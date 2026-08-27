@@ -1,5 +1,7 @@
 # Apeireth Desktop — Release Candidate Reality Check Matrix
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
+
 > **审计基线**: `Jimmy master @ 0bd63405bfd57492a03ed095c8d511fb6caf2d2c`
 > **RC 分支**: `rc/desktop-reality-check`
 > **审计原则**: 先证明问题存在，再修改；严禁凭空构造新层或虚假完成；严格划分 P0–P3 缺陷级别。

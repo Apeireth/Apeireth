@@ -212,7 +212,7 @@ if let DetectOutcome::Conflict(c) | DetectOutcome::ConflictBypassedByForce(c) =
 
 ---
 
-## 6. LOCATION 选择 — 选 (5):`apeireth-host::three_way`
+## 6. LOCATION 选择 — 选 (5):`apeireth-host::three_way`（apeireth-host 现 legacy/，v2 落点见根 ARCHITECTURE.md）
 
 **候选位置**:
 1. ❌ `apeireth-three-way` 新独立 crate — overkill,只有一个 trait + 一个 struct,workspace 已经有 100+ crates,加新 crate 编译图变大但收益小。

@@ -1,5 +1,7 @@
 # Apeireth Fresh Integration & Reconciliation — Final Report
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本系列描述旧 master 线（86-crate）上针对 `crates/apeireth-companion|memory|api` 的能力扩展工作，相关实现现整体在 `legacy/donor/`。
+
 > Autonomous integration session, 2026-08-20.
 > Working repo: `apeireth-fresh` (origin = Jimmyxiao2009/apeireth-rust).
 > Strategy doc: `docs/core-capability-integration-strategy.md`.

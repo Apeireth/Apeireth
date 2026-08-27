@@ -162,6 +162,9 @@ semantics were not changed by this cleanup.
 ### Current status
 
 - Root workspace: 13 crates, Rust 1.97.1, workspace version 1.2.0.
+- Product line: default branch `main` @ `d6910cf7`, tag `v2.0.0-alpha.1`
+  (reconstruct_v2 工程重构首个 alpha；workspace 版本轴 1.2.0 与产品轴独立).
+- Tests: 1338 passed / 0 failed; CI green across lint/fmt/audit/deny/miri/rustdoc/coverage.
 - Frontend: separate desktop/Tauri workspace and release boundary.
 - Historical nested workspace: removed after its useful decisions were captured
   in the architecture audit.

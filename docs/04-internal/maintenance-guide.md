@@ -1,5 +1,7 @@
 # Apeireth companion 维护指南（2026-08-16, post-1.0.0 增量 2026-08-19）
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本文大部分模块地图/命令对应 legacy companion；v2 维护事实以 ARCHITECTURE.md + `docs/development/repository-layout.md` 为准，全文重写排期见 ROADMAP P1。
+
 > **post-1.0.0 增量**: 本文件 (apeireth-companion, LOCKED) 内容本身在 1.0 release 后未变, 但生态有增量:
 > - `frontend/companion-desktop/` (Svelte 5 + Tauri 2) 走 HTTP/SSE 调 companion_serve — 真实 LLM 流式待 TP34 v1.5 中期
 > - `apeireth-pipeline-g5/` 通用 5 阶段 pipeline 框架, 跟 companion 配 chat 专用 pipeline 共存

@@ -27,14 +27,18 @@ Apeireth 团队承诺漏洞披露过程透明，通过以下渠道公告：
 
 ## 适用范围 (Scope)
 
-以下组件被认为是"安全边界"，其漏洞属于本政策范围：
+以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 13-crate 工作区）：
 
-- `apeireth-core` (L0 HA 核心 + 12 键 + Self-Disable 5 大机制 + 双洋葱统一体)
-- `apeireth-sovereignty` (HumanAuthority + MultiHuman M-of-N + 三域分离 BCD + Physical Multisig)
-- `apeireth-tool-approval` (5 规则工具审批 + fuzzy matching)
-- `apeireth-bus` (5 层总线的权限隔离)
-- `apeireth-api` / `apeireth-protocol` (4 LLM 协议归一化 — 含 token / key 处理)
-- `apeireth-memory` / `apeireth-vector` (持久化的用户画像 / 长期记忆 — 可能含敏感数据)
+- `apeireth-core`（`crates/foundation/core`）— 稳定域原语 + kernel（IDs/时间/生命周期/事件）；13 键 verdict cache 与洋葱/守门语义（v1 脊椎，接线状态见 ROADMAP P0/P2）
+- `apeireth-protocol`（`crates/foundation/protocol`）— 规范化协议 DTO 与 vendor wire 翻译（不含 HTTP client）
+- `apeireth-plugin`（`crates/foundation/plugin`）— Plugin/Capability 契约、凭据解析契约、capability 注册唯一权威
+- `apeireth-governance`（`crates/foundation/governance`）— Allow/Deny/RequireApproval 决策、PII/注入检测、防篡改审计哈希链
+- `apeireth-runtime`（`crates/engine/runtime`）— agent loop 单一执行入口、approval 生命周期、execution trace
+- `apeireth-provider`（`crates/engine/provider`）— 供应商凭据解析、认证头构造、wire 适配
+- `apeireth-tools-canonical`（`crates/capabilities/tools`）— 进程执行唯一边界（Job Object/进程组）、egress 策略、受控 fetch（DNS 钉扎）
+- `apeireth-gateway` / `apeireth-cli`（`crates/adapters/`）— 传输与入口面，不拥有业务逻辑
+
+v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`apeireth-bus`、`apeireth-api`、`apeireth-memory/vector` 等）现整体位于 `legacy/`（参考代码，不参与构建），其实现的安全语义将在 ROADMAP §4 对应阶段移植回主链；移植完成前，其漏洞按 v1 政策处理（安全边界仍视为有效）。
 
 **不在范围**: 业务逻辑 bug (非安全), 性能问题, doc typo, 等等. 这些走普通 GitHub Issue.
 
@@ -67,4 +71,4 @@ Apeireth 团队承诺漏洞披露过程透明，通过以下渠道公告：
 
 ---
 
-_Last updated_: 2026-08-05 (R18 第 0 阶段第 5 项)
+_Last updated_: 2026-08-27 (reconstruct_v2 收敛后，13-crate 范围重写)

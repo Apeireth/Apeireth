@@ -1,5 +1,10 @@
 # 自定义 LLM Provider 指南
 
+> **现状 (2026-08-27)**：本文针对 v1 时代 companion_serve（`legacy/donor/apeireth-companion`）。
+> 当前 13-crate 工作区的 provider 切换方式：环境变量 + plugin 装配（3 家 canonical provider），
+> 见 [quick-start.md](quick-start.md) 与 [api.md](../03-reference/api.md) 的"Provider 配置"节。
+> 正文保留为 v1 历史指南。
+
 > **2026-08-20 新增**: companion_serve 现在支持多 LLM provider 切换, **不需要改源码**.
 >
 > 适用场景: 想用 Claude / OpenAI / 本地 vLLM 替代 MiniMax, 或加 fallback 链.

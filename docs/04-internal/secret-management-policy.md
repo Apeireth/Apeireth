@@ -200,7 +200,7 @@ cp -r .git .git.backup-pre-key-scrub
 #    [REDACTED-github-pat-ghp_...2026-08-21]==>[你的真 github PAT, 主人控制台复制]
 #    ```
 
-# 3. filter-repo 重写 master + 所有 branches + tags
+# 3. filter-repo 重写 main（旧 master 已归档 archive/v1.0-master）+ 所有 branches + tags
 echo "Y" | python -m git_filter_repo --replace-text .git/filter-rules.txt --force --refs=refs/heads/* --refs=refs/tags/*
 
 # 4. 物理删除 blob
@@ -212,7 +212,7 @@ git rev-list --all --objects | Select-String "kug0t7Jik3" -ErrorAction SilentlyC
 Select-String -Path reports -Pattern "kug0t7Jik3-CLvvPauLHx8IjzwB9ANsnTFI_HXF9c4vhERO7gYqB6KOL4ldK3pdj2esU3EVaN6w4jl3z9fGUOwjLQz1EXzXjPATISo4BFMAbaEHOb8YRsUg" -Recurse
 
 # 6. 验证 cargo test + clippy 仍绿
-cargo test -p apeireth-host -p apeireth-sovereignty -p apeireth-team-lead -p apeireth-arbitration -p apeireth-memory -p apeireth-companion --lib
+cargo test -p apeireth-host -p apeireth-sovereignty -p apeireth-team-lead -p apeireth-arbitration -p apeireth-memory -p apeireth-companion --lib  # （v1 时代旧 crate 名，现 13-crate 清单见根 ARCHITECTURE.md）
 cargo clippy --workspace --lib --tests -- -D warnings
 
 # 7. 清理 backup + filter rules
