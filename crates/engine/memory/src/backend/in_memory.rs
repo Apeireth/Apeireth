@@ -81,9 +81,7 @@ impl MemoryBackend for InMemoryBackend {
         Ok(all)
     }
 
-    fn append_stream(&self, kind: StreamKind, entry: serde_json::Value) -> MemoryResult<()> {
-        let entry: HistoryEntry = serde_json::from_value(entry)?;
-        
+    fn append_stream(&self, kind: StreamKind, entry: HistoryEntry) -> MemoryResult<()> {
         let mut streams = self.streams.lock().expect("InMemoryBackend poisoned");
         let key = (kind, entry.session_id.clone().unwrap_or_default());
         let list = streams.entry(key).or_insert_with(Vec::new);
@@ -96,8 +94,8 @@ impl MemoryBackend for InMemoryBackend {
         kind: StreamKind,
         session_id: &str,
         n: usize,
-    ) -> MemoryResult<Vec<serde_json::Value>> {
-        
+    ) -> MemoryResult<Vec<HistoryEntry>> {
+
         let streams = self.streams.lock().expect("InMemoryBackend poisoned");
         let key = (kind, session_id.to_string());
         let list = match streams.get(&key) {
@@ -114,10 +112,7 @@ impl MemoryBackend for InMemoryBackend {
             let skip = alive.len() - n;
             alive.drain(..skip);
         }
-        alive
-            .into_iter()
-            .map(|e| serde_json::to_value(e).map_err(crate::MemoryError::Json))
-            .collect()
+        Ok(alive)
     }
 }
 
