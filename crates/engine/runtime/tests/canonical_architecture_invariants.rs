@@ -39,6 +39,7 @@ fn canonical_sources() -> Vec<(&'static str, &'static str)> {
         ("approval", include_str!("../src/canonical/approval.rs")),
         ("error", include_str!("../src/canonical/error.rs")),
         ("execute", include_str!("../src/canonical/execute.rs")),
+        ("module", include_str!("../src/canonical/module.rs")),
         ("provider", include_str!("../src/canonical/provider.rs")),
         ("runtime", include_str!("../src/canonical/runtime.rs")),
         ("session", include_str!("../src/canonical/session.rs")),
