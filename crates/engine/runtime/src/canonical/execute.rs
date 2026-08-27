@@ -212,28 +212,25 @@ impl Runtime {
         session.record(request_id, trace_id, SessionEventKind::TurnStarted, clock);
         self.sessions.save(&session).await?;
 
-        let model = match request
+        let Some(model) = request
             .model
             .clone()
             .or_else(|| self.config.default_model.clone())
-        {
-            Some(model) => model,
-            None => {
-                let error = RuntimeError::misconfigured(
-                    "no model: the turn named none and the runtime has no default_model",
-                );
-                session.record(
-                    request_id,
-                    trace_id,
-                    SessionEventKind::ExecutionFailed {
-                        phase: "model_selection".into(),
-                        error: error.to_string(),
-                    },
-                    clock,
-                );
-                self.sessions.save(&session).await?;
-                return Err(error);
-            }
+        else {
+            let error = RuntimeError::misconfigured(
+                "no model: the turn named none and the runtime has no default_model",
+            );
+            session.record(
+                request_id,
+                trace_id,
+                SessionEventKind::ExecutionFailed {
+                    phase: "model_selection".into(),
+                    error: error.to_string(),
+                },
+                clock,
+            );
+            self.sessions.save(&session).await?;
+            return Err(error);
         };
 
         let tools = self.plugins.tool_declarations();
@@ -291,9 +288,8 @@ impl Runtime {
         approval_id: ApprovalId,
         decision: ApprovalDecision,
     ) -> RuntimeResult<ApprovalResolution> {
-        let mut session = match self.sessions.load(&session_id).await? {
-            Some(session) => session,
-            None => return Ok(ApprovalResolution::NotFound),
+        let Some(mut session) = self.sessions.load(&session_id).await? else {
+            return Ok(ApprovalResolution::NotFound);
         };
 
         let Some(approval) = session.approvals.get(&approval_id).cloned() else {

@@ -49,9 +49,8 @@ async fn mock_vendor(body: &'static str) -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
-        let (mut socket, _) = match listener.accept().await {
-            Ok(s) => s,
-            Err(_) => return,
+        let Ok((mut socket, _)) = listener.accept().await else {
+            return;
         };
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let mut buf = [0u8; 4096];
