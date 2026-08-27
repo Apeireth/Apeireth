@@ -120,74 +120,19 @@ pub type MemoryResult<T> = Result<T, MemoryError>;
 /// - Relation     → 关系流 (行动域, 对应 §5 关系史)
 /// - Evolution    → 演化流 (思想 + 提案, 对应 §5 自我叙事)
 /// - Reflection   → 反思期流 (反思期审计, Self-Disable §3 使用)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum StreamKind {
-    /// 思想流.
-    Thought,
-    /// 提案流.
-    Proposal,
-    /// 行动流.
-    Action,
-    /// 关系流.
-    Relation,
-    /// 演化流.
-    Evolution,
-    /// 反思期流.
-    Reflection,
-}
+///
+/// **P-arch (2026-08-27) O-6 锚 #2 兑现**: 6 变体 canonical 在 `apeireth_core::kernel::StreamKind`,
+/// memory crate 通过 `pub use` re-export 保持 v1 compat. 100+ consumer 0 破 (同类型不同路径).
+/// **扩展方法** (`table_name_ext` / `semantic_name_ext`) 由 `apeireth_core::kernel::StreamKindExt`
+/// 提供 (在 core kernel 中定义, 避免 orphan rule E0117, 0 改 100+ 调用方).
+pub use apeireth_core::kernel::StreamKind;
+pub use apeireth_core::kernel::StreamKindExt;
 
-impl StreamKind {
-    /// 返回对应的物理表名 (snake_case).
-    pub const fn table_name(self) -> &'static str {
-        match self {
-            StreamKind::Thought => "thought_stream",
-            StreamKind::Proposal => "proposal_stream",
-            StreamKind::Action => "action_stream",
-            StreamKind::Relation => "relation_stream",
-            StreamKind::Evolution => "evolution_stream",
-            StreamKind::Reflection => "reflection_stream",
-        }
-    }
-
-    /// D2 §5 对应的语义命名 (供 UI / 报告使用).
-    pub const fn semantic_name(self) -> &'static str {
-        match self {
-            StreamKind::Thought => "思想 (Thought)",
-            StreamKind::Proposal => "提案 (Proposal)",
-            StreamKind::Action => "行动 (Action)",
-            StreamKind::Relation => "关系 (Relation)",
-            StreamKind::Evolution => "演化 (Evolution)",
-            StreamKind::Reflection => "反思期 (Reflection Period)",
-        }
-    }
-
-    /// 全部 6 种流 (按主人 2026-07-31 指示顺序).
-    pub const ALL: [StreamKind; 6] = [
-        StreamKind::Thought,
-        StreamKind::Proposal,
-        StreamKind::Action,
-        StreamKind::Relation,
-        StreamKind::Evolution,
-        StreamKind::Reflection,
-    ];
-}
-
-impl FromStr for StreamKind {
-    type Err = MemoryError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "thought" => Ok(StreamKind::Thought),
-            "proposal" => Ok(StreamKind::Proposal),
-            "action" => Ok(StreamKind::Action),
-            "relation" => Ok(StreamKind::Relation),
-            "evolution" => Ok(StreamKind::Evolution),
-            "reflection" => Ok(StreamKind::Reflection),
-            other => Err(MemoryError::Invalid(format!(
-                "unknown stream kind: {other}"
-            ))),
-        }
-    }
+/// (FromStr for memory-local error 删 — StreamKind canonical 在 core kernel,
+/// 已有 `impl FromStr for StreamKind` with `Err = String`, orphan rule 阻止 memory 再 impl
+/// memory-local `Err = MemoryError`. 提供 `from_str_core` helper 函数把 String 错误 wrap 成 MemoryError.
+pub fn from_str_core(s: &str) -> Result<StreamKind, MemoryError> {
+    s.parse().map_err(MemoryError::Invalid)
 }
 
 /// 统一的内存存储入口 (SQLite 实现).
@@ -330,16 +275,16 @@ mod tests {
                 StreamKind::Evolution => "evolution",
                 StreamKind::Reflection => "reflection",
             };
-            assert_eq!(StreamKind::from_str(s).unwrap(), kind);
-            assert!(!kind.table_name().is_empty());
-            assert!(!kind.semantic_name().is_empty());
+            assert_eq!(crate::from_str_core(s).unwrap(), kind);
+            assert!(!kind.table_name_ext().is_empty());
+            assert!(!kind.semantic_name_ext().is_empty());
         }
     }
 
     #[test]
     fn stream_kind_all_covers_six() {
         assert_eq!(StreamKind::ALL.len(), 6);
-        let mut names: Vec<_> = StreamKind::ALL.iter().map(|k| k.table_name()).collect();
+        let mut names: Vec<_> = StreamKind::ALL.iter().map(|k| k.table_name_ext()).collect();
         names.sort();
         names.dedup();
         assert_eq!(names.len(), 6, "6 历史流必须 6 张独立表");
@@ -440,3 +385,4 @@ pub mod backend;
 /// 完整 pipeline. 详见 `v2-unabsorbed-features.md` §B1.
 pub mod experience;
 pub mod preference_store;
+

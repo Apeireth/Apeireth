@@ -11,6 +11,7 @@ use thiserror::Error;
 
 use crate::{MemoryError, MemoryResult, StreamKind};
 
+use apeireth_core::kernel::StreamKindExt;
 /// Append-only 约束违反.
 #[derive(Debug, Error)]
 pub enum AppendOnlyError {
@@ -339,7 +340,7 @@ pub fn export_all_streams(conn: &Connection) -> MemoryResult<Vec<HistoryEntry>> 
         StreamKind::Evolution,
         StreamKind::Reflection,
     ] {
-        let table = kind.table_name();
+        let table = kind.table_name_ext();
         let mut stmt = conn.prepare(&format!(
             "SELECT id, subject_id, subject_rev, session_id, created_at, payload, source, tags, tombstoned_at
              FROM {table} ORDER BY created_at ASC, id ASC"
@@ -354,7 +355,7 @@ pub fn export_all_streams(conn: &Connection) -> MemoryResult<Vec<HistoryEntry>> 
 
 /// 给 streams 模块的 FromStr helper.
 pub fn kind_from_str(s: &str) -> MemoryResult<StreamKind> {
-    StreamKind::from_str(s)
+    crate::from_str_core(s)
 }
 
 /// 公共 helper: 取当前 epoch seconds.
@@ -407,3 +408,4 @@ mod tests {
         assert!(out.is_empty());
     }
 }
+
