@@ -94,6 +94,11 @@ pub enum MemoryError {
     /// JSON 序列化/反序列化失败.
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    /// P-arch (2026-08-27): 文件后端 / keyring / 未来 storage 路径的 IO 错误.
+    /// 同 rusqlite::Error / serde_json::Error 模式：`From` 转换让 `?` 在
+    /// FileBackend 等新后端直接工作，无需 `.map_err(...)` 包裹。
+    #[error("memory io error: {0}")]
+    Io(#[from] std::io::Error),
     /// 调用方提供的参数非法 (空字符串 / 时间范围倒置等).
     #[error("invalid argument: {0}")]
     Invalid(String),
@@ -413,3 +418,18 @@ pub mod lightmemo;
 
 /// 编译期守门 (per O-5 不假装)
 pub const MEMORY_SUBMODULE_COUNT: usize = 2;
+
+/// P-arch (2026-08-27): 记忆后端抽象 trait.
+///
+/// **目的**: 摆脱 "apeireth-memory 强绑 SQLite" 的实现细节，
+/// 让 domain 操作可插拔后端 (SQLite / File / InMemory / 未来 MongoDB)。
+///
+/// **架构原则** (per v2-unabsorbed-features.md §A4):
+/// - `MemoryBackend` 是 trait，不是具体类型
+/// - 具体后端 (sqlite/file/in_memory) 在 `backend` 子模块
+/// - 现有 `SqliteMemoryStore` 保留作为 v1 compat facade；新代码走 `Arc<dyn MemoryBackend>`
+/// - 0 触碰现有 24 子模块的公共 API（3 不漂移：Episode/Note/Session/IdentityCard/HistoryEntry 签名不变）
+///
+/// **方法范围**: trait 暴露**跨后端最小集**——append-only 写入 + 列表。
+/// 复杂查询 (EpisodeQuery 复合条件) 走具体后端 trait (EpisodeStore) 保留。
+pub mod backend;
