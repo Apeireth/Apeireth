@@ -70,6 +70,7 @@ fn make_test_ha(mode: HAMode) -> HumanAuthority {
         mode,
         real_humans: vec![],
         ice_frozen_until: None,
+        multi_sign: None,
     }
 }
 
