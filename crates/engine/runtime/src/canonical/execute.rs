@@ -44,6 +44,8 @@
 //! Two things do abort: governance denying the *completion* itself, and the
 //! round limit. Neither is something the model can recover from by trying again.
 
+use std::sync::Arc;
+
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest};
 use apeireth_plugin::FrozenInvocation;
@@ -57,6 +59,10 @@ use super::approval::{
     FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 use super::error::{RuntimeError, RuntimeResult};
+use super::module::{
+    HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleOutcome, ModuleTurnState,
+    PromptOverlay, RuntimeModuleInvoker,
+};
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
 use super::trace::{ExecutionTrace, TraceEvent};
@@ -175,6 +181,56 @@ enum ToolDispatch {
     },
 }
 
+struct HookEffects {
+    prompt_overlays: Vec<PromptOverlay>,
+    directive: ModuleDirective,
+    directive_module_id: Option<String>,
+}
+
+impl Default for HookEffects {
+    fn default() -> Self {
+        Self {
+            prompt_overlays: Vec::new(),
+            directive: ModuleDirective::Continue,
+            directive_module_id: None,
+        }
+    }
+}
+
+impl HookEffects {
+    fn push(&mut self, module_id: &str, outcome: ModuleOutcome) {
+        self.prompt_overlays.extend(outcome.prompt_overlays);
+
+        let incoming_strength = directive_strength(&outcome.directive);
+        let current_strength = directive_strength(&self.directive);
+        if incoming_strength > current_strength {
+            self.directive = outcome.directive;
+            self.directive_module_id = Some(module_id.to_string());
+        }
+    }
+}
+
+fn directive_strength(directive: &ModuleDirective) -> u8 {
+    match directive {
+        ModuleDirective::Continue => 0,
+        ModuleDirective::Retry { .. } => 1,
+        ModuleDirective::Stop { .. } => 2,
+    }
+}
+
+fn compose_provider_messages(
+    session_messages: &[NormalizedMessage],
+    retry_scaffolding: &[NormalizedMessage],
+    overlays: &[PromptOverlay],
+) -> Vec<NormalizedMessage> {
+    let mut messages =
+        Vec::with_capacity(overlays.len() + session_messages.len() + retry_scaffolding.len());
+    messages.extend(overlays.iter().map(|overlay| overlay.message().clone()));
+    messages.extend_from_slice(session_messages);
+    messages.extend_from_slice(retry_scaffolding);
+    messages
+}
+
 impl Runtime {
     /// Run one turn to completion or pending approval.
     ///
@@ -185,10 +241,20 @@ impl Runtime {
         let lock = self.session_locks.acquire(request.session).await;
         let _guard = lock.lock().await;
 
-        self.execute_outcome_locked(request).await
+        let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
+        let observed_request = request.clone();
+        let result = self.execute_outcome_locked(request, state.clone()).await;
+        if let Err(error) = &result {
+            self.observe_error(&observed_request, state, error).await;
+        }
+        result
     }
 
-    async fn execute_outcome_locked(&self, request: TurnRequest) -> RuntimeResult<TurnOutcome> {
+    async fn execute_outcome_locked(
+        &self,
+        request: TurnRequest,
+        module_state: Arc<ModuleTurnState>,
+    ) -> RuntimeResult<TurnOutcome> {
         let trace_id = TraceId::new();
         let request_id = RequestId::new();
         let mut trace = ExecutionTrace::new(trace_id, request.session, request_id);
@@ -233,6 +299,42 @@ impl Runtime {
             return Err(error);
         };
 
+        let invocation = InvocationContext::user_turn();
+        let turn_start_messages = session.messages.clone();
+        let turn_start = self
+            .run_hook_checked(
+                HookPoint::TurnStart,
+                &mut session,
+                &request.session,
+                &invocation,
+                &model,
+                &turn_start_messages,
+                None,
+                None,
+                None,
+                None,
+                request_id,
+                trace_id,
+                &module_state,
+            )
+            .await?;
+
+        let initial_retry = match turn_start.directive {
+            ModuleDirective::Continue => Vec::new(),
+            ModuleDirective::Retry { feedback } => {
+                vec![NormalizedMessage::user(feedback)]
+            }
+            ModuleDirective::Stop { reason } => {
+                let module_id = turn_start
+                    .directive_module_id
+                    .as_deref()
+                    .unwrap_or("unknown");
+                return self
+                    .fail_module_stop(&mut session, request_id, trace_id, module_id, reason)
+                    .await;
+            }
+        };
+
         let tools = self.plugins.tool_declarations();
         let continuation =
             FrozenTurnContinuation::start_of_round(request_id, trace_id, model.clone(), 1);
@@ -245,6 +347,10 @@ impl Runtime {
             trace_id,
             tools,
             continuation,
+            initial_retry,
+            turn_start.prompt_overlays,
+            invocation,
+            module_state,
         )
         .await
     }
@@ -278,8 +384,15 @@ impl Runtime {
         let lock = self.session_locks.acquire(session_id).await;
         let _guard = lock.lock().await;
 
-        self.resolve_approval_locked(session_id, approval_id, decision)
-            .await
+        let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
+        let request = TurnRequest::new(session_id, "");
+        let result = self
+            .resolve_approval_locked(session_id, approval_id, decision)
+            .await;
+        if let Err(error) = &result {
+            self.observe_error(&request, state, error).await;
+        }
+        result
     }
 
     async fn resolve_approval_locked(
@@ -387,6 +500,13 @@ impl Runtime {
                         approval.trace_id,
                         tools,
                         continuation,
+                        Vec::new(),
+                        Vec::new(),
+                        InvocationContext::user_turn(),
+                        Arc::new(ModuleTurnState::with_used(
+                            self.config.max_module_invocations,
+                            approval.continuation.module_invocations,
+                        )),
                     )
                     .await?;
                 Ok(ApprovalResolution::Resumed(outcome))
@@ -445,6 +565,13 @@ impl Runtime {
                         approval.trace_id,
                         tools,
                         continuation,
+                        Vec::new(),
+                        Vec::new(),
+                        InvocationContext::user_turn(),
+                        Arc::new(ModuleTurnState::with_used(
+                            self.config.max_module_invocations,
+                            approval.continuation.module_invocations,
+                        )),
                     )
                     .await?;
                 Ok(ApprovalResolution::Resumed(outcome))
@@ -466,10 +593,17 @@ impl Runtime {
         trace_id: TraceId,
         tools: Vec<NormalizedTool>,
         mut continuation: FrozenTurnContinuation,
+        mut retry_scaffolding: Vec<NormalizedMessage>,
+        mut pending_overlays: Vec<PromptOverlay>,
+        invocation: InvocationContext,
+        module_state: Arc<ModuleTurnState>,
     ) -> RuntimeResult<TurnOutcome> {
         let clock = self.clock.as_ref();
 
         loop {
+            let mut next_overlays = std::mem::take(&mut pending_overlays);
+            let mut current_candidate: Option<NormalizedResponse> = None;
+
             if continuation.tool_calls.is_empty() {
                 if continuation.round > self.config.max_rounds {
                     let error = RuntimeError::RoundLimitExceeded {
@@ -487,6 +621,52 @@ impl Runtime {
                     self.sessions.save(&session).await?;
                     return Err(error);
                 }
+
+                let model_messages =
+                    compose_provider_messages(&session.messages, &retry_scaffolding, &[]);
+                let before_model = self
+                    .run_hook_checked(
+                        HookPoint::BeforeModelCall,
+                        &mut session,
+                        &session_id,
+                        &invocation,
+                        &continuation.model,
+                        &model_messages,
+                        None,
+                        None,
+                        None,
+                        None,
+                        request_id,
+                        trace_id,
+                        &module_state,
+                    )
+                    .await?;
+                next_overlays.extend(before_model.prompt_overlays);
+
+                match before_model.directive {
+                    ModuleDirective::Continue => {}
+                    ModuleDirective::Retry { feedback } => {
+                        retry_scaffolding = vec![NormalizedMessage::user(feedback)];
+                        pending_overlays = next_overlays;
+                        continuation.round += 1;
+                        continue;
+                    }
+                    ModuleDirective::Stop { reason } => {
+                        return self
+                            .fail_module_stop(
+                                &mut session,
+                                request_id,
+                                trace_id,
+                                before_model
+                                    .directive_module_id
+                                    .as_deref()
+                                    .unwrap_or("unknown"),
+                                reason,
+                            )
+                            .await;
+                    }
+                }
+
                 if let Err(error) = self
                     .authorize_completion(
                         &mut trace,
@@ -503,9 +683,15 @@ impl Runtime {
                     return Err(error);
                 }
 
-                let provider_request =
-                    NormalizedRequest::new(continuation.model.clone(), session.messages.clone());
-
+                let provider_request = NormalizedRequest::new(
+                    continuation.model.clone(),
+                    compose_provider_messages(
+                        &session.messages,
+                        &retry_scaffolding,
+                        &next_overlays,
+                    ),
+                );
+                retry_scaffolding.clear();
                 let routed = self
                     .providers
                     .complete_with_tools(&provider_request, &tools)
@@ -569,26 +755,142 @@ impl Runtime {
                     },
                 );
 
-                if response.tool_calls.is_empty() {
-                    return self
-                        .finish_turn(
-                            session,
-                            trace,
-                            request_id,
-                            served_by,
-                            response,
-                            continuation.round,
-                        )
-                        .await
-                        .map(TurnOutcome::Completed);
+                let after_model_messages = session.messages.clone();
+                let after_model = self
+                    .run_hook_checked(
+                        HookPoint::AfterModelResponse,
+                        &mut session,
+                        &session_id,
+                        &invocation,
+                        &continuation.model,
+                        &after_model_messages,
+                        Some(&response),
+                        None,
+                        None,
+                        None,
+                        request_id,
+                        trace_id,
+                        &module_state,
+                    )
+                    .await?;
+                next_overlays.extend(after_model.prompt_overlays);
+
+                match after_model.directive {
+                    ModuleDirective::Continue => {}
+                    ModuleDirective::Retry { feedback } => {
+                        retry_scaffolding = vec![
+                            NormalizedMessage::assistant(response.content.clone()),
+                            NormalizedMessage::user(feedback),
+                        ];
+                        pending_overlays = next_overlays;
+                        continuation.round += 1;
+                        continue;
+                    }
+                    ModuleDirective::Stop { reason } => {
+                        return self
+                            .fail_module_stop(
+                                &mut session,
+                                request_id,
+                                trace_id,
+                                after_model
+                                    .directive_module_id
+                                    .as_deref()
+                                    .unwrap_or("unknown"),
+                                reason,
+                            )
+                            .await;
+                    }
                 }
 
-                // The assistant's tool-call message must reach the transcript
-                // before the results, or the provider sees answers to questions
-                // it never asked.
+                if response.tool_calls.is_empty() {
+                    let final_messages = session.messages.clone();
+                    let before_final = self
+                        .run_hook_checked(
+                            HookPoint::BeforeFinalCommit,
+                            &mut session,
+                            &session_id,
+                            &invocation,
+                            &continuation.model,
+                            &final_messages,
+                            Some(&response),
+                            None,
+                            None,
+                            None,
+                            request_id,
+                            trace_id,
+                            &module_state,
+                        )
+                        .await?;
+                    next_overlays.extend(before_final.prompt_overlays);
+
+                    match before_final.directive {
+                        ModuleDirective::Continue => {
+                            let candidate = response.clone();
+                            let turn_response = self
+                                .finish_turn(
+                                    &mut session,
+                                    trace,
+                                    request_id,
+                                    served_by,
+                                    response,
+                                    continuation.round,
+                                )
+                                .await?;
+                            let after_turn_messages = session.messages.clone();
+                            // AfterTurn is observational: the turn is already
+                            // durably committed, so its directive cannot undo it.
+                            let _ = self
+                                .run_hook_checked(
+                                    HookPoint::AfterTurn,
+                                    &mut session,
+                                    &session_id,
+                                    &invocation,
+                                    &continuation.model,
+                                    &after_turn_messages,
+                                    Some(&candidate),
+                                    None,
+                                    None,
+                                    None,
+                                    request_id,
+                                    trace_id,
+                                    &module_state,
+                                )
+                                .await?;
+                            return Ok(TurnOutcome::Completed(turn_response));
+                        }
+                        ModuleDirective::Retry { feedback } => {
+                            retry_scaffolding = vec![
+                                NormalizedMessage::assistant(response.content.clone()),
+                                NormalizedMessage::user(feedback),
+                            ];
+                            pending_overlays = next_overlays;
+                            continuation.round += 1;
+                            continue;
+                        }
+                        ModuleDirective::Stop { reason } => {
+                            return self
+                                .fail_module_stop(
+                                    &mut session,
+                                    request_id,
+                                    trace_id,
+                                    before_final
+                                        .directive_module_id
+                                        .as_deref()
+                                        .unwrap_or("unknown"),
+                                    reason,
+                                )
+                                .await;
+                        }
+                    }
+                }
+
+                // The assistant tool-call message must reach the transcript
+                // before results, or the provider sees answers to questions it
+                // never asked.
+                current_candidate = Some(response.clone());
                 session.append(
                     NormalizedMessage::assistant_with_tool_calls(
-                        response.content.clone(),
+                        response.content,
                         response.tool_calls.clone(),
                     ),
                     clock,
@@ -600,27 +902,73 @@ impl Runtime {
                 continuation.approved_approval_id = None;
             }
 
+            let mut retry_requested = None;
             while continuation.next_tool_index < continuation.tool_calls.len() {
                 let index = continuation.next_tool_index;
                 let call = continuation.tool_calls[index].clone();
                 let is_preapproved = continuation.approved_tool_index == Some(index);
-
-                // The approved dispatch must execute the exact stored frozen
-                // approval, never a fresh freeze of the tool call.
                 let approved_approval = if is_preapproved {
-                    let approval_id = continuation
-                        .approved_approval_id
-                        .expect("approved_tool_index requires approved_approval_id");
+                    let approval_id = continuation.approved_approval_id.ok_or_else(|| {
+                        RuntimeError::misconfigured(
+                            "approved_tool_index requires approved_approval_id",
+                        )
+                    })?;
                     Some(
                         session
                             .approvals
                             .get(&approval_id)
                             .cloned()
-                            .expect("approved approval must exist in session"),
+                            .ok_or_else(|| {
+                                RuntimeError::misconfigured(
+                                    "approved approval must exist in session",
+                                )
+                            })?,
                     )
                 } else {
                     None
                 };
+
+                let before_tool_messages = session.messages.clone();
+                let before_tool = self
+                    .run_hook_checked(
+                        HookPoint::BeforeToolCall,
+                        &mut session,
+                        &session_id,
+                        &invocation,
+                        &continuation.model,
+                        &before_tool_messages,
+                        current_candidate.as_ref(),
+                        Some(&call),
+                        None,
+                        None,
+                        request_id,
+                        trace_id,
+                        &module_state,
+                    )
+                    .await?;
+                next_overlays.extend(before_tool.prompt_overlays);
+
+                match before_tool.directive {
+                    ModuleDirective::Continue => {}
+                    ModuleDirective::Retry { feedback } => {
+                        retry_requested = Some(feedback);
+                        break;
+                    }
+                    ModuleDirective::Stop { reason } => {
+                        return self
+                            .fail_module_stop(
+                                &mut session,
+                                request_id,
+                                trace_id,
+                                before_tool
+                                    .directive_module_id
+                                    .as_deref()
+                                    .unwrap_or("unknown"),
+                                reason,
+                            )
+                            .await;
+                    }
+                }
 
                 match self
                     .dispatch_one_tool(
@@ -637,7 +985,7 @@ impl Runtime {
                     .await?
                 {
                     ToolDispatch::Result(result) => {
-                        session.append(result.into_message(), clock);
+                        session.append(result.clone().into_message(), clock);
 
                         if let Some(approved_approval_id) = continuation.approved_approval_id {
                             if let Some(approval) = session.approvals.get_mut(&approved_approval_id)
@@ -645,11 +993,49 @@ impl Runtime {
                                 approval.status = ApprovalStatus::Consumed;
                             }
                             session.active_approval_id = None;
-                            // Persist the consumed result promptly so a crash
-                            // after the external effect observes a terminal
-                            // approval, and a crash before this save observes
-                            // Claimed (which must never re-execute).
                             self.sessions.save(&session).await?;
+                        }
+
+                        let after_tool_messages = session.messages.clone();
+                        let after_tool = self
+                            .run_hook_checked(
+                                HookPoint::AfterToolResult,
+                                &mut session,
+                                &session_id,
+                                &invocation,
+                                &continuation.model,
+                                &after_tool_messages,
+                                current_candidate.as_ref(),
+                                Some(&call),
+                                Some(&result),
+                                None,
+                                request_id,
+                                trace_id,
+                                &module_state,
+                            )
+                            .await?;
+                        next_overlays.extend(after_tool.prompt_overlays);
+
+                        match after_tool.directive {
+                            ModuleDirective::Continue => {}
+                            ModuleDirective::Retry { feedback } => {
+                                retry_requested = Some(feedback);
+                                break;
+                            }
+                            ModuleDirective::Stop { reason } => {
+                                return self
+                                    .fail_module_stop(
+                                        &mut session,
+                                        request_id,
+                                        trace_id,
+                                        after_tool
+                                            .directive_module_id
+                                            .as_deref()
+                                            .unwrap_or("unknown"),
+                                        reason,
+                                    )
+                                    .await;
+                            }
                         }
                     }
                     ToolDispatch::Pending {
@@ -688,6 +1074,7 @@ impl Runtime {
                             next_tool_index: index,
                             approved_tool_index: None,
                             approved_approval_id: None,
+                            module_invocations: module_state.used(),
                         };
                         let pending = PendingApproval {
                             approval_id,
@@ -746,15 +1133,183 @@ impl Runtime {
                 continuation.approved_approval_id = None;
             }
 
+            if let Some(feedback) = retry_requested {
+                retry_scaffolding = vec![NormalizedMessage::user(feedback)];
+                pending_overlays = next_overlays;
+                continuation.round += 1;
+                continuation.tool_calls.clear();
+                continuation.next_tool_index = 0;
+                continuation.approved_tool_index = None;
+                continuation.approved_approval_id = None;
+                continue;
+            }
+
             // Every tool call in this round has a result in the transcript.
             self.sessions.save(&session).await?;
 
+            pending_overlays = next_overlays;
             continuation.round += 1;
             continuation.tool_calls.clear();
             continuation.next_tool_index = 0;
             continuation.approved_tool_index = None;
             continuation.approved_approval_id = None;
         }
+    }
+
+    async fn run_hook_checked(
+        &self,
+        hook: HookPoint,
+        session: &mut Session,
+        session_id: &SessionId,
+        invocation: &InvocationContext,
+        model: &str,
+        messages: &[NormalizedMessage],
+        candidate: Option<&NormalizedResponse>,
+        tool_call: Option<&ToolCall>,
+        tool_result: Option<&ToolResult>,
+        error: Option<&str>,
+        request_id: RequestId,
+        trace_id: TraceId,
+        module_state: &Arc<ModuleTurnState>,
+    ) -> RuntimeResult<HookEffects> {
+        match self
+            .run_hook(
+                hook,
+                session_id,
+                invocation,
+                model,
+                messages,
+                candidate,
+                tool_call,
+                tool_result,
+                error,
+                module_state,
+            )
+            .await
+        {
+            Ok(effects) => Ok(effects),
+            Err(runtime_error) => {
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::ExecutionFailed {
+                        phase: "module_hook".into(),
+                        error: runtime_error.to_string(),
+                    },
+                    self.clock.as_ref(),
+                );
+                self.sessions.save(session).await?;
+                Err(runtime_error)
+            }
+        }
+    }
+
+    async fn run_hook(
+        &self,
+        hook: HookPoint,
+        session_id: &SessionId,
+        invocation: &InvocationContext,
+        model: &str,
+        messages: &[NormalizedMessage],
+        candidate: Option<&NormalizedResponse>,
+        tool_call: Option<&ToolCall>,
+        tool_result: Option<&ToolResult>,
+        error: Option<&str>,
+        module_state: &Arc<ModuleTurnState>,
+    ) -> RuntimeResult<HookEffects> {
+        let mut effects = HookEffects::default();
+        for module in &self.modules {
+            let manifest = module.manifest();
+            let invoker = RuntimeModuleInvoker::new(
+                &self.providers,
+                model,
+                &manifest.id,
+                Arc::clone(module_state),
+                invocation.depth,
+            );
+            let context = ModuleContext {
+                session_id,
+                model,
+                messages,
+                candidate,
+                tool_call,
+                tool_result,
+                invocation,
+                module_id: &manifest.id,
+                error,
+                invoker: &invoker,
+            };
+            let outcome =
+                module
+                    .on_hook(hook, &context)
+                    .await
+                    .map_err(|source| RuntimeError::Module {
+                        module_id: manifest.id.clone(),
+                        source,
+                    })?;
+            effects.push(&manifest.id, outcome);
+        }
+        Ok(effects)
+    }
+
+    async fn observe_error(
+        &self,
+        request: &TurnRequest,
+        module_state: Arc<ModuleTurnState>,
+        error: &RuntimeError,
+    ) {
+        let messages = match self.sessions.load(&request.session).await {
+            Ok(Some(session)) => session.messages,
+            _ => Vec::new(),
+        };
+        let model = request
+            .model
+            .clone()
+            .or_else(|| self.config.default_model.clone())
+            .unwrap_or_default();
+        let invocation = InvocationContext::user_turn();
+        let error_text = error.to_string();
+        // Error observation is deliberately best-effort. A failing error hook
+        // cannot replace, swallow, or rewrite the original runtime failure.
+        let _ = self
+            .run_hook(
+                HookPoint::OnError,
+                &request.session,
+                &invocation,
+                &model,
+                &messages,
+                None,
+                None,
+                None,
+                Some(&error_text),
+                &module_state,
+            )
+            .await;
+    }
+
+    async fn fail_module_stop(
+        &self,
+        session: &mut Session,
+        request_id: RequestId,
+        trace_id: TraceId,
+        module_id: &str,
+        reason: String,
+    ) -> RuntimeResult<TurnOutcome> {
+        let error = RuntimeError::ModuleStopped {
+            module_id: module_id.to_string(),
+            reason,
+        };
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::ExecutionFailed {
+                phase: "module_stop".into(),
+                error: error.to_string(),
+            },
+            self.clock.as_ref(),
+        );
+        self.sessions.save(session).await?;
+        Err(error)
     }
 
     /// Ask governance whether this round's completion may proceed.
@@ -1151,7 +1706,7 @@ impl Runtime {
     /// Record the assistant's answer, persist the session, and close the trace.
     async fn finish_turn(
         &self,
-        mut session: Session,
+        session: &mut Session,
         mut trace: ExecutionTrace,
         request_id: RequestId,
         served_by: CapabilityId,
