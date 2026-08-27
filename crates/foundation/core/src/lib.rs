@@ -17,7 +17,12 @@
 use serde::{Deserialize, Serialize};
 
 // R131 架构债清理: 拆 lib.rs 108KB → 5 submodules
-// 0 触碰公开签名 — `use apeireth_core::Episode` 等不破坏.
+// P-arch (2026-08-27): 0 触碰公开签名 — `use apeireth_core::Episode` 等不破坏.
+// v2.0 alpha 新代码走 `apeireth_core::kernel::Episode` (kernel 模块已 re-export
+// 全部 legacy 域类型为 alias, 同一类型不同路径). 真实 drain (删 root 的
+// `pub use memory::*` 等) 排 v2.1: 需 12 个 crate 改路径, 1:1
+// aliases 已经在 kernel 准备好, drain 切路径只是改 use 行.
+// 详细: docs/04-internal/v2-unabsorbed-features.md §P1 core drain.
 pub mod memory;
 // 可注入时钟 (SystemClock / VirtualClock): 时间敏感机制测试与模拟快进
 pub mod clock;
