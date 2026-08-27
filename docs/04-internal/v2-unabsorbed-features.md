@@ -381,4 +381,24 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 
 ---
 
-_本文 v2 首发 (2026-08-27)：基于对 77 个 legacy/donor crate + 15 archived + 13 frozen 的 doc comment + 关键模块声明实测盘查（非子代理推理）。结论：v2 13-crate 工作区**缺 6 类 A 级功能 + 7 类 B 级 + 14 类 C 级 + 14 类 D 级**。A 级（council/team-lead/perception/memory-extensions/tool-runtime/tool-approval）必须进 v2 roadmap，P-arch / P1 / P3 / P5 / P6 排期落地。v2-native 设计原则贯穿：多 instance LLM 隔离（v1 全独立 session 太重）/ JSON 协议（v1 free text）/ 单一事实源 plugin registry（v1 多 registry）/ trait-based 多态（v1 if-else 散落）。**0 漂移承诺**: 8 哲学锚 / 13 键 LOCKED 数据 / 3 项不可变脊柱语义 / workspace.version 0 改；本文新增 `crates/foundation/orchestration/`（P6）+ `crates/engine/perception/`（P4）+ 各 trait 扩展，**不**触碰 LOCKED public API。_
+_本文 v2 首发 (2026-08-27) + rc.1 进展更新 (2026-08-27 收盘, HEAD `67c06d95`)：基于对 77 个 legacy/donor crate + 15 archived + 13 frozen 的 doc comment + 关键模块声明实测盘查（非子代理推理）。结论：v2 13-crate 工作区**缺 6 类 A 级功能 + 7 类 B 级 + 14 类 C 级 + 14 类 D 级**。A 级（council/team-lead/perception/memory-extensions/tool-runtime/tool-approval）必须进 v2 roadmap，P-arch / P1 / P3 / P5 / P6 排期落地。v2-native 设计原则贯穿：多 instance LLM 隔离（v1 全独立 session 太重）/ JSON 协议（v1 free text）/ 单一事实源 plugin registry（v1 多 registry）/ trait-based 多态（v1 if-else 散落）。**0 漂移承诺**: 9 哲学锚（升 8→9, 加 O-6 永远追求最优）/ 13 键 LOCKED 数据 / 3 项不可变脊柱语义 / workspace.version 0 改；本文新增 `crates/foundation/orchestration/`（P6）+ `crates/engine/perception/`（P4）+ 各 trait 扩展，**不**触碰 LOCKED public API。
+
+**P-arch + RC 进展 (2026-08-27 收盘, HEAD `67c06d95`)**:
+- ✅ O-6 哲学锚 #9 登记 + 12 项工程化兑现 (5 Refactor + 5 守门 workflow + 文档 + kernel re-export + 统一 error trait)
+- ✅ **7/10 RC 真实现完成**: RC-1 MemoryBackend SqliteBackend / RC-2 Experience / RC-3 PreferenceStore / RC-4 SelfAssessmentStore / RC-8 SubSupervisor (改名 `TokioSubSupervisor` → `StdSubSupervisor`, 诚实反映 std::process) / RC-9 keyring / RC-10 File AES-GCM
+- ⏳ **3/10 RC 待 LLM API key + 硬件**: RC-5 Orchestrator runtime LLM harness / RC-6 Council multi-LLM + 60s timeout / RC-7 Perception 真 modality (Whisper / screen capture)
+- **cognitive module** (其他 dev 推, 3 commit `a699c5f5`/`1d227d6a`/`64e64f46`): hook ABI + 集成 + lifecycle invariants. 不在本工作范围.
+- 详见 `docs/04-internal/HANDOFF-NOTES.md` (子代理 D 写, 接手人手册) + `CHANGELOG.md` (RC 进展时间表) + `ROADMAP.md` §3 (当前状态) + `docs/04-internal/v2.0.0-rc-roadmap.md` (10 RC 完整) + `docs/01-architecture/v2-arch-refactor-batch.md` (O-6 5 Refactor + 守门)
+
+**接手人 5 条 actionable advice** (per 子代理 D handoff):
+1. 优先做 RC-5/6/7 (需 LLM key), 不要重做 RC-1/2/3/4/8/9/10 (写真完成, 0 改)
+2. 哲学锚编号 ledger 待核 (12 vs 23 项, 子代理 A/B 报告), 别重复兑现
+3. 12 consumer 弃用迁移 (alpha `#[allow(deprecated)]` → v2.0 release 前删, rc 后必破)
+4. RC-10 补 line header AAD tamper 保护 (子代理 C 建议 5)
+5. cognitive module 不变量 (其他 dev 推, 看 commits `64e64f46` / `1d227d6a` / `a699c5f5`)
+
+**子代理 4 项报告** (A/B/C/D, 全部采纳):
+- A (`5dc29cb`): Send+Sync 注释 (commit `67fc66a0` 自动派生 + 注释说明, 不写 `#[derive(Send, Sync)]` 因 unsafe trait)
+- B (`792f5a97`): v1 vs v2 41 项差异 (A6 / B7 / C14 / D14) + 5 风险 (RC-7 硬件依赖 / Council 60s timeout / 12 consumer 弃用 / schema 兼容 / O-6 守门回归)
+- C (`9d60deea`): P0 build break (RC-2 untracked) + RC-8 命名错位 (commit `4e4fba89` 修)
+- D (`4f56cf5a`): 接手人手册 `HANDOFF-NOTES.md` 11 节_
