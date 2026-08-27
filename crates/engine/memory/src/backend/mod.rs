@@ -21,6 +21,12 @@
 // Trait 抽象层在 plugin (P-arch 2026-08-27 O-6 重构); 这里是 re-export 保持 v1 兼容路径
 pub use apeireth_plugin::memory_backend::{BackendKind, MemoryBackend};
 
+// 3 backend impl (P-arch 2026-08-27 + RC-1 2026-08-27 纯 SQL 重写)
+// `pub mod` 声明让测试模块 + 外部 import 都能看到 3 个具体 backend
+pub mod sqlite;
+pub mod file;
+pub mod in_memory;
+
 use apeireth_core::kernel::memory::Episode;
 
 use crate::append_only::HistoryEntry;
