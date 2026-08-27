@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth 纯 Rust SDK 客户端 (1.0 release #2 install), 0 PyO3, 0 .venv"
+description = "Apeireth 客户端 SDK（阶段 6 stub: 6 工具白名单 + 鉴权 5 组件 + WS 8 帧协议类型已就位; 真实 HTTP/WS 待 R21 接, 显式 `unimplemented!()` 守门. 0 PyO3, 0 .venv, 纯 Rust）"
 
 [dependencies]
 tokio = { workspace = true }

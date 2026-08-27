@@ -1,72 +1,157 @@
-# Apeireth 1.0 release CODEOWNERS
-# 主人 2026-08-05 拍板
-# TP13 #27 (backlog #31): 11 悬空 crate 条目清理 (2026-08-18 devops_engineer)
-#  - 移除: apeireth-mcp-ssh / apeireth-mcp-winrm / apeireth-mcp-relay-image
-#          apeireth-image-prompt / apeireth-rollback / apeireth-plugin
-#          apeireth-repo-scan / apeireth-repo-analyzer / apeireth-keyring
-#          apeireth-machine-id / apeireth-observability
-#  - 全部 `crates/<name>/` 目录不存在 (C3 复核 + TP13 实测)
-#  - 恢复路径: git log -- CODEOWNERS + git checkout <commit>^ -- CODEOWNERS
-#  - 后续: 实际 crate 建好后, 由对应 owner 加回
+# Apeireth CODEOWNERS (v2.0 工程重构线, 默认分支 main @ d6910cf7)
+#
+# 维护规范 (per docs/archive/conventions/):
+#   - 新增 canonical crate 入口: 在对应分组下加 1 行
+#   - legacy/ 路径: 仅存档, owner = @apeireth-archive (无主动改动)
+#   - docs/ 现行区(01-architecture/02-guides/03-reference/development)由对应 owner 守门
+#   - docs/archive/** 历史: 不走 CODEOWNERS (不再作为活跃审核入口)
+#   - 0 触碰: 8 哲学锚 / R11 baseline 3 值 / workspace.version (per 09-anchor.md + 11-baseline.md)
+#
+# 路径格式: GitHub CODEOWNERS, 每组顺序自上而下、最后匹配覆盖前面匹配
 
-# 顶层
-/CHANGELOG.md          @chuling
-/README.md             @chuling
-/ROADMAP.md            @chuling
+# ============================================================================
+# 顶层根文档 (主仓门面)
+# ============================================================================
+/CHANGELOG.md              @chuling
+/ROADMAP.md                @chuling
+/README.md                 @chuling
+/README.zh-CN.md           @chuling
+/RELEASE_NOTES.md          @chuling
+/CODEOWNERS                @chuling
+/CONTRIBUTING.md           @chuling
+/SECURITY.md               @chuling
+/INSTALL.md                @chuling
+/Cargo.toml                @chuling
 
-# 7 LOCKED 文档 (per APEIRETH-CONVENTIONS, 8 hard-walls 之一)
-/docs/APEIRETH-CONVENTIONS.md  @chuling
-/docs/APEIRETH-VERSIONING.md   @chuling
-/docs/APEIRETH-GLOSSARY.md     @chuling
-/docs/stage1/                   @chuling
-/docs/stage2/                   @chuling
-/docs/stage3/                   @chuling
-/docs/v2-strategy/             @chuling
-/docs/v4-strategy/             @chuling
-/docs/v4.1-strategy/           @chuling
-/docs/v6-baseline-architecture/ @chuling
-/docs/stage4/R11-baseline.md    @chuling
+# ============================================================================
+# 文档现行区 (4 段规范结构, docs/README.md)
+# ============================================================================
+# 01-architecture: 架构契约 + 审计
+/docs/01-architecture/architecture.md           @chuling
+/docs/01-architecture/vision.md                  @chuling   # 🔒 锁定 - 哲学锚, 0 改
+/docs/01-architecture/philosophy.md             @chuling   # 🔒 锁定 - 哲学锚, 0 改
+/docs/01-architecture/brand.md                   @chuling   # 🔒 锁定 - 品牌锚, 0 改
+/docs/01-architecture/security.md                @chuling   # 安全模型（v1 快照, 加 status 指引）
+/docs/01-architecture/engineering-report.md     @chuling
+/docs/01-architecture/                           @chuling   # 审计/迁移文档含
 
-# 24 LOCKED crate (per .github/workflows/rust.yml hard-walls job, 2026-08-19 同步)
-# 注: hard-walls job 实际锁 23 个 (缺 apeireth-graph), 这是漂移
-#      修 hard-walls job 之前这里先加回, 保持 1:1
-/legacy/donor/apeireth-supervisor/   @chuling
-/legacy/donor/apeireth-agent/        @chuling
-/legacy/donor/apeireth-council/      @chuling
-/legacy/donor/apeireth-bus/          @chuling
-/crates/foundation/protocol/     @chuling
-/legacy/donor/apeireth-mcp/          @chuling
-/legacy/donor/apeireth-tool-registry/ @chuling
-/legacy/donor/apeireth-tool-runtime/ @chuling
-/legacy/donor/apeireth-graph/        @chuling
-/legacy/donor/apeireth-pipeline/     @chuling
-/legacy/donor/apeireth-tool-approval/ @chuling
-/legacy/donor/apeireth-extension/    @chuling
-/legacy/donor/apeireth-evolution/    @chuling
-/legacy/donor/apeireth-api/          @chuling
-/crates/foundation/core/         @chuling
-/crates/engine/memory/       @chuling
-/legacy/donor/apeireth-asi/          @chuling
-/legacy/donor/apeireth-tools/        @chuling
-/crates/adapters/cli/          @chuling
-/legacy/donor/apeireth-bench/        @chuling
-/legacy/donor/apeireth-cognition/    @chuling
-/legacy/donor/apeireth-action/       @chuling
-/legacy/donor/apeireth-life-force/   @chuling
-/legacy/donor/apeireth-constraint/   @chuling
+# 02-guides: 用户/开发指南
+/docs/02-guides/quick-start.md                  @chuling
+/docs/02-guides/development.md                  @chuling
+/docs/02-guides/deployment.md                   @chuling
+/docs/02-guides/user-manual.md                  @chuling
+/docs/02-guides/frontend-data-contract.md       @chuling   # v1 契约, 标历史
+/docs/02-guides/custom-llm.md                   @chuling   # v1 形态, 标历史
+/docs/02-guides/smol-vm-config.md               @chuling   # 自标历史
 
-# 实际存在的 P0 MCP + 团队协作 (R20 阶段 1 残留)
-/legacy/donor/apeireth-workflow/        @chuling
-/legacy/donor/apeireth-team-lead/       @chuling
+# 03-reference: API/术语/crate 参考
+/docs/03-reference/crates.md                    @chuling
+/docs/03-reference/api.md                       @chuling
+/docs/03-reference/glossary.md                  @chuling
 
-# 实际存在的 skeleton (R20 阶段 1 续 残留)
-/legacy/donor/apeireth-lark/            @chuling
-/legacy/donor/apeireth-voice/           @chuling
+# development: 目录与新增模块
+/docs/development/repository-layout.md         @chuling
+/docs/development/adding-a-module.md            @chuling
+/docs/development/legacy-port-backlog.md        @chuling
 
-# 1.0 release 估补 (实际存在的)
-/legacy/donor/apeireth-i18n/            @chuling
-/crates/adapters/sdk/             @chuling
+# 04-internal: 内部工作文档（设计意图 + 台账 + 团队）
+/docs/04-internal/design-intent.md              @chuling   # 🔒 思想层 + §1 机制映射（活跃维护）
+/docs/04-internal/next-team-handbook.md         @chuling
+/docs/04-internal/backlog.md                   @chuling   # 已冻结, 仅存档
+/docs/04-internal/release-plan.md               @chuling
+/docs/04-internal/maintenance-guide.md          @chuling
+/docs/04-internal/plugin-authoring-guide.md      @chuling
+/docs/04-internal/secret-management-policy.md   @chuling
+/docs/04-internal/team-work-doc.md              @chuling
+/docs/04-internal/ci-fix-log-2026-08.md         @chuling
+/docs/04-internal/borrow-from-jimmyxiao2009.md  @chuling
+/docs/04-internal/memory-research.md            @chuling
+/docs/04-internal/upgrade-research-pack.md      @chuling
+/docs/04-internal/ref-crawler-research.md       @chuling
+/docs/04-internal/ref-gh-accel.md               @chuling
+/docs/04-internal/ref-hydra.md                  @chuling
+/docs/04-internal/ref-yoyo-evolve.md            @chuling
+/docs/04-internal/design-task-lease-2026-08-21.md           @chuling
+/docs/04-internal/design-three-way-conflict-2026-08-21.md   @chuling
 
-# post-1.0.0 新增 (PR #1 合并, 2026-08-19)
-# companion-desktop 独立 [workspace] (Svelte 5 + Tauri 2), 不在根 cargo workspace
-/frontend/companion-desktop/      @chuling
+# 设计 (前端 + 系统)
+/docs/design/01-DESIGN-SYSTEM.md               @chuling
+/docs/design/intro-animation.md                 @chuling
+/docs/design/frontend-handoff.md               @chuling
+
+# 历史快照（v1/v2 过程，含 R*/stage*/r*/adr/conventions/glossary/versioning）
+/docs/archive/                                @apeireth-archive
+
+# ============================================================================
+# Foundation（5 个, 稳定契约层）
+# ============================================================================
+# 5 个 crate 一律 root-owned: 公开 API 是稳定契约, 改动需架构审议
+/crates/foundation/core/                       @chuling
+/crates/foundation/protocol/                   @chuling
+/crates/foundation/plugin/                     @chuling
+/crates/foundation/governance/                 @chuling
+/crates/foundation/credentials/                 @chuling   # 暂未接线, 公开 API 冻结
+
+# ============================================================================
+# Engine（4 个, 运行时执行 + 持久化 + 记忆 + Provider）
+# ============================================================================
+/crates/engine/runtime/                        @chuling   # canonical agent loop, 单一入口
+/crates/engine/provider/                       @chuling   # 3 canonical provider (minimax/anthropic/openai-compatible)
+/crates/engine/storage/                        @chuling
+/crates/engine/memory/                         @chuling
+
+# ============================================================================
+# Capabilities（1 个, 唯一 ProcessExecutor 边界）
+# ============================================================================
+/crates/capabilities/tools/                    @chuling   # 包名 apeireth-tools-canonical
+
+# ============================================================================
+# Adapters（3 个, 外部入口面）
+# ============================================================================
+/crates/adapters/gateway/                      @chuling   # canonical HTTP :8080
+/crates/adapters/cli/                          @chuling   # apeireth session/chat/gateway serve
+/crates/adapters/sdk/                          @chuling   # stub mode (unimplemented! 守门), 真实 HTTP/WS 待 R21
+
+# ============================================================================
+# 独立前端 workspace（不在根 Cargo workspace, 自己的 CI）
+# ============================================================================
+/frontend/companion-desktop/                   @chuling
+
+# ============================================================================
+# 部署/打包/工具（scripts, deploy, packaging, reports）
+# ============================================================================
+/scripts/                                     @chuling
+/deploy/                                      @chuling
+/packaging/                                   @chuling
+/Makefile                                     @chuling
+/suites.toml                                  @chuling   # 装配矩阵 (若已迁移/移除则此处随之取消)
+/reports/                                     @chuling   # 验证证据（审计后入）
+
+# ============================================================================
+# CI 与 GitHub 模板
+# ============================================================================
+/.github/                                     @chuling
+/.github/workflows/                           @chuling   # 13 门禁 workflow（lint/audit/deny/miri/rustdoc/m2b/m2c/m3a/compan/p3/r128-2/ci-fix 等）
+
+# ============================================================================
+# 历史参考（legacy/ 排除构建, 仅 donor/archived/frozen 三段, 由 @apeireth-archive 守门）
+# ============================================================================
+/legacy/                                      @apeireth-archive   # 86-crate 旧工作区整体归档, ref-only
+/legacy/donor/                                @apeireth-archive
+/legacy/archived/                             @apeireth-archive
+/legacy/frozen/                               @apeireth-archive
+
+# ============================================================================
+# 历史不关注（构建垃圾/临时/未跟踪残留）
+# ============================================================================
+/crates/_archived/                            @apeireth-archive   # v1 构建垃圾未跟踪
+/reconstruction_v2/                           @apeireth-archive   # git 已删, 磁盘残留未跟踪
+/.research_mem/                               @apeireth-archive
+/.scratch_n4/                                 @apeireth-archive
+
+# ============================================================================
+# 真实层（CI 引用: rust.yml hard-walls job 等; 这部分必须与 .github/workflows 1:1）
+# ============================================================================
+# 不可变脊柱 (per R148 仅保 3 项):
+# - Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义
+# 此 3 项由 governance crate + core crate 共同承担, 见 ROADMAP §5
