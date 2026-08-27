@@ -21,7 +21,7 @@
 // Trait 抽象层在 plugin (P-arch 2026-08-27 O-6 重构); 这里是 re-export 保持 v1 兼容路径
 pub use apeireth_plugin::memory_backend::{BackendKind, MemoryBackend};
 
-use apeireth_core::Episode;
+use apeireth_core::kernel::memory::Episode;
 
 use crate::append_only::HistoryEntry;
 use crate::MemoryResult;

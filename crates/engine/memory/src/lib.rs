@@ -22,7 +22,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
 
-use apeireth_core::{Episode, IdentityCard, Note, Session};
+use apeireth_core::{kernel::memory::Episode, kernel::memory::IdentityCard, kernel::memory::Note, kernel::memory::Session};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -74,8 +74,8 @@ pub use streams::{
 };
 pub use three_layer::{ThreeLayerMemory, SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY}; // R30 U9
 
-/// 重新导出 `apeireth_core::Episode` 方便下游不必记多个导入路径.
-pub use apeireth_core::Episode as CoreEpisode;
+/// 重新导出 `apeireth_core::kernel::memory::Episode` 方便下游不必记多个导入路径.
+pub use apeireth_core::kernel::memory::Episode as CoreEpisode;
 // R177: organ invariants (10 tests + 2 Kani proofs)
 mod organ_kani_proofs;
 
@@ -307,7 +307,7 @@ pub(crate) fn fresh_store() -> SqliteMemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::Migration;
+    use apeireth_core::kernel::memory::Migration;
 
     #[test]
     fn open_in_memory_creates_schema() {

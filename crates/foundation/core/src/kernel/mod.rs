@@ -66,11 +66,7 @@ pub use time::{system_clock, Clock, SystemClock, Timestamp, VirtualClock};
 //
 // 7 键 + 13 键 验证层类型: 已在 13 键 LOCKED 范畴, 0 改.
 pub use crate::gate::Gate as GateTrait;
-pub use crate::memory::Episode;
-pub use crate::memory::IdentityCard;
-pub use crate::memory::Migration as CarrierMigration;
-pub use crate::memory::Note;
-pub use crate::memory::Session;
+pub use crate::kernel::memory::{Episode, IdentityCard, Migration as CarrierMigration, Note, Session};
 pub use crate::onion::{PermissionOnion, PrincipleOnion, PrincipleLayer};
 pub use crate::philosophy::{PhilosophyGuard, PhilosophyKey, PhilosophyVerdict, VerdictCache};
 
@@ -118,19 +114,20 @@ mod tests {
         assert_eq!(capability.kind_segment(), "tool");
     }
 
-    /// P-arch (2026-08-27): core drain 第一阶段验证.
-    /// kernel re-export 的 legacy 域类型 = 同一类型 (非新类型).
-    /// 0 触碰公开签名; v2.1 drain 时 12 个 consumer 仅改 `use` 行即可.
+    /// P-arch (2026-08-27) O-6 锚 #9 兑现: core drain 真完成 (2026-08-27 收尾).
+    /// `apeireth_core::Episode` 旧路径已删, 新代码唯一可达 `apeireth_core::kernel::memory::Episode`
+    /// (or `kernel::{Episode}` re-export). 12 consumer 已迁.
+    /// 0 触碰公开签名: 旧类型定义 0 改 (字段一致); 只是 import 路径多了一条.
     #[test]
-    fn kernel_legacy_aliases_point_to_the_same_types_as_root() {
-        let _e_via_root: crate::memory::Episode = Episode {
+    fn kernel_memory_is_canonical_source_of_truth() {
+        let _e: Episode = Episode {
             id: "ep-drain".into(),
             timestamp: 1_700_000_000,
             role: "user".into(),
             content: "core drain test".into(),
             session_id: "sess-drain".into(),
         };
-        // 编译通过 = 类型完全一致 (trait object 同一 ID)
+        // 编译通过 = kernel::memory 是唯一 source of truth
 
         // 13 键哲学层别名也可达
         let _key: PhilosophyKey = PhilosophyKey::NotClone;

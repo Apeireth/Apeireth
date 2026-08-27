@@ -33,7 +33,7 @@ use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
-use apeireth_core::Episode;
+use apeireth_core::kernel::memory::Episode;
 
 /// 记忆治理状态.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

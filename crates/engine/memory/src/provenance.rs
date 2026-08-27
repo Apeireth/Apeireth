@@ -15,7 +15,7 @@
 
 use rusqlite::{params, Connection, OptionalExtension};
 
-use apeireth_core::Episode;
+use apeireth_core::kernel::memory::Episode;
 
 use crate::{MemoryError, MemoryResult};
 
