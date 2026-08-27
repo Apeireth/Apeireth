@@ -11,6 +11,7 @@ members = [
     "crates/engine/provider",
     "crates/engine/storage",
     "crates/engine/memory",
+    "crates/engine/perception",
     "crates/capabilities/tools",
     "crates/adapters/gateway",
     "crates/adapters/cli",
