@@ -231,8 +231,10 @@ name = "apeireth-plugin"
 version = "1.2.0"
 dependencies = [
  "apeireth-core",
+ "apeireth-orchestration",
  "apeireth-protocol",
  "async-trait",
+ "futures",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
