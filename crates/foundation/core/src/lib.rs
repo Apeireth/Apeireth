@@ -24,6 +24,8 @@ use serde::{Deserialize, Serialize};
 // aliases 已经在 kernel 准备好, drain 切路径只是改 use 行.
 // 详细: docs/04-internal/v2-unabsorbed-features.md §P1 core drain.
 pub mod memory;
+// (legacy compat shim — see Refactor-5 in v2-arch-refactor-batch.md; 真实
+// 域类型定义在 crate::kernel::memory)
 // 可注入时钟 (SystemClock / VirtualClock): 时间敏感机制测试与模拟快进
 pub mod clock;
 // reconstruct_v2 canonical convergence: stable primitives shared by every
@@ -37,7 +39,13 @@ pub mod clock;
 pub mod kernel;
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
+// P-arch (2026-08-27) Refactor-5: lib.rs 直接 `pub use memory::*` (memory 模块
+// re-exports kernel::memory, 单点 source of truth). kernel 也独立 re-export
+// (kernel 路径 `apeireth_core::kernel::Episode` 给新代码用).
+// 旧代码 `use apeireth_core::Episode` 仍可用 (走 crate::memory 路径).
+// v2.0.0-rc 阶段: 12 consumer 批量 `use apeireth_core::kernel::Episode` + 删此 `pub use`.
 pub use memory::*;
+
 pub mod gate;
 pub mod lifecycle;
 pub mod onion;
