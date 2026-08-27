@@ -307,7 +307,7 @@ mod windows_tests {
             .spawn()
             .unwrap();
 
-        job.assign(child.as_raw_handle() as _).unwrap();
+        job.assign(child.as_raw_handle().cast()).unwrap();
 
         drop(job);
 
