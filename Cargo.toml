@@ -161,6 +161,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
 thiserror = "1.0"
+# v2.0.0-rc.1 RC-10: AES-256-GCM 加密 (per v2.0.0-rc-roadmap.md §3 RC-10: "File AES-GCM 加密")
+# `aes-gcm` 0.10 是 stable release, 0.11 是 2024-06 release (rust 1.78+)
+aes-gcm = "0.10"
+rand = "0.8"
 # HTTP 客户端 (含 stream feature, 给 TUI 改瘦 Step 1 的 SSE 流式用)
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 # async stream utilities (SSE 解析依赖 StreamExt)
