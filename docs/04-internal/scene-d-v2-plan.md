@@ -230,17 +230,17 @@ pub trait IsolatedLlmInstance: Send + Sync {
 
 ---
 
-## 5. 待拍板决策
+## 5. 决策（2026-08-27 用户拍板）
 
-| # | 决策项 | 选项 | 我的推荐 |
-|---|---|---|---|
-| 1 | L3 评审实例的模型选择 | (a) 同 provider 不同 temperature / (b) 同 provider 不同 model / (c) 不同 provider | (b) 同 provider 不同 model — 同 provider 减少 API key 管理，但 model 不同确保隔离 |
-| 2 | PreferenceStore 持久化后端 | (a) 复用 crates/engine/storage SQLite / (b) 独立小 KV store | (a) — 已在 storage 路径上，避免再开 DB 连接管理 |
-| 3 | 多 agent 通信协议 | (a) 自由文本（v1 模式）/ (b) JSON 结构化 | (b) — 自由文本让评审 agent 容易被 prompt injection |
-| 4 | SelfAssessmentCache 触发频率 | (a) 每 50 turn / (b) 每 100 turn / (c) 每次 tool 失败时 | (c) — 事件驱动比时间驱动更准；50/100 turn 是 fallback |
-| 5 | orchestrator 是否进 Cargo workspace | (a) 是（13-crate → 14-crate） / (b) 否（独立 `crates/_arch/orchestrator/`）| (a) — 进 workspace 让它与其他 crate 走同一 CI + 一致治理 |
-| 6 | 例 3 是否需要"主人审批 orchestrator 编排" | (a) 否（orchestrator 是 runtime 内部）/ (b) 是（重大任务先给主人看 plan） | (b) — 长程任务应该让主人知道分了什么给谁 |
-| 7 | L3 总延迟预算 | (a) 与 L1 hook 同延迟（<100ms）/ (b) 异步并行（不阻塞主对话） | (b) — L3 评审不能阻塞主对话流 |
+| # | 决策项 | 选项 | 拍板 | 理由 |
+|---|---|---|---|---|
+| 1 | L3 评审实例的模型选择 | (a) 同 provider 不同 temperature / (b) 同 provider 不同 model / (c) 不同 provider | ✅ **(b) 同 provider 不同 model** | 同 provider 减少 API key 管理；不同 model 确保隔离（同一 model 同一 prompt 多次调用结果高度相关，temperature 调不准） |
+| 2 | PreferenceStore 持久化后端 | (a) 复用 crates/engine/storage SQLite / (b) 独立小 KV store | ✅ **(a) 复用 SQLite** | 已在 storage 路径上，避免再开 DB 连接管理；复用 WAL + migration 机制 |
+| 3 | 多 agent 通信协议 | (a) 自由文本（v1 模式）/ (b) JSON 结构化 | ✅ **(b) JSON 结构化** | 自由文本让评审 agent 容易被 prompt injection；JSON schema 强约束 |
+| 4 | SelfAssessmentCache 触发频率 | (a) 每 50 turn / (b) 每 100 turn / (c) 每次 tool 失败时 | ✅ **(c) 事件驱动 + fallback** | 事件驱动比时间驱动更准；50/100 turn 是 fallback；tool 失败必触发（**重大偏差信号**） |
+| 5 | orchestrator 是否进 Cargo workspace | (a) 是（13-crate → 14-crate） / (b) 否（独立 `crates/_arch/orchestrator/`）| ✅ **(a) 进 workspace** | 与其他 crate 走同一 CI + 一致治理；**不**进 workspace 反而是历史包袱的回归 |
+| 6 | 例 3 是否需要"主人审批 orchestrator 编排" | (a) 否（orchestrator 是 runtime 内部）/ (b) 是（重大任务先给主人看 plan） | ✅ **(b) 主人审批** | 长程任务应该让主人知道分了什么给谁；orchestrator 出 plan 阶段暂停等主人批准；批准后进 implement |
+| 7 | L3 总延迟预算 | (a) 与 L1 hook 同延迟（<100ms）/ (b) 异步并行（不阻塞主对话） | ✅ **(b) 异步并行** | L3 评审不能阻塞主对话流；异步 + 评审结果用时通知主人 |
 
 ---
 
