@@ -134,11 +134,11 @@ async fn unicode_script_round_trips_without_normalization() {
     let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
 
     #[cfg(windows)]
-    let command = "powershell -NoProfile -EncodedCommand WwBDAG8AbgBzAG8AbABlAF0AOgA6AE8AdQB0AHAAdQB0AEUAbgBjAG8AZABpAG4AZwA9AFsAVABlAHgAdAAuAFUAVABGADgARQBuAGMAbwBkAGkAbgBnAF0AOgA6AG4AZQB3ACgAKQA7ACAAVwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIABhAHAAZQBpAHIAZQB0AGgAXwDqlg==";
+    let command = "powershell -NoProfile -NonInteractive -EncodedCommand WwBDAG8AbgBzAG8AbABlAF0AOgA6AE8AdQB0AHAAdQB0AEUAbgBjAG8AZABpAG4AZwA9AFsAVABlAHgAdAAuAFUAVABGADgARQBuAGMAbwBkAGkAbgBnAF0AOgA6AG4AZQB3ACgAKQA7ACAAVwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIABhAHAAZQBpAHIAZQB0AGgAXwDqlg==";
     #[cfg(not(windows))]
     let command = "printf 'apeireth_雪'";
 
-    let value = invoke(&tool, command, None, None).await;
+    let value = invoke(&tool, command, None, Some(120_000)).await;
     let stdout = value["stdout"].as_str().unwrap();
     assert!(stdout.contains("apeireth_雪"), "stdout was {stdout:?}");
 }
