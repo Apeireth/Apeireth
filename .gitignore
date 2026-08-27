@@ -209,7 +209,8 @@ crates/apeireth-integration-e2e/.*.log
 #       supply-chain/ 是 cargo-vet 初始化产物 (782 exemptions + Mozilla 缓存),
 #       3 个目录都不进 git — 重现: `cargo vet init` + `make tools-install`
 # 注: 这些目录必须在 init 之前先 .gitkeep, 否则首次 checkout 后丢失规则
-tools/
+# (anchor 到根: 只 ignore 根 ./tools/, 不要误伤 crates/capabilities/tools/ canonical crate)
+/tools/
 sbom/
 supply-chain/
 
