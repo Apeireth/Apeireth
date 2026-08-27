@@ -433,3 +433,9 @@ pub const MEMORY_SUBMODULE_COUNT: usize = 2;
 /// **方法范围**: trait 暴露**跨后端最小集**——append-only 写入 + 列表。
 /// 复杂查询 (EpisodeQuery 复合条件) 走具体后端 trait (EpisodeStore) 保留。
 pub mod backend;
+
+/// P-arch (2026-08-27): B1 Experience trait 骨架 (3-layer: Wiki / KG / Association).
+///
+/// v2.0 alpha 是 0 装 (trait 边界, 无 impl); v2.1 接 SQLite + gen_cache
+/// 完整 pipeline. 详见 `v2-unabsorbed-features.md` §B1.
+pub mod experience;
