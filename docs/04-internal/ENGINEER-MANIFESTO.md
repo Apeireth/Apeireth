@@ -123,8 +123,8 @@ Author:          主代理 Mavis
 | 1 | **clippy 0 警告** | `cargo clippy --workspace --all-targets --locked -- -D warnings` | 0 warning, 0 error |
 | 2 | **workspace tests 0 失败** | `cargo test --workspace --locked` | 0 FAILED (含 1 ignored 真实 LLM E2E) |
 | 3 | **legacy compat path < 100 引用** | `grep -r "legacy/" crates/ \| wc -l` | < 100 (legacy/ 在 workspace exclude) |
-| 4 | **LOCKED 5 项 0 触碰** (详 §10) | (CI 比对 src 改动) | 8 哲学锚本体 + 13 键 + 3 不可变脊柱 + workspace.version + R11 baseline 全 0 改 |
-| 5 | **哲学锚表头 0 减** | (CI 比对 8 锚 description 行数) | NINE_ANCHORS_HARDCODE 编译期断言不 panic |
+| 4 | **LOCKED 5 项 0 触碰** (详 §10) | (CI 比对 src 改动) | 9 哲学锚本体 + 13 键 + 3 不可变脊柱 + workspace.version + R11 baseline 全 0 改 |
+| 5 | **哲学锚表头 0 减** | (CI 比对 9 锚 description 行数) | NINE_ANCHORS_HARDCODE 编译期断言不 panic |
 
 **手动验证真账** (接手人首件事):
 ```bash
@@ -299,7 +299,7 @@ docs/04-internal/9-organ-progress-2026-08-28.md  ← 9 organ 实时进度
 - 0 装诚实真账:
   - 测试: cargo test --workspace --locked = <N> passed / 0 failed
   - clippy: cargo clippy --workspace --all-targets --locked -- -D warnings = 0 警告
-  - 0 触碰 LOCKED 5 项 (8 哲学锚本体 + 13 键 + 3 不可变脊柱 + workspace.version + R11 baseline)
+  - 0 触碰 LOCKED 5 项 (9 哲学锚本体 + 13 键 + 3 不可变脊柱 + workspace.version + R11 baseline)
   - 0 引新外部 dep (Cargo.lock 0 行 diff)
 - O-6 三阶审查:
   - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
