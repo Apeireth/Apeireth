@@ -2,7 +2,7 @@
 
 > **给谁看**：从零接手 v2 工程的新人. 你**不**知道这个项目, 这份文档给你**第一个**上下文.
 > **HEAD**：以 `main` 当前提交为准（本文件随 cognitive module wiring 同步更新）。
-> **状态**：v2.0.0-rc.1 的 RC-1/2/3/4/8/9/10 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root；Orchestrator、真实 provider Council E2E、偏好学习、长程 reflection、非文本 perception 仍明确延期。
+> **状态**：v2.0.0-rc.1 的 RC-1/2/3/4/8/9/10 已落地，RC-11 v1→APX2 migration utility 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root；Orchestrator、真实 provider Council E2E、偏好学习、长程 reflection、非文本 perception 仍明确延期。
 
 ```yaml
 [Document-Meta]
