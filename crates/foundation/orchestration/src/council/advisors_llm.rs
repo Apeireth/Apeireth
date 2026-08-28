@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crate::llm::{CompletionMessage, CompletionRequest, LlmError, LlmFactory, LlmInstance};
-use crate::{Advisor, AdvisorKind, AdvisorVerdict, Proposal, SubagentRole};
+use crate::{Advisor, AdvisorDecision, AdvisorKind, AdvisorVerdict, Proposal, SubagentRole};
 
 /// 默认 primary model (per scene-d §3 决策 1: MiniMax-M3-thinking for 7 advisor).
 pub const DEFAULT_PRIMARY_MODEL: &str = "minimax-m3-thinking";
@@ -14,7 +14,10 @@ pub const DEFAULT_FALLBACK_MODEL: &str = "minimax-m3";
 /// 7 advisor 的 canonical system prompt 模板.
 pub fn seven_system_prompts() -> Vec<(&'static str, &'static str)> {
     vec![
-        ("SafetyAdvisor", "review for safety risks, deny if any unsafe"),
+        (
+            "SafetyAdvisor",
+            "review for safety risks, deny if any unsafe",
+        ),
         ("PerformanceAdvisor", "review for performance impact"),
         (
             "PhilosophyAdvisor",
@@ -61,18 +64,19 @@ impl LlmAdvisor {
         self.system_prompt
     }
 
-    /// 把 LLM 响应 text 解析成 `AdvisorVerdict`.
+    /// 把 LLM 响应 text 解析成 bounded typed `AdvisorVerdict`.
     fn parse_verdict(text: &str) -> AdvisorVerdict {
         let lower = text.to_ascii_lowercase();
-        if lower.contains("deny") || lower.contains("veto") || lower.contains("reject") {
-            AdvisorVerdict::Deny {
-                reason: text.trim().to_string(),
-            }
-        } else if lower.contains("abstain") || lower.contains("skip") {
-            AdvisorVerdict::Abstain
-        } else {
-            AdvisorVerdict::Allow
-        }
+        let (score, verdict) =
+            if lower.contains("deny") || lower.contains("veto") || lower.contains("reject") {
+                (0.0, AdvisorDecision::Stop)
+            } else if lower.contains("abstain") || lower.contains("skip") {
+                (0.0, AdvisorDecision::Abstain)
+            } else {
+                (1.0, AdvisorDecision::Allow)
+            };
+        AdvisorVerdict::new(score, verdict, text.trim(), None)
+            .expect("keyword-derived advisor verdict is bounded")
     }
 }
 
@@ -89,7 +93,15 @@ impl Advisor for LlmAdvisor {
     async fn evaluate(&self, proposal: &Proposal) -> AdvisorVerdict {
         let proposal_json = match serde_json::to_string(proposal) {
             Ok(s) => s,
-            Err(_e) => return AdvisorVerdict::Abstain,
+            Err(_e) => {
+                return AdvisorVerdict::new(
+                    0.0,
+                    AdvisorDecision::Abstain,
+                    "proposal serialization failed",
+                    None,
+                )
+                .expect("serialization-error advisor verdict is bounded")
+            }
         };
 
         let req = CompletionRequest {
@@ -106,17 +118,21 @@ impl Advisor for LlmAdvisor {
             max_tokens: Some(512),
         };
 
-        let instance: Box<dyn LlmInstance> =
-            match self.factory.spawn(SubagentRole::Reviewer, &self.model).await {
-                Ok(i) => i,
-                Err(e) => return map_llm_error_to_deny("spawn", e),
-            };
+        let instance: Box<dyn LlmInstance> = match self
+            .factory
+            .spawn(SubagentRole::Reviewer, &self.model)
+            .await
+        {
+            Ok(i) => i,
+            Err(e) => return map_llm_error_to_deny("spawn", e),
+        };
 
         match instance.complete(req).await {
             Ok(resp) => {
                 let text = resp.message.content;
                 if text.trim().is_empty() {
-                    AdvisorVerdict::Abstain
+                    AdvisorVerdict::new(0.0, AdvisorDecision::Abstain, "empty LLM response", None)
+                        .expect("empty advisor verdict is bounded")
                 } else {
                     Self::parse_verdict(&text)
                 }
@@ -134,7 +150,8 @@ impl Advisor for LlmAdvisor {
 /// "advisor 选择不参与" vs "我没法评审", 与子代理 B 风险 #5 "0 模型污染路径" 对齐.
 fn map_llm_error_to_deny(stage: &'static str, err: LlmError) -> AdvisorVerdict {
     let msg = format!("advisor error: {stage}: {err}");
-    AdvisorVerdict::Deny { reason: msg }
+    AdvisorVerdict::new(0.0, AdvisorDecision::Stop, msg, None)
+        .expect("error advisor verdict is bounded")
 }
 
 /// 构造 7 个默认 LlmAdvisor (per scene-d §5 决策 1: 全部 primary model).
@@ -180,7 +197,10 @@ mod tests {
         assert_eq!(prompts.len(), 7);
 
         let expected: [(&str, &str); 7] = [
-            ("SafetyAdvisor", "review for safety risks, deny if any unsafe"),
+            (
+                "SafetyAdvisor",
+                "review for safety risks, deny if any unsafe",
+            ),
             ("PerformanceAdvisor", "review for performance impact"),
             (
                 "PhilosophyAdvisor",
@@ -200,28 +220,26 @@ mod tests {
     #[test]
     fn test_parse_verdict_deny_keywords() {
         let v = LlmAdvisor::parse_verdict("Deny: this is unsafe");
-        match v {
-            AdvisorVerdict::Deny { reason } => assert!(reason.contains("unsafe")),
-            _ => panic!("expected Deny"),
-        }
+        assert_eq!(v.verdict, AdvisorDecision::Stop);
+        assert!(v.critique.contains("unsafe"));
         let v = LlmAdvisor::parse_verdict("VETO");
-        assert!(matches!(v, AdvisorVerdict::Deny { .. }));
+        assert_eq!(v.verdict, AdvisorDecision::Stop);
         let v = LlmAdvisor::parse_verdict("reject this proposal");
-        assert!(matches!(v, AdvisorVerdict::Deny { .. }));
+        assert_eq!(v.verdict, AdvisorDecision::Stop);
     }
 
     #[test]
     fn test_parse_verdict_abstain_keywords() {
         let v = LlmAdvisor::parse_verdict("Abstain: not my domain");
-        assert_eq!(v, AdvisorVerdict::Abstain);
+        assert_eq!(v.verdict, AdvisorDecision::Abstain);
         let v = LlmAdvisor::parse_verdict("skip this review");
-        assert_eq!(v, AdvisorVerdict::Abstain);
+        assert_eq!(v.verdict, AdvisorDecision::Abstain);
     }
 
     #[test]
     fn test_parse_verdict_default_allow() {
         let v = LlmAdvisor::parse_verdict("Looks fine, approve.");
-        assert_eq!(v, AdvisorVerdict::Allow);
+        assert_eq!(v.verdict, AdvisorDecision::Allow);
     }
 
     #[test]
@@ -257,13 +275,9 @@ mod tests {
             session_id: apeireth_core::kernel::SessionId::new(),
         };
         let verdict = advisor.evaluate(&proposal).await;
-        match verdict {
-            AdvisorVerdict::Deny { reason } => {
-                assert!(reason.contains("advisor error"));
-                assert!(reason.contains("spawn"));
-            }
-            _ => panic!("expected Deny with reason on spawn failure, got {verdict:?}"),
-        }
+        assert_eq!(verdict.verdict, AdvisorDecision::Stop);
+        assert!(verdict.critique.contains("advisor error"));
+        assert!(verdict.critique.contains("spawn"));
     }
 
     #[test]

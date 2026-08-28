@@ -17,8 +17,8 @@
 //!    (apeireth-plugin::LlmFactory 在 runtime 集成时由 RC-7 wiring 桥接)
 //! 3. 架构: 7 advisor 是 7 个独立 MockLlmInstance (per scene-d §3 多 instance 隔离)
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use apeireth_core::kernel::SessionId;
@@ -31,7 +31,7 @@ use apeireth_orchestration::llm::{
     TokenUsage,
 };
 use apeireth_orchestration::{
-    Advisor, AdvisorKind, AdvisorVerdict, CouncilVerdict, Proposal, SubagentRole,
+    Advisor, AdvisorDecision, AdvisorKind, AdvisorVerdict, CouncilVerdict, Proposal, SubagentRole,
 };
 use async_trait::async_trait;
 
@@ -66,7 +66,9 @@ impl LlmInstance for MockLlmInstance {
             return Err(match kind {
                 "network" => LlmError::Network(self.error_msg.clone()),
                 "credentials" => LlmError::Credentials(self.error_msg.clone()),
-                "rate_limited" => LlmError::RateLimited { retry_after_ms: 1000 },
+                "rate_limited" => LlmError::RateLimited {
+                    retry_after_ms: 1000,
+                },
                 "provider" => LlmError::Provider(self.error_msg.clone()),
                 "stream" => LlmError::Stream(self.error_msg.clone()),
                 "not_implemented" => LlmError::NotImplemented("test"),
@@ -261,10 +263,8 @@ async fn council_llm_error_deny_with_reason() {
     // 0 装诚实 (子代理 N 设计选择): LLM 错误 → Deny + reason "advisor error: ..."
     // (per 子代理 B 5 维分析 "0 模型污染路径": Deny+reason 比 Abstain 更诚实,
     //  明确告诉上层 "我没法评审, 这是基础设施失败")
-    let factory = Arc::new(MockLlmFactory::new("").with_error_kind(
-        "network",
-        "test connection refused",
-    ));
+    let factory =
+        Arc::new(MockLlmFactory::new("").with_error_kind("network", "test connection refused"));
     let council = Council::with_factory(factory, "minimax-m3");
     let verdict = council.decide(&sample_proposal()).await;
 
@@ -297,7 +297,10 @@ fn council_seven_system_prompts_content_exact_match() {
 
     // 与 lib::advisors_llm::test_seven_system_prompts_match_documented_templates 重复校验
     let expected: &[(&str, &str)] = &[
-        ("SafetyAdvisor", "review for safety risks, deny if any unsafe"),
+        (
+            "SafetyAdvisor",
+            "review for safety risks, deny if any unsafe",
+        ),
         ("PerformanceAdvisor", "review for performance impact"),
         (
             "PhilosophyAdvisor",
@@ -431,7 +434,8 @@ async fn council_one_advisor_veto_overrides_others() {
             AdvisorKind::Safety
         }
         async fn evaluate(&self, _: &Proposal) -> AdvisorVerdict {
-            AdvisorVerdict::Allow
+            AdvisorVerdict::new(1.0, AdvisorDecision::Allow, "approved", Some(1.0))
+                .expect("bounded approve verdict")
         }
     }
     struct DenyAdvisor(AdvisorKind);
@@ -444,9 +448,8 @@ async fn council_one_advisor_veto_overrides_others() {
             self.0
         }
         async fn evaluate(&self, _: &Proposal) -> AdvisorVerdict {
-            AdvisorVerdict::Deny {
-                reason: "veto reason".into(),
-            }
+            AdvisorVerdict::new(0.0, AdvisorDecision::Stop, "veto reason", Some(1.0))
+                .expect("bounded veto verdict")
         }
     }
     // 6 approve + 1 deny = 7
