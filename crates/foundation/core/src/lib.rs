@@ -53,6 +53,10 @@ pub mod gate;
 pub mod lifecycle;
 pub mod onion;
 pub mod philosophy;
+// P-arch (2026-08-27) + v2.0.0-rc.1 + 哲学锚本体加 O-6 (LOCKED 0 装诚实授权):
+// 哲学锚 9 项 hardcode 锁 (S-1/S-2/S-3/O-1..O-5/O-6), 编译期断言
+// 防止哲学锚本体被改 (per O-6 + O-5 不假装 + 12 键 PHL-07 模式)
+pub mod eight_anchors;
 pub use gate::*;
 pub use lifecycle::*;
 pub use onion::*;
