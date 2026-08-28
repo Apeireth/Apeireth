@@ -18,9 +18,10 @@ use apeireth_core::kernel::{Clock, Episode};
 use apeireth_orchestration::Council;
 use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
 use apeireth_runtime::canonical::orchestrator::{
-    LocalOrchestratorRelationship, LocalSovereignty, OrganChainOutputs, OrganOrchestrator,
-    OrganOrchestratorGate, OrchestratorBoundaries, OrchestratorLoopConfig,
-    OrganTickInput, PolicyStage, PolicyTransitionReason, RelationshipState, SovereigntyGate,
+    LocalOrchestratorRelationship, LocalSovereignty, OrchestratorBoundaries,
+    OrchestratorLoopConfig, OrganChainOutputs, OrganOrchestrator, OrganOrchestratorGate,
+    OrganTickInput, PolicyStage, PolicyTransitionReason, RatificationChain, RelationshipState,
+    SovereigntyGate,
 };
 use chrono::TimeZone;
 
@@ -67,7 +68,10 @@ impl OrganTrait for MockOrgan {
 
 fn clock() -> Arc<dyn Clock> {
     Arc::new(VirtualClock::new(
-        chrono::Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).single().unwrap(),
+        chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 12, 0, 0)
+            .single()
+            .unwrap(),
     ))
 }
 
@@ -158,7 +162,10 @@ async fn orchestrator_tick_9_organ_process_serial() {
     assert!(outputs.f6.is_some(), "4. F6 value_cases 应有输出");
     assert!(outputs.w1.is_some(), "5. W1 world_model 应有输出");
     assert!(outputs.w2.is_some(), "6. W2 causal_world_model 应有输出");
-    assert!(outputs.w3.is_some(), "7. W3 causal_world_model_edges 应有输出");
+    assert!(
+        outputs.w3.is_some(),
+        "7. W3 causal_world_model_edges 应有输出"
+    );
     assert!(outputs.e7.is_some(), "8. E7 emergence 应有输出");
     assert!(outputs.memory.is_some(), "9. Memory memory 应有输出");
 
@@ -326,9 +333,18 @@ async fn orchestrator_5_state_machine_transitions() {
 
     // §6.2 transition 路径: Idle → Draft → Proposed → Ratified → Active
     assert_eq!(PolicyStage::Idle.allowed_next(), Some(PolicyStage::Draft));
-    assert_eq!(PolicyStage::Draft.allowed_next(), Some(PolicyStage::Proposed));
-    assert_eq!(PolicyStage::Proposed.allowed_next(), Some(PolicyStage::Ratified));
-    assert_eq!(PolicyStage::Ratified.allowed_next(), Some(PolicyStage::Active));
+    assert_eq!(
+        PolicyStage::Draft.allowed_next(),
+        Some(PolicyStage::Proposed)
+    );
+    assert_eq!(
+        PolicyStage::Proposed.allowed_next(),
+        Some(PolicyStage::Ratified)
+    );
+    assert_eq!(
+        PolicyStage::Ratified.allowed_next(),
+        Some(PolicyStage::Active)
+    );
     assert_eq!(PolicyStage::Active.allowed_next(), None); // 终态 (Retired 在 evolution crate)
 
     // is_active() (per v1 `EvolutionState::is_active` 1:1)
@@ -348,6 +364,30 @@ async fn orchestrator_5_state_machine_transitions() {
 
     // ratify_fresh_policy() 走完整 5 状态链路终点 Active
     assert!(orch.ratify_fresh_policy().is_ok());
+    assert_eq!(orch.policy_stage(), PolicyStage::Active);
+
+    // ratify_fresh_policy() 真实路径: 4 transition 走链 + RatificationChain 留痕
+    // (per Stage 1 完整化, v1 `AwakeCompanion::ratify_fresh_policy` 1:1)
+    let mut orch = build_orchestrator();
+    let chain = orch.ratify_fresh_policy().expect("ratify 第一次成功");
+    assert_eq!(
+        chain.len(),
+        4,
+        "4 transitions: Draft→Proposed→Ratified→Active"
+    );
+    assert!(chain.all_ok(), "all 4 transitions 应 ok");
+    // 4 transition 顺序核对
+    assert_eq!(chain.steps[0].0, PolicyStage::Draft);
+    assert_eq!(chain.steps[1].0, PolicyStage::Proposed);
+    assert_eq!(chain.steps[2].0, PolicyStage::Ratified);
+    assert_eq!(chain.steps[3].0, PolicyStage::Active);
+    // 终态 = Active
+    assert_eq!(orch.policy_stage(), PolicyStage::Active);
+
+    // 重复 ratify_fresh_policy() = idempotent (v1 semantics: *evolution = new())
+    let chain2 = orch.ratify_fresh_policy().expect("ratify 第二次也成功");
+    assert_eq!(chain2.len(), 4);
+    assert!(chain2.all_ok());
     assert_eq!(orch.policy_stage(), PolicyStage::Active);
 
     // L0-L5 集成 (per `v2-architecture-reflection.md` §6 + 子代理 R12 真实施)
@@ -382,9 +422,11 @@ async fn orchestrator_5_state_machine_transitions() {
     assert!(outcome.is_none(), "主权熔断 → tick 返 None");
     assert_eq!(
         orch.last_decision(),
-        Some(&apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Held(
-            OrganOrchestratorGate::SovereigntyFrozen
-        ))
+        Some(
+            &apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Held(
+                OrganOrchestratorGate::SovereigntyFrozen
+            )
+        )
     );
 
     // user_quiet → tick 返 None + last_decision = Held(UserQuiet)
@@ -394,8 +436,10 @@ async fn orchestrator_5_state_machine_transitions() {
     assert!(outcome.is_none(), "user_quiet → tick 返 None");
     assert_eq!(
         orch.last_decision(),
-        Some(&apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Held(
-            OrganOrchestratorGate::UserQuiet
-        ))
+        Some(
+            &apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Held(
+                OrganOrchestratorGate::UserQuiet
+            )
+        )
     );
 }
