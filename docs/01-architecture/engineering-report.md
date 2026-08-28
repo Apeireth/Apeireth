@@ -13,11 +13,13 @@
 | 项 | 值 (v1.0.0) | 值 (2026-08-19 增量后) |
 |---|---|---|
 | 提交数 | 2,389 | 2,389+ (post-1.0 work in `git log`) |
-| crates | 85 active / ~340K 行 Rust | 85 + 1 独立 workspace (`companion-desktop` 1 crate) |
+| crates | 85 active / **~55 万行 Rust** (实测 551,208 行 .rs + 1,154,516 行总 tracked) | 85 + 1 独立 workspace (`companion-desktop` 1 crate) |
 | 测试 | 368 组 0 失败 | **23,874** 组 0 失败 (368 v1.0.0 + 23,506 post-1.0) |
 | 编译 | workspace --all-targets 干净 | 同上 (post-1.0 改动后仍干净) |
 | 历史体积 | .git 4.52GB → **356MB**（-92%，GitHub 友好）| 356MB (无变化) |
 | 文档 | 554 个 md 收敛为 5 区规范结构 + 86 个 crate README 对齐 | 86 + 3 README (companion-desktop / cron 同步 / pipeline-g5 同步) |
+
+> **0 装诚实修正 (2026-08-28)**: 之前 "85/86 crates / ~340K 行 Rust" 是 v1 era 0 装低估, 真数字 **55.1 万行 Rust** (实测 `git ls-tree -r v1.0.0` + `git show` 全量扫描, 1,701 个 .rs 文件, 551,208 行). 用户原话 "1.0 不止 34 万行吧" 触发本审计. 主代理亲做 (`docs/04-internal/v2-architecture-reflection.md` §10 反思 "不预先估算数字, 算实际").
 
 ## 二、里程碑
 
@@ -68,7 +70,7 @@
 
 ## 七、一句话
 
-**34 万行 Rust，从"哲学声明"到"真实存在的伙伴"——Apeireth 1.0 证明了一件事：诚实不是工程的成本，而是工程的地基。**
+**55 万行 Rust（实测 551,208 行 .rs, 1,154,516 行总 tracked, 0 装诚实修 2026-08-28），从"哲学声明"到"真实存在的伙伴"——Apeireth 1.0 证明了一件事：诚实不是工程的成本，而是工程的地基。**
 
 > post-1.0.0 (2026-08-19): 诚实是地基, **不漂移**是屋顶 — templates / docs / CI gates 全部跟实际 hard-walls job 1:1 对齐. 后续 TP34 (real LLM streaming) 是屋顶下一层, 见 `docs/04-internal/next-team-handbook.md`.
 
