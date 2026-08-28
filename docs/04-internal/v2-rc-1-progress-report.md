@@ -3,7 +3,7 @@
 > **本文档定位**: 保留上游在 `ae182c8c` 的完整历史快照（commit 序列 + 子代理报告 + LOCKED 状态 + 当时阻塞项）。当前交付状态以 `HANDOFF-NOTES.md`、`cognitive-module-wiring.md` 与 `v2.0.0-rc-roadmap.md` 为准。
 > **快照 HEAD** = `ae182c8c`；这不是当前 `main` 的 HEAD。
 
-> **当前 main 覆盖说明（2026-08-28 release-gate）**：后续提交已将 RC-10 加固为 APX2 v2 envelope：写入时使用 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length 的 AAD，v1 records 仍可读，v2 新写；当前格式不把 raw `record_id` 写入磁盘。Council adapter 已通过 canonical `ModuleInvoker` 接入单一 loop（默认关闭，最多 7 个 advisor，10s/60s bounded，真实 provider E2E 仍需凭证），Experience extraction 已在 durable AfterTurn 后以保守、显式 marker 方式写入既有 stores。下方关于旧 line-header 的 plaintext record-id 与 v1→v2 migration script 的描述属于该历史快照，不能当作当前 APX2 行为。
+> **当前 main 覆盖说明（2026-08-28 release-gate）**：后续提交已将 RC-10 加固为 APX2 v2 envelope：写入时使用 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length 的 AAD，v1 records 仍可读，v2 新写；当前格式不把 raw `record_id` 写入磁盘。Council adapter 已通过 canonical `ModuleInvoker` 接入单一 loop（默认关闭，最多 7 个 advisor，10s/60s bounded，真实 provider E2E 仍需凭证），Experience extraction 已在 durable AfterTurn 后以保守、显式 marker 方式写入既有 stores。下方关于旧 line-header plaintext record-id 的描述属于历史快照；当前 `scripts/migrate_v1_to_v2_encrypted.py` 与 Rust 集成测试已同步输出 APX2 envelope，并保留 v1→v2 离线迁移能力。
 
 ```
 [Document-Meta]
