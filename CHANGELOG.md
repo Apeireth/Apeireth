@@ -29,6 +29,17 @@
 - **Deprecated consumer audit**: active workspace production consumers of
   `#[allow(deprecated)]` / `#[deprecated]` are 0; legacy/archive material stays
   retained and no artificial migration was added.
+- **R12 OrganOrchestrator 真实施** (`2550b99d`): 类似 v1 AwakeCompanion 的 9 organ 串联层落地在
+  `crates/engine/runtime/src/canonical/orchestrator.rs` — 13 重 gate (8 E7 + 5 v2 扩展) +
+  5 状态机 PolicyStage 前向声明 + 9 organ 顺序 process + 故障隔离 (fail → NotImplemented 不断链),
+  10 lib + 3 integration tests; 0 引新外部 dep, 0 触碰 LOCKED.
+- **8 spec 收齐 + 6 处错账修正** (`ccf29c57`): R9 frontend 对接 + R10 cognitive 9 organ 集成 +
+  R11 OrganOrchestrator + R13 接力审 + R14 RC-7 真 modality + R15 preference_learning 激活 +
+  Z 独立审计; 主代理亲做 12 slot 真账核验 = **6 WIRED + 6 DEFERRED** (judge/council 为 WIRED,
+  OFF by default, 弃用 "SLOT READY" 旧称) + R12 状态 + 接手人 9 actionable.
+- **给新团队的话** (`TO-NEW-TEAM.md`): 阶段性收盘交付 + 接手 10 步 + 4 块真实施清单.
+- **Workspace 测试实测**: `cargo test --workspace --locked` = **1726 passed, 0 FAILED**
+  (2026-08-28 主代理亲跑); `cargo clippy --workspace --all-targets --locked -- -D warnings` = 0 警告.
 
 ## [2026-08-28] v2.0.0-rc.1 incremental baseline (7/10 RC complete)
 
