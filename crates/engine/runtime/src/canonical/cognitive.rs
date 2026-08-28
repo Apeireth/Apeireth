@@ -1389,6 +1389,18 @@ mod tests {
         }
     }
 
+    struct DummySubLoop;
+
+    #[async_trait::async_trait]
+    impl super::super::subloop::SubLoopSpawner for DummySubLoop {
+        async fn spawn(
+            &self,
+            _spec: super::super::subloop::SubLoopSpec,
+        ) -> Result<super::super::subloop::SubLoopResult, super::super::subloop::SubLoopError> {
+            Err(super::super::subloop::SubLoopError::NoModel)
+        }
+    }
+
     fn context<'a>(
         session: &'a SessionId,
         messages: &'a [NormalizedMessage],
@@ -1397,6 +1409,7 @@ mod tests {
         module_id: &'a str,
     ) -> ModuleContext<'a> {
         static INVOCATION: OnceLock<super::super::module::InvocationContext> = OnceLock::new();
+        static DUMMY_SUBLOOP: DummySubLoop = DummySubLoop;
         ModuleContext {
             session_id: session,
             model: "fake-model",
@@ -1408,6 +1421,7 @@ mod tests {
             module_id,
             error: None,
             invoker,
+            subloop: &DUMMY_SUBLOOP,
         }
     }
 
