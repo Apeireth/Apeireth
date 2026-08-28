@@ -61,10 +61,11 @@ use super::approval::{
 use super::error::{RuntimeError, RuntimeResult};
 use super::module::{
     HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleOutcome, ModuleTurnState,
-    PromptOverlay, RuntimeModuleInvoker,
+    PromptOverlay,
 };
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
+use super::subloop::RuntimeSubLoopSpawner;
 use super::trace::{ExecutionTrace, TraceEvent};
 
 /// One turn's input.
@@ -1389,10 +1390,12 @@ impl Runtime {
         module_state: &Arc<ModuleTurnState>,
     ) -> RuntimeResult<HookEffects> {
         let mut effects = HookEffects::default();
+        let active_tools = self.tools();
         for module in &self.modules {
             let manifest = module.manifest();
-            let invoker = RuntimeModuleInvoker::new(
+            let spawner = RuntimeSubLoopSpawner::new(
                 &self.providers,
+                active_tools.clone(),
                 model,
                 &manifest.id,
                 Arc::clone(module_state),
@@ -1408,7 +1411,8 @@ impl Runtime {
                 invocation,
                 module_id: &manifest.id,
                 error,
-                invoker: &invoker,
+                invoker: &spawner,
+                subloop: &spawner,
             };
             let outcome =
                 module
