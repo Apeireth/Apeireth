@@ -242,7 +242,6 @@ name = "apeireth-orchestration"
 version = "1.2.0"
 dependencies = [
  "apeireth-core",
- "apeireth-plugin",
  "async-trait",
  "futures",
  "serde",
