@@ -12,9 +12,14 @@ apeireth-core = { path = "../core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 
+# RC-6: integration tests use plugin's canonical LlmFactory via dev-dep.
+# Lib code uses mirrored trait in `llm.rs` (cycle break: plugin → orch, not vice versa).
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt"] }
+apeireth-plugin = { path = "../plugin" }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
 
 [lib]
 name = "apeireth_orchestration"
