@@ -1,13 +1,13 @@
 # 接手人手册 (HANDOFF-NOTES.md)
 
 > **给谁看**：从零接手 v2 工程的新人. 你**不**知道这个项目, 这份文档给你**第一个**上下文.
-> **HEAD**：以 `main` 当前提交为准（本文件随 cognitive module wiring 同步更新）。
-> **状态（2026-08-28）**：RC-1/2/3/4/5/6/8/9/10 已有真实实现或适配，RC-11 v1→APX2 migration utility 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root。MiniMax provider E2E 仍需凭证；Orchestrator、偏好学习、长程 reflection、非文本 perception 仍明确延期。
+> **HEAD**：以 `main` 当前提交为准（`bbbfb75b`, 2026-08-28; A 块 OrganOrchestrator 完整化 + O-6 复盘 amend 后）。
+> **状态（2026-08-28, Final-2.1）**：RC-1/2/3/4/5/6/8/9/10 已有真实实现或适配，RC-11 v1→APX2 migration utility 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root。MiniMax provider E2E 仍需凭证；**A 块 OrganOrchestrator 完整化 5 stage 真实施已落** (amend 后 commits `c003e078` ~ `0afa733f` + 复盘 `bbbfb75b`; 详 `organ-orchestrator-completion-plan.md` + `A-block-o6-true-account.md`); 偏好学习、长程 reflection、非文本 perception 仍明确延期; frontend 对接 + RC-7 真 modality 待硬件.
 
 ```yaml
 [Document-Meta]
 Document:        docs/04-internal/HANDOFF-NOTES.md
-Version:         Handoff-Rev-1.0
+Version:         Handoff-Rev-1.1 (A 块完成真账 同步)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (接手人入口)
 ```
