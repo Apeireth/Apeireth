@@ -163,7 +163,7 @@ pub struct Council {
     config: CouncilConfig,
 }
 
-/// Council 决策 (含按住机制, per v1 stage4-correction-v15)
+/// Legacy Council verdict retained for compatibility with local advisors.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CouncilVerdict {
     /// 通过 (多数 Allow, 无强反对)
@@ -171,7 +171,7 @@ pub enum CouncilVerdict {
     /// 拒绝 (含按住: 30% Advisor 反对 / 一致反对)
     Vetoed { by: AdvisorKind, reason: String },
     /// 需人工批准 (v2 治理的 Deny vs RequireApproval 区分, per ROADMAP P0)
-    /// 触发条件: 60s 内达不成 consensus (v1 stage4) — 0 装: 永不触发
+    /// The runtime-backed path exposes the typed `CouncilDecision` instead.
     DeferToHuman { reason: String },
 }
 
@@ -314,7 +314,7 @@ impl CouncilConfig {
 }
 
 impl Council {
-    /// 7 个 advisor 默认 (0 装: 全 Allow, 用于 v2.0 alpha 无 LLM harness 场景)
+    /// Seven deterministic advisors for compatibility and no-provider tests.
     pub fn default_allow() -> Self {
         Self {
             advisors: vec![
@@ -363,20 +363,10 @@ impl Council {
         self
     }
 
-    /// 多意见加权: 任一 advisor Deny (除 Abstain) 即触发 Veto
-    /// (v1 30% 强反对 / 一致反对 / 60s 裁决超时的 v2 简化: 一票否决制 + Abstain 跳过)
-    /// **0 装 PASS**: 真实 council 是 7 个 LLM 并行调用 + 加权 + 60s 超时, v2.0.0-rc.
-    ///
-    /// **v2.0.0-rc contract** (per `v2.0.0-rc-roadmap.md` §2.4 + scene-d §2):
-    /// - `decide` 内部走 `tokio::time::timeout(Duration::from_secs(60), futures::future::join_all(7 LLM calls))`
-    /// - 任一 advisor 失败 → 该 advisor 视为 Abstain (不算 30% 阈值)
-    /// - 任一 advisor Deny → `Vetoed { by, reason }`
-    /// - 全 Allow/Abstain → `Approved`
-    /// - 60s 触发 → `DeferToHuman { reason: "60s no consensus" }`
-    /// - runtime `DeferToHuman` 路径 → 转 `RequireApproval` (governance 已装, 直接复用 `8732857` wiring)
-    ///
-    /// **alpha 0 装**: 当前同步遍历 7 advisors, 没 60s timeout, 失败即 Deny (无 Abstain 路径).
-    /// rc 阶段改: `tokio::spawn` 7 个并发 LLM 调用 + `futures::future::join_all` + `tokio::time::timeout`.
+    /// Compatibility path for callers that own local `Advisor` implementations.
+    /// It evaluates advisors sequentially and maps the typed results to the
+    /// historical `CouncilVerdict`; runtime-backed side-calls must use
+    /// [`Self::decide_with_invoker`] so timeout and failure policy is explicit.
     pub async fn decide(&self, proposal: &Proposal) -> CouncilVerdict {
         let mut evaluations = Vec::with_capacity(self.advisors.len());
         for advisor in &self.advisors {

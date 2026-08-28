@@ -1,11 +1,13 @@
-//! P-arch (2026-08-27): B1 Experience trait 0 装接口 (O-6 重构批次 Refactor-2).
+//! P-arch (2026-08-28): B1 Experience trait and conservative extraction
+//! re-export (O-6 重构批次 Refactor-2).
 //!
 //! **O-6 重构**: trait 抽象层搬到 `apeireth-plugin` (foundation), impl 留本 crate (engine).
-//! 单向依赖: memory → plugin. `ExperienceError` / `ExperienceResult` 仍在 plugin (与 `MemoryBackendError`
-//! 一样的占位模式, rc 阶段统一).
+//! 单向依赖: memory → plugin. Storage implementations stay in this engine;
+//! extraction types and the deterministic extractor stay in the foundation
+//! plugin so runtime code does not depend on SQL.
 //!
 //! **v1 compat**: `apeireth_memory::experience::WikiEntry` 仍可访问 (re-export),
-//! 现有 3 个内部测试 + 0 外部 user 0 破坏.
+//! Existing v1 callers can continue using the re-exported paths.
 //!
 //! The conservative extractor is defined in the foundation plugin so the
 //! runtime can materialize evidence-bound artifacts without importing SQL.
