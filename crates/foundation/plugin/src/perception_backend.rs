@@ -140,9 +140,7 @@ pub enum PerceptionBackendError {
     /// 网络/HTTP 错
     Network(String),
     /// Rate limit (transient, per `LlmError::RateLimited`)
-    RateLimited {
-        retry_after_ms: u64,
-    },
+    RateLimited { retry_after_ms: u64 },
     /// Provider 返回错误 (4xx/5xx)
     Provider(String),
     /// 流中断 / 超时
@@ -374,7 +372,10 @@ mod tests {
             .expect_err("None backend must return NotImplemented");
         let s_none = err_none.to_string();
         assert!(s_none.contains("0 装"), "0 装 must be in msg: {s_none}");
-        assert!(s_none.contains("v2.1"), "v2.1 path must be in msg: {s_none}");
+        assert!(
+            s_none.contains("v2.1"),
+            "v2.1 path must be in msg: {s_none}"
+        );
 
         // 2. Some(noop backend) → BackendNotWired (新契约, 提示 runtime 装配)
         let v_some: VoiceInput = VoiceInput {
@@ -422,13 +423,16 @@ mod tests {
 
         // StaticCredentials 模拟有 key (per RC-9 后续 keyring 真接路径),
         // 当前 skeleton 同样返 BackendUnavailable (因为 HTTP 未接), 不假装"有 key 就通".
-        let resolver_with_key = StaticCredentials::new()
-            .with("provider.whisper.api_key", "sk-test-1234567890abcdef");
+        let resolver_with_key =
+            StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef");
         let _ = resolver_with_key.resolve(&backend.credential_key); // 确认 resolver 能拿到
         let result2 = backend
             .transcribe(AudioBuffer::empty(), LangHint::auto())
             .await;
-        assert!(result2.is_err(), "Whisper skeleton must error even with key (HTTP unwired)");
+        assert!(
+            result2.is_err(),
+            "Whisper skeleton must error even with key (HTTP unwired)"
+        );
     }
 
     /// RC-7: `dyn VoiceBackend` 必须 Send + Sync, runtime 跨 turn 复用要满足.
