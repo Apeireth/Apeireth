@@ -22,7 +22,7 @@ Author:          子代理 R9
 
 **9 organ** 全部真移植 (`crates/engine/organ/src/lib.rs:11-32`): E4/F4/F6/F1/W1/W2/W3/E7/Memory 9 organ trait 抽象 + 1:1 v1 翻译.
 
-**认知模块** 6/12 slot WIRED (`docs/04-internal/cognitive-module-wiring.md:20-35`): 4 WIRED + 1 SLOT READY + 6 DEFERRED (Judge / Council / SelfAssessment / MemoryWriteback 等).
+**认知模块** 6/12 slot WIRED (`docs/04-internal/cognitive-module-wiring.md:20-35`): **6 WIRED + 6 DEFERRED** (`memory_recall` / `preference_recall` / `judge` / `council` / `self_assessment` / `memory_writeback`; judge/council 为 WIRED, OFF by default).
 
 **前端 companion-desktop** (`frontend/companion-desktop/README.md:1-124`) 当前 0 触碰 v2 gateway, 仅用历史 v1 companion :8090 接口. **完整迁移 = 真生产前阻塞 #2, 估 4-6 周** (主代理估 2027-Q1 启动).
 
@@ -103,7 +103,7 @@ v2 gateway 当前实现 3 条路由 (`canonical_entry.rs:168-174`):
 }
 ```
 
-**9 organ 串联位置**: 主对话走 runtime (`canonical_entry.rs:99` `runtime.execute(turn).await`), runtime 调用认知模块 (per `cognitive-module-wiring.md:37-43` 注册顺序 TurnStart → AfterModelResponse → AfterTurn). 9 organ 串联通过 `OrganOrchestrator` (per §3 集成路径, 待 R11 OrganOrchestrator 实施).
+**9 organ 串联位置**: 主对话走 runtime (`canonical_entry.rs:99` `runtime.execute(turn).await`), runtime 调用认知模块 (per `cognitive-module-wiring.md:37-43` 注册顺序 TurnStart → AfterModelResponse → AfterTurn). 9 organ 串联通过 `OrganOrchestrator` (per §3 集成路径, R11 spec 已完 + R12 真实施已落 `crates/engine/runtime/src/canonical/orchestrator.rs`).
 
 **v1 差异**: v1 `companion_serve.rs:1066` 同样路径但内置 9 organ 散落调用, v2 由 runtime + cognitive module 抽象接管.
 
@@ -180,7 +180,7 @@ model=whisper-1
 
 ## 3. 9 organ 集成路径 (L0-L5, per Q1 建议顺序)
 
-per `crates/engine/organ/src/lib.rs:11-32` 9 organ 全 done, 真生产路径通过 `OrganOrchestrator` (待 R11 实施, `crates/engine/organ/src/lib.rs` 暂无) 串联 9 organ.
+per `crates/engine/organ/src/lib.rs:11-32` 9 organ 全 done, 真生产路径通过 `OrganOrchestrator` (R12 真实施已落 `crates/engine/runtime/src/canonical/orchestrator.rs`) 串联 9 organ.
 
 ### 3.1 L0 人类审批 (LlmFactory 注入)
 
@@ -327,7 +327,7 @@ per `docs/04-internal/cognitive-module-wiring.md:20-35`:
 | `cognitive.orchestrator` | — | NOT AN AGENT MODULE | long-running service |
 | `cognitive.perception` | — | NOT AN AGENT MODULE | perception adapter |
 
-**Status 总结**: 4 WIRED + 1 SLOT READY (judge) + 1 SLOT READY (council) + 1 SLOT READY (self_assessment) + 6 DEFERRED.
+**Status 总结**: **6 WIRED + 6 DEFERRED** (`memory_recall` / `preference_recall` / `judge` / `council` / `self_assessment` / `memory_writeback`; judge/council 为 WIRED, OFF by default).
 
 **注册顺序确定性** (per `cognitive-module-wiring.md:37-43`):
 
@@ -337,14 +337,14 @@ AfterModelResponse: judge -> council
 AfterTurn:          self_assessment -> memory_writeback
 ```
 
-### 5.2 OrganOrchestrator 类似 AwakeCompanion (R11 待办)
+### 5.2 OrganOrchestrator 类似 AwakeCompanion (R11 spec 已完 + R12 真实施已落)
 
-**当前状态**: 0 装 — `OrganOrchestrator` 未在 `crates/engine/organ/src/lib.rs` 实现 (per 子代理 R9 必读 #6). 9 organ 已 trait 抽象 + 真实现, 但**串联**逻辑待 R11 (估真生产 4-6 周内实施).
+**当前状态**: 0 装 — R11 spec 已完 (`docs/01-architecture/organ-orchestrator-spec.md`, 500 行) + R12 真实施已落 `crates/engine/runtime/src/canonical/orchestrator.rs` (8+5=13 gate + 5 状态机 PolicyStage 前向声明 + 9 organ 顺序 process, 10 lib + 3 integration tests 全过). 9 organ 已 trait 抽象 + 真实现, 串联逻辑已真写 (真生产估 1-3 周内落地).
 
 **提案 schema** (本 spec, 待实施):
 
 ```rust
-// crates/engine/organ/src/orchestrator.rs (NEW, 待 R11 实施)
+// R12 真实施已落: crates/engine/runtime/src/canonical/orchestrator.rs (原提案位 crates/engine/organ/src/orchestrator.rs)
 pub struct OrganOrchestrator {
     organs: BTreeMap<OrganKind, Arc<dyn OrganTrait>>,
 }
@@ -411,7 +411,7 @@ per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md:65-67` + v2 治理 runtime:
 
 **位置**: runtime 治理 (per `canonical_entry.rs:269-281` `RuntimeError::Denied` / `ApprovalRequired`).
 
-**HTTP 透传**: 前端 `runtime.ts` 处理 `403 FORBIDDEN` + `409 CONFLICT` → 弹主人审批 UI (companion-desktop 待 R11 实施).
+**HTTP 透传**: 前端 `runtime.ts` 处理 `403 FORBIDDEN` + `409 CONFLICT` → 弹主人审批 UI (companion-desktop 待 R13 接力审后真实施, 估 4-6 周).
 
 ### 7.2 13 键降级为哲学标准 (RUNTIME_ENFORCED = false)
 
@@ -480,15 +480,19 @@ cargo test -p apeireth-migration --locked                                # Rust 
 
 ---
 
-## 10. 接手人 5 actionable 验证 (per 子代理 D handoff)
+## 10. 接手人 9 actionable 验证 (per 子代理 D handoff 5/5 done + 4 新加 #6-#9)
 
-per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` + 子代理 D handoff:
+per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` + 子代理 D handoff + R13 接力审:
 
 - ✅ **#1 RC-5/6/7 + 9 organ 真移植全 done** (HEAD `b9026186` 拍板, 9 organ 真兑现)
 - ✅ **#2 哲学锚 ledger 待核** (9 锚 LOCKED 0 改, O-6 新加, `eight_anchors.rs:58-79` 编译期 hardcode)
 - ✅ **#3 12 consumer 弃用迁移** (100+ consumer 0 破, v1 `apeireth-companion` 在 `legacy/donor/`)
 - ✅ **#4 RC-10 line header AAD + APX2 envelope** (`canonical_entry.rs` runtime 通过 RC-10 真接)
 - ✅ **#5 cognitive module 不变量 + 9 organ trait 抽象边界** (`cognitive-module-wiring.md` + `organ.rs` 守门)
+- 🔄 **#6 OrganOrchestrator** (R11 spec done + R12 真实施已落, 真生产估 1-3 周)
+- ⏳ **#7 6 DEFERRED slot 激活** (R10 spec done + R15 preference_learning spec done, 估 6-10 周真实施)
+- ⏳ **#8 frontend 对接** (R9 spec done + R13 接力审完成, 估 4-6 周真实施, 2027-Q1 启动)
+- ⏳ **#9 RC-7 Perception 真 modality** (R14 spec done, 估 2-3 周真实施, 需硬件)
 
 ---
 
@@ -530,7 +534,7 @@ per 子代理 R9 必读 #1-#11 + 必跑命令 + 必读文档:
 
 1. **frontend spec 缺失**: 前 28 sub-agent (A-H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z) 全部没写 frontend spec. R9 是**第 29 个视角**, 标 frontend 对接 = 真生产前阻塞 #2 的 spec.
 2. **canonical_entry.rs 当前 0 SSE**: v1 `companion_serve.rs:1066` 标 "非流式 + SSE 透传流式", v2 `canonical_entry.rs:168-174` 仅 3 路由非流式. **SSE 实施** = frontend 对接 4-6 周内的真实施范畴 (本 spec 提案 schema).
-3. **OrganOrchestrator 0 装**: 9 organ trait 已抽象 + impl 已真写, 但**串联**逻辑 0 装. R11 待办实施.
+3. **OrganOrchestrator 0 装**: 9 organ trait 已抽象 + impl 已真写, 原串联逻辑 0 装 (R9 写本文时), R11 spec 已完 + R12 真实施已落 (主代理审后修正).
 4. **GET /v1/models 0 装**: v2 gateway 当前无此路由, 真生产估加.
 5. **APX2 envelope 在 integration test 通过**: per `FINAL-HANDOFF-V2.0.0-RC.1.md`, 但真生产前需 1-2 天有 key 但没 v1 db 验证.
 
