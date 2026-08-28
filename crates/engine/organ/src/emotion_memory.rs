@@ -244,14 +244,16 @@ impl EmotionMemoryEngine {
     /// 情绪上下文检索: 找与目标情绪相似的记录 (valence 差 ≤ tolerance) (per v1 1:1).
     ///
     /// "记得你上次烦的时候" — 伙伴行为的机制, 非拟人.
-    pub fn recall_by_mood(
+    ///
+    /// **测试便利**: `_at(now_ms)` 显式注入时间, 测试可控 (per 子代理 R2 约定).
+    pub fn recall_by_mood_at(
         &self,
+        now_ms: i64,
         target_valence: f64,
         tolerance: f64,
         max: usize,
     ) -> Vec<&MoodRecord> {
-        let now = system_time_ms();
-        let cutoff = now - self.config.recall_window_ms;
+        let cutoff = now_ms - self.config.recall_window_ms;
         let mut out: Vec<&MoodRecord> = self
             .records
             .iter()
@@ -260,6 +262,16 @@ impl EmotionMemoryEngine {
         out.sort_by_key(|r| std::cmp::Reverse(r.at_ms));
         out.truncate(max);
         out
+    }
+
+    /// 情绪上下文检索 (便捷: 用 `system_time_ms()` 派生 now, 等价 v1 行为).
+    pub fn recall_by_mood(
+        &self,
+        target_valence: f64,
+        tolerance: f64,
+        max: usize,
+    ) -> Vec<&MoodRecord> {
+        self.recall_by_mood_at(system_time_ms(), target_valence, tolerance, max)
     }
 
     /// 记录数 (per v1 `len` 1:1).
@@ -567,10 +579,10 @@ mod tests {
             "拿到投资那天",
             now - 5 * 24 * 3600 * 1000,
         ));
-        let low = mem.recall_by_mood(-0.8, 0.2, 5);
+        let low = mem.recall_by_mood_at(now, -0.8, 0.2, 5);
         assert_eq!(low.len(), 1);
         assert!(low[0].note.contains("项目黄了"));
-        let high = mem.recall_by_mood(0.8, 0.2, 5);
+        let high = mem.recall_by_mood_at(now, 0.8, 0.2, 5);
         assert_eq!(high.len(), 1);
         assert!(high[0].note.contains("投资"));
         mem.record(MoodRecord::with_timestamp(
@@ -580,7 +592,7 @@ mod tests {
             "很久以前",
             now - 90 * 24 * 3600 * 1000,
         ));
-        let low2 = mem.recall_by_mood(-0.8, 0.2, 5);
+        let low2 = mem.recall_by_mood_at(now, -0.8, 0.2, 5);
         assert_eq!(low2.len(), 1, "90 天前记录应被窗口排除");
     }
 

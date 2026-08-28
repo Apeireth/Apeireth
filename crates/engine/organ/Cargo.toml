@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth 9-organ 真移植 (P-arch 2026-08-28): v1 companion era 9 organ (W1/W2/W3/E4/F4/F1/F6/E7/Memory) 1:1 翻译到 v2 OrganTrait 抽象边界. v2.0-rc.1 仅 E4 Curiosity 真实现; 其余 8 organ 是 forward-declared trait/类型 (rc 阶段或 v2.1 续做)."
+description = "Apeireth 9-organ 真移植 (P-arch 2026-08-28): v1 companion era 9 organ (W1/W2/W3/E4/F4/F1/F6/E7/Memory) 1:1 翻译到 v2 OrganTrait 抽象边界. v2.0-rc.1 E4/F4/F6/F1 真实现 (确定性无 LLM 器官); 其余 5 organ (W1/W2/W3/E7/Memory) 是 forward-declared trait/类型 (rc 阶段或 v2.1 续做, 含 LLM 重估)."
 
 [dependencies]
 apeireth-core = { path = "../../foundation/core" }
