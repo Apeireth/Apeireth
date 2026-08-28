@@ -186,6 +186,10 @@ _workspace/*
 # R125 17:23 Mavis (per decision-33): Python audit + commit msg 草稿 ignore
 out/
 Apeireth-rust/apeireth/out/
+# v2.0.0-rc.1 cognitive module runtime 产物 (per acd8c5e7 feat(runtime) commit).
+# CLI 启动时 `build_cognitive_modules_from_env` 在 `cwd` 创建 SQLite db.
+# 0 装: 真存在盘上, 不假装 — runtime 自管, git 0 追踪.
+.apeireth/
 .git_commit_msg.txt
 
 # R126 P2-2 Mavis (2026-08-10): 8 硬墙 验证日志 (per 决策 #33 + 决策 #51 §1.3 P2-2)
