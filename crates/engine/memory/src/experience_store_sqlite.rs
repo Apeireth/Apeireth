@@ -77,6 +77,12 @@ impl SQLiteExperienceStore {
                     last_seen_episode_id TEXT,
                     last_seen_at INTEGER NOT NULL,
                     PRIMARY KEY (from_entity, to_entity)
+                );
+                CREATE TABLE IF NOT EXISTS association_observations (
+                    from_entity TEXT NOT NULL,
+                    to_entity TEXT NOT NULL,
+                    source_episode_id TEXT NOT NULL,
+                    PRIMARY KEY (from_entity, to_entity, source_episode_id)
                 );",
             )
             .map_err(apeireth_storage::StorageError::from)
@@ -345,6 +351,14 @@ impl AssociationStore for SQLiteExperienceStore {
     fn record_cooccurrence(&self, from: &str, to: &str, episode_id: &str) -> CapabilityResult<()> {
         let now = chrono::Utc::now().timestamp();
         self.pool.read(|conn| {
+            let inserted = conn.execute(
+                "INSERT OR IGNORE INTO association_observations \
+                 (from_entity, to_entity, source_episode_id) VALUES (?1, ?2, ?3)",
+                rusqlite::params![from, to, episode_id],
+            )?;
+            if inserted == 0 {
+                return Ok(());
+            }
             conn.execute(
                 "INSERT INTO association_edges (from_entity, to_entity, co_occurrence_count, last_seen_episode_id, last_seen_at) \
                  VALUES (?1, ?2, 1, ?3, ?4) \
@@ -402,6 +416,8 @@ impl AssociationStore for SQLiteExperienceStore {
 mod tests {
     use super::*;
     use apeireth_core::kernel::SessionId;
+    use apeireth_core::Episode;
+    use apeireth_plugin::experience::extract_experience;
 
     async fn fresh() -> SQLiteExperienceStore {
         let pool = SqliteConnectionPool::in_memory()
@@ -506,12 +522,81 @@ mod tests {
     async fn association_record_and_top() {
         let store = fresh().await;
         AssociationStore::record_cooccurrence(&store, "rust", "fast", "ep-1").expect("rec 1");
+        AssociationStore::record_cooccurrence(&store, "rust", "fast", "ep-1")
+            .expect("duplicate rec");
         AssociationStore::record_cooccurrence(&store, "rust", "fast", "ep-2").expect("rec 2");
         let top = AssociationStore::top_associations(&store, "rust", 10).expect("top");
         assert!(!top.is_empty());
         assert!(
-            top[0].co_occurrence_count >= 2,
-            "co_occurrence_count 累加, not 0 装 reset"
+            top[0].co_occurrence_count == 2,
+            "same episode must not be counted twice"
+        );
+    }
+
+    #[tokio::test]
+    async fn extracted_experience_persists_with_episode_evidence_and_deduplicates() {
+        let store = fresh().await;
+        let episode = Episode {
+            id: "ep-extracted".into(),
+            timestamp: 1_700_000_000,
+            role: "assistant".into(),
+            content: "Rust is fast.\nfact: rust | property | fast\nlink: rust | fast | supports\nassociate: rust | cargo".into(),
+            session_id: "session-1".into(),
+        };
+        let artifacts = extract_experience(&episode).expect("extract");
+        for entry in &artifacts.wiki_entries {
+            WikiEntryStore::put_wiki(&store, entry).expect("wiki");
+        }
+        for fact in &artifacts.facts {
+            KnowledgeGraphStore::put_fact(&store, fact).expect("fact");
+        }
+        for link in &artifacts.links {
+            KnowledgeGraphStore::put_link(&store, link).expect("link");
+        }
+        for association in &artifacts.associations {
+            AssociationStore::record_cooccurrence(
+                &store,
+                &association.from_entity,
+                &association.to_entity,
+                &association.source_episode_id,
+            )
+            .expect("association");
+        }
+
+        // A retry/replay of the same durable episode is idempotent at the
+        // existing stores' boundaries.
+        for association in &artifacts.associations {
+            AssociationStore::record_cooccurrence(
+                &store,
+                &association.from_entity,
+                &association.to_entity,
+                &association.source_episode_id,
+            )
+            .expect("duplicate association");
+        }
+        assert_eq!(
+            WikiEntryStore::wiki_for_episode(&store, &episode.id)
+                .expect("wiki evidence")
+                .len(),
+            1
+        );
+        assert_eq!(
+            KnowledgeGraphStore::facts_from(&store, "rust", 10)
+                .expect("fact evidence")
+                .len(),
+            1
+        );
+        assert_eq!(
+            KnowledgeGraphStore::links_from(&store, "rust", 10)
+                .expect("link evidence")
+                .len(),
+            1
+        );
+        assert_eq!(
+            AssociationStore::top_associations(&store, "rust", 10).expect("association evidence")
+                [0]
+            .co_occurrence_count,
+            1
         );
     }
 

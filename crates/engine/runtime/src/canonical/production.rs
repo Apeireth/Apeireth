@@ -24,8 +24,7 @@ use super::module::{AgentModule, ModuleManifest};
 ///
 /// Memory and preference recall/writeback are cheap local calls and are on by
 /// default when their injected stores exist. Judge and Council are explicitly
-/// opt-in; Judge makes a provider side-call and Council may eventually do so
-/// through injected advisors.
+/// opt-in; Judge and Council side-calls stay behind the runtime invoker.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CognitiveModuleConfig {
     /// Register memory recall when a memory backend is supplied.
@@ -113,9 +112,13 @@ impl ProductionCognitiveModules {
             let memory = required(backends.memory.clone(), "memory_recall", "memory")?;
             let mut module = MemoryRecallModule::new(memory);
             if let (Some(wiki), Some(graph), Some(associations)) =
-                (backends.wiki, backends.graph, backends.associations)
+                (&backends.wiki, &backends.graph, &backends.associations)
             {
-                module = module.with_experience(wiki, graph, associations);
+                module = module.with_experience(
+                    Arc::clone(wiki),
+                    Arc::clone(graph),
+                    Arc::clone(associations),
+                );
             }
             modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }
@@ -164,13 +167,20 @@ impl ProductionCognitiveModules {
         }
 
         if config.memory_writeback {
-            modules.push(Arc::new(
-                MemoryWritebackModule::new(
-                    required(backends.memory, "memory_writeback", "memory")?,
-                    clock,
-                )
-                .with_telemetry(Arc::clone(&telemetry)),
-            ));
+            let mut module = MemoryWritebackModule::new(
+                required(backends.memory, "memory_writeback", "memory")?,
+                clock,
+            );
+            if let (Some(wiki), Some(graph), Some(associations)) =
+                (&backends.wiki, &backends.graph, &backends.associations)
+            {
+                module = module.with_experience(
+                    Arc::clone(wiki),
+                    Arc::clone(graph),
+                    Arc::clone(associations),
+                );
+            }
+            modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }
 
         let mut seen = std::collections::BTreeSet::new();

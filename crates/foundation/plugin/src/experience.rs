@@ -8,15 +8,13 @@
 //! - trait `KnowledgeGraphStore`（subject-predicate-object 事实 + 链接）
 //! - trait `AssociationStore`（VCP 联想网络：entity 关联强度）
 //!
-//! **位置**: trait 在 `apeireth-plugin` (foundation), impl 留 v2.1
-//! (与 memory_governance / RC-2 任务一起做).
+//! **位置**: traits and the conservative deterministic extractor live in
+//! `apeireth-plugin` (foundation); SQLite persistence remains in memory
+//! (engine).
 //!
-//! **0 装 PASS**:
-//! - trait **只**定义 trait 边界（`0 装 = 没有 impl`，避免假装有实现）
-//! - 现有 `gen_cache.rs` / `provenance.rs` / `hallways.rs` 已涵盖 v2 alpha 的部分
-//!   progressive disclosure 能力；新 trait 是 v2.0.0-alpha.2+ 完整化的契约
-//! - 完整 SQLite impl 留 v2.0.0-rc 路线（与 memory_governance 同源）—— 详见
-//!   `v2-unabsorbed-features.md` §B1
+//! **Conservative default**: the extractor only derives a bounded summary and
+//! explicitly marked `fact:`, `link:`, and `associate:` records. It does not
+//! claim semantic LLM extraction and never copies a full transcript.
 //!
 //! **3 阶审查** (O-6 锚 9, commit message 必写明):
 //! 1. 总体: 与 MemoryBackend + ToolCapability + ProviderCapability + CredentialResolver
@@ -180,18 +178,342 @@ pub trait AssociationStore: Send + Sync {
 // impl 端用 `Box::new(my_local_error)` 包.)
 
 // ============================================
-// 占位 helper: 从 episode 提炼到 3 layer 的入口
+// Typed extraction schema and conservative pipeline
 // ============================================
 
-/// Episode 写入后调一次 (v1 practice: gen_cache + wiki + kg + association 链式触发).
+const MAX_WIKI_ENTRIES: usize = 8;
+const MAX_FACTS: usize = 16;
+const MAX_LINKS: usize = 16;
+const MAX_ASSOCIATIONS: usize = 16;
+const MAX_FIELD_CHARS: usize = 2_000;
+
+/// Raw typed extraction output. A future LLM adapter may deserialize this
+/// schema, but source evidence is injected from the durable episode during
+/// materialization rather than trusted from model output.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExperienceExtraction {
+    /// Bounded wiki summaries.
+    #[serde(default)]
+    pub wiki_entries: Vec<ExtractedWikiEntry>,
+    /// Bounded subject-predicate-object facts.
+    #[serde(default)]
+    pub facts: Vec<ExtractedFact>,
+    /// Bounded entity links.
+    #[serde(default)]
+    pub links: Vec<ExtractedLink>,
+    /// Bounded entity co-occurrences.
+    #[serde(default)]
+    pub associations: Vec<ExtractedAssociation>,
+}
+
+/// Raw wiki entry from a typed extractor.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExtractedWikiEntry {
+    /// Topic label.
+    pub topic: String,
+    /// Short summary used for recall.
+    pub summary: String,
+    /// Bounded higher-level body, never a transcript copy.
+    pub body: String,
+    /// Conservative confidence.
+    pub confidence: f64,
+    /// Search tags.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+/// Raw graph fact from a typed extractor.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExtractedFact {
+    /// Subject identifier.
+    pub subject_id: String,
+    /// Predicate.
+    pub predicate: String,
+    /// Object identifier or literal.
+    pub object_id: String,
+    /// Fact confidence.
+    pub confidence: f64,
+}
+
+/// Raw graph link from a typed extractor.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExtractedLink {
+    /// Source entity.
+    pub from_id: String,
+    /// Destination entity.
+    pub to_id: String,
+    /// Link kind.
+    pub kind: String,
+    /// Link weight.
+    pub weight: f64,
+}
+
+/// Raw association from a typed extractor.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExtractedAssociation {
+    /// First entity.
+    pub from_entity: String,
+    /// Second entity.
+    pub to_entity: String,
+}
+
+impl ExperienceExtraction {
+    /// Validate all collection and field bounds before persistence.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.wiki_entries.len() > MAX_WIKI_ENTRIES {
+            return Err("experience extraction contains too many wiki entries".into());
+        }
+        if self.facts.len() > MAX_FACTS {
+            return Err("experience extraction contains too many facts".into());
+        }
+        if self.links.len() > MAX_LINKS {
+            return Err("experience extraction contains too many links".into());
+        }
+        if self.associations.len() > MAX_ASSOCIATIONS {
+            return Err("experience extraction contains too many associations".into());
+        }
+        for entry in &self.wiki_entries {
+            for (label, value) in [
+                ("wiki topic", &entry.topic),
+                ("wiki summary", &entry.summary),
+                ("wiki body", &entry.body),
+            ] {
+                validate_field(label, value)?;
+            }
+            if !entry.confidence.is_finite() || !(0.0..=1.0).contains(&entry.confidence) {
+                return Err("wiki confidence must be finite and between 0 and 1".into());
+            }
+            if entry.tags.len() > MAX_ASSOCIATIONS {
+                return Err("wiki entry contains too many tags".into());
+            }
+            for tag in &entry.tags {
+                validate_field("wiki tag", tag)?;
+            }
+        }
+        for fact in &self.facts {
+            validate_field("fact subject", &fact.subject_id)?;
+            validate_field("fact predicate", &fact.predicate)?;
+            validate_field("fact object", &fact.object_id)?;
+            validate_confidence("fact confidence", fact.confidence)?;
+        }
+        for link in &self.links {
+            validate_field("link from", &link.from_id)?;
+            validate_field("link to", &link.to_id)?;
+            validate_field("link kind", &link.kind)?;
+            validate_confidence("link weight", link.weight)?;
+        }
+        for association in &self.associations {
+            validate_field("association from", &association.from_entity)?;
+            validate_field("association to", &association.to_entity)?;
+        }
+        Ok(())
+    }
+}
+
+fn validate_field(label: &str, value: &str) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(format!("{label} must not be empty"));
+    }
+    if value.chars().count() > MAX_FIELD_CHARS {
+        return Err(format!("{label} exceeds {MAX_FIELD_CHARS} characters"));
+    }
+    Ok(())
+}
+
+fn validate_confidence(label: &str, value: f64) -> Result<(), String> {
+    if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+        return Err(format!("{label} must be finite and between 0 and 1"));
+    }
+    Ok(())
+}
+
+/// Materialized artifacts carry durable source evidence into every store.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ExperienceArtifacts {
+    /// Materialized wiki entries.
+    pub wiki_entries: Vec<WikiEntry>,
+    /// Materialized graph facts.
+    pub facts: Vec<GraphFact>,
+    /// Materialized graph links.
+    pub links: Vec<GraphLink>,
+    /// Materialized associations.
+    pub associations: Vec<AssociationObservation>,
+}
+
+/// One association observation with its source episode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssociationObservation {
+    /// First entity.
+    pub from_entity: String,
+    /// Second entity.
+    pub to_entity: String,
+    /// Durable source episode.
+    pub source_episode_id: String,
+}
+
+/// Extract a bounded, conservative experience from one durable episode.
 ///
-/// **0 装 PASS (v2.0 alpha)**: 当前是 `NotImplemented` 占位. 真实 pipeline
-/// 在 v2.1 (与 memory_governance.forget + scene-d 例 1 SelfAssessmentCache 一起做).
+/// A short summary is generated deterministically. Higher-order facts and
+/// relations are accepted only from explicit pipe-delimited markers:
+/// `fact: subject | predicate | object`, `link: from | to | kind`, and
+/// `associate: from | to`. This is intentionally conservative until an
+/// optional typed ModuleInvoker-based LLM extractor is configured.
+pub fn extract_experience(episode: &Episode) -> Result<ExperienceArtifacts, String> {
+    let mut extraction = ExperienceExtraction::default();
+    let summary = deterministic_summary(&episode.content);
+    if !summary.is_empty() {
+        extraction.wiki_entries.push(ExtractedWikiEntry {
+            topic: bounded(&summary, 160),
+            summary: bounded(&summary, 240),
+            body: bounded(&summary, 240),
+            confidence: 0.25,
+            tags: vec![
+                "origin:deterministic".into(),
+                format!("role:{}", episode.role),
+            ],
+        });
+    }
+    for line in episode.content.lines().map(str::trim) {
+        if let Some(fields) = marker_fields(line, "fact:", 3) {
+            extraction.facts.push(ExtractedFact {
+                subject_id: fields[0].clone(),
+                predicate: fields[1].clone(),
+                object_id: fields[2].clone(),
+                confidence: 0.5,
+            });
+        } else if let Some(fields) = marker_fields(line, "link:", 3) {
+            extraction.links.push(ExtractedLink {
+                from_id: fields[0].clone(),
+                to_id: fields[1].clone(),
+                kind: fields[2].clone(),
+                weight: 0.5,
+            });
+        } else if let Some(fields) = marker_fields(line, "associate:", 2) {
+            extraction.associations.push(ExtractedAssociation {
+                from_entity: fields[0].clone(),
+                to_entity: fields[1].clone(),
+            });
+        }
+    }
+    extraction.validate()?;
+    Ok(materialize(episode, extraction))
+}
+
+fn materialize(episode: &Episode, extraction: ExperienceExtraction) -> ExperienceArtifacts {
+    let wiki_entries = extraction
+        .wiki_entries
+        .into_iter()
+        .enumerate()
+        .map(|(index, entry)| WikiEntry {
+            id: format!("experience-wiki:{}:{index}", episode.id),
+            session_id: episode.session_id.clone(),
+            source_episode_id: episode.id.clone(),
+            extracted_at: episode.timestamp,
+            topic: entry.topic,
+            summary: entry.summary,
+            body: entry.body,
+            confidence: entry.confidence,
+            tags: entry.tags,
+        })
+        .collect();
+    let facts = extraction
+        .facts
+        .into_iter()
+        .enumerate()
+        .map(|(index, fact)| GraphFact {
+            id: format!("experience-fact:{}:{index}", episode.id),
+            subject_id: fact.subject_id,
+            subject_kind: "entity".into(),
+            predicate: fact.predicate,
+            object_id: fact.object_id,
+            object_kind: "entity_or_literal".into(),
+            valid_from: episode.timestamp,
+            valid_until: None,
+            source_episode_id: episode.id.clone(),
+            confidence: fact.confidence,
+        })
+        .collect();
+    let links = extraction
+        .links
+        .into_iter()
+        .map(|link| GraphLink {
+            from_id: link.from_id,
+            to_id: link.to_id,
+            kind: link.kind,
+            weight: link.weight,
+            source_episode_id: episode.id.clone(),
+            created_at: episode.timestamp,
+        })
+        .collect();
+    let associations = extraction
+        .associations
+        .into_iter()
+        .map(|association| AssociationObservation {
+            from_entity: association.from_entity,
+            to_entity: association.to_entity,
+            source_episode_id: episode.id.clone(),
+        })
+        .collect();
+    ExperienceArtifacts {
+        wiki_entries,
+        facts,
+        links,
+        associations,
+    }
+}
+
+fn deterministic_summary(content: &str) -> String {
+    content
+        .lines()
+        .map(str::trim)
+        .find(|line| {
+            !line.is_empty()
+                && !line.starts_with("fact:")
+                && !line.starts_with("link:")
+                && !line.starts_with("associate:")
+        })
+        .map(|line| {
+            line.split(['.', '。', '!', '！', '?', '？'])
+                .next()
+                .unwrap_or(line)
+                .trim()
+        })
+        .map(|line| bounded(line, 240))
+        .unwrap_or_default()
+}
+
+fn marker_fields(line: &str, marker: &str, expected: usize) -> Option<Vec<String>> {
+    let rest = line.strip_prefix(marker)?;
+    let fields = rest
+        .split('|')
+        .map(str::trim)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    (fields.len() == expected && fields.iter().all(|field| !field.is_empty())).then_some(fields)
+}
+
+fn bounded(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
+}
+
+/// Compatibility wrapper for callers that still expect the original tuple.
+/// New code should use [`extract_experience`] so associations are not lost.
 pub fn extract_experience_from_episode(
-    _episode: &Episode,
+    episode: &Episode,
 ) -> (Option<WikiEntry>, Vec<GraphFact>, Vec<GraphLink>) {
-    // 0 装: 不假装有提炼, 直接返空
-    (None, Vec::new(), Vec::new())
+    match extract_experience(episode) {
+        Ok(artifacts) => (
+            artifacts.wiki_entries.into_iter().next(),
+            artifacts.facts,
+            artifacts.links,
+        ),
+        Err(_) => (None, Vec::new(), Vec::new()),
+    }
 }
 
 #[cfg(test)]
@@ -199,23 +521,50 @@ mod tests {
     use super::*;
     use crate::memory_backend::CapabilityResult;
 
-    /// P-arch (2026-08-27): 0 装验证.
-    /// extract_experience_from_episode 不假装有 pipeline, 直接返空
-    /// (None / Vec::new / Vec::new).
-    /// 真 pipeline 在 v2.1 与 memory_governance 一起做.
+    /// Conservative extraction produces a bounded summary and explicit
+    /// structured relations without copying the transcript.
     #[test]
-    fn extract_does_not_pretend_to_work_in_v2_alpha() {
+    fn extract_experience_is_bounded_and_evidence_bound() {
         let ep = Episode {
             id: "ep-1".into(),
             timestamp: 1_700_000_000,
             role: "user".into(),
-            content: "hello".into(),
+            content: "Rust is fast and safe.\nfact: rust | property | fast\nlink: rust | safe | protects\nassociate: rust | cargo".into(),
             session_id: "s".into(),
         };
-        let (w, f, l) = extract_experience_from_episode(&ep);
-        assert!(w.is_none());
-        assert!(f.is_empty());
-        assert!(l.is_empty());
+        let artifacts = extract_experience(&ep).unwrap();
+        assert_eq!(artifacts.wiki_entries.len(), 1);
+        assert_eq!(artifacts.facts.len(), 1);
+        assert_eq!(artifacts.links.len(), 1);
+        assert_eq!(artifacts.associations.len(), 1);
+        assert_eq!(artifacts.wiki_entries[0].source_episode_id, "ep-1");
+        assert_eq!(artifacts.facts[0].source_episode_id, "ep-1");
+        assert_eq!(artifacts.links[0].source_episode_id, "ep-1");
+        assert_eq!(artifacts.associations[0].source_episode_id, "ep-1");
+        assert_eq!(artifacts.wiki_entries[0].body, "Rust is fast and safe");
+        assert!(!artifacts.wiki_entries[0].body.contains("fact:"));
+    }
+
+    #[test]
+    fn extraction_schema_rejects_unknown_fields_and_bounds() {
+        let unknown = serde_json::from_str::<ExperienceExtraction>(
+            r#"{"wiki_entries":[],"facts":[],"links":[],"associations":[],"extra":1}"#,
+        );
+        assert!(unknown.is_err());
+
+        let too_many = ExperienceExtraction {
+            wiki_entries: (0..9)
+                .map(|_| ExtractedWikiEntry {
+                    topic: "topic".into(),
+                    summary: "summary".into(),
+                    body: "body".into(),
+                    confidence: 0.5,
+                    tags: Vec::new(),
+                })
+                .collect(),
+            ..ExperienceExtraction::default()
+        };
+        assert!(too_many.validate().is_err());
     }
 
     /// 0 装 PASS: 错误通道统一为 `Box<dyn Error + Send + Sync>`, impl 端用
