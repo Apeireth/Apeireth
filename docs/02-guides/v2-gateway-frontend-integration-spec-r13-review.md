@@ -295,7 +295,7 @@ per R11 spec §9 + R10 spec §11 + 主代理整合文档 §1.3, 子代理 R13 �
 | LOCKED 项 | 状态 | 验证 |
 |---|---|---|
 | **5 项 LOCKED** | ✅ 0 触碰 | per `10-locked.md` + `philosophy.md` (9 锚) |
-| **8 哲学锚本体** (`eight_anchors.rs:58-79`) | ✅ 0 触碰 | per `philosophy.md` + O-6 子代理 K |
+| **9 哲学锚本体** (`eight_anchors.rs:58-79`) | ✅ 0 触碰 | per `philosophy.md` + O-6 子代理 K |
 | **13 键** (`philosophy.rs:142 RUNTIME_ENFORCED = false`) | ✅ 0 触碰 | per `governance` 13 键 verdict cache |
 | **workspace.version = "1.2.0"** (`Cargo.toml:43`) | ✅ 0 触碰 | per `Cargo.toml:44` 0 改 |
 | **R11 baseline** (`cognitive.rs` 12 slot + Cargo.lock) | ✅ 0 触碰 | per `cargo test --locked` 1713 passed 0 FAILED |
