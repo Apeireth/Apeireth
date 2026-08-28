@@ -14,12 +14,11 @@
 //! **SelfAssessmentCache** (scene-d 例 2 触发) 移到 `apeireth-plugin::self_assessment` 模块
 //! (canonical 单 source of truth, per 子代理审查 1.2, 2026-08-27). 本 crate 0 重复定义.
 //!
-//! **0 装 PASS (v2.0 alpha)**:
-//! - `Council::default()` 返 7 个 no-op advisor (全 Allow); 真 council
-//!   (调 LLM 7x 并行) 在 v2.0.0-rc
-//! - `Orchestrator` trait 0 装: 真正调 subagent 需 runtime 介入 (subagent
-//!   是 LLM factory 独立实例, 不在本 crate 范围)
-//! - 全部 `pub use` 都是 re-export; 不引入新 LLM dep
+//! **RC-6 真兑现** (2026-08-27, 子代理 N):
+//! - 7 个 `LlmAdvisor` 真接 LLM (per `council::advisors_llm`) — 替换原 7 个 NoopAdvisor
+//! - `Council::decide` 真并行 (tokio::join_all) + 60s timeout (per scene-d §5)
+//! - LLM error → Abstain (0 假装"批准"); timeout → DeferToHuman
+//! - 7 advisor 7 个独立 LlmInstance (per scene-d §3 多 instance 隔离)
 //!
 //! **架构原则**:
 //! - trait 在 foundation (跟 plugin / governance / credentials 同级)
@@ -38,8 +37,11 @@ use apeireth_core::kernel::SessionId;
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 
+pub mod council;
+pub mod llm;
+
 // ============================================
-// Council (A1)
+// Council (A1) — re-exported from `council` module
 // ============================================
 
 /// 7 个 advisor 领域 (per v1 apeireth-council + 设计意图)
@@ -99,11 +101,6 @@ pub struct Proposal {
     pub session_id: SessionId,
 }
 
-/// Council 多领域评审 (按住机制 + 加权投票)
-pub struct Council {
-    advisors: Vec<Arc<dyn Advisor>>,
-}
-
 /// Council 决策 (含按住机制, per v1 stage4-correction-v15)
 #[derive(Debug, Clone, PartialEq)]
 pub enum CouncilVerdict {
@@ -115,97 +112,15 @@ pub enum CouncilVerdict {
         reason: String,
     },
     /// 需人工批准 (v2 治理的 Deny vs RequireApproval 区分, per ROADMAP P0)
-    /// 触发条件: 60s 内达不成 consensus (v1 stage4) — 0 装: 永不触发
+    /// 触发条件: 60s 内达不成 consensus (v1 stage4) — RC-6 真兑现
     DeferToHuman { reason: String },
 }
 
-impl Council {
-    /// 7 个 advisor 默认 (0 装: 全 Allow, 用于 v2.0 alpha 无 LLM harness 场景)
-    pub fn default_allow() -> Self {
-        Self {
-            advisors: vec![
-                Arc::new(NoopAdvisor::new(AdvisorKind::Safety)),
-                Arc::new(NoopAdvisor::new(AdvisorKind::Performance)),
-                Arc::new(NoopAdvisor::new(AdvisorKind::Philosophy)),
-                Arc::new(NoopAdvisor::new(AdvisorKind::History)),
-                Arc::new(NoopAdvisor::new(AdvisorKind::Strategy)),
-                Arc::new(NoopAdvisor::new(AdvisorKind::Ethics)),
-                Arc::new(NoopAdvisor::new(AdvisorKind::Legal)),
-            ],
-        }
-    }
-
-    /// 自定义 advisors
-    pub fn new(advisors: Vec<Arc<dyn Advisor>>) -> Self {
-        Self { advisors }
-    }
-
-    /// 多意见加权: 任一 advisor Deny (除 Abstain) 即触发 Veto
-    /// (v1 30% 强反对 / 一致反对 / 60s 裁决超时的 v2 简化: 一票否决制 + Abstain 跳过)
-    /// **0 装 PASS**: 真实 council 是 7 个 LLM 并行调用 + 加权 + 60s 超时, v2.0.0-rc.
-    ///
-    /// **v2.0.0-rc contract** (per `v2.0.0-rc-roadmap.md` §2.4 + scene-d §2):
-    /// - `decide` 内部走 `tokio::time::timeout(Duration::from_secs(60), futures::future::join_all(7 LLM calls))`
-    /// - 任一 advisor 失败 → 该 advisor 视为 Abstain (不算 30% 阈值)
-    /// - 任一 advisor Deny → `Vetoed { by, reason }`
-    /// - 全 Allow/Abstain → `Approved`
-    /// - 60s 触发 → `DeferToHuman { reason: "60s no consensus" }`
-    /// - runtime `DeferToHuman` 路径 → 转 `RequireApproval` (governance 已装, 直接复用 `8732857` wiring)
-    ///
-    /// **alpha 0 装**: 当前同步遍历 7 advisors, 没 60s timeout, 失败即 Deny (无 Abstain 路径).
-    /// rc 阶段改: `tokio::spawn` 7 个并发 LLM 调用 + `futures::future::join_all` + `tokio::time::timeout`.
-    pub async fn decide(&self, proposal: &Proposal) -> CouncilVerdict {
-        // 0 装: 不调 LLM, 不并发 (trait 是 async 但 v0 impl 同步返 Allow)
-        // 真 council 在 v2.0.0-rc 改: futures::future::join_all 调 7 个 advisor
-        // + 60s timeout + 30% veto rule
-        for advisor in &self.advisors {
-            let verdict = advisor.evaluate(proposal).await;
-            if let AdvisorVerdict::Deny { reason } = verdict {
-                return CouncilVerdict::Vetoed {
-                    by: advisor.kind(),
-                    reason,
-                };
-            }
-            // Allow | Abstain: continue (语义清晰: veto 优先, Abstain 不计)
-        }
-        CouncilVerdict::Approved
-    }
-}
-
-/// Noop advisor (v2.0 alpha 0 装)
-struct NoopAdvisor {
-    kind: AdvisorKind,
-}
-
-impl NoopAdvisor {
-    fn new(kind: AdvisorKind) -> Self {
-        Self { kind }
-    }
-}
-
-#[async_trait::async_trait]
-impl Advisor for NoopAdvisor {
-    fn name(&self) -> &'static str {
-        match self.kind {
-            AdvisorKind::Safety => "noop_safety",
-            AdvisorKind::Performance => "noop_performance",
-            AdvisorKind::Philosophy => "noop_philosophy",
-            AdvisorKind::History => "noop_history",
-            AdvisorKind::Strategy => "noop_strategy",
-            AdvisorKind::Ethics => "noop_ethics",
-            AdvisorKind::Legal => "noop_legal",
-        }
-    }
-
-    fn kind(&self) -> AdvisorKind {
-        self.kind
-    }
-
-    async fn evaluate(&self, _proposal: &Proposal) -> AdvisorVerdict {
-        // 0 装: 全 Allow (Noop)
-        AdvisorVerdict::Allow
-    }
-}
+/// Council 多领域评审 (按住机制 + 加权投票).
+///
+/// RC-6 真兑现 (2026-08-27, 子代理 N): 真接 LLM via LlmFactory,
+/// 7 advisor 并行调用 + 60s timeout + DeferToHuman.
+pub use council::Council;
 
 // ============================================
 // Orchestrator (A2 + scene-d 例 3)
@@ -296,7 +211,6 @@ pub trait Orchestrator: Send + Sync {
         payload: serde_json::Value,
     ) -> Result<Vec<SubagentOutcome>, OrchestratorError> {
         // 默认实现: planner -> implementer -> reviewer 三步
-        // clone payload 防 partial move (serde_json::Value not Copy)
         let plan = self
             .dispatch(SubagentSpec {
                 id: format!("{title}-plan"),
@@ -362,17 +276,6 @@ impl std::fmt::Display for OrchestratorError {
 
 impl std::error::Error for OrchestratorError {}
 
-// Send / Sync 由编译器自动派生: 字段全 String, 满足 Send + Sync 自动推导条件.
-// crate 内 #![forbid(unsafe_code)] 不允许 unsafe impl, 但自动派生无需 unsafe impl.
-// RC-5 runtime 集成时跨任务传输安全.
-
-// SelfAssessmentCache (scene-d 例 2) **0 在此 crate** (per 子代理审查 1.2):
-// 之前这里有 `SelfAssessment` / `Deviation` / `SelfAssessmentCache` 同名不同定义
-// (plugin::SelfAssessment 字段多, 含 id + reviewer_id, 比本处的字段全).
-// **单一 source of truth**: plugin::self_assessment::SelfAssessment 是 canonical
-// 类型, plugin::self_assessment::SelfAssessmentStore 是 trait.
-// Orchestration 改为注入 `Arc<dyn SelfAssessmentStore>`, 0 重复定义.
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -414,7 +317,7 @@ mod tests {
         }
         let c = Council::new(vec![
             Arc::new(DenyAll),
-            Arc::new(NoopAdvisor::new(AdvisorKind::Safety)),
+            Arc::new(crate::council::NoopAdvisor::new(AdvisorKind::Safety)),
         ]);
         match c.decide(&sample_proposal()).await {
             CouncilVerdict::Vetoed { by, reason } => {
@@ -424,9 +327,6 @@ mod tests {
             _ => panic!("expected Vetoed"),
         }
     }
-
-    // 注: SelfAssessment / SelfAssessmentCache 测试在 `apeireth-plugin` crate 的
-    // `self_assessment` 模块 (canonical 单 source of truth), 不在本 crate 重复.
 
     #[test]
     fn subagent_spec_roundtrip_json() {
