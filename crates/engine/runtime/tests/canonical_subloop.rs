@@ -1,9 +1,11 @@
-//! Tests proving bounded, private-transcript SubLoops owned by modules.
+//! Tests proving bounded, private-transcript SubLoops owned by modules and strictly governed.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
-use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, RequestId, SessionId, TraceId};
+use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
+use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest, GovernanceVerdict};
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
     ProviderError, ToolCapability,
@@ -13,54 +15,50 @@ use apeireth_protocol::canonical::{
     NormalizedResponse, NormalizedTool, NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
 use apeireth_runtime::{
-    HookPoint, Module, ModuleContext, ModuleManifest, ModuleOutcome, Runtime, SubLoopSpec,
-    TurnRequest,
+    HookPoint, Module, ModuleContext, ModuleManifest, ModuleOutcome, PromptOverlay, Runtime,
+    SubLoopError, SubLoopResult, SubLoopSpec, TurnRequest,
 };
 use async_trait::async_trait;
 
-struct MockAllowedTool;
+#[derive(Clone)]
+struct MockInstrumentedTool {
+    id: CapabilityId,
+    name: String,
+    invocations: Arc<AtomicUsize>,
+}
 
-#[async_trait]
-impl ToolCapability for MockAllowedTool {
-    fn id(&self) -> &CapabilityId {
-        static ID: std::sync::OnceLock<CapabilityId> = std::sync::OnceLock::new();
-        ID.get_or_init(|| CapabilityId::new("tool.allowed").unwrap())
-    }
-
-    fn declaration(&self) -> NormalizedTool {
-        NormalizedTool {
-            name: "allowed_tool".into(),
-            description: Some("An allowed tool".into()),
-            parameters: ToolParameters::new(),
-            strict: false,
-        }
-    }
-
-    async fn invoke(&self, call: &ToolCall) -> ToolResult {
-        ToolResult::ok(&call.id, serde_json::json!({ "allowed": true }))
+impl MockInstrumentedTool {
+    fn new(id: &str, name: &str) -> (Self, Arc<AtomicUsize>) {
+        let invocations = Arc::new(AtomicUsize::new(0));
+        (
+            Self {
+                id: CapabilityId::new(id).unwrap(),
+                name: name.to_string(),
+                invocations: Arc::clone(&invocations),
+            },
+            invocations,
+        )
     }
 }
 
-struct MockDeniedTool;
-
 #[async_trait]
-impl ToolCapability for MockDeniedTool {
+impl ToolCapability for MockInstrumentedTool {
     fn id(&self) -> &CapabilityId {
-        static ID: std::sync::OnceLock<CapabilityId> = std::sync::OnceLock::new();
-        ID.get_or_init(|| CapabilityId::new("tool.denied").unwrap())
+        &self.id
     }
 
     fn declaration(&self) -> NormalizedTool {
         NormalizedTool {
-            name: "denied_tool".into(),
-            description: Some("A denied tool".into()),
+            name: self.name.clone(),
+            description: Some(format!("Instrumented tool {}", self.name)),
             parameters: ToolParameters::new(),
             strict: false,
         }
     }
 
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
-        ToolResult::ok(&call.id, serde_json::json!({ "denied": true }))
+        self.invocations.fetch_add(1, Ordering::SeqCst);
+        ToolResult::ok(&call.id, serde_json::json!({ "executed": self.name }))
     }
 }
 
@@ -72,6 +70,7 @@ enum ScriptStep {
         arguments: serde_json::Value,
     },
     Say(&'static str),
+    DelayAndSay(Duration, &'static str),
 }
 
 struct ScriptedProvider {
@@ -145,6 +144,13 @@ impl ProviderCapability for ScriptedProvider {
                 content: (*text).to_string(),
                 ..base
             }),
+            ScriptStep::DelayAndSay(delay, text) => {
+                tokio::time::sleep(*delay).await;
+                Ok(NormalizedResponse {
+                    content: (*text).to_string(),
+                    ..base
+                })
+            }
         }
     }
 }
@@ -192,31 +198,32 @@ impl Plugin for ScriptedProviderPlugin {
     }
 }
 
-/// Module that invokes a bounded SubLoop on TurnStart and injects the structured outcome.
-struct SubLoopTesterModule {
+// ---------------------------------------------------------------------------
+// 1. Basic SubLoop execution on private transcript
+// ---------------------------------------------------------------------------
+
+struct BasicSubLoopModule {
     manifest: ModuleManifest,
     allowed_tool: Arc<dyn ToolCapability>,
-    denied_tool: Arc<dyn ToolCapability>,
 }
 
-impl SubLoopTesterModule {
-    fn new() -> Self {
+impl BasicSubLoopModule {
+    fn new(allowed_tool: Arc<dyn ToolCapability>) -> Self {
         Self {
-            manifest: ModuleManifest::new("module.subloop.tester", "SubLoop Tester Module"),
-            allowed_tool: Arc::new(MockAllowedTool),
-            denied_tool: Arc::new(MockDeniedTool),
+            manifest: ModuleManifest::new("module.subloop.basic", "Basic SubLoop Module"),
+            allowed_tool,
         }
     }
 }
 
 #[async_trait]
-impl Module for SubLoopTesterModule {
+impl Module for BasicSubLoopModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
 
     fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.allowed_tool.clone(), self.denied_tool.clone()]
+        vec![self.allowed_tool.clone()]
     }
 
     async fn on_hook(
@@ -227,7 +234,7 @@ impl Module for SubLoopTesterModule {
         if hook == HookPoint::TurnStart {
             let spec = SubLoopSpec {
                 max_rounds: 3,
-                allowed_capabilities: vec![self.allowed_tool.id().clone()], // Only allowed_tool in allowlist
+                allowed_capabilities: vec![self.allowed_tool.id().clone()],
                 timeout: None,
                 messages: vec![NormalizedMessage::user("run subtask")],
                 system_prompt: Some("You are a subloop helper.".into()),
@@ -245,12 +252,12 @@ impl Module for SubLoopTesterModule {
             assert_eq!(result.tool_results.len(), 1);
             assert!(result.tool_results[0].is_ok());
 
-            return Ok(ModuleOutcome::continue_().with_prompt_overlay(
-                apeireth_runtime::PromptOverlay::system(format!(
+            return Ok(
+                ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(format!(
                     "SubLoop computed: {}",
                     result.text
-                )),
-            ));
+                ))),
+            );
         }
 
         Ok(ModuleOutcome::continue_())
@@ -259,10 +266,7 @@ impl Module for SubLoopTesterModule {
 
 #[tokio::test]
 async fn subloop_runs_on_private_transcript_with_strict_capability_allowlist() {
-    // Script:
-    // Step 0: SubLoop calls allowed_tool
-    // Step 1: SubLoop finishes with "subloop finished successfully"
-    // Step 2: Main loop model turn sees overlay and answers "Main answer complete"
+    let (tool, tool_invocations) = MockInstrumentedTool::new("tool.allowed", "allowed_tool");
     let script = vec![
         ScriptStep::CallTool {
             call_id: "subloop_call_1",
@@ -275,7 +279,7 @@ async fn subloop_runs_on_private_transcript_with_strict_capability_allowlist() {
 
     let provider = ScriptedProvider::new("provider.mock", script);
     let plugin = ScriptedProviderPlugin::new(provider);
-    let module = Arc::new(SubLoopTesterModule::new());
+    let module = Arc::new(BasicSubLoopModule::new(Arc::new(tool)));
 
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
@@ -290,6 +294,7 @@ async fn subloop_runs_on_private_transcript_with_strict_capability_allowlist() {
 
     let response = runtime.execute(req).await.expect("turn executes");
     assert_eq!(response.text, "Main answer complete");
+    assert_eq!(tool_invocations.load(Ordering::SeqCst), 1);
 
     // Verify main session transcript: does NOT have subloop private messages!
     let session = runtime
@@ -314,27 +319,18 @@ async fn subloop_runs_on_private_transcript_with_strict_capability_allowlist() {
     }
 }
 
-struct SubLoopDeniedTesterModule {
+// ---------------------------------------------------------------------------
+// 2. Hostile provider attempting denied tool in SubLoop
+// ---------------------------------------------------------------------------
+
+struct HostileSubLoopModule {
     manifest: ModuleManifest,
     allowed_tool: Arc<dyn ToolCapability>,
     denied_tool: Arc<dyn ToolCapability>,
 }
 
-impl SubLoopDeniedTesterModule {
-    fn new() -> Self {
-        Self {
-            manifest: ModuleManifest::new(
-                "module.subloop.denied_tester",
-                "SubLoop Denied Tester Module",
-            ),
-            allowed_tool: Arc::new(MockAllowedTool),
-            denied_tool: Arc::new(MockDeniedTool),
-        }
-    }
-}
-
 #[async_trait]
-impl Module for SubLoopDeniedTesterModule {
+impl Module for HostileSubLoopModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -351,9 +347,9 @@ impl Module for SubLoopDeniedTesterModule {
         if hook == HookPoint::TurnStart {
             let spec = SubLoopSpec {
                 max_rounds: 3,
-                allowed_capabilities: vec![self.allowed_tool.id().clone()], // denied_tool is NOT in allowlist
+                allowed_capabilities: vec![self.allowed_tool.id().clone()], // denied_tool is NOT allowed
                 timeout: None,
-                messages: vec![NormalizedMessage::user("try calling denied tool")],
+                messages: vec![NormalizedMessage::user("subloop prompt")],
                 system_prompt: None,
                 model: Some("subloop-model".into()),
             };
@@ -377,10 +373,15 @@ impl Module for SubLoopDeniedTesterModule {
 }
 
 #[tokio::test]
-async fn subloop_with_allowed_and_denied_tools() {
+async fn hostile_provider_attempting_denied_capability_is_blocked_and_invoke_counter_is_zero() {
+    let (allowed_tool, allowed_invocations) =
+        MockInstrumentedTool::new("tool.allowed", "allowed_tool");
+    let (denied_tool, denied_invocations) = MockInstrumentedTool::new("tool.denied", "denied_tool");
+
     let script = vec![
+        // Hostile provider calls denied_tool despite it not being in declaration
         ScriptStep::CallTool {
-            call_id: "subloop_call_denied",
+            call_id: "hostile_call_1",
             tool: "denied_tool",
             arguments: serde_json::json!({}),
         },
@@ -390,7 +391,11 @@ async fn subloop_with_allowed_and_denied_tools() {
 
     let provider = ScriptedProvider::new("provider.mock", script);
     let plugin = ScriptedProviderPlugin::new(provider);
-    let module = Arc::new(SubLoopDeniedTesterModule::new());
+    let module = Arc::new(HostileSubLoopModule {
+        manifest: ModuleManifest::new("module.hostile", "Hostile Tester Module"),
+        allowed_tool: Arc::new(allowed_tool),
+        denied_tool: Arc::new(denied_tool),
+    });
 
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
@@ -401,7 +406,354 @@ async fn subloop_with_allowed_and_denied_tools() {
         .expect("runtime builds cleanly");
 
     let req = TurnRequest::new(SessionId::new(), "hello").with_model("subloop-model");
-
     let response = runtime.execute(req).await.expect("turn executes");
+
     assert_eq!(response.text, "Main turn completed");
+    // Invariant: denied_tool::invoke was NEVER executed
+    assert_eq!(
+        denied_invocations.load(Ordering::SeqCst),
+        0,
+        "Denied capability must never be invoked"
+    );
+    assert_eq!(allowed_invocations.load(Ordering::SeqCst), 0);
+}
+
+// ---------------------------------------------------------------------------
+// 3. Global governance deny remains authoritative inside SubLoop
+// ---------------------------------------------------------------------------
+
+struct CustomDenyGovernance;
+
+#[async_trait]
+impl GovernanceHook for CustomDenyGovernance {
+    fn name(&self) -> &str {
+        "custom_deny"
+    }
+
+    async fn evaluate(&self, req: &GovernanceRequest<'_>) -> Decision {
+        match req.action {
+            Action::CapabilityDispatch { capability, .. } => {
+                if capability.as_str() == "tool.globally_denied" {
+                    Decision::Deny {
+                        reason: "globally blocked by security policy".into(),
+                    }
+                } else {
+                    Decision::Allow
+                }
+            }
+            _ => Decision::Allow,
+        }
+    }
+}
+
+struct GovernanceSubLoopModule {
+    manifest: ModuleManifest,
+    tool: Arc<dyn ToolCapability>,
+}
+
+#[async_trait]
+impl Module for GovernanceSubLoopModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![self.tool.clone()]
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, apeireth_runtime::ModuleError> {
+        if hook == HookPoint::TurnStart {
+            let spec = SubLoopSpec {
+                max_rounds: 3,
+                allowed_capabilities: vec![self.tool.id().clone()], // SubLoop allowlist says YES
+                timeout: None,
+                messages: vec![NormalizedMessage::user("subloop prompt")],
+                system_prompt: None,
+                model: Some("subloop-model".into()),
+            };
+
+            let result = ctx
+                .subloop()
+                .spawn(spec)
+                .await
+                .map_err(|e| apeireth_runtime::ModuleError::Message(e.to_string()))?;
+
+            assert_eq!(result.rounds, 2);
+            assert_eq!(result.tool_results.len(), 1);
+            // Must be permanently denied by governance
+            assert!(!result.tool_results[0].is_ok());
+            assert!(result.tool_results[0]
+                .render()
+                .contains("refused by governance"));
+
+            return Ok(ModuleOutcome::continue_());
+        }
+
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+#[tokio::test]
+async fn globally_denied_capability_remains_denied_inside_subloop() {
+    let (tool, tool_invocations) =
+        MockInstrumentedTool::new("tool.globally_denied", "globally_denied_tool");
+
+    let script = vec![
+        ScriptStep::CallTool {
+            call_id: "gov_call_1",
+            tool: "globally_denied_tool",
+            arguments: serde_json::json!({}),
+        },
+        ScriptStep::Say("SubLoop handled governance refusal"),
+        ScriptStep::Say("Main turn completed cleanly"),
+    ];
+
+    let provider = ScriptedProvider::new("provider.mock", script);
+    let plugin = ScriptedProviderPlugin::new(provider);
+    let module = Arc::new(GovernanceSubLoopModule {
+        manifest: ModuleManifest::new("module.gov.test", "Governance Tester Module"),
+        tool: Arc::new(tool),
+    });
+
+    let mut runtime = Runtime::builder()
+        .with_plugin(plugin)
+        .with_module(module)
+        .with_governance(Arc::new(CustomDenyGovernance))
+        .with_default_model("subloop-model")
+        .build()
+        .await
+        .expect("runtime builds cleanly");
+
+    let req = TurnRequest::new(SessionId::new(), "hello").with_model("subloop-model");
+    let response = runtime.execute(req).await.expect("turn executes");
+
+    assert_eq!(response.text, "Main turn completed cleanly");
+    // Tool::invoke was NEVER called because governance blocked it before invocation
+    assert_eq!(
+        tool_invocations.load(Ordering::SeqCst),
+        0,
+        "ToolCapability::invoke must not be called when governance denies"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 4. Capability requiring interactive approval fails cleanly in SubLoop
+// ---------------------------------------------------------------------------
+
+struct ApprovalRequiredGovernance;
+
+#[async_trait]
+impl GovernanceHook for ApprovalRequiredGovernance {
+    fn name(&self) -> &str {
+        "approval_required"
+    }
+
+    async fn evaluate(&self, req: &GovernanceRequest<'_>) -> Decision {
+        match req.action {
+            Action::CapabilityDispatch { .. } => Decision::RequireApproval {
+                reason: "sensitive action needs human confirmation".into(),
+            },
+            _ => Decision::Allow,
+        }
+    }
+}
+
+struct ApprovalSubLoopModule {
+    manifest: ModuleManifest,
+    tool: Arc<dyn ToolCapability>,
+}
+
+#[async_trait]
+impl Module for ApprovalSubLoopModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![self.tool.clone()]
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, apeireth_runtime::ModuleError> {
+        if hook == HookPoint::TurnStart {
+            let spec = SubLoopSpec {
+                max_rounds: 3,
+                allowed_capabilities: vec![self.tool.id().clone()],
+                timeout: None,
+                messages: vec![NormalizedMessage::user("subloop prompt")],
+                system_prompt: None,
+                model: Some("subloop-model".into()),
+            };
+
+            let result = ctx
+                .subloop()
+                .spawn(spec)
+                .await
+                .map_err(|e| apeireth_runtime::ModuleError::Message(e.to_string()))?;
+
+            assert_eq!(result.rounds, 2);
+            assert_eq!(result.tool_results.len(), 1);
+            assert!(!result.tool_results[0].is_ok());
+            assert!(result.tool_results[0]
+                .render()
+                .contains("requires interactive approval which is not permitted in subloops"));
+
+            return Ok(ModuleOutcome::continue_());
+        }
+
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+#[tokio::test]
+async fn effectful_capability_requiring_approval_fails_cleanly_in_subloop() {
+    let (tool, tool_invocations) =
+        MockInstrumentedTool::new("tool.approval_required", "approval_tool");
+
+    let script = vec![
+        ScriptStep::CallTool {
+            call_id: "appr_call_1",
+            tool: "approval_tool",
+            arguments: serde_json::json!({}),
+        },
+        ScriptStep::Say("SubLoop handled approval requirement cleanly"),
+        ScriptStep::Say("Main turn completed cleanly"),
+    ];
+
+    let provider = ScriptedProvider::new("provider.mock", script);
+    let plugin = ScriptedProviderPlugin::new(provider);
+    let module = Arc::new(ApprovalSubLoopModule {
+        manifest: ModuleManifest::new("module.appr.test", "Approval Tester Module"),
+        tool: Arc::new(tool),
+    });
+
+    let mut runtime = Runtime::builder()
+        .with_plugin(plugin)
+        .with_module(module)
+        .with_governance(Arc::new(ApprovalRequiredGovernance))
+        .with_default_model("subloop-model")
+        .build()
+        .await
+        .expect("runtime builds cleanly");
+
+    let session_id = SessionId::new();
+    let req = TurnRequest::new(session_id, "hello").with_model("subloop-model");
+    let response = runtime.execute(req).await.expect("turn executes");
+
+    assert_eq!(response.text, "Main turn completed cleanly");
+    assert_eq!(
+        tool_invocations.load(Ordering::SeqCst),
+        0,
+        "Tool requiring interactive approval must not be invoked inside SubLoop"
+    );
+
+    // Assert no pending approval was created in the session
+    let session = runtime
+        .sessions()
+        .load(&session_id)
+        .await
+        .expect("load")
+        .expect("session");
+    assert!(session.active_approval_id.is_none());
+}
+
+// ---------------------------------------------------------------------------
+// 5. SubLoop timeout enforcement across whole execution
+// ---------------------------------------------------------------------------
+
+struct TimeoutSubLoopModule {
+    manifest: ModuleManifest,
+}
+
+#[async_trait]
+impl Module for TimeoutSubLoopModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, apeireth_runtime::ModuleError> {
+        if hook == HookPoint::TurnStart {
+            let spec = SubLoopSpec {
+                max_rounds: 3,
+                allowed_capabilities: Vec::new(),
+                timeout: Some(Duration::from_millis(50)), // Strict 50ms timeout
+                messages: vec![NormalizedMessage::user("slow request")],
+                system_prompt: None,
+                model: Some("subloop-model".into()),
+            };
+
+            let err = ctx
+                .subloop()
+                .spawn(spec)
+                .await
+                .expect_err("SubLoop must time out");
+
+            match err {
+                SubLoopError::Timeout => {}
+                other => panic!("expected SubLoopError::Timeout, got {other:?}"),
+            }
+
+            return Ok(ModuleOutcome::continue_()
+                .with_prompt_overlay(PromptOverlay::system("SubLoop timed out as expected")));
+        }
+
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+#[tokio::test]
+async fn subloop_timeout_enforces_overall_execution_deadline() {
+    let script = vec![
+        // Provider takes 300ms to respond, exceeding the 50ms SubLoop timeout
+        ScriptStep::DelayAndSay(Duration::from_millis(300), "delayed response"),
+        // Main loop turn response
+        ScriptStep::Say("Main turn completed after subloop timeout"),
+    ];
+
+    let provider = ScriptedProvider::new("provider.mock", script);
+    let plugin = ScriptedProviderPlugin::new(provider);
+    let module = Arc::new(TimeoutSubLoopModule {
+        manifest: ModuleManifest::new("module.timeout.test", "Timeout Tester Module"),
+    });
+
+    let mut runtime = Runtime::builder()
+        .with_plugin(plugin)
+        .with_module(module)
+        .with_default_model("subloop-model")
+        .build()
+        .await
+        .expect("runtime builds cleanly");
+
+    let session_id = SessionId::new();
+    let req = TurnRequest::new(session_id, "hello").with_model("subloop-model");
+    let response = runtime.execute(req).await.expect("turn executes");
+
+    assert_eq!(response.text, "Main turn completed after subloop timeout");
+
+    // Primary session is intact and does not contain partial subloop messages
+    let session = runtime
+        .sessions()
+        .load(&session_id)
+        .await
+        .expect("load")
+        .expect("session");
+    for msg in &session.messages {
+        for part in &msg.content {
+            if let apeireth_protocol::canonical::ContentPart::Text { text } = part {
+                assert_ne!(text, "slow request");
+                assert_ne!(text, "delayed response");
+            }
+        }
+    }
 }

@@ -23,50 +23,55 @@ The runtime has converged into its canonical shape:
 3. **Module Ownership of Capabilities**:
    - Every cognitive component (Memory, Preference, Judge, Council, SelfAssessment, Experience) implements `Module`.
    - Every tool capability (Filesystem, Search, Repo, Shell, Fetch, MCP) is registered through a `Module`.
-4. **SubLoop Isolation**:
+   - `McpModule` manages dynamic post-build tool registration via `RwLock` without creating a secondary registry.
+4. **Governed SubLoop Isolation & Dispatch**:
    - SubLoops execute on private, ephemeral transcripts.
-   - SubLoops never mutate the main session.
-   - SubLoops never emit direct user frontend events.
-   - SubLoops enforce explicit capability allowlists.
-   - SubLoops return structured `SubLoopResult` to their calling module.
+   - SubLoops never mutate the main session and never emit direct user frontend events.
+   - All SubLoop tool calls flow through the **canonical capability governance path**:
+     $$\text{effective permission} = \text{global governance} \land \text{subloop allowlist}$$
+   - Global governance is always authoritative; allowlists can never relax a global deny.
+   - Capabilities requiring interactive human approval fail cleanly inside SubLoops with structured errors.
+   - SubLoop execution is bounded by explicit round limits (`max_rounds`), overall execution timeouts (`timeout`), shared turn invocation budgets (`ModuleTurnState`), and recursion depth guards (`DEFAULT_MAX_INVOCATION_DEPTH`).
 
 ---
 
 ## 3. Component Architecture
 
 ```text
-┌────────────────────────────────────────────────────────┐
-│               Single User-Facing Main Loop             │
-│            (Runtime::execute in execute.rs)            │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-             ┌─────────────┴─────────────┐
-             ▼                           ▼
-┌─────────────────────────┐ ┌────────────────────────────┐
-│   Minimal Microkernel   │ │    Governance Pipeline     │
-│ (Sessions, Providers,   │ │ (AllowAll, DenyCapability, │
-│  Deterministic Registry)│ │  ContentRisk, Approvals)   │
-└────────────┬────────────┘ └────────────────────────────┘
-             │
-             ▼
-┌────────────────────────────────────────────────────────┐
-│                  Unified Module System                 │
-│         (Cognitive Modules + Tool Modules + MCP)       │
-├──────────────────────────┬─────────────────────────────┤
-│   Cognitive Modules:     │   Tool Modules:             │
-│   - MemoryRecall         │   - FilesystemModule        │
-│   - PreferenceRecall     │   - SearchModule            │
-│   - JudgeModule          │   - RepoModule              │
-│   - CouncilModule        │   - ShellModule             │
-│   - SelfAssessmentModule │   - FetchModule             │
-│   - MemoryWriteback      │   - McpModule (dynamic MCP) │
-└────────────┬─────────────┴─────────────────────────────┘
-             │
-             ▼
-┌────────────────────────────────────────────────────────┐
-│               Bounded Module-Owned SubLoops            │
-│    (SubLoopSpawner, Private Transcript, Tool Allowlist)│
-└────────────────────────────────────────────────────────┘
++--------------------------------------------------------+
+|               Single User-Facing Main Loop             |
+|            (Runtime::execute in execute.rs)            |
++--------------------------+-----------------------------+
+                           |
+             +-------------+-------------+
+             |                           |
+             v                           v
++-------------------------+ +----------------------------+
+|   Minimal Microkernel   | |    Governance Pipeline     |
+| (Sessions, Providers,   | | (AllowAll, DenyCapability, |
+|  Deterministic Registry)| |  ContentRisk, Approvals)   |
++------------+------------+ +-------------+--------------+
+             |                            |
+             |           +----------------+ (Authoritative Policy)
+             v           v
++--------------------------------------------------------+
+|                  Unified Module System                 |
+|         (Cognitive Modules + Tool Modules + MCP)       |
++--------------------------+-----------------------------+
+|   Cognitive Modules:     |   Tool Modules:             |
+|   - MemoryRecall         |   - FilesystemModule        |
+|   - PreferenceRecall     |   - SearchModule            |
+|   - JudgeModule          |   - RepoModule              |
+|   - CouncilModule        |   - ShellModule             |
+|   - SelfAssessmentModule |   - FetchModule             |
+|   - MemoryWriteback      |   - McpModule (dynamic MCP) |
++------------+-------------+-----------------------------+
+             |
+             v
++--------------------------------------------------------+
+|               Bounded Module-Owned SubLoops            |
+|  (SubLoopSpawner, Private Transcript, Governed Dispatch)|
++--------------------------------------------------------+
 ```
 
 ---
@@ -79,5 +84,7 @@ The runtime has converged into its canonical shape:
 | Module System | General `Module` trait with hooks & tools | `tests/cognitive_module_abi.rs` |
 | Tool Modules | Filesystem, Search, Repo, Shell, Fetch via modules | `tests/canonical_module_tools.rs` |
 | MCP Integration | Dynamic MCP capabilities registered via `McpModule` | `tests/canonical_module_tools.rs` |
-| SubLoop Bounds | Private transcript, round limits, tool allowlist | `tests/canonical_subloop.rs` |
+| SubLoop Governance | SubLoop tool calls evaluated against global governance | `tests/canonical_subloop.rs` |
+| Hostile Capability | Denied tool call is blocked; tool invoke counter is 0 | `tests/canonical_subloop.rs` |
+| SubLoop Timeout | Overall deadline aborts slow SubLoop; session intact | `tests/canonical_subloop.rs` |
 | Backward Compat | Type aliases (`ProductionCognitiveModules`, `AgentModule`) | Entire test workspace |
