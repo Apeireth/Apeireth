@@ -200,6 +200,16 @@ impl LlmInstance for NoopLlmInstance {
 
 /// 0 装 PASS: NoopLlmFactory
 /// spawn 即返 NoopLlmInstance. runtime 启动时用.
+///
+/// **0 装诚实 (RC-5, v2.0.0-rc.1)**:
+/// - 真生产路径用 [`crate::LlmFactory`] 的 impl, 例如
+///   `apeireth_provider::minimax_llm_factory::MinimaxLlmFactory` (MiniMax backend 真接
+///   `provider.minimax.api_key` via `CredentialResolver`, 复用 `MinimaxProviderCapability`
+///   HTTP client; 见 `canonical_minimax.rs`)
+/// - `NoopLlmFactory` 保留用于 **0 装诚实测试** (没真 key 时跑 governance 路径) +
+///   **alpha 0 装路径** (没装真 LLM 时的占位)
+/// - 不假装"我有 AI 决策": `complete` 返 `LlmError::NotImplemented`, governance 转 Deny 或
+///   Abstain (per scene-d §2.2)
 pub struct NoopLlmFactory;
 
 #[async_trait]
