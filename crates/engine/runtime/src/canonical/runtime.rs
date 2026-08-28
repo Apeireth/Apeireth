@@ -159,7 +159,7 @@ impl Runtime {
             .modules
             .tools()
             .iter()
-            .map(|t| t.declaration().into())
+            .map(|t| t.declaration())
             .collect();
         declarations.extend(self.plugins.tool_declarations());
         declarations
