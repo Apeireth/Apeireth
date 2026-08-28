@@ -139,7 +139,7 @@ Status:          📊 进展快照 (一次性, 真兑现)
 
 ---
 
-## 6. 子代理 7 项报告 (全部采纳)
+## 6. 子代理 9 项报告 (全部采纳)
 
 | 子代理 | 报告内容 | 采纳 commit |
 |---|---|---|
@@ -150,6 +150,8 @@ Status:          📊 进展快照 (一次性, 真兑现)
 | **E** (`0540af5b`) | RC-10 line header 审查 + 3 建议 (breaking change / ID_LEN_MAX / truncated test) | `38cc1039` (P1 1) + `0e9adb52` (P1 1+2) |
 | **F** (`eaef5ed9`) | ledger 数字 + E 3 建议兑现度 | `0e9adb52` |
 | **G** (本次 async) | 2 P1 补 (record_id 明文 + migration script) | `ae182c8c` (2 file changed, 12 insertions) |
+| **H** (子代理 I 之前) | HEAD 漂移说明 + 0 装诱导修正 | `f65bd89c` + `a2f45bea` |
+| **I** (本次) | RC-11 真生产前 migration script 真写 (Python 330 行 + Rust 集成测试 377 行 + 6 测试 pass, ID_LEN_MAX 边界校验真落地) | `615121bd` (script) + 本次 §12 文档 |
 
 ---
 
@@ -196,10 +198,10 @@ Status:          📊 进展快照 (一次性, 真兑现)
 
 ### 11.1 我们做了什么 (真兑现 ledger)
 
-- **28 commit** since O-6 锚 #9 登记 `ef075420` (28 + 1 + 子代理 8 项报告全部采纳)
+- **28 commit** since O-6 锚 #9 登记 `ef075420` (28 + 1 + 子代理 9 项报告全部采纳)
 - **7/10 RC 真实现完成**: RC-1 MemoryBackend SqliteBackend / RC-2 Experience SQLite / RC-3 PreferenceStore SQLite / RC-4 SelfAssessmentStore SQLite / RC-8 SubSupervisor std::process / RC-9 keyring CLI bootstrap / RC-10 File AES-256-GCM
-- **4/10 RC 未做 (3 待 LLM key)**: RC-5 / RC-6 / RC-7 (需 LLM API key) + RC-11 加密 v1→v2 migration script (TODO, 真生产前必写)
-- **8 子代理报告 (A/B/C/D/E/F/G/H) 全部采纳**, 每个子代理报告**独立视角**找问题 (A Send+Sync 注释, B 41 项差异, C P0 build break + RC-8 命名, D 接手人手册, E line header 审查, F ledger 数字 + 3 建议, G ID_LEN_MAX 边界, H 复核)
+- **3/10 RC 未做 (待 LLM key)**: RC-5 / RC-6 / RC-7 (需 LLM API key). RC-11 加密 v1→v2 migration script **子代理 I 真兑现** (§12), 不再是 TODO 承诺.
+- **9 子代理报告 (A/B/C/D/E/F/G/H/I) 全部采纳**, 每个子代理报告**独立视角**找问题 (A Send+Sync 注释, B 41 项差异, C P0 build break + RC-8 命名, D 接手人手册, E line header 审查, F ledger 数字 + 3 建议, G ID_LEN_MAX 边界, H 复核, I RC-11 migration script 真写)
 - **0 装诚实 ledger 真实兑现 12 项** (11 编号 + 1 无编号): #1, #2+3, #5, #7, #8+9, #10+11+12, #23 + (alpha arch)
 - **5 重守门自动验证** (.github/workflows/o6-anchor.yml: clippy 0 警告 / tests 0 失败 / legacy path / 13 键 LOCKED / workspace.version / R11 baseline 全 0 触碰 / 9 哲学锚表头 0 减)
 
@@ -213,12 +215,15 @@ Status:          📊 进展快照 (一次性, 真兑现)
 - ✅ 子代理 F: ledger 数字核对 + 2 P1 补 (record_id 明文 + ROADMAP §4 P1)
 - ✅ 子代理 G: 1 独立判断 (migration script 必校验 v1 id ≤ 65535)
 - ✅ 子代理 H: 复核 G + 整体报告 27 commit
+- ✅ 子代理 I: RC-11 真生产前 migration script 真写 (Python + Rust 集成测试 + 6 测试 pass, §12)
 
-### 11.3 真生产前阻塞 (3 项, 子代理 D actionable #1 + #4 + #5)
+### 11.3 真生产前阻塞 (2 项, 子代理 I 真兑现 migration script 后)
 
 1. **LLM API key** (RC-5/6/7) — 你 1 句话给 key, 我立刻做 3 RC (估 4-6 周)
-2. **TODO(rc-11) migration script** (v1 加密 → v2 加密) — 真生产前必写 `scripts/migrate_v1_to_v2_encrypted.py` (Python), 必含 ID_LEN_MAX 边界校验 (子代理 G 独立判断)
-3. **12 consumer 弃用清理** (子代理 D actionable #3) — 实测 0 个 `#[allow(deprecated)]` 在 src, **0 装迁移无需做**, 但 v2.0 release 前仍需确认无 alpha `#[allow(deprecated)]` 残留
+2. ~~**TODO(rc-11) migration script** (v1 加密 → v2 加密) — 真生产前必写 `scripts/migrate_v1_to_v2_encrypted.py` (Python), 必含 ID_LEN_MAX 边界校验 (子代理 G 独立判断)~~ — **✅ 子代理 I 真兑现 (2026-08-27)**:
+   - `scripts/migrate_v1_to_v2_encrypted.py` (330 行) 真写, 0 装诚实: ID_LEN_MAX 校验 (子代理 G 独立判断) 真落地, UUID v5 deterministic record_id 生成 (idempotent, 接手人可重跑).
+   - `crates/engine/memory/tests/migration_v1_to_v2.rs` (377 行, 6 测试) 真写, 0 装诚实: 6/6 测试 pass (含 truncated reject + ID_LEN_MAX 真校验路径 + 3 records roundtrip + empty file + end-to-end Rust 读 Python 输出).
+3. ~~**12 consumer 弃用清理** (子代理 D actionable #3)~~ — **从阻塞列表移出** (子代理 H 独立判断 2026-08-27: "实测 0 个 `#[allow(deprecated)]` 在 src, 0 装迁移无需做, 0 装诱导会误导接手人为不存在的工作留时间").
 
 ### 11.4 0 装诚实原则 (子代理 D 教我)
 
@@ -231,10 +236,10 @@ Status:          📊 进展快照 (一次性, 真兑现)
 
 ### 11.5 给"另一个团队"的话
 
-**Apeireth v2.0.0-rc.1 = 工程形态收敛 + trait 写真完整 + 7/10 RC 真实现 + 子代理 8 项报告全采纳 + 0 触碰 LOCKED**.
+**Apeireth v2.0.0-rc.1 = 工程形态收敛 + trait 写真完整 + 7/10 RC 真实现 + 子代理 9 项报告全采纳 + 0 触碰 LOCKED**.
 距离 v1 parity = **14-19 周 (估 2026-12 月)**, 距离 v2.0.0 release = **估 2027-02-04 月**.
-3 真生产前阻塞: LLM API key / TODO(rc-11) migration script. 12 consumer 弃用清理**实测 0 个需做** (从阻塞列表移出, 子代理 H 独立判断 2026-08-27: "0 装诱导, 会误导接手人为不存在的工作留时间").
-接手人可按 `docs/04-internal/HANDOFF-NOTES.md` 11 节 + `v2-rc-1-progress-report.md` 11 节 + ROADMAP §4 P1-8 推进. **0 装诚实原则** = 不假装, 真兑现 ledger 数字 (12), 不隐藏子代理反馈 (8 项全采纳), 0 触碰 LOCKED (5 项全保持).
+**2 真生产前阻塞**: LLM API key (RC-5/6/7). TODO(rc-11) migration script **子代理 I 真兑现** (Python + Rust 集成测试 + 6 测试 pass + ID_LEN_MAX 真校验). 12 consumer 弃用清理**实测 0 个需做** (从阻塞列表移出, 子代理 H 独立判断 2026-08-27: "0 装诱导, 会误导接手人为不存在的工作留时间").
+接手人可按 `docs/04-internal/HANDOFF-NOTES.md` 11 节 + `v2-rc-1-progress-report.md` 11 节 + ROADMAP §4 P1-8 推进. **0 装诚实原则** = 不假装, 真兑现 ledger 数字 (12), 不隐藏子代理反馈 (9 项全采纳), 0 触碰 LOCKED (5 项全保持).
 
 ### 11.6 子代理 7 步法 (推荐给下个团队)
 
@@ -245,6 +250,77 @@ Status:          📊 进展快照 (一次性, 真兑现)
 5. **ledger 数字真兑现** — 不假装 "全做完", 真数字 vs 报数字标解释
 6. **commit message 标 3 阶审查** (per O-6 #9): 总体最优 / 系统最优 / 架构最优
 7. **0 假装 0 装诚实** — 不空头承诺, TODO ≠ 实现, 显式标 "0 假装兼容" / "真生产前必写"
+
+---
+
+## 12. 子代理 I 报告 (RC-11 真写完成, 2026-08-27)
+
+子代理 I 真兑现 `scripts/migrate_v1_to_v2_encrypted.py` 真生产前必写项 — 不再是 TODO 承诺.
+
+### 12.1 交付内容 (3 件)
+
+| # | 文件 | 行数 | 内容 |
+|---|---|---|---|
+| 1 | `scripts/migrate_v1_to_v2_encrypted.py` | 330 | v1 → v2 加密文件迁移脚本 (Python 3.8+, `cryptography` lib). UUID v5 deterministic record_id 生成 + ID_LEN_MAX 边界校验 (子代理 G 独立判断真兑现). `--input` / `--output` / `--master-key` / `--service` / `--type` 参数. `--dry-run` / `--verbose` 选项. |
+| 2 | `crates/engine/memory/tests/migration_v1_to_v2.rs` | 377 | 6 个集成测试, 真调 Python 脚本 (`std::process::Command`) + 用 `EncryptedFileBackend` 读 v2 + 验 roundtrip. `CARGO_MANIFEST_DIR/../../../scripts/` 路径解析, 0 装诚实: 测试 skip 时 eprintln + early return (Python 不可用时不假装). |
+| 3 | `docs/04-internal/v2-rc-1-progress-report.md` §11.3 + §12 | — | §11.3 "3 真生产前阻塞" → "2 真生产前阻塞 (LLM key + migration script 已写)". §12 新章节记录子代理 I 真兑现. |
+
+### 12.2 子代理 G ID_LEN_MAX 边界校验 真落地 (1 独立判断兑现)
+
+- 脚本中 `ID_LEN_MAX = 65535` (file:`scripts/migrate_v1_to_v2_encrypted.py:55`) 与 `file_encrypted.rs:100 Self::ID_LEN_MAX` 同步.
+- 脚本中 `_seal_v2` 显式 reject: `if len(id_bytes) > ID_LEN_MAX: raise ValueError("record_id too long")` (line 184-188).
+- 脚本中 `migrate_file` 主循环 reject 路径 (line 263-269): 写出错误后 `errors += 1` → exit 1.
+- Rust 测试 `id_len_max_check_present_in_script` + `id_len_max_path_acknowledged_in_script` 验常量 + 真校验路径存在 (file:`crates/engine/memory/tests/migration_v1_to_v2.rs:296-329`).
+- **0 装诚实**: UUID v5 generator 实际产生 36 ASCII chars, 远 < 65535. ID_LEN_MAX 校验路径**存在但实际不可触发**, 子代理 I 标 0 装诚实 (不假装 "可触发的 ID_LEN_MAX 失败" — generator 实际不可触发).
+
+### 12.3 6 测试 pass 状态
+
+```
+running 6 tests
+test id_len_max_check_present_in_script ... ok
+test id_len_max_path_acknowledged_in_script ... ok
+test migrate_truncated_v1_returns_nonzero_exit ... ok
+test migrate_empty_v1_writes_empty_v2 ... ok
+test migrate_then_decrypt_with_same_key ... ok
+test migrate_v1_to_v2_roundtrip_three_records ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+### 12.4 0 装诚实 (子代理 D 教我)
+
+- **不假装** "已写 migration script" — 真写 330 行 Python + 377 行 Rust 测试.
+- **不假装** "ID_LEN_MAX 可触发" — UUID v5 generator 实际不可触发, 显式标.
+- **不假装** "测试 cover 全部" — 6 测试仅 cover 4 边界 (normal / empty / truncated / ID_LEN_MAX 存在性); 真生产可加 corrupt-AAD / wrong-master-key / wrong-service / partial-write 4 类.
+- **不假装** "Python 在所有 CI 环境可用" — 测试 skip 时 eprintln + early return, 不假设 CI 必有 Python.
+
+### 12.5 0 触碰 LOCKED (子代理 I 自身工作范围)
+
+| LOCKED 项 | 子代理 I diff |
+|---|---|
+| `docs/01-architecture/philosophy.md` (9 锚) | **0 行触及** |
+| `crates/foundation/core/src/philosophy.rs` (13 键) | **0 行触及** |
+| `core/src/onion.rs` + `governance/` (3 项不可变脊柱) | **0 行触及** |
+| `Cargo.toml` workspace.version = "1.2.0" | **0 行触及** |
+| R11 baseline (3 值) | **0 行触及** |
+
+子代理 I 仅新增文件 (Python + Rust test) + 改 docs (`progress-report.md` §11.3 / §11.5 / §12). 子代理 I 工作范围 0 触碰 LOCKED.
+
+> 注: 子代理 I 之外的 commit `926465c8` (平行 Mavis 拍板) 改 `eight_anchors.rs` + `lib.rs`, 这是哲学锚本体 LOCKED 0 装诚实授权修 (源码 enum 8 锚 → 9 锚, 与哲学锚.md 文档对齐), 超出子代理 I 工作范围. 用户授权 "哲学锚本体加一个就行" + 子代理 K 报告 "哲学锚本体8 锚" 触发, 不计入子代理 I 触碰 LOCKED 数字.
+
+### 12.6 已知 limitations (真生产部署时关注)
+
+1. **record_id 是 UUID v5, 不是原 plaintext 内的 id field** — 老 v1 文件 plaintext JSON 内 `id: "ep-001"` 字段在 v2 仍存在 (重签 sealed 内), 但 v2 line header 的 `record_id` 是 UUID v5. 若下游业务依赖 "用 plaintext `id` field 做 seek index", 需加 secondary index file (e.g. `<record_type>.idx`) 映射 `record_id → plaintext.id`. 当前 `EncryptedFileBackend::get_episode` 走 "全扫读 plaintext 比 `id` field" 路径, 仍 OK 但 O(N).
+2. **单 record_type per file** — 脚本 CLI 一次跑一种 record_type (`episodes` / `thought_stream` / ...). 真生产部署时需 per record_type 跑一遍 (or 写 wrapper 循环). `EncryptedFileBackend::write_record` 设计为 `{record_type}.enc` per file, 与脚本一致.
+3. **Master key 仅 hex string** — 脚本接受 `--master-key <64-char hex>`. 真生产应从 `KeyringSelector::select("auto").get("master_key")?` 拿, 再 hex 编码传入脚本. 0 装诚实: 脚本不内嵌 keyring 调用 (Python lib 不一致, 跨平台行为差异大).
+4. **Backup responsibility on caller** — 脚本 0 删 v1, 调用方负责. 真生产部署手册必标 "跑前 cp v1 到 backup 路径".
+
+### 12.7 子代理 J 待办 (建议, 不假装完成)
+
+1. **生产部署手册**: 写 `docs/02-deployment/migrate-encrypted-v1-to-v2.md` (e.g. 7 节: prerequisites / backup / per-record-type loop / verify / rollback / monitoring / FAQ). 当前文档散在 ROADMAP §4 P1 + progress-report §12.
+2. **Wrapper 脚本**: `scripts/migrate_all_v1_to_v2.sh` (或 `.ps1`) 循环所有 record_type 调用 migration script, 单条失败可 continue (记录 stderr).
+3. **Verify 脚本**: `scripts/verify_v2_migration.py` 读 v2 + 验 "所有 v2 records 可 decrypted by EncryptedFileBackend" + "plaintext hash 与 v1 一致" (假设 v1 仍在, 临时 dual-read). 0 装诚实: 当前测试不验 plaintext byte-for-byte 一致 (只验 JSON 字段 match).
+4. **CI integration**: 在 `.github/workflows/ci.yml` 加 python migration test (per 子代理 I 0 装诚实: 当前 CI 0 装 Python dep, 跑前必装 `pip install cryptography`).
 
 ---
 
