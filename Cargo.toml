@@ -165,6 +165,7 @@ thiserror = "1.0"
 # `aes-gcm` 0.10 是 stable release, 0.11 是 2024-06 release (rust 1.78+)
 aes-gcm = "0.10"
 rand = "0.8"
+sha2 = "0.10"
 # HTTP 客户端 (含 stream feature, 给 TUI 改瘦 Step 1 的 SSE 流式用)
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 # async stream utilities (SSE 解析依赖 StreamExt)
