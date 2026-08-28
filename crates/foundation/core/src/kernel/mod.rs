@@ -69,8 +69,10 @@ pub use time::{system_clock, Clock, SystemClock, Timestamp, VirtualClock};
 //
 // 7 键 + 13 键 验证层类型: 已在 13 键 LOCKED 范畴, 0 改.
 pub use crate::gate::Gate as GateTrait;
-pub use crate::kernel::memory::{Episode, HistoryEntry, IdentityCard, Migration as CarrierMigration, Note, Session};
-pub use crate::onion::{PermissionOnion, PrincipleOnion, PrincipleLayer};
+pub use crate::kernel::memory::{
+    Episode, HistoryEntry, IdentityCard, Migration as CarrierMigration, Note, Session,
+};
+pub use crate::onion::{PermissionOnion, PrincipleLayer, PrincipleOnion};
 pub use crate::philosophy::{PhilosophyGuard, PhilosophyKey, PhilosophyVerdict, VerdictCache};
 
 #[cfg(test)]

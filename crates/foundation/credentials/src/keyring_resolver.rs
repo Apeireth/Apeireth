@@ -87,8 +87,11 @@ mod tests {
     #[test]
     fn resolves_an_existing_service() {
         let k = Arc::new(InMemoryKeyring::new(Arc::new(crate::keyring::NoopAudit)));
-        k.set("provider.fake.api_key", &crate::secret::SecretBuf::from_str("sk-test"))
-            .unwrap();
+        k.set(
+            "provider.fake.api_key",
+            &crate::secret::SecretBuf::from_str("sk-test"),
+        )
+        .unwrap();
         let r = KeyringCredentialResolver::new(k);
         let got = r.resolve("provider.fake.api_key");
         assert!(got.is_some());
