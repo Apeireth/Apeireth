@@ -1,6 +1,30 @@
 # Changelog — Apeireth
 
-## [Unreleased] — v2.0.0-rc.1 增量 (7/10 RC 完成)
+## [Unreleased] — v2.0.0-rc.1 release-gate follow-up
+
+- **RC-10 metadata integrity** (`343f7a1a`, upstream `38cc1039`): encrypted
+  records now write an APX2 header whose authenticated data binds the format
+  version, service/type, physical record index, opaque keyed record-id
+  commitment, and complete sealed length. Existing v1 records remain
+  readable; new records use v2. Added tamper, swap, framing, truncation, and
+  legacy-read coverage.
+- **Canonical Council wiring** (`6f064766`): the Council adapter is now in the
+  single runtime module loop, disabled by default, and uses the runtime-owned
+  `ModuleInvoker` for at most seven bounded typed advisor calls with 10-second
+  per-advisor and 60-second overall timeouts. Fake-invoker tests cover wiring,
+  ordering, retry/stop aggregation, malformed responses, and timeout defer;
+  real provider E2E remains credential-gated.
+- **Durable Experience extraction** (`be1e67cf`): after a successful durable
+  `AfterTurn` episode write, the conservative extractor materializes bounded
+  summary/explicit-marker artifacts with source-episode evidence into the
+  existing Wiki/KG/Association stores. SQLite association observations are
+  idempotent; failures are fail-open with warnings. No hidden model call or
+  full-transcript copy is performed by the production default.
+- **Deprecated consumer audit**: active workspace production consumers of
+  `#[allow(deprecated)]` / `#[deprecated]` are 0; legacy/archive material stays
+  retained and no artificial migration was added.
+
+## [2026-08-28] v2.0.0-rc.1 incremental baseline (7/10 RC complete)
 
 - **✅ v2.0.0-rc.1 RC-1/2/3/4/8/9/10 真实现 (7/10 RC, 2026-08-27)**:
   - **RC-1 MemoryBackend SqliteBackend 真 SQL 重写** (`43ec9635`): 5 方法纯 SQL

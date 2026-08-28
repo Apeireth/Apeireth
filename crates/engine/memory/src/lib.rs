@@ -382,10 +382,12 @@ pub const MEMORY_SUBMODULE_COUNT: usize = 2;
 /// 复杂查询 (EpisodeQuery 复合条件) 走具体后端 trait (EpisodeStore) 保留。
 pub mod backend;
 
-/// P-arch (2026-08-27): B1 Experience trait 骨架 (3-layer: Wiki / KG / Association).
+/// P-arch (2026-08-28): B1 Experience traits, SQLite stores, and conservative
+/// evidence-bound extraction (3-layer: Wiki / KG / Association).
 ///
-/// v2.0 alpha 是 0 装 (trait 边界, 无 impl); v2.1 接 SQLite + gen_cache
-/// 完整 pipeline. 详见 `v2-unabsorbed-features.md` §B1.
+/// The foundation owns the trait and extractor boundary; this engine owns the
+/// SQLite implementations. Full semantic LLM extraction and long-term
+/// reflection remain outside the current release.
 pub mod experience;
 pub mod experience_store_sqlite;
 pub mod preference_store;
