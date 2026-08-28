@@ -35,6 +35,17 @@
 //! Per-record AAD tamper 保护 (子代理 C 建议 #5 兑现, 2026-08-27):
 //! AAD = `service|type|record_id` (line header 提供 record_id 重建).
 //! 篡改 record_id 必 fail AEAD verify (fail-closed, 0 装假装安全).
+//! **⚠️ record_id 明文 (子代理 F 建议 1, 2026-08-27)**:
+//! line header `id` 字段是 UTF-8 **明文**写入盘上 (per line header 协议).
+//! AEAD 不保护 header, 只保护 sealed bytes. 攻击者可读所有 record_id
+//! (即使不解密 sealed). 0 装诚实: **id 通常用作 key 查询 + seek index, 不是机密**.
+//! 真机密场景 (e.g. record_id 本身含 PII / 凭据引用) 需额外加密 id 索引
+//! 或 HMAC-wrap line header. 0 装假装"id 也密文".
+//!
+//! TODO(rc-11, 子代理 F 2026-08-27): 真生产前必须写 v1→v2 migration script.
+//! 读老格式 `[sealed_len:4 BE][sealed:N]` → 重写新格式
+//! `[id_len:2 BE][id:id_len][sealed_len:4 BE][sealed:N]` + 重新签 AAD (用同 record_id).
+//! 0 装假装"兼容老数据". ROADMAP §4 P1 已追项.
 
 use std::path::PathBuf;
 use std::sync::Arc;

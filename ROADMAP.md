@@ -105,6 +105,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | P6 | companion 器官移植 | 世界模型 W1/W2/W3、好奇心 E4、假设检验 F4、情感记忆 F1、价值内化 F6 从 legacy 移植回主链 | P3 |
 | P7 | 连续感知 | voice/screen（v1 的"连续感知①②"从未落地 main，实现留 legacy） | P6 |
 | P8 | 前端产品化 | companion-desktop 对接主链 + 真实流式（旧 TP34 重映射） | P0 |
+| **P1 (新)** | **RC-10 加密 v1→v2 migration script** (子代理 F 独立判断 2026-08-27) | 加密文件格式 v1 `[sealed_len:4 BE][sealed:N]` 不可读 v2 `[id_len:2 BE][id:id_len][sealed_len:4 BE][sealed:N]`. RC-10 仍 rc 阶段未上线 0 影响, 真生产前必须 migration script 读老文件重写新格式 (含 line header 字段 `record_id` 重算). 接手人需写 `scripts/migrate_v1_to_v2_encrypted.py` (Python) 或等 RC-11 acceptance 任务追项 | RC-10 真生产 |
 
 ---
 
