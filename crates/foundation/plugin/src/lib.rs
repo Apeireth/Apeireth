@@ -58,6 +58,7 @@ pub mod manager;
 pub mod manifest;
 pub mod memory_backend;
 pub mod perception;
+pub mod perception_backend;
 pub mod plugin;
 pub mod preference;
 pub mod provider;
@@ -73,6 +74,10 @@ pub use manifest::PluginManifest;
 // O-6 锚兑现 #12: 统一 capability trait 错误通道 `CapabilityResult<T>` 在 crate root
 // 可用, 避免每个 use 点写 `crate::memory_backend::CapabilityResult`.
 pub use memory_backend::CapabilityResult;
+pub use perception_backend::{
+    AudioBuffer, LangHint, PerceptionBackendError, ScreenshotBytes, TactileState, Transcription,
+    VoiceBackend, WhisperBackend, NoopVoiceBackend,
+};
 pub use plugin::{Plugin, PluginContext};
 pub use provider::{ProviderCapability, ProviderError};
 pub use registry::{CapabilityRecord, CapabilityRegistry, PluginRegistry};

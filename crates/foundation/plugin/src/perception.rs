@@ -34,9 +34,13 @@
 //!
 //! 详见 `v2-unabsorbed-features.md` §A3 + `ROADMAP.md` §4 P4.
 
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use apeireth_core::kernel::SessionId;
+
+use crate::perception_backend::VoiceBackend;
 
 // ============================================
 // 统一输入格式 (perception -> runtime)
@@ -182,6 +186,13 @@ pub enum PerceptionError {
         modality: PerceptionModality,
         when: &'static str,
     },
+    /// RC-7: trait 已就位 + backend 已注入, 但 runtime 没在 `poll()` 里调真 backend.
+    /// 显式标注装配路径, 不假装"已 stream".
+    BackendNotWired {
+        modality: PerceptionModality,
+        backend: String,
+        when: &'static str,
+    },
     /// 底层 IO 错 (voice 文件读失败 / screen capture 失败)
     Io(String),
     /// 配置错 (channel name 冲突 / attention 阈值非法)
@@ -194,6 +205,10 @@ impl std::fmt::Display for PerceptionError {
             Self::NotImplemented { modality, when } => write!(
                 f,
                 "perception modality {modality:?} not implemented in v2.0 alpha (0 装 PASS; 0 装; 路线: {when})"
+            ),
+            Self::BackendNotWired { modality, backend, when } => write!(
+                f,
+                "perception modality {modality:?} has backend '{backend}' injected; BackendNotWired (0 装 PASS; 0 装; 装配路径: {when})"
             ),
             Self::Io(msg) => write!(f, "perception io error: {msg}"),
             Self::Config(msg) => write!(f, "perception config error: {msg}"),
@@ -268,9 +283,37 @@ impl PerceptionInput for TextInput {
 // 0 装占位: Voice / Vision / Tactile
 // ============================================
 
-/// 0 装: voice input 仅占位, v2.0 alpha next_event() 返 NotImplemented
+/// Voice 真 backend 注入点 (per scene-d §5 决策 1: 多 backend 可选).
+///
+/// **0 装诚实** (per RC-7):
+/// - `backend = None` (默认) → next_event() 返 `NotImplemented` (现有契约, 0 破)
+/// - `backend = Some(whisper)` → next_event() 返 `BackendNotWired`,
+///   提示 runtime 在 `VoiceInput::poll()` 时 wire 真 backend (engine 层
+///   `WhisperHttpBackend::transcribe()` 调 OpenAI/MiniMax endpoint)
+/// - VoiceInput 本身不持有 reqwest / 不调 HTTP, 仍是**纯 trait impl**,
+///   边界划在 "Input trait 在 foundation, backend impl 在 engine"
 pub struct VoiceInput {
     pub session_id: SessionId,
+    /// Backend 注入 (None = 0 装占位, Some = 装配好了但 runtime 没在 poll 里 wire)
+    pub backend: Option<Arc<dyn VoiceBackend>>,
+}
+
+impl VoiceInput {
+    /// 构造时不带 backend (保留现有 0 装行为)
+    pub fn new(session_id: SessionId) -> Self {
+        Self {
+            session_id,
+            backend: None,
+        }
+    }
+
+    /// 构造时注入 backend (RC-7 真生产路径入口)
+    pub fn with_backend(session_id: SessionId, backend: Arc<dyn VoiceBackend>) -> Self {
+        Self {
+            session_id,
+            backend: Some(backend),
+        }
+    }
 }
 
 impl PerceptionInput for VoiceInput {
@@ -279,10 +322,17 @@ impl PerceptionInput for VoiceInput {
     }
 
     fn next_event(&self) -> Result<Option<PerceptionEvent>, PerceptionError> {
-        Err(PerceptionError::NotImplemented {
-            modality: PerceptionModality::Voice,
-            when: "v2.1 (与 scene-d 例 1 / companion-desktop 集成一起做)",
-        })
+        match &self.backend {
+            None => Err(PerceptionError::NotImplemented {
+                modality: PerceptionModality::Voice,
+                when: "v2.1 (audio backend trait 边界已就位, runtime 装配 backend 后走 VoiceInput::poll())",
+            }),
+            Some(b) => Err(PerceptionError::BackendNotWired {
+                modality: PerceptionModality::Voice,
+                backend: b.name().to_string(),
+                when: "VoiceInput::poll() 时 wire backend; 当前 trait impl 还没接 async streaming",
+            }),
+        }
     }
 }
 
@@ -353,7 +403,7 @@ mod tests {
     fn voice_vision_tactile_are_zero_implementation() {
         let sid = SessionId::new();
         for input in [
-            Box::new(VoiceInput { session_id: sid }) as Box<dyn PerceptionInput>,
+            Box::new(VoiceInput::new(sid)) as Box<dyn PerceptionInput>,
             Box::new(VisionInput { session_id: sid }),
             Box::new(TactileInput { session_id: sid }),
         ] {
