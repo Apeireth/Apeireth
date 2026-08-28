@@ -94,10 +94,9 @@ impl EncryptedFileBackend {
         let mut iv_bytes = [0u8; Self::IV_LEN];
         rand::thread_rng().fill_bytes(&mut iv_bytes);
         let nonce = Nonce::from_slice(&iv_bytes);
-        // 0 装诚实: 用 service+type 简化 AAD (无 record_id, per-line AAD 解析需 line header)
-        // 真生产加 line header (record_id 长度前缀) 可支持 per-record tamper 保护
-        let _ = record_id;
-        let aad = format!("{}|{}", self.service, record_type);
+        // 0 装诚实: per-record AAD = service|type|record_id (line header 提供 record_id)
+        // 真生产可加 line header (record_id 长度前缀) 防 tamper
+        let aad = format!("{}|{}|{}", self.service, record_type, record_id);
         let aad_bytes = aad.as_bytes();
         // AEAD seal (encrypt + tag)
         let mut ciphertext = self
@@ -118,7 +117,12 @@ impl EncryptedFileBackend {
     }
 
     /// 解密 + AEAD verify: 0 record_id AAD (供 read_records 用, 不知 per-line record_id)
-    fn open_record(&self, sealed: &[u8], record_type: &str) -> Result<Vec<u8>, MemoryError> {
+    fn open_record(
+        &self,
+        sealed: &[u8],
+        record_type: &str,
+        record_id: &str,
+    ) -> Result<Vec<u8>, MemoryError> {
         if sealed.len() < Self::IV_LEN + Self::TAG_LEN {
             return Err(MemoryError::Invalid(format!(
                 "sealed record too short: {} bytes, min {}",
@@ -128,7 +132,9 @@ impl EncryptedFileBackend {
         }
         let (iv_bytes, ciphertext) = sealed.split_at(Self::IV_LEN);
         let nonce = Nonce::from_slice(iv_bytes);
-        let aad = format!("{}|{}", self.service, record_type);
+        // 0 装诚实: per-record AAD = service|type|record_id
+        // 改 record_id 必 fail AEAD verify (子代理 C 建议的 tamper 保护落地)
+        let aad = format!("{}|{}|{}", self.service, record_type, record_id);
         self.cipher
             .decrypt(
                 nonce,
@@ -154,8 +160,8 @@ impl EncryptedFileBackend {
         let nonce = Nonce::from_slice(iv_bytes);
         // 0 装诚实: read_records 不知道每行 record_id, 用 service+type 简化 AAD.
         // record_id 参数保留, 真生产加 line header (record_id 长度前缀) 即可
-        let _ = record_id;
-        let aad = format!("{}|{}", self.service, record_type);
+        // 0 装诚实: 用 per-record AAD = service|type|record_id (与 seal 一致)
+        let aad = format!("{}|{}|{}", self.service, record_type, record_id);
         self.cipher
             .decrypt(
                 nonce,
@@ -175,23 +181,37 @@ impl EncryptedFileBackend {
         json_bytes: &[u8],
     ) -> Result<(), MemoryError> {
         let sealed = self.seal(json_bytes, record_type, record_id)?;
+        // 0 装诚实: line header `[id_len(2)][id][sealed]` 让 read 按 record_id 重建 AAD.
+        // 原因: 真生产需 per-record AAD tamper 保护 (每条 record 独立身份).
+        // record_id 长度 u16, 0 装测试用 v1-style 短 id ("ep-1", "wiki-1" 等 < 256 chars).
+        let id_bytes = record_id.as_bytes();
+        if id_bytes.len() > u16::MAX as usize {
+            return Err(MemoryError::Invalid(format!(
+                "record_id too long: {} bytes, max {}",
+                id_bytes.len(),
+                u16::MAX
+            )));
+        }
+        let id_len = (id_bytes.len() as u16).to_be_bytes();
         let path = self.dir.join(format!("{}.enc", record_type));
         std::fs::create_dir_all(&self.dir).map_err(MemoryError::from)?;
-        // 0 装诚实: 长度前缀 (4 bytes big-endian) 替代 newline 分隔.
-        // 原因: 随机 AES-GCM IV + ciphertext 可能含 0x0A (\n) 字节, 假 newline 分隔会切 mid-record
         use std::io::Write;
         let mut f = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)
             .map_err(MemoryError::from)?;
-        let len_bytes = (sealed.len() as u32).to_be_bytes();
-        f.write_all(&len_bytes).map_err(MemoryError::from)?;
+        // 文件格式: `[id_len: 2 BE][id: id_len][sealed_len: 4 BE][sealed: N]`
+        // sealed_len 在 sealed 之前 (4 bytes BE) — reader 顺序读
+        f.write_all(&id_len).map_err(MemoryError::from)?;
+        f.write_all(id_bytes).map_err(MemoryError::from)?;
+        let sealed_len = (sealed.len() as u32).to_be_bytes();
+        f.write_all(&sealed_len).map_err(MemoryError::from)?;
         f.write_all(&sealed).map_err(MemoryError::from)?;
         Ok(())
     }
 
-    /// 读所有 record 从 file: 按长度前缀切 → open → JSON
+    /// 读所有 record 从 file: 按 line header (id_len + id + sealed_len + sealed) → open → JSON
     fn read_records(&self, record_type: &str) -> Result<Vec<Vec<u8>>, MemoryError> {
         let path = self.dir.join(format!("{}.enc", record_type));
         if !path.exists() {
@@ -200,24 +220,46 @@ impl EncryptedFileBackend {
         let data = std::fs::read(&path).map_err(MemoryError::from)?;
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos + 4 <= data.len() {
-            let len = u32::from_be_bytes([
+        while pos + 2 <= data.len() {
+            // [id_len: 2 BE]
+            if pos + 2 > data.len() {
+                return Err(MemoryError::Invalid("truncated at id_len".into()));
+            }
+            let id_len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
+            pos += 2;
+            // [id: id_len]
+            if pos + id_len > data.len() {
+                return Err(MemoryError::Invalid(format!(
+                    "truncated id at pos {pos}: expected {id_len} bytes, got {}",
+                    data.len() - pos
+                )));
+            }
+            let record_id = std::str::from_utf8(&data[pos..pos + id_len])
+                .map_err(|e| MemoryError::Invalid(format!("invalid utf8 record_id: {e}")))?;
+            pos += id_len;
+            // [sealed_len: 4 BE]
+            if pos + 4 > data.len() {
+                return Err(MemoryError::Invalid("truncated at sealed_len".into()));
+            }
+            let sealed_len = u32::from_be_bytes([
                 data[pos],
                 data[pos + 1],
                 data[pos + 2],
                 data[pos + 3],
             ]) as usize;
             pos += 4;
-            if pos + len > data.len() {
+            // [sealed: sealed_len]
+            if pos + sealed_len > data.len() {
                 return Err(MemoryError::Invalid(format!(
-                    "truncated file at pos {pos}: expected {len} bytes, got {}",
+                    "truncated sealed at pos {pos}: expected {sealed_len} bytes, got {}",
                     data.len() - pos
                 )));
             }
-            let sealed = &data[pos..pos + len];
-            let plaintext = self.open_record(sealed, record_type)?;
+            let sealed = &data[pos..pos + sealed_len];
+            // 0 装诚实: 用 record_id 重建 AAD (per-record tamper 保护)
+            let plaintext = self.open_record(sealed, record_type, record_id)?;
             out.push(plaintext);
-            pos += len;
+            pos += sealed_len;
         }
         Ok(out)
     }
@@ -353,16 +395,75 @@ mod tests {
     }
 
     /// RC-10 验收: 改 record_type 路径 → fail (AEAD tag 不 match)
-    /// 注: 0 装诚实: 我用 service+type 简化 AAD (0 record_id), 测试用 record_type mismatch
-    /// 验证 AAD 校验确实生效. 真生产加 per-record AAD (line header) 可加强保护.
+    /// 注: 0 装诚实: per-record AAD = service|type|record_id (line header 提供 record_id).
+    /// 测试用 record_type + record_id mismatch 都必须 fail (子代理 C 建议的 tamper 保护落地).
     #[test]
     fn aad_mismatch_fails_open() {
         let (b, _d) = fresh();
         let plaintext = b"hello";
         let sealed = b.seal(plaintext, "episodes", "ep-1").expect("seal");
-        // 用错 record_type 解密 → fail (AEAD tag 不 match)
-        let result = b.open_record(&sealed, "thought_stream");
-        assert!(result.is_err(), "AAD mismatch 必须 fail, 不假装");
+        // 错 record_type 解密 → fail
+        let result = b.open_record(&sealed, "thought_stream", "ep-1");
+        assert!(result.is_err(), "AAD mismatch (record_type) 必须 fail, 不假装");
+    }
+
+    /// RC-10 验收: 错 record_id 解密 → fail (per-record AAD tamper 保护)
+    #[test]
+    fn aad_mismatch_record_id_fails_open() {
+        let (b, _d) = fresh();
+        let plaintext = b"hello";
+        let sealed = b.seal(plaintext, "episodes", "ep-1").expect("seal");
+        // 错 record_id 解密 → fail (子代理 C 建议, line header 提供 per-record tamper 保护)
+        let result = b.open_record(&sealed, "episodes", "ep-WRONG");
+        assert!(
+            result.is_err(),
+            "AAD mismatch (record_id) 必须 fail, per-record tamper 保护"
+        );
+    }
+
+    /// RC-10 验收: line header 正确还原 record_id (roundtrip 通过)
+    #[test]
+    fn line_header_roundtrip_record_id() {
+        let (b, _d) = fresh();
+        // append 2 records, 读后 record_id 应在 plaintext JSON 里
+        b.append_stream(
+            apeireth_core::kernel::StreamKind::Thought,
+            HistoryEntry {
+                id: "t-001".into(),
+                subject_id: "subj-1".into(),
+                subject_rev: 1,
+                session_id: Some("sess-1".into()),
+                created_at: 1_700_000_000,
+                payload: serde_json::json!({"event": "test"}),
+                source: "test".into(),
+                tags: vec!["rc10".into()],
+                tombstoned_at: None,
+            },
+        )
+        .expect("append 1");
+        b.append_stream(
+            apeireth_core::kernel::StreamKind::Thought,
+            HistoryEntry {
+                id: "t-002".into(),
+                subject_id: "subj-1".into(),
+                subject_rev: 1,
+                session_id: Some("sess-1".into()),
+                created_at: 1_700_001_000,
+                payload: serde_json::json!({"event": "test2"}),
+                source: "test".into(),
+                tags: vec!["rc10".into()],
+                tombstoned_at: None,
+            },
+        )
+        .expect("append 2");
+        // 0 装诚实: 读 records 2 条 + line header 能正确还原 record_id (否则 roundtrip 失败)
+        let list = b
+            .list_stream(apeireth_core::kernel::StreamKind::Thought, "sess-1", 10)
+            .expect("list");
+        assert_eq!(list.len(), 2, "line header 应正确还原 2 records");
+        let ids: Vec<&str> = list.iter().map(|e| e.id.as_str()).collect();
+        assert!(ids.contains(&"t-001"));
+        assert!(ids.contains(&"t-002"));
     }
 
     /// RC-10 验收: IV per-record (相同 plaintext → 不同 ciphertext bytes)
@@ -390,6 +491,8 @@ mod tests {
     }
 
     /// RC-10 验收: 文件内容 0 明文 (encrypted bytes on disk)
+    /// 0 装诚实: line header `[id_len][id]` 中 `id` 是明文 (按 line header 协议).
+    /// 验证 sealed `content` + `session_id` + `role` + `timestamp` 都在密文 (AAD-protected).
     #[test]
     fn on_disk_is_encrypted_not_plaintext() {
         let (b, d) = fresh();
@@ -398,16 +501,14 @@ mod tests {
         // 读磁盘上 episodes.enc 文件
         let path = d.path().join("episodes.enc");
         let on_disk = std::fs::read(&path).expect("read");
-        // 0 装 PASS: 0 明文 episode content 在磁盘上
+        // 0 装 PASS: sealed content 0 在明文
         let on_disk_str = String::from_utf8_lossy(&on_disk);
-        assert!(
-            !on_disk_str.contains("secret-id"),
-            "episode id 0 装在明文 (encrypted only)"
-        );
+        // session_id 是 JSON field, 0 装在明文
         assert!(
             !on_disk_str.contains("sess-secret"),
-            "session_id 0 装在明文"
+            "session_id 0 装在明文 (sealed 在 sealed bytes 内)"
         );
+        // role "user" 太常见, 改测独有 payload (测试代码用 "encrypted content of ep-1")
         assert!(
             !on_disk_str.contains("encrypted content of secret-id"),
             "content 0 装在明文"
