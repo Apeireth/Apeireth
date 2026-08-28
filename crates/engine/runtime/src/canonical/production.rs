@@ -18,7 +18,7 @@ use super::cognitive::{
     MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule, SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
-use super::module::{AgentModule, ModuleManifest};
+use super::module::{Module, ModuleManifest};
 
 /// Feature switches for the production cognitive slots.
 ///
@@ -77,20 +77,26 @@ pub struct CognitiveBackends {
     pub council: Option<Arc<Council>>,
 }
 
+/// Configuration options for canonical production modules.
+pub type ProductionModulesConfig = CognitiveModuleConfig;
+
 /// The validated, ordered module set to pass to [`RuntimeBuilder::with_module`].
-pub struct ProductionCognitiveModules {
-    modules: Vec<Arc<dyn AgentModule>>,
+pub struct ProductionModules {
+    modules: Vec<Arc<dyn Module>>,
     telemetry: Arc<CognitiveTelemetry>,
 }
 
-impl ProductionCognitiveModules {
+/// Compatibility alias for [`ProductionModules`].
+pub use ProductionModules as ProductionCognitiveModules;
+
+impl ProductionModules {
     /// Build the canonical registration order.
     pub fn build(
         config: CognitiveModuleConfig,
         backends: CognitiveBackends,
         clock: Arc<dyn Clock>,
     ) -> RuntimeResult<Self> {
-        let mut modules: Vec<Arc<dyn AgentModule>> = Vec::new();
+        let mut modules: Vec<Arc<dyn Module>> = Vec::new();
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
 
@@ -197,7 +203,7 @@ impl ProductionCognitiveModules {
     }
 
     /// Ordered modules for registration in the canonical runtime.
-    pub fn modules(&self) -> &[Arc<dyn AgentModule>] {
+    pub fn modules(&self) -> &[Arc<dyn Module>] {
         &self.modules
     }
 
