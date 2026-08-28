@@ -158,7 +158,7 @@ source episode evidence；不宣称长程 cognition、偏好学习或完整语�
 ### 7.2 远程验证记录 (2026-08-28)
 
 本轮验证统一在 `desktop-dcce212558a843ed-20260806111728416` 的
-`D:\apx\apeireth-rust` 执行，远程验证代码基线为 `863df70f`（随后仅追加收盘文档提交），
+`D:\apx\apeireth-rust` 执行，远程验证最终提交为 `21eb5291`，
 并确认远程 `HEAD == origin/main`、工作树 clean；工具链为 `rustc 1.97.1 / cargo 1.97.1`。
 以下结果均为远程结果：
 
