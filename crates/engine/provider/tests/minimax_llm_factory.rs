@@ -179,7 +179,10 @@ async fn real_llm_call_smoke() {
     // result.is_ok()).
     match result {
         Ok(resp) => {
-            assert!(!resp.message.content.is_empty(), "response content 0 装非空");
+            assert!(
+                !resp.message.content.is_empty(),
+                "response content 0 装非空"
+            );
             assert!(resp.usage.total_tokens > 0, "usage 0 装报告 token");
         }
         Err(LlmError::RateLimited { .. }) => {

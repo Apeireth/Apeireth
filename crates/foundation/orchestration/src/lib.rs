@@ -42,6 +42,9 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 
+pub mod council;
+pub mod llm;
+
 // ============================================
 // Council (A1)
 // ============================================
@@ -347,6 +350,13 @@ impl Council {
         }
     }
 
+    /// Construct the seven real LLM advisor slots for the compatibility API.
+    /// Each advisor gets its own provider instance when evaluated.
+    pub fn with_factory(factory: Arc<dyn llm::LlmFactory>, model: impl Into<String>) -> Self {
+        let model = model.into();
+        Self::new(council::default_seven_advisors(factory, &model))
+    }
+
     /// 自定义 advisors
     pub fn new(advisors: Vec<Arc<dyn Advisor>>) -> Self {
         Self {
@@ -363,14 +373,49 @@ impl Council {
         self
     }
 
+    /// Borrow the registered advisors for inspection and integration tests.
+    pub fn advisors(&self) -> &[Arc<dyn Advisor>] {
+        &self.advisors
+    }
+
     /// Compatibility path for callers that own local `Advisor` implementations.
-    /// It evaluates advisors sequentially and maps the typed results to the
-    /// historical `CouncilVerdict`; runtime-backed side-calls must use
-    /// [`Self::decide_with_invoker`] so timeout and failure policy is explicit.
+    /// It evaluates the bounded advisor batch in parallel and maps the typed
+    /// results to the historical `CouncilVerdict`; runtime-backed side-calls
+    /// should use [`Self::decide_with_invoker`] when failure categories and
+    /// ordered evidence are needed.
     pub async fn decide(&self, proposal: &Proposal) -> CouncilVerdict {
-        let mut evaluations = Vec::with_capacity(self.advisors.len());
-        for advisor in &self.advisors {
-            let verdict = advisor.evaluate(proposal).await;
+        let per_advisor_timeout = self.config.per_advisor_timeout;
+        let batch = join_all(self.advisors.iter().take(self.config.max_advisors).map(
+            |advisor| async move {
+                let result =
+                    tokio::time::timeout(per_advisor_timeout, advisor.evaluate(proposal)).await;
+                (advisor, result)
+            },
+        ));
+        let Ok(completed) = tokio::time::timeout(self.config.overall_timeout, batch).await else {
+            return CouncilVerdict::DeferToHuman {
+                reason: format!(
+                    "overall Council timeout elapsed after {} seconds",
+                    self.config.overall_timeout.as_secs()
+                ),
+            };
+        };
+
+        let mut evaluations = Vec::with_capacity(completed.len());
+        for (advisor, result) in completed {
+            let Ok(verdict) = result else {
+                return CouncilVerdict::DeferToHuman {
+                    reason: format!("advisor {} timeout elapsed", advisor.name()),
+                };
+            };
+            if let Err(reason) = verdict.validate() {
+                return CouncilVerdict::DeferToHuman {
+                    reason: format!(
+                        "advisor {} returned malformed verdict: {reason}",
+                        advisor.name()
+                    ),
+                };
+            }
             evaluations.push(AdvisorEvaluation {
                 advisor: advisor.name().into(),
                 kind: advisor.kind(),
