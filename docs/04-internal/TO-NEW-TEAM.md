@@ -1,14 +1,14 @@
-# 给新团队的话 (TO-NEW-TEAM, 主代理 Mavis 写, 2026-08-28 阶段性收盘, v1.1 工程师版)
+# 给新团队的话 (TO-NEW-TEAM, 主代理 Mavis 写, 2026-08-28 阶段性收盘, v1.2 工程师版 + A 块完整化真账)
 
 > **本文档定位**: v2.0.0-rc.1 阶段收盘时, 主代理给接手新团队 (工程师组成的开发团队) 的话 + **已推送文件地图** + 接手工作流.
-> **HEAD 状态**: 全部内容已 push 到 `origin/main` @ `93c2d9d7` (2026-08-28). 接手人先跑 §3 基线验证确认.
-> **何时写**: 8 spec (R9-R15 + Z 审计) 收齐 + R12 OrganOrchestrator 真实施落地 + 6 处错账修正完成, 阶段性告一段落.
-> **关系文档**: `FINAL-HANDOFF-V2.0.0-RC.1.md` (接手报告入口) + `HANDOFF-NOTES.md` (子代理 D 接手人手册) + `v2-architecture-reflection.md` (新架构反思 + 自升级 cycle).
+> **HEAD 状态**: A 块完整化 (5 stage amend + O-6 复盘) 全部 push 到 `origin/main` @ `bbbfb75b` (2026-08-28). 接手人先跑 §3 基线验证确认.
+> **何时写**: 8 spec (R9-R15 + Z 审计) 收齐 + R12 OrganOrchestrator 真实施落地 + 6 处错账修正 + **A 块 OrganOrchestrator 完整化 (5 stage 真实施) + O-6 三阶审查 amend (主代理自检 0 装诚实标修正)**完成, 阶段性告一段落.
+> **关系文档**: `FINAL-HANDOFF-V2.0.0-RC.1.md` (接手报告入口) + `HANDOFF-NOTES.md` (子代理 D 接手人手册) + `v2-architecture-reflection.md` (新架构反思 + 自升级 cycle) + `organ-orchestrator-completion-plan.md` (A 块 5 stage 计划 + O-6 复盘 §7) + `A-block-o6-true-account.md` (A 块 O-6 失守 + amend 配对 commit).
 
 ```
 [Document-Meta]
 Document:        docs/04-internal/TO-NEW-TEAM.md
-Version:         1.1 (工程师版: + 文件地图 + 工作流)
+Version:         1.2 (工程师版: + A 块 5 stage 完成真账 + §5.2 O-6 三阶审查 模板升级 + §7 1 段交付 更新)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (给新团队的话, 接手人必读)
 Author:          主代理 Mavis
@@ -37,11 +37,12 @@ Author:          主代理 Mavis
 | clippy | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |
 | 7 capability trait | MemoryBackend / Experience / Perception / PreferenceStore / SelfAssessmentStore / LlmFactory / SubSupervisor 全真接 |
 | 9 organ | **9/9 真移植** (E4/F1/F4/F6/W1/W2/W3/E7/Memory, 整合 #2 commit `bbf70293`) |
-| **OrganOrchestrator** | **R12 真实施已落** (`crates/engine/runtime/src/canonical/orchestrator.rs`, 13 重 gate + 5 状态机 + 9 organ 顺序 process, 10 lib + 3 integration tests) |
+| **OrganOrchestrator** | **A 块完整化真实施已落** (`crates/engine/runtime/src/canonical/orchestrator.rs` + `upgrade_cycle.rs`, 13 重 gate + 5 状态机 + 9 organ 顺序 process + tick 6 步 (主权闸 → 9 organ + 8 gate → F1 emotion → Council 60s → 演化闸 → governance) + L0-L5 UpgradeCycle 6 步; 5 stage 真实施 + O-6 三阶审查 amend 后 commits `c003e078` / `087ab2ac` / `50ba2e57` / `29e5ce66` / `0afa733f`; 详 `docs/01-architecture/organ-orchestrator-completion-plan.md` + `docs/04-internal/A-block-o6-true-account.md`) |
 | 认知模块 12 slot | **6 WIRED + 6 DEFERRED** (judge/council 为 WIRED, OFF by default) |
 | 10 RC | **9/10 真实现**, RC-7 (Whisper + 屏幕感知) 待硬件, spec 已完 (R14) |
 | 真 LLM | MiniMax adapter 真 call **1.16s** 跑通 (RC-5) |
 | v1.0 真实体量 | 551,208 行 .rs / 1,154,516 总 tracked LOC / 85 active crates (文档曾误写 34 万, 已实测修正) |
+| **测试 (A 块后)** | **1739 passed, 0 FAILED** (主代理 2026-08-28 amend 后亲跑; 比 baseline 1726 + 13 新增, 详见 A 块真账) |
 
 ---
 
@@ -53,10 +54,12 @@ Author:          主代理 Mavis
 
 | 文件 | 用途 | 落地 commit |
 |---|---|---|
-| `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` | **唯一接手入口**: 意图 + 进度 + 数字真账 + 给新团队的话 (Final-2.0) | `93c2d9d7` |
-| `docs/04-internal/TO-NEW-TEAM.md` | **本文**: 给新团队的话 + 文件地图 + 工作流 | `93c2d9d7` |
+| `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` | **唯一接手入口**: 意图 + 进度 + 数字真账 + 给新团队的话 (Final-2.0) | `bbbfb75b` (amend 后) |
+| `docs/04-internal/TO-NEW-TEAM.md` | **本文**: 给新团队的话 + 文件地图 + 工作流 | `bbbfb75b` (amend 后) |
 | `docs/04-internal/HANDOFF-NOTES.md` | 子代理 D 接手人手册 11 节 (逐项检查清单) | `0ec9ccae` |
 | `docs/04-internal/v2.0.0-rc-roadmap.md` | 10 RC + 验收标准 + 接手人清单 | 早期 |
+| `docs/01-architecture/organ-orchestrator-completion-plan.md` | **A 块 5 stage 计划 + O-6 复盘 §7** (新增, A 块完整化真账) | `434dc0a5` |
+| `docs/04-internal/A-block-o6-true-account.md` | **A 块 O-6 三阶审查 0 装诚实复盘 + 后续 commit 标准** (amend 配对 commit) | `bbbfb75b` |
 
 ### 2.2 架构与哲学 (动代码前必读)
 
@@ -154,19 +157,20 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
 
 ## 4. 还剩什么 (真账, 不粉饰)
 
-**v2.0.0 release 估 5-7 月 (2027-01-08 至 2027-03 月)**, 剩 4 块真实施 + 收尾:
+**v2.0.0 release 估 5-7 月 (2027-01-08 至 2027-03 月)**, 剩 3 块真实施 + 收尾 (**A 块已完成**):
 
-| # | 块 | 估时 | 依赖 | 起点文件 |
-|---|---|---|---|---|
-| A | **OrganOrchestrator 完整化** | 1-3 周 | 9 organ done ✅ + R11 spec done ✅ | `crates/engine/runtime/src/canonical/orchestrator.rs` |
-| B | **frontend 对接** | 4-6 周 | OrganOrchestrator + 6 slot | `docs/02-guides/v2-gateway-frontend-integration-spec.md` + `v2-gateway-frontend-integration-spec-r13-review.md` |
-| C | **6 DEFERRED slot 激活** | 6-10 周 | OrganOrchestrator | `docs/01-architecture/cognitive-9-organ-integration-spec.md` + `deferred-slot-activation-preference_learning-spec.md` |
-| D | **RC-7 Perception 真 modality** | 2-3 周 | 硬件 (Whisper + xcap) | `docs/01-architecture/rc-7-perception-true-modality-spec.md` + `crates/foundation/plugin/src/perception_backend.rs` |
+| # | 块 | 状态 | 估时 | 依赖 | 起点文件 |
+|---|---|---|---|---|---|
+| A | **OrganOrchestrator 完整化** | ✅ **done** (5 stage 真实施, amend 后 commits `c003e078` ~ `0afa733f`) | 1-3 周 (实测 ~10h) | 9 organ done ✅ + R11 spec done ✅ | `crates/engine/runtime/src/canonical/orchestrator.rs` + `upgrade_cycle.rs` |
+| B | **frontend 对接** | ⏳ 待做 | 4-6 周 | OrganOrchestrator ✅ + 6 slot | `docs/02-guides/v2-gateway-frontend-integration-spec.md` + `v2-gateway-frontend-integration-spec-r13-review.md` |
+| C | **6 DEFERRED slot 激活** | ⏳ 待做 | 6-10 周 | OrganOrchestrator ✅ | `docs/01-architecture/cognitive-9-organ-integration-spec.md` + `deferred-slot-activation-preference_learning-spec.md` |
+| D | **RC-7 Perception 真 modality** | ⏳ 待做 (需硬件) | 2-3 周 | 硬件 (Whisper + xcap) | `docs/01-architecture/rc-7-perception-true-modality-spec.md` + `crates/foundation/plugin/src/perception_backend.rs` |
 
 **收尾必做**:
 - RC-11 migration script 真生产验证 (1-2 天, 有 key 但没 v1 db): `python scripts/migrate_v1_to_v2_encrypted.py --src <v1_db> --dst <v2_db>`
 - 5 重守门自动验证全绿后拍 `git tag v2.0.0`
 - 旧债: 整合 #2 commit `bbf70293` message 标 "无新外部 dep" 是**错的** (真 = 5 新 dep, AES-256-GCM 系), commit 已 push 无法改, 真账记在各文档
+- **A 块 O-6 复盘 配对 commit `bbbfb75b`** (详 `docs/04-internal/A-block-o6-true-account.md`): 之前 5 commit O-6 三阶审查 sections 多是描述 WHAT 不是 WHY, O-6 失守; amend 后修订版 sections 真答案 + 拒 alternatives + 拒理由. 后续 commit 标准见 plan doc §7.
 
 ---
 
@@ -185,17 +189,19 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
 8. 文档 HEAD/数字同步 (防漂移: 说 commit 数跑 git log, 说测试数跑 cargo test)
 ```
 
-### 5.2 commit message 模板 (O-6 三阶审查必带)
+### 5.2 commit message 模板 (O-6 三阶审查必带, **amend 配对 commit `bbbfb75b` 后升级版**)
 
 ```
 <type>(<scope>): <一句话>
 
 - 0 装诚实真账: <实测数字 / 0 触碰 LOCKED 声明>
 - O-6 三阶审查:
-  - 总体最优: <与 v2 整体语境对齐>
-  - 系统最优: <在子系统依赖图里位置对>
-  - 架构最优: <workspace 边界清晰>
+  - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
+  - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? 与 alternatives 比较 + 选最优 + 拒理由>
+  - 架构最优: <在 workspace 16-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
 ```
+
+> **不**复用 v1 alignment 代替 v2 总体最优. **不**描述 WHAT 代替 WHY. 每段需有具体拒的 alternative + 拒理由. 详 `docs/01-architecture/organ-orchestrator-completion-plan.md` §7.
 
 ### 5.3 派子代理 brief 模板 (用户原话 "派是手段不是目的")
 
@@ -239,14 +245,16 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
 
 ## 7. 1 段交付 (用户原话 "给交付文档, 更新项目其他文档, 阶段性告一段落, 给新团队的话")
 
-**Apeireth v2.0.0-rc.1 阶段收盘 (origin/main @ `93c2d9d7`)**:
+**Apeireth v2.0.0-rc.1 阶段收盘 + A 块 OrganOrchestrator 完整化 (origin/main @ `bbbfb75b`)**:
 
 - ✅ 8 spec 收齐 (R9/R10/R11/R13/R14/R15 + Z 审计 + 本报告), 全部已 push
 - ✅ R12 OrganOrchestrator 真实施落地 (13 gate + 5 状态机 + 9 organ 串联, 3 integration tests)
 - ✅ 6 处错账修正 (12 slot 真账 6 WIRED + 6 DEFERRED, 主代理亲做)
-- ✅ 1726 passed 0 FAILED / 0 clippy 警告 / 0 触碰 LOCKED 5 项
-- ✅ 本会话 85 commit, 全部 push 同步 (origin/main = `93c2d9d7`)
-- ⏳ 4 块真实施 (A OrganOrchestrator 完整化 1-3 周 / B frontend 4-6 周 / C 6 DEFERRED 6-10 周 / D RC-7 2-3 周), 估 2027-Q1 启动, v2.0.0 release 估 2027-01-08 至 2027-03 月
-- 📌 给新团队的话 = 本文 §6; 文件地图 = 本文 §2
+- ✅ **A 块 OrganOrchestrator 完整化真实施 (5 stage 真实施 + amend 后 commits `c003e078` ~ `0afa733f`)**: 缺口 D ratify_fresh_policy 5 状态链 / 缺口 B F1 PAD mood / 缺口 A check_8_gates 接 E7 last_hold / 缺口 C Council decide_with_invoker / 缺口 E L0-L5 UpgradeCycle driver. 0 触碰 LOCKED 5 项, 0 引新外部 dep. **A 块完成** ✅
+- ✅ **A 块 O-6 三阶审查 0 装诚实复盘 + amend (commit `bbbfb75b`)**: 主代理自检发现之前 5 commit O-6 三阶审查 sections 多是描述 WHAT 不是 WHY, O-6 失守; amend 后修订版 sections 真答案 + 拒 alternatives + 拒理由; 后续 commit 标准见 plan doc §7. O-6 doctrine '工作量与麻烦不是拒绝重做的理由' 真兑现.
+- ✅ 1739 passed 0 FAILED / 0 clippy 警告 / 0 触碰 LOCKED 5 项 (1726 baseline + 13 new A 块 + O-6 复盘 amend force push code 0 变)
+- ✅ 6 amend 后 commits + 1 复盘 配对 commit, 全部 push 同步 (origin/main = `bbbfb75b`)
+- ⏳ **3 块真实施** (B frontend 4-6 周 / C 6 DEFERRED 6-10 周 / D RC-7 2-3 周需硬件), 估 2027-Q1 启动, v2.0.0 release 估 2027-01-08 至 2027-03 月
+- 📌 给新团队的话 = 本文 §6; 文件地图 = 本文 §2; O-6 三阶审查标准 = plan doc §7; 0 装诚实复盘 = `A-block-o6-true-account.md`
 
-**阶段告一段落. 真账: 架构最优骨架已立, 模块补齐是下一阶段.**
+**阶段告一段落. 真账: 架构最优骨架已立 + OrganOrchestrator 完整化真实施已立 (A 块完成), 模块补齐是下一阶段.**
