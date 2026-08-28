@@ -157,8 +157,9 @@ source episode evidence；不宣称长程 cognition、偏好学习或完整语�
 ### 7.2 远程验证记录 (2026-08-28)
 
 本轮验证统一在 `desktop-dcce212558a843ed-20260806111728416` 的
-`D:\apx\apeireth-rust` 执行，远程提交为 `e5dbca0605d123b00205b7efdaddc40d5a2d94d3`，
-工具链为 `rustc 1.97.1 / cargo 1.97.1`。以下结果均为远程结果：
+`D:\apx\apeireth-rust` 执行，远程验证提交为 `e2ab0d4145e710465033295b54a6e1d3d1a1a0ca`，
+并确认远程 `HEAD == origin/main`、工作树 clean；工具链为 `rustc 1.97.1 / cargo 1.97.1`。
+以下结果均为远程结果：
 
 - `cargo test -p apeireth-runtime`
 - `cargo test -p apeireth-memory`
@@ -171,10 +172,11 @@ source episode evidence；不宣称长程 cognition、偏好学习或完整语�
 - `cargo test --workspace`
 - 本轮触碰 Rust 文件的定点 `rustfmt --check` 与 `git diff --check`
 
-`cargo clippy --workspace --all-targets --all-features -- -D warnings` 仍受远程机
-未安装 Python 3.x 阻断：可选 SDK 的 PyO3 feature 无法完成解释器探测；设置
-`PYO3_NO_PYTHON=1` 后又因当前 feature 未启用 abi3 而失败。`cargo fmt --all -- --check`
-只报告基线中未触碰文件的既有漂移；未对这些无关文件做格式化。
+`cargo clippy --workspace --all-targets --all-features -- -D warnings` 首次因远程机
+未安装 Python 3.x 阻断；随后在远程配置官方 Python 3.12.10 embeddable interpreter，
+以 `PYO3_PYTHON=D:\apx\python312-embed\python.exe` 重跑并通过。没有修改 PyO3
+语义或禁用 Python feature。all-features 运行产生的 tracked SDK header 已恢复，
+远程验证目录最终 clean；Python runtime 保留在 `D:\apx` 作为验证机前置。
 
 ---
 
