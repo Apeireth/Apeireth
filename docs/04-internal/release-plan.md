@@ -76,7 +76,7 @@ Status:          🟢 活跃 (v2 发布路线)
 ### 已通过（CI 实测 2026-08-27）
 
 - [x] **构建**：`cargo build --workspace --tests --locked` ✅
-- [x] **测试**：`cargo test --workspace --tests --bins --lib --locked` (首版 2026-08-27 拍版时) → **1338 passed / 0 failed**; 现 main = `9080cc93` 实测 → **~1476 passed / 0 failed**（+138 新测试：B1 Experience 3 + P4 Perception 5 + P6 Orchestration 5 + 8 守门 + ...）
+- [x] **测试**：`cargo test --workspace --tests --bins --lib --locked` (首版 2026-08-27 拍版时) → **1338 passed / 0 failed**; 现 main = `9080cc93` 实测 → **~1476 passed / 0 failed**（+138 新测试：B1 Experience 3 + P4 Perception 5 + P6 Orchestration 5 + 8 守门 + ...; **A 块后 1739 passed / 0 failed**）
 - [x] **lint**：`rust-lint.yml`（clippy 3 档 + fmt）✅
 - [x] **fmt**：`cargo fmt --all --check` ✅
 - [x] **audit**：`cargo-audit.yml`（RUSTSEC database）✅
