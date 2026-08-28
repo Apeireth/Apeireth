@@ -19,7 +19,7 @@ pub use canonical::{
     ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse,
     ModuleInvoker, ModuleManifest, ModuleMetricsSnapshot, ModuleOutcome, ModuleRegistry,
     PendingApproval, PendingApprovalView, PreferenceRecallModule, ProductionCognitiveModules,
-    PromptOverlay, ProviderHealth, ProviderRouter, RoutedCompletion, Runtime, RuntimeBuilder,
+    ProductionModules, ProductionModulesConfig, PromptOverlay, ProviderHealth, ProviderRouter, RoutedCompletion, Runtime, RuntimeBuilder,
     RuntimeConfig, RuntimeError, RuntimeResult, SelfAssessmentModule, Session, SessionEvent,
     SessionEventKind, SessionManager, SessionStore, SqliteSessionStore, TraceEntry, TraceEvent,
     TurnOutcome, TurnRequest, TurnResponse, COUNCIL_MODULE_ID, DEFAULT_MAX_INVOCATION_DEPTH,
