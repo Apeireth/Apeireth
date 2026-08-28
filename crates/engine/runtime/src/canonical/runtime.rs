@@ -44,7 +44,7 @@ use apeireth_plugin::{
 
 use super::cognitive::CognitiveTelemetry;
 use super::error::{RuntimeError, RuntimeResult};
-use super::module::{AgentModule, DEFAULT_MAX_MODULE_INVOCATIONS};
+use super::module::{Module, ModuleRegistry, DEFAULT_MAX_MODULE_INVOCATIONS};
 use super::provider::ProviderRouter;
 use super::session::{InMemorySessionStore, SessionManager, SessionStore};
 
@@ -110,7 +110,7 @@ pub struct Runtime {
     pub(super) governance: Arc<dyn GovernanceHook>,
     pub(super) clock: Arc<dyn Clock>,
     pub(super) config: RuntimeConfig,
-    pub(super) modules: Vec<Arc<dyn AgentModule>>,
+    pub(super) modules: ModuleRegistry,
     pub(super) cognitive_telemetry: Option<Arc<CognitiveTelemetry>>,
     pub(super) session_locks: SessionLocks,
 }
@@ -148,7 +148,21 @@ impl Runtime {
 
     /// Every tool that can currently be dispatched to.
     pub fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        self.plugins.active_tools()
+        let mut tools = self.modules.tools();
+        tools.extend(self.plugins.active_tools());
+        tools
+    }
+
+    /// Model-facing tool declarations for all active tools.
+    pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
+        let mut declarations: Vec<apeireth_protocol::canonical::NormalizedTool> = self
+            .modules
+            .tools()
+            .iter()
+            .map(|t| t.declaration().into())
+            .collect();
+        declarations.extend(self.plugins.tool_declarations());
+        declarations
     }
 
     /// The router over every provider that can currently serve a completion.
@@ -160,8 +174,13 @@ impl Runtime {
         &self.providers
     }
 
-    /// The cognitive modules registered with this runtime, in execution order.
-    pub fn modules(&self) -> &[Arc<dyn AgentModule>] {
+    /// The modules registered with this runtime, in execution order.
+    pub fn modules(&self) -> &[Arc<dyn Module>] {
+        self.modules.modules()
+    }
+
+    /// The module registry holding all registered modules.
+    pub fn module_registry(&self) -> &ModuleRegistry {
         &self.modules
     }
 
@@ -202,7 +221,7 @@ pub struct RuntimeBuilder {
     session_store: Arc<dyn SessionStore>,
     governance: Arc<dyn GovernanceHook>,
     plugins: Vec<Arc<dyn Plugin>>,
-    modules: Vec<Arc<dyn AgentModule>>,
+    modules: Vec<Arc<dyn Module>>,
     cognitive_telemetry: Option<Arc<CognitiveTelemetry>>,
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
@@ -270,7 +289,7 @@ impl RuntimeBuilder {
 
     /// Register a cognitive module. Modules run in registration order.
     #[must_use]
-    pub fn with_module(mut self, module: Arc<dyn AgentModule>) -> Self {
+    pub fn with_module(mut self, module: Arc<dyn Module>) -> Self {
         self.modules.push(module);
         self
     }
@@ -336,20 +355,11 @@ impl RuntimeBuilder {
                 "max_module_invocations must be at least 1",
             ));
         }
-
-        let mut module_ids = std::collections::BTreeSet::new();
-        for module in &self.modules {
-            if module.manifest().id.is_empty() {
-                return Err(RuntimeError::misconfigured(
-                    "registered modules must have a non-empty id",
-                ));
-            }
-            if !module_ids.insert(module.manifest().id.clone()) {
-                return Err(RuntimeError::misconfigured(format!(
-                    "duplicate module id {:?}",
-                    module.manifest().id
-                )));
-            }
+        let mut module_registry = ModuleRegistry::new();
+        for module in self.modules {
+            module_registry
+                .register(module)
+                .map_err(RuntimeError::misconfigured)?;
         }
 
         let mut manager = PluginManager::new();
@@ -380,7 +390,7 @@ impl RuntimeBuilder {
             governance: self.governance,
             clock: self.clock,
             config: self.config,
-            modules: self.modules,
+            modules: module_registry,
             cognitive_telemetry: self.cognitive_telemetry,
             session_locks: SessionLocks::default(),
         })
