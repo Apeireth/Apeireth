@@ -42,10 +42,15 @@
 //! 真机密场景 (e.g. record_id 本身含 PII / 凭据引用) 需额外加密 id 索引
 //! 或 HMAC-wrap line header. 0 装假装"id 也密文".
 //!
-//! TODO(rc-11, 子代理 F 2026-08-27): 真生产前必须写 v1→v2 migration script.
+//! TODO(rc-11, 子代理 F + G 2026-08-27): 真生产前必须写 v1→v2 migration script.
 //! 读老格式 `[sealed_len:4 BE][sealed:N]` → 重写新格式
 //! `[id_len:2 BE][id:id_len][sealed_len:4 BE][sealed:N]` + 重新签 AAD (用同 record_id).
 //! 0 装假装"兼容老数据". ROADMAP §4 P1 已追项.
+//!
+//! ⚠️ 子代理 G 独立判断 (2026-08-27): migration script 必校验老 v1 id 长度 ≤ 65535 bytes
+//! (= `Self::ID_LEN_MAX` = u16 BE). 老 v1 era 若 id 超 65535 bytes (罕见, e.g. base64 长凭据引用),
+//! script 必须 reject + 报告 (truncation silently 会导致密封解不开). 接手人应复用本文件
+//! `ID_LEN_MAX` 常量语义, 避免引入新 truncation 风险. 不阻 RC-10 推进, 必入 RC-11 checklist.
 
 use std::path::PathBuf;
 use std::sync::Arc;
