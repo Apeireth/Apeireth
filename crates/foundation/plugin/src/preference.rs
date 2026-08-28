@@ -26,8 +26,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use apeireth_core::kernel::SessionId;
 use crate::memory_backend::CapabilityResult;
+use apeireth_core::kernel::SessionId;
 
 /// 主人偏好 (per scene-d §2.1):
 /// 事实陈述 (stance) + 证据引用 (evidence_refs: 哪些 episode / session 来源) +

@@ -66,7 +66,8 @@ impl SQLitePreferenceStore {
     pub async fn ensure_schema(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let pool = self.pool.clone();
         pool.write(|conn| -> Result<(), apeireth_storage::StorageError> {
-            conn.execute_batch(r#"
+            conn.execute_batch(
+                r#"
                 CREATE TABLE IF NOT EXISTS user_preferences (
                     id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL,
@@ -79,7 +80,8 @@ impl SQLitePreferenceStore {
                 );
                 CREATE INDEX IF NOT EXISTS idx_user_prefs_session_confidence
                     ON user_preferences(session_id, confidence DESC);
-            "#)
+            "#,
+            )
             .map_err(apeireth_storage::StorageError::from)
         })
         .await
@@ -88,11 +90,16 @@ impl SQLitePreferenceStore {
 }
 
 impl PreferenceStore for SQLitePreferenceStore {
-    fn record(&self, pref: &UserPreference) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    fn record(
+        &self,
+        pref: &UserPreference,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // INSERT OR REPLACE: 同一 id 覆盖 (id 是 PK, scene-d §2.1 v1 实践: SHA-256
         // session_id + topic 派生, 同 session + topic 多次 record 是更新不是新增)
-        let evidence_refs_json = serde_json::to_string(&pref.evidence_refs).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
-        let tags_json = serde_json::to_string(&pref.tags).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        let evidence_refs_json = serde_json::to_string(&pref.evidence_refs)
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        let tags_json = serde_json::to_string(&pref.tags)
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let session_id_str = pref.session_id.to_string();
         // 同步读 — RC-3 trait method 是 sync, 用 reader pool
         self.pool
@@ -280,9 +287,7 @@ mod tests {
         let p = pref("pref-1", sid, "Rust language", 0.85);
         store.record(&p).expect("record");
 
-        let recalled = store
-            .recall_for_context(&sid, "Rust", 10)
-            .expect("recall");
+        let recalled = store.recall_for_context(&sid, "Rust", 10).expect("recall");
         assert_eq!(recalled.len(), 1);
         assert_eq!(recalled[0].id, "pref-1");
         assert_eq!(recalled[0].confidence, 0.85);
@@ -298,9 +303,7 @@ mod tests {
         store.record(&pref("high", sid, "topic", 0.9)).unwrap();
         store.record(&pref("mid", sid, "topic", 0.6)).unwrap();
 
-        let recalled = store
-            .recall_for_context(&sid, "topic", 10)
-            .expect("recall");
+        let recalled = store.recall_for_context(&sid, "topic", 10).expect("recall");
         assert_eq!(recalled.len(), 3);
         assert_eq!(recalled[0].id, "high");
         assert_eq!(recalled[1].id, "mid");
@@ -312,13 +315,17 @@ mod tests {
     async fn recall_filters_by_topic() {
         let store = fresh().await;
         let sid = SessionId::new();
-        store.record(&pref("rust-1", sid, "Rust language", 0.9)).unwrap();
-        store.record(&pref("py-1", sid, "Python language", 0.7)).unwrap();
-        store.record(&pref("rust-2", sid, "Rust tooling", 0.8)).unwrap();
+        store
+            .record(&pref("rust-1", sid, "Rust language", 0.9))
+            .unwrap();
+        store
+            .record(&pref("py-1", sid, "Python language", 0.7))
+            .unwrap();
+        store
+            .record(&pref("rust-2", sid, "Rust tooling", 0.8))
+            .unwrap();
 
-        let rust_only = store
-            .recall_for_context(&sid, "Rust", 10)
-            .expect("recall");
+        let rust_only = store.recall_for_context(&sid, "Rust", 10).expect("recall");
         assert_eq!(rust_only.len(), 2);
         let ids: Vec<&str> = rust_only.iter().map(|p| p.id.as_str()).collect();
         assert!(ids.contains(&"rust-1"));

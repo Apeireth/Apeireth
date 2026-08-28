@@ -15,9 +15,10 @@
 //! 阶段 4 §1.5 完整版双洋葱统一体作为 demo 来源
 
 use apeireth_core::{
-    Action, ActionGuard, ActionTarget, ActionVerdict, DefaultPhilosophyGuard, kernel::memory::Episode, HAMode,
-    HumanAuthority, kernel::memory::IdentityCard, LifeStage, kernel::memory::Migration, PermissionLayer, PermissionOnion,
-    PhilosophyGuard, PhilosophyVerdict, PrincipleLayer, PrincipleOnion, RealHuman, RiskLevel,
+    kernel::memory::Episode, kernel::memory::IdentityCard, kernel::memory::Migration, Action,
+    ActionGuard, ActionTarget, ActionVerdict, DefaultPhilosophyGuard, HAMode, HumanAuthority,
+    LifeStage, PermissionLayer, PermissionOnion, PhilosophyGuard, PhilosophyVerdict,
+    PrincipleLayer, PrincipleOnion, RealHuman, RiskLevel,
 };
 
 fn main() {

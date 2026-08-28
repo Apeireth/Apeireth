@@ -48,7 +48,10 @@ impl MemoryBackend for InMemoryBackend {
     }
 
     fn put_episode(&self, ep: &Episode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut map = self.episodes_by_id.lock().expect("InMemoryBackend poisoned");
+        let mut map = self
+            .episodes_by_id
+            .lock()
+            .expect("InMemoryBackend poisoned");
         if map.contains_key(&ep.id) {
             return Err(Box::new(crate::MemoryError::Invalid(format!(
                 "episode id already exists: {}",
@@ -59,13 +62,26 @@ impl MemoryBackend for InMemoryBackend {
         Ok(())
     }
 
-    fn get_episode(&self, id: &str) -> Result<Option<Episode>, Box<dyn std::error::Error + Send + Sync>> {
-        let map = self.episodes_by_id.lock().expect("InMemoryBackend poisoned");
+    fn get_episode(
+        &self,
+        id: &str,
+    ) -> Result<Option<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        let map = self
+            .episodes_by_id
+            .lock()
+            .expect("InMemoryBackend poisoned");
         Ok(map.get(id).cloned())
     }
 
-    fn recent_episodes(&self, session_id: &str, n: usize) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
-        let map = self.episodes_by_id.lock().expect("InMemoryBackend poisoned");
+    fn recent_episodes(
+        &self,
+        session_id: &str,
+        n: usize,
+    ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        let map = self
+            .episodes_by_id
+            .lock()
+            .expect("InMemoryBackend poisoned");
         let mut all: Vec<Episode> = map
             .values()
             .filter(|e| e.session_id == session_id)
@@ -97,7 +113,6 @@ impl MemoryBackend for InMemoryBackend {
         session_id: &str,
         n: usize,
     ) -> Result<Vec<HistoryEntry>, Box<dyn std::error::Error + Send + Sync>> {
-
         let streams = self.streams.lock().expect("InMemoryBackend poisoned");
         let key = (kind, session_id.to_string());
         let Some(list) = streams.get(&key) else {

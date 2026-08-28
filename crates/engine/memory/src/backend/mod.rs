@@ -25,10 +25,10 @@ pub use apeireth_plugin::memory_backend::{BackendKind, MemoryBackend};
 
 // 4 backend impl (P-arch 2026-08-27 + RC-1 纯 SQL 重写 + RC-10 AES-GCM 加密)
 // `pub mod` 声明让测试模块 + 外部 import 都能看到 4 个具体 backend
-pub mod sqlite;
 pub mod file;
 pub mod file_encrypted;
 pub mod in_memory;
+pub mod sqlite;
 
 use apeireth_core::kernel::memory::Episode;
 

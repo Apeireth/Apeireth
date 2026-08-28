@@ -103,16 +103,15 @@ impl HumanAuthority {
                 if signatures.iter().any(|s| Self::is_well_formed_sig(s)) {
                     MultiSignResult::Accepted
                 } else {
-                    MultiSignResult::Insufficient { required: 1, received: 0 }
+                    MultiSignResult::Insufficient {
+                        required: 1,
+                        received: 0,
+                    }
                 }
             }
             HAMode::Offline => MultiSignResult::DeniedOffline,
             HAMode::MultiHuman => {
-                let required = self
-                    .multi_sign
-                    .as_ref()
-                    .map(|m| m.required)
-                    .unwrap_or(1);
+                let required = self.multi_sign.as_ref().map(|m| m.required).unwrap_or(1);
                 let total = self.real_humans.len();
                 if total == 0 {
                     return MultiSignResult::InvalidHA(
@@ -275,15 +274,9 @@ pub const VERDICT_KEYS_BY_PRINCIPLE: &[(&str, &[PhilosophyKey])] = &[
     ),
     (
         PRINCIPLE_LAYER_S,
-        &[
-            PhilosophyKey::NotSafe,
-            PhilosophyKey::NotUnoptimizable,
-        ],
+        &[PhilosophyKey::NotSafe, PhilosophyKey::NotUnoptimizable],
     ),
-    (
-        PRINCIPLE_LAYER_A,
-        &[PhilosophyKey::NotUndo],
-    ),
+    (PRINCIPLE_LAYER_A, &[PhilosophyKey::NotUndo]),
     (
         PRINCIPLE_LAYER_M,
         &[
@@ -351,7 +344,10 @@ mod ha_multisign_tests {
             ice_frozen_until: None,
             multi_sign: None,
         };
-        assert_eq!(ha.verify_multisig(&[sig("alice")]), MultiSignResult::Accepted);
+        assert_eq!(
+            ha.verify_multisig(&[sig("alice")]),
+            MultiSignResult::Accepted
+        );
     }
 
     #[test]
@@ -396,7 +392,10 @@ mod ha_multisign_tests {
             ice_frozen_until: None,
             multi_sign: None,
         };
-        assert_eq!(ha.verify_multisig(&[sig("alice")]), MultiSignResult::DeniedOffline);
+        assert_eq!(
+            ha.verify_multisig(&[sig("alice")]),
+            MultiSignResult::DeniedOffline
+        );
     }
 
     #[test]
@@ -427,7 +426,10 @@ mod ha_multisign_tests {
             }
         );
         // 2 个签名，刚好
-        assert_eq!(ha.verify_multisig(&[sig("a"), sig("b")]), MultiSignResult::Accepted);
+        assert_eq!(
+            ha.verify_multisig(&[sig("a"), sig("b")]),
+            MultiSignResult::Accepted
+        );
         // 3 个签名，通过
         assert_eq!(
             ha.verify_multisig(&[sig("a"), sig("b"), sig("c")]),

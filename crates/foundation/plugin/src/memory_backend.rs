@@ -26,8 +26,8 @@
 //! typed enum + `serde_json::Value`. `StreamKind` 6 变体 canonical 已在 core kernel.
 //! HistoryEntry 字段仍走 JSON Value (rc 阶段评估 typed struct 是否值).
 
-use apeireth_core::Episode;
 use apeireth_core::kernel::{HistoryEntry, StreamKind};
+use apeireth_core::Episode;
 
 /// 统一 capability trait 错误类型 (O-6 锚兑现 #12, 2026-08-27).
 ///
