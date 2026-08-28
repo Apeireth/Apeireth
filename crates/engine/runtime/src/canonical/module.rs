@@ -328,6 +328,7 @@ pub struct ModuleContext<'a> {
     /// Error text for [`HookPoint::OnError`], when available.
     pub error: Option<&'a str>,
     pub(crate) invoker: &'a dyn ModuleInvoker,
+    pub(crate) subloop: &'a dyn super::subloop::SubLoopSpawner,
 }
 
 impl<'a> ModuleContext<'a> {
@@ -349,6 +350,11 @@ impl<'a> ModuleContext<'a> {
     /// Runtime-owned isolated model invocation capability.
     pub fn invoker(&self) -> &'a dyn ModuleInvoker {
         self.invoker
+    }
+
+    /// Runtime-owned bounded SubLoop spawner.
+    pub fn subloop(&self) -> &'a dyn super::subloop::SubLoopSpawner {
+        self.subloop
     }
 }
 
@@ -500,7 +506,7 @@ impl ModuleTurnState {
         self.used.store(used, Ordering::Relaxed);
     }
 
-    fn reserve(&self) -> Result<(), ModuleInvocationError> {
+    pub(crate) fn reserve(&self) -> Result<(), ModuleInvocationError> {
         loop {
             let used = self.used.load(Ordering::Relaxed);
             if used >= self.max {

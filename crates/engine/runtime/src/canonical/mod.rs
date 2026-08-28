@@ -33,6 +33,7 @@ pub mod production;
 pub mod provider;
 pub mod runtime;
 pub mod session;
+pub mod subloop;
 pub mod tool_modules;
 pub mod trace;
 
@@ -64,6 +65,9 @@ pub use runtime::{plugin_ids, Runtime, RuntimeBuilder, RuntimeConfig, DEFAULT_MA
 pub use session::{
     InMemorySessionStore, Session, SessionEvent, SessionEventKind, SessionManager, SessionStore,
     SqliteSessionStore,
+};
+pub use subloop::{
+    RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpec, SubLoopSpawner,
 };
 pub use tool_modules::{
     FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
