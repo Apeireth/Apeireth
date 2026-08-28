@@ -11,7 +11,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
-use apeireth_orchestration::{Council, CouncilVerdict, Proposal};
+use apeireth_orchestration::{
+    Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
+    CouncilInvoker, Proposal,
+};
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEntryStore};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::{PreferenceStore, UserPreference};
@@ -894,9 +897,9 @@ impl AgentModule for SelfAssessmentModule {
 
 /// Adapt the existing Council service to an AfterModelResponse decision.
 ///
-/// This adapter never invokes an LLM and never dispatches tools.  A real
-/// advisor implementation can be injected into `Council` later without adding
-/// another runtime loop.
+/// The Council service owns bounded aggregation; this module adapts each
+/// advisor to the runtime-owned [`ModuleInvoker`]. It never dispatches tools,
+/// persists a session, or creates a second agent loop.
 pub struct CouncilModule {
     manifest: ModuleManifest,
     council: Arc<Council>,
@@ -952,11 +955,27 @@ impl AgentModule for CouncilModule {
                     submitted_at: self.clock.now().timestamp(),
                     session_id: *ctx.session_id,
                 };
-                match self.council.decide(&proposal).await {
-                    CouncilVerdict::Approved => ModuleOutcome::continue_(),
-                    CouncilVerdict::Vetoed { reason, .. } => ModuleOutcome::stop(reason),
-                    CouncilVerdict::DeferToHuman { reason } => ModuleOutcome::stop(reason),
-                }
+                let adapter = RuntimeCouncilInvoker {
+                    invoker: ctx.invoker(),
+                };
+                let result = self.council.decide_with_invoker(&proposal, &adapter).await;
+                let side_calls = result.side_call_count;
+                let outcome = match result.decision {
+                    CouncilDecision::Continue => ModuleOutcome::continue_(),
+                    CouncilDecision::Retry => ModuleOutcome::retry(result.retry_feedback()),
+                    CouncilDecision::Stop => ModuleOutcome::stop("Council hard-stop"),
+                    CouncilDecision::DeferToHuman => {
+                        ModuleOutcome::stop("Council could not reach a safe decision")
+                    }
+                };
+                self.metrics.record(
+                    COUNCIL_MODULE_ID,
+                    hook,
+                    &outcome.directive,
+                    started,
+                    u64::try_from(side_calls).expect("Council side-call count fits in u64"),
+                );
+                return Ok(outcome);
             } else {
                 ModuleOutcome::continue_()
             }
@@ -967,6 +986,57 @@ impl AgentModule for CouncilModule {
             .record(COUNCIL_MODULE_ID, hook, &result.directive, started, 0);
         Ok(result)
     }
+}
+
+/// Runtime-owned adapter for the foundation Council service.
+struct RuntimeCouncilInvoker<'a> {
+    invoker: &'a dyn super::module::ModuleInvoker,
+}
+
+#[async_trait::async_trait]
+impl CouncilInvoker for RuntimeCouncilInvoker<'_> {
+    async fn invoke(
+        &self,
+        advisor: Arc<dyn Advisor>,
+        proposal: &Proposal,
+    ) -> Result<AdvisorVerdict, CouncilCallError> {
+        let request = ModuleInvocationRequest::isolated(
+            format!(
+                "You are the {:?} council advisor. Return only JSON matching this schema: {{\"score\": number from 0 to 1, \"verdict\": \"allow\"|\"retry\"|\"stop\"|\"abstain\", \"critique\": string <= 2000 chars, \"confidence\": number or null}}. Never call tools.",
+                advisor.kind()
+            ),
+            format!(
+                "Advisor domain: {:?}\nProposal id: {}\nProposal payload: {}",
+                advisor.kind(),
+                proposal.id,
+                proposal.payload
+            ),
+        );
+        let response = self
+            .invoker
+            .invoke(request)
+            .await
+            .map_err(|error| CouncilCallError::Provider(error.to_string()))?;
+        parse_advisor_verdict(response.text())
+    }
+}
+
+fn parse_advisor_verdict(text: &str) -> Result<AdvisorVerdict, CouncilCallError> {
+    let trimmed = text.trim();
+    let json = if let Some(stripped) = trimmed.strip_prefix("```") {
+        let body = stripped
+            .strip_prefix("json")
+            .or_else(|| stripped.strip_prefix("JSON"))
+            .unwrap_or(stripped)
+            .trim_start_matches('\n');
+        body.strip_suffix("```").unwrap_or(body).trim()
+    } else {
+        trimmed
+    };
+    let verdict: AdvisorVerdict = serde_json::from_str(json)
+        .map_err(|error| CouncilCallError::Malformed(format!("invalid advisor JSON: {error}")))?;
+    verdict.validate().map_err(CouncilCallError::Malformed)?;
+    Ok(verdict)
 }
 
 /// Convert a perception text event into the canonical request boundary.
@@ -1310,6 +1380,52 @@ mod tests {
         assert_eq!(invoker.calls.load(Ordering::Relaxed), 2);
         assert_eq!(judge.metrics().side_calls, 2);
         assert!(JudgeModule::parse_result("not json").is_err());
+    }
+
+    #[tokio::test]
+    async fn council_module_uses_module_invoker_for_bounded_fake_advisors() {
+        let session = SessionId::new();
+        let invoker = FixedInvoker {
+            response: NormalizedResponse::text(
+                "council-1",
+                "fake",
+                r#"{"score":0.2,"verdict":"retry","critique":"tighten the answer","confidence":0.9}"#,
+            ),
+            calls: AtomicU64::new(0),
+        };
+        let council = Arc::new(Council::default_llm().with_config(
+            apeireth_orchestration::CouncilConfig {
+                max_advisors: 3,
+                per_advisor_timeout: std::time::Duration::from_secs(1),
+                overall_timeout: std::time::Duration::from_secs(2),
+            },
+        ));
+        let module = CouncilModule::new(
+            council,
+            Arc::new(VirtualClock::new(
+                apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                    .unwrap()
+                    .as_datetime(),
+            )),
+        );
+        let messages = vec![NormalizedMessage::user("request")];
+        let candidate = NormalizedResponse::text("answer-1", "fake", "candidate");
+        let outcome = module
+            .on_hook(
+                HookPoint::AfterModelResponse,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&candidate),
+                    &invoker,
+                    COUNCIL_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(outcome.directive, ModuleDirective::Retry { .. }));
+        assert_eq!(invoker.calls.load(Ordering::Relaxed), 3);
+        assert_eq!(module.metrics().side_calls, 3);
     }
 
     #[tokio::test]
