@@ -171,7 +171,7 @@ impl Module for FetchModule {
 /// Module that manages and dynamically contributes Model Context Protocol (MCP) tool capabilities.
 pub struct McpModule {
     manifest: ModuleManifest,
-    tools: Vec<Arc<dyn ToolCapability>>,
+    tools: std::sync::RwLock<Vec<Arc<dyn ToolCapability>>>,
 }
 
 impl McpModule {
@@ -179,19 +179,27 @@ impl McpModule {
     pub fn new() -> Self {
         Self {
             manifest: ModuleManifest::new("module.mcp", "MCP Capability Module"),
-            tools: Vec::new(),
+            tools: std::sync::RwLock::new(Vec::new()),
         }
     }
 
-    /// Add a tool capability provided by an MCP source.
-    pub fn with_tool(mut self, tool: Arc<dyn ToolCapability>) -> Self {
-        self.tools.push(tool);
+    /// Add a tool capability provided by an MCP source during initialization.
+    pub fn with_tool(self, tool: Arc<dyn ToolCapability>) -> Self {
+        self.tools.write().expect("mcp lock poisoned").push(tool);
         self
     }
 
     /// Register a dynamic tool capability provided by an MCP source.
-    pub fn register_tool(&mut self, tool: Arc<dyn ToolCapability>) {
-        self.tools.push(tool);
+    pub fn register_tool(&self, tool: Arc<dyn ToolCapability>) {
+        self.tools.write().expect("mcp lock poisoned").push(tool);
+    }
+
+    /// Unregister a dynamic tool capability by capability ID.
+    pub fn unregister_tool(&self, capability_id: &apeireth_core::kernel::CapabilityId) {
+        self.tools
+            .write()
+            .expect("mcp lock poisoned")
+            .retain(|t| t.id() != capability_id);
     }
 }
 
@@ -207,6 +215,6 @@ impl Module for McpModule {
     }
 
     fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        self.tools.clone()
+        self.tools.read().expect("mcp lock poisoned").clone()
     }
 }

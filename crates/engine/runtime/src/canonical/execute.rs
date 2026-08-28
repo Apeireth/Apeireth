@@ -1348,6 +1348,7 @@ impl Runtime {
             .run_hook(
                 hook,
                 session_id,
+                trace_id,
                 invocation,
                 model,
                 messages,
@@ -1380,6 +1381,7 @@ impl Runtime {
         &self,
         hook: HookPoint,
         session_id: &SessionId,
+        trace_id: TraceId,
         invocation: &InvocationContext,
         model: &str,
         messages: &[NormalizedMessage],
@@ -1396,6 +1398,9 @@ impl Runtime {
             let spawner = RuntimeSubLoopSpawner::new(
                 &self.providers,
                 active_tools.clone(),
+                self.governance.as_ref(),
+                *session_id,
+                trace_id,
                 model,
                 &manifest.id,
                 Arc::clone(module_state),
@@ -1511,6 +1516,7 @@ impl Runtime {
             .run_hook(
                 HookPoint::OnError,
                 &request.session,
+                TraceId::new(),
                 &invocation,
                 &model,
                 &messages,
