@@ -194,8 +194,7 @@ pub const ALL_NINE_ANCHORS: [PhilosophicalAnchor8; 9] = [
 pub const ALL_NINE_ANCHOR_CODES: [&str; 9] = [
     "S-1", "S-2", "S-3", // R126 NEW
     "O-1", // R126 NEW
-    "O-2", "O-3", "O-4", "O-5",
-    "O-6", // 2026-08-27 NEW (LOCKED 0 装诚实授权)
+    "O-2", "O-3", "O-4", "O-5", "O-6", // 2026-08-27 NEW (LOCKED 0 装诚实授权)
 ];
 
 /// 6 哲学锚 (向后兼容) 顺序锁定 (per `apeireth-council::PHILOSOPHICAL_ANCHORS`)
@@ -294,51 +293,73 @@ pub const NINE_ANCHORS_HARDCODE: () = {
     // 提取原 6 锚顺序: S-1, S-2, O-2, O-3, O-4, O-5
     // 验证: ALL_NINE_ANCHORS[0] == S1, [1] == S2, [4] == O2, [5] == O3, [6] == O4, [7] == O5
     // 0 装诚实: 用 as_bytes() 比较 (const-friendly, &str PartialEq 0  const stable)
-    if ALL_NINE_ANCHORS[0].code().as_bytes()[0] != PhilosophicalAnchor8::S1NorthStar.code().as_bytes()[0]
-        || ALL_NINE_ANCHORS[0].code().as_bytes()[1] != PhilosophicalAnchor8::S1NorthStar.code().as_bytes()[1]
+    if ALL_NINE_ANCHORS[0].code().as_bytes()[0]
+        != PhilosophicalAnchor8::S1NorthStar.code().as_bytes()[0]
+        || ALL_NINE_ANCHORS[0].code().as_bytes()[1]
+            != PhilosophicalAnchor8::S1NorthStar.code().as_bytes()[1]
     {
         panic!("原 6 锚顺序 0 改: [0] 必须是 S-1");
     }
-    if ALL_NINE_ANCHORS[1].code().as_bytes()[0] != PhilosophicalAnchor8::S2TruthFromReality.code().as_bytes()[0]
-        || ALL_NINE_ANCHORS[1].code().as_bytes()[1] != PhilosophicalAnchor8::S2TruthFromReality.code().as_bytes()[1]
+    if ALL_NINE_ANCHORS[1].code().as_bytes()[0]
+        != PhilosophicalAnchor8::S2TruthFromReality.code().as_bytes()[0]
+        || ALL_NINE_ANCHORS[1].code().as_bytes()[1]
+            != PhilosophicalAnchor8::S2TruthFromReality.code().as_bytes()[1]
     {
         panic!("原 6 锚顺序 0 改: [1] 必须是 S-2");
     }
-    if ALL_NINE_ANCHORS[4].code().as_bytes()[0] != PhilosophicalAnchor8::O2StandingOnShoulders.code().as_bytes()[0]
-        || ALL_NINE_ANCHORS[4].code().as_bytes()[1] != PhilosophicalAnchor8::O2StandingOnShoulders.code().as_bytes()[1]
+    if ALL_NINE_ANCHORS[4].code().as_bytes()[0]
+        != PhilosophicalAnchor8::O2StandingOnShoulders
+            .code()
+            .as_bytes()[0]
+        || ALL_NINE_ANCHORS[4].code().as_bytes()[1]
+            != PhilosophicalAnchor8::O2StandingOnShoulders
+                .code()
+                .as_bytes()[1]
     {
         panic!("原 6 锚顺序 0 改: [4] 必须是 O-2");
     }
-    if ALL_NINE_ANCHORS[5].code().as_bytes()[0] != PhilosophicalAnchor8::O3SeeItThrough.code().as_bytes()[0]
-        || ALL_NINE_ANCHORS[5].code().as_bytes()[1] != PhilosophicalAnchor8::O3SeeItThrough.code().as_bytes()[1]
+    if ALL_NINE_ANCHORS[5].code().as_bytes()[0]
+        != PhilosophicalAnchor8::O3SeeItThrough.code().as_bytes()[0]
+        || ALL_NINE_ANCHORS[5].code().as_bytes()[1]
+            != PhilosophicalAnchor8::O3SeeItThrough.code().as_bytes()[1]
     {
         panic!("原 6 锚顺序 0 改: [5] 必须是 O-3");
     }
-    if ALL_NINE_ANCHORS[6].code().as_bytes()[0] != PhilosophicalAnchor8::O4AnyoneCanTakeOver.code().as_bytes()[0]
-        || ALL_NINE_ANCHORS[6].code().as_bytes()[1] != PhilosophicalAnchor8::O4AnyoneCanTakeOver.code().as_bytes()[1]
+    if ALL_NINE_ANCHORS[6].code().as_bytes()[0]
+        != PhilosophicalAnchor8::O4AnyoneCanTakeOver.code().as_bytes()[0]
+        || ALL_NINE_ANCHORS[6].code().as_bytes()[1]
+            != PhilosophicalAnchor8::O4AnyoneCanTakeOver.code().as_bytes()[1]
     {
         panic!("原 6 锚顺序 0 改: [6] 必须是 O-4");
     }
-    if ALL_NINE_ANCHORS[7].code().as_bytes()[0] != PhilosophicalAnchor8::O5NoPretend.code().as_bytes()[0]
-        || ALL_NINE_ANCHORS[7].code().as_bytes()[1] != PhilosophicalAnchor8::O5NoPretend.code().as_bytes()[1]
+    if ALL_NINE_ANCHORS[7].code().as_bytes()[0]
+        != PhilosophicalAnchor8::O5NoPretend.code().as_bytes()[0]
+        || ALL_NINE_ANCHORS[7].code().as_bytes()[1]
+            != PhilosophicalAnchor8::O5NoPretend.code().as_bytes()[1]
     {
         panic!("原 6 锚顺序 0 改: [7] 必须是 O-5");
     }
     // 2026-08-27 NEW: O-6 永远追求最优 必须 [8]
-    if ALL_NINE_ANCHORS[8].code().as_bytes()[0] != PhilosophicalAnchor8::O6AlwaysOptimal.code().as_bytes()[0]
-        || ALL_NINE_ANCHORS[8].code().as_bytes()[1] != PhilosophicalAnchor8::O6AlwaysOptimal.code().as_bytes()[1]
+    if ALL_NINE_ANCHORS[8].code().as_bytes()[0]
+        != PhilosophicalAnchor8::O6AlwaysOptimal.code().as_bytes()[0]
+        || ALL_NINE_ANCHORS[8].code().as_bytes()[1]
+            != PhilosophicalAnchor8::O6AlwaysOptimal.code().as_bytes()[1]
     {
         panic!("2026-08-27 NEW 锚顺序: [8] 必须是 O-6 永远追求最优 (LOCKED 0 装诚实授权)");
     }
 
     // R126 新增 2 锚位置: [2]=S-3, [3]=O-1
-    if ALL_NINE_ANCHORS[2].code().as_bytes()[0] != PhilosophicalAnchor8::S3QualityEngineering.code().as_bytes()[0]
-        || ALL_NINE_ANCHORS[2].code().as_bytes()[1] != PhilosophicalAnchor8::S3QualityEngineering.code().as_bytes()[1]
+    if ALL_NINE_ANCHORS[2].code().as_bytes()[0]
+        != PhilosophicalAnchor8::S3QualityEngineering.code().as_bytes()[0]
+        || ALL_NINE_ANCHORS[2].code().as_bytes()[1]
+            != PhilosophicalAnchor8::S3QualityEngineering.code().as_bytes()[1]
     {
         panic!("R126 新增位置错: [2] 必须是 S-3 (质量工程化)");
     }
-    if ALL_NINE_ANCHORS[3].code().as_bytes()[0] != PhilosophicalAnchor8::O1SafetyFirst.code().as_bytes()[0]
-        || ALL_NINE_ANCHORS[3].code().as_bytes()[1] != PhilosophicalAnchor8::O1SafetyFirst.code().as_bytes()[1]
+    if ALL_NINE_ANCHORS[3].code().as_bytes()[0]
+        != PhilosophicalAnchor8::O1SafetyFirst.code().as_bytes()[0]
+        || ALL_NINE_ANCHORS[3].code().as_bytes()[1]
+            != PhilosophicalAnchor8::O1SafetyFirst.code().as_bytes()[1]
     {
         panic!("R126 新增位置错: [3] 必须是 O-1 (安全优先)");
     }

@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 """RC-11 v1 -> v2 加密文件迁移脚本 (Python)
 
-真生产前必写 (per file_encrypted.rs:45-48 TODO + 子代理 F P1 #2 + 子代理 G ID_LEN_MAX).
+RC-11 delivery (per the v1 compatibility contract and 子代理 G ID_LEN_MAX review).
 
 **v1 格式** (RC-10 早期, commit `e2a5be08`):
     [sealed_len: u32 BE 4 bytes][sealed: N bytes]
     sealed 内部 = [iv (12)][ciphertext (N-12-16)][tag (16)]
     AAD v1 = service|type (简化, 无 record_id)
 
-**v2 格式** (RC-10 line header, commit `38cc1039`):
-    [id_len: u16 BE 2 bytes][id: id_len UTF-8][sealed_len: u32 BE 4 bytes][sealed: N bytes]
-    AAD v2 = service|type|record_id (per-record tamper 保护, 子代理 C 建议 #5)
+**v2 格式** (current APX2 envelope, commit `be0f564f`):
+    frame = [sealed_len: u32 BE 4 bytes][sealed: N bytes]
+    sealed = [magic APX2][version 2][index: u64 BE][opaque keyed id commitment: 32 bytes]
+             [iv: 12 bytes][ciphertext][tag: 16 bytes]
+    AAD v2 = version|service/type|physical index|id commitment|sealed length.
+    The raw record_id is never written to the file.
 
 **关键**:
-- v1 era 没有 record_id, 脚本**必为每条 record 生成 v2 record_id**:
-  使用 UUID v5 (deterministic, from `uuid.NAMESPACE_DNS` + sha256(JSON content + index))
-  → 相同 input 重跑迁移生成相同 id (idempotent, 接手人可重跑).
+- v1 era 没有 record_id. If the decrypted JSON has a non-empty string `id`, the
+  migration reuses it; otherwise it generates a UUID v5 (deterministic, from
+  `uuid.NAMESPACE_DNS` + sha256(JSON content + index)). Re-running the same
+  input therefore keeps the logical identity commitment stable.
 - 0 装诚实: 若 record_id 字节 > 65535 (ID_LEN_MAX), script reject + exit 1.
   不 silent truncation (子代理 G 独立判断, 2026-08-27).
 
@@ -35,14 +39,16 @@
 - master key 由调用方提供 (真生产从 KeyringSelector 取, dev 显式 hex).
 - 跑前**先备份** v1 (脚本 0 删 v1, 调用方负责 backup).
 - 跑后 v2 用 v2 `EncryptedFileBackend` 验 (建议另写 verify 脚本).
-- 限制: 单 record_type per file (per line header `{record_type}.enc`).
+- 限制: 单 record_type per file (`{record_type}.enc`).
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import logging
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -57,6 +63,10 @@ ID_LEN_MAX = 65535
 KEY_LEN = 32
 IV_LEN = 12
 TAG_LEN = 16
+MAGIC = b"APX2"
+FORMAT_VERSION = 2
+HEADER_LEN = 4 + 1 + 8 + 32
+RECORD_ID_DOMAIN = b"apeireth/encrypted-file/record-id/v2"
 
 log = logging.getLogger("migrate_v1_to_v2")
 
@@ -106,25 +116,72 @@ def _open_v1_sealed(
     return plaintext
 
 
-def _seal_v2(
-    key: bytes, service: str, record_type: str, record_id: str, plaintext: bytes
-) -> bytes:
-    """Encrypt v2: AAD = service|type|record_id, 返 [iv 12][ct][tag 16].
+def _record_id_commitment(key: bytes, record_id: str) -> bytes:
+    """Derive the same opaque keyed commitment as ``EncryptedFileBackend``."""
+    id_bytes = record_id.encode("utf-8")
+    return hashlib.sha256(
+        RECORD_ID_DOMAIN
+        + key
+        + len(id_bytes).to_bytes(8, byteorder="big", signed=False)
+        + id_bytes
+    ).digest()
 
-    Raises:
-        ValueError: record_id 字节长度超 ID_LEN_MAX.
-    """
+
+def _v2_aad(
+    service: str,
+    record_type: str,
+    record_index: int,
+    commitment: bytes,
+    sealed_len: int,
+) -> bytes:
+    """Build the byte-exact APX2 AAD envelope used by the Rust backend."""
+    service_bytes = service.encode("utf-8")
+    type_bytes = record_type.encode("utf-8")
+    if len(commitment) != 32:
+        raise ValueError("record identity commitment must be 32 bytes")
+    if not 0 <= record_index <= 0xFFFFFFFFFFFFFFFF:
+        raise ValueError("record index does not fit u64")
+    if not 0 <= sealed_len <= 0xFFFFFFFF:
+        raise ValueError("sealed record is too large for u32 framing")
+    return (
+        bytes([FORMAT_VERSION])
+        + len(service_bytes).to_bytes(4, byteorder="big", signed=False)
+        + service_bytes
+        + len(type_bytes).to_bytes(4, byteorder="big", signed=False)
+        + type_bytes
+        + record_index.to_bytes(8, byteorder="big", signed=False)
+        + commitment
+        + sealed_len.to_bytes(4, byteorder="big", signed=False)
+    )
+
+
+def _seal_v2(
+    key: bytes,
+    service: str,
+    record_type: str,
+    record_id: str,
+    plaintext: bytes,
+    record_index: int,
+) -> bytes:
+    """Encrypt the current APX2 record envelope with metadata-bound AAD."""
     id_bytes = record_id.encode("utf-8")
     if len(id_bytes) > ID_LEN_MAX:
         raise ValueError(
             f"record_id too long: {len(id_bytes)} bytes, max {ID_LEN_MAX}"
         )
-    iv = uuid.uuid4().bytes[:IV_LEN]  # 12 bytes random (per-record IV)
-    aad = f"{service}|{record_type}|{record_id}".encode("utf-8")
-    aesgcm = AESGCM(key)
-    ct_with_tag = aesgcm.encrypt(iv, plaintext, aad)
-    out = iv + ct_with_tag
-    return out
+    commitment = _record_id_commitment(key, record_id)
+    sealed_len = HEADER_LEN + IV_LEN + len(plaintext) + TAG_LEN
+    aad = _v2_aad(service, record_type, record_index, commitment, sealed_len)
+    iv = os.urandom(IV_LEN)  # per-record random nonce
+    ciphertext = AESGCM(key).encrypt(iv, plaintext, aad)
+    return (
+        MAGIC
+        + bytes([FORMAT_VERSION])
+        + record_index.to_bytes(8, byteorder="big", signed=False)
+        + commitment
+        + iv
+        + ciphertext
+    )
 
 
 def _generate_record_id(plaintext: bytes, index: int, namespace: uuid.UUID) -> str:
@@ -140,6 +197,21 @@ def _generate_record_id(plaintext: bytes, index: int, namespace: uuid.UUID) -> s
     digest = h.digest()
     # uuid v5 expects 16-byte digest
     return str(uuid.uuid5(namespace, digest.hex()))
+
+
+def _extract_record_id(
+    plaintext: bytes, index: int, namespace: uuid.UUID
+) -> str:
+    """Reuse a serialized ``id`` field; use a stable UUID for opaque records."""
+    try:
+        value = json.loads(plaintext)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        value = None
+    if isinstance(value, dict) and isinstance(value.get("id"), str):
+        record_id = value["id"]
+        if record_id:
+            return record_id
+    return _generate_record_id(plaintext, index, namespace)
 
 
 def migrate_file(
@@ -177,6 +249,7 @@ def migrate_file(
     if not v1_data:
         log.warning("v1 file empty, writing empty v2 file")
         if not dry_run:
+            v2_path.parent.mkdir(parents=True, exist_ok=True)
             v2_path.write_bytes(b"")
         return 0
 
@@ -205,7 +278,7 @@ def migrate_file(
             errors += 1
             continue
 
-        record_id = _generate_record_id(plaintext, idx, namespace)
+        record_id = _extract_record_id(plaintext, idx, namespace)
         id_bytes = record_id.encode("utf-8")
         if len(id_bytes) > ID_LEN_MAX:
             # 子代理 G 独立判断: 必 reject, 不 silent truncation
@@ -219,17 +292,22 @@ def migrate_file(
             continue
 
         try:
-            sealed_v2 = _seal_v2(master_key, service, record_type, record_id, plaintext)
+            sealed_v2 = _seal_v2(
+                master_key,
+                service,
+                record_type,
+                record_id,
+                plaintext,
+                idx,
+            )
         except Exception as e:
             log.error("record %d: v2 seal failed: %s", idx, e)
             errors += 1
             continue
 
-        # v2 frame: [id_len: 2 BE][id][sealed_len: 4 BE][sealed]
-        id_len = len(id_bytes).to_bytes(2, byteorder="big", signed=False)
+        # APX2 frame: [sealed_len: 4 BE][sealed]. The logical id is represented
+        # only by the keyed commitment inside the authenticated sealed header.
         sealed_len = len(sealed_v2).to_bytes(4, byteorder="big", signed=False)
-        v2_bytes.extend(id_len)
-        v2_bytes.extend(id_bytes)
         v2_bytes.extend(sealed_len)
         v2_bytes.extend(sealed_v2)
 
