@@ -133,11 +133,16 @@ const _K1_LIB_PLATFORM_APEIRETH: &str = "apeireth";
 #[allow(dead_code)]
 const _K1_LIB_VERSION_LOCKED: (u16, u16, u16) = (1, 0, 0);
 
-/// **8 哲学锚编译期守门** (baseline 2026-08-19): 6 字样必含 (per 任务稿 8 哲学锚穿透: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5).
+/// **8 哲学锚编译期守门** (baseline 2026-08-19, 8 锚时期 = 6 原版 + S-3 R126 + O-1 R126): 8 字样必含
+/// (per 任务稿 8 哲学锚穿透: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5).
+/// 注: 2026-08-27 加 O-6 (LOCKED 9 锚), O-6 是 methodology 不需要字样穿透, SDK 守 8 字样 baseline
+/// 不扩. R26+ SDK 重构时改 const 8 entries → 9 entries (加 O-6 永远追求最优) — 留 backlog.
 #[allow(dead_code)]
-const _SIX_PHILOSOPHY_ANCHORS: [&str; 6] = [
+const _EIGHT_PHILOSOPHY_ANCHORS: [&str; 8] = [
     "S-1", // 北极星
     "S-2", // 实事求是
+    "S-3", // 质量工程化 NEW (R126)
+    "O-1", // 安全优先 NEW (R126)
     "O-2", // 走在前人肩上
     "O-3", // 干到底
     "O-4", // 任何人都能接手
