@@ -470,7 +470,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory real_llm_call_smoke -
 | **13 键** | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` 显式标 | 已拍板降级为哲学标准, 不接回 runtime 强制. |
 | **3 项不可变脊柱** | `crates/foundation/core/src/onion.rs:249` | Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义 | 同上, 主人明确授权例外. |
 | **workspace.version** | `Cargo.toml` (workspace.version) | `"1.2.0"` 双轴制 (产品轴 tag + workspace 轴) | tag 推进 v2.0.0 → v2.0.1 改 patch, 主代理拍板. |
-| **R11 baseline 3 值** | `crates/foundation/core/src/cognitive.rs` + `Cargo.lock` | 0.8682 / 0.8532 / 0.9063 (R11 ASI R-Measure 数字严守) | R11 数字更新需 R12 spec 重新审定, 主代理拍板. |
+| **R11 baseline 3 值** | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (R11_V1141/1131/1136_BASELINE const) + `legacy/donor/apeireth-blueprint-impl/src/r_measure.rs:228-231` (RMeasureAll::drift hardcode) — active workspace 无 const source | 0.8682 / 0.8532 / 0.9063 (R11 ASI R-Measure 数字严守) | R11 数字更新需 R12 spec 重新审定 + active workspace 移植, 主代理拍板. |
 
 **改前必查**:
 ```bash
@@ -551,7 +551,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 
 ---
 
-## 13. 常见错误 + 真实陷阱 (8 原版 + 3 Round 1-3 工序教训 = 11 条)
+## 13. 常见错误 + 真实陷阱 (8 原版 + 3 Round 1-3 工序教训 + 1 Round 4 author env 教训 = 12 条)
 
 | # | 错误 | 症状 | 修法 |
 |---|---|---|---|
@@ -566,6 +566,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 | 9 | **amend 没 `git add`, `write-tree` 输出 HEAD^{tree}** | amend 后 `git diff --stat` 显示修了, 但 `git show HASH:path` 实际是旧 blob (Round 1 真账: 5e18e65b msg 修了但 tree 没修) | amend 后必自验 tree: `git show HASH:path | grep <fix>`. 不依赖 `git diff --stat`. 见 .harness-step-log §3.6 + 0 装诚实标续 |
 | 10 | **`git fetch` 失败 ≠ `git push` 失败** | TCP 阻 fetch 但 push 实际成功 (Round 1 真账: 2 commits 实际 push 上了 origin, 但主代理凭 fetch 失败误判 + amend + followup, Round 3 fetch 通才发现 origin 已 advance, 改 force push) | 失败诊断: `git fetch` 跟 `git push` 是独立 channel, 各自状态. 怀疑 push 状态时, retry push 看 error code, 不要凭 fetch 失败推断 push. 见 .harness-step-log §3 |
 | 11 | **PowerShell `^{tree}` syntax gotcha** | `git rev-parse HEAD^{tree}` 中 `^{}` 被 pwsh 当特殊字符 (Round 1 真账: 第 1 次 amend 工序错, 第二次 update-ref 覆盖了第一次 chain) | quote 整段: `git rev-parse 'HEAD^{tree}'` 或 `-F file` 替代 inline msg. amend 工序需 quote, 否则 amend 错位. 见 .harness-step-log §3.4 |
+| 12 | **`git commit -F file` 漏设 GIT_AUTHOR_NAME env var** | commit author fallback 到 git config default (Round 4 真账: 4 commits author 错为 minimax-m3-agent, 不是 Mavis) | 每次 commit 前必设 env var: `$env:GIT_AUTHOR_NAME="Mavis"; $env:GIT_AUTHOR_EMAIL="Mavis@apeireth.local"; $env:GIT_COMMITTER_NAME="Mavis"; $env:GIT_COMMITTER_EMAIL="Mavis@apeireth.local"` 或 `git commit --author="Mavis <Mavis@apeireth.local>"`. amend 后必查 `git log --format='%h \| %an'` 自验. |
 
 **0 装诚实标 (A 块 O-6 复盘)**: 主代理第一次**自己**用 "Windows 非交互环境复杂" 当借口拒绝 amend 5 commits. 用户提醒 "不要怕麻烦, 就按正确做法做啊". 主代理**立即**用 `git plumbing` (commit-tree + update-ref) 完成 amend, **不找借口**. O-6 doctrine 真兑现: "工作量与麻烦不是拒绝重做的理由".
 
