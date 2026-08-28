@@ -366,7 +366,7 @@ _本文档 v2 续 (2026-08-28): HEAD `ecb78db4` 82 commit 进展快照. 0 装诚
 ### 16. 5 重守门真账 (子代理 Z 亲跑)
 
 - clippy 0 警告 ✅
-- workspace tests 0 失败 (1713 passed) ✅
+- workspace tests 0 失败 (1713 passed 子代理 Z 当时; **A 块后 1739 passed**) ✅
 - legacy compat path ✅
 - 13 键 LOCKED + 9 哲学锚 + workspace.version + R11 baseline 0 触碰 ✅
 - 哲学锚表头 0 减 ✅
