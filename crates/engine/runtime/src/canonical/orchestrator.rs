@@ -60,7 +60,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
 use apeireth_orchestration::{Council, Proposal};
-use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
+use apeireth_plugin::organ::{
+    InitiativeGate, OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
+};
 #[cfg(test)]
 use chrono::TimeZone;
 
@@ -71,95 +73,14 @@ use chrono::TimeZone;
 /// 主动门控原因 (per v1 `InitiativeGate` 13 种 `presence.rs:410-423` + `emergence.rs` 8 种
 /// 1:1 翻译).
 ///
-/// **0 装诚实**:
+/// **0 装诚实** (Stage 3 重构, 2026-08-28):
+/// - canonical 13-variant 在 `apeireth_plugin::organ::InitiativeGate` (foundation 层).
+/// - `OrganOrchestratorGate` 是 alias, 不重复定义 (per R12 orchestrator.rs:78-81 0 装诚实标 +
+///   Stage 3 重构承诺). emergence.rs 同样 re-export 同一 enum, 避免 3 处副本.
 /// - 13 种全覆盖: emergence 8 (UserQuiet/QuietHours/DailyLimit/LlmBudget/DepthLow/
 ///   RhythmUnknown/RhythmVeto/DriveLow) + organs 5 (SovereigntyFrozen/EmotionLow/
 ///   CouncilVeto/PolicyInactive/GateBlock).
-/// - Orchestrator 本地 enum 复制 organ crate 同名 enum (因为 organ crate 不 re-export),
-///   实施时通过 `From<OrganInitiativeGate>` 桥接. v2 字段对齐 v1 真 schema, 不简化.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OrganOrchestratorGate {
-    /// 门禁 0: 用户显式「不打扰」(per v1 `emergence.rs:460-463`)
-    UserQuiet,
-    /// 门禁 1: 安静窗口 (per v1 `emergence.rs:464-468` + `Boundaries::in_quiet_window`)
-    QuietHours,
-    /// 门禁 2: 频率上限 (per v1 `emergence.rs:469-473` + `Boundaries.max_initiatives_per_day`)
-    DailyLimit,
-    /// 门禁 2.5: LLM 成本预算 (per v1 `emergence.rs:474-484` + `LoopConfig.min_llm_interval_ms`)
-    LlmBudget,
-    /// 门禁 3: 关系深度不够 (per v1 `emergence.rs:486-490` + `Boundaries.min_depth`)
-    DepthLow,
-    /// 门禁 4: 没有观察天数时不猜测作息 (per v1 `emergence.rs:493-497` + `rhythm.days == 0`)
-    RhythmUnknown,
-    /// 门禁 5: 节奏否决 — 学到的作息说「此刻几乎不可能活跃」(per v1 `emergence.rs:499-503`)
-    RhythmVeto,
-    /// 门禁 6: 驱动不足, 但冷启动探针也未命中 (per v1 `emergence.rs:506+`)
-    DriveLow,
-    /// 主权总闸熔断 (per v1 `organs.rs:91-94` + `sovereignty.is_frozen()`)
-    SovereigntyFrozen,
-    /// 情绪愉悦度低于 mood_floor (per v1 `organs.rs:108-114`)
-    EmotionLow,
-    /// 智囊团审议拒绝 (per v1 `organs.rs:132-135` + `council.deliberate().is_rejected()`)
-    CouncilVeto,
-    /// 策略不在 Active 态 (per v1 `organs.rs:137-141` + `evolution.current.is_active()`)
-    PolicyInactive,
-    /// 洋葱门拦下 (V1 哲学 × V2 权限 × V3 HA, per v1 `organs.rs:142-163`)
-    GateBlock,
-}
-
-impl OrganOrchestratorGate {
-    /// 13 种 InitiativeGate 全列 (per R11 spec §5 注: "13 种 InitiativeGate 真实门控,
-    /// emergence 8 + organs 5 = 13").
-    pub const ALL_13: [Self; 13] = [
-        Self::UserQuiet,
-        Self::QuietHours,
-        Self::DailyLimit,
-        Self::LlmBudget,
-        Self::DepthLow,
-        Self::RhythmUnknown,
-        Self::RhythmVeto,
-        Self::DriveLow,
-        Self::SovereigntyFrozen,
-        Self::EmotionLow,
-        Self::CouncilVeto,
-        Self::PolicyInactive,
-        Self::GateBlock,
-    ];
-
-    /// 是否来自 emergence 机制层 8 重 gate (vs organs 上层 5).
-    pub fn is_emergence_gate(&self) -> bool {
-        matches!(
-            self,
-            Self::UserQuiet
-                | Self::QuietHours
-                | Self::DailyLimit
-                | Self::LlmBudget
-                | Self::DepthLow
-                | Self::RhythmUnknown
-                | Self::RhythmVeto
-                | Self::DriveLow
-        )
-    }
-
-    /// 阶段名 (snake_case, 给 telemetry 序列化用).
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::UserQuiet => "user_quiet",
-            Self::QuietHours => "quiet_hours",
-            Self::DailyLimit => "daily_limit",
-            Self::LlmBudget => "llm_budget",
-            Self::DepthLow => "depth_low",
-            Self::RhythmUnknown => "rhythm_unknown",
-            Self::RhythmVeto => "rhythm_veto",
-            Self::DriveLow => "drive_low",
-            Self::SovereigntyFrozen => "sovereignty_frozen",
-            Self::EmotionLow => "emotion_low",
-            Self::CouncilVeto => "council_veto",
-            Self::PolicyInactive => "policy_inactive",
-            Self::GateBlock => "gate_block",
-        }
-    }
-}
+pub use apeireth_plugin::organ::InitiativeGate as OrganOrchestratorGate;
 
 // ============================================
 // 5 状态机 (per `apeireth-evolution::EvolutionStateMachine` 6 状态 - Retired = 5
@@ -885,13 +806,37 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         }
     }
 
-    /// 8 重 gate 真实路径 — 外层统一入口 (per R11 spec §5).
+    /// 从 E7 emergence organ 输出提取真实 InitiativeGate (Stage 3 完整化).
     ///
     /// **0 装诚实**:
+    /// - 输入: `chain_9_organs()` 输出的 `OrganChainOutputs` (orchestrator 步骤 2 真存).
+    /// - 提取 `chain.e7` 若为 `OrganOutput::Emergence { gate: Some(...), .. }` → 返 `Some(gate)`.
+    /// - 边界:
+    ///   - `chain.e7` 为 `OrganOutput::NotImplemented { organ: E7, .. }` (Mock organ / 0 装 E7) →
+    ///     返 `None` (orchestrator 不假装"有 gate"). `check_8_gates()` 不返 RhythmXxx.
+    ///   - `chain.e7` 为 `OrganOutput::Emergence { gate: None, .. }` (E7 spoke=true 时)
+    ///     → 返 `None` (per EmergenceLoop::tick 末尾 self.last_hold = None, emergence.rs:679).
+    ///   - `chain.e7` 为其他 variant → 返 `None` (0 装诚实, 不假装).
+    pub fn extract_e7_gate(&self, chain: &OrganChainOutputs) -> Option<InitiativeGate> {
+        let e7_output = chain.e7.as_ref()?;
+        match e7_output {
+            OrganOutput::Emergence { gate, .. } => *gate,
+            OrganOutput::NotImplemented {
+                organ: OrganKind::E7,
+                ..
+            } => None,
+            _ => None,
+        }
+    }
+
+    /// 8 重 gate 真实路径 — 外层统一入口 (per R11 spec §5).
+    ///
+    /// **0 装诚实** (Stage 3 完整化):
     /// - Orchestrator 本地先跑前 3 重短路 (`boundaries.early_gate_block`):
     ///   UserQuiet / QuietHours / DailyLimit.
-    /// - LlmBudget / DepthLow / RhythmUnknown / RhythmVeto / DriveLow 5 重由 E7 organ
-    ///   `OrganOutput::Emergence` 反推 (per v1 `EmergenceLoop::last_hold()` 1:1).
+    /// - LlmBudget + DepthLow 2 重由 Orchestrator 本地校验 (LLM 间隔 + 关系深度).
+    /// - RhythmUnknown / RhythmVeto / DriveLow 3 重由 E7 organ `chain.e7.gate`
+    ///   真实算法给出 (per v1 `EmergenceLoop::last_hold()` 1:1, Stage 3 接入).
     /// - SovereigntyFrozen / EmotionLow / CouncilVeto / PolicyInactive / GateBlock 5 重由
     ///   Orchestrator 上层 (主权闸 / 智囊团 / 5 状态机 / governance) 给出.
     /// - 13 种 InitiativeGate 全部**真实存在** (per R11 spec §5 注 "13 种真实门控").
@@ -901,6 +846,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         initiatives_today: u32,
         at_ms: i64,
         last_initiative_ms: Option<i64>,
+        chain: &OrganChainOutputs,
     ) -> Option<OrganOrchestratorGate> {
         // 主权闸 (per v1 AwakeCompanion::tick 第 1 步)
         if self.sovereignty.lock().is_frozen() {
@@ -921,14 +867,13 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         if depth < self.boundaries.min_depth {
             return Some(OrganOrchestratorGate::DepthLow);
         }
-        // RhythmUnknown / RhythmVeto / DriveLow: 由 E7 organ 真实算法给出 (per
-        // v1 emergence.rs:493-506+ 1:1); Orchestrator 仅持有 schema, 不重新实现算法.
-        // 真生产路径 Orchestrator 调 E7 organ 拿 OrganOutput::Emergence + last_hold
-        // (per R11 spec §5 "E7 emergence.rs 内部 if-else 仍保留, OrganOrchestrator 是
-        // 外层 8 重 gate 统一入口").
-        //
-        // **0 装诚实**: 这 3 重 (RhythmUnknown / RhythmVeto / DriveLow) 真实路径来自
-        // E7 organ; 本地 schema 仅供测试 + spec 验证 (per tests/orchestrator.rs 测试 2).
+        // RhythmUnknown / RhythmVeto / DriveLow 3 重: 从 E7 organ 真算法拿 (Stage 3 完整化).
+        // 真生产路径: chain.e7 = OrganOutput::Emergence { action, spoke, gate: Some(InitiativeGate) }
+        // → orchestrator 拿 InitiativeGate 直接翻译 (alias 后同 enum).
+        // **0 装诚实**: 若 chain.e7 = NotImplemented / Other variant (Mock organ) → skip, 不假装.
+        if let Some(e7_gate) = self.extract_e7_gate(chain) {
+            return Some(e7_gate);
+        }
         None
     }
 
@@ -1053,6 +998,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
             initiatives_today,
             input.at_ms,
             last_initiative_ms,
+            &chain,
         ) {
             self.last_decision = Some(OrchestratorDecision::Held(gate));
             return None;
@@ -1287,8 +1233,9 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         initiatives_today: u32,
         at_ms: i64,
         last_initiative_ms: Option<i64>,
+        chain: &OrganChainOutputs,
     ) -> Option<OrganOrchestratorGate> {
-        self.check_8_gates(minutes, initiatives_today, at_ms, last_initiative_ms)
+        self.check_8_gates(minutes, initiatives_today, at_ms, last_initiative_ms, chain)
     }
 }
 

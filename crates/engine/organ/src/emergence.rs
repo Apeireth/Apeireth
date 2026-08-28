@@ -59,7 +59,16 @@
 use std::collections::{HashSet, VecDeque};
 
 use apeireth_plugin::llm_factory::LlmFactory;
-use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
+use apeireth_plugin::organ::{
+    InitiativeGate, OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
+};
+
+/// Re-export InitiativeGate (canonical 13-variant 在 foundation/plugin 层, per Stage 3 重构).
+///
+/// **0 装诚实**: 不在 engine 层维护副本 (per R12 orchestrator.rs:78-81 0 装诚实标),
+/// 统一从 `apeireth_plugin::organ::InitiativeGate` re-export. emergence.rs 内部使用 + orchestrator
+/// 透过 `OrganOrchestratorGate` alias 引用同一 enum.
+pub use apeireth_plugin::organ::InitiativeGate as _PluginInitiativeGate;
 
 // ============================================
 // v1 数据结构 1:1 翻译 (确定性, 无 LLM)
@@ -414,31 +423,6 @@ pub struct HistoryEntry {
     pub at_ms: i64,
     pub feedback: Feedback,
     pub score: f64,
-}
-
-/// 主动门控原因 (per v1 `InitiativeGate` 1:1, v2 本地副本; legacy `apeireth-companion::presence` 也有定义).
-///
-/// **0 装诚实**: 这是机制层**真实**门控原因 (不是事后解释), 用于观测口 / 留痕.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InitiativeGate {
-    UserQuiet,
-    QuietHours,
-    DailyLimit,
-    LlmBudget,
-    DepthLow,
-    RhythmUnknown,
-    RhythmVeto,
-    DriveLow,
-    /// SovereigntyFrozen (最高优先, 主权熔断) — v2 加, 兼容 AwakeCompanion 主权闸.
-    SovereigntyFrozen,
-    /// EmotionLow (情绪愉悦度低) — v2 加, 兼容 AwakeCompanion 情绪调制.
-    EmotionLow,
-    /// CouncilVeto (智囊团审议拒绝) — v2 加, 兼容 AwakeCompanion 审议.
-    CouncilVeto,
-    /// PolicyInactive (策略不在 Active) — v2 加, 兼容 AwakeCompanion 演化闸.
-    PolicyInactive,
-    /// GateBlock (洋葱门拦下) — v2 加, 兼容 AwakeCompanion 安全闸.
-    GateBlock,
 }
 
 // ============================================
@@ -888,9 +872,18 @@ impl OrganTrait for EmergenceOrgan {
             None => (String::new(), false),
         };
 
+        // Stage 3 完整化: gate = self.last_hold() (per v1 `EmergenceLoop::last_hold()` 1:1).
+        // - 决定开口 (spoke = true) → EmergenceLoop.tick 末尾 self.last_hold = None (per emergence.rs:679).
+        //   但有些路径 last_hold 可能没清零 → 仍真返 Some (例如 DriveLow cold-start probe pass 后)。
+        //   真生产路径: 决定开口也返 None; 此处不假装。
+        // - 拦下 (spoke = false) → last_hold() 返 Some(_)。真生产路径 Orchestrator 拿此 gate 翻译为
+        //   OrganOrchestratorGate (3 重: RhythmUnknown / RhythmVeto / DriveLow)。
+        let gate = self.last_hold();
+
         Ok(OrganOutput::Emergence {
             action: action_label,
             spoke,
+            gate,
         })
     }
 
