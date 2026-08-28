@@ -2,6 +2,11 @@
 
 ## [Unreleased] — v2.0.0-rc.1 release-gate follow-up
 
+- **A 块 OrganOrchestrator 完整化 stage 1 (缺口 D)**: ratify_fresh_policy() 走完整
+  5 状态 transition 链 (per v1 `AwakeCompanion::ratify_fresh_policy` 1:1, v1 走 4 个
+  evolution.transition 调用). 新增 `RatificationChain` struct 留痕 4 transition
+  每步 result (telemetry/audit 用). 0 引新外部 dep, 0 触碰 LOCKED 5 项,
+  `cargo test --workspace --locked` 1726 passed / 0 failed.
 - **RC-10 metadata integrity** (`2214fb01`, upstream `38cc1039`): encrypted
   records now write an APX2 header whose authenticated data binds the format
   version, service/type, physical record index, opaque keyed record-id
