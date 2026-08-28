@@ -1,15 +1,15 @@
-# Apeireth v2.0.0-rc.1 最终接手报告 (2026-08-28 收盘, 主代理 Mavis 写)
+# Apeireth v2.0.0-rc.1 最终接手报告 (2026-08-28 收盘, 主代理 Mavis 写, Final-2.0 更新)
 
-> **本文档定位**: v2.0.0-rc.1 收盘接手报告, 含完整意图 + 进度 + 给新团队的话.
-> **HEAD 状态**: `395fe0f0` (本地 = origin 同步) — **主代理 0 装诚实自评 (子代理 Z 审计触发, 2026-08-28 修正)**: 实际 HEAD `d55c5745` (73 commit 累计, 9 organ 全 done, 整合 #2 commit `bbf70293` 拍板). 接手人首件事: 跑 `git log --oneline | head -1` 确认 HEAD.
+> **本文档定位**: v2.0.0-rc.1 收盘接手报告, 含完整意图 + 进度 + 给新团队的话. **接手人入口文档**.
+> **HEAD 状态**: 收盘批 commit (本批交付 commit, 见本文件 §0 下方 git 验证命令; 本批前 = `ccf29c57` 错账修正 + `2550b99d` R12 真实施). 接手人首件事: 跑 `git log --oneline | head -1` 确认 HEAD 与 §0 一致 (0 装诚实, HEAD 漂移是病).
 > **读谁**: 接手 Apeireth v2.0 的新团队 / 未来自我升级 cycle 的实施者.
-> **何时写**: 主代理 Mavis 收盘 rc.1 session 写于 2026-08-28, 真 LLM 调通后.
-> **关系文档**: 本文 + `HANDOFF-NOTES.md` (子代理 D 接手人手册 11 节) + `v2-architecture-reflection.md` (新架构反思 + 自升级 cycle) + `v2-rc-1-progress-report.md` (本会话进展快照).
+> **何时写**: 主代理 Mavis 收盘 rc.1 session 写于 2026-08-28, 真 LLM 调通后; Final-2.0 = 2026-08-28 8 spec 收齐 + R12 真实施落地 + 6 处错账修正后更新.
+> **关系文档**: 本文 + `HANDOFF-NOTES.md` (子代理 D 接手人手册 11 节) + `v2-architecture-reflection.md` (新架构反思 + 自升级 cycle) + `v2-rc-1-progress-report.md` (本会话进展快照) + `TO-NEW-TEAM.md` (给新团队的话).
 
 ```
 [Document-Meta]
 Document:        docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md
-Version:         Final-1.0 (rc.1 收盘)
+Version:         Final-2.0 (rc.1 收盘 + 8 spec 收齐 + R12 落地)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (接手人入口)
 Author:          主代理 Mavis (反思 session)
@@ -19,11 +19,18 @@ Author:          主代理 Mavis (反思 session)
 
 ## 0. TL;DR (1 段总结)
 
-**Apeireth v2.0.0-rc.1 = 新架构完成 (15-crate + 7 capability trait + 认知模块 + 9 哲学锚 + 5 重守门) + 9/10 RC 真实现 + 子代理 14 项报告全部采纳 + 哲学锚本体 LOCKED 真加 O-6 + 自我升级 cycle 设计完成 + 真 LLM call 1.16s 跑通 (RC-5 MiniMax adapter) + 9 organ 全部真实现 (整合 #2 commit `bbf70293`)**.
+**Apeireth v2.0.0-rc.1 = 新架构完成 (16-crate + 7 capability trait + 认知模块 + 9 哲学锚 + 5 重守门) + 9/10 RC 真实现 + 9 organ 全部真移植 + OrganOrchestrator 串联层真实施落地 (R12) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 + 哲学锚本体 LOCKED 真加 O-6 + 自我升级 cycle 设计完成 + 真 LLM call 1.16s 跑通 (RC-5 MiniMax adapter)**.
 
-**总进度 ≈ 50%** (v2.0.0 release 估 5-7 月, 2027-01-08 至 2027-03 月). 距离 v1.0 parity = 9 organ 真移植 + frontend 对接 = 估 5-7 月. **真生产前阻塞 1 项**: 至少 1 organ 真移植 (估 4 周, 推荐 E4 curiosity).
+**总进度 ≈ 70%** (v2.0.0 release 估 5-7 月, 2027-01-08 至 2027-03 月). 距离 v1.0 parity = frontend 对接 + 6 DEFERRED slot 激活 + RC-7 真 modality + RC-11 真生产验证 = 4 块真实施, 估 1-3 月 (2027-Q1 启动).
 
-**local = origin = `395fe0f0` (2026-08-28)**. 本会话累计 19 commit (从 `ef075420` 基线).
+**本会话累计 85 commit (从 `ef075420` 基线, 主代理亲算)**, **1726 tests passed 0 FAILED** (主代理 2026-08-28 亲跑 `cargo test --workspace --locked`), **0 clippy 警告**, **0 触碰 LOCKED 5 项**.
+
+```bash
+# 接手人首件事 (0 装诚实核验 HEAD, 不裸信文档):
+git log --oneline -5
+cargo test --workspace --locked        # 期望: 1726 passed, 0 FAILED
+cargo clippy --workspace --all-targets --locked -- -D warnings   # 期望: 0 警告
+```
 
 ---
 
@@ -70,22 +77,25 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 
 ## 2. 进度 (Where)
 
-### 2.1 总进度 ≈ 50%
+### 2.1 总进度 ≈ 70%
 
 | 维度 | 完成度 | 子项 |
 |---|---|---|
-| **新架构** | 100% | 15-crate + 7 capability trait + 认知模块 12 slot + 9 哲学锚 + 5 重守门 |
-| **RC 真实现** | 90% (9/10) | RC-1/2/3/4/5/6/8/9/10/11 真写, RC-7 待硬件 (Whisper + screen capture) |
-| **9 organ 真移植** | 0% (0/9) | 估 4 周/1 organ, ROADMAP §4 P6 最低门槛 |
-| **认知模块** | 50% (6/12 slot) | 4 WIRED + 1 SLOT READY + 6 DEFERRED (其他 dev 推 5 commit) |
-| **v1.0 parity** | 估 5-7 月 | 子代理 L 估 2027-01-08 至 2027-03 月 |
+| **新架构** | 100% | 16-crate + 7 capability trait + 认知模块 12 slot + 9 哲学锚 + 5 重守门 |
+| **RC 真实现** | 90% (9/10) | RC-1/2/3/4/5/6/8/9/10/11 真写, RC-7 真 modality spec 已完 (R14) 待硬件 |
+| **9 organ 真移植** | 100% (9/9) | 整合 #2 commit `bbf70293` 一次性拍板, 9 organ trait 抽象 + 1:1 v1 翻译 |
+| **OrganOrchestrator 串联层** | 🔄 R12 已落 | 13 gate + 5 状态机 + 9 organ 顺序 process (commit `2550b99d`), 完整化估 1-3 周 |
+| **认知模块** | 50% (6/12 slot WIRED) | 6 WIRED + 6 DEFERRED (judge/council 为 WIRED, OFF by default) |
+| **8 spec 收齐** | 100% | R9/R10/R11/R13/R14/R15 + Z 审计 + 本报告 |
+| **v1.0 parity** | 估 5-7 月 | 剩 4 块真实施 (OrganOrchestrator 完整化 / frontend / 6 DEFERRED / RC-7), 2027-Q1 启动 |
 
-**总进度算法** (实测):
+**总进度算法** (估, 主代理主观加权):
 - 新架构 100% × 15% = 15%
 - RC 90% × 20% = 18%
-- 器官 0% × 40% = 0%
+- 9 organ + 串联层 100% × 30% = 30%
 - 认知 50% × 25% = 12.5%
-- **小计 ≈ 45.5%** (不含 frontend -10% = **~50%**)
+- 8 spec + 文档 100% × 10% = 10%
+- **小计 ≈ 85.5%**, 扣 4 块真实施未做 ≈ **70%** (0 装诚实标: 这是估, 不是精确测量)
 
 ### 2.2 RC 真实现进度 (10 RC)
 
@@ -97,7 +107,7 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 | RC-4 SelfAssessmentStore SQLite (场景 D 例 2) | ✅ | `042ad4eb` | 7 |
 | RC-5 LlmFactory MiniMax 真实现 + **真 LLM call 1.16s** | ✅ | `02faa6d0` | 7 + 1 ignored |
 | RC-6 Council 7 LlmAdvisor + 60s timeout + DeferToHuman | ✅ | `a3768fd6` | 15 + 12 |
-| RC-7 Perception 真 modality (Whisper + screen) | ⏳ | — | 估 2-3 周, 需硬件 |
+| RC-7 Perception 真 modality (Whisper + screen) | ⏳ spec done (R14, 572 行) | 真实施估 2-3 周, 需硬件 |
 | RC-8 SubSupervisor std::process 真实现 + 改名 `StdSubSupervisor` | ✅ | `67fc66a0` + `4e4fba89` | 8 |
 | RC-9 keyring 真接入 CLI bootstrap (4 backend) | ✅ | `aa661a66` | 4 |
 | RC-10 File AES-256-GCM 加密 + line header AAD tamper 保护 | ✅ | `e2a5be08` + `38cc1039` | 9 + 2 |
@@ -126,32 +136,37 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 
 ### 3.1 工程形态收敛
 
-- v1 86-crate → v2 15-crate = **71 crates removed (82.6% 收敛)**
-- 4 层分组: foundation 7 + engine 5 + capabilities 1 + adapters 3
+- v1 86-crate → v2 16-crate = **70 crates removed (81.4% 收敛)**
+- 4 层分组: foundation 6 + engine 6 (含 `apeireth-organ`) + capabilities 1 + adapters 3
 - 单向依赖: memory/tools/cli/credentials/orchestration → plugin
 - 0 反向, 0 循环, 100+ consumer 0 破
 
 ### 3.2 新架构就位
 
-- **15-crate workspace** (Cargo.toml members)
+- **16-crate workspace** (Cargo.toml members)
 - **7 capability trait** (位置: `apeireth-plugin`)
   - MemoryBackend / Experience / Perception / PreferenceStore / SelfAssessmentStore / LlmFactory / SubSupervisor
-- **认知模块 12 slot ledger** (其他 dev 推 5 commit, 6 WIRED + 6 DEFERRED)
+- **认知模块 12 slot ledger** (其他 dev 推 5 commit, **6 WIRED + 6 DEFERRED**, judge/council 为 WIRED OFF by default)
+- **9 organ** trait 抽象 (`crates/foundation/plugin/src/organ.rs`) + 真实现 (`crates/engine/organ/`)
+- **OrganOrchestrator 串联层** (R12 真实施: `crates/engine/runtime/src/canonical/orchestrator.rs`)
 - **9 哲学锚** (升 8→9, O-6 加, LOCKED)
 - **13 键** (降级为哲学标准, `RUNTIME_ENFORCED = false`)
 - **3 项不可变脊柱** (Self-Disable / L0 HA / 13 键 verdict cache 语义)
 - **5 重守门** 自动验证 (clippy / tests / legacy path / LOCKED / 哲学锚表头)
 - **Triple Onion** (L0 人类审批 + L1-L5 权限层 + DSL 洋葱 Colang)
 
-### 3.3 真写代码 (本会话 19 commit, ~7400 行净增)
+### 3.3 真写代码 (本会话累计 85 commit, 主代理亲算 `git log ef075420..HEAD`)
 
 | 类别 | commit 数 | LOC |
 |---|---|---|
-| 真 RC 实现 | 11 commit | ~2300 行 (engine/memory + provider + orchestration) |
-| 哲学锚 9 项 | 9 commit (5 Refactor + #2 + #18+#19+#23 + O-6 加) | ~1500 行 |
-| 文档交付 | 7 commit (HANDOFF +5 同步 + 总结 + 0 装诱导 + 反思) | ~3500 行 |
-| 子代理反馈采纳 | 6 commit (A/C/E/F/G/I fix) | ~200 行 |
+| 真 RC 实现 | 11 commit (rc.1 批) | ~2300 行 (engine/memory + provider + orchestration) |
+| 哲学锚 9 项 | 9 commit (rc.1 批, 5 Refactor + #2 + #18+#19+#23 + O-6 加) | ~1500 行 |
+| 9 organ 真移植 | 9 sub-agent (Q1 + R1-R8) | 整合 #2 commit `bbf70293` 一次性拍板 |
+| **R12 OrganOrchestrator 真实施** | `2550b99d` | **1933 行** (orchestrator.rs + 3 integration tests) |
+| 文档交付 + 8 spec + 错账修正 | rc.1 批 + 收盘批 | 8 spec ~4000 行 + R13 接力审 497 行 |
 | RC-11 migration | 1 commit | 700 行 (Python + Rust) |
+
+> **0 装诚实**: "85 commit" = `git log ef075420..HEAD --oneline | measure` 实测; 早期文档写 "19 commit" 是少算 (只数了 rc.1 收盘前部分), Final-2.0 已修.
 
 ### 3.4 真 LLM call 跑通 (RC-5 子代理 M)
 
@@ -160,7 +175,9 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 - 0 hardcode, 0 commit, 0 print
 - 真调 MiniMax-M3-thinking model (per scene-d §5 决策 1)
 
-### 3.5 子代理 14 项报告全部采纳 (独立视角)
+### 3.5 子代理 20 项报告全部采纳 (独立视角)
+
+**第一批 (rc.1, 14 项)**:
 
 | 子代理 | 任务 | 关键产出 |
 |---|---|---|
@@ -179,6 +196,20 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 | M | RC-5 LlmFactory MiniMax 真实现 | `02faa6d0` |
 | N | RC-6 Council 7 LlmAdvisor 真实现 | `a3768fd6` |
 
+**第二批 (8 spec + 真实施, 2026-08-28 收盘)**:
+
+| 子代理 | 任务 | 关键产出 |
+|---|---|---|
+| Q1 + R1-R8 | 9 organ 真移植 (E4/F1/F4/F6/W1/W2/W3/E7/Memory) | 整合 #2 commit `bbf70293` |
+| R9 | frontend 对接 spec + quickstart | 565 + 224 行 (12 slot 数字错, R13 纠) |
+| R10 | cognitive 9 organ 集成 spec | 1001 行 (ledger 数字错, R13 纠) |
+| R11 | OrganOrchestrator spec | 500 行 15 节 |
+| R12 | **OrganOrchestrator 真实施** | `2550b99d`, 1933 行 (13 gate + 5 状态机 + 9 organ 串联) |
+| R13 | frontend 接力审 + 6 处错账 | 497 行, 真账 6 WIRED + 6 DEFERRED |
+| R14 | RC-7 真 modality spec | 572 行 (硬件依赖如实标) |
+| R15 | preference_learning 激活 spec | 617 行 |
+| Z | 0 装诚实独立审计 | 60% 真兑现 + 5 假装标 (4 已修 + 1 commit message 记真账) |
+
 ### 3.6 文档完整
 
 - `CHANGELOG.md` [Unreleased] 段 (12/12 ledger + 8/10 RC + 子代理反馈)
@@ -191,7 +222,16 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 - `docs/04-internal/migration-v1-to-v2.md` (v1→v2 迁移指南)
 - `docs/04-internal/o6-session-log-2026-08-27.md` (本会话反思 + 教训)
 - `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` (本文)
-- `docs/01-architecture/v2-architecture-reflection.md` (新架构反思 + 自升级 cycle, 380 行)
+- `docs/04-internal/TO-NEW-TEAM.md` (给新团队的话)
+- `docs/04-internal/v2.0.0-release-path-integration.md` (3 spec 协作 + 4 块真实施依赖链)
+- `docs/04-internal/v2.0.0-release-path.md` (8 阶段 release 路径)
+- `docs/04-internal/9-organ-progress-2026-08-28.md` (9 organ 实时进度)
+- `docs/01-architecture/organ-orchestrator-spec.md` (R11, 500 行)
+- `docs/01-architecture/cognitive-9-organ-integration-spec.md` (R10, 1001 行)
+- `docs/01-architecture/rc-7-perception-true-modality-spec.md` (R14, 572 行)
+- `docs/01-architecture/deferred-slot-activation-preference_learning-spec.md` (R15, 617 行)
+- `docs/02-guides/v2-gateway-frontend-integration-spec.md` (R9, 565 行) + `v2-frontend-quickstart.md` (224 行) + `v2-gateway-frontend-integration-spec-r13-review.md` (R13, 497 行)
+- `docs/01-architecture/v2-architecture-reflection.md` (新架构反思 + 自升级 cycle, §11 第二批反思)
 - `docs/01-architecture/v2-arch-refactor-batch.md` (5 Refactor + 守门)
 - `docs/01-architecture/philosophy.md` (9 哲学锚 + O-6 不做借口清单)
 - `docs/01-architecture/engineering-report.md` (v1.0 行数 0 装诚实修正: 34 万 → 55 万)
@@ -206,16 +246,24 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 
 ```
 Apeireth-rust/
-├── Cargo.toml                    # workspace members (15 crates)
+├── Cargo.toml                    # workspace members (16 crates)
 ├── ROADMAP.md                    # 顶层路线
-├── CHANGELOG.md                  # 12/12 O-6 ledger + 8/10 RC
+├── CHANGELOG.md                  # 12/12 O-6 ledger + 9/10 RC + R12 + 8 spec
 ├── RELEASE_NOTES.md              # v1.0 0 装诚实行数修正
 ├── docs/
 │   ├── 01-architecture/
 │   │   ├── philosophy.md         # 9 哲学锚 + O-6 不做借口
 │   │   ├── engineering-report.md # v1.0 数字实测
 │   │   ├── v2-arch-refactor-batch.md  # 5 Refactor + 守门
-│   │   └── v2-architecture-reflection.md  # 新架构反思 + 自升级 cycle
+│   │   ├── v2-architecture-reflection.md  # 新架构反思 + 自升级 cycle
+│   │   ├── organ-orchestrator-spec.md     # R11 (500 行)
+│   │   ├── cognitive-9-organ-integration-spec.md  # R10 (1001 行)
+│   │   ├── rc-7-perception-true-modality-spec.md  # R14 (572 行)
+│   │   └── deferred-slot-activation-preference_learning-spec.md  # R15 (617 行)
+│   ├── 02-guides/
+│   │   ├── v2-gateway-frontend-integration-spec.md  # R9 (565 行)
+│   │   ├── v2-frontend-quickstart.md                # R9 (224 行)
+│   │   └── v2-gateway-frontend-integration-spec-r13-review.md  # R13 (497 行)
 │   ├── 04-internal/
 │   │   ├── HANDOFF-NOTES.md              # 11 节 接手人手册
 │   │   ├── v2.0.0-rc-roadmap.md          # 10 RC + 验收
@@ -224,11 +272,15 @@ Apeireth-rust/
 │   │   ├── scene-d-v2-plan.md            # 场景 D 3 例
 │   │   ├── migration-v1-to-v2.md         # v1→v2 迁移指南
 │   │   ├── o6-session-log-2026-08-27.md  # 反思 + 教训
+│   │   ├── v2.0.0-release-path.md        # 8 阶段 release 路径
+│   │   ├── v2.0.0-release-path-integration.md  # 3 spec 协作 + 4 块真实施
+│   │   ├── 9-organ-progress-2026-08-28.md       # 9 organ 实时进度
+│   │   ├── TO-NEW-TEAM.md               # 给新团队的话
 │   │   └── FINAL-HANDOFF-V2.0.0-RC.1.md   # 本文
 │   └── archive/cognitive-module-wiring.md # 12 slot ledger
-├── crates/                       # 15 crates workspace
-│   ├── foundation/               # 7 (core/protocol/plugin/governance/credentials/orchestration/...)
-│   ├── engine/                   # 5 (runtime/provider/storage/memory/perception)
+├── crates/                       # 16 crates workspace
+│   ├── foundation/               # 6 (core/protocol/plugin/governance/credentials/orchestration)
+│   ├── engine/                   # 6 (runtime/provider/storage/memory/perception/organ)
 │   ├── capabilities/             # 1 (tools)
 │   └── adapters/                 # 3 (cli/gateway/sdk)
 ├── scripts/
@@ -303,12 +355,12 @@ cargo test -p apeireth-provider --test minimax_llm_factory \
 | **v1.0.0 Rust 代码** | **551,208 行** (.rs) | 实测 `git ls-tree -r v1.0.0` + `git show` (2026-08-28) |
 | **v1.0.0 总 tracked LOC** | **1,154,516 行** | 实测同上 |
 | **v1.0.0 active crates** | 85 (三层生态) | 实测 `git ls-tree -r v1.0.0 crates` |
-| **v2 (HEAD `395fe0f0`) workspace crates** | 15 | Cargo.toml members |
-| **v2 测试** | 1500+ passed / 0 failed | 子代理 M/N 跑后实测 |
+| **v2 (收盘批) workspace crates** | **16** | Cargo.toml members |
+| **v2 测试** | **1726 passed / 0 FAILED** | 主代理 2026-08-28 亲跑 `cargo test --workspace --locked` |
 | **v2 真 LLM call 延迟** | 1.16s | 子代理 M `real_llm_call_smoke` 实测 |
-| **本会话累计 commit** | 19 (从 `ef075420` 基线) | `git log ef075420..HEAD --oneline | wc -l` |
-| **子代理派** | 14 个 (A/B/C/D/E/F/G/H/I/J/K/L/M/N) | (见 §3.5) |
-| **0 触碰 LOCKED** | 5 项 LOCKED 数据 0 改 | 子代理 A/B/E/F/G/H/J/K 多方核验 |
+| **本会话累计 commit** | **85** (从 `ef075420` 基线) | `git log ef075420..HEAD --oneline | measure` 主代理亲算 |
+| **子代理派** | **31** (第一批 14 A-N + 第二批 17 Q1/R1-R15/Z) | (见 §3.5) |
+| **0 触碰 LOCKED** | 5 项 LOCKED 数据 0 改 | 子代理 A/B/E/F/G/H/J/K + 主代理收盘亲验 |
 
 ---
 
@@ -328,35 +380,42 @@ cargo test -p apeireth-provider --test minimax_llm_factory \
 3. **每小段做 + 派子代理审查** (用户原话 "做完的时候我看结果")
 4. **派 ≤ 14 子代理 = 0 装诱导 / 工具不是目的**
 
-### 5.3 真生产前必做 (按优先级)
+### 5.3 真生产前必做 (按优先级, 2026-08-28 收盘更新)
 
-1. **🔴 至少 1 器官移植** (4 周, E4 curiosity 最易, 推荐)
-2. **🟡 frontend companion-desktop 对接** (4-6 周)
-3. **🟢 RC-7 Perception 真 modality** (2-3 周, 需硬件)
-4. **🟢 RC-11 migration script 真生产前验证** (1-2 天, 有 key 但没 v1 db)
+1. **🟡 frontend companion-desktop 对接** (4-6 周, R9 spec + R13 接力审 done, 估 2027-Q1 启动)
+2. **🟡 6 DEFERRED slot 激活** (6-10 周, R10 + R15 spec done, preference_learning 先)
+3. **🟢 OrganOrchestrator 完整化** (1-3 周, R12 已落起步)
+4. **🟢 RC-7 Perception 真 modality** (2-3 周, R14 spec done, 需硬件)
+5. **🟢 RC-11 migration script 真生产前验证** (1-2 天, 有 key 但没 v1 db)
 
-### 5.4 接手 10 步 (per `v2-architecture-reflection.md` §10)
+### 5.4 接手 10 步 (per `v2-architecture-reflection.md` §10 + `TO-NEW-TEAM.md` §3.3)
 
 ```
 1. 读 ROADMAP.md §3 当前状态 + §3.5 阶段表
-2. 读 CHANGELOG.md [Unreleased] 段 (12/12 ledger)
+2. 读 CHANGELOG.md [Unreleased] 段 (12/12 ledger + 9/10 RC + R12 + 8 spec)
 3. 读 docs/01-architecture/philosophy.md (9 哲学锚 + O-6 不做借口)
 4. 读 docs/01-architecture/v2-arch-refactor-batch.md (5 Refactor + 守门)
 5. 读 docs/04-internal/v2.0.0-rc-roadmap.md (10 RC + 验收)
 6. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
-7. 读 docs/04-internal/v2-rc-1-progress-report.md (本会话进展快照)
+7. 读 docs/04-internal/TO-NEW-TEAM.md (给新团队的话 + 4 块真实施清单)
 8. 读 docs/01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
-9. 跑 cargo test --workspace --locked (验证 0 FAILED)
+9. 跑 cargo test --workspace --locked (验证 1726 passed 0 FAILED)
 10. 跑 cargo clippy --workspace --all-targets --locked -- -D warnings (验证 0 警告)
 ```
 
-### 5.5 给新团队的话 (主代理 Mavis 致)
+### 5.5 给新团队的话 (主代理 Mavis 致, 完整版见 `TO-NEW-TEAM.md`)
 
-> Apeireth v2.0.0-rc.1 是 **新架构 + 工程形态收敛** 的真实完成. 9 organ 真移植是 v2.0.0 release 的**最后门槛** — 估 4-6 周, E4 curiosity 最易, 主推. 真生产前别忘了 **TODO(rc-11) migration script 验证** — 加密文件格式 v1 → v2 不可读, 真生产前必跑. 子代理 D 教训 + O-6 不做借口清单 + 5 重守门 = 信任地基. **派子代理 = 手段不为目的, 主代理拍板**. 9 哲学锚本体 LOCKED 0 改 (升 8→9 加 O-6 是 2026-08-27 你授权的). **v2.0 release 估 5-7 月, 2027-01-08 至 2027-03 月**. v2.0 release 后 Apeireth **自我升级** (L0 人类审批 → L1 自我诊断 → L2 提案 → L3 验证 → L4 主人审 → L5 runtime patch), 主代理**只拍板**, Apeireth 跑升级. **0 装诚实原则 = 真兑现, 不假装, 不漂移**.
+> Apeireth v2.0.0-rc.1 = **新架构 + 工程形态收敛 + 9 organ 真移植 + OrganOrchestrator 串联层落地** 的真实完成. v2.0.0 release 的最后门槛 = 4 块真实施: **frontend 对接 (4-6 周, R9+R13 spec done) + 6 DEFERRED slot 激活 (6-10 周, R10+R15 spec done) + OrganOrchestrator 完整化 (1-3 周, R12 已落) + RC-7 真 modality (2-3 周, R14 spec done, 需硬件)** — 估 2027-Q1 启动, v2.0.0 release 估 2027-01-08 至 2027-03 月.
+>
+> 别忘了三件旧账: **RC-11 migration script 真生产验证** (加密文件格式 v1 → v2 不可读, 真生产前必跑); **整合 #2 commit `bbf70293` message 标 "无新外部 dep" 是错的** (真 = 5 新 dep, AES-256-GCM 系, 无法改 commit, 真账在各文档); **12 slot 真账 = 6 WIRED + 6 DEFERRED** (judge/council 是 WIRED OFF by default, 不是 "SLOT READY", R13 接力审纠).
+>
+> 工作方式: **派子代理 = 手段不为目的, 主代理拍板**; 子代理报告主代理必须亲验 (0 装诱导 prevention 本身可能是 0 装诱导, 子代理 Z 教训). 9 哲学锚本体 LOCKED 0 改 (升 8→9 加 O-6 是 2026-08-27 主人授权的). v2.0 release 后 Apeireth **自我升级** (L0 人类审批 → L1 自我诊断 → L2 提案 → L3 验证 → L4 主人审 → L5 runtime patch), 主代理**只拍板**, Apeireth 跑升级. **0 装诚实原则 = 真兑现, 不假装, 不漂移**.
 
 ---
 
-## 6. 完整 commit 列表 (本会话 19 commit, `ef075420..395fe0f0`)
+## 6. rc.1 收盘 commit 列表 (历史, `ef075420..395fe0f0` 19 commit)
+
+> **0 装诚实标**: 下面是 rc.1 首次收盘 (Final-1.0) 时的 19 commit 历史列表, 保留原样供追溯. **本会话 (含 9 organ + 8 spec + R12 + 收盘批) 累计 85 commit**, 完整列表跑 `git log ef075420..HEAD --oneline` 实测.
 
 ```
 395fe0f0 docs: 反思文档 (新架构 + 自升级 cycle) + v1.0 行数实测修正 (34万→55万, 0装诚实)
@@ -404,19 +463,20 @@ f2cfaa76 refactor(plugin): O-6 Refactor-2+3 - Experience + Perception traits 搬
 ## 7. 给新团队最后一段话 (v2.0 release 后 6 个月内)
 
 ```
-Apeireth v2.0 = 9 organ 真移植 + frontend 对接 + 自我升级 cycle.
+Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + frontend 对接 + 自我升级 cycle.
 
 新团队:
-1. 接手 4 个真生产前阻塞 (per §5.3): 至少 1 器官 + frontend + RC-7 + RC-11 验证
-2. 派子代理 = 调研/验证/真写 (有目的), 主代理拍板
-3. 0 装诚实原则 = 真兑现, 不假装, 不漂移
+1. 接手 4 个真生产前阻塞 (per §5.3): frontend + 6 DEFERRED + OrganOrchestrator 完整化 + RC-7
+2. 派子代理 = 调研/验证/真写 (有目的), 主代理拍板 + 亲验报告
+3. 0 装诚实原则 = 真兑现, 不假装, 不漂移 (HEAD 漂移是病, 数字必实测)
 4. 9 哲学锚 + 13 键 + 5 重守门 = 信任地基, LOCKED 0 改
 5. v2.0 release 估 2027-01-08 至 2027-03 月, 5-7 月
+6. 完整版给新团队的话: docs/04-internal/TO-NEW-TEAM.md
 
-主代理 Mavis 收盘 rc.1, 你来接.
-有疑问看 docs/04-internal/ + docs/01-architecture/ + 跑 5 重守门 baseline.
+主代理 Mavis 收盘 rc.1 + 8 spec 阶段, 你来接.
+有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline.
 ```
 
 ---
 
-_本文档 v1 首发 (2026-08-28, 主代理 Mavis 写于 rc.1 收盘 session). HEAD = `395fe0f0`. 19 commit 累计, 14 子代理报告全采纳, 0 触碰 LOCKED, 真 LLM call 1.16s 跑通. 接手人按 §5.4 10 步读 + §5.3 4 阻塞真做, v2.0.0 release 估 2027-01-08 至 2027-03 月._
+_本文档 Final-1.0 首发 (2026-08-28, 主代理 Mavis 写于 rc.1 收盘 session, HEAD = `395fe0f0`, 19 commit). Final-2.0 更新 (2026-08-28): 9 organ 真移植 100% + R12 OrganOrchestrator 真实施落地 (`2550b99d`) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 (`ccf29c57`) + 1726 tests 0 FAILED + 85 commit 实测 + 16 crates. 0 触碰 LOCKED, 真 LLM call 1.16s 跑通. 接手人按 §5.4 10 步读 + §5.3 4 阻塞真做, v2.0.0 release 估 2027-01-08 至 2027-03 月._

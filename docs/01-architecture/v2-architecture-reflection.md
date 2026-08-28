@@ -414,4 +414,39 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 
 ---
 
-_本文档 v1 首发 (2026-08-28, 主代理 Mavis 写于反思 session). 子代理 K 拍板: 哲学锚 O-6 真加 + 子代理 M 真写 RC-5 + 子代理 I 真写 RC-11. 下次反思预计在 v2.0 release 后 (估 2027-01-08) 写升级 cycle 实战回顾._
+## 11. 第二批子代理阶段反思 (R1-R15 + Z, 2026-08-28 收盘)
+
+### 11.1 第二批派了 15 个子代理 (R1-R15 + Z, 9 organ + 8 spec)
+
+| 子代理 | 任务 | 产出 | 是否值得 |
+|---|---|---|---|
+| Q1/R1/R2/R3 | E4/F1/F4/F6 organ 真移植 (确定性 4 件) | commit `4aa54a0a` / `23e48900` / `02f9d537` | ✅ 4 organ 真兑现 |
+| R4/R5/R6/R7/R8 | W1/W2/W3/E7/Memory organ 真移植 (LLM 重 + 状态机) | 整合 #2 commit `bbf70293` | ✅ 5 organ 真兑现 |
+| R9 | frontend 对接 spec + quickstart | 565 + 224 行 | ✅ 但 task brief 估错 12 slot 数字 (R13 纠) |
+| R10 | cognitive 9 organ 集成 spec | 1001 行 | ✅ 但 ledger 数字错 (R13 纠) |
+| R11 | OrganOrchestrator spec | 500 行 15 节 | ✅ |
+| R12 | OrganOrchestrator 真实施 | commit `2550b99d`, 1933 行 | ✅ 真代码不是 spec |
+| R13 | frontend 接力审 + 错账 | 497 行, 6 处错账 | ✅ 找到真账 6 WIRED + 6 DEFERRED |
+| R14 | RC-7 真 modality spec | 572 行 | ✅ 硬件依赖如实标 |
+| R15 | preference_learning 激活 spec | 617 行 | ✅ |
+| Z | 0 装诚实独立审计 | 60% 真兑现 + 5 假装标 | ✅ **最有价值**: 逼出主代理亲做核验 |
+
+### 11.2 第二批教训 (主代理 Mavis 反思)
+
+1. **子代理 spec 数字也会错** — R9/R10 沿用 task brief 的 "4 WIRED + 1 SLOT READY" 旧账, 是 R13 接力审才发现 12 slot 真账 = 6 WIRED + 6 DEFERRED. **教训: 子代理报告必须主代理亲验 ledger, 不能接力传错账.**
+2. **"派子代理是手段不是目的" 的正面样本 = R12** — 只有 R12 是真实施 (1933 行代码), 其余都是 spec/审. spec 再多不推进系统.
+3. **0 装诱导 prevention 本身是 0 装诱导** (Z 独立判断, 本阶段最锋利发现) — 标 "0 装诚实" 不算验证, 主代理亲跑 `cargo test` / `git log` / `git diff` 才算.
+4. **HEAD 漂移是反复犯的错** — FINAL-HANDOFF 曾标 `395fe0f0` 实际 `d55c5745`, 9-organ-progress 曾标 `02f9d537` 实际 `bbf70293`. **教训: 文档 HEAD 一律写 "见 FINAL-HANDOFF §0" 或收盘批 commit, 不再裸写 hash.**
+
+### 11.3 本阶段收盘真账 (2026-08-28)
+
+- 8 spec 收齐 (R9/R10/R11/R13/R14/R15 + Z + 本报告)
+- R12 OrganOrchestrator 真实施落地 (13 gate + 5 状态机 + 9 organ 串联, 3 integration tests)
+- 6 处错账修正 (commit `ccf29c57`, 主代理亲做)
+- **1726 passed 0 FAILED / 0 clippy 警告 / 0 触碰 LOCKED 5 项**
+- 本会话累计 85 commit (从 `ef075420` 基线, 主代理亲算)
+- 给新团队的话: `docs/04-internal/TO-NEW-TEAM.md`
+
+---
+
+_本文档 v1 首发 (2026-08-28, 主代理 Mavis 写于反思 session). 子代理 K 拍板: 哲学锚 O-6 真加 + 子代理 M 真写 RC-5 + 子代理 I 真写 RC-11. 2026-08-28 收盘补 §11 (第二批 R1-R15 + Z 反思). 下次反思预计在 v2.0 release 后 (估 2027-01-08) 写升级 cycle 实战回顾._
