@@ -255,7 +255,6 @@ Status:          📊 历史进展快照；当前状态见覆盖说明
 
 ---
 
-<<<<<<< HEAD
 ## 12. 子代理 I 报告 (RC-11 真写完成, 2026-08-27)
 
 子代理 I 真兑现 `scripts/migrate_v1_to_v2_encrypted.py` 真生产前必写项 — 不再是 TODO 承诺.
