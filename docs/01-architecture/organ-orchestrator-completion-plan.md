@@ -203,11 +203,11 @@ grep "version" Cargo.toml | head -5  # workspace.version = "1.2.0" 0 改
 
 | Stage | 缺口 | Commit | Tests | Clippy | 备注 |
 |---|---|---|---|---|---|
-| 1 | D | `fc159288` (主代理亲做, 0 装诚实真账) | 1726 passed / 0 failed | 0 警告 | ✅ done (push to `fc159288`); + RatificationChain struct + ratify_fresh_policy() 4 transition 走链 |
-| 2 | B | TBD | TBD | TBD | TBD |
-| 3 | A | TBD | TBD | TBD | TBD |
-| 4 | C | TBD | TBD | TBD | TBD |
-| 5 | E | TBD | TBD | TBD | TBD |
+| 1 | D | `fc159288` (主代理亲做) | 1726 passed / 0 failed | 0 警告 | ✅ done (pushed); + RatificationChain struct + ratify_fresh_policy() 4 transition 走链 |
+| 2 | B | `ea9aa14f` (主代理亲做) | 1727 passed / 0 failed (+1 new) | 0 警告 | ✅ done (pushed); + extract_emotion_mood() + tick 步骤 3 真路径 |
+| 3 | A | `ed6353f4` (主代理亲做) | 1728 passed / 0 failed (+1 new) | 0 警告 | ✅ done (pushed); + InitiativeGate 移 plugin + OrganOutput::Emergence.gate + extract_e7_gate() |
+| 4 | C | `1972b040` (主代理亲做) | 1729 passed / 0 failed (+1 new) | 0 警告 | ✅ done (pushed); + CouncilInvoker 参数 + MockCouncilInvoker + decide_with_invoker |
+| 5 | E | TBD | 1739 passed / 0 failed (+10 new) | 0 警告 | TBD (commit 后填) |
 
 ---
 

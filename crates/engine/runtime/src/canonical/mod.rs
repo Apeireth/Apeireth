@@ -37,6 +37,10 @@ pub mod module;
 // - 0 引新外部 dep (Cargo.lock 0 行 diff).
 pub mod orchestrator;
 pub mod production;
+// L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
+// **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
+// L1 接 SelfAssessmentStore. 主人 Veto dashboard 留 v2.0.0 release 接入.
+pub mod upgrade_cycle;
 pub mod provider;
 pub mod runtime;
 pub mod session;
