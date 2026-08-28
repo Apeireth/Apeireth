@@ -54,8 +54,9 @@ Author:          主代理 Mavis
 
 | 文件 | 用途 | 落地 commit |
 |---|---|---|
-| `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` | **唯一接手入口**: 意图 + 进度 + 数字真账 + 给新团队的话 (Final-2.0) | `bbbfb75b` (amend 后) |
-| `docs/04-internal/TO-NEW-TEAM.md` | **本文**: 给新团队的话 + 文件地图 + 工作流 | `bbbfb75b` (amend 后) |
+| `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` | **唯一接手入口**: 意图 + 进度 + 数字真账 + 给新团队的话 (Final-2.1, A 块后) | `6f9c3dee` |
+| `docs/04-internal/TO-NEW-TEAM.md` | **本文**: 给新团队的话 + 文件地图 + 工作流 | `6f9c3dee` |
+| `docs/04-internal/ENGINEER-MANIFESTO.md` | **工程师团队 reference 手册** (14 章, 9 哲学锚 + 13 键 + 5 重守门 + O-6 三阶审查 + 派子代理 + force push + 8 真实陷阱, 改 src / 改 doc / 派子代理 前必读) | `6f9c3dee` |
 | `docs/04-internal/HANDOFF-NOTES.md` | 子代理 D 接手人手册 11 节 (逐项检查清单) | `0ec9ccae` |
 | `docs/04-internal/v2.0.0-rc-roadmap.md` | 10 RC + 验收标准 + 接手人清单 | 早期 |
 | `docs/01-architecture/organ-orchestrator-completion-plan.md` | **A 块 5 stage 计划 + O-6 复盘 §7** (新增, A 块完整化真账) | `434dc0a5` |

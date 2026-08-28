@@ -393,16 +393,16 @@ cargo test -p apeireth-provider --test minimax_llm_factory \
 ```
 1. 读 ROADMAP.md §3 当前状态 + §3.5 阶段表 + §3.6 A 块完成真账
 2. 读 CHANGELOG.md [Unreleased] 段 (12/12 ledger + 9/10 RC + R12 + 8 spec + A 块 5 stage + O-6 复盘 amend)
-3. 读 docs/01-architecture/philosophy.md (9 哲学锚 + O-6 不做借口)
-4. 读 docs/01-architecture/v2-arch-refactor-batch.md (5 Refactor + 守门)
-5. 读 docs/01-architecture/organ-orchestrator-completion-plan.md (A 块 5 stage 计划 + O-6 复盘 §7)
-6. 读 docs/04-internal/A-block-o6-true-account.md (A 块 O-6 0 装诚实复盘 + 修订版 + 后续 commit 标准)
-7. 读 docs/04-internal/v2.0.0-rc-roadmap.md (10 RC + 验收)
-8. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
-9. 读 docs/04-internal/TO-NEW-TEAM.md (给新团队的话 + 3 块真实施清单)
-10. 读 docs/01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
-11. 跑 cargo test --workspace --locked (验证 1739 passed 0 FAILED)
-12. 跑 cargo clippy --workspace --all-targets --locked -- -D warnings (验证 0 警告)
+3. 读 docs/04-internal/ENGINEER-MANIFESTO.md (工程师团队 reference 手册, 9 哲学锚 + 13 键 + 5 重守门 + O-6 三阶审查 + 派子代理 + force push + 8 真实陷阱, 改 src / 改 doc / 派子代理 前必读)
+4. 读 docs/01-architecture/philosophy.md (9 哲学锚 + O-6 不做借口)
+5. 读 docs/01-architecture/v2-arch-refactor-batch.md (5 Refactor + 守门)
+6. 读 docs/01-architecture/organ-orchestrator-completion-plan.md (A 块 5 stage 计划 + O-6 复盘 §7)
+7. 读 docs/04-internal/A-block-o6-true-account.md (A 块 O-6 0 装诚实复盘 + 修订版 + 后续 commit 标准)
+8. 读 docs/04-internal/v2.0.0-rc-roadmap.md (10 RC + 验收)
+9. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
+10. 读 docs/04-internal/TO-NEW-TEAM.md (给新团队的话 + 3 块真实施清单)
+11. 读 docs/01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
+12. 跑 cargo test --workspace --locked (验证 1739 passed 0 FAILED) + cargo clippy --workspace --all-targets --locked -- -D warnings (验证 0 警告)
 ```
 
 ### 5.5 给新团队的话 (主代理 Mavis 致, 完整版见 `TO-NEW-TEAM.md`)

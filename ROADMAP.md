@@ -147,7 +147,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 |---|---|---|
 | 生产路径 governance（已 ✅） | PII/注入/凭据泄漏 3 hook 已装（upstream `873d2857`） | **13 键 verdict cache 已降级为哲学标准**（`RUNTIME_ENFORCED = false`，映射到 5 原则洋葱）；**场景 D 长程 AI 判断待评估**（见 `docs/04-internal/scene-d-v2-plan.md`）|
 | 功能退坡（26 项 Lost Capabilities） | 产品能力暂时不可用 | 按 §4 P3-P7 顺序恢复；legacy/ 保留全部实现 |
-| 文档数字矛盾（v1 era 残留：23,874 vs 23,806；3 vs 5 provider 等） | 误导接手者 | ✅ 文档对账批已统一为 v2 实测值（1476 tests / 15 crates / 3 provider canonical）|
+| 文档数字矛盾（v1 era 残留：23,874 vs 23,806；3 vs 5 provider 等） | 误导接手者 | ✅ 文档对账批已统一为 v2 实测值（1739 tests / 16 crates / 3 provider canonical / A 块完成 + O-6 复盘 amend 后）; 工程师 reference 手册 `docs/04-internal/ENGINEER-MANIFESTO.md` (14 章, 改 src / 改 doc / 派子代理前必读) |
 | `crates/_archived` 1.4GB 未跟踪构建垃圾 | 本地仓库膨胀 | 可删除（git 历史已含） |
 | 本地 `reconstruction_v2/` 26GB 未跟踪垃圾 | 磁盘占用 | 可删除 |
 
