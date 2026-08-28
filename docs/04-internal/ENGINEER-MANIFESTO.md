@@ -138,6 +138,28 @@ git status                                             # 期望: clean 或仅 .h
 
 `o6-anchor.yml` 5 守门 = 公共契约. 任何 1 关失败, 你的 commit 不应合入 main.
 
+### 4.5 术语统一表 — "X 重守门" vs "LOCKED 5 项" (避免混淆)
+
+**问题**: MANIFESTO + ROADMAP + spec 各处出现 "5 重 / 6 重 / 7 重 / 8 重 / 9 重" 数字混用, 接手工程师易混淆.
+
+**统一术语表**:
+
+| 数字 | 含义 | 位置 | 实测当前值 |
+|---|---|---|---|
+| **5 重** | §4 当前 CI 守门**5 项**检查 (clippy / tests / legacy / LOCKED / 哲学锚) | §4 表 row 1-5 | 5 项 ✓ |
+| **6 重** | R125-5 v6 守门 (5 重 + DSL onion 守门, NVIDIA Guardrails 借鉴) | ROADMAP L165 | 已升 |
+| **7 重** | R126 v7 守门 (6 重 + Colang DSL + Superpowers Skill Guard) | ROADMAP L165 | 已升 |
+| **8 重** | R126 v8 守门 (历史中间态) | docs/archive/ | 已升 |
+| **9 重** | R126 v9 守门 (8 重 + S-3 R126 + O-1 R126) | ROADMAP L165 | 当前 LOCKED |
+| **5 项 LOCKED** | §10 LOCKED 守门**5 项** (哲学锚 / 13 键 / 3 不可变 / workspace.version / R11 baseline) | §10 table | 5 项 ✓ |
+| **9 哲学锚** | 当前 LOCKED 哲学锚数 (6 原版 + S-3 + O-1 + O-6) | §2 / §10 | 9 ✓ |
+
+**关键区分**:
+- **"X 重守门" 数字 = 守门**版本**数** (v5 / v6 / v7 / v8 / v9), 反映历史升级路径. 当前 v9 守门.
+- **"X 项" 数字 = 检查 / 锁定**项**数** (CI 守门 5 项 / LOCKED 5 项 / 9 哲学锚 等), 反映当前状态.
+
+**0 装诚实标**: §4 表头 "5 重守门" 是当前 CI 守门 5 项 (版本无关), 跟 §10 "LOCKED 5 项" 是**不同概念** (CI 守门 5 项 vs LOCKED 守门 5 项), 不要混. "X 重" 数字混用 (5/6/7/8/9) 是历史版本演进, 不是漂移.
+
 ---
 
 ## 5. O-6 永远追求最优 — commit message 三阶审查 (必带)
