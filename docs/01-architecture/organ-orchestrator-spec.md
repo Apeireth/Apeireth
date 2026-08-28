@@ -12,7 +12,7 @@ Document:        docs/01-architecture/organ-orchestrator-spec.md
 Version:         Spec-0.1 (v2.0.0-rc.1+ 待实施)
 Last-Modified:   2026-08-28
 Status:          🟡 待实施 (不假装 "已完成")
-HEAD:            b9026186 (v2.0.0-rc.1)
+HEAD:            7d990297 (Round 6 完). 历史 v2.0.0-rc.1 tag @ 9026186.
 Author:          子代理 R11 (独立判断, 0 装诚实真账)
 ```
 

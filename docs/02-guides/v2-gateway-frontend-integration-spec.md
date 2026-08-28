@@ -1,7 +1,7 @@
 # v2 Gateway Frontend Integration Spec (2026-08-28, 子代理 R9 写, 主代理 Mavis 待审)
 
 > **本文档定位**: v2 canonical gateway ↔ companion-desktop 集成 spec. 真实生产前阻塞 #2 (估 4-6 周, 2027-Q1 启动).
-> **HEAD 状态**: `b9026186` (v2.0.0-rc.1 release tag 拍板).
+> **HEAD 状态**: `7d990297` (Round 6 完). 历史 v2.0.0-rc.1 tag @ `b9026186`.
 > **何时写**: 子代理 R9 在 rc.1 收盘后, 整合 #2 commit 拍板 + 9 organ 全 done 状态下写本 spec (真实施由主代理后续派 sub-agent).
 > **关系文档**: `FINAL-HANDOFF-V2.0.0-RC.1.md` + `v2.0.0-release-path.md` + `cognitive-module-wiring.md` + `frontend-data-contract.md` (历史 v1 companion 契约).
 
@@ -503,7 +503,7 @@ per 子代理 Z 独立审计触发主代理亲做 (`docs/04-internal/FINAL-HANDO
 ### 11.1 9 organ 真兑现 + 1713 tests + 0 clippy + 0 触碰 LOCKED
 
 - 9 organ 真兑现: ✅ 9/9 done (`crates/engine/organ/src/lib.rs:11-32`)
-- workspace tests: ✅ 1713 passed 0 FAILED (per `v2.0.0-release-path.md:26`)
+- workspace tests: ✅ 1713 passed 0 FAILED (子代理 Z 当时实测, per `v2.0.0-release-path.md:26`; A 块后 1739 passed)
 - clippy: ✅ 0 警告
 - LOCKED 5 项: ✅ 0 触碰 (per §10 actionable 验证)
 

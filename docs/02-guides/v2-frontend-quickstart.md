@@ -1,7 +1,7 @@
 # v2 Frontend Quickstart (2026-08-28, 子代理 R9 写, 主代理 Mavis 待审)
 
 > **本文档定位**: companion-desktop 对接 v2 gateway 快速集成指南 (估真生产前 4-6 周实施, 2027-Q1 启动).
-> **HEAD 状态**: `b9026186` (v2.0.0-rc.1 release tag 拍板).
+> **HEAD 状态**: `7d990297` (Round 6 完, A 块 + 4 doc drift fix + SDK 真 bug fix + §8.5 hook + §4.5 术语表). 历史 v2.0.0-rc.1 tag @ `b9026186`.
 > **何时写**: 子代理 R9 在 rc.1 收盘后写本指南 + spec (`v2-gateway-frontend-integration-spec.md`).
 > **关系文档**: `v2-gateway-frontend-integration-spec.md` (本指南的完整契约).
 
