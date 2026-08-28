@@ -37,13 +37,25 @@
   - **0 触碰 LOCKED (5 项)**: 9 哲学锚 / 13 键 / 3 不变脊柱 / workspace.version / R11 baseline
     全 0 改 (子代理 C P0 审查 + 子代理 D 接手人手册核验)
 
-- **✅ O-6 哲学锚 #9 登记 + 12/12 项兑现 (2026-08-27)**:
+- **✅ O-6 哲学锚 #9 登记 + 12/12 项兑现 (2026-08-27, ledger 源 `docs/04-internal/o6-session-log-2026-08-27.md` §1 阶段 3 表)**:
   - 哲学锚升 8→9: 新 `O-6 永远追求最优` 登记 (`docs/01-architecture/philosophy.md`)
   - 锚表达: 总体最优 / 系统最优 / 架构最优 + 三阶审查 (commit message 必含具体回答)
   - 不做借口清单: 工作量大 / 等以后 / alpha 先这样 / v1 时代这样 / 用户没要求 (5 条)
-  - 工程化兑现 (12 项): 5 Refactor (MemoryBackend/Experience/Perception traits → plugin) + core drain 真正重定义 + KeyringCredentialResolver 重命名 + clippy 0 警告 + O-6 5 重守门 workflow + cargo test --doc workflow + 文档位置 + kernel re-export + 统一 error trait
+  - 工程化兑现 (12 项, **commit 序号 → 哲学锚编号 ledger**):
+    | Ledger # | Commit | 描述 |
+    |---|---|---|
+    | 1 | `30d342fa` | Refactor-1 MemoryBackend trait → plugin |
+    | 2 + 3 | `f2cfaa76` | Refactor-2+3 Experience + Perception traits → plugin |
+    | 5 | `ed0a0913` | 真 core drain 完成 (Per 子代理 A 反馈 O-6 #5 决策) |
+    | 7 | `7d48c76e` | Refactor-4 KeyringCredentialResolver 重命名 |
+    | 8 + 9 | `240f3277` | O-6 5 重守门 workflow + cargo test --doc workflow |
+    | 10 + 11 + 12 | `c55e3911` | 文档位置 + kernel re-export + 统一 error trait |
+    | (alpha arch) | `d42d7c1e` | Refactor-5 core drain 真正重定义 (无 O-6 编号, 子代理 ledger 标 "alpha arch") |
+    | **23** | **`38cc1039` (本批)** | **RC-10 line header AAD tamper 保护 (子代理 C 建议 #5 兑现)** |
+    | (撤回) | `ed0a0913` | 哲学锚教训撤回 (子代理 D 撤回, 不上升为永久规则) |
+  - **0 装诚实 ledger 核对** (子代理 D actionable #2 修正): 真兑现 **11 个编号 (1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 23) + 1 个无编号 (alpha arch) = 12 项**. 子代理 B 报告 "23" 是 12 项总编号之和误读. ledger 源 `docs/04-internal/o6-session-log-2026-08-27.md` §1 阶段 3 表.
   - 5 重守门 (`.github/workflows/o6-anchor.yml`): clippy 0 警告 / workspace tests 0 失败 / legacy compat path < 100 引用 / 13 键 LOCKED + 9 哲学锚 + workspace.version + R11 baseline 0 触碰 / 哲学锚表头 0 减
-  - 详见 `docs/01-architecture/v2-arch-refactor-batch.md` + `docs/01-architecture/philosophy.md` §O-6
+  - 详见 `docs/01-architecture/v2-arch-refactor-batch.md` + `docs/01-architecture/philosophy.md` §O-6 + `docs/04-internal/o6-session-log-2026-08-27.md` §1 (ledger 源)
 - **✅ 13 键 verdict cache 降级决策 (P0 拍板完成, 2026-08-27)**:
   - 5 维分析: 安全性 (0 模型污染路径) / 延迟 (6 数量级差, hook 是 O(μs) 而 self-introspection 是 O(seconds)) / 正确性覆盖 (与 hook 少量互补) / 审计 (两者相当) / 场景 D 互补 (已被 SelfAssessmentCache + 多 agent 互审覆盖) → 加权 0.28/5
   - **降级**: 保持 L2 哲学标准 (`philosophy.rs::RUNTIME_ENFORCED = false`), 不接 runtime 强制机制
