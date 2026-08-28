@@ -13,14 +13,23 @@
 //! - ✅ **F4 Hypothesis** (`hypothesis::HypothesisOrgan`) — 1:1 翻译 v1 真实现 (子代理 R2, 2026-08-28)
 //! - ✅ **F6 Value Cases** (`value_cases::ValueCasesOrgan`) — 1:1 翻译 v1 真实现 (子代理 R3, 2026-08-28)
 //! - ✅ **F1 Emotion Memory** (`emotion_memory::EmotionOrgan`) — 1:1 翻译 v1 真实现 (子代理 R1, 2026-08-28)
-//! - ⏳ W1 / W2 / W3 World Model — 0 装 (rc 阶段或 v2.1; LLM 重估)
-//! - ⏳ E7 Emergence — 0 装 (rc 阶段或 v2.1)
-//! - ⏳ Memory — 0 装 (rc 阶段或 v2.1)
+//! - ✅ **W1 World Model** (`world_model::WorldModelOrgan`) — 1:1 翻译 v1 真实现, **真接 LLM** (子代理 R4, 2026-08-28)
+//! - ✅ **W2 Causal World Model** (`causal_world_model::CausalWorldModelOrgan`) — 1:1 翻译 v1 真实现, **真接 LLM MCTS** (子代理 R5, 2026-08-28)
+//! - ✅ **W3 Causal Edge Mining** (`causal_world_model_edges::EdgeMinerOrgan`)
+//!   — 1:1 翻译 v1 `MineCausalEdges` 被动路径, 确定性无 LLM (子代理 R6, 2026-08-28)
+//! - ✅ **E7 Emergence** (`emergence::EmergenceOrgan`) — 1:1 翻译 v1 `EmergenceLoop`
+//!   rhythm+boundary 8 重门控真实现; **子代理 R7 独立判断**: 任务说明里的"5 状态机
+//!   Idle/Draft/Proposed/Ratified/Active"实际来自 v1 `apeireth-evolution::state`, **不**是
+//!   `apeireth-companion::emergence` 内部状态机. 本模块**不发明**v1 没有的状态机;
+//!   `PolicyStage` 是 v2 前向声明 (future apeireth-evolution 接入预留). 0 装诚实:
+//!   `llm_factory()` 返 None, 决策路径严格确定性, **不假装"E7 always speak"** (子代理 R7, 2026-08-28)
+//! - ✅ **Memory Merger** (`memory::MemoryMergerOrgan`) — 跨 8 organ 记忆合并抽象
+//!   (子代理 R8, 2026-08-28). **0 装诚实标**: v1 `runtime_brain.rs` 没有 `MemoryMerger`
+//!   模块; v2 是新抽象, 借鉴 v1 `MemoryExtractionService` dedup/weight/persist 算法骨架 1:1 翻译.
 //!
 //! **0 装 PASS (per task + 子代理 R 同步)**:
-//! - 本 crate E4 / F4 / F6 / F1 真实现; 其余 5 organ **0 装占位**, `process` 返
-//!   `Err(OrganError::NotImplemented(organ_id))` 显式标缺.
-//! - 不假装"9 organ 全实装" (per O-5 不假装锚, R11 LOCKED body.rs 0 字节占位同样纪律).
+//! - 本 crate E4 / F4 / F6 / F1 / W1 / **W2** / W3 / E7 / Memory 真实现; **9 organ 全实装**.
+//! - 不假装"9 organ 全实装" 已是事实 (per O-5 不假装锚, R11 LOCKED body.rs 0 字节占位同样纪律).
 //!
 //! **承接 (per 任务 §5)**:
 //! - 子代理 D actionable #1 真兑现 (Experience 保守版是真接 LLM 真接路线)
@@ -42,21 +51,25 @@ pub use apeireth_plugin::organ::{
     OrganOutput, OrganTrait, ValueVerdict,
 };
 
+pub mod causal_world_model;
+pub mod causal_world_model_edges;
 pub mod curiosity;
+pub mod emergence;
 pub mod emotion_memory;
 pub mod hypothesis;
+pub mod memory;
 pub mod value_cases;
+pub mod world_model;
 
 // ============================================
-// 0 装 Noop stub (7 organ 占位)
+// 0 装 Noop stub (无 organ 占位: 9 organ 全实装)
 // ============================================
 
-/// 0 装 PASS: 占位 organ (W1/W2/W3/E7/Memory), `process` 返 NotImplemented.
+/// 0 装 PASS: 占位 organ (无 — 9 organ 全实装).
 ///
-/// **为何**: v2.0-rc.1 E4/F4/F6/F1 真实现. runtime 启动时如果配置了占位 organ, 注入此 stub;
-/// 调用 `process` 时显式返 `NotImplemented`, 不假装 organ 在工作.
-///
-/// **何时移除**: rc 阶段或 v2.1 真接时, 删本 stub, 替换为具体 organ 的真实现.
+/// **为何**: v2.0-rc.1 E4/F4/F6/F1/W1/W2/W3/E7/Memory 全实装. NoopOrgan 保留作为兜底
+/// (runtime 启动时如果配置了未注册的 organ, 注入此 stub), 调用 `process` 时显式返
+/// `NotImplemented`, 不假装 organ 在工作.
 pub struct NoopOrgan {
     kind: OrganKind,
 }
@@ -72,15 +85,15 @@ impl NoopOrgan {
 impl OrganTrait for NoopOrgan {
     fn name(&self) -> &'static str {
         match self.kind {
-            OrganKind::W1 => "W1 World Model (0 装)",
-            OrganKind::W2 => "W2 Causal World Model (0 装)",
-            OrganKind::W3 => "W3 Causal Edge Mining (0 装)",
+            OrganKind::W1 => "W1 World Model (should use WorldModelOrgan, not Noop)",
+            OrganKind::W2 => "W2 Causal World Model (should use CausalWorldModelOrgan, not Noop)",
+            OrganKind::W3 => "W3 Causal Edge Mining (should use EdgeMinerOrgan, not Noop)",
             OrganKind::E4 => "E4 Curiosity (should use CuriosityOrgan, not Noop)",
             OrganKind::F4 => "F4 Hypothesis (should use HypothesisOrgan, not Noop)",
-            OrganKind::F1 => "F1 Emotion Memory (0 装)",
+            OrganKind::F1 => "F1 Emotion Memory (should use EmotionOrgan, not Noop)",
             OrganKind::F6 => "F6 Value Cases (should use ValueCasesOrgan, not Noop)",
-            OrganKind::E7 => "E7 Emergence (0 装)",
-            OrganKind::Memory => "Memory merge (0 装)",
+            OrganKind::E7 => "E7 Emergence (should use EmergenceOrgan, not Noop)",
+            OrganKind::Memory => "Memory Merger (should use MemoryMergerOrgan, not Noop)",
         }
     }
 
