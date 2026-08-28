@@ -54,7 +54,10 @@ pub use module::{
     ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, ModuleRegistry,
     PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
-pub use production::{CognitiveBackends, CognitiveModuleConfig, ProductionCognitiveModules};
+pub use production::{
+    CognitiveBackends, CognitiveModuleConfig, ProductionCognitiveModules, ProductionModules,
+    ProductionModulesConfig,
+};
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{plugin_ids, Runtime, RuntimeBuilder, RuntimeConfig, DEFAULT_MAX_ROUNDS};
 pub use session::{

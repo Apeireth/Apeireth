@@ -451,6 +451,23 @@ impl From<Vec<Arc<dyn Module>>> for ModuleRegistry {
     }
 }
 
+impl std::ops::Deref for ModuleRegistry {
+    type Target = [Arc<dyn Module>];
+
+    fn deref(&self) -> &Self::Target {
+        &self.modules
+    }
+}
+
+impl<'a> IntoIterator for &'a ModuleRegistry {
+    type Item = &'a Arc<dyn Module>;
+    type IntoIter = std::slice::Iter<'a, Arc<dyn Module>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.modules.iter()
+    }
+}
+
 /// Default maximum number of isolated module provider calls in one turn.
 pub const DEFAULT_MAX_MODULE_INVOCATIONS: usize = 8;
 
