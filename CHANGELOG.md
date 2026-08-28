@@ -2,6 +2,15 @@
 
 ## [Unreleased] — v2.0.0-rc.1 release-gate follow-up
 
+- **A 块 OrganOrchestrator 完整化 stage 3 (缺口 A)**: `check_8_gates()` 接 E7 organ
+  真实 `last_hold()` 路径. 重构: `InitiativeGate` 从 `crates/engine/organ/src/emergence.rs`
+  移到 `crates/foundation/plugin/src/organ.rs` (canonical 13-variant enum), `OrganOutput::Emergence`
+  新增 `gate: Option<InitiativeGate>` 字段, `OrchestratorGate` 改为 alias. 新增
+  `extract_e7_gate()` helper + `check_8_gates()` 加 `&OrganChainOutputs` 参数. Orchestrator
+  从 `chain.e7.gate` 拿 RhythmUnknown/RhythmVeto/DriveLow 3 重真实 gate (per v1
+  `EmergenceLoop::last_hold()` 1:1). 新增 1 集成测试 (7 case: 3 gate 真路径 / None
+  skip / NotImplemented skip / tick RhythmVeto 拦下 / Mock default Spoke). 0 触碰 LOCKED,
+  `cargo test --workspace --locked` 1728 passed / 0 failed.
 - **A 块 OrganOrchestrator 完整化 stage 2 (缺口 B)**: tick 步骤 3 情绪调制真生产路径
   — 从 `chain_9_organs()` 输出的 `chain.f1` 提取 `OrganOutput::Emotion { pleasure, .. }`
   → 算 mood = (pleasure + 1.0) / 2.0 (per v1 organs.rs:109). 新增 `extract_emotion_mood()`

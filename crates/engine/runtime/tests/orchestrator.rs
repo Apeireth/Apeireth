@@ -130,6 +130,66 @@ fn build_orchestrator_with_f1_pleasure(
     )
 }
 
+/// E7 emergence organ mock — 返 `OrganOutput::Emergence` with configurable gate (Stage 3 测试).
+struct E7GateMock {
+    gate: Option<apeireth_plugin::organ::InitiativeGate>,
+}
+
+#[async_trait::async_trait]
+impl OrganTrait for E7GateMock {
+    fn name(&self) -> &'static str {
+        "E7GateMock"
+    }
+    fn organ_id(&self) -> OrganKind {
+        OrganKind::E7
+    }
+    async fn process(&self, _input: OrganInput) -> Result<OrganOutput, OrganError> {
+        Ok(OrganOutput::Emergence {
+            action: String::new(),
+            spoke: false,
+            gate: self.gate,
+        })
+    }
+}
+
+/// 构造带可配置 E7 gate 的 orchestrator (Stage 3 测试 helper)
+fn build_orchestrator_with_e7_gate(
+    gate: Option<apeireth_plugin::organ::InitiativeGate>,
+) -> OrganOrchestrator<LocalOrchestratorRelationship> {
+    let organ_e4: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::E4));
+    let organ_f1: Arc<dyn OrganTrait> = Arc::new(F1EmotionMock { pleasure: 0.6 }); // 高 pleasure 跳过 EmotionLow
+    let organ_f4: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::F4));
+    let organ_f6: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::F6));
+    let organ_w1: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::W1));
+    let organ_w2: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::W2));
+    let organ_w3: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::W3));
+    let organ_e7: Arc<dyn OrganTrait> = Arc::new(E7GateMock { gate });
+    let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::Memory));
+
+    let council = Arc::new(Council::default_allow());
+    let sovereignty: Arc<parking_lot::Mutex<dyn SovereigntyGate>> =
+        Arc::new(parking_lot::Mutex::new(LocalSovereignty::default()));
+    let rel = LocalOrchestratorRelationship::new(0.5);
+
+    OrganOrchestrator::new(
+        organ_e4,
+        organ_f1,
+        organ_f4,
+        organ_f6,
+        organ_w1,
+        organ_w2,
+        organ_w3,
+        organ_e7,
+        organ_memory,
+        council,
+        sovereignty,
+        rel,
+        OrchestratorBoundaries::default(),
+        OrchestratorLoopConfig::default(),
+        clock(),
+    )
+}
+
 fn clock() -> Arc<dyn Clock> {
     Arc::new(VirtualClock::new(
         chrono::Utc
@@ -290,7 +350,7 @@ async fn orchestrator_8_gates_real() {
     {
         let mut orch = build_orchestrator();
         orch.boundaries_mut_for_test().user_quiet = true;
-        let gate = orch.check_8_gates_for_test(720, 0, 0, None);
+        let gate = orch.check_8_gates_for_test(720, 0, 0, None, &OrganChainOutputs::default());
         assert_eq!(
             gate,
             Some(OrganOrchestratorGate::UserQuiet),
@@ -303,7 +363,7 @@ async fn orchestrator_8_gates_real() {
         let mut orch = build_orchestrator();
         orch.boundaries_mut_for_test().quiet_start_minutes = Some(22 * 60);
         orch.boundaries_mut_for_test().quiet_end_minutes = Some(6 * 60);
-        let gate = orch.check_8_gates_for_test(23 * 60, 0, 0, None);
+        let gate = orch.check_8_gates_for_test(23 * 60, 0, 0, None, &OrganChainOutputs::default());
         assert_eq!(
             gate,
             Some(OrganOrchestratorGate::QuietHours),
@@ -314,7 +374,7 @@ async fn orchestrator_8_gates_real() {
     // daily_limit
     {
         let orch = build_orchestrator();
-        let gate = orch.check_8_gates_for_test(720, 5, 0, None);
+        let gate = orch.check_8_gates_for_test(720, 5, 0, None, &OrganChainOutputs::default());
         assert_eq!(
             gate,
             Some(OrganOrchestratorGate::DailyLimit),
@@ -327,7 +387,7 @@ async fn orchestrator_8_gates_real() {
         let orch = build_orchestrator();
         // last_initiative_ms = 1000, at_ms = 1100, min_llm_interval_ms = 60_000 (default)
         // diff = 100 < 60_000 → LlmBudget 触发
-        let gate = orch.check_8_gates_for_test(720, 0, 1100, Some(1000));
+        let gate = orch.check_8_gates_for_test(720, 0, 1100, Some(1000), &OrganChainOutputs::default());
         assert_eq!(
             gate,
             Some(OrganOrchestratorGate::LlmBudget),
@@ -339,7 +399,7 @@ async fn orchestrator_8_gates_real() {
     {
         let mut orch = build_orchestrator();
         orch.relationship_mut_for_test().adjust(-1.0); // depth → 0.0
-        let gate = orch.check_8_gates_for_test(720, 0, 0, None);
+        let gate = orch.check_8_gates_for_test(720, 0, 0, None, &OrganChainOutputs::default());
         assert_eq!(
             gate,
             Some(OrganOrchestratorGate::DepthLow),
@@ -355,7 +415,7 @@ async fn orchestrator_8_gates_real() {
                 local_sovereignty.freeze();
             }
         }
-        let gate = orch.check_8_gates_for_test(720, 0, 0, None);
+        let gate = orch.check_8_gates_for_test(720, 0, 0, None, &OrganChainOutputs::default());
         assert_eq!(
             gate,
             Some(OrganOrchestratorGate::SovereigntyFrozen),
@@ -366,7 +426,7 @@ async fn orchestrator_8_gates_real() {
     // 默认全 pass (无任何 gate 触发) — 返 None
     {
         let orch = build_orchestrator();
-        let gate = orch.check_8_gates_for_test(720, 0, 1_000_000, Some(0));
+        let gate = orch.check_8_gates_for_test(720, 0, 1_000_000, Some(0), &OrganChainOutputs::default());
         assert_eq!(gate, None, "默认 8 重 gate 全 pass");
     }
 }
@@ -617,6 +677,135 @@ async fn orchestrator_step3_f1_emotion_real() {
         assert_eq!(outcome.action_label, "问候");
         assert!(matches!(
             orch_high.last_decision(),
+            Some(apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Spoke { .. })
+        ));
+    }
+}
+
+// ============================================
+// 测试 5: orchestrator_check_8_gates_e7_real (Stage 3 完整化)
+// ============================================
+
+/// check_8_gates() 接 E7 organ 真 gate (per v1 `EmergenceLoop::last_hold()` 1:1).
+///
+/// 验证:
+/// - E7 organ 返 `OrganOutput::Emergence { gate: Some(InitiativeGate::RhythmUnknown), .. }`
+///   → `extract_e7_gate()` 返 `Some(RhythmUnknown)`, `check_8_gates()` 返 `Some(RhythmUnknown)`.
+/// - 同理 RhythmVeto / DriveLow 3 重都从 E7 chain 真实拿.
+/// - E7 organ 返 `NotImplemented` (Mock) → `extract_e7_gate()` 返 None, `check_8_gates()` 不返 RhythmXxx.
+/// - tick() 真实路径: E7 gate = RhythmVeto → tick 返 None + last_decision = Held(RhythmVeto)
+#[tokio::test]
+async fn orchestrator_check_8_gates_e7_real() {
+    use apeireth_plugin::organ::InitiativeGate;
+    use apeireth_runtime::canonical::orchestrator::OrganChainOutputs;
+    use apeireth_plugin::organ::OrganOutput;
+
+    // Case 1: E7 organ 返 RhythmUnknown → extract_e7_gate 返 Some → check_8_gates 返 RhythmUnknown
+    {
+        let orch = build_orchestrator_with_e7_gate(Some(InitiativeGate::RhythmUnknown));
+        let organ_input = OrganInput::new(make_episode(), vec![]);
+        let chain: OrganChainOutputs = orch.chain_9_organs(organ_input).await;
+        let gate = orch.extract_e7_gate(&chain);
+        assert_eq!(
+            gate,
+            Some(InitiativeGate::RhythmUnknown),
+            "extract_e7_gate 应 = RhythmUnknown"
+        );
+        let check = orch.check_8_gates_for_test(720, 0, 0, None, &chain);
+        assert_eq!(
+            check,
+            Some(OrganOrchestratorGate::RhythmUnknown),
+            "check_8_gates 应从 e7.gate 返 RhythmUnknown"
+        );
+    }
+
+    // Case 2: E7 organ 返 RhythmVeto → check_8_gates 返 RhythmVeto
+    {
+        let orch = build_orchestrator_with_e7_gate(Some(InitiativeGate::RhythmVeto));
+        let organ_input = OrganInput::new(make_episode(), vec![]);
+        let chain: OrganChainOutputs = orch.chain_9_organs(organ_input).await;
+        let check = orch.check_8_gates_for_test(720, 0, 0, None, &chain);
+        assert_eq!(check, Some(OrganOrchestratorGate::RhythmVeto));
+    }
+
+    // Case 3: E7 organ 返 DriveLow → check_8_gates 返 DriveLow
+    {
+        let orch = build_orchestrator_with_e7_gate(Some(InitiativeGate::DriveLow));
+        let organ_input = OrganInput::new(make_episode(), vec![]);
+        let chain: OrganChainOutputs = orch.chain_9_organs(organ_input).await;
+        let check = orch.check_8_gates_for_test(720, 0, 0, None, &chain);
+        assert_eq!(check, Some(OrganOrchestratorGate::DriveLow));
+    }
+
+    // Case 4: E7 organ 返 None gate (spoke=true 路径) → extract 返 None → check_8_gates 不返 RhythmXxx
+    // (其他 5 重 gate 也 pass 默认 → 返 None)
+    {
+        let orch = build_orchestrator_with_e7_gate(None);
+        let organ_input = OrganInput::new(make_episode(), vec![]);
+        let chain: OrganChainOutputs = orch.chain_9_organs(organ_input).await;
+        let gate = orch.extract_e7_gate(&chain);
+        assert!(
+            gate.is_none(),
+            "E7 gate = None (spoke=true) → extract 应 None, got {gate:?}"
+        );
+        let check = orch.check_8_gates_for_test(720, 0, 1_000_000, Some(0), &chain);
+        assert!(
+            check.is_none(),
+            "8 重 gate 全 pass + E7 gate None → check 应 None, got {check:?}"
+        );
+    }
+
+    // Case 5: E7 organ 返 NotImplemented (Mock organ) → extract 返 None → check_8_gates 不返 RhythmXxx
+    {
+        let orch = build_orchestrator(); // 默认 Mock 9 organ, E7 返 NotImplemented
+        let organ_input = OrganInput::new(make_episode(), vec![]);
+        let chain: OrganChainOutputs = orch.chain_9_organs(organ_input).await;
+        // 确认 e7 真是 NotImplemented
+        if let Some(OrganOutput::NotImplemented { organ, .. }) = chain.e7.as_ref() {
+            assert_eq!(*organ, OrganKind::E7);
+        } else {
+            panic!("E7 应返 NotImplemented, got {:?}", chain.e7);
+        }
+        let gate = orch.extract_e7_gate(&chain);
+        assert!(gate.is_none(), "E7 = NotImplemented → extract None");
+    }
+
+    // Case 6: tick() 真实路径 — E7 gate = RhythmVeto → tick 返 None + last_decision = Held(RhythmVeto)
+    // 注意: tick 顺序 = 主权闸 → chain_9_organs + check_8_gates → step 3 emotion → ...
+    // 默认 OrchestratorBoundaries + LoopConfig (无 quiet hours / 不超 daily_limit / 不超 llm_interval /
+    // depth=0.5 > min_depth=0.3). step 3 F1 = high pleasure (0.6), mood=0.8 > 0.3, 通过.
+    // 故 RhythmVeto (E7 真算法) 是唯一拦下原因.
+    {
+        let mut orch_veto = build_orchestrator_with_e7_gate(Some(InitiativeGate::RhythmVeto));
+        let outcome = orch_veto.tick(make_tick_input(1_000_000)).await;
+        assert!(
+            outcome.is_none(),
+            "RhythmVeto gate → tick 应返 None"
+        );
+        assert_eq!(
+            orch_veto.last_decision(),
+            Some(
+                &apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Held(
+                    OrganOrchestratorGate::RhythmVeto
+                )
+            ),
+            "last_decision 应 = Held(RhythmVeto)"
+        );
+    }
+
+    // Case 7: tick() 真实路径 — E7 gate = None + 所有 organ Mock (NotImplemented)
+    // → check_8_gates 不返 RhythmXxx → step 3 F1 = NotImplemented skip → step 4 Council pass →
+    // step 5 Policy Active → step 6 Sovereignty 未熔断 → Spoke
+    // (此 case 类似 orchestrator_5_state_machine_transitions 默认场景, 加 Stage 3 E7 gate 接入验证)
+    {
+        let mut orch = build_orchestrator(); // E7 = NotImplemented, F1 = NotImplemented
+        let outcome = orch.tick(make_tick_input(1_000_000)).await;
+        assert!(
+            outcome.is_some(),
+            "Mock 9 organ + E7 None gate → tick 应正常走完, 返 Some"
+        );
+        assert!(matches!(
+            orch.last_decision(),
             Some(apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Spoke { .. })
         ));
     }

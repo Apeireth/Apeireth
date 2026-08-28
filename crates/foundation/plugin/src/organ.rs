@@ -180,11 +180,114 @@ pub enum OrganOutput {
     /// W1 / W2 / W3 world model: 因果边 / 反事实链
     WorldModel { edges: Vec<CausalEdge>, counterfactual: Vec<String> },
     /// E7 emergence: 主动动作 + 决策留痕
-    Emergence { action: String, spoke: bool },
+    Emergence {
+        action: String,
+        spoke: bool,
+        /// 真实 InitiativeGate 留痕 (per v1 `EmergenceLoop::last_hold()` 1:1, Stage 3 完整化).
+        ///
+        /// **0 装诚实**: 真生产路径 = `EmergenceOrgan::tick()` 完成后 `last_hold()` 真值.
+        /// Orchestrator 外层 8 重 gate (RhythmUnknown / RhythmVeto / DriveLow 3 重) 读此字段.
+        /// Mock organ / 0 装 organ → `None` (Orchestrator 不假装"有 gate").
+        gate: Option<InitiativeGate>,
+    },
     /// Memory: 记忆合并结果
     Memory { notes_added: usize, notes_merged: usize },
     /// 0 装 PASS: 未实现 organ 的占位 variant
     NotImplemented { organ: OrganKind, note: String },
+}
+
+/// 主动门控原因 (per v1 `apeireth-companion::presence::InitiativeGate` 13 种 1:1).
+///
+/// **0 装诚实**:
+/// - 13 种全覆盖: emergence 8 (UserQuiet/QuietHours/DailyLimit/LlmBudget/DepthLow/
+///   RhythmUnknown/RhythmVeto/DriveLow) + organs 5 (SovereigntyFrozen/EmotionLow/
+///   CouncilVeto/PolicyInactive/GateBlock).
+/// - canonical 13-variant 在 foundation 层 (per Stage 3 重构, 替代 `emergence.rs` 本地副本),
+///   `engine/organ/src/emergence.rs` 通过 re-export 复用; Orchestrator 通过 alias 复用.
+/// - OrchestratorGate == InitiativeGate (alias), 避免重复定义 (per R12 orchestrator.rs:78-81
+///   0 装诚实标 + Stage 3 重构).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InitiativeGate {
+    /// 门禁 0: 用户显式「不打扰」(per v1 `emergence.rs:460-463`)
+    UserQuiet,
+    /// 门禁 1: 安静窗口 (per v1 `emergence.rs:464-468` + `Boundaries::in_quiet_window`)
+    QuietHours,
+    /// 门禁 2: 频率上限 (per v1 `emergence.rs:469-473` + `Boundaries.max_initiatives_per_day`)
+    DailyLimit,
+    /// 门禁 2.5: LLM 成本预算 (per v1 `emergence.rs:474-484` + `LoopConfig.min_llm_interval_ms`)
+    LlmBudget,
+    /// 门禁 3: 关系深度不够 (per v1 `emergence.rs:486-489` + `Boundaries.min_depth`)
+    DepthLow,
+    /// 门禁 4: 没有观察天数时不猜测作息 (per v1 `emergence.rs:493-497` + `rhythm.days == 0`)
+    RhythmUnknown,
+    /// 门禁 5: 节奏否决 — 学到的作息说「此刻几乎不可能活跃」(per v1 `emergence.rs:499-503`)
+    RhythmVeto,
+    /// 门禁 6: 驱动不足, 但冷启动探针也未命中 (per v1 `emergence.rs:506+`)
+    DriveLow,
+    /// 主权总闸熔断 (per v1 `organs.rs:91-94` + `sovereignty.is_frozen()`)
+    SovereigntyFrozen,
+    /// 情绪愉悦度低于 mood_floor (per v1 `organs.rs:108-114`)
+    EmotionLow,
+    /// 智囊团审议拒绝 (per v1 `organs.rs:132-135` + `council.deliberate().is_rejected()`)
+    CouncilVeto,
+    /// 策略不在 Active 态 (per v1 `organs.rs:137-141` + `evolution.current.is_active()`)
+    PolicyInactive,
+    /// 洋葱门拦下 (V1 哲学 × V2 权限 × V3 HA, per v1 `organs.rs:142-163`)
+    GateBlock,
+}
+
+impl InitiativeGate {
+    /// 13 种 InitiativeGate 全列 (per R11 spec §5 注: "13 种 InitiativeGate 真实门控,
+    /// emergence 8 + organs 5 = 13").
+    pub const ALL_13: [Self; 13] = [
+        Self::UserQuiet,
+        Self::QuietHours,
+        Self::DailyLimit,
+        Self::LlmBudget,
+        Self::DepthLow,
+        Self::RhythmUnknown,
+        Self::RhythmVeto,
+        Self::DriveLow,
+        Self::SovereigntyFrozen,
+        Self::EmotionLow,
+        Self::CouncilVeto,
+        Self::PolicyInactive,
+        Self::GateBlock,
+    ];
+
+    /// 是否来自 emergence 机制层 8 重 gate (vs organs 上层 5).
+    pub fn is_emergence_gate(&self) -> bool {
+        matches!(
+            self,
+            Self::UserQuiet
+                | Self::QuietHours
+                | Self::DailyLimit
+                | Self::LlmBudget
+                | Self::DepthLow
+                | Self::RhythmUnknown
+                | Self::RhythmVeto
+                | Self::DriveLow
+        )
+    }
+
+    /// stage 名 (snake_case, 给 telemetry 序列化用).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::UserQuiet => "user_quiet",
+            Self::QuietHours => "quiet_hours",
+            Self::DailyLimit => "daily_limit",
+            Self::LlmBudget => "llm_budget",
+            Self::DepthLow => "depth_low",
+            Self::RhythmUnknown => "rhythm_unknown",
+            Self::RhythmVeto => "rhythm_veto",
+            Self::DriveLow => "drive_low",
+            Self::SovereigntyFrozen => "sovereignty_frozen",
+            Self::EmotionLow => "emotion_low",
+            Self::CouncilVeto => "council_veto",
+            Self::PolicyInactive => "policy_inactive",
+            Self::GateBlock => "gate_block",
+        }
+    }
 }
 
 /// v1 curiosity `ExplorationTarget` 1:1 翻译 (per `legacy/donor/apeireth-companion/src/curiosity.rs:64-73`)
