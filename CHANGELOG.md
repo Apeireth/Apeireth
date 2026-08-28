@@ -2,6 +2,20 @@
 
 ## [Unreleased] — v2.0.0-rc.1 release-gate follow-up
 
+- **A 块 OrganOrchestrator 完整化 stage 5 (缺口 E)**: L0-L5 `UpgradeCycle` driver
+  真实施 (per R11 §7 + `v2-architecture-reflection.md` §6). 新文件
+  `crates/engine/runtime/src/canonical/upgrade_cycle.rs` + `tests/upgrade_cycle.rs`:
+  - struct `UpgradeCycle` 持 `Arc<OrganOrchestrator>` + `Arc<dyn GovernanceHook>`
+    + `Arc<dyn SelfAssessmentStore>` + `Arc<dyn TagSuggester>` + `current_version`
+  - `run_full_cycle(proposal)` 6 步串行: L0 哲学锚 (governance 真调) →
+    L1 self_assessment (alignment >= 0.6) → L2 Orchestrator.council_deliberate
+    (Stage 4 真路径) → L3 chain_9_organs → L4 governance 主人 Veto → L5 tag 建议
+  - `CycleStep` enum (Pending/InProgress/Approved/Rejected/Tagged) + `UpgradeCycleResult`
+  - `TagSuggester` trait + `DefaultTagSuggester` (bump patch "1.2.0" → "1.2.1";
+    **0 装诚实**: 不自动跑 `Command::new("git", ...)` 仅返建议字符串, 主人手跑 git tag)
+  - 7 集成测试 + 3 单元测试覆盖 happy path / L1 Rejected / L2 Stop / L0 Deny /
+    layer_outcomes 顺序 / TagSuggester trait object.  0 触碰 LOCKED, 0 引新外部 dep,
+    `cargo test --workspace --locked` 1739 passed / 0 failed (1729 + 10 new).
 - **A 块 OrganOrchestrator 完整化 stage 4 (缺口 C)**: tick 步骤 4 智囊团审议改用
   `Council::decide_with_invoker` 真生产路径 (per cognitive-module-wiring.md:99 10s/advisor
   + 60s 总 timeout + 7 advisor 并行, 返 typed `CouncilResult` 含 `CouncilDecision`
