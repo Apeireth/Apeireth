@@ -38,9 +38,14 @@ and a documented dependency edge.
 
 ## Runtime and process ownership
 
-`apeireth-runtime::canonical::Runtime` owns session lifecycle, governance
-evaluation, provider selection, tool dispatch, continuation, and trace. The
-gateway and CLI only translate their transport inputs and invoke the runtime.
+`apeireth-runtime::canonical::Runtime` is the single user-facing Main Loop and
+minimal microkernel composition root. It owns session lifecycle, governance
+evaluation, provider routing, module lifecycle dispatch, and continuation.
+
+The runtime adopts a unified **Module System** (`apeireth_runtime::Module`):
+- All cognitive capabilities (Memory, Preference, Judge, Council, SelfAssessment, Experience) and tool capabilities (Filesystem, Search, Repo, Shell, Fetch, MCP) are provided through modules.
+- The microkernel remains minimal and pure: it boots with zero modules and can execute plain chat turns without any tool or cognitive overhead.
+- Modules can initiate bounded **SubLoops** (`apeireth_runtime::SubLoopSpawner`) running on private, ephemeral transcripts with explicit capability allowlists, never mutating the main session or emitting direct user chat output.
 
 `apeireth-tools-canonical::process::ProcessExecutor` is the sole process
 execution owner. Its public structured request/result contract and current

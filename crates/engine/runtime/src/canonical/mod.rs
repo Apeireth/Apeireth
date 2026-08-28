@@ -33,6 +33,8 @@ pub mod production;
 pub mod provider;
 pub mod runtime;
 pub mod session;
+pub mod subloop;
+pub mod tool_modules;
 pub mod trace;
 
 pub use approval::{
@@ -49,16 +51,25 @@ pub use cognitive::{
 pub use error::{RuntimeError, RuntimeResult};
 pub use execute::{ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse};
 pub use module::{
-    AgentModule, HookPoint, InvocationContext, InvocationOrigin, ModuleContext, ModuleDirective,
-    ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse,
-    ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH,
-    DEFAULT_MAX_MODULE_INVOCATIONS,
+    AgentModule, HookPoint, InvocationContext, InvocationOrigin, Module, ModuleContext,
+    ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
+    ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, ModuleRegistry,
+    PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
-pub use production::{CognitiveBackends, CognitiveModuleConfig, ProductionCognitiveModules};
+pub use production::{
+    CognitiveBackends, CognitiveModuleConfig, ProductionBackends, ProductionCognitiveModules,
+    ProductionModules, ProductionModulesConfig,
+};
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{plugin_ids, Runtime, RuntimeBuilder, RuntimeConfig, DEFAULT_MAX_ROUNDS};
 pub use session::{
     InMemorySessionStore, Session, SessionEvent, SessionEventKind, SessionManager, SessionStore,
     SqliteSessionStore,
+};
+pub use subloop::{
+    RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
+};
+pub use tool_modules::{
+    FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
 };
 pub use trace::{ExecutionTrace, TraceEntry, TraceEvent};

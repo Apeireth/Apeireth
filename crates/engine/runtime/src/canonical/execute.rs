@@ -61,10 +61,11 @@ use super::approval::{
 use super::error::{RuntimeError, RuntimeResult};
 use super::module::{
     HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleOutcome, ModuleTurnState,
-    PromptOverlay, RuntimeModuleInvoker,
+    PromptOverlay,
 };
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
+use super::subloop::RuntimeSubLoopSpawner;
 use super::trace::{ExecutionTrace, TraceEvent};
 
 /// One turn's input.
@@ -345,7 +346,7 @@ impl Runtime {
             }
         };
 
-        let tools = self.plugins.tool_declarations();
+        let tools = self.tool_declarations();
         let continuation =
             FrozenTurnContinuation::start_of_round(request_id, trace_id, model.clone(), 1);
 
@@ -564,7 +565,7 @@ impl Runtime {
                     }
                 }
 
-                let tools = self.plugins.tool_declarations();
+                let tools = self.tool_declarations();
                 let mut trace =
                     ExecutionTrace::new(approval.trace_id, session_id, approval.request_id);
                 trace.record(
@@ -626,7 +627,7 @@ impl Runtime {
                 continuation.approved_tool_index = Some(continuation.next_tool_index);
                 continuation.approved_approval_id = Some(approval_id);
 
-                let tools = self.plugins.tool_declarations();
+                let tools = self.tool_declarations();
                 let mut trace =
                     ExecutionTrace::new(approval.trace_id, session_id, approval.request_id);
                 trace.record(
@@ -1347,6 +1348,7 @@ impl Runtime {
             .run_hook(
                 hook,
                 session_id,
+                trace_id,
                 invocation,
                 model,
                 messages,
@@ -1379,6 +1381,7 @@ impl Runtime {
         &self,
         hook: HookPoint,
         session_id: &SessionId,
+        trace_id: TraceId,
         invocation: &InvocationContext,
         model: &str,
         messages: &[NormalizedMessage],
@@ -1389,10 +1392,15 @@ impl Runtime {
         module_state: &Arc<ModuleTurnState>,
     ) -> RuntimeResult<HookEffects> {
         let mut effects = HookEffects::default();
+        let active_tools = self.tools();
         for module in &self.modules {
             let manifest = module.manifest();
-            let invoker = RuntimeModuleInvoker::new(
+            let spawner = RuntimeSubLoopSpawner::new(
                 &self.providers,
+                active_tools.clone(),
+                self.governance.as_ref(),
+                *session_id,
+                trace_id,
                 model,
                 &manifest.id,
                 Arc::clone(module_state),
@@ -1408,7 +1416,8 @@ impl Runtime {
                 invocation,
                 module_id: &manifest.id,
                 error,
-                invoker: &invoker,
+                invoker: &spawner,
+                subloop: &spawner,
             };
             let outcome =
                 module
@@ -1507,6 +1516,7 @@ impl Runtime {
             .run_hook(
                 HookPoint::OnError,
                 &request.session,
+                TraceId::new(),
                 &invocation,
                 &model,
                 &messages,
@@ -1640,9 +1650,12 @@ impl Runtime {
     ) -> RuntimeResult<ToolDispatch> {
         let clock = self.clock.as_ref();
 
-        let Some(tool) = self.plugins.tool_by_name(&call.name) else {
+        let Some(tool) = self
+            .modules
+            .find_tool_by_name(&call.name)
+            .or_else(|| self.plugins.tool_by_name(&call.name))
+        else {
             let available = self
-                .plugins
                 .tool_declarations()
                 .iter()
                 .map(|t| t.name.clone())
