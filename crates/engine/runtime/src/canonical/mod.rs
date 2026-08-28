@@ -29,6 +29,13 @@ pub mod cognitive;
 pub mod error;
 pub mod execute;
 pub mod module;
+// OrganOrchestrator 类似 v1 AwakeCompanion 真实施 (per R11 spec + 子代理 R12 真实施).
+// **0 装诚实真账 (子代理 R12 独立判断)**:
+// - 本 module 是 spec 部分真实施 (估 30-45 分钟), 完整 1-3 周估待 (per R11 §8.4).
+// - 9 organ process 串联 + 8 重 gate 真实存在 + 5 状态机 forward-declared + L0-L5 骨架.
+// - 0 触碰 cognitive.rs 12 slot (LOCKED, 子代理 K 核验).
+// - 0 引新外部 dep (Cargo.lock 0 行 diff).
+pub mod orchestrator;
 pub mod production;
 pub mod provider;
 pub mod runtime;
