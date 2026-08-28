@@ -23,8 +23,8 @@
 //! **v1 compat**: 100+ consumer 0 破 (trait 是新增)
 
 use apeireth_core::kernel::SessionId;
-use apeireth_plugin::preference::{PreferenceStore, UserPreference};
 use apeireth_plugin::memory_backend::CapabilityResult;
+use apeireth_plugin::preference::{PreferenceStore, UserPreference};
 
 /// 0 装 PASS (v2.0 alpha): NoopPreferenceStore
 /// 不持久化偏好, 返 Ok / 空 Vec. 真 SQLite impl 在 v2.0.0-rc RC-3.
@@ -58,10 +58,7 @@ impl PreferenceStore for NoopPreferenceStore {
         Ok(())
     }
 
-    fn list_for_session(
-        &self,
-        _session_id: &SessionId,
-    ) -> CapabilityResult<Vec<UserPreference>> {
+    fn list_for_session(&self, _session_id: &SessionId) -> CapabilityResult<Vec<UserPreference>> {
         // 0 装: 永返空
         Ok(Vec::new())
     }
@@ -95,8 +92,13 @@ mod tests {
         assert!(result.is_ok());
 
         // 0 装: 再 recall 应该返空 (没存)
-        let recalled = store.recall_for_context(&sid, "language preference", 10).unwrap();
-        assert!(recalled.is_empty(), "NoopPreferenceStore 不持久化, 应当 recall 空");
+        let recalled = store
+            .recall_for_context(&sid, "language preference", 10)
+            .unwrap();
+        assert!(
+            recalled.is_empty(),
+            "NoopPreferenceStore 不持久化, 应当 recall 空"
+        );
     }
 
     /// 0 装 PASS: NoopPreferenceStore::recall_for_context 永返空

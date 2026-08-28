@@ -34,8 +34,8 @@
 use std::sync::Arc;
 
 use apeireth_core::kernel::SessionId;
-use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 pub mod council;
 pub mod llm;
@@ -107,10 +107,7 @@ pub enum CouncilVerdict {
     /// 通过 (多数 Allow, 无强反对)
     Approved,
     /// 拒绝 (含按住: 30% Advisor 反对 / 一致反对)
-    Vetoed {
-        by: AdvisorKind,
-        reason: String,
-    },
+    Vetoed { by: AdvisorKind, reason: String },
     /// 需人工批准 (v2 治理的 Deny vs RequireApproval 区分, per ROADMAP P0)
     /// 触发条件: 60s 内达不成 consensus (v1 stage4) — RC-6 真兑现
     DeferToHuman { reason: String },

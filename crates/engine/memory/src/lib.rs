@@ -22,7 +22,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
 
-use apeireth_core::{kernel::memory::Episode, kernel::memory::IdentityCard, kernel::memory::Note, kernel::memory::Session};
+use apeireth_core::{
+    kernel::memory::Episode, kernel::memory::IdentityCard, kernel::memory::Note,
+    kernel::memory::Session,
+};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -388,4 +391,3 @@ pub mod experience_store_sqlite;
 pub mod preference_store;
 pub mod preference_store_sqlite;
 pub mod self_assessment_store_sqlite;
-

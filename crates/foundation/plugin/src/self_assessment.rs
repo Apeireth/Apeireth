@@ -25,8 +25,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use apeireth_core::kernel::SessionId;
 use crate::memory_backend::CapabilityResult;
+use apeireth_core::kernel::SessionId;
 
 /// 自我评估结果 (per scene-d §2.2):
 /// alignment (与主人期望对齐度) + quality (输出质量) + deviations (偏差列表, JSON)
@@ -69,11 +69,7 @@ pub trait SelfAssessmentStore: Send + Sync {
 
     /// 查某 task_id 的最近 N 条评估 (按时间升序, 末尾 N 条)
     /// runtime 在每 turn 起始读 5 条, 如果 alignment 最低 < 0.6 → DeviationReport
-    fn recent_for_task(
-        &self,
-        task_id: &str,
-        limit: u32,
-    ) -> CapabilityResult<Vec<SelfAssessment>>;
+    fn recent_for_task(&self, task_id: &str, limit: u32) -> CapabilityResult<Vec<SelfAssessment>>;
 
     /// 查某 task_id 的最近 1 条 alignment (runtime hot-path 快速查)
     /// 0 装 PASS: 真 backend rc 阶段实现, 索引 (task_id, assessed_at) O(log N)

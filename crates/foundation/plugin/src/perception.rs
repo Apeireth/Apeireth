@@ -178,7 +178,10 @@ impl Attention for ThresholdAttention {
 #[derive(Debug)]
 pub enum PerceptionError {
     /// 0 装 PASS: modality 在 v2.0 alpha 不实现 (Voice/Vision/Tactile)
-    NotImplemented { modality: PerceptionModality, when: &'static str },
+    NotImplemented {
+        modality: PerceptionModality,
+        when: &'static str,
+    },
     /// 底层 IO 错 (voice 文件读失败 / screen capture 失败)
     Io(String),
     /// 配置错 (channel name 冲突 / attention 阈值非法)
