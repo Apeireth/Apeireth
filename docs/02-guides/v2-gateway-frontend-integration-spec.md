@@ -255,7 +255,7 @@ per `crates/engine/organ/src/lib.rs:11-32` 9 organ 全 done, 真生产路径通�
 
 **路径**: v2.0.0 release → 真生产反馈 → v2.0.1 patch → `git tag v2.0.1` (per R11 LOCKED release pipeline).
 
-**HEAD 拍板**: `b9026186` (v2.0.0-rc.1 release tag 拍板, per 子代理 R9 必读 #1).
+**HEAD 拍板**: `7d990297` (Round 6 完; 历史 v2.0.0-rc.1 release tag @ `b9026186`, per 子代理 R9 必读 #1).
 
 ---
 
@@ -444,7 +444,7 @@ per `docs/04-internal/v2.0.0-release-path.md:30-36`:
 
 ### 9.1 Git tag 拍板
 
-- ✅ `git tag v2.0.0-rc.1` (HEAD `b9026186`, 已拍板, per 子代理 R9 必读 #1)
+- ✅ `git tag v2.0.0-rc.1` (HEAD `b9026186` 当时, 已拍板, per 子代理 R9 必读 #1; 当前 HEAD `7d990297` Round 6 完)
 - ⏳ `git tag v2.0.0` (frontend 对接后, 估 2027-01-08 至 2027-03 月, per 子代理 L 估)
 
 ### 9.2 真生产前必跑 5 重守门 (per `FINAL-HANDOFF-V2.0.0-RC.1.md:114-121`)
@@ -484,7 +484,7 @@ cargo test -p apeireth-migration --locked                                # Rust 
 
 per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` + 子代理 D handoff + R13 接力审:
 
-- ✅ **#1 RC-5/6/7 + 9 organ 真移植全 done** (HEAD `b9026186` 拍板, 9 organ 真兑现)
+- ✅ **#1 RC-5/6/7 + 9 organ 真移植全 done** (HEAD `b9026186` 当时拍板, 9 organ 真兑现; 当前 HEAD `7d990297` Round 6 完)
 - ✅ **#2 哲学锚 ledger 待核** (9 锚 LOCKED 0 改, O-6 新加, `eight_anchors.rs:58-79` 编译期 hardcode)
 - ✅ **#3 12 consumer 弃用迁移** (100+ consumer 0 破, v1 `apeireth-companion` 在 `legacy/donor/`)
 - ✅ **#4 RC-10 line header AAD + APX2 envelope** (`canonical_entry.rs` runtime 通过 RC-10 真接)
@@ -558,7 +558,7 @@ per 子代理 R9 必读 #1-#11 + 必跑命令 + 必读文档:
 - APX2 envelope: RC-10 commits `e2a5be08` + `38cc1039`
 - RC-11 migration: commits `926465c8` + `483fb4cd` + `615121bd`
 - RC-7 Perception trait: commit `6e918c12`
-- HEAD 拍板: `b9026186` (v2.0.0-rc.1 release tag)
+- HEAD 拍板: `7d990297` (Round 6 完; 历史 v2.0.0-rc.1 release tag @ `b9026186`)
 - 接手报告: `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md`
 - Release 路径: `docs/04-internal/v2.0.0-release-path.md`
 - v1 companion 契约: `docs/02-guides/frontend-data-contract.md` (历史 v1, 待 v2 重对齐)
