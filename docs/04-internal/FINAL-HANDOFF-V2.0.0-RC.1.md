@@ -1,7 +1,7 @@
 # Apeireth v2.0.0-rc.1 最终接手报告 (2026-08-28 收盘, 主代理 Mavis 写, Final-2.1 更新: A 块 OrganOrchestrator 完整化 + O-6 三阶审查 amend)
 
 > **本文档定位**: v2.0.0-rc.1 收盘接手报告, 含完整意图 + 进度 + 给新团队的话. **接手人入口文档**.
-> **HEAD 状态**: 收盘批 commit (本批交付 commit, 见本文件 §0 下方 git 验证命令; 本批前 = `ccf29c57` 错账修正 + `2550b99d` R12 真实施; **本批新 = A 块 5 stage 真实施 amend 后 commits `c003e078` ~ `0afa733f` + 复盘配对 `bbbfb75b`**). 接手人首件事: 跑 `git log --oneline | head -1` 确认 HEAD 与 §0 一致 (0 装诚实, HEAD 漂移是病).
+> **HEAD 状态 (Final-2.1 写时)**: 收盘批 commit `bbbfb75b` (A 块 5 stage amend + 复盘配对). **当前 HEAD (Round 6 完)**: `7d990297`.
 > **读谁**: 接手 Apeireth v2.0 的新团队 / 未来自我升级 cycle 的实施者.
 > **何时写**: 主代理 Mavis 收盘 rc.1 session 写于 2026-08-28, 真 LLM 调通后; Final-2.0 = 2026-08-28 8 spec 收齐 + R12 真实施落地 + 6 处错账修正后更新. **Final-2.1 = 2026-08-28 A 块 OrganOrchestrator 完整化 (5 stage 真实施) + O-6 三阶审查 amend (主代理自检 0 装诚实标修正) 后更新**.
 > **关系文档**: 本文 + `HANDOFF-NOTES.md` (子代理 D 接手人手册 11 节) + `v2-architecture-reflection.md` (新架构反思 + 自升级 cycle) + `v2-rc-1-progress-report.md` (本会话进展快照) + `TO-NEW-TEAM.md` (给新团队的话) + `organ-orchestrator-completion-plan.md` (A 块 5 stage 计划 + O-6 复盘 §7) + `A-block-o6-true-account.md` (A 块 O-6 失守 + amend 配对 commit).
@@ -23,7 +23,7 @@ Author:          主代理 Mavis (反思 session)
 
 **总进度 ≈ 80%** (v2.0.0 release 估 4-6 月, 2027-01-08 至 2027-02 月, 因 A 块 OrganOrchestrator 完整化提前完成). 距离 v1.0 parity = frontend 对接 + 6 DEFERRED slot 激活 + RC-7 真 modality + RC-11 真生产验证 = **3 块真实施** (A 块已 ✅), 估 1-3 月 (2027-Q1 启动).
 
-**本会话累计 85+ commit (从 `ef075420` 基线, 主代理亲算; A 块 5 stage + 复盘配对 amend 后 6 commit)**, **1739 tests passed 0 FAILED** (主代理 2026-08-28 amend 后亲跑 `cargo test --workspace --locked`; 1726 baseline + 13 new A 块), **0 clippy 警告**, **0 触碰 LOCKED 5 项**.
+**本会话累计 85+ commit (从 `ef075420` 基线, 主代理亲算; A 块 5 stage + 复盘配对 amend 后 6 commit)**, **1739 tests passed 0 FAILED** (主代理 2026-08-28 amend 后亲跑 `cargo test --workspace --locked`; 1726 baseline + 13 new A 块; **Round 4-6 后仍 1739 passed / 0 failed**), **0 clippy 警告**, **0 触碰 LOCKED 5 项**.
 
 ```bash
 # 接手人首件事 (0 装诚实核验 HEAD, 不裸信文档):
@@ -356,7 +356,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory \
 | **v1.0.0 总 tracked LOC** | **1,154,516 行** | 实测同上 |
 | **v1.0.0 active crates** | 85 (三层生态) | 实测 `git ls-tree -r v1.0.0 crates` |
 | **v2 (收盘批) workspace crates** | **16** | Cargo.toml members |
-| **v2 测试** | **1726 passed / 0 FAILED** | 主代理 2026-08-28 亲跑 `cargo test --workspace --locked` |
+| **v2 测试** | **1726 passed / 0 FAILED (A 块前; **A 块后 1739 passed**)** | 主代理 2026-08-28 亲跑 `cargo test --workspace --locked` |
 | **v2 真 LLM call 延迟** | 1.16s | 子代理 M `real_llm_call_smoke` 实测 |
 | **本会话累计 commit** | **85** (从 `ef075420` 基线) | `git log ef075420..HEAD --oneline | measure` 主代理亲算 |
 | **子代理派** | **31** (第一批 14 A-N + 第二批 17 Q1/R1-R15/Z) | (见 §3.5) |
@@ -483,4 +483,4 @@ Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + OrganO
 
 ---
 
-_本文档 Final-1.0 首发 (2026-08-28, 主代理 Mavis 写于 rc.1 收盘 session, HEAD = `395fe0f0`, 19 commit). Final-2.0 更新 (2026-08-28): 9 organ 真移植 100% + R12 OrganOrchestrator 真实施落地 (`2550b99d`) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 (`ccf29c57`) + 1726 tests 0 FAILED + 85 commit 实测 + 16 crates. 0 触碰 LOCKED, 真 LLM call 1.16s 跑通. 接手人按 §5.4 10 步读 + §5.3 4 阻塞真做, v2.0.0 release 估 2027-01-08 至 2027-03 月. **Final-2.1 更新 (2026-08-28)**: A 块 OrganOrchestrator 完整化 5 stage 真实施 (amend 后 commits `c003e078` ~ `0afa733f`) + O-6 三阶审查 amend 复盘 (commit `bbbfb75b`); 1739 tests 0 FAILED (1726 baseline + 13 new A 块); 剩 **3 块**真实施 (frontend / 6 DEFERRED / RC-7); v2.0.0 release 估 **2027-01-08 至 2027-02 月, 4-6 月** (因 A 块提前完成, 从 5-7 月缩短为 4-6 月)._
+_本文档 Final-1.0 首发 (2026-08-28, 主代理 Mavis 写于 rc.1 收盘 session, 当时 HEAD = `395fe0f0`, 19 commit; **当前 HEAD (Round 6 完) = `7d990297`**). Final-2.0 更新 (2026-08-28): 9 organ 真移植 100% + R12 OrganOrchestrator 真实施落地 (`2550b99d`) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 (`ccf29c57`) + 1726 tests 0 FAILED + 85 commit 实测 + 16 crates. 0 触碰 LOCKED, 真 LLM call 1.16s 跑通. 接手人按 §5.4 10 步读 + §5.3 4 阻塞真做, v2.0.0 release 估 2027-01-08 至 2027-03 月. **Final-2.1 更新 (2026-08-28)**: A 块 OrganOrchestrator 完整化 5 stage 真实施 (amend 后 commits `c003e078` ~ `0afa733f`) + O-6 三阶审查 amend 复盘 (commit `bbbfb75b`); 1739 tests 0 FAILED (1726 baseline + 13 new A 块); 剩 **3 块**真实施 (frontend / 6 DEFERRED / RC-7); v2.0.0 release 估 **2027-01-08 至 2027-02 月, 4-6 月** (因 A 块提前完成, 从 5-7 月缩短为 4-6 月)._

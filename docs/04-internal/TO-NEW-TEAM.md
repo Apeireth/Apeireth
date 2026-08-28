@@ -1,7 +1,7 @@
 # 给新团队的话 (TO-NEW-TEAM, 主代理 Mavis 写, 2026-08-28 阶段性收盘, v1.2 工程师版 + A 块完整化真账)
 
 > **本文档定位**: v2.0.0-rc.1 阶段收盘时, 主代理给接手新团队 (工程师组成的开发团队) 的话 + **已推送文件地图** + 接手工作流.
-> **HEAD 状态**: A 块完整化 (5 stage amend + O-6 复盘) 全部 push 到 `origin/main` @ `bbbfb75b` (2026-08-28). 接手人先跑 §3 基线验证确认.
+> **HEAD 状态**: Round 6 完 `origin/main` @ `7d990297` (2026-08-28; A 块 + 4 doc drift fix + SDK 真 bug fix + §8.5 hook + §4.5 术语表). 历史: A 块完整化 (5 stage amend + O-6 复盘) 全部 push 到 `bbbfb75b`. 接手人先跑 §3 基线验证确认.
 > **何时写**: 8 spec (R9-R15 + Z 审计) 收齐 + R12 OrganOrchestrator 真实施落地 + 6 处错账修正 + **A 块 OrganOrchestrator 完整化 (5 stage 真实施) + O-6 三阶审查 amend (主代理自检 0 装诚实标修正)**完成, 阶段性告一段落.
 > **关系文档**: `FINAL-HANDOFF-V2.0.0-RC.1.md` (接手报告入口) + `HANDOFF-NOTES.md` (子代理 D 接手人手册) + `v2-architecture-reflection.md` (新架构反思 + 自升级 cycle) + `organ-orchestrator-completion-plan.md` (A 块 5 stage 计划 + O-6 复盘 §7) + `A-block-o6-true-account.md` (A 块 O-6 失守 + amend 配对 commit).
 
@@ -33,7 +33,7 @@ Author:          主代理 Mavis
 | workspace | **16 crates** (foundation 6 + engine 6 + capabilities 1 + adapters 3), 单向依赖, 0 循环 |
 | 架构收敛 | v1 86-crate → v2 16-crate = **81.4% 收敛** |
 | 哲学锚 | **9 项 LOCKED** (S-1/S-2/S-3 + O-1..O-6, O-6 永远追求最优 2026-08-27 主人授权加) |
-| 测试 | **1726 passed, 0 FAILED** (主代理 2026-08-28 亲跑 `cargo test --workspace --locked`) |
+| 测试 (A 块前) | **1726 passed, 0 FAILED** (主代理 2026-08-28 亲跑 `cargo test --workspace --locked` 当时; **A 块后 1739 passed**) |
 | clippy | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |
 | 7 capability trait | MemoryBackend / Experience / Perception / PreferenceStore / SelfAssessmentStore / LlmFactory / SubSupervisor 全真接 |
 | 9 organ | **9/9 真移植** (E4/F1/F4/F6/W1/W2/W3/E7/Memory, 整合 #2 commit `bbf70293`) |
@@ -127,7 +127,7 @@ git fetch origin && git checkout main && git log --oneline -5
 
 # 2. 全量测试
 cargo test --workspace --locked
-#    期望: 1726 passed, 0 FAILED
+#    期望 (A 块前): 1726 passed, 0 FAILED (**A 块后 1739 passed**)
 
 # 3. clippy 0 警告
 cargo clippy --workspace --all-targets --locked -- -D warnings
