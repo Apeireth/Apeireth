@@ -10,10 +10,10 @@
 //!
 //! **v2.0-rc.1 真实现进度** (per 任务"真生产前阻塞 #1: 9 organ 至少 1 真移植"):
 //! - ✅ **E4 Curiosity** (`curiosity::CuriosityOrgan`) — 1:1 翻译 v1 真实现
+//! - ✅ **F4 Hypothesis** (`hypothesis::HypothesisOrgan`) — 1:1 翻译 v1 真实现 (子代理 R2, 2026-08-28)
+//! - ✅ **F6 Value Cases** (`value_cases::ValueCasesOrgan`) — 1:1 翻译 v1 真实现 (子代理 R3, 2026-08-28)
 //! - ⏳ W1 / W2 / W3 World Model — 0 装 (rc 阶段或 v2.1)
-//! - ⏳ F4 Hypothesis — 0 装 (rc 阶段或 v2.1)
-//! - ⏳ F1 Emotion Memory — 0 装 (rc 阶段或 v2.1)
-//! - ⏳ F6 Value Cases — 0 装 (rc 阶段或 v2.1)
+//! - ⏳ F1 Emotion Memory — 0 装 (rc 阶段或 v2.1; 子代理 R1 并行写)
 //! - ⏳ E7 Emergence — 0 装 (rc 阶段或 v2.1)
 //! - ⏳ Memory — 0 装 (rc 阶段或 v2.1)
 //!
@@ -43,14 +43,16 @@ pub use apeireth_plugin::organ::{
 };
 
 pub mod curiosity;
+pub mod hypothesis;
+pub mod value_cases;
 
 // ============================================
-// 0 装 Noop stub (8 organ 占位)
+// 0 装 Noop stub (7 organ 占位)
 // ============================================
 
-/// 0 装 PASS: 占位 organ (W1/W2/W3/F4/F1/F6/E7/Memory), `process` 返 NotImplemented.
+/// 0 装 PASS: 占位 organ (W1/W2/W3/F1/E7/Memory), `process` 返 NotImplemented.
 ///
-/// **为何**: v2.0-rc.1 仅 E4 真实现. runtime 启动时如果配置了占位 organ, 注入此 stub;
+/// **为何**: v2.0-rc.1 E4/F4/F6 真实现. runtime 启动时如果配置了占位 organ, 注入此 stub;
 /// 调用 `process` 时显式返 `NotImplemented`, 不假装 organ 在工作.
 ///
 /// **何时移除**: rc 阶段或 v2.1 真接时, 删本 stub, 替换为具体 organ 的真实现.
@@ -73,9 +75,9 @@ impl OrganTrait for NoopOrgan {
             OrganKind::W2 => "W2 Causal World Model (0 装)",
             OrganKind::W3 => "W3 Causal Edge Mining (0 装)",
             OrganKind::E4 => "E4 Curiosity (should use CuriosityOrgan, not Noop)",
-            OrganKind::F4 => "F4 Hypothesis (0 装)",
+            OrganKind::F4 => "F4 Hypothesis (should use HypothesisOrgan, not Noop)",
             OrganKind::F1 => "F1 Emotion Memory (0 装)",
-            OrganKind::F6 => "F6 Value Cases (0 装)",
+            OrganKind::F6 => "F6 Value Cases (should use ValueCasesOrgan, not Noop)",
             OrganKind::E7 => "E7 Emergence (0 装)",
             OrganKind::Memory => "Memory merge (0 装)",
         }
