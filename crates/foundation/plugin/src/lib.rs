@@ -75,8 +75,8 @@ pub use manifest::PluginManifest;
 // 可用, 避免每个 use 点写 `crate::memory_backend::CapabilityResult`.
 pub use memory_backend::CapabilityResult;
 pub use perception_backend::{
-    AudioBuffer, LangHint, PerceptionBackendError, ScreenshotBytes, TactileState, Transcription,
-    VoiceBackend, WhisperBackend, NoopVoiceBackend,
+    AudioBuffer, LangHint, NoopVoiceBackend, PerceptionBackendError, ScreenshotBytes, TactileState,
+    Transcription, VoiceBackend, WhisperBackend,
 };
 pub use plugin::{Plugin, PluginContext};
 pub use provider::{ProviderCapability, ProviderError};
