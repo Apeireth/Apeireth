@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# commit-msg hook — Apeireth v2.0 (per ENGINEER-MANIFESTO §5 + §8.2 + §8.5)
+# 目的: 强制 commit msg 必含 O-6 三阶审查 关键词 (总体/系统/架构 + 拒 alternatives)
+# 启用: git config core.hooksPath .githooks (per docs/04-internal/ENGINEER-MANIFESTO.md §8.5)
+# 注: amend commit 不触发 (per git 行为, --amend bypass commit-msg hook)
+
+set -e
+
+MSG_FILE="$1"
+MSG=$(cat "$MSG_FILE")
+
+# 检查 1: O-6 三阶审查 必带 3 段 (per §5)
+MISSING=""
+for keyword in "总体最优" "系统最优" "架构最优"; do
+  if ! grep -q "$keyword" <<< "$MSG"; then
+    MISSING="$MISSING $keyword"
+  fi
+done
+if [ -n "$MISSING" ]; then
+  echo "❌ COMMIT-MSG HOOK BLOCK (per §5 + §8.2)"
+  echo ""
+  echo "msg 缺 O-6 三阶审查段:$MISSING"
+  echo ""
+  echo "修法: msg 必含 '总体最优' / '系统最优' / '架构最优' 三段 + 拒 alternatives + 拒理由"
+  echo "模板 (per §8.2):"
+  echo "  - O-6 三阶审查:"
+  echo "    - 总体最优: <改动在大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里是不是最优切入点?>"
+  echo "    - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里改动放在哪一层最合适?>"
+  echo "    - 架构最优: <在 workspace 16-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界是不是最优?>"
+  echo ""
+  echo "如主代理 override (e.g. amend 历史 commit, 真例外 per §8.2), 用 --no-verify:"
+  echo "  git commit --no-verify ..."
+  exit 1
+fi
+
+# 检查 2: 拒 alternatives 必带 (per §5 + §8.2)
+if ! grep -qE "拒方案|拒理由|拒" <<< "$MSG"; then
+  echo "⚠️ WARNING: msg 缺 '拒 alternatives' 描述 (per §5 + §8.2)"
+  echo ""
+  echo "建议: 每段三阶审查后加 '拒方案 A: ... — 拒, ...; 拒方案 B: ... — 拒, ...'"
+  echo "这是 O-6 doctrine 的核心: 永远追求最优 = 列出 alternatives + 选最优 + 拒理由"
+fi
+
+exit 0
