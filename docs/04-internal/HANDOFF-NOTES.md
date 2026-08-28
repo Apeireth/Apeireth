@@ -2,13 +2,13 @@
 
 > **给谁看**：从零接手 v2 工程的新人. 你**不**知道这个项目, 这份文档给你**第一个**上下文.
 > **HEAD**：以 `main` 当前提交为准（本文件随 cognitive module wiring 同步更新）。
-> **状态**：v2.0.0-rc.1 的 RC-1/2/3/4/8/9/10 已落地，RC-11 v1→APX2 migration utility 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root；Orchestrator、真实 provider Council E2E、偏好学习、长程 reflection、非文本 perception 仍明确延期。
+> **状态（2026-08-28）**：RC-1/2/3/4/5/6/8/9/10 已有真实实现或适配，RC-11 v1→APX2 migration utility 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root。MiniMax provider E2E 仍需凭证；Orchestrator、偏好学习、长程 reflection、非文本 perception 仍明确延期。
 
 ```yaml
 [Document-Meta]
 Document:        docs/04-internal/HANDOFF-NOTES.md
 Version:         Handoff-Rev-1.0
-Last-Modified:   2026-08-27
+Last-Modified:   2026-08-28
 Status:          🟢 活跃 (接手人入口)
 ```
 
@@ -50,12 +50,13 @@ Status:          🟢 活跃 (接手人入口)
 | **RC-2** | ✅ 真实现 | Experience trait → SQLite (WikiEntry / KG / Association 全 impl) + RC-8 改名 (子代理 C 反馈) | `4e4fba89` |
 | **RC-3** | ✅ 真实现 | PreferenceStore → SQLite (Noop impl 收, 真 SQL 兑现, 子代理审查修) | `03f5ed71` / `61cc0421` |
 | **RC-4** | ✅ 真实现 | SelfAssessmentStore → SQLite (场景 D 例 2) | `042ad4eb` |
-| **RC-5** | ⏳ 待 LLM key | Orchestrator → LLM harness (LlmFactory trait **已锁** at `crates/foundation/plugin/src/llm_factory.rs:151`, NoopLlmFactory 0 装已就位) | `78ee5d51` / `ca0f48e9` |
-| **RC-6** | ⏳ 待 LLM key | Council → multi-LLM 并行 (DeferToHuman 决策已加, Council trait 已就位) | `ca0f48e9` |
+| **RC-5** | ✅ provider adapter；E2E 待 key | MiniMax `LlmFactory` 真实 adapter 已落地；Orchestrator harness 仍延期 | `02faa6d0` |
+| **RC-6** | ✅ bounded advisor adapter；provider E2E 待 key | 7 个 LLM advisor slot 并行、10s/60s bounded、DeferToHuman；canonical runtime 通过 `ModuleInvoker` 接入 | `a3768fd6` / `863df70f` |
 | **RC-7** | ⏳ 待硬件 | Perception → 真 modality (Whisper / xcap), Text impl 已就位, 4 modality forward-declared | (PerceptionInput trait in `crates/foundation/plugin/src/perception.rs:86`) |
 | **RC-8** | ✅ 真实现 + 改名 | SubSupervisor → tokio::process 真实 + 改名 (子代理 A 反馈) | `67fc66a0` / `4e4fba89` |
 | **RC-9** | ✅ 真实现 | Keyring 真接入 CLI bootstrap (4 backend + selector → EnvCredentialResolver fallback) | `aa661a66` |
-| **RC-10** | ✅ 真实现 | File AES-256-GCM 加密 (EncryptedFileBackend) | `e2a5be08` |
+| **RC-10** | ✅ 真实现 | File AES-256-GCM 加密 + metadata-bound APX2 header | `2214fb01` |
+| **RC-11** | ✅ migration utility | 离线 v1→APX2 重签；截断与超长 logical id fail-closed | `a565f011` |
 | **cognitive wiring** | ✅ 本轮 | 唯一 slot ledger + production composition + Memory/Preference/Assessment/Writeback + Judge adapter；Critic/Reflection/Planner 不重复造 loop | `docs/04-internal/cognitive-module-wiring.md` |
 
 子代理审查 5 项修正 (`61cc0421`): RC-1 真 SQL impl 兑现 + RC-3 真 SQL impl + SelfAssessment 单 source of truth.
@@ -121,7 +122,7 @@ crates/
 
 | # | 风险 | 严重度 | 谁能解决 | 接手人该做 |
 |---|---|---|---|---|
-| **R-B1** | RC-5/6/7 0 装占位 (Orchestrator / Council / Perception) | 高 | 主代理 + 需 LLM API key + 硬件 | 等 RC-5/6/7 实装时按 `v2.0.0-rc-roadmap.md` §3 RC-5/6 acceptance criteria 推进, Noop impl 暂时保留. |
+| **R-B1** | RC-5 provider E2E、Orchestrator harness、RC-7 perception 仍受外部条件或范围限制 | 高 | 主代理 + 需 LLM API key + 硬件 | RC-6 bounded adapter 已落地；后续只补真实 provider E2E、Orchestrator harness 与 perception，不回退到第二 loop. |
 | **R-B2** | 9 器官 (W1/W2/W3/E4/F4/F1/F6/E7) 全部在 `legacy/donor/apeireth-companion`, 未移植 v2 主链 | 高 | 主代理 + 6-8 周工作量 (ROADMAP §4 P6) | **不要**在 rc 阶段硬塞 — 长程任务继续走 v1 branch (`archive/v1.0-master`). v2 rc 阶段走标准 OpenAI Chat 兼容. |
 | **R-B3** | LLM 调用成本 (主对话 + 每 N turn 自评 + 偏好 recall) | 中 | 优化 `LlmFactory` 默认 model (cheap model) | 接 RC-5 时按 `v2.0.0-rc-roadmap.md` §5 风险行缓解: PerSpec 缓存 + advisor 可降 5→3. |
 | **R-B4** | v1 → v2 数据 schema 兼容 (rc 阶段假设兼容, v2.0.0+ 引入新表) | 中 | migrations 走幂等 `IF NOT EXISTS` (per `crates/engine/storage/src/migrations.rs`) | 数据迁移按 `migration-v1-to-v2.md` §4.4 步骤走, **先备份 v1 db**. |
@@ -131,7 +132,7 @@ crates/
 
 ## 7. 下一步 (按优先级)
 
-1. **RC-5/6/7 (立刻可做, 接口已锁)** — trait 已在 `crates/foundation/plugin/src/{llm_factory.rs, orchestration/}`, Noop impl 0 装就位. 需 LLM API key + 硬件 (Whisper / xcap).
+1. **RC-5/7 与 provider E2E** — RC-5 MiniMax adapter 与 RC-6 bounded Council 已落地；下一步是凭证条件下的 provider E2E、Orchestrator harness，以及硬件相关的 Whisper / xcap.
 2. **Cognitive module 集成 review** (其他 dev 推, 接手人看 3 commit) — `a699c5f5` ABI / `1d227d6a` integration / `64e64f46` lifecycle. 重点看 `crates/engine/runtime/src/canonical/module.rs` 与 `execute.rs` 边界.
 3. **v1.0 parity 完成 (ROADMAP §4 P3-P6)** — 子代理 B 估 14-19 周: M1B 记忆移植 (P3) → perception trait (P4) → tool-runtime + supervisor + SelfAssessment (P5) → council + team-lead + cognition (P6).
 4. **13 键永久降级后** 仍有 3 用法 (hook deny reason / CapabilityDescriptor risk 分级 / ROADMAP §5 语义定义) — 不接回 runtime 强制.
@@ -157,7 +158,7 @@ source episode evidence；不宣称长程 cognition、偏好学习或完整语�
 ### 7.2 远程验证记录 (2026-08-28)
 
 本轮验证统一在 `desktop-dcce212558a843ed-20260806111728416` 的
-`D:\apx\apeireth-rust` 执行，远程验证提交为 `c76e40e0f2d1917eabbd9628a880431ae53ac620`，
+`D:\apx\apeireth-rust` 执行，远程验证代码基线为 `863df70f`（随后仅追加收盘文档提交），
 并确认远程 `HEAD == origin/main`、工作树 clean；工具链为 `rustc 1.97.1 / cargo 1.97.1`。
 以下结果均为远程结果：
 
@@ -259,8 +260,8 @@ git remote -v
 
 ## 11. 一句话总结
 
-**v2.0.0-alpha.1 = 骨架 + 主链 + governance P0 + 13 键降级** (15 crate / ~1476 测试 / 0 clippy 警告).
-**v2.0.0-rc.1 = 接真 backend** (10 RC 中 6 已真实现, RC-5/6/7 待 LLM key + 硬件).
+**v2.0.0-alpha.1 = 骨架 + 主链 + governance P0 + 13 键降级** (15 crate / 全 workspace 测试通过 / 0 clippy 警告).
+**v2.0.0-rc.1 = 接真 backend** (RC-1/2/3/4/5/6/8/9/10/11 已有实现或适配；provider E2E、Orchestrator、RC-7 perception 与长程 cognition 仍延期).
 **v2.0.0 = 完整功能 + frontend** (rc 后 ~6-8 周, 含至少 1 器官移植).
 
 设计哲学 / 8+1 锚 / 13 键 / 三洋葱 / L0 HA / 0 装 PASS 跨 v2 三个阶段 **0 改**. O-6 永远是守门人 — 你也是.
