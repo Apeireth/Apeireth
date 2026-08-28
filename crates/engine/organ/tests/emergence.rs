@@ -86,7 +86,7 @@ async fn emergence_organ_propose_transitions_state_to_proposed() {
     // (per 子代理 R7 0 装诚实: process() 严格走 8 重门控, 不假装"主动开口")
     let output = output.expect("process 路径不返 Err");
     match output {
-        OrganOutput::Emergence { action, spoke } => {
+        OrganOutput::Emergence { action, spoke, .. } => {
             assert!(!spoke, "无观察数据 → rhythm_unknown 拦下, 不主动开口");
             assert!(action.is_empty(), "未开口 → action 字段为空字符串");
         }
@@ -133,7 +133,7 @@ async fn emergence_organ_ratify_activates_proposal() {
     let output = organ.process(make_input(vec![])).await;
     let output = output.expect("process 路径不返 Err");
     match output {
-        OrganOutput::Emergence { action, spoke } => {
+        OrganOutput::Emergence { action, spoke, .. } => {
             assert!(
                 spoke,
                 "深关系 + 活跃时段 + 8 重门控全过 → spoke=true (RhythmMatched)"
