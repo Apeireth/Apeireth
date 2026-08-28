@@ -776,7 +776,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 ### 11.1 5 项 LOCKED (per `docs/04-internal/v2-rc-1-progress-report.md` + Q1 任务 brief)
 
 1. **`apeireth_locked_items.rs` baseline 0 改** (5 项 LOCKED 项本体文件)
-2. **8 哲学锚本体** `crates/foundation/core/src/philosophy/eight_anchors.rs:58-79` enum 顺序
+2. **9 哲学锚本体** `crates/foundation/core/src/eight_anchors.rs:58-79` enum 顺序
    0 改 (LOCKED, O-6 已加升 8→9)
 3. **13 键** `crates/foundation/core/src/philosophy.rs:142` `RUNTIME_ENFORCED = false`
    0 改 (LOCKED, 降级为哲学标准)

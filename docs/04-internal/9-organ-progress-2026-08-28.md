@@ -70,7 +70,7 @@ Author:          主代理 Mavis
 ### 2.2 4 sub-agent (Q1/R1/R2/R3) 0 触碰 LOCKED 5 项核验
 
 子代理 Q1 报告 §4 "0 触碰 LOCKED (8 项)":
-- ✅ 5 项 LOCKED (Self-Disable / L0 HA / 13 键 verdict cache) + 8 哲学锚本体 — 0 改
+- ✅ 5 项 LOCKED (Self-Disable / L0 HA / 13 键 verdict cache) + 9 哲学锚本体 — 0 改
 - ✅ `crates/engine/runtime/src/canonical/cognitive.rs` 12 slot ledger — 0 改
 - ✅ Cargo.lock 仅 apeireth-organ 新增 dep 自动同步
 - ✅ workspace.version = 1.2.0 0 改
@@ -85,7 +85,7 @@ Author:          主代理 Mavis
 ### 2.3 5 sub-agent (R4/R5/R6/R7/R8) 0 触碰 LOCKED 任务约束
 
 每个 sub-agent 任务 prompt 含 "0 触碰 LOCKED (5 项严守)" 段:
-- ✅ 5 项 LOCKED + 8 哲学锚本体 + 13 键 + workspace.version + R11 baseline 0 改
+- ✅ 5 项 LOCKED + 9 哲学锚本体 + 13 键 + workspace.version + R11 baseline 0 改
 - ✅ `crates/engine/runtime/src/canonical/cognitive.rs` 12 slot ledger 0 改
 - ✅ Cargo.lock 0 行 diff
 - ✅ workspace.version = 1.2.0 0 改
