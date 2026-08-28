@@ -221,8 +221,7 @@ async fn tool_module_invocation_executes_end_to_end() {
         .await
         .expect("runtime builds cleanly");
 
-    let req = TurnRequest::new(SessionId::new(), "search for hello")
-        .with_model("mock-model");
+    let req = TurnRequest::new(SessionId::new(), "search for hello").with_model("mock-model");
 
     let response = runtime.execute(req).await.expect("turn executes");
 

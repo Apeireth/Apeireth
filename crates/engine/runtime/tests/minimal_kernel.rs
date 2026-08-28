@@ -12,8 +12,7 @@ use apeireth_plugin::{
     ProviderError,
 };
 use apeireth_protocol::canonical::{
-    ModelDescriptor, NormalizedFinishReason, NormalizedRequest, NormalizedResponse,
-    NormalizedUsage,
+    ModelDescriptor, NormalizedFinishReason, NormalizedRequest, NormalizedResponse, NormalizedUsage,
 };
 use apeireth_runtime::{Runtime, TurnRequest};
 use async_trait::async_trait;
@@ -122,13 +121,21 @@ async fn minimal_kernel_without_standard_modules_completes_plain_chat_turn() {
         .await
         .expect("minimal kernel runtime builds cleanly without any modules");
 
-    assert_eq!(runtime.modules().len(), 0, "no modules should be registered");
+    assert_eq!(
+        runtime.modules().len(),
+        0,
+        "no modules should be registered"
+    );
     assert_eq!(runtime.tools().len(), 0, "no tools should be registered");
-    assert_eq!(runtime.tool_declarations().len(), 0, "no tool declarations should be offered");
+    assert_eq!(
+        runtime.tool_declarations().len(),
+        0,
+        "no tool declarations should be offered"
+    );
 
     let session_id = SessionId::new();
-    let req = TurnRequest::new(session_id.clone(), "Hello Apeireth Microkernel")
-        .with_model("pure-chat-model");
+    let req =
+        TurnRequest::new(session_id, "Hello Apeireth Microkernel").with_model("pure-chat-model");
 
     let response = runtime.execute(req).await.expect("turn completes cleanly");
     assert_eq!(response.text, "Hello from pure microkernel!");
