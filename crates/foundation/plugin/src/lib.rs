@@ -57,6 +57,7 @@ pub mod llm_factory;
 pub mod manager;
 pub mod manifest;
 pub mod memory_backend;
+pub mod organ;
 pub mod perception;
 pub mod perception_backend;
 pub mod plugin;
