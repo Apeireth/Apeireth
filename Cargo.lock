@@ -250,6 +250,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-organ"
+version = "1.2.0"
+dependencies = [
+ "apeireth-core",
+ "apeireth-orchestration",
+ "apeireth-plugin",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-perception"
 version = "1.2.0"
 dependencies = [

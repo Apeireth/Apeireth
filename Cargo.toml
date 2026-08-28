@@ -13,6 +13,7 @@ members = [
     "crates/engine/storage",
     "crates/engine/memory",
     "crates/engine/perception",
+    "crates/engine/organ",
     "crates/capabilities/tools",
     "crates/adapters/gateway",
     "crates/adapters/cli",
