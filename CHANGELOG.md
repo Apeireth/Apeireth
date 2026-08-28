@@ -20,6 +20,12 @@
   existing Wiki/KG/Association stores. SQLite association observations are
   idempotent; failures are fail-open with warnings. No hidden model call or
   full-transcript copy is performed by the production default.
+- **RC-11 migration tooling** (`615121bd` plus the APX2 follow-up): the Python
+  v1→v2 migration utility and Rust integration coverage now emit the current
+  APX2 envelope, preserve serialized logical ids when available, and fail
+  closed on truncated input or oversized ids.
+- **O-6 anchor alignment** (`926465c8`): the canonical anchor enum now exposes
+  the authorized O-6 entry with compile-time nine-anchor ordering checks.
 - **Deprecated consumer audit**: active workspace production consumers of
   `#[allow(deprecated)]` / `#[deprecated]` are 0; legacy/archive material stays
   retained and no artificial migration was added.
