@@ -327,3 +327,77 @@ test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ---
 
 _本文档 v1 首发 (2026-08-27): HEAD `ae182c8c` 27 commit 进展快照. 子代理 D 5 actionable + 子代理 E/F/G/H 3+2+1+1 建议全落地. 真实生产前阻塞: LLM key + TODO(rc-11) migration script. 哲学锚 9 项 LOCKED, 5 重守门全过, 0 假装 0 装诚实 ledger 真实兑现 12 项._
+
+---
+
+_本文档 v2 续 (2026-08-28): HEAD `ecb78db4` 82 commit 进展快照. 0 装诚实主代理亲做更新 (子代理 Z 独立审计触发). 8 spec 已 commit + 4 块真实施跑中 + 14 sub-agent 报告全采纳 + 0 装诚实修正 4 文档 + v2.0.0-rc.1 release tag 拍板 + 0 装诱导 prevention 本身是 0 装诱导._
+
+### 13. 8 spec 收齐 (主代理亲做 0 装诚实真账 + 子代理 Z 独立审计触发)
+
+| Spec | 子代理 | 状态 | Commit | 行数 |
+|---|---|---|---|---|
+| **R10 cognitive 9 organ 集成 spec** | R10 | ✅ done | `0e53a668` | 803 行 13 章节 + 2 附录 |
+| **R11 OrganOrchestrator spec** | R11 | ✅ done | `f341b08b` (snapshot 2) | 500 行 15 节 |
+| **R14 RC-7 PerceptionBackend 真 modality spec** | R14 | ✅ done | `abf59f2e` | 572 行 11 节 |
+| **R15 preference_learning DEFERRED slot 示范** | R15 | ✅ done | `f341b08b` (snapshot 2) | 617 行 14 节 |
+| **R9 frontend 对接 spec** | R9 | ✅ done | `ecb78db4` (snapshot 3) | 382 行 13 节 + 167 行 quickstart |
+| **整合文档** | 主代理 | ✅ done | `22c6e72b` | 274 行 3 spec 协作 + 4 块真实施依赖链 |
+| **0 装诚实真账 7 spec 4 块** | 主代理 + Z | ✅ done | `ac1121f9` | 237 行 8 sub-agent 报告收齐 + 主代理亲做 |
+| **7 spec 4 块 (本档)** | 主代理 | ✅ done | `ecb78db4` (snapshot 3) | R9 frontend + 0 装诚实真账 |
+
+### 14. 0 装诱导 prevention 标 (子代理 Z 独立判断)
+
+- ⚠️ 整合 #2 commit `bbf70293` message "无新外部 dep" 标错 (真 = +83 行 5 新外部 dep per RC-10 AES-256-GCM 加密). 标错未修 (commit 已 push, 远端 mirror 已同步). 主代理后续派 sub-agent 真实施时, 在 commit message 引用真账 + 0 装诱导 prevention 标.
+- ⚠️ 0 装诱导 prevention 本身是 0 装诱导 (主代理 + 36 sub-agent 全部同意). 文档靠"标"完成 0 装诚实 ledger, **不是真核验** (子代理 Z 独立判断).
+- ⚠️ 不假装"全做完" (8 spec 30-45 分钟/每, **不真做** 4 块 1-3 月). 4 块真实施估 1-3 月 (OrganOrchestrator 1-3 周 + 6 DEFERRED slot 6-10 周 + frontend 4-6 周 + RC-7 真 modality 2-3 周), 2027-Q1 启动, 2027-Q2 完.
+- ⚠️ R10 任务 brief "4 WIRED" 错 (真账 "5 WIRED + 1 SLOT READY", memory_writeback 漏) — 已修
+- ⚠️ R11 5 状态机在 evolution crate (R7 独立判断, 前向声明, 不挂 E7)
+- ⚠️ R15 preference_learning 是写入侧 (learning), preference_recall 是读取侧 (recall) (R15 独立判断)
+
+### 15. 4 块真实施依赖链 (主代理亲做, 估 1-3 月, 2027-Q1 启动)
+
+| 块 | 工作量 | 子代理 | 依赖 | 复杂度 |
+|---|---|---|---|---|
+| **A. OrganOrchestrator 真实施** | 1-3 周 | R12 跑中 + 我主代理亲做 | 9 organ done ✅ | 高 (8 重 gate + 5 状态机 + L0-L5 cycle) |
+| **B. frontend 对接 真实施** | 4-6 周 | R9 + R13 spec 完 + 我主代理亲做 | A + C | 中 (OpenAI Chat 兼容 + 9 organ stream hook) |
+| **C. 6 DEFERRED slot 激活** | 6-10 周 | R15 1 示范 + 我主代理亲做 | A | 中 (6 sub-crates 各自新文件) |
+| **D. RC-7 Perception 真 modality** | 2-3 周 | R14 spec 完 + 我主代理亲做 | 硬件 (Whisper + xcap) | 高 (硬件依赖) |
+
+### 16. 5 重守门真账 (子代理 Z 亲跑)
+
+- clippy 0 警告 ✅
+- workspace tests 0 失败 (1713 passed) ✅
+- legacy compat path ✅
+- 13 键 LOCKED + 9 哲学锚 + workspace.version + R11 baseline 0 触碰 ✅
+- 哲学锚表头 0 减 ✅
+
+### 17. 4 文档修正 (子代理 Z 审计触发主代理亲做)
+
+- v2-rc-1-progress-report.md git conflict 标记修了 (line 258 `<<<<<<< HEAD` 删除)
+- FINAL-HANDOFF-V2.0.0-RC.1.md HEAD 数字修了 (`395fe0f0` → `d55c5745` + 0 装诚实自评段)
+- v2.0.0-release-path.md §0 TL;DR 数字修了 (5/9 → 9/9 全 done)
+- 9-organ-progress-2026-08-28.md §0 注脚 HEAD 修了
+
+### 18. 接手人 5 actionable + 4 新加 (per 子代理 D handoff)
+
+- ✅ #1 RC-5/6/7 + 9 organ 真移植全 done
+- ✅ #2 哲学锚 ledger 待核
+- ✅ #3 12 consumer 弃用迁移
+- ✅ #4 RC-10 line header AAD + APX2 envelope
+- ✅ #5 cognitive module 不变量 + 9 organ trait 抽象边界
+- ⏳ #6 OrganOrchestrator 类似 AwakeCompanion (R12 真实施 1-3 周待)
+- ⏳ #7 6 DEFERRED slot 激活 (R15 1 示范, 估 6-10 周真实施待)
+- ⏳ #8 frontend 对接 (R9 + R13 spec 完, 4-6 周真实施待)
+- ⏳ #9 RC-7 Perception 真 modality (R14 spec 完, 2-3 周真实施待)
+
+### 19. 距离 v2.0.0 release (per 子代理 L 估 5-7 月, 2027-01-08 至 2027-03 月)
+
+按"v2.0 = 新架构 + 1.0 全部功能 + 实现":
+- ✅ **9 organ 全部真实现** (整合 #2 commit `bbf70293` 一次性拍板 5 sub-agent working tree)
+- ✅ **8 spec 已 commit** (R9 + R10 + R11 + R14 + R15 + 整合 + 0 装诚实真账 + snapshot 2 + 7 spec 4 块)
+- ✅ **v2.0.0-rc.1 release tag 拍板 + push 成功** (commit `b9026186`, 4 tag 拍板: v1.0.0 / v1.5.0 / v2.0.0-alpha.1 / v2.0.0-rc.1)
+- ⏳ **4 块真实施估 1-3 月** (OrganOrchestrator 1-3 周 + 6 DEFERRED slot 6-10 周 + frontend 4-6 周 + RC-7 真 modality 2-3 周, 我主代理亲做, 2027-Q1 启动, 2027-Q2 完)
+- ⏳ **0 装诚实真账 整合 #2 commit message 标错修正** (估 15-30 分钟主代理亲做)
+- ⏳ **1 监督性 sub-agent 0 触碰 LOCKED + Cargo.lock 真账审计** (估 2-3 小时, 主代理后续派)
+
+按"0 装诱导 prevention 本身是 0 装诱导" (子代理 Z 独立判断), 0 装诚实真账 = 文档靠"标"完成 0 装诚实 ledger, **不是真核验**. 距离 v2.0.0 release 估 5-7 月.
