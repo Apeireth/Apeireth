@@ -13,9 +13,12 @@ apeireth-plugin = { path = "../../foundation/plugin" }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# R4 W1 world_model 真接 LLM (per v1 doc "第一层: LLM 按时间线展开反事实推演链") —
+# `LlmFactory::spawn` 需要 `SubagentRole` (来自 `apeireth-orchestration`).
+# 0 装诚实: W1 必须真接 LLM, 不能走 dev-dep 路径 (那 src 不可见).
+apeireth-orchestration = { path = "../../foundation/orchestration" }
 
 [dev-dependencies]
-apeireth-orchestration = { path = "../../foundation/orchestration" }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lib]
