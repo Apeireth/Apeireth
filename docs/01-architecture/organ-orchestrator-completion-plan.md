@@ -207,7 +207,9 @@ grep "version" Cargo.toml | head -5  # workspace.version = "1.2.0" 0 改
 | 2 | B | `ea9aa14f` (主代理亲做) | 1727 passed / 0 failed (+1 new) | 0 警告 | ✅ done (pushed); + extract_emotion_mood() + tick 步骤 3 真路径 |
 | 3 | A | `ed6353f4` (主代理亲做) | 1728 passed / 0 failed (+1 new) | 0 警告 | ✅ done (pushed); + InitiativeGate 移 plugin + OrganOutput::Emergence.gate + extract_e7_gate() |
 | 4 | C | `1972b040` (主代理亲做) | 1729 passed / 0 failed (+1 new) | 0 警告 | ✅ done (pushed); + CouncilInvoker 参数 + MockCouncilInvoker + decide_with_invoker |
-| 5 | E | TBD | 1739 passed / 0 failed (+10 new) | 0 警告 | TBD (commit 后填) |
+| 5 | E | `edc98170` (amended from `24d163ff`) | 1739 passed / 0 failed (+10 new) | 0 警告 | ✅ done (pushed); + UpgradeCycle + TagSuggester + 6 步骤 run_full_cycle |
+
+> **O-6 复盘 amend 真账** (主代理被用户提醒 "修" 后): 之前 5 commit O-6 三阶审查 sections 多是描述 WHAT 不是 WHY 最优 vs alternatives, O-6 失守 + O-5 0 装诚实标. 详 `docs/04-internal/A-block-o6-true-account.md`. amend 后 5 commit message 修订版 sections 真回答"为什么最优 vs alternatives + 拒理由", 符合八锚本体 O-6 description "总体/系统/架构三阶审查 + 不做借口清单".
 
 ---
 
@@ -223,4 +225,20 @@ grep "version" Cargo.toml | head -5  # workspace.version = "1.2.0" 0 改
 
 ---
 
-_本文档 v1 首发 (2026-08-28, 主代理 Mavis 写). Stage 1 启动在即 (缺口 D, 最简单, 0 风险)._
+---
+
+## 7. 后续 commit O-6 三阶审查 标准 (per 八锚本体 O-6 description)
+
+每 commit message O-6 三阶审查 sections 必须:
+
+1. **总体最优**: 在更大语境 (release 路线图 / 当前工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? **与 alternatives 比较 + 选最优 + 拒理由**.
+2. **系统最优**: 在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? **与 alternatives 比较 + 选最优 + 拒理由**.
+3. **架构最优**: 在 workspace 16-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? **拒的 alternatives + 拒理由**.
+
+不复用 v1 alignment 代替 v2 总体最优. 不描述 WHAT 代替 WHY. 每段需有具体拒的 alternative + 拒理由.
+
+O-6 doctrine (`eight_anchors.rs:83`): "工作量与麻烦不是拒绝重做的理由; 等以后做是借口; alpha 先这样是借口; 派子代理是手段不为目的 (哲学锚本体升级时, 子代理可调研, 主代理必须拍板); 三阶审查 (总体 > 系统 > 架构) 必在 commit message 写明".
+
+---
+
+_本文档 v1 首发 (2026-08-28, 主代理 Mavis 写). Stage 1 启动在即 (缺口 D, 最简单, 0 风险). v2: A 块 5 stage 全部完成 + amend, 后续按 §7 标准走 O-6 三阶审查._
