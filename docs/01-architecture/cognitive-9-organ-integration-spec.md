@@ -11,7 +11,7 @@
 > `crates/foundation/plugin/src/organ.rs` (OrganTrait 边界).
 >
 > **核心矛盾 (子代理 R10 独立判断)**: v2.0-rc.1 真实账是
-> "cognitive module 12 slot 6 WIRED + 1 SLOT READY (council), 9 organ 全实装 (整合 #2 commit
+> "cognitive module 12 slot 6 WIRED (judge/council WIRED, OFF by default), 9 organ 全实装 (整合 #2 commit
 > `bbf70293`)". 缺的不是 "写一个 orchestrator" — 缺的是把 cognitive module slot 和 9 organ
 > process **在同一 runtime hook 链里串成 L0-L5 自升级 cycle**. 本 spec 不真做这 1 周, **只**写
 > "未来实施者怎么串 + 哪些契约严守 0 改".
@@ -25,7 +25,7 @@
 - §3 9 organ 串联顺序 (per R7 风险 #1 + 子代理 L 自升级 cycle)
 - §4 12 slot 注入路径 (per `cognitive-module-wiring.md:23-35`)
 - §5 OrganOrchestrator 类似 AwakeCompanion (R7 0 装诚实真账)
-- §6 4 WIRED + 1 SLOT READY slot 真接路径
+- §6 6 WIRED slot 真接路径
 - §7 6 DEFERRED slot 激活路径 (真生产前可激活)
 - §8 5 状态机 + 8 重门控 + 主动开口 (per E7 emergence)
 - §9 L0-L5 自升级 cycle 集成 (per `v2-architecture-reflection.md` §6)
@@ -48,14 +48,14 @@
 
 | 体系 | 真实现 | 待激活 |
 |---|---|---|
-| **cognitive module 12 slot** | 6 WIRED + 1 SLOT READY = `memory_recall` / `preference_recall` / `memory_writeback` / `judge` / `self_assessment` / `council` (READY) | 6 DEFERRED = `preference_learning` / `cognitive.critic` / `cognitive.reflection` / `cognitive.planner` / `cognitive.orchestrator` / `cognitive.perception` |
+| **cognitive module 12 slot** | **6 WIRED** = `memory_recall` / `preference_recall` / `memory_writeback` / `judge` / `self_assessment` / `council` (judge/council 为 WIRED, OFF by default) | 6 DEFERRED = `preference_learning` / `cognitive.critic` / `cognitive.reflection` / `cognitive.planner` / `cognitive.orchestrator` / `cognitive.perception` |
 | **9 organ** | 9/9 真实现 (整合 #2 commit `bbf70293`): E4 Curiosity / F1 Emotion / F4 Hypothesis / F6 Value / W1 World Model / W2 Causal World Model / W3 Edge Mining / E7 Emergence / Memory Merger | 0 (全实装) |
 | **串联层** | **缺失** — 9 organ 各自独立 trait impl, 缺 OrganOrchestrator 把 9 organ process 串成 L0-L5 cycle | OrganOrchestrator 类似 legacy `AwakeCompanion` 8 重 gate + 5 状态机 + 主动开口 + emotion/council/onion 串接 |
 
 ### 1.3 任务边界 (子代理 R10 独立判断)
 
 - **本 spec 不真做 1 周 cognitive module × 9 organ 集成实施**. 只写 spec 30-45 分钟.
-- **0 装诚实标**: 不假装"已集成 cognitive module × 9 organ". 真账是 "12 slot 6 WIRED + 1 SLOT READY
+- **0 装诚实标**: 不假装"已集成 cognitive module × 9 organ". 真账是 "12 slot 6 WIRED
   真接 + 9 organ 各自 trait impl 已就位 + OrganOrchestrator 缺 (R7 风险 #1 提)" — 这条风险 #1
   必须等真生产前真实施, 估 1-3 周.
 - **不引新外部 dep**. Cargo.lock 0 行 diff.
@@ -240,7 +240,7 @@
 > **本章定位**: 复述 `docs/04-internal/cognitive-module-wiring.md:23-35` 的 12 slot
 > ledger, 标 file:line 锁定 + 真接状态 + 真生产前必做事项.
 
-### 4.1 4 WIRED slot (per `cognitive-module-wiring.md:24-29`)
+### 4.1 WIRED slot 真接 (per `cognitive-module-wiring.md:24-29`, council 见 §4.2)
 
 | Slot | 真接 module | Hook | Dependency | Status | File:line |
 |---|---|---|---|---|---|
@@ -250,11 +250,12 @@
 | `cognitive.self_assessment` | `SelfAssessmentModule` | `AfterTurn` | Judge 结果 (no fabricated heuristic score) | ✅ WIRED, Judge-backed | `cognitive.rs:40` (id) + `:875` (manifest) |
 | `cognitive.memory_writeback` (附加) | `MemoryWritebackModule` | `AfterTurn` | `Arc<dyn MemoryBackend>` + Experience + `Arc<dyn Clock>` | ✅ WIRED | `cognitive.rs:38` (id) + `:419` (manifest) + `:457` (impl) |
 
-> **注意**: 上面标 4 WIRED + 1 附加 `memory_writeback` = 5 WIRED (per
-> `cognitive-module-wiring.md:24-29` 把 `memory_writeback` 也算 WIRED, 但任务 brief 说 "4 WIRED"
-> 是按 brief 描述的子集; 真账 = 5 WIRED per ledger, 6 WIRED 含 `council` SLOT READY).
+> **注意**: 上面表格 + §4.2 = **6 WIRED** (`memory_recall` / `preference_recall` / `judge` /
+> `self_assessment` / `memory_writeback` / `council`). 任务 brief 曾写 "4 WIRED", R10 曾修正为
+> "5 WIRED + 1 SLOT READY", R13 接力审真账核验 = **6 WIRED + 6 DEFERRED** (judge/council 是
+> "WIRED, OFF by default", 不是 "SLOT READY").
 
-### 4.2 1 SLOT READY (per `cognitive-module-wiring.md:27`)
+### 4.2 `cognitive.council` 补充 (WIRED, OFF by default, per `cognitive-module-wiring.md:27`)
 
 | Slot | 真接 module | Hook | Dependency | Status | File:line |
 |---|---|---|---|---|---|
@@ -387,9 +388,9 @@ AfterTurn:          self_assessment -> memory_writeback
 
 ---
 
-## §6 4 WIRED + 1 SLOT READY slot 真接路径
+## §6 6 WIRED slot 真接路径
 
-> **本章定位**: 详细说明 5 个已真接 slot 的数据流 + 9 organ 关联 + 真生产前待补.
+> **本章定位**: 详细说明 6 个已真接 slot 的数据流 + 9 organ 关联 + 真生产前待补.
 
 ### 6.1 `cognitive.memory_recall` (WIRED)
 
@@ -449,7 +450,7 @@ AfterTurn:          self_assessment -> memory_writeback
   当前情绪 + 趋势作为 self_assessment 上下文.
 - **真实施估时**: 1 周.
 
-### 6.5 `cognitive.council` (SLOT READY, OFF by default)
+### 6.5 `cognitive.council` (WIRED, OFF by default)
 
 - **真接 module**: `CouncilModule` (per `:963-1049`)
 - **Hook**: `AfterModelResponse`
@@ -687,7 +688,7 @@ LlmFactory 真接 (v2.1) → 真渲染 Initiative.action.label() → 自然话�
 | 加 1 capability trait | 1-2 周 |
 | 改 LLM provider | 1 周 (per LlmFactory trait, 子代理 M 已写真 impl) |
 | 加 1 organ 真移植 | 4-6 周 (per 子代理 L 估, E4 curiosity 最易) |
-| 认知模块新 slot | 2-3 周 (12 slot ledger 当前 6 WIRED + 1 SLOT READY, 6 DEFERRED) |
+| 认知模块新 slot | 2-3 周 (12 slot ledger 当前 6 WIRED, 6 DEFERRED) |
 | 改 Triple onion L3-L5 真实现 | 4-6 周 |
 | **总估计每次自升级** | **1-6 周** (取决于升级类型) |
 
@@ -716,12 +717,10 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
   - Memory Merger ✅ (子代理 R8, 子代理 R10 同意 R8 独立判断 "v1 无 MemoryMerger,
     v2 是新抽象")
 - **cognitive module 12 slot 真接**:
-  - 4 WIRED: `memory_recall` / `preference_recall` / `judge` / `self_assessment`
-    (per task brief)
-  - 1 附加 WIRED: `memory_writeback` (per ledger, task brief 不列但 ledger 含)
-  - 1 SLOT READY: `council` (per `cognitive-module-wiring.md:27`)
-  - **总计**: 5 WIRED + 1 SLOT READY (任务 brief 说 "6 WIRED" 含 council SLOT READY;
-    子代理 R10 同意 ledger 5 WIRED + 1 SLOT READY = 6 真接)
+  - 6 WIRED: `memory_recall` / `preference_recall` / `judge` / `self_assessment` /
+    `memory_writeback` / `council` (judge/council 为 WIRED, OFF by default; per ledger
+    `cognitive-module-wiring.md:24-29`, R13 接力审真账核验)
+  - **总计**: 6 WIRED + 6 DEFERRED
   - 6 DEFERRED: `preference_learning` / `cognitive.critic` (DEFERRED INTO JUDGE) /
     `cognitive.reflection` (DEFERRED INTO SELF-ASSESSMENT) / `cognitive.planner` /
     `cognitive.orchestrator` / `cognitive.perception`
@@ -762,7 +761,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 | 项目 | 真账 | 是否 0 装诱导 |
 |---|---|---|
 | 9 organ 真实现 | 真 (整合 #2 commit `bbf70293`) | ❌ 不是 |
-| cognitive module 12 slot 真接 | 5 WIRED + 1 SLOT READY 真接 | ❌ 不是 |
+| cognitive module 12 slot 真接 | 6 WIRED 真接 | ❌ 不是 |
 | OrganOrchestrator | **缺** | ❌ 不是 (R7 风险 #1 真账) |
 | 6 DEFERRED 激活 | **0 激活** | ❌ 不是 (forward-declared 真账) |
 | 5 状态机真接 | **前向声明, 不真接** | ❌ 不是 (`emergence.rs:450-456` 真账) |
@@ -896,7 +895,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 | `cognitive.preference_recall` (id) | `:39` | WIRED |
 | `cognitive.self_assessment` (id) | `:40` | WIRED |
 | `cognitive.judge` (id) | `:41` | WIRED (OFF by default) |
-| `cognitive.council` (id) | `:42` | SLOT READY (OFF by default) |
+| `cognitive.council` (id) | `:42` | WIRED (OFF by default) |
 | `MemoryRecallModule` (struct) | `:255-402` | 真接 |
 | `MemoryWritebackModule` (struct) | `:405-554` | 真接 |
 | `PreferenceRecallModule` (struct) | `:571-622` | 真接 |
@@ -972,7 +971,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 - **L0-L5**: 自升级 cycle 6 层 (人类审批 / 自我诊断 / 提案生成 / 验证 / 主人审批 / runtime patch)
 - **WIRED**: cognitive module 12 slot 真接
 - **DEFERRED**: cognitive module 12 slot 0 激活 (forward-declared)
-- **SLOT READY**: 已实现但默认 OFF (per `cognitive-module-wiring.md:26-27` judge/council)
+- **WIRED, OFF by default**: 真接但默认关闭 (per `cognitive-module-wiring.md:26-27` judge/council; 旧称 "SLOT READY" 已弃用, R13 接力审修正)
 - **AGENT MODULE**: `AgentModule` ABI (cognitive module 用, 独立于 7 capability trait)
 - **OrganTrait**: `OrganTrait` ABI (9 organ 用)
 - **5 重守门**: clippy 0 / tests 0 / 13 键 LOCKED / workspace.version / R11 baseline
