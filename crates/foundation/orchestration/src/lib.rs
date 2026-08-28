@@ -1,8 +1,8 @@
 //! P-arch (2026-08-27): A1 council + A2 team-lead + scene-d 例 3 Orchestrator.
 //!
-//! v2.0 alpha **只**提供 trait 边界 + 0 装占位数据类. 真 LLM 调
-//! (council 7 advisor 并行 / orchestrator 调 subagent) 留 v2.0.0-rc 路线
-//! (per `v2-unabsorbed-features.md` §A1 + §A2 + `scene-d-v2-plan.md` §3).
+//! The Council service provides the typed advisor boundary and a bounded,
+//! deterministic evaluation path. Provider calls are injected by the runtime
+//! through a small adapter; this crate never owns a provider client.
 //!
 //! 借鉴 v1 `apeireth-team-lead` (14 调度工具) + `apeireth-council` (7 advisor
 //! + 按住机制) + `apeireth-orchestrator` (plan/impl/review). **v2 形态**:
@@ -14,11 +14,13 @@
 //! **SelfAssessmentCache** (scene-d 例 2 触发) 移到 `apeireth-plugin::self_assessment` 模块
 //! (canonical 单 source of truth, per 子代理审查 1.2, 2026-08-27). 本 crate 0 重复定义.
 //!
-//! **RC-6 真兑现** (2026-08-27, 子代理 N):
-//! - 7 个 `LlmAdvisor` 真接 LLM (per `council::advisors_llm`) — 替换原 7 个 NoopAdvisor
-//! - `Council::decide` 真并行 (tokio::join_all) + 60s timeout (per scene-d §5)
-//! - LLM error → Abstain (0 假装"批准"); timeout → DeferToHuman
-//! - 7 advisor 7 个独立 LlmInstance (per scene-d §3 多 instance 隔离)
+//! **Runtime boundary**:
+//! - `Council::decide` remains the compatibility path for local advisors.
+//! - `Council::decide_with_invoker` runs bounded advisor side-calls with
+//!   per-advisor and overall timeouts; the runtime supplies the invoker.
+//! - `Orchestrator` trait 0 装: 真正调 subagent 需 runtime 介入 (subagent
+//!   是 LLM factory 独立实例, 不在本 crate 范围)
+//! - 全部 `pub use` 都是 re-export; 不引入新 LLM dep
 //!
 //! **架构原则**:
 //! - trait 在 foundation (跟 plugin / governance / credentials 同级)
@@ -31,22 +33,22 @@
 
 #![forbid(unsafe_code)]
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use apeireth_core::kernel::SessionId;
 use async_trait::async_trait;
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 
-pub mod council;
-pub mod llm;
-
 // ============================================
-// Council (A1) — re-exported from `council` module
+// Council (A1)
 // ============================================
 
 /// 7 个 advisor 领域 (per v1 apeireth-council + 设计意图)
 /// 与 13 键原则洋葱的 S (价值层) 对应.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum AdvisorKind {
     /// 安全性 (PII / 注入 / 凭据泄漏 / 自我禁用)
     Safety,
@@ -64,15 +66,68 @@ pub enum AdvisorKind {
     Legal,
 }
 
-/// 单个 advisor 的输出
-#[derive(Debug, Clone, PartialEq)]
-pub enum AdvisorVerdict {
-    /// 同意
+/// Typed decision returned by one advisor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AdvisorDecision {
+    /// The candidate is acceptable.
     Allow,
-    /// 反对 (附理由)
-    Deny { reason: String },
-    /// 弃权 (不参与投票)
+    /// The candidate should be regenerated.
+    Retry,
+    /// The candidate must not be accepted.
+    Stop,
+    /// The advisor cannot make a decision.
     Abstain,
+}
+
+/// Typed, bounded result returned by one advisor.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdvisorVerdict {
+    /// Normalized score in the inclusive range 0..=1.
+    pub score: f64,
+    /// Typed advisor decision.
+    pub verdict: AdvisorDecision,
+    /// Short actionable critique.
+    pub critique: String,
+    /// Optional advisor confidence in the inclusive range 0..=1.
+    pub confidence: Option<f64>,
+}
+
+impl AdvisorVerdict {
+    /// Construct a valid typed verdict.
+    pub fn new(
+        score: f64,
+        verdict: AdvisorDecision,
+        critique: impl Into<String>,
+        confidence: Option<f64>,
+    ) -> Result<Self, String> {
+        let verdict = Self {
+            score,
+            verdict,
+            critique: critique.into(),
+            confidence,
+        };
+        verdict.validate()?;
+        Ok(verdict)
+    }
+
+    /// Validate bounded advisor output before aggregation.
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.score.is_finite() || !(0.0..=1.0).contains(&self.score) {
+            return Err("advisor score must be finite and between 0 and 1".into());
+        }
+        if self
+            .confidence
+            .is_some_and(|confidence| !confidence.is_finite() || !(0.0..=1.0).contains(&confidence))
+        {
+            return Err("advisor confidence must be finite and between 0 and 1".into());
+        }
+        if self.critique.chars().count() > 2_000 {
+            return Err("advisor critique exceeds 2000 characters".into());
+        }
+        Ok(())
+    }
 }
 
 /// Advisor trait: 每个领域 1 个 LLM 调用
@@ -82,7 +137,8 @@ pub trait Advisor: Send + Sync {
     fn name(&self) -> &'static str;
     /// 类型
     fn kind(&self) -> AdvisorKind;
-    /// 评审 (v2.0 alpha: 0 装, 返硬编码; v2.0.0-rc: 调 LLM 独立实例)
+    /// Local/compatibility evaluation path. Runtime-backed advisors use the
+    /// injected [`CouncilInvoker`] path instead.
     async fn evaluate(&self, proposal: &Proposal) -> AdvisorVerdict;
 }
 
@@ -101,6 +157,12 @@ pub struct Proposal {
     pub session_id: SessionId,
 }
 
+/// Council 多领域评审 (按住机制 + 加权投票)
+pub struct Council {
+    advisors: Vec<Arc<dyn Advisor>>,
+    config: CouncilConfig,
+}
+
 /// Council 决策 (含按住机制, per v1 stage4-correction-v15)
 #[derive(Debug, Clone, PartialEq)]
 pub enum CouncilVerdict {
@@ -109,15 +171,466 @@ pub enum CouncilVerdict {
     /// 拒绝 (含按住: 30% Advisor 反对 / 一致反对)
     Vetoed { by: AdvisorKind, reason: String },
     /// 需人工批准 (v2 治理的 Deny vs RequireApproval 区分, per ROADMAP P0)
-    /// 触发条件: 60s 内达不成 consensus (v1 stage4) — RC-6 真兑现
+    /// 触发条件: 60s 内达不成 consensus (v1 stage4) — 0 装: 永不触发
     DeferToHuman { reason: String },
 }
 
-/// Council 多领域评审 (按住机制 + 加权投票).
-///
-/// RC-6 真兑现 (2026-08-27, 子代理 N): 真接 LLM via LlmFactory,
-/// 7 advisor 并行调用 + 60s timeout + DeferToHuman.
-pub use council::Council;
+/// Typed aggregate decision emitted by the bounded Council path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CouncilDecision {
+    /// Keep the candidate and continue the canonical loop.
+    Continue,
+    /// Ask the canonical loop for another candidate.
+    Retry,
+    /// Reject the current candidate.
+    Stop,
+    /// The Council could not reach a safe decision.
+    DeferToHuman,
+}
+
+/// One ordered advisor evaluation in a Council result.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AdvisorEvaluation {
+    /// Stable advisor name.
+    pub advisor: String,
+    /// Advisor domain.
+    pub kind: AdvisorKind,
+    /// Typed advisor output.
+    pub verdict: AdvisorVerdict,
+}
+
+/// A bounded advisor failure. The reason is returned to the caller but is not
+/// emitted to low-cardinality telemetry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdvisorFailure {
+    /// Stable advisor name.
+    pub advisor: String,
+    /// Advisor domain.
+    pub kind: AdvisorKind,
+    /// Stable failure category.
+    pub category: String,
+    /// Legible failure detail.
+    pub reason: String,
+}
+
+/// Deterministic, typed Council aggregate.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CouncilResult {
+    /// Mean score across valid, non-abstaining advisor verdicts.
+    pub aggregate_score: f64,
+    /// Aggregate control decision.
+    pub decision: CouncilDecision,
+    /// Advisors that returned a non-abstaining valid result.
+    pub supporting_advisors: Vec<String>,
+    /// Results in advisor registration order, never task completion order.
+    pub evaluations: Vec<AdvisorEvaluation>,
+    /// Per-advisor failures in advisor registration order.
+    pub failures: Vec<AdvisorFailure>,
+    /// Number of invocations attempted by the bounded batch.
+    pub side_call_count: usize,
+    /// Whether the overall Council deadline elapsed.
+    pub timed_out: bool,
+}
+
+impl CouncilResult {
+    /// Short feedback suitable for the canonical retry directive.
+    pub fn retry_feedback(&self) -> String {
+        let mut feedback = self
+            .evaluations
+            .iter()
+            .filter(|evaluation| evaluation.verdict.verdict == AdvisorDecision::Retry)
+            .map(|evaluation| evaluation.verdict.critique.as_str())
+            .filter(|critique| !critique.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("; ");
+        if feedback.is_empty() {
+            feedback = "Council majority requested another candidate".into();
+        }
+        feedback.chars().take(2_000).collect()
+    }
+}
+
+/// Failure returned by an injected Council side-call adapter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CouncilCallError {
+    /// Provider/runtime side-call failed.
+    Provider(String),
+    /// The advisor response was not valid typed JSON.
+    Malformed(String),
+}
+
+impl std::fmt::Display for CouncilCallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Provider(reason) => write!(f, "provider: {reason}"),
+            Self::Malformed(reason) => write!(f, "malformed: {reason}"),
+        }
+    }
+}
+
+impl std::error::Error for CouncilCallError {}
+
+/// Runtime adapter for Council advisor side-calls.
+#[async_trait]
+pub trait CouncilInvoker: Send + Sync {
+    /// Invoke one advisor through the canonical runtime-owned side-call path.
+    async fn invoke(
+        &self,
+        advisor: Arc<dyn Advisor>,
+        proposal: &Proposal,
+    ) -> Result<AdvisorVerdict, CouncilCallError>;
+}
+
+/// Bounded Council execution settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CouncilConfig {
+    /// Maximum number of registered advisors evaluated for one proposal.
+    pub max_advisors: usize,
+    /// Deadline for one advisor side-call.
+    pub per_advisor_timeout: Duration,
+    /// Deadline for the whole Council batch.
+    pub overall_timeout: Duration,
+}
+
+impl Default for CouncilConfig {
+    fn default() -> Self {
+        Self {
+            max_advisors: 7,
+            per_advisor_timeout: Duration::from_secs(10),
+            overall_timeout: Duration::from_secs(60),
+        }
+    }
+}
+
+impl CouncilConfig {
+    fn normalized(self) -> Self {
+        Self {
+            max_advisors: self.max_advisors.max(1),
+            per_advisor_timeout: self.per_advisor_timeout.max(Duration::from_millis(1)),
+            overall_timeout: self.overall_timeout.max(Duration::from_millis(1)),
+        }
+    }
+}
+
+impl Council {
+    /// 7 个 advisor 默认 (0 装: 全 Allow, 用于 v2.0 alpha 无 LLM harness 场景)
+    pub fn default_allow() -> Self {
+        Self {
+            advisors: vec![
+                Arc::new(NoopAdvisor::new(AdvisorKind::Safety)),
+                Arc::new(NoopAdvisor::new(AdvisorKind::Performance)),
+                Arc::new(NoopAdvisor::new(AdvisorKind::Philosophy)),
+                Arc::new(NoopAdvisor::new(AdvisorKind::History)),
+                Arc::new(NoopAdvisor::new(AdvisorKind::Strategy)),
+                Arc::new(NoopAdvisor::new(AdvisorKind::Ethics)),
+                Arc::new(NoopAdvisor::new(AdvisorKind::Legal)),
+            ],
+            config: CouncilConfig::default(),
+        }
+    }
+
+    /// Seven named LLM advisor slots. The runtime supplies the actual
+    /// provider side-call through [`CouncilInvoker`].
+    pub fn default_llm() -> Self {
+        Self {
+            advisors: vec![
+                Arc::new(SlotAdvisor::new(AdvisorKind::Safety)),
+                Arc::new(SlotAdvisor::new(AdvisorKind::Performance)),
+                Arc::new(SlotAdvisor::new(AdvisorKind::Philosophy)),
+                Arc::new(SlotAdvisor::new(AdvisorKind::History)),
+                Arc::new(SlotAdvisor::new(AdvisorKind::Strategy)),
+                Arc::new(SlotAdvisor::new(AdvisorKind::Ethics)),
+                Arc::new(SlotAdvisor::new(AdvisorKind::Legal)),
+            ],
+            config: CouncilConfig::default(),
+        }
+    }
+
+    /// 自定义 advisors
+    pub fn new(advisors: Vec<Arc<dyn Advisor>>) -> Self {
+        Self {
+            advisors,
+            config: CouncilConfig::default(),
+        }
+    }
+
+    /// Override the bounded Council settings without introducing a separate
+    /// runtime or configuration framework.
+    #[must_use]
+    pub fn with_config(mut self, config: CouncilConfig) -> Self {
+        self.config = config.normalized();
+        self
+    }
+
+    /// 多意见加权: 任一 advisor Deny (除 Abstain) 即触发 Veto
+    /// (v1 30% 强反对 / 一致反对 / 60s 裁决超时的 v2 简化: 一票否决制 + Abstain 跳过)
+    /// **0 装 PASS**: 真实 council 是 7 个 LLM 并行调用 + 加权 + 60s 超时, v2.0.0-rc.
+    ///
+    /// **v2.0.0-rc contract** (per `v2.0.0-rc-roadmap.md` §2.4 + scene-d §2):
+    /// - `decide` 内部走 `tokio::time::timeout(Duration::from_secs(60), futures::future::join_all(7 LLM calls))`
+    /// - 任一 advisor 失败 → 该 advisor 视为 Abstain (不算 30% 阈值)
+    /// - 任一 advisor Deny → `Vetoed { by, reason }`
+    /// - 全 Allow/Abstain → `Approved`
+    /// - 60s 触发 → `DeferToHuman { reason: "60s no consensus" }`
+    /// - runtime `DeferToHuman` 路径 → 转 `RequireApproval` (governance 已装, 直接复用 `8732857` wiring)
+    ///
+    /// **alpha 0 装**: 当前同步遍历 7 advisors, 没 60s timeout, 失败即 Deny (无 Abstain 路径).
+    /// rc 阶段改: `tokio::spawn` 7 个并发 LLM 调用 + `futures::future::join_all` + `tokio::time::timeout`.
+    pub async fn decide(&self, proposal: &Proposal) -> CouncilVerdict {
+        let mut evaluations = Vec::with_capacity(self.advisors.len());
+        for advisor in &self.advisors {
+            let verdict = advisor.evaluate(proposal).await;
+            evaluations.push(AdvisorEvaluation {
+                advisor: advisor.name().into(),
+                kind: advisor.kind(),
+                verdict,
+            });
+        }
+        Self::legacy_verdict(&evaluations)
+    }
+
+    /// Run advisor side-calls through an injected runtime adapter.
+    ///
+    /// Futures are bounded by `max_advisors`, each call has its own deadline,
+    /// and the aggregate has a hard overall deadline. Results are sorted back
+    /// into registration order before aggregation, so completion order cannot
+    /// change the decision.
+    pub async fn decide_with_invoker(
+        &self,
+        proposal: &Proposal,
+        invoker: &dyn CouncilInvoker,
+    ) -> CouncilResult {
+        let selected = self
+            .advisors
+            .iter()
+            .take(self.config.max_advisors)
+            .enumerate()
+            .map(|(index, advisor)| (index, Arc::clone(advisor)))
+            .collect::<Vec<_>>();
+        let attempted = Arc::new(AtomicUsize::new(0));
+        let per_advisor_timeout = self.config.per_advisor_timeout;
+        let attempted_for_batch = Arc::clone(&attempted);
+        let batch = async move {
+            join_all(selected.into_iter().map(|(index, advisor)| {
+                let attempted = Arc::clone(&attempted_for_batch);
+                async move {
+                    attempted.fetch_add(1, Ordering::Relaxed);
+                    let result = tokio::time::timeout(
+                        per_advisor_timeout,
+                        invoker.invoke(Arc::clone(&advisor), proposal),
+                    )
+                    .await;
+                    (index, advisor, result)
+                }
+            }))
+            .await
+        };
+
+        let batch_result = tokio::time::timeout(self.config.overall_timeout, batch).await;
+        let attempted_side_calls = attempted.load(Ordering::Relaxed);
+        let Ok(mut completed) = batch_result else {
+            return CouncilResult {
+                aggregate_score: 0.0,
+                decision: CouncilDecision::DeferToHuman,
+                supporting_advisors: Vec::new(),
+                evaluations: Vec::new(),
+                failures: vec![AdvisorFailure {
+                    advisor: "council".into(),
+                    kind: AdvisorKind::Safety,
+                    category: "overall_timeout".into(),
+                    reason: "overall Council timeout elapsed".into(),
+                }],
+                side_call_count: attempted_side_calls,
+                timed_out: true,
+            };
+        };
+
+        completed.sort_by_key(|(index, _, _)| *index);
+        let mut evaluations = Vec::new();
+        let mut failures = Vec::new();
+        for (_, advisor, result) in completed {
+            match result {
+                Ok(Ok(verdict)) => match verdict.validate() {
+                    Ok(()) => evaluations.push(AdvisorEvaluation {
+                        advisor: advisor.name().into(),
+                        kind: advisor.kind(),
+                        verdict,
+                    }),
+                    Err(reason) => failures.push(AdvisorFailure {
+                        advisor: advisor.name().into(),
+                        kind: advisor.kind(),
+                        category: "malformed".into(),
+                        reason,
+                    }),
+                },
+                Ok(Err(error)) => failures.push(AdvisorFailure {
+                    advisor: advisor.name().into(),
+                    kind: advisor.kind(),
+                    category: match error {
+                        CouncilCallError::Provider(_) => "provider_failure",
+                        CouncilCallError::Malformed(_) => "malformed",
+                    }
+                    .into(),
+                    reason: error.to_string(),
+                }),
+                Err(_) => failures.push(AdvisorFailure {
+                    advisor: advisor.name().into(),
+                    kind: advisor.kind(),
+                    category: "advisor_timeout".into(),
+                    reason: "advisor timeout elapsed".into(),
+                }),
+            }
+        }
+
+        Self::aggregate(evaluations, failures, attempted_side_calls, false)
+    }
+
+    fn aggregate(
+        evaluations: Vec<AdvisorEvaluation>,
+        failures: Vec<AdvisorFailure>,
+        side_call_count: usize,
+        timed_out: bool,
+    ) -> CouncilResult {
+        let decisive = evaluations
+            .iter()
+            .filter(|evaluation| evaluation.verdict.verdict != AdvisorDecision::Abstain)
+            .collect::<Vec<_>>();
+        let aggregate_score = if decisive.is_empty() {
+            0.0
+        } else {
+            decisive
+                .iter()
+                .map(|evaluation| evaluation.verdict.score)
+                .sum::<f64>()
+                / decisive.len() as f64
+        };
+        let stop = decisive
+            .iter()
+            .find(|evaluation| evaluation.verdict.verdict == AdvisorDecision::Stop);
+        let retries = decisive
+            .iter()
+            .filter(|evaluation| evaluation.verdict.verdict == AdvisorDecision::Retry)
+            .count();
+        let allows = decisive
+            .iter()
+            .filter(|evaluation| evaluation.verdict.verdict == AdvisorDecision::Allow)
+            .count();
+        let decision = if stop.is_some() {
+            CouncilDecision::Stop
+        } else if retries > allows {
+            CouncilDecision::Retry
+        } else if decisive.is_empty() && !failures.is_empty() {
+            CouncilDecision::DeferToHuman
+        } else {
+            CouncilDecision::Continue
+        };
+        let supporting_advisors = decisive
+            .iter()
+            .map(|evaluation| evaluation.advisor.clone())
+            .collect();
+        CouncilResult {
+            aggregate_score,
+            decision,
+            supporting_advisors,
+            evaluations,
+            failures,
+            side_call_count,
+            timed_out,
+        }
+    }
+
+    fn legacy_verdict(evaluations: &[AdvisorEvaluation]) -> CouncilVerdict {
+        if let Some(veto) = evaluations.iter().find(|evaluation| {
+            matches!(
+                evaluation.verdict.verdict,
+                AdvisorDecision::Stop | AdvisorDecision::Retry
+            )
+        }) {
+            return CouncilVerdict::Vetoed {
+                by: veto.kind,
+                reason: veto.verdict.critique.clone(),
+            };
+        }
+        CouncilVerdict::Approved
+    }
+}
+
+/// Noop advisor (v2.0 alpha 0 装)
+struct NoopAdvisor {
+    kind: AdvisorKind,
+}
+
+impl NoopAdvisor {
+    fn new(kind: AdvisorKind) -> Self {
+        Self { kind }
+    }
+}
+
+#[async_trait::async_trait]
+impl Advisor for NoopAdvisor {
+    fn name(&self) -> &'static str {
+        match self.kind {
+            AdvisorKind::Safety => "noop_safety",
+            AdvisorKind::Performance => "noop_performance",
+            AdvisorKind::Philosophy => "noop_philosophy",
+            AdvisorKind::History => "noop_history",
+            AdvisorKind::Strategy => "noop_strategy",
+            AdvisorKind::Ethics => "noop_ethics",
+            AdvisorKind::Legal => "noop_legal",
+        }
+    }
+
+    fn kind(&self) -> AdvisorKind {
+        self.kind
+    }
+
+    async fn evaluate(&self, _proposal: &Proposal) -> AdvisorVerdict {
+        AdvisorVerdict::new(1.0, AdvisorDecision::Allow, "noop allow", Some(1.0))
+            .expect("static noop verdict is valid")
+    }
+}
+
+/// A named LLM advisor slot. It is intentionally provider-free; the runtime
+/// adapter turns the slot into one isolated ModuleInvoker request.
+struct SlotAdvisor {
+    kind: AdvisorKind,
+}
+
+impl SlotAdvisor {
+    fn new(kind: AdvisorKind) -> Self {
+        Self { kind }
+    }
+}
+
+#[async_trait]
+impl Advisor for SlotAdvisor {
+    fn name(&self) -> &'static str {
+        match self.kind {
+            AdvisorKind::Safety => "llm_safety",
+            AdvisorKind::Performance => "llm_performance",
+            AdvisorKind::Philosophy => "llm_philosophy",
+            AdvisorKind::History => "llm_history",
+            AdvisorKind::Strategy => "llm_strategy",
+            AdvisorKind::Ethics => "llm_ethics",
+            AdvisorKind::Legal => "llm_legal",
+        }
+    }
+
+    fn kind(&self) -> AdvisorKind {
+        self.kind
+    }
+
+    async fn evaluate(&self, _proposal: &Proposal) -> AdvisorVerdict {
+        AdvisorVerdict::new(
+            0.0,
+            AdvisorDecision::Abstain,
+            "runtime invoker required",
+            None,
+        )
+        .expect("static slot verdict is valid")
+    }
+}
 
 // ============================================
 // Orchestrator (A2 + scene-d 例 3)
@@ -208,6 +721,7 @@ pub trait Orchestrator: Send + Sync {
         payload: serde_json::Value,
     ) -> Result<Vec<SubagentOutcome>, OrchestratorError> {
         // 默认实现: planner -> implementer -> reviewer 三步
+        // clone payload 防 partial move (serde_json::Value not Copy)
         let plan = self
             .dispatch(SubagentSpec {
                 id: format!("{title}-plan"),
@@ -273,6 +787,17 @@ impl std::fmt::Display for OrchestratorError {
 
 impl std::error::Error for OrchestratorError {}
 
+// Send / Sync 由编译器自动派生: 字段全 String, 满足 Send + Sync 自动推导条件.
+// crate 内 #![forbid(unsafe_code)] 不允许 unsafe impl, 但自动派生无需 unsafe impl.
+// RC-5 runtime 集成时跨任务传输安全.
+
+// SelfAssessmentCache (scene-d 例 2) **0 在此 crate** (per 子代理审查 1.2):
+// 之前这里有 `SelfAssessment` / `Deviation` / `SelfAssessmentCache` 同名不同定义
+// (plugin::SelfAssessment 字段多, 含 id + reviewer_id, 比本处的字段全).
+// **单一 source of truth**: plugin::self_assessment::SelfAssessment 是 canonical
+// 类型, plugin::self_assessment::SelfAssessmentStore 是 trait.
+// Orchestration 改为注入 `Arc<dyn SelfAssessmentStore>`, 0 重复定义.
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,14 +832,12 @@ mod tests {
                 AdvisorKind::Safety
             }
             async fn evaluate(&self, _: &Proposal) -> AdvisorVerdict {
-                AdvisorVerdict::Deny {
-                    reason: "test veto".into(),
-                }
+                AdvisorVerdict::new(0.1, AdvisorDecision::Stop, "test veto", Some(1.0)).unwrap()
             }
         }
         let c = Council::new(vec![
             Arc::new(DenyAll),
-            Arc::new(crate::council::NoopAdvisor::new(AdvisorKind::Safety)),
+            Arc::new(NoopAdvisor::new(AdvisorKind::Safety)),
         ]);
         match c.decide(&sample_proposal()).await {
             CouncilVerdict::Vetoed { by, reason } => {
@@ -324,6 +847,9 @@ mod tests {
             _ => panic!("expected Vetoed"),
         }
     }
+
+    // 注: SelfAssessment / SelfAssessmentCache 测试在 `apeireth-plugin` crate 的
+    // `self_assessment` 模块 (canonical 单 source of truth), 不在本 crate 重复.
 
     #[test]
     fn subagent_spec_roundtrip_json() {
@@ -358,5 +884,219 @@ mod tests {
         assert_eq!(back.passed, false);
         assert_eq!(back.score, 0.4);
         assert_eq!(back.blocking_issues, vec!["missing test".to_string()]);
+    }
+
+    struct ScriptedAdvisor {
+        name: &'static str,
+        kind: AdvisorKind,
+    }
+
+    #[async_trait]
+    impl Advisor for ScriptedAdvisor {
+        fn name(&self) -> &'static str {
+            self.name
+        }
+
+        fn kind(&self) -> AdvisorKind {
+            self.kind
+        }
+
+        async fn evaluate(&self, _proposal: &Proposal) -> AdvisorVerdict {
+            AdvisorVerdict::new(1.0, AdvisorDecision::Allow, "compat", Some(1.0)).unwrap()
+        }
+    }
+
+    struct ScriptedInvoker {
+        decisions:
+            std::collections::BTreeMap<AdvisorKind, Result<AdvisorVerdict, CouncilCallError>>,
+        delays: std::collections::BTreeMap<AdvisorKind, Duration>,
+    }
+
+    #[async_trait]
+    impl CouncilInvoker for ScriptedInvoker {
+        async fn invoke(
+            &self,
+            advisor: Arc<dyn Advisor>,
+            _proposal: &Proposal,
+        ) -> Result<AdvisorVerdict, CouncilCallError> {
+            if let Some(delay) = self.delays.get(&advisor.kind()) {
+                tokio::time::sleep(*delay).await;
+            }
+            self.decisions
+                .get(&advisor.kind())
+                .cloned()
+                .unwrap_or_else(|| Err(CouncilCallError::Provider("missing script".into())))
+        }
+    }
+
+    fn council_with_kinds(kinds: &[AdvisorKind]) -> Council {
+        Council::new(
+            kinds
+                .iter()
+                .enumerate()
+                .map(|(index, kind)| {
+                    Arc::new(ScriptedAdvisor {
+                        name: Box::leak(format!("advisor-{index}").into_boxed_str()),
+                        kind: *kind,
+                    }) as Arc<dyn Advisor>
+                })
+                .collect(),
+        )
+    }
+
+    fn verdict(decision: AdvisorDecision, score: f64) -> AdvisorVerdict {
+        AdvisorVerdict::new(score, decision, "script", Some(0.9)).unwrap()
+    }
+
+    #[tokio::test]
+    async fn bounded_council_aggregates_in_registration_order() {
+        let council = council_with_kinds(&[
+            AdvisorKind::Safety,
+            AdvisorKind::Performance,
+            AdvisorKind::Philosophy,
+        ])
+        .with_config(CouncilConfig {
+            max_advisors: 3,
+            per_advisor_timeout: Duration::from_millis(100),
+            overall_timeout: Duration::from_secs(1),
+        });
+        let invoker = ScriptedInvoker {
+            decisions: [
+                (
+                    AdvisorKind::Safety,
+                    Ok(verdict(AdvisorDecision::Allow, 0.9)),
+                ),
+                (
+                    AdvisorKind::Performance,
+                    Ok(verdict(AdvisorDecision::Allow, 0.8)),
+                ),
+                (
+                    AdvisorKind::Philosophy,
+                    Ok(verdict(AdvisorDecision::Allow, 0.7)),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            delays: [
+                (AdvisorKind::Safety, Duration::from_millis(20)),
+                (AdvisorKind::Performance, Duration::from_millis(1)),
+                (AdvisorKind::Philosophy, Duration::from_millis(10)),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let result = council
+            .decide_with_invoker(&sample_proposal(), &invoker)
+            .await;
+        assert_eq!(result.decision, CouncilDecision::Continue);
+        assert_eq!(result.side_call_count, 3);
+        assert_eq!(
+            result
+                .evaluations
+                .iter()
+                .map(|evaluation| evaluation.kind)
+                .collect::<Vec<_>>(),
+            vec![
+                AdvisorKind::Safety,
+                AdvisorKind::Performance,
+                AdvisorKind::Philosophy
+            ]
+        );
+        assert!((result.aggregate_score - 0.8).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn council_decision_semantics_cover_retry_stop_and_failures() {
+        let proposal = sample_proposal();
+        let retry_council = council_with_kinds(&[
+            AdvisorKind::Safety,
+            AdvisorKind::Performance,
+            AdvisorKind::Philosophy,
+        ]);
+        let retry_invoker = ScriptedInvoker {
+            decisions: [
+                (
+                    AdvisorKind::Safety,
+                    Ok(verdict(AdvisorDecision::Retry, 0.3)),
+                ),
+                (
+                    AdvisorKind::Performance,
+                    Ok(verdict(AdvisorDecision::Retry, 0.4)),
+                ),
+                (
+                    AdvisorKind::Philosophy,
+                    Ok(verdict(AdvisorDecision::Allow, 0.8)),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            delays: Default::default(),
+        };
+        let result = retry_council
+            .decide_with_invoker(&proposal, &retry_invoker)
+            .await;
+        assert_eq!(result.decision, CouncilDecision::Retry);
+
+        let stop_council = council_with_kinds(&[AdvisorKind::Safety, AdvisorKind::Performance]);
+        let stop_invoker = ScriptedInvoker {
+            decisions: [
+                (
+                    AdvisorKind::Safety,
+                    Ok(verdict(AdvisorDecision::Allow, 1.0)),
+                ),
+                (
+                    AdvisorKind::Performance,
+                    Ok(verdict(AdvisorDecision::Stop, 0.0)),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            delays: Default::default(),
+        };
+        let result = stop_council
+            .decide_with_invoker(&proposal, &stop_invoker)
+            .await;
+        assert_eq!(result.decision, CouncilDecision::Stop);
+
+        let failure_council = council_with_kinds(&[AdvisorKind::Safety]);
+        let failure_invoker = ScriptedInvoker {
+            decisions: [(
+                AdvisorKind::Safety,
+                Err(CouncilCallError::Malformed("bad json".into())),
+            )]
+            .into_iter()
+            .collect(),
+            delays: Default::default(),
+        };
+        let result = failure_council
+            .decide_with_invoker(&proposal, &failure_invoker)
+            .await;
+        assert_eq!(result.decision, CouncilDecision::DeferToHuman);
+        assert_eq!(result.failures[0].category, "malformed");
+    }
+
+    #[tokio::test]
+    async fn council_per_advisor_timeout_is_fail_open_to_defer_when_all_timeout() {
+        let council = council_with_kinds(&[AdvisorKind::Safety]).with_config(CouncilConfig {
+            max_advisors: 1,
+            per_advisor_timeout: Duration::from_millis(5),
+            overall_timeout: Duration::from_secs(1),
+        });
+        let invoker = ScriptedInvoker {
+            decisions: [(
+                AdvisorKind::Safety,
+                Ok(verdict(AdvisorDecision::Allow, 1.0)),
+            )]
+            .into_iter()
+            .collect(),
+            delays: [(AdvisorKind::Safety, Duration::from_millis(50))]
+                .into_iter()
+                .collect(),
+        };
+        let result = council
+            .decide_with_invoker(&sample_proposal(), &invoker)
+            .await;
+        assert_eq!(result.decision, CouncilDecision::DeferToHuman);
+        assert_eq!(result.failures[0].category, "advisor_timeout");
     }
 }

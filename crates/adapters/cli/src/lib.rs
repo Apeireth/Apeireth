@@ -225,7 +225,7 @@ async fn build_cognitive_modules_from_env(
     let self_assessments: Arc<dyn apeireth_plugin::self_assessment::SelfAssessmentStore> =
         self_assessments.clone();
     let council = if council_enabled {
-        Some(Arc::new(apeireth_orchestration::Council::default_allow()))
+        Some(Arc::new(apeireth_orchestration::Council::default_llm()))
     } else {
         None
     };
