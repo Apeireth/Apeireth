@@ -266,3 +266,10 @@ coverage/
 # Frontend (companion-desktop)
 **/node_modules/
 frontend/companion-desktop/dist/
+
+# 2026-08-28 Mavis: harness dev artifacts (接手 ENGINEER-MANIFESTO push 后 hygiene 修)
+# 模式: 主代理运行时临时产物 — baseline logs / amend msg / step logs / sub-agent msg
+# (.harness-msg/ 早 ignore, 此处补 3 pattern 覆盖其余)
+.harness-*.log
+.harness-*.txt
+.harness-*.md
