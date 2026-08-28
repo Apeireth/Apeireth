@@ -52,6 +52,7 @@ Status:          📝 工作日志 (Reflective, not authoritative)
 | `c55e3911` | O-6 #10 #11 #12 (文档位置 + kernel re-export + 统一 error) | #10 #11 #12 |
 | `240f3277` | O-6 #8 #9 (5 重守门 workflow + cargo test --doc) | #8 #9 |
 | `a98a636d` | ROADMAP §3 + CHANGELOG + philosophy.md 教训整合 | - |
+| `38cc1039` | RC-10 line header AAD tamper 保护 (子代理 C 建议 #5 兑现) | **#23** |
 
 ---
 
