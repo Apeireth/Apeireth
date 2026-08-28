@@ -9,6 +9,11 @@ Document:        docs/04-internal/v2-rc-1-progress-report.md
 Version:         Snapshot-1.0
 Last-Modified:   2026-08-27
 Status:          📊 进展快照 (一次性, 真兑现)
+
+> **HEAD 指针漂移说明** (子代理 H 风险 #1 缓解, 2026-08-27):
+> 本报告初始写于 HEAD `ae182c8c` (commit `206fb1da` 进展报告).
+> 后续 commit `c481b123` (子代理 G 独立判断补) + `d5a079ba` (0 装诚实总结) + `a2f45bea` (0 装诱导修正) 仅文档增量, **0 触碰**报告 §2-§10 27 commit 数据.
+> 接手人 `git log | head -1` 当前 HEAD 与报告 §1/§10 标的 HEAD 可能有 1-3 commit 漂移, 但漂移 commit 全是文档增量, 0 改动报告真数据.
 ```
 
 ---
