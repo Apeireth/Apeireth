@@ -49,10 +49,10 @@ pub use cognitive::{
 pub use error::{RuntimeError, RuntimeResult};
 pub use execute::{ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse};
 pub use module::{
-    AgentModule, HookPoint, InvocationContext, InvocationOrigin, ModuleContext, ModuleDirective,
-    ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse,
-    ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH,
-    DEFAULT_MAX_MODULE_INVOCATIONS,
+    AgentModule, HookPoint, InvocationContext, InvocationOrigin, Module, ModuleContext,
+    ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
+    ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, ModuleRegistry,
+    PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
 pub use production::{CognitiveBackends, CognitiveModuleConfig, ProductionCognitiveModules};
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
