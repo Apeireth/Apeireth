@@ -1,7 +1,7 @@
 # Apeireth v2.0.0-rc.1 最终接手报告 (2026-08-28 收盘, 主代理 Mavis 写)
 
 > **本文档定位**: v2.0.0-rc.1 收盘接手报告, 含完整意图 + 进度 + 给新团队的话.
-> **HEAD 状态**: `395fe0f0` (本地 = origin 同步)
+> **HEAD 状态**: `395fe0f0` (本地 = origin 同步) — **主代理 0 装诚实自评 (子代理 Z 审计触发, 2026-08-28 修正)**: 实际 HEAD `d55c5745` (73 commit 累计, 9 organ 全 done, 整合 #2 commit `bbf70293` 拍板). 接手人首件事: 跑 `git log --oneline | head -1` 确认 HEAD.
 > **读谁**: 接手 Apeireth v2.0 的新团队 / 未来自我升级 cycle 的实施者.
 > **何时写**: 主代理 Mavis 收盘 rc.1 session 写于 2026-08-28, 真 LLM 调通后.
 > **关系文档**: 本文 + `HANDOFF-NOTES.md` (子代理 D 接手人手册 11 节) + `v2-architecture-reflection.md` (新架构反思 + 自升级 cycle) + `v2-rc-1-progress-report.md` (本会话进展快照).
@@ -19,7 +19,7 @@ Author:          主代理 Mavis (反思 session)
 
 ## 0. TL;DR (1 段总结)
 
-**Apeireth v2.0.0-rc.1 = 新架构完成 (15-crate + 7 capability trait + 认知模块 + 9 哲学锚 + 5 重守门) + 9/10 RC 真实现 + 子代理 14 项报告全部采纳 + 哲学锚本体 LOCKED 真加 O-6 + 自我升级 cycle 设计完成 + 真 LLM call 1.16s 跑通 (RC-5 MiniMax adapter)**.
+**Apeireth v2.0.0-rc.1 = 新架构完成 (15-crate + 7 capability trait + 认知模块 + 9 哲学锚 + 5 重守门) + 9/10 RC 真实现 + 子代理 14 项报告全部采纳 + 哲学锚本体 LOCKED 真加 O-6 + 自我升级 cycle 设计完成 + 真 LLM call 1.16s 跑通 (RC-5 MiniMax adapter) + 9 organ 全部真实现 (整合 #2 commit `bbf70293`)**.
 
 **总进度 ≈ 50%** (v2.0.0 release 估 5-7 月, 2027-01-08 至 2027-03 月). 距离 v1.0 parity = 9 organ 真移植 + frontend 对接 = 估 5-7 月. **真生产前阻塞 1 项**: 至少 1 organ 真移植 (估 4 周, 推荐 E4 curiosity).
 
