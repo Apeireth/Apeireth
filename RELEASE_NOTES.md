@@ -25,8 +25,9 @@
 | 项 | 值 |
 |---|---|
 | active crate | 85（三层生态：模块/套件/插件） |
-| 代码量 | ~34 万行 Rust |
+| 代码量 | **~55 万行 Rust** (实测 551,208 行 .rs, 1,701 个 .rs 文件, per `git ls-tree -r v1.0.0` + `git show` 全量扫描 2026-08-28) — 之前 "34 万行" 是 0 装低估, 真数字高一倍 |
 | 测试 | 全量 368 组 0 失败（含真实 API 压测退避后 100/100） |
+| 总 tracked 文件 LOC | ~115 万行（含 docs/ + reports/ + scripts/ + Cargo.lock 等, 实测 1,154,516 行） |
 | 编译 | workspace --all-targets 干净 |
 | 仓库 | 历史净化后 .git 356MB（GitHub 友好），0 大 blob |
 | License | Apache-2.0 |
