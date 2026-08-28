@@ -345,7 +345,7 @@ impl Runtime {
             }
         };
 
-        let tools = self.plugins.tool_declarations();
+        let tools = self.tool_declarations();
         let continuation =
             FrozenTurnContinuation::start_of_round(request_id, trace_id, model.clone(), 1);
 
@@ -564,7 +564,7 @@ impl Runtime {
                     }
                 }
 
-                let tools = self.plugins.tool_declarations();
+                let tools = self.tool_declarations();
                 let mut trace =
                     ExecutionTrace::new(approval.trace_id, session_id, approval.request_id);
                 trace.record(
@@ -626,7 +626,7 @@ impl Runtime {
                 continuation.approved_tool_index = Some(continuation.next_tool_index);
                 continuation.approved_approval_id = Some(approval_id);
 
-                let tools = self.plugins.tool_declarations();
+                let tools = self.tool_declarations();
                 let mut trace =
                     ExecutionTrace::new(approval.trace_id, session_id, approval.request_id);
                 trace.record(
@@ -1640,9 +1640,12 @@ impl Runtime {
     ) -> RuntimeResult<ToolDispatch> {
         let clock = self.clock.as_ref();
 
-        let Some(tool) = self.plugins.tool_by_name(&call.name) else {
+        let Some(tool) = self
+            .modules
+            .find_tool_by_name(&call.name)
+            .or_else(|| self.plugins.tool_by_name(&call.name))
+        else {
             let available = self
-                .plugins
                 .tool_declarations()
                 .iter()
                 .map(|t| t.name.clone())
