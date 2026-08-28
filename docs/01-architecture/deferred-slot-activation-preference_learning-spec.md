@@ -387,7 +387,7 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 
 每 1 个 DEFERRED slot 接力 spec 必含 5 项 LOCKED 严守, 同本 spec §7:
 
-1. 5 项 LOCKED + 8 哲学锚本体 + 13 键 + workspace.version + R11 baseline 0 改
+1. 5 项 LOCKED + 9 哲学锚本体 + 13 键 + workspace.version + R11 baseline 0 改
 2. `crates/foundation/plugin/src/organ.rs` 0 改 (新增 variant 由 R10 spec 决策, 不改现有 9 variant)
 3. `crates/foundation/plugin/src/preference.rs` 0 改 (F6 真实现已就位)
 4. `cognitive-module-wiring.md` 0 改 (12 slot ledger 已就位, 仅加新 slot 待 R10 spec 决策)
@@ -527,7 +527,7 @@ per 整合文档 §6 + 子代理 Z 独立审计触发:
 2. **主代理亲跑**: `cargo test --workspace --locked 2>&1 | tail -3` 应 0 FAILED
 3. **主代理亲跑**: `cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tail -3` 应 0 警告
 4. **主代理亲跑**: `cargo test -p apeireth-preference-learning --lib` 应 7-10 tests 0 FAILED
-5. **主代理亲做**: 5 项 LOCKED + 8 哲学锚本体 + 13 键 + workspace.version + R11 baseline 核验
+5. **主代理亲做**: 5 项 LOCKED + 9 哲学锚本体 + 13 键 + workspace.version + R11 baseline 核验
 6. **主代理亲做**: 0 装诱导 prevention 标 commit message
 
 ---
@@ -751,7 +751,7 @@ git diff HEAD~1..HEAD --stat | Select-Object -First 10
 - 子代理 ID: R20
 - 任务 brief: "按 `docs/01-architecture/deferred-slot-activation-preference_learning-spec.md` §4 真实施 preference_learning (估 2 周, 1 人)"
 - 前置依赖: OrganOrchestrator 真实施 (R12, 1-3 周)
-- LOCKED: 5 项 + 8 哲学锚本体 + 13 键 + workspace.version + R11 baseline 0 改
+- LOCKED: 5 项 + 9 哲学锚本体 + 13 键 + workspace.version + R11 baseline 0 改
 - 0 装诚实真账: spec 写 1 个示范 + 真实施估 2 周, 不假装"全做完"
 
 ### 13.2 建议 2: 主代理后续派 R16-R19 + R14 接力同模式 spec

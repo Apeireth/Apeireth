@@ -194,7 +194,7 @@ v2 alpha 0 装, v2.0.0-rc.1 接真 backend. 跟 RC-7 一起.
 - [ ] commit message 写明"3 阶审查的具体回答"
 - [ ] O-6 锚的"可检查信号" 5 条全过 (clippy + 0 静默失败 + commit 0 in-progress + push + CI 0 red)
 - [ ] 推上去后 CI 23 个 workflow 全过
-- [ ] 0 触碰 LOCKED (8 哲学锚 + 13 键 + 3 项不可变脊柱 + workspace.version + R11 baseline)
+- [ ] 0 触碰 LOCKED (9 哲学锚 + 13 键 + 3 项不可变脊柱 + workspace.version + R11 baseline)
 
 ## 7. 与 ROADMAP / 文档同步
 
