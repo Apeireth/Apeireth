@@ -66,6 +66,70 @@ impl OrganTrait for MockOrgan {
     }
 }
 
+/// F1 emotion organ mock — 返 `OrganOutput::Emotion` with configurable pleasure (Stage 2 测试).
+struct F1EmotionMock {
+    pleasure: f32,
+}
+
+#[async_trait::async_trait]
+impl OrganTrait for F1EmotionMock {
+    fn name(&self) -> &'static str {
+        "F1EmotionMock"
+    }
+    fn organ_id(&self) -> OrganKind {
+        OrganKind::F1
+    }
+    async fn process(&self, _input: OrganInput) -> Result<OrganOutput, OrganError> {
+        Ok(OrganOutput::Emotion {
+            pleasure: self.pleasure,
+            arousal: 0.5,
+            dominance: 0.5,
+            trend: apeireth_plugin::organ::EmotionTrend::Stable,
+        })
+    }
+}
+
+/// 构造带可配置 F1 pleasure 的 orchestrator (Stage 2 测试 helper)
+fn build_orchestrator_with_f1_pleasure(
+    pleasure: f32,
+) -> OrganOrchestrator<LocalOrchestratorRelationship> {
+    use apeireth_plugin::organ::EmotionTrend;
+    let _ = EmotionTrend::Stable; // suppress unused import
+
+    let organ_e4: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::E4));
+    let organ_f1: Arc<dyn OrganTrait> = Arc::new(F1EmotionMock { pleasure });
+    let organ_f4: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::F4));
+    let organ_f6: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::F6));
+    let organ_w1: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::W1));
+    let organ_w2: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::W2));
+    let organ_w3: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::W3));
+    let organ_e7: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::E7));
+    let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::Memory));
+
+    let council = Arc::new(Council::default_allow());
+    let sovereignty: Arc<parking_lot::Mutex<dyn SovereigntyGate>> =
+        Arc::new(parking_lot::Mutex::new(LocalSovereignty::default()));
+    let rel = LocalOrchestratorRelationship::new(0.5);
+
+    OrganOrchestrator::new(
+        organ_e4,
+        organ_f1,
+        organ_f4,
+        organ_f6,
+        organ_w1,
+        organ_w2,
+        organ_w3,
+        organ_e7,
+        organ_memory,
+        council,
+        sovereignty,
+        rel,
+        OrchestratorBoundaries::default(),
+        OrchestratorLoopConfig::default(),
+        clock(),
+    )
+}
+
 fn clock() -> Arc<dyn Clock> {
     Arc::new(VirtualClock::new(
         chrono::Utc
@@ -442,4 +506,118 @@ async fn orchestrator_5_state_machine_transitions() {
             )
         )
     );
+}
+
+// ============================================
+// 测试 4: orchestrator_step3_f1_emotion_real (Stage 2 完整化)
+// ============================================
+
+/// tick 步骤 3: F1 emotion organ 真路径 → 算 mood → 比 mood_floor (per v1 organs.rs:108-114 1:1).
+///
+/// 验证:
+/// - F1 organ 返 `OrganOutput::Emotion { pleasure, .. }` → extract_emotion_mood 算 mood
+///   = (pleasure + 1.0) / 2.0
+/// - mood < mood_floor (default 0.3) → tick 返 None + last_decision = Held(EmotionLow)
+/// - mood >= mood_floor → tick 正常走完 (Spoke)
+/// - F1 organ 返 `NotImplemented` (Mock) → extract_emotion_mood 返 None → step 3 skip
+#[tokio::test]
+async fn orchestrator_step3_f1_emotion_real() {
+    use apeireth_plugin::organ::{EmotionTrend, OrganOutput};
+    use apeireth_runtime::canonical::orchestrator::OrganChainOutputs;
+
+    // Case 1: pleasure = -0.8 → mood = (-0.8 + 1.0) / 2.0 = 0.1 < 0.3 (mood_floor)
+    {
+        let orch = build_orchestrator_with_f1_pleasure(-0.8_f32);
+        let organ_input = OrganInput::new(make_episode(), vec!["你好".to_string()]);
+        let chain: OrganChainOutputs = orch.chain_9_organs(organ_input).await;
+        let mood_low = orch.extract_emotion_mood(&chain);
+        assert!(
+            mood_low.is_some(),
+            "F1 emotion 输出存在 → extract 应返 Some"
+        );
+        let mood_low = mood_low.unwrap();
+        assert!(
+            (mood_low - 0.1).abs() < 1e-5,
+            "mood_low 应 = 0.1, got {mood_low}"
+        );
+        assert!(
+            mood_low < OrchestratorLoopConfig::default().mood_floor,
+            "mood_low < mood_floor → 应触发 EmotionLow"
+        );
+    }
+
+    // Case 2: pleasure = 0.6 → mood = (0.6 + 1.0) / 2.0 = 0.8 > 0.3
+    {
+        let orch = build_orchestrator_with_f1_pleasure(0.6_f32);
+        let organ_input = OrganInput::new(make_episode(), vec!["你好".to_string()]);
+        let chain: OrganChainOutputs = orch.chain_9_organs(organ_input).await;
+        let mood_high = orch.extract_emotion_mood(&chain);
+        assert!(mood_high.is_some());
+        let mood_high = mood_high.unwrap();
+        assert!(
+            (mood_high - 0.8).abs() < 1e-5,
+            "mood_high 应 = 0.8, got {mood_high}"
+        );
+        assert!(
+            mood_high >= OrchestratorLoopConfig::default().mood_floor,
+            "mood_high >= mood_floor → tick 不应在 step 3 拦下"
+        );
+    }
+
+    // Case 3: F1 organ 返 NotImplemented (Mock) → extract_emotion_mood 返 None
+    // (Orchestrator 不假装"有情绪数据"; tick step 3 skip)
+    {
+        let orch_mock = build_orchestrator();
+        let organ_input = OrganInput::new(make_episode(), vec![]);
+        let chain_mock = orch_mock.chain_9_organs(organ_input).await;
+        let mood_mock = orch_mock.extract_emotion_mood(&chain_mock);
+        assert!(
+            mood_mock.is_none(),
+            "F1 organ 返 NotImplemented → extract_emotion_mood 应 None, got {mood_mock:?}"
+        );
+        // 确认 f1 真是 NotImplemented (sanity)
+        if let Some(OrganOutput::NotImplemented { organ, .. }) = chain_mock.f1.as_ref() {
+            assert_eq!(*organ, OrganKind::F1);
+        } else {
+            panic!("F1 应返 NotImplemented, got {:?}", chain_mock.f1);
+        }
+    }
+
+    // Case 4: EmotionLow 真实触发路径 — tick + 低 pleasure F1 → 返 None + last_decision = Held(EmotionLow)
+    // 注意: tick 步骤顺序 = 主权闸 → 9 organ 串联 + 8 gate → 情绪调制 (step 3) → ...
+    // 低 pleasure F1 → mood = 0.1 < 0.3 → step 3 EmotionLow → tick 返 None
+    // (必须先过主权闸 + 8 重 gate; 默认条件满足)
+    {
+        let mut orch_low = build_orchestrator_with_f1_pleasure(-0.8_f32);
+        let outcome = orch_low.tick(make_tick_input(1_000_000)).await;
+        assert!(
+            outcome.is_none(),
+            "低 pleasure F1 → tick 应在 step 3 EmotionLow 拦下"
+        );
+        assert_eq!(
+            orch_low.last_decision(),
+            Some(
+                &apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Held(
+                    OrganOrchestratorGate::EmotionLow
+                )
+            ),
+            "last_decision 应 = Held(EmotionLow)"
+        );
+    }
+
+    // Case 5: 高 pleasure F1 → tick 正常走完 (Spoke)
+    {
+        let mut orch_high = build_orchestrator_with_f1_pleasure(0.6_f32);
+        let outcome = orch_high.tick(make_tick_input(1_000_000)).await;
+        assert!(
+            outcome.is_some(),
+            "高 pleasure F1 → tick 应通过 step 3, 走完正常路径"
+        );
+        let outcome = outcome.unwrap();
+        assert_eq!(outcome.action_label, "问候");
+        assert!(matches!(
+            orch_high.last_decision(),
+            Some(apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Spoke { .. })
+        ));
+    }
 }

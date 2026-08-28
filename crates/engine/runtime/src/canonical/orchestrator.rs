@@ -861,6 +861,30 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         outputs
     }
 
+    /// 从 F1 emotion organ 输出提取 mood (per v1 `organs.rs:108-114` 1:1).
+    ///
+    /// **0 装诚实**:
+    /// - 输入: `chain_9_organs()` 输出的 `OrganChainOutputs` (orchestrator 步骤 2 真存).
+    /// - 提取 `chain.f1` 若为 `OrganOutput::Emotion { pleasure, .. }` → 算 mood
+    ///   = (pleasure + 1.0) / 2.0 (per v1 organs.rs:109). arousal/dominance/trend
+    ///   暂未纳入 mood (per v1 organs.rs:108-114 主路径只查 pleasure).
+    /// - 边界:
+    ///   - `chain.f1` 为 `OrganOutput::NotImplemented { organ: F1, .. }` (Mock organ / 0 装 F1) →
+    ///     返 `None` (orchestrator 不假装"有情绪数据").
+    ///   - `chain.f1` 为 `None` (chain 失败或没调) → 返 `None`.
+    ///   - `chain.f1` 为其他 variant (其他 organ kind 误用 F1 slot) → 返 `None`.
+    pub fn extract_emotion_mood(&self, chain: &OrganChainOutputs) -> Option<f64> {
+        let f1_output = chain.f1.as_ref()?;
+        match f1_output {
+            OrganOutput::Emotion { pleasure, .. } => Some((f64::from(*pleasure) + 1.0) / 2.0),
+            OrganOutput::NotImplemented {
+                organ: OrganKind::F1,
+                ..
+            } => None,
+            _ => None, // 其他 variant → 0 装诚实, 不假装
+        }
+    }
+
     /// 8 重 gate 真实路径 — 外层统一入口 (per R11 spec §5).
     ///
     /// **0 装诚实**:
@@ -1017,7 +1041,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
                 .map(|c| vec![c])
                 .unwrap_or_default(),
         );
-        let _chain = self.chain_9_organs(organ_input).await;
+        let chain = self.chain_9_organs(organ_input).await;
 
         // 8 重 gate 外层入口 (per R11 spec §5)
         // **0 装诚实**: initiatives_today 简化 = 0 (per v1 EmergenceLoop 内部维护,
@@ -1034,12 +1058,22 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
             return None;
         }
 
-        // 步骤 3: 情绪调制 (per v1 organs.rs:108-114, mood_floor 抑制)
-        // **0 装诚实**: Orchestrator 本地 mood_floor 校验; 真实路径调 F1 emotion organ
-        // 拿 PAD + 算 mood = (p+1)/2. 本地简化: 不重算 emotion, 仅校验 mood_floor 阈值.
-        // 真生产路径: F1 organ 拿 mood 后, Orchestrator 比 mood_floor 决定抑制.
-        // 本 spec 测试用 `mood_floor` 直接 pass (orchestrator 不假装"已计算情绪").
-        let _ = self.loop_config.mood_floor; // 0 装诚实: 保留 schema, 不假装"已算情绪"
+        // 步骤 3: 情绪调制 (per v1 `organs.rs:108-114`, mood_floor 抑制, 真生产路径 Stage 2 完整化)
+        // **0 装诚实**:
+        // - 真实路径: 从 `chain.f1` 拿 `OrganOutput::Emotion { pleasure, .. }` → 算 mood
+        //   = (pleasure + 1.0) / 2.0 (per v1 organs.rs:109). mood < `mood_floor` → 拦下 (EmotionLow).
+        // - 边界: `chain.f1` 若为 `NotImplemented` (Mock / 0 装 organ) → skip (不假装"有情绪数据").
+        //   若为其他 variant (其他 organ 用错 kind) → skip (不假装)。
+        // - 真生产路径: F1 `EmotionOrgan::process()` 返真 `Emotion` variant;
+        //   测试用 MockOrgan 返 `NotImplemented` → step 3 skip, test 仍 pass。
+        if let Some(mood) = self.extract_emotion_mood(&chain) {
+            if mood < self.loop_config.mood_floor {
+                self.last_decision = Some(OrchestratorDecision::Held(
+                    OrganOrchestratorGate::EmotionLow,
+                ));
+                return None;
+            }
+        }
 
         // 步骤 4: 智囊团审议 (per v1 organs.rs:116-135, 60s timeout per cognitive-module-wiring.md:99)
         let session_id = if !input.session_id.is_empty() {
