@@ -82,9 +82,8 @@ impl StdSubSupervisor {
         cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        cmd.spawn().map_err(|e| {
-            SupervisorError::StartFailed(format!("spawn `{}` failed: {e}", spec.cmd))
-        })
+        cmd.spawn()
+            .map_err(|e| SupervisorError::StartFailed(format!("spawn `{}` failed: {e}", spec.cmd)))
     }
 
     /// 检测 `ExitReason` (per v1: ExitCode → Normal/Abnormal, signal → Signaled on Unix)
@@ -107,7 +106,7 @@ impl StdSubSupervisor {
     fn try_reap(&self, _child_id: &str, child: &mut Child) -> Option<ExitReason> {
         match child.try_wait() {
             Ok(Some(status)) => Some(Self::classify_exit(status)),
-            Ok(None) => None, // 还活着
+            Ok(None) => None,                   // 还活着
             Err(_) => Some(ExitReason::Killed), // 错当 killed
         }
     }
@@ -130,7 +129,12 @@ impl SubSupervisor for StdSubSupervisor {
         // 启动所有声明的 children (per v1 process:start)
         // 0 装 PASS: 真启进程, 不假装
         for spec in &self.children {
-            if self.handles.lock().expect("handles poisoned").contains_key(&spec.id) {
+            if self
+                .handles
+                .lock()
+                .expect("handles poisoned")
+                .contains_key(&spec.id)
+            {
                 return Err(SupervisorError::StartFailed(format!(
                     "duplicate child id: {}",
                     spec.id
@@ -156,10 +160,7 @@ impl SubSupervisor for StdSubSupervisor {
             }
             // 还活着, kill
             if let Err(e) = child.kill() {
-                return Err(SupervisorError::Io(format!(
-                    "kill `{}` failed: {e}",
-                    id
-                )));
+                return Err(SupervisorError::Io(format!("kill `{}` failed: {e}", id)));
             }
         }
         handles.clear();
@@ -302,10 +303,14 @@ mod tests {
         spec.restart = RestartStrategy::Transient;
         let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
         // Normal 不重启
-        let d = s.on_child_exit("c-1", ExitReason::Normal { code: 0 }).unwrap();
+        let d = s
+            .on_child_exit("c-1", ExitReason::Normal { code: 0 })
+            .unwrap();
         assert_eq!(d, RestartDecision::DoNotRestart);
         // Abnormal 重启
-        let d = s.on_child_exit("c-1", ExitReason::Abnormal { code: 1 }).unwrap();
+        let d = s
+            .on_child_exit("c-1", ExitReason::Abnormal { code: 1 })
+            .unwrap();
         assert_eq!(d, RestartDecision::RestartNow);
     }
 
@@ -317,7 +322,9 @@ mod tests {
         let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
         // 默认 5 次
         for _ in 0..5 {
-            let _ = s.on_child_exit("c-1", ExitReason::Abnormal { code: 1 }).unwrap();
+            let _ = s
+                .on_child_exit("c-1", ExitReason::Abnormal { code: 1 })
+                .unwrap();
         }
         // 第 6 次: 超限
         let r = s.on_child_exit("c-1", ExitReason::Abnormal { code: 1 });
@@ -372,10 +379,7 @@ mod tests {
     fn duplicate_child_id_returns_error() {
         let spec1 = ChildSpec::new("dup", "/bin/true");
         let spec2 = ChildSpec::new("dup", "/bin/false");
-        let mut s = StdSubSupervisor::new(
-            SubSupervisorKind::Core,
-            vec![spec1, spec2],
-        );
+        let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec1, spec2]);
         let r = s.start();
         assert!(matches!(r, Err(SupervisorError::StartFailed(_))));
     }

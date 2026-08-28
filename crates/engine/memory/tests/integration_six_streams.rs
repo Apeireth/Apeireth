@@ -10,7 +10,10 @@
 //!
 //! 这些测试放在 `tests/` 目录, 编译为独立 binary, 验证 public API.
 
-use apeireth_core::{kernel::memory::Episode, kernel::memory::IdentityCard, kernel::memory::Migration, kernel::memory::Note, kernel::memory::Session};
+use apeireth_core::{
+    kernel::memory::Episode, kernel::memory::IdentityCard, kernel::memory::Migration,
+    kernel::memory::Note, kernel::memory::Session,
+};
 use apeireth_memory::{
     ActionStream, ContinuitySnapshotStore, EpisodeQuery, EpisodeStore, EvolutionStream, GoalStream,
     HistoryEntry, HistoryStream, IdentityCardStore, MigrationStream, NoteQuery, NoteStore,

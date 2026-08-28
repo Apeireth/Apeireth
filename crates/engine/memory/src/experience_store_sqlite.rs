@@ -2,13 +2,13 @@
 //!
 //! impl 在 apeireth-memory (engine), trait 在 apeireth-plugin (foundation)
 
-use std::sync::Arc;
 use apeireth_plugin::experience::{
     AssociationEdge, AssociationStore, GraphFact, GraphLink, KnowledgeGraphStore, WikiEntry,
     WikiEntryStore,
 };
 use apeireth_plugin::memory_backend::CapabilityResult;
 use apeireth_storage::SqliteConnectionPool;
+use std::sync::Arc;
 
 pub struct SQLiteExperienceStore {
     pool: Arc<SqliteConnectionPool>,
@@ -82,14 +82,14 @@ impl SQLiteExperienceStore {
             .map_err(apeireth_storage::StorageError::from)
         })
         .await
-        .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
+        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 }
 
 impl WikiEntryStore for SQLiteExperienceStore {
     fn put_wiki(&self, entry: &WikiEntry) -> CapabilityResult<()> {
         let tags_json = serde_json::to_string(&entry.tags)
-            .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         self.pool
             .read(|conn| {
                 conn.execute(
@@ -230,7 +230,7 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
                 )?;
                 Ok(())
             })
-            .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
     fn put_link(&self, link: &GraphLink) -> CapabilityResult<()> {
@@ -251,80 +251,77 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
                 )?;
                 Ok(())
             })
-            .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
-    fn facts_from(
-        &self,
-        subject_id: &str,
-        limit: u32,
-    ) -> CapabilityResult<Vec<GraphFact>> {
+    fn facts_from(&self, subject_id: &str, limit: u32) -> CapabilityResult<Vec<GraphFact>> {
         self.pool
-            .read(|conn| -> Result<Vec<GraphFact>, apeireth_storage::StorageError> {
-                let mut stmt = conn.prepare_cached(
-                    "SELECT id, subject_id, subject_kind, predicate, object_id, object_kind, \
+            .read(
+                |conn| -> Result<Vec<GraphFact>, apeireth_storage::StorageError> {
+                    let mut stmt = conn.prepare_cached(
+                        "SELECT id, subject_id, subject_kind, predicate, object_id, object_kind, \
                             valid_from_ms, valid_until_ms, source_episode_id, confidence \
                      FROM kg_facts \
                      WHERE subject_id = ?1 \
                        AND (valid_until_ms IS NULL OR valid_until_ms > ?2) \
                      ORDER BY confidence DESC \
                      LIMIT ?3",
-                )?;
-                let now_ms = chrono::Utc::now().timestamp_millis();
-                let rows = stmt.query_map(
-                    rusqlite::params![subject_id, now_ms, i64::from(limit)],
-                    |row| {
-                        Ok(GraphFact {
-                            id: row.get(0)?,
-                            subject_id: row.get(1)?,
-                            subject_kind: row.get(2)?,
-                            predicate: row.get(3)?,
-                            object_id: row.get(4)?,
-                            object_kind: row.get(5)?,
-                            valid_from: row.get(6)?,
-                            valid_until: row.get(7)?,
-                            source_episode_id: row.get(8)?,
-                            confidence: row.get(9)?,
-                        })
-                    },
-                )?;
-                let mut out = Vec::new();
-                for r in rows {
-                    out.push(r?);
-                }
-                Ok(out)
-            })
-            .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
+                    )?;
+                    let now_ms = chrono::Utc::now().timestamp_millis();
+                    let rows = stmt.query_map(
+                        rusqlite::params![subject_id, now_ms, i64::from(limit)],
+                        |row| {
+                            Ok(GraphFact {
+                                id: row.get(0)?,
+                                subject_id: row.get(1)?,
+                                subject_kind: row.get(2)?,
+                                predicate: row.get(3)?,
+                                object_id: row.get(4)?,
+                                object_kind: row.get(5)?,
+                                valid_from: row.get(6)?,
+                                valid_until: row.get(7)?,
+                                source_episode_id: row.get(8)?,
+                                confidence: row.get(9)?,
+                            })
+                        },
+                    )?;
+                    let mut out = Vec::new();
+                    for r in rows {
+                        out.push(r?);
+                    }
+                    Ok(out)
+                },
+            )
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
-    fn links_from(
-        &self,
-        from_id: &str,
-        limit: u32,
-    ) -> CapabilityResult<Vec<GraphLink>> {
+    fn links_from(&self, from_id: &str, limit: u32) -> CapabilityResult<Vec<GraphLink>> {
         self.pool
-            .read(|conn| -> Result<Vec<GraphLink>, apeireth_storage::StorageError> {
-                let mut stmt = conn.prepare_cached(
-                    "SELECT from_id, to_id, kind, weight, source_episode_id, created_at \
+            .read(
+                |conn| -> Result<Vec<GraphLink>, apeireth_storage::StorageError> {
+                    let mut stmt = conn.prepare_cached(
+                        "SELECT from_id, to_id, kind, weight, source_episode_id, created_at \
                      FROM kg_links WHERE from_id = ?1 ORDER BY weight DESC LIMIT ?2",
-                )?;
-                let rows = stmt.query_map(rusqlite::params![from_id, i64::from(limit)], |row| {
-                    Ok(GraphLink {
-                        from_id: row.get(0)?,
-                        to_id: row.get(1)?,
-                        kind: row.get(2)?,
-                        weight: row.get(3)?,
-                        source_episode_id: row.get(4)?,
-                        created_at: row.get(5)?,
-                    })
-                })?;
-                let mut out = Vec::new();
-                for r in rows {
-                    out.push(r?);
-                }
-                Ok(out)
-            })
-            .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
+                    )?;
+                    let rows =
+                        stmt.query_map(rusqlite::params![from_id, i64::from(limit)], |row| {
+                            Ok(GraphLink {
+                                from_id: row.get(0)?,
+                                to_id: row.get(1)?,
+                                kind: row.get(2)?,
+                                weight: row.get(3)?,
+                                source_episode_id: row.get(4)?,
+                                created_at: row.get(5)?,
+                            })
+                        })?;
+                    let mut out = Vec::new();
+                    for r in rows {
+                        out.push(r?);
+                    }
+                    Ok(out)
+                },
+            )
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
     fn forget_subject(&self, subject_id: &str) -> CapabilityResult<()> {
@@ -340,17 +337,12 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
                 )?;
                 Ok(())
             })
-            .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 }
 
 impl AssociationStore for SQLiteExperienceStore {
-    fn record_cooccurrence(
-        &self,
-        from: &str,
-        to: &str,
-        episode_id: &str,
-    ) -> CapabilityResult<()> {
+    fn record_cooccurrence(&self, from: &str, to: &str, episode_id: &str) -> CapabilityResult<()> {
         let now = chrono::Utc::now().timestamp();
         self.pool.read(|conn| {
             conn.execute(
@@ -377,11 +369,7 @@ impl AssociationStore for SQLiteExperienceStore {
         .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
-    fn top_associations(
-        &self,
-        entity: &str,
-        limit: u32,
-    ) -> CapabilityResult<Vec<AssociationEdge>> {
+    fn top_associations(&self, entity: &str, limit: u32) -> CapabilityResult<Vec<AssociationEdge>> {
         self.pool
             .read(|conn: &rusqlite::Connection| -> Result<Vec<AssociationEdge>, apeireth_storage::StorageError> {
                 let mut stmt = conn.prepare_cached(
@@ -441,8 +429,7 @@ mod tests {
             extracted_at: 1_700_000_000,
         };
         WikiEntryStore::put_wiki(&store, &entry).expect("put");
-        let list = WikiEntryStore::list_wiki(&store, &sid.to_string(), "Rust", 10)
-            .expect("list");
+        let list = WikiEntryStore::list_wiki(&store, &sid.to_string(), "Rust", 10).expect("list");
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, "wiki-1");
     }
@@ -464,8 +451,7 @@ mod tests {
             confidence: 0.9,
         };
         KnowledgeGraphStore::put_fact(&store, &fact).expect("put_fact");
-        let facts = KnowledgeGraphStore::facts_from(&store, "rust", 10)
-            .expect("facts_from");
+        let facts = KnowledgeGraphStore::facts_from(&store, "rust", 10).expect("facts_from");
         assert_eq!(facts.len(), 1);
         assert_eq!(facts[0].id, "fact-1");
 
@@ -478,8 +464,7 @@ mod tests {
             created_at: 1_700_000_000,
         };
         KnowledgeGraphStore::put_link(&store, &link).expect("put_link");
-        let links = KnowledgeGraphStore::links_from(&store, "rust", 10)
-            .expect("links_from");
+        let links = KnowledgeGraphStore::links_from(&store, "rust", 10).expect("links_from");
         assert_eq!(links.len(), 1);
     }
 
@@ -501,12 +486,16 @@ mod tests {
         };
         KnowledgeGraphStore::put_fact(&store, &fact).expect("put");
         assert_eq!(
-            KnowledgeGraphStore::facts_from(&store, "ephemeral", 10).unwrap().len(),
+            KnowledgeGraphStore::facts_from(&store, "ephemeral", 10)
+                .unwrap()
+                .len(),
             1
         );
         KnowledgeGraphStore::forget_subject(&store, "ephemeral").expect("forget");
         assert_eq!(
-            KnowledgeGraphStore::facts_from(&store, "ephemeral", 10).unwrap().len(),
+            KnowledgeGraphStore::facts_from(&store, "ephemeral", 10)
+                .unwrap()
+                .len(),
             0,
             "forget 真删"
         );
@@ -516,10 +505,8 @@ mod tests {
     #[tokio::test]
     async fn association_record_and_top() {
         let store = fresh().await;
-        AssociationStore::record_cooccurrence(&store, "rust", "fast", "ep-1")
-            .expect("rec 1");
-        AssociationStore::record_cooccurrence(&store, "rust", "fast", "ep-2")
-            .expect("rec 2");
+        AssociationStore::record_cooccurrence(&store, "rust", "fast", "ep-1").expect("rec 1");
+        AssociationStore::record_cooccurrence(&store, "rust", "fast", "ep-2").expect("rec 2");
         let top = AssociationStore::top_associations(&store, "rust", 10).expect("top");
         assert!(!top.is_empty());
         assert!(

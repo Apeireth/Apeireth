@@ -30,8 +30,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use apeireth_core::Episode;
 use crate::memory_backend::CapabilityResult;
+use apeireth_core::Episode;
 
 // ============================================
 // Wiki (L1: LLM 提炼的条目)
@@ -71,7 +71,12 @@ pub trait WikiEntryStore: Send + Sync {
     fn put_wiki(&self, entry: &WikiEntry) -> CapabilityResult<()>;
 
     /// 按 session 列出某 topic 下的 WikiEntry
-    fn list_wiki(&self, session_id: &str, topic: &str, limit: u32) -> CapabilityResult<Vec<WikiEntry>>;
+    fn list_wiki(
+        &self,
+        session_id: &str,
+        topic: &str,
+        limit: u32,
+    ) -> CapabilityResult<Vec<WikiEntry>>;
 
     /// 按 source_episode_id 反查（v1 progressive disclosure: 注入时回查摘要）
     fn wiki_for_episode(&self, episode_id: &str) -> CapabilityResult<Vec<WikiEntry>>;
@@ -90,8 +95,8 @@ pub struct GraphFact {
     pub id: String,
     pub subject_id: String,
     pub subject_kind: String, // "person" / "tool" / "concept" / ...
-    pub predicate: String, // "uses" / "depends_on" / "is_a" / ...
-    pub object_id: String,   // 实体 ID 或字面值
+    pub predicate: String,    // "uses" / "depends_on" / "is_a" / ...
+    pub object_id: String,    // 实体 ID 或字面值
     pub object_kind: String,
     /// 时间有效性: 何时该 fact 成立 (v1 D2 §5.4: 暂存为单一 timestamp)
     pub valid_from: i64,
@@ -160,12 +165,7 @@ pub struct AssociationEdge {
 /// 联想网络 trait
 pub trait AssociationStore: Send + Sync {
     /// 记录一次 entity-pair 共现（每次 episode 写入时调）
-    fn record_cooccurrence(
-        &self,
-        from: &str,
-        to: &str,
-        episode_id: &str,
-    ) -> CapabilityResult<()>;
+    fn record_cooccurrence(&self, from: &str, to: &str, episode_id: &str) -> CapabilityResult<()>;
 
     /// 查 entity 联想 top-N（按 co_occurrence_count desc）
     fn top_associations(&self, entity: &str, limit: u32) -> CapabilityResult<Vec<AssociationEdge>>;
