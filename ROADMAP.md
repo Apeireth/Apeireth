@@ -105,7 +105,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | P6 | companion 器官移植 | 世界模型 W1/W2/W3、好奇心 E4、假设检验 F4、情感记忆 F1、价值内化 F6 从 legacy 移植回主链 | P3 |
 | P7 | 连续感知 | voice/screen（v1 的"连续感知①②"从未落地 main，实现留 legacy） | P6 |
 | P8 | 前端产品化 | companion-desktop 对接主链 + 真实流式（旧 TP34 重映射） | P0 |
-| **P1 (新)** | **RC-10 metadata-bound APX2 header** | 已完成：v2 写入的 AAD 绑定 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length；旧 v1 `[sealed_len:4 BE][sealed:N]` 保持只读兼容，当前格式不落盘 raw `record_id`。如部署需要离线重写旧数据，可另行提供迁移工具，但不是当前读取兼容的阻塞项 | RC-10 ✅ |
+| **P1 (新)** | **RC-10 metadata-bound APX2 header + RC-11 migration** | 已完成：v2 写入的 AAD 绑定 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length；旧 v1 `[sealed_len:4 BE][sealed:N]` 保持只读兼容，当前格式不落盘 raw `record_id`。`scripts/migrate_v1_to_v2_encrypted.py` 与 7 个 Rust 集成测试完成离线 v1→APX2 重签、截断/超长 ID fail-closed 验证 | RC-10/11 ✅ |
 
 ---
 
@@ -149,4 +149,4 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ---
 
-_本 ROADMAP 由文档对账批重写 (2026-08-27)，反映 reconstruct_v2 工程重构完成 + main 晋升 + v2.0.0-alpha.1。思想层（8 锚 / 13 键 / 三洋葱 / 9 organ / R11 baseline 3 值）LOCKED 保留。v1.0 时代详单见 `docs/archive/roadmap/`。_
+_本 ROADMAP 由文档对账批重写 (2026-08-27)，反映 reconstruct_v2 工程重构完成 + main 晋升 + v2.0.0-alpha.1。思想层（9 锚 / 13 键 / 三洋葱 / 9 organ / R11 baseline 3 值）LOCKED 保留。v1.0 时代详单见 `docs/archive/roadmap/`。_
