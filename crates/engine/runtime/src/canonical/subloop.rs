@@ -184,9 +184,7 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
                 maximum: DEFAULT_MAX_INVOCATION_DEPTH,
             });
         }
-        let model = spec
-            .model
-            .unwrap_or_else(|| self.current_model.to_string());
+        let model = spec.model.unwrap_or_else(|| self.current_model.to_string());
         if model.is_empty() {
             return Err(SubLoopError::NoModel);
         }
@@ -228,13 +226,13 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
                 req.tools = tool_declarations.clone();
             }
 
-            let routed = self
-                .router
-                .complete(&req)
-                .await
-                .map_err(|error| SubLoopError::Provider {
-                    reason: format!("module {} subloop: {error}", self.module_id),
-                })?;
+            let routed =
+                self.router
+                    .complete(&req)
+                    .await
+                    .map_err(|error| SubLoopError::Provider {
+                        reason: format!("module {} subloop: {error}", self.module_id),
+                    })?;
 
             let response = routed.response;
             total_usage.prompt_tokens += response.usage.prompt_tokens;
@@ -251,12 +249,17 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
                 ));
 
                 for call in &response.tool_calls {
-                    let tool_opt = allowed_tools.iter().find(|t| t.declaration().name == call.name);
+                    let tool_opt = allowed_tools
+                        .iter()
+                        .find(|t| t.declaration().name == call.name);
                     let result = match tool_opt {
                         Some(tool) => tool.invoke(call).await,
                         None => ToolResult::permanent_error(
                             &call.id,
-                            format!("tool {:?} is not in the subloop capability allowlist", call.name),
+                            format!(
+                                "tool {:?} is not in the subloop capability allowlist",
+                                call.name
+                            ),
                         ),
                     };
                     collected_tool_results.push(result.clone());
@@ -273,7 +276,9 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
             }
         }
 
-        Err(SubLoopError::RoundLimitReached { rounds: spec.max_rounds })
+        Err(SubLoopError::RoundLimitReached {
+            rounds: spec.max_rounds,
+        })
     }
 }
 

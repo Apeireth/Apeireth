@@ -237,6 +237,7 @@ async fn build_cognitive_modules_from_env(
         preferences: Some(preferences),
         self_assessments: Some(self_assessments),
         council,
+        workspace_root: std::env::current_dir().ok(),
     };
     apeireth_runtime::canonical::ProductionCognitiveModules::build(config, backends, clock)
         .map_err(|error| error.to_string())

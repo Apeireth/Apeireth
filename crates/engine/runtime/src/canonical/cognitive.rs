@@ -1396,7 +1396,8 @@ mod tests {
         async fn spawn(
             &self,
             _spec: super::super::subloop::SubLoopSpec,
-        ) -> Result<super::super::subloop::SubLoopResult, super::super::subloop::SubLoopError> {
+        ) -> Result<super::super::subloop::SubLoopResult, super::super::subloop::SubLoopError>
+        {
             Err(super::super::subloop::SubLoopError::NoModel)
         }
     }
