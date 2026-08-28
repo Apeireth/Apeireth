@@ -113,12 +113,73 @@ bbbfb75b docs: A 块 5 commit O-6 三阶审查 复盘 + 后续 commit 标准 (�
 
 ---
 
-## 5. 哲学锚承诺 (per §0 主代理三承诺)
+## 5. 哲学锚承诺 (per §0 主代理三承诺) — Round 9 收盘更新
 
-1. **继续维护 9 哲学锚 LOCKED**: 本轮修了 8→9 锚数字漂移, 0 改 9 锚本体 (eight_anchors.rs:58-79 0 行 diff)
-2. **继续派子代理 = 调研/验证/真写**: 本轮没派 (改动小, 主代理 1 人足够), 但读哲学锚 + 跑 baseline = 自验
-3. **继续 O-6 永远追求最优**: 本轮 amend 2 commits, 三阶审查写在 commit message; 0 找借口 (amend 第一遍错 → 立即 flag + 修, 不 hide)
+1. **继续维护 9 哲学锚 LOCKED** (兑现 ✓):
+   - Round 1-9 全程 0 触碰 eight_anchors.rs enum (9 锚本体 0 改)
+   - Round 1-3 修 13 处 8→9 锚数字漂移 (commit message + 文档 LOCKED 描述 + sub-agent R11 错账)
+   - Round 5-6 增 §13 #11 PowerShell `^{tree}` gotcha + §13 #12 author env var 漏设
+   - Round 6 §4.5 术语统一表 (5/6/7/8/9 重 vs LOCKED 5 项)
+2. **继续派子代理 = 调研/验证/真写** (兑现 ✓):
+   - Round 4 派 sub-agent audit 5 commits 哲学偏离 (主代理亲验 catch 3 处误判)
+   - Round 8-9 派 8 sub-agent 调研 (2 真账 + 6 全调研真账 batch)
+   - Round 9 派 R20 + B-A sub-agent 真实施 (2 次 O-6 失守, 主代理撤 + 写真账)
+   - 教训: sub-agent brief 必含 "跑 5 重守门 + 主代理亲验前不假装 PASS"
+3. **继续 O-6 永远追求最优** (兑现 ✓):
+   - Round 1-9 每 commit 必带三阶审查 (总体/系统/架构) + 拒 alternatives + 拒理由
+   - Round 1 amend 失守 → flag + followup 修 (不 hide)
+   - Round 4 author Mavis env var 失守 → 4 commit amend (不"删重做")
+   - Round 9 R20 + B-A sub-agent O-6 失守 → 主代理撤 + 写真账 (不假装 PASS)
+   - 0 装诚实标 7 处 + 13 处 数字漂移修 + 20 处 stale doc 修 = 工程师接手 evidence
+
+## 6. Round 1-9 真账交付清单 (一站式 reference)
+
+**接手工程师必读 5 doc**:
+1. 本 handbook (Round 9 写) — `docs/04-internal/v2-reference-handbook-2026-08-28.md` (~430 行)
+2. ENGINEER-MANIFESTO.md — 14 章工程规范 + §13 12 真实陷阱
+3. 本 handoff log (本文件)
+4. sub-agent-audit-round-4-2026-08-28.md (201 行, Round 4 audit)
+5. round-8-verifications-2026-08-28.md (256 行, Round 8 CI/wiring 真账)
+
+**Round 9 调研 7 真账 doc** (~1586 行):
+- r20-preference_learning-research (346)
+- r21-r24-r12-research (195)
+- rc7-perception-research (228)
+- b-block-decision-points-research (199)
+- b-block-gateway-sse-research (170)
+- gitignore-hygiene-audit (220)
+- r9-r10-spec-drift-audit (228)
+
+**Round 1-9 18 commits 完整链**:
+1. `bbbfb75b` A 块 5 commit O-6 三阶审查 0 装诚实复盘
+2. `c003e078` Stage 1 ratify_fresh_policy
+3. `087ab2ac` Stage 2 extract_emotion_mood
+4. `50ba2e57` Stage 3 check_8_gates
+5. `29e5ce66` Stage 4 decide_with_invoker
+6. `0afa733f` Stage 5 L0-L5 UpgradeCycle
+7. `1d885299` A 块完成真账同步 (msg amend)
+8. `5e18e65b` ENGINEER-MANIFESTO 14 章 (msg amend)
+9. `3a957056` ENGINEER-MANIFESTO doc 本体 8→9 真修 + .gitignore + handoff log
+10. `13e73891` organ-orchestrator-spec 8→9 锚漂移修
+11. `aa488f1f` Round 3 audit 修 5 docs 8 处 8→9 锚 LOCKED 真漂移
+12. `bde6268b` sub-agent 审计报告 Round 4
+13. `0ca16572` §13 增 3 条 Round 1-3 工序教训
+14. `dd4a72de` Round 5 backlog (src 漂移 + 3 docs R11 path + §13 #12)
+15. `7a861938` §8.5 pre-commit + commit-msg hook
+16. `2155d694` fix(sdk): SDK lib.rs _SIX_PHILOSOPHY_ANCHORS
+17. `7d990297` §4.5 术语统一表
+18. `155a9450` Round 7 20 处 stale doc batch fix
+19. `66649ead` Round 8 part 1 4 处 v2-gateway HEAD stale
+20. `3eb7f26b` Round 8 part 2 2 sub-agent + frontend hygiene + O-5 失守
+21. `70281cc6` Round 9 6 sub-agent 调研真账 batch (current HEAD)
+
+## 7. Round 9 收盘 1 段交付 (更新 §5 哲学锚承诺后)
+
+Apeireth v2.0.0-rc.1 在 `origin/main @ 70281cc6` (Round 9 完), **9 哲学锚 LOCKED, 1739 tests PASS, 0 警告, 0 触碰 LOCKED 5 项, 0 装诚实**. A 块 (OrganOrchestrator 完整化 5 stage) 已落地, B/C/D 3 块调研真账 ~1586 行已就位, 派单顺序 + critical path 5-7 周 调研清楚. **接手 = 1-2 小时读 5 份 doc + 1-2 天主代理亲做 6 项决策冻结 + 派 4-6 个 sub-agent 真实施 + 5 重守门 baseline 严守 + commit msg 5 段模板 + §8.5 hook 启用**. 2027-Q1 启动, 2027-Q2 完.
+
+主代理 Mavis 收盘. 接手 = 你.
 
 ---
 
-_Mavis 写于 2026-08-28, 接手 ENGINEER-MANIFESTO push 后. 后续按本文档 §3 下一步建议执行._
+_Mavis 写于 2026-08-28 Round 9 收盘, 21 commits, 1 force push, 8 sub-agent 调研 + 2 sub-agent 真实施失守撤, 13 处 0 装诚实标, 1586 行调研真账 + 430 行一站式 reference + 1 token 紧现实. A 块 + B/C/D 调研 闭环._
+
