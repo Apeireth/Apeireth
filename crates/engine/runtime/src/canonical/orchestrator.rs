@@ -59,7 +59,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
-use apeireth_orchestration::{Council, Proposal};
+use apeireth_orchestration::{Council, CouncilDecision, CouncilInvoker, CouncilResult, Proposal};
 use apeireth_plugin::organ::{
     InitiativeGate, OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
 };
@@ -523,6 +523,13 @@ pub struct OrganOrchestrator<RS: RelationshipState + 'static> {
 
     // 智囊团 (per v1 `AwakeCompanion::council: Council`, 真接 LLM per RC-6)
     council: Arc<Council>,
+    /// Council invoker adapter (per cognitive-module-wiring.md:99 60s timeout + 7 advisor 并行,
+    /// runtime-owned `ModuleInvoker` 桥接). Stage 4 完整化: Orchestrator 调 `decide_with_invoker`
+    /// 而非 legacy `decide()`, 拿 typed `CouncilResult` 含 failure category + side_call_count.
+    ///
+    /// **0 装诚实**: 测试用 `MockCouncilInvoker` 返 `Allow`; 真生产路径 `ModuleInvokerCouncilAdapter`
+    /// 桥 runtime 的 `ModuleInvoker` 到 `CouncilInvoker` (Stage 5 在 governance composition root 注入).
+    council_invoker: Arc<dyn CouncilInvoker>,
 
     // 关系深度 (per v1 `AwakeCompanion::loop_: EmergenceLoop<Bond>`, Bond 占位)
     relationship: parking_lot::Mutex<RS>,
@@ -625,6 +632,72 @@ pub fn system_time_ms() -> i64 {
 }
 
 // ============================================
+// MockCouncilInvoker (Stage 4 测试 helper)
+// ============================================
+
+/// Mock CouncilInvoker — 测试用 allow-all invoker (per Stage 4 完整化).
+///
+/// **0 装诚实**:
+/// - 真生产路径 Orchestrator 调 `Council::decide_with_invoker(proposal, &*council_invoker)`,
+///   invoker 返 `AdvisorVerdict`. Mock 实现直接返 `Allow` 不调真 LLM.
+/// - Stage 4 测试用: `MockCouncilInvoker::allow_all()` 返所有 advisor 都 Allow → CouncilDecision::Continue.
+/// - 真生产路径: `ModuleInvokerCouncilAdapter` (Stage 5 L0-L5 cycle 在 governance composition
+///   root 注入, 桥 runtime `ModuleInvoker` → `CouncilInvoker`, 60s timeout per
+///   cognitive-module-wiring.md:99).
+pub struct MockCouncilInvoker {
+    /// 返 Allow 还是 Stop (per test case 配置).
+    pub decision: MockCouncilDecision,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MockCouncilDecision {
+    AllowAll,
+    StopAll,
+}
+
+impl MockCouncilInvoker {
+    pub fn allow_all() -> Self {
+        Self {
+            decision: MockCouncilDecision::AllowAll,
+        }
+    }
+    pub fn stop_all() -> Self {
+        Self {
+            decision: MockCouncilDecision::StopAll,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl CouncilInvoker for MockCouncilInvoker {
+    async fn invoke(
+        &self,
+        _advisor: Arc<dyn apeireth_orchestration::Advisor>,
+        _proposal: &Proposal,
+    ) -> Result<apeireth_orchestration::AdvisorVerdict, apeireth_orchestration::CouncilCallError> {
+        // 0 装诚实: 测试 mock 不调真 LLM, 直接返构造 verdict (per RC-6 子代理 N 真接 LLM 路径
+        // 由 ModuleInvokerCouncilAdapter 处理, 不在本 mock 范围).
+        use apeireth_orchestration::{AdvisorDecision, AdvisorVerdict};
+        match self.decision {
+            MockCouncilDecision::AllowAll => Ok(AdvisorVerdict::new(
+                1.0,
+                AdvisorDecision::Allow,
+                "mock allow (Stage 4 测试)",
+                None,
+            )
+            .expect("mock allow verdict is bounded")),
+            MockCouncilDecision::StopAll => Ok(AdvisorVerdict::new(
+                0.0,
+                AdvisorDecision::Stop,
+                "mock stop (Stage 4 测试)",
+                None,
+            )
+            .expect("mock stop verdict is bounded")),
+        }
+    }
+}
+
+// ============================================
 // OrganOrchestrator impl
 // ============================================
 
@@ -650,6 +723,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         organ_e7: Arc<dyn OrganTrait>,
         organ_memory: Arc<dyn OrganTrait>,
         council: Arc<Council>,
+        council_invoker: Arc<dyn CouncilInvoker>,
         sovereignty: Arc<parking_lot::Mutex<dyn SovereigntyGate>>,
         relationship: RS,
         boundaries: OrchestratorBoundaries,
@@ -669,6 +743,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
             policy_stage: PolicyStage::Active, // per ratify_fresh_policy 终点
             sovereignty,
             council,
+            council_invoker,
             relationship: parking_lot::Mutex::new(relationship),
             boundaries,
             loop_config,
@@ -877,21 +952,36 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         None
     }
 
-    /// 智囊团审议 (per v1 AwakeCompanion::tick 第 4 步 + RC-6 真接 LLM).
+    /// 智囊团审议 (per v1 AwakeCompanion::tick 第 4 步 + RC-6 真接 LLM, Stage 4 完整化).
     ///
-    /// **0 装诚实**:
-    /// - 真实路径调 `Arc<Council>::decide(proposal)` (legacy compat API, 返 `CouncilVerdict`).
-    /// - `CouncilVerdict::Approved` = 通过, `Vetoed` / `DeferToHuman` = 拦下 (`CouncilVeto`).
-    /// - 真生产路径调 `Council::decide_with_invoker` (per cognitive-module-wiring.md:99
-    ///   60s timeout), 返 `CouncilDecision`; 本 spec 用 compat API 简化.
+    /// **0 装诚实** (Stage 4 完整化):
+    /// - 真实路径调 `Arc<Council>::decide_with_invoker(proposal, &*self.council_invoker)`
+    ///   (per cognitive-module-wiring.md:99 10s/advisor + 60s 总 timeout + 7 advisor 并行).
+    /// - 返 `CouncilResult` (typed) 含:
+    ///   - `decision: CouncilDecision` (Continue | Retry | Stop | DeferToHuman)
+    ///   - `aggregate_score: f64` (decision 加权 score)
+    ///   - `supporting_advisors: Vec<String>` (通过的 advisor 名)
+    ///   - `failures: Vec<AdvisorFailure>` (per-advisor failure category + reason)
+    ///   - `side_call_count: usize` (实际发起的 side-call 数, 用于 budget 跟踪)
+    ///   - `timed_out: bool` (是否整体超时)
+    /// - 翻译为 Orchestrator gate:
+    ///   - `CouncilDecision::Continue` → `Ok(true)` (通过)
+    ///   - `CouncilDecision::Retry` → `Ok(true)` (通过, retry feedback 留 trace)
+    ///   - `CouncilDecision::Stop` → `Err(())` (Vetoed, 拦下 → tick 返 Held(CouncilVeto))
+    ///   - `CouncilDecision::DeferToHuman` → `Err(())` (DeferToHuman, 拦下 → tick 返 Held(CouncilVeto))
+    /// - 真生产路径: `council_invoker` 由 governance composition root 注入
+    ///   `ModuleInvokerCouncilAdapter` (把 runtime `ModuleInvoker` 桥接成 `CouncilInvoker`,
+    ///   60s timeout 强制 per cognitive-module-wiring.md:99).
+    /// - Stage 5 (L0-L5 cycle) 留口子: typed CouncilResult 用于 telemetry + audit.
     pub async fn council_deliberate(&self, proposal: &Proposal) -> Result<bool, OrganError> {
-        let verdict = self.council.decide(proposal).await;
-        // **0 装诚实**: CouncilVerdict → bool 通过 (Approved = true, 其他 = false)
-        let approved = matches!(verdict, apeireth_orchestration::CouncilVerdict::Approved);
-        if !approved {
-            // 记录但不假装"已上报 CouncilVeto" (per AwakeCompanion::tick 第 4 步)
+        let result: CouncilResult = self
+            .council
+            .decide_with_invoker(proposal, &*self.council_invoker)
+            .await;
+        match result.decision {
+            CouncilDecision::Continue | CouncilDecision::Retry => Ok(true),
+            CouncilDecision::Stop | CouncilDecision::DeferToHuman => Ok(false),
         }
-        Ok(approved)
     }
 
     /// 5 状态机 transition driver (per v1 `AwakeCompanion::ratify_fresh_policy` 1:1).
@@ -1595,6 +1685,7 @@ mod tests {
         });
 
         let council = Arc::new(Council::default_allow());
+        let council_invoker: Arc<dyn CouncilInvoker> = Arc::new(MockCouncilInvoker::allow_all());
         let sovereignty: Arc<parking_lot::Mutex<dyn SovereigntyGate>> =
             Arc::new(parking_lot::Mutex::new(LocalSovereignty::default()));
         let rel = LocalOrchestratorRelationship::new(0.5);
@@ -1616,6 +1707,7 @@ mod tests {
             organ_e7,
             organ_memory,
             council,
+            council_invoker,
             sovereignty,
             rel,
             OrchestratorBoundaries::default(),

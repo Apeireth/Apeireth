@@ -2,6 +2,15 @@
 
 ## [Unreleased] — v2.0.0-rc.1 release-gate follow-up
 
+- **A 块 OrganOrchestrator 完整化 stage 4 (缺口 C)**: tick 步骤 4 智囊团审议改用
+  `Council::decide_with_invoker` 真生产路径 (per cognitive-module-wiring.md:99 10s/advisor
+  + 60s 总 timeout + 7 advisor 并行, 返 typed `CouncilResult` 含 `CouncilDecision`
+  + `aggregate_score` + `failures` + `side_call_count` + `timed_out`). Orchestrator.new() 加
+  `Arc<dyn CouncilInvoker>` 参数 (per Council trait 设计). 新增 `MockCouncilInvoker` test
+  helper (allow_all / stop_all 2 variant). `council_deliberate()` 翻译 `CouncilDecision`:
+  Continue/Retry → 通过, Stop/DeferToHuman → CouncilVeto. 新增 1 集成测试 (5 case:
+  council_decide 2 path / tick Spoke + CouncilVeto / chain 不受影响). 0 触碰 LOCKED,
+  `cargo test --workspace --locked` 1729 passed / 0 failed.
 - **A 块 OrganOrchestrator 完整化 stage 3 (缺口 A)**: `check_8_gates()` 接 E7 organ
   真实 `last_hold()` 路径. 重构: `InitiativeGate` 从 `crates/engine/organ/src/emergence.rs`
   移到 `crates/foundation/plugin/src/organ.rs` (canonical 13-variant enum), `OrganOutput::Emergence`
