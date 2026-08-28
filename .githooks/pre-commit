@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# pre-commit hook — Apeireth v2.0 (per ENGINEER-MANIFESTO §8.5 + §13 #12)
+# 目的: 强制检查 author env var (per §13 #12 教训) + LOCKED 5 项 0 触碰警告 (per §10)
+# 启用: git config core.hooksPath .githooks (per docs/04-internal/ENGINEER-MANIFESTO.md §8.5)
+
+set -e
+
+# 检查 1: author env var 设置 (per §13 #12 Round 4 真账)
+# 根因: Round 2-4 我用 `git commit -F file` 时漏设 GIT_AUTHOR_NAME env var,
+#       fallback 到 git config default = minimax-m3-agent (不是 Mavis)
+# 修法: 必须设 4 env vars
+if [ -z "$GIT_AUTHOR_NAME" ]; then
+  echo "❌ PRE-COMMIT HOOK BLOCK (per §13 #12 教训)"
+  echo ""
+  echo "GIT_AUTHOR_NAME 未设置. commit author 会 fallback 到 git config default."
+  echo ""
+  echo "修法 (commit 前 export):"
+  echo "  export GIT_AUTHOR_NAME=\"Mavis\""
+  echo "  export GIT_AUTHOR_EMAIL=\"Mavis@apeireth.local\""
+  echo "  export GIT_COMMITTER_NAME=\"Mavis\""
+  echo "  export GIT_COMMITTER_EMAIL=\"Mavis@apeireth.local\""
+  echo ""
+  echo "或一次性:"
+  echo "  export GIT_AUTHOR_NAME=Mavis GIT_AUTHOR_EMAIL=Mavis@apeireth.local \\"
+  echo "         GIT_COMMITTER_NAME=Mavis GIT_COMMITTER_EMAIL=Mavis@apeireth.local"
+  exit 1
+fi
+
+# 检查 2: LOCKED 5 项 0 触碰 (per §10 改前必查)
+# 注: 这是警告, 不 abort. 主代理 override 用 --no-verify
+LOCKED_FILES=(
+  "crates/foundation/core/src/eight_anchors.rs"
+  "crates/foundation/core/src/philosophy.rs"
+  "crates/foundation/core/src/onion.rs"
+  "Cargo.toml"
+)
+WARN=0
+for f in "${LOCKED_FILES[@]}"; do
+  if ! git diff --quiet HEAD -- "$f" 2>/dev/null; then
+    echo "⚠️ WARNING: $f 有改动 (LOCKED 项, 需主代理拍板 per §10 真例外)"
+    WARN=1
+  fi
+done
+if [ $WARN -eq 1 ]; then
+  echo ""
+  echo "如主代理已拍板 (per §10 真例外), 用 --no-verify 跳过:"
+  echo "  git commit --no-verify ..."
+fi
+
+exit 0
