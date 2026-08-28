@@ -75,7 +75,7 @@
 2. 13 键 (`crates/foundation/core/src/philosophy.rs:142`) 0 改
 3. 3 项不可变脊柱 (`crates/foundation/core/src/onion.rs:249`) 0 改
 4. workspace.version (`Cargo.toml` "1.2.0") 0 改
-5. R11 baseline (`crates/foundation/core/src/cognitive.rs` 0.8682/0.8532/0.9063 + `Cargo.lock`) 0 改
+5. R11 baseline (legacy reference: `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` const `R11_V1141_BASELINE: f64 = 0.8682` / `R11_V1131_BASELINE: f64 = 0.8532` / `R11_V1136_BASELINE: f64 = 0.9063` — active workspace 无 const source, 等 R12 spec 重新审定后移植) 0 改
 
 **commit message 模板** (per §5.2):
 ```

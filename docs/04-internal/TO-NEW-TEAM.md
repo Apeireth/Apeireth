@@ -224,7 +224,7 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
 | 13 键 | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` |
 | 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` | Self-Disable / L0 HA / 13 键 verdict cache |
 | workspace.version | `Cargo.toml` | `"1.2.0"` 双轴制 |
-| R11 baseline 3 值 | `crates/foundation/core/src/cognitive.rs` + `Cargo.lock` | 0.8682 / 0.8532 / 0.9063 |
+| R11 baseline 3 值 | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (active workspace 无 const source) | 0.8682 / 0.8532 / 0.9063 (数字严守, R12 spec 重新审定后移植) |
 
 > 例外: 主人明确授权 (例: 2026-08-27 授权加 O-6). 其余情况 0 触碰.
 
