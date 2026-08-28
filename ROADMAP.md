@@ -61,23 +61,23 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ---
 
-## 3. 当前状态（v2.0.0-rc.1，2026-08-27 收盘）
+## 3. 当前状态（v2.0.0-rc.1，2026-08-28 release-gate 收盘前）
 
 | 项 | 值（实测） |
 |---|---|
-| 分支 | `main` @ `67c06d95`（默认分支，v1 → `archive/v1.0-master`） |
+| 分支 | `main`（默认分支，v1 → `archive/v1.0-master`；本轮 release commits 待 push） |
 | Tag | `v2.0.0-alpha.1` → `d6910cf7`（v1.0.0 / v1.5.0 保留，**v2.0.0-rc.1 待发**） |
 | Workspace | **15 crates**（foundation 7 / engine 5 / capabilities 1 / adapters 3） |
 | 代码量 | ~74k 行 active（不含 legacy/） |
 | 测试 | ~1500+ passed / 0 failed (workspace 0 FAILED) |
 | CI | 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage/13 键契约/M2B/M2C/M3A 三 OS） + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告 + `cargo test --workspace --doc --locked` |
-| **v2.0.0-rc.1 RC 进展** | **7/10 RC 真实现完成**（alpha trait 接真 backend）：RC-1 MemoryBackend SqliteBackend / RC-2 Experience / RC-3 PreferenceStore / RC-4 SelfAssessmentStore / RC-8 SubSupervisor / RC-9 keyring / RC-10 File AES-GCM；3/10 待 (RC-5/6/7 需 LLM API key / 硬件)。详见 `docs/04-internal/v2.0.0-rc-roadmap.md` |
+| **v2.0.0-rc.1 RC 进展** | **7/10 RC 真实 backend 完成**；RC-10 已补 metadata-bound APX2 header；canonical cognitive follow-up 已接 Council adapter 与 durable conservative Experience extraction。真实 Orchestrator、provider-backed Council E2E、偏好学习、长程 reflection、非文本 perception 仍延期。详见 `docs/04-internal/v2.0.0-rc-roadmap.md` |
 | **O-6 锚兑现** | **12/12 项全部完成**（2026-08-27, 哲学锚 #9 启动）+ 子代理反馈修正 (RC-2 写真, RC-8 `TokioSubSupervisor` → `StdSubSupervisor` 命名诚实化)。详见 `docs/01-architecture/v2-arch-refactor-batch.md` + `.github/workflows/o6-anchor.yml` (5 重自动守门) + `docs/04-internal/HANDOFF-NOTES.md` (子代理 D 接手人手册) |
 | **子代理审查** | 4 子代理 (A/B/C/D) 报告全部接收采纳. 子代理 A: Send+Sync 注释 (commit `67fc66a0`); 子代理 B: v1 vs v2 41 项差异 + 5 风险; 子代理 C: P0 build break + 命名错位 (commit `4e4fba89` 修); 子代理 D: 接手人手册 |
 | 旧 gate | `release-prep`、`pii-leak-detection` 保持 master-only，不在 main 跑 |
 | 生产安全现状 | 工具层 shell/fetch 默认关 + **P0 governance 已装 (upstream `873d2857`)** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；**13 键 verdict cache 已降级**（P0 拍板完成，2026-08-27，5 维分析：self-introspection 6 数量级延迟 + 0 模型污染路径 + 场景 D 覆盖，详 `v2-unabsorbed-features.md` §A4） |
 | ROADMAP §4 P1-P6 | 全部完成（trait 边界 + 0 装占位）：A4 MemoryBackend / B4 sovereignty M-of-N / credentials 接线 / core drain / B1 Experience / A3 perception / B5 process supervisor / A1 council / A2 team-lead / 场景 D 例 1-3 |
-| **cognitive module** (其他 dev 推) | 3 commit (`a699c5f5` / `1d227d6a` / `64e64f46`): cognitive module hook ABI + 集成 + lifecycle invariants. 0 触碰我工作范围. |
+| **cognitive module** | canonical single-loop ABI + lifecycle invariants；本轮补 production composition、Judge/Council adapter、durable Experience wiring；无第二 agent loop、无隐藏 tool/provider path。详见 `docs/04-internal/cognitive-module-wiring.md` |
 
 ### 3.5 阶段表（含 v2.0.0-rc.1 时间表）
 

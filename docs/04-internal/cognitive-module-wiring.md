@@ -24,7 +24,7 @@ additions are explicit and remain subject to the runtime's duplicate-id check.
 | `cognitive.memory_recall` | runtime cognitive adapter | `TurnStart` | WIRED | `Arc<dyn MemoryBackend>`; optional Experience reads; transient overlay only |
 | `cognitive.preference_recall` | runtime cognitive adapter | `TurnStart` | WIRED | `Arc<dyn PreferenceStore>`; transient overlay only |
 | `cognitive.judge` | runtime cognitive adapter | `AfterModelResponse` | WIRED, OFF by default | one `ModuleInvoker` side-call at most per judge hook; typed JSON; no tools |
-| `cognitive.council` | runtime cognitive adapter | `AfterModelResponse` | SLOT READY, OFF by default | adapts existing `Council`; no tool dispatch and no LLM side-call in current default advisors |
+| `cognitive.council` | runtime cognitive adapter | `AfterModelResponse` | WIRED, OFF by default | bounded typed advisor path through `ModuleInvoker`; no tool dispatch |
 | `cognitive.self_assessment` | runtime cognitive adapter | `AfterTurn` | WIRED, Judge-backed | records only a real Judge result; no fabricated heuristic score |
 | `cognitive.memory_writeback` | runtime cognitive adapter | `AfterTurn` | WIRED | successful final turn only; append-only user/assistant Episodes |
 | `cognitive.preference_learning` | deferred, no owner yet | — | DEFERRED | no evidence-extraction side-call or implicit preference mutation |
@@ -68,10 +68,14 @@ normal memory recall/writeback has no additional model cost.
 called by these modules. All current cognitive side-calls use the existing
 runtime-owned `ModuleInvoker`, preserving depth and per-turn budget controls.
 
-Experience storage is real and wired, but `extract_experience_from_episode`
-remains an explicit no-op until its evidence-extraction contract is implemented.
-This release does not claim a complete long-term reflection or preference
-learning pipeline.
+Experience storage and extraction are real and wired. After a durable
+`AfterTurn` episode commit, the conservative extractor materializes only a
+bounded summary plus explicitly marked `fact:`, `link:`, and `associate:`
+records. Every artifact carries the source episode id; SQLite association
+observations are idempotent. The production default does not make a hidden
+model call, and extraction failures fail open with telemetry warnings. This
+release does not claim a complete long-term reflection or preference-learning
+pipeline.
 
 ## AI evaluates AI contract
 
@@ -87,6 +91,15 @@ The candidate, Judge critique, and side-call response are not written to
 memory by Judge. Self-assessment receives only the typed in-process result and
 records it after commit. The telemetry sink stores module id, hook, directive,
 duration, and side-call count, never prompt or response content.
+
+`cognitive.council` uses the same isolated `ModuleInvoker` boundary. The
+default runtime adapter exposes seven named advisor slots, bounds selection
+and concurrency, applies a 10-second per-advisor timeout and a 60-second
+overall timeout, and aggregates typed `allow`/`retry`/`stop`/`abstain`
+decisions deterministically. Provider, malformed-response, and timeout
+failures are explicit and defer to human review. The CLI keeps this path
+disabled by default; fake-invoker tests cover the runtime wiring and the
+orchestration package, while real provider E2E remains credential-gated.
 
 ## Non-goals preserved
 

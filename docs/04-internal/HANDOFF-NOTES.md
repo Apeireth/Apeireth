@@ -2,7 +2,7 @@
 
 > **给谁看**：从零接手 v2 工程的新人. 你**不**知道这个项目, 这份文档给你**第一个**上下文.
 > **HEAD**：以 `main` 当前提交为准（本文件随 cognitive module wiring 同步更新）。
-> **状态**：v2.0.0-rc.1 的 RC-1/2/3/4/8/9/10 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment 已接入单一 composition root；Orchestrator、真实 Council advisors、偏好学习、长程 reflection、非文本 perception 仍明确延期。
+> **状态**：v2.0.0-rc.1 的 RC-1/2/3/4/8/9/10 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root；Orchestrator、真实 provider Council E2E、偏好学习、长程 reflection、非文本 perception 仍明确延期。
 
 ```yaml
 [Document-Meta]
@@ -146,9 +146,12 @@ crates/
 `ProductionCognitiveModules` + `RuntimeBuilder::with_module` 显式添加模块，
 并接受 runtime 的 duplicate-id / hook / round / side-call 守门。
 
-默认无额外模型成本：memory/preference recall 与 AfterTurn writeback 走注入
-backend；Judge 只有 `APEIRETH_COGNITIVE_JUDGE=1` 才开启；Experience 表已接线但
-`extract_experience_from_episode` 仍是显式 no-op，不得写文档声称长程 cognition
+默认无额外模型成本：memory/preference recall、AfterTurn writeback 与
+保守 Experience extraction 走注入 backend；Judge/Council 只有对应环境开关才
+开启。Council 通过 runtime-owned `ModuleInvoker` 做有界 typed advisor side-call，
+默认最多 7 个 advisor、单 advisor 10s、整体 60s；真实 provider E2E 仍需凭证。
+Experience 只在 episode durable commit 成功后提炼有界摘要与显式 marker，并保留
+source episode evidence；不宣称长程 cognition、偏好学习或完整语义 LLM extraction
 已完成。
 
 ### 7.2 远程验证记录 (2026-08-28)
@@ -180,7 +183,9 @@ backend；Judge 只有 `APEIRETH_COGNITIVE_JUDGE=1` 才开启；Experience 表�
 1. **跑 baseline** — `cargo test --workspace --locked` 应 0 失败, `cargo clippy --workspace --all-targets --locked -- -D warnings` 应 0 警告 (本批实测: 测试通过, clippy 干净). 不通过 = O-6 锚违约, 不可推迟.
 2. **RC-8 命名注意** — `crates/capabilities/tools/src/supervisor.rs:132` 的 `SubSupervisor` 是 **v2 进程级 supervisor** (重启 child 进程), **不**是 v1 `apeireth-team-lead` 14 调度工具. 别混淆.
 3. **哲学锚编号有 ledger** — 哲学锚 #1-#9 是稳定编号, 但 commit message 里 "O-6 锚 #11 / #18 / #23" 等是 O-6 重构批次的**子项序号** (不是哲学锚数), 看 `o6-session-log-2026-08-27.md` §1 commit 表对应.
-4. **12 consumer `use apeireth_core::*` deprecation** — O-6 Refactor-5 (`d42d7c1e`) 完成真 core drain, 12 consumer 已加 `#[allow(deprecated)]`. **不**要删 allow (删了 = clippy 红), **不**要在 rc 之前再扩 kernel 类型.
+4. **deprecated consumer 清理** — 当前 active workspace 扫描显示 `#[allow(deprecated)]`
+   与 `#[deprecated]` consumer 均为 **0**；旧 legacy/archive 与历史文档保留作考古资料，
+   不从生产主线删除。不要为已不存在的消费者伪造迁移或回退兼容边界。
 5. **认知模块生命周期不变量** — `64e64f46` 修复 cognitive hook lifecycle, runtime 在 `execute.rs` 加了 invariant assertions. RC-5 接 orchestrator 时**不**要绕过 module.rs 的 hook 注册表 — 走 `register_hook` ABI, 不直接 mut state.
 
 ---

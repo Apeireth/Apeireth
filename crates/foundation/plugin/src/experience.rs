@@ -61,9 +61,9 @@ pub struct WikiEntry {
     pub tags: Vec<String>,
 }
 
-/// Wiki 存储 trait（0 装：v2.0 alpha 无 SQLite impl）
-///
-/// 0 装 PASS: trait 边界清晰, impl 留 v2.1
+/// Wiki 存储 trait. The SQLite implementation lives in the memory engine;
+/// the trait remains in the foundation plugin to preserve the dependency
+/// direction.
 pub trait WikiEntryStore: Send + Sync {
     /// 写一条 WikiEntry
     fn put_wiki(&self, entry: &WikiEntry) -> CapabilityResult<()>;
@@ -567,22 +567,16 @@ mod tests {
         assert!(too_many.validate().is_err());
     }
 
-    /// 0 装 PASS: 错误通道统一为 `Box<dyn Error + Send + Sync>`, impl 端用
-    /// `Box::new(impl_local_error)` 包. 这里验证 0 装 marker 字符串 (impl v2.1
-    /// 接真 backend 时, NotImplemented 应改为真错误).
+    /// Error channels remain compatible with `Box<dyn Error + Send + Sync>`.
     #[test]
-    fn not_implemented_marker_appears_in_error_string() {
-        // 0 装: impl 包成 Box 的字符串应含 0 装 / v2.1 / 实现者 (impl-defined)
-        // v2.0 alpha 的真 0 装 impl 在 memory crate (现在 NoopAdvisor)
-        let e = std::io::Error::new(std::io::ErrorKind::Unsupported, "0 装 PASS: v2.1");
+    fn capability_error_box_roundtrips() {
+        let e = std::io::Error::new(std::io::ErrorKind::Unsupported, "capability unavailable");
         let boxed: Box<dyn std::error::Error + Send + Sync> = Box::new(e);
         let s = format!("{boxed}");
-        assert!(s.contains("0 装"));
-        assert!(s.contains("v2.1"));
+        assert!(s.contains("capability unavailable"));
     }
 
-    /// 0 装 PASS: WikiEntry 可从 episode 构造 (smoke), 不依赖 backend.
-    /// 真实持久化由 trait impl (v2.1) 提供.
+    /// WikiEntry can be constructed independently of a backend.
     #[test]
     fn wiki_entry_construction_works() {
         let w = WikiEntry {
@@ -591,8 +585,8 @@ mod tests {
             source_episode_id: "ep-1".into(),
             extracted_at: 1_700_000_000,
             topic: "memory extraction".into(),
-            summary: "extract_experience trait 骨架就位".into(),
-            body: "完整 impl 留 v2.1".into(),
+            summary: "extract_experience typed artifact".into(),
+            body: "evidence-bound artifact construction".into(),
             confidence: 0.85,
             tags: vec!["trait".into(), "0装".into()],
         };
