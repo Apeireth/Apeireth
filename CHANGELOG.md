@@ -2,6 +2,14 @@
 
 ## [Unreleased] — v2.0.0-rc.1 release-gate follow-up
 
+- **A 块 OrganOrchestrator 完整化 stage 2 (缺口 B)**: tick 步骤 3 情绪调制真生产路径
+  — 从 `chain_9_organs()` 输出的 `chain.f1` 提取 `OrganOutput::Emotion { pleasure, .. }`
+  → 算 mood = (pleasure + 1.0) / 2.0 (per v1 organs.rs:109). 新增 `extract_emotion_mood()`
+  helper, 边界处理: `NotImplemented` / `None` / 其他 variant → 返 `None` (0 装诚实,
+  不假装"有情绪数据"). mood < `mood_floor` → 触发 `EmotionLow` gate, tick 返 None +
+  `last_decision = Held(EmotionLow)`. 新增 1 集成测试 (5 case: low/high/mood boundary
+  / NotImplemented / tick 真实路径). 0 引新外部 dep, 0 触碰 LOCKED 5 项,
+  `cargo test --workspace --locked` 1727 passed / 0 failed (1726 baseline + 1 new).
 - **A 块 OrganOrchestrator 完整化 stage 1 (缺口 D)**: ratify_fresh_policy() 走完整
   5 状态 transition 链 (per v1 `AwakeCompanion::ratify_fresh_policy` 1:1, v1 走 4 个
   evolution.transition 调用). 新增 `RatificationChain` struct 留痕 4 transition
