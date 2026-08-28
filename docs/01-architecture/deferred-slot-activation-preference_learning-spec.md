@@ -6,7 +6,7 @@
 > cognitive.planner / cognitive.orchestrator / cognitive.perception) 由后续 R16-R19 / R14
 > 接力同模式写 spec.
 >
-> **HEAD 状态**: `22c6e72b` (本地 = 远端同步, v2.0.0-rc.1 release tag 已拍板 commit `b9026186`)
+> **HEAD 状态**: `7d990297` (Round 6 完). 历史: 本地 = 远端同步 @ `22c6e72b`, v2.0.0-rc.1 release tag @ `b9026186`.
 >
 > **关系文档**:
 > - `cognitive-module-wiring.md` (12 slot ledger, 6 WIRED + 1 SLOT READY + 6 DEFERRED)

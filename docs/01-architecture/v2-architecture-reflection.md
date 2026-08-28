@@ -443,7 +443,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 - 8 spec 收齐 (R9/R10/R11/R13/R14/R15 + Z + 本报告)
 - R12 OrganOrchestrator 真实施落地 (13 gate + 5 状态机 + 9 organ 串联, 3 integration tests)
 - 6 处错账修正 (commit `ccf29c57`, 主代理亲做)
-- **1726 passed 0 FAILED / 0 clippy 警告 / 0 触碰 LOCKED 5 项**
+- **1726 passed 0 FAILED / 0 clippy 警告 / 0 触碰 LOCKED 5 项 (当时; **A 块后 1739 passed**)**
 - 本会话累计 85 commit (从 `ef075420` 基线, 主代理亲算)
 - 给新团队的话: `docs/04-internal/TO-NEW-TEAM.md`
 

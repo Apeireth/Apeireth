@@ -44,7 +44,7 @@
 
 **Cognitive Module × 9 Organ 集成 = 把 cognitive module 的 12 slot (AgentModule 体系) 与 9 organ 的 process (OrganTrait 体系) 在同一 runtime hook 链里, 串成 L0-L5 自升级 cycle, 同时保留两条体系各自的 0 装诚实边界**.
 
-### 1.2 当前状态 (v2.0.0-rc.1, HEAD `b9026186`)
+### 1.2 当前状态 (v2.0.0-rc.1, HEAD `7d990297` Round 6 完; 历史 tag @ `b9026186`)
 
 | 体系 | 真实现 | 待激活 |
 |---|---|---|
