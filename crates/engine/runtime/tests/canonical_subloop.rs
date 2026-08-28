@@ -97,11 +97,10 @@ impl ProviderCapability for ScriptedProvider {
     }
 
     fn models(&self) -> Vec<ModelDescriptor> {
-        vec![ModelDescriptor::new(
-            ModelId::new("subloop-model").unwrap(),
-            self.id.clone(),
-        )
-        .with_feature(ModelFeature::ToolCalls)]
+        vec![
+            ModelDescriptor::new(ModelId::new("subloop-model").unwrap(), self.id.clone())
+                .with_feature(ModelFeature::ToolCalls),
+        ]
     }
 
     async fn complete(
@@ -287,8 +286,7 @@ async fn subloop_runs_on_private_transcript_with_strict_capability_allowlist() {
         .expect("runtime builds cleanly");
 
     let session_id = SessionId::new();
-    let req = TurnRequest::new(session_id.clone(), "Hello from user")
-        .with_model("subloop-model");
+    let req = TurnRequest::new(session_id, "Hello from user").with_model("subloop-model");
 
     let response = runtime.execute(req).await.expect("turn executes");
     assert_eq!(response.text, "Main answer complete");
@@ -325,7 +323,10 @@ struct SubLoopDeniedTesterModule {
 impl SubLoopDeniedTesterModule {
     fn new() -> Self {
         Self {
-            manifest: ModuleManifest::new("module.subloop.denied_tester", "SubLoop Denied Tester Module"),
+            manifest: ModuleManifest::new(
+                "module.subloop.denied_tester",
+                "SubLoop Denied Tester Module",
+            ),
             allowed_tool: Arc::new(MockAllowedTool),
             denied_tool: Arc::new(MockDeniedTool),
         }
@@ -399,8 +400,7 @@ async fn subloop_with_allowed_and_denied_tools() {
         .await
         .expect("runtime builds cleanly");
 
-    let req = TurnRequest::new(SessionId::new(), "hello")
-        .with_model("subloop-model");
+    let req = TurnRequest::new(SessionId::new(), "hello").with_model("subloop-model");
 
     let response = runtime.execute(req).await.expect("turn executes");
     assert_eq!(response.text, "Main turn completed");
