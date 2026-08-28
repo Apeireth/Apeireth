@@ -228,7 +228,7 @@ Status:          📊 进展快照 (一次性, 真兑现)
 
 **Apeireth v2.0.0-rc.1 = 工程形态收敛 + trait 写真完整 + 7/10 RC 真实现 + 子代理 8 项报告全采纳 + 0 触碰 LOCKED**.
 距离 v1 parity = **14-19 周 (估 2026-12 月)**, 距离 v2.0.0 release = **估 2027-02-04 月**.
-3 真生产前阻塞: LLM API key / TODO(rc-11) migration script / 12 consumer 弃用清理 (实测 0 个需做).
+3 真生产前阻塞: LLM API key / TODO(rc-11) migration script. 12 consumer 弃用清理**实测 0 个需做** (从阻塞列表移出, 子代理 H 独立判断 2026-08-27: "0 装诱导, 会误导接手人为不存在的工作留时间").
 接手人可按 `docs/04-internal/HANDOFF-NOTES.md` 11 节 + `v2-rc-1-progress-report.md` 11 节 + ROADMAP §4 P1-8 推进. **0 装诚实原则** = 不假装, 真兑现 ledger 数字 (12), 不隐藏子代理反馈 (8 项全采纳), 0 触碰 LOCKED (5 项全保持).
 
 ### 11.6 子代理 7 步法 (推荐给下个团队)
