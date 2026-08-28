@@ -17,6 +17,7 @@ apeireth-plugin = { path = "../../foundation/plugin" }
 apeireth-governance = { path = "../../foundation/governance" }
 apeireth-orchestration = { path = "../../foundation/orchestration" }
 apeireth-storage = { path = "../storage" }
+apeireth-tools-canonical = { path = "../../capabilities/tools" }
 rusqlite = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
@@ -30,7 +31,6 @@ parking_lot = "0.12"
 tempfile = "3"
 chrono = { workspace = true }
 apeireth-provider = { path = "../provider" }
-apeireth-tools-canonical = { path = "../../capabilities/tools" }
 reqwest = { workspace = true }
 
 [lints]
