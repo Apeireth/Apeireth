@@ -2,6 +2,18 @@
 
 ## [Unreleased] — v2.0.0-rc.1 release-gate follow-up
 
+- **A 块 5 stage commit O-6 三阶审查 amend (主代理自检 0 装诚实标修正)**:
+  - `c003e078` Stage 1 (was `fc159288`) + `087ab2ac` Stage 2 (was `ea9aa14f`) +
+    `50ba2e57` Stage 3 (was `ed6353f4`) + `29e5ce66` Stage 4 (was `1972b040`) +
+    `0afa733f` Stage 5 (was `24d163ff`)
+  - amend 法: git plumbing (`commit-tree` + `update-ref`) 重写 commit messages,
+    code content 0 变 (tests 1739 passed 不变, clippy 0 警告不变)
+  - 修订版 O-6 三阶审查 sections 真答案 + 拒 alternatives + 拒理由 (per 八锚本体 O-6 description)
+  - 配对 commit `bbbfb75b`: `docs/04-internal/A-block-o6-true-account.md` (0 装诚实复盘 +
+    后续 commit 标准) + plan doc §7 (后续 O-6 三阶审查 标准)
+  - O-6 doctrine 复盘: '工作量与麻烦不是拒绝重做的理由' — 不找借口
+  - force push 到 origin/main (`+ 798dba5b...bbbfb75b main -> main (forced update)`)
+
 - **A 块 OrganOrchestrator 完整化 stage 5 (缺口 E)**: L0-L5 `UpgradeCycle` driver
   真实施 (per R11 §7 + `v2-architecture-reflection.md` §6). 新文件
   `crates/engine/runtime/src/canonical/upgrade_cycle.rs` + `tests/upgrade_cycle.rs`:
