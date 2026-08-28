@@ -7,8 +7,9 @@
 //! **背景**:
 //! - v1 格式 (commit `e2a5be08`): `[sealed_len: u32 BE 4B][sealed: N]`,
 //!   AAD = `service|type` (无 record_id tamper 保护).
-//! - v2 格式 (commit `38cc1039`): `[id_len: u16 BE 2B][id: id_len UTF-8][sealed_len: 4B][sealed: N]`,
-//!   AAD = `service|type|record_id` (per-record tamper 保护, 子代理 C 建议 #5 兑现).
+//! - v2 格式 (APX2): `[sealed_len: u32 BE 4B][APX2|version|index|opaque commitment|iv|sealed]`,
+//!   AAD 绑定 format version、service/type、physical index、opaque record-id
+//!   commitment 与完整 sealed length；raw record_id 不落盘。
 //!
 //! **真兑现**:
 //! - 调 `scripts/migrate_v1_to_v2_encrypted.py` 真跑 v1 -> v2 迁移.
@@ -54,13 +55,13 @@ fn script_path() -> std::path::PathBuf {
     p
 }
 
-/// Find a python interpreter available on this host (Windows / Unix).
-/// Returns None if none found; caller will skip the test (0 装诚实).
+/// Find a Python interpreter with the migration script's optional dependency.
+/// Returns None if Python or `cryptography` is missing; caller will skip the test.
 fn python_interpreter() -> Option<&'static str> {
     // Try a few names: `python` first (most common), then `python3`, `py`.
     for candidate in ["python", "python3", "py"] {
         if Command::new(candidate)
-            .arg("--version")
+            .args(["-c", "import cryptography"])
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false)
@@ -141,7 +142,8 @@ fn build_v1_fixture_truncated(path: &Path) {
     // Write a sealed_len that points past EOF → truncated input
     let mut f = fs::File::create(path).expect("create truncated v1");
     let fake_len: u32 = 1_000_000;
-    f.write_all(&fake_len.to_be_bytes()).expect("write sealed_len");
+    f.write_all(&fake_len.to_be_bytes())
+        .expect("write sealed_len");
     // No sealed bytes follow → reader hits EOF mid-record
 }
 
@@ -153,11 +155,7 @@ fn build_v1_empty(path: &Path) {
 /// Skip-aware wrapper that runs the migration script and returns (status, stdout, stderr).
 /// If python is missing the closure inside each test panics with a `skip!`-style
 /// early-return. We use early-return via `Option` to keep tests simple.
-fn run_migration(
-    input: &Path,
-    output: &Path,
-    record_type: &str,
-) -> Option<(i32, String, String)> {
+fn run_migration(input: &Path, output: &Path, record_type: &str) -> Option<(i32, String, String)> {
     let py = python_interpreter()?;
     let script = script_path();
     let output = Command::new(py)
@@ -243,6 +241,29 @@ fn migrate_v1_to_v2_roundtrip_three_records() {
     let sess_a_ids: Vec<&str> = sess_a.iter().map(|e| e.id.as_str()).collect();
     assert!(sess_a_ids.contains(&"ep-001"));
     assert!(sess_a_ids.contains(&"ep-002"));
+
+    let migrated = fs::read(&v2).expect("read migrated APX2 file");
+    let mut pos = 0usize;
+    let mut frame_count = 0usize;
+    while pos < migrated.len() {
+        assert!(migrated.len() - pos >= 4, "truncated APX2 frame prefix");
+        let frame_len =
+            u32::from_be_bytes(migrated[pos..pos + 4].try_into().expect("frame length")) as usize;
+        pos += 4;
+        assert!(frame_len <= migrated.len() - pos, "truncated APX2 frame");
+        if frame_count == 0 {
+            assert_eq!(
+                &migrated[pos..pos + 4],
+                b"APX2",
+                "migration must write the current envelope"
+            );
+            assert_eq!(migrated[pos + 4], 2, "migration must write APX2 version 2");
+        }
+        pos += frame_len;
+        frame_count += 1;
+    }
+    assert_eq!(frame_count, 3, "migration must preserve all records");
+    assert_eq!(pos, migrated.len(), "APX2 frames must cover the output");
 }
 
 /// Empty v1 file (0 bytes) → migration script writes empty v2, exit 0.
@@ -290,11 +311,7 @@ fn migrate_truncated_v1_returns_nonzero_exit() {
     );
 }
 
-/// ID_LEN_MAX 边界 (子代理 G 独立判断 2026-08-27):
-/// 脚本中 ID_LEN_MAX check 真落地 + 但 UUID v5 generator 实际不可能 > 36 chars
-/// (deterministic UUID always 36 ASCII chars, well below 65535).
-/// 此测试验脚本**有 ID_LEN_MAX 常量 + 真校验路径** (不 silent truncation).
-/// 0 装诚实: 不假装 "可触发的 ID_LEN_MAX 失败" — generator 实际不可触发.
+/// ID_LEN_MAX constant and enforcement path are present (子代理 G, 2026-08-27).
 #[test]
 fn id_len_max_check_present_in_script() {
     let script = script_path();
@@ -315,15 +332,38 @@ fn id_len_max_check_present_in_script() {
     );
 }
 
-/// ID_LEN_MAX 边界: 真构造超 65535 bytes record_id 的失败路径
-/// → 模拟方法: 把 plaintext 设超 65535 bytes (script 把 plaintext 走 hash 后生成 UUID v5,
-/// UUID v5 仍 36 chars), 所以 record_id 永远 < ID_LEN_MAX. **0 装诚实: 此 case 实际不可触发**.
+/// ID_LEN_MAX 边界: a serialized logical id over 65535 bytes must fail closed.
+#[test]
+fn id_len_max_path_rejects_oversized_logical_id() {
+    let dir = TempDir::new().expect("tempdir");
+    let v1 = dir.path().join("episodes.enc.v1");
+    let v2 = dir.path().join("episodes.enc");
+    let oversized_id = "x".repeat(65_536);
+    let plaintext = format!(
+        r#"{{"id":"{oversized_id}","timestamp":1700000000,"role":"user","content":"too-large","session_id":"s"}}"#
+    )
+    .into_bytes();
+    build_v1_fixture(&v1, &[plaintext]);
+
+    let (code, _stdout, stderr) = match run_migration(&v1, &v2, RECORD_TYPE) {
+        Some(t) => t,
+        None => return,
+    };
+    assert_ne!(
+        code, 0,
+        "oversized logical id must be rejected; stderr={stderr}"
+    );
+    assert!(
+        !v2.exists(),
+        "failed migration must not write partial output"
+    );
+}
+
 #[test]
 fn id_len_max_path_acknowledged_in_script() {
     let script = script_path();
     let text = fs::read_to_string(&script).expect("read migration script");
-    // 子代理 G 独立判断: 真校验路径必须存在 (即使 generator 实际不可触发).
-    // 验脚本有 _seal_v2 里 check `len(id_bytes) > ID_LEN_MAX → raise`.
+    // 子代理 G 独立判断: 真校验路径必须存在, 不 silent truncation.
     assert!(
         text.contains("id_bytes > ID_LEN_MAX")
             || text.contains("len(id_bytes) > ID_LEN_MAX")
@@ -333,8 +373,8 @@ fn id_len_max_path_acknowledged_in_script() {
 }
 
 /// Roundtrip after migration: build v1, migrate, query via trait API end-to-end.
-/// 0 装诚实: 加密解密 roundtrip 通过 → AAD 一致 (v1 AAD = service|type vs
-/// v2 AAD = service|type|record_id, migration script 重签时 record_id 一致即可解密).
+/// 0 装诚实: 加密解密 roundtrip 通过 → v1 service/type AAD 解密后，
+/// migration script 用同一 APX2 metadata envelope 重签即可解密.
 #[test]
 fn migrate_then_decrypt_with_same_key() {
     let dir = TempDir::new().expect("tempdir");
@@ -344,8 +384,10 @@ fn migrate_then_decrypt_with_same_key() {
     let v2 = dir.path().join("episodes.enc");
 
     let plaintexts: Vec<Vec<u8>> = vec![
-        br#"{"id":"a","timestamp":1700000000,"role":"user","content":"alpha","session_id":"s"}"#.to_vec(),
-        br#"{"id":"b","timestamp":1700001000,"role":"user","content":"beta","session_id":"s"}"#.to_vec(),
+        br#"{"id":"a","timestamp":1700000000,"role":"user","content":"alpha","session_id":"s"}"#
+            .to_vec(),
+        br#"{"id":"b","timestamp":1700001000,"role":"user","content":"beta","session_id":"s"}"#
+            .to_vec(),
     ];
     build_v1_fixture(&v1, &plaintexts);
 
@@ -355,23 +397,26 @@ fn migrate_then_decrypt_with_same_key() {
     };
     assert_eq!(code, 0, "stderr={stderr}");
 
-    // 0 装诚实: v1 AAD = service|type, v2 AAD = service|type|record_id.
-    // record_id 由 migration script 生成 (UUID v5 from plaintext + index), deterministic.
-    // 重跑相同 input → 相同 record_id. 我们查询 via trait API, 用 record_id "a" / "b" 验:
-    // 这里因为 record_id 是 UUID, 不能用 "a"/"b" 查询. 我们用 recent_episodes (按 session_id).
+    // 0 装诚实: v1 AAD = service|type; APX2 v2 AAD binds the full metadata envelope.
+    // The migration reuses JSON `id` when present, so the backend API retains the
+    // logical identity while keeping only its keyed commitment on disk.
     let backend = EncryptedFileBackend::new(dir.path(), &[0u8; 32], SERVICE);
-    let sess = backend
-        .recent_episodes("s", 10)
-        .expect("recent_episodes");
+    let sess = backend.recent_episodes("s", 10).expect("recent_episodes");
     assert_eq!(sess.len(), 2, "both records must roundtrip after migration");
     let contents: Vec<&str> = sess.iter().map(|e| e.content.as_str()).collect();
-    assert!(contents.contains(&"alpha"), "alpha content lost after migration");
-    assert!(contents.contains(&"beta"), "beta content lost after migration");
+    assert!(
+        contents.contains(&"alpha"),
+        "alpha content lost after migration"
+    );
+    assert!(
+        contents.contains(&"beta"),
+        "beta content lost after migration"
+    );
 
-    // 0 装诚实: 通过 v2 文件大小大致判断 v2 frame 结构正确 (line header 每条 ≥ 2 + 12 + 4 + 16 = 34 字节)
+    // 0 装诚实: verify the APX2 frame has the current sealed-header minimum.
     let v2_size = fs::metadata(&v2).expect("v2 metadata").len() as usize;
     assert!(
-        v2_size >= 34 * 2,
-        "v2 file should be ≥ 68 bytes for 2 records; got {v2_size}"
+        v2_size >= (4 + 45 + 12 + 16) * 2,
+        "v2 file should contain two APX2 records; got {v2_size}"
     );
 }
