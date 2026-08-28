@@ -107,6 +107,8 @@ fn build_orchestrator_with_f1_pleasure(
     let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::Memory));
 
     let council = Arc::new(Council::default_allow());
+    let council_invoker: Arc<dyn apeireth_orchestration::CouncilInvoker> =
+        Arc::new(apeireth_runtime::canonical::orchestrator::MockCouncilInvoker::allow_all());
     let sovereignty: Arc<parking_lot::Mutex<dyn SovereigntyGate>> =
         Arc::new(parking_lot::Mutex::new(LocalSovereignty::default()));
     let rel = LocalOrchestratorRelationship::new(0.5);
@@ -122,6 +124,7 @@ fn build_orchestrator_with_f1_pleasure(
         organ_e7,
         organ_memory,
         council,
+        council_invoker,
         sovereignty,
         rel,
         OrchestratorBoundaries::default(),
@@ -167,6 +170,8 @@ fn build_orchestrator_with_e7_gate(
     let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::Memory));
 
     let council = Arc::new(Council::default_allow());
+    let council_invoker: Arc<dyn apeireth_orchestration::CouncilInvoker> =
+        Arc::new(apeireth_runtime::canonical::orchestrator::MockCouncilInvoker::allow_all());
     let sovereignty: Arc<parking_lot::Mutex<dyn SovereigntyGate>> =
         Arc::new(parking_lot::Mutex::new(LocalSovereignty::default()));
     let rel = LocalOrchestratorRelationship::new(0.5);
@@ -182,6 +187,7 @@ fn build_orchestrator_with_e7_gate(
         organ_e7,
         organ_memory,
         council,
+        council_invoker,
         sovereignty,
         rel,
         OrchestratorBoundaries::default(),
@@ -211,6 +217,8 @@ fn build_orchestrator() -> OrganOrchestrator<LocalOrchestratorRelationship> {
     let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::Memory));
 
     let council = Arc::new(Council::default_allow());
+    let council_invoker: Arc<dyn apeireth_orchestration::CouncilInvoker> =
+        Arc::new(apeireth_runtime::canonical::orchestrator::MockCouncilInvoker::allow_all());
     let sovereignty: Arc<parking_lot::Mutex<dyn SovereigntyGate>> =
         Arc::new(parking_lot::Mutex::new(LocalSovereignty::default()));
     let rel = LocalOrchestratorRelationship::new(0.5);
@@ -226,6 +234,7 @@ fn build_orchestrator() -> OrganOrchestrator<LocalOrchestratorRelationship> {
         organ_e7,
         organ_memory,
         council,
+        council_invoker,
         sovereignty,
         rel,
         OrchestratorBoundaries::default(),
@@ -808,5 +817,150 @@ async fn orchestrator_check_8_gates_e7_real() {
             orch.last_decision(),
             Some(apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Spoke { .. })
         ));
+    }
+}
+
+// ============================================
+// 测试 6: orchestrator_council_decide_with_invoker (Stage 4 完整化)
+// ============================================
+
+/// Council decide_with_invoker 真生产路径 (per cognitive-module-wiring.md:99).
+///
+/// 验证:
+/// - MockCouncilInvoker::allow_all() → 所有 advisor 返 Allow → CouncilDecision::Continue
+///   → `council_deliberate()` 返 `Ok(true)`.
+/// - MockCouncilInvoker::stop_all() → 所有 advisor 返 Stop → CouncilDecision::Stop
+///   → `council_deliberate()` 返 `Ok(false)` (拦下 → CouncilVeto).
+/// - tick() 真实路径: allow_all invoker → tick 走完正常 (Spoke);
+///   stop_all invoker → tick 返 None + last_decision = Held(CouncilVeto).
+#[tokio::test]
+async fn orchestrator_council_decide_with_invoker() {
+    use apeireth_runtime::canonical::orchestrator::{
+        MockCouncilDecision, MockCouncilInvoker, OrganChainOutputs,
+    };
+    use apeireth_orchestration::{Council, Proposal};
+    use chrono::TimeZone;
+
+    // Helper: 构造带可配置 CouncilInvoker 的 orchestrator (Stage 4 测试)
+    fn build_orchestrator_with_council_decision(
+        decision: MockCouncilDecision,
+    ) -> OrganOrchestrator<LocalOrchestratorRelationship> {
+        let organ_e4: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::E4));
+        let organ_f1: Arc<dyn OrganTrait> = Arc::new(F1EmotionMock { pleasure: 0.6 });
+        let organ_f4: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::F4));
+        let organ_f6: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::F6));
+        let organ_w1: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::W1));
+        let organ_w2: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::W2));
+        let organ_w3: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::W3));
+        let organ_e7: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::E7));
+        let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan::new(OrganKind::Memory));
+
+        let council = Arc::new(Council::default_allow());
+        let council_invoker: Arc<dyn apeireth_orchestration::CouncilInvoker> =
+            Arc::new(MockCouncilInvoker { decision });
+        let sovereignty: Arc<parking_lot::Mutex<dyn SovereigntyGate>> =
+            Arc::new(parking_lot::Mutex::new(LocalSovereignty::default()));
+        let rel = LocalOrchestratorRelationship::new(0.5);
+
+        OrganOrchestrator::new(
+            organ_e4,
+            organ_f1,
+            organ_f4,
+            organ_f6,
+            organ_w1,
+            organ_w2,
+            organ_w3,
+            organ_e7,
+            organ_memory,
+            council,
+            council_invoker,
+            sovereignty,
+            rel,
+            OrchestratorBoundaries::default(),
+            OrchestratorLoopConfig::default(),
+            clock(),
+        )
+    }
+
+    // Case 1: allow_all invoker → council_deliberate 返 Ok(true)
+    {
+        let orch = build_orchestrator_with_council_decision(MockCouncilDecision::AllowAll);
+        let proposal = Proposal {
+            id: "test-proposal-1".into(),
+            proposer: "apeireth-test".into(),
+            payload: serde_json::json!({"action": "test"}),
+            submitted_at: chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap().timestamp(),
+            session_id: apeireth_core::kernel::SessionId::default(),
+        };
+        let result = orch.council_deliberate(&proposal).await;
+        assert!(
+            result.is_ok(),
+            "council_deliberate 不应返 Err, got {result:?}"
+        );
+        assert!(
+            result.unwrap(),
+            "allow_all invoker → council_deliberate 应 = Ok(true)"
+        );
+    }
+
+    // Case 2: stop_all invoker → council_deliberate 返 Ok(false) (CouncilVeto)
+    {
+        let orch = build_orchestrator_with_council_decision(MockCouncilDecision::StopAll);
+        let proposal = Proposal {
+            id: "test-proposal-2".into(),
+            proposer: "apeireth-test".into(),
+            payload: serde_json::json!({"action": "test"}),
+            submitted_at: chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap().timestamp(),
+            session_id: apeireth_core::kernel::SessionId::default(),
+        };
+        let result = orch.council_deliberate(&proposal).await;
+        assert!(result.is_ok());
+        assert!(
+            !result.unwrap(),
+            "stop_all invoker → council_deliberate 应 = Ok(false) (CouncilVeto)"
+        );
+    }
+
+    // Case 3: tick() 真实路径 — allow_all invoker → 正常走完 (Spoke)
+    {
+        let mut orch = build_orchestrator_with_council_decision(MockCouncilDecision::AllowAll);
+        let outcome = orch.tick(make_tick_input(1_000_000)).await;
+        assert!(
+            outcome.is_some(),
+            "allow_all invoker → tick 应通过 step 4, 走完正常路径"
+        );
+        assert!(matches!(
+            orch.last_decision(),
+            Some(apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Spoke { .. })
+        ));
+    }
+
+    // Case 4: tick() 真实路径 — stop_all invoker → tick 返 None + last_decision = Held(CouncilVeto)
+    // (注: tick 顺序 = 主权闸 → chain + check_8_gates → step 3 emotion → step 4 council;
+    //  默认条件全 pass + F1 high pleasure → step 4 是唯一拦下原因)
+    {
+        let mut orch = build_orchestrator_with_council_decision(MockCouncilDecision::StopAll);
+        let outcome = orch.tick(make_tick_input(1_000_000)).await;
+        assert!(
+            outcome.is_none(),
+            "stop_all invoker → tick 应在 step 4 CouncilVeto 拦下"
+        );
+        assert_eq!(
+            orch.last_decision(),
+            Some(
+                &apeireth_runtime::canonical::orchestrator::OrchestratorDecision::Held(
+                    OrganOrchestratorGate::CouncilVeto
+                )
+            ),
+            "last_decision 应 = Held(CouncilVeto)"
+        );
+    }
+
+    // Case 5: chain_9_organs 输出仍可用 (Stage 4 不影响 step 2 chain 输出, 仅 step 4 用 council)
+    {
+        let orch = build_orchestrator_with_council_decision(MockCouncilDecision::AllowAll);
+        let organ_input = OrganInput::new(make_episode(), vec!["stage4".to_string()]);
+        let chain: OrganChainOutputs = orch.chain_9_organs(organ_input).await;
+        assert!(chain.all_present(), "9 organ 全有输出 (Stage 4 验证 chain 不受 council 切换影响)");
     }
 }
