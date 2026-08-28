@@ -1,14 +1,16 @@
-# v2.0.0-rc.1 整体进展报告 (2026-08-27 → HEAD `ae182c8c`)
+# v2.0.0-rc.1 整体进展报告（历史快照：2026-08-27 → `ae182c8c`）
 
-> **本文档定位**: 接手人 + 用户一眼看完整 v2.0.0-rc.1 现状 (commit 序列 + 5 actionable + 7 子代理报告 + LOCKED 状态 + 阻塞项). 0 装诚实 ledger, 数字 100% 真实.
-> **HEAD** = `ae182c8c` (本地 = 远端同步, push 状态 0 un-pushed).
+> **本文档定位**: 保留上游在 `ae182c8c` 的完整历史快照（commit 序列 + 子代理报告 + LOCKED 状态 + 当时阻塞项）。当前交付状态以 `HANDOFF-NOTES.md`、`cognitive-module-wiring.md` 与 `v2.0.0-rc-roadmap.md` 为准。
+> **快照 HEAD** = `ae182c8c`；这不是当前 `main` 的 HEAD。
+
+> **当前 main 覆盖说明（2026-08-28 release-gate）**：后续提交已将 RC-10 加固为 APX2 v2 envelope：写入时使用 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length 的 AAD，v1 records 仍可读，v2 新写；当前格式不把 raw `record_id` 写入磁盘。Council adapter 已通过 canonical `ModuleInvoker` 接入单一 loop（默认关闭，最多 7 个 advisor，10s/60s bounded，真实 provider E2E 仍需凭证），Experience extraction 已在 durable AfterTurn 后以保守、显式 marker 方式写入既有 stores。下方关于旧 line-header 的 plaintext record-id 与 v1→v2 migration script 的描述属于该历史快照，不能当作当前 APX2 行为。
 
 ```
 [Document-Meta]
 Document:        docs/04-internal/v2-rc-1-progress-report.md
-Version:         Snapshot-1.0
-Last-Modified:   2026-08-27
-Status:          📊 进展快照 (一次性, 真兑现)
+Version:         Snapshot-1.1 (historical + current-main overlay)
+Last-Modified:   2026-08-28
+Status:          📊 历史进展快照；当前状态见覆盖说明
 
 > **HEAD 指针漂移说明** (子代理 H 风险 #1 缓解, 2026-08-27):
 > 本报告初始写于 HEAD `ae182c8c` (commit `206fb1da` 进展报告).
@@ -253,6 +255,7 @@ Status:          📊 进展快照 (一次性, 真兑现)
 
 ---
 
+<<<<<<< HEAD
 ## 12. 子代理 I 报告 (RC-11 真写完成, 2026-08-27)
 
 子代理 I 真兑现 `scripts/migrate_v1_to_v2_encrypted.py` 真生产前必写项 — 不再是 TODO 承诺.
