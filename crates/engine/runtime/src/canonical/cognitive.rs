@@ -15,7 +15,9 @@ use apeireth_orchestration::{
     Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
     CouncilInvoker, Proposal,
 };
-use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEntryStore};
+use apeireth_plugin::experience::{
+    extract_experience, AssociationStore, KnowledgeGraphStore, WikiEntryStore,
+};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::{PreferenceStore, UserPreference};
 use apeireth_plugin::self_assessment::{SelfAssessment, SelfAssessmentStore};
@@ -403,6 +405,9 @@ impl AgentModule for MemoryRecallModule {
 pub struct MemoryWritebackModule {
     manifest: ModuleManifest,
     memory: Arc<dyn MemoryBackend>,
+    wiki: Option<Arc<dyn WikiEntryStore>>,
+    graph: Option<Arc<dyn KnowledgeGraphStore>>,
+    associations: Option<Arc<dyn AssociationStore>>,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
 }
@@ -413,9 +418,27 @@ impl MemoryWritebackModule {
         Self {
             manifest: ModuleManifest::new(MEMORY_WRITEBACK_MODULE_ID, "Memory writeback"),
             memory,
+            wiki: None,
+            graph: None,
+            associations: None,
             clock,
             metrics: ModuleMetrics::default(),
         }
+    }
+
+    /// Attach the existing Experience stores. Extraction remains
+    /// conservative and deterministic; no hidden provider call is made.
+    #[must_use]
+    pub fn with_experience(
+        mut self,
+        wiki: Arc<dyn WikiEntryStore>,
+        graph: Arc<dyn KnowledgeGraphStore>,
+        associations: Arc<dyn AssociationStore>,
+    ) -> Self {
+        self.wiki = Some(wiki);
+        self.graph = Some(graph);
+        self.associations = Some(associations);
+        self
     }
 
     /// Read-only metrics for embedding callers.
@@ -477,6 +500,43 @@ impl AgentModule for MemoryWritebackModule {
                     // answer, but the warning counter makes the loss visible.
                     if self.memory.put_episode(&episode).is_err() {
                         self.metrics.warning();
+                        continue;
+                    }
+                    if let (Some(wiki), Some(graph), Some(associations)) =
+                        (&self.wiki, &self.graph, &self.associations)
+                    {
+                        match extract_experience(&episode) {
+                            Ok(artifacts) => {
+                                for entry in artifacts.wiki_entries {
+                                    if wiki.put_wiki(&entry).is_err() {
+                                        self.metrics.warning();
+                                    }
+                                }
+                                for fact in artifacts.facts {
+                                    if graph.put_fact(&fact).is_err() {
+                                        self.metrics.warning();
+                                    }
+                                }
+                                for link in artifacts.links {
+                                    if graph.put_link(&link).is_err() {
+                                        self.metrics.warning();
+                                    }
+                                }
+                                for association in artifacts.associations {
+                                    if associations
+                                        .record_cooccurrence(
+                                            &association.from_entity,
+                                            &association.to_entity,
+                                            &association.source_episode_id,
+                                        )
+                                        .is_err()
+                                    {
+                                        self.metrics.warning();
+                                    }
+                                }
+                            }
+                            Err(_) => self.metrics.warning(),
+                        }
                     }
                 }
             }
@@ -1081,6 +1141,7 @@ pub const DEFERRED_COGNITIVE_SLOTS: &[(&str, &str)] = &[
 mod tests {
     use super::*;
     use apeireth_core::kernel::{HistoryEntry, VirtualClock};
+    use apeireth_plugin::experience::{AssociationEdge, GraphFact, GraphLink, WikiEntry};
     use apeireth_plugin::memory_backend::{BackendKind, CapabilityResult};
     use apeireth_plugin::perception::{PerceptionEvent, PerceptionModality};
     use std::sync::OnceLock;
@@ -1146,6 +1207,97 @@ mod tests {
             _session_id: &str,
             _n: usize,
         ) -> CapabilityResult<Vec<HistoryEntry>> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeExperience {
+        wikis: Mutex<Vec<WikiEntry>>,
+        facts: Mutex<Vec<GraphFact>>,
+        links: Mutex<Vec<GraphLink>>,
+        associations: Mutex<Vec<(String, String, String)>>,
+    }
+
+    impl WikiEntryStore for FakeExperience {
+        fn put_wiki(&self, entry: &WikiEntry) -> CapabilityResult<()> {
+            self.wikis
+                .lock()
+                .expect("fake wiki mutex")
+                .push(entry.clone());
+            Ok(())
+        }
+
+        fn list_wiki(
+            &self,
+            _session_id: &str,
+            _topic: &str,
+            _limit: u32,
+        ) -> CapabilityResult<Vec<WikiEntry>> {
+            Ok(self.wikis.lock().expect("fake wiki mutex").clone())
+        }
+
+        fn wiki_for_episode(&self, episode_id: &str) -> CapabilityResult<Vec<WikiEntry>> {
+            Ok(self
+                .wikis
+                .lock()
+                .expect("fake wiki mutex")
+                .iter()
+                .filter(|entry| entry.source_episode_id == episode_id)
+                .cloned()
+                .collect())
+        }
+    }
+
+    impl KnowledgeGraphStore for FakeExperience {
+        fn put_fact(&self, fact: &GraphFact) -> CapabilityResult<()> {
+            self.facts
+                .lock()
+                .expect("fake facts mutex")
+                .push(fact.clone());
+            Ok(())
+        }
+
+        fn put_link(&self, link: &GraphLink) -> CapabilityResult<()> {
+            self.links
+                .lock()
+                .expect("fake links mutex")
+                .push(link.clone());
+            Ok(())
+        }
+
+        fn facts_from(&self, _subject_id: &str, _limit: u32) -> CapabilityResult<Vec<GraphFact>> {
+            Ok(self.facts.lock().expect("fake facts mutex").clone())
+        }
+
+        fn links_from(&self, _from_id: &str, _limit: u32) -> CapabilityResult<Vec<GraphLink>> {
+            Ok(self.links.lock().expect("fake links mutex").clone())
+        }
+
+        fn forget_subject(&self, _subject_id: &str) -> CapabilityResult<()> {
+            Ok(())
+        }
+    }
+
+    impl AssociationStore for FakeExperience {
+        fn record_cooccurrence(
+            &self,
+            from: &str,
+            to: &str,
+            episode_id: &str,
+        ) -> CapabilityResult<()> {
+            self.associations
+                .lock()
+                .expect("fake association mutex")
+                .push((from.into(), to.into(), episode_id.into()));
+            Ok(())
+        }
+
+        fn top_associations(
+            &self,
+            _entity: &str,
+            _limit: u32,
+        ) -> CapabilityResult<Vec<AssociationEdge>> {
             Ok(Vec::new())
         }
     }
@@ -1326,6 +1478,59 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(memory.episodes.lock().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn writeback_extracts_only_after_durable_episode_persistence() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        let experience = Arc::new(FakeExperience::default());
+        let clock = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let writeback = MemoryWritebackModule::new(memory.clone(), clock).with_experience(
+            experience.clone(),
+            experience.clone(),
+            experience.clone(),
+        );
+        let invoker = FixedInvoker {
+            response: NormalizedResponse::text("unused", "fake", "unused"),
+            calls: AtomicU64::new(0),
+        };
+        let messages = vec![NormalizedMessage::user("remember this")];
+        let candidate = NormalizedResponse::text(
+            "answer-1",
+            "fake",
+            "A concise answer.\nfact: rust | property | fast\nlink: rust | fast | supports\nassociate: rust | cargo",
+        );
+        writeback
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&candidate),
+                    &invoker,
+                    MEMORY_WRITEBACK_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(memory.episodes.lock().unwrap().len(), 2);
+        assert_eq!(experience.wikis.lock().unwrap().len(), 2);
+        assert_eq!(experience.facts.lock().unwrap().len(), 1);
+        assert_eq!(experience.links.lock().unwrap().len(), 1);
+        assert_eq!(experience.associations.lock().unwrap().len(), 1);
+        assert!(experience
+            .facts
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|fact| !fact.source_episode_id.is_empty()));
+        assert_eq!(writeback.metrics().warnings, 0);
     }
 
     #[tokio::test]
