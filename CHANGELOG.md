@@ -2,19 +2,19 @@
 
 ## [Unreleased] — v2.0.0-rc.1 release-gate follow-up
 
-- **RC-10 metadata integrity** (`38ac4527`, upstream `38cc1039`): encrypted
+- **RC-10 metadata integrity** (`2214fb01`, upstream `38cc1039`): encrypted
   records now write an APX2 header whose authenticated data binds the format
   version, service/type, physical record index, opaque keyed record-id
   commitment, and complete sealed length. Existing v1 records remain
   readable; new records use v2. Added tamper, swap, framing, truncation, and
   legacy-read coverage.
-- **Canonical Council wiring** (`eed1a005`): the Council adapter is now in the
+- **Canonical Council wiring** (`e77256de`, plus `863df70f`): the Council adapter is now in the
   single runtime module loop, disabled by default, and uses the runtime-owned
   `ModuleInvoker` for at most seven bounded typed advisor calls with 10-second
   per-advisor and 60-second overall timeouts. Fake-invoker tests cover wiring,
   ordering, retry/stop aggregation, malformed responses, and timeout defer;
   real provider E2E remains credential-gated.
-- **Durable Experience extraction** (`b06c6fca`): after a successful durable
+- **Durable Experience extraction** (`a11c81ff`): after a successful durable
   `AfterTurn` episode write, the conservative extractor materializes bounded
   summary/explicit-marker artifacts with source-episode evidence into the
   existing Wiki/KG/Association stores. SQLite association observations are
