@@ -71,7 +71,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | 代码量 | ~74k 行 active（不含 legacy/） |
 | 测试 | ~1500+ passed / 0 failed (workspace 0 FAILED) |
 | CI | 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage/13 键契约/M2B/M2C/M3A 三 OS） + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告 + `cargo test --workspace --doc --locked` |
-| **v2.0.0-rc.1 RC 进展** | **7/10 RC 真实 backend 完成**；RC-10 已补 metadata-bound APX2 header；canonical cognitive follow-up 已接 Council adapter 与 durable conservative Experience extraction。真实 Orchestrator、provider-backed Council E2E、偏好学习、长程 reflection、非文本 perception 仍延期。详见 `docs/04-internal/v2.0.0-rc-roadmap.md` |
+| **v2.0.0-rc.1 RC 进展** | **8/10 RC 真实 backend/adapter 完成**；RC-10 已补 metadata-bound APX2 header，RC-6 已接 bounded Council adapter；canonical cognitive follow-up 已接 Council 与 durable conservative Experience extraction。真实 Orchestrator、provider-backed Council E2E、偏好学习、长程 reflection、非文本 perception 仍延期。详见 `docs/04-internal/v2.0.0-rc-roadmap.md` |
 | **O-6 锚兑现** | **12/12 项全部完成**（2026-08-27, 哲学锚 #9 启动）+ 子代理反馈修正 (RC-2 写真, RC-8 `TokioSubSupervisor` → `StdSubSupervisor` 命名诚实化)。详见 `docs/01-architecture/v2-arch-refactor-batch.md` + `.github/workflows/o6-anchor.yml` (5 重自动守门) + `docs/04-internal/HANDOFF-NOTES.md` (子代理 D 接手人手册) |
 | **子代理审查** | 4 子代理 (A/B/C/D) 报告全部接收采纳. 子代理 A: Send+Sync 注释 (commit `67fc66a0`); 子代理 B: v1 vs v2 41 项差异 + 5 风险; 子代理 C: P0 build break + 命名错位 (commit `4e4fba89` 修); 子代理 D: 接手人手册 |
 | 旧 gate | `release-prep`、`pii-leak-detection` 保持 master-only，不在 main 跑 |
@@ -85,7 +85,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 |---|---|---|---|---|---|
 | **v1.0.0** | ✅ 已发布（历史） | `v1.0.0` → `993e9107` | 86-crate + 23k tests + 9 organ 完整 + companion_serve | 2026-08-18 已发 | — |
 | **v2.0.0-alpha.1** | ✅ 已发布 | `v2.0.0-alpha.1` → `d6910cf7` | 15-crate 工程重构 + governance P0 + 13 键降级 + ROADMAP §4 P1-P6 trait 边界 | 2026-08-27 已发 | — |
-| **v2.0.0-rc.1** | 🎯 下一阶段，**接手人继续** | `v2.0.0-rc.1`（待发） | alpha 7 trait 接真 backend（**7/10 RC 已完成**） + 3 RC 需 LLM key | 2026-12 月 | **剩 3 RC = RC-5/6/7 需 LLM API key + 硬件** |
+| **v2.0.0-rc.1** | 🎯 下一阶段，**接手人继续** | `v2.0.0-rc.1`（待发） | alpha 7 trait 接真 backend（**8/10 RC 已完成或适配**） + RC-5 harness / RC-7 modality 仍需补齐 | 2026-12 月 | **剩余重点 = RC-5 Orchestrator harness、RC-7 perception、provider E2E 与长程 cognition** |
 | **v2.0.0** | 远期 | `v2.0.0`（待发） | rc 全绿 + 至少 1 器官移植（W1/W2/E4/F1/F6 选 1） + frontend companion-desktop 接入 v2 gateway | 2027-02-04 月 | rc 后约 6-8 周 |
 | **v2.x (商业化)** | 远期 | — | 多用户 / 跨载体 / 租赁 / marketplace | 2027-Q3+ | — |
 | v1 (legacy) | 维护 | `v1.0.0` / `archive/v1.0-master` | 86-crate 完整功能 + 9 organ + companion；v2 rc 后只修严重 bug | 永久 | — |
