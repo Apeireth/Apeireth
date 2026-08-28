@@ -7,10 +7,13 @@
 //! **v1 compat**: `apeireth_memory::experience::WikiEntry` 仍可访问 (re-export),
 //! 现有 3 个内部测试 + 0 外部 user 0 破坏.
 //!
-//! **0 装 PASS**: `extract_experience_from_episode` 仍返空 (rc 阶段真实现).
+//! The conservative extractor is defined in the foundation plugin so the
+//! runtime can materialize evidence-bound artifacts without importing SQL.
 
 // Trait 在 plugin (P-arch 2026-08-27 O-6 重构); 这里 re-export 保持 v1 兼容路径
 pub use apeireth_plugin::experience::{
-    extract_experience_from_episode, AssociationEdge, AssociationNode, AssociationStore, GraphFact,
-    GraphLink, KnowledgeGraphStore, WikiEntry, WikiEntryStore,
+    extract_experience, extract_experience_from_episode, AssociationEdge, AssociationNode,
+    AssociationObservation, AssociationStore, ExperienceArtifacts, ExperienceExtraction,
+    ExtractedAssociation, ExtractedFact, ExtractedLink, ExtractedWikiEntry, GraphFact, GraphLink,
+    KnowledgeGraphStore, WikiEntry, WikiEntryStore,
 };
