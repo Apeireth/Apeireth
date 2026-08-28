@@ -337,7 +337,9 @@ impl MinimaxLlmInstance {
             ProviderError::RateLimited { retry_after_ms, .. } => {
                 LlmError::RateLimited { retry_after_ms }
             }
-            ProviderError::Timeout { timeout_ms, .. } => LlmError::Stream(format!("timeout after {timeout_ms}ms")),
+            ProviderError::Timeout { timeout_ms, .. } => {
+                LlmError::Stream(format!("timeout after {timeout_ms}ms"))
+            }
             ProviderError::Network { detail, .. } => LlmError::Network(detail),
             ProviderError::BadResponse { detail, .. } => LlmError::Provider(detail),
             ProviderError::Refused { detail, .. } => LlmError::Provider(detail),
