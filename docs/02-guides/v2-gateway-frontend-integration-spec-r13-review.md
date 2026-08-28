@@ -446,7 +446,7 @@ per `git status` 子代理 R13 接力时:
 - R10 spec (本文接力审): `docs/01-architecture/cognitive-9-organ-integration-spec.md:1-1001`
 - R11 spec (本文接力审): `docs/01-architecture/organ-orchestrator-spec.md:1-500`
 - R12 working tree (untracked, R13 接力时已起): `crates/engine/runtime/src/canonical/orchestrator.rs` (per `git status`)
-- R14 spec (RC-7 Perception 真 modality): `docs/04-internal/rc-7-perception-true-modality-spec.md` (per `abf59f2e` commit)
+- R14 spec (RC-7 Perception 真 modality): `docs/01-architecture/rc-7-perception-true-modality-spec.md` (per `abf59f2e` commit)
 - 主代理整合文档: `docs/04-internal/v2.0.0-release-path-integration.md:1-274`
 - 12 slot ledger (LOCKED, 真账): `docs/04-internal/cognitive-module-wiring.md:23-35`
 - v2 gateway 入口: `crates/adapters/gateway/src/lib.rs:1-15`
