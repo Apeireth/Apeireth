@@ -1,9 +1,10 @@
-//! The single production cognitive-module composition root.
+//! The single production module composition root.
 //!
-//! Adapters supply concrete backends and the optional Council.  This module
-//! owns only ordering and slot validation, so CLI, gateway, and future
-//! embedding callers cannot accidentally register a second cognitive spine.
+//! Adapters supply concrete backends, tools, and the optional Council. This module
+//! owns ordering and slot validation, so CLI, gateway, and future
+//! embedding callers cannot accidentally register a second cognitive or tool spine.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_core::kernel::Clock;
@@ -12,21 +13,25 @@ use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEnt
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
 use apeireth_plugin::self_assessment::SelfAssessmentStore;
+use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
 
 use super::cognitive::{
     CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule, JudgeObservations,
     MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule, SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
-use super::module::{AgentModule, ModuleManifest};
+use super::module::{Module, ModuleManifest};
+use super::tool_modules::{
+    FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
+};
 
-/// Feature switches for the production cognitive slots.
+/// Feature switches for the production cognitive and tool modules.
 ///
 /// Memory and preference recall/writeback are cheap local calls and are on by
-/// default when their injected stores exist. Judge and Council are explicitly
+/// default when their injected stores exist. Judge, Council, Shell and Fetch are explicitly
 /// opt-in; Judge and Council side-calls stay behind the runtime invoker.
-#[derive(Debug, Clone, PartialEq)]
-pub struct CognitiveModuleConfig {
+#[derive(Debug, Clone)]
+pub struct ProductionModulesConfig {
     /// Register memory recall when a memory backend is supplied.
     pub memory_recall: bool,
     /// Register AfterTurn memory writeback when a memory backend is supplied.
@@ -39,9 +44,21 @@ pub struct CognitiveModuleConfig {
     pub judge: JudgeConfig,
     /// Register the no-tool Council adapter.
     pub council: bool,
+    /// Register filesystem tool module when workspace root is supplied.
+    pub filesystem: bool,
+    /// Register search tool module when workspace root is supplied.
+    pub search: bool,
+    /// Register repository inspection tool module when workspace root is supplied.
+    pub repo: bool,
+    /// Register shell tool module when config is supplied.
+    pub shell: Option<TrustedShellConfig>,
+    /// Register fetch tool module when config is supplied.
+    pub fetch: Option<FetchConfig>,
+    /// Register MCP capability module.
+    pub mcp: bool,
 }
 
-impl Default for CognitiveModuleConfig {
+impl Default for ProductionModulesConfig {
     fn default() -> Self {
         Self {
             memory_recall: true,
@@ -50,9 +67,18 @@ impl Default for CognitiveModuleConfig {
             self_assessment: true,
             judge: JudgeConfig::default(),
             council: false,
+            filesystem: true,
+            search: true,
+            repo: true,
+            shell: None,
+            fetch: None,
+            mcp: false,
         }
     }
 }
+
+/// Compatibility alias for [`ProductionModulesConfig`].
+pub type CognitiveModuleConfig = ProductionModulesConfig;
 
 /// Concrete capability handles supplied by an adapter composition root.
 ///
@@ -60,7 +86,7 @@ impl Default for CognitiveModuleConfig {
 /// subset.  A requested slot without its backend is a boot-time configuration
 /// error, never a silently inert production registration.
 #[derive(Default)]
-pub struct CognitiveBackends {
+pub struct ProductionBackends {
     /// Episode and history-stream backend.
     pub memory: Option<Arc<dyn MemoryBackend>>,
     /// Optional progressive-disclosure wiki store.
@@ -75,22 +101,30 @@ pub struct CognitiveBackends {
     pub self_assessments: Option<Arc<dyn SelfAssessmentStore>>,
     /// Council service, supplied only when the adapter explicitly enables it.
     pub council: Option<Arc<Council>>,
+    /// Workspace root directory for local file tools.
+    pub workspace_root: Option<PathBuf>,
 }
 
+/// Compatibility alias for [`ProductionBackends`].
+pub type CognitiveBackends = ProductionBackends;
+
 /// The validated, ordered module set to pass to [`RuntimeBuilder::with_module`].
-pub struct ProductionCognitiveModules {
-    modules: Vec<Arc<dyn AgentModule>>,
+pub struct ProductionModules {
+    modules: Vec<Arc<dyn Module>>,
     telemetry: Arc<CognitiveTelemetry>,
 }
 
-impl ProductionCognitiveModules {
+/// Compatibility alias for [`ProductionModules`].
+pub use ProductionModules as ProductionCognitiveModules;
+
+impl ProductionModules {
     /// Build the canonical registration order.
     pub fn build(
-        config: CognitiveModuleConfig,
-        backends: CognitiveBackends,
+        config: ProductionModulesConfig,
+        backends: ProductionBackends,
         clock: Arc<dyn Clock>,
     ) -> RuntimeResult<Self> {
-        let mut modules: Vec<Arc<dyn AgentModule>> = Vec::new();
+        let mut modules: Vec<Arc<dyn Module>> = Vec::new();
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
 
@@ -108,6 +142,38 @@ impl ProductionCognitiveModules {
             ));
         }
 
+        // Register tool modules when configured and available
+        if config.filesystem {
+            if let Some(root) = &backends.workspace_root {
+                modules.push(Arc::new(FilesystemModule::new(root.clone())));
+            }
+        }
+
+        if config.search {
+            if let Some(root) = &backends.workspace_root {
+                modules.push(Arc::new(SearchModule::new(root.clone())));
+            }
+        }
+
+        if config.repo {
+            if let Some(root) = &backends.workspace_root {
+                modules.push(Arc::new(RepoModule::new(root.clone())));
+            }
+        }
+
+        if let Some(shell_config) = config.shell {
+            modules.push(Arc::new(ShellModule::new(shell_config)));
+        }
+
+        if let Some(fetch_config) = config.fetch {
+            modules.push(Arc::new(FetchModule::new(fetch_config)));
+        }
+
+        if config.mcp {
+            modules.push(Arc::new(McpModule::new()));
+        }
+
+        // Register cognitive modules
         if config.memory_recall {
             let memory = required(backends.memory.clone(), "memory_recall", "memory")?;
             let mut module = MemoryRecallModule::new(memory);
@@ -197,7 +263,7 @@ impl ProductionCognitiveModules {
     }
 
     /// Ordered modules for registration in the canonical runtime.
-    pub fn modules(&self) -> &[Arc<dyn AgentModule>] {
+    pub fn modules(&self) -> &[Arc<dyn Module>] {
         &self.modules
     }
 

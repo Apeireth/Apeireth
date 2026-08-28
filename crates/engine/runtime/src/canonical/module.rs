@@ -328,6 +328,7 @@ pub struct ModuleContext<'a> {
     /// Error text for [`HookPoint::OnError`], when available.
     pub error: Option<&'a str>,
     pub(crate) invoker: &'a dyn ModuleInvoker,
+    pub(crate) subloop: &'a dyn super::subloop::SubLoopSpawner,
 }
 
 impl<'a> ModuleContext<'a> {
@@ -350,25 +351,127 @@ impl<'a> ModuleContext<'a> {
     pub fn invoker(&self) -> &'a dyn ModuleInvoker {
         self.invoker
     }
+
+    /// Runtime-owned bounded SubLoop spawner.
+    pub fn subloop(&self) -> &'a dyn super::subloop::SubLoopSpawner {
+        self.subloop
+    }
 }
 
-/// A module participating in the canonical runtime lifecycle.
+use apeireth_plugin::ToolCapability;
+
+/// A module participating in the canonical runtime lifecycle and providing capabilities.
 ///
 /// Hook calls are sequential and deterministic. A hook error aborts an
 /// in-progress turn and is reported through [`HookPoint::OnError`] when
 /// possible; `AfterTurn` is already post-commit and `OnError` is best effort.
 /// Module directives cannot execute capabilities or alter a tool invocation.
+/// Modules can also contribute tool capabilities to the unified capability registry.
 #[async_trait]
-pub trait AgentModule: Send + Sync {
+pub trait Module: Send + Sync {
     /// Stable module identity.
     fn manifest(&self) -> &ModuleManifest;
 
     /// Observe a lifecycle point and return transient policy effects.
     async fn on_hook(
         &self,
-        hook: HookPoint,
-        ctx: &ModuleContext<'_>,
-    ) -> Result<ModuleOutcome, ModuleError>;
+        _hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        Ok(ModuleOutcome::continue_())
+    }
+
+    /// Tool capabilities contributed by this module.
+    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+        Vec::new()
+    }
+}
+
+/// Compatibility alias for the canonical [`Module`] trait.
+pub use Module as AgentModule;
+
+/// Canonical registry for all runtime modules.
+///
+/// Ensures deterministic registration ordering, unique module IDs,
+/// and aggregates tool capabilities exposed by modules.
+#[derive(Default, Clone)]
+pub struct ModuleRegistry {
+    modules: Vec<Arc<dyn Module>>,
+}
+
+impl ModuleRegistry {
+    /// Create an empty module registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Register one module, rejecting duplicate or empty IDs.
+    pub fn register(&mut self, module: Arc<dyn Module>) -> Result<(), String> {
+        let manifest = module.manifest();
+        if manifest.id.is_empty() {
+            return Err("registered modules must have a non-empty id".to_string());
+        }
+        if self.modules.iter().any(|m| m.manifest().id == manifest.id) {
+            return Err(format!("duplicate module id {:?}", manifest.id));
+        }
+        self.modules.push(module);
+        Ok(())
+    }
+
+    /// All registered modules in deterministic registration order.
+    pub fn modules(&self) -> &[Arc<dyn Module>] {
+        &self.modules
+    }
+
+    /// Tool capabilities contributed by all registered modules.
+    pub fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+        self.modules.iter().flat_map(|m| m.tools()).collect()
+    }
+
+    /// Find a tool capability by tool name across all modules.
+    pub fn find_tool_by_name(&self, name: &str) -> Option<Arc<dyn ToolCapability>> {
+        for module in &self.modules {
+            for tool in module.tools() {
+                if tool.declaration().name == name {
+                    return Some(tool);
+                }
+            }
+        }
+        None
+    }
+
+    /// Number of registered modules.
+    pub fn len(&self) -> usize {
+        self.modules.len()
+    }
+
+    /// Whether the registry contains no modules.
+    pub fn is_empty(&self) -> bool {
+        self.modules.is_empty()
+    }
+}
+
+impl From<Vec<Arc<dyn Module>>> for ModuleRegistry {
+    fn from(modules: Vec<Arc<dyn Module>>) -> Self {
+        Self { modules }
+    }
+}
+
+impl std::ops::Deref for ModuleRegistry {
+    type Target = [Arc<dyn Module>];
+
+    fn deref(&self) -> &Self::Target {
+        &self.modules
+    }
+}
+
+impl<'a> IntoIterator for &'a ModuleRegistry {
+    type Item = &'a Arc<dyn Module>;
+    type IntoIter = std::slice::Iter<'a, Arc<dyn Module>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.modules.iter()
+    }
 }
 
 /// Default maximum number of isolated module provider calls in one turn.
@@ -403,7 +506,7 @@ impl ModuleTurnState {
         self.used.store(used, Ordering::Relaxed);
     }
 
-    fn reserve(&self) -> Result<(), ModuleInvocationError> {
+    pub(crate) fn reserve(&self) -> Result<(), ModuleInvocationError> {
         loop {
             let used = self.used.load(Ordering::Relaxed);
             if used >= self.max {
