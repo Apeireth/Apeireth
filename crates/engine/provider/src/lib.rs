@@ -10,6 +10,8 @@
 pub mod canonical_anthropic;
 /// MiniMax OpenAI-compatible provider capability and plugin.
 pub mod canonical_minimax;
+/// RC-5 LlmFactory 真实现 — MiniMax backend adapter (复用 `MinimaxProviderCapability`).
+pub mod minimax_llm_factory;
 /// Generic OpenAI-compatible provider capability and plugin.
 pub mod canonical_openai_compatible;
 /// Environment-backed credential resolution.
