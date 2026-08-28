@@ -9,16 +9,16 @@
 //! - 单向依赖: `apeireth-organ` → `apeireth-plugin` → `apeireth-core` (与 plugin 体系一致)
 //!
 //! **v2.0-rc.1 真实现进度** (per 任务"真生产前阻塞 #1: 9 organ 至少 1 真移植"):
-//! - ✅ **E4 Curiosity** (`curiosity::CuriosityOrgan`) — 1:1 翻译 v1 真实现
+//! - ✅ **E4 Curiosity** (`curiosity::CuriosityOrgan`) — 1:1 翻译 v1 真实现 (子代理 Q1)
 //! - ✅ **F4 Hypothesis** (`hypothesis::HypothesisOrgan`) — 1:1 翻译 v1 真实现 (子代理 R2, 2026-08-28)
 //! - ✅ **F6 Value Cases** (`value_cases::ValueCasesOrgan`) — 1:1 翻译 v1 真实现 (子代理 R3, 2026-08-28)
-//! - ⏳ W1 / W2 / W3 World Model — 0 装 (rc 阶段或 v2.1)
-//! - ⏳ F1 Emotion Memory — 0 装 (rc 阶段或 v2.1; 子代理 R1 并行写)
+//! - ✅ **F1 Emotion Memory** (`emotion_memory::EmotionOrgan`) — 1:1 翻译 v1 真实现 (子代理 R1, 2026-08-28)
+//! - ⏳ W1 / W2 / W3 World Model — 0 装 (rc 阶段或 v2.1; LLM 重估)
 //! - ⏳ E7 Emergence — 0 装 (rc 阶段或 v2.1)
 //! - ⏳ Memory — 0 装 (rc 阶段或 v2.1)
 //!
 //! **0 装 PASS (per task + 子代理 R 同步)**:
-//! - 本 crate 仅 E4 真实现; 其余 8 organ **0 装占位**, `process` 返
+//! - 本 crate E4 / F4 / F6 / F1 真实现; 其余 5 organ **0 装占位**, `process` 返
 //!   `Err(OrganError::NotImplemented(organ_id))` 显式标缺.
 //! - 不假装"9 organ 全实装" (per O-5 不假装锚, R11 LOCKED body.rs 0 字节占位同样纪律).
 //!
@@ -43,6 +43,7 @@ pub use apeireth_plugin::organ::{
 };
 
 pub mod curiosity;
+pub mod emotion_memory;
 pub mod hypothesis;
 pub mod value_cases;
 
@@ -50,9 +51,9 @@ pub mod value_cases;
 // 0 装 Noop stub (7 organ 占位)
 // ============================================
 
-/// 0 装 PASS: 占位 organ (W1/W2/W3/F1/E7/Memory), `process` 返 NotImplemented.
+/// 0 装 PASS: 占位 organ (W1/W2/W3/E7/Memory), `process` 返 NotImplemented.
 ///
-/// **为何**: v2.0-rc.1 E4/F4/F6 真实现. runtime 启动时如果配置了占位 organ, 注入此 stub;
+/// **为何**: v2.0-rc.1 E4/F4/F6/F1 真实现. runtime 启动时如果配置了占位 organ, 注入此 stub;
 /// 调用 `process` 时显式返 `NotImplemented`, 不假装 organ 在工作.
 ///
 /// **何时移除**: rc 阶段或 v2.1 真接时, 删本 stub, 替换为具体 organ 的真实现.
