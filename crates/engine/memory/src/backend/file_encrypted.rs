@@ -26,6 +26,15 @@
 //! **0 触碰 LOCKED**: 9 哲学锚 / 13 键 / 3 项不可变脊柱 / workspace.version / R11 baseline.
 //!
 //! **v1 compat**: 100+ consumer 0 破 (新增 module, 0 改 FileBackend).
+//!
+//! **⚠️ Breaking change (子代理 E 审查建议 1, 2026-08-27)**:
+//! 加密文件格式 v2 (line header `[id_len:2 BE][id:id_len][sealed_len:4 BE][sealed:N]`)
+//! **不可读 v1** (老格式 `[sealed_len:4 BE][sealed:N]` 无 id 字段).
+//! RC-10 仍在 rc 阶段, 未上线, 0 影响.
+//! 真生产: 升级前需 `data migration script` 读老文件, 重写新格式.
+//! Per-record AAD tamper 保护 (子代理 C 建议 #5 兑现, 2026-08-27):
+//! AAD = `service|type|record_id` (line header 提供 record_id 重建).
+//! 篡改 record_id 必 fail AEAD verify (fail-closed, 0 装假装安全).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -69,6 +78,10 @@ impl EncryptedFileBackend {
 
     /// 16 bytes AEAD tag (GCM tag length)
     pub const TAG_LEN: usize = 16;
+
+    /// record_id 字节长度上限 (u16 = 65535 bytes, 0 装诚实标注)
+    /// UUID / SHA-style id 通常 8-36 bytes, 0 装期望
+    pub const ID_LEN_MAX: usize = u16::MAX as usize;
 
     /// 创 EncryptedFileBackend with explicit 32-byte master key.
     /// **0 装 PASS**: master key 0 真接 OS keyring (alpha 0 装). RC-10 阶段接 `KeyringSelector`.
@@ -183,13 +196,15 @@ impl EncryptedFileBackend {
         let sealed = self.seal(json_bytes, record_type, record_id)?;
         // 0 装诚实: line header `[id_len(2)][id][sealed]` 让 read 按 record_id 重建 AAD.
         // 原因: 真生产需 per-record AAD tamper 保护 (每条 record 独立身份).
-        // record_id 长度 u16, 0 装测试用 v1-style 短 id ("ep-1", "wiki-1" 等 < 256 chars).
+        // 0 装诚实: record_id 长度 u16 = Self::ID_LEN_MAX (65535 bytes).
+        // UUID / SHA-style id 通常 8-36 bytes, 0 装期望.
+        // 超出返 Invalid error, 不 panic.
         let id_bytes = record_id.as_bytes();
-        if id_bytes.len() > u16::MAX as usize {
+        if id_bytes.len() > Self::ID_LEN_MAX {
             return Err(MemoryError::Invalid(format!(
                 "record_id too long: {} bytes, max {}",
                 id_bytes.len(),
-                u16::MAX
+                Self::ID_LEN_MAX
             )));
         }
         let id_len = (id_bytes.len() as u16).to_be_bytes();
@@ -513,6 +528,49 @@ mod tests {
             !on_disk_str.contains("encrypted content of secret-id"),
             "content 0 装在明文"
         );
+    }
+
+    /// RC-10 验收: 损坏 line header → fail (子代理 E 建议 2 边界 case)
+    /// 0 装: 构造一个 id_len 字段说 1000 但实际只写 5 字节 id 的损坏文件
+    /// → 期望 read_records 返 `truncated id` 错误而非 panic
+    #[test]
+    fn truncated_id_returns_error_not_panic() {
+        let (_b, d) = fresh();
+        use std::io::Write;
+        // 写损坏 line header: id_len=1000 (u16 BE), 但只 5 字节 id, 无 sealed
+        let path = d.path().join("episodes.enc");
+        let mut f = std::fs::File::create(&path).expect("create");
+        f.write_all(&1000u16.to_be_bytes()).expect("write id_len");
+        f.write_all(b"short").expect("write id 5 bytes");
+        f.sync_all().expect("sync");
+        drop(f);
+        // 重新构造 store, 触发 read_records
+        let store = EncryptedFileBackend::for_dev_only(d.path(), "test");
+        // get_episode 走 read_records → 期望 Invalid 错误 (不 panic)
+        let result = store.get_episode("any-id");
+        assert!(result.is_err(), "损坏 line header 必须 fail, 不假装");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("truncated id") || err.contains("truncated"),
+            "必须显式 truncated error 诊断 (fail-closed), 错误: {err}"
+        );
+    }
+
+    /// RC-10 验收: record_id 超长 (over ID_LEN_MAX) → 返 Invalid 错误
+    #[test]
+    fn record_id_too_long_returns_error() {
+        let (b, _d) = fresh();
+        // 65536 字节 = ID_LEN_MAX + 1
+        let too_long = "x".repeat(65536);
+        // 直接调 write_record (因 put_episode 接受任何 id, 但 write_record 长度检查)
+        let result = b.put_episode(&::apeireth_core::kernel::Episode {
+            id: too_long,
+            timestamp: 1_700_000_000,
+            role: "user".into(),
+            content: "test".into(),
+            session_id: "sess".into(),
+        });
+        assert!(result.is_err(), "ID_LEN_MAX 超出必须 fail, 不假装");
     }
 
     /// RC-10 验收: stream append + list
