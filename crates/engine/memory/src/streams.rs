@@ -21,8 +21,8 @@ use crate::append_only::{
     insert_entry, list_for_session, list_for_subject, list_recent_entries, mark_tombstone,
     HistoryEntry, HistoryStream,
 };
-use apeireth_core::kernel::StreamKindExt;
 use crate::{MemoryResult, StreamKind};
+use apeireth_core::kernel::StreamKindExt;
 /// 6 流通用 helper: 软删除并写入 reason.
 pub(crate) fn tombstone_with_reason(
     conn: &Connection,
@@ -63,7 +63,13 @@ impl<'a> HistoryStream for ThoughtStream<'a> {
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
-        tombstone_with_reason(self.conn, StreamKind::Thought.table_name_ext(), id, at, reason)
+        tombstone_with_reason(
+            self.conn,
+            StreamKind::Thought.table_name_ext(),
+            id,
+            at,
+            reason,
+        )
     }
 
     fn list_for_subject(
@@ -130,7 +136,13 @@ impl<'a> HistoryStream for ProposalStream<'a> {
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
-        tombstone_with_reason(self.conn, StreamKind::Proposal.table_name_ext(), id, at, reason)
+        tombstone_with_reason(
+            self.conn,
+            StreamKind::Proposal.table_name_ext(),
+            id,
+            at,
+            reason,
+        )
     }
 
     fn list_for_subject(
@@ -199,7 +211,13 @@ impl<'a> HistoryStream for ActionStream<'a> {
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
-        tombstone_with_reason(self.conn, StreamKind::Action.table_name_ext(), id, at, reason)
+        tombstone_with_reason(
+            self.conn,
+            StreamKind::Action.table_name_ext(),
+            id,
+            at,
+            reason,
+        )
     }
 
     fn list_for_subject(
@@ -266,7 +284,13 @@ impl<'a> HistoryStream for RelationStream<'a> {
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
-        tombstone_with_reason(self.conn, StreamKind::Relation.table_name_ext(), id, at, reason)
+        tombstone_with_reason(
+            self.conn,
+            StreamKind::Relation.table_name_ext(),
+            id,
+            at,
+            reason,
+        )
     }
 
     fn list_for_subject(

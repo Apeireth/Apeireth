@@ -27,8 +27,8 @@
 //!
 //! **v1 compat**: trait 是新增, 0 破现有 100+ consumer
 
-use async_trait::async_trait;
 use apeireth_orchestration::SubagentRole;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
@@ -55,7 +55,9 @@ pub struct CompletionRequest {
     pub max_tokens: Option<u32>,
 }
 
-fn default_temperature() -> f64 { 1.0 }
+fn default_temperature() -> f64 {
+    1.0
+}
 
 /// 一条完成消息 (role + content)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,7 +90,8 @@ pub struct TokenUsage {
 }
 
 /// 流式响应 (0 装: alpha 不实现 streaming, rc 阶段)
-pub type CompletionStream<'a> = Pin<Box<dyn futures::Stream<Item = Result<CompletionResponse, LlmError>> + Send + 'a>>;
+pub type CompletionStream<'a> =
+    Pin<Box<dyn futures::Stream<Item = Result<CompletionResponse, LlmError>> + Send + 'a>>;
 
 /// LLM 错误 (统一通道)
 #[derive(Debug)]
@@ -112,10 +115,14 @@ impl std::fmt::Display for LlmError {
         match self {
             Self::Credentials(m) => write!(f, "llm credentials error: {m}"),
             Self::Network(m) => write!(f, "llm network error: {m}"),
-            Self::RateLimited { retry_after_ms } => write!(f, "llm rate limited, retry after {retry_after_ms}ms"),
+            Self::RateLimited { retry_after_ms } => {
+                write!(f, "llm rate limited, retry after {retry_after_ms}ms")
+            }
             Self::Provider(m) => write!(f, "llm provider error: {m}"),
             Self::Stream(m) => write!(f, "llm stream error: {m}"),
-            Self::NotImplemented(what) => write!(f, "llm not implemented: {what} (0 装 PASS; rc 阶段实现)"),
+            Self::NotImplemented(what) => {
+                write!(f, "llm not implemented: {what} (0 装 PASS; rc 阶段实现)")
+            }
         }
     }
 }
@@ -137,7 +144,9 @@ pub trait LlmInstance: Send + Sync {
 
     /// 流式完成 (0 装: alpha 不实现, rc 阶段)
     async fn stream(&self, _req: CompletionRequest) -> Result<CompletionStream<'_>, LlmError> {
-        Err(LlmError::NotImplemented("LlmInstance::stream (0 装 PASS; rc 阶段实现)"))
+        Err(LlmError::NotImplemented(
+            "LlmInstance::stream (0 装 PASS; rc 阶段实现)",
+        ))
     }
 
     /// 名字 (用于监控 / 日志)
@@ -153,7 +162,11 @@ pub trait LlmFactory: Send + Sync {
     /// - `role`: SubagentRole (决定 system prompt 模板)
     /// - `model`: model ID (e.g. "anthropic/claude-3-5-sonnet", "MiniMax/M3")
     /// 返回的 LlmInstance 是独立的 (独立 temperature / system prompt / tool config).
-    async fn spawn(&self, role: SubagentRole, model: &str) -> Result<Box<dyn LlmInstance>, LlmError>;
+    async fn spawn(
+        &self,
+        role: SubagentRole,
+        model: &str,
+    ) -> Result<Box<dyn LlmInstance>, LlmError>;
 
     /// 列可用 model (runtime 启动时用, 用于 council 7 advisor 选不同 model)
     async fn available_models(&self) -> Result<Vec<String>, LlmError>;
@@ -181,7 +194,10 @@ pub struct NoopLlmInstance {
 
 impl NoopLlmInstance {
     pub fn new(role: SubagentRole, model: impl Into<String>) -> Self {
-        Self { role, model: model.into() }
+        Self {
+            role,
+            model: model.into(),
+        }
     }
 }
 
@@ -214,7 +230,11 @@ pub struct NoopLlmFactory;
 
 #[async_trait]
 impl LlmFactory for NoopLlmFactory {
-    async fn spawn(&self, role: SubagentRole, model: &str) -> Result<Box<dyn LlmInstance>, LlmError> {
+    async fn spawn(
+        &self,
+        role: SubagentRole,
+        model: &str,
+    ) -> Result<Box<dyn LlmInstance>, LlmError> {
         // 0 装: 返 Noop, 不是真 LLM. rc 阶段返 `LlmFactoryImpl::spawn(...)` 真 LLM instance.
         Ok(Box::new(NoopLlmInstance::new(role, model)))
     }
@@ -254,7 +274,9 @@ mod tests {
         assert!(s.contains("not implemented"));
         assert!(s.contains("0 装 PASS"));
 
-        let e2 = LlmError::RateLimited { retry_after_ms: 5000 };
+        let e2 = LlmError::RateLimited {
+            retry_after_ms: 5000,
+        };
         let s2 = format!("{e2}");
         assert!(s2.contains("rate limited"));
         assert!(s2.contains("5000"));

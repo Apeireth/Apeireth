@@ -11,6 +11,6 @@
 
 // Trait 在 plugin (P-arch 2026-08-27 O-6 重构); 这里 re-export 保持 v1 兼容路径
 pub use apeireth_plugin::experience::{
-    AssociationEdge, AssociationNode, AssociationStore, GraphFact, GraphLink,
-    KnowledgeGraphStore, WikiEntry, WikiEntryStore, extract_experience_from_episode,
+    extract_experience_from_episode, AssociationEdge, AssociationNode, AssociationStore, GraphFact,
+    GraphLink, KnowledgeGraphStore, WikiEntry, WikiEntryStore,
 };

@@ -88,18 +88,15 @@ fn try_build_keyring_resolver() -> Result<Arc<dyn CredentialResolver>, String> {
             }
         });
     // KeyringSelector::select (4 backend: platform / encrypted-file / in-memory / auto)
-    let selected = KeyringSelector::select(
-        env_value.as_deref(),
-        audit,
-        fallback_dir,
-    )
-    .map_err(|e| format!("KeyringSelector::select 失败: {e}"))?;
+    let selected = KeyringSelector::select(env_value.as_deref(), audit, fallback_dir)
+        .map_err(|e| format!("KeyringSelector::select 失败: {e}"))?;
     // 0 装诚实: backend 名字 (platform / encrypted-file / in-memory / auto) 写到 stderr
     // 运维可见 (per `selected.kind`)
     eprintln!("[keyring] KeyringSelector 选 backend: {:?}", selected.kind);
     // KeyringCredentialResolver::new 接受 Arc<dyn KeyringBackend>,
     // selected.backend 是 Box<dyn KeyringBackend>, 转 Arc
-    let backend_arc: Arc<dyn apeireth_credentials::keyring::KeyringBackend> = selected.backend.into();
+    let backend_arc: Arc<dyn apeireth_credentials::keyring::KeyringBackend> =
+        selected.backend.into();
     Ok(Arc::new(KeyringCredentialResolver::new(backend_arc)))
 }
 
@@ -116,7 +113,10 @@ mod tests {
         let resolver = build_keyring_resolver();
         // 退化到 EnvCredentialResolver: 应返 None (env 未设)
         let result = resolver.resolve("provider.minimax.api_key");
-        assert!(result.is_none(), "退化路径: EnvCredentialResolver 没拿到 key, 返 None");
+        assert!(
+            result.is_none(),
+            "退化路径: EnvCredentialResolver 没拿到 key, 返 None"
+        );
         if let Some(s) = saved {
             std::env::set_var("APEIRETH_KEYRING_BACKEND", s);
         }
@@ -144,7 +144,10 @@ mod tests {
         let saved = std::env::var("APEIRETH_KEYRING_BACKEND").ok();
         let saved_dir = std::env::var_os("APEIRETH_KEYRING_DIR");
         std::env::set_var("APEIRETH_KEYRING_BACKEND", "encrypted-file");
-        std::env::set_var("APEIRETH_KEYRING_DIR", "/nonexistent/apeireth/keyring/that/does/not/exist");
+        std::env::set_var(
+            "APEIRETH_KEYRING_DIR",
+            "/nonexistent/apeireth/keyring/that/does/not/exist",
+        );
         let resolver = build_keyring_resolver();
         // 退化到 EnvCredentialResolver: 不崩
         let result = resolver.resolve("any.service");

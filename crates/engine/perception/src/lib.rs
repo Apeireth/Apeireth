@@ -27,4 +27,3 @@ mod tests {
         assert_eq!(event.payload["text"], "test");
     }
 }
-

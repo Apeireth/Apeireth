@@ -89,7 +89,8 @@ impl SelfAssessmentStore for SQLiteSelfAssessmentStore {
     fn record(&self, sa: &SelfAssessment) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // 0 装诚实: 真写, 不假装
         // INSERT OR REPLACE on PK id 冲突 (同 id record 是 UPSERT, 与 PreferenceStore 同 pattern)
-        let deviations_json = serde_json::to_string(&sa.deviations).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        let deviations_json = serde_json::to_string(&sa.deviations)
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let session_id_str = sa.session_id.to_string();
         self.pool
             .read(|conn| {
@@ -222,11 +223,11 @@ mod tests {
     #[tokio::test]
     async fn record_and_recent_roundtrip() {
         let store = fresh().await;
-        store.record(&sa("sa-1", "task-1", 1, 0.85)).expect("record");
+        store
+            .record(&sa("sa-1", "task-1", 1, 0.85))
+            .expect("record");
 
-        let recent = store
-            .recent_for_task("task-1", 10)
-            .expect("recent");
+        let recent = store.recent_for_task("task-1", 10).expect("recent");
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].id, "sa-1");
         assert_eq!(recent[0].alignment, 0.85);
@@ -240,9 +241,7 @@ mod tests {
         store.record(&sa("newer", "task", 2, 0.7)).unwrap();
         store.record(&sa("newest", "task", 3, 0.5)).unwrap();
 
-        let recent = store
-            .recent_for_task("task", 10)
-            .expect("recent");
+        let recent = store.recent_for_task("task", 10).expect("recent");
         assert_eq!(recent.len(), 3);
         assert_eq!(recent[0].id, "newest"); // 最高 round, 最新
         assert_eq!(recent[1].id, "newer");
