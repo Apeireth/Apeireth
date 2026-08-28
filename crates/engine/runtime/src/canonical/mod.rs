@@ -67,7 +67,7 @@ pub use session::{
     SqliteSessionStore,
 };
 pub use subloop::{
-    RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpec, SubLoopSpawner,
+    RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
 };
 pub use tool_modules::{
     FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
