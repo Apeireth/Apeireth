@@ -28,7 +28,7 @@
 //! - 与 v1 的 14 调度工具 API 1:1 对应, 但 trait 化让 impl 可换 (CLI / TUI / HTTP 都走同 trait)
 //! - 多 instance 隔离 (per scene-d §3): subagent 必须是 LLM factory 独立实例, 禁共享 prompt
 //!
-//! 0 触碰 LOCKED: 8 哲学锚 / 13 键 / 3 项不可变脊柱 / workspace.version / R11 baseline
+//! 0 触碰 LOCKED: 9 哲学锚 / 13 键 / 3 项不可变脊柱 / workspace.version / R11 baseline
 //!   0 改; 新增 0 触碰现有任何 crate.
 
 #![forbid(unsafe_code)]
