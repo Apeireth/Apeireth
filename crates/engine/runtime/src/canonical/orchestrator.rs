@@ -60,9 +60,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
 use apeireth_orchestration::{Council, Proposal};
-use apeireth_plugin::organ::{
-    OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
-};
+use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
 #[cfg(test)]
 use chrono::TimeZone;
 
@@ -293,7 +291,11 @@ impl OrchestratorBoundaries {
 
     /// 用户显式「不打扰」+ 安静窗口 + 频率上限 — 外层 3 重 gate (per R11 spec §5).
     /// 真实路径仍由 E7 organ 8 重 gate 给最终决策, 这里仅做前 3 重短路.
-    pub fn early_gate_block(&self, minutes: u32, initiatives_today: u32) -> Option<OrganOrchestratorGate> {
+    pub fn early_gate_block(
+        &self,
+        minutes: u32,
+        initiatives_today: u32,
+    ) -> Option<OrganOrchestratorGate> {
         if self.user_quiet {
             return Some(OrganOrchestratorGate::UserQuiet);
         }
@@ -582,14 +584,14 @@ pub enum OrchestratorDecision {
 /// - governance 13 键洋葱门 = `Arc<dyn SovereigntyGate>` (真实接入待 governance 真接)
 pub struct OrganOrchestrator<RS: RelationshipState + 'static> {
     // 9 organ handle (per R11 spec §4.1 串联顺序 1-9)
-    organ_e4: Arc<dyn OrganTrait>, // curiosity
-    organ_f1: Arc<dyn OrganTrait>, // emotion_memory
-    organ_f4: Arc<dyn OrganTrait>, // hypothesis
-    organ_f6: Arc<dyn OrganTrait>, // value_cases
-    organ_w1: Arc<dyn OrganTrait>, // world_model
-    organ_w2: Arc<dyn OrganTrait>, // causal_world_model
-    organ_w3: Arc<dyn OrganTrait>, // causal_world_model_edges
-    organ_e7: Arc<dyn OrganTrait>, // emergence (8 重 gate 真实)
+    organ_e4: Arc<dyn OrganTrait>,     // curiosity
+    organ_f1: Arc<dyn OrganTrait>,     // emotion_memory
+    organ_f4: Arc<dyn OrganTrait>,     // hypothesis
+    organ_f6: Arc<dyn OrganTrait>,     // value_cases
+    organ_w1: Arc<dyn OrganTrait>,     // world_model
+    organ_w2: Arc<dyn OrganTrait>,     // causal_world_model
+    organ_w3: Arc<dyn OrganTrait>,     // causal_world_model_edges
+    organ_e7: Arc<dyn OrganTrait>,     // emergence (8 重 gate 真实)
     organ_memory: Arc<dyn OrganTrait>, // memory merger
 
     // 5 状态机本地 driver (forward-declared)
@@ -768,74 +770,92 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         // 1. E4 curiosity
         match self.organ_e4.process(input.clone()).await {
             Ok(out) => outputs.e4 = Some(out),
-            Err(_e) => outputs.e4 = Some(OrganOutput::NotImplemented {
-                organ: OrganKind::E4,
-                note: "chain_9_organs: E4 process failed (0 装诚实)".to_string(),
-            }),
+            Err(_e) => {
+                outputs.e4 = Some(OrganOutput::NotImplemented {
+                    organ: OrganKind::E4,
+                    note: "chain_9_organs: E4 process failed (0 装诚实)".to_string(),
+                })
+            }
         }
         // 2. F1 emotion
         match self.organ_f1.process(input.clone()).await {
             Ok(out) => outputs.f1 = Some(out),
-            Err(_e) => outputs.f1 = Some(OrganOutput::NotImplemented {
-                organ: OrganKind::F1,
-                note: "chain_9_organs: F1 process failed (0 装诚实)".to_string(),
-            }),
+            Err(_e) => {
+                outputs.f1 = Some(OrganOutput::NotImplemented {
+                    organ: OrganKind::F1,
+                    note: "chain_9_organs: F1 process failed (0 装诚实)".to_string(),
+                })
+            }
         }
         // 3. F4 hypothesis
         match self.organ_f4.process(input.clone()).await {
             Ok(out) => outputs.f4 = Some(out),
-            Err(_e) => outputs.f4 = Some(OrganOutput::NotImplemented {
-                organ: OrganKind::F4,
-                note: "chain_9_organs: F4 process failed (0 装诚实)".to_string(),
-            }),
+            Err(_e) => {
+                outputs.f4 = Some(OrganOutput::NotImplemented {
+                    organ: OrganKind::F4,
+                    note: "chain_9_organs: F4 process failed (0 装诚实)".to_string(),
+                })
+            }
         }
         // 4. F6 value_cases
         match self.organ_f6.process(input.clone()).await {
             Ok(out) => outputs.f6 = Some(out),
-            Err(_e) => outputs.f6 = Some(OrganOutput::NotImplemented {
-                organ: OrganKind::F6,
-                note: "chain_9_organs: F6 process failed (0 装诚实)".to_string(),
-            }),
+            Err(_e) => {
+                outputs.f6 = Some(OrganOutput::NotImplemented {
+                    organ: OrganKind::F6,
+                    note: "chain_9_organs: F6 process failed (0 装诚实)".to_string(),
+                })
+            }
         }
         // 5. W1 world_model (LLM real)
         match self.organ_w1.process(input.clone()).await {
             Ok(out) => outputs.w1 = Some(out),
-            Err(_e) => outputs.w1 = Some(OrganOutput::NotImplemented {
-                organ: OrganKind::W1,
-                note: "chain_9_organs: W1 process failed (0 装诚实)".to_string(),
-            }),
+            Err(_e) => {
+                outputs.w1 = Some(OrganOutput::NotImplemented {
+                    organ: OrganKind::W1,
+                    note: "chain_9_organs: W1 process failed (0 装诚实)".to_string(),
+                })
+            }
         }
         // 6. W2 causal_world_model (LLM MCTS real)
         match self.organ_w2.process(input.clone()).await {
             Ok(out) => outputs.w2 = Some(out),
-            Err(_e) => outputs.w2 = Some(OrganOutput::NotImplemented {
-                organ: OrganKind::W2,
-                note: "chain_9_organs: W2 process failed (0 装诚实)".to_string(),
-            }),
+            Err(_e) => {
+                outputs.w2 = Some(OrganOutput::NotImplemented {
+                    organ: OrganKind::W2,
+                    note: "chain_9_organs: W2 process failed (0 装诚实)".to_string(),
+                })
+            }
         }
         // 7. W3 causal_world_model_edges (deterministic)
         match self.organ_w3.process(input.clone()).await {
             Ok(out) => outputs.w3 = Some(out),
-            Err(_e) => outputs.w3 = Some(OrganOutput::NotImplemented {
-                organ: OrganKind::W3,
-                note: "chain_9_organs: W3 process failed (0 装诚实)".to_string(),
-            }),
+            Err(_e) => {
+                outputs.w3 = Some(OrganOutput::NotImplemented {
+                    organ: OrganKind::W3,
+                    note: "chain_9_organs: W3 process failed (0 装诚实)".to_string(),
+                })
+            }
         }
         // 8. E7 emergence (8 重 gate 真实 — Orchestrator 是外层串联入口)
         match self.organ_e7.process(input.clone()).await {
             Ok(out) => outputs.e7 = Some(out),
-            Err(_e) => outputs.e7 = Some(OrganOutput::NotImplemented {
-                organ: OrganKind::E7,
-                note: "chain_9_organs: E7 process failed (0 装诚实)".to_string(),
-            }),
+            Err(_e) => {
+                outputs.e7 = Some(OrganOutput::NotImplemented {
+                    organ: OrganKind::E7,
+                    note: "chain_9_organs: E7 process failed (0 装诚实)".to_string(),
+                })
+            }
         }
         // 9. Memory memory (末尾合并 8 organ 输出, per R11 spec §4.1)
         match self.organ_memory.process(input.clone()).await {
             Ok(out) => outputs.memory = Some(out),
-            Err(_e) => outputs.memory = Some(OrganOutput::NotImplemented {
-                organ: OrganKind::Memory,
-                note: "chain_9_organs: Memory process failed (0 装诚实)".to_string(),
-            }),
+            Err(_e) => {
+                outputs.memory = Some(OrganOutput::NotImplemented {
+                    organ: OrganKind::Memory,
+                    note: "chain_9_organs: Memory process failed (0 装诚实)".to_string(),
+                })
+            }
         }
 
         outputs
@@ -909,18 +929,49 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
     ///
     /// **0 装诚实**:
     /// - 真生产路径接 `apeireth-evolution::EvolutionStateMachine::transition` (per
-        //   v1 `state.rs:186-197` 1:1).
-    /// - 本地 driver 仅维护 forward-declared `PolicyStage`, 按 `allowed_next()` 表推进.
-    /// - 返 `Ok(())` 表示 transition 成功; `Err(())` 表示不允许 (per v1 `Result<(), TransitionError>`).
-    pub fn ratify_fresh_policy(&mut self) -> Result<(), ()> {
-        self.policy_stage = PolicyStage::Active; // per ratify_fresh_policy 终点
-        Ok(())
+    ///   v1 `state.rs:186-197` 1:1).
+    /// - 本地 driver 维护 forward-declared `PolicyStage`, 按 `allowed_next()` 表推进.
+    /// - `ratify_fresh_policy()` 走完整 5 状态链 (Idle→Draft→Proposed→Ratified→Active),
+    ///   返 `Result<RatificationChain, ()>` 含 4 transition 每步结果 (per v1
+    ///   `AwakeCompanion::ratify_fresh_policy` 1:1, v1 走 4 个 evolution.transition 调用).
+    /// - `transition_policy()` 单步推进 (per v1 `EvolutionStateMachine::transition` 1:1).
+    pub fn ratify_fresh_policy(&mut self) -> Result<RatificationChain, ()> {
+        // per v1 `AwakeCompanion::ratify_fresh_policy` 1:1:
+        //   *evolution = EvolutionStateMachine::new();  // 重置到 Idle
+        //   evolution.transition(Draft, Start);         // 4 transition 调用
+        //   evolution.transition(Proposed, Submit);
+        //   evolution.transition(Ratified, CouncilApprove);
+        //   evolution.transition(Active, Activate);
+        self.policy_stage = PolicyStage::Idle; // per *evolution = EvolutionStateMachine::new()
+        let mut chain = Vec::with_capacity(4);
+        for (target, reason) in [
+            (PolicyStage::Draft, PolicyTransitionReason::Start),
+            (PolicyStage::Proposed, PolicyTransitionReason::Submit),
+            (
+                PolicyStage::Ratified,
+                PolicyTransitionReason::CouncilApprove,
+            ),
+            (PolicyStage::Active, PolicyTransitionReason::Activate),
+        ] {
+            let r = self.transition_policy(target, reason);
+            chain.push((target, r));
+            if r.is_err() {
+                return Err(());
+            }
+        }
+        Ok(RatificationChain { steps: chain })
     }
 
-    /// 走完整 Idle→Draft→Proposed→Ratified→Active 链路 (per v1 `AwakeCompanion::ratify_fresh_policy`).
+    /// 单步 transition (per v1 `EvolutionStateMachine::transition` 1:1).
     ///
-    /// **0 装诚实**: 真生产路径接 evolution state machine; 本地 driver 简化 = 直接置 `Active`.
-    pub fn transition_policy(&mut self, target: PolicyStage, _reason: PolicyTransitionReason) -> Result<(), ()> {
+    /// **0 装诚实**: 真生产路径接 evolution state machine; 本地 driver 维护 forward-declared
+    /// `PolicyStage`, 按 `allowed_next()` 表推进. 返 `Ok(())` 表示 transition 成功;
+    /// `Err(())` 表示不允许 (per v1 `Result<(), TransitionError>`).
+    pub fn transition_policy(
+        &mut self,
+        target: PolicyStage,
+        _reason: PolicyTransitionReason,
+    ) -> Result<(), ()> {
         let allowed = self.policy_stage.allowed_next();
         match allowed {
             Some(next) if next == target => {
@@ -959,7 +1010,12 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         // 步骤 2: 9 organ process 串联 + 8 重 gate 外层入口
         let organ_input = OrganInput::new(
             input.episode.clone(),
-            input.context_hint.as_ref().cloned().map(|c| vec![c]).unwrap_or_default(),
+            input
+                .context_hint
+                .as_ref()
+                .cloned()
+                .map(|c| vec![c])
+                .unwrap_or_default(),
         );
         let _chain = self.chain_9_organs(organ_input).await;
 
@@ -1117,8 +1173,11 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         if !self.policy_stage.is_active() {
             if self.consecutive_ignores >= 2 {
                 // 真实路径降级 max_initiatives_per_day (per v1 organs.rs:252-257)
-                self.boundaries.max_initiatives_per_day =
-                    self.boundaries.max_initiatives_per_day.saturating_sub(1).max(1);
+                self.boundaries.max_initiatives_per_day = self
+                    .boundaries
+                    .max_initiatives_per_day
+                    .saturating_sub(1)
+                    .max(1);
                 self.consecutive_ignores = 0;
             }
             let _ = self.ratify_fresh_policy();
@@ -1196,6 +1255,39 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         last_initiative_ms: Option<i64>,
     ) -> Option<OrganOrchestratorGate> {
         self.check_8_gates(minutes, initiatives_today, at_ms, last_initiative_ms)
+    }
+}
+
+// ============================================
+// ratify_fresh_policy() 走完整 5 状态 transition 链结果 (per v1 `AwakeCompanion::ratify_fresh_policy`
+// 1:1, v1 走 4 个 evolution.transition 调用)
+// ============================================
+
+/// ratify_fresh_policy() 走完整 5 状态 transition 链结果 (per v1 `AwakeCompanion::ratify_fresh_policy`
+/// 1:1, v1 走 4 个 evolution.transition 调用).
+///
+/// **0 装诚实**: 每条 transition 真实走 `allowed_next()` 检查, 任一步失败返 `Err`.
+/// 留痕用 (telemetry + audit), 不参与决策.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RatificationChain {
+    /// 4 transition 每步 (target, result) 对 (Draft→Proposed→Ratified→Active).
+    pub steps: Vec<(PolicyStage, Result<(), ()>)>,
+}
+
+impl RatificationChain {
+    /// 是否全部 transition 成功 (走完 Idle → Draft → Proposed → Ratified → Active).
+    pub fn all_ok(&self) -> bool {
+        self.steps.iter().all(|(_, r)| r.is_ok())
+    }
+
+    /// 步骤数 (应 = 4 per v1 `AwakeCompanion::ratify_fresh_policy` 1:1).
+    pub fn len(&self) -> usize {
+        self.steps.len()
+    }
+
+    /// 是否为空 (0 step = 0 装诚实标: 未走任何 transition).
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
     }
 }
 
@@ -1329,12 +1421,16 @@ mod tests {
                 | OrganOrchestratorGate::DepthLow
                 | OrganOrchestratorGate::RhythmUnknown
                 | OrganOrchestratorGate::RhythmVeto
-                | OrganOrchestratorGate::DriveLow => assert!(is_emerge, "{:?} 应是 emergence gate", gate),
+                | OrganOrchestratorGate::DriveLow => {
+                    assert!(is_emerge, "{:?} 应是 emergence gate", gate)
+                }
                 OrganOrchestratorGate::SovereigntyFrozen
                 | OrganOrchestratorGate::EmotionLow
                 | OrganOrchestratorGate::CouncilVeto
                 | OrganOrchestratorGate::PolicyInactive
-                | OrganOrchestratorGate::GateBlock => assert!(!is_emerge, "{:?} 应是 organs gate", gate),
+                | OrganOrchestratorGate::GateBlock => {
+                    assert!(!is_emerge, "{:?} 应是 organs gate", gate)
+                }
             }
         }
     }
@@ -1344,9 +1440,18 @@ mod tests {
     fn organ_orchestrator_5_state_machine_transitions() {
         // Idle → Draft → Proposed → Ratified → Active (per v1 ratify_fresh_policy 1:1)
         assert_eq!(PolicyStage::Idle.allowed_next(), Some(PolicyStage::Draft));
-        assert_eq!(PolicyStage::Draft.allowed_next(), Some(PolicyStage::Proposed));
-        assert_eq!(PolicyStage::Proposed.allowed_next(), Some(PolicyStage::Ratified));
-        assert_eq!(PolicyStage::Ratified.allowed_next(), Some(PolicyStage::Active));
+        assert_eq!(
+            PolicyStage::Draft.allowed_next(),
+            Some(PolicyStage::Proposed)
+        );
+        assert_eq!(
+            PolicyStage::Proposed.allowed_next(),
+            Some(PolicyStage::Ratified)
+        );
+        assert_eq!(
+            PolicyStage::Ratified.allowed_next(),
+            Some(PolicyStage::Active)
+        );
         assert_eq!(PolicyStage::Active.allowed_next(), None); // 终态 (Retired 在 evolution crate)
 
         // is_active() (per v1 EvolutionState::is_active 1:1)
@@ -1480,25 +1585,44 @@ mod tests {
         // **0 装诚实**: runtime crate 不依赖 apeireth-organ (per Cargo.toml:13-19).
         // Orchestrator 测试用本地 MockOrgan, 验证 9 organ + 8 gate + 5 state machine +
         // L0-L5 完整骨架可构造.
-        let organ_e4: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::E4 });
-        let organ_f1: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::F1 });
-        let organ_f4: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::F4 });
-        let organ_f6: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::F6 });
-        let organ_w1: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::W1 });
-        let organ_w2: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::W2 });
-        let organ_w3: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::W3 });
-        let organ_e7: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::E7 });
-        let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::Memory });
+        let organ_e4: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+            kind: OrganKind::E4,
+        });
+        let organ_f1: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+            kind: OrganKind::F1,
+        });
+        let organ_f4: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+            kind: OrganKind::F4,
+        });
+        let organ_f6: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+            kind: OrganKind::F6,
+        });
+        let organ_w1: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+            kind: OrganKind::W1,
+        });
+        let organ_w2: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+            kind: OrganKind::W2,
+        });
+        let organ_w3: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+            kind: OrganKind::W3,
+        });
+        let organ_e7: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+            kind: OrganKind::E7,
+        });
+        let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+            kind: OrganKind::Memory,
+        });
 
         let council = Arc::new(Council::default_allow());
         let sovereignty: Arc<parking_lot::Mutex<dyn SovereigntyGate>> =
             Arc::new(parking_lot::Mutex::new(LocalSovereignty::default()));
         let rel = LocalOrchestratorRelationship::new(0.5);
-        let clock: Arc<dyn Clock> = Arc::new(
-            VirtualClock::new(
-                chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).single().unwrap(),
-            ),
-        );
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            chrono::Utc
+                .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+                .single()
+                .unwrap(),
+        ));
 
         let orch = OrganOrchestrator::new(
             organ_e4,
