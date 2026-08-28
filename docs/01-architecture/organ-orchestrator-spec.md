@@ -398,7 +398,7 @@ per 主代理 Mavis 设计 (子代理 R11 整合 v1 AwakeCompanion 真路径):
 | LOCKED 项 | 状态 | 验证 |
 |---|---|---|
 | **5 项 LOCKED** | ✅ 0 触碰 | per `10-locked.md` + `philosophy.md` (9 锚) |
-| **8 哲学锚本体** | ✅ 0 触碰 | per `philosophy.md` + O-6 子代理 K |
+| **9 哲学锚本体** | ✅ 0 触碰 | per `philosophy.md` + O-6 子代理 K |
 | **13 键** | ✅ 0 触碰 | per `governance` 13 键 verdict cache |
 | **workspace.version = "1.2.0"** | ✅ 0 触碰 | per `Cargo.toml:44` |
 | **R11 baseline** | ✅ 0 触碰 | `cognitive.rs` 12 slot 0 改 + Cargo.lock 0 行 diff (本文仅文档) |
