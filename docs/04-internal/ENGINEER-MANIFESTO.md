@@ -390,6 +390,41 @@ adapters (3)   ← 只能依赖 foundation + engine + capabilities
 
 **0 装诚实标**: 任何改动**绕过**这 3 hook (e.g. 直调 `LlmFactory` 跳 governance) = O-1 安全优先失守 + O-5 0 装 PASS 失守. 修法: 通过 `Runtime::execute_turn` (canonical agent loop), 不绕.
 
+### 8.5 Pre-commit + Commit-msg Hook (强制 O-6 + §13 #12 防御)
+
+**目的**: 把 O-6 doctrine + §13 #12 author env 教训 沉淀为 git hook, 避免下次失守.
+
+**位置**: `.githooks/pre-commit` + `.githooks/commit-msg` (tracked in git, 跨接手人保留)
+
+**启用** (一次性, per 接手人):
+```bash
+git config core.hooksPath .githooks
+```
+
+**检查项**:
+
+1. **pre-commit hook**:
+   - 检查 1 (BLOCK): `GIT_AUTHOR_NAME` env var 必须设置 (per §13 #12 Round 4 真账, 防止 fallback 到 git config default)
+   - 检查 2 (WARN): LOCKED 5 项 (eight_anchors.rs / philosophy.rs / onion.rs / Cargo.toml) 0 触碰 — 不 abort, 主代理 override 用 `--no-verify`
+
+2. **commit-msg hook**:
+   - 检查 1 (BLOCK): msg 必含 `总体最优` / `系统最优` / `架构最优` 三段 (per §5 + §8.2 三阶审查模板)
+   - 检查 2 (WARN): msg 必含 `拒` 关键词 (拒 alternatives + 拒理由, per O-6 doctrine)
+
+**Override** (主代理拍板 + 真例外):
+```bash
+git commit --no-verify -m "..."   # 跳过所有 hook
+```
+
+**注**:
+- amend commit (`git commit --amend`) 不触发 commit-msg hook (per git 行为). 所以 amend 时主代理必自验 msg 含 O-6 三阶审查.
+- pre-commit hook 检查的是 working tree (LOCKED 文件改动), amend 时也触发.
+
+**真账**:
+- Round 6 主代理写本 hook, 是 §13 #12 教训的工程化兑现 (O-4 任何人都能接手 — 接手工程师 clone 后, enable hook 就自动防御).
+- 0 引新外部 dep (纯 bash script, 跟现有 `.git/gh-credential.ps1` 风格一致).
+- Hook 启用**不**自动 (per git 设计, 用户必须 `git config core.hooksPath`), 接手人主动 enable = 显式选择信任.
+
 ---
 
 ## 9. 工具/参考速查 (commit + 改 src + 派子代理 + 改 doc)
