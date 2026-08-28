@@ -551,7 +551,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 
 ---
 
-## 13. 常见错误 + 真实陷阱 (从 A 块 O-6 复盘提炼的 8 条)
+## 13. 常见错误 + 真实陷阱 (8 原版 + 3 Round 1-3 工序教训 = 11 条)
 
 | # | 错误 | 症状 | 修法 |
 |---|---|---|---|
@@ -563,8 +563,13 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 | 6 | **`--force-with-lease` 凭据 stale** | push rejected "stale info" | 改 `--force-with-lease=main:<expected-old-tip>` (验证 remote ref 状态), 不裸 `--force` |
 | 7 | **pub struct 在 impl block 内** | 编译错 "struct is not supported in 'trait's or 'impl's" | 移到 module level (impl block 外) |
 | 8 | **Cargo.toml workspace.version 改** | O-6 失守 (workspace.version LOCKED) | 主代理拍板才改 (per §10 真例外 #4) |
+| 9 | **amend 没 `git add`, `write-tree` 输出 HEAD^{tree}** | amend 后 `git diff --stat` 显示修了, 但 `git show HASH:path` 实际是旧 blob (Round 1 真账: 5e18e65b msg 修了但 tree 没修) | amend 后必自验 tree: `git show HASH:path | grep <fix>`. 不依赖 `git diff --stat`. 见 .harness-step-log §3.6 + 0 装诚实标续 |
+| 10 | **`git fetch` 失败 ≠ `git push` 失败** | TCP 阻 fetch 但 push 实际成功 (Round 1 真账: 2 commits 实际 push 上了 origin, 但主代理凭 fetch 失败误判 + amend + followup, Round 3 fetch 通才发现 origin 已 advance, 改 force push) | 失败诊断: `git fetch` 跟 `git push` 是独立 channel, 各自状态. 怀疑 push 状态时, retry push 看 error code, 不要凭 fetch 失败推断 push. 见 .harness-step-log §3 |
+| 11 | **PowerShell `^{tree}` syntax gotcha** | `git rev-parse HEAD^{tree}` 中 `^{}` 被 pwsh 当特殊字符 (Round 1 真账: 第 1 次 amend 工序错, 第二次 update-ref 覆盖了第一次 chain) | quote 整段: `git rev-parse 'HEAD^{tree}'` 或 `-F file` 替代 inline msg. amend 工序需 quote, 否则 amend 错位. 见 .harness-step-log §3.4 |
 
-**0 装诚实标** (A 块 O-6 复盘): 主代理第一次**自己**用 "Windows 非交互环境复杂" 当借口拒绝 amend 5 commits. 用户提醒 "不要怕麻烦, 就按正确做法做啊". 主代理**立即**用 `git plumbing` (commit-tree + update-ref) 完成 amend, **不找借口**. O-6 doctrine 真兑现: "工作量与麻烦不是拒绝重做的理由".
+**0 装诚实标 (A 块 O-6 复盘)**: 主代理第一次**自己**用 "Windows 非交互环境复杂" 当借口拒绝 amend 5 commits. 用户提醒 "不要怕麻烦, 就按正确做法做啊". 主代理**立即**用 `git plumbing` (commit-tree + update-ref) 完成 amend, **不找借口**. O-6 doctrine 真兑现: "工作量与麻烦不是拒绝重做的理由".
+
+**0 装诚实标 (Round 1-3 工序教训续, per §13 #9 #10 #11)**: 主代理 Round 1 amend 5e18e65b 时, 凭 `git diff --stat` 看到 6 行 diff 就以为修了 doc 本体 (实际只修了 msg, tree 还是 HEAD 老 doc). Round 2 通过 `git show 5e18e65b:docs/04-internal/ENGINEER-MANIFESTO.md | grep "8 哲学锚"` 自验, 才发现 "8 哲学锚" 3 处仍在. **没 hide**, 没"删 5e18e65b amend 第 3 次", 而是用 followup commit `e3300347` 真修 doc 本体 + flag 错账 (commit message + handoff log + step log 三处). O-5 doctrine 真兑现: 失守 flag 即改, 不"等以后修". Round 3 force push 完美执行 §8 `--force-with-lease=main:cef36c48`, 覆盖 origin 原版 (含漂移) 为 amend + followup 版本 (无漂移).
 
 ---
 
