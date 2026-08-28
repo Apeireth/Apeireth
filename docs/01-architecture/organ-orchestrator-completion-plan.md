@@ -203,7 +203,23 @@ grep "version" Cargo.toml | head -5  # workspace.version = "1.2.0" 0 改
 
 | Stage | 缺口 | Commit | Tests | Clippy | 备注 |
 |---|---|---|---|---|---|
-| 1 | D | TBD | TBD | TBD | TBD |
+| 1 | D | `fc159288` (主代理亲做, 0 装诚实真账) | 1726 passed / 0 failed | 0 警告 | ✅ done (push to `fc159288`); + RatificationChain struct + ratify_fresh_policy() 4 transition 走链 |
+| 2 | B | TBD | TBD | TBD | TBD |
+| 3 | A | TBD | TBD | TBD | TBD |
+| 4 | C | TBD | TBD | TBD | TBD |
+| 5 | E | TBD | TBD | TBD | TBD |
+
+---
+
+## 6. Stage 1 实战教训 (主代理亲验)
+
+1. **`cargo fmt -- file1 file2` 不只格式化指定文件** — 实测会格式化整个 workspace 21 个文件。
+   立即 `git checkout HEAD -- crates/...` 回滚非我的改动。本次提交只含 orchestrator.rs + tests/orchestrator.rs。
+   **下次 commit 前**: 不再用 `cargo fmt -- file`，改用 `rustfmt file.rs` (单文件格式化)。
+
+2. **嵌套 impl block Rust 不支持** — 第一次编辑把 `impl RatificationChain { ... }` 放在 `impl<RS> OrganOrchestrator<RS> { ... }` 内部，编译错 `implementation is not supported in 'trait's or 'impl's`。修法: 移 RatificationChain struct + impl 到 module-level（在 impl OrganOrchestrator<RS> 闭括号之后）。
+
+3. **R12 内部 0 装诚实标** 准确 — orchestrator.rs:915-918 旧实现 `policy_stage = Active` 单步跳 + 注释"本地 driver 简化"确实是 0 装诚实标缺口。R11 spec §6.3 v1 `AwakeCompanion::ratify_fresh_policy` 真走 4 transition 调用，新实现对齐 v1 1:1。
 
 ---
 
