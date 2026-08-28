@@ -266,11 +266,24 @@ coverage/
 # Frontend (companion-desktop)
 **/node_modules/
 frontend/companion-desktop/dist/
+# Tauri build artifacts (Round 8 hygiene: target/ + node_modules/ 应 ignore, 不污染 git)
+frontend/companion-desktop/target/
+frontend/companion-desktop/src-tauri/target/
+# pnpm symlink forest (跟 .pnpm/ 内部一致, 0 commit)
+frontend/companion-desktop/.pnpm-store/
 
 # 2026-08-28 Mavis: harness dev artifacts (接手 ENGINEER-MANIFESTO push 后 hygiene 修)
 # 模式: 主代理运行时临时产物 — baseline logs / amend msg / step logs / sub-agent msg / batch fix ps
-# (.harness-msg/ 早 ignore, 此处补 4 pattern 覆盖其余)
+# Round 8 O-5 0 装诚实标修正: 之前 commit message 说 ".harness-msg/ 早 ignore", 实际从未加 ignore 规则
+# (Round 1 commit e3300347 漏加 .harness-msg/ 单 ignore 行, .harness-*.txt 不递归 sub-dir, 漏 ignore 5 sub-agent msg 文件)
+# 本 commit 修: 加 .harness-msg/ 整个目录 ignore + **/.harness-* 递归匹配覆盖未来 sub-dir
+.harness-msg/
+.harness-msg/**
 .harness-*.log
 .harness-*.txt
 .harness-*.md
 .harness-*.ps1
+**/.harness-*.log
+**/.harness-*.txt
+**/.harness-*.md
+**/.harness-*.ps1
