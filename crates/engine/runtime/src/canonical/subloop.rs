@@ -15,7 +15,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use apeireth_core::kernel::CapabilityId;
+use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
+use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{
     NormalizedFinishReason, NormalizedMessage, NormalizedRequest, NormalizedUsage, ToolCall,
@@ -37,7 +38,7 @@ pub struct SubLoopSpec {
     pub max_rounds: u32,
     /// Explicit list of capability IDs allowed to be executed within this SubLoop.
     pub allowed_capabilities: Vec<CapabilityId>,
-    /// Optional execution timeout.
+    /// Optional execution timeout across the whole SubLoop.
     pub timeout: Option<Duration>,
     /// Initial messages for the ephemeral transcript.
     pub messages: Vec<NormalizedMessage>,
@@ -69,6 +70,12 @@ impl SubLoopSpec {
     /// Set round limit.
     pub fn with_max_rounds(mut self, max_rounds: u32) -> Self {
         self.max_rounds = max_rounds;
+        self
+    }
+
+    /// Set timeout duration.
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -148,6 +155,9 @@ pub trait SubLoopSpawner: Send + Sync {
 pub struct RuntimeSubLoopSpawner<'a> {
     router: &'a ProviderRouter,
     tools: Vec<Arc<dyn ToolCapability>>,
+    governance: &'a dyn GovernanceHook,
+    session_id: SessionId,
+    trace_id: TraceId,
     current_model: &'a str,
     module_id: &'a str,
     state: Arc<ModuleTurnState>,
@@ -159,6 +169,9 @@ impl<'a> RuntimeSubLoopSpawner<'a> {
     pub(crate) fn new(
         router: &'a ProviderRouter,
         tools: Vec<Arc<dyn ToolCapability>>,
+        governance: &'a dyn GovernanceHook,
+        session_id: SessionId,
+        trace_id: TraceId,
         current_model: &'a str,
         module_id: &'a str,
         state: Arc<ModuleTurnState>,
@@ -167,17 +180,17 @@ impl<'a> RuntimeSubLoopSpawner<'a> {
         Self {
             router,
             tools,
+            governance,
+            session_id,
+            trace_id,
             current_model,
             module_id,
             state,
             depth: parent_depth.saturating_add(1),
         }
     }
-}
 
-#[async_trait]
-impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
-    async fn spawn(&self, spec: SubLoopSpec) -> Result<SubLoopResult, SubLoopError> {
+    async fn spawn_bounded(&self, spec: SubLoopSpec) -> Result<SubLoopResult, SubLoopError> {
         if self.depth > DEFAULT_MAX_INVOCATION_DEPTH {
             return Err(SubLoopError::RecursionLimit {
                 depth: self.depth,
@@ -192,7 +205,7 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
             return Err(SubLoopError::RoundLimitReached { rounds: 0 });
         }
 
-        // Filter available tools by the spec's capability allowlist
+        // Filter available tools by the spec's capability allowlist for model-facing declarations
         let allowed_tools: Vec<Arc<dyn ToolCapability>> = self
             .tools
             .iter()
@@ -249,19 +262,9 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
                 ));
 
                 for call in &response.tool_calls {
-                    let tool_opt = allowed_tools
-                        .iter()
-                        .find(|t| t.declaration().name == call.name);
-                    let result = match tool_opt {
-                        Some(tool) => tool.invoke(call).await,
-                        None => ToolResult::permanent_error(
-                            &call.id,
-                            format!(
-                                "tool {:?} is not in the subloop capability allowlist",
-                                call.name
-                            ),
-                        ),
-                    };
+                    let result = self
+                        .dispatch_subloop_tool(call, &spec.allowed_capabilities, round)
+                        .await;
                     collected_tool_results.push(result.clone());
                     transcript.push(result.into_message());
                 }
@@ -279,6 +282,93 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
         Err(SubLoopError::RoundLimitReached {
             rounds: spec.max_rounds,
         })
+    }
+
+    async fn dispatch_subloop_tool(
+        &self,
+        call: &ToolCall,
+        allowlist: &[CapabilityId],
+        round: u32,
+    ) -> ToolResult {
+        // 1. Look up tool among all active runtime tools
+        let Some(tool) = self
+            .tools
+            .iter()
+            .find(|t| t.declaration().name == call.name)
+        else {
+            return ToolResult::permanent_error(
+                &call.id,
+                format!("no tool named {:?} is available", call.name),
+            )
+            .with_name(&call.name);
+        };
+
+        let capability = tool.id();
+
+        // 2. Check SubLoop allowlist (allowlist is an ADDITIONAL constraint)
+        if !allowlist.iter().any(|c| c == capability) {
+            return ToolResult::permanent_error(
+                &call.id,
+                format!(
+                    "tool {:?} ({capability}) is not in the subloop capability allowlist",
+                    call.name
+                ),
+            )
+            .with_name(&call.name);
+        }
+
+        // 3. Canonical Governance evaluation (must never be bypassed!)
+        let action = Action::CapabilityDispatch {
+            capability,
+            arguments: &call.arguments,
+        };
+        let verdict = self
+            .governance
+            .evaluate_verbose(&GovernanceRequest::new(
+                action,
+                self.session_id,
+                self.trace_id,
+                round,
+            ))
+            .await;
+
+        match verdict.decision {
+            Decision::Allow => {
+                // Succeeded all checks: invoke capability
+                tool.invoke(call).await
+            }
+            Decision::Deny { reason } => {
+                // Denied by governance: do NOT invoke tool
+                ToolResult::permanent_error(&call.id, format!("refused by governance: {reason}"))
+                    .with_name(&call.name)
+            }
+            Decision::RequireApproval { reason } => {
+                // SubLoops cannot perform interactive user approvals; fail cleanly without invoking
+                ToolResult::permanent_error(
+                    &call.id,
+                    format!(
+                        "subloop capability requires interactive approval which is not permitted in subloops: {reason}"
+                    ),
+                )
+                .with_name(&call.name)
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
+    async fn spawn(&self, spec: SubLoopSpec) -> Result<SubLoopResult, SubLoopError> {
+        let timeout_opt = spec.timeout;
+        let fut = self.spawn_bounded(spec);
+        if let Some(dur) = timeout_opt {
+            match tokio::time::timeout(dur, fut).await {
+                Ok(res) => res,
+                Err(_) => Err(SubLoopError::Timeout),
+            }
+        } else {
+            fut.await
+        }
     }
 }
 
