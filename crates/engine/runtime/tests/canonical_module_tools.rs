@@ -228,3 +228,63 @@ async fn tool_module_invocation_executes_end_to_end() {
     assert_eq!(response.text, "MCP search returned found item");
     assert_eq!(response.rounds, 2);
 }
+
+#[tokio::test]
+async fn mcp_dynamic_registration_and_unregistration_after_build_is_live() {
+    let script = vec![
+        // Turn 1: Successfully calls dynamic tool
+        Scripted::CallTool {
+            call_id: "dynamic_call_1",
+            tool: "mcp_custom_search",
+            arguments: serde_json::json!({ "query": "test" }),
+        },
+        Scripted::Say("Search handled dynamically"),
+        // Turn 2: Attempting to call after unregistering
+        Scripted::CallTool {
+            call_id: "dynamic_call_2",
+            tool: "mcp_custom_search",
+            arguments: serde_json::json!({ "query": "test" }),
+        },
+        Scripted::Say("Recovered from missing tool"),
+    ];
+
+    let provider = ScriptedProvider::new("provider.mock", script);
+    let plugin = ScriptedProviderPlugin::new(provider);
+    let mcp_module = Arc::new(McpModule::new()); // Initially empty
+
+    let mut runtime = Runtime::builder()
+        .with_plugin(plugin)
+        .with_module(Arc::clone(&mcp_module) as Arc<dyn apeireth_runtime::Module>)
+        .with_default_model("mock-model")
+        .build()
+        .await
+        .expect("runtime builds cleanly");
+
+    // Initially no tools offered
+    assert_eq!(runtime.tool_declarations().len(), 0);
+
+    // Dynamic registration post-build
+    let tool = Arc::new(MockMcpTool);
+    let tool_id = tool.id().clone();
+    mcp_module.register_tool(tool);
+
+    // Tool declarations immediately reflect dynamic tool
+    assert_eq!(runtime.tool_declarations().len(), 1);
+    assert_eq!(runtime.tool_declarations()[0].name, "mcp_custom_search");
+
+    // Turn 1 executes with the dynamically registered tool
+    let req1 = TurnRequest::new(SessionId::new(), "search query").with_model("mock-model");
+    let resp1 = runtime.execute(req1).await.expect("turn 1 executes");
+    assert_eq!(resp1.text, "Search handled dynamically");
+
+    // Unregister the dynamic tool
+    mcp_module.unregister_tool(&tool_id);
+
+    // Tool declarations immediately reflect removal
+    assert_eq!(runtime.tool_declarations().len(), 0);
+
+    // Turn 2 fails to find the tool, runtime records error and model recovers cleanly
+    let req2 = TurnRequest::new(SessionId::new(), "search query again").with_model("mock-model");
+    let resp2 = runtime.execute(req2).await.expect("turn 2 executes");
+    assert_eq!(resp2.text, "Recovered from missing tool");
+}
