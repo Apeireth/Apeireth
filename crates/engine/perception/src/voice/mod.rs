@@ -12,6 +12,10 @@
 //! 2. 系统: engine 层持 HTTP 客户端, foundation 层只持 trait 契约
 //! 3. 架构: runtime 通过 `Arc<dyn VoiceBackend>` 注入, 多 backend 可选
 
+pub mod emotion_voice;
 pub mod whisper_http;
 
+pub use emotion_voice::{
+    AcousticParameters, EmotionCategory, EmotionVoiceSynthesizer, PadEmotion,
+};
 pub use whisper_http::{WhisperHttpBackend, WhisperHttpConfig};
