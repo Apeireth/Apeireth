@@ -21,6 +21,7 @@ use super::cognitive::{
 };
 use super::error::{RuntimeError, RuntimeResult};
 use super::module::{Module, ModuleManifest};
+use super::organ_module::OrganModule;
 use super::tool_modules::{
     FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
 };
@@ -56,6 +57,12 @@ pub struct ProductionModulesConfig {
     pub fetch: Option<FetchConfig>,
     /// Register MCP capability module.
     pub mcp: bool,
+    /// Register the single organ module (post-turn organ cognition).
+    ///
+    /// Opt-in and off by default: the organ chain includes LLM-heavy W1/W2
+    /// side-calls, and this is the explicit rollout boundary for the first
+    /// production organ integration.
+    pub organs: bool,
 }
 
 impl Default for ProductionModulesConfig {
@@ -73,6 +80,7 @@ impl Default for ProductionModulesConfig {
             shell: None,
             fetch: None,
             mcp: false,
+            organs: false,
         }
     }
 }
@@ -230,6 +238,10 @@ impl ProductionModules {
                 )
                 .with_telemetry(Arc::clone(&telemetry)),
             ));
+        }
+
+        if config.organs {
+            modules.push(Arc::new(OrganModule::new(Arc::clone(&clock))));
         }
 
         if config.memory_writeback {
