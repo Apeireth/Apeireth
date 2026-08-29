@@ -105,7 +105,9 @@ impl SessionLocks {
 /// The assembled runtime.
 pub struct Runtime {
     pub(super) plugins: PluginManager,
-    pub(super) providers: ProviderRouter,
+    // Arc so per-turn invoker handles can carry the one canonical router
+    // without borrowing the runtime. Still exactly one router instance.
+    pub(super) providers: Arc<ProviderRouter>,
     pub(super) sessions: SessionManager,
     pub(super) governance: Arc<dyn GovernanceHook>,
     pub(super) clock: Arc<dyn Clock>,
@@ -201,6 +203,13 @@ impl Runtime {
     /// `provider.something`.
     pub fn providers(&self) -> &ProviderRouter {
         &self.providers
+    }
+
+    /// The shared router behind an [`Arc`](std::sync::Arc), for turn-scoped
+    /// invoker construction. This is the same single router instance the
+    /// runtime serves every completion from.
+    pub(super) fn providers_arc(&self) -> Arc<ProviderRouter> {
+        Arc::clone(&self.providers)
     }
 
     /// The modules registered with this runtime, in execution order.
@@ -422,7 +431,7 @@ impl RuntimeBuilder {
 
         Ok(Runtime {
             plugins: manager,
-            providers,
+            providers: Arc::new(providers),
             sessions: SessionManager::new(self.session_store, Arc::clone(&self.clock)),
             governance: self.governance,
             clock: self.clock,
