@@ -82,6 +82,14 @@ pub enum ReflexionError {
     Json(#[from] serde_json::Error),
     #[error("存储锁中毒")]
     LockPoisoned,
+    /// 持久化状态损坏: 反思游标 `reflected_until` 超过失败记录总数,
+    /// 说明落盘文件被外部篡改或截断损坏.
+    ///
+    /// **策略 (P1 硬化)**: 显式返回类型化错误, 不 panic, 不静默按有效状态
+    /// 继续, 也不自动"修复"游标 — 损坏状态的处置 (修复/重置/废弃) 是
+    /// 运维侧的显式决策.
+    #[error("reflexion 存储状态损坏: reflected_until ({cursor}) 超过失败记录总数 ({len})")]
+    CorruptedCursor { cursor: usize, len: usize },
 }
 
 /// CRITIC: 失败轨迹 → 反思文本 Trait.
@@ -405,6 +413,14 @@ impl ReflexionStore for FileReflexionStore {
         timestamp_epoch_ms: i64,
     ) -> Result<usize, ReflexionError> {
         let mut data = self.read_data()?;
+        // P1 硬化: 切片前校验游标 — 落盘状态被篡改/损坏 (reflected_until >
+        // 失败总数) 时返回类型化错误, 绝不 panic, 绝不静默按有效状态继续.
+        if data.reflected_until > data.failures.len() {
+            return Err(ReflexionError::CorruptedCursor {
+                cursor: data.reflected_until,
+                len: data.failures.len(),
+            });
+        }
         let mut count = 0;
         let start = data.reflected_until;
         let failures_slice = data.failures[start..].to_vec();
@@ -526,5 +542,73 @@ mod tests {
         let pos_exact = injection.find("教训 #2").unwrap();
         let pos_sub = injection.find("教训 #1").unwrap();
         assert!(pos_exact < pos_sub, "精确匹配项应排在前面");
+    }
+
+    /// P1 硬化: 损坏游标 (reflected_until > failures.len()) → 类型化错误,
+    /// 不 panic, 不静默修复, 且错误中可观测 cursor/len.
+    #[test]
+    fn file_store_corrupt_cursor_is_rejected_without_panic() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("reflexions.json");
+        // 手工写入损坏状态: 游标 10, 但失败记录只有 1 条
+        let corrupt = r#"{"failures":[{"seq":1,"kind":"validation_failed","task_type":"deploy","summary":"端口被占","timestamp_epoch_ms":1000}],"reflections":[],"reflected_until":10}"#;
+        std::fs::write(&path, corrupt).unwrap();
+
+        let store = FileReflexionStore::new(tmp.path());
+        let err = store
+            .process_unreflected(&RuleCritic, 2000)
+            .expect_err("损坏游标必须显式报错");
+        match err {
+            ReflexionError::CorruptedCursor { cursor, len } => {
+                assert_eq!(cursor, 10);
+                assert_eq!(len, 1);
+            }
+            other => panic!("expected CorruptedCursor, got {other:?}"),
+        }
+        // 损坏状态保持原样 (不做静默修复): 再次读取仍是损坏的 cursor
+        let err_again = store.process_unreflected(&RuleCritic, 3000).unwrap_err();
+        assert!(matches!(
+            err_again,
+            ReflexionError::CorruptedCursor { .. }
+        ));
+    }
+
+    /// P1 硬化: 游标等于总数 → 合法空工作 (Ok(0)).
+    #[test]
+    fn file_store_cursor_at_len_is_valid_empty_work() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = FileReflexionStore::new(tmp.path());
+        store
+            .record_failure(FailureKind::ValidationFailed, "deploy", "配置丢失", 1000)
+            .unwrap();
+        let first = store.process_unreflected(&RuleCritic, 2000).unwrap();
+        assert_eq!(first, 1);
+        // 游标 == len: 再次处理 → 0 条待反思, 不报错
+        let second = store.process_unreflected(&RuleCritic, 3000).unwrap();
+        assert_eq!(second, 0);
+    }
+
+    /// P1 硬化: 游标小于总数 → 正常处理剩余条目, 既有排序/预算行为不变.
+    #[test]
+    fn file_store_cursor_below_len_processes_remaining() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = FileReflexionStore::new(tmp.path());
+        store
+            .record_failure(FailureKind::ValidationFailed, "deploy", "配置丢失", 1000)
+            .unwrap();
+        assert_eq!(store.process_unreflected(&RuleCritic, 2000).unwrap(), 1);
+        // 追加 2 条后游标 (1) < len (3) → 仅处理新增 2 条
+        store
+            .record_failure(FailureKind::DecisionRejected, "deploy", "方案被否", 3000)
+            .unwrap();
+        store
+            .record_failure(FailureKind::ExperienceFailed, "deploy", "旧经验失效", 4000)
+            .unwrap();
+        let count = store.process_unreflected(&RuleCritic, 5000).unwrap();
+        assert_eq!(count, 2);
+        let reflections = store.list_reflections().unwrap();
+        assert_eq!(reflections.len(), 3);
+        // retry_injection 正常
+        assert!(store.retry_injection("deploy", 2000).unwrap().is_some());
     }
 }
