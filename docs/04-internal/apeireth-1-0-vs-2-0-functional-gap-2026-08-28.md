@@ -146,7 +146,7 @@ Author:          主代理 Mavis
 | **morphology** | `apeireth-companion/src/morphology.rs` | REAL | ❌ **0 真实施** (Live2D 形态 / 物种化 frontend 相关) | 🔴 **缺** (跟 Round 10 Open-LLM-VTuber / Firefly / AIRI / Mio 调研相关) |
 | **continuation / continuity / spill** | `apeireth-companion/src/continuation.rs`, `continuity.rs`, `spill.rs` | REAL | ❌ **0 真实施** (对话连续性相关) | 🔴 **缺** |
 | **context / context_rot** | `apeireth-companion/src/context.rs`, `context_rot.rs` | REAL | ❌ **0 真实施** (context window 旋转 / 长程记忆) | 🔴 **缺** |
-| **assemble / hello** | `apeireth-companion/src/assemble.rs`, `hello.rs` | REAL | ❌ **0 真实施** (启动 / 装配) | 🔴 **缺** |
+| **assemble / hello** | `apeireth-companion/src/assemble.rs`, `hello.rs` | REAL | ❌ **0 真实施** (assemble = 启动/装配, **hello = Windows Hello 生物识别 (NGC 凭据探测, 121 行, 0 装 PASS 标注 "Windows Hello 真绑机制口")**, 不是"启动/装配") | 🔴 **缺** (assemble 1:1 可移植, hello 需主人硬件 + 微软账号配置, 真实施主代理亲测本地 Windows NGC 凭据提供方) |
 | **onering** | `apeireth-companion/src/onering.rs` | REAL | ❌ **0 真实施** (单环 / 协调 相关) | 🔴 **缺** |
 | **oracle / oracle_adapters** | `apeireth-companion/src/oracle.rs`, `oracle_adapters.rs` | REAL | ❌ **0 真实施** (oracle / 预言 相关) | 🔴 **缺** |
 | **milestone** | `apeireth-companion/src/milestone.rs` | REAL | ❌ **0 真实施** (里程碑 / 物种化塑形 相关) | 🔴 **缺** |
@@ -217,7 +217,7 @@ Author:          主代理 Mavis
 - **oracle / oracle_adapters** (预言 / 适配器)
 - **context / context_rot** (context window / 旋转)
 - **continuation / continuity / spill** (连续性)
-- **assemble / hello** (启动 / 装配)
+- **assemble / hello** (assemble = 启动/装配 1:1 可移植, **hello = Windows Hello 生物识别 (NGC 凭据探测, 121 行, 1.0 真账 self-flag "0 装 PASS: 不假装已绑定, 检测不到如实报 Unavailable{reason}")**)
 - **thought_cluster** (思考聚类)
 - **intent_brier** (Brier 校准意图)
 - **confidence** (置信度)
