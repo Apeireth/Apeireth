@@ -70,6 +70,12 @@ pub enum RuntimeError {
         hook: String,
         /// What a human is being asked to approve.
         reason: String,
+        /// Stable handle for the pending capability approval, when one exists.
+        ///
+        /// Completion-level approval is not resumable and leaves this empty.
+        approval: Option<ApprovalId>,
+        /// Session that owns the pending approval, when one exists.
+        session: Option<SessionId>,
     },
 
     /// A registered module failed while running a hook.
@@ -194,6 +200,8 @@ mod tests {
         let approval = RuntimeError::ApprovalRequired {
             hook: "human_gate".into(),
             reason: "needs a human".into(),
+            approval: None,
+            session: None,
         };
         assert!(denied.to_string().contains("denied"), "{denied}");
         assert!(approval.to_string().contains("approval"), "{approval}");

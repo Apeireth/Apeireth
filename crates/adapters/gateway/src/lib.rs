@@ -10,6 +10,7 @@
 pub mod canonical_entry;
 
 pub use canonical_entry::{
-    canonical_router, execute_chat, serve_canonical, CanonicalChatRequest, CanonicalChatResponse,
-    CanonicalEntryError,
+    canonical_router, execute_chat, resolve_approval, serve_canonical, CanonicalApprovalRequest,
+    CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError,
+    CanonicalPendingApproval,
 };
