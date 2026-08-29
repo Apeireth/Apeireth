@@ -45,6 +45,7 @@ pub mod organ_llm_bridge;
 // Long-lived: 7 deterministic organs + OrganOrchestrator backend; transient
 // per invocation: W1/W2 built from ctx.invoker_handle() and dropped.
 pub mod organ_module;
+pub mod preference_learning;
 pub mod production;
 pub mod provider;
 pub mod runtime;
@@ -78,6 +79,10 @@ pub use module::{
 };
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
 pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};
+pub use preference_learning::{
+    PreferenceEvidence, PreferenceLearningModule, PreferenceLearningStats, PreferencePolarity,
+    PREFERENCE_LEARNING_MODULE_ID,
+};
 pub use production::{
     CognitiveBackends, CognitiveModuleConfig, ProductionBackends, ProductionCognitiveModules,
     ProductionModules, ProductionModulesConfig,
