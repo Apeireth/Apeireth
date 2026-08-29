@@ -876,10 +876,7 @@ impl Runtime {
                 match after_model.directive {
                     ModuleDirective::Continue => {}
                     ModuleDirective::Retry { feedback } => {
-                        retry_scaffolding = vec![
-                            NormalizedMessage::assistant(response.content.clone()),
-                            NormalizedMessage::user(feedback),
-                        ];
+                        retry_scaffolding = vec![NormalizedMessage::user(feedback)];
                         pending_overlays = next_overlays;
                         continuation.round += 1;
                         continue;
@@ -957,10 +954,7 @@ impl Runtime {
                             return Ok(TurnOutcome::Completed(turn_response));
                         }
                         ModuleDirective::Retry { feedback } => {
-                            retry_scaffolding = vec![
-                                NormalizedMessage::assistant(response.content.clone()),
-                                NormalizedMessage::user(feedback),
-                            ];
+                            retry_scaffolding = vec![NormalizedMessage::user(feedback)];
                             pending_overlays = next_overlays;
                             continuation.round += 1;
                             continue;
