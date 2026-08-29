@@ -176,7 +176,7 @@ Author:          主代理 Mavis
 |---|---|---|---|---|
 | 1 | v1 context.rs + context_rot.rs rot_score 融合 (per R11 catch) | 1-2 天 | 0 | 🟢 P0 (Round 13 派单同步) |
 | 2 | cognitive module consolidation_writeback_pipeline + reflection_writeback_pipeline trait spec (per R11 真账) | 1-2 天 | 0 | 🟢 P0 |
-| 3 | hello.rs 主题确认 (Windows Hello NGC vs 启动/装配, per R11 catch) | 1 小时 | 0 | 🟢 P0 |
+| 3 | **hello.rs 主题确认** (已知 Windows Hello NGC 121 行, 不是"启动/装配", per Round 15 main代理亲测) | 1 小时 | 0 (真账已知) | 🟢 P0 |
 | 4 | education 真 CAS spec (1.0 是字符串规则, 2.0 真 CAS sympy, per Round 13 maturity) | 1-2 周 | 0 | 🟢 P0 (物种化核心) |
 | 5 | confidence BetaBinomial trait spec (1.0 完整, 2.0 organ::world_model::CalibrationStrength 本地简化版需补 BetaBinomial trait, per Round 13 maturity) | 1 周 | 0 | 🟢 P0 (物种化核心) |
 | 6 | reflexion 3 trait 口实接线 spec (LLM CRITIC + 失败事件实接线 + 注入块消费侧, per Round 13 maturity) | 1 周 | 0 | 🟢 P0 (物种化核心) |
@@ -192,7 +192,7 @@ Author:          主代理 Mavis
 
 | # | 派单 | 估时 | 优先级 | 物种化维度 | 阻塞 |
 |---|---|---|---|---|---|
-| 1 | **R12-CoordinationContext-1** (onering + oracle / context+context_rot 融合 + 部分 hello) | 3-4 周 | 🟢 P0 | 协调+上下文 | 主代理 #1 rot_score 融合 + #3 hello 主题 |
+| 1 | **R12-CoordinationContext-1** (onering + oracle / context+context_rot 融合 + 部分 hello (Windows Hello NGC 已知, 不是"启动/装配")) | 3-4 周 | 🟢 P0 | 协调+上下文 | 主代理 #1 rot_score 融合 + #2 hello (Windows Hello NGC 121 行, 0 装 PASS 标注, 真实施需主人硬件 + 微软账号配置, 真实施主代理亲测本地 Windows NGC 凭据提供方) |
 | 2 | **R12-CoordinationContext-2** (continuation + continuity + spill + milestone + experiment_field) | 3-4 周 | 🟢 P0 | 协调+上下文 | 0 |
 | 3 | **R12-CoordinationContext-3** (proactive + progressive + pentest + Kani bridge) | 2-3 周 | 🟢 P0 | 协调+上下文 | 0 |
 | 4 | **R12-SpeciesCore-1** (principles + partner) | 2 周 | 🟢 P0 | 物种化核心 | 主代理 #5 confidence BetaBinomial trait spec |
@@ -307,7 +307,7 @@ Week 7-10: R20 preference_learning (in-progress)
 按真账 §2.1 表 1-10, 主代理亲做 10 项 spec 决策冻结, **不依赖网络**:
 
 1. **v1 context.rs + context_rot.rs rot_score 融合** (1-2 天) — **立即做**
-2. **hello.rs 主题确认** (1 小时) — **立即做**
+2. **hello.rs 主题确认** ✅ (1 小时, 已知 Windows Hello NGC 121 行, 不是"启动/装配", 真账 brief 模板已含真实施路径)
 3. **cognitive module consolidation_writeback_pipeline + reflection_writeback_pipeline trait spec** (1-2 天) — **立即做**
 4. **6 真实施派单 brief 模板** (1-2 天) — **立即做**
 5. **education 真 CAS spec** (1-2 周) — **立即做** (物种化核心)
@@ -326,7 +326,7 @@ Week 7-10: R20 preference_learning (in-progress)
 
 | # | 派单 | 估时 | 物种化维度 |
 |---|---|---|---|
-| 1 | R12-CoordinationContext-1 (onering + oracle / context+context_rot 融合 + 部分 hello) | 3-4 周 | 协调+上下文 |
+| 1 | R12-CoordinationContext-1 (onering + oracle / context+context_rot 融合 + 部分 hello (Windows Hello NGC 121 行 已知)) | 3-4 周 | 协调+上下文 |
 | 2 | R12-CoordinationContext-2 (continuation + continuity + spill + milestone + experiment_field) | 3-4 周 | 协调+上下文 |
 | 3 | R12-CoordinationContext-3 (proactive + progressive + pentest + Kani bridge) | 2-3 周 | 协调+上下文 |
 | 4 | R12-SpeciesCore-1 (principles + partner) | 2 周 | 物种化核心 |
