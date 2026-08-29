@@ -12,7 +12,9 @@
 
 use std::sync::Mutex;
 
-use apeireth_cli::{build_canonical_runtime_from_env, execute_canonical_cli_turn};
+use apeireth_cli::{
+    build_canonical_runtime_from_env, execute_canonical_cli_turn, CanonicalCliTurn,
+};
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
 use serde_json::Value;
@@ -85,6 +87,12 @@ async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax
     let _g_models = EnvGuard::set("APEIRETH_API_MODELS", Some("MiniMax-M3"));
     let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("MiniMax-M3"));
     let _g_local_read = EnvGuard::set("APEIRETH_ENABLE_LOCAL_READ_TOOLS", None);
+    let session_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-session-{}.sqlite3",
+        std::process::id()
+    ));
+    let session_db = session_db.to_string_lossy().into_owned();
+    let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
     // Anthropic key absent — its provider is still registered (keyless), but
     // would fail explicitly if routed to. Minimax serves this turn.
     let _g_ant_key = EnvGuard::set("APEIRETH_ANTHROPIC_KEY", None);
@@ -124,9 +132,13 @@ async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax
     assert!(matches!(governance_verdict.decision, Decision::Deny { .. }));
     assert_eq!(governance_verdict.hook, "permission_governance");
 
-    let outcome = execute_canonical_cli_turn(&runtime, "hi", None, None)
-        .await
-        .expect("the turn completes");
+    let CanonicalCliTurn::Completed(outcome) =
+        execute_canonical_cli_turn(&runtime, "hi", None, None)
+            .await
+            .expect("the turn completes")
+    else {
+        panic!("expected a completed turn");
+    };
     assert_eq!(outcome.served_by.as_str(), "provider.minimax");
     assert_eq!(outcome.text, "hello from canonical cli");
     assert_eq!(outcome.rounds, 1);
@@ -150,14 +162,24 @@ async fn the_cli_bootstrap_routes_an_anthropic_model_to_provider_anthropic() {
     let _g_ant_url = EnvGuard::set("APEIRETH_ANTHROPIC_URL", Some(&anthropic_url));
     let _g_ant_models = EnvGuard::set("APEIRETH_ANTHROPIC_MODELS", Some("claude-sonnet-4-5"));
     let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("claude-sonnet-4-5"));
+    let session_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-session-anthropic-{}.sqlite3",
+        std::process::id()
+    ));
+    let session_db = session_db.to_string_lossy().into_owned();
+    let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
 
     let runtime = build_canonical_runtime_from_env()
         .await
         .expect("bootstrap builds a runtime with both providers");
 
-    let outcome = execute_canonical_cli_turn(&runtime, "hi", None, None)
-        .await
-        .expect("the turn completes");
+    let CanonicalCliTurn::Completed(outcome) =
+        execute_canonical_cli_turn(&runtime, "hi", None, None)
+            .await
+            .expect("the turn completes")
+    else {
+        panic!("expected a completed turn");
+    };
     assert_eq!(outcome.served_by.as_str(), "provider.anthropic");
     assert_eq!(outcome.text, "hello from anthropic cli");
 }
@@ -180,6 +202,12 @@ async fn the_cli_bootstrap_routes_an_openai_model_to_provider_openai_compatible(
     let _g_openai_url = EnvGuard::set("APEIRETH_OPENAI_URL", Some(&openai_url));
     let _g_openai_models = EnvGuard::set("APEIRETH_OPENAI_MODELS", Some("gpt-4o-mini"));
     let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("gpt-4o-mini"));
+    let session_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-session-openai-{}.sqlite3",
+        std::process::id()
+    ));
+    let session_db = session_db.to_string_lossy().into_owned();
+    let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
 
     let runtime = build_canonical_runtime_from_env()
         .await
@@ -198,9 +226,13 @@ async fn the_cli_bootstrap_routes_an_openai_model_to_provider_openai_compatible(
         "{ids:?}"
     );
 
-    let outcome = execute_canonical_cli_turn(&runtime, "hi", None, None)
-        .await
-        .expect("the turn completes");
+    let CanonicalCliTurn::Completed(outcome) =
+        execute_canonical_cli_turn(&runtime, "hi", None, None)
+            .await
+            .expect("the turn completes")
+    else {
+        panic!("expected a completed turn");
+    };
     assert_eq!(outcome.served_by.as_str(), "provider.openai-compatible");
     assert_eq!(outcome.text, "hello from openai cli");
 }
@@ -212,6 +244,12 @@ async fn the_cli_bootstrap_omits_openai_compatible_when_unconfigured() {
     // (it has no hardcoded model default — §21/§38).
     let _g_minimax_key = EnvGuard::set("APEIRETH_API_KEY", Some("sk-fake"));
     let _g_openai_models = EnvGuard::set("APEIRETH_OPENAI_MODELS", None);
+    let session_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-session-omit-{}.sqlite3",
+        std::process::id()
+    ));
+    let session_db = session_db.to_string_lossy().into_owned();
+    let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
 
     let runtime = build_canonical_runtime_from_env()
         .await
@@ -245,6 +283,12 @@ async fn the_cli_bootstrap_boots_keyless_and_fails_explicitly_on_execute() {
     let _g_url = EnvGuard::set("APEIRETH_API_URL", Some(&base_url));
     let _g_models = EnvGuard::set("APEIRETH_API_MODELS", Some("MiniMax-M3"));
     let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("MiniMax-M3"));
+    let session_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-session-keyless-{}.sqlite3",
+        std::process::id()
+    ));
+    let session_db = session_db.to_string_lossy().into_owned();
+    let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
 
     let runtime = build_canonical_runtime_from_env()
         .await

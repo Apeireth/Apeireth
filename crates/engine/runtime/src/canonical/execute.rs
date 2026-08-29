@@ -272,6 +272,7 @@ impl Runtime {
 
         let clock = self.clock.as_ref();
         let mut session = self.sessions.load_or_create(request.session).await?;
+        self.expire_active_approval_if_needed(&mut session).await?;
 
         if let Some(active) = session.active_approval_id {
             return Err(RuntimeError::SessionApprovalPending {
@@ -370,13 +371,16 @@ impl Runtime {
     ///
     /// A pending approval is mapped to [`RuntimeError::ApprovalRequired`] so
     /// callers that have not adopted [`Runtime::execute_outcome`] keep their
-    /// old behaviour. The semantic engine is the same.
+    /// old behaviour. The semantic engine is the same. The error retains the
+    /// [`ApprovalId`] so a caller can still resume without a second subsystem.
     pub async fn execute(&self, request: TurnRequest) -> RuntimeResult<TurnResponse> {
         match self.execute_outcome(request).await? {
             TurnOutcome::Completed(response) => Ok(response),
             TurnOutcome::PendingApproval(view) => Err(RuntimeError::ApprovalRequired {
                 hook: view.governance_hook,
                 reason: view.governance_reason,
+                approval: Some(view.approval_id),
+                session: Some(view.session_id),
             }),
         }
     }
@@ -468,8 +472,14 @@ impl Runtime {
             return Ok(ApprovalResolution::Expired);
         }
 
+        let decision_label = decision.label();
         match decision {
-            ApprovalDecision::Reject { reason } => {
+            ApprovalDecision::Reject { reason } | ApprovalDecision::Cancel { reason } => {
+                let result_text = if decision_label == "cancelled" {
+                    "operation cancelled by user"
+                } else {
+                    "operation rejected by user"
+                };
                 let rejected = {
                     let mut rejected = approval.clone();
                     rejected.status = ApprovalStatus::Rejected;
@@ -483,7 +493,7 @@ impl Runtime {
                     approval.trace_id,
                     SessionEventKind::ApprovalResolved {
                         approval_id,
-                        decision: "rejected".into(),
+                        decision: decision_label.into(),
                         round: approval.round,
                         human_reason: reason,
                     },
@@ -491,11 +501,8 @@ impl Runtime {
                 );
 
                 // The model gets a canonical rejection result and may recover.
-                let rejection = ToolResult::permanent_error(
-                    &approval.tool_call.id,
-                    "operation rejected by user",
-                )
-                .with_name(&approval.tool_call.name);
+                let rejection = ToolResult::permanent_error(&approval.tool_call.id, result_text)
+                    .with_name(&approval.tool_call.name);
                 session.append(rejection.clone().into_message(), self.clock.as_ref());
 
                 let mut continuation = approval.continuation.clone();
@@ -572,7 +579,7 @@ impl Runtime {
                     now,
                     TraceEvent::ApprovalResolved {
                         approval_id,
-                        decision: "rejected".into(),
+                        decision: decision_label.into(),
                         round: approval.round,
                     },
                 );
@@ -1554,6 +1561,57 @@ impl Runtime {
         Err(error)
     }
 
+    /// Expire a pending approval that has outlived its TTL so a later turn can start.
+    ///
+    /// Claimed approvals are not expired here: their effect may already have
+    /// started, and automatic retry is unsafe.
+    async fn expire_active_approval_if_needed(&self, session: &mut Session) -> RuntimeResult<()> {
+        let Some(approval_id) = session.active_approval_id else {
+            return Ok(());
+        };
+        let Some(approval) = session.approvals.get(&approval_id).cloned() else {
+            session.active_approval_id = None;
+            self.sessions.save(session).await?;
+            return Ok(());
+        };
+        if approval.status != ApprovalStatus::Pending {
+            return Ok(());
+        }
+        let now = Timestamp::from_clock(self.clock.as_ref());
+        if !approval.is_expired(now) {
+            return Ok(());
+        }
+
+        let expired = {
+            let mut expired = approval.clone();
+            expired.status = ApprovalStatus::Expired;
+            expired.human_reason = None;
+            expired
+        };
+        session.approvals.insert(approval_id, expired);
+        session.active_approval_id = None;
+        session.record(
+            approval.request_id,
+            approval.trace_id,
+            SessionEventKind::ApprovalResolved {
+                approval_id,
+                decision: "expired".into(),
+                round: approval.round,
+                human_reason: None,
+            },
+            self.clock.as_ref(),
+        );
+        Self::append_skipped_tool_results(
+            session,
+            &approval.continuation.tool_calls,
+            approval.continuation.next_tool_index,
+            "operation expired before tool dispatch",
+            self.clock.as_ref(),
+        );
+        self.sessions.save(session).await?;
+        Ok(())
+    }
+
     /// Ask governance whether this round's completion may proceed.
     async fn authorize_completion(
         &self,
@@ -1626,7 +1684,12 @@ impl Runtime {
                     },
                     self.clock.as_ref(),
                 );
-                Err(RuntimeError::ApprovalRequired { hook, reason })
+                Err(RuntimeError::ApprovalRequired {
+                    hook,
+                    reason,
+                    approval: None,
+                    session: Some(*session_id),
+                })
             }
         }
     }
