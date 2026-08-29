@@ -160,28 +160,35 @@ pub trait SubLoopSpawner: Send + Sync {
 }
 
 /// Runtime-owned spawner that executes bounded SubLoops against router and tools.
-pub struct RuntimeSubLoopSpawner<'a> {
-    router: &'a ProviderRouter,
+///
+/// An owned turn-scoped handle: it carries one invocation's session, trace,
+/// model and budget context, clones share that invocation's `ModuleTurnState`,
+/// and it is not task-local or global ambient authority — it exists only where
+/// the runtime hands it out for the current invocation. It must not be
+/// retained as persistent module state across turns.
+#[derive(Clone)]
+pub struct RuntimeSubLoopSpawner {
+    router: Arc<ProviderRouter>,
     tools: Vec<Arc<dyn ToolCapability>>,
-    governance: &'a dyn GovernanceHook,
+    governance: Arc<dyn GovernanceHook>,
     session_id: SessionId,
     trace_id: TraceId,
-    current_model: &'a str,
-    module_id: &'a str,
+    current_model: Arc<str>,
+    module_id: Arc<str>,
     state: Arc<ModuleTurnState>,
     depth: u8,
 }
 
-impl<'a> RuntimeSubLoopSpawner<'a> {
+impl RuntimeSubLoopSpawner {
     /// Create a new SubLoop spawner scoped to a module hook.
     pub(crate) fn new(
-        router: &'a ProviderRouter,
+        router: Arc<ProviderRouter>,
         tools: Vec<Arc<dyn ToolCapability>>,
-        governance: &'a dyn GovernanceHook,
+        governance: Arc<dyn GovernanceHook>,
         session_id: SessionId,
         trace_id: TraceId,
-        current_model: &'a str,
-        module_id: &'a str,
+        current_model: impl Into<Arc<str>>,
+        module_id: impl Into<Arc<str>>,
         state: Arc<ModuleTurnState>,
         parent_depth: u8,
     ) -> Self {
@@ -191,8 +198,8 @@ impl<'a> RuntimeSubLoopSpawner<'a> {
             governance,
             session_id,
             trace_id,
-            current_model,
-            module_id,
+            current_model: current_model.into(),
+            module_id: module_id.into(),
             state,
             depth: parent_depth.saturating_add(1),
         }
@@ -248,7 +255,7 @@ impl<'a> RuntimeSubLoopSpawner<'a> {
             }
 
             authorize_isolated_completion(
-                self.governance,
+                self.governance.as_ref(),
                 self.session_id,
                 self.trace_id,
                 &model,
@@ -375,7 +382,7 @@ impl<'a> RuntimeSubLoopSpawner<'a> {
 }
 
 #[async_trait]
-impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
+impl SubLoopSpawner for RuntimeSubLoopSpawner {
     async fn spawn(&self, spec: SubLoopSpec) -> Result<SubLoopResult, SubLoopError> {
         let timeout_opt = spec.timeout;
         let fut = self.spawn_bounded(spec);
@@ -391,7 +398,7 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner<'_> {
 }
 
 #[async_trait]
-impl ModuleInvoker for RuntimeSubLoopSpawner<'_> {
+impl ModuleInvoker for RuntimeSubLoopSpawner {
     async fn invoke(
         &self,
         request: ModuleInvocationRequest,
@@ -417,7 +424,7 @@ impl ModuleInvoker for RuntimeSubLoopSpawner<'_> {
         messages.push(NormalizedMessage::user(request.input));
 
         authorize_isolated_completion(
-            self.governance,
+            self.governance.as_ref(),
             self.session_id,
             self.trace_id,
             &model,

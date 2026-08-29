@@ -1406,7 +1406,7 @@ mod tests {
         session: &'a SessionId,
         messages: &'a [NormalizedMessage],
         candidate: Option<&'a NormalizedResponse>,
-        invoker: &'a dyn super::super::module::ModuleInvoker,
+        invoker: &'a Arc<dyn super::super::module::ModuleInvoker>,
         module_id: &'a str,
     ) -> ModuleContext<'a> {
         static INVOCATION: OnceLock<super::super::module::InvocationContext> = OnceLock::new();
@@ -1421,7 +1421,8 @@ mod tests {
             invocation: INVOCATION.get_or_init(super::super::module::InvocationContext::user_turn),
             module_id,
             error: None,
-            invoker,
+            invoker: &**invoker,
+            invoker_handle: Arc::clone(invoker),
             subloop: &DUMMY_SUBLOOP,
         }
     }
@@ -1439,10 +1440,10 @@ mod tests {
                 session_id: session.to_string(),
             })
             .unwrap();
-        let invoker = FixedInvoker {
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
             response: NormalizedResponse::text("judge", "judge", "{}"),
             calls: AtomicU64::new(0),
-        };
+        });
         let messages = vec![NormalizedMessage::user("what now?")];
         let telemetry = Arc::new(CognitiveTelemetry::default());
         let recall = MemoryRecallModule::new(memory.clone()).with_telemetry(Arc::clone(&telemetry));
@@ -1510,10 +1511,10 @@ mod tests {
             experience.clone(),
             experience.clone(),
         );
-        let invoker = FixedInvoker {
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
             response: NormalizedResponse::text("unused", "fake", "unused"),
             calls: AtomicU64::new(0),
-        };
+        });
         let messages = vec![NormalizedMessage::user("remember this")];
         let candidate = NormalizedResponse::text(
             "answer-1",
@@ -1551,14 +1552,15 @@ mod tests {
     #[tokio::test]
     async fn judge_uses_one_bounded_side_call_and_retries_once() {
         let session = SessionId::new();
-        let invoker = FixedInvoker {
+        let invoker_counter = Arc::new(FixedInvoker {
             response: NormalizedResponse::text(
                 "judge-1",
                 "judge",
                 r#"{"score":0.2,"verdict":"retry","critique":"be more direct"}"#,
             ),
             calls: AtomicU64::new(0),
-        };
+        });
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = invoker_counter.clone();
         let judge = JudgeModule::new(
             JudgeConfig {
                 enabled: true,
@@ -1597,7 +1599,7 @@ mod tests {
             .await
             .unwrap();
         assert!(matches!(second.directive, ModuleDirective::Stop { .. }));
-        assert_eq!(invoker.calls.load(Ordering::Relaxed), 2);
+        assert_eq!(invoker_counter.calls.load(Ordering::Relaxed), 2);
         assert_eq!(judge.metrics().side_calls, 2);
         assert!(JudgeModule::parse_result("not json").is_err());
     }
@@ -1605,14 +1607,15 @@ mod tests {
     #[tokio::test]
     async fn council_module_uses_module_invoker_for_bounded_fake_advisors() {
         let session = SessionId::new();
-        let invoker = FixedInvoker {
+        let invoker_counter = Arc::new(FixedInvoker {
             response: NormalizedResponse::text(
                 "council-1",
                 "fake",
                 r#"{"score":0.2,"verdict":"retry","critique":"tighten the answer","confidence":0.9}"#,
             ),
             calls: AtomicU64::new(0),
-        };
+        });
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = invoker_counter.clone();
         let council = Arc::new(Council::default_llm().with_config(
             apeireth_orchestration::CouncilConfig {
                 max_advisors: 3,
@@ -1644,7 +1647,7 @@ mod tests {
             .await
             .unwrap();
         assert!(matches!(outcome.directive, ModuleDirective::Retry { .. }));
-        assert_eq!(invoker.calls.load(Ordering::Relaxed), 3);
+        assert_eq!(invoker_counter.calls.load(Ordering::Relaxed), 3);
         assert_eq!(module.metrics().side_calls, 3);
     }
 
