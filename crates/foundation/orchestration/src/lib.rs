@@ -47,6 +47,8 @@ pub mod context_rot;
 pub mod continuation;
 pub mod council;
 pub mod llm;
+pub mod prompt_stabilizer;
+pub mod speech_arbiter;
 
 pub use ambient_context::{
     AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
@@ -59,6 +61,12 @@ pub use context_rot::{
 pub use continuation::{
     ContinuationSnapshot, ContinuationStore, EditAction, FileContinuationStore,
     InMemoryContinuationStore, PendingToolCall, SegmentEditor,
+};
+pub use prompt_stabilizer::{
+    EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage, StabilizedRole,
+};
+pub use speech_arbiter::{
+    ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
 };
 
 // ============================================
