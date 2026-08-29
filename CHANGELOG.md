@@ -31,6 +31,15 @@
   - **教育与微积分换元符号检查 (`education.rs`)**: 纯 Safe Rust 四重微分一致性检查、经典三角/双曲/线性根式模式匹配与结构化 Markdown 报告。
 - **B 块 / 网关流式交互 (`apeireth-gateway`)**:
   - `POST /v1/chat/completions` 当 `stream: true` 时返回标准 `text/event-stream` SSE 数据帧与 `[DONE]` 终止帧。
+- **元认知自校准与长程思维簇 (`apeireth-memory`)**:
+  - **意图理解准确率 Brier 自我诊断 (`intent_brier.rs`)**: 滚动窗口 [30, 100, 300] 轮 Brier 得分数学自校准 + 话题领域诊断 + 相对趋势分析；
+  - **思维簇管理与元自学习只读回读 (`thought_cluster.rs`)**: `{YYYY-MM-DD}-{seq:03}.md` 结构化思维文件落盘 + 链注册表 + 安全防穿越与编辑防御 + `InMemoryThoughtClusterReader`；
+  - **元思考递归推演链 (`meta_thinking.rs`)**: 多阶段“思考 $\to$ 再思考”递进推演引擎 + 最大深度 10 限制 + 思维死循环检测熔断 (`CycleDetected`) + 降级标定 + 反思适配器 (`ChainReflectionThinker`)；
+  - **程序性记忆与习惯固化 (`procedural.rs`)**: N.E.K.O 5 维记忆第 5 维，自动记录 Condition-Action 技能规则配方，拉普拉斯平滑计算置信度与高阶规则自动晋级。
+- **物种化交互与全双工流式伴随 (`apeireth-gateway` / `perception` / `orchestration`)**:
+  - **全双工实时流式打断与插话机制 (`barge_in.rs`)**: 毫秒级广播取消信号阻断服务端生成与传输，向客户端推送 `event: interrupt` 数据帧；
+  - **情感声学参数调制与语音向导 (`emotion_voice.rs`)**: 将 PAD 情绪向量与性格特征映射为 TTS 底层 Pitch / Speed / Volume / Emotion 连续声学参数与 SSML 封装；
+  - **跨场景环境自适应伴随状态机 (`ambient_context.rs`)**: AIRI 模式感知前台 IDE / 全屏游戏 / 阅读浏览 / 空闲状态，自动在 `FocusAssistant`, `SilentObserver`, `WarmCompanion`, `Resting` 间平滑切换。
 - **前端桌面端伙伴 (`frontend/companion-desktop`)**:
   - Svelte 5 + Tauri 2 现代化桌面端，生产打包 `pnpm build` 与 `pnpm check` 100% 通过（0 错误，0 警告）。
 
