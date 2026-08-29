@@ -89,6 +89,34 @@ impl SQLitePreferenceStore {
     }
 }
 
+/// Row mapper shared by the topic and fallback recall queries.
+fn map_preference_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserPreference> {
+    let id: String = row.get(0)?;
+    let session_id_str: String = row.get(1)?;
+    let topic: String = row.get(2)?;
+    let stance: String = row.get(3)?;
+    let confidence: f64 = row.get(4)?;
+    let evidence_refs_str: String = row.get(5)?;
+    let tags_str: String = row.get(6)?;
+    let created_at: i64 = row.get(7)?;
+    let evidence_refs: Vec<String> = serde_json::from_str(&evidence_refs_str).unwrap_or_default();
+    let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
+    // session_id 解析: 字符串 → SessionId
+    let session_id_parsed = session_id_str
+        .parse::<SessionId>()
+        .map_err(|e| rusqlite::Error::InvalidParameterName(format!("SessionId parse: {e}")))?;
+    Ok(UserPreference {
+        id,
+        session_id: session_id_parsed,
+        topic,
+        stance,
+        confidence,
+        evidence_refs,
+        tags,
+        created_at,
+    })
+}
+
 impl PreferenceStore for SQLitePreferenceStore {
     fn record(
         &self,
@@ -131,53 +159,53 @@ impl PreferenceStore for SQLitePreferenceStore {
         limit: u32,
     ) -> Result<Vec<UserPreference>, Box<dyn std::error::Error + Send + Sync>> {
         let session_id_str = session_id.to_string();
-        // SELECT 路径: 同 session 下, topic LIKE current_topic (前缀匹配)
-        // + ORDER BY confidence DESC, created_at DESC (新近优先)
-        // + LIMIT ?N
+        // SELECT 路径 (v1 donor `preference_injection` 语义: 偏好跨场景自动应用):
+        // 1. 同 session 下双向子串匹配 (stored topic ↔ current topic)
+        //    + ORDER BY confidence DESC, created_at DESC + LIMIT ?N;
+        // 2. 无 topic 命中时回退到该 session 的 top-N (donor 的偏好画像是
+        //    无条件注入的, 不被话题门控; 旧行为 `topic LIKE '%整条消息%'`
+        //    使学到的偏好几乎永远召回不到, 闭环断裂).
         self.pool
             .read(|conn| {
-                let mut stmt = conn
-                    .prepare_cached(
+                let load = |stmt: &mut rusqlite::Statement<'_>,
+                            topic_param: &str|
+                 -> Result<Vec<UserPreference>, rusqlite::Error> {
+                    let rows = stmt.query_map(
+                        rusqlite::params![session_id_str, topic_param, i64::from(limit)],
+                        map_preference_row,
+                    )?;
+                    let mut out = Vec::new();
+                    for r in rows {
+                        out.push(r?);
+                    }
+                    Ok(out)
+                };
+                let mut topic_stmt = conn.prepare_cached(
+                    "SELECT id, session_id, topic, stance, confidence, evidence_refs, tags, created_at \
+                     FROM user_preferences \
+                     WHERE session_id = ?1 \
+                       AND (?2 = '' OR topic LIKE '%' || ?2 || '%' OR ?2 LIKE '%' || topic || '%') \
+                     ORDER BY confidence DESC, created_at DESC \
+                     LIMIT ?3",
+                )?;
+                let mut out = load(&mut topic_stmt, current_topic)?;
+                if out.is_empty() && !current_topic.is_empty() {
+                    // Donor 语义回退: 无话题命中 → 该 session 的 top-N 偏好画像.
+                    let mut fallback_stmt = conn.prepare_cached(
                         "SELECT id, session_id, topic, stance, confidence, evidence_refs, tags, created_at \
                          FROM user_preferences \
                          WHERE session_id = ?1 \
-                           AND (?2 = '' OR topic LIKE '%' || ?2 || '%') \
                          ORDER BY confidence DESC, created_at DESC \
-                         LIMIT ?3",
+                         LIMIT ?2",
                     )?;
-                let rows = stmt
-                    .query_map(rusqlite::params![session_id_str, current_topic, i64::from(limit)], |row| {
-                        let id: String = row.get(0)?;
-                        let session_id_str: String = row.get(1)?;
-                        let topic: String = row.get(2)?;
-                        let stance: String = row.get(3)?;
-                        let confidence: f64 = row.get(4)?;
-                        let evidence_refs_str: String = row.get(5)?;
-                        let tags_str: String = row.get(6)?;
-                        let created_at: i64 = row.get(7)?;
-                        let evidence_refs: Vec<String> =
-                            serde_json::from_str(&evidence_refs_str).unwrap_or_default();
-                        let tags: Vec<String> =
-                            serde_json::from_str(&tags_str).unwrap_or_default();
-                        // session_id 解析: 字符串 → SessionId
-                        let session_id_parsed = session_id_str
-                            .parse::<SessionId>()
-                            .map_err(|e| rusqlite::Error::InvalidParameterName(format!("SessionId parse: {e}")),
-                            )?;
-                        Ok(UserPreference {
-                            id,
-                            session_id: session_id_parsed,
-                            topic,
-                            stance,
-                            confidence,
-                            evidence_refs,
-                            tags,
-                            created_at,
-                        })
-                    })?;
-                let mut out = Vec::new();
-                for r in rows {
-                    out.push(r?);
+                    let rows = fallback_stmt.query_map(
+                        rusqlite::params![session_id_str, i64::from(limit)],
+                        map_preference_row,
+                    )?;
+                    out = Vec::new();
+                    for r in rows {
+                        out.push(r?);
+                    }
                 }
                 Ok(out)
             })
@@ -393,5 +421,33 @@ mod tests {
         assert_eq!(list.len(), 1, "PK 冲突 → UPSERT, 不重复");
         assert_eq!(list[0].topic, "topic2");
         assert_eq!(list[0].confidence, 0.9);
+    }
+
+    /// 无 topic 命中 → 回退到该 session 的 top-N (v1 donor
+    /// `preference_injection` 跨场景自动应用语义).
+    #[tokio::test]
+    async fn recall_falls_back_to_top_n_when_topic_misses() {
+        let store = fresh().await;
+        let sid = SessionId::new();
+        store
+            .record(&pref("rust", sid, "rust", 0.9))
+            .expect("record");
+        store
+            .record(&pref("python", sid, "python", 0.6))
+            .expect("record");
+
+        // 话题完全不同的提问 → 回退返回 top-N (按 confidence 排序).
+        let recalled = store
+            .recall_for_context(&sid, "What should I use for a small new project?", 5)
+            .expect("recall fallback");
+        assert_eq!(recalled.len(), 2, "fallback returns the session top-N");
+        assert_eq!(recalled[0].topic, "rust", "higher confidence first");
+
+        // 话题双向子串命中仍优先: 提问含 "rust" → 只返回 rust 行.
+        let matched = store
+            .recall_for_context(&sid, "Should I start with rust?", 5)
+            .expect("recall bidirectional");
+        assert_eq!(matched.len(), 1);
+        assert_eq!(matched[0].topic, "rust");
     }
 }
