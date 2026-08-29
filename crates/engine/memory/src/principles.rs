@@ -80,17 +80,29 @@ pub struct PromotionCandidate {
 }
 
 /// 常数时间字符串比较 (防时序攻击).
+///
+/// **诚实限制声明**: 循环次数取决于较长一侧的输入长度, 因此比较耗时仍会泄露
+/// `max(len(a), len(b))`. 本实现保证的是:
+/// - 比较耗时**与内容无关** (不泄露首个差异字节位置或前缀匹配深度);
+/// - 移除了旧实现中长度不匹配时的提前返回分支.
+///
+/// 并非数学意义上完美的常数时间实现; 如需严格常数时间语义应改用专用密码学库.
 pub fn constant_time_eq(a: &str, b: &str) -> bool {
     let a_bytes = a.as_bytes();
     let b_bytes = b.as_bytes();
-    if a_bytes.len() != b_bytes.len() {
-        return false;
-    }
+    // 以较长一侧决定循环次数, 短侧越界补 0: 循环体内不存在依赖内容或
+    // 长度的提前退出分支.
+    let max_len = a_bytes.len().max(b_bytes.len());
     let mut diff = 0u8;
-    for (x, y) in a_bytes.iter().zip(b_bytes.iter()) {
+    for i in 0..max_len {
+        let x = a_bytes.get(i).copied().unwrap_or(0);
+        let y = b_bytes.get(i).copied().unwrap_or(0);
         diff |= x ^ y;
     }
-    diff == 0
+    // 长度差异折叠进最终判定: 纯零字节前缀 (如 "\0\0" vs "\0") 的字节折叠
+    // 可能为 0, 必须由长度相等性兜底. 此为唯一最终分支, 只依赖长度相等性.
+    let length_equal = a_bytes.len() == b_bytes.len();
+    diff == 0 && length_equal
 }
 
 /// 动态原则持久化与审查 Trait.
@@ -105,6 +117,11 @@ pub trait PrincipleStore: Send + Sync {
     ) -> Result<DynamicPrinciple, MemoryError>;
 
     /// 主人批准原则 (需要提供正确的 master token).
+    ///
+    /// **架构边界 (P1 硬化)**: 原则批准是**库内本地**的原则生命周期操作,
+    /// 当前未接入 canonical Runtime 审批/治理. 在未经 canonical Runtime
+    /// governance/approval 路径显式接线之前, 本机制不得成为运行时策略
+    /// 激活权威 (不得据此激活/修改任何 runtime 行为).
     fn approve(
         &self,
         chain_or_id: &str,
@@ -162,10 +179,27 @@ pub trait PrincipleStore: Send + Sync {
 }
 
 /// 内存版动态原则存储器.
-#[derive(Debug)]
+///
+/// **架构边界 (P1 硬化)**: 本类型及其 master token 批准机制是**库内本地**
+/// 实现, 当前生产 Runtime 无任何构造/调用路径 (审计结论), 必须保持 UNWIRED;
+/// 若未来接入, 必须经 canonical Runtime governance/approval 路径, 不得
+/// 自行成为第二审批权威.
+///
+/// master token 永不出现在 `Debug`/`Display`/错误/日志输出中 (见手写
+/// `Debug`), 也不泄露 token 长度.
 pub struct InMemoryPrincipleStore {
     principles: Mutex<HashMap<String, DynamicPrinciple>>,
     master_token: Option<String>,
+}
+
+impl std::fmt::Debug for InMemoryPrincipleStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let count = self.principles.lock().map(|g| g.len()).unwrap_or(0);
+        f.debug_struct("InMemoryPrincipleStore")
+            .field("principles_count", &count)
+            .field("master_token", &"<redacted>")
+            .finish()
+    }
 }
 
 impl InMemoryPrincipleStore {
@@ -330,6 +364,56 @@ mod tests {
         assert!(constant_time_eq("secret123", "secret123"));
         assert!(!constant_time_eq("secret123", "secret456"));
         assert!(!constant_time_eq("short", "longer_secret"));
+    }
+
+    /// P1 硬化: 比较矩阵 — 移除长度提前返回后, 全部判定仍正确.
+    #[test]
+    fn constant_time_eq_full_matrix() {
+        // 相等
+        assert!(constant_time_eq("", ""));
+        assert!(constant_time_eq("abc", "abc"));
+        assert!(constant_time_eq("密钥token", "密钥token")); // 多字节 UTF-8 按字节相等
+        // 同长度不同内容
+        assert!(!constant_time_eq("abc", "abd"));
+        assert!(!constant_time_eq("密钥token", "密钥tOken"));
+        // 不同长度 (含前缀关系)
+        assert!(!constant_time_eq("abc", "abcd"));
+        assert!(!constant_time_eq("abcd", "abc"));
+        assert!(!constant_time_eq("", "a"));
+        assert!(!constant_time_eq("a", ""));
+        // 全零字节 + 长度不同: 字节折叠为 0, 必须由长度相等性兜底拒绝
+        assert!(!constant_time_eq("\0\0", "\0"));
+        assert!(!constant_time_eq("\0", "\0\0"));
+        assert!(constant_time_eq("\0\0", "\0\0"));
+    }
+
+    /// P1 硬化: master token 不得出现在 Debug 输出中 (含片段与长度).
+    #[test]
+    fn master_token_never_appears_in_debug() {
+        let token = "super-secret-master-token-12345";
+        let store = InMemoryPrincipleStore::with_token(token);
+        let dbg = format!("{store:?}");
+        assert!(!dbg.contains(token), "Debug 不得包含完整 token: {dbg}");
+        assert!(!dbg.contains("super-secret"), "Debug 不得包含 token 片段: {dbg}");
+        assert!(!dbg.contains("master-token-12345"), "Debug 不得包含 token 片段: {dbg}");
+        // 不泄露长度 (token 长 31 字节)
+        assert!(!dbg.contains("31"), "Debug 不得泄露 token 长度: {dbg}");
+        assert!(dbg.contains("<redacted>"), "Debug 应显式显示 redacted: {dbg}");
+    }
+
+    /// P1 硬化: 批准失败的错误文本不得回显尝试的 token 值.
+    #[test]
+    fn approve_failure_error_does_not_leak_attempted_token() {
+        let store = InMemoryPrincipleStore::with_token("valid_token");
+        let p = store
+            .propose("禁止未经验证执行系统命令", "安全性保护", "安全守则", 1000)
+            .unwrap();
+        let err = store.approve(&p.chain, "WRONG_SECRET_ATTEMPT_XY", 2000).unwrap_err();
+        let err_text = err.to_string();
+        assert!(
+            !err_text.contains("WRONG_SECRET_ATTEMPT_XY"),
+            "错误文本不得回显 token: {err_text}"
+        );
     }
 
     #[test]
