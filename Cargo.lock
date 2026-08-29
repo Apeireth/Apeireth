@@ -143,7 +143,6 @@ dependencies = [
  "apeireth-provider",
  "apeireth-runtime",
  "apeireth-storage",
- "apeireth-tools-canonical",
  "reqwest",
  "serde_json",
  "tokio",

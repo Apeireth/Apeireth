@@ -385,6 +385,11 @@ pub trait Module: Send + Sync {
     fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
         Vec::new()
     }
+
+    /// Accept a dynamic tool after runtime build, if this module supports it.
+    fn register_dynamic_tool(&self, _tool: Arc<dyn ToolCapability>) -> Result<(), String> {
+        Err("module does not accept dynamic tools".into())
+    }
 }
 
 /// Compatibility alias for the canonical [`Module`] trait.
@@ -414,6 +419,11 @@ impl ModuleRegistry {
         if self.modules.iter().any(|m| m.manifest().id == manifest.id) {
             return Err(format!("duplicate module id {:?}", manifest.id));
         }
+        reject_tool_identity_collisions(
+            &self.tools(),
+            &module.tools(),
+            &format!("module {}", manifest.id),
+        )?;
         self.modules.push(module);
         Ok(())
     }
@@ -429,15 +439,23 @@ impl ModuleRegistry {
     }
 
     /// Find a tool capability by tool name across all modules.
+    ///
+    /// Duplicate names are a registration error. Lookup still fails closed if a
+    /// live MCP bag later introduces a collision: more than one match is treated
+    /// as unavailable rather than first-wins.
     pub fn find_tool_by_name(&self, name: &str) -> Option<Arc<dyn ToolCapability>> {
+        let mut found = None;
         for module in &self.modules {
             for tool in module.tools() {
                 if tool.declaration().name == name {
-                    return Some(tool);
+                    if found.is_some() {
+                        return None;
+                    }
+                    found = Some(tool);
                 }
             }
         }
-        None
+        found
     }
 
     /// Number of registered modules.
@@ -455,6 +473,37 @@ impl From<Vec<Arc<dyn Module>>> for ModuleRegistry {
     fn from(modules: Vec<Arc<dyn Module>>) -> Self {
         Self { modules }
     }
+}
+
+/// Reject duplicate capability ids or model-facing names between two tool sets.
+pub(crate) fn reject_tool_identity_collisions(
+    incumbent: &[Arc<dyn ToolCapability>],
+    challengers: &[Arc<dyn ToolCapability>],
+    challenger_owner: &str,
+) -> Result<(), String> {
+    let mut by_id: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    let mut by_name: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    for tool in incumbent {
+        by_id.insert(tool.id().to_string(), tool.declaration().name);
+        by_name.insert(tool.declaration().name, tool.id().to_string());
+    }
+    for tool in challengers {
+        let id = tool.id().to_string();
+        let name = tool.declaration().name;
+        if let Some(existing_name) = by_id.get(&id) {
+            return Err(format!(
+                "duplicate capability id {id} from {challenger_owner} collides with existing tool {existing_name:?}"
+            ));
+        }
+        if let Some(existing_id) = by_name.get(&name) {
+            return Err(format!(
+                "duplicate tool name {name:?} from {challenger_owner} collides with existing capability {existing_id}"
+            ));
+        }
+        by_id.insert(id, name.clone());
+        by_name.insert(name, tool.id().to_string());
+    }
+    Ok(())
 }
 
 impl std::ops::Deref for ModuleRegistry {

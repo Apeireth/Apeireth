@@ -1713,11 +1713,13 @@ impl Runtime {
     ) -> RuntimeResult<ToolDispatch> {
         let clock = self.clock.as_ref();
 
-        let Some(tool) = self
-            .modules
-            .find_tool_by_name(&call.name)
-            .or_else(|| self.plugins.tool_by_name(&call.name))
-        else {
+        let module_tool = self.modules.find_tool_by_name(&call.name);
+        let plugin_tool = self.plugins.tool_by_name(&call.name);
+        let Some(tool) = (match (module_tool, plugin_tool) {
+            (Some(tool), None) | (None, Some(tool)) => Some(tool),
+            (None, None) => None,
+            (Some(_), Some(_)) => None,
+        }) else {
             let available = self
                 .tool_declarations()
                 .iter()
