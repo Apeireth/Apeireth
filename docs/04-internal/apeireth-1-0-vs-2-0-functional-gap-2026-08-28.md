@@ -275,7 +275,7 @@ Author:          主代理 Mavis
 
 ### 4.1 派单原则 (per O-6 总体最优)
 
-- **总估时 P0 必补 (15 项)**: 估 2-4 月 critical path
+- **总估时 P0 必补 (~23 项, per Round 12 终极审计 + Round 13 1.0 maturity 补查)**: 估 **12-14 周 critical path** (修订主代理真账 §3.1 估 3-4 周 ❌ 偏乐观, 实际 12-14 周 = 1:1 翻译 + trait 口主代理亲做 spec + PARTIAL 真实施 critical path 累加). 主代理必亲做 spec ~2 周 (v1 rot_score 融合 + cognitive module trait + education 真 CAS + confidence BetaBinomial + reflexion 3 trait 口 + hello 主题 + git clone v2 master branch)
 - **并行**: 派 5-6 sub-agent 真调研 (每个 ~2-3 周调研 + ~2-4 周真实施)
 - **不重叠**: 借鉴链 per Round 10 5 真调研 + research/source 已借鉴
 - **0 装诚实标**: 必含, 不假装 OK
@@ -350,11 +350,11 @@ Author:          主代理 Mavis
 ### 6.3 修订 release 路径
 
 - **v2.0 release 估时**: 原 2027-Q1 (per MANIFESTO §14 4-6 月), 现在 release 路径需重估:
-  - 1.0 功能全集必补 (15 项 P0 必补, 估 2-4 月 critical path)
-  - release 估时上调: 4-6 月 → **6-9 月** (P0 真补完)
+  - 1.0 功能全集必补 (~23 项 P0 必补, 估 **12-14 周 critical path**, per Round 13 1.0 maturity 补查)
+  - release 估时上调: 4-6 月 → **6-9 月** (P0 真补完, 真实施 critical path 12-14 周)
   - 物种化核心 (education / partner / community / principles) 估 3-4 周真调研 + 6-8 周真实施 = 2-3 月 critical path
-- 修订 ROADMAP §7 总进度 (70% → 80% → **70% 重新估** 因 1.0 功能全集差距发现, **降回 75-80%** 真实)
-- 修订 MANIFESTO §14 release timeline
+- 修订 ROADMAP §7 总进度 (70% → 80% → **70-75% 重新估** 因 1.0 功能全集差距发现 + Round 13 1.0 maturity 补查, **降回 70-75%** 真实)
+- 修订 MANIFESTO §14 release timeline (2027-Q1-Q2 → **2027-Q3**)
 
 ---
 
