@@ -13,9 +13,13 @@
 //! 3. 架构: runtime 通过 `Arc<dyn VoiceBackend>` 注入, 多 backend 可选
 
 pub mod emotion_voice;
+pub mod minimax_tts;
 pub mod whisper_http;
 
 pub use emotion_voice::{
     AcousticParameters, EmotionCategory, EmotionVoiceSynthesizer, PadEmotion,
+};
+pub use minimax_tts::{
+    AudioChunk, EmotionToneModulation, MiniMaxLiveTtsClient, MiniMaxTtsRequest, TtsError,
 };
 pub use whisper_http::{WhisperHttpBackend, WhisperHttpConfig};
