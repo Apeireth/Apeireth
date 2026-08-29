@@ -12,10 +12,12 @@
 
 #![deny(unsafe_code)]
 
+pub mod apply_patch;
 pub mod education;
 pub mod egress;
 pub mod fetch;
 pub mod filesystem;
+pub mod guardrail;
 pub mod mcp;
 pub mod plugin;
 pub mod process;
@@ -29,10 +31,12 @@ pub mod spill;
 pub mod std_sub_supervisor;
 pub mod supervisor;
 
+pub use apply_patch::{ApplyPatchError, FilePatchAction, PatchHunk, PatchReport, TransactionalPatchApplier};
 pub use education::{DxCheckTool, DxReport, REPLACED_DIFFS};
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
 pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
+pub use guardrail::{LeakedCredentialKind, PreCallGuardError, ToolGuardrail, TripwireScanResult};
 pub use mcp::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, McpClient, McpContent, McpError,
     McpToolDescriptor, McpToolResult, McpTransport,
