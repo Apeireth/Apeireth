@@ -341,6 +341,7 @@ pub struct ModuleContext<'a> {
     /// Error text for [`HookPoint::OnError`], when available.
     pub error: Option<&'a str>,
     pub(crate) invoker: &'a dyn ModuleInvoker,
+    pub(crate) invoker_handle: Arc<dyn ModuleInvoker>,
     pub(crate) subloop: &'a dyn super::subloop::SubLoopSpawner,
 }
 
@@ -363,6 +364,22 @@ impl<'a> ModuleContext<'a> {
     /// Runtime-owned isolated model invocation capability.
     pub fn invoker(&self) -> &'a dyn ModuleInvoker {
         self.invoker
+    }
+
+    /// Owned handle onto the same per-turn isolated invoker as [`Self::invoker`].
+    ///
+    /// An owned `ModuleInvoker` handle carries one invocation's session, trace,
+    /// model and budget context. It is intended for asynchronous work spawned
+    /// within that invocation and must not be retained as persistent module
+    /// state. Clones of the handle share this invocation's
+    /// `ModuleTurnState` budget; they never mint a fresh one. The next turn
+    /// receives a different handle with different turn context.
+    ///
+    /// Both accessors dereference the same per-turn invoker object; the owned
+    /// form exists so a hook can move the capability into async work (for
+    /// example an `LlmFactory` adapter) that outlives the borrowed context.
+    pub fn invoker_handle(&self) -> Arc<dyn ModuleInvoker> {
+        Arc::clone(&self.invoker_handle)
     }
 
     /// Runtime-owned bounded SubLoop spawner.
@@ -613,25 +630,46 @@ impl ModuleTurnState {
 }
 
 /// Runtime-owned implementation of the isolated module invoker.
-pub(crate) struct RuntimeModuleInvoker<'a> {
-    router: &'a ProviderRouter,
-    governance: &'a dyn GovernanceHook,
+///
+/// An owned turn-scoped handle: it carries one invocation's session, trace,
+/// model and budget context, clones share that invocation's `ModuleTurnState`,
+/// and it is not task-local or global ambient authority — it exists only where
+/// the runtime hands it out for the current invocation. It must not be
+/// retained as persistent module state across turns.
+pub(crate) struct RuntimeModuleInvoker {
+    router: Arc<ProviderRouter>,
+    governance: Arc<dyn GovernanceHook>,
     session_id: SessionId,
     trace_id: TraceId,
-    current_model: &'a str,
-    module_id: &'a str,
+    current_model: Arc<str>,
+    module_id: Arc<str>,
     state: Arc<ModuleTurnState>,
     depth: u8,
 }
 
-impl<'a> RuntimeModuleInvoker<'a> {
+impl Clone for RuntimeModuleInvoker {
+    fn clone(&self) -> Self {
+        Self {
+            router: Arc::clone(&self.router),
+            governance: Arc::clone(&self.governance),
+            session_id: self.session_id,
+            trace_id: self.trace_id,
+            current_model: Arc::clone(&self.current_model),
+            module_id: Arc::clone(&self.module_id),
+            state: Arc::clone(&self.state),
+            depth: self.depth,
+        }
+    }
+}
+
+impl RuntimeModuleInvoker {
     pub(crate) fn new(
-        router: &'a ProviderRouter,
-        governance: &'a dyn GovernanceHook,
+        router: Arc<ProviderRouter>,
+        governance: Arc<dyn GovernanceHook>,
         session_id: SessionId,
         trace_id: TraceId,
-        current_model: &'a str,
-        module_id: &'a str,
+        current_model: impl Into<Arc<str>>,
+        module_id: impl Into<Arc<str>>,
         state: Arc<ModuleTurnState>,
         parent_depth: u8,
     ) -> Self {
@@ -640,8 +678,8 @@ impl<'a> RuntimeModuleInvoker<'a> {
             governance,
             session_id,
             trace_id,
-            current_model,
-            module_id,
+            current_model: current_model.into(),
+            module_id: module_id.into(),
             state,
             depth: parent_depth.saturating_add(1),
         }
@@ -649,7 +687,7 @@ impl<'a> RuntimeModuleInvoker<'a> {
 }
 
 #[async_trait]
-impl ModuleInvoker for RuntimeModuleInvoker<'_> {
+impl ModuleInvoker for RuntimeModuleInvoker {
     async fn invoke(
         &self,
         request: ModuleInvocationRequest,
@@ -675,7 +713,7 @@ impl ModuleInvoker for RuntimeModuleInvoker<'_> {
         messages.push(NormalizedMessage::user(request.input));
 
         authorize_isolated_completion(
-            self.governance,
+            self.governance.as_ref(),
             self.session_id,
             self.trace_id,
             &model,
