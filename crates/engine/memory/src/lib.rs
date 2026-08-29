@@ -48,11 +48,13 @@ pub use append_only::{AppendOnlyError, HistoryEntry, HistoryStream, Tombstone};
 pub mod history_streams;
 
 pub mod arbitration;
+pub mod bitemporal_graph;
 pub mod continuity_link;
 pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
 pub mod dreaming;
+pub mod five_dimensional;
 pub mod hybrid_search;
 pub mod intent_brier;
 pub mod meta_thinking;
@@ -63,6 +65,11 @@ pub mod procedural;
 pub mod reflexion;
 pub mod thought_cluster;
 pub mod topic_predictor;
+
+pub use bitemporal_graph::{BitemporalFact, BitemporalGraph};
+pub use five_dimensional::{
+    FactItem, FiveDimensionalMemory, MemoryBrowserEntry, MemoryDimension, ReflectionItem,
+};
 
 pub use arbitration::{
     ArbitrationEngine, ArbitrationError, ArbitrationEvent, EventSource, IntegrityReport,
