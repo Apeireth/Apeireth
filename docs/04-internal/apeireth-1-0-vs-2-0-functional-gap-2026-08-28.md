@@ -40,9 +40,9 @@ Author:          主代理 Mavis
 | SQLite pool + write channel | `apeireth-storage/src/pool.rs` | REAL | ✅ 已就位 (per `apeireth-storage/src/lib.rs` Memory_v2 etc.) | 🟢 OK |
 | Migrations | `apeireth-storage/src/migrations.rs` | REAL | ✅ | 🟢 OK |
 | MemoryStore v2 (ACT-R, temporal, tombstone) | `apeireth-storage/src/memory_v2.rs` | REAL | ✅ `cognitive.memory_recall` + `memory_writeback` WIRED | 🟢 OK |
-| VectorIndex (cosine + BM25 hybrid) | `apeireth-storage/src/vector.rs` | REAL | ❌ **0 真实施** (per `cognitive-module-wiring.md` 12 slot 不含 vector) | 🔴 **缺** |
-| Graph primitives / causal graph | `apeireth-storage/src/graph.rs`, `graph_primitive.rs`, `graph_ops.rs`, `fold.rs` | PARTIAL | ❌ **0 真实施** (per `causal_world_model` organ ✅ WIRED, 但 storage graph 抽象层 0 真实施) | 🔴 **缺** (organ 借 v1 donor, storage 抽象层缺) |
-| Memory_* support modules | `apeireth-storage/src/memory_*.rs` | PARTIAL | ⚠️ 部分 (organ memory ✅, support modules 0 真实施) | 🟡 partial |
+| VectorIndex (cosine + BM25 hybrid) | `apeireth-storage/src/vector.rs` | REAL | 🟡 **partial** (per R11-Storage 真账, v2 `crates/engine/memory/src/canonical/vector.rs` 已 1:1 翻译 cosine `VectorIndex` + `cosine_similarity` (L1-273) + ACT-R 检索, **缺 BM25 hybrid** — `lightmemo/search.rs` + `dailynote/search.rs` 是 LightMemo 子模块 BM25-lite, 不是 storage 主线) | 🟡 partial (cosine ✅, BM25 hybrid ❌) |
+| Graph primitives / causal graph | `apeireth-storage/src/graph.rs`, `graph_primitive.rs`, `graph_ops.rs`, `fold.rs` | PARTIAL | 🟡 **partial** (per R11-Storage 真账, v2 `crates/engine/memory/src/canonical/graph.rs` 已 1:1 翻译 `MemoryGraph` (BFS + shortest_path, L54+), **缺 causal engine** — W1/W2/W3 world_model organ ✅ WIRED 部分) | 🟡 partial (graph primitives ✅, causal engine ❌) |
+| Memory_* support modules | `apeireth-storage/src/memory_*.rs` | PARTIAL | ✅ **OK** (per R11-Storage 真账, v2 `apeireth-memory` 22 modules 大部分 1:1 翻译 v1 donor, **ONNX stub 待决策** — DROP/真接/ADAPT) | 🟢 OK |
 
 ### 1.2 Tools 层 (~9 真实施 + 5 PARTIAL)
 
@@ -180,7 +180,7 @@ Author:          主代理 Mavis
 ### 2.3 🔴 缺 (v2 0 真实施, 必补或必调研)
 
 约 **25 项**, 包括:
-- **Storage**: VectorIndex (cosine + BM25), Graph primitives
+- **Storage**: VectorIndex (BM25 hybrid 缺, cosine ✅), Graph primitives (causal engine 缺, graph primitives ✅)
 - **Tools**: Invest tool (P3), ToolSynthesizer (sandbox unused, 真接 risk)
 - **Vision**: Vision ScreenCapture / pHash (Windows), OmniParser window enumeration (Windows), DesktopActionTool (Windows)
 - **Companion 核心功能**: consolidation_writeback pipeline, daily_summary / diary, cross_diary, memory_injection, thought_cluster, intent_brier, confidence, goal / goal_tools, education (物种化核心 vision L48), partner, community, principles, meta_thinking, timeline, tone, morphology, continuation / continuity / spill, context / context_rot, assemble / hello, onering, oracle / oracle_adapters, milestone, experiment_field, proactive / progressive / pentest, Kani proofs (bridge_kani_proofs / organ_kani_proofs)
@@ -244,8 +244,8 @@ Author:          主代理 Mavis
 
 | # | Feature | 估时 | 阻塞 | 派单建议 |
 |---|---|---|---|---|
-| 1 | **VectorIndex (cosine + BM25 hybrid)** | 1-2 周 | 0 | 派 sub-agent 真调研 (1 周, 写真账) + 真实施 |
-| 2 | **Graph primitives / causal graph** (storage 抽象层) | 2-3 周 | 0 | 派 sub-agent 真调研 + 真实施 (organ causal_world_model ✅ 已借, storage 抽象层缺) |
+| 1 | **VectorIndex (BM25 hybrid 补, cosine ✅ 真账已就位)** | 1 周 | 0 | 派 sub-agent 真实施 BM25 hybrid 补 (per R11-Storage 真账 §1.2 hybrid 修订) |
+| 2 | **Graph primitives (causal engine 补, graph primitives ✅ 真账已就位)** | 1-2 周 | 0 | 派 sub-agent 真实施 causal engine (per R11-Storage 真账 §1.3 修订) |
 | 3 | **ToolSynthesizer** (sandbox unused fix) | 1 周 | 0 | 派 sub-agent 真调研 + 真实施 (security critical) |
 | 4 | **daily_summary / diary + cross_diary + memory_injection** (长期记忆塑形) | 2-3 周 | 0 | 派 sub-agent 真调研 (Mio 真账 §5 #5 已推荐) + 真实施 (跟 R20 + R22 critical path) |
 | 5 | **Vision ScreenCapture / pHash + OmniParser + DesktopActionTool** (Windows 真接) | 2-3 周 | 硬件 | D 块 RC-7 真 modality 真接 (Windows 真接已调研, 真实施需硬件) |
@@ -284,7 +284,7 @@ Author:          主代理 Mavis
 ### 4.2 派单顺序 (per O-6 + 用户 directive "多派几个")
 
 **Round 11 P0 派单 (6 sub-agent 真调研具体 gap)**:
-1. **Storage 抽象层真调研** (VectorIndex + Graph primitives, 派 1 sub-agent, 2-3 周)
+1. **Storage 抽象层真调研** (VectorIndex BM25 hybrid + Graph causal engine 补, 派 1 sub-agent, 1-2 周真实施) — **R11-Storage 真账就位** (主代理真账 §1.1 标 ❌ 错修订为 🟡 partial)
 2. **长期记忆塑形真调研** (daily_summary / diary + cross_diary + memory_injection, 派 1 sub-agent, 2-3 周, 跟 Mio 真账 P0 调研同步)
 3. **物种化核心真调研** (education + partner + community + principles, 派 1 sub-agent, 3-4 周, 跟 vision.md 真理解 species 核心)
 4. **物种化塑形维度真调研** (timeline + tone + morphology, 派 1 sub-agent, 2-3 周, 跟 Round 10 Open-LLM-VTuber / Firefly / AIRI / Mio 调研对接)
@@ -318,7 +318,7 @@ Author:          主代理 Mavis
 | 失守 | 详情 | 修法 |
 |---|---|---|
 | **Round 1-10 局限视角** | 一直画 "v2 工程架构现状", 没看 1.0 vs 2.0 功能差距 — 之前没意识到 v2 release 必补 1.0 全集 | 本文件真账 + 派 sub-agent 真调研具体 gap |
-| **约 25 项 1.0 功能 v2 缺** | VectorIndex / Graph / consolidation_writeback / daily_summary / cross_diary / memory_injection / 教育 / partner / community / principles / Kani / 等 | 派 sub-agent 真调研, 估 2-4 月 critical path 真补 |
+| **约 23 项 1.0 功能 v2 缺** (修订: VectorIndex/Graph 从 🔴 缺 → 🟡 partial) | BM25 hybrid / causal engine / consolidation_writeback / daily_summary / cross_diary / memory_injection / 教育 / partner / community / principles / Kani / 等 | 派 sub-agent 真调研, 估 2-4 月 critical path 真补 |
 | **本真账 0 实测** | 未 git clone v2 master branch (per master audit L138), 仅读 1.0 真账 (legacy/donor/) + 2.0 handbook + 5 R7 真调研 + master audit 真账推论 | 真实施前主代理必亲验 (per §4.2 派单顺序) |
 | **数 1.0 真账基于 master audit L197-771 + glob 100+ modules 路径** | 实际 v1 master branch (~86-crate) 完整代码未逐行读, 仅按功能分类列 | 主代理派 sub-agent 逐 gap 真 clone v2 main + grep 跟 1.0 真对照 |
 

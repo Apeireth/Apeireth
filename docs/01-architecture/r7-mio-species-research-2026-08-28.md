@@ -44,14 +44,11 @@ Author:          sub-agent R7-Mio (主代理 Mavis 派)
 
 **Mio**: Windows 本地优先 — 单 binary + 本地存储 + 0 cloud 依赖 (中文个人 AI Agent 标准范式).
 
-**Apeireth** (per 真理解 §1.1 + L87-99):
-- L57: "companion-desktop 是物种化的具体形态 — 同一套 backend, 不同用户不同前端皮肤"
-- **用户想法 #1** "Apeireth 可以便携安装进 U 盘" — post-release v2.0.0 估 2027-Q2
-- 工程: 16 crate workspace + 单 binary `target/release/apeireth` + `Cargo.lock` 锁定
+**Apeireth** (per 真理解 §1.1 + L87-99): L57 "companion-desktop 是物种化的具体形态"; **用户想法 #1** "Apeireth 可以便携安装进 U 盘" (post-release v2.0.0 估 2027-Q2); 工程: 16 crate workspace + 单 binary `target/release/apeireth` + `Cargo.lock` 锁定.
 
 **借鉴点**:
 1. **Windows 本地 binary 部署** ↔ v2 portable binary (per L93 借鉴 Alife)
-2. **便携 U 盘启动** (FAT32/exFAT + `APEIRETH_HOME` 环境变量) ↔ Mio 本地优先范式
+2. **便携 U 盘启动** (FAT32/exFAT + `APEIRETH_HOME`) ↔ Mio 本地优先范式
 3. **本地存储 = 物种化基础** — per-user 记忆/偏好完全本地, 0 cloud 共享, 跟 vision.md L47 "每个她独立塑形" 完美对接
 
 ### 2.2 个人 AI Agent ↔ v2 物种化 per-user 塑形
@@ -60,26 +57,23 @@ Author:          sub-agent R7-Mio (主代理 Mavis 派)
 
 **Apeireth vision.md L47**: "物种而非个体" + "机制/哲学/安全同源, 记忆/偏好/好奇形状被各自的共同生活塑形" + 工程兑现 per-user memory(5维)+ preference + curiosity + emotional timeline.
 
-**物种 vs 个体**:
-- **同**: Mio single-user + Apeireth 物种化 — 同源哲学 (用户专属 AI, 非 framework)
-- **异**: Mio "个人" 是单设备狭义; Apeireth "物种" 是单用户广义 (本地优先 + 跨设备可选, post-v2.0.0)
-- **借鉴启示**: Mio 是 v2 物种化 **最贴近的工程参考**
+**物种 vs 个体**: **同** — Mio single-user + Apeireth 物种化同源哲学 (用户专属 AI, 非 framework); **异** — Mio "个人" 单设备狭义, Apeireth "物种" 单用户广义 (本地优先 + 跨设备可选). **借鉴启示**: Mio 是 v2 物种化 **最贴近的工程参考**.
 
 ### 2.3 日记功能 ↔ v2 cognitive self_assessment + memory_writeback (核心!)
 
-**Mio**: 日记 — 推断每日自动生成 + 用户可读 + 长期保存 (per "对话/记忆/日记" 组合).
+**Mio**: 日记 — 推断每日自动生成 + 用户可读 + 长期保存.
 
-**Apeireth v2 cognitive slot 现状** (per handbook §1.3 L58-62):
+**Apeireth v2 cognitive slot** (per handbook §1.3 L58-62):
 - `cognitive.self_assessment` — WIRED, Judge-backed, AfterTurn
 - `cognitive.memory_writeback` — WIRED, AfterTurn, append-only Episodes
-- `cognitive.reflection` — **DEFERRED INTO SELF-ASSESSMENT** → R22 派单 (1 周)
-- `cognitive.preference_learning` — **DEFERRED → R20 派单** (调研就位, 2-3 周)
+- `cognitive.reflection` — **DEFERRED** → R22 派单 (1 周)
+- `cognitive.preference_learning` — **DEFERRED** → R20 派单 (2-3 周)
 - **缺耦合**: self_assessment → memory_writeback 无显式 pipeline
 
 **借鉴点 (核心!)**:
 1. **日记 = 反思 + 写回合一** ↔ v2 `self_assessment + memory_writeback` 二合一路径完美对齐
-2. **R22 reflection 真实施直接借鉴** (1 周, per L62) — 日记反思部分对标
-3. **R20 preference_learning 真实施直接借鉴** (2-3 周, per L60) — 日记 → preference 提炼
+2. **R22 reflection 真实施直接借鉴** (1 周, L62) — 日记反思部分对标
+3. **R20 preference_learning 真实施直接借鉴** (2-3 周, L60) — 日记 → preference 提炼
 4. **cognitive module 增维**: 加 `reflection_writeback_pipeline` trait, R20+R22+日记三者**并发** (3-4 周 critical path)
 
 ### 2.4 屏幕感知 ↔ v2 RC-7 perception modality
@@ -91,23 +85,15 @@ Author:          sub-agent R7-Mio (主代理 Mavis 派)
 **借鉴点**:
 1. **0 装诱导 prevention**: Mio 若走 v1 同款 (窗口轮询), 跟 v1 等价, **不假装** "RC-7 Vision 真接"; RC-7 Vision 真接是新增能力
 2. **xcap 真接路径** (1 周, 跟 RC-7 §1.2 完全重叠)
-3. **主代理决策**: 派 sub-agent 真调研 Mio 屏幕感知 (推断路径) + 主代理亲验, 写 `r7-mio-screen-perception-research.md` ≤200 行
+3. **派 sub-agent 真调研 Mio 屏幕感知** (推断路径) + 主代理亲验, 写 `r7-mio-screen-perception-research.md` ≤200 行
 
 ### 2.5 QQ interface ↔ v2 即时通讯扩展 (NapCatQQ, LOW)
 
-**Mio**: QQ — 推断 NapCatQQ / go-cqhttp / OneBot 协议.
-
-**Apeireth v2 gateway** (per L29): 即时通讯 = LOW priority, "v2 gateway 已有 SSE, 不直接借鉴"; NapCatQQ 在 LOW 段 (L79).
-
-**借鉴点**: **LOW**, 不排 critical path; P2 后续调研, 跟 N.E.K.O/Firefly 同类合并.
+**Mio**: QQ — 推断 NapCatQQ / go-cqhttp / OneBot 协议. **Apeireth v2 gateway** (per L29): 即时通讯 = LOW priority, NapCatQQ 在 LOW 段 (L79). **借鉴点**: **LOW**, 不排 critical path; P2 后续, 跟 N.E.K.O/Firefly 同类合并.
 
 ### 2.6 语音 (TTS/ASR) ↔ v2 RC-7 真 modality (重叠, 不重)
 
-**Mio**: 语音 = ASR + TTS 标配.
-
-**Apeireth RC-7 §1.1**: Voice 真接 = Whisper HTTP (麦克风 + API key); TTS trait 已写, 缺真 backend impl.
-
-**借鉴点**: 跟 N.E.K.O / Open-LLM-VTuber 真账已写, Mio 语音**不是 unique 借鉴点**, 重叠路径不重复.
+**Mio**: 语音 = ASR + TTS 标配. **Apeireth RC-7 §1.1**: Voice 真接 = Whisper HTTP (麦克风 + API key); TTS trait 已写, 缺真 backend impl. **借鉴点**: 跟 N.E.K.O / Open-LLM-VTuber 真账已写, Mio 语音**不是 unique 借鉴点**, 重叠路径不重复.
 
 ---
 
@@ -153,13 +139,13 @@ Author:          sub-agent R7-Mio (主代理 Mavis 派)
 
 **Mio**: 默认 Live2D (桌宠标配), 推断 Cubism 5 + WebGL (per N.E.K.O/AIRI/Open-LLM-VTuber 同类).
 
-**Apeireth v2**: companion-desktop (Svelte 5 + Tauri 2, post-1.0.0 PR #1); v1 done 1411 行 runtime.ts (SSE/WS/panel).
+**Apeireth v2**: companion-desktop (Svelte 5 + Tauri 2, post-1.0.0 PR #1); v1 done 1411 行 runtime.ts.
 
-**借鉴点**: Live2D 渲染 pipeline ↔ companion-desktop 渲染层; 真实施: 跟 N.E.K.O §4.1 + Open-LLM-VTuber 真账同类合并, 派 sub-agent 一次性产出.
+**借鉴点**: Live2D 渲染 pipeline ↔ companion-desktop 渲染层; 真实施: 跟 N.E.K.O §4.1 + Open-LLM-VTuber 真账合并, 派 sub-agent 一次性产出.
 
 ### 4.2 Windows 本地 UI ↔ v2 portable 部署
 
-**Mio Windows 本地 UI**: 默认 Windows 桌面 UI (electron/tauri 推断).
+**Mio**: 默认 Windows 桌面 UI (electron/tauri 推断).
 
 **Apeireth v2 物种化 frontend 部署**: vision.md L47 "不同用户不同前端皮肤" + companion-desktop 多皮肤 (默认 Live2D + 可选 VRM/MMD) + **本地优先 = portable binary 范式**.
 
@@ -173,27 +159,22 @@ Author:          sub-agent R7-Mio (主代理 Mavis 派)
 
 **Mio 日记真账** (推断): LLM 总结 + 时序 append + 本地 SQLite/Markdown.
 
-**Apeireth v2 cognitive module** (per handbook §1.3):
-- 6/12 WIRED (memory_recall / preference_recall / judge / council / self_assessment / memory_writeback)
-- 6/12 DEFERRED (preference_learning R20 / critic R21 / reflection R22 / planner R23 / orchestrator R24 / perception R14)
-- **缺耦合**: self_assessment → memory_writeback 无显式 pipeline
+**Apeireth v2 cognitive module** (per handbook §1.3): 6/12 WIRED (memory_recall/preference_recall/judge/council/self_assessment/memory_writeback) + 6/12 DEFERRED (preference_learning R20 / critic R21 / reflection R22 / planner R23 / orchestrator R24 / perception R14). **缺耦合**: self_assessment → memory_writeback 无显式 pipeline.
 
 **借鉴点 (P0, 核心)**:
-1. **日记 = "反思 + 写回" 耦合范式** ↔ cognitive module 加 `reflection_writeback_pipeline` trait (扩展 trait, LOCKED 5 项 0 触碰)
+1. **日记 = "反思 + 写回" 耦合范式** ↔ cognitive module 加 `reflection_writeback_pipeline` trait (扩展, LOCKED 5 项 0 触碰)
 2. **R22 reflection** (1 周, L62) 直接对标 Mio 日记反思部分
 3. **R20 preference_learning** (2-3 周, L60) 借鉴 Mio 日记 → preference 提炼
 
 ### 5.2 屏幕感知 ↔ v2 RC-7 真 modality (高度重叠)
 
-**Apeireth RC-7** (§1.2): xcap 跨平台仅 Windows 真接; 估时 XcapVisionBackend 骨架 + 2 error path test = 2-3 天 (不需硬件); 真截屏需 Windows + 多显示器.
+**Apeireth RC-7** (§1.2): xcap 跨平台仅 Windows 真接; XcapVisionBackend 骨架 + 2 error path test = 2-3 天 (不需硬件); 真截屏需 Windows + 多显示器.
 
-**借鉴点**: Mio 屏幕感知路径调研跟 RC-7 真实施**完全重叠**, 派 1 sub-agent 一次性产出; 估时 1 周, 跟 R15+ RC-7 真实施并行 (per RC-7 §4 "R15+ 优先做不需硬件的 1 周").
+**借鉴点**: Mio 屏幕感知路径调研跟 RC-7 真实施**完全重叠**, 派 1 sub-agent 一次性产出; 估时 1 周, 跟 R15+ RC-7 真实施并行 (per RC-7 §4).
 
 ### 5.3 QQ ↔ v2 NapCatQQ (LOW, 不排 critical path)
 
-**Apeireth v2 gateway**: 即时通讯 = LOW (per L29), NapCatQQ 在 LOW 段 (L79).
-
-**借鉴点**: P2 后续调研, 跟 N.E.K.O/Firefly 同类合并, 主代理可选不借鉴.
+**Apeireth v2 gateway**: 即时通讯 = LOW (per L29), NapCatQQ 在 LOW 段 (L79). **借鉴点**: P2 后续, 跟 N.E.K.O/Firefly 合并, 主代理可选不借鉴.
 
 ---
 
@@ -243,20 +224,15 @@ Author:          sub-agent R7-Mio (主代理 Mavis 派)
 
 ### 7.3 主代理下一步 (推荐)
 
-| # | 行动 | 估时 | 阻塞 |
-|---|---|---|---|
-| 1 | **派 sub-agent 真调研 Mio 日记实现** (§3.2 + §5.1, **P0 核心**) | 1 周 (派单 §6 P0 #1) | 0 |
-| 2 | **主代理亲 git clone Mio + 看 README + 看 spec** (走代理/VPN, **必做**) | 1-2 天 | 0 |
-| 3 | **决策冻结: cognitive module reflection_writeback pipeline trait 是否增维** (§6 P0 #2) | 1 天 (主代理亲做) | #1+#2 done |
-| 4 | **跟 R20 preference_learning + R22 reflection 真实施并行** (handbook L60+L62, 关键!) | 3-4 周 (R20+R22 critical path) | R10 OrganKind 决策 |
-| 5 | **写 `r7-mio-diary-research.md`** ≤200 行 | 1 周 (派单内) | #1+#2 done |
-| 6 | **写 `r7-mio-portable-research.md`** ≤300 行 (用户想法 #1 对齐) | 1 周 (派单 P1 #3) | 真实施调研 |
+1. **派 sub-agent 真调研 Mio 日记** (§3.2 + §5.1, **P0 核心**) — 1 周, 阻塞 0
+2. **主代理亲 git clone Mio + README + spec** (走代理/VPN, **必做**) — 1-2 天
+3. **决策冻结**: cognitive module `reflection_writeback_pipeline` trait 是否增维 (§6 P0 #2) — 1 天
+4. **跟 R20 preference_learning + R22 reflection 真实施并行** (handbook L60+L62, 关键!) — 3-4 周 critical path
+5. 产出 `r7-mio-diary-research.md` ≤200 行 + `r7-mio-portable-research.md` ≤300 行 — 各 1 周
 
-**总估时**: P0 (1 周) + P1 (4-6 周) + P2 (4-6 周) = **2-3 月 critical path**, 跟 v2 release critical path 5-7 周并行 (R20+R22 占大头), **不冲突**.
+**总估时**: P0 (1 周) + P1 (4-6 周) + P2 (4-6 周) = **2-3 月 critical path**, 跟 v2 release 5-7 周并行 (R20+R22 占大头), **不冲突**.
 
-**关键同步点**:
-- R20 preference_learning (2-3 周) + R22 reflection (1 周) + 日记反思写回 cognitive module 增维 (1-2 周) **三者并发** (3-4 周 critical path)
-- Windows 本地优先 portable binary (P1 调研 1 周 + P2 实施 2-3 周) 排 post-release (用户想法 #1 估 2027-Q2), 跟 v2.0.0 release 解耦
+**关键同步**: R20 (2-3 周) + R22 (1 周) + 日记反思写回 cognitive 增维 (1-2 周) **三者并发** (3-4 周 critical path). portable binary (P1 调研 1 周 + P2 实施 2-3 周) 排 post-release 2027-Q2, 跟 v2.0.0 release 解耦.
 
 ---
 
