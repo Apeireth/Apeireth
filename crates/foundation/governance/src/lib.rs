@@ -46,6 +46,7 @@ use serde::{Deserialize, Serialize};
 pub mod audit;
 pub mod input_security;
 pub mod permission;
+pub mod rate_limit;
 
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
 pub use input_security::{
@@ -53,6 +54,7 @@ pub use input_security::{
     PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal,
 };
 pub use permission::{Permission, PermissionGovernanceHook, PermissionPolicy, PermissionSet};
+pub use rate_limit::{RateLimitConfig, RateLimitGovernanceHook, TrustTier};
 
 /// What the runtime is about to do.
 #[derive(Debug, Clone, PartialEq)]
