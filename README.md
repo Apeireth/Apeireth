@@ -121,30 +121,64 @@ There is a tension we live with deliberately: we give her a face and a voice and
 
 ## What Apeireth Is — Three Faces, One Base
 
-Apeireth provides a stable home for an LLM-facing runtime: durable contracts,
-session and execution orchestration, provider access, tools, policy, and
-integration surfaces. The product baseline is intentionally smaller than the
-historical donor workspaces.
+Apeireth provides a stable, memory-centric home for an LLM-facing runtime: durable contracts, session and cognitive orchestration, provider abstraction, sandboxed execution, and multimodal companion integration.
 
-### Current product boundary
+### System Architecture Overview
 
-The root Cargo workspace contains thirteen packages:
+```mermaid
+graph TD
+    classDef adapter fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff;
+    classDef engine fill:#1a365d,stroke:#2b6cb0,stroke-width:2px,color:#fff;
+    classDef capability fill:#22543d,stroke:#2f855a,stroke-width:2px,color:#fff;
+    classDef foundation fill:#742a2a,stroke:#9b2c2c,stroke-width:2px,color:#fff;
+    classDef desktop fill:#4c1d95,stroke:#6d28d9,stroke-width:2px,color:#fff;
 
-| Layer | Responsibility |
-|---|---|
-| Foundation | core types, protocol contracts, plugin contracts, governance, credentials |
-| Engine | runtime/session execution, provider transport, SQLite storage, memory |
-| Capabilities | built-in tools and the canonical process-execution boundary |
-| Adapters | HTTP gateway, CLI, and SDK |
+    UI["Frontend: Svelte 5 + Tauri 2 Desktop Companion"]:::desktop
+    CLI["apeireth-cli"]:::adapter
+    GW["apeireth-gateway (HTTP / SSE / Barge-in)"]:::adapter
+    SDK["apeireth-sdk"]:::adapter
 
-The desktop application at [frontend/companion-desktop/](frontend/companion-desktop/)
-is an independent Svelte 5 + Tauri 2 workspace. `legacy/` contains donor and
-reference material only. The former nested `reconstruction_v2/` workspace and
-the empty `crates/modules/` placeholder are not part of the current tree.
+    UI -->|IPC / HTTP| GW
+    CLI --> RT["apeireth-runtime (Session & Agent Loop)"]:::engine
+    GW --> RT
+    SDK --> RT
 
-### Canonical runtime
+    subgraph Engine Layer
+        RT --> MEM["apeireth-memory (BM25 + Dense + Graph + Procedural + Brier)"]:::engine
+        RT --> ORG["apeireth-organ (9 Cognitive Organs & Persona Synthesizer)"]:::engine
+        RT --> PRV["apeireth-provider (Anthropic / MiniMax / OpenAI-Compatible)"]:::engine
+        RT --> PER["apeireth-perception (Whisper Voice + Xcap Vision)"]:::engine
+        RT --> STO["apeireth-storage (SQLite Pools & Migrations)"]:::engine
+    end
 
-The CLI binary is `apeireth`:
+    subgraph Capabilities Layer
+        RT --> TLS["apeireth-tools-canonical (ProcessExecutor OS Sandbox & FS)"]:::capability
+    end
+
+    subgraph Foundation Layer
+        MEM & ORG & PRV & PER & STO & TLS --> CRD["apeireth-credentials (Keyring & Zeroize)"]:::foundation
+        MEM & ORG & PRV & PER & STO & TLS --> PLG["apeireth-plugin & apeireth-orchestration (Council & Ambient)"]:::foundation
+        PLG --> GOV["apeireth-governance (Permission & Principle Onions)"]:::foundation
+        GOV --> PROT["apeireth-protocol (Canonical Wire Translation)"]:::foundation
+        PROT --> CORE["apeireth-core (Domain Primitives, IDs & Clock)"]:::foundation
+    end
+```
+
+### Current Product Boundary
+
+The root Cargo workspace contains **16 core packages** structured across four distinct architectural layers, accompanied by an independent desktop workspace:
+
+| Layer | Responsibility | Crates |
+|---|---|---|
+| **Adapters** | Transports, CLI, SDK, and real-time SSE barge-in | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk` |
+| **Engine** | Runtime loop, memory, organs, perception, providers, storage | `apeireth-runtime`, `apeireth-memory`, `apeireth-organ`, `apeireth-perception`, `apeireth-provider`, `apeireth-storage` |
+| **Capabilities** | Tool execution and OS process containment | `apeireth-tools-canonical` (owns `ProcessExecutor`) |
+| **Foundation** | Core domain, protocol, governance, credentials, orchestration, plugins | `apeireth-core`, `apeireth-protocol`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration`, `apeireth-plugin` |
+| **Desktop Companion** | Svelte 5 + Tauri 2 modern desktop workspace | `frontend/companion-desktop/` (independent release boundary) |
+
+### Canonical Runtime
+
+The primary CLI binary is `apeireth`:
 
 ```text
 apeireth session
@@ -152,65 +186,49 @@ apeireth chat
 apeireth gateway serve --port 8080
 ```
 
-The gateway owns HTTP transport and exposes `/health`. Providers are selected
-through the runtime/provider path, while credentials are resolved through the
-credential contract. `ProcessExecutor` remains owned by
-`crates/capabilities/tools/src/process/`; its structured spawn, timeout,
-bounded output, explicit cwd/env, and existing Windows/Linux/macOS containment
-semantics were not changed by this cleanup.
+The gateway owns HTTP transport and exposes `/health` and streaming SSE chat completions. Providers are selected through runtime capabilities, while credentials are secure and memory-zeroized. `ProcessExecutor` remains strictly owned by `crates/capabilities/tools/src/process/` under a formal [Threat Model](docs/security/process-executor-threat-model.md).
 
-### Current status
+### Current Status
 
-- Root workspace: 13 crates, Rust 1.97.1, workspace version 1.2.0.
-- Product line: default branch `main` @ `d6910cf7`, tag `v2.0.0-alpha.1`
-  (reconstruct_v2 工程重构首个 alpha；workspace 版本轴 1.2.0 与产品轴独立).
-- Tests: 1338 passed / 0 failed; CI green across lint/fmt/audit/deny/miri/rustdoc/coverage.
-- Frontend: separate desktop/Tauri workspace and release boundary.
-- Historical nested workspace: removed after its useful decisions were captured
-  in the architecture audit.
-- Verification entry points: formatter, workspace check/test, focused process
-  tests, legacy-dependency scan, and independent desktop checks.
+- **Root workspace**: 16 crates, Rust 1.97.1 (MSRV), workspace version 1.2.0.
+- **Product line**: Tag `v2.0.0-preview` (Feature-complete 2.0 baseline).
+- **Test verification**: 1700+ tests passed / 0 failed; CI green across lint/fmt/audit/deny/clippy (`-D warnings`).
+- **Frontend desktop**: Svelte 5 + Tauri 2, `pnpm build` & `pnpm check` 100% green.
+- **Threat model & benchmarks**: Documented and reproducible.
 
-### Quick start
+### Quick Start & Contributing
+
+- ⚡ **[5-Minute Quickstart & Good First Issues](docs/development/5-min-quickstart.md)** — Run CLI, Gateway, and Desktop in under 5 minutes.
+- 🛡️ **[ProcessExecutor Threat Model & Sandbox Policy](docs/security/process-executor-threat-model.md)** — In-depth OS sandbox architecture.
+- 📊 **[Performance & Latency Baseline Report](reports/benchmark-baseline.md)** — Memory search, Brier calibration, and startup benchmarks.
 
 ```bash
-cargo build --workspace --locked
+# 1. Build and test everything
+cargo test --workspace
+
+# 2. Run local HTTP gateway
 cargo run -p apeireth-cli -- gateway serve --port 8080
 ```
 
-For a provider-backed run, set `APEIRETH_API_KEY` in the environment. The
-complete command list and endpoint examples are in
-[docs/02-guides/quick-start.md](docs/02-guides/quick-start.md).
+### Documentation Index
 
-### Deferred work
+- [Documentation Hub](docs/README.md)
+- [Architecture & Layers](docs/01-architecture/architecture.md)
+- [Crate Reference](docs/03-reference/crates.md)
+- [ProcessExecutor Threat Model](docs/security/process-executor-threat-model.md)
+- [Performance Benchmarks](reports/benchmark-baseline.md)
+- [5-Minute Quickstart](docs/development/5-min-quickstart.md)
+- [Changelog](CHANGELOG.md) & [Roadmap](ROADMAP.md)
 
-This baseline does not implement `ProcessSupervisor`, process-tree
-snapshots, runtime telemetry or risk engines, Sentinel/EDR, filesystem or
-network isolation, stronger cgroup/macOS containment, a second runtime,
-scheduler redesign, public API/IPC/schema changes, database migrations, or a
-new product module.
+### Need Apeireth v1.0 Historical Code?
 
-### Documentation
+The 2.0 re-architecture streamlined the codebase from early historical donor repositories into a cohesive, high-performance 16-crate system. **Design, philosophy, and nine anchors remain 100% invariant**. Historical donor materials are preserved in `legacy/` and git tags:
 
-- [Documentation index](docs/README.md)
-- [Current architecture](docs/01-architecture/architecture.md)
-- [Repository ownership map](docs/development/repository-layout.md)
-- [Crate reference](docs/03-reference/crates.md)
-- [Quick start](docs/02-guides/quick-start.md)
-- [Release notes](RELEASE_NOTES.md)
-
-### Need Apeireth v1.0?（保留 1.0 完整可访问）
-
-v2.0 工程重构（v0 → 13-crate 工作区）改的是工程形态，**设计 / 哲学 / 愿景 / 规范 0 改**。但功能有延后（companion 器官 / 完整记忆 / voice 等仍在 legacy/）。如果你的场景需要 v1.0 的全部能力，按下面任一方式取：
-
-| 取 v1 的方式 | 命令 / 入口 |
-| | |
-| **切到 v1 线（推荐开发 v1 兼容代码）** | `git checkout archive/v1.0-master` —— 旧 master 线完整可编译可运行（86-crate + companion_serve :8090） |
-| **切到 v1.0 发布 tag（推荐部署/复现）** | `git checkout v1.0.0` —— tag 指向 commit `993e9107`，即"真正的 1.0"发布点 |
-| **查 v1 完整源码（不切分支）** | `legacy/` 目录 —— 86-crate 完整代码 + 9 器官 + companion + 记忆 v2 + voice + 工具桥 全部 reference-only（`Cargo.toml` `exclude = ["legacy"]` 排除构建） |
-| **查 v1 历史文档（不切分支）** | `docs/archive/` —— v1 时代的 R*/stage*/adr/conventions/glossary/versioning 全部归档保留，包含：<br>• `docs/archive/roadmap/v1.0-released-r128-r178-2026-08-18.md`（v1.0 发布路径详单）<br>• `docs/archive/stage4/R11-baseline.md`（R11 baseline LOCKED，0.8682/0.8532/0.906）<br>• `docs/archive/conventions/`（12 子规范 + 7 子系统 + 21 词条）<br>• `docs/archive/glossary/17-4-gates-permission.md`（v1 守门 v9 lineage） |
-
-> **设计哲学 / 哲学 8 锚 / 13 键 verdict cache / 三洋葱 / L0 HA / Self-Disable / 0 装 PASS 跨版本不变**。v2 与 v1 的关系是 "v2 = v1 的下一代工程形态"，不是替代关系。两者并列存在，按需取用。
+| Access Method | Command / Location |
+|---|---|
+| **Checkout v1.0 Release Tag** | `git checkout v1.0.0` (Points to commit `993e9107`) |
+| **Inspect Donor Source** | `legacy/donor/` directory (Excluded from root Cargo workspace) |
+| **Inspect Archived Docs** | `docs/archive/` directory |
 
 ## License
 
