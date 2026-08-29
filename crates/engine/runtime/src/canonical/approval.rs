@@ -28,6 +28,14 @@ pub enum ApprovalDecision {
         /// otherwise.
         reason: Option<String>,
     },
+    /// Cancel the pending operation without executing it.
+    ///
+    /// Semantically equivalent to rejection for transcript pairing: the frozen
+    /// tool call receives a synthetic result and the turn may continue.
+    Cancel {
+        /// Optional human reason.
+        reason: Option<String>,
+    },
 }
 
 impl ApprovalDecision {
@@ -35,6 +43,7 @@ impl ApprovalDecision {
         match self {
             Self::Approve => "approved",
             Self::Reject { .. } => "rejected",
+            Self::Cancel { .. } => "cancelled",
         }
     }
 }
