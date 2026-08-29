@@ -60,7 +60,7 @@ pub use context_rot::{
 };
 pub use continuation::{
     ContinuationSnapshot, ContinuationStore, EditAction, FileContinuationStore,
-    InMemoryContinuationStore, PendingToolCall, SegmentEditor,
+    InMemoryContinuationStore, PendingToolCall, SegmentEditError, SegmentEditor,
 };
 pub use prompt_stabilizer::{
     EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage, StabilizedRole,
