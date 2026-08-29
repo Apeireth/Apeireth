@@ -65,11 +65,13 @@ pub mod procedural;
 pub mod reflexion;
 pub mod thought_cluster;
 pub mod topic_predictor;
+pub mod wiki_fs;
 
 pub use bitemporal_graph::{BitemporalFact, BitemporalGraph};
 pub use five_dimensional::{
     FactItem, FiveDimensionalMemory, MemoryBrowserEntry, MemoryDimension, ReflectionItem,
 };
+pub use wiki_fs::{WikiFsEngine, WikiHealthReport, WikiLintIssue, WikiPage};
 
 pub use arbitration::{
     ArbitrationEngine, ArbitrationError, ArbitrationEvent, EventSource, IntegrityReport,

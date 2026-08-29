@@ -28,6 +28,8 @@ pub mod approval;
 pub mod cognitive;
 pub mod error;
 pub mod execute;
+pub mod harness_patch;
+pub mod heartbeat;
 pub mod module;
 // OrganOrchestrator 类似 v1 AwakeCompanion 真实施 (per R11 spec + 子代理 R12 真实施).
 // **0 装诚实真账 (子代理 R12 独立判断)**:
@@ -71,6 +73,12 @@ pub use cognitive::{
 };
 pub use error::{RuntimeError, RuntimeResult};
 pub use execute::{ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse};
+pub use harness_patch::{
+    FailureCategory, FailureTrajectory, HarnessPatch, HarnessPatchAction, HarnessPatchEngine,
+};
+pub use heartbeat::{
+    FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource,
+};
 pub use module::{
     AgentModule, HookPoint, InvocationContext, InvocationOrigin, Module, ModuleContext,
     ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
