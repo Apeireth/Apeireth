@@ -277,7 +277,7 @@ mod tests {
         assert_eq!(t.capability_dispatches(), 1);
         assert_eq!(t.dispatches_of(&calculator()), 1);
         assert_eq!(
-            t.dispatches_of(&CapabilityId::new("tool.shell").unwrap()),
+            t.dispatches_of(&CapabilityId::new("tool.example").unwrap()),
             0
         );
         assert_eq!(t.completed_rounds(), Some(2));
