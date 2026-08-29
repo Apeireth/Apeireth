@@ -474,6 +474,7 @@ async fn the_trace_orders_the_chain_exactly_as_specified() {
     let provider = FakeProvider::new("provider.fake", calculator_script());
     let runtime = Runtime::builder()
         .with_clock(frozen_clock())
+        .with_governance(Arc::new(AllowAll))
         .with_plugin(ProviderPlugin::new("vendor.fake", provider))
         .with_plugin(CalculatorPlugin::new())
         .with_default_model(MODEL)
@@ -529,6 +530,7 @@ async fn the_turn_output_carries_no_raw_reasoning() {
     let provider = FakeProvider::new("provider.fake", calculator_script());
     let runtime = Runtime::builder()
         .with_clock(frozen_clock())
+        .with_governance(Arc::new(AllowAll))
         .with_plugin(ProviderPlugin::new("vendor.fake", provider))
         .with_plugin(CalculatorPlugin::new())
         .with_default_model(MODEL)
@@ -693,6 +695,7 @@ async fn a_tool_that_fails_keeps_the_turn_alive() {
     let runtime = Runtime::builder()
         .with_clock(frozen_clock())
         .with_session_store(store)
+        .with_governance(Arc::new(AllowAll))
         .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
         .with_plugin(calculator.clone())
         .with_default_model(MODEL)
@@ -838,6 +841,7 @@ async fn a_turn_that_never_converges_hits_the_round_limit() {
 
     let runtime = Runtime::builder()
         .with_clock(frozen_clock())
+        .with_governance(Arc::new(AllowAll))
         .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
         .with_plugin(calculator.clone())
         .with_default_model(MODEL)
@@ -1122,6 +1126,7 @@ async fn the_whole_turn_is_reproducible() {
         let provider = FakeProvider::new("provider.fake", calculator_script());
         let runtime = Runtime::builder()
             .with_clock(frozen_clock())
+            .with_governance(Arc::new(AllowAll))
             .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
             .with_plugin(CalculatorPlugin::new())
             .with_default_model(MODEL)
