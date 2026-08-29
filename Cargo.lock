@@ -255,6 +255,8 @@ dependencies = [
  "apeireth-core",
  "apeireth-orchestration",
  "apeireth-plugin",
+ "apeireth-protocol",
+ "apeireth-runtime",
  "async-trait",
  "serde",
  "serde_json",
