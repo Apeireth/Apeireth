@@ -253,9 +253,9 @@ pub trait GovernanceHook: Send + Sync {
 
 /// Allows everything.
 ///
-/// The correct default for tests and for a runtime with no policy configured, and
-/// honest about it: an explicit permissive hook is visible in a composition root,
-/// whereas an `Option<Arc<dyn GovernanceHook>>` that happens to be `None` is not.
+/// Explicitly permissive. Tests and embeddings that need an open runtime must
+/// install this hook themselves. Production and the default runtime builder
+/// fail closed instead.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AllowAll;
 
@@ -267,6 +267,30 @@ impl GovernanceHook for AllowAll {
 
     async fn evaluate(&self, _request: &GovernanceRequest<'_>) -> Decision {
         Decision::Allow
+    }
+}
+
+/// Fail-closed default: completions may proceed, capability dispatch may not.
+///
+/// A runtime with no policy still answers plain chat. It must not execute a
+/// tool, MCP capability, or other side effect until an explicit grant is
+/// installed. Completions stay allowed so a zero-module kernel can still talk.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DenyUnconfigured;
+
+#[async_trait]
+impl GovernanceHook for DenyUnconfigured {
+    fn name(&self) -> &str {
+        "deny_unconfigured"
+    }
+
+    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        match &request.action {
+            Action::Completion { .. } => Decision::Allow,
+            Action::CapabilityDispatch { capability, .. } => Decision::deny(format!(
+                "capability {capability} is not permitted: no governance policy is configured"
+            )),
+        }
     }
 }
 

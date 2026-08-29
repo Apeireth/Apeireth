@@ -184,17 +184,25 @@ impl McpModule {
     }
 
     /// Add a tool capability provided by an MCP source during initialization.
-    pub fn with_tool(self, tool: Arc<dyn ToolCapability>) -> Self {
-        self.tools.write().expect("mcp lock poisoned").push(tool);
-        self
+    pub fn with_tool(self, tool: Arc<dyn ToolCapability>) -> Result<Self, String> {
+        self.register_tool(tool)?;
+        Ok(self)
     }
 
     /// Register a dynamic tool capability provided by an MCP source.
-    pub fn register_tool(&self, tool: Arc<dyn ToolCapability>) {
-        self.tools.write().expect("mcp lock poisoned").push(tool);
+    ///
+    /// Rejects duplicate capability ids and duplicate model-facing names inside
+    /// this module. Cross-module collisions are rejected by the runtime.
+    pub fn register_tool(&self, tool: Arc<dyn ToolCapability>) -> Result<(), String> {
+        let mut tools = self.tools.write().expect("mcp lock poisoned");
+        super::module::reject_tool_identity_collisions(&tools, &[Arc::clone(&tool)], "mcp")?;
+        tools.push(tool);
+        Ok(())
     }
 
     /// Unregister a dynamic tool capability by capability ID.
+    ///
+    /// Only tools whose id matches are removed; other owners are untouched.
     pub fn unregister_tool(&self, capability_id: &apeireth_core::kernel::CapabilityId) {
         self.tools
             .write()
@@ -216,5 +224,9 @@ impl Module for McpModule {
 
     fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
         self.tools.read().expect("mcp lock poisoned").clone()
+    }
+
+    fn register_dynamic_tool(&self, tool: Arc<dyn ToolCapability>) -> Result<(), String> {
+        self.register_tool(tool)
     }
 }
