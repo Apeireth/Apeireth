@@ -41,6 +41,10 @@ pub mod orchestrator;
 // completion-governed path once organ wiring lands. Adapter only: it holds
 // no provider, budget, or governance authority of its own.
 pub mod organ_llm_bridge;
+// The ONE canonical organ-ownership module (AfterTurn post-turn cognition).
+// Long-lived: 7 deterministic organs + OrganOrchestrator backend; transient
+// per invocation: W1/W2 built from ctx.invoker_handle() and dropped.
+pub mod organ_module;
 pub mod production;
 pub mod provider;
 pub mod runtime;
@@ -73,6 +77,7 @@ pub use module::{
     PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
+pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};
 pub use production::{
     CognitiveBackends, CognitiveModuleConfig, ProductionBackends, ProductionCognitiveModules,
     ProductionModules, ProductionModulesConfig,
