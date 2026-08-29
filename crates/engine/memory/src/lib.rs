@@ -47,10 +47,12 @@ pub use append_only::{AppendOnlyError, HistoryEntry, HistoryStream, Tombstone};
 // R22 ST-A2.4 — 6 历史流深度公共 API (query / insert / count)
 pub mod history_streams;
 
+pub mod arbitration;
 pub mod continuity_link;
 pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
+pub mod dreaming;
 pub mod hybrid_search;
 pub mod intent_brier;
 pub mod meta_thinking;
@@ -61,6 +63,14 @@ pub mod procedural;
 pub mod reflexion;
 pub mod thought_cluster;
 pub mod topic_predictor;
+
+pub use arbitration::{
+    ArbitrationEngine, ArbitrationError, ArbitrationEvent, EventSource, IntegrityReport,
+};
+
+pub use dreaming::{
+    DreamEngine, DreamEngineConfig, DreamError, DreamReport, DreamStage,
+};
 
 pub use procedural::{
     render_procedural_prompt, HabitMatch, HabitPattern, InMemoryProceduralStore, ProceduralError,

@@ -16,6 +16,7 @@ pub mod education;
 pub mod egress;
 pub mod fetch;
 pub mod filesystem;
+pub mod mcp;
 pub mod plugin;
 pub mod process;
 pub mod repo;
@@ -32,6 +33,10 @@ pub use education::{DxCheckTool, DxReport, REPLACED_DIFFS};
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
 pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
+pub use mcp::{
+    JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, McpClient, McpContent, McpError,
+    McpToolDescriptor, McpToolResult, McpTransport,
+};
 pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
 pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
