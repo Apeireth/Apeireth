@@ -284,6 +284,7 @@ async fn subloop_runs_on_private_transcript_with_strict_capability_allowlist() {
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
         .with_module(module)
+        .with_governance(Arc::new(apeireth_governance::AllowAll))
         .with_default_model("subloop-model")
         .build()
         .await
@@ -756,4 +757,85 @@ async fn subloop_timeout_enforces_overall_execution_deadline() {
             }
         }
     }
+}
+
+struct DenyCompletions;
+
+#[async_trait]
+impl GovernanceHook for DenyCompletions {
+    fn name(&self) -> &str {
+        "deny_completions"
+    }
+
+    async fn evaluate(&self, req: &GovernanceRequest<'_>) -> Decision {
+        match req.action {
+            Action::Completion { .. } => Decision::Deny {
+                reason: "completions blocked".into(),
+            },
+            _ => Decision::Allow,
+        }
+    }
+}
+
+struct IsolatedCompletionSubLoopModule {
+    manifest: ModuleManifest,
+    error: Arc<std::sync::Mutex<Option<String>>>,
+}
+
+#[async_trait]
+impl Module for IsolatedCompletionSubLoopModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, apeireth_runtime::ModuleError> {
+        if hook == HookPoint::TurnStart {
+            let err = ctx
+                .subloop()
+                .spawn(SubLoopSpec::single_turn("side work"))
+                .await
+                .expect_err("subloop completion must fail closed");
+            *self.error.lock().unwrap() = Some(err.to_string());
+            return Ok(ModuleOutcome::continue_());
+        }
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+#[tokio::test]
+async fn global_completion_deny_blocks_subloop_and_does_not_call_provider() {
+    let provider = ScriptedProvider::new("provider.mock", vec![ScriptStep::Say("must not run")]);
+    let error = Arc::new(std::sync::Mutex::new(None));
+    let module = Arc::new(IsolatedCompletionSubLoopModule {
+        manifest: ModuleManifest::new("module.completion.deny", "completion deny"),
+        error: Arc::clone(&error),
+    });
+    let mut runtime = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(Arc::clone(&provider)))
+        .with_module(module)
+        .with_governance(Arc::new(DenyCompletions))
+        .with_default_model("subloop-model")
+        .build()
+        .await
+        .expect("runtime builds");
+
+    let err = runtime
+        .execute(TurnRequest::new(SessionId::new(), "hello").with_model("subloop-model"))
+        .await
+        .expect_err("main completion is also denied");
+    assert!(err.to_string().contains("completions blocked"), "{err}");
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    let side = error
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("subloop error captured");
+    assert!(
+        side.contains("refused by governance") || side.contains("completions blocked"),
+        "{side}"
+    );
 }
