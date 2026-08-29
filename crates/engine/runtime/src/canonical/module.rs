@@ -7,7 +7,8 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use apeireth_core::kernel::{CapabilityId, SessionId};
+use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
+use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
 use apeireth_protocol::canonical::{
     NormalizedMessage, NormalizedRequest, NormalizedResponse, ToolCall, ToolResult,
 };
@@ -268,6 +269,18 @@ pub enum ModuleInvocationError {
         /// Legible provider/runtime failure.
         reason: String,
     },
+    /// Canonical completion governance refused the isolated call.
+    #[error("module side invocation refused by governance: {reason}")]
+    Denied {
+        /// Why the isolated completion was refused.
+        reason: String,
+    },
+    /// Isolated completions cannot create a hidden human approval.
+    #[error("module side invocation requires approval which is not permitted: {reason}")]
+    ApprovalRequired {
+        /// Why a human would have been asked.
+        reason: String,
+    },
 }
 
 /// Failure returned by a module hook.
@@ -506,6 +519,33 @@ pub(crate) fn reject_tool_identity_collisions(
     Ok(())
 }
 
+/// Canonical completion governance for isolated module/SubLoop side-calls.
+///
+/// Side loops never mint a hidden approval: `RequireApproval` fails closed.
+pub(crate) async fn authorize_isolated_completion(
+    governance: &dyn GovernanceHook,
+    session_id: SessionId,
+    trace_id: TraceId,
+    model: &str,
+    message_count: usize,
+    round: u32,
+) -> Result<(), ModuleInvocationError> {
+    let action = Action::Completion {
+        model,
+        message_count,
+    };
+    let verdict = governance
+        .evaluate_verbose(&GovernanceRequest::new(action, session_id, trace_id, round))
+        .await;
+    match verdict.decision {
+        Decision::Allow => Ok(()),
+        Decision::Deny { reason } => Err(ModuleInvocationError::Denied { reason }),
+        Decision::RequireApproval { reason } => {
+            Err(ModuleInvocationError::ApprovalRequired { reason })
+        }
+    }
+}
+
 impl std::ops::Deref for ModuleRegistry {
     type Target = [Arc<dyn Module>];
 
@@ -575,6 +615,9 @@ impl ModuleTurnState {
 /// Runtime-owned implementation of the isolated module invoker.
 pub(crate) struct RuntimeModuleInvoker<'a> {
     router: &'a ProviderRouter,
+    governance: &'a dyn GovernanceHook,
+    session_id: SessionId,
+    trace_id: TraceId,
     current_model: &'a str,
     module_id: &'a str,
     state: Arc<ModuleTurnState>,
@@ -584,6 +627,9 @@ pub(crate) struct RuntimeModuleInvoker<'a> {
 impl<'a> RuntimeModuleInvoker<'a> {
     pub(crate) fn new(
         router: &'a ProviderRouter,
+        governance: &'a dyn GovernanceHook,
+        session_id: SessionId,
+        trace_id: TraceId,
         current_model: &'a str,
         module_id: &'a str,
         state: Arc<ModuleTurnState>,
@@ -591,6 +637,9 @@ impl<'a> RuntimeModuleInvoker<'a> {
     ) -> Self {
         Self {
             router,
+            governance,
+            session_id,
+            trace_id,
             current_model,
             module_id,
             state,
@@ -624,6 +673,16 @@ impl ModuleInvoker for RuntimeModuleInvoker<'_> {
             messages.push(NormalizedMessage::system(system));
         }
         messages.push(NormalizedMessage::user(request.input));
+
+        authorize_isolated_completion(
+            self.governance,
+            self.session_id,
+            self.trace_id,
+            &model,
+            messages.len(),
+            1,
+        )
+        .await?;
 
         // `complete` intentionally sends no tool declarations. It also does
         // not enter the session store or the module hook bus, so this is an

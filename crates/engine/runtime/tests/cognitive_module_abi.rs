@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
 use apeireth_governance::{
-    DenyCapabilities, GovernancePipeline, Permission, PermissionGovernanceHook, PermissionPolicy,
+    Action, AllowAll, Decision, DenyCapabilities, GovernanceHook, GovernancePipeline,
+    GovernanceRequest, Permission, PermissionGovernanceHook, PermissionPolicy,
 };
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
@@ -246,6 +247,7 @@ impl ToolCapability for EchoTool {
 async fn runtime(provider: Arc<FakeProvider>, modules: Vec<Arc<dyn AgentModule>>) -> Runtime {
     let mut builder = Runtime::builder()
         .with_default_model(MODEL)
+        .with_governance(Arc::new(AllowAll))
         .with_plugin(ProviderPlugin::new(provider));
     for module in modules {
         builder = builder.with_module(module);
@@ -703,7 +705,11 @@ async fn overlays_are_recomputed_for_each_provider_retry() {
     let first: Vec<String> = provider.request(0).messages.iter().map(text).collect();
     assert_eq!(first, ["overlay-0", "question"]);
     let second: Vec<String> = provider.request(1).messages.iter().map(text).collect();
-    assert_eq!(second, ["overlay-1", "question", "candidate 1", "revise"]);
+    assert_eq!(second, ["overlay-1", "question", "revise"]);
+    assert!(
+        !second.iter().any(|message| message == "candidate 1"),
+        "rejected candidate must not be replayed to the provider"
+    );
 }
 
 #[tokio::test]
@@ -764,9 +770,10 @@ async fn before_final_commit_retry_uses_the_same_round_budget_and_transient_scaf
     assert_eq!(response.rounds, 2);
     let retry_request = provider.request(1);
     let retry_texts: Vec<String> = retry_request.messages.iter().map(text).collect();
-    assert_eq!(
-        retry_texts,
-        ["question", "candidate 1", "revise this candidate"]
+    assert_eq!(retry_texts, ["question", "revise this candidate"]);
+    assert!(
+        !retry_texts.iter().any(|message| message == "candidate 1"),
+        "rejected candidate must not be replayed to the provider"
     );
     let session = runtime.sessions().load_or_create(session_id).await.unwrap();
     let persisted: Vec<String> = session.messages.iter().map(text).collect();
@@ -1061,6 +1068,7 @@ async fn after_tool_retry_closes_remaining_calls_without_mixing_feedback_into_re
     });
     let runtime = Runtime::builder()
         .with_default_model(MODEL)
+        .with_governance(Arc::new(AllowAll))
         .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
         .with_plugin(tool_plugin.clone())
         .with_module(module)
@@ -1213,4 +1221,48 @@ async fn retry_cannot_extend_the_structural_round_limit() {
         RuntimeError::RoundLimitExceeded { limit: 1 }
     ));
     assert_eq!(provider.call_count(), 1);
+}
+
+struct DenyCompletions;
+
+#[async_trait]
+impl GovernanceHook for DenyCompletions {
+    fn name(&self) -> &str {
+        "deny_completions"
+    }
+
+    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        match request.action {
+            Action::Completion { .. } => Decision::deny("completions blocked"),
+            _ => Decision::Allow,
+        }
+    }
+}
+
+#[tokio::test]
+async fn isolated_module_invoker_obeys_completion_governance() {
+    let provider = FakeProvider::new(vec![Reply::Text("must not run")]);
+    let side_text = Arc::new(Mutex::new(None));
+    let module = Arc::new(SideCallModule {
+        manifest: ModuleManifest::new("module.side_denied", "side denied"),
+        side_text: Arc::clone(&side_text),
+        side_tool_calls: Arc::new(Mutex::new(None)),
+        hook_count: Arc::new(AtomicUsize::new(0)),
+        origin: Arc::new(Mutex::new(None)),
+    });
+    let runtime = Runtime::builder()
+        .with_default_model(MODEL)
+        .with_governance(Arc::new(DenyCompletions))
+        .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
+        .with_module(module)
+        .build()
+        .await
+        .unwrap();
+    let error = runtime
+        .execute(TurnRequest::new(SessionId::new(), "question"))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("completions blocked"), "{error}");
+    assert_eq!(provider.call_count(), 0);
+    assert!(side_text.lock().unwrap().is_none());
 }
