@@ -1,6 +1,11 @@
 # Apeireth Core Capabilities — Contract & Invariants
 
-> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本系列描述旧 master 线（86-crate）上针对 `crates/apeireth-companion|memory|api` 的能力扩展工作，相关实现现整体在 `legacy/donor/`。
+> **当前基线 (v2.0.0-preview)**：
+> Apeireth 2.0 拥有完备的**全域系统能力体系**，涵盖基石治理 (Foundation & Governance)、认知记忆 (Engine & Cognition)、工具沙箱 (Capabilities & Sandbox) 以及网关全双工 (Gateway & Adapters)。
+> - **系统能力完整规范手册**：详见 [`docs/01-architecture/system-capabilities.md`](01-architecture/system-capabilities.md)
+> - **能力矩阵与对外契约参考**：详见 [`docs/03-reference/capabilities-matrix.md`](03-reference/capabilities-matrix.md)
+> 
+> 下文保留核心端点契约（Manifest、Session、Memory、Permissions、Trace）的不变量定义。
 
 > 本轮 Core Capability Expansion 落地的正式能力契约. 重点写 contract / invariants / security.
 > 实现细节见 `docs/core-capability-expansion.md` (工程日志) 与源码.
