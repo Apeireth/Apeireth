@@ -63,9 +63,7 @@ use std::sync::Arc;
 use apeireth_plugin::llm_factory::{
     CompletionMessage, CompletionRequest, LlmError, LlmFactory, LlmInstance, NoopLlmFactory,
 };
-use apeireth_plugin::organ::{
-    OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
-};
+use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -222,10 +220,10 @@ impl std::fmt::Debug for CalibratedResolver {
             .field(
                 "registry",
                 &self
-                .registry
-                .as_ref()
-                .map(|r| format!("Some({})", std::any::type_name_of_val(&**r)))
-                .unwrap_or_else(|| "None".to_string()),
+                    .registry
+                    .as_ref()
+                    .map(|r| format!("Some({})", std::any::type_name_of_val(&**r)))
+                    .unwrap_or_else(|| "None".to_string()),
             )
             .finish()
     }
@@ -280,7 +278,8 @@ impl CalibratedResolver {
         let phat = successes as f64 / n as f64;
         let denom = 1.0 + z * z / n as f64;
         let center = (phat + z * z / (2.0 * n as f64)) / denom;
-        let half = (z * (phat * (1.0 - phat) / n as f64 + z * z / (4.0 * n as f64 * n as f64)).sqrt())
+        let half = (z
+            * (phat * (1.0 - phat) / n as f64 + z * z / (4.0 * n as f64 * n as f64)).sqrt())
             / denom;
         let interval = ((center - half).max(0.0), (center + half).min(1.0));
 
@@ -615,10 +614,11 @@ impl LlmTimelineLlm {
             .await
             .map_err(|e| format!("LlmFactory::spawn failed: {e}"))?;
 
-        let system_prompt = "你是反事实推演器. 按主人世界观, 假设的当前状态, 生成下 1 步世界状态变化. \
+        let system_prompt =
+            "你是反事实推演器. 按主人世界观, 假设的当前状态, 生成下 1 步世界状态变化. \
             响应格式: 第一行自然语言叙事 (发生了什么), 第二行 'state: <JSON>'. \
             链结束信号: 返回 narrative 为空字符串."
-            .to_string();
+                .to_string();
 
         // user prompt: 把 ctx 序列化 (1:1 翻译 v1 TimelineContext 用途)
         let user_payload = serde_json::json!({
@@ -647,7 +647,11 @@ impl LlmTimelineLlm {
             .await
             .map_err(|e| format!("LlmInstance::complete failed: {e}"))?;
 
-        Ok(Self::parse_response(&resp.message.content, &ctx.prior_state, ctx.tick))
+        Ok(Self::parse_response(
+            &resp.message.content,
+            &ctx.prior_state,
+            ctx.tick,
+        ))
     }
 }
 
@@ -723,7 +727,10 @@ impl WorldModel {
         // (per v1 TextualSimulator::run 起点状态不变语义)
         let start_state = WorldState::default();
         let chain = sim
-            .run(start_state, format!("{} | 当前状态: {}", query.hypothesis, query.current_state))
+            .run(
+                start_state,
+                format!("{} | 当前状态: {}", query.hypothesis, query.current_state),
+            )
             .await
             .map_err(OrganError::LlmError)?;
         // 返最终状态: chain.steps 末的 state_snapshot, 或 start_state (空链)
@@ -839,9 +846,9 @@ impl OrganTrait for WorldModelOrgan {
         } else {
             format!(
                 "{} ({})",
-            input.episode.content,
-            input.context_hints.join("; ")
-        )
+                input.episode.content,
+                input.context_hints.join("; ")
+            )
         };
         let current_state = input.episode.content.clone();
 
@@ -861,7 +868,10 @@ impl OrganTrait for WorldModelOrgan {
             .iter()
             .map(|e| format!("{}: {:?}", e.name, e.props))
             .collect();
-        let _ = (self.model.state_diff(WorldState::default(), state.clone()).await)
+        let _ = (self
+            .model
+            .state_diff(WorldState::default(), state.clone())
+            .await)
             .unwrap_or_default(); // 仅验 trait API 可用, 不返 (OrganOutput schema 无 diff 字段)
         Ok(OrganOutput::WorldModel {
             edges: vec![], // W2/W3 真接时填 (CausalEdge 1:1 翻译 v1)
@@ -925,10 +935,7 @@ mod tests {
 
         // 验收点 1: 推演链生成
         assert_eq!(chain.step_count(), 3, "mock 3 步脚本 → chain 3 步");
-        assert!(
-            chain.terminal_forecast.is_some(),
-            "终点 forecast 必须存在"
-        );
+        assert!(chain.terminal_forecast.is_some(), "终点 forecast 必须存在");
         assert!(!chain.rejected, "p=0.7 未超阈值, 不应拒绝");
         assert!(chain.reject_reason.is_none());
         assert!(
@@ -1026,10 +1033,7 @@ mod tests {
         let r = CalibratedResolver::new();
         let s = r.status().unwrap();
         assert_eq!(s.resolved_count, 0);
-        assert!(
-            (s.mean_brier - 0.0).abs() < 1e-9,
-            "无历史 → mean_brier=0.0"
-        );
+        assert!((s.mean_brier - 0.0).abs() < 1e-9, "无历史 → mean_brier=0.0");
         assert!((s.probability - 0.5).abs() < 1e-9, "无历史 → 0.5 均匀先验");
         assert_eq!(s.strength, CalibrationStrength::Weak);
         assert_eq!(s.interval, (0.0, 1.0));
@@ -1146,9 +1150,7 @@ mod tests {
             tick: 0,
         };
         let mut after = before.clone();
-        after.entities[0]
-            .props
-            .insert("进度".into(), 0.6);
+        after.entities[0].props.insert("进度".into(), 0.6);
         after.entities.push(Entity {
             id: "work".into(),
             name: "工作".into(),

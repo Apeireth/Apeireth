@@ -45,13 +45,13 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use apeireth_orchestration::SubagentRole;
 use apeireth_plugin::llm_factory::{
     CompletionMessage, CompletionRequest, LlmError, LlmFactory, LlmInstance,
 };
 use apeireth_plugin::organ::{
     CausalEdge as PluginCausalEdge, OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
 };
-use apeireth_orchestration::SubagentRole;
 use async_trait::async_trait;
 
 // ============================================================
@@ -636,10 +636,8 @@ pub struct MCTSNode {
 #[async_trait]
 pub trait CausalLlm: Send + Sync {
     /// 分支点判断: 给定当前状态 + 候选边, LLM 给 (a) 边的可行性 (b) 走到此边的叙事片段.
-    async fn judge_branch(
-        &self,
-        ctx: &CausalBranchContext,
-    ) -> Result<CausalBranchJudgment, String>;
+    async fn judge_branch(&self, ctx: &CausalBranchContext)
+        -> Result<CausalBranchJudgment, String>;
 
     /// 提议因果边 (W3 补充路径).
     async fn propose_edges(
@@ -1218,7 +1216,11 @@ impl CausalWorldModel {
         };
 
         let score = if new_graph.len_edges() > 0 {
-            (new_graph.edges().iter().map(|e| e.weight as f32).sum::<f32>()
+            (new_graph
+                .edges()
+                .iter()
+                .map(|e| e.weight as f32)
+                .sum::<f32>()
                 / new_graph.len_edges() as f32)
                 .clamp(0.0, 1.0)
         } else {
@@ -1252,7 +1254,11 @@ impl CausalWorldModel {
             };
             let sub_graph = self.simulate_counterfactual(sub_query).await?;
             let sub_score = if sub_graph.len_edges() > 0 {
-                (sub_graph.edges().iter().map(|e| e.weight as f32).sum::<f32>()
+                (sub_graph
+                    .edges()
+                    .iter()
+                    .map(|e| e.weight as f32)
+                    .sum::<f32>()
                     / sub_graph.len_edges() as f32)
                     .clamp(0.0, 1.0)
             } else {
@@ -1352,8 +1358,7 @@ impl OrganTrait for CausalWorldModelOrgan {
         let current_graph = self.model.snapshot_graph();
         if current_graph.is_empty() {
             return Err(OrganError::Config(
-                "CausalGraph is empty; load edges first (via W3 miner or manual add_edge)"
-                    .into(),
+                "CausalGraph is empty; load edges first (via W3 miner or manual add_edge)".into(),
             ));
         }
 
@@ -1578,7 +1583,10 @@ mod tests {
         assert_eq!(chain.steps[0].from_node, "主人|行为|熬夜");
         assert_eq!(chain.steps[0].to_node, "熬夜|导致|效率低");
         assert!(chain.terminal_node.is_some(), "应到达终点节点");
-        assert!(chain.terminal_probability.is_some(), "应构造终点 probability");
+        assert!(
+            chain.terminal_probability.is_some(),
+            "应构造终点 probability"
+        );
         assert!(!chain.rejected, "无对账 + 边权重高 → 不拒绝");
         let prob = chain.terminal_probability.unwrap();
         assert!(
@@ -1715,7 +1723,11 @@ mod tests {
         assert_eq!(edges[0].from, "a|b|c");
         assert_eq!(edges[0].to, "b|c|d");
         // 0.7 f32 → f64 转换有精度损失, 用 1e-6 容差
-        assert!((edges[0].weight - 0.7).abs() < 1e-6, "weight={}", edges[0].weight);
+        assert!(
+            (edges[0].weight - 0.7).abs() < 1e-6,
+            "weight={}",
+            edges[0].weight
+        );
         assert_eq!(edges[0].evidence_count, 2);
         assert_eq!(edges[0].source, EdgeSource::LlmProposed);
     }
@@ -1755,7 +1767,10 @@ mod tests {
         assert!((p.conf - 0.75_f32).abs() < 1e-6);
         assert_eq!(p.source, "Statistical");
 
-        assert_eq!(mk(EdgeSource::LlmProposed).to_plugin().source, "LlmProposed");
+        assert_eq!(
+            mk(EdgeSource::LlmProposed).to_plugin().source,
+            "LlmProposed"
+        );
         assert_eq!(mk(EdgeSource::Hybrid).to_plugin().source, "Hybrid");
     }
 

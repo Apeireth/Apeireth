@@ -1,6 +1,6 @@
 # Apeireth Crate Index
 
-This index lists the 13 members of the root Cargo workspace. The independent
+This index lists the 16 members of the root Cargo workspace. The independent
 Tauri shell is documented with the frontend, and `legacy/` is excluded from
 the product workspace.
 
@@ -13,6 +13,7 @@ the product workspace.
 | `apeireth-plugin` | `crates/foundation/plugin` | Plugin lifecycle, capability descriptors, registries, and provider/tool contracts |
 | `apeireth-governance` | `crates/foundation/governance` | Allow, deny, approval, input-security, and audit policy hooks |
 | `apeireth-credentials` | `crates/foundation/credentials` | Credential storage backends and secret handling |
+| `apeireth-orchestration` | `crates/foundation/orchestration` | Multi-agent coordination, council advisor orchestration, and consensus protocols |
 
 ## Engine
 
@@ -22,6 +23,8 @@ the product workspace.
 | `apeireth-provider` | `crates/engine/provider` | Anthropic, MiniMax, and OpenAI-compatible provider capabilities |
 | `apeireth-storage` | `crates/engine/storage` | SQLite pool, migrations, storage configuration, and errors |
 | `apeireth-memory` | `crates/engine/memory` | Durable memory domain, retrieval, graph primitives, and vector indexing |
+| `apeireth-perception` | `crates/engine/perception` | Multimodal perception backends: Voice (Whisper HTTP) and Vision (Xcap screen capture) |
+| `apeireth-organ` | `crates/engine/organ` | 9 cognitive organs (W1..W3 world models, E4 curiosity, F1 emotion, F4 hypothesis, F6 values, E7 emergence, memory merger) |
 
 ## Capabilities
 

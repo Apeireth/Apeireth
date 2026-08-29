@@ -264,10 +264,7 @@ impl ValueCasesOrgan {
     ///
     /// `llm_factory` 和 `model` 保留给未来 v2.1 LLM 价值萃取路径. 当前算法不调用,
     /// 0 装诚实.
-    pub fn new(
-        llm_factory: std::sync::Arc<dyn LlmFactory>,
-        model: impl Into<String>,
-    ) -> Self {
+    pub fn new(llm_factory: std::sync::Arc<dyn LlmFactory>, model: impl Into<String>) -> Self {
         Self::with_dry_run(llm_factory, model, false)
     }
 
@@ -413,7 +410,12 @@ impl OrganTrait for ValueCasesOrgan {
             vec![input.episode.role.clone()]
         };
 
-        let case = self.record(scenario, values, decision, DecisionBasis::CouncilDeliberation);
+        let case = self.record(
+            scenario,
+            values,
+            decision,
+            DecisionBasis::CouncilDeliberation,
+        );
 
         // verdict 0 装诚实: 刚登记, 不知主人是否同意 → Pending
         Ok(OrganOutput::Value {
@@ -540,7 +542,12 @@ mod tests {
         assert_eq!(c.at_ms, 1_700_000_000);
 
         // 不显式注入 → 默认 0 (per v2 organ crate 时间约定)
-        let c2 = store.record("场景2", vec!["a".into()], "d", DecisionBasis::MasterDecision);
+        let c2 = store.record(
+            "场景2",
+            vec!["a".into()],
+            "d",
+            DecisionBasis::MasterDecision,
+        );
         assert_eq!(c2.at_ms, 0);
     }
 
@@ -572,10 +579,7 @@ mod tests {
             content: "主人想熬夜写代码".into(),
             timestamp: 1_700_000_000,
         };
-        let input = OrganInput::new(
-            ep,
-            vec!["劝主人休息".into(), "健康".into(), "进度".into()],
-        );
+        let input = OrganInput::new(ep, vec!["劝主人休息".into(), "健康".into(), "进度".into()]);
         let output = organ.process(input).await.expect("process ok");
         match output {
             OrganOutput::Value { case_id, verdict } => {

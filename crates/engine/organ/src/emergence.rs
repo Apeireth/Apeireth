@@ -991,7 +991,10 @@ mod tests {
         let init = l.tick(at_ms, day_key, minutes, hint);
         assert!(init.is_some());
         let init = init.unwrap();
-        assert!(matches!(init.reason, InitiativeReason::RhythmMatched { .. }));
+        assert!(matches!(
+            init.reason,
+            InitiativeReason::RhythmMatched { .. }
+        ));
         assert!(init.context_hint.is_some());
         // 决策层不产生任何固定问候文案
         assert!(!init.context_hint.as_ref().unwrap().contains("早上好"));
@@ -1056,7 +1059,9 @@ mod tests {
         let day_key = day_key_from_epoch_ms(at_ms);
         assert!(l.tick(at_ms, day_key.clone(), 8 * 60 + 40, None).is_some());
         // 1 分钟后仍在 min_llm_interval 内 → 保持安静 (LLM 成本预算门禁)
-        assert!(l.tick(at_ms + 60_000, day_key.clone(), 8 * 60 + 41, None).is_none());
+        assert!(l
+            .tick(at_ms + 60_000, day_key.clone(), 8 * 60 + 41, None)
+            .is_none());
         assert_eq!(l.last_hold(), Some(InitiativeGate::LlmBudget));
         // 超过间隔且仍在活跃时段 (16:00-16:30 桶) → 恢复主动
         assert!(l
@@ -1091,7 +1096,9 @@ mod tests {
     #[test]
     fn initiative_to_message_no_greeting_template() {
         let init = Initiative {
-            reason: InitiativeReason::RhythmMatched { minutes_now: 8 * 60 + 40 },
+            reason: InitiativeReason::RhythmMatched {
+                minutes_now: 8 * 60 + 40,
+            },
             action: Action::Greet,
             rhythm: RhythmEstimate {
                 active_probability: 0.7,
@@ -1140,7 +1147,11 @@ mod tests {
             PolicyStage::Ratified,
             PolicyStage::Active,
         ];
-        assert_eq!(stages.len(), 5, "5 状态机 = Idle/Draft/Proposed/Ratified/Active");
+        assert_eq!(
+            stages.len(),
+            5,
+            "5 状态机 = Idle/Draft/Proposed/Ratified/Active"
+        );
         assert!(!PolicyStage::Idle.is_active());
         assert!(!PolicyStage::Draft.is_active());
         assert!(!PolicyStage::Proposed.is_active());
@@ -1160,7 +1171,10 @@ mod tests {
         let at_ms: i64 = 1_786_838_400_000;
         assert_eq!(day_key_from_epoch_ms(at_ms), "2026-08-16");
         let at_ms_with_minutes = at_ms + 8 * 3_600_000 + 40 * 60_000;
-        assert_eq!(minutes_of_day_from_epoch_ms(at_ms_with_minutes), 8 * 60 + 40);
+        assert_eq!(
+            minutes_of_day_from_epoch_ms(at_ms_with_minutes),
+            8 * 60 + 40
+        );
         // 跨午夜: 23:59 UTC
         let at_ms_late = at_ms + 23 * 3_600_000 + 59 * 60_000;
         assert_eq!(minutes_of_day_from_epoch_ms(at_ms_late), 23 * 60 + 59);

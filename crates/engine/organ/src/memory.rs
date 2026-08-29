@@ -178,8 +178,8 @@ impl MemoryMerger {
 
         // dedup: 找同 hash 已有条目
         if let Some(existing) = self.memories.iter_mut().find(|m| m.is_same_content(hash)) {
-            existing.weight = (existing.weight + weight * self.config.dedup_threshold)
-                .clamp(0.0, 1.0);
+            existing.weight =
+                (existing.weight + weight * self.config.dedup_threshold).clamp(0.0, 1.0);
             existing.at_ms = existing.at_ms.max(at_ms);
             return (false, existing.id.clone());
         }
@@ -504,12 +504,22 @@ mod tests {
         let mut merger = MemoryMerger::new(MemoryConfig::default());
 
         // 第一次 merge (新内容)
-        let (is_new_1, id_1) = merger.merge(OrganKind::E4, "主人的工作进入新阶段", 0.7, 1_700_000_000_000);
+        let (is_new_1, id_1) = merger.merge(
+            OrganKind::E4,
+            "主人的工作进入新阶段",
+            0.7,
+            1_700_000_000_000,
+        );
         assert!(is_new_1, "首次 merge 应新增");
         assert!(id_1.starts_with("mrg-"));
 
         // 第二次 merge (同内容)
-        let (is_new_2, id_2) = merger.merge(OrganKind::F1, "主人的工作进入新阶段", 0.5, 1_700_000_001_000);
+        let (is_new_2, id_2) = merger.merge(
+            OrganKind::F1,
+            "主人的工作进入新阶段",
+            0.5,
+            1_700_000_001_000,
+        );
         assert!(!is_new_2, "重复内容应 dedup, 不新增");
         assert_eq!(id_1, id_2, "dedup 应返同一 id");
 
@@ -540,12 +550,18 @@ mod tests {
         // weight +0.3 → 0.8
         assert!(merger.weight(&id, 0.3), "weight 调整应成功");
         let after_up = merger.list().iter().find(|m| m.id == id).unwrap().weight;
-        assert!((after_up - 0.8).abs() < 1e-4, "weight 应增到 0.8: got {after_up}");
+        assert!(
+            (after_up - 0.8).abs() < 1e-4,
+            "weight 应增到 0.8: got {after_up}"
+        );
 
         // weight -0.5 → 0.3
         assert!(merger.weight(&id, -0.5));
         let after_down = merger.list().iter().find(|m| m.id == id).unwrap().weight;
-        assert!((after_down - 0.3).abs() < 1e-4, "weight 应降到 0.3: got {after_down}");
+        assert!(
+            (after_down - 0.3).abs() < 1e-4,
+            "weight 应降到 0.3: got {after_down}"
+        );
 
         // 不存在 id → false
         assert!(!merger.weight("mrg-nonexist", 0.1), "不存在 id 应返 false");

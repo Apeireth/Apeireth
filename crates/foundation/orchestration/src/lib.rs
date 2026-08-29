@@ -42,8 +42,20 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 
+pub mod context_rot;
+pub mod continuation;
 pub mod council;
 pub mod llm;
+
+pub use context_rot::{
+    apply_ops, compact_then_budget, extractive_summary, query_tokens, repetition_factor,
+    rot_breakdown, rot_score, BudgetedBlock, CompactionOp, Compactor, DeterministicCompactor,
+    RotBreakdown, RotConfig, Segment,
+};
+pub use continuation::{
+    ContinuationSnapshot, ContinuationStore, EditAction, FileContinuationStore,
+    InMemoryContinuationStore, PendingToolCall, SegmentEditor,
+};
 
 // ============================================
 // Council (A1)
