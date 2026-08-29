@@ -90,7 +90,7 @@ pub struct CognitiveTelemetry {
 }
 
 impl CognitiveTelemetry {
-    fn record(&self, event: CognitiveModuleEvent) {
+    pub(crate) fn record(&self, event: CognitiveModuleEvent) {
         let mut events = self.events.lock().expect("cognitive telemetry mutex");
         if events.len() == MAX_TELEMETRY_EVENTS {
             events.remove(0);
@@ -1119,10 +1119,6 @@ pub fn turn_request_from_perception(
 /// module.  Reflection is represented by the optional Judge-backed assessment;
 /// Orchestrator remains an external long-running service.
 pub const DEFERRED_COGNITIVE_SLOTS: &[(&str, &str)] = &[
-    (
-        "cognitive.preference_learning",
-        "deferred until explicit evidence extraction",
-    ),
     (
         "cognitive.critic",
         "included in Judge critique; no duplicate side-call",
