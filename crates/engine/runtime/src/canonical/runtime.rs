@@ -37,7 +37,7 @@ use tokio::sync::Mutex as TokioMutex;
 use apeireth_core::kernel::{
     system_clock, ApprovalId, CapabilityId, Clock, PluginId, SessionId, TraceId,
 };
-use apeireth_governance::{AllowAll, GovernanceHook};
+use apeireth_governance::{DenyUnconfigured, GovernanceHook};
 use apeireth_plugin::{
     CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
 };
@@ -153,6 +153,35 @@ impl Runtime {
         tools
     }
 
+    /// Register a dynamic tool on a named module after build.
+    ///
+    /// The tool is rejected if its capability id or model-facing name collides
+    /// with any already-visible module or plugin tool.
+    pub fn register_dynamic_tool(
+        &self,
+        module_id: &str,
+        tool: Arc<dyn ToolCapability>,
+    ) -> Result<(), RuntimeError> {
+        crate::canonical::module::reject_tool_identity_collisions(
+            &self.tools(),
+            std::slice::from_ref(&tool),
+            module_id,
+        )
+        .map_err(RuntimeError::misconfigured)?;
+        let module = self
+            .modules
+            .iter()
+            .find(|module| module.manifest().id == module_id)
+            .ok_or_else(|| {
+                RuntimeError::misconfigured(format!(
+                    "dynamic tool registration target {module_id:?} is not registered"
+                ))
+            })?;
+        module
+            .register_dynamic_tool(tool)
+            .map_err(RuntimeError::misconfigured)
+    }
+
     /// Model-facing tool declarations for all active tools.
     pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
         let mut declarations: Vec<apeireth_protocol::canonical::NormalizedTool> = self
@@ -214,7 +243,8 @@ impl std::fmt::Debug for Runtime {
 ///
 /// Every dependency has a working default, so the smallest useful runtime is
 /// `Runtime::builder().build().await`. Defaults are inert rather than
-/// surprising: no credentials, no policy, memory-backed sessions.
+/// surprising: no credentials, fail-closed capability dispatch, memory-backed
+/// sessions. Completions remain allowed so a zero-module kernel can still chat.
 pub struct RuntimeBuilder {
     clock: Arc<dyn Clock>,
     credentials: Arc<dyn CredentialResolver>,
@@ -240,7 +270,7 @@ impl RuntimeBuilder {
             clock: system_clock(),
             credentials: Arc::new(NoCredentials),
             session_store: Arc::new(InMemorySessionStore::new()),
-            governance: Arc::new(AllowAll),
+            governance: Arc::new(DenyUnconfigured),
             plugins: Vec::new(),
             modules: Vec::new(),
             cognitive_telemetry: None,
@@ -373,6 +403,13 @@ impl RuntimeBuilder {
             TraceId::new(),
         );
         manager.start_all(&ctx).await?;
+
+        crate::canonical::module::reject_tool_identity_collisions(
+            &module_registry.tools(),
+            &manager.active_tools(),
+            "plugin tools",
+        )
+        .map_err(RuntimeError::misconfigured)?;
 
         // Providers are read out of the capability registry *after* start-up, so
         // the router contains exactly those whose plugins actually came up. A
@@ -583,12 +620,18 @@ mod tests {
     async fn governance_is_held_as_configured() {
         let runtime = Runtime::builder()
             .with_governance(Arc::new(GovernancePipeline::new().with(Arc::new(
-                DenyCapabilities::new().deny(CapabilityId::new("tool.shell").unwrap()),
+                DenyCapabilities::new().deny(CapabilityId::new("tool.example").unwrap()),
             ))))
             .build()
             .await
             .unwrap();
         assert_eq!(runtime.governance().name(), "pipeline");
+    }
+
+    #[tokio::test]
+    async fn default_governance_is_fail_closed_for_capabilities() {
+        let runtime = Runtime::builder().build().await.unwrap();
+        assert_eq!(runtime.governance().name(), "deny_unconfigured");
     }
 
     #[tokio::test]

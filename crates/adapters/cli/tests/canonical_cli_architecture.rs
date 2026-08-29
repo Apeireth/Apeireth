@@ -25,13 +25,13 @@ fn without_whitespace(source: &str) -> String {
 fn canonical_cli_chat_path_enters_runtime_execute() {
     let body = function_body(
         "pub async fn execute_canonical_cli_turn",
-        "/// Bootstrap and execute the canonical CLI chat path.",
+        "/// Resolve a pending approval through the canonical runtime API.",
     );
     let compact = without_whitespace(body);
 
     assert!(
-        compact.contains("runtime.execute(request)"),
-        "the CLI chat path must enter Runtime::execute, not an agent loop:\n{body}"
+        compact.contains("runtime.execute_outcome(request)"),
+        "the CLI chat path must enter Runtime::execute_outcome, not an agent loop:\n{body}"
     );
     assert!(
         body.contains("TurnRequest::new"),
@@ -43,7 +43,7 @@ fn canonical_cli_chat_path_enters_runtime_execute() {
 fn canonical_cli_bootstrap_uses_the_runtime_builder_and_its_entry_adapter() {
     let body = function_body(
         "pub async fn dispatch_canonical_chat",
-        "/// Start the HTTP Gateway backed by one long-lived canonical runtime.",
+        "/// Bootstrap and resolve a pending approval on the production session store.",
     );
 
     assert!(
