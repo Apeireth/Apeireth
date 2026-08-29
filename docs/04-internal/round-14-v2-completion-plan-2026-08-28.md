@@ -52,7 +52,7 @@ Author:          主代理 Mavis
 
 **实事求是路径**:
 1. **不假装** 1.0 全部完整 (Round 13 maturity 补查发现 5 项 PARTIAL + 4 项 trait 口 + 28 项 REAL)
-2. **不假装** 调研 100% 完成 (R11 sub-agent + 主代理都 0 实测 1.0 .rs + 0 git clone 2.0 master branch, 仅真账 + 推断)
+2. **不假装** 调研 100% 完成 (R11 sub-agent + 主代理都 0 实测 1.0 .rs, **本地 working tree 已就位 86-crate v1 + 16 crates v2 真账** 0 git clone 必要, 仅真账 + 推断)
 3. **不假装** release 时间 (4-6 月 → 6-9 月修订, 因 ~35 项 1.0 缺口 + 1.0 maturity 补查)
 
 ### 1.3 S-3 质量工程化 (Engineering rigor = 1739 tests / 0 clippy / clippy 0 / LOCKED 0)
@@ -181,10 +181,10 @@ Author:          主代理 Mavis
 | 5 | confidence BetaBinomial trait spec (1.0 完整, 2.0 organ::world_model::CalibrationStrength 本地简化版需补 BetaBinomial trait, per Round 13 maturity) | 1 周 | 0 | 🟢 P0 (物种化核心) |
 | 6 | reflexion 3 trait 口实接线 spec (LLM CRITIC + 失败事件实接线 + 注入块消费侧, per Round 13 maturity) | 1 周 | 0 | 🟢 P0 (物种化核心) |
 | 7 | 6 真实施派单 brief 模板 (Round 13 §3.3 派单顺序 11 项) | 1-2 天 | 0 | 🟢 P0 |
-| 8 | git clone v2 master branch + 真对照 1.0 vs 2.0 (1-2 天, per Round 12 catch 0 实测) | 1-2 天 | 网络 | 🟡 P1 (网络恢复时做) |
+| 8 | **主代理实测 27 项 1.0 .rs maturity 补查 + 2.0 crates 真账实测** (本地 working tree 已就位, 0 git clone 必要, per Round 12 catch + Round 13 修订) | 2-3 天 | 0 (本地 working tree 已就位, 只需主代理亲自读) | 🟡 P1 (主代理亲做, 不依赖网络) |
 | 9 | ROADMAP §7 + MANIFESTO §14 release timeline 修订 ✅ | (Round 14 commit `3ea454f1` 已 done) | 0 | ✅ done |
 | 10 | §3.1 估时修订 ✅ | (Round 13 真账已 done) | 0 | ✅ done |
-| **主代理亲做总估时** | **~2 周** | | | |
+| **主代理亲做总估时** | **~2 周** (7 项 spec 立即可做, 不依赖网络, +#8 本地实测 2-3 天) | | | |
 
 ### 2.2 派 sub-agent 真实施 (11 项, 12-14 周 critical path)
 
@@ -302,7 +302,7 @@ Week 7-10: R20 preference_learning (in-progress)
 
 ## 4. 主代理真账下一步想法 (答用户 "要怎么完成 2.0")
 
-### 4.1 立即可做 (用户开代理 + 主代理亲做 spec, ~2 周)
+### 4.1 立即可做 (主代理亲做 spec, ~2 周, **不依赖网络**)
 
 按真账 §2.1 表 1-10, 主代理亲做 10 项 spec 决策冻结, **不依赖网络**:
 
@@ -314,7 +314,13 @@ Week 7-10: R20 preference_learning (in-progress)
 6. **confidence BetaBinomial trait spec** (1 周) — **立即做** (物种化核心)
 7. **reflexion 3 trait 口实接线 spec** (1 周) — **立即做** (物种化核心)
 
-### 4.2 派 sub-agent 真实施 (用户开代理 + 网络恢复, ~12-14 周 critical path)
+### 4.2 派 sub-agent 真实施 (主代理亲做派单 brief, ~12-14 周 critical path, **不依赖网络 — 本地 working tree 已就位真账**)
+- per O-6 doctrine "工作量不是拒绝重做的理由"
+- 主代理亲做 #4 6 真实施派单 brief 模板 (Round 13 §3.3 派单顺序 11 项)
+- 真账 brief 模板 per `v2-reference-handbook-2026-08-28.md` §3.1
+- 0 装诚实: sub-agent brief 必含 "0 装诚实" + "5 重守门 baseline" + "LOCKED 0 触碰"
+- **不依赖网络** — sub-agent 写真账到本地 working tree, 主代理亲验 + commit + push
+- 真实施时主代理必亲测 (per Round 13 catch 0 实测 1.0 .rs 部分 + 2.0 真账实测, 本地 working tree 已就位)
 
 按真账 §2.2 派单顺序 1-11, 派 sub-agent 真实施:
 
@@ -348,7 +354,7 @@ Week 7-10: R20 preference_learning (in-progress)
 
 **主代理 (Mavis)**:
 - 10 项 spec 决策冻结 (~2 周)
-- git clone v2 master branch + 真对照 1.0 vs 2.0 (~35 项 .rs 实测, 网络恢复时 ~2 天)
+- git clone ~~v2 master branch~~ + 真对照 1.0 vs 2.0 (**本地 working tree 已就位, 0 git clone 必要**, ~35 项 .rs 实测, 主代理亲做 ~2-3 天)
 - release 流程 check + ROADMAP §7 + MANIFESTO §14 修订 (~1 周)
 - release announcement + tag v2.0.0 (~1 周)
 
@@ -368,7 +374,7 @@ Week 7-10: R20 preference_learning (in-progress)
 | **Round 11 6 sub-agent 调研 0 实测 1.0 .rs** | 仅凭真账 + 推断, 跟 0 实测 2.0 master branch 同失守 | Round 13 主代理亲测 8 个核心 1.0 .rs maturity, 修订主代理真账 §2.4 maturity 区分 |
 | **主代理 §3.1 估 3-4 周 ❌ 偏乐观** | 修订 → 12-14 周 critical path (Round 14 release 修订 commit `3ea454f1` 已 push) | 主代理亲做 spec ~2 周 + 派 sub-agent 12-14 周 = 真实施 14-16 周 critical path |
 | **release timeline 修订** | 4-6 月 → 6-9 月 (因 ~35 项 1.0 缺口 + 1.0 maturity 补查) | Round 14 commit `3ea454f1` 已 push 修订 |
-| **0 实测 2.0 master branch** | 0 git clone (~86-crate), 仅真账 + 推断 + R7/R11 真调研推论 | 真实施时主代理必亲验 (~1-2 天 git clone + 真对照) |
+| **0 实测 2.0 master branch** | 本地 working tree 已就位 ~86-crate v1 + 16 crates v2 真账, 仅真账 + 推断 + R7/R11 真调研推论 | 真实施时主代理必亲验 (~2-3 天本地实测 27 项 1.0 .rs + 2.0 真账, 0 git clone 必要) |
 | **1.0 maturity 35 项中 8 项实测 (~23%)** | Round 13 主代理亲测 8 个核心 1.0 .rs, 余 27 项仅凭推断 | 真实施时主代理必亲测 (~35 项 1.0 .rs 实测 + 物种化扩展 + 0 触碰 LOCKED) |
 | **0 引新外部 dep** | per 真账 brief 约束, 1:1 翻译优先借签 1.0 真账 | 物种化借签边界: 借签 1.0 真账 + R7 真调研 + research/source 真开源, 0 新外部 dep |
 
