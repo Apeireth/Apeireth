@@ -16,6 +16,14 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 
+# XCap is only compiled on platforms for which it provides a capture backend.
+# The vision module has a cfg-gated fail-closed fallback for other targets.
+[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
+xcap = "0.9.8"
+# Keep emitted formats explicit and minimal. `xcap` supplies RGBA frames;
+# this activates only PNG/JPEG encoders instead of image's full codec set.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+
 [lib]
 name = "apeireth_perception"
 path = "src/lib.rs"
