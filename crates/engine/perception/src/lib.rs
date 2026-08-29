@@ -6,12 +6,17 @@
 //!
 //! **v1 compat**: `apeireth_perception::*` 仍可访问 (re-export), 5 个内部测试 0 破坏.
 
+pub mod vision;
+pub mod voice;
+
 // Trait 在 plugin (P-arch 2026-08-27 O-6 重构); 这里 re-export 保持 v1 兼容路径
 pub use apeireth_plugin::perception::{
     Attention, PerceptionChannel, PerceptionError, PerceptionEvent, PerceptionInput,
     PerceptionModality, TactileInput, TextInput, ThresholdAttention, TopKAttention, VisionInput,
     VoiceInput,
 };
+pub use vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
+pub use voice::{WhisperHttpBackend, WhisperHttpConfig};
 
 #[cfg(test)]
 mod tests {

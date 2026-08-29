@@ -85,12 +85,7 @@ impl MoodRecord {
     /// 构造 + clamp (无 chrono 依赖, `at_ms = 0` 兜底 — per 子代理 R2 约定).
     ///
     /// **外部调用**: 如要 now-时间戳, 显式传 `system_time_ms()`.
-    pub fn new(
-        valence: f64,
-        arousal: f64,
-        source: MoodSource,
-        note: impl Into<String>,
-    ) -> Self {
+    pub fn new(valence: f64, arousal: f64, source: MoodSource, note: impl Into<String>) -> Self {
         Self {
             valence: valence.clamp(-1.0, 1.0),
             arousal: arousal.clamp(0.0, 1.0),
@@ -226,8 +221,7 @@ impl EmotionMemoryEngine {
     /// 数据不足 (< 2 条) 返回 None.
     pub fn mood_trend_at(&self, now_ms: i64, window_ms: i64) -> Option<f64> {
         let cutoff = now_ms - window_ms;
-        let window: Vec<&MoodRecord> =
-            self.records.iter().filter(|r| r.at_ms >= cutoff).collect();
+        let window: Vec<&MoodRecord> = self.records.iter().filter(|r| r.at_ms >= cutoff).collect();
         if window.len() < 2 {
             return None;
         }
@@ -474,8 +468,7 @@ impl OrganTrait for EmotionOrgan {
     }
 
     /// 0 装诚实: v1 emotion_memory 是确定性无 LLM, 返 None 不假装.
-    fn llm_factory(&self) -> Option<std::sync::Arc<dyn apeireth_plugin::llm_factory::LlmFactory>>
-    {
+    fn llm_factory(&self) -> Option<std::sync::Arc<dyn apeireth_plugin::llm_factory::LlmFactory>> {
         None
     }
 }
