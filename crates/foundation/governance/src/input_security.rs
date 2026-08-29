@@ -38,9 +38,29 @@ static PHONE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 
 static CREDENTIAL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?:\b(?:sk-[a-zA-Z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b|(?i:\bbearer[ \t]+[A-Za-z0-9._~+/=-]{16,}\b))",
+        r"(?:\b(?:sk-[a-zA-Z0-9_-]{20,}|AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{50,}|glpat-[a-zA-Z0-9_-]{20,}|xox[baprs]-[a-zA-Z0-9-]+)\b|(?i:\bbearer[ \t]+[A-Za-z0-9._~+/=-]{16,}\b))",
     )
     .unwrap()
+});
+
+static SSN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap()
+});
+
+static CREDIT_CARD_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b(?:\d{4}[ -]?){3}\d{4}\b").unwrap()
+});
+
+static IP_ADDRESS_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b").unwrap()
+});
+
+static CREDENTIAL_URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[a-zA-Z]+://[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.~!$&'()*+,;=-]+@[a-zA-Z0-9.-]+").unwrap()
+});
+
+static ENV_SECRET_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)(?:export\s+)?([A-Za-z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASS|AUTH)[A-Za-z0-9_]*)\s*[:=]\s*["']?([A-Za-z0-9_~+/=.-]{8,})["']?"#).unwrap()
 });
 
 /// The category of PII-like content a detector found.
@@ -54,6 +74,16 @@ pub enum PiiKind {
     /// A credential-like string (`sk-...`, AWS access-key shape, or a
     /// `Bearer` token shape).
     CredentialKey,
+    /// A US Social Security Number shape.
+    Ssn,
+    /// A credit card number shape.
+    CreditCard,
+    /// An IPv4 address.
+    IpAddress,
+    /// A URL containing user:password credentials.
+    CredentialUrl,
+    /// An environment variable secret assignment (e.g. `export API_KEY=...`).
+    EnvSecret,
 }
 
 impl PiiKind {
@@ -63,6 +93,11 @@ impl PiiKind {
             Self::Email => "email",
             Self::Phone => "phone",
             Self::CredentialKey => "credential_key",
+            Self::Ssn => "ssn",
+            Self::CreditCard => "credit_card",
+            Self::IpAddress => "ip_address",
+            Self::CredentialUrl => "credential_url",
+            Self::EnvSecret => "env_secret",
         }
     }
 
@@ -72,6 +107,11 @@ impl PiiKind {
             Self::Email => "[REDACTED_EMAIL]",
             Self::Phone => "[REDACTED_PHONE]",
             Self::CredentialKey => "[REDACTED_CREDENTIAL]",
+            Self::Ssn => "[REDACTED_SSN]",
+            Self::CreditCard => "[REDACTED_CREDIT_CARD]",
+            Self::IpAddress => "[REDACTED_IP]",
+            Self::CredentialUrl => "[REDACTED_URL_CREDENTIAL]",
+            Self::EnvSecret => "[REDACTED_ENV_SECRET]",
         }
     }
 }
@@ -104,6 +144,11 @@ impl PiiDetector {
             PiiKind::CredentialKey,
             &mut findings,
         );
+        collect_findings(text, &SSN_REGEX, PiiKind::Ssn, &mut findings);
+        collect_findings(text, &CREDIT_CARD_REGEX, PiiKind::CreditCard, &mut findings);
+        collect_findings(text, &IP_ADDRESS_REGEX, PiiKind::IpAddress, &mut findings);
+        collect_findings(text, &CREDENTIAL_URL_REGEX, PiiKind::CredentialUrl, &mut findings);
+        collect_findings(text, &ENV_SECRET_REGEX, PiiKind::EnvSecret, &mut findings);
         sort_findings(findings)
     }
 
@@ -119,10 +164,17 @@ impl PiiDetector {
     /// The original sensitive tokens are replaced with stable placeholders.
     /// Surrounding text is preserved.
     pub fn redact(text: &str) -> String {
-        let redacted = EMAIL_REGEX.replace_all(text, PiiKind::Email.redaction_label());
+        let redacted = CREDENTIAL_URL_REGEX.replace_all(text, PiiKind::CredentialUrl.redaction_label());
+        let redacted = ENV_SECRET_REGEX.replace_all(&redacted, |caps: &regex::Captures| {
+            format!("{}=[REDACTED_ENV_SECRET]", &caps[1])
+        });
+        let redacted = EMAIL_REGEX.replace_all(&redacted, PiiKind::Email.redaction_label());
         let redacted = PHONE_REGEX.replace_all(&redacted, PiiKind::Phone.redaction_label());
         let redacted =
             CREDENTIAL_REGEX.replace_all(&redacted, PiiKind::CredentialKey.redaction_label());
+        let redacted = SSN_REGEX.replace_all(&redacted, PiiKind::Ssn.redaction_label());
+        let redacted = CREDIT_CARD_REGEX.replace_all(&redacted, PiiKind::CreditCard.redaction_label());
+        let redacted = IP_ADDRESS_REGEX.replace_all(&redacted, PiiKind::IpAddress.redaction_label());
         redacted.into_owned()
     }
 }
@@ -529,13 +581,26 @@ mod tests {
 
     #[tokio::test]
     async fn input_security_hooks_allow_completions() {
-        assert!(PromptInjectionHook
-            .evaluate(&completion_request())
-            .await
-            .is_allowed());
-        assert!(CredentialDisclosureHook
-            .evaluate(&completion_request())
-            .await
-            .is_allowed());
+        let req = completion_request();
+        assert_eq!(PromptInjectionHook.evaluate(&req).await, Decision::Allow);
+        assert_eq!(CredentialDisclosureHook.evaluate(&req).await, Decision::Allow);
+    }
+
+    #[test]
+    fn test_all_8_pii_categories_detected_and_redacted() {
+        let input = "SSN: 123-45-6789, CC: 1234-5678-9012-3456, IP: 192.168.1.1, URL: https://admin:secret123@internal.net, ENV: export API_KEY=\"my_secret_token_123\"";
+        let findings = PiiDetector::findings(input);
+        assert!(findings.iter().any(|f| f.kind == PiiKind::Ssn));
+        assert!(findings.iter().any(|f| f.kind == PiiKind::CreditCard));
+        assert!(findings.iter().any(|f| f.kind == PiiKind::IpAddress));
+        assert!(findings.iter().any(|f| f.kind == PiiKind::CredentialUrl));
+        assert!(findings.iter().any(|f| f.kind == PiiKind::EnvSecret));
+
+        let redacted = PiiDetector::redact(input);
+        assert!(redacted.contains("[REDACTED_SSN]"));
+        assert!(redacted.contains("[REDACTED_CREDIT_CARD]"));
+        assert!(redacted.contains("[REDACTED_IP]"));
+        assert!(redacted.contains("[REDACTED_URL_CREDENTIAL]"));
+        assert!(redacted.contains("API_KEY=[REDACTED_ENV_SECRET]"));
     }
 }

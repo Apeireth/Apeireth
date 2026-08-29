@@ -12,8 +12,14 @@ pub mod canonical_entry;
 /// Full-duplex real-time voice barge-in and client interrupt controller.
 pub mod barge_in;
 
+/// 8-frame full-duplex protocol and streaming sentence divider.
+pub mod duplex_gateway;
+
 pub use barge_in::{
     format_sse_interrupt_event, BargeInController, InterruptReason, StreamHandle,
+};
+pub use duplex_gateway::{
+    DuplexFrame, DuplexSessionController, SentenceDivider,
 };
 
 pub use canonical_entry::{

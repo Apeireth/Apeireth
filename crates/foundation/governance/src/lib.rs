@@ -47,6 +47,8 @@ pub mod audit;
 pub mod input_security;
 pub mod permission;
 pub mod rate_limit;
+pub mod tool_desc_audit;
+pub mod untrusted_mark;
 
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
 pub use input_security::{
@@ -55,6 +57,10 @@ pub use input_security::{
 };
 pub use permission::{Permission, PermissionGovernanceHook, PermissionPolicy, PermissionSet};
 pub use rate_limit::{RateLimitConfig, RateLimitGovernanceHook, TrustTier};
+pub use tool_desc_audit::{AuditSeverity, ToolDescAuditError, ToolDescAuditResult, ToolDescAuditor};
+pub use untrusted_mark::{
+    UntrustedContentPayload, UntrustedContentWrapper, UNTRUSTED_TAG_CLOSE, UNTRUSTED_TAG_OPEN,
+};
 
 /// What the runtime is about to do.
 #[derive(Debug, Clone, PartialEq)]
