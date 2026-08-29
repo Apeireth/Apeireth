@@ -62,7 +62,7 @@ Author:          主代理 Mavis
 | **10 RC** | **9/10 真实现**, RC-7 (Whisper + 屏幕感知) 待硬件, spec 已完 (R14) |
 | **真 LLM** | MiniMax adapter 真 call **1.16s** 跑通 (RC-5) |
 | **v1.0 真实体量** | 551,208 行 .rs / 1,154,516 总 tracked LOC / 85 active crates |
-| **剩 3 块真实施** | B 块 frontend 对接 4-6 周 / C 块 6 DEFERRED slot 激活 6-10 周 / D 块 RC-7 真 modality 2-3 周 (需硬件); 估 2027-Q1 启动, v2.0.0 release 估 2027-01-08 至 2027-02 月 |
+| **剩 3 块真实施** | B 块 frontend 对接 4-6 周 / C 块 6 DEFERRED slot 激活 6-10 周 / D 块 RC-7 真 modality 2-3 周 (需硬件); 估 2027-Q1 启动, **v2.0.0 release 估 2027-Q3 (修订 per Round 12-13 真调研: ~23 项 1.0 缺口 + Round 13 1.0 maturity 补查, 估时从 4-6 月 上调到 6-9 月, 真实施 critical path 12-14 周)** |
 
 ---
 
@@ -594,12 +594,12 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 | **C** | **6 DEFERRED slot 激活** (R10 + R15 spec done) | 6-10 周 | OrganOrchestrator ✅ | `docs/01-architecture/cognitive-9-organ-integration-spec.md` (1001 行) + `deferred-slot-activation-preference_learning-spec.md` (617 行) | 建议第二 (preference_learning 先, others 按 R15 顺序) |
 | **D** | **RC-7 Perception 真 modality** (R14 spec done) | 2-3 周 (需硬件) | 硬件 (Whisper + xcap) | `docs/01-architecture/rc-7-perception-true-modality-spec.md` (572 行) + `crates/foundation/plugin/src/perception_backend.rs` | 硬件到位时做 |
 
-**总进度** (A 块前估 70%, A 块后估 80%; 主代理主观加权, 不是精确测量):
+**总进度** (A 块前估 70%, A 块后估 80% → **修订 70-75%** per Round 12-13 1.0 vs 2.0 功能全集差距发现 + Round 13 1.0 maturity 补查; 主代理主观加权, 不是精确测量):
 - A 块 ✅ OrganOrchestrator 完整化 — 30%
 - B 块 ✅ frontend 对接 — 估 5%
 - C 块 ✅ 6 DEFERRED slot 激活 — 估 10%
 - D 块 ✅ RC-7 真 modality — 估 5%
-- v2.0.0 release 估 2027-01-08 至 2027-02 月, 4-6 月 (A 块提前完成, 从 5-7 月缩短为 4-6 月)
+- v2.0.0 release 估 **2027-Q3** (修订 per Round 12-13 真调研, 因 ~23 项 1.0 缺口 + 1.0 maturity 补查, 估时从原 2027-01-08 至 2027-02 月 (4-6 月) 上调到 6-9 月)
 
 **收尾必做** (与 A 块无关, 全局):
 - RC-11 migration script 真生产验证 (1-2 天, 有 key 但没 v1 db): `python scripts/migrate_v1_to_v2_encrypted.py --src <v1_db> --dst <v2_db>`
@@ -645,7 +645,7 @@ Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + A 块 
 3. 0 装诚实原则 = 真兑现, 不假装, 不漂移 (HEAD 漂移是病, 数字必实测)
 4. 9 哲学锚 + 13 键 + 5 重守门 = 信任地基, LOCKED 0 改 (除非主代理拍板)
 5. O-6 三阶审查 = 每 commit 必真答案 + 拒 alternatives + 拒理由 (per §5, 不找借口)
-6. v2.0 release 估 2027-01-08 至 2027-02 月, 4-6 月 (A 块提前完成)
+6. v2.0 release 估 **2027-Q3** (修订 per Round 12-13 真调研, 因 ~23 项 1.0 缺口 + 1.0 maturity 补查, 估时从 4-6 月 上调到 6-9 月, 真实施 critical path 12-14 周)
 7. 完整版给新团队的话: docs/04-internal/TO-NEW-TEAM.md
 8. A 块 O-6 复盘: docs/04-internal/A-block-o6-true-account.md
 9. 本 reference 手册: docs/04-internal/ENGINEER-MANIFESTO.md (你正在读)
