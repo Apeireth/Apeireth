@@ -52,11 +52,38 @@ pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
 pub mod hybrid_search;
+pub mod intent_brier;
+pub mod meta_thinking;
 pub mod milestone;
 pub mod partner;
 pub mod principles;
+pub mod procedural;
 pub mod reflexion;
+pub mod thought_cluster;
 pub mod topic_predictor;
+
+pub use procedural::{
+    render_procedural_prompt, HabitMatch, HabitPattern, InMemoryProceduralStore, ProceduralError,
+    ProceduralStore,
+};
+
+pub use meta_thinking::{
+    save_to_cluster, ChainReflectionThinker, ChainStage, MetaChainResult, MetaThinkError,
+    MetaThinkInput, MetaThinkOutput, MetaThinker, MetaThinkingChain, ReflectionMetaThinker,
+    StageResult, StopReason, DEFAULT_MAX_DEPTH,
+};
+
+pub use thought_cluster::{
+    InMemoryThoughtClusterReader, ThoughtClusterError, ThoughtClusterManager, ThoughtClusterReader,
+    ThoughtFile, CLUSTER_SUFFIX, META_CHAINS_FILE, MIN_EDIT_TARGET_CHARS,
+};
+
+pub use intent_brier::{
+    brier_score, compute_report, compute_trend, compute_window, domain_diagnostics, mean_brier,
+    render_report, BrierTrend, BrierWindow, DomainDiagnostic, FeedbackOutcome,
+    IntentDiagnosticReport, IntentLedger, IntentPrediction, IntentRecord,
+    DEFAULT_LOW_CALIBRATION_THRESHOLD, DEFAULT_WINDOWS, TREND_DELTA_RATIO,
+};
 
 pub use reflexion::{
     Critic, FailureKind, FailureRecord, FileReflexionStore, InMemoryReflexionStore, ReflectionText,
