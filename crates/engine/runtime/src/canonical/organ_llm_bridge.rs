@@ -348,21 +348,17 @@ mod tests {
     }
 
     /// Real canonical chain: the crate-internal per-turn invoker over a real
-    /// router. The invoker borrows the router and the governance hook, so the
-    /// test leaks them to `'static` to satisfy the adapter's
-    /// `Arc<dyn ModuleInvoker>` contract. Test scaffolding only.
+    /// router. The invoker is an owned turn-scoped handle (Arc router + Arc
+    /// governance), so no lifetime scaffolding is needed.
     fn real_invoker(
         provider: &Arc<ScriptedProvider>,
         governance: FixedDecisionHook,
-    ) -> (Arc<dyn ModuleInvoker>, &'static FixedDecisionHook) {
-        let governance: &'static FixedDecisionHook = Box::leak(Box::new(governance));
-        let router: &'static ProviderRouter = Box::leak(Box::new(ProviderRouter::new(
-            vec![provider.clone()],
-            virtual_clock(),
-        )));
+    ) -> (Arc<dyn ModuleInvoker>, Arc<FixedDecisionHook>) {
+        let governance = Arc::new(governance);
+        let router = Arc::new(ProviderRouter::new(vec![provider.clone()], virtual_clock()));
         let invoker = super::super::module::RuntimeModuleInvoker::new(
             router,
-            governance,
+            governance.clone(),
             SessionId::new(),
             TraceId::new(),
             "test-model",
@@ -649,6 +645,96 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
+    // Handle semantics on the owned turn-scoped invoker
+    // ------------------------------------------------------------------
+
+    /// Clones of the owned handle share one `ModuleTurnState`: with a budget
+    /// of one, the original call succeeds and every clone flavour — a
+    /// struct clone and a cloned trait-object handle — is refused without
+    /// reaching a provider.
+    #[tokio::test]
+    async fn owned_handle_clones_share_one_turn_budget() {
+        let provider = ScriptedProvider::new("ok");
+        let governance = Arc::new(FixedDecisionHook::allow());
+        let router = Arc::new(ProviderRouter::new(vec![provider.clone()], virtual_clock()));
+        let invoker = super::super::module::RuntimeModuleInvoker::new(
+            router,
+            governance,
+            SessionId::new(),
+            TraceId::new(),
+            "test-model",
+            "test.organ_llm_bridge",
+            Arc::new(ModuleTurnState::new(1)),
+            0,
+        );
+
+        let first = invoker
+            .invoke(ModuleInvocationRequest::isolated("system", "one"))
+            .await;
+        assert!(first.is_ok(), "first handle call must pass, got {first:?}");
+        assert_eq!(provider.completions(), 1);
+
+        // Struct clone: same turn budget, not a fresh one.
+        let struct_clone = invoker.clone();
+        let second = struct_clone
+            .invoke(ModuleInvocationRequest::isolated("system", "two"))
+            .await;
+        match second {
+            Err(ModuleInvocationError::BudgetExceeded { limit }) => assert_eq!(limit, 1),
+            other => panic!("struct clone must share the turn budget, got {other:?}"),
+        }
+
+        // Trait-object handle clone: same shared state again.
+        let handle: Arc<dyn ModuleInvoker> = Arc::new(invoker);
+        let third = handle
+            .clone()
+            .invoke(ModuleInvocationRequest::isolated("system", "three"))
+            .await;
+        assert!(
+            matches!(third, Err(ModuleInvocationError::BudgetExceeded { .. })),
+            "handle clone must share the turn budget, got {third:?}"
+        );
+        assert_eq!(
+            provider.completions(),
+            1,
+            "budget-exceeded calls must never reach a provider"
+        );
+    }
+
+    /// The recursion depth guard is unchanged on the owned handle: a handle
+    /// spawned from a nested invocation (parent depth 1) is at depth 2 and is
+    /// refused before any governance or provider work.
+    #[tokio::test]
+    async fn owned_handle_depth_guard_unchanged() {
+        let provider = ScriptedProvider::new("never");
+        let governance = Arc::new(FixedDecisionHook::allow());
+        let router = Arc::new(ProviderRouter::new(vec![provider], virtual_clock()));
+        let invoker = super::super::module::RuntimeModuleInvoker::new(
+            router,
+            governance,
+            SessionId::new(),
+            TraceId::new(),
+            "test-model",
+            "test.organ_llm_bridge",
+            Arc::new(ModuleTurnState::new(8)),
+            1,
+        );
+        let error = invoker
+            .invoke(ModuleInvocationRequest::isolated("system", "nested"))
+            .await
+            .expect_err("depth 2 exceeds the maximum of 1");
+        assert!(
+            matches!(
+                error,
+                ModuleInvocationError::RecursionLimit {
+                    depth: 2,
+                    maximum: 1
+                }
+            ),
+            "got: {error:?}"
+        );
+    }
+
     // D. no raw provider ownership (source guard over the impl section)
     // ------------------------------------------------------------------
 
