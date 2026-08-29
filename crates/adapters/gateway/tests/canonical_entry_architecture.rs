@@ -9,8 +9,8 @@ const CANONICAL_ENTRY: &str = include_str!("../src/canonical_entry.rs");
 #[test]
 fn canonical_gateway_entry_delegates_semantics_to_runtime_execute() {
     assert!(
-        CANONICAL_ENTRY.contains("runtime.execute("),
-        "the production gateway chat path must enter Runtime::execute"
+        CANONICAL_ENTRY.contains("runtime.execute_outcome("),
+        "the production gateway chat path must enter Runtime::execute_outcome"
     );
     assert!(
         CANONICAL_ENTRY.contains("pub async fn execute_chat"),
