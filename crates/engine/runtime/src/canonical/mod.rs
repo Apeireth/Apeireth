@@ -36,17 +36,22 @@ pub mod module;
 // - 0 触碰 cognitive.rs 12 slot (LOCKED, 子代理 K 核验).
 // - 0 引新外部 dep (Cargo.lock 0 行 diff).
 pub mod orchestrator;
+// Bridge from the plugin `LlmFactory` contract onto the runtime-owned
+// `ModuleInvoker`, so organ LLM calls (W1/W2) can ride the canonical
+// completion-governed path once organ wiring lands. Adapter only: it holds
+// no provider, budget, or governance authority of its own.
+pub mod organ_llm_bridge;
 pub mod production;
-// L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
-// **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
-// L1 接 SelfAssessmentStore. 主人 Veto dashboard 留 v2.0.0 release 接入.
-pub mod upgrade_cycle;
 pub mod provider;
 pub mod runtime;
 pub mod session;
 pub mod subloop;
 pub mod tool_modules;
 pub mod trace;
+// L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
+// **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
+// L1 接 SelfAssessmentStore. 主人 Veto dashboard 留 v2.0.0 release 接入.
+pub mod upgrade_cycle;
 
 pub use approval::{
     operation_fingerprint, operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus,
@@ -67,6 +72,7 @@ pub use module::{
     ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, ModuleRegistry,
     PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
+pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
 pub use production::{
     CognitiveBackends, CognitiveModuleConfig, ProductionBackends, ProductionCognitiveModules,
     ProductionModules, ProductionModulesConfig,
