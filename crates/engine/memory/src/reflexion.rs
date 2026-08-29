@@ -11,8 +11,11 @@
 //! 2. 系统: 位于 `engine/memory`，提供抽象的 `ReflexionStore` Trait 与内存/文件实现
 //! 3. 架构: 强类型数据模型，0 unsafe, 0 外部 C 扩展
 
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -82,6 +85,21 @@ pub enum ReflexionError {
     Json(#[from] serde_json::Error),
     #[error("存储锁中毒")]
     LockPoisoned,
+    #[error("reflexion 历史上限必须大于零")]
+    InvalidHistoryCap,
+    #[error("reflexion 持久化存储正被另一个写入者占用: {path}")]
+    StoreBusy { path: PathBuf },
+    #[error("reflexion 存储状态损坏: failure seq 必须严格递增且非零 (previous: {previous:?}, current: {current})")]
+    CorruptedSequence {
+        previous: Option<usize>,
+        current: usize,
+    },
+    #[error(
+        "reflexion 存储状态损坏: next_seq ({next_seq}) 必须大于最后一个 failure seq ({last_seq})"
+    )]
+    CorruptedNextSequence { next_seq: usize, last_seq: usize },
+    #[error("reflexion 序列号已耗尽")]
+    SequenceExhausted,
     /// 持久化状态损坏: 反思游标 `reflected_until` 超过失败记录总数,
     /// 说明落盘文件被外部篡改或截断损坏.
     ///
@@ -335,9 +353,26 @@ impl ReflexionStore for InMemoryReflexionStore {
     }
 }
 
-/// 文件系统持久化 Reflexion 存储 (原子写).
+/// 文件持久化失败轨迹的默认上限。
+///
+/// 上限仅适用于 [`FileReflexionStore`]；内存实现是测试/嵌入用的非持久化
+/// 存储，不对进程内生命周期施加此持久化配额。超过上限时保留最新记录，
+/// 并同步移除其已淘汰记录的反思文本。
+pub const DEFAULT_FILE_HISTORY_CAP: usize = 256;
+
+/// 文件系统持久化 Reflexion 存储。
+///
+/// 所有变更操作先通过同一根目录中的 `reflexions.lock` 执行原子文件创建
+/// 来取得跨线程/进程的排他所有权，再进行读取、修改和原子替换写入。因此，
+/// 同一根目录的两个 [`FileReflexionStore`] 实例不会静默丢失彼此的更新。
+///
+/// **崩溃语义：** 锁文件在正常返回（包括错误返回）时由 RAII 清理。若进程
+/// 在持锁期间异常终止，锁文件可能保留；后续写入会在有限等待后返回
+/// [`ReflexionError::StoreBusy`]，而不会猜测性删除可能仍属于活跃写入者的锁。
+/// 运维人员确认没有活跃写入者后可以显式移除该锁文件。
 pub struct FileReflexionStore {
     root: PathBuf,
+    max_history: usize,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -348,11 +383,125 @@ struct ReflexionDataFile {
     reflections: Vec<ReflectionText>,
     #[serde(default)]
     reflected_until: usize,
+    /// 下一个可分配的序列号。旧版文件没有该字段时为 0，并会从现有记录
+    /// 推导出安全的下一个值后在下一次成功变更中持久化。
+    #[serde(default)]
+    next_seq: usize,
+}
+
+impl ReflexionDataFile {
+    fn validate_and_normalize(&mut self) -> Result<(), ReflexionError> {
+        // P1 硬化仍然在任何数据消费之前执行：绝不让损坏的游标进入切片操作。
+        if self.reflected_until > self.failures.len() {
+            return Err(ReflexionError::CorruptedCursor {
+                cursor: self.reflected_until,
+                len: self.failures.len(),
+            });
+        }
+
+        let mut previous = None;
+        for failure in &self.failures {
+            if failure.seq == 0 || previous.is_some_and(|seq| failure.seq <= seq) {
+                return Err(ReflexionError::CorruptedSequence {
+                    previous,
+                    current: failure.seq,
+                });
+            }
+            previous = Some(failure.seq);
+        }
+
+        let minimum_next = match previous {
+            Some(last_seq) => last_seq
+                .checked_add(1)
+                .ok_or(ReflexionError::SequenceExhausted)?,
+            None => 1,
+        };
+        if self.next_seq == 0 {
+            // Backwards-compatible normalization for state files written before
+            // `next_seq` existed. New writes never persist zero.
+            self.next_seq = minimum_next;
+        } else if self.next_seq < minimum_next {
+            return Err(ReflexionError::CorruptedNextSequence {
+                next_seq: self.next_seq,
+                last_seq: previous.unwrap_or_default(),
+            });
+        }
+        Ok(())
+    }
+
+    fn reserve_next_seq(&mut self) -> Result<usize, ReflexionError> {
+        let seq = self.next_seq;
+        self.next_seq = seq
+            .checked_add(1)
+            .ok_or(ReflexionError::SequenceExhausted)?;
+        Ok(seq)
+    }
+}
+
+/// A filesystem-level exclusive mutation claim.
+///
+/// `create_new(true)` is an atomic create operation on the target filesystem,
+/// so this is intentionally not a process-local mutex. Holding a path rather
+/// than an open descriptor also lets the guard delete it portably on Windows.
+struct MutationLock {
+    path: PathBuf,
+}
+
+impl MutationLock {
+    const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+    const RETRY_DELAY: Duration = Duration::from_millis(1);
+
+    fn acquire(root: &Path) -> Result<Self, ReflexionError> {
+        std::fs::create_dir_all(root)?;
+        let path = root.join("reflexions.lock");
+        let deadline = Instant::now() + Self::WAIT_TIMEOUT;
+
+        loop {
+            match OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(_) => return Ok(Self { path }),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    if Instant::now() >= deadline {
+                        return Err(ReflexionError::StoreBusy { path });
+                    }
+                    // Bounded backoff avoids a hot spin while allowing a concurrent
+                    // writer to finish. Tests synchronize with barriers/channels,
+                    // not arbitrary sleeps.
+                    std::thread::sleep(Self::RETRY_DELAY);
+                }
+                Err(error) => return Err(ReflexionError::Io(error)),
+            }
+        }
+    }
+}
+
+impl Drop for MutationLock {
+    fn drop(&mut self) {
+        // This must not replace the original operation's result. A leftover lock
+        // remains fail-closed and is surfaced as StoreBusy on the next mutation.
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 impl FileReflexionStore {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            max_history: DEFAULT_FILE_HISTORY_CAP,
+        }
+    }
+
+    /// Creates a store with an explicit persistent-history cap.
+    pub fn with_history_cap(
+        root: impl Into<PathBuf>,
+        max_history: usize,
+    ) -> Result<Self, ReflexionError> {
+        if max_history == 0 {
+            return Err(ReflexionError::InvalidHistoryCap);
+        }
+        Ok(Self {
+            root: root.into(),
+            max_history,
+        })
     }
 
     fn file_path(&self) -> PathBuf {
@@ -362,11 +511,34 @@ impl FileReflexionStore {
     fn read_data(&self) -> Result<ReflexionDataFile, ReflexionError> {
         let path = self.file_path();
         if !path.exists() {
-            return Ok(ReflexionDataFile::default());
+            let mut data = ReflexionDataFile::default();
+            data.validate_and_normalize()?;
+            return Ok(data);
         }
         let bytes = std::fs::read(&path)?;
-        let data = serde_json::from_slice(&bytes)?;
+        let mut data: ReflexionDataFile = serde_json::from_slice(&bytes)?;
+        data.validate_and_normalize()?;
         Ok(data)
+    }
+
+    fn trim_history(&self, data: &mut ReflexionDataFile) {
+        if data.failures.len() <= self.max_history {
+            return;
+        }
+
+        let removed = data.failures.len() - self.max_history;
+        data.failures.drain(..removed);
+        // `reflected_until` is a count over the retained prefix. If already
+        // reflected records were evicted, subtract them; if unreflected records
+        // were evicted, no retained prefix may be claimed as reflected.
+        data.reflected_until = data
+            .reflected_until
+            .saturating_sub(removed)
+            .min(data.failures.len());
+
+        let retained_sequences: Vec<usize> = data.failures.iter().map(|f| f.seq).collect();
+        data.reflections
+            .retain(|reflection| retained_sequences.binary_search(&reflection.seq).is_ok());
     }
 
     fn write_data(&self, data: &ReflexionDataFile) -> Result<(), ReflexionError> {
@@ -376,9 +548,39 @@ impl FileReflexionStore {
             .root
             .join(format!("reflexions.tmp-{}", uuid::Uuid::new_v4()));
         let bytes = serde_json::to_vec_pretty(data)?;
-        std::fs::write(&tmp_path, bytes)?;
-        std::fs::rename(&tmp_path, &target_path)?;
-        Ok(())
+
+        let result = (|| -> Result<(), ReflexionError> {
+            let mut tmp_file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&tmp_path)?;
+            tmp_file.write_all(&bytes)?;
+            tmp_file.sync_all()?;
+            drop(tmp_file);
+            std::fs::rename(&tmp_path, &target_path)?;
+            Ok(())
+        })();
+        if result.is_err() {
+            // Best-effort cleanup only. The original error is more actionable;
+            // a leftover unique temp file cannot affect future reads or claims.
+            let _ = std::fs::remove_file(&tmp_path);
+        }
+        result
+    }
+
+    fn mutate<T>(
+        &self,
+        operation: impl FnOnce(&mut ReflexionDataFile) -> Result<T, ReflexionError>,
+    ) -> Result<T, ReflexionError> {
+        let _lock = MutationLock::acquire(&self.root)?;
+        let mut data = self.read_data()?;
+        // An old, oversized file is bounded before any new mutation observes it.
+        self.trim_history(&mut data);
+        let result = operation(&mut data)?;
+        self.trim_history(&mut data);
+        data.validate_and_normalize()?;
+        self.write_data(&data)?;
+        Ok(result)
     }
 }
 
@@ -393,18 +595,17 @@ impl ReflexionStore for FileReflexionStore {
         if task_type.trim().is_empty() || summary.trim().is_empty() {
             return Err(ReflexionError::EmptyContent);
         }
-        let mut data = self.read_data()?;
-        let seq = data.failures.len() + 1;
-        let record = FailureRecord {
-            seq,
-            kind,
-            task_type: task_type.to_string(),
-            summary: summary.to_string(),
-            timestamp_epoch_ms,
-        };
-        data.failures.push(record.clone());
-        self.write_data(&data)?;
-        Ok(record)
+        self.mutate(|data| {
+            let record = FailureRecord {
+                seq: data.reserve_next_seq()?,
+                kind,
+                task_type: task_type.to_string(),
+                summary: summary.to_string(),
+                timestamp_epoch_ms,
+            };
+            data.failures.push(record.clone());
+            Ok(record)
+        })
     }
 
     fn process_unreflected(
@@ -412,32 +613,30 @@ impl ReflexionStore for FileReflexionStore {
         critic: &dyn Critic,
         timestamp_epoch_ms: i64,
     ) -> Result<usize, ReflexionError> {
-        let mut data = self.read_data()?;
-        // P1 硬化: 切片前校验游标 — 落盘状态被篡改/损坏 (reflected_until >
-        // 失败总数) 时返回类型化错误, 绝不 panic, 绝不静默按有效状态继续.
-        if data.reflected_until > data.failures.len() {
-            return Err(ReflexionError::CorruptedCursor {
-                cursor: data.reflected_until,
-                len: data.failures.len(),
-            });
-        }
-        let mut count = 0;
-        let start = data.reflected_until;
-        let failures_slice = data.failures[start..].to_vec();
+        self.mutate(|data| {
+            // Keep the explicit P1 check adjacent to the slice operation even
+            // though read_data has already validated the persisted state.
+            if data.reflected_until > data.failures.len() {
+                return Err(ReflexionError::CorruptedCursor {
+                    cursor: data.reflected_until,
+                    len: data.failures.len(),
+                });
+            }
+            let start = data.reflected_until;
+            let failures_slice = data.failures[start..].to_vec();
 
-        for failure in &failures_slice {
-            let text = critic.reflect(failure);
-            data.reflections.push(ReflectionText {
-                seq: failure.seq,
-                task_type: failure.task_type.clone(),
-                text,
-                timestamp_epoch_ms,
-            });
-            count += 1;
-        }
-        data.reflected_until = data.failures.len();
-        self.write_data(&data)?;
-        Ok(count)
+            for failure in &failures_slice {
+                let text = critic.reflect(failure);
+                data.reflections.push(ReflectionText {
+                    seq: failure.seq,
+                    task_type: failure.task_type.clone(),
+                    text,
+                    timestamp_epoch_ms,
+                });
+            }
+            data.reflected_until = data.failures.len();
+            Ok(failures_slice.len())
+        })
     }
 
     fn list_failures(&self) -> Result<Vec<FailureRecord>, ReflexionError> {
@@ -466,6 +665,9 @@ impl ReflexionStore for FileReflexionStore {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{mpsc, Arc, Barrier};
+    use std::thread;
+
     use super::*;
 
     #[test]
@@ -567,10 +769,7 @@ mod tests {
         }
         // 损坏状态保持原样 (不做静默修复): 再次读取仍是损坏的 cursor
         let err_again = store.process_unreflected(&RuleCritic, 3000).unwrap_err();
-        assert!(matches!(
-            err_again,
-            ReflexionError::CorruptedCursor { .. }
-        ));
+        assert!(matches!(err_again, ReflexionError::CorruptedCursor { .. }));
     }
 
     /// P1 硬化: 游标等于总数 → 合法空工作 (Ok(0)).
@@ -610,5 +809,156 @@ mod tests {
         assert_eq!(reflections.len(), 3);
         // retry_injection 正常
         assert!(store.retry_injection("deploy", 2000).unwrap().is_some());
+    }
+
+    #[test]
+    fn file_store_history_cap_keeps_cursor_and_reflections_consistent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = FileReflexionStore::with_history_cap(tmp.path(), 2).unwrap();
+
+        let first = store
+            .record_failure(FailureKind::ValidationFailed, "deploy", "first", 1000)
+            .unwrap();
+        assert_eq!(first.seq, 1);
+        assert_eq!(store.process_unreflected(&RuleCritic, 2000).unwrap(), 1);
+
+        let second = store
+            .record_failure(FailureKind::DecisionRejected, "deploy", "second", 3000)
+            .unwrap();
+        let third = store
+            .record_failure(FailureKind::ExperienceFailed, "deploy", "third", 4000)
+            .unwrap();
+        assert_eq!((second.seq, third.seq), (2, 3));
+
+        // The deterministic policy retains the newest two failures. Its cursor
+        // is rebased from the old retained prefix, so both retained failures are
+        // correctly recognized as still unreflected.
+        let failures = store.list_failures().unwrap();
+        assert_eq!(
+            failures
+                .iter()
+                .map(|failure| failure.seq)
+                .collect::<Vec<_>>(),
+            vec![2, 3]
+        );
+        assert_eq!(store.process_unreflected(&RuleCritic, 5000).unwrap(), 2);
+        assert_eq!(store.process_unreflected(&RuleCritic, 6000).unwrap(), 0);
+
+        let reflections = store.list_reflections().unwrap();
+        assert_eq!(
+            reflections
+                .iter()
+                .map(|reflection| reflection.seq)
+                .collect::<Vec<_>>(),
+            vec![2, 3]
+        );
+
+        // The persisted next-sequence cursor is independent from the retained
+        // vector length, so eviction cannot cause a sequence collision.
+        let fourth = store
+            .record_failure(FailureKind::ValidationFailed, "deploy", "fourth", 7000)
+            .unwrap();
+        assert_eq!(fourth.seq, 4);
+        assert_eq!(
+            store
+                .list_failures()
+                .unwrap()
+                .iter()
+                .map(|failure| failure.seq)
+                .collect::<Vec<_>>(),
+            vec![3, 4]
+        );
+    }
+
+    #[test]
+    fn file_store_concurrent_instances_preserve_both_writes_and_unique_sequences() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        let start = Arc::new(Barrier::new(3));
+        let (tx, rx) = mpsc::channel();
+
+        let mut workers = Vec::new();
+        for summary in ["writer-a", "writer-b"] {
+            let root = root.clone();
+            let start = Arc::clone(&start);
+            let tx = tx.clone();
+            workers.push(thread::spawn(move || {
+                let store = FileReflexionStore::new(root);
+                start.wait();
+                tx.send(store.record_failure(
+                    FailureKind::ValidationFailed,
+                    "deploy",
+                    summary,
+                    1000,
+                ))
+                .unwrap();
+            }));
+        }
+        drop(tx);
+
+        start.wait();
+        let results: Vec<_> = rx.into_iter().collect();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(results.len(), 2);
+        for result in results {
+            assert!(
+                result.is_ok(),
+                "concurrent writer must not be lost: {result:?}"
+            );
+        }
+
+        let store = FileReflexionStore::new(root);
+        let failures = store.list_failures().unwrap();
+        assert_eq!(failures.len(), 2);
+        assert_eq!(
+            failures
+                .iter()
+                .map(|failure| failure.seq)
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        let mut summaries = failures
+            .iter()
+            .map(|failure| failure.summary.as_str())
+            .collect::<Vec<_>>();
+        summaries.sort_unstable();
+        assert_eq!(summaries, vec!["writer-a", "writer-b"]);
+    }
+
+    #[test]
+    fn malformed_json_is_typed_non_destructive_and_releases_mutation_claim() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("reflexions.json");
+        let malformed = b"{ this is not json";
+        std::fs::write(&path, malformed).unwrap();
+        let store = FileReflexionStore::new(tmp.path());
+
+        let err = store
+            .record_failure(FailureKind::ValidationFailed, "deploy", "bad json", 1000)
+            .unwrap_err();
+        assert!(matches!(err, ReflexionError::Json(_)));
+        assert_eq!(std::fs::read(&path).unwrap(), malformed);
+        assert!(
+            !tmp.path().join("reflexions.lock").exists(),
+            "an error path must release the mutation claim"
+        );
+
+        // A subsequent valid state can be mutated immediately; the previous
+        // parse failure did not leave a process-local or filesystem deadlock.
+        std::fs::write(&path, b"{}").unwrap();
+        assert!(store
+            .record_failure(FailureKind::ValidationFailed, "deploy", "recovered", 2000)
+            .is_ok());
+    }
+
+    #[test]
+    fn file_store_rejects_zero_history_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(matches!(
+            FileReflexionStore::with_history_cap(tmp.path(), 0),
+            Err(ReflexionError::InvalidHistoryCap)
+        ));
     }
 }
