@@ -48,7 +48,45 @@ pub use append_only::{AppendOnlyError, HistoryEntry, HistoryStream, Tombstone};
 pub mod history_streams;
 
 pub mod continuity_link;
+pub mod cross_diary;
+pub mod daily_summary;
+pub mod diary;
+pub mod hybrid_search;
+pub mod milestone;
+pub mod partner;
+pub mod principles;
+pub mod reflexion;
+pub mod topic_predictor;
+
+pub use reflexion::{
+    Critic, FailureKind, FailureRecord, FileReflexionStore, InMemoryReflexionStore, ReflectionText,
+    ReflexionError, ReflexionStore, RuleCritic,
+};
+
+pub use cross_diary::{link_core, CrossDiaryIndex, CrossLink, SNIPPET_MAX_CHARS};
+pub use daily_summary::{build_daily_summary, DailySummary};
+pub use diary::{
+    valid_date, DayPage, DiaryEntry, DiaryError, DiaryHit, DiaryInjector, DiaryStore,
+    FileDiaryStore, InMemoryDiaryStore, TRUNCATION_MARK,
+};
+
 pub use episode::{EpisodeQuery, EpisodeStore};
+pub use hybrid_search::{tokenize, Bm25Config, Bm25Hit, Bm25Index, HybridHit, HybridSearchEngine};
+pub use milestone::{
+    InMemoryMilestoneStore, Milestone, MilestoneKind, MilestonePayload, MilestoneStore,
+};
+pub use partner::{
+    Bond, BondCharacter, BondDepth, BondStage, InMemoryPartnerStore, Partner, PartnerId,
+    PartnerPreferences, PartnerStore, PrivacyBoundary,
+};
+pub use principles::{
+    check_dynamic_principles, constant_time_eq, DynamicPrinciple, InMemoryPrincipleStore,
+    PrincipleStatus, PrincipleStore, PromotionCandidate,
+};
+pub use topic_predictor::{
+    CompositeChannel, ImportanceChannel, KeywordChannel, PreloadChannel, TimeChannel, TopicCue,
+    TopicHint, TopicPrediction, TopicPredictor,
+};
 // TP24 (M5 + N25): 记忆来源链 + 时间元数据 (episodes 表的 4 列 V4 扩展).
 // 方法以 inherent impl on SqliteMemoryStore 暴露, 不引入 trait (减少 import, 保持向后兼容).
 pub mod provenance;

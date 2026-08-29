@@ -230,6 +230,8 @@ struct OpenAiChatRequest {
     messages: Vec<OpenAiMessage>,
     #[serde(default)]
     session_id: Option<SessionId>,
+    #[serde(default)]
+    stream: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -265,6 +267,47 @@ struct OpenAiExecutionMetadata {
 }
 
 #[derive(Debug, Serialize)]
+struct OpenAiStreamChunk {
+    id: String,
+    object: &'static str,
+    created: i64,
+    model: String,
+    choices: Vec<OpenAiStreamChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    apeireth: Option<OpenAiExecutionMetadata>,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiStreamChoice {
+    index: u32,
+    delta: OpenAiStreamDelta,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finish_reason: Option<&'static str>,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiStreamDelta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    role: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ModelListItem {
+    id: String,
+    object: &'static str,
+    created: i64,
+    owned_by: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct ModelListResponse {
+    object: &'static str,
+    data: Vec<ModelListItem>,
+}
+
+#[derive(Debug, Serialize)]
 struct ErrorBody {
     error: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -277,6 +320,7 @@ type HttpError = (StatusCode, Json<ErrorBody>);
 pub fn canonical_router(runtime: Arc<Runtime>) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/v1/models", get(list_models))
         .route("/v1/chat", post(native_chat))
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals/resolve", post(native_resolve_approval))
@@ -296,6 +340,32 @@ async fn health() -> Json<serde_json::Value> {
         "status": "ok",
         "execution_owner": "apeireth-runtime::canonical"
     }))
+}
+
+async fn list_models(State(runtime): State<Arc<Runtime>>) -> Json<ModelListResponse> {
+    let created = Timestamp::from_clock(runtime.clock().as_ref()).epoch_millis() / 1_000;
+    let model_id = runtime
+        .config()
+        .default_model
+        .clone()
+        .unwrap_or_else(|| "default".to_string());
+    Json(ModelListResponse {
+        object: "list",
+        data: vec![
+            ModelListItem {
+                id: model_id,
+                object: "model",
+                created,
+                owned_by: "apeireth",
+            },
+            ModelListItem {
+                id: "whisper-1".to_string(),
+                object: "model",
+                created,
+                owned_by: "apeireth",
+            },
+        ],
+    })
 }
 
 async fn native_chat(
@@ -336,7 +406,8 @@ fn chat_http_response(outcome: CanonicalChatOutcome) -> Response {
 async fn openai_chat(
     State(runtime): State<Arc<Runtime>>,
     Json(request): Json<OpenAiChatRequest>,
-) -> Result<Json<OpenAiChatResponse>, HttpError> {
+) -> Result<Response, HttpError> {
+    let is_stream = request.stream;
     let session = request.session_id.unwrap_or_else(SessionId::new);
     let input = request
         .messages
@@ -381,28 +452,113 @@ async fn openai_chat(
         ));
     };
     let created = Timestamp::from_clock(runtime.clock().as_ref()).epoch_millis() / 1_000;
+    let model_name = request.model.unwrap_or_default();
 
-    Ok(Json(OpenAiChatResponse {
-        id: outcome.request.clone(),
-        object: "chat.completion",
-        created,
-        model: request.model.unwrap_or_default(),
-        choices: vec![OpenAiChoice {
-            index: 0,
-            message: OpenAiAssistantMessage {
-                role: "assistant",
-                content: outcome.text,
+    if is_stream {
+        // 构建 OpenAI 规范 SSE 流式数据帧
+        let chunk_init = OpenAiStreamChunk {
+            id: outcome.request.clone(),
+            object: "chat.completion.chunk",
+            created,
+            model: model_name.clone(),
+            choices: vec![OpenAiStreamChoice {
+                index: 0,
+                delta: OpenAiStreamDelta {
+                    role: Some("assistant"),
+                    content: None,
+                },
+                finish_reason: None,
+            }],
+            apeireth: None,
+        };
+        let chunk_content = OpenAiStreamChunk {
+            id: outcome.request.clone(),
+            object: "chat.completion.chunk",
+            created,
+            model: model_name.clone(),
+            choices: vec![OpenAiStreamChoice {
+                index: 0,
+                delta: OpenAiStreamDelta {
+                    role: None,
+                    content: Some(outcome.text),
+                },
+                finish_reason: None,
+            }],
+            apeireth: Some(OpenAiExecutionMetadata {
+                session_id: outcome.session.to_string(),
+                trace_id: outcome.trace_id,
+                served_by: outcome.served_by,
+                rounds: outcome.rounds,
+            }),
+        };
+        let chunk_final = OpenAiStreamChunk {
+            id: outcome.request,
+            object: "chat.completion.chunk",
+            created,
+            model: model_name,
+            choices: vec![OpenAiStreamChoice {
+                index: 0,
+                delta: OpenAiStreamDelta {
+                    role: None,
+                    content: None,
+                },
+                finish_reason: Some("stop"),
+            }],
+            apeireth: None,
+        };
+
+        let body_str = format!(
+            "data: {}\n\ndata: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
+            serde_json::to_string(&chunk_init).map_err(|e| http_error(
+                CanonicalEntryError::InvalidRequest(e.to_string()),
+                Some(session)
+            ))?,
+            serde_json::to_string(&chunk_content).map_err(|e| http_error(
+                CanonicalEntryError::InvalidRequest(e.to_string()),
+                Some(session)
+            ))?,
+            serde_json::to_string(&chunk_final).map_err(|e| http_error(
+                CanonicalEntryError::InvalidRequest(e.to_string()),
+                Some(session)
+            ))?,
+        );
+
+        Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "text/event-stream")
+            .header("cache-control", "no-cache")
+            .header("connection", "keep-alive")
+            .body(axum::body::Body::from(body_str))
+            .map_err(|e| {
+                http_error(
+                    CanonicalEntryError::InvalidRequest(e.to_string()),
+                    Some(session),
+                )
+            })?)
+    } else {
+        Ok(Json(OpenAiChatResponse {
+            id: outcome.request.clone(),
+            object: "chat.completion",
+            created,
+            model: model_name,
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiAssistantMessage {
+                    role: "assistant",
+                    content: outcome.text,
+                },
+                finish_reason: "stop",
+            }],
+            usage: outcome.usage,
+            apeireth: OpenAiExecutionMetadata {
+                session_id: outcome.session.to_string(),
+                trace_id: outcome.trace_id,
+                served_by: outcome.served_by,
+                rounds: outcome.rounds,
             },
-            finish_reason: "stop",
-        }],
-        usage: outcome.usage,
-        apeireth: OpenAiExecutionMetadata {
-            session_id: outcome.session.to_string(),
-            trace_id: outcome.trace_id,
-            served_by: outcome.served_by,
-            rounds: outcome.rounds,
-        },
-    }))
+        })
+        .into_response())
+    }
 }
 
 fn http_error(error: CanonicalEntryError, session: Option<SessionId>) -> HttpError {
