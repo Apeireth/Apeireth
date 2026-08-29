@@ -27,6 +27,7 @@ docs/
 | [01-architecture/engineering-report.md](01-architecture/engineering-report.md) | 工程报告（1.0 实测数据/里程碑/纪律）|
 | [01-architecture/system-capabilities.md](01-architecture/system-capabilities.md) | 系统能力规范手册（全域能力体系与安全治理契约）|
 | [01-architecture/v2-master-lineage-and-upgrade-blueprint.md](01-architecture/v2-master-lineage-and-upgrade-blueprint.md) | 2.0 终极升级蓝图白皮书（1.0 行级与 170+ 标杆解构）|
+| [01-architecture/vcp-vs-apeireth-deep-comparison.md](01-architecture/vcp-vs-apeireth-deep-comparison.md) | Apeireth 2.0 vs VCPToolBox 深度架构对比与优劣势洞察报告 |
 | [02-guides/quick-start.md](02-guides/quick-start.md) | 快速开始（真实命令）|
 | [02-guides/user-manual.md](02-guides/user-manual.md) | 用户手册（功能详解/FAQ）|
 | [02-guides/deployment.md](02-guides/deployment.md) | 部署（环境变量/持久化/前端接入/故障排查）|
