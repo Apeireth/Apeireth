@@ -22,6 +22,7 @@ use super::cognitive::{
 use super::error::{RuntimeError, RuntimeResult};
 use super::module::{Module, ModuleManifest};
 use super::organ_module::OrganModule;
+use super::preference_learning::PreferenceLearningModule;
 use super::tool_modules::{
     FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
 };
@@ -57,6 +58,9 @@ pub struct ProductionModulesConfig {
     pub fetch: Option<FetchConfig>,
     /// Register MCP capability module.
     pub mcp: bool,
+    /// Register deterministic preference learning (AfterTurn, explicit
+    /// evidence only). Requires the preference backend when enabled.
+    pub preference_learning: bool,
     /// Register the single organ module (post-turn organ cognition).
     ///
     /// Opt-in and off by default: the organ chain includes LLM-heavy W1/W2
@@ -80,6 +84,7 @@ impl Default for ProductionModulesConfig {
             shell: None,
             fetch: None,
             mcp: false,
+            preference_learning: false,
             organs: false,
         }
     }
@@ -202,6 +207,19 @@ impl ProductionModules {
                 PreferenceRecallModule::new(required(
                     backends.preferences.clone(),
                     "preference_recall",
+                    "preferences",
+                )?)
+                .with_telemetry(Arc::clone(&telemetry)),
+            ));
+        }
+
+        // Learning sits beside recall: recall overlays at TurnStart, learning
+        // writes at AfterTurn for future turns.
+        if config.preference_learning {
+            modules.push(Arc::new(
+                PreferenceLearningModule::new(required(
+                    backends.preferences.clone(),
+                    "preference_learning",
                     "preferences",
                 )?)
                 .with_telemetry(Arc::clone(&telemetry)),
