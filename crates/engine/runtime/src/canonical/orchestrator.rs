@@ -761,6 +761,30 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
     /// - 任何 organ 返 `Err` → 记录 + 继续下一 organ (per v1 runtime_brain.rs: 故障隔离).
     /// - 输出累积到 `OrganChainOutputs`, 真实路径 E7 organ 输出驱动决策.
     pub async fn chain_9_organs(&self, input: OrganInput) -> OrganChainOutputs {
+        self.chain_9_organs_with_transient_llm(
+            input,
+            Arc::clone(&self.organ_w1),
+            Arc::clone(&self.organ_w2),
+        )
+        .await
+    }
+
+    /// Same 9-organ chain, with THIS execution's W1/W2 handles supplied by the
+    /// caller.
+    ///
+    /// W1/W2 need the current invocation's LLM factory; a turn-scoped factory
+    /// must not be stored in the orchestrator's persistent state, so callers
+    /// (the organ module hook) build transient W1/W2 per execution and hand
+    /// them in here. The other seven organs keep their persistent handles, and
+    /// the parameters are only borrowed for this call — nothing is retained
+    /// after it returns. Algorithms, gates and state are identical to
+    /// [`Self::chain_9_organs`].
+    pub async fn chain_9_organs_with_transient_llm(
+        &self,
+        input: OrganInput,
+        organ_w1: Arc<dyn OrganTrait>,
+        organ_w2: Arc<dyn OrganTrait>,
+    ) -> OrganChainOutputs {
         let mut outputs = OrganChainOutputs::default();
 
         // 1. E4 curiosity
@@ -803,8 +827,8 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
                 })
             }
         }
-        // 5. W1 world_model (LLM real)
-        match self.organ_w1.process(input.clone()).await {
+        // 5. W1 world_model (LLM real, transient handle for this execution)
+        match organ_w1.process(input.clone()).await {
             Ok(out) => outputs.w1 = Some(out),
             Err(_e) => {
                 outputs.w1 = Some(OrganOutput::NotImplemented {
@@ -813,8 +837,8 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
                 })
             }
         }
-        // 6. W2 causal_world_model (LLM MCTS real)
-        match self.organ_w2.process(input.clone()).await {
+        // 6. W2 causal_world_model (LLM MCTS real, transient handle for this execution)
+        match organ_w2.process(input.clone()).await {
             Ok(out) => outputs.w2 = Some(out),
             Err(_e) => {
                 outputs.w2 = Some(OrganOutput::NotImplemented {
@@ -1718,5 +1742,129 @@ mod tests {
         assert_eq!(orch.organ_handles().len(), 9);
         assert_eq!(orch.policy_stage(), PolicyStage::Active);
         assert_eq!(orch.depth(), 0.5);
+    }
+    /// Counting mock: records how many times this handle was processed.
+    struct CountingOrgan {
+        kind: OrganKind,
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl OrganTrait for CountingOrgan {
+        fn name(&self) -> &'static str {
+            "CountingOrgan"
+        }
+        fn organ_id(&self) -> OrganKind {
+            self.kind
+        }
+        async fn process(&self, _input: OrganInput) -> Result<OrganOutput, OrganError> {
+            use std::sync::atomic::Ordering;
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(OrganOutput::NotImplemented {
+                organ: self.kind,
+                note: "counting mock".to_string(),
+            })
+        }
+    }
+
+    fn counting_orchestrator() -> (
+        OrganOrchestrator<LocalOrchestratorRelationship>,
+        Vec<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+    ) {
+        use std::sync::atomic::AtomicUsize;
+        let kinds = [
+            OrganKind::E4,
+            OrganKind::F1,
+            OrganKind::F4,
+            OrganKind::F6,
+            OrganKind::W1,
+            OrganKind::W2,
+            OrganKind::W3,
+            OrganKind::E7,
+            OrganKind::Memory,
+        ];
+        let counters: Vec<_> = kinds
+            .iter()
+            .map(|_| std::sync::Arc::new(AtomicUsize::new(0)))
+            .collect();
+        let organ = |i: usize| -> Arc<dyn OrganTrait> {
+            Arc::new(CountingOrgan {
+                kind: kinds[i],
+                calls: std::sync::Arc::clone(&counters[i]),
+            })
+        };
+        let orch = OrganOrchestrator::new(
+            organ(0),
+            organ(1),
+            organ(2),
+            organ(3),
+            organ(4),
+            organ(5),
+            organ(6),
+            organ(7),
+            organ(8),
+            Arc::new(Council::default_allow()),
+            Arc::new(MockCouncilInvoker::allow_all()),
+            Arc::new(parking_lot::Mutex::new(LocalSovereignty::default())),
+            LocalOrchestratorRelationship::default(),
+            OrchestratorBoundaries::default(),
+            OrchestratorLoopConfig::default(),
+            Arc::new(VirtualClock::new(
+                chrono::Utc
+                    .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+                    .single()
+                    .unwrap(),
+            )),
+        );
+        (orch, counters)
+    }
+
+    /// The transient seam runs THIS execution's W1/W2 handles and leaves the
+    /// persistent W1/W2 handles untouched; `chain_9_organs` keeps using the
+    /// persistent ones.
+    #[tokio::test]
+    async fn transient_seam_uses_caller_handles_for_w1_w2() {
+        use std::sync::atomic::Ordering;
+        let (orch, counters) = counting_orchestrator();
+        let transient_w1_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let transient_w2_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let make = |kind: OrganKind,
+                    calls: &std::sync::Arc<std::sync::atomic::AtomicUsize>|
+         -> Arc<dyn OrganTrait> {
+            Arc::new(CountingOrgan {
+                kind,
+                calls: std::sync::Arc::clone(calls),
+            })
+        };
+
+        let input = OrganInput::new(episode(), vec![]);
+        let outputs = orch
+            .chain_9_organs_with_transient_llm(
+                input.clone(),
+                make(OrganKind::W1, &transient_w1_calls),
+                make(OrganKind::W2, &transient_w2_calls),
+            )
+            .await;
+        assert!(outputs.all_present(), "9/9 outputs present");
+        // Persistent W1/W2 untouched by the transient seam.
+        assert_eq!(counters[4].load(Ordering::SeqCst), 0, "persistent W1");
+        assert_eq!(counters[5].load(Ordering::SeqCst), 0, "persistent W2");
+        // Transient handles ran exactly once.
+        assert_eq!(transient_w1_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(transient_w2_calls.load(Ordering::SeqCst), 1);
+        // The other seven persistent organs all ran.
+        for index in [0usize, 1, 2, 3, 6, 7, 8] {
+            assert_eq!(
+                counters[index].load(Ordering::SeqCst),
+                1,
+                "persistent organ #{index}"
+            );
+        }
+
+        // The compatibility chain still uses the persistent handles.
+        let outputs = orch.chain_9_organs(input).await;
+        assert!(outputs.all_present());
+        assert_eq!(counters[4].load(Ordering::SeqCst), 1, "persistent W1 now");
+        assert_eq!(counters[5].load(Ordering::SeqCst), 1, "persistent W2 now");
     }
 }
