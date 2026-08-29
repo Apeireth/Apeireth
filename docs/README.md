@@ -25,11 +25,14 @@ docs/
 | [01-architecture/architecture.md](01-architecture/architecture.md) | 架构总览（当前根工作区与独立桌面工作区）|
 | [01-architecture/security.md](01-architecture/security.md) | 安全模型（对齐实际机制）|
 | [01-architecture/engineering-report.md](01-architecture/engineering-report.md) | 工程报告（1.0 实测数据/里程碑/纪律）|
+| [01-architecture/system-capabilities.md](01-architecture/system-capabilities.md) | 系统能力规范手册（全域能力体系与安全治理契约）|
+| [01-architecture/v2-master-lineage-and-upgrade-blueprint.md](01-architecture/v2-master-lineage-and-upgrade-blueprint.md) | 2.0 终极升级蓝图白皮书（1.0 行级与 170+ 标杆解构）|
 | [02-guides/quick-start.md](02-guides/quick-start.md) | 快速开始（真实命令）|
 | [02-guides/user-manual.md](02-guides/user-manual.md) | 用户手册（功能详解/FAQ）|
 | [02-guides/deployment.md](02-guides/deployment.md) | 部署（环境变量/持久化/前端接入/故障排查）|
 | [02-guides/development.md](02-guides/development.md) | 开发指南（代码地图/模式/陷阱/提交规范）|
 | [03-reference/crates.md](03-reference/crates.md) | 当前根工作区 crate 索引 |
+| [03-reference/capabilities-matrix.md](03-reference/capabilities-matrix.md) | 工业级能力矩阵与对外契约参考 |
 | [03-reference/api.md](03-reference/api.md) | API 参考（真实端点/工具协议/认证）|
 | [03-reference/glossary.md](03-reference/glossary.md) | 术语表（品牌/架构/记忆/她本身/安全）|
 | [04-internal/design-intent.md](04-internal/design-intent.md) | 设计意图与拍板历史 |
