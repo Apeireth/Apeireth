@@ -323,6 +323,7 @@ dependencies = [
  "apeireth-core",
  "apeireth-governance",
  "apeireth-orchestration",
+ "apeireth-organ",
  "apeireth-plugin",
  "apeireth-protocol",
  "apeireth-provider",
