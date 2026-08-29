@@ -15,12 +15,12 @@
 //! 2. 系统: 放置在 `apeireth-memory`, 组合 `canonical::VectorIndex`
 //! 3. 架构: 纯数学与确定性数据结构, 0 unsafe, 0 网络模型依赖
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 
 use crate::canonical::domain::MemoryId;
-use crate::canonical::vector::{VectorHit, VectorIndex};
+use crate::canonical::vector::VectorIndex;
 use crate::MemoryError;
 
 /// BM25 超参数配置.
@@ -35,6 +35,59 @@ pub struct Bm25Config {
 impl Default for Bm25Config {
     fn default() -> Self {
         Self { k1: 1.2, b: 0.75 }
+    }
+}
+
+impl Bm25Config {
+    /// Returns parameters that are safe for floating-point scoring.
+    ///
+    /// `Bm25Config` remains a plain public configuration struct for backwards
+    /// compatibility.  A non-finite `k1` or `b` is therefore normalized to the
+    /// documented defaults at scoring time, and a finite `b` is constrained to
+    /// the conventional `[0.0, 1.0]` range.  This prevents a caller-provided
+    /// NaN from escaping into a ranking comparator.
+    fn normalized_for_scoring(&self) -> Self {
+        let defaults = Self::default();
+        Self {
+            k1: if self.k1.is_finite() && self.k1 >= 0.0 {
+                self.k1
+            } else {
+                defaults.k1
+            },
+            b: if self.b.is_finite() {
+                self.b.clamp(0.0, 1.0)
+            } else {
+                defaults.b
+            },
+        }
+    }
+}
+
+/// Orders scored results by score descending, followed by stable identity
+/// ascending.  All search paths use this rule so replay ordering does not
+/// depend on hash-map iteration order.
+fn compare_score_desc_then_id(
+    left_score: f32,
+    left_id: &str,
+    right_score: f32,
+    right_id: &str,
+) -> std::cmp::Ordering {
+    right_score
+        .total_cmp(&left_score)
+        .then_with(|| left_id.cmp(right_id))
+}
+
+/// Keeps ranking scores finite even when a caller supplies extreme but finite
+/// floating-point configuration values.  BM25 and RRF are non-negative in
+/// their supported parameter ranges, so positive overflow is saturated and
+/// invalid/negative intermediate values become the least relevant score.
+fn finite_non_negative_score(score: f32) -> f32 {
+    if score.is_finite() && score >= 0.0 {
+        score
+    } else if score.is_infinite() && score.is_sign_positive() {
+        f32::MAX
+    } else {
+        0.0
     }
 }
 
@@ -171,7 +224,9 @@ impl Bm25Index {
         }
     }
 
-    /// 执行 BM25 查询并返回降序排列的命中结果.
+    /// Executes a BM25 query, ordered by score descending and then document ID
+    /// ascending.  The explicit ID tie-break makes equal-score results stable
+    /// across process runs and hash-map layouts.
     pub fn search(&self, query: &str, top_k: usize) -> Vec<Bm25Hit> {
         if self.total_docs == 0 || top_k == 0 {
             return Vec::new();
@@ -182,6 +237,7 @@ impl Bm25Index {
             return Vec::new();
         }
 
+        let config = self.config.normalized_for_scoring();
         let avg_dl = self.avg_doc_length().max(1.0);
         let n = self.total_docs as f32;
         let mut scores: HashMap<String, f32> = HashMap::new();
@@ -199,12 +255,11 @@ impl Bm25Index {
                 if let Some(&tf) = tf_map.get(term) {
                     let doc_len = self.doc_lengths.get(doc_id).copied().unwrap_or(1) as f32;
                     let tf_f = tf as f32;
-                    let num = tf_f * (self.config.k1 + 1.0);
-                    let denom = tf_f
-                        + self.config.k1
-                            * (1.0 - self.config.b + self.config.b * (doc_len / avg_dl));
-                    let term_score = idf * (num / denom);
-                    *scores.entry(doc_id.clone()).or_default() += term_score;
+                    let num = tf_f * (config.k1 + 1.0);
+                    let denom = tf_f + config.k1 * (1.0 - config.b + config.b * (doc_len / avg_dl));
+                    let term_score = finite_non_negative_score(idf * (num / denom));
+                    let entry = scores.entry(doc_id.clone()).or_default();
+                    *entry = finite_non_negative_score(*entry + term_score);
                 }
             }
         }
@@ -214,11 +269,7 @@ impl Bm25Index {
             .map(|(id, score)| Bm25Hit { id, score })
             .collect();
 
-        hits.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        hits.sort_by(|a, b| compare_score_desc_then_id(a.score, &a.id, b.score, &b.id));
         hits.truncate(top_k);
         hits
     }
@@ -272,10 +323,17 @@ impl HybridSearchEngine {
         Ok(())
     }
 
-    /// 执行倒数排名融合 (Reciprocal Rank Fusion, RRF) 混合检索.
+    /// Executes reciprocal-rank-fusion (RRF) hybrid retrieval.
     ///
     /// 公式: `score(d) = (w_vec / (k + rank_vec)) + (w_bm25 / (k + rank_bm25))`
-    /// 参数 k 通常取 60.0.
+    /// Parameters `rrf_k`, `w_vector`, and `w_bm25` must be finite and
+    /// non-negative.  Results are ordered by fused score descending and then
+    /// document ID ascending.
+    ///
+    /// `query_vector = None` intentionally disables the semantic channel and
+    /// preserves lexical-only retrieval.  Supplying `Some(...)` selects the
+    /// semantic channel; invalid vector input (including a dimension mismatch
+    /// or NaN) is returned to the caller instead of being silently ignored.
     pub fn search_rrf(
         &self,
         query_text: &str,
@@ -284,8 +342,11 @@ impl HybridSearchEngine {
         rrf_k: f32,
         w_vector: f32,
         w_bm25: f32,
-    ) -> Vec<HybridHit> {
-        let bm25_hits = self.bm25_index.search(query_text, top_k * 2);
+    ) -> Result<Vec<HybridHit>, MemoryError> {
+        validate_rrf_parameters(rrf_k, w_vector, w_bm25)?;
+
+        let recall_limit = top_k.saturating_mul(2);
+        let bm25_hits = self.bm25_index.search(query_text, recall_limit);
         let mut bm25_ranks: HashMap<String, usize> = HashMap::new();
         for (idx, hit) in bm25_hits.iter().enumerate() {
             bm25_ranks.insert(hit.id.clone(), idx + 1);
@@ -293,14 +354,20 @@ impl HybridSearchEngine {
 
         let mut vector_ranks: HashMap<String, usize> = HashMap::new();
         if let Some(vec) = query_vector {
-            if let Ok(vec_hits) = self.vector_index.query(vec, top_k * 2) {
-                for (idx, hit) in vec_hits.iter().enumerate() {
-                    vector_ranks.insert(hit.id.to_string(), idx + 1);
-                }
+            let vec_hits = self
+                .vector_index
+                .query(vec, recall_limit)
+                .map_err(|error| {
+                    MemoryError::Invalid(format!("semantic vector query rejected: {error}"))
+                })?;
+            for (idx, hit) in vec_hits.iter().enumerate() {
+                vector_ranks.insert(hit.id.to_string(), idx + 1);
             }
         }
 
-        let mut all_ids: HashSet<String> = HashSet::new();
+        // A BTreeSet is deterministic even before the final score sort.  This
+        // matters for exact replay when all fusion inputs have identical score.
+        let mut all_ids: BTreeSet<String> = BTreeSet::new();
         all_ids.extend(bm25_ranks.keys().cloned());
         all_ids.extend(vector_ranks.keys().cloned());
 
@@ -311,10 +378,10 @@ impl HybridSearchEngine {
 
             let mut score = 0.0f32;
             if let Some(r) = v_rank {
-                score += w_vector / (rrf_k + r as f32);
+                score = finite_non_negative_score(score + w_vector / (rrf_k + r as f32));
             }
             if let Some(r) = b_rank {
-                score += w_bm25 / (rrf_k + r as f32);
+                score = finite_non_negative_score(score + w_bm25 / (rrf_k + r as f32));
             }
 
             hybrid_hits.push(HybridHit {
@@ -325,14 +392,21 @@ impl HybridSearchEngine {
             });
         }
 
-        hybrid_hits.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        hybrid_hits.sort_by(|a, b| compare_score_desc_then_id(a.score, &a.id, b.score, &b.id));
         hybrid_hits.truncate(top_k);
-        hybrid_hits
+        Ok(hybrid_hits)
     }
+}
+
+fn validate_rrf_parameters(rrf_k: f32, w_vector: f32, w_bm25: f32) -> Result<(), MemoryError> {
+    for (name, value) in [("rrf_k", rrf_k), ("w_vector", w_vector), ("w_bm25", w_bm25)] {
+        if !value.is_finite() || value < 0.0 {
+            return Err(MemoryError::Invalid(format!(
+                "{name} must be finite and non-negative"
+            )));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -377,11 +451,125 @@ mod tests {
             .insert("doc2", "包含独特关键词的内容", Some(vec![0.0, 1.0, 0.0]))
             .unwrap();
 
-        let hits = engine.search_rrf("独特关键词", Some(&[1.0, 0.0, 0.0]), 5, 60.0, 1.0, 1.0);
+        let hits = engine
+            .search_rrf("独特关键词", Some(&[1.0, 0.0, 0.0]), 5, 60.0, 1.0, 1.0)
+            .unwrap();
 
         assert_eq!(hits.len(), 2);
         // 两者均有一路第一名，由于权重相同，均获得有效 RRF 评分
         assert!(hits[0].score > 0.0);
         assert!(hits[1].score > 0.0);
+    }
+
+    #[test]
+    fn bm25_ties_are_id_sorted_for_ascii_cjk_and_repeated_queries() {
+        let mut ascii = Bm25Index::new(Bm25Config::default());
+        ascii.insert("zulu", "rust retrieval");
+        ascii.insert("alpha", "rust retrieval");
+        ascii.insert("empty", "");
+
+        let expected_ascii = vec!["alpha", "zulu"];
+        for _ in 0..100 {
+            let actual: Vec<_> = ascii
+                .search("rust", 10)
+                .into_iter()
+                .map(|hit| hit.id)
+                .collect();
+            assert_eq!(actual, expected_ascii);
+        }
+
+        let mut cjk = Bm25Index::new(Bm25Config::default());
+        cjk.insert("zulu", "语言模型");
+        cjk.insert("alpha", "语言模型");
+        for _ in 0..100 {
+            let actual: Vec<_> = cjk
+                .search("语言", 10)
+                .into_iter()
+                .map(|hit| hit.id)
+                .collect();
+            assert_eq!(actual, expected_ascii);
+        }
+    }
+
+    #[test]
+    fn rrf_ties_are_id_sorted_and_replay_exactly() {
+        let mut engine = HybridSearchEngine::new(2).unwrap();
+        // Vector rank: alpha then beta.  BM25 rank: beta then alpha.
+        // Equal weights make the two RRF sums exactly the same pair of terms.
+        engine
+            .insert("alpha", "needle", Some(vec![1.0, 0.0]))
+            .unwrap();
+        engine
+            .insert("beta", "needle needle", Some(vec![0.0, 1.0]))
+            .unwrap();
+
+        let expected = vec!["alpha", "beta"];
+        for _ in 0..100 {
+            let hits = engine
+                .search_rrf("needle", Some(&[1.0, 0.0]), 2, 60.0, 1.0, 1.0)
+                .unwrap();
+            let actual: Vec<_> = hits.iter().map(|hit| hit.id.as_str()).collect();
+            assert_eq!(actual, expected);
+            assert_eq!(hits[0].vector_rank, Some(1));
+            assert_eq!(hits[0].bm25_rank, Some(2));
+            assert_eq!(hits[1].vector_rank, Some(2));
+            assert_eq!(hits[1].bm25_rank, Some(1));
+            assert_eq!(hits[0].score, hits[1].score);
+        }
+    }
+
+    #[test]
+    fn absent_semantic_channel_is_lexical_only_but_invalid_vectors_are_errors() {
+        let mut engine = HybridSearchEngine::new(2).unwrap();
+        engine
+            .insert("lexical", "needle", Some(vec![1.0, 0.0]))
+            .unwrap();
+
+        let lexical_only = engine
+            .search_rrf("needle", None, 10, 60.0, 1.0, 1.0)
+            .unwrap();
+        assert_eq!(lexical_only.len(), 1);
+        assert_eq!(lexical_only[0].id, "lexical");
+        assert_eq!(lexical_only[0].vector_rank, None);
+
+        let wrong_dimension = engine
+            .search_rrf("needle", Some(&[1.0]), 10, 60.0, 1.0, 1.0)
+            .unwrap_err();
+        assert!(matches!(
+            wrong_dimension,
+            MemoryError::Invalid(message) if message.contains("dimension mismatch")
+        ));
+
+        let nan_vector = engine
+            .search_rrf("needle", Some(&[f32::NAN, 0.0]), 10, 60.0, 1.0, 1.0)
+            .unwrap_err();
+        assert!(matches!(nan_vector, MemoryError::Invalid(_)));
+        assert!(matches!(
+            engine.search_rrf("needle", None, 10, f32::NAN, 1.0, 1.0),
+            Err(MemoryError::Invalid(_))
+        ));
+    }
+
+    #[test]
+    fn zero_vectors_zero_length_documents_and_nonfinite_bm25_config_are_safe() {
+        let mut engine = HybridSearchEngine::new(2).unwrap();
+        engine.insert("zero", "", Some(vec![0.0, 0.0])).unwrap();
+        let zero_query = engine
+            .search_rrf("", Some(&[0.0, 0.0]), 1, 60.0, 1.0, 1.0)
+            .unwrap();
+        assert_eq!(zero_query.len(), 1);
+        assert!(zero_query[0].score.is_finite());
+
+        let mut bm25 = Bm25Index::new(Bm25Config {
+            k1: f32::NAN,
+            b: f32::NAN,
+        });
+        bm25.insert("zulu", "rust");
+        bm25.insert("alpha", "rust");
+        bm25.insert("empty", "");
+        let hits = bm25.search("rust", 10);
+        assert!(hits.iter().all(|hit| hit.score.is_finite()));
+        let ids: Vec<_> = hits.into_iter().map(|hit| hit.id).collect();
+        assert_eq!(ids, vec!["alpha", "zulu"]);
     }
 }

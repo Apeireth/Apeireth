@@ -17,7 +17,7 @@
 
 use chrono::{Datelike, NaiveDateTime, Timelike};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 /// 话题线索输入 (纯启发式, 0 LLM).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -41,7 +41,9 @@ pub struct TopicHint {
     pub confidence: f32,
 }
 
-/// 话题预测结果集 (按置信度降序排列).
+/// Topic prediction results, ordered by confidence descending and then topic
+/// key ascending.  The secondary key gives equal-confidence predictions a
+/// stable replay order.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TopicPrediction {
     pub hints: Vec<TopicHint>,
@@ -65,8 +67,11 @@ impl TopicPrediction {
             .filter(|h| h.confidence > 0.0)
             .max_by(|a, b| {
                 a.confidence
-                    .partial_cmp(&b.confidence)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .total_cmp(&b.confidence)
+                    // `max_by` chooses the greater item, so reverse the topic
+                    // comparison to make the lexicographically smallest equal
+                    // confidence topic the deterministic primary topic.
+                    .then_with(|| b.topic.cmp(&a.topic))
             })
             .map(|h| h.topic.as_str())
     }
@@ -121,8 +126,9 @@ pub struct TopicPredictor;
 impl TopicPredictor {
     /// 根据话题线索进行综合预测.
     pub fn predict(cue: &TopicCue) -> TopicPrediction {
-        let mut scores: std::collections::HashMap<&'static str, f32> =
-            std::collections::HashMap::new();
+        // BTreeMap prevents hash iteration from leaking into observable
+        // prediction ordering.  The explicit final sort remains the contract.
+        let mut scores: BTreeMap<&'static str, f32> = BTreeMap::new();
 
         // 1. 关键词通道 (从最近用户与助手消息中加权提取)
         for (i, msg) in cue.recent_user_messages.iter().rev().enumerate() {
@@ -184,8 +190,8 @@ impl TopicPredictor {
 
         hints.sort_by(|a, b| {
             b.confidence
-                .partial_cmp(&a.confidence)
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .total_cmp(&a.confidence)
+                .then_with(|| a.topic.cmp(&b.topic))
         });
 
         TopicPrediction { hints }
@@ -209,7 +215,7 @@ impl PreloadChannel for KeywordChannel {
     }
 
     fn candidates(&self, cue: &TopicCue) -> Vec<String> {
-        let mut matched = HashSet::new();
+        let mut matched = BTreeSet::new();
         for msg in &cue.recent_user_messages {
             let lower = msg.to_lowercase();
             for (kw, _) in TOPIC_KEYWORDS {
@@ -352,5 +358,53 @@ mod tests {
         let pred = TopicPredictor::predict(&cue);
         assert!(pred.hints.is_empty());
         assert_eq!(pred.primary(), None);
+    }
+
+    #[test]
+    fn equal_confidence_topics_are_key_sorted_and_replay_exactly() {
+        let cue = TopicCue {
+            recent_user_messages: vec!["考试项目".to_string()],
+            ..Default::default()
+        };
+        let expected = vec!["exam_prep", "project"];
+        for _ in 0..100 {
+            let prediction = TopicPredictor::predict(&cue);
+            let actual: Vec<_> = prediction
+                .hints
+                .iter()
+                .map(|hint| hint.topic.as_str())
+                .collect();
+            assert_eq!(actual, expected);
+            assert_eq!(prediction.primary(), Some("exam_prep"));
+        }
+
+        // `primary` is also deterministic for a manually-constructed result
+        // whose equal-confidence hints arrive in an arbitrary order.
+        let manually_reversed = TopicPrediction {
+            hints: vec![
+                TopicHint {
+                    topic: "project".to_string(),
+                    confidence: 0.35,
+                },
+                TopicHint {
+                    topic: "exam_prep".to_string(),
+                    confidence: 0.35,
+                },
+            ],
+        };
+        assert_eq!(manually_reversed.primary(), Some("exam_prep"));
+    }
+
+    #[test]
+    fn keyword_preload_candidates_are_deterministic() {
+        let cue = TopicCue {
+            recent_user_messages: vec!["项目代码考试".to_string()],
+            ..Default::default()
+        };
+        let channel = KeywordChannel;
+        let expected = channel.candidates(&cue);
+        for _ in 0..100 {
+            assert_eq!(channel.candidates(&cue), expected);
+        }
     }
 }
