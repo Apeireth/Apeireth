@@ -1,6 +1,40 @@
 # Changelog — Apeireth
 
-## [Unreleased] — v2.0.0-rc.1 release-gate follow-up
+## [v2.0.0-preview] - 2026-08-29
+
+> **版本定位与状态说明**:
+> 本版本为 **Apeireth 2.0 预览版 (Preview)**。
+> - **工程建设状态**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 16 Crates 100% 编译与单元/集成测试通过，前端桌面端打包与类型全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
+> - **后续发布路线**: 当前阶段已就绪，转入**协作者生产压测、真机环境与端到端联调交叉验证**阶段。待协作者压测与交叉验证闭环后，由协作者提议正式发布 2.0 最终正式版 (GA)。
+
+### 🌟 2.0 核心建设成果总览
+- **A 块 / 编排与多 Agent 协作 (`apeireth-orchestration`)**:
+  - `OrganOrchestrator` 5 阶段完整化（L0 主权闸 → 9 Organ 链 → 情绪调制 → Council 智囊团加权审议 → 演化闸 → 治理钩子）；
+  - `Council` 7 Advisor 仲裁机制与强制按住机制；
+  - `SubagentSpec` 多 Agent 编排隔离契约。
+- **D 块 / 多模态感知 (`apeireth-perception`)**:
+  - `WhisperHttpBackend`：标准 `multipart/form-data` 发送音频转写请求，支持 OpenAI / MiniMax，凭据走 `CredentialResolver`；
+  - `XcapVisionBackend`：底层 OS 屏幕多显示器截屏，无头环境 Fail-Closed 守门。
+- **R12 / 长期记忆体系与物种化演进 (`apeireth-memory`)**:
+  - **混合检索 (`hybrid_search.rs`)**: 纯 Safe Rust Okapi BM25（$k_1=1.2, b=0.75$）+ CJK 双字滑窗切分 + 余弦语义向量 + RRF 倒数排名融合；
+  - **伙伴与羁绊模型 (`partner.rs`)**: 7 大关系演化阶段 + 连续深度 $[0.0, 1.0]$ 状态机 + 5 维性格特征；
+  - **关系里程碑 (`milestone.rs`)**: 8 大关系分类 + 5 种强类型 Payload + `MilestoneStore` 契约；
+  - **动态原则洋葱 (`principles.rs`)**: 常数时间 `constant_time_eq` 审批校验（消除 1.0 时序侧信道）+ 单调自增链式演化 + L3 洋葱晋级报告导出；
+  - **叙事日记与归档 (`diary.rs`)**: 按日 `{YYYY-MM-DD}.json` 归档 + 原子写落盘 + 字符预算受限上下文注入；
+  - **每日活动聚合 (`daily_summary.rs`)**: 纯确定性事实分类流聚合（`mem-*`, `reflect-*`, 工具调用）与 Markdown 结构化渲染；
+  - **跨日记图关联 (`cross_diary.rs`)**: 共享词元双向关联索引与可审计 `shared_tokens` 上下文抽取；
+  - **口头强化反思闭环 (`reflexion.rs`)**: 3 类失败轨迹追踪 + `RuleCritic` + 精确匹配加权排序（精确=2, 子串=1）+ **严格回溯弹出防超支截断**。
+- **协调与安全执行 (`apeireth-tools-canonical` & `orchestration`)**:
+  - **上下文衰减 (`context_rot.rs`)**: 确定性 3 因子评分（重复度+半衰期陈旧度+无关度）+ 核心段绝对豁免保护；
+  - **工具输出溢出保护 (`spill.rs`)**: 会话私有落盘 + `create_new(true)` 独占原子写 + `canonicalize` 路径穿越防御；
+  - **断点续行与段编辑 (`continuation.rs`)**: 断点快照 + 原子写 + **O-1 核心段删除拦截防御**；
+  - **教育与微积分换元符号检查 (`education.rs`)**: 纯 Safe Rust 四重微分一致性检查、经典三角/双曲/线性根式模式匹配与结构化 Markdown 报告。
+- **B 块 / 网关流式交互 (`apeireth-gateway`)**:
+  - `POST /v1/chat/completions` 当 `stream: true` 时返回标准 `text/event-stream` SSE 数据帧与 `[DONE]` 终止帧。
+- **前端桌面端伙伴 (`frontend/companion-desktop`)**:
+  - Svelte 5 + Tauri 2 现代化桌面端，生产打包 `pnpm build` 与 `pnpm check` 100% 通过（0 错误，0 警告）。
+
+## [v2.0.0-rc.1] — 2026-08-28
 
 - **A 块 5 stage commit O-6 三阶审查 amend (主代理自检 0 装诚实标修正)**:
   - `c003e078` Stage 1 (was `fc159288`) + `087ab2ac` Stage 2 (was `ea9aa14f`) +

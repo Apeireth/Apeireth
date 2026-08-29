@@ -14,8 +14,10 @@ serde_json = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
+uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
+tempfile = "3"
 tokio = { workspace = true, features = ["macros", "rt", "time"] }
 
 [lib]

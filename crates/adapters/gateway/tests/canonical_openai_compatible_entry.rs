@@ -200,3 +200,92 @@ async fn the_gateway_reports_an_openai_compatible_missing_credential_as_unavaila
         "no HTTP must be attempted when the key is missing"
     );
 }
+
+#[tokio::test]
+async fn the_gateway_serves_models_list_endpoint() {
+    let resolver: Arc<dyn CredentialResolver> = Arc::new(StaticCredentials::new());
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_session_store(Arc::new(InMemorySessionStore::new()))
+        .with_governance(Arc::new(AllowAll))
+        .with_credentials(resolver)
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .expect("runtime builds");
+
+    let request = Request::builder()
+        .uri("/v1/models")
+        .method("GET")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = canonical_router(Arc::new(runtime))
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["object"], "list");
+    let data = body["data"].as_array().expect("data array");
+    assert!(data.iter().any(|m| m["id"] == MODEL));
+}
+
+#[tokio::test]
+async fn the_gateway_serves_sse_stream_chat_completions() {
+    let server = MockServer::start(openai_success_body()).await;
+    let http = reqwest::Client::builder().build().unwrap();
+    let plugin = Arc::new(
+        OpenAiCompatibleProviderPlugin::new(server.base_url(), vec![MODEL.into()], http, 2_000)
+            .unwrap(),
+    );
+    let resolver: Arc<dyn CredentialResolver> =
+        Arc::new(StaticCredentials::new().with(OPENAI_COMPATIBLE_API_KEY, FAKE_KEY));
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_session_store(Arc::new(InMemorySessionStore::new()))
+        .with_governance(Arc::new(AllowAll))
+        .with_credentials(resolver)
+        .with_plugin(plugin)
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .expect("runtime builds");
+
+    let session = SessionId::from_uuid(Uuid::from_u128(99));
+    let req_body = serde_json::json!({
+        "model": MODEL,
+        "session_id": session,
+        "stream": true,
+        "messages": [
+            {"role": "user", "content": "stream hello"}
+        ]
+    });
+
+    let request = Request::builder()
+        .uri("/v1/chat/completions")
+        .method("POST")
+        .header("content-type", "application/json")
+        .body(Body::from(req_body.to_string()))
+        .unwrap();
+
+    let response = canonical_router(Arc::new(runtime))
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get("content-type").unwrap(),
+        "text/event-stream"
+    );
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(body_str.contains("data: "));
+    assert!(body_str.contains("chat.completion.chunk"));
+    assert!(body_str.contains("data: [DONE]"));
+    assert!(server.served());
+}

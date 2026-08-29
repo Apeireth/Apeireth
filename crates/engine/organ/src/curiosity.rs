@@ -290,10 +290,7 @@ impl CuriosityOrgan {
     ///
     /// `llm_factory` 和 `model` 保留给未来 v2.1 LLM 探索路径 (per 任务 §4 / 子代理 Q
     /// 报告 #3 Council 共享 LlmFactory 路径). 当前算法不调用, 0 装诚实.
-    pub fn new(
-        llm_factory: std::sync::Arc<dyn LlmFactory>,
-        model: impl Into<String>,
-    ) -> Self {
+    pub fn new(llm_factory: std::sync::Arc<dyn LlmFactory>, model: impl Into<String>) -> Self {
         Self {
             engine: std::sync::Mutex::new(CuriosityEngine::new(CuriosityConfig::default())),
             _llm_factory: llm_factory,

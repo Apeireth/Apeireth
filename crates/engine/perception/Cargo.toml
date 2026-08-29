@@ -10,8 +10,11 @@ description = "Apeireth 感知层 trait (P-arch 2026-08-27, A3): 5 modality (Tex
 [dependencies]
 apeireth-core = { path = "../../foundation/core" }
 apeireth-plugin = { path = "../../foundation/plugin" }
+async-trait = { workspace = true }
+reqwest = { workspace = true, features = ["multipart"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 
 [lib]
 name = "apeireth_perception"

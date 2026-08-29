@@ -58,8 +58,14 @@ pub mod emergence;
 pub mod emotion_memory;
 pub mod hypothesis;
 pub mod memory;
+pub mod tone;
 pub mod value_cases;
 pub mod world_model;
+
+pub use tone::{
+    deliberation_intensity, emotion_tone, organ_tone, tone_hint, BondCharacterSnapshot,
+    DeliberationEcho, EmotionToneStyle, ToneError,
+};
 
 // ============================================
 // 0 装 Noop stub (无 organ 占位: 9 organ 全实装)

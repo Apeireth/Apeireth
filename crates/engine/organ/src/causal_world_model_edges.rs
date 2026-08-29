@@ -709,7 +709,11 @@ mod tests {
         assert_eq!(edge.from, "主人|行为|熬夜");
         assert_eq!(edge.to, "熬夜|导致|效率低");
         assert_eq!(edge.evidence_count, 7, "共现 7 次即边");
-        assert_eq!(edge.source, EdgeSource::Statistical, "W3 主路径 = Statistical");
+        assert_eq!(
+            edge.source,
+            EdgeSource::Statistical,
+            "W3 主路径 = Statistical"
+        );
         assert!(edge.weight > 0.0 && edge.weight <= 1.0);
         assert!(edge.predicate.contains("行为") && edge.predicate.contains("导致"));
     }
@@ -772,7 +776,10 @@ mod tests {
         // 1000 秒后衰减 (factor = 0.99^1000 ≈ 4.3e-5).
         miner.decay_weights(1_000_000);
         let after = miner.get_top_edges(10)[0].total_weight;
-        assert!(after < before, "衰减后权重应下降: before={before}, after={after}");
+        assert!(
+            after < before,
+            "衰减后权重应下降: before={before}, after={after}"
+        );
         assert!(after > 0.0, "衰减不归零: after={after}");
     }
 
