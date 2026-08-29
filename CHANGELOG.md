@@ -40,6 +40,11 @@
   - **全双工实时流式打断与插话机制 (`barge_in.rs`)**: 毫秒级广播取消信号阻断服务端生成与传输，向客户端推送 `event: interrupt` 数据帧；
   - **情感声学参数调制与语音向导 (`emotion_voice.rs`)**: 将 PAD 情绪向量与性格特征映射为 TTS 底层 Pitch / Speed / Volume / Emotion 连续声学参数与 SSML 封装；
   - **跨场景环境自适应伴随状态机 (`ambient_context.rs`)**: AIRI 模式感知前台 IDE / 全屏游戏 / 阅读浏览 / 空闲状态，自动在 `FocusAssistant`, `SilentObserver`, `WarmCompanion`, `Resting` 间平滑切换。
+- **1.0 深度沉淀与通用协议标准全量吸收 (`apeireth-memory` / `governance` / `tools-canonical`)**:
+  - **离线做梦与夜间认知重组 6 阶段引擎 (`dreaming.rs`)**: `Awake` $\to$ `Drowsy` $\to$ `LightSleep` $\to$ `DeepSleep` $\to$ `RemSleep` $\to$ `Awakening` 状态机，驱动 `MetaThinkingChain` 递归推演，自动将反思固化为 `procedural.rs` 习惯规则；
+  - **HASH-SQL 唯一事实时间线与不可篡改仲裁机 (`arbitration.rs`)**: 统一 `Frontend`, `Cli`, `Gateway`, `AgentComm`, `System`, `External` 多源事件，三元组确定性仲裁 + 链式 SHA-256 签名 + Merkle Root 根折叠 + `constant_time_eq_str` 防时序侧信道；
+  - **工具调用频率限制与安全黑名单守门 (`rate_limit.rs`)**: A6 规则增强，支持分/时多尺度滑动窗口、静态安全黑名单即时阻断与四阶信任等级体系 (`TrustTier: Low, Standard, High, Trusted`)；
+  - **Model Context Protocol (MCP) 标准外部工具桥接 (`mcp.rs`)**: 纯 Safe Rust 实现 JSON-RPC 2.0 协议握手 (`initialize`)、动态工具发现 (`tools/list`) 与隔离调用 (`tools/call`)，多模态输出（Text/Image/Resource）归一化。
 - **前端桌面端伙伴 (`frontend/companion-desktop`)**:
   - Svelte 5 + Tauri 2 现代化桌面端，生产打包 `pnpm build` 与 `pnpm check` 100% 通过（0 错误，0 警告）。
 
