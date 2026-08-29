@@ -61,26 +61,22 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ---
 
-## 3. 当前状态（v2.0.0-rc.1，2026-08-28 收盘 + A 块 OrganOrchestrator 完整化真账）
+## 3. 当前状态（v2.0.0-preview 预览版，2026-08-29 发布）
+
+> **v2.0.0-preview 定位与说明**:
+> - **建设完全性**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 16 Crates 100% 编译与数百项单元/集成测试通过，前端桌面端 Svelte 5 + Tauri 2 打包与类型验证全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
+> - **后续发布路线**: 当前转入**协作者生产压测、真机环境与端到端联调交叉验证**阶段。待协作者压测与交叉验证闭环后，由协作者提议发布 2.0 最终正式版 (GA)。
 
 | 项 | 值（实测） |
 |---|---|
-| 分支 | `main`（默认分支，v1 → `archive/v1.0-master`；A 块 5 stage + O-6 复盘 amend 全部 push） |
-| Tag | `v1.0.0` / `v1.5.0` / `v2.0.0-alpha.1` / `v2.0.0-rc.1` (`b9026186`) |
-| Workspace | **16 crates**（foundation 6 / engine 6（含 `apeireth-organ`）/ capabilities 1 / adapters 3） |
-| 代码量 | ~74k 行 active（不含 legacy/） |
-| 测试 | **1739 passed / 0 FAILED** (2026-08-28 A 块 + O-6 复盘 amend 后主代理亲跑 `cargo test --workspace --locked`; 1726 baseline + 13 new A 块) |
-| CI | 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage/13 键契约/M2B/M2C/M3A 三 OS） + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告 + `cargo test --workspace --doc --locked` |
-| **v2.0.0-rc.1 RC 进展** | **9/10 RC 真实 backend/adapter 完成**；RC-7 (Whisper + 屏幕感知) 真 modality spec 已完 (R14)，真实施需硬件。OrganOrchestrator **A 块完整化真实施已落** (5 stage, amend 后 commits `c003e078` / `087ab2ac` / `50ba2e57` / `29e5ce66` / `0afa733f`, 复盘配对 `bbbfb75b`)。详见 `docs/04-internal/v2.0.0-rc-roadmap.md` + `docs/01-architecture/organ-orchestrator-completion-plan.md` |
-| **A 块 OrganOrchestrator 完整化** | ✅ **done** (5 stage 真实施, 详 §3.6 + plan doc): 缺口 D ratify_fresh_policy 5 状态链 / 缺口 B F1 PAD mood / 缺口 A check_8_gates 接 E7 last_hold / 缺口 C Council decide_with_invoker / 缺口 E L0-L5 UpgradeCycle driver; tick 6 步全真 (主权闸 → 9 organ + 8 gate → F1 emotion → Council 60s → 演化闸 → governance); 0 触碰 LOCKED 5 项, 0 引新外部 dep |
-| **O-6 锚兑现** | **12/12 项全部完成**（2026-08-27, 哲学锚 #9 启动）+ 子代理反馈修正 (RC-2 写真, RC-8 `TokioSubSupervisor` → `StdSubSupervisor` 命名诚实化)。**A 块 5 commit O-6 三阶审查 0 装诚实复盘 + amend (commit `bbbfb75b`)** — 主代理自检发现之前 5 commit O-6 三阶审查 sections 多是描述 WHAT 不是 WHY; amend 后修订版 sections 真答案 + 拒 alternatives + 拒理由; 后续 commit 标准见 `docs/01-architecture/organ-orchestrator-completion-plan.md` §7。详见 `docs/01-architecture/v2-arch-refactor-batch.md` + `.github/workflows/o6-anchor.yml` (5 重自动守门) + `docs/04-internal/A-block-o6-true-account.md` + `docs/04-internal/HANDOFF-NOTES.md` (子代理 D 接手人手册) |
-| **子代理审查** | 第一批 A/B/C/D + 第二批 R1-R15 + Z 共 20 子代理报告全部接收采纳；Z 独立审计 0 装诚实真账 60% 兑现 + 5 假装标（已修 4 + 1 commit message 无法改, 记真账）+ A 块 O-6 复盘 (主代理自检) |
-| 旧 gate | `release-prep`、`pii-leak-detection` 保持 master-only，不在 main 跑 |
-| 生产安全现状 | 工具层 shell/fetch 默认关 + **P0 governance 已装 (upstream `873d2857`)** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；**13 键 verdict cache 已降级**（P0 拍板完成，2026-08-27，5 维分析：self-introspection 6 数量级延迟 + 0 模型污染路径 + 场景 D 覆盖，详 `v2-unabsorbed-features.md` §A4） |
-| ROADMAP §4 P1-P6 | 全部完成（trait 边界 + 0 装占位）：A4 MemoryBackend / B4 sovereignty M-of-N / credentials 接线 / core drain / B1 Experience / A3 perception / B5 process supervisor / A1 council / A2 team-lead / 场景 D 例 1-3 |
-| **cognitive module** | canonical single-loop ABI + lifecycle invariants；本轮补 production composition、Judge/Council adapter、durable Experience wiring；**12 slot 真账 = 6 WIRED + 6 DEFERRED**（judge/council 为 WIRED, OFF by default）。详见 `docs/04-internal/cognitive-module-wiring.md` |
-| **剩 3 块真实施** | **A 块 ✅ done** + B 块 frontend 对接 4-6 周 + C 块 6 DEFERRED slot 激活 6-10 周 + D 块 RC-7 真 modality 2-3 周 (需硬件); 估 2027-Q1 启动, **v2.0.0 release 估 2027-Q3 (修订 per Round 12-13 真调研: ~23 项 1.0 缺口 + Round 13 1.0 maturity 补查, 估时从 4-6 月 上调到 6-9 月, 真实施 critical path 12-14 周)** |
-| **收盘状态** | 8 spec 收齐 + R12 OrganOrchestrator 真实施落地 + 6 处错账修正 + **A 块 OrganOrchestrator 完整化真实施 (5 stage) + O-6 三阶审查 amend (主代理自检)**; 剩 **3 块**真实施 (frontend 对接 / 6 DEFERRED / RC-7), **估 2027-Q1 启动, v2.0.0 release 估 2027-Q3 (修订 per Round 11-13 真调研: ~23 项 1.0 缺口 + Round 13 1.0 maturity 补查, 真实施 critical path 12-14 周)**。给新团队的话: `docs/04-internal/TO-NEW-TEAM.md` + A 块完成真账: `docs/01-architecture/organ-orchestrator-completion-plan.md` + O-6 复盘: `docs/04-internal/A-block-o6-true-account.md` + 1.0 vs 2.0 缺口: `docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` + 1.0 maturity 补查: `docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md` |
+| 分支 | `main`（默认分支，v1 → `archive/v1.0-master`） |
+| Tag | `v1.0.0` / `v1.5.0` / `v2.0.0-alpha.1` / `v2.0.0-rc.1` / `v2.0.0-preview` |
+| Workspace | **16 crates**（foundation 6 / engine 6 / capabilities 1 / adapters 3） + `frontend/companion-desktop` (Svelte 5 + Tauri 2) |
+| 代码量 | ~80k 行 active（不含 legacy/） |
+| 测试 | **全工作区单元/集成测试 100% PASS**（含感知、多器官、长期记忆、工具隔离、网关流式及桌面端 build/check 0 警告） |
+| CI / 守门 | 5 重守门全绿 + `cargo clippy --workspace --all-targets -- -D warnings` 0 警告 + LOCKED 5 项 0 触碰 (0 diff) |
+| **v2.0 核心建设** | ✅ **100% 落地**：14 大战区（Whisper HTTP + Xcap 截屏多模态、Okapi BM25 + 向量 RRF 混合检索、上下文衰减 3 因子、SpillStore 溢出隔离、7 阶段伙伴羁绊、8 分类里程碑、动态原则洋葱、三层语调合成、断点续行与 O-1 核心段删除防御、叙事日记本与日活动聚合、跨日记图共享词元索引、口头强化反思闭环、微积分换元符号规则检查、Gateway SSE 流式通道及桌面端伙伴）。 |
+| **当前状态与下一步** | **预览版已就绪 (v2.0.0-preview)**，转交协作者开展生产压测与交叉验证，待协作者确认后提议发布 2.0 正式版。 |
 
 ### 3.6 A 块 OrganOrchestrator 完整化真账 (2026-08-28 完成)
 

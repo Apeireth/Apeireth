@@ -52,9 +52,7 @@
 use std::collections::HashMap;
 
 use apeireth_plugin::llm_factory::LlmFactory;
-use apeireth_plugin::organ::{
-    OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
-};
+use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
 
 // ============================================
 // v1 数据结构 1:1 翻译 (HypothesisStore + Evidence + Status)
@@ -397,10 +395,7 @@ impl HypothesisOrgan {
     ///
     /// `llm_factory` 和 `model` 保留给未来 v2.1 LLM 命题抽取路径. 当前算法不调用,
     /// 0 装诚实.
-    pub fn new(
-        llm_factory: std::sync::Arc<dyn LlmFactory>,
-        model: impl Into<String>,
-    ) -> Self {
+    pub fn new(llm_factory: std::sync::Arc<dyn LlmFactory>, model: impl Into<String>) -> Self {
         Self::with_configs(
             llm_factory,
             model,
@@ -737,9 +732,7 @@ mod tests {
     async fn process_returns_hypothesis_output_with_registered_id() {
         let organ = HypothesisOrgan::new(test_factory(), "minimax-m3");
         let output = organ
-            .process(input_with_hints(vec![
-                "主人熬夜 → 次日效率低".into(),
-            ]))
+            .process(input_with_hints(vec!["主人熬夜 → 次日效率低".into()]))
             .await
             .expect("process ok");
         match output {
