@@ -142,6 +142,26 @@ async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax
     assert_eq!(outcome.served_by.as_str(), "provider.minimax");
     assert_eq!(outcome.text, "hello from canonical cli");
     assert_eq!(outcome.rounds, 1);
+
+    let mut names: Vec<String> = runtime
+        .tool_declarations()
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect();
+    names.sort();
+    for required in ["filesystem", "search", "repo"] {
+        let count = names
+            .iter()
+            .filter(|name| name.as_str() == required)
+            .count();
+        assert_eq!(count, 1, "{required} must be unique, got {names:?}");
+    }
+    for absent in ["shell", "fetch"] {
+        assert!(
+            !names.iter().any(|name| name.as_str() == absent),
+            "{absent} must not be registered in production CLI by default: {names:?}"
+        );
+    }
 }
 
 #[tokio::test]
