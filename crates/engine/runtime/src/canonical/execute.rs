@@ -60,8 +60,8 @@ use super::approval::{
 };
 use super::error::{RuntimeError, RuntimeResult};
 use super::module::{
-    HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleOutcome, ModuleTurnState,
-    PromptOverlay,
+    HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleInvoker, ModuleOutcome,
+    ModuleTurnState, PromptOverlay,
 };
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
@@ -1396,17 +1396,21 @@ impl Runtime {
         let active_tools = self.tools();
         for module in &self.modules {
             let manifest = module.manifest();
-            let spawner = RuntimeSubLoopSpawner::new(
-                &self.providers,
+            // One turn-scoped spawner per hook: the borrowed accessor and the
+            // owned handle below dereference the same Arc allocation, so every
+            // path shares this turn's budget and identity.
+            let spawner = Arc::new(RuntimeSubLoopSpawner::new(
+                self.providers_arc(),
                 active_tools.clone(),
-                self.governance.as_ref(),
+                Arc::clone(&self.governance),
                 *session_id,
                 trace_id,
                 model,
-                &manifest.id,
+                manifest.id.as_str(),
                 Arc::clone(module_state),
                 invocation.depth,
-            );
+            ));
+            let invoker_handle: Arc<dyn ModuleInvoker> = spawner.clone();
             let context = ModuleContext {
                 session_id,
                 model,
@@ -1417,8 +1421,9 @@ impl Runtime {
                 invocation,
                 module_id: &manifest.id,
                 error,
-                invoker: &spawner,
-                subloop: &spawner,
+                invoker: &*spawner,
+                invoker_handle,
+                subloop: &*spawner,
             };
             let outcome =
                 module
