@@ -7,11 +7,15 @@
 
 use std::sync::Arc;
 
-use apeireth_core::kernel::{SessionId, Timestamp};
+use apeireth_core::kernel::{ApprovalId, SessionId, Timestamp};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
-use apeireth_runtime::canonical::{ExecutionTrace, Runtime, RuntimeError, TurnRequest};
+use apeireth_runtime::canonical::{
+    ApprovalDecision, ApprovalResolution, ExecutionTrace, PendingApprovalView, Runtime,
+    RuntimeError, TurnOutcome, TurnRequest,
+};
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -65,6 +69,48 @@ pub struct CanonicalChatResponse {
     pub trace: ExecutionTrace,
 }
 
+/// Transport-neutral pending-approval payload. Exposes identity and safe
+/// metadata only; it never includes the executable frozen payload.
+#[derive(Debug, Clone, Serialize)]
+pub struct CanonicalPendingApproval {
+    pub session: SessionId,
+    pub approval_id: ApprovalId,
+    pub request: String,
+    pub trace_id: String,
+    pub capability_id: String,
+    pub tool_name: String,
+    pub governance_hook: String,
+    pub governance_reason: String,
+    pub created_at: Timestamp,
+    pub expires_at: Timestamp,
+}
+
+impl From<PendingApprovalView> for CanonicalPendingApproval {
+    fn from(view: PendingApprovalView) -> Self {
+        Self {
+            session: view.session_id,
+            approval_id: view.approval_id,
+            request: view.request_id.to_string(),
+            trace_id: view.trace_id.to_string(),
+            capability_id: view.capability_id.to_string(),
+            tool_name: view.tool_name,
+            governance_hook: view.governance_hook,
+            governance_reason: view.governance_reason,
+            created_at: view.created_at,
+            expires_at: view.expires_at,
+        }
+    }
+}
+
+/// Result of a canonical chat or approval-resume call.
+#[derive(Debug, Clone)]
+pub enum CanonicalChatOutcome {
+    /// The turn completed.
+    Completed(CanonicalChatResponse),
+    /// The turn is paused for human approval. The `ApprovalId` is retained.
+    PendingApproval(CanonicalPendingApproval),
+}
+
 /// Failure at the gateway adapter boundary.
 #[derive(Debug, thiserror::Error)]
 pub enum CanonicalEntryError {
@@ -76,11 +122,22 @@ pub enum CanonicalEntryError {
     Runtime(#[from] RuntimeError),
 }
 
+/// Request to resolve one pending approval.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CanonicalApprovalRequest {
+    pub session: SessionId,
+    pub approval: ApprovalId,
+    /// `approve`, `reject`, or `cancel`.
+    pub decision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
 /// Invoke the canonical runtime through the real gateway entry adapter.
 pub async fn execute_chat(
     runtime: &Runtime,
     request: CanonicalChatRequest,
-) -> Result<CanonicalChatResponse, CanonicalEntryError> {
+) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
     if request.input.trim().is_empty() {
         return Err(CanonicalEntryError::InvalidRequest(
             "input must not be empty".into(),
@@ -96,17 +153,69 @@ pub async fn execute_chat(
         turn = turn.with_system(system);
     }
 
-    let outcome = runtime.execute(turn).await?;
-    Ok(CanonicalChatResponse {
-        session: outcome.session,
-        request: outcome.request.to_string(),
-        trace_id: outcome.trace.trace.to_string(),
-        text: outcome.text,
-        served_by: outcome.served_by.to_string(),
-        rounds: outcome.rounds,
-        usage: outcome.usage,
-        trace: outcome.trace,
-    })
+    Ok(turn_outcome_to_chat(runtime.execute_outcome(turn).await?))
+}
+
+/// Resolve a pending approval through the canonical runtime API.
+pub async fn resolve_approval(
+    runtime: &Runtime,
+    request: CanonicalApprovalRequest,
+) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
+    let decision = parse_approval_decision(&request.decision, request.reason.clone())?;
+    match runtime
+        .resolve_approval(request.session, request.approval, decision)
+        .await?
+    {
+        ApprovalResolution::Resumed(outcome) => Ok(turn_outcome_to_chat(outcome)),
+        ApprovalResolution::AlreadyResolved { status } => Err(CanonicalEntryError::InvalidRequest(
+            format!("approval already resolved: {status:?}"),
+        )),
+        ApprovalResolution::ExecutionInterrupted { approval_id } => {
+            Err(CanonicalEntryError::InvalidRequest(format!(
+                "approval {approval_id} was interrupted and must not be retried automatically"
+            )))
+        }
+        ApprovalResolution::Expired => Err(CanonicalEntryError::InvalidRequest(
+            "approval expired before it was resolved".into(),
+        )),
+        ApprovalResolution::NotFound => Err(CanonicalEntryError::InvalidRequest(
+            "approval was not found for this session".into(),
+        )),
+    }
+}
+
+fn turn_outcome_to_chat(outcome: TurnOutcome) -> CanonicalChatOutcome {
+    match outcome {
+        TurnOutcome::Completed(response) => {
+            CanonicalChatOutcome::Completed(CanonicalChatResponse {
+                session: response.session,
+                request: response.request.to_string(),
+                trace_id: response.trace.trace.to_string(),
+                text: response.text,
+                served_by: response.served_by.to_string(),
+                rounds: response.rounds,
+                usage: response.usage,
+                trace: response.trace,
+            })
+        }
+        TurnOutcome::PendingApproval(view) => {
+            CanonicalChatOutcome::PendingApproval(CanonicalPendingApproval::from(view))
+        }
+    }
+}
+
+fn parse_approval_decision(
+    decision: &str,
+    reason: Option<String>,
+) -> Result<ApprovalDecision, CanonicalEntryError> {
+    match decision.trim().to_ascii_lowercase().as_str() {
+        "approve" => Ok(ApprovalDecision::Approve),
+        "reject" => Ok(ApprovalDecision::Reject { reason }),
+        "cancel" => Ok(ApprovalDecision::Cancel { reason }),
+        other => Err(CanonicalEntryError::InvalidRequest(format!(
+            "unknown approval decision {other:?}; expected approve, reject, or cancel"
+        ))),
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -170,6 +279,7 @@ pub fn canonical_router(runtime: Arc<Runtime>) -> Router {
         .route("/health", get(health))
         .route("/v1/chat", post(native_chat))
         .route("/v1/chat/completions", post(openai_chat))
+        .route("/v1/approvals/resolve", post(native_resolve_approval))
         .with_state(runtime)
 }
 
@@ -191,14 +301,36 @@ async fn health() -> Json<serde_json::Value> {
 async fn native_chat(
     State(runtime): State<Arc<Runtime>>,
     Json(request): Json<CanonicalChatRequest>,
-) -> Result<Json<CanonicalChatResponse>, HttpError> {
+) -> Result<Response, HttpError> {
     let mut request = request;
     let session = request.session.unwrap_or_else(SessionId::new);
     request.session = Some(session);
     execute_chat(runtime.as_ref(), request)
         .await
-        .map(Json)
+        .map(chat_http_response)
         .map_err(|error| http_error(error, Some(session)))
+}
+
+async fn native_resolve_approval(
+    State(runtime): State<Arc<Runtime>>,
+    Json(request): Json<CanonicalApprovalRequest>,
+) -> Result<Response, HttpError> {
+    let session = request.session;
+    resolve_approval(runtime.as_ref(), request)
+        .await
+        .map(chat_http_response)
+        .map_err(|error| http_error(error, Some(session)))
+}
+
+fn chat_http_response(outcome: CanonicalChatOutcome) -> Response {
+    match outcome {
+        CanonicalChatOutcome::Completed(response) => {
+            (StatusCode::OK, Json(response)).into_response()
+        }
+        CanonicalChatOutcome::PendingApproval(pending) => {
+            (StatusCode::ACCEPTED, Json(pending)).into_response()
+        }
+    }
 }
 
 async fn openai_chat(
@@ -239,6 +371,15 @@ async fn openai_chat(
     let outcome = execute_chat(runtime.as_ref(), native)
         .await
         .map_err(|error| http_error(error, Some(session)))?;
+    let CanonicalChatOutcome::Completed(outcome) = outcome else {
+        return Err(http_error(
+            CanonicalEntryError::InvalidRequest(
+                "OpenAI-compatible chat cannot resume a pending approval; use /v1/approvals/resolve"
+                    .into(),
+            ),
+            Some(session),
+        ));
+    };
     let created = Timestamp::from_clock(runtime.clock().as_ref()).epoch_millis() / 1_000;
 
     Ok(Json(OpenAiChatResponse {
@@ -268,7 +409,10 @@ fn http_error(error: CanonicalEntryError, session: Option<SessionId>) -> HttpErr
     let status = match &error {
         CanonicalEntryError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
         CanonicalEntryError::Runtime(RuntimeError::Denied { .. }) => StatusCode::FORBIDDEN,
-        CanonicalEntryError::Runtime(RuntimeError::ApprovalRequired { .. }) => StatusCode::CONFLICT,
+        CanonicalEntryError::Runtime(RuntimeError::ApprovalRequired { .. })
+        | CanonicalEntryError::Runtime(RuntimeError::SessionApprovalPending { .. }) => {
+            StatusCode::CONFLICT
+        }
         CanonicalEntryError::Runtime(RuntimeError::NoProvider { .. })
         | CanonicalEntryError::Runtime(RuntimeError::NoHealthyProvider { .. })
         | CanonicalEntryError::Runtime(RuntimeError::Misconfigured(_)) => {

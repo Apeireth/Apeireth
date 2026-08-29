@@ -2,12 +2,14 @@ use std::env;
 use std::process::ExitCode;
 
 use apeireth_cli::{
-    build_canonical_runtime_from_env, dispatch_canonical_chat, dispatch_gateway_serve,
+    build_canonical_runtime_from_env, dispatch_canonical_approval, dispatch_canonical_chat,
+    dispatch_gateway_serve, CanonicalCliTurn,
 };
+use apeireth_runtime::ApprovalDecision;
 
 fn print_help() {
     println!(
-        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth gateway serve [--port PORT]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
+        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--port PORT]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
     );
 }
 
@@ -47,7 +49,7 @@ fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> E
         }
     };
     match runtime.block_on(dispatch_canonical_chat(prompt, model, session)) {
-        Ok(response) => {
+        Ok(CanonicalCliTurn::Completed(response)) => {
             println!("{}", response.text);
             eprintln!(
                 "session={} trace={} provider={} rounds={}",
@@ -55,8 +57,45 @@ fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> E
             );
             ExitCode::SUCCESS
         }
+        Ok(CanonicalCliTurn::PendingApproval(view)) => {
+            println!("approval required");
+            eprintln!(
+                "session={} approval={} capability={} tool={} expires_at={} reason={}",
+                view.session_id,
+                view.approval_id,
+                view.capability_id,
+                view.tool_name,
+                view.expires_at,
+                view.governance_reason
+            );
+            eprintln!(
+                "resume with: apeireth approve --session {} --approval {}",
+                view.session_id, view.approval_id
+            );
+            ExitCode::from(2)
+        }
         Err(error) => {
             eprintln!("canonical chat failed: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_approval(session: String, approval: String, decision: ApprovalDecision) -> ExitCode {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("failed to create Tokio runtime: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(dispatch_canonical_approval(session, approval, decision)) {
+        Ok(resolution) => {
+            println!("{resolution:?}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("canonical approval failed: {error}");
             ExitCode::FAILURE
         }
     }
@@ -113,6 +152,52 @@ fn parse_chat(args: &[String]) -> Result<(String, Option<String>, Option<String>
     Ok((prompt.join(" "), model, session))
 }
 
+fn parse_approval(
+    command: &str,
+    args: &[String],
+) -> Result<(String, String, ApprovalDecision), String> {
+    let mut session = None;
+    let mut approval = None;
+    let mut reason = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--session" => {
+                index += 1;
+                session = args.get(index).cloned();
+                if session.is_none() {
+                    return Err(format!("{command} --session requires a value"));
+                }
+            }
+            "--approval" => {
+                index += 1;
+                approval = args.get(index).cloned();
+                if approval.is_none() {
+                    return Err(format!("{command} --approval requires a value"));
+                }
+            }
+            "--reason" => {
+                index += 1;
+                reason = args.get(index).cloned();
+                if reason.is_none() {
+                    return Err(format!("{command} --reason requires a value"));
+                }
+            }
+            value => return Err(format!("unknown {command} argument: {value}")),
+        }
+        index += 1;
+    }
+    let session = session.ok_or_else(|| format!("{command} requires --session"))?;
+    let approval = approval.ok_or_else(|| format!("{command} requires --approval"))?;
+    let decision = match command {
+        "approve" => ApprovalDecision::Approve,
+        "reject" => ApprovalDecision::Reject { reason },
+        "cancel" => ApprovalDecision::Cancel { reason },
+        other => return Err(format!("unknown approval command: {other}")),
+    };
+    Ok((session, approval, decision))
+}
+
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() || args[0] == "session" {
@@ -130,6 +215,14 @@ fn main() -> ExitCode {
     match args[0].as_str() {
         "chat" => match parse_chat(&args[1..]) {
             Ok((prompt, model, session)) => run_chat(prompt, model, session),
+            Err(error) => {
+                eprintln!("{error}");
+                print_help();
+                ExitCode::FAILURE
+            }
+        },
+        "approve" | "reject" | "cancel" => match parse_approval(&args[0], &args[1..]) {
+            Ok((session, approval, decision)) => run_approval(session, approval, decision),
             Err(error) => {
                 eprintln!("{error}");
                 print_help();
