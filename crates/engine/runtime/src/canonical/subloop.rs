@@ -26,8 +26,8 @@ use async_trait::async_trait;
 use thiserror::Error;
 
 use super::module::{
-    ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker,
-    ModuleTurnState, DEFAULT_MAX_INVOCATION_DEPTH,
+    authorize_isolated_completion, ModuleInvocationError, ModuleInvocationRequest,
+    ModuleInvocationResponse, ModuleInvoker, ModuleTurnState, DEFAULT_MAX_INVOCATION_DEPTH,
 };
 use super::provider::ProviderRouter;
 
@@ -129,6 +129,12 @@ pub enum SubLoopError {
     /// Provider failure.
     #[error("subloop provider failed: {reason}")]
     Provider { reason: String },
+    /// Canonical completion governance refused the SubLoop provider call.
+    #[error("subloop completion refused by governance: {reason}")]
+    Denied { reason: String },
+    /// SubLoops cannot mint a hidden human approval for completions.
+    #[error("subloop completion requires approval which is not permitted: {reason}")]
+    ApprovalRequired { reason: String },
 }
 
 impl From<ModuleInvocationError> for SubLoopError {
@@ -140,6 +146,8 @@ impl From<ModuleInvocationError> for SubLoopError {
             }
             ModuleInvocationError::NoModel => Self::NoModel,
             ModuleInvocationError::Provider { reason } => Self::Provider { reason },
+            ModuleInvocationError::Denied { reason } => Self::Denied { reason },
+            ModuleInvocationError::ApprovalRequired { reason } => Self::ApprovalRequired { reason },
         }
     }
 }
@@ -238,6 +246,16 @@ impl<'a> RuntimeSubLoopSpawner<'a> {
             if !tool_declarations.is_empty() {
                 req.tools = tool_declarations.clone();
             }
+
+            authorize_isolated_completion(
+                self.governance,
+                self.session_id,
+                self.trace_id,
+                &model,
+                transcript.len(),
+                round,
+            )
+            .await?;
 
             let routed =
                 self.router
@@ -397,6 +415,16 @@ impl ModuleInvoker for RuntimeSubLoopSpawner<'_> {
             messages.push(NormalizedMessage::system(system));
         }
         messages.push(NormalizedMessage::user(request.input));
+
+        authorize_isolated_completion(
+            self.governance,
+            self.session_id,
+            self.trace_id,
+            &model,
+            messages.len(),
+            1,
+        )
+        .await?;
 
         let routed = self
             .router
