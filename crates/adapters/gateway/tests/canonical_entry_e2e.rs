@@ -7,7 +7,10 @@ use apeireth_core::kernel::{
     CapabilityId, Clock, ModelId, PluginId, SessionId, Timestamp, VirtualClock,
 };
 use apeireth_gateway::canonical_router;
-use apeireth_governance::{AllowAll, Decision, GovernanceHook, GovernanceRequest};
+use apeireth_governance::{
+    AllowAll, Decision, GovernanceHook, GovernancePipeline, GovernanceRequest, Permission,
+    PermissionGovernanceHook, PermissionPolicy,
+};
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
     ProviderError, ToolCapability,
@@ -415,4 +418,178 @@ async fn real_http_entry_preserves_a_tool_failure() {
     assert!(session.messages.iter().any(|message| {
         message.role == MessageRole::Tool && message_text(message).contains("integer fields")
     }));
+}
+
+fn approval_policy() -> GovernancePipeline {
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.calculator".into()));
+    policy.require_approval_for("tool.calculator");
+    GovernancePipeline::new().with(Arc::new(PermissionGovernanceHook::new(policy)))
+}
+
+fn resolve_request(session: SessionId, approval: &str, decision: &str) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri("/v1/approvals/resolve")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_vec(&serde_json::json!({
+                "session": session,
+                "approval": approval,
+                "decision": decision
+            }))
+            .unwrap(),
+        ))
+        .unwrap()
+}
+
+async fn json_body(response: axum::http::Response<Body>) -> (StatusCode, serde_json::Value) {
+    let status = response.status();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+#[tokio::test]
+async fn http_pending_approval_can_be_approved_without_double_execution() {
+    let provider = FakeProvider::new();
+    let calculator_calls = Arc::new(AtomicUsize::new(0));
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(frozen_clock())
+            .with_governance(Arc::new(approval_policy()))
+            .with_plugin(TestPlugin::provider(provider.clone()))
+            .with_plugin(TestPlugin::calculator(calculator_calls.clone()))
+            .with_default_model(MODEL)
+            .build()
+            .await
+            .unwrap(),
+    );
+    let session = SessionId::from_uuid(Uuid::from_u128(46));
+    let (status, body) = json_body(
+        canonical_router(runtime.clone())
+            .oneshot(native_request(session, "calculate 1 + 1"))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert_eq!(body["session"], session.to_string());
+    assert_eq!(body["tool_name"], "calculator");
+    assert_eq!(body["capability_id"], "tool.calculator");
+    let approval = body["approval_id"].as_str().expect("approval id");
+    assert!(!approval.is_empty());
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 0);
+
+    let (status, body) = json_body(
+        canonical_router(runtime.clone())
+            .oneshot(resolve_request(session, approval, "approve"))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["text"], "The result is 2.");
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 1);
+
+    let (status, body) = json_body(
+        canonical_router(runtime)
+            .oneshot(resolve_request(session, approval, "approve"))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("already resolved"),
+        "{body}"
+    );
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn http_pending_approval_can_be_rejected() {
+    let provider = FakeProvider::new();
+    let calculator_calls = Arc::new(AtomicUsize::new(0));
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(frozen_clock())
+            .with_governance(Arc::new(approval_policy()))
+            .with_plugin(TestPlugin::provider(provider.clone()))
+            .with_plugin(TestPlugin::calculator(calculator_calls.clone()))
+            .with_default_model(MODEL)
+            .build()
+            .await
+            .unwrap(),
+    );
+    let session = SessionId::from_uuid(Uuid::from_u128(47));
+    let (status, body) = json_body(
+        canonical_router(runtime.clone())
+            .oneshot(native_request(session, "calculate 1 + 1"))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let approval = body["approval_id"].as_str().expect("approval id");
+
+    let (status, body) = json_body(
+        canonical_router(runtime)
+            .oneshot(resolve_request(session, approval, "reject"))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["text"], "The result is 2.");
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn expired_pending_approval_allows_the_next_turn() {
+    let start = Timestamp::from_epoch_millis(1_700_000_000_000)
+        .unwrap()
+        .as_datetime();
+    let clock = Arc::new(VirtualClock::new(start));
+    let provider = FakeProvider::new();
+    let calculator_calls = Arc::new(AtomicUsize::new(0));
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(Arc::clone(&clock) as Arc<dyn Clock>)
+            .with_governance(Arc::new(approval_policy()))
+            .with_plugin(TestPlugin::provider(provider.clone()))
+            .with_plugin(TestPlugin::calculator(calculator_calls.clone()))
+            .with_default_model(MODEL)
+            .with_approval_ttl(1)
+            .build()
+            .await
+            .unwrap(),
+    );
+    let session = SessionId::from_uuid(Uuid::from_u128(48));
+    let (status, _) = json_body(
+        canonical_router(runtime.clone())
+            .oneshot(native_request(session, "calculate 1 + 1"))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 0);
+
+    clock.set(
+        Timestamp::from_epoch_millis(1_700_000_000_005)
+            .unwrap()
+            .as_datetime(),
+    );
+    let (status, body) = json_body(
+        canonical_router(runtime)
+            .oneshot(native_request(session, "continue after expiry"))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 0);
 }

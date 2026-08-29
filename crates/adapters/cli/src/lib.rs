@@ -1,7 +1,8 @@
 //! Canonical Apeireth command-line entry points.
 //!
 //! The CLI is a thin adapter: it bootstraps one canonical runtime, constructs
-//! a canonical turn request, and delegates execution to `Runtime::execute`.
+//! a canonical turn request, and delegates execution to
+//! `Runtime::execute_outcome`. Pending approvals keep their `ApprovalId`.
 
 // v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring / EncryptedFile backend
 // (per `v2.0.0-rc-roadmap.md` §3 RC-9: "keyring 真正接到 EnvCredentialResolver 之前").
@@ -10,16 +11,20 @@ pub mod keyring_bootstrap;
 
 use std::sync::Arc;
 
-use apeireth_core::kernel::{CapabilityId, SessionId};
+use apeireth_core::kernel::{ApprovalId, CapabilityId, SessionId};
 use apeireth_governance::{
     CredentialDisclosureHook, GovernancePipeline, Permission, PermissionGovernanceHook,
     PermissionPolicy, PromptInjectionHook,
 };
-use apeireth_runtime::canonical::{Runtime, TurnRequest, TurnResponse};
+use apeireth_runtime::canonical::{
+    ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SqliteSessionStore,
+    TurnOutcome, TurnRequest, TurnResponse,
+};
 
 /// One persistent SQLite database is shared by the cognitive backends.
 /// `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
 const COGNITIVE_DB_ENV: &str = "APEIRETH_COGNITIVE_DB";
+const SESSION_DB_ENV: &str = "APEIRETH_SESSION_DB";
 const COGNITIVE_JUDGE_ENV: &str = "APEIRETH_COGNITIVE_JUDGE";
 const COGNITIVE_COUNCIL_ENV: &str = "APEIRETH_COGNITIVE_COUNCIL";
 
@@ -80,17 +85,13 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
         keyring_bootstrap::build_keyring_resolver();
     builder = builder.with_credentials(resolver);
     builder = builder.with_governance(Arc::new(build_production_governance_from_env()));
+    builder = builder.with_session_store(production_session_store().await?);
 
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
+    // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
     let cognitive = build_cognitive_modules_from_env(Arc::clone(&clock)).await?;
     builder = cognitive.register_into(builder);
-
-    let workspace_root = std::env::current_dir()
-        .map_err(|error| format!("canonical runtime bootstrap failed: current_dir: {error}"))?;
-    builder = builder.with_plugin(Arc::new(apeireth_tools_canonical::BuiltinToolsPlugin::new(
-        workspace_root,
-    )));
 
     let first_default_model: Option<String>;
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
@@ -126,6 +127,26 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
         .build()
         .await
         .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))
+}
+
+async fn production_session_store() -> Result<Arc<dyn apeireth_runtime::SessionStore>, String> {
+    let path = std::env::var(SESSION_DB_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| ".apeireth/sessions.sqlite3".into());
+    SqliteSessionStore::open(&path)
+        .await
+        .map(|store| Arc::new(store) as Arc<dyn apeireth_runtime::SessionStore>)
+        .map_err(|error| format!("session store open failed: {error}"))
+}
+
+/// Completed turn or a pending approval that still has its [`ApprovalId`].
+#[derive(Debug, Clone)]
+pub enum CanonicalCliTurn {
+    /// The turn reached a final assistant response.
+    Completed(TurnResponse),
+    /// The turn is suspended until a human resolves the returned approval.
+    PendingApproval(PendingApprovalView),
 }
 
 async fn build_cognitive_modules_from_env(
@@ -243,19 +264,36 @@ async fn build_cognitive_modules_from_env(
         .map_err(|error| error.to_string())
 }
 
-/// Execute one CLI turn directly through [`Runtime::execute`].
+/// Execute one CLI turn directly through [`Runtime::execute_outcome`].
 pub async fn execute_canonical_cli_turn(
     runtime: &Runtime,
     prompt: impl Into<String>,
     model: Option<String>,
     session: Option<SessionId>,
-) -> Result<TurnResponse, String> {
+) -> Result<CanonicalCliTurn, String> {
     let mut request = TurnRequest::new(session.unwrap_or_else(SessionId::new), prompt);
     if let Some(model) = model {
         request = request.with_model(model);
     }
+    match runtime
+        .execute_outcome(request)
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        TurnOutcome::Completed(response) => Ok(CanonicalCliTurn::Completed(response)),
+        TurnOutcome::PendingApproval(view) => Ok(CanonicalCliTurn::PendingApproval(view)),
+    }
+}
+
+/// Resolve a pending approval through the canonical runtime API.
+pub async fn resolve_canonical_cli_approval(
+    runtime: &Runtime,
+    session: SessionId,
+    approval: ApprovalId,
+    decision: ApprovalDecision,
+) -> Result<ApprovalResolution, String> {
     runtime
-        .execute(request)
+        .resolve_approval(session, approval, decision)
         .await
         .map_err(|error| error.to_string())
 }
@@ -265,12 +303,28 @@ pub async fn dispatch_canonical_chat(
     prompt: impl Into<String>,
     model: Option<String>,
     session: Option<String>,
-) -> Result<TurnResponse, String> {
+) -> Result<CanonicalCliTurn, String> {
     let session = session
         .map(|id| id.parse::<SessionId>().map_err(|error| error.to_string()))
         .transpose()?;
     let runtime = build_canonical_runtime_from_env().await?;
     execute_canonical_cli_turn(&runtime, prompt, model, session).await
+}
+
+/// Bootstrap and resolve a pending approval on the production session store.
+pub async fn dispatch_canonical_approval(
+    session: String,
+    approval: String,
+    decision: ApprovalDecision,
+) -> Result<ApprovalResolution, String> {
+    let session = session
+        .parse::<SessionId>()
+        .map_err(|error| error.to_string())?;
+    let approval = approval
+        .parse::<ApprovalId>()
+        .map_err(|error| error.to_string())?;
+    let runtime = build_canonical_runtime_from_env().await?;
+    resolve_canonical_cli_approval(&runtime, session, approval, decision).await
 }
 
 /// Start the HTTP Gateway backed by one long-lived canonical runtime.

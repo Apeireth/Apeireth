@@ -28,6 +28,14 @@ pub enum ApprovalDecision {
         /// otherwise.
         reason: Option<String>,
     },
+    /// Cancel the pending operation without executing it.
+    ///
+    /// Semantically equivalent to rejection for transcript pairing: the frozen
+    /// tool call receives a synthetic result and the turn may continue.
+    Cancel {
+        /// Optional human reason.
+        reason: Option<String>,
+    },
 }
 
 impl ApprovalDecision {
@@ -35,6 +43,7 @@ impl ApprovalDecision {
         match self {
             Self::Approve => "approved",
             Self::Reject { .. } => "rejected",
+            Self::Cancel { .. } => "cancelled",
         }
     }
 }
@@ -369,14 +378,14 @@ mod tests {
     fn fingerprint_is_deterministic_for_equivalent_objects() {
         let session = SessionId::new();
         let request = RequestId::new();
-        let cap = CapabilityId::new("tool.shell").unwrap();
+        let cap = CapabilityId::new("tool.example").unwrap();
         let args_a = serde_json::json!({ "command": "echo hi", "cwd": "/tmp" });
         let args_b = serde_json::json!({ "cwd": "/tmp", "command": "echo hi" });
 
         let a = operation_fingerprint(
             "capability_dispatch",
             &cap,
-            "shell",
+            "example",
             "call_1",
             &args_a,
             session,
@@ -386,7 +395,7 @@ mod tests {
         let b = operation_fingerprint(
             "capability_dispatch",
             &cap,
-            "shell",
+            "example",
             "call_1",
             &args_b,
             session,
@@ -400,13 +409,13 @@ mod tests {
     fn fingerprint_changes_with_any_operation_field() {
         let session = SessionId::new();
         let request = RequestId::new();
-        let cap = CapabilityId::new("tool.shell").unwrap();
+        let cap = CapabilityId::new("tool.example").unwrap();
         let args = serde_json::json!({ "command": "echo hi" });
 
         let base = operation_fingerprint(
             "capability_dispatch",
             &cap,
-            "shell",
+            "example",
             "call_1",
             &args,
             session,
@@ -417,7 +426,7 @@ mod tests {
         let changed_scalar = operation_fingerprint(
             "capability_dispatch",
             &cap,
-            "shell",
+            "example",
             "call_1",
             &serde_json::json!({ "command": "echo bye" }),
             session,
@@ -428,8 +437,8 @@ mod tests {
 
         let changed_capability = operation_fingerprint(
             "capability_dispatch",
-            &CapabilityId::new("tool.repo").unwrap(),
-            "shell",
+            &CapabilityId::new("tool.other").unwrap(),
+            "example",
             "call_1",
             &args,
             session,
@@ -441,7 +450,7 @@ mod tests {
         let changed_call = operation_fingerprint(
             "capability_dispatch",
             &cap,
-            "shell",
+            "example",
             "call_2",
             &args,
             session,
