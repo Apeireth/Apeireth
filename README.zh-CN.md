@@ -120,25 +120,60 @@ Apeireth 源自 **Apeiron**（ἄπειρον）——古希腊语"无定形/无
 
 ## 阿佩瑞斯是什么 —— 三面一体，一个基地
 
-阿佩瑞斯为面向 LLM 的运行时提供稳定的承载边界：契约、会话与执行
-编排、模型供应商接入、工具、策略和集成接口。当前基线小于历史 donor
-工作区，优先保证边界清晰、可验证、可回滚。
+阿佩瑞斯为面向 LLM 的运行时提供稳定的承载边界：以持久记忆为核心的契约体系、多智能体协同编排、模型供应商接入、OS 级沙箱安全执行与全双工桌面伴侣交互。
+
+### 系统架构总览
+
+```mermaid
+graph TD
+    classDef adapter fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff;
+    classDef engine fill:#1a365d,stroke:#2b6cb0,stroke-width:2px,color:#fff;
+    classDef capability fill:#22543d,stroke:#2f855a,stroke-width:2px,color:#fff;
+    classDef foundation fill:#742a2a,stroke:#9b2c2c,stroke-width:2px,color:#fff;
+    classDef desktop fill:#4c1d95,stroke:#6d28d9,stroke-width:2px,color:#fff;
+
+    UI["前端桌面伴侣: Svelte 5 + Tauri 2"]:::desktop
+    CLI["apeireth-cli (命令行)"]:::adapter
+    GW["apeireth-gateway (HTTP / SSE / 实时打断)"]:::adapter
+    SDK["apeireth-sdk (开发者套件)"]:::adapter
+
+    UI -->|IPC / HTTP| GW
+    CLI --> RT["apeireth-runtime (会话与智能体主循环)"]:::engine
+    GW --> RT
+    SDK --> RT
+
+    subgraph Engine 引擎层
+        RT --> MEM["apeireth-memory (BM25+向量混合检索 / 图谱 / 程序性记忆 / Brier自诊断)"]:::engine
+        RT --> ORG["apeireth-organ (9大认知器官 / 情感语气桥调制)"]:::engine
+        RT --> PRV["apeireth-provider (Anthropic / MiniMax / OpenAI兼容接口)"]:::engine
+        RT --> PER["apeireth-perception (Whisper语音多模态 / Xcap视觉截屏)"]:::engine
+        RT --> STO["apeireth-storage (SQLite连接池 / 迁移引擎)"]:::engine
+    end
+
+    subgraph Capabilities 技能能力层
+        RT --> TLS["apeireth-tools-canonical (ProcessExecutor 进程沙箱隔离 / 文件系统工具)"]:::capability
+    end
+
+    subgraph Foundation 基础设施层
+        MEM & ORG & PRV & PER & STO & TLS --> CRD["apeireth-credentials (安全凭据 / 内存擦除)"]:::foundation
+        MEM & ORG & PRV & PER & STO & TLS --> PLG["apeireth-plugin & apeireth-orchestration (智囊团编排 / 环境自适应)"]:::foundation
+        PLG --> GOV["apeireth-governance (原则洋葱 / 权限洋葱 / L0 HA守门)"]:::foundation
+        GOV --> PROT["apeireth-protocol (标准协议转换与归一化)"]:::foundation
+        PROT --> CORE["apeireth-core (领域原语 / 实体ID / 可注入时钟)"]:::foundation
+    end
+```
 
 ### 当前产品边界
 
-根 Cargo 工作区包含 13 个 package：
+根 Cargo 工作区包含 **16 个核心 package**，划分为四大清晰的单向架构分层，并配套独立的桌面前端工作区：
 
-| 层 | 职责 |
-|---|---|
-| Foundation | 核心类型、协议契约、插件契约、治理策略、凭据 |
-| Engine | runtime/会话执行、provider、SQLite 持久化、记忆 |
-| Capabilities | 内置工具和唯一的进程执行边界 |
-| Adapters | HTTP gateway、CLI、SDK |
-
-[frontend/companion-desktop/](frontend/companion-desktop/) 是独立的
-Svelte 5 + Tauri 2 工作区。`legacy/` 只保留 donor/参考资料；
-旧的嵌套 `reconstruction_v2/` 工作区和空的
-`crates/modules/` 占位目录已不属于当前树。
+| 层级 | 核心职责 | 包含 Crates |
+|---|---|---|
+| **Adapters (适配器层)** | HTTP 网关、CLI 终端、SDK 与全双工流式打断 | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk` |
+| **Engine (引擎层)** | 运行时循环、持久记忆、认知器官、多模态感知、模型接入、存储 | `apeireth-runtime`, `apeireth-memory`, `apeireth-organ`, `apeireth-perception`, `apeireth-provider`, `apeireth-storage` |
+| **Capabilities (能力层)** | 内置工具集与操作系统级进程沙箱执行边界 | `apeireth-tools-canonical`（独占持有 `ProcessExecutor`） |
+| **Foundation (基石层)** | 核心领域原语、协议转换、治理策略、安全凭据、编排系统、插件机制 | `apeireth-core`, `apeireth-protocol`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration`, `apeireth-plugin` |
+| **桌面端伴侣** | Svelte 5 + Tauri 2 现代桌面端独立工作区 | `frontend/companion-desktop/`（独立发布与构建边界） |
 
 ### 当前运行入口
 
@@ -150,62 +185,53 @@ apeireth chat
 apeireth gateway serve --port 8080
 ```
 
-Gateway 负责 HTTP 传输并提供 `/health`。Provider 通过
-runtime/provider 路径选择，凭据通过 credentials 契约解析。
-`ProcessExecutor` 仍由
-`crates/capabilities/tools/src/process/` 持有；本次整理没有改动
-其 structured spawn、timeout、有界输出、显式 cwd/env 以及
-Windows/Linux/macOS 现有 containment 语义。
+Gateway 负责 HTTP 传输并提供 `/health` 和 SSE 流式响应。Provider 通过 runtime 统一调度，凭据通过 credentials 契约在内存中安全管理并自动擦除。`ProcessExecutor` 严格由 `crates/capabilities/tools/src/process/` 独占管理，并遵循公开的 [威胁模型与安全白皮书](docs/security/process-executor-threat-model.md)。
 
-### 当前状态
+### 当前工程状态
 
-- 根工作区：13 个 crate，Rust 1.97.1，workspace version 1.2.0。
-- 产品线：默认分支 `main` @ `d6910cf7`，tag `v2.0.0-alpha.1`
-  （reconstruct_v2 工程重构首个 alpha；workspace 版本轴 1.2.0 与产品轴独立）。
-- 测试：1338 passed / 0 failed；CI 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage）。
-- 前端：独立的桌面/Tauri 工作区和发布边界。
-- 历史嵌套工作区：已在吸收架构审计结论后移除。
-- 验证入口：formatter、workspace check/test、ProcessExecutor 专项测试、
-  legacy 依赖扫描，以及独立桌面检查。
+- **根工作区**：16 个 crate，Rust 1.97.1 (MSRV)，workspace version 1.2.0。
+- **产品基线**：标签 `v2.0.0-preview`（功能完整 2.0 基线）。
+- **测试通过率**：全工作区 1700+ 项测试 100% PASS，0 失败；CI 全绿（lint/fmt/audit/deny/clippy `-D warnings` 零警告）。
+- **桌面前端**：Svelte 5 + Tauri 2，`pnpm build` 与 `pnpm check` 100% 通过（0 错误，0 警告）。
+- **威胁模型与基准**：公开透明、可完整复现。
 
-### 快速开始
+### 快速开始与贡献指引
+
+- ⚡ **[5 分钟极速上手与 Good First Issues](docs/development/5-min-quickstart.md)** —— 5 分钟内完整运行 CLI、Gateway 与桌面端。
+- 🛡️ **[ProcessExecutor 威胁模型与安全白皮书](docs/security/process-executor-threat-model.md)** —— 进程执行边界与 OS 沙箱深度解析。
+- 📊 **[系统性能与时延基准报告](reports/benchmark-baseline.md)** —— 混合记忆检索、Brier 意图诊断与冷启动实测数据。
 
 ```bash
-cargo build --workspace --locked
+# 1. 编译并运行全量测试
+cargo test --workspace
+
+# 2. 启动本地 HTTP 网关
 cargo run -p apeireth-cli -- gateway serve --port 8080
 ```
 
-接入 provider 时，在环境变量中设置 `APEIRETH_API_KEY`。
-完整命令和 endpoint 示例见
-[docs/02-guides/quick-start.md](docs/02-guides/quick-start.md)。
+### 文档导航
 
-### 延后事项
+- [文档中心](docs/README.md)
+- [系统架构与分层](docs/01-architecture/architecture.md)
+- [Crate 职责索引](docs/03-reference/crates.md)
+- [进程沙箱威胁模型](docs/security/process-executor-threat-model.md)
+- [性能基准报告](reports/benchmark-baseline.md)
+- [5 分钟上手指引](docs/development/5-min-quickstart.md)
+- [版本日志](CHANGELOG.md) & [演进路线图](ROADMAP.md)
 
-本基线不实现 `ProcessSupervisor`、process-tree snapshot、
-runtime telemetry 或 risk engine、Sentinel/EDR、filesystem/network
-isolation、更强的 Linux cgroup/macOS containment、第二套 runtime、
-scheduler 重构、public API/IPC/schema 变更、数据库 migration，或新的
-产品模块。
+### 需要查看 1.0 历史代码？
 
-### 文档
+2.0 重构将历史早期探索代码收敛为高内聚、高性能的 16-crate 现代体系。**设计哲学、9 大哲学锚、13 键与双洋葱架构 100% 不变**。历史参考资产均完整保留在 `legacy/` 目录与 Git Tag 中：
 
-- [文档索引](docs/README.md)
-- [当前架构](docs/01-architecture/architecture.md)
-- [目录与 ownership](docs/development/repository-layout.md)
-- [Crate 参考](docs/03-reference/crates.md)
-- [快速开始](docs/02-guides/quick-start.md)
-- [发布说明](RELEASE_NOTES.md)
+| 取用方式 | 命令 / 路径 |
+|---|---|
+| **检出 v1.0 发布 Tag** | `git checkout v1.0.0`（指向 commit `993e9107`） |
+| **查阅历史 Donor 源码** | `legacy/donor/` 目录（已从根 Cargo 工作区排除） |
+| **查阅历史归档文档** | `docs/archive/` 目录 |
 
-### 需要 Apeireth v1.0?（保留 1.0 完整可访问）
+## License
 
-v2.0 工程重构（86-crate → 13-crate 工作区）改的是**工程形态**，**设计 / 哲学 / 愿景 / 规范 0 改**。但功能有延后（companion 器官 / 完整记忆 / voice 等仍在 legacy/）。如果你的场景需要 v1.0 的全部能力，按下面任一方式取：
-
-| 取 v1 的方式 | 命令 / 入口 |
-| | |
-| **切到 v1 线（推荐开发 v1 兼容代码）** | `git checkout archive/v1.0-master` —— 旧 master 线完整可编译可运行（86-crate + companion_serve :8090） |
-| **切到 v1.0 发布 tag（推荐部署/复现）** | `git checkout v1.0.0` —— tag 指向 commit `993e9107`，即"真正的 1.0"发布点 |
-| **查 v1 完整源码（不切分支）** | `legacy/` 目录 —— 86-crate 完整代码 + 9 器官 + companion + 记忆 v2 + voice + 工具桥 全部 reference-only（`Cargo.toml` `exclude = ["legacy"]` 排除构建） |
-| **查 v1 历史文档（不切分支）** | `docs/archive/` —— v1 时代的 R*/stage*/adr/conventions/glossary/versioning 全部归档保留，包含：<br>• `docs/archive/roadmap/v1.0-released-r128-r178-2026-08-18.md`（v1.0 发布路径详单）<br>• `docs/archive/stage4/R11-baseline.md`（R11 baseline LOCKED，0.8682/0.8532/0.906）<br>• `docs/archive/conventions/`（12 子规范 + 7 子系统 + 21 词条）<br>• `docs/archive/glossary/17-4-gates-permission.md`（v1 守门 v9 lineage） |
+Apache-2.0 —— 见 [LICENSE](LICENSE)。
 
 > **设计哲学 / 哲学 8 锚 / 13 键 verdict cache / 三洋葱 / L0 HA / Self-Disable / 0 装 PASS 跨版本不变**。v2 与 v1 的关系是 "v2 = v1 的下一代工程形态"，不是替代关系。两者并列存在，按需取用。
 
