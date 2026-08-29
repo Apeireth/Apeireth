@@ -19,7 +19,6 @@ apeireth-gateway = { path = "../gateway" }
 apeireth-memory = { path = "../../engine/memory" }
 apeireth-orchestration = { path = "../../foundation/orchestration" }
 apeireth-plugin = { path = "../../foundation/plugin" }
-apeireth-tools-canonical = { path = "../../capabilities/tools" }
 apeireth-provider = { path = "../../engine/provider" }
 apeireth-runtime = { path = "../../engine/runtime" }
 apeireth-storage = { path = "../../engine/storage" }

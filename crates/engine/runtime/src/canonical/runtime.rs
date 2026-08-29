@@ -153,6 +153,35 @@ impl Runtime {
         tools
     }
 
+    /// Register a dynamic tool on a named module after build.
+    ///
+    /// The tool is rejected if its capability id or model-facing name collides
+    /// with any already-visible module or plugin tool.
+    pub fn register_dynamic_tool(
+        &self,
+        module_id: &str,
+        tool: Arc<dyn ToolCapability>,
+    ) -> Result<(), RuntimeError> {
+        crate::canonical::module::reject_tool_identity_collisions(
+            &self.tools(),
+            std::slice::from_ref(&tool),
+            module_id,
+        )
+        .map_err(RuntimeError::misconfigured)?;
+        let module = self
+            .modules
+            .iter()
+            .find(|module| module.manifest().id == module_id)
+            .ok_or_else(|| {
+                RuntimeError::misconfigured(format!(
+                    "dynamic tool registration target {module_id:?} is not registered"
+                ))
+            })?;
+        module
+            .register_dynamic_tool(tool)
+            .map_err(RuntimeError::misconfigured)
+    }
+
     /// Model-facing tool declarations for all active tools.
     pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
         let mut declarations: Vec<apeireth_protocol::canonical::NormalizedTool> = self
@@ -373,6 +402,13 @@ impl RuntimeBuilder {
             TraceId::new(),
         );
         manager.start_all(&ctx).await?;
+
+        crate::canonical::module::reject_tool_identity_collisions(
+            &module_registry.tools(),
+            &manager.active_tools(),
+            "plugin tools",
+        )
+        .map_err(RuntimeError::misconfigured)?;
 
         // Providers are read out of the capability registry *after* start-up, so
         // the router contains exactly those whose plugins actually came up. A

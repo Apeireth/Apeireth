@@ -89,14 +89,9 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
 
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
+    // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
     let cognitive = build_cognitive_modules_from_env(Arc::clone(&clock)).await?;
     builder = cognitive.register_into(builder);
-
-    let workspace_root = std::env::current_dir()
-        .map_err(|error| format!("canonical runtime bootstrap failed: current_dir: {error}"))?;
-    builder = builder.with_plugin(Arc::new(apeireth_tools_canonical::BuiltinToolsPlugin::new(
-        workspace_root,
-    )));
 
     let first_default_model: Option<String>;
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
