@@ -61,7 +61,12 @@ pub mod daily_summary;
 pub mod diary;
 pub mod dreaming;
 pub mod five_dimensional;
+pub mod graph_algo;
 pub mod hybrid_search;
+pub mod metadata_filter;
+pub mod persistent_vector;
+pub mod query_expand;
+pub mod vector_distance;
 pub mod intent_brier;
 pub mod calibration;
 pub mod calibration_critic;
@@ -192,7 +197,20 @@ pub use diary::{
 };
 
 pub use episode::{EpisodeQuery, EpisodeStore};
+pub use graph_algo::{
+    all_paths, connected_components, dijkstra_shortest_path, edges_matching, has_cycle,
+    neighbors_directed, nodes_with_label, topological_sort, walk, TraversalDirection, WalkOrder,
+    WalkStep,
+};
 pub use hybrid_search::{tokenize, Bm25Config, Bm25Hit, Bm25Index, HybridHit, HybridSearchEngine};
+pub use metadata_filter::{MetadataFilter, PropertyPredicate};
+pub use persistent_vector::{PersistentVectorHit, PersistentVectorIndex, DEFAULT_DB_FILE};
+pub use query_expand::{expand_query, ExpandedQuery};
+pub use vector_distance::{
+    cosine, cosine_distance, cosine_distance_to_score, distance, dot_product, euclidean_distance,
+    euclidean_distance_sq, l2_distance_to_score, l2_norm, manhattan_distance, normalize,
+    DistanceMetric,
+};
 pub use milestone::{
     InMemoryMilestoneStore, Milestone, MilestoneKind, MilestonePayload, MilestoneStore,
 };
