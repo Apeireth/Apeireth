@@ -78,7 +78,8 @@ pub use continuation::{
     InMemoryContinuationStore, PendingToolCall, SegmentEditError, SegmentEditor,
 };
 pub use prompt_stabilizer::{
-    EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage, StabilizedRole,
+    assemble_tiered, EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage,
+    StabilizedRole,
 };
 pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
