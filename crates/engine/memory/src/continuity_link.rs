@@ -3,9 +3,22 @@
 //! **8 项承诺**: 全部遵守。**不假装**: continuity_id 仍由 IdentityCard 唯一约束守护。
 //! **不修改承诺 (LOCKED)**: 不改 workspace 版本、锁定 StreamKind 或锁定文档。
 
-use crate::{IdentityCardStore, MemoryResult, SqliteMemoryStore};
+use crate::{
+    onering, EpisodeQuery, EpisodeStore, IdentityCardStore, MemoryError, MemoryResult,
+    SqliteMemoryStore,
+};
+use apeireth_core::kernel::memory::{IdentityCard, Migration};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
+
+/// Default continuity anchor (single-subject deploy).
+pub const DEFAULT_CONTINUITY_ID: &str = "companion-main";
+
+/// Environment variable that overrides the process-level continuity anchor.
+pub const CONTINUITY_ENV_VAR: &str = "APEIRETH_CONTINUITY_ID";
+
+/// Lineage prefix for copy-forward migrated episode ids (`mig-{original}`).
+pub const MIGRATED_ID_PREFIX: &str = "mig-";
 
 /// 跨会话主体连续性的可审计快照。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +135,160 @@ pub fn recall_recent(
         .map_err(crate::MemoryError::Sqlite)
 }
 
+/// Trim a raw continuity value; empty → `fallback`. Never returns an empty string
+/// if `fallback` itself is non-empty.
+pub fn normalize_continuity(raw: &str, fallback: &str) -> String {
+    let t = raw.trim();
+    if t.is_empty() {
+        fallback.to_string()
+    } else {
+        t.to_string()
+    }
+}
+
+/// `APEIRETH_CONTINUITY_ID` (trim, non-empty) or `default`.
+pub fn continuity_id_from_env(default: &str) -> String {
+    std::env::var(CONTINUITY_ENV_VAR)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
+/// Process-level continuity: env override or [`DEFAULT_CONTINUITY_ID`].
+pub fn current_continuity_id() -> String {
+    continuity_id_from_env(DEFAULT_CONTINUITY_ID)
+}
+
+/// Ensure an IdentityCard exists for `continuity_id` (idempotent). Empty id is rejected.
+pub fn ensure_identity(
+    store: &SqliteMemoryStore,
+    continuity_id: &str,
+    carrier: &str,
+    birth_time: i64,
+) -> MemoryResult<()> {
+    let cid = continuity_id.trim();
+    if cid.is_empty() {
+        return Err(MemoryError::Invalid(
+            "continuity_id 为空, 无法登记 IdentityCard".into(),
+        ));
+    }
+    if store.exists(cid)? {
+        return Ok(());
+    }
+    let card = IdentityCard {
+        continuity_id: cid.to_string(),
+        birth_time,
+        carriers: vec![carrier.trim().to_string()],
+        migration_history: Vec::new(),
+    };
+    match store.create(&card) {
+        Ok(_) => Ok(()),
+        Err(MemoryError::Identity(crate::IdentityConflict::AlreadyExists(_))) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+/// Honest report of one append-only copy-forward subject migration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MigrationReport {
+    pub from: String,
+    pub to: String,
+    /// Episodes copied forward (originals kept).
+    pub episodes_copied: usize,
+    /// Already-migrated rows skipped (idempotent INSERT OR IGNORE).
+    pub episodes_skipped: usize,
+    /// OneRing ledger rows re-keyed (0 = table missing or no matching rows).
+    pub ledger_rekeyed: usize,
+    pub executed_at: i64,
+}
+
+/// Copy-forward migrate episodes from anchor `from` to `to`.
+///
+/// Append-only safety: originals stay. Copies get id `mig-{original}`,
+/// `continuity_id = to`, `session_id = to`, preserved timestamp/role/content.
+/// OneRing ledger (non-append-only sidecar) is UPDATE-rekeyed when present.
+pub fn migrate_subject(
+    store: &SqliteMemoryStore,
+    from: &str,
+    to: &str,
+    executed_at: i64,
+) -> MemoryResult<MigrationReport> {
+    let from = from.trim().to_string();
+    let to = to.trim().to_string();
+    if from.is_empty() || to.is_empty() {
+        return Err(MemoryError::Invalid(
+            "迁移锚点不能为空 (from/to 均须非空)".into(),
+        ));
+    }
+    if from == to {
+        return Err(MemoryError::Invalid(format!(
+            "迁移锚点相同 (from == to == {from}), 无需迁移"
+        )));
+    }
+
+    // Query without holding conn (Mutex is not re-entrant).
+    let olds = store.query(&EpisodeQuery::new().for_session(&from))?;
+
+    let conn = store.conn()?;
+    let mut copied = 0usize;
+    let mut skipped = 0usize;
+    for ep in &olds {
+        let n = conn.execute(
+            "INSERT OR IGNORE INTO episodes (id, continuity_id, session_id, timestamp, role, content)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                format!("{MIGRATED_ID_PREFIX}{}", ep.id),
+                to,
+                to,
+                ep.timestamp,
+                ep.role,
+                ep.content,
+            ],
+        )?;
+        if n > 0 {
+            copied += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+
+    let ledger_rekeyed = if onering::onering_table_exists(&conn) {
+        conn.execute(
+            "UPDATE onering_messages SET continuity_id = ?1 WHERE continuity_id = ?2",
+            params![to, from],
+        )?
+    } else {
+        0
+    };
+
+    Ok(MigrationReport {
+        from,
+        to,
+        episodes_copied: copied,
+        episodes_skipped: skipped,
+        ledger_rekeyed,
+        executed_at,
+    })
+}
+
+/// Record a carrier hop on the IdentityCard (same continuity, different carrier).
+/// Distinct from [`migrate_subject`] (anchor re-key).
+pub fn record_carrier_migration(
+    store: &SqliteMemoryStore,
+    continuity_id: &str,
+    from_carrier: &str,
+    to_carrier: &str,
+    timestamp: i64,
+) -> MemoryResult<()> {
+    let m = Migration {
+        from_carrier: from_carrier.trim().to_string(),
+        to_carrier: to_carrier.trim().to_string(),
+        timestamp,
+    };
+    store.record_migration(continuity_id, &m).map(|_| ())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,5 +351,115 @@ mod tests {
         db.conn().unwrap().execute("INSERT INTO episodes (id, continuity_id, session_id, timestamp, role, content) VALUES ('e1', ?1, 's1', 21, 'user', 'hello')", [&id]).unwrap();
         assert_eq!(resolve_continuity(&db, &id).unwrap().total_episodes, 1);
         assert_eq!(recall_recent(&db, &id, 1).unwrap()[0].episode_count, 1);
+    }
+
+    #[test]
+    fn normalize_trims_and_falls_back() {
+        assert_eq!(normalize_continuity("  c1  ", "fb"), "c1");
+        assert_eq!(normalize_continuity("   ", "fb"), "fb");
+        assert_eq!(normalize_continuity("", "fb"), "fb");
+    }
+
+    #[test]
+    fn current_continuity_never_empty() {
+        assert!(!current_continuity_id().trim().is_empty());
+    }
+
+    #[test]
+    fn ensure_identity_is_idempotent() {
+        let db = SqliteMemoryStore::open_in_memory().unwrap();
+        ensure_identity(&db, "c-main", "carrier-a", 10).unwrap();
+        ensure_identity(&db, "c-main", "carrier-a", 10).unwrap();
+        assert!(db.exists("c-main").unwrap());
+        assert!(ensure_identity(&db, "  ", "carrier-a", 10).is_err());
+    }
+
+    #[test]
+    fn migrate_copies_forward_and_keeps_originals() {
+        let db = SqliteMemoryStore::open_in_memory().unwrap();
+        db.put_episode(&apeireth_core::kernel::memory::Episode {
+            id: "ep-0".into(),
+            timestamp: 100,
+            role: "user".into(),
+            content: "事实一".into(),
+            session_id: "me".into(),
+        })
+        .unwrap();
+        db.put_episode(&apeireth_core::kernel::memory::Episode {
+            id: "ep-1".into(),
+            timestamp: 101,
+            role: "assistant".into(),
+            content: "事实二".into(),
+            session_id: "me".into(),
+        })
+        .unwrap();
+        let r = migrate_subject(&db, "me", "c-main", 200).unwrap();
+        assert_eq!(r.episodes_copied, 2);
+        assert_eq!(r.episodes_skipped, 0);
+        assert_eq!(db.count_by_session("me").unwrap(), 2);
+        let news = db.recent_episodes("c-main", 10).unwrap();
+        assert_eq!(news.len(), 2);
+        assert!(news.iter().all(|e| e.id.starts_with(MIGRATED_ID_PREFIX)));
+        assert_eq!(news[0].content, "事实一");
+        assert_eq!(news[0].timestamp, 100);
+        let by_cont = db
+            .query(&EpisodeQuery::new().for_continuity("c-main"))
+            .unwrap();
+        assert_eq!(by_cont.len(), 2, "迁移副本应写入真实 continuity_id");
+    }
+
+    #[test]
+    fn migrate_is_idempotent() {
+        let db = SqliteMemoryStore::open_in_memory().unwrap();
+        db.put_episode(&apeireth_core::kernel::memory::Episode {
+            id: "ep-0".into(),
+            timestamp: 100,
+            role: "user".into(),
+            content: "事实一".into(),
+            session_id: "me".into(),
+        })
+        .unwrap();
+        let r1 = migrate_subject(&db, "me", "c-main", 200).unwrap();
+        assert_eq!(r1.episodes_copied, 1);
+        let r2 = migrate_subject(&db, "me", "c-main", 201).unwrap();
+        assert_eq!(r2.episodes_copied, 0);
+        assert_eq!(r2.episodes_skipped, 1);
+        assert_eq!(db.count_by_session("c-main").unwrap(), 1);
+    }
+
+    #[test]
+    fn migrate_rejects_empty_or_same_anchor() {
+        let db = SqliteMemoryStore::open_in_memory().unwrap();
+        assert!(migrate_subject(&db, "", "c", 1).is_err());
+        assert!(migrate_subject(&db, "me", "  ", 1).is_err());
+        assert!(migrate_subject(&db, "same", "same", 1).is_err());
+    }
+
+    #[test]
+    fn migrate_rekeys_onering_ledger_when_present() {
+        let db = SqliteMemoryStore::open_in_memory().unwrap();
+        let ledger = crate::onering::OneRingLedger::new(&db, "me")
+            .unwrap()
+            .with_max_records(10);
+        ledger
+            .record("user", None, "web", "账本旧锚", 50)
+            .unwrap();
+        let r = migrate_subject(&db, "me", "c-main", 200).unwrap();
+        assert_eq!(r.ledger_rekeyed, 1);
+        let moved = crate::onering::OneRingLedger::new(&db, "c-main").unwrap();
+        assert_eq!(moved.len().unwrap(), 1);
+        assert_eq!(moved.recent(1).unwrap()[0].content, "账本旧锚");
+    }
+
+    #[test]
+    fn record_carrier_migration_appends_history() {
+        let db = SqliteMemoryStore::open_in_memory().unwrap();
+        ensure_identity(&db, "c-main", "disk-a", 10).unwrap();
+        record_carrier_migration(&db, "c-main", "disk-a", "disk-b", 20).unwrap();
+        let card = db.get("c-main").unwrap().unwrap();
+        assert!(card.carriers.iter().any(|c| c == "disk-b"));
+        assert_eq!(card.migration_history.len(), 1);
+        assert_eq!(card.migration_history[0].from_carrier, "disk-a");
+        assert_eq!(card.migration_history[0].to_carrier, "disk-b");
     }
 }
