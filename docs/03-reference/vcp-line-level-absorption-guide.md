@@ -139,6 +139,64 @@ impl RiverDynamicsEngine {
 }
 ```
 
+### 1.3 TagMemo V10 连续双重拓扑场与 DTSC 闭合度可观测量 (`modules/tagmemoV10/`)
+
+VCP 1.0 的重大突破是将浪潮从 **V8 离散脉冲传导** 演进为 **V10 连续拓扑双重场解析解与河网几何积分**：
+
+#### 1. 双预解算子对偶场求解器 (`scaledFieldSolver.js:L212-286`)
+将离散 hop 遍历升级为稳态偏微分场方程解析解：
+$$\begin{cases} (I - \alpha_L P_L) u_L = (1 - \alpha_L) s_0 & (\text{Local Field 局域聚焦场}, \ \alpha_L \approx 0.15) \\ (I - \alpha_T P_T) u_T = (1 - \alpha_T) s_0 & (\text{Transfer Field 全域迁移场}, \ \alpha_T \approx 0.60) \end{cases}$$
+- 采用 Jacobi/Gauss-Seidel 迭代松弛，直到 $L_1$ 残差 $\|u^{(k+1)} - u^{(k)}\|_1 < 10^{-4}$。
+
+#### 2. DTSC (Dual-Scale Topology Closure) 4 维可观测张量 (`dstcObservables.js:L6-100`)
+每个候选记忆 Chunk 被视为拓扑场中的一条有序参数曲线 $\gamma(t)$，计算 4 维闭合度特征：
+1. **Direct ($O_{\text{dir}}$)**：Query 与 Chunk 向量的余弦相似度；
+2. **Structural ($O_{\text{struct}}$)**：Chunk 标签在 Local Field $u_L$ 中的接触面积积分；
+3. **Thematic ($O_{\text{theme}}$)**：Chunk 标签在 Transfer Field $u_T$ 中的全图主题亲和力；
+4. **Closure ($O_{\text{close}}$)**：$\text{sim}(\vec{v}_{\text{chunk}}, \ \sum w_i \vec{v}_{\text{tag}})$ 记忆向量与加权场中心向量的几何闭合度。
+
+#### 3. $\Omega$ 河网可观测性标量门控 (`riverObservability.js:L85-108`)
+$$\Omega = \left( \Omega_{\text{edge}} \cdot \Omega_{\text{emerge}} \cdot \Omega_{\text{flow}} \right)^{1/3} \in [0, 1]$$
+- **Collapsed 态** ($\Omega < 0.12$)：河网未展开，退化为纯向量直读；
+- **Sparse 态** ($0.12 \le \Omega < 0.45$)：局部联想，激活保守拓扑加权；
+- **Dense 态** ($\Omega \ge 0.45$)：全拓扑涌现，全量激活 DTSC 相对几何重排。
+
+#### 4. Apeireth 2.0 Safe Rust 结构设计
+在 `crates/engine/memory/src/tagmemo_v10.rs` 中：
+```rust
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DtscObservables {
+    pub direct: f32,     // 0~1
+    pub structural: f32, // 0~1
+    pub thematic: f32,   // 0~1
+    pub closure: f32,    // 0~1
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum RiverState {
+    Collapsed, // Ω < 0.12
+    Sparse,    // 0.12 <= Ω < 0.45
+    Dense,     // Ω >= 0.45
+}
+
+pub struct DualScaledFieldSolver {
+    pub alpha_local: f32,    // 0.15
+    pub alpha_transfer: f32, // 0.60
+    pub max_iterations: usize,
+    pub tolerance: f32,      // 1e-4
+}
+
+impl DualScaledFieldSolver {
+    pub fn solve(&self, source_distribution: &[f32], csr_matrix: &CsrMatrix) -> (Vec<f32>, Vec<f32>) {
+        // Safe Rust 高性能双重场松弛求解
+        let mut u_local = source_distribution.to_vec();
+        let mut u_transfer = source_distribution.to_vec();
+        // ... (Jacobi 迭代松弛)
+        (u_local, u_transfer)
+    }
+}
+```
+
 ---
 
 ## 2. 修正 Gram-Schmidt 残差金字塔多层正交投影
