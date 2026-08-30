@@ -14,6 +14,23 @@
   let inputEl = $state<HTMLInputElement | null>(null);
   let health = $state<HealthState>('connecting');
 
+  // Generate unique session ID per quick-window instance (persisted in localStorage)
+  const QUICK_SESSION_KEY = 'apeireth:quick-window:session-id';
+  let quickSessionId = $state<string>('');
+
+  function ensureQuickSession(): string {
+    if (quickSessionId) return quickSessionId;
+    const stored = localStorage.getItem(QUICK_SESSION_KEY);
+    if (stored) {
+      quickSessionId = stored;
+      return stored;
+    }
+    const newId = `quick-${crypto.randomUUID()}`;
+    localStorage.setItem(QUICK_SESSION_KEY, newId);
+    quickSessionId = newId;
+    return newId;
+  }
+
   const runtime = createAgentRuntime(config);
   const responseHtml = $derived(responseText ? renderMarkdown(responseText) : '');
   const healthText = $derived(
@@ -62,7 +79,7 @@
         {
           messages: [{role: 'user', content: text}],
           model: {id: config.model, provider: 'apeireth'},
-          sessionId: 'quick-session',
+          sessionId: ensureQuickSession(),
           context: {user: '主人'},
         },
         (event) => {
