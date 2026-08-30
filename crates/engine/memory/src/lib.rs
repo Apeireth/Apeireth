@@ -186,6 +186,9 @@ pub use dedup::{
     overlap_ratio, DedupConfig, DedupIndex, DEFAULT_DEDUP_WINDOW_MS, DEFAULT_LRU_CAP,
     TEXTUAL_MIN_LEN, TEXTUAL_OVERLAP_THRESHOLD,
 };
+// Salvage 02: rolling cross-frontend context ledger (companion onering).
+pub mod onering;
+pub use onering::{LedgerEntry, OneRingLedger, DEFAULT_MAX_RECORDS, ROLE_ASSISTANT, ROLE_USER};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
