@@ -184,7 +184,10 @@ pub use memory_governance::{
 };
 // Core Capability Expansion Phase 5: Agent 执行轨迹 (structured trace, 持久化 + 查询).
 pub mod agent_trace;
-pub use agent_trace::{TraceQueryError, TraceSpan, TraceSpanKind, TraceSpanStatus, TraceStore};
+pub use agent_trace::{
+    redact_attributes, sanitize_summary, summary_is_safe, TraceQueryError, TraceSpan, TraceSpanKind,
+    TraceSpanStatus, TraceStore,
+};
 // Salvage 02: windowed fingerprint + textual near-dup (companion observer_capture / dream).
 pub mod dedup;
 pub use dedup::{
