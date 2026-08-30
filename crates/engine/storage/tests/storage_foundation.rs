@@ -264,3 +264,23 @@ fn rate_limiter_retry_after_overrides_backoff() {
     let outcome = decide(&b, 0, Some(RetryAfter::Seconds(5)), Duration::ZERO, 0);
     assert_eq!(outcome, RetryOutcome::Retry(Duration::from_secs(5)));
 }
+
+#[test]
+fn cache_lru_ttl_and_shard_roundtrip() {
+    use apeireth_storage::cache::{CacheBuilder, EvictionPolicy, MemoryCache};
+    use std::time::Duration;
+
+    let cache: MemoryCache<String, i32> = MemoryCache::new(
+        CacheBuilder::new()
+            .max_size(2)
+            .policy(EvictionPolicy::Lru)
+            .shards(16)
+            .build(),
+    )
+    .unwrap();
+    cache.put("a".into(), 1, Duration::from_secs(60)).unwrap();
+    cache.put("b".into(), 2, Duration::from_secs(60)).unwrap();
+    cache.put("c".into(), 3, Duration::from_secs(60)).unwrap();
+    assert!(cache.get(&"a".into()).is_none());
+    assert_eq!(cache.get(&"c".into()), Some(3));
+}
