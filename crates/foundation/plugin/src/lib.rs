@@ -49,6 +49,9 @@
 
 #![deny(unsafe_code)]
 
+pub mod alias;
+pub mod availability;
+pub mod bounds;
 pub mod capability;
 pub mod credentials;
 pub mod error;
@@ -65,13 +68,33 @@ pub mod preference;
 pub mod provider;
 pub mod registry;
 pub mod self_assessment;
+pub mod semver;
 pub mod tool;
+pub mod watch;
 
+pub use alias::{
+    aliases_by_id, index_manifests, index_pairs, unresolved_token, AliasIndex, AliasResolver,
+    LruCache, DEFAULT_CACHE_SIZE, LEGACY_UNRESOLVED_PREFIX,
+};
+pub use availability::{Availability, AvailabilityError, AvailabilityReport};
+pub use bounds::{
+    audit_bounds, check_call, check_input_size, check_output_size, check_permissions,
+    default_caller_permissions, is_valid_kebab, privileged_caller_permissions,
+    validate_extension_name, validate_permissions, validate_plugin_manifest_text,
+    validate_resource_bounds, validate_version, BoundError, ResourceBounds,
+};
 pub use capability::{CapabilityDescriptor, CapabilityKind};
 pub use credentials::{CredentialResolver, NoCredentials, Secret, StaticCredentials};
 pub use error::{PluginError, PluginResult};
 pub use manager::PluginManager;
 pub use manifest::PluginManifest;
+pub use semver::{
+    compare as compare_semver, is_valid as is_valid_semver, parse as parse_semver, Semver,
+    SemverError,
+};
+pub use watch::{
+    discover_metadata_files, file_mtime_unix, should_invalidate, MetadataWatcher, WatchEvent,
+};
 // O-6 锚兑现 #12: 统一 capability trait 错误通道 `CapabilityResult<T>` 在 crate root
 // 可用, 避免每个 use 点写 `crate::memory_backend::CapabilityResult`.
 pub use memory_backend::CapabilityResult;
