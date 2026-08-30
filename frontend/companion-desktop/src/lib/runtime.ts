@@ -105,6 +105,33 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * Detect unsupported endpoint errors (404/501/503 on known legacy routes) and
+ * return a user-friendly message explaining the canonical 2.0 architecture.
+ * For other errors, pass through the original message.
+ */
+export function friendlyErrorMessage(caught: unknown, endpoint?: string): string {
+  if (caught instanceof HttpError && endpoint) {
+    const isLegacyEndpoint =
+      endpoint.includes('/v1/panel/') ||
+      endpoint.includes('/v1/apeireth/') ||
+      endpoint.includes('/v1/tools/list') ||
+      endpoint.includes('/v1/memory/append') ||
+      endpoint.includes('/v1/organs');
+
+    if (isLegacyEndpoint && (caught.status === 404 || caught.status === 501 || caught.status === 503)) {
+      return '当前运行时不支持此内省功能 (Apeireth 2.0 canonical gateway 无 panel/introspection API)';
+    }
+  }
+
+  // Fallback to original message
+  if (caught instanceof Error) return caught.message;
+  if (typeof caught === 'object' && caught !== null && 'message' in caught) {
+    return String(caught.message);
+  }
+  return String(caught);
+}
+
 export function toRuntimeError(caught: unknown): RuntimeError {
   if (caught instanceof DOMException && caught.name === 'AbortError') {
     return {code: 'aborted', message: '已中止请求'};

@@ -25,7 +25,7 @@
   import ConfirmDialog from './components/ConfirmDialog.svelte';
   import StatusBadge from './components/StatusBadge.svelte';
   import type {ApeirethConfig, ChatMessage, Conversation} from './types';
-  import {fetchBackendSessions} from './runtime';
+  import {fetchBackendSessions, friendlyErrorMessage} from './runtime';
 
 
   let {
@@ -79,11 +79,7 @@
     try {
       backendSessions = await fetchBackendSessions(config);
     } catch (e) {
-      backendError = e instanceof Error
-        ? e.message
-        : (typeof e === 'object' && e !== null && 'message' in e)
-          ? String(e.message)
-          : String(e);
+      backendError = friendlyErrorMessage(e, '/v1/panel/sessions');
     } finally {
       backendLoading = false;
     }
