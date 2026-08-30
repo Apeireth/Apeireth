@@ -200,16 +200,19 @@ fn parse_approval(
 
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
-    if args.is_empty() || args[0] == "session" {
+    if args.is_empty() {
         return run_session();
     }
-    if args[0] == "--help" || args[0] == "-h" {
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
         print_help();
         return ExitCode::SUCCESS;
     }
-    if args[0] == "--version" || args[0] == "-V" {
+    if args.iter().any(|arg| arg == "--version" || arg == "-V") {
         println!("apeireth {}", env!("CARGO_PKG_VERSION"));
         return ExitCode::SUCCESS;
+    }
+    if args[0] == "session" {
+        return run_session();
     }
 
     match args[0].as_str() {
@@ -246,6 +249,10 @@ fn main() -> ExitCode {
                             return ExitCode::FAILURE;
                         }
                     };
+                } else {
+                    eprintln!("unknown gateway argument: {}", args[index]);
+                    print_help();
+                    return ExitCode::FAILURE;
                 }
                 index += 1;
             }
@@ -256,5 +263,99 @@ fn main() -> ExitCode {
             print_help();
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_chat_simple() {
+        let args = vec!["hello".into(), "world".into()];
+        let (prompt, model, session) = parse_chat(&args).unwrap();
+        assert_eq!(prompt, "hello world");
+        assert_eq!(model, None);
+        assert_eq!(session, None);
+    }
+
+    #[test]
+    fn test_parse_chat_with_options() {
+        let args = vec![
+            "--model".into(),
+            "gpt-4o".into(),
+            "--session".into(),
+            "sess-123".into(),
+            "do".into(),
+            "something".into(),
+        ];
+        let (prompt, model, session) = parse_chat(&args).unwrap();
+        assert_eq!(prompt, "do something");
+        assert_eq!(model.as_deref(), Some("gpt-4o"));
+        assert_eq!(session.as_deref(), Some("sess-123"));
+    }
+
+    #[test]
+    fn test_parse_chat_errors() {
+        assert!(parse_chat(&[]).is_err());
+        assert!(parse_chat(&["--model".into()]).is_err());
+        assert!(parse_chat(&["--session".into()]).is_err());
+        assert!(parse_chat(&["--model".into(), "m".into()]).is_err());
+    }
+
+    #[test]
+    fn test_parse_approval_approve() {
+        let args = vec![
+            "--session".into(),
+            "s1".into(),
+            "--approval".into(),
+            "a1".into(),
+        ];
+        let (session, approval, decision) = parse_approval("approve", &args).unwrap();
+        assert_eq!(session, "s1");
+        assert_eq!(approval, "a1");
+        assert_eq!(decision, ApprovalDecision::Approve);
+    }
+
+    #[test]
+    fn test_parse_approval_reject_with_reason() {
+        let args = vec![
+            "--session".into(),
+            "s1".into(),
+            "--approval".into(),
+            "a1".into(),
+            "--reason".into(),
+            "too risky".into(),
+        ];
+        let (session, approval, decision) = parse_approval("reject", &args).unwrap();
+        assert_eq!(session, "s1");
+        assert_eq!(approval, "a1");
+        assert_eq!(
+            decision,
+            ApprovalDecision::Reject {
+                reason: Some("too risky".into())
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_approval_cancel_without_reason() {
+        let args = vec![
+            "--session".into(),
+            "s1".into(),
+            "--approval".into(),
+            "a1".into(),
+        ];
+        let (session, approval, decision) = parse_approval("cancel", &args).unwrap();
+        assert_eq!(session, "s1");
+        assert_eq!(approval, "a1");
+        assert_eq!(decision, ApprovalDecision::Cancel { reason: None });
+    }
+
+    #[test]
+    fn test_parse_approval_missing_required() {
+        assert!(parse_approval("approve", &["--session".into(), "s1".into()]).is_err());
+        assert!(parse_approval("approve", &["--approval".into(), "a1".into()]).is_err());
+        assert!(parse_approval("approve", &["--unknown".into(), "val".into()]).is_err());
     }
 }
