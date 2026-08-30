@@ -161,6 +161,36 @@ When $U_{\text{care}} \ge \Theta_{\text{action}}$ and user flow friction is zero
 
 ---
 
+## 💡 Real-World Scenarios & Capabilities in Action
+
+```text
++-----------------------------------------------------------------------------------------+
+|                                    APEIRETH IN ACTION                                   |
++-----------------------------------------------------------------------------------------+
+| [01. Lifelong Code Pair-Programming]                                                    |
+| Remembers your custom APIs and architectural style from 6 months ago. Assembles        |
+| Tree-sitter AST RepoMaps with personalized PageRank for compact token-budget context.   |
+|                                                                                         |
+| [02. Autonomous Curiosity-Driven Research]                                              |
+| Analyzes topological Betti holes in memory, discovers blind spots, and crawls deep web  |
+| documentation overnight to synthesize anti-entropy [[WikiLink]] reference pages.        |
+|                                                                                         |
+| [03. Transactional SAGA Refactoring Sandbox]                                            |
+| Forks a Copy-On-Write (CoW) branch in a clean Git Worktree. If unit tests fail or rate   |
+| limits trigger, executes LIFO reverse compensating actions in < 35µs with zero damage.  |
+|                                                                                         |
+| [04. Lineage Spawning & Knowledge Swarms]                                               |
+| Nurtures specialized child agents with constant-time Ed25519 epigenetic inheritance,   |
+| evolving from Shadowing apprentice to fully independent swarm peers.                    |
+|                                                                                         |
+| [05. Ember HUD Ambient Presence]                                                        |
+| Subtle 4.0s physiological breathing glow on screen edges. Automatically throttles       |
+| proactive care during deep coding flow, stepping forward only when fatigue is detected.  |
++-----------------------------------------------------------------------------------------+
+```
+
+---
+
 ## 🧱 16-Crate Microkernel Workspace Structure
 
 Apeireth 2.0+ enforces a strict, acyclic, single-direction dependency hierarchy:
@@ -230,7 +260,17 @@ cargo run -p apeireth-cli -- bundle --output-dir "E:\Apeireth-Portable"
 
 ---
 
-## 🛡️ The Nine Philosophical Anchors (九大哲学锚)
+## 📜 Documentation Index
+
+- 📑 **[Beyond-SOTA Future Paradigms Whitepaper](docs/03-reference/beyond-sota-future-paradigms-whitepaper.md)**
+- 📐 **[2.0 Full Architecture & Line-by-Line Blueprint](docs/01-architecture/v2-line-by-line-verification-and-upgrade-blueprint.md)**
+- 📋 **[All-Domain Capabilities Matrix](docs/03-reference/capabilities-matrix.md)**
+- 🛡️ **[ProcessExecutor Threat Model & Sandbox Policy](docs/security/process-executor-threat-model.md)**
+- 📊 **[Benchmark Baseline & Latency Report](reports/benchmark-baseline.md)**
+- ⚡ **[5-Minute Developer Quickstart](docs/development/5-min-quickstart.md)**
+
+<details>
+<summary><b>🛡️ The Nine Invariant Philosophical Anchors (点击展开九大不可变哲学锚)</b></summary>
 
 Every line of code and every design decision strictly conforms to the **Nine Invariant Anchors**:
 
@@ -244,16 +284,7 @@ Every line of code and every design decision strictly conforms to the **Nine Inv
 8. **`O-5` Never Fake It (0 装 PASS)**: 0 `todo!`, 0 `unimplemented!`, 0 dummy mocks, 0 hollow stubs.
 9. **`O-6` Always Optimal (永远追求最优)**: Microkernel single-direction hierarchy, optimal data structures, zero compromises.
 
----
-
-## 📜 Documentation Index
-
-- 📑 **[Beyond-SOTA Future Paradigms Whitepaper](docs/03-reference/beyond-sota-future-paradigms-whitepaper.md)**
-- 📐 **[2.0 Full Architecture & Line-by-Line Blueprint](docs/01-architecture/v2-line-by-line-verification-and-upgrade-blueprint.md)**
-- 📋 **[All-Domain Capabilities Matrix](docs/03-reference/capabilities-matrix.md)**
-- 🛡️ **[ProcessExecutor Threat Model & Sandbox Policy](docs/security/process-executor-threat-model.md)**
-- 📊 **[Benchmark Baseline & Latency Report](reports/benchmark-baseline.md)**
-- ⚡ **[5-Minute Developer Quickstart](docs/development/5-min-quickstart.md)**
+</details>
 
 <details>
 <summary><b>📖 Philosophical Foundations: The Name & Brand Manifesto (点击展开命名哲学与品牌宣言)</b></summary>
