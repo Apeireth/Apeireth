@@ -58,10 +58,15 @@ pub mod emergence;
 pub mod emotion_memory;
 pub mod hypothesis;
 pub mod memory;
+pub mod morphology;
 pub mod tone;
 pub mod value_cases;
 pub mod world_model;
 
+pub use morphology::{
+    classify as classify_query_morphology, crawl_budget, sanitize_temperature, MorphologyVerdict,
+    RetrievalMode,
+};
 pub use tone::{
     deliberation_intensity, emotion_tone, organ_tone, tone_hint, BondCharacterSnapshot,
     DeliberationEcho, EmotionToneStyle, ToneError,
