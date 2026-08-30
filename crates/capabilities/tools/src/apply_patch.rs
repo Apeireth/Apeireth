@@ -517,14 +517,7 @@ replaced
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("a.rs"), "foo\nfoo\n").unwrap();
 
-        let patch = r#"*** Begin Patch
-*** Update File: a.rs
-<<<<<<< SEARCH
-foo
-=======
-bar
->>>>>>>
-*** End Patch"#;
+        let patch = "*** Begin Patch\n*** Update File: a.rs\n-foo\n+bar\n*** End Patch";
 
         let err = TransactionalPatchApplier::apply(dir.path(), patch).unwrap_err();
         match err {
@@ -630,14 +623,7 @@ bar
     fn unique_match_replaces_the_single_occurrence() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("a.rs"), "alpha\nfoo\nbeta\n").unwrap();
-        let patch = r#"*** Begin Patch
-*** Update File: a.rs
-<<<<<<< SEARCH
-foo
-=======
-bar
->>>>>>>
-*** End Patch"#;
+        let patch = "*** Begin Patch\n*** Update File: a.rs\n-foo\n+bar\n*** End Patch";
         TransactionalPatchApplier::apply(dir.path(), patch).unwrap();
         assert_eq!(
             fs::read_to_string(dir.path().join("a.rs")).unwrap(),

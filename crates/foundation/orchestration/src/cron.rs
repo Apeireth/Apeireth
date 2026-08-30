@@ -251,11 +251,11 @@ fn or_numeric_piece(orig: &str, piece: &str, lo: u8, hi: u8, bits: &mut u64) -> 
 impl CronExpr {
     /// Parse a 5-field expression or a Vixie `@` shorthand.
     ///
-    /// `@hourly` → `0 * * * *`  
-    /// `@daily` / `@midnight` → `0 0 * * *`  
-    /// `@weekly` → `0 0 * * 0`  
-    /// `@monthly` → `0 0 1 * *`  
-    /// `@yearly` / `@annually` → `0 0 1 1 *`  
+    /// `@hourly` → `0 * * * *`
+    /// `@daily` / `@midnight` → `0 0 * * *`
+    /// `@weekly` → `0 0 * * 0`
+    /// `@monthly` → `0 0 1 * *`
+    /// `@yearly` / `@annually` → `0 0 1 1 *`
     /// `@reboot` is a marker (`is_reboot()`), not a timetable.
     pub fn parse(expr: &str) -> CronResult<CronExpr> {
         let expr = expr.trim();
