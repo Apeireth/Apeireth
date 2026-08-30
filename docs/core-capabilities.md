@@ -1,7 +1,9 @@
 # Apeireth Core Capabilities — Contract & Invariants
 
+> **端点接线状态 (基线 candidate `8b7e3111`, 2026-08-30)**：本文件记录的是历史 Core Capability Expansion 轮次设计的**端点契约与不变量**。当前 canonical 网关生产路由（`apeireth-gateway::canonical_router`）仅暴露 `/health`、`/v1/models`、`/v1/chat`、`/v1/chat/completions`、`/v1/approvals/resolve`；下文的 `/v1/apeireth/capabilities`、`/v1/apeireth/sessions`、memory 治理、grants、`/v1/panel/traces` 与 `/v1/apeireth/events` SSE 端点**未**挂载到当前生产路由。下文内容保留为设计/历史契约参考，集成前请以实际路由为准。
+
 > **当前基线 (v2.0.0-preview)**：
-> Apeireth 2.0 拥有完备的**全域系统能力体系**，涵盖基石治理 (Foundation & Governance)、认知记忆 (Engine & Cognition)、工具沙箱 (Capabilities & Sandbox) 以及网关全双工 (Gateway & Adapters)。
+> Apeireth 2.0 拥有覆盖四层架构的**全域系统能力体系**，涵盖基石治理 (Foundation & Governance)、认知记忆 (Engine & Cognition)、工具沙箱 (Capabilities & Sandbox) 以及网关全双工 (Gateway & Adapters)（各能力的实现/接线/默认启用层级见 [`docs/01-architecture/system-capabilities.md`](01-architecture/system-capabilities.md) 状态标注）。
 > - **系统能力完整规范手册**：详见 [`docs/01-architecture/system-capabilities.md`](01-architecture/system-capabilities.md)
 > - **能力矩阵与对外契约参考**：详见 [`docs/03-reference/capabilities-matrix.md`](03-reference/capabilities-matrix.md)
 > 

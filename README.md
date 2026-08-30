@@ -170,7 +170,7 @@ The root Cargo workspace contains **16 core packages** structured across four di
 
 | Layer | Responsibility | Crates |
 |---|---|---|
-| **Adapters** | Transports, CLI, SDK, and real-time SSE barge-in | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk` |
+| **Adapters** | Transports, CLI, SDK; chat SSE is buffered framing; barge-in is a library module | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk` |
 | **Engine** | Runtime loop, memory, organs, perception, providers, storage | `apeireth-runtime`, `apeireth-memory`, `apeireth-organ`, `apeireth-perception`, `apeireth-provider`, `apeireth-storage` |
 | **Capabilities** | Tool execution and OS process containment | `apeireth-tools-canonical` (owns `ProcessExecutor`) |
 | **Foundation** | Core domain, protocol, governance, credentials, orchestration, plugins | `apeireth-core`, `apeireth-protocol`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration`, `apeireth-plugin` |
@@ -186,14 +186,15 @@ apeireth chat
 apeireth gateway serve --port 8080
 ```
 
-The gateway owns HTTP transport and exposes `/health` and streaming SSE chat completions. Providers are selected through runtime capabilities, while credentials are secure and memory-zeroized. `ProcessExecutor` remains strictly owned by `crates/capabilities/tools/src/process/` under a formal [Threat Model](docs/security/process-executor-threat-model.md).
+The gateway owns HTTP transport and exposes `/health` and SSE chat completions. With `stream: true`, `POST /v1/chat/completions` returns `text/event-stream` frames terminated by `[DONE]` as **buffered framing** — emitted after the full canonical completion path (governance, transcript commit) has finished, not incremental token streaming. True token-by-token streaming is blocked by the frozen canonical seam and is not available in this release. Providers are selected through runtime capabilities, while credentials are secure and memory-zeroized. `ProcessExecutor` remains strictly owned by `crates/capabilities/tools/src/process/` under a formal [Threat Model](docs/security/process-executor-threat-model.md).
 
 ### Current Status
 
 - **Root workspace**: 16 crates, Rust 1.97.1 (MSRV), workspace version 1.2.0.
-- **Product line**: Tag `v2.0.0-preview` (Feature-complete 2.0 baseline).
-- **Test verification**: 1700+ tests passed / 0 failed; CI green across lint/fmt/audit/deny/clippy (`-D warnings`).
-- **Frontend desktop**: Svelte 5 + Tauri 2, `pnpm build` & `pnpm check` 100% green.
+- **Product line**: Tag `v2.0.0-preview` (2.0 baseline; six P2 hardening commits since this tag are documented in the changelog's Unreleased section).
+- **Test verification (remote Windows validation machine, candidate `8b7e3111`)**: `cargo test --workspace --locked` = **2012 passed / 0 failed** (13 ignored); `cargo check --workspace --locked`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `git diff --check` all clean. (Older "1700+" figures describe earlier baselines, not the current tree.)
+- **Frontend desktop**: Svelte 5 + Tauri 2; earlier rounds reported `pnpm build` & `pnpm check` green — the current remote validation gate did not cover the frontend build.
+- **Capability status (0-fake-PASS)**: library modules are opt-in and are **not** wired into the canonical runtime by default. `XcapVisionBackend` (real Windows screen capture) is implemented and hardware-validated on Windows only (headless sessions fail closed; no macOS/Linux hardware validation), but is not registered in the runtime and not enabled by default. The six P2 hardening commits (retrieval determinism, proposal-bound principle approvals, single-winner continuation, bounded reflexion persistence, session-scoped bounded spill, real Xcap capture) are library-level and add no default-enabled module or production wiring. Principle approvals stay intentionally in-memory/unwired; `topic_predictor` is not wired into `PreferenceRecall`.
 - **Threat model & benchmarks**: Documented and reproducible.
 
 ### Quick Start & Contributing

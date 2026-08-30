@@ -169,7 +169,7 @@ graph TD
 
 | 层级 | 核心职责 | 包含 Crates |
 |---|---|---|
-| **Adapters (适配器层)** | HTTP 网关、CLI 终端、SDK 与全双工流式打断 | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk` |
+| **Adapters (适配器层)** | HTTP 网关、CLI 终端、SDK（chat SSE 为缓冲成帧；打断为库级模块） | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk` |
 | **Engine (引擎层)** | 运行时循环、持久记忆、认知器官、多模态感知、模型接入、存储 | `apeireth-runtime`, `apeireth-memory`, `apeireth-organ`, `apeireth-perception`, `apeireth-provider`, `apeireth-storage` |
 | **Capabilities (能力层)** | 内置工具集与操作系统级进程沙箱执行边界 | `apeireth-tools-canonical`（独占持有 `ProcessExecutor`） |
 | **Foundation (基石层)** | 核心领域原语、协议转换、治理策略、安全凭据、编排系统、插件机制 | `apeireth-core`, `apeireth-protocol`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration`, `apeireth-plugin` |
@@ -185,14 +185,15 @@ apeireth chat
 apeireth gateway serve --port 8080
 ```
 
-Gateway 负责 HTTP 传输并提供 `/health` 和 SSE 流式响应。Provider 通过 runtime 统一调度，凭据通过 credentials 契约在内存中安全管理并自动擦除。`ProcessExecutor` 严格由 `crates/capabilities/tools/src/process/` 独占管理，并遵循公开的 [威胁模型与安全白皮书](docs/security/process-executor-threat-model.md)。
+Gateway 负责 HTTP 传输并提供 `/health` 与 chat completions 的 SSE 缓冲成帧：`POST /v1/chat/completions` 在 `stream: true` 时，于完整 canonical 完成路径（治理、transcript 提交）结束后返回 `text/event-stream` 帧与 `[DONE]` 终止帧——**并非逐 token 增量流式**；真正的增量流式被冻结的 canonical seam 阻塞，本版本不提供。Provider 通过 runtime 统一调度，凭据通过 credentials 契约在内存中安全管理并自动擦除。`ProcessExecutor` 严格由 `crates/capabilities/tools/src/process/` 独占管理，并遵循公开的 [威胁模型与安全白皮书](docs/security/process-executor-threat-model.md)。
 
 ### 当前工程状态
 
 - **根工作区**：16 个 crate，Rust 1.97.1 (MSRV)，workspace version 1.2.0。
-- **产品基线**：标签 `v2.0.0-preview`（功能完整 2.0 基线）。
-- **测试通过率**：全工作区 1700+ 项测试 100% PASS，0 失败；CI 全绿（lint/fmt/audit/deny/clippy `-D warnings` 零警告）。
-- **桌面前端**：Svelte 5 + Tauri 2，`pnpm build` 与 `pnpm check` 100% 通过（0 错误，0 警告）。
+- **产品基线**：标签 `v2.0.0-preview`（2.0 基线；该标签之后的 6 个 P2 加固提交见 CHANGELOG Unreleased 段）。
+- **测试验证**（远端 Windows 验证机，候选 `8b7e3111`）：`cargo test --workspace --locked` = **2012 通过 / 0 失败**（13 ignored）；`cargo check --workspace --locked`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`git diff --check` 全部通过。（旧 "1700+" 数字为历史基线，非当前工作区状态。）
+- **桌面前端**：Svelte 5 + Tauri 2；此前轮次报告 `pnpm build` 与 `pnpm check` 通过（0 错误，0 警告）——本轮远端验证未覆盖前端构建。
+- **能力状态（0 装 PASS）**：库模块均为 opt-in，**未**默认接入 canonical 运行时。`XcapVisionBackend`（真实 Windows 屏幕捕获）已实现且仅在 Windows 上硬件验证（无头环境 fail-closed；未做 macOS/Linux 硬件验证），但未在 runtime 注册、默认不启用。6 个 P2 加固提交（检索确定性、提案绑定原则审批、单赢家 continuation、有界 reflexion 持久化、会话级有界 spill、真实 Xcap 捕获）均为库级，不新增默认启用模块或生产接线。原则审批刻意保持内存/未接线状态；`topic_predictor` 未接线进 `PreferenceRecall`。
 - **威胁模型与基准**：公开透明、可完整复现。
 
 ### 快速开始与贡献指引

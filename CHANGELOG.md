@@ -1,5 +1,30 @@
 # Changelog — Apeireth
 
+## [Unreleased] — P2 加固波次 (candidate `8b7e3111`, 2026-08-30)
+
+> **状态标注 (0 装 PASS)**：下列六项 P2 加固提交全部为 **IMPLEMENTED（库级实现）且经远端 Windows 验证机测试验证**（candidate `8b7e3111`，clean tree，HEAD 已核验）：
+> `cargo test --workspace --locked` = **2012 passed / 0 failed**（13 ignored）；`cargo check --workspace --locked`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`git diff --check` 全部通过。
+> 注意四个层级不可混淆：**IMPLEMENTED（代码存在于候选）** ≠ **PRODUCTION WIRED（接入 canonical 运行时主路径）** ≠ **DEFAULT ENABLED（无需 opt-in 即开启）** ≠ **HARDWARE VALIDATED（真机验证）**。本波次均为**库级加固**：除真实 Xcap 捕获后端（仅 Windows 硬件验证）外，**没有**新增运行时权威、默认启用模块或生产接线；模块默认全部 opt-in。
+
+### 加固内容 (six P2 commits)
+- **检索确定性 (`b2446e67`, `apeireth-memory`)**：BM25 / RRF 平局按 id 稳定排序，等置信度话题按 key 排序且可精确重放。回归证据：`bm25_ties_are_id_sorted_for_ascii_cjk_and_repeated_queries`、`rrf_ties_are_id_sorted_and_replay_exactly`、`equal_confidence_topics_are_key_sorted_and_replay_exactly` 全部通过。库级，无新运行时接线。
+- **原则审批绑定提案 (`4f5395b2`, `apeireth-memory`)**：审批工件绑定具体 proposal——`approval_for_proposal_a_cannot_activate_proposal_b`、`concurrent_uses_of_one_approval_artifact_have_one_winner`、`successful_approval_artifact_cannot_be_replayed`、`expired_approval_artifact_is_rejected_without_sleeping` 全部通过。原则审批**刻意保持内存/库级（未接线）**，等待授权的 canonical 治理设计。
+- **Continuation 单赢家消费 (`a4ba09fc`, `apeireth-orchestration`)**：跨 store 实例单赢家、hostile id / 恶意 snapshot id 防穿越——`file_store_consume_is_single_winner_across_store_instances`、`hostile_id_claim_cannot_escape_store_root`、`malicious_snapshot_id_cannot_escape_store_root` 全部通过。库级。
+- **Reflexion 有界串行持久化 (`53c0376a`, `apeireth-memory`)**：history cap 下 cursor/reflections 保持一致，malformed JSON 为类型化非破坏性错误并释放 mutation claim——`file_store_history_cap_keeps_cursor_and_reflections_consistent`、`malformed_json_is_typed_non_destructive_and_releases_mutation_claim` 全部通过。库级。
+- **会话级有界 Spill (`778a0fcb`, `apeireth-tools-canonical`)**：跨 store 实例配额竞争单赢家、并发会话隔离、唯一引用、引用防穿越——`quota_race_has_exactly_one_winner_across_store_instances`、`concurrent_different_sessions_stay_isolated`、`concurrent_same_session_writers_receive_unique_references`、`traversal_and_root_wide_references_are_rejected` 全部通过。库级。
+- **真实 Xcap 视觉捕获 (`8b7e3111`, `apeireth-perception`)**：
+  - **IMPLEMENTED**：真实 xcap 0.9.8 捕获后端（`XcapVisionBackend`），确定性显示器排序（主屏优先）、bounds 限制、真实 PNG/JPEG 编码、fail-closed 错误。
+  - **NOT production wired / NOT default enabled**：仅是 `VisionBackend` trait 的后端实现；canonical runtime 默认路径**不**调用、**不**注册。用法为显式 opt-in 构造（`XcapVisionBackend::default_monitor()` / `new(config)`）；`NoopVisionBackend` 为显式零假设占位。
+  - **HARDWARE VALIDATED（仅 Windows）**：远端验证机交互会话中 ignored 测试 `real_xcap_hardware_capture_smoke` 通过（`\\.\DISPLAY1` 主屏 1680x1050，PNG 242067 字节，PNG magic 校验 + 真实桌面内容目检）；本地开发机交互会话 smoke 亦 PASS。无头 / session-0（SSH 服务上下文）环境按设计 fail-closed（`BackendUnavailable` invalid-handle `0x80070006` E_HANDLE）。**未做 macOS / Linux 硬件验证。**
+
+### SSE 状态（本轮终审口径，审计结论 `KERNEL_SEAM_MISSING`）
+- Gateway 的 SSE 为**缓冲成帧（buffered framing）**：`POST /v1/chat/completions` 在 `stream: true` 时，于完整 canonical 完成路径（治理、transcript 提交）结束后返回 `text/event-stream` 帧与 `[DONE]` 终止帧。
+- **真正的逐 token 增量流式被冻结的 canonical seam 阻塞**：canonical provider/router/runtime 契约只返回完整 `NormalizedResponse` / `TurnOutcome`；增加流式契约将改变冻结内核 seam，需显式授权。Gateway 绕过 Runtime 直接从 provider 流式被架构守门禁止。涉及"实时流式 / 逐 token 输出"表述的文档已按此口径修正。
+
+### 架构不变量（本轮重申）
+- 仍为：ONE 主循环、ONE ProviderRouter、ONE canonical completion 治理路径、ONE 主 session 权威、无第二审批权威、模块无持久 turn 权威、无裸 provider 绕行（runtime 7 项 + gateway 2 项 canonical 架构不变量测试全部通过）。
+- 库级已验证、**非默认启用**的 P2 能力：turn-scoped `ModuleInvoker`（`canonical_invoker_handle` 7 测试，含跨轮独立预算与拒绝越权 handle 调用）、`OrganModule`（`canonical_organ_module` 12 测试，默认缺席、不暴露工具）、`PreferenceLearning` 闭环（`canonical_preference_learning` 14 测试，含 `turn1_learning_reaches_turn2_provider_context`）、零模块最小内核（`minimal_kernel_without_standard_modules_completes_plain_chat_turn`）。`topic_predictor` 仍未接线进 `PreferenceRecall`。
+
 ## [v2.0.0-preview] - 2026-08-29
 
 > **版本定位与状态说明**:
@@ -14,7 +39,7 @@
   - `SubagentSpec` 多 Agent 编排隔离契约。
 - **D 块 / 多模态感知 (`apeireth-perception`)**:
   - `WhisperHttpBackend`：标准 `multipart/form-data` 发送音频转写请求，支持 OpenAI / MiniMax，凭据走 `CredentialResolver`；
-  - `XcapVisionBackend`：底层 OS 屏幕多显示器截屏，无头环境 Fail-Closed 守门。
+  - `XcapVisionBackend`：底层 OS 屏幕多显示器截屏，无头环境 Fail-Closed 守门。（注：真实捕获实现于次日 `8b7e3111` 落地，见上方 Unreleased；仅 Windows 硬件验证，默认不接线、opt-in 构造。）
 - **R12 / 长期记忆体系与物种化演进 (`apeireth-memory`)**:
   - **混合检索 (`hybrid_search.rs`)**: 纯 Safe Rust Okapi BM25（$k_1=1.2, b=0.75$）+ CJK 双字滑窗切分 + 余弦语义向量 + RRF 倒数排名融合；
   - **伙伴与羁绊模型 (`partner.rs`)**: 7 大关系演化阶段 + 连续深度 $[0.0, 1.0]$ 状态机 + 5 维性格特征；
@@ -30,7 +55,7 @@
   - **断点续行与段编辑 (`continuation.rs`)**: 断点快照 + 原子写 + **O-1 核心段删除拦截防御**；
   - **教育与微积分换元符号检查 (`education.rs`)**: 纯 Safe Rust 四重微分一致性检查、经典三角/双曲/线性根式模式匹配与结构化 Markdown 报告。
 - **B 块 / 网关流式交互 (`apeireth-gateway`)**:
-  - `POST /v1/chat/completions` 当 `stream: true` 时返回标准 `text/event-stream` SSE 数据帧与 `[DONE]` 终止帧。
+  - `POST /v1/chat/completions` 当 `stream: true` 时返回标准 `text/event-stream` SSE 数据帧与 `[DONE]` 终止帧。（口径澄清：为**缓冲成帧**——完整 canonical 完成路径结束后一次性返回，**非逐 token 增量流式**；增量流式被冻结 canonical seam 阻塞，见 Unreleased §SSE 状态。）
 - **元认知自校准与长程思维簇 (`apeireth-memory`)**:
   - **意图理解准确率 Brier 自我诊断 (`intent_brier.rs`)**: 滚动窗口 [30, 100, 300] 轮 Brier 得分数学自校准 + 话题领域诊断 + 相对趋势分析；
   - **思维簇管理与元自学习只读回读 (`thought_cluster.rs`)**: `{YYYY-MM-DD}-{seq:03}.md` 结构化思维文件落盘 + 链注册表 + 安全防穿越与编辑防御 + `InMemoryThoughtClusterReader`；
