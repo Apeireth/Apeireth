@@ -10,7 +10,7 @@ Apeireth 感知层采用**单向分层**与**可插拔后端**设计：
 
 - **Foundation 层**（`apeireth-plugin`）：定义 `VoiceBackend`、`VisionBackend`、`TactileBackend` 等纯 Trait 契约及 `PerceptionEvent` 统一事件格式。
 - **Engine 层**（`apeireth-perception`）：实现具体的生产级通信与操作系统捕获后端。
-- **Runtime 注入**：Runtime 通过 `Arc<dyn VoiceBackend>` 与 `Arc<dyn VisionBackend>` 注入，跨 Turn 异步复用。
+- **Runtime 注入点**：感知后端以 `Arc<dyn VoiceBackend>` / `Arc<dyn VisionBackend>` trait 对象形式注入。但注意：当前 canonical runtime **默认不注册任何真实视觉后端**——`XcapVisionBackend` 仅支持显式 opt-in 构造（见 §3.1），`NoopVisionBackend` 为显式零假设占位（见 §3.2）。
 
 ---
 
@@ -63,6 +63,13 @@ let secondary_vision = XcapVisionBackend::new(XcapVisionConfig {
 });
 ```
 
+**状态标注 (0 装 PASS, 基线 candidate `8b7e3111`)**：
+
+* **IMPLEMENTED**：真实 xcap 0.9.8 捕获后端，确定性显示器排序（主屏优先）、bounds 限制、真实 PNG/JPEG 编码、fail-closed 错误。
+* **NOT PRODUCTION WIRED**：仅是 `VisionBackend` trait 的后端实现；canonical runtime 默认路径**不**调用、**不**注册。唯一用法是如上所示的显式 opt-in 构造。
+* **NOT DEFAULT ENABLED**：任何地方都不默认开启；不构造即不捕获。
+* **HARDWARE VALIDATED（仅 Windows）**：远端验证机交互会话中 ignored 测试 `real_xcap_hardware_capture_smoke` 通过（`\\.\DISPLAY1` 主屏 1680x1050，PNG 242067 字节，PNG magic 校验 + 真实桌面内容目检）；本地开发机交互会话 smoke 亦 PASS。无头 / session-0（SSH 服务上下文）环境按设计 fail-closed（`PerceptionBackendError::BackendUnavailable` invalid-handle `0x80070006` E_HANDLE）。**未做 macOS / Linux 硬件验证。**
+
 ### 3.2 NoopVisionBackend
 在测试或纯文本交互环境下，使用 `NoopVisionBackend` 作为显式 0 装占位：
 
@@ -76,10 +83,16 @@ let noop = NoopVisionBackend;
 
 ## 4. 验收与测试
 
-运行感知模块全量测试：
+运行感知模块全量测试（基线 candidate `8b7e3111` 远端 Windows 验证机实测：**39 passed / 0 failed，1 ignored**）：
 
 ```powershell
 cargo test -p apeireth-perception --locked
 cargo test -p apeireth-perception --test perception_integration --locked
 cargo clippy -p apeireth-perception --all-targets --locked -- -D warnings
+```
+
+Xcap 真机冒烟测试默认 `#[ignore]`（需要交互式桌面会话，无头环境会 fail-closed 报 `BackendUnavailable`）。在有真实显示器的交互会话中可显式运行：
+
+```powershell
+cargo test -p apeireth-perception --locked -- --ignored real_xcap_hardware_capture_smoke
 ```
