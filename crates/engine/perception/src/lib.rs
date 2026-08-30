@@ -10,6 +10,7 @@
 //! (normalization, capture metadata, screen salience, observation capture).
 //! It is **not** an `AgentModule` and does **not** own final response.
 
+pub mod capture;
 pub mod normalize;
 pub mod vision;
 pub mod voice;
@@ -20,6 +21,7 @@ pub use apeireth_plugin::perception::{
     PerceptionModality, TactileInput, TextInput, ThresholdAttention, TopKAttention, VisionInput,
     VoiceInput,
 };
+pub use capture::{capture_metadata, CaptureMetadata};
 pub use normalize::{
     command_observation, default_attention_threshold, default_top_k, pipeline_events,
     tactile_observation, text_observation, top_k_events, validate_event, vision_observation,
