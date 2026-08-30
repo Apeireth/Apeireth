@@ -68,6 +68,7 @@ pub mod topic_predictor;
 pub mod epa_bridge;
 pub mod residual_pyramid;
 pub mod river_topology;
+pub mod three_tier_vault;
 pub mod wiki_fs;
 
 pub use epa_bridge::{EpaProjectionResult, EpaSemanticBridge};
@@ -77,6 +78,10 @@ pub use residual_pyramid::{
 pub use river_topology::{
     DtscObservables, DualScaledFieldSolver, RiverDynamicsEngine, RiverEdge, RiverObservability,
     RiverState, SpikeSignal, TagNode,
+};
+pub use three_tier_vault::{
+    ProvenanceRecord, ThreeTierVault, TocTreeIndexer, TocTreeNode, TreeReasoningRouter, VaultError,
+    VaultTier,
 };
 
 pub use bitemporal_graph::{BitemporalFact, BitemporalGraph};
