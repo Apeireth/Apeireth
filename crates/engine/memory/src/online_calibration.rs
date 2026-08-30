@@ -363,12 +363,9 @@ impl DriftDetector {
         let n = baseline.len().min(self.streak.len());
         let mut alarms = Vec::new();
         for i in 0..n {
-            let v = match values.get(i).copied().filter(|x| x.is_finite()) {
-                Some(v) => v,
-                None => {
-                    self.streak[i] = 0;
-                    continue;
-                }
+            let Some(v) = values.get(i).copied().filter(|x| x.is_finite()) else {
+                self.streak[i] = 0;
+                continue;
             };
             let z = baseline.z(i, v);
             if z.abs() > self.z_threshold {

@@ -125,7 +125,7 @@ impl EnergyVadConfig {
 
     /// Samples per analysis frame at 16 kHz mono.
     pub fn frame_samples(&self) -> usize {
-        ((PCM16_SAMPLE_RATE_HZ as u64) * u64::from(self.frame_size_ms) / 1000) as usize
+        (u64::from(PCM16_SAMPLE_RATE_HZ) * u64::from(self.frame_size_ms) / 1000) as usize
     }
 }
 
