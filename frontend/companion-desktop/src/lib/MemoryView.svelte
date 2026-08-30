@@ -125,7 +125,11 @@
         episodes = await fetchMemoryEpisodes(config, searchQuery, 120);
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = e instanceof Error
+        ? e.message
+        : (typeof e === 'object' && e !== null && 'message' in e)
+          ? String(e.message)
+          : String(e);
     } finally {
       loading = false;
     }
