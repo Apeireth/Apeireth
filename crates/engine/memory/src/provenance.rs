@@ -155,6 +155,52 @@ impl crate::SqliteMemoryStore {
         Ok(())
     }
 
+    /// Same as [`Self::put_episode_full`] but binds a real `continuity_id`.
+    /// Empty continuity is rejected (does not fall back to `"default"`).
+    pub fn put_episode_full_for_subject(
+        &self,
+        ep: &Episode,
+        meta: &EpisodeMeta,
+        continuity_id: &str,
+    ) -> MemoryResult<()> {
+        if ep.id.trim().is_empty() {
+            return Err(MemoryError::Invalid("episode id is empty".into()));
+        }
+        if ep.session_id.trim().is_empty() {
+            return Err(MemoryError::Invalid("episode session_id is empty".into()));
+        }
+        if ep.role.trim().is_empty() {
+            return Err(MemoryError::Invalid("episode role is empty".into()));
+        }
+        let cid = continuity_id.trim();
+        if cid.is_empty() {
+            return Err(MemoryError::Invalid(
+                "continuity_id is empty (put_episode_full_for_subject refuses the default placeholder)"
+                    .into(),
+            ));
+        }
+        let conn = self.conn()?;
+        conn.execute(
+            "INSERT OR IGNORE INTO episodes \
+             (id, continuity_id, session_id, timestamp, role, content, \
+              valid_from_ms, valid_until_ms, created_ms, provenance) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                ep.id,
+                cid,
+                ep.session_id,
+                ep.timestamp,
+                ep.role,
+                ep.content,
+                meta.valid_from_ms,
+                meta.valid_until_ms,
+                meta.created_ms,
+                meta.provenance.as_str(),
+            ],
+        )?;
+        Ok(())
+    }
+
     /// 按时间窗检索 (epoch_ms). SQL 过滤:
     /// `created_ms >= from_ms AND (valid_until_ms IS NULL OR valid_until_ms >= until_ms)`.
     ///
@@ -311,5 +357,36 @@ mod tests {
         assert_eq!(m.valid_from_ms, Some(42));
         assert_eq!(m.valid_until_ms, None);
         assert_eq!(m.provenance, Provenance::Tool);
+    }
+
+    #[test]
+    fn put_episode_full_for_subject_binds_continuity_and_provenance() {
+        use apeireth_core::kernel::memory::Episode;
+        use crate::{EpisodeQuery, EpisodeStore, SqliteMemoryStore};
+
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        let ep = Episode {
+            id: "ep-prov".into(),
+            timestamp: 100,
+            role: "user".into(),
+            content: "bound".into(),
+            session_id: "sess".into(),
+        };
+        let meta = EpisodeMeta::now(100_000, Provenance::Dialog);
+        store
+            .put_episode_full_for_subject(&ep, &meta, "cid-real")
+            .unwrap();
+        let by_cid = <SqliteMemoryStore as EpisodeStore>::query(
+            &store,
+            &EpisodeQuery::new().for_continuity("cid-real"),
+        )
+        .unwrap();
+        assert_eq!(by_cid.len(), 1);
+        let got = store.read_episode_meta("ep-prov").unwrap().unwrap();
+        assert_eq!(got.provenance, Provenance::Dialog);
+        assert_eq!(got.created_ms, 100_000);
+        assert!(store
+            .put_episode_full_for_subject(&ep, &meta, "  ")
+            .is_err());
     }
 }
