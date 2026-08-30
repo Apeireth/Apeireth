@@ -44,6 +44,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod ambient_context;
 pub mod async_context;
+pub mod care_potential_field;
 pub mod context_rot;
 pub mod continuation;
 pub mod council;
@@ -52,6 +53,7 @@ pub mod prompt_stabilizer;
 pub mod speech_arbiter;
 pub mod worktree_sandbox;
 
+pub use care_potential_field::{CareAction, CarePotentialField};
 pub use ambient_context::{
     AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
 };

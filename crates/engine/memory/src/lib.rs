@@ -70,6 +70,13 @@ pub mod residual_pyramid;
 pub mod river_topology;
 pub mod three_tier_vault;
 pub mod wiki_fs;
+pub mod betti_hole_detector;
+pub mod kuramoto_resonance;
+pub mod chronicle_crystallizer;
+
+pub use betti_hole_detector::{BettiHoleDetector, BettiTopologicalReport, ManifoldConceptNode, TopologicalVoidRing};
+pub use kuramoto_resonance::{EpiphanyEvent, KuramotoOscillator, KuramotoResonanceEngine};
+pub use chronicle_crystallizer::{ChronicleCrystallizer, ChronicleSection, RawEpisodicTrace};
 
 pub use epa_bridge::{EpaProjectionResult, EpaSemanticBridge};
 pub use residual_pyramid::{
