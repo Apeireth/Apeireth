@@ -7,8 +7,12 @@
 
 use std::sync::Arc;
 
+use apeireth_core::kernel::SessionId;
 use apeireth_perception::vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
 use apeireth_perception::voice::{WhisperHttpBackend, WhisperHttpConfig};
+use apeireth_perception::{
+    default_attention_threshold, PerceptionModality, PerceptionOwner, SignalSource,
+};
 use apeireth_plugin::credentials::StaticCredentials;
 use apeireth_plugin::perception_backend::{
     AudioBuffer, LangHint, PerceptionBackendError, VisionBackend, VoiceBackend,
@@ -59,4 +63,42 @@ async fn perception_vision_captures_fail_closed_in_headless() {
         res,
         Err(PerceptionBackendError::BackendUnavailable(_))
     ));
+}
+
+#[test]
+fn enabled_owner_runs_end_to_end_multimodal_pipeline() {
+    let mut owner = PerceptionOwner::enabled(SessionId::new()).with_top_k(3);
+    owner.ingest_text(SignalSource::Cli, "hello world", 0.6);
+    owner.ingest_text(SignalSource::Internal, "noise", 0.1);
+    owner.ingest_voice(SignalSource::Http, "say hi", 0.85);
+    owner.ingest_vision(SignalSource::PyBridge, 1280, 720, Some("screen".into()));
+    owner.ingest_tactile(SignalSource::Internal, -0.9);
+    owner.ingest_command(SignalSource::Cli, "/status");
+
+    let selected = owner.select();
+    assert!(
+        !selected.is_empty(),
+        "pipeline should keep at least one event"
+    );
+    assert!(selected.len() <= 3);
+    let threshold = default_attention_threshold();
+    for event in &selected {
+        assert!(event.attention_score >= threshold);
+        assert!(!event.payload.is_null());
+        assert!(matches!(
+            event.source,
+            PerceptionModality::Text
+                | PerceptionModality::Voice
+                | PerceptionModality::Vision
+                | PerceptionModality::Tactile
+                | PerceptionModality::Command
+        ));
+    }
+}
+
+#[test]
+fn disabled_owner_is_the_default_production_path() {
+    let mut owner = PerceptionOwner::default();
+    owner.ingest_text(SignalSource::Cli, "must not leak", 1.0);
+    assert!(owner.select().is_empty());
 }
