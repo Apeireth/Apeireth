@@ -565,3 +565,105 @@ async fn fetch_does_not_send_auth_cookie_or_proxy_headers() {
     assert_eq!(value["body"], "headers clean");
     server.await.unwrap();
 }
+
+#[tokio::test]
+async fn html_fetch_adds_title_text_and_accessibility_without_changing_body() {
+    let html = b"<html><head><title>My Page</title></head><body><h1>Hello</h1><button>OK</button></body></html>".to_vec();
+    let (port, server) = serve_once(move |mut socket| async move {
+        let _ = read_request_head(&mut socket).await;
+        write_http(
+            &mut socket,
+            "200 OK",
+            &[("content-type", "text/html; charset=utf-8")],
+            &html,
+        )
+        .await;
+    })
+    .await;
+
+    let result = fetch_tool()
+        .invoke(&call_url(format!("http://127.0.0.1:{port}/page.html")))
+        .await;
+
+    let value = value_of(result);
+    assert_eq!(
+        value["body"],
+        "<html><head><title>My Page</title></head><body><h1>Hello</h1><button>OK</button></body></html>"
+    );
+    assert_eq!(value["title"], "My Page");
+    let text = value["text"].as_str().unwrap_or("");
+    assert!(text.contains("Hello"), "{text}");
+    assert!(text.contains("OK"), "{text}");
+    let snap = value["accessibility"].as_str().unwrap_or("");
+    assert!(snap.contains("heading"), "{snap}");
+    assert!(snap.contains("button"), "{snap}");
+    assert!(snap.contains("[ref="), "{snap}");
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn rate_limiter_rejects_over_limit_without_a_second_contact() {
+    let (port, server) = serve_once(|mut socket| async move {
+        let _ = read_request_head(&mut socket).await;
+        write_http(
+            &mut socket,
+            "200 OK",
+            &[("content-type", "text/plain")],
+            b"first",
+        )
+        .await;
+    })
+    .await;
+
+    let tool = FetchTool::new(
+        FetchConfig::new(Arc::new(allowlist_egress()))
+            .with_rate_limiting_config(1, Duration::from_secs(60)),
+    );
+    let url = format!("http://127.0.0.1:{port}/once");
+
+    let first = tool.invoke(&call_url(&url)).await;
+    let value = value_of(first);
+    assert_eq!(value["body"], "first");
+
+    let second = tool.invoke(&call_url(&url)).await;
+    assert!(!second.is_ok(), "second request must be rate-limited");
+    let rendered = second.render();
+    assert!(rendered.contains("rate limited"), "{rendered}");
+    assert!(
+        second.outcome.is_retryable(),
+        "rate-limit should be retryable: {rendered}"
+    );
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn response_cache_serves_the_second_request_without_contacting() {
+    let (port, server) = serve_once(|mut socket| async move {
+        let _ = read_request_head(&mut socket).await;
+        write_http(
+            &mut socket,
+            "200 OK",
+            &[("content-type", "text/plain")],
+            b"cached-body",
+        )
+        .await;
+    })
+    .await;
+
+    let config = FetchConfig::new(Arc::new(allowlist_egress()))
+        .with_response_cache(Duration::from_secs(60));
+    let cache = config.response_cache().cloned();
+    let tool = FetchTool::new(config);
+    let url = format!("http://127.0.0.1:{port}/cached");
+
+    let first = tool.invoke(&call_url(&url)).await;
+    assert_eq!(value_of(first)["body"], "cached-body");
+
+    let second = tool.invoke(&call_url(&url)).await;
+    assert_eq!(value_of(second)["body"], "cached-body");
+
+    let stats = cache.expect("cache enabled").stats();
+    assert_eq!(stats.hits, 1);
+    assert_eq!(stats.misses, 1);
+    server.await.unwrap();
+}

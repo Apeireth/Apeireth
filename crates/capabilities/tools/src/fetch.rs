@@ -16,7 +16,7 @@
 //! Fetch does not use the shell, does not call `reqwest` directly, does not
 //! resolve DNS for policy decisions, and does not duplicate IP classification.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use apeireth_core::kernel::CapabilityId;
@@ -27,6 +27,16 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
+
+pub mod accessibility;
+pub mod html_text;
+pub mod rate_limit;
+pub mod response_cache;
+
+pub use accessibility::{extract_tree, AccessibilityNode, AccessibilityTree, NodeRole};
+pub use html_text::{extract_links, extract_text, extract_title, HtmlExtractError};
+pub use rate_limit::RateLimiter;
+pub use response_cache::{ResponseCache, ResponseCacheStats};
 
 /// Maximum accepted URL length in bytes.
 pub const FETCH_URL_MAX_BYTES: usize = 8 * 1024;
@@ -44,6 +54,12 @@ const FETCH_METHOD: &str = "GET";
 pub struct FetchConfig {
     egress: Arc<ControlledEgress>,
     user_agent: Option<String>,
+    /// Optional per-host sliding-window rate limiter (donor R231 semantics).
+    /// Scheduling state only; never part of the frozen approved payload.
+    rate_limiter: Option<Arc<Mutex<RateLimiter>>>,
+    /// Optional TTL response cache (donor R265 semantics). Process-local;
+    /// keyed by the frozen normalized request URL.
+    response_cache: Option<Arc<ResponseCache>>,
 }
 
 impl FetchConfig {
@@ -52,6 +68,8 @@ impl FetchConfig {
         Self {
             egress,
             user_agent: None,
+            rate_limiter: None,
+            response_cache: None,
         }
     }
 
@@ -87,6 +105,46 @@ impl FetchConfig {
     pub fn with_user_agent(mut self, user_agent: impl Into<String>) -> Self {
         self.user_agent = Some(user_agent.into());
         self
+    }
+
+    /// Enable per-host rate limiting with the donor default (60 requests per
+    /// 60 seconds). Requests over the limit fail with a retryable error that
+    /// includes the wait time.
+    #[must_use]
+    pub fn with_rate_limiting(mut self) -> Self {
+        self.rate_limiter = Some(Arc::new(Mutex::new(RateLimiter::new())));
+        self
+    }
+
+    /// Enable per-host rate limiting with an explicit limit and window.
+    #[must_use]
+    pub fn with_rate_limiting_config(
+        mut self,
+        max_requests: usize,
+        window: Duration,
+    ) -> Self {
+        self.rate_limiter = Some(Arc::new(Mutex::new(RateLimiter::with_limit(
+            max_requests, window,
+        ))));
+        self
+    }
+
+    /// Enable a TTL response cache. Only successful (2xx) textual responses
+    /// are cached; keys are the exact frozen normalized request URLs.
+    #[must_use]
+    pub fn with_response_cache(mut self, ttl: Duration) -> Self {
+        self.response_cache = Some(Arc::new(ResponseCache::new(ttl)));
+        self
+    }
+
+    /// The per-host rate limiter, when enabled.
+    pub fn rate_limiter(&self) -> Option<&Arc<Mutex<RateLimiter>>> {
+        self.rate_limiter.as_ref()
+    }
+
+    /// The response cache, when enabled.
+    pub fn response_cache(&self) -> Option<&Arc<ResponseCache>> {
+        self.response_cache.as_ref()
     }
 
     pub fn egress(&self) -> &Arc<ControlledEgress> {
@@ -310,6 +368,47 @@ impl FetchTool {
         user_agent: Option<&str>,
         url: &str,
     ) -> ToolResult {
+        // Process-local scheduling: cache lookup happens before the network;
+        // the rate limiter consumes quota before the request is issued (the
+        // quota is spent whether or not the remote succeeds, matching the
+        // donor's semantics).
+        let cache = self.config.response_cache();
+        if let Some(cache) = cache {
+            if let Some(cached) = cache.get(url) {
+                return ToolResult::ok(&call.id, cached).with_name("fetch");
+            }
+        }
+
+        if let Some(limiter) = self.config.rate_limiter() {
+            let host = Url::parse(url)
+                .ok()
+                .and_then(|u| u.host_str().map(ToOwned::to_owned))
+                .unwrap_or_default();
+            if !host.is_empty() {
+                let decision = {
+                    let mut limiter = limiter
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let allowed = limiter.check(&host);
+                    if allowed {
+                        limiter.record(&host);
+                    }
+                    (allowed, limiter.wait_time(&host))
+                };
+                let (allowed, wait) = decision;
+                if !allowed {
+                    let backoff = wait
+                        .map(|d| format!("; retry after about {} ms", d.as_millis()))
+                        .unwrap_or_default();
+                    return ToolResult::retryable_error(
+                        &call.id,
+                        format!("fetch rate limited for host {host}{backoff}"),
+                    )
+                    .with_name("fetch");
+                }
+            }
+        }
+
         let mut headers: Vec<(&str, &str)> = Vec::with_capacity(2);
         headers.push(("accept", "*/*"));
         if let Some(user_agent) = user_agent {
@@ -332,7 +431,7 @@ impl FetchTool {
             };
 
         let final_url = sanitize_final_url(&response.final_url);
-        let value = serde_json::json!({
+        let mut value = serde_json::json!({
             "url": final_url,
             "status": response.status,
             "content_type": effective_content_type,
@@ -341,6 +440,34 @@ impl FetchTool {
             "bytes": body.len(),
             "redirects": response.redirects,
         });
+
+        // HTML responses gain additive, LLM-friendly derived views: page
+        // title, extracted plain text, and the accessibility snapshot. The
+        // raw body is unchanged.
+        let essence = content_type
+            .as_deref()
+            .map(media_type_essence)
+            .unwrap_or_default();
+        if essence == "text/html" || essence == "application/xhtml+xml" {
+            if let Some(title) = extract_title(&decoded) {
+                value["title"] = serde_json::Value::String(title.trim().to_string());
+            }
+            if let Ok(text) = extract_text(&decoded) {
+                value["text"] = serde_json::Value::String(text);
+            }
+            let tree = extract_tree(&decoded);
+            if !tree.is_empty() {
+                value["accessibility"] = serde_json::Value::String(tree.to_snapshot());
+            }
+        }
+
+        // Cache only successful textual responses; error pages and
+        // non-textual rejections are not worth re-serving.
+        if let Some(cache) = cache {
+            if (200..300).contains(&response.status) {
+                cache.put(url.to_string(), value.clone());
+            }
+        }
 
         ToolResult::ok(&call.id, value).with_name("fetch")
     }
