@@ -13,10 +13,12 @@
 | **治理 (Governance)** | `gov.untrusted_boundary`| `apeireth-governance::untrusted_mark` | `wrap_content()`, `unwrap_content()` | `<<<[UNTRUSTED_CONTENT]>>>` 逃逸中和 |
 | **治理 (Governance)** | `gov.pii_masking` | `apeireth-governance::input_security` | `PiiDetector::redact(text)` | 8 类 PII + `EnvSecret` 行解析 |
 | **治理 (Governance)** | `gov.rate_limiter` | `apeireth-governance::rate_limit` | `RateLimiterHook::check_limit()` | 4 阶信任模型 + 分/时滑动窗口 |
+| **编排 (Orchestration)** | `orch.worktree_sandbox` | `apeireth-orchestration::worktree_sandbox` | `TddStateMachine::record_test_result()` | gnhf 物理隔离 Worktree + TDD 原子回滚 |
 | **编排 (Orchestration)** | `orch.async_context` | `apeireth-orchestration::async_context` | `AsyncContextPipeline::assemble_prompt_context()` | 四层异步数组隔离 (Ephemeral/Durable/Summary/HUD) |
 | **编排 (Orchestration)** | `orch.speech_arbiter` | `apeireth-orchestration::speech_arbiter` | `SpeechOutputArbiter::arbitrate()` | FIFO 排队 / TTL 淘汰 / 抢占打断 |
 | **编排 (Orchestration)** | `orch.prompt_cache` | `apeireth-orchestration::prompt_stabilizer`| `assemble_messages()` | 字节级前缀固定 + 单点环境注入 |
 | **编排 (Orchestration)** | `orch.council_7` | `apeireth-orchestration::council` | `Council::decide(proposal)` | 7 Advisor 结构化辩论与 Veto 机制 |
+| **记忆 (Memory)** | `mem.three_tier_vault`| `apeireth-memory::three_tier_vault` | `ThreeTierVault`, `TocTreeIndexer` | SwarmVault 三层知识库 + OpenKB TOC 树路由 |
 | **记忆 (Memory)** | `mem.river_topology` | `apeireth-memory::river_topology` | `DualScaledFieldSolver::solve()` | TagMemo V10 预解双对偶场 + LIF 脉冲 + Ω 门控 |
 | **记忆 (Memory)** | `mem.residual_pyramid`| `apeireth-memory::residual_pyramid` | `OrthogonalResidualPyramid::analyze()` | 修正 Gram-Schmidt 正交投影 + 90% 能量截断 |
 | **记忆 (Memory)** | `mem.epa_bridge` | `apeireth-memory::epa_bridge` | `EpaSemanticBridge::project()` | 加权中心化 PCA 语义主轴 + 逻辑深度 + 跨域共振 |
@@ -27,6 +29,7 @@
 | **记忆 (Memory)** | `mem.wiki_fs` | `apeireth-memory::wiki_fs` | `compile_page()`, `run_lint()` | Karpathy 知识编译 + `[[WikiLink]]` + 反熵 Lint |
 | **运行时 (Runtime)** | `rt.heartbeat` | `apeireth-runtime::canonical::heartbeat`| `schedule_task()`, `acquire_flow_lock()` | 5 触发源 + 二叉最大堆 + FlowLock 心流锁 |
 | **运行时 (Runtime)** | `rt.harness_patch` | `apeireth-runtime::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| Harness-R1 失败轨迹自动演绎策略补丁 |
+| **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` | `RepoMapGenerator::generate_map()` | Aider 式 AST 跨语言提取 + PageRank 代码地图 |
 | **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | Codex 两阶段提交 + 100% 自动原子回滚 |
 | **工具 (Capabilities)** | `tool.guardrail` | `apeireth-tools-canonical::guardrail` | `pre_call_guard()`, `post_call_guard()` | 路径/命令拦截 + API Key/私钥出站绊线 |
 | **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
