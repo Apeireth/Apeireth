@@ -55,6 +55,9 @@
 // ============================================================
 
 pub mod adapter;
+// Salvage 16: ACP (Agent Communication Protocol) envelope schema — agent
+// addressing + integrity checksum + routing classification (from apeireth-acp).
+pub mod acp;
 pub mod adapters;
 // reconstruct_v2 canonical convergence: the canonical interaction contract.
 // Re-exports the normalized types that already existed and adds the three that
@@ -93,6 +96,15 @@ pub use ws_v1::{
     AuthFrame, CloseFrame, ErrorFrame, PingFrame, StreamChunkFrame, StreamEndFrame,
     ToolInvokeFrame, ToolResultFrame, WsFrame, WS_IDLE_TIMEOUT_SECS, WS_MAX_STREAM_CHUNKS,
     WS_PING_INTERVAL_SECS, WS_PROTOCOL_VERSION, WS_TOKEN_DEFAULT_TTL_SECS,
+};
+
+// Salvage 16 re-exports: ACP envelope schema.
+pub use acp::{
+    checksum as acp_checksum, from_json_string as acp_from_json_string,
+    is_broadcast as acp_is_broadcast, is_unicast as acp_is_unicast,
+    matches_pair as acp_matches_pair, payload_equivalent as acp_payload_equivalent,
+    sequence_number as acp_sequence_number, to_json_string as acp_to_json_string,
+    verify as acp_verify, AcpEnvelope, AcpError, AcpResult,
 };
 
 // ============================================================
