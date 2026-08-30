@@ -563,8 +563,17 @@
         streaming: false,
       });
     } catch (caught) {
-      const isAborted = caught instanceof Error && caught.name === 'AbortError';
-      const msg = caught instanceof Error ? caught.message : String(caught);
+      const isAborted =
+        (caught instanceof Error && caught.name === 'AbortError') ||
+        (typeof caught === 'object' && caught !== null && (caught as any).code === 'aborted');
+      const msg =
+        typeof caught === 'string'
+          ? caught
+          : caught instanceof Error
+            ? caught.message
+            : typeof caught === 'object' && caught !== null && 'message' in caught
+              ? String((caught as any).message)
+              : String(caught);
       if (isAborted) {
         updateMessage(conversationId, assistantMessage.id, {streaming: false, aborted: true});
       } else {

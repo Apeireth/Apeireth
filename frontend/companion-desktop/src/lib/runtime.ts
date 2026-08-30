@@ -146,8 +146,14 @@ export function loadConfig(): ApeirethConfig {
         delete parsed.master_token;
         modified = true;
       }
+      let baseUrl = typeof parsed.baseUrl === 'string' ? parsed.baseUrl : 'http://127.0.0.1:8080';
+      // Migrate legacy default placeholder (:3000) to canonical Apeireth Gateway (:8080)
+      if (baseUrl === 'http://127.0.0.1:3000') {
+        baseUrl = 'http://127.0.0.1:8080';
+        modified = true;
+      }
       const cleaned: ApeirethConfig = {
-        baseUrl: typeof parsed.baseUrl === 'string' ? parsed.baseUrl : 'http://127.0.0.1:8080',
+        baseUrl,
         apiKey: '', // transient in-memory only; not persisted
         model: typeof parsed.model === 'string' ? parsed.model : 'MiniMax-Text-01',
         theme: typeof parsed.theme === 'string' ? (parsed.theme as any) : undefined,
@@ -384,7 +390,14 @@ export async function streamChat(
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new HttpError(response.status, `HTTP ${response.status} ${text.slice(0, 300)}`);
+    let detail = text.slice(0, 300);
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed.error === 'string') {
+        detail = parsed.error;
+      }
+    } catch {}
+    throw new HttpError(response.status, `HTTP ${response.status}: ${detail}`);
   }
   if (!response.body) throw new Error('响应流为空');
 
