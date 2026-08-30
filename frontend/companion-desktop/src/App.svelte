@@ -207,6 +207,7 @@
             content: m.text,
           })) || [{role: 'user', content: userText}],
           model: {id: config.model},
+          sessionId: activeConversation?.id,
         },
         () => {},
       );
