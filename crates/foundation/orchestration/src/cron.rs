@@ -236,9 +236,8 @@ fn or_numeric_piece(orig: &str, piece: &str, lo: u8, hi: u8, bits: &mut u64) -> 
     let mut v = start;
     loop {
         *bits |= 1u64 << v;
-        let next = match v.checked_add(step) {
-            Some(n) => n,
-            None => break,
+        let Some(next) = v.checked_add(step) else {
+            break;
         };
         if next > end {
             break;
