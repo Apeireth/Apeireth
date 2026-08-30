@@ -17,6 +17,7 @@
 //! Only `pool.rs` and `migrations.rs` semantics were ported, with the donor
 //! migration SQL kept for on-disk compatibility.
 
+pub mod cache;
 pub mod error;
 pub mod migrations;
 pub mod pool;
