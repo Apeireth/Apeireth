@@ -49,6 +49,7 @@
 
 #![deny(unsafe_code)]
 
+pub mod alias;
 pub mod capability;
 pub mod credentials;
 pub mod error;
@@ -67,6 +68,10 @@ pub mod registry;
 pub mod self_assessment;
 pub mod tool;
 
+pub use alias::{
+    aliases_by_id, index_manifests, index_pairs, unresolved_token, AliasIndex, AliasResolver,
+    LruCache, DEFAULT_CACHE_SIZE, LEGACY_UNRESOLVED_PREFIX,
+};
 pub use capability::{CapabilityDescriptor, CapabilityKind};
 pub use credentials::{CredentialResolver, NoCredentials, Secret, StaticCredentials};
 pub use error::{PluginError, PluginResult};
