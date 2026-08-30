@@ -16,7 +16,10 @@ pub use apeireth_plugin::perception::{
     VoiceInput,
 };
 pub use vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
-pub use voice::{WhisperHttpBackend, WhisperHttpConfig};
+pub use voice::{
+    hex_decode_audio, pcm16_rms, split_pcm16_frames, AudioFrameError, Pcm16Buffer, Pcm16Frame,
+    WhisperHttpBackend, WhisperHttpConfig, PCM16_FRAME_SAMPLES, PCM16_SAMPLE_RATE_HZ,
+};
 
 #[cfg(test)]
 mod tests {

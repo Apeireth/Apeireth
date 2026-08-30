@@ -8,7 +8,10 @@
 use std::sync::Arc;
 
 use apeireth_perception::vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
-use apeireth_perception::voice::{WhisperHttpBackend, WhisperHttpConfig};
+use apeireth_perception::voice::{
+    hex_decode_audio, split_pcm16_frames, Pcm16Buffer, WhisperHttpBackend, WhisperHttpConfig,
+    PCM16_FRAME_SAMPLES,
+};
 use apeireth_plugin::credentials::StaticCredentials;
 use apeireth_plugin::perception_backend::{
     AudioBuffer, LangHint, PerceptionBackendError, VisionBackend, VoiceBackend,
@@ -59,4 +62,13 @@ async fn perception_vision_captures_fail_closed_in_headless() {
         res,
         Err(PerceptionBackendError::BackendUnavailable(_))
     ));
+}
+
+#[test]
+fn pcm16_split_and_hex_decode_are_pure() {
+    let buf = Pcm16Buffer::from_samples(vec![3i16; PCM16_FRAME_SAMPLES + 8]).unwrap();
+    let frames = split_pcm16_frames(&buf.samples, buf.sample_rate, buf.channels);
+    assert_eq!(frames.len(), 2);
+    assert_eq!(frames[1].samples.len(), 8);
+    assert_eq!(hex_decode_audio("494433").unwrap(), b"ID3");
 }
