@@ -117,7 +117,7 @@ impl Backoff for ExponentialBackoff {
         let jitter_nanos = if nanos == 0 {
             0
         } else {
-            let seed = (attempt as u64).wrapping_mul(0x9E3779B97F4A7C15);
+            let seed = u64::from(attempt).wrapping_mul(0x9E3779B97F4A7C15);
             let mixed = (seed ^ (seed >> 33)).wrapping_mul(0xFF51AFD7ED558CCD);
             let mixed = (mixed ^ (mixed >> 33)).wrapping_mul(0xC4CEB9FE1A85EC53);
             (mixed ^ (mixed >> 33)) % (nanos as u64)
