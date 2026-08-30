@@ -50,11 +50,13 @@ pub mod council;
 pub mod llm;
 pub mod prompt_stabilizer;
 pub mod speech_arbiter;
+pub mod worktree_sandbox;
 
 pub use ambient_context::{
     AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
 };
 pub use async_context::{AsyncArrayKind, AsyncContextMessage, AsyncContextPipeline};
+pub use worktree_sandbox::{RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError};
 pub use context_rot::{
     apply_ops, compact_then_budget, extractive_summary, query_tokens, repetition_factor,
     rot_breakdown, rot_score, BudgetedBlock, CompactionOp, Compactor, DeterministicCompactor,
