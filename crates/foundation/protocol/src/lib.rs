@@ -70,6 +70,9 @@ pub mod bridge_ext;
 pub mod error;
 pub mod gateway;
 pub mod normalized;
+// Salvage 16: status-aware retry semantics — retryable-status classification,
+// backoff tiers, jitter modes (from apeireth-api::retry).
+pub mod retry;
 // R20 阶段 2: WebSocket 8 帧协议 (蓝图 §2.3). 跟 4 LLM 协议归一化层并列, 0 冲突.
 pub mod ws_v1;
 
@@ -105,6 +108,10 @@ pub use acp::{
     matches_pair as acp_matches_pair, payload_equivalent as acp_payload_equivalent,
     sequence_number as acp_sequence_number, to_json_string as acp_to_json_string,
     verify as acp_verify, AcpEnvelope, AcpError, AcpResult,
+};
+pub use retry::{
+    jittered_sleep, should_retry_status, BackoffPolicy, JitterMode, RetryCounters, RetryPolicy,
+    XorShift64, RETRYABLE_4XX,
 };
 
 // ============================================================
