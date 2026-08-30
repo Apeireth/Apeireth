@@ -174,7 +174,7 @@
           </div>
 
           <div class="form-group">
-            <label for="api-key-status">API Key 凭据状态</label>
+            <label for="api-key-status">网关认证密钥 (Gateway Auth Key)</label>
             <div class="credential-row">
               <div class="cred-status">
                 <Lock size={14} />
@@ -184,7 +184,9 @@
                 {hasApiKey ? '更换 Key' : '配置 Key'}
               </button>
             </div>
-            <small class="field-hint">为保障安全，API Key 仅于发起请求时在内存传递，界面不直接回显明文。</small>
+            <small class="field-hint">
+              网关认证密钥（可选）。提供商凭据（Anthropic/OpenAI）由后端从环境变量或系统密钥环加载，不在此配置。
+            </small>
           </div>
 
           <div class="form-group">
@@ -362,14 +364,17 @@
       aria-labelledby="api-key-dialog-title"
     >
       <div class="modal-header">
-        <h3 id="api-key-dialog-title">配置 API Key</h3>
+        <h3 id="api-key-dialog-title">配置网关认证密钥</h3>
       </div>
       <div class="modal-body">
-        <p class="modal-desc">请输入后端持有的 API Key。留空并保存可清除已配置凭据。</p>
+        <p class="modal-desc">
+          网关认证密钥（可选）用于网关层身份验证。提供商凭据（Anthropic/OpenAI API Key）
+          由 Apeireth 后端从环境变量或系统密钥环加载，不在此配置。留空并保存可清除已配置凭据。
+        </p>
         <div class="form-group">
           <input
             type="password"
-            placeholder="输入 API Key"
+            placeholder="输入网关认证密钥（可选）"
             bind:value={tempApiKey}
           />
         </div>
