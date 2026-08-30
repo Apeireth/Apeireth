@@ -284,3 +284,55 @@ fn cache_lru_ttl_and_shard_roundtrip() {
     assert!(cache.get(&"a".into()).is_none());
     assert_eq!(cache.get(&"c".into()), Some(3));
 }
+
+#[test]
+fn quota_lru_evicts_oldest_to_fit_total() {
+    use apeireth_storage::quota::{enforce_quota, QuotaConfig, QuotaItem};
+
+    let cfg = QuotaConfig {
+        max_age_days: 7,
+        max_item_bytes: 1000,
+        max_total_bytes: 25,
+    };
+    let items = vec![
+        QuotaItem {
+            id: "a".into(),
+            timestamp: 1,
+            size_bytes: 10,
+        },
+        QuotaItem {
+            id: "b".into(),
+            timestamp: 2,
+            size_bytes: 10,
+        },
+        QuotaItem {
+            id: "c".into(),
+            timestamp: 3,
+            size_bytes: 10,
+        },
+    ];
+    let d = enforce_quota(items, 1_000, &cfg).unwrap();
+    assert_eq!(d.evicted[0].id, "a");
+    assert_eq!(d.remaining_bytes(), 20);
+}
+
+#[test]
+fn machine_id_parsers_roundtrip_donor_fixtures() {
+    use apeireth_storage::machine_id::{
+        encode_hostid, parse_ioreg_uuid, parse_registry_machine_guid, parse_wmi_uuid,
+    };
+
+    assert_eq!(
+        parse_wmi_uuid("UUID\r\nAAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\r\n").as_deref(),
+        Some("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")
+    );
+    assert_eq!(
+        parse_registry_machine_guid("    MachineGuid    REG_SZ    deadbeef-guid").as_deref(),
+        Some("deadbeef-guid")
+    );
+    assert_eq!(
+        parse_ioreg_uuid(r#"    "IOPlatformUUID" = "ABCD-EF""#).as_deref(),
+        Some("ABCD-EF")
+    );
+    assert_eq!(encode_hostid(&[0xaa, 0xbb]).as_deref(), Some("aabb"));
+}
