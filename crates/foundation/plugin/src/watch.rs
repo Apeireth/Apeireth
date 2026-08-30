@@ -195,15 +195,13 @@ fn walk(root: &Path, dir: &Path, depth: usize, max_depth: usize, out: &mut Vec<P
     if depth > max_depth {
         return;
     }
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        let file_type = match entry.file_type() {
-            Ok(t) => t,
-            Err(_) => continue,
+        let Ok(file_type) = entry.file_type() else {
+            continue;
         };
         if file_type.is_dir() {
             walk(root, &path, depth + 1, max_depth, out);
