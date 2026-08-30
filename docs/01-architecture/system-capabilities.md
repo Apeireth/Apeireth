@@ -5,6 +5,10 @@
 > **安全基准**: `#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]` 纯 Safe Rust 零 unsafe  
 > **哲学约束**: 严守 9 哲学锚 (S-1~S-3, O-1~O-6) 与 5 项 LOCKED 核心资产
 
+> **状态标注 (0 装 PASS, 基线 candidate `8b7e3111`)**: 本手册描述各能力域的**库级实现契约 (IMPLEMENTED)**。四个状态层级不可混淆：
+> **IMPLEMENTED（代码存在）** ≠ **PRODUCTION WIRED（接入 canonical 运行时主路径）** ≠ **DEFAULT ENABLED（无需 opt-in 即开启）** ≠ **HARDWARE VALIDATED（真机验证）**。
+> 除特别标注外，模块均为显式 opt-in，**未**接入 canonical 运行时默认路径，**未**默认启用。当前已验证基线：远端 Windows 验证机 `cargo test --workspace --locked` = 2012 通过 / 0 失败（13 ignored）。库级已验证但未接线的 P2 能力（turn-scoped `ModuleInvoker`、`OrganModule`、`PreferenceLearning` 闭环、principle approvals、`topic_predictor`、continuation/reflexion/spill/检索确定性加固）状态详见 `CHANGELOG.md` Unreleased 段。
+
 ---
 
 ## 目录
@@ -34,7 +38,7 @@ graph TD
         GUARD[guardrail: Pre拦截+Post凭据绊线]
         MCP[mcp: JSON-RPC 2.0 标准传输]
         EXEC[process_executor: Job Object/cgroups 沙箱]
-        SPILL[spill: 大文本溢出安全分页]
+        SPILL[spill: 会话级有界大文本溢出分页 (库级)]
     end
 
     subgraph Engine [2. 引擎与认知层 (Engine Layer)]
@@ -181,6 +185,8 @@ graph TD
 
 ## 5. 网关与全双工交互能力域
 
+> **接线状态 (基线 candidate `8b7e3111`)**: `duplex_gateway`（8 帧 WebSocket）与 `barge_in` 是 `apeireth-gateway` 内的**库级模块**，**未**挂载到 canonical HTTP 生产路由（生产路由仅 `/health`、`/v1/models`、`/v1/chat`、`/v1/chat/completions`、`/v1/approvals/resolve`）。canonical 网关的 SSE 为**缓冲成帧**：`POST /v1/chat/completions` 在 `stream: true` 时，于完整 canonical 完成路径（治理、transcript 提交）结束后一次性返回 SSE 帧与 `[DONE]`，**不是逐 token 增量流式**——增量流式被冻结的 canonical seam 阻塞（审计结论 `KERNEL_SEAM_MISSING`），需显式授权才能扩展。
+
 ### 5.1 8 帧 WebSocket 全双工实时协议 (`duplex_gateway.rs`)
 * **帧体系定义**：
   1. `Auth`: 连接鉴权帧
@@ -194,7 +200,7 @@ graph TD
 
 ### 5.2 流式分句分词器 (`SentenceDivider`)
 * **标点边界切片**：在 `。`, `！`, `？`, `!`, `?`, `;`, `；`, `\n` 处精准切分语义短句；
-* **超低延迟推流**：Token 流聚合为短句后立即并发推入 TTS 引擎，首包音频延迟（TTFAB）压至 **< 300ms**。
+* **超低延迟推流**：Token 流聚合为短句后立即并发推入 TTS 引擎，首包音频延迟（TTFAB）设计目标 **< 300ms**（库级设计目标，未在 canonical 路径实测）。
 
 ---
 
