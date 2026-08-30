@@ -161,6 +161,36 @@ $$\frac{dU_{\text{care}}}{dt} = \nabla U_{\text{circadian}} + \nabla U_{\text{fr
 
 ---
 
+## 💡 生产级应用场景与核心用例
+
+```text
++-----------------------------------------------------------------------------------------+
+|                                    APEIRETH 实战场景演示                                |
++-----------------------------------------------------------------------------------------+
+| [01. 跨会话终生结对编程]                                                                |
+| 绝非转瞬即忘的单次对话框。Apeireth 维护双时态事实图谱，精准记住你半年前的架构偏好与私有  |
+| API 习惯，结合 Tree-sitter AST 与 PageRank 自动生成极低 Token 预算的代码拓扑地图。        |
+|                                                                                         |
+| [02. 自主好奇心盲区探索与深度研究]                                                       |
+| 利用代数拓扑探测认知空洞，夜间通过高反爬无头感知器自主研读前沿技术文档，自动沉淀编译为   |
+| 结构化、防熵增的 [[WikiLink]] 知识库。                                                   |
+|                                                                                         |
+| [03. 零风险事务级重构与 SAGA 回滚]                                                       |
+| 在 Git Worktree 物理隔离沙箱中推演 CoW 假说分支。一旦单测失败或遭遇速率限制，SAGA 逆向   |
+| 算子栈在 35 微秒内全量原子回滚，绝不破坏宿主代码库。                                     |
+|                                                                                         |
+| [04. 跨代繁育教养与多智能体知识共享]                                                     |
+| 导师 Agent 借助 Ed25519 表观遗传常数时间校验培养具备特化能力的子代 Agent，经历影子学徒   |
+| 到双签共审再到完全独立，并将高质量事实反哺至 SwarmVault 知识保险库。                     |
+|                                                                                         |
+| [05. Ember HUD 微光生理在场]                                                            |
+| 屏幕边缘 4.0s 生理呼吸柔和微光。深度编码时通过 FlowLock 心流阻尼强行压制弹窗打扰；深夜疲 |
+| 劳时通过三阶克制动作主动提供无声关怀。                                                   |
++-----------------------------------------------------------------------------------------+
+```
+
+---
+
 ## 🧱 16 个核心 Crate 微内核拓扑结构
 
 Apeireth 2.0+ 严格遵循单向依赖与微内核设计，绝无循环依赖：
@@ -230,7 +260,17 @@ cargo run -p apeireth-cli -- bundle --output-dir "E:\Apeireth-Portable"
 
 ---
 
-## 🛡️ 九大哲学锚（The Nine Anchors）
+## 📜 深度文档索引
+
+- 📑 **[《超越 SOTA：全域未来范式白皮书》](docs/03-reference/beyond-sota-future-paradigms-whitepaper.md)**
+- 📐 **[《Apeireth 2.0 行级核验与升级蓝图》](docs/01-architecture/v2-line-by-line-verification-and-upgrade-blueprint.md)**
+- 📋 **[《全域能力契约矩阵 (Capabilities Matrix)》](docs/03-reference/capabilities-matrix.md)**
+- 🛡️ **[《ProcessExecutor 威胁模型与沙箱防御规范》](docs/security/process-executor-threat-model.md)**
+- 📊 **[《基准测试与时延性能报告》](reports/benchmark-baseline.md)**
+- ⚡ **[《开发者 5 分钟极速上手指南》](docs/development/5-min-quickstart.md)**
+
+<details>
+<summary><b>🛡️ 九大不可变哲学锚 (The Nine Invariant Anchors 点击展开)</b></summary>
 
 Apeireth 的每一行代码、每一个 Pull Request 均严格贯穿着九大不可变哲学锚：
 
@@ -244,16 +284,7 @@ Apeireth 的每一行代码、每一个 Pull Request 均严格贯穿着九大不
 8. **`O-5` 不假装 (0 装 PASS)**：0 `todo!`、0 `unimplemented!`、0 虚假 Mock、0 空壳桩，诚信是信任基石。
 9. **`O-6` 永远追求最优**：坚持微内核单向依赖，追求总体最优、系统最优与架构最优。
 
----
-
-## 📜 深度文档索引
-
-- 📑 **[《超越 SOTA：全域未来范式白皮书》](docs/03-reference/beyond-sota-future-paradigms-whitepaper.md)**
-- 📐 **[《Apeireth 2.0 行级核验与升级蓝图》](docs/01-architecture/v2-line-by-line-verification-and-upgrade-blueprint.md)**
-- 📋 **[《全域能力契约矩阵 (Capabilities Matrix)》](docs/03-reference/capabilities-matrix.md)**
-- 🛡️ **[《ProcessExecutor 威胁模型与沙箱防御规范》](docs/security/process-executor-threat-model.md)**
-- 📊 **[《基准测试与时延性能报告》](reports/benchmark-baseline.md)**
-- ⚡ **[《开发者 5 分钟极速上手指南》](docs/development/5-min-quickstart.md)**
+</details>
 
 <details>
 <summary><b>📖 哲学基石：命名与品牌宣言 (The Name & Brand Manifesto 点击展开)</b></summary>
