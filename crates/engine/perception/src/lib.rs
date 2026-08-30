@@ -35,7 +35,14 @@ pub use observe::{ObservationCandidate, ObservationOutcome, ObservationQueue};
 pub use owner::PerceptionOwner;
 pub use screen::{NoopScreenSource, ScreenEvent, ScreenEventKind, ScreenPerception};
 pub use vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
-pub use voice::{WhisperHttpBackend, WhisperHttpConfig};
+pub use voice::{
+    detect_energy, encode_audio_append, encode_image_input, hex_decode_audio, pcm16_rms,
+    split_pcm16_frames, AudioFrameError, EnergyVadConfig, EnergyVadResult, EnergyVadStream,
+    InputAudioBuffer, InputBufferState, NoopSpeechInput, NoopSpeechOutput, Pcm16Buffer,
+    Pcm16Frame, RecordingError, RecordingSession, RecordingStatus, SpeechInput, SpeechOutput,
+    StreamAudioFormat, StreamFrameError, TurnDetection, TurnDetectionKind, VadError, VoiceSession,
+    VoiceTurn, WhisperHttpBackend, WhisperHttpConfig, PCM16_FRAME_SAMPLES, PCM16_SAMPLE_RATE_HZ,
+};
 
 #[cfg(test)]
 mod tests {
