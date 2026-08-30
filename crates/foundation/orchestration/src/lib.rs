@@ -48,6 +48,7 @@ pub mod care_potential_field;
 pub mod context_rot;
 pub mod continuation;
 pub mod council;
+pub mod cron;
 pub mod llm;
 pub mod prompt_stabilizer;
 pub mod speech_arbiter;
@@ -73,6 +74,10 @@ pub use prompt_stabilizer::{
 };
 pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
+};
+pub use cron::{
+    describe, next_after, validate_expr, validate_schedule, CronError, CronExpr, CronResult,
+    Schedule as CronSchedule, DOW_ALIASES, MONTH_ALIASES,
 };
 
 // ============================================
