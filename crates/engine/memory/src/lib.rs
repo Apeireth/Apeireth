@@ -58,7 +58,10 @@ pub mod five_dimensional;
 pub mod hybrid_search;
 pub mod intent_brier;
 pub mod calibration;
+pub mod calibration_critic;
+pub mod confidence;
 pub mod ensemble;
+pub mod online_calibration;
 pub mod meta_thinking;
 pub mod milestone;
 pub mod partner;
@@ -138,6 +141,14 @@ pub use calibration::{
 pub use ensemble::{
     AggregationStrategy, EnsembleConfig, EnsembleForecast, EnsembleMember, MarketConfig,
     MarketError, PredictionMarket, TradeReceipt,
+};
+pub use calibration_critic::{
+    CalibrationCritic, CriticConfig as CalibrationCriticConfig, CritiqueAction, CritiqueResult,
+};
+pub use confidence::{BetaBinomial, Strength as ConfidenceStrength};
+pub use online_calibration::{
+    AdaptiveBaseline, CalibrationCoefficients, Coeff, DriftAlarm, DriftDetector, LinearCalibration,
+    RecalibrationScheduler, ScheduleReport, UserFeedback as CalibrationFeedback,
 };
 
 pub use reflexion::{
