@@ -17,7 +17,11 @@
 | **编排 (Orchestration)** | `orch.async_context` | `apeireth-orchestration::async_context` | `AsyncContextPipeline::assemble_prompt_context()` | 四层异步数组隔离 (Ephemeral/Durable/Summary/HUD) |
 | **编排 (Orchestration)** | `orch.speech_arbiter` | `apeireth-orchestration::speech_arbiter` | `SpeechOutputArbiter::arbitrate()` | FIFO 排队 / TTL 淘汰 / 抢占打断 |
 | **编排 (Orchestration)** | `orch.prompt_cache` | `apeireth-orchestration::prompt_stabilizer`| `assemble_messages()` | 字节级前缀固定 + 单点环境注入 |
+| **编排 (Orchestration)** | `orch.care_potential` | `apeireth-orchestration::care_potential_field`| `CarePotentialField::step()` | 连续关怀势能微分方程 + 深夜/挫败量子跃迁 + 三阶克制共情动作 |
 | **编排 (Orchestration)** | `orch.council_7` | `apeireth-orchestration::council` | `Council::decide(proposal)` | 7 Advisor 结构化辩论与 Veto 机制 |
+| **记忆 (Memory)** | `mem.betti_hole_detector`| `apeireth-memory::betti_hole_detector` | `BettiHoleDetector::analyze()` | Vietoris-Rips 持续同调 + β₀/β₁/β₂ 拓扑洞 + 负压求知梯度 |
+| **记忆 (Memory)** | `mem.kuramoto_resonance`| `apeireth-memory::kuramoto_resonance` | `KuramotoResonanceEngine::step()` | 非线性振子相锁 + 零阻抗虫洞 + 顿悟雪崩元概念 |
+| **记忆 (Memory)** | `mem.chronicle_crystallizer`| `apeireth-memory::chronicle_crystallizer` | `ChronicleCrystallizer::crystallize()` | 昼夜相变结晶 + 分形幂律衰减 R(t) + SHA-256 Merkle 锚定 |
 | **记忆 (Memory)** | `mem.three_tier_vault`| `apeireth-memory::three_tier_vault` | `ThreeTierVault`, `TocTreeIndexer` | SwarmVault 三层知识库 + OpenKB TOC 树路由 |
 | **记忆 (Memory)** | `mem.river_topology` | `apeireth-memory::river_topology` | `DualScaledFieldSolver::solve()` | TagMemo V10 预解双对偶场 + LIF 脉冲 + Ω 门控 |
 | **记忆 (Memory)** | `mem.residual_pyramid`| `apeireth-memory::residual_pyramid` | `OrthogonalResidualPyramid::analyze()` | 修正 Gram-Schmidt 正交投影 + 90% 能量截断 |
@@ -35,6 +39,7 @@
 | **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
 | **网关 (Gateway)** | `gw.file_fetcher` | `apeireth-gateway::file_fetcher` | `TransparentFileFetcher::fetch_file()` | 超栈追踪 V2 跨节点透明文件穿透 + SHA-256 缓存 |
 | **网关 (Gateway)** | `gw.duplex_ws` | `apeireth-gateway::duplex_gateway` | `DuplexFrame`, `SentenceDivider` | 8 核心帧体系 + 实时分句 + 毫秒级 Barge-in |
+| **网关 (Gateway)** | `gw.ember_hud` | `apeireth-gateway::ember_hud_driver` | `EmberHudDriver::synthesize_uniforms()` | 4.0s 生理呼吸三次正弦波 + 暗角微光 + WGSL 着色器 |
 | **感知 (Perception)** | `perc.minimax_tts` | `apeireth-perception::voice::minimax_tts`| `synthesize_stream()` | 128kbps 32kHz 音频流 + 3D PAD 情感调制 |
 
 > **状态标注 (0 装 PASS, 基线 candidate `8b7e3111`)**：本矩阵描述的是各能力域的**库级实现契约 (IMPLEMENTED)**——"实现模块"列确认对应模块存在于候选代码中并有测试覆盖（远端 Windows 验证机 `cargo test --workspace --locked` = 2012 通过 / 0 失败），**不代表** PRODUCTION WIRED（接入 canonical 运行时主路径）或 DEFAULT ENABLED（默认开启）。除特别标注外，所有模块均需显式 opt-in；`gw.duplex_ws` 与 barge-in 为网关库级模块，**未**挂载到 canonical HTTP 生产路由（生产路由仅 `/health`、`/v1/models`、`/v1/chat`、`/v1/chat/completions`、`/v1/approvals/resolve`）；canonical 网关的 chat SSE 为缓冲成帧（完整 canonical 完成路径结束后返回帧与 `[DONE]`），非逐 token 增量流式。Xcap 视觉捕获为 opt-in 后端，仅 Windows 硬件验证。逐项状态详见 `CHANGELOG.md` Unreleased 段。
