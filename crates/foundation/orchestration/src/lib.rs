@@ -45,6 +45,7 @@ use serde::{Deserialize, Serialize};
 pub mod ambient_context;
 pub mod async_context;
 pub mod care_potential_field;
+pub mod context_budget;
 pub mod context_fold;
 pub mod context_rot;
 pub mod continuation;
@@ -59,6 +60,7 @@ pub use ambient_context::{
 };
 pub use async_context::{AsyncArrayKind, AsyncContextMessage, AsyncContextPipeline};
 pub use care_potential_field::{CareAction, CarePotentialField};
+pub use context_budget::{CatalogEntry, ContextAssembler, ContextBlock, ProgressiveCatalog};
 pub use context_fold::{
     approx_tokens, cosine, fold, fold_segments, has_fold_markers, parse_fold_blocks,
     render_fold_blocks, unfold, unfold_semantic, AccumulatorSnapshot, BigramOverlapScorer,
