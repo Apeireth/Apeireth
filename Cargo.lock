@@ -160,6 +160,7 @@ dependencies = [
  "apeireth-runtime",
  "apeireth-storage",
  "reqwest",
+ "serde",
  "serde_json",
  "tokio",
 ]
