@@ -8,6 +8,9 @@
 // (per `v2.0.0-rc-roadmap.md` §3 RC-9: "keyring 真正接到 EnvCredentialResolver 之前").
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
 pub mod keyring_bootstrap;
+pub mod portable_bundle;
+
+pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
 
 use std::sync::Arc;
 

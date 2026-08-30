@@ -27,6 +27,7 @@ pub mod search;
 mod sensitive_path;
 pub mod shell;
 pub mod spill;
+pub mod stealth_crawler;
 // P-arch (2026-08-27): B5 process supervisor trait 骨架. 详见 ROADMAP §4 P5.
 // v2.0.0-rc.1 RC-8: 加 std_sub_supervisor 模块 (真 impl, std::process::Command 同步启进程).
 pub mod std_sub_supervisor;
@@ -47,3 +48,4 @@ pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};
+pub use stealth_crawler::{ExtractedMediaItem, StealthBrowserConfig, StealthCrawlerEngine};
