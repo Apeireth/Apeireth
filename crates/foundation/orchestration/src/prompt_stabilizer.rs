@@ -119,6 +119,24 @@ impl PromptCacheStabilizer {
     }
 }
 
+/// Hydra-style tiered system-prompt assembly: sort by tier (lower first) and
+/// concatenate. Recovered from donor `prompt_cache::assemble_tiered`.
+///
+/// Typical tiers: `0` identity, `50` memory evidence, `100` tool guidance.
+/// This is a string assembler only — it does not own a session or a cache.
+pub fn assemble_tiered(parts: &[(u8, &str)]) -> String {
+    let mut sorted: Vec<(u8, &str)> = parts.to_vec();
+    sorted.sort_by_key(|(tier, _)| *tier);
+    let mut s = String::new();
+    for (_, content) in sorted {
+        s.push_str(content);
+        if !content.ends_with('\n') {
+            s.push('\n');
+        }
+    }
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,5 +186,24 @@ mod tests {
 
         let ratio = PromptCacheStabilizer::calculate_cache_prefix_ratio(&m1, &m2);
         assert!(ratio > 0.6); // 前缀稳定命中率超过 60%
+    }
+
+    #[test]
+    fn tiered_assembly_orders_by_tier() {
+        let s = assemble_tiered(&[
+            (100, "工具指引\n"),
+            (0, "身份: 阿佩瑞斯\n"),
+            (50, "记忆证据\n"),
+        ]);
+        let i0 = s.find("身份").unwrap();
+        let i1 = s.find("记忆").unwrap();
+        let i2 = s.find("工具").unwrap();
+        assert!(i0 < i1 && i1 < i2, "tier 0 身份应最前: {s}");
+    }
+
+    #[test]
+    fn tiered_assembly_adds_trailing_newline_when_missing() {
+        let s = assemble_tiered(&[(1, "a"), (0, "b")]);
+        assert_eq!(s, "b\na\n");
     }
 }
