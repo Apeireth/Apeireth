@@ -67,8 +67,13 @@ pub mod bridge_ext;
 pub mod error;
 pub mod gateway;
 pub mod normalized;
+pub mod p2p_mesh;
 // R20 阶段 2: WebSocket 8 帧协议 (蓝图 §2.3). 跟 4 LLM 协议归一化层并列, 0 冲突.
 pub mod ws_v1;
+
+pub use p2p_mesh::{
+    MemoryRoamingDelta, MeshNodeDescriptor, MeshTransportKind, OnionMeshPacket, P2pMeshController,
+};
 
 pub use adapter::ProtocolAdapter;
 pub use adapters::{

@@ -40,9 +40,12 @@
 | **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | Codex 两阶段提交 + 100% 自动原子回滚 |
 | **工具 (Capabilities)** | `tool.guardrail` | `apeireth-tools-canonical::guardrail` | `pre_call_guard()`, `post_call_guard()` | 路径/命令拦截 + API Key/私钥出站绊线 |
 | **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
+| **工具 (Capabilities)** | `tool.stealth_crawler`| `apeireth-tools-canonical::stealth_crawler` | `StealthCrawlerEngine::parse_scraped_document()` | 高反爬异步无头浏览器 + 指纹伪装 + 短视频多模态提取 |
+| **适配器 (Adapters)** | `cli.portable_bundle` | `apeireth-cli::portable_bundle` | `PortableBundleSynthesizer::generate_windows_launcher()` | 随身 U 盘生命体便携化打包器 + `./data/` 相对隔离 |
 | **网关 (Gateway)** | `gw.file_fetcher` | `apeireth-gateway::file_fetcher` | `TransparentFileFetcher::fetch_file()` | 超栈追踪 V2 跨节点透明文件穿透 + SHA-256 缓存 |
 | **网关 (Gateway)** | `gw.duplex_ws` | `apeireth-gateway::duplex_gateway` | `DuplexFrame`, `SentenceDivider` | 8 核心帧体系 + 实时分句 + 毫秒级 Barge-in |
 | **网关 (Gateway)** | `gw.ember_hud` | `apeireth-gateway::ember_hud_driver` | `EmberHudDriver::synthesize_uniforms()` | 4.0s 生理呼吸三次正弦波 + 暗角微光 + WGSL 着色器 |
+| **协议 (Protocol)** | `proto.p2p_mesh` | `apeireth-protocol::p2p_mesh` | `P2pMeshController::wrap_onion_packet()` | 去中心化 P2P 蓝牙/LAN Mesh + Noise 密钥交换 + 洋葱路由 + 记忆漫游 |
 | **感知 (Perception)** | `perc.minimax_tts` | `apeireth-perception::voice::minimax_tts`| `synthesize_stream()` | 128kbps 32kHz 音频流 + 3D PAD 情感调制 |
 
 > **状态标注 (0 装 PASS, 基线 candidate `8b7e3111`)**：本矩阵描述的是各能力域的**库级实现契约 (IMPLEMENTED)**——"实现模块"列确认对应模块存在于候选代码中并有测试覆盖（远端 Windows 验证机 `cargo test --workspace --locked` = 2012 通过 / 0 失败），**不代表** PRODUCTION WIRED（接入 canonical 运行时主路径）或 DEFAULT ENABLED（默认开启）。除特别标注外，所有模块均需显式 opt-in；`gw.duplex_ws` 与 barge-in 为网关库级模块，**未**挂载到 canonical HTTP 生产路由（生产路由仅 `/health`、`/v1/models`、`/v1/chat`、`/v1/chat/completions`、`/v1/approvals/resolve`）；canonical 网关的 chat SSE 为缓冲成帧（完整 canonical 完成路径结束后返回帧与 `[DONE]`），非逐 token 增量流式。Xcap 视觉捕获为 opt-in 后端，仅 Windows 硬件验证。逐项状态详见 `CHANGELOG.md` Unreleased 段。

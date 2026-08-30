@@ -22,6 +22,8 @@ apeireth-plugin = { path = "../../foundation/plugin" }
 apeireth-provider = { path = "../../engine/provider" }
 apeireth-runtime = { path = "../../engine/runtime" }
 apeireth-storage = { path = "../../engine/storage" }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
