@@ -53,6 +53,11 @@ struct SearchMatch {
     path: String,
     line: usize,
     text: String,
+    /// 1-based byte column of the first match on the case-folded line.
+    /// `0` for filename matches (no line content).
+    column: usize,
+    /// Non-overlapping occurrence count on this line (donor CodeSearcher semantics).
+    occurrences: usize,
 }
 
 pub struct SearchTool {
@@ -143,6 +148,8 @@ impl SearchTool {
         path: String,
         line: usize,
         text: String,
+        column: usize,
+        occurrences: usize,
         max_results: usize,
         truncated: &mut bool,
     ) -> bool {
@@ -150,7 +157,13 @@ impl SearchTool {
             *truncated = true;
             return false;
         }
-        results.push(SearchMatch { path, line, text });
+        results.push(SearchMatch {
+            path,
+            line,
+            text,
+            column,
+            occurrences,
+        });
         true
     }
 
@@ -266,6 +279,8 @@ impl SearchTool {
                 rel.clone(),
                 0,
                 format!("[filename match] {file_name}"),
+                0,
+                1,
                 max_results,
                 truncated,
             ) {
@@ -285,13 +300,17 @@ impl SearchTool {
         };
 
         for (line_idx, line) in content.lines().enumerate() {
-            if line.to_lowercase().contains(query_lower) {
+            let line_lower = line.to_lowercase();
+            let (occurrences, column) = literal_line_hits(&line_lower, query_lower);
+            if occurrences > 0 {
                 let snippet: String = line.trim().chars().take(160).collect();
                 if !self.add_match(
                     results,
                     rel.clone(),
                     line_idx + 1,
                     snippet,
+                    column,
+                    occurrences,
                     max_results,
                     truncated,
                 ) {
@@ -300,6 +319,31 @@ impl SearchTool {
             }
         }
     }
+}
+
+/// Count non-overlapping literal hits on a case-folded line.
+///
+/// Returns `(occurrences, first_column)` where `first_column` is 1-based on the
+/// case-folded line (donor CodeSearcher: positions computed after lowercasing).
+fn literal_line_hits(line_lower: &str, query_lower: &str) -> (usize, usize) {
+    if query_lower.is_empty() {
+        return (0, 0);
+    }
+    let mut occurrences = 0;
+    let mut first_column = 0;
+    let mut start = 0;
+    while let Some(pos) = line_lower[start..].find(query_lower) {
+        let abs = start + pos;
+        occurrences += 1;
+        if first_column == 0 {
+            first_column = abs + 1;
+        }
+        start = abs + query_lower.len().max(1);
+        if start > line_lower.len() {
+            break;
+        }
+    }
+    (occurrences, first_column)
 }
 
 #[async_trait]
@@ -400,6 +444,8 @@ impl ToolCapability for SearchTool {
                 "path": m.path,
                 "line": m.line,
                 "text": m.text,
+                "column": m.column,
+                "occurrences": m.occurrences,
             })).collect::<Vec<_>>(),
         });
 
@@ -613,5 +659,26 @@ mod tests {
             "{}",
             nested_direct.render()
         );
+    }
+
+    #[test]
+    fn literal_line_hits_count_non_overlapping_and_first_column() {
+        assert_eq!(literal_line_hits("hello world", "hello"), (1, 1));
+        assert_eq!(literal_line_hits("xx xx xx", "xx"), (3, 1));
+        assert_eq!(literal_line_hits("ababa", "aba"), (1, 1));
+        assert_eq!(literal_line_hits("nope", "x"), (0, 0));
+        assert_eq!(literal_line_hits("pre needle post", "needle"), (1, 5));
+    }
+
+    #[tokio::test]
+    async fn content_match_reports_occurrences_and_first_column() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "xx xx xx\n").unwrap();
+
+        let result = invoke(&tool(dir.path()), "xx", ".", None).await;
+        assert!(result.is_ok());
+        let rendered = result.render();
+        assert!(rendered.contains("\"occurrences\":3"), "{rendered}");
+        assert!(rendered.contains("\"column\":1"), "{rendered}");
     }
 }
