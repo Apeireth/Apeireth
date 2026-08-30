@@ -53,15 +53,37 @@ pub use apeireth_plugin::organ::{
 
 pub mod causal_world_model;
 pub mod causal_world_model_edges;
+pub mod context_assembly;
 pub mod curiosity;
 pub mod emergence;
 pub mod emotion_memory;
+pub mod experience_growth;
 pub mod hypothesis;
 pub mod memory;
+pub mod morphology;
+pub mod motivation;
+pub mod prompt_assembly;
 pub mod tone;
 pub mod value_cases;
 pub mod world_model;
 
+pub use context_assembly::{assemble_tiered, ContextAssembler, ContextBlock};
+pub use experience_growth::{
+    build_promotion_hint, list_latest, mark_proposed, ready_for_capability, verify_experience,
+    PracticeExperience, EMA_ALPHA, PROMOTE_MIN_SCORE, PROMOTE_MIN_VERIFIES,
+};
+pub use morphology::{
+    classify as classify_query_morphology, crawl_budget, sanitize_temperature, MorphologyVerdict,
+    RetrievalMode,
+};
+pub use motivation::{
+    motivation_score, AutonomyConsistency, IntrinsicIntensity, MotivationScore, ValueStability,
+    MOTIVATION_THRESHOLD, MOTIVATION_WEIGHTS,
+};
+pub use prompt_assembly::{
+    AssemblerError, AssemblyGuard, AssemblyRole, ExpansionReport, PromptAssembler, SourceKind,
+    StaticSource, VariableSource,
+};
 pub use tone::{
     deliberation_intensity, emotion_tone, organ_tone, tone_hint, BondCharacterSnapshot,
     DeliberationEcho, EmotionToneStyle, ToneError,

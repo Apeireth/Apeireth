@@ -44,6 +44,33 @@ impl Default for BondCharacterSnapshot {
     }
 }
 
+impl BondCharacterSnapshot {
+    /// Plutchik-style emotion injection into relational character (donor `BondCharacter::apply_emotion`).
+    ///
+    /// Joy / trust / anticipation raise resonance (EMA 0.7 / 0.1 mix). Trust
+    /// itself is EMA 0.8 / 0.2. Fear / surprise / sadness / disgust / anger
+    /// are accepted for API parity and currently unused (donor discarded them
+    /// the same way). Does **not** own `memory::partner::Bond` — this is a
+    /// tone-layer snapshot helper.
+    #[allow(clippy::too_many_arguments)]
+    pub fn apply_emotion(
+        &mut self,
+        joy: f64,
+        trust: f64,
+        fear: f64,
+        surprise: f64,
+        sadness: f64,
+        disgust: f64,
+        anger: f64,
+        anticipation: f64,
+    ) {
+        self.resonance =
+            (self.resonance * 0.7 + (joy + trust + anticipation) * 0.1).clamp(0.0, 1.0);
+        self.trust = (self.trust * 0.8 + trust * 0.2).clamp(0.0, 1.0);
+        let _ = (fear, surprise, sadness, disgust, anger);
+    }
+}
+
 /// 情绪风格枚举 (7 档全覆盖).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -228,5 +255,30 @@ mod tests {
         assert!(prompt.contains("轻松亲切"));
         assert!(prompt.contains("明朗温暖"));
         assert!(prompt.contains("倾向支持"));
+    }
+
+    #[test]
+    fn apply_emotion_raises_resonance_and_trust() {
+        let mut snap = BondCharacterSnapshot {
+            trust: 0.2,
+            resonance: 0.2,
+            ..Default::default()
+        };
+        snap.apply_emotion(1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+        assert!((snap.resonance - (0.2 * 0.7 + 0.3)).abs() < 1e-12);
+        assert!((snap.trust - (0.2 * 0.8 + 0.2)).abs() < 1e-12);
+        assert!(snap.resonance > 0.2 && snap.trust > 0.2);
+    }
+
+    #[test]
+    fn apply_emotion_clamps() {
+        let mut snap = BondCharacterSnapshot {
+            trust: 1.0,
+            resonance: 1.0,
+            ..Default::default()
+        };
+        snap.apply_emotion(1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+        assert_eq!(snap.resonance, 1.0);
+        assert_eq!(snap.trust, 1.0);
     }
 }
