@@ -78,6 +78,9 @@ pub mod retry;
 pub mod usage;
 // R20 阶段 2: WebSocket 8 帧协议 (蓝图 §2.3). 跟 4 LLM 协议归一化层并列, 0 冲突.
 pub mod ws_v1;
+// Salvage 16: WS v1 session contract — auth-first gate, version negotiation,
+// frame-direction enforcement (from apeireth-api::ws_v1 server handler).
+pub mod ws_session;
 
 pub use adapter::ProtocolAdapter;
 pub use adapters::{
@@ -117,6 +120,10 @@ pub use retry::{
     XorShift64, RETRYABLE_4XX,
 };
 pub use usage::{CostTracker, ModelPricing, UsageRecord};
+pub use ws_session::{
+    WsFrameDecision, WsSessionGuard, WsSessionState, WS_CLOSE_NORMAL,
+    WS_CLOSE_TOO_MANY_CONCURRENT, WS_CLOSE_UNAUTHORIZED,
+};
 
 // ============================================================
 // 编译期 hardcode (平台不变性, 主哲学锚 #1 不漂移 + #6 工程铁律)
