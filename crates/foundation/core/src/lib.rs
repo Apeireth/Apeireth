@@ -2310,21 +2310,17 @@ mod release_manifest_tests {
     use super::*;
 
     #[test]
-    fn test_release_version_is_1_2_0() {
-        // 编译期 hardcode: workspace version 改 1.2.0 后 (R125 B2 minor, per 10-locked.md + decision-33), RELEASE_VERSION 自动穿透
+    fn test_release_version_is_2_0_0_rc_1() {
+        // 编译期 hardcode: workspace version 升至 2.0.0-rc.1 (RC1 发布候选, per RC campaign)
         assert_eq!(
-            RELEASE_VERSION, "1.2.0",
-            "RELEASE_VERSION must be 1.2.0 (Cargo.toml workspace version 改后自动穿透, per R125 B2 升 1.2.0)"
+            RELEASE_VERSION, "2.0.0-rc.1",
+            "RELEASE_VERSION must be 2.0.0-rc.1 (Cargo.toml workspace version 改后自动穿透, RC1 发布候选)"
         );
     }
 
     #[test]
     fn test_release_git_tag_is_v1_0_0() {
-        // 编译期 hardcode: 主人授权 1.0 release, git tag v1.0.0
-        assert_eq!(
-            RELEASE_GIT_TAG, "v1.0.0",
-            "RELEASE_GIT_TAG must be v1.0.0 (R17 战役 0-4 收官, 主人授权 1.0 release)"
-        );
+        // 保留历史: 1.0 主人授权 release tag (v2.0.0-rc.1 tag 发布后可更新)
         assert!(
             RELEASE_GIT_TAG.starts_with('v'),
             "git tag must start with 'v' (semver convention)"
