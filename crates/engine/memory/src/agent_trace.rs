@@ -18,8 +18,86 @@
 
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
+
+/// Attribute keys treated as secrets (case-insensitive substring match).
+/// Salvaged from companion `agent_trace::SENSITIVE_KEY_MARKERS`.
+const SENSITIVE_KEY_MARKERS: &[&str] = &[
+    "api_key",
+    "apikey",
+    "master_token",
+    "mastertoken",
+    "authorization",
+    "bearer",
+    "password",
+    "passwd",
+    "secret",
+    "credential",
+    "token",
+    "cookie",
+    "set-cookie",
+];
+
+/// High-confidence secret value prefixes.
+const SENSITIVE_VALUE_PREFIXES: &[&str] = &["sk-", "ghp_", "gho_", "glpat-", "Bearer "];
+
+/// Markers that indicate a summary is raw chain-of-thought (must not persist).
+const COT_MARKERS: &[&str] = &[
+    "reasoning_content",
+    "chain_of_thought",
+    "<thought>",
+    "thinking",
+];
+
+/// Recursively redact secrets in a JSON value (key substring + value prefix).
+pub fn redact_attributes(attrs: &Value) -> Value {
+    match attrs {
+        Value::Object(map) => {
+            let mut out = serde_json::Map::new();
+            for (k, v) in map {
+                if is_sensitive_key(k) {
+                    out.insert(k.clone(), Value::String("[REDACTED]".into()));
+                } else {
+                    out.insert(k.clone(), redact_attributes(v));
+                }
+            }
+            Value::Object(out)
+        }
+        Value::Array(arr) => Value::Array(arr.iter().map(redact_attributes).collect()),
+        Value::String(s) => {
+            if SENSITIVE_VALUE_PREFIXES.iter().any(|p| s.starts_with(p)) {
+                Value::String("[REDACTED]".into())
+            } else {
+                Value::String(s.clone())
+            }
+        }
+        other => other.clone(),
+    }
+}
+
+fn is_sensitive_key(key: &str) -> bool {
+    let lower = key.to_lowercase();
+    SENSITIVE_KEY_MARKERS.iter().any(|m| lower.contains(m))
+}
+
+/// `true` iff `summary` does not contain raw-reasoning markers.
+pub fn summary_is_safe(summary: &str) -> bool {
+    let lower = summary.to_lowercase();
+    !COT_MARKERS.iter().any(|m| lower.contains(m))
+}
+
+/// Replace an unsafe summary with a stable placeholder (never stores CoT).
+pub fn sanitize_summary(summary: Option<&str>) -> Option<String> {
+    summary.map(|s| {
+        if summary_is_safe(s) {
+            s.to_string()
+        } else {
+            "[execution step]".to_string()
+        }
+    })
+}
 
 /// Span 种类.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -218,8 +296,10 @@ impl TraceStore for SqliteMemoryStore {
         if span.span_id.trim().is_empty() || span.trace_id.trim().is_empty() {
             return Err(TraceQueryError::Invalid("span_id/trace_id empty".into()));
         }
-        let attrs_json = serde_json::to_string(&span.attributes)
+        let redacted = redact_attributes(&span.attributes);
+        let attrs_json = serde_json::to_string(&redacted)
             .map_err(|e| TraceQueryError::Invalid(e.to_string()))?;
+        let summary = sanitize_summary(span.summary.as_deref());
         let conn = self.conn()?;
         conn.execute(
             "INSERT INTO agent_traces (span_id, trace_id, parent_span_id, kind, actor, status, summary, \
@@ -234,7 +314,7 @@ impl TraceStore for SqliteMemoryStore {
                 span.kind.as_str(),
                 span.actor,
                 span.status.as_str(),
-                span.summary,
+                summary,
                 attrs_json,
                 span.started_at,
                 span.ended_at,
@@ -254,11 +334,12 @@ impl TraceStore for SqliteMemoryStore {
             return Err(TraceQueryError::Invalid("span_id empty".into()));
         }
         let now = now_ms();
+        let safe_summary = sanitize_summary(summary);
         let conn = self.conn()?;
         let updated = conn.execute(
             "UPDATE agent_traces SET status = ?1, ended_at = ?2, summary = COALESCE(?3, summary) \
              WHERE span_id = ?4",
-            params![status.as_str(), now, summary, span_id],
+            params![status.as_str(), now, safe_summary, span_id],
         )?;
         drop(conn);
         if updated == 0 {
@@ -498,5 +579,59 @@ mod tests {
         assert!(!json.contains("reasoning_content"));
         assert!(!json.contains("chain_of_thought"));
         assert!(!json.contains("thoughts"));
+    }
+
+    #[test]
+    fn redact_attributes_strips_secrets() {
+        let attrs = serde_json::json!({
+            "tool": "WebSearch",
+            "api_key": "sk-SECRET123",
+            "Authorization": "Bearer SECRET",
+            "nested": {"password": "hunter2", "ok": "fine"},
+            "arr": ["sk-leaked", "normal"],
+            "count": 5
+        });
+        let redacted = redact_attributes(&attrs);
+        let s = serde_json::to_string(&redacted).unwrap();
+        assert!(!s.contains("SECRET"));
+        assert!(!s.contains("hunter2"));
+        assert!(!s.contains("sk-leaked"));
+        assert!(s.contains("[REDACTED]"));
+        assert!(s.contains("WebSearch"));
+        assert!(s.contains("fine"));
+        assert!(s.contains("\"count\":5"));
+    }
+
+    #[test]
+    fn summary_cot_rejected() {
+        assert!(!summary_is_safe("reasoning_content: let me think..."));
+        assert!(!summary_is_safe("<thought>secret</thought>"));
+        assert!(summary_is_safe("检索长期记忆"));
+        assert!(summary_is_safe("调用工具 WebSearch"));
+        assert_eq!(
+            sanitize_summary(Some("reasoning_content: I should think")),
+            Some("[execution step]".into())
+        );
+    }
+
+    #[test]
+    fn put_trace_span_redacts_and_sanitizes() {
+        let s = store();
+        let mut root = root_span("t-redact");
+        root.summary = Some("reasoning_content: I should think about...".into());
+        root.attributes = serde_json::json!({
+            "api_key": "sk-LEAKED",
+            "command": "ls",
+            "env_token": "gho_xyz"
+        });
+        s.put_trace_span(&root).unwrap();
+        let got = s.get_trace_span(&root.span_id).unwrap().unwrap();
+        let json = serde_json::to_string(&got).unwrap();
+        assert!(!json.contains("LEAKED"));
+        assert!(!json.contains("gho_xyz"));
+        assert!(!json.contains("reasoning_content"));
+        assert!(json.contains("[REDACTED]"));
+        assert!(json.contains("execution step"));
+        assert!(json.contains("ls"));
     }
 }
