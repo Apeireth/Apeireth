@@ -237,3 +237,30 @@ async fn config_with_zero_connections_is_rejected() {
     }
     std::fs::remove_file(&path).ok();
 }
+
+#[test]
+fn rate_limiter_token_bucket_burst_and_refill() {
+    use apeireth_storage::rate_limit::{token_bucket_in_memory, RateLimiterStats};
+    use std::time::{Duration, Instant};
+
+    let l = token_bucket_in_memory(100.0, 5, None).unwrap();
+    let now = Instant::now();
+    for _ in 0..5 {
+        assert!(l.try_acquire_at("k", 1, now).unwrap());
+    }
+    assert!(!l.try_acquire_at("k", 1, now).unwrap());
+    assert!(l.try_acquire_at("k", 1, now + Duration::from_millis(20)).unwrap());
+    let s: RateLimiterStats = l.stats();
+    assert_eq!(s.hits, 6);
+    assert_eq!(s.misses, 1);
+}
+
+#[test]
+fn rate_limiter_retry_after_overrides_backoff() {
+    use apeireth_storage::rate_limit::{decide, ConstantBackoff, RetryAfter, RetryOutcome};
+    use std::time::Duration;
+
+    let b = ConstantBackoff::new(Duration::from_millis(100), 0);
+    let outcome = decide(&b, 0, Some(RetryAfter::Seconds(5)), Duration::ZERO, 0);
+    assert_eq!(outcome, RetryOutcome::Retry(Duration::from_secs(5)));
+}
