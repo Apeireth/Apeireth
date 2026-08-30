@@ -359,8 +359,9 @@ pub struct ProcessLimits {
     pub max_active_processes: Option<u32>,
     /// Optional CPU-time limit in seconds.
     ///
-    /// Linux/macOS: `RLIMIT_CPU`. Windows currently has no CPU limit in this
-    /// contract and will refuse the limit.
+    /// Linux/macOS: `RLIMIT_CPU`. Windows: Job Object
+    /// `JOB_OBJECT_LIMIT_PROCESS_TIME` (per-process user-mode time, 100-ns
+    /// units). This is CPU time, not wall-clock timeout (`max_runtime`).
     pub max_cpu_seconds: Option<u64>,
     /// Optional maximum file size in bytes that the child may create.
     ///

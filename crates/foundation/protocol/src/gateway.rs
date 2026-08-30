@@ -90,6 +90,63 @@ impl ProtocolKind {
             _ => None,
         }
     }
+
+    /// Detect the LLM protocol from a request URL path (heuristic).
+    ///
+    /// Recovered from the archived `apeireth-protocol-bridge::detect`
+    /// (`detect_protocol` path branch): the reverse of
+    /// [`crate::bridge::endpoint_path_for_kind`], for entry points that must
+    /// accept native-protocol clients without an explicit protocol header.
+    /// Case-insensitive; only the 4 HTTP LLM kinds are detectable (Acp / Mcp /
+    /// OpenClawGateway have no canonical URL path).
+    ///
+    /// Match order mirrors the donor: Anthropic Messages → OpenAI Responses →
+    /// OpenAI Chat → Gemini, first hit wins, `None` when nothing matches.
+    pub fn detect_from_path(path: &str) -> Option<Self> {
+        Self::detect_from_hints(path, None, None)
+    }
+
+    /// Detect the LLM protocol from path plus optional request headers.
+    ///
+    /// Recovered from the archived `apeireth-protocol-bridge::detect`
+    /// (`detect_protocol` header fallback): when the path is not one of the
+    /// four canonical LLM endpoints, an `anthropic-version` header or a
+    /// `content-type` containing `"anthropic"` classifies the request as
+    /// Anthropic Messages. Header fallback never overrides a path hit.
+    ///
+    /// `anthropic_version` / `content_type` are compared case-insensitively.
+    pub fn detect_from_hints(
+        path: &str,
+        anthropic_version: Option<&str>,
+        content_type: Option<&str>,
+    ) -> Option<Self> {
+        let p = path.to_lowercase();
+        if p.contains("/v1/messages") || p.contains("/v1beta/messages") {
+            return Some(Self::AnthropicMessages);
+        }
+        if p.contains("/v1/responses") {
+            return Some(Self::OpenAiResponses);
+        }
+        if p.contains("/v1/chat/completions") || p.contains("/v1/completions") {
+            return Some(Self::OpenAiChat);
+        }
+        if p.contains("/v1beta/models/") || p.contains(":generatecontent") {
+            return Some(Self::Gemini);
+        }
+        // Header-based fallback (donor detect.rs:24-32). Path always wins.
+        if anthropic_version
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
+        {
+            return Some(Self::AnthropicMessages);
+        }
+        if let Some(ct) = content_type {
+            if ct.to_lowercase().contains("anthropic") {
+                return Some(Self::AnthropicMessages);
+            }
+        }
+        None
+    }
 }
 
 /// R30 U10: 跨协议 bridge trait
@@ -253,6 +310,100 @@ impl ProtocolBridge for OpenClawGatewayBridge {
 mod tests {
     use super::*;
     use crate::normalized::NormalizedMessage;
+
+    // Tests ported from the archived apeireth-protocol-bridge detect.rs.
+
+    #[test]
+    fn detect_anthropic_via_path() {
+        assert_eq!(
+            ProtocolKind::detect_from_path("/v1/messages"),
+            Some(ProtocolKind::AnthropicMessages)
+        );
+    }
+
+    #[test]
+    fn detect_openai_responses_via_path() {
+        assert_eq!(
+            ProtocolKind::detect_from_path("/v1/responses"),
+            Some(ProtocolKind::OpenAiResponses)
+        );
+    }
+
+    #[test]
+    fn detect_openai_chat_via_path() {
+        assert_eq!(
+            ProtocolKind::detect_from_path("/v1/chat/completions"),
+            Some(ProtocolKind::OpenAiChat)
+        );
+    }
+
+    #[test]
+    fn detect_gemini_via_path() {
+        assert_eq!(
+            ProtocolKind::detect_from_path("/v1beta/models/foo:generateContent"),
+            Some(ProtocolKind::Gemini)
+        );
+        // Case-insensitive on the verb suffix.
+        assert_eq!(
+            ProtocolKind::detect_from_path("/V1BETA/models/x:generatecontent"),
+            Some(ProtocolKind::Gemini)
+        );
+    }
+
+    #[test]
+    fn detect_unknown_path_is_none() {
+        assert_eq!(ProtocolKind::detect_from_path("/random"), None);
+        assert_eq!(ProtocolKind::detect_from_path(""), None);
+    }
+
+    #[test]
+    fn detect_order_messages_before_chat() {
+        // First hit wins, donor order preserved.
+        assert_eq!(
+            ProtocolKind::detect_from_path("/v1/messages"),
+            Some(ProtocolKind::AnthropicMessages)
+        );
+    }
+
+    #[test]
+    fn detect_via_anthropic_version_header() {
+        // Donor detect.rs: detect_via_anthropic_version.
+        assert_eq!(
+            ProtocolKind::detect_from_hints("/random", Some("2023-06-01"), None),
+            Some(ProtocolKind::AnthropicMessages)
+        );
+        // Empty / whitespace version is not a signal.
+        assert_eq!(
+            ProtocolKind::detect_from_hints("/random", Some("  "), None),
+            None
+        );
+        assert_eq!(ProtocolKind::detect_from_hints("/random", Some(""), None), None);
+    }
+
+    #[test]
+    fn detect_via_anthropic_content_type() {
+        assert_eq!(
+            ProtocolKind::detect_from_hints("/random", None, Some("application/vnd.anthropic+json")),
+            Some(ProtocolKind::AnthropicMessages)
+        );
+        assert_eq!(
+            ProtocolKind::detect_from_hints("/random", None, Some("application/json")),
+            None
+        );
+    }
+
+    #[test]
+    fn detect_path_wins_over_headers() {
+        // Path classification is more reliable; headers must not override it.
+        assert_eq!(
+            ProtocolKind::detect_from_hints(
+                "/v1/chat/completions",
+                Some("2023-06-01"),
+                Some("application/vnd.anthropic+json"),
+            ),
+            Some(ProtocolKind::OpenAiChat)
+        );
+    }
 
     fn dummy_req() -> NormalizedRequest {
         NormalizedRequest::new("test", vec![NormalizedMessage::user("hello openclaw")])

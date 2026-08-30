@@ -55,6 +55,9 @@
 // ============================================================
 
 pub mod adapter;
+// Salvage 16: ACP (Agent Communication Protocol) envelope schema — agent
+// addressing + integrity checksum + routing classification (from apeireth-acp).
+pub mod acp;
 pub mod adapters;
 // reconstruct_v2 canonical convergence: the canonical interaction contract.
 // Re-exports the normalized types that already existed and adds the three that
@@ -68,8 +71,17 @@ pub mod error;
 pub mod gateway;
 pub mod normalized;
 pub mod p2p_mesh;
+// Salvage 16: status-aware retry semantics — retryable-status classification,
+// backoff tiers, jitter modes (from apeireth-api::retry).
+pub mod retry;
+// Salvage 16: usage accounting — per-call cost/latency records + aggregate
+// queries (from apeireth-pipeline provider_registry UsageRecord/CostTracker).
+pub mod usage;
 // R20 阶段 2: WebSocket 8 帧协议 (蓝图 §2.3). 跟 4 LLM 协议归一化层并列, 0 冲突.
 pub mod ws_v1;
+// Salvage 16: WS v1 session contract — auth-first gate, version negotiation,
+// frame-direction enforcement (from apeireth-api::ws_v1 server handler).
+pub mod ws_session;
 
 pub use p2p_mesh::{
     MemoryRoamingDelta, MeshNodeDescriptor, MeshTransportKind, OnionMeshPacket, P2pMeshController,
@@ -98,6 +110,24 @@ pub use ws_v1::{
     AuthFrame, CloseFrame, ErrorFrame, PingFrame, StreamChunkFrame, StreamEndFrame,
     ToolInvokeFrame, ToolResultFrame, WsFrame, WS_IDLE_TIMEOUT_SECS, WS_MAX_STREAM_CHUNKS,
     WS_PING_INTERVAL_SECS, WS_PROTOCOL_VERSION, WS_TOKEN_DEFAULT_TTL_SECS,
+};
+
+// Salvage 16 re-exports: ACP envelope schema.
+pub use acp::{
+    checksum as acp_checksum, from_json_string as acp_from_json_string,
+    is_broadcast as acp_is_broadcast, is_unicast as acp_is_unicast,
+    matches_pair as acp_matches_pair, payload_equivalent as acp_payload_equivalent,
+    sequence_number as acp_sequence_number, to_json_string as acp_to_json_string,
+    verify as acp_verify, AcpEnvelope, AcpError, AcpResult,
+};
+pub use retry::{
+    jittered_sleep, should_retry_status, BackoffPolicy, JitterMode, RetryCounters, RetryPolicy,
+    XorShift64, RETRYABLE_4XX,
+};
+pub use usage::{CostTracker, ModelPricing, UsageRecord};
+pub use ws_session::{
+    WsFrameDecision, WsSessionGuard, WsSessionState, WS_CLOSE_NORMAL,
+    WS_CLOSE_TOO_MANY_CONCURRENT, WS_CLOSE_UNAUTHORIZED,
 };
 
 // ============================================================

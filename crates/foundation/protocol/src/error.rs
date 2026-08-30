@@ -108,6 +108,48 @@ impl ProtocolError {
             message: message.into(),
         }
     }
+
+    /// Upstream HTTP / protocol error constructor.
+    pub fn remote(status: u16, body: impl Into<String>) -> Self {
+        Self::Remote {
+            status,
+            body: body.into(),
+        }
+    }
+
+    /// HTTP status carried by a [`ProtocolError::Remote`], if any.
+    ///
+    /// Parse / missing / invalid / unsupported / inconsistent / internal are
+    /// client-side contract errors and have no status.
+    pub fn status(&self) -> Option<u16> {
+        match self {
+            Self::Remote { status, .. } => Some(*status),
+            _ => None,
+        }
+    }
+
+    /// Whether a transport-layer retry of this error is classified as worth
+    /// attempting.
+    ///
+    /// Delegates to [`crate::retry::should_retry_status`]:
+    /// - [`ProtocolError::Remote`] uses its HTTP status
+    /// - [`ProtocolError::Internal`] is treated as a network-equivalent failure
+    ///   (status `0`)
+    /// - every other variant is a contract error (4xx-equivalent, not in the
+    ///   retryable whitelist) and is not retried
+    ///
+    /// Classification only — this crate never sleeps or re-issues a request.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Self::Remote { status, .. } => crate::retry::should_retry_status(*status),
+            Self::Internal(_) => crate::retry::should_retry_status(0),
+            Self::Parse { .. }
+            | Self::Missing { .. }
+            | Self::Invalid { .. }
+            | Self::Unsupported { .. }
+            | Self::Inconsistent { .. } => false,
+        }
+    }
 }
 
 /// 工具结果错误检测 (借鉴 VCP `isToolResultError` 真代码语义)。
@@ -235,5 +277,32 @@ mod tests {
         // 既没成功标志,也没失败字段,也没 HTTP code → 不算
         assert!(!is_tool_result_error(&json!({"foo": "bar"})));
         assert!(!is_tool_result_error(&json!({})));
+    }
+
+    #[test]
+    fn remote_is_retryable_follows_status_taxonomy() {
+        assert!(ProtocolError::remote(429, "rate limited").is_retryable());
+        assert!(ProtocolError::remote(503, "unavailable").is_retryable());
+        assert!(ProtocolError::remote(0, "network").is_retryable());
+        assert!(!ProtocolError::remote(400, "bad request").is_retryable());
+        assert!(!ProtocolError::remote(401, "unauthorized").is_retryable());
+        assert!(!ProtocolError::remote(404, "missing").is_retryable());
+    }
+
+    #[test]
+    fn contract_errors_are_not_retryable() {
+        assert!(!ProtocolError::parse("messages", "bad json").is_retryable());
+        assert!(!ProtocolError::missing("model").is_retryable());
+        assert!(!ProtocolError::invalid("temperature", "negative").is_retryable());
+        assert!(!ProtocolError::unsupported("audio").is_retryable());
+        assert!(!ProtocolError::inconsistent("tool_choice without tools").is_retryable());
+        // Internal is treated as a network-equivalent failure (status 0).
+        assert!(ProtocolError::Internal("panic".into()).is_retryable());
+    }
+
+    #[test]
+    fn remote_status_accessor() {
+        assert_eq!(ProtocolError::remote(502, "bad gateway").status(), Some(502));
+        assert_eq!(ProtocolError::missing("model").status(), None);
     }
 }
