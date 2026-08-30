@@ -105,7 +105,10 @@ chmod +x ./apeireth
         PortableBundleManifest {
             agent_name: self.agent_name.clone(),
             version: self.version.clone(),
-            bundle_id: format!("bundle_{}_{created_at_secs}", self.agent_name.to_lowercase()),
+            bundle_id: format!(
+                "bundle_{}_{created_at_secs}",
+                self.agent_name.to_lowercase()
+            ),
             created_at_secs,
             relative_data_dir: "./data".into(),
             relative_db_path: "./data/apeireth.db".into(),
@@ -145,6 +148,8 @@ mod tests {
         assert_eq!(manifest.agent_name, "Apeireth-Pro");
         assert_eq!(manifest.version, "2.0.0");
         assert_eq!(manifest.relative_data_dir, "./data");
-        assert!(manifest.included_files.contains(&"run_apeireth.bat".to_string()));
+        assert!(manifest
+            .included_files
+            .contains(&"run_apeireth.bat".to_string()));
     }
 }

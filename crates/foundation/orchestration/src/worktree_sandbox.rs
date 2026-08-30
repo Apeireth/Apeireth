@@ -9,9 +9,9 @@
 //!
 //! Pure Safe Rust (`#![forbid(unsafe_code)]`).
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 /// Errors related to worktree sandbox operations.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,7 +26,9 @@ impl fmt::Display for WorktreeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidConfig(msg) => write!(f, "invalid worktree configuration: {msg}"),
-            Self::IllegalTransition(from, to) => write!(f, "illegal state transition from {from:?} to {to:?}"),
+            Self::IllegalTransition(from, to) => {
+                write!(f, "illegal state transition from {from:?} to {to:?}")
+            }
             Self::TestFailed(msg) => write!(f, "verification test failed: {msg}"),
             Self::Execution(msg) => write!(f, "worktree execution error: {msg}"),
         }
@@ -74,10 +76,14 @@ impl WorktreeConfig {
         let branch_name = branch_name.into();
 
         if worktree_name.trim().is_empty() {
-            return Err(WorktreeError::InvalidConfig("worktree name cannot be empty".to_string()));
+            return Err(WorktreeError::InvalidConfig(
+                "worktree name cannot be empty".to_string(),
+            ));
         }
         if branch_name.trim().is_empty() {
-            return Err(WorktreeError::InvalidConfig("branch name cannot be empty".to_string()));
+            return Err(WorktreeError::InvalidConfig(
+                "branch name cannot be empty".to_string(),
+            ));
         }
 
         let worktree_path = repo_root.join(".worktrees").join(&worktree_name);
@@ -147,16 +153,30 @@ impl TddStateMachine {
     /// Transitions from Editing to Testing.
     pub fn begin_testing(&mut self) -> Result<(), WorktreeError> {
         if self.current_phase != TddPhase::Editing {
-            return Err(WorktreeError::IllegalTransition(self.current_phase, TddPhase::Testing));
+            return Err(WorktreeError::IllegalTransition(
+                self.current_phase,
+                TddPhase::Testing,
+            ));
         }
         self.current_phase = TddPhase::Testing;
         Ok(())
     }
 
     /// Records test results. If passed, transitions to Passed; if failed, to Failed.
-    pub fn record_test_result(&mut self, passed: bool, output: String) -> Result<TddPhase, WorktreeError> {
+    pub fn record_test_result(
+        &mut self,
+        passed: bool,
+        output: String,
+    ) -> Result<TddPhase, WorktreeError> {
         if self.current_phase != TddPhase::Testing {
-            return Err(WorktreeError::IllegalTransition(self.current_phase, if passed { TddPhase::Passed } else { TddPhase::Failed }));
+            return Err(WorktreeError::IllegalTransition(
+                self.current_phase,
+                if passed {
+                    TddPhase::Passed
+                } else {
+                    TddPhase::Failed
+                },
+            ));
         }
 
         self.last_test_output = Some(output);
@@ -173,7 +193,10 @@ impl TddStateMachine {
     /// Commits changes on test pass.
     pub fn commit_on_pass(&mut self, _commit_msg: &str) -> Result<Vec<String>, WorktreeError> {
         if self.current_phase != TddPhase::Passed {
-            return Err(WorktreeError::IllegalTransition(self.current_phase, TddPhase::Committed));
+            return Err(WorktreeError::IllegalTransition(
+                self.current_phase,
+                TddPhase::Committed,
+            ));
         }
         self.current_phase = TddPhase::Committed;
         Ok(vec![
@@ -186,7 +209,10 @@ impl TddStateMachine {
     /// Rolls back working copy to clean state on failure (`git reset --hard`).
     pub fn rollback_on_fail(&mut self) -> Result<Vec<String>, WorktreeError> {
         if self.current_phase != TddPhase::Failed {
-            return Err(WorktreeError::IllegalTransition(self.current_phase, TddPhase::RolledBack));
+            return Err(WorktreeError::IllegalTransition(
+                self.current_phase,
+                TddPhase::RolledBack,
+            ));
         }
         self.current_phase = TddPhase::RolledBack;
         Ok(vec![
@@ -222,7 +248,8 @@ impl RateLimitBackoff {
     pub fn next_delay(&mut self) -> u64 {
         let delay = self.current_delay_ms;
         self.retry_count += 1;
-        self.current_delay_ms = ((self.current_delay_ms as f64 * self.multiplier) as u64).min(self.max_delay_ms);
+        self.current_delay_ms =
+            ((self.current_delay_ms as f64 * self.multiplier) as u64).min(self.max_delay_ms);
         delay
     }
 
@@ -243,7 +270,8 @@ mod tests {
             Path::new("/workspace"),
             "agent_feature_x",
             "feature/x_patch",
-        ).unwrap();
+        )
+        .unwrap();
 
         let add_args = config.create_command_args();
         assert_eq!(add_args[0], "worktree");
@@ -259,11 +287,7 @@ mod tests {
 
     #[test]
     fn test_tdd_state_machine_success_flow() {
-        let config = WorktreeConfig::new(
-            Path::new("/workspace"),
-            "test_wt",
-            "branch_wt",
-        ).unwrap();
+        let config = WorktreeConfig::new(Path::new("/workspace"), "test_wt", "branch_wt").unwrap();
 
         let mut sm = TddStateMachine::new(config);
         assert_eq!(sm.current_phase, TddPhase::Initialized);
@@ -275,7 +299,9 @@ mod tests {
         sm.begin_testing().unwrap();
         assert_eq!(sm.current_phase, TddPhase::Testing);
 
-        let phase = sm.record_test_result(true, "All 10 tests passed".to_string()).unwrap();
+        let phase = sm
+            .record_test_result(true, "All 10 tests passed".to_string())
+            .unwrap();
         assert_eq!(phase, TddPhase::Passed);
 
         let commit_args = sm.commit_on_pass("feat: complete feature X").unwrap();
@@ -285,17 +311,15 @@ mod tests {
 
     #[test]
     fn test_tdd_state_machine_fail_and_rollback_flow() {
-        let config = WorktreeConfig::new(
-            Path::new("/workspace"),
-            "test_wt",
-            "branch_wt",
-        ).unwrap();
+        let config = WorktreeConfig::new(Path::new("/workspace"), "test_wt", "branch_wt").unwrap();
 
         let mut sm = TddStateMachine::new(config);
         sm.begin_edit().unwrap();
         sm.begin_testing().unwrap();
 
-        let phase = sm.record_test_result(false, "Syntax error at line 42".to_string()).unwrap();
+        let phase = sm
+            .record_test_result(false, "Syntax error at line 42".to_string())
+            .unwrap();
         assert_eq!(phase, TddPhase::Failed);
         assert_eq!(sm.consecutive_failures, 1);
 

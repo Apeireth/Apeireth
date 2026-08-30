@@ -90,7 +90,10 @@ impl PromptCacheStabilizer {
     }
 
     /// 计算两次组装之间的公共稳定前缀字节比例 (用于观测 Prompt Cache 命中潜力).
-    pub fn calculate_cache_prefix_ratio(previous: &[StabilizedMessage], current: &[StabilizedMessage]) -> f32 {
+    pub fn calculate_cache_prefix_ratio(
+        previous: &[StabilizedMessage],
+        current: &[StabilizedMessage],
+    ) -> f32 {
         if previous.is_empty() || current.is_empty() {
             return 0.0;
         }
@@ -143,27 +146,45 @@ mod tests {
             active_mood: "Happy".to_string(),
         };
 
-        let assembled = PromptCacheStabilizer::assemble_messages(sys, &history, "What time is it?", &ephemeral);
+        let assembled =
+            PromptCacheStabilizer::assemble_messages(sys, &history, "What time is it?", &ephemeral);
 
         assert_eq!(assembled.len(), 4);
         assert_eq!(assembled[0].role, StabilizedRole::System);
         assert_eq!(assembled[1].content, "Hello!");
         assert_eq!(assembled[2].content, "Hello! How can I help you today?");
         // 验证动态信息被单点注入到最新 User 消息中
-        assert!(assembled[3].content.contains("[Ephemeral Context: Time=2026-08-29 22:00"));
+        assert!(assembled[3]
+            .content
+            .contains("[Ephemeral Context: Time=2026-08-29 22:00"));
         assert!(assembled[3].content.contains("What time is it?"));
     }
 
     #[test]
     fn test_cache_prefix_ratio() {
         let m1 = vec![
-            StabilizedMessage { role: StabilizedRole::System, content: "System Prompt 1234567890".to_string() },
-            StabilizedMessage { role: StabilizedRole::User, content: "Old Message".to_string() },
+            StabilizedMessage {
+                role: StabilizedRole::System,
+                content: "System Prompt 1234567890".to_string(),
+            },
+            StabilizedMessage {
+                role: StabilizedRole::User,
+                content: "Old Message".to_string(),
+            },
         ];
         let m2 = vec![
-            StabilizedMessage { role: StabilizedRole::System, content: "System Prompt 1234567890".to_string() },
-            StabilizedMessage { role: StabilizedRole::User, content: "Old Message".to_string() },
-            StabilizedMessage { role: StabilizedRole::Assistant, content: "New reply".to_string() },
+            StabilizedMessage {
+                role: StabilizedRole::System,
+                content: "System Prompt 1234567890".to_string(),
+            },
+            StabilizedMessage {
+                role: StabilizedRole::User,
+                content: "Old Message".to_string(),
+            },
+            StabilizedMessage {
+                role: StabilizedRole::Assistant,
+                content: "New reply".to_string(),
+            },
         ];
 
         let ratio = PromptCacheStabilizer::calculate_cache_prefix_ratio(&m1, &m2);

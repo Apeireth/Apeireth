@@ -4,8 +4,8 @@
 //! 智能体持续读取碎片会话与原始资料 (Raw Sources)，增量“编译”并维护结构化、相互内联的 Markdown 维基库 (`viking://` 或本地 wiki 目录)，
 //! 并通过异步反熵 Lint 机制（死链检测、孤岛页面检测与冲突概念消解）保持知识体系高度有序.
 
-use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 /// 单个 Wiki 词条页面.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,11 +23,18 @@ pub struct WikiPage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WikiLintIssue {
     /// 死链: 引用的目标页面不存在
-    BrokenLink { from_slug: String, target_slug: String },
+    BrokenLink {
+        from_slug: String,
+        target_slug: String,
+    },
     /// 孤岛页面: 无任何其他页面引用该词条
     OrphanPage { slug: String },
     /// 潜在概念重复: 两个页面的标题或关键词高度重合
-    PotentialDuplicate { slug_a: String, slug_b: String, similarity: u8 },
+    PotentialDuplicate {
+        slug_a: String,
+        slug_b: String,
+        similarity: u8,
+    },
 }
 
 /// Wiki 反熵健康度报告.
@@ -74,7 +81,13 @@ impl WikiFsEngine {
     }
 
     /// 增量“编译”写入或更新一个 Wiki 页面.
-    pub fn compile_page(&mut self, slug: &str, title: &str, markdown_content: &str, now_ms: u64) -> WikiPage {
+    pub fn compile_page(
+        &mut self,
+        slug: &str,
+        title: &str,
+        markdown_content: &str,
+        now_ms: u64,
+    ) -> WikiPage {
         let links = Self::extract_wikilinks(markdown_content);
         let slug_clean = slug.trim().to_lowercase();
 
@@ -134,9 +147,7 @@ impl WikiFsEngine {
         // 2. 扫描孤岛页面 (入度为 0 且非 index/home 主页)
         for (slug, in_degree) in &incoming_ref_counts {
             if *in_degree == 0 && slug != "index" && slug != "home" && self.pages.len() > 1 {
-                issues.push(WikiLintIssue::OrphanPage {
-                    slug: slug.clone(),
-                });
+                issues.push(WikiLintIssue::OrphanPage { slug: slug.clone() });
             }
         }
 
@@ -168,10 +179,20 @@ mod tests {
         let mut wiki = WikiFsEngine::new();
 
         // 1. 编译写入 index 页面，引用 rust_lang 与 non_existent
-        wiki.compile_page("index", "知识索引", "探索 [[rust_lang]] 与 [[missing_concept]].", 1000);
+        wiki.compile_page(
+            "index",
+            "知识索引",
+            "探索 [[rust_lang]] 与 [[missing_concept]].",
+            1000,
+        );
 
         // 2. 编译写入 rust_lang 页面
-        wiki.compile_page("rust_lang", "Rust 语言核心", "Rust 是一门注重安全与性能的语言.", 1000);
+        wiki.compile_page(
+            "rust_lang",
+            "Rust 语言核心",
+            "Rust 是一门注重安全与性能的语言.",
+            1000,
+        );
 
         // 3. 编译写入一个无任何引用的孤岛页面 orphan_page
         wiki.compile_page("orphan_page", "孤立词条", "无人引用的内容.", 1000);
@@ -184,7 +205,10 @@ mod tests {
         assert!(report.issues.iter().any(|i| matches!(i, WikiLintIssue::BrokenLink { target_slug, .. } if target_slug == "missing_concept")));
 
         // 验证捕获到了孤岛页面 orphan_page
-        assert!(report.issues.iter().any(|i| matches!(i, WikiLintIssue::OrphanPage { slug } if slug == "orphan_page")));
+        assert!(report
+            .issues
+            .iter()
+            .any(|i| matches!(i, WikiLintIssue::OrphanPage { slug } if slug == "orphan_page")));
 
         assert!(report.health_score < 100);
     }

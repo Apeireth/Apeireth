@@ -57,7 +57,10 @@ fn mock_timeline_llm() -> Arc<dyn TimelineLlm> {
             },
         })
         .collect();
-    Arc::new(MockTimeline { scripts, terminal_p: 0.7 })
+    Arc::new(MockTimeline {
+        scripts,
+        terminal_p: 0.7,
+    })
 }
 
 /// 简化版 MockTimelineLlm (tests 目录内, 与 src 内的同名类型互不冲突).
@@ -182,7 +185,10 @@ async fn world_model_organ_state_diff_compares_two_states() {
         props: [("进度".to_string(), 0.5f64)].into_iter().collect(),
     });
     single.tick = 1;
-    let diff = wm.state_diff(empty, single.clone()).await.expect("state_diff");
+    let diff = wm
+        .state_diff(empty, single.clone())
+        .await
+        .expect("state_diff");
     assert_eq!(diff.added, vec!["master".to_string()]);
     assert!(diff.removed.is_empty());
     assert!(diff.changed.is_empty());
@@ -194,19 +200,28 @@ async fn world_model_organ_state_diff_compares_two_states() {
         name: "工作".into(),
         props: [("紧急".to_string(), 0.8f64)].into_iter().collect(),
     });
-    let diff2 = wm.state_diff(single.clone(), two.clone()).await.expect("state_diff2");
+    let diff2 = wm
+        .state_diff(single.clone(), two.clone())
+        .await
+        .expect("state_diff2");
     assert_eq!(diff2.added, vec!["work".to_string()]);
     assert!(diff2.removed.is_empty());
 
     // 2 entities → 单 entity (删 work) → removed
-    let diff3 = wm.state_diff(two.clone(), single.clone()).await.expect("state_diff3");
+    let diff3 = wm
+        .state_diff(two.clone(), single.clone())
+        .await
+        .expect("state_diff3");
     assert_eq!(diff3.removed, vec!["work".to_string()]);
     assert!(diff3.added.is_empty());
 
     // 改属性: master.进度 0.5 → 0.8
     let mut changed = single.clone();
     changed.entities[0].props.insert("进度".to_string(), 0.8);
-    let diff4 = wm.state_diff(single.clone(), changed).await.expect("state_diff4");
+    let diff4 = wm
+        .state_diff(single.clone(), changed)
+        .await
+        .expect("state_diff4");
     assert!(diff4.changed.contains(&"master.进度".to_string()));
 }
 
@@ -279,10 +294,7 @@ async fn world_model_facade_api_complete() {
         current_state: "主人精力 80%".into(),
     };
     let result = wm.simulate(query.clone()).await;
-    assert!(
-        result.is_err(),
-        "0 装诚实: NoopLlmFactory 真接 LLM 应失败"
-    );
+    assert!(result.is_err(), "0 装诚实: NoopLlmFactory 真接 LLM 应失败");
 
     // 2) counterfactual (与 simulate 同义)
     let result2 = wm.counterfactual(query).await;

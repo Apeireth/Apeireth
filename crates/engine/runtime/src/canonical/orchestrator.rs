@@ -674,7 +674,8 @@ impl CouncilInvoker for MockCouncilInvoker {
         &self,
         _advisor: Arc<dyn apeireth_orchestration::Advisor>,
         _proposal: &Proposal,
-    ) -> Result<apeireth_orchestration::AdvisorVerdict, apeireth_orchestration::CouncilCallError> {
+    ) -> Result<apeireth_orchestration::AdvisorVerdict, apeireth_orchestration::CouncilCallError>
+    {
         // 0 装诚实: 测试 mock 不调真 LLM, 直接返构造 verdict (per RC-6 子代理 N 真接 LLM 路径
         // 由 ModuleInvokerCouncilAdapter 处理, 不在本 mock 范围).
         use apeireth_orchestration::{AdvisorDecision, AdvisorVerdict};

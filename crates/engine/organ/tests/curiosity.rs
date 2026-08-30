@@ -48,8 +48,10 @@ impl LlmFactory for MockLlmFactory {
         &self,
         _role: apeireth_orchestration::SubagentRole,
         _model: &str,
-    ) -> Result<Box<dyn apeireth_plugin::llm_factory::LlmInstance>, apeireth_plugin::llm_factory::LlmError>
-    {
+    ) -> Result<
+        Box<dyn apeireth_plugin::llm_factory::LlmInstance>,
+        apeireth_plugin::llm_factory::LlmError,
+    > {
         // 0 装诚实: mock 直接返 NotImplemented, 不假装真 LLM.
         // 真接 LLM 路径在 #[ignore] test 里.
         Err(apeireth_plugin::llm_factory::LlmError::NotImplemented(
@@ -57,7 +59,9 @@ impl LlmFactory for MockLlmFactory {
         ))
     }
 
-    async fn available_models(&self) -> Result<Vec<String>, apeireth_plugin::llm_factory::LlmError> {
+    async fn available_models(
+        &self,
+    ) -> Result<Vec<String>, apeireth_plugin::llm_factory::LlmError> {
         Ok(vec!["mock-model".to_string()])
     }
 
@@ -87,13 +91,7 @@ async fn curiosity_organ_returns_score_and_question() {
     let mock: Arc<dyn LlmFactory> = Arc::new(MockLlmFactory::new("dummy"));
 
     let organ = CuriosityOrgan::new(mock, "mock-model");
-    organ.feed_echoes([
-        Echo::new(
-            "rust async trait",
-            0.85,
-            EchoSource::Memory,
-        ),
-    ]);
+    organ.feed_echoes([Echo::new("rust async trait", 0.85, EchoSource::Memory)]);
     organ.deepen("rust async trait"); // 强回声 → Deep
 
     // 喂 oracle 意外度 (per v1 `feed_surprise`)
@@ -121,8 +119,7 @@ async fn curiosity_organ_returns_score_and_question() {
                 "deepen 触发后应至少有 1 个 Deep 目标, got {deep_count}"
             );
             // 3) ask_master 不含强回声 (回声 ≥ 0.6 阈值 → 自己探索)
-            let master_topics: Vec<&str> =
-                ask_master.iter().map(|t| t.topic.as_str()).collect();
+            let master_topics: Vec<&str> = ask_master.iter().map(|t| t.topic.as_str()).collect();
             assert!(
                 !master_topics.contains(&"rust async trait"),
                 "强回声主题不应 ask_master"
@@ -177,10 +174,10 @@ async fn curiosity_organ_real_llm_smoke() {
 /// (per `apeireth-plugin::organ::OrganTrait::llm_factory()` default impl).
 ///
 /// 此处验证:
-    // 1) trait 默认 `llm_factory()` 返 None (没 fake)
-    // 2) 即便传 None-shaped trait object (实际不可能, Arc<dyn LlmFactory> 必须有 impl),
-    //    `CuriosityOrgan` 也能构造 (因为 trait 字段保留 + 实际不用)
-    // 3) process 路径不调用 LLM, 不返 LlmError
+// 1) trait 默认 `llm_factory()` 返 None (没 fake)
+// 2) 即便传 None-shaped trait object (实际不可能, Arc<dyn LlmFactory> 必须有 impl),
+//    `CuriosityOrgan` 也能构造 (因为 trait 字段保留 + 实际不用)
+// 3) process 路径不调用 LLM, 不返 LlmError
 #[test]
 fn curiosity_organ_no_llm_returns_none_factory() {
     // 0 装诚实: NoopLlmFactory 是 0 装显式占位, 不调真 LLM.

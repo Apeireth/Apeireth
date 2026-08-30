@@ -14,8 +14,8 @@
 //!
 //! Pure Safe Rust (`#![deny(unsafe_code)]`).
 
-use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 /// 1-dimensional topological void ring detected on the concept manifold.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -172,7 +172,11 @@ impl BettiHoleDetector {
         }
 
         // Sort voids by curiosity pressure descending
-        detected_voids.sort_by(|a, b| b.curiosity_pressure.partial_cmp(&a.curiosity_pressure).unwrap_or(std::cmp::Ordering::Equal));
+        detected_voids.sort_by(|a, b| {
+            b.curiosity_pressure
+                .partial_cmp(&a.curiosity_pressure)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // 4. Compute global curiosity gradient vector
         let emb_dim = nodes[0].embedding.len();
@@ -189,7 +193,9 @@ impl BettiHoleDetector {
             }
         }
 
-        let cohesion_score = (1.0 / (1.0 + (betti_0 as f32 - 1.0).max(0.0) * 0.2 + detected_voids.len() as f32 * 0.1)).clamp(0.0, 1.0);
+        let cohesion_score = (1.0
+            / (1.0 + (betti_0 as f32 - 1.0).max(0.0) * 0.2 + detected_voids.len() as f32 * 0.1))
+            .clamp(0.0, 1.0);
 
         BettiTopologicalReport {
             betti_0_islands: betti_0,
@@ -236,7 +242,12 @@ impl BettiHoleDetector {
         roots.len()
     }
 
-    fn find_candidate_cycles(&self, n: usize, dist_matrix: &[Vec<f32>], max_threshold: f32) -> Vec<Vec<usize>> {
+    fn find_candidate_cycles(
+        &self,
+        n: usize,
+        dist_matrix: &[Vec<f32>],
+        max_threshold: f32,
+    ) -> Vec<Vec<usize>> {
         let mut cycles = Vec::new();
         // 3-cycles
         for i in 0..n {
@@ -264,7 +275,11 @@ impl BettiHoleDetector {
                         let d_jk = dist_matrix[j][k];
                         let d_kl = dist_matrix[k][l];
                         let d_li = dist_matrix[l][i];
-                        if d_ij <= max_threshold && d_jk <= max_threshold && d_kl <= max_threshold && d_li <= max_threshold {
+                        if d_ij <= max_threshold
+                            && d_jk <= max_threshold
+                            && d_kl <= max_threshold
+                            && d_li <= max_threshold
+                        {
                             cycles.push(vec![i, j, k, l]);
                         }
                     }
@@ -274,11 +289,7 @@ impl BettiHoleDetector {
         cycles
     }
 
-    fn compute_cycle_persistence(
-        &self,
-        cycle: &[usize],
-        dist_matrix: &[Vec<f32>],
-    ) -> (f32, f32) {
+    fn compute_cycle_persistence(&self, cycle: &[usize], dist_matrix: &[Vec<f32>]) -> (f32, f32) {
         let k = cycle.len();
         // Cycle is born when all boundary edges appear
         let mut max_boundary_edge = 0.0f32;

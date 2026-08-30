@@ -3,9 +3,9 @@
 //! 统一管理智能体的自主唤醒、环境定时感知、异步后台任务轮询与用户交互事件，
 //! 支持 5 大触发源、5 级优先级抢占式二叉堆队列与“心流锁”保护机制.
 
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use serde::{Deserialize, Serialize};
 
 /// 心跳事件触发源类型.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,7 +100,8 @@ impl HeartbeatScheduler {
             }
 
             // 若心流锁已锁定且任务优先级不足以抢占，则暂不弹出
-            if self.flow_lock.is_locked && top.priority < self.flow_lock.minimum_preemption_priority {
+            if self.flow_lock.is_locked && top.priority < self.flow_lock.minimum_preemption_priority
+            {
                 return None;
             }
         }

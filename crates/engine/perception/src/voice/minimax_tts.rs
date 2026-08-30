@@ -2,8 +2,8 @@
 //!
 //! 支持 `speech-2.6-hd` 128kbps 32kHz 音频流生成与基于 PAD 情感空间的情绪声学语气调制.
 
-use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// TTS 错误类型.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -20,7 +20,9 @@ impl fmt::Display for TtsError {
             Self::MissingApiKey => write!(f, "API Key 缺失或无效"),
             Self::EmptyText => write!(f, "请求文本为空"),
             Self::AudioCodecError(msg) => write!(f, "音频流编码/解码错误: {}", msg),
-            Self::UpstreamError(code, msg) => write!(f, "上游服务返回错误: HTTP {} - {}", code, msg),
+            Self::UpstreamError(code, msg) => {
+                write!(f, "上游服务返回错误: HTTP {} - {}", code, msg)
+            }
         }
     }
 }
@@ -89,7 +91,11 @@ impl MiniMaxLiveTtsClient {
     }
 
     /// 根据三维 PAD 情感值自动推导音色语气调制参数.
-    pub fn derive_tone_from_pad(valence: f32, arousal: f32, dominance: f32) -> EmotionToneModulation {
+    pub fn derive_tone_from_pad(
+        valence: f32,
+        arousal: f32,
+        dominance: f32,
+    ) -> EmotionToneModulation {
         let (style, speed, pitch) = if valence > 0.3 && arousal > 0.2 {
             ("Happy", 1.05 + arousal * 0.1, dominance * 2.0)
         } else if valence > 0.2 && arousal <= 0.2 {
@@ -111,7 +117,11 @@ impl MiniMaxLiveTtsClient {
     }
 
     /// 构建受控的 TTS 请求负载.
-    pub fn build_request(&self, text: &str, tone: EmotionToneModulation) -> Result<MiniMaxTtsRequest, TtsError> {
+    pub fn build_request(
+        &self,
+        text: &str,
+        tone: EmotionToneModulation,
+    ) -> Result<MiniMaxTtsRequest, TtsError> {
         let trimmed = text.trim();
         if trimmed.is_empty() {
             return Err(TtsError::EmptyText);
@@ -148,13 +158,21 @@ mod tests {
 
     #[test]
     fn test_build_request() {
-        let client = MiniMaxLiveTtsClient::new(Some("test_key".to_string()), Some("group_123".to_string()));
+        let client =
+            MiniMaxLiveTtsClient::new(Some("test_key".to_string()), Some("group_123".to_string()));
         let tone = EmotionToneModulation::default();
-        let req = client.build_request("你好，欢迎来到 Apeireth 世界！", tone).unwrap();
+        let req = client
+            .build_request("你好，欢迎来到 Apeireth 世界！", tone)
+            .unwrap();
         assert_eq!(req.audio_sample_rate, 32000);
         assert_eq!(req.format, "mp3");
         assert_eq!(req.voice_id, "female-tianmei");
 
-        assert_eq!(client.build_request("   ", EmotionToneModulation::default()).unwrap_err(), TtsError::EmptyText);
+        assert_eq!(
+            client
+                .build_request("   ", EmotionToneModulation::default())
+                .unwrap_err(),
+            TtsError::EmptyText
+        );
     }
 }

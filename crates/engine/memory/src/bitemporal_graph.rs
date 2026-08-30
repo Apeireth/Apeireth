@@ -4,8 +4,8 @@
 //! 2. 事实演化时旧边不物理删除，而是将其 `invalid_at` 设为当前时间并递增 `rev` 产生新版本；
 //! 3. 混合检索结合重要性与实体逆频稀有度 (Intrinsic Residual Specificity).
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// 双时态图谱事实三元组.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -52,7 +52,10 @@ impl BitemporalGraph {
 
         // 1. 查找并废弃先前的有效事实
         for fact in &mut self.facts {
-            if fact.invalid_at_ms.is_none() && fact.subject == subject && fact.predicate == predicate {
+            if fact.invalid_at_ms.is_none()
+                && fact.subject == subject
+                && fact.predicate == predicate
+            {
                 fact.invalid_at_ms = Some(now_ms);
                 next_rev = fact.rev + 1;
             }
@@ -71,7 +74,10 @@ impl BitemporalGraph {
         };
 
         // 3. 统计实体频次
-        *self.entity_frequency.entry(subject.to_string()).or_insert(0) += 1;
+        *self
+            .entity_frequency
+            .entry(subject.to_string())
+            .or_insert(0) += 1;
         *self.entity_frequency.entry(object.to_string()).or_insert(0) += 1;
 
         self.facts.push(new_fact.clone());
@@ -94,7 +100,10 @@ impl BitemporalGraph {
 
     /// 获取当前仍然有效的全部事实.
     pub fn get_current_valid_facts(&self) -> Vec<&BitemporalFact> {
-        self.facts.iter().filter(|f| f.invalid_at_ms.is_none()).collect()
+        self.facts
+            .iter()
+            .filter(|f| f.invalid_at_ms.is_none())
+            .collect()
     }
 
     /// 计算实体的 Intrinsic Residual 特异性 (逆频稀有度, 0.0 ~ 1.0).

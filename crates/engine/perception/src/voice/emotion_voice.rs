@@ -99,7 +99,11 @@ pub struct EmotionVoiceSynthesizer;
 
 impl EmotionVoiceSynthesizer {
     /// 根据 PAD 情绪与性格特征计算连续声学参数.
-    pub fn compute_acoustic_params(pad: &PadEmotion, warmth: f64, liveliness: f64) -> AcousticParameters {
+    pub fn compute_acoustic_params(
+        pad: &PadEmotion,
+        warmth: f64,
+        liveliness: f64,
+    ) -> AcousticParameters {
         let p = pad.pleasure.clamp(-1.0, 1.0);
         let a = pad.arousal.clamp(-1.0, 1.0);
         let _d = pad.dominance.clamp(-1.0, 1.0);
@@ -152,13 +156,7 @@ impl EmotionVoiceSynthesizer {
 
         format!(
             r#"<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="{}"><mstts:express-as style="{}" styledegree="{:.1}"><prosody pitch="{:+}%" rate="{:+}%" volume="{:+}%">{}</prosody></mstts:express-as></voice></speak>"#,
-            voice_name,
-            style,
-            params.emotion_intensity,
-            pitch_pct,
-            speed_pct,
-            volume_pct,
-            text
+            voice_name, style, params.emotion_intensity, pitch_pct, speed_pct, volume_pct, text
         )
     }
 }
@@ -209,7 +207,11 @@ mod tests {
             primary_emotion: EmotionCategory::Joy,
         };
 
-        let ssml = EmotionVoiceSynthesizer::wrap_ssml("主人，今天的工作全部圆满完成了！", "zh-CN-XiaoxiaoNeural", &params);
+        let ssml = EmotionVoiceSynthesizer::wrap_ssml(
+            "主人，今天的工作全部圆满完成了！",
+            "zh-CN-XiaoxiaoNeural",
+            &params,
+        );
         assert!(ssml.starts_with("<speak"));
         assert!(ssml.contains("style=\"cheerful\""));
         assert!(ssml.contains("zh-CN-XiaoxiaoNeural"));

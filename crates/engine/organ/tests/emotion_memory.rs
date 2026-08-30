@@ -81,10 +81,7 @@ async fn emotion_organ_record_updates_mood_state() {
                 (pleasure - (-0.7)).abs() < 1e-3,
                 "pleasure 应≈ -0.7 (解析 hint)"
             );
-            assert!(
-                (arousal - 0.6).abs() < 1e-3,
-                "arousal 应≈ 0.6 (解析 hint)"
-            );
+            assert!((arousal - 0.6).abs() < 1e-3, "arousal 应≈ 0.6 (解析 hint)");
             assert_eq!(
                 dominance, 0.0,
                 "0 装诚实: v1 emotion_memory 无 dominance 概念, schema 字段填 0.0"

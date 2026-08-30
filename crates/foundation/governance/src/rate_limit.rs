@@ -71,7 +71,11 @@ impl InvocationWindow {
         self.timestamps_ms.retain(|&t| t >= one_hour_ago);
 
         let one_minute_ago = now_ms.saturating_sub(60_000);
-        let count_minute = self.timestamps_ms.iter().filter(|&&t| t >= one_minute_ago).count();
+        let count_minute = self
+            .timestamps_ms
+            .iter()
+            .filter(|&&t| t >= one_minute_ago)
+            .count();
         let count_hour = self.timestamps_ms.len();
 
         if (count_minute as u32) >= limit_per_minute || (count_hour as u32) >= limit_per_hour {
@@ -103,7 +107,10 @@ impl RateLimitGovernanceHook {
     }
 
     /// 设置静态黑名单能力集合.
-    pub fn with_blacklist(mut self, blacklist: impl IntoIterator<Item = impl Into<String>>) -> Self {
+    pub fn with_blacklist(
+        mut self,
+        blacklist: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         let set: HashSet<String> = blacklist.into_iter().map(|s| s.into()).collect();
         self.blacklist = Arc::new(set);
         self
@@ -157,7 +164,10 @@ impl GovernanceHook for RateLimitGovernanceHook {
             let (limit_min, limit_hr) = match tier {
                 TrustTier::Low => (base_per_min.min(5), self.config.default_per_hour.min(50)),
                 TrustTier::Standard => (base_per_min, self.config.default_per_hour),
-                TrustTier::High => (base_per_min.saturating_mul(2), self.config.default_per_hour.saturating_mul(2)),
+                TrustTier::High => (
+                    base_per_min.saturating_mul(2),
+                    self.config.default_per_hour.saturating_mul(2),
+                ),
                 TrustTier::Trusted => unreachable!(),
             };
 

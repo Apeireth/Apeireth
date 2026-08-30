@@ -213,7 +213,8 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         controller.interrupt("voice_sess_1", InterruptReason::VoiceBargeIn);
 
-        let result = tokio::time::timeout(tokio::time::Duration::from_millis(200), waiter_task).await;
+        let result =
+            tokio::time::timeout(tokio::time::Duration::from_millis(200), waiter_task).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().unwrap(), true);
         assert_eq!(handle.reason(), Some(InterruptReason::VoiceBargeIn));
@@ -230,7 +231,10 @@ mod tests {
 
         // 验证旧会话被自动抢占打断
         assert!(handle_turn_1.is_interrupted());
-        assert_eq!(handle_turn_1.reason(), Some(InterruptReason::NewTurnPreempt));
+        assert_eq!(
+            handle_turn_1.reason(),
+            Some(InterruptReason::NewTurnPreempt)
+        );
 
         // 验证新会话正常运行中
         assert!(!handle_turn_2.is_interrupted());

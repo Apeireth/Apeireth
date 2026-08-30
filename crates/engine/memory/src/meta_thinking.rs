@@ -395,7 +395,9 @@ mod tests {
 
         let zero_depth_chain = MetaThinkingChain::new(&["前思维簇"], 0);
         assert_eq!(
-            zero_depth_chain.run("query", &SimpleEchoThinker).unwrap_err(),
+            zero_depth_chain
+                .run("query", &SimpleEchoThinker)
+                .unwrap_err(),
             MetaThinkError::InvalidDepth(0)
         );
     }
@@ -442,7 +444,11 @@ mod tests {
 
         assert_eq!(result.stages.len(), 1);
         assert_eq!(result.stop_reason, StopReason::ThinkerHalted);
-        assert!(result.stages[0].error.as_ref().unwrap().contains("LLM timeout"));
+        assert!(result.stages[0]
+            .error
+            .as_ref()
+            .unwrap()
+            .contains("LLM timeout"));
     }
 
     #[test]

@@ -93,7 +93,10 @@ impl DreamReport {
         out.push_str(&format!("# 🌙 【认知梦境日志 — {}】\n\n", self.dream_id));
         out.push_str(&format!("- **梦境开始**: {} ms\n", self.started_at_ms));
         out.push_str(&format!("- **梦境苏醒**: {} ms\n", self.finished_at_ms));
-        out.push_str(&format!("- **扫描记忆数**: {} 条\n\n", self.scanned_episodes_count));
+        out.push_str(&format!(
+            "- **扫描记忆数**: {} 条\n\n",
+            self.scanned_episodes_count
+        ));
 
         out.push_str("## 🌌 深度睡眠元思考洞察\n");
         if let Some(thought) = &self.meta_thought_summary {
@@ -136,7 +139,11 @@ impl Default for DreamEngineConfig {
     fn default() -> Self {
         Self {
             min_idle_for_dream_ms: 900_000,
-            dream_clusters: vec!["反思簇".to_string(), "归纳簇".to_string(), "洞察簇".to_string()],
+            dream_clusters: vec![
+                "反思簇".to_string(),
+                "归纳簇".to_string(),
+                "洞察簇".to_string(),
+            ],
         }
     }
 }
@@ -183,7 +190,12 @@ impl DreamEngine {
 
         // 3. LightSleep -> DeepSleep (元思考链推演)
         self.current_stage = DreamStage::DeepSleep;
-        let cluster_names: Vec<&str> = self.config.dream_clusters.iter().map(|s| s.as_str()).collect();
+        let cluster_names: Vec<&str> = self
+            .config
+            .dream_clusters
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
         let chain = MetaThinkingChain::new(&cluster_names, 5);
 
         let query = if recent_memories.is_empty() {
@@ -215,12 +227,9 @@ impl DreamEngine {
         self.current_stage = DreamStage::Awakening;
         let mut consolidated = Vec::new();
         if let Some(thought) = &meta_thought_summary {
-            if thought.contains("建议") || thought.contains("优化") || thought.contains("规则") {
-                let habit_res = procedural_store.record_habit(
-                    "dream_derived_rule",
-                    thought,
-                    true,
-                );
+            if thought.contains("建议") || thought.contains("优化") || thought.contains("规则")
+            {
+                let habit_res = procedural_store.record_habit("dream_derived_rule", thought, true);
                 if let Ok(h) = habit_res {
                     consolidated.push(h);
                 }
