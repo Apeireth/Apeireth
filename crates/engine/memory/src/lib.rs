@@ -50,6 +50,12 @@ pub mod history_streams;
 pub mod arbitration;
 pub mod bitemporal_graph;
 pub mod continuity_link;
+pub use continuity_link::{
+    continuity_id_from_env, current_continuity_id, ensure_identity, migrate_subject,
+    normalize_continuity, recall_recent, record_carrier_migration, record_session,
+    resolve_continuity, ContinuityLink, MigrationReport, SessionRef, CONTINUITY_ENV_VAR,
+    DEFAULT_CONTINUITY_ID, MIGRATED_ID_PREFIX,
+};
 pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
@@ -201,7 +207,23 @@ pub use memory_governance::{
 };
 // Core Capability Expansion Phase 5: Agent 执行轨迹 (structured trace, 持久化 + 查询).
 pub mod agent_trace;
-pub use agent_trace::{TraceQueryError, TraceSpan, TraceSpanKind, TraceSpanStatus, TraceStore};
+pub use agent_trace::{
+    redact_attributes, sanitize_summary, summary_is_safe, TraceQueryError, TraceSpan, TraceSpanKind,
+    TraceSpanStatus, TraceStore,
+};
+// Salvage 02: windowed fingerprint + textual near-dup (companion observer_capture / dream).
+pub mod dedup;
+pub use dedup::{
+    dedup_textual, episode_fingerprint, fingerprint_bytes, fingerprint_json, normalize_for_dedup,
+    overlap_ratio, DedupConfig, DedupIndex, DEFAULT_DEDUP_WINDOW_MS, DEFAULT_LRU_CAP,
+    TEXTUAL_MIN_LEN, TEXTUAL_OVERLAP_THRESHOLD,
+};
+// Salvage 02: rolling cross-frontend context ledger (companion onering).
+pub mod onering;
+pub use onering::{LedgerEntry, OneRingLedger, DEFAULT_MAX_RECORDS, ROLE_ASSISTANT, ROLE_USER};
+// Salvage 02: combined retention sweep (count cap + TTL + decay) via governance sidecar.
+pub mod retention;
+pub use retention::{decay_strength, sweep_session, RetentionPolicy, RetentionSweepReport};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
