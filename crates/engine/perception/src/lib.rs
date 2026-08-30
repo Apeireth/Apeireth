@@ -12,6 +12,7 @@
 
 pub mod capture;
 pub mod normalize;
+pub mod observe;
 pub mod screen;
 pub mod vision;
 pub mod voice;
@@ -28,6 +29,7 @@ pub use normalize::{
     tactile_observation, text_observation, top_k_events, validate_event, vision_observation,
     voice_observation, SignalSource,
 };
+pub use observe::{ObservationCandidate, ObservationOutcome, ObservationQueue};
 pub use screen::{NoopScreenSource, ScreenEvent, ScreenEventKind, ScreenPerception};
 pub use vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
 pub use voice::{WhisperHttpBackend, WhisperHttpConfig};
