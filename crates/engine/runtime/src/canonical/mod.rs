@@ -25,6 +25,7 @@
 //! there is no second orchestration driver or legacy runtime dependency.
 
 pub mod approval;
+pub mod causal_world_model;
 pub mod cognitive;
 pub mod error;
 pub mod execute;
@@ -63,6 +64,10 @@ pub mod upgrade_cycle;
 pub use approval::{
     operation_fingerprint, operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus,
     PendingApproval, PendingApprovalView,
+};
+pub use causal_world_model::{
+    BranchEvaluationOutcome, CausalWorldModel, HypothesisBranch, SagaCompensatingAction,
+    WorldStateSnapshot,
 };
 pub use cognitive::{
     turn_request_from_perception, CognitiveModuleEvent, CognitiveTelemetry, CouncilModule,
