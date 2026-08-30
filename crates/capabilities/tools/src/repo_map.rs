@@ -10,9 +10,9 @@
 //!
 //! Pure Safe Rust (`#![deny(unsafe_code)]`).
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 /// Kind of code symbol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -72,7 +72,12 @@ impl SymbolParser {
             }
 
             // Functions: pub fn name / fn name / async fn name
-            if let Some(rest) = trimmed.strip_prefix("pub fn ").or_else(|| trimmed.strip_prefix("fn ")).or_else(|| trimmed.strip_prefix("pub async fn ")).or_else(|| trimmed.strip_prefix("async fn ")) {
+            if let Some(rest) = trimmed
+                .strip_prefix("pub fn ")
+                .or_else(|| trimmed.strip_prefix("fn "))
+                .or_else(|| trimmed.strip_prefix("pub async fn "))
+                .or_else(|| trimmed.strip_prefix("async fn "))
+            {
                 if let Some(name) = rest.split(['(', '<', ' ']).next() {
                     let clean = name.trim();
                     if !clean.is_empty() {
@@ -88,7 +93,10 @@ impl SymbolParser {
                 }
             }
             // Structs
-            else if let Some(rest) = trimmed.strip_prefix("pub struct ").or_else(|| trimmed.strip_prefix("struct ")) {
+            else if let Some(rest) = trimmed
+                .strip_prefix("pub struct ")
+                .or_else(|| trimmed.strip_prefix("struct "))
+            {
                 if let Some(name) = rest.split(['<', '{', ';', ' ']).next() {
                     let clean = name.trim();
                     if !clean.is_empty() {
@@ -104,7 +112,10 @@ impl SymbolParser {
                 }
             }
             // Enums
-            else if let Some(rest) = trimmed.strip_prefix("pub enum ").or_else(|| trimmed.strip_prefix("enum ")) {
+            else if let Some(rest) = trimmed
+                .strip_prefix("pub enum ")
+                .or_else(|| trimmed.strip_prefix("enum "))
+            {
                 if let Some(name) = rest.split(['<', '{', ' ']).next() {
                     let clean = name.trim();
                     if !clean.is_empty() {
@@ -120,7 +131,10 @@ impl SymbolParser {
                 }
             }
             // Traits
-            else if let Some(rest) = trimmed.strip_prefix("pub trait ").or_else(|| trimmed.strip_prefix("trait ")) {
+            else if let Some(rest) = trimmed
+                .strip_prefix("pub trait ")
+                .or_else(|| trimmed.strip_prefix("trait "))
+            {
                 if let Some(name) = rest.split(['<', '{', ':', ' ']).next() {
                     let clean = name.trim();
                     if !clean.is_empty() {
@@ -136,7 +150,10 @@ impl SymbolParser {
                 }
             }
             // Type alias
-            else if let Some(rest) = trimmed.strip_prefix("pub type ").or_else(|| trimmed.strip_prefix("type ")) {
+            else if let Some(rest) = trimmed
+                .strip_prefix("pub type ")
+                .or_else(|| trimmed.strip_prefix("type "))
+            {
                 if let Some(name) = rest.split(['<', '=', ';', ' ']).next() {
                     let clean = name.trim();
                     if !clean.is_empty() {
@@ -165,7 +182,10 @@ impl SymbolParser {
                 continue;
             }
 
-            if let Some(rest) = trimmed.strip_prefix("def ").or_else(|| trimmed.strip_prefix("async def ")) {
+            if let Some(rest) = trimmed
+                .strip_prefix("def ")
+                .or_else(|| trimmed.strip_prefix("async def "))
+            {
                 if let Some(name) = rest.split('(').next() {
                     let clean = name.trim();
                     if !clean.is_empty() {
@@ -208,7 +228,10 @@ impl SymbolParser {
                 continue;
             }
 
-            if let Some(rest) = trimmed.strip_prefix("export function ").or_else(|| trimmed.strip_prefix("function ")) {
+            if let Some(rest) = trimmed
+                .strip_prefix("export function ")
+                .or_else(|| trimmed.strip_prefix("function "))
+            {
                 if let Some(name) = rest.split(['(', '<', ' ']).next() {
                     let clean = name.trim();
                     if !clean.is_empty() {
@@ -222,7 +245,10 @@ impl SymbolParser {
                         });
                     }
                 }
-            } else if let Some(rest) = trimmed.strip_prefix("export class ").or_else(|| trimmed.strip_prefix("class ")) {
+            } else if let Some(rest) = trimmed
+                .strip_prefix("export class ")
+                .or_else(|| trimmed.strip_prefix("class "))
+            {
                 if let Some(name) = rest.split(['<', '{', ' ']).next() {
                     let clean = name.trim();
                     if !clean.is_empty() {
@@ -236,7 +262,10 @@ impl SymbolParser {
                         });
                     }
                 }
-            } else if let Some(rest) = trimmed.strip_prefix("export interface ").or_else(|| trimmed.strip_prefix("interface ")) {
+            } else if let Some(rest) = trimmed
+                .strip_prefix("export interface ")
+                .or_else(|| trimmed.strip_prefix("interface "))
+            {
                 if let Some(name) = rest.split(['<', '{', ' ']).next() {
                     let clean = name.trim();
                     if !clean.is_empty() {
@@ -331,7 +360,10 @@ pub struct RepoDependencyGraph {
 
 impl RepoDependencyGraph {
     /// Builds graph from parsed symbol tags across all repository files.
-    pub fn build(file_tags: &[(PathBuf, Vec<SymbolTag>)], file_contents: &[(PathBuf, String)]) -> Self {
+    pub fn build(
+        file_tags: &[(PathBuf, Vec<SymbolTag>)],
+        file_contents: &[(PathBuf, String)],
+    ) -> Self {
         let mut files = Vec::new();
         let mut definitions = HashMap::new();
         let mut adjacency: HashMap<PathBuf, HashSet<PathBuf>> = HashMap::new();
@@ -350,7 +382,10 @@ impl RepoDependencyGraph {
         for (caller_path, content) in file_contents {
             for (def_name, target_path) in &definitions {
                 if caller_path != target_path && content.contains(def_name) {
-                    adjacency.entry(caller_path.clone()).or_default().insert(target_path.clone());
+                    adjacency
+                        .entry(caller_path.clone())
+                        .or_default()
+                        .insert(target_path.clone());
                 }
             }
         }
@@ -382,7 +417,11 @@ impl RepoDependencyGraph {
         let mut total_weight = 0.0;
 
         for f in &self.files {
-            let w = if focus_set.contains(f) { focus_boost } else { 1.0 };
+            let w = if focus_set.contains(f) {
+                focus_boost
+            } else {
+                1.0
+            };
             teleport.insert(f.clone(), w);
             total_weight += w;
         }
@@ -392,7 +431,11 @@ impl RepoDependencyGraph {
         }
 
         // Initialize ranks uniformly
-        let mut ranks: HashMap<PathBuf, f64> = self.files.iter().map(|f| (f.clone(), 1.0 / n as f64)).collect();
+        let mut ranks: HashMap<PathBuf, f64> = self
+            .files
+            .iter()
+            .map(|f| (f.clone(), 1.0 / n as f64))
+            .collect();
 
         // Power iteration
         for _ in 0..max_iterations {
@@ -412,13 +455,15 @@ impl RepoDependencyGraph {
                     if targets.contains(f) {
                         let out_degree = targets.len();
                         if out_degree > 0 {
-                            incoming_score += ranks.get(source).copied().unwrap_or(0.0) / out_degree as f64;
+                            incoming_score +=
+                                ranks.get(source).copied().unwrap_or(0.0) / out_degree as f64;
                         }
                     }
                 }
 
                 let t = teleport.get(f).copied().unwrap_or(0.0);
-                let score = damping_factor * (incoming_score + dangling_sum / n as f64) + (1.0 - damping_factor) * t;
+                let score = damping_factor * (incoming_score + dangling_sum / n as f64)
+                    + (1.0 - damping_factor) * t;
                 next_ranks.insert(f.clone(), score);
             }
 
@@ -457,7 +502,8 @@ impl RepoMapGenerator {
         file_tags: &[(PathBuf, Vec<SymbolTag>)],
         ranked_files: &[(PathBuf, f64)],
     ) -> String {
-        let tag_map: HashMap<&PathBuf, &Vec<SymbolTag>> = file_tags.iter().map(|(p, t)| (p, t)).collect();
+        let tag_map: HashMap<&PathBuf, &Vec<SymbolTag>> =
+            file_tags.iter().map(|(p, t)| (p, t)).collect();
 
         // Estimated tokens ~ chars / 4
         let max_chars = self.token_budget * 4;
@@ -485,7 +531,10 @@ impl RepoMapGenerator {
                         SymbolKind::Constant => "const",
                         SymbolKind::Module => "mod",
                     };
-                    file_chunk.push_str(&format!("  L{}: [{}] {} ...\n", tag.line_number, kind_prefix, tag.name));
+                    file_chunk.push_str(&format!(
+                        "  L{}: [{}] {} ...\n",
+                        tag.line_number, kind_prefix, tag.name
+                    ));
                 }
             }
             file_chunk.push('\n');
@@ -552,7 +601,10 @@ pub fn create_default_engine() -> EngineConfig {
         let tags2 = SymbolParser::parse_file(&f2, code2);
 
         let file_tags = vec![(f1.clone(), tags1), (f2.clone(), tags2)];
-        let file_contents = vec![(f1.clone(), code1.to_string()), (f2.clone(), code2.to_string())];
+        let file_contents = vec![
+            (f1.clone(), code1.to_string()),
+            (f2.clone(), code2.to_string()),
+        ];
 
         let graph = RepoDependencyGraph::build(&file_tags, &file_contents);
         let ranks = graph.compute_personalized_pagerank(&[f2.clone()], 0.85, 50, 1e-4);

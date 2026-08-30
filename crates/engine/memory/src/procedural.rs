@@ -54,7 +54,11 @@ pub struct HabitPattern {
 }
 
 impl HabitPattern {
-    pub fn new(id: impl Into<String>, trigger: impl Into<String>, recipe: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        trigger: impl Into<String>,
+        recipe: impl Into<String>,
+    ) -> Self {
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as i64)
@@ -166,8 +170,14 @@ impl InMemoryProceduralStore {
         }
 
         // 分词重合度 (按空格/下划线切分)
-        let q_tokens: Vec<&str> = q_lower.split(|c: char| c.is_whitespace() || c == '_').filter(|s| !s.is_empty()).collect();
-        let t_tokens: Vec<&str> = t_lower.split(|c: char| c.is_whitespace() || c == '_').filter(|s| !s.is_empty()).collect();
+        let q_tokens: Vec<&str> = q_lower
+            .split(|c: char| c.is_whitespace() || c == '_')
+            .filter(|s| !s.is_empty())
+            .collect();
+        let t_tokens: Vec<&str> = t_lower
+            .split(|c: char| c.is_whitespace() || c == '_')
+            .filter(|s| !s.is_empty())
+            .collect();
 
         if q_tokens.is_empty() || t_tokens.is_empty() {
             return 0.0;
@@ -245,22 +255,33 @@ impl ProceduralStore for InMemoryProceduralStore {
             })
             .collect();
 
-        matches.sort_by(|a, b| b.match_score.partial_cmp(&a.match_score).unwrap_or(std::cmp::Ordering::Equal));
+        matches.sort_by(|a, b| {
+            b.match_score
+                .partial_cmp(&a.match_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         matches.truncate(top_k);
         matches
     }
 
     fn promote_habit(&self, id: &str) -> Result<(), ProceduralError> {
         let mut lock = self.habits.lock().unwrap();
-        let habit = lock.get_mut(id).ok_or_else(|| ProceduralError::NotFound(id.to_string()))?;
+        let habit = lock
+            .get_mut(id)
+            .ok_or_else(|| ProceduralError::NotFound(id.to_string()))?;
         habit.is_promoted = true;
         Ok(())
     }
 
     fn list_promoted_habits(&self) -> Vec<HabitPattern> {
         let lock = self.habits.lock().unwrap();
-        let mut promoted: Vec<HabitPattern> = lock.values().filter(|h| h.is_promoted).cloned().collect();
-        promoted.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+        let mut promoted: Vec<HabitPattern> =
+            lock.values().filter(|h| h.is_promoted).cloned().collect();
+        promoted.sort_by(|a, b| {
+            b.confidence
+                .partial_cmp(&a.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         promoted
     }
 
@@ -277,7 +298,11 @@ pub fn render_procedural_prompt(habits: &[HabitMatch]) -> String {
 
     let mut out = String::from("### 【程序性记忆与固化习惯 (Procedural Skills)】\n");
     for (i, m) in habits.iter().enumerate() {
-        let star = if m.habit.is_promoted { " ⭐[已固化高阶习惯]" } else { "" };
+        let star = if m.habit.is_promoted {
+            " ⭐[已固化高阶习惯]"
+        } else {
+            ""
+        };
         out.push_str(&format!(
             "{}. 场景: `{}` (置信度: {:.2}){}\n   推荐操作配方: {}\n",
             i + 1,
@@ -302,7 +327,11 @@ mod tests {
     fn test_record_and_update_habit_confidence() {
         let store = InMemoryProceduralStore::new(10);
         let habit = store
-            .record_habit("cargo_test_fail", "运行 cargo test --offline 并检查第一处报错", true)
+            .record_habit(
+                "cargo_test_fail",
+                "运行 cargo test --offline 并检查第一处报错",
+                true,
+            )
             .unwrap();
 
         assert_eq!(habit.trigger_condition, "cargo_test_fail");
@@ -312,7 +341,11 @@ mod tests {
         // 连续 5 次成功
         for _ in 0..5 {
             store
-                .record_habit("cargo_test_fail", "运行 cargo test --offline 并检查第一处报错", true)
+                .record_habit(
+                    "cargo_test_fail",
+                    "运行 cargo test --offline 并检查第一处报错",
+                    true,
+                )
                 .unwrap();
         }
 
@@ -325,8 +358,16 @@ mod tests {
     #[test]
     fn test_match_habits_ranking() {
         let store = InMemoryProceduralStore::new(10);
-        store.record_habit("git_conflict_resolve", "使用 git status 检查未合并文件", true).unwrap();
-        store.record_habit("git_commit_style", "遵循 Angular commit message 规范", true).unwrap();
+        store
+            .record_habit(
+                "git_conflict_resolve",
+                "使用 git status 检查未合并文件",
+                true,
+            )
+            .unwrap();
+        store
+            .record_habit("git_commit_style", "遵循 Angular commit message 规范", true)
+            .unwrap();
 
         let matches = store.match_habits("git conflict happen in repo", 5);
         assert_eq!(matches.len(), 1);
@@ -336,7 +377,9 @@ mod tests {
     #[test]
     fn test_render_procedural_prompt() {
         let store = InMemoryProceduralStore::new(10);
-        store.record_habit("build_error", "查看 target/ 目录或检查 rustc 版本", true).unwrap();
+        store
+            .record_habit("build_error", "查看 target/ 目录或检查 rustc 版本", true)
+            .unwrap();
         let matches = store.match_habits("build_error", 1);
 
         let rendered = render_procedural_prompt(&matches);

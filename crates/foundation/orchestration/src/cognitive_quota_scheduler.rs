@@ -47,7 +47,12 @@ pub struct CognitiveQuota {
 }
 
 impl CognitiveQuota {
-    pub fn new(max_tokens: usize, max_tool_steps: usize, max_cost_micros: u64, max_depth: usize) -> Self {
+    pub fn new(
+        max_tokens: usize,
+        max_tool_steps: usize,
+        max_cost_micros: u64,
+        max_depth: usize,
+    ) -> Self {
         Self {
             max_tokens,
             max_tool_steps,
@@ -197,7 +202,11 @@ impl CognitiveQuotaScheduler {
     }
 
     /// Priority Inheritance Protocol (PIP): Boosts the effective priority of lock-holding task.
-    pub fn boost_priority_for_lock(&self, resource_id: &str, requesting_priority: CognitivePriority) {
+    pub fn boost_priority_for_lock(
+        &self,
+        resource_id: &str,
+        requesting_priority: CognitivePriority,
+    ) {
         let mut inner = self.inner.lock().expect("Scheduler mutex poisoned");
         if let Some(holder_id) = inner.held_locks.get(resource_id).cloned() {
             let old_prio = if let Some(holder_tcb) = inner.tasks.get_mut(&holder_id) {
@@ -226,7 +235,9 @@ impl CognitiveQuotaScheduler {
     /// Registers a resource lock held by a task.
     pub fn register_lock(&self, resource_id: &str, task_id: &str) {
         let mut inner = self.inner.lock().expect("Scheduler mutex poisoned");
-        inner.held_locks.insert(resource_id.to_string(), task_id.to_string());
+        inner
+            .held_locks
+            .insert(resource_id.to_string(), task_id.to_string());
     }
 
     /// Releases a resource lock and resets effective priority to base priority.
@@ -358,7 +369,10 @@ mod tests {
         // Background task should now be at InteractiveUser priority level
         let scheduled = scheduler.schedule_next().unwrap();
         assert_eq!(scheduled.task_id, "task_bg_lock");
-        assert_eq!(scheduled.effective_priority, CognitivePriority::InteractiveUser);
+        assert_eq!(
+            scheduled.effective_priority,
+            CognitivePriority::InteractiveUser
+        );
 
         // Once lock is released, priority resets
         scheduler.release_lock("memory_graph_lock");

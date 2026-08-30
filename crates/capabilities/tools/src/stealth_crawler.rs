@@ -82,7 +82,9 @@ impl StealthCrawlerEngine {
         if self.config.user_agent_pool.is_empty() {
             return "Apeireth-StealthCrawler/2.0";
         }
-        let hash_val = url.bytes().fold(0usize, |acc, b| acc.wrapping_add(b as usize));
+        let hash_val = url
+            .bytes()
+            .fold(0usize, |acc, b| acc.wrapping_add(b as usize));
         let idx = hash_val % self.config.user_agent_pool.len();
         &self.config.user_agent_pool[idx]
     }
@@ -102,7 +104,9 @@ impl StealthCrawlerEngine {
         raw_body: &str,
         media_type: &str,
     ) -> ExtractedMediaItem {
-        let clean_text = raw_body.replace("<script", "[script_redacted]").replace("</script>", "");
+        let clean_text = raw_body
+            .replace("<script", "[script_redacted]")
+            .replace("</script>", "");
         let wrapped_body = Self::wrap_untrusted_content(url, &clean_text);
 
         ExtractedMediaItem {
@@ -112,7 +116,11 @@ impl StealthCrawlerEngine {
             published_at: None,
             clean_markdown: wrapped_body,
             media_type: media_type.to_string(),
-            media_duration_secs: if media_type == "short_video" { Some(45.0) } else { None },
+            media_duration_secs: if media_type == "short_video" {
+                Some(45.0)
+            } else {
+                None
+            },
             tags: vec!["web_curation".into(), media_type.to_string()],
             metadata: HashMap::new(),
         }

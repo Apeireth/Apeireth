@@ -21,17 +21,11 @@ pub mod file_fetcher;
 /// Ember HUD 4.0s breath and peripheral vignette glow driver.
 pub mod ember_hud_driver;
 
-pub use barge_in::{
-    format_sse_interrupt_event, BargeInController, InterruptReason, StreamHandle,
-};
-pub use duplex_gateway::{
-    DuplexFrame, DuplexSessionController, SentenceDivider,
-};
+pub use barge_in::{format_sse_interrupt_event, BargeInController, InterruptReason, StreamHandle};
+pub use duplex_gateway::{DuplexFrame, DuplexSessionController, SentenceDivider};
+pub use ember_hud_driver::{EmberCognitiveStance, EmberHudDriver, EmberShaderUniforms};
 pub use file_fetcher::{
     FetchedFile, FileFetchError, InternalFileRequest, InternalFileResponse, TransparentFileFetcher,
-};
-pub use ember_hud_driver::{
-    EmberCognitiveStance, EmberHudDriver, EmberShaderUniforms,
 };
 
 pub use canonical_entry::{

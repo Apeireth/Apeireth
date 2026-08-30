@@ -81,9 +81,7 @@ pub use execute::{ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse};
 pub use harness_patch::{
     FailureCategory, FailureTrajectory, HarnessPatch, HarnessPatchAction, HarnessPatchEngine,
 };
-pub use heartbeat::{
-    FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource,
-};
+pub use heartbeat::{FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource};
 pub use module::{
     AgentModule, HookPoint, InvocationContext, InvocationOrigin, Module, ModuleContext,
     ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,

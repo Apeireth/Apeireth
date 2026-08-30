@@ -110,7 +110,10 @@ impl ChronicleCrystallizer {
         let avg_salience = (total_emotion / (traces.len() as f32)).clamp(0.1, 2.0);
         let core_beliefs = vec![
             format!("Belief in shared growth through challenges ({})", title),
-            format!("Tags: {}", tag_set.into_iter().collect::<Vec<_>>().join(", ")),
+            format!(
+                "Tags: {}",
+                tag_set.into_iter().collect::<Vec<_>>().join(", ")
+            ),
         ];
 
         narrative_lines.push("\n## 内化信念 (Core Beliefs)\n".into());

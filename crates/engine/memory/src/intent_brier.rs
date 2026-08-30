@@ -15,8 +15,8 @@
 
 #![deny(unsafe_code)]
 
-use std::collections::{BTreeMap, VecDeque};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, VecDeque};
 
 // ============================================================
 // 核心数据结构
@@ -89,22 +89,14 @@ impl IntentRecord {
     }
 
     /// 链式追加反馈.
-    pub fn feedback(
-        mut self,
-        outcome: FeedbackOutcome,
-        true_topic: Option<String>,
-    ) -> Self {
+    pub fn feedback(mut self, outcome: FeedbackOutcome, true_topic: Option<String>) -> Self {
         self.outcome = Some(outcome);
         self.true_topic = true_topic;
         self
     }
 
     /// 原地设置反馈.
-    pub fn apply_feedback(
-        &mut self,
-        outcome: FeedbackOutcome,
-        true_topic: Option<String>,
-    ) {
+    pub fn apply_feedback(&mut self, outcome: FeedbackOutcome, true_topic: Option<String>) {
         self.outcome = Some(outcome);
         self.true_topic = true_topic;
     }
@@ -116,7 +108,8 @@ impl IntentRecord {
 
     /// Brier 单条得分 (无 outcome 时返回 None).
     pub fn brier(&self) -> Option<f64> {
-        self.outcome.map(|o| brier_score(self.prediction.confidence, o.is_hit()))
+        self.outcome
+            .map(|o| brier_score(self.prediction.confidence, o.is_hit()))
     }
 }
 
@@ -192,7 +185,11 @@ impl IntentLedger {
 
     /// 仅返回已完成反馈的记录.
     pub fn resolved_records(&self) -> Vec<IntentRecord> {
-        self.records.iter().filter(|r| r.outcome.is_some()).cloned().collect()
+        self.records
+            .iter()
+            .filter(|r| r.outcome.is_some())
+            .cloned()
+            .collect()
     }
 }
 
@@ -322,10 +319,7 @@ pub struct DomainDiagnostic {
 }
 
 /// 按 domain 分组计算 mean_brier 并标定低校准领域.
-pub fn domain_diagnostics(
-    records: &[IntentRecord],
-    threshold: f64,
-) -> Vec<DomainDiagnostic> {
+pub fn domain_diagnostics(records: &[IntentRecord], threshold: f64) -> Vec<DomainDiagnostic> {
     let mut groups: BTreeMap<String, Vec<f64>> = BTreeMap::new();
     for r in records.iter().filter(|r| r.outcome.is_some()) {
         if let Some(d) = &r.domain {
@@ -347,7 +341,11 @@ pub fn domain_diagnostics(
             }
         })
         .collect();
-    out.sort_by(|a, b| b.mean_brier.partial_cmp(&a.mean_brier).unwrap_or(std::cmp::Ordering::Equal));
+    out.sort_by(|a, b| {
+        b.mean_brier
+            .partial_cmp(&a.mean_brier)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     out
 }
 
@@ -375,7 +373,10 @@ pub struct IntentDiagnosticReport {
 impl IntentDiagnosticReport {
     pub fn empty() -> Self {
         Self {
-            windows: DEFAULT_WINDOWS.iter().map(|&w| BrierWindow::empty(w)).collect(),
+            windows: DEFAULT_WINDOWS
+                .iter()
+                .map(|&w| BrierWindow::empty(w))
+                .collect(),
             overall_mean_brier: 0.0,
             trend: BrierTrend::Stable,
             domain_diagnostics: Vec::new(),
@@ -394,8 +395,10 @@ pub fn compute_report(
     if records.is_empty() {
         return IntentDiagnosticReport::empty();
     }
-    let windows: Vec<BrierWindow> =
-        DEFAULT_WINDOWS.iter().map(|&w| compute_window(&records, w)).collect();
+    let windows: Vec<BrierWindow> = DEFAULT_WINDOWS
+        .iter()
+        .map(|&w| compute_window(&records, w))
+        .collect();
     let overall = mean_brier(&records);
     let trend = compute_trend(&records);
     let domain_diag = domain_diagnostics(&records, low_calibration_threshold);
@@ -436,7 +439,11 @@ pub fn render_report(report: &IntentDiagnosticReport) -> String {
     if !report.domain_diagnostics.is_empty() {
         s.push_str("· 按领域:\n");
         for d in &report.domain_diagnostics {
-            let flag = if d.is_low_calibration { " ⚠低校准" } else { "" };
+            let flag = if d.is_low_calibration {
+                " ⚠低校准"
+            } else {
+                ""
+            };
             s.push_str(&format!(
                 "  - {}: Brier = {:.3} (样本 {}){}\n",
                 d.domain, d.mean_brier, d.sample_count, flag
@@ -551,7 +558,7 @@ mod tests {
     #[test]
     fn mean_brier_computes_average() {
         let records = vec![
-            rec("a", 0.9, 1).feedback(FeedbackOutcome::Agree, None),   // 0.01
+            rec("a", 0.9, 1).feedback(FeedbackOutcome::Agree, None), // 0.01
             rec("b", 0.9, 2).feedback(FeedbackOutcome::Correct, None), // 0.81
         ];
         assert!((mean_brier(&records) - 0.41).abs() < 1e-4);
@@ -577,7 +584,9 @@ mod tests {
         assert!(ledger.feedback(100, FeedbackOutcome::Agree, None).is_ok());
         assert_eq!(ledger.resolved_records().len(), 1);
         // 重复反馈拒绝
-        assert!(ledger.feedback(100, FeedbackOutcome::Correct, None).is_err());
+        assert!(ledger
+            .feedback(100, FeedbackOutcome::Correct, None)
+            .is_err());
         // 未知时间戳
         assert!(ledger.feedback(999, FeedbackOutcome::Agree, None).is_err());
     }
@@ -661,10 +670,10 @@ mod tests {
     #[test]
     fn domain_diagnostics_groups_and_flags_threshold() {
         let records = vec![
-            rec_domain("a", 0.9, 1, "study").feedback(FeedbackOutcome::Agree, None),   // 0.01
-            rec_domain("b", 0.9, 2, "study").feedback(FeedbackOutcome::Agree, None),   // 0.01
-            rec_domain("c", 0.9, 3, "invest").feedback(FeedbackOutcome::Correct, None),// 0.81
-            rec_domain("d", 0.9, 4, "invest").feedback(FeedbackOutcome::Correct, None),// 0.81
+            rec_domain("a", 0.9, 1, "study").feedback(FeedbackOutcome::Agree, None), // 0.01
+            rec_domain("b", 0.9, 2, "study").feedback(FeedbackOutcome::Agree, None), // 0.01
+            rec_domain("c", 0.9, 3, "invest").feedback(FeedbackOutcome::Correct, None), // 0.81
+            rec_domain("d", 0.9, 4, "invest").feedback(FeedbackOutcome::Correct, None), // 0.81
         ];
         let diag = domain_diagnostics(&records, 0.25);
         assert_eq!(diag.len(), 2);
