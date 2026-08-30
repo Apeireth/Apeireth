@@ -58,6 +58,7 @@ pub mod curiosity;
 pub mod emergence;
 pub mod emotion_memory;
 pub mod experience_growth;
+pub mod goal;
 pub mod hypothesis;
 pub mod memory;
 pub mod morphology;
@@ -76,10 +77,6 @@ pub use morphology::{
     classify as classify_query_morphology, crawl_budget, sanitize_temperature, MorphologyVerdict,
     RetrievalMode,
 };
-pub use motivation::{
-    motivation_score, AutonomyConsistency, IntrinsicIntensity, MotivationScore, ValueStability,
-    MOTIVATION_THRESHOLD, MOTIVATION_WEIGHTS,
-};
 pub use prompt_assembly::{
     AssemblerError, AssemblyGuard, AssemblyRole, ExpansionReport, PromptAssembler, SourceKind,
     StaticSource, VariableSource,
@@ -87,6 +84,13 @@ pub use prompt_assembly::{
 pub use tone::{
     deliberation_intensity, emotion_tone, organ_tone, tone_hint, BondCharacterSnapshot,
     DeliberationEcho, EmotionToneStyle, ToneError,
+};
+pub use goal::{
+    GoalBlock, GoalError, GoalPersistError, GoalPhase, GoalService, GoalSnapshot, GoalStore,
+};
+pub use motivation::{
+    motivation_score, AutonomyConsistency, IntrinsicIntensity, MotivationScore, ValueStability,
+    MIN_MOTIVATION_THRESHOLD, MOTIVATION_THRESHOLD, MOTIVATION_WEIGHTS,
 };
 
 // ============================================
