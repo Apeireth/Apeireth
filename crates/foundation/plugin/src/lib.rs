@@ -59,6 +59,7 @@ pub mod experience;
 pub mod llm_factory;
 pub mod manager;
 pub mod manifest;
+pub mod mcp;
 pub mod memory_backend;
 pub mod organ;
 pub mod perception;
