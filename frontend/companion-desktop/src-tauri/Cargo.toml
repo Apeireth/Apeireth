@@ -3,7 +3,7 @@
 
 [package]
 name = "companion-desktop"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 description = "Apeireth 桌面伙伴 — 薄 Tauri shell (窗口/托盘/通知), 保留 legacy companion 兼容接入"
 edition = "2021"
 rust-version = "1.77.2"

@@ -43,7 +43,7 @@ fi
 
 # === 1. 找 .deb ===
 cd "$(dirname "$0")/../.."
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+VERSION="${APEIRETH_VERSION:-2.0.0~rc1}"
 
 if [[ -n "${1:-}" ]]; then
     DEB_PATH="$1"
@@ -51,12 +51,12 @@ elif [[ -n "${APEIRETH_DEB:-}" ]]; then
     DEB_PATH="${APEIRETH_DEB}"
 else
     # 默认: target/<triple>/debian/apeireth_<version>_amd64.deb
-    DEB_PATH=$(find target -name "apeireth_${VERSION}_amd64.deb" -type f 2>/dev/null | head -1 || true)
+    DEB_PATH=$(find target -name "apeireth_*${VERSION}*.deb" -o -name "apeireth_2.0.0*.deb" -type f 2>/dev/null | head -1 || true)
     if [[ -z "${DEB_PATH}" ]]; then
-        echo "❌ 未找到 .deb (默认路径 target/**/apeireth_${VERSION}_amd64.deb)"
+        echo "❌ 未找到 .deb (默认路径 target/**/apeireth_*${VERSION}*.deb)"
         echo "   选项:"
         echo "   1. 先跑 packaging/deb/build.sh 编出 .deb"
-        echo "   2. 从 GitHub release 下载: https://github.com/apeireth/apeireth-rust/releases/download/v${VERSION}/apeireth_${VERSION}_amd64.deb"
+        echo "   2. 从 GitHub release 下载: https://github.com/apeireth/apeireth-rust/releases/download/v2.0.0-rc.1/apeireth_${VERSION}_amd64.deb"
         echo "   3. 显式传: sudo $0 /path/to/apeireth.deb"
         exit 1
     fi

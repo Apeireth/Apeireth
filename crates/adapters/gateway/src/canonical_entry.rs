@@ -324,6 +324,7 @@ pub fn canonical_router(runtime: Arc<Runtime>) -> Router {
         .route("/v1/chat", post(native_chat))
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals/resolve", post(native_resolve_approval))
+        .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(runtime)
 }
 

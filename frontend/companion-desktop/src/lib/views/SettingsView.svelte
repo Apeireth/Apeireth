@@ -168,9 +168,9 @@
               id="endpoint-input"
               type="text"
               bind:value={editBaseUrl}
-              placeholder="http://127.0.0.1:8090"
+              placeholder="http://127.0.0.1:8080"
             />
-            <small class="field-hint">默认为 companion_serve 端口 (:8090) 或 apeireth-api 端口 (:8080)。</small>
+            <small class="field-hint">默认为 Apeireth 核心网关端口 (:8080)。</small>
           </div>
 
           <div class="form-group">

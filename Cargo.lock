@@ -147,7 +147,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "apeireth-cli"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-credentials",
@@ -167,7 +167,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-core"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-credentials"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-plugin",
  "chacha20poly1305",
@@ -196,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-gateway"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -214,12 +214,13 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tower",
+ "tower-http",
  "uuid",
 ]
 
 [[package]]
 name = "apeireth-governance"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "async-trait",
@@ -233,7 +234,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-memory"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -256,7 +257,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-orchestration"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "async-trait",
@@ -270,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-organ"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-orchestration",
@@ -285,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-perception"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-plugin",
@@ -300,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-plugin"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-orchestration",
@@ -315,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-protocol"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "async-trait",
@@ -328,7 +329,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-provider"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-orchestration",
@@ -343,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-runtime"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -369,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-sdk"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "anyhow",
  "apeireth-protocol",
@@ -395,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-storage"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "r2d2",
  "r2d2_sqlite",
@@ -406,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-tools-canonical"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-plugin",

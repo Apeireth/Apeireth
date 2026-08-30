@@ -50,8 +50,9 @@ set -euo pipefail
 SCRIPT_NAME="$(basename "$0")"
 PACKAGE_NAME="apeireth"
 SERVICE_NAME="apeireth"
-DOCKER_IMAGE="ghcr.io/apeireth/api:1.0.0"
-DOCKER_IMAGE_LATEST="ghcr.io/apeireth/api:latest"
+DOCKER_IMAGE="apeireth/apeireth:2.0.0-rc.1"
+DOCKER_IMAGE_LATEST="apeireth/apeireth:latest"
+DOCKER_IMAGE_GHCR="ghcr.io/apeireth/apeireth:2.0.0-rc.1"
 DATA_PATHS=(
   "/var/lib/apeireth"
   "/var/log/apeireth"
@@ -444,9 +445,8 @@ step5_cleanup() {
 # ===================== 主流程 =====================
 main() {
   echo "==============================================="
-  echo " Apeireth Uninstall v1.0.0"
-  echo " 蓝图: reports/r19-integration-v2/r20-stage-2-3-prep §3.7"
-  echo " 守门: §3.5 #6 卸载 + 0 残留 + 可重装 (P0)"
+  echo " Apeireth Uninstall v2.0.0-rc.1"
+  echo " 守门: 卸载 + 0 残留 + 可重装 (P0)"
   echo " 模式: $(if [[ "${DRY_RUN}" == "true" ]]; then echo "DRY-RUN"; else echo "REAL"; fi)"
   echo " 保留数据: $(if [[ "${KEEP_DATA}" == "true" ]]; then echo "YES (--keep-data)"; else echo "NO"; fi)"
   echo "==============================================="

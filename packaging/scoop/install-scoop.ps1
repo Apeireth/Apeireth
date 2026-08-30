@@ -19,9 +19,10 @@
 $ErrorActionPreference = 'Stop'
 
 $VERSION = $env:APEIRETH_VERSION
-if (-not $VERSION) { $VERSION = "1.0.0" }
+if (-not $VERSION) { $VERSION = "2.0.0-rc.1" }
 $BUCKET = $env:APEIRETH_BUCKET
 if (-not $BUCKET) { $BUCKET = "apeireth/scoop-bucket" }
+
 
 Write-Host "=== apeireth scoop install v${VERSION} (bucket=${BUCKET}) ==="
 

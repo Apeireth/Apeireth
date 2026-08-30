@@ -1,8 +1,8 @@
 //! Apeireth 桌面伙伴 — 薄 Tauri shell
 //!
 //! 窗口管理 + 托盘 + 通知 + 全局快捷键.
-//! **Agent runtime 不在这里** — 对话/记忆/工具/宪法全部由 apeireth-companion
-//! 后端承担 (companion_serve :8090 OpenAI 兼容端点). 本壳只负责桌面承载.
+//! **Agent runtime 不在这里** — 对话/记忆/工具/治理全部由 Apeireth Canonical Gateway
+//! 后端承担 (apeireth gateway serve :8080). 本壳只负责桌面承载.
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -39,7 +39,8 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let show = MenuItem::with_id(app, "show", "打开主窗", true, None::<&str>)?;
     let quick = MenuItem::with_id(app, "quick", "快捷窗口", true, None::<&str>)?;
-    Menu::with_items(app, &[&show, &quick, &quit])
+    let settings = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
+    Menu::with_items(app, &[&show, &quick, &settings, &quit])
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -62,8 +63,7 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            // 后端自拉起 (v1): 探测 :8090 /health, 未在听则 spawn companion_serve.
-            // 独立线程执行, 不阻塞 UI; env 整体继承父进程, 密钥不入码不打印.
+            // 后端自拉起: 探测 :8080 /health, 未在听则尝试拉起 apeireth gateway.
             std::thread::spawn(ensure_backend_running);
 
             // 主窗口由 tauri.conf.json 声明 (app.windows[0] label=main), 这里不再重复创建.
@@ -95,6 +95,7 @@ pub fn run() {
                         }
                     }
                     "quick" => toggle_quick_window(app.clone()),
+                    "settings" => open_settings(app.clone()),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -128,22 +129,14 @@ pub fn run() {
         .expect("error while running companion-desktop");
 }
 
-/// 后端自拉起 (v1). 在独立线程里跑, 不阻塞 UI.
-///
-/// 行为契约:
-/// - 探测 `127.0.0.1:8090/health` 返回 200 → 已在跑, 直接返回.
-/// - 端口被占但 /health 非 200 → 疑似被别的进程占用, 不 spawn (避免端口冲突),
-///   前端健康门控会自然显示未连接.
-/// - 连不上 → spawn `target/debug/examples/companion_serve.exe` (相对仓库根解析).
-///
-/// 纪律: env 整体继承父进程, APEIRETH_API_KEY 等密钥不入码不打印; spawn 失败只记日志.
+/// 后端网关连接探测与可选守护进程自拉起.
 fn ensure_backend_running() {
     use std::io::{Read, Write};
     use std::net::TcpStream;
     use std::time::Duration;
 
     let probe = || -> Result<String, std::io::Error> {
-        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8090));
+        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
         let mut s = TcpStream::connect_timeout(&addr, Duration::from_millis(500))?;
         s.set_read_timeout(Some(Duration::from_millis(800)))?;
         s.write_all(b"GET /health HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")?;
@@ -154,46 +147,48 @@ fn ensure_backend_running() {
 
     match probe() {
         Ok(head) if head.contains(" 200") => {
-            println!("[companion-shell] 后端 :8090 /health 已在听, 跳过自拉起");
+            println!("[companion-shell] Apeireth Gateway :8080 /health 已就绪");
             return;
         }
         Ok(_) => {
-            println!("[companion-shell] :8090 被占用但 /health 非 200, 跳过自拉起 (交给前端门控)");
+            println!("[companion-shell] :8080 端口活跃但 /health 非 200 (由前端门控指示)");
             return;
         }
-        Err(_) => println!("[companion-shell] :8090 未在听, 尝试拉起 companion_serve…"),
+        Err(_) => println!("[companion-shell] :8080 网关未就绪，检测本地二进制…"),
     }
 
-    // 相对仓库根解析 dev 后端路径: src-tauri → companion-desktop → frontend → 仓库根.
+    // 尝试探测开发环境构建产物中的 apeireth 二进制
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let repo_root = manifest_dir
         .join("../../..")
         .canonicalize()
         .unwrap_or_else(|_| manifest_dir.join("../../.."));
-    let exe = repo_root
-        .join("target")
-        .join("debug")
-        .join("examples")
-        .join("companion_serve.exe");
-    if !exe.is_file() {
-        eprintln!(
-            "[companion-shell] 未找到后端 exe: {} (需先 cargo build --example companion_serve)",
-            exe.display()
-        );
-        return;
-    }
+    
+    let candidate_paths = [
+        repo_root.join("target").join("debug").join("apeireth.exe"),
+        repo_root.join("target").join("release").join("apeireth.exe"),
+        repo_root.join("target").join("debug").join("apeireth"),
+        repo_root.join("target").join("release").join("apeireth"),
+    ];
 
-    let mut cmd = std::process::Command::new(&exe);
-    cmd.current_dir(&repo_root); // 后端可能按 cwd 解析配置/数据目录
+    let exe = candidate_paths.into_iter().find(|p| p.is_file());
+    let Some(exe_path) = exe else {
+        println!("[companion-shell] 未找到本地 apeireth 二进制，等待外部网关服务启动");
+        return;
+    };
+
+    let mut cmd = std::process::Command::new(&exe_path);
+    cmd.args(["gateway", "serve", "--port", "8080"]);
+    cmd.current_dir(&repo_root);
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: 后台静默, 不弹黑窗
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     match cmd.spawn() {
         Ok(child) => {
             let pid = child.id();
-            println!("[companion-shell] companion_serve 已拉起 pid={pid}, 等待端口就绪…");
+            println!("[companion-shell] apeireth 网关已拉起 pid={pid}, 等待端口就绪…");
             std::thread::sleep(Duration::from_secs(2));
             match probe() {
                 Ok(head) if head.contains(" 200") => {

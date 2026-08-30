@@ -41,7 +41,7 @@ members = [
 #     (per decision-22 §2.2 B2 1.2.0 严守 → 0 改 version 边界 + P15-1 0 主动 commit 严守 → 0 改 27 crate scope creep)
 # ============================================================================
 [workspace.package]
-version = "1.2.0"  # B2 upgrade: 1.1.0 → 1.2.0 (R125 末 minor, per 10-locked.md + decision-22 + decision-33)
+version = "2.0.0-rc.1"
 edition = "2021"
 rust-version = "1.97"  # 与 rust-toolchain.toml 对齐 (1.97.1), MSRV 诚实声明
 authors = ["Apeireth Team"]

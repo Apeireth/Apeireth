@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+VERSION="${APEIRETH_VERSION:-2.0.0-rc.1}"
 INSTALL_DIR="${APEIRETH_INSTALL_DIR:-/opt/apeireth}"
 
 # 0. root 守门
@@ -70,5 +70,6 @@ echo "[4/4] ✅ 安装完成"
 echo "    二进制: ${INSTALL_DIR}/bin/apeireth"
 echo "    symlink: /usr/local/bin/apeireth"
 echo "    验证: apeireth --version"
-echo "    启动: apeireth serve (前台) 或 systemctl status apeireth"
+echo "    启动: apeireth gateway serve --port 8080 (前台) 或 systemctl status apeireth"
 echo "    卸载: sudo rm -rf ${INSTALL_DIR} /usr/local/bin/apeireth /etc/systemd/system/apeireth.service"
+
