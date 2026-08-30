@@ -117,9 +117,8 @@ pub fn sweep_session(
     // Age / decay candidates first (any that fail those tests, regardless of count).
     let mut keep: Vec<(String, i64, i64)> = Vec::new(); // (id, timestamp, revision)
     for ep in &episodes {
-        let governed = match store.get_governed(&ep.id)? {
-            Some(g) => g,
-            None => continue,
+        let Some(governed) = store.get_governed(&ep.id)? else {
+            continue;
         };
         if governed.status == MemoryGovernanceStatus::Forgotten {
             report.skipped_already_forgotten += 1;
