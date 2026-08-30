@@ -201,5 +201,7 @@ remove_zip() {
 remove_docker() {
     docker stop apeireth 2>/dev/null || true
     docker rm apeireth 2>/dev/null || true
-    docker rmi ghcr.io/apeireth/apeireth:1.0.0 2>/dev/null || true
+    docker rmi apeireth/apeireth:2.0.0-rc.1 apeireth/apeireth:latest 2>/dev/null || true
+    docker rmi ghcr.io/apeireth/apeireth:2.0.0-rc.1 ghcr.io/apeireth/apeireth:latest 2>/dev/null || true
 }
+

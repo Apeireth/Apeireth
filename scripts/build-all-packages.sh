@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+VERSION="${APEIRETH_VERSION:-2.0.0-rc.1}"
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then
     DRY_RUN=true

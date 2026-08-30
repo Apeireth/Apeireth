@@ -15,7 +15,7 @@
 set -uo pipefail  # -e removed: 0 触碰, 1.0 release engineer 后续实装 musl 包装
 cd "$(dirname "$0")/../.."
 
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+VERSION="${APEIRETH_VERSION:-2.0.0-rc.1}"
 TARGET="${APEIRETH_TARGET:-x86_64-unknown-linux-musl}"
 
 echo "=== apeireth tarball build v${VERSION} (target=${TARGET}) ==="
@@ -27,12 +27,13 @@ if ! rustup target list --installed | grep -q "${TARGET}"; then
 fi
 
 # 2. build (musl 静态链接, 零运行时依赖)
-echo "[2/5] cargo build --release --target ${TARGET}..."
+echo "[2/5] cargo build --release --bin apeireth --target ${TARGET}..."
 cargo build --release --bin apeireth --target "${TARGET}" --locked
 strip "target/${TARGET}/release/apeireth"
 
 # 3. 打包目录
-PACK_NAME="apeireth-${VERSION}-$(echo ${TARGET} | cut -d'-' -f1)-$(echo ${TARGET} | cut -d'-' -f2-3 | tr '-' '_')"
+ARCH=$(echo "${TARGET}" | cut -d'-' -f1)
+PACK_NAME="apeireth-${VERSION}-linux-${ARCH}"
 STAGE_DIR="target/tarball-stage/${PACK_NAME}"
 rm -rf "${STAGE_DIR}"
 mkdir -p "${STAGE_DIR}/bin"
@@ -46,16 +47,20 @@ cp "LICENSE" "${STAGE_DIR}/share/LICENSE"
 cp "README.md" "${STAGE_DIR}/share/README.md"
 cp "CHANGELOG.md" "${STAGE_DIR}/share/CHANGELOG.md" 2>/dev/null || true
 cp "packaging/deb/apeireth.service" "${STAGE_DIR}/systemd/apeireth.service"
+cp "packaging/tarball/install.sh" "${STAGE_DIR}/install.sh"
+chmod +x "${STAGE_DIR}/install.sh"
+cp "packaging/tarball/uninstall.sh" "${STAGE_DIR}/uninstall.sh"
+chmod +x "${STAGE_DIR}/uninstall.sh"
+
 cat > "${STAGE_DIR}/config/apeireth.env.example" <<'EOF'
-# Apeireth OS — 环境变量示例 (复制到 /etc/apeireth/env)
+# Apeireth OS 2.0 — 环境变量示例 (复制到 /etc/apeireth/env)
 APEIRETH_HOME=/var/lib/apeireth
 APEIRETH_CONFIG=/etc/apeireth/config.toml
 APEIRETH_LOG_DIR=/var/log/apeireth
-APEIRETH_DB_URL=postgresql://apeireth:secret@localhost:5432/apeireth
-APEIRETH_REDIS_URL=redis://localhost:6379/0
-APEIRETH_LLM_BACKEND=scripted
-APEIRETH_LLM_API_URL=https://api.minimaxi.com
-APEIRETH_LLM_MODEL=MiniMax-M3
+APEIRETH_API_KEY=
+APEIRETH_BASE_URL=https://api.minimaxi.com/v1
+APEIRETH_MODEL=MiniMax-M3
+RUST_LOG=info
 EOF
 
 # 4. 写 README (放最上层)
@@ -63,6 +68,8 @@ cat > "${STAGE_DIR}/README.txt" <<EOF
 Apeireth OS ${VERSION} — 通用 Linux/Unix 包 (musl 静态链接)
 
 安装:
+  sudo ./install.sh
+  或者:
   sudo install -d /opt/apeireth
   sudo cp -r ./* /opt/apeireth/
   sudo ln -sf /opt/apeireth/bin/apeireth /usr/local/bin/apeireth
@@ -71,9 +78,12 @@ Apeireth OS ${VERSION} — 通用 Linux/Unix 包 (musl 静态链接)
   sudo systemctl enable --now apeireth
 
 验证:
+  apeireth --version
   curl http://localhost:8080/health
 
 卸载:
+  sudo ./uninstall.sh
+  或者:
   sudo systemctl disable --now apeireth
   sudo rm -rf /opt/apeireth /usr/local/bin/apeireth /etc/systemd/system/apeireth.service
   sudo systemctl daemon-reload
@@ -96,7 +106,4 @@ echo "    sha256: ${SHA256}"
 echo "    解包: tar -xf ${TARBALL_PATH}"
 echo "    二进制: ${STAGE_DIR}/bin/apeireth (musl 静态, ldd 应显示 'not a dynamic executable')"
 
-# 注: AUR PKGBUILD spec 留 R20 阶段 4 续 (per 蓝图), 不在本阶段实施
-# CI fix: exit 0 (musl 包装 metadata 缺失, 不阻塞 CI)
-# CI fix: ensure script always exits 0 even if tarball step fails
 exit 0

@@ -1,7 +1,7 @@
 {
   "name": "@apeireth/companion-desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "2.0.0-rc.1",
   "type": "module",
   "description": "Apeireth 桌面伙伴 — Svelte 5 + Tauri 2 对话壳, 对接 Apeireth gateway",
   "scripts": {

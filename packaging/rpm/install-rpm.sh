@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+VERSION="${APEIRETH_VERSION:-2.0.0}"
 cd "$(dirname "$0")/../.."
 
 # 0. root 守门
@@ -31,9 +31,9 @@ fi
 if [[ -n "${1:-}" ]]; then
     RPM_PATH="$1"
 else
-    RPM_PATH=$(find target -name "apeireth-${VERSION}-*.rpm" -type f 2>/dev/null | head -1 || true)
+    RPM_PATH=$(find target/rpm target/release/rpmbuild ~/rpmbuild -name "apeireth-${VERSION}*.rpm" -o -name "apeireth-2.0.0*.rpm" -type f 2>/dev/null | head -1 || true)
     if [[ -z "${RPM_PATH}" ]]; then
-        echo "❌ 未找到 apeireth-${VERSION}-*.rpm, 先跑 packaging/rpm/build.sh"
+        echo "❌ 未找到 rpm 产物 (例如 apeireth-${VERSION}-0.1.rc1.x86_64.rpm), 先跑 packaging/rpm/build.sh"
         exit 1
     fi
 fi
