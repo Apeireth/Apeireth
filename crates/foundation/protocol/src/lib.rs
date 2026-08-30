@@ -73,6 +73,9 @@ pub mod normalized;
 // Salvage 16: status-aware retry semantics — retryable-status classification,
 // backoff tiers, jitter modes (from apeireth-api::retry).
 pub mod retry;
+// Salvage 16: usage accounting — per-call cost/latency records + aggregate
+// queries (from apeireth-pipeline provider_registry UsageRecord/CostTracker).
+pub mod usage;
 // R20 阶段 2: WebSocket 8 帧协议 (蓝图 §2.3). 跟 4 LLM 协议归一化层并列, 0 冲突.
 pub mod ws_v1;
 
@@ -113,6 +116,7 @@ pub use retry::{
     jittered_sleep, should_retry_status, BackoffPolicy, JitterMode, RetryCounters, RetryPolicy,
     XorShift64, RETRYABLE_4XX,
 };
+pub use usage::{CostTracker, ModelPricing, UsageRecord};
 
 // ============================================================
 // 编译期 hardcode (平台不变性, 主哲学锚 #1 不漂移 + #6 工程铁律)
