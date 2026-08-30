@@ -1,12 +1,14 @@
 //! Apeireth 桌面伙伴 — 薄 Tauri shell
 //!
-//! 窗口管理 + 托盘 + 通知 + 全局快捷键 + 后端进程监督.
+//! 窗口管理 + 托盘 + 通知 + 全局快捷键 + 后端进程监督 + 生产日志.
 //! **Agent runtime 不在这里** — 对话/记忆/工具/治理全部由 Apeireth Canonical Gateway
 //! 后端承担 (apeireth gateway serve). 本壳只负责桌面承载与进程生命周期.
 
 mod backend_supervisor;
+mod logging;
 
 use backend_supervisor::{BackendInfo, BackendSupervisor};
+use logging::{DesktopLogger, LogLevel};
 use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -40,6 +42,42 @@ async fn restart_backend(supervisor: State<'_, Arc<BackendSupervisor>>) -> Resul
 }
 
 #[tauri::command]
+fn get_log_directory(logger: State<'_, Arc<DesktopLogger>>) -> Result<String, String> {
+    Ok(logger.log_directory().to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn open_log_directory(logger: State<'_, Arc<DesktopLogger>>) -> Result<(), String> {
+    let log_dir = logger.log_directory();
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(log_dir)
+            .spawn()
+            .map_err(|e| format!("Failed to open log directory: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(log_dir)
+            .spawn()
+            .map_err(|e| format!("Failed to open log directory: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(log_dir)
+            .spawn()
+            .map_err(|e| format!("Failed to open log directory: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn open_settings(app: tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -69,6 +107,17 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize production logger
+    let logger = match DesktopLogger::new() {
+        Ok(logger) => Arc::new(logger),
+        Err(e) => {
+            eprintln!("Failed to initialize logger: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    logger.log_desktop(LogLevel::Info, &format!("Desktop starting version={}", env!("CARGO_PKG_VERSION")));
+
     // Initialize backend supervisor
     let supervisor = Arc::new(BackendSupervisor::new());
 
@@ -87,12 +136,15 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_notification::init())
         .manage(supervisor.clone())
+        .manage(logger.clone())
         .invoke_handler(tauri::generate_handler![
             ping,
             get_backend_status,
             start_backend,
             stop_backend,
             restart_backend,
+            get_log_directory,
+            open_log_directory,
             open_settings,
             toggle_quick_window
         ])
@@ -101,10 +153,18 @@ pub fn run() {
 
             // Auto-start backend on app launch
             let supervisor_clone = supervisor.clone();
+            let logger_clone = logger.clone();
             tauri::async_runtime::spawn(async move {
+                logger_clone.log_desktop(LogLevel::Info, "Backend auto-start initiated");
                 match supervisor_clone.start().await {
-                    Ok(msg) => eprintln!("Backend auto-start: {}", msg),
-                    Err(e) => eprintln!("Backend auto-start failed: {}", e),
+                    Ok(msg) => {
+                        eprintln!("Backend auto-start: {}", msg);
+                        logger_clone.log_desktop(LogLevel::Info, &format!("Backend auto-start success: {}", msg));
+                    }
+                    Err(e) => {
+                        eprintln!("Backend auto-start failed: {}", e);
+                        logger_clone.log_desktop(LogLevel::Error, &format!("Backend auto-start failed: {}", e));
+                    }
                 }
             });
 
