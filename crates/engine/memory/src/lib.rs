@@ -77,6 +77,7 @@ pub mod chronicle_crystallizer;
 // Default-off; not production-wired.
 pub mod memory_injection;
 pub mod amem_graph;
+pub mod memory_rank;
 
 pub use betti_hole_detector::{BettiHoleDetector, BettiTopologicalReport, ManifoldConceptNode, TopologicalVoidRing};
 pub use kuramoto_resonance::{EpiphanyEvent, KuramotoOscillator, KuramotoResonanceEngine};
@@ -89,6 +90,10 @@ pub use memory_injection::{
 pub use amem_graph::{
     combined_score, content_residual, crawl, fact_specificity, text_overlap, AmemGraph, GraphFact,
     GraphRankConfig, MemoryLink, GRAPH_INJECTION_LIMIT, LINK_OVERLAP_THRESHOLD,
+};
+pub use memory_rank::{
+    filter_active_memories, group_bonus, memory_score, parse_importance, rank_memory_entries,
+    recency_score, RankableMemory, IMP_PREFIX, TOMBSTONE_PREFIX,
 };
 
 pub use epa_bridge::{EpaProjectionResult, EpaSemanticBridge};
