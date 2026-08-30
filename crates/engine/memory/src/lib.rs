@@ -65,7 +65,19 @@ pub mod procedural;
 pub mod reflexion;
 pub mod thought_cluster;
 pub mod topic_predictor;
+pub mod epa_bridge;
+pub mod residual_pyramid;
+pub mod river_topology;
 pub mod wiki_fs;
+
+pub use epa_bridge::{EpaProjectionResult, EpaSemanticBridge};
+pub use residual_pyramid::{
+    OrthogonalResidualPyramid, PyramidAnalysis, PyramidLevel, TagMemoActivationGate,
+};
+pub use river_topology::{
+    DtscObservables, DualScaledFieldSolver, RiverDynamicsEngine, RiverEdge, RiverObservability,
+    RiverState, SpikeSignal, TagNode,
+};
 
 pub use bitemporal_graph::{BitemporalFact, BitemporalGraph};
 pub use five_dimensional::{

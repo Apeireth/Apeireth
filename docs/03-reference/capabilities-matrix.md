@@ -13,9 +13,13 @@
 | **治理 (Governance)** | `gov.untrusted_boundary`| `apeireth-governance::untrusted_mark` | `wrap_content()`, `unwrap_content()` | `<<<[UNTRUSTED_CONTENT]>>>` 逃逸中和 |
 | **治理 (Governance)** | `gov.pii_masking` | `apeireth-governance::input_security` | `PiiDetector::redact(text)` | 8 类 PII + `EnvSecret` 行解析 |
 | **治理 (Governance)** | `gov.rate_limiter` | `apeireth-governance::rate_limit` | `RateLimiterHook::check_limit()` | 4 阶信任模型 + 分/时滑动窗口 |
+| **编排 (Orchestration)** | `orch.async_context` | `apeireth-orchestration::async_context` | `AsyncContextPipeline::assemble_prompt_context()` | 四层异步数组隔离 (Ephemeral/Durable/Summary/HUD) |
 | **编排 (Orchestration)** | `orch.speech_arbiter` | `apeireth-orchestration::speech_arbiter` | `SpeechOutputArbiter::arbitrate()` | FIFO 排队 / TTL 淘汰 / 抢占打断 |
 | **编排 (Orchestration)** | `orch.prompt_cache` | `apeireth-orchestration::prompt_stabilizer`| `assemble_messages()` | 字节级前缀固定 + 单点环境注入 |
 | **编排 (Orchestration)** | `orch.council_7` | `apeireth-orchestration::council` | `Council::decide(proposal)` | 7 Advisor 结构化辩论与 Veto 机制 |
+| **记忆 (Memory)** | `mem.river_topology` | `apeireth-memory::river_topology` | `DualScaledFieldSolver::solve()` | TagMemo V10 预解双对偶场 + LIF 脉冲 + Ω 门控 |
+| **记忆 (Memory)** | `mem.residual_pyramid`| `apeireth-memory::residual_pyramid` | `OrthogonalResidualPyramid::analyze()` | 修正 Gram-Schmidt 正交投影 + 90% 能量截断 |
+| **记忆 (Memory)** | `mem.epa_bridge` | `apeireth-memory::epa_bridge` | `EpaSemanticBridge::project()` | 加权中心化 PCA 语义主轴 + 逻辑深度 + 跨域共振 |
 | **记忆 (Memory)** | `mem.five_dimensional` | `apeireth-memory::five_dimensional` | `export_browser_entries()` | 5 维时空记忆 (Working~Persona) |
 | **记忆 (Memory)** | `mem.bitemporal_graph` | `apeireth-memory::bitemporal_graph` | `upsert_fact()`, `search_facts()` | 双时态版本链 + Intrinsic Residual 特异性 |
 | **记忆 (Memory)** | `mem.arbitration` | `apeireth-memory::arbitration` | `append_event()`, `verify_integrity()` | SHA-256 哈希链 + 常数时间比对 + Merkle 根 |
@@ -26,6 +30,7 @@
 | **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | Codex 两阶段提交 + 100% 自动原子回滚 |
 | **工具 (Capabilities)** | `tool.guardrail` | `apeireth-tools-canonical::guardrail` | `pre_call_guard()`, `post_call_guard()` | 路径/命令拦截 + API Key/私钥出站绊线 |
 | **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
+| **网关 (Gateway)** | `gw.file_fetcher` | `apeireth-gateway::file_fetcher` | `TransparentFileFetcher::fetch_file()` | 超栈追踪 V2 跨节点透明文件穿透 + SHA-256 缓存 |
 | **网关 (Gateway)** | `gw.duplex_ws` | `apeireth-gateway::duplex_gateway` | `DuplexFrame`, `SentenceDivider` | 8 核心帧体系 + 实时分句 + 毫秒级 Barge-in |
 | **感知 (Perception)** | `perc.minimax_tts` | `apeireth-perception::voice::minimax_tts`| `synthesize_stream()` | 128kbps 32kHz 音频流 + 3D PAD 情感调制 |
 
