@@ -19,7 +19,9 @@
 pub mod audio_frame;
 pub mod audio_session;
 pub mod emotion_voice;
+pub mod energy_vad;
 pub mod minimax_tts;
+pub mod stream_frame;
 pub mod whisper_http;
 
 pub use audio_frame::{
@@ -34,7 +36,13 @@ pub use audio_session::{
 pub use emotion_voice::{
     AcousticParameters, EmotionCategory, EmotionVoiceSynthesizer, PadEmotion,
 };
+pub use energy_vad::{detect_energy, EnergyVadConfig, EnergyVadResult, EnergyVadStream, VadError};
 pub use minimax_tts::{
     AudioChunk, EmotionToneModulation, MiniMaxLiveTtsClient, MiniMaxTtsRequest, TtsError,
+};
+pub use stream_frame::{
+    encode_audio_append, encode_image_input, InputAudioBuffer, InputBufferState, StreamAudioFormat,
+    StreamFrameError, TurnDetection, TurnDetectionKind, DEFAULT_PREFIX_PADDING_MS,
+    DEFAULT_SILENCE_DURATION_MS, DEFAULT_TURN_THRESHOLD, MAX_AUDIO_APPEND_BYTES, MAX_IMAGE_BYTES,
 };
 pub use whisper_http::{WhisperHttpBackend, WhisperHttpConfig};

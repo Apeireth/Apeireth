@@ -9,9 +9,10 @@ use std::sync::Arc;
 
 use apeireth_perception::vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
 use apeireth_perception::voice::{
-    hex_decode_audio, split_pcm16_frames, Pcm16Buffer, RecordingSession, RecordingStatus,
-    SpeechInput, SpeechOutput, VoiceSession, WhisperHttpBackend, WhisperHttpConfig,
-    PCM16_FRAME_SAMPLES,
+    detect_energy, encode_audio_append, hex_decode_audio, pcm16_to_le_bytes, split_pcm16_frames,
+    EnergyVadConfig, InputAudioBuffer, InputBufferState, Pcm16Buffer, RecordingSession,
+    RecordingStatus, SpeechInput, SpeechOutput, VoiceSession, WhisperHttpBackend,
+    WhisperHttpConfig, PCM16_FRAME_SAMPLES,
 };
 use apeireth_plugin::credentials::StaticCredentials;
 use apeireth_plugin::perception_backend::{
@@ -105,4 +106,22 @@ fn voice_session_loopback_does_not_own_a_transcript() {
     let turn = session.turn(&|t| t.to_uppercase()).unwrap();
     assert_eq!(turn.reply, "PING");
     assert_eq!(session.turn_count, 1);
+}
+
+#[test]
+fn input_audio_buffer_append_commit() {
+    let bytes = pcm16_to_le_bytes(&[9i16; 4]);
+    encode_audio_append(&bytes).unwrap();
+    let mut buf = InputAudioBuffer::manual();
+    buf.append(&bytes).unwrap();
+    assert_eq!(buf.state(), InputBufferState::Buffering);
+    assert_eq!(buf.commit().unwrap(), vec![9i16; 4]);
+    assert_eq!(buf.state(), InputBufferState::Committed);
+}
+
+#[test]
+fn energy_vad_silence_versus_tone() {
+    let cfg = EnergyVadConfig::default_energy();
+    assert!(!detect_energy(&[0i16; 3200], &cfg).unwrap().is_speech);
+    assert!(detect_energy(&[i16::MAX; 3200], &cfg).unwrap().is_speech);
 }
