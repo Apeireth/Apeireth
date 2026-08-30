@@ -58,6 +58,13 @@
 
   async function handleForget(ep: MemoryEpisodeItem): Promise<void> {
     forgetTarget = null;
+
+    // Capability gate: prevent calling unsupported /v1/apeireth/memory/episodes/:id/forget
+    if (!capabilitySupported(capabilities, 'memory.forget')) {
+      mutationError = '遗忘记忆不支持: 当前运行时未实现 memory.forget (Apeireth 2.0 canonical gateway 无此治理 API)';
+      return;
+    }
+
     mutating = true;
     mutationError = '';
     const r = await forgetMemoryEpisode(config, ep.id, 0, '用户手动遗忘');
@@ -71,6 +78,12 @@
   }
 
   async function handleToggleProtect(ep: MemoryEpisodeItem, currentlyProtected: boolean): Promise<void> {
+    // Capability gate: prevent calling unsupported /v1/apeireth/memory/episodes/:id/protect
+    if (!capabilitySupported(capabilities, 'memory.protect')) {
+      mutationError = '保护/取消保护记忆不支持: 当前运行时未实现 memory.protect (Apeireth 2.0 canonical gateway 无此治理 API)';
+      return;
+    }
+
     mutating = true;
     mutationError = '';
     const r = currentlyProtected
@@ -119,10 +132,22 @@
     error = '';
     try {
       if (activeTab === 'graph') {
+        // Capability gate: prevent calling unsupported /v1/panel/graph
+        if (!capabilitySupported(capabilities, 'memory.graph.read')) {
+          error = '知识图谱不支持: 当前运行时未实现 memory.graph.read (Apeireth 2.0 canonical gateway 无此内省 API)';
+          loading = false;
+          return;
+        }
         const graph = await fetchGraphData(config);
         graphFacts = graph.facts;
         graphLinks = graph.links;
       } else {
+        // Capability gate: prevent calling unsupported /v1/panel/memory/episodes
+        if (!capabilitySupported(capabilities, 'memory.read')) {
+          error = '记忆流不支持: 当前运行时未实现 memory.read (Apeireth 2.0 canonical gateway 无此内省 API)';
+          loading = false;
+          return;
+        }
         episodes = await fetchMemoryEpisodes(config, searchQuery, 120);
       }
     } catch (e) {
@@ -136,6 +161,13 @@
   async function handleAppend() {
     const text = newContent.trim();
     if (!text || appending) return;
+
+    // Capability gate: prevent calling unsupported /v1/memory/append
+    if (!capabilitySupported(capabilities, 'memory.write')) {
+      error = '写入记忆不支持: 当前运行时未实现 memory.write (Apeireth 2.0 canonical gateway 无此内省 API)';
+      return;
+    }
+
     appending = true;
     appendSuccess = false;
 

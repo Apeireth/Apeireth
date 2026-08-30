@@ -706,6 +706,21 @@ export function capabilitySupported(manifest: CapabilityManifest | null, id: str
 }
 
 /**
+ * Throw if a capability is not supported, preventing HTTP calls to known-404 endpoints.
+ * Use this at the start of every function that calls a non-canonical introspection endpoint.
+ *
+ * @param manifest - current capability manifest (null = no capabilities)
+ * @param capabilityId - the capability ID required for this operation
+ * @param operation - human-readable operation name for error message
+ * @throws Error with user-friendly message if capability unsupported
+ */
+export function requireCapability(manifest: CapabilityManifest | null, capabilityId: string, operation: string): void {
+  if (!capabilitySupported(manifest, capabilityId)) {
+    throw new Error(`${operation} 不支持: 当前运行时未实现 ${capabilityId} (Apeireth 2.0 canonical gateway 无此内省 API)`);
+  }
+}
+
+/**
  * 查询某 capability 是否**当前可用** (动态语义, 受 provider/凭据影响).
  *
  * 语义:
