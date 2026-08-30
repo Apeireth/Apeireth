@@ -2,8 +2,8 @@
 //!
 //! 支持 8 帧全双工 WebSocket 通信规范与 <180ms 毫秒级打断 (Barge-in).
 
-use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// 全双工 WebSocket 帧类型 (8 核心帧体系).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,11 +20,21 @@ pub enum DuplexFrame {
     /// 模型流式文本输出切片
     AssistantTextChunk { chunk: String, seq: u32 },
     /// TTS 流式音频二进制切片元数据
-    AssistantAudioChunk { sample_rate: u32, duration_ms: u32, is_final: bool },
+    AssistantAudioChunk {
+        sample_rate: u32,
+        duration_ms: u32,
+        is_final: bool,
+    },
     /// 毫秒级语音插话打断通知 (Barge-in Interrupt)
-    BargeInInterrupt { interrupt_reason: String, at_seq: u32 },
+    BargeInInterrupt {
+        interrupt_reason: String,
+        at_seq: u32,
+    },
     /// 对话流结束标记
-    StreamEnd { total_tokens: u32, total_latency_ms: u64 },
+    StreamEnd {
+        total_tokens: u32,
+        total_latency_ms: u64,
+    },
 }
 
 /// 流式分句器 (SentenceDivider).
@@ -161,13 +171,22 @@ mod tests {
         controller.start_speaking();
 
         let frame1 = controller.next_text_frame("你好");
-        assert_eq!(frame1, DuplexFrame::AssistantTextChunk { chunk: "你好".to_string(), seq: 1 });
+        assert_eq!(
+            frame1,
+            DuplexFrame::AssistantTextChunk {
+                chunk: "你好".to_string(),
+                seq: 1
+            }
+        );
 
         let interrupt = controller.trigger_barge_in("User voice detected").unwrap();
-        assert_eq!(interrupt, DuplexFrame::BargeInInterrupt {
-            interrupt_reason: "User voice detected".to_string(),
-            at_seq: 1,
-        });
+        assert_eq!(
+            interrupt,
+            DuplexFrame::BargeInInterrupt {
+                interrupt_reason: "User voice detected".to_string(),
+                at_seq: 1,
+            }
+        );
 
         // 已经打断后不再重复触发
         assert!(controller.trigger_barge_in("Another noise").is_none());

@@ -43,16 +43,14 @@ static CREDENTIAL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
-static SSN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap()
-});
+static SSN_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap());
 
-static CREDIT_CARD_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b(?:\d{4}[ -]?){3}\d{4}\b").unwrap()
-});
+static CREDIT_CARD_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b(?:\d{4}[ -]?){3}\d{4}\b").unwrap());
 
 static IP_ADDRESS_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b").unwrap()
+    Regex::new(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b")
+        .unwrap()
 });
 
 static CREDENTIAL_URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -147,7 +145,12 @@ impl PiiDetector {
         collect_findings(text, &SSN_REGEX, PiiKind::Ssn, &mut findings);
         collect_findings(text, &CREDIT_CARD_REGEX, PiiKind::CreditCard, &mut findings);
         collect_findings(text, &IP_ADDRESS_REGEX, PiiKind::IpAddress, &mut findings);
-        collect_findings(text, &CREDENTIAL_URL_REGEX, PiiKind::CredentialUrl, &mut findings);
+        collect_findings(
+            text,
+            &CREDENTIAL_URL_REGEX,
+            PiiKind::CredentialUrl,
+            &mut findings,
+        );
         collect_findings(text, &ENV_SECRET_REGEX, PiiKind::EnvSecret, &mut findings);
         sort_findings(findings)
     }
@@ -164,7 +167,8 @@ impl PiiDetector {
     /// The original sensitive tokens are replaced with stable placeholders.
     /// Surrounding text is preserved.
     pub fn redact(text: &str) -> String {
-        let redacted = CREDENTIAL_URL_REGEX.replace_all(text, PiiKind::CredentialUrl.redaction_label());
+        let redacted =
+            CREDENTIAL_URL_REGEX.replace_all(text, PiiKind::CredentialUrl.redaction_label());
         let redacted = ENV_SECRET_REGEX.replace_all(&redacted, |caps: &regex::Captures| {
             format!("{}=[REDACTED_ENV_SECRET]", &caps[1])
         });
@@ -173,8 +177,10 @@ impl PiiDetector {
         let redacted =
             CREDENTIAL_REGEX.replace_all(&redacted, PiiKind::CredentialKey.redaction_label());
         let redacted = SSN_REGEX.replace_all(&redacted, PiiKind::Ssn.redaction_label());
-        let redacted = CREDIT_CARD_REGEX.replace_all(&redacted, PiiKind::CreditCard.redaction_label());
-        let redacted = IP_ADDRESS_REGEX.replace_all(&redacted, PiiKind::IpAddress.redaction_label());
+        let redacted =
+            CREDIT_CARD_REGEX.replace_all(&redacted, PiiKind::CreditCard.redaction_label());
+        let redacted =
+            IP_ADDRESS_REGEX.replace_all(&redacted, PiiKind::IpAddress.redaction_label());
         redacted.into_owned()
     }
 }
@@ -583,7 +589,10 @@ mod tests {
     async fn input_security_hooks_allow_completions() {
         let req = completion_request();
         assert_eq!(PromptInjectionHook.evaluate(&req).await, Decision::Allow);
-        assert_eq!(CredentialDisclosureHook.evaluate(&req).await, Decision::Allow);
+        assert_eq!(
+            CredentialDisclosureHook.evaluate(&req).await,
+            Decision::Allow
+        );
     }
 
     #[test]

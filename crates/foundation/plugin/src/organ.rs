@@ -174,11 +174,18 @@ pub enum OrganOutput {
         trend: EmotionTrend,
     },
     /// F4 hypothesis: 新登记猜想
-    Hypothesis { id: u64, statement: String, conf: f32 },
+    Hypothesis {
+        id: u64,
+        statement: String,
+        conf: f32,
+    },
     /// F6 value: 案例入库 / 反馈回流
     Value { case_id: u64, verdict: ValueVerdict },
     /// W1 / W2 / W3 world model: 因果边 / 反事实链
-    WorldModel { edges: Vec<CausalEdge>, counterfactual: Vec<String> },
+    WorldModel {
+        edges: Vec<CausalEdge>,
+        counterfactual: Vec<String>,
+    },
     /// E7 emergence: 主动动作 + 决策留痕
     Emergence {
         action: String,
@@ -191,7 +198,10 @@ pub enum OrganOutput {
         gate: Option<InitiativeGate>,
     },
     /// Memory: 记忆合并结果
-    Memory { notes_added: usize, notes_merged: usize },
+    Memory {
+        notes_added: usize,
+        notes_merged: usize,
+    },
     /// 0 装 PASS: 未实现 organ 的占位 variant
     NotImplemented { organ: OrganKind, note: String },
 }
@@ -369,7 +379,10 @@ impl std::fmt::Display for OrganError {
             Self::LlmUnavailable(m) => write!(f, "organ llm factory unavailable: {m}"),
             Self::LlmError(m) => write!(f, "organ llm call failed: {m}"),
             Self::Config(m) => write!(f, "organ config error: {m}"),
-            Self::BudgetExhausted { remaining, required } => write!(
+            Self::BudgetExhausted {
+                remaining,
+                required,
+            } => write!(
                 f,
                 "organ budget exhausted (remaining={remaining}, required={required})"
             ),
@@ -446,10 +459,7 @@ mod tests {
             if *k == OrganKind::E4 {
                 continue;
             }
-            assert!(
-                k.v2_impl_status().contains("0 装"),
-                "{k:?} should be 0 装"
-            );
+            assert!(k.v2_impl_status().contains("0 装"), "{k:?} should be 0 装");
         }
     }
 
@@ -459,7 +469,10 @@ mod tests {
         let e = OrganError::NotImplemented(OrganKind::W1);
         let s = e.to_string();
         assert!(s.contains("0 装 PASS"), "msg must mark 0 装: {s}");
-        assert!(s.contains("world_model"), "v1 module path must be in msg: {s}");
+        assert!(
+            s.contains("world_model"),
+            "v1 module path must be in msg: {s}"
+        );
     }
 
     /// 0 装 PASS: OrganError 6 variant 都有 Display impl (不 panic)

@@ -33,7 +33,9 @@ pub mod stealth_crawler;
 pub mod std_sub_supervisor;
 pub mod supervisor;
 
-pub use apply_patch::{ApplyPatchError, FilePatchAction, PatchHunk, PatchReport, TransactionalPatchApplier};
+pub use apply_patch::{
+    ApplyPatchError, FilePatchAction, PatchHunk, PatchReport, TransactionalPatchApplier,
+};
 pub use education::{DxCheckTool, DxReport, REPLACED_DIFFS};
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
 pub use fetch::{FetchConfig, FetchTool};

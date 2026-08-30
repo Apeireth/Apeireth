@@ -40,7 +40,10 @@ pub enum HarnessPatchAction {
     /// 调整单步思考深度上限
     AdjustThinkingBudget { new_max_depth: u32 },
     /// 增加路径防报错前置兜底
-    AddFallbackPath { target_pattern: String, fallback_value: String },
+    AddFallbackPath {
+        target_pattern: String,
+        fallback_value: String,
+    },
 }
 
 /// 策略补丁包.
@@ -81,7 +84,10 @@ impl HarnessPatchEngine {
             match traj.category {
                 FailureCategory::ToolArgumentInvalid => {
                     new_patches.push(HarnessPatch {
-                        patch_id: format!("patch_arg_{}", self.active_patches.len() + new_patches.len() + 1),
+                        patch_id: format!(
+                            "patch_arg_{}",
+                            self.active_patches.len() + new_patches.len() + 1
+                        ),
                         target_category: FailureCategory::ToolArgumentInvalid,
                         description: format!("针对 {} 的入参格式注入提示", traj.failed_action),
                         action: HarnessPatchAction::InjectPreCallGuidance {
@@ -93,7 +99,10 @@ impl HarnessPatchEngine {
                 }
                 FailureCategory::RecursiveThinkingExhausted => {
                     new_patches.push(HarnessPatch {
-                        patch_id: format!("patch_think_{}", self.active_patches.len() + new_patches.len() + 1),
+                        patch_id: format!(
+                            "patch_think_{}",
+                            self.active_patches.len() + new_patches.len() + 1
+                        ),
                         target_category: FailureCategory::RecursiveThinkingExhausted,
                         description: "增加单步反思深度保护上限".to_string(),
                         action: HarnessPatchAction::AdjustThinkingBudget { new_max_depth: 8 },
@@ -137,8 +146,14 @@ mod tests {
 
         let patches = engine.synthesize_patches();
         assert_eq!(patches.len(), 1);
-        assert_eq!(patches[0].target_category, FailureCategory::ToolArgumentInvalid);
-        assert!(matches!(patches[0].action, HarnessPatchAction::InjectPreCallGuidance { .. }));
+        assert_eq!(
+            patches[0].target_category,
+            FailureCategory::ToolArgumentInvalid
+        );
+        assert!(matches!(
+            patches[0].action,
+            HarnessPatchAction::InjectPreCallGuidance { .. }
+        ));
 
         assert_eq!(engine.get_active_patches().len(), 1);
     }

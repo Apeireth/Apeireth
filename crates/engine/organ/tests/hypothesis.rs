@@ -76,7 +76,9 @@ async fn hypothesis_organ_add_and_list_pending() {
 
     // 4) process() 路径: 走 OrganTrait, 登记猜想 (per v1 hypothesis 路径入口)
     let output = organ
-        .process(empty_input_with_hints(vec!["可证伪: 主人的工作效率跟心情挂钩".into()]))
+        .process(empty_input_with_hints(vec![
+            "可证伪: 主人的工作效率跟心情挂钩".into(),
+        ]))
         .await
         .expect("process ok");
     match output {
@@ -162,10 +164,7 @@ async fn hypothesis_organ_evidence_aggregates_to_confirm() {
         h.id,
         Evidence::refuting(EvidenceSource::Observation, 5.0, "late evidence"),
     );
-    assert!(
-        result.is_err(),
-        "已定论假设不接受新证据 (per v1 1:1)"
-    );
+    assert!(result.is_err(), "已定论假设不接受新证据 (per v1 1:1)");
 
     // 5) 反证路径: 另起一条猜想, 反驳证据主导 → Refuted
     let h2 = organ.conjecture("雨天 → 主人心情差");
@@ -221,10 +220,8 @@ async fn hypothesis_organ_search_finds_by_text() {
     let all = organ.list(None);
     assert_eq!(all.len(), 3);
 
-    let matches_rain: Vec<&Hypothesis> = all
-        .iter()
-        .filter(|h| h.statement.contains("雨"))
-        .collect();
+    let matches_rain: Vec<&Hypothesis> =
+        all.iter().filter(|h| h.statement.contains("雨")).collect();
     assert_eq!(matches_rain.len(), 1, "雨天匹配 1 条");
     assert!(matches_rain[0].statement.contains("雨天"));
 
@@ -319,7 +316,13 @@ fn hypothesis_organ_trait_shape_complete() {
 
     // plan_verify
     let plan = organ.plan_verify(&h, true);
-    assert!(matches!(plan, apeireth_organ::hypothesis::VerifyPlan::ObserveWindow { .. }));
+    assert!(matches!(
+        plan,
+        apeireth_organ::hypothesis::VerifyPlan::ObserveWindow { .. }
+    ));
     let plan2 = organ.plan_verify(&h, false);
-    assert!(matches!(plan2, apeireth_organ::hypothesis::VerifyPlan::AskMaster { .. }));
+    assert!(matches!(
+        plan2,
+        apeireth_organ::hypothesis::VerifyPlan::AskMaster { .. }
+    ));
 }

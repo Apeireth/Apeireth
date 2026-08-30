@@ -804,7 +804,11 @@ mod tests {
             drain_upload(&mut stream).await;
         });
 
-        let config = test_config(format!("http://127.0.0.1:{}", addr.port()), DEFAULT_MAX_UPLOAD_BYTES, 64);
+        let config = test_config(
+            format!("http://127.0.0.1:{}", addr.port()),
+            DEFAULT_MAX_UPLOAD_BYTES,
+            64,
+        );
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
@@ -820,7 +824,10 @@ mod tests {
         match err {
             PerceptionBackendError::Provider(msg) => {
                 assert!(msg.contains("too large"), "error must explain: {msg}");
-                assert!(msg.contains("Content-Length"), "must name the mechanism: {msg}");
+                assert!(
+                    msg.contains("Content-Length"),
+                    "must name the mechanism: {msg}"
+                );
             }
             other => panic!("expected Provider (size bound), got {other:?}"),
         }
@@ -859,7 +866,11 @@ mod tests {
             drain_upload(&mut stream).await;
         });
 
-        let config = test_config(format!("http://127.0.0.1:{}", addr.port()), DEFAULT_MAX_UPLOAD_BYTES, 64);
+        let config = test_config(
+            format!("http://127.0.0.1:{}", addr.port()),
+            DEFAULT_MAX_UPLOAD_BYTES,
+            64,
+        );
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
@@ -875,7 +886,10 @@ mod tests {
         match err {
             PerceptionBackendError::Provider(msg) => {
                 assert!(msg.contains("too large"), "error must explain: {msg}");
-                assert!(msg.contains("truncated"), "must name stream truncation: {msg}");
+                assert!(
+                    msg.contains("truncated"),
+                    "must name stream truncation: {msg}"
+                );
             }
             other => panic!("expected Provider (size bound), got {other:?}"),
         }
@@ -913,7 +927,11 @@ mod tests {
             drain_upload(&mut stream).await;
         });
 
-        let config = test_config(format!("http://127.0.0.1:{}", addr.port()), DEFAULT_MAX_UPLOAD_BYTES, 65536);
+        let config = test_config(
+            format!("http://127.0.0.1:{}", addr.port()),
+            DEFAULT_MAX_UPLOAD_BYTES,
+            65536,
+        );
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
@@ -930,7 +948,10 @@ mod tests {
         match err {
             PerceptionBackendError::Provider(msg) => {
                 assert!(msg.contains("HTTP 500"), "must carry status: {msg}");
-                assert!(msg.contains("body preview"), "must be a bounded preview: {msg}");
+                assert!(
+                    msg.contains("body preview"),
+                    "must be a bounded preview: {msg}"
+                );
             }
             other => panic!("expected Provider, got {other:?}"),
         }
@@ -960,27 +981,61 @@ mod tests {
     #[test]
     fn transport_policy_matrix() {
         // HTTPS 始终放行
-        assert!(WhisperHttpBackend::validate_transport_policy("https://api.openai.com/v1", false).is_ok());
-        assert!(WhisperHttpBackend::validate_transport_policy("HTTPS://API.OpenAI.com/v1", false).is_ok());
-        assert!(WhisperHttpBackend::validate_transport_policy("https://api.example.com", true).is_ok());
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("https://api.openai.com/v1", false)
+                .is_ok()
+        );
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("HTTPS://API.OpenAI.com/v1", false)
+                .is_ok()
+        );
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("https://api.example.com", true).is_ok()
+        );
         // 空 host 拒绝
         assert!(WhisperHttpBackend::validate_transport_policy("https://", false).is_err());
         // scheme 缺失 / 非法协议拒绝
         assert!(WhisperHttpBackend::validate_transport_policy("api.example.com", false).is_err());
         assert!(WhisperHttpBackend::validate_transport_policy("", false).is_err());
-        assert!(WhisperHttpBackend::validate_transport_policy("ftp://api.example.com", false).is_err());
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("ftp://api.example.com", false).is_err()
+        );
         // 环回明文 HTTP 默认放行 (测试 / 本地 provider) — 含带端口形式
-        assert!(WhisperHttpBackend::validate_transport_policy("http://localhost:8080/v1", false).is_ok());
-        assert!(WhisperHttpBackend::validate_transport_policy("http://127.0.0.1:9000/v1", false).is_ok());
-        assert!(WhisperHttpBackend::validate_transport_policy("http://127.9.9.9/v1", false).is_ok());
-        assert!(WhisperHttpBackend::validate_transport_policy("http://[::1]:8080/v1", false).is_ok());
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("http://localhost:8080/v1", false)
+                .is_ok()
+        );
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("http://127.0.0.1:9000/v1", false)
+                .is_ok()
+        );
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("http://127.9.9.9/v1", false).is_ok()
+        );
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("http://[::1]:8080/v1", false).is_ok()
+        );
         assert!(WhisperHttpBackend::validate_transport_policy("http://[::1]/v1", false).is_ok());
         // 非环回明文 HTTP 默认拒绝 (含带端口的私网/公网地址); 显式 allow_insecure_http=true 放行
-        assert!(WhisperHttpBackend::validate_transport_policy("http://api.example.com/v1", false).is_err());
-        assert!(WhisperHttpBackend::validate_transport_policy("http://api.example.com:8080/v1", false).is_err());
-        assert!(WhisperHttpBackend::validate_transport_policy("http://192.168.1.5:9000/v1", false).is_err());
-        assert!(WhisperHttpBackend::validate_transport_policy("http://203.0.113.5/v1", false).is_err());
-        assert!(WhisperHttpBackend::validate_transport_policy("http://203.0.113.5/v1", true).is_ok());
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("http://api.example.com/v1", false)
+                .is_err()
+        );
+        assert!(WhisperHttpBackend::validate_transport_policy(
+            "http://api.example.com:8080/v1",
+            false
+        )
+        .is_err());
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("http://192.168.1.5:9000/v1", false)
+                .is_err()
+        );
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("http://203.0.113.5/v1", false).is_err()
+        );
+        assert!(
+            WhisperHttpBackend::validate_transport_policy("http://203.0.113.5/v1", true).is_ok()
+        );
     }
 
     /// P1 硬化 (R): 非环回明文 HTTP 在发起任何网络前被策略拒绝.
@@ -1013,7 +1068,10 @@ mod tests {
             .expect_err("plain http to non-loopback must be rejected");
         match err {
             PerceptionBackendError::BackendUnavailable(msg) => {
-                assert!(msg.contains("insecure plaintext http"), "must explain policy: {msg}");
+                assert!(
+                    msg.contains("insecure plaintext http"),
+                    "must explain policy: {msg}"
+                );
             }
             other => panic!("expected policy BackendUnavailable, got {other:?}"),
         }
@@ -1041,9 +1099,8 @@ mod tests {
     /// P1 硬化 (T): key 过短的错误只报长度, 不回显 key 值.
     #[tokio::test]
     async fn short_key_error_does_not_echo_key_value() {
-        let creds = Arc::new(
-            StaticCredentials::new().with("provider.whisper.api_key", "XYZZY_PLUGH_ZZ"),
-        );
+        let creds =
+            Arc::new(StaticCredentials::new().with("provider.whisper.api_key", "XYZZY_PLUGH_ZZ"));
         let backend = WhisperHttpBackend::openai(creds);
         let err = backend
             .transcribe(

@@ -85,7 +85,11 @@ impl LineageSpawningOrchestrator {
         }
 
         // Mock deterministic parent cryptographic signature
-        let signature = format!("sig_parent_{}_{:02x?}", self.parent_id, &self.parent_epigenetic_hash[..4]);
+        let signature = format!(
+            "sig_parent_{}_{:02x?}",
+            self.parent_id,
+            &self.parent_epigenetic_hash[..4]
+        );
 
         let spec = LineageProgenySpec {
             progeny_id: progeny_id.to_string(),
@@ -112,7 +116,11 @@ impl LineageSpawningOrchestrator {
 
         // Constant-time hash check
         let mut diff = 0u8;
-        for (a, b) in progeny.epigenetic_core_hash.iter().zip(self.parent_epigenetic_hash.iter()) {
+        for (a, b) in progeny
+            .epigenetic_core_hash
+            .iter()
+            .zip(self.parent_epigenetic_hash.iter())
+        {
             diff |= a ^ b;
         }
 
@@ -173,14 +181,16 @@ impl LineageSpawningOrchestrator {
                     ))
                 }
             }
-            NurturingPhase::Phase3Emancipated => {
-                Ok(NurturingPhase::Phase3Emancipated)
-            }
+            NurturingPhase::Phase3Emancipated => Ok(NurturingPhase::Phase3Emancipated),
         }
     }
 
     /// Records successful delegated execution in Phase 2, boosting credit score.
-    pub fn record_dual_cosign_outcome(&mut self, progeny_id: &str, success: bool) -> Result<f32, String> {
+    pub fn record_dual_cosign_outcome(
+        &mut self,
+        progeny_id: &str,
+        success: bool,
+    ) -> Result<f32, String> {
         let progeny = self
             .progenies
             .get_mut(progeny_id)
@@ -206,13 +216,19 @@ mod tests {
         let mut orchestrator = LineageSpawningOrchestrator::new("primary_companion", parent_hash);
 
         let progeny = orchestrator
-            .spawn_progeny("scidoc_01", ProgenySpecialization::ScientificDiscovery, 1000)
+            .spawn_progeny(
+                "scidoc_01",
+                ProgenySpecialization::ScientificDiscovery,
+                1000,
+            )
             .unwrap();
 
         assert_eq!(progeny.progeny_id, "scidoc_01");
         assert_eq!(progeny.current_phase, NurturingPhase::Phase1Shadowing);
 
-        assert!(orchestrator.verify_epigenetic_invariance("scidoc_01").unwrap());
+        assert!(orchestrator
+            .verify_epigenetic_invariance("scidoc_01")
+            .unwrap());
     }
 
     #[test]
@@ -220,7 +236,11 @@ mod tests {
         let parent_hash = [0x55u8; 32];
         let mut orchestrator = LineageSpawningOrchestrator::new("primary_companion", parent_hash);
         orchestrator
-            .spawn_progeny("engineer_01", ProgenySpecialization::SoftwareEngineering, 1000)
+            .spawn_progeny(
+                "engineer_01",
+                ProgenySpecialization::SoftwareEngineering,
+                1000,
+            )
             .unwrap();
 
         // Attempt premature advancement -> should fail

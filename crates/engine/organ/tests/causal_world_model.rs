@@ -22,6 +22,7 @@
 
 use apeireth_core::kernel::memory::Episode;
 use apeireth_core::kernel::SessionId;
+use apeireth_orchestration::SubagentRole;
 use apeireth_organ::causal_world_model::{
     CausalEdge, CausalEdgeMiningOrgan, CausalNode, CausalWorldModelOrgan, CounterfactualQuery,
     EdgeSource, MineCausalEdges, TimelineFact,
@@ -31,7 +32,6 @@ use apeireth_plugin::llm_factory::{
     CompletionMessage, CompletionRequest, CompletionResponse, LlmError, LlmFactory, LlmInstance,
     TokenUsage,
 };
-use apeireth_orchestration::SubagentRole;
 use std::sync::Arc;
 
 // ============================================================
@@ -225,7 +225,10 @@ async fn causal_world_model_organ_simulate_counterfactual_uses_llm() {
         .expect("process should succeed with mock LLM");
 
     match output {
-        OrganOutput::WorldModel { edges, counterfactual } => {
+        OrganOutput::WorldModel {
+            edges,
+            counterfactual,
+        } => {
             // 0 装诚实: W2 organ 走通 LLM 调用 (Mock factory 返 CompletionResponse
             // 模拟 LLM 真响应). 验:
             // - edges / counterfactual schema 正确 (plugin `CausalEdge` 4 字段)
@@ -295,9 +298,7 @@ async fn causal_world_model_organ_no_llm_returns_error() {
             // 0 装诚实: W2 organ 不假装能调 LLM, Noop 注入时显式报 LLM 错
         }
         Err(other) => {
-            panic!(
-                "expected OrganError::LlmError or LlmUnavailable (0 装诚实), got {other:?}"
-            );
+            panic!("expected OrganError::LlmError or LlmUnavailable (0 装诚实), got {other:?}");
         }
         Ok(_) => {
             panic!("0 装诚实: W2 organ with NoopLlmFactory must fail (not pretend to work)");
@@ -419,12 +420,7 @@ async fn w2_w3_pipeline_mining_then_simulate() {
     //
     // 直接构造 CounterfactualQuery 验证 W2 + LLM 链路:
     let graph = inner.snapshot_graph();
-    let start = graph
-        .nodes()
-        .next()
-        .expect("至少 1 节点")
-        .id
-        .clone();
+    let start = graph.nodes().next().expect("至少 1 节点").id.clone();
     let query = CounterfactualQuery {
         hypothesis: "如果主人今晚熬夜...".into(),
         current_graph: graph,
@@ -438,8 +434,10 @@ async fn w2_w3_pipeline_mining_then_simulate() {
     // mock judge_response 没匹配挖掘边的 id → LLM 走"未评边 → 保守拒绝"路径
     // (per `causal_world_model.rs::LlmFactoryCausalLlm::judge_branch` 保守策略).
     // 0 装诚实: LLM 拒绝所有候选 → new_graph 应为空 (无 step 走过).
-    assert!(new_graph.is_empty() || new_graph.len_edges() == 0 || new_graph.len_edges() > 0,
-        "new_graph shape 由 mock LLM 决定; 路径走通即可");
+    assert!(
+        new_graph.is_empty() || new_graph.len_edges() == 0 || new_graph.len_edges() > 0,
+        "new_graph shape 由 mock LLM 决定; 路径走通即可"
+    );
 
     // W3 + W2 trait 边界锁定
     assert_eq!(organ.organ_id(), OrganKind::W2);

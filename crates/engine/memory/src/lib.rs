@@ -48,35 +48,37 @@ pub use append_only::{AppendOnlyError, HistoryEntry, HistoryStream, Tombstone};
 pub mod history_streams;
 
 pub mod arbitration;
+pub mod betti_hole_detector;
 pub mod bitemporal_graph;
+pub mod chronicle_crystallizer;
 pub mod continuity_link;
 pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
 pub mod dreaming;
+pub mod epa_bridge;
 pub mod five_dimensional;
 pub mod hybrid_search;
 pub mod intent_brier;
+pub mod kuramoto_resonance;
 pub mod meta_thinking;
 pub mod milestone;
 pub mod partner;
 pub mod principles;
 pub mod procedural;
 pub mod reflexion;
-pub mod thought_cluster;
-pub mod topic_predictor;
-pub mod epa_bridge;
 pub mod residual_pyramid;
 pub mod river_topology;
+pub mod thought_cluster;
 pub mod three_tier_vault;
+pub mod topic_predictor;
 pub mod wiki_fs;
-pub mod betti_hole_detector;
-pub mod kuramoto_resonance;
-pub mod chronicle_crystallizer;
 
-pub use betti_hole_detector::{BettiHoleDetector, BettiTopologicalReport, ManifoldConceptNode, TopologicalVoidRing};
-pub use kuramoto_resonance::{EpiphanyEvent, KuramotoOscillator, KuramotoResonanceEngine};
+pub use betti_hole_detector::{
+    BettiHoleDetector, BettiTopologicalReport, ManifoldConceptNode, TopologicalVoidRing,
+};
 pub use chronicle_crystallizer::{ChronicleCrystallizer, ChronicleSection, RawEpisodicTrace};
+pub use kuramoto_resonance::{EpiphanyEvent, KuramotoOscillator, KuramotoResonanceEngine};
 
 pub use epa_bridge::{EpaProjectionResult, EpaSemanticBridge};
 pub use residual_pyramid::{
@@ -101,9 +103,7 @@ pub use arbitration::{
     ArbitrationEngine, ArbitrationError, ArbitrationEvent, EventSource, IntegrityReport,
 };
 
-pub use dreaming::{
-    DreamEngine, DreamEngineConfig, DreamError, DreamReport, DreamStage,
-};
+pub use dreaming::{DreamEngine, DreamEngineConfig, DreamError, DreamReport, DreamStage};
 
 pub use procedural::{
     render_procedural_prompt, HabitMatch, HabitPattern, InMemoryProceduralStore, ProceduralError,

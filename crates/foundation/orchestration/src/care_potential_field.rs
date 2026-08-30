@@ -27,10 +27,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CareAction {
     /// Level 1: Ambient glow pulse & vignette color temperature shift.
-    AmbientGlowPulse {
-        color_temp_k: u32,
-        intensity: f32,
-    },
+    AmbientGlowPulse { color_temp_k: u32, intensity: f32 },
     /// Level 2: Silent background preparation of solutions / memos without interruption.
     SilentPreparation {
         topic: String,
@@ -103,13 +100,12 @@ impl CarePotentialField {
             + self.gamma_fatigue * fatigue_factor.clamp(0.0, 1.0)
             + self.delta_silence * silence_norm;
 
-        let damping = self.friction_damping * flow_resistance.clamp(0.0, 10.0)
-            + self.natural_decay * u;
+        let damping =
+            self.friction_damping * flow_resistance.clamp(0.0, 10.0) + self.natural_decay * u;
 
         let delta_u = (gain - damping) * dt_seconds;
         u = (u + delta_u).max(0.0);
-        self.current_potential
-            .store(u.to_bits(), Ordering::SeqCst);
+        self.current_potential.store(u.to_bits(), Ordering::SeqCst);
 
         // Check for quantum tunneling breakthrough
         if u >= self.threshold {
