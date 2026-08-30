@@ -31,6 +31,15 @@ pub struct PluginManifest {
     pub dependencies: Vec<PluginId>,
     /// Additional annotations.
     pub metadata: Metadata,
+    /// Alternative lookup keys for this plugin id.
+    ///
+    /// Recovered from legacy agent alias maps. These are **not** a second
+    /// identity: [`PluginId`] remains unique, and [`crate::PluginRegistry`]
+    /// still keys on it. Aliases exist so a caller can resolve `@coder` to
+    /// `builtin.coder` through [`crate::alias::AliasIndex`] without inventing
+    /// a second registry. Empty by default; omitted JSON deserializes as empty.
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 impl PluginManifest {
@@ -43,6 +52,7 @@ impl PluginManifest {
             capabilities: Vec::new(),
             dependencies: Vec::new(),
             metadata: Metadata::new(),
+            aliases: Vec::new(),
         }
     }
 
@@ -88,6 +98,48 @@ impl PluginManifest {
     pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.metadata.insert(key, value);
         self
+    }
+
+    /// Declare an alternative lookup key. Empty strings and duplicates (including
+    /// the plugin id itself) are ignored.
+    #[must_use]
+    pub fn with_alias(mut self, alias: impl Into<String>) -> Self {
+        let alias = alias.into();
+        if alias.is_empty() || alias == self.id.as_str() || self.aliases.iter().any(|a| a == &alias)
+        {
+            return self;
+        }
+        self.aliases.push(alias);
+        self
+    }
+
+    /// Declare several alternative lookup keys.
+    #[must_use]
+    pub fn with_aliases<I, S>(mut self, aliases: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        for alias in aliases {
+            self = self.with_alias(alias);
+        }
+        self
+    }
+
+    /// Plugin id plus declared aliases, id first, duplicates collapsed.
+    pub fn lookup_keys(&self) -> Vec<&str> {
+        let mut out = vec![self.id.as_str()];
+        for alias in &self.aliases {
+            if !out.contains(&alias.as_str()) {
+                out.push(alias.as_str());
+            }
+        }
+        out
+    }
+
+    /// Whether `key` is this plugin's id or one of its aliases.
+    pub fn matches_lookup(&self, key: &str) -> bool {
+        self.id.as_str() == key || self.aliases.iter().any(|a| a == key)
     }
 
     /// The declaration for `id`, if this plugin provides it.
@@ -169,9 +221,39 @@ mod tests {
     fn round_trips_through_json() {
         let m = manifest()
             .depends_on(PluginId::new("builtin.other").unwrap())
-            .with_metadata("author", "apeireth");
+            .with_metadata("author", "apeireth")
+            .with_alias("@calc");
         let back: PluginManifest =
             serde_json::from_str(&serde_json::to_string(&m).unwrap()).unwrap();
         assert_eq!(m, back);
+    }
+
+    #[test]
+    fn aliases_dedup_and_lookup_keys_include_id() {
+        let m = manifest()
+            .with_alias("@calc")
+            .with_alias("@calc")
+            .with_alias("builtin.calculator")
+            .with_alias("");
+        assert_eq!(m.aliases, vec!["@calc".to_string()]);
+        assert_eq!(m.lookup_keys(), ["builtin.calculator", "@calc"]);
+        assert!(m.matches_lookup("builtin.calculator"));
+        assert!(m.matches_lookup("@calc"));
+        assert!(!m.matches_lookup("@other"));
+    }
+
+    #[test]
+    fn json_without_aliases_deserializes_empty() {
+        let json = r#"{
+            "id": "builtin.calculator",
+            "version": "1.0.0",
+            "description": "Arithmetic evaluation",
+            "capabilities": [],
+            "dependencies": [],
+            "metadata": {}
+        }"#;
+        let m: PluginManifest = serde_json::from_str(json).unwrap();
+        assert!(m.aliases.is_empty());
+        assert_eq!(m.lookup_keys(), ["builtin.calculator"]);
     }
 }
