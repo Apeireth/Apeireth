@@ -232,15 +232,26 @@ impl ActivityStateMachine {
 
     /// 转换是否合法 (不修改状态; donor `can_transition`)。
     pub fn can_transition(&self, next: ActivityState) -> bool {
-        use ActivityState::*;
         match (self.state, next) {
-            (Pending, Scheduled) | (Pending, Cancelled) => true,
-            (Scheduled, Running) | (Scheduled, Cancelled) => true,
-            (Running, Succeeded) | (Running, Failed) | (Running, TimedOut) | (Running, Cancelled) => {
-                true
-            }
+            (ActivityState::Pending, ActivityState::Scheduled)
+            | (ActivityState::Pending, ActivityState::Cancelled) => true,
+            (ActivityState::Scheduled, ActivityState::Running)
+            | (ActivityState::Scheduled, ActivityState::Cancelled) => true,
+            (ActivityState::Running, ActivityState::Succeeded)
+            | (ActivityState::Running, ActivityState::Failed)
+            | (ActivityState::Running, ActivityState::TimedOut)
+            | (ActivityState::Running, ActivityState::Cancelled) => true,
             // 重试例外由 retry() 守门; can_transition 对终态一律拒绝
-            (Pending | Scheduled | Running | Succeeded | Failed | Cancelled | TimedOut, _) => false,
+            (
+                ActivityState::Pending
+                | ActivityState::Scheduled
+                | ActivityState::Running
+                | ActivityState::Succeeded
+                | ActivityState::Failed
+                | ActivityState::Cancelled
+                | ActivityState::TimedOut,
+                _,
+            ) => false,
         }
     }
 
