@@ -34,6 +34,8 @@ docs/
 | [02-guides/development.md](02-guides/development.md) | 开发指南（代码地图/模式/陷阱/提交规范）|
 | [03-reference/crates.md](03-reference/crates.md) | 当前根工作区 crate 索引 |
 | [03-reference/capabilities-matrix.md](03-reference/capabilities-matrix.md) | 工业级能力矩阵与对外契约参考 |
+| [03-reference/team-handover-reference.md](03-reference/team-handover-reference.md) | **团队接手一站式参考全景手册（权威交接主入口）** |
+| [03-reference/vcp-line-level-absorption-guide.md](03-reference/vcp-line-level-absorption-guide.md) | VCP 核心算法行级代码解构与 2.0 吸收升级指南 |
 | [03-reference/api.md](03-reference/api.md) | API 参考（真实端点/工具协议/认证）|
 | [03-reference/glossary.md](03-reference/glossary.md) | 术语表（品牌/架构/记忆/她本身/安全）|
 | [04-internal/design-intent.md](04-internal/design-intent.md) | 设计意图与拍板历史 |
