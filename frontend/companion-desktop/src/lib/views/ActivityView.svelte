@@ -26,7 +26,7 @@
   import LoadingState from '../components/LoadingState.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import type {ActivityItem, ApeirethConfig, CapabilityManifest} from '../types';
-  import {fetchAuditLogs, fetchTraceDetail, capabilitySupported} from '../runtime';
+  import {fetchAuditLogs, fetchTraceDetail, capabilitySupported, friendlyErrorMessage} from '../runtime';
   import {splitPresenceLine, type PresenceFrame} from '../presence';
 
   let {
@@ -159,11 +159,7 @@
       const logs = await fetchAuditLogs(config, 80);
       activities = mergeActivities(activities, logs);
     } catch (e) {
-      error = e instanceof Error
-        ? e.message
-        : (typeof e === 'object' && e !== null && 'message' in e)
-          ? String(e.message)
-          : String(e);
+      error = friendlyErrorMessage(e, '/v1/panel/audit');
     } finally {
       loading = false;
     }

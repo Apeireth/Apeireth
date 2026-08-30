@@ -34,6 +34,7 @@
     protectMemoryEpisode,
     unprotectMemoryEpisode,
     capabilitySupported,
+    friendlyErrorMessage,
   } from './runtime';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
 
@@ -125,11 +126,8 @@
         episodes = await fetchMemoryEpisodes(config, searchQuery, 120);
       }
     } catch (e) {
-      error = e instanceof Error
-        ? e.message
-        : (typeof e === 'object' && e !== null && 'message' in e)
-          ? String(e.message)
-          : String(e);
+      const endpoint = activeCategory === 'graph' ? '/v1/panel/graph' : '/v1/panel/memory/episodes';
+      error = friendlyErrorMessage(e, endpoint);
     } finally {
       loading = false;
     }

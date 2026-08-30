@@ -25,7 +25,7 @@
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
   import type {ApeirethConfig, ApprovalRequestItem, CapabilityManifest, ToolItem} from '../types';
-  import {fetchApprovalRequests, fetchGrants, fetchTools, grantToolPermission, revokeGrant, capabilitySupported} from '../runtime';
+  import {fetchApprovalRequests, fetchGrants, fetchTools, grantToolPermission, revokeGrant, capabilitySupported, friendlyErrorMessage} from '../runtime';
 
   let {
     config,
@@ -70,11 +70,7 @@
     try {
       const [toolsRes, approvalsRes, grantsRes] = await Promise.all([
         fetchTools(config).catch((e) => {
-          error = e instanceof Error
-            ? e.message
-            : (typeof e === 'object' && e !== null && 'message' in e)
-              ? String(e.message)
-              : String(e);
+          error = friendlyErrorMessage(e, '/v1/tools/list');
           return [];
         }),
         fetchApprovalRequests(config).catch(() => []),
@@ -84,11 +80,7 @@
       approvalRequests = approvalsRes;
       grants = grantsRes;
     } catch (e) {
-      error = e instanceof Error
-        ? e.message
-        : (typeof e === 'object' && e !== null && 'message' in e)
-          ? String(e.message)
-          : String(e);
+      error = friendlyErrorMessage(e, '/v1/tools/list');
     } finally {
       loading = false;
     }
