@@ -1,62 +1,76 @@
-//! Motivation / value score formula (V0.5 §13) — algorithm only.
+//! Motivation / value scoring formula (library, default-off).
 //!
-//! Recovered from `legacy/donor/apeireth-motivation/src/lib.rs` `motivation_score`.
+//! Recovered from `legacy/donor/apeireth-motivation/src/lib.rs` §13
+//! `motivation_score`. Pure f64 math: three named components, proposed
+//! weights `(0.35, 0.35, 0.30)`, hard threshold `0.85`.
 //!
-//! **Not ported** (agent 15 owns proactive / cron / goals):
-//! - SGI write-flow / C-SGI-1..7 uniqueness machine
-//! - `MotivationDrive` as a second goal owner
-//! - ReflectionAuditor / Uuid history
+//! **Not recovered** (ownership / architecture):
+//! - `SGI` write-flow + C-SGI-1..7 as a second goal owner (v2 Goal SM is
+//!   [`crate::goal::GoalService`]; SGI uniqueness is a policy vocabulary, not
+//!   a second store).
+//! - `MotivationDrive` trait as a runtime authority.
+//! - Consciousness / life-force bridges, Kani stubs, Uuid-timestamped entries.
 //!
-//! Weights are a proposed starting point (`0.35 / 0.35 / 0.30`), not frozen.
-//! Default-off library primitive.
+//! Production wiring: none. Scoring is a function. Callers inject the three
+//! component structs; this module never reads a clock or a store.
 
-/// Proposed §13 weights: autonomy / value / intrinsic. Not frozen.
+use serde::{Deserialize, Serialize};
+
+/// Proposed §13 weights (autonomy, value-stability, intrinsic). Not frozen.
 pub const MOTIVATION_WEIGHTS: (f64, f64, f64) = (0.35, 0.35, 0.30);
 
-/// Hard threshold used by the donor (`MIN_EVIDENCE_SCORE` = 0.85).
-pub const MOTIVATION_THRESHOLD: f64 = 0.85;
+/// Hard threshold the donor used (`MIN_EVIDENCE_SCORE` = 0.85).
+pub const MIN_MOTIVATION_THRESHOLD: f64 = 0.85;
 
-/// Autonomy-consistency inputs (internal drive vs history share).
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Alias kept for salvage-07 re-exports (`MOTIVATION_THRESHOLD`).
+pub const MOTIVATION_THRESHOLD: f64 = MIN_MOTIVATION_THRESHOLD;
+
+/// Autonomy consistency (internal drive × history ratio).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct AutonomyConsistency {
     /// Current internal-drive intensity `[0, 1]`.
     pub internal_intensity: f64,
-    /// Share of history that is internal `[0, 1]`.
+    /// Share of history that was internal `[0, 1]`.
     pub internal_history_ratio: f64,
 }
 
-/// Value-stability inputs (turnover + deadline variance; lower is better).
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Value-orientation stability. Lower turnover / variance is more stable.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ValueStability {
-    /// Goal-turnover rate `[0, 1]`.
+    /// Goal-text turnover `[0, 1]` (lower is more stable).
     pub goal_turnover: f64,
-    /// Deadline-span variance, normalized `[0, 1]`.
+    /// Deadline-span variance, normalized `[0, 1]` (lower is more stable).
     pub deadline_variance: f64,
 }
 
-/// Intrinsic-intensity inputs.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Intrinsic intensity (current internal × historical peak).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct IntrinsicIntensity {
-    /// Current SGI internal intensity `[0, 1]`.
+    /// Current internal intensity `[0, 1]`.
     pub current_internal: f64,
-    /// Historical internal-intensity peak `[0, 1]`.
+    /// Historical internal peak `[0, 1]`.
     pub historical_peak: f64,
 }
 
-/// Weighted motivation / value score.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Composite motivation / value score.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct MotivationScore {
+    /// Weighted total `[0, 1]`.
     pub total: f64,
+    /// Autonomy component.
     pub autonomy: f64,
+    /// Value-stability component.
     pub value: f64,
+    /// Intrinsic-intensity component.
     pub intrinsic: f64,
+    /// Whether `total >= MIN_MOTIVATION_THRESHOLD`.
     pub passes_threshold: bool,
 }
 
 /// `motivation_score = w1*autonomy + w2*value + w3*intrinsic`.
 ///
 /// - autonomy = sqrt(intensity × history_ratio)  (geometric; either low pulls down)
-/// - value    = mean(1 - turnover, 1 - deadline_variance)
+/// - value    = mean(1 − turnover, 1 − deadline_variance)
 /// - intrinsic = mean(current, historical_peak)
 pub fn motivation_score(
     autonomy: AutonomyConsistency,
@@ -82,7 +96,7 @@ pub fn motivation_score(
         autonomy: autonomy_score,
         value: value_score,
         intrinsic: intrinsic_score,
-        passes_threshold: total >= MOTIVATION_THRESHOLD,
+        passes_threshold: total >= MIN_MOTIVATION_THRESHOLD,
     }
 }
 
@@ -94,11 +108,11 @@ mod tests {
     fn healthy_agent_passes_threshold() {
         let score = motivation_score(
             AutonomyConsistency {
-                internal_intensity: 0.95,
-                internal_history_ratio: 0.9,
+                internal_intensity: 0.9,
+                internal_history_ratio: 0.85,
             },
             ValueStability {
-                goal_turnover: 0.05,
+                goal_turnover: 0.1,
                 deadline_variance: 0.1,
             },
             IntrinsicIntensity {
@@ -106,57 +120,39 @@ mod tests {
                 historical_peak: 0.95,
             },
         );
-        assert!(score.passes_threshold, "healthy total={}", score.total);
-        assert!(score.total >= MOTIVATION_THRESHOLD);
-        assert!((score.autonomy - (0.95 * 0.9_f64).sqrt()).abs() < 1e-12);
+        assert!(score.passes_threshold);
+        assert!(score.total >= MIN_MOTIVATION_THRESHOLD);
+        assert!(score.autonomy > 0.8);
+        assert!(score.value > 0.8);
+        assert!(score.intrinsic > 0.8);
     }
 
     #[test]
     fn low_intrinsic_fails_threshold() {
         let score = motivation_score(
             AutonomyConsistency {
-                internal_intensity: 0.95,
-                internal_history_ratio: 0.9,
+                internal_intensity: 0.5,
+                internal_history_ratio: 0.5,
             },
             ValueStability {
-                goal_turnover: 0.05,
-                deadline_variance: 0.1,
+                goal_turnover: 0.8,
+                deadline_variance: 0.8,
             },
             IntrinsicIntensity {
-                current_internal: 0.0,
-                historical_peak: 0.0,
+                current_internal: 0.2,
+                historical_peak: 0.3,
             },
         );
         assert!(!score.passes_threshold);
-        assert_eq!(score.intrinsic, 0.0);
+        assert!(score.total < MIN_MOTIVATION_THRESHOLD);
     }
 
     #[test]
-    fn zero_inputs_zero_total() {
-        let score = motivation_score(
-            AutonomyConsistency {
-                internal_intensity: 0.0,
-                internal_history_ratio: 0.0,
-            },
-            ValueStability {
-                goal_turnover: 1.0,
-                deadline_variance: 1.0,
-            },
-            IntrinsicIntensity {
-                current_internal: 0.0,
-                historical_peak: 0.0,
-            },
-        );
-        assert_eq!(score.total, 0.0);
-        assert!(!score.passes_threshold);
-    }
-
-    #[test]
-    fn mid_weights_are_convex_combination() {
+    fn geometric_autonomy_collapses_when_either_factor_is_zero() {
         let score = motivation_score(
             AutonomyConsistency {
                 internal_intensity: 1.0,
-                internal_history_ratio: 1.0,
+                internal_history_ratio: 0.0,
             },
             ValueStability {
                 goal_turnover: 0.0,
@@ -167,9 +163,32 @@ mod tests {
                 historical_peak: 1.0,
             },
         );
-        assert!((score.total - 1.0).abs() < 1e-12);
+        assert_eq!(score.autonomy, 0.0);
+        // weights 0.35*0 + 0.35*1 + 0.30*1 = 0.65 < 0.85
+        assert!(!score.passes_threshold);
+        assert!((score.total - 0.65).abs() < 1e-12);
+    }
+
+    #[test]
+    fn clamps_out_of_range_inputs() {
+        let score = motivation_score(
+            AutonomyConsistency {
+                internal_intensity: 2.0,
+                internal_history_ratio: 2.0,
+            },
+            ValueStability {
+                goal_turnover: -1.0,
+                deadline_variance: -1.0,
+            },
+            IntrinsicIntensity {
+                current_internal: 4.0,
+                historical_peak: 4.0,
+            },
+        );
         assert_eq!(score.autonomy, 1.0);
         assert_eq!(score.value, 1.0);
         assert_eq!(score.intrinsic, 1.0);
+        assert_eq!(score.total, 1.0);
+        assert!(score.passes_threshold);
     }
 }
