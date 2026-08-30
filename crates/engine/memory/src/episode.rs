@@ -108,6 +108,37 @@ impl crate::SqliteMemoryStore {
             session_id: row.get(4)?,
         })
     }
+
+    /// Write an episode bound to a real `continuity_id` (not the `"default"` placeholder).
+    ///
+    /// Donor companion `continuity::migrate_subject` / OneRing needed this path because
+    /// `EpisodeStore::put_episode` hard-codes `continuity_id = "default"`. The trait
+    /// signature is LOCKED; this inherent method is the compatible extension.
+    /// Empty continuity_id is rejected (does not silently fall back to `"default"`).
+    pub fn put_episode_for_subject(&self, ep: &Episode, continuity_id: &str) -> MemoryResult<()> {
+        Self::validate_episode(ep)?;
+        let cid = continuity_id.trim();
+        if cid.is_empty() {
+            return Err(MemoryError::Invalid(
+                "continuity_id is empty (put_episode_for_subject refuses the default placeholder)"
+                    .into(),
+            ));
+        }
+        let conn = self.conn()?;
+        conn.execute(
+            "INSERT OR IGNORE INTO episodes (id, continuity_id, session_id, timestamp, role, content)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                ep.id,
+                cid,
+                ep.session_id,
+                ep.timestamp,
+                ep.role,
+                ep.content,
+            ],
+        )?;
+        Ok(())
+    }
 }
 
 impl EpisodeStore for crate::SqliteMemoryStore {
@@ -379,5 +410,32 @@ mod tests {
         bad.id = "  ".into();
         let err = <SqliteMemoryStore as EpisodeStore>::put_episode(&store, &bad).unwrap_err();
         assert!(err.to_string().contains("id is empty"));
+    }
+
+    #[test]
+    fn put_episode_for_subject_writes_real_continuity_id() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        store
+            .put_episode_for_subject(&make_episode("e-sub", "sess-A", 1, "user"), "cid-real")
+            .unwrap();
+        let by_cid = <SqliteMemoryStore as EpisodeStore>::query(
+            &store,
+            &EpisodeQuery::new().for_continuity("cid-real"),
+        )
+        .unwrap();
+        assert_eq!(by_cid.len(), 1);
+        assert_eq!(by_cid[0].id, "e-sub");
+        let by_default = <SqliteMemoryStore as EpisodeStore>::list_by_subject(&store, "default")
+            .unwrap();
+        assert!(by_default.iter().all(|e| e.id != "e-sub"));
+    }
+
+    #[test]
+    fn put_episode_for_subject_rejects_empty_continuity() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        let err = store
+            .put_episode_for_subject(&make_episode("e1", "s", 1, "user"), "  ")
+            .unwrap_err();
+        assert!(err.to_string().contains("continuity_id is empty"));
     }
 }
