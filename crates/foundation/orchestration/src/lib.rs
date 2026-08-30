@@ -47,6 +47,7 @@ pub mod async_context;
 pub mod care_potential_field;
 pub mod context_rot;
 pub mod continuation;
+pub mod durable;
 pub mod council;
 pub mod llm;
 pub mod prompt_stabilizer;
@@ -67,6 +68,10 @@ pub use context_rot::{
 pub use continuation::{
     ContinuationSnapshot, ContinuationStore, EditAction, FileContinuationStore,
     InMemoryContinuationStore, PendingToolCall, SegmentEditError, SegmentEditor,
+};
+pub use durable::{
+    ActivityEvent, ActivityEventKind, ActivityExecutor, ActivityState, ActivityStateError,
+    ActivityStateMachine, DurableError, DurableHistory, DurableResult, DurableRun, RetryPolicy,
 };
 pub use prompt_stabilizer::{
     EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage, StabilizedRole,
