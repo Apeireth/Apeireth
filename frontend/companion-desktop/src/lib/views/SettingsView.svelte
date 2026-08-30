@@ -238,7 +238,7 @@
 
           <div class="notice-box">
             <StatusBadge label="只读呈现" variant="amber" size="small" />
-            <span>人设与声称约束由后端 Rust companion_serve 机制直接装配，前端暂不提供自定义覆写。</span>
+            <span>人设与声称约束由 Apeireth Gateway 运行时装配，前端暂不提供自定义覆写。</span>
           </div>
         </div>
 
