@@ -56,6 +56,7 @@ pub mod causal_world_model_edges;
 pub mod curiosity;
 pub mod emergence;
 pub mod emotion_memory;
+pub mod goal;
 pub mod hypothesis;
 pub mod memory;
 pub mod tone;
@@ -65,6 +66,9 @@ pub mod world_model;
 pub use tone::{
     deliberation_intensity, emotion_tone, organ_tone, tone_hint, BondCharacterSnapshot,
     DeliberationEcho, EmotionToneStyle, ToneError,
+};
+pub use goal::{
+    GoalBlock, GoalError, GoalPersistError, GoalPhase, GoalService, GoalSnapshot, GoalStore,
 };
 
 // ============================================
