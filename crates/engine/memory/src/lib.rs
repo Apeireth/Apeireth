@@ -57,6 +57,8 @@ pub mod dreaming;
 pub mod five_dimensional;
 pub mod graph_algo;
 pub mod hybrid_search;
+pub mod metadata_filter;
+pub mod query_expand;
 pub mod intent_brier;
 pub mod meta_thinking;
 pub mod milestone;
@@ -148,6 +150,8 @@ pub use graph_algo::{
     WalkStep,
 };
 pub use hybrid_search::{tokenize, Bm25Config, Bm25Hit, Bm25Index, HybridHit, HybridSearchEngine};
+pub use metadata_filter::{MetadataFilter, PropertyPredicate};
+pub use query_expand::{expand_query, ExpandedQuery};
 pub use milestone::{
     InMemoryMilestoneStore, Milestone, MilestoneKind, MilestonePayload, MilestoneStore,
 };
