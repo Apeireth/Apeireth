@@ -9,10 +9,12 @@
 //! **Salvage (agent 08)**: this crate owns recovered perception *algorithms*
 //! (normalization, capture metadata, screen salience, observation capture).
 //! It is **not** an `AgentModule` and does **not** own final response.
+//! [`owner::PerceptionOwner`] is default-off and unwired.
 
 pub mod capture;
 pub mod normalize;
 pub mod observe;
+pub mod owner;
 pub mod screen;
 pub mod vision;
 pub mod voice;
@@ -30,6 +32,7 @@ pub use normalize::{
     voice_observation, SignalSource,
 };
 pub use observe::{ObservationCandidate, ObservationOutcome, ObservationQueue};
+pub use owner::PerceptionOwner;
 pub use screen::{NoopScreenSource, ScreenEvent, ScreenEventKind, ScreenPerception};
 pub use vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
 pub use voice::{WhisperHttpBackend, WhisperHttpConfig};
@@ -46,5 +49,11 @@ mod tests {
         let event = input.next_event().unwrap().expect("first event");
         assert_eq!(event.source, PerceptionModality::Text);
         assert_eq!(event.payload["text"], "test");
+    }
+
+    #[test]
+    fn default_owner_is_off() {
+        let owner = PerceptionOwner::default();
+        assert!(!owner.is_enabled());
     }
 }
