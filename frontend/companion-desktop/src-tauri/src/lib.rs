@@ -1,18 +1,42 @@
 //! Apeireth 桌面伙伴 — 薄 Tauri shell
 //!
-//! 窗口管理 + 托盘 + 通知 + 全局快捷键.
+//! 窗口管理 + 托盘 + 通知 + 全局快捷键 + 后端进程监督.
 //! **Agent runtime 不在这里** — 对话/记忆/工具/治理全部由 Apeireth Canonical Gateway
-//! 后端承担 (apeireth gateway serve :8080). 本壳只负责桌面承载.
+//! 后端承担 (apeireth gateway serve). 本壳只负责桌面承载与进程生命周期.
 
+mod backend_supervisor;
+
+use backend_supervisor::{BackendInfo, BackendSupervisor};
+use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WebviewUrl, WebviewWindowBuilder,
+    Manager, State, WebviewUrl, WebviewWindowBuilder,
 };
 
 #[tauri::command]
 fn ping() -> &'static str {
     "pong"
+}
+
+#[tauri::command]
+async fn get_backend_status(supervisor: State<'_, Arc<BackendSupervisor>>) -> Result<BackendInfo, String> {
+    Ok(supervisor.info().await)
+}
+
+#[tauri::command]
+async fn start_backend(supervisor: State<'_, Arc<BackendSupervisor>>) -> Result<String, String> {
+    supervisor.start().await
+}
+
+#[tauri::command]
+async fn stop_backend(supervisor: State<'_, Arc<BackendSupervisor>>) -> Result<String, String> {
+    supervisor.stop().await
+}
+
+#[tauri::command]
+async fn restart_backend(supervisor: State<'_, Arc<BackendSupervisor>>) -> Result<String, String> {
+    supervisor.restart().await
 }
 
 #[tauri::command]
@@ -45,6 +69,9 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize backend supervisor
+    let supervisor = Arc::new(BackendSupervisor::new());
+
     tauri::Builder::default()
         // 单实例: 二次启动聚焦已有主窗而不是再开一个 (尽量靠前注册).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -59,9 +86,27 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![ping, open_settings, toggle_quick_window])
-        .setup(|app| {
+        .manage(supervisor.clone())
+        .invoke_handler(tauri::generate_handler![
+            ping,
+            get_backend_status,
+            start_backend,
+            stop_backend,
+            restart_backend,
+            open_settings,
+            toggle_quick_window
+        ])
+        .setup(move |app| {
             let handle = app.handle().clone();
+
+            // Auto-start backend on app launch
+            let supervisor_clone = supervisor.clone();
+            tauri::async_runtime::spawn(async move {
+                match supervisor_clone.start().await {
+                    Ok(msg) => eprintln!("Backend auto-start: {}", msg),
+                    Err(e) => eprintln!("Backend auto-start failed: {}", e),
+                }
+            });
 
             // 主窗口由 tauri.conf.json 声明 (app.windows[0] label=main), 这里不再重复创建.
 
@@ -122,6 +167,16 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running companion-desktop");
+        .build(tauri::generate_context!())
+        .expect("error building companion-desktop")
+        .run(move |app_handle, event| {
+            // Cleanup: stop owned backend on app exit
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                if let Some(supervisor) = app_handle.try_state::<Arc<BackendSupervisor>>() {
+                    tauri::async_runtime::block_on(async move {
+                        let _ = supervisor.stop().await;
+                    });
+                }
+            }
+        });
 }
