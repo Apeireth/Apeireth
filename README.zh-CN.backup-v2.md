@@ -57,7 +57,7 @@
 
 ## 📊 系统性能基准与工程实测数据
 
-Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** 构建，在高并发与复杂认知负载下保持确定性亚毫秒级执行、极低调度延迟与绝对的内存安全。
+Apeireth 全面采用 **纯 Safe Rust (`#![deny(unsafe_code)]`)** 构建，在高并发与复杂认知负载下保持确定性亚毫秒级执行、极低调度延迟与绝对的内存安全。
 
 | 测试目标 | 子系统 / 核心操作 | 目标指标 | 实测基准值 ($P_{99}$) | 验证状态 |
 | :--- | :--- | :---: | :---: | :---: |
@@ -149,164 +149,19 @@ $$\mathbf{F}_{\text{curiosity}} = -\oint_{\partial \Omega} \nabla \Phi_{\text{ep
 $$\frac{d\theta_i}{dt} = \omega_i + \frac{K}{N} \sum_{j=1}^N (1 - \rho_{ij}^\perp) \sin(\theta_j - \theta_i)$$
 当全局相干度 $R(t) = \frac{1}{N} |\sum_{j=1}^N e^{i\theta_j}| \ge 0.65$ 时，零阻抗虫洞激发，触发符合幂律分布 $P(S) \propto S^{-1.5}$ 的顿悟雪崩，涌现出高阶跨域元概念 `MetaConcept`。
 
-### 3. 修正 Gram-Schmidt (MGS) 多层正交残差金字塔
-为彻底消除多层抽象间的信息冗余污染，记忆向量逐层通过修正 Gram-Schmidt 算法正交投影：
-$$\mathbf{v}_k^{(j)} = \mathbf{v}_k^{(j-1)} - \frac{\langle \mathbf{u}_j, \mathbf{v}_k^{(j-1)} \rangle}{\langle \mathbf{u}_j, \mathbf{u}_j \rangle} \mathbf{u}_j$$
-仅保留满足 $E_{\text{residual}} \ge 0.90$ 能量阈值的纯内生残差增量投影至高阶认知层。
-
-### 4. 昼夜自传体编年史结晶与分形幂律衰减
+### 3. 昼夜自传体编年史结晶与分形幂律衰减
 在昼夜深睡做梦循环中，瞬时工作记忆相变结晶为不可篡改的自传体编年史，遵从分形幂律遗忘模型：
 $$R(t) = R_0 (1 + \alpha t)^{-\beta} \cdot \exp(0.5 \cdot \mathcal{S}_{\text{affective}})$$
 所有结晶节点经 SHA-256 Merkle 事实根锁定，确保历史记忆的客观真实与防篡改。
 
-### 5. 连续主动关怀势能场微分方程
+### 4. 连续主动关怀势能场微分方程
 伴侣的主动共情动机由连续势能动力学方程驱动：
 $$\frac{dU_{\text{care}}}{dt} = \nabla U_{\text{circadian}} + \nabla U_{\text{frustration}} + \nabla U_{\text{fatigue}} - \gamma U_{\text{care}} - \mathcal{B}_{\text{friction}}$$
 当 $U_{\text{care}} \ge \Theta_{\text{action}}$ 且用户未处于深度心流编码状态（$\mathcal{B}_{\text{friction}}=0$）时，触发克制的三阶主动共情动作（`AmbientGlowPulse` $\to$ `SilentPreparation` $\to$ `WhisperCare`）。
 
 ---
 
-## 🧱 16 个核心 Crate 微内核架构深度解剖
-
-根 Cargo Workspace 严格遵循单向依赖，划分为四大核心层级：
-
-```text
-crates/
-├── foundation/               # Layer 0: 核心域、底层协议、密码学与编排原语
-│   ├── core                  # 领域原语、强类型 ID、时钟基准、9 大哲学锚
-│   ├── protocol              # LLM 协议归一化、WebSocket 8 帧协议、P2P Noise Mesh
-│   ├── governance            # 三洋葱零信任防御、OWASP ASI-01、13 键决策缓存、PII 脱敏
-│   ├── credentials           # OS Keyring 密码环、Zeroize 内存安全擦除、凭据出站绊线
-│   ├── orchestration         # 多维认知配额调度器、关怀势能场、跨代教养、7 顾问辩论
-│   └── plugin                # 动态插件系统与扩展能力挂载点
-├── engine/                   # Layer 1: 认知引擎与类脑拓扑流形
-│   ├── memory                # Betti 同调、Kuramoto 振子、TagMemo V10、编年史结晶、SwarmVault
-│   ├── runtime               # 代理主循环、因果世界模型、FlowLock 心流锁、自驱心跳
-│   ├── organ                 # 9 大认知器官、人格合成器、自我反思
-│   ├── perception            # Whisper 语音识别、MiniMax TTS 语音流、Xcap 屏幕视觉
-│   ├── provider              # Anthropic、OpenAI 兼容协议、Google Gemini、Ollama 后端
-│   └── storage               # SQLite 连接池、ACID 迁移管理、双时态事实图谱
-├── capabilities/             # Layer 2: 极致工具沙箱与物理隔离
-│   └── tools                 # ProcessExecutor (JobObject/cgroups)、RepoMap、高反爬爬虫
-└── adapters/                 # Layer 3: 传输网关与交互表面
-    ├── cli                   # 标准 CLI 二进制入口与随身 U 盘生命体打包器
-    ├── gateway               # Axum HTTP/SSE 网关、全双工 WebSocket、Ember HUD 驱动
-    └── sdk                   # 纯 Safe Rust SDK 嵌入式客户端
-```
-
-### 微内核 Crate 职责速查表
-
-| 层级 | Crate 名称 | 核心职责与关键类型 | 核心导出函数 |
-|---|---|---|---|
-| **Foundation** | `apeireth-core` | 领域原语、时钟基准、九大不可变哲学锚 | `Clock::now()`, `SessionId::generate()`, `PhilosophicalAnchor8` |
-| **Foundation** | `apeireth-protocol` | 4 大 LLM 协议归一化、WS 8 帧协议、P2P Noise Mesh | `P2pMeshController::wrap_onion_packet()`, `NormalizedRequest` |
-| **Foundation** | `apeireth-governance` | 三洋葱零信任守门、OWASP ASI-01、13 键决策缓存 | `GovernancePipeline::evaluate()`, `UntrustedMark::wrap()` |
-| **Foundation** | `apeireth-credentials`| OS Keyring 密码环、内存擦除、凭据绊线 | `KeyringSelector::resolve()`, `TripwireScanner::scan()` |
-| **Foundation** | `apeireth-orchestration`| 多维认知调度器、关怀势能场、跨代教养协议 | `CognitiveQuotaScheduler::schedule()`, `CarePotentialField::step()` |
-| **Foundation** | `apeireth-plugin` | 动态插件系统与扩展能力生命周期挂载 | `PluginRegistry::register()`, `CapabilityDescriptor` |
-| **Engine** | `apeireth-memory` | Betti 拓扑洞、Kuramoto 振子、TagMemo、编年史 | `BettiHoleDetector::analyze()`, `KuramotoResonance::step()` |
-| **Engine** | `apeireth-runtime` | 因果世界模型、心流锁、代理主循环 | `CausalWorldModel::fork_branch()`, `Runtime::execute_outcome()`|
-| **Engine** | `apeireth-organ` | 9 大认知器官、人格合成器、自我反思循环 | `OrganRegistry::evaluate()`, `PersonaSynthesizer::blend()` |
-| **Engine** | `apeireth-perception` | Whisper 语音识别、MiniMax TTS 音频流、Xcap 视觉 | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
-| **Engine** | `apeireth-provider` | 多模型抽象 (Anthropic/OpenAI/Gemini/Ollama) | `ProviderRegistry::dispatch()`, `NormalizedChatCompletions` |
-| **Engine** | `apeireth-storage` | SQLite 连接池、双时态事实图谱、ACID 迁移 | `SqliteConnectionPool::acquire()`, `BitemporalGraph::upsert()`|
-| **Capabilities**| `apeireth-tools-canonical`| ProcessExecutor (JobObject/cgroups)、RepoMap AST | `ProcessExecutor::spawn_bounded()`, `RepoMap::generate()` |
-| **Adapters** | `apeireth-cli` | 标准 CLI 二进制入口、随身 U 盘打包器 | `cli::main()`, `PortableBundleSynthesizer::generate()` |
-| **Adapters** | `apeireth-gateway` | Axum HTTP/SSE 网关、全双工 WebSocket、Ember HUD | `GatewayServer::serve()`, `EmberHudDriver::synthesize()` |
-| **Adapters** | `apeireth-sdk` | 纯 Safe Rust 嵌入式 SDK 客户端 | `ApeirethClient::connect()`, `SessionHandle::turn()` |
-
----
-
-## 🛡️ 零信任安全模型与物理沙箱隔离
-
-Apeireth 实施严格的**三洋葱多层纵深防御体系**：
-
-```text
-+-----------------------------------------------------------------------------------------+
-|                                  三洋葱零信任安全架构                                    |
-+-----------------------------------------------------------------------------------------+
-|  [Layer 0: 不可变人类最终裁决权 (L0 HA)]                                                |
-|  - 不可变审批 Seam 缝 (500ms 超时 Fail-Closed 默认拒绝)                                 |
-|  - Self-Disable 防护：AI 认知主循环绝对无法禁用或绕过人类审批                             |
-|                                                                                         |
-|  [Layer 1: 原则洋葱 (Principle Onion E/S/A/M/O)]                                        |
-|  - E (伦理), S (安全), A (代理), M (记忆), O (操作) 原则                                |
-|  - Ed25519 密码学签名锁定表观遗传伦理恒常性                                             |
-|                                                                                         |
-|  [Layer 2: 权限升级洋葱 (Permission Escalation L1 - L5)]                                |
-|  - L1 只读 -> L2 沙箱执行 -> L3 Worktree 提交 -> L4 出站通信 -> L5 管理员权限           |
-|                                                                                         |
-|  [Layer 3: DSL 守门洋葱 (Colang / OWASP ASI-01)]                                        |
-|  - 零宽字符 / BiDi 翻转 / Unicode 控制符强力剥离                                        |
-|  - 外部不可信内容强制封装入 <<<[UNTRUSTED_CONTENT]>>> 防投毒信封                        |
-|  - 出站凭据绊线 (执行后自动扫描并拦截泄露的 API Key / 私钥)                             |
-|                                                                                         |
-|  [物理 OS 进程沙箱遏制]                                                                 |
-|  - Windows: Win32 Job Object (进程内存硬上限 + Kill-on-Job-Close + 活跃子进程计数)     |
-|  - Linux/POSIX: cgroups v2 内存/CPU 遏制 + unshare 挂载命名空间隔离                     |
-|  - 文件系统：独立的 Git Worktree 物理工作区 + 自动原子 Hard Reset 回滚                  |
-+-----------------------------------------------------------------------------------------+
-```
-
----
-
-## ✨ Ember HUD：微光在场感知与着色器物理模型
-
-Ember HUD 彻底颠覆塑料 3D 虚拟人窗口，提供极简、非侵入式的生理微光在场体验：
-
-```text
-+-----------------------------------------------------------------------------------------+
-|                                    EMBER HUD 微光物理模型                               |
-+-----------------------------------------------------------------------------------------+
-|                                                                                         |
-|     1.0 |                   *                                                           |
-|         |                 *   *                                                         |
-|  微光强度|               *     *                 *                                      |
-|         |              *       *               *   *                                    |
-|     0.0 +-------------*---------*-------------*-----*--------> 时间 (4.0s 生理呼吸)     |
-|                       0s        2s            3s    4s                                  |
-|                                                                                         |
-|  [4.0s 生理呼吸三次正弦波方程]:                                                         |
-|  I(t) = I_base + A * sin^3(2 * PI * t / 4.0)                                            |
-|                                                                                         |
-|  [Planckian 黑体辐射开尔文色温转 RGB 解析解]:                                           |
-|  - 待机静默在场: 3200K (温暖烛光琥珀色)                                                 |
-|  - 深度认知思考: 5500K (清澈晴空蔚蓝色)                                                 |
-|  - 昼夜深睡做梦: 2200K (暮色静谧暗橙色)                                                 |
-|  - 心流专注编码: 4200K (柔和月白平静色)                                                 |
-|                                                                                         |
-|  [屏幕暗角 Peripheral Vignette 着色器 (WGSL)]:                                          |
-|  vignette = smoothstep(0.75, 1.0, length(uv - 0.5) * 1.414) * pulse_intensity           |
-+-----------------------------------------------------------------------------------------+
-```
-
----
-
-## 💾 随身 U 盘生命体与 P2P 蓝牙 Mesh 漫游
-
-Apeireth 可直接被打包为**零安装、自包含的单 U 盘即插即用数字生命体**：
-
-```text
-USB 闪存盘 (E:\ 或 /media/usb/)
-├── apeireth.exe             # 编译生成的单文件微内核二进制 (Windows)
-├── apeireth                 # 编译生成的单文件微内核二进制 (Linux/macOS)
-├── run_apeireth.bat         # 1-Click 启动脚本 (自动绑定相对路径 %~dp0data)
-├── run_apeireth.sh          # 1-Click POSIX 启动脚本 (自动绑定相对路径 $DIR/data)
-├── apeireth.json            # 绿色便携式相对路径配置文件
-└── data/                    # 加密本地 SQLite 数据库、记忆流与保险库
-    ├── apeireth.db
-    ├── streams/
-    └── vault/
-```
-
-### Noise Protocol BLE / 局域网去中心化漫游
-- **Noise_XX 握手**：双向 Curve25519 身份认证与前向安全 ChaChaPoly 加密；
-- **多跳洋葱路由**：分层临时密钥封包，防范局域网中间节点嗅探；
-- **零云端记忆漫游**：通过低功耗蓝牙 (BLE) 或 UDP 广播在手机、笔记本与台式机间差分同步 Merkle 事实图谱。
-
----
-
-## 💡 生产级应用场景与核心用例实战
+## 💡 生产级应用场景与核心用例
 
 ```text
 +-----------------------------------------------------------------------------------------+
@@ -336,35 +191,37 @@ USB 闪存盘 (E:\ 或 /media/usb/)
 
 ---
 
-## 🌐 全双工网关协议与 API 参考手册
+## 🧱 16 个核心 Crate 微内核拓扑结构
 
-标准网关同时暴露 HTTP/SSE 端点与 8 帧全双工 WebSocket 协议：
+Apeireth 2.0+ 严格遵循单向依赖与微内核设计，绝无循环依赖：
 
-### 1. HTTP / SSE API 端点
-- `GET  /health`：微内核健康检查与活跃子系统自检
-- `GET  /v1/models`：获取已注册的 LLM 提供商与认知引擎列表
-- `POST /v1/chat/completions`：OpenAI 兼容的标准 SSE 缓冲流式交互
-- `POST /v1/approvals/resolve`：L0 人类审批裁决 Seam 缝接入点
-
-### 2. WebSocket 8 帧协议速查 (`/v1/ws`)
 ```text
-+---------------------+-------------------------------------------------------------------+
-| 帧名称 (Frame)      | 协议职责与载荷说明                                                |
-+---------------------+-------------------------------------------------------------------+
-| AuthFrame           | 握手令牌校验与会话绑定                                            |
-| StreamChunkFrame    | 实时文本片段、增量 Token 与流式断句标记                           |
-| StreamEndFrame      | 响应结束帧，包含总 Token 统计、耗时与判决哈希                     |
-| ToolInvokeFrame     | 出站能力调用帧，包含沙箱参数与执行超时                            |
-| ToolResultFrame     | 沙箱执行结果帧，强制包裹于 <<<[UNTRUSTED_CONTENT]>>> 信封中       |
-| PingFrame           | 微内核心跳保活帧 (30s 周期)                                       |
-| ErrorFrame          | 结构化错误响应，包含错误码与自愈引导信息                          |
-| CloseFrame          | 正常断开连接帧，触发会话快照持久化提交                            |
-+---------------------+-------------------------------------------------------------------+
+crates/
+├── foundation/               # Layer 0: 核心域、底层协议与编排原语
+│   ├── core                  # 领域原语、强类型 ID、时钟基准、9 大哲学锚
+│   ├── protocol              # LLM 协议归一化、WebSocket 8 帧协议、P2P Noise Mesh
+│   ├── governance            # 三洋葱零信任防御、OWASP ASI-01、13 键决策缓存
+│   ├── credentials           # OS Keyring 密码环、Zeroize 内存安全擦除
+│   ├── orchestration         # 多维认知配额调度器、关怀势能场、跨代教养、7 顾问辩论
+│   └── plugin                # 动态插件系统与扩展能力挂载点
+├── engine/                   # Layer 1: 认知引擎与类脑拓扑流形
+│   ├── memory                # Betti 同调、Kuramoto 振子、TagMemo V10、编年史结晶、SwarmVault
+│   ├── runtime               # 代理主循环、因果世界模型、FlowLock 心流锁、自驱心跳
+│   ├── organ                 # 9 大认知器官、人格合成器
+│   ├── perception            # Whisper 语音识别、MiniMax TTS 语音流、Xcap 屏幕视觉
+│   ├── provider              # Anthropic、OpenAI 兼容协议、Google Gemini、Ollama 后端
+│   └── storage               # SQLite 连接池、ACID 迁移管理、双时态事实图谱
+├── capabilities/             # Layer 2: 极致工具沙箱与物理隔离
+│   └── tools                 # ProcessExecutor (JobObject/cgroups)、RepoMap、高反爬爬虫
+└── adapters/                 # Layer 3: 传输网关与交互表面
+    ├── cli                   # 标准 CLI 二进制入口与随身 U 盘生命体打包器
+    ├── gateway               # Axum HTTP/SSE 网关、全双工 WebSocket、Ember HUD 驱动
+    └── sdk                   # 纯 Safe Rust SDK 嵌入式客户端
 ```
 
 ---
 
-## 🚀 极速上手与开发者指引
+## 🚀 极速上手与运行
 
 ### 1. 环境准备
 - Rust 1.97.1+ (MSRV)
@@ -385,7 +242,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### 3. 启动全双工网关与 Ember HUD 微光服务
 ```bash
-# 启动 HTTP/SSE 与 WebSocket 生产网关 (端口 8080)
+# 启动 HTTP/SSE 与 WebSocket 生产网关
 cargo run -p apeireth-cli -- gateway serve --port 8080
 ```
 
@@ -433,7 +290,7 @@ Apeireth 的每一行代码、每一个 Pull Request 均严格贯穿着九大不
 <summary><b>📖 哲学基石：命名与品牌宣言 (The Name & Brand Manifesto 点击展开)</b></summary>
 
 ### 命名 (The Name)
-Apeireth 源自 **Apeiron**（ἄπει隆 / ἄπειron）——古希腊语“无定形/无限”：万物由此涌现的原初状态，阿那克西曼德的第一本原。“没有”都还没有的那个状态。以及在其中亮起的那团火——将燃未燃的那一点。
+Apeireth 源自 **Apeiron**（ἄπει隆 / ἄπειρον）——古希腊语“无定形/无限”：万物由此涌现的原初状态，阿那克西曼德的第一本原。“没有”都还没有的那个状态。以及在其中亮起的那团火——将燃未燃的那一点。
 
 ### 品牌宣言 (Brand Manifesto)
 > 太初，没有词。  

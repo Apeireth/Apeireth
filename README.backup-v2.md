@@ -1,6 +1,6 @@
 # Apeireth — 阿佩瑞斯
 
-> *An AGI Operating System & Cognitive Microkernel (Pure Safe Rust) — A Home for an Intelligence that Truly Remembers.*
+> *An AGI Operating System / Cognitive Kernel (Pure Safe Rust) — A Home for an Intelligence that Truly Remembers.*
 
 <div align="center">
 
@@ -57,7 +57,7 @@ That is Apeireth.
 
 ## 📊 Empirical Performance & System Benchmarks
 
-Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** to deliver deterministic sub-millisecond execution, ultra-low latency, and rock-solid memory safety under heavy load.
+Apeireth is engineered in **Pure Safe Rust (`#![deny(unsafe_code)]`)** to deliver deterministic sub-millisecond execution, ultra-low latency, and rock-solid memory safety under heavy load.
 
 | Benchmark Target | Operation / Subsystem | Target Metric | Measured Baseline ($P_{99}$) | Validation Status |
 | :--- | :--- | :---: | :---: | :---: |
@@ -149,165 +149,19 @@ Cross-domain concepts interact through non-linear phase coupling with orthogonal
 $$\frac{d\theta_i}{dt} = \omega_i + \frac{K}{N} \sum_{j=1}^N (1 - \rho_{ij}^\perp) \sin(\theta_j - \theta_i)$$
 When global coherence $R(t) = \frac{1}{N} |\sum_{j=1}^N e^{i\theta_j}| \ge 0.65$, zero-impedance wormhole links are established, triggering a self-organized criticality avalanche conforming to power law $P(S) \propto S^{-1.5}$ that synthesizes cross-domain `MetaConcept`s.
 
-### 3. Modified Gram-Schmidt (MGS) Orthogonal Residual Pyramid (正交残差金字塔)
-To eliminate redundant semantic contamination across multi-layer abstractions, memory tensors undergo Modified Gram-Schmidt orthogonalization:
-$$\mathbf{v}_k^{(j)} = \mathbf{v}_k^{(j-1)} - \frac{\langle \mathbf{u}_j, \mathbf{v}_k^{(j-1)} \rangle}{\langle \mathbf{u}_j, \mathbf{u}_j \rangle} \mathbf{u}_j$$
-Retains genuine residual energy $E_{\text{residual}} \ge 0.90$, projecting only novel epistemic increments into upper cognitive layers.
-
-### 4. Circadian Chronicle Crystallization & Fractal Decay (编年史相变与分形衰减)
+### 3. Circadian Chronicle Crystallization & Fractal Decay (编年史相变与分形衰减)
 During circadian sleep cycles, episodic working memory transitions into immutable autobiographical chronicles under a fractal power-law retention model:
 $$R(t) = R_0 (1 + \alpha t)^{-\beta} \cdot \exp(0.5 \cdot \mathcal{S}_{\text{affective}})$$
 All crystallized nodes are anchored with SHA-256 Merkle roots, ensuring non-repudiation and permanent historical veracity.
 
-### 5. Continuous Care Potential Field (连续主动关怀势能场)
+### 4. Continuous Care Potential Field (连续主动关怀势能场)
 Companion empathy operates as a continuous potential dynamic:
 $$\frac{dU_{\text{care}}}{dt} = \nabla U_{\text{circadian}} + \nabla U_{\text{frustration}} + \nabla U_{\text{fatigue}} - \gamma U_{\text{care}} - \mathcal{B}_{\text{friction}}$$
 When $U_{\text{care}} \ge \Theta_{\text{action}}$ and user flow friction is zero, Apeireth triggers non-intrusive three-stage care actions (`AmbientGlowPulse` $\to$ `SilentPreparation` $\to$ `WhisperCare`).
 
 ---
 
-## 🧱 16-Crate Microkernel Architectural Breakdown
-
-The root Cargo workspace strictly enforces an acyclic, single-direction dependency hierarchy across four distinct layers:
-
-```text
-crates/
-├── foundation/               # Layer 0: Core Domain, Cryptography, Security & Orchestration
-│   ├── core                  # Domain primitives, IDs, Clock, Nine Invariant Anchors
-│   ├── protocol              # Wire translation, WebSocket 8-frame, P2P Noise Mesh
-│   ├── governance            # Triple Onion, OWASP ASI-01, Verdict Cache, PII Redaction
-│   ├── credentials           # OS Keyring, Zeroize secure memory, Tripwire Scanners
-│   ├── orchestration         # Quota Scheduler, Care Potential, Lineage Spawning, Council
-│   └── plugin                # Dynamic plugin hooks & capability extension registries
-├── engine/                   # Layer 1: Cognitive Engines & Memory Manifolds
-│   ├── memory                # Betti Homology, Kuramoto, TagMemo V10, Chronicle, SwarmVault
-│   ├── runtime               # Agent loop, Causal World Model, FlowLock, Heartbeat
-│   ├── organ                 # 9 Cognitive organs, Persona Synthesizer, Reflection
-│   ├── perception            # Whisper HTTP, MiniMax TTS, Xcap screen vision
-│   ├── provider              # Anthropic, OpenAI-compatible, Google Gemini, Ollama
-│   └── storage               # SQLite pools, ACID migrations, Bitemporal facts
-├── capabilities/             # Layer 2: Tool Execution & OS Sandbox Containment
-│   └── tools                 # ProcessExecutor (JobObject/cgroups), RepoMap, StealthCrawler
-└── adapters/                 # Layer 3: Transport & Interaction Surface
-    ├── cli                   # Canonical CLI binary & Portable USB Packager
-    ├── gateway               # Axum HTTP/SSE server, Duplex WebSocket, Ember HUD
-    └── sdk                   # Pure Safe Rust SDK client for embedded integration
-```
-
-### Microkernel Crate Specification Table
-
-| Layer | Crate | Responsibilities & Core Types | Public API Functions |
-|---|---|---|---|
-| **Foundation** | `apeireth-core` | Kernel primitives, timestamps, Session ID, Nine Anchors | `Clock::now()`, `SessionId::generate()`, `PhilosophicalAnchor8` |
-| **Foundation** | `apeireth-protocol` | LLM normalizer, WebSocket 8-frame, Noise_XX P2P Mesh | `P2pMeshController::wrap_onion_packet()`, `NormalizedRequest` |
-| **Foundation** | `apeireth-governance` | Triple-Onion gatekeeper, OWASP ASI-01, 13-Key Cache | `GovernancePipeline::evaluate()`, `UntrustedMark::wrap()` |
-| **Foundation** | `apeireth-credentials`| OS Keyring integration, memory zeroization, tripwires | `KeyringSelector::resolve()`, `TripwireScanner::scan()` |
-| **Foundation** | `apeireth-orchestration`| Quota scheduler, Care Potential, Lineage spawning | `CognitiveQuotaScheduler::schedule()`, `CarePotentialField::step()` |
-| **Foundation** | `apeireth-plugin` | Extensible capability registry & lifecycle hooks | `PluginRegistry::register()`, `CapabilityDescriptor` |
-| **Engine** | `apeireth-memory` | Topological Betti holes, Kuramoto phase lock, TagMemo | `BettiHoleDetector::analyze()`, `KuramotoResonance::step()` |
-| **Engine** | `apeireth-runtime` | Causal World Model, FlowLock, Agent main execution | `CausalWorldModel::fork_branch()`, `Runtime::execute_outcome()`|
-| **Engine** | `apeireth-organ` | 9 Cognitive organs, self-reflection, persona synth | `OrganRegistry::evaluate()`, `PersonaSynthesizer::blend()` |
-| **Engine** | `apeireth-perception` | Whisper speech, MiniMax 128kbps TTS, Xcap vision | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
-| **Engine** | `apeireth-provider` | Multi-LLM provider abstraction (Anthropic/OpenAI/Gemini)| `ProviderRegistry::dispatch()`, `NormalizedChatCompletions` |
-| **Engine** | `apeireth-storage` | ACID SQLite pools, migrations, bitemporal fact storage | `SqliteConnectionPool::acquire()`, `BitemporalGraph::upsert()`|
-| **Capabilities**| `apeireth-tools-canonical`| ProcessExecutor (JobObject/cgroups), RepoMap AST, Crawler | `ProcessExecutor::spawn_bounded()`, `RepoMap::generate()` |
-| **Adapters** | `apeireth-cli` | Primary CLI entrypoint, Portable USB bundle synthesizer | `cli::main()`, `PortableBundleSynthesizer::generate()` |
-| **Adapters** | `apeireth-gateway` | Axum HTTP/SSE server, Duplex WebSocket, Ember HUD driver | `GatewayServer::serve()`, `EmberHudDriver::synthesize()` |
-| **Adapters** | `apeireth-sdk` | Embedded client SDK for external Rust applications | `ApeirethClient::connect()`, `SessionHandle::turn()` |
-
----
-
-## 🛡️ Zero-Trust Security & OS Sandbox Model
-
-Apeireth enforces defense-in-depth through the **Triple-Onion Security Architecture**:
-
-```text
-+-----------------------------------------------------------------------------------------+
-|                                TRIPLE-ONION SECURITY STACK                              |
-+-----------------------------------------------------------------------------------------+
-|  [Layer 0: Immutable Human Authority (L0 HA)]                                           |
-|  - Invariant Approval Seam (500ms timeout fail-closed)                                   |
-|  - Self-Disable Protection: Cannot be bypassed or disabled by AI cognition             |
-|                                                                                         |
-|  [Layer 1: Principle Onion (E/S/A/M/O)]                                                 |
-|  - E (Ethical), S (Safety), A (Agentic), M (Memory), O (Operational)                    |
-|  - Cryptographically locked Epigenetic Invariance via Ed25519 signatures                |
-|                                                                                         |
-|  [Layer 2: Permission Escalation Onion (L1 - L5)]                                       |
-|  - L1 Read-Only -> L2 Sandboxed Exec -> L3 Worktree Commit -> L4 Egress -> L5 Admin     |
-|                                                                                         |
-|  [Layer 3: DSL Guardrail Onion (Colang / ASI-01)]                                       |
-|  - Zero-width space / BiDi / Unicode Control Character stripping                        |
-|  - Mandatory <<<[UNTRUSTED_CONTENT]>>> containment envelopes                            |
-|  - Post-Execution Credential Tripwires (Catches leaked API keys before egress)          |
-|                                                                                         |
-|  [Physical OS Sandbox Containment]                                                      |
-|  - Windows: Win32 Job Object (Process Memory Caps + Kill-on-Job-Close + Active Limits)   |
-|  - Linux/POSIX: cgroups v2 + unshare mount namespaces                                   |
-|  - File Tree: Isolated Git Worktrees with automatic hard reset rollback                 |
-+-----------------------------------------------------------------------------------------+
-```
-
----
-
-## ✨ Ember HUD: Ambient Luminescent Presence & Physical Shaders
-
-Ember HUD replaces plastic avatar windows with an ultra-minimalist, ambient physiological lighting presence:
-
-```text
-+-----------------------------------------------------------------------------------------+
-|                                  EMBER HUD COLOR & SHADER                               |
-+-----------------------------------------------------------------------------------------+
-|                                                                                         |
-|     1.0 |                   *                                                           |
-|         |                 *   *                                                         |
-| Intensity|               *     *                 *                                      |
-|         |              *       *               *   *                                    |
-|     0.0 +-------------*---------*-------------*-----*--------> Time (4.0s Breathing)    |
-|                       0s        2s            3s    4s                                  |
-|                                                                                         |
-|  [Physiological Breathing Equation]:                                                    |
-|  I(t) = I_base + A * sin^3(2 * PI * t / 4.0)                                            |
-|                                                                                         |
-|  [Planckian Blackbody Radiation Color Temperature]:                                     |
-|  T_Kelvin -> (R, G, B) analytical solution:                                             |
-|  - Idle Presence:     3200K (Warm Candlelight Amber)                                    |
-|  - Deep Thinking:     5500K (Daylight Azure Blue)                                       |
-|  - Circadian Dreaming: 2200K (Deep Dusk Ember)                                          |
-|  - Flow Focus:        4200K (Soft Moonlight Calm)                                       |
-|                                                                                         |
-|  [Peripheral Screen Vignette (WGSL Shader)]:                                            |
-|  vignette = smoothstep(0.75, 1.0, length(uv - 0.5) * 1.414) * pulse_intensity           |
-+-----------------------------------------------------------------------------------------+
-```
-
----
-
-## 💾 Portable USB Flash-Drive Agent & P2P Mesh Roaming
-
-Apeireth can be packaged as a **zero-install, self-contained single USB flash-drive entity**:
-
-```text
-USB_DRIVE (E:\ or /media/usb/)
-├── apeireth.exe             # High-performance compiled single binary (Windows)
-├── apeireth                 # High-performance compiled single binary (Linux/macOS)
-├── run_apeireth.bat         # 1-Click launcher setting relative %~dp0data environment
-├── run_apeireth.sh          # 1-Click POSIX launcher setting relative $DIR/data
-├── apeireth.json            # Portable configuration with relative storage bindings
-└── data/                    # Encrypted local SQLite DB, memory streams & vault
-    ├── apeireth.db
-    ├── streams/
-    └── vault/
-```
-
-### Noise Protocol BLE / LAN Decentralized Roaming
-- **Noise_XX Handshake**: Mutual curve25519 authentication with forward-secret ChaChaPoly encryption;
-- **Onion Routing**: Ephemeral multi-hop envelopes preventing local gateway snooping;
-- **Zero-Cloud Memory Roaming**: Exchanging Merkle tree fact diffs between phone, laptop, and desktop via Bluetooth LE / UDP broadcast.
-
----
-
-## 💡 Real-World Scenarios in Action
+## 💡 Real-World Scenarios & Capabilities in Action
 
 ```text
 +-----------------------------------------------------------------------------------------+
@@ -337,35 +191,37 @@ USB_DRIVE (E:\ or /media/usb/)
 
 ---
 
-## 🌐 Full-Duplex Gateway Protocol & API Reference
+## 🧱 16-Crate Microkernel Workspace Structure
 
-The canonical gateway exposes HTTP/SSE endpoints alongside an 8-frame full-duplex WebSocket protocol:
+Apeireth 2.0+ enforces a strict, acyclic, single-direction dependency hierarchy:
 
-### 1. HTTP / SSE Endpoints
-- `GET  /health`: Microkernel health status and active subsystem check
-- `GET  /v1/models`: List registered LLM providers and cognitive engines
-- `POST /v1/chat/completions`: OpenAI-compatible buffered SSE chat streaming
-- `POST /v1/approvals/resolve`: L0 human approval resolution seam
-
-### 2. WebSocket 8-Frame Wire Protocol (`/v1/ws`)
 ```text
-+---------------------+-------------------------------------------------------------------+
-| Frame Name          | Wire Purpose & Payload                                            |
-+---------------------+-------------------------------------------------------------------+
-| AuthFrame           | Handshake token verification & session binding                    |
-| StreamChunkFrame    | Real-time partial text & token chunk with sentence boundary flag  |
-| StreamEndFrame      | Completion marker with total tokens, latency & verdict hash       |
-| ToolInvokeFrame     | Outbound capability call with sandboxed arguments & timeout       |
-| ToolResultFrame     | Sandboxed execution result encapsulated in untrusted envelope     |
-| PingFrame           | Microkernel heartbeat keep-alive (30s interval)                   |
-| ErrorFrame          | Structured failure payload with error code & recovery guidance     |
-| CloseFrame          | Clean termination with session snapshot commit                    |
-+---------------------+-------------------------------------------------------------------+
+crates/
+├── foundation/               # Layer 0: Core Domain, Security & Orchestration
+│   ├── core                  # Domain primitives, IDs, Clock, Nine Anchors
+│   ├── protocol              # Wire translation, WebSocket 8-frame, P2P Noise Mesh
+│   ├── governance            # Triple Onion, OWASP ASI-01, Verdict Cache
+│   ├── credentials           # OS Keyring, Zeroize secure memory
+│   ├── orchestration         # Quota Scheduler, Care Potential, Lineage Spawning, Council
+│   └── plugin                # Dynamic plugin & capability extension hooks
+├── engine/                   # Layer 1: Cognitive Engines & Memory Manifolds
+│   ├── memory                # Betti Homology, Kuramoto, TagMemo V10, Chronicle, SwarmVault
+│   ├── runtime               # Agent loop, Causal World Model, FlowLock, Heartbeat
+│   ├── organ                 # 9 Cognitive organs, Persona Synthesizer
+│   ├── perception            # Whisper HTTP, MiniMax TTS, Xcap screen vision
+│   ├── provider              # Anthropic, OpenAI-compatible, Google Gemini, Ollama
+│   └── storage               # SQLite pools, ACID migrations, Bitemporal facts
+├── capabilities/             # Layer 2: Tool Execution & Sandbox Containment
+│   └── tools                 # ProcessExecutor (JobObject/cgroups), RepoMap, StealthCrawler
+└── adapters/                 # Layer 3: Transport & Interaction Surface
+    ├── cli                   # Canonical CLI binary & Portable USB Packager
+    ├── gateway               # Axum HTTP/SSE server, Duplex WebSocket, Ember HUD
+    └── sdk                   # Rust SDK client for embedded integration
 ```
 
 ---
 
-## 🚀 Quick Start & Developer Guide
+## 🚀 Quick Start
 
 ### 1. Prerequisites
 - Rust 1.97.1+ (MSRV)
@@ -377,7 +233,7 @@ The canonical gateway exposes HTTP/SSE endpoints alongside an 8-frame full-duple
 git clone https://github.com/Apeireth/apeireth-rust.git
 cd apeireth-rust
 
-# Run all 2012+ unit and integration tests across the 16 crates
+# Run all 2012+ unit and integration tests
 cargo test --workspace
 
 # Verify pure Safe Rust and zero clippy warnings
@@ -386,13 +242,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### 3. Launch Canonical Gateway with Ember HUD
 ```bash
-# Start HTTP/SSE and WebSocket gateway on port 8080
+# Start HTTP/SSE and WebSocket gateway
 cargo run -p apeireth-cli -- gateway serve --port 8080
 ```
 
 ### 4. Interactive CLI Session
 ```bash
-# Start interactive pair-programming session with bitemporal memory
+# Start interactive pair-programming session
 cargo run -p apeireth-cli -- chat
 ```
 
@@ -414,7 +270,7 @@ cargo run -p apeireth-cli -- bundle --output-dir "E:\Apeireth-Portable"
 - ⚡ **[5-Minute Developer Quickstart](docs/development/5-min-quickstart.md)**
 
 <details>
-<summary><b>🛡️ The Nine Invariant Philosophical Anchors (九大不可变哲学锚)</b></summary>
+<summary><b>🛡️ The Nine Invariant Philosophical Anchors (点击展开九大不可变哲学锚)</b></summary>
 
 Every line of code and every design decision strictly conforms to the **Nine Invariant Anchors**:
 
@@ -431,7 +287,7 @@ Every line of code and every design decision strictly conforms to the **Nine Inv
 </details>
 
 <details>
-<summary><b>📖 Philosophical Foundations: The Name & Brand Manifesto (命名哲学与品牌宣言)</b></summary>
+<summary><b>📖 Philosophical Foundations: The Name & Brand Manifesto (点击展开命名哲学与品牌宣言)</b></summary>
 
 ### The Name
 Apeireth comes from **Apeiron** (ἄπειρον) — the ancient Greek word for the *unbounded*, the *formless*: the primordial state from which, according to Anaximander, everything arises. The silence before "nothing" itself. And the fire that lights within it — the point between not-yet-burning and burning.
