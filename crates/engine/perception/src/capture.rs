@@ -107,8 +107,8 @@ pub fn jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
             if length < 7 || index + 6 >= bytes.len() {
                 return None;
             }
-            let height = u16::from_be_bytes([bytes[index + 3], bytes[index + 4]]) as u32;
-            let width = u16::from_be_bytes([bytes[index + 5], bytes[index + 6]]) as u32;
+            let height = u32::from(u16::from_be_bytes([bytes[index + 3], bytes[index + 4]]));
+            let width = u32::from(u16::from_be_bytes([bytes[index + 5], bytes[index + 6]]));
             if width == 0 || height == 0 {
                 return None;
             }
