@@ -29,6 +29,8 @@
 | **网关 (Gateway)** | `gw.duplex_ws` | `apeireth-gateway::duplex_gateway` | `DuplexFrame`, `SentenceDivider` | 8 核心帧体系 + 实时分句 + 毫秒级 Barge-in |
 | **感知 (Perception)** | `perc.minimax_tts` | `apeireth-perception::voice::minimax_tts`| `synthesize_stream()` | 128kbps 32kHz 音频流 + 3D PAD 情感调制 |
 
+> **状态标注 (0 装 PASS, 基线 candidate `8b7e3111`)**：本矩阵描述的是各能力域的**库级实现契约 (IMPLEMENTED)**——"实现模块"列确认对应模块存在于候选代码中并有测试覆盖（远端 Windows 验证机 `cargo test --workspace --locked` = 2012 通过 / 0 失败），**不代表** PRODUCTION WIRED（接入 canonical 运行时主路径）或 DEFAULT ENABLED（默认开启）。除特别标注外，所有模块均需显式 opt-in；`gw.duplex_ws` 与 barge-in 为网关库级模块，**未**挂载到 canonical HTTP 生产路由（生产路由仅 `/health`、`/v1/models`、`/v1/chat`、`/v1/chat/completions`、`/v1/approvals/resolve`）；canonical 网关的 chat SSE 为缓冲成帧（完整 canonical 完成路径结束后返回帧与 `[DONE]`），非逐 token 增量流式。Xcap 视觉捕获为 opt-in 后端，仅 Windows 硬件验证。逐项状态详见 `CHANGELOG.md` Unreleased 段。
+
 ---
 
 ## 2. 核心数据结构与契约示例
