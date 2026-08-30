@@ -266,10 +266,10 @@ export async function checkHealthDetailed(baseUrl: string, apiKey: string = '', 
   }
 
   // 2. Models / Provider (canonical)
+  // NOTE: Provider credentials loaded by backend from env vars, not frontend Authorization header.
   const t1 = performance.now();
   try {
     const res = await fetch(`${base}/v1/models`, {
-      headers: apiKey ? {Authorization: `Bearer ${apiKey}`} : {},
       signal: AbortSignal.timeout(3000),
     });
     const lat = Math.round(performance.now() - t1);
@@ -308,9 +308,9 @@ export async function checkHealthDetailed(baseUrl: string, apiKey: string = '', 
 }
 
 export async function listModels(baseUrl: string, apiKey: string): Promise<string[]> {
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/models`, {
-    headers: apiKey ? {Authorization: `Bearer ${apiKey}`} : {},
-  });
+  // NOTE: Provider credentials loaded by backend from env vars, not frontend Authorization header.
+  // apiKey parameter kept for signature compatibility but not used for canonical endpoint.
+  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/models`);
   const data = (await checkJson(response)) as {data?: Array<{id: string}>};
   return (data.data || []).map((item) => item.id);
 }
@@ -339,9 +339,10 @@ export async function streamChat(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (config.apiKey) {
-    headers.Authorization = `Bearer ${config.apiKey}`;
-  }
+  // NOTE: Provider credentials are loaded by backend from environment variables
+  // (APEIRETH_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, keyring).
+  // Frontend apiKey is reserved for future gateway authentication, NOT provider config.
+  // Do NOT send Authorization header to canonical /v1/chat/completions endpoint.
 
   const response = await fetch(`${base}/v1/chat/completions`, {
     method: 'POST',
