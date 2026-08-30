@@ -11,6 +11,9 @@
 //! - initialize lifecycle + capability metadata
 //! - schema / wire-key normalization (`inputSchema`, `mimeType`, `isError`)
 //! - resources/list+read and prompts/list+get models
+//! - in-memory subscription brokers
+//! - WHATWG SSE frame parser + reconnect policy
+//! - `file://` URI containment (algorithm only)
 //!
 //! Explicitly **not** recovered here:
 //! - reqwest SSE / HTTP-streamable / stdio transports
@@ -26,8 +29,12 @@ pub mod discovery;
 pub mod jsonrpc;
 pub mod lifecycle;
 pub mod prompt;
+pub mod reconnect;
 pub mod resource;
 pub mod schema;
+pub mod sse;
+pub mod subscribe;
+pub mod uri;
 
 pub use discovery::{
     dispatch_by_method, Primitive, PrimitiveDispatch, PRIMITIVE_COUNT, SUPPORTED_METHODS,
@@ -48,6 +55,7 @@ pub use prompt::{
     PromptArgument, PromptContent, PromptMessage, PromptRole, PromptServer, StaticPromptServer,
     PROMPT_INVALID_ARGS, PROMPT_NOT_FOUND, PROMPT_RENDER_FAILED,
 };
+pub use reconnect::{ReconnectPolicy, ReconnectState};
 pub use resource::{
     dispatch as dispatch_resources, handle_resources_list, handle_resources_read,
     CompositeResourceServer, Resource, ResourceContent, ResourceServer, StaticResourceServer,
@@ -57,4 +65,17 @@ pub use schema::{
     content_block_from_wire, content_block_to_wire, is_valid_mcp_name, normalize_mcp_result,
     normalize_wire_object, ContentBlock, McpTool, ToolCallResult, TOOL_CALL_FAILED, TOOL_INTERNAL,
     TOOL_INVALID_ARGS, TOOL_NOT_FOUND,
+};
+pub use sse::{absolutize_endpoint, parse_sse_frame, SseBuffer, SseFrame};
+pub use subscribe::{
+    build_resource_updated_notification, build_tool_completed_notification,
+    build_tool_list_changed_notification, build_tool_progress_notification,
+    handle_resources_subscribe, handle_resources_unsubscribe, handle_tools_subscribe,
+    handle_tools_unsubscribe, Subscription, SubscriptionManager, ToolEvent, ToolEventBroker,
+    ToolEventKind, ToolSubscription, SUBSCRIBE_ALREADY_SUBSCRIBED, SUBSCRIBE_INVALID_URI,
+    SUBSCRIBE_NOT_FOUND, TOOL_SUBSCRIBE_ALREADY, TOOL_SUBSCRIBE_INVALID_NAME,
+    TOOL_SUBSCRIBE_NOT_FOUND,
+};
+pub use uri::{
+    guess_mime, parse_file_uri, percent_decode, reject_escape, resolve_contained, UriError,
 };
