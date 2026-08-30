@@ -52,15 +52,31 @@ pub mod betti_hole_detector;
 pub mod bitemporal_graph;
 pub mod chronicle_crystallizer;
 pub mod continuity_link;
+pub use continuity_link::{
+    continuity_id_from_env, current_continuity_id, ensure_identity, migrate_subject,
+    normalize_continuity, recall_recent, record_carrier_migration, record_session,
+    resolve_continuity, ContinuityLink, MigrationReport, SessionRef, CONTINUITY_ENV_VAR,
+    DEFAULT_CONTINUITY_ID, MIGRATED_ID_PREFIX,
+};
 pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
 pub mod dreaming;
 pub mod epa_bridge;
 pub mod five_dimensional;
+pub mod graph_algo;
 pub mod hybrid_search;
+pub mod metadata_filter;
+pub mod persistent_vector;
+pub mod query_expand;
+pub mod vector_distance;
 pub mod intent_brier;
 pub mod kuramoto_resonance;
+pub mod calibration;
+pub mod calibration_critic;
+pub mod confidence;
+pub mod ensemble;
+pub mod online_calibration;
 pub mod meta_thinking;
 pub mod milestone;
 pub mod partner;
@@ -73,12 +89,34 @@ pub mod thought_cluster;
 pub mod three_tier_vault;
 pub mod topic_predictor;
 pub mod wiki_fs;
+// Salvage-03 (memory-advanced): closed-world injection + A-MEM residual CRAWL.
+// Default-off; not production-wired.
+pub mod memory_injection;
+pub mod amem_graph;
+pub mod memory_rank;
+pub mod dream_consolidation;
 
 pub use betti_hole_detector::{
     BettiHoleDetector, BettiTopologicalReport, ManifoldConceptNode, TopologicalVoidRing,
 };
 pub use chronicle_crystallizer::{ChronicleCrystallizer, ChronicleSection, RawEpisodicTrace};
 pub use kuramoto_resonance::{EpiphanyEvent, KuramotoOscillator, KuramotoResonanceEngine};
+
+pub use memory_injection::{
+    build_memory_injection, build_preference_injection, EVIDENCE_MAX_CHARS,
+    PREFERENCE_INJECTION_LIMIT,
+};
+pub use amem_graph::{
+    combined_score, content_residual, crawl, fact_specificity, text_overlap, AmemGraph, GraphFact,
+    GraphRankConfig, MemoryLink, GRAPH_INJECTION_LIMIT, LINK_OVERLAP_THRESHOLD,
+};
+pub use memory_rank::{
+    filter_active_memories, group_bonus, memory_score, parse_importance, rank_memory_entries,
+    recency_score, RankableMemory, IMP_PREFIX, TOMBSTONE_PREFIX,
+};
+pub use dream_consolidation::{
+    pair_merge, select_dream_candidates, DreamSource, DREAM_ID_PREFIX,
+};
 
 pub use epa_bridge::{EpaProjectionResult, EpaSemanticBridge};
 pub use residual_pyramid::{
@@ -128,6 +166,24 @@ pub use intent_brier::{
     DEFAULT_LOW_CALIBRATION_THRESHOLD, DEFAULT_WINDOWS, TREND_DELTA_RATIO,
 };
 
+pub use calibration::{
+    brier_squared, calibration_bins, decompose, decompose_default, ece_default,
+    expected_calibration_error, mean_brier_score, BrierDecomposition, CalibrationBin, Observation,
+    DEFAULT_NUM_BINS,
+};
+pub use ensemble::{
+    AggregationStrategy, EnsembleConfig, EnsembleForecast, EnsembleMember, MarketConfig,
+    MarketError, PredictionMarket, TradeReceipt,
+};
+pub use calibration_critic::{
+    CalibrationCritic, CriticConfig as CalibrationCriticConfig, CritiqueAction, CritiqueResult,
+};
+pub use confidence::{BetaBinomial, Strength as ConfidenceStrength};
+pub use online_calibration::{
+    AdaptiveBaseline, CalibrationCoefficients, Coeff, DriftAlarm, DriftDetector, LinearCalibration,
+    RecalibrationScheduler, ScheduleReport, UserFeedback as CalibrationFeedback,
+};
+
 pub use reflexion::{
     Critic, FailureKind, FailureRecord, FileReflexionStore, InMemoryReflexionStore, ReflectionText,
     ReflexionError, ReflexionStore, RuleCritic,
@@ -141,7 +197,20 @@ pub use diary::{
 };
 
 pub use episode::{EpisodeQuery, EpisodeStore};
+pub use graph_algo::{
+    all_paths, connected_components, dijkstra_shortest_path, edges_matching, has_cycle,
+    neighbors_directed, nodes_with_label, topological_sort, walk, TraversalDirection, WalkOrder,
+    WalkStep,
+};
 pub use hybrid_search::{tokenize, Bm25Config, Bm25Hit, Bm25Index, HybridHit, HybridSearchEngine};
+pub use metadata_filter::{MetadataFilter, PropertyPredicate};
+pub use persistent_vector::{PersistentVectorHit, PersistentVectorIndex, DEFAULT_DB_FILE};
+pub use query_expand::{expand_query, ExpandedQuery};
+pub use vector_distance::{
+    cosine, cosine_distance, cosine_distance_to_score, distance, dot_product, euclidean_distance,
+    euclidean_distance_sq, l2_distance_to_score, l2_norm, manhattan_distance, normalize,
+    DistanceMetric,
+};
 pub use milestone::{
     InMemoryMilestoneStore, Milestone, MilestoneKind, MilestonePayload, MilestoneStore,
 };
@@ -178,7 +247,23 @@ pub use memory_governance::{
 };
 // Core Capability Expansion Phase 5: Agent 执行轨迹 (structured trace, 持久化 + 查询).
 pub mod agent_trace;
-pub use agent_trace::{TraceQueryError, TraceSpan, TraceSpanKind, TraceSpanStatus, TraceStore};
+pub use agent_trace::{
+    redact_attributes, sanitize_summary, summary_is_safe, TraceQueryError, TraceSpan, TraceSpanKind,
+    TraceSpanStatus, TraceStore,
+};
+// Salvage 02: windowed fingerprint + textual near-dup (companion observer_capture / dream).
+pub mod dedup;
+pub use dedup::{
+    dedup_textual, episode_fingerprint, fingerprint_bytes, fingerprint_json, normalize_for_dedup,
+    overlap_ratio, DedupConfig, DedupIndex, DEFAULT_DEDUP_WINDOW_MS, DEFAULT_LRU_CAP,
+    TEXTUAL_MIN_LEN, TEXTUAL_OVERLAP_THRESHOLD,
+};
+// Salvage 02: rolling cross-frontend context ledger (companion onering).
+pub mod onering;
+pub use onering::{LedgerEntry, OneRingLedger, DEFAULT_MAX_RECORDS, ROLE_ASSISTANT, ROLE_USER};
+// Salvage 02: combined retention sweep (count cap + TTL + decay) via governance sidecar.
+pub mod retention;
+pub use retention::{decay_strength, sweep_session, RetentionPolicy, RetentionSweepReport};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
