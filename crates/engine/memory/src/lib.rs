@@ -58,6 +58,7 @@ pub mod five_dimensional;
 pub mod hybrid_search;
 pub mod intent_brier;
 pub mod calibration;
+pub mod ensemble;
 pub mod meta_thinking;
 pub mod milestone;
 pub mod partner;
@@ -133,6 +134,10 @@ pub use calibration::{
     brier_squared, calibration_bins, decompose, decompose_default, ece_default,
     expected_calibration_error, mean_brier_score, BrierDecomposition, CalibrationBin, Observation,
     DEFAULT_NUM_BINS,
+};
+pub use ensemble::{
+    AggregationStrategy, EnsembleConfig, EnsembleForecast, EnsembleMember, MarketConfig,
+    MarketError, PredictionMarket, TradeReceipt,
 };
 
 pub use reflexion::{
