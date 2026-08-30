@@ -9,7 +9,8 @@ use std::sync::Arc;
 
 use apeireth_perception::vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
 use apeireth_perception::voice::{
-    hex_decode_audio, split_pcm16_frames, Pcm16Buffer, WhisperHttpBackend, WhisperHttpConfig,
+    hex_decode_audio, split_pcm16_frames, Pcm16Buffer, RecordingSession, RecordingStatus,
+    SpeechInput, SpeechOutput, VoiceSession, WhisperHttpBackend, WhisperHttpConfig,
     PCM16_FRAME_SAMPLES,
 };
 use apeireth_plugin::credentials::StaticCredentials;
@@ -71,4 +72,37 @@ fn pcm16_split_and_hex_decode_are_pure() {
     assert_eq!(frames.len(), 2);
     assert_eq!(frames[1].samples.len(), 8);
     assert_eq!(hex_decode_audio("494433").unwrap(), b"ID3");
+}
+
+#[test]
+fn recording_session_guarded_transitions() {
+    let mut rec = RecordingSession::arm("it-1", "apeireth");
+    rec.start().unwrap();
+    rec.append_samples(&[7i16; 64]).unwrap();
+    let pcm = rec.stop().unwrap();
+    assert_eq!(rec.status, RecordingStatus::Stopped);
+    assert_eq!(pcm.samples.len(), 64);
+}
+
+#[test]
+fn voice_session_loopback_does_not_own_a_transcript() {
+    #[derive(Debug)]
+    struct In(Vec<String>);
+    impl SpeechInput for In {
+        fn listen(&mut self) -> Result<String, String> {
+            Ok(self.0.remove(0))
+        }
+    }
+    #[derive(Debug, Default)]
+    struct Out(Vec<String>);
+    impl SpeechOutput for Out {
+        fn speak(&mut self, text: &str) -> Result<(), String> {
+            self.0.push(text.to_string());
+            Ok(())
+        }
+    }
+    let mut session = VoiceSession::new(Box::new(In(vec!["ping".into()])), Box::new(Out::default()));
+    let turn = session.turn(&|t| t.to_uppercase()).unwrap();
+    assert_eq!(turn.reply, "PING");
+    assert_eq!(session.turn_count, 1);
 }
