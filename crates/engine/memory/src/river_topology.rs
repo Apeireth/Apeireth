@@ -188,10 +188,7 @@ impl DtscObservables {
             self.direct * 0.70 + self.structural * 0.20 + self.closure * 0.10
         } else {
             // Dense 态：全拓扑几何重排
-            self.direct * 0.35
-                + self.structural * 0.30
-                + self.thematic * 0.20
-                + self.closure * 0.15
+            self.direct * 0.35 + self.structural * 0.30 + self.thematic * 0.20 + self.closure * 0.15
         }
     }
 }
@@ -282,11 +279,7 @@ impl DualScaledFieldSolver {
     }
 
     /// 求解双对偶连续场分布 (u_local, u_transfer)
-    pub fn solve(
-        &self,
-        source: &[f32],
-        adjacency_matrix: &[Vec<f32>],
-    ) -> (Vec<f32>, Vec<f32>) {
+    pub fn solve(&self, source: &[f32], adjacency_matrix: &[Vec<f32>]) -> (Vec<f32>, Vec<f32>) {
         let n = source.len();
         if n == 0 || adjacency_matrix.len() != n {
             return (vec![], vec![]);
@@ -318,12 +311,21 @@ impl DualScaledFieldSolver {
                 }
                 // (I - α P) u = (1 - α) s0  ==>  u = (1 - α) s0 + α P u
                 next_local[i] = (1.0 - self.alpha_local) * s0[i] + self.alpha_local * prop_l;
-                next_transfer[i] = (1.0 - self.alpha_transfer) * s0[i] + self.alpha_transfer * prop_t;
+                next_transfer[i] =
+                    (1.0 - self.alpha_transfer) * s0[i] + self.alpha_transfer * prop_t;
             }
 
             // 检查 L1 残差收敛
-            let res_l: f32 = next_local.iter().zip(&u_local).map(|(a, b)| (a - b).abs()).sum();
-            let res_t: f32 = next_transfer.iter().zip(&u_transfer).map(|(a, b)| (a - b).abs()).sum();
+            let res_l: f32 = next_local
+                .iter()
+                .zip(&u_local)
+                .map(|(a, b)| (a - b).abs())
+                .sum();
+            let res_t: f32 = next_transfer
+                .iter()
+                .zip(&u_transfer)
+                .map(|(a, b)| (a - b).abs())
+                .sum();
 
             u_local = next_local;
             u_transfer = next_transfer;

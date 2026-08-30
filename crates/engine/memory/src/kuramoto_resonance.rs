@@ -61,11 +61,7 @@ impl KuramotoResonanceEngine {
     }
 
     /// Advances the oscillator phases using numerical integration and detects emergent phase-locking.
-    pub fn step(
-        &self,
-        oscillators: &mut [KuramotoOscillator],
-        dt: f32,
-    ) -> Vec<EpiphanyEvent> {
+    pub fn step(&self, oscillators: &mut [KuramotoOscillator], dt: f32) -> Vec<EpiphanyEvent> {
         let n = oscillators.len();
         if n < 2 {
             return Vec::new();
@@ -80,8 +76,12 @@ impl KuramotoResonanceEngine {
                 } else {
                     1.0f32
                 };
-                let res_cos = Self::cosine_similarity(&oscillators[i].intrinsic_residual, &oscillators[j].intrinsic_residual);
-                let coupling = (self.coupling_strength_base * (1.0 + res_cos) * cross_domain_boost).max(0.0);
+                let res_cos = Self::cosine_similarity(
+                    &oscillators[i].intrinsic_residual,
+                    &oscillators[j].intrinsic_residual,
+                );
+                let coupling =
+                    (self.coupling_strength_base * (1.0 + res_cos) * cross_domain_boost).max(0.0);
                 k_matrix[i][j] = coupling;
                 k_matrix[j][i] = coupling;
             }
@@ -95,11 +95,14 @@ impl KuramotoResonanceEngine {
             let mut coupling_sum = 0.0f32;
             for j in 0..n {
                 if i != j {
-                    coupling_sum += k_matrix[i][j] * (oscillators[j].current_phase_theta - oscillators[i].current_phase_theta).sin();
+                    coupling_sum += k_matrix[i][j]
+                        * (oscillators[j].current_phase_theta - oscillators[i].current_phase_theta)
+                            .sin();
                 }
             }
             let dtheta_dt = oscillators[i].natural_frequency_omega + coupling_sum / (n as f32);
-            let updated_phase = (oscillators[i].current_phase_theta + dtheta_dt * dt) % (2.0 * std::f32::consts::PI);
+            let updated_phase = (oscillators[i].current_phase_theta + dtheta_dt * dt)
+                % (2.0 * std::f32::consts::PI);
             let normalized_phase = if updated_phase < 0.0 {
                 updated_phase + 2.0 * std::f32::consts::PI
             } else {
@@ -123,7 +126,9 @@ impl KuramotoResonanceEngine {
             for j in (i + 1)..n {
                 // We are especially interested in cross-domain synchronization (e.g. Cryptography <-> Biology)
                 if oscillators[i].domain_tag != oscillators[j].domain_tag {
-                    let phase_diff = (oscillators[i].current_phase_theta - oscillators[j].current_phase_theta).abs();
+                    let phase_diff = (oscillators[i].current_phase_theta
+                        - oscillators[j].current_phase_theta)
+                        .abs();
                     let min_phase_diff = phase_diff.min(2.0 * std::f32::consts::PI - phase_diff);
                     let coherence = ((min_phase_diff).cos() + 1.0) / 2.0;
 
@@ -132,21 +137,27 @@ impl KuramotoResonanceEngine {
                         let epiphany_id = format!("epiphany_{epiphany_counter:03}");
                         let meta_name = format!(
                             "MetaSynthesis_{}_{}",
-                            oscillators[i].concept_id,
-                            oscillators[j].concept_id
+                            oscillators[i].concept_id, oscillators[j].concept_id
                         );
 
                         // Synthesize new meta-vector from residual contraction
                         let dim = oscillators[i].intrinsic_residual.len();
                         let mut meta_vector = vec![0.0f32; dim];
                         for d in 0..dim {
-                            meta_vector[d] = (oscillators[i].intrinsic_residual[d] + oscillators[j].intrinsic_residual[d]) * 0.5 * (1.0 + coherence);
+                            meta_vector[d] = (oscillators[i].intrinsic_residual[d]
+                                + oscillators[j].intrinsic_residual[d])
+                                * 0.5
+                                * (1.0 + coherence);
                         }
 
                         let wormhole_edges = vec![
                             (oscillators[i].concept_id.clone(), meta_name.clone(), 1.0f32),
                             (oscillators[j].concept_id.clone(), meta_name.clone(), 1.0f32),
-                            (oscillators[i].concept_id.clone(), oscillators[j].concept_id.clone(), 0.95f32),
+                            (
+                                oscillators[i].concept_id.clone(),
+                                oscillators[j].concept_id.clone(),
+                                0.95f32,
+                            ),
                         ];
 
                         epiphanies.push(EpiphanyEvent {

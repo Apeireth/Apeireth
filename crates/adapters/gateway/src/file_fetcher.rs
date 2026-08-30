@@ -192,7 +192,8 @@ impl TransparentFileFetcher {
 
 /// 简易 Safe Base64 解码器 (无外部额外依赖)
 fn base64_decode(input: &str) -> Result<Vec<u8>, FileFetchError> {
-    const B64_TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const B64_TABLE: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut lookup = [255u8; 256];
     for (i, &b) in B64_TABLE.iter().enumerate() {
         lookup[b as usize] = i as u8;
@@ -234,9 +235,13 @@ mod tests {
     #[test]
     fn test_path_traversal_detection() {
         let fetcher = TransparentFileFetcher::new("target/.file_cache", vec![]);
-        assert!(fetcher.validate_path_safety("valid/path/to/file.png").is_ok());
+        assert!(fetcher
+            .validate_path_safety("valid/path/to/file.png")
+            .is_ok());
         assert!(fetcher.validate_path_safety("../etc/passwd").is_err());
-        assert!(fetcher.validate_path_safety("valid/../../secret.key").is_err());
+        assert!(fetcher
+            .validate_path_safety("valid/../../secret.key")
+            .is_err());
     }
 
     #[test]
@@ -271,7 +276,9 @@ mod tests {
 
         // 再次获取应命中内存缓存
         let cached = fetcher
-            .fetch_file("file://remote_storage/asset.txt", |_| panic!("Should use cache"))
+            .fetch_file("file://remote_storage/asset.txt", |_| {
+                panic!("Should use cache")
+            })
             .unwrap();
         assert_eq!(cached.cache_key, result.cache_key);
     }

@@ -16,9 +16,7 @@ pub mod emotion_voice;
 pub mod minimax_tts;
 pub mod whisper_http;
 
-pub use emotion_voice::{
-    AcousticParameters, EmotionCategory, EmotionVoiceSynthesizer, PadEmotion,
-};
+pub use emotion_voice::{AcousticParameters, EmotionCategory, EmotionVoiceSynthesizer, PadEmotion};
 pub use minimax_tts::{
     AudioChunk, EmotionToneModulation, MiniMaxLiveTtsClient, MiniMaxTtsRequest, TtsError,
 };

@@ -12,9 +12,9 @@
 //!
 //! Pure Safe Rust (`#![deny(unsafe_code)]`).
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Errors related to Three-Tier Vault and TOC operations.
@@ -155,11 +155,7 @@ impl TreeReasoningRouter {
         matches
     }
 
-    fn recursive_route(
-        node: &TocTreeNode,
-        keywords: &[&str],
-        results: &mut Vec<TocTreeNode>,
-    ) {
+    fn recursive_route(node: &TocTreeNode, keywords: &[&str], results: &mut Vec<TocTreeNode>) {
         let title_lower = node.title.to_lowercase();
         let summary_lower = node.summary.to_lowercase();
 
@@ -271,7 +267,10 @@ Detailed analysis here.
 
         assert_eq!(main.children[0].title, "Chapter 1: Introduction");
         assert_eq!(main.children[0].children.len(), 1); // Section 1.1
-        assert_eq!(main.children[0].children[0].title, "Section 1.1: Background");
+        assert_eq!(
+            main.children[0].children[0].title,
+            "Section 1.1: Background"
+        );
 
         assert_eq!(main.children[1].title, "Chapter 2: Deep Dive");
     }
@@ -295,13 +294,22 @@ Covers OWASP security and rate limiting.
     fn test_three_tier_vault_schema_and_provenance() {
         let mut vault = ThreeTierVault::new(
             Path::new("/vault"),
-            vec!["Hypothesis".to_string(), "Finding".to_string(), "Component".to_string()],
+            vec![
+                "Hypothesis".to_string(),
+                "Finding".to_string(),
+                "Component".to_string(),
+            ],
         );
 
         assert!(vault.validate_entity_type("Component").is_ok());
         assert!(vault.validate_entity_type("AlienArtifact").is_err());
 
-        vault.record_provenance("raw_pdf_01", "wiki_comp_river", "distilled_from", 1780000000);
+        vault.record_provenance(
+            "raw_pdf_01",
+            "wiki_comp_river",
+            "distilled_from",
+            1780000000,
+        );
         let sources = vault.get_raw_sources_for_concept("wiki_comp_river");
         assert_eq!(sources.len(), 1);
         assert_eq!(sources[0], "raw_pdf_01");

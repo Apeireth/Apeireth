@@ -3,8 +3,8 @@
 //! 在能力执行前拦截路径穿越与高危 Shell 注入，在能力执行后扫描输出中的敏感凭据，
 //! 阻断凭据外泄并防止被大模型长程记忆污染.
 
-use std::path::Path;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use thiserror::Error;
 
 /// 前置守门拦截错误.
@@ -46,7 +46,10 @@ impl ToolGuardrail {
     }
 
     /// 前置路径安全检查.
-    pub fn verify_path_access(workspace_root: &Path, requested_path: &Path) -> Result<(), PreCallGuardError> {
+    pub fn verify_path_access(
+        workspace_root: &Path,
+        requested_path: &Path,
+    ) -> Result<(), PreCallGuardError> {
         let path_str = requested_path.to_string_lossy();
 
         // 1. 拦截明显的路径穿越特征
@@ -60,9 +63,14 @@ impl ToolGuardrail {
         // 2. 拦截绝对敏感路径
         let lower_path = path_str.to_lowercase();
         let forbidden_prefixes = [
-            "/etc/shadow", "/etc/passwd", "/etc/sudoers",
-            "/root", "/var/run", "/dev",
-            "c:\\windows\\system32", "c:\\windows\\system",
+            "/etc/shadow",
+            "/etc/passwd",
+            "/etc/sudoers",
+            "/root",
+            "/var/run",
+            "/dev",
+            "c:\\windows\\system32",
+            "c:\\windows\\system",
         ];
 
         for prefix in &forbidden_prefixes {
@@ -76,7 +84,9 @@ impl ToolGuardrail {
 
         // 3. 若为绝对路径，必须位于 workspace_root 范围内
         if requested_path.is_absolute() {
-            if let (Ok(canonical_root), Ok(canonical_target)) = (workspace_root.canonicalize(), requested_path.canonicalize()) {
+            if let (Ok(canonical_root), Ok(canonical_target)) =
+                (workspace_root.canonicalize(), requested_path.canonicalize())
+            {
                 if !canonical_target.starts_with(&canonical_root) {
                     return Err(PreCallGuardError::PathTraversal(format!(
                         "目标路径超出工作区边界: {}",
@@ -96,10 +106,16 @@ impl ToolGuardrail {
 
         // 高危不可逆破坏性命令
         let forbidden_commands = [
-            "rm -rf /", "rm -rf /*", "rmdir /s /q c:\\",
-            "mkfs.", "dd if=", "format c:",
+            "rm -rf /",
+            "rm -rf /*",
+            "rmdir /s /q c:\\",
+            "mkfs.",
+            "dd if=",
+            "format c:",
             ":(){ :|:& };:", // Fork 炸弹
-            "shutdown -h now", "shutdown /s", "reboot",
+            "shutdown -h now",
+            "shutdown /s",
+            "reboot",
         ];
 
         for cmd in &forbidden_commands {
@@ -122,7 +138,9 @@ impl ToolGuardrail {
         // 1. OpenAI Key 扫描 (sk-...)
         if let Some(pos) = sanitized.find("sk-") {
             let candidate = &sanitized[pos..];
-            let end = candidate.find(|c: char| c.is_whitespace() || c == '"' || c == '\'').unwrap_or(candidate.len());
+            let end = candidate
+                .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
+                .unwrap_or(candidate.len());
             let token = &candidate[..end];
             if token.len() >= 20 {
                 leaked_kinds.push(LeakedCredentialKind::OpenAiKey);
@@ -133,7 +151,9 @@ impl ToolGuardrail {
         // 2. AWS Key 扫描 (AKIA...)
         if let Some(pos) = sanitized.find("AKIA") {
             let candidate = &sanitized[pos..];
-            let end = candidate.find(|c: char| !c.is_ascii_alphanumeric()).unwrap_or(candidate.len());
+            let end = candidate
+                .find(|c: char| !c.is_ascii_alphanumeric())
+                .unwrap_or(candidate.len());
             let token = &candidate[..end];
             if token.len() >= 16 && token.len() <= 32 {
                 leaked_kinds.push(LeakedCredentialKind::AwsAccessKey);
@@ -144,7 +164,9 @@ impl ToolGuardrail {
         // 3. GitHub PAT 扫描 (ghp_... 或 github_pat_...)
         if let Some(pos) = sanitized.find("ghp_") {
             let candidate = &sanitized[pos..];
-            let end = candidate.find(|c: char| !c.is_ascii_alphanumeric()).unwrap_or(candidate.len());
+            let end = candidate
+                .find(|c: char| !c.is_ascii_alphanumeric())
+                .unwrap_or(candidate.len());
             let token = &candidate[..end];
             if token.len() >= 36 {
                 leaked_kinds.push(LeakedCredentialKind::GitHubPat);
@@ -169,7 +191,9 @@ impl ToolGuardrail {
         for prefix in &slack_prefixes {
             if let Some(pos) = sanitized.find(prefix) {
                 let candidate = &sanitized[pos..];
-                let end = candidate.find(|c: char| c.is_whitespace() || c == '"' || c == '\'').unwrap_or(candidate.len());
+                let end = candidate
+                    .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
+                    .unwrap_or(candidate.len());
                 let token = &candidate[..end];
                 if token.len() >= 20 {
                     leaked_kinds.push(LeakedCredentialKind::SlackToken);
@@ -218,7 +242,9 @@ mod tests {
         let res = ToolGuardrail::scan_and_sanitize_output(raw);
         assert!(!res.is_clean);
         assert!(res.leaked_kinds.contains(&LeakedCredentialKind::OpenAiKey));
-        assert!(res.leaked_kinds.contains(&LeakedCredentialKind::AwsAccessKey));
+        assert!(res
+            .leaked_kinds
+            .contains(&LeakedCredentialKind::AwsAccessKey));
         assert!(res.sanitized_output.contains("[REDACTED_OPENAI_KEY]"));
         assert!(res.sanitized_output.contains("[REDACTED_AWS_KEY]"));
     }
@@ -228,7 +254,9 @@ mod tests {
         let raw = "Output: -----BEGIN RSA PRIVATE KEY----- MIIEowIBAAKCAQEA0... -----END RSA PRIVATE KEY-----";
         let res = ToolGuardrail::scan_and_sanitize_output(raw);
         assert!(!res.is_clean);
-        assert!(res.leaked_kinds.contains(&LeakedCredentialKind::PemPrivateKey));
+        assert!(res
+            .leaked_kinds
+            .contains(&LeakedCredentialKind::PemPrivateKey));
         assert!(res.sanitized_output.contains("[REDACTED_PEM_PRIVATE_KEY]"));
     }
 }

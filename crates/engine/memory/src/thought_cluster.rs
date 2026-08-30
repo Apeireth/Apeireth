@@ -359,9 +359,9 @@ impl ThoughtClusterReader for InMemoryThoughtClusterReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use apeireth_core::clock::VirtualClock;
     use chrono::TimeZone;
+    use std::path::Path;
 
     fn vclock() -> VirtualClock {
         VirtualClock::new(
@@ -395,7 +395,7 @@ mod tests {
         assert_eq!(p1.file_name().unwrap(), "2026-08-16-001.md");
         assert_eq!(p2.file_name().unwrap(), "2026-08-16-002.md");
         assert!(p2.starts_with(root.join("前思维簇")));
-        
+
         let p3 = m.create_file("反思簇", "反思一条").unwrap();
         assert_eq!(p3.file_name().unwrap(), "2026-08-16-001.md");
         cleanup(&root);
@@ -419,7 +419,7 @@ mod tests {
         let m = mgr(&root);
         m.create_file("乙簇", "乙内容").unwrap();
         m.create_file("甲簇", "甲内容").unwrap();
-        
+
         let clusters = m.list_clusters().unwrap();
         assert_eq!(clusters, vec!["乙簇", "甲簇"]);
 
@@ -436,7 +436,8 @@ mod tests {
         m.create_file("甲簇", "甲1").unwrap();
         m.create_file("乙簇", "乙1").unwrap();
 
-        m.register_chain("主线思考", &["乙簇".into(), "甲簇".into()]).unwrap();
+        m.register_chain("主线思考", &["乙簇".into(), "甲簇".into()])
+            .unwrap();
         let files = m.read_chain("主线思考").unwrap();
         assert_eq!(files.len(), 2);
         assert_eq!(files[0].name, "乙簇/2026-08-16-001.md");
@@ -448,13 +449,19 @@ mod tests {
     fn edit_file_replaces_target_with_safety_boundary() {
         let root = temp_root();
         let m = mgr(&root);
-        m.create_file("测试簇", "这是第一行说明文本。这是一段足够长的目标文本需要被替换。这是最后一行。").unwrap();
+        m.create_file(
+            "测试簇",
+            "这是第一行说明文本。这是一段足够长的目标文本需要被替换。这是最后一行。",
+        )
+        .unwrap();
 
         // 过短拒绝 (< 15 字符)
         assert!(m.edit_file(Some("测试簇"), "短文本", "新文本").is_err());
 
         let target = "这是一段足够长的目标文本需要被替换。";
-        let path = m.edit_file(Some("测试簇"), target, "【已替换的新内容】").unwrap();
+        let path = m
+            .edit_file(Some("测试簇"), target, "【已替换的新内容】")
+            .unwrap();
         let content = std::fs::read_to_string(path).unwrap();
         assert!(content.contains("【已替换的新内容】"));
         assert!(!content.contains(target));
@@ -478,10 +485,13 @@ mod tests {
     #[test]
     fn in_memory_reader_works_identically() {
         let mut reader = InMemoryThoughtClusterReader::new();
-        reader.insert_file("内存簇", ThoughtFile {
-            name: "test.md".into(),
-            content: "内存内容".into(),
-        });
+        reader.insert_file(
+            "内存簇",
+            ThoughtFile {
+                name: "test.md".into(),
+                content: "内存内容".into(),
+            },
+        );
         reader.register_chain("测试链", vec!["内存簇".into()]);
 
         assert_eq!(reader.clusters(), vec!["内存簇"]);

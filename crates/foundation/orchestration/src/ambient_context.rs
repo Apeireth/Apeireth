@@ -145,11 +145,7 @@ impl AmbientContextMachine {
     }
 
     /// 更新环境感知状态并自动完成姿态转移.
-    pub fn update_environment(
-        &self,
-        window_title: Option<&str>,
-        now_ms: i64,
-    ) -> AmbientSnapshot {
+    pub fn update_environment(&self, window_title: Option<&str>, now_ms: i64) -> AmbientSnapshot {
         let scene = if let Some(title) = window_title {
             Self::infer_scene_from_window(title)
         } else {
@@ -226,7 +222,9 @@ mod tests {
     #[test]
     fn test_infer_scene_classification() {
         assert_eq!(
-            AmbientContextMachine::infer_scene_from_window("main.rs - Apeireth - Visual Studio Code"),
+            AmbientContextMachine::infer_scene_from_window(
+                "main.rs - Apeireth - Visual Studio Code"
+            ),
             UserActivityScene::DeepCoding
         );
         assert_eq!(
@@ -249,7 +247,8 @@ mod tests {
         machine.record_interaction(0);
 
         // 切换到编码
-        let snap1 = machine.update_environment(Some("crates/engine/memory/src/lib.rs - VSCode"), 1000);
+        let snap1 =
+            machine.update_environment(Some("crates/engine/memory/src/lib.rs - VSCode"), 1000);
         assert_eq!(snap1.scene, UserActivityScene::DeepCoding);
         assert_eq!(snap1.stance, CompanionStance::FocusAssistant);
 
