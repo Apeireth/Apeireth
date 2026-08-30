@@ -50,6 +50,7 @@
 #![deny(unsafe_code)]
 
 pub mod alias;
+pub mod bounds;
 pub mod capability;
 pub mod credentials;
 pub mod error;
@@ -73,6 +74,12 @@ pub mod watch;
 pub use alias::{
     aliases_by_id, index_manifests, index_pairs, unresolved_token, AliasIndex, AliasResolver,
     LruCache, DEFAULT_CACHE_SIZE, LEGACY_UNRESOLVED_PREFIX,
+};
+pub use bounds::{
+    audit_bounds, check_call, check_input_size, check_output_size, check_permissions,
+    default_caller_permissions, is_valid_kebab, privileged_caller_permissions,
+    validate_extension_name, validate_permissions, validate_plugin_manifest_text,
+    validate_resource_bounds, validate_version, BoundError, ResourceBounds,
 };
 pub use capability::{CapabilityDescriptor, CapabilityKind};
 pub use credentials::{CredentialResolver, NoCredentials, Secret, StaticCredentials};
