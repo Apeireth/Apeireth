@@ -800,43 +800,6 @@ export async function fetchBackendSessions(config: ApeirethConfig): Promise<Arra
   return data.sessions || [];
 }
 
-/** 获取会话时间线 (episodes) */
-export async function fetchSessionTimeline(config: ApeirethConfig, sessionId: string): Promise<MemoryEpisodeItem[]> {
-  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/sessions/${encodeURIComponent(sessionId)}/timeline`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-  });
-  const data = (await checkJson(res)) as {episodes?: Array<{id: string; timestamp: number; role: string; content: string; session_id: string}>};
-  return (data.episodes || []).map((e) => ({
-    id: e.id,
-    timestamp: e.timestamp,
-    role: e.role,
-    content: e.content,
-    sessionId: e.session_id,
-  }));
-}
-
-/** 获取 6 历史记忆流 */
-export async function fetchMemoryStreams(config: ApeirethConfig): Promise<Record<string, MemoryEpisodeItem[]>> {
-  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/streams`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-  });
-  const data = (await checkJson(res)) as {streams?: Record<string, Array<{id: string; timestamp: number; role: string; content: string; session_id: string}>>};
-  const result: Record<string, MemoryEpisodeItem[]> = {};
-  if (data.streams) {
-    for (const [key, list] of Object.entries(data.streams)) {
-      result[key] = (list || []).map((e) => ({
-        id: e.id,
-        timestamp: e.timestamp,
-        role: e.role,
-        content: e.content,
-        sessionId: e.session_id,
-        stream: key,
-      }));
-    }
-  }
-  return result;
-}
-
 /** 搜索记忆条目 */
 export async function fetchMemoryEpisodes(config: ApeirethConfig, query = '', limit = 100): Promise<MemoryEpisodeItem[]> {
   const url = `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/episodes?limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}`;
@@ -1023,11 +986,6 @@ export async function grantToolPermission(
   }
 }
 
-// Compatibility alias — master used `grantApproval` for the same endpoint.
-export const grantApproval = grantToolPermission;
-// Compatibility alias — master used `fetchPendingApprovals`.
-export const fetchPendingApprovals = fetchApprovalRequests;
-
 /** 写入记忆条目 */
 export async function appendMemoryEpisode(
   config: ApeirethConfig,
@@ -1081,21 +1039,6 @@ export function saveConversations(conversations: Conversation[]): void {
 // Backward-compatible aliases for legacy / transition imports
 export type MemoryEpisode = MemoryEpisodeItem;
 export type ToolInfo = ToolItem;
-
-export async function fetchEpisodes(config: ApeirethConfig, limit = 50): Promise<MemoryEpisodeItem[]> {
-  return fetchMemoryEpisodes(config, '', limit);
-}
-
-export async function fetchOrgans(config: ApeirethConfig): Promise<unknown[]> {
-  try {
-    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/organs`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-    });
-    return (await checkJson(res)) as unknown[];
-  } catch {
-    return [];
-  }
-}
 
 // ============================================================
 // Companion Presentation Events — reconciled from upstream master
@@ -1284,47 +1227,7 @@ async function patchJson(config: ApeirethConfig, path: string, body: unknown): P
   }
 }
 
-// --- Session lifecycle ---
-
-export async function fetchBackendSessionsV2(config: ApeirethConfig, includeArchived = false): Promise<BackendSessionRecord[]> {
-  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/sessions?include_archived=${includeArchived}`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-  });
-  const data = (await checkJson(res)) as {sessions?: BackendSessionRecord[]};
-  return data.sessions || [];
-}
-
-export async function createBackendSession(config: ApeirethConfig, title?: string, scope: 'global' | 'project' = 'global', projectId?: string): Promise<BackendSessionRecord | {error: string}> {
-  const r = await postJson(config, '/v1/apeireth/sessions', {title, scope, project_id: projectId});
-  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'create failed'};
-}
-
-export async function renameBackendSession(config: ApeirethConfig, id: string, title: string, expectedRev: number): Promise<BackendSessionRecord | {error: string}> {
-  const r = await patchJson(config, `/v1/apeireth/sessions/${encodeURIComponent(id)}`, {title, expected_rev: expectedRev});
-  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'rename failed'};
-}
-
-export async function archiveBackendSession(config: ApeirethConfig, id: string, expectedRev: number): Promise<BackendSessionRecord | {error: string}> {
-  const r = await postJson(config, `/v1/apeireth/sessions/${encodeURIComponent(id)}/archive`, {expected_rev: expectedRev});
-  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'archive failed'};
-}
-
-export async function restoreBackendSession(config: ApeirethConfig, id: string, expectedRev: number): Promise<BackendSessionRecord | {error: string}> {
-  const r = await postJson(config, `/v1/apeireth/sessions/${encodeURIComponent(id)}/restore`, {expected_rev: expectedRev});
-  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'restore failed'};
-}
-
-export async function closeBackendSession(config: ApeirethConfig, id: string, expectedRev: number): Promise<BackendSessionRecord | {error: string}> {
-  const r = await postJson(config, `/v1/apeireth/sessions/${encodeURIComponent(id)}/close`, {expected_rev: expectedRev});
-  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'close failed'};
-}
-
 // --- Memory governance ---
-
-export async function updateMemoryEpisode(config: ApeirethConfig, id: string, content: string, expectedRev: number, updatedBy?: string): Promise<GovernedEpisodeItem | {error: string}> {
-  const r = await patchJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}`, {content, expected_rev: expectedRev, updated_by: updatedBy});
-  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'update failed'};
-}
 
 export async function forgetMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number, reason?: string): Promise<GovernedEpisodeItem | {error: string}> {
   const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/forget`, {expected_rev: expectedRev, reason});
@@ -1361,18 +1264,6 @@ export async function revokeGrant(config: ApeirethConfig, id: string, masterToke
 }
 
 // --- Trace ---
-
-export async function fetchTraces(config: ApeirethConfig, limit = 50): Promise<Array<{trace_id: string; root_span: TraceSpanItem; span_count: number}>> {
-  try {
-    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/traces?limit=${limit}`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-    });
-    const data = (await checkJson(res)) as {traces?: Array<{trace_id: string; root_span: TraceSpanItem; span_count: number}>};
-    return data.traces || [];
-  } catch {
-    return [];
-  }
-}
 
 export async function fetchTraceDetail(config: ApeirethConfig, traceId: string): Promise<TraceSpanItem[] | {error: string}> {
   try {
