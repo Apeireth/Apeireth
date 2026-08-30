@@ -396,6 +396,105 @@ impl HybridSearchEngine {
         hybrid_hits.truncate(top_k);
         Ok(hybrid_hits)
     }
+
+    /// Weighted score fusion (documented in this module as ③, previously
+    /// unimplemented).
+    ///
+    /// `score(d) = α * norm(vec_score) + (1 - α) * norm(bm25_score)`
+    ///
+    /// Each channel is min-max normalized over the recalled set. A document
+    /// missing from a channel contributes `0` for that channel. `alpha` must
+    /// be finite and in `[0, 1]`. `query_vector = None` disables the semantic
+    /// channel (same contract as [`Self::search_rrf`]).
+    pub fn search_weighted(
+        &self,
+        query_text: &str,
+        query_vector: Option<&[f32]>,
+        top_k: usize,
+        alpha: f32,
+    ) -> Result<Vec<HybridHit>, MemoryError> {
+        if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+            return Err(MemoryError::Invalid(
+                "alpha must be finite and in [0, 1]".into(),
+            ));
+        }
+
+        let recall_limit = top_k.saturating_mul(2);
+        let bm25_hits = self.bm25_index.search(query_text, recall_limit);
+        let mut bm25_scores: HashMap<String, (usize, f32)> = HashMap::new();
+        for (idx, hit) in bm25_hits.iter().enumerate() {
+            bm25_scores.insert(hit.id.clone(), (idx + 1, hit.score));
+        }
+
+        let mut vector_scores: HashMap<String, (usize, f32)> = HashMap::new();
+        if let Some(vec) = query_vector {
+            let vec_hits = self
+                .vector_index
+                .query(vec, recall_limit)
+                .map_err(|error| {
+                    MemoryError::Invalid(format!("semantic vector query rejected: {error}"))
+                })?;
+            for (idx, hit) in vec_hits.iter().enumerate() {
+                vector_scores.insert(hit.id.to_string(), (idx + 1, hit.score));
+            }
+        }
+
+        let mut all_ids: BTreeSet<String> = BTreeSet::new();
+        all_ids.extend(bm25_scores.keys().cloned());
+        all_ids.extend(vector_scores.keys().cloned());
+
+        let bm25_min_max = min_max(bm25_scores.values().map(|(_, s)| *s));
+        let vec_min_max = min_max(vector_scores.values().map(|(_, s)| *s));
+
+        let mut hybrid_hits = Vec::new();
+        for id in all_ids {
+            let v = vector_scores.get(&id).copied();
+            let b = bm25_scores.get(&id).copied();
+            let vec_norm = v.map(|(_, s)| min_max_norm(s, vec_min_max)).unwrap_or(0.0);
+            let bm25_norm = b.map(|(_, s)| min_max_norm(s, bm25_min_max)).unwrap_or(0.0);
+            let score = finite_non_negative_score(alpha * vec_norm + (1.0 - alpha) * bm25_norm);
+            hybrid_hits.push(HybridHit {
+                id,
+                score,
+                vector_rank: v.map(|(r, _)| r),
+                bm25_rank: b.map(|(r, _)| r),
+            });
+        }
+
+        hybrid_hits.sort_by(|a, b| compare_score_desc_then_id(a.score, &a.id, b.score, &b.id));
+        hybrid_hits.truncate(top_k);
+        Ok(hybrid_hits)
+    }
+}
+
+fn min_max(scores: impl Iterator<Item = f32>) -> Option<(f32, f32)> {
+    let mut min = f32::INFINITY;
+    let mut max = f32::NEG_INFINITY;
+    let mut any = false;
+    for score in scores {
+        if !score.is_finite() {
+            continue;
+        }
+        any = true;
+        min = min.min(score);
+        max = max.max(score);
+    }
+    any.then_some((min, max))
+}
+
+fn min_max_norm(score: f32, bounds: Option<(f32, f32)>) -> f32 {
+    let Some((min, max)) = bounds else {
+        return 0.0;
+    };
+    if !score.is_finite() {
+        return 0.0;
+    }
+    if (max - min).abs() < f32::EPSILON {
+        // A degenerate range (one hit, or all equal) is uninformative for
+        // discrimination but must not zero a channel that actually fired.
+        return 1.0;
+    }
+    finite_non_negative_score(((score - min) / (max - min)).clamp(0.0, 1.0))
 }
 
 fn validate_rrf_parameters(rrf_k: f32, w_vector: f32, w_bm25: f32) -> Result<(), MemoryError> {
@@ -571,5 +670,52 @@ mod tests {
         assert!(hits.iter().all(|hit| hit.score.is_finite()));
         let ids: Vec<_> = hits.into_iter().map(|hit| hit.id).collect();
         assert_eq!(ids, vec!["alpha", "zulu"]);
+    }
+
+    #[test]
+    fn weighted_fusion_respects_alpha_and_rejects_invalid() {
+        let mut engine = HybridSearchEngine::new(3).unwrap();
+        engine
+            .insert("doc1", "普通文本一条", Some(vec![1.0, 0.0, 0.0]))
+            .unwrap();
+        engine
+            .insert("doc2", "包含独特关键词的内容", Some(vec![0.0, 1.0, 0.0]))
+            .unwrap();
+
+        let lexical = engine
+            .search_weighted("独特关键词", Some(&[1.0, 0.0, 0.0]), 5, 0.0)
+            .unwrap();
+        assert_eq!(lexical[0].id, "doc2");
+
+        let semantic = engine
+            .search_weighted("独特关键词", Some(&[1.0, 0.0, 0.0]), 5, 1.0)
+            .unwrap();
+        assert_eq!(semantic[0].id, "doc1");
+
+        assert!(matches!(
+            engine.search_weighted("x", None, 5, 1.5),
+            Err(MemoryError::Invalid(_))
+        ));
+        assert!(matches!(
+            engine.search_weighted("x", None, 5, f32::NAN),
+            Err(MemoryError::Invalid(_))
+        ));
+    }
+
+    #[test]
+    fn weighted_ties_are_id_sorted() {
+        let mut engine = HybridSearchEngine::new(2).unwrap();
+        engine
+            .insert("alpha", "needle", Some(vec![1.0, 0.0]))
+            .unwrap();
+        engine
+            .insert("beta", "needle", Some(vec![1.0, 0.0]))
+            .unwrap();
+        let hits = engine
+            .search_weighted("needle", Some(&[1.0, 0.0]), 2, 0.5)
+            .unwrap();
+        assert_eq!(hits[0].id, "alpha");
+        assert_eq!(hits[1].id, "beta");
+        assert_eq!(hits[0].score, hits[1].score);
     }
 }
