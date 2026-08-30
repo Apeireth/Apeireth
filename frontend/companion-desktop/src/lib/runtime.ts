@@ -119,7 +119,12 @@ export function toRuntimeError(caught: unknown): RuntimeError {
       status: caught.status,
     };
   }
-  const message = caught instanceof Error ? caught.message : String(caught);
+  // Strengthen fallback to prevent [object Object] rendering
+  const message = caught instanceof Error
+    ? caught.message
+    : (typeof caught === 'object' && caught !== null && 'message' in caught)
+      ? String(caught.message)
+      : String(caught);
   return {code: 'unknown', message};
 }
 
@@ -208,7 +213,7 @@ export async function checkHealth(baseUrl: string): Promise<boolean> {
   }
 }
 
-/** 深度多子系统健康检测，真实探测后端各项能力 */
+/** 深度健康检测，探测 canonical Apeireth 2.0 gateway 实际暴露端点 */
 export async function checkHealthDetailed(baseUrl: string, apiKey: string = '', model?: string): Promise<RuntimeHealthReport> {
   const base = normalizeBaseUrl(baseUrl);
   const subsystems: SubsystemStatus[] = [];
@@ -216,24 +221,24 @@ export async function checkHealthDetailed(baseUrl: string, apiKey: string = '', 
   let anyOk = false;
   let allOk = true;
 
-  // 1. API Gateway / Gateway Health
+  // 1. Gateway Health (canonical)
   const t0 = performance.now();
   try {
     const res = await fetch(`${base}/health`, {signal: AbortSignal.timeout(2500)});
     const lat = Math.round(performance.now() - t0);
     if (res.ok) {
       anyOk = true;
-      subsystems.push({name: 'API 网关', key: 'api', status: 'ok', endpoint: '/health', latencyMs: lat, detail: 'HTTP 200 OK'});
+      subsystems.push({name: 'Gateway', key: 'api', status: 'ok', endpoint: '/health', latencyMs: lat, detail: 'HTTP 200 OK'});
     } else {
       allOk = false;
-      subsystems.push({name: 'API 网关', key: 'api', status: 'degraded', endpoint: '/health', latencyMs: lat, detail: `HTTP ${res.status}`});
+      subsystems.push({name: 'Gateway', key: 'api', status: 'degraded', endpoint: '/health', latencyMs: lat, detail: `HTTP ${res.status}`});
     }
   } catch (e) {
     allOk = false;
-    subsystems.push({name: 'API 网关', key: 'api', status: 'offline', endpoint: '/health', detail: '连接超时或服务未启动'});
+    subsystems.push({name: 'Gateway', key: 'api', status: 'offline', endpoint: '/health', detail: '连接超时或服务未启动'});
   }
 
-  // 2. 模型列表 / Provider
+  // 2. Models / Provider (canonical)
   const t1 = performance.now();
   try {
     const res = await fetch(`${base}/v1/models`, {
@@ -245,74 +250,14 @@ export async function checkHealthDetailed(baseUrl: string, apiKey: string = '', 
       anyOk = true;
       const data = (await res.json().catch(() => ({}))) as {data?: unknown[]};
       const count = Array.isArray(data.data) ? data.data.length : 0;
-      subsystems.push({name: '模型服务', key: 'companion', status: 'ok', endpoint: '/v1/models', latencyMs: lat, detail: `可用模型数: ${count}`});
+      subsystems.push({name: '模型/提供商', key: 'companion', status: 'ok', endpoint: '/v1/models', latencyMs: lat, detail: `可用模型: ${count}`});
     } else {
       allOk = false;
-      subsystems.push({name: '模型服务', key: 'companion', status: 'degraded', endpoint: '/v1/models', latencyMs: lat, detail: `HTTP ${res.status}`});
+      subsystems.push({name: '模型/提供商', key: 'companion', status: 'degraded', endpoint: '/v1/models', latencyMs: lat, detail: `HTTP ${res.status}`});
     }
   } catch {
     allOk = false;
-    subsystems.push({name: '模型服务', key: 'companion', status: 'offline', endpoint: '/v1/models', detail: '模型列表不可用'});
-  }
-
-  // 3. 会话存储 / Session Ledger
-  const t2 = performance.now();
-  try {
-    const res = await fetch(`${base}/v1/panel/sessions`, {
-      headers: apiKey ? {Authorization: `Bearer ${apiKey}`} : {},
-      signal: AbortSignal.timeout(3000),
-    });
-    const lat = Math.round(performance.now() - t2);
-    if (res.ok) {
-      anyOk = true;
-      subsystems.push({name: '会话存储', key: 'sessions', status: 'ok', endpoint: '/v1/panel/sessions', latencyMs: lat, detail: 'SQLite 会话账本已加载'});
-    } else {
-      allOk = false;
-      subsystems.push({name: '会话存储', key: 'sessions', status: 'degraded', endpoint: '/v1/panel/sessions', latencyMs: lat, detail: `HTTP ${res.status}`});
-    }
-  } catch {
-    allOk = false;
-    subsystems.push({name: '会话存储', key: 'sessions', status: 'offline', endpoint: '/v1/panel/sessions', detail: '会话只读端点不可用'});
-  }
-
-  // 4. 记忆系统 / Memory Streams
-  const t3 = performance.now();
-  try {
-    const res = await fetch(`${base}/v1/panel/memory/streams`, {
-      headers: apiKey ? {Authorization: `Bearer ${apiKey}`} : {},
-      signal: AbortSignal.timeout(3000),
-    });
-    const lat = Math.round(performance.now() - t3);
-    if (res.ok) {
-      anyOk = true;
-      subsystems.push({name: '记忆流', key: 'memory', status: 'ok', endpoint: '/v1/panel/memory/streams', latencyMs: lat, detail: '6 历史流已就绪'});
-    } else {
-      allOk = false;
-      subsystems.push({name: '记忆流', key: 'memory', status: 'degraded', endpoint: '/v1/panel/memory/streams', latencyMs: lat, detail: `HTTP ${res.status}`});
-    }
-  } catch {
-    allOk = false;
-    subsystems.push({name: '记忆流', key: 'memory', status: 'offline', endpoint: '/v1/panel/memory/streams', detail: '记忆端点不可用'});
-  }
-
-  // 5. 工具注册表 / Tools
-  const t4 = performance.now();
-  try {
-    const res = await fetch(`${base}/v1/tools/list`, {
-      headers: apiKey ? {Authorization: `Bearer ${apiKey}`} : {},
-      signal: AbortSignal.timeout(3000),
-    });
-    const lat = Math.round(performance.now() - t4);
-    if (res.ok) {
-      anyOk = true;
-      subsystems.push({name: '工具注册表', key: 'tools', status: 'ok', endpoint: '/v1/tools/list', latencyMs: lat, detail: '工具目录已装配'});
-    } else {
-      allOk = false;
-      subsystems.push({name: '工具注册表', key: 'tools', status: 'degraded', endpoint: '/v1/tools/list', latencyMs: lat, detail: `HTTP ${res.status}`});
-    }
-  } catch {
-    allOk = false;
-    subsystems.push({name: '工具注册表', key: 'tools', status: 'offline', endpoint: '/v1/tools/list', detail: '工具服务不可用'});
+    subsystems.push({name: '模型/提供商', key: 'companion', status: 'offline', endpoint: '/v1/models', detail: '模型列表不可用 (提供商未配置或离线)'});
   }
 
   const overallLat = Math.round(performance.now() - startAll);
@@ -331,9 +276,6 @@ export async function checkHealthDetailed(baseUrl: string, apiKey: string = '', 
     latencyMs: overallLat,
     lastChecked: Date.now(),
     subsystems,
-    // 修复硬编码 'MiniMax-M3': 优先调用方传入, 否则读本地持久化配置 (loadConfig
-    // 自带 'MiniMax-M3' 默认值兜底). App/Settings 两处调用点的 config 均源自
-    // loadConfig, 无需改调用侧即可正确反映 config.model.
     model: model || loadConfig().model,
   };
 }
@@ -373,9 +315,6 @@ export async function streamChat(
   if (config.apiKey) {
     headers.Authorization = `Bearer ${config.apiKey}`;
   }
-  if (sessionId) {
-    headers['X-Apeireth-Continuity'] = sessionId;
-  }
 
   const response = await fetch(`${base}/v1/chat/completions`, {
     method: 'POST',
@@ -383,6 +322,7 @@ export async function streamChat(
     body: JSON.stringify({
       model: config.model,
       messages,
+      session_id: sessionId,
       stream: true,
     }),
     signal,

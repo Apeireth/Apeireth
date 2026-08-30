@@ -72,7 +72,11 @@
         },
       );
     } catch (caught) {
-      error = caught instanceof Error ? caught.message : String(caught);
+      error = caught instanceof Error
+        ? caught.message
+        : (typeof caught === 'object' && caught !== null && 'message' in caught)
+          ? String(caught.message)
+          : String(caught);
     } finally {
       busy = false;
     }

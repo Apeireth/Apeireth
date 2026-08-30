@@ -159,7 +159,11 @@
       const logs = await fetchAuditLogs(config, 80);
       activities = mergeActivities(activities, logs);
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = e instanceof Error
+        ? e.message
+        : (typeof e === 'object' && e !== null && 'message' in e)
+          ? String(e.message)
+          : String(e);
     } finally {
       loading = false;
     }

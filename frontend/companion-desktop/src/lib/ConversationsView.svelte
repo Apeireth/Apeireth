@@ -79,7 +79,11 @@
     try {
       backendSessions = await fetchBackendSessions(config);
     } catch (e) {
-      backendError = e instanceof Error ? e.message : String(e);
+      backendError = e instanceof Error
+        ? e.message
+        : (typeof e === 'object' && e !== null && 'message' in e)
+          ? String(e.message)
+          : String(e);
     } finally {
       backendLoading = false;
     }

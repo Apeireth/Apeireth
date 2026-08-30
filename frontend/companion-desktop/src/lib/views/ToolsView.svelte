@@ -70,7 +70,11 @@
     try {
       const [toolsRes, approvalsRes, grantsRes] = await Promise.all([
         fetchTools(config).catch((e) => {
-          error = e instanceof Error ? e.message : String(e);
+          error = e instanceof Error
+            ? e.message
+            : (typeof e === 'object' && e !== null && 'message' in e)
+              ? String(e.message)
+              : String(e);
           return [];
         }),
         fetchApprovalRequests(config).catch(() => []),
@@ -80,7 +84,11 @@
       approvalRequests = approvalsRes;
       grants = grantsRes;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = e instanceof Error
+        ? e.message
+        : (typeof e === 'object' && e !== null && 'message' in e)
+          ? String(e.message)
+          : String(e);
     } finally {
       loading = false;
     }
