@@ -179,6 +179,13 @@ pub use memory_governance::{
 // Core Capability Expansion Phase 5: Agent 执行轨迹 (structured trace, 持久化 + 查询).
 pub mod agent_trace;
 pub use agent_trace::{TraceQueryError, TraceSpan, TraceSpanKind, TraceSpanStatus, TraceStore};
+// Salvage 02: windowed fingerprint + textual near-dup (companion observer_capture / dream).
+pub mod dedup;
+pub use dedup::{
+    dedup_textual, episode_fingerprint, fingerprint_bytes, fingerprint_json, normalize_for_dedup,
+    overlap_ratio, DedupConfig, DedupIndex, DEFAULT_DEDUP_WINDOW_MS, DEFAULT_LRU_CAP,
+    TEXTUAL_MIN_LEN, TEXTUAL_OVERLAP_THRESHOLD,
+};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
