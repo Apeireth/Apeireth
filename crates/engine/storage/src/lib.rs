@@ -19,8 +19,10 @@
 
 pub mod cache;
 pub mod error;
+pub mod machine_id;
 pub mod migrations;
 pub mod pool;
+pub mod quota;
 pub mod rate_limit;
 
 pub use error::StorageError;
