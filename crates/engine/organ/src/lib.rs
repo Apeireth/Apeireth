@@ -59,6 +59,7 @@ pub mod emotion_memory;
 pub mod goal;
 pub mod hypothesis;
 pub mod memory;
+pub mod motivation;
 pub mod tone;
 pub mod value_cases;
 pub mod world_model;
@@ -69,6 +70,10 @@ pub use tone::{
 };
 pub use goal::{
     GoalBlock, GoalError, GoalPersistError, GoalPhase, GoalService, GoalSnapshot, GoalStore,
+};
+pub use motivation::{
+    motivation_score, AutonomyConsistency, IntrinsicIntensity, MotivationScore, ValueStability,
+    MIN_MOTIVATION_THRESHOLD, MOTIVATION_WEIGHTS,
 };
 
 // ============================================
