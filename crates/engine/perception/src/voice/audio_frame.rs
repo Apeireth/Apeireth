@@ -29,7 +29,8 @@ pub const PCM16_MAX_AUDIO_SECONDS: u32 = 30;
 pub const PCM16_CHANNELS_MONO: u8 = 1;
 
 /// Maximum duration in milliseconds implied by [`PCM16_MAX_AUDIO_SECONDS`].
-pub const PCM16_MAX_DURATION_MS: u64 = PCM16_MAX_AUDIO_SECONDS as u64 * 1000;
+    #[allow(clippy::cast_lossless)]
+    pub const PCM16_MAX_DURATION_MS: u64 = PCM16_MAX_AUDIO_SECONDS as u64 * 1000;
 
 /// PCM16 / hex-audio errors.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
