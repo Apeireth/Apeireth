@@ -126,7 +126,7 @@
         episodes = await fetchMemoryEpisodes(config, searchQuery, 120);
       }
     } catch (e) {
-      const endpoint = activeCategory === 'graph' ? '/v1/panel/graph' : '/v1/panel/memory/episodes';
+      const endpoint = activeTab === 'graph' ? '/v1/panel/graph' : '/v1/panel/memory/episodes';
       error = friendlyErrorMessage(e, endpoint);
     } finally {
       loading = false;
