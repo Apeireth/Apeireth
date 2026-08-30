@@ -22,6 +22,7 @@ pub mod mcp;
 pub mod plugin;
 pub mod process;
 pub mod repo;
+pub mod repo_map;
 pub mod search;
 mod sensitive_path;
 pub mod shell;
