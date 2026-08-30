@@ -8,11 +8,13 @@
 //!
 //! # What this crate is not
 //!
-//! It is not a policy library. It contains no PII detector, no rate limiter, no
-//! council, no audit chain. Those exist already — `apeireth-guard`,
-//! `apeireth-council`, `apeireth-library-governance` — and each is a
-//! [`GovernanceHook`] implementation waiting to be adapted, not something to
-//! reimplement here.
+//! It is not a second approval authority, council loop, or sovereignty runtime.
+//! Recovered donor algorithms (Colang parser, approval-policy scoring, eval
+//! stats, evidence checker, hold/synthesis rubric, risk-rank / fail-closed)
+//! live here as **default-off library helpers**. They do not implement
+//! [`GovernanceHook`] and are not installed in [`GovernancePipeline`]. The
+//! runtime still consults one hook; mapping a helper onto [`Decision`] is the
+//! caller's job.
 //!
 //! Keeping the contract this thin is deliberate. The branch this converges had
 //! governance logic scattered across several crates with no shared decision type,
@@ -43,10 +45,16 @@ use apeireth_core::kernel::{CapabilityId, Metadata, PluginId, SessionId, TraceId
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+pub mod approval_policy;
 pub mod audit;
+pub mod colang;
+pub mod eval;
+pub mod evidence;
 pub mod input_security;
 pub mod permission;
 pub mod rate_limit;
+pub mod risk;
+pub mod rubric;
 pub mod tool_desc_audit;
 pub mod untrusted_mark;
 
@@ -60,6 +68,33 @@ pub use rate_limit::{RateLimitConfig, RateLimitGovernanceHook, TrustTier};
 pub use tool_desc_audit::{AuditSeverity, ToolDescAuditError, ToolDescAuditResult, ToolDescAuditor};
 pub use untrusted_mark::{
     UntrustedContentPayload, UntrustedContentWrapper, UNTRUSTED_TAG_CLOSE, UNTRUSTED_TAG_OPEN,
+};
+
+pub use approval_policy::{
+    best_approval_match, extract_commands, frequency_count, is_high_risk, parse_approval_entry,
+    ApprovalPolicyEngine, CallRecord, ParsedApprovalEntry, PolicyMatch, APPROVAL_TIMEOUT_MS,
+    DEFAULT_HIGH_RISK_PREFIXES, FREQUENCY_MAX_CALLS, FREQUENCY_WINDOW_MS, SILENT_REJECT_SUFFIX,
+};
+pub use colang::{
+    extract_action_name, ColangDefine, ColangDslGuard, ColangElement, ColangElementKind,
+    ColangGuardConfig, ColangGuardOutcome, ColangParseError, ColangParser, ColangValidationError,
+    ColangValidationReport, ColangValidator, DslOnionLayer, DslOnionVerdict, ParsedColangFile,
+};
+pub use eval::{
+    is_valid_percentile, mean, percentile, stddev, weighted_mean, CategoryBreakdown, EvalScore,
+    TaskResult, TaskSummary,
+};
+pub use evidence::{
+    EvidenceCheck, EvidenceEntry, EvidenceGuard, EvidenceKind, INFERENCE_CONFIDENCE_CEILING,
+};
+pub use risk::{
+    check_no_degrade, is_degrade, risk_rank, run_fail_closed, ApplyPhase, FailClosedError,
+    FailClosedPhase, NoDegradeCheck, PreparePhase, RegressionAssertion, VerifyPhase,
+};
+pub use rubric::{
+    passes_strategy, synthesize, AdvisorDomain, Ballot, HoldDecision, HoldThreshold, HoldTrigger,
+    StanceKind, SynthesisReport, VotingStrategy, HOLD_DELIBERATION_TIMEOUT_MS,
+    HOLD_STRONG_DISAPPROVE_PERCENT, SUPERMAJORITY_FRACTION,
 };
 
 /// What the runtime is about to do.
