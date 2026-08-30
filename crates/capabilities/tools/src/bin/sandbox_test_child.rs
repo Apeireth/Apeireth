@@ -18,6 +18,7 @@
 //! sandbox-test-child exit-code <n>
 //! sandbox-test-child allocate <mebibytes>
 //! sandbox-test-child spawn-child sleep <seconds>
+//! sandbox-test-child burn-cpu <seconds>
 //! ```
 
 use std::io::{self, Write};
@@ -167,6 +168,18 @@ fn main() {
             {
                 println!("NOT_WINDOWS");
             }
+        }
+        "burn-cpu" => {
+            let seconds = parse::<u64>(args.get(1)).unwrap_or(5);
+            let deadline = std::time::Instant::now() + Duration::from_secs(seconds.max(1));
+            // Tight user-mode loop so JOB_OBJECT_LIMIT_PROCESS_TIME / RLIMIT_CPU
+            // can fire. `thread::sleep` would only consume wall-clock time.
+            let mut acc: u64 = 0;
+            while std::time::Instant::now() < deadline {
+                acc = acc.wrapping_add(1).wrapping_mul(0x9E37_79B9);
+                std::hint::black_box(acc);
+            }
+            println!("BURN_DONE {acc}");
         }
         "spawn-child" => {
             let child_mode = args.get(1).map(String::as_str).unwrap_or("sleep");
