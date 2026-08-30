@@ -134,8 +134,7 @@ impl OrthogonalResidualPyramid {
 
             let new_res_energy: f32 = new_residual.iter().map(|&x| x * x).sum();
             let current_energy: f32 = current_residual.iter().map(|&x| x * x).sum();
-            let energy_explained =
-                (current_energy - new_res_energy).max(0.0) / original_energy;
+            let energy_explained = (current_energy - new_res_energy).max(0.0) / original_energy;
 
             levels.push(PyramidLevel {
                 level,
@@ -154,7 +153,8 @@ impl OrthogonalResidualPyramid {
         }
 
         // 4. 分析握手差向量与相干度 (Direction Coherence)
-        let (coherence, noise_signal) = Self::compute_handshake_coherence(query, &all_retrieved_tags);
+        let (coherence, noise_signal) =
+            Self::compute_handshake_coherence(query, &all_retrieved_tags);
         let novelty_signal = ((1.0 - total_explained) * 0.70 + coherence * 0.30).clamp(0.0, 1.0);
 
         PyramidAnalysis {
@@ -194,7 +194,9 @@ impl OrthogonalResidualPyramid {
             *x /= n;
         }
 
-        let coherence = (mean_diff.iter().map(|&x| x * x).sum::<f32>()).sqrt().clamp(0.0, 1.0);
+        let coherence = (mean_diff.iter().map(|&x| x * x).sum::<f32>())
+            .sqrt()
+            .clamp(0.0, 1.0);
         let noise_signal = (1.0 - coherence).clamp(0.0, 1.0);
 
         (coherence, noise_signal)

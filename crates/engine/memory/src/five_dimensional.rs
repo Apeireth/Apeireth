@@ -3,8 +3,8 @@
 //! 吸收 N.E.K.O 与 MemGPT 架构精髓，将智能体的记忆结构解耦为 5 个不同时空尺度的认知层级，
 //! 并提供 Memory Browser 可视化校对数据结构，杜绝大模型记忆幻觉.
 
-use std::collections::{HashMap, VecDeque};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
 
 /// 记忆层级枚举.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -72,7 +72,11 @@ pub struct FiveDimensionalMemory {
 impl FiveDimensionalMemory {
     pub fn new(persona_core: &str, working_capacity: usize) -> Self {
         Self {
-            working_capacity: if working_capacity == 0 { 10 } else { working_capacity },
+            working_capacity: if working_capacity == 0 {
+                10
+            } else {
+                working_capacity
+            },
             working_buffer: VecDeque::with_capacity(working_capacity),
             recent_memories: Vec::new(),
             facts: HashMap::new(),
@@ -95,7 +99,14 @@ impl FiveDimensionalMemory {
     }
 
     /// 写入/更新事实记忆 (带置信度与自动时间戳更新).
-    pub fn upsert_fact(&mut self, entity: &str, property: &str, value: &str, confidence: f32, now_ms: u64) {
+    pub fn upsert_fact(
+        &mut self,
+        entity: &str,
+        property: &str,
+        value: &str,
+        confidence: f32,
+        now_ms: u64,
+    ) {
         let entity_map = self.facts.entry(entity.to_string()).or_default();
         if let Some(existing) = entity_map.get_mut(property) {
             existing.value = value.to_string();
@@ -122,7 +133,13 @@ impl FiveDimensionalMemory {
     }
 
     /// 记录一条高阶认知反思.
-    pub fn add_reflection(&mut self, summary: &str, insight: &str, sources: Vec<String>, now_ms: u64) {
+    pub fn add_reflection(
+        &mut self,
+        summary: &str,
+        insight: &str,
+        sources: Vec<String>,
+        now_ms: u64,
+    ) {
         self.reflections.push(ReflectionItem {
             id: format!("refl_{}", self.reflections.len() + 1),
             summary: summary.to_string(),
@@ -220,13 +237,24 @@ mod tests {
         assert_eq!(fact.confidence, 0.95);
 
         // 3. Reflection
-        mem.add_reflection("主人经常熬夜", "需要适时主动提醒休息", vec!["ep_1".to_string()], 2000);
+        mem.add_reflection(
+            "主人经常熬夜",
+            "需要适时主动提醒休息",
+            vec!["ep_1".to_string()],
+            2000,
+        );
         assert_eq!(mem.get_reflections().len(), 1);
 
         // 4. Browser entries export
         let entries = mem.export_browser_entries();
-        assert!(entries.iter().any(|e| e.dimension == MemoryDimension::Persona));
-        assert!(entries.iter().any(|e| e.dimension == MemoryDimension::Fact && e.title == "user.favorite_drink"));
-        assert!(entries.iter().any(|e| e.dimension == MemoryDimension::Reflection));
+        assert!(entries
+            .iter()
+            .any(|e| e.dimension == MemoryDimension::Persona));
+        assert!(entries
+            .iter()
+            .any(|e| e.dimension == MemoryDimension::Fact && e.title == "user.favorite_drink"));
+        assert!(entries
+            .iter()
+            .any(|e| e.dimension == MemoryDimension::Reflection));
     }
 }

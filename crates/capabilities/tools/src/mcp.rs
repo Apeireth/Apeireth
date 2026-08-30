@@ -177,17 +177,17 @@ impl McpClient {
             });
         }
 
-        let result = resp.result.ok_or_else(|| {
-            McpError::Serialization("tools/list 返回空 result".to_string())
-        })?;
+        let result = resp
+            .result
+            .ok_or_else(|| McpError::Serialization("tools/list 返回空 result".to_string()))?;
 
         #[derive(Deserialize)]
         struct ToolsListResponse {
             tools: Vec<McpToolDescriptor>,
         }
 
-        let parsed: ToolsListResponse = serde_json::from_value(result)
-            .map_err(|e| McpError::Serialization(e.to_string()))?;
+        let parsed: ToolsListResponse =
+            serde_json::from_value(result).map_err(|e| McpError::Serialization(e.to_string()))?;
 
         self.cached_tools.clear();
         for t in &parsed.tools {
@@ -227,12 +227,12 @@ impl McpClient {
             });
         }
 
-        let result = resp.result.ok_or_else(|| {
-            McpError::Serialization("tools/call 返回空 result".to_string())
-        })?;
+        let result = resp
+            .result
+            .ok_or_else(|| McpError::Serialization("tools/call 返回空 result".to_string()))?;
 
-        let tool_result: McpToolResult = serde_json::from_value(result)
-            .map_err(|e| McpError::Serialization(e.to_string()))?;
+        let tool_result: McpToolResult =
+            serde_json::from_value(result).map_err(|e| McpError::Serialization(e.to_string()))?;
 
         Ok(tool_result)
     }

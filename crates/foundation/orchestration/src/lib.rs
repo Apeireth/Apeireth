@@ -55,19 +55,15 @@ pub mod prompt_stabilizer;
 pub mod speech_arbiter;
 pub mod worktree_sandbox;
 
+pub use ambient_context::{
+    AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
+};
+pub use async_context::{AsyncArrayKind, AsyncContextMessage, AsyncContextPipeline};
 pub use care_potential_field::{CareAction, CarePotentialField};
 pub use cognitive_quota_scheduler::{
     CognitiveContextFrame, CognitiveInterrupt, CognitivePriority, CognitiveQuota,
     CognitiveQuotaScheduler, CognitiveTaskControlBlock,
 };
-pub use lineage_spawning::{
-    LineageProgenySpec, LineageSpawningOrchestrator, NurturingPhase, ProgenySpecialization,
-};
-pub use ambient_context::{
-    AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
-};
-pub use async_context::{AsyncArrayKind, AsyncContextMessage, AsyncContextPipeline};
-pub use worktree_sandbox::{RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError};
 pub use context_rot::{
     apply_ops, compact_then_budget, extractive_summary, query_tokens, repetition_factor,
     rot_breakdown, rot_score, BudgetedBlock, CompactionOp, Compactor, DeterministicCompactor,
@@ -77,11 +73,17 @@ pub use continuation::{
     ContinuationSnapshot, ContinuationStore, EditAction, FileContinuationStore,
     InMemoryContinuationStore, PendingToolCall, SegmentEditError, SegmentEditor,
 };
+pub use lineage_spawning::{
+    LineageProgenySpec, LineageSpawningOrchestrator, NurturingPhase, ProgenySpecialization,
+};
 pub use prompt_stabilizer::{
     EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage, StabilizedRole,
 };
 pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
+};
+pub use worktree_sandbox::{
+    RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,
 };
 
 // ============================================

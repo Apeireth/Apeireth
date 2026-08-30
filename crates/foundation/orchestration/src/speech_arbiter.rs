@@ -2,8 +2,8 @@
 //!
 //! 吸收 Lumi_Nox 架构精髓，解决双/多 Agent 同台、桌面伴侣与实时弹幕/语音交互中的抢话、插话与发言饥饿问题.
 
-use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 
 /// 发言处理策略.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,7 +128,10 @@ impl SpeechOutputArbiter {
     }
 
     fn grant_speech(&mut self, req: &SpeechRequest, now_ms: u64) {
-        *self.speaker_turn_count.entry(req.speaker_id.clone()).or_insert(0) += 1;
+        *self
+            .speaker_turn_count
+            .entry(req.speaker_id.clone())
+            .or_insert(0) += 1;
         self.current_speech = Some(ActiveSpeech {
             speaker_id: req.speaker_id.clone(),
             content: req.content.clone(),
@@ -186,17 +189,26 @@ mod tests {
         };
 
         // 1. Agent A 首先获得发言权
-        assert_eq!(arbiter.arbitrate(req1, SpeechStrategy::Queue, 1000), ArbiterDecision::GrantedImmediately);
+        assert_eq!(
+            arbiter.arbitrate(req1, SpeechStrategy::Queue, 1000),
+            ArbiterDecision::GrantedImmediately
+        );
         assert_eq!(arbiter.get_current_speaker().unwrap().speaker_id, "agent_a");
 
         // 2. Agent B 排队
-        assert_eq!(arbiter.arbitrate(req2, SpeechStrategy::Queue, 1000), ArbiterDecision::Queued { queue_position: 1 });
+        assert_eq!(
+            arbiter.arbitrate(req2, SpeechStrategy::Queue, 1000),
+            ArbiterDecision::Queued { queue_position: 1 }
+        );
 
         // 3. User 强行打断
         let int_decision = arbiter.arbitrate(req3, SpeechStrategy::Interrupt, 1000);
-        assert_eq!(int_decision, ArbiterDecision::InterruptedAndGranted {
-            interrupted_speaker: Some("agent_a".to_string()),
-        });
+        assert_eq!(
+            int_decision,
+            ArbiterDecision::InterruptedAndGranted {
+                interrupted_speaker: Some("agent_a".to_string()),
+            }
+        );
         assert_eq!(arbiter.get_current_speaker().unwrap().speaker_id, "user");
 
         // 4. User 发言完毕，自动轮到队列中的 Agent B

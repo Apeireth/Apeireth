@@ -152,7 +152,10 @@ async fn emergence_organ_ratify_activates_proposal() {
     }
 
     // (c) OrganOutput::Emergence 二次确认: 同样输入同样输出 (v1 8 重门控 = 确定性)
-    let output2 = organ.process(make_input(vec![])).await.expect("process 路径 2");
+    let output2 = organ
+        .process(make_input(vec![]))
+        .await
+        .expect("process 路径 2");
     if let OrganOutput::Emergence { spoke: s2, .. } = output2 {
         // 第二次同一天: initiatives_today 已 +1, max=2 → 仍可; 但 min_llm_interval_ms=60s 未过
         // → LlmBudget 拦下 → spoke=false. (v1 deterministic)

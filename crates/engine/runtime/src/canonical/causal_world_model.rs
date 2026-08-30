@@ -126,7 +126,9 @@ impl CausalWorldModel {
             return Err(format!("Branch '{branch_id}' is closed"));
         }
 
-        branch.modified_files.insert(path.to_string(), checksum.to_string());
+        branch
+            .modified_files
+            .insert(path.to_string(), checksum.to_string());
         Ok(())
     }
 

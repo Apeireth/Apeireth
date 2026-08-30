@@ -396,7 +396,8 @@ async fn orchestrator_8_gates_real() {
         let orch = build_orchestrator();
         // last_initiative_ms = 1000, at_ms = 1100, min_llm_interval_ms = 60_000 (default)
         // diff = 100 < 60_000 → LlmBudget 触发
-        let gate = orch.check_8_gates_for_test(720, 0, 1100, Some(1000), &OrganChainOutputs::default());
+        let gate =
+            orch.check_8_gates_for_test(720, 0, 1100, Some(1000), &OrganChainOutputs::default());
         assert_eq!(
             gate,
             Some(OrganOrchestratorGate::LlmBudget),
@@ -435,7 +436,8 @@ async fn orchestrator_8_gates_real() {
     // 默认全 pass (无任何 gate 触发) — 返 None
     {
         let orch = build_orchestrator();
-        let gate = orch.check_8_gates_for_test(720, 0, 1_000_000, Some(0), &OrganChainOutputs::default());
+        let gate =
+            orch.check_8_gates_for_test(720, 0, 1_000_000, Some(0), &OrganChainOutputs::default());
         assert_eq!(gate, None, "默认 8 重 gate 全 pass");
     }
 }
@@ -706,8 +708,8 @@ async fn orchestrator_step3_f1_emotion_real() {
 #[tokio::test]
 async fn orchestrator_check_8_gates_e7_real() {
     use apeireth_plugin::organ::InitiativeGate;
-    use apeireth_runtime::canonical::orchestrator::OrganChainOutputs;
     use apeireth_plugin::organ::OrganOutput;
+    use apeireth_runtime::canonical::orchestrator::OrganChainOutputs;
 
     // Case 1: E7 organ 返 RhythmUnknown → extract_e7_gate 返 Some → check_8_gates 返 RhythmUnknown
     {
@@ -787,10 +789,7 @@ async fn orchestrator_check_8_gates_e7_real() {
     {
         let mut orch_veto = build_orchestrator_with_e7_gate(Some(InitiativeGate::RhythmVeto));
         let outcome = orch_veto.tick(make_tick_input(1_000_000)).await;
-        assert!(
-            outcome.is_none(),
-            "RhythmVeto gate → tick 应返 None"
-        );
+        assert!(outcome.is_none(), "RhythmVeto gate → tick 应返 None");
         assert_eq!(
             orch_veto.last_decision(),
             Some(
@@ -835,10 +834,10 @@ async fn orchestrator_check_8_gates_e7_real() {
 ///   stop_all invoker → tick 返 None + last_decision = Held(CouncilVeto).
 #[tokio::test]
 async fn orchestrator_council_decide_with_invoker() {
+    use apeireth_orchestration::{Council, Proposal};
     use apeireth_runtime::canonical::orchestrator::{
         MockCouncilDecision, MockCouncilInvoker, OrganChainOutputs,
     };
-    use apeireth_orchestration::{Council, Proposal};
     use chrono::TimeZone;
 
     // Helper: 构造带可配置 CouncilInvoker 的 orchestrator (Stage 4 测试)
@@ -889,7 +888,10 @@ async fn orchestrator_council_decide_with_invoker() {
             id: "test-proposal-1".into(),
             proposer: "apeireth-test".into(),
             payload: serde_json::json!({"action": "test"}),
-            submitted_at: chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap().timestamp(),
+            submitted_at: chrono::Utc
+                .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+                .unwrap()
+                .timestamp(),
             session_id: apeireth_core::kernel::SessionId::default(),
         };
         let result = orch.council_deliberate(&proposal).await;
@@ -910,7 +912,10 @@ async fn orchestrator_council_decide_with_invoker() {
             id: "test-proposal-2".into(),
             proposer: "apeireth-test".into(),
             payload: serde_json::json!({"action": "test"}),
-            submitted_at: chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap().timestamp(),
+            submitted_at: chrono::Utc
+                .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+                .unwrap()
+                .timestamp(),
             session_id: apeireth_core::kernel::SessionId::default(),
         };
         let result = orch.council_deliberate(&proposal).await;
@@ -961,6 +966,9 @@ async fn orchestrator_council_decide_with_invoker() {
         let orch = build_orchestrator_with_council_decision(MockCouncilDecision::AllowAll);
         let organ_input = OrganInput::new(make_episode(), vec!["stage4".to_string()]);
         let chain: OrganChainOutputs = orch.chain_9_organs(organ_input).await;
-        assert!(chain.all_present(), "9 organ 全有输出 (Stage 4 验证 chain 不受 council 切换影响)");
+        assert!(
+            chain.all_present(),
+            "9 organ 全有输出 (Stage 4 验证 chain 不受 council 切换影响)"
+        );
     }
 }

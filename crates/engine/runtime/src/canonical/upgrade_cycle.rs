@@ -41,10 +41,10 @@
 
 use std::sync::Arc;
 
+use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
 use apeireth_orchestration::Proposal;
 use apeireth_plugin::self_assessment::SelfAssessmentStore;
-use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 
 use super::orchestrator::{OrganOrchestrator, RelationshipState, UpgradeLayer};
 
@@ -187,10 +187,7 @@ impl<RS: RelationshipState + 'static> UpgradeCycle<RS> {
     /// - 6 步骤串行; 任一 Rejected → cycle 立即停, 后续步骤不跑.
     /// - L5 只在 final_step 是所有 Approved (i.e. cycle 通过) 时建议 tag (per CycleStep::Tagged).
     /// - 不修改任何 LOCKED 数据 (9 哲学锚 + 13 键 + workspace.version 等).
-    pub async fn run_full_cycle(
-        &self,
-        proposal: Proposal,
-    ) -> UpgradeCycleResult {
+    pub async fn run_full_cycle(&self, proposal: Proposal) -> UpgradeCycleResult {
         let mut outcomes: Vec<(UpgradeLayer, CycleStep)> = Vec::with_capacity(6);
         let session_id = proposal.session_id;
         let trace_id = TraceId::new();
@@ -285,10 +282,7 @@ impl<RS: RelationshipState + 'static> UpgradeCycle<RS> {
     /// 若 score < 0.6 → Rejected (per v2-architecture-reflection.md §6 L1).
     async fn step_l1(&self, session_id: &SessionId) -> CycleStep {
         let session_id_str = session_id.to_string();
-        match self
-            .self_assessments
-            .recent_for_task(&session_id_str, 1)
-        {
+        match self.self_assessments.recent_for_task(&session_id_str, 1) {
             Ok(assessments) => {
                 if let Some(latest) = assessments.first() {
                     if latest.alignment >= 0.6 {

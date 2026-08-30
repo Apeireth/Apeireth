@@ -83,7 +83,11 @@ impl EpaSemanticBridge {
         let mut gram = vec![vec![0.0f32; n]; n];
         for i in 0..n {
             for j in i..n {
-                let dot: f32 = x_tilde[i].iter().zip(&x_tilde[j]).map(|(&a, &b)| a * b).sum();
+                let dot: f32 = x_tilde[i]
+                    .iter()
+                    .zip(&x_tilde[j])
+                    .map(|(&a, &b)| a * b)
+                    .sum();
                 gram[i][j] = dot;
                 gram[j][i] = dot;
             }

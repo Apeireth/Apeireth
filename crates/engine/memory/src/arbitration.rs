@@ -264,7 +264,8 @@ impl ArbitrationEngine {
             return "0".repeat(64);
         }
 
-        let mut current_layer: Vec<String> = events.iter().map(|e| e.content_hash.clone()).collect();
+        let mut current_layer: Vec<String> =
+            events.iter().map(|e| e.content_hash.clone()).collect();
 
         while current_layer.len() > 1 {
             let mut next_layer = Vec::new();

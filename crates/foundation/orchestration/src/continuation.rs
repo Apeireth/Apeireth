@@ -203,22 +203,24 @@ impl ContinuationStore for InMemoryContinuationStore {
     }
 
     fn consume(&self, id: &str) -> ContinuationResult<ContinuationSnapshot> {
-        let mut guard = self
-            .snapshots
-            .lock()
-            .map_err(|_| ContinuationStoreError::LockPoisoned {
-                operation: "consume",
-            })?;
+        let mut guard =
+            self.snapshots
+                .lock()
+                .map_err(|_| ContinuationStoreError::LockPoisoned {
+                    operation: "consume",
+                })?;
         guard
             .remove(id)
             .ok_or_else(|| ContinuationStoreError::NotFound { id: id.to_string() })
     }
 
     fn delete(&self, id: &str) -> ContinuationResult<()> {
-        let mut guard = self
-            .snapshots
-            .lock()
-            .map_err(|_| ContinuationStoreError::LockPoisoned { operation: "delete" })?;
+        let mut guard =
+            self.snapshots
+                .lock()
+                .map_err(|_| ContinuationStoreError::LockPoisoned {
+                    operation: "delete",
+                })?;
         guard.remove(id);
         Ok(())
     }
@@ -298,11 +300,7 @@ impl FileContinuationStore {
         match std::fs::symlink_metadata(&claim) {
             Ok(_) => Ok(vec![claim]),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
-            Err(error) => Err(ContinuationStoreError::io(
-                "检查消费声明",
-                claim,
-                error,
-            )),
+            Err(error) => Err(ContinuationStoreError::io("检查消费声明", claim, error)),
         }
     }
 
@@ -319,11 +317,7 @@ impl FileContinuationStore {
                 Ok(metadata) => metadata,
                 Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
                 Err(error) => {
-                    return Err(ContinuationStoreError::io(
-                        "检查消费声明",
-                        claim,
-                        error,
-                    ));
+                    return Err(ContinuationStoreError::io("检查消费声明", claim, error));
                 }
             };
             let file_type = metadata.file_type();
@@ -332,11 +326,7 @@ impl FileContinuationStore {
                     Ok(()) => {}
                     Err(error) if error.kind() == io::ErrorKind::NotFound => {}
                     Err(error) => {
-                        return Err(ContinuationStoreError::io(
-                            "删除消费声明",
-                            claim,
-                            error,
-                        ));
+                        return Err(ContinuationStoreError::io("删除消费声明", claim, error));
                     }
                 }
             }
@@ -347,9 +337,8 @@ impl FileContinuationStore {
 
 impl ContinuationStore for FileContinuationStore {
     fn save(&self, snapshot: &ContinuationSnapshot) -> ContinuationResult<()> {
-        std::fs::create_dir_all(&self.dir).map_err(|error| {
-            ContinuationStoreError::io("创建快照目录", self.dir.clone(), error)
-        })?;
+        std::fs::create_dir_all(&self.dir)
+            .map_err(|error| ContinuationStoreError::io("创建快照目录", self.dir.clone(), error))?;
         // A retained crash/corruption marker is deliberately fail-closed. Do
         // not let a reused ID overwrite the state that says it was claimed.
         if self.has_claim_for(&snapshot.id)? {
@@ -364,17 +353,16 @@ impl ContinuationStore for FileContinuationStore {
             sanitize_snapshot_id(&snapshot.id),
             Uuid::new_v4()
         ));
-        let bytes = serde_json::to_vec_pretty(snapshot)
-            .map_err(|error| ContinuationStoreError::Serialization {
+        let bytes = serde_json::to_vec_pretty(snapshot).map_err(|error| {
+            ContinuationStoreError::Serialization {
                 reason: error.to_string(),
-            })?;
-        std::fs::write(&tmp, bytes).map_err(|error| {
-            ContinuationStoreError::io("写入临时快照", tmp.clone(), error)
+            }
         })?;
+        std::fs::write(&tmp, bytes)
+            .map_err(|error| ContinuationStoreError::io("写入临时快照", tmp.clone(), error))?;
         let final_path = self.path_for(&snapshot.id);
-        std::fs::rename(&tmp, &final_path).map_err(|error| {
-            ContinuationStoreError::io("原子提交快照", final_path, error)
-        })?;
+        std::fs::rename(&tmp, &final_path)
+            .map_err(|error| ContinuationStoreError::io("原子提交快照", final_path, error))?;
         Ok(())
     }
 
@@ -411,7 +399,11 @@ impl ContinuationStore for FileContinuationStore {
                 return Err(ContinuationStoreError::NotFound { id: id.to_string() });
             }
             Err(error) => {
-                return Err(ContinuationStoreError::io("原子创建快照消费声明", claim, error));
+                return Err(ContinuationStoreError::io(
+                    "原子创建快照消费声明",
+                    claim,
+                    error,
+                ));
             }
         }
 
@@ -451,11 +443,7 @@ impl ContinuationStore for FileContinuationStore {
             Ok(()) => {}
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => {
-                return Err(ContinuationStoreError::io(
-                    "删除已消费快照",
-                    path,
-                    error,
-                ));
+                return Err(ContinuationStoreError::io("删除已消费快照", path, error));
             }
         }
         match std::fs::remove_file(&claim) {
@@ -538,7 +526,10 @@ impl fmt::Display for SegmentEditError {
                 write!(f, "O-1 拒绝: 核心保护段 '{block_id}' 不可被 Remove")
             }
             Self::CoreSegmentReplaceDenied { block_id } => {
-                write!(f, "O-1 拒绝: 核心保护段 '{block_id}' 不可被 Replace (含替换为空)")
+                write!(
+                    f,
+                    "O-1 拒绝: 核心保护段 '{block_id}' 不可被 Replace (含替换为空)"
+                )
             }
         }
     }
@@ -726,14 +717,20 @@ mod tests {
                     successes += 1;
                     assert_eq!(consumed, snap);
                 }
-                Err(error) => assert!(matches!(
-                    error,
-                    ContinuationStoreError::NotFound { .. }
-                        | ContinuationStoreError::AlreadyConsumed { .. }
-                ), "unexpected losing consume result: {error:?}"),
+                Err(error) => assert!(
+                    matches!(
+                        error,
+                        ContinuationStoreError::NotFound { .. }
+                            | ContinuationStoreError::AlreadyConsumed { .. }
+                    ),
+                    "unexpected losing consume result: {error:?}"
+                ),
             }
         }
-        assert_eq!(successes, 1, "exactly one consumer may receive the snapshot");
+        assert_eq!(
+            successes, 1,
+            "exactly one consumer may receive the snapshot"
+        );
         assert!(store.claim_paths_for(&snap.id).unwrap().is_empty());
     }
 
@@ -951,7 +948,10 @@ mod tests {
                 .filter_map(|e| e.ok())
                 .filter(|e| e.file_name().to_string_lossy().contains(".tmp-"))
                 .collect();
-            assert!(leftovers.is_empty(), "id={hostile:?} 残留 tmp 文件: {leftovers:?}");
+            assert!(
+                leftovers.is_empty(),
+                "id={hostile:?} 残留 tmp 文件: {leftovers:?}"
+            );
         }
     }
 

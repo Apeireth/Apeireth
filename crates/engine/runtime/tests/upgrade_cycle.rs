@@ -2,22 +2,24 @@
 
 use std::sync::Arc;
 
-use apeireth_governance::{AllowAll, Decision, GovernanceHook, GovernanceRequest, GovernanceVerdict};
+use apeireth_core::clock::VirtualClock;
+use apeireth_core::kernel::Clock;
+use apeireth_core::kernel::SessionId;
+use apeireth_governance::{
+    AllowAll, Decision, GovernanceHook, GovernanceRequest, GovernanceVerdict,
+};
 use apeireth_orchestration::{Council, CouncilInvoker, Proposal};
 use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
 use apeireth_plugin::self_assessment::{SelfAssessment, SelfAssessmentStore};
 use apeireth_runtime::canonical::orchestrator::{
     LocalOrchestratorRelationship, LocalSovereignty, MockCouncilDecision, MockCouncilInvoker,
-    OrganOrchestrator, OrchestratorBoundaries, OrchestratorLoopConfig, SovereigntyGate,
+    OrchestratorBoundaries, OrchestratorLoopConfig, OrganOrchestrator, SovereigntyGate,
 };
 use apeireth_runtime::canonical::upgrade_cycle::{
     CycleStep, DefaultTagSuggester, TagSuggester, UpgradeCycle,
 };
-use apeireth_core::clock::VirtualClock;
-use apeireth_core::kernel::Clock;
-use apeireth_core::kernel::SessionId;
-use chrono::TimeZone;
 use async_trait::async_trait;
+use chrono::TimeZone;
 
 /// Mock SelfAssessmentStore — 返 Ok(空 vec) (Stage 5 简化: 无 self_assessment 历史 → 默认 Approved).
 struct EmptySelfAssessments;
@@ -102,20 +104,41 @@ impl OrganTrait for MockOrgan {
 
 fn clock() -> Arc<dyn Clock> {
     Arc::new(VirtualClock::new(
-        chrono::Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).single().unwrap(),
+        chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 12, 0, 0)
+            .single()
+            .unwrap(),
     ))
 }
 
 fn build_orchestrator() -> OrganOrchestrator<LocalOrchestratorRelationship> {
-    let organ_e4: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::E4 });
-    let organ_f1: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::F1 });
-    let organ_f4: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::F4 });
-    let organ_f6: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::F6 });
-    let organ_w1: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::W1 });
-    let organ_w2: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::W2 });
-    let organ_w3: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::W3 });
-    let organ_e7: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::E7 });
-    let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::Memory });
+    let organ_e4: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::E4,
+    });
+    let organ_f1: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::F1,
+    });
+    let organ_f4: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::F4,
+    });
+    let organ_f6: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::F6,
+    });
+    let organ_w1: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::W1,
+    });
+    let organ_w2: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::W2,
+    });
+    let organ_w3: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::W3,
+    });
+    let organ_e7: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::E7,
+    });
+    let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::Memory,
+    });
 
     let council = Arc::new(Council::default_allow());
     let council_invoker: Arc<dyn CouncilInvoker> = Arc::new(MockCouncilInvoker::allow_all());
@@ -160,7 +183,10 @@ fn sample_proposal() -> Proposal {
         id: "upgrade-cycle-test-1".into(),
         proposer: "apeireth-test".into(),
         payload: serde_json::json!({"action": "upgrade_cycle_test"}),
-        submitted_at: chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap().timestamp(),
+        submitted_at: chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+            .unwrap()
+            .timestamp(),
         session_id: SessionId::default(),
     }
 }
@@ -236,26 +262,40 @@ async fn upgrade_cycle_l2_council_stop_rejected() {
     );
     let result = cycle.run_full_cycle(sample_proposal()).await;
 
-    assert_eq!(
-        result.layer_outcomes.len(),
-        3,
-        "L0 + L1 + L2 (L2 stops)"
-    );
+    assert_eq!(result.layer_outcomes.len(), 3, "L0 + L1 + L2 (L2 stops)");
     assert!(matches!(result.layer_outcomes[2].1, CycleStep::Rejected));
     assert_eq!(result.final_step, CycleStep::Rejected);
 }
 
 /// Helper: orchestrator with stop_all MockCouncilInvoker (L2 CouncilDecision::Stop)
 fn build_orchestrator_with_stop_council() -> OrganOrchestrator<LocalOrchestratorRelationship> {
-    let organ_e4: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::E4 });
-    let organ_f1: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::F1 });
-    let organ_f4: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::F4 });
-    let organ_f6: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::F6 });
-    let organ_w1: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::W1 });
-    let organ_w2: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::W2 });
-    let organ_w3: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::W3 });
-    let organ_e7: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::E7 });
-    let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan { kind: OrganKind::Memory });
+    let organ_e4: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::E4,
+    });
+    let organ_f1: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::F1,
+    });
+    let organ_f4: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::F4,
+    });
+    let organ_f6: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::F6,
+    });
+    let organ_w1: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::W1,
+    });
+    let organ_w2: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::W2,
+    });
+    let organ_w3: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::W3,
+    });
+    let organ_e7: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::E7,
+    });
+    let organ_memory: Arc<dyn OrganTrait> = Arc::new(MockOrgan {
+        kind: OrganKind::Memory,
+    });
 
     let council = Arc::new(Council::default_allow());
     let council_invoker: Arc<dyn CouncilInvoker> = Arc::new(MockCouncilInvoker {
@@ -316,11 +356,7 @@ async fn upgrade_cycle_l0_governance_deny_rejected() {
     );
     let result = cycle.run_full_cycle(sample_proposal()).await;
 
-    assert_eq!(
-        result.layer_outcomes.len(),
-        1,
-        "L0 only (early stop)"
-    );
+    assert_eq!(result.layer_outcomes.len(), 1, "L0 only (early stop)");
     assert!(matches!(result.layer_outcomes[0].1, CycleStep::Rejected));
     assert_eq!(result.final_step, CycleStep::Rejected);
 }
@@ -336,26 +372,14 @@ async fn upgrade_cycle_layer_outcomes_order() {
     let cycle = build_upgrade_cycle(Arc::new(EmptySelfAssessments));
     let result = cycle.run_full_cycle(sample_proposal()).await;
 
-    assert_eq!(
-        result.layer_outcomes[0].0,
-        UpgradeLayer::L0HumanApproval
-    );
-    assert_eq!(
-        result.layer_outcomes[1].0,
-        UpgradeLayer::L1SelfAssessment
-    );
+    assert_eq!(result.layer_outcomes[0].0, UpgradeLayer::L0HumanApproval);
+    assert_eq!(result.layer_outcomes[1].0, UpgradeLayer::L1SelfAssessment);
     assert_eq!(
         result.layer_outcomes[2].0,
         UpgradeLayer::L2ProposalGeneration
     );
-    assert_eq!(
-        result.layer_outcomes[3].0,
-        UpgradeLayer::L3Verification
-    );
-    assert_eq!(
-        result.layer_outcomes[4].0,
-        UpgradeLayer::L4MasterApproval
-    );
+    assert_eq!(result.layer_outcomes[3].0, UpgradeLayer::L3Verification);
+    assert_eq!(result.layer_outcomes[4].0, UpgradeLayer::L4MasterApproval);
     assert_eq!(result.layer_outcomes[5].0, UpgradeLayer::L5RuntimePatch);
 }
 
@@ -376,10 +400,7 @@ fn upgrade_cycle_default_tag_suggester() {
         "1.2.0-NOT-READY"
     );
     // 不规则 version → fallback
-    assert_eq!(
-        sug.suggest_next_tag("abc", CycleStep::Tagged),
-        "abc-next"
-    );
+    assert_eq!(sug.suggest_next_tag("abc", CycleStep::Tagged), "abc-next");
 }
 
 /// TagSuggester trait object 用 (Stage 5 验证 trait 可对象化).

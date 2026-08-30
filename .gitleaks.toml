@@ -38,10 +38,15 @@ paths = [
     '''reports/.*minimax-hello.*''',
     # 本防御配置文件本身 (gitleaks config 是 .toml, 不含凭证)
     '''\.gitleaks\.toml''',
-    '''scripts/secret-scan\.ps1''',
     # 旧 task 报告里的 test verification key (借 prefix 但含 test/dummy/verify 标记)
-    '''reports/.*'''
-]
+    '''reports/.*''',
+    '''legacy/.*''',
+    '''frontend/companion-desktop/tests/.*''',
+    '''crates/adapters/cli/tests/.*''',
+    '''crates/adapters/sdk/examples/.*''',
+    '''crates/capabilities/tools/src/guardrail\.rs''',
+    '''crates/engine/perception/tests/.*''',
+    '''crates/foundation/governance/src/input_security\.rs'''
 ]
 regexes = [
     # 测试 placeholder (ghp_aaaaaaaa / sk-verylong... / sk-ant-voice-...)

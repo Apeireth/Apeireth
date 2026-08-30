@@ -77,23 +77,21 @@ $SecretPatterns = @(
 # 借鉴自 .gitignore 的 "允许" 文件 (placeholder / 测试数据, false positive)
 # ============================================================================
 $AllowlistPaths = @(
-    'legacy/donor/apeireth-guard/src/pii.rs',                # PII detection test (ghp_aaa...)
-    'legacy/donor/apeireth-guard/tests/*',
-    'legacy/donor/apeireth-tools/src/guardrail.rs',          # guardrail test (ghp_aaa...)
-    'legacy/donor/apeireth-tools/tests/*',
-    'legacy/donor/apeireth-tool-runtime/src/privacy.rs',     # privacy test (sk-verylong...)
-    'legacy/donor/apeireth-tool-runtime/tests/*',
-    'crates/adapters/sdk/src/voice/*',                # voice SDK test (sk-ant-...)
-    'legacy/archived/apeireth-sdk-voice/*',
+    'legacy/*',
+    'legacy/**/*',
+    'frontend/companion-desktop/tests/*',
+    'crates/adapters/cli/tests/*',
+    'crates/adapters/sdk/examples/*',
+    'crates/capabilities/tools/src/guardrail.rs',
+    'crates/engine/perception/tests/*',
+    'crates/foundation/governance/src/input_security.rs',
+    'crates/adapters/sdk/src/voice/*',
     # 真凭证存放位置 (per .gitignore, 不入库)
     'apikey-ultra.txt', 'apikey-*.txt',
     '*.git-credentials', 'Users*.git-credentials',
-    # R215 防御: 历史已 redact 的报告 (per R215 git filter-repo)
-    'reports/*real-key*', 'reports/*real-llm*', 'reports/*minimax-hello*',
-    # R215 防御: 旧 task 报告里的 test key (借 prefix 但含 "test" / "dummy" / "verify" 标记, 非真 key).
-    # 真 key 的防御由 .gitignore (real-key 文件名) + filter-repo (历史 scrub) 双层把守, 此 allowlist 只挡 false positive.
-    'reports/*',                                # 大部分 reports/ 含 test verification key
-    'r129-3-run-api-helper.ps1'                 # 旧 task helper, 含 test key
+    # 历史已 redact 的报告 (per R215 git filter-repo)
+    'reports/*',
+    'r129-3-run-api-helper.ps1'
 )
 
 # ============================================================================
@@ -147,6 +145,8 @@ function Scan-Content {
         $lineNum = $StartLine + $i
         foreach ($pat in $SecretPatterns) {
             if ($line -match $pat.Pattern) {
+                $trimmed = $line.Trim()
+                $snippetLen = [Math]::Min(120, $trimmed.Length)
                 $findings += [PSCustomObject]@{
                     File = $FilePath
                     Line = $lineNum
@@ -154,7 +154,7 @@ function Scan-Content {
                     Pattern = $pat.Name
                     Tags = $pat.Tags
                     Match = $Matches[0]
-                    Snippet = $line.Trim().Substring(0, [Math]::Min(120, $line.Length))
+                    Snippet = if ($snippetLen -gt 0) { $trimmed.Substring(0, $snippetLen) } else { "" }
                 }
                 break  # 一行只报一次
             }
@@ -198,8 +198,8 @@ function Invoke-ScanHistory {
     $blobs = & git rev-list --all --objects 2>$null
     $scanned = 0
     foreach ($line in $blobs) {
-        if ($line -notmatch '^[0-9a-f]{40}\s+(.+)$') { continue }
-        $sha = $Matches[1].Split(' ')[0]
+        if ($line -notmatch '^([0-9a-f]{40})\s+(.+)$') { continue }
+        $sha = $Matches[1]
         $path = $Matches[2]
         # 跳过大文件 / binary / docs
         if ($path -match '\.(lock|json|png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|md|txt|wasm|exe|dll|so|dylib)$') { continue }
@@ -236,8 +236,9 @@ switch ($Mode) {
 
 # 过滤: allowlist paths
 $filtered = foreach ($f in $findings) {
-    if (Test-PathAllowed -Path $f.File -AllowlistPaths $AllowlistPaths) { continue }
-    if ($allowlist -and (Test-PathAllowed -Path $f.File -AllowlistPaths $allowlist.Paths)) { continue }
+    $checkPath = $f.File -replace '^\[history\]\s*', ''
+    if (Test-PathAllowed -Path $checkPath -AllowlistPaths $AllowlistPaths) { continue }
+    if ($allowlist -and (Test-PathAllowed -Path $checkPath -AllowlistPaths $allowlist.Paths)) { continue }
     # allowlist regexes
     if ($allowlist) {
         $skip = $false

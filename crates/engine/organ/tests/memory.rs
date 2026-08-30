@@ -84,12 +84,7 @@ async fn memory_merger_organ_merge_deduplicates_similar_content() {
     assert_eq!(mem.at_ms, 1_700_000_001_000, "dedup 后 at_ms 应取最新");
 
     // 不同内容 → 新增
-    let (is_new_3, _) = merger.merge(
-        OrganKind::W1,
-        "完全不同内容",
-        0.5,
-        1_700_000_002_000,
-    );
+    let (is_new_3, _) = merger.merge(OrganKind::W1, "完全不同内容", 0.5, 1_700_000_002_000);
     assert!(is_new_3, "新内容应新增");
 
     assert_eq!(merger.len(), 2, "应有 2 条记忆 (dedup 后)");
@@ -250,7 +245,9 @@ async fn memory_merger_organ_query_finds_by_keyword() {
     assert!(
         hits[0].weight >= hits[1].weight,
         "应按 weight 倒序: hits={:?}",
-        hits.iter().map(|h| (h.content.as_str(), h.weight)).collect::<Vec<_>>()
+        hits.iter()
+            .map(|h| (h.content.as_str(), h.weight))
+            .collect::<Vec<_>>()
     );
 
     // 关键词"古风" → 命中 1 条

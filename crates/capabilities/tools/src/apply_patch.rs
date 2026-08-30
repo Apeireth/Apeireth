@@ -3,10 +3,10 @@
 //! 支持在单次原子事务中对代码库执行多文件新增 (Add)、删除 (Delete) 与按上下文精确替换更新 (Update).
 //! 若任意一个文件的任意一个 Hunk 匹配失败，整个事务立即完全回滚，保证磁盘状态绝对一致.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Patch 应用错误.
@@ -27,9 +27,17 @@ pub enum ApplyPatchError {
 /// 单个文件操作类型.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilePatchAction {
-    Add { path: PathBuf, content: String },
-    Delete { path: PathBuf },
-    Update { path: PathBuf, hunks: Vec<PatchHunk> },
+    Add {
+        path: PathBuf,
+        content: String,
+    },
+    Delete {
+        path: PathBuf,
+    },
+    Update {
+        path: PathBuf,
+        hunks: Vec<PatchHunk>,
+    },
 }
 
 /// 补丁修改块 (Hunk).
@@ -118,7 +126,9 @@ impl TransactionalPatchApplier {
                             i += 1;
                         }
                         if i >= lines.len() || lines[i].trim() != "=======" {
-                            return Err(ApplyPatchError::ParseError("缺少 '=======' 分隔符".to_string()));
+                            return Err(ApplyPatchError::ParseError(
+                                "缺少 '=======' 分隔符".to_string(),
+                            ));
                         }
                         i += 1; // 跳过 =======
                         let mut replace_lines = Vec::new();
@@ -127,7 +137,9 @@ impl TransactionalPatchApplier {
                             i += 1;
                         }
                         if i >= lines.len() || lines[i].trim() != ">>>>>>>" {
-                            return Err(ApplyPatchError::ParseError("缺少 '>>>>>>>' 结束符".to_string()));
+                            return Err(ApplyPatchError::ParseError(
+                                "缺少 '>>>>>>>' 结束符".to_string(),
+                            ));
                         }
                         i += 1; // 跳过 >>>>>>>
                         hunks.push(PatchHunk {
@@ -176,7 +188,9 @@ impl TransactionalPatchApplier {
                 FilePatchAction::Add { path, content } => {
                     let full_path = root_dir.join(path);
                     if full_path.exists() {
-                        return Err(ApplyPatchError::FileAlreadyExists(path.to_string_lossy().to_string()));
+                        return Err(ApplyPatchError::FileAlreadyExists(
+                            path.to_string_lossy().to_string(),
+                        ));
                     }
                     original_backups.insert(full_path.clone(), None);
                     staged_writes.insert(full_path, content.clone());
@@ -185,9 +199,12 @@ impl TransactionalPatchApplier {
                 FilePatchAction::Delete { path } => {
                     let full_path = root_dir.join(path);
                     if !full_path.exists() {
-                        return Err(ApplyPatchError::FileNotFound(path.to_string_lossy().to_string()));
+                        return Err(ApplyPatchError::FileNotFound(
+                            path.to_string_lossy().to_string(),
+                        ));
                     }
-                    let old_content = fs::read_to_string(&full_path).map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+                    let old_content = fs::read_to_string(&full_path)
+                        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
                     original_backups.insert(full_path.clone(), Some(old_content));
                     staged_deletes.push(full_path);
                     files_deleted.push(path.to_string_lossy().to_string());
@@ -195,9 +212,12 @@ impl TransactionalPatchApplier {
                 FilePatchAction::Update { path, hunks } => {
                     let full_path = root_dir.join(path);
                     if !full_path.exists() {
-                        return Err(ApplyPatchError::FileNotFound(path.to_string_lossy().to_string()));
+                        return Err(ApplyPatchError::FileNotFound(
+                            path.to_string_lossy().to_string(),
+                        ));
                     }
-                    let original = fs::read_to_string(&full_path).map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+                    let original = fs::read_to_string(&full_path)
+                        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
                     original_backups.insert(full_path.clone(), Some(original.clone()));
 
                     let mut updated = original;
@@ -211,7 +231,8 @@ impl TransactionalPatchApplier {
                             )));
                         }
                         // 替换且只替换第一个唯一匹配实例
-                        updated = updated.replacen(&hunk.search_context, &hunk.replacement_content, 1);
+                        updated =
+                            updated.replacen(&hunk.search_context, &hunk.replacement_content, 1);
                     }
                     staged_writes.insert(full_path, updated);
                     files_updated.push(path.to_string_lossy().to_string());
