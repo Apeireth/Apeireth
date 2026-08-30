@@ -41,7 +41,7 @@ fi
 
 # === 1. 找 tarball ===
 cd "$(dirname "$0")/../.."
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+VERSION="${APEIRETH_VERSION:-2.0.0-rc.1}"
 INSTALL_DIR="${APEIRETH_INSTALL_DIR:-/opt/apeireth}"
 
 if [[ -n "${1:-}" ]]; then
@@ -49,9 +49,9 @@ if [[ -n "${1:-}" ]]; then
 elif [[ -n "${APEIRETH_TARBALL:-}" ]]; then
     TARBALL_PATH="${APEIRETH_TARBALL}"
 else
-    TARBALL_PATH=$(find target -name "apeireth-${VERSION}-*.tar.gz" -type f 2>/dev/null | head -1 || true)
+    TARBALL_PATH=$(find target -name "apeireth-${VERSION}*.tar.gz" -o -name "apeireth-2.0.0*.tar.gz" -type f 2>/dev/null | head -1 || true)
     if [[ -z "${TARBALL_PATH}" ]]; then
-        echo "❌ 未找到 tarball (默认路径 target/**/apeireth-${VERSION}-*.tar.gz)"
+        echo "❌ 未找到 tarball (默认路径 target/**/apeireth-${VERSION}*.tar.gz)"
         echo "   选项:"
         echo "   1. 先跑 packaging/tarball/build.sh 编出 tarball"
         echo "   2. 从 GitHub release 下载"

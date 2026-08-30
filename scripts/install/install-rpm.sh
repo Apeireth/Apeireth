@@ -37,20 +37,20 @@ fi
 
 # === 1. 找 .rpm ===
 cd "$(dirname "$0")/../.."
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+VERSION="${APEIRETH_VERSION:-2.0.0}"
 
 if [[ -n "${1:-}" ]]; then
     RPM_PATH="$1"
 elif [[ -n "${APEIRETH_RPM:-}" ]]; then
     RPM_PATH="${APEIRETH_RPM}"
 else
-    # 默认: target/rpm/RPMS/x86_64/apeireth-<version>-1.x86_64.rpm (cargo-rpm 默认输出)
-    RPM_PATH=$(find target -name "apeireth-${VERSION}-*.rpm" -type f 2>/dev/null | head -1 || true)
+    # 默认: target/rpm/RPMS/x86_64/apeireth-<version>-0.1.rc1.x86_64.rpm
+    RPM_PATH=$(find target/rpm target/release/rpmbuild ~/rpmbuild -name "apeireth-${VERSION}*.rpm" -o -name "apeireth-2.0.0*.rpm" -type f 2>/dev/null | head -1 || true)
     if [[ -z "${RPM_PATH}" ]]; then
-        echo "❌ 未找到 .rpm (默认路径 target/**/apeireth-${VERSION}-*.rpm)"
+        echo "❌ 未找到 .rpm (默认路径 target/**/apeireth-${VERSION}*.rpm)"
         echo "   选项:"
         echo "   1. 先跑 packaging/rpm/build.sh 编出 .rpm"
-        echo "   2. 从 GitHub release 下载: https://github.com/apeireth/apeireth-rust/releases/download/v${VERSION}/apeireth-${VERSION}-1.x86_64.rpm"
+        echo "   2. 从 GitHub release 下载: https://github.com/apeireth/apeireth-rust/releases/download/v2.0.0-rc.1/apeireth-2.0.0-0.1.rc1.x86_64.rpm"
         echo "   3. 显式传: sudo $0 /path/to/apeireth.rpm"
         exit 1
     fi

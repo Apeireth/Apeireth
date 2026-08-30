@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+VERSION="${APEIRETH_VERSION:-2.0.0~rc1}"
 cd "$(dirname "$0")/../.."
 
 # 0. root 守门
@@ -31,9 +31,9 @@ fi
 if [[ -n "${1:-}" ]]; then
     DEB_PATH="$1"
 else
-    DEB_PATH=$(find target -name "apeireth_${VERSION}_amd64.deb" -type f 2>/dev/null | head -1 || true)
+    DEB_PATH=$(find target -name "apeireth_*${VERSION}*.deb" -o -name "apeireth_2.0.0*.deb" -type f 2>/dev/null | head -1 || true)
     if [[ -z "${DEB_PATH}" ]]; then
-        echo "❌ 未找到 apeireth_${VERSION}_amd64.deb, 先跑 packaging/deb/build.sh"
+        echo "❌ 未找到 deb 产物 (例如 apeireth_${VERSION}_amd64.deb), 先跑 packaging/deb/build.sh"
         exit 1
     fi
 fi

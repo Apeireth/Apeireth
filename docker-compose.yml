@@ -10,7 +10,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: apeireth/apeireth:1.0.0
+    image: apeireth/apeireth:2.0.0-rc.1
     container_name: apeireth
     restart: unless-stopped
     ports:

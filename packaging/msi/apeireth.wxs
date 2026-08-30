@@ -1,92 +1,156 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Apeireth Windows MSI (8 包之 1, D-06 拍板)
-  平台: Windows (msiexec /i apeireth-1.0.0-x86_64.msi)
-  工具: WiX 3.x (cargo-wix 自动生成)
-  体积: ~50MB (含 Windows service 注册)
-  验证: msiexec /i apeireth-1.0.0-x86_64.msi
-        services.msc 找 "Apeireth OS"
-        curl http://localhost:8080/health
-  卸载: msiexec /x apeireth-1.0.0-x86_64.msi
+  Apeireth Windows MSI Installer Definition (APEIRETH 2.0 RC)
+  Platform: Windows x86_64 (msiexec /i apeireth-2.0.0-rc.1-windows-x86_64.msi)
+  Tool: WiX Toolset 3.x / 4.x / cargo-wix
+  Target Path: %ProgramFiles%\Apeireth\
 
-  注: cargo-wix 会基于此模板 + Cargo.toml [package.metadata.wix] 自动生成 MSI。
-      0 触碰 (per 任务规范): MSI 实装待 release engineer 阶段 3 末触发。
+  Lifecycle:
+    - Install: msiexec /i apeireth-2.0.0-rc.1-windows-x86_64.msi /qn
+    - Upgrade: msiexec /i apeireth-2.0.0.msi /qn (MajorUpgrade automated)
+    - Repair:  msiexec /f apeireth-2.0.0-rc.1-windows-x86_64.msi
+    - Uninstall: msiexec /x {ProductCode} or via Add/Remove Programs
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
-  <Product Id="*" Name="Apeireth OS" Version="1.0.0.0"
-           Manufacturer="Apeireth Team" Language="1033"
-           UpgradeCode="PUT-GUID-HERE-AT-BUILD-TIME">
+  <Product Id="*"
+           Name="Apeireth OS"
+           Version="2.0.0.0"
+           Manufacturer="Apeireth Team"
+           Language="1033"
+           UpgradeCode="{9D7E2B45-7E3A-4F8A-B31F-79A5E2E39401}">
 
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
-             Description="Apeireth OS 1.0.0 - AI Growth Platform"
-             Comments="Apache-2.0 license, 详见 https://github.com/apeireth/apeireth-rust"
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Description="Apeireth OS 2.0 - AGI Operating System &amp; AI Growth Platform"
+             Comments="Apache-2.0 license, see https://github.com/apeireth/apeireth-rust"
              Manufacturer="Apeireth Team" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed."
+                  AllowSameVersionUpgrades="yes" />
 
     <MediaTemplate EmbedCab="yes" />
 
-    <!-- 功能组件: 必选 (默认 install) -->
+    <!-- Application Icon -->
+    <Icon Id="ApeirethIcon.ico" SourceFile="packaging\msi\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ApeirethIcon.ico" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/apeireth/apeireth-rust" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/apeireth/apeireth-rust" />
+
+    <!-- Feature Definition -->
     <Feature Id="ProductFeature" Title="Apeireth OS" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
-      <ComponentRef Id="ServiceComponent" />
+      <ComponentRef Id="ApplicationShortcuts" />
       <ComponentRef Id="EnvironmentComponent" />
+      <ComponentRef Id="ServiceComponent" />
     </Feature>
 
-    <!-- 默认安装目录: C:\Program Files\Apeireth\ -->
+    <!-- Directory Structure -->
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLDIR" Name="Apeireth">
           <Directory Id="BIN" Name="bin" />
           <Directory Id="CONFIG" Name="config" />
+          <Directory Id="SHARE" Name="share" />
           <Directory Id="LOG" Name="log" />
           <Directory Id="DATA" Name="data" />
         </Directory>
       </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Apeireth" />
+      </Directory>
     </Directory>
 
-    <!-- 主程序 + LICENSE + 配置 -->
-    <ComponentGroup Id="ProductComponents" Directory="INSTALLDIR">
-      <Component Id="MainExecutable" Guid="PUT-GUID-MAIN">
-        <File Id="ApeirethExe" Source="target\x86_64-pc-windows-msvc\release\apeireth.exe"
+    <!-- Product Components -->
+    <ComponentGroup Id="ProductComponents">
+      <!-- Main Executable in bin/ -->
+      <Component Id="MainExecutable" Guid="{3C1F5C02-A8E2-4EA4-9345-09A0D7D06E21}" Directory="BIN">
+        <File Id="ApeirethExe"
+              Source="target\release\apeireth.exe"
               KeyPath="yes" />
       </Component>
-      <Component Id="LicenseFile" Guid="PUT-GUID-LICENSE">
-        <File Id="LicenseFile" Source="LICENSE" />
+
+      <!-- Documentation & Legal in share/ -->
+      <Component Id="LicenseFile" Guid="{57E0E32A-4B6A-4A73-A337-BE7692FE01C3}" Directory="SHARE">
+        <File Id="LicenseFile" Source="LICENSE" KeyPath="yes" />
       </Component>
-      <Component Id="ReadmeFile" Guid="PUT-GUID-README">
-        <File Id="ReadmeFile" Source="README.md" />
+      <Component Id="NoticeFile" Guid="{8F52BC34-9A26-44F1-8B0C-17482D2C67E4}" Directory="SHARE">
+        <File Id="NoticeFile" Source="NOTICE" KeyPath="yes" />
       </Component>
-      <Component Id="ConfigExample" Guid="PUT-GUID-CONFIG">
-        <File Id="ConfigExample" Source="packaging\zip\stage\config\apeireth.env.example" />
+      <Component Id="ReadmeFile" Guid="{D5523EE6-4B17-4F66-BF03-34D5C58C28A1}" Directory="SHARE">
+        <File Id="ReadmeFile" Source="README.md" KeyPath="yes" />
+      </Component>
+
+      <!-- Clean Directory Removal on Uninstall -->
+      <Component Id="CleanupDirs" Guid="{E4A7D92C-38B1-4A57-8C49-61DE2E6C9F20}" Directory="INSTALLDIR">
+        <CreateFolder />
+        <RemoveFolder Id="RemoveBIN" Directory="BIN" On="uninstall" />
+        <RemoveFolder Id="RemoveCONFIG" Directory="CONFIG" On="uninstall" />
+        <RemoveFolder Id="RemoveSHARE" Directory="SHARE" On="uninstall" />
+        <RemoveFolder Id="RemoveLOG" Directory="LOG" On="uninstall" />
+        <RemoveFolder Id="RemoveDATA" Directory="DATA" On="uninstall" />
+        <RemoveFolder Id="RemoveINSTALLDIR" Directory="INSTALLDIR" On="uninstall" />
+        <RegistryValue Root="HKLM" Key="Software\Apeireth\ApeirethOS" Name="InstallDir" Type="string" Value="[INSTALLDIR]" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
-    <!-- Windows Service 注册 (util:ServiceConfig) -->
-    <Component Id="ServiceComponent" Guid="PUT-GUID-SERVICE" Directory="INSTALLDIR">
-      <util:ServiceConfig
-        Id="ApeirethService"
-        Name="ApeirethOS"
-        DisplayName="Apeireth OS - AI Growth Platform"
-        Description="长程 AI 成长平台 API server"
-        Start="auto"
-        Type="ownProcess"
-        ErrorControl="normal"
-        Arguments="serve"
-        BinaryKey="ApeirethExe" />
+    <!-- Start Menu Shortcuts -->
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ApplicationShortcuts" Guid="{97D5FA54-159E-4DC5-8B2B-35C2B4C30A09}">
+        <Shortcut Id="ApplicationStartMenuShortcut"
+                  Name="Apeireth OS CLI"
+                  Description="Launch Apeireth CLI environment"
+                  Target="[BIN]apeireth.exe"
+                  WorkingDirectory="INSTALLDIR"
+                  Icon="ApeirethIcon.ico" />
+        <Shortcut Id="UninstallProduct"
+                  Name="Uninstall Apeireth OS"
+                  Description="Uninstalls Apeireth OS"
+                  Target="[System64Folder]msiexec.exe"
+                  Arguments="/x [ProductCode]" />
+        <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Apeireth\ApeirethOS" Name="ShortcutsInstalled" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Environment Variables (System-wide) -->
+    <Component Id="EnvironmentComponent" Guid="{12B16B4D-7E81-4FE8-9E6F-A0CCBD23B7C6}" Directory="INSTALLDIR">
+      <Environment Id="APEIRETH_HOME" Name="APEIRETH_HOME" Value="[INSTALLDIR]data" Action="set" System="yes" Part="all" />
+      <Environment Id="APEIRETH_CONFIG" Name="APEIRETH_CONFIG" Value="[INSTALLDIR]config\config.toml" Action="set" System="yes" Part="all" />
+      <Environment Id="PATH" Name="PATH" Value="[BIN]" Action="set" System="yes" Part="last" />
+      <RegistryValue Root="HKLM" Key="Software\Apeireth\ApeirethOS" Name="EnvConfigured" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
-    <!-- 环境变量 (per blueprint §3.4 install.ps1 等价) -->
-    <Component Id="EnvironmentComponent" Guid="PUT-GUID-ENV" Directory="INSTALLDIR">
-      <Environment Id="APEIRETH_HOME" Name="APEIRETH_HOME" Value="[INSTALLDIR]data"
-                    Action="set" System="yes" Part="all" />
-      <Environment Id="APEIRETH_CONFIG" Name="APEIRETH_CONFIG"
-                    Value="[INSTALLDIR]config\config.toml" Action="set" System="yes" Part="all" />
+    <!-- Windows Service Component -->
+    <Component Id="ServiceComponent" Guid="{8E866D57-B2A8-433E-A43D-4A2D87FF37A0}" Directory="BIN">
+      <File Id="ServiceExe" Source="target\release\apeireth.exe" KeyPath="yes" />
+      <ServiceInstall Id="ApeirethServiceInstaller"
+                      Type="ownProcess"
+                      Vital="yes"
+                      Name="ApeirethOS"
+                      DisplayName="Apeireth OS Service"
+                      Description="Apeireth AGI Operating System Core API and Agent Service"
+                      Start="auto"
+                      Account="LocalSystem"
+                      ErrorControl="normal"
+                      Arguments="serve" />
+      <ServiceControl Id="ApeirethServiceControl"
+                      Name="ApeirethOS"
+                      Start="install"
+                      Stop="both"
+                      Remove="uninstall"
+                      Wait="yes" />
     </Component>
 
-    <!-- UI -->
+    <!-- Standard Minimal UI -->
     <UI>
       <UIRef Id="WixUI_Minimal" />
+      <Publish Dialog="ExitDialog"
+               Control="Finish"
+               Event="DoAction"
+               Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
     </UI>
 
   </Product>

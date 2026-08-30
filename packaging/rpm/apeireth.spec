@@ -1,44 +1,40 @@
-# Apeireth rpm spec (8 包之 1, D-06 拍板, Linux 重点优化)
-# 平台: RHEL / Fedora / CentOS (dnf install apeireth)
-# 工具: cargo-rpm
-# 体积: ~50MB (含 systemd unit + config)
+# Apeireth rpm spec (Apeireth 2.0 RC1, Linux packaging)
+# 平台: RHEL 8+/9+ / Fedora / CentOS Stream / Rocky / Alma (dnf install apeireth)
+# 工具: cargo-rpm / rpmbuild
+# 体积: ~45MB (含 systemd unit + config)
 #
 # 用法:
-#   cargo install cargo-rpm
-#   ./packaging/rpm/build.sh   # 出 target/rpm/apeireth-1.0.0-1.x86_64.rpm
+#   ./packaging/rpm/build.sh   # 出 target/rpm/apeireth-2.0.0-0.1.rc1.*.rpm
 #
 # 验证:
-#   sudo dnf install ./target/rpm/apeireth-1.0.0-1.x86_64.rpm
+#   sudo dnf install ./target/rpm/apeireth-2.0.0-0.1.rc1.*.rpm
 #   sudo systemctl start apeireth
 #   curl http://localhost:8080/health
 #
 # 卸载: sudo dnf remove apeireth
 
 Name:           apeireth
-Version:        1.0.0
-Release:        1%{?dist}
-Summary:        Apeireth OS - AI Growth Platform (API server)
+Version:        2.0.0
+Release:        0.1.rc1%{?dist}
+Summary:        Apeireth 2.0 - AGI Operating System & Cognitive Microkernel
 License:        Apache-2.0
 URL:            https://github.com/apeireth/apeireth-rust
-Source0:        https://github.com/apeireth/apeireth-rust/archive/refs/tags/v%{version}.tar.gz
+Source0:        https://github.com/apeireth/apeireth-rust/archive/refs/tags/v%{version}-rc.1.tar.gz
 
-# Build 依赖 (开发机)
+# Build 依赖 (开发机 / CI runner)
 BuildRequires:  cargo >= 1.80
 BuildRequires:  rust >= 1.80
-BuildRequires:  pkgconfig(openssl)
-BuildRequires:  pkgconfig(sqlite3)
-BuildRequires:  pkgconfig(libgit2)
+BuildRequires:  ca-certificates
+BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  systemd
 
 # 运行时依赖 (用户机)
-Requires:       openssl-libs >= 3.0
-Requires:       sqlite-libs >= 3.40
-Requires:       libgit2 >= 1.7
 Requires:       ca-certificates
+Requires:       systemd
 
 %description
-Apeireth OS — 长程 AI 成长平台 (立体架构 v2 + 生命架构 v4).
-本包提供 API server (apeireth) 二进制, 默认监听 :8080 (HTTP/WS) + :9090 (metrics).
+Apeireth OS 2.0 — Cognitive Microkernel & AGI Operating System.
+本包提供 Apeireth CLI / Gateway 二进制 (apeireth), 默认网关监听 :8080 (HTTP/WS).
 配套 PostgreSQL 16 + Redis 7 见 docker-compose.yml 或 packaging/docker/.
 
 %prep
@@ -82,6 +78,11 @@ getent passwd apeireth >/dev/null || useradd --system \
 %ghost %config(noreplace) %{_sysconfdir}/apeireth/
 
 %changelog
+* Sun Aug 30 2026 Apeireth Team <dev@apeireth.io> - 2.0.0-0.1.rc1
+- APEIRETH 2.0 RC1 release (8 packages, unified workspace)
+- Cognitive Microkernel & Canonical Agent Loop + Gateway Serve (:8080)
+- Keyring Secret Service + Physical Sandbox Integration
+
 * Wed Aug 05 2026 Apeireth Team <dev@apeireth.io> - 1.0.0-1
 - R20 阶段 3 首次 1.0 release (8 包齐发, D-06 拍板)
 - API server (apeireth) + systemd unit

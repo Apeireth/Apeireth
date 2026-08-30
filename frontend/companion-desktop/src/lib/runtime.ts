@@ -147,7 +147,7 @@ export function loadConfig(): ApeirethConfig {
         modified = true;
       }
       const cleaned: ApeirethConfig = {
-        baseUrl: typeof parsed.baseUrl === 'string' ? parsed.baseUrl : 'http://127.0.0.1:3000',
+        baseUrl: typeof parsed.baseUrl === 'string' ? parsed.baseUrl : 'http://127.0.0.1:8080',
         apiKey: '', // transient in-memory only; not persisted
         model: typeof parsed.model === 'string' ? parsed.model : 'MiniMax-Text-01',
         theme: typeof parsed.theme === 'string' ? (parsed.theme as any) : undefined,
@@ -164,7 +164,7 @@ export function loadConfig(): ApeirethConfig {
   } catch {
     // ignore corrupted config
   }
-  return {baseUrl: 'http://127.0.0.1:3000', apiKey: '', model: 'MiniMax-Text-01'};
+  return {baseUrl: 'http://127.0.0.1:8080', apiKey: '', model: 'MiniMax-Text-01'};
 
 }
 
