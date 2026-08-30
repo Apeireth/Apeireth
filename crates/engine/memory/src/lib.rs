@@ -195,6 +195,9 @@ pub use dedup::{
 // Salvage 02: rolling cross-frontend context ledger (companion onering).
 pub mod onering;
 pub use onering::{LedgerEntry, OneRingLedger, DEFAULT_MAX_RECORDS, ROLE_ASSISTANT, ROLE_USER};
+// Salvage 02: combined retention sweep (count cap + TTL + decay) via governance sidecar.
+pub mod retention;
+pub use retention::{decay_strength, sweep_session, RetentionPolicy, RetentionSweepReport};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
