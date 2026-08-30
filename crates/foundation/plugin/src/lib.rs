@@ -50,6 +50,7 @@
 #![deny(unsafe_code)]
 
 pub mod alias;
+pub mod availability;
 pub mod bounds;
 pub mod capability;
 pub mod credentials;
@@ -75,6 +76,7 @@ pub use alias::{
     aliases_by_id, index_manifests, index_pairs, unresolved_token, AliasIndex, AliasResolver,
     LruCache, DEFAULT_CACHE_SIZE, LEGACY_UNRESOLVED_PREFIX,
 };
+pub use availability::{Availability, AvailabilityError, AvailabilityReport};
 pub use bounds::{
     audit_bounds, check_call, check_input_size, check_output_size, check_permissions,
     default_caller_permissions, is_valid_kebab, privileged_caller_permissions,
