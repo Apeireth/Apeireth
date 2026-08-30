@@ -45,15 +45,24 @@ use serde::{Deserialize, Serialize};
 pub mod ambient_context;
 pub mod async_context;
 pub mod care_potential_field;
+pub mod cognitive_quota_scheduler;
 pub mod context_rot;
 pub mod continuation;
 pub mod council;
+pub mod lineage_spawning;
 pub mod llm;
 pub mod prompt_stabilizer;
 pub mod speech_arbiter;
 pub mod worktree_sandbox;
 
 pub use care_potential_field::{CareAction, CarePotentialField};
+pub use cognitive_quota_scheduler::{
+    CognitiveContextFrame, CognitiveInterrupt, CognitivePriority, CognitiveQuota,
+    CognitiveQuotaScheduler, CognitiveTaskControlBlock,
+};
+pub use lineage_spawning::{
+    LineageProgenySpec, LineageSpawningOrchestrator, NurturingPhase, ProgenySpecialization,
+};
 pub use ambient_context::{
     AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
 };
