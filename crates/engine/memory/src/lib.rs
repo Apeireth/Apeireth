@@ -57,6 +57,11 @@ pub mod dreaming;
 pub mod five_dimensional;
 pub mod hybrid_search;
 pub mod intent_brier;
+pub mod calibration;
+pub mod calibration_critic;
+pub mod confidence;
+pub mod ensemble;
+pub mod online_calibration;
 pub mod meta_thinking;
 pub mod milestone;
 pub mod partner;
@@ -126,6 +131,24 @@ pub use intent_brier::{
     render_report, BrierTrend, BrierWindow, DomainDiagnostic, FeedbackOutcome,
     IntentDiagnosticReport, IntentLedger, IntentPrediction, IntentRecord,
     DEFAULT_LOW_CALIBRATION_THRESHOLD, DEFAULT_WINDOWS, TREND_DELTA_RATIO,
+};
+
+pub use calibration::{
+    brier_squared, calibration_bins, decompose, decompose_default, ece_default,
+    expected_calibration_error, mean_brier_score, BrierDecomposition, CalibrationBin, Observation,
+    DEFAULT_NUM_BINS,
+};
+pub use ensemble::{
+    AggregationStrategy, EnsembleConfig, EnsembleForecast, EnsembleMember, MarketConfig,
+    MarketError, PredictionMarket, TradeReceipt,
+};
+pub use calibration_critic::{
+    CalibrationCritic, CriticConfig as CalibrationCriticConfig, CritiqueAction, CritiqueResult,
+};
+pub use confidence::{BetaBinomial, Strength as ConfidenceStrength};
+pub use online_calibration::{
+    AdaptiveBaseline, CalibrationCoefficients, Coeff, DriftAlarm, DriftDetector, LinearCalibration,
+    RecalibrationScheduler, ScheduleReport, UserFeedback as CalibrationFeedback,
 };
 
 pub use reflexion::{
