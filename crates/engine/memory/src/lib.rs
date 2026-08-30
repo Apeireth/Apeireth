@@ -73,8 +73,10 @@ pub mod wiki_fs;
 pub mod betti_hole_detector;
 pub mod kuramoto_resonance;
 pub mod chronicle_crystallizer;
-// Salvage-03 (memory-advanced): closed-world injection. Default-off; not production-wired.
+// Salvage-03 (memory-advanced): closed-world injection + A-MEM residual CRAWL.
+// Default-off; not production-wired.
 pub mod memory_injection;
+pub mod amem_graph;
 
 pub use betti_hole_detector::{BettiHoleDetector, BettiTopologicalReport, ManifoldConceptNode, TopologicalVoidRing};
 pub use kuramoto_resonance::{EpiphanyEvent, KuramotoOscillator, KuramotoResonanceEngine};
@@ -83,6 +85,10 @@ pub use chronicle_crystallizer::{ChronicleCrystallizer, ChronicleSection, RawEpi
 pub use memory_injection::{
     build_memory_injection, build_preference_injection, EVIDENCE_MAX_CHARS,
     PREFERENCE_INJECTION_LIMIT,
+};
+pub use amem_graph::{
+    combined_score, content_residual, crawl, fact_specificity, text_overlap, AmemGraph, GraphFact,
+    GraphRankConfig, MemoryLink, GRAPH_INJECTION_LIMIT, LINK_OVERLAP_THRESHOLD,
 };
 
 pub use epa_bridge::{EpaProjectionResult, EpaSemanticBridge};
