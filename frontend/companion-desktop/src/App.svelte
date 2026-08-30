@@ -972,6 +972,7 @@
               {conversations}
               activeId={activeId || ''}
               {config}
+              {capabilities}
               onOpen={openConversation}
               onCreate={newConversation}
               onArchive={archiveConversation}

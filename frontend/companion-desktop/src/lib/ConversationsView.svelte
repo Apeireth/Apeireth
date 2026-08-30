@@ -24,14 +24,15 @@
   import LoadingState from './components/LoadingState.svelte';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
   import StatusBadge from './components/StatusBadge.svelte';
-  import type {ApeirethConfig, ChatMessage, Conversation} from './types';
-  import {fetchBackendSessions, friendlyErrorMessage} from './runtime';
+  import type {ApeirethConfig, ChatMessage, Conversation, CapabilityManifest} from './types';
+  import {fetchBackendSessions, friendlyErrorMessage, capabilitySupported} from './runtime';
 
 
   let {
     conversations = [],
     activeId = '',
     config,
+    capabilities = null,
     onOpen,
     onCreate,
     onArchive,
@@ -42,6 +43,7 @@
     conversations: Conversation[];
     activeId: string;
     config?: ApeirethConfig;
+    capabilities?: CapabilityManifest | null;
     onOpen: (id: string) => void;
     onCreate: () => void;
     onArchive: (id: string) => void;
@@ -74,6 +76,13 @@
 
   async function loadBackendLedger() {
     if (!config) return;
+
+    // Capability gate: prevent calling unsupported /v1/panel/sessions
+    if (!capabilitySupported(capabilities, 'sessions.read')) {
+      backendError = '后端会话账本不支持: 当前运行时未实现 sessions.read (Apeireth 2.0 canonical gateway 无此内省 API)';
+      return;
+    }
+
     backendLoading = true;
     backendError = '';
     try {
