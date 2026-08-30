@@ -18,6 +18,8 @@
 | **编排 (Orchestration)** | `orch.speech_arbiter` | `apeireth-orchestration::speech_arbiter` | `SpeechOutputArbiter::arbitrate()` | FIFO 排队 / TTL 淘汰 / 抢占打断 |
 | **编排 (Orchestration)** | `orch.prompt_cache` | `apeireth-orchestration::prompt_stabilizer`| `assemble_messages()` | 字节级前缀固定 + 单点环境注入 |
 | **编排 (Orchestration)** | `orch.care_potential` | `apeireth-orchestration::care_potential_field`| `CarePotentialField::step()` | 连续关怀势能微分方程 + 深夜/挫败量子跃迁 + 三阶克制共情动作 |
+| **编排 (Orchestration)** | `orch.cognitive_scheduler`| `apeireth-orchestration::cognitive_quota_scheduler`| `CognitiveQuotaScheduler::schedule_next()` | 多维认知配额 Q + PIP 优先级继承 + 抢占快照压栈 |
+| **编排 (Orchestration)** | `orch.lineage_spawning` | `apeireth-orchestration::lineage_spawning` | `LineageSpawningOrchestrator::spawn_progeny()` | 跨代教养协议 + Ed25519 表观遗传同构 + 三阶段晋级 |
 | **编排 (Orchestration)** | `orch.council_7` | `apeireth-orchestration::council` | `Council::decide(proposal)` | 7 Advisor 结构化辩论与 Veto 机制 |
 | **记忆 (Memory)** | `mem.betti_hole_detector`| `apeireth-memory::betti_hole_detector` | `BettiHoleDetector::analyze()` | Vietoris-Rips 持续同调 + β₀/β₁/β₂ 拓扑洞 + 负压求知梯度 |
 | **记忆 (Memory)** | `mem.kuramoto_resonance`| `apeireth-memory::kuramoto_resonance` | `KuramotoResonanceEngine::step()` | 非线性振子相锁 + 零阻抗虫洞 + 顿悟雪崩元概念 |
@@ -32,6 +34,7 @@
 | **记忆 (Memory)** | `mem.dreaming` | `apeireth-memory::dreaming` | `advance_cycle()`, `dream_state()` | 6 阶段昼夜认知循环与经验沉淀 |
 | **记忆 (Memory)** | `mem.wiki_fs` | `apeireth-memory::wiki_fs` | `compile_page()`, `run_lint()` | Karpathy 知识编译 + `[[WikiLink]]` + 反熵 Lint |
 | **运行时 (Runtime)** | `rt.heartbeat` | `apeireth-runtime::canonical::heartbeat`| `schedule_task()`, `acquire_flow_lock()` | 5 触发源 + 二叉最大堆 + FlowLock 心流锁 |
+| **运行时 (Runtime)** | `rt.causal_world_model` | `apeireth-runtime::canonical::causal_world_model`| `CausalWorldModel::fork_branch()`, `commit_branch()` | CoW 假说分支推演 + SAGA 逆向补偿 LIFO 回滚 |
 | **运行时 (Runtime)** | `rt.harness_patch` | `apeireth-runtime::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| Harness-R1 失败轨迹自动演绎策略补丁 |
 | **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` | `RepoMapGenerator::generate_map()` | Aider 式 AST 跨语言提取 + PageRank 代码地图 |
 | **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | Codex 两阶段提交 + 100% 自动原子回滚 |
