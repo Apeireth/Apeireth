@@ -367,6 +367,49 @@ mod windows_tests {
     }
 
     #[test]
+    fn cpu_time_limit_is_advertised_enforced() {
+        let capabilities = current_platform_capabilities();
+        assert_eq!(
+            capabilities.cpu_limit,
+            EnforcementLevel::Enforced,
+            "Windows backend must advertise JOB_OBJECT_LIMIT_PROCESS_TIME as Enforced"
+        );
+    }
+
+    #[test]
+    fn cpu_time_limit_terminates_a_cpu_bound_child() {
+        let mut limits = ProcessLimits::default();
+        limits.max_cpu_seconds = Some(1);
+        limits.max_runtime = Duration::from_secs(15);
+        let request = ProcessRequest::new(helper())
+            .with_args(["burn-cpu", "30"])
+            .with_limits(limits);
+
+        let started = Instant::now();
+        let result = execute(&request).unwrap();
+        let elapsed = started.elapsed();
+        assert!(
+            !result.timed_out(),
+            "CPU-time Job Object limit must kill the child itself, not the wall-clock supervisor; got {:?}",
+            result.termination
+        );
+        assert!(
+            !result.success(),
+            "CPU-time Job Object limit must terminate a 30s burn; got {:?}",
+            result.termination
+        );
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "1s CPU-time limit should fire well under 10s wall clock, elapsed={elapsed:?}"
+        );
+        assert!(
+            !text(&result.stdout).contains("BURN_DONE"),
+            "child must not finish the 30s burn under a 1s CPU-time limit, stdout={:?}",
+            text(&result.stdout)
+        );
+    }
+
+    #[test]
     fn process_memory_limit_rejects_oversized_allocation() {
         let mut limits = ProcessLimits::default();
         limits.max_process_memory_bytes = Some(128 * 1024 * 1024);

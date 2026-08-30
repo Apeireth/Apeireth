@@ -45,6 +45,7 @@ use windows_sys::Win32::System::JobObjects::{
     SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
     JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_JOB_MEMORY,
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOB_OBJECT_LIMIT_PROCESS_MEMORY,
+    JOB_OBJECT_LIMIT_PROCESS_TIME,
 };
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
@@ -111,6 +112,15 @@ impl JobObject {
             if let Some(active_processes) = limits.max_active_processes {
                 flags |= JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
                 info.BasicLimitInformation.ActiveProcessLimit = active_processes;
+            }
+
+            if let Some(seconds) = limits.max_cpu_seconds {
+                flags |= JOB_OBJECT_LIMIT_PROCESS_TIME;
+                // PerProcessUserTimeLimit is a 100-nanosecond interval (FILETIME).
+                // Saturate rather than wrap: a caller that asks for an enormous
+                // CPU budget still gets a finite Job Object limit.
+                let hundred_ns = seconds.saturating_mul(10_000_000);
+                info.BasicLimitInformation.PerProcessUserTimeLimit = hundred_ns as i64;
             }
 
             info.BasicLimitInformation.LimitFlags = flags;
@@ -197,7 +207,7 @@ pub(crate) fn capabilities() -> IsolationCapabilities {
         IsolationCapability::ProcessCountLimit,
         EnforcementLevel::Enforced,
     );
-    caps.set(IsolationCapability::CpuLimit, EnforcementLevel::Unsupported);
+    caps.set(IsolationCapability::CpuLimit, EnforcementLevel::Enforced);
     caps.set(
         IsolationCapability::FileSizeLimit,
         EnforcementLevel::Unsupported,
