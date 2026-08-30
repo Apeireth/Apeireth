@@ -71,11 +71,12 @@ impl TokenBucket {
     /// Construct at an explicit clock.
     pub fn new_at(cfg: &BucketConfig, now: Instant) -> RateLimitResult<Self> {
         cfg.validate()?;
-        let initial = cfg.initial_tokens.unwrap_or(cfg.burst) as f64;
+        let burst = f64::from(cfg.burst);
+        let initial = f64::from(cfg.initial_tokens.unwrap_or(cfg.burst));
         Ok(Self {
-            capacity: cfg.burst as f64,
+            capacity: burst,
             refill_rate: cfg.rate_per_second,
-            tokens: initial.min(cfg.burst as f64),
+            tokens: initial.min(burst),
             last_refill: now,
         })
     }
@@ -91,8 +92,9 @@ impl TokenBucket {
             return true;
         }
         self.refill(now);
-        if self.tokens >= cost as f64 {
-            self.tokens -= cost as f64;
+        let cost_f = f64::from(cost);
+        if self.tokens >= cost_f {
+            self.tokens -= cost_f;
             true
         } else {
             false
@@ -104,7 +106,7 @@ impl TokenBucket {
         if cost == 0 {
             return;
         }
-        self.tokens = (self.tokens + cost as f64).min(self.capacity);
+        self.tokens = (self.tokens + f64::from(cost)).min(self.capacity);
     }
 
     /// Restore a full bucket.
@@ -179,7 +181,7 @@ impl LeakyBucket {
         cfg.validate()?;
         Ok(Self {
             drip_rate: cfg.rate_per_second,
-            capacity: cfg.burst as f64,
+            capacity: f64::from(cfg.burst),
             level: 0.0,
             last_drip: now,
             overflow_policy: overflow,
@@ -202,8 +204,9 @@ impl LeakyBucket {
             return true;
         }
         self.drip(now);
-        if self.level + cost as f64 <= self.capacity {
-            self.level += cost as f64;
+        let cost_f = f64::from(cost);
+        if self.level + cost_f <= self.capacity {
+            self.level += cost_f;
             true
         } else {
             false
@@ -215,7 +218,7 @@ impl LeakyBucket {
         if cost == 0 {
             return;
         }
-        self.level = (self.level - cost as f64).max(0.0);
+        self.level = (self.level - f64::from(cost)).max(0.0);
     }
 
     /// Empty the bucket.
