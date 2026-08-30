@@ -5,7 +5,12 @@
 //! + Command) 留在本 crate; 完整 5 modality 真实现留 v2.1 路线 (per `v2-unabsorbed-features.md` §A3).
 //!
 //! **v1 compat**: `apeireth_perception::*` 仍可访问 (re-export), 5 个内部测试 0 破坏.
+//!
+//! **Salvage (agent 08)**: this crate owns recovered perception *algorithms*
+//! (normalization, capture metadata, screen salience, observation capture).
+//! It is **not** an `AgentModule` and does **not** own final response.
 
+pub mod normalize;
 pub mod vision;
 pub mod voice;
 
@@ -14,6 +19,11 @@ pub use apeireth_plugin::perception::{
     Attention, PerceptionChannel, PerceptionError, PerceptionEvent, PerceptionInput,
     PerceptionModality, TactileInput, TextInput, ThresholdAttention, TopKAttention, VisionInput,
     VoiceInput,
+};
+pub use normalize::{
+    command_observation, default_attention_threshold, default_top_k, pipeline_events,
+    tactile_observation, text_observation, top_k_events, validate_event, vision_observation,
+    voice_observation, SignalSource,
 };
 pub use vision::{NoopVisionBackend, XcapVisionBackend, XcapVisionConfig};
 pub use voice::{WhisperHttpBackend, WhisperHttpConfig};
