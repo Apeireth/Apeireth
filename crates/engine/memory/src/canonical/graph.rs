@@ -77,6 +77,18 @@ impl MemoryGraph {
         self.edges.len()
     }
 
+    /// All node ids, sorted ascending so callers can iterate deterministically.
+    pub fn node_ids(&self) -> Vec<MemoryId> {
+        let mut ids: Vec<MemoryId> = self.nodes.keys().cloned().collect();
+        ids.sort();
+        ids
+    }
+
+    /// All edges in insertion order.
+    pub fn all_edges(&self) -> &[Edge] {
+        &self.edges
+    }
+
     /// Adds a node. Duplicate ids are rejected with [`MemoryError::Conflict`].
     pub fn add_node(&mut self, node: Node) -> Result<(), MemoryError> {
         if self.nodes.contains_key(&node.id) {
@@ -166,6 +178,18 @@ impl MemoryGraph {
     pub fn edges_from(&self, id: &MemoryId) -> Vec<&Edge> {
         let mut edges: Vec<&Edge> = self.edges.iter().filter(|edge| &edge.from == id).collect();
         edges.sort_by(|a, b| a.relation.cmp(&b.relation).then_with(|| a.to.cmp(&b.to)));
+        edges
+    }
+
+    /// Incoming edges to `id`, deterministically ordered by relation and then
+    /// source id.
+    pub fn edges_into(&self, id: &MemoryId) -> Vec<&Edge> {
+        let mut edges: Vec<&Edge> = self.edges.iter().filter(|edge| &edge.to == id).collect();
+        edges.sort_by(|a, b| {
+            a.relation
+                .cmp(&b.relation)
+                .then_with(|| a.from.cmp(&b.from))
+        });
         edges
     }
 
@@ -284,6 +308,13 @@ mod tests {
         assert_eq!(neighbors.len(), 2);
         assert_eq!(neighbors[0].id, id("b"));
         assert_eq!(neighbors[1].id, id("c"));
+
+        assert_eq!(graph.node_ids(), vec![id("a"), id("b"), id("c")]);
+        assert_eq!(graph.all_edges().len(), 2);
+        assert!(graph.edges_into(&id("a")).is_empty());
+        let into_b = graph.edges_into(&id("b"));
+        assert_eq!(into_b.len(), 1);
+        assert_eq!(into_b[0].from, id("a"));
     }
 
     #[test]
