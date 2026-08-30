@@ -46,6 +46,13 @@
 
   async function openTrace(traceId: string): Promise<void> {
     if (!canReadTrace) return;
+
+    // Capability gate: prevent calling unsupported /v1/panel/traces/:id
+    if (!capabilitySupported(capabilities, 'trace.read')) {
+      traceDetail = {traceId, spans: [], loading: false, error: '追踪详情不支持: 当前运行时未实现 trace.read (Apeireth 2.0 canonical gateway 无此内省 API)'};
+      return;
+    }
+
     traceDetail = {traceId, spans: [], loading: true, error: ''};
     const r = await fetchTraceDetail(config, traceId);
     if (Array.isArray(r)) {
@@ -156,6 +163,13 @@
     loading = true;
     error = '';
     try {
+      // Capability gate: prevent calling unsupported /v1/panel/audit
+      if (!capabilitySupported(capabilities, 'audit.read')) {
+        error = '审计日志不支持: 当前运行时未实现 audit.read (Apeireth 2.0 canonical gateway 无此内省 API)';
+        loading = false;
+        return;
+      }
+
       const logs = await fetchAuditLogs(config, 80);
       activities = mergeActivities(activities, logs);
     } catch (e) {

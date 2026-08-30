@@ -68,17 +68,38 @@
     loading = true;
     error = '';
     try {
+      // Capability gates for tools/approvals/grants introspection
+      const toolsPromise = capabilitySupported(capabilities, 'tools.list')
+        ? fetchTools(config).catch((e) => {
+            error = friendlyErrorMessage(e, '/v1/tools/list');
+            return [];
+          })
+        : Promise.resolve([]);
+
+      const approvalsPromise = capabilitySupported(capabilities, 'permissions.approval.read')
+        ? fetchApprovalRequests(config).catch(() => [])
+        : Promise.resolve([]);
+
+      const grantsPromise = (canListGrants && capabilitySupported(capabilities, 'permissions.grants.read'))
+        ? fetchGrants(config).catch(() => [])
+        : Promise.resolve([]);
+
       const [toolsRes, approvalsRes, grantsRes] = await Promise.all([
-        fetchTools(config).catch((e) => {
-          error = friendlyErrorMessage(e, '/v1/tools/list');
-          return [];
-        }),
-        fetchApprovalRequests(config).catch(() => []),
-        canListGrants ? fetchGrants(config).catch(() => []) : Promise.resolve([]),
+        toolsPromise,
+        approvalsPromise,
+        grantsPromise,
       ]);
+
       tools = toolsRes;
       approvalRequests = approvalsRes;
       grants = grantsRes;
+
+      // If all capabilities unsupported, show informative error
+      if (!capabilitySupported(capabilities, 'tools.list') &&
+          !capabilitySupported(capabilities, 'permissions.approval.read') &&
+          !capabilitySupported(capabilities, 'permissions.grants.read')) {
+        error = '工具内省不支持: 当前运行时未实现工具/权限审批 API (Apeireth 2.0 canonical gateway 无此内省功能)';
+      }
     } catch (e) {
       error = friendlyErrorMessage(e, '/v1/tools/list');
     } finally {
@@ -88,6 +109,13 @@
 
   async function executeRevoke(): Promise<void> {
     if (!revokingGrant) return;
+
+    // Capability gate for revoke
+    if (!capabilitySupported(capabilities, 'permissions.revoke')) {
+      revokeError = '撤销权限不支持: 当前运行时未实现 permissions.revoke (Apeireth 2.0 canonical gateway 无此治理 API)';
+      return;
+    }
+
     revokeBusy = true;
     revokeError = '';
     const r = await revokeGrant(config, revokingGrant.id, revokeTokenDraft);
