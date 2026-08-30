@@ -53,19 +53,26 @@ pub use apeireth_plugin::organ::{
 
 pub mod causal_world_model;
 pub mod causal_world_model_edges;
+pub mod context_assembly;
 pub mod curiosity;
 pub mod emergence;
 pub mod emotion_memory;
 pub mod hypothesis;
 pub mod memory;
 pub mod morphology;
+pub mod prompt_assembly;
 pub mod tone;
 pub mod value_cases;
 pub mod world_model;
 
+pub use context_assembly::{assemble_tiered, ContextAssembler, ContextBlock};
 pub use morphology::{
     classify as classify_query_morphology, crawl_budget, sanitize_temperature, MorphologyVerdict,
     RetrievalMode,
+};
+pub use prompt_assembly::{
+    AssemblerError, AssemblyGuard, AssemblyRole, ExpansionReport, PromptAssembler, SourceKind,
+    StaticSource, VariableSource,
 };
 pub use tone::{
     deliberation_intensity, emotion_tone, organ_tone, tone_hint, BondCharacterSnapshot,
