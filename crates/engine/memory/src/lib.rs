@@ -50,6 +50,12 @@ pub mod history_streams;
 pub mod arbitration;
 pub mod bitemporal_graph;
 pub mod continuity_link;
+pub use continuity_link::{
+    continuity_id_from_env, current_continuity_id, ensure_identity, migrate_subject,
+    normalize_continuity, recall_recent, record_carrier_migration, record_session,
+    resolve_continuity, ContinuityLink, MigrationReport, SessionRef, CONTINUITY_ENV_VAR,
+    DEFAULT_CONTINUITY_ID, MIGRATED_ID_PREFIX,
+};
 pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
