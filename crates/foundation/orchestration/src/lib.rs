@@ -45,6 +45,8 @@ use serde::{Deserialize, Serialize};
 pub mod ambient_context;
 pub mod async_context;
 pub mod care_potential_field;
+pub mod context_budget;
+pub mod context_fold;
 pub mod context_rot;
 pub mod continuation;
 pub mod durable;
@@ -54,12 +56,19 @@ pub mod prompt_stabilizer;
 pub mod speech_arbiter;
 pub mod worktree_sandbox;
 
-pub use care_potential_field::{CareAction, CarePotentialField};
 pub use ambient_context::{
     AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
 };
 pub use async_context::{AsyncArrayKind, AsyncContextMessage, AsyncContextPipeline};
-pub use worktree_sandbox::{RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError};
+pub use care_potential_field::{CareAction, CarePotentialField};
+pub use context_budget::{CatalogEntry, ContextAssembler, ContextBlock, ProgressiveCatalog};
+pub use context_fold::{
+    approx_tokens, cosine, fold, fold_segments, has_fold_markers, parse_fold_blocks,
+    render_fold_blocks, unfold, unfold_semantic, AccumulatorSnapshot, BigramOverlapScorer,
+    Embedder, EmbeddingScorer, FoldBlock, FoldBlockRender, FoldError, FoldMarker, FoldResult,
+    FoldStrategy, FoldedSegment, MarkerKind, RelevanceScorer, SemanticFoldOptions,
+    SemanticFoldOutcome, TokenAccumulator,
+};
 pub use context_rot::{
     apply_ops, compact_then_budget, extractive_summary, query_tokens, repetition_factor,
     rot_breakdown, rot_score, BudgetedBlock, CompactionOp, Compactor, DeterministicCompactor,
@@ -74,10 +83,14 @@ pub use durable::{
     ActivityStateMachine, DurableError, DurableHistory, DurableResult, DurableRun, RetryPolicy,
 };
 pub use prompt_stabilizer::{
-    EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage, StabilizedRole,
+    assemble_tiered, EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage,
+    StabilizedRole,
 };
 pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
+};
+pub use worktree_sandbox::{
+    RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,
 };
 
 // ============================================
