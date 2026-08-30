@@ -561,11 +561,12 @@ export async function streamChat(
 
 /** 非流式聊天 (用于简单问答/健康检查). Reconciled from master. */
 export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<string> {
+  // NOTE: Provider credentials loaded by backend from environment variables.
+  // Do NOT send Authorization header to canonical /v1/chat/completions endpoint.
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify({
       model: config.model,
