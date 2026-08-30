@@ -9,7 +9,8 @@
 //! Recovered surface:
 //! - JSON-RPC 2.0 envelopes (untagged id, notifications, batch)
 //! - initialize lifecycle + capability metadata
-//! - primitive method dispatch table (library handlers only)
+//! - schema / wire-key normalization (`inputSchema`, `mimeType`, `isError`)
+//! - resources/list+read and prompts/list+get models
 //!
 //! Explicitly **not** recovered here:
 //! - reqwest SSE / HTTP-streamable / stdio transports
@@ -24,6 +25,9 @@
 pub mod discovery;
 pub mod jsonrpc;
 pub mod lifecycle;
+pub mod prompt;
+pub mod resource;
+pub mod schema;
 
 pub use discovery::{
     dispatch_by_method, Primitive, PrimitiveDispatch, PRIMITIVE_COUNT, SUPPORTED_METHODS,
@@ -38,4 +42,19 @@ pub use lifecycle::{
     LoggingCapability, PromptsCapability, ResourcesCapability, RootsCapability, SamplingCapability,
     ServerCapabilities, ServerIdentity, ServerInfo, SessionState, ToolsCapability,
     MCP_PROTOCOL_VERSION, PROTOCOL_VERSION_MISMATCH, SUPPORTED_PROTOCOL_VERSIONS,
+};
+pub use prompt::{
+    dispatch as dispatch_prompts, handle_prompts_get, handle_prompts_list, GetPromptResult, Prompt,
+    PromptArgument, PromptContent, PromptMessage, PromptRole, PromptServer, StaticPromptServer,
+    PROMPT_INVALID_ARGS, PROMPT_NOT_FOUND, PROMPT_RENDER_FAILED,
+};
+pub use resource::{
+    dispatch as dispatch_resources, handle_resources_list, handle_resources_read,
+    CompositeResourceServer, Resource, ResourceContent, ResourceServer, StaticResourceServer,
+    RESOURCE_INVALID_URI, RESOURCE_NOT_FOUND, RESOURCE_READ_FAILED,
+};
+pub use schema::{
+    content_block_from_wire, content_block_to_wire, is_valid_mcp_name, normalize_mcp_result,
+    normalize_wire_object, ContentBlock, McpTool, ToolCallResult, TOOL_CALL_FAILED, TOOL_INTERNAL,
+    TOOL_INVALID_ARGS, TOOL_NOT_FOUND,
 };
