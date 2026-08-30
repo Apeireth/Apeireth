@@ -55,6 +55,7 @@ pub mod daily_summary;
 pub mod diary;
 pub mod dreaming;
 pub mod five_dimensional;
+pub mod graph_algo;
 pub mod hybrid_search;
 pub mod intent_brier;
 pub mod meta_thinking;
@@ -141,6 +142,11 @@ pub use diary::{
 };
 
 pub use episode::{EpisodeQuery, EpisodeStore};
+pub use graph_algo::{
+    all_paths, connected_components, dijkstra_shortest_path, edges_matching, has_cycle,
+    neighbors_directed, nodes_with_label, topological_sort, walk, TraversalDirection, WalkOrder,
+    WalkStep,
+};
 pub use hybrid_search::{tokenize, Bm25Config, Bm25Hit, Bm25Index, HybridHit, HybridSearchEngine};
 pub use milestone::{
     InMemoryMilestoneStore, Milestone, MilestoneKind, MilestonePayload, MilestoneStore,
