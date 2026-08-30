@@ -237,3 +237,102 @@ async fn config_with_zero_connections_is_rejected() {
     }
     std::fs::remove_file(&path).ok();
 }
+
+#[test]
+fn rate_limiter_token_bucket_burst_and_refill() {
+    use apeireth_storage::rate_limit::{token_bucket_in_memory, RateLimiterStats};
+    use std::time::{Duration, Instant};
+
+    let l = token_bucket_in_memory(100.0, 5, None).unwrap();
+    let now = Instant::now();
+    for _ in 0..5 {
+        assert!(l.try_acquire_at("k", 1, now).unwrap());
+    }
+    assert!(!l.try_acquire_at("k", 1, now).unwrap());
+    assert!(l.try_acquire_at("k", 1, now + Duration::from_millis(20)).unwrap());
+    let s: RateLimiterStats = l.stats();
+    assert_eq!(s.hits, 6);
+    assert_eq!(s.misses, 1);
+}
+
+#[test]
+fn rate_limiter_retry_after_overrides_backoff() {
+    use apeireth_storage::rate_limit::{decide, ConstantBackoff, RetryAfter, RetryOutcome};
+    use std::time::Duration;
+
+    let b = ConstantBackoff::new(Duration::from_millis(100), 0);
+    let outcome = decide(&b, 0, Some(RetryAfter::Seconds(5)), Duration::ZERO, 0);
+    assert_eq!(outcome, RetryOutcome::Retry(Duration::from_secs(5)));
+}
+
+#[test]
+fn cache_lru_ttl_and_shard_roundtrip() {
+    use apeireth_storage::cache::{CacheBuilder, EvictionPolicy, MemoryCache};
+    use std::time::Duration;
+
+    let cache: MemoryCache<String, i32> = MemoryCache::new(
+        CacheBuilder::new()
+            .max_size(2)
+            .policy(EvictionPolicy::Lru)
+            .shards(16)
+            .build(),
+    )
+    .unwrap();
+    cache.put("a".into(), 1, Duration::from_secs(60)).unwrap();
+    cache.put("b".into(), 2, Duration::from_secs(60)).unwrap();
+    cache.put("c".into(), 3, Duration::from_secs(60)).unwrap();
+    assert!(cache.get(&"a".into()).is_none());
+    assert_eq!(cache.get(&"c".into()), Some(3));
+}
+
+#[test]
+fn quota_lru_evicts_oldest_to_fit_total() {
+    use apeireth_storage::quota::{enforce_quota, QuotaConfig, QuotaItem};
+
+    let cfg = QuotaConfig {
+        max_age_days: 7,
+        max_item_bytes: 1000,
+        max_total_bytes: 25,
+    };
+    let items = vec![
+        QuotaItem {
+            id: "a".into(),
+            timestamp: 1,
+            size_bytes: 10,
+        },
+        QuotaItem {
+            id: "b".into(),
+            timestamp: 2,
+            size_bytes: 10,
+        },
+        QuotaItem {
+            id: "c".into(),
+            timestamp: 3,
+            size_bytes: 10,
+        },
+    ];
+    let d = enforce_quota(items, 1_000, &cfg).unwrap();
+    assert_eq!(d.evicted[0].id, "a");
+    assert_eq!(d.remaining_bytes(), 20);
+}
+
+#[test]
+fn machine_id_parsers_roundtrip_donor_fixtures() {
+    use apeireth_storage::machine_id::{
+        encode_hostid, parse_ioreg_uuid, parse_registry_machine_guid, parse_wmi_uuid,
+    };
+
+    assert_eq!(
+        parse_wmi_uuid("UUID\r\nAAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\r\n").as_deref(),
+        Some("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")
+    );
+    assert_eq!(
+        parse_registry_machine_guid("    MachineGuid    REG_SZ    deadbeef-guid").as_deref(),
+        Some("deadbeef-guid")
+    );
+    assert_eq!(
+        parse_ioreg_uuid(r#"    "IOPlatformUUID" = "ABCD-EF""#).as_deref(),
+        Some("ABCD-EF")
+    );
+    assert_eq!(encode_hostid(&[0xaa, 0xbb]).as_deref(), Some("aabb"));
+}
