@@ -46,7 +46,8 @@
       "timestampUrl": null,
       "wix": {
         "language": ["zh-CN", "en-US"],
-        "upgradeCode": "B4A6C589-3543-4C4C-8D19-2D8C6FEA3F74"
+        "upgradeCode": "B4A6C589-3543-4C4C-8D19-2D8C6FEA3F74",
+        "version": "2.0.0.1"
       },
       "nsis": {
         "installMode": "perMachine",
