@@ -29,6 +29,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": ["binaries/apeireth"],
     "shortDescription": "Apeireth 桌面伙伴",
     "longDescription": "Apeireth 桌面伙伴 — 跨平台 AI 成长与协作桌面客户端",
     "copyright": "Copyright © 2026 Apeireth Team",
