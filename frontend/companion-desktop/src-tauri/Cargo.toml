@@ -25,6 +25,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# Workspace policy (clippy.toml): fs_err over std::fs for path-carrying errors.
+fs-err = "3.0"
 
 [profile.release]
 codegen-units = 1
