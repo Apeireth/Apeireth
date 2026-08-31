@@ -265,9 +265,7 @@ impl AmemGraph {
             .contents
             .iter()
             .filter(|(id, _)| {
-                id.as_str() != new_id
-                    && !id.starts_with("link-")
-                    && !id.starts_with("tomb-")
+                id.as_str() != new_id && !id.starts_with("link-") && !id.starts_with("tomb-")
             })
             .map(|(id, c)| (id.clone(), c.clone()))
             .collect();
@@ -460,7 +458,10 @@ mod tests {
         g.add_fact("主人", "备考", "高数期中", 8, 1);
         let facts = g.query(None, None, None);
         let s = g.specificity(facts[0]);
-        assert!((s - 1.0).abs() < 1e-9, "single node max specificity, got {s}");
+        assert!(
+            (s - 1.0).abs() < 1e-9,
+            "single node max specificity, got {s}"
+        );
     }
 
     #[test]
@@ -474,7 +475,10 @@ mod tests {
         let unique = active.iter().find(|f| f.subject == "本座").unwrap();
         let s_common = g.specificity(common);
         let expected = (0.5 + 0.5 + 1.0) / 3.0;
-        assert!((s_common - expected).abs() < 1e-9, "got {s_common}, want {expected}");
+        assert!(
+            (s_common - expected).abs() < 1e-9,
+            "got {s_common}, want {expected}"
+        );
         let s_unique = g.specificity(unique);
         assert!((s_unique - 1.0).abs() < 1e-9);
         assert!(s_unique > s_common);

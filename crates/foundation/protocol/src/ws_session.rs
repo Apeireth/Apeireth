@@ -25,9 +25,7 @@
 //!
 //! Pure frame logic: no socket, no runtime, fully deterministic.
 
-use crate::ws_v1::{
-    AuthFrame, CloseFrame, ErrorFrame, WsFrame, WS_PROTOCOL_VERSION,
-};
+use crate::ws_v1::{AuthFrame, CloseFrame, ErrorFrame, WsFrame, WS_PROTOCOL_VERSION};
 
 /// Close code: normal closure (client done) — blueprint §2.5.
 pub const WS_CLOSE_NORMAL: u16 = 1000;
@@ -148,9 +146,7 @@ impl Default for WsSessionGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ws_v1::{
-        PingFrame, StreamChunkFrame, ToolInvokeFrame, ToolResultFrame,
-    };
+    use crate::ws_v1::{PingFrame, StreamChunkFrame, ToolInvokeFrame, ToolResultFrame};
 
     fn auth(version: &str) -> WsFrame {
         WsFrame::Auth(AuthFrame {
@@ -186,7 +182,10 @@ mod tests {
     #[test]
     fn valid_auth_opens_the_session() {
         let mut guard = WsSessionGuard::new();
-        assert_eq!(guard.admit(&auth(WS_PROTOCOL_VERSION)), WsFrameDecision::Deliver);
+        assert_eq!(
+            guard.admit(&auth(WS_PROTOCOL_VERSION)),
+            WsFrameDecision::Deliver
+        );
         assert!(guard.is_open());
         // Business frame now delivers.
         assert_eq!(guard.admit(&invoke()), WsFrameDecision::Deliver);
@@ -204,7 +203,10 @@ mod tests {
             }
             other => panic!("expected Close, got {other:?}"),
         }
-        assert!(!guard.is_open(), "failed negotiation must not open the session");
+        assert!(
+            !guard.is_open(),
+            "failed negotiation must not open the session"
+        );
     }
 
     #[test]
@@ -272,12 +274,18 @@ mod tests {
         let mut guard = WsSessionGuard::new();
         guard.admit(&auth(WS_PROTOCOL_VERSION));
         // Legacy behavior: a second Auth frame re-validates rather than rejects.
-        assert_eq!(guard.admit(&auth(WS_PROTOCOL_VERSION)), WsFrameDecision::Deliver);
+        assert_eq!(
+            guard.admit(&auth(WS_PROTOCOL_VERSION)),
+            WsFrameDecision::Deliver
+        );
         assert!(guard.is_open());
         // A later bad version still closes.
         assert!(matches!(
             guard.admit(&auth("9")),
-            WsFrameDecision::Close(CloseFrame { code: WS_CLOSE_UNAUTHORIZED, .. })
+            WsFrameDecision::Close(CloseFrame {
+                code: WS_CLOSE_UNAUTHORIZED,
+                ..
+            })
         ));
     }
 

@@ -361,8 +361,8 @@ mod tests {
 
     #[test]
     fn put_episode_full_for_subject_binds_continuity_and_provenance() {
-        use apeireth_core::kernel::memory::Episode;
         use crate::{EpisodeQuery, EpisodeStore, SqliteMemoryStore};
+        use apeireth_core::kernel::memory::Episode;
 
         let store = SqliteMemoryStore::open_in_memory().unwrap();
         let ep = Episode {

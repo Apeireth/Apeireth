@@ -146,7 +146,8 @@ fn voice_session_loopback_does_not_own_a_transcript() {
             Ok(())
         }
     }
-    let mut session = VoiceSession::new(Box::new(In(vec!["ping".into()])), Box::new(Out::default()));
+    let mut session =
+        VoiceSession::new(Box::new(In(vec!["ping".into()])), Box::new(Out::default()));
     let turn = session.turn(&|t| t.to_uppercase()).unwrap();
     assert_eq!(turn.reply, "PING");
     assert_eq!(session.turn_count, 1);

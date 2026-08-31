@@ -191,7 +191,11 @@ impl ActivityStateMachine {
     }
 
     /// 状态转换守门 (不含重试通道; 重试走 [`Self::retry`] 以接入预算检查)。
-    pub fn transition(&mut self, next: ActivityState, now_ms: i64) -> Result<(), ActivityStateError> {
+    pub fn transition(
+        &mut self,
+        next: ActivityState,
+        now_ms: i64,
+    ) -> Result<(), ActivityStateError> {
         if !self.can_transition(next) {
             return Err(ActivityStateError::InvalidTransition {
                 from: self.state,
@@ -204,11 +208,7 @@ impl ActivityStateMachine {
 
     /// 重试通道: 仅 `Failed` / `TimedOut` 可重入 `Scheduled`, 且受预算守门;
     /// `Cancelled` 永不可重试。
-    pub fn retry(
-        &mut self,
-        policy: &RetryPolicy,
-        now_ms: i64,
-    ) -> Result<(), ActivityStateError> {
+    pub fn retry(&mut self, policy: &RetryPolicy, now_ms: i64) -> Result<(), ActivityStateError> {
         match self.state {
             ActivityState::Failed | ActivityState::TimedOut => {}
             other => {
@@ -275,7 +275,9 @@ impl ActivityStateMachine {
         // which increments before applying Scheduled. Events and RetryPolicy are
         // 1-based (donor max_attempts=3 means 3 executions, not 3 retries on top
         // of a 0-based first try).
-        if self.state == ActivityState::Pending && next == ActivityState::Scheduled && self.attempt == 0
+        if self.state == ActivityState::Pending
+            && next == ActivityState::Scheduled
+            && self.attempt == 0
         {
             self.attempt = 1;
         }
@@ -352,7 +354,10 @@ mod tests {
         sm.transition(ActivityState::Running, 1002).unwrap();
         sm.transition(ActivityState::Succeeded, 1003).unwrap();
         assert!(sm.is_terminal());
-        assert_eq!(sm.accumulated_runtime_ms, 1, "离开 Running 时累计 1003-1002");
+        assert_eq!(
+            sm.accumulated_runtime_ms, 1,
+            "离开 Running 时累计 1003-1002"
+        );
     }
 
     /// donor `test_terminal_blocks_further_transitions`。
@@ -407,7 +412,11 @@ mod tests {
         sm.transition(ActivityState::Failed, 1009).unwrap();
         assert!(matches!(
             sm.retry(&policy, 1010),
-            Err(ActivityStateError::RetryExhausted { attempt: 3, max_attempts: 3, .. })
+            Err(ActivityStateError::RetryExhausted {
+                attempt: 3,
+                max_attempts: 3,
+                ..
+            })
         ));
 
         // Cancelled 不可重试
@@ -415,7 +424,10 @@ mod tests {
         cancelled.transition(ActivityState::Cancelled, 1).unwrap();
         assert!(matches!(
             cancelled.retry(&policy, 2),
-            Err(ActivityStateError::InvalidTransition { from: ActivityState::Cancelled, .. })
+            Err(ActivityStateError::InvalidTransition {
+                from: ActivityState::Cancelled,
+                ..
+            })
         ));
     }
 }

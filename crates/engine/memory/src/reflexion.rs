@@ -557,6 +557,12 @@ impl FileReflexionStore {
             tmp_file.write_all(&bytes)?;
             tmp_file.sync_all()?;
             drop(tmp_file);
+            #[cfg(windows)]
+            {
+                if target_path.exists() {
+                    let _ = std::fs::remove_file(&target_path);
+                }
+            }
             std::fs::rename(&tmp_path, &target_path)?;
             Ok(())
         })();

@@ -292,7 +292,9 @@ mod tests {
         write(&dir.join("b.json"), "2");
         let events = w.check_for_changes();
         assert!(
-            events.iter().any(|e| matches!(e, WatchEvent::Added(p) if p.ends_with("b.json"))),
+            events
+                .iter()
+                .any(|e| matches!(e, WatchEvent::Added(p) if p.ends_with("b.json"))),
             "{events:?}"
         );
         assert!(should_invalidate(&events));

@@ -231,13 +231,16 @@ mod tests {
     fn ttl_expires_items_older_than_max_age_days() {
         let now = 10 * 86_400;
         let c = cfg(7, 1000, 10_000);
-        let items = vec![
-            item("old", 0, 10),
-            item("fresh", now - 86_400, 10),
-        ];
+        let items = vec![item("old", 0, 10), item("fresh", now - 86_400, 10)];
         let d = enforce_quota(items, now, &c).unwrap();
-        assert_eq!(d.expired.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["old"]);
-        assert_eq!(d.keep.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["fresh"]);
+        assert_eq!(
+            d.expired.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+            ["old"]
+        );
+        assert_eq!(
+            d.keep.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+            ["fresh"]
+        );
         assert!(d.evicted.is_empty());
     }
 
@@ -245,15 +248,17 @@ mod tests {
     fn lru_evicts_oldest_until_total_fits() {
         let now = 1_000;
         let c = cfg(7, 1000, 25);
-        let items = vec![
-            item("a", 1, 10),
-            item("b", 2, 10),
-            item("c", 3, 10),
-        ];
+        let items = vec![item("a", 1, 10), item("b", 2, 10), item("c", 3, 10)];
         let d = enforce_quota(items, now, &c).unwrap();
         assert!(d.expired.is_empty());
-        assert_eq!(d.evicted.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["a"]);
-        assert_eq!(d.keep.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["b", "c"]);
+        assert_eq!(
+            d.evicted.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+            ["a"]
+        );
+        assert_eq!(
+            d.keep.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+            ["b", "c"]
+        );
         assert_eq!(d.remaining_bytes(), 20);
     }
 
@@ -261,27 +266,23 @@ mod tests {
     fn lru_evicts_multiple_oldest() {
         let now = 1_000;
         let c = cfg(7, 1000, 10);
-        let items = vec![
-            item("a", 1, 10),
-            item("b", 2, 10),
-            item("c", 3, 10),
-        ];
+        let items = vec![item("a", 1, 10), item("b", 2, 10), item("c", 3, 10)];
         let d = enforce_quota(items, now, &c).unwrap();
         assert_eq!(
             d.evicted.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
             ["a", "b"]
         );
-        assert_eq!(d.keep.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["c"]);
+        assert_eq!(
+            d.keep.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+            ["c"]
+        );
     }
 
     #[test]
     fn ttl_runs_before_lru() {
         let now = 10 * 86_400;
         let c = cfg(7, 1000, 10);
-        let items = vec![
-            item("expired-big", 0, 100),
-            item("keep", now, 10),
-        ];
+        let items = vec![item("expired-big", 0, 100), item("keep", now, 10)];
         let d = enforce_quota(items, now, &c).unwrap();
         assert_eq!(d.expired[0].id, "expired-big");
         assert!(d.evicted.is_empty());
@@ -295,10 +296,7 @@ mod tests {
         let items = vec![item("huge", 1, 10)];
         assert!(matches!(
             enforce_quota(items, now, &c),
-            Err(QuotaError::TotalOverflow {
-                actual: 10,
-                max: 5
-            })
+            Err(QuotaError::TotalOverflow { actual: 10, max: 5 })
         ));
     }
 

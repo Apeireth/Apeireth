@@ -482,7 +482,7 @@ mod tests {
         // A is short-dup of B (B longer, so A is removed). B then dups C.
         // Donor incremented past the replacement; we must collapse all three.
         let mut items = vec![
-            "abcdefghijklmnopqrst".into(),            // 20 chars
+            "abcdefghijklmnopqrst".into(),             // 20 chars
             "abcdefghijklmnopqrstuvwxyz".into(),       // longer, contains first
             "abcdefghijklmnopqrstuvwxyz012345".into(), // even longer, contains second
         ];

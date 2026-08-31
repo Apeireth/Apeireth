@@ -438,7 +438,10 @@ mod tests {
 
     #[test]
     fn hostid_hex_encodes_up_to_8_bytes() {
-        assert_eq!(encode_hostid(&[0x12, 0x34, 0x56, 0x78]).as_deref(), Some("12345678"));
+        assert_eq!(
+            encode_hostid(&[0x12, 0x34, 0x56, 0x78]).as_deref(),
+            Some("12345678")
+        );
         assert_eq!(encode_hostid(&[]), None);
         let long = [1u8, 2, 3, 4, 5, 6, 7, 8, 9];
         assert_eq!(encode_hostid(&long).unwrap().len(), 16);
@@ -449,7 +452,11 @@ mod tests {
         let p = Platform::detect();
         assert!(matches!(
             p,
-            Platform::Windows | Platform::Darwin | Platform::Linux | Platform::Bsd | Platform::Unsupported
+            Platform::Windows
+                | Platform::Darwin
+                | Platform::Linux
+                | Platform::Bsd
+                | Platform::Unsupported
         ));
     }
 }

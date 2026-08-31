@@ -118,13 +118,10 @@ impl FetchConfig {
 
     /// Enable per-host rate limiting with an explicit limit and window.
     #[must_use]
-    pub fn with_rate_limiting_config(
-        mut self,
-        max_requests: usize,
-        window: Duration,
-    ) -> Self {
+    pub fn with_rate_limiting_config(mut self, max_requests: usize, window: Duration) -> Self {
         self.rate_limiter = Some(Arc::new(Mutex::new(RateLimiter::with_limit(
-            max_requests, window,
+            max_requests,
+            window,
         ))));
         self
     }

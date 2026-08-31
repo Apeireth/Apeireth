@@ -74,7 +74,10 @@ pub fn stddev(scores: &[EvalScore]) -> f64 {
         return 0.0;
     }
     let mean = valid.iter().sum::<f64>() / valid.len() as f64;
-    let variance = valid.iter().map(|value| (value - mean).powi(2)).sum::<f64>()
+    let variance = valid
+        .iter()
+        .map(|value| (value - mean).powi(2))
+        .sum::<f64>()
         / (valid.len() - 1) as f64;
     variance.sqrt()
 }
@@ -156,7 +159,10 @@ impl TaskSummary {
             results.iter().map(|result| result.score).sum::<f64>() / total as f64
         };
 
-        let mut categories: Vec<&str> = results.iter().map(|result| result.category.as_str()).collect();
+        let mut categories: Vec<&str> = results
+            .iter()
+            .map(|result| result.category.as_str())
+            .collect();
         categories.sort_unstable();
         categories.dedup();
         let per_category = categories
@@ -308,7 +314,9 @@ mod tests {
         assert_eq!(bug.total, 2);
         assert_eq!(bug.passed, 1);
         let scores = summary.to_eval_scores();
-        assert!(scores.iter().any(|score| score.dimension == "overall_pass_rate"));
+        assert!(scores
+            .iter()
+            .any(|score| score.dimension == "overall_pass_rate"));
         for score in &scores {
             assert!(score.is_valid());
         }

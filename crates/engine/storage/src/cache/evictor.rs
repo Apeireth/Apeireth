@@ -459,7 +459,10 @@ mod tests {
     fn eviction_policy_five() {
         assert_eq!(EvictionPolicy::ALL.len(), 5);
         assert_eq!(EvictionPolicy::Lru.as_str(), "LRU");
-        assert_eq!("tiny_lfu".parse::<EvictionPolicy>().unwrap(), EvictionPolicy::TinyLfu);
+        assert_eq!(
+            "tiny_lfu".parse::<EvictionPolicy>().unwrap(),
+            EvictionPolicy::TinyLfu
+        );
         assert!("NOPE".parse::<EvictionPolicy>().is_err());
     }
 

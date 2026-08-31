@@ -123,11 +123,7 @@ impl UsageRecord {
     /// Bridges the canonical [`NormalizedResponse`] `usage` into the
     /// accounting vocabulary. Cost is `0.0` — price it via [`ModelPricing`]
     /// if the caller knows the rates; this crate never invents prices.
-    pub fn from_normalized(
-        resp: &NormalizedResponse,
-        latency_ms: u64,
-        success: bool,
-    ) -> Self {
+    pub fn from_normalized(resp: &NormalizedResponse, latency_ms: u64, success: bool) -> Self {
         Self {
             timestamp_ms: now_ms(),
             provider: String::new(),
@@ -273,7 +269,14 @@ mod tests {
     use super::*;
     use crate::normalized::NormalizedUsage;
 
-    fn rec(provider: &str, model: &str, input: u64, output: u64, cost: f64, latency: u64) -> UsageRecord {
+    fn rec(
+        provider: &str,
+        model: &str,
+        input: u64,
+        output: u64,
+        cost: f64,
+        latency: u64,
+    ) -> UsageRecord {
         UsageRecord::new(0, provider, model, input, output, cost, latency, true)
     }
 
@@ -346,7 +349,16 @@ mod tests {
 
     #[test]
     fn usage_record_total_tokens_and_serde_round_trip() {
-        let r = UsageRecord::new(1722931200000, "minimax", "MiniMax-M3", 1500, 800, 0.0165, 234, true);
+        let r = UsageRecord::new(
+            1722931200000,
+            "minimax",
+            "MiniMax-M3",
+            1500,
+            800,
+            0.0165,
+            234,
+            true,
+        );
         assert_eq!(r.total_tokens(), 2300);
         let json = serde_json::to_string(&r).unwrap();
         let back: UsageRecord = serde_json::from_str(&json).unwrap();

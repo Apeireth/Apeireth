@@ -302,7 +302,10 @@ mod tests {
 
     #[test]
     fn remote_status_accessor() {
-        assert_eq!(ProtocolError::remote(502, "bad gateway").status(), Some(502));
+        assert_eq!(
+            ProtocolError::remote(502, "bad gateway").status(),
+            Some(502)
+        );
         assert_eq!(ProtocolError::missing("model").status(), None);
     }
 }

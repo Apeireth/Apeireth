@@ -403,12 +403,7 @@ impl KeyedLimiter {
             total_attempts: self.inner.total_attempts.load(Ordering::Relaxed),
             hits: self.inner.hits.load(Ordering::Relaxed),
             misses: self.inner.misses.load(Ordering::Relaxed),
-            tracked_keys: self
-                .inner
-                .state
-                .lock()
-                .map(|m| m.len())
-                .unwrap_or(0),
+            tracked_keys: self.inner.state.lock().map(|m| m.len()).unwrap_or(0),
         }
     }
 
@@ -434,9 +429,7 @@ impl KeyedLimiter {
         let bucket = &self.config.bucket;
         let strategy = &self.config.strategy;
         match strategy.kind {
-            StrategyKind::TokenBucket => {
-                Ok(PerKeyState::Token(TokenBucket::new_at(bucket, now)?))
-            }
+            StrategyKind::TokenBucket => Ok(PerKeyState::Token(TokenBucket::new_at(bucket, now)?)),
             StrategyKind::LeakyBucket => {
                 let overflow = strategy
                     .overflow_policy
