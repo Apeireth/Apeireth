@@ -35,13 +35,14 @@ use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
 
 use apeireth_core::kernel::{
-    system_clock, ApprovalId, CapabilityId, Clock, PluginId, SessionId, TraceId,
+    system_clock, ApprovalId, CapabilityId, Clock, PluginId, SessionId, Timestamp, TraceId,
 };
 use apeireth_governance::{DenyUnconfigured, GovernanceHook};
 use apeireth_plugin::{
     CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
 };
 
+use super::approval::PendingApprovalView;
 use super::cognitive::CognitiveTelemetry;
 use super::error::{RuntimeError, RuntimeResult};
 use super::module::{Module, ModuleRegistry, DEFAULT_MAX_MODULE_INVOCATIONS};
@@ -225,6 +226,26 @@ impl Runtime {
     /// Shared non-sensitive telemetry for the production cognitive slots.
     pub fn cognitive_telemetry(&self) -> Option<&Arc<CognitiveTelemetry>> {
         self.cognitive_telemetry.as_ref()
+    }
+
+    /// Pending approvals waiting on a human for one session.
+    ///
+    /// This is a read projection of session-owned governance state. It never
+    /// executes a tool and never mutates policy.
+    pub async fn pending_approvals(
+        &self,
+        session: SessionId,
+    ) -> RuntimeResult<Vec<PendingApprovalView>> {
+        let Some(loaded) = self.sessions.load(&session).await? else {
+            return Ok(Vec::new());
+        };
+        let now = Timestamp::from_clock(self.clock.as_ref());
+        Ok(loaded
+            .approvals
+            .values()
+            .filter(|approval| approval.status.is_pending() && !approval.is_expired(now))
+            .map(PendingApprovalView::from)
+            .collect())
     }
 
     /// Stop every plugin in reverse start order.

@@ -470,6 +470,7 @@ export interface SubscribePresenceOptions {
 export function subscribePresence(baseUrl: string, options: SubscribePresenceOptions = {}): () => void {
   const store = options.store ?? presenceStore;
   const url = `${baseUrl.replace(/\/+$/, '')}/v1/apeireth/events`;
+  // Caller must capability-gate. Canonical 2.0 does not serve this URL.
 
   let active = true;
   let source: EventSource | null = null;

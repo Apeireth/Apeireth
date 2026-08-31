@@ -237,6 +237,9 @@
     }
 
     if (!isLive) return;
+    if (!capabilitySupported(capabilities, 'activity.sse')) {
+      return;
+    }
 
     try {
       const base = config.baseUrl.replace(/\/+$/, '');

@@ -31,5 +31,5 @@ pub use file_fetcher::{
 pub use canonical_entry::{
     canonical_router, execute_chat, resolve_approval, serve_canonical, CanonicalApprovalRequest,
     CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError,
-    CanonicalPendingApproval,
+    CanonicalExecutionEvent, CanonicalPendingApproval,
 };

@@ -16,6 +16,14 @@ fn canonical_gateway_entry_delegates_semantics_to_runtime_execute() {
         CANONICAL_ENTRY.contains("pub async fn execute_chat"),
         "the transport-neutral gateway entry adapter must exist"
     );
+    assert!(
+        CANONICAL_ENTRY.contains(".pending_approvals("),
+        "approval inbox must be a Runtime read projection, not a second store"
+    );
+    assert!(
+        CANONICAL_ENTRY.contains("\"/v1/approvals\""),
+        "the minimum pending-approval read surface must exist"
+    );
 }
 
 #[test]
@@ -31,6 +39,10 @@ fn canonical_gateway_entry_does_not_reach_around_the_runtime() {
         "ProcessExecutor",
         "ProcessRequest",
         "ProcessLimits",
+        "ToolExecutor",
+        "/v1/apeireth/grant",
+        "master_token",
+        "/v1/panel/",
     ] {
         assert!(
             !CANONICAL_ENTRY.contains(forbidden),
