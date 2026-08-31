@@ -277,9 +277,13 @@ mod tests {
 
     #[test]
     fn empirical_flag() {
-        assert!(!EvidenceEntry::from_inference("c5", "guess", 0.5, now_ms(), "x")
-            .has_empirical_evidence());
-        assert!(EvidenceEntry::from_tool_call("c6", "saw", "tool", "h", 0.9, now_ms(), "x")
-            .has_empirical_evidence());
+        assert!(
+            !EvidenceEntry::from_inference("c5", "guess", 0.5, now_ms(), "x")
+                .has_empirical_evidence()
+        );
+        assert!(
+            EvidenceEntry::from_tool_call("c6", "saw", "tool", "h", 0.9, now_ms(), "x")
+                .has_empirical_evidence()
+        );
     }
 }

@@ -41,9 +41,7 @@ impl ReconnectPolicy {
         }
         let mut wait = self.initial_backoff;
         for _ in 1..attempt {
-            wait = wait
-                .saturating_mul(self.multiplier_num)
-                / self.multiplier_den.max(1);
+            wait = wait.saturating_mul(self.multiplier_num) / self.multiplier_den.max(1);
             if wait > self.max_backoff {
                 return self.max_backoff;
             }

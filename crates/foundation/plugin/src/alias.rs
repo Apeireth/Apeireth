@@ -595,7 +595,10 @@ mod tests {
     fn unresolved_token_matches_vcp_shape() {
         assert_eq!(LEGACY_UNRESOLVED_PREFIX, "{{agent:");
         assert_eq!(unresolved_token("agent", "coder"), "{{agent:coder}}");
-        assert_eq!(unresolved_token("plugin", "builtin.tools"), "{{plugin:builtin.tools}}");
+        assert_eq!(
+            unresolved_token("plugin", "builtin.tools"),
+            "{{plugin:builtin.tools}}"
+        );
     }
 
     #[test]

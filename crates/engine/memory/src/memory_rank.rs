@@ -27,11 +27,7 @@ pub struct RankableMemory {
 }
 
 impl RankableMemory {
-    pub fn new(
-        id: impl Into<String>,
-        content: impl Into<String>,
-        timestamp: i64,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, content: impl Into<String>, timestamp: i64) -> Self {
         Self {
             id: id.into(),
             content: content.into(),
@@ -74,11 +70,7 @@ pub fn recency_score(timestamp: i64, now_unix: i64) -> f64 {
 }
 
 /// Score = importance×3 + access_count×0.3 + group_bonus + recency×2.
-pub fn memory_score(
-    item: &RankableMemory,
-    access_count: u64,
-    now_unix: i64,
-) -> f64 {
+pub fn memory_score(item: &RankableMemory, access_count: u64, now_unix: i64) -> f64 {
     let importance = f64::from(parse_importance(&item.content));
     importance * 3.0
         + access_count as f64 * 0.3

@@ -75,10 +75,12 @@ fn hex_val(b: u8) -> Option<u8> {
 /// Returns a **relative** path. Does not touch the filesystem.
 pub fn parse_file_uri(uri: &str) -> Result<PathBuf, UriError> {
     const PREFIX: &str = "file:///";
-    let path_str = uri.strip_prefix(PREFIX).ok_or_else(|| UriError::BadScheme {
-        expected: PREFIX,
-        got: uri.to_string(),
-    })?;
+    let path_str = uri
+        .strip_prefix(PREFIX)
+        .ok_or_else(|| UriError::BadScheme {
+            expected: PREFIX,
+            got: uri.to_string(),
+        })?;
     let decoded = percent_decode(path_str);
     let p = Path::new(&decoded);
     if p.is_absolute() {

@@ -72,7 +72,16 @@ const DEPTH_CUES: &[&str] = &[
 
 /// Direct-question cues → raise Shallow logit.
 const QUESTION_MARKS: &[&str] = &[
-    "？", "?", "吗", "呢", "怎么", "如何", "是否", "哪些", "什么", "为什么",
+    "？",
+    "?",
+    "吗",
+    "呢",
+    "怎么",
+    "如何",
+    "是否",
+    "哪些",
+    "什么",
+    "为什么",
 ];
 
 fn clamp01(v: f64) -> f64 {

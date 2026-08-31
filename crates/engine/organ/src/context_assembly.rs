@@ -197,15 +197,16 @@ mod tests {
         let a = ContextAssembler::new(10)
             .push(ContextBlock::new("a", "abcdef"))
             .push(ContextBlock::new("b", "xyz"));
-        assert_eq!(
-            a.budget_report(),
-            vec![("a".into(), 6), ("b".into(), 3)]
-        );
+        assert_eq!(a.budget_report(), vec![("a".into(), 6), ("b".into(), 3)]);
     }
 
     #[test]
     fn assemble_tiered_orders_by_tier() {
-        let s = assemble_tiered(&[(100, "工具指引\n"), (0, "身份: 阿佩瑞斯\n"), (50, "记忆证据\n")]);
+        let s = assemble_tiered(&[
+            (100, "工具指引\n"),
+            (0, "身份: 阿佩瑞斯\n"),
+            (50, "记忆证据\n"),
+        ]);
         let i0 = s.find("身份").unwrap();
         let i1 = s.find("记忆").unwrap();
         let i2 = s.find("工具").unwrap();
