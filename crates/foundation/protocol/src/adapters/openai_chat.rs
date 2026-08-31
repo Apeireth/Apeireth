@@ -7,7 +7,7 @@
 //! - `model` / `messages` / `temperature` / `max_tokens` / `stream` / `stop` / `tools` / `tool_choice`
 //! - 响应: `choices[0].message.{content, tool_calls}` / `usage` / `finish_reason`
 //!
-//! **借鉴 VCP**:
+//! **设计参考: TopologicalEngine**:
 //! - `routes/protocolBridge.js:63-89` `toOpenAiChatTool` 3 步判定
 //! - `routes/protocolBridge.js:120-156` `normalizeToolChoice` (auto / required / specific)
 

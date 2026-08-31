@@ -1,9 +1,9 @@
-//! Audio session state machines recovered from donor voice + companion.
+//! Audio session state machines recovered from canonical voice + companion.
 //!
 //! Two independent helpers, both **library-only / default-off**:
 //!
-//! 1. [`RecordingSession`] — donor `RecordingStatus` (Pending / Recording /
-//!    Stopped / Failed) as a *real* guarded SM. Donor `VoiceRecorder::start`
+//! 1. [`RecordingSession`] — canonical `RecordingStatus` (Pending / Recording /
+//!    Stopped / Failed) as a *real* guarded SM. Engine `VoiceRecorder::start`
 //!    returned `NotImplemented` under `STUB_MODE` and never transitioned.
 //! 2. [`VoiceSession`] — companion `listen → handler → speak` orchestration.
 //!    Agent 08 deferred this. The handler is an injected `Fn(&str) -> String`;
@@ -50,7 +50,7 @@ impl fmt::Display for RecordingError {
 
 impl std::error::Error for RecordingError {}
 
-/// Donor 4-state recording machine (`Pending` / `Recording` / `Stopped` / `Failed`).
+/// Engine 4-state recording machine (`Pending` / `Recording` / `Stopped` / `Failed`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RecordingStatus {
@@ -67,13 +67,13 @@ pub enum RecordingStatus {
 /// One capture session. Does not own a microphone or a transcript.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecordingSession {
-    /// Opaque session id (caller-assigned; donor used UUID).
+    /// Opaque session id (caller-assigned; canonical used UUID).
     pub id: String,
     /// Wake word / trigger that armed the session.
     pub triggered_by: String,
     /// Arm time.
     pub started_at: SystemTime,
-    /// Max capture duration (donor default 30 s).
+    /// Max capture duration (canonical default 30 s).
     pub max_duration: Duration,
     /// Current status.
     pub status: RecordingStatus,
@@ -290,7 +290,7 @@ impl VoiceSession {
 
     /// One turn: listen → reject empty → `handler` → speak → increment.
     ///
-    /// Speak failure does **not** increment `turn_count` (donor contract).
+    /// Speak failure does **not** increment `turn_count` (canonical contract).
     pub fn turn(&mut self, handler: &dyn Fn(&str) -> String) -> Result<VoiceTurn, String> {
         let transcript = self.input.listen()?;
         if transcript.trim().is_empty() {

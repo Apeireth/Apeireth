@@ -1,6 +1,6 @@
 //! P-arch (2026-08-27): A3 Perception trait 骨架 (5 modality). O-6 重构批次 Refactor-3.
 //!
-//! 借鉴 v1 `apeireth-perception`（5 种输入 + Attention 策略 + PerceptionChannel +
+//! 核心模块 apeireth-perception:（5 种输入 + Attention 策略 + PerceptionChannel +
 //! PerceptionEvent 统一格式），**v2 形态**:
 //!
 //! - `PerceptionInput` trait（5 modality: Text / Voice / Vision / Tactile / Command）
@@ -15,7 +15,7 @@
 //! - v2.0 alpha **只**实现 Text modality（生产用）；Voice / Vision / Tactile / Command
 //!   是 forward-declared trait method（**返回 NotImplemented**），明确"v2.0 做不到"
 //! - 现实路径: v1 companion/desktop 的 voice_session / screen_perception 走
-//!   `legacy/donor/apeireth-perception` (workspace exclude), v2 alpha 不移植
+//!   `legacy/canonical/apeireth-perception` (workspace exclude), v2 alpha 不移植
 //! - 完整 v2.1 实现: 跟 scene-d 例 1 (主人偏好) / 例 2 (自我评估) 同步做
 //!
 //! **架构原则** (O-6 锚 9, commit message 必写明):

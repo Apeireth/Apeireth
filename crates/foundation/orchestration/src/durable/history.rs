@@ -1,8 +1,8 @@
 //! `durable::history` — 追加式活动事件日志 (EventHistory 语义).
 //!
-//! **语义来源**: donor/apeireth-workflow `Event`/`EventKind` (typed events, 单调
-//! event_id, input/output/error/timestamp) + donor/apeireth-supervisor `Journal`
-//! (单调 seq 重分配, JSONL 行序列化, filter 查询) + donor/apeireth-bus `EventLog`
+//! **语义来源**: canonical/apeireth-workflow `Event`/`EventKind` (typed events, 单调
+//! event_id, input/output/error/timestamp) + canonical/apeireth-supervisor `Journal`
+//! (单调 seq 重分配, JSONL 行序列化, filter 查询) + canonical/apeireth-bus `EventLog`
 //! (since / last_n replay 查询语义)。
 //!
 //! **不变量**:
@@ -20,21 +20,21 @@ use super::DurableError;
 /// Run 级事件 (RunStarted/RunCompleted/RunFailed) 在 `activity_id` 字段上的占位标识。
 pub const RUN_EVENT_ACTOR: &str = "run";
 
-/// 活动事件类型 (donor workflow `EventKind` 语义, 命名对齐 v2: SubLoop/step 而非 Workflow)。
+/// 活动事件类型 (canonical workflow `EventKind` 语义, 命名对齐 v2: SubLoop/step 而非 Workflow)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActivityEventKind {
-    /// 一次持久 run 开始 (输入已记录; donor `WorkflowStarted`)。
+    /// 一次持久 run 开始 (输入已记录; canonical `WorkflowStarted`)。
     RunStarted,
-    /// 活动已调度 (输入 + 尝试号已记录; donor `ActivityScheduled`)。
+    /// 活动已调度 (输入 + 尝试号已记录; canonical `ActivityScheduled`)。
     ActivityScheduled,
-    /// 活动成功完成 (输出已记录; donor `ActivityCompleted`)。
+    /// 活动成功完成 (输出已记录; canonical `ActivityCompleted`)。
     ActivityCompleted,
-    /// 活动失败 (错误 + 尝试号已记录; donor `ActivityFailed`)。
+    /// 活动失败 (错误 + 尝试号已记录; canonical `ActivityFailed`)。
     ActivityFailed,
-    /// 一次持久 run 成功结束 (输出已记录; donor `WorkflowCompleted`)。
+    /// 一次持久 run 成功结束 (输出已记录; canonical `WorkflowCompleted`)。
     RunCompleted,
-    /// 一次持久 run 失败结束 (错误已记录; donor `WorkflowFailed`)。
+    /// 一次持久 run 失败结束 (错误已记录; canonical `WorkflowFailed`)。
     RunFailed,
 }
 
@@ -215,9 +215,9 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    // ====== donor workflow lib.rs 移植测试 ======
+    // ====== canonical workflow lib.rs 移植测试 ======
 
-    /// donor `runner_event_ids_monotonic`: seq 严格单调 1..=n。
+    /// canonical `runner_event_ids_monotonic`: seq 严格单调 1..=n。
     #[test]
     fn seq_is_strictly_monotonic() {
         let mut h = DurableHistory::new();
@@ -238,7 +238,7 @@ mod tests {
         }
     }
 
-    /// donor `event_kind_serialization`: snake_case serde 表示。
+    /// canonical `event_kind_serialization`: snake_case serde 表示。
     #[test]
     fn event_kind_serialization_is_snake_case() {
         assert_eq!(
@@ -268,7 +268,7 @@ mod tests {
         assert_eq!(ActivityEventKind::RunStarted.as_str(), "run_started");
     }
 
-    /// donor `event_serialization_round_trip`: 事件 serde 往返无损。
+    /// canonical `event_serialization_round_trip`: 事件 serde 往返无损。
     #[test]
     fn event_serialization_round_trip() {
         let e = ActivityEvent {
@@ -288,7 +288,7 @@ mod tests {
 
     // ====== supervisor journal_entry.rs 移植测试 ======
 
-    /// donor `journal_append_assigns_monotonic_seq`: 外部 seq 被重分配。
+    /// canonical `journal_append_assigns_monotonic_seq`: 外部 seq 被重分配。
     #[test]
     fn record_reassigns_external_seq() {
         let mut h = DurableHistory::new();
@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(s, 2);
     }
 
-    /// donor `journal_filter_kind_isolates` + `journal_filter_child_isolates`。
+    /// canonical `journal_filter_kind_isolates` + `journal_filter_child_isolates`。
     #[test]
     fn filter_kind_and_activity_isolate() {
         let mut h = DurableHistory::new();
@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(b_failures[0].error.as_deref(), Some("x"));
     }
 
-    /// donor `journal_entry_serde_jsonl_compat`: 每行独立可解析 (JSONL)。
+    /// canonical `journal_entry_serde_jsonl_compat`: 每行独立可解析 (JSONL)。
     #[test]
     fn jsonl_lines_are_independently_parseable() {
         let mut h = DurableHistory::new();
@@ -425,7 +425,7 @@ mod tests {
 
     // ====== bus event_log.rs 查询语义移植 ======
 
-    /// donor `replay_since_filters_by_timestamp` + `last_n_reverses_order`。
+    /// canonical `replay_since_filters_by_timestamp` + `last_n_reverses_order`。
     #[test]
     fn since_and_last_n_query_semantics() {
         let mut h = DurableHistory::new();

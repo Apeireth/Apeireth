@@ -14,7 +14,7 @@
 //!
 //! - R11 LOCKED 9 organ: UI 器官 (TUI 渲染层, R11 严守 0 触碰).
 //! - v1 companion era 9 organ ID: 行为/认知器官 (本 trait 服务对象, 移植自
-//!   `legacy/donor/apeireth-companion/src/{curiosity,emotion_memory,hypothesis,...}.rs`).
+//!   `legacy/canonical/apeireth-companion/src/{curiosity,emotion_memory,hypothesis,...}.rs`).
 //!
 //! | ID   | v1 module                  | v2 impl 状态                  |
 //! |------|----------------------------|-------------------------------|
@@ -34,7 +34,7 @@
 //!   在 `OrganTrait::process` 返 `Err(OrganError::NotImplemented(organ_id))` 显式标缺.
 //! - `llm_factory()` 默认返 `None`, 不假装每个 organ 都接 LLM. Curiosity 即使 trait
 //!   接口返 LLM (per 任务说明), **真实现**仍是确定性机制 (v1 真实现是确定性无 LLM,
-//!   per `legacy/donor/apeireth-companion/src/curiosity.rs:1-23` 文档明示).
+//!   per `legacy/canonical/apeireth-companion/src/curiosity.rs:1-23` 文档明示).
 //! - 真生产前阻塞 #1 (任务): 至少 1 organ 真移植 — E4 Curiosity 已 ✅.
 //!
 //! **3 阶审查** (O-6 锚 9, per `perception_backend.rs` 同模式):
@@ -45,7 +45,7 @@
 //! **async-trait**: 用 `async_trait::async_trait` 宏 (per `llm_factory.rs` 同模式).
 //!
 //! **v1 compat**: trait 是新增, 0 破现有 consumer. v1 `apeireth-companion::curiosity`
-//! 仍在 `legacy/donor/` (workspace exclude), v2 真生产路径走 `apeireth-organ::curiosity`.
+//! 仍在 `legacy/canonical/` (workspace exclude), v2 真生产路径走 `apeireth-organ::curiosity`.
 //!
 //! **承接**: 子代理 Q 报告 #3 "Council 真接 LLM" 已就位 (`LlmFactory` 注入),
 //! Curiosity 与 Council 共享 `LlmFactory` 接口.
@@ -89,7 +89,7 @@ pub enum OrganKind {
 }
 
 impl OrganKind {
-    /// v1 module 路径 (per `legacy/donor/apeireth-companion/src/<file>.rs`)
+    /// v1 module 路径 (per `legacy/canonical/apeireth-companion/src/<file>.rs`)
     pub fn v1_module(&self) -> &'static str {
         match self {
             Self::W1 => "world_model",
@@ -300,7 +300,7 @@ impl InitiativeGate {
     }
 }
 
-/// v1 curiosity `ExplorationTarget` 1:1 翻译 (per `legacy/donor/apeireth-companion/src/curiosity.rs:64-73`)
+/// v1 curiosity `ExplorationTarget` 1:1 翻译 (per `legacy/canonical/apeireth-companion/src/curiosity.rs:64-73`)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CuriosityTarget {
     pub id: u64,
@@ -310,7 +310,7 @@ pub struct CuriosityTarget {
     pub est_cost: f64,
 }
 
-/// v1 `Depth` 1:1 (per `legacy/donor/apeireth-companion/src/curiosity.rs:57-61`)
+/// v1 `Depth` 1:1 (per `legacy/canonical/apeireth-companion/src/curiosity.rs:57-61`)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CuriosityDepth {
     Shallow,

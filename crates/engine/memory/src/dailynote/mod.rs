@@ -1,6 +1,6 @@
 //! `apeireth-memory-dailynote` - R141 daily note (4→1 merge per v2 plan §9.5).
 //!
-//! VCP had 4 separate plugins: DailyNote, DailyNoteSearcher, DailyNoteFolder,
+//! Previous design had 4 separate components: DailyNote, DailyNoteSearcher, DailyNoteFolder,
 //! DailyNoteExporter. We merge into 1 cohesive crate.
 //!
 //! Functions:

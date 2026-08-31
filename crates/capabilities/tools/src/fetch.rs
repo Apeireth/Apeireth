@@ -54,10 +54,10 @@ const FETCH_METHOD: &str = "GET";
 pub struct FetchConfig {
     egress: Arc<ControlledEgress>,
     user_agent: Option<String>,
-    /// Optional per-host sliding-window rate limiter (donor R231 semantics).
+    /// Optional per-host sliding-window rate limiter (canonical semantics).
     /// Scheduling state only; never part of the frozen approved payload.
     rate_limiter: Option<Arc<Mutex<RateLimiter>>>,
-    /// Optional TTL response cache (donor R265 semantics). Process-local;
+    /// Optional TTL response cache (canonical semantics). Process-local;
     /// keyed by the frozen normalized request URL.
     response_cache: Option<Arc<ResponseCache>>,
 }
@@ -107,7 +107,7 @@ impl FetchConfig {
         self
     }
 
-    /// Enable per-host rate limiting with the donor default (60 requests per
+    /// Enable per-host rate limiting with the canonical default (60 requests per
     /// 60 seconds). Requests over the limit fail with a retryable error that
     /// includes the wait time.
     #[must_use]
@@ -368,7 +368,7 @@ impl FetchTool {
         // Process-local scheduling: cache lookup happens before the network;
         // the rate limiter consumes quota before the request is issued (the
         // quota is spent whether or not the remote succeeds, matching the
-        // donor's semantics).
+        // canonical's semantics).
         let cache = self.config.response_cache();
         if let Some(cache) = cache {
             if let Some(cached) = cache.get(url) {

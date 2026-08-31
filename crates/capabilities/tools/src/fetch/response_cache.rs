@@ -2,7 +2,7 @@
 //!
 //! Ported semantics from legacy `apeireth-tool-fetch::cache` (R265): a TTL
 //! map with hit/miss/eviction statistics. Expired entries are evicted on
-//! access; `invalidate`/`clear` give callers explicit control. The donor used
+//! access; `invalidate`/`clear` give callers explicit control. The canonical used
 //! a `parking_lot` RwLock; this port uses `std::sync::RwLock` so the crate
 //! gains no new dependency.
 //!

@@ -1,6 +1,6 @@
 //! 5-field cron parse / match / next-after (library, default-off).
 //!
-//! Recovered from `legacy/donor/apeireth-cron/src/lib.rs`. This is a **parser
+//! Canonical implementation module. This is a **parser
 //! and matcher**, not a scheduler. There is no tokio interval, no job table,
 //! no daemon. Callers that already own a heartbeat (v2
 //! `runtime::canonical::heartbeat::HeartbeatScheduler`) may ask `matches` /
@@ -15,7 +15,7 @@
 //! - `next_after`: enumerate at most ~1 year of minutes, Gregorian leap days,
 //!   Sakamoto weekday
 //!
-//! Discarded: `CronEngine` tokio tick loop (`scheduler.rs`, test-only in donor
+//! Discarded: `CronEngine` tokio tick loop (`scheduler.rs`, test-only in canonical
 //! and a second loop even then). Approximate 30-day epoch→date conversion
 //! used by that engine is also discarded.
 

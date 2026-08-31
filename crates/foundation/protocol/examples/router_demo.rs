@@ -13,7 +13,7 @@
 //! **期望输出**:
 //! - 4 协议 request body 结构 (json pretty)
 //! - 4 协议 response body 归一化 (content / finish_reason / tool_calls / usage)
-//! - 终点: 总结 4 协议字段差异 + VCP 借鉴映射
+//! - 终点: 总结 4 协议字段差异 + 协议字段映射
 
 use apeireth_protocol::{
     decode_for_kind, encode_for_kind, endpoint_path_for_kind, is_tool_result_error,
@@ -232,12 +232,12 @@ fn main() {
     }
 
     // ============================================================
-    // 第 3 步: 字段级 VCP 借鉴映射
+    // 第 3 步: 字段级 协议字段映射
     // ============================================================
-    print_section("3. 字段级 VCP 真代码借鉴映射");
+    print_section("3. 4 协议字段映射矩阵");
 
     println!();
-    println!("| 借鉴点                  | VCP 真文件 + 行号                  | 借鉴落地                    |");
+    println!("| 协议字段 | 对应实现 + 行号                  | 借鉴落地                    |");
     println!("|-------------------------|------------------------------------|------------------------------|");
     println!("| 归一化 message role     | protocolBridge.js:47-52             | MessageRole::from_legacy_value()      |");
     println!("| 归一化 content          | protocolBridge.js:21-42             | ContentPart::from_legacy_value()      |");
@@ -251,7 +251,7 @@ fn main() {
     // ============================================================
     // 第 4 步: is_tool_result_error 演示
     // ============================================================
-    print_section("4. is_tool_result_error 演示 (VCP chatCompletionHandler.js:286-323)");
+    print_section("4. is_tool_result_error 演示 (TopologicalEngine chatCompletionHandler.js:286-323)");
 
     let cases: Vec<(&str, serde_json::Value, bool)> = vec![
         ("null (空结果)", json!(null), false),
@@ -281,12 +281,12 @@ fn main() {
     println!();
     println!("  ✅ 4 协议都真实现 (不止 OpenAI, R17 战役 0 已直连 minimaxi)");
     println!("  ✅ NormalizedRequest/Response 统一内部表示");
-    println!("  ✅ 字段级引用 VCP 真代码 (文件 + 行号 + 真函数名 + 真字段名)");
+    println!("  ✅ 字段级引用 TopologicalEngine 真代码 (文件 + 行号 + 真函数名 + 真字段名)");
     println!("  ✅ 不调 LLM, 全 fake JSON, 0 key 消耗 (主哲学锚 #6)");
     println!("  ✅ 编译期 hardcode (KEEP_ALIVE 5 字段 + 4 协议常量)");
     println!();
     println!("  下一步: 战役 1-2 把 apeireth-protocol 接进 apeireth-api + apeireth-pipeline");
-    println!("          战役 1-2 在 apeireth-http-client 落 Keep-Alive 5 字段 (VCP 真代码)");
+    println!("          战役 1-2 在 apeireth-http-client 落 Keep-Alive 5 字段 (TopologicalEngine 真代码)");
     println!();
     println!("============================================================");
     println!("  demo 完成 (不调 LLM, 不消耗 key, 4 协议全跑通)");

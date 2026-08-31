@@ -1,6 +1,6 @@
 //! MCP prompts/list + prompts/get models.
 //!
-//! Donor: `legacy/donor/apeireth-mcp/src/prompts.rs`.
+//! Engine: `legacy/canonical/apeireth-mcp/src/prompts.rs`.
 //!
 //! Library primitives only. Rendering is injected via [`PromptServer`];
 //! this crate does not own prompt templates or call an LLM.

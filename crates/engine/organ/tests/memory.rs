@@ -19,9 +19,9 @@
 //!
 //! **R8 独立判断** (与 R7 同模式):
 //! - 任务 spec "1:1 翻译 v1 MemoryMerger" — **v1 没有此模块** (核查
-//!   `legacy/donor/apeireth-companion/src/runtime_brain.rs` 242 行无 MemoryMerger;
+//!   `legacy/canonical/apeireth-companion/src/runtime_brain.rs` 242 行无 MemoryMerger;
 //!   相关散落 3 处: memory_extractor + proactive_memory + runtime_brain).
-//! - v2 MemoryMerger 是**新设计**, 借鉴 v1 `MemoryExtractionService` (dedup-by-content
+//! - v2 MemoryMerger 是**新设计**, 自研记忆抽取服务 (dedup-by-content
 //!   + weight + persist schema) **算法骨架** 1:1 翻译.
 //! - trait schema `OrganOutput::Memory { notes_added, notes_merged }` 锁定
 //!   (per `apeireth-plugin::organ:184-185`).

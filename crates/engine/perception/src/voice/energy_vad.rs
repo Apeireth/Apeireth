@@ -60,10 +60,10 @@ impl fmt::Display for VadError {
 
 impl std::error::Error for VadError {}
 
-/// Energy VAD configuration (donor `VadConfig` Energy defaults).
+/// Energy VAD configuration (canonical `VadConfig` Energy defaults).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EnergyVadConfig {
-    /// RMS threshold in `[0.0, 1.0]`. Donor Energy default = 0.05.
+    /// RMS threshold in `[0.0, 1.0]`. Engine Energy default = 0.05.
     pub energy_threshold: f32,
     /// Trailing silence that ends an utterance (ms). 0 = no hangover.
     pub silence_threshold_ms: u32,
@@ -74,7 +74,7 @@ pub struct EnergyVadConfig {
 }
 
 impl EnergyVadConfig {
-    /// Donor `VadConfig::default_energy`.
+    /// Engine `VadConfig::default_energy`.
     pub fn default_energy() -> Self {
         Self {
             energy_threshold: 0.05,
@@ -84,7 +84,7 @@ impl EnergyVadConfig {
         }
     }
 
-    /// Donor `VadConfig::default_silence` (threshold 0, 500 ms hangover).
+    /// Engine `VadConfig::default_silence` (threshold 0, 500 ms hangover).
     pub fn default_silence() -> Self {
         Self {
             energy_threshold: 0.0,
@@ -94,7 +94,7 @@ impl EnergyVadConfig {
         }
     }
 
-    /// Validated constructor (donor `VadConfig::custom` Energy path).
+    /// Validated constructor (canonical `VadConfig::custom` Energy path).
     pub fn custom(
         energy_threshold: f32,
         silence_threshold_ms: u32,
@@ -133,7 +133,7 @@ impl Default for EnergyVadConfig {
     }
 }
 
-/// One Energy-VAD result (donor `VadResult` fields that the Energy path can fill).
+/// One Energy-VAD result (canonical `VadResult` fields that the Energy path can fill).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EnergyVadResult {
     /// True when a speech segment meeting `min_speech_duration_ms` was found.

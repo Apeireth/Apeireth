@@ -6,7 +6,7 @@
 //! pretend to see the desktop.
 //!
 //! Idle detection is deterministic and does not depend on the OS source.
-//! IdleStart is emitted at most once per idle stretch (donor `poll_events`
+//! IdleStart is emitted at most once per idle stretch (canonical `poll_events`
 //! would re-emit every poll after the threshold; that is a leak, not a
 //! semantic).
 

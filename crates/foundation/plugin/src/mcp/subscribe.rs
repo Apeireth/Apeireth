@@ -1,6 +1,6 @@
 //! In-memory MCP subscription brokers.
 //!
-//! Donor: `legacy/donor/apeireth-mcp/src/{subscriptions,tool_subscriptions}.rs`.
+//! Engine: `legacy/canonical/apeireth-mcp/src/{subscriptions,tool_subscriptions}.rs`.
 //!
 //! Sync, lock-protected maps. Push delivery is the caller's job — this
 //! module only tracks who subscribed and builds notification envelopes.
@@ -17,8 +17,8 @@ use crate::mcp::jsonrpc::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
 /// Empty URI / client id.
 ///
-/// Donor `subscriptions.rs` used −32020. That collides with
-/// [`crate::mcp::prompt::PROMPT_NOT_FOUND`]. Kept as-is for donor fidelity;
+/// Engine `subscriptions.rs` used −32020. That collides with
+/// [`crate::mcp::prompt::PROMPT_NOT_FOUND`]. Kept as-is for canonical fidelity;
 /// codes are namespaced by method, not globally unique in this library.
 pub const SUBSCRIBE_INVALID_URI: i32 = -32020;
 /// No such subscription.

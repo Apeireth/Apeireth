@@ -159,10 +159,10 @@ impl PreferenceStore for SQLitePreferenceStore {
         limit: u32,
     ) -> Result<Vec<UserPreference>, Box<dyn std::error::Error + Send + Sync>> {
         let session_id_str = session_id.to_string();
-        // SELECT 路径 (v1 donor `preference_injection` 语义: 偏好跨场景自动应用):
+        // SELECT 路径 (v1 canonical `preference_injection` 语义: 偏好跨场景自动应用):
         // 1. 同 session 下双向子串匹配 (stored topic ↔ current topic)
         //    + ORDER BY confidence DESC, created_at DESC + LIMIT ?N;
-        // 2. 无 topic 命中时回退到该 session 的 top-N (donor 的偏好画像是
+        // 2. 无 topic 命中时回退到该 session 的 top-N (canonical 的偏好画像是
         //    无条件注入的, 不被话题门控; 旧行为 `topic LIKE '%整条消息%'`
         //    使学到的偏好几乎永远召回不到, 闭环断裂).
         self.pool
@@ -190,7 +190,7 @@ impl PreferenceStore for SQLitePreferenceStore {
                 )?;
                 let mut out = load(&mut topic_stmt, current_topic)?;
                 if out.is_empty() && !current_topic.is_empty() {
-                    // Donor 语义回退: 无话题命中 → 该 session 的 top-N 偏好画像.
+                    // Engine 语义回退: 无话题命中 → 该 session 的 top-N 偏好画像.
                     let mut fallback_stmt = conn.prepare_cached(
                         "SELECT id, session_id, topic, stance, confidence, evidence_refs, tags, created_at \
                          FROM user_preferences \
@@ -423,7 +423,7 @@ mod tests {
         assert_eq!(list[0].confidence, 0.9);
     }
 
-    /// 无 topic 命中 → 回退到该 session 的 top-N (v1 donor
+    /// 无 topic 命中 → 回退到该 session 的 top-N (v1 canonical
     /// `preference_injection` 跨场景自动应用语义).
     #[tokio::test]
     async fn recall_falls_back_to_top_n_when_topic_misses() {

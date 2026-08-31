@@ -1,6 +1,6 @@
 //! MCP wire-schema normalization.
 //!
-//! Donor `apeireth-mcp` stored tool/resource fields as Rust snake_case
+//! Engine `apeireth-mcp` stored tool/resource fields as Rust snake_case
 //! (`input_schema`, `mime_type`, `is_error`) **without** serde renames, so
 //! the JSON it emitted did not match MCP 2025-03-26 (`inputSchema`,
 //! `mimeType`, `isError`). The v2 client in `apeireth-tools::mcp` already
@@ -8,7 +8,7 @@
 //! shared library so a later host (and resource/prompt models) speak the
 //! same wire.
 //!
-//! Also recovered: kebab-case tool/prompt name check (donor
+//! Also recovered: kebab-case tool/prompt name check (canonical
 //! `tools/naming.rs`) and a tolerant object-key rewrite that accepts
 //! either snake_case or camelCase inbound JSON.
 
@@ -40,7 +40,7 @@ const WIRE_KEY_MAP: &[(&str, &str)] = &[
 /// Recursively rewrite object keys that have a known MCP camelCase form.
 ///
 /// Already-camelCase keys are left alone. Arrays are walked. Non-objects
-/// are returned unchanged. Used to ingest donor JSON that was serialized
+/// are returned unchanged. Used to ingest canonical JSON that was serialized
 /// without serde renames.
 pub fn normalize_wire_object(value: Value) -> Value {
     match value {
@@ -66,7 +66,7 @@ fn rewrite_key(k: &str) -> &str {
     k
 }
 
-/// Kebab-case MCP tool / prompt name (donor `is_valid_tool_name`).
+/// Kebab-case MCP tool / prompt name (canonical `is_valid_tool_name`).
 ///
 /// Rules: non-empty; ASCII lowercase / digit / `-`; no leading/trailing
 /// `-`; no `--`.
@@ -234,7 +234,7 @@ impl ToolCallResult {
     }
 }
 
-/// Normalize a tools/call result object that may use donor snake_case.
+/// Normalize a tools/call result object that may use canonical snake_case.
 pub fn normalize_mcp_result(value: Value) -> Result<ToolCallResult, String> {
     let normalized = normalize_wire_object(value);
     serde_json::from_value(normalized).map_err(|e| e.to_string())
@@ -271,13 +271,13 @@ mod tests {
 
     #[test]
     fn normalize_wire_object_rewrites_known_keys() {
-        let donor = json!({
+        let canonical = json!({
             "name": "echo",
             "input_schema": { "type": "object" },
             "mime_type": "text/plain",
             "nested": { "is_error": true, "list_changed": false }
         });
-        let out = normalize_wire_object(donor);
+        let out = normalize_wire_object(canonical);
         assert_eq!(out["inputSchema"]["type"], "object");
         assert_eq!(out["mimeType"], "text/plain");
         assert_eq!(out["nested"]["isError"], true);
@@ -303,8 +303,8 @@ mod tests {
 
     #[test]
     fn content_block_from_wire_accepts_snake_case() {
-        let donor = json!({"type": "text", "text": "hi", "mime_type": "text/plain"});
-        let c = content_block_from_wire(donor).unwrap();
+        let canonical = json!({"type": "text", "text": "hi", "mime_type": "text/plain"});
+        let c = content_block_from_wire(canonical).unwrap();
         match c {
             ContentBlock::Text { text, mime_type } => {
                 assert_eq!(text, "hi");
@@ -327,11 +327,11 @@ mod tests {
 
     #[test]
     fn normalize_mcp_result_from_donor_snake_case() {
-        let donor = json!({
+        let canonical = json!({
             "content": [{"type": "text", "text": "ok", "mime_type": "text/plain"}],
             "is_error": false
         });
-        let r = normalize_mcp_result(donor).unwrap();
+        let r = normalize_mcp_result(canonical).unwrap();
         assert!(!r.is_error);
         assert_eq!(r.extract_text(), "ok");
     }

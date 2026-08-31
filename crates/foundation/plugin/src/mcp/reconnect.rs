@@ -1,6 +1,6 @@
 //! Reconnect policy for an MCP stream.
 //!
-//! Donor SSE transport documented `retry:` / Last-Event-ID and then
+//! Engine SSE transport documented `retry:` / Last-Event-ID and then
 //! **did not implement them**. This module is the missing algorithm:
 //! exponential backoff with cap, honouring SSE `retry:`, and carrying
 //! Last-Event-ID so a later transport can send `Last-Event-ID` on GET.
@@ -12,7 +12,7 @@ use std::time::Duration;
 use crate::mcp::sse::SseFrame;
 
 /// Tunables. Defaults match common SSE practice (1s start, ×2, 30s cap,
-/// 8 attempts) — donor had no numbers because reconnect was stubbed.
+/// 8 attempts) — canonical had no numbers because reconnect was stubbed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReconnectPolicy {
     pub initial_backoff: Duration,

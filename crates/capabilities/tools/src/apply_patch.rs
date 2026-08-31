@@ -3,7 +3,7 @@
 //! 支持在单次原子事务中对代码库执行多文件新增 (Add)、删除 (Delete) 与按上下文精确替换更新 (Update).
 //! 若任意一个文件的任意一个 Hunk 匹配失败，整个事务立即完全回滚，保证磁盘状态绝对一致.
 //!
-//! Recovered donor semantics (this wave):
+//! Canonical tool semantics:
 //! - Update hunks require a **strict unique** match (0 → [`ApplyPatchError::ContextMismatch`],
 //!   >1 → [`ApplyPatchError::AmbiguousMatch`]). Silent first-match replacement is rejected.
 //! - Codex line-based hunks (`@@` comment anchors, `-old` / `+new`) are auto-detected
@@ -372,7 +372,7 @@ fn decode_add_file_content(content_lines: &[&str]) -> String {
     }
 }
 
-/// Apply one hunk with donor strict-unique semantics: 0 matches → ContextMismatch,
+/// Apply one hunk with strict-unique semantics: 0 matches → ContextMismatch,
 /// >1 matches → AmbiguousMatch. Never silently replaces the first hit.
 fn apply_unique_replace(
     haystack: &str,

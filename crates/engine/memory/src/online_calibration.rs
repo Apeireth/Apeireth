@@ -1,9 +1,9 @@
 //! Generalized online calibration: EMA baseline, linear scale+offset fit, 2σ drift.
 //!
-//! Recovered from `legacy/donor/apeireth-asi/src/{calibration,drift,scheduler}.rs`
+//! Canonical implementation module.
 //! and **stripped of the 24-dim / 9-submeasure ASI scaffolding**.
 //!
-//! The donor types were locked to `V05_DIM_COUNT` / `V1136_SUBMEASURE_COUNT`.
+//! The canonical types were locked to `V05_DIM_COUNT` / `V1136_SUBMEASURE_COUNT`.
 //! v2 has no ASI crate, so this module operates on a caller-owned `f64` series:
 //!
 //! - [`AdaptiveBaseline`] — EMA mean / variance + z-score
@@ -450,7 +450,7 @@ impl RecalibrationScheduler {
 
     /// Observe one vector. Returns `Some(report)` when `count % every_n == 0`.
     ///
-    /// The donor's `observe` path did **not** retain a trace buffer; it fitted
+    /// The canonical's `observe` path did **not** retain a trace buffer; it fitted
     /// against an empty history and the current baseline. This port keeps that
     /// honesty: use [`Self::run_with_history`] when the caller owns traces.
     pub fn observe(

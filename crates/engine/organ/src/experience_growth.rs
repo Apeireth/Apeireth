@@ -1,6 +1,6 @@
 //! Relational practice-memory: EMA verify + promotion threshold.
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/experience.rs` (algorithm
+//! Canonical implementation module. (algorithm
 //! only). Distinct from v2 `apeireth-plugin::experience` wiki/KG/association
 //! extraction: this is **reusable practice** (scene / practice / result /
 //! verify_count / EMA score), not episode-derived wiki facts.
@@ -11,10 +11,10 @@
 //!
 //! Default-off library primitive.
 
-/// Promotion: `verify_count >= 3` and `score >= 0.7` (donor initial params).
+/// Promotion: `verify_count >= 3` and `score >= 0.7` (canonical initial params).
 pub const PROMOTE_MIN_VERIFIES: u64 = 3;
 pub const PROMOTE_MIN_SCORE: f64 = 0.7;
-/// EMA smoothing (aligned with donor capability EMA).
+/// EMA smoothing (aligned with canonical capability EMA).
 pub const EMA_ALPHA: f64 = 0.7;
 
 /// Practice-memory record (append-only versions share `chain`).
@@ -67,7 +67,7 @@ impl PracticeExperience {
     }
 }
 
-/// Outcome value used in the EMA update (donor `verify` table).
+/// Outcome value used in the EMA update (canonical `verify` table).
 fn outcome_value(success: bool, previous_outcome: &str) -> f64 {
     match (success, previous_outcome) {
         (true, _) => 1.0,

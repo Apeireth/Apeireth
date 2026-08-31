@@ -1,10 +1,10 @@
-//! Score aggregation recovered from `legacy/donor/apeireth-eval`.
+//! Score aggregation recovered from `legacy/canonical/apeireth-eval`.
 //!
 //! Pure stdlib statistics: arithmetic / weighted mean, sample standard
 //! deviation, linear-interpolation percentile, and a SWE-bench-style pass-rate
 //! summarizer. This is **governance-of-eval** math, not a task runner and not
 //! a second agent loop. LLM smoke / MCP bridge / live cross-model HTTP paths
-//! from the donor are discarded.
+//! from the canonical are discarded.
 
 use serde::{Deserialize, Serialize};
 
@@ -132,7 +132,7 @@ pub struct CategoryBreakdown {
 }
 
 /// Aggregated pass-rate report. Empty input uses pass_rate / mean_score = 1.0
-/// (donor convention: "no tasks" is not a failure).
+/// (canonical convention: "no tasks" is not a failure).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TaskSummary {
     pub total: usize,

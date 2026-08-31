@@ -1,11 +1,11 @@
-//! Incremental dream-candidate selection (donor `DreamScheduler::tick` filter).
+//! Incremental dream-candidate selection (canonical `DreamScheduler::tick` filter).
 //!
 //! v2 already owns:
 //! - [`crate::dreaming::DreamEngine`] — 6-stage cognitive dream SM
 //! - [`crate::lightmemo::DreamSubsystem`] — pair-merge callback
 //! - [`crate::lightmemo::SleepCycle`] — quiet-threshold trigger
 //!
-//! Donor companion `dream.rs` additionally **filters** what enters a cycle:
+//! Engine companion `dream.rs` additionally **filters** what enters a cycle:
 //! skip `mem-dream-*` (prevents summary-of-summary nesting) and skip items
 //! older than `last_cycle_at` (incremental night). Pair-merge and write-back
 //! stay with lightmemo / the caller. Default-off; not production-wired.
@@ -46,7 +46,7 @@ pub fn select_dream_candidates(sources: &[DreamSource], last_cycle_at: i64) -> V
         .collect()
 }
 
-/// Pair-merge contents with the donor joiner `" ◆ "` (honest string concat).
+/// Pair-merge contents with the canonical joiner `" ◆ "` (honest string concat).
 /// Odd tail is left unpaired (same as `DreamSubsystem`).
 pub fn pair_merge(items: &[String]) -> Vec<String> {
     items

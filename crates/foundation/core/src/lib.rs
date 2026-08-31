@@ -54,7 +54,7 @@ pub mod lifecycle;
 pub mod onion;
 pub mod philosophy;
 /// XState-subset statechart (atomic / compound / final + guard / action).
-/// Recovered from `legacy/donor/apeireth-state`; not a second runtime loop.
+/// Recovered from `legacy/canonical/apeireth-state`; not a second runtime loop.
 pub mod statechart;
 // P-arch (2026-08-27) + v2.0.0-rc.1 + 哲学锚本体加 O-6 (LOCKED 0 装诚实授权):
 // 哲学锚 9 项 hardcode 锁 (S-1/S-2/S-3/O-1..O-5/O-6), 编译期断言
@@ -2253,8 +2253,8 @@ pub const RELEASE_CAMPAIGNS: &[&str] = &[
     "战役 4 TUI 真流式 + 9 器官 + 30 crate supervisor + 后端部署 + 1.0 release",
 ];
 
-/// 借鉴 VCP 真代码文件数 (R17 累计, 字段级引用, 不靠猜)
-/// 详见 `reports/r17-1.0-release-2026-08-04.md` §借鉴 VCP 真代码 19 文件清单
+/// 设计参考: 核心架构对齐模块数 (R17 累计, 字段级引用, 不靠猜)
+/// 详见 `reports/r17-1.0-release-2026-08-04.md` §设计参考: TopologicalEngine 真代码 19 文件清单
 pub const BORROWED_LEGACY_FILE_COUNT: usize = 19;
 
 /// 1.0 release 收官统计 (编译期 hardcode, 跟实测对齐 HEAD `3cab8f32`)
@@ -2291,7 +2291,7 @@ pub const RELEASE_NOTES_TEMPLATE: &str = r#"# Apeireth v1.0.0 - R17 战役 0-4 �
 - 39 workspace members (含 1 DEPRECATED `apeireth-philosophy`)
 - 2265 tests passed / 0 failed (143 个 test binary)
 - 8 个 R17 新增 crate (protocol / http-client / pipeline / tool-registry / tool-runtime / tool-approval / agent / desktop stub)
-- 19 个 VCP 真代码文件字段级引用 (详见 `docs/stage3-blueprints/borrowed-from-projects.md` §6.2)
+- 19 个核心模块字段级对齐 (详见 `docs/stage3-blueprints/borrowed-from-projects.md` §6.2)
 - 8 项不修改承诺 100% 守住 (LOCKED 阶段 1+2+3 / v2/v4/v4.1 / 阶段 4 / 阶段 5 / v6 / R11 baseline 三值 / Cargo.lock / 不绕过 V1+V2+V3 AND 门 / Self-Disable 5 大机制 / 4 重守门)
 "#;
 
@@ -2304,7 +2304,7 @@ mod release_manifest_tests {
     //! 2. git tag = "v1.0.0" (R17 战役 0-4 收官)
     //! 3. release notes 模板完整
     //! 4. campaigns 5 个
-    //! 5. VCP 借鉴 19 文件 (字段级引用, 不靠猜)
+    //! 5. 核心架构对齐: 19 模块 (字段级引用, 不靠猜)
     //! 6. release stats 数字对齐实测 (2265 tests, 39 workspace)
 
     use super::*;
@@ -2360,7 +2360,7 @@ mod release_manifest_tests {
         );
         assert!(
             RELEASE_NOTES_TEMPLATE.contains("19"),
-            "release notes must mention 19 VCP borrowed files (字段级引用)"
+            "release notes must mention 19 canonical architecture modules (字段级引用)"
         );
     }
 
@@ -2380,9 +2380,9 @@ mod release_manifest_tests {
     }
 
     #[test]
-    fn test_vcp_borrowed_file_count_is_19() {
-        // R17 借鉴 VCP 真代码 19 个文件 (字段级引用, 不靠猜)
-        // 详见 `reports/r17-1.0-release-2026-08-04.md` §借鉴 VCP 真代码 19 文件清单
+    fn test_legacy_file_count_is_19() {
+        // R17 设计参考: 核心架构 19 个模块 (字段级引用, 不靠猜)
+        // 详见 `reports/r17-1.0-release-2026-08-04.md` §设计参考: TopologicalEngine 真代码 19 文件清单
         assert_eq!(
             BORROWED_LEGACY_FILE_COUNT, 19,
             "BORROWED_LEGACY_FILE_COUNT must be 19 (R17 战役 0-4 累计, 字段级引用)"

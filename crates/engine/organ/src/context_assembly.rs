@@ -1,6 +1,6 @@
 //! Budgeted context-block assembler (relational prompt injection).
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/context.rs` (the block
+//! Canonical implementation module. (the block
 //! pipeline only — rot scoring already lives in
 //! `apeireth-orchestration::context_rot` and is a different algorithm).
 //!

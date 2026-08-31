@@ -1,6 +1,6 @@
 //! MCP initialize handshake, capability metadata, and client session state.
 //!
-//! Donor: `legacy/donor/apeireth-mcp/src/{initialize.rs,lib.rs}` (ServerInfo /
+//! Engine: `legacy/canonical/apeireth-mcp/src/{initialize.rs,lib.rs}` (ServerInfo /
 //! ClientInfo / protocol version negotiation).
 //!
 //! The production client in `apeireth-tools::mcp` sends a hardcoded
@@ -125,7 +125,7 @@ pub struct ServerIdentity {
     pub version: String,
 }
 
-/// Server capability declaration. Donor only advertised `tools`; this
+/// Server capability declaration. Engine only advertised `tools`; this
 /// recovery also models resources/prompts/logging flags so a host can
 /// advertise them without inventing a second registry.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -143,7 +143,7 @@ pub struct ServerCapabilities {
 }
 
 impl ServerCapabilities {
-    /// Tools-only advertisement (matches the donor default).
+    /// Tools-only advertisement (matches the canonical default).
     pub fn tools_only() -> Self {
         Self {
             tools: Some(ToolsCapability { listChanged: false }),
@@ -275,7 +275,7 @@ pub fn handle_initialize(req: &JsonRpcRequest, default_server_info: ServerInfo) 
 
 /// Client-side session state. New → Initializing → Ready, or Closed.
 ///
-/// Donor `McpClient` only had a boolean `server_info.is_some()`. A reconnect
+/// Engine `McpClient` only had a boolean `server_info.is_some()`. A reconnect
 /// policy needs the extra states so `tools/list` cannot race initialize and
 /// so a closed transport cannot be reused silently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -9,7 +9,7 @@
 [![Tests](https://img.shields.io/badge/tests-2012%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-16--Crate%20微内核-orange.svg)](docs/01-architecture/architecture.md)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
@@ -421,7 +421,7 @@ Apeireth 的每一行代码、每一个 Pull Request 均严格贯穿着九大不
 2. **`S-2` 实事求是**：核验后写，真实物理与数学微分计算，坚决拒绝叙事泡沫。
 3. **`S-3` 质量工程化**：编译期强类型系统、Clippy 0 警告、自动化测试 100% 通过。
 4. **`O-1` 安全优先**：Fail-Closed 默认拒绝、物理进程 JobObject 沙箱、出站凭据绊线、SAGA 回滚。
-5. **`O-2` 走在前人经验上**：深度吸收 VCP、Aider、gnhf、SwarmVault、Noise Protocol 等 170+ 标杆精髓并实现超越。
+5. **`O-2` 走在前人经验上**：深度吸收 TopologicalEngine、Aider、gnhf、SwarmVault、Noise Protocol 等 170+ 标杆精髓并实现超越。
 6. **`O-3` 干到底**：拒绝半成品；从 Trait 到 Crate Root 导出、单测与能力矩阵全链路 100% 闭环。
 7. **`O-4` 任何人都能接手**：架构自解释、完备的数学与工程文档、清晰的代码结构。
 8. **`O-5` 不假装 (0 装 PASS)**：0 `todo!`、0 `unimplemented!`、0 虚假 Mock、0 空壳桩，诚信是信任基石。
@@ -493,9 +493,21 @@ Apeireth 源自 **Apeiron**（ἄπει隆 / ἄπειron）——古希腊语�
 
 ---
 
-## ⚖️ 开源协议
+## ⚖️ 开源协议与贡献公约
 
-Apeireth 采用 [Apache-2.0 开源协议](LICENSE)。
+Apeireth 遵循 **MIT** 与 **Apache-2.0** 双重开源协议（您可以根据自身需求自由选择其中之一）：
+
+- **Apache License, Version 2.0**（参见 [LICENSE-APACHE](LICENSE-APACHE) 或 <http://www.apache.org/licenses/LICENSE-2.0>）
+- **MIT License**（参见 [LICENSE-MIT](LICENSE-MIT) 或 <http://opensource.org/licenses/MIT>）
+
+### 🤝 开发者原创性声明 (DCO 等同效力公约)
+向本项目提交任何 Pull Request、Issue 或代码补丁，即依据“输入=输出 (Inbound=Outbound)”规则自动承诺：您为该贡献的合法原创作者，且无条件以 MIT OR Apache-2.0 双协议向本项目授权。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+---
+
+## ⚠️ 法律免责与合规声明
+
+本项目仅供学术研究、个人学习、技术探索与本地受控环境使用。任何组织或个人若利用本项目向公众提供在线生成式人工智能服务，须独立履行算法备案与合规义务。详见完整法律声明 [DISCLAIMER.md](DISCLAIMER.md)。
 
 ---
 

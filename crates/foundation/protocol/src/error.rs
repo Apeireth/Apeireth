@@ -1,6 +1,6 @@
 //! 协议层错误类型
 //!
-//! **借鉴 VCP 真代码** (`research/source/vcptoolbox/modules/chatCompletionHandler.js:286-323`):
+//! **设计参考: TopologicalEngine 真代码** (`research/source/vcptoolbox/modules/chatCompletionHandler.js:286-323`):
 //! `isToolResultError` 多级字段判断 (success / ok / status / code / httpStatus),
 //! 我们把这种"5 字段多级判断"作为错误分类的依据。
 
@@ -8,7 +8,7 @@ use thiserror::Error;
 
 /// 协议层错误。
 ///
-/// **变体** (借鉴 VCP `isToolResultError` 真代码的 5 字段 + HTTP 错误码):
+/// **变体** (设计参考: TopologicalEngine `isToolResultError` 真代码的 5 字段 + HTTP 错误码):
 /// - `Parse` — JSON 解析失败 / 字段类型不匹配
 /// - `Missing` — 必填字段缺失 (e.g. model / messages)
 /// - `Invalid` — 字段值非法 (e.g. temperature < 0)
@@ -152,9 +152,9 @@ impl ProtocolError {
     }
 }
 
-/// 工具结果错误检测 (借鉴 VCP `isToolResultError` 真代码语义)。
+/// 工具结果错误检测 (设计参考: TopologicalEngine `isToolResultError` 真代码语义)。
 ///
-/// VCP `chatCompletionHandler.js:286-323` 的多级判断:
+/// TopologicalEngine `chatCompletionHandler.js:286-323` 的多级判断:
 /// 1. **成功优先** (`success===true` / `status==='success'` / `status==='ok'` / `ok===true` → 不算错误)
 /// 2. **失败字段** (`error===true` / `success===false` / `status==='error'` / `status==='failed'` /
 ///    `status==='failure'` / `ok===false` → 算错误)
@@ -221,13 +221,13 @@ mod tests {
 
     #[test]
     fn is_tool_result_error_null_is_not_error() {
-        // VCP: 空结果不视为错误
+        // TopologicalEngine: 空结果不视为错误
         assert!(!is_tool_result_error(&json!(null)));
     }
 
     #[test]
     fn is_tool_result_error_success_fields() {
-        // VCP: 成功优先 (success=true / status=ok / ok=true)
+        // TopologicalEngine: 成功优先 (success=true / status=ok / ok=true)
         assert!(!is_tool_result_error(
             &json!({"success": true, "data": "x"})
         ));
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn is_tool_result_error_failure_fields() {
-        // VCP: 失败字段
+        // TopologicalEngine: 失败字段
         assert!(is_tool_result_error(&json!({"error": true})));
         assert!(is_tool_result_error(&json!({"success": false})));
         assert!(is_tool_result_error(&json!({"status": "error"})));
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn is_tool_result_error_http_code() {
-        // VCP: code/statusCode/httpStatus 在 400-599
+        // TopologicalEngine: code/statusCode/httpStatus 在 400-599
         assert!(is_tool_result_error(&json!({"code": 404})));
         assert!(is_tool_result_error(&json!({"code": 500})));
         assert!(is_tool_result_error(&json!({"statusCode": 429})));
@@ -260,13 +260,13 @@ mod tests {
 
     #[test]
     fn is_tool_result_error_string_prefix() {
-        // VCP: 字符串前缀
+        // TopologicalEngine: 字符串前缀
         assert!(is_tool_result_error(&json!("[error] something went wrong")));
         assert!(is_tool_result_error(&json!("[错误] 出错了")));
         assert!(is_tool_result_error(&json!("error: bad request")));
         assert!(is_tool_result_error(&json!("失败：网络超时")));
         assert!(!is_tool_result_error(&json!("Everything is fine")));
-        // VCP: 业务正文里包含"错误"不算
+        // TopologicalEngine: 业务正文里包含"错误"不算
         assert!(!is_tool_result_error(&json!(
             "the user typed an error message"
         )));

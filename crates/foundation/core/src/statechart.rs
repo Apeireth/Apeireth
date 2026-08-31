@@ -1,4 +1,4 @@
-//! XState-subset statechart recovered from `legacy/donor/apeireth-state`.
+//! XState-subset statechart recovered from `legacy/canonical/apeireth-state`.
 //!
 //! Covered: atomic / compound / final nodes, event transitions, guards,
 //! actions, on_entry / on_exit. Hierarchical child execution is **not**

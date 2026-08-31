@@ -123,7 +123,7 @@ impl PromptCacheStabilizer {
 }
 
 /// Hydra-style tiered system-prompt assembly: sort by tier (lower first) and
-/// concatenate. Recovered from donor `prompt_cache::assemble_tiered`.
+/// concatenate. Recovered from canonical `prompt_cache::assemble_tiered`.
 ///
 /// Typical tiers: `0` identity, `50` memory evidence, `100` tool guidance.
 /// This is a string assembler only — it does not own a session or a cache.

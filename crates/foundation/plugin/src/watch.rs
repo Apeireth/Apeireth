@@ -1,7 +1,7 @@
 //! Polling mtime watcher used as a cache-invalidation signal.
 //!
-//! Recovered from `legacy/donor/apeireth-skills/src/watcher.rs` (mtime compare,
-//! Added / Modified / Removed). The donor `apeireth-agent` `watch_dir` used
+//! Canonical implementation module. (mtime compare,
+//! Added / Modified / Removed). The canonical `apeireth-agent` `watch_dir` used
 //! `notify` 5.x; v2 plugin explicitly out-of-scopes inotify/hot-reload of
 //! plugin code. This helper only reports **file identity changes** so a
 //! caller can `clear_cache` on a [`crate::alias::AliasResolver`]. It does
@@ -77,7 +77,7 @@ impl std::fmt::Debug for MetadataWatcher {
 }
 
 impl MetadataWatcher {
-    /// Watch `root`. Depth 4 matches the donor file-loader bound (loop guard).
+    /// Watch `root`. Depth 4 matches the canonical file-loader bound (loop guard).
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self {
             root: root.into(),

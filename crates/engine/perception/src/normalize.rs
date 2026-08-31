@@ -1,7 +1,7 @@
-//! Multimodal observation normalization recovered from donor `apeireth-perception`.
+//! Multimodal observation normalization recovered from canonical `apeireth-perception`.
 //!
 //! v2 already owns the frozen `PerceptionEvent` / `Attention` / modality traits in
-//! `apeireth-plugin`. This module does **not** resurrect donor `PerceptionChannel`
+//! `apeireth-plugin`. This module does **not** resurrect canonical `PerceptionChannel`
 //! types or a second event schema. It ports the missing **algorithms**:
 //!
 //! - `SignalSource` provenance labels (cli / http / pybridge / mcp / internal / unknown)
@@ -21,10 +21,10 @@ use apeireth_plugin::perception::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-/// Donor default attention threshold (balance of signal vs noise).
+/// Engine default attention threshold (balance of signal vs noise).
 pub const DEFAULT_ATTENTION_THRESHOLD: f64 = 0.5;
 
-/// Donor default Top-K (aligned with a single-batch processing cap).
+/// Engine default Top-K (aligned with a single-batch processing cap).
 pub const DEFAULT_TOP_K: usize = 5;
 
 /// Full-HD reference used by the vision pixel-priority heuristic.
@@ -73,7 +73,7 @@ pub fn clamp_priority(value: f64) -> f64 {
     value.clamp(0.0, 1.0)
 }
 
-/// Voice priority equals clamped loudness (donor heuristic; no acoustic model).
+/// Voice priority equals clamped loudness (canonical heuristic; no acoustic model).
 pub fn voice_priority(loudness: f64) -> f64 {
     clamp_priority(loudness)
 }
@@ -121,7 +121,7 @@ pub fn payload_is_empty(payload: &Value) -> bool {
     }
 }
 
-/// Validate canonical event fields recovered from donor `validate_event`.
+/// Validate canonical event fields recovered from canonical `validate_event`.
 pub fn validate_event(event: &PerceptionEvent) -> Result<(), String> {
     if payload_is_empty(&event.payload) {
         return Err("PerceptionEvent.payload must not be empty".to_string());
@@ -135,7 +135,7 @@ pub fn validate_event(event: &PerceptionEvent) -> Result<(), String> {
     Ok(())
 }
 
-/// Append a tag (donor `PerceptionEvent::with_tag`).
+/// Append a tag (canonical `PerceptionEvent::with_tag`).
 pub fn with_tag(mut event: PerceptionEvent, tag: impl Into<String>) -> PerceptionEvent {
     event.tags.push(tag.into());
     event
@@ -143,7 +143,7 @@ pub fn with_tag(mut event: PerceptionEvent, tag: impl Into<String>) -> Perceptio
 
 /// Filter events by attention threshold using the canonical `ThresholdAttention`.
 ///
-/// The cutoff is **not** clamped here (matching donor `pipeline`): a threshold
+/// The cutoff is **not** clamped here (matching canonical `pipeline`): a threshold
 /// above 1.0 keeps nothing; a threshold below 0.0 keeps everything. Callers
 /// that want a clamped cutoff should pass [`clamp_priority`].
 pub fn pipeline_events(events: Vec<PerceptionEvent>, threshold: f64) -> Vec<PerceptionEvent> {

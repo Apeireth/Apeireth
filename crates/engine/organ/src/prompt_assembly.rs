@@ -1,6 +1,6 @@
-//! Prompt placeholder universe (VCP messageProcessor paradigm, rewritten).
+//! Prompt placeholder universe (canonical message processor paradigm, rewritten).
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/prompt_assembler.rs`.
+//! Canonical implementation module.
 //!
 //! - Typed variable sources: identity / state / goals / memory / time / custom.
 //! - Privileged expansion: `agent:` / `toolbox:` only expand in system (or

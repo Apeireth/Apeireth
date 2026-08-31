@@ -24,10 +24,10 @@ pub struct Migration {
 
 /// Ordered migration list.
 ///
-/// Version 1 preserves the donor `reconstruction_v2` on-disk table set so an
+/// Version 1 preserves the canonical `reconstruction_v2` on-disk table set so an
 /// existing Apeireth 2.0 database created by the parallel implementation can
 /// be opened without data loss. The SQL is intentionally `IF NOT EXISTS`:
-/// donor databases may already contain these tables while still carrying
+/// canonical databases may already contain these tables while still carrying
 /// `user_version = 0`, so the first migration must be idempotent.
 static MIGRATIONS: &[Migration] = &[
     Migration {

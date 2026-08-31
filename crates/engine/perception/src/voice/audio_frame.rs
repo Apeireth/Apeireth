@@ -1,6 +1,6 @@
-//! PCM16 frame primitives recovered from donor `apeireth-voice`.
+//! PCM16 frame primitives recovered from canonical `apeireth-voice`.
 //!
-//! Donor `VoiceSdk` / Porcupine facades returned `NotImplemented`. The load-bearing
+//! Engine `VoiceSdk` / Porcupine facades returned `NotImplemented`. The load-bearing
 //! pieces are the pvrecorder-style geometry (16 kHz / 16-bit / 512 samples),
 //! duration math, empty / too-long guards, little-endian framing, and MiniMax
 //! hex-audio decode. Plugin [`apeireth_plugin::perception_backend::AudioBuffer`]
@@ -16,16 +16,16 @@ use serde::{Deserialize, Serialize};
 
 use apeireth_plugin::perception_backend::AudioBuffer;
 
-/// pvrecorder / Porcupine sample rate (donor `VOICE_SAMPLE_RATE_HZ`).
+/// pvrecorder / Porcupine sample rate (canonical `VOICE_SAMPLE_RATE_HZ`).
 pub const PCM16_SAMPLE_RATE_HZ: u32 = 16_000;
 
-/// Single analysis frame (donor `VOICE_FRAME_LENGTH`).
+/// Single analysis frame (canonical `VOICE_FRAME_LENGTH`).
 pub const PCM16_FRAME_SAMPLES: usize = 512;
 
-/// Single-session recording cap (donor `VOICE_MAX_AUDIO_SECONDS`).
+/// Single-session recording cap (canonical `VOICE_MAX_AUDIO_SECONDS`).
 pub const PCM16_MAX_AUDIO_SECONDS: u32 = 30;
 
-/// Mono channel count used by the donor buffer helpers.
+/// Mono channel count used by the canonical buffer helpers.
 pub const PCM16_CHANNELS_MONO: u8 = 1;
 
 /// Maximum duration in milliseconds implied by [`PCM16_MAX_AUDIO_SECONDS`].
@@ -39,7 +39,7 @@ pub enum AudioFrameError {
     Empty,
     /// Duration exceeds [`PCM16_MAX_DURATION_MS`].
     TooLong { got_ms: u64, max_ms: u64 },
-    /// Sample rate other than the donor hardcode.
+    /// Sample rate other than the canonical hardcode.
     UnsupportedSampleRate { got: u32, expected: u32 },
     /// Channel count other than mono.
     UnsupportedChannels { got: u8 },
@@ -74,7 +74,7 @@ impl std::error::Error for AudioFrameError {}
 
 /// Duration in milliseconds for `sample_count` PCM samples.
 ///
-/// Donor formula: `samples.len() * 1000 / (sample_rate * channels)`, integer
+/// Engine formula: `samples.len() * 1000 / (sample_rate * channels)`, integer
 /// division. Returns 0 when sample rate or channels is 0.
 pub fn duration_ms(sample_count: usize, sample_rate_hz: u32, channels: u8) -> u64 {
     if sample_rate_hz == 0 || channels == 0 {
@@ -85,7 +85,7 @@ pub fn duration_ms(sample_count: usize, sample_rate_hz: u32, channels: u8) -> u6
 
 /// Normalized RMS energy in `[0.0, 1.0]` (`sqrt(mean(s²)) / 32768`).
 ///
-/// Donor VAD named an Energy (RMS) algorithm but left `detect()` unimplemented.
+/// Engine VAD named an Energy (RMS) algorithm but left `detect()` unimplemented.
 /// This is the actual energy primitive the session / VAD helpers consume.
 pub fn pcm16_rms(samples: &[i16]) -> f32 {
     if samples.is_empty() {
@@ -127,7 +127,7 @@ pub fn pcm16_to_le_bytes(samples: &[i16]) -> Vec<u8> {
 
 /// MiniMax T2A hex string → audio bytes (whitespace ignored).
 ///
-/// Recovered from `legacy/donor/apeireth-voice/src/minimax_live.rs`. The HTTP
+/// Recovered from `legacy/canonical/apeireth-voice/src/minimax_live.rs`. The HTTP
 /// client around it is discarded (v2 already owns MiniMax TTS request shaping).
 pub fn hex_decode_audio(hex: &str) -> Result<Vec<u8>, AudioFrameError> {
     let cleaned: Vec<u8> = hex.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
@@ -159,7 +159,7 @@ fn hex_nibble(b: u8) -> Result<u8, AudioFrameError> {
     }
 }
 
-/// One PCM16 analysis frame. Geometry defaults to the donor 16 kHz / 512-sample
+/// One PCM16 analysis frame. Geometry defaults to the canonical 16 kHz / 512-sample
 /// model; a trailing partial frame may be shorter.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pcm16Frame {
@@ -174,7 +174,7 @@ pub struct Pcm16Frame {
 }
 
 impl Pcm16Frame {
-    /// Build a frame from samples at the donor sample rate. Empty is rejected.
+    /// Build a frame from samples at the canonical sample rate. Empty is rejected.
     pub fn from_samples(samples: Vec<i16>) -> Result<Self, AudioFrameError> {
         if samples.is_empty() {
             return Err(AudioFrameError::Empty);
@@ -197,7 +197,7 @@ impl Pcm16Frame {
         }
     }
 
-    /// Frame length in samples (donor field `frame_length`).
+    /// Frame length in samples (canonical field `frame_length`).
     pub fn frame_length(&self) -> u32 {
         self.samples.len() as u32
     }
@@ -245,7 +245,7 @@ impl Pcm16Buffer {
         })
     }
 
-    /// Donor `assert_sample_rate_hardcode`.
+    /// Engine `assert_sample_rate_hardcode`.
     pub fn assert_sample_rate(&self) -> Result<(), AudioFrameError> {
         if self.sample_rate != PCM16_SAMPLE_RATE_HZ {
             return Err(AudioFrameError::UnsupportedSampleRate {
@@ -256,7 +256,7 @@ impl Pcm16Buffer {
         Ok(())
     }
 
-    /// Donor `assert_duration_within_limit` (30 s).
+    /// Engine `assert_duration_within_limit` (30 s).
     pub fn assert_duration_within_limit(&self) -> Result<(), AudioFrameError> {
         if self.duration_ms > PCM16_MAX_DURATION_MS {
             return Err(AudioFrameError::TooLong {
@@ -298,7 +298,7 @@ impl Pcm16Buffer {
     }
 }
 
-/// Split a PCM16 stream into donor-sized frames. Trailing partial frames are kept.
+/// Split a PCM16 stream into canonical-sized frames. Trailing partial frames are kept.
 pub fn split_pcm16_frames(samples: &[i16], sample_rate: u32, channels: u8) -> Vec<Pcm16Frame> {
     if samples.is_empty() {
         return Vec::new();

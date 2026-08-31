@@ -56,7 +56,7 @@ struct SearchMatch {
     /// 1-based byte column of the first match on the case-folded line.
     /// `0` for filename matches (no line content).
     column: usize,
-    /// Non-overlapping occurrence count on this line (donor CodeSearcher semantics).
+    /// Non-overlapping occurrence count on this line (canonical CodeSearcher semantics).
     occurrences: usize,
 }
 
@@ -324,7 +324,7 @@ impl SearchTool {
 /// Count non-overlapping literal hits on a case-folded line.
 ///
 /// Returns `(occurrences, first_column)` where `first_column` is 1-based on the
-/// case-folded line (donor CodeSearcher: positions computed after lowercasing).
+/// case-folded line (positions computed after lowercasing).
 fn literal_line_hits(line_lower: &str, query_lower: &str) -> (usize, usize) {
     if query_lower.is_empty() {
         return (0, 0);

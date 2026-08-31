@@ -1,7 +1,7 @@
 //! P-arch (2026-08-28): OrganOrchestrator 类似 `AwakeCompanion` 真实施 v2.
 //!
-//! 1:1 翻译 v1 `legacy/donor/apeireth-companion/src/runtime_brain.rs` +
-//! `legacy/donor/apeireth-companion/src/organs.rs`:
+//! 1:1 翻译 v1 `legacy/canonical/apeireth-companion/src/runtime_brain.rs` +
+//! `legacy/canonical/apeireth-companion/src/organs.rs`:
 //!
 //! - 9 organ process 串联 (per R11 spec §4.1: E4 → F1 → F4 → F6 → W1 → W2 → W3 → E7 → Memory)
 //! - 8 重 gate (per v1 `AwakeCompanion::tick` 第 2 步 + `emergence.rs:460-503` 1:1:
@@ -91,7 +91,7 @@ pub use apeireth_plugin::organ::InitiativeGate as OrganOrchestratorGate;
 /// - Retired = 5, `state.rs:26-44` 1:1 翻译).
 ///
 /// **0 装诚实** (子代理 R7 独立判断):
-/// - v1 真状态机在 `apeireth-evolution` crate (`legacy/donor/` workspace exclude),
+/// - v1 真状态机在 `apeireth-evolution` crate (`legacy/canonical/` workspace exclude),
 ///   `EmergenceLoop` 内部**不**含状态机.
 /// - v2 `PolicyStage` (per `emergence.rs:465-471`) 是前向声明; Orchestrator 本地 `PolicyStage`
 ///   同样前向声明 (per 子代理 R12 0 装诚实: 不假装"已接 evolution crate").
@@ -288,7 +288,7 @@ impl Default for OrchestratorLoopConfig {
 
 /// 关系深度 trait (per v1 `apeireth-companion::emergence::RelationshipState` 1:1).
 ///
-/// **0 装诚实**: trait 是抽象, 真生产路径 Bond (`legacy/donor/apeireth-core::bond`)
+/// **0 装诚实**: trait 是抽象, 真生产路径 Bond (`legacy/canonical/apeireth-core::bond`)
 /// 在 workspace exclude; runtime 侧提供 `LocalOrchestratorRelationship` 占位。
 pub trait RelationshipState: Send + Sync {
     /// 0..1 的关系深度
@@ -500,7 +500,7 @@ pub enum OrchestratorDecision {
 ///
 /// **0 装诚实**:
 /// - 5 状态机本地驱动是 forward-declared, 真生产路径接 evolution crate
-/// - Bond (per v1 `loop_: EmergenceLoop<Bond>`) 在 legacy/donor/, runtime 侧用
+/// - Bond (per v1 `loop_: EmergenceLoop<Bond>`) 在 legacy/canonical/, runtime 侧用
 ///   `LocalOrchestratorRelationship` 占位
 /// - governance 13 键洋葱门 = `Arc<dyn SovereigntyGate>` (真实接入待 governance 真接)
 pub struct OrganOrchestrator<RS: RelationshipState + 'static> {

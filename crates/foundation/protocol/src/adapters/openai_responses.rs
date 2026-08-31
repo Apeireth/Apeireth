@@ -9,10 +9,10 @@
 //! - **响应 `output`** 是结构化数组 (跟 Chat Completions 的 choices 不同)
 //! - **顶层 `output_text`** 字段 (server 拼出来的纯文本)
 //!
-//! **借鉴 VCP**:
+//! **设计参考: TopologicalEngine**:
 //! - `routes/protocolBridge.js:210-220` `buildImmediateResponsesPayload` 的 output
 //!   数组结构 (item with `content[0].text`)
-//! - 字段命名约定: `output_text` 顶层 + `output[0].content[0].text` (VCP 真代码)
+//! - 字段命名约定: `output_text` 顶层 + `output[0].content[0].text` (TopologicalEngine 真代码)
 
 use crate::adapter::ProtocolAdapter;
 use crate::error::ProtocolError;
@@ -58,7 +58,7 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
         let mut body = Map::new();
         body.insert("model".into(), Value::String(req.model.clone()));
 
-        // 借鉴 VCP: system 提到顶层 instructions
+        // 设计参考: TopologicalEngine: system 提到顶层 instructions
         let mut instructions: Option<String> = None;
         let mut non_system: Vec<&crate::normalized::NormalizedMessage> = Vec::new();
         for m in &req.messages {
@@ -80,7 +80,7 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
             body.insert("instructions".into(), Value::String(ins));
         }
 
-        // 借鉴 VCP `routes/protocolBridge.js:210-220` buildImmediateResponsesPayload:
+        // 设计参考: TopologicalEngine `routes/protocolBridge.js:210-220` buildImmediateResponsesPayload:
         // output 是结构化数组; input 归一化为 OpenAI Responses 的 input item 数组
         let input_items: Vec<Value> = non_system
             .iter()
@@ -202,7 +202,7 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
             body.insert("tool_choice".into(), v);
         }
 
-        // parallel_tool_calls 借鉴 VCP protocolBridge.js:169-171
+        // parallel_tool_calls 设计参考: TopologicalEngine protocolBridge.js:169-171
         if let Some(p) = req.metadata.get("parallel_tool_calls") {
             if let Ok(b) = p.parse::<bool>() {
                 body.insert("parallel_tool_calls".into(), Value::Bool(b));
@@ -224,7 +224,7 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
             .ok_or_else(|| ProtocolError::missing("model"))?
             .to_string();
 
-        // 借鉴 VCP `buildImmediateResponsesPayload`:
+        // 设计参考: TopologicalEngine `buildImmediateResponsesPayload`:
         // output 是数组,每个 item 有 type + content[0].text
         let mut content = String::new();
         let mut tool_calls: Vec<ToolCall> = Vec::new();
@@ -283,7 +283,7 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
             }
         }
 
-        // 优先用顶层 output_text (VCP 拼出来的纯文本)
+        // 优先用顶层 output_text (TopologicalEngine 拼出来的纯文本)
         if let Some(top_text) = raw.get("output_text").and_then(|v| v.as_str()) {
             if !top_text.is_empty() && content.is_empty() {
                 content = top_text.to_string();
@@ -342,7 +342,7 @@ mod tests {
 
     #[test]
     fn request_system_promoted_to_instructions() {
-        // 借鉴 VCP protocolBridge.js:210-220: system → 顶层 instructions
+        // 设计参考: TopologicalEngine protocolBridge.js:210-220: system → 顶层 instructions
         let req = NormalizedRequest::new(
             "gpt-4o",
             vec![
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn request_multi_system_concatenated() {
-        // 借鉴 VCP: 多段 system 拼起来
+        // 设计参考: TopologicalEngine: 多段 system 拼起来
         let req = NormalizedRequest::new(
             "gpt-4o",
             vec![
@@ -375,7 +375,7 @@ mod tests {
 
     #[test]
     fn request_input_uses_input_text() {
-        // 借鉴 VCP: input item 的 content 用 input_text 不是 text
+        // 设计参考: TopologicalEngine: input item 的 content 用 input_text 不是 text
         let req = NormalizedRequest::new("gpt-4o", vec![NormalizedMessage::user("Hello")]);
         let v = OpenAiResponsesAdapter::new().adapt_request(&req).unwrap();
         assert_eq!(v["input"][0]["content"][0]["type"], "input_text");
@@ -384,7 +384,7 @@ mod tests {
 
     #[test]
     fn request_tool_as_function_call_output() {
-        // 借鉴 VCP: tool message → function_call_output
+        // 设计参考: TopologicalEngine: tool message → function_call_output
         let req = NormalizedRequest::new(
             "gpt-4o",
             vec![
@@ -426,7 +426,7 @@ mod tests {
 
     #[test]
     fn request_parallel_tool_calls_via_metadata() {
-        // 借鉴 VCP protocolBridge.js:169-171
+        // 设计参考: TopologicalEngine protocolBridge.js:169-171
         let mut req = NormalizedRequest::new("gpt-4o", vec![NormalizedMessage::user("hi")]);
         req.metadata
             .insert("parallel_tool_calls".into(), "true".into());
@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn response_with_output_array_message() {
-        // 借鉴 VCP buildImmediateResponsesPayload: output[0].content[0].text
+        // 设计参考: TopologicalEngine buildImmediateResponsesPayload: output[0].content[0].text
         let raw = json!({
             "id": "resp_123",
             "object": "response",
@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     fn response_uses_top_level_output_text_when_no_output() {
-        // 借鉴 VCP buildImmediateResponsesPayload: 顶层 output_text 兜底
+        // 设计参考: TopologicalEngine buildImmediateResponsesPayload: 顶层 output_text 兜底
         let raw = json!({
             "id": "x", "model": "gpt-4o",
             "status": "completed",

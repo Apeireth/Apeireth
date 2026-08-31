@@ -4,7 +4,7 @@
 //! deterministic evaluation path. Provider calls are injected by the runtime
 //! through a small adapter; this crate never owns a provider client.
 //!
-//! 借鉴 v1 `apeireth-team-lead` (14 调度工具) + `apeireth-council` (7 advisor
+//! 核心模块 apeireth-team-lead: (14 调度工具) + `apeireth-council` (7 advisor
 //! + 按住机制) + `apeireth-orchestrator` (plan/impl/review). **v2 形态**:
 //! - `Advisor` trait (per-domain LLM 评审; 7 advisor 是 7 个具体 struct)
 //! - `Council::decide(proposal) -> CouncilVerdict` (按住 + 多意见加权)

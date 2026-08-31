@@ -2,7 +2,7 @@
 //! (被动路径, 确定性无 LLM).
 //!
 //! 1:1 翻译 v1 `apeireth-companion::causal_world_model` 中 **W3 边挖掘** 部分
-//! (v1 `MineCausalEdges`, per `legacy/donor/apeireth-companion/src/causal_world_model.rs:170-274`).
+//! (v1 `MineCausalEdges`, per `legacy/canonical/apeireth-companion/src/causal_world_model.rs:170-274`).
 //!
 //! ## 与 W2 (causal_world_model 主动 MCTS LLM) 严格区分
 //!

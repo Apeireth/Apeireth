@@ -1,7 +1,7 @@
-//! JSON property-bag filters for retrieval (salvage of donor
+//! JSON property-bag filters for retrieval (salvage of canonical
 //! `apeireth-graph-primitive::query` predicates).
 //!
-//! Donor `NodeQuery` / `EdgeQuery` AND-ed kind + JSON equality over a property
+//! Engine `NodeQuery` / `EdgeQuery` AND-ed kind + JSON equality over a property
 //! bag. Canonical [`MemoryFilter`] only has `as_of` / tombstone / limit, and
 //! [`VectorIndex`] stores no metadata. This module is a pure matcher the
 //! persistent vector index (and any caller with a JSON bag) can apply **after**

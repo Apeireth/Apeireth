@@ -15,7 +15,7 @@
 //! - C1 0 commit: ✅ 0 主动 commit (本文件 untracked, 等 Mavis 整合 #5 拍板)
 //! - 0 push: ✅ 0 主动 push (等 1.0 release 配 GitHub remote)
 //!
-//! **借鉴 ID (per 决策 #22 §3 严格化)**: `R126-philo-8-BORROW-apeireth/conventions-vR125-2026-08-10`
+//! **设计参考: ID (per 决策 #22 §3 严格化)**: `R126-philo-8-BORROW-apeireth/conventions-vR125-2026-08-10`
 //! - 0 装 = 内部 extension (R125 16:55 09-anchor.md 已升级 8 锚 doc-level, 本 R126 实施 src-level)
 //! - 0 装 PASS 严守: ✅ 0 假装"已借鉴"外部, 0 装 src 写完 + 内联 tests pass
 //!
@@ -37,7 +37,7 @@
 /// **原 6 锚 (LOCKED 0 改, per APEIRETH-CONVENTIONS.md §9)**:
 /// - `S-1` 北极星导向 — 服务 ASI 北极星 (per 主人 22:33)
 /// - `S-2` 实事求是 — 基于现状不重写, 核验后写 (per 主人 17:43, R119 主人 8/10 01:14 拍板)
-/// - `O-2` 走在前人经验上 — 借鉴 Hermes / OpenClaw / VCP / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (per 主人 19:33)
+/// - `O-2` 走在前人经验上 — 吸收业界前沿与系统工程最佳实践 (per 主人 19:33)
 /// - `O-3` 干到底 — 决策立刻沉淀, 1 commit 总 (per 主人 23:44, 主人 8/9 拍板)
 /// - `O-4` 任何人都能接手 — 4 件套齐全, 顶层瘦 (per 主人 00:56, R119 主人 8/10 拍板)
 /// - `O-5` 不假装 — 12 键编译期 hardcode, 8 项不修改承诺形式撤销后原意保留 (per 主人 17:58, R119)
@@ -48,7 +48,7 @@
 ///
 /// **命名空间 (per 决策 #22 §2.5)**:
 /// - S-* = Subjective 主体哲学锚 (跟"主"主人 / 主体连续性 关联)
-/// - O-* = Objective 客观哲学锚 (跟"客"客观守门 / 借鉴 / 持续性 关联)
+/// - O-* = Objective 客观哲学锚 (跟"客"客观守门 / 设计参考: / 持续性 关联)
 ///
 /// **8 哲学锚 vs 6 哲学锚关系 (向后兼容)**:
 /// - 6 锚: S-1, S-2, O-2, O-3, O-4, O-5 (顺序锁定 per `apeireth-council::PHILOSOPHICAL_ANCHORS`)
@@ -109,7 +109,7 @@ impl PhilosophicalAnchor8 {
             Self::S2TruthFromReality => "S-2 实事求是 — 基于现状不重写, 核验后写 (主 17:43)",
             Self::S3QualityEngineering => "S-3 质量工程化 — 代码质量 = 工程信誉, clippy 150 + doc 1077 清 (R123-1 主 16:55)",
             Self::O1SafetyFirst => "O-1 安全优先 — 安全 > 功能 > 性能, 6 重守门 v6 (R125-5 主 16:55)",
-            Self::O2StandingOnShoulders => "O-2 走在前人经验上 — 借鉴 Hermes / OpenClaw / VCP / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (主 19:33)",
+            Self::O2StandingOnShoulders => "O-2 走在前人经验上 — 吸收业界前沿与系统工程最佳实践 (主 19:33)",
             Self::O3SeeItThrough => "O-3 干到底 — 决策立刻沉淀, 1 commit 总 (主 23:44)",
             Self::O4AnyoneCanTakeOver => "O-4 任何人都能接手 — 4 件套齐全, 顶层瘦 (主 00:56)",
             Self::O5NoPretend => "O-5 不假装 — 12 键编译期 hardcode (主 17:58)",

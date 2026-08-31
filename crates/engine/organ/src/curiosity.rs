@@ -1,8 +1,8 @@
-//! E4 Curiosity 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/curiosity.rs`).
+//! E4 Curiosity 器官真实现 (v2 移植版, per `legacy/canonical/apeireth-companion/src/curiosity.rs`).
 //!
 //! **v1 → v2 1:1 翻译纪律**:
 //! - v1 真实现是**确定性机制件** (回声合成/偏置采样/预算/路由全部可测, 无 LLM 依赖,
-//!   per `legacy/donor/apeireth-companion/src/curiosity.rs:13-17` 文档明示).
+//!   per `legacy/canonical/apeireth-companion/src/curiosity.rs:13-17` 文档明示).
 //! - v2 真实现保留 v1 全部确定性算法: `CuriosityEngine` (回声采样 + 加深 + 预算 + 路由).
 //! - v2 trait 接口 (`OrganTrait`) **保留** LLM factory 字段 (`llm_factory()`), 默认 None.
 //!   未来 v2.1 路线 (per task §4) 可加"LLM 探索具体内容"路径, 但**不破坏** v1 确定性

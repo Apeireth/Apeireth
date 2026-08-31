@@ -1,4 +1,4 @@
-//! Graph traversal helpers over [`MemoryGraph`] (salvage of donor
+//! Graph traversal helpers over [`MemoryGraph`] (salvage of canonical
 //! `apeireth-graph-primitive` traversal + pathfinding).
 //!
 //! Canonical [`MemoryGraph`] already owns BFS (`traverse`) and unweighted
@@ -151,7 +151,7 @@ pub fn walk(
 /// Weighted shortest path using Dijkstra on outgoing edges.
 ///
 /// Returns `(path, total_weight)`. Negative or non-finite weights are skipped
-/// (donor Dijkstra does not support them). A self-path is `([from], 0.0)` when
+/// (canonical Dijkstra does not support them). A self-path is `([from], 0.0)` when
 /// the node exists. Missing endpoints or an unreachable target return `None`.
 pub fn dijkstra_shortest_path(
     graph: &MemoryGraph,
@@ -217,7 +217,7 @@ fn finite_nonneg_bits(x: f64) -> Option<u64> {
 
 /// Enumerate simple directed paths from `from` to `to`, capped by `max_paths`
 /// and `max_depth` (path length in nodes). The trivial self-path is omitted
-/// (donor behaviour). Neighbors are visited in id-ascending order.
+/// (canonical behaviour). Neighbors are visited in id-ascending order.
 pub fn all_paths(
     graph: &MemoryGraph,
     from: &MemoryId,

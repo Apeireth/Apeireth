@@ -1,12 +1,12 @@
 //! Goal state machine + crash-safe persist (library, default-off).
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/goal.rs` (DSH-style
+//! Canonical implementation module. (DSH-style
 //! single-current-goal machine). This is a **mechanism**: one current goal,
 //! guarded phase transitions, revision CAS, `rounds_started` only on
 //! goal-driven turns, tmp+rename persist. It is **not** a round driver, not
 //! a daemon, and not a second agent loop.
 //!
-//! Semantics kept from the donor:
+//! Semantics kept from the canonical:
 //! - Single current goal. `create` refuses while a non-completed goal exists.
 //! - `revision` is strictly +1 on every committed mutation.
 //! - Illegal phase transitions leave state unchanged.
@@ -14,11 +14,11 @@
 //! - `rounds_started` increments only via [`GoalService::admit_round`].
 //! - Hitting `max_goal_rounds` auto-blocks with code `max-rounds`.
 //!
-//! Honest adaptations vs the donor:
-//! - Donor claimed compare-and-set (`StaleRevision`) but never compared an
+//! Honest adaptations vs the canonical:
+//! - Engine claimed compare-and-set (`StaleRevision`) but never compared an
 //!   expected revision. This port **enforces** CAS: every mutation takes the
 //!   caller's expected revision and rejects a stale handle.
-//! - Donor swallowed persist errors (`let _ = store.save`). This port surfaces
+//! - Engine swallowed persist errors (`let _ = store.save`). This port surfaces
 //!   typed I/O / serialization errors; in-memory state is not advanced if
 //!   persist fails.
 //! - No `uuid` / `chrono` crate deps. Ids are minted from

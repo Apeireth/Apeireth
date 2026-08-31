@@ -1,6 +1,6 @@
 //! Motivation / value scoring formula (library, default-off).
 //!
-//! Recovered from `legacy/donor/apeireth-motivation/src/lib.rs` §13
+//! Canonical implementation module. §13
 //! `motivation_score`. Pure f64 math: three named components, proposed
 //! weights `(0.35, 0.35, 0.30)`, hard threshold `0.85`.
 //!
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 /// Proposed §13 weights (autonomy, value-stability, intrinsic). Not frozen.
 pub const MOTIVATION_WEIGHTS: (f64, f64, f64) = (0.35, 0.35, 0.30);
 
-/// Hard threshold the donor used (`MIN_EVIDENCE_SCORE` = 0.85).
+/// Hard threshold the canonical used (`MIN_EVIDENCE_SCORE` = 0.85).
 pub const MIN_MOTIVATION_THRESHOLD: f64 = 0.85;
 
 /// Alias kept for salvage-07 re-exports (`MOTIVATION_THRESHOLD`).

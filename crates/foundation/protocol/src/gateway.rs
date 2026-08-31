@@ -100,7 +100,7 @@ impl ProtocolKind {
     /// Case-insensitive; only the 4 HTTP LLM kinds are detectable (Acp / Mcp /
     /// OpenClawGateway have no canonical URL path).
     ///
-    /// Match order mirrors the donor: Anthropic Messages → OpenAI Responses →
+    /// Match order mirrors the canonical: Anthropic Messages → OpenAI Responses →
     /// OpenAI Chat → Gemini, first hit wins, `None` when nothing matches.
     pub fn detect_from_path(path: &str) -> Option<Self> {
         Self::detect_from_hints(path, None, None)
@@ -133,7 +133,7 @@ impl ProtocolKind {
         if p.contains("/v1beta/models/") || p.contains(":generatecontent") {
             return Some(Self::Gemini);
         }
-        // Header-based fallback (donor detect.rs:24-32). Path always wins.
+        // Header-based fallback (canonical detect.rs:24-32). Path always wins.
         if anthropic_version
             .map(|v| !v.trim().is_empty())
             .unwrap_or(false)
@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     fn detect_order_messages_before_chat() {
-        // First hit wins, donor order preserved.
+        // First hit wins, canonical order preserved.
         assert_eq!(
             ProtocolKind::detect_from_path("/v1/messages"),
             Some(ProtocolKind::AnthropicMessages)
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn detect_via_anthropic_version_header() {
-        // Donor detect.rs: detect_via_anthropic_version.
+        // Engine detect.rs: detect_via_anthropic_version.
         assert_eq!(
             ProtocolKind::detect_from_hints("/random", Some("2023-06-01"), None),
             Some(ProtocolKind::AnthropicMessages)

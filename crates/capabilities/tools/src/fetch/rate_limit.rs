@@ -13,9 +13,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
-/// Default limit: 60 requests per 60 seconds (donor default).
+/// Default limit: 60 requests per 60 seconds (canonical default).
 pub const DEFAULT_MAX_REQUESTS: usize = 60;
-/// Default window: 60 seconds (donor default).
+/// Default window: 60 seconds (canonical default).
 pub const DEFAULT_WINDOW: Duration = Duration::from_secs(60);
 
 /// Per-host sliding-window rate limiter.

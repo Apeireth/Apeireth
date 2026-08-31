@@ -11,7 +11,7 @@
 //! - `ProtocolBridge` trait + 4 Bridge struct (R37-1: 高层 facade, 砍 router 中间层)
 //! - `ProtocolRouter` (R37-1 起 `#[deprecated]`, 0.5 release 后删)
 //!
-//! **借鉴 VCP 真代码** (`research/source/vcptoolbox/`):
+//! **设计参考: TopologicalEngine 真代码** (`research/source/vcptoolbox/`):
 //! - 归一化 message role: `routes/protocolBridge.js:47-52` `normalizeMessageRole`
 //! - 归一化 content: `routes/protocolBridge.js:21-42` `normalizeTextContent`
 //! - 工具归一化: `routes/protocolBridge.js:63-89` `toOpenAiChatTool` 3 步判定
@@ -24,8 +24,8 @@
 //!
 //! **不假装** (战役 0 主哲学锚 #1 不漂移):
 //! - ✅ 4 协议都真实现, 不只 OpenAI (R17 战役 0 已直连)
-//! - ✅ 字段级引用 VCP 真代码 (文件 + 行号 + 真函数名 + 真字段名)
-//! - ✅ 不抄 VCP 业务代码, 只借工程模式 (归一化思想)
+//! - ✅ 字段级引用 TopologicalEngine 真代码 (文件 + 行号 + 真函数名 + 真字段名)
+//! - ✅ 不抄 TopologicalEngine 业务代码, 只借工程模式 (归一化思想)
 //! - ✅ unit tests 覆盖归一化核心, ≥ 50 个 test
 //!
 //! **不修改承诺**:
@@ -140,7 +140,7 @@ pub const PROTOCOL_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// 4 协议总数 (编译期 hardcode, 防止加新协议忘改 docs)
 pub const PROTOCOL_COUNT: usize = 4;
 
-/// 默认 OpenAI Chat 路径 (VCP 兼容: `/v1/chat/completions`)
+/// 默认 OpenAI Chat 路径 (TopologicalEngine 兼容: `/v1/chat/completions`)
 pub const OPENAI_CHAT_PATH: &str = "/v1/chat/completions";
 
 /// 默认 OpenAI Responses 路径
@@ -152,18 +152,18 @@ pub const ANTHROPIC_MESSAGES_PATH: &str = "/v1/messages";
 /// 默认 Gemini 路径 (URL 路径含 model 占位符)
 pub const GEMINI_PATH_TEMPLATE: &str = "/v1beta/models/{model}:generateContent";
 
-/// 借鉴 VCP Keep-Alive 5 字段 (战役 1-2 在 `apeireth-http-client` 落地)
+/// 设计参考: TopologicalEngine Keep-Alive 5 字段 (战役 1-2 在 `apeireth-http-client` 落地)
 /// 当前仅在编译期 hardcode, 战役 1-2 真用 (`research/source/vcptoolbox/modules/chatCompletionHandler.js:22-28`)
 ///
 /// **借鉴来源**: `chatCompletionHandler.js:22-28` `agentOptions = { keepAlive: true, keepAliveMsecs: 1000, freeSocketTimeout: 8000, scheduling: 'lifo', maxSockets: 10000 }`
 pub const KEEP_ALIVE_KEEP_ALIVE: bool = true;
-/// VCP `chatCompletionHandler.js:24` `keepAliveMsecs: 1000` (TCP 探针 1s)
+/// TopologicalEngine `chatCompletionHandler.js:24` `keepAliveMsecs: 1000` (TCP 探针 1s)
 pub const KEEP_ALIVE_KEEP_ALIVE_MSECS: u64 = 1000;
-/// VCP `chatCompletionHandler.js:25` `freeSocketTimeout: 8000` (8s 杀 zombie)
+/// TopologicalEngine `chatCompletionHandler.js:25` `freeSocketTimeout: 8000` (8s 杀 zombie)
 pub const KEEP_ALIVE_FREE_SOCKET_TIMEOUT: u64 = 8000;
-/// VCP `chatCompletionHandler.js:26` `scheduling: 'lifo'` (优先复用最新鲜)
+/// TopologicalEngine `chatCompletionHandler.js:26` `scheduling: 'lifo'` (优先复用最新鲜)
 pub const KEEP_ALIVE_SCHEDULING_LIFO: bool = true;
-/// VCP `chatCompletionHandler.js:27` `maxSockets: 10000` (高并发上限)
+/// TopologicalEngine `chatCompletionHandler.js:27` `maxSockets: 10000` (高并发上限)
 pub const KEEP_ALIVE_MAX_SOCKETS: usize = 10000;
 
 /// Anthropic max_tokens 默认 (协议要求必填, R17 战役 0 验证 minimaxi 兼容)
@@ -186,26 +186,26 @@ const _: () = {
         "PROTOCOL_COUNT must be 4 (OpenAI Chat / OpenAI Responses / Anthropic / Gemini)"
     );
 
-    // Keep-Alive 5 字段 (借鉴 VCP chatCompletionHandler.js:22-28)
+    // Keep-Alive 5 字段 (设计参考: TopologicalEngine chatCompletionHandler.js:22-28)
     assert!(
         KEEP_ALIVE_KEEP_ALIVE,
-        "Keep-Alive must be enabled (VCP 真代码 keepAlive: true)"
+        "Keep-Alive must be enabled (TopologicalEngine 真代码 keepAlive: true)"
     );
     assert!(
         KEEP_ALIVE_KEEP_ALIVE_MSECS >= 100,
-        "Keep-Alive interval must be >= 100ms (VCP: 1000ms)"
+        "Keep-Alive interval must be >= 100ms (TopologicalEngine: 1000ms)"
     );
     assert!(
         KEEP_ALIVE_FREE_SOCKET_TIMEOUT >= 1000,
-        "Free socket timeout must be >= 1s (VCP: 8000ms 防 zombie)"
+        "Free socket timeout must be >= 1s (TopologicalEngine: 8000ms 防 zombie)"
     );
     assert!(
         KEEP_ALIVE_SCHEDULING_LIFO,
-        "Scheduling must be LIFO (VCP: 'lifo' 优先复用最新鲜连接)"
+        "Scheduling must be LIFO (TopologicalEngine: 'lifo' 优先复用最新鲜连接)"
     );
     assert!(
         KEEP_ALIVE_MAX_SOCKETS >= 100,
-        "Max sockets must be >= 100 (VCP: 10000)"
+        "Max sockets must be >= 100 (TopologicalEngine: 10000)"
     );
 
     // 温度上限

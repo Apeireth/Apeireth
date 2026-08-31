@@ -1,6 +1,6 @@
 //! P-arch (2026-08-28): W2 Causal World Model + W3 Causal Edge Mining 器官真移植 v2 (LLM 重).
 //!
-//! v1 `apeireth-companion::causal_world_model::CausalWorldModel` 1:1 翻译 (`legacy/donor/apeireth-companion/src/causal_world_model.rs`,
+//! v1 `apeireth-companion::causal_world_model::CausalWorldModel` 1:1 翻译 (`legacy/canonical/apeireth-companion/src/causal_world_model.rs`,
 //! 1061 行, TP32 / W2 + W3).
 //!
 //! **与 E4/F1/F4/F6 不同**: v1 W2 是 **LLM 重** (per v1 doc: "LLM 推理: 因果图反事实推演").

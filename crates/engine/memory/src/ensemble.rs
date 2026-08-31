@@ -1,6 +1,6 @@
 //! Ensemble forecast aggregation + Hanson LMSR prediction market.
 //!
-//! Recovered from `legacy/donor/apeireth-cognition/src/forecast.rs`.
+//! Canonical implementation module.
 //!
 //! Two complementary aggregators, both pure math and independent of any LLM
 //! transport:
@@ -14,7 +14,7 @@
 //!   outcomes.
 //!
 //! LMSR uses a log-sum-exp shift for numerical stability (an improvement over
-//! the donor's raw `exp(q/b)`). No provider, store, or loop is owned here.
+//! the canonical's raw `exp(q/b)`). No provider, store, or loop is owned here.
 
 #![deny(unsafe_code)]
 
@@ -307,7 +307,7 @@ impl PredictionMarket {
     }
 
     /// Offset each `q_i` by `1/N`. Prices are translation-invariant, so this
-    /// is cosmetic; it exists for donor API parity.
+    /// is cosmetic; it exists for canonical API parity.
     pub fn uniform(config: MarketConfig) -> Self {
         let mut m = Self::new(config);
         let n = m.config.num_outcomes as f64;

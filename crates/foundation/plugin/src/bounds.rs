@@ -1,7 +1,7 @@
 //! Manifest bound and permission checks recovered from
-//! `legacy/donor/apeireth-extension` (`manifest.rs`, `sandbox.rs`, `audit.rs`).
+//! `legacy/canonical/apeireth-extension` (`manifest.rs`, `sandbox.rs`, `audit.rs`).
 //!
-//! The donor parsed `extension.toml` and ran a second plugin execution manager.
+//! The canonical parsed `extension.toml` and ran a second plugin execution manager.
 //! v2 plugins are static and in-process; this module keeps the **numeric and
 //! permission algorithms** so a caller can validate metadata before treating a
 //! declaration as callable. It does not register plugins and does not invoke
@@ -12,15 +12,15 @@ use std::collections::BTreeSet;
 use crate::manifest::PluginManifest;
 use crate::semver;
 
-/// Donor name length cap (`extension.toml` `name`, 1..=64).
+/// Engine name length cap (`extension.toml` `name`, 1..=64).
 pub const MAX_NAME_LEN: usize = 64;
-/// Donor description length cap.
+/// Engine description length cap.
 pub const MAX_DESC_LEN: usize = 512;
-/// Donor permission-string length cap.
+/// Engine permission-string length cap.
 pub const MAX_PERMISSION_LEN: usize = 64;
-/// Donor permission-list length cap.
+/// Engine permission-list length cap.
 pub const MAX_PERMISSIONS: usize = 32;
-/// Donor version-string length cap (the strict parser is tighter).
+/// Engine version-string length cap (the strict parser is tighter).
 pub const MAX_VERSION_LEN: usize = 32;
 /// Absolute byte ceiling (16 MiB) for declared I/O.
 pub const MAX_IO_BYTES: usize = 16 * 1024 * 1024;
@@ -43,7 +43,7 @@ pub struct ResourceBounds {
 }
 
 impl ResourceBounds {
-    /// Donor-style defaults: 64 KiB in/out, 1 s timeout.
+    /// Engine-style defaults: 64 KiB in/out, 1 s timeout.
     pub const fn default_limits() -> Self {
         Self {
             max_input_bytes: 65_536,
@@ -119,7 +119,7 @@ impl std::error::Error for BoundError {}
 
 /// Skill-style kebab-case id: ASCII lowercase + digit + `-`, no consecutive
 /// dashes, no leading or trailing dash. Recovered from
-/// `legacy/donor/apeireth-skills` `is_valid_id`. Distinct from core
+/// `legacy/canonical/apeireth-skills` `is_valid_id`. Distinct from core
 /// [`apeireth_core::kernel::PluginId`] grammar, which also allows `.` and `_`.
 pub fn is_valid_kebab(id: &str) -> bool {
     if id.is_empty() || id.starts_with('-') || id.ends_with('-') {
@@ -218,7 +218,7 @@ pub fn validate_resource_bounds(bounds: &ResourceBounds) -> Result<(), BoundErro
     Ok(())
 }
 
-/// Donor audit layer: at least one permission, I/O ≥ 1 KiB, timeout ≤ 10 min.
+/// Engine audit layer: at least one permission, I/O ≥ 1 KiB, timeout ≤ 10 min.
 pub fn audit_bounds(permissions: &[String], bounds: &ResourceBounds) -> Result<(), BoundError> {
     if permissions.is_empty() {
         return Err(BoundError::AuditRejected("no permissions declared".into()));
@@ -305,12 +305,12 @@ pub fn check_call(
     check_input_size(plugin, input_bytes, bounds)
 }
 
-/// Default caller grant from the donor sandbox (`invoke` + `read`).
+/// Default caller grant from the canonical sandbox (`invoke` + `read`).
 pub fn default_caller_permissions() -> BTreeSet<String> {
     ["invoke", "read"].into_iter().map(str::to_string).collect()
 }
 
-/// Privileged grant from the donor sandbox.
+/// Privileged grant from the canonical sandbox.
 pub fn privileged_caller_permissions() -> BTreeSet<String> {
     [
         "invoke", "read", "write", "system", "llm_call", "ask_user", "render",
@@ -323,7 +323,7 @@ pub fn privileged_caller_permissions() -> BTreeSet<String> {
 /// Validate a live [`PluginManifest`] description length and (if present)
 /// strict version. Plugin ids already pass core's stable-id grammar.
 ///
-/// Opt-in: [`crate::PluginManager::register`] does not call this. Donor
+/// Opt-in: [`crate::PluginManager::register`] does not call this. Engine
 /// `extension.toml` required a description and a semver-like version; v2
 /// manifests still allow a free-form version unless a caller asks.
 pub fn validate_plugin_manifest_text(manifest: &PluginManifest) -> Result<(), BoundError> {

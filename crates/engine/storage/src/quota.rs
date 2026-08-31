@@ -1,20 +1,20 @@
 //! Shadow / snapshot quota recovered from `legacy/archived/apeireth-rollback`.
 //!
-//! The donor SnapshotService (file copy + git2) is not ported. This module
+//! The canonical SnapshotService (file copy + git2) is not ported. This module
 //! keeps the 71GB-incident quota algorithm: per-item TTL, per-item size cap,
 //! total size cap, and LRU eviction of the oldest entries until the total
 //! fits. Callers own the actual bytes on disk.
 
 use std::cmp::Ordering;
 
-/// Default per-shadow age cap (7 days). Donor `MAX_SHADOW_AGE_DAYS`.
+/// Default per-shadow age cap (7 days). Engine `MAX_SHADOW_AGE_DAYS`.
 pub const MAX_SHADOW_AGE_DAYS: u64 = 7;
-/// Default per-shadow size cap (100 MiB). Donor `MAX_SHADOW_SIZE_BYTES`.
+/// Default per-shadow size cap (100 MiB). Engine `MAX_SHADOW_SIZE_BYTES`.
 pub const MAX_SHADOW_SIZE_BYTES: u64 = 100 * 1024 * 1024;
-/// Default total shadow size cap (2 GiB). Donor `MAX_TOTAL_SHADOW_SIZE_BYTES`.
+/// Default total shadow size cap (2 GiB). Engine `MAX_TOTAL_SHADOW_SIZE_BYTES`.
 pub const MAX_TOTAL_SHADOW_SIZE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
-/// Quota configuration. Defaults match the donor 71GB-incident constants.
+/// Quota configuration. Defaults match the canonical 71GB-incident constants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QuotaConfig {
     /// Maximum age in days. Entries older than this are expired.

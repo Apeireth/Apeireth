@@ -1,4 +1,4 @@
-//! Policy helpers recovered from the donor tool-approval **rule engine**.
+//! Policy helpers recovered from the canonical tool-approval **rule engine**.
 //!
 //! Canonical ownership is unchanged:
 //!
@@ -20,10 +20,10 @@ use serde_json::Value;
 
 use crate::Decision;
 
-/// Default high-risk capability prefixes (donor RiskRule).
+/// Default high-risk capability prefixes (canonical RiskRule).
 pub const DEFAULT_HIGH_RISK_PREFIXES: [&str; 3] = ["system", "network", "file"];
 
-/// Default approval window (VCP `getTimeoutMs` = 5 minutes).
+/// Default approval window (getTimeoutMs = 5 minutes).
 pub const APPROVAL_TIMEOUT_MS: u64 = 5 * 60 * 1000;
 
 /// Frequency window (1 minute).
@@ -32,7 +32,7 @@ pub const FREQUENCY_WINDOW_MS: u64 = 60_000;
 /// Frequency threshold (3 calls inside the window, including the current one).
 pub const FREQUENCY_MAX_CALLS: u32 = 3;
 
-/// VCP silent-reject suffix.
+/// silent-reject suffix.
 pub const SILENT_REJECT_SUFFIX: &str = "::SilentReject";
 
 /// One historical capability dispatch, used by the frequency helper.
@@ -113,7 +113,7 @@ pub fn parse_approval_entry(entry: &str) -> Option<ParsedApprovalEntry> {
     })
 }
 
-/// Prefix match used by the donor RiskRule (`system.exec`, `file_write`, …).
+/// Prefix match used by the canonical RiskRule (`system.exec`, `file_write`, …).
 pub fn is_high_risk(capability: &str, prefixes: &[&str]) -> bool {
     let lower = capability.to_lowercase();
     prefixes
@@ -220,7 +220,7 @@ impl ApprovalPolicyEngine {
         }
     }
 
-    /// Evaluate in donor order: Blacklist → Trust → Frequency → Risk →
+    /// Evaluate in canonical order: Blacklist → Trust → Frequency → Risk →
     /// ApprovalList → Whitelist. First terminal match wins.
     pub fn evaluate(
         &self,

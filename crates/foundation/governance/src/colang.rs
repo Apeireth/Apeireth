@@ -1,11 +1,11 @@
 //! Colang v1 line parser, AST, validator, and optional DSL guard.
 //!
-//! Recovered from `legacy/donor/apeireth-sovereignty/src/colang_dsl.rs` as a
+//! Canonical implementation module. as a
 //! **library helper**. This is not a second approval authority:
 //!
 //! * it does not implement [`crate::GovernanceHook`]
 //! * it is not installed in [`crate::GovernancePipeline`]
-//! * the donor `SixFoldGuardRunner` / `Governance.process` wrapper is discarded
+//! * the canonical `SixFoldGuardRunner` / `Governance.process` wrapper is discarded
 //!
 //! Callers that want Colang as a policy source must map
 //! [`ColangGuardOutcome`] onto the canonical [`crate::Decision`] themselves.

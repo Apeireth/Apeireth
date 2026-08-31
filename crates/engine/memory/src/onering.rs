@@ -1,14 +1,14 @@
 //! Rolling cross-frontend context ledger (salvage of companion `onering`).
 //!
-//! Donor behaviour recovered:
+//! Engine behaviour recovered:
 //! - Unified timeline keyed by `continuity_id` (SSE / Web / CLI / … share one ledger).
 //! - Monotonic `seq` (AUTOINCREMENT) as the sort key, not wall-clock.
 //! - Count-based prune: keep the most recent `max_records` rows per continuity.
 //! - Ledger is **not** the episode pipeline — table `onering_messages` is a
 //!   sidecar. Extract / dream / reflection keep reading `episodes`.
 //!
-//! Discarded donor shortcuts:
-//! - VCP fuzzy-diff timeline insertion (explicitly not absorbed).
+//! Discarded canonical shortcuts:
+//! - fuzzy-diff timeline insertion (explicitly not absorbed).
 //! - Hard DELETE as the only retention (see [`crate::retention`] for the
 //!   policy object; this module still prunes the rolling window because a
 //!   ledger is a recent-window, not an archive).
@@ -19,7 +19,7 @@ use rusqlite::params;
 
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 
-/// Default per-anchor retention (donor DEFAULT_MAX_RECORDS).
+/// Default per-anchor retention (canonical DEFAULT_MAX_RECORDS).
 pub const DEFAULT_MAX_RECORDS: usize = 200;
 
 /// Legal ledger roles.

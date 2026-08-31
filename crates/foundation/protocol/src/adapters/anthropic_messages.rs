@@ -12,7 +12,7 @@
 //! - 响应 `content` 是块数组 (text / tool_use), 不是 `choices`
 //! - 响应 `stop_reason`: `end_turn` / `max_tokens` / `stop_sequence` / `tool_use`
 //!
-//! **借鉴 VCP**:
+//! **设计参考: TopologicalEngine**:
 //! - `routes/protocolBridge.js:120-156` `normalizeToolChoice` (Anthropic 不支持 tool_choice
 //!   "none" 跟 "auto", 用 tools 列表控制)
 //! - `chatCompletionHandler.js:286-323` `isToolResultError` 的 5 字段语义
@@ -75,7 +75,7 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
         body.insert("model".into(), Value::String(req.model.clone()));
         body.insert("max_tokens".into(), json!(max_tokens));
 
-        // 借鉴 VCP: system 提到顶层
+        // 设计参考: TopologicalEngine: system 提到顶层
         let mut system_text: Option<String> = None;
         let mut non_system: Vec<&crate::normalized::NormalizedMessage> = Vec::new();
         for m in &req.messages {
@@ -93,9 +93,9 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
             body.insert("system".into(), Value::String(s));
         }
 
-        // 借鉴 VCP `routes/protocolBridge.js:120-156`:
+        // 设计参考: TopologicalEngine `routes/protocolBridge.js:120-156`:
         // Anthropic 不支持 tool_choice = "none" / "auto" / "specific"
-        // 通过 tools 列表控制 (VCP 真代码: tool_choice === 'none' 时去掉 tools)
+        // 通过 tools 列表控制 (TopologicalEngine 真代码: tool_choice === 'none' 时去掉 tools)
         let mut tools = req.tools.clone();
         let tool_choice_v: Option<Value> = match &req.tool_choice {
             Some(NormalizedToolChoice::None) => {
@@ -133,7 +133,7 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
                         if !text.is_empty() {
                             blocks.push(json!({"type": "text", "text": text}));
                         }
-                        // 借鉴 VCP: assistant tool_calls → Anthropic tool_use 块
+                        // 设计参考: TopologicalEngine: assistant tool_calls → Anthropic tool_use 块
                         for tc in &m.tool_calls {
                             blocks.push(json!({
                                 "type": "tool_use",
@@ -277,7 +277,7 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
                         });
                     }
                     "thinking" => {
-                        // 借鉴 VCP: thinking 块不进入主 content, 进 raw_metadata
+                        // 设计参考: TopologicalEngine: thinking 块不进入主 content, 进 raw_metadata
                         if let Some(thinking) = block.get("thinking").and_then(|v| v.as_str()) {
                             // 不追加到 content, 留给 raw_metadata
                             let _ = thinking;
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn request_tool_choice_none_drops_tools() {
-        // 借鉴 VCP protocolBridge.js:120-156: tool_choice=none → 去掉 tools
+        // 设计参考: TopologicalEngine protocolBridge.js:120-156: tool_choice=none → 去掉 tools
         let mut req =
             NormalizedRequest::new("claude-sonnet-4", vec![NormalizedMessage::user("hi")]);
         req.max_tokens = Some(100);
@@ -440,7 +440,7 @@ mod tests {
 
     #[test]
     fn request_tool_choice_specific_filters_tools() {
-        // 借鉴 VCP: specific 退化为 filter
+        // 设计参考: TopologicalEngine: specific 退化为 filter
         let mut req =
             NormalizedRequest::new("claude-sonnet-4", vec![NormalizedMessage::user("hi")]);
         req.max_tokens = Some(100);
@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     fn request_assistant_tool_calls_become_tool_use_blocks() {
-        // 借鉴 VCP: OpenAI tool_calls → Anthropic tool_use 块
+        // 设计参考: TopologicalEngine: OpenAI tool_calls → Anthropic tool_use 块
         let tc = ToolCall {
             id: "toolu_1".into(),
             name: "get_weather".into(),
@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn request_tool_message_becomes_user_with_tool_result_block() {
-        // 借鉴 VCP: OpenAI tool → Anthropic user role + tool_result block
+        // 设计参考: TopologicalEngine: OpenAI tool → Anthropic user role + tool_result block
         let mut req = NormalizedRequest::new(
             "claude-sonnet-4",
             vec![NormalizedMessage::tool_result(
@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     fn request_image_url_becomes_anthropic_image_block() {
-        // 借鉴 VCP: image 块两种 source (url / base64)
+        // 设计参考: TopologicalEngine: image 块两种 source (url / base64)
         use crate::normalized::ContentPart;
         let msg = NormalizedMessage {
             role: MessageRole::User,
