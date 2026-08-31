@@ -28,7 +28,7 @@ if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
 }
 Push-Location $DesktopDir
 try {
-    pnpm tauri build --bundles msi --target $Target
+    cmd.exe /c pnpm tauri build --bundles msi --target $Target
     if ($LASTEXITCODE -ne 0) { throw "Tauri MSI build failed with exit code $LASTEXITCODE" }
 } finally {
     Pop-Location

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {Copy, Check, Bot, User, Terminal} from 'lucide-svelte';
+  import {Copy, Check, Pencil, RotateCw, GitFork, Terminal, X, ArrowUp} from 'lucide-svelte';
   import {renderMarkdown} from './markdown';
   import TaskCard from '../components/TaskCard.svelte';
   import ExecutionTimeline from '../components/ExecutionTimeline.svelte';
@@ -10,18 +10,26 @@
     message,
     onOpenTask,
     onRetry,
+    onEditSave,
+    onEditAndRegenerate,
+    onBranch,
   }: {
     message: ChatMessage;
     onOpenTask?: (taskId: string) => void;
-    onRetry?: (text: string) => void;
+    onRetry?: (messageId: string) => void;
+    onEditSave?: (messageId: string, newText: string) => void;
+    onEditAndRegenerate?: (messageId: string, newText: string) => void;
+    onBranch?: (messageId: string) => void;
   } = $props();
 
   let copied = $state(false);
+  let isEditing = $state(false);
+  let editDraft = $state(message.text || '');
 
   const role = $derived(message.role);
   const text = $derived(message.text || '');
   const streaming = $derived(!!message.streaming);
-  const html = $derived(role === 'assistant' && text ? renderMarkdown(text) : '');
+  const html = $derived(text ? renderMarkdown(text) : '');
 
   async function copyText() {
     if (!text) return;
@@ -32,6 +40,25 @@
     } catch {
       // ignore
     }
+  }
+
+  function handleCancelEdit() {
+    isEditing = false;
+    editDraft = text;
+  }
+
+  function handleSaveOnly() {
+    const trimmed = editDraft.trim();
+    if (!trimmed) return;
+    onEditSave?.(message.id, trimmed);
+    isEditing = false;
+  }
+
+  function handleSaveAndResend() {
+    const trimmed = editDraft.trim();
+    if (!trimmed) return;
+    onEditAndRegenerate?.(message.id, trimmed);
+    isEditing = false;
   }
 </script>
 
@@ -82,17 +109,74 @@
             {#if copied}<Check size={12} class="green" />{:else}<Copy size={12} />{/if}
             <span class="btn-text">{copied ? '已复制' : '复制'}</span>
           </button>
+
+          {#if onRetry}
+            <button class="tool-icon-btn" onclick={() => onRetry?.(message.id)} title="重新生成回复" aria-label="重试">
+              <RotateCw size={12} />
+              <span class="btn-text">重新生成</span>
+            </button>
+          {/if}
+
+          {#if onBranch}
+            <button class="tool-icon-btn" onclick={() => onBranch?.(message.id)} title="从此条消息创建新分支会话" aria-label="分支">
+              <GitFork size={12} />
+              <span class="btn-text">创建分支</span>
+            </button>
+          {/if}
+
           {#if message.modelInfo?.id}
             <span class="model-tag">{message.modelInfo.id}</span>
           {/if}
         </div>
       {/if}
     {:else}
-      <div class="user-bubble">
-        <p class="user-text">{text}</p>
-        <button class="user-copy-btn" onclick={copyText} title="复制" aria-label="复制">
-          {#if copied}<Check size={11} class="green" />{:else}<Copy size={11} />{/if}
-        </button>
+      <div class="user-bubble" class:editing={isEditing}>
+        {#if isEditing}
+          <div class="user-edit-box">
+            <textarea
+              bind:value={editDraft}
+              rows="3"
+              class="user-edit-textarea"
+              placeholder="修改消息内容..."
+              onkeydown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  handleSaveAndResend();
+                } else if (e.key === 'Escape') {
+                  handleCancelEdit();
+                }
+              }}
+            ></textarea>
+            <div class="user-edit-actions">
+              <span class="edit-hint">Ctrl+Enter 重新发送 · Esc 取消</span>
+              <div class="edit-btn-group">
+                <button class="edit-btn cancel" onclick={handleCancelEdit}>取消</button>
+                <button class="edit-btn save" onclick={handleSaveOnly}>仅保存</button>
+                <button class="edit-btn resend" onclick={handleSaveAndResend}>
+                  <ArrowUp size={12} />
+                  <span>保存并重新生成</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        {:else}
+          <div class="user-text md-body user-md">
+            {@html html}
+          </div>
+          <div class="user-actions-bar">
+            <button class="user-action-btn" onclick={() => { isEditing = true; editDraft = text; }} title="编辑消息" aria-label="编辑">
+              <Pencil size={11} />
+            </button>
+            <button class="user-action-btn" onclick={copyText} title="复制" aria-label="复制">
+              {#if copied}<Check size={11} class="green" />{:else}<Copy size={11} />{/if}
+            </button>
+            {#if onBranch}
+              <button class="user-action-btn" onclick={() => onBranch?.(message.id)} title="从此处分支出新会话" aria-label="分支">
+                <GitFork size={11} />
+              </button>
+            {/if}
+          </div>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -120,43 +204,136 @@
   }
   .user-bubble {
     position: relative;
-    display: inline-block;
+    display: block;
+    width: 100%;
+  }
+  .user-bubble.editing {
+    width: 100%;
+  }
+
+  .user-edit-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid var(--ap-gold);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  }
+  .user-edit-textarea {
+    width: 100%;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--ap-font-ui);
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: #1a1a1e;
+    background: #fff;
+    resize: vertical;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .user-edit-textarea:focus {
+    border-color: var(--ap-gold-ui);
+    box-shadow: 0 0 0 2px rgba(255, 210, 122, 0.25);
+  }
+  .user-edit-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .edit-hint {
+    font-size: 11px;
+    color: rgba(38, 38, 42, 0.5);
+  }
+  .edit-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    cursor: pointer;
+    font-family: var(--ap-font-ui);
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+  }
+  .edit-btn.cancel {
+    background: transparent;
+    border-color: rgba(0, 0, 0, 0.15);
+    color: #555;
+  }
+  .edit-btn.cancel:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #222;
+  }
+  .edit-btn.save {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.18);
+    color: #222;
+  }
+  .edit-btn.save:hover {
+    background: rgba(0, 0, 0, 0.12);
+  }
+  .edit-btn.resend {
+    background: #242428;
+    color: #f5f5f7;
+    border-color: #111;
+  }
+  .edit-btn.resend:hover {
+    background: #000;
+    color: #ffd27a;
   }
 
   .user-text {
     padding: 10px 14px;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: 10px 10px 2px 10px;
     margin: 0;
     line-height: 1.7;
-    color: var(--text);
     white-space: pre-wrap;
     word-break: break-word;
   }
-  .user-copy-btn {
+  .user-actions-bar {
     position: absolute;
-    top: 6px;
-    right: -26px;
+    bottom: -22px;
+    right: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     opacity: 0;
     transition: opacity 0.15s ease;
-    border: 0;
-    background: transparent;
-    color: var(--muted);
-    padding: 2px;
-    cursor: pointer;
+    background: rgba(11, 13, 18, 0.85);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--ap-line);
+    backdrop-filter: blur(8px);
+    z-index: 5;
   }
-  .user-bubble:hover .user-copy-btn {
+  .user-bubble:hover .user-actions-bar {
     opacity: 1;
   }
-  .user-copy-btn:hover {
-    color: var(--amber);
+  .user-action-btn {
+    border: 0;
+    background: transparent;
+    color: rgba(232, 224, 204, 0.6);
+    padding: 2px 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.15s ease;
   }
-  .tool-calls-container {
-    margin-bottom: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  .user-action-btn:hover {
+    color: var(--ap-gold);
+    background: rgba(255, 210, 122, 0.12);
   }
   .message-toolbar {
     display: flex;

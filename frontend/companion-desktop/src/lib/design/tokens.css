@@ -87,7 +87,7 @@
   --ap-voice-line-height: 2.1;
   --ap-voice-line-height-mobile: 1.95;
   --ap-voice-letter-spacing: 0.13em;
-  --ap-voice-max-width: 31ch;
+  --ap-voice-max-width: 100%;
   --ap-voice-caption-size: 11px;      /* 引题，字距 0.5em */
   --ap-voice-caption-spacing: 0.5em;
   --ap-voice-attribution-spacing: 0.35em; /* 署名 11px / 0.35em */
@@ -107,14 +107,14 @@
    基础工具类（规范出处见各条注释）
    ============================================================================ */
 
-/* 他的声音排版 ✅ 规范 §6.1：衬线 + 0.13em 字距 + 2.1 行高 + 31ch 行宽上限
+/* 他的声音排版 ✅ 规范 §6.1：衬线 + 0.13em 字距 + 2.1 行高
    「他的每一句话都按引语对待」。 */
 .ap-voice {
   font-family: var(--ap-font-voice);
   font-size: var(--ap-voice-size);
   line-height: var(--ap-voice-line-height);
   letter-spacing: var(--ap-voice-letter-spacing);
-  max-width: var(--ap-voice-max-width);
+  max-width: 100%;
   color: var(--ap-bone);
 }
 

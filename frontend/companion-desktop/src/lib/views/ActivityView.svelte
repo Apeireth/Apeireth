@@ -19,6 +19,13 @@
     Filter,
     Play,
     Pause,
+    FileJson,
+    Download,
+    Trash2,
+    Copy,
+    Check,
+    Cpu,
+    Zap,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import EmptyState from '../components/EmptyState.svelte';
@@ -28,6 +35,13 @@
   import type {ActivityItem, ApeirethConfig, CapabilityManifest} from '../types';
   import {fetchAuditLogs, fetchTraceDetail, capabilitySupported, friendlyErrorMessage} from '../runtime';
   import {splitPresenceLine, type PresenceFrame} from '../presence';
+  import {
+    getCallLogs,
+    clearCallLogs,
+    subscribeCallLogs,
+    exportCallLogsJson,
+    type CallLogEntry,
+  } from '../call-logger';
 
   let {
     config,
@@ -36,6 +50,16 @@
     config: ApeirethConfig;
     capabilities: CapabilityManifest | null;
   } = $props();
+
+  // Tab mode: 'calls' (模型调用日志) | 'audit' (系统事件审计)
+  let activeTab = $state<'calls' | 'audit'>('calls');
+
+  // Call Logs state
+  let callLogs = $state<CallLogEntry[]>([]);
+  let callStatusFilter = $state<'all' | 'success' | 'error' | 'aborted'>('all');
+  let callSearchQuery = $state('');
+  let expandedCallIds = $state<Record<string, boolean>>({});
+  let copiedCallId = $state<string | null>(null);
 
   // Capability gating: trace 关联 (Phase 5).
   let canReadTrace = $derived(capabilitySupported(capabilities, 'trace.read'));
@@ -47,7 +71,6 @@
   async function openTrace(traceId: string): Promise<void> {
     if (!canReadTrace) return;
 
-    // Capability gate: prevent calling unsupported /v1/panel/traces/:id
     if (!capabilitySupported(capabilities, 'trace.read')) {
       traceDetail = {traceId, spans: [], loading: false, error: '追踪详情不支持: 当前运行时未实现 trace.read (Apeireth 2.0 canonical gateway 无此内省 API)'};
       return;
@@ -62,9 +85,7 @@
     }
   }
 
-  /** 把 span 列表渲染成缩进树 (按 parent_span_id 关联). */
   function spanTree(spans: TraceSpanItem[]): TraceSpanItem[] {
-    // 按 started_at 升序; 根 (parent=null) 在前.
     return [...spans].sort((a, b) => a.started_at - b.started_at);
   }
 
@@ -94,6 +115,67 @@
   let expandedIds = $state<Record<string, boolean>>({});
 
   let sseEventSource: EventSource | null = null;
+
+  function toggleCallExpand(id: string) {
+    expandedCallIds = {...expandedCallIds, [id]: !expandedCallIds[id]};
+  }
+
+  async function copyCallJson(entry: CallLogEntry) {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(entry, null, 2));
+      copiedCallId = entry.id;
+      setTimeout(() => { copiedCallId = null; }, 2000);
+    } catch {}
+  }
+
+  function handleExportLogs() {
+    const json = exportCallLogsJson();
+    const blob = new Blob([json], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `apeireth_call_logs_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleClearLogs() {
+    if (confirm('确定要清空全部模型调用日志吗？')) {
+      clearCallLogs();
+    }
+  }
+
+  const filteredCallLogs = $derived.by(() => {
+    let list = [...callLogs];
+    if (callStatusFilter !== 'all') {
+      list = list.filter((c) => c.status === callStatusFilter);
+    }
+    if (callSearchQuery.trim()) {
+      const q = callSearchQuery.toLowerCase().trim();
+      list = list.filter((c) =>
+        c.model.toLowerCase().includes(q) ||
+        c.endpoint.toLowerCase().includes(q) ||
+        (c.responseContent && c.responseContent.toLowerCase().includes(q)) ||
+        c.requestMessages.some((m) => m.content.toLowerCase().includes(q)) ||
+        (c.errorMessage && c.errorMessage.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  });
+
+  const callStats = $derived.by(() => {
+    const total = callLogs.length;
+    if (!total) return {total: 0, avgLatency: 0, successRate: '100%', errors: 0};
+    const totalLat = callLogs.reduce((acc, c) => acc + (c.latencyMs || 0), 0);
+    const successCount = callLogs.filter((c) => c.status === 'success').length;
+    const errors = callLogs.filter((c) => c.status === 'error').length;
+    return {
+      total,
+      avgLatency: Math.round(totalLat / total),
+      successRate: `${Math.round((successCount / total) * 100)}%`,
+      errors,
+    };
+  });
 
   const categoryIcons = {
     conversation: Radio,
@@ -361,12 +443,17 @@
     return `${Math.floor(diffHour / 24)}天前`;
   }
 
+  let unsubCallLogs: (() => void) | null = null;
   onMount(() => {
+    unsubCallLogs = subscribeCallLogs((logs) => {
+      callLogs = logs;
+    });
     void loadPersistedAudit();
     startSseListener();
   });
 
   onDestroy(() => {
+    unsubCallLogs?.();
     if (sseEventSource) {
       sseEventSource.close();
       sseEventSource = null;
@@ -376,164 +463,371 @@
 
 <section class="activity-view">
   <PageHeader
-    eyebrow="观察"
-    title="活动时间线"
-    subtitle="Apeireth 统一事件流，聚合实时涌现事件与持久审计记录，展示底层决策与工具调用。"
-  >
-    <button
-      class="live-toggle-btn"
-      class:active={isLive}
-      onclick={toggleLive}
-      title={isLive ? '点击暂停实时监听' : '点击开启实时监听'}
-    >
-      {#if isLive}
-        <Radio size={13} class="live-icon spin" />
-        <span>实时流 (已连接)</span>
-      {:else}
-        <Pause size={13} />
-        <span>已暂停</span>
-      {/if}
-    </button>
-    <button class="quiet-button" onclick={loadPersistedAudit} disabled={loading}>
-      <RotateCcw size={13} class={loading ? 'spin' : ''} />
-      <span>刷新审计</span>
-    </button>
-  </PageHeader>
+    eyebrow="观察与审计"
+    title="活动与调用日志"
+    subtitle="记录每一轮模型交互的延迟、Token、Prompt 及 CoT 思考流，同步展示底层决策与系统事件。"
+  />
 
-  <!-- Toolbar & Filters -->
-  <div class="activity-toolbar">
-    <div class="search-input-wrap">
-      <Search size={14} class="search-icon" />
-      <input
-        type="text"
-        placeholder="搜索事件标题、摘要或参数…"
-        bind:value={searchQuery}
-      />
-      {#if searchQuery}
-        <button class="clear-search-btn" onclick={() => searchQuery = ''} aria-label="清除搜索">
-          <X size={12} />
+  <!-- Mode Switch Tabs -->
+  <div class="view-mode-header">
+    <div class="view-mode-tabs">
+      <button
+        class="mode-tab-btn"
+        class:active={activeTab === 'calls'}
+        onclick={() => activeTab = 'calls'}
+      >
+        <Zap size={13} />
+        <span>模型调用日志</span>
+        <span class="tab-badge">{callLogs.length}</span>
+      </button>
+      <button
+        class="mode-tab-btn"
+        class:active={activeTab === 'audit'}
+        onclick={() => activeTab = 'audit'}
+      >
+        <Activity size={13} />
+        <span>系统事件审计</span>
+        <span class="tab-badge">{activities.length}</span>
+      </button>
+    </div>
+
+    {#if activeTab === 'calls'}
+      <div class="tab-header-actions">
+        <button class="quiet-button export-btn" onclick={handleExportLogs} disabled={!callLogs.length} title="导出全部调用日志为 JSON">
+          <Download size={13} />
+          <span>导出日志</span>
         </button>
-      {/if}
-    </div>
-
-    <div class="filters-wrap">
-      <!-- Category Tabs -->
-      <div class="category-tabs">
-        <button
-          class="cat-btn"
-          class:active={selectedCategory === 'all'}
-          onclick={() => selectedCategory = 'all'}
-        >全部</button>
-        <button
-          class="cat-btn"
-          class:active={selectedCategory === 'tool'}
-          onclick={() => selectedCategory = 'tool'}
-        >工具</button>
-        <button
-          class="cat-btn"
-          class:active={selectedCategory === 'agent'}
-          onclick={() => selectedCategory = 'agent'}
-        >Agent</button>
-        <button
-          class="cat-btn"
-          class:active={selectedCategory === 'memory'}
-          onclick={() => selectedCategory = 'memory'}
-        >记忆</button>
-        <button
-          class="cat-btn"
-          class:active={selectedCategory === 'runtime'}
-          onclick={() => selectedCategory = 'runtime'}
-        >运行时</button>
+        <button class="quiet-button clear-btn" onclick={handleClearLogs} disabled={!callLogs.length} title="清空调用日志">
+          <Trash2 size={13} />
+          <span>清空</span>
+        </button>
       </div>
-
-      <!-- Severity Filter -->
-      <select class="severity-select" bind:value={selectedSeverity} aria-label="筛选级别">
-        <option value="all">全部状态</option>
-        <option value="info">正常 / 信息</option>
-        <option value="success">成功</option>
-        <option value="warning">警告</option>
-        <option value="error">异常 / 错误</option>
-      </select>
-    </div>
+    {:else}
+      <div class="tab-header-actions">
+        <button
+          class="live-toggle-btn"
+          class:active={isLive}
+          onclick={toggleLive}
+          title={isLive ? '点击暂停实时监听' : '点击开启实时监听'}
+        >
+          {#if isLive}
+            <Radio size={13} class="live-icon spin" />
+            <span>实时流 (已连接)</span>
+          {:else}
+            <Pause size={13} />
+            <span>已暂停</span>
+          {/if}
+        </button>
+        <button class="quiet-button" onclick={loadPersistedAudit} disabled={loading}>
+          <RotateCcw size={13} class={loading ? 'spin' : ''} />
+          <span>刷新审计</span>
+        </button>
+      </div>
+    {/if}
   </div>
 
-  <!-- Timeline Body -->
-  <div class="timeline-container">
-    {#if loading && !activities.length}
-      <LoadingState message="正在连接并加载活动时间线…" />
-    {:else if error && !activities.length}
-      <ErrorState title="拉取活动记录失败" message={error} onRetry={loadPersistedAudit} />
-    {:else if !filteredActivities.length}
-      <EmptyState
-        icon="⚡"
-        title={searchQuery ? '没有匹配的活动事件' : '暂无活动记录'}
-        description="当与伙伴对话、调用工具或系统反思时，事件流会实时更新。"
-      />
-    {:else}
-      <div class="timeline-stream">
-        {#each filteredActivities as item (item.id)}
-          {@const CategoryIcon = categoryIcons[item.category] || Activity}
-          <article class="timeline-item" class:error={item.severity === 'error'} class:expanded={expandedIds[item.id]}>
-            <!-- Left Axis Dot -->
-            <div class="timeline-axis">
-              <div class="axis-icon-dot {item.category} {item.severity}">
-                <CategoryIcon size={12} />
-              </div>
-              <div class="axis-line"></div>
-            </div>
+  {#if activeTab === 'calls'}
+    <!-- Call Stats Summary -->
+    <div class="call-stats-strip">
+      <div class="stat-pill">
+        <span class="stat-num">{callStats.total}</span>
+        <span class="stat-lbl">总调用轮次</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-num">{callStats.avgLatency} <small>ms</small></span>
+        <span class="stat-lbl">平均耗时</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-num text-success">{callStats.successRate}</span>
+        <span class="stat-lbl">成功率</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-num" class:text-danger={callStats.errors > 0}>{callStats.errors}</span>
+        <span class="stat-lbl">异常错误</span>
+      </div>
+    </div>
 
-            <!-- Content Card -->
-            <div class="timeline-card">
+    <!-- Call Logs Toolbar -->
+    <div class="activity-toolbar">
+      <div class="search-input-wrap">
+        <Search size={14} class="search-icon" />
+        <input
+          type="text"
+          placeholder="搜索模型、端点、Prompt 或输出内容…"
+          bind:value={callSearchQuery}
+        />
+        {#if callSearchQuery}
+          <button class="clear-search-btn" onclick={() => callSearchQuery = ''} aria-label="清除搜索">
+            <X size={12} />
+          </button>
+        {/if}
+      </div>
+
+      <div class="filters-wrap">
+        <div class="category-tabs">
+          <button class="cat-btn" class:active={callStatusFilter === 'all'} onclick={() => callStatusFilter = 'all'}>全部</button>
+          <button class="cat-btn" class:active={callStatusFilter === 'success'} onclick={() => callStatusFilter = 'success'}>成功</button>
+          <button class="cat-btn" class:active={callStatusFilter === 'error'} onclick={() => callStatusFilter = 'error'}>错误</button>
+          <button class="cat-btn" class:active={callStatusFilter === 'aborted'} onclick={() => callStatusFilter = 'aborted'}>已中止</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Call Logs List -->
+    <div class="call-logs-container">
+      {#if !filteredCallLogs.length}
+        <EmptyState
+          icon="⚡"
+          title={callSearchQuery ? '没有找到匹配的调用日志' : '暂无模型调用记录'}
+          description="在对话窗口发送消息后，每一轮调用的端点、延迟、Payload 与 CoT 思考流将在此实时记录。"
+        />
+      {:else}
+        <div class="call-logs-stream">
+          {#each filteredCallLogs as log (log.id)}
+            <article class="call-log-card" class:expanded={expandedCallIds[log.id]} class:error={log.status === 'error'}>
               <div
-                class="timeline-card-head"
+                class="call-card-head"
                 role="button"
                 tabindex="0"
-                onclick={() => toggleExpand(item.id)}
-                onkeydown={(e) => e.key === 'Enter' && toggleExpand(item.id)}
+                onclick={() => toggleCallExpand(log.id)}
+                onkeydown={(e) => e.key === 'Enter' && toggleCallExpand(log.id)}
               >
-                <div class="head-left">
-                  <span class="source-tag {item.source}">{item.source === 'sse' ? '实时流' : '审计'}</span>
-                  <strong class="item-title">{item.title}</strong>
-                  <StatusBadge
-                    label={categoryLabels[item.category] || item.category}
-                    variant={item.category === 'tool' ? 'amber' : item.category === 'error' ? 'danger' : 'neutral'}
-                    size="small"
-                  />
+                <div class="call-head-left">
+                  <span class="status-pill status-{log.status}">
+                    {log.status === 'success' ? 'OK 200' : log.status === 'aborted' ? 'ABORT' : 'ERR'}
+                  </span>
+                  <span class="proto-tag proto-{log.protocol}">{log.protocol.toUpperCase()}</span>
+                  <strong class="model-name">{log.model}</strong>
+                  <span class="endpoint-url" title={log.endpoint}>{log.endpoint}</span>
                 </div>
 
-                <div class="head-right">
-                  <span class="rel-time">{formatRelative(item.timestamp)}</span>
-                  <time class="abs-time">{formatTime(item.timestamp)}</time>
-                  <button class="expand-arrow-btn" aria-label={expandedIds[item.id] ? '收起详情' : '展开详情'}>
-                    {#if expandedIds[item.id]}<ChevronDown size={13} />{:else}<ChevronRight size={13} />{/if}
+                <div class="call-head-right">
+                  <span class="latency-pill">{log.latencyMs} ms</span>
+                  <time class="call-time">{log.timeFormatted}</time>
+                  <button class="expand-arrow-btn" aria-label={expandedCallIds[log.id] ? '收起' : '展开'}>
+                    {#if expandedCallIds[log.id]}<ChevronDown size={14} />{:else}<ChevronRight size={14} />{/if}
                   </button>
                 </div>
               </div>
 
-              <p class="item-summary">{item.summary}</p>
-
-              {#if item.traceId && canReadTrace}
-                <button
-                  class="trace-link-btn"
-                  onclick={() => openTrace(item.traceId as string)}
-                  title="查看执行轨迹 (trace 树)"
-                >
-                  轨迹 →
-                </button>
-              {/if}
-
-              {#if expandedIds[item.id] && item.detail}
-                <div class="item-detail-wrap">
-                  <span class="detail-label">技术详情 / 原始参数</span>
-                  <pre class="detail-pre">{item.detail}</pre>
+              <!-- Compact Snippet -->
+              {#if !expandedCallIds[log.id]}
+                <div class="call-snippet">
+                  <span class="snip-prompt">提问: {log.requestMessages[log.requestMessages.length - 1]?.content.slice(0, 85) || '(无提示词)'}</span>
+                  {#if log.responseContent}
+                    <span class="snip-resp">↳ 回复: {log.responseContent.slice(0, 110)}</span>
+                  {/if}
+                  {#if log.errorMessage}
+                    <span class="snip-err">↳ 报错: {log.errorMessage}</span>
+                  {/if}
                 </div>
               {/if}
-            </div>
-          </article>
-        {/each}
+
+              <!-- Expanded Details -->
+              {#if expandedCallIds[log.id]}
+                <div class="call-details-expanded">
+                  <!-- Prompt / Messages -->
+                  <div class="detail-section">
+                    <div class="section-title">
+                      <span>请求消息上下文 ({log.requestMessages.length} 条)</span>
+                    </div>
+                    <div class="messages-list-inspect">
+                      {#each log.requestMessages as msg}
+                        <div class="inspect-msg-row role-{msg.role}">
+                          <span class="role-badge">{msg.role}</span>
+                          <pre class="msg-content-pre">{msg.content}</pre>
+                        </div>
+                      {/each}
+                    </div>
+                  </div>
+
+                  <!-- Reasoning CoT if available -->
+                  {#if log.reasoningContent}
+                    <div class="detail-section reasoning-section">
+                      <div class="section-title">
+                        <Sparkles size={12} class="sparkle-gold" />
+                        <span>思考过程 (Reasoning / CoT)</span>
+                      </div>
+                      <pre class="reasoning-pre">{log.reasoningContent}</pre>
+                    </div>
+                  {/if}
+
+                  <!-- Response Content -->
+                  {#if log.responseContent}
+                    <div class="detail-section">
+                      <div class="section-title">
+                        <span>模型生成结果</span>
+                      </div>
+                      <pre class="response-pre">{log.responseContent}</pre>
+                    </div>
+                  {/if}
+
+                  <!-- Error message -->
+                  {#if log.errorMessage}
+                    <div class="detail-section error-section">
+                      <div class="section-title">
+                        <AlertTriangle size={12} />
+                        <span>异常详情</span>
+                      </div>
+                      <p class="error-text">{log.errorMessage}</p>
+                    </div>
+                  {/if}
+
+                  <!-- Bottom actions -->
+                  <div class="detail-bottom-bar">
+                    <button class="call-copy-json-btn" onclick={() => copyCallJson(log)}>
+                      {#if copiedCallId === log.id}
+                        <Check size={12} class="green" />
+                        <span>已复制完整 JSON 记录</span>
+                      {:else}
+                        <Copy size={12} />
+                        <span>复制调用 JSON 详情</span>
+                      {/if}
+                    </button>
+                  </div>
+                </div>
+              {/if}
+            </article>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {:else}
+    <!-- Toolbar & Filters for Audit -->
+    <div class="activity-toolbar">
+      <div class="search-input-wrap">
+        <Search size={14} class="search-icon" />
+        <input
+          type="text"
+          placeholder="搜索事件标题、摘要或参数…"
+          bind:value={searchQuery}
+        />
+        {#if searchQuery}
+          <button class="clear-search-btn" onclick={() => searchQuery = ''} aria-label="清除搜索">
+            <X size={12} />
+          </button>
+        {/if}
       </div>
-    {/if}
-  </div>
+
+      <div class="filters-wrap">
+        <!-- Category Tabs -->
+        <div class="category-tabs">
+          <button
+            class="cat-btn"
+            class:active={selectedCategory === 'all'}
+            onclick={() => selectedCategory = 'all'}
+          >全部</button>
+          <button
+            class="cat-btn"
+            class:active={selectedCategory === 'tool'}
+            onclick={() => selectedCategory = 'tool'}
+          >工具</button>
+          <button
+            class="cat-btn"
+            class:active={selectedCategory === 'agent'}
+            onclick={() => selectedCategory = 'agent'}
+          >Agent</button>
+          <button
+            class="cat-btn"
+            class:active={selectedCategory === 'memory'}
+            onclick={() => selectedCategory = 'memory'}
+          >记忆</button>
+          <button
+            class="cat-btn"
+            class:active={selectedCategory === 'runtime'}
+            onclick={() => selectedCategory = 'runtime'}
+          >运行时</button>
+        </div>
+
+        <!-- Severity Filter -->
+        <select class="severity-select" bind:value={selectedSeverity} aria-label="筛选级别">
+          <option value="all">全部状态</option>
+          <option value="info">正常 / 信息</option>
+          <option value="success">成功</option>
+          <option value="warning">警告</option>
+          <option value="error">异常 / 错误</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Timeline Body for Audit -->
+    <div class="timeline-container">
+      {#if loading && !activities.length}
+        <LoadingState message="正在连接并加载活动时间线…" />
+      {:else if error && !activities.length}
+        <ErrorState title="拉取活动记录失败" message={error} onRetry={loadPersistedAudit} />
+      {:else if !filteredActivities.length}
+        <EmptyState
+          icon="⚡"
+          title={searchQuery ? '没有匹配的活动事件' : '暂无活动记录'}
+          description="当与伙伴对话、调用工具或系统反思时，事件流会实时更新。"
+        />
+      {:else}
+        <div class="timeline-stream">
+          {#each filteredActivities as item (item.id)}
+            {@const CategoryIcon = categoryIcons[item.category] || Activity}
+            <article class="timeline-item" class:error={item.severity === 'error'} class:expanded={expandedIds[item.id]}>
+              <!-- Left Axis Dot -->
+              <div class="timeline-axis">
+                <div class="axis-icon-dot {item.category} {item.severity}">
+                  <CategoryIcon size={12} />
+                </div>
+                <div class="axis-line"></div>
+              </div>
+
+              <!-- Content Card -->
+              <div class="timeline-card">
+                <div
+                  class="timeline-card-head"
+                  role="button"
+                  tabindex="0"
+                  onclick={() => toggleExpand(item.id)}
+                  onkeydown={(e) => e.key === 'Enter' && toggleExpand(item.id)}
+                >
+                  <div class="head-left">
+                    <span class="source-tag {item.source}">{item.source === 'sse' ? '实时流' : '审计'}</span>
+                    <strong class="item-title">{item.title}</strong>
+                    <StatusBadge
+                      label={categoryLabels[item.category] || item.category}
+                      variant={item.category === 'tool' ? 'amber' : item.category === 'error' ? 'danger' : 'neutral'}
+                      size="small"
+                    />
+                  </div>
+
+                  <div class="head-right">
+                    <span class="rel-time">{formatRelative(item.timestamp)}</span>
+                    <time class="abs-time">{formatTime(item.timestamp)}</time>
+                    <button class="expand-arrow-btn" aria-label={expandedIds[item.id] ? '收起详情' : '展开详情'}>
+                      {#if expandedIds[item.id]}<ChevronDown size={13} />{:else}<ChevronRight size={13} />{/if}
+                    </button>
+                  </div>
+                </div>
+
+                <p class="item-summary">{item.summary}</p>
+
+                {#if item.traceId && canReadTrace}
+                  <button
+                    class="trace-link-btn"
+                    onclick={() => openTrace(item.traceId as string)}
+                    title="查看执行轨迹 (trace 树)"
+                  >
+                    轨迹 →
+                  </button>
+                {/if}
+
+                {#if expandedIds[item.id] && item.detail}
+                  <div class="item-detail-wrap">
+                    <span class="detail-label">技术详情 / 原始参数</span>
+                    <pre class="detail-pre">{item.detail}</pre>
+                  </div>
+                {/if}
+              </div>
+            </article>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </section>
 
 {#if traceDetail}
@@ -582,6 +876,384 @@
     min-height: 0;
     overflow: hidden;
   }
+
+  /* Mode Header & Tabs */
+  .view-mode-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 32px 12px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .view-mode-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-2);
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+  }
+  .mode-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .mode-tab-btn:hover {
+    color: var(--text);
+  }
+  .mode-tab-btn.active {
+    background: var(--surface-3);
+    color: var(--ap-gold-ui, #ffd27a);
+    font-weight: 500;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  }
+  .tab-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    background: rgba(255, 210, 122, 0.15);
+    color: var(--ap-gold);
+    font-family: var(--mono);
+  }
+  .tab-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .export-btn, .clear-btn {
+    font-size: 11.5px;
+  }
+
+  /* Call Stats Strip */
+  .call-stats-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 32px;
+    background: rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .stat-pill {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .stat-num {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: var(--mono);
+  }
+  .stat-num small {
+    font-size: 10px;
+    color: var(--faint);
+  }
+  .stat-lbl {
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .text-success {
+    color: #4ade80 !important;
+  }
+  .text-danger {
+    color: #f87171 !important;
+  }
+
+  /* Call Logs Stream & Cards */
+  .call-logs-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 36px 60px;
+    width: 100%;
+    min-height: 0;
+  }
+  .call-logs-stream {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+  }
+  .call-log-card {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 18px;
+    transition: all 0.15s ease;
+    width: 100%;
+  }
+  .call-log-card:hover {
+    border-color: var(--line-strong);
+    background: var(--surface-3);
+  }
+  .call-log-card.error {
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+  .call-log-card.expanded {
+    border-color: var(--ap-gold-ui, #ffd27a);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.28);
+  }
+
+  .call-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    gap: 16px;
+    width: 100%;
+  }
+  .call-head-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+    flex: 1;
+  }
+  .status-pill {
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-family: var(--mono);
+  }
+  .status-pill.status-success {
+    background: rgba(74, 222, 128, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.3);
+  }
+  .status-pill.status-error {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(248, 113, 113, 0.3);
+  }
+  .status-pill.status-aborted {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+  }
+  .proto-tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    background: var(--surface-3);
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .proto-tag.proto-openai {
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.3);
+  }
+  .proto-tag.proto-anthropic {
+    color: #f472b6;
+    border-color: rgba(244, 114, 182, 0.3);
+  }
+  .proto-tag.proto-gateway {
+    color: var(--ap-gold);
+    border-color: rgba(255, 210, 122, 0.3);
+  }
+  .model-name {
+    font-size: 13.5px;
+    color: var(--text);
+    font-family: var(--mono);
+  }
+  .endpoint-url {
+    font-size: 11.5px;
+    color: var(--faint);
+    max-width: 480px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .call-head-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .latency-pill {
+    font-size: 11.5px;
+    color: var(--ap-gold-ui, #ffd27a);
+    font-family: var(--mono);
+    background: rgba(255, 210, 122, 0.08);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 210, 122, 0.18);
+  }
+  .call-time {
+    font-size: 11px;
+    color: var(--faint);
+    font-family: var(--mono);
+  }
+
+  .call-snippet {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .snip-prompt {
+    color: var(--text);
+    word-break: break-word;
+  }
+  .snip-resp {
+    color: rgba(232, 224, 204, 0.7);
+    word-break: break-word;
+  }
+  .snip-err {
+    color: #f87171;
+  }
+
+  /* Expanded Inspect */
+  .call-details-expanded {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .sparkle-gold {
+    color: var(--ap-gold);
+  }
+  .messages-list-inspect {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .inspect-msg-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 12px;
+  }
+  .role-badge {
+    align-self: flex-start;
+    font-size: 10.5px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    background: var(--surface-3);
+    color: var(--muted);
+  }
+  .inspect-msg-row.role-user .role-badge {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+  }
+  .inspect-msg-row.role-assistant .role-badge {
+    background: rgba(255, 210, 122, 0.15);
+    color: var(--ap-gold);
+  }
+  .inspect-msg-row.role-system .role-badge {
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+  }
+  .msg-content-pre, .response-pre, .reasoning-pre {
+    margin: 0;
+    font-family: var(--ap-font-body, system-ui);
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 700px;
+    overflow-y: auto;
+  }
+  .reasoning-section {
+    background: rgba(255, 210, 122, 0.05);
+    border: 1px solid rgba(255, 210, 122, 0.2);
+    border-radius: 6px;
+    padding: 10px 14px;
+  }
+  .reasoning-pre {
+    color: #d8cca9;
+    font-style: italic;
+    font-size: 12px;
+  }
+  .response-pre {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 14px;
+  }
+  .error-section {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 6px;
+    padding: 10px 14px;
+  }
+  .error-text {
+    margin: 0;
+    color: #f87171;
+    font-size: 12px;
+    font-family: var(--mono);
+  }
+  .detail-bottom-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+  }
+  .call-copy-json-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-3);
+    color: var(--muted);
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .call-copy-json-btn:hover {
+    color: var(--text);
+    border-color: var(--ap-gold-ui, #ffd27a);
+  }
+
   .live-toggle-btn {
     display: inline-flex;
     align-items: center;
@@ -690,14 +1362,17 @@
   .timeline-container {
     flex: 1;
     overflow-y: auto;
-    padding: 20px 32px 40px;
+    padding: 20px 36px 60px;
+    width: 100%;
+    min-height: 0;
   }
   .timeline-stream {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    max-width: 960px;
-    margin: 0 auto;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
   }
   .timeline-item {
     display: flex;

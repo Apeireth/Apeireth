@@ -181,11 +181,36 @@ export interface CapabilityManifest {
   legacy?: boolean;
 }
 
+export type ProviderProtocol = 'openai' | 'anthropic';
+
+export interface ProviderConfig {
+  protocol: ProviderProtocol;
+  preset: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  anthropicVersion?: string;
+}
+
 export interface ApeirethConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
   theme?: Theme;
+  provider?: ProviderConfig;
+  openaiConfig?: {
+    preset?: string;
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+  };
+  anthropicConfig?: {
+    preset?: string;
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    anthropicVersion?: string;
+  };
 }
 
 export interface ActivityItem {

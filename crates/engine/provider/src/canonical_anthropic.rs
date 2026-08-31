@@ -61,7 +61,19 @@ const PLUGIN_ID: &str = "builtin.anthropic";
 /// repository's existing default (minimaxi's Anthropic-compatible gateway).
 pub const DEFAULT_BASE_URL: &str = "https://api.minimaxi.com/anthropic";
 /// Default model list when none is configured (repository convention).
-pub const DEFAULT_MODELS: &[&str] = &["MiniMax-M3"];
+pub const DEFAULT_MODELS: &[&str] = &[
+    "MiniMax-M3",
+    "claude-3-7-sonnet-20250219",
+    "claude-3-7-sonnet",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet",
+    "claude-3-5-haiku-20241022",
+    "claude-3-5-haiku",
+    "claude-3-opus-20240229",
+    "claude-3-opus",
+    "claude-sonnet-4-5",
+    "claude-sonnet-5",
+];
 /// Anthropic API version header value (repository convention).
 pub const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Default per-request timeout.
