@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "node tests/run-all.mjs",
     "tauri": "tauri",
     "preview": "vite preview"
   },

@@ -29,7 +29,6 @@
     appendMemoryEpisode,
     fetchGraphData,
     fetchMemoryEpisodes,
-    fetchMemoryStreams,
     forgetMemoryEpisode,
     protectMemoryEpisode,
     unprotectMemoryEpisode,
