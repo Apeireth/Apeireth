@@ -10,14 +10,29 @@
 
 [CmdletBinding()]
 param(
-    [switch]$ProbeGateway
+    [switch]$ProbeGateway,
+    [string]$Target = "x86_64-pc-windows-msvc"
 )
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..
-$bundleMsiDir = Join-Path $PWD 'src-tauri\target\release\bundle\msi'
-$releaseDir = Join-Path $PWD 'src-tauri\target\release'
-$workspaceCli = Join-Path $PWD '..\..\target\release\apeireth.exe'
+
+$bundleMsiCandidates = @(
+    "$PWD\src-tauri\target\$Target\release\bundle\msi",
+    "$PWD\src-tauri\target\release\bundle\msi"
+)
+$releaseCandidates = @(
+    "$PWD\src-tauri\target\$Target\release",
+    "$PWD\src-tauri\target\release"
+)
+$workspaceCliCandidates = @(
+    "$PWD\..\..\target\$Target\release\apeireth.exe",
+    "$PWD\..\..\target\release\apeireth.exe"
+)
+
+$bundleMsiDir = ($bundleMsiCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1)
+$releaseDir = ($releaseCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1)
+$workspaceCli = ($workspaceCliCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1)
 $failures = 0
 
 function Assert-Check([bool]$Ok, [string]$Message) {
@@ -47,7 +62,7 @@ if (Test-Path $workspaceCli) {
 
 Write-Host '=== built release layout (what the installer packages) ==='
 $builtApp = Join-Path $releaseDir 'companion-desktop.exe'
-$builtSidecar = Join-Path $releaseDir 'apeireth.exe'
+$builtSidecar = if (Test-Path (Join-Path $releaseDir 'apeireth.exe')) { Join-Path $releaseDir 'apeireth.exe' } else { $workspaceCli }
 Assert-Check (Test-Path $builtApp) "release companion-desktop.exe present"
 Assert-Check (Test-Path $builtSidecar) "release apeireth.exe sits beside the app (bundled-backend layout)"
 if (Test-Path $builtSidecar) {

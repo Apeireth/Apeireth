@@ -178,3 +178,32 @@ h4.md-h, h5.md-h, h6.md-h { font-size: 14px; }
 .md-code .hljs-meta { color: #96919c; }
 .md-code .hljs-emphasis { font-style: italic; }
 .md-code .hljs-strong { font-weight: 700; }
+
+/* 用户消息内部 markdown 适配 */
+.user-md {
+  color: inherit;
+  font-family: inherit;
+}
+.user-md .md-p {
+  color: inherit;
+  margin: 0 0 8px;
+}
+.user-md .md-p:last-child {
+  margin-bottom: 0;
+}
+.user-md .md-h {
+  color: inherit;
+}
+.user-md .md-code {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #1a1a1e;
+}
+.user-md .md-code code {
+  color: inherit;
+}
+.user-md .md-inline {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #a8381e;
+}
