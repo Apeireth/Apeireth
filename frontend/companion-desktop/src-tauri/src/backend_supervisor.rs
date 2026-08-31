@@ -608,6 +608,7 @@ impl BackendSupervisor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::process::Command;
 
     /// Verified against the CLI's own help output:
     /// `apeireth gateway serve [--port PORT]`.
@@ -716,6 +717,59 @@ mod tests {
         let info = tokio_block(supervisor.info());
         assert_eq!(info.state, BackendState::Failed);
         assert!(info.last_error.is_some(), "failure reason must be recorded");
+    }
+
+    #[test]
+    fn readiness_fails_fast_when_owned_child_already_exited() {
+        let supervisor = BackendSupervisor::build(None);
+        let elapsed = tokio_block(async {
+            let mut child = {
+                #[cfg(windows)]
+                {
+                    Command::new("cmd")
+                        .args(["/C", "exit", "42"])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .stdin(std::process::Stdio::null())
+                        .spawn()
+                        .expect("spawn dummy child")
+                }
+                #[cfg(not(windows))]
+                {
+                    Command::new("sh")
+                        .args(["-c", "exit 42"])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .stdin(std::process::Stdio::null())
+                        .spawn()
+                        .expect("spawn dummy child")
+                }
+            };
+            let pid = child.id().expect("pid");
+            let _ = child.wait().await;
+            {
+                let mut info = supervisor.info.write().await;
+                info.state = BackendState::Starting;
+                info.ownership = BackendOwnership::OwnedByDesktop;
+            }
+            {
+                let mut process = supervisor.process.write().await;
+                *process = Some(BackendProcess { child, pid });
+            }
+            let started = Instant::now();
+            let result = supervisor.wait_for_ready(1).await;
+            assert!(result.is_err(), "expected failure, got {result:?}");
+            let message = result.unwrap_err();
+            assert!(
+                message.contains("exited during startup"),
+                "must report child death, not a 15s timeout: {message}"
+            );
+            started.elapsed()
+        });
+        assert!(
+            elapsed < Duration::from_secs(3),
+            "child death must fail fast, took {elapsed:?}"
+        );
     }
 
     #[test]
