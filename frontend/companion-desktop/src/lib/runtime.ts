@@ -85,14 +85,57 @@ export type RuntimeEvent =
   | {type: 'reasoning-delta'; requestId: string; text: string}
   | {type: 'tool-call'; requestId: string; toolCall: ToolCallDetails}
   | {type: 'tool-result'; requestId: string; toolCallId: string; ok: boolean; summary?: string; full?: string; error?: string}
+  | {type: 'approval-required'; requestId: string; pending: CanonicalPendingApproval}
   | {type: 'message-end'; requestId: string; messageId: string; fullText: string}
   | {type: 'run-error'; requestId: string; error: RuntimeError}
   | {type: 'run-end'; requestId: string; aborted: boolean};
 
 export interface RuntimeError {
-  code: 'http' | 'network' | 'auth' | 'timeout' | 'aborted' | 'unknown';
+  code:
+    | 'http'
+    | 'network'
+    | 'auth'
+    | 'timeout'
+    | 'aborted'
+    | 'unknown'
+    | 'approval_required'
+    | 'denied'
+    | 'provider'
+    | 'backend';
   message: string;
   status?: number;
+}
+
+export interface CanonicalPendingApproval {
+  session: string;
+  approval_id: string;
+  request: string;
+  trace_id: string;
+  capability_id: string;
+  tool_name: string;
+  governance_hook: string;
+  governance_reason: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface CanonicalExecutionEvent {
+  event: 'tool_started' | 'tool_completed' | 'tool_failed' | 'approval_required' | string;
+  tool_name?: string;
+  capability_id?: string;
+  tool_call_id?: string;
+  succeeded?: boolean;
+  approval_id?: string;
+  round?: number;
+}
+
+export class ApprovalRequiredError extends Error {
+  pending: CanonicalPendingApproval;
+  constructor(pending: CanonicalPendingApproval) {
+    super(`需要批准: ${pending.tool_name} — ${pending.governance_reason}`);
+    this.name = 'ApprovalRequiredError';
+    this.pending = pending;
+  }
 }
 
 export interface AgentRuntime {
@@ -109,9 +152,12 @@ export interface RuntimeStatus {
 }
 
 export function classifyHttpError(status: number): RuntimeError['code'] {
-  if (status === 401 || status === 403) return 'auth';
+  if (status === 401 || status === 403) return 'denied';
+  if (status === 409) return 'approval_required';
+  if (status === 502) return 'provider';
+  if (status === 503) return 'backend';
   if (status === 404) return 'http';
-  if (status >= 500) return 'http';
+  if (status >= 500) return 'backend';
   return 'http';
 }
 
@@ -189,6 +235,9 @@ export function friendlyErrorMessage(caught: unknown, endpoint?: string): string
 export function toRuntimeError(caught: unknown): RuntimeError {
   if (caught instanceof DOMException && caught.name === 'AbortError') {
     return {code: 'aborted', message: '已中止请求'};
+  }
+  if (caught instanceof ApprovalRequiredError) {
+    return {code: 'approval_required', message: caught.message, status: 202};
   }
   if (caught instanceof TypeError) {
     return {code: 'network', message: '网络错误：后端不可达或跨域拒绝'};
@@ -381,6 +430,32 @@ export interface StreamCallbacks {
   onReasoningDelta?: (text: string) => void;
   onToolCall?: (toolCall: ToolCallDetails) => void;
   onToolResult?: (id: string, ok: boolean, summary?: string) => void;
+  onApprovalRequired?: (pending: CanonicalPendingApproval) => void;
+}
+
+function applyCanonicalEvents(
+  events: CanonicalExecutionEvent[] | undefined,
+  callbacks: StreamCallbacks,
+): void {
+  if (!events) return;
+  for (const event of events) {
+    const id = event.tool_call_id || event.approval_id || event.capability_id || event.event;
+    const name = event.tool_name || event.capability_id || 'tool';
+    if (event.event === 'tool_started' || event.event === 'approval_required') {
+      callbacks.onToolCall?.({
+        id,
+        name,
+        status: event.event === 'approval_required' ? 'pending' : 'running',
+        startTime: Date.now(),
+      });
+    }
+    if (event.event === 'tool_completed' || event.event === 'tool_failed') {
+      callbacks.onToolResult?.(id, event.event === 'tool_completed', event.event);
+    }
+    if (event.event === 'approval_required' && event.approval_id) {
+      // The 202 body carries the full pending record; events only hint.
+    }
+  }
 }
 
 export async function streamChat(
@@ -411,6 +486,11 @@ export async function streamChat(
     signal,
   });
 
+  if (response.status === 202) {
+    const pending = (await response.json()) as CanonicalPendingApproval;
+    callbacks.onApprovalRequired?.(pending);
+    throw new ApprovalRequiredError(pending);
+  }
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     let detail = text.slice(0, 300);
@@ -428,7 +508,6 @@ export async function streamChat(
   const decoder = new TextDecoder();
   let buffer = '';
   let fullText = '';
-  const currentTools: Map<string, ToolCallDetails> = new Map();
 
   // W6 CoT 增量分流 (契约 §2.3): MiniMax 把 CoT 嵌在 delta.content 的
   // <think>…</think> / <!-- … --> 标记里, 边界标记可能跨 chunk 切分.
@@ -535,17 +614,10 @@ export async function streamChat(
               delta?: {
                 content?: string;
                 reasoning_content?: string;
-                tool_calls?: Array<{
-                  index?: number;
-                  id?: string;
-                  function?: {
-                    name?: string;
-                    arguments?: string;
-                  };
-                }>;
               };
               finish_reason?: string;
             }>;
+            apeireth?: {events?: CanonicalExecutionEvent[]};
           };
 
           const choice = json.choices?.[0];
@@ -561,47 +633,8 @@ export async function streamChat(
             callbacks.onReasoningDelta?.(delta.reasoning_content);
           }
 
-          // 3. Tool calls streaming
-          if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
-            for (const tc of delta.tool_calls) {
-              const tcId = tc.id || `tc-${tc.index ?? 0}`;
-              let existing = currentTools.get(tcId);
-              if (!existing) {
-                existing = {
-                  id: tcId,
-                  name: tc.function?.name || '未知工具',
-                  rawArgs: tc.function?.arguments || '',
-                  status: 'running',
-                  startTime: Date.now(),
-                };
-                currentTools.set(tcId, existing);
-                callbacks.onToolCall?.(existing);
-              } else {
-                if (tc.function?.name) existing.name = tc.function.name;
-                if (tc.function?.arguments) existing.rawArgs = (existing.rawArgs || '') + tc.function.arguments;
-                try {
-                  if (existing.rawArgs) {
-                    existing.args = JSON.parse(existing.rawArgs);
-                  }
-                } catch {
-                  // partial JSON parsing failure is expected while streaming arguments
-                }
-                callbacks.onToolCall?.(existing);
-              }
-            }
-          }
-
-          // 4. Finish reason
-          if (choice?.finish_reason) {
-            for (const [, tc] of currentTools) {
-              if (tc.status === 'running') {
-                tc.status = 'succeeded';
-                tc.endTime = Date.now();
-                tc.durationMs = tc.endTime - (tc.startTime || tc.endTime);
-                callbacks.onToolResult?.(tc.id, true, '执行成功');
-              }
-            }
-          }
+          // 3. Canonical Main Loop observations — never client-executed tool_calls.
+          applyCanonicalEvents(json.apeireth?.events, callbacks);
         } catch {
           // ignore malformed SSE chunks
         }
@@ -666,6 +699,8 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
             onToolCall: (toolCall) => onEvent({type: 'tool-call', requestId, toolCall}),
             onToolResult: (toolCallId, ok, summary) =>
               onEvent({type: 'tool-result', requestId, toolCallId, ok, summary}),
+            onApprovalRequired: (pending) =>
+              onEvent({type: 'approval-required', requestId, pending}),
           },
           request.signal ?? abortController.signal,
           request.sessionId,
@@ -675,6 +710,10 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
         onEvent({type: 'run-end', requestId, aborted: false});
         return full;
       } catch (caught) {
+        if (caught instanceof ApprovalRequiredError) {
+          onEvent({type: 'run-end', requestId, aborted: false});
+          throw caught;
+        }
         const error = toRuntimeError(caught);
         if (error.code !== 'aborted') {
           onEvent({type: 'run-error', requestId, error});
@@ -717,32 +756,10 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
  *
  * 404 仅作为 legacy fallback 触发条件, 不作为长期协议设计.
  */
-export async function fetchCapabilities(config: ApeirethConfig): Promise<CapabilityManifest> {
-  const base = normalizeBaseUrl(config.baseUrl);
-  try {
-    const res = await fetch(`${base}/v1/apeireth/capabilities`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!res.ok) {
-      // 非 200 → legacy fallback (不抛错, 不弄死 Desktop)
-      return legacyCapabilityManifest();
-    }
-    const data = (await res.json()) as CapabilityManifest;
-    // 基本校验: 必须有 schema_version + capabilities 数组, 否则视为损坏 → legacy
-    if (
-      typeof data.schema_version !== 'number' ||
-      !Array.isArray(data.capabilities) ||
-      !data.runtime ||
-      typeof data.runtime.service !== 'string'
-    ) {
-      return legacyCapabilityManifest();
-    }
-    return data;
-  } catch {
-    // 网络错误/超时 → legacy fallback
-    return legacyCapabilityManifest();
-  }
+export async function fetchCapabilities(_config: ApeirethConfig): Promise<CapabilityManifest> {
+  // Canonical 2.0 has no /v1/apeireth/capabilities. Do not probe a known-dead
+  // URL; the release contract is the product surface.
+  return releaseContractManifest();
 }
 
 /**
@@ -1010,69 +1027,61 @@ export async function fetchTools(config: ApeirethConfig): Promise<ToolItem[]> {
   }));
 }
 
-/** 获取待审批授权请求 */
-export async function fetchApprovalRequests(config: ApeirethConfig): Promise<ApprovalRequestItem[]> {
-  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/approval-requests`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-  });
-  // G1 修复: 后端返回 {count, requests, note} 对象 (approval_requests.rs:229-242,
-  // 契约 §3.2), 不是裸数组 — 旧代码 Array.isArray(对象) 恒 false, 待批授权永不显示.
-  interface ApprovalRequestRow {
-    id?: string;
-    chain?: string;
-    rev?: number;
-    tool?: string;
-    reason?: string;
-    args_preview?: string;
-    summary?: string;
-    created_at?: number;
-    requested_at?: number;
-    status?: string;
-  }
-  const data = (await checkJson(res)) as {count?: number; requests?: ApprovalRequestRow[]; note?: string} | ApprovalRequestRow[];
-  const list: ApprovalRequestRow[] = Array.isArray(data) ? data : Array.isArray(data?.requests) ? data.requests : [];
-  if (!list.length) return [];
-  return list.map((item, idx) => ({
-    id: item.id || `apreq-${idx}`,
-    chain: item.chain,
-    rev: item.rev,
-    tool: item.tool || '未知工具',
-    reason: item.reason,
-    args_preview: item.args_preview,
-    summary: item.reason || item.summary || item.args_preview || '请求执行特权工具',
-    requestedAt: item.created_at || item.requested_at,
-    status: (item.status as ApprovalRequestItem['status']) || 'pending',
-  }));
+/** Canonical pending-approval inbox. Session-scoped; never hits v1 grant APIs. */
+export async function fetchCanonicalApprovals(
+  config: ApeirethConfig,
+  sessionId: string,
+): Promise<CanonicalPendingApproval[]> {
+  const res = await fetch(
+    `${normalizeBaseUrl(config.baseUrl)}/v1/approvals?session=${encodeURIComponent(sessionId)}`,
+  );
+  const data = (await checkJson(res)) as {approvals?: CanonicalPendingApproval[]};
+  return Array.isArray(data.approvals) ? data.approvals : [];
 }
 
-/** 主人批准端点 (master token 显式授权，不持久化 Token) */
-export async function grantToolPermission(
+/** Resolve one pending approval through canonical Governance. */
+export async function resolveCanonicalApproval(
   config: ApeirethConfig,
-  tool: string,
-  hours: number = 1,
-  masterToken: string = '',
-): Promise<{ok: boolean; error?: string}> {
-  try {
-    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/grant`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
-      },
-      body: JSON.stringify({
-        tool,
-        hours,
-        master_token: masterToken.trim(),
-      }),
-    });
-    if (!res.ok) {
-      const err = (await res.json().catch(() => ({error: `HTTP ${res.status}`}))) as {error?: string};
-      return {ok: false, error: err.error || `HTTP ${res.status}`};
-    }
-    return {ok: true};
-  } catch (caught) {
-    return {ok: false, error: caught instanceof Error ? caught.message : String(caught)};
+  pending: CanonicalPendingApproval,
+  decision: 'approve' | 'reject' | 'cancel',
+  reason?: string,
+): Promise<{kind: 'completed'; text: string; events: CanonicalExecutionEvent[]} | {kind: 'pending'; pending: CanonicalPendingApproval}> {
+  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/approvals/resolve`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      session: pending.session,
+      approval: pending.approval_id,
+      decision,
+      reason,
+    }),
+  });
+  if (res.status === 202) {
+    const next = (await res.json()) as CanonicalPendingApproval;
+    return {kind: 'pending', pending: next};
   }
+  const data = (await checkJson(res)) as {
+    text?: string;
+    events?: CanonicalExecutionEvent[];
+  };
+  return {kind: 'completed', text: data.text || '', events: data.events || []};
+}
+
+/** @deprecated v1 grant inbox. Does not request a dead URL. */
+export async function fetchApprovalRequests(
+  _config: ApeirethConfig,
+): Promise<ApprovalRequestItem[]> {
+  return [];
+}
+
+/** @deprecated v1 master-token grant. Does not request a dead URL. */
+export async function grantToolPermission(
+  _config: ApeirethConfig,
+  _tool: string,
+  _hours: number = 1,
+  _masterToken: string = '',
+): Promise<{ok: boolean; error?: string}> {
+  return {ok: false, error: 'legacy grant path removed; use /v1/approvals/resolve'};
 }
 
 /** 写入记忆条目 */
@@ -1156,60 +1165,11 @@ export interface CompanionEvent {
  * 支持断线指数退避自动重连 (2s ~ 30s)
  */
 export function subscribeCompanionEvents(
-  config: ApeirethConfig,
-  onEvent: (event: CompanionEvent) => void,
+  _config: ApeirethConfig,
+  _onEvent: (event: CompanionEvent) => void,
 ): () => void {
-  const url = `${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/events`;
-  let active = true;
-  let currentController: AbortController | null = null;
-  let retryDelay = 2000;
-
-  async function connectLoop(): Promise<void> {
-    while (active) {
-      currentController = new AbortController();
-      try {
-        const response = await fetch(url, {
-          headers: {Authorization: `Bearer ${config.apiKey}`},
-          signal: currentController.signal,
-        });
-        if (!response.ok || !response.body) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        retryDelay = 2000; // Reset delay on successful connection
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (active) {
-          const {done, value} = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, {stream: true});
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('data:')) {
-              const data = trimmed.slice(5).trim();
-              if (data) {
-                onEvent({text: data, ts: Date.now()});
-              }
-            }
-          }
-        }
-      } catch {
-        // Disconnected or aborted
-      }
-      if (!active) break;
-      await new Promise((resolve) => setTimeout(resolve, retryDelay));
-      retryDelay = Math.min(retryDelay * 1.5, 30000);
-    }
-  }
-
-  void connectLoop();
-
-  return () => {
-    active = false;
-    currentController?.abort();
-  };
+  // Canonical 2.0 has no companion SSE bus. Do not request /v1/apeireth/events.
+  return () => {};
 }
 
 // ============================================================
@@ -1335,21 +1295,16 @@ export async function unprotectMemoryEpisode(config: ApeirethConfig, id: string,
 
 // --- Permission grants (revoke + list) ---
 
-export async function fetchGrants(config: ApeirethConfig): Promise<GrantView[]> {
-  try {
-    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/grants`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-    });
-    const data = (await checkJson(res)) as {grants?: GrantView[]};
-    return data.grants || [];
-  } catch {
-    return [];
-  }
+export async function fetchGrants(_config: ApeirethConfig): Promise<GrantView[]> {
+  return [];
 }
 
-export async function revokeGrant(config: ApeirethConfig, id: string, masterToken: string): Promise<{ok: boolean; error?: string}> {
-  const r = await postJson(config, `/v1/apeireth/grants/${encodeURIComponent(id)}/revoke`, {master_token: masterToken.trim()});
-  return r.ok ? {ok: true} : {ok: false, error: r.error};
+export async function revokeGrant(
+  _config: ApeirethConfig,
+  _id: string,
+  _masterToken: string,
+): Promise<{ok: boolean; error?: string}> {
+  return {ok: false, error: 'legacy grant path removed; use /v1/approvals/resolve'};
 }
 
 // --- Trace ---

@@ -26,6 +26,7 @@
   import { voiceCallManager } from './lib/voice';
 
   import EmptyState from './lib/components/EmptyState.svelte';
+  import ConfirmDialog from './lib/components/ConfirmDialog.svelte';
   import SceneLayer from './lib/scene/SceneLayer.svelte';
   import PlanetLayer from './lib/scene/PlanetLayer.svelte';
   import BridgeLayer from './lib/bridge/BridgeLayer.svelte';
@@ -52,7 +53,9 @@
   import {
     checkHealthDetailed,
     createAgentRuntime,
-    fetchApprovalRequests,
+    fetchCanonicalApprovals,
+    resolveCanonicalApproval,
+    ApprovalRequiredError,
     loadConfig,
     loadConversations,
     saveConfig,
@@ -61,6 +64,7 @@
     subscribeCompanionEvents,
     capabilitySupported,
     type CompanionPresentationState,
+    type CanonicalPendingApproval,
   } from './lib/runtime';
   import {presenceStore, subscribePresence} from './lib/presence';
   import {isDesktop, resolveBackendEndpoint} from './lib/desktop-bridge';
@@ -164,6 +168,8 @@
   let busy = $state(false);
   let error = $state('');
   let pendingApprovals = $state<ApprovalRequestItem[]>([]);
+  let pendingCanonical = $state<CanonicalPendingApproval | null>(null);
+  let approvalBusy = $state(false);
   let isReasoning = $state(false);
   let isExecutingTool = $state(false);
   let legacyToast = $state('');
@@ -477,8 +483,17 @@
         if (!capabilities || fresh.runtime.version !== prevVersion || fresh.legacy !== capabilities.legacy) {
           capabilities = fresh;
         }
-        // 同步待审批请求 (后端权限洋葱).
-        pendingApprovals = await fetchApprovalRequests(config).catch(() => []);
+        if (activeId) {
+          const inbox = await fetchCanonicalApprovals(config, activeId).catch(() => []);
+          pendingApprovals = inbox.map((item) => ({
+            id: item.approval_id,
+            tool: item.tool_name,
+            reason: item.governance_reason,
+            status: 'pending' as const,
+          }));
+        } else {
+          pendingApprovals = [];
+        }
       } else {
         pendingApprovals = [];
       }
@@ -558,6 +573,8 @@
           } else if (event.type === 'tool-result') {
             isExecutingTool = false;
             void triggerAutoScroll();
+          } else if (event.type === 'approval-required') {
+            pendingCanonical = event.pending;
           }
         },
       );
@@ -566,6 +583,14 @@
         streaming: false,
       });
     } catch (caught) {
+      if (caught instanceof ApprovalRequiredError) {
+        pendingCanonical = caught.pending;
+        updateMessage(conversationId, assistantMessage.id, {
+          streaming: false,
+          text: `等待批准：${caught.pending.tool_name}`,
+        });
+        return;
+      }
       const isAborted =
         (caught instanceof Error && caught.name === 'AbortError') ||
         (typeof caught === 'object' && caught !== null && (caught as any).code === 'aborted');
@@ -599,6 +624,40 @@
       await tick();
       void triggerAutoScroll();
     }
+  }
+
+  async function resolvePending(decision: 'approve' | 'reject'): Promise<void> {
+    if (!pendingCanonical || approvalBusy) return;
+    approvalBusy = true;
+    const conversationId = activeId;
+    try {
+      const result = await resolveCanonicalApproval(config, pendingCanonical, decision);
+      if (result.kind === 'pending') {
+        pendingCanonical = result.pending;
+        return;
+      }
+      pendingCanonical = null;
+      if (conversationId) {
+        const conversation = conversations.find((item) => item.id === conversationId);
+        const last = conversation?.messages.filter((m) => m.role === 'assistant').at(-1);
+        if (last) {
+          updateMessage(conversationId, last.id, {
+            text: result.text || (decision === 'approve' ? '(空响应)' : '已拒绝该工具调用'),
+            streaming: false,
+          });
+        }
+      }
+    } catch (caught) {
+      error = describeCaughtSafe(caught);
+    } finally {
+      approvalBusy = false;
+      await refreshConnection();
+    }
+  }
+
+  function describeCaughtSafe(caught: unknown): string {
+    if (caught instanceof Error) return caught.message;
+    return String(caught);
   }
 
   function stop(): void {
@@ -1089,6 +1148,16 @@
   }}
   onClose={() => showVoiceCall = false}
   onSendMessage={handleVoiceMessage}
+/>
+
+<ConfirmDialog
+  open={pendingCanonical !== null}
+  title="需要批准"
+  message={pendingCanonical ? `${pendingCanonical.tool_name}：${pendingCanonical.governance_reason}` : ''}
+  confirmText={approvalBusy ? '处理中…' : '批准'}
+  cancelText="拒绝"
+  onConfirm={() => void resolvePending('approve')}
+  onCancel={() => void resolvePending('reject')}
 />
 
 <!-- Runtime Diagnostics Modal -->
