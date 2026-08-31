@@ -12,8 +12,10 @@
 //! - Timestamped structured events
 //! - Platform-appropriate paths (Windows: %LOCALAPPDATA%\Apeireth\logs\)
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+// Workspace policy (clippy.toml): fs_err over std::fs, so filesystem errors
+// carry the offending path instead of a bare ErrorKind.
+use fs_err::{self as fs, File, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
