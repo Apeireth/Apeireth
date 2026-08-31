@@ -1,9 +1,9 @@
-//! F4 Hypothesis 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/hypothesis.rs`).
+//! F4 Hypothesis 器官真实现 (v2 移植版, per `legacy/canonical/apeireth-companion/src/hypothesis.rs`).
 //!
 //! **v1 → v2 1:1 翻译纪律**:
 //!
 //! - v1 真实现是**确定性机制** (HypothesisStore + VerifyPlanner + ReconcileSink 三件套,
-//!   全部可测, 无 LLM 依赖, per `legacy/donor/apeireth-companion/src/hypothesis.rs:11-17`
+//!   全部可测, 无 LLM 依赖, per `legacy/canonical/apeireth-companion/src/hypothesis.rs:11-17`
 //!   文档明示 "机制 (确定性, 无 LLM)").
 //! - v2 真实现保留 v1 全部确定性算法: 4 态状态机 (Conjecture/Verifying/Confirmed/Refuted),
 //!   加权证据累积触发定论, `min_evidence_to_settle` 防单条大权重拍板, `VerifyPlanner`
@@ -31,7 +31,7 @@
 //!    runtime 决定如何执行, organ trait 仅产出建议, 不假装 plan 已执行.
 //! - `ReconcileSink` 是 trait 接口, 默认 `NoopSink` (诚实: 未接真对账).
 //!
-//! **v1 哲学** (per `legacy/donor/apeireth-companion/src/hypothesis.rs:1-9`):
+//! **v1 哲学** (per `legacy/canonical/apeireth-companion/src/hypothesis.rs:1-9`):
 //!
 //! - 好奇心决定探索哪 → 世界模型提供推演载体 → **假设检验设计验证** → 记忆提供证据库
 //!   → 验证结果更新她. 本模块是四原型串链的中枢.

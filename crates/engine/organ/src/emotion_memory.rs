@@ -1,7 +1,7 @@
-//! F1 EmotionMemory 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/emotion_memory.rs`).
+//! F1 EmotionMemory 器官真实现 (v2 移植版, per `legacy/canonical/apeireth-companion/src/emotion_memory.rs`).
 //!
 //! **v1 → v2 1:1 翻译纪律**:
-//! - v1 真实现是**确定性无 LLM** (per `legacy/donor/apeireth-companion/src/emotion_memory.rs:11-17`
+//! - v1 真实现是**确定性无 LLM** (per `legacy/canonical/apeireth-companion/src/emotion_memory.rs:11-17`
 //!   文档明示: "## 机制 (确定性, 无 LLM)") — v2 trait 保留 `llm_factory()` 接口但**真实现不用**.
 //! - v1 数据模型: `MoodRecord { valence [-1,1], arousal [0,1], source, note, at_ms }` +
 //!   `MoodSnapshot { valence, arousal, sample_count, last_source }` (2D valence/arousal).

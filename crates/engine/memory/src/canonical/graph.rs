@@ -2,7 +2,7 @@
 //!
 //! This module owns simple, deterministic relationship/query primitives for
 //! memory infrastructure. It is not a knowledge-graph product, a planner, or
-//! a causal cognition engine. The donor graph implementations are in-memory
+//! a causal cognition engine. The canonical graph implementations are in-memory
 //! only, so this graph makes no persistence promise.
 
 use std::collections::{HashMap, HashSet, VecDeque};

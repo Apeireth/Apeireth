@@ -4,7 +4,7 @@
 //! - frozen/apeireth-task `RetryPolicy` 硬编码常量 (max_retries=3, backoff 基数 1s,
 //!   指数 1s→2s→4s) 与 `TaskStateMachine` 7 状态守门 (Pending/Queued/Running/...,
 //!   终态锁定, Failed/Timeout 可重入, Cancelled 不可重试)。
-//! - donor/apeireth-pipeline-g5 `DefaultReliability::backoff_ms` (attempt→退避查询,
+//! - canonical/apeireth-pipeline-g5 `DefaultReliability::backoff_ms` (attempt→退避查询,
 //!   不在原语内 sleep, 异步 sleep 由上层拥有)。
 //! - v2 已有 [`crate::worktree_sandbox::RateLimitBackoff`] 是限流场景的实例化退避;
 //!   本模块的 [`RetryPolicy`] 补齐"尝试预算 + 元数据落账"维度, 两者互补不重复。
@@ -16,12 +16,12 @@ use serde::{Deserialize, Serialize};
 
 use super::history::RUN_EVENT_ACTOR;
 
-/// 重试策略: 尝试预算 + 确定性指数退避 (donor frozen-task 常量为默认值)。
+/// 重试策略: 尝试预算 + 确定性指数退避 (canonical frozen-task 常量为默认值)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RetryPolicy {
-    /// 最大尝试次数 (含首次; donor `MAX_RETRIES_DEFAULT = 3`)。
+    /// 最大尝试次数 (含首次; canonical `MAX_RETRIES_DEFAULT = 3`)。
     pub max_attempts: u32,
-    /// 退避基数毫秒 (第 1 次重试前; donor `RETRY_BACKOFF_MS = 1000`)。
+    /// 退避基数毫秒 (第 1 次重试前; canonical `RETRY_BACKOFF_MS = 1000`)。
     pub base_backoff_ms: u64,
     /// 退避上限毫秒 (指数封顶)。
     pub max_backoff_ms: u64,
@@ -72,26 +72,26 @@ impl RetryPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActivityState {
-    /// 已创建, 未调度 (donor `Pending`)
+    /// 已创建, 未调度 (canonical `Pending`)
     Pending,
-    /// 已写入调度事件 (donor `Queued`)
+    /// 已写入调度事件 (canonical `Queued`)
     Scheduled,
-    /// 执行器在途 (donor `Running`)
+    /// 执行器在途 (canonical `Running`)
     Running,
-    /// 成功 (终态; donor `Completed`)
+    /// 成功 (终态; canonical `Completed`)
     Succeeded,
-    /// 失败 (可重试; donor `Failed`)
+    /// 失败 (可重试; canonical `Failed`)
     Failed,
-    /// 取消 (终态, 永不可重试; donor `Cancelled`)
+    /// 取消 (终态, 永不可重试; canonical `Cancelled`)
     Cancelled,
-    /// 超时 (可重试; donor `Timeout`)
+    /// 超时 (可重试; canonical `Timeout`)
     TimedOut,
 }
 
-/// 状态数编译期守门 (donor `TASK_STATE_COUNT` 模式)。
+/// 状态数编译期守门 (canonical `TASK_STATE_COUNT` 模式)。
 pub const ACTIVITY_STATE_COUNT: usize = 7;
 
-/// 全部 7 个状态 (donor `SUPPORTED_STATES` 模式)。
+/// 全部 7 个状态 (canonical `SUPPORTED_STATES` 模式)。
 pub const SUPPORTED_ACTIVITY_STATES: &[ActivityState] = &[
     ActivityState::Pending,
     ActivityState::Scheduled,
@@ -104,7 +104,7 @@ pub const SUPPORTED_ACTIVITY_STATES: &[ActivityState] = &[
 
 const _: () = assert!(SUPPORTED_ACTIVITY_STATES.len() == ACTIVITY_STATE_COUNT);
 
-/// 活动状态机守门错误 (donor `TaskError::InvalidTransition` 模式)。
+/// 活动状态机守门错误 (canonical `TaskError::InvalidTransition` 模式)。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActivityStateError {
     /// 非法状态转换。
@@ -114,7 +114,7 @@ pub enum ActivityStateError {
         /// 目标状态
         to: ActivityState,
     },
-    /// 重试超出预算 (donor `RetryPolicy.max_retries` 守门)。
+    /// 重试超出预算 (canonical `RetryPolicy.max_retries` 守门)。
     RetryExhausted {
         /// 活动 ID
         activity_id: String,
@@ -145,9 +145,9 @@ impl std::fmt::Display for ActivityStateError {
 
 impl std::error::Error for ActivityStateError {}
 
-/// 活动调用守门状态机 (donor `TaskStateMachine` 适配)。
+/// 活动调用守门状态机 (canonical `TaskStateMachine` 适配)。
 ///
-/// 转换表 (donor 状态图 1:1, Queued→Scheduled 改名):
+/// 转换表 (canonical 状态图 1:1, Queued→Scheduled 改名):
 ///
 /// ```text
 /// Pending  ──schedule──▶  Scheduled ──dispatch──▶ Running
@@ -159,7 +159,7 @@ impl std::error::Error for ActivityStateError {}
 ///                                           └─────retry──────────▶ Scheduled
 /// ```
 ///
-/// **不变量** (不可妥协, donor O-1 教训):
+/// **不变量** (不可妥协, canonical O-1 教训):
 /// - 终态 (`Succeeded` / `Failed` / `Cancelled` / `TimedOut`) 除重试通道外不可再转换;
 /// - `Cancelled` 永不可重试 (主动取消不是失败);
 /// - `Pending` 不得跳过 `Scheduled` 直达 `Running`;
@@ -230,7 +230,7 @@ impl ActivityStateMachine {
         Ok(())
     }
 
-    /// 转换是否合法 (不修改状态; donor `can_transition`)。
+    /// 转换是否合法 (不修改状态; canonical `can_transition`)。
     pub fn can_transition(&self, next: ActivityState) -> bool {
         match (self.state, next) {
             (ActivityState::Pending, ActivityState::Scheduled)
@@ -255,7 +255,7 @@ impl ActivityStateMachine {
         }
     }
 
-    /// 是否终态 (donor `is_terminal`; Failed/TimedOut 属终态, 仅保留重试通道)。
+    /// 是否终态 (canonical `is_terminal`; Failed/TimedOut 属终态, 仅保留重试通道)。
     pub fn is_terminal(&self) -> bool {
         matches!(
             self.state,
@@ -273,7 +273,7 @@ impl ActivityStateMachine {
         }
         // First schedule is attempt 1; subsequent re-entry goes through `retry()`
         // which increments before applying Scheduled. Events and RetryPolicy are
-        // 1-based (donor max_attempts=3 means 3 executions, not 3 retries on top
+        // 1-based (canonical max_attempts=3 means 3 executions, not 3 retries on top
         // of a 0-based first try).
         if self.state == ActivityState::Pending
             && next == ActivityState::Scheduled
@@ -295,7 +295,7 @@ mod tests {
 
     // ====== RetryPolicy ======
 
-    /// donor frozen-task 常量: max_retries=3, backoff 基数 1000ms。
+    /// canonical frozen-task 常量: max_retries=3, backoff 基数 1000ms。
     #[test]
     fn defaults_match_donor_constants() {
         let p = RetryPolicy::default();
@@ -303,7 +303,7 @@ mod tests {
         assert_eq!(p.base_backoff_ms, 1_000);
     }
 
-    /// donor g5 语义: attempt 计数守门, 超预算拒绝。
+    /// canonical g5 语义: attempt 计数守门, 超预算拒绝。
     #[test]
     fn should_retry_boundaries() {
         let p = RetryPolicy::new(3, 100, 1_000);
@@ -318,7 +318,7 @@ mod tests {
         assert_eq!(RetryPolicy::new(0, 1, 1).max_attempts, 1);
     }
 
-    /// donor frozen-task 指数退避 1s→2s→4s, 封顶生效, 零重试为 0。
+    /// canonical frozen-task 指数退避 1s→2s→4s, 封顶生效, 零重试为 0。
     #[test]
     fn backoff_is_exponential_and_capped() {
         let p = RetryPolicy::new(8, 1_000, 30_000);
@@ -337,16 +337,16 @@ mod tests {
         assert_eq!(small.backoff_ms(5), 1_000);
     }
 
-    // ====== ActivityStateMachine (donor frozen-task 移植测试) ======
+    // ====== ActivityStateMachine (canonical frozen-task 移植测试) ======
 
-    /// donor `test_seven_states_hardcoded`。
+    /// canonical `test_seven_states_hardcoded`。
     #[test]
     fn seven_states_hardcoded() {
         assert_eq!(ACTIVITY_STATE_COUNT, 7);
         assert_eq!(SUPPORTED_ACTIVITY_STATES.len(), 7);
     }
 
-    /// donor `test_state_machine_happy_path`。
+    /// canonical `test_state_machine_happy_path`。
     #[test]
     fn happy_path_reaches_terminal() {
         let mut sm = ActivityStateMachine::new("t1", 1000);
@@ -360,7 +360,7 @@ mod tests {
         );
     }
 
-    /// donor `test_terminal_blocks_further_transitions`。
+    /// canonical `test_terminal_blocks_further_transitions`。
     #[test]
     fn terminal_blocks_further_transitions() {
         let mut sm = ActivityStateMachine::new("t2", 1000);
@@ -372,7 +372,7 @@ mod tests {
         assert!(sm.transition(ActivityState::Running, 1004).is_err());
     }
 
-    /// donor `test_pending_to_cancelled_direct`。
+    /// canonical `test_pending_to_cancelled_direct`。
     #[test]
     fn pending_to_cancelled_direct() {
         let mut sm = ActivityStateMachine::new("t3", 1000);
@@ -380,7 +380,7 @@ mod tests {
         assert!(sm.is_terminal());
     }
 
-    /// donor `test_invalid_skip_queue_to_running`: Pending 不得跳过 Scheduled。
+    /// canonical `test_invalid_skip_queue_to_running`: Pending 不得跳过 Scheduled。
     #[test]
     fn invalid_skip_scheduled_to_running() {
         let mut sm = ActivityStateMachine::new("t4", 1000);

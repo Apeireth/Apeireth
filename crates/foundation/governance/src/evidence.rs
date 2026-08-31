@@ -1,4 +1,4 @@
-//! Claim / evidence chain recovered from donor `evidence_guard`.
+//! Claim / evidence chain recovered from canonical `evidence_guard`.
 //!
 //! A claim without empirical evidence fails unless it is marked Inference
 //! **and** `confidence < INFERENCE_CONFIDENCE_CEILING` (0.7). This is a

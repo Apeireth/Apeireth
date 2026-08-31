@@ -281,7 +281,7 @@ where
 }
 
 /// Simplified ARC: T1 (recent) + T2 (frequent). Ghost lists are recorded but
-/// `p` is not adapted — donor already labelled this as not IBM ARC.
+/// `p` is not adapted — canonical already labelled this as not IBM ARC.
 struct ArcEvictor<K: Hash + Eq + Clone> {
     t1: VecDeque<K>,
     t2: VecDeque<K>,

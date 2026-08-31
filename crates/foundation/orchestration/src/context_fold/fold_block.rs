@@ -1,4 +1,4 @@
-//! FoldBlock graded reveal (VCP `foldProtocol` spirit, Rust-native).
+//! FoldBlock graded reveal (foldProtocol hierarchical design, Rust-native).
 //!
 //! Documents are split on line markers `[===vcp_fold:threshold===]`
 //! (optional `[===vcp_fold:threshold::desc:description===]`). Render expands a

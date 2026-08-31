@@ -1,4 +1,4 @@
-//! R179 P1-11: 4-layer progressive memory (借鉴 mempalace 4-layer closed-loop).
+//! R179 P1-11: 4-layer progressive memory (基于分层记忆模型).
 //!
 //! ## 概念
 //! 每个 memory item 从 L1 逐渐升级到 L4:

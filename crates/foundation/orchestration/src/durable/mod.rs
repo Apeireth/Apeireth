@@ -1,10 +1,10 @@
 //! `apeireth-orchestration::durable` — 持久执行原语 (durable execution primitives).
 //!
 //! **语义来源 (semantic salvage)**:
-//! - `legacy/donor/apeireth-workflow` (Temporal-lite `EventHistory` + Activity 语义)
-//! - `legacy/donor/apeireth-supervisor/src/journal_entry.rs` (chidori 式 host-call
+//! - `legacy/canonical/apeireth-workflow` (Temporal-lite `EventHistory` + Activity 语义)
+//! - `legacy/canonical/apeireth-supervisor/src/journal_entry.rs` (chidori 式 host-call
 //!   journal: 单调 seq + JSONL 行序列化 + 确定性重放元数据)
-//! - `legacy/donor/apeireth-bus/src/event_log.rs` (replay 查询语义: filter / since / last_n)
+//! - `legacy/canonical/apeireth-bus/src/event_log.rs` (replay 查询语义: filter / since / last_n)
 //! - `legacy/frozen/apeireth-task` (7 状态守门状态机 + 重试策略常量: max_retries=3,
 //!   backoff 1s→2s→4s)
 //!
@@ -12,8 +12,8 @@
 //! 1. `DurableHistory` — 追加式活动事件日志 (typed events, 单调 seq, JSONL 往返,
 //!    按 activity / 时间 / last_n 查询)
 //! 2. `DurableRun` — 确定性重放引擎: 同一 input + 同一 history 前缀 → 同一 output,
-//!    且**已记录完成的活动零副作用重放** (这是 legacy donor 只声称而未实现的真重放:
-//!    donor 的 "replay" 只是整段重跑并重新执行全部副作用)
+//!    且**已记录完成的活动零副作用重放** (这是 legacy canonical 只声称而未实现的真重放:
+//!    canonical 的 "replay" 只是整段重跑并重新执行全部副作用)
 //! 3. `RetryPolicy` — 尝试预算 + 确定性退避计划 (尝试号作为 failure/retry 元数据
 //!    记入事件流)
 //! 4. `ActivityStateMachine` — 活动调用守门状态机 (Pending/Scheduled/Running/
@@ -61,7 +61,7 @@ pub enum DurableError {
         reason: String,
     },
     /// 重放分歧: step 函数请求的活动与日志中下一个已记录的调度不一致
-    /// (确定性被破坏的显式信号, 对应 donor `WorkflowError::HistoryCorrupted` 的升级)。
+    /// (确定性被破坏的显式信号, 对应 canonical `WorkflowError::HistoryCorrupted` 的升级)。
     ReplayMismatch {
         /// 请求的活动 ID
         activity_id: String,

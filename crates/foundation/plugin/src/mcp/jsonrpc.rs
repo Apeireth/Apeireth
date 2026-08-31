@@ -1,6 +1,6 @@
 //! JSON-RPC 2.0 envelopes used by MCP.
 //!
-//! Donor: `legacy/donor/apeireth-mcp/src/protocol.rs`.
+//! Engine: `legacy/canonical/apeireth-mcp/src/protocol.rs`.
 //!
 //! The production client in `apeireth-tools::mcp` uses a `u64` request id.
 //! MCP (and JSON-RPC 2.0) allow String | Number | Null, and notifications

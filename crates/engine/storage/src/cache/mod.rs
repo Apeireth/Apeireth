@@ -4,9 +4,9 @@
 //! cache, **not** a second memory store: it does not persist episodes, notes,
 //! or history streams.
 //!
-//! Donor extras that are not ported:
+//! Engine extras that are not ported:
 //! - `indexmap` / `lru` crate / `quickcache` backends (new deps)
-//! - Redis / Disk / Memcached backends (honest stubs in the donor)
+//! - Redis / Disk / Memcached backends (honest stubs in the canonical)
 //! - `memory_provider` (would be a second MemoryStore)
 //! - eager background TTL scanner (needs a runtime task; lazy TTL is the
 //!   load-bearing algorithm)

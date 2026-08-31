@@ -1,4 +1,4 @@
-//! R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py).
+//! R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (基于分层记忆模型).
 //!
 //! ## 模型
 //! - **wing**: 项目 / 主题 (类似 mempalace 的 wing, 不是 apeireth 的 wing 机构术语)
@@ -6,7 +6,7 @@
 //! - **entity**: 一个 tag (例外 wing 自己)
 //! - **hallway**: wing 内两个 entity 的连接, 共现次数 >= min_count
 //!
-//! ## 算法 (借鉴 mempalace compute_hallways_for_wing)
+//! ## 算法 (基于分层记忆模型)
 //! 1. 拉所有 Note (filter by min_confidence)
 //! 2. 按 wing 分组: note.tags[0] = wing (约定)
 //!    — 允许 caller 自定义 wing_of(note) (默认用 tags[0])

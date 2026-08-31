@@ -1,6 +1,6 @@
 //! river_topology: 浪潮流体拓扑动力学与 TagMemo V10 双预解连续场求解器
 //!
-//! 吸收自 VCP 1.0 / TagMemo V10 (`RiverMemoEngine.js`, `modules/tagmemoV10/`, `rust-vexus-lite`):
+//! 连续流体拓扑动力学核心实现:
 //! 1. LIF (Leaky Integrate-and-Fire) 神经元脉冲传导模型，具备软非回溯抑制 (`return_flow_penalty = 0.1`)；
 //! 2. 节点内生残差 (Intrinsic Residual) 驱动的非对称张力，张力 >= 0.65 自动激活虫洞跃迁边 (Wormhole, 零动量损耗)；
 //! 3. 双预解算子对偶连续场方程求解器：

@@ -1,4 +1,4 @@
-//! `apeireth-provider::reasoning_adapter` — 推理字段归一化适配件 (N12 ②, VCP reasoningContentAdapter 吸收)
+//! `apeireth-provider::reasoning_adapter` — 推理字段归一化适配件 (N12 ②, reasoningContentAdapter 吸收)
 //!
 //! **机制** (调研依据: research/source/vcptoolbox/modules/reasoningContentAdapter.js +
 //! config.env.example; 任务锚点: team-work-doc §8.3/§8.4, backlog N12):
@@ -6,7 +6,7 @@
 //! 多家 LLM API 的推理内容字段名各不相同 (DeepSeek `reasoning_content` /
 //! Claude `thinking` / Kimi `reasoning` ...). 本模块:
 //!
-//! 1. **入向归一化**: 从响应对象按 12 个别名 (REASONING_ALIASES, 与 VCP REASONING_KEYS
+//! 1. **入向归一化**: 从响应对象按 12 个别名 (REASONING_ALIASES, 与 REASONING_KEYS
 //!    1:1) 提取推理文本 (支持嵌套对象/数组递归), 去重合并为内部 think 块
 //!    (`<think>...</think>`), 前置于可见内容。
 //! 2. **按目标模型能力下发**: `should_convert_for_model` 白名单过滤 —
@@ -14,11 +14,11 @@
 //! 3. **出向剥离**: `remove_reasoning_fields` 把全部别名字段从 JSON 对象删除
 //!    (转发给不支持推理字段的下游模型前使用)。
 //!
-//! **默认行为对齐 VCP**: enabled=false + 过滤器空 → 任何模型都不转换
+//! **默认适配行为:**: enabled=false + 过滤器空 → 任何模型都不转换
 //! (保守默认, 显式配置后才生效)。
 //!
 //! **0 假装**:
-//! - 别名清单以 VCP 源码 REASONING_KEYS 实数为准 (12 个); 台账写 "13 别名"
+//! - 别名清单以 REASONING_KEYS 为准 (12 个); 台账写 "13 别名"
 //!   为笔误 (源码核实), 未虚构第 13 个别名。
 //! - 流式增量 (SSE chunk 级) 归一化未做: 本模块面向完整 JSON 对象;
 //!   流式拼接后调用即可, 不需要独立机制。
@@ -26,7 +26,7 @@
 
 use serde_json::Value;
 
-/// 推理字段别名表 (与 VCP REASONING_KEYS 1:1, 提取按此顺序)。
+/// 推理字段别名表 (与 REASONING_KEYS 1:1, 提取按此顺序)。
 pub const REASONING_ALIASES: [&str; 12] = [
     "reasoning_content",
     "reasoning",
@@ -42,7 +42,7 @@ pub const REASONING_ALIASES: [&str; 12] = [
     "thoughts",
 ];
 
-/// 嵌套对象里视为文本内容的键 (VCP TEXT_VALUE_KEYS)。
+/// 嵌套对象里视为文本内容的键 (TEXT_VALUE_KEYS)。
 const TEXT_VALUE_KEYS: [&str; 6] = [
     "text",
     "content",
@@ -72,7 +72,7 @@ pub fn wrap_reasoning_text(text: &str, tag: &str) -> String {
     format!("<{tag}>\n{text}{closing_prefix}</{tag}>\n")
 }
 
-/// 递归提取单个值里的推理文本 (VCP valueToReasoningText):
+/// 递归提取单个值里的推理文本 (valueToReasoningText):
 /// - 字符串原样; 数字转字符串; null/false → 空
 /// - 数组 → 逐项提取, 空项丢弃, `\n` 连接
 /// - 对象 → 优先取 TEXT_VALUE_KEYS ∪ REASONING_ALIASES 命中的键, `\n` 连接;
@@ -133,7 +133,7 @@ pub fn extract_reasoning_text(source: &Value) -> String {
 }
 
 /// 多源提取 (message 本体 + 附加源如 delta/usage)。
-/// **片段级全局去重** (对 VCP 的小改进: VCP 按整源文本去重, 流式场景 delta
+/// **片段级全局去重** (对全局去重的优化: 原逻辑按整源文本去重, 流式场景 delta
 /// 与 message 累积重复时会双发; 这里按片段去重消除该重复)。
 pub fn extract_reasoning_text_from_sources(sources: &[&Value]) -> String {
     let mut parts = Vec::new();
@@ -166,10 +166,10 @@ pub fn remove_reasoning_fields(source: &mut Value) -> usize {
     removed
 }
 
-/// 适配器配置 (VCP config.env: ReasoningToContentEnabled / ReasoningToContentModel / Tag)。
+/// 适配器配置 (config.env: ReasoningToContentEnabled / ReasoningToContentModel / Tag)。
 #[derive(Debug, Clone)]
 pub struct ReasoningAdapterConfig {
-    /// 总开关 (VCP 默认 false)。
+    /// 总开关 (TopologicalEngine 默认 false)。
     pub enabled: bool,
     /// 模型白名单过滤器: 模型名 (小写) 包含任一过滤器子串才转换。空 = 不转换任何模型。
     pub model_filters: Vec<String>,
@@ -210,7 +210,7 @@ impl ReasoningAdapterConfig {
         }
     }
 
-    /// 目标模型是否需要推理转换 (VCP shouldConvertReasoningForModel 1:1):
+    /// 目标模型是否需要推理转换 (shouldConvertReasoningForModel 1:1):
     /// enabled && 模型名非空 && 过滤器非空 && 任一过滤器子串命中 (大小写不敏感)。
     pub fn should_convert_for_model(&self, model_name: &str) -> bool {
         if !self.enabled || model_name.trim().is_empty() || self.model_filters.is_empty() {
@@ -223,7 +223,7 @@ impl ReasoningAdapterConfig {
     }
 }
 
-/// 构造客户端可见内容 (VCP buildClientVisibleContent 1:1):
+/// 构造客户端可见内容 (buildClientVisibleContent 1:1):
 /// - 模型未命中过滤器 → message.content 原样 (字符串 content 之外 → 空串)
 /// - 命中 → think 块前置于 content (无推理文本 → 原样)
 pub fn build_client_visible_content(

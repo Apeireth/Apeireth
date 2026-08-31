@@ -78,11 +78,11 @@ impl std::fmt::Display for MemoryId {
 ///
 /// - `id`: the domain key; persisted identity.
 /// - `data`: the memory content itself.
-/// - `importance`: donor-supported domain metadata. Persisted now, ranked in
+/// - `importance`: canonical domain metadata. Persisted now, ranked in
 ///   M1B2; not interpreted in M1B1.
-/// - `access_count`: donor-supported domain metadata used for ACT-R-style
+/// - `access_count`: canonical domain metadata used for ACT-R-style
 ///   retrieval in M1B2.
-/// - `access_times`: donor-supported domain metadata; explicit timestamps for
+/// - `access_times`: canonical domain metadata; explicit timestamps for
 ///   retrieval. `Timestamp` is the canonical core time type.
 /// - `created_at`: creation time, supplied by the caller or a canonical
 ///   `Clock`; never read from the wall clock inside the domain.

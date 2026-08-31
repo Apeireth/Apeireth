@@ -9,7 +9,7 @@
 //! # What this crate is not
 //!
 //! It is not a second approval authority, council loop, or sovereignty runtime.
-//! Recovered donor algorithms (Colang parser, approval-policy scoring, eval
+//! Recovered canonical algorithms (Colang parser, approval-policy scoring, eval
 //! stats, evidence checker, hold/synthesis rubric, risk-rank / fail-closed)
 //! live here as **default-off library helpers**. They do not implement
 //! [`GovernanceHook`] and are not installed in [`GovernancePipeline`]. The

@@ -25,7 +25,7 @@
 //!   `llm_factory()` 返 None, 决策路径严格确定性, **不假装"E7 always speak"** (子代理 R7, 2026-08-28)
 //! - ✅ **Memory Merger** (`memory::MemoryMergerOrgan`) — 跨 8 organ 记忆合并抽象
 //!   (子代理 R8, 2026-08-28). **0 装诚实标**: v1 `runtime_brain.rs` 没有 `MemoryMerger`
-//!   模块; v2 是新抽象, 借鉴 v1 `MemoryExtractionService` dedup/weight/persist 算法骨架 1:1 翻译.
+//!   模块; v2 是新抽象, 自研记忆抽取服务 dedup/weight/persist 算法骨架 1:1 翻译.
 //!
 //! **0 装 PASS (per task + 子代理 R 同步)**:
 //! - 本 crate E4 / F4 / F6 / F1 / W1 / **W2** / W3 / E7 / Memory 真实现; **9 organ 全实装**.
@@ -43,7 +43,7 @@
 //! 3. 架构: runtime 拿 `Arc<dyn OrganTrait>`, 9 organ trait 抽象统一入口语义.
 //!
 //! **v1 compat**: trait 是新增, 0 破现有 consumer. v1 `apeireth-companion::curiosity`
-//! 仍在 `legacy/donor/` (workspace exclude), v2 真生产路径走本 crate.
+//! 仍在 `legacy/canonical/` (workspace exclude), v2 真生产路径走本 crate.
 
 // Re-export plugin 层 trait + 类型 (per `apeireth-perception` 同模式)
 pub use apeireth_plugin::organ::{

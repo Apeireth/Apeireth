@@ -1,6 +1,6 @@
 //! Capture metadata helpers recovered around the existing `ScreenshotBytes` contract.
 //!
-//! `XcapVisionBackend` already captures PNG/JPEG bytes. Donor `VisionInput` also
+//! `XcapVisionBackend` already captures PNG/JPEG bytes. Engine `VisionInput` also
 //! carried `width` / `height` / optional OCR. Those fields never made it onto
 //! `ScreenshotBytes` (frozen in `apeireth-plugin`). This module extracts them
 //! from encoded image bytes without adding a new capture backend or a second

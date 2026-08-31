@@ -1,6 +1,6 @@
 //! Windowed fingerprint dedup (salvage of companion `observer_capture` LRU + hash).
 //!
-//! Donor behaviour recovered:
+//! Engine behaviour recovered:
 //! - Canonical SHA-256 fingerprint of a payload (first 16 hex chars).
 //! - In-memory LRU keyed by `(namespace, fingerprint)` with a time window.
 //! - Optional SQLite sidecar so the window survives process restart.
@@ -8,9 +8,9 @@
 //! This is **not** a second MemoryStore. Persistence reuses
 //! [`crate::SqliteMemoryStore::conn`] and a dedicated `dedup_fingerprints`
 //! table (created idempotently). Episodes are never polluted with `expc-*`
-//! rows — that donor shortcut is discarded.
+//! rows — that canonical shortcut is discarded.
 //!
-//! Default window = 24h; default LRU cap = 1024 (donor constants).
+//! Default window = 24h; default LRU cap = 1024 (canonical constants).
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Mutex;
@@ -26,13 +26,13 @@ pub const DEFAULT_DEDUP_WINDOW_MS: i64 = 24 * 60 * 60 * 1000;
 /// Default in-memory LRU capacity.
 pub const DEFAULT_LRU_CAP: usize = 1024;
 
-/// Character Jaccard threshold used by [`dedup_textual`] (donor dream.rs: 0.8).
+/// Character Jaccard threshold used by [`dedup_textual`] (canonical dream.rs: 0.8).
 pub const TEXTUAL_OVERLAP_THRESHOLD: f64 = 0.8;
 
 /// Minimum normalized length before substring / overlap collapse applies.
 pub const TEXTUAL_MIN_LEN: usize = 20;
 
-/// Fingerprint hex length (8 bytes = 16 hex chars; donor `args_hash`).
+/// Fingerprint hex length (8 bytes = 16 hex chars; canonical `args_hash`).
 const FINGERPRINT_HEX_LEN: usize = 16;
 
 /// Configuration for a [`DedupIndex`].
@@ -95,7 +95,7 @@ pub fn episode_fingerprint(role: &str, content: &str) -> String {
     fingerprint_bytes(normalized.as_bytes())
 }
 
-/// Strip whitespace and lowercase (donor `dream::dedup_textual` normalizer).
+/// Strip whitespace and lowercase (canonical text normalizer).
 pub fn normalize_for_dedup(s: &str) -> String {
     s.chars()
         .filter(|c| !c.is_whitespace())
@@ -127,7 +127,7 @@ pub fn overlap_ratio(a: &str, b: &str) -> f64 {
 /// - both are at least [`TEXTUAL_MIN_LEN`] and Jaccard overlap exceeds
 ///   [`TEXTUAL_OVERLAP_THRESHOLD`].
 ///
-/// Donor `dream::dedup_textual` incremented `i` after replacing the current
+/// Engine `dream::dedup_textual` incremented `i` after replacing the current
 /// item, skipping the replacement. This port stays on `i` so the new occupant
 /// is compared against the remainder.
 pub fn dedup_textual(items: &mut Vec<String>) {
@@ -480,7 +480,7 @@ mod tests {
     #[test]
     fn dedup_textual_replacement_is_recompared() {
         // A is short-dup of B (B longer, so A is removed). B then dups C.
-        // Donor incremented past the replacement; we must collapse all three.
+        // Engine incremented past the replacement; we must collapse all three.
         let mut items = vec![
             "abcdefghijklmnopqrst".into(),             // 20 chars
             "abcdefghijklmnopqrstuvwxyz".into(),       // longer, contains first

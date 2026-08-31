@@ -1,7 +1,7 @@
-//! Persistent brute-force cosine KNN (salvage of donor
+//! Persistent brute-force cosine KNN (salvage of canonical
 //! `apeireth-vector::sqlite_backend` **fallback** path).
 //!
-//! The donor `vec0` virtual table requires the `sqlite-vec` C extension
+//! The canonical `vec0` virtual table requires the `sqlite-vec` C extension
 //! (unsafe auto-extension + a new crates.io dependency). That path is
 //! **deferred**. This module recovers the BLOB table, little-endian pack,
 //! metadata JSON, upsert/delete/clear, and full-scan cosine KNN using only
@@ -9,7 +9,7 @@
 //!
 //! It is **not** a second [`crate::canonical::vector::VectorIndex`] owner:
 //! the in-memory index stays the hybrid-search semantic channel. This type
-//! is the durable companion (own `.db` file, same as the donor) and is
+//! is the durable companion (own `.db` file, same as the canonical) and is
 //! default-off — nothing in `hybrid_search` auto-wires it.
 
 use std::path::{Path, PathBuf};
@@ -21,7 +21,7 @@ use crate::canonical::vector::cosine_similarity;
 use crate::metadata_filter::MetadataFilter;
 use crate::MemoryError;
 
-/// Default file name used by the donor backend.
+/// Default file name used by the canonical backend.
 pub const DEFAULT_DB_FILE: &str = "apeireth-vector.db";
 
 const META_DIM: &str = "dim";
@@ -179,7 +179,7 @@ impl PersistentVectorIndex {
         }
     }
 
-    /// Cosine top-k. Optional `filter` is applied **after** scoring (donor
+    /// Cosine top-k. Optional `filter` is applied **after** scoring (canonical
     /// metadata is stored but was not used as a KNN predicate; this is the
     /// recovered filter behaviour).
     pub fn search(

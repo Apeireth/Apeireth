@@ -1,9 +1,9 @@
 //! WHATWG HTML §9.2 Server-Sent Events frame parser.
 //!
-//! Donor: `legacy/donor/apeireth-mcp/src/transport/sse.rs` (`parse_sse_frame`,
+//! Engine: `legacy/canonical/apeireth-mcp/src/transport/sse.rs` (`parse_sse_frame`,
 //! `absolutize_endpoint`, frame-separator scan).
 //!
-//! Recovered **without reqwest**. The donor `SseTransport` is deferred: it
+//! Recovered **without reqwest**. The canonical `SseTransport` is deferred: it
 //! is a live HTTP client and would pull a new dependency plus a parallel
 //! host. A later transport can feed bytes into [`SseBuffer`].
 
@@ -14,10 +14,10 @@ use std::time::Duration;
 pub struct SseFrame {
     pub event: Option<String>,
     pub data_lines: Vec<String>,
-    /// `id:` field (Last-Event-ID). Donor ignored this; we keep it so
+    /// `id:` field (Last-Event-ID). Engine ignored this; we keep it so
     /// reconnect can resume.
     pub id: Option<String>,
-    /// `retry:` field, milliseconds. Donor ignored this.
+    /// `retry:` field, milliseconds. Engine ignored this.
     pub retry: Option<Duration>,
 }
 
@@ -143,7 +143,7 @@ fn find_frame_sep(s: &str) -> Option<usize> {
 
 /// Resolve a (possibly relative) endpoint against a base URL.
 ///
-/// Donor used `reqwest::Url::join`. This version is std-only:
+/// Engine used `reqwest::Url::join`. This version is std-only:
 /// - already-absolute `http(s)://` endpoints are returned as-is
 /// - paths starting with `/` replace the base path
 /// - other relatives append after the last `/` of the base path

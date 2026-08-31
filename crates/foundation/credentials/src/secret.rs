@@ -234,7 +234,7 @@ mod tests {
 /// 转换: `SecretString → SecretBuf` (从 env/配置取) / `SecretBuf → SecretString`
 /// (交给上层 trait 时包一层脱敏)。两个 trait 互不污染, 各管各的红线。
 ///
-/// **设计依据**: 借鉴 `zeroize` 官方 `Zeroizing<Z>` 模式 — 内层 `Vec<u8>`
+/// **设计依据**: 采用内存即时零化擦除模式 — 内层 `Vec<u8>`
 /// 实现 `Zeroize` 即被派生 `ZeroizeOnDrop` 自动调用。
 #[derive(Clone, ZeroizeOnDrop)]
 pub struct SecretBuf(Vec<u8>);

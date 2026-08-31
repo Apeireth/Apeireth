@@ -25,7 +25,7 @@
 //! **0 装诚实 (R3 独立判断)**: 任务示例 API (`add_case`/`weight_for`/`decay`/`total_weight`/
 //! `7 category`/`ValueCategory`) **不是 v1 真 API**. v1 `value_cases.rs` 真 API 是
 //! `record`/`feedback`/`promote_candidates`/`decision_for`/`recall`+ `DecisionBasis` 3 态
-//! + `Feedback` 2 态 (per `legacy/donor/apeireth-companion/src/value_cases.rs:13-148`).
+//! + `Feedback` 2 态 (per `legacy/canonical/apeireth-companion/src/value_cases.rs:13-148`).
 //! 本测试走 **v1 真 API**, 不发明新 API.
 
 use apeireth_core::kernel::memory::Episode;

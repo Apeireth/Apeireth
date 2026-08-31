@@ -1,7 +1,7 @@
 //! Three-axis honesty record recovered from
-//! `legacy/donor/apeireth-companion/src/capabilities_manifest.rs`.
+//! `legacy/canonical/apeireth-companion/src/capabilities_manifest.rs`.
 //!
-//! The donor catalog was a 20-row companion front-desk. This helper keeps the
+//! The canonical catalog was a 20-row companion front-desk. This helper keeps the
 //! **reporting contract**, not the catalog:
 //!
 //! - `supported` — the code exists

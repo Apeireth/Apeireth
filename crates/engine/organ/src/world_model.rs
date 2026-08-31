@@ -1,4 +1,4 @@
-//! W1 World Model 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/world_model.rs`).
+//! W1 World Model 器官真实现 (v2 移植版, per `legacy/canonical/apeireth-companion/src/world_model.rs`).
 //!
 //! **v1 → v2 1:1 翻译纪律**:
 //!
@@ -36,7 +36,7 @@
 //! - `TextualSimulator::run` / `calibrate` **不**调用任何 `SqliteMemoryStore` / `memory_extractor`.
 //!   推演结果永远不当事实注入记忆 (per v1 doc 11-13 行 "0 装 PASS" 硬边界).
 //!
-//! **v1 哲学** (per `legacy/donor/apeireth-companion/src/world_model.rs:1-21`):
+//! **v1 哲学** (per `legacy/canonical/apeireth-companion/src/world_model.rs:1-21`):
 //!
 //! - **第一层 (本模块)**: LLM 按时间线展开反事实推演链, oracle Brier 在终点校准 (防编故事).
 //! - 第二层 (W2): 因果结构图推演, 沿 memory_graph s/p/o 因果网 MCTS — 下一步.

@@ -1,12 +1,12 @@
 //! P-arch (2026-08-27): B1 Experience trait 骨架 (3-layer).
 //! O-6 重构批次 Refactor-2.
 //!
-//! 借鉴 v1 `apeireth-experience`（LLM Wiki + Knowledge Graph + VCP 联想网络，
+//! 核心模块 apeireth-experience:（LLM Wiki + Knowledge Graph + TopologicalEngine 联想网络，
 //! 3-layer progressive disclosure），**v2 形态**：
 //!
 //! - trait `WikiEntryStore`（per-episode 提炼的 wiki 条目）
 //! - trait `KnowledgeGraphStore`（subject-predicate-object 事实 + 链接）
-//! - trait `AssociationStore`（VCP 联想网络：entity 关联强度）
+//! - trait `AssociationStore`（TopologicalEngine 联想网络：entity 关联强度）
 //!
 //! **位置**: traits and the conservative deterministic extractor live in
 //! `apeireth-plugin` (foundation); SQLite persistence remains in memory
@@ -84,7 +84,7 @@ pub trait WikiEntryStore: Send + Sync {
 // Knowledge Graph (L2: 事实 + 链接)
 // ============================================
 
-/// Graph 事实 (s/p/o 三元组，v1 借鉴: safishamsi/graphify + VCP 联想网络)
+/// Graph 事实 (s/p/o 三元组，v1 借鉴: safishamsi/graphify + TopologicalEngine 联想网络)
 ///
 /// 命名空间: subject (实体 ID) → predicate (关系) → object (实体 ID 或字面值)
 /// v1 实践: subject_id 复用 `PluginId` 或 domain entity; 0 装存 String
@@ -138,7 +138,7 @@ pub trait KnowledgeGraphStore: Send + Sync {
 // Association (L3: 联想网络)
 // ============================================
 
-/// 联想节点 (VCP `compound_eye` 借鉴: entity-pair 共现强度)
+/// 联想节点 (概念关联拓扑: 实体对共现强度)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AssociationNode {
     pub entity_id: String,

@@ -1,6 +1,6 @@
 //! Beta-Binomial confidence with a Wilson 95% interval.
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/confidence.rs`.
+//! Canonical implementation module.
 //!
 //! v2 already inlines a one-shot Beta(1,1) posterior + Wilson interval inside
 //! W1 World Model's `CalibratedResolver`. This module is the reusable, stateful

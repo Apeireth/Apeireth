@@ -31,7 +31,7 @@ static EMAIL_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
 
 static PHONE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    // Mainland-China mobile shape from the donor. The trailing `\b` keeps a
+    // Mainland-China mobile shape from the canonical. The trailing `\b` keeps a
     // 12-digit string from matching as its first 11 digits.
     Regex::new(r"\b(?:\+?86)?1[3-9]\d{9}\b").unwrap()
 });
@@ -67,7 +67,7 @@ static ENV_SECRET_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 pub enum PiiKind {
     /// An email address.
     Email,
-    /// A phone number (currently the donor's mainland-China mobile shape).
+    /// A phone number (currently the canonical's mainland-China mobile shape).
     Phone,
     /// A credential-like string (`sk-...`, AWS access-key shape, or a
     /// `Bearer` token shape).

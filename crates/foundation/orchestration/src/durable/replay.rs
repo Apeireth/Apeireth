@@ -1,9 +1,9 @@
 //! `durable::replay` — 确定性重放引擎 (真正跳过已完成活动的副作用).
 //!
-//! **语义来源**: donor/apeireth-workflow 声称 "同一 input + 相同 history → 相同 output"
-//! 的 replay, 但 donor `WorkflowRunner::run` 每次都新建空 history 并重新执行全部
+//! **语义来源**: canonical/apeireth-workflow 声称 "同一 input + 相同 history → 相同 output"
+//! 的 replay, 但 canonical `WorkflowRunner::run` 每次都新建空 history 并重新执行全部
 //! Activity 副作用 (`r152_workflow_deliverables` 只验证了确定性函数本身)。本模块
-//! **补上 donor 未实现的真重放**:
+//! **补上 canonical 未实现的真重放**:
 //!
 //! - 已记录 `ActivityScheduled` + `ActivityCompleted` → 返回记录的 output, **零副作用**;
 //! - 已记录尝试链 `Scheduled → Failed … → Completed` → 消费失败记录后返回成功;
@@ -12,7 +12,7 @@
 //! - 新鲜活动经注入的 [`ActivityExecutor`] 执行并追加事件。
 //!
 //! **确定性方法**: 注入时间戳 + JSON 输入相等匹配 (v2 step 函数确定性, 无 rng)。
-//! 不采用 donor supervisor 的 `host_pid` / `rng_seed` DeterminismMeta。
+//! 不采用 canonical supervisor 的 `host_pid` / `rng_seed` DeterminismMeta。
 //!
 //! **不是** Main Loop / WorkflowRunner 注册表 / daemon tick: 调用方自带 step 闭包
 //! 与 executor, 本类型只维护一条 journal 游标。
@@ -23,7 +23,7 @@ use super::history::{ActivityEvent, ActivityEventKind, DurableHistory, RUN_EVENT
 use super::retry::RetryPolicy;
 use super::{DurableError, DurableResult};
 
-/// 副作用执行器 (donor `Activity` trait 的注入形态, 无全局注册表).
+/// 副作用执行器 (canonical `Activity` trait 的注入形态, 无全局注册表).
 pub trait ActivityExecutor {
     /// 执行一次活动。`Err(String)` 视为该次尝试失败, 由 [`DurableRun`] 按 [`RetryPolicy`] 记账。
     fn execute(&self, activity_id: &str, input: &Value) -> Result<Value, String>;
@@ -554,7 +554,7 @@ mod tests {
         h.events().iter().map(|e| e.kind).collect()
     }
 
-    /// donor `runner_records_event_history` / R225 end-to-end: 事件顺序。
+    /// canonical `runner_records_event_history` / R225 end-to-end: 事件顺序。
     #[test]
     fn fresh_run_records_started_scheduled_completed() {
         let exec = CountingEcho::new();
@@ -587,7 +587,7 @@ mod tests {
         }
     }
 
-    /// donor `test_workflow_propagates_activity_failure` + `runner_handles_activity_failure`。
+    /// canonical `test_workflow_propagates_activity_failure` + `runner_handles_activity_failure`。
     #[test]
     fn activity_failure_is_recorded_and_propagated() {
         let mut run = DurableRun::start(json!(null), 1);
@@ -614,8 +614,8 @@ mod tests {
         );
     }
 
-    /// donor `r152_workflow_deliverables`: 同 input → 同 output; **并且**第二次
-    /// 走 history 重放, 计数器不增加 (这是 donor 只声称未实现的真重放)。
+    /// canonical `r152_workflow_deliverables`: 同 input → 同 output; **并且**第二次
+    /// 走 history 重放, 计数器不增加 (这是 canonical 只声称未实现的真重放)。
     #[test]
     fn replay_skips_completed_activities() {
         let exec = CountingEcho::new();

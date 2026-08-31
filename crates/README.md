@@ -38,7 +38,7 @@ Model/runtime-facing actions.
 No product module is active in this baseline. When a feature earns a
 canonical owner, create it under `crates/modules/<name>/` and add it to the
 root workspace at the same time. Do not commit an empty architecture
-directory or reintroduce the historical Companion donor as production code.
+directory or reintroduce the historical Companion canonical as production code.
 
 ## Adapters
 
@@ -52,6 +52,6 @@ External surfaces into canonical Runtime.
 
 ## Legacy
 
-All donor/archived/frozen code lives under `legacy/`, not here. Current product
+All canonical/archived/frozen code lives under `legacy/`, not here. Current product
 code must not add new dependencies on `legacy/`. Existing legacy path
 dependencies are tracked migration debt.

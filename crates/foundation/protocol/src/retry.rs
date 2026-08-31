@@ -11,14 +11,14 @@
 //!   default, "reliable over fast"), `Custom`.
 //! - **Jitter modes** (AWS SDK patterns): None / Full / Equal / Decorrelated.
 //!
-//! Differences from the donor, by design:
-//! - The donor wrapped jitter in a `WithJitter(Box<BackoffPolicy>, JitterMode>)`
+//! Differences from the canonical, by design:
+//! - The canonical wrapped jitter in a `WithJitter(Box<BackoffPolicy>, JitterMode>)`
 //!   variant purely to keep 1.0 call sites pattern-matchable. v2 has no such
 //!   compatibility surface, so jitter is a plain field on [`RetryPolicy`].
-//! - The donor's metrics came from `apeireth_telemetry::Counter`; here
+//! - The canonical's metrics came from `apeireth_telemetry::Counter`; here
 //!   [`RetryCounters`] is a dependency-free atomic counter triple with the
 //!   same three observables (attempts / exhausted / success_after).
-//! - The donor drew randomness from a thread-local xorshift; here
+//! - The canonical drew randomness from a thread-local xorshift; here
 //!   [`XorShift64`] is a seedable, injectable PRNG (same xorshift64
 //!   constants), so jitter is deterministic under test and carries no
 //!   hidden global state.
@@ -143,8 +143,8 @@ impl JitterMode {
 
 /// Seedable xorshift64 PRNG (legacy `fastrand_u64` without the thread-local).
 ///
-/// Same shift constants as the donor (13 / 7 / 17). Not
-/// cryptographically secure — jitter only, exactly as in the donor.
+/// Same shift constants as the canonical (13 / 7 / 17). Not
+/// cryptographically secure — jitter only, exactly as in the canonical.
 #[derive(Debug, Clone)]
 pub struct XorShift64 {
     state: u64,
@@ -152,7 +152,7 @@ pub struct XorShift64 {
 
 impl XorShift64 {
     /// Create from a nonzero seed (`0` is remapped to a fixed nonzero constant,
-    /// mirroring the donor's initialization guard).
+    /// mirroring the canonical's initialization guard).
     pub fn new(seed: u64) -> Self {
         let state = if seed == 0 {
             0x9e37_79b9_7f4a_7c15
@@ -234,7 +234,7 @@ pub fn jittered_sleep(
 
 /// A backoff schedule plus the jitter mode to apply to it.
 ///
-/// Legacy shape minus the compatibility shim: the donor modeled this as a
+/// Legacy shape minus the compatibility shim: the canonical modeled this as a
 /// `WithJitter(Box<BackoffPolicy>, JitterMode)` enum variant; v2 has no legacy
 /// match sites, so this is a plain pair.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -254,7 +254,7 @@ impl RetryPolicy {
         }
     }
 
-    /// Attach a jitter mode (builder style, mirroring the donor's
+    /// Attach a jitter mode (builder style, mirroring the canonical's
     /// `BackoffPolicy::with_jitter` call shape).
     pub fn with_jitter(mut self, jitter: JitterMode) -> Self {
         self.jitter = jitter;
@@ -262,7 +262,7 @@ impl RetryPolicy {
     }
 
     /// Tier durations (delegates to the inner [`BackoffPolicy`]; jitter never
-    /// changes the tier count, mirroring the donor's `WithJitter` semantics).
+    /// changes the tier count, mirroring the canonical's `WithJitter` semantics).
     pub fn to_durations(&self) -> Vec<Duration> {
         self.backoff.to_durations()
     }
@@ -348,7 +348,7 @@ impl RetryCounters {
 mod tests {
     use super::*;
 
-    // ---------- should_retry_status (ported 1:1 from donor) ----------
+    // ---------- should_retry_status (ported 1:1 from canonical) ----------
 
     #[test]
     fn should_retry_4xx_default_no() {

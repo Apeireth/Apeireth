@@ -1,6 +1,6 @@
 //! `apeireth-memory::three_layer` — **R30 U9 claude-mem 3 层记忆 facade**
 //!
-//! **设计哲学** (claude-mem 借鉴, VCP/Apeireth 工程实践):
+//! **设计哲学** (claude-mem 借鉴, TopologicalEngine/Apeireth 工程实践):
 //! - **Working** (工作层): 当前 session 的 in-memory ring buffer, 极快 (无 IO), 给 LLM 喂上下文
 //! - **Short-term** (短程层): 最近 N 小时的 episode (SQLite), 中等 IO, 跨 session 回忆
 //! - **Long-term** (长程层): 永久笔记 + IdentityCard (SQLite), 慢但可压缩检索
@@ -158,7 +158,7 @@ impl ThreeLayerMemory {
         }
     }
 
-    /// R33-2 (mem0 借鉴): promote working → long-term notes (自动 fact extraction)
+    /// R33-2 (自研事实提取引擎): promote working → long-term notes (自动 fact extraction)
     ///
     /// **mem0 思想** (开源 long-term memory, Apache 2.0):
     /// - `add("I love Rust", user_id=...)` 自动抽 fact
@@ -202,7 +202,7 @@ impl ThreeLayerMemory {
     }
 }
 
-/// R33-2 (mem0 借鉴): 5 启发式 fact extraction rule
+/// R33-2 (自研事实提取引擎): 5 启发式 fact extraction rule
 ///
 /// **不调 LLM** (R19 离线优先, 零成本). 用简单模式匹配 + 关键句.
 fn extract_facts(text: &str) -> Vec<String> {
@@ -453,7 +453,7 @@ mod tests {
         assert!(r.is_err(), "depth=99 应报错, got: {:?}", r);
     }
 
-    // R33-2 (mem0 借鉴) 测试
+    // R33-2 (自研事实提取引擎) 测试
     #[test]
     fn r33_promote_with_summarize_extracts_digit_fact() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open"));

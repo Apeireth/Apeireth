@@ -1,6 +1,6 @@
 //! Generative-Agents-style memory ranking + Mem0 tombstone filter.
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/memory_extractor.rs`:
+//! Canonical implementation module.:
 //! - `parse_importance` / `【imp:N】` prefix
 //! - `rank_memory_entries`: importance × 3 + access × 0.3 + group bonus + recency
 //! - `active_episodes` tombstone filter (`tomb-*` + `【已废弃】{id}`)
@@ -11,7 +11,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-/// Importance prefix written by the donor extractor (`【imp:N】content`).
+/// Importance prefix written by the canonical extractor (`【imp:N】content`).
 pub const IMP_PREFIX: &str = "【imp:";
 
 /// Tombstone body prefix (`【已废弃】{target_id}`).
@@ -36,7 +36,7 @@ impl RankableMemory {
     }
 }
 
-/// Parse `【imp:N】` prefix; missing / malformed → 5 (donor default).
+/// Parse `【imp:N】` prefix; missing / malformed → 5 (canonical default).
 pub fn parse_importance(content: &str) -> u8 {
     if let Some(rest) = content.strip_prefix(IMP_PREFIX) {
         if let Some(end) = rest.find('】') {
@@ -82,7 +82,7 @@ pub fn memory_score(item: &RankableMemory, access_count: u64, now_unix: i64) -> 
 /// `(id, content)` pairs.
 ///
 /// `access` maps id → `(access_count, last_access_unix)`; last-access is
-/// recorded for callers but unused in the donor score (count only).
+/// recorded for callers but unused in the canonical score (count only).
 pub fn rank_memory_entries(
     items: &[RankableMemory],
     access: &HashMap<String, (u64, i64)>,

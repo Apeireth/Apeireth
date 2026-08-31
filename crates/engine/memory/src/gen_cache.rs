@@ -1,6 +1,6 @@
-//! N8: generation 绑定观测缓存 (VCP MemoRuntime 精神: Arc 快照 + 观测缓存).
+//! N8: generation 绑定观测缓存 (MemoRuntime 动态快照与观测缓存: Arc 快照 + 观测缓存).
 //!
-//! 背景: 台账 N8 (最后一个未实施 P0 吸收项, VCP rust-vexus-lite MemoRuntime).
+//! 背景: 台账 N8 (最后一个未实施 P0 吸收项, MemoRuntime vector cache).
 //! 由 database_engineer2 移交 fullstack_engineer2 续接 (原认领 3 轮无进展).
 //! 自包含模块: 仅依赖 std, 禁止改 semantic_persist.rs / memory_graph 评分本体
 //! (任务边界); artifact_sig 语义 (N5, `semantic_persist::artifact_sig`) 通过

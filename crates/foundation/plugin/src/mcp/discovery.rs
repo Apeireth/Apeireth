@@ -1,6 +1,6 @@
 //! MCP primitive namespace and method dispatch table.
 //!
-//! Donor: `legacy/donor/apeireth-mcp/src/primitives.rs`.
+//! Engine: `legacy/canonical/apeireth-mcp/src/primitives.rs`.
 //!
 //! A lookup table, not a registry of live tools. `Implemented` here means
 //! "this library has handler primitives for the method", not "a host is

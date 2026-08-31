@@ -7,12 +7,12 @@
 //! - **URL 路径带 model** (`/v1beta/models/{model}:generateContent`)
 //! - **`contents[]`** 数组 (role: `user` / `model`), 不是 messages
 //! - **`systemInstruction`** 顶层 (类似 Anthropic `system`)
-//! - **`tools[].functionDeclarations[]`** 数组 (复刻 VCP `extractProtectedTools` 真机制)
+//! - **`tools[].functionDeclarations[]`** 数组 (复刻 TopologicalEngine `extractProtectedTools` 真机制)
 //! - **`parts[]`** 数组, 每 part 是 `text` / `inlineData` / `functionCall` / `functionResponse`
 //! - **响应 `candidates[0].content.parts[]`** 而不是 `choices[0].message`
 //! - **`finishReason`** 枚举: `STOP` / `MAX_TOKENS` / `SAFETY` / `RECITATION` / `OTHER`
 //!
-//! **借鉴 VCP**:
+//! **设计参考: TopologicalEngine**:
 //! - `routes/protocolBridge.js:91-118` `extractProtectedTools` (Gemini functionDeclarations
 //!   + legacy `functions` 处理, **关键字段级引用**)
 
@@ -60,7 +60,7 @@ impl ProtocolAdapter for GeminiAdapter {
 
         let mut body = Map::new();
 
-        // 借鉴 VCP: system → systemInstruction 顶层
+        // 设计参考: TopologicalEngine: system → systemInstruction 顶层
         let mut system_text: Option<String> = None;
         let mut non_system: Vec<&crate::normalized::NormalizedMessage> = Vec::new();
         for m in &req.messages {
@@ -81,7 +81,7 @@ impl ProtocolAdapter for GeminiAdapter {
             );
         }
 
-        // 借鉴 VCP `extractProtectedTools` (protocolBridge.js:91-118):
+        // 设计参考: TopologicalEngine `extractProtectedTools` (protocolBridge.js:91-118):
         // Gemini tools 用 functionDeclarations 数组 (跟 OpenAI 嵌套格式不同)
         if !req.tools.is_empty() {
             let declarations: Vec<Value> = req
@@ -103,7 +103,7 @@ impl ProtocolAdapter for GeminiAdapter {
             );
         }
 
-        // 借鉴 VCP `normalizeToolChoice` (protocolBridge.js:120-156):
+        // 设计参考: TopologicalEngine `normalizeToolChoice` (protocolBridge.js:120-156):
         // Gemini 用 toolConfig.functionCallingConfig.mode (NONE / AUTO / ANY)
         if let Some(tc) = &req.tool_choice {
             let mode = match tc {
@@ -133,7 +133,7 @@ impl ProtocolAdapter for GeminiAdapter {
             );
         }
 
-        // 借鉴 VCP legacy functions (protocolBridge.js:110-115): 兼容旧 Gemini
+        // 设计参考: TopologicalEngine legacy functions (protocolBridge.js:110-115): 兼容旧 Gemini
         // 已经在 NormalizedRequest 里归一化为 tools, 这里不重复
 
         // contents
@@ -155,7 +155,7 @@ impl ProtocolAdapter for GeminiAdapter {
                             parts.push(json!({"text": text}));
                         }
                         for tc in &m.tool_calls {
-                            // 借鉴 VCP: functionCall 块
+                            // 设计参考: TopologicalEngine: functionCall 块
                             parts.push(json!({
                                 "functionCall": {
                                     "name": tc.name,
@@ -174,7 +174,7 @@ impl ProtocolAdapter for GeminiAdapter {
                                 "content": ContentPart::join_text(&m.content),
                             }
                         });
-                        // 借鉴 VCP `is_tool_result_error` 真代码: 检查 is_error
+                        // 设计参考: TopologicalEngine `is_tool_result_error` 真代码: 检查 is_error
                         let is_error = m
                             .name
                             .as_deref()
@@ -251,7 +251,7 @@ impl ProtocolAdapter for GeminiAdapter {
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("")
                                 .to_string();
-                            // 借鉴 VCP: Gemini functionCall 没有 id, 用 name 替代 (保持唯一性靠 user 端)
+                            // 设计参考: TopologicalEngine: Gemini functionCall 没有 id, 用 name 替代 (保持唯一性靠 user 端)
                             let id = format!("gemini_call_{}", name);
                             let args = fc.get("args").cloned().unwrap_or(Value::Object(Map::new()));
                             tool_calls.push(ToolCall {
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn request_system_promoted_to_system_instruction() {
-        // 借鉴 VCP: system → systemInstruction 顶层
+        // 设计参考: TopologicalEngine: system → systemInstruction 顶层
         let req = NormalizedRequest::new(
             "gemini-1.5-pro",
             vec![
@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn request_contents_uses_user_and_model_roles() {
-        // 借鉴 VCP: assistant → model role
+        // 设计参考: TopologicalEngine: assistant → model role
         let req = NormalizedRequest::new(
             "gemini-1.5-pro",
             vec![
@@ -419,7 +419,7 @@ mod tests {
 
     #[test]
     fn request_tools_use_function_declarations() {
-        // 借鉴 VCP protocolBridge.js:91-118 extractProtectedTools 真机制
+        // 设计参考: TopologicalEngine protocolBridge.js:91-118 extractProtectedTools 真机制
         let mut req = NormalizedRequest::new("gemini-1.5-pro", vec![NormalizedMessage::user("hi")]);
         let mut p = Map::new();
         p.insert("type".into(), Value::String("object".into()));
@@ -434,7 +434,7 @@ mod tests {
 
     #[test]
     fn request_tool_choice_specific_uses_allowed_function_names() {
-        // 借鉴 VCP normalizeToolChoice (protocolBridge.js:120-156): mode=ANY + allowedFunctionNames
+        // 设计参考: TopologicalEngine normalizeToolChoice (protocolBridge.js:120-156): mode=ANY + allowedFunctionNames
         let mut req = NormalizedRequest::new("gemini-1.5-pro", vec![NormalizedMessage::user("hi")]);
         req.tools.push(NormalizedTool::new("get_weather"));
         req.tools.push(NormalizedTool::new("get_news"));
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn request_assistant_tool_calls_become_function_call_parts() {
-        // 借鉴 VCP: OpenAI tool_calls → Gemini functionCall parts
+        // 设计参考: TopologicalEngine: OpenAI tool_calls → Gemini functionCall parts
         let tc = ToolCall {
             id: "call_1".into(),
             name: "get_weather".into(),
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn request_tool_message_becomes_user_function_response() {
-        // 借鉴 VCP: OpenAI tool → Gemini user + functionResponse
+        // 设计参考: TopologicalEngine: OpenAI tool → Gemini user + functionResponse
         let req = NormalizedRequest::new(
             "gemini-1.5-pro",
             vec![NormalizedMessage::tool_result(
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn response_with_function_call() {
-        // 借鉴 VCP: Gemini functionCall 块
+        // 设计参考: TopologicalEngine: Gemini functionCall 块
         let raw = json!({
             "candidates": [{
                 "content": {

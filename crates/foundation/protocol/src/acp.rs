@@ -3,7 +3,7 @@
 //! JSON serialization.
 //!
 //! Recovered from the legacy `apeireth-acp` crate (R23 P1 #5) as a *schema*
-//! only: the donor's transport lives in a pre-v2 runtime this workspace no
+//! only: the canonical's transport lives in a pre-v2 runtime this workspace no
 //! longer has, but the envelope contract — fields, validation, checksum,
 //! unicast/broadcast routing classification, sequence numbering, strict JSON
 //! round trip — is pure protocol vocabulary. Note this is a different envelope
@@ -11,7 +11,7 @@
 //! format `v/kind/id/body`); the ACP envelope is agent-addressed
 //! (`sender/recipient/kind/payload`).
 //!
-//! Checksum honesty (carried over from the donor): the integrity digest uses
+//! Checksum honesty (carried over from the canonical): the integrity digest uses
 //! the standard library's `DefaultHasher` (SipHash 1-3), which is stable
 //! within a Rust toolchain but is NOT collision-resistant against an
 //! adversary. It is an in-process tamper-evidence check, not a security
@@ -23,7 +23,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use thiserror::Error;
 
-/// ACP envelope errors (donor 1:1).
+/// ACP envelope errors (canonical 1:1).
 #[derive(Debug, Error)]
 pub enum AcpError {
     /// Sender (or recipient) is empty after trimming.
@@ -40,7 +40,7 @@ pub enum AcpError {
 /// Result alias for ACP operations.
 pub type AcpResult<T> = Result<T, AcpError>;
 
-/// Agent-to-agent envelope (donor `apeireth_acp::Envelope`, 1:1).
+/// Agent-to-agent envelope (canonical `apeireth_acp::Envelope`, 1:1).
 ///
 /// `recipient = "*"` means broadcast; any other non-empty recipient is
 /// unicast.
@@ -89,7 +89,7 @@ impl AcpEnvelope {
 
 /// Compute the envelope's integrity digest (16 lowercase hex chars).
 ///
-/// Donor 1:1: canonical field-ordered JSON, prefixed with `'E'` (seeded by
+/// Engine 1:1: canonical field-ordered JSON, prefixed with `'E'` (seeded by
 /// type to avoid cross-envelope-type collisions), hashed with `DefaultHasher`.
 /// See the module docs for the honesty note on SipHash.
 pub fn checksum(env: &AcpEnvelope) -> AcpResult<String> {
@@ -135,7 +135,7 @@ pub fn is_broadcast(env: &AcpEnvelope) -> bool {
 
 /// Deterministic sequence id from sender + a caller counter.
 ///
-/// Donor 1:1: replaces random UUIDs with a reproducible id for replay
+/// Engine 1:1: replaces random UUIDs with a reproducible id for replay
 /// scenarios; the value is stable for the same `(sender, counter)` pair.
 pub fn sequence_number(env: &AcpEnvelope, counter: u64) -> AcpResult<u64> {
     env.validate()?;
@@ -177,7 +177,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    // Tests ported 1:1 from the donor apeireth-acp crate.
+    // Tests ported 1:1 from the canonical apeireth-acp crate.
 
     #[test]
     fn envelope_roundtrips_through_validate() {

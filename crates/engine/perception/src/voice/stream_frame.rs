@@ -1,6 +1,6 @@
-//! Streaming audio buffer framing recovered from donor `apeireth-voice::realtime`.
+//! Streaming audio buffer framing recovered from canonical `apeireth-voice::realtime`.
 //!
-//! Donor realtime.rs is an OpenAI Realtime *schema* (event enums, gpt-realtime
+//! Engine realtime.rs is an OpenAI Realtime *schema* (event enums, gpt-realtime
 //! dispatch, ephemeral tokens, function calling). Porting that as a second
 //! session / provider path is forbidden. The media primitives that *are* real:
 //!
@@ -18,10 +18,10 @@ use serde::{Deserialize, Serialize};
 
 use super::audio_frame::{pcm16_from_le_bytes, AudioFrameError, PCM16_FRAME_SAMPLES};
 
-/// Maximum audio bytes per append (donor `REALTIME_MAX_AUDIO_BUFFER_BYTES`).
+/// Maximum audio bytes per append (canonical `REALTIME_MAX_AUDIO_BUFFER_BYTES`).
 pub const MAX_AUDIO_APPEND_BYTES: usize = 15 * 1024 * 1024;
 
-/// Maximum image bytes for a multimodal attachment (donor `REALTIME_MAX_IMAGE_BYTES`).
+/// Maximum image bytes for a multimodal attachment (canonical `REALTIME_MAX_IMAGE_BYTES`).
 pub const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
 
 /// Default VAD activation threshold.
@@ -36,7 +36,7 @@ pub const DEFAULT_PREFIX_PADDING_MS: u32 = 300;
 /// Framing errors.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StreamFrameError {
-    /// Empty payload rejected (donor used `AudioBufferTooLarge { got: 0 }` /
+    /// Empty payload rejected (canonical used `AudioBufferTooLarge { got: 0 }` /
     /// `ImageTooLarge { got: 0 }` — same shape, clearer name).
     Empty,
     /// Audio append exceeded [`MAX_AUDIO_APPEND_BYTES`].
@@ -78,7 +78,7 @@ impl fmt::Display for StreamFrameError {
 
 impl std::error::Error for StreamFrameError {}
 
-/// Audio format tag for a streaming append (donor `RealtimeAudioFormat`).
+/// Audio format tag for a streaming append (canonical `RealtimeAudioFormat`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StreamAudioFormat {
@@ -96,7 +96,7 @@ impl Default for StreamAudioFormat {
     }
 }
 
-/// Turn-detection kind (donor `TurnDetectionKind`).
+/// Turn-detection kind (canonical `TurnDetectionKind`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TurnDetectionKind {
@@ -106,7 +106,7 @@ pub enum TurnDetectionKind {
     Disabled,
 }
 
-/// Server-side VAD configuration (donor `TurnDetection` defaults).
+/// Server-side VAD configuration (canonical `TurnDetection` defaults).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TurnDetection {
     /// Detection kind.
@@ -176,7 +176,7 @@ pub fn encode_image_input(image_bytes: &[u8]) -> Result<&[u8], StreamFrameError>
     Ok(image_bytes)
 }
 
-/// Input-audio-buffer states. Donor events (`append` / `commit` / `clear` /
+/// Input-audio-buffer states. Engine events (`append` / `commit` / `clear` /
 /// `speech_started` / `speech_stopped`) implied this machine but never ran it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -344,7 +344,7 @@ impl InputAudioBuffer {
         self.state
     }
 
-    /// How many donor-sized PCM16 frames the current buffer would split into
+    /// How many canonical-sized PCM16 frames the current buffer would split into
     /// (partial tail counts as one).
     pub fn pending_frame_count(&self) -> usize {
         if self.bytes.is_empty() {

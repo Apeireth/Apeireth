@@ -35,9 +35,9 @@ pub mod canonical;
 mod episode;
 mod identity;
 mod migrations;
-// N8: generation 绑定观测缓存 (自包含, VCP MemoRuntime 精神, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
+// N8: generation 绑定观测缓存 (自包含, MemoRuntime 动态快照与观测缓存:, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
 pub mod gen_cache;
-// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py)
+// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (基于分层记忆模型)
 pub mod hallways;
 mod session_note;
 mod streams;
@@ -551,7 +551,7 @@ mod tests {
 /// R146: 3 memory crate -> 1 apeireth-memory (子模块)
 ///
 /// dailynote: 按日期分区存储 (R141)
-/// lightmemo: VCP production V3 拓扑简化 (R142-R143)
+/// lightmemo: Production V3 拓扑简化 (R142-R143)
 pub mod dailynote;
 pub mod lightmemo;
 

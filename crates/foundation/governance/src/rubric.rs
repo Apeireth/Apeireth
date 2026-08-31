@@ -10,7 +10,7 @@
 //!   optional 60s timeout
 //! * voting strategies: weighted majority / top scoring / supermajority (2/3)
 //!
-//! Default advisor-domain weights match the donor Safety=1.00 … History=0.55
+//! Default advisor-domain weights match the canonical Safety=1.00 … History=0.55
 //! table.
 
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,7 @@ pub const HOLD_DELIBERATION_TIMEOUT_MS: u64 = 60_000;
 /// Supermajority fraction (2/3 of non-empty ballots).
 pub const SUPERMAJORITY_FRACTION: f64 = 2.0 / 3.0;
 
-/// Stance used by the donor synthesis table.
+/// Stance used by the canonical synthesis table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StanceKind {
     StrongApprove,
@@ -75,7 +75,7 @@ impl StanceKind {
     }
 }
 
-/// Seven donor advisor domains. Weights are used only when a ballot leaves
+/// Seven canonical advisor domains. Weights are used only when a ballot leaves
 /// `weight` at 0.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AdvisorDomain {
@@ -162,7 +162,7 @@ pub struct SynthesisReport {
 
 /// Synthesize ballots. Abstentions are dropped from the score; hold is
 /// evaluated against the original slice (including abstentions, matching the
-/// donor: strong-disapprove percent uses total count).
+/// canonical: strong-disapprove percent uses total count).
 pub fn synthesize(ballots: &[Ballot]) -> SynthesisReport {
     let mut weighted = Vec::new();
     let mut sum_weighted_score = 0.0;

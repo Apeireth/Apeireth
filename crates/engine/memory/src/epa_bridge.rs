@@ -1,6 +1,6 @@
 //! epa_bridge: EPA 加权中心化 PCA 语义主轴、逻辑深度与跨域共振桥
 //!
-//! 吸收自 VCP 1.0 (`EPAModule.js`):
+//! 核心自主设计与数学动力学实现:
 //! 1. 加权中心化 (Weighted Centering) 消除公共背景偏置；
 //! 2. 隐式 Gram 矩阵幂迭代 (Power Iteration) 与正交化提取语义主成分基底；
 //! 3. 能量分布香农信息熵量化逻辑深度 (Logic Depth = 1 - H_norm)；

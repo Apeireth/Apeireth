@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn extract_numeric_entities() {
-        // Donor decoder handles decimal numeric entities (`&#65;` → A). Hex
+        // Engine decoder handles decimal numeric entities (`&#65;` → A). Hex
         // (`&#x42;`) is not in the ported algorithm.
         let h = "<p>&#65;&#66;</p>";
         let t = extract_text(h).unwrap();

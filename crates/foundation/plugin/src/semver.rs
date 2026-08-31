@@ -1,5 +1,5 @@
 //! Strict SemVer 2.0.0 parse and compare, recovered from
-//! `legacy/donor/apeireth-skills/src/semver_strict.rs`.
+//! `legacy/canonical/apeireth-skills/src/semver_strict.rs`.
 //!
 //! Plugin manifests store version as a free-form string. This helper is for
 //! callers that need the spec: three numeric segments, optional pre-release,

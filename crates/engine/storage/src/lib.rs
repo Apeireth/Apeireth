@@ -14,7 +14,7 @@
 //! built on top of this foundation in later migration phases.
 //!
 //! M1A port source: `origin/master:reconstruction_v2/crates/apeireth-storage`.
-//! Only `pool.rs` and `migrations.rs` semantics were ported, with the donor
+//! Only `pool.rs` and `migrations.rs` semantics were ported, with the canonical
 //! migration SQL kept for on-disk compatibility.
 
 pub mod cache;

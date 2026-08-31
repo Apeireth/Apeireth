@@ -1,6 +1,6 @@
 //! residual_pyramid: 修正 Gram-Schmidt 多层正交残差金字塔
 //!
-//! 吸收自 VCP 1.0 (`ResidualPyramid.js`):
+//! 核心自主设计与数学动力学实现:
 //! 1. 基于 Modified Gram-Schmidt (MGS) 正交化算法，将 Query 向量投影到已知标签张成的子空间中；
 //! 2. 多层级能量级联分解（60% 主导语义 -> 25% 次级语义 -> 5% 隐蔽微弱残差）；
 //! 3. 握手差向量（Handshake Vectors）与方向一致性（Direction Coherence），量化领域漂移意图；

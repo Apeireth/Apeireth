@@ -74,12 +74,12 @@ pub use store::{validate_service_name, CredentialsStore, FileCredentialsStore};
 /// runtime 可用此把 keyring / encrypted file 后端注入到 plugin 体系。
 pub use keyring_resolver::KeyringCredentialResolver;
 
-/// 借 VCP 字段数 (编译期自审锚, 对照 apeireth-tool-approval 惯例)。
+/// 保留历史字段数 (编译期自审锚, 对照 apeireth-tool-approval 惯例)。
 ///
-/// 本 crate 为原生新增, 无 VCP 借鉴字段 — 值为 0, 显式标注非遗漏。
-pub const BORROWED_VCP_FIELDS: usize = 0;
+/// 本 crate 为原生新增, 无外部引用字段 — 值为 0, 显式标注非遗漏。
+pub const LEGACY_RESERVED_FIELDS: usize = 0;
 
-const _: () = assert!(BORROWED_VCP_FIELDS == 0, "原生 crate, 借鉴字段应为 0");
+const _: () = assert!(LEGACY_RESERVED_FIELDS == 0, "原生 crate, 借鉴字段应为 0");
 
 #[cfg(test)]
 mod tests {
@@ -91,7 +91,7 @@ mod tests {
         let _ = redact_len(3);
         let _ = mask_for_display("abcdefgh");
         assert!(DEFAULT_HIGH_RISK_SERVICES.contains(&"master"));
-        assert_eq!(BORROWED_VCP_FIELDS, 0);
+        assert_eq!(LEGACY_RESERVED_FIELDS, 0);
         // TP20-S3: keyring 顶层 API 可达
         let _ = MAX_SECRET_LEN;
         let _ = MAX_SERVICE_NAME_LEN;

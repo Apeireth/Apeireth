@@ -1,10 +1,10 @@
-//! Vector distance utilities (salvage of donor `apeireth-vector::distance`).
+//! Vector distance utilities (salvage of canonical `apeireth-vector::distance`).
 //!
 //! Canonical [`crate::canonical::vector::cosine_similarity`] already owns
 //! cosine for the in-memory index. This module recovers the extra metrics
-//! (L2, L2², dot, Manhattan) and the donor distance→score maps used by the
+//! (L2, L2², dot, Manhattan) and the canonical distance→score maps used by the
 //! persistent KNN fallback. Length mismatch or non-finite input returns
-//! `None` instead of panicking (the donor used `assert_eq!`).
+//! `None` instead of panicking (the canonical used `assert_eq!`).
 
 use crate::canonical::vector::cosine_similarity;
 
@@ -103,7 +103,7 @@ pub fn normalize(v: &[f32]) -> Option<Vec<f32>> {
 }
 
 /// Distance according to `metric`. Dot product is returned negated so that
-/// smaller values remain "closer" (donor convention).
+/// smaller values remain "closer" (canonical convention).
 pub fn distance(a: &[f32], b: &[f32], metric: DistanceMetric) -> Option<f32> {
     match metric {
         DistanceMetric::Euclidean => euclidean_distance(a, b),
@@ -114,7 +114,7 @@ pub fn distance(a: &[f32], b: &[f32], metric: DistanceMetric) -> Option<f32> {
     }
 }
 
-/// Donor sqlite-vec score maps, kept as ranking heuristics without the C
+/// Engine sqlite-vec score maps, kept as ranking heuristics without the C
 /// extension:
 ///
 /// - cosine distance `d ∈ [0, 2]` → `1 - d/2` (similarity in `[-1, 1]`,

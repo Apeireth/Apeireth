@@ -9,7 +9,7 @@
 [![Tests](https://img.shields.io/badge/tests-2012%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-16--Crate%20Microkernel-orange.svg)](docs/01-architecture/architecture.md)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
@@ -422,7 +422,7 @@ Every line of code and every design decision strictly conforms to the **Nine Inv
 2. **`S-2` Truth from Reality (实事求是)**: Verify before writing; true mathematical dynamics over narrative hype.
 3. **`S-3` Quality Engineering (质量工程化)**: Rigorous type systems, 0-clippy warnings, 100% CI pass rate.
 4. **`O-1` Security First (安全优先)**: Fail-closed architecture, physical sandboxes, outbound tripwires, SAGA rollback.
-5. **`O-2` Standing on Shoulders (走在前人经验上)**: Absorb the essence of VCP, Aider, gnhf, SwarmVault, Noise Protocol.
+5. **`O-2` Standing on Shoulders (走在前人经验上)**: Absorb the essence of TopologicalEngine, Aider, gnhf, SwarmVault, Noise Protocol.
 6. **`O-3` Follow Through (干到底)**: Zero half-measures; full-stack closure from trait to tests and documentation.
 7. **`O-4` Maintainability (任何人都能接手)**: Crystal-clear architecture, mathematical docs, self-explaining code.
 8. **`O-5` Never Fake It (0 装 PASS)**: 0 `todo!`, 0 `unimplemented!`, 0 dummy mocks, 0 hollow stubs.
@@ -494,9 +494,21 @@ Apeireth comes from **Apeiron** (ἄπειρον) — the ancient Greek word for
 
 ---
 
-## ⚖️ License
+## ⚖️ License & Contribution
 
-Apeireth is licensed under the [Apache-2.0 License](LICENSE).
+Apeireth is dual-licensed under either of the following licenses at your option:
+
+- **Apache License, Version 2.0** ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- **MIT License** ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+
+### 🤝 Developer Certificate of Origin (DCO) Equivalent Policy
+By contributing to this repository (via Pull Request, Issue, or Patch), you explicitly certify under the Inbound=Outbound policy that your contributions are original and licensed under the dual MIT OR Apache-2.0 terms without extra conditions. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## ⚠️ Legal Disclaimer & Compliance
+
+This software is developed strictly for academic research, education, and local controlled experimental use. Operators deploying Apeireth for public-facing Generative AI services must independently fulfill all statutory regulatory and algorithmic compliance requirements. See [DISCLAIMER.md](DISCLAIMER.md) for full terms.
 
 ---
 

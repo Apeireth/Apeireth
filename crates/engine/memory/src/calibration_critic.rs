@@ -1,7 +1,7 @@
 //! Calibration-aware critic: Brier + ECE → Continue / Revise / Reject.
 //!
-//! Recovered from `legacy/donor/apeireth-evolution/src/critic.rs` and
-//! **decoupled from the donor 6-state evolution machine**.
+//! Canonical implementation module. and
+//! **decoupled from the canonical 6-state evolution machine**.
 //!
 //! v2 already has:
 //! - `reflexion::RuleCritic` — template text over three failure kinds

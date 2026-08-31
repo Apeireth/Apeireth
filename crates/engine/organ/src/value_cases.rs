@@ -1,9 +1,9 @@
-//! F6 Value Cases 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/value_cases.rs`).
+//! F6 Value Cases 器官真实现 (v2 移植版, per `legacy/canonical/apeireth-companion/src/value_cases.rs`).
 //!
 //! **v1 → v2 1:1 翻译纪律**:
 //!
 //! - v1 真实现是**确定性机制** (案例库 + 裁决记录 + 主人反馈回流 + 提升候选, 全部可测,
-//!   无 LLM 依赖, per `legacy/donor/apeireth-companion/src/value_cases.rs:13-18` 文档明示
+//!   无 LLM 依赖, per `legacy/canonical/apeireth-companion/src/value_cases.rs:13-18` 文档明示
 //!   "机制 (确定性, 无 LLM)").
 //! - v2 真实现保留 v1 全部确定性算法: `record / feedback / promote_candidates / decision_for / recall`.
 //! - v2 trait 接口 (`OrganTrait`) 保留 LLM factory 字段 (`llm_factory()`), 默认 None.
@@ -34,7 +34,7 @@
 //!    是否提升为原则 (per v1 doc "提升动作由调用方决定").
 //! - `feedback` 是 v1 真 API (回流信号), 不假装已自动提升.
 //!
-//! **v1 哲学** (per `legacy/donor/apeireth-companion/src/value_cases.rs:3-12`):
+//! **v1 哲学** (per `legacy/canonical/apeireth-companion/src/value_cases.rs:3-12`):
 //!
 //! - 宪法是规则表, 规则总有未覆盖的情况 — 价值内化 = 规则沉默处凭"主人意图与长期福祉"
 //!   做决定. 渐进内化: **规则 → 案例 → 判断**.

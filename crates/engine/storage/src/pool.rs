@@ -71,7 +71,7 @@ impl SynchronousMode {
 
 /// SQLite connection/pool configuration.
 ///
-/// The defaults mirror the donor implementation: WAL, synchronous NORMAL,
+/// The defaults mirror the canonical implementation: WAL, synchronous NORMAL,
 /// foreign keys ON, a 5-second busy timeout, and a read pool of 10.
 #[derive(Debug, Clone)]
 pub struct SqliteConfig {

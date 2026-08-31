@@ -1,6 +1,6 @@
 //! MCP resources/list + resources/read models.
 //!
-//! Donor: `legacy/donor/apeireth-mcp/src/resources.rs`.
+//! Engine: `legacy/canonical/apeireth-mcp/src/resources.rs`.
 //!
 //! Library primitives only. [`ResourceServer`] is a trait a host *may*
 //! implement; nothing here walks a real filesystem or talks to organs.

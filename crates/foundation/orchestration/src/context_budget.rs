@@ -1,6 +1,6 @@
 //! Context budget assembly and progressive-disclosure catalog.
 //!
-//! Recovered from donor `apeireth-companion::{context,progressive}`:
+//! Recovered from canonical `apeireth-companion::{context,progressive}`:
 //! - [`ContextAssembler`]: ordered injection blocks + total char budget +
 //!   core-block protection + greedy "cut the largest non-core first".
 //! - [`ProgressiveCatalog`]: catalog-first injection (`topic — summary (N)`)
@@ -60,7 +60,7 @@ pub struct ContextAssembler {
 
 impl ContextAssembler {
     /// Total budget in characters. Values below 100 are raised to 100 so a
-    /// core persona block always has a usable floor (donor contract).
+    /// core persona block always has a usable floor (canonical contract).
     pub fn new(total_budget_chars: usize) -> Self {
         Self {
             blocks: Vec::new(),
@@ -183,7 +183,7 @@ pub struct ProgressiveCatalog {
 }
 
 impl ProgressiveCatalog {
-    /// Catalog with the donor default budget (~800 tokens ≈ 1600 chars).
+    /// Catalog with the canonical default budget (~800 tokens ≈ 1600 chars).
     pub fn new(entries: Vec<CatalogEntry>) -> Self {
         Self {
             entries,

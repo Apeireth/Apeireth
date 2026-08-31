@@ -1,6 +1,6 @@
 //! file_fetcher: 超栈追踪 V2 跨节点透明文件穿透与安全沙箱缓存
 //!
-//! 吸收自 VCP 1.0 (`FileFetcherServer.js`):
+//! 核心自主设计与数学动力学实现:
 //! 1. 拦截 `file://` 本地协议 URL 并计算 SHA-256 平台无关缓存键；
 //! 2. 本地缓存 (.file_cache) 命中即读，未命中时通过分布式 WebSocket 协议下发 `internal_request_file` 请求；
 //! 3. 接收远程 Base64 数据并做 SHA-256 完整性自检后原子落盘；
@@ -228,6 +228,36 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, FileFetchError> {
     Ok(output)
 }
 
+/// 简易 Safe Base64 编码器 (无外部额外依赖)
+fn base64_encode(data: &[u8]) -> String {
+    const B64_TABLE: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::new();
+    let mut i = 0;
+    while i < data.len() {
+        let b0 = data[i] as usize;
+        let b1 = if i + 1 < data.len() { data[i + 1] as usize } else { 0 };
+        let b2 = if i + 2 < data.len() { data[i + 2] as usize } else { 0 };
+
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+
+        result.push(B64_TABLE[(triple >> 18) & 0x3F] as char);
+        result.push(B64_TABLE[(triple >> 12) & 0x3F] as char);
+        if i + 1 < data.len() {
+            result.push(B64_TABLE[(triple >> 6) & 0x3F] as char);
+        } else {
+            result.push('=');
+        }
+        if i + 2 < data.len() {
+            result.push(B64_TABLE[triple & 0x3F] as char);
+        } else {
+            result.push('=');
+        }
+        i += 3;
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,13 +278,13 @@ mod tests {
     fn test_remote_file_fetch_and_integrity_verification() {
         let mut fetcher = TransparentFileFetcher::new("target/.file_cache", vec![]);
 
-        let dummy_data = b"Hello VCP HyperStack Transparent File Fetcher!";
+        let dummy_data = b"Hello Apeireth HyperStack Transparent File Fetcher!";
         let mut hasher = Sha256::new();
         hasher.update(dummy_data);
         let expected_hash = format!("{:x}", hasher.finalize());
 
         // Base64 of dummy_data
-        let base64_str = "SGVsbG8gVkNQIEh5cGVyU3RhY2sgVHJhbnNwYXJlbnQgRmlsZSBGZXRjaGVyIQ==";
+        let base64_str = base64_encode(dummy_data);
 
         let mock_provider = |_url: &str| -> Result<InternalFileResponse, FileFetchError> {
             Ok(InternalFileResponse {

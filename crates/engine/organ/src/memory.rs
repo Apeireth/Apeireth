@@ -3,13 +3,13 @@
 //! **v1 → v2 翻译路线 (子代理 R8 独立判断)**:
 //!
 //! - **任务 spec 描述**: "v1 `MemoryMerger` 1:1 翻译 (跨 8 organ 记忆合并)".
-//! - **v1 真实现核查**: `legacy/donor/apeireth-companion/src/runtime_brain.rs` **没有
+//! - **v1 真实现核查**: `legacy/canonical/apeireth-companion/src/runtime_brain.rs` **没有
 //!   `MemoryMerger` 模块**. v1 era "记忆合并" 是**散落 3 处**:
 //!   - `runtime_brain.rs` (聚合 curiosity + emotion + hypothesis + catalog, L88 tick)
 //!   - `memory_extractor.rs` (`MemoryExtractionService::apply` 写入 SQLite, 5 维度提炼)
 //!   - `proactive_memory.rs` (`TopicPredictor` + `PreloadChannel` 主动预载)
 //! - **0 装诚实**: v1 没有统一的"跨 8 organ 记忆合并抽象". v2 `MemoryMerger` 是
-//!   **新设计** (按任务 spec), 不是 1:1 翻译. 真翻译纪律要求标: v2 是新抽象, 借鉴 v1
+//!   **新设计** (按任务 spec), 不是 1:1 翻译. 真翻译纪律要求标: v2 是新抽象, 设计参考: v1
 //!   `MemoryExtractionService` (dedup-by-content + weight + persist schema) 1:1 翻译其
 //!   **算法骨架**.
 //!

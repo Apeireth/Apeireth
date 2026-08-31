@@ -1,4 +1,4 @@
-//! E7 Emergence 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/emergence.rs`).
+//! E7 Emergence 器官真实现 (v2 移植版, per `legacy/canonical/apeireth-companion/src/emergence.rs`).
 //!
 //! **v1 → v2 1:1 翻译纪律** (per 子代理 R7 独立判断):
 //!
@@ -37,7 +37,7 @@
 //!   v2 真生产路径 `EmergenceOrgan::process()` 走完整 8 重门控 → 仅在 `should_speak()=true`
 //!   时把 `Initiative.action.label()` 装进 `OrganOutput::Emergence.action`; `spoke` = 是否真开口
 //!   (被任何一重门控拦下 = false). v1 `Initiative` 全字段仍保留在本模块公开 API, 供
-//!   `AwakeCompanion` (在 legacy/donor/) 或 v2 future integration 复用.
+//!   `AwakeCompanion` (在 legacy/canonical/) 或 v2 future integration 复用.
 //!
 //! **承接 (per 任务 §5)**:
 //! - 子代理 R1 (F1) / R2 (F4) / R3 (F6) 已就位 1:1 v1 真实现; E7 同款纪律.
@@ -77,7 +77,7 @@ pub use apeireth_plugin::organ::InitiativeGate as _PluginInitiativeGate;
 /// 关系深度 (per v1 `RelationshipState::depth()`).
 ///
 /// **0 装诚实**: v1 trait 由 `LocalRelationship` (机制层近似) + `Bond` (生产实现) 桥接;
-/// v2 organ crate 不绑 Bond (Bond 在 legacy/donor/), 暴露 `LocalRelationship` (机制层
+/// v2 organ crate 不绑 Bond (Bond 在 legacy/canonical/), 暴露 `LocalRelationship` (机制层
 /// 近似) 给本模块自身测试用 + future integration 入口. Bond 桥接 (`Bond → RelationshipState`)
 /// 等 v2 E7 真生产路径把 Bond 接入 workspace 时再补 (per `v2-unabsorbed-features.md`).
 pub trait RelationshipState {
@@ -435,7 +435,7 @@ pub struct HistoryEntry {
 /// - v1 `apeireth-companion::emergence::emergence.rs` **不包含**此状态机.
 /// - v1 真状态机在 `apeireth-evolution::state::EvolutionStateMachine` (6 状态含 Retired).
 /// - v1 `AwakeCompanion::ratify_fresh_policy` 调用 evolution engine 走全链路.
-/// - v2 E7 organ crate 不绑 apeireth-evolution (它在 legacy/donor/), 本 enum 是
+/// - v2 E7 organ crate 不绑 apeireth-evolution (它在 legacy/canonical/), 本 enum 是
 ///   **前向声明**, 留接口给 future 真接. 当前 v2 E7 `process()` 走 rhythm+boundary
 ///   loop 1:1 v1 真相, 不假装 emergence 自带 5 状态机.
 ///

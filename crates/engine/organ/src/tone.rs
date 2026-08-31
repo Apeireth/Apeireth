@@ -45,11 +45,11 @@ impl Default for BondCharacterSnapshot {
 }
 
 impl BondCharacterSnapshot {
-    /// Plutchik-style emotion injection into relational character (donor `BondCharacter::apply_emotion`).
+    /// Plutchik-style emotion injection into relational character (canonical `BondCharacter::apply_emotion`).
     ///
     /// Joy / trust / anticipation raise resonance (EMA 0.7 / 0.1 mix). Trust
     /// itself is EMA 0.8 / 0.2. Fear / surprise / sadness / disgust / anger
-    /// are accepted for API parity and currently unused (donor discarded them
+    /// are accepted for API parity and currently unused (canonical discarded them
     /// the same way). Does **not** own `memory::partner::Bond` — this is a
     /// tone-layer snapshot helper.
     #[allow(clippy::too_many_arguments)]
