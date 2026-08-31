@@ -287,3 +287,8 @@ frontend/companion-desktop/.pnpm-store/
 **/.harness-*.txt
 **/.harness-*.md
 **/.harness-*.ps1
+
+# Tauri sidecar staging: the canonical `apeireth` backend is copied here from
+# target/release at package time (see packaging/stage-sidecar.ps1). It is a
+# build artifact (~10MB), never a source file.
+frontend/companion-desktop/src-tauri/binaries/
