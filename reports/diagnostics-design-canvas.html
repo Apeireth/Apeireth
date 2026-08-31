@@ -1,0 +1,753 @@
+<title>Runtime Diagnostics Canvas</title>
+<style>
+  /* ============================================================
+     Apeireth 2.0 — Runtime Diagnostics design canvas
+     Tokens below are COPIED from the product, not invented:
+       src/lib/design/base.css        (palette, buttons, StatusDot)
+       src/lib/components/StatusBadge.svelte
+       src/lib/views/SettingsView.svelte  (scoped block/card/diag CSS)
+     Specimen panels use only these values.
+     ============================================================ */
+  :root {
+    /* --- product palette (base.css dark set) --- */
+    --bg: #0e0d10;
+    --surface: #151419;
+    --surface-2: #1b1a20;
+    --surface-3: #242229;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-strong: rgba(255, 255, 255, 0.15);
+    --text: #ebe8e2;
+    --muted: #96919c;
+    --faint: #625f69;
+    --amber: #e7a23b;
+    --amber-hi: #f1b95d;
+    --amber-wash: rgba(231, 162, 59, 0.12);
+    --amber-line: rgba(231, 162, 59, 0.36);
+    --green: #4db380;
+    --green-wash: rgba(77, 179, 128, 0.13);
+    --blue: #70a3dc;
+    --blue-wash: rgba(112, 163, 220, 0.13);
+    --danger: #e05b50;
+    --danger-wash: rgba(224, 91, 80, 0.12);
+    --danger-line: rgba(224, 91, 80, 0.35);
+    --mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    --ui: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    /* Explicit ground: the artifact composites over a host-painted surface. */
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- canvas chrome (NOT product UI) ----------
+     Deliberately in the faint/muted register so it recedes behind specimens. */
+  .canvas {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 28px 72px;
+    display: flex;
+    flex-direction: column;
+    gap: 34px;
+  }
+  .canvas-head { display: flex; flex-direction: column; gap: 10px; }
+  .canvas-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .canvas-head h1 {
+    margin: 0;
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .canvas-head p {
+    margin: 0;
+    max-width: 68ch;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .canvas-note {
+    display: flex;
+    gap: 10px;
+    padding: 11px 13px;
+    background: var(--amber-wash);
+    border: 1px solid var(--amber-line);
+    border-radius: 7px;
+    font-size: 12px;
+    color: var(--muted);
+    max-width: 80ch;
+  }
+  .canvas-note b { color: var(--amber); font-weight: 600; }
+
+  .specimens { display: flex; flex-direction: column; gap: 30px; }
+
+  .specimen { display: flex; flex-direction: column; gap: 11px; }
+  .specimen-label {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .specimen-id { color: var(--amber); letter-spacing: 0.08em; }
+  .specimen-name { color: var(--text); letter-spacing: 0.04em; }
+  .specimen-trigger { color: var(--muted); }
+  .specimen-invariant {
+    font-family: var(--ui);
+    font-size: 12px;
+    color: var(--muted);
+    max-width: 74ch;
+  }
+  .specimen-invariant strong { color: var(--text); font-weight: 600; }
+
+  /* Frame = the settings content column the panel actually sits in. */
+  .frame {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    max-width: 620px;
+  }
+
+  /* ---------- product primitives, copied verbatim ---------- */
+  .setting-block { display: flex; flex-direction: column; gap: 18px; }
+  .block-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--text); }
+  .block-desc { margin: -10px 0 6px; font-size: 13px; color: var(--muted); }
+
+  .info-card {
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .info-title { font-size: 13px; color: var(--text); }
+  .info-text { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  .notice-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--amber-wash);
+    border: 1px solid var(--amber-line);
+    border-radius: 7px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* diag-results / diag-summary / diag-list / diag-item — SettingsView */
+  .diag-results {
+    padding: 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .diag-summary {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+  }
+  .diag-summary b { color: var(--amber); font-family: var(--mono); }
+  .diag-list { display: flex; flex-direction: column; gap: 6px; }
+  .diag-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .diag-item code { font-family: var(--mono); color: var(--faint); }
+  .diag-value { font-family: var(--mono); color: var(--muted); }
+
+  /* StatusBadge.svelte — pill, 999px, 11px/600 */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .status-badge.small { padding: 1px 6px; font-size: 10px; }
+  .status-badge.amber { background: var(--amber-wash); color: var(--amber); border: 1px solid var(--amber-line); }
+  .status-badge.green { background: var(--green-wash); color: var(--green); border: 1px solid rgba(77, 179, 128, 0.3); }
+  .status-badge.blue { background: var(--blue-wash); color: var(--blue); border: 1px solid rgba(112, 163, 220, 0.3); }
+  .status-badge.danger { background: var(--danger-wash); color: var(--danger); border: 1px solid var(--danger-line); }
+  .status-badge.neutral { background: var(--surface-3); color: var(--text); border: 1px solid var(--line); }
+  .status-badge.dim { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+
+  /* StatusDot — base.css */
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--green);
+    flex: none;
+  }
+  .status-dot.off { background: var(--faint); }
+  .status-dot.active { background: var(--amber); }
+  .status-dot.danger { background: var(--danger); }
+  .status-dot.pulse { animation: dot-pulse 2.8s var(--ease, cubic-bezier(0.645, 0.045, 0.355, 1)) infinite; }
+  @keyframes dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* Buttons — base.css taxonomy */
+  .quiet-button, .primary-button, .danger-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 13px;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+  }
+  .quiet-button:hover { border-color: var(--amber-line); color: var(--amber); }
+  .primary-button { background: var(--amber); border-color: var(--amber); color: #1b1409; font-weight: 650; }
+  .primary-button:hover { background: var(--amber-hi); }
+  .danger-button { background: var(--danger-wash); border-color: var(--danger-line); color: var(--danger); }
+  .quiet-button[disabled], .primary-button[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    border-color: var(--line);
+    color: var(--muted);
+  }
+  .primary-button[disabled] { background: var(--surface-2); }
+  .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .spin { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .spin, .status-dot.pulse { animation: none; }
+  }
+
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  .glyph { width: 13px; height: 13px; flex: none; }
+
+  .canvas-foot {
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    max-width: 82ch;
+  }
+  .canvas-foot h2 {
+    margin: 0 0 2px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 500;
+  }
+  .canvas-foot ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+  .canvas-foot code { font-family: var(--mono); color: var(--text); font-size: 11px; }
+</style>
+
+<div class="canvas">
+  <header class="canvas-head">
+    <span class="canvas-eyebrow">Apeireth 2.0 · 设置 › 运行时诊断 · design canvas</span>
+    <h1>Runtime Diagnostics — proposed states</h1>
+    <p>
+      Six states for the existing <code style="font-family:var(--mono)">运行时诊断</code> section of
+      SettingsView. Every panel below is assembled from primitives already in the product —
+      <code style="font-family:var(--mono)">.setting-block</code>, <code style="font-family:var(--mono)">.info-card</code>,
+      <code style="font-family:var(--mono)">.diag-results</code>, <code style="font-family:var(--mono)">.notice-box</code>,
+      StatusBadge, StatusDot, and the three existing button classes. No new visual primitive is proposed.
+    </p>
+    <div class="canvas-note">
+      <span>
+        <b>Not a SuperDesign artifact.</b> SuperDesign is not available in this environment (no CLI, no skill, no MCP
+        tool), so this canvas was authored directly against the tokens extracted from
+        <code style="font-family:var(--mono)">base.css</code>, <code style="font-family:var(--mono)">StatusBadge.svelte</code>
+        and <code style="font-family:var(--mono)">SettingsView.svelte</code>. The review gate is unchanged: nothing here
+        is implemented until you approve it.
+      </span>
+    </div>
+  </header>
+
+  <div class="specimens">
+
+    <!-- ============ A · READY ============ -->
+    <section class="specimen">
+      <div class="specimen-label">
+        <span class="specimen-id">A</span>
+        <span class="specimen-name">READY</span>
+        <span class="specimen-trigger">backend Ready · provider configured</span>
+      </div>
+      <p class="specimen-invariant">
+        Four separate concepts, four separate rows: <strong>backend process</strong>, <strong>gateway</strong>,
+        <strong>provider</strong>, <strong>chat</strong>. Reuses <code style="font-family:var(--mono)">.diag-results</code>
+        exactly as the current health report does — the process rows are added to that existing list, not a new card type.
+      </p>
+      <div class="frame">
+        <div class="setting-block">
+          <h3 class="block-title">运行时诊断</h3>
+          <p class="block-desc">后端进程、网关、模型提供商与本机日志。</p>
+
+          <div class="diag-results">
+            <div class="diag-summary">
+              <span>桌面版本: <b>2.0.0-rc.1</b></span>
+              <span>后端版本: <b>2.0.0-rc.1</b></span>
+              <span>启动耗时: <b>1420ms</b></span>
+            </div>
+            <div class="diag-list">
+              <div class="diag-item">
+                <span><span class="status-dot"></span>&nbsp; 后端进程</span>
+                <span class="status-badge green small">运行中 · 本应用托管</span>
+              </div>
+              <div class="diag-item">
+                <span>PID</span>
+                <span class="diag-value">18492</span>
+              </div>
+              <div class="diag-item">
+                <span>端点</span>
+                <span class="diag-value">127.0.0.1:52719</span>
+              </div>
+              <div class="diag-item">
+                <span>网关 <code>/health</code></span>
+                <span class="status-badge green small">已连接</span>
+              </div>
+              <div class="diag-item">
+                <span>模型提供商 <code>/v1/models</code></span>
+                <span class="status-badge green small">已就绪 · 2 个模型</span>
+              </div>
+              <div class="diag-item">
+                <span>对话运行时</span>
+                <span class="status-badge green small">可用</span>
+              </div>
+              <div class="diag-item">
+                <span>重启次数</span>
+                <span class="diag-value">0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button class="quiet-button" type="button">
+              <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+              <span>重新检测</span>
+            </button>
+            <button class="quiet-button" type="button">
+              <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20h16"/><path d="M4 4v16"/><path d="M8 8h8v8H8z"/></svg>
+              <span>打开日志目录</span>
+            </button>
+            <button class="quiet-button" type="button">
+              <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 3h10v14"/><path d="M5 7h10v14H5z"/></svg>
+              <span>复制诊断摘要</span>
+            </button>
+            <button class="quiet-button" type="button">
+              <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+              <span>重启后端</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ B · STARTING ============ -->
+    <section class="specimen">
+      <div class="specimen-label">
+        <span class="specimen-id">B</span>
+        <span class="specimen-name">STARTING</span>
+        <span class="specimen-trigger">spawned · awaiting /health</span>
+      </div>
+      <p class="specimen-invariant">
+        Pending fields read <strong>待定</strong> in the faint register rather than showing a wrong value or an
+        error colour. The amber StatusDot is the product's existing <em>active</em> state — the same dot the chat rail
+        already uses while generating. Controls are disabled, and the row count is unchanged from A, so
+        <strong>no layout jump</strong> when it resolves.
+      </p>
+      <div class="frame">
+        <div class="setting-block">
+          <h3 class="block-title">运行时诊断</h3>
+          <p class="block-desc">后端进程、网关、模型提供商与本机日志。</p>
+
+          <div class="diag-results">
+            <div class="diag-summary">
+              <span>桌面版本: <b>2.0.0-rc.1</b></span>
+              <span>后端版本: <b>待定</b></span>
+              <span>启动耗时: <b>—</b></span>
+            </div>
+            <div class="diag-list">
+              <div class="diag-item">
+                <span><span class="status-dot active pulse"></span>&nbsp; 后端进程</span>
+                <span class="status-badge amber small">启动中 · 本应用托管</span>
+              </div>
+              <div class="diag-item">
+                <span>PID</span>
+                <span class="diag-value">18492</span>
+              </div>
+              <div class="diag-item">
+                <span>端点</span>
+                <span class="diag-value" style="color: var(--faint)">待定</span>
+              </div>
+              <div class="diag-item">
+                <span>网关 <code>/health</code></span>
+                <span class="status-badge dim small">等待响应…</span>
+              </div>
+              <div class="diag-item">
+                <span>模型提供商 <code>/v1/models</code></span>
+                <span class="status-badge dim small">未检测</span>
+              </div>
+              <div class="diag-item">
+                <span>对话运行时</span>
+                <span class="status-badge dim small">未检测</span>
+              </div>
+              <div class="diag-item">
+                <span>重启次数</span>
+                <span class="diag-value">0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button class="quiet-button" type="button" disabled>
+              <svg class="glyph spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+              <span>正在启动…</span>
+            </button>
+            <button class="quiet-button" type="button">
+              <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20h16"/><path d="M4 4v16"/><path d="M8 8h8v8H8z"/></svg>
+              <span>打开日志目录</span>
+            </button>
+            <button class="quiet-button" type="button" disabled>
+              <span>重启后端</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ C · BACKEND FAILED ============ -->
+    <section class="specimen">
+      <div class="specimen-label">
+        <span class="specimen-id">C</span>
+        <span class="specimen-name">BACKEND FAILED</span>
+        <span class="specimen-trigger">unexpected exit · code 1</span>
+      </div>
+      <p class="specimen-invariant">
+        The only state that uses danger colour, and it uses the existing danger register
+        (<code style="font-family:var(--mono)">--danger-wash</code> / <code style="font-family:var(--mono)">--danger-line</code>),
+        not a new alert component. Exit code and stderr tail are shown in mono because they are copied into bug
+        reports. <strong>重启后端</strong> is promoted to <code style="font-family:var(--mono)">.primary-button</code>
+        here — the one state where it is the obvious next action.
+      </p>
+      <div class="frame">
+        <div class="setting-block">
+          <h3 class="block-title">运行时诊断</h3>
+          <p class="block-desc">后端进程、网关、模型提供商与本机日志。</p>
+
+          <div class="diag-results" style="border-color: var(--danger-line)">
+            <div class="diag-summary">
+              <span>桌面版本: <b>2.0.0-rc.1</b></span>
+              <span>退出码: <b style="color: var(--danger)">1</b></span>
+              <span>重启次数: <b>1</b></span>
+            </div>
+            <div class="diag-list">
+              <div class="diag-item">
+                <span><span class="status-dot danger"></span>&nbsp; 后端进程</span>
+                <span class="status-badge danger small">已退出 · 本应用托管</span>
+              </div>
+              <div class="diag-item">
+                <span>上次 PID</span>
+                <span class="diag-value">18492</span>
+              </div>
+              <div class="diag-item">
+                <span>端点</span>
+                <span class="diag-value" style="color: var(--faint)">不可用</span>
+              </div>
+              <div class="diag-item">
+                <span>网关 <code>/health</code></span>
+                <span class="status-badge danger small">未连接</span>
+              </div>
+              <div class="diag-item">
+                <span>模型提供商</span>
+                <span class="status-badge dim small">未检测</span>
+              </div>
+              <div class="diag-item">
+                <span>对话运行时</span>
+                <span class="status-badge danger small">不可用</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-card" style="border-color: var(--danger-line)">
+            <strong class="info-title" style="color: var(--danger)">最近一次错误</strong>
+            <p class="info-text" style="font-family: var(--mono); font-size: 11px; color: var(--text)">
+              backend exited unexpectedly (code 1)
+            </p>
+            <p class="info-text" style="font-family: var(--mono); font-size: 11px">
+              [stderr] canonical runtime bootstrap failed: cognitive database uses<br>
+              incompatible generic episodes schema
+            </p>
+          </div>
+
+          <div class="button-row">
+            <button class="primary-button" type="button">
+              <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+              <span>重启后端</span>
+            </button>
+            <button class="quiet-button" type="button">
+              <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20h16"/><path d="M4 4v16"/><path d="M8 8h8v8H8z"/></svg>
+              <span>打开日志目录</span>
+            </button>
+            <button class="quiet-button" type="button">
+              <span>复制诊断摘要</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ D · PROVIDER UNAVAILABLE ============ -->
+    <section class="specimen">
+      <div class="specimen-label">
+        <span class="specimen-id">D</span>
+        <span class="specimen-name">PROVIDER UNAVAILABLE</span>
+        <span class="specimen-trigger">backend Ready · no credential resolved</span>
+      </div>
+      <p class="specimen-invariant">
+        The state this whole section exists for. Backend and gateway stay <strong>green</strong>; only provider and
+        chat degrade to amber. Nothing on this panel implies the backend crashed. The credential source is stated as
+        fact (environment / keyring) in the existing <code style="font-family:var(--mono)">.notice-box</code>, because
+        the frontend cannot set it — matching the live gateway's own 502:
+        <code style="font-family:var(--mono)">missing API key for provider.minimax.api_key</code>.
+      </p>
+      <div class="frame">
+        <div class="setting-block">
+          <h3 class="block-title">运行时诊断</h3>
+          <p class="block-desc">后端进程、网关、模型提供商与本机日志。</p>
+
+          <div class="diag-results">
+            <div class="diag-summary">
+              <span>桌面版本: <b>2.0.0-rc.1</b></span>
+              <span>后端版本: <b>2.0.0-rc.1</b></span>
+              <span>启动耗时: <b>1380ms</b></span>
+            </div>
+            <div class="diag-list">
+              <div class="diag-item">
+                <span><span class="status-dot"></span>&nbsp; 后端进程</span>
+                <span class="status-badge green small">运行中 · 本应用托管</span>
+              </div>
+              <div class="diag-item">
+                <span>PID</span>
+                <span class="diag-value">18492</span>
+              </div>
+              <div class="diag-item">
+                <span>端点</span>
+                <span class="diag-value">127.0.0.1:52719</span>
+              </div>
+              <div class="diag-item">
+                <span>网关 <code>/health</code></span>
+                <span class="status-badge green small">已连接</span>
+              </div>
+              <div class="diag-item">
+                <span>模型提供商 <code>/v1/models</code></span>
+                <span class="status-badge amber small">未配置凭据</span>
+              </div>
+              <div class="diag-item">
+                <span>对话运行时</span>
+                <span class="status-badge amber small">不可用 · 等待凭据</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="notice-box">
+            <span class="status-badge amber small">凭据来源</span>
+            <span>
+              提供商凭据由后端启动时从环境变量或系统密钥环读取
+              (<code style="font-family:var(--mono)">APEIRETH_API_KEY</code> /
+              <code style="font-family:var(--mono)">APEIRETH_ANTHROPIC_KEY</code> /
+              <code style="font-family:var(--mono)">OPENAI_API_KEY</code>)，前端无法在此配置。
+            </span>
+          </div>
+
+          <div class="button-row">
+            <button class="quiet-button" type="button">
+              <span>重新检测</span>
+            </button>
+            <button class="quiet-button" type="button">
+              <span>打开日志目录</span>
+            </button>
+            <button class="quiet-button" type="button">
+              <span>复制诊断摘要</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ E · UNSUPPORTED CAPABILITY ============ -->
+    <section class="specimen">
+      <div class="specimen-label">
+        <span class="specimen-id">E</span>
+        <span class="specimen-name">UNSUPPORTED CAPABILITY</span>
+        <span class="specimen-trigger">MemoryView · canonical 2.0 exposes no introspection API</span>
+      </div>
+      <p class="specimen-invariant">
+        Deliberate and calm, <strong>not</strong> a network-error state: no danger colour, no retry button, because
+        retrying cannot help. Reuses <code style="font-family:var(--mono)">.notice-box</code> — the same device the
+        Persona section already uses for its 只读呈现 disclosure. The page's own header, tabs and search
+        <strong>stay in place</strong>; only the feed area is replaced.
+      </p>
+      <div class="frame">
+        <div class="setting-block">
+          <h3 class="block-title">记忆与知识库</h3>
+          <p class="block-desc">查看与检索持久化情节记忆 (episodes)、历史流与结构化知识图谱。</p>
+
+          <div class="notice-box">
+            <span class="status-badge dim small">不支持</span>
+            <span>当前运行时未提供记忆内省接口。Apeireth 2.0 网关不暴露 memory browser API。</span>
+          </div>
+
+          <div class="info-card">
+            <strong class="info-title">这不是错误</strong>
+            <p class="info-text">
+              对话与模型服务正常可用。记忆浏览是可选的内省能力，本次发布的规范网关有意不提供该接口，
+              因此此处不会发起请求，也无需重试。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ F · RESTARTING ============ -->
+    <section class="specimen">
+      <div class="specimen-label">
+        <span class="specimen-id">F</span>
+        <span class="specimen-name">RESTARTING</span>
+        <span class="specimen-trigger">restart requested · old child stopped</span>
+      </div>
+      <p class="specimen-invariant">
+        Transition is legible from the restart counter incrementing and the amber process row — the same visual
+        vocabulary as B, so a restart reads as a start rather than as a distinct fifth appearance. Row count is again
+        identical, so <strong>no layout jump</strong> in either direction.
+      </p>
+      <div class="frame">
+        <div class="setting-block">
+          <h3 class="block-title">运行时诊断</h3>
+          <p class="block-desc">后端进程、网关、模型提供商与本机日志。</p>
+
+          <div class="diag-results">
+            <div class="diag-summary">
+              <span>桌面版本: <b>2.0.0-rc.1</b></span>
+              <span>后端版本: <b>待定</b></span>
+              <span>重启次数: <b>2</b></span>
+            </div>
+            <div class="diag-list">
+              <div class="diag-item">
+                <span><span class="status-dot active pulse"></span>&nbsp; 后端进程</span>
+                <span class="status-badge amber small">重启中 · 本应用托管</span>
+              </div>
+              <div class="diag-item">
+                <span>PID</span>
+                <span class="diag-value">19104</span>
+              </div>
+              <div class="diag-item">
+                <span>端点</span>
+                <span class="diag-value" style="color: var(--faint)">待定</span>
+              </div>
+              <div class="diag-item">
+                <span>网关 <code>/health</code></span>
+                <span class="status-badge dim small">等待响应…</span>
+              </div>
+              <div class="diag-item">
+                <span>模型提供商</span>
+                <span class="status-badge dim small">未检测</span>
+              </div>
+              <div class="diag-item">
+                <span>对话运行时</span>
+                <span class="status-badge dim small">未检测</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button class="quiet-button" type="button" disabled>
+              <svg class="glyph spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+              <span>正在重启…</span>
+            </button>
+            <button class="quiet-button" type="button">
+              <span>打开日志目录</span>
+            </button>
+            <button class="quiet-button" type="button" disabled>
+              <span>复制诊断摘要</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="canvas-foot">
+    <h2>Reused existing patterns</h2>
+    <ul>
+      <li><code>.setting-block</code> / <code>.block-title</code> / <code>.block-desc</code> — section shell, unchanged</li>
+      <li><code>.diag-results</code> / <code>.diag-summary</code> / <code>.diag-list</code> / <code>.diag-item</code> — process rows are added to the existing health list</li>
+      <li><code>.info-card</code> / <code>.info-title</code> / <code>.info-text</code> — error detail and the "not an error" explainer</li>
+      <li><code>.notice-box</code> — credential-source and unsupported-capability disclosures (same device as Persona's 只读呈现)</li>
+      <li><code>StatusBadge</code> — green / amber / danger / dim / neutral variants only</li>
+      <li><code>StatusDot</code> — default, <code>.active</code>, <code>.off</code>; <code>.danger</code> is the one addition below</li>
+      <li><code>.quiet-button</code> / <code>.primary-button</code> — existing taxonomy; 重启后端 is promoted to primary only in state C</li>
+    </ul>
+
+    <h2 style="margin-top: 14px">New visual primitives</h2>
+    <ul>
+      <li>
+        <strong style="color: var(--text)">One:</strong> <code>.status-dot.danger</code> — a danger-coloured dot.
+        StatusDot ships <code>off</code> (faint) and <code>active</code> (amber) but no failure colour, and state C needs
+        to read as failed at a glance in the same position the other states use. It is 3 lines reusing
+        <code>--danger</code>, not a new component. The alternative — reusing <code>off</code> — would render a crashed
+        backend identically to a stopped one.
+      </li>
+      <li>
+        <code>.status-dot.pulse</code> is <em>not</em> counted as new: it applies the product's existing
+        2.8s breathing cadence (<code>--ap-dur-breathe</code>) and is dropped under <code>prefers-reduced-motion</code>.
+        If you would rather add no motion at all, say so and it comes out — the amber colour alone still distinguishes
+        the state.
+      </li>
+    </ul>
+
+    <h2 style="margin-top: 14px">Open questions for review</h2>
+    <ul>
+      <li>Placement: these rows extend the existing <code>运行时诊断</code> section. RuntimeModal shows the same health report — should it get the process rows too, or stay connection-only?</li>
+      <li>Four buttons in state A is the most this row has carried. Acceptable, or should 复制诊断摘要 move to an overflow?</li>
+      <li>State E is drawn for MemoryView. ToolsView / ActivityView / the Conversations backend-ledger tab would take the same treatment — confirm that reading before it is applied to all four.</li>
+    </ul>
+  </footer>
+</div>
