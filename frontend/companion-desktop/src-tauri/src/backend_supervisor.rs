@@ -15,8 +15,6 @@
 
 use crate::logging::{DesktopLogger, LogLevel};
 use serde::Serialize;
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -74,11 +72,11 @@ impl Default for BackendInfo {
     }
 }
 
+/// A live owned child. Port and start time live on [`BackendInfo`] rather than
+/// being duplicated here, so there is one source of truth for diagnostics.
 struct BackendProcess {
     child: Child,
     pid: u32,
-    port: u16,
-    started_at: Instant,
 }
 
 pub struct BackendSupervisor {
@@ -88,22 +86,20 @@ pub struct BackendSupervisor {
 }
 
 impl BackendSupervisor {
-    pub fn new() -> Self {
+    /// Base constructor. Production always attaches a logger via
+    /// [`Self::with_logger`]; tests use `build(None)` when no log file is wanted.
+    fn build(logger: Option<Arc<DesktopLogger>>) -> Self {
         Self {
             info: Arc::new(RwLock::new(BackendInfo::default())),
             process: Arc::new(RwLock::new(None)),
-            logger: None,
+            logger,
         }
     }
 
     /// Attach a persistent logger so backend stdout/stderr reaches
     /// `apeireth-backend.log` and lifecycle events reach the desktop log.
     pub fn with_logger(logger: Arc<DesktopLogger>) -> Self {
-        Self {
-            info: Arc::new(RwLock::new(BackendInfo::default())),
-            process: Arc::new(RwLock::new(None)),
-            logger: Some(logger),
-        }
+        Self::build(Some(logger))
     }
 
     fn log_desktop(&self, level: LogLevel, message: &str) {
@@ -178,12 +174,7 @@ impl BackendSupervisor {
 
                 // Store process handle
                 let mut process = self.process.write().await;
-                *process = Some(BackendProcess {
-                    child,
-                    pid,
-                    port,
-                    started_at,
-                });
+                *process = Some(BackendProcess { child, pid });
                 drop(process);
 
                 // Update info
@@ -442,6 +433,8 @@ impl BackendSupervisor {
 
         // Keep the child in the app's lifetime, not the user's screen: without
         // CREATE_NO_WINDOW a console window flashes on every launch.
+        // `tokio::process::Command` exposes `creation_flags` inherently on
+        // Windows, so no std extension trait import is needed.
         #[cfg(windows)]
         {
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -544,12 +537,9 @@ impl BackendSupervisor {
     }
 }
 
-impl Drop for BackendSupervisor {
-    fn drop(&mut self) {
-        // Note: Drop is synchronous, cannot use async stop()
-        // Actual cleanup happens in Tauri's cleanup handler
-    }
-}
+// No `Drop` impl: stopping the child needs async, which `drop` cannot await.
+// Shutdown of the owned backend is driven by the `RunEvent::ExitRequested`
+// handler in `lib.rs`, which can block on `stop()`.
 
 #[cfg(test)]
 mod tests {
@@ -588,7 +578,7 @@ mod tests {
 
     #[test]
     fn fresh_supervisor_is_stopped_and_unowned() {
-        let supervisor = BackendSupervisor::new();
+        let supervisor = BackendSupervisor::build(None);
         let info = tokio_block(supervisor.info());
         assert_eq!(info.state, BackendState::Stopped);
         assert_eq!(info.ownership, BackendOwnership::External);
@@ -601,7 +591,7 @@ mod tests {
     /// supervisor owns nothing, so stop() has to refuse.
     #[test]
     fn stop_refuses_to_touch_external_backend() {
-        let supervisor = BackendSupervisor::new();
+        let supervisor = BackendSupervisor::build(None);
         let result = tokio_block(supervisor.stop());
         assert!(result.is_err(), "expected refusal, got {result:?}");
         assert!(
@@ -612,7 +602,7 @@ mod tests {
 
     #[test]
     fn ephemeral_port_selection_yields_a_bindable_port() {
-        let supervisor = BackendSupervisor::new();
+        let supervisor = BackendSupervisor::build(None);
         let port = tokio_block(supervisor.select_free_port()).expect("port");
         assert_ne!(port, 0);
         assert_ne!(port, 8090, "must never select the legacy companion port");
@@ -626,7 +616,7 @@ mod tests {
         let dead_port = listener.local_addr().expect("addr").port();
         drop(listener); // Nothing is listening now.
 
-        let supervisor = BackendSupervisor::new();
+        let supervisor = BackendSupervisor::build(None);
         let result = tokio_block(async {
             tokio::time::timeout(
                 Duration::from_secs(20),
@@ -646,7 +636,7 @@ mod tests {
         let dead_port = listener.local_addr().expect("addr").port();
         drop(listener);
 
-        let supervisor = BackendSupervisor::new();
+        let supervisor = BackendSupervisor::build(None);
         tokio_block(async {
             {
                 let mut info = supervisor.info.write().await;
@@ -666,7 +656,7 @@ mod tests {
 
     #[test]
     fn backend_info_serializes_without_secrets() {
-        let supervisor = BackendSupervisor::new();
+        let supervisor = BackendSupervisor::build(None);
         let info = tokio_block(supervisor.info());
         let json = serde_json::to_string(&info).expect("serialize");
 
