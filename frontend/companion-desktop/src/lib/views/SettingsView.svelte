@@ -16,12 +16,20 @@
     Eye,
     EyeOff,
     AlertTriangle,
+    Globe,
+    Bot,
+    Sparkles,
+    CheckCircle2,
+    XCircle,
+    Info,
+    ChevronDown,
+    ChevronUp,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
-  import type {ApeirethConfig, RuntimeHealthReport} from '../types';
-  import {checkHealthDetailed, listModels, saveConfig} from '../runtime';
+  import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig} from '../types';
+  import {checkHealthDetailed, listModels, testProviderConnection} from '../runtime';
 
   let {
     config,
@@ -44,20 +52,147 @@
 
   let activeSection = $state<SettingsSection>('models');
 
-  // Edit fields
+  // Gateway backend fields
   let editBaseUrl = $state('');
-  let editModel = $state('');
-  let editApiKeyDraft = $state('');
-  let modelsList = $state<string[]>([]);
-  let loadingModels = $state(false);
   let saveSuccess = $state(false);
+  let showAdvancedGateway = $state(false);
 
-  $effect(() => {
-    editBaseUrl = config.baseUrl;
-    editModel = config.model;
+  // Model Provider protocol & preset configurations
+  const OPENAI_PRESETS = [
+    {
+      id: 'openai',
+      name: 'OpenAI 官方',
+      baseUrl: 'https://api.openai.com/v1',
+      defaultModel: 'gpt-4o',
+      models: ['gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o1'],
+    },
+    {
+      id: 'deepseek',
+      name: 'DeepSeek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      defaultModel: 'deepseek-chat',
+      models: ['deepseek-chat', 'deepseek-reasoner'],
+    },
+    {
+      id: 'minimax',
+      name: 'MiniMax',
+      baseUrl: 'https://api.minimax.chat/v1',
+      defaultModel: 'MiniMax-M3',
+      models: ['MiniMax-M3', 'MiniMax-Text-01'],
+    },
+    {
+      id: 'ollama',
+      name: 'Ollama 本地',
+      baseUrl: 'http://localhost:11434/v1',
+      defaultModel: 'llama3.3',
+      models: ['llama3.3', 'qwen2.5-coder', 'deepseek-r1'],
+    },
+    {
+      id: 'custom',
+      name: '自定义 OpenAI 端点',
+      baseUrl: '',
+      defaultModel: '',
+      models: [],
+    },
+  ];
+
+  const ANTHROPIC_PRESETS = [
+    {
+      id: 'anthropic',
+      name: 'Anthropic 官方',
+      baseUrl: 'https://api.anthropic.com',
+      defaultModel: 'claude-3-7-sonnet-20250219',
+      models: ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+    },
+    {
+      id: 'minimax_anthropic',
+      name: 'MiniMax (Anthropic 网关)',
+      baseUrl: 'https://api.minimaxi.com/anthropic',
+      defaultModel: 'MiniMax-M3',
+      models: ['MiniMax-M3'],
+    },
+    {
+      id: 'custom',
+      name: '自定义 Anthropic 端点',
+      baseUrl: '',
+      defaultModel: '',
+      models: [],
+    },
+  ];
+
+  let activeProtocol = $state<ProviderProtocol>('openai');
+  let activePreset = $state<string>('openai');
+  let providerBaseUrl = $state<string>('https://api.openai.com/v1');
+  let providerApiKey = $state<string>('');
+  let showApiKey = $state<boolean>(false);
+  let providerModel = $state<string>('gpt-4o');
+  let anthropicVersion = $state<string>('2023-06-01');
+
+  // Buffer configs for protocol switching
+  let openaiBuffer = $state({
+    preset: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: 'gpt-4o',
   });
 
-  // Api key update modal
+  let anthropicBuffer = $state({
+    preset: 'anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    apiKey: '',
+    model: 'claude-3-7-sonnet-20250219',
+    anthropicVersion: '2023-06-01',
+  });
+
+  // Test connection state
+  let isTestingConnection = $state(false);
+  let testResult = $state<{
+    ok: boolean;
+    message: string;
+    latencyMs?: number;
+    models?: string[];
+  } | null>(null);
+
+  // Sync initial config from props
+  $effect(() => {
+    editBaseUrl = config.baseUrl;
+
+    if (config.openaiConfig) {
+      openaiBuffer = {
+        preset: config.openaiConfig.preset || 'openai',
+        baseUrl: config.openaiConfig.baseUrl || 'https://api.openai.com/v1',
+        apiKey: config.openaiConfig.apiKey || '',
+        model: config.openaiConfig.model || 'gpt-4o',
+      };
+    }
+
+    if (config.anthropicConfig) {
+      anthropicBuffer = {
+        preset: config.anthropicConfig.preset || 'anthropic',
+        baseUrl: config.anthropicConfig.baseUrl || 'https://api.anthropic.com',
+        apiKey: config.anthropicConfig.apiKey || '',
+        model: config.anthropicConfig.model || 'claude-3-7-sonnet-20250219',
+        anthropicVersion: config.anthropicConfig.anthropicVersion || '2023-06-01',
+      };
+    }
+
+    if (config.provider) {
+      activeProtocol = config.provider.protocol;
+      activePreset = config.provider.preset || 'openai';
+      providerBaseUrl = config.provider.baseUrl;
+      providerApiKey = config.provider.apiKey || '';
+      providerModel = config.provider.model || config.model;
+      anthropicVersion = config.provider.anthropicVersion || '2023-06-01';
+    } else {
+      activeProtocol = 'openai';
+      activePreset = 'openai';
+      providerBaseUrl = 'https://api.openai.com/v1';
+      providerApiKey = '';
+      providerModel = config.model || 'gpt-4o';
+    }
+  });
+
+  // Api key update modal for Gateway
   let showApiKeyModal = $state(false);
   let tempApiKey = $state('');
 
@@ -70,8 +205,11 @@
 
   const hasApiKey = $derived(!!config.apiKey && config.apiKey.trim().length > 0);
 
-  const sections = [
+  const currentPresets = $derived(activeProtocol === 'openai' ? OPENAI_PRESETS : ANTHROPIC_PRESETS);
+  const currentPresetObj = $derived(currentPresets.find((p) => p.id === activePreset) || currentPresets[currentPresets.length - 1]);
+  const recommendedModels = $derived(currentPresetObj?.models || []);
 
+  const sections = [
     {id: 'models', label: '模型与提供商', icon: Cpu},
     {id: 'personality', label: '伙伴人设与行为', icon: User},
     {id: 'memory', label: '记忆策略', icon: Layers3},
@@ -81,23 +219,103 @@
     {id: 'developer', label: '开发者选项', icon: Code},
   ] as const;
 
-  async function handleRefreshModels() {
-    loadingModels = true;
+  function switchProtocol(protocol: ProviderProtocol) {
+    if (activeProtocol === protocol) return;
+
+    // Save current to buffer
+    if (activeProtocol === 'openai') {
+      openaiBuffer = {
+        preset: activePreset,
+        baseUrl: providerBaseUrl,
+        apiKey: providerApiKey,
+        model: providerModel,
+      };
+    } else {
+      anthropicBuffer = {
+        preset: activePreset,
+        baseUrl: providerBaseUrl,
+        apiKey: providerApiKey,
+        model: providerModel,
+        anthropicVersion,
+      };
+    }
+
+    // Switch and restore from target buffer
+    activeProtocol = protocol;
+    testResult = null;
+
+    if (protocol === 'openai') {
+      activePreset = openaiBuffer.preset;
+      providerBaseUrl = openaiBuffer.baseUrl;
+      providerApiKey = openaiBuffer.apiKey;
+      providerModel = openaiBuffer.model;
+    } else {
+      activePreset = anthropicBuffer.preset;
+      providerBaseUrl = anthropicBuffer.baseUrl;
+      providerApiKey = anthropicBuffer.apiKey;
+      providerModel = anthropicBuffer.model;
+      anthropicVersion = anthropicBuffer.anthropicVersion || '2023-06-01';
+    }
+  }
+
+  function selectPreset(presetId: string) {
+    activePreset = presetId;
+    testResult = null;
+    const p = currentPresets.find((item) => item.id === presetId);
+    if (p && p.id !== 'custom') {
+      providerBaseUrl = p.baseUrl;
+      if (p.defaultModel && (!providerModel || p.models.includes(providerModel) || providerModel === 'gpt-4o' || providerModel === 'MiniMax-M3' || providerModel === 'claude-3-7-sonnet-20250219')) {
+        providerModel = p.defaultModel;
+      }
+    }
+  }
+
+  async function handleTestProviderConnection() {
+    isTestingConnection = true;
+    testResult = null;
     try {
-      modelsList = await listModels(editBaseUrl, config.apiKey);
-    } catch {
-      modelsList = [];
+      const currentProvider: ProviderConfig = {
+        protocol: activeProtocol,
+        preset: activePreset,
+        baseUrl: providerBaseUrl.trim(),
+        apiKey: providerApiKey.trim(),
+        model: providerModel.trim(),
+        anthropicVersion: activeProtocol === 'anthropic' ? anthropicVersion.trim() : undefined,
+      };
+      const res = await testProviderConnection(currentProvider);
+      testResult = res;
     } finally {
-      loadingModels = false;
+      isTestingConnection = false;
     }
   }
 
   function handleSaveSettings() {
+    const currentProvider: ProviderConfig = {
+      protocol: activeProtocol,
+      preset: activePreset,
+      baseUrl: providerBaseUrl.trim(),
+      apiKey: providerApiKey.trim(),
+      model: providerModel.trim(),
+      anthropicVersion: activeProtocol === 'anthropic' ? anthropicVersion.trim() : undefined,
+    };
+
+    const currentOpenai = activeProtocol === 'openai'
+      ? { preset: activePreset, baseUrl: providerBaseUrl.trim(), apiKey: providerApiKey.trim(), model: providerModel.trim() }
+      : openaiBuffer;
+
+    const currentAnthropic = activeProtocol === 'anthropic'
+      ? { preset: activePreset, baseUrl: providerBaseUrl.trim(), apiKey: providerApiKey.trim(), model: providerModel.trim(), anthropicVersion: anthropicVersion.trim() }
+      : anthropicBuffer;
+
     const updated: ApeirethConfig = {
       ...config,
       baseUrl: editBaseUrl.trim(),
-      model: editModel.trim(),
+      model: providerModel.trim() || config.model,
+      provider: currentProvider,
+      openaiConfig: currentOpenai,
+      anthropicConfig: currentAnthropic,
     };
+
     onSave(updated);
     saveSuccess = true;
     setTimeout(() => {
@@ -118,7 +336,7 @@
   async function checkDiagnostics() {
     checkingRuntime = true;
     try {
-      runtimeReport = await checkHealthDetailed(config.baseUrl, config.apiKey);
+      runtimeReport = await checkHealthDetailed(config.baseUrl, config.apiKey, providerModel);
     } finally {
       checkingRuntime = false;
     }
@@ -129,7 +347,7 @@
   <PageHeader
     eyebrow="首选项"
     title="系统设置"
-    subtitle="配置 Apeireth 后端连接、模型服务、权限安全与客户端数据。"
+    subtitle="配置模型提供商（Anthropic / OpenAI 兼容协议）、后端连接、权限与数据。"
   >
     <button class="primary-button" onclick={handleSaveSettings}>
       <Check size={14} />
@@ -159,61 +377,235 @@
     <div class="settings-content">
       {#if activeSection === 'models'}
         <div class="setting-block">
-          <h3 class="block-title">后端服务与模型</h3>
-          <p class="block-desc">配置 Apeireth 端点地址与大语言模型。</p>
+          <h3 class="block-title">模型提供商与协议配置</h3>
+          <p class="block-desc">选择大语言模型提供商协议，支持 Anthropic Messages API 与 OpenAI 兼容协议。</p>
 
-          <div class="form-group">
-            <label for="endpoint-input">端点服务地址 (Endpoint URL)</label>
-            <input
-              id="endpoint-input"
-              type="text"
-              bind:value={editBaseUrl}
-              placeholder="http://127.0.0.1:8080"
-            />
-            <small class="field-hint">默认为 Apeireth 核心网关端口 (:8080)。</small>
+          <!-- Protocol Selector Tabs -->
+          <div class="protocol-tabs">
+            <button
+              class="protocol-tab"
+              class:selected={activeProtocol === 'openai'}
+              onclick={() => switchProtocol('openai')}
+            >
+              <Globe size={15} />
+              <div class="proto-text">
+                <span class="proto-title">OpenAI 兼容协议</span>
+                <span class="proto-sub">OpenAI / DeepSeek / MiniMax / Ollama / vLLM</span>
+              </div>
+            </button>
+
+            <button
+              class="protocol-tab"
+              class:selected={activeProtocol === 'anthropic'}
+              onclick={() => switchProtocol('anthropic')}
+            >
+              <Sparkles size={15} />
+              <div class="proto-text">
+                <span class="proto-title">Anthropic Claude 协议</span>
+                <span class="proto-sub">Anthropic Messages API / Claude 3.5 & 3.7</span>
+              </div>
+            </button>
           </div>
 
+          <!-- Provider Presets -->
           <div class="form-group">
-            <label for="api-key-status">网关认证密钥 (Gateway Auth Key)</label>
-            <div class="credential-row">
-              <div class="cred-status">
-                <Lock size={14} />
-                <span>{hasApiKey ? '已配置 (Configured)' : '未配置 (Not configured)'}</span>
-              </div>
-              <button class="quiet-button" onclick={() => { tempApiKey = ''; showApiKeyModal = true; }}>
-                {hasApiKey ? '更换 Key' : '配置 Key'}
-              </button>
+            <span class="group-label">快速预设服务商 (Preset Provider)</span>
+            <div class="presets-row">
+              {#each currentPresets as p}
+                <button
+                  class="preset-chip"
+                  class:selected={activePreset === p.id}
+                  onclick={() => selectPreset(p.id)}
+                >
+                  <span>{p.name}</span>
+                </button>
+              {/each}
             </div>
+          </div>
+
+          <!-- Base URL Input -->
+          <div class="form-group">
+            <label for="provider-url-input">API 端点地址 (Base URL)</label>
+            <input
+              id="provider-url-input"
+              type="text"
+              bind:value={providerBaseUrl}
+              placeholder={activeProtocol === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'}
+            />
             <small class="field-hint">
-              网关认证密钥（可选）。提供商凭据（Anthropic/OpenAI）由后端从环境变量或系统密钥环加载，不在此配置。
+              {activeProtocol === 'openai'
+                ? 'OpenAI 兼容网关地址，通常以 /v1 结尾（如 https://api.deepseek.com/v1 或 http://localhost:11434/v1）。'
+                : 'Anthropic 服务网关地址（默认 https://api.anthropic.com）。'}
             </small>
           </div>
 
+          <!-- API Key Input -->
           <div class="form-group">
-            <label for="model-input">当前模型 (Model)</label>
-            <div class="model-input-row">
+            <label for="provider-key-input">
+              {activeProtocol === 'openai' ? 'OpenAI API 密钥 (API Key)' : 'Anthropic API 密钥 (x-api-key)'}
+            </label>
+            <div class="key-input-wrapper">
               <input
-                id="model-input"
-                type="text"
-                bind:value={editModel}
-                placeholder="MiniMax-M3"
+                id="provider-key-input"
+                type={showApiKey ? 'text' : 'password'}
+                bind:value={providerApiKey}
+                placeholder={activeProtocol === 'openai' ? 'sk-...' : 'sk-ant-...'}
+                autocomplete="off"
               />
-              <button class="quiet-button" onclick={handleRefreshModels} disabled={loadingModels}>
-                <RotateCcw size={13} class={loadingModels ? 'spin' : ''} />
-                <span>刷新模型列表</span>
+              <button
+                class="key-toggle-btn"
+                type="button"
+                onclick={() => showApiKey = !showApiKey}
+                title={showApiKey ? '隐藏密钥' : '显示密钥'}
+              >
+                {#if showApiKey}
+                  <EyeOff size={14} />
+                {:else}
+                  <Eye size={14} />
+                {/if}
               </button>
             </div>
-            {#if modelsList.length}
+            <small class="field-hint">
+              {activeProtocol === 'openai'
+                ? '用于发起模型请求的 Bearer Token，安全保存在客户端本地配置中。'
+                : '用于 Anthropic Messages API 的 x-api-key 鉴权凭据。'}
+            </small>
+          </div>
+
+          <!-- Anthropic Version (if Anthropic) -->
+          {#if activeProtocol === 'anthropic'}
+            <div class="form-group">
+              <label for="anthropic-ver-input">Anthropic API 版本 (anthropic-version Header)</label>
+              <input
+                id="anthropic-ver-input"
+                type="text"
+                bind:value={anthropicVersion}
+                placeholder="2023-06-01"
+              />
+              <small class="field-hint">默认值为 2023-06-01，可根据需要自定义。</small>
+            </div>
+          {/if}
+
+          <!-- Model Input & Recommended Chips -->
+          <div class="form-group">
+            <label for="provider-model-input">活动模型名称 (Model Identifier)</label>
+            <div class="model-input-row">
+              <input
+                id="provider-model-input"
+                type="text"
+                bind:value={providerModel}
+                placeholder={activeProtocol === 'openai' ? 'gpt-4o' : 'claude-3-7-sonnet-20250219'}
+              />
+              <button
+                class="quiet-button"
+                onclick={handleTestProviderConnection}
+                disabled={isTestingConnection || !providerBaseUrl}
+              >
+                <RotateCcw size={13} class={isTestingConnection ? 'spin' : ''} />
+                <span>{isTestingConnection ? '测试中…' : '测试提供商连接'}</span>
+              </button>
+            </div>
+
+            <!-- Recommended Model Chips -->
+            {#if recommendedModels.length > 0}
               <div class="models-chip-list">
-                {#each modelsList as m}
+                <span class="chip-label">推荐模型:</span>
+                {#each recommendedModels as m}
                   <button
                     class="model-chip"
-                    class:selected={editModel === m}
-                    onclick={() => editModel = m}
+                    class:selected={providerModel === m}
+                    onclick={() => providerModel = m}
                   >
                     {m}
                   </button>
                 {/each}
+              </div>
+            {/if}
+          </div>
+
+          <!-- Connection Test Result Banner -->
+          {#if testResult}
+            <div class="test-result-box" class:success={testResult.ok} class:failed={!testResult.ok}>
+              <div class="test-result-head">
+                {#if testResult.ok}
+                  <CheckCircle2 size={16} class="head-icon success-icon" />
+                  <strong>提供商连通正常</strong>
+                {:else}
+                  <XCircle size={16} class="head-icon failed-icon" />
+                  <strong>提供商连接异常</strong>
+                {/if}
+                {#if testResult.latencyMs !== undefined}
+                  <span class="latency-badge">{testResult.latencyMs} ms</span>
+                {/if}
+              </div>
+              <p class="test-result-msg">{testResult.message}</p>
+              {#if testResult.models && testResult.models.length > 0}
+                <div class="discovered-models">
+                  <span class="disc-label">远端模型列表 ({testResult.models.length}):</span>
+                  <div class="models-chip-list">
+                    {#each testResult.models.slice(0, 12) as dm}
+                      <button
+                        class="model-chip"
+                        class:selected={providerModel === dm}
+                        onclick={() => providerModel = dm}
+                      >
+                        {dm}
+                      </button>
+                    {/each}
+                    {#if testResult.models.length > 12}
+                      <span class="more-models">+{testResult.models.length - 12} 更多…</span>
+                    {/if}
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Collapsible Gateway/Daemon Section -->
+          <div class="advanced-box">
+            <button
+              class="advanced-toggle"
+              onclick={() => showAdvancedGateway = !showAdvancedGateway}
+            >
+              <div class="adv-left">
+                <Server size={14} />
+                <span>Apeireth 核心网关与守护进程 (Advanced Gateway)</span>
+              </div>
+              {#if showAdvancedGateway}
+                <ChevronUp size={14} />
+              {:else}
+                <ChevronDown size={14} />
+              {/if}
+            </button>
+
+            {#if showAdvancedGateway}
+              <div class="advanced-body">
+                <div class="form-group">
+                  <label for="endpoint-input">网关服务地址 (Gateway URL)</label>
+                  <input
+                    id="endpoint-input"
+                    type="text"
+                    bind:value={editBaseUrl}
+                    placeholder="http://127.0.0.1:8080"
+                  />
+                  <small class="field-hint">默认为 Apeireth 核心网关端口 (:8080)。</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="api-key-status">网关认证密钥 (Gateway Auth Key)</label>
+                  <div class="credential-row">
+                    <div class="cred-status">
+                      <Lock size={14} />
+                      <span>{hasApiKey ? '已配置 (Configured)' : '未配置 (Not configured)'}</span>
+                    </div>
+                    <button class="quiet-button" onclick={() => { tempApiKey = ''; showApiKeyModal = true; }}>
+                      {hasApiKey ? '更换 Key' : '配置 Key'}
+                    </button>
+                  </div>
+                  <small class="field-hint">
+                    Apeireth 网关管理认证密钥（可选）。
+                  </small>
+                </div>
               </div>
             {/if}
           </div>
@@ -342,7 +734,7 @@
 
           <div class="form-group">
             <label for="raw-config-json">客户端配置 (JSON)</label>
-            <pre class="code-box">{JSON.stringify({baseUrl: config.baseUrl, model: config.model, hasApiKey}, null, 2)}</pre>
+            <pre class="code-box">{JSON.stringify({baseUrl: config.baseUrl, model: providerModel, provider: config.provider, hasApiKey}, null, 2)}</pre>
           </div>
         </div>
       {/if}
@@ -351,7 +743,7 @@
   </div>
 </section>
 
-<!-- API Key Edit Modal -->
+<!-- API Key Edit Modal for Gateway -->
 {#if showApiKeyModal}
   <div class="modal-backdrop" onclick={() => showApiKeyModal = false} role="presentation">
     <div
@@ -368,8 +760,7 @@
       </div>
       <div class="modal-body">
         <p class="modal-desc">
-          网关认证密钥（可选）用于网关层身份验证。提供商凭据（Anthropic/OpenAI API Key）
-          由 Apeireth 后端从环境变量或系统密钥环加载，不在此配置。留空并保存可清除已配置凭据。
+          网关认证密钥用于 Apeireth 核心网关访问鉴权。留空并保存可清除已配置凭据。
         </p>
         <div class="form-group">
           <input
@@ -470,12 +861,90 @@
     color: var(--muted);
   }
 
+  /* Protocol Tabs */
+  .protocol-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .protocol-tab {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+    color: var(--muted);
+  }
+  .protocol-tab:hover {
+    border-color: var(--amber-line);
+    color: var(--text);
+  }
+  .protocol-tab.selected {
+    background: var(--amber-wash);
+    border-color: var(--amber-line);
+    color: var(--amber);
+  }
+  .proto-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .proto-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .protocol-tab.selected .proto-title {
+    color: var(--amber);
+  }
+  .proto-sub {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.3;
+  }
+
+  /* Presets Row */
+  .presets-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .preset-chip {
+    padding: 6px 12px;
+    border-radius: 7px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .preset-chip:hover {
+    border-color: var(--amber-line);
+    color: var(--text);
+  }
+  .preset-chip.selected {
+    background: var(--amber-wash);
+    border-color: var(--amber-line);
+    color: var(--amber);
+    font-weight: 600;
+  }
+
+  /* Form controls */
   .form-group {
     display: flex;
     flex-direction: column;
     gap: 6px;
   }
-  .form-group label {
+  .form-group label,
+  .form-group .group-label {
     font-size: 12px;
     font-weight: 500;
     color: var(--text);
@@ -496,6 +965,32 @@
     font-size: 11px;
     color: var(--faint);
     line-height: 1.4;
+  }
+
+  /* Key input with show/hide toggle */
+  .key-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .key-input-wrapper input {
+    width: 100%;
+    padding-right: 36px;
+  }
+  .key-toggle-btn {
+    position: absolute;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px;
+  }
+  .key-toggle-btn:hover {
+    color: var(--text);
   }
 
   .credential-row {
@@ -524,8 +1019,13 @@
   .models-chip-list {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 6px;
-    margin-top: 6px;
+    margin-top: 4px;
+  }
+  .chip-label {
+    font-size: 11px;
+    color: var(--muted);
   }
   .model-chip {
     padding: 4px 10px;
@@ -545,6 +1045,100 @@
     background: var(--amber-wash);
     border-color: var(--amber-line);
     color: var(--amber);
+  }
+
+  /* Test Connection Banner */
+  .test-result-box {
+    padding: 12px 14px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .test-result-box.success {
+    background: rgba(46, 204, 113, 0.08);
+    border: 1px solid rgba(46, 204, 113, 0.3);
+  }
+  .test-result-box.failed {
+    background: rgba(231, 76, 60, 0.08);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+  }
+  .test-result-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  :global(.success-icon) {
+    color: #2ecc71;
+  }
+  :global(.failed-icon) {
+    color: #e74c3c;
+  }
+  .latency-badge {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .test-result-msg {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+  .discovered-models {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+    border-top: 1px solid var(--line);
+    padding-top: 6px;
+  }
+  .disc-label {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .more-models {
+    font-size: 11px;
+    color: var(--faint);
+    align-self: center;
+  }
+
+  /* Advanced Gateway Box */
+  .advanced-box {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .advanced-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .advanced-toggle:hover {
+    color: var(--text);
+  }
+  .adv-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+  }
+  .advanced-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
   }
 
   .info-card {

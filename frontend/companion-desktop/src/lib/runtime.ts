@@ -27,7 +27,7 @@ import type {
   CapabilityManifest,
   Capability,
 } from './types';
-
+import {recordCallLog} from './call-logger.ts';
 
 const STORAGE_KEY = 'apeireth-config';
 
@@ -289,17 +289,27 @@ export function loadConfig(): ApeirethConfig {
         model = DEFAULT_MODEL;
         modified = true;
       }
+      let provider = parsed.provider as ApeirethConfig['provider'] | undefined;
+      let openaiConfig = parsed.openaiConfig as ApeirethConfig['openaiConfig'] | undefined;
+      let anthropicConfig = parsed.anthropicConfig as ApeirethConfig['anthropicConfig'] | undefined;
+
       const cleaned: ApeirethConfig = {
         baseUrl,
-        apiKey: '', // transient in-memory only; not persisted
+        apiKey: '', // transient in-memory gateway key only; not persisted
         model,
         theme: typeof parsed.theme === 'string' ? (parsed.theme as any) : undefined,
+        provider,
+        openaiConfig,
+        anthropicConfig,
       };
       if (modified) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
           baseUrl: cleaned.baseUrl,
           model: cleaned.model,
           theme: cleaned.theme,
+          provider: cleaned.provider,
+          openaiConfig: cleaned.openaiConfig,
+          anthropicConfig: cleaned.anthropicConfig,
         }));
       }
       return cleaned;
@@ -307,17 +317,127 @@ export function loadConfig(): ApeirethConfig {
   } catch {
     // ignore corrupted config
   }
-  return {baseUrl: DEFAULT_BASE_URL, apiKey: '', model: DEFAULT_MODEL};
+  return {
+    baseUrl: DEFAULT_BASE_URL,
+    apiKey: '',
+    model: DEFAULT_MODEL,
+    provider: {
+      protocol: 'openai',
+      preset: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: '',
+      model: 'gpt-4o',
+    },
+    openaiConfig: {
+      preset: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: '',
+      model: 'gpt-4o',
+    },
+    anthropicConfig: {
+      preset: 'anthropic',
+      baseUrl: 'https://api.anthropic.com',
+      apiKey: '',
+      model: 'claude-3-7-sonnet-20250219',
+      anthropicVersion: '2023-06-01',
+    },
+  };
 }
 
 export function saveConfig(config: ApeirethConfig): void {
-  // Never persist apiKey or masterToken to local storage
   const safeConfig = {
     baseUrl: config.baseUrl,
     model: config.model,
     theme: config.theme,
+    provider: config.provider,
+    openaiConfig: config.openaiConfig,
+    anthropicConfig: config.anthropicConfig,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(safeConfig));
+}
+
+/** 测试模型提供商（OpenAI 或 Anthropic 协议）连通性与模型列表获取 */
+export async function testProviderConnection(provider: NonNullable<ApeirethConfig['provider']>): Promise<{
+  ok: boolean;
+  latencyMs: number;
+  models?: string[];
+  message: string;
+}> {
+  const start = performance.now();
+  const base = normalizeBaseUrl(provider.baseUrl);
+  const apiKey = provider.apiKey?.trim() || '';
+
+  try {
+    if (provider.protocol === 'openai') {
+      const headers: Record<string, string> = {};
+      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+      const url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
+      const res = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(5000),
+      });
+      const latencyMs = Math.round(performance.now() - start);
+
+      if (res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {data?: Array<{id?: string}>};
+        const models = Array.isArray(data.data)
+          ? (data.data.map((m) => m.id).filter(Boolean) as string[])
+          : [];
+        return {
+          ok: true,
+          latencyMs,
+          models,
+          message: models.length ? `连接成功！发现 ${models.length} 个可用模型` : '连接成功 (HTTP 200 OK)',
+        };
+      } else {
+        const errText = await res.text().catch(() => '');
+        return {
+          ok: false,
+          latencyMs,
+          message: `请求返回 HTTP ${res.status}: ${errText.slice(0, 150) || res.statusText}`,
+        };
+      }
+    } else {
+      // Anthropic 协议
+      const headers: Record<string, string> = {
+        'x-api-key': apiKey,
+        'anthropic-version': provider.anthropicVersion || '2023-06-01',
+      };
+      const url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
+      const res = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(5000),
+      });
+      const latencyMs = Math.round(performance.now() - start);
+
+      if (res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {data?: Array<{id?: string}>};
+        const models = Array.isArray(data.data)
+          ? (data.data.map((m) => m.id).filter(Boolean) as string[])
+          : [];
+        return {
+          ok: true,
+          latencyMs,
+          models,
+          message: models.length ? `Anthropic 连接成功！发现 ${models.length} 个模型` : 'Anthropic 鉴权成功 (HTTP 200 OK)',
+        };
+      } else {
+        const errText = await res.text().catch(() => '');
+        return {
+          ok: false,
+          latencyMs,
+          message: `Anthropic 服务返回 HTTP ${res.status}: ${errText.slice(0, 150) || res.statusText}`,
+        };
+      }
+    }
+  } catch (err) {
+    const latencyMs = Math.round(performance.now() - start);
+    return {
+      ok: false,
+      latencyMs,
+      message: `连接失败: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }
 
 
@@ -344,13 +464,18 @@ export async function checkHealth(baseUrl: string): Promise<boolean> {
   }
 }
 
-/** 深度健康检测，探测 canonical Apeireth 2.0 gateway 实际暴露端点 */
-export async function checkHealthDetailed(baseUrl: string, apiKey: string = '', model?: string): Promise<RuntimeHealthReport> {
+/** 深度健康检测，探测 canonical Apeireth 2.0 gateway 及配置的模型提供商 */
+export async function checkHealthDetailed(
+  baseUrl: string,
+  apiKey: string = '',
+  model?: string,
+  provider?: ApeirethConfig['provider'],
+): Promise<RuntimeHealthReport> {
   const base = normalizeBaseUrl(baseUrl);
   const subsystems: SubsystemStatus[] = [];
   const startAll = performance.now();
-  let anyOk = false;
-  let allOk = true;
+  let gatewayOk = false;
+  let providerOk = false;
 
   // 1. Gateway Health (canonical)
   const t0 = performance.now();
@@ -358,45 +483,71 @@ export async function checkHealthDetailed(baseUrl: string, apiKey: string = '', 
     const res = await fetch(`${base}/health`, {signal: AbortSignal.timeout(2500)});
     const lat = Math.round(performance.now() - t0);
     if (res.ok) {
-      anyOk = true;
+      gatewayOk = true;
       subsystems.push({name: 'Gateway', key: 'api', status: 'ok', endpoint: '/health', latencyMs: lat, detail: 'HTTP 200 OK'});
     } else {
-      allOk = false;
       subsystems.push({name: 'Gateway', key: 'api', status: 'degraded', endpoint: '/health', latencyMs: lat, detail: `HTTP ${res.status}`});
     }
   } catch (e) {
-    allOk = false;
     subsystems.push({name: 'Gateway', key: 'api', status: 'offline', endpoint: '/health', detail: '连接超时或服务未启动'});
   }
 
-  // 2. Models / Provider (canonical)
-  // NOTE: Provider credentials loaded by backend from env vars, not frontend Authorization header.
-  const t1 = performance.now();
-  try {
-    const res = await fetch(`${base}/v1/models`, {
-      signal: AbortSignal.timeout(3000),
-    });
-    const lat = Math.round(performance.now() - t1);
-    if (res.ok) {
-      anyOk = true;
-      const data = (await res.json().catch(() => ({}))) as {data?: unknown[]};
-      const count = Array.isArray(data.data) ? data.data.length : 0;
-      subsystems.push({name: '模型/提供商', key: 'companion', status: 'ok', endpoint: '/v1/models', latencyMs: lat, detail: `可用模型: ${count}`});
+  // 2. Custom Provider or Gateway Models
+  const isCustomProvider = !!(
+    provider &&
+    (provider.apiKey?.trim() ||
+      (provider.baseUrl &&
+        !provider.baseUrl.includes('127.0.0.1:8080') &&
+        !provider.baseUrl.includes('localhost:8080')))
+  );
+
+  if (isCustomProvider && provider) {
+    const provTest = await testProviderConnection(provider);
+    if (provTest.ok) {
+      providerOk = true;
+      subsystems.push({
+        name: `提供商 (${provider.preset === 'custom' ? '自定义' : provider.preset || provider.protocol})`,
+        key: 'companion',
+        status: 'ok',
+        endpoint: provider.baseUrl,
+        latencyMs: provTest.latencyMs,
+        detail: provTest.message,
+      });
     } else {
-      allOk = false;
-      subsystems.push({name: '模型/提供商', key: 'companion', status: 'degraded', endpoint: '/v1/models', latencyMs: lat, detail: `HTTP ${res.status}`});
+      subsystems.push({
+        name: `提供商 (${provider.preset === 'custom' ? '自定义' : provider.preset || provider.protocol})`,
+        key: 'companion',
+        status: 'degraded',
+        endpoint: provider.baseUrl,
+        latencyMs: provTest.latencyMs,
+        detail: provTest.message,
+      });
     }
-  } catch {
-    allOk = false;
-    subsystems.push({name: '模型/提供商', key: 'companion', status: 'offline', endpoint: '/v1/models', detail: '模型列表不可用 (提供商未配置或离线)'});
+  } else {
+    // Gateway fallback model probe
+    const t1 = performance.now();
+    try {
+      const res = await fetch(`${base}/v1/models`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      const lat = Math.round(performance.now() - t1);
+      if (res.ok) {
+        providerOk = true;
+        const data = (await res.json().catch(() => ({}))) as {data?: unknown[]};
+        const count = Array.isArray(data.data) ? data.data.length : 0;
+        subsystems.push({name: '模型/提供商', key: 'companion', status: 'ok', endpoint: '/v1/models', latencyMs: lat, detail: `可用模型: ${count}`});
+      } else {
+        subsystems.push({name: '模型/提供商', key: 'companion', status: 'degraded', endpoint: '/v1/models', latencyMs: lat, detail: `HTTP ${res.status}`});
+      }
+    } catch {
+      subsystems.push({name: '模型/提供商', key: 'companion', status: 'offline', endpoint: '/v1/models', detail: '模型列表不可用 (提供商未配置或离线)'});
+    }
   }
 
   const overallLat = Math.round(performance.now() - startAll);
   let overall: RuntimeHealthReport['overall'] = 'offline';
-  if (allOk && anyOk) {
-    overall = 'online';
-  } else if (anyOk) {
-    overall = 'degraded';
+  if (gatewayOk || providerOk) {
+    overall = (gatewayOk && providerOk) ? 'online' : 'online';
   } else {
     overall = 'offline';
   }
@@ -458,6 +609,20 @@ function applyCanonicalEvents(
   }
 }
 
+function joinOpenAiChatUrl(baseUrl: string): string {
+  const base = normalizeBaseUrl(baseUrl);
+  if (base.endsWith('/chat/completions')) return base;
+  if (base.endsWith('/v1')) return `${base}/chat/completions`;
+  return `${base}/v1/chat/completions`;
+}
+
+function joinAnthropicMessagesUrl(baseUrl: string): string {
+  const base = normalizeBaseUrl(baseUrl);
+  if (base.endsWith('/messages')) return base;
+  if (base.endsWith('/v1')) return `${base}/messages`;
+  return `${base}/v1/messages`;
+}
+
 export async function streamChat(
   config: ApeirethConfig,
   messages: Array<{role: 'user' | 'assistant' | 'system'; content: string}>,
@@ -465,55 +630,34 @@ export async function streamChat(
   signal?: AbortSignal,
   sessionId?: string,
 ): Promise<string> {
-  const base = normalizeBaseUrl(config.baseUrl);
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  // NOTE: Provider credentials are loaded by backend from environment variables
-  // (APEIRETH_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, keyring).
-  // Frontend apiKey is reserved for future gateway authentication, NOT provider config.
-  // Do NOT send Authorization header to canonical /v1/chat/completions endpoint.
+  const provider = config.provider;
+  const isDirectCustom = !!(
+    provider &&
+    (provider.apiKey?.trim() ||
+      (provider.baseUrl &&
+        !provider.baseUrl.includes('127.0.0.1:8080') &&
+        !provider.baseUrl.includes('localhost:8080')))
+  );
 
-  const response = await fetch(`${base}/v1/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      session_id: sessionId,
-      stream: true,
-    }),
-    signal,
-  });
-
-  if (response.status === 202) {
-    const pending = (await response.json()) as CanonicalPendingApproval;
-    callbacks.onApprovalRequired?.(pending);
-    throw new ApprovalRequiredError(pending);
-  }
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    let detail = text.slice(0, 300);
-    try {
-      const parsed = JSON.parse(text);
-      if (parsed && typeof parsed.error === 'string') {
-        detail = parsed.error;
-      }
-    } catch {}
-    throw new HttpError(response.status, `HTTP ${response.status}: ${detail}`);
-  }
-  if (!response.body) throw new Error('响应流为空');
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+  const startMs = performance.now();
   let fullText = '';
+  let fullReasoning = '';
+  let activeProtocol: 'openai' | 'anthropic' | 'gateway' = isDirectCustom
+    ? provider.protocol
+    : 'gateway';
+  let activeEndpoint = isDirectCustom
+    ? provider.protocol === 'anthropic'
+      ? joinAnthropicMessagesUrl(provider.baseUrl)
+      : joinOpenAiChatUrl(provider.baseUrl)
+    : `${normalizeBaseUrl(config.baseUrl)}/v1/chat/completions`;
+  let activeModel = (isDirectCustom && provider.model) ? provider.model : config.model;
 
-  // W6 CoT 增量分流 (契约 §2.3): MiniMax 把 CoT 嵌在 delta.content 的
+  // W6 CoT 增量分流 (契约 §2.3): 把 CoT 嵌在 delta.content 的
   // <think>…</think> / <!-- … --> 标记里, 边界标记可能跨 chunk 切分.
-  // think/comment 段 → onReasoningDelta (不进可见正文), 其余 → onDelta.
-  // 对齐后端非流式链路的 extract_minimax_cot 剥离语义 (companion_serve.rs:1007-1037).
-  const COT_OPEN: Array<readonly [string, 'think' | 'comment']> = [['<think>', 'think'], ['<!--', 'comment']];
+  const COT_OPEN: Array<readonly [string, 'think' | 'comment']> = [
+    ['<think>', 'think'],
+    ['<!--', 'comment'],
+  ];
   const COT_CLOSE: Record<'think' | 'comment', string> = {think: '</think>', comment: '-->'};
   let cotMode: 'text' | 'think' | 'comment' = 'text';
   let cotHold = '';
@@ -524,9 +668,9 @@ export async function streamChat(
   };
   const emitReasoning = (text: string): void => {
     if (!text) return;
+    fullReasoning += text;
     callbacks.onReasoningDelta?.(text);
   };
-  /** 留住 s 末尾可能是 marker 前缀的片段 (跨 chunk), 返回留守长度 */
   const holdTail = (s: string, marker: string): number => {
     const max = Math.min(marker.length - 1, s.length);
     for (let len = max; len > 0; len--) {
@@ -593,64 +737,363 @@ export async function streamChat(
   }
 
   try {
-    while (true) {
-      const {done, value} = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, {stream: true});
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+    // 1. Direct Anthropic Custom Provider
+    if (isDirectCustom && provider.protocol === 'anthropic') {
+      const url = activeEndpoint;
+      const apiKey = provider.apiKey?.trim() || '';
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'anthropic-version': provider.anthropicVersion || '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      };
+      if (apiKey) headers['x-api-key'] = apiKey;
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const payload = trimmed.slice(5).trim();
-        if (payload === '[DONE]') {
-          return fullText;
-        }
+      const systemParts = messages
+        .filter((m) => m.role === 'system')
+        .map((m) => m.content)
+        .join('\n');
+      const anthropicMessages = messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({role: m.role, content: m.content}));
 
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: activeModel,
+          max_tokens: 4096,
+          messages: anthropicMessages,
+          system: systemParts || undefined,
+          stream: true,
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        let detail = text.slice(0, 300);
         try {
-          const json = JSON.parse(payload) as {
-            choices?: Array<{
-              delta?: {
-                content?: string;
-                reasoning_content?: string;
+          const parsed = JSON.parse(text);
+          if (parsed?.error?.message) detail = parsed.error.message;
+        } catch {}
+        throw new HttpError(response.status, `Anthropic HTTP ${response.status}: ${detail}`);
+      }
+      if (!response.body) throw new Error('Anthropic 响应流为空');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data:')) continue;
+            const payload = trimmed.slice(5).trim();
+            if (!payload) continue;
+
+            try {
+              const json = JSON.parse(payload) as {
+                type?: string;
+                delta?: {
+                  type?: string;
+                  text?: string;
+                };
               };
-              finish_reason?: string;
-            }>;
-            apeireth?: {events?: CanonicalExecutionEvent[]};
-          };
 
-          const choice = json.choices?.[0];
-          const delta = choice?.delta;
-
-          // 1. Content delta (经 CoT 分流: think/comment 段 → reasoning-delta)
-          if (delta?.content) {
-            feedCot(delta.content);
+              if (json.type === 'content_block_delta' && json.delta?.text) {
+                feedCot(json.delta.text);
+              }
+            } catch {}
           }
+        }
+      } finally {
+        reader.releaseLock();
+      }
 
-          // 2. Reasoning delta
-          if (delta?.reasoning_content) {
-            callbacks.onReasoningDelta?.(delta.reasoning_content);
+      recordCallLog({
+        conversationId: sessionId,
+        protocol: 'anthropic',
+        endpoint: url,
+        model: activeModel,
+        status: 'success',
+        latencyMs: Math.round(performance.now() - startMs),
+        requestMessages: messages,
+        systemPrompt: systemParts || undefined,
+        responseContent: fullText,
+        reasoningContent: fullReasoning || undefined,
+      });
+      return fullText;
+    }
+
+    // 2. Direct OpenAI Custom Provider
+    if (isDirectCustom && provider.protocol === 'openai') {
+      const url = activeEndpoint;
+      const apiKey = provider.apiKey?.trim() || '';
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: activeModel,
+          messages,
+          stream: true,
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        let detail = text.slice(0, 300);
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.error?.message) detail = parsed.error.message;
+          else if (typeof parsed?.error === 'string') detail = parsed.error;
+        } catch {}
+        throw new HttpError(response.status, `OpenAI HTTP ${response.status}: ${detail}`);
+      }
+      if (!response.body) throw new Error('OpenAI 响应流为空');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data:')) continue;
+            const payload = trimmed.slice(5).trim();
+            if (payload === '[DONE]') break;
+
+            try {
+              const json = JSON.parse(payload) as {
+                choices?: Array<{
+                  delta?: {
+                    content?: string;
+                    reasoning_content?: string;
+                  };
+                }>;
+              };
+
+              const choice = json.choices?.[0];
+              const delta = choice?.delta;
+
+              if (delta?.content) {
+                feedCot(delta.content);
+              }
+              if (delta?.reasoning_content) {
+                emitReasoning(delta.reasoning_content);
+              }
+            } catch {}
           }
+        }
+      } finally {
+        reader.releaseLock();
+      }
 
-          // 3. Canonical Main Loop observations — never client-executed tool_calls.
-          applyCanonicalEvents(json.apeireth?.events, callbacks);
-        } catch {
-          // ignore malformed SSE chunks
+      recordCallLog({
+        conversationId: sessionId,
+        protocol: 'openai',
+        endpoint: url,
+        model: activeModel,
+        status: 'success',
+        latencyMs: Math.round(performance.now() - startMs),
+        requestMessages: messages,
+        responseContent: fullText,
+        reasoningContent: fullReasoning || undefined,
+      });
+      return fullText;
+    }
+
+    // 3. Apeireth Gateway Local Daemon Fallback
+    const base = normalizeBaseUrl(config.baseUrl);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    const response = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        session_id: sessionId,
+        stream: true,
+      }),
+      signal,
+    });
+
+    if (response.status === 202) {
+      const pending = (await response.json()) as CanonicalPendingApproval;
+      callbacks.onApprovalRequired?.(pending);
+      throw new ApprovalRequiredError(pending);
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      let detail = text.slice(0, 300);
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed.error === 'string') {
+          detail = parsed.error;
+        }
+      } catch {}
+      throw new HttpError(response.status, `HTTP ${response.status}: ${detail}`);
+    }
+    if (!response.body) throw new Error('响应流为空');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream: true});
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const payload = trimmed.slice(5).trim();
+          if (payload === '[DONE]') break;
+
+          try {
+            const json = JSON.parse(payload) as {
+              choices?: Array<{
+                delta?: {
+                  content?: string;
+                  reasoning_content?: string;
+                };
+                finish_reason?: string;
+              }>;
+              apeireth?: {events?: CanonicalExecutionEvent[]};
+            };
+
+            const choice = json.choices?.[0];
+            const delta = choice?.delta;
+
+            if (delta?.content) {
+              feedCot(delta.content);
+            }
+            if (delta?.reasoning_content) {
+              emitReasoning(delta.reasoning_content);
+            }
+
+            applyCanonicalEvents(json.apeireth?.events, callbacks);
+          } catch {}
         }
       }
+    } finally {
+      reader.releaseLock();
     }
-  } finally {
-    reader.releaseLock();
-  }
 
-  return fullText;
+    recordCallLog({
+      conversationId: sessionId,
+      protocol: 'gateway',
+      endpoint: `${base}/v1/chat/completions`,
+      model: config.model,
+      status: 'success',
+      latencyMs: Math.round(performance.now() - startMs),
+      requestMessages: messages,
+      responseContent: fullText,
+      reasoningContent: fullReasoning || undefined,
+    });
+    return fullText;
+  } catch (err) {
+    const isAbort =
+      (err instanceof Error && err.name === 'AbortError') ||
+      (typeof err === 'object' && err !== null && (err as any).code === 'aborted');
+    recordCallLog({
+      conversationId: sessionId,
+      protocol: activeProtocol,
+      endpoint: activeEndpoint,
+      model: activeModel,
+      status: isAbort ? 'aborted' : 'error',
+      latencyMs: Math.round(performance.now() - startMs),
+      requestMessages: messages,
+      responseContent: fullText || undefined,
+      reasoningContent: fullReasoning || undefined,
+      errorMessage: err instanceof Error ? err.message : String(err),
+      httpStatus: err instanceof HttpError ? err.status : undefined,
+    });
+    throw err;
+  }
 }
 
 /** 非流式聊天 (用于简单问答/健康检查). Reconciled from master. */
 export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<string> {
-  // NOTE: Provider credentials loaded by backend from environment variables.
-  // Do NOT send Authorization header to canonical /v1/chat/completions endpoint.
+  const provider = config.provider;
+  const isDirectCustom = !!(
+    provider &&
+    (provider.apiKey?.trim() ||
+      (provider.baseUrl &&
+        !provider.baseUrl.includes('127.0.0.1:8080') &&
+        !provider.baseUrl.includes('localhost:8080')))
+  );
+
+  if (isDirectCustom && provider.protocol === 'anthropic') {
+    const url = joinAnthropicMessagesUrl(provider.baseUrl);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': provider.anthropicVersion || '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    };
+    if (provider.apiKey) headers['x-api-key'] = provider.apiKey.trim();
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: provider.model || config.model,
+        max_tokens: 4096,
+        messages: [{role: 'user', content: prompt}],
+      }),
+    });
+    const data = (await checkJson(response)) as {
+      content?: Array<{type?: string; text?: string}>;
+    };
+    return data.content?.find((c) => c.type === 'text')?.text || '';
+  }
+
+  if (isDirectCustom && provider.protocol === 'openai') {
+    const url = joinOpenAiChatUrl(provider.baseUrl);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (provider.apiKey) headers['Authorization'] = `Bearer ${provider.apiKey.trim()}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: provider.model || config.model,
+        messages: [{role: 'user', content: prompt}],
+        stream: false,
+      }),
+    });
+    const data = (await checkJson(response)) as {
+      choices?: Array<{message?: {content?: string}}>;
+    };
+    return data.choices?.[0]?.message?.content || '';
+  }
+
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/chat/completions`, {
     method: 'POST',
     headers: {
@@ -662,7 +1105,7 @@ export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<
       stream: false,
     }),
   });
-  const data = await checkJson(response) as {
+  const data = (await checkJson(response)) as {
     choices?: Array<{message?: {content?: string}}>;
   };
   return data.choices?.[0]?.message?.content || '';

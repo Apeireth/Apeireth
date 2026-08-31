@@ -469,7 +469,8 @@
   async function refreshConnection(): Promise<void> {
     isRefreshingHealth = true;
     try {
-      const report = await checkHealthDetailed(config.baseUrl, config.apiKey);
+      await adoptSupervisorEndpoint();
+      const report = await checkHealthDetailed(config.baseUrl, config.apiKey, config.model, config.provider);
       healthReport = report;
       if (!busy) {
         healthState = report.overall;
@@ -664,8 +665,8 @@
     agentRuntime.abort();
   }
 
-  /** 重试一条失败/中止的 assistant 消息: 找到其上一条 user 文本重新发送. Reconciled from master. */
-  function retry(messageId: string): void {
+  /** 重试一条 assistant 消息: 找到上一条用户消息重新发送 */
+  function retryAssistantMessage(messageId: string): void {
     if (busy || !activeConversation) return;
     const msgs = activeConversation.messages;
     const idx = msgs.findIndex((m) => m.id === messageId);
@@ -677,11 +678,53 @@
         break;
       }
     }
-    const filtered = msgs.filter((m) => m.id !== messageId);
+    // 截断该 assistant 消息及之后的消息
+    const filtered = msgs.slice(0, idx);
     updateConversation(activeConversation.id, {messages: filtered});
     if (userText) {
       void send(userText);
     }
+  }
+
+  /** 编辑用户消息仅保存 */
+  function editUserMessageSave(messageId: string, newText: string): void {
+    if (!activeConversation) return;
+    updateMessage(activeConversation.id, messageId, {text: newText});
+  }
+
+  /** 编辑用户消息并重新生成回答（截断后续回答从新文本开始） */
+  function editUserMessageAndRegenerate(messageId: string, newText: string): void {
+    if (busy || !activeConversation) return;
+    const msgs = activeConversation.messages;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    // 截断该用户消息及之后的所有消息
+    const filtered = msgs.slice(0, idx);
+    updateConversation(activeConversation.id, {messages: filtered});
+    void send(newText);
+  }
+
+  /** 分支会话：从 messageId 处截取历史，创建新分支会话并跳转 */
+  function branchFromMessage(messageId: string): void {
+    if (!activeConversation) return;
+    const msgs = activeConversation.messages;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    const sliced = JSON.parse(JSON.stringify(msgs.slice(0, idx + 1))) as ChatMessage[];
+    const now = Date.now();
+    const branchConv: Conversation = {
+      id: crypto.randomUUID(),
+      title: `${activeConversation.title.replace(/\s*\(分支.*\)$/, '')} (分支 ${new Date(now).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'})})`,
+      createdAt: now,
+      updatedAt: now,
+      messages: sliced,
+      scope: 'global',
+      model: config.model,
+    };
+    conversations = [branchConv, ...conversations];
+    activeId = branchConv.id;
+    activeView = 'chat';
+    persist();
   }
 
   function newConversation(): void {
@@ -935,6 +978,10 @@
               </div>
             </div>
             <div class="chat-header-actions">
+              <button class="new-chat-trigger-btn" onclick={newConversation} title="新建对话 (Ctrl+N)">
+                <Plus size={13} />
+                <span>新建对话</span>
+              </button>
               <button class="voice-call-trigger-btn" onclick={openVoiceCall} title="开启全双工实时语音通话">
                 <PhoneCall size={14} />
                 <span>实时语音</span>
@@ -996,7 +1043,10 @@
                     <div class="msg-card" class:ap-clip-corner={item.message.role === 'user'}>
                       <MessageContent
                         message={item.message}
-                        onRetry={(t) => { draft = t; void send(); }}
+                        onRetry={(msgId) => retryAssistantMessage(msgId)}
+                        onEditSave={(msgId, newText) => editUserMessageSave(msgId, newText)}
+                        onEditAndRegenerate={(msgId, newText) => editUserMessageAndRegenerate(msgId, newText)}
+                        onBranch={(msgId) => branchFromMessage(msgId)}
                       />
                     </div>
                   </article>
@@ -1366,6 +1416,27 @@
     align-items: center;
     gap: 8px;
   }
+  .new-chat-trigger-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ap-bone);
+    background: rgba(255, 210, 122, 0.12);
+    border: 1px solid rgba(255, 210, 122, 0.35);
+    border-radius: 9999px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+  }
+  .new-chat-trigger-btn:hover {
+    background: rgba(255, 210, 122, 0.25);
+    border-color: var(--ap-gold);
+    color: var(--ap-gold);
+    transform: scale(1.02);
+  }
   .voice-call-trigger-btn {
     display: inline-flex;
     align-items: center;
@@ -1404,7 +1475,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 10px max(26px, calc((100% - 880px) / 2)) 26px;
+    padding: 14px 15% 28px;
     display: flex;
     flex-direction: column;
     gap: 18px;
@@ -1465,10 +1536,11 @@
      衬线引语排版由 MessageContent 的 .ap-voice 承担。 */
   .msg-row.assistant .msg-card {
     position: relative;
-    width: fit-content;
-    min-width: 150px;
-    max-width: min(76%, 680px);
-    padding: 13px 22px 9px 24px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 14px 24px 12px 26px;
     background: rgba(11, 13, 18, 0.74);
     border: 1px solid var(--ap-line);
     border-left: 0;
@@ -1494,12 +1566,12 @@
   }
   /* 工具/任务卡在他的卡内保持可读宽度 */
   .msg-row.assistant .msg-card :global(.tool-calls-container) {
-    min-width: min(340px, 52vw);
+    width: 100%;
   }
 
   /* 用户卡片（§5.3）：右侧哑白实体卡（.ap-card 配方），无晕无金无衬线，斜切角 */
   .msg-row.user .msg-card {
-    max-width: min(72%, 560px);
+    max-width: 90%;
     background: var(--ap-card);
     color: var(--ap-register-archive-ink);
     padding: 0;
@@ -1609,7 +1681,7 @@
 
   /* ---------- Composer：底部居中细长输入条，近黑面板 + 金边聚焦 ---------- */
   .composer-wrap {
-    padding: 6px max(26px, calc((100% - 880px) / 2)) 16px;
+    padding: 8px 15% 18px;
   }
   .composer-bar {
     display: flex;
@@ -1688,14 +1760,19 @@
     min-height: 0;
     min-width: 0;
     display: flex;
-    margin: 14px 20px 20px 14px;
-    border-radius: 3px;
+    margin: 12px 18px 18px 12px;
+    border-radius: 4px;
     overflow: hidden;
+    pointer-events: auto;
+    width: calc(100% - 30px);
+    height: calc(100% - 30px);
   }
   .page-layer > :global(*) {
     flex: 1;
     min-height: 0;
     min-width: 0;
+    width: 100%;
+    height: 100%;
   }
 
   /* ---------- legacy 轻量 toast（非「他说」行，如测试事件） ---------- */

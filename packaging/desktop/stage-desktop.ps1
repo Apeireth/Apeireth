@@ -29,9 +29,10 @@ if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
 }
 Push-Location $DesktopDir
 try {
-    pnpm install --frozen-lockfile
+    $env:CI = "true"
+    cmd.exe /c pnpm install --frozen-lockfile
     if ($LASTEXITCODE -ne 0) { throw "pnpm install failed with exit code $LASTEXITCODE" }
-    pnpm build
+    cmd.exe /c pnpm build
     if ($LASTEXITCODE -ne 0) { throw "pnpm build failed with exit code $LASTEXITCODE" }
 } finally {
     Pop-Location

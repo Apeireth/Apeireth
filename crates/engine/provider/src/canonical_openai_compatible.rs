@@ -57,8 +57,24 @@ const PLUGIN_ID: &str = "builtin.openai-compatible";
 /// Default endpoint. A vendor-safe default (OpenAI's public API) is acceptable
 /// configuration (§19); the provider is generic and `base_url` is overridable.
 pub const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
+/// Default model list when none is configured.
+pub const DEFAULT_MODELS: &[&str] = &[
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "gpt-4",
+    "gpt-3.5-turbo",
+    "o1",
+    "o1-mini",
+    "o3-mini",
+    "deepseek-chat",
+    "deepseek-reasoner",
+    "qwen-turbo",
+    "qwen-plus",
+    "qwen-max",
+];
 /// Default per-request timeout.
-const DEFAULT_TIMEOUT_MS: u64 = 60_000;
+pub const DEFAULT_TIMEOUT_MS: u64 = 60_000;
 
 /// A handle to the credential resolver, shared between a plugin and its
 /// capability across the registration→initialize timing gap. Holds a resolver
