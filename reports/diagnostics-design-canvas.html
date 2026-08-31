@@ -122,6 +122,98 @@
     padding: 20px;
     max-width: 620px;
   }
+  .frame.wide { max-width: 920px; padding: 0; overflow: hidden; }
+
+  /* Settings chrome — copied from SettingsView.svelte scoped layout. */
+  .settings-layout {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    min-height: 420px;
+  }
+  .settings-subnav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 16px 12px;
+    border-right: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .subnav-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: left;
+  }
+  .subnav-btn.active {
+    background: var(--amber-wash);
+    color: var(--amber);
+    font-weight: 500;
+  }
+  .settings-content { padding: 24px 28px 36px; max-width: 680px; }
+  .page-head { padding: 22px 28px 14px; border-bottom: 1px solid var(--line); }
+  .eyebrow {
+    margin: 0 0 3px;
+    color: var(--amber);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .page-head h1 { font-size: 22px; line-height: 1.2; margin: 0; }
+  .subtitle { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+
+  /* MemoryView toolbar/tabs — copied from MemoryView.svelte so state E
+     preserves the live page composition instead of looking like Settings. */
+  .memory-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 28px 14px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .search-input-wrap {
+    flex: 1;
+    min-width: 220px;
+    max-width: 380px;
+  }
+  .search-input-wrap input {
+    width: 100%;
+    padding: 7px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .memory-tabs-row { display: flex; gap: 4px; }
+  .mem-tab-btn {
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 6px;
+  }
+  .mem-tab-btn.active {
+    background: var(--amber-wash);
+    border-color: var(--amber-line);
+    color: var(--amber);
+  }
+  .memory-container { padding: 20px 28px 32px; display: flex; flex-direction: column; gap: 12px; }
+
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 820px) { .pair { grid-template-columns: 1fr; } }
+
+  .ix-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .ix-cap { font-family: var(--mono); font-size: 10px; color: var(--faint); min-width: 72px; }
 
   /* ---------- product primitives, copied verbatim ---------- */
   .setting-block { display: flex; flex-direction: column; gap: 18px; }
@@ -283,11 +375,13 @@
     <span class="canvas-eyebrow">Apeireth 2.0 · 设置 › 运行时诊断 · design canvas</span>
     <h1>Runtime Diagnostics — proposed states</h1>
     <p>
-      Six states for the existing <code style="font-family:var(--mono)">运行时诊断</code> section of
-      SettingsView. Every panel below is assembled from primitives already in the product —
-      <code style="font-family:var(--mono)">.setting-block</code>, <code style="font-family:var(--mono)">.info-card</code>,
-      <code style="font-family:var(--mono)">.diag-results</code>, <code style="font-family:var(--mono)">.notice-box</code>,
-      StatusBadge, StatusDot, and the three existing button classes. No new visual primitive is proposed.
+      Placement first, then six states. Diagnostics live in the existing
+      <code style="font-family:var(--mono)">设置 › 运行时与诊断</code> column — not a new page, not a Grafana
+      overlay. Every panel is assembled from primitives already in the product:
+      <code style="font-family:var(--mono)">.setting-block</code>,
+      <code style="font-family:var(--mono)">.diag-results</code>,
+      <code style="font-family:var(--mono)">.notice-box</code>,
+      StatusBadge, StatusDot, and the three existing button classes.
     </p>
     <div class="canvas-note">
       <span>
@@ -301,6 +395,71 @@
   </header>
 
   <div class="specimens">
+
+    <!-- ============ 0 · SETTINGS CONTEXT ============ -->
+    <section class="specimen">
+      <div class="specimen-label">
+        <span class="specimen-id">0</span>
+        <span class="specimen-name">SETTINGS CONTEXT</span>
+        <span class="specimen-trigger">首选项 › 运行时与诊断 · Ready seated in the live layout</span>
+      </div>
+      <p class="specimen-invariant">
+        Hierarchy, left to right: <strong>page header</strong> (existing PageHeader) →
+        <strong>subnav</strong> (existing 7 sections, 运行时与诊断 selected) →
+        <strong>content column</strong> (existing <code style="font-family:var(--mono)">.settings-content</code> width).
+        Process rows, PID, endpoint, provider, restart count and the three log actions all sit inside that
+        column. RuntimeModal stays the connection sheet; this section owns process lifecycle.
+      </p>
+      <div class="frame wide">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">首选项</p>
+            <h1>系统设置</h1>
+            <p class="subtitle">配置 Apeireth 后端连接、模型服务、权限安全与客户端数据。</p>
+          </div>
+        </div>
+        <div class="settings-layout">
+          <aside class="settings-subnav">
+            <button class="subnav-btn" type="button">模型与提供商</button>
+            <button class="subnav-btn" type="button">伙伴人设与行为</button>
+            <button class="subnav-btn" type="button">记忆策略</button>
+            <button class="subnav-btn" type="button">工具与权限策略</button>
+            <button class="subnav-btn active" type="button">运行时与诊断</button>
+            <button class="subnav-btn" type="button">数据与存储</button>
+            <button class="subnav-btn" type="button">开发者选项</button>
+          </aside>
+          <div class="settings-content">
+            <div class="setting-block">
+              <h3 class="block-title">运行时诊断</h3>
+              <p class="block-desc">后端进程、网关、模型提供商与本机日志。</p>
+              <div class="diag-results">
+                <div class="diag-summary">
+                  <span>桌面版本: <b>2.0.0-rc.1</b></span>
+                  <span>后端版本: <b>2.0.0-rc.1</b></span>
+                  <span>重启次数: <b>0</b></span>
+                </div>
+                <div class="diag-list">
+                  <div class="diag-item">
+                    <span><span class="status-dot"></span>&nbsp; 后端进程</span>
+                    <span class="status-badge green small">运行中 · 本应用托管</span>
+                  </div>
+                  <div class="diag-item"><span>PID</span><span class="diag-value">18492</span></div>
+                  <div class="diag-item"><span>端点</span><span class="diag-value">127.0.0.1:52719</span></div>
+                  <div class="diag-item"><span>网关 <code>/health</code></span><span class="status-badge green small">已连接</span></div>
+                  <div class="diag-item"><span>模型提供商</span><span class="status-badge green small">已就绪</span></div>
+                </div>
+              </div>
+              <div class="button-row">
+                <button class="quiet-button" type="button">重新检测</button>
+                <button class="quiet-button" type="button">打开日志目录</button>
+                <button class="quiet-button" type="button">复制诊断摘要</button>
+                <button class="quiet-button" type="button">重启后端</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- ============ A · READY ============ -->
     <section class="specimen">
@@ -619,27 +778,64 @@
         <span class="specimen-trigger">MemoryView · canonical 2.0 exposes no introspection API</span>
       </div>
       <p class="specimen-invariant">
-        Deliberate and calm, <strong>not</strong> a network-error state: no danger colour, no retry button, because
-        retrying cannot help. Reuses <code style="font-family:var(--mono)">.notice-box</code> — the same device the
-        Persona section already uses for its 只读呈现 disclosure. The page's own header, tabs and search
-        <strong>stay in place</strong>; only the feed area is replaced.
+        Deliberate and calm, <strong>not</strong> a network-error state: no danger colour, no
+        <code style="font-family:var(--mono)">ErrorState</code> retry — retrying cannot help. Header, search and
+        tabs <strong>stay in place</strong> (MemoryView composition preserved). Only the feed is replaced with the
+        existing <code style="font-family:var(--mono)">.notice-box</code> + <code style="font-family:var(--mono)">.info-card</code>
+        already used for Persona's 只读呈现. The same treatment applies to Tools, Activity, and the Conversations
+        backend-ledger tab.
       </p>
-      <div class="frame">
-        <div class="setting-block">
-          <h3 class="block-title">记忆与知识库</h3>
-          <p class="block-desc">查看与检索持久化情节记忆 (episodes)、历史流与结构化知识图谱。</p>
-
+      <div class="frame wide">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">认知</p>
+            <h1>记忆与知识库</h1>
+            <p class="subtitle">查看与检索持久化情节记忆 (episodes)、历史流与结构化知识图谱。</p>
+          </div>
+        </div>
+        <div class="memory-toolbar">
+          <div class="search-input-wrap">
+            <input type="text" placeholder="搜索记忆文本或会话标签…" disabled>
+          </div>
+          <div class="memory-tabs-row">
+            <button class="mem-tab-btn active" type="button">情节记忆</button>
+            <button class="mem-tab-btn" type="button">历史流</button>
+            <button class="mem-tab-btn" type="button">知识图谱</button>
+          </div>
+        </div>
+        <div class="memory-container">
           <div class="notice-box">
             <span class="status-badge dim small">不支持</span>
             <span>当前运行时未提供记忆内省接口。Apeireth 2.0 网关不暴露 memory browser API。</span>
           </div>
-
           <div class="info-card">
             <strong class="info-title">这不是错误</strong>
             <p class="info-text">
-              对话与模型服务正常可用。记忆浏览是可选的内省能力，本次发布的规范网关有意不提供该接口，
+              对话与模型服务正常可用。记忆浏览是可选的内省能力，本次发布有意不提供该接口，
               因此此处不会发起请求，也无需重试。
             </p>
+          </div>
+        </div>
+      </div>
+      <div class="pair" style="margin-top: 12px">
+        <div class="frame">
+          <div class="setting-block">
+            <h3 class="block-title">工具管理与权限</h3>
+            <p class="block-desc">查看注册工具与待批特权调用。</p>
+            <div class="notice-box">
+              <span class="status-badge dim small">不支持</span>
+              <span>规范网关不暴露工具注册表内省。页面骨架保留，不请求 <code>/v1/tools/list</code>。</span>
+            </div>
+          </div>
+        </div>
+        <div class="frame">
+          <div class="setting-block">
+            <h3 class="block-title">活动</h3>
+            <p class="block-desc">审计与运行时事件。</p>
+            <div class="notice-box">
+              <span class="status-badge dim small">不支持</span>
+              <span>规范网关不暴露活动事件流。不是离线，也不是后端崩溃。</span>
+            </div>
           </div>
         </div>
       </div>
@@ -712,6 +908,50 @@
       </div>
     </section>
 
+    <!-- ============ interaction states ============ -->
+    <section class="specimen">
+      <div class="specimen-label">
+        <span class="specimen-id">IX</span>
+        <span class="specimen-name">CONTROL STATES</span>
+        <span class="specimen-trigger">hover · focus · disabled · loading — existing button taxonomy only</span>
+      </div>
+      <p class="specimen-invariant">
+        No new control. Quiet / primary / danger already define hover. Focus uses the product
+        <code style="font-family:var(--mono)">:focus-visible</code> amber ring. Disabled is the existing 0.45 opacity.
+        Loading reuses the 0.9s spin already on 刷新模型列表.
+      </p>
+      <div class="frame">
+        <div class="setting-block">
+          <div class="ix-row">
+            <span class="ix-cap">default</span>
+            <button class="quiet-button" type="button">打开日志目录</button>
+            <button class="primary-button" type="button">重启后端</button>
+          </div>
+          <div class="ix-row">
+            <span class="ix-cap">hover</span>
+            <button class="quiet-button" type="button" style="border-color: var(--amber-line); color: var(--amber)">打开日志目录</button>
+            <button class="primary-button" type="button" style="background: var(--amber-hi)">重启后端</button>
+          </div>
+          <div class="ix-row">
+            <span class="ix-cap">focus</span>
+            <button class="quiet-button" type="button" style="outline: 2px solid var(--amber); outline-offset: 2px">复制诊断摘要</button>
+          </div>
+          <div class="ix-row">
+            <span class="ix-cap">disabled</span>
+            <button class="quiet-button" type="button" disabled>重启后端</button>
+            <button class="primary-button" type="button" disabled>正在启动…</button>
+          </div>
+          <div class="ix-row">
+            <span class="ix-cap">loading</span>
+            <button class="quiet-button" type="button" disabled>
+              <svg class="glyph spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+              <span>正在启动…</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </div>
 
   <footer class="canvas-foot">
@@ -745,9 +985,9 @@
 
     <h2 style="margin-top: 14px">Open questions for review</h2>
     <ul>
-      <li>Placement: these rows extend the existing <code>运行时诊断</code> section. RuntimeModal shows the same health report — should it get the process rows too, or stay connection-only?</li>
-      <li>Four buttons in state A is the most this row has carried. Acceptable, or should 复制诊断摘要 move to an overflow?</li>
-      <li>State E is drawn for MemoryView. ToolsView / ActivityView / the Conversations backend-ledger tab would take the same treatment — confirm that reading before it is applied to all four.</li>
+      <li>Placement (specimen 0): process rows extend Settings › 运行时与诊断. RuntimeModal stays connection-only unless you want the same rows there too.</li>
+      <li>Four quiet buttons in Ready is the densest this row has carried. Acceptable, or should 复制诊断摘要 move behind 打开日志目录?</li>
+      <li>Unsupported (specimen E) is drawn for MemoryView with Tools/Activity as the same notice. Confirm before applying to Conversations' backend-ledger tab.</li>
     </ul>
   </footer>
 </div>
