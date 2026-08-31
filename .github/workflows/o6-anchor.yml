@@ -120,9 +120,10 @@ jobs:
             echo "❌ O-6 锚 #4 违约: 锚数 ($ANCHOR_COUNT) < 9"
             exit 1
           fi
-          # workspace.version 0 改守门 (line 可能有 inline comment, 不强制锚行尾)
-          if ! grep -qE '^version = "1.2.0"' Cargo.toml; then
-            echo "❌ O-6 锚 #4 违约: workspace.version != 1.2.0"
+          # The workspace package version is the active release authority.
+          CUR=$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ -z "$CUR" ]; then
+            echo "❌ O-6 锚 #4 违约: workspace.version missing"
             exit 1
           fi
           # R11 baseline 3 值守门 (0.8682/0.8532/0.9063)
@@ -133,7 +134,7 @@ jobs:
             echo "❌ O-6 锚 #4 违约: R11 baseline 3 值 (0.8682/0.8532/0.9063) 缺失"
             exit 1
           fi
-          echo "✓ O-6 锚 #4: 13 键 LOCKED + 9 哲学锚 + workspace.version 1.2.0 + R11 baseline 0 触碰"
+          echo "✓ O-6 锚 #4: 13 键 LOCKED + 9 哲学锚 + workspace.version $CUR + R11 baseline 0 触碰"
 
       # O-6 锚 #5 (额外): 8 哲学锚表头数 0 减 (不能删除任何锚, 只能扩展)
       - name: "O-6 锚 #5: 哲学锚表头 0 减 (只允许扩展)"

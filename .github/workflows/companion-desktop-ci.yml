@@ -155,14 +155,15 @@ jobs:
         run: |
           BASE="${{ steps.base.outputs.base_sha }}"
           if [ -z "$BASE" ]; then exit 0; fi
-          # root Cargo.toml workspace.version 必须保持 1.2.0 (per 8 硬墙)
-          CUR=$(grep -E '^version\s*=' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          # The workspace package version is the active release authority.
+          CUR=$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          EXPECTED="${APEIRETH_VERSION:-2.0.0-rc.1}"
           echo "workspace.version = $CUR"
-          if [ "$CUR" != "1.2.0" ]; then
-            echo "::error::workspace.version 改动: $CUR (期望 1.2.0)"
+          if [ "$CUR" != "$EXPECTED" ]; then
+            echo "::error::workspace.version 改动: $CUR (期望 $EXPECTED)"
             exit 1
           fi
-          echo "✅ workspace.version 1.2.0 不变"
+          echo "✅ workspace.version $EXPECTED matches release authority"
 
       - name: "守门: companion-desktop 是独立 workspace"
         run: |

@@ -28,6 +28,7 @@
 param(
     [ValidateSet('release', 'debug')]
     [string]$Profile = 'release',
+    [string]$Target,
     [switch]$SkipBuild
 )
 
@@ -40,7 +41,8 @@ $sidecarDir = Join-Path $repoRoot 'frontend/companion-desktop/src-tauri/binaries
 # on every platform Tauri targets.
 $hostLine = (rustc -vV | Select-String -Pattern '^host:').Line
 if (-not $hostLine) { throw 'Could not determine host target triple from rustc -vV.' }
-$targetTriple = $hostLine.Split(':')[1].Trim()
+$hostTriple = $hostLine.Split(':')[1].Trim()
+$targetTriple = if ($Target) { $Target } else { $hostTriple }
 $exeSuffix = if ($IsWindows -or $env:OS -eq 'Windows_NT') { '.exe' } else { '' }
 
 if (-not $SkipBuild) {
@@ -48,17 +50,20 @@ if (-not $SkipBuild) {
     Push-Location $repoRoot
     try {
         if ($Profile -eq 'release') {
-            cargo build --release -p apeireth-cli
+            $cargoArgs = @('build', '--release', '-p', 'apeireth-cli', '--bin', 'apeireth', '--locked')
         } else {
-            cargo build -p apeireth-cli
+            $cargoArgs = @('build', '-p', 'apeireth-cli', '--bin', 'apeireth', '--locked')
         }
+        if ($Target) { $cargoArgs += @('--target', $Target) }
+        & cargo @cargoArgs
         if ($LASTEXITCODE -ne 0) { throw "cargo build failed with exit code $LASTEXITCODE" }
     } finally {
         Pop-Location
     }
 }
 
-$source = Join-Path $repoRoot "target/$Profile/apeireth$exeSuffix"
+$sourceRoot = if ($Target) { Join-Path $repoRoot "target/$Target" } else { Join-Path $repoRoot 'target' }
+$source = Join-Path $sourceRoot "$Profile/apeireth$exeSuffix"
 if (-not (Test-Path $source)) {
     throw "Canonical backend not found at $source. Run without -SkipBuild first."
 }
