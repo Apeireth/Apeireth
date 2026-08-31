@@ -21,8 +21,12 @@ const testsDir = dirname(fileURLToPath(import.meta.url));
 
 /** `strip` marks suites that import .ts sources and need type stripping. */
 const SUITES = [
-  {file: 'capability-manifest.mjs', name: 'capability manifest projection'},
-  {file: 'desktop-capability-gating.mjs', name: 'capability gating'},
+  // Imports the REAL src/lib/runtime.ts, so a regression in the production
+  // release contract or error surface fails here. The two suites below it
+  // mirror their logic locally and cannot catch that.
+  {file: 'release-contract.mjs', name: 'canonical release contract (real module)', strip: true},
+  {file: 'capability-manifest.mjs', name: 'capability manifest projection (mirrored)'},
+  {file: 'desktop-capability-gating.mjs', name: 'capability gating (mirrored)'},
   {file: 'reality-check.mjs', name: 'storage + secret-persistence safety'},
   {file: 'security-attack.mjs', name: 'redaction / spoofing defence'},
   {file: 'presence-split.mjs', name: 'presence frame parsing', strip: true},
