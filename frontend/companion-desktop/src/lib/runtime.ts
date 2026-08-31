@@ -31,6 +31,25 @@ import type {
 
 const STORAGE_KEY = 'apeireth-config';
 
+/**
+ * Canonical Apeireth 2.0 gateway address used when nothing is configured.
+ * The gateway binds this port by default (`apeireth gateway serve --port 8080`);
+ * in packaged Tauri mode the BackendSupervisor overrides it with the port it
+ * actually allocated.
+ */
+const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
+
+/**
+ * Default model, matching the canonical minimax provider's own default
+ * (`DEFAULT_MODELS[0]` in crates/engine/provider/src/canonical_minimax.rs).
+ *
+ * The provider accepts either the vendor spelling (`MiniMax-M3`) or the
+ * canonical id (`minimax-m3`); the vendor spelling is used here to match the
+ * backend constant exactly. The retired v1 default `MiniMax-Text-01` matches no
+ * canonical provider and is migrated away in `loadConfig`.
+ */
+const DEFAULT_MODEL = 'MiniMax-M3';
+
 // ============================================================
 // Runtime Contract Types
 // ============================================================
@@ -178,16 +197,23 @@ export function loadConfig(): ApeirethConfig {
         delete parsed.master_token;
         modified = true;
       }
-      let baseUrl = typeof parsed.baseUrl === 'string' ? parsed.baseUrl : 'http://127.0.0.1:8080';
+      let baseUrl = typeof parsed.baseUrl === 'string' ? parsed.baseUrl : DEFAULT_BASE_URL;
       // Migrate legacy default placeholder (:3000) to canonical Apeireth Gateway (:8080)
       if (baseUrl === 'http://127.0.0.1:3000') {
-        baseUrl = 'http://127.0.0.1:8080';
+        baseUrl = DEFAULT_BASE_URL;
+        modified = true;
+      }
+      let model = typeof parsed.model === 'string' ? parsed.model : DEFAULT_MODEL;
+      // Migrate the retired v1 default. No canonical provider matches
+      // 'MiniMax-Text-01', so a config carrying it would fail every turn.
+      if (model === 'MiniMax-Text-01') {
+        model = DEFAULT_MODEL;
         modified = true;
       }
       const cleaned: ApeirethConfig = {
         baseUrl,
         apiKey: '', // transient in-memory only; not persisted
-        model: typeof parsed.model === 'string' ? parsed.model : 'MiniMax-Text-01',
+        model,
         theme: typeof parsed.theme === 'string' ? (parsed.theme as any) : undefined,
       };
       if (modified) {
@@ -202,8 +228,7 @@ export function loadConfig(): ApeirethConfig {
   } catch {
     // ignore corrupted config
   }
-  return {baseUrl: 'http://127.0.0.1:8080', apiKey: '', model: 'MiniMax-Text-01'};
-
+  return {baseUrl: DEFAULT_BASE_URL, apiKey: '', model: DEFAULT_MODEL};
 }
 
 export function saveConfig(config: ApeirethConfig): void {
