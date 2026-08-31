@@ -59,9 +59,11 @@
     saveConversations,
     fetchCapabilities,
     subscribeCompanionEvents,
+    capabilitySupported,
     type CompanionPresentationState,
   } from './lib/runtime';
   import {presenceStore, subscribePresence} from './lib/presence';
+  import {isDesktop, resolveBackendEndpoint} from './lib/desktop-bridge';
 
   // 6 大一级导航（信息架构不变；视觉改为左侧细竖条，金色 = 当前项，规范 §2.1 金色纪律）
   const nav = [
@@ -688,9 +690,28 @@
     });
   });
 
+  /**
+   * In packaged desktop mode the BackendSupervisor allocates an ephemeral port
+   * at each launch, so a persisted baseUrl points at a port nothing is
+   * listening on. The supervisor is authoritative; adopt its endpoint before
+   * the first health probe. No-op in web mode.
+   */
+  async function adoptSupervisorEndpoint(): Promise<void> {
+    if (!isDesktop()) return;
+    const endpoint = await resolveBackendEndpoint(config.baseUrl);
+    if (endpoint && endpoint !== config.baseUrl) {
+      config = {...config, baseUrl: endpoint};
+      // Rebuild the runtime so in-flight transport targets the live port.
+      agentRuntime = createAgentRuntime(config);
+      healthReport = {...healthReport, baseUrl: endpoint};
+    }
+  }
+
   onMount(() => {
     if (!activeId && conversations.length) activeId = conversations[0].id;
-    void refreshConnection();
+    // Resolve the real endpoint first, then probe: in packaged mode a probe
+    // against the stale persisted port would report a false offline state.
+    void adoptSupervisorEndpoint().then(() => refreshConnection());
 
     // 舰内时刻心跳：无 ?hour= 覆写时每 30s 对齐本地时钟（照明过渡由 CSS/rAF 慢性子承担）
     const hourTimer =
@@ -700,16 +721,26 @@
           }, 30000)
         : null;
 
+    // Capability gate for the two /v1/apeireth/events subscribers below.
+    // The canonical 2.0 gateway does not serve that route (404), and
+    // subscribeCompanionEvents retries on an exponential backoff loop that never
+    // gives up — so without this gate an unsupported runtime is reconnected to
+    // forever. Both are re-armed by refreshConnection() if a manifest ever
+    // declares activity.sse.
+    const eventStreamSupported = capabilitySupported(capabilities, 'activity.sse');
+
     // presence 频道主订阅（波次 2 壳层整合点）：EventSource + 指数退避 + SIM 纪律。
     // 与下方 legacy 订阅并存是设计内行为——store 按 (type, at) 去重（presence.ts dedupKey）。
-    const unsubscribePresence = subscribePresence(config.baseUrl);
+    const unsubscribePresence = eventStreamSupported
+      ? subscribePresence(config.baseUrl)
+      : () => {};
 
     // 订阅 SSE 伴随体事件通道 (主动涌现与反思通知). Reconciled from master.
     // G5 修复: 频道现为 legacy 文本行 + presence JSON 行共流 (契约 §5.1/§8.1) —
     // 先经 presence 分流: JSON 行进 presenceStore, 仅 legacy 文本行继续下行。
     // 波次 2：`[他说]` 行 = 他主动开口 → 进入对话流（规范 §5.3）；
     // 其余 legacy 行（如测试事件）→ 轻量 toast，不进对话。
-    const unsubscribeEvents = subscribeCompanionEvents(config, (event) => {
+    const unsubscribeEvents = !eventStreamSupported ? () => {} : subscribeCompanionEvents(config, (event) => {
       if (presenceStore.ingestLine(event.text) !== 'legacy') return;
       const text = event.text.trim();
       if (text.startsWith('[他说]')) {
