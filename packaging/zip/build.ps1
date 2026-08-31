@@ -20,20 +20,15 @@ $PACK_NAME = "apeireth-${VERSION}-${ARCH_NAME}"
 
 Write-Host "=== Apeireth Portable ZIP Packaging v${VERSION} (target=${TARGET}) ==="
 
-# 1. Cargo build
-Write-Host "[1/5] Checking/building release binary..."
+# 1. Build the target-qualified canonical release binary
+Write-Host "[1/5] Building release binary..."
 $EXE_SRC = "target/${TARGET}/release/apeireth.exe"
-$EXE_FALLBACK = "target/release/apeireth.exe"
-
-if (-not (Test-Path $EXE_SRC) -and -not (Test-Path $EXE_FALLBACK)) {
-    Write-Host "    Building binary via cargo build --release --bin apeireth..."
-    cargo build --release --bin apeireth --target $TARGET --locked
+cargo build --release --bin apeireth --target $TARGET --locked
+if ($LASTEXITCODE -ne 0) { throw "cargo build failed with exit code $LASTEXITCODE" }
+if (-not (Test-Path $EXE_SRC)) {
+    throw "Target-qualified binary not found: ${EXE_SRC}"
 }
-
-$FINAL_EXE_SRC = if (Test-Path $EXE_SRC) { $EXE_SRC } elseif (Test-Path $EXE_FALLBACK) { $EXE_FALLBACK } else { $null }
-if (-not $FINAL_EXE_SRC) {
-    throw "Binary not found: ${EXE_SRC} or ${EXE_FALLBACK}. Please build apeireth first."
-}
+$FINAL_EXE_SRC = $EXE_SRC
 
 # 2. Stage packaging directory
 Write-Host "[2/5] Staging packaging files into target/zip-stage/${PACK_NAME}..."

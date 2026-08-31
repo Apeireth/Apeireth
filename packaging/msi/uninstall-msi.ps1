@@ -31,9 +31,12 @@ if (-not $MsiFile) {
 }
 
 if ($MsiFile -and (Test-Path $MsiFile)) {
-    $args = @("/x", """")
+    $args = @('/x', $MsiFile)
     if ($Quiet) { $args += "/qn"; $args += "/norestart" }
     $process = Start-Process msiexec.exe -ArgumentList $args -Wait -PassThru
+    if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {
+        throw "msiexec uninstall failed with exit code: $($process.ExitCode)"
+    }
 } else {
     # Uninstall by UpgradeCode or Product Name via WMI/Registry search
     Write-Host "Searching installed Apeireth product..."

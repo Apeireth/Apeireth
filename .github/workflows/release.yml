@@ -359,12 +359,12 @@ jobs:
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx --locked
 
-      # === 编译期 hardcode: VERSION=1.2.0 (与 workspace.package.version 对账) ===
+      # === Release authority check (workspace.package.version) ===
       - name: Verify workspace version matches release tag
         env:
-          APEIRETH_VERSION: '1.2.0'
+          APEIRETH_VERSION: '2.0.0-rc.1'
         run: |
-          ACTUAL="$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)"
+          ACTUAL="$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep '^version = ' | head -1 | cut -d'"' -f2)"
           if [[ "${ACTUAL}" != "${APEIRETH_VERSION}" ]]; then
             echo "❌ workspace version 不对账: ${ACTUAL} != ${APEIRETH_VERSION}"
             exit 1

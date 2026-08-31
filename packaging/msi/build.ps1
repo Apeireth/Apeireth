@@ -3,7 +3,7 @@
 # Tool: WiX Toolset / cargo-wix
 # Target Path: %ProgramFiles%\Apeireth\
 
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..\..
 
 $VERSION = $env:APEIRETH_VERSION
@@ -16,33 +16,26 @@ $MSI_NAME = "apeireth-${VERSION}-${ARCH_NAME}.msi"
 
 Write-Host "=== Apeireth MSI Packaging v${VERSION} (target=${TARGET}) ==="
 
-# 1. Check/Build release binary
-Write-Host "[1/5] Checking/building release binary..."
+# 1. Build the target-qualified canonical release binary
+Write-Host "[1/5] Building release binary..."
 $EXE_SRC = "target/${TARGET}/release/apeireth.exe"
-$EXE_FALLBACK = "target/release/apeireth.exe"
+cargo build --release --bin apeireth --target $TARGET --locked
+if ($LASTEXITCODE -ne 0) { throw "cargo build failed with exit code $LASTEXITCODE" }
+if (-not (Test-Path $EXE_SRC)) { throw "Target-qualified binary not found: $EXE_SRC" }
 
-if (-not (Test-Path $EXE_SRC) -and -not (Test-Path $EXE_FALLBACK)) {
-    Write-Host "    Building binary via cargo build --release --bin apeireth..."
-    cargo build --release --bin apeireth --target $TARGET --locked
-}
-
-# Ensure target/release directory has binary for WiX source references
-if (-not (Test-Path "target/release")) { New-Item -ItemType Directory -Path "target/release" -Force | Out-Null }
-if (Test-Path $EXE_SRC -and -not (Test-Path "target/release/apeireth.exe")) {
-    Copy-Item $EXE_SRC "target/release/apeireth.exe" -Force
-}
 
 # 2. Stage MSI components
 Write-Host "[2/5] Staging MSI components..."
+$LegacyWixBinary = Join-Path "target" "release\apeireth.exe"
+New-Item -ItemType Directory -Path (Split-Path $LegacyWixBinary) -Force | Out-Null
+Copy-Item $EXE_SRC $LegacyWixBinary -Force
 $STAGE_DIR = Join-Path "target" "msi-stage"
 if (Test-Path $STAGE_DIR) { Remove-Item $STAGE_DIR -Recurse -Force }
 New-Item -ItemType Directory -Path (Join-Path $STAGE_DIR "bin") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $STAGE_DIR "config") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $STAGE_DIR "share") -Force | Out-Null
 
-if (Test-Path "target/release/apeireth.exe") {
-    Copy-Item "target/release/apeireth.exe" (Join-Path $STAGE_DIR "bin" "apeireth.exe") -Force
-}
+Copy-Item $EXE_SRC (Join-Path $STAGE_DIR "bin" "apeireth.exe") -Force
 if (Test-Path "LICENSE") { Copy-Item "LICENSE" (Join-Path $STAGE_DIR "share" "LICENSE") -Force }
 if (Test-Path "NOTICE") { Copy-Item "NOTICE" (Join-Path $STAGE_DIR "share" "NOTICE") -Force }
 if (Test-Path "README.md") { Copy-Item "README.md" (Join-Path $STAGE_DIR "share" "README.md") -Force }
@@ -69,9 +62,7 @@ if ($hasWix) {
     Write-Host "    Running cargo wix..."
     cargo wix --no-build --target $TARGET -o $MSI_OUTPUT_PATH
 } else {
-    Write-Host "    [STAGING COMPLETE] WiX toolset not detected in environment PATH."
-    Write-Host "    Staged files ready in ${STAGE_DIR}."
-    Write-Host "    WiX configuration verified: packaging/msi/apeireth.wxs"
+    throw 'WiX toolset or cargo-wix is required to produce the CLI MSI.'
 }
 
 # 4. Checksum & report
@@ -84,9 +75,7 @@ if (Test-Path $MSI_OUTPUT_PATH) {
     Write-Host "    MSI artifact: ${MSI_OUTPUT_PATH} (${SIZE_FMT})"
     Write-Host "    SHA256:       ${MSI_SHA256}"
 } else {
-    Write-Host "    MSI staged specification: packaging/msi/apeireth.wxs"
-    Write-Host "    UpgradeCode: {9D7E2B45-7E3A-4F8A-B31F-79A5E2E39401}"
-    Write-Host "    ProductCode: Auto-generated (*)"
+    throw "MSI build completed without producing $MSI_OUTPUT_PATH"
 }
 
 Write-Host "[5/5] MSI Packaging step complete."

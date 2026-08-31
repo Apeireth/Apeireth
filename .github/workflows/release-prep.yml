@@ -93,11 +93,12 @@ jobs:
           fi
           echo "✅ 24 LOCKED crate 仅纯 fmt 改 (logic 0 触碰)"
 
-      - name: "守门 #2: workspace.version 1.2.0 不变"
+      - name: "守门 #2: workspace.version matches release authority"
         run: |
-          CUR=$(grep -E '^version\s*=' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          if [ "$CUR" != "1.2.0" ]; then
-            echo "::error::workspace.version = $CUR (期望 1.2.0)"
+          CUR=$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          EXPECTED="${APEIRETH_VERSION:-2.0.0-rc.1}"
+          if [ "$CUR" != "$EXPECTED" ]; then
+            echo "::error::workspace.version = $CUR (期望 $EXPECTED)"
             exit 1
           fi
           echo "✅ workspace.version = $CUR"

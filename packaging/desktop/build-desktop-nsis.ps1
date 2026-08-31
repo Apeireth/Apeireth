@@ -5,36 +5,38 @@ param(
     [string]$Target = "x86_64-pc-windows-msvc"
 )
 
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..\..
 
 Write-Host "=== Apeireth Tauri Desktop NSIS Packaging v$Version ==="
 
-# 1. Stage frontend & assets
+# 1. Stage frontend, canonical CLI, and sidecar
 & "$PSScriptRoot\stage-desktop.ps1" -Version $Version -Target $Target
+if ($LASTEXITCODE -ne 0) { throw "Desktop staging failed with exit code $LASTEXITCODE" }
 
 # 2. Build Tauri desktop bundle (NSIS)
 $DesktopDir = "frontend\companion-desktop"
 $OutNsisDir = "target\desktop-nsis"
-if (-not (Test-Path $OutNsisDir)) { New-Item -ItemType Directory -Path $OutNsisDir -Force | Out-Null }
+if (Test-Path $OutNsisDir) { Remove-Item $OutNsisDir -Recurse -Force }
+New-Item -ItemType Directory -Path $OutNsisDir -Force | Out-Null
+$TauriNsisDir = Join-Path $DesktopDir "src-tauri\target\$Target\release\bundle\nsis"
+if (Test-Path $TauriNsisDir) { Remove-Item $TauriNsisDir -Recurse -Force }
 
 Write-Host "[1/3] Building Tauri NSIS bundle..."
-if (Get-Command cargo -ErrorAction SilentlyContinue) {
-    Push-Location "$DesktopDir\src-tauri"
-    if (Get-Command tauri -ErrorAction SilentlyContinue) {
-        tauri build --bundles nsis --target $Target
-    } elseif (Get-Command pnpm -ErrorAction SilentlyContinue) {
-        pnpm --dir .. tauri build --bundles nsis --target $Target
-    } else {
-        Write-Host "    [DRY-RUN/STAGING] Tauri CLI not installed in PATH. Packaging configuration verified."
-    }
+if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+    throw 'pnpm is required for the Tauri NSIS build.'
+}
+Push-Location $DesktopDir
+try {
+    pnpm tauri build --bundles nsis --target $Target
+    if ($LASTEXITCODE -ne 0) { throw "Tauri NSIS build failed with exit code $LASTEXITCODE" }
+} finally {
     Pop-Location
 }
 
 # 3. Collect NSIS artifact
 $tauriNsisCandidates = @(
-    "$DesktopDir\src-tauri\target\$Target\release\bundle\nsis\*.exe",
-    "$DesktopDir\src-tauri\target\release\bundle\nsis\*.exe"
+    "$DesktopDir\src-tauri\target\$Target\release\bundle\nsis\*.exe"
 )
 
 $foundNsis = $false
@@ -55,9 +57,7 @@ foreach ($pattern in $tauriNsisCandidates) {
 }
 
 if (-not $foundNsis) {
-    Write-Host "[2/3] [STAGING READY] Tauri Desktop NSIS config verified: $DesktopDir\src-tauri\tauri.conf.json"
-    Write-Host "    InstallMode: perMachine"
-    Write-Host "    Languages:   SimpChinese, English"
+    throw "Tauri NSIS build completed without producing an installer under $DesktopDir\src-tauri\target."
 }
 
 Write-Host "[3/3] Desktop NSIS packaging step complete."
