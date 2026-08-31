@@ -125,6 +125,46 @@ export class HttpError extends Error {
 }
 
 /**
+ * Render any caught value as human-readable text.
+ *
+ * The one hard rule: never return `"[object Object]"`. `String(value)` produces
+ * exactly that for a plain object, so an object is only stringified through a
+ * field known to carry text — otherwise it is JSON-serialised, and failing that
+ * described by shape.
+ */
+export function describeCaught(caught: unknown): string {
+  if (caught instanceof Error) return caught.message;
+  if (typeof caught === 'string') return caught;
+  if (caught === null) return '未知错误 (null)';
+  if (caught === undefined) return '未知错误 (undefined)';
+
+  if (typeof caught === 'object') {
+    // Common text-bearing shapes, including backend error bodies ({error: "..."}).
+    for (const key of ['message', 'error', 'detail', 'description'] as const) {
+      const value = (caught as Record<string, unknown>)[key];
+      if (typeof value === 'string' && value.trim()) return value;
+      // A nested Error or {error:{message}} body.
+      if (value instanceof Error && value.message) return value.message;
+      if (value && typeof value === 'object') {
+        const nested = (value as Record<string, unknown>).message;
+        if (typeof nested === 'string' && nested.trim()) return nested;
+      }
+    }
+    // No text field: serialise rather than let String() yield [object Object].
+    try {
+      const json = JSON.stringify(caught);
+      if (json && json !== '{}') return json;
+    } catch {
+      // Circular or non-serialisable; fall through to the shape description.
+    }
+    const name = (caught as object).constructor?.name;
+    return `未知错误对象${name && name !== 'Object' ? ` (${name})` : ''}`;
+  }
+
+  return String(caught);
+}
+
+/**
  * Detect unsupported endpoint errors (404/501/503 on known legacy routes) and
  * return a user-friendly message explaining the canonical 2.0 architecture.
  * For other errors, pass through the original message.
@@ -143,12 +183,7 @@ export function friendlyErrorMessage(caught: unknown, endpoint?: string): string
     }
   }
 
-  // Fallback to original message
-  if (caught instanceof Error) return caught.message;
-  if (typeof caught === 'object' && caught !== null && 'message' in caught) {
-    return String(caught.message);
-  }
-  return String(caught);
+  return describeCaught(caught);
 }
 
 export function toRuntimeError(caught: unknown): RuntimeError {
@@ -165,13 +200,8 @@ export function toRuntimeError(caught: unknown): RuntimeError {
       status: caught.status,
     };
   }
-  // Strengthen fallback to prevent [object Object] rendering
-  const message = caught instanceof Error
-    ? caught.message
-    : (typeof caught === 'object' && caught !== null && 'message' in caught)
-      ? String(caught.message)
-      : String(caught);
-  return {code: 'unknown', message};
+  // One shared guarantee: describeCaught never yields "[object Object]".
+  return {code: 'unknown', message: describeCaught(caught)};
 }
 
 export function loadConfig(): ApeirethConfig {
@@ -794,14 +824,33 @@ export function findCapability(manifest: CapabilityManifest | null, id: string):
 }
 
 /**
- * Legacy 兼容 profile: runtime 无原生 manifest 端点时的保守声明.
- * 只声明经过历史契约证明存在的能力 (chat / health / models / 只读 panel 端点).
- * 不推测任何 mutation — memory.forget / sessions.create / permissions.revoke 等一律 unsupported.
+ * Static Apeireth 2.0 release contract, used when the runtime exposes no
+ * capability-manifest endpoint.
+ *
+ * This is **frontend knowledge of its own release contract**, not runtime
+ * introspection. It declares supported ONLY what the canonical gateway is
+ * proven to serve (verified in crates/adapters/gateway/src/canonical_entry.rs):
+ *
+ *     GET  /health
+ *     GET  /v1/models
+ *     POST /v1/chat
+ *     POST /v1/chat/completions
+ *     POST /v1/approvals/resolve
+ *
+ * Everything else is unsupported. Unknown is unsupported — a capability is
+ * never assumed present because an older backend once served it.
+ *
+ * History: this function previously declared sessions.read, memory.read,
+ * tools.list, activity.sse and activity.audit as supported. Since
+ * `fetchCapabilities` falls back here on 404, and canonical 2.0 returns 404 for
+ * /v1/apeireth/capabilities, that fallback asserted five capabilities the
+ * gateway does not have — which silently defeated every capability gate and let
+ * the UI keep calling known-404 routes.
  */
-export function legacyCapabilityManifest(): CapabilityManifest {
-  const cap = (id: string, supported: boolean, read: boolean, write: boolean, ops: string[]): Capability => ({
+export function releaseContractManifest(): CapabilityManifest {
+  const cap = (id: string, read: boolean, write: boolean, ops: string[]): Capability => ({
     id,
-    supported,
+    supported: true,
     read,
     write,
     version: 1,
@@ -809,29 +858,27 @@ export function legacyCapabilityManifest(): CapabilityManifest {
   });
   return {
     schema_version: 1,
-    runtime: {service: 'apeireth-legacy-runtime', version: 'unknown'},
+    runtime: {service: 'apeireth-gateway-2.0', version: 'release-contract'},
+    // `legacy` marks a manifest that did not come from the runtime itself.
     legacy: true,
     capabilities: [
-      {name: 'chat', capabilities: [cap('chat.completions', true, true, true, ['stream'])]},
-      {name: 'health', capabilities: [cap('health', true, true, false, ['check'])]},
-      {name: 'models', capabilities: [cap('models.list', true, true, false, ['list'])]},
-      {name: 'sessions', capabilities: [cap('sessions.read', true, true, false, ['list', 'timeline'])]},
-      {name: 'memory', capabilities: [cap('memory.read', true, true, false, ['list', 'search'])]},
-      {name: 'tools', capabilities: [cap('tools.list', true, true, false, ['list'])]},
+      {name: 'health', capabilities: [cap('health', true, false, ['check'])]},
+      {name: 'models', capabilities: [cap('models.list', true, false, ['list'])]},
+      {name: 'chat', capabilities: [cap('chat.completions', true, true, ['stream'])]},
       {
-        name: 'permissions',
-        capabilities: [cap('permissions.requests.read', true, true, false, ['list'])],
-      },
-      {
-        name: 'activity',
-        capabilities: [
-          cap('activity.sse', true, true, false, ['subscribe']),
-          cap('activity.audit', true, true, false, ['list']),
-        ],
+        name: 'approvals',
+        capabilities: [cap('approvals.resolve', false, true, ['resolve'])],
       },
     ],
   };
 }
+
+/**
+ * @deprecated Renamed to {@link releaseContractManifest}. The old name implied
+ * a permissive legacy profile; the behaviour is now a conservative release
+ * contract. Retained so existing imports keep compiling.
+ */
+export const legacyCapabilityManifest = releaseContractManifest;
 
 /** 获取真实后端会话列表 (只读数据) */
 export async function fetchBackendSessions(config: ApeirethConfig): Promise<Array<{id: string; started_at: number; last_active_at: number; closed_at?: number; episode_count: number}>> {
