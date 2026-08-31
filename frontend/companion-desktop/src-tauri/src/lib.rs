@@ -4,7 +4,11 @@
 //! **Agent runtime 不在这里** — 对话/记忆/工具/治理全部由 Apeireth Canonical Gateway
 //! 后端承担 (apeireth gateway serve). 本壳只负责桌面承载与进程生命周期.
 
-mod backend_supervisor;
+// Public so tests/supervisor_lifecycle.rs can drive the real lifecycle against a
+// spawned canonical backend. The unit tests cover state without a child process;
+// the Ready transition, crash detection, restart, and owned shutdown only exist
+// at runtime and are exercised from that integration test.
+pub mod backend_supervisor;
 mod logging;
 
 use backend_supervisor::{BackendInfo, BackendSupervisor};

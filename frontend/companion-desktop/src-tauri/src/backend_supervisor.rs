@@ -102,6 +102,22 @@ impl BackendSupervisor {
         Self::build(Some(logger))
     }
 
+    /// A logger-less supervisor for integration tests.
+    ///
+    /// Tests drive the real lifecycle but must not append to the user's actual
+    /// log files, so no logger is attached.
+    #[doc(hidden)]
+    pub fn new_for_test() -> Self {
+        Self::build(None)
+    }
+
+    /// Expose dev-build resolution so an integration test can report a missing
+    /// backend instead of silently passing with nothing to spawn.
+    #[doc(hidden)]
+    pub fn resolve_dev_backend_for_test() -> Option<PathBuf> {
+        Self::resolve_dev_backend()
+    }
+
     fn log_desktop(&self, level: LogLevel, message: &str) {
         if let Some(logger) = &self.logger {
             logger.log_desktop(level, message);
@@ -110,21 +126,37 @@ impl BackendSupervisor {
 
     /// Drain one child pipe line-by-line into the backend log.
     ///
-    /// Each line is redacted by [`DesktopLogger::log_backend`], so provider
-    /// credentials echoed by the runtime never reach disk.
+    /// The drain task is spawned even when no logger is attached. Dropping a
+    /// piped stdout/stderr handle without a reader closes the pipe; the
+    /// canonical CLI then panics on its first `eprintln!` (Windows exit 101)
+    /// and never binds the gateway. Tests use a logger-less supervisor, and a
+    /// production logger failure must not kill the child the same way.
+    ///
+    /// Each logged line is redacted by [`DesktopLogger::log_backend`], so
+    /// provider credentials echoed by the runtime never reach disk.
     fn pump_stream<R>(&self, stream: R, channel: &'static str)
     where
         R: tokio::io::AsyncRead + Unpin + Send + 'static,
     {
-        let Some(logger) = self.logger.clone() else {
-            return;
-        };
+        let logger = self.logger.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(stream).lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                logger.log_backend(&format!("[{channel}] {line}"));
+                if let Some(logger) = &logger {
+                    logger.log_backend(&format!("[{channel}] {line}"));
+                }
             }
         });
+    }
+
+    /// Kill and reap an owned child after a failed start so a dead gateway
+    /// cannot hold the session database or a TCP port.
+    async fn reclaim_child(&self) {
+        let mut process = self.process.write().await;
+        if let Some(mut backend) = process.take() {
+            let _ = backend.child.start_kill();
+            let _ = tokio::time::timeout(Duration::from_secs(2), backend.child.wait()).await;
+        }
     }
 
     /// Get current backend info (safe for frontend)
@@ -186,13 +218,18 @@ impl BackendSupervisor {
                 info.ownership = BackendOwnership::OwnedByDesktop;
                 drop(info);
 
-                // Probe for readiness. A timeout must land in Failed rather
-                // than leaving the machine stuck in Starting forever, so the
-                // error is captured instead of propagating with `?`.
+                // Probe for readiness. A timeout or child death must land in
+                // Failed rather than leaving the machine stuck in Starting,
+                // and the child must be reaped so the next start is not
+                // blocked by a leaked sqlite lock.
                 if let Err(error) = self.wait_for_ready(port).await {
+                    self.reclaim_child().await;
                     let mut info = self.info.write().await;
                     info.state = BackendState::Failed;
                     info.last_error = Some(error.clone());
+                    info.pid = None;
+                    info.endpoint = None;
+                    info.port = None;
                     drop(info);
                     self.log_desktop(LogLevel::Error, &format!("backend.ready_failed {error}"));
                     return Err(error);
@@ -429,7 +466,8 @@ impl BackendSupervisor {
         cmd.args(Self::spawn_args(port))
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .stdin(Stdio::null());
+            .stdin(Stdio::null())
+            .kill_on_drop(true);
 
         // Keep the child in the app's lifetime, not the user's screen: without
         // CREATE_NO_WINDOW a console window flashes on every launch.
@@ -518,14 +556,40 @@ impl BackendSupervisor {
         let endpoint = format!("http://127.0.0.1:{}/health", port);
         let timeout = Duration::from_secs(15);
         let start = Instant::now();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .build()
+            .map_err(|error| format!("failed to build health client: {error}"))?;
 
         loop {
             if start.elapsed() > timeout {
                 return Err(format!("Backend startup timeout after {:?}", timeout));
             }
 
-            // Try health check
-            match reqwest::get(&endpoint).await {
+            // A child that dies during bootstrap (broken stdio, bind failure,
+            // sqlite lock) must fail immediately. Waiting out the 15s budget
+            // hides the real exit and poisons the next start.
+            {
+                let info = self.info.read().await;
+                if info.state == BackendState::Failed {
+                    return Err(info.last_error.clone().unwrap_or_else(|| {
+                        "backend failed during startup".to_string()
+                    }));
+                }
+            }
+            {
+                let mut guard = self.process.write().await;
+                if let Some(backend) = guard.as_mut() {
+                    if let Ok(Some(status)) = backend.child.try_wait() {
+                        return Err(format!(
+                            "backend exited during startup (code {:?})",
+                            status.code()
+                        ));
+                    }
+                }
+            }
+
+            match client.get(&endpoint).send().await {
                 Ok(response) if response.status().is_success() => {
                     return Ok(());
                 }
