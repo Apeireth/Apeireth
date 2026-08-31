@@ -314,6 +314,17 @@ async fn real_http_entry_closes_the_canonical_tool_loop() {
     assert!(entries
         .iter()
         .all(|entry| entry["at"].as_str() == Some("2023-11-14T22:13:20Z")));
+    let events = body["events"].as_array().expect("product-facing events");
+    assert!(
+        events.iter().any(|event| event["event"] == "tool_started"
+            && event["tool_call_id"] == "call-1"),
+        "{events:?}"
+    );
+    assert!(
+        events.iter().any(|event| event["event"] == "tool_completed"
+            && event["succeeded"] == true),
+        "{events:?}"
+    );
 }
 
 #[tokio::test]
@@ -591,5 +602,155 @@ async fn expired_pending_approval_allows_the_next_turn() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 0);
+}
+
+fn openai_request(session: SessionId, input: &str, stream: bool) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_vec(&serde_json::json!({
+                "model": MODEL,
+                "session_id": session,
+                "stream": stream,
+                "messages": [{"role": "user", "content": input}]
+            }))
+            .unwrap(),
+        ))
+        .unwrap()
+}
+
+fn inbox_request(session: SessionId) -> Request<Body> {
+    Request::builder()
+        .method("GET")
+        .uri(format!("/v1/approvals?session={session}"))
+        .body(Body::empty())
+        .unwrap()
+}
+
+#[tokio::test]
+async fn openai_compatible_path_exposes_tool_events_without_client_execution() {
+    let provider = FakeProvider::new();
+    let calculator_calls = Arc::new(AtomicUsize::new(0));
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(frozen_clock())
+            .with_governance(Arc::new(AllowAll))
+            .with_plugin(TestPlugin::provider(provider.clone()))
+            .with_plugin(TestPlugin::calculator(calculator_calls.clone()))
+            .with_default_model(MODEL)
+            .build()
+            .await
+            .unwrap(),
+    );
+    let session = SessionId::from_uuid(Uuid::from_u128(49));
+    let (status, body) = json_body(
+        canonical_router(runtime)
+            .oneshot(openai_request(session, "calculate 1 + 1", false))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["choices"][0]["message"]["content"], "The result is 2.");
+    let events = body["apeireth"]["events"]
+        .as_array()
+        .expect("openai metadata must carry execution events");
+    assert!(
+        events.iter().any(|event| event["event"] == "tool_started"),
+        "{events:?}"
+    );
+    assert!(
+        events.iter().any(|event| event["event"] == "tool_completed"),
+        "{events:?}"
+    );
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 1);
+    assert!(
+        body["choices"][0]["message"]["tool_calls"].is_null()
+            || body["choices"][0]["message"]
+                .get("tool_calls")
+                .is_none(),
+        "OpenAI tool_calls must not move execution to the client: {body}"
+    );
+}
+
+#[tokio::test]
+async fn openai_compatible_path_returns_pending_approval_as_accepted() {
+    let provider = FakeProvider::new();
+    let calculator_calls = Arc::new(AtomicUsize::new(0));
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(frozen_clock())
+            .with_governance(Arc::new(approval_policy()))
+            .with_plugin(TestPlugin::provider(provider))
+            .with_plugin(TestPlugin::calculator(calculator_calls.clone()))
+            .with_default_model(MODEL)
+            .build()
+            .await
+            .unwrap(),
+    );
+    let session = SessionId::from_uuid(Uuid::from_u128(50));
+    let (status, body) = json_body(
+        canonical_router(runtime)
+            .oneshot(openai_request(session, "calculate 1 + 1", true))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{body}");
+    assert_eq!(body["session"], session.to_string());
+    assert_eq!(body["tool_name"], "calculator");
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn approval_inbox_lists_pending_for_the_same_session() {
+    let provider = FakeProvider::new();
+    let calculator_calls = Arc::new(AtomicUsize::new(0));
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(frozen_clock())
+            .with_governance(Arc::new(approval_policy()))
+            .with_plugin(TestPlugin::provider(provider))
+            .with_plugin(TestPlugin::calculator(calculator_calls.clone()))
+            .with_default_model(MODEL)
+            .build()
+            .await
+            .unwrap(),
+    );
+    let session = SessionId::from_uuid(Uuid::from_u128(51));
+    let other = SessionId::from_uuid(Uuid::from_u128(52));
+    let (status, body) = json_body(
+        canonical_router(runtime.clone())
+            .oneshot(native_request(session, "calculate 1 + 1"))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let approval = body["approval_id"].as_str().unwrap().to_string();
+
+    let (status, inbox) = json_body(
+        canonical_router(runtime.clone())
+            .oneshot(inbox_request(session))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{inbox}");
+    assert_eq!(inbox["session"], session.to_string());
+    assert_eq!(inbox["approvals"][0]["approval_id"], approval);
+
+    let (status, empty) = json_body(
+        canonical_router(runtime)
+            .oneshot(inbox_request(other))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{empty}");
+    assert_eq!(empty["approvals"].as_array().unwrap().len(), 0);
     assert_eq!(calculator_calls.load(Ordering::SeqCst), 0);
 }

@@ -11,9 +11,9 @@ use apeireth_core::kernel::{ApprovalId, SessionId, Timestamp};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, ExecutionTrace, PendingApprovalView, Runtime,
-    RuntimeError, TurnOutcome, TurnRequest,
+    RuntimeError, TraceEvent, TurnOutcome, TurnRequest,
 };
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -67,6 +67,86 @@ pub struct CanonicalChatResponse {
     pub usage: NormalizedUsage,
     /// Structured execution metadata; never raw model reasoning.
     pub trace: ExecutionTrace,
+    /// Product-facing execution events derived from the trace.
+    ///
+    /// Desktop may render these. It must not execute tools from them.
+    pub events: Vec<CanonicalExecutionEvent>,
+}
+
+/// Minimal product-facing execution event.
+///
+/// These are observations of the Main Loop. They are not a tool-call protocol
+/// and they never authorize the client to run a capability.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct CanonicalExecutionEvent {
+    pub event: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capability_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub succeeded: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approval_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub round: Option<u32>,
+}
+
+fn events_from_trace(trace: &ExecutionTrace) -> Vec<CanonicalExecutionEvent> {
+    let mut events = Vec::new();
+    for entry in &trace.entries {
+        match &entry.event {
+            TraceEvent::CapabilityDispatched {
+                capability,
+                tool_call_id,
+                round,
+            } => events.push(CanonicalExecutionEvent {
+                event: "tool_started".into(),
+                tool_name: Some(capability.to_string()),
+                capability_id: Some(capability.to_string()),
+                tool_call_id: Some(tool_call_id.clone()),
+                succeeded: None,
+                approval_id: None,
+                round: Some(*round),
+            }),
+            TraceEvent::CapabilityCompleted {
+                capability,
+                tool_call_id,
+                succeeded,
+                round,
+            } => events.push(CanonicalExecutionEvent {
+                event: if *succeeded {
+                    "tool_completed".into()
+                } else {
+                    "tool_failed".into()
+                },
+                tool_name: Some(capability.to_string()),
+                capability_id: Some(capability.to_string()),
+                tool_call_id: Some(tool_call_id.clone()),
+                succeeded: Some(*succeeded),
+                approval_id: None,
+                round: Some(*round),
+            }),
+            TraceEvent::ApprovalRequested {
+                approval_id,
+                capability,
+                tool_call_id,
+                round,
+            } => events.push(CanonicalExecutionEvent {
+                event: "approval_required".into(),
+                tool_name: Some(capability.to_string()),
+                capability_id: Some(capability.to_string()),
+                tool_call_id: Some(tool_call_id.clone()),
+                succeeded: None,
+                approval_id: Some(approval_id.to_string()),
+                round: Some(*round),
+            }),
+            _ => {}
+        }
+    }
+    events
 }
 
 /// Transport-neutral pending-approval payload. Exposes identity and safe
@@ -195,7 +275,8 @@ fn turn_outcome_to_chat(outcome: TurnOutcome) -> CanonicalChatOutcome {
                 served_by: response.served_by.to_string(),
                 rounds: response.rounds,
                 usage: response.usage,
-                trace: response.trace,
+                trace: response.trace.clone(),
+                events: events_from_trace(&response.trace),
             })
         }
         TurnOutcome::PendingApproval(view) => {
@@ -264,6 +345,8 @@ struct OpenAiExecutionMetadata {
     trace_id: String,
     served_by: String,
     rounds: u32,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    events: Vec<CanonicalExecutionEvent>,
 }
 
 #[derive(Debug, Serialize)]
@@ -323,6 +406,7 @@ pub fn canonical_router(runtime: Arc<Runtime>) -> Router {
         .route("/v1/models", get(list_models))
         .route("/v1/chat", post(native_chat))
         .route("/v1/chat/completions", post(openai_chat))
+        .route("/v1/approvals", get(list_pending_approvals))
         .route("/v1/approvals/resolve", post(native_resolve_approval))
         .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(runtime)
@@ -393,6 +477,34 @@ async fn native_resolve_approval(
         .map_err(|error| http_error(error, Some(session)))
 }
 
+#[derive(Debug, Deserialize)]
+struct ApprovalInboxQuery {
+    session: SessionId,
+}
+
+#[derive(Debug, Serialize)]
+struct ApprovalInboxResponse {
+    session: SessionId,
+    approvals: Vec<CanonicalPendingApproval>,
+}
+
+async fn list_pending_approvals(
+    State(runtime): State<Arc<Runtime>>,
+    Query(query): Query<ApprovalInboxQuery>,
+) -> Result<Json<ApprovalInboxResponse>, HttpError> {
+    let approvals = runtime
+        .pending_approvals(query.session)
+        .await
+        .map_err(|error| http_error(CanonicalEntryError::Runtime(error), Some(query.session)))?
+        .into_iter()
+        .map(CanonicalPendingApproval::from)
+        .collect();
+    Ok(Json(ApprovalInboxResponse {
+        session: query.session,
+        approvals,
+    }))
+}
+
 fn chat_http_response(outcome: CanonicalChatOutcome) -> Response {
     match outcome {
         CanonicalChatOutcome::Completed(response) => {
@@ -443,17 +555,15 @@ async fn openai_chat(
     let outcome = execute_chat(runtime.as_ref(), native)
         .await
         .map_err(|error| http_error(error, Some(session)))?;
-    let CanonicalChatOutcome::Completed(outcome) = outcome else {
-        return Err(http_error(
-            CanonicalEntryError::InvalidRequest(
-                "OpenAI-compatible chat cannot resume a pending approval; use /v1/approvals/resolve"
-                    .into(),
-            ),
-            Some(session),
-        ));
+    let outcome = match outcome {
+        CanonicalChatOutcome::Completed(completed) => completed,
+        CanonicalChatOutcome::PendingApproval(pending) => {
+            return Ok((StatusCode::ACCEPTED, Json(pending)).into_response());
+        }
     };
     let created = Timestamp::from_clock(runtime.clock().as_ref()).epoch_millis() / 1_000;
     let model_name = request.model.unwrap_or_default();
+    let events = outcome.events.clone();
 
     if is_stream {
         // 构建 OpenAI 规范 SSE 流式数据帧
@@ -487,9 +597,10 @@ async fn openai_chat(
             }],
             apeireth: Some(OpenAiExecutionMetadata {
                 session_id: outcome.session.to_string(),
-                trace_id: outcome.trace_id,
-                served_by: outcome.served_by,
+                trace_id: outcome.trace_id.clone(),
+                served_by: outcome.served_by.clone(),
                 rounds: outcome.rounds,
+                events: events.clone(),
             }),
         };
         let chunk_final = OpenAiStreamChunk {
@@ -556,6 +667,7 @@ async fn openai_chat(
                 trace_id: outcome.trace_id,
                 served_by: outcome.served_by,
                 rounds: outcome.rounds,
+                events,
             },
         })
         .into_response())
