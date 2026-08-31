@@ -5,7 +5,7 @@
 #   .\packaging\scoop\build.ps1
 #   $env:APEIRETH_VERSION = "2.0.0-rc.1"; .\packaging\scoop\build.ps1
 
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..\..
 
 $VERSION = $env:APEIRETH_VERSION
@@ -15,31 +15,13 @@ if (-not $BUCKET_REPO) { $BUCKET_REPO = "apeireth/scoop-bucket" }
 
 Write-Host "=== Apeireth Scoop Manifest Build v${VERSION} ==="
 
-# 1. Compute zip SHA256 (from local target or remote release)
+# 1. Compute zip SHA256 from the locally produced release artifact.
 $LOCAL_ZIP = "target\apeireth-${VERSION}-windows-x86_64.zip"
-$ZIP_SHA256 = $null
-
-if (Test-Path $LOCAL_ZIP) {
-    Write-Host "[1/4] Using local ZIP artifact for sha256: ${LOCAL_ZIP}"
-    $ZIP_SHA256 = (Get-FileHash -Path $LOCAL_ZIP -Algorithm SHA256).Hash
-} else {
-    $ZIP_URL = "https://github.com/apeireth/apeireth-rust/releases/download/v${VERSION}/apeireth-${VERSION}-windows-x86_64.zip"
-    Write-Host "[1/4] Attempting to download ZIP for sha256: ${ZIP_URL}"
-    $TEMP_ZIP_PATH = Join-Path $env:TEMP "apeireth-${VERSION}.zip"
-    try {
-        Invoke-WebRequest -Uri $ZIP_URL -OutFile $TEMP_ZIP_PATH -UseBasicParsing -TimeoutSec 10
-        if (Test-Path $TEMP_ZIP_PATH) {
-            $ZIP_SHA256 = (Get-FileHash -Path $TEMP_ZIP_PATH -Algorithm SHA256).Hash
-            Remove-Item $TEMP_ZIP_PATH -Force
-        }
-    } catch {
-        Write-Host "    [NOTE] Remote release not reachable yet; placeholder preserved for release pipeline."
-    }
+if (-not (Test-Path $LOCAL_ZIP)) {
+    throw "Local release ZIP is required: ${LOCAL_ZIP}. Build packaging\zip\build.ps1 first."
 }
-
-if (-not $ZIP_SHA256) {
-    $ZIP_SHA256 = "REPLACE_WITH_RELEASE_SHA256_AT_TAG_TIME"
-}
+$ZIP_SHA256 = (Get-FileHash -Path $LOCAL_ZIP -Algorithm SHA256).Hash
+Write-Host "[1/4] Using local ZIP artifact for sha256: ${LOCAL_ZIP}"
 
 Write-Host "    SHA256: ${ZIP_SHA256}"
 

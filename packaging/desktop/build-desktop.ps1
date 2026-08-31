@@ -5,7 +5,7 @@ param(
     [string]$Target = "x86_64-pc-windows-msvc"
 )
 
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..\..
 
 Write-Host "=================================================="
@@ -14,6 +14,7 @@ Write-Host "=================================================="
 
 # 1. Stage assets & frontend
 & "$PSScriptRoot\stage-desktop.ps1" -Version $Version -Target $Target
+if ($LASTEXITCODE -ne 0) { throw "Desktop staging failed with exit code $LASTEXITCODE" }
 
 # 2. Build Portable Desktop ZIP
 Write-Host "[1/3] Creating Desktop Portable ZIP..."
@@ -29,10 +30,12 @@ Write-Host "    SHA256:      $ZIP_SHA256"
 # 3. Build Desktop MSI
 Write-Host "[2/3] Building Desktop MSI..."
 & "$PSScriptRoot\build-desktop-msi.ps1" -Version $Version -Target $Target
+if ($LASTEXITCODE -ne 0) { throw "Desktop MSI build failed with exit code $LASTEXITCODE" }
 
 # 4. Build Desktop NSIS
 Write-Host "[3/3] Building Desktop NSIS..."
 & "$PSScriptRoot\build-desktop-nsis.ps1" -Version $Version -Target $Target
+if ($LASTEXITCODE -ne 0) { throw "Desktop NSIS build failed with exit code $LASTEXITCODE" }
 
 Write-Host "=================================================="
 Write-Host "  Desktop Packaging Complete (v$Version)"

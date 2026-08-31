@@ -110,14 +110,22 @@ for f in *; do
 done
 
 ISO_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "2026-08-30T12:00:00Z")"
+WORKSPACE_VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/p' "${REPO_ROOT}/Cargo.toml" | grep -E '^version\s*=' | head -1 | sed -E 's/.*version\s*=\s*"([^"]+)".*/\1/')"
+DESKTOP_VERSION="$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' "${REPO_ROOT}/frontend/companion-desktop/package.json" | head -1)"
+if [[ -z "${WORKSPACE_VERSION}" || -z "${DESKTOP_VERSION}" || "${WORKSPACE_VERSION}" != "${VERSION}" || "${DESKTOP_VERSION}" != "${VERSION}" ]]; then
+  echo "release version mismatch: workspace=${WORKSPACE_VERSION:-UNKNOWN} desktop=${DESKTOP_VERSION:-UNKNOWN} requested=${VERSION}" >&2
+  exit 1
+fi
 
 if command -v jq >/dev/null 2>&1; then
-  jq -n \
+    jq -n \
     --arg name "Apeireth 2.0 Release Candidate" \
     --arg ver "$VERSION" \
     --arg tag "$RELEASE_TAG" \
     --arg sha "$COMMIT_SHA" \
     --arg ts "$ISO_TIMESTAMP" \
+    --arg workspace "$WORKSPACE_VERSION" \
+    --arg desktop "$DESKTOP_VERSION" \
     --argjson artifacts "$ARTIFACTS_JSON" \
     '{
       schema_version: "2.0.0",
@@ -130,11 +138,11 @@ if command -v jq >/dev/null 2>&1; then
         generator: "scripts/generate-release-manifest.sh"
       },
       components: {
-        workspace: "1.2.0",
-        cli: "1.2.0",
-        gateway: "1.2.0",
-        sdk: "1.2.0",
-        companion_desktop: "2.0.0-rc.1"
+        workspace: $workspace,
+        cli: $workspace,
+        gateway: $workspace,
+        sdk: $workspace,
+        companion_desktop: $desktop
       },
       artifacts: $artifacts,
       checksums: {
@@ -160,6 +168,13 @@ else
     "commit_sha": "${COMMIT_SHA}",
     "created_at": "${ISO_TIMESTAMP}",
     "generator": "scripts/generate-release-manifest.sh"
+  },
+  "components": {
+    "workspace": "${WORKSPACE_VERSION}",
+    "cli": "${WORKSPACE_VERSION}",
+    "gateway": "${WORKSPACE_VERSION}",
+    "sdk": "${WORKSPACE_VERSION}",
+    "companion_desktop": "${DESKTOP_VERSION}"
   },
   "checksums": {
     "sha256sums_file": "SHA256SUMS"

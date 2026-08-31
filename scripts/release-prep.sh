@@ -22,7 +22,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+VERSION="${APEIRETH_VERSION:-2.0.0-rc.1}"
 DRY_RUN=false
 SKIP=""
 if [[ "${1:-}" == "--dry-run" ]]; then DRY_RUN=true; fi
@@ -46,13 +46,13 @@ check_hard_walls() {
 
     # A1: workspace.version
     local CUR VER REASON
-    CUR=$(grep -E '^version\s*=' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+    CUR=$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')
     REASON=""
-    if [[ "$CUR" != "1.2.0" ]]; then
-        REASON="workspace.version = $CUR (期望 1.2.0)"
+    if [[ "$CUR" != "$VERSION" ]]; then
+        REASON="workspace.version = $CUR (期望 $VERSION)"
     fi
     if [[ -n "$REASON" ]]; then
-        fail "$section.1" "workspace.version 1.2.0 不变" "$REASON"
+        fail "$section.1" "workspace.version matches release authority" "$REASON"
     else
         pass "$section.1" "workspace.version = $CUR"
     fi

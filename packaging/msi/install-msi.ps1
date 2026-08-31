@@ -20,7 +20,7 @@ if (-not $MsiFile) {
 Write-Host "=== Installing Apeireth MSI Package ==="
 Write-Host "MSI File: $MsiFile"
 
-$args = @("/i", """")
+$args = @('/i', $MsiFile)
 if ($Quiet) {
     $args += "/qn"
     $args += "/norestart"
@@ -28,7 +28,7 @@ if ($Quiet) {
 
 $process = Start-Process msiexec.exe -ArgumentList $args -Wait -PassThru
 if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) {
-    Write-Host "Apeireth MSI installed successfully (ExitCode: $(.ExitCode))."
+    Write-Host "Apeireth MSI installed successfully (ExitCode: $($process.ExitCode))."
 } else {
-    throw "msiexec failed with exit code: $(.ExitCode)"
+    throw "msiexec failed with exit code: $($process.ExitCode)"
 }

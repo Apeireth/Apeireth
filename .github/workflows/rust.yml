@@ -158,16 +158,16 @@ jobs:
           fi
           echo "✅ 24 LOCKED crate 仅纯 fmt 改 (logic 0 触碰)"
 
-      - name: "守门 2: workspace.version 1.2.0 不变"
+      - name: "守门 2: workspace.version matches release authority"
         env:
           BASE: ${{ steps.base.outputs.base_sha }}
         run: |
           if [ -z "$BASE" ]; then exit 0; fi
-          CUR=$(grep -E '^version\s*=' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          PREV=$(git show "$BASE:Cargo.toml" 2>/dev/null | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/' || echo "")
+          CUR=$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          PREV=$(git show "$BASE:Cargo.toml" 2>/dev/null | sed -n '/^\[workspace\.package\]/,/^\[/p' | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/' || echo "")
           echo "workspace.version: prev=$PREV cur=$CUR"
-          if [ "$CUR" != "1.2.0" ]; then
-            echo "::error::workspace.version = $CUR (期望 1.2.0)"
+          if [ -z "$CUR" ]; then
+            echo "::error::workspace.version is missing"
             exit 1
           fi
           if [ -n "$PREV" ] && [ "$CUR" != "$PREV" ]; then

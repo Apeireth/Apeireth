@@ -8,6 +8,8 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..\..
 
+$RepoRoot = (Get-Location).Path
+
 Write-Host "=== Staging Apeireth Desktop Companion v$Version ==="
 
 $DesktopDir = "frontend\companion-desktop"
@@ -19,21 +21,23 @@ New-Item -ItemType Directory -Path (Join-Path $StageDir "share") -Force | Out-Nu
 New-Item -ItemType Directory -Path (Join-Path $StageDir "icons") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $StageDir "dist") -Force | Out-Null
 
-# 1. Build frontend dist if pnpm is available, or ensure valid dist
+# 1. Build the real frontend. A placeholder UI is not a release artifact.
 Write-Host "[1/3] Checking frontend dist..."
 $distPath = Join-Path $DesktopDir "dist"
-if (-not (Test-Path $distPath) -or (Get-ChildItem $distPath).Count -eq 0) {
-    if (Get-Command pnpm -ErrorAction SilentlyContinue) {
-        Write-Host "    Building Svelte 5 frontend via pnpm build..."
-        Push-Location $DesktopDir
-        pnpm install --frozen-lockfile
-        pnpm build
-        Pop-Location
-    } else {
-        Write-Host "    [STAGING FALLBACK] Creating fallback placeholder dist/index.html..."
-        New-Item -ItemType Directory -Path $distPath -Force | Out-Null
-        "<!DOCTYPE html><html><head><title>Apeireth Companion</title></head><body><h1>Apeireth Companion Desktop</h1></body></html>" | Out-File -FilePath (Join-Path $distPath "index.html") -Encoding UTF8
-    }
+if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+    throw 'pnpm is required to build the RC frontend; refusing placeholder staging.'
+}
+Push-Location $DesktopDir
+try {
+    pnpm install --frozen-lockfile
+    if ($LASTEXITCODE -ne 0) { throw "pnpm install failed with exit code $LASTEXITCODE" }
+    pnpm build
+    if ($LASTEXITCODE -ne 0) { throw "pnpm build failed with exit code $LASTEXITCODE" }
+} finally {
+    Pop-Location
+}
+if (-not (Test-Path (Join-Path $distPath 'index.html'))) {
+    throw "Frontend build did not produce $distPath/index.html"
 }
 Copy-Item (Join-Path $distPath "*") (Join-Path $StageDir "dist") -Recurse -Force
 
@@ -46,8 +50,12 @@ if (Test-Path "$DesktopDir\src-tauri\icons") {
     Copy-Item (Join-Path "$DesktopDir\src-tauri\icons" "*") (Join-Path $StageDir "icons") -Force
 }
 
-# 3. Check/Stage binaries
+# 3. Build and stage the canonical backend sidecar
 Write-Host "[3/3] Staging desktop binaries..."
+$sidecarScript = Join-Path $RepoRoot 'packaging\stage-sidecar.ps1'
+& $sidecarScript -Profile release -Target $Target
+if ($LASTEXITCODE -ne 0) { throw "Sidecar staging failed with exit code $LASTEXITCODE" }
+
 $tauriBinCandidates = @(
     "$DesktopDir\src-tauri\target\$Target\release\companion-desktop.exe",
     "$DesktopDir\src-tauri\target\release\companion-desktop.exe",
@@ -66,7 +74,7 @@ foreach ($cand in $tauriBinCandidates) {
 }
 
 if (-not $foundBin) {
-    Write-Host "    [NOTE] Pre-compiled companion-desktop binary not found in target. Staged for build phase."
+    Write-Host "    Companion desktop binary will be produced by the Tauri build phase."
 }
 
 Write-Host "Desktop staging completed at: $StageDir"

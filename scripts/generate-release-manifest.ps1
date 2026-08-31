@@ -230,13 +230,24 @@ $BuildMatrix = @(
     @{ target = "multi-arch";                 platform = "container"; arch = "amd64/arm64"; format = "docker"; tool = "docker-buildx" }
 )
 
-# Read component versions
+# Read component versions from active authorities.
+$RootCargo = Join-Path $RepoRoot 'Cargo.toml'
+$RootContent = Get-Content $RootCargo -Raw
+if ($RootContent -notmatch '(?ms)\[workspace\.package\].*?^version\s*=\s*"([^"]+)"') {
+    throw 'Could not read [workspace.package].version from Cargo.toml.'
+}
+$WorkspaceVersion = $Matches[1]
+$DesktopPackage = Join-Path $RepoRoot 'frontend/companion-desktop/package.json'
+$DesktopVersion = (Get-Content $DesktopPackage -Raw | ConvertFrom-Json).version
+if ($WorkspaceVersion -ne $Version -or $DesktopVersion -ne $Version) {
+    throw "Release version mismatch: workspace=$WorkspaceVersion desktop=$DesktopVersion requested=$Version"
+}
 $ComponentVersions = @{
-    workspace          = "2.0.0-rc.1"
-    cli                = "2.0.0-rc.1"
-    gateway            = "2.0.0-rc.1"
-    sdk                = "2.0.0-rc.1"
-    companion_desktop  = "2.0.0-rc.1"
+    workspace          = $WorkspaceVersion
+    cli                = $WorkspaceVersion
+    gateway            = $WorkspaceVersion
+    sdk                = $WorkspaceVersion
+    companion_desktop  = $DesktopVersion
 }
 
 # Construct Manifest JSON Object

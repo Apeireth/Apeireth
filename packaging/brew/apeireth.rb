@@ -9,10 +9,10 @@
 class Apeireth < Formula
   desc "Apeireth OS - AI Growth Platform (API server)"
   homepage "https://github.com/apeireth/apeireth-rust"
-  url "https://github.com/apeireth/apeireth-rust/archive/refs/tags/v1.0.0.tar.gz"
+  url "https://github.com/apeireth/apeireth-rust/archive/refs/tags/v2.0.0-rc.1.tar.gz"
   sha256 "REPLACE_WITH_RELEASE_SHA256_AT_TAG_TIME"
   license "Apache-2.0"
-  version "1.0.0"
+  version "2.0.0-rc.1"
 
   # macOS 版本兼容
   depends_on :macos => :high_sierra
