@@ -116,10 +116,19 @@ pub fn run() {
         }
     };
 
-    logger.log_desktop(LogLevel::Info, &format!("Desktop starting version={}", env!("CARGO_PKG_VERSION")));
+    // Bound log growth before appending this session's output.
+    if let Err(error) = logger.rotate_if_needed() {
+        eprintln!("log rotation failed: {error}");
+    }
 
-    // Initialize backend supervisor
-    let supervisor = Arc::new(BackendSupervisor::new());
+    logger.log_desktop(
+        LogLevel::Info,
+        &format!("desktop.start version={}", env!("CARGO_PKG_VERSION")),
+    );
+
+    // Initialize backend supervisor with the persistent logger attached, so
+    // backend stdout/stderr lands in apeireth-backend.log.
+    let supervisor = Arc::new(BackendSupervisor::with_logger(logger.clone()));
 
     tauri::Builder::default()
         // 单实例: 二次启动聚焦已有主窗而不是再开一个 (尽量靠前注册).
