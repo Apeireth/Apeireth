@@ -1263,8 +1263,18 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
  * 404 仅作为 legacy fallback 触发条件, 不作为长期协议设计.
  */
 export async function fetchCapabilities(_config: ApeirethConfig): Promise<CapabilityManifest> {
-  // Canonical 2.0 has no /v1/apeireth/capabilities. Do not probe a known-dead
-  // URL; the release contract is the product surface.
+  // Canonical 2.0 now serves a dynamic manifest. Ask the runtime first; only
+  // fall back to the static release contract when the endpoint is unreachable.
+  const baseUrl = normalizeBaseUrl(_config.baseUrl);
+  try {
+    const res = await fetch(`${baseUrl}/v1/apeireth/capabilities`);
+    if (res.ok) {
+      const data = (await res.json()) as CapabilityManifest;
+      if (data && Array.isArray(data.capabilities)) return data;
+    }
+  } catch {
+    // fall through to the static contract
+  }
   return releaseContractManifest();
 }
 
@@ -1388,10 +1398,31 @@ export function releaseContractManifest(): CapabilityManifest {
       {name: 'health', capabilities: [cap('health', true, false, ['check'])]},
       {name: 'models', capabilities: [cap('models.list', true, false, ['list'])]},
       {name: 'chat', capabilities: [cap('chat.completions', true, true, ['stream'])]},
+      {name: 'sessions', capabilities: [cap('sessions.read', true, false, ['list'])]},
       {
-        name: 'approvals',
-        capabilities: [cap('approvals.resolve', false, true, ['resolve'])],
+        name: 'memory',
+        capabilities: [
+          cap('memory.read', true, false, ['list', 'search']),
+          cap('memory.write', true, true, ['append']),
+          cap('memory.forget', false, true, ['forget']),
+          cap('memory.protect', false, true, ['protect']),
+          cap('memory.unprotect', false, true, ['unprotect']),
+          cap('memory.graph.read', true, false, ['graph']),
+        ],
       },
+      {name: 'tools', capabilities: [cap('tools.list', true, false, ['list'])]},
+      {
+        name: 'permissions',
+        capabilities: [
+          cap('permissions.approval.read', true, false, ['list']),
+          cap('permissions.grants.read', true, false, ['list']),
+          cap('permissions.revoke', false, true, ['revoke']),
+        ],
+      },
+      {name: 'organs', capabilities: [cap('organs.list', true, false, ['list'])]},
+      {name: 'trace', capabilities: [cap('trace.read', true, false, ['list', 'detail'])]},
+      {name: 'audit', capabilities: [cap('audit.read', true, false, ['list'])]},
+      {name: 'activity', capabilities: [cap('activity.sse', true, false, ['subscribe'])]},
     ],
   };
 }
@@ -1404,12 +1435,28 @@ export function releaseContractManifest(): CapabilityManifest {
 export const legacyCapabilityManifest = releaseContractManifest;
 
 /** 获取真实后端会话列表 (只读数据) */
-export async function fetchBackendSessions(config: ApeirethConfig): Promise<Array<{id: string; started_at: number; last_active_at: number; closed_at?: number; episode_count: number}>> {
+export async function fetchBackendSessions(config: ApeirethConfig): Promise<Array<{id: string; title?: string; started_at: number; last_active_at: number; closed_at?: number; episode_count: number}>> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/sessions`, {
     headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
   });
-  const data = (await checkJson(res)) as {sessions?: Array<{id: string; started_at: number; last_active_at: number; closed_at?: number; episode_count: number}>};
-  return data.sessions || [];
+  // Canonical contract shape: {sessions: [{id, title, created_at, updated_at, message_count, revision}]}
+  const data = (await checkJson(res)) as {
+    sessions?: Array<{
+      id: string;
+      title?: string | null;
+      created_at?: number;
+      updated_at?: number;
+      message_count?: number;
+      revision?: number;
+    }>;
+  };
+  return (data.sessions || []).map((s) => ({
+    id: s.id,
+    title: typeof s.title === 'string' ? s.title : undefined,
+    started_at: s.created_at ?? 0,
+    last_active_at: s.updated_at ?? 0,
+    episode_count: s.message_count ?? 0,
+  }));
 }
 
 /** 搜索记忆条目 */
@@ -1418,40 +1465,55 @@ export async function fetchMemoryEpisodes(config: ApeirethConfig, query = '', li
   const res = await fetch(url, {
     headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
   });
-  const data = (await checkJson(res)) as {episodes?: Array<{id: string; timestamp: number; role: string; content: string; session_id: string}>};
+  const data = (await checkJson(res)) as {
+    episodes?: Array<{
+      id: string;
+      timestamp: number;
+      role: string;
+      content: string;
+      session_id: string;
+      category?: string | null;
+      importance?: number | null;
+      protected?: boolean | null;
+      status?: string | null;
+    }>;
+  };
   return (data.episodes || []).map((e) => ({
     id: e.id,
     timestamp: e.timestamp,
     role: e.role,
     content: e.content,
     sessionId: e.session_id,
+    category: typeof e.category === 'string' ? e.category : undefined,
+    importance: typeof e.importance === 'number' ? e.importance : undefined,
+    protected: typeof e.protected === 'boolean' ? e.protected : undefined,
+    status: e.status === 'forgotten' ? 'forgotten' : e.status === 'active' ? 'active' : undefined,
   }));
 }
 
-/** 获取知识图谱事实和链接 */
+/** 获取知识图谱节点和边 */
 export async function fetchGraphData(config: ApeirethConfig): Promise<{facts: MemoryEpisodeItem[]; links: MemoryEpisodeItem[]}> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/graph`, {
     headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
   });
-  // G3 修复: 后端 facts/links 是图谱 JSON (panel_readonly.rs:294-314, 契约 §4.5) —
-  // facts 形如 {id, subject, predicate, object, importance}, links 形如 {id, from, to, weight},
-  // 旧代码按 episode 形 {content} 解析 → MemoryView 渲染 undefined 空白. 在此组装可读文本.
+  // Canonical contract shape: {nodes: [{id, label, kind}], edges: [{from, to, weight, label?}]}
   const data = (await checkJson(res)) as {
-    facts?: Array<{id?: string; subject?: string; predicate?: string; object?: string; importance?: number}>;
-    links?: Array<{id?: string; from?: string; to?: string; weight?: number}>;
+    nodes?: Array<{id?: string; label?: string; kind?: string}>;
+    edges?: Array<{from?: string; to?: string; weight?: number; label?: string | null}>;
   };
   return {
-    facts: (data.facts || []).map((f, i) => ({
-      id: f.id || `factg-${i}`,
-      timestamp: 0, // 图谱事实无时间戳 (后端不投影), view 侧按 0 隐藏时间行
-      role: 'fact',
-      content: [f.subject, f.predicate, f.object].filter(Boolean).join(' · ') || '(空事实)',
-      sessionId: 'graph',
-      category: 'fact',
-      importance: typeof f.importance === 'number' ? f.importance : undefined,
-    })),
-    links: (data.links || []).map((l, i) => ({
-      id: l.id || `link-${i}`,
+    facts: (data.nodes || [])
+      .filter((n) => n.kind === 'episode')
+      .map((n, i) => ({
+        id: n.id || `factg-${i}`,
+        timestamp: 0, // 图谱节点无时间戳, view 侧按 0 隐藏时间行
+        role: 'fact',
+        content: n.label || '(空节点)',
+        sessionId: 'graph',
+        category: 'fact',
+      })),
+    links: (data.edges || []).map((l, i) => ({
+      id: `${l.from}-${l.to}-${i}`,
       timestamp: 0,
       role: 'link',
       content: `${l.from ?? '?'} → ${l.to ?? '?'}${typeof l.weight === 'number' ? ` (权重 ${l.weight})` : ''}`,
@@ -1466,38 +1528,21 @@ export async function fetchAuditLogs(config: ApeirethConfig, limit = 100): Promi
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/audit?limit=${limit}`, {
     headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
   });
-  // G4 修复: 后端 ToolCallRecord 字段是 tool_name / started_at_ms / status:"failure"
-  // (record.rs:43-80, 契约 §4.7), 旧代码期望 timestamp/tool/'failed',
-  // 导致时间恒为"现在"、标题恒"操作记录"、失败不显红. 在此适配映射, view 不动.
+  // Canonical contract shape: {events: [{ts, event, service, detail?}]}
   const data = (await checkJson(res)) as {
-    records?: Array<{
-      id?: string;
-      tool_name?: string;
-      tool?: string;
-      action?: string;
-      started_at_ms?: number;
-      timestamp?: number;
-      status?: string;
-      success?: boolean;
-      detail?: string;
-    }>;
+    events?: Array<{ts?: number; event?: string; service?: string; detail?: string | null}>;
   };
-  return (data.records || []).map((r, i) => {
-    const toolName = r.tool_name || r.tool;
-    const rawTs = r.started_at_ms ?? r.timestamp;
-    const failed = r.status === 'failure' || r.status === 'failed' || r.status === 'error' || r.success === false;
-    return {
-      id: r.id || `audit-${rawTs || Date.now()}-${i}`,
-      timestamp: rawTs ? (rawTs > 1e11 ? rawTs : rawTs * 1000) : Date.now(),
-      category: (toolName ? 'tool' : 'runtime') as ActivityItem['category'],
-      title: toolName ? `工具调用: ${toolName}` : (r.action || '操作记录'),
-      summary: r.detail || r.action || (toolName ? `工具调用: ${toolName}` : '系统操作留痕'),
-      source: 'audit' as ActivityItem['source'],
-      severity: (failed ? 'error' : 'info') as ActivityItem['severity'],
-      detail: JSON.stringify(r, null, 2),
-      raw: r,
-    };
-  });
+  return (data.events || []).map((e, i) => ({
+    id: `${e.event || 'audit'}-${e.ts || i}`,
+    timestamp: e.ts ?? Date.now(),
+    category: 'runtime' as ActivityItem['category'],
+    title: e.event || '系统事件',
+    summary: e.detail || e.event || '系统操作留痕',
+    source: 'audit' as ActivityItem['source'],
+    severity: 'info' as ActivityItem['severity'],
+    detail: JSON.stringify(e, null, 2),
+    raw: e,
+  }));
 }
 
 /** 获取工具列表 (严格请求后端真实注册表端点) */
@@ -1521,15 +1566,24 @@ export async function fetchTools(config: ApeirethConfig): Promise<ToolItem[]> {
     );
   }
 
-  const data = (await res.json()) as {tools?: Array<{name: string; description?: string; args_schema?: unknown}>};
+  const data = (await res.json()) as {
+    tools?: Array<{
+      name: string;
+      description?: string;
+      args_schema?: unknown;
+      source?: string;
+      permission?: string;
+      available?: boolean;
+    }>;
+  };
   if (!Array.isArray(data.tools)) return [];
   return data.tools.map((t) => ({
     name: t.name,
     description: t.description || '无描述信息',
     argsSchema: t.args_schema,
-    source: 'builtin',
-    permission: 'prompt',
-    available: true,
+    source: (t.source as ToolItem['source']) || 'builtin',
+    permission: (t.permission as ToolItem['permission']) || 'prompt',
+    available: t.available !== false,
   }));
 }
 
@@ -1597,6 +1651,21 @@ export async function appendMemoryEpisode(
   category: string = 'fact',
   sessionId: string = 'me',
 ): Promise<boolean> {
+  // The canonical gateway requires a UUID session. The panel keeps one stable
+  // "panel memory" session so scattered writes stay discoverable.
+  const MEMORY_SESSION_KEY = 'apeireth-panel-memory-session';
+  let target = sessionId && sessionId !== 'me' ? sessionId : '';
+  if (!target) {
+    try {
+      target = localStorage.getItem(MEMORY_SESSION_KEY) || '';
+      if (!target) {
+        target = crypto.randomUUID();
+        localStorage.setItem(MEMORY_SESSION_KEY, target);
+      }
+    } catch {
+      target = crypto.randomUUID();
+    }
+  }
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/memory/append`, {
     method: 'POST',
     headers: {
@@ -1604,7 +1673,7 @@ export async function appendMemoryEpisode(
       Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
     },
     body: JSON.stringify({
-      session_id: sessionId,
+      session: target,
       role: 'user',
       content: `[${category}] ${content}`,
     }),
@@ -1666,16 +1735,68 @@ export interface CompanionEvent {
 }
 
 /**
- * 订阅 Apeireth 伴随体事件流 (GET /v1/apeireth/events)
- * 接收后端 CompanionDaemon 涌现问候、反思完成与做梦通知
- * 支持断线指数退避自动重连 (2s ~ 30s)
+ * 订阅 Apeireth 网关事件流 (GET /v1/apeireth/events)
+ * 接收 backend_ready / approval_required / approval_resolved 等网关级事件,
+ * 转成轻量文本行交给调用方 (toast / 对话流纪律)。
+ * 支持断线指数退避自动重连 (2s → 30s)。
  */
 export function subscribeCompanionEvents(
-  _config: ApeirethConfig,
-  _onEvent: (event: CompanionEvent) => void,
+  config: ApeirethConfig,
+  onEvent: (event: CompanionEvent) => void,
 ): () => void {
-  // Canonical 2.0 has no companion SSE bus. Do not request /v1/apeireth/events.
-  return () => {};
+  if (typeof EventSource === 'undefined') return () => {};
+  const url = `${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/events`;
+  let active = true;
+  let source: EventSource | null = null;
+  let retryDelay = 2000;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const handler = (kind: string) => (msg: MessageEvent) => {
+    let payload: Record<string, unknown> | null = null;
+    try {
+      payload = JSON.parse(typeof msg.data === 'string' ? msg.data : '');
+    } catch {
+      payload = null;
+    }
+    let text = '';
+    if (kind === 'backend_ready') {
+      text = '后端已就绪';
+    } else if (kind === 'approval_required') {
+      const tool = typeof payload?.tool_name === 'string' ? payload.tool_name : '工具';
+      text = `[需要批准] ${tool}`;
+    } else if (kind === 'approval_resolved') {
+      text = '[审批已处理]';
+    }
+    if (text) onEvent({text, ts: Date.now(), kind});
+  };
+
+  const connect = () => {
+    if (!active) return;
+    const es = new EventSource(url);
+    source = es;
+    es.addEventListener('backend_ready', handler('backend_ready') as EventListener);
+    es.addEventListener('approval_required', handler('approval_required') as EventListener);
+    es.addEventListener('approval_resolved', handler('approval_resolved') as EventListener);
+    es.onerror = () => {
+      if (source === es) source = null;
+      es.close();
+      if (!active) return;
+      retryTimer = setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 1.5, 30000);
+    };
+  };
+
+  connect();
+
+  return () => {
+    active = false;
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+    source?.close();
+    source = null;
+  };
 }
 
 // ============================================================
@@ -1799,18 +1920,48 @@ export async function unprotectMemoryEpisode(config: ApeirethConfig, id: string,
   return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'unprotect failed'};
 }
 
-// --- Permission grants (revoke + list) ---
+// --- Permission grants (list + revoke) ---
 
-export async function fetchGrants(_config: ApeirethConfig): Promise<GrantView[]> {
-  return [];
+export async function fetchGrants(config: ApeirethConfig): Promise<GrantView[]> {
+  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/grants`, {
+    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+  });
+  if (!res.ok) return [];
+  const data = (await res.json().catch(() => null)) as {
+    grants?: Array<{permission?: string; capability?: string; granted_at?: number | null}>;
+  } | null;
+  return (data?.grants || []).map((g) => ({
+    id: g.capability || g.permission || 'grant',
+    name: g.permission || g.capability || 'grant',
+    tools: g.capability ? [g.capability] : [],
+    paths: [],
+    expiry: '',
+    op_budget: null,
+    used_ops: 0,
+    spend_budget: null,
+    spend_used: 0,
+    activated_at_ms: g.granted_at ?? 0,
+    created_at_ms: g.granted_at ?? 0,
+    active: true,
+    expired: false,
+  }));
 }
 
 export async function revokeGrant(
-  _config: ApeirethConfig,
-  _id: string,
-  _masterToken: string,
+  config: ApeirethConfig,
+  id: string,
+  _masterToken: string = '',
 ): Promise<{ok: boolean; error?: string}> {
-  return {ok: false, error: 'legacy grant path removed; use /v1/approvals/resolve'};
+  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/grants/revoke`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({capability: id}),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as {error?: {message?: string}; message?: string} | null;
+    return {ok: false, error: data?.error?.message || data?.message || `HTTP ${res.status}`};
+  }
+  return {ok: true};
 }
 
 // --- Trace ---
