@@ -63,6 +63,8 @@
     fetchCapabilities,
     subscribeCompanionEvents,
     capabilitySupported,
+    activePersonaOf,
+    DEFAULT_PERSONAS,
     type CompanionPresentationState,
     type CanonicalPendingApproval,
   } from './lib/runtime';
@@ -162,6 +164,26 @@
       : null;
   let timelineHour = $state(hourOverride ?? localClockHour());
   let config = $state<ApeirethConfig>(loadConfig());
+  const activePersona = $derived(activePersonaOf(config));
+  // 旧配置无 personas 字段时回退默认人设 (切换器与注入同源).
+  const personaList = $derived(
+    config.personas && config.personas.length > 0 ? config.personas : DEFAULT_PERSONAS,
+  );
+
+  // 切换伙伴身份 (数据驱动, 无重编译): 同步激活人设 + 可选固定模型, 持久化配置.
+  function setActivePersona(id: string): void {
+    const target = personaList.find((p) => p.id === id);
+    if (!target) return;
+    const next: ApeirethConfig = {...config, activePersonaId: id};
+    if (target.model) next.model = target.model;
+    config = next;
+    saveConfig(next);
+    agentRuntime = createAgentRuntime(next);
+    personaMenuOpen = false;
+  }
+
+  // 伙伴身份下拉 (纯 Svelte 自绘, 避免 WebView2 原生 select 弹窗挂起问题)
+  let personaMenuOpen = $state(false);
   let conversations = $state<Conversation[]>(loadConversations());
   let activeId = $state<string | null>(null);
   let draft = $state('');
@@ -978,6 +1000,35 @@
               </div>
             </div>
             <div class="chat-header-actions">
+              <div class="persona-menu">
+                <button
+                  class="persona-trigger"
+                  onclick={() => (personaMenuOpen = !personaMenuOpen)}
+                  title="切换伙伴身份"
+                  aria-label="切换伙伴身份"
+                  aria-expanded={personaMenuOpen}
+                >
+                  <span>{activePersona?.name || '伙伴'}</span>
+                  <ChevronDown size={12} />
+                </button>
+                {#if personaMenuOpen}
+                  <div class="persona-pop" role="menu">
+                    {#each personaList as p (p.id)}
+                      <button
+                        class="persona-item"
+                        class:active={p.id === activePersona?.id}
+                        role="menuitem"
+                        onclick={() => setActivePersona(p.id)}
+                      >
+                        <span class="persona-item-name">{p.name}</span>
+                        {#if p.model}
+                          <span class="persona-item-model">{p.model}</span>
+                        {/if}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
               <button class="new-chat-trigger-btn" onclick={newConversation} title="新建对话 (Ctrl+N)">
                 <Plus size={13} />
                 <span>新建对话</span>
@@ -1415,6 +1466,60 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  /* 伙伴身份切换器 (多 Agent): 纯 Svelte 自绘下拉, 金色细框, 与状态行同语言 */
+  .persona-menu {
+    position: relative;
+  }
+  .persona-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(232, 217, 176, 0.06);
+    border: 1px solid rgba(232, 217, 176, 0.25);
+    border-radius: 6px;
+    color: var(--ap-gold-ui);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 4px 9px;
+    cursor: pointer;
+  }
+  .persona-trigger:hover { border-color: var(--ap-gold-ui); }
+  .persona-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 170px;
+    background: rgba(12, 12, 20, 0.97);
+    border: 1px solid var(--ap-gold-line, rgba(232, 217, 176, 0.3));
+    border-radius: 8px;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 60;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  }
+  .persona-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--ap-bone);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .persona-item:hover { background: rgba(232, 217, 176, 0.08); }
+  .persona-item.active { color: var(--ap-gold-ui); }
+  .persona-item-model {
+    font-family: var(--ap-font-mono);
+    font-size: 10px;
+    color: var(--faint, rgba(232, 224, 204, 0.4));
   }
   .new-chat-trigger-btn {
     display: inline-flex;
