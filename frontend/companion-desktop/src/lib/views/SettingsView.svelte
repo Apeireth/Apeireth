@@ -24,12 +24,13 @@
     Info,
     ChevronDown,
     ChevronUp,
+    Plus,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
-  import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig} from '../types';
-  import {checkHealthDetailed, listModels, testProviderConnection} from '../runtime';
+  import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile} from '../types';
+  import {checkHealthDetailed, listModels, testProviderConnection, DEFAULT_PERSONAS} from '../runtime';
 
   let {
     config,
@@ -152,6 +153,25 @@
     latencyMs?: number;
     models?: string[];
   } | null>(null);
+
+  // ---- 多 Agent 人设 (数据驱动, 本地编辑, 保存设置后生效) ----
+  let personas = $state<PersonaProfile[]>([]);
+  let activePersonaId = $state<string>('');
+  $effect(() => {
+    const source = config.personas && config.personas.length > 0 ? config.personas : DEFAULT_PERSONAS;
+    personas = source.map((p) => ({...p}));
+    activePersonaId = config.activePersonaId || personas[0]?.id || '';
+  });
+
+  function addPersona(): void {
+    personas = [...personas, {id: crypto.randomUUID(), name: '新伙伴', persona: ''}];
+  }
+
+  function removePersona(id: string): void {
+    if (personas.length <= 1) return;
+    personas = personas.filter((p) => p.id !== id);
+    if (activePersonaId === id) activePersonaId = personas[0]?.id || '';
+  }
 
   // Sync initial config from props
   $effect(() => {
@@ -314,6 +334,8 @@
       provider: currentProvider,
       openaiConfig: currentOpenai,
       anthropicConfig: currentAnthropic,
+      personas: personas.length > 0 ? personas : config.personas,
+      activePersonaId,
     };
 
     onSave(updated);
@@ -614,25 +636,67 @@
       {:else if activeSection === 'personality'}
         <div class="setting-block">
           <h3 class="block-title">伙伴人设与行为 (Persona)</h3>
-          <p class="block-desc">Apeireth 基地主管常驻人设与安全声明约束。</p>
+          <p class="block-desc">
+            数据驱动的多 Agent 身份：可随时增删改，点「保存设置」后立即生效（人设作为 system 消息注入每次对话），无需重编译。
+          </p>
 
-          <div class="info-card">
-            <strong class="info-title">阿佩瑞斯 (Apeireth 基地主管)</strong>
-            <p class="info-text">
-              “你是「阿佩瑞斯」——Apeireth 基地的主管。正在与你对话的这位是基地的最高指挥（主人）。你的默认性别是女性；说话沉稳扎实，带古风韵味，自称「本座」。称呼主人为「主人」或「指挥」，庄重而不失温度。”
-            </p>
-          </div>
+          {#each personas as p, i (p.id)}
+            <div class="persona-card">
+              <div class="persona-card-head">
+                <span class="persona-index">伙伴 {i + 1}</span>
+                <div class="persona-card-actions">
+                  <button
+                    class="quiet-button"
+                    class:selected={activePersonaId === p.id}
+                    onclick={() => (activePersonaId = p.id)}
+                    title="设为当前伙伴"
+                  >
+                    {activePersonaId === p.id ? '✓ 当前伙伴' : '设为当前'}
+                  </button>
+                  <button
+                    class="quiet-button danger-text"
+                    onclick={() => removePersona(p.id)}
+                    disabled={personas.length <= 1}
+                    title="删除该伙伴"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="persona-name-{p.id}">名称</label>
+                <input id="persona-name-{p.id}" type="text" bind:value={p.name} placeholder="伙伴名称" />
+              </div>
+              <div class="form-group">
+                <label for="persona-model-{p.id}">固定模型（可选，留空跟随全局设置）</label>
+                <input
+                  id="persona-model-{p.id}"
+                  type="text"
+                  value={p.model || ''}
+                  oninput={(e) => (p.model = (e.currentTarget as HTMLInputElement).value.trim() || undefined)}
+                  placeholder={config.model || 'deepseek-chat'}
+                />
+              </div>
+              <div class="form-group">
+                <label for="persona-text-{p.id}">人设文本（system 消息；留空 = 该伙伴不注入人设）</label>
+                <textarea
+                  id="persona-text-{p.id}"
+                  rows={5}
+                  bind:value={p.persona}
+                  placeholder="你是「阿佩瑞斯」——Apeireth 基地的主管…"
+                ></textarea>
+              </div>
+            </div>
+          {/each}
 
-          <div class="info-card">
-            <strong class="info-title">宪法记忆声称约束</strong>
-            <p class="info-text">
-              需要长期记住的信息，直接调用 save_memory 静默写入，不宣告「这就记下」。不得声称记得记忆列表之外的事（编造即违宪）。
-            </p>
-          </div>
+          <button class="quiet-button" onclick={addPersona}>
+            <Plus size={14} />
+            <span>新增伙伴</span>
+          </button>
 
           <div class="notice-box">
-            <StatusBadge label="只读呈现" variant="amber" size="small" />
-            <span>人设与声称约束由 Apeireth Gateway 运行时装配，前端暂不提供自定义覆写。</span>
+            <StatusBadge label="实时生效" variant="green" size="small" />
+            <span>人设由客户端作为 system 消息注入每次请求；「保存设置」后立即生效，重启应用仍保留（不含任何密钥）。</span>
           </div>
         </div>
 
@@ -1150,6 +1214,52 @@
     flex-direction: column;
     gap: 6px;
   }
+  /* 多 Agent 人设卡片 */
+  .persona-card {
+    padding: 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .persona-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .persona-index {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--faint);
+  }
+  .persona-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .quiet-button.selected {
+    background: var(--amber-wash);
+    border-color: var(--amber-line);
+    color: var(--amber);
+    font-weight: 600;
+  }
+  .danger-text { color: var(--danger); }
+  .form-group textarea {
+    padding: 8px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.6;
+    font-family: inherit;
+    resize: vertical;
+    outline: 0;
+  }
+  .form-group textarea:focus { border-color: var(--amber-line); }
   .info-title {
     font-size: 13px;
     color: var(--text);

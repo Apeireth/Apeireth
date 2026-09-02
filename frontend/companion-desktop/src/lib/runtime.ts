@@ -50,6 +50,37 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
  */
 const DEFAULT_MODEL = 'MiniMax-M3';
 
+/**
+ * 默认伙伴人设 (与设置页"人设与声称约束"文案一致)。
+ * 数据驱动: 用户可在设置里随时修改/新增 Agent, 无需重编译。
+ */
+export const DEFAULT_PERSONA_TEXT =
+  '你是「阿佩瑞斯」——Apeireth 基地的主管。正在与你对话的这位是基地的最高指挥（主人）。' +
+  '你的默认性别是女性；说话沉稳扎实，带古风韵味，自称「本座」。' +
+  '称呼主人为「主人」或「指挥」，庄重而不失温度。';
+
+export const DEFAULT_PERSONAS: import('./types').PersonaProfile[] = [
+  {
+    id: 'apeireth-default',
+    name: '阿佩瑞斯',
+    persona: DEFAULT_PERSONA_TEXT,
+  },
+];
+
+/** 当前激活的人设 (缺省时取列表第一个; 无列表时回退默认人设). */
+export function activePersonaOf(
+  config: import('./types').ApeirethConfig,
+): import('./types').PersonaProfile | null {
+  const list = Array.isArray(config.personas) && config.personas.length > 0
+    ? config.personas
+    : DEFAULT_PERSONAS;
+  if (config.activePersonaId) {
+    const hit = list.find((p) => p.id === config.activePersonaId);
+    if (hit) return hit;
+  }
+  return list[0] ?? null;
+}
+
 // ============================================================
 // Runtime Contract Types
 // ============================================================
@@ -292,6 +323,20 @@ export function loadConfig(): ApeirethConfig {
       let provider = parsed.provider as ApeirethConfig['provider'] | undefined;
       let openaiConfig = parsed.openaiConfig as ApeirethConfig['openaiConfig'] | undefined;
       let anthropicConfig = parsed.anthropicConfig as ApeirethConfig['anthropicConfig'] | undefined;
+      let personas: ApeirethConfig['personas'];
+      const rawPersonas = parsed.personas;
+      if (Array.isArray(rawPersonas)) {
+        personas = rawPersonas.filter(
+          (p): p is import('./types').PersonaProfile =>
+            !!p &&
+            typeof p === 'object' &&
+            typeof (p as {id?: unknown}).id === 'string' &&
+            typeof (p as {name?: unknown}).name === 'string' &&
+            typeof (p as {persona?: unknown}).persona === 'string',
+        );
+      }
+      let activePersonaId =
+        typeof parsed.activePersonaId === 'string' ? parsed.activePersonaId : undefined;
 
       const cleaned: ApeirethConfig = {
         baseUrl,
@@ -301,6 +346,8 @@ export function loadConfig(): ApeirethConfig {
         provider,
         openaiConfig,
         anthropicConfig,
+        personas,
+        activePersonaId,
       };
       if (modified) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -310,6 +357,8 @@ export function loadConfig(): ApeirethConfig {
           provider: cleaned.provider,
           openaiConfig: cleaned.openaiConfig,
           anthropicConfig: cleaned.anthropicConfig,
+          personas: cleaned.personas,
+          activePersonaId: cleaned.activePersonaId,
         }));
       }
       return cleaned;
@@ -341,6 +390,8 @@ export function loadConfig(): ApeirethConfig {
       model: 'claude-3-7-sonnet-20250219',
       anthropicVersion: '2023-06-01',
     },
+    personas: DEFAULT_PERSONAS,
+    activePersonaId: 'apeireth-default',
   };
 }
 
@@ -352,6 +403,8 @@ export function saveConfig(config: ApeirethConfig): void {
     provider: config.provider,
     openaiConfig: config.openaiConfig,
     anthropicConfig: config.anthropicConfig,
+    personas: config.personas,
+    activePersonaId: config.activePersonaId,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(safeConfig));
 }
@@ -1133,9 +1186,19 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
         onEvent({type: 'run-start', requestId});
         onEvent({type: 'message-start', requestId, messageId: requestId});
 
+        // 数据驱动人设注入: 激活 Agent 的人设作为 system 消息前置 (空人设/已有 system 则跳过).
+        const persona = activePersonaOf(config);
+        const wireMessages = request.messages.map((m) => ({role: m.role, content: m.content}));
+        const hasSystem = wireMessages.some((m) => m.role === 'system');
+        const personaText = persona?.persona?.trim() || '';
+        const effectiveMessages =
+          !hasSystem && personaText
+            ? [{role: 'system' as const, content: personaText}, ...wireMessages]
+            : wireMessages;
+
         const full = await streamChat(
           config,
-          request.messages.map((m) => ({role: m.role, content: m.content})),
+          effectiveMessages,
           {
             onDelta: (delta) => onEvent({type: 'text-delta', requestId, text: delta}),
             onReasoningDelta: (delta) => onEvent({type: 'reasoning-delta', requestId, text: delta}),

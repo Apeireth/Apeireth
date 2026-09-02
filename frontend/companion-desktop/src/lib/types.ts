@@ -192,6 +192,20 @@ export interface ProviderConfig {
   anthropicVersion?: string;
 }
 
+/**
+ * 伙伴人设 (Agent Persona) — 数据驱动身份, 可在设置里随时增删改, 无需重编译。
+ * persona 文本作为 system 消息注入每次对话请求 (runtime.ts run() 统一注入)。
+ */
+export interface PersonaProfile {
+  id: string;
+  /** 显示名, 如 "阿佩瑞斯" */
+  name: string;
+  /** system 人设文本 (可为空 = 不注入) */
+  persona: string;
+  /** 可选: 该 Agent 固定使用的模型 (切换人设时同步切换模型) */
+  model?: string;
+}
+
 export interface ApeirethConfig {
   baseUrl: string;
   apiKey: string;
@@ -211,6 +225,10 @@ export interface ApeirethConfig {
     model: string;
     anthropicVersion?: string;
   };
+  /** 多 Agent 人设列表 (持久化于本地配置, 不含 secret) */
+  personas?: PersonaProfile[];
+  /** 当前激活人设 id (缺省时取列表第一个) */
+  activePersonaId?: string;
 }
 
 export interface ActivityItem {
