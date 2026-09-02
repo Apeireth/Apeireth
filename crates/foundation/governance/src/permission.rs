@@ -11,6 +11,7 @@
 //! second decision enum.
 
 use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -127,6 +128,11 @@ impl PermissionPolicy {
         self.grants.has(permission)
     }
 
+    /// Iterate the current grants in deterministic order (panel surface).
+    pub fn iter(&self) -> impl Iterator<Item = &Permission> {
+        self.grants.iter()
+    }
+
     /// Mark a capability as requiring human approval even when the permission
     /// is granted.
     pub fn require_approval_for(&mut self, capability: impl Into<String>) {
@@ -160,25 +166,42 @@ impl PermissionPolicy {
 }
 
 /// Canonical governance hook wrapper for [`PermissionPolicy`].
+///
+/// The policy lives behind `Arc<Mutex<PermissionPolicy>>` so the composition
+/// root can share one mutable policy between the live hook and introspection
+/// surfaces (grants listing / session-scoped hot revoke).
 #[derive(Debug, Clone)]
 pub struct PermissionGovernanceHook {
     name: &'static str,
-    policy: PermissionPolicy,
+    policy: Arc<Mutex<PermissionPolicy>>,
 }
 
 impl PermissionGovernanceHook {
     pub fn new(policy: PermissionPolicy) -> Self {
         Self {
             name: "permission_governance",
-            policy,
+            policy: Arc::new(Mutex::new(policy)),
         }
     }
 
     pub fn named(name: &'static str, policy: PermissionPolicy) -> Self {
-        Self { name, policy }
+        Self {
+            name,
+            policy: Arc::new(Mutex::new(policy)),
+        }
     }
 
-    pub fn policy(&self) -> &PermissionPolicy {
+    /// Wrap an already-shared policy so hot revokes take effect on the live
+    /// hook immediately (session-scoped; process restart restores defaults).
+    pub fn new_shared(policy: Arc<Mutex<PermissionPolicy>>) -> Self {
+        Self {
+            name: "permission_governance",
+            policy,
+        }
+    }
+
+    /// The shared policy handle (for panel introspection).
+    pub fn policy(&self) -> &Arc<Mutex<PermissionPolicy>> {
         &self.policy
     }
 }
@@ -192,7 +215,11 @@ impl GovernanceHook for PermissionGovernanceHook {
     async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
         match &request.action {
             Action::CapabilityDispatch { capability, .. } => {
-                self.policy.decision_for_capability(capability.as_str())
+                let policy = self
+                    .policy
+                    .lock()
+                    .expect("permission policy mutex poisoned");
+                policy.decision_for_capability(capability.as_str())
             }
             Action::Completion { .. } => Decision::Allow,
         }
