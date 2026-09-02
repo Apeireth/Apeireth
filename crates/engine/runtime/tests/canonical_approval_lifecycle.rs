@@ -919,6 +919,13 @@ impl apeireth_runtime::canonical::SessionStore for RecordingStore {
         }
         self.inner.save(session).await
     }
+
+    async fn list(
+        &self,
+    ) -> apeireth_runtime::canonical::RuntimeResult<Vec<apeireth_runtime::canonical::Session>>
+    {
+        self.inner.list().await
+    }
 }
 
 #[derive(Clone)]
@@ -960,6 +967,13 @@ impl apeireth_runtime::canonical::SessionStore for FailClaimedStore {
         }
         self.inner.save(session).await
     }
+
+    async fn list(
+        &self,
+    ) -> apeireth_runtime::canonical::RuntimeResult<Vec<apeireth_runtime::canonical::Session>>
+    {
+        self.inner.list().await
+    }
 }
 
 #[derive(Clone)]
@@ -1000,6 +1014,13 @@ impl apeireth_runtime::canonical::SessionStore for FailConsumedStore {
             ));
         }
         self.inner.save(session).await
+    }
+
+    async fn list(
+        &self,
+    ) -> apeireth_runtime::canonical::RuntimeResult<Vec<apeireth_runtime::canonical::Session>>
+    {
+        self.inner.list().await
     }
 }
 

@@ -9,6 +9,12 @@
 /// Native and OpenAI-compatible HTTP chat entry points.
 pub mod canonical_entry;
 
+/// Panel introspection surface (`/v1/panel/*`, tools, capabilities, audit, traces).
+pub mod panels;
+
+/// Gateway-level SSE event bus (`/v1/apeireth/events`).
+pub mod events;
+
 /// Full-duplex real-time voice barge-in and client interrupt controller.
 pub mod barge_in;
 
@@ -29,7 +35,16 @@ pub use file_fetcher::{
 };
 
 pub use canonical_entry::{
-    canonical_router, execute_chat, resolve_approval, serve_canonical, CanonicalApprovalRequest,
-    CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError,
-    CanonicalExecutionEvent, CanonicalPendingApproval,
+    build_gateway_state, canonical_router, canonical_router_with_panels, canonical_router_with_state,
+    execute_chat, resolve_approval, serve_canonical, CanonicalApprovalRequest, CanonicalChatOutcome,
+    CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError, CanonicalExecutionEvent,
+    CanonicalPendingApproval,
+};
+
+pub use events::{events_handler, EventBus, GatewayEvent};
+
+pub use panels::{
+    AuditDto, EpisodeDto, EpisodeMutationDto, GatewayState, GrantDto, GrantMutationDto,
+    GraphEdgeDto, GraphNodeDto, MemoryGraphDto, OrganDto, PanelData, SessionSummaryDto, ToolDto,
+    TraceDetailDto, TraceSpanDto, TraceSummaryDto,
 };

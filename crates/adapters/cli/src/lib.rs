@@ -9,9 +9,11 @@
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
 pub mod keyring_bootstrap;
 pub mod portable_bundle;
+pub mod gateway_panels;
 
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, SessionId};
@@ -19,9 +21,10 @@ use apeireth_governance::{
     CredentialDisclosureHook, GovernancePipeline, Permission, PermissionGovernanceHook,
     PermissionPolicy, PromptInjectionHook,
 };
+use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_runtime::canonical::{
-    ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SqliteSessionStore,
-    TurnOutcome, TurnRequest, TurnResponse,
+    ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore,
+    SqliteSessionStore, TurnOutcome, TurnRequest, TurnResponse,
 };
 
 /// One persistent SQLite database is shared by the cognitive backends.
@@ -41,17 +44,28 @@ pub const ENABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_ENABLE_LOCAL_READ_TOOLS"
 /// Authorization is deliberately the first hook: a later content-risk hook
 /// must never turn an unauthorized capability into an approval request.
 pub fn build_production_governance(enable_local_read_tools: bool) -> GovernancePipeline {
+    build_production_governance_parts(enable_local_read_tools).0
+}
+
+/// Build the production pipeline and return the shared policy handle alongside
+/// it, so the gateway can serve grants listing and session-scoped hot revoke
+/// against the same policy the live hooks evaluate.
+pub fn build_production_governance_parts(
+    enable_local_read_tools: bool,
+) -> (GovernancePipeline, Arc<std::sync::Mutex<PermissionPolicy>>) {
     let mut policy = PermissionPolicy::new();
     policy.grant(Permission::ExecuteTool("tool.repo".to_string()));
     if enable_local_read_tools {
         policy.grant(Permission::ExecuteTool("tool.filesystem".to_string()));
         policy.grant(Permission::ExecuteTool("tool.search".to_string()));
     }
+    let policy = Arc::new(std::sync::Mutex::new(policy));
 
-    GovernancePipeline::new()
-        .with(Arc::new(PermissionGovernanceHook::new(policy)))
+    let pipeline = GovernancePipeline::new()
+        .with(Arc::new(PermissionGovernanceHook::new_shared(policy.clone())))
         .with(Arc::new(CredentialDisclosureHook::new()))
-        .with(Arc::new(PromptInjectionHook::new()))
+        .with(Arc::new(PromptInjectionHook::new()));
+    (pipeline, policy)
 }
 
 /// Build the production governance policy using the process environment.
@@ -66,11 +80,49 @@ pub fn build_production_governance_from_env() -> GovernancePipeline {
     build_production_governance(enable_local_read_tools)
 }
 
+fn build_production_governance_parts_from_env(
+) -> (GovernancePipeline, Arc<std::sync::Mutex<PermissionPolicy>>) {
+    let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    build_production_governance_parts(enable_local_read_tools)
+}
+
 /// Build the one canonical runtime used by CLI chat and the HTTP gateway.
 ///
 /// Provider implementations are injected as plugins. Credentials are resolved
 /// at execution time, so neither the runtime nor a provider stores API keys.
 pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
+    let (runtime, _, _, _) = build_canonical_runtime_with_sessions_from_env().await?;
+    Ok(runtime)
+}
+
+/// Build the runtime and return the shared session-store, memory-backend and
+/// permission-policy handles alongside it, so the gateway can serve the
+/// sessions/memory/permissions introspection surfaces from the same durable
+/// stores and the same live policy.
+pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
+    (
+        Runtime,
+        Arc<dyn SessionStore>,
+        Arc<dyn MemoryBackend>,
+        Arc<std::sync::Mutex<PermissionPolicy>>,
+    ),
+    String,
+> {
+    let session_store = production_session_store().await?;
+    let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
+    let (cognitive, memory) = build_cognitive_modules_from_env(Arc::clone(&clock)).await?;
+    let (runtime, policy) =
+        build_canonical_runtime_with_parts(session_store.clone(), cognitive, clock).await?;
+    Ok((runtime, session_store, memory, policy))
+}
+
+async fn build_canonical_runtime_with_parts(
+    session_store: Arc<dyn SessionStore>,
+    cognitive: apeireth_runtime::canonical::ProductionCognitiveModules,
+    clock: Arc<dyn apeireth_core::kernel::Clock>,
+) -> Result<(Runtime, Arc<std::sync::Mutex<PermissionPolicy>>), String> {
     use apeireth_provider::canonical_anthropic::AnthropicProviderPlugin;
     use apeireth_provider::canonical_minimax::MinimaxProviderPlugin;
     use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
@@ -79,7 +131,6 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
         .ok()
         .filter(|model| !model.trim().is_empty());
 
-    let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
     let mut builder = Runtime::builder().with_clock(Arc::clone(&clock));
     // P-arch (2026-08-27) + v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring
     // 优先用 keyring (设 APEIRETH_KEYRING_BACKEND env), fallback 到 EnvCredentialResolver
@@ -87,13 +138,13 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
     let resolver: Arc<dyn apeireth_plugin::CredentialResolver> =
         keyring_bootstrap::build_keyring_resolver();
     builder = builder.with_credentials(resolver);
-    builder = builder.with_governance(Arc::new(build_production_governance_from_env()));
-    builder = builder.with_session_store(production_session_store().await?);
+    let (governance, policy) = build_production_governance_parts_from_env();
+    builder = builder.with_governance(Arc::new(governance));
+    builder = builder.with_session_store(session_store);
 
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
     // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
-    let cognitive = build_cognitive_modules_from_env(Arc::clone(&clock)).await?;
     builder = cognitive.register_into(builder);
 
     let first_default_model: Option<String>;
@@ -126,10 +177,11 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
         builder = builder.with_default_model(model);
     }
 
-    builder
+    let runtime = builder
         .build()
         .await
-        .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))
+        .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
+    Ok((runtime, policy))
 }
 
 async fn production_session_store() -> Result<Arc<dyn apeireth_runtime::SessionStore>, String> {
@@ -154,7 +206,13 @@ pub enum CanonicalCliTurn {
 
 async fn build_cognitive_modules_from_env(
     clock: Arc<dyn apeireth_core::kernel::Clock>,
-) -> Result<apeireth_runtime::canonical::ProductionCognitiveModules, String> {
+) -> Result<
+    (
+        apeireth_runtime::canonical::ProductionCognitiveModules,
+        Arc<dyn MemoryBackend>,
+    ),
+    String,
+> {
     use apeireth_memory::backend::sqlite::SqliteBackend;
     use apeireth_memory::{
         experience_store_sqlite::SQLiteExperienceStore,
@@ -254,7 +312,7 @@ async fn build_cognitive_modules_from_env(
         None
     };
     let backends = CognitiveBackends {
-        memory: Some(memory),
+        memory: Some(memory.clone()),
         wiki: Some(wiki),
         graph: Some(graph),
         associations: Some(associations),
@@ -263,8 +321,11 @@ async fn build_cognitive_modules_from_env(
         council,
         workspace_root: std::env::current_dir().ok(),
     };
-    apeireth_runtime::canonical::ProductionCognitiveModules::build(config, backends, clock)
-        .map_err(|error| error.to_string())
+    let modules = apeireth_runtime::canonical::ProductionCognitiveModules::build(
+        config, backends, clock,
+    )
+    .map_err(|error| error.to_string())?;
+    Ok((modules, memory))
 }
 
 /// Execute one CLI turn directly through [`Runtime::execute_outcome`].
@@ -333,7 +394,19 @@ pub async fn dispatch_canonical_approval(
 /// Start the HTTP Gateway backed by one long-lived canonical runtime.
 /// Blocks until the server exits.
 pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
-    let runtime = Arc::new(build_canonical_runtime_from_env().await?);
+    let (runtime, sessions, memory, policy) = build_canonical_runtime_with_sessions_from_env().await?;
+    let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let panels: Arc<dyn apeireth_gateway::PanelData> = Arc::new(
+        crate::gateway_panels::CliPanelData::new(
+            sessions,
+            memory,
+            policy,
+            enable_local_read_tools,
+            default_panel_data_dir(),
+        ),
+    );
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
         .map_err(|error| format!("bind 0.0.0.0:{port} failed: {error}"))?;
@@ -343,9 +416,23 @@ pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
     let url = format!("http://{local_addr}");
 
     eprintln!("canonical gateway started at {url}");
-    apeireth_gateway::serve_canonical(listener, runtime)
+    apeireth_gateway::serve_canonical(listener, Arc::new(runtime), Some(panels))
         .await
         .map_err(|error| format!("gateway server failed: {error}"))?;
 
     Ok(format!("server stopped at {url}"))
+}
+
+/// Data directory for panel archives. `APEIRETH_DATA_DIR` overrides; the
+/// default is `~/.apeireth` (same place as the keyring and session dbs).
+fn default_panel_data_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("APEIRETH_DATA_DIR") {
+        if !dir.trim().is_empty() {
+            return PathBuf::from(dir);
+        }
+    }
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home).join(".apeireth")
 }

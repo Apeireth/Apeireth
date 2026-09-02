@@ -227,6 +227,12 @@ pub trait SessionStore: Send + Sync {
 
     /// Persist a session, creating or replacing it.
     async fn save(&self, session: &Session) -> RuntimeResult<()>;
+
+    /// List every stored session, most recently updated first.
+    ///
+    /// Panel/introspection surface (`GET /v1/panel/sessions`). Ordering is part
+    /// of the contract: the frontend renders the newest conversation first.
+    async fn list(&self) -> RuntimeResult<Vec<Session>>;
 }
 
 /// A session store held in process memory.
@@ -267,6 +273,12 @@ impl SessionStore for InMemorySessionStore {
             .await
             .insert(session.id, session.clone());
         Ok(())
+    }
+
+    async fn list(&self) -> RuntimeResult<Vec<Session>> {
+        let mut all: Vec<Session> = self.sessions.lock().await.values().cloned().collect();
+        all.sort_by(|a, b| b.updated_at.epoch_millis().cmp(&a.updated_at.epoch_millis()));
+        Ok(all)
     }
 }
 
@@ -353,6 +365,26 @@ impl SessionStore for SqliteSessionStore {
             .await
             .map_err(|e| Self::storage_err(id, "saved", e))?;
         Ok(())
+    }
+
+    async fn list(&self) -> RuntimeResult<Vec<Session>> {
+        let mut sessions = self
+            .pool
+            .read(|conn| {
+                let mut stmt = conn.prepare("SELECT data FROM sessions")?;
+                let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+                let mut sessions = Vec::new();
+                for row in rows {
+                    let data = row.map_err(|e| StorageError::Serialization(e.to_string()))?;
+                    let session = serde_json::from_str::<Session>(&data)
+                        .map_err(|e| StorageError::Serialization(e.to_string()))?;
+                    sessions.push(session);
+                }
+                Ok::<_, StorageError>(sessions)
+            })
+            .map_err(|e| RuntimeError::session_store_open(format!("list: {e}")))?;
+        sessions.sort_by(|a, b| b.updated_at.epoch_millis().cmp(&a.updated_at.epoch_millis()));
+        Ok(sessions)
     }
 }
 
@@ -557,5 +589,52 @@ mod tests {
             ),
             "the transcript must survive a file-backed reopen"
         );
+    }
+
+    #[tokio::test]
+    async fn list_returns_sessions_most_recently_updated_first() {
+        let virtual_clock = VirtualClock::new(
+            Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        );
+        let clock: Arc<dyn Clock> = Arc::new(virtual_clock.clone());
+        let store = InMemorySessionStore::new();
+
+        let older = Session::new(SessionId::new(), clock.as_ref());
+        virtual_clock.advance(chrono::Duration::seconds(30));
+        let newer = Session::new(SessionId::new(), clock.as_ref());
+
+        store.save(&older).await.unwrap();
+        store.save(&newer).await.unwrap();
+
+        let listed = store.list().await.unwrap();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].id, newer.id, "newest updated first");
+        assert_eq!(listed[1].id, older.id);
+    }
+
+    #[tokio::test]
+    async fn sqlite_list_returns_sessions_most_recently_updated_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SqliteSessionStore::open(dir.path().join("sessions.sqlite"))
+            .await
+            .unwrap();
+        let virtual_clock = VirtualClock::new(
+            Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        );
+        let clock: Arc<dyn Clock> = Arc::new(virtual_clock.clone());
+        let older = Session::new(SessionId::new(), clock.as_ref());
+        virtual_clock.advance(chrono::Duration::seconds(30));
+        let newer = Session::new(SessionId::new(), clock.as_ref());
+        store.save(&older).await.unwrap();
+        store.save(&newer).await.unwrap();
+
+        let listed = store.list().await.unwrap();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].id, newer.id);
+        assert_eq!(listed[1].id, older.id);
     }
 }

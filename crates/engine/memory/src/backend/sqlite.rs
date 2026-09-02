@@ -95,13 +95,23 @@ impl MemoryBackend for SqliteBackend {
         // RC-1 真 SQL impl: 走 pool.read() 短借用 connection. 单 backend 实例假设单
         // logical writer (per backend doc). v2.0.0-rc 阶段切 `pool.write().await` +
         // trait async 重构 (per 子代理审查 1.1 反馈, 见 backend/mod.rs 文档).
+        //
+        // continuity_id: 生产迁移 schema 要求 NOT NULL; 核心 Episode 无此字段,
+        // 以 session_id 派生 (episode 的主体 = 其会话), 0 装诚实并保持写入可见.
         let ep = ep.clone();
         self.pool
             .read(|conn| {
                 conn.execute(
-                    "INSERT OR IGNORE INTO episodes (id, timestamp, role, content, session_id) \
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
-                    rusqlite::params![ep.id, ep.timestamp, ep.role, ep.content, ep.session_id],
+                    "INSERT OR IGNORE INTO episodes (id, continuity_id, timestamp, role, content, session_id) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    rusqlite::params![
+                        ep.id,
+                        ep.session_id,
+                        ep.timestamp,
+                        ep.role,
+                        ep.content,
+                        ep.session_id
+                    ],
                 )?;
                 Ok(())
             })
@@ -296,6 +306,7 @@ mod tests {
             conn.execute_batch(r#"
                 CREATE TABLE IF NOT EXISTS episodes (
                     id TEXT PRIMARY KEY,
+                    continuity_id TEXT NOT NULL,
                     timestamp INTEGER NOT NULL,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,

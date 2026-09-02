@@ -1,0 +1,542 @@
+//! Panel data adapter for the gateway introspection surface.
+//!
+//! Composition-root implementation of [`apeireth_gateway::PanelData`]:
+//! - sessions come from the same durable [`SessionStore`] the runtime uses;
+//! - memory episodes come from the same [`MemoryBackend`] the cognitive
+//!   modules use; protect/forget are gateway-level flags (revisioned JSONL
+//!   archive) — the underlying memory schema is append-only by design;
+//! - tools are the honest static catalog of the production policy;
+//! - traces and audit are JSONL archives under the data dir
+//!   (`~/.apeireth/traces.jsonl`, `~/.apeireth/daemon-audit.jsonl`,
+//!   `~/.apeireth/memory-flags.jsonl`).
+//!
+//! Archives are bounded in memory (newest first) and appended to disk
+//! best-effort: a full disk must never fail a chat turn.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use apeireth_core::Episode;
+use apeireth_gateway::{
+    AuditDto, EpisodeDto, EpisodeMutationDto, GrantDto, GrantMutationDto, GraphEdgeDto,
+    GraphNodeDto, MemoryGraphDto, OrganDto, PanelData, SessionSummaryDto, ToolDto, TraceDetailDto,
+    TraceSpanDto, TraceSummaryDto,
+};
+use apeireth_governance::{Permission, PermissionPolicy};
+use apeireth_plugin::memory_backend::MemoryBackend;
+use apeireth_protocol::canonical::{ContentPart, MessageRole};
+use apeireth_runtime::canonical::{Session, SessionStore};
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+
+const MAX_TRACES: usize = 500;
+const MAX_AUDIT: usize = 1_000;
+const TITLE_CHARS: usize = 40;
+const GRAPH_EPISODES_PER_SESSION: usize = 200;
+
+fn errstr<E: std::fmt::Display>(e: E) -> String {
+    e.to_string()
+}
+
+/// Gateway-level per-episode flags (protect/forget) with a monotonic revision.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FlagEntry {
+    id: String,
+    protected: bool,
+    tombstoned: bool,
+    rev: u64,
+}
+
+/// Production [`PanelData`] backed by the CLI composition's own handles.
+pub struct CliPanelData {
+    sessions: Arc<dyn SessionStore>,
+    memory: Arc<dyn MemoryBackend>,
+    policy: Arc<std::sync::Mutex<PermissionPolicy>>,
+    tools: Vec<ToolDto>,
+    organs: Vec<OrganDto>,
+    trace_path: PathBuf,
+    audit_path: PathBuf,
+    flags_path: PathBuf,
+    traces: std::sync::Mutex<Vec<TraceDetailDto>>,
+    audit: std::sync::Mutex<Vec<AuditDto>>,
+    flags: std::sync::Mutex<HashMap<String, FlagEntry>>,
+}
+
+impl CliPanelData {
+    /// Build over the shared stores and archive files in `data_dir`.
+    pub fn new(
+        sessions: Arc<dyn SessionStore>,
+        memory: Arc<dyn MemoryBackend>,
+        policy: Arc<std::sync::Mutex<PermissionPolicy>>,
+        enable_local_read_tools: bool,
+        data_dir: PathBuf,
+    ) -> Self {
+        let _ = std::fs::create_dir_all(&data_dir);
+        let trace_path = data_dir.join("traces.jsonl");
+        let audit_path = data_dir.join("daemon-audit.jsonl");
+        let flags_path = data_dir.join("memory-flags.jsonl");
+
+        let traces = load_newest_first::<TraceDetailDto>(&trace_path, MAX_TRACES);
+        let audit = load_newest_first::<AuditDto>(&audit_path, MAX_AUDIT);
+        let flags = load_flags(&flags_path);
+
+        Self {
+            sessions,
+            memory,
+            policy,
+            tools: build_tool_catalog(enable_local_read_tools),
+            organs: build_organ_catalog(),
+            trace_path,
+            audit_path,
+            flags_path,
+            traces: std::sync::Mutex::new(traces),
+            audit: std::sync::Mutex::new(audit),
+            flags: std::sync::Mutex::new(flags),
+        }
+    }
+
+    fn episode_dto(&self, episode: &Episode, flags: &HashMap<String, FlagEntry>) -> EpisodeDto {
+        let flag = flags.get(&episode.id);
+        EpisodeDto {
+            id: episode.id.clone(),
+            // core episodes store epoch seconds; the contract is epoch ms.
+            timestamp: episode.timestamp.saturating_mul(1_000),
+            role: episode.role.clone(),
+            content: episode.content.clone(),
+            session_id: episode.session_id.clone(),
+            category: None,
+            importance: None,
+            protected: Some(flag.map(|f| f.protected).unwrap_or(false)),
+            status: Some("active".to_string()),
+        }
+    }
+
+    /// Apply a protect/unprotect/forget transition under an optimistic
+    /// revision check; persist the new flag entry on success.
+    fn mutate_flag(
+        &self,
+        id: &str,
+        expected_rev: u64,
+        apply: impl FnOnce(&mut FlagEntry),
+    ) -> Result<EpisodeMutationDto, String> {
+        let mut flags = self.flags.lock().map_err(errstr)?;
+        let entry = flags
+            .get_mut(id)
+            .ok_or_else(|| format!("episode {id} not found"))?;
+        if entry.rev != expected_rev {
+            return Err(format!(
+                "revision conflict: expected {expected_rev}, current {}",
+                entry.rev
+            ));
+        }
+        apply(entry);
+        entry.rev += 1;
+        let updated = entry.clone();
+        drop(flags);
+        append_jsonl(&self.flags_path, &updated);
+        Ok(EpisodeMutationDto {
+            ok: true,
+            rev: updated.rev,
+        })
+    }
+}
+
+/// The production tool catalog. The canonical policy grants `tool.repo`
+/// always, and `tool.filesystem` / `tool.search` only when
+/// `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` (see cli composition root).
+fn build_tool_catalog(enable_local_read_tools: bool) -> Vec<ToolDto> {
+    let local = |name: &str, description: &str| ToolDto {
+        name: name.to_string(),
+        description: description.to_string(),
+        args_schema: None,
+        source: "builtin".to_string(),
+        permission: if enable_local_read_tools { "granted" } else { "none" }.to_string(),
+        available: enable_local_read_tools,
+    };
+    vec![
+        ToolDto {
+            name: "tool.repo".to_string(),
+            description: "仓库检查: git 状态 / 提交历史 / 差异 (只读)".to_string(),
+            args_schema: None,
+            source: "builtin".to_string(),
+            permission: "granted".to_string(),
+            available: true,
+        },
+        local(
+            "tool.filesystem",
+            "受控文件读取 (仅工作区根目录内, 敏感路径拒绝)",
+        ),
+        local("tool.search", "工作区内容检索 (文件名与全文, 结果限量)"),
+    ]
+}
+
+/// The canonical 9-organ catalog. Production runs with the organ chain
+/// disabled by default (`ProductionModulesConfig::organs = false`), so every
+/// entry reports `enabled: false` — the catalog is the honest static surface,
+/// not a claim that organs are executing.
+fn build_organ_catalog() -> Vec<OrganDto> {
+    let organ = |id: &str, name: &str, description: &str| OrganDto {
+        id: id.to_string(),
+        name: name.to_string(),
+        enabled: false,
+        description: Some(description.to_string()),
+    };
+    vec![
+        organ("W1", "World Model", "世界模型校准与前向预测"),
+        organ("W2", "Causal World Model", "因果世界模型 (CoW 分支 + SAGA 补偿)"),
+        organ("W3", "Causal Edge Mining", "因果边挖掘"),
+        organ("E4", "Curiosity", "好奇驱动探索"),
+        organ("F4", "Hypothesis", "假设提出与验证计划"),
+        organ("F1", "Emotion Memory", "情感记忆"),
+        organ("F6", "Value Cases", "价值案例库"),
+        organ("E7", "Emergence", "涌现行为观察"),
+        organ("Memory", "Memory Merger", "跨流记忆合并"),
+    ]
+}
+
+fn grant_capability(permission: &Permission) -> String {
+    match permission {
+        Permission::ExecuteTool(name) => name.clone(),
+        Permission::ReadMemory => "memory.read".to_string(),
+        Permission::WriteMemory => "memory.write".to_string(),
+        Permission::NetworkEgress(scope) => scope.clone(),
+        Permission::ModifyIdentity => "identity.modify".to_string(),
+        Permission::AdminOverride => "admin.override".to_string(),
+    }
+}
+
+fn session_title(session: &Session) -> Option<String> {
+    session
+        .messages
+        .iter()
+        .find(|m| m.role == MessageRole::User)
+        .map(|m| ContentPart::join_text(&m.content))
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
+        .map(|text| snippet(&text, TITLE_CHARS))
+}
+
+fn snippet(text: &str, max_chars: usize) -> String {
+    let mut out: String = text.chars().take(max_chars).collect();
+    if text.chars().count() > max_chars {
+        out.push('…');
+    }
+    out
+}
+
+/// Load JSONL newest-first (lines are appended chronologically), skipping
+/// unparseable legacy rows, bounded to `cap`.
+fn load_newest_first<T: serde::de::DeserializeOwned>(path: &PathBuf, cap: usize) -> Vec<T> {
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let mut parsed: Vec<T> = raw
+        .lines()
+        .filter_map(|line| serde_json::from_str::<T>(line).ok())
+        .collect();
+    if parsed.len() > cap {
+        parsed.drain(0..parsed.len() - cap);
+    }
+    parsed.reverse();
+    parsed
+}
+
+/// Load the flag archive; later lines win (append-only updates).
+fn load_flags(path: &PathBuf) -> HashMap<String, FlagEntry> {
+    let mut flags = HashMap::new();
+    if let Ok(raw) = std::fs::read_to_string(path) {
+        for line in raw.lines() {
+            if let Ok(entry) = serde_json::from_str::<FlagEntry>(line) {
+                flags.insert(entry.id.clone(), entry);
+            }
+        }
+    }
+    flags
+}
+
+fn append_jsonl<T: serde::Serialize>(path: &PathBuf, value: &T) {
+    let Ok(line) = serde_json::to_string(value) else {
+        return;
+    };
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{line}");
+    }
+}
+
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+#[async_trait]
+impl PanelData for CliPanelData {
+    async fn list_sessions(&self) -> Result<Vec<SessionSummaryDto>, String> {
+        let sessions = self.sessions.list().await.map_err(errstr)?;
+        Ok(sessions
+            .into_iter()
+            .map(|session| SessionSummaryDto {
+                id: session.id.to_string(),
+                title: session_title(&session),
+                created_at: session.created_at.epoch_millis(),
+                updated_at: session.updated_at.epoch_millis(),
+                message_count: session.messages.len(),
+                revision: session.revision,
+            })
+            .collect())
+    }
+
+    async fn list_tools(&self) -> Result<Vec<ToolDto>, String> {
+        Ok(self.tools.clone())
+    }
+
+    async fn list_traces(&self, limit: usize) -> Result<Vec<TraceSummaryDto>, String> {
+        let traces = self.traces.lock().map_err(errstr)?;
+        Ok(traces
+            .iter()
+            .take(limit)
+            .filter_map(|detail| {
+                let root = detail.spans.first()?.clone();
+                Some(TraceSummaryDto {
+                    trace_id: detail.trace_id.clone(),
+                    span_count: detail.spans.len(),
+                    started_at: root.started_at,
+                    root_span: root,
+                })
+            })
+            .collect())
+    }
+
+    async fn trace_detail(&self, trace_id: &str) -> Result<Option<TraceDetailDto>, String> {
+        let traces = self.traces.lock().map_err(errstr)?;
+        Ok(traces
+            .iter()
+            .find(|detail| detail.trace_id == trace_id)
+            .cloned())
+    }
+
+    async fn list_audit(&self, limit: usize) -> Result<Vec<AuditDto>, String> {
+        let audit = self.audit.lock().map_err(errstr)?;
+        Ok(audit.iter().take(limit).cloned().collect())
+    }
+
+    async fn append_audit(&self, event: &str, detail: Option<&str>) {
+        let entry = AuditDto {
+            ts: now_millis(),
+            event: event.to_string(),
+            service: "gateway".to_string(),
+            detail: detail.map(|d| d.to_string()),
+        };
+        append_jsonl(&self.audit_path, &entry);
+        if let Ok(mut audit) = self.audit.lock() {
+            audit.insert(0, entry);
+            audit.truncate(MAX_AUDIT);
+        }
+    }
+
+    async fn append_trace(&self, trace_id: &str, spans: Vec<TraceSpanDto>) {
+        if spans.is_empty() {
+            return;
+        }
+        let detail = TraceDetailDto {
+            trace_id: trace_id.to_string(),
+            spans,
+        };
+        append_jsonl(&self.trace_path, &detail);
+        if let Ok(mut traces) = self.traces.lock() {
+            traces.retain(|existing| existing.trace_id != detail.trace_id);
+            traces.insert(0, detail);
+            traces.truncate(MAX_TRACES);
+        }
+    }
+
+    fn supports_memory(&self) -> bool {
+        true
+    }
+
+    async fn list_episodes(
+        &self,
+        session: Option<&str>,
+        query: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EpisodeDto>, String> {
+        let mut raw: Vec<Episode> = Vec::new();
+        if let Some(session_id) = session {
+            raw = self
+                .memory
+                .recent_episodes(session_id, limit)
+                .map_err(errstr)?;
+        } else {
+            let sessions = self.sessions.list().await.map_err(errstr)?;
+            for stored in &sessions {
+                let mut recents = self
+                    .memory
+                    .recent_episodes(&stored.id.to_string(), limit)
+                    .map_err(errstr)?;
+                raw.append(&mut recents);
+            }
+        }
+
+        let flags = self.flags.lock().map_err(errstr)?;
+        let query_lc = query.map(|q| q.to_lowercase());
+        let mut out: Vec<EpisodeDto> = Vec::new();
+        for episode in raw {
+            if let Some(flag) = flags.get(&episode.id) {
+                if flag.tombstoned {
+                    continue;
+                }
+            }
+            if let Some(q) = &query_lc {
+                if !episode.content.to_lowercase().contains(q) {
+                    continue;
+                }
+            }
+            out.push(self.episode_dto(&episode, &flags));
+        }
+        out.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        out.truncate(limit);
+        Ok(out)
+    }
+
+    async fn append_episode(
+        &self,
+        session: &str,
+        role: &str,
+        content: &str,
+    ) -> Result<EpisodeDto, String> {
+        // A session that owns memory must exist in the session ledger, so the
+        // global episode list (which enumerates sessions) can reach it.
+        let session_id: apeireth_core::kernel::SessionId = session.parse().map_err(errstr)?;
+        if self.sessions.load(&session_id).await.map_err(errstr)?.is_none() {
+            let clock = apeireth_core::kernel::system_clock();
+            let created = Session::new(session_id, clock.as_ref());
+            self.sessions.save(&created).await.map_err(errstr)?;
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+        let episode = Episode {
+            id: id.clone(),
+            timestamp: now_millis() / 1_000,
+            role: role.to_string(),
+            content: content.to_string(),
+            session_id: session.to_string(),
+        };
+        self.memory.put_episode(&episode).map_err(errstr)?;
+        let flag = FlagEntry {
+            id: id.clone(),
+            protected: false,
+            tombstoned: false,
+            rev: 0,
+        };
+        append_jsonl(&self.flags_path, &flag);
+        if let Ok(mut flags) = self.flags.lock() {
+            flags.insert(id.clone(), flag);
+        }
+        Ok(EpisodeDto {
+            id,
+            timestamp: episode.timestamp.saturating_mul(1_000),
+            role: episode.role,
+            content: episode.content,
+            session_id: episode.session_id,
+            category: None,
+            importance: None,
+            protected: Some(false),
+            status: Some("active".to_string()),
+        })
+    }
+
+    async fn protect_episode(&self, id: &str, expected_rev: u64) -> Result<EpisodeMutationDto, String> {
+        self.mutate_flag(id, expected_rev, |entry| entry.protected = true)
+    }
+
+    async fn unprotect_episode(&self, id: &str, expected_rev: u64) -> Result<EpisodeMutationDto, String> {
+        self.mutate_flag(id, expected_rev, |entry| entry.protected = false)
+    }
+
+    async fn forget_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+        _reason: Option<&str>,
+    ) -> Result<EpisodeMutationDto, String> {
+        self.mutate_flag(id, expected_rev, |entry| entry.tombstoned = true)
+    }
+
+    async fn memory_graph(&self) -> Result<MemoryGraphDto, String> {
+        let sessions = self.sessions.list().await.map_err(errstr)?;
+        let flags = self.flags.lock().map_err(errstr)?;
+        let mut nodes = Vec::new();
+        let mut edges = Vec::new();
+        for stored in &sessions {
+            let session_node = format!("session:{}", stored.id);
+            nodes.push(GraphNodeDto {
+                id: session_node.clone(),
+                label: session_title(stored).unwrap_or_else(|| stored.id.to_string()),
+                kind: "session".to_string(),
+            });
+            let recents = self
+                .memory
+                .recent_episodes(&stored.id.to_string(), GRAPH_EPISODES_PER_SESSION)
+                .map_err(errstr)?;
+            for episode in recents {
+                if let Some(flag) = flags.get(&episode.id) {
+                    if flag.tombstoned {
+                        continue;
+                    }
+                }
+                nodes.push(GraphNodeDto {
+                    id: episode.id.clone(),
+                    label: snippet(&episode.content, TITLE_CHARS),
+                    kind: "episode".to_string(),
+                });
+                edges.push(GraphEdgeDto {
+                    from: session_node.clone(),
+                    to: episode.id.clone(),
+                    weight: 1.0,
+                    label: None,
+                });
+            }
+        }
+        Ok(MemoryGraphDto { nodes, edges })
+    }
+
+    fn supports_permissions(&self) -> bool {
+        true
+    }
+
+    async fn list_grants(&self) -> Result<Vec<GrantDto>, String> {
+        let policy = self.policy.lock().map_err(errstr)?;
+        Ok(policy
+            .iter()
+            .map(|permission| GrantDto {
+                permission: permission.label(),
+                capability: grant_capability(permission),
+                granted_at: None,
+            })
+            .collect())
+    }
+
+    async fn revoke_grant(&self, capability: &str) -> Result<GrantMutationDto, String> {
+        let permission = match capability {
+            "memory.read" => Permission::ReadMemory,
+            "memory.write" => Permission::WriteMemory,
+            "identity.modify" => Permission::ModifyIdentity,
+            "admin.override" => Permission::AdminOverride,
+            other => Permission::ExecuteTool(other.to_string()),
+        };
+        let mut policy = self.policy.lock().map_err(errstr)?;
+        let ok = policy.revoke(&permission);
+        Ok(GrantMutationDto { ok })
+    }
+
+    fn supports_organs(&self) -> bool {
+        true
+    }
+
+    async fn list_organs(&self) -> Result<Vec<OrganDto>, String> {
+        Ok(self.organs.clone())
+    }
+}
