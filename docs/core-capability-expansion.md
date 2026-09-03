@@ -20,7 +20,7 @@
 - SQLite `sessions` 表(`migrations.rs:224-229`): `id PK, started_at, last_active_at, closed_at`.
 - `SessionStore` trait: `upsert_session`(INSERT…ON CONFLICT DO UPDATE last_active_at) / `get_session` / `close_session` / `list_open_sessions` / `list_all_sessions`.
 - session id 由调用方提供 (companion 硬编码 `"me"`; council 用 `session-{:06}`). 无中心生成器.
-- **无** `Conversation`/`LedgerSession` 类型. OneRing ledger(`onering_messages` 表)是另一套会话语义, 未与 sessions 表对齐.
+- **无** `Conversation`/`LedgerSession` 类型. ContextLedger(`context_ledger_messages` 表)是另一套会话语义, 未与 sessions 表对齐.
 - `/v1/chat/completions` **不绑定 session** — 纯无状态代理 (messages 全量上行); 通过 `X-Apeireth-Continuity` header 传 continuity_id (日志/记忆锚点).
 - episodes 表 `session_id` 关联 sessions; episodes **append-only**(BEFORE UPDATE/DELETE trigger 拒绝).
 

@@ -40,7 +40,7 @@ Author:          主代理 Mavis
 | SQLite pool + write channel | `apeireth-storage/src/pool.rs` | REAL | ✅ 已就位 (per `apeireth-storage/src/lib.rs` Memory_v2 etc.) | 🟢 OK |
 | Migrations | `apeireth-storage/src/migrations.rs` | REAL | ✅ | 🟢 OK |
 | MemoryStore v2 (ACT-R, temporal, tombstone) | `apeireth-storage/src/memory_v2.rs` | REAL | ✅ `cognitive.memory_recall` + `memory_writeback` WIRED | 🟢 OK |
-| VectorIndex (cosine + BM25 hybrid) | `apeireth-storage/src/vector.rs` | REAL | 🟡 **partial** (per R11-Storage 真账, v2 `crates/engine/memory/src/canonical/vector.rs` 已 1:1 翻译 cosine `VectorIndex` + `cosine_similarity` (L1-273) + ACT-R 检索, **缺 BM25 hybrid** — `lightmemo/search.rs` + `dailynote/search.rs` 是 LightMemo 子模块 BM25-lite, 不是 storage 主线) | 🟡 partial (cosine ✅, BM25 hybrid ❌) |
+| VectorIndex (cosine + BM25 hybrid) | `apeireth-storage/src/vector.rs` | REAL | 🟡 **partial** (per R11-Storage 真账, v2 `crates/engine/memory/src/canonical/vector.rs` 已 1:1 翻译 cosine `VectorIndex` + `cosine_similarity` (L1-273) + ACT-R 检索, **缺 BM25 hybrid** — `layered_memo/search.rs` + `dailynote/search.rs` 是 LayeredMemo 子模块 BM25-lite, 不是 storage 主线) | 🟡 partial (cosine ✅, BM25 hybrid ❌) |
 | Graph primitives / causal graph | `apeireth-storage/src/graph.rs`, `graph_primitive.rs`, `graph_ops.rs`, `fold.rs` | PARTIAL | 🟡 **partial** (per R11-Storage 真账, v2 `crates/engine/memory/src/canonical/graph.rs` 已 1:1 翻译 `MemoryGraph` (BFS + shortest_path, L54+), **缺 causal engine** — W1/W2/W3 world_model organ ✅ WIRED 部分) | 🟡 partial (graph primitives ✅, causal engine ❌) |
 | Memory_* support modules | `apeireth-storage/src/memory_*.rs` | PARTIAL | ✅ **OK** (per R11-Storage 真账, v2 `apeireth-memory` 22 modules 大部分 1:1 翻译 v1 donor, **ONNX stub 待决策** — DROP/真接/ADAPT) | 🟢 OK |
 
