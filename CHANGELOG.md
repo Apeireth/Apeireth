@@ -379,8 +379,8 @@
 | R170 | followup-checkpoint integration | `docs/session/checkpoint-2026-08-14.md` |
 | R169 | 41 e2e tests all pass with LIVE apikey | `docs/r169/r169-e2e-demo-all-41-pass.md` |
 | R168 | LIVE MiniMax-M3 e2e 验证 (HTTP 200, 5.5s cold / 1.1s warm) | `docs/r168/r168-live-verification-and-doc-consistency.md` |
-| R167 | 会话总结: VCP 命名 100% 清理, 78→76 active crates, 5618 tests | `docs/r167/r167-session-summary.md` |
-| R166 | Public API deep cleanup: 21 VCP 命名 → LEGACY_*/BORROWED_*/ABSORBED_* | `docs/r166/r166-public-api-deep-cleanup.md` |
+| R167 | 会话总结: 公共 API 命名规范化, 78→76 active crates, 5618 tests | `docs/r167/r167-session-summary.md` |
+| R166 | Public API deep cleanup: 21 处公共常量命名规范化 (LEGACY_*/BORROWED_LEGACY_* 体系) | `docs/r166/r166-public-api-deep-cleanup.md` |
 | R165 | 架构审计 + 死代码归档 (2 crate → _archived), 78→76 members | `docs/r165/r165-architecture-audit-and-deadcode-archive.md` |
 | R164 | Public API cleanup + workspace warning zero (858 tests) | `docs/r164/r164-api-cleanup-and-warning-zero.md` |
 | R163 | Lint cleanup batch 2: 475 warnings → 0, 16 bugs fixed | `docs/r163/r163-lint-cleanup-batch-2.md` |
@@ -399,8 +399,8 @@
 | R149 | 终极补弱 5/5: tool-fetch / skills anthropic_skills / runtime LlmWorker / graph ThreadCheckpointStore / formal l0_ha multisig (+78 tests) | `docs/r149/r149-p0-five-modules.md` |
 | R148 | 24 LOCKED 形式撤销扫尾 (仅保 3 项不可变脊柱) + 修 3 个 pre-existing test bugs | `docs/archive/conventions/10-locked.md` |
 | R147 | NEW apeireth-runtime (7 模块端到端 orchestration, 10 tests) | `crates/apeireth-runtime/README.md` |
-| R146 | 优雅化总修复: vcp-bridge→protocol-bridge, 5 SDK→1, 3 内存→1, 12 README 补 | — |
-| R145 | VCP 终极差距补弱完工 (7 模块, 67+ tests) | `temp/r145_final_report.md` |
+| R146 | 优雅化总修复: bridge 模块重构, 5 SDK→1, 3 内存→1, 12 README 补 | — |
+| R145 | 终极差距补弱完工 (7 模块, 67+ tests) | `temp/r145_final_report.md` |
 | R128 | workspace 收敛 94→55 active, minimax 4 协议真端到端, 0 errors | `reports/minimax-end-to-end-r128-2026-08-12.md` |
 
 ## [Unreleased] — R128 (2026-08-12)
