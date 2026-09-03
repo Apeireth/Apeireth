@@ -184,7 +184,7 @@ gantt
     title Apeireth 2.0+ 终极生命体演进路线
     dateFormat  YYYY-MM-DD
     section 阶段一：连续流形与微内核巩固 (2026-Q3)
-    TagMemo V10 双预解场与 MGS 残差金字塔实装     :active, 2026-08-30, 20d
+    双标度连续场 (DualScaled) 与 MGS 残差金字塔实装     :active, 2026-08-30, 20d
     Aider AST RepoMap 与 gnhf Worktree 隔离沙箱    :active, 2026-08-30, 15d
     SwarmVault 三层知识库与 OpenKB TOC 树路由     :active, 2026-08-30, 15d
 

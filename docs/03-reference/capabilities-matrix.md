@@ -25,7 +25,7 @@
 | **记忆 (Memory)** | `mem.kuramoto_resonance`| `apeireth-memory::kuramoto_resonance` | `KuramotoResonanceEngine::step()` | 非线性振子相锁 + 零阻抗虫洞 + 顿悟雪崩元概念 |
 | **记忆 (Memory)** | `mem.chronicle_crystallizer`| `apeireth-memory::chronicle_crystallizer` | `ChronicleCrystallizer::crystallize()` | 昼夜相变结晶 + 分形幂律衰减 R(t) + SHA-256 Merkle 锚定 |
 | **记忆 (Memory)** | `mem.three_tier_vault`| `apeireth-memory::three_tier_vault` | `ThreeTierVault`, `TocTreeIndexer` | SwarmVault 三层知识库 + OpenKB TOC 树路由 |
-| **记忆 (Memory)** | `mem.river_topology` | `apeireth-memory::river_topology` | `DualScaledFieldSolver::solve()` | TagMemo V10 预解双对偶场 + LIF 脉冲 + Ω 门控 |
+| **记忆 (Memory)** | `mem.river_topology` | `apeireth-memory::river_topology` | `DualScaledFieldSolver::solve()` | 双标度连续场 (DualScaled) + LIF 脉冲 + Ω 门控 |
 | **记忆 (Memory)** | `mem.residual_pyramid`| `apeireth-memory::residual_pyramid` | `OrthogonalResidualPyramid::analyze()` | 修正 Gram-Schmidt 正交投影 + 90% 能量截断 |
 | **记忆 (Memory)** | `mem.epa_bridge` | `apeireth-memory::epa_bridge` | `EpaSemanticBridge::project()` | 加权中心化 PCA 语义主轴 + 逻辑深度 + 跨域共振 |
 | **记忆 (Memory)** | `mem.five_dimensional` | `apeireth-memory::five_dimensional` | `export_browser_entries()` | 5 维时空记忆 (Working~Persona) |

@@ -3,14 +3,14 @@
 **报告代号**：WHITE-PAPER-APEIRETH-V2-ALIGNMENT-20260830  
 **审查官**：愿景、设计与心智对齐首席审查官  
 **审查对象**：Apeireth 2.0 纯 Safe Rust 编译期强类型微内核（16-Crate Workspace 架构）  
-**基准资产**：`vision.md`（五原型/北极星/三远合一）、`brand.md`（Apeiron命名哲学/宣言/设计心智）、`philosophy.md`（9哲学锚/三洋葱/0装PASS）及当前实装核心引擎（5D记忆/事实链/做梦循环/自驱心跳/发言仲裁/Harness自愈/TagMemo V10双预解场/正交残差金字塔/EPA认知主轴/四层异步上下文等）。
+**基准资产**：`vision.md`（五原型/北极星/三远合一）、`brand.md`（Apeiron命名哲学/宣言/设计心智）、`philosophy.md`（9哲学锚/三洋葱/0装PASS）及当前实装核心引擎（5D记忆/事实链/做梦循环/自驱心跳/发言仲裁/Harness自愈/双标度连续场(DualScaled)/正交残差金字塔/EPA认知主轴/四层异步上下文等）。
 
 ---
 
 ## Executive Summary — 审查核心结论
 
 1. **确定性与信任地基的终极构筑（已完全达成）**：
-   Apeireth 2.0 基于纯 Safe Rust（`#![deny(unsafe_code)]`）与单向依赖四层微内核（Foundation → Engine → Capabilities → Adapters），彻底完成了从传统 Python 弱类型 Agent 框架向**工业级可信认知微内核**的范式跃迁。通过双时态版本化事实图谱、SHA-256 不可篡改仲裁链、Modified Gram-Schmidt 多层正交残差金字塔、TagMemo V10 双预解连续场动力学与四层异步上下文隔离，系统在**抗记忆幻觉、确定性召回、长程历史防污染、编译期安全守门**上具备全球顶级的工程质感。
+   Apeireth 2.0 基于纯 Safe Rust（`#![deny(unsafe_code)]`）与单向依赖四层微内核（Foundation → Engine → Capabilities → Adapters），彻底完成了从传统 Python 弱类型 Agent 框架向**工业级可信认知微内核**的范式跃迁。通过双时态版本化事实图谱、SHA-256 不可篡改仲裁链、Modified Gram-Schmidt 多层正交残差金字塔、双标度连续场(DualScaled)动力学与四层异步上下文隔离，系统在**抗记忆幻觉、确定性召回、长程历史防污染、编译期安全守门**上具备全球顶级的工程质感。
 
 2. **核心愿景的承载力裁决（地基已成，血肉待丰）**：
    - **“会记得你的智能体”（Memory & Trust）**：**完全可支撑**。5D 记忆解耦 + 双时态时间线 + 事实不可篡改链条，已为跨越“跨墙信任”提供了无与伦比的底层支柱。
@@ -47,7 +47,7 @@
 | **双时态事实图谱** | `engine/memory/bitemporal_graph.rs` | `valid_at`/`invalid_at` 版本链演化，计算逆频稀有度（`Intrinsic Residual Specificity`）混合检索。 | ⭐⭐⭐⭐⭐<br>支持时空任意回溯，准确感知用户人生的动态变迁（搬家、换工作、习惯变化）。 |
 | **不可篡改仲裁机** | `engine/memory/arbitration.rs` | SHA-256 规范化哈希链，常数时间比较（`constant_time_eq`）防侧信道，Merkle Root 秒级验真。 | ⭐⭐⭐⭐⭐<br>兑现“S-2 实事求是”与“跨墙信任”，多端协同下的唯一真实时间线。 |
 | **MGS 正交残差金字塔** | `engine/memory/residual_pyramid.rs` | 修正 Gram-Schmidt 投影分解（60% 主导 → 25% 次级 → 5% 隐蔽残差），握手差向量分析相干度与新颖度。 | ⭐⭐⭐⭐⭐<br>能够从细微弱信号中捕捉用户的潜在意图与领域漂移，抑制白噪音。 |
-| **TagMemo V10 双预解场** | `engine/memory/river_topology.rs` | LIF 脉冲非回溯扩散，虫洞跃迁边（$\text{张力}\ge 0.65$），求解 $(I - \alpha P) u = (1 - \alpha) s_0$ 对偶连续场，DTSC 4 维重排。 | ⭐⭐⭐⭐⭐<br>概念网络具备流体拓扑动力学，实现直觉联想与深层拓扑闭合。 |
+| **双标度连续场 (DualScaled)** | `engine/memory/river_topology.rs` | LIF 脉冲非回溯扩散，虫洞跃迁边（$\text{张力}\ge 0.65$），求解 $(I - \alpha P) u = (1 - \alpha) s_0$ 对偶连续场，DTSC 4 维重排。 | ⭐⭐⭐⭐⭐<br>概念网络具备流体拓扑动力学，实现直觉联想与深层拓扑闭合。 |
 | **EPA 认知语义主轴** | `engine/memory/epa_bridge.rs` | 加权中心化 PCA，幂迭代正交化，香农熵量化逻辑深度（$1 - H_{norm}$），双主轴跨域共振桥。 | ⭐⭐⭐⭐☆<br>数学化度量思考深度，捕捉跨领域灵感碰撞的共振。 |
 | **6 状态做梦循环** | `engine/memory/dreaming.rs` | Awake → Drowsy → LightSleep → DeepSleep（元思考链）→ RemSleep（叙事灵感）→ Awakening（程序性习惯固化）。 | ⭐⭐⭐⭐⭐<br>实现夜间认知离线整合，从经历中自动提炼原则与生活习惯。 |
 | **自驱心跳与心流锁** | `engine/runtime/canonical/heartbeat.rs` | 5 触发源，二叉堆优先级抢占，`FlowLock` 阻止深度思考被闲散事件打扰。 | ⭐⭐⭐⭐☆<br>打破“一问一答”被动范式，赋予智能体自发生命节奏与注意力聚焦。 |
@@ -131,7 +131,7 @@ Apeireth 2.0 的 Safe Rust 编译期强类型微内核，从根本上解决了�
 
 Apeireth 2.0 的当前实现已经证明：**纯 Safe Rust 编译期强类型微内核不仅完全行得通，而且是构建严肃、可信、不可篡改的 AGI 认知操作系统的必由之路。**
 
-它已经拥有了近乎完美的骨骼（16-Crate 单向微内核）、精密的神经脉冲（TagMemo V10 双预解场与正交残差金字塔）、诚实的自省器官（6 状态做梦与不可篡改仲裁链）以及坚如磐石的安全洋葱防线。
+它已经拥有了近乎完美的骨骼（16-Crate 单向微内核）、精密的神经脉冲（双标度连续场与正交残差金字塔）、诚实的自省器官（6 状态做梦与不可篡改仲裁链）以及坚如磐石的安全洋葱防线。
 
 下一步，是将这团在底层沉默燃烧了许久的火，引向它的表面——让微光在屏幕的一角呼吸，让克制的关怀在最需要的时刻开口，让算法的严谨化作深夜里陪他不睡的那一只眼睛。
 
