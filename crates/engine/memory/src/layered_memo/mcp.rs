@@ -1,4 +1,4 @@
-//! MCP server for LightMemo (5 tools).
+//! MCP server for layered_memo (5 tools).
 
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,7 @@ pub struct McpError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LightMemoTool {
+pub enum LayeredMemoTool {
     MemoryAdd,
     MemoryGet,
     MemorySearch,
@@ -38,32 +38,32 @@ pub enum LightMemoTool {
     DreamCycle,
 }
 
-impl LightMemoTool {
+impl LayeredMemoTool {
     pub fn name(&self) -> &'static str {
         match self {
-            LightMemoTool::MemoryAdd => "memory_add",
-            LightMemoTool::MemoryGet => "memory_get",
-            LightMemoTool::MemorySearch => "memory_search",
-            LightMemoTool::DecayCheck => "decay_check",
-            LightMemoTool::DreamCycle => "dream_cycle",
+            LayeredMemoTool::MemoryAdd => "memory_add",
+            LayeredMemoTool::MemoryGet => "memory_get",
+            LayeredMemoTool::MemorySearch => "memory_search",
+            LayeredMemoTool::DecayCheck => "decay_check",
+            LayeredMemoTool::DreamCycle => "dream_cycle",
         }
     }
-    pub fn all() -> &'static [LightMemoTool] {
+    pub fn all() -> &'static [LayeredMemoTool] {
         &[
-            LightMemoTool::MemoryAdd,
-            LightMemoTool::MemoryGet,
-            LightMemoTool::MemorySearch,
-            LightMemoTool::DecayCheck,
-            LightMemoTool::DreamCycle,
+            LayeredMemoTool::MemoryAdd,
+            LayeredMemoTool::MemoryGet,
+            LayeredMemoTool::MemorySearch,
+            LayeredMemoTool::DecayCheck,
+            LayeredMemoTool::DreamCycle,
         ]
     }
 }
 
-pub const LIGHTMEMO_MCP_TOOL_COUNT: usize = 5;
+pub const LAYERED_MEMO_MCP_TOOL_COUNT: usize = 5;
 
-pub struct LightMemoMcp;
+pub struct LayeredMemoMcp;
 
-impl LightMemoMcp {
+impl LayeredMemoMcp {
     pub fn new() -> Self {
         Self
     }
@@ -74,20 +74,20 @@ impl LightMemoMcp {
                 id: req.id,
                 result: Some(json!({
                     "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "apeireth-lightmemo", "version": "1.2.0"},
+                    "serverInfo": {"name": "apeireth-layered_memo", "version": "1.2.0"},
                     "capabilities": {"tools": {}}
                 })),
                 error: None,
             },
             "tools/list" => {
-                let tools: Vec<_> = LightMemoTool::all().iter().map(|t| json!({
+                let tools: Vec<_> = LayeredMemoTool::all().iter().map(|t| json!({
                     "name": t.name(),
                     "description": match t {
-                        LightMemoTool::MemoryAdd => "Add a memory item across all 4 layers",
-                        LightMemoTool::MemoryGet => "Get a memory item by ID",
-                        LightMemoTool::MemorySearch => "Search via multi-pipe (keyword + vector + tag)",
-                        LightMemoTool::DecayCheck => "Check decay strength of an item",
-                        LightMemoTool::DreamCycle => "Run a dream consolidation cycle",
+                        LayeredMemoTool::MemoryAdd => "Add a memory item across all 4 layers",
+                        LayeredMemoTool::MemoryGet => "Get a memory item by ID",
+                        LayeredMemoTool::MemorySearch => "Search via multi-pipe (keyword + vector + tag)",
+                        LayeredMemoTool::DecayCheck => "Check decay strength of an item",
+                        LayeredMemoTool::DreamCycle => "Run a dream consolidation cycle",
                     }
                 })).collect();
                 McpResponse {
@@ -153,7 +153,7 @@ impl LightMemoMcp {
     }
 }
 
-impl Default for LightMemoMcp {
+impl Default for LayeredMemoMcp {
     fn default() -> Self {
         Self::new()
     }
@@ -164,11 +164,11 @@ mod tests {
     use super::*;
     #[test]
     fn tool_count() {
-        assert_eq!(LIGHTMEMO_MCP_TOOL_COUNT, 5);
+        assert_eq!(LAYERED_MEMO_MCP_TOOL_COUNT, 5);
     }
     #[test]
     fn initialize() {
-        let m = LightMemoMcp::new();
+        let m = LayeredMemoMcp::new();
         let r = m.handle(McpRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(json!(1)),
@@ -179,7 +179,7 @@ mod tests {
     }
     #[test]
     fn tools_list_5() {
-        let m = LightMemoMcp::new();
+        let m = LayeredMemoMcp::new();
         let r = m.handle(McpRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(json!(2)),
@@ -192,7 +192,7 @@ mod tests {
     }
     #[test]
     fn memory_add_tool() {
-        let m = LightMemoMcp::new();
+        let m = LayeredMemoMcp::new();
         let r = m.handle(McpRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(json!(3)),

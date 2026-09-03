@@ -1,7 +1,7 @@
-//! Retention policy + sweep (salvage of OneRing prune, lightmemo decay, governance protect).
+//! Retention policy + sweep (salvage of context-ledger prune, layered-memo decay, governance protect).
 //!
 //! Combines three donor / v2 primitives that previously lived in isolation:
-//! - **Count cap** (OneRing `max_records` per subject) — keep the newest N.
+//! - **Count cap** (Context ledger `max_records` per subject) — keep the newest N.
 //! - **Age TTL** — forget episodes older than `max_age_secs`.
 //! - **Decay threshold** — forget when Ebbinghaus strength drops below `min_strength`.
 //!

@@ -2,13 +2,13 @@
 //!
 //! v2 already owns:
 //! - [`crate::dreaming::DreamEngine`] — 6-stage cognitive dream SM
-//! - [`crate::lightmemo::DreamSubsystem`] — pair-merge callback
-//! - [`crate::lightmemo::SleepCycle`] — quiet-threshold trigger
+//! - [`crate::layered_memo::DreamSubsystem`] — pair-merge callback
+//! - [`crate::layered_memo::SleepCycle`] — quiet-threshold trigger
 //!
 //! Donor companion `dream.rs` additionally **filters** what enters a cycle:
 //! skip `mem-dream-*` (prevents summary-of-summary nesting) and skip items
 //! older than `last_cycle_at` (incremental night). Pair-merge and write-back
-//! stay with lightmemo / the caller. Default-off; not production-wired.
+//! stay with layered_memo / the caller. Default-off; not production-wired.
 
 /// Prefix of dream-cycle products (and thought-inventory rows).
 pub const DREAM_ID_PREFIX: &str = "mem-dream-";
@@ -36,7 +36,7 @@ impl DreamSource {
 /// - drops ids starting with [`DREAM_ID_PREFIX`]
 /// - keeps `timestamp >= last_cycle_at` (unix seconds)
 ///
-/// Does not pair-merge; [`crate::lightmemo::DreamSubsystem::dream_cycle`] does.
+/// Does not pair-merge; [`crate::layered_memo::DreamSubsystem::dream_cycle`] does.
 pub fn select_dream_candidates(sources: &[DreamSource], last_cycle_at: i64) -> Vec<String> {
     sources
         .iter()

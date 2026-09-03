@@ -25,7 +25,7 @@
 //!
 //! ## 用法
 //! ```rust,no_run
-//! use apeireth_memory::lightmemo::progression::{LayerProgression, Layer};
+//! use apeireth_memory::layered_memo::progression::{LayerProgression, Layer};
 //!
 //! let mut prog = LayerProgression::new();
 //! let id = "item-1".to_string();
@@ -36,7 +36,7 @@
 //! assert!(!prog.is_in(&id, Layer::L4));
 //! ```
 
-#![allow(missing_docs)] // R163 O-5: 与 lightmemo 兄弟模块一致, 模块头文档即公共说明
+#![allow(missing_docs)] // R163 O-5: 与 layered_memo 兄弟模块一致, 模块头文档即公共说明
 
 use std::collections::HashMap;
 
