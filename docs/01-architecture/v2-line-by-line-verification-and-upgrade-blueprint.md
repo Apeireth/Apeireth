@@ -43,7 +43,7 @@
 | `river_topology.rs` | `DualScaledFieldSolver`, `RiverDynamicsEngine`, `DtscObservables` | 双标度连续场求解器 (DualScaled) $(I - \alpha P)u = (1-\alpha)s_0$；LIF 神经元脉冲非回溯传导；$\Omega$ 标量门控三态机。 | ✅ 100% PASS |
 | `residual_pyramid.rs` | `OrthogonalResidualPyramid`, `FieldActivationGate` | 修正 Gram-Schmidt (MGS) 多层正交残差金字塔分解；90% 能量截断；握手相干度门控。 | ✅ 100% PASS |
 | `epa_bridge.rs` | `EpaSemanticBridge`, `EpaProjectionResult` | 加权中心化 PCA 语义主轴投影；隐式 Gram 矩阵幂迭代重正交化；归一化香农熵逻辑深度与跨域共振桥。 | ✅ 100% PASS |
-| `three_tier_vault.rs` | `ThreeTierVault`, `TocTreeIndexer`, `TreeReasoningRouter` | SwarmVault 规范 Raw-Wiki-Schema 三层知识保险库；PageIndex 式无向量 Markdown 目录树大纲推理路由。 | ✅ 100% PASS |
+| `three_tier_vault.rs` | `ThreeTierVault`, `TocTreeIndexer`, `TreeReasoningRouter` | Raw-Wiki-Schema 三层知识保险库；无向量 Markdown 目录树大纲推理路由。 | ✅ 100% PASS |
 | `wiki_fs.rs` | `WikiCompilationEngine` | Karpathy 式知识编译；`[[wikilink]]` 双链提取与拓扑校验；反熵 Lint（孤立页面与死链检测）。 | ✅ 100% PASS |
 | `five_dimensional.rs` | `FiveDimensionalMemory` | Working/Episode/Semantic/Procedural/Persona 5 维时空记忆统一检索与浏览器导出。 | ✅ 100% PASS |
 | `bitemporal_graph.rs` | `BitemporalGraph`, `BitemporalFact` | `valid_at`/`invalid_at` 双时态版本演化；Intrinsic Residual 特异性打分。 | ✅ 100% PASS |
@@ -56,7 +56,7 @@
 
 | 模块文件 | 核心结构体 / 函数 | 工程机制与特性 | 状态与单测覆盖 |
 |---|---|---|:---:|
-| `worktree_sandbox.rs` | `WorktreeConfig`, `TddStateMachine`, `RateLimitBackoff` | gnhf 式 Git Worktree 物理工作区隔离；TDD 自验证状态机 (`Edit -> Test -> Commit/Hard Reset`)；指数退避恢复。 | ✅ 100% PASS |
+| `worktree_sandbox.rs` | `WorktreeConfig`, `TddStateMachine`, `RateLimitBackoff` | Git Worktree 物理工作区隔离；TDD 自验证状态机 (`Edit -> Test -> Commit/Hard Reset`)；指数退避恢复。 | ✅ 100% PASS |
 | `speech_arbiter.rs` | `SpeechOutputArbiter` | Lumi_Nox 式双 AI 发言权仲裁锁；FIFO 排队队列；TTL 衰减淘汰；高优先级抢占打断。 | ✅ 100% PASS |
 | `prompt_stabilizer.rs` | `PromptCacheStabilizer` | 字节级前缀固定稳定器；单点动态环境注入插槽；最大化厂商 Prompt Cache 命中率。 | ✅ 100% PASS |
 | `async_context.rs` | `AsyncContextPipeline` | 四层异步上下文隔离管线（Ephemeral / Durable / Summary / HUD），彻底阻断历史毒化。 | ✅ 100% PASS |
@@ -80,7 +80,7 @@
 
 | 模块文件 | 核心结构体 / 函数 | 底层实现细节 | 状态与单测覆盖 |
 |---|---|---|:---:|
-| `repo_map.rs` | `SymbolParser`, `RepoDependencyGraph`, `RepoMapGenerator` | Aider 式跨语言 AST 符号提取（Rust/Py/TS/Go）；个性化 PageRank 幂迭代收敛；Token 预算二分剪裁。 | ✅ 100% PASS |
+| `repo_map.rs` | `SymbolParser`, `RepoDependencyGraph`, `RepoMapGenerator` | 跨语言 AST 符号提取（Rust/Py/TS/Go）；个性化 PageRank 幂迭代收敛；Token 预算二分剪裁。 | ✅ 100% PASS |
 | `apply_patch.rs` | `TransactionalPatchApplier` | Codex 风格多文件两阶段事务打补丁；上下文唯一性校验；100% 自动原子回滚。 | ✅ 100% PASS |
 | `guardrail.rs` | `pre_call_guard`, `post_call_guard` | Pre-Call 拦截路径穿越与危险命令；Post-Call 敏感凭据/私钥出站绊线（Tripwire）。 | ✅ 100% PASS |
 | `process/executor.rs` | `ProcessExecutor` | Windows `CREATE_SUSPENDED -> JobObject` 树遏制；Linux cgroups v2 与资源硬配额。 | ✅ 100% PASS |
@@ -237,7 +237,7 @@ flowchart LR
 
 ### 模块 6：跨代教养与物种分化协议 (`lineage_spawning.rs`)
 - **目标路径**：`crates/foundation/orchestration/src/lineage_spawning.rs`
-- **机制**：母代 Ed25519 签名锁定原则洋葱 E/S 层（表观遗传守恒）；三阶段教养生命周期（Phase 1 影子学徒 $\to$ Phase 2 双签共审 $\to$ Phase 3 独立反哺 SwarmVault 宗族）。
+- **机制**：母代 Ed25519 签名锁定原则洋葱 E/S 层（表观遗传守恒）；三阶段教养生命周期（Phase 1 影子学徒 $\to$ Phase 2 双签共审 $\to$ Phase 3 独立反哺知识库宗族）。
 - **核心结构体**：
   ```rust
   pub struct LineageProgenySpec {

@@ -150,7 +150,7 @@ $$\frac{\partial \Phi}{\partial t} = \nabla \cdot (\mathbf{D} \nabla \Phi) - \ma
 - **三阶段教养生命周期**：
   1. *Phase 1 (影子学徒)*：只读观察，散度达标准出；
   2. *Phase 2 (双签共审)*：渐进授权，高危操作 7 Advisor 联审；
-  3. *Phase 3 (独立分化)*：独立沙箱运行，成果反哺 SwarmVault 宗族。
+  3. *Phase 3 (独立分化)*：独立沙箱运行，成果反哺知识库宗族。
 
 ### 5.3 密码学不可篡改事实时间线（Merkle Mountain Range）
 - **MMR 事实中枢**：6 条历史流全部单调追加，提供 $O(\log N)$ 轻客户端证明；
@@ -185,8 +185,8 @@ gantt
     dateFormat  YYYY-MM-DD
     section 阶段一：连续流形与微内核巩固 (2026-Q3)
     双标度连续场 (DualScaled) 与 MGS 残差金字塔实装     :active, 2026-08-30, 20d
-    Aider AST RepoMap 与 gnhf Worktree 隔离沙箱    :active, 2026-08-30, 15d
-    SwarmVault 三层知识库与 OpenKB TOC 树路由     :active, 2026-08-30, 15d
+    AST RepoMap 与 Worktree 隔离沙箱    :active, 2026-08-30, 15d
+    三层知识库与无向量 TOC 树路由     :active, 2026-08-30, 15d
 
     section 阶段二：微光在场与主动关怀 (2026-Q4)
     Ember HUD 4.0s 生理呼吸着色器与暗角微光        :2026-09-20, 25d
