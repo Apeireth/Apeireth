@@ -24,7 +24,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::thought_cluster::{ThoughtClusterError, ThoughtClusterManager, ThoughtClusterReader};
+use crate::cluster_store::{ClusterReader, ClusterStore, ClusterStoreError};
 
 /// 默认最大思考深度 (防无限递归).
 pub const DEFAULT_MAX_DEPTH: usize = 10;
@@ -163,7 +163,7 @@ impl MetaChainResult {
 pub struct MetaThinkingChain {
     stages: Vec<ChainStage>,
     max_depth: usize,
-    reader: Option<Arc<dyn ThoughtClusterReader>>,
+    reader: Option<Arc<dyn ClusterReader>>,
 }
 
 impl MetaThinkingChain {
@@ -182,7 +182,7 @@ impl MetaThinkingChain {
     }
 
     /// 注入思维簇读取器以获取历史簇上下文.
-    pub fn with_reader(mut self, reader: Arc<dyn ThoughtClusterReader>) -> Self {
+    pub fn with_reader(mut self, reader: Arc<dyn ClusterReader>) -> Self {
         self.reader = Some(reader);
         self
     }
@@ -303,10 +303,10 @@ impl MetaThinkingChain {
 
 /// 将元思考链报告落盘保存到指定思维簇.
 pub fn save_to_cluster(
-    manager: &ThoughtClusterManager,
+    manager: &ClusterStore,
     cluster: &str,
     result: &MetaChainResult,
-) -> Result<PathBuf, ThoughtClusterError> {
+) -> Result<PathBuf, ClusterStoreError> {
     manager.create_file(cluster, &result.to_markdown())
 }
 

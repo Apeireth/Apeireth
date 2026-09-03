@@ -1,4 +1,4 @@
-//! `apeireth-memory-lightmemo` - R142 LightMemo memory system.
+//! `apeireth-memory-layered_memo` - R142 layered_memo memory system.
 //!
 //! Rust port of AgentMemory v2.1.0 (4-layer closed-loop memory):
 //! - L1: file persistence (rusqlite + blob storage)
@@ -52,14 +52,14 @@ pub use l4_lcm::{L4LcmCompressor, LcmCallback, LcmChunk};
 pub use adapter::{
     AdapterRegistry, ConversationAdapter, FileAdapter, MemoryAdapter, MemorySource, SourceKind,
 };
-pub use compat::{LightMemoCommand, LightMemoCompatRouter, LIGHTMEMO_COMMAND_COUNT};
+pub use compat::{LayeredMemoCommand, LayeredMemoCompatRouter, LAYERED_MEMO_COMMAND_COUNT};
 pub use decay::{DecayConfig, DecayEngine};
 pub use dream::{DreamCallback, DreamSubsystem};
 pub use dual_track::{dual_track_merge, DualTrackHit, HitSource};
-pub use enhanced::EnhancedLightMemo;
+pub use enhanced::EnhancedLayeredMemo;
 pub use librarian::{Category, Librarian};
 pub use manager::{MemoryError, MemoryItem, MemoryManager};
-pub use mcp::{LightMemoMcp, LightMemoTool};
+pub use mcp::{LayeredMemoMcp, LayeredMemoTool};
 pub use pipe::{FusionStrategy, SearchPipe};
 pub use progression::{Layer, LayerProgression};
 pub use search::{SearchHit, SearchMode, SearchPipeline};

@@ -1,25 +1,25 @@
-//! EnhancedLightMemo composed entry.
+//! EnhancedLayeredMemo composed entry.
 
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use super::decay::DecayEngine;
 use super::dream::DreamSubsystem;
 use super::manager::{MemoryItem, MemoryManager};
-use super::mcp::{LightMemoMcp, McpRequest, McpResponse};
+use super::mcp::{LayeredMemoMcp, McpRequest, McpResponse};
 
-pub struct EnhancedLightMemo {
+pub struct EnhancedLayeredMemo {
     manager: MemoryManager,
     decay: DecayEngine,
     dream: DreamSubsystem,
-    mcp: LightMemoMcp,
+    mcp: LayeredMemoMcp,
 }
 
-impl EnhancedLightMemo {
+impl EnhancedLayeredMemo {
     pub fn new_in_memory() -> Result<Self, super::manager::MemoryError> {
         Ok(Self {
             manager: MemoryManager::new_in_memory()?,
             decay: DecayEngine::new(),
             dream: DreamSubsystem::new(),
-            mcp: LightMemoMcp::new(),
+            mcp: LayeredMemoMcp::new(),
         })
     }
 
@@ -51,7 +51,7 @@ impl EnhancedLightMemo {
     }
 }
 
-impl Default for EnhancedLightMemo {
+impl Default for EnhancedLayeredMemo {
     fn default() -> Self {
         Self::new_in_memory().expect("in-memory")
     }
@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn add_and_decay() {
-        let mut e = EnhancedLightMemo::new_in_memory().unwrap();
+        let mut e = EnhancedLayeredMemo::new_in_memory().unwrap();
         let id = e.add_memory("test", vec!["a".into()]).unwrap();
         // Recent item should have high decay strength
         let strength = e.decay().strength(Utc::now());
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn dispatch_mcp() {
-        let e = EnhancedLightMemo::new_in_memory().unwrap();
+        let e = EnhancedLayeredMemo::new_in_memory().unwrap();
         let r = e.dispatch_mcp(McpRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(serde_json::json!(1)),

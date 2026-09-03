@@ -1,10 +1,10 @@
-//! Rolling cross-frontend context ledger (salvage of companion `onering`).
+//! Rolling cross-frontend context ledger (salvage of the companion ledger).
 //!
 //! Donor behaviour recovered:
 //! - Unified timeline keyed by `continuity_id` (SSE / Web / CLI / … share one ledger).
 //! - Monotonic `seq` (AUTOINCREMENT) as the sort key, not wall-clock.
 //! - Count-based prune: keep the most recent `max_records` rows per continuity.
-//! - Ledger is **not** the episode pipeline — table `onering_messages` is a
+//! - Ledger is **not** the episode pipeline — table `context_ledger_messages` is a
 //!   sidecar. Extract / dream / reflection keep reading `episodes`.
 //!
 //! Discarded donor shortcuts:
@@ -46,13 +46,13 @@ pub struct LedgerEntry {
 }
 
 /// Rolling context ledger bound to one continuity anchor.
-pub struct OneRingLedger<'a> {
+pub struct ContextLedger<'a> {
     store: &'a SqliteMemoryStore,
     continuity: String,
     max_records: usize,
 }
 
-impl<'a> OneRingLedger<'a> {
+impl<'a> ContextLedger<'a> {
     /// Open a ledger for `continuity`. Empty anchor is rejected.
     pub fn new(store: &'a SqliteMemoryStore, continuity: impl Into<String>) -> MemoryResult<Self> {
         let continuity = continuity.into().trim().to_string();
@@ -120,7 +120,7 @@ impl<'a> OneRingLedger<'a> {
         let frontend = frontend.trim();
         if frontend.is_empty() {
             return Err(MemoryError::Invalid(
-                "前端来源为空, 拒绝留痕 (OneRing 必须可溯源)".into(),
+                "前端来源为空, 拒绝留痕 (统一账本 必须可溯源)".into(),
             ));
         }
         let content = content.trim();
@@ -132,16 +132,16 @@ impl<'a> OneRingLedger<'a> {
         self.ensure_table()?;
         let conn = self.store.conn()?;
         conn.execute(
-            "INSERT INTO onering_messages (continuity_id, role, sender, frontend, content, ts)
+            "INSERT INTO context_ledger_messages (continuity_id, role, sender, frontend, content, ts)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![continuity, role, sender, frontend, content, ts],
         )?;
         let seq = conn.last_insert_rowid();
         conn.execute(
-            "DELETE FROM onering_messages
+            "DELETE FROM context_ledger_messages
               WHERE continuity_id = ?1
                 AND seq NOT IN (
-                    SELECT seq FROM onering_messages
+                    SELECT seq FROM context_ledger_messages
                      WHERE continuity_id = ?1
                      ORDER BY seq DESC LIMIT ?2
                 )",
@@ -167,7 +167,7 @@ impl<'a> OneRingLedger<'a> {
         let conn = self.store.conn()?;
         let mut stmt = conn.prepare(
             "SELECT seq, continuity_id, role, sender, frontend, content, ts
-               FROM onering_messages
+               FROM context_ledger_messages
               WHERE continuity_id = ?1
               ORDER BY seq DESC LIMIT ?2",
         )?;
@@ -182,7 +182,7 @@ impl<'a> OneRingLedger<'a> {
         self.ensure_table()?;
         let conn = self.store.conn()?;
         let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM onering_messages WHERE continuity_id = ?1",
+            "SELECT COUNT(*) FROM context_ledger_messages WHERE continuity_id = ?1",
             params![self.continuity],
             |r| r.get(0),
         )?;
@@ -194,15 +194,15 @@ impl<'a> OneRingLedger<'a> {
     }
 
     fn ensure_table(&self) -> MemoryResult<()> {
-        ensure_onering_table(self.store)
+        ensure_context_ledger_table(self.store)
     }
 }
 
 /// Create the sidecar table (idempotent). Shared with continuity migrate.
-pub(crate) fn ensure_onering_table(store: &SqliteMemoryStore) -> MemoryResult<()> {
+pub(crate) fn ensure_context_ledger_table(store: &SqliteMemoryStore) -> MemoryResult<()> {
     let conn = store.conn()?;
     conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS onering_messages (
+        "CREATE TABLE IF NOT EXISTS context_ledger_messages (
             seq INTEGER PRIMARY KEY AUTOINCREMENT,
             continuity_id TEXT NOT NULL,
             role TEXT NOT NULL,
@@ -211,15 +211,15 @@ pub(crate) fn ensure_onering_table(store: &SqliteMemoryStore) -> MemoryResult<()
             content TEXT NOT NULL,
             ts INTEGER NOT NULL
          );
-         CREATE INDEX IF NOT EXISTS idx_onering_continuity_seq
-            ON onering_messages(continuity_id, seq);",
+         CREATE INDEX IF NOT EXISTS idx_context_ledger_continuity_seq
+            ON context_ledger_messages(continuity_id, seq);",
     )?;
     Ok(())
 }
 
-pub(crate) fn onering_table_exists(conn: &rusqlite::Connection) -> bool {
+pub(crate) fn context_ledger_table_exists(conn: &rusqlite::Connection) -> bool {
     conn.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'onering_messages'",
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'context_ledger_messages'",
         [],
         |r| r.get::<_, i64>(0),
     )
@@ -251,7 +251,7 @@ mod tests {
     #[test]
     fn records_and_replays_in_order() {
         let st = store();
-        let l = OneRingLedger::new(&st, "c-main").unwrap();
+        let l = ContextLedger::new(&st, "c-main").unwrap();
         l.record("user", Some("master"), "web", "你好", 10).unwrap();
         l.record("assistant", Some("apeireth"), "web", "主人好", 11)
             .unwrap();
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn cross_frontend_same_timeline() {
         let st = store();
-        let l = OneRingLedger::new(&st, "c-main").unwrap();
+        let l = ContextLedger::new(&st, "c-main").unwrap();
         l.record("user", Some("master"), "web", "网页问的", 1)
             .unwrap();
         l.record("user", Some("master"), "openai-compat", "SSE 问的", 2)
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn multi_anchor_isolated() {
         let st = store();
-        let l = OneRingLedger::new(&st, "c-main").unwrap();
+        let l = ContextLedger::new(&st, "c-main").unwrap();
         l.record("user", None, "web", "A 的话", 1).unwrap();
         l.record_as("c-other", "user", None, "web", "B 的话", 2)
             .unwrap();
@@ -296,18 +296,18 @@ mod tests {
     #[test]
     fn rejects_invalid_role_content_frontend_anchor() {
         let st = store();
-        let l = OneRingLedger::new(&st, "c-main").unwrap();
+        let l = ContextLedger::new(&st, "c-main").unwrap();
         assert!(l.record("system", None, "web", "x", 1).is_err());
         assert!(l.record("user", None, "web", "   ", 1).is_err());
         assert!(l.record("user", None, "  ", "内容", 1).is_err());
         assert!(l.record_as(" ", "user", None, "web", "内容", 1).is_err());
-        assert!(OneRingLedger::new(&st, "  ").is_err());
+        assert!(ContextLedger::new(&st, "  ").is_err());
     }
 
     #[test]
     fn prunes_to_max_records() {
         let st = store();
-        let l = OneRingLedger::new(&st, "c-main")
+        let l = ContextLedger::new(&st, "c-main")
             .unwrap()
             .with_max_records(3);
         for i in 0..10 {
@@ -322,7 +322,7 @@ mod tests {
     #[test]
     fn recent_limit_zero_is_empty() {
         let st = store();
-        let l = OneRingLedger::new(&st, "c-main").unwrap();
+        let l = ContextLedger::new(&st, "c-main").unwrap();
         l.record("user", None, "web", "x", 1).unwrap();
         assert!(l.recent(0).unwrap().is_empty());
     }
@@ -330,7 +330,7 @@ mod tests {
     #[test]
     fn ledger_does_not_pollute_episodes() {
         let st = store();
-        let l = OneRingLedger::new(&st, "c-main").unwrap();
+        let l = ContextLedger::new(&st, "c-main").unwrap();
         l.record("user", None, "web", "账本条目", 1).unwrap();
         assert_eq!(
             <SqliteMemoryStore as EpisodeStore>::count_by_session(&st, "c-main").unwrap(),
