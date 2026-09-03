@@ -36,7 +36,7 @@ graph TD
 
     subgraph Layer2 [Layer 2: 引擎与认知层 (Engine)]
         RT[apeireth-runtime: 内核+自驱心跳+FlowLock+Harness自愈]
-        MEM[apeireth-memory: 5D记忆+双时态图谱+事实链+做梦+LLM-Wiki]
+        MEM[apeireth-memory: 5D记忆+双时态图谱+事实链+做梦+活维基知识编译]
         PROV[apeireth-provider: Anthropic/OpenAI/MiniMax多模型路由]
         PERC[apeireth-perception: MiniMax LIVE语音+3D-PAD情感+屏幕感知]
         STOR[apeireth-storage: SQLite连接池与持久化迁移]
@@ -98,7 +98,7 @@ graph TD
 * **双时态事实图谱**：`BitemporalGraph::search_facts(query, now_ms)`（版本链 + 残差特异性）
 * **密码事实时间线**：`ArbitrationTimeline::append_event()`（SHA-256 哈希链 + Merkle Root）
 * **昼夜梦境引擎**：`DreamEngine::advance_cycle()`（6 阶段认知循环）
-* **LLM-Wiki 知识编译**：`WikiFsEngine::run_lint()`（双链拓扑 + 死链/孤岛反熵 Lint）
+* **活维基知识编译**：`WikiFsEngine::run_lint()`（双链拓扑 + 死链/孤岛反熵 Lint）
 * **AI 自驱心跳与心流锁**：`HeartbeatScheduler::acquire_flow_lock()`（抢占式二叉堆）
 * **Harness 失败自进化修补**：`HarnessPatchEngine::synthesize_patches()`（DeepSeek R1 范式）
 * **事务级多文件补丁**：`TransactionalPatchApplier::apply_patch()`（两阶段提交 + 自动原子回滚）
@@ -114,7 +114,7 @@ graph TD
 
 ### 核心演进路线图：
 1. **第一批 (已实装)**：OWASP ASI-01 审计、不可信信封包裹、8 类 PII、Pre/Post 工具绊线、Codex 事务补丁、MiniMax LIVE 语音、8 帧 Duplex 网关、5D 记忆与 Zep 双时态图谱。
-2. **第二批 (已实装)**：Lumi_Nox 发言仲裁机、NemesisBot Prompt Cache 稳定器、AI 自驱心跳与 FlowLock 心流锁、DeepSeek Harness-R1 自愈修补、Karpathy LLM-Wiki 知识编译与反熵治理。
+2. **第二批 (已实装)**：发言仲裁机、Prompt Cache 稳定器、AI 自驱心跳与 FlowLock 心流锁、失败轨迹自愈修补、活维基知识编译与反熵治理。
 3. **第三批 (规划中)**：VCP 浪潮流体动力学（LIF 脉冲传导）、Gram-Schmidt 正交残差金字塔、EPA 加权中心化 PCA 语义主轴与跨节点透明超栈文件穿透。
 
 ---

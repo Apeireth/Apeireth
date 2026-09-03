@@ -1,4 +1,4 @@
-//! epa_bridge: EPA 加权中心化 PCA 语义主轴、逻辑深度与跨域共振桥
+//! semantic_axis: 加权中心化 PCA 语义主轴 (Semantic Axis)、逻辑深度与跨域共振桥
 //!
 //! 吸收自 VCP 1.0 (`EPAModule.js`):
 //! 1. 加权中心化 (Weighted Centering) 消除公共背景偏置；
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 /// 语义主轴分析结果
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EpaProjectionResult {
+pub struct SemanticAxisProjection {
     /// 各正交主轴上的投影分量
     pub projections: Vec<f32>,
     /// 能量概率分布 P(k)
@@ -25,15 +25,15 @@ pub struct EpaProjectionResult {
     pub active_bridges: Vec<(usize, usize, f32)>,
 }
 
-/// EPA 语义桥梁引擎
+/// 语义主轴桥梁引擎 (Semantic Axis Bridge)
 #[derive(Debug, Clone)]
-pub struct EpaSemanticBridge {
+pub struct SemanticAxisBridge {
     pub dimension: usize,
     pub basis_vectors: Vec<Vec<f32>>,
     pub mean_vector: Vec<f32>,
 }
 
-impl EpaSemanticBridge {
+impl SemanticAxisBridge {
     pub fn new(dimension: usize) -> Self {
         Self {
             dimension,
@@ -154,10 +154,10 @@ impl EpaSemanticBridge {
     }
 
     /// 投影 Query 向量并量化逻辑深度与跨域共振
-    pub fn project(&self, vector: &[f32]) -> EpaProjectionResult {
+    pub fn project(&self, vector: &[f32]) -> SemanticAxisProjection {
         let k = self.basis_vectors.len();
         if k == 0 || vector.len() != self.dimension {
-            return EpaProjectionResult {
+            return SemanticAxisProjection {
                 projections: vec![],
                 probabilities: vec![],
                 normalized_entropy: 0.0,
@@ -185,7 +185,7 @@ impl EpaSemanticBridge {
         }
 
         if total_energy < 1e-12 {
-            return EpaProjectionResult {
+            return SemanticAxisProjection {
                 projections,
                 probabilities: vec![0.0; k],
                 normalized_entropy: 0.0,
@@ -227,7 +227,7 @@ impl EpaSemanticBridge {
             }
         }
 
-        EpaProjectionResult {
+        SemanticAxisProjection {
             projections,
             probabilities,
             normalized_entropy,
@@ -243,8 +243,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_epa_fit_and_projection_logic_depth() {
-        let mut epa = EpaSemanticBridge::new(3);
+    fn test_semantic_axis_fit_and_projection_logic_depth() {
+        let mut axis = SemanticAxisBridge::new(3);
 
         let centroids = vec![
             (vec![1.0, 0.0, 0.0], 10.0),
@@ -252,17 +252,17 @@ mod tests {
             (vec![0.0, 0.0, 1.0], 10.0),
         ];
 
-        epa.fit(&centroids, 2);
-        assert_eq!(epa.basis_vectors.len(), 2);
+        axis.fit(&centroids, 2);
+        assert_eq!(axis.basis_vectors.len(), 2);
 
         // 强偏向单一主轴的向量，逻辑深度高
         let query_focused = vec![2.0, 0.0, 0.0];
-        let res_focused = epa.project(&query_focused);
+        let res_focused = axis.project(&query_focused);
         assert!(res_focused.logic_depth >= 0.0 && res_focused.logic_depth <= 1.0);
 
         // 双轴平衡激活的向量，触发共振
         let query_resonance = vec![1.0, 1.0, 0.0];
-        let res_resonance = epa.project(&query_resonance);
+        let res_resonance = axis.project(&query_resonance);
         assert_eq!(res_resonance.projections.len(), 2);
     }
 }

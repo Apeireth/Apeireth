@@ -22,7 +22,7 @@ the product workspace.
 | `apeireth-runtime` | `crates/engine/runtime` | 规范会话内核、多提供商路由、5 触发源二叉堆心跳调度器与 FlowLock 心流锁 (`heartbeat`)、DeepSeek Harness-R1 失败自进化修补 (`harness_patch`)、治理执行闭环与 Trace |
 | `apeireth-provider` | `crates/engine/provider` | Anthropic, MiniMax, and OpenAI-compatible provider capabilities |
 | `apeireth-storage` | `crates/engine/storage` | SQLite pool, migrations, storage configuration, and errors |
-| `apeireth-memory` | `crates/engine/memory` | 五维时空记忆与 Browser 导出 (`five_dimensional`)、Zep 双时态事实图谱与残差特异性检索 (`bitemporal_graph`)、SHA-256 唯一事实链与 Merkle 仲裁 (`arbitration`)、6 阶段昼夜做梦引擎 (`dreaming`)、元思维递进思考链 (`meta_thinking`)、Karpathy LLM-Wiki 知识编译与反熵 Lint (`wiki_fs`) |
+| `apeireth-memory` | `crates/engine/memory` | 五维时空记忆与 Browser 导出 (`five_dimensional`)、双时态事实图谱与残差特异性检索 (`bitemporal_graph`)、SHA-256 唯一事实链与 Merkle 仲裁 (`arbitration`)、6 阶段昼夜做梦引擎 (`dreaming`)、元思维递进思考链 (`meta_thinking`)、活维基知识编译与反熵 Lint (`wiki_fs`) |
 | `apeireth-perception` | `crates/engine/perception` | 多模态感知体系: MiniMax LIVE 高保真 TTS 适配器与 3D PAD 情感语气调制 (`minimax_tts`)、Whisper 语音识别与 Xcap 屏幕捕获 |
 | `apeireth-organ` | `crates/engine/organ` | 9 cognitive organs (W1..W3 world models, E4 curiosity, F1 emotion, F4 hypothesis, F6 values, E7 emergence, memory merger, persona tone synthesizer) |
 
@@ -30,7 +30,7 @@ the product workspace.
 
 | Package | Path | Responsibility |
 | --- | --- | --- |
-| `apeireth-tools-canonical` | `crates/capabilities/tools` | Codex/Aider 事务级多文件打补丁与自动回滚 (`apply_patch`)、前置路径/命令拦截与后置凭据出站绊线 (`guardrail`)、标准 JSON-RPC 2.0 MCP 客户端 (`mcp`)、ProcessExecutor 安全容器 (Windows Job Object / Linux cgroups) 与大文本溢出安全分页 (`spill`) |
+| `apeireth-tools-canonical` | `crates/capabilities/tools` | 事务级多文件打补丁与自动回滚 (`apply_patch`)、前置路径/命令拦截与后置凭据出站绊线 (`guardrail`)、标准 JSON-RPC 2.0 MCP 客户端 (`mcp`)、ProcessExecutor 安全容器 (Windows Job Object / Linux cgroups) 与大文本溢出安全分页 (`spill`) |
 
 ## Adapters
 

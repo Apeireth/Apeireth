@@ -104,7 +104,7 @@ graph TB
         KURAMOTO["⚡ Kuramoto 非线性振子相锁<br/>(MGS 残差金字塔张量缩并 + 顿悟雪崩 MetaConcept)"]
         RIVER["🌊 双标度连续记忆场 (DualScaled)<br/>(LIF 脉冲非回溯传导 + 零阻抗虫洞跃迁)"]
         CHRONICLE["📜 昼夜自传体编年史结晶<br/>(深睡相变结晶 + 分形幂律衰减 R(t) + Merkle 锚定)"]
-        VAULT["🏛️ SwarmVault & LLM-Wiki<br/>(Raw-Wiki-Schema 三层知识库 + TOC 树状路由)"]
+        VAULT["🏛️ 三层知识库 (Three-Tier Vault)<br/>(Raw-Wiki-Schema 三层架构 + 无向量 TOC 树状路由)"]
     end
 
     subgraph SECURITY_PIPELINE["零信任治理与物理沙箱 (Triple Onion)"]
@@ -181,7 +181,7 @@ $$\frac{dU_{\text{care}}}{dt} = \nabla U_{\text{circadian}} + \nabla U_{\text{fr
 |                                                                                         |
 | [04. 跨代繁育教养与多智能体知识共享]                                                     |
 | 导师 Agent 借助 Ed25519 表观遗传常数时间校验培养具备特化能力的子代 Agent，经历影子学徒   |
-| 到双签共审再到完全独立，并将高质量事实反哺至 SwarmVault 知识保险库。                     |
+| 到双签共审再到完全独立，并将高质量事实反哺至三层知识保险库。                     |
 |                                                                                         |
 | [05. Ember HUD 微光生理在场]                                                            |
 | 屏幕边缘 4.0s 生理呼吸柔和微光。深度编码时通过 FlowLock 心流阻尼强行压制弹窗打扰；深夜疲 |
@@ -205,7 +205,7 @@ crates/
 │   ├── orchestration         # 多维认知配额调度器、关怀势能场、跨代教养、7 顾问辩论
 │   └── plugin                # 动态插件系统与扩展能力挂载点
 ├── engine/                   # Layer 1: 认知引擎与类脑拓扑流形
-│   ├── memory                # Betti 同调、Kuramoto 振子、双标度连续场、编年史结晶、SwarmVault
+│   ├── memory                # Betti 同调、Kuramoto 振子、双标度连续场、编年史结晶、三层知识库
 │   ├── runtime               # 代理主循环、因果世界模型、FlowLock 心流锁、自驱心跳
 │   ├── organ                 # 9 大认知器官、人格合成器
 │   ├── perception            # Whisper 语音识别、MiniMax TTS 语音流、Xcap 屏幕视觉

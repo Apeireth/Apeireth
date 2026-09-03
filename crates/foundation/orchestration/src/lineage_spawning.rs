@@ -11,7 +11,7 @@
 //! - **Three-Stage Nurturing Lifecycle (三阶段教养周期)**:
 //!   1. `Phase 1: Shadowing` — Read-only observation & divergence evaluation ($\mathcal{L}_{\text{divergence}} \le 0.05$);
 //!   2. `Phase 2: DualCoSign` — Gradual delegation with 7 Advisor & Parent co-signing on high-risk operations;
-//!   3. `Phase 3: Emancipated` — Fully autonomous thread with continuous feedback to SwarmVault living wiki.
+//!   3. `Phase 3: Emancipated` — Fully autonomous thread with continuous feedback to the three-tier living wiki vault.
 //!
 //! Pure Safe Rust (`#![forbid(unsafe_code)]`).
 

@@ -3,7 +3,7 @@
 **报告代号**：WHITE-PAPER-APEIRETH-V2-ALIGNMENT-20260830  
 **审查官**：愿景、设计与心智对齐首席审查官  
 **审查对象**：Apeireth 2.0 纯 Safe Rust 编译期强类型微内核（16-Crate Workspace 架构）  
-**基准资产**：`vision.md`（五原型/北极星/三远合一）、`brand.md`（Apeiron命名哲学/宣言/设计心智）、`philosophy.md`（9哲学锚/三洋葱/0装PASS）及当前实装核心引擎（5D记忆/事实链/做梦循环/自驱心跳/发言仲裁/Harness自愈/双标度连续场(DualScaled)/正交残差金字塔/EPA认知主轴/四层异步上下文等）。
+**基准资产**：`vision.md`（五原型/北极星/三远合一）、`brand.md`（Apeiron命名哲学/宣言/设计心智）、`philosophy.md`（9哲学锚/三洋葱/0装PASS）及当前实装核心引擎（5D记忆/事实链/做梦循环/自驱心跳/发言仲裁/自愈修补/双标度连续场(DualScaled)/正交残差金字塔/语义主轴(Semantic Axis)/四层异步上下文等）。
 
 ---
 

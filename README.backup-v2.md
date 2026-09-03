@@ -104,7 +104,7 @@ graph TB
         KURAMOTO["⚡ Kuramoto Phase Locking<br/>(MGS Residual Cosine + Epiphany MetaConcepts)"]
         RIVER["🌊 DualScaled Continuous Memory Field<br/>(LIF Spiking + Internal Wormhole Jump)"]
         CHRONICLE["📜 Chronicle Crystallizer<br/>(Circadian Phase Shift + Fractal Decay R(t))"]
-        VAULT["🏛️ SwarmVault & LLM-Wiki<br/>(Raw-Wiki-Schema 3-Tier + TOC Tree Routing)"]
+        VAULT["🏛️ Three-Tier Knowledge Vault<br/>(Raw-Wiki-Schema 3-Tier + Vectorless TOC Tree Routing)"]
     end
 
     subgraph SECURITY_PIPELINE["Zero-Trust Governance & Execution (Triple Onion)"]
@@ -205,7 +205,7 @@ crates/
 │   ├── orchestration         # Quota Scheduler, Care Potential, Lineage Spawning, Council
 │   └── plugin                # Dynamic plugin & capability extension hooks
 ├── engine/                   # Layer 1: Cognitive Engines & Memory Manifolds
-│   ├── memory                # Betti Homology, Kuramoto, DualScaled field, Chronicle, SwarmVault
+│   ├── memory                # Betti Homology, Kuramoto, DualScaled field, Chronicle, Three-Tier Vault
 │   ├── runtime               # Agent loop, Causal World Model, FlowLock, Heartbeat
 │   ├── organ                 # 9 Cognitive organs, Persona Synthesizer
 │   ├── perception            # Whisper HTTP, MiniMax TTS, Xcap screen vision
