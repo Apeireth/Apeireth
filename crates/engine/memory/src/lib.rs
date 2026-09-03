@@ -120,7 +120,7 @@ pub use dream_consolidation::{
 
 pub use epa_bridge::{EpaProjectionResult, EpaSemanticBridge};
 pub use residual_pyramid::{
-    OrthogonalResidualPyramid, PyramidAnalysis, PyramidLevel, TagMemoActivationGate,
+    FieldActivationGate, OrthogonalResidualPyramid, PyramidAnalysis, PyramidLevel,
 };
 pub use river_topology::{
     DtscObservables, DualScaledFieldSolver, RiverDynamicsEngine, RiverEdge, RiverObservability,

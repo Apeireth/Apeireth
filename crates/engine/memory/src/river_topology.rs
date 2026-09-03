@@ -1,4 +1,4 @@
-//! river_topology: 浪潮流体拓扑动力学与 TagMemo V10 双预解连续场求解器
+//! river_topology: 浪潮流体拓扑动力学与双标度连续场求解器 (DualScaledField)
 //!
 //! 吸收自 VCP 1.0 / TagMemo V10 (`RiverMemoEngine.js`, `modules/tagmemoV10/`, `rust-vexus-lite`):
 //! 1. LIF (Leaky Integrate-and-Fire) 神经元脉冲传导模型，具备软非回溯抑制 (`return_flow_penalty = 0.1`)；
@@ -161,7 +161,7 @@ impl RiverDynamicsEngine {
 }
 
 // =========================================================================
-// TagMemo V10: 连续双重场偏微分求解器与 DTSC / Ω 度量体系
+// DualScaledField: 连续双重场偏微分求解器与 DTSC / Ω 度量体系
 // =========================================================================
 
 /// DTSC (Dual-Scale Topology Closure) 4 维可观测张量

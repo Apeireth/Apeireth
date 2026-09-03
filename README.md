@@ -102,7 +102,7 @@ graph TB
     subgraph COGNITIVE_MANIFOLD["Brain-Inspired Topological Memory (Engine Layer)"]
         BETTI["🕳️ Vietoris-Rips Homology<br/>(β₀/β₁/β₂ Holes + Epistemic Negative Pressure)"]
         KURAMOTO["⚡ Kuramoto Phase Locking<br/>(MGS Residual Cosine + Epiphany MetaConcepts)"]
-        RIVER["🌊 TagMemo V10 Continuous Field<br/>(LIF Spiking + Internal Wormhole Jump)"]
+        RIVER["🌊 DualScaled Continuous Memory Field<br/>(LIF Spiking + Internal Wormhole Jump)"]
         CHRONICLE["📜 Chronicle Crystallizer<br/>(Circadian Phase Shift + Fractal Decay R(t))"]
         VAULT["🏛️ SwarmVault & LLM-Wiki<br/>(Raw-Wiki-Schema 3-Tier + TOC Tree Routing)"]
     end
@@ -124,7 +124,7 @@ graph TB
 
 | Capability Dimension | Traditional Industry SOTA (Python / LangChain / AutoGPT) | Apeireth 2.0+ Future Paradigm |
 |---|---|---|
-| **Memory Architecture** | Static Top-K chunk vector retrieval (high hallucination, breaks narrative context) | **Continuous Fluid Topological Manifold**: TagMemo V10 continuous field + Vietoris-Rips $\beta_1$ hole curiosity suction + Kuramoto epiphany resonance |
+| **Memory Architecture** | Static Top-K chunk vector retrieval (high hallucination, breaks narrative context) | **Continuous Fluid Topological Manifold**: DualScaled continuous field + Vietoris-Rips $\beta_1$ hole curiosity suction + Kuramoto epiphany resonance |
 | **Long-Term Memory** | Flat database dumps or simple truncation | **Chronicle Phase Crystallization**: Circadian sleep crystallization, fractal power-law decay $R(t)=(1+\alpha t)^{-\beta} e^{0.5\mathcal{S}}$, Merkle chain anchoring |
 | **Kernel Scheduling** | Fragile `while True` Python loops, vulnerable to API stalls and race conditions | **Cognitive Quota Preemptive Microkernel**: 5-level priority queue with multidimensional quota $\mathcal{Q}=\langle \text{Token}, \text{Step}, \text{Cost}, \text{Depth} \rangle$ & Priority Inheritance Protocol (PIP) |
 | **Action Safety** | Direct destructive execution or crude dry-runs | **Causal World Model**: Copy-On-Write (CoW) hypothesis branch sandbox with SAGA compensating reverse stack $\mathcal{T}=\langle A_i, A_i^{-1} \rangle$ LIFO rollback |
@@ -133,6 +133,10 @@ graph TB
 | **Security & Sandbox** | Naive prompt defenses & ambient subprocesses | **Triple-Onion OS Sandbox**: Windows JobObject / Linux cgroups physical containment + Git Worktree isolation + `<<<[UNTRUSTED_CONTENT]>>>` anti-poisoning |
 | **Portability & Sync** | Heavy cloud dependencies & non-portable setups | **Portable USB Agent & P2P Mesh**: Relative path `./data/` isolation + Noise_XX end-to-end encrypted BLE/LAN memory roaming |
 | **Memory & Safety** | Python dynamic typing, memory leaks, GIL bottlenecks | **100% Pure Safe Rust**: `#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`, zero unhandled exceptions, zero data races |
+
+> **借鉴与署名**:记忆场的流体拓扑动力学与残差金字塔为 VCP 1.0 行级借鉴的 Rust 再实现,
+> 原始来源与逐行对照见 [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
+> 与 [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md)。
 
 ---
 
@@ -180,7 +184,7 @@ crates/
 │   ├── orchestration         # Quota Scheduler, Care Potential, Lineage Spawning, Council
 │   └── plugin                # Dynamic plugin hooks & capability extension registries
 ├── engine/                   # Layer 1: Cognitive Engines & Memory Manifolds
-│   ├── memory                # Betti Homology, Kuramoto, TagMemo V10, Chronicle, SwarmVault
+│   ├── memory                # Betti Homology, Kuramoto, DualScaled field, Chronicle, SwarmVault
 │   ├── runtime               # Agent loop, Causal World Model, FlowLock, Heartbeat
 │   ├── organ                 # 9 Cognitive organs, Persona Synthesizer, Reflection
 │   ├── perception            # Whisper HTTP, MiniMax TTS, Xcap screen vision
@@ -204,7 +208,7 @@ crates/
 | **Foundation** | `apeireth-credentials`| OS Keyring integration, memory zeroization, tripwires | `KeyringSelector::resolve()`, `TripwireScanner::scan()` |
 | **Foundation** | `apeireth-orchestration`| Quota scheduler, Care Potential, Lineage spawning | `CognitiveQuotaScheduler::schedule()`, `CarePotentialField::step()` |
 | **Foundation** | `apeireth-plugin` | Extensible capability registry & lifecycle hooks | `PluginRegistry::register()`, `CapabilityDescriptor` |
-| **Engine** | `apeireth-memory` | Topological Betti holes, Kuramoto phase lock, TagMemo | `BettiHoleDetector::analyze()`, `KuramotoResonance::step()` |
+| **Engine** | `apeireth-memory` | Topological Betti holes, Kuramoto phase lock, DualScaled field | `BettiHoleDetector::analyze()`, `KuramotoResonance::step()` |
 | **Engine** | `apeireth-runtime` | Causal World Model, FlowLock, Agent main execution | `CausalWorldModel::fork_branch()`, `Runtime::execute_outcome()`|
 | **Engine** | `apeireth-organ` | 9 Cognitive organs, self-reflection, persona synth | `OrganRegistry::evaluate()`, `PersonaSynthesizer::blend()` |
 | **Engine** | `apeireth-perception` | Whisper speech, MiniMax 128kbps TTS, Xcap vision | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
