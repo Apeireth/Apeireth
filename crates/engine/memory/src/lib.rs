@@ -85,7 +85,7 @@ pub mod procedural;
 pub mod reflexion;
 pub mod residual_pyramid;
 pub mod river_topology;
-pub mod thought_cluster;
+pub mod cluster_store;
 pub mod three_tier_vault;
 pub mod topic_predictor;
 pub mod wiki_fs;
@@ -154,9 +154,9 @@ pub use meta_thinking::{
     StageResult, StopReason, DEFAULT_MAX_DEPTH,
 };
 
-pub use thought_cluster::{
-    InMemoryThoughtClusterReader, ThoughtClusterError, ThoughtClusterManager, ThoughtClusterReader,
-    ThoughtFile, CLUSTER_SUFFIX, META_CHAINS_FILE, MIN_EDIT_TARGET_CHARS,
+pub use cluster_store::{
+    ClusterFile, ClusterReader, ClusterStore, ClusterStoreError, InMemoryClusterReader,
+    CLUSTER_SUFFIX, META_CHAINS_FILE, MIN_EDIT_TARGET_CHARS,
 };
 
 pub use intent_brier::{
@@ -258,9 +258,9 @@ pub use dedup::{
     overlap_ratio, DedupConfig, DedupIndex, DEFAULT_DEDUP_WINDOW_MS, DEFAULT_LRU_CAP,
     TEXTUAL_MIN_LEN, TEXTUAL_OVERLAP_THRESHOLD,
 };
-// Salvage 02: rolling cross-frontend context ledger (companion onering).
-pub mod onering;
-pub use onering::{LedgerEntry, OneRingLedger, DEFAULT_MAX_RECORDS, ROLE_ASSISTANT, ROLE_USER};
+// Salvage 02: rolling cross-frontend context ledger.
+pub mod context_ledger;
+pub use context_ledger::{ContextLedger, LedgerEntry, DEFAULT_MAX_RECORDS, ROLE_ASSISTANT, ROLE_USER};
 // Salvage 02: combined retention sweep (count cap + TTL + decay) via governance sidecar.
 pub mod retention;
 pub use retention::{decay_strength, sweep_session, RetentionPolicy, RetentionSweepReport};
@@ -553,9 +553,9 @@ mod tests {
 /// R146: 3 memory crate -> 1 apeireth-memory (子模块)
 ///
 /// dailynote: 按日期分区存储 (R141)
-/// lightmemo: VCP production V3 拓扑简化 (R142-R143)
+/// layered_memo: 四层闭环记忆系统 (L1 文件 / L2 向量 / L3 标签 / L4 LCM)
 pub mod dailynote;
-pub mod lightmemo;
+pub mod layered_memo;
 
 /// 编译期守门 (per O-5 不假装)
 pub const MEMORY_SUBMODULE_COUNT: usize = 2;

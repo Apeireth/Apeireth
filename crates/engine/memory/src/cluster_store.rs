@@ -1,8 +1,8 @@
-//! `apeireth-memory::thought_cluster` — 思维簇管理与元自学习读取口 (N4 / 认知长程聚类).
+//! `apeireth-memory::cluster_store` — 思维簇管理与元自学习读取口 (N4 / 认知长程聚类).
 //!
 //! AI 的思考链不是对话的消耗性副产品，而是 AI 自主维护的“思考文件”：
 //! 按主题聚簇落盘 (`{YYYY-MM-DD}-{seq:03}.md`)，在反思 (Reflection) 与做梦 (Dreaming) 周期中
-//! 经由统一的只读接口 [`ThoughtClusterReader`] 回读，实现“思考的再思考”(元自学习).
+//! 经由统一的只读接口 [`ClusterReader`] 回读，实现“思考的再思考”(元自学习).
 //!
 //! ## 核心机制
 //! - 簇目录: 根目录下以「簇」结尾的目录；
@@ -32,7 +32,7 @@ pub const MIN_EDIT_TARGET_CHARS: usize = 15;
 
 /// 思维簇错误定义.
 #[derive(Debug, Error)]
-pub enum ThoughtClusterError {
+pub enum ClusterStoreError {
     #[error("非法簇名: {0} (须非空、不含路径分隔符、不含 '..' 且以「{CLUSTER_SUFFIX}」结尾)")]
     InvalidName(String),
     #[error("内容为空")]
@@ -49,7 +49,7 @@ pub enum ThoughtClusterError {
 
 /// 簇内思考文件载荷.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ThoughtFile {
+pub struct ClusterFile {
     pub name: String,
     pub content: String,
 }
@@ -64,22 +64,22 @@ struct MetaChains {
 /// 思维簇统一读取接口 (元自学习消费侧).
 ///
 /// 采用无异常降级语义 (文件或簇不存在时返回空列表).
-pub trait ThoughtClusterReader: Send + Sync {
+pub trait ClusterReader: Send + Sync {
     /// 列出全部簇名 (字典序排序).
     fn clusters(&self) -> Vec<String>;
     /// 读取指定簇的全部思考文件 (按文件名字典序 = 时间序).
-    fn read_cluster(&self, name: &str) -> Vec<ThoughtFile>;
+    fn read_cluster(&self, name: &str) -> Vec<ClusterFile>;
     /// 读取一条链 (链 = 一组簇): 返回 `簇/文件名` 形式的思考文件.
-    fn read_chain(&self, name: &str) -> Vec<ThoughtFile>;
+    fn read_chain(&self, name: &str) -> Vec<ClusterFile>;
 }
 
 /// 思维簇文件管理器.
-pub struct ThoughtClusterManager {
+pub struct ClusterStore {
     root: PathBuf,
     clock: Arc<dyn Clock>,
 }
 
-impl ThoughtClusterManager {
+impl ClusterStore {
     /// root = 思维簇根目录；clock = 可注入时钟抽象.
     pub fn new(root: impl Into<PathBuf>, clock: Arc<dyn Clock>) -> Self {
         Self {
@@ -89,7 +89,7 @@ impl ThoughtClusterManager {
     }
 
     /// 簇名规范化与安全防穿越校验.
-    fn normalize_name(name: &str) -> Result<String, ThoughtClusterError> {
+    fn normalize_name(name: &str) -> Result<String, ClusterStoreError> {
         let cleaned: String = name.chars().filter(|c| !c.is_whitespace()).collect();
         let bad = cleaned.is_empty()
             || !cleaned.ends_with(CLUSTER_SUFFIX)
@@ -97,12 +97,12 @@ impl ThoughtClusterManager {
             || cleaned.contains('\\')
             || cleaned.contains("..");
         if bad {
-            return Err(ThoughtClusterError::InvalidName(name.to_string()));
+            return Err(ClusterStoreError::InvalidName(name.to_string()));
         }
         Ok(cleaned)
     }
 
-    fn cluster_dir(&self, name: &str) -> Result<PathBuf, ThoughtClusterError> {
+    fn cluster_dir(&self, name: &str) -> Result<PathBuf, ClusterStoreError> {
         Ok(self.root.join(Self::normalize_name(name)?))
     }
 
@@ -111,9 +111,9 @@ impl ThoughtClusterManager {
         &self,
         cluster: &str,
         content: &str,
-    ) -> Result<PathBuf, ThoughtClusterError> {
+    ) -> Result<PathBuf, ClusterStoreError> {
         if content.trim().is_empty() {
-            return Err(ThoughtClusterError::EmptyContent);
+            return Err(ClusterStoreError::EmptyContent);
         }
         let dir = self.cluster_dir(cluster)?;
         std::fs::create_dir_all(&dir)?;
@@ -133,7 +133,7 @@ impl ThoughtClusterManager {
     }
 
     /// 列出全部合法簇目录名 (字典序升序).
-    pub fn list_clusters(&self) -> Result<Vec<String>, ThoughtClusterError> {
+    pub fn list_clusters(&self) -> Result<Vec<String>, ClusterStoreError> {
         let rd = match std::fs::read_dir(&self.root) {
             Ok(rd) => rd,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -150,7 +150,7 @@ impl ThoughtClusterManager {
     }
 
     /// 读取指定簇的全部思考文件 (.md / .txt).
-    pub fn read_cluster(&self, name: &str) -> Result<Vec<ThoughtFile>, ThoughtClusterError> {
+    pub fn read_cluster(&self, name: &str) -> Result<Vec<ClusterFile>, ClusterStoreError> {
         let dir = self.cluster_dir(name)?;
         let rd = match std::fs::read_dir(&dir) {
             Ok(rd) => rd,
@@ -175,12 +175,12 @@ impl ThoughtClusterManager {
                 .file_name()
                 .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
             let content = std::fs::read_to_string(&p)?;
-            out.push(ThoughtFile { name, content });
+            out.push(ClusterFile { name, content });
         }
         Ok(out)
     }
 
-    fn load_chains(&self) -> Result<MetaChains, ThoughtClusterError> {
+    fn load_chains(&self) -> Result<MetaChains, ClusterStoreError> {
         let path = self.root.join(META_CHAINS_FILE);
         match std::fs::read_to_string(&path) {
             Ok(s) => Ok(serde_json::from_str(&s)?),
@@ -194,9 +194,9 @@ impl ThoughtClusterManager {
         &self,
         chain: &str,
         clusters: &[String],
-    ) -> Result<(), ThoughtClusterError> {
+    ) -> Result<(), ClusterStoreError> {
         if chain.trim().is_empty() {
-            return Err(ThoughtClusterError::InvalidName(chain.to_string()));
+            return Err(ClusterStoreError::InvalidName(chain.to_string()));
         }
         for c in clusters {
             Self::normalize_name(c)?;
@@ -215,7 +215,7 @@ impl ThoughtClusterManager {
     }
 
     /// 读取一条思维链下全部簇的所有思考文件.
-    pub fn read_chain(&self, chain: &str) -> Result<Vec<ThoughtFile>, ThoughtClusterError> {
+    pub fn read_chain(&self, chain: &str) -> Result<Vec<ClusterFile>, ClusterStoreError> {
         let meta = self.load_chains()?;
         let Some(clusters) = meta.chains.get(chain.trim()) else {
             return Ok(Vec::new());
@@ -223,7 +223,7 @@ impl ThoughtClusterManager {
         let mut out = Vec::new();
         for c in clusters {
             for f in self.read_cluster(c)? {
-                out.push(ThoughtFile {
+                out.push(ClusterFile {
                     name: format!("{c}/{}", f.name),
                     content: f.content,
                 });
@@ -238,10 +238,10 @@ impl ThoughtClusterManager {
         cluster: Option<&str>,
         target: &str,
         replacement: &str,
-    ) -> Result<PathBuf, ThoughtClusterError> {
+    ) -> Result<PathBuf, ClusterStoreError> {
         let n = target.chars().count();
         if n < MIN_EDIT_TARGET_CHARS {
-            return Err(ThoughtClusterError::TargetTooShort(n));
+            return Err(ClusterStoreError::TargetTooShort(n));
         }
         let dirs = match cluster {
             Some(c) => vec![self.cluster_dir(c)?],
@@ -264,11 +264,11 @@ impl ThoughtClusterManager {
                 }
             }
         }
-        Err(ThoughtClusterError::NotFound)
+        Err(ClusterStoreError::NotFound)
     }
 
     /// 全局检索 (查找所有内容中包含指定 query 的文件).
-    pub fn search(&self, query: &str) -> Result<Vec<(String, String, usize)>, ThoughtClusterError> {
+    pub fn search(&self, query: &str) -> Result<Vec<(String, String, usize)>, ClusterStoreError> {
         if query.is_empty() {
             return Ok(Vec::new());
         }
@@ -285,17 +285,17 @@ impl ThoughtClusterManager {
     }
 }
 
-impl ThoughtClusterReader for ThoughtClusterManager {
+impl ClusterReader for ClusterStore {
     fn clusters(&self) -> Vec<String> {
         self.list_clusters().unwrap_or_default()
     }
 
-    fn read_cluster(&self, name: &str) -> Vec<ThoughtFile> {
-        ThoughtClusterManager::read_cluster(self, name).unwrap_or_default()
+    fn read_cluster(&self, name: &str) -> Vec<ClusterFile> {
+        ClusterStore::read_cluster(self, name).unwrap_or_default()
     }
 
-    fn read_chain(&self, name: &str) -> Vec<ThoughtFile> {
-        ThoughtClusterManager::read_chain(self, name).unwrap_or_default()
+    fn read_chain(&self, name: &str) -> Vec<ClusterFile> {
+        ClusterStore::read_chain(self, name).unwrap_or_default()
     }
 }
 
@@ -305,17 +305,17 @@ impl ThoughtClusterReader for ThoughtClusterManager {
 
 /// 纯内存实现的思维簇读取器 (供无磁盘/瞬态场景或轻量测试直接使用).
 #[derive(Debug, Clone, Default)]
-pub struct InMemoryThoughtClusterReader {
-    clusters: BTreeMap<String, Vec<ThoughtFile>>,
+pub struct InMemoryClusterReader {
+    clusters: BTreeMap<String, Vec<ClusterFile>>,
     chains: BTreeMap<String, Vec<String>>,
 }
 
-impl InMemoryThoughtClusterReader {
+impl InMemoryClusterReader {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn insert_file(&mut self, cluster: impl Into<String>, file: ThoughtFile) {
+    pub fn insert_file(&mut self, cluster: impl Into<String>, file: ClusterFile) {
         self.clusters.entry(cluster.into()).or_default().push(file);
     }
 
@@ -324,16 +324,16 @@ impl InMemoryThoughtClusterReader {
     }
 }
 
-impl ThoughtClusterReader for InMemoryThoughtClusterReader {
+impl ClusterReader for InMemoryClusterReader {
     fn clusters(&self) -> Vec<String> {
         self.clusters.keys().cloned().collect()
     }
 
-    fn read_cluster(&self, name: &str) -> Vec<ThoughtFile> {
+    fn read_cluster(&self, name: &str) -> Vec<ClusterFile> {
         self.clusters.get(name).cloned().unwrap_or_default()
     }
 
-    fn read_chain(&self, name: &str) -> Vec<ThoughtFile> {
+    fn read_chain(&self, name: &str) -> Vec<ClusterFile> {
         let Some(clusters) = self.chains.get(name) else {
             return Vec::new();
         };
@@ -341,7 +341,7 @@ impl ThoughtClusterReader for InMemoryThoughtClusterReader {
         for c in clusters {
             if let Some(files) = self.clusters.get(c) {
                 for f in files {
-                    out.push(ThoughtFile {
+                    out.push(ClusterFile {
                         name: format!("{c}/{}", f.name),
                         content: f.content.clone(),
                     });
@@ -376,8 +376,8 @@ mod tests {
         std::env::temp_dir().join(format!("apeireth-tcm-test-{}", uuid::Uuid::new_v4()))
     }
 
-    fn mgr(root: &Path) -> ThoughtClusterManager {
-        ThoughtClusterManager::new(root.to_path_buf(), Arc::new(vclock()))
+    fn mgr(root: &Path) -> ClusterStore {
+        ClusterStore::new(root.to_path_buf(), Arc::new(vclock()))
     }
 
     fn cleanup(root: &Path) {
@@ -484,10 +484,10 @@ mod tests {
 
     #[test]
     fn in_memory_reader_works_identically() {
-        let mut reader = InMemoryThoughtClusterReader::new();
+        let mut reader = InMemoryClusterReader::new();
         reader.insert_file(
             "内存簇",
-            ThoughtFile {
+            ClusterFile {
                 name: "test.md".into(),
                 content: "内存内容".into(),
             },

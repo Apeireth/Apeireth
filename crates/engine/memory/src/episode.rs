@@ -111,7 +111,7 @@ impl crate::SqliteMemoryStore {
 
     /// Write an episode bound to a real `continuity_id` (not the `"default"` placeholder).
     ///
-    /// Donor companion `continuity::migrate_subject` / OneRing needed this path because
+    /// Donor companion `continuity::migrate_subject` needed this path because
     /// `EpisodeStore::put_episode` hard-codes `continuity_id = "default"`. The trait
     /// signature is LOCKED; this inherent method is the compatible extension.
     /// Empty continuity_id is rejected (does not silently fall back to `"default"`).

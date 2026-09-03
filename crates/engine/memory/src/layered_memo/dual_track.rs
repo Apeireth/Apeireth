@@ -1,4 +1,4 @@
-//! `lightmemo::dual_track` — 双轨语义决策 (审计 P2#8, 2026-08-16 backlog 全清).
+//! `layered_memo::dual_track` — 双轨语义决策 (审计 P2#8, 2026-08-16 backlog 全清).
 //!
 //! 双轨: **episodes = 事实源 (权威)**, **L1-L4 分层索引 = 快速路径 (补充)**。
 //! 查询时两条轨道各自产出候选, 本模块做合并决策:
@@ -40,7 +40,7 @@ pub struct DualTrackHit {
 /// 双轨语义决策: episodes (事实源) + 索引命中 → 合并排序.
 ///
 /// - `episodes`: 事实源候选 (id, content), 调用方已按自身相关性排序 (如排名注入)
-/// - `index_hits`: lightmemo 索引命中 (SearchPipeline 产物)
+/// - `index_hits`: layered_memo 索引命中 (SearchPipeline 产物)
 /// - `index_content`: 索引 id → content (取内容用)
 /// - `top_k`: 输出上限
 pub fn dual_track_merge(
@@ -101,7 +101,7 @@ fn source_rank(s: HitSource) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lightmemo::search::SearchMode;
+    use crate::layered_memo::search::SearchMode;
 
     #[test]
     fn episodes_win_over_index_on_same_id() {

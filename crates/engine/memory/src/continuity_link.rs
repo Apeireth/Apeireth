@@ -4,7 +4,7 @@
 //! **不修改承诺 (LOCKED)**: 不改 workspace 版本、锁定 StreamKind 或锁定文档。
 
 use crate::{
-    onering, EpisodeQuery, EpisodeStore, IdentityCardStore, MemoryError, MemoryResult,
+    context_ledger, EpisodeQuery, EpisodeStore, IdentityCardStore, MemoryError, MemoryResult,
     SqliteMemoryStore,
 };
 use apeireth_core::kernel::memory::{IdentityCard, Migration};
@@ -198,7 +198,7 @@ pub struct MigrationReport {
     pub episodes_copied: usize,
     /// Already-migrated rows skipped (idempotent INSERT OR IGNORE).
     pub episodes_skipped: usize,
-    /// OneRing ledger rows re-keyed (0 = table missing or no matching rows).
+    /// Context ledger rows re-keyed (0 = table missing or no matching rows).
     pub ledger_rekeyed: usize,
     pub executed_at: i64,
 }
@@ -207,7 +207,7 @@ pub struct MigrationReport {
 ///
 /// Append-only safety: originals stay. Copies get id `mig-{original}`,
 /// `continuity_id = to`, `session_id = to`, preserved timestamp/role/content.
-/// OneRing ledger (non-append-only sidecar) is UPDATE-rekeyed when present.
+/// Context ledger (non-append-only sidecar) is UPDATE-rekeyed when present.
 pub fn migrate_subject(
     store: &SqliteMemoryStore,
     from: &str,
@@ -253,9 +253,9 @@ pub fn migrate_subject(
         }
     }
 
-    let ledger_rekeyed = if onering::onering_table_exists(&conn) {
+    let ledger_rekeyed = if context_ledger::context_ledger_table_exists(&conn) {
         conn.execute(
-            "UPDATE onering_messages SET continuity_id = ?1 WHERE continuity_id = ?2",
+            "UPDATE context_ledger_messages SET continuity_id = ?1 WHERE continuity_id = ?2",
             params![to, from],
         )?
     } else {
@@ -436,9 +436,9 @@ mod tests {
     }
 
     #[test]
-    fn migrate_rekeys_onering_ledger_when_present() {
+    fn migrate_rekeys_context_ledger_when_present() {
         let db = SqliteMemoryStore::open_in_memory().unwrap();
-        let ledger = crate::onering::OneRingLedger::new(&db, "me")
+        let ledger = crate::context_ledger::ContextLedger::new(&db, "me")
             .unwrap()
             .with_max_records(10);
         ledger
@@ -446,7 +446,7 @@ mod tests {
             .unwrap();
         let r = migrate_subject(&db, "me", "c-main", 200).unwrap();
         assert_eq!(r.ledger_rekeyed, 1);
-        let moved = crate::onering::OneRingLedger::new(&db, "c-main").unwrap();
+        let moved = crate::context_ledger::ContextLedger::new(&db, "c-main").unwrap();
         assert_eq!(moved.len().unwrap(), 1);
         assert_eq!(moved.recent(1).unwrap()[0].content, "账本旧锚");
     }
