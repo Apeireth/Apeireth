@@ -34,7 +34,7 @@ graph TD
     end
 
     subgraph Capabilities [3. 能力与沙箱层 (Capabilities Layer)]
-        PATCH[apply_patch: Codex两阶段事务补丁]
+        PATCH[apply_patch: 两阶段事务补丁]
         GUARD[guardrail: Pre拦截+Post凭据绊线]
         MCP[mcp: JSON-RPC 2.0 标准传输]
         EXEC[process_executor: Job Object/cgroups 沙箱]
@@ -43,12 +43,12 @@ graph TD
 
     subgraph Engine [2. 引擎与认知层 (Engine Layer)]
         MEM5D[five_dimensional: 五维时空记忆+Browser]
-        BITEMP[bitemporal_graph: Zep双时态+残差检索]
+        BITEMP[bitemporal_graph: 双时态+残差检索]
         ARBIT[arbitration: SHA-256事实链+Merkle校验]
         DREAM[dreaming: 6阶段认知昼夜循环]
         META[meta_thinking: 多阶段元思维反思链]
         HEART[heartbeat: 5源抢占心跳+FlowLock心流锁]
-        WIKI[wiki_fs: Karpathy知识编译与反熵Lint]
+        WIKI[wiki_fs: 知识编译与反熵Lint]
         HARNESS[harness_patch: 失败轨迹自愈修补]
         VOICE[minimax_tts: 3D-PAD情感高保真语音]
     end
@@ -106,14 +106,14 @@ graph TD
   * `High`: 高频业务（60 次/分，1000 次/时）
   * `Trusted`: 内部受信（无限制）
 
-### 2.5 Lumi_Nox 发言权仲裁锁与轮流调度矩阵 (`speech_arbiter.rs`)
+### 2.5 发言权仲裁锁与轮流调度矩阵 (`speech_arbiter.rs`)
 * **定位**：解决多 Agent 同台、桌面伴侣与用户交互时的抢话、冲突与发言饥饿。
 * **策略支持**：
   * `Queue`: FIFO 优先级排队
   * `Drop`: 过期闲聊与低优先级弹幕丢弃（支持 TTL 超时淘汰）
   * `Interrupt`: 用户开口或高危警报立即打断当前发言者并抢占麦克风
 
-### 2.6 NemesisBot 风格 Prompt Cache 字节级稳定器 (`prompt_stabilizer.rs`)
+### 2.6 Prompt Cache 字节级稳定器 (`prompt_stabilizer.rs`)
 * **定位**：最大化 Anthropic/OpenAI/DeepSeek 的 Prompt Cache 命中率（80%+）。
 * **核心法则**：
   * 前缀锁定：System Prompt + Persona + 历史消息字节流保持绝对不变；
@@ -132,7 +132,7 @@ graph TD
   5. `Persona Memory`: 核心世界观与防篡改人设（只读保护）
 * **可视化纠偏**：`export_browser_entries()` 导出结构化条目供 UI 校对，消除模型幻觉。
 
-### 3.2 Zep 双时态图谱与 Intrinsic Residual 稀有度检索 (`bitemporal_graph.rs`)
+### 3.2 双时态图谱与 Intrinsic Residual 稀有度检索 (`bitemporal_graph.rs`)
 * **双时态演化**：事实三元组携带 `valid_at_ms`, `invalid_at_ms`, `rev` 版本链；更新事实时旧版本失效但不物理删除，支持任意历史时间戳时空回溯（`get_valid_facts_at`）。
 * **残差特异性打分**：计算全图实体逆频残差，检索时按 `(importance * 0.6 + avg_specificity * 0.4)` 加权排序，防止大众高频词淹没稀有专业记忆。
 
@@ -149,7 +149,7 @@ graph TD
   ```
 * **离线做梦沉淀**：在系统空闲与睡眠阶段自动将短期会话提炼为程序性规则与长期经验。
 
-### 3.5 Karpathy LLM-Wiki 知识编译与反熵治理 (`wiki_fs.rs`)
+### 3.5 知识编译胜于检索与反熵治理 (`wiki_fs.rs`)
 * **编译胜于检索 (Compilation over Retrieval)**：将对话碎片增量编译为内联维基 Markdown 页面；
 * **双链语法支持**：自动解析 `[[WikiLink]]` 语法并维护全局出入度拓扑；
 * **反熵 Lint**：扫描死链（`BrokenLink`）、孤岛页面（`OrphanPage`）与概念重复，量化计算知识库健康分。
@@ -159,7 +159,7 @@ graph TD
 * **抢占式二叉最大堆**：按优先级与时间戳自动调度；
 * **FlowLock 心流锁**：智能体进入深度任务时锁定心流，屏蔽低优先级干扰，保障长程思考连续性。
 
-### 3.7 DeepSeek Harness-R1 失败自进化修补 (`harness_patch.rs`)
+### 3.7 失败自进化修补 (`harness_patch.rs`)
 * **失败轨迹收集**：捕获入参错误、环境缺失、治理拒绝、递归熔断与上下文截断 5 类故障；
 * **动态策略修补**：自动生成前置引导（`InjectPreCallGuidance`）、思考上限微调（`AdjustThinkingBudget`）与路径兜底（`AddFallbackPath`）。
 
@@ -167,7 +167,7 @@ graph TD
 
 ## 4. 工具与沙箱隔离能力域
 
-### 4.1 Codex / Aider 事务级多文件补丁工具 (`apply_patch.rs`)
+### 4.1 事务级多文件补丁工具 (`apply_patch.rs`)
 * **规范支持**：`*** Begin Patch` / `*** Add File:` / `*** Delete File:` / `*** Update File:` (含 `<<<<<<< SEARCH ... ======= ... >>>>>>>`)；
 * **两阶段提交与回滚 (Two-Phase Commit & Rollback)**：
   1. Dry-run 阶段：全量在内存中计算变更，若任意文件、任意 Hunk 匹配失败则全量中止，零磁盘副作用；

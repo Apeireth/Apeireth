@@ -80,7 +80,7 @@ Apeireth v2.0 真实施必读 (主代理亲做 spec + 派 sub-agent 真实施 �
 4. v2 真账 (本地 working tree, 0 git clone 必要):
    - crates/engine/memory/src/canonical/{vector.rs, graph.rs} (v2 Storage 抽象层, VectorIndex + MemoryGraph 已 1:1 翻译)
    - crates/engine/runtime/src/canonical/{orchestrator.rs, organ_kani_proofs.rs} (A 块 Stage 5 L0-L5 UpgradeCycle + organ_kani_proofs)
-   - crates/engine/memory/src/{lightmemo/search.rs, dailynote/search.rs} (v2 BM25-lite 子模块, 不是 storage 主线)
+   - crates/engine/memory/src/{layered_memo/search.rs, dailynote/search.rs} (v2 BM25-lite 子模块, 不是 storage 主线)
    - crates/foundation/core/src/{eight_anchors.rs:58-79 (9 哲学锚 LOCKED), philosophy.rs:142 (13 键 LOCKED), onion.rs:249 (3 项不可变脊柱 LOCKED)} (LOCKED 5 项, 0 触碰)
    - Cargo.toml:44 ("1.2.0", workspace.version LOCKED, 0 改)
    - legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44 (R11_V1141/1131/1136_BASELINE = 0.8682/0.8532/0.9063, R11 baseline LOCKED, 0 触碰)
