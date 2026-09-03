@@ -102,7 +102,7 @@ graph TB
     subgraph COGNITIVE_MANIFOLD["类脑流体连续拓扑记忆 (Engine Layer)"]
         BETTI["🕳️ Vietoris-Rips 持续同调分析<br/>(β₀/β₁/β₂ 拓扑空洞 + 好奇心负压求知梯度)"]
         KURAMOTO["⚡ Kuramoto 非线性振子相锁<br/>(MGS 残差金字塔张量缩并 + 顿悟雪崩 MetaConcept)"]
-        RIVER["🌊 TagMemo V10 连续偏微分场<br/>(LIF 脉冲非回溯传导 + 零阻抗虫洞跃迁)"]
+        RIVER["🌊 双标度连续记忆场 (DualScaled)<br/>(LIF 脉冲非回溯传导 + 零阻抗虫洞跃迁)"]
         CHRONICLE["📜 昼夜自传体编年史结晶<br/>(深睡相变结晶 + 分形幂律衰减 R(t) + Merkle 锚定)"]
         VAULT["🏛️ SwarmVault & LLM-Wiki<br/>(Raw-Wiki-Schema 三层知识库 + TOC 树状路由)"]
     end
@@ -124,7 +124,7 @@ graph TB
 
 | 能力维度 | 传统行业标准 (Python / LangChain / AutoGPT) | Apeireth 2.0+ 未来范式 |
 |---|---|---|
-| **记忆架构** | 静态 Top-K 向量分块检索（上下文割裂、高幻觉、无认知主动性） | **类脑连续流体拓扑流形**：TagMemo V10 连续场 + Vietoris-Rips $\beta_1$ 拓扑洞求知负压引力 + Kuramoto 跨域相锁顿悟雪崩 |
+| **记忆架构** | 静态 Top-K 向量分块检索（上下文割裂、高幻觉、无认知主动性） | **类脑连续流体拓扑流形**：双标度连续场 (DualScaled) + Vietoris-Rips $\beta_1$ 拓扑洞求知负压引力 + Kuramoto 跨域相锁顿悟雪崩 |
 | **终身记忆沉淀** | 扁平数据库堆积或粗暴截断 | **昼夜相变自传体编年史**：深睡做梦相变结晶，分形幂律遗忘模型 $R(t)=(1+\alpha t)^{-\beta} e^{0.5\mathcal{S}}$，Merkle 哈希防篡改事实链 |
 | **内核调度** | 脆弱的 `while True` Python 脚本，易卡死、死锁与竞态冲突 | **认知配额抢占式微内核**：5 级认知优先级队列，多维算力配额 $\mathcal{Q}=\langle \text{Token}, \text{Step}, \text{Cost}, \text{Depth} \rangle$，PIP 优先级继承协议 |
 | **操作安全性** | 直接执行破坏性操作或简单 dry-run | **因果世界模型沙箱**：Copy-On-Write (CoW) 假说分支推演，SAGA 逆向补偿算子栈 $\mathcal{T}=\langle A_i, A_i^{-1} \rangle$ LIFO 100% 自动安全回滚 |
@@ -133,6 +133,10 @@ graph TB
 | **沙箱与安全** | 纯 Prompt 提示词防御与裸系统子进程 | **零信任三洋葱物理沙箱**：Windows JobObject / Linux cgroups 物理进程遏制 + Git Worktree 隔离 + `<<<[UNTRUSTED_CONTENT]>>>` 防投毒信封 |
 | **便携化与漫游** | 依赖复杂云环境与中心化服务器 | **随身 U 盘生命体 & P2P Mesh**：`./data/` 相对路径硬隔离（防盘符漂移）+ Noise_XX 端到端加密 BLE/局域网去中心化记忆漫游 |
 | **内存与类型安全** | 动态弱类型、内存泄漏、GIL 性能瓶颈 | **100% 纯 Safe Rust**：`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`，编译期内存安全、零未捕获异常、零数据竞态 |
+
+> **借鉴与署名**：记忆场的流体拓扑动力学与残差金字塔为 VCP 1.0 行级借鉴的 Rust 再实现,
+> 原始来源与逐行对照见 [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
+> 与 [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md)。
 
 ---
 
@@ -180,7 +184,7 @@ crates/
 │   ├── orchestration         # 多维认知配额调度器、关怀势能场、跨代教养、7 顾问辩论
 │   └── plugin                # 动态插件系统与扩展能力挂载点
 ├── engine/                   # Layer 1: 认知引擎与类脑拓扑流形
-│   ├── memory                # Betti 同调、Kuramoto 振子、TagMemo V10、编年史结晶、SwarmVault
+│   ├── memory                # Betti 同调、Kuramoto 振子、双标度连续场、编年史结晶、SwarmVault
 │   ├── runtime               # 代理主循环、因果世界模型、FlowLock 心流锁、自驱心跳
 │   ├── organ                 # 9 大认知器官、人格合成器、自我反思
 │   ├── perception            # Whisper 语音识别、MiniMax TTS 语音流、Xcap 屏幕视觉
@@ -204,7 +208,7 @@ crates/
 | **Foundation** | `apeireth-credentials`| OS Keyring 密码环、内存擦除、凭据绊线 | `KeyringSelector::resolve()`, `TripwireScanner::scan()` |
 | **Foundation** | `apeireth-orchestration`| 多维认知调度器、关怀势能场、跨代教养协议 | `CognitiveQuotaScheduler::schedule()`, `CarePotentialField::step()` |
 | **Foundation** | `apeireth-plugin` | 动态插件系统与扩展能力生命周期挂载 | `PluginRegistry::register()`, `CapabilityDescriptor` |
-| **Engine** | `apeireth-memory` | Betti 拓扑洞、Kuramoto 振子、TagMemo、编年史 | `BettiHoleDetector::analyze()`, `KuramotoResonance::step()` |
+| **Engine** | `apeireth-memory` | Betti 拓扑洞、Kuramoto 振子、双标度连续场、编年史 | `BettiHoleDetector::analyze()`, `KuramotoResonance::step()` |
 | **Engine** | `apeireth-runtime` | 因果世界模型、心流锁、代理主循环 | `CausalWorldModel::fork_branch()`, `Runtime::execute_outcome()`|
 | **Engine** | `apeireth-organ` | 9 大认知器官、人格合成器、自我反思循环 | `OrganRegistry::evaluate()`, `PersonaSynthesizer::blend()` |
 | **Engine** | `apeireth-perception` | Whisper 语音识别、MiniMax TTS 音频流、Xcap 视觉 | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|

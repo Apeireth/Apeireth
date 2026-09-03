@@ -102,7 +102,7 @@ graph TB
     subgraph COGNITIVE_MANIFOLD["Brain-Inspired Topological Memory (Engine Layer)"]
         BETTI["🕳️ Vietoris-Rips Homology<br/>(β₀/β₁/β₂ Holes + Epistemic Negative Pressure)"]
         KURAMOTO["⚡ Kuramoto Phase Locking<br/>(MGS Residual Cosine + Epiphany MetaConcepts)"]
-        RIVER["🌊 TagMemo V10 Continuous Field<br/>(LIF Spiking + Internal Wormhole Jump)"]
+        RIVER["🌊 DualScaled Continuous Memory Field<br/>(LIF Spiking + Internal Wormhole Jump)"]
         CHRONICLE["📜 Chronicle Crystallizer<br/>(Circadian Phase Shift + Fractal Decay R(t))"]
         VAULT["🏛️ SwarmVault & LLM-Wiki<br/>(Raw-Wiki-Schema 3-Tier + TOC Tree Routing)"]
     end
@@ -124,7 +124,7 @@ graph TB
 
 | Capability Dimension | Traditional Industry SOTA (Python / LangChain / AutoGPT) | Apeireth 2.0+ Future Paradigm |
 |---|---|---|
-| **Memory Architecture** | Static Top-K chunk vector retrieval (high hallucination, breaks narrative context) | **Continuous Fluid Topological Manifold**: TagMemo V10 continuous field + Vietoris-Rips $\beta_1$ hole curiosity suction + Kuramoto epiphany resonance |
+| **Memory Architecture** | Static Top-K chunk vector retrieval (high hallucination, breaks narrative context) | **Continuous Fluid Topological Manifold**: DualScaled continuous field + Vietoris-Rips $\beta_1$ hole curiosity suction + Kuramoto epiphany resonance |
 | **Long-Term Memory** | Flat database dumps or simple truncation | **Chronicle Phase Crystallization**: Circadian sleep crystallization, fractal power-law decay $R(t)=(1+\alpha t)^{-\beta} e^{0.5\mathcal{S}}$, Merkle chain anchoring |
 | **Kernel Scheduling** | Fragile `while True` Python loops, vulnerable to API stalls and race conditions | **Cognitive Quota Preemptive Microkernel**: 5-level priority queue with multidimensional quota $\mathcal{Q}=\langle \text{Token}, \text{Step}, \text{Cost}, \text{Depth} \rangle$ & Priority Inheritance Protocol (PIP) |
 | **Action Safety** | Direct destructive execution or crude dry-runs | **Causal World Model**: Copy-On-Write (CoW) hypothesis branch sandbox with SAGA compensating reverse stack $\mathcal{T}=\langle A_i, A_i^{-1} \rangle$ LIFO rollback |
@@ -205,7 +205,7 @@ crates/
 │   ├── orchestration         # Quota Scheduler, Care Potential, Lineage Spawning, Council
 │   └── plugin                # Dynamic plugin & capability extension hooks
 ├── engine/                   # Layer 1: Cognitive Engines & Memory Manifolds
-│   ├── memory                # Betti Homology, Kuramoto, TagMemo V10, Chronicle, SwarmVault
+│   ├── memory                # Betti Homology, Kuramoto, DualScaled field, Chronicle, SwarmVault
 │   ├── runtime               # Agent loop, Causal World Model, FlowLock, Heartbeat
 │   ├── organ                 # 9 Cognitive organs, Persona Synthesizer
 │   ├── perception            # Whisper HTTP, MiniMax TTS, Xcap screen vision

@@ -40,8 +40,8 @@
 
 | 模块文件 | 核心结构体 / 函数 | 数学机制 / 算法逻辑 | 状态与单测覆盖 |
 |---|---|---|:---:|
-| `river_topology.rs` | `DualScaledFieldSolver`, `RiverDynamicsEngine`, `DtscObservables` | TagMemo V10 偏微分双预解连续场求解器 $(I - \alpha P)u = (1-\alpha)s_0$；LIF 神经元脉冲非回溯传导；$\Omega$ 标量门控三态机。 | ✅ 100% PASS |
-| `residual_pyramid.rs` | `OrthogonalResidualPyramid`, `TagMemoActivationGate` | 修正 Gram-Schmidt (MGS) 多层正交残差金字塔分解；90% 能量截断；握手相干度门控。 | ✅ 100% PASS |
+| `river_topology.rs` | `DualScaledFieldSolver`, `RiverDynamicsEngine`, `DtscObservables` | 双标度连续场求解器 (DualScaled) $(I - \alpha P)u = (1-\alpha)s_0$；LIF 神经元脉冲非回溯传导；$\Omega$ 标量门控三态机。 | ✅ 100% PASS |
+| `residual_pyramid.rs` | `OrthogonalResidualPyramid`, `FieldActivationGate` | 修正 Gram-Schmidt (MGS) 多层正交残差金字塔分解；90% 能量截断；握手相干度门控。 | ✅ 100% PASS |
 | `epa_bridge.rs` | `EpaSemanticBridge`, `EpaProjectionResult` | 加权中心化 PCA 语义主轴投影；隐式 Gram 矩阵幂迭代重正交化；归一化香农熵逻辑深度与跨域共振桥。 | ✅ 100% PASS |
 | `three_tier_vault.rs` | `ThreeTierVault`, `TocTreeIndexer`, `TreeReasoningRouter` | SwarmVault 规范 Raw-Wiki-Schema 三层知识保险库；PageIndex 式无向量 Markdown 目录树大纲推理路由。 | ✅ 100% PASS |
 | `wiki_fs.rs` | `WikiCompilationEngine` | Karpathy 式知识编译；`[[wikilink]]` 双链提取与拓扑校验；反熵 Lint（孤立页面与死链检测）。 | ✅ 100% PASS |
@@ -114,7 +114,7 @@
 ```mermaid
 flowchart LR
     subgraph Current_2_0["Apeireth 2.0 (已完全实装)"]
-        A1["TagMemo V10 偏微分连续场"]
+        A1["双标度连续场 (DualScaled)"]
         A2["MGS 残差金字塔"]
         A3["7 Advisor 辩论 + FlowLock"]
         A4["Git Worktree + Codex Patch"]

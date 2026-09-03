@@ -204,9 +204,9 @@ impl OrthogonalResidualPyramid {
 }
 
 /// 记忆激活门控度量
-pub struct TagMemoActivationGate;
+pub struct FieldActivationGate;
 
-impl TagMemoActivationGate {
+impl FieldActivationGate {
     /// 计算综合激活度: Coverage * Coherence * (1 - Noise)
     pub fn compute_activation(analysis: &PyramidAnalysis) -> f32 {
         (analysis.total_explained_ratio * analysis.coherence * (1.0 - analysis.noise_signal))
@@ -238,7 +238,7 @@ mod tests {
         assert!(result.total_explained_ratio > 0.60);
         assert!(result.coherence >= 0.0 && result.coherence <= 1.0);
 
-        let activation = TagMemoActivationGate::compute_activation(&result);
+        let activation = FieldActivationGate::compute_activation(&result);
         assert!(activation >= 0.0 && activation <= 1.0);
     }
 }
