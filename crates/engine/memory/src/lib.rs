@@ -62,7 +62,7 @@ pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
 pub mod dreaming;
-pub mod epa_bridge;
+pub mod semantic_axis;
 pub mod five_dimensional;
 pub mod graph_algo;
 pub mod hybrid_search;
@@ -118,7 +118,7 @@ pub use dream_consolidation::{
     pair_merge, select_dream_candidates, DreamSource, DREAM_ID_PREFIX,
 };
 
-pub use epa_bridge::{EpaProjectionResult, EpaSemanticBridge};
+pub use semantic_axis::{SemanticAxisBridge, SemanticAxisProjection};
 pub use residual_pyramid::{
     FieldActivationGate, OrthogonalResidualPyramid, PyramidAnalysis, PyramidLevel,
 };
