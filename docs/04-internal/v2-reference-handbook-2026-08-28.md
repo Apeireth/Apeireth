@@ -152,7 +152,7 @@ c003e078 refactor(runtime): OrganOrchestrator 完整化 stage 1 (A 块)
 
 ### 2.5 O-2 前人肩上
 
-> Borrow, attribute, adapt (Hermes / OpenClaw / VCP / claude-mem + LangGraph / AutoGen / MCP / LSP / semver).
+> Borrow, attribute, adapt (上游标杆项目 + 标准协议), 借 + 标注 + 改。
 
 **工程兑现**: A 块 5 stage 1:1 翻译 v1 (`legacy/donor/apeireth-companion/src/`) + R20 preference_learning 1:1 翻译 v1 TopicPredictor + PreloadChannel + R21 critic 1:1 翻译 v1 critic.rs + R22 reflection 1:1 翻译 v1 reflection.rs.
 
