@@ -278,7 +278,7 @@ Every line of code and every design decision strictly conforms to the **Nine Inv
 2. **`S-2` Truth from Reality (实事求是)**: Verify before writing; true mathematical dynamics over narrative hype.
 3. **`S-3` Quality Engineering (质量工程化)**: Rigorous type systems, 0-clippy warnings, 100% CI pass rate.
 4. **`O-1` Security First (安全优先)**: Fail-closed architecture, physical sandboxes, outbound tripwires, SAGA rollback.
-5. **`O-2` Standing on Shoulders (走在前人经验上)**: Absorb the essence of VCP, Aider, gnhf, SwarmVault, Noise Protocol.
+5. **`O-2` Standing on Shoulders (走在前人经验上)**: Absorb the essence of 170+ benchmark projects and exceed them (line-level attribution kept in `docs/03-reference/` absorption guides).
 6. **`O-3` Follow Through (干到底)**: Zero half-measures; full-stack closure from trait to tests and documentation.
 7. **`O-4` Maintainability (任何人都能接手)**: Crystal-clear architecture, mathematical docs, self-explaining code.
 8. **`O-5` Never Fake It (0 装 PASS)**: 0 `todo!`, 0 `unimplemented!`, 0 dummy mocks, 0 hollow stubs.

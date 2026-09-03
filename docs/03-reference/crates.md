@@ -13,13 +13,13 @@ the product workspace.
 | `apeireth-plugin` | `crates/foundation/plugin` | Plugin lifecycle, capability descriptors, registries, and provider/tool contracts |
 | `apeireth-governance` | `crates/foundation/governance` | Allow, deny, approval, OWASP ASI-01 工具描述投毒审计 (`tool_desc_audit`)、外部不可信内容信封包裹与逃逸中和 (`untrusted_mark`)、8 类 PII 检测与 `EnvSecret` 行解析 (`input_security`)、4 阶信任多尺度滑动窗口限流 (`rate_limit`) |
 | `apeireth-credentials` | `crates/foundation/credentials` | `SecretString` / `SecretBuf` 内存零化 (Zeroize)、Fail-closed 凭据审批门控 (`CredentialGate`)、Keyring/Env 解析 |
-| `apeireth-orchestration` | `crates/foundation/orchestration` | Multi-agent coordination, 7 Advisor 结构化辩论协议 (`council`)、Lumi_Nox 双 AI 发言权仲裁机 (`speech_arbiter`)、NemesisBot Prompt Cache 字节级稳定器 (`prompt_stabilizer`) 与环境自适应状态机 (`ambient_context`) |
+| `apeireth-orchestration` | `crates/foundation/orchestration` | Multi-agent coordination, 7 Advisor 结构化辩论协议 (`council`)、双 AI 发言权仲裁机 (`speech_arbiter`)、Prompt Cache 字节级稳定器 (`prompt_stabilizer`) 与环境自适应状态机 (`ambient_context`) |
 
 ## Engine
 
 | Package | Path | Responsibility |
 | --- | --- | --- |
-| `apeireth-runtime` | `crates/engine/runtime` | 规范会话内核、多提供商路由、5 触发源二叉堆心跳调度器与 FlowLock 心流锁 (`heartbeat`)、DeepSeek Harness-R1 失败自进化修补 (`harness_patch`)、治理执行闭环与 Trace |
+| `apeireth-runtime` | `crates/engine/runtime` | 规范会话内核、多提供商路由、5 触发源二叉堆心跳调度器与 FlowLock 心流锁 (`heartbeat`)、失败轨迹自进化修补 (`harness_patch`)、治理执行闭环与 Trace |
 | `apeireth-provider` | `crates/engine/provider` | Anthropic, MiniMax, and OpenAI-compatible provider capabilities |
 | `apeireth-storage` | `crates/engine/storage` | SQLite pool, migrations, storage configuration, and errors |
 | `apeireth-memory` | `crates/engine/memory` | 五维时空记忆与 Browser 导出 (`five_dimensional`)、双时态事实图谱与残差特异性检索 (`bitemporal_graph`)、SHA-256 唯一事实链与 Merkle 仲裁 (`arbitration`)、6 阶段昼夜做梦引擎 (`dreaming`)、元思维递进思考链 (`meta_thinking`)、活维基知识编译与反熵 Lint (`wiki_fs`) |

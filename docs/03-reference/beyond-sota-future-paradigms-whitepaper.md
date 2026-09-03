@@ -7,7 +7,7 @@
 > - 自主智能体操作系统与微内核架构首席科学家
 > - 情感计算、具身在场与人机共生首席科学家
 > - 自进化智能体演化与主权对齐首席科学家  
-> **研究对象**：170+ 标杆项目（覆盖 Agent OS, Aider, gnhf, OpenHands, Harness-R1, SwarmVault, OmegaWiki, Letta, Zep, VCP TagMemo V10, N.E.K.O, AIRI, Open-LLM-VTuber, 流萤 Companion, BitChat/Briar P2P, U盘便携运行等）与 Apeireth 2.0  
+> **研究对象**：170+ 标杆项目（逐项署名清单见 `docs/03-reference/sota-benchmarks-absorption-report.md`）与 Apeireth 2.0  
 > **核心立意**：彻底跳出“机械抄写与静态对比”，以第一性原理探索“比好更好”的四大未来认知与工程范式。
 
 ---
@@ -164,7 +164,7 @@ $$\frac{\partial \Phi}{\partial t} = \nabla \cdot (\mathbf{D} \nabla \Phi) - \ma
 
 ## 6. 全域 170+ 标杆系统代际演进对照全景
 
-| 核心能力维度 | 初代胶水框架 (LangChain/CrewAI) | 重型容器平台 (OpenHands) | 经典桌面桌宠 (AIRI/N.E.K.O) | **Apeireth 2.0+ 终极范式** |
+| 核心能力维度 | 初代胶水框架 | 重型容器平台 | 经典桌面桌宠 | **Apeireth 2.0+ 终极范式** |
 |---|---|---|---|---|
 | **语言与类型底座** | Python 动态弱类型 | Python + Docker | TS/Python + Live2D | **100% 纯 Safe Rust 编译期强类型微内核** |
 | **认知记忆范式** | 离散 Chunk 向量检索 | 文本 EventStream 日志 | 结构化槽位与提示词 | **连续黎曼流形 PDE 场 + 编年史相变结晶 + 顿悟共振** |

@@ -26,7 +26,7 @@
 | **机制而非补丁** | 缺能力就设计机制模块；不往已有代码里塞特例 | 加 if 判断绕过一个缺失的机制 |
 | **集成而非分立** | 新需求优先挂进已有机制（trait 口/扩展点）；不另立平行系统 | 为一个小功能新建一套并行的 store/调度器 |
 | **0 装 PASS** | 做不到的事如实说做不到；留口要标注"未接"；不假装"已接好" | 返回 Ok 假装成功；文档写"已支持"实际没有 |
-| **调研先行** | 高价值/基础工具先调研成熟实现（VCP/MemGPT/Zep 等），吸收先进写法，实战验证后才提交 | 闭门造车重造轮子 |
+| **调研先行** | 高价值/基础工具先调研成熟实现（上游标杆项目等），吸收先进写法，实战验证后才提交 | 闭门造车重造轮子 |
 | **工程有更新，文档就同步** | 改代码必改文档；调研未落地必进 docs/backlog.md | 改完代码忘了文档，调研完忘了台账 |
 | **诚实审计留痕** | 每个机制标注"做了什么/没做什么"；错误信息明确可行动 | 静默吞错、模糊报错 |
 | **测试是证据** | 正常路径 + 失败路径 + 非法输入都测；机制件加虚拟时间模拟 | 只测 happy path |
@@ -133,11 +133,11 @@
 > 分层原则见 §1.3。**官方 5 个整件**；社区按 §5.6 规范开发细件。
 
 ### 5.1 官方模块扩展：记忆域深化包（核心，进 companion lib）
-- 语义折叠（只折叠低相关段，VCP ContextFoldingV2 精神）
-- 记忆主题分组（VCP SemanticGroupManager 精神）→ 注入"主题索引"块 ✅ Rust 落点: companion topic_groups.rs (提交 17483af0; assemble.rs memory_block 挂接, 任务 a227fc3f 终验通过)
-- 元思考递归链（VCP MetaThinkingManager 精神）→ 思考→再思考 ✅ Rust 落点: companion meta_thinking.rs (提交 6fcd36c2; reflection 接线待 backlog N15)
-- 跨日记联想（VCP associativeDiscovery 精神）→ memory_graph 已有底层 ✅ Rust 落点: companion cross_diary.rs (提交 8e015af0; 确定性共享token建链+双向查询, 注入 trait 口 CrossDiaryInjector 统一接线延后, 0 装 PASS)
-- 日记本中心（VCP RAGDiaryPlugin 精神）→ 按日归档 + 检索 + 注入 ✅ Rust 落点: companion diary.rs (提交 f2e50f46; 按日归档+确定性检索+recent_injection 注入块, DiaryInjector trait 口)
+- 语义折叠（只折叠低相关段，上游选择性折叠精神）
+- 记忆主题分组（上游语义分组精神）→ 注入"主题索引"块 ✅ Rust 落点: companion topic_groups.rs (提交 17483af0; assemble.rs memory_block 挂接, 任务 a227fc3f 终验通过)
+- 元思考递归链（上游元思考精神）→ 思考→再思考 ✅ Rust 落点: companion meta_thinking.rs (提交 6fcd36c2; reflection 接线待 backlog N15)
+- 跨日记联想（上游关联发现精神）→ memory_graph 已有底层 ✅ Rust 落点: companion cross_diary.rs (提交 8e015af0; 确定性共享token建链+双向查询, 注入 trait 口 CrossDiaryInjector 统一接线延后, 0 装 PASS)
+- 日记本中心（上游日记插件精神）→ 按日归档 + 检索 + 注入 ✅ Rust 落点: companion diary.rs (提交 f2e50f46; 按日归档+确定性检索+recent_injection 注入块, DiaryInjector trait 口)
 - **验收**：每个机制 = lib 模块 + trait 口 + 单测 + 注入链可见 + 0 装 PASS 标注
 - **§5.1 收官** ✅ 注入链统一接线完成 (任务 68caf9cb, 提交 cb12b810): assemble.rs unified_memory_block 四源合并 (主题索引+日记摘要+跨日记关联+记忆证据块), 各源独立预算互不侵占, 砍序 关联→日记→主题→记忆证据块(反幻觉基石最后砍), 空源不注半残块; 五机制至此全闭环
 
@@ -379,11 +379,11 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 | TP3 | **apeireth-credentials**（N21） | 新 crate；衔接权限洋葱 master token | 不存明文到日志；按服务名读写；0 假装"安全存储"边界如实标注 | 读写/未知名报错/脱敏测试 |
 | TP4 | **ShellPreset**（N22） | tool-shell 内 | 预设名展开为完整命令模板；白名单预设；参数走模板防注入 | 预设展开/非法预设拒绝/注入测试 |
 | TP5 | **提示词装配引擎**（N9） | 新 lib 模块（VCP messageProcessor 范式） | 特权角色+单次展开+环检测+分型变量源；挂 CompanionApp 注入链 | 装配/防重复展开/环检测测试 |
-| TP6 | **OneRing 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本；SQLite 内容寻址 + fuzzy diff 对账 | 多前端同一叙事/来源标记测试 |
+| TP6 | **ContextLedger 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本；SQLite 内容寻址 + fuzzy diff 对账 | 多前端同一叙事/来源标记测试 |
 | TP7 | **金融数据源**（N3） | oracle 预测机 | DigitalOracle 精神：宏观/利率/股票/加密/预测市场；mock 先行；可证伪预测自动登记 | mock 全测 + 预测 resolve 闭环 |
 | TP8 | **观测缓存**（N8） | 查询管线中间产物 | generation 绑定 + TTL + 防跨代脏读（VCP MemoRuntime 模式） | 缓存命中/代际失效测试 |
 | TP9 | **消费方规范落地**（N18） | maintenance-guide + 孤儿体检脚本 | 新 crate 必须登记消费方；`scripts/audit/orphan-scan.ps1` 入库为定期检查 | 规范写入 + 扫描脚本可跑 |
-| TP10 | **ThoughtCluster 元自学习**（N4） | 记忆域深化 | AI 思维链文件 + 反思/涌现消费；versioned chain | 创建/编辑/消费链测试 |
+| TP10 | **ClusterStore 元自学习**（N4） | 记忆域深化 | AI 思维链文件 + 反思/涌现消费；versioned chain | 创建/编辑/消费链测试 |
 
 **执行顺序建议**：TP3 → TP2 → TP4（装配主链）；TP1 并行；TP5/TP6/TP8（上下文组）并行；TP7（食粮）与 TP10 靠后；TP9 全程（先立规范再干活）。
 
@@ -410,7 +410,7 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 | 包 | 名称 | 挂接机制 | 边界要点 | 验收要点 |
 |---|---|---|---|---|
 | TP14 | **Sessions 会话持久化 + 中断恢复**（A3, P1） | apeireth-agent AgentSession + tool-runtime/record | run 前取历史/run 后存 items + 审批中断同会话恢复 + 拒绝保留工具记录供重放; 与 GoalService 互补 | 持久化/恢复/中断重放测试 |
-| TP15 | **OneRing 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本; SQLite 内容寻址 + fuzzy diff 对账; 来源标记 | 多前端同一叙事/来源标记测试 |
+| TP15 | **ContextLedger 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本; SQLite 内容寻址 + fuzzy diff 对账; 来源标记 | 多前端同一叙事/来源标记测试 |
 | TP16 | **上下文编辑 + Context Rot 度量**（M1） | context.rs + continuation.rs | rot_score（重复/陈旧/相关性启发式, 确定性 0 LLM 先行）+ compaction 改 LLM 参与的 retain/remove/replace 段编辑; 不另立模块 | 编辑原语/rot 评分/触发策略测试 |
 
 ### 批次三（进化链, 顺序执行）

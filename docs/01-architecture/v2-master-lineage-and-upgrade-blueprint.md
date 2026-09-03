@@ -45,7 +45,7 @@
 Apeireth 2.0 历经深度重构，成功将 1.0 时代 86-crate 的单体巨石收敛为 **13-crate 模块化分层工作区**（`foundation / engine / capabilities / adapters`），并在双洋葱统一体、不可篡改审计链、受控出站沙箱（Controlled Egress）、Okapi BM25+向量混合检索以及前端 Svelte 5 + Tauri 2 桌面伴侣上完成了极高质量的交付（全工作区测试 100% 通过，Clippy 0 警告）。
 
 通过 7 大专业子代理对 **1.0 遗留代码库（77+ crates）每一行代码的详尽对比**，以及对 **170+ 外部标杆项目工程代码的深度逆向钻研**，我们发现：
-1. **1.0 的优秀遗产**：在多签异构验证、7 Advisor 多轮辩论、Zep 双时态事实图、工具输出 Spill 溢出、Prompt Cache 稳定化脱敏、OWASP ASI-01 工具描述投毒防御等方面沉淀了大量反直觉的安全防御细节；
+1. **1.0 的优秀遗产**：在多签异构验证、7 Advisor 多轮辩论、双时态事实图、工具输出 Spill 溢出、Prompt Cache 稳定化脱敏、OWASP ASI-01 工具描述投毒防御等方面沉淀了大量反直觉的安全防御细节；
 2. **外部前沿的代际跃迁**：业界正从“单次提示词工程”向**“失败轨迹驱动自修复（Harness-R1）”**、**“知识编译胜于检索（LLM-Wiki）”**、**“全双工流式插话与 Live2D 拟真具身（Open-LLM/NEKO）”**、**“操作系统级抢占调度与页表置换（MemGPT/AIOS）”** 全速演进。
 
 本白皮书将上述所有前沿机制进行数学抽象与 Rust 工程建模，形成 Apeireth 2.0 迈向终极形态的宏大蓝图。
@@ -61,7 +61,7 @@ Apeireth 2.0 历经深度重构，成功将 1.0 时代 86-crate 的单体巨石�
 | `memory-extensions/src/cache_layer.rs` (L85-182) | **CachedMemoryProvider 写穿与失败回滚**：L1 内存尽力写；若底层持久化失败，立即执行 `cache.delete(key)` 自动回滚 L1 缓存，保证强一致性。 | 2.0 仅有单一 Backend，缺少自动写穿回填与故障回滚装饰器。 | 在 `storage` 与 `memory/backend` 引入 `CachedMemoryProvider`。 |
 | `memory-extensions/src/provider_disk_lru.rs` (L37-260) | **DiskLruProvider**：本地 Disk + LRU 缓存，带 6 阶 K-1 强校验、`file://` 规范、冷启动目录扫描恢复与基于 `Instant` 的 TTL 惰性淘汰。 | 2.0 缺少高性能本地磁盘 LRU 存储 Provider。 | 引入 `DiskLruProvider` 满足离线/边缘大容量缓存。 |
 | `apeireth-vector/src/distance.rs` (L18-135) | **5 种标准向量距离度量**：Euclidean、EuclideanSquared（免开方快路径）、Cosine、DotProduct、Manhattan，配合 SIMD 自动向量化。 | 2.0 仅有纯内存余弦相似度。 | 在 `memory/vector.rs` 补齐 5 种距离与 SQLite Blob 向量持久化。 |
-| `companion/src/memory_graph.rs` | **Zep 双时态事实图谱**：三元组携带 `valid_at` / `invalid_at` / 单调 `rev` 版本链；A-MEM 关联预算爬取；Intrinsic Residual 实体稀有度残差打分。 | 2.0 的 `MemoryGraph` 仅为纯内存简单拓扑图，无时间演化与残差打分。 | 升级为双时态时序知识图谱，引入残差特异性混合检索。 |
+| `companion/src/memory_graph.rs` | **双时态事实图谱**：三元组携带 `valid_at` / `invalid_at` / 单调 `rev` 版本链；A-MEM 关联预算爬取；Intrinsic Residual 实体稀有度残差打分。 | 2.0 的 `MemoryGraph` 仅为纯内存简单拓扑图，无时间演化与残差打分。 | 升级为双时态时序知识图谱，引入残差特异性混合检索。 |
 | `apeireth-cognition/src/planning.rs` | **泛型 MCTS / LATS 规划引擎**：UCT 树搜索核心、`xorshift64*` 确定性伪随机数、Arena 节点池与 Rollout 深度截断。 | 2.0 仅在因果世界模型中有局部推演，无通用 MCTS 搜索框架。 | 在 `engine/runtime` 抽离通用 MCTS 规划器。 |
 | `apeireth-cognition/src/forecast.rs` | **Hanson LMSR 预测市场与 Contrarian Boost**：$C(q)=b\ln(\sum e^{q_i/b})$ 市场计分；少数派反方加权抑制 LLM 集群盲思（Groupthink）。 | 2.0 仅实现了基础的意图 Brier 均值。 | 引入 LMSR 市场计分与 Murphy 1973 Brier 三分解诊断。 |
 | `apeireth-consciousness/src/plutchik_engine.rs` | **3D PAD + Plutchik 情感动力学**：Pleasure/Arousal/Dominance 3D 空间、8 基础 + 8 复合情绪、14 类事件驱动与平滑转移监控（步长限制）。 | 2.0 的 `emotion_memory.rs` 将 Dominance 硬编码为 0.0，降维为 2D。 | 恢复完整 3D PAD 与 Plutchik 情绪轮转移状态机。 |
@@ -95,7 +95,7 @@ Apeireth 2.0 历经深度重构，成功将 1.0 时代 86-crate 的单体巨石�
 | `apeireth-voice/src/minimax_live.rs` | **MiniMax LIVE 高保真 TTS 直连**：直连 `speech-2.6-hd` 128kbps 32kHz 音频流生成；`tone.rs` 支持开心/温和/激昂等情绪调制。 | 2.0 目前仅有 Whisper STT，无官方真 TTS 引擎。 | 回填 MiniMax 真实客户端，补齐多模态语音合成闭环。 |
 | `apeireth-api/src/ws_v1.rs` (L1-467) | **8 帧全双工 WebSocket 网关**：AuthFrame (5min TTL), PingFrame (30s), ToolInvokeFrame, ToolResultFrame, StreamChunkFrame, StreamEndFrame 等。 | 2.0 目前主要为 HTTP POST，缺少全双工 WebSocket 网关入口。 | 在 `gateway` 中开放 `/v1/stream` 8 帧 WebSocket 服务。 |
 | `apeireth-api/src/replay_cache.rs` | **31KB 幂等 Replay 缓存引擎**：基于 SHA-256 请求摘要与 Idempotency-Key，结合 SQLite WAL 拦截重复工具写操作。 | 2.0 缺少网络层与工具层的幂等拦截机制。 | 引入 `ReplayCache` 保障高并发与弱网下的执行幂等。 |
-| `apeireth-tools/src/apply_patch.rs` | **Codex-Style 事务级 `apply_patch`**：`*** Begin Patch` 多文件原子打补丁；唯一上下文匹配校验（`OldNotFound` / `AmbiguousMatch` 回滚）。 | 2.0 代码编辑依赖全量/区块重写，缺少事务级多文件 diff patch。 | 在 `capabilities/tools` 中实装 `apply_patch` 工具。 |
+| `apeireth-tools/src/apply_patch.rs` | **事务级 `apply_patch`**：`*** Begin Patch` 多文件原子打补丁；唯一上下文匹配校验（`OldNotFound` / `AmbiguousMatch` 回滚）。 | 2.0 代码编辑依赖全量/区块重写，缺少事务级多文件 diff patch。 | 在 `capabilities/tools` 中实装 `apply_patch` 工具。 |
 | `tool-browser/src/accessibility.rs` | **ARIA 无障碍树抽取**：手写轻量 Tokenizer 将 HTML 转换为 20 类标准 ARIA 节点树，**比原始 HTML 节约 10-50x Token**。 | 2.0 的 `fetch.rs` 仅返回原始文本或 HTML。 | 将 ARIA 抽取作为 Fetch/Browser 工具的标准瘦身过滤器。 |
 | `apeireth-lark/src/real.rs` (32.8KB) | **飞书 Lark 真实 5 端点客户端**：自动获取刷新 `tenant_access_token`、IM 消息发送、日历操作、Docx 文档读写、多维表格读写。 | 2.0 `adapters/sdk/src/lark/` 仍为 STUB 骨架。 | 移植真实代码，打通飞书开放平台企业级协同生态。 |
 
@@ -221,7 +221,7 @@ gantt
     8 类 PII 扩展与 EnvSecret 解析器               :2026-09-05, 8d
     Pre-call 防注入与 Post-call 凭据绊线 (Tripwire) :2026-09-08, 8d
     Prompt Cache 稳定化与工具 Spillover 溢出保护   :2026-09-12, 7d
-    Codex-Style apply_patch 与 MiniMax TTS 回填    :2026-09-15, 8d
+    事务级 apply_patch 与 MiniMax TTS 回填    :2026-09-15, 8d
 
     section 第二阶段：流式全双工与多形态具身驱动 (P1)
     duplex_gateway 与 SentenceDivider 流式分句     :2026-09-22, 10d
@@ -231,12 +231,12 @@ gantt
 
     section 第三阶段：五维记忆体系与知识编译 (P1)
     五维记忆拓扑 (Working/Recent/Fact/Reflect/Persona):2026-10-18, 12d
-    Zep 双时态事实图谱与 Intrinsic Residual 检索  :2026-10-25, 10d
-    viking:// 虚拟分层文件系统与 LLM-Wiki 增量编译 :2026-11-01, 12d
+    双时态事实图谱与 Intrinsic Residual 检索  :2026-10-25, 10d
+    viking:// 虚拟分层文件系统与知识增量编译 :2026-11-01, 12d
     昼夜节律 Sleep 做梦算子与 Memory Browser 校对 :2026-11-10, 10d
 
     section 第四阶段：自进化 Harness 与微内核调度 (P2)
-    Harness-R1 失败轨迹收集与策略自修复引擎        :2026-11-20, 14d
+    失败轨迹收集与策略自修复引擎        :2026-11-20, 14d
     AgentPCB 与抢占式微内核调度器 (AMS)           :2026-12-01, 14d
     Prompt 虚拟内存页表置换 (LRU/Clock) 与内存陷阱 :2026-12-12, 12d
     全系统总线级 HASH-SQL 事实时间线闭环           :2026-12-20, 14d

@@ -58,7 +58,7 @@
   - `POST /v1/chat/completions` 当 `stream: true` 时返回标准 `text/event-stream` SSE 数据帧与 `[DONE]` 终止帧。（口径澄清：为**缓冲成帧**——完整 canonical 完成路径结束后一次性返回，**非逐 token 增量流式**；增量流式被冻结 canonical seam 阻塞，见 Unreleased §SSE 状态。）
 - **元认知自校准与长程思维簇 (`apeireth-memory`)**:
   - **意图理解准确率 Brier 自我诊断 (`intent_brier.rs`)**: 滚动窗口 [30, 100, 300] 轮 Brier 得分数学自校准 + 话题领域诊断 + 相对趋势分析；
-  - **思维簇管理与元自学习只读回读 (`thought_cluster.rs`)**: `{YYYY-MM-DD}-{seq:03}.md` 结构化思维文件落盘 + 链注册表 + 安全防穿越与编辑防御 + `InMemoryThoughtClusterReader`；
+  - **思维簇管理与元自学习只读回读 (现 `cluster_store.rs`)**: `{YYYY-MM-DD}-{seq:03}.md` 结构化思维文件落盘 + 链注册表 + 安全防穿越与编辑防御 + `InMemoryClusterReader`；
   - **元思考递归推演链 (`meta_thinking.rs`)**: 多阶段“思考 $\to$ 再思考”递进推演引擎 + 最大深度 10 限制 + 思维死循环检测熔断 (`CycleDetected`) + 降级标定 + 反思适配器 (`ChainReflectionThinker`)；
   - **程序性记忆与习惯固化 (`procedural.rs`)**: N.E.K.O 5 维记忆第 5 维，自动记录 Condition-Action 技能规则配方，拉普拉斯平滑计算置信度与高阶规则自动晋级。
 - **物种化交互与全双工流式伴随 (`apeireth-gateway` / `perception` / `orchestration`)**:

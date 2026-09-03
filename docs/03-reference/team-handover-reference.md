@@ -113,9 +113,9 @@ graph TD
 * **VCP 行级吸收指南**：[`docs/03-reference/vcp-line-level-absorption-guide.md`](vcp-line-level-absorption-guide.md)
 
 ### 核心演进路线图：
-1. **第一批 (已实装)**：OWASP ASI-01 审计、不可信信封包裹、8 类 PII、Pre/Post 工具绊线、Codex 事务补丁、MiniMax LIVE 语音、8 帧 Duplex 网关、5D 记忆与 Zep 双时态图谱。
+1. **第一批 (已实装)**：OWASP ASI-01 审计、不可信信封包裹、8 类 PII、Pre/Post 工具绊线、事务补丁、MiniMax LIVE 语音、8 帧 Duplex 网关、5D 记忆与双时态图谱。
 2. **第二批 (已实装)**：发言仲裁机、Prompt Cache 稳定器、AI 自驱心跳与 FlowLock 心流锁、失败轨迹自愈修补、活维基知识编译与反熵治理。
-3. **第三批 (规划中)**：VCP 浪潮流体动力学（LIF 脉冲传导）、Gram-Schmidt 正交残差金字塔、EPA 加权中心化 PCA 语义主轴与跨节点透明超栈文件穿透。
+3. **第三批 (规划中)**：浪潮流体动力学（LIF 脉冲传导）、Gram-Schmidt 正交残差金字塔、加权中心化 PCA 语义主轴与跨节点透明超栈文件穿透。
 
 ---
 

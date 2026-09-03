@@ -32,12 +32,12 @@
 | **记忆 (Memory)** | `mem.bitemporal_graph` | `apeireth-memory::bitemporal_graph` | `upsert_fact()`, `search_facts()` | 双时态版本链 + Intrinsic Residual 特异性 |
 | **记忆 (Memory)** | `mem.arbitration` | `apeireth-memory::arbitration` | `append_event()`, `verify_integrity()` | SHA-256 哈希链 + 常数时间比对 + Merkle 根 |
 | **记忆 (Memory)** | `mem.dreaming` | `apeireth-memory::dreaming` | `advance_cycle()`, `dream_state()` | 6 阶段昼夜认知循环与经验沉淀 |
-| **记忆 (Memory)** | `mem.wiki_fs` | `apeireth-memory::wiki_fs` | `compile_page()`, `run_lint()` | Karpathy 知识编译 + `[[WikiLink]]` + 反熵 Lint |
+| **记忆 (Memory)** | `mem.wiki_fs` | `apeireth-memory::wiki_fs` | `compile_page()`, `run_lint()` | 知识编译胜于检索 + `[[WikiLink]]` + 反熵 Lint |
 | **运行时 (Runtime)** | `rt.heartbeat` | `apeireth-runtime::canonical::heartbeat`| `schedule_task()`, `acquire_flow_lock()` | 5 触发源 + 二叉最大堆 + FlowLock 心流锁 |
 | **运行时 (Runtime)** | `rt.causal_world_model` | `apeireth-runtime::canonical::causal_world_model`| `CausalWorldModel::fork_branch()`, `commit_branch()` | CoW 假说分支推演 + SAGA 逆向补偿 LIFO 回滚 |
-| **运行时 (Runtime)** | `rt.harness_patch` | `apeireth-runtime::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| Harness-R1 失败轨迹自动演绎策略补丁 |
+| **运行时 (Runtime)** | `rt.harness_patch` | `apeireth-runtime::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| 失败轨迹自动演绎策略补丁 |
 | **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` | `RepoMapGenerator::generate_map()` | 跨语言 AST 符号提取 + PageRank 代码地图 |
-| **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | Codex 两阶段提交 + 100% 自动原子回滚 |
+| **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | 两阶段提交 + 100% 自动原子回滚 |
 | **工具 (Capabilities)** | `tool.guardrail` | `apeireth-tools-canonical::guardrail` | `pre_call_guard()`, `post_call_guard()` | 路径/命令拦截 + API Key/私钥出站绊线 |
 | **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
 | **工具 (Capabilities)** | `tool.stealth_crawler`| `apeireth-tools-canonical::stealth_crawler` | `StealthCrawlerEngine::parse_scraped_document()` | 高反爬异步无头浏览器 + 指纹伪装 + 短视频多模态提取 |

@@ -83,7 +83,7 @@
 2. **pHash 变化检测感知门**（N27 成本地基, 代码已有）：perceptual_hash 上位为 PerceptionGate——帧→diff→仅变化帧触发 OCR/VLM → 事件 `sensor.screen.changed` 上 bus。**一行思维转变, 连续感知成本从 O(每帧全理解) 降到 O(仅变化帧)**
 3. **Screenpipe 式三层流水线**（N27 骨架, Screenpipe 本身是 Rust）：捕获层（屏幕/音频帧）→ 本地理解层（OCR/Whisper 文本块）→ SQLite 索引层（可查询"最近见过/说过什么"）
 4. **ProAgent 式按需感知上下文（PerceptionGate）**：传感器事件先在门控层过滤/聚合/摘要，只把情境观察发布给 agent——杜绝裸流进上下文
-5. **视觉/解析混合路由 + Letta 式记忆压缩**：router.rs 升级为成本路由（文本→OCR/布局, 图表→VLM 定性, 数值→回源结构化数据, 语义→整图 token）；event_log 持久化时设计"原始事件 + 周期摘要记忆块"两级记忆（PAL-UI 式按需回看）
+5. **视觉/解析混合路由 + 分层记忆压缩**：router.rs 升级为成本路由（文本→OCR/布局, 图表→VLM 定性, 数值→回源结构化数据, 语义→整图 token）；event_log 持久化时设计"原始事件 + 周期摘要记忆块"两级记忆（PAL-UI 式按需回看）
 
 **成本铁律**（行业实测）：
 - 截图直喂 VLM ≈ 2100 tokens/屏（优化后 540）——"能少看就少看、能解析就别整图"
@@ -113,7 +113,7 @@
 
 **⭐3. Sleeping LLM 逐条审计 + 渐进巩固门控 + drowsiness 触发**：per-item stage 晋级/退级 + 到期数量超阈值才触发复习批 + 验证后回滚；权重编辑（MEMIT/LoRA）明确不抄
 
-**⭐4. Letta review-gated dreaming**：第二个后台 agent 审阅拟议记忆更新再应用 + 触发 = 周期 ∪ 步数 ∪ 到期数量——给 DreamScheduler 升级
+**⭐4. 审阅门控做梦机制**：第二个后台 agent 审阅拟议记忆更新再应用 + 触发 = 周期 ∪ 步数 ∪ 到期数量——给 DreamScheduler 升级
 
 **⭐5. 选择性遗忘清单（FSFM 四分法）+ 混合时钟**：被动衰减（FSRS 到期）/ 主动删除（capability 退役扩展: 逾期未复核→降权）/ 安全触发（**到期复习 = 定期审计 = 对冲记忆投毒**——MINJA 注入 98.2% 论文佐证）/ 自适应强化（FSRS 参数拟合）
 
