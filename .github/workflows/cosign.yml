@@ -126,7 +126,7 @@ jobs:
       fingerprint: ${{ steps.fp.outputs.fingerprint }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -235,7 +235,7 @@ jobs:
       id-token: write   # OIDC for Fulcio (Docker image signing)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -432,7 +432,7 @@ jobs:
       contents: read    # checkout + download artifacts
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -634,7 +634,7 @@ jobs:
       contents: write   # push cosign.pub + cosign-keys.md 回主仓
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0

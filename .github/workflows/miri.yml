@@ -30,7 +30,7 @@ jobs:
           # 全量 --lib, 保留 apeireth-core 覆盖 unsafe 检查.
           - crate: "apeireth-core"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust nightly (for miri)
         uses: dtolnay/rust-toolchain@nightly

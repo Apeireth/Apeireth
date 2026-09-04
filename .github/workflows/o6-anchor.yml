@@ -28,7 +28,7 @@ jobs:
         os: [ubuntu-latest]  # 单 OS 足够 (哲学锚守门不依赖 OS)
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable

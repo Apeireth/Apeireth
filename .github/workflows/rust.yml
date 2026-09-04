@@ -41,7 +41,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify current workspace does not reach legacy/
         run: python scripts/check_no_legacy_deps.py
@@ -87,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -267,7 +267,7 @@ jobs:
     name: Secret scan (R215 防御层, 借鉴 gitleaks pattern)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # scan-history 需要全历史
 

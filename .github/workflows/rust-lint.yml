@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust stable + clippy + rustfmt
         uses: dtolnay/rust-toolchain@stable
@@ -55,7 +55,7 @@ jobs:
     name: cargo fmt --check (单独)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # CI fix 2026-08: nightly rustfmt 每日漂移 (原 8 项 rustfmt.toml 配置在 stable
       # 全是 unstable, nightly 跑则全仓数百文件 diff, 门禁从未绿过) → 改 stable + 默认风格
       - uses: dtolnay/rust-toolchain@stable
