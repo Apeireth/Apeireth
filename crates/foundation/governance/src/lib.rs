@@ -53,6 +53,13 @@ pub mod evidence;
 pub mod input_security;
 pub mod permission;
 pub mod rate_limit;
+// B5 · Phase 4 (research, 默认关闭): 校准门控自治 (RA-4 风险优先阶梯 + hysteresis + shadow).
+pub mod research_autonomy;
+pub use research_autonomy::{
+    research_fixed_threshold, ResearchAutonomyDiagnostics, ResearchAutonomyGovernor,
+    ResearchAutonomyState, ResearchAutonomyThresholds, ResearchRiskFirstLadder,
+    ResearchShadowAutonomy, ResearchShadowDivergence, ResearchStrengthTier,
+};
 pub mod risk;
 pub mod rubric;
 pub mod tool_desc_audit;
