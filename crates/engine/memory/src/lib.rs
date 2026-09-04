@@ -258,6 +258,17 @@ pub use research_derived_memory::{
     ClosureReport, DerivedRef, DeterministicLeakJudge, DualRaterResult, GovernedRecall,
     JudgeVerdict, LeakAuditItem, LeakAuditReport, ResearchJudge,
 };
+// B7 · Phase 6 原型一 (research, 不进默认路径): 漫游记忆 CRDT.
+pub mod research_roaming_memory;
+pub use research_roaming_memory::{
+    ResearchLogicalClock, ResearchRoamingItem, ResearchRoamingMemory,
+};
+// B8 · Phase 6 原型二 (research, 不进默认路径): 模块非干扰性.
+pub mod research_non_interference;
+pub use research_non_interference::{
+    research_check_non_interference, ResearchCounterModule, ResearchCounterOp,
+    ResearchModule, ResearchNonInterferenceReport, ResearchSetModule, ResearchSetOp,
+};
 // Salvage 02: windowed fingerprint + textual near-dup (companion observer_capture / dream).
 pub mod dedup;
 pub use dedup::{
