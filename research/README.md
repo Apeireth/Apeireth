@@ -15,7 +15,7 @@
 | `datasets/` | 实验数据集（原始 + 派生），大文件不入 git |
 | `baselines/` | 冻结基线记录（commit / 测试数 / 指标快照） |
 | `metrics/` | 统一指标层定义与计算约定 |
-| `runners/` | 实验运行器（benchmark harness 入口，Rust 独立 bin 或脚本） |
+| `runners/` | 实验运行器(已实现:`apeireth-research-runner`,独立 cargo 项目,合成基准 + 效用-成本曲线 + bootstrap CI) |
 | `configs/` | 实验配置（seed、参数矩阵、config hash 约定） |
 | `reports/` | 实验报告（每实验一份：假设/设置/结果/局限/失败判据） |
 | `logs/` | JSONL 研究日志（schema 见 `logs/README.md`） |
