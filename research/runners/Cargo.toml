@@ -1,0 +1,8 @@
+[package]
+name = "apeireth-research-runner"
+version = "0.1.0"
+edition = "2021"
+description = "Apeireth 评测批运行器 (research/runners): 合成基准 + 效用-成本曲线 + bootstrap CI + JSONL 研究日志. 独立项目, 不进主 workspace 默认构建."
+license = "Apache-2.0 OR MIT"
+
+[dependencies]

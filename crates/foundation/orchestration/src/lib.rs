@@ -56,6 +56,12 @@ pub use research_context_policy::{
     ResearchContextPolicy, ResearchPolicyAction, ResearchPolicyDecision, ResearchRepr,
     ResearchSegment, ResearchShadowEntry, ResearchShadowLogger, ResearchStackPinPolicy,
 };
+// B9 · Phase 3 补全 (research, 默认关闭): VaultLRU/FTRL 学习型保留 (RA-3 Proposal B).
+pub mod research_vault_ftrl;
+pub use research_vault_ftrl::{
+    best_fixed_linear_loss, research_synthetic_feedback, ResearchOgdConfig,
+    ResearchPrefixGuardConfig, ResearchSegmentFeatures, ResearchVaultLruFtrl,
+};
 pub mod continuation;
 pub mod durable;
 pub mod council;

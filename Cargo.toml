@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-exclude = ["legacy"]
+exclude = ["legacy", "research"]
 members = [
     "crates/foundation/core",
     "crates/foundation/protocol",
