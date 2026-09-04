@@ -251,6 +251,13 @@ pub use agent_trace::{
     redact_attributes, sanitize_summary, summary_is_safe, TraceQueryError, TraceSpan, TraceSpanKind,
     TraceSpanStatus, TraceStore,
 };
+// B2 · Phase 1 (research, 默认关闭): 派生记忆血缘 + 遗忘传播审计 (RA-1 A.4).
+pub mod research_derived_memory;
+pub use research_derived_memory::{
+    dual_rater_protocol, research_invalidate_cache_on_forget, ClosureMode, ClosureNode,
+    ClosureReport, DerivedRef, DeterministicLeakJudge, DualRaterResult, GovernedRecall,
+    JudgeVerdict, LeakAuditItem, LeakAuditReport, ResearchJudge,
+};
 // Salvage 02: windowed fingerprint + textual near-dup (companion observer_capture / dream).
 pub mod dedup;
 pub use dedup::{

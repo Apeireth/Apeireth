@@ -131,6 +131,37 @@ pub const MIGRATIONS: &[Migration] = &[
               CREATE INDEX IF NOT EXISTS idx_agent_traces_session ON agent_traces(session_id, started_at);\n\
               CREATE INDEX IF NOT EXISTS idx_agent_traces_started ON agent_traces(started_at DESC);",
     },
+    // B2 · Phase 1 (research, 默认关闭): 派生记忆血缘 + append-only 血缘审计事件.
+    // - research_derived_from: RA-1 A.4.1 schema (主键 = 全列去重, 幂等登记).
+    // - research_lineage_events: A8 不可变审计事件 (只 INSERT, 无 UPDATE/DELETE 路径).
+    // 纯新增表: 不影响任何既有表/查询语义; 生产路径零触碰.
+    Migration {
+        version: 8,
+        name: "V8__research_derived_lineage",
+        sql: "CREATE TABLE IF NOT EXISTS research_derived_from (\n\
+              derived_kind TEXT NOT NULL,\n\
+              derived_id   TEXT NOT NULL,\n\
+              source_kind  TEXT NOT NULL,\n\
+              source_id    TEXT NOT NULL,\n\
+              span         TEXT,\n\
+              ts           INTEGER NOT NULL,\n\
+              PRIMARY KEY (derived_kind, derived_id, source_kind, source_id)\n\
+              );\n\
+              CREATE INDEX IF NOT EXISTS idx_research_derived_src ON research_derived_from(source_kind, source_id);\n\
+              CREATE INDEX IF NOT EXISTS idx_research_derived_der ON research_derived_from(derived_kind, derived_id);\n\
+              CREATE TABLE IF NOT EXISTS research_lineage_events (\n\
+              seq              INTEGER PRIMARY KEY AUTOINCREMENT,\n\
+              op               TEXT NOT NULL,\n\
+              actor            TEXT,\n\
+              ts               INTEGER NOT NULL,\n\
+              reason           TEXT,\n\
+              subject          TEXT NOT NULL,\n\
+              revision_before  INTEGER,\n\
+              revision_after   INTEGER,\n\
+              detail_json      TEXT NOT NULL DEFAULT '{}'\n\
+              );\n\
+              CREATE INDEX IF NOT EXISTS idx_research_lineage_events_ts ON research_lineage_events(ts);",
+    },
 ];
 
 const HALLWAYS_SQL: &str = r#"
@@ -596,8 +627,8 @@ mod tests {
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            3,
-            "V5/V6/V7 各一条"
+            4,
+            "V5/V6/V7/V8 各一条"
         );
     }
 
