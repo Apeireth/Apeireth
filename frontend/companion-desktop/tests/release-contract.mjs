@@ -39,7 +39,7 @@ globalThis.localStorage = {
 };
 
 // The routes canonical_entry.rs actually registers.
-const CANONICAL = ['health', 'models.list', 'chat.completions', 'approvals.resolve'];
+const CANONICAL = ['health', 'models.list', 'chat.completions', 'permissions.approval.resolve'];
 
 // Optional runtime projections are deliberately not assumed when discovery is
 // unavailable. The live manifest can enable them after a successful fetch.
@@ -63,6 +63,11 @@ check('canonical capabilities are supported', () => {
   for (const id of CANONICAL) {
     assert.equal(capabilitySupported(manifest, id), true, `${id} should be supported`);
   }
+});
+
+check('approvals.resolve remains a compatibility alias of permissions.approval.resolve', () => {
+  const manifest = releaseContractManifest();
+  assert.equal(capabilitySupported(manifest, 'approvals.resolve'), true);
 });
 
 check('no introspection capability is claimed', () => {

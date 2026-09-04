@@ -533,10 +533,39 @@ async fn panel_routes_serve_contract_shapes() {
     assert_eq!(find_group("health")["capabilities"][0]["id"], "health");
     assert_eq!(find_group("sessions")["capabilities"][0]["supported"], true);
     assert_eq!(find_group("memory")["capabilities"][0]["supported"], true);
+    let memory_update = find_group("memory")["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|cap| cap["id"] == "memory.update")
+        .expect("memory.update must remain in the universe");
+    assert_eq!(memory_update["supported"], false);
+    assert_eq!(memory_update["available"], false);
+    assert_eq!(memory_update["reason"], "not_implemented");
     assert_eq!(find_group("memory")["capabilities"][0]["id"], "memory.read");
+    let permission_ids: Vec<&str> = find_group("permissions")["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|cap| cap["id"].as_str().unwrap())
+        .collect();
+    assert!(
+        permission_ids.contains(&"permissions.approval.read"),
+        "canonical approval read id missing: {permission_ids:?}"
+    );
+    assert!(
+        permission_ids.contains(&"permissions.approval.resolve"),
+        "canonical approval resolve id missing: {permission_ids:?}"
+    );
+    let approvals_read = find_group("permissions")["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|cap| cap["id"] == "approvals.read")
+        .expect("compatibility alias approvals.read");
     assert_eq!(
-        find_group("permissions")["capabilities"][0]["id"],
-        "approvals.read"
+        approvals_read["alias_of"], "permissions.approval.read",
+        "approvals.read must be an explicit alias, not a second taxonomy"
     );
     assert_eq!(find_group("trace")["capabilities"][0]["supported"], true);
     assert_eq!(
@@ -544,17 +573,21 @@ async fn panel_routes_serve_contract_shapes() {
         true,
         "the SSE bus is core gateway infrastructure, always available"
     );
+    let grants = find_group("permissions")["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|cap| cap["id"] == "permissions.grants.read")
+        .expect("permissions.grants.read");
+    assert_eq!(grants["supported"], true);
+    let revoke = find_group("permissions")["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|cap| cap["id"] == "permissions.revoke")
+        .expect("permissions.revoke");
     assert_eq!(
-        find_group("permissions")["capabilities"][2]["id"],
-        "permissions.grants.read"
-    );
-    assert_eq!(
-        find_group("permissions")["capabilities"][2]["supported"],
-        true
-    );
-    assert_eq!(
-        find_group("permissions")["capabilities"][3]["supported"],
-        true,
+        revoke["supported"], true,
         "revoke is available alongside grants.read"
     );
     assert_eq!(find_group("organs")["capabilities"][0]["id"], "organs.list");

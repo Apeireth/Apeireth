@@ -950,6 +950,18 @@ fn cap(
     supported: bool,
     available: bool,
 ) -> serde_json::Value {
+    cap_with_reason(id, read, write, ops, supported, available, None)
+}
+
+fn cap_with_reason(
+    id: &str,
+    read: bool,
+    write: bool,
+    ops: &[&str],
+    supported: bool,
+    available: bool,
+    reason: Option<&str>,
+) -> serde_json::Value {
     let mut value = serde_json::json!({
         "id": id,
         "supported": supported,
@@ -960,12 +972,26 @@ fn cap(
         "available": available,
     });
     if !available {
-        value["reason"] = serde_json::json!(if supported {
+        value["reason"] = serde_json::json!(reason.unwrap_or(if supported {
             "provider_not_configured"
         } else {
             "platform_unsupported"
-        });
+        }));
     }
+    value
+}
+
+fn cap_alias(
+    id: &str,
+    alias_of: &str,
+    read: bool,
+    write: bool,
+    ops: &[&str],
+    supported: bool,
+    available: bool,
+) -> serde_json::Value {
+    let mut value = cap(id, read, write, ops, supported, available);
+    value["alias_of"] = serde_json::json!(alias_of);
     value
 }
 
@@ -999,7 +1025,19 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
                 "memory.update" => (false, false),
                 _ => (memory_governance_supported, memory_governance_supported),
             };
-            cap(id, *read, *write, operations, supported, available)
+            if *id == "memory.update" {
+                cap_with_reason(
+                    id,
+                    *read,
+                    *write,
+                    operations,
+                    supported,
+                    available,
+                    Some("not_implemented"),
+                )
+            } else {
+                cap(id, *read, *write, operations, supported, available)
+            }
         })
         .chain(std::iter::once(cap(
             "memory.graph.read",
@@ -1024,8 +1062,10 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "memory", "capabilities": memory },
             { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], tools_supported, tools_supported) ] },
             { "name": "permissions", "capabilities": [
-                cap("approvals.read", true, false, &["list"], true, true),
-                cap("approvals.resolve", false, true, &["resolve"], true, true),
+                cap("permissions.approval.read", true, false, &["list"], true, true),
+                cap("permissions.approval.resolve", false, true, &["resolve"], true, true),
+                cap_alias("approvals.read", "permissions.approval.read", true, false, &["list"], true, true),
+                cap_alias("approvals.resolve", "permissions.approval.resolve", false, true, &["resolve"], true, true),
                 cap("permissions.grants.read", true, false, &["list"], permissions_supported, permissions_supported),
                 cap("permissions.revoke", false, true, &["revoke"], permissions_write_supported, permissions_write_supported),
             ] },

@@ -320,6 +320,17 @@ mod tests {
                     content TEXT NOT NULL,
                     session_id TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS episode_governance (
+                    episode_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    protected INTEGER NOT NULL DEFAULT 0,
+                    content_override TEXT,
+                    revision INTEGER NOT NULL DEFAULT 0,
+                    updated_at INTEGER,
+                    updated_by TEXT,
+                    reason TEXT,
+                    forgotten_at INTEGER
+                );
                 CREATE TABLE IF NOT EXISTS thought_stream (
                     id TEXT PRIMARY KEY,
                     subject_id TEXT NOT NULL,
