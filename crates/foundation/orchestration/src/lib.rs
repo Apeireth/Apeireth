@@ -49,6 +49,13 @@ pub mod cognitive_quota_scheduler;
 pub mod context_budget;
 pub mod context_fold;
 pub mod context_rot;
+// B3 · Phase 3 (research, 默认关闭): 上下文在线保留决策 (RA-3 StackPin/ShadowLogger).
+pub mod research_context_policy;
+pub use research_context_policy::{
+    research_belady_opt_misses, research_stackpin_paging_misses, research_synthetic_requests,
+    ResearchContextPolicy, ResearchPolicyAction, ResearchPolicyDecision, ResearchRepr,
+    ResearchSegment, ResearchShadowEntry, ResearchShadowLogger, ResearchStackPinPolicy,
+};
 pub mod continuation;
 pub mod durable;
 pub mod council;
