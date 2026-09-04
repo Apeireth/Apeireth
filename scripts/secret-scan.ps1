@@ -86,6 +86,7 @@ $AllowlistPaths = @(
     'crates/engine/perception/tests/*',
     'crates/foundation/governance/src/input_security.rs',
     'crates/adapters/sdk/src/voice/*',
+    'frontend/companion-desktop/src-tauri/src/logging.rs',
     # 真凭证存放位置 (per .gitignore, 不入库)
     'apikey-ultra.txt', 'apikey-*.txt',
     '*.git-credentials', 'Users*.git-credentials',
