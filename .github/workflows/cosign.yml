@@ -269,7 +269,7 @@ jobs:
       #   - workflow_run: github.event.workflow_run.id (上游 release-1.0.0 run ID)
       #   - workflow_dispatch (owner 显式重签): inputs.run_url 解析 → run_id
       - name: Download 8 package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: apeireth-*
           path: dist_raw/
@@ -457,7 +457,7 @@ jobs:
 
       # === 8 包产物 + 签名都下载 ===
       - name: Download 8 package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: apeireth-*
           path: dist_raw/
@@ -496,7 +496,7 @@ jobs:
           ls -la dist/ | head -20
 
       - name: Download cosign signatures
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cosign-signatures-${{ env.APEIRETH_VERSION }}
           path: dist/signatures/
