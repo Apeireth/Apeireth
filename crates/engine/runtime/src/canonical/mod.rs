@@ -25,6 +25,15 @@
 //! there is no second orchestration driver or legacy runtime dependency.
 
 pub mod approval;
+// B6 · Phase 5 (research, 默认关闭): 审批状态机形式化 (RA-5 规格, 模型级验证).
+pub mod research_approval_sm;
+pub use research_approval_sm::{
+    research_allowed_recovery, research_run_fault_injection, ResearchApprovalError,
+    ResearchApprovalEvent, ResearchApprovalMachine, ResearchApprovalRecord,
+    ResearchApprovalStatus, ResearchCompensation, ResearchFaultInjectionReport,
+    ResearchIdempotency, ResearchRecoveryAction, ResearchRecoveryAdvice,
+    ResearchSideEffectCategory, ResearchSideEffectDescriptor,
+};
 pub mod causal_world_model;
 pub mod cognitive;
 pub mod error;
