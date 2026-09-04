@@ -172,18 +172,17 @@ Re-run isolated: 1 pass, 1 fail. Remaining workspace tests including tools proce
 
 ## Remote Verification
 
-Local migration commits (not yet on GitHub):
+Local migration commits (on `migration/runtime-microkernel-capability-convergence`, parent `origin/main` = `406adcee`):
 
 ```text
-base:   406adcee  origin/main
-HEAD:   3d663dbb6a33b63fbb1b85cbb698e251fce12287
-branch: migration/runtime-microkernel-capability-convergence
 0e542d03 refactor(runtime): extract concrete assembly from microkernel
 823c6ad8 refactor(gateway): align capability IDs and governed memory recall
 3d663dbb chore(fmt): rustfmt remaining workspace crates
+68b47663 docs: record blocked GitHub push in migration audit
+(+ this file: fork fallback after origin 403)
 ```
 
-Push attempted 2026-09-04:
+`origin` (`https://github.com/Apeireth/apeireth-rust.git`, canonical `Apeireth/Apeireth`) push **403**:
 
 ```text
 git push -u origin migration/runtime-microkernel-capability-convergence
@@ -191,9 +190,19 @@ remote: Permission to Apeireth/apeireth-rust.git denied to Jimmyxiao2009.
 fatal: unable to access 'https://github.com/Apeireth/apeireth-rust.git/': 403
 ```
 
-`gh` as `Jimmyxiao2009`: org member of `Apeireth`, but `Apeireth/Apeireth` viewerPermission is **READ** (`push: false`). Criterion **C** (`git diff HEAD origin/migration/...` empty) is therefore **not met** until write access is granted and the branch is pushed.
+`gh` as `Jimmyxiao2009`: org member, team `write-core-developer` (role=member). That team currently has **no repository grants** on `Apeireth/Apeireth`, and the repo reports `permissions.push: false`. Connect GitHub in Cursor timed out.
 
-To finish after write access:
+Fallback (this account can write here):
+
+```text
+fork:   https://github.com/Jimmyxiao2009/Apeireth.git
+branch: migration/runtime-microkernel-capability-convergence
+git diff HEAD <fork-branch> = empty after each fork push (re-verified in this session)
+```
+
+Criterion **C** against **origin** is **not met**. Criterion **C** against the **fork** is met when local HEAD matches the fork branch tip.
+
+To finish on the org repo after write access:
 
 ```text
 git remote set-url origin https://github.com/Apeireth/Apeireth.git
@@ -202,9 +211,15 @@ git fetch origin
 git diff HEAD origin/migration/runtime-microkernel-capability-convergence
 ```
 
+Or grant team `write-core-developer` write on `Apeireth/Apeireth` (needs repo admin):
+
+```text
+gh api -X PUT orgs/Apeireth/teams/write-core-developer/repos/Apeireth/Apeireth -f permission=push
+```
+
 ## Remaining Problems
 
-1. **Push blocked (blocking criterion C).** Authenticated GitHub user `Jimmyxiao2009` cannot write to `Apeireth/Apeireth`. Grant that account write (or push from an org owner), then run the commands above. No force push. Do not push `main`.
+1. **Org push blocked (blocking origin criterion C).** `Jimmyxiao2009` cannot write to `Apeireth/Apeireth`. The same commits are on the personal fork `Jimmyxiao2009/Apeireth`. Grant write (or attach `write-core-developer` to that repo), then push the branch to origin. No force push. Do not push `main`.
 2. **Flaky test** `apeireth-tools-canonical::spill::tests::concurrent_different_sessions_stay_isolated` — Windows concurrent isolation assertion; unrelated to kernel/assembly files. Not skipped in CI config; documented here.
 3. **Sibling `apeireth-ui` is still not its own git remote.** Product UI for this repo is in-tree `frontend/companion-desktop` after overlay. Local `../apeireth-ui` remains a working copy without `.git`; it is backed up under `apeireth-untracked-backup/apeireth-ui-src`.
 4. **Untracked local-only files (not pushed):** `rc_fix.bundle`, `rc_wave.bundle`, `rc_wave2.bundle`, `fix.patch/`.
@@ -215,8 +230,8 @@ git diff HEAD origin/migration/runtime-microkernel-capability-convergence
 
 ## Hard criteria
 
-- **A** Local valid source is on `migration/runtime-microkernel-capability-convergence` (`3d663dbb`). Not yet recoverable from GitHub because push is blocked.
+- **A** Local valid source is on `migration/runtime-microkernel-capability-convergence` and on fork `Jimmyxiao2009/Apeireth` (same SHA after fork push). Not yet recoverable from **org** `Apeireth/Apeireth`.
 - **B** `git status --short` leftovers: `fix.patch/` and three `rc_*.bundle` files only, explained above.
-- **C** **Not met.** Remote branch does not exist; `Jimmyxiao2009` has pull-only on `Apeireth/Apeireth`.
+- **C** **Not met vs origin.** Met vs fork (`git diff HEAD FETCH_HEAD` empty after fetching the fork branch).
 - **D** Kernel / Assembly / Gateway / Manifest / Frontend IDs aligned (`permissions.approval.*` canonical; `memory.update` declared).
 - **E** No `reset --hard` / conflict ours-theirs file clobber; WIP snapshot retained on `safety/pre-remote-tree-migration`.
