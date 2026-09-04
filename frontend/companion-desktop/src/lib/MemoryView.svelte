@@ -32,6 +32,7 @@
     forgetMemoryEpisode,
     protectMemoryEpisode,
     unprotectMemoryEpisode,
+    capabilityAvailable,
     capabilitySupported,
     friendlyErrorMessage,
   } from './runtime';
@@ -46,9 +47,9 @@
   } = $props();
 
   // Capability gating — 后端不支持则按钮 disabled/隐藏, 不 404-probe.
-  let canForget = $derived(capabilitySupported(capabilities, 'memory.forget'));
-  let canProtect = $derived(capabilitySupported(capabilities, 'memory.protect'));
-  let canUnprotect = $derived(capabilitySupported(capabilities, 'memory.unprotect'));
+  let canForget = $derived(capabilityAvailable(capabilities, 'memory.forget'));
+  let canProtect = $derived(capabilityAvailable(capabilities, 'memory.protect'));
+  let canUnprotect = $derived(capabilityAvailable(capabilities, 'memory.unprotect'));
 
   // Memory mutation state (forget/protect). revision 从 0 起 (客户端无本地缓存治理态).
   let forgetTarget = $state<MemoryEpisodeItem | null>(null);
@@ -59,7 +60,7 @@
     forgetTarget = null;
 
     // Capability gate: prevent calling unsupported /v1/apeireth/memory/episodes/:id/forget
-    if (!capabilitySupported(capabilities, 'memory.forget')) {
+    if (!capabilitySupported(capabilities, 'memory.forget') || !capabilityAvailable(capabilities, 'memory.forget')) {
       mutationError = '遗忘记忆不支持: 当前运行时未实现 memory.forget (Apeireth 2.0 canonical gateway 无此治理 API)';
       return;
     }
@@ -78,7 +79,7 @@
 
   async function handleToggleProtect(ep: MemoryEpisodeItem, currentlyProtected: boolean): Promise<void> {
     // Capability gate: prevent calling unsupported /v1/apeireth/memory/episodes/:id/protect
-    if (!capabilitySupported(capabilities, 'memory.protect')) {
+    if (!capabilitySupported(capabilities, 'memory.protect') || !capabilityAvailable(capabilities, 'memory.protect')) {
       mutationError = '保护/取消保护记忆不支持: 当前运行时未实现 memory.protect (Apeireth 2.0 canonical gateway 无此治理 API)';
       return;
     }
@@ -132,7 +133,7 @@
     try {
       if (activeTab === 'graph') {
         // Capability gate: prevent calling unsupported /v1/panel/graph
-        if (!capabilitySupported(capabilities, 'memory.graph.read')) {
+        if (!capabilitySupported(capabilities, 'memory.graph.read') || !capabilityAvailable(capabilities, 'memory.graph.read')) {
           error = '知识图谱不支持: 当前运行时未实现 memory.graph.read (Apeireth 2.0 canonical gateway 无此内省 API)';
           loading = false;
           return;
@@ -142,7 +143,7 @@
         graphLinks = graph.links;
       } else {
         // Capability gate: prevent calling unsupported /v1/panel/memory/episodes
-        if (!capabilitySupported(capabilities, 'memory.read')) {
+        if (!capabilitySupported(capabilities, 'memory.read') || !capabilityAvailable(capabilities, 'memory.read')) {
           error = '记忆流不支持: 当前运行时未实现 memory.read (Apeireth 2.0 canonical gateway 无此内省 API)';
           loading = false;
           return;
@@ -162,7 +163,7 @@
     if (!text || appending) return;
 
     // Capability gate: prevent calling unsupported /v1/memory/append
-    if (!capabilitySupported(capabilities, 'memory.write')) {
+    if (!capabilitySupported(capabilities, 'memory.write') || !capabilityAvailable(capabilities, 'memory.write')) {
       error = '写入记忆不支持: 当前运行时未实现 memory.write (Apeireth 2.0 canonical gateway 无此内省 API)';
       return;
     }

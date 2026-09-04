@@ -35,16 +35,19 @@ pub use file_fetcher::{
 };
 
 pub use canonical_entry::{
-    build_gateway_state, canonical_router, canonical_router_with_panels, canonical_router_with_state,
-    execute_chat, resolve_approval, serve_canonical, CanonicalApprovalRequest, CanonicalChatOutcome,
-    CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError, CanonicalExecutionEvent,
-    CanonicalPendingApproval,
+    build_gateway_state, build_gateway_state_with_services, canonical_router,
+    canonical_router_with_panels, canonical_router_with_services, canonical_router_with_state,
+    execute_chat, resolve_approval, serve_canonical, serve_canonical_with_services,
+    CanonicalApprovalRequest, CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse,
+    CanonicalEntryError, CanonicalExecutionEvent, CanonicalPendingApproval,
 };
 
-pub use events::{events_handler, EventBus, GatewayEvent};
+pub use events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
 
 pub use panels::{
-    AuditDto, EpisodeDto, EpisodeMutationDto, GatewayState, GrantDto, GrantMutationDto,
-    GraphEdgeDto, GraphNodeDto, MemoryGraphDto, OrganDto, PanelData, SessionSummaryDto, ToolDto,
-    TraceDetailDto, TraceSpanDto, TraceSummaryDto,
+    AuditCommand, AuditDto, AuditQuery, EpisodeDto, EpisodeMutationDto, GatewayServices,
+    GatewayState, GrantCommand, GrantDto, GrantMutationDto, GrantQuery, GraphEdgeDto, GraphNodeDto,
+    MemoryCommand, MemoryGovernanceCommand, MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto,
+    PanelData, SessionQuery, SessionSummaryDto, ToolCatalogQuery, ToolDto, TraceCommand,
+    TraceDetailDto, TraceQuery, TraceSpanDto, TraceSummaryDto,
 };

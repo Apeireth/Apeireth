@@ -144,7 +144,7 @@ fn now_ms() -> i64 {
 }
 
 /// 记忆治理存储接口.
-pub trait MemoryGovernanceStore {
+pub trait MemoryGovernanceStore: Send + Sync {
     /// 读取单 episode 的治理视图 (含 override content).
     fn get_governed(
         &self,

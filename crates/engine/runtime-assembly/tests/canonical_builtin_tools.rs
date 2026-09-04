@@ -5,6 +5,8 @@
 //! provider is scripted and the filesystem is a temporary workspace, so the
 //! test is offline and reproducible.
 
+use apeireth_runtime_assembly as apeireth_runtime;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 

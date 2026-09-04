@@ -11,6 +11,8 @@
 //! - plugs into the organ `LlmFactory` bridge without being retained as
 //!   persistent module state (the probe module below holds no handle).
 
+use apeireth_runtime_assembly as apeireth_runtime;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -27,9 +29,10 @@ use apeireth_protocol::canonical::{
     NormalizedUsage,
 };
 use apeireth_runtime::canonical::{
-    AgentModule, HookPoint, InvokerLlmFactory, ModuleContext, ModuleError, ModuleInvocationError,
+    AgentModule, HookPoint, ModuleContext, ModuleError, ModuleInvocationError,
     ModuleInvocationRequest, ModuleManifest, ModuleOutcome, Runtime, TurnOutcome, TurnRequest,
 };
+use apeireth_runtime_assembly::InvokerLlmFactory;
 use async_trait::async_trait;
 
 const MODEL: &str = "fake-model-1";

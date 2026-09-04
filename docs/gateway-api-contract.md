@@ -3,8 +3,8 @@
 > 本文档是桌面端(及其他客户端)与 Apeireth canonical gateway 之间的**稳定契约**。
 > UI/UX 团队据此开发界面;后端团队据此实现并保证不破坏。任何端点变更必须先改本文档。
 >
-> 状态:2026-09-02 起草。标注 `[已实现]` 的端点当前可用,其余为实现计划(见 §10 排期)。
-> 响应形状与 `frontend/companion-desktop/src/lib/types.ts` 对齐。
+> 状态:2026-09-04，当前 canonical runtime/assembly 实现。标注 `[已实现]` 的端点当前可用；能力是否真正可用以 `/v1/apeireth/capabilities` 为准。
+> 响应形状与 `apeireth-ui/src/lib/types.ts` 对齐；`frontend/companion-desktop` 是 Tauri 薄壳。
 
 ## §1 通用约定
 
@@ -15,7 +15,9 @@
   ```json
   { "error": { "code": "invalid_request | not_found | unsupported | runtime_error | auth_failed", "message": "人类可读信息" } }
   ```
-  HTTP 语义:400 请求不合法 / 404 资源或端点不存在 / 422 provider 失败 / 500 运行时错误 / 202 审批挂起
+  HTTP 语义:400 `invalid_request` / 403 `denied` / 404 `not_found` / 409 `conflict` /
+  422 provider/runtime 语义失败 / 500 `internal_error` / 501 `unsupported` /
+  503 `unavailable` / 202 审批挂起
 - 分页:列表端点统一 `limit`(默认 50,最大 500)+ 按时间倒序;需要更多分页时再引入 cursor
 
 ## §2 已实现端点
@@ -24,6 +26,10 @@
 |---|---|---|
 | `/health` | GET | `{"status":"ok","execution_owner":"apeireth-runtime::canonical"}` |
 | `/v1/models` | GET | OpenAI 风格模型列表 `{object:"list",data:[{id,object:"model",created,owned_by}]}` |
+| `/v1/providers` | GET | 来自 live Provider Router 的 provider 状态与模型描述 |
+| `/v1/runtime/snapshot` | GET | 不含凭据、私有记忆、原始 prompt/CoT 的 Runtime 诊断快照 |
+| `/v1/apeireth/capabilities` | GET | 来自 GatewayServices、Runtime Registry 与 Provider Router 的动态能力清单 |
+| `/v1/modules` | GET | 来自 BehaviorRegistry 的行为模块清单；`/v1/organs` 为兼容别名 |
 | `/v1/chat` | POST | 原生对话(见 §3) |
 | `/v1/chat/completions` | POST | OpenAI 兼容对话(支持 `stream:true` SSE) |
 | `/v1/approvals?session={id}` | GET | 该会话的待批审批(见 §6) |
@@ -52,7 +58,7 @@
 `GET /v1/panel/sessions?limit=50` →
 ```json
 { "sessions": [
-  { "id": "…", "title": "…", "created_at": 123, "updated_at": 123, "message_count": 4, "model": "deepseek-chat" }
+  { "id": "…", "title": "…", "created_at": 123, "updated_at": 123, "message_count": 4, "revision": 0 }
 ] }
 ```
 
@@ -79,8 +85,10 @@ episodes 响应:
 > `timestamp` 已从底层 epoch 秒转换为契约的 epoch 毫秒。
 append 请求 `{ "session": "UUID", "content": "…", "role": "可选 user|assistant(默认 user)" }` → 201 + 新 episode。
 会话不存在时自动在会话账本创建(保证全局列表可达)。
-forget/protect/unprotect 请求 `{ "expected_rev": 0, "reason": "可选" }` → `{ "ok": true, "rev": 1 }`;
-修订冲突返回 500 `runtime_error`。旗标持久于 `~/.apeireth/memory-flags.jsonl`,重启保留。
+forget/protect/unprotect 请求 `{ "expected_rev": 0, "reason": "可选" }` → 完整治理结果:
+`{ "ok": true, "rev": 1, "id": "…", "status": "forgotten|active", "protected": false,
+"revision": 1, "content": "…" }`。修订冲突返回 409 `conflict`；历史
+`memory-flags.jsonl` 只在启动时幂等迁移到 `episode_governance`，迁移后不再参与判断。
 graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episode" } ], "edges": [ { "from": "…", "to": "…", "weight": 1.0, "label": "可选" } ] }`。
 (v1 语义:session → episode 包含边,源自真实存储数据)
 
@@ -106,10 +114,11 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
   作用于运行时同一 policy 实例,进程重启后恢复默认策略;`capability` 支持工具名与
   `memory.read`/`memory.write`/`identity.modify`/`admin.override` 语义名)
 
-### §7b 器官清单 ✅
+### §7b 器官与行为模块清单 ✅
 
-- `GET /v1/organs` → `{ "organs": [ { "id": "W1", "name": "World Model", "enabled": false, "description": "…" } ] }`
-  (9 个 canonical 器官 W1/W2/W3/E4/F4/F1/F6/E7/Memory;生产配置默认未启用 organ 链 → `enabled` 恒 false,诚实静态目录)
+- `GET /v1/organs` → `{ "organs": [ { "id": "…", "name": "…", "enabled": true, "description": "…" } ] }`
+  来源是当前 assembly 的 BehaviorRegistry；不再返回固定的 9 个静态未启用器官。
+- `GET /v1/modules` → `{ "modules": [ ... ] }`，与 `/v1/organs` 共享当前行为注册状态。
 
 ## §8 Trace / Audit / 事件总线
 
@@ -118,13 +127,13 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
   ```json
   { "trace_id": "…", "spans": [ { "span_id": "…", "parent_span_id": "…|null", "kind": "turn|provider|tool|governance", "actor": "…", "status": "ok|error", "summary": "…", "started_at": 123, "ended_at": 123, "session_id": "…" } ] }
   ```
-- `GET /v1/panel/audit?limit=100` `[P1]` → `{ "events": [ { "ts": 123, "event": "chat.turn.completed", "service": "gateway", "detail": "…" } ] }`
-  (网关自写 `~/.apeireth/daemon-audit.jsonl`,兼容读取旧 daemon 遗留条目)
-- `GET /v1/apeireth/events` ✅ — SSE 事件总线,网关级事件:
+- `GET /v1/panel/audit?limit=100` `[P1]` → `{ "events": [ { "ts": 123, "event": "chat.turn.completed", "service": "runtime", "detail": "…" } ] }`
+  由 RuntimeEventSink 的审计端口归档；网关不再从响应结果反推一套 turn 事实。
+- `GET /v1/apeireth/events` ✅ — Runtime Event Spine 的 SSE 投影:
   `backend_ready`(启动,仅广播一次)/ `turn_started` / `turn_delta` / `turn_completed` /
   `approval_required` / `approval_resolved`。
   帧格式:`event: <name>` + `data: <json>`;15s keep-alive;容量 256,慢订阅者被断连(不无限缓存)。
-  > v1 诚实边界:`turn_delta` 携带**最终全文作为单条增量**——canonical 运行时在网关编码前
+  > 当前诚实边界:`turn_delta` 携带**最终全文作为单条增量**——canonical 运行时在网关编码前
   > 已完整收口,网关边界观测不到 token 级增量。事件在进程内广播,不跨重启持久。
 
 ## §9 能力清单 `[P0]`
@@ -136,17 +145,21 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
     { "name": "memory", "capabilities": [ { "id": "memory.read", "supported": true, "read": true, "write": false, "operations": ["list","search"], "available": true } ] }
   ] }
 ```
-capability id 全集:`health`、`models.list`、`chat.completions`、`sessions.read`、`memory.read/write/forget/protect/unprotect`、`memory.graph.read`、`tools.list`、`permissions.approval.read`、`permissions.grants.read`、`permissions.revoke`、`trace.read`、`audit.read`、`activity.sse`。
+每个条目同时提供 `supported`、`available` 与不可用时的 `reason`。当前核心 ID 包括:
+`health`、`models.list`、`providers.list`、`runtime.snapshot.read`、`chat.completions`、
+`sessions.read`、`memory.read/write/forget/protect/unprotect`、`memory.graph.read`、
+`tools.list`、`approvals.read`、`approvals.resolve`、`permissions.grants.read`、
+`permissions.revoke`、`organs.list`、`modules.list`、`trace.read`、`audit.read`、`activity.sse`。
 
-## §10 实现排期
+## §10 当前实现状态
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| P0 | 网关状态重构(GatewayState)+ `sessions.read` + `tools.list` + `trace.read` + 动态 `capabilities` + audit 归档写入 | ✅ 已完成(2026-09-02) |
-| P1 | `memory.read/write/forget/protect/unprotect` + `memory.graph.read` + `audit.read`(网关自写审计已随 P0 落) | ✅ 已完成(2026-09-02;附带修复上游 memory backend 写入静默丢失 bug) |
-| P2 | `permissions.grants.read` + `permissions.revoke` + organ 清单 `/v1/organs` | ✅ 已完成(2026-09-02;hook 政策改 Arc<Mutex> 共享,热撤销作用于运行时同实例) |
-| P3 | SSE 事件总线 `/v1/apeireth/events` | ✅ 已完成(2026-09-02;in-process broadcast,handler 发布 + SSE 订阅端点) |
+| P0 | GatewayServices bounded-context ports、live capability manifest、Runtime snapshot、sessions/tools/traces | ✅ 已完成(2026-09-04) |
+| P1 | Governed memory query/write/forget/protect/unprotect/graph 与真实 revision | ✅ 已完成(2026-09-04) |
+| P2 | Live Behavior/Capability/Provider/Model projection 与 approvals/grants | ✅ 已完成(2026-09-04) |
+| P3 | Runtime Event Spine → trace/audit/SSE，CLI direct turn 可观测 | ✅ 已完成(2026-09-04) |
 
-实现位置:`crates/adapters/gateway/src/`(canonical_entry.rs + panels.rs),
-数据源:`apeireth_runtime::canonical::SessionStore` + CLI 组合根
-(`crates/adapters/cli/src/gateway_panels.rs`:`~/.apeireth/traces.jsonl` / `daemon-audit.jsonl` 归档)。
+实现位置:`crates/adapters/gateway/src/`(canonical_entry.rs + panels.rs + events.rs)，
+数据源为 Runtime/Assembly 注入的 bounded-context ports；CLI 组合根位于
+`crates/adapters/cli/src/gateway_panels.rs`，旧 `PanelData` 仅作为兼容适配层。

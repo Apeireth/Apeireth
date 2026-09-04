@@ -22,6 +22,7 @@ apeireth-plugin = { path = "../../foundation/plugin" }
 apeireth-protocol = { path = "../../foundation/protocol" }
 apeireth-provider = { path = "../../engine/provider" }
 apeireth-runtime = { path = "../../engine/runtime" }
+apeireth-runtime-assembly = { path = "../../engine/runtime-assembly" }
 apeireth-storage = { path = "../../engine/storage" }
 async-trait = { workspace = true }
 serde = { workspace = true }

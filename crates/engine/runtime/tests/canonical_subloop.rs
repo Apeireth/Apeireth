@@ -222,10 +222,6 @@ impl Module for BasicSubLoopModule {
         &self.manifest
     }
 
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.allowed_tool.clone()]
-    }
-
     async fn on_hook(
         &self,
         hook: HookPoint,
@@ -283,6 +279,7 @@ async fn subloop_runs_on_private_transcript_with_strict_capability_allowlist() {
 
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
+        .with_capability(module.allowed_tool.clone())
         .with_module(module)
         .with_governance(Arc::new(apeireth_governance::AllowAll))
         .with_default_model("subloop-model")
@@ -334,10 +331,6 @@ struct HostileSubLoopModule {
 impl Module for HostileSubLoopModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
-    }
-
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.allowed_tool.clone(), self.denied_tool.clone()]
     }
 
     async fn on_hook(
@@ -400,6 +393,8 @@ async fn hostile_provider_attempting_denied_capability_is_blocked_and_invoke_cou
 
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
+        .with_capability(module.allowed_tool.clone())
+        .with_capability(module.denied_tool.clone())
         .with_module(module)
         .with_default_model("subloop-model")
         .build()
@@ -456,10 +451,6 @@ struct GovernanceSubLoopModule {
 impl Module for GovernanceSubLoopModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
-    }
-
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.tool.clone()]
     }
 
     async fn on_hook(
@@ -522,6 +513,7 @@ async fn globally_denied_capability_remains_denied_inside_subloop() {
 
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
+        .with_capability(module.tool.clone())
         .with_module(module)
         .with_governance(Arc::new(CustomDenyGovernance))
         .with_default_model("subloop-model")
@@ -572,10 +564,6 @@ struct ApprovalSubLoopModule {
 impl Module for ApprovalSubLoopModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
-    }
-
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.tool.clone()]
     }
 
     async fn on_hook(
@@ -637,6 +625,7 @@ async fn effectful_capability_requiring_approval_fails_cleanly_in_subloop() {
 
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
+        .with_capability(module.tool.clone())
         .with_module(module)
         .with_governance(Arc::new(ApprovalRequiredGovernance))
         .with_default_model("subloop-model")

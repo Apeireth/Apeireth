@@ -21,7 +21,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
 use crate::events::{events_handler, EventBus, GatewayEvent};
-use crate::panels::{panel_routes, GatewayState, PanelData, TraceSpanDto};
+use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
 
 /// Native gateway request. HTTP and CLI transports can both construct it.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -384,7 +384,7 @@ struct ModelListItem {
     id: String,
     object: &'static str,
     created: i64,
-    owned_by: &'static str,
+    owned_by: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -407,10 +407,32 @@ pub fn build_gateway_state(
     runtime: Arc<Runtime>,
     panels: Option<Arc<dyn PanelData>>,
 ) -> GatewayState {
+    build_gateway_state_with_services(runtime, GatewayServices::from_panel(panels))
+}
+
+/// Assemble gateway state from bounded-context ports supplied by the
+/// composition root. This is the production path; the legacy `PanelData`
+/// adapter above exists only for compatibility with older embedders/tests.
+pub fn build_gateway_state_with_services(
+    runtime: Arc<Runtime>,
+    services: GatewayServices,
+) -> GatewayState {
+    let events = EventBus::default();
+    let observations = Arc::new(crate::events::RuntimeObservationSink::new(
+        services.trace_commands.clone(),
+        services.audit_commands.clone(),
+    ));
+    runtime.set_event_sink(Arc::new(
+        apeireth_runtime::canonical::CompositeRuntimeEventSink::new(vec![
+            Arc::new(events.clone()),
+            observations.clone(),
+        ]),
+    ));
     GatewayState {
         runtime,
-        panels,
-        events: EventBus::default(),
+        services,
+        events,
+        observations,
     }
 }
 
@@ -419,7 +441,7 @@ pub fn build_gateway_state(
 /// Panel routes answer `501 unsupported` while no [`PanelData`] is attached —
 /// see [`canonical_router_with_panels`].
 pub fn canonical_router(runtime: Arc<Runtime>) -> Router {
-    canonical_router_with_panels(runtime, None)
+    canonical_router_with_services(runtime, GatewayServices::default())
 }
 
 /// Build the production router with optional panel/introspection backends.
@@ -430,19 +452,29 @@ pub fn canonical_router_with_panels(
     canonical_router_with_state(build_gateway_state(runtime, panels))
 }
 
+/// Build the production router over explicit bounded-context gateway ports.
+pub fn canonical_router_with_services(runtime: Arc<Runtime>, services: GatewayServices) -> Router {
+    canonical_router_with_state(build_gateway_state_with_services(runtime, services))
+}
+
 /// Build the production router over an explicit [`GatewayState`] (lets tests
 /// keep a handle on the event bus).
 pub fn canonical_router_with_state(state: GatewayState) -> Router {
     Router::<GatewayState>::new()
         .route("/health", get(health))
         .route("/v1/models", get(list_models))
+        .route("/v1/providers", get(list_providers))
+        .route("/v1/runtime/snapshot", get(runtime_snapshot))
+        .route("/v1/apeireth/runtime/snapshot", get(runtime_snapshot))
         .route("/v1/chat", post(native_chat))
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals", get(list_pending_approvals))
         .route("/v1/approvals/resolve", post(native_resolve_approval))
         .route("/v1/apeireth/events", get(events_handler))
         .merge(panel_routes())
-        .layer(tower_http::cors::CorsLayer::permissive())
+        // The desktop gateway is loopback by default and does not need an
+        // open cross-origin policy. Deployments that intentionally expose the
+        // gateway must add an explicit, trusted-origin policy at their edge.
         .with_state(state)
 }
 
@@ -452,7 +484,16 @@ pub async fn serve_canonical(
     runtime: Arc<Runtime>,
     panels: Option<Arc<dyn PanelData>>,
 ) -> std::io::Result<()> {
-    let state = build_gateway_state(runtime, panels);
+    serve_canonical_with_services(listener, runtime, GatewayServices::from_panel(panels)).await
+}
+
+/// Serve the canonical gateway over explicit bounded-context gateway ports.
+pub async fn serve_canonical_with_services(
+    listener: tokio::net::TcpListener,
+    runtime: Arc<Runtime>,
+    services: GatewayServices,
+) -> std::io::Result<()> {
+    let state = build_gateway_state_with_services(runtime, services);
     let endpoint = listener
         .local_addr()
         .map(|addr| addr.to_string())
@@ -473,74 +514,33 @@ async fn health() -> Json<serde_json::Value> {
 
 async fn list_models(State(state): State<GatewayState>) -> Json<ModelListResponse> {
     let created = Timestamp::from_clock(state.runtime.clock().as_ref()).epoch_millis() / 1_000;
-    let model_id = state
+    let data = state
         .runtime
-        .config()
-        .default_model
-        .clone()
-        .unwrap_or_else(|| "default".to_string());
+        .providers()
+        .model_descriptors()
+        .into_iter()
+        .map(|model| ModelListItem {
+            id: model.id.to_string(),
+            object: "model",
+            created,
+            owned_by: model.provider.to_string(),
+        })
+        .collect();
     Json(ModelListResponse {
         object: "list",
-        data: vec![
-            ModelListItem {
-                id: model_id,
-                object: "model",
-                created,
-                owned_by: "apeireth",
-            },
-            ModelListItem {
-                id: "whisper-1".to_string(),
-                object: "model",
-                created,
-                owned_by: "apeireth",
-            },
-        ],
+        data,
     })
 }
 
-/// Convert a per-turn [`ExecutionTrace`] into archived panel spans.
-///
-/// One span per trace entry: the first entry is the root, everything else
-/// parents to it. Status is derived from the event variant; details (rounds,
-/// capability ids) live in `summary`-free span `kind`s — the archive is a
-/// product-facing observation, never a tool-authorization record.
-fn spans_from_trace(trace: &ExecutionTrace) -> Vec<TraceSpanDto> {
-    let root_span_id = trace
-        .entries
-        .first()
-        .map(|_| format!("{}", 0_usize))
-        .unwrap_or_default();
-    trace
-        .entries
-        .iter()
-        .enumerate()
-        .map(|(index, entry)| {
-            let (kind, status) = match &entry.event {
-                TraceEvent::ProviderInvoked { .. } => ("provider", "ok"),
-                TraceEvent::ProviderSucceeded { .. } => ("provider", "ok"),
-                TraceEvent::ProviderFailed { .. } => ("provider", "error"),
-                TraceEvent::ApprovalRequested { .. } => ("approval", "ok"),
-                TraceEvent::ApprovalResolved { .. } => ("approval", "ok"),
-                TraceEvent::GovernanceEvaluated { .. } => ("governance", "ok"),
-                TraceEvent::CapabilityUnavailable { .. } => ("capability", "error"),
-                TraceEvent::CapabilityDispatched { .. } => ("tool", "ok"),
-                TraceEvent::CapabilityCompleted { .. } => ("tool", "ok"),
-                TraceEvent::TurnCompleted { .. } => ("turn", "ok"),
-                _ => ("event", "ok"),
-            };
-            TraceSpanDto {
-                span_id: format!("{}-{index}", 0_usize),
-                parent_span_id: if index == 0 { None } else { Some(root_span_id.clone()) },
-                kind: kind.to_string(),
-                actor: "runtime".to_string(),
-                status: status.to_string(),
-                summary: None,
-                started_at: entry.at.epoch_millis(),
-                ended_at: None,
-                session_id: None,
-            }
-        })
-        .collect()
+async fn list_providers(State(state): State<GatewayState>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "object": "list",
+        "data": state.runtime.snapshot().providers,
+    }))
+}
+
+async fn runtime_snapshot(State(state): State<GatewayState>) -> Json<serde_json::Value> {
+    Json(serde_json::json!(state.runtime.snapshot()))
 }
 
 async fn native_chat(
@@ -550,77 +550,23 @@ async fn native_chat(
     let mut request = request;
     let session = request.session.unwrap_or_else(SessionId::new);
     request.session = Some(session);
-    state
-        .events
-        .publish(GatewayEvent::new("turn_started", serde_json::json!({ "session": session })));
-    let outcome = execute_chat(state.runtime.as_ref(), request)
-        .await
-        .map_err(|error| http_error(error, Some(session)))?;
-
-    if let Some(panels) = &state.panels {
-        match &outcome {
-            CanonicalChatOutcome::Completed(response) => {
-                let spans = spans_from_trace(&response.trace);
-                panels.append_trace(&response.trace_id, spans).await;
-                panels
-                    .append_audit(
-                        "chat.turn.completed",
-                        Some(&format!(
-                            "session={} rounds={} served_by={}",
-                            response.session, response.rounds, response.served_by
-                        )),
-                    )
-                    .await;
-            }
-            CanonicalChatOutcome::PendingApproval(pending) => {
-                panels
-                    .append_audit(
-                        "chat.turn.pending_approval",
-                        Some(&format!(
-                            "session={} approval={} tool={}",
-                            pending.session, pending.approval_id, pending.tool_name
-                        )),
-                    )
-                    .await;
-            }
-        }
-    }
-
-    publish_turn_outcome(&state.events, &outcome);
+    let outcome = execute_chat(state.runtime.as_ref(), request).await;
+    state.observations.flush().await;
+    let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
+    publish_turn_delta(&state.events, &outcome);
     Ok(chat_http_response(outcome))
 }
 
-/// Emit SSE lifecycle events for a finished (or paused) turn.
-fn publish_turn_outcome(bus: &EventBus, outcome: &CanonicalChatOutcome) {
-    match outcome {
-        CanonicalChatOutcome::Completed(response) => {
-            // v1 honesty: the runtime completes a turn before the gateway can
-            // encode it, so `turn_delta` carries the final text as ONE delta.
-            bus.publish(GatewayEvent::new(
-                "turn_delta",
-                serde_json::json!({ "session": response.session, "text": response.text }),
-            ));
-            bus.publish(GatewayEvent::new(
-                "turn_completed",
-                serde_json::json!({
-                    "session": response.session,
-                    "trace_id": response.trace_id,
-                    "rounds": response.rounds,
-                    "served_by": response.served_by,
-                }),
-            ));
-        }
-        CanonicalChatOutcome::PendingApproval(pending) => {
-            bus.publish(GatewayEvent::new(
-                "approval_required",
-                serde_json::json!({
-                    "session": pending.session,
-                    "approval_id": pending.approval_id,
-                    "tool_name": pending.tool_name,
-                    "capability_id": pending.capability_id,
-                }),
-            ));
-        }
+/// Emit the final assistant text as a transport delta. Lifecycle semantics are
+/// emitted by the RuntimeEventSink; this helper does not infer them.
+fn publish_turn_delta(bus: &EventBus, outcome: &CanonicalChatOutcome) {
+    if let CanonicalChatOutcome::Completed(response) = outcome {
+        // v1 honesty: the runtime completes a turn before the gateway can
+        // encode it, so `turn_delta` carries the final text as ONE delta.
+        bus.publish(GatewayEvent::new(
+            "turn_delta",
+            serde_json::json!({ "session": response.session, "text": response.text }),
+        ));
     }
 }
 
@@ -629,36 +575,10 @@ async fn native_resolve_approval(
     Json(request): Json<CanonicalApprovalRequest>,
 ) -> Result<Response, HttpError> {
     let session = request.session;
-    let decision = request.decision.clone();
-    let approval = request.approval;
-    let outcome = resolve_approval(state.runtime.as_ref(), request)
-        .await
-        .map_err(|error| http_error(error, Some(session)))?;
-
-    if let Some(panels) = &state.panels {
-        match &outcome {
-            CanonicalChatOutcome::Completed(response) => {
-                let spans = spans_from_trace(&response.trace);
-                panels.append_trace(&response.trace_id, spans).await;
-            }
-            CanonicalChatOutcome::PendingApproval(_) => {}
-        }
-        panels
-            .append_audit(
-                "approval.resolved",
-                Some(&format!(
-                    "session={} approval={} decision={:?}",
-                    session, approval, decision
-                )),
-            )
-            .await;
-    }
-
-    state.events.publish(GatewayEvent::new(
-        "approval_resolved",
-        serde_json::json!({ "session": session, "approval_id": approval, "decision": decision }),
-    ));
-    publish_turn_outcome(&state.events, &outcome);
+    let outcome = resolve_approval(state.runtime.as_ref(), request).await;
+    state.observations.flush().await;
+    let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
+    publish_turn_delta(&state.events, &outcome);
     Ok(chat_http_response(outcome))
 }
 
@@ -708,9 +628,6 @@ async fn openai_chat(
 ) -> Result<Response, HttpError> {
     let is_stream = request.stream;
     let session = request.session_id.unwrap_or_else(SessionId::new);
-    state
-        .events
-        .publish(GatewayEvent::new("turn_started", serde_json::json!({ "session": session })));
     let input = request
         .messages
         .iter()
@@ -741,68 +658,22 @@ async fn openai_chat(
         model: request.model.clone(),
         system: (!system.is_empty()).then_some(system),
     };
-    let outcome = execute_chat(state.runtime.as_ref(), native)
-        .await
-        .map_err(|error| http_error(error, Some(session)))?;
-    if let Some(panels) = &state.panels {
-        match &outcome {
-            CanonicalChatOutcome::Completed(response) => {
-                let spans = spans_from_trace(&response.trace);
-                panels.append_trace(&response.trace_id, spans).await;
-                panels
-                    .append_audit(
-                        "chat.turn.completed",
-                        Some(&format!(
-                            "session={} rounds={} served_by={}",
-                            response.session, response.rounds, response.served_by
-                        )),
-                    )
-                    .await;
-            }
-            CanonicalChatOutcome::PendingApproval(pending) => {
-                panels
-                    .append_audit(
-                        "chat.turn.pending_approval",
-                        Some(&format!(
-                            "session={} approval={} tool={}",
-                            pending.session, pending.approval_id, pending.tool_name
-                        )),
-                    )
-                    .await;
-            }
-        }
-    }
+    let outcome = execute_chat(state.runtime.as_ref(), native).await;
+    state.observations.flush().await;
+    let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     let outcome = match outcome {
         CanonicalChatOutcome::Completed(completed) => completed,
         CanonicalChatOutcome::PendingApproval(pending) => {
-            state.events.publish(GatewayEvent::new(
-                "approval_required",
-                serde_json::json!({
-                    "session": pending.session,
-                    "approval_id": pending.approval_id,
-                    "tool_name": pending.tool_name,
-                    "capability_id": pending.capability_id,
-                }),
-            ));
             return Ok((StatusCode::ACCEPTED, Json(pending)).into_response());
         }
     };
     let created = Timestamp::from_clock(state.runtime.clock().as_ref()).epoch_millis() / 1_000;
     let model_name = request.model.unwrap_or_default();
     let events = outcome.events.clone();
-    state.events.publish(GatewayEvent::new(
-        "turn_delta",
-        serde_json::json!({ "session": outcome.session, "text": outcome.text }),
-    ));
-    state.events.publish(GatewayEvent::new(
-        "turn_completed",
-        serde_json::json!({
-            "session": outcome.session,
-            "trace_id": outcome.trace_id,
-            "rounds": outcome.rounds,
-            "served_by": outcome.served_by,
-        }),
-    ));
+    publish_turn_delta(
+        &state.events,
+        &CanonicalChatOutcome::Completed(outcome.clone()),
+    );
 
     if is_stream {
         // 构建 OpenAI 规范 SSE 流式数据帧

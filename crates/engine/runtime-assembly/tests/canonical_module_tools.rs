@@ -1,12 +1,15 @@
 //! Tests proving tool capabilities owned and registered via Modules.
 
+use apeireth_runtime_assembly as apeireth_runtime;
+
 use std::sync::Arc;
 
 use apeireth_core::kernel::{CapabilityId, SessionId};
 use apeireth_governance::AllowAll;
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
-use apeireth_runtime::{
+use apeireth_runtime::canonical::CapabilityProvider;
+use apeireth_runtime::canonical::{
     FilesystemModule, McpModule, RepoModule, Runtime, SearchModule, TurnRequest,
 };
 use apeireth_tools_canonical::BuiltinToolsPlugin;
@@ -50,10 +53,10 @@ async fn tool_modules_register_and_offer_declarations_to_turn() {
     );
 
     let runtime = Runtime::builder()
-        .with_module(fs_module)
-        .with_module(search_module)
-        .with_module(repo_module)
-        .with_module(mcp_module)
+        .with_capability(fs_module.capabilities()[0].clone())
+        .with_capability(search_module.capabilities()[0].clone())
+        .with_capability(repo_module.capabilities()[0].clone())
+        .with_capability(mcp_module.capabilities()[0].clone())
         .build()
         .await
         .expect("runtime build succeeds with tool modules");
@@ -222,7 +225,7 @@ async fn tool_module_invocation_executes_end_to_end() {
 
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
-        .with_module(mcp_module)
+        .with_capability(mcp_module.capabilities()[0].clone())
         .with_governance(Arc::new(AllowAll))
         .with_default_model("mock-model")
         .build()
@@ -262,7 +265,6 @@ async fn mcp_dynamic_registration_and_unregistration_after_build_is_live() {
 
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
-        .with_module(Arc::clone(&mcp_module) as Arc<dyn apeireth_runtime::Module>)
         .with_governance(Arc::new(AllowAll))
         .with_default_model("mock-model")
         .build()
@@ -290,6 +292,7 @@ async fn mcp_dynamic_registration_and_unregistration_after_build_is_live() {
 
     // Unregister the dynamic tool
     mcp_module.unregister_tool(&tool_id);
+    runtime.capability_registry().unregister(&tool_id);
 
     // Tool declarations immediately reflect removal
     assert_eq!(runtime.tool_declarations().len(), 0);
@@ -329,7 +332,13 @@ impl ToolCapability for CollidingTool {
 async fn module_and_plugin_duplicate_tool_names_are_rejected_at_build() {
     let temp_dir = tempfile::tempdir().unwrap();
     let err = Runtime::builder()
-        .with_module(Arc::new(FilesystemModule::new(temp_dir.path())))
+        .with_capability(
+            Arc::new(FilesystemModule::new(temp_dir.path()))
+                .capabilities()
+                .into_iter()
+                .next()
+                .expect("filesystem capability"),
+        )
         .with_plugin(Arc::new(BuiltinToolsPlugin::new(temp_dir.path())))
         .build()
         .await
@@ -346,8 +355,7 @@ async fn hostile_mcp_cannot_steal_builtin_name_or_capability_id() {
     let temp_dir = tempfile::tempdir().unwrap();
     let mcp = Arc::new(McpModule::new());
     let runtime = Runtime::builder()
-        .with_module(Arc::new(RepoModule::new(temp_dir.path())))
-        .with_module(Arc::clone(&mcp) as Arc<dyn apeireth_runtime::Module>)
+        .with_capability(Arc::new(RepoModule::new(temp_dir.path())).capabilities()[0].clone())
         .with_governance(Arc::new(AllowAll))
         .build()
         .await
@@ -383,11 +391,8 @@ async fn hostile_mcp_cannot_steal_builtin_name_or_capability_id() {
     }))
     .expect("module-local bag cannot see sibling modules");
     assert!(
-        runtime
-            .module_registry()
-            .find_tool_by_name("repo")
-            .is_none(),
-        "duplicate live names must fail closed rather than first-wins"
+        runtime.capability_registry().find_by_name("repo").is_some(),
+        "unregistered module-local tools must not alter the live capability registry"
     );
 }
 

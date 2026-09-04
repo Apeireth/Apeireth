@@ -194,6 +194,7 @@ fn map_invocation_error(error: ModuleInvocationError) -> LlmError {
         }
         ModuleInvocationError::NoModel => "module invocation has no model".to_string(),
         ModuleInvocationError::Provider { reason } => reason,
+        other => other.to_string(),
     };
     LlmError::Provider(reason)
 }

@@ -340,9 +340,9 @@ pub struct ModuleContext<'a> {
     pub module_id: &'a str,
     /// Error text for [`HookPoint::OnError`], when available.
     pub error: Option<&'a str>,
-    pub(crate) invoker: &'a dyn ModuleInvoker,
-    pub(crate) invoker_handle: Arc<dyn ModuleInvoker>,
-    pub(crate) subloop: &'a dyn super::subloop::SubLoopSpawner,
+    pub invoker: &'a dyn ModuleInvoker,
+    pub invoker_handle: Arc<dyn ModuleInvoker>,
+    pub subloop: &'a dyn super::subloop::SubLoopSpawner,
 }
 
 impl<'a> ModuleContext<'a> {
@@ -390,15 +390,16 @@ impl<'a> ModuleContext<'a> {
 
 use apeireth_plugin::ToolCapability;
 
-/// A module participating in the canonical runtime lifecycle and providing capabilities.
+/// A behavior module participating in the canonical runtime lifecycle.
 ///
 /// Hook calls are sequential and deterministic. A hook error aborts an
 /// in-progress turn and is reported through [`HookPoint::OnError`] when
 /// possible; `AfterTurn` is already post-commit and `OnError` is best effort.
 /// Module directives cannot execute capabilities or alter a tool invocation.
-/// Modules can also contribute tool capabilities to the unified capability registry.
+/// Dispatchable capabilities are deliberately not part of this trait. Register
+/// them through [`super::capability::CapabilityRegistry`] instead.
 #[async_trait]
-pub trait Module: Send + Sync {
+pub trait BehaviorModule: Send + Sync {
     /// Stable module identity.
     fn manifest(&self) -> &ModuleManifest;
 
@@ -410,38 +411,30 @@ pub trait Module: Send + Sync {
     ) -> Result<ModuleOutcome, ModuleError> {
         Ok(ModuleOutcome::continue_())
     }
-
-    /// Tool capabilities contributed by this module.
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        Vec::new()
-    }
-
-    /// Accept a dynamic tool after runtime build, if this module supports it.
-    fn register_dynamic_tool(&self, _tool: Arc<dyn ToolCapability>) -> Result<(), String> {
-        Err("module does not accept dynamic tools".into())
-    }
 }
 
-/// Compatibility alias for the canonical [`Module`] trait.
-pub use Module as AgentModule;
+/// Compatibility alias for the renamed behavior trait.
+pub use BehaviorModule as Module;
+/// Compatibility alias retained for existing embedders.
+pub use BehaviorModule as AgentModule;
 
 /// Canonical registry for all runtime modules.
 ///
 /// Ensures deterministic registration ordering, unique module IDs,
 /// and aggregates tool capabilities exposed by modules.
 #[derive(Default, Clone)]
-pub struct ModuleRegistry {
-    modules: Vec<Arc<dyn Module>>,
+pub struct BehaviorRegistry {
+    modules: Vec<Arc<dyn BehaviorModule>>,
 }
 
-impl ModuleRegistry {
+impl BehaviorRegistry {
     /// Create an empty module registry.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Register one module, rejecting duplicate or empty IDs.
-    pub fn register(&mut self, module: Arc<dyn Module>) -> Result<(), String> {
+    pub fn register(&mut self, module: Arc<dyn BehaviorModule>) -> Result<(), String> {
         let manifest = module.manifest();
         if manifest.id.is_empty() {
             return Err("registered modules must have a non-empty id".to_string());
@@ -449,43 +442,13 @@ impl ModuleRegistry {
         if self.modules.iter().any(|m| m.manifest().id == manifest.id) {
             return Err(format!("duplicate module id {:?}", manifest.id));
         }
-        reject_tool_identity_collisions(
-            &self.tools(),
-            &module.tools(),
-            &format!("module {}", manifest.id),
-        )?;
         self.modules.push(module);
         Ok(())
     }
 
     /// All registered modules in deterministic registration order.
-    pub fn modules(&self) -> &[Arc<dyn Module>] {
+    pub fn modules(&self) -> &[Arc<dyn BehaviorModule>] {
         &self.modules
-    }
-
-    /// Tool capabilities contributed by all registered modules.
-    pub fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        self.modules.iter().flat_map(|m| m.tools()).collect()
-    }
-
-    /// Find a tool capability by tool name across all modules.
-    ///
-    /// Duplicate names are a registration error. Lookup still fails closed if a
-    /// live MCP bag later introduces a collision: more than one match is treated
-    /// as unavailable rather than first-wins.
-    pub fn find_tool_by_name(&self, name: &str) -> Option<Arc<dyn ToolCapability>> {
-        let mut found = None;
-        for module in &self.modules {
-            for tool in module.tools() {
-                if tool.declaration().name == name {
-                    if found.is_some() {
-                        return None;
-                    }
-                    found = Some(tool);
-                }
-            }
-        }
-        found
     }
 
     /// Number of registered modules.
@@ -499,14 +462,17 @@ impl ModuleRegistry {
     }
 }
 
-impl From<Vec<Arc<dyn Module>>> for ModuleRegistry {
-    fn from(modules: Vec<Arc<dyn Module>>) -> Self {
+impl From<Vec<Arc<dyn BehaviorModule>>> for BehaviorRegistry {
+    fn from(modules: Vec<Arc<dyn BehaviorModule>>) -> Self {
         Self { modules }
     }
 }
 
+/// Compatibility name for the old registry.
+pub use BehaviorRegistry as ModuleRegistry;
+
 /// Reject duplicate capability ids or model-facing names between two tool sets.
-pub(crate) fn reject_tool_identity_collisions(
+pub fn reject_tool_identity_collisions(
     incumbent: &[Arc<dyn ToolCapability>],
     challengers: &[Arc<dyn ToolCapability>],
     challenger_owner: &str,
@@ -563,16 +529,16 @@ pub(crate) async fn authorize_isolated_completion(
     }
 }
 
-impl std::ops::Deref for ModuleRegistry {
-    type Target = [Arc<dyn Module>];
+impl std::ops::Deref for BehaviorRegistry {
+    type Target = [Arc<dyn BehaviorModule>];
 
     fn deref(&self) -> &Self::Target {
         &self.modules
     }
 }
 
-impl<'a> IntoIterator for &'a ModuleRegistry {
-    type Item = &'a Arc<dyn Module>;
+impl<'a> IntoIterator for &'a BehaviorRegistry {
+    type Item = &'a Arc<dyn BehaviorModule>;
     type IntoIter = std::slice::Iter<'a, Arc<dyn Module>>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -584,13 +550,13 @@ impl<'a> IntoIterator for &'a ModuleRegistry {
 pub const DEFAULT_MAX_MODULE_INVOCATIONS: usize = 8;
 
 /// Per-turn side-call accounting shared by all registered modules.
-pub(crate) struct ModuleTurnState {
+pub struct ModuleTurnState {
     used: AtomicUsize,
     max: usize,
 }
 
 impl ModuleTurnState {
-    pub(crate) fn new(max: usize) -> Self {
+    pub fn new(max: usize) -> Self {
         Self {
             used: AtomicUsize::new(0),
             max,
@@ -636,7 +602,7 @@ impl ModuleTurnState {
 /// and it is not task-local or global ambient authority — it exists only where
 /// the runtime hands it out for the current invocation. It must not be
 /// retained as persistent module state across turns.
-pub(crate) struct RuntimeModuleInvoker {
+pub struct RuntimeModuleInvoker {
     router: Arc<ProviderRouter>,
     governance: Arc<dyn GovernanceHook>,
     session_id: SessionId,
@@ -663,7 +629,7 @@ impl Clone for RuntimeModuleInvoker {
 }
 
 impl RuntimeModuleInvoker {
-    pub(crate) fn new(
+    pub fn new(
         router: Arc<ProviderRouter>,
         governance: Arc<dyn GovernanceHook>,
         session_id: SessionId,

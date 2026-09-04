@@ -1,13 +1,13 @@
 //! Panel introspection surface (`/v1/panel/*`, `/v1/tools/list`, `/v1/apeireth/capabilities`).
 //!
 //! The gateway owns HTTP shape and transport only; concrete data access is
-//! supplied by the composition root through [`PanelData`]. When no panel data
-//! is configured (e.g. embedded tests), every panel route answers
+//! supplied by the composition root through bounded-context ports in
+//! [`GatewayServices`]. When no service is configured (e.g. embedded tests), every panel route answers
 //! `501 unsupported` with the canonical error body — the frontend treats that
 //! as honest degradation, never as a transport failure.
 //!
 //! Response shapes follow `docs/gateway-api-contract.md` §4-§9 and mirror the
-//! desktop types in `frontend/companion-desktop/src/lib/types.ts`.
+//! desktop types in the sibling `apeireth-ui/src/lib/types.ts` workspace.
 
 use std::sync::Arc;
 
@@ -25,8 +25,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone)]
 pub struct GatewayState {
     pub runtime: Arc<Runtime>,
-    pub panels: Option<Arc<dyn PanelData>>,
+    pub services: GatewayServices,
     pub events: crate::events::EventBus,
+    pub observations: Arc<crate::events::RuntimeObservationSink>,
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +118,13 @@ pub struct EpisodeDto {
 #[derive(Debug, Clone, Serialize)]
 pub struct EpisodeMutationDto {
     pub ok: bool,
+    /// Compatibility alias retained for older desktop clients.
     pub rev: u64,
+    pub id: String,
+    pub status: String,
+    pub protected: bool,
+    pub revision: u64,
+    pub content: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -218,15 +225,26 @@ pub trait PanelData: Send + Sync {
     ) -> Result<Vec<EpisodeDto>, String>;
 
     /// Append one episode and return its DTO (rev starts at 0).
-    async fn append_episode(&self, session: &str, role: &str, content: &str)
-        -> Result<EpisodeDto, String>;
+    async fn append_episode(
+        &self,
+        session: &str,
+        role: &str,
+        content: &str,
+    ) -> Result<EpisodeDto, String>;
 
     /// Gateway-level protect/unprotect/forget flags with optimistic revision
     /// checks. `expected_rev` must equal the current revision, otherwise a
     /// conflict error is returned and nothing changes.
-    async fn protect_episode(&self, id: &str, expected_rev: u64) -> Result<EpisodeMutationDto, String>;
-    async fn unprotect_episode(&self, id: &str, expected_rev: u64)
-        -> Result<EpisodeMutationDto, String>;
+    async fn protect_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String>;
+    async fn unprotect_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String>;
     async fn forget_episode(
         &self,
         id: &str,
@@ -261,6 +279,283 @@ pub trait PanelData: Send + Sync {
 }
 
 // ---------------------------------------------------------------------------
+// Bounded-context gateway services
+// ---------------------------------------------------------------------------
+
+/// Session read port exposed to the gateway.
+#[async_trait]
+pub trait SessionQuery: Send + Sync {
+    async fn list_sessions(&self) -> Result<Vec<SessionSummaryDto>, String>;
+}
+
+/// Memory read port exposed to the gateway.
+#[async_trait]
+pub trait MemoryQuery: Send + Sync {
+    async fn list_episodes(
+        &self,
+        session: Option<&str>,
+        query: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EpisodeDto>, String>;
+    async fn memory_graph(&self) -> Result<MemoryGraphDto, String>;
+}
+
+/// Memory append port.
+#[async_trait]
+pub trait MemoryCommand: Send + Sync {
+    async fn append_episode(
+        &self,
+        session: &str,
+        role: &str,
+        content: &str,
+    ) -> Result<EpisodeDto, String>;
+}
+
+/// Durable memory governance command port.
+#[async_trait]
+pub trait MemoryGovernanceCommand: Send + Sync {
+    async fn protect_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String>;
+    async fn unprotect_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String>;
+    async fn forget_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+        reason: Option<&str>,
+    ) -> Result<EpisodeMutationDto, String>;
+}
+
+/// Tool catalog read port.
+#[async_trait]
+pub trait ToolCatalogQuery: Send + Sync {
+    async fn list_tools(&self) -> Result<Vec<ToolDto>, String>;
+}
+
+/// Trace query port.
+#[async_trait]
+pub trait TraceQuery: Send + Sync {
+    async fn list_traces(&self, limit: usize) -> Result<Vec<TraceSummaryDto>, String>;
+    async fn trace_detail(&self, trace_id: &str) -> Result<Option<TraceDetailDto>, String>;
+}
+
+/// Trace archive write port.
+#[async_trait]
+pub trait TraceCommand: Send + Sync {
+    async fn append_trace(&self, trace_id: &str, spans: Vec<TraceSpanDto>);
+}
+
+/// Audit query and append ports.
+#[async_trait]
+pub trait AuditQuery: Send + Sync {
+    async fn list_audit(&self, limit: usize) -> Result<Vec<AuditDto>, String>;
+}
+
+#[async_trait]
+pub trait AuditCommand: Send + Sync {
+    async fn append_audit(&self, event: &str, detail: Option<&str>);
+}
+
+/// Permission/grant query port.
+#[async_trait]
+pub trait GrantQuery: Send + Sync {
+    async fn list_grants(&self) -> Result<Vec<GrantDto>, String>;
+}
+
+/// Permission/grant command port.
+#[async_trait]
+pub trait GrantCommand: Send + Sync {
+    async fn revoke_grant(&self, capability: &str) -> Result<GrantMutationDto, String>;
+}
+
+/// Behavior/module projection port.
+#[async_trait]
+pub trait ModuleQuery: Send + Sync {
+    async fn list_modules(&self) -> Result<Vec<OrganDto>, String>;
+}
+
+/// Gateway service graph. Presence of a port is the capability fact; there is
+/// no second `supports_*` feature-bit interface in the production path.
+#[derive(Clone, Default)]
+pub struct GatewayServices {
+    pub sessions: Option<Arc<dyn SessionQuery>>,
+    pub memory: Option<Arc<dyn MemoryQuery>>,
+    pub memory_commands: Option<Arc<dyn MemoryCommand>>,
+    pub memory_governance: Option<Arc<dyn MemoryGovernanceCommand>>,
+    pub tools: Option<Arc<dyn ToolCatalogQuery>>,
+    pub traces: Option<Arc<dyn TraceQuery>>,
+    pub trace_commands: Option<Arc<dyn TraceCommand>>,
+    pub audit: Option<Arc<dyn AuditQuery>>,
+    pub audit_commands: Option<Arc<dyn AuditCommand>>,
+    pub grants: Option<Arc<dyn GrantQuery>>,
+    pub grant_commands: Option<Arc<dyn GrantCommand>>,
+    pub modules: Option<Arc<dyn ModuleQuery>>,
+}
+
+impl GatewayServices {
+    /// Compatibility bridge for callers still handing the gateway a legacy
+    /// panel object. New production composition should populate ports directly.
+    pub fn from_panel(panel: Option<Arc<dyn PanelData>>) -> Self {
+        let Some(panel) = panel else {
+            return Self::default();
+        };
+        let adapter = Arc::new(PanelDataAdapter {
+            inner: panel.clone(),
+        });
+        let memory = panel.supports_memory();
+        let permissions = panel.supports_permissions();
+        let modules = panel.supports_organs();
+        Self {
+            sessions: Some(adapter.clone()),
+            memory: memory.then(|| adapter.clone() as Arc<dyn MemoryQuery>),
+            memory_commands: memory.then(|| adapter.clone() as Arc<dyn MemoryCommand>),
+            memory_governance: memory.then(|| adapter.clone() as Arc<dyn MemoryGovernanceCommand>),
+            tools: Some(adapter.clone()),
+            traces: Some(adapter.clone()),
+            trace_commands: Some(adapter.clone()),
+            audit: Some(adapter.clone()),
+            audit_commands: Some(adapter.clone()),
+            grants: permissions.then(|| adapter.clone() as Arc<dyn GrantQuery>),
+            grant_commands: permissions.then(|| adapter.clone() as Arc<dyn GrantCommand>),
+            modules: modules.then(|| adapter as Arc<dyn ModuleQuery>),
+        }
+    }
+}
+
+struct PanelDataAdapter {
+    inner: Arc<dyn PanelData>,
+}
+
+#[async_trait]
+impl SessionQuery for PanelDataAdapter {
+    async fn list_sessions(&self) -> Result<Vec<SessionSummaryDto>, String> {
+        self.inner.list_sessions().await
+    }
+}
+
+#[async_trait]
+impl MemoryQuery for PanelDataAdapter {
+    async fn list_episodes(
+        &self,
+        session: Option<&str>,
+        query: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EpisodeDto>, String> {
+        self.inner.list_episodes(session, query, limit).await
+    }
+
+    async fn memory_graph(&self) -> Result<MemoryGraphDto, String> {
+        self.inner.memory_graph().await
+    }
+}
+
+#[async_trait]
+impl MemoryCommand for PanelDataAdapter {
+    async fn append_episode(
+        &self,
+        session: &str,
+        role: &str,
+        content: &str,
+    ) -> Result<EpisodeDto, String> {
+        self.inner.append_episode(session, role, content).await
+    }
+}
+
+#[async_trait]
+impl MemoryGovernanceCommand for PanelDataAdapter {
+    async fn protect_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        self.inner.protect_episode(id, expected_rev).await
+    }
+
+    async fn unprotect_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        self.inner.unprotect_episode(id, expected_rev).await
+    }
+
+    async fn forget_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+        reason: Option<&str>,
+    ) -> Result<EpisodeMutationDto, String> {
+        self.inner.forget_episode(id, expected_rev, reason).await
+    }
+}
+
+#[async_trait]
+impl ToolCatalogQuery for PanelDataAdapter {
+    async fn list_tools(&self) -> Result<Vec<ToolDto>, String> {
+        self.inner.list_tools().await
+    }
+}
+
+#[async_trait]
+impl TraceQuery for PanelDataAdapter {
+    async fn list_traces(&self, limit: usize) -> Result<Vec<TraceSummaryDto>, String> {
+        self.inner.list_traces(limit).await
+    }
+
+    async fn trace_detail(&self, trace_id: &str) -> Result<Option<TraceDetailDto>, String> {
+        self.inner.trace_detail(trace_id).await
+    }
+}
+
+#[async_trait]
+impl TraceCommand for PanelDataAdapter {
+    async fn append_trace(&self, trace_id: &str, spans: Vec<TraceSpanDto>) {
+        self.inner.append_trace(trace_id, spans).await
+    }
+}
+
+#[async_trait]
+impl AuditQuery for PanelDataAdapter {
+    async fn list_audit(&self, limit: usize) -> Result<Vec<AuditDto>, String> {
+        self.inner.list_audit(limit).await
+    }
+}
+
+#[async_trait]
+impl AuditCommand for PanelDataAdapter {
+    async fn append_audit(&self, event: &str, detail: Option<&str>) {
+        self.inner.append_audit(event, detail).await
+    }
+}
+
+#[async_trait]
+impl GrantQuery for PanelDataAdapter {
+    async fn list_grants(&self) -> Result<Vec<GrantDto>, String> {
+        self.inner.list_grants().await
+    }
+}
+
+#[async_trait]
+impl GrantCommand for PanelDataAdapter {
+    async fn revoke_grant(&self, capability: &str) -> Result<GrantMutationDto, String> {
+        self.inner.revoke_grant(capability).await
+    }
+}
+
+#[async_trait]
+impl ModuleQuery for PanelDataAdapter {
+    async fn list_modules(&self) -> Result<Vec<OrganDto>, String> {
+        self.inner.list_organs().await
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -290,11 +585,9 @@ pub fn panel_routes() -> Router<GatewayState> {
         )
         .route("/v1/panel/graph", get(memory_graph))
         .route("/v1/panel/grants", get(list_grants))
-        .route(
-            "/v1/panel/grants/revoke",
-            axum::routing::post(revoke_grant),
-        )
+        .route("/v1/panel/grants/revoke", axum::routing::post(revoke_grant))
         .route("/v1/organs", get(list_organs))
+        .route("/v1/modules", get(list_modules))
 }
 
 // ---------------------------------------------------------------------------
@@ -336,40 +629,48 @@ struct LimitQuery {
 // ---------------------------------------------------------------------------
 
 async fn list_sessions(State(state): State<GatewayState>) -> Response {
-    let Some(panels) = &state.panels else {
+    let Some(sessions) = &state.services.sessions else {
         return unsupported("sessions.read");
     };
-    match panels.list_sessions().await {
-        Ok(sessions) => (StatusCode::OK, Json(serde_json::json!({ "sessions": sessions }))).into_response(),
+    match sessions.list_sessions().await {
+        Ok(sessions) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "sessions": sessions })),
+        )
+            .into_response(),
         Err(e) => panel_error(e),
     }
 }
 
 async fn list_tools(State(state): State<GatewayState>) -> Response {
-    let Some(panels) = &state.panels else {
+    let Some(tools) = &state.services.tools else {
         return unsupported("tools.list");
     };
-    match panels.list_tools().await {
+    match tools.list_tools().await {
         Ok(tools) => (StatusCode::OK, Json(serde_json::json!({ "tools": tools }))).into_response(),
         Err(e) => panel_error(e),
     }
 }
 
 async fn list_traces(State(state): State<GatewayState>, Query(q): Query<LimitQuery>) -> Response {
-    let Some(panels) = &state.panels else {
+    let Some(traces) = &state.services.traces else {
         return unsupported("trace.read");
     };
-    match panels.list_traces(limit_of(q.limit)).await {
-        Ok(traces) => (StatusCode::OK, Json(serde_json::json!({ "traces": traces }))).into_response(),
+    match traces.list_traces(limit_of(q.limit)).await {
+        Ok(traces) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "traces": traces })),
+        )
+            .into_response(),
         Err(e) => panel_error(e),
     }
 }
 
 async fn trace_detail(State(state): State<GatewayState>, Path(trace_id): Path<String>) -> Response {
-    let Some(panels) = &state.panels else {
+    let Some(traces) = &state.services.traces else {
         return unsupported("trace.read");
     };
-    match panels.trace_detail(&trace_id).await {
+    match traces.trace_detail(&trace_id).await {
         Ok(Some(detail)) => (StatusCode::OK, Json(detail)).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
@@ -381,11 +682,15 @@ async fn trace_detail(State(state): State<GatewayState>, Path(trace_id): Path<St
 }
 
 async fn list_audit(State(state): State<GatewayState>, Query(q): Query<LimitQuery>) -> Response {
-    let Some(panels) = &state.panels else {
+    let Some(audit) = &state.services.audit else {
         return unsupported("audit.read");
     };
-    match panels.list_audit(limit_of(q.limit)).await {
-        Ok(events) => (StatusCode::OK, Json(serde_json::json!({ "events": events }))).into_response(),
+    match audit.list_audit(limit_of(q.limit)).await {
+        Ok(events) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "events": events })),
+        )
+            .into_response(),
         Err(e) => panel_error(e),
     }
 }
@@ -395,11 +700,22 @@ async fn list_audit(State(state): State<GatewayState>, Query(q): Query<LimitQuer
 // ---------------------------------------------------------------------------
 
 fn memory_unavailable(state: &GatewayState) -> Option<Response> {
-    let Some(panels) = &state.panels else {
+    if state.services.memory.is_none() {
         return Some(unsupported("memory.read"));
-    };
-    if !panels.supports_memory() {
-        return Some(unsupported("memory.read"));
+    }
+    None
+}
+
+fn memory_write_unavailable(state: &GatewayState) -> Option<Response> {
+    if state.services.memory_commands.is_none() {
+        return Some(unsupported("memory.write"));
+    }
+    None
+}
+
+fn memory_governance_unavailable(state: &GatewayState) -> Option<Response> {
+    if state.services.memory_governance.is_none() {
+        return Some(unsupported("memory.governance"));
     }
     None
 }
@@ -433,14 +749,16 @@ async fn list_episodes(
     if let Some(response) = memory_unavailable(&state) {
         return response;
     }
-    let panels = state.panels.as_ref().expect("checked above");
-    match panels
+    let memory = state.services.memory.as_ref().expect("checked above");
+    match memory
         .list_episodes(q.session.as_deref(), q.q.as_deref(), limit_of(q.limit))
         .await
     {
-        Ok(episodes) => {
-            (StatusCode::OK, Json(serde_json::json!({ "episodes": episodes }))).into_response()
-        }
+        Ok(episodes) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "episodes": episodes })),
+        )
+            .into_response(),
         Err(e) => panel_error(e),
     }
 }
@@ -449,7 +767,7 @@ async fn append_episode(
     State(state): State<GatewayState>,
     Json(request): Json<EpisodeAppendRequest>,
 ) -> Response {
-    if let Some(response) = memory_unavailable(&state) {
+    if let Some(response) = memory_write_unavailable(&state) {
         return response;
     }
     if request.content.trim().is_empty() {
@@ -459,9 +777,16 @@ async fn append_episode(
         )
             .into_response();
     }
-    let panels = state.panels.as_ref().expect("checked above");
+    let memory = state
+        .services
+        .memory_commands
+        .as_ref()
+        .expect("checked above");
     let role = request.role.as_deref().unwrap_or("user");
-    match panels.append_episode(&request.session, role, &request.content).await {
+    match memory
+        .append_episode(&request.session, role, &request.content)
+        .await
+    {
         Ok(episode) => (StatusCode::CREATED, Json(episode)).into_response(),
         Err(e) => panel_error(e),
     }
@@ -472,11 +797,15 @@ async fn protect_episode(
     axum::extract::Path(id): axum::extract::Path<String>,
     Json(request): Json<EpisodeMutationRequest>,
 ) -> Response {
-    if let Some(response) = memory_unavailable(&state) {
+    if let Some(response) = memory_governance_unavailable(&state) {
         return response;
     }
-    let panels = state.panels.as_ref().expect("checked above");
-    match panels.protect_episode(&id, request.expected_rev).await {
+    let memory = state
+        .services
+        .memory_governance
+        .as_ref()
+        .expect("checked above");
+    match memory.protect_episode(&id, request.expected_rev).await {
         Ok(mutation) => (StatusCode::OK, Json(mutation)).into_response(),
         Err(e) => panel_error(e),
     }
@@ -487,11 +816,15 @@ async fn unprotect_episode(
     axum::extract::Path(id): axum::extract::Path<String>,
     Json(request): Json<EpisodeMutationRequest>,
 ) -> Response {
-    if let Some(response) = memory_unavailable(&state) {
+    if let Some(response) = memory_governance_unavailable(&state) {
         return response;
     }
-    let panels = state.panels.as_ref().expect("checked above");
-    match panels.unprotect_episode(&id, request.expected_rev).await {
+    let memory = state
+        .services
+        .memory_governance
+        .as_ref()
+        .expect("checked above");
+    match memory.unprotect_episode(&id, request.expected_rev).await {
         Ok(mutation) => (StatusCode::OK, Json(mutation)).into_response(),
         Err(e) => panel_error(e),
     }
@@ -502,11 +835,15 @@ async fn forget_episode(
     axum::extract::Path(id): axum::extract::Path<String>,
     Json(request): Json<EpisodeMutationRequest>,
 ) -> Response {
-    if let Some(response) = memory_unavailable(&state) {
+    if let Some(response) = memory_governance_unavailable(&state) {
         return response;
     }
-    let panels = state.panels.as_ref().expect("checked above");
-    match panels
+    let memory = state
+        .services
+        .memory_governance
+        .as_ref()
+        .expect("checked above");
+    match memory
         .forget_episode(&id, request.expected_rev, request.reason.as_deref())
         .await
     {
@@ -519,8 +856,8 @@ async fn memory_graph(State(state): State<GatewayState>) -> Response {
     if let Some(response) = memory_unavailable(&state) {
         return response;
     }
-    let panels = state.panels.as_ref().expect("checked above");
-    match panels.memory_graph().await {
+    let memory = state.services.memory.as_ref().expect("checked above");
+    match memory.memory_graph().await {
         Ok(graph) => (StatusCode::OK, Json(graph)).into_response(),
         Err(e) => panel_error(e),
     }
@@ -531,10 +868,7 @@ async fn memory_graph(State(state): State<GatewayState>) -> Response {
 // ---------------------------------------------------------------------------
 
 fn permissions_unavailable(state: &GatewayState) -> Option<Response> {
-    let Some(panels) = &state.panels else {
-        return Some(unsupported("permissions.grants.read"));
-    };
-    if !panels.supports_permissions() {
+    if state.services.grants.is_none() {
         return Some(unsupported("permissions.grants.read"));
     }
     None
@@ -549,9 +883,13 @@ async fn list_grants(State(state): State<GatewayState>) -> Response {
     if let Some(response) = permissions_unavailable(&state) {
         return response;
     }
-    let panels = state.panels.as_ref().expect("checked above");
-    match panels.list_grants().await {
-        Ok(grants) => (StatusCode::OK, Json(serde_json::json!({ "grants": grants }))).into_response(),
+    let grants = state.services.grants.as_ref().expect("checked above");
+    match grants.list_grants().await {
+        Ok(grants) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "grants": grants })),
+        )
+            .into_response(),
         Err(e) => panel_error(e),
     }
 }
@@ -563,22 +901,39 @@ async fn revoke_grant(
     if let Some(response) = permissions_unavailable(&state) {
         return response;
     }
-    let panels = state.panels.as_ref().expect("checked above");
-    match panels.revoke_grant(&request.capability).await {
+    let Some(commands) = &state.services.grant_commands else {
+        return unsupported("permissions.revoke");
+    };
+    match commands.revoke_grant(&request.capability).await {
         Ok(mutation) => (StatusCode::OK, Json(mutation)).into_response(),
         Err(e) => panel_error(e),
     }
 }
 
 async fn list_organs(State(state): State<GatewayState>) -> Response {
-    let Some(panels) = &state.panels else {
+    let Some(modules) = &state.services.modules else {
         return unsupported("organs.list");
     };
-    if !panels.supports_organs() {
-        return unsupported("organs.list");
+    match modules.list_modules().await {
+        Ok(organs) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "organs": organs })),
+        )
+            .into_response(),
+        Err(e) => panel_error(e),
     }
-    match panels.list_organs().await {
-        Ok(organs) => (StatusCode::OK, Json(serde_json::json!({ "organs": organs }))).into_response(),
+}
+
+async fn list_modules(State(state): State<GatewayState>) -> Response {
+    let Some(modules) = &state.services.modules else {
+        return unsupported("modules.list");
+    };
+    match modules.list_modules().await {
+        Ok(modules) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "modules": modules })),
+        )
+            .into_response(),
         Err(e) => panel_error(e),
     }
 }
@@ -587,8 +942,15 @@ async fn list_organs(State(state): State<GatewayState>) -> Response {
 // Capability manifest
 // ---------------------------------------------------------------------------
 
-fn cap(id: &str, read: bool, write: bool, ops: &[&str], supported: bool, available: bool) -> serde_json::Value {
-    serde_json::json!({
+fn cap(
+    id: &str,
+    read: bool,
+    write: bool,
+    ops: &[&str],
+    supported: bool,
+    available: bool,
+) -> serde_json::Value {
+    let mut value = serde_json::json!({
         "id": id,
         "supported": supported,
         "read": read,
@@ -596,38 +958,48 @@ fn cap(id: &str, read: bool, write: bool, ops: &[&str], supported: bool, availab
         "version": 1,
         "operations": ops,
         "available": available,
-    })
+    });
+    if !available {
+        value["reason"] = serde_json::json!(if supported {
+            "provider_not_configured"
+        } else {
+            "platform_unsupported"
+        });
+    }
+    value
 }
 
 async fn capabilities(State(state): State<GatewayState>) -> Response {
-    let panels = state.panels.is_some();
-    let memory_supported = state
-        .panels
-        .as_ref()
-        .map(|p| p.supports_memory())
-        .unwrap_or(false);
-    let permissions_supported = state
-        .panels
-        .as_ref()
-        .map(|p| p.supports_permissions())
-        .unwrap_or(false);
-    let organs_supported = state
-        .panels
-        .as_ref()
-        .map(|p| p.supports_organs())
-        .unwrap_or(false);
+    let services = &state.services;
+    let sessions_supported = services.sessions.is_some();
+    let memory_supported = services.memory.is_some();
+    let memory_write_supported = services.memory_commands.is_some();
+    let memory_governance_supported = services.memory_governance.is_some();
+    let tools_supported = services.tools.is_some();
+    let trace_supported = services.traces.is_some();
+    let audit_supported = services.audit.is_some();
+    let permissions_supported = services.grants.is_some();
+    let permissions_write_supported = services.grant_commands.is_some();
+    let organs_supported = services.modules.is_some();
 
     let memory_ids = [
-        ("memory.read", true, true),
-        ("memory.write", true, true),
-        ("memory.forget", false, true),
-        ("memory.protect", false, true),
-        ("memory.unprotect", false, true),
+        ("memory.read", true, false, &["list", "read"] as &[&str]),
+        ("memory.write", false, true, &["append"] as &[&str]),
+        ("memory.update", false, true, &["update"] as &[&str]),
+        ("memory.forget", false, true, &["forget"] as &[&str]),
+        ("memory.protect", false, true, &["protect"] as &[&str]),
+        ("memory.unprotect", false, true, &["unprotect"] as &[&str]),
     ];
     let memory = memory_ids
         .iter()
-        .map(|(id, read, write)| {
-            cap(id, *read, *write, &["list", "append"], memory_supported, memory_supported)
+        .map(|(id, read, write, operations)| {
+            let (supported, available) = match *id {
+                "memory.read" => (memory_supported, memory_supported),
+                "memory.write" => (memory_write_supported, memory_write_supported),
+                "memory.update" => (false, false),
+                _ => (memory_governance_supported, memory_governance_supported),
+            };
+            cap(id, *read, *write, operations, supported, available)
         })
         .chain(std::iter::once(cap(
             "memory.graph.read",
@@ -644,21 +1016,25 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
         "runtime": { "service": "apeireth-gateway-2.0", "version": env!("CARGO_PKG_VERSION") },
         "capabilities": [
             { "name": "health", "capabilities": [ cap("health", true, false, &["check"], true, true) ] },
-            { "name": "models", "capabilities": [ cap("models.list", true, false, &["list"], true, true) ] },
-            { "name": "chat", "capabilities": [ cap("chat.completions", true, true, &["stream"], true, true) ] },
-            { "name": "sessions", "capabilities": [ cap("sessions.read", true, false, &["list"], panels, panels) ] },
+            { "name": "models", "capabilities": [ cap("models.list", true, false, &["list"], true, !state.runtime.providers().is_empty()) ] },
+            { "name": "providers", "capabilities": [ cap("providers.list", true, false, &["list"], true, !state.runtime.providers().is_empty()) ] },
+            { "name": "runtime", "capabilities": [ cap("runtime.snapshot.read", true, false, &["read"], true, true) ] },
+            { "name": "chat", "capabilities": [ cap("chat.completions", true, true, &["complete", "stream"], true, !state.runtime.providers().is_empty()) ] },
+            { "name": "sessions", "capabilities": [ cap("sessions.read", true, false, &["list"], sessions_supported, sessions_supported) ] },
             { "name": "memory", "capabilities": memory },
-            { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], panels, panels) ] },
+            { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], tools_supported, tools_supported) ] },
             { "name": "permissions", "capabilities": [
-                cap("permissions.approval.read", true, false, &["list"], true, true),
+                cap("approvals.read", true, false, &["list"], true, true),
+                cap("approvals.resolve", false, true, &["resolve"], true, true),
                 cap("permissions.grants.read", true, false, &["list"], permissions_supported, permissions_supported),
-                cap("permissions.revoke", false, true, &["revoke"], permissions_supported, permissions_supported),
+                cap("permissions.revoke", false, true, &["revoke"], permissions_write_supported, permissions_write_supported),
             ] },
             { "name": "organs", "capabilities": [
                 cap("organs.list", true, false, &["list"], organs_supported, organs_supported),
+                cap("modules.list", true, false, &["list"], organs_supported, organs_supported),
             ] },
-            { "name": "trace", "capabilities": [ cap("trace.read", true, false, &["list", "detail"], panels, panels) ] },
-            { "name": "audit", "capabilities": [ cap("audit.read", true, false, &["list"], panels, panels) ] },
+            { "name": "trace", "capabilities": [ cap("trace.read", true, false, &["list", "detail"], trace_supported, trace_supported) ] },
+            { "name": "audit", "capabilities": [ cap("audit.read", true, false, &["list"], audit_supported, audit_supported) ] },
             { "name": "activity", "capabilities": [ cap("activity.sse", true, false, &["subscribe"], true, true) ] },
         ]
     });

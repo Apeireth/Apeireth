@@ -54,6 +54,35 @@ html[data-theme="day"] {
   --shadow: 0 24px 70px rgba(40, 32, 50, 0.18);
 }
 
+/* Essence 浅色：嵌入视图（ConversationsView / SettingsView 等）消费的旧 Pattern 令牌 */
+html[data-theme='essence'] {
+  --bg: transparent;
+  --surface: rgba(255, 255, 255, 0.9);
+  --surface-2: rgba(255, 255, 255, 0.78);
+  --surface-3: #f0ede8;
+  --line: rgba(20, 19, 22, 0.1);
+  --line-strong: rgba(20, 19, 22, 0.16);
+  --text: #1c1b1f;
+  --muted: #5c575f;
+  --faint: #8a848f;
+  --amber: #8a7355;
+  --amber-hi: #a89272;
+  --amber-wash: rgba(138, 115, 85, 0.12);
+  --amber-line: rgba(138, 115, 85, 0.32);
+  --green: #3d7a5c;
+  --green-wash: rgba(61, 122, 92, 0.12);
+  --blue: #4a6278;
+  --blue-wash: rgba(74, 98, 120, 0.12);
+  --danger: #a84840;
+  --shadow: 0 16px 48px rgba(20, 19, 22, 0.1);
+  --bg-input: rgba(255, 255, 255, 0.88);
+}
+
+html[data-theme='essence'] body {
+  background: transparent;
+  color: var(--text);
+}
+
 /* ---------- 基础重置（原压缩块开头，全部元素级，全局生效） ---------- */
 * { box-sizing: border-box; }
 html, body { height: 100%; }

@@ -39,7 +39,9 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::{CapabilityId, Clock, Timestamp};
 use apeireth_plugin::{ProviderCapability, ProviderError};
-use apeireth_protocol::canonical::{NormalizedRequest, NormalizedResponse, NormalizedTool};
+use apeireth_protocol::canonical::{
+    ModelDescriptor, NormalizedRequest, NormalizedResponse, NormalizedTool,
+};
 use parking_lot::RwLock;
 
 use super::error::{RuntimeError, RuntimeResult};
@@ -133,6 +135,26 @@ impl ProviderRouter {
         let mut sorted: Vec<&Arc<dyn ProviderCapability>> = self.providers.iter().collect();
         sorted.sort_by_key(|p| self.rank(p.id()));
         sorted.iter().map(|p| p.id().clone()).collect()
+    }
+
+    /// Models advertised by the live provider capability registry.
+    ///
+    /// This is a read projection only: routing still decides whether a model
+    /// is healthy and whether a request can be served.
+    pub fn model_descriptors(&self) -> Vec<ModelDescriptor> {
+        let mut models = self
+            .providers
+            .iter()
+            .flat_map(|provider| provider.models())
+            .collect::<Vec<_>>();
+        models.sort_by(|left, right| {
+            left.id
+                .as_str()
+                .cmp(right.id.as_str())
+                .then_with(|| left.provider.as_str().cmp(right.provider.as_str()))
+        });
+        models.dedup_by(|left, right| left.id == right.id && left.provider == right.provider);
+        models
     }
 
     /// Current health of a provider, if it has been exercised.
