@@ -9,7 +9,7 @@
 [![Tests](https://img.shields.io/badge/tests-2012%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-16--Crate%20Microkernel-orange.svg)](docs/01-architecture/architecture.md)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
@@ -500,7 +500,10 @@ Apeireth comes from **Apeiron** (ἄπειρον) — the ancient Greek word for
 
 ## ⚖️ License
 
-Apeireth is licensed under the [Apache-2.0 License](LICENSE).
+Apeireth is dual-licensed under either of the following, at your option:
+
+- [Apache License 2.0](LICENSE)
+- [MIT License](LICENSE-MIT)
 
 ---
 

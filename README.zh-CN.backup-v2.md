@@ -9,7 +9,7 @@
 [![Tests](https://img.shields.io/badge/tests-2012%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-16--Crate%20微内核-orange.svg)](docs/01-architecture/architecture.md)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
@@ -352,7 +352,10 @@ Apeireth 源自 **Apeiron**（ἄπει隆 / ἄπειρον）——古希腊�
 
 ## ⚖️ 开源协议
 
-Apeireth 采用 [Apache-2.0 开源协议](LICENSE)。
+Apeireth 采用双协议授权,任选其一:
+
+- [Apache License 2.0](LICENSE)
+- [MIT License](LICENSE-MIT)
 
 ---
 
