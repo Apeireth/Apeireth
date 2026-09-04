@@ -7,7 +7,7 @@ Historical design proposals and donor implementations live under `docs/archive/`
 ## Current structure
 
 ```text
-apeireth-rust/
+apeireth/
 ├── crates/
 │   ├── foundation/       # stable domain types, protocol, plugins, policy, credentials
 │   ├── engine/            # runtime orchestration, providers, storage, memory

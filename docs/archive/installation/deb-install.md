@@ -25,10 +25,10 @@
 
 ```bash
 # 1.1 从 GitHub release 下载 (v1.0.0)
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth_1.0.0_amd64.deb
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.0/apeireth_1.0.0_amd64.deb
 
 # 1.2 校验 sha256 (建议)
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth_1.0.0_amd64.deb.sha256
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.0/apeireth_1.0.0_amd64.deb.sha256
 sha256sum -c apeireth_1.0.0_amd64.deb.sha256
 
 # 1.3 装
@@ -118,7 +118,7 @@ APEIRETH_LLM_BACKEND=scripted
 
 ```bash
 # 5.1 拉新 .deb
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.1/apeireth_1.0.1_amd64.deb
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.1/apeireth_1.0.1_amd64.deb
 
 # 5.2 apt 升级 (自动重启服务)
 sudo apt install ./apeireth_1.0.1_amd64.deb

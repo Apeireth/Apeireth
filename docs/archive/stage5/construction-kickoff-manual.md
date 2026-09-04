@@ -449,7 +449,7 @@ reports/
 
 ```bash
 # 1. Clone
-git clone https://github.com/apeireth/apeireth-rust.git
+git clone https://github.com/Apeireth/Apeireth.git
 cd apeireth-rust
 
 # 2. 验证环境（已就绪）

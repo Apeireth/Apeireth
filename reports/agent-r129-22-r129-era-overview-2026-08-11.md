@@ -178,7 +178,7 @@
    - Step 8: 8 硬墙 0 越界 + 0 装 PASS 严守 (14/14 verify)
 2. **配 GitHub remote** (setup-github-remote.{ps1,sh}, 主人手跑):
    - 主人浏览器创建 GitHub repo `apeireth/apeireth-rust` (Public, 0 初始化 README/.gitignore/license)
-   - 加 origin remote `https://github.com/apeireth/apeireth-rust.git`
+   - 加 origin remote `https://github.com/Apeireth/Apeireth.git`
    - 主人配 git push 认证 (gh auth login 或 Personal Access Token)
 3. **git push 整合 #5 拆 3 commit** (git-push-1.0.{ps1,sh}, 主人手跑):
    - 整合 #5.1 commit (50+ src/ 改动)

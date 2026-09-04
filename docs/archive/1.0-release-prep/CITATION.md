@@ -97,7 +97,7 @@ Apeireth v1.0.0 学术引用 = **2 BibTeX entry** (apeireth2026 主 + apeireth-r
   author       = {Apeireth Team},
   year         = {2026},
   version      = {1.0.0},
-  url          = {https://github.com/apeireth/apeireth-rust},
+  url          = {https://github.com/Apeireth/Apeireth},
   note         = {R14 Rust rewrite; v2 立体架构 / v4 生命架构 / v4.1 生命架构增量 共存 (LOCKED);
                   22 trait 互锁矩阵 (per docs/stage6/22-trait-interlock.md);
                   V-Measure 24 维 + 9 子测度 (per docs/stage6/V-measure-design.md);
@@ -285,7 +285,7 @@ doi: 10.5281/zenodo.12345678  # R21 续, 1.0 release 暂不挂
   author       = {Apeireth Team},
   year         = {2026},
   version      = {1.0.0},
-  url          = {https://github.com/apeireth/apeireth-rust}
+  url          = {https://github.com/Apeireth/Apeireth}
 }
 ```
 
@@ -300,7 +300,7 @@ doi: 10.5281/zenodo.12345678  # R21 续, 1.0 release 暂不挂
   year         = {2026},
   publisher    = {GitHub},
   version      = {1.0.0},
-  url          = {https://github.com/apeireth/apeireth-rust/blob/main/docs/1.0-release-prep/MIGRATION_GUIDE-sqlite-to-postgres.md},
+  url          = {https://github.com/Apeireth/Apeireth/blob/main/docs/1.0-release-prep/MIGRATION_GUIDE-sqlite-to-postgres.md},
   note         = {Per MIGRATION_GUIDE §6.2, 1KB SQLite mock 17 字节 fake-data.db dry-run 0 错实测 (bg_657fa7e4 2026-08-06 00:50-00:55)}
 }
 ```
@@ -352,7 +352,7 @@ doi: 10.5281/zenodo.12345678  # R21 续, 1.0 release 暂不挂
 ### §8.1 论文引用 (Journal/Conference)
 
 ```
-Apeireth Team. (2026). Apeireth: A Long-Horizon AI Growth Platform (Rust Implementation) (Version 1.0.0) [Software]. https://github.com/apeireth/apeireth-rust
+Apeireth Team. (2026). Apeireth: A Long-Horizon AI Growth Platform (Rust Implementation) (Version 1.0.0) [Software]. https://github.com/Apeireth/Apeireth
 ```
 
 ### §8.2 学位引用 (Thesis/Dissertation)
@@ -371,7 +371,7 @@ The software used in this research is Apeireth v1.0.0 (Apeireth Team, 2026).
 ### §8.4 标准引用 (Standard/Specification)
 
 ```
-Apeireth Team. (2026). Apeireth Architecture Specification v1.0.0: 6 哲学锚 + 8 项不修改承诺 [Standard]. https://github.com/apeireth/apeireth-rust/blob/main/APEIRETH-CONVENTIONS.md
+Apeireth Team. (2026). Apeireth Architecture Specification v1.0.0: 6 哲学锚 + 8 项不修改承诺 [Standard]. https://github.com/Apeireth/Apeireth/blob/main/APEIRETH-CONVENTIONS.md
 ```
 
 ---

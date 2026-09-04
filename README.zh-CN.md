@@ -6,7 +6,7 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-2012%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
+[![Tests](https://img.shields.io/badge/tests-3119%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-16--Crate%20微内核-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
@@ -70,7 +70,7 @@ Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsa
 | **JobObject 物理沙箱** | Win32 Job Object 边界初始化 + 进程隔离限制 | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **实测通过** |
 | **微内核冷启动耗时** | 16-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **实测通过** |
 | **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **实测通过** |
-| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | **2012 / 2012 通过** | ✅ **0 失败** |
+| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | **3119 / 3119 通过** | ✅ **0 失败** |
 
 > *所有基准数据均在真实硬件（AMD Ryzen 9 / Intel Core i9, 32GB RAM, Windows 11 / Ubuntu 24.04）上核验（详见 [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md)）。*
 
@@ -377,10 +377,10 @@ USB 闪存盘 (E:\ 或 /media/usb/)
 ### 2. 编译与全量测试验证
 ```bash
 # 克隆代码库
-git clone https://github.com/Apeireth/apeireth-rust.git
-cd apeireth-rust
+git clone https://github.com/Apeireth/Apeireth.git
+cd Apeireth
 
-# 运行全工作区 2012+ 单元测试与集成测试
+# 运行全工作区 3119 项单元测试与集成测试
 cargo test --workspace
 
 # 验证纯 Safe Rust 规范与 Clippy 0 警告

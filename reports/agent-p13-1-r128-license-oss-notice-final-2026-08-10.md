@@ -331,7 +331,7 @@ version = "1.2.0"  # B2 upgrade: 1.1.0 → 1.2.0 (R125 末 minor, per 10-locked.
 
 - [x] 读决策文档 decision-22/33/36/47/48/55/56/57 拿 LICENSE + 借鉴链上下文 (8 决策全读, per 决策 #57 §0)
 - [x] 读借鉴源码 7/11 LICENSE 实测 (clap 4.6.6 / hyper 0.1.20 / servers 76d64c8 / PyO3 0.29.2 / kani 0.67.0 / langgraph d56666f / superpowers 6.2.0, 全部在 borrowed-repos 实测 LICENSE 头)
-- [x] 读 Cargo.toml + Cargo.lock 拿项目元数据 (version 1.2.0 / license Apache-2.0 / authors Apeireth Team / repository github.com/apeireth/apeireth-rust)
+- [x] 读 Cargo.toml + Cargo.lock 拿项目元数据 (version 1.2.0 / license Apache-2.0 / authors Apeireth Team / repository github.com/Apeireth/Apeireth)
 - [x] 写 LICENSE 决定: **保持不动** (已存在, 8/5 写入, 168 行完整 Apache 2.0 verbatim, 0 必改 per Apache 2.0 §1)
 - [x] 写 OSS_NOTICE.md (20881 bytes, 21 KB, 360 行, 11 节, 整合借鉴 8/11 + 决策链 + 0 装 PASS + 8 硬墙 0 越界 + Apache 2.0 §4(d) 合规)
 - [x] git status 0 主动 commit 严守 verify (仅 untracked `OSS_NOTICE.md`, 0 staged, 0 commit)

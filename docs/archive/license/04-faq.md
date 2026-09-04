@@ -161,7 +161,7 @@
 ### Q6.1: 看到 LICENSE 错误 / 缺失 attribution 怎么办?
 
 **A**: 提 GitHub issue:
-- 仓库: https://github.com/apeireth/apeireth-rust/issues
+- 仓库: https://github.com/Apeireth/Apeireth/issues
 - 标题: `[LICENSE] <错误描述>`
 - 内容: 出错文件 + 期望 vs 实际
 - 标 `D-1 license compliance`

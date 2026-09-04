@@ -6,7 +6,7 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-2012%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
+[![Tests](https://img.shields.io/badge/tests-3119%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-16--Crate%20Microkernel-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
@@ -70,7 +70,7 @@ Apeireth is engineered in **Pure Safe Rust (`#![deny(unsafe_code)]`)** to delive
 | **JobObject OS Sandbox Spawn** | Win32 Job Object creation + limits + process containment | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **VERIFIED** |
 | **Microkernel Cold Start** | 16-crate kernel bootstrap to ready state | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **VERIFIED** |
 | **Runtime Idle Footprint** | Complete microkernel background daemon memory usage | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **VERIFIED** |
-| **Workspace Test Suite** | Full regression pass across all 16 crates | 100% Pass | **2012 / 2012 PASS** | ✅ **0 FAILED** |
+| **Workspace Test Suite** | Full regression pass across all 16 crates | 100% Pass | **3119 / 3119 PASS** | ✅ **0 FAILED** |
 
 > *All benchmarks are hardware-verified on AMD Ryzen 9 / Intel Core i9, 32GB RAM, Windows 11 / Ubuntu 24.04 (see [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md) for full reproduction steps).*
 
@@ -230,10 +230,10 @@ crates/
 ### 2. Build & Test Entire Workspace
 ```bash
 # Clone the repository
-git clone https://github.com/Apeireth/apeireth-rust.git
-cd apeireth-rust
+git clone https://github.com/Apeireth/Apeireth.git
+cd Apeireth
 
-# Run all 2012+ unit and integration tests
+# Run all 3119 unit and integration tests
 cargo test --workspace
 
 # Verify pure Safe Rust and zero clippy warnings

@@ -162,7 +162,7 @@
 **R145-3 02:34 实地 verify Cargo workspace 1.2.0 严守状态 (per R145-3 + 决策 #74 B2 + 决策 #78 Option A + 决策 #62 §5.1)**:
 - ✅ **`Cargo.toml:273-274`**: `[workspace.package]` 段 `version = "1.2.0"` (整合 #5.2 commit 拍板后 仍 0 改, V1.0 release 严守 100%)
 - ✅ **`Cargo.toml:280`**: `license = "Apache-2.0"` (V1.0 release 严守 100%, SPDX 表达式 单一 license)
-- ✅ **`Cargo.toml:282`**: `repository = "https://github.com/apeireth/apeireth-rust"` (V1.0 release 严守 100%)
+- ✅ **`Cargo.toml:282`**: `repository = "https://github.com/Apeireth/Apeireth"` (V1.0 release 严守 100%)
 - ✅ **`Cargo.toml:285`**: `description = "Apeireth R14 Rust 重写 — ... 1.0 release (借鉴 8/11 + 24 LOCKED + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 13 键 verdict cache)"` (V1.0 release 严守 100%)
 - ✅ **`Cargo.toml:287`**: `keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]` (V1.0 release 严守 100%)
 - ✅ **`Cargo.toml:301`**: `borrow = { count_total = 11, count_cloned = 8, count_rate_limited = 3, count_skipped = 1 }` (整合 #5.1 commit 拍板后状态, per R155-1 §2.4 整合 #5.2 commit 时 update 17:44 → 22:50 到 cloned=10/rate_limited=0/skipped=1, 整合 #5.2 commit 拍板后)

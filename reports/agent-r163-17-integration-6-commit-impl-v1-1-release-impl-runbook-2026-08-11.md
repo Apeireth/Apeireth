@@ -157,10 +157,10 @@ R163 era 整合 #6 commit 拍板 实施阶段 第 17 派活 (per 决策 #110 9:3
 | **整合 #6.2 docs/ + Cargo.toml commit** | 🟢 ✅ READY 100% (CHANGELOG + ROADMAP + RELEASE_NOTES + OSS_NOTICE + Cargo.toml 0 必改 + Cargo.lock 0 必改, per 决策 #62 §5.2 + R144-2 02:25) | ✅ done (Step 8 主人 git commit) | per 决策 #62 §5.2 + 决策 #73 §2.3 + 决策 #74 §4.2 |
 | **整合 #6.3 reports/ commit** | 🟢 ✅ READY 100% (决策链 #78-#130 + V1.1 release sub-agent 报告链 R130-R163 + HANDOFF) | ✅ done (Step 8 主人 git commit) | per 决策 #62 §5.3 + 决策 #78 §2.3 |
 | **整合 #7 Cargo workspace 1.2.1 bump commit** | 🟢 ✅ READY 100% (per R162-15 0 交集 100% + R137-3 5 阶段 5 天 1 周) | ✅ done (Step 8 主人 git commit, V1.1 release 实战前 1 天) | per R162-15 §1 战略级 1 句判断 + 决策 #74 §3.3 + 决策 #151 整合 #7 commit 拍板 2026-11-29 + R151-2 183.0KB |
-| **origin remote** | 0 origin (只有 2 worktree remote, per R129-27 关键发现 2) | `https://github.com/apeireth/apeireth-rust.git` | per Step 9 主人配 (V1.1 release 实战 第 1 commit push 配 remote) |
+| **origin remote** | 0 origin (只有 2 worktree remote, per R129-27 关键发现 2) | `https://github.com/Apeireth/Apeireth.git` | per Step 9 主人配 (V1.1 release 实战 第 1 commit push 配 remote) |
 | **v1.0.0 tag** | **stale** (R23 P3 2026-08-07 01:33, 471a8728, workspace.version = 1.0.0 旧值, per R129-27 关键发现 1) | **新 v1.0.0** (整合 #5.2 commit hash, workspace.version = 1.2.0 大版本归 0, 1.0 release 实战 Step 8.3 主人手跑删 stale + Step 9 打新) | per V1.0 release 实战 Step 8.3 主人手跑删 stale + Step 9 打新 |
 | **v1.1.0 tag** | 0 存在 | **新 v1.1.0** (整合 #7 commit hash, workspace.version = 1.2.1, V1.1 release 实战 Step 9 主人手跑打) | per Step 9 主人手跑打 (per 决策 #22 §2.2 semver 跟 决策 #74 B2 reconcile, Mavis 自决) |
-| **GitHub release 页面 (v1.1.0)** | 0 存在 | `https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0` | per Step 9 主人手跑 (per 决策 #11 + 决策 #33 §2.3 + 决策 #78 §3) |
+| **GitHub release 页面 (v1.1.0)** | 0 存在 | `https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0` | per Step 9 主人手跑 (per 决策 #11 + 决策 #33 §2.3 + 决策 #78 §3) |
 | **8 硬墙 verify** | ✅ (per R154-3 6:25 实地 verify 8/8 全 PASS 100% 严守) | 11/11 ✅ (per 决策 #33 §2.3 + 决策 #74 §1 + R154-3 Step 8) | per 决策 #33 §2.3 + 决策 #89 §3 |
 | **8 步 verify** | ✅ (per R154-3 6:25 实地 verify 8/8 全 PASS 100% 严守) | 8/8 ✅ (per 决策 #78 §8) | per 决策 #78 §8 + 决策 #89 §2 |
 | **跨 8+1+1+1+1+1 维度 verify (整合 #6 commit 拍板 准备)** | 🟢 全 PASS ✅ READY 100% (per R162-1+8+10+11+14+15+17 = 7 done sub-agent 拍板 严守解读) | 13/13 ✅ (per 决策 #108 + 决策 #109) | per 决策 #108 + 决策 #109 + R162-15 §5 附录 + R162-17 11/11 |
@@ -623,12 +623,12 @@ R163 era 整合 #6 commit 拍板 实施阶段 第 17 派活 (per 决策 #110 9:3
 | 4 | verify 删 stale tag | `git tag -l "v1.0.0"` 输出空 | 主人 (脚本执行) | 1 min |
 | 5 | push tag v1.1.0 | `git push origin v1.1.0` (per 决策 #22 §2.2 semver 跟 决策 #74 B2 reconcile, Mavis 自决) | 主人 (脚本执行) | 1 min |
 | 6 | verify tag 推成功 | `git ls-remote origin v1.1.0` = local v1.1.0 (整合 #7 commit hash, Cargo workspace 1.2.1 bump) | 主人 (脚本执行) | 1 min |
-| 7 | 主人浏览器 GitHub UI Releases | https://github.com/apeireth/apeireth-rust/releases → Click "Draft a new release" | 主人 | 1 min |
+| 7 | 主人浏览器 GitHub UI Releases | https://github.com/Apeireth/Apeireth/releases → Click "Draft a new release" | 主人 | 1 min |
 | 8 | Choose tag | v1.1.0 (从下拉框选) | 主人 | 0.5 min |
 | 9 | Release title | "Apeireth V1.1.0" | 主人 | 0.5 min |
 | 10 | Release description | per RELEASE_NOTES.md V1.1.0 段 (沿用 1.0 release RELEASE_NOTES.md 36823 bytes / 419 行 模板, V1.1.0 段 done per Step 1) - 主人复制粘贴 | 主人 | 1 min |
 | 11 | Click "Publish release" |  | 主人 | 0.5 min |
-| 12 | verify GitHub Release v1.1.0 创建成功 | https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0 | 主人 (浏览器 verify) | 0.5 min |
+| 12 | verify GitHub Release v1.1.0 创建成功 | https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0 | 主人 (浏览器 verify) | 0.5 min |
 
 **10 min 时间盒 0 主动 push/tag/release 严守 verify**:
 - Mavis 0 主动 push 严守 100% (per 决策 #11 + 决策 #33 §2.3 + 决策 #58 §7 + 决策 #61 §6 + 决策 #74 §6 + 决策 #78 §3)

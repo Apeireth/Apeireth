@@ -125,7 +125,7 @@ Full diff: https://github.com/yourcompany/yourfork/compare/v1.0.0...main
 **实操**:
 - [ ] `git fork` 后, 你的 `LICENSE` / `NOTICE` / `THIRD-PARTY-NOTICES.md` **不**动
 - [ ] 你改的文件加 `Modified by YourCompany on <date>` 注释头
-- [ ] 你的 `README.md` 加 "本项目修改自 [Apeireth](https://github.com/apeireth/apeireth-rust) (Apache-2.0)"
+- [ ] 你的 `README.md` 加 "本项目修改自 [Apeireth](https://github.com/Apeireth/Apeireth) (Apache-2.0)"
 - [ ] 你的 `CHANGELOG.md` 写清 "基于 v1.0.0 的所有改动"
 
 ### 2.2 Fork + 闭源仓库
@@ -171,7 +171,7 @@ COPY MODIFICATION_NOTICE.md /usr/share/apeireth/
 
 # 默认 License prompt
 LABEL org.opencontainers.image.licenses="Apache-2.0"
-LABEL org.opencontainers.image.source="https://github.com/apeireth/apeireth-rust"
+LABEL org.opencontainers.image.source="https://github.com/Apeireth/Apeireth"
 LABEL org.opencontainers.image.title="YourCompany Apeireth v1.0.0 Modified"
 ```
 
@@ -232,7 +232,7 @@ setup(
     ],
     long_description='''
     This package wraps Apeireth SDK v1.0.0 (Apache-2.0).
-    See https://github.com/apeireth/apeireth-rust for the full license.
+    See https://github.com/Apeireth/Apeireth for the full license.
     ''',
 )
 ```

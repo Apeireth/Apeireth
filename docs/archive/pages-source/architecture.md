@@ -216,11 +216,11 @@ R129 era (8/11 00:03-)
 
 ## 9. Refs
 
-- 📄 [决策链 #22-#62](https://github.com/apeireth/apeireth-rust/tree/main/reports) — `reports/decision-*.md` 31 份决策文件
-- 📄 [HANDOFF-NEXT-SESSION-2026-08-10.md](https://github.com/apeireth/apeireth-rust/blob/main/reports/HANDOFF-NEXT-SESSION-2026-08-10.md) — R125-R128-2 era 完整上下文
-- 📄 [Cargo.toml](https://github.com/apeireth/apeireth-rust/blob/main/Cargo.toml) — `[workspace.metadata.apeireth]` section 73 行
-- 📄 [OSS_NOTICE.md](https://github.com/apeireth/apeireth-rust/blob/main/OSS_NOTICE.md) — 借鉴 11/11 致谢
-- 📄 [Architecture v4 — Living Intelligence](https://github.com/apeireth/apeireth-rust/blob/main/docs/architecture-v4-living-intelligence.md) — 完整架构文档
-- 📄 [Architecture v4.1 — Living Intelligence Update](https://github.com/apeireth/apeireth-rust/blob/main/docs/architecture-v4-1-living-intelligence-update.md) — 架构更新
-- 📄 [docs/stage4/8-locked-unified-2026-08-05.md](https://github.com/apeireth/apeireth-rust/blob/main/docs/stage4/8-locked-unified-2026-08-05.md) — 8 不修改承诺
-- 📄 [docs/stage4/apeireth-architecture-readonly-review-2026-08-05.md](https://github.com/apeireth/apeireth-rust/blob/main/docs/stage4/apeireth-architecture-readonly-review-2026-08-05.md) — 架构 readonly 评审
+- 📄 [决策链 #22-#62](https://github.com/Apeireth/Apeireth/tree/main/reports) — `reports/decision-*.md` 31 份决策文件
+- 📄 [HANDOFF-NEXT-SESSION-2026-08-10.md](https://github.com/Apeireth/Apeireth/blob/main/reports/HANDOFF-NEXT-SESSION-2026-08-10.md) — R125-R128-2 era 完整上下文
+- 📄 [Cargo.toml](https://github.com/Apeireth/Apeireth/blob/main/Cargo.toml) — `[workspace.metadata.apeireth]` section 73 行
+- 📄 [OSS_NOTICE.md](https://github.com/Apeireth/Apeireth/blob/main/OSS_NOTICE.md) — 借鉴 11/11 致谢
+- 📄 [Architecture v4 — Living Intelligence](https://github.com/Apeireth/Apeireth/blob/main/docs/architecture-v4-living-intelligence.md) — 完整架构文档
+- 📄 [Architecture v4.1 — Living Intelligence Update](https://github.com/Apeireth/Apeireth/blob/main/docs/architecture-v4-1-living-intelligence-update.md) — 架构更新
+- 📄 [docs/stage4/8-locked-unified-2026-08-05.md](https://github.com/Apeireth/Apeireth/blob/main/docs/stage4/8-locked-unified-2026-08-05.md) — 8 不修改承诺
+- 📄 [docs/stage4/apeireth-architecture-readonly-review-2026-08-05.md](https://github.com/Apeireth/Apeireth/blob/main/docs/stage4/apeireth-architecture-readonly-review-2026-08-05.md) — 架构 readonly 评审

@@ -366,7 +366,7 @@
 - **Step 4 主人 打 v1.1.0 tag** (主人手跑 5 min 06:15-06:20, 0 Mavis 主动 tag 严守 100%, per 决策 #22 §2.2 semver 1.0 → 1.1 minor bump 跟 R130-5 §1.1 + R132-1 §1.1 + R137-3 §1 + R140-2 §1.2 多个报告一致, 注: 1.0 release stale v1.0.0 tag 471a8728 在 1.0 release 实战 Step 4 已删, V1.1 release 实战 0 stale tag 冲突)
 - **Step 5 主人 git push --tags** (主人手跑 5 min 06:20-06:25, 0 Mavis 主动 push 严守 100%, per 决策 #11)
 - **Step 6 主人 release notes 上传 + GitHub Release v1.1.0 创建** (主人手跑 10 min 06:25-06:35, GitHub UI → Releases → Draft → v1.1.0 tag → description RELEASE_NOTES.md V1.1 release + 6 大方向 + 11 项 verify 100% 落实 + 8 硬墙 0 越界 + 0 装 PASS 严守 100% → Click "Publish release", 0 Mavis 主动 release 严守 100%, per 决策 #11 + 决策 #78 §3)
-- **Step 7 V1.1 release 实战 done verify** (Mavis verify + 主人 verify 5 min 06:35-06:40, verify GitHub release v1.1.0 页面 https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0 + 整合 #6 + #7 commit 拍板 verify 100% + 决策链 #131 spec 写完, per 决策 #10 + 决策 #33 C1)
+- **Step 7 V1.1 release 实战 done verify** (Mavis verify + 主人 verify 5 min 06:35-06:40, verify GitHub release v1.1.0 页面 https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0 + 整合 #6 + #7 commit 拍板 verify 100% + 决策链 #131 spec 写完, per 决策 #10 + 决策 #33 C1)
 - **Step 8 V1.2 release 永久循环接续** (Mavis 主动 永久循环 0 终点, per 决策 #71 §2-§5 + 主人 0:57 拍板, 4 步循环 (永久) → 含 整合 #8 + #9 + #10 commit 拍板 + V1.2 release 调研 + 差距 + 计划 + 实施 + 实战, 估 V1.2 release 2027-02-28 per R130-5 §1.2 + R132-1 §1.2 + R131-3 §1.2)
 - **总时间盒 40-70 min ≈ 1 hour 主人起床后** (per R151-2 §2.5 + R136-2 §3 + R138-7 §6 + 决策 #11 + 决策 #33 C1, 整合 #6 + #7 commit 拍板 ready 2026-11-25 + 2026-11-29 主人起床 verify + Step 2-6 共 30 min + Step 7 verify 5 min + Step 8 永久循环)
 

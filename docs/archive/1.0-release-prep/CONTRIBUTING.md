@@ -285,7 +285,7 @@ git diff main..HEAD -- CONTRIBUTING.md
 按 [`.well-known/security.txt`](../../.well-known/security.txt) RFC 9116 报告:
 
 - **Email**: `mailto:security@apeireth.local`
-- **GitHub Advisories**: https://github.com/apeireth/apeireth-rust/security/advisories/new
+- **GitHub Advisories**: https://github.com/Apeireth/Apeireth/security/advisories/new
 - **GPG 加密**: `apeireth-security.pub` (per `.well-known/security.txt` Expires 字段, 1 年有效期)
 - **响应 SLA**: 24h 初次响应, 7 天出 patch, 30 天出 release (per 蓝图 §3.5 P0 #12 security)
 

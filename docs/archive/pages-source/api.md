@@ -119,15 +119,15 @@ GET /v1/rate-limit/status
 
 | Organ | API 文档 | 拟人化 |
 |-------|---------|--------|
-| brain | [`docs/api/organ-brain.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/organ-brain.md) | 决策 |
-| heart | [`docs/api/organ-heart.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/organ-heart.md) | 状态 |
-| memory | [`docs/api/organ-memory.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/organ-memory.md) | 长期记忆 |
-| mind | [`docs/api/organ-mind.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/organ-mind.md) | 推理 |
-| voice | [`docs/api/organ-voice.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/organ-voice.md) | 表达 |
-| eye | [`docs/api/organ-eye.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/organ-eye.md) | 感知 |
-| ear | [`docs/api/organ-ear.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/organ-ear.md) | 监听 |
-| hand | [`docs/api/organ-hand.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/organ-hand.md) | 执行 |
-| body | [`docs/api/organ-body.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/organ-body.md) | 总线 |
+| brain | [`docs/api/organ-brain.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/organ-brain.md) | 决策 |
+| heart | [`docs/api/organ-heart.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/organ-heart.md) | 状态 |
+| memory | [`docs/api/organ-memory.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/organ-memory.md) | 长期记忆 |
+| mind | [`docs/api/organ-mind.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/organ-mind.md) | 推理 |
+| voice | [`docs/api/organ-voice.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/organ-voice.md) | 表达 |
+| eye | [`docs/api/organ-eye.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/organ-eye.md) | 感知 |
+| ear | [`docs/api/organ-ear.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/organ-ear.md) | 监听 |
+| hand | [`docs/api/organ-hand.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/organ-hand.md) | 执行 |
+| body | [`docs/api/organ-body.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/organ-body.md) | 总线 |
 
 **9 organ = TUI/Tauri 终极前端核心** (per 决策 #11 + 用户记忆 #5).
 
@@ -153,7 +153,7 @@ POST /v1/auth/logout
 | `APEIRETH_RATE_LIMIT` | 429 | 限流 |
 | `APEIRETH_INTERNAL` | 500 | 内部错误 |
 
-完整错误码见 [`docs/api/error-codes.md`](https://github.com/apeireth/apeireth-rust/blob/main/docs/api/error-codes.md).
+完整错误码见 [`docs/api/error-codes.md`](https://github.com/Apeireth/Apeireth/blob/main/docs/api/error-codes.md).
 
 ## 9. 0 装 PASS 严守 (per 决策 #33 §2.3 C2)
 

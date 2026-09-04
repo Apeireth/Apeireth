@@ -13,7 +13,7 @@ locations; the root workspace is the only active Rust workspace.
 
 | Item | Value |
 | --- | --- |
-| Remote | `https://github.com/Apeireth/apeireth-rust.git` |
+| Remote | `https://github.com/Apeireth/Apeireth.git` |
 | Branch | `reconstruct_v2` (authoritative working baseline) |
 | Starting HEAD | `b0a017f060841119b46d79e28870732ae80e1aed` |
 | HEAD subject | `feat(frontier): complete real-time Voice Call UI, Screen Agent, Software Factory and MCP Hub` |

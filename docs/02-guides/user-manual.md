@@ -125,7 +125,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | 启用 shell/fetch？ | bootstrap 时 `BuiltinToolsPlugin::with_options(root, BuiltinToolsOptions { shell: Some(...), fetch: Some(...) })`。CLI 默认不启用。 |
 | 工具被拒了？ | 预期行为：要么工具未启用（opt-in 关），要么 governance hook deny / RequireApproval。当前 AllowAll 默认下工具不拒；启用 hook 后才生效。 |
 | 我想接一个 IDE 一样的自定义模型？ | 实现 `ProviderCapability` trait + 注册为 plugin；参考 `crates/engine/provider/src/canonical_minimax.rs` 作为示例。 |
-| Docker？ | `Dockerfile` 多架构已修；本机无 docker 详见 [CI 实测为准](https://github.com/Apeireth/apeireth-rust/actions)。 |
+| Docker？ | `Dockerfile` 多架构已修；本机无 docker 详见 [CI 实测为准](https://github.com/Apeireth/Apeireth/actions)。 |
 | 我看到的"13 键"在哪？ | `crates/foundation/core/src/philosophy.rs` + 测试 `crates/foundation/core/tests/verdict_keys.rs` 等。当前未接 canonical 执行路径（见 §8）。|
 
 ## 10. 一句话

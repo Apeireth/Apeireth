@@ -1,7 +1,7 @@
 # Apeireth Architecture
 
-> 当前基线：默认分支 `main` @ `d6910cf7`，tag `v2.0.0-alpha.1`。
-> 根 Cargo workspace（13 个 crate）+ 独立的
+> 当前基线：默认分支 `main`，tag `v2.0.0-rc.1`（测试基线见 `research/baselines/`）。
+> 根 Cargo workspace（16 个 crate）+ 独立的
 > `frontend/companion-desktop` workspace。历史 donor 不属于生产依赖。
 
 ## Layer view
@@ -15,7 +15,7 @@ crates/engine/runtime  ── governance / providers / storage
         │
 crates/capabilities/tools  ── built-in capabilities + ProcessExecutor
         │
-crates/foundation/{core,protocol,plugin,governance,credentials}
+crates/foundation/{core,protocol,plugin,governance,credentials,orchestration}
 ```
 
 The dependency direction points inward: adapters call the runtime, the runtime
@@ -27,8 +27,8 @@ contracts. The current dependency graph is intentionally explicit in the root
 
 | Group | Crates | Ownership |
 | --- | --- | --- |
-| Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials` | Stable domain primitives, normalized protocol types, capability/plugin contracts, governance decisions, credential backends |
-| Engine | `apeireth-runtime`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory` | Runtime composition, vendor provider capabilities, SQLite/storage foundation, durable memory and retrieval |
+| Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration` | Stable domain primitives, normalized protocol types, capability/plugin contracts, governance decisions, credential backends, orchestration/council/context |
+| Engine | `apeireth-runtime`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ` | Runtime composition, vendor provider capabilities, SQLite/storage foundation, durable memory and retrieval, perception, organ modules |
 | Capabilities | `apeireth-tools-canonical` | Built-in filesystem/search/repository/fetch/shell capabilities and the canonical process execution boundary |
 | Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk` | HTTP/CLI/SDK entry surfaces; no second orchestration root |
 

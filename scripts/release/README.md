@@ -91,7 +91,7 @@ bash scripts/release/setup-github-remote.sh
 
 **3 子步**:
 1. 主人浏览器创建 GitHub repo `apeireth/apeireth-rust` (Public, 0 初始化 README/.gitignore/license)
-2. 加 origin remote `https://github.com/apeireth/apeireth-rust.git`
+2. 加 origin remote `https://github.com/Apeireth/Apeireth.git`
 3. 主人手配 git push 认证 (推荐 GitHub CLI `gh auth login` 或 Personal Access Token)
 
 ### Step 3: git push 整合 #5 commit (主人手跑, Mavis 0 主动 push 严守)
@@ -130,7 +130,7 @@ bash scripts/release/tag-1.0.0.sh
 1. 打 annotated tag `v1.0.0` (per semver 大版本归 0, decision-22 §2.2)
 2. `git push origin v1.0.0`
 3. `gh release create v1.0.0 --title "Apeireth 1.0.0" --notes-file RELEASE_NOTES.md`
-4. verify GitHub release 页面 `https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0`
+4. verify GitHub release 页面 `https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0`
 
 ### Step 5: 1.0 release 反馈 (主人接管, 0 主动 IM 打扰)
 

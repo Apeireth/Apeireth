@@ -101,7 +101,7 @@ requirements fail before any child is spawned, with
 
 Workflow: `M2B-XV three-OS process isolation validation` (`.github/workflows/m2b-xv-isolation.yml`)
 
-Run: https://github.com/Apeireth/apeireth-rust/actions/runs/32871298920
+Run: https://github.com/Apeireth/Apeireth/actions/runs/32871298920
 Commit: `49ea32ec8947d5b184de72c3af6a513c73fc3127` — `test(tool): accept canonicalized cwd path on macOS`
 
 | Platform | Job | Result | Tool-canonical tests | Process-executor tests |

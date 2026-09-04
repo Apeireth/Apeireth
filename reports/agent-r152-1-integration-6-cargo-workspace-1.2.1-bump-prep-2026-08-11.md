@@ -241,11 +241,11 @@ edition = "2021"
 rust-version = "1.80"
 authors = ["Apeireth Team"]
 license = "Apache-2.0"
-repository = "https://github.com/apeireth/apeireth-rust"
+repository = "https://github.com/Apeireth/Apeireth"
 # V1.1 release 描述 (per decision-74 B1 V1.1 release Mavis 自决改 + decision-77 §3.1 + decision-86 §4):
 # 借鉴 11/12 + 25 LOCKED (24 + PHL-07) + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 13 键 verdict cache
 description = "Apeireth R14 Rust 重写 — 立体架构 v2 + 生命架构 v4/v4.1 + 17 crate 本源推导 + 双洋葱统一体 + Self-Disable 防护 + V1.1 release (借鉴 11/12 + 1 借脑 = 12 源 + 25 LOCKED V1.1 release Mavis 自决改 + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 13 键 verdict cache, per decision-74 B1 V1.1 release Mavis 自决改)"
-homepage = "https://github.com/apeireth/apeireth-rust"
+homepage = "https://github.com/Apeireth/Apeireth"
 keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]
 categories = ["ai", "asynchronous", "compilers"]
 ```
@@ -618,9 +618,9 @@ borrow_local_path = ".openclaw/workspace/borrowed-repos/"
 | `rust-version` | `"1.80"` | `"1.80"` | 🔒 0 改 (semver 0 影响 rust-version) |
 | `authors` | `["Apeireth Team"]` | `["Apeireth Team"]` | 🔒 0 改 (semver 0 影响 authors) |
 | `license` | `"Apache-2.0"` | `"Apache-2.0"` | 🔒 0 改 (per Apache 2.0 §4(d) NOTICE 条款 + Cargo.toml:280 实地 verify) |
-| `repository` | `"https://github.com/apeireth/apeireth-rust"` | 同 | 🔒 0 改 (semver 0 影响 repository) |
+| `repository` | `"https://github.com/Apeireth/Apeireth"` | 同 | 🔒 0 改 (semver 0 影响 repository) |
 | `description` | "Apeireth R14 Rust 重写 — 立体架构 v2 + ..." | V1.1 release description update (借鉴 11/12 + 25 LOCKED) | 🔄 UPDATE (决策 #74 B1 V1.1 release Mavis 自决改) |
-| `homepage` | `"https://github.com/apeireth/apeireth-rust"` | 同 | 🔒 0 改 (semver 0 影响 homepage) |
+| `homepage` | `"https://github.com/Apeireth/Apeireth"` | 同 | 🔒 0 改 (semver 0 影响 homepage) |
 | `keywords` | `["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]` | 同 | 🔒 0 改 (semver 0 影响 keywords) |
 | `categories` | `["ai", "asynchronous", "compilers"]` | 同 | 🔒 0 改 (semver 0 影响 categories) |
 
@@ -1236,8 +1236,8 @@ cargo update -p apeireth-value
 | **Cargo.toml:274 edition 字段** | "2021" 严守 (semver 0 影响 edition) | "2021" 严守 (semver 0 影响 edition) | ✅ R152-1 05:00 verify 100% 一致 |
 | **Cargo.toml:275 rust-version 字段** | "1.80" 严守 (semver 0 影响 rust-version) | "1.80" 严守 (semver 0 影响 rust-version) | ✅ R152-1 05:00 verify 100% 一致 |
 | **Cargo.toml:277 authors 字段** | `["Apeireth Team"]` 严守 | `["Apeireth Team"]` 严守 | ✅ R152-1 05:00 verify 100% 一致 |
-| **Cargo.toml:282 repository 字段** | `"https://github.com/apeireth/apeireth-rust"` 严守 | 同 严守 | ✅ R152-1 05:00 verify 100% 一致 |
-| **Cargo.toml:286 homepage 字段** | `"https://github.com/apeireth/apeireth-rust"` 严守 | 同 严守 | ✅ R152-1 05:00 verify 100% 一致 |
+| **Cargo.toml:282 repository 字段** | `"https://github.com/Apeireth/Apeireth"` 严守 | 同 严守 | ✅ R152-1 05:00 verify 100% 一致 |
+| **Cargo.toml:286 homepage 字段** | `"https://github.com/Apeireth/Apeireth"` 严守 | 同 严守 | ✅ R152-1 05:00 verify 100% 一致 |
 | **Cargo.toml:287 keywords 字段** | `["ai", "agent", ...]` 严守 | 同 严守 | ✅ R152-1 05:00 verify 100% 一致 |
 | **Cargo.toml:288 categories 字段** | `["ai", "asynchronous", "compilers"]` 严守 | 同 严守 | ✅ R152-1 05:00 verify 100% 一致 |
 | **Cargo.toml:285 description 字段** | V1.0 description 严守 | V1.1 description update (借鉴 11/12 + 25 LOCKED) | ✅ R152-1 05:00 verify 100% 一致 (V1.0) |

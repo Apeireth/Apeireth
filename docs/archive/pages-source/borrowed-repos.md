@@ -1,7 +1,7 @@
 # Borrowed Repos — 借鉴 11/11 致谢
 
-> **完整 OSS_NOTICE**: 见根目录 [`OSS_NOTICE.md`](https://github.com/apeireth/apeireth-rust/blob/main/OSS_NOTICE.md) (P13-1 21:53 写, 346 行, 借鉴 8/11 致谢)
-> **完整 THIRD-PARTY-NOTICES**: 见根目录 [`THIRD-PARTY-NOTICES.md`](https://github.com/apeireth/apeireth-rust/blob/main/THIRD-PARTY-NOTICES.md) (cargo-about 0.8.4 生成, 1709 lines / 12 SPDX / 0 cargo-deny violation, 106KB)
+> **完整 OSS_NOTICE**: 见根目录 [`OSS_NOTICE.md`](https://github.com/Apeireth/Apeireth/blob/main/OSS_NOTICE.md) (P13-1 21:53 写, 346 行, 借鉴 8/11 致谢)
+> **完整 THIRD-PARTY-NOTICES**: 见根目录 [`THIRD-PARTY-NOTICES.md`](https://github.com/Apeireth/Apeireth/blob/main/THIRD-PARTY-NOTICES.md) (cargo-about 0.8.4 生成, 1709 lines / 12 SPDX / 0 cargo-deny violation, 106KB)
 > **整合 #4 commit**: `abf12243` (2026-08-10 19:41, 46752 file changes)
 
 ---
@@ -149,8 +149,8 @@ borrow = [
 
 ## 6. Refs
 
-- 📄 [OSS_NOTICE.md](https://github.com/apeireth/apeireth-rust/blob/main/OSS_NOTICE.md) — 完整借鉴 11/11 致谢 (346 行, P13-1 写)
-- 📄 [THIRD-PARTY-NOTICES.md](https://github.com/apeireth/apeireth-rust/blob/main/THIRD-PARTY-NOTICES.md) — 561 crates attribution (1709 lines / 12 SPDX / 0 cargo-deny violation)
-- 📄 [Cargo.toml](https://github.com/apeireth/apeireth-rust/blob/main/Cargo.toml) — `[workspace.metadata.apeireth]` section 73 行
-- 📄 [LICENSE](https://github.com/apeireth/apeireth-rust/blob/main/LICENSE) — Apache 2.0 verbatim (175 行)
-- 📄 [NOTICE](https://github.com/apeireth/apeireth-rust/blob/main/NOTICE) — 项目 attribution (66 行)
+- 📄 [OSS_NOTICE.md](https://github.com/Apeireth/Apeireth/blob/main/OSS_NOTICE.md) — 完整借鉴 11/11 致谢 (346 行, P13-1 写)
+- 📄 [THIRD-PARTY-NOTICES.md](https://github.com/Apeireth/Apeireth/blob/main/THIRD-PARTY-NOTICES.md) — 561 crates attribution (1709 lines / 12 SPDX / 0 cargo-deny violation)
+- 📄 [Cargo.toml](https://github.com/Apeireth/Apeireth/blob/main/Cargo.toml) — `[workspace.metadata.apeireth]` section 73 行
+- 📄 [LICENSE](https://github.com/Apeireth/Apeireth/blob/main/LICENSE) — Apache 2.0 verbatim (175 行)
+- 📄 [NOTICE](https://github.com/Apeireth/Apeireth/blob/main/NOTICE) — 项目 attribution (66 行)

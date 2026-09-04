@@ -2,7 +2,7 @@
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **当前基线**: 默认分支 `main`、13-crate 工作区（v2.0.0-alpha.1）；`legacy/` 不参与构建。
+> **当前基线**: 默认分支 `main`、16-crate 工作区（v2.0.0-rc.1）；`legacy/` 不参与构建。
 
 ---
 
@@ -60,8 +60,8 @@ winget install Kitware.CMake
 ### 步骤 4：Clone + Build
 
 ```powershell
-git clone https://github.com/apeireth/apeireth-rust.git
-cd apeireth-rust
+git clone https://github.com/Apeireth/Apeireth.git
+cd Apeireth
 cargo build --workspace
 cargo test --workspace
 ```
@@ -105,8 +105,8 @@ sudo apt install -y python3 python3-pip python3-dev
 ### 步骤 3：Clone + Build
 
 ```bash
-git clone https://github.com/apeireth/apeireth-rust.git
-cd apeireth-rust
+git clone https://github.com/Apeireth/Apeireth.git
+cd Apeireth
 cargo build --workspace
 cargo test --workspace
 ```
@@ -152,8 +152,8 @@ brew install cmake pkg-config openssl
 ### 步骤 4：Clone + Build
 
 ```bash
-git clone https://github.com/apeireth/apeireth-rust.git
-cd apeireth-rust
+git clone https://github.com/Apeireth/Apeireth.git
+cd Apeireth
 cargo build --workspace
 cargo test --workspace
 ```
@@ -174,7 +174,7 @@ cargo run --bin apeireth session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（应该 1338 passed / 0 failed——13-crate 工作区实测；v1 时代 86-crate 全量为 23,806，见 CHANGELOG）
+# 2. Test（应该 3119 passed / 0 failed——16-crate 工作区实测，2026-09-04 审计重核；v1 时代 86-crate 全量为 23,806，见 CHANGELOG）
 cargo test --workspace
 
 # 3. Clippy（应该 0 warning）

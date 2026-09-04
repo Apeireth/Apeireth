@@ -27,3 +27,6 @@
 ## 默认行为闸门
 
 Phase 0 只新增 `research/` 工作区（无 Cargo.toml，不进 workspace 构建），主产品代码零改动——等价性门与性能门天然满足（见 `research/README.md`）。
+
+## 审计更新（2026-09-04）
+Phase 1–6 + FTRL 交付后全量重核: **3119 passed / 0 failed / 13 ignored / 106 suites**（.harness-audit-test.log）。本文档上方 3061 为 Phase 0 冻结快照, 保持不动。

@@ -412,7 +412,7 @@
    ↓
 [Step 1] 整合 #5.1/5.2/5.3 commit done verify (Mavis 自决拍板 5.1 + 5.2, 5.3 ✅ 1:43, per 决策 #78 §2.2)
    ↓
-[Step 2] 主人 配 GitHub remote (per 决策 #11, 主人手跑, 估 15 min, origin = https://github.com/apeireth/apeireth-rust.git)
+[Step 2] 主人 配 GitHub remote (per 决策 #11, 主人手跑, 估 15 min, origin = https://github.com/Apeireth/Apeireth.git)
    ↓
 [Step 3] 主人 git push 整合 #5 拆 3 commit (per 决策 #62 + R129-8 §B, 主人手跑 git-push-1.0.{ps1,sh}, 估 10 min)
    ↓

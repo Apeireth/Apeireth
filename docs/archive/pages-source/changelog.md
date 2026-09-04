@@ -1,6 +1,6 @@
 # Changelog — v1.0.0
 
-> **完整 CHANGELOG**: 见根目录 [`CHANGELOG.md`](https://github.com/apeireth/apeireth-rust/blob/main/CHANGELOG.md) (P7-1 21:23 写 v1.0.0, 42.8KB / 435 行)
+> **完整 CHANGELOG**: 见根目录 [`CHANGELOG.md`](https://github.com/Apeireth/Apeireth/blob/main/CHANGELOG.md) (P7-1 21:23 写 v1.0.0, 42.8KB / 435 行)
 > **格式**: [Keep a Changelog 1.1.0](https://keepachangelog.com/zh-CN/1.1.0/) + [Semantic Versioning](https://semver.org/lang/zh-CN/)
 > **整合 #4 commit**: `abf12243` (2026-08-10 19:41, 46752 file changes)
 > **0 主动 commit 严守** (Mavis 整合 #5 commit 时机拍板, per 决策 #62 + decision-33 C1)
@@ -88,8 +88,8 @@ Apeireth **1.0.0** 是 R14 Rust 重写项目的**第一个稳定版本 0 release
 - 📄 [ROADMAP.md](roadmap.md) — 1.0 → 2.0 路线图
 - 📄 [Architecture](architecture.md) — 8 哲学锚 + 24 LOCKED + 决策链
 - 📄 [Borrowed Repos](borrowed-repos.md) — 借鉴 11/11 致谢
-- 📄 [OSS_NOTICE.md](https://github.com/apeireth/apeireth-rust/blob/main/OSS_NOTICE.md) — 借鉴源码 11/11 完整致谢
-- 📄 [RELEASE_NOTES.md](https://github.com/apeireth/apeireth-rust/blob/main/RELEASE_NOTES.md) — 1.0.0 release notes (P7-3 retry 21:27 写, 36.8KB / 419 行)
+- 📄 [OSS_NOTICE.md](https://github.com/Apeireth/Apeireth/blob/main/OSS_NOTICE.md) — 借鉴源码 11/11 完整致谢
+- 📄 [RELEASE_NOTES.md](https://github.com/Apeireth/Apeireth/blob/main/RELEASE_NOTES.md) — 1.0.0 release notes (P7-3 retry 21:27 写, 36.8KB / 419 行)
 
 ## 历史版本
 
@@ -98,4 +98,4 @@ Apeireth **1.0.0** 是 R14 Rust 重写项目的**第一个稳定版本 0 release
 | 0.x | R114-R118 动态试运营 | 4921 passed / 88 suites / 0 failed, workspace.version 1.1.0 |
 | 1.0.0 | 2026-08-10 (本版本) | R125-R127 era + 整合 #4 commit done + 24 LOCKED + 8 哲学锚 + 30 维 + 6 重 v7 + 13 键 |
 
-完整历史见 [`docs/release/`](https://github.com/apeireth/apeireth-rust/tree/main/docs/release) 目录 (1.0.0 / 1.1.0 / 1.1.1 / 1.1.2 / 1.2-candidate / 1.2-r114-r118 等).
+完整历史见 [`docs/release/`](https://github.com/Apeireth/Apeireth/tree/main/docs/release) 目录 (1.0.0 / 1.1.0 / 1.1.1 / 1.1.2 / 1.2-candidate / 1.2-r114-r118 等).

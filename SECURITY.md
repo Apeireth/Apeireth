@@ -21,13 +21,13 @@ Apeireth 团队欢迎安全报告，并承诺及时处理安全问题。
 
 Apeireth 团队承诺漏洞披露过程透明，通过以下渠道公告：
 
-- **GitHub Security Advisories**: <https://github.com/apeireth/apeireth-rust/security/advisories>
-- **项目 Release Notes**: <https://github.com/apeireth/apeireth-rust/releases>
+- **GitHub Security Advisories**: <https://github.com/Apeireth/Apeireth/security/advisories>
+- **项目 Release Notes**: <https://github.com/Apeireth/Apeireth/releases>
 - **RustSec advisory database**: <https://github.com/RustSec/advisory-db> (即 `cargo-audit`)
 
 ## 适用范围 (Scope)
 
-以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 13-crate 工作区）：
+以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 16-crate 工作区）：
 
 - `apeireth-core`（`crates/foundation/core`）— 稳定域原语 + kernel（IDs/时间/生命周期/事件）；13 键 verdict cache 与洋葱/守门语义（v1 脊椎，接线状态见 ROADMAP P0/P2）
 - `apeireth-protocol`（`crates/foundation/protocol`）— 规范化协议 DTO 与 vendor wire 翻译（不含 HTTP client）

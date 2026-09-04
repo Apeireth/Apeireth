@@ -239,7 +239,7 @@ scoop uninstall apeireth
 ```bash
 # WSL2 内
 wsl
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth-1.0.0-x86_64-linux.tar.gz
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.0/apeireth-1.0.0-x86_64-linux.tar.gz
 sudo ./scripts/install/install-tarball.sh
 ```
 

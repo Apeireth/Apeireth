@@ -452,8 +452,8 @@ git diff 4207f187 HEAD -- Cargo.toml
 
 | 步骤 | 操作 | 估时 |
 |------|------|------|
-| 1 | 主人 浏览器创建 GitHub repo: https://github.com/apeireth/apeireth-rust (Public, 0 初始化 README/.gitignore/license) | 3 min |
-| 2 | 主人 手跑 `git remote add origin https://github.com/apeireth/apeireth-rust.git` | 1 min |
+| 1 | 主人 浏览器创建 GitHub repo: https://github.com/Apeireth/Apeireth (Public, 0 初始化 README/.gitignore/license) | 3 min |
+| 2 | 主人 手跑 `git remote add origin https://github.com/Apeireth/Apeireth.git` | 1 min |
 | 3 | 主人 配 git push 认证: `gh auth login --with-token` 或 PAT (full repo access scopes: repo + workflow + write:packages) | 5 min |
 | 4 | 主人 手跑 `git push -u origin master` | 5 min |
 | 5 | 主人 手跑 `git push -u origin --tags` (推 tag, 注意 stale v1.0.0 tag 471a8728 待 步骤 6 删) | 3 min |

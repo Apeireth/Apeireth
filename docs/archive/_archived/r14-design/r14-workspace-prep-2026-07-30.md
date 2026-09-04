@@ -46,7 +46,7 @@
 **workspace 全局配置**:
 - `version = "0.14.0"` (R14 启动版)
 - `edition = "2021"`, `rust-version = "1.80"` (实测 1.97.1)
-- `license = "Apache-2.0"`, `repository = "https://github.com/apeireth/apeireth-rust"`
+- `license = "Apache-2.0"`, `repository = "https://github.com/Apeireth/Apeireth"`
 - `resolver = "2"` (Rust 2021 edition 必备)
 
 **profile.release**:

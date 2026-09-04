@@ -622,7 +622,7 @@
 [8/11 09:00] 主人起床 (估, per 主人习惯 + 历史作息, 01:14 拍板睡觉)
 [8/11 09:00-09:05] Mavis 主动 done notification 报告 (整合 #5.1/5.2/5.3 commit 拍板全 done, per gate-discipline + 决策 #10 + 决策 #78 §3)
 [8/11 09:05-09:20] 1.0 release 实战 Step 2 主人 配 GitHub remote ✅
-  ↓ origin = https://github.com/apeireth/apeireth-rust.git, scripts/release/setup-github-remote.{ps1,sh} R129-8 写
+  ↓ origin = https://github.com/Apeireth/Apeireth.git, scripts/release/setup-github-remote.{ps1,sh} R129-8 写
 [8/11 09:20-09:30] 1.0 release 实战 Step 3 主人 git push 整合 #5 拆 3 commit ✅
   ↓ scripts/release/git-push-1.0.{ps1,sh} R129-8 写, local master = remote master
 [8/11 09:30-09:35] 1.0 release 实战 Step 4 主人 删 stale v1.0.0 tag (R23 P3 2026-08-07 01:33 471a8728) + 打新 v1.0.0 tag + push ✅
@@ -632,7 +632,7 @@
 [8/11 09:40-10:10] 1.0 release 实战 Step 6 主人 GitHub Pages mkdocs build + gh-pages 部署 ✅
   ↓ scripts/release/deploy-github-pages.{ps1,sh} R129-23 实战脚本, 7 文档 + mkdocs.yml 4133 bytes + Material theme + 主语言 zh, mkdocs build + git checkout --orphan gh-pages + git push origin gh-pages --force + GitHub repo Settings → Pages → Source: gh-pages branch → Save
 [8/11 10:10-10:15] 1.0 release 实战 Step 7 1.0 release done verify ✅
-  ↓ verify GitHub release v1.0.0 页面 https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0 + https://apeireth.github.io/apeireth-rust/ 7 文档 5 nav + 3 链式页
+  ↓ verify GitHub release v1.0.0 页面 https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0 + https://apeireth.github.io/apeireth-rust/ 7 文档 5 nav + 3 链式页
 [8/11 10:15+] V1.0 release done ✅ + Step 8 V1.1 release 永久循环接续 (Mavis 主动 永久)
   ↓ 总时间盒 70 min ≈ 1-2 hour 主人起床后, per 决策 #71 §2-§5 + 主人 0:57 拍板 + R144 调研 → R145 差距 → R146 计划 → R147 实施 4 步循环
 [8/12+] 永久循环 调研 阶段 (R130-R132 era 调研 6+11+2 sub-agent 派活)
@@ -669,7 +669,7 @@
 
 **V1.1 release 实战 7 步 runbook** (估 **2026-11-30 06:00-08:00 主人手跑 60-90 min**):
 - **Step 1 整合 #6 + #7 commit 拍板 verify** (5 min): 验证整合 #6 commit 拍板 done 2026-11-25 + 整合 #7 commit 拍板 done 2026-11-29, master HEAD 衔接 100% (per R151-2 §2.5)
-- **Step 2 配 GitHub remote** (5 min, 复用 V1.0 release 配的 remote): origin = https://github.com/apeireth/apeireth-rust.git, scripts/release/setup-github-remote.{ps1,sh} R129-8 写 (per 决策 #11 + 决策 #78 §3)
+- **Step 2 配 GitHub remote** (5 min, 复用 V1.0 release 配的 remote): origin = https://github.com/Apeireth/Apeireth.git, scripts/release/setup-github-remote.{ps1,sh} R129-8 写 (per 决策 #11 + 决策 #78 §3)
 - **Step 3 git push** (10 min): 推整合 #6 + #7 commit 到 origin master, scripts/release/git-push-v1.1.{ps1,sh} (per 决策 #11)
 - **Step 4 git tag v1.1.0** (5 min): 删 stale v1.1.0 tag (if any) + 打新 v1.1.0 tag + push --tags, scripts/release/tag-v1.1.0.{ps1,sh} (per R129-27 关键发现 1)
 - **Step 5 release notes 上传** (5 min): GitHub UI Releases → Draft a new release → Choose v1.1.0 tag → Release title "Apeireth 1.1.0" → description V1.1_RELEASE_NOTES.md → Click "Publish release" (per R129-8 §C)

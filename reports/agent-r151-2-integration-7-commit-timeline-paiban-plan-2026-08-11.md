@@ -272,7 +272,7 @@
 | Step | 任务 | 估时 (min) | Mavis 角色 | 主人手跑 | 8 硬墙严守 |
 |------|------|------|-----------|----------|-----------|
 | **Step 1** | 整合 #6 + #7 commit 拍板 verify (3 commit hash + master HEAD 新值) | **5 min** (估 2026-11-30 06:05 done) | Mavis 自决拍板 (per 决策 #33 C1) | 0 (Mavis verify) | ✅ 0 越界 |
-| **Step 2** | 主人起床后配 GitHub remote (per 决策 #33 C1 0 主动 push) | **5 min** (估 2026-11-30 06:10 done) | 0 主动 push (per 决策 #33 C1) | 主人手跑: `git remote add origin https://github.com/apeireth/apeireth-rust` | ✅ 0 越界 |
+| **Step 2** | 主人起床后配 GitHub remote (per 决策 #33 C1 0 主动 push) | **5 min** (估 2026-11-30 06:10 done) | 0 主动 push (per 决策 #33 C1) | 主人手跑: `git remote add origin https://github.com/Apeireth/Apeireth` | ✅ 0 越界 |
 | **Step 3** | 主人手跑 git push (per 决策 #33 C1 0 主动 push) | **5 min** (估 2026-11-30 06:15 done) | 0 主动 push (per 决策 #33 C1) | 主人手跑: `git push -u origin master` | ✅ 0 越界 |
 | **Step 4** | 主人手跑 git tag v1.1.0 (per 决策 #33 C1 0 主动 tag, 整合 #6 + #7 commit 拍板后) | **5 min** (估 2026-11-30 06:20 done) | 0 主动 tag (per 决策 #33 C1) | 主人手跑: `git tag -a v1.1.0 -m "V1.1 release 实战完 (per 决策 #74 B1 V1.1 release Mavis 自决改 + 决策 #74 B2 workspace.version 1.2.0 → 1.2.1 bump + 决策 #74 A3 PHL-07 V1.1 实施 + 24 → 25 LOCKED + 决策 #78 整合 #5.3 reports/ commit 拍板 Option A 类比 + 8 硬墙 V1.1 release Mavis 自决改 + 0 主动 push 严守 per 决策 #33 C1)"` | ✅ 0 越界 |
 | **Step 5** | 主人手跑 git push --tags (per 决策 #33 C1 0 主动 push) | **5 min** (估 2026-11-30 06:25 done) | 0 主动 push (per 决策 #33 C1) | 主人手跑: `git push --tags` | ✅ 0 越界 |
