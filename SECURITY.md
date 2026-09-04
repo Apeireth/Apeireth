@@ -71,4 +71,4 @@ v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`
 
 ---
 
-_Last updated_: 2026-08-27 (reconstruct_v2 收敛后，13-crate 范围重写)
+_Last updated_: 2026-09-04 (文档对账：16-crate 范围核验、测试基线 3119、仓库 URL `Apeireth/Apeireth`)
