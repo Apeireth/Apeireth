@@ -25,6 +25,7 @@ members = [
 # ----------------------------------------------------------------------------
 # LICENSE 引用链 (Apache 2.0 §4(d) NOTICE 条款, per P13-1 OSS_NOTICE.md §0.1):
 #   - 根目录 `LICENSE`         : Apache License 2.0 完整文本 (175 行, 2026-08-05 写入, P13-1 严守不动)
+#   - 根目录 `LICENSE-MIT`     : MIT License 完整文本 (2026-09-03 新增, 双协议)
 #   - 根目录 `NOTICE`           : 项目特有 attribution (66 行, R20 阶段 6, P13-1 严守不动)
 #   - 根目录 `OSS_NOTICE.md`    : 借鉴源码 8/11 整合 + 决策链 (346 行, P13-1 R128 阶段 D 新写)
 #   - 根目录 `THIRD-PARTY-NOTICES.md` : cargo-about 0.8.4 生成 561 crates 第三方 attribution
@@ -35,7 +36,7 @@ members = [
 #   详见 [workspace.metadata.apeireth] §borrow 段
 #
 # Cargo.toml license field 0 装 PASS 严守 verify (P15-1 R128-2 阶段 C):
-#   - [workspace.package] license = "Apache-2.0"  ← 主仓 license 单一来源
+#   - [workspace.package] license = "Apache-2.0 OR MIT"  ← 主仓 license 单一来源 (双协议, 2026-09-03 拍板)
 #   - 90+ sub-crate 中 65+ 已用 `license.workspace = true` 继承
 #   - 27 skeleton 阶段硬编码 (license = "Apache-2.0" + version 硬编码 0.1.0/1.0.0) = **已知 TODO, 1.0 release 后清**
 #     (per decision-22 §2.2 B2 1.2.0 严守 → 0 改 version 边界 + P15-1 0 主动 commit 严守 → 0 改 27 crate scope creep)
@@ -45,15 +46,15 @@ version = "2.0.0-rc.1"
 edition = "2021"
 rust-version = "1.97"  # 与 rust-toolchain.toml 对齐 (1.97.1), MSRV 诚实声明
 authors = ["Apeireth Team"]
-# 单一 license 来源 (per Apache 2.0 §4(d) NOTICE 条款, 完整文本见 根目录 `LICENSE`)
-# Sub-crate 继承 = `license.workspace = true` (90+ crate 中 65+ 已用, 27 硬编码待 1.0 后清)
-license = "Apache-2.0"
-# SPDX 表达式 (per cargo + crates.io 推荐, Apache-2.0 单一 license 不需 OR; dual license 如 clap/PyO3/kani 见各 crate)
-repository = "https://github.com/apeireth/apeireth-rust"
+# 双协议 (2026-09-03 拍板): Apache-2.0 OR MIT, 任选其一; 完整文本见根目录 `LICENSE` / `LICENSE-MIT`
+# Sub-crate 继承 = `license.workspace = true` (全部子 crate 已继承)
+license = "Apache-2.0 OR MIT"
+# SPDX 表达式 (per cargo + crates.io 推荐; dual license 惯例同 Rust 官方 / clap / PyO3 / kani)
+repository = "https://github.com/Apeireth/Apeireth"
 # 1.0 release 描述 (per decision-22 §3 + decision-57 §0 + decision-58 §0 + 2026-08-19 subagent 验证)
 # 借鉴 8/11 + 24 LOCKED (per R148 仅保 3 不可变脊柱) + 8 哲学锚 + V0.5 24 维 (30 维升级 R126 P1-4 未合入) + 9 重守门 v9 (lineage v6→v7→v8→v9) + 13 键 verdict cache = 1.0 release
 description = "Apeireth — AGI 操作系统 / LLM 基地（Rust）。v2.0 工程重构线：13-crate 单一工作区（foundation/engine/capabilities/adapters）+ canonical agent loop + 3 provider 插件 + 受控工具与进程边界；设计/哲学/愿景沿袭 v1.0（8 哲学锚 + 三洋葱 + 13 键 + 0 装 PASS，v1 历史详单见 docs/archive/）"
-homepage = "https://github.com/apeireth/apeireth-rust"
+homepage = "https://github.com/Apeireth/Apeireth"
 keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]
 categories = ["ai", "asynchronous", "compilers"]
 
@@ -140,6 +141,7 @@ integration_chain = [
 # LICENSE 引用链 (per P13-1 OSS_NOTICE.md §0.1 + Apache 2.0 §4(d))
 license_files = [
     "LICENSE (175 行, Apache 2.0 verbatim, 2026-08-05 写入, P13-1 严守不动)",
+    "LICENSE-MIT (MIT verbatim, 2026-09-03 新增, 双协议)",
     "NOTICE (66 行, 项目特有 attribution, R20 阶段 6, P13-1 严守不动)",
     "OSS_NOTICE.md (346 行, 借鉴源码 8/11 致谢, P13-1 R128 阶段 D 新写)",
     "THIRD-PARTY-NOTICES.md (1709 lines / 12 SPDX / 0 cargo-deny violation, cargo-about 0.8.4 生成, 2026-08-06)",

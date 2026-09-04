@@ -1,5 +1,7 @@
 # Apeireth License FAQ & Compliance Guide
 
+> **注**: 本文档描述 v1.0 (2026-08) 时期的单一 Apache-2.0 授权。自 v2.0 起项目改为双协议 **Apache-2.0 OR MIT**,并新增 DCO 等效贡献声明,见根目录 `CONTRIBUTING.md` 与 `README.md`。
+
 > **性质**: Apeireth 1.0 release (v1.0.0) 许可证常见问题 + 合规指南
 > **依据**: `LICENSE` (Apache-2.0) + `NOTICE` + `DEPENDENCY` + `THIRD-PARTY-NOTICES.md` (1709 lines / 561 crate / 12 unique SPDX)
 > **最后更新**: 2026-08-06
