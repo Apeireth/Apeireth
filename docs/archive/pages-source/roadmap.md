@@ -1,7 +1,7 @@
 # Roadmap — 1.0 → 2.0
 
-> **完整 ROADMAP**: 见根目录 [`ROADMAP.md`](https://github.com/apeireth/apeireth-rust/blob/main/ROADMAP.md) (P7-2 21:22 写, 28.7KB / 235 行)
-> **历史路线图**: 见 [`docs/roadmap/`](https://github.com/apeireth/apeireth-rust/tree/main/docs/roadmap)
+> **完整 ROADMAP**: 见根目录 [`ROADMAP.md`](https://github.com/Apeireth/Apeireth/blob/main/ROADMAP.md) (P7-2 21:22 写, 28.7KB / 235 行)
+> **历史路线图**: 见 [`docs/roadmap/`](https://github.com/Apeireth/Apeireth/tree/main/docs/roadmap)
 > **整合 #4 commit**: `abf12243` (2026-08-10 19:41, 46752 file changes, master HEAD 严守)
 
 ---
@@ -121,13 +121,13 @@ B1 24 LOCKED 入口签名 0 改 / B2 1.2.0 0 改 / A1 3 值 0 改 / B3 30 维 / 
 | #61 | 8/11 | 新会话接手 + R129 era 派活规划 |
 | #62 | 8/11 | 整合 #5 commit 拆 3 commit 拍板 |
 
-完整决策链见 [`reports/decision-*.md`](https://github.com/apeireth/apeireth-rust/tree/main/reports) (R125 era → R128-2 era, 31 份决策文件).
+完整决策链见 [`reports/decision-*.md`](https://github.com/Apeireth/Apeireth/tree/main/reports) (R125 era → R128-2 era, 31 份决策文件).
 
 ## 6. Refs
 
-- 📄 [ROADMAP.md](https://github.com/apeireth/apeireth-rust/blob/main/ROADMAP.md) — 完整路线图 (P7-2 21:22 写, 28.7KB / 235 行)
-- 📄 [docs/roadmap/v1.0.0-release-roadmap-2026-08-06.md](https://github.com/apeireth/apeireth-rust/blob/main/docs/roadmap/v1.0.0-release-roadmap-2026-08-06.md)
-- 📄 [docs/roadmap/v1.0-released-r125-r127-2026-08-10.md](https://github.com/apeireth/apeireth-rust/blob/main/docs/roadmap/v1.0-released-r125-r127-2026-08-10.md)
-- 📄 [docs/roadmap/r20-product-finalize-2026-08-05.md](https://github.com/apeireth/apeireth-rust/blob/main/docs/roadmap/r20-product-finalize-2026-08-05.md)
-- 📄 [docs/v2-strategy/00-VISION.md](https://github.com/apeireth/apeireth-rust/blob/main/docs/v2-strategy/00-VISION.md) — v2 战略
-- 📄 [docs/v2-strategy/05-EXECUTION-NOW.md](https://github.com/apeireth/apeireth-rust/blob/main/docs/v2-strategy/05-EXECUTION-NOW.md) — v2 执行
+- 📄 [ROADMAP.md](https://github.com/Apeireth/Apeireth/blob/main/ROADMAP.md) — 完整路线图 (P7-2 21:22 写, 28.7KB / 235 行)
+- 📄 [docs/roadmap/v1.0.0-release-roadmap-2026-08-06.md](https://github.com/Apeireth/Apeireth/blob/main/docs/roadmap/v1.0.0-release-roadmap-2026-08-06.md)
+- 📄 [docs/roadmap/v1.0-released-r125-r127-2026-08-10.md](https://github.com/Apeireth/Apeireth/blob/main/docs/roadmap/v1.0-released-r125-r127-2026-08-10.md)
+- 📄 [docs/roadmap/r20-product-finalize-2026-08-05.md](https://github.com/Apeireth/Apeireth/blob/main/docs/roadmap/r20-product-finalize-2026-08-05.md)
+- 📄 [docs/v2-strategy/00-VISION.md](https://github.com/Apeireth/Apeireth/blob/main/docs/v2-strategy/00-VISION.md) — v2 战略
+- 📄 [docs/v2-strategy/05-EXECUTION-NOW.md](https://github.com/Apeireth/Apeireth/blob/main/docs/v2-strategy/05-EXECUTION-NOW.md) — v2 执行

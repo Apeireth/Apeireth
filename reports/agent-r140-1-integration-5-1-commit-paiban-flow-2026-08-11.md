@@ -735,7 +735,7 @@ abf12243  # 整合 #4 commit (8/10 19:41 done)
 | 阶段 | 描述 | 任务主体 | 时间盒 | Mavis 角色 |
 |------|------|---------|-------|-----------|
 | **阶段 1: 整合 #5 commit 拍板** | 5.1 → 5.2 → 5.3 顺序 git add + git commit | Mavis 自决 + cron auto-pickup | 1 day | 主动 (自决拍板) |
-| **阶段 2: 主人配 GitHub remote** | 主人手跑 `git remote add origin https://github.com/apeireth/apeireth-rust.git` | 主人起床后手跑 | 1 hour | 0 主动 (等主人) |
+| **阶段 2: 主人配 GitHub remote** | 主人手跑 `git remote add origin https://github.com/Apeireth/Apeireth.git` | 主人起床后手跑 | 1 hour | 0 主动 (等主人) |
 | **阶段 3: 主人 git push** | 主人手跑 `git push -u origin master` | 主人起床后手跑 | 1 hour | 0 主动 (等主人) |
 | **阶段 4: 主人 tag v1.0.0 + GitHub Release notes** | 主人手跑 `git tag -d v1.0.0` 删 stale + `git tag -a v1.0.0 -m "..."` + `git push origin v1.0.0` + GitHub UI Releases | 主人起床后手跑 | 1 hour | 0 主动 (等主人) |
 | **阶段 5: 主人 GitHub Pages 部署 + 8 步 verify** | 主人手跑 `mkdocs build` + `git checkout --orphan gh-pages` + `git push origin gh-pages --force` + GitHub repo Settings → Pages + 8 步 verify | 主人起床后手跑 | 1 day | 0 主动 (等主人) |

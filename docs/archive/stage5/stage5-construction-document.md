@@ -184,7 +184,7 @@ edition = "2021"
 rust-version = "1.80"
 authors = ["Apeireth Team"]
 license = "Apache-2.0"
-repository = "https://github.com/apeireth/apeireth-rust"
+repository = "https://github.com/Apeireth/Apeireth"
 description = "Apeireth R14 Rust 重写 — 立体架构 v2 + 生命架构 v4/v4.1 + 18 crate 本源推导"  # 改：原 "Apeireth 主路径核心"
 ```
 

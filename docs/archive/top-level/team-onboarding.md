@@ -200,8 +200,8 @@ git diff main..HEAD -- Cargo.toml | grep '^+.*version'
 按 **`.well-known/security.txt` RFC 9116**:
 
 - mailto:security@apeireth.local
-- https://github.com/apeireth/apeireth-rust/security/advisories/new
-- 加密: https://github.com/apeireth/apeireth-rust/blob/main/docs/security/cosign.pub
+- https://github.com/Apeireth/Apeireth/security/advisories/new
+- 加密: https://github.com/Apeireth/Apeireth/blob/main/docs/security/cosign.pub
 - Expires: 2027-12-31T23:59:59Z
 
 ### 9.3 紧急联系

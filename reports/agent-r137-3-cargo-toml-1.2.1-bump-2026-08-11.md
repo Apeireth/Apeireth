@@ -213,7 +213,7 @@ edition = "2021"
 rust-version = "1.80"
 authors = ["Apeireth Team"]
 license = "Apache-2.0"
-repository = "https://github.com/apeireth/apeireth-rust"
+repository = "https://github.com/Apeireth/Apeireth"
 # V1.1 release 描述 (per decision-74 B1 V1.1 release Mavis 自决改 + decision-77 §3.1):
 # 借鉴 11/12 + 24 LOCKED (V1.1 release Mavis 自决改, 25 LOCKED 总数 = 24 + PHL-07) + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 14 键 verdict cache
 description = "Apeireth R14 Rust 重写 — 立体架构 v2 + 生命架构 v4/v4.1 + 17 crate 本源推导 + 双洋葱统一体 + Self-Disable 防护 + V1.1 release (借鉴 11/12 + 1 借脑 = 12 源 + 24 LOCKED 改写 + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 14 键 verdict cache, per decision-74 B1 V1.1 release Mavis 自决改)"

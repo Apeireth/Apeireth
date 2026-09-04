@@ -104,7 +104,7 @@ Status:          🟢 活跃 (v2 发布路线)
 | 产物 | 位置 | 状态 |
 |---|---|---|
 | tag | `v2.0.0-alpha.1` → `d6910cf7` | ✅ 已推（Clash proxy + IP rewrite + Host 头）|
-| 远端 | `https://github.com/Apeireth/apeireth-rust`（默认分支 `main`）| ✅ |
+| 远端 | `https://github.com/Apeireth/Apeireth`（默认分支 `main`）| ✅ |
 | 文档集 | 根 README + ROADMAP + CHANGELOG + 4 段 docs + ARCHITECTURE + 根 SECURITY/CONTRIBUTING/INSTALL/CODEOWNERS | ✅ 文档对账批 2026-08-27 完成 |
 | SBOM | `cargo cyclonedx sbom`（per [Makefile](../../Makefile) `make sbom`）| ⏳ 跑（v2 release 触发）|
 | cosign 签名 | per `apeireth-cosign` 镜像（post-1.0.0 已配置）| ✅ v2 沿用 |

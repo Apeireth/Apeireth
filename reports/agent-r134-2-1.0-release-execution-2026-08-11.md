@@ -31,8 +31,8 @@
   └─ 5.3 commit: reports/ 决策链 + 报告 (30+ 文件, per R129-12/16 + 41 sub-agent 报告)
   ↓ 整合 #5 commit done
 [阶段 2] 主人配 GitHub remote (1 hour, 主人起床后手跑, Mavis 0 主动)
-  ├─ 主人浏览器创建 GitHub repo: https://github.com/apeireth/apeireth-rust (Public, 0 初始化 README/.gitignore/license)
-  ├─ 主人手跑 `git remote add origin https://github.com/apeireth/apeireth-rust.git` (per setup-github-remote.ps1)
+  ├─ 主人浏览器创建 GitHub repo: https://github.com/Apeireth/Apeireth (Public, 0 初始化 README/.gitignore/license)
+  ├─ 主人手跑 `git remote add origin https://github.com/Apeireth/Apeireth.git` (per setup-github-remote.ps1)
   ├─ 主人手跑 `git remote -v` verify
   └─ 主人配 git push 认证 (gh auth login 或 PAT)
   ↓
@@ -293,16 +293,16 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
 - 主人手跑 PowerShell (Windows):
   ```powershell
   cd Apeireth-rust
-  git remote add origin https://github.com/apeireth/apeireth-rust.git
+  git remote add origin https://github.com/Apeireth/Apeireth.git
   git remote -v
   ```
 - 主人手跑 Bash (Linux/macOS/WSL):
   ```bash
   cd ~/Apeireth-rust
-  git remote add origin https://github.com/apeireth/apeireth-rust.git
+  git remote add origin https://github.com/Apeireth/Apeireth.git
   git remote -v
   ```
-- 预期输出: `origin  https://github.com/apeireth/apeireth-rust.git (fetch)` + `origin  https://github.com/apeireth/apeireth-rust.git (push)`
+- 预期输出: `origin  https://github.com/Apeireth/Apeireth.git (fetch)` + `origin  https://github.com/Apeireth/Apeireth.git (push)`
 
 **步骤 2.3: 主人配 git push 认证** (per R129-8 §Step 3.3)
 - 选项 A: gh CLI (推荐, 主人 GitHub org 已有 gh 认证):
@@ -319,7 +319,7 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
 - 主人手跑:
   ```bash
   git remote -v
-  # 验证 origin = https://github.com/apeireth/apeireth-rust.git
+  # 验证 origin = https://github.com/Apeireth/Apeireth.git
   gh auth status
   # 验证 Logged in to github.com as apeireth
   ```
@@ -331,7 +331,7 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
 | **R1**: GitHub org `apeireth` 不存在 | 主人无法创建 repo | 主人提前 verify org 存在 (https://github.com/apeireth), 不存在则用 主人 personal account |
 | **R2**: GitHub PAT 权限不足 | push 失败 | 用 `repo` + `workflow` + `write:packages` scopes (full repo access) |
 | **R3**: 主人 0 初始化 README/.gitignore/license 错 | 跟主仓冲突 | R129-8 setup-github-remote.ps1 写"0 初始化" banner 严守, 主人手跑前 read |
-| **R4**: origin remote URL 拼错 | push 失败 | `git remote -v` verify, 跟 https://github.com/apeireth/apeireth-rust.git 严格对齐 |
+| **R4**: origin remote URL 拼错 | push 失败 | `git remote -v` verify, 跟 https://github.com/Apeireth/Apeireth.git 严格对齐 |
 | **R5**: 阶段 1 整合 #5 commit 未 done | 阶段 2 推 0 commit | 阶段 1 Mavis 自决拍板 done 后才 阶段 2 (per 决策 #76 §2.1) |
 
 **0 主动 push 严守**: Mavis 0 主动 配 remote 0 主动 验证 0 主动 认证 — 阶段 2 全 主人手跑.
@@ -367,7 +367,7 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
   git push -u origin master
   git push -u origin --tags
   ```
-- 预期输出: `Writing objects: 100% (XXX/XXX), XXX bytes` + `To https://github.com/apeireth/apeireth-rust.git` + `* [new branch] master -> master` + `Branch 'master' set up to track remote 'origin/master'`
+- 预期输出: `Writing objects: 100% (XXX/XXX), XXX bytes` + `To https://github.com/Apeireth/Apeireth.git` + `* [new branch] master -> master` + `Branch 'master' set up to track remote 'origin/master'`
 
 **步骤 3.3: 主人 verify push 成功** (per R129-8 §Step 4.3)
 - 主人手跑:
@@ -377,7 +377,7 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
   git log --oneline origin/master -5
   # 预期: 顶部 3 个 commit = 整合 #5.3 + 5.2 + 5.1, 跟 local master 一致
   ```
-- 主人浏览器 verify: https://github.com/apeireth/apeireth-rust/commits/master (3 个新 commit 顶部)
+- 主人浏览器 verify: https://github.com/Apeireth/Apeireth/commits/master (3 个新 commit 顶部)
 
 ### 4.2 阶段 3 风险 + 缓解
 
@@ -412,7 +412,7 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
 - 主人手跑 (如果 origin 有 stale v1.0.0 tag, 也删):
   ```bash
   git push origin :refs/tags/v1.0.0
-  # 预期: To https://github.com/apeireth/apeireth-rust.git - [deleted] v1.0.0
+  # 预期: To https://github.com/Apeireth/Apeireth.git - [deleted] v1.0.0
   ```
 
 **步骤 4.2: 主人手跑 打 annotated tag v1.0.0** (per R129-8 §Step 5.1 + 决策 #62 §5.2)
@@ -429,12 +429,12 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
 - 主人手跑:
   ```bash
   git push origin v1.0.0
-  # 预期: To https://github.com/apeireth/apeireth-rust.git * [new tag] v1.0.0 -> v1.0.0
+  # 预期: To https://github.com/Apeireth/Apeireth.git * [new tag] v1.0.0 -> v1.0.0
   ```
-- 主人浏览器 verify: https://github.com/apeireth/apeireth-rust/tags (v1.0.0 tag 在列表)
+- 主人浏览器 verify: https://github.com/Apeireth/Apeireth/tags (v1.0.0 tag 在列表)
 
 **步骤 4.4: 主人浏览器 GitHub UI: Draft a new release** (per R129-8 §Step 5.3 + 决策 #62 §5.3)
-- 主人浏览器访问 https://github.com/apeireth/apeireth-rust/releases/new
+- 主人浏览器访问 https://github.com/Apeireth/Apeireth/releases/new
 - Choose a tag: 选择 `v1.0.0` (从下拉菜单)
 - Release title: `Apeireth 1.0.0`
 - Describe this release: 主人复制 `RELEASE_NOTES.md` (36823 bytes, P7-3 retry 21:27 写) 全部内容粘贴 (或 `gh release create v1.0.0 --title "Apeireth 1.0.0" --notes-file RELEASE_NOTES.md` CLI 命令, 主人手跑)
@@ -444,7 +444,7 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
 - Click "Publish release"
 
 **步骤 4.5: 主人 verify GitHub release 页面** (per R129-8 §Step 5.4)
-- 主人浏览器访问 https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0
+- 主人浏览器访问 https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0
 - 预期: Release title "Apeireth 1.0.0" + tag `v1.0.0` + release notes (RELEASE_NOTES.md 全文) + Latest release 标记
 
 ### 5.2 阶段 4 风险 + 缓解
@@ -503,12 +503,12 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
 - 主人手跑:
   ```bash
   git push origin gh-pages --force
-  # 预期: To https://github.com/apeireth/apeireth-rust.git * [new branch] gh-pages -> gh-pages
+  # 预期: To https://github.com/Apeireth/Apeireth.git * [new branch] gh-pages -> gh-pages
   ```
-- 主人浏览器 verify: https://github.com/apeireth/apeireth-rust/tree/gh-pages (7 文档 + mkdocs.yml + site/)
+- 主人浏览器 verify: https://github.com/Apeireth/Apeireth/tree/gh-pages (7 文档 + mkdocs.yml + site/)
 
 **步骤 5.5: 主人浏览器 GitHub Pages 设置** (per R129-23 §Step 6.4)
-- 主人浏览器访问 https://github.com/apeireth/apeireth-rust/settings/pages
+- 主人浏览器访问 https://github.com/Apeireth/Apeireth/settings/pages
 - Source: `Deploy from a branch` (下拉菜单)
 - Branch: `gh-pages` + Folder: `/ (root)`
 - Click "Save"
@@ -548,7 +548,7 @@ Refs: decision-22, #33, #48, #55, #58, #61, #62, #71, #73, #76
 
 **步骤 5.8: 主人 verify 1.0 release 页面 + GitHub Pages 文档站 双 done** (per R129-35 §Step 7)
 - 主人浏览器双 verify:
-  - https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0 (1.0 release 页面)
+  - https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0 (1.0 release 页面)
   - https://apeireth.github.io/apeireth-rust/ (GitHub Pages 文档站)
 - 主人发 release announcement (微信群 / Twitter / 邮件, per R129-23 §Step 7.3)
 

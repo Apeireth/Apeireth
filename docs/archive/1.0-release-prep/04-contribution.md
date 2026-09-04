@@ -66,7 +66,7 @@ Target:         贡献入口显眼 (CONTRIBUTING.md 1 跳可达)
 
 按 [`.well-known/security.txt`](./.well-known/security.txt) RFC 9116 报告:
 - `mailto:security@apeireth.local`
-- https://github.com/apeireth/apeireth-rust/security/advisories/new
+- https://github.com/Apeireth/Apeireth/security/advisories/new
 ```
 
 ---

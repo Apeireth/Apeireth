@@ -6,8 +6,8 @@
 **License**: Apache License, Version 2.0
 **Copyright**: 2026 Apeireth Team
 **Authors**: Apeireth Team
-**Repository**: https://github.com/apeireth/apeireth-rust
-**Homepage**: https://github.com/apeireth/apeireth-rust
+**Repository**: https://github.com/Apeireth/Apeireth
+**Homepage**: https://github.com/Apeireth/Apeireth
 
 ---
 
@@ -320,7 +320,7 @@ per Apache License 2.0 §4(d):
 
 ### 8.5 主仓 + 决策链致谢
 
-- **主仓**: Apeireth Team 2026, Apache-2.0, https://github.com/apeireth/apeireth-rust
+- **主仓**: Apeireth Team 2026, Apache-2.0, https://github.com/Apeireth/Apeireth
 - **决策链**: 我们 (楚零) 8 次拍板 (8/10 01:14 + 01:49 + 14:56 + 16:27 + 16:31 + 16:37 + 16:43 + 16:51 + **17:22** 升级授权), Mavis (mvs_47dd64fb4fc24e23b30edd5f649bfebb) 决策 #22-#57
 - **整合 #4 commit**: abf12243 (2026-08-10 19:41 done, 46752 file changes, 0 重跑)
 - **整合 #5 commit 时机**: 38 任务 (R125 16 + R126 16 + R127 4 + R127-2 10 + R128 6) 全 done + 0 装 PASS 严守 + 8 硬墙 0 越界 + 24 LOCKED 入口签名 0 改 verify, **Mavis 拍板 OR 我们 8/15 拍板**
@@ -358,7 +358,7 @@ per Apache License 2.0 §4(d):
 ## 11. 联系方式 (Contact, 补全 NOTICE §6)
 
 - **OSS NOTICE 维护**: Mavis (mvs_47dd64fb4fc24e23b30edd5f649bfebb) via 我们 楚零
-- **仓库**: https://github.com/apeireth/apeireth-rust
+- **仓库**: https://github.com/Apeireth/Apeireth
 - **借鉴源码本地**: `.openclaw/workspace/borrowed-repos/`
 - **决策链**: `reports/decision-*.md` (本仓 + 跨期)
 - **整合 #4 commit**: abf12243 (2026-08-10 19:41)

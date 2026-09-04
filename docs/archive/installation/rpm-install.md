@@ -27,10 +27,10 @@
 
 ```bash
 # 1.1 从 GitHub release 下载
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth-1.0.0-1.x86_64.rpm
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.0/apeireth-1.0.0-1.x86_64.rpm
 
 # 1.2 校验 sha256
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth-1.0.0-1.x86_64.rpm.sha256
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.0/apeireth-1.0.0-1.x86_64.rpm.sha256
 sha256sum -c apeireth-1.0.0-1.x86_64.rpm.sha256
 
 # 1.3 装 (dnf 自动解依赖: openssl-libs / sqlite-libs / libgit2 / ca-certificates)
@@ -121,7 +121,7 @@ journalctl -u apeireth -n 50 --no-pager
 
 ```bash
 # 5.1 拉新 .rpm
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.1/apeireth-1.0.1-1.x86_64.rpm
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.1/apeireth-1.0.1-1.x86_64.rpm
 
 # 5.2 dnf 升级 (自动触发 systemd_postun_with_restart)
 sudo dnf upgrade ./apeireth-1.0.1-1.x86_64.rpm

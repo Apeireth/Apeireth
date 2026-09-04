@@ -47,7 +47,7 @@
 - **Step 4 主人 打 v1.1.0 tag** (主人手跑 5 min 06:15-06:20, 0 Mavis 主动 tag 严守 100%, per 决策 #22 §2.2 semver 1.0 → 1.1 minor bump 跟 R130-5 §1.1 + R132-1 §1.1 + R137-3 §1 + R140-2 §1.2 多个报告一致, 注: 1.0 release stale v1.0.0 tag 471a8728 在 1.0 release 实战 Step 4 已删, V1.1 release 实战 0 stale tag 冲突)
 - **Step 5 主人 git push --tags** (主人手跑 5 min 06:20-06:25, 0 Mavis 主动 push 严守 100%, per 决策 #11)
 - **Step 6 主人 release notes 上传 + GitHub Release v1.1.0 创建** (主人手跑 10 min 06:25-06:35, GitHub UI → Releases → Draft → v1.1.0 tag → description RELEASE_NOTES.md V1.1 release + 6 大方向 + 11 项 verify 100% 落实 + 8 硬墙 0 越界 + 0 装 PASS 严守 100% → Click "Publish release", 0 Mavis 主动 release 严守 100%, per 决策 #11 + 决策 #78 §3)
-- **Step 7 V1.1 release 实战 done verify** (Mavis verify + 主人 verify 5 min 06:35-06:40, verify GitHub release v1.1.0 页面 https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0 + 整合 #6 + #7 commit 拍板 verify 100% + 决策链 #131 spec 写完, per 决策 #10 + 决策 #33 C1)
+- **Step 7 V1.1 release 实战 done verify** (Mavis verify + 主人 verify 5 min 06:35-06:40, verify GitHub release v1.1.0 页面 https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0 + 整合 #6 + #7 commit 拍板 verify 100% + 决策链 #131 spec 写完, per 决策 #10 + 决策 #33 C1)
 - **Step 8 V1.2 release 永久循环接续** (Mavis 主动 永久循环 0 终点, per 决策 #71 §2-§5 + 主人 0:57 拍板, 4 步循环 (永久) → 含 整合 #8 + #9 + #10 commit 拍板 + V1.2 release 调研 + 差距 + 计划 + 实施 + 实战, 估 V1.2 release 2027-02-28 per R130-5 §1.2 + R132-1 §1.2 + R131-3 §1.2)
 
 **总时间盒 40-70 min ≈ 1 hour 主人起床后** (per R151-2 §2.5 + R136-2 §3 + R138-7 §6 + 决策 #11 + 决策 #33 C1, 整合 #6 + #7 commit 拍板 ready 2026-11-25 + 2026-11-29 主人起床 verify + Step 2-6 共 30 min + Step 7 verify 5 min + Step 8 永久循环).
@@ -164,7 +164,7 @@ flowchart TD
 | Step | 任务 | 估时 (min) | Mavis 角色 | 主人手跑 | 8 硬墙严守 | 决策依据 |
 |------|------|------|-----------|----------|-----------|---------|
 | **Step 1** | 整合 #6 + #7 commit 拍板 verify (3 commit hash + master HEAD 新值 + 8 步 verify 11 项 100% 落实) | **5 min** (估 2026-11-30 06:05 done) | Mavis 自决拍板 (per 决策 #33 C1 + 决策 #62 §9 + 决策 #78 §2.3 + 决策 #74 B1 + 决策 #74 B2 + 决策 #85) | 0 (Mavis verify) | ✅ 0 越界 | 决策 #33 C1 + 决策 #62 §9 + 决策 #71 §2.5 + 决策 #74 §1 + 决策 #78 §2.3 + 决策 #85 + 决策 #86 + R151-1 §2 + R151-2 §2 |
-| **Step 2** | 主人起床后配 GitHub remote (per 决策 #33 C1 0 主动 push, 0 Mavis 主动 配 remote) | **5 min** (估 2026-11-30 06:10 done) | 0 主动 push (per 决策 #33 C1 + 决策 #61 §6) | 主人手跑: `git remote add origin https://github.com/apeireth/apeireth-rust` (跟 1.0 release 实战 Step 2 类比) | ✅ 0 越界 | 决策 #11 + 决策 #33 §2.3 + 决策 #58 §7 + 决策 #61 §6 + 决策 #74 §3.3 + 决策 #78 §3 |
+| **Step 2** | 主人起床后配 GitHub remote (per 决策 #33 C1 0 主动 push, 0 Mavis 主动 配 remote) | **5 min** (估 2026-11-30 06:10 done) | 0 主动 push (per 决策 #33 C1 + 决策 #61 §6) | 主人手跑: `git remote add origin https://github.com/Apeireth/Apeireth` (跟 1.0 release 实战 Step 2 类比) | ✅ 0 越界 | 决策 #11 + 决策 #33 §2.3 + 决策 #58 §7 + 决策 #61 §6 + 决策 #74 §3.3 + 决策 #78 §3 |
 | **Step 3** | 主人手跑 git push (per 决策 #33 C1 0 主动 push) | **5 min** (估 2026-11-30 06:15 done) | 0 主动 push (per 决策 #33 C1 + 决策 #61 §6) | 主人手跑: `git push -u origin master` (跟 1.0 release 实战 Step 3 类比, 0 主动 push 严守 100%) | ✅ 0 越界 | 决策 #11 + 决策 #33 C1 + 决策 #58 §7 + 决策 #61 §6 + 决策 #62 §9 + 决策 #74 §3.3 + 决策 #78 §3 |
 | **Step 4** | 主人手跑 git tag v1.1.0 (per 决策 #33 C1 0 主动 tag, 整合 #6 + #7 commit 拍板后, 1.0 release 实战 Step 4 已删 stale v1.0.0 tag 471a8728 → V1.1 release 实战 0 stale tag 冲突) | **5 min** (估 2026-11-30 06:20 done) | 0 主动 tag (per 决策 #33 C1 + 决策 #61 §6) | 主人手跑: `git tag -a v1.1.0 -m "V1.1 release 实战完 (per 决策 #74 B1 V1.1 release Mavis 自决改 + 决策 #74 B2 workspace.version 1.2.0 → 1.2.1 bump + 决策 #74 A3 PHL-07 V1.1 实施 + 24 → 25 LOCKED + 决策 #78 整合 #5.3 reports/ commit 拍板 Option A 类比 + 8 硬墙 V1.1 release Mavis 自决改 + 0 主动 push 严守 per 决策 #33 C1)"` (semver 1.0 → 1.1 minor bump, per 决策 #22 §2.2 + R130-5 §1.1 + R132-1 §1.1) | ✅ 0 越界 | 决策 #11 + 决策 #22 §2.2 semver + 决策 #33 C1 + 决策 #61 §6 + 决策 #74 §1 B2 1.2.0 → 1.2.1 bump + 决策 #78 §3 + R129-27 关键发现 1 (1.0 release 实战 Step 4 已删 stale) |
 | **Step 5** | 主人手跑 git push --tags (per 决策 #33 C1 0 主动 push) | **5 min** (估 2026-11-30 06:25 done) | 0 主动 push (per 决策 #33 C1 + 决策 #61 §6) | 主人手跑: `git push --tags` (跟 1.0 release 实战 Step 5 类比, 0 主动 push 严守 100%) | ✅ 0 越界 | 决策 #11 + 决策 #33 C1 + 决策 #58 §7 + 决策 #61 §6 + 决策 #74 §3.3 + 决策 #78 §3 |
@@ -314,7 +314,7 @@ flowchart TD
 | # | 子步 | 命令 | 主动方 | 0 主动 push 严守 |
 |---:|------|------|:------:|:---------------:|
 | 1 | 主人浏览器创建 GitHub repo (跟 1.0 release 实战类比, 估已创建 `apeireth/apeireth-rust`) | `https://github.com/new` 创 `apeireth/apeireth-rust` (Public, 0 初始化 README/.gitignore/license) | 主人 | ✅ |
-| 2 | verify remote 已存在 (1.0 release 实战 Step 2 已配过) | `git remote -v` 显示 origin = https://github.com/apeireth/apeireth-rust.git | 主人 (脚本执行) | ✅ |
+| 2 | verify remote 已存在 (1.0 release 实战 Step 2 已配过) | `git remote -v` 显示 origin = https://github.com/Apeireth/Apeireth.git | 主人 (脚本执行) | ✅ |
 | 3 | 如果 remote 已存在 → 跳过配 remote, 进入 Step 3 git push | `git remote get-url origin` (verify) | 主人 (脚本执行) | ✅ |
 | 4 | 如果 remote 0 存在 → 主人配 git push 认证 (跟 1.0 release 实战类比) | `gh auth login` (推荐) 或 Personal Access Token (scopes: repo + workflow + write:packages) | 主人 | ✅ |
 
@@ -376,12 +376,12 @@ flowchart TD
 
 | # | 子步 | 命令 / UI | 主动方 | 0 主动 push 严守 |
 |---:|------|------|:------:|:---------------:|
-| 1 | 主人浏览器 GitHub UI Releases | https://github.com/apeireth/apeireth-rust/releases → Click "Draft a new release" | 主人 | ✅ |
+| 1 | 主人浏览器 GitHub UI Releases | https://github.com/Apeireth/Apeireth/releases → Click "Draft a new release" | 主人 | ✅ |
 | 2 | Choose tag | v1.1.0 (从下拉框选, 跟 Step 4 打的 tag 一致) | 主人 | ✅ |
 | 3 | Release title | "Apeireth 1.1.0" | 主人 | ✅ |
 | 4 | Release description | per `RELEASE_NOTES.md` V1.1 release (估 ~50 KB, 整合 #6.2 commit 拍板 包含, 6 大方向 + 11 项 verify 100% 落实 + 8 硬墙 0 越界 + 0 装 PASS 严守 100% + 25 LOCKED 入口签名 改写 终极 verify + 12 借鉴源 0 装 PASS 严守 100% + 8 哲学锚 严守 100% + 不要怕复杂度哲学 严守 100%) | 主人 (复制粘贴) | ✅ |
 | 5 | Click "Publish release" |  | 主人 | ✅ |
-| 6 | verify GitHub Release v1.1.0 创建成功 | https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0 | 主人 (浏览器 verify) | ✅ |
+| 6 | verify GitHub Release v1.1.0 创建成功 | https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0 | 主人 (浏览器 verify) | ✅ |
 
 **V1.1 release 实战 Step 6 跟 1.0 release 实战 Step 5 差异** (per R129-8 §C + R151-1 §1.1 + R151-2 §2.5):
 - 1.0 release 实战 Step 5: Release description = `RELEASE_NOTES.md` 36823 bytes / 419 行 (P7-3 retry 21:27 写, 整合 #5.2 commit 包含, V1.0 release 内容)
@@ -403,7 +403,7 @@ flowchart TD
 
 | # | 子步 | URL / 命令 | 主动方 | 通过判据 |
 |---:|------|------|:------:|---------|
-| 1 | verify GitHub release v1.1.0 页面 | https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0 | 主人 (浏览器) | title "Apeireth 1.1.0" + notes (RELEASE_NOTES.md V1.1 release) + assets (源码 tarball/zip) |
+| 1 | verify GitHub release v1.1.0 页面 | https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0 | 主人 (浏览器) | title "Apeireth 1.1.0" + notes (RELEASE_NOTES.md V1.1 release) + assets (源码 tarball/zip) |
 | 2 | verify 整合 #6 + #7 commit 拍板 verify 100% (跟 1.0 release 实战 Step 7 续) | `git log --oneline -10` 显示 9 commit (整合 #5.1 + 5.2 + 5.3 + 6.1 + 6.2 + 6.3 + 7.1 + 7.2 + 7.3) | 主人 (脚本执行) | 9 commit 跟 Mavis 主动 done notification 报告 100% 一致 |
 | 3 | verify 25 LOCKED 入口签名 0 改 verify (V1.1 release Mavis 自决改 24 → 25 LOCKED 加 1 个 PHL-07 入口) | per `crates/apeireth-central/src/phl_07.rs` (NEW, 25 LOCKED 总数) + 24 LOCKED crate 入口签名 verify 100% | 主人 (脚本执行) | 25 LOCKED 入口签名 verify 25/25 全 PASS |
 | 4 | verify Cargo.toml 1.2.1 严守 (V1.1 release bump) | `grep "workspace.version" Cargo.toml` = "1.2.1" | 主人 (脚本执行) | Cargo.toml:274 version = "1.2.1" 跟 决策 #74 §1 B2 100% 一致 |

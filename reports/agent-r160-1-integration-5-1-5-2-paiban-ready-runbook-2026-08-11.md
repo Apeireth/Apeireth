@@ -912,10 +912,10 @@
 - PowerShell (Windows):
   ```powershell
   cd Apeireth-rust
-  git remote add origin https://github.com/apeireth/apeireth-rust.git
+  git remote add origin https://github.com/Apeireth/Apeireth.git
   git remote -v
   ```
-- 预期输出: `origin  https://github.com/apeireth/apeireth-rust.git (fetch)` + `origin  https://github.com/apeireth/apeireth-rust.git (push)`
+- 预期输出: `origin  https://github.com/Apeireth/Apeireth.git (fetch)` + `origin  https://github.com/Apeireth/Apeireth.git (push)`
 
 **Step 9.3 主人配 git push 认证** (per R129-8 §Step 3.3 + R134-2 §3.1 + R143-2 1.0 release 7 阶段 5, 估 5 min):
 - 选项 A: gh CLI (推荐, 主人 GitHub org 已有 gh 认证):
@@ -941,7 +941,7 @@
   ```powershell
   git status
   # 预期输出: "Your branch is up to date with 'origin/master'."
-  # https://github.com/apeireth/apeireth-rust/commits/master 看到 4 个新 commit (整合 #5.3 + 5.1 + 5.2 + 整合 #4)
+  # https://github.com/Apeireth/Apeireth/commits/master 看到 4 个新 commit (整合 #5.3 + 5.1 + 5.2 + 整合 #4)
   ```
 
 **Step 9 8 硬墙严守 100%** (per 决策 #33 §2.3 + 决策 #74 §1 8 硬墙锚定):
@@ -1021,7 +1021,7 @@
   ```
 
 **Step 11.3 主人浏览器 GitHub UI: Releases → Draft a new release → Choose v1.0.0 tag** (per R134-2 §5 + R138-5 §2.4, 估 5 min):
-- 进入 GitHub Repo: `https://github.com/apeireth/apeireth-rust`
+- 进入 GitHub Repo: `https://github.com/Apeireth/Apeireth`
 - 点击 "Releases" → "Create a new release" (or "Draft a new release")
 - 选择 tag: v1.0.0
 - Release title: "Apeireth 1.0.0"
@@ -1051,7 +1051,7 @@
 - 主人 8/11 01:14 拍板 3 件套 (工程类 + 技术类 locked 全早解锁 + 架构审视永久 + 不要怕复杂度)
 
 **Step 11.5 主人 verify GitHub Release v1.0.0 创建成功** (per 决策 #11 + R134-2 §5 + R138-5 §2.4):
-- https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0
+- https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0
 - 看到 v1.0.0 release 页面 + Release title + Release description + 1 tag + 1 source code (zip + tar.gz)
 
 **Step 11 8 硬墙严守 100%** (per 决策 #33 §2.3 + 决策 #74 §1 8 硬墙锚定):
@@ -1706,7 +1706,7 @@
 
 **E8: GitHub remote 创建失败** (per 决策 #11 + 决策 #62 §5.1 + R129-8 §Step 3.1 + R134-2 §3.1 + R143-2 1.0 release 7 阶段 5):
 - 1.0 release 实战 阻塞, GitHub remote 创建失败
-- 主人 verify GitHub repo: https://github.com/apeireth/apeireth-rust 创建成功
+- 主人 verify GitHub repo: https://github.com/Apeireth/Apeireth 创建成功
 - 0 装 PASS 严守 100% (per 决策 #74 C2 + 决策 #33 §2.3 C2)
 
 **E9: git push 失败** (per 决策 #11 + 决策 #62 §5.1 + R129-8 §Step 3.4 + R134-2 §4.1 + R143-2 1.0 release 7 阶段 5):
@@ -1716,7 +1716,7 @@
 
 **E10: GitHub Release v1.0.0 创建失败** (per 决策 #11 + R134-2 §5 + R138-5 §2.4 + R143-2 1.0 release 7 阶段 6):
 - 1.0 release 实战 阻塞, GitHub Release v1.0.0 创建失败
-- 主人 verify GitHub Release v1.0.0 创建成功 + https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0
+- 主人 verify GitHub Release v1.0.0 创建成功 + https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0
 - 0 装 PASS 严守 100% (per 决策 #74 C2 + 决策 #33 §2.3 C2)
 
 ---

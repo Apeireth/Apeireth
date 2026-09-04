@@ -806,7 +806,7 @@
   - Step 4 git tag v1.1.0 (5 min, scripts/release/tag-1.0.0.{ps1,sh} per R129-8 写)
   - Step 5 git push --tags (5 min, scripts/release/git-push-1.0.{ps1,sh} per R129-8 续)
   - Step 6 GitHub Release 创建 v1.1.0 (5 min, GitHub UI Releases → Draft a new release → Choose v1.1.0 tag → Release title "Apeireth 1.1.0" → description RELEASE_NOTES.md → Click "Publish release", per R129-8 §C)
-  - Step 7 V1.1 release 实战 done verify (5 min, verify GitHub release v1.1.0 页面 https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0)
+  - Step 7 V1.1 release 实战 done verify (5 min, verify GitHub release v1.1.0 页面 https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0)
 - **总 50 min 估 2026-11-30 06:00-08:00 主人起床后手跑 7 步 runbook**
 
 ---

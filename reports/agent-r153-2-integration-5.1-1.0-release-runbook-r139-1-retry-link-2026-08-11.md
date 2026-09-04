@@ -49,12 +49,12 @@
 
 **1.0 release 实战 8 步 runbook 当前版本 (per R147-1 §2 + R138-5 §2 + R143-2 §1.4 + R143-3 §1 + R149-5 §1.1 + R148-23 §2 + R148-24 §3 整合, 12 份 upstream 报告 + 决策 #11 + 决策 #74 + 决策 #78 + 决策 #81 + 决策 #86 + 决策 #87 协同, 0 重复造轮子 100%)**:
 - **Step 1 整合 #5.1/5.2/5.3 commit done verify** (Mavis 自决拍板, 估 04:30+ ready, 8/8 verify 100% 落实 + 8 决策点 D0-D7 + 5 源文件缺失 0 装 PASS 严守 100% + R139-1-retry-2 续修完 4 项问题 + 8 步 verify 8/8 全 PASS, 30-60 min, per 决策 #78 §2.3 + 决策 #81 + 决策 #87 §1 + R148-23 §0 + R148-24 §1.4)
-- **Step 2 主人 配 GitHub remote** (主人手跑 per 决策 #11, 估 09:05-09:20, 15 min, origin = https://github.com/apeireth/apeireth-rust.git, scripts/release/setup-github-remote.{ps1,sh} R129-8 写)
+- **Step 2 主人 配 GitHub remote** (主人手跑 per 决策 #11, 估 09:05-09:20, 15 min, origin = https://github.com/Apeireth/Apeireth.git, scripts/release/setup-github-remote.{ps1,sh} R129-8 写)
 - **Step 3 主人 git push 整合 #5 拆 3 commit** (主人手跑, 估 09:20-09:30, 10 min, scripts/release/git-push-1.0.{ps1,sh} R129-8 写, local master = remote master)
 - **Step 4 主人 删 stale v1.0.0 tag (R23 P3 2026-08-07 01:33 471a8728) + 打新 v1.0.0 tag + push** (主人手跑, 估 09:30-09:35, 5 min, per R129-27 关键发现 1, scripts/release/tag-1.0.0.{ps1,sh} R129-8 写)
 - **Step 5 主人 release notes 上传** (主人手跑, 估 09:35-09:40, 5 min, GitHub UI Releases → Draft a new release → Choose v1.0.0 tag → Release title "Apeireth 1.0.0" → description RELEASE_NOTES.md 36823 bytes → Click "Publish release", per R129-8 §C)
 - **Step 6 主人 GitHub Pages mkdocs build + gh-pages 部署** (主人手跑, 估 09:40-10:10, 30 min, scripts/release/deploy-github-pages.{ps1,sh} R129-23 实战脚本, 7 文档 + mkdocs.yml 4133 bytes + Material theme + 主语言 zh, mkdocs build + git checkout --orphan gh-pages + git push origin gh-pages --force + GitHub repo Settings → Pages → Source: gh-pages branch → Save)
-- **Step 7 1.0 release done verify** (主人 verify, 估 10:10-10:15, 5 min, verify GitHub release v1.0.0 页面 https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0 + https://apeireth.github.io/apeireth-rust/ 7 文档 5 nav + 3 链式页)
+- **Step 7 1.0 release done verify** (主人 verify, 估 10:10-10:15, 5 min, verify GitHub release v1.0.0 页面 https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0 + https://apeireth.github.io/apeireth-rust/ 7 文档 5 nav + 3 链式页)
 - **Step 8 V1.1 release 永久循环接续** (Mavis 主动 永久循环 0 终点, per 决策 #71 §2-§5 + 主人 0:57 拍板, 4 步循环 R144 调研 → R145 差距 → R146 计划 → R147 实施 → 含 整合 #6 + #7 commit 拍板 + V1.1 release 实战, 估 V1.1 release 2026-11-30)
 
 **总时间盒 70 min ≈ 1-2 hour 主人起床后** (per R142-2 §7.1 + R147-1 §7.1 + R149-5 §4.1, 整合 #5 commit 拍板 ready 04:30+ + 主人起床 verify 5 min + Step 2-7 共 70 min + Step 8 永久循环).
@@ -143,10 +143,10 @@ R153 era 整合 第 2 批 sub-agent 之一 (per 决策 #87 §5 派活, 05:15 派
 | **整合 #5.2 docs/ + Cargo.toml commit** | ⚠️ PARTIAL (等 5.1 src/ commit 拍板后, Cargo.toml borrow 段 update 17:44 → 22:50 状态决策点) | done (10 docs/ + Cargo.toml license) | per 决策 #62 §5.2 + 决策 #73 §2.3 + 决策 #74 B1 + 决策 #87 §3 |
 | **整合 #5.3 reports/ commit** | ✅ done (1:43, 187 files / 127548 insertions) | done (✅ 已 done) | per 决策 #78 §2.2 |
 | **R139-1-retry .log** | ⚠️ 1701KB (1701612 bytes, 5:08 写完, 7 errors + 294 fails + cargo deny 6 duplicate + cargo run tui 0 --help 0 行) | R139-1-retry-2 续修完 4 项问题 + 8 步 verify 8/8 全 PASS | per 决策 #87 §1 + §5 |
-| **origin remote** | 0 origin (只有 2 worktree remote) | `https://github.com/apeireth/apeireth-rust.git` | per Step 2 主人配 |
+| **origin remote** | 0 origin (只有 2 worktree remote) | `https://github.com/Apeireth/Apeireth.git` | per Step 2 主人配 |
 | **v1.0.0 tag** | **stale** (R23 P3 2026-08-07 01:33, 471a8728, workspace.version = 1.0.0 旧值) | **新 v1.0.0** (整合 #5 HEAD, workspace.version = 1.2.0 大版本归 0) | per Step 4.1 主人手跑删 stale |
-| **GitHub release 页面** | 0 存在 | `https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0` | per Step 5.3 |
-| **gh-pages branch** | 0 存在 (待 Step 6 创建) | `https://github.com/apeireth/apeireth-rust/tree/gh-pages` | per Step 6 |
+| **GitHub release 页面** | 0 存在 | `https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0` | per Step 5.3 |
+| **gh-pages branch** | 0 存在 (待 Step 6 创建) | `https://github.com/Apeireth/Apeireth/tree/gh-pages` | per Step 6 |
 | **GitHub Pages 文档站** | 0 部署 | `https://apeireth.github.io/apeireth-rust/` | per Step 7 |
 | **8 硬墙 verify** | ✅ (per R131-5 1:28 + R129-3-续 1:40 双 verify 100% 一致, 14 项 100%) | 11/11 ✅ (per R129-1/2/11/14/21/25/33 + 决策 #74 B1 改写) | per 决策 #33 §2.3 + 决策 #87 §6 |
 | **跑中 16 满** | ✅ 14 跑中 + 2 派 (R139-1-retry-2 + R153-1 + R153-2) = 16 满 | - | per 决策 #66 + 主人 0:34 + 决策 #87 §5 |
@@ -329,7 +329,7 @@ cargo run tui 0 --help: 0 行 baseline (TUI 0 --help 选项, 决策点 D4)
 ```mermaid
 flowchart TD
     A[Step 0 起点 verify<br/>整合 #5.1/5.2/5.3 commit 拍板 ready 04:30+<br/>master HEAD = 4207f187 → 5.1 → 5.2<br/>per 决策 #78 + R148-23 + R148-24 + 决策 #87] --> B[Step 1 整合 #5.1/5.2/5.3 commit done verify<br/>Mavis 自决拍板<br/>5.1 src/ + 5.2 docs/ + 5.3 reports/<br/>8 步 verify 8/8 全 PASS 后<br/>per 决策 #62 + 决策 #78 §2.1 + R148-23 §2 + 决策 #87 §1]
-    B --> C[Step 2 主人 配 GitHub remote<br/>主人手跑 15 min 09:05-09:20<br/>origin = https://github.com/apeireth/apeireth-rust.git<br/>per 决策 #11 + R129-8 + setup-github-remote.{ps1,sh}]
+    B --> C[Step 2 主人 配 GitHub remote<br/>主人手跑 15 min 09:05-09:20<br/>origin = https://github.com/Apeireth/Apeireth.git<br/>per 决策 #11 + R129-8 + setup-github-remote.{ps1,sh}]
     C --> D[Step 3 主人 git push 整合 #5 拆 3 commit<br/>主人手跑 10 min 09:20-09:30<br/>local master = remote master<br/>per 决策 #11 + R129-8 §B + git-push-1.0.{ps1,sh}]
     D --> E[Step 4 主人 删 stale v1.0.0 tag 471a8728<br/>+ 打新 v1.0.0 tag + push<br/>主人手跑 5 min 09:30-09:35<br/>per R129-27 关键发现 1 + 决策 #11 + tag-1.0.0.{ps1,sh}]
     E --> F[Step 5 主人 release notes 上传<br/>主人手跑 5 min 09:35-09:40<br/>GitHub UI → Releases → Draft → v1.0.0 tag<br/>description RELEASE_NOTES.md 36823 bytes<br/>per 决策 #11 + R129-8 §C]
@@ -400,7 +400,7 @@ flowchart TD
 | # | 子步 | 命令 | 主动方 | 0 主动 push 严守 |
 |---:|------|------|:------:|:---------------:|
 | 1 | 主人浏览器创建 GitHub repo | `https://github.com/new` 创 `apeireth/apeireth-rust` (Public, 0 初始化 README/.gitignore/license) | 主人 | ✅ |
-| 2 | 加 origin remote | `git remote add origin https://github.com/apeireth/apeireth-rust.git` | 主人 (脚本执行) | ✅ |
+| 2 | 加 origin remote | `git remote add origin https://github.com/Apeireth/Apeireth.git` | 主人 (脚本执行) | ✅ |
 | 3 | verify remote | `git remote -v` 显示 origin | 主人 (脚本执行) | ✅ |
 | 4 | 主人配 git push 认证 | `gh auth login` (推荐) 或 Personal Access Token (scopes: repo + workflow + write:packages) | 主人 | ✅ |
 
@@ -425,12 +425,12 @@ flowchart TD
 
 | # | 子步 | 命令 / UI | 主动方 | 0 主动 push 严守 |
 |---:|------|------|:------:|:---------------:|
-| 1 | 主人浏览器 GitHub UI Releases | https://github.com/apeireth/apeireth-rust/releases → Click "Draft a new release" | 主人 | ✅ |
+| 1 | 主人浏览器 GitHub UI Releases | https://github.com/Apeireth/Apeireth/releases → Click "Draft a new release" | 主人 | ✅ |
 | 2 | Choose tag | v1.0.0 (从下拉框选) | 主人 | ✅ |
 | 3 | Release title | "Apeireth 1.0.0" | 主人 | ✅ |
 | 4 | Release description | per RELEASE_NOTES.md (36823 bytes / 419 行, P7-3 retry 21:27 写) | 主人 (复制粘贴) | ✅ |
 | 5 | Click "Publish release" |  | 主人 | ✅ |
-| 6 | verify GitHub Release v1.0.0 创建成功 | https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0 | 主人 (浏览器 verify) | ✅ |
+| 6 | verify GitHub Release v1.0.0 创建成功 | https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0 | 主人 (浏览器 verify) | ✅ |
 
 **Step 6 当前版本** (per R147-1 §2.6 + R138-5 §2.6 + R129-23 + R129-13 + 决策 #11):
 
@@ -451,7 +451,7 @@ flowchart TD
 
 | # | 子步 | URL / 命令 | 主动方 | 通过判据 |
 |---:|------|------|:------:|---------|
-| 1 | verify GitHub release 页面 | https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0 | 主人 (浏览器) | title "Apeireth 1.0.0" + notes (RELEASE_NOTES.md) + assets (源码 tarball/zip) |
+| 1 | verify GitHub release 页面 | https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0 | 主人 (浏览器) | title "Apeireth 1.0.0" + notes (RELEASE_NOTES.md) + assets (源码 tarball/zip) |
 | 2 | verify GitHub Pages 文档站 | https://apeireth.github.io/apeireth-rust/ | 主人 (浏览器) | 5 nav + 3 链式页 (Home/Getting Started/API/Roadmap/Architecture + Changelog/Borrowed Repos/Architecture) 正常显示 |
 | 3 | 主人发 release announcement | 微信群 / Twitter / 邮件 (中文/英文) | 主人 | release 链接 + 借鉴 8/11 致谢 + 决策链 #22-#87 摘要 |
 
@@ -898,7 +898,7 @@ git reset --hard 4207f187 revert 改动
 | **D-1** | 整合 #5.1 src/ commit 拍板时机 (per R148-11 03:10 + R148-23 03:23 + R148-24 04:00 + 决策 #87 §1 整合 #5.1 NOT READY 严守 解读) | 拍板时机估 8/11 04:30+, 等 R139-1-retry-2 续修完 4 项问题 (7 errors + 294 fails + cargo deny 6 duplicate + cargo run tui 0 --help baseline) + 8 步 verify 8/8 全 PASS 后由 Mavis 自决拍板 | 决策 #78 §2.3 + 决策 #79 §2.1 + 决策 #81 + 决策 #86 §2 + 决策 #87 §1 + 主人 0:25 + 主人 01:14 拍板 3 件套 | Mavis (cron auto-pickup) |
 | **D-2** | 整合 #5.2 docs/ + Cargo.toml commit 拍板时机 (per 决策 #62 §5.2 + 决策 #73 §2.3 + 决策 #74 §4.2 + 决策 #87 §3) | 拍板时机估 8/11 04:45-05:00, 5.1 拍板后, Cargo.toml borrow 段 update 17:44 → 22:50 + 哲学文档 15-no-fear-complexity.md 加 + 8 硬墙 B1 改写 文档更新 | 决策 #62 §5.2 + 决策 #73 §2.3 + 决策 #74 §4.2 + R144-2 02:25 详化 + 决策 #78 §2.3 + 决策 #86 §2 + 决策 #87 §3 | Mavis (cron auto-pickup) |
 | **D-3** | 主人起床时机 (per 主人习惯 + 01:14 拍板睡觉) | 估 8/11 09:00, per 主人历史作息 + 决策 #10 + 用户记忆 #10 | 决策 #10 + 用户记忆 #10 + 决策 #86 + 决策 #87 + 主人习惯 | 主人 |
-| **D-4** | 主人 配 GitHub remote 时机 (per 决策 #11 + R129-8) | 主人起床后 09:05-09:20, 15 min, origin = https://github.com/apeireth/apeireth-rust.git | 决策 #11 + 决策 #30 §3.4 + 决策 #33 §2.3 + 决策 #58 §7 + 决策 #61 §6 + 决策 #74 §3.3 + 决策 #78 §3 + 决策 #86 §5 + 决策 #87 | 主人手跑 |
+| **D-4** | 主人 配 GitHub remote 时机 (per 决策 #11 + R129-8) | 主人起床后 09:05-09:20, 15 min, origin = https://github.com/Apeireth/Apeireth.git | 决策 #11 + 决策 #30 §3.4 + 决策 #33 §2.3 + 决策 #58 §7 + 决策 #61 §6 + 决策 #74 §3.3 + 决策 #78 §3 + 决策 #86 §5 + 决策 #87 | 主人手跑 |
 | **D-5** | 主人 手跑 git push 时机 (per 决策 #11 + R129-8 §B) | 09:20-09:30, 10 min, local master = remote master | 决策 #11 + 决策 #62 + 决策 #74 §3.3 + 决策 #78 §3 + 决策 #87 | 主人手跑 |
 | **D-6** | 主人 手跑 git tag v1.0.0 + release notes 时机 (per 决策 #11 + R129-27 关键发现 1 + R129-8 §C) | 09:30-09:40, 10 min, 删 stale v1.0.0 tag 471a8728 + 打新 v1.0.0 tag + push + GitHub UI Releases → Draft → v1.0.0 tag → title "Apeireth 1.0.0" + description RELEASE_NOTES.md 36823 bytes → Publish | 决策 #11 + 决策 #22 §2.2 semver + 决策 #74 §3.3 + 决策 #78 §3 + R129-27 关键发现 1 + 决策 #87 | 主人手跑 |
 | **D-7** | 主人 手跑 GitHub Pages 部署 + done verify 时机 (per 决策 #11 + R129-13 + R129-23 + 决策 #55 §2.6 + 决策 #58 §5) | 09:40-10:15, 35 min, mkdocs build + gh-pages orphan branch + push --force + GitHub Pages 设置 + verify GitHub release v1.0.0 + https://apeireth.github.io/apeireth-rust/ 7 文档 5 nav + 3 链式页 | 决策 #11 + 决策 #55 §2.6 + 决策 #58 §5 + 决策 #74 §3.3 + 决策 #78 §3 + 主人 8/4 23:33 (Tauri 终极前的过渡文档站) + 决策 #87 | 主人手跑 |
@@ -1186,7 +1186,7 @@ abf12243 (整合 #4, 8/10 19:41)
 
 **Step 2 (15 min, 09:05-09:20) 配 GitHub remote**:
 - 子步 1: 主人浏览器打开 https://github.com/new 创 `apeireth/apeireth-rust` (Public, 0 初始化 README/.gitignore/license)
-- 子步 2: 主人手跑 `git remote add origin https://github.com/apeireth/apeireth-rust.git`
+- 子步 2: 主人手跑 `git remote add origin https://github.com/Apeireth/Apeireth.git`
 - 子步 3: 主人手跑 `git remote -v` verify origin 出现
 - 子步 4: 主人配 git push 认证 (`gh auth login` 推荐 或 Personal Access Token scopes: repo + workflow + write:packages)
 - 0 主动 push 严守 100% (Mavis 0 主动配 remote, 主人手跑, per 决策 #11 + 决策 #33 §2.3 + 决策 #61 §6 + 决策 #74 §3.3 + 决策 #78 §3 + 决策 #86 §5 + 决策 #87)
@@ -1208,12 +1208,12 @@ abf12243 (整合 #4, 8/10 19:41)
 
 **Step 5 (5 min, 09:35-09:40) release notes 上传**:
 - 子步 1: 跑 `Get-Content "RELEASE_NOTES.md" -Raw | Set-Clipboard` 复制到剪贴板
-- 子步 2: 主人浏览器打开 https://github.com/apeireth/apeireth-rust/releases/new
+- 子步 2: 主人浏览器打开 https://github.com/Apeireth/Apeireth/releases/new
 - 子步 3: 主人 tag 下拉选 v1.0.0
 - 子步 4: 主人 title 填 "Apeireth 1.0.0"
 - 子步 5: 主人 description 区域 Ctrl+V 粘贴 RELEASE_NOTES.md
 - 子步 6: 主人 Click "Publish release"
-- 子步 7: 主人 verify https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0 创建成功
+- 子步 7: 主人 verify https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0 创建成功
 - 0 主动 release 严守 100% (Mavis 0 主动 release, 主人手跑, per 决策 #11 + 决策 #33 §2.3 + 决策 #61 §6 + 决策 #74 §3.3 + 决策 #78 §3 + 决策 #86 §5 + 决策 #87)
 
 **Step 6 (30 min, 09:40-10:10) GitHub Pages mkdocs build + gh-pages 部署** (拆 3 子脚本):
@@ -1232,14 +1232,14 @@ abf12243 (整合 #4, 8/10 19:41)
   - `git commit -m "GitHub Pages 1.0 release"`
 - **Step 6.3 deploy-github-pages-push.{ps1,sh}** (20 min, push gh-pages + GitHub Pages 设置 verify):
   - `git push origin gh-pages --force`
-  - 主人浏览器打开 https://github.com/apeireth/apeireth-rust/settings/pages
+  - 主人浏览器打开 https://github.com/Apeireth/Apeireth/settings/pages
   - 主人 Source: gh-pages branch + Folder: / (root) → Save
   - verify https://apeireth.github.io/apeireth-rust/ 7 文档 5 nav + 3 链式页 正常显示
 - 0 主动 build 0 主动 push 严守 100% (Mavis 0 主动 build 0 主动 push, 主人手跑, per 决策 #11 + 决策 #33 §2.3 + 决策 #61 §6 + 决策 #74 §3.3 + 决策 #78 §3 + 决策 #86 §5 + 决策 #87 + 决策 #55 §2.6 + 决策 #58 §5)
 
 **Step 7 (5 min, 10:10-10:15) 1.0 release done verify**:
 - 子步 1: verify-1.0.0-done.{ps1,sh} 自动化 (curl GitHub release API + curl GitHub Pages site/ + parse HTML 找 nav)
-- 子步 2: 主人浏览器 verify https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0 显示 title "Apeireth 1.0.0" + notes (RELEASE_NOTES.md) + assets
+- 子步 2: 主人浏览器 verify https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0 显示 title "Apeireth 1.0.0" + notes (RELEASE_NOTES.md) + assets
 - 子步 3: 主人浏览器 verify https://apeireth.github.io/apeireth-rust/ 7 文档 5 nav + 3 链式页 正常显示
 - 子步 4: 主人发 release announcement 微信群 / Twitter / 邮件 (中文/英文)
 - 0 主动 IM 主人 严守 100% (per gate-discipline + 决策 #10 + 用户记忆 #10)

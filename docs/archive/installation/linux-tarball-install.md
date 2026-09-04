@@ -41,10 +41,10 @@
 
 ```bash
 # 2.1 下载 (默认 amd64)
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth-1.0.0-x86_64-linux.tar.gz
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.0/apeireth-1.0.0-x86_64-linux.tar.gz
 
 # 2.2 校验 sha256
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth-1.0.0-x86_64-linux.tar.gz.sha256
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.0/apeireth-1.0.0-x86_64-linux.tar.gz.sha256
 sha256sum -c apeireth-1.0.0-x86_64-linux.tar.gz.sha256
 
 # 2.3 解包 + 装 (官方脚本)
@@ -153,7 +153,7 @@ yay -S apeireth-bin  # R20 阶段 4 估补
 ```bash
 pkgname=apeireth
 pkgver=1.0.0
-source=("https://github.com/apeireth/apeireth-rust/releases/download/v${pkgver}/apeireth-${pkgver}-x86_64-linux.tar.gz")
+source=("https://github.com/Apeireth/Apeireth/releases/download/v${pkgver}/apeireth-${pkgver}-x86_64-linux.tar.gz")
 sha256sums=('REPLACE_AT_RELEASE_TIME')
 
 package() {

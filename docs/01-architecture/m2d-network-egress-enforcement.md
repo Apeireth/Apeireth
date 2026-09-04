@@ -155,7 +155,7 @@ attempted first.
 
 Workflow: `M2B-XV three-OS process isolation validation` (extended with an explicit controlled-egress test step)
 
-Run: https://github.com/Apeireth/apeireth-rust/actions/runs/32875581292
+Run: https://github.com/Apeireth/Apeireth/actions/runs/32875581292
 Commit: `fdd339a9fc2c018274b7db00dbf68b1868235c84`
 
 | Platform | Job | Result | Tests |

@@ -457,7 +457,7 @@
   ↓ 8 步全 PASS
 [实战 Step 3] 配 GitHub remote (per setup-github-remote.ps1)
   ├─ 主人浏览器创建 GitHub repo (Public, 0 初始化 README/.gitignore/license)
-  ├─ 加 origin remote = https://github.com/apeireth/apeireth-rust.git
+  ├─ 加 origin remote = https://github.com/Apeireth/Apeireth.git
   ├─ git remote -v verify
   └─ 主人配 git push 认证 (gh auth login 或 PAT)
   ↓
@@ -472,7 +472,7 @@
   ├─ git tag -a v1.0.0 -m "Apeireth 1.0.0 release"
   ├─ git push origin v1.0.0
   ├─ gh release create v1.0.0 --title "Apeireth 1.0.0" --notes-file RELEASE_NOTES.md
-  └─ verify GitHub release 页面 https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0
+  └─ verify GitHub release 页面 https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0
   ↓
 [实战 Step 6] GitHub Pages 部署 (per deploy-github-pages.ps1, R129-23 新写)
   ├─ pip install mkdocs mkdocs-material (一次性)
@@ -484,7 +484,7 @@
   └─ GitHub repo Settings → Pages → Source: gh-pages branch / Folder: / (root)
   ↓
 [实战 Step 7] verify 1.0 release + GitHub Pages
-  ├─ verify https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0
+  ├─ verify https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0
   ├─ verify https://apeireth.github.io/apeireth-rust/ (7 文档)
   └─ 主人发 release announcement (中文/英文)
   ↓

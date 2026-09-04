@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Research Phase 0–6 交付 + 双协议 + 文档对账 (2026-09-04)
+
+- **research 工作区**:`research/`(baselines/metrics/runners/logs schema);Phase 0 冻结基线 3061 → 交付后全量 **3119 passed / 0 failed / 13 ignored / 106 suites**。
+- **Research 前缀模块(全部默认关闭,生产路径零行为变化)**:派生记忆血缘与遗忘闭包审计、BTFM 真双时态(additive,旧 API 不变)、StackPin 上下文保留(竞争比护栏)、ShadowLogger、校准门控自治(风险阶梯+hysteresis)、审批状态机形式化(Dispatched 拆分+崩溃模型+故障注入)、漫游记忆 CRDT、模块非干扰、VaultLRU/FTRL(O(√T) 后悔界)。
+- **评测运行器**:`research/runners/`(独立 cargo 项目,合成基准 + 效用-成本曲线 + bootstrap 95% CI + JSONL 日志)。
+- **双协议**:`Apache-2.0 OR MIT`(SPDX 更新,`LICENSE-MIT` 新增)+ CONTRIBUTING DCO 等效贡献声明。
+- **文档对账**:仓库 URL 迁移 `Apeireth/Apeireth`(96 文件);crate 数统一为实测 16;测试数统一为实测 3119;architecture/CONTRIBUTING/INSTALL/SECURITY/README 全量更新。
+
 ## [Unreleased] — P2 加固波次 (candidate `8b7e3111`, 2026-08-30)
 
 > **状态标注 (0 装 PASS)**：下列六项 P2 加固提交全部为 **IMPLEMENTED（库级实现）且经远端 Windows 验证机测试验证**（candidate `8b7e3111`，clean tree，HEAD 已核验）：

@@ -33,7 +33,7 @@ Target:         接手者 1 跳可达 (5 分钟跑通)
 
 \`\`\`bash
 # 1. 克隆 (5s)
-git clone https://github.com/apeireth/apeireth-rust.git
+git clone https://github.com/Apeireth/Apeireth.git
 cd apeireth-rust
 
 # 2. 构建 (估 5-10 min, 71 crate 编译)
@@ -50,7 +50,7 @@ cargo test --workspace
 
 \`\`\`powershell
 # 1. 克隆
-git clone https://github.com/apeireth/apeireth-rust.git
+git clone https://github.com/Apeireth/Apeireth.git
 cd apeireth-rust
 
 # 2. 构建 (需 Visual Studio Build Tools 2022, 见 INSTALL.md §步骤 2)

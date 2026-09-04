@@ -82,7 +82,7 @@
 
 - [ ] 主人跑 `scripts/release/setup-github-remote.ps1` (Windows PowerShell 优先, per 主人 8/10 跑过夜)
   - [ ] Step 1: 主人浏览器创建 GitHub repo (`apeireth/apeireth-rust`, Public, 0 初始化 README/.gitignore/license)
-  - [ ] Step 2: 加 origin remote (`git remote add origin https://github.com/apeireth/apeireth-rust.git`)
+  - [ ] Step 2: 加 origin remote (`git remote add origin https://github.com/Apeireth/Apeireth.git`)
   - [ ] Step 3: verify remote (`git remote -v` 显示 origin)
   - [ ] Step 4: 主人手配 git push 认证 (推荐 GitHub CLI `gh auth login` 或 Personal Access Token)
 
@@ -110,7 +110,7 @@
   - [ ] Step 1: 打 annotated tag `v1.0.0` (per semver 大版本归 0, decision-22 §2.2)
   - [ ] Step 2: `git push origin v1.0.0`
   - [ ] Step 3: `gh release create v1.0.0 --title "Apeireth 1.0.0" --notes-file RELEASE_NOTES.md`
-  - [ ] Step 4: verify GitHub release 页面 (`https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0`)
+  - [ ] Step 4: verify GitHub release 页面 (`https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0`)
 
 **Mavis 0 主动 tag 0 主动 release (per decision-33 §2.3 + decision-58 §7 + decision-62 §9)**
 

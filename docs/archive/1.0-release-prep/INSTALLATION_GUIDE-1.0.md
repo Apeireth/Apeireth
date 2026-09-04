@@ -211,7 +211,7 @@ docs/installation/  (5 包 + 1 comparison)
 
 ```bash
 # 1. 一行装 (GitHub release)
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth_1.0.0_amd64.deb
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.0/apeireth_1.0.0_amd64.deb
 sudo apt install ./apeireth_1.0.0_amd64.deb
 
 # 2. 启用 + 启动
@@ -236,7 +236,7 @@ curl -fsS http://localhost:8080/health
 
 ```bash
 # 1. 一行装 (GitHub release)
-curl -fsSL -O https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth-1.0.0-1.x86_64.rpm
+curl -fsSL -O https://github.com/Apeireth/Apeireth/releases/download/v1.0.0/apeireth-1.0.0-1.x86_64.rpm
 sudo dnf install ./apeireth-1.0.0-1.x86_64.rpm
 
 # 2. 启用 + 启动

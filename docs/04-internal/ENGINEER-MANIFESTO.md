@@ -370,7 +370,7 @@ git update-ref refs/heads/main $replacements[-1]
 
 # force push (必用 --force-with-lease=<ref>:<expected>):
 git fetch origin
-git -c http.sslVerify=false -c http.extraHeader="Host: github.com" -c credential.helper=store push --force-with-lease=main:<old-tip> https://20.27.177.113/Apeireth/apeireth-rust.git main
+git -c http.sslVerify=false -c http.extraHeader="Host: github.com" -c credential.helper=store push --force-with-lease=main:<old-tip> https://20.27.177.113/Apeireth/Apeireth.git main
 ```
 
 **0 装诚实标**: `--force` 无验证, 用 `--force-with-lease` 验证 remote ref 状态. 实际试过 `--force` 在 mirror 上因 stale info 失败, 用 `--force-with-lease=main:<old-tip>` 通过.

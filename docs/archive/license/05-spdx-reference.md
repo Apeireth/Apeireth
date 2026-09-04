@@ -342,7 +342,7 @@ grep -oP '^\| `?[A-Za-z0-9.\-]+`? \|' THIRD-PARTY-NOTICES.md | sort -u | wc -l
 | **MIT 原文** | https://opensource.org/licenses/MIT | 20 行 |
 | **Cargo-deny 文档** | https://embarkstudios.github.io/cargo-deny/ | 16 license allow 配置 |
 | **Cargo-about 文档** | https://github.com/EmbarkStudios/cargo-about | THIRD-PARTY 生成工具 |
-| **Apeireth 仓库** | https://github.com/apeireth/apeireth-rust | 主仓库 |
+| **Apeireth 仓库** | https://github.com/Apeireth/Apeireth | 主仓库 |
 | **Apeireth NOTICES** | `THIRD-PARTY-NOTICES.md` (1709 行) | 561 crate attribution |
 | **Apeireth deny.toml** | `deny.toml` | 16 license allow + 0 violation |
 

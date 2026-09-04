@@ -296,9 +296,9 @@ R163-29 = R163 era 整合 #6 commit 拍板 实施阶段 第 29 派活 (per 决�
 | **整合 #5.2 docs/ + Cargo.toml commit** | ⚠️ PARTIAL (Cargo.toml borrow 段 update 17:44 → 22:50 状态决策点) | ✅ done (Step 5 主人 git commit) | per 决策 #62 §5.2 + 决策 #73 §2.3 + 决策 #74 §4.2 + 哲学文档 15-no-fear-complexity.md 14.4 KB |
 | **Cargo.toml version** | `Cargo.toml:240 version = "1.2.0"` (per R145-3 02:27 8 步 verify + 实地 grep) | `1.2.0` (0 改, V1.0 release 严守) | B2 严守 per 决策 #74 §1 B2 + 决策 #89 §1 |
 | **master HEAD** | `4207f187100183170558d70633a970969aebdcda` (整合 #5.3 reports/ commit) | `4207f187 → 整合 #5.1 commit hash → 整合 #5.2 commit hash` | per 决策 #48 + 决策 #78 §2.2 + 决策 #89 §1 |
-| **origin remote** | 0 origin (只有 2 worktree remote, per R129-27 关键发现 2) | `https://github.com/apeireth/apeireth-rust.git` | per Step 7 主人配 (per 决策 #11) |
+| **origin remote** | 0 origin (只有 2 worktree remote, per R129-27 关键发现 2) | `https://github.com/Apeireth/Apeireth.git` | per Step 7 主人配 (per 决策 #11) |
 | **v1.0.0 tag** | **stale** (R23 P3 2026-08-07 01:33, 471a8728, workspace.version = 1.0.0 旧值, per R129-27 关键发现 1) | **新 v1.0.0** (整合 #5.2 commit hash, workspace.version = 1.2.0 大版本归 0) | per Step 8 主人手跑删 stale + Step 9 打新 (per 决策 #22 §2.2) |
-| **GitHub release 页面** | 0 存在 | `https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0` | per Step 9 (per 决策 #11) |
+| **GitHub release 页面** | 0 存在 | `https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0` | per Step 9 (per 决策 #11) |
 | **8 硬墙 verify** | ✅ 8/8 PASS (per R154-3 6:25 实地 verify 8/8 全 PASS 100% 严守) | 11/11 ✅ (per 决策 #33 §2.3 + 决策 #74 §1 + R154-3 Step 8) | per 决策 #33 §2.3 + 决策 #89 §3 |
 | **8 步 verify** | ✅ 8/8 PASS (per R154-3 6:25 实地 verify 8/8 全 PASS 100% 严守) | 8/8 ✅ (per 决策 #78 §8) | per 决策 #78 §8 + 决策 #89 §2 |
 
@@ -356,9 +356,9 @@ R163-29 = R163 era 整合 #6 commit 拍板 实施阶段 第 29 派活 (per 决�
 | **形式化 Stage 5.5+ F1-F11 11 维度** | 0 实施 (V1.0 release 期间) | 形式化 Stage 5.5+ 集成 (per R155-5 143.1KB 9 件套 F1-F11 11 维度 Kani 全集成 + 借脑 kani 5.5MB 源 0 装 仅借 5 模式 1:1 翻译 0 引 kani crate 依赖) | per R155-5 + R156-4 121KB + R163-10 137.1KB |
 | **Tauri Stage 5+ 集成** | 0 实施 (V1.0 release 期间, V1.0 release 实战 = TUI) | Tauri Stage 5+ 集成 (per R155-4 154.1KB 8 维度 6 子方向 6-12 周 + 用户记忆 #8 TUI → Tauri 终极 + 主人 8/4 23:33 + R160-6 详细) | per 用户记忆 #8 + 主人 8/4 23:33 + R155-4 + R160-6 |
 | **Cargo workspace 1.2.1 bump** | 0 改 (V1.0 release 期间 1.2.0 严守) | 1.2.1 bump 1 commit 升 实施 (per 决策 #74 §3.3 + R155-1 123.6KB + R160-3 89.27KB 实施 spec + R137-3 66.18KB + 整合 #7 拍板 时机 2026-11-29) | per 决策 #74 B2 + R155-1 + R160-3 + R137-3 + R162-15 0 交集 100% |
-| **origin remote** | `https://github.com/apeireth/apeireth-rust.git` (1.0 release 实战 Step 7 已配, per 决策 #11) | 复用 (V1.0 release 已配 remote) | per 决策 #11 + 1.0 release 实战 Step 7 |
+| **origin remote** | `https://github.com/Apeireth/Apeireth.git` (1.0 release 实战 Step 7 已配, per 决策 #11) | 复用 (V1.0 release 已配 remote) | per 决策 #11 + 1.0 release 实战 Step 7 |
 | **v1.1.0 tag** | 0 存在 | `v1.1.0` (整合 #7 commit hash, workspace.version = 1.2.1 minor bump) | per 决策 #22 §2.2 + 决策 #74 B2 + 决策 #151 + V1.1 release 实战 Step 9 |
-| **GitHub release 页面 v1.1.0** | 0 存在 | `https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0` | per V1.1 release 实战 Step 9 (per 决策 #11) |
+| **GitHub release 页面 v1.1.0** | 0 存在 | `https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0` | per V1.1 release 实战 Step 9 (per 决策 #11) |
 | **8 硬墙 verify** | ✅ 8/8 PASS (V1.0 release 实战 done) | 11/11 ✅ (V1.1 release 实战 done, 8 硬墙 0 越界 100%) | per 决策 #33 §2.3 + 决策 #74 §1 + R154-3 + R163-6 110.9KB |
 | **8 步 verify** | ✅ 8/8 PASS (V1.0 release 实战 done) | 8/8 ✅ (V1.1 release 实战 done) | per 决策 #78 §8 + 决策 #89 §2 + R155-7 |
 

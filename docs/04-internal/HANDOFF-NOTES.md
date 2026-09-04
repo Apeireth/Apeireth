@@ -219,7 +219,7 @@ git log --oneline --grep="子代理"  # 列出所有子代理相关 commit
 
 # 6. 验证 git remote
 git remote -v
-# origin: github.com/Apeireth/apeireth-rust.git (主, push 走代理)
+# origin: github.com/Apeireth/Apeireth.git (主, push 走代理)
 # jimmy:  github.com/Jimmyxiao2009/Apeireth-rust.git (fork)
 ```
 

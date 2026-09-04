@@ -63,7 +63,7 @@
 - ⚠️ 你**必须**在服务条款 / About 页保留 "Powered by Apeireth" + 链接到 `LICENSE` (per §4)
 
 **实操清单**:
-- [ ] About 页加 "Powered by Apeireth" + 链接 `https://github.com/apeireth/apeireth-rust`
+- [ ] About 页加 "Powered by Apeireth" + 链接 `https://github.com/Apeireth/Apeireth`
 - [ ] 服务条款引 "本服务使用 Apache-2.0 许可的 Apeireth (https://www.apache.org/licenses/LICENSE-2.0)"
 - [ ] 你的 SLA / 隐私政策 跟 Apeireth 无关 (你独立负责)
 - [ ] 0 用 "Apeireth" 名 + logo 做营销 (per §6 商标边界)

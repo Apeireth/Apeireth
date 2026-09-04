@@ -153,10 +153,10 @@ R163 era 第 2 sub-agent (per 决策 #109 §2, 09:32 派, 跑中 2-3 + 派 13 = 
 | **整合 #5.3 reports/ commit** | ✅ done (1:43, 187 files / 127548 insertions) | ✅ done (✅ 已 done) | per 决策 #78 §2.2 |
 | **整合 #6 V1.1 release 准备** | 🟢 跨 8+1+1+1+1+1 维度 严守 解读 全 PASS ✅ READY 100% (per 决策 #109 §1 + R162-1+8+10+11+14+15+17 = 7 done) | ✅ done (整合 #6 commit 拍板 Mavis 自决, 2026-11-25 06:00 主人手跑, 0 主动 commit 严守 100%) | per 决策 #74 §1 B1 + 决策 #78 §3 + 决策 #89 §3 + 决策 #109 §1 |
 | **整合 #7 Cargo workspace 1.2.1 bump** | 🟢 ✅ READY 100% (per R155-6 §2.2 + R162-15 0 交集 100%) | ✅ done (整合 #7 commit 拍板 Mavis 自决, 2026-11-29 06:00 主人手跑) | per 决策 #74 §1 B2 + 决策 #89 §3 + 决策 #109 §1 |
-| **origin remote** | 0 origin (只有 2 worktree remote, per R129-27 关键发现 2) | `https://github.com/apeireth/apeireth-rust.git` | per Step 7 主人配 (R160-2 9 步 runbook) |
+| **origin remote** | 0 origin (只有 2 worktree remote, per R129-27 关键发现 2) | `https://github.com/Apeireth/Apeireth.git` | per Step 7 主人配 (R160-2 9 步 runbook) |
 | **v1.0.0 tag** | **stale** (R23 P3 2026-08-07 01:33, 471a8728, workspace.version = 1.0.0 旧值, per R129-27 关键发现 1) | **新 v1.0.0** (整合 #5.2 commit hash, workspace.version = 1.2.0 大版本归 0) | per Step 8 主人手跑删 stale + Step 9 打新 (R160-2 9 步 runbook) |
 | **v1.1.0 tag** | 0 v1.1.0 tag (待 V1.1 release 2026-11-30 主人手跑) | **新 v1.1.0** (整合 #7 commit hash, workspace.version = 1.2.1 minor bump) | per V1.1 release 实战 9 步 runbook (R160-2 模板 1:1 续) |
-| **GitHub release 页面** | 0 存在 | `https://github.com/apeireth/apeireth-rust/releases/tag/v1.0.0` (V1.0) + `.../v1.1.0` (V1.1) | per R160-2 Step 9 (V1.0) + V1.1 release 9 步 runbook (V1.1) |
+| **GitHub release 页面** | 0 存在 | `https://github.com/Apeireth/Apeireth/releases/tag/v1.0.0` (V1.0) + `.../v1.1.0` (V1.1) | per R160-2 Step 9 (V1.0) + V1.1 release 9 步 runbook (V1.1) |
 | **8 硬墙 verify** | ✅ (per R154-3 6:25 实地 verify 8/8 全 PASS 100% 严守) | 11/11 ✅ (per 决策 #33 §2.3 + 决策 #74 §1 + R154-3 Step 8) | per 决策 #33 §2.3 + 决策 #89 §3 |
 | **8 步 verify** | ✅ (per R154-3 6:25 实地 verify 8/8 全 PASS 100% 严守) | 8/8 ✅ (per 决策 #78 §8) | per 决策 #78 §8 + 决策 #89 §2 |
 | **target/** | 90.29 GB (50-100 GB 预警区间, 持平 16 tick 8:10-9:32) | 0 主动删 严守 100% (per 决策 #70) | per 决策 #109 §3 + 决策 #70 |

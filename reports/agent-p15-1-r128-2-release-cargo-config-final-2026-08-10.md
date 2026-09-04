@@ -57,10 +57,10 @@ authors = ["Apeireth Team"]
 # Sub-crate 继承 = `license.workspace = true` (90+ crate 中 65+ 已用, 27 硬编码待 1.0 后清)
 license = "Apache-2.0"
 # SPDX 表达式 (per cargo + crates.io 推荐, Apache-2.0 单一 license 不需 OR; dual license 如 clap/PyO3/kani 见各 crate)
-repository = "https://github.com/apeireth/apeireth-rust"
+repository = "https://github.com/Apeireth/Apeireth"
 # 1.0 release 描述 (per decision-22 §3 + decision-57 §0 + decision-58 §0)
 description = "Apeireth R14 Rust 重写 — 立体架构 v2 + 生命架构 v4/v4.1 + 17 crate 本源推导 + 双洋葱统一体 + Self-Disable 防护 + 1.0 release (借鉴 8/11 + 24 LOCKED + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 13 键 verdict cache)"
-homepage = "https://github.com/apeireth/apeireth-rust"
+homepage = "https://github.com/Apeireth/Apeireth"
 keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]
 categories = ["ai", "asynchronous", "compilers"]
 ```

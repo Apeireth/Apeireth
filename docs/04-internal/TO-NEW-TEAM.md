@@ -151,7 +151,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory real_llm_call_smoke -
 
 ```bash
 git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
-    -c credential.helper=store push https://20.27.177.113/Apeireth/apeireth-rust.git main
+    -c credential.helper=store push https://20.27.177.113/Apeireth/Apeireth.git main
 ```
 
 ---

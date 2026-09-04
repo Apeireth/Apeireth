@@ -343,7 +343,7 @@
 #### Step 3: 主人 配 GitHub remote V1.1 (已配 1.0, 验 remote, 估 2026-11-30 06:00-06:05, 5 min)
 
 **Step 3 详细 (per 决策 #11 + R129-8 1.0 release 流程准备 10 文件 + R147-1 + R153-2)**:
-- **Step 3.1 主人 验 GitHub remote V1.1 (1-2 min)**: 跑 `git remote -v` verify origin = https://github.com/apeireth/apeireth-rust.git (V1.0 release 已配, per 决策 #11 + R129-8 setup-github-remote.{ps1,sh}) + 跑 `git remote show origin` verify HEAD branch = master + 跑 `git ls-remote origin` verify v1.0.0 tag 存在 (V1.0 release done) + 跑 `git ls-remote origin | grep v1.1` verify v1.1.0 tag 0 存在 (V1.1 release 拍板前 0 存在 stale tag).
+- **Step 3.1 主人 验 GitHub remote V1.1 (1-2 min)**: 跑 `git remote -v` verify origin = https://github.com/Apeireth/Apeireth.git (V1.0 release 已配, per 决策 #11 + R129-8 setup-github-remote.{ps1,sh}) + 跑 `git remote show origin` verify HEAD branch = master + 跑 `git ls-remote origin` verify v1.0.0 tag 存在 (V1.0 release done) + 跑 `git ls-remote origin | grep v1.1` verify v1.1.0 tag 0 存在 (V1.1 release 拍板前 0 存在 stale tag).
 - **Step 3.2 主人 验 GitHub Actions secrets 配置 V1.1 (1 min)**: 跑 `gh secret list` verify GH_TOKEN + GITHUB_TOKEN 配置 + 跑 `gh workflow list` verify 7 workflows 存在 (cargo-build.yml + cargo-test.yml + cargo-audit.yml + cargo-deny.yml + cargo-doc.yml + mkdocs-deploy.yml + release.yml).
 - **Step 3.3 主人 验 GitHub Pages 配置 V1.1 (1-2 min)**: 跑 GitHub repo Settings → Pages → Source: gh-pages branch → Save (V1.0 release 已配, 验) + 跑 `git ls-remote origin gh-pages` verify gh-pages branch 存在.
 - **Step 3.4 主人 验 mkdocs 配置 V1.1 (1 min)**: 跑 `cat mkdocs.yml` verify 7 文档 + 5 nav + 3 链式页 (per R129-13 1.0 release checklist + GitHub Pages 7 文档 + mkdocs.yml 4133 bytes + Material theme + 主语言 zh).
@@ -372,7 +372,7 @@
 **Step 6 详细 (per 决策 #11 + 决策 #78 + R129-8 §C + R147-1 + R153-2)**:
 - **Step 6.1 主人 verify release notes V1.1.0 准备 (2-3 min)**: 跑 `cat RELEASE_NOTES.md | head -100` verify V1.1.0 release notes 完整 (per R151-1 整合 #6 commit 拍板时间表 + R151-2 整合 #7 commit 拍板时间表 + R153-1~7 V1.1 spec 拓维 7 份报告, 估 50-100 KB 文档) + 跑 `wc -l RELEASE_NOTES.md` verify lines 数.
 - **Step 6.2 主人 上传 release notes V1.1.0 (5-7 min)**: GitHub UI Releases → Draft a new release → Choose v1.1.0 tag → Release title "Apeireth 1.1.0" → description RELEASE_NOTES.md 内容 → Click "Publish release" (per R129-8 §C 类比 + R147-1 1.0 release 实战准备 8 步 + R153-2 整合 #5.1 1.0 release 实战 8 步 runbook 跟 R139-1-retry log 衔接).
-- **Step 6.3 主人 verify release notes V1.1.0 上传成功 (2-3 min)**: 跑 https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0 页面 verify release notes V1.1.0 显示 + assets 完整.
+- **Step 6.3 主人 verify release notes V1.1.0 上传成功 (2-3 min)**: 跑 https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0 页面 verify release notes V1.1.0 显示 + assets 完整.
 - **Step 6 总时间盒**: 2-3 min verify + 5-7 min 上传 + 2-3 min verify = 估 10 min 主人手跑.
 
 #### Step 7: 主人 GitHub Pages mkdocs build V1.1.0 + gh-pages 部署 (估 2026-11-30 06:40-07:30, 50 min)
@@ -389,7 +389,7 @@
 #### Step 8: V1.1 release done verify (估 2026-11-30 07:30-08:00, 30 min) + V1.2 release 永久循环接续
 
 **Step 8 详细 (per 决策 #11 + 决策 #74 + 决策 #78 + 决策 #87 + R147-1 + R153-2)**:
-- **Step 8.1 主人 verify V1.1.0 release done (5-10 min)**: 跑 https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0 页面 verify V1.1.0 release notes + assets 完整 + 跑 https://apeireth.github.io/apeireth-rust-v1.1/ 页面 verify 7 文档 + 5 nav + 3 链式页显示 OK + 跑 `git tag -l "v1.1*"` verify v1.1.0 tag 存在 + 跑 `git log v1.1.0 --oneline | head -5` verify 整合 #6 + #7 commit 拍板.
+- **Step 8.1 主人 verify V1.1.0 release done (5-10 min)**: 跑 https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0 页面 verify V1.1.0 release notes + assets 完整 + 跑 https://apeireth.github.io/apeireth-rust-v1.1/ 页面 verify 7 文档 + 5 nav + 3 链式页显示 OK + 跑 `git tag -l "v1.1*"` verify v1.1.0 tag 存在 + 跑 `git log v1.1.0 --oneline | head -5` verify 整合 #6 + #7 commit 拍板.
 - **Step 8.2 主人 verify 8 硬墙 0 越界 100% (5-10 min)**: 跑 11 项 verify (B1 24 → 25 LOCKED Mavis 自决改 + B2 1.2.1 + A1 R11 baseline 3 值 + A3 14 键 PHL-08 NEW + B3 32 维 + B4 36 维 + B5 9 件套 + C1 0 主动 commit + C2 0 装 PASS + 0 push 严守) = 11/11 项 100% PASS.
 - **Step 8.3 主人 verify 24 LOCKED 入口签名 0 改 verify 25/25 全 PASS (5-10 min)**: 跑 24 LOCKED + 1 PHL-07 入口签名 0 改 verify (V1.1 release 24 → 25 LOCKED) = 25/25 全 PASS.
 - **Step 8.4 V1.1 release done 通知 (per gate-discipline)**: Mavis 5 min tick cron 监督 + 决策日志写 (per 决策 #10 + 用户记忆 #10 + R148-23 + R148-24 + 决策 #87) + 主动 done notification 报告 V1.1 release done (per 决策 #10 + 决策 #78 §3 + 决策 #87).

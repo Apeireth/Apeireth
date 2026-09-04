@@ -742,7 +742,7 @@
    ├─ Step 4.1: 打 annotated tag v1.1.0
    ├─ Step 4.2: push tag origin v1.1.0
    ├─ Step 4.3: gh release create v1.1.0 --title "Apeireth 1.1.0" --notes-file RELEASE_NOTES.md
-   └─ Step 4.4: verify GitHub release 页面 https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0
+   └─ Step 4.4: verify GitHub release 页面 https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0
    ↓
 [Step 5] GitHub Pages 重新部署 (per deploy-github-pages-v1.1.ps1, R131-9 写, 估 30 min)
    ├─ Step 5.0: mkdocs build (生成 site/ 目录, 含 V1.1 新文档)
@@ -752,7 +752,7 @@
    └─ Step 5.4: verify https://apeireth.github.io/apeireth-rust/ (V1.1 更新)
    ↓
 [Step 6] verify V1.1 release + GitHub Pages + 主人发 release announcement
-   ├─ Step 6.1: verify https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0
+   ├─ Step 6.1: verify https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0
    ├─ Step 6.2: verify https://apeireth.github.io/apeireth-rust/ (V1.1 文档)
    ├─ Step 6.3: verify master HEAD 包含整合 #5 + #6 + #7 commit
    ├─ Step 6.4: verify v1.1.0 tag 指向整合 #7 HEAD
@@ -770,8 +770,8 @@
 | 3 | 整合 #5 commit | NOT ready | done (R130-1 修 30+1 bug) | per R130-1 报告 |
 | 4 | 整合 #6 commit | N/A | done (R131 era 实施) | per R131-8 决策 #97 |
 | 5 | 整合 #7 commit | N/A | done (V1.1 release 前最终) | per R131-9 §3-§5 |
-| 6 | origin remote | 0 (1.0 release 时配) | `https://github.com/apeireth/apeireth-rust.git` | per R129-35 Step 3 |
-| 7 | v1.1.0 tag | N/A | `https://github.com/apeireth/apeireth-rust/releases/tag/v1.1.0` | per R131-9 Step 4 |
+| 6 | origin remote | 0 (1.0 release 时配) | `https://github.com/Apeireth/Apeireth.git` | per R129-35 Step 3 |
+| 7 | v1.1.0 tag | N/A | `https://github.com/Apeireth/Apeireth/releases/tag/v1.1.0` | per R131-9 Step 4 |
 | 8 | GitHub Pages | N/A (1.0 release 时部署) | `https://apeireth.github.io/apeireth-rust/` (V1.1 重新部署) | per R131-9 Step 5 |
 | 9 | cargo build | 🟡 24+5 errors | 0 errors (修 30+1 bug) | per R130-1 |
 | 10 | cargo test | 🟡 1 FAILED test | 4200+ tests pass (per §2.2) | per R131-3 |

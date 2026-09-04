@@ -12,13 +12,13 @@
 | Git | 2.30+ | `git --version` |
 | GitHub CLI (1.0 release 配 remote 用) | 2.0+ | `gh --version` |
 
-详见 [`rust-toolchain.toml`](https://github.com/apeireth/apeireth-rust/blob/main/rust-toolchain.toml) (主仓 1.80 stable).
+详见 [`rust-toolchain.toml`](https://github.com/Apeireth/Apeireth/blob/main/rust-toolchain.toml) (主仓 1.80 stable).
 
 ## 2. Clone (1.0 release 后)
 
 ```bash
 # 1.0 release 后从 GitHub clone (per 决策 #55 §2.6 + 决策 #58 §5)
-git clone https://github.com/apeireth/apeireth-rust.git
+git clone https://github.com/Apeireth/Apeireth.git
 cd apeireth-rust
 ```
 
@@ -106,7 +106,7 @@ bash scripts/release/verify-1.0-pre-tag.sh
 
 ### Q: `cargo test --workspace` 部分 test fail
 
-**A**: 0 装 PASS 严守 (✅ 8 真实施 + ⏳ 0 + ❌ 1), fail 必为已知问题. 见 [`reports/verify-1.0-pre-tag-YYYY-MM-DD-HHMM.md`](https://github.com/apeireth/apeireth-rust/tree/main/reports).
+**A**: 0 装 PASS 严守 (✅ 8 真实施 + ⏳ 0 + ❌ 1), fail 必为已知问题. 见 [`reports/verify-1.0-pre-tag-YYYY-MM-DD-HHMM.md`](https://github.com/Apeireth/Apeireth/tree/main/reports).
 
 ### Q: 端口 8080 占用
 
@@ -124,8 +124,8 @@ bash scripts/release/verify-1.0-pre-tag.sh
 
 ## 必读
 
-- 📄 [README.md](https://github.com/apeireth/apeireth-rust/blob/main/README.md) — 项目主页
-- 📄 [INSTALLATION_GUIDE-1.0.md](https://github.com/apeireth/apeireth-rust/blob/main/docs/1.0-release-prep/INSTALLATION_GUIDE-1.0.md) — 详细安装指南
-- 📄 [CONTRIBUTING.md](https://github.com/apeireth/apeireth-rust/blob/main/CONTRIBUTING.md) — 贡献指南
+- 📄 [README.md](https://github.com/Apeireth/Apeireth/blob/main/README.md) — 项目主页
+- 📄 [INSTALLATION_GUIDE-1.0.md](https://github.com/Apeireth/Apeireth/blob/main/docs/1.0-release-prep/INSTALLATION_GUIDE-1.0.md) — 详细安装指南
+- 📄 [CONTRIBUTING.md](https://github.com/Apeireth/Apeireth/blob/main/CONTRIBUTING.md) — 贡献指南
 - 📄 [CHANGELOG.md](changelog.md) — 变更日志
 - 📄 [ROADMAP.md](roadmap.md) — 路线图

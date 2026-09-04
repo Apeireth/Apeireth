@@ -37,7 +37,7 @@ Target:         学术可引用性 (BibTeX 入口 + 前身致敬 + 6 哲学锚)
   author       = {Apeireth Team},
   year         = {2026},
   version      = {1.0.0},
-  url          = {https://github.com/apeireth/apeireth-rust},
+  url          = {https://github.com/Apeireth/Apeireth},
   note         = {R14 Rust rewrite; v2/v4/v4.1 three-architecture; 22 trait interlock matrix; V-Measure 24 dimensions}
 }
 

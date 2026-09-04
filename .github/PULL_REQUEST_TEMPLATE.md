@@ -38,7 +38,7 @@
 - [ ] CI / tooling update
 - [ ] Refactor (no functional change)
 
-## R26+ 5 项硬约束 (per [CONTRIBUTING.md §0 触碰实查](https://github.com/apeireth/apeireth-rust/blob/main/CONTRIBUTING.md))
+## R26+ 5 项硬约束 (per [CONTRIBUTING.md §0 触碰实查](https://github.com/Apeireth/Apeireth/blob/main/CONTRIBUTING.md))
 
 <!-- 任务要的 5 项 1:1, 提交前必跑实查 -->
 
@@ -89,7 +89,7 @@
 - [ ] 不重复造轮子
 - [ ] 诚实标缺
 
-## 1.0 release 12 项 checklist (per [scripts/release-1.0-checklist.sh](https://github.com/apeireth/apeireth-rust/blob/main/scripts/release-1.0-checklist.sh))
+## 1.0 release 12 项 checklist (per [scripts/release-1.0-checklist.sh](https://github.com/Apeireth/Apeireth/blob/main/scripts/release-1.0-checklist.sh))
 
 <!-- 仅在 1.0 release 收尾时勾选, 日常 PR 留空 -->
 
