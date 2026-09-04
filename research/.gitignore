@@ -1,0 +1,6 @@
+# research/ 实验区 gitignore
+# 构建产物 (runner 独立项目) 不入库。
+runners/target/
+# 大文件数据集不入库 (见 datasets/README.md MANIFEST 约定)。
+datasets/**/raw/*.bin
+datasets/**/raw/*.db
