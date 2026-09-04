@@ -41,6 +41,7 @@
 2. 缓存联动为整代失效（粗粒度），按 query_hash 级驱逐留后续
 3. support(θ) 的 lost 计数按"已入闭包节点"计（BFS 序），与按"根集"计的口径差异需在评测中对照
 4. LLM-as-judge 真接线未做（无 LLM 依赖的确定性 stub 先行）
+5. 泄漏向量 2（notes 物理删 vs episodes 软删双轨）：本批次交付**审计**（`research_audit_forgotten_leaks` 对 note 类派生项输出 lost_sources/in_closure），**决策**（是否引入 note 级 forget）按 B2 闸门"先审计后决策"明确推迟，未做任何删除动作。
 
 ## 6. 评测与实验
 
