@@ -131,7 +131,7 @@ jobs:
       # === docker 走 buildx (单 image, multi-arch 推到 GHCR) ===
       - name: Set up QEMU (docker arm64)
         if: matrix.target == 'docker' && matrix.arch == 'arm64'
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx (docker)
         if: matrix.target == 'docker'
@@ -220,7 +220,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
