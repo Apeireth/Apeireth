@@ -1321,13 +1321,8 @@ export async function fetchCapabilities(_config: ApeirethConfig): Promise<Capabi
  * 应使用 capabilityAvailable() — 它反映 provider/凭据状态.
  */
 export function capabilitySupported(manifest: CapabilityManifest | null, id: string): boolean {
-  if (!manifest) return false;
-  for (const group of manifest.capabilities) {
-    for (const cap of group.capabilities) {
-      if (cap.id === id) return cap.supported === true;
-    }
-  }
-  return false;
+  const cap = findCapability(manifest, id);
+  return cap?.supported === true;
 }
 
 /**
@@ -1381,14 +1376,26 @@ export function capabilityUnavailableReason(
 }
 
 /** 查找某 capability 完整声明 (跨组). */
+const CAPABILITY_ALIASES: Record<string, string> = {
+  'approvals.read': 'permissions.approval.read',
+  'approvals.resolve': 'permissions.approval.resolve',
+};
+
+function canonicalCapabilityId(id: string): string {
+  return CAPABILITY_ALIASES[id] ?? id;
+}
+
 export function findCapability(manifest: CapabilityManifest | null, id: string): Capability | null {
   if (!manifest) return null;
+  const want = canonicalCapabilityId(id);
+  let aliasMatch: Capability | null = null;
   for (const group of manifest.capabilities) {
     for (const cap of group.capabilities) {
-      if (cap.id === id) return cap;
+      if (cap.id === want || cap.id === id) return cap;
+      if (cap.alias_of === want || cap.alias_of === id) aliasMatch = cap;
     }
   }
-  return null;
+  return aliasMatch;
 }
 
 /**
@@ -1431,10 +1438,7 @@ export function releaseContractManifest(): CapabilityManifest {
       {name: 'health', capabilities: [cap('health', true, false, ['check'])]},
       {name: 'models', capabilities: [cap('models.list', true, false, ['list'])]},
       {name: 'chat', capabilities: [cap('chat.completions', true, true, ['stream'])]},
-      {
-        name: 'approvals',
-        capabilities: [cap('approvals.resolve', false, true, ['resolve'])],
-      },
+      {name: 'permissions', capabilities: [cap('permissions.approval.resolve', false, true, ['resolve'])]},
     ],
   };
 }

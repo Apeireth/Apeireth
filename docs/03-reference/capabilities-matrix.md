@@ -17,8 +17,9 @@
 | `models.list`, `providers.list`, `chat.completions` | true | 取决于已注册 Provider | ProviderRouter / Settings、Conversations |
 | `sessions.read` | 取决于 SessionQuery port | 同 supported | SessionQuery / Conversations |
 | `memory.read`, `memory.write`, `memory.forget`, `memory.protect`, `memory.unprotect`, `memory.graph.read` | 取决于 governed memory ports | 同 supported | GovernedMemoryService / Memory |
+| `memory.update` | false | false (`reason=not_implemented`) | Declared in the universe, not wired |
 | `tools.list` | 取决于 CapabilityQuery port | 同 supported | CapabilityRegistry / Tools |
-| `approvals.read`, `approvals.resolve` | true | true | Runtime approval protocol / Tools |
+| `permissions.approval.read`, `permissions.approval.resolve` | true | true | Runtime approval protocol / Tools (`approvals.read` / `approvals.resolve` are explicit `alias_of` compatibility ids) |
 | `permissions.grants.read`, `permissions.revoke` | 取决于 grant ports | 同 supported | Grant ports / Tools |
 | `trace.read`, `audit.read`, `activity.sse` | 取决于 observability ports；SSE 由 Event Spine 提供 | 同 supported | RuntimeEventSink / Activity |
 | `organs.list`, `modules.list` | 取决于 BehaviorRegistry projection | 同 supported | BehaviorRegistry / RuntimeModal |

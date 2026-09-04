@@ -76,7 +76,7 @@
           })
         : Promise.resolve([]);
 
-      const approvalsPromise = capabilityAvailable(capabilities, 'approvals.read')
+      const approvalsPromise = capabilityAvailable(capabilities, 'permissions.approval.read')
         ? fetchApprovalRequests(config).catch(() => [])
         : Promise.resolve([]);
 
@@ -96,7 +96,7 @@
 
       // If all capabilities unsupported, show informative error
       if (!capabilitySupported(capabilities, 'tools.list') &&
-          !capabilitySupported(capabilities, 'approvals.read') &&
+          !capabilitySupported(capabilities, 'permissions.approval.read') &&
           !capabilitySupported(capabilities, 'permissions.grants.read')) {
         error = '工具内省不支持: 当前运行时未实现工具/权限审批 API (Apeireth 2.0 canonical gateway 无此内省功能)';
       }

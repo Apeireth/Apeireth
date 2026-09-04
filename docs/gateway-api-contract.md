@@ -148,7 +148,9 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
 每个条目同时提供 `supported`、`available` 与不可用时的 `reason`。当前核心 ID 包括:
 `health`、`models.list`、`providers.list`、`runtime.snapshot.read`、`chat.completions`、
 `sessions.read`、`memory.read/write/forget/protect/unprotect`、`memory.graph.read`、
-`tools.list`、`approvals.read`、`approvals.resolve`、`permissions.grants.read`、
+`memory.update`（`supported=false`, `available=false`, `reason=not_implemented`）、
+`tools.list`、`permissions.approval.read`、`permissions.approval.resolve`、
+`approvals.read` / `approvals.resolve`（compatibility aliases）、`permissions.grants.read`、
 `permissions.revoke`、`organs.list`、`modules.list`、`trace.read`、`audit.read`、`activity.sse`。
 
 ## §10 当前实现状态

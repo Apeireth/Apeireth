@@ -118,7 +118,8 @@ Runtime 在 turn/approval 生命周期发出结构化 `RuntimeEvent`，默认使
 | `sessions.read` | 取决于 SessionQuery | 同 supported | SessionQuery | Conversations |
 | `memory.read/write/forget/protect/unprotect/graph.read` | 取决于 governed memory ports | 同 supported | Memory ports + `episode_governance` | Memory |
 | `tools.list` | 取决于 ToolCatalogQuery | 同 supported | CapabilityRegistry + plugins | Tools |
-| `approvals.read`, `approvals.resolve` | true | true | Runtime Approval protocol | Tools |
+| `permissions.approval.read`, `permissions.approval.resolve` | true | true | Runtime Approval protocol | Tools |
+| `approvals.read`, `approvals.resolve` | true | true | compatibility aliases (`alias_of` the permissions.approval.* ids) | Tools |
 | `permissions.grants.read`, `permissions.revoke` | 取决于 Grant ports | 同 supported | Grant ports | Tools |
 | `trace.read`, `audit.read`, `activity.sse` | 取决于对应 ports/Event Spine | 同 supported | Trace/Audit/Event sinks | Activity |
 | `organs.list`, `modules.list` | 取决于 ModuleQuery | 同 supported | BehaviorRegistry projection | RuntimeModal |
@@ -128,7 +129,7 @@ Runtime 在 turn/approval 生命周期发出结构化 `RuntimeEvent`，默认使
 
 ## Frontend Migration
 
-活动 UI 源码位于 sibling workspace `apeireth-ui`，Tauri 目录只保留薄壳：
+活动 UI 源码位于本仓库 `frontend/companion-desktop/`（从本机 `apeireth-ui` 提取后迁回 in-tree，避免依赖 sibling checkout）：
 
 - Conversations：以 `sessions.read` gate ledger；不可用显示原因并停止请求。
 - Memory：分别 gate read/write/forget/protect/unprotect/graph；使用后端真实 revision/state。
