@@ -300,26 +300,30 @@ fn probe_darwin() -> Result<(String, String), MachineIdError> {
 
 #[cfg(target_os = "linux")]
 fn probe_linux() -> Result<(String, String), MachineIdError> {
-    let mut last_err: Option<String> = None;
+    let mut errors: Vec<String> = Vec::with_capacity(3);
     match read_trimmed(LINUX_DMI_PATH) {
         Ok(raw) if !raw.is_empty() && !raw.contains("None") && !raw.contains("To Be Filled") => {
             return Ok((raw, "dmi".to_string()));
         }
-        Ok(_) => last_err = Some("DMI empty/placeholder".to_string()),
-        Err(e) => last_err = Some(format!("DMI: {e}")),
+        Ok(_) => errors.push("DMI empty/placeholder".to_string()),
+        Err(e) => errors.push(format!("DMI: {e}")),
     }
     match read_trimmed(LINUX_DBUS_PATH) {
         Ok(raw) if !raw.is_empty() => return Ok((raw, "dbus".to_string())),
-        Ok(_) => last_err = Some("DBus empty".to_string()),
-        Err(e) => last_err = Some(format!("DBus: {e}")),
+        Ok(_) => errors.push("DBus empty".to_string()),
+        Err(e) => errors.push(format!("DBus: {e}")),
     }
     match read_trimmed(LINUX_ETC_PATH) {
         Ok(raw) if !raw.is_empty() => return Ok((raw, "etc".to_string())),
-        Ok(_) => last_err = Some("ETC empty".to_string()),
-        Err(e) => last_err = Some(format!("ETC: {e}")),
+        Ok(_) => errors.push("ETC empty".to_string()),
+        Err(e) => errors.push(format!("ETC: {e}")),
     }
     Err(MachineIdError::LinuxAllSourcesFailed(
-        last_err.unwrap_or_else(|| "all 3 sources unavailable".to_string()),
+        if errors.is_empty() {
+            "all 3 sources unavailable".to_string()
+        } else {
+            errors.join("; ")
+        },
     ))
 }
 

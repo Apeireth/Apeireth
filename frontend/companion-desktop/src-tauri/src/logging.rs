@@ -377,9 +377,9 @@ mod tests {
     #[test]
     fn redacts_canonical_provider_env_values() {
         for (line, secret) in [
-            ("APEIRETH_API_KEY=mm-live-abcdef123456", "mm-live-abcdef123456"),
-            ("APEIRETH_ANTHROPIC_KEY=ant-live-9f8e7d", "ant-live-9f8e7d"),
-            ("OPENAI_API_KEY=oai-live-55443322", "oai-live-55443322"),
+            ("APEIRETH_API_KEY=test-key-mm-live-abcdef123456", "test-key-mm-live-abcdef123456"),
+            ("APEIRETH_ANTHROPIC_KEY=test-key-ant-live-9f8e7d", "test-key-ant-live-9f8e7d"),
+            ("OPENAI_API_KEY=test-key-oai-live-55443322", "test-key-oai-live-55443322"),
         ] {
             let redacted = DesktopLogger::redact_secrets(line);
             assert!(

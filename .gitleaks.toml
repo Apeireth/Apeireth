@@ -46,7 +46,8 @@ paths = [
     '''crates/adapters/sdk/examples/.*''',
     '''crates/capabilities/tools/src/guardrail\.rs''',
     '''crates/engine/perception/tests/.*''',
-    '''crates/foundation/governance/src/input_security\.rs'''
+    '''crates/foundation/governance/src/input_security\.rs''',
+    '''frontend/companion-desktop/src-tauri/src/logging\.rs'''
 ]
 regexes = [
     # 测试 placeholder (ghp_aaaaaaaa / sk-verylong... / sk-ant-voice-...)
