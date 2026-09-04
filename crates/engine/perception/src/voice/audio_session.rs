@@ -38,7 +38,10 @@ impl fmt::Display for RecordingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IllegalTransition { from, attempted } => {
-                write!(f, "illegal recording transition: {from:?} cannot {attempted}")
+                write!(
+                    f,
+                    "illegal recording transition: {from:?} cannot {attempted}"
+                )
             }
             Self::Audio(msg) => write!(f, "recording audio error: {msg}"),
         }
@@ -132,7 +135,11 @@ impl RecordingSession {
             return Ok(());
         }
         self.samples.extend_from_slice(samples);
-        let elapsed = duration_ms(self.samples.len(), PCM16_SAMPLE_RATE_HZ, PCM16_CHANNELS_MONO);
+        let elapsed = duration_ms(
+            self.samples.len(),
+            PCM16_SAMPLE_RATE_HZ,
+            PCM16_CHANNELS_MONO,
+        );
         if elapsed > self.max_duration.as_millis() as u64 {
             self.status = RecordingStatus::Failed;
             return Err(RecordingError::Audio(format!(
@@ -156,7 +163,8 @@ impl RecordingSession {
             return Err(RecordingError::Audio("audio buffer is empty".into()));
         }
         self.status = RecordingStatus::Stopped;
-        Pcm16Buffer::from_samples(self.samples.clone()).map_err(|err| RecordingError::Audio(err.to_string()))
+        Pcm16Buffer::from_samples(self.samples.clone())
+            .map_err(|err| RecordingError::Audio(err.to_string()))
     }
 
     /// Force `Failed` from `Pending` or `Recording`.

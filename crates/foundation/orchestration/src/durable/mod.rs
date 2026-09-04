@@ -46,8 +46,8 @@ pub use history::{
 };
 pub use replay::{ActivityExecutor, DurableRun};
 pub use retry::{
-    ActivityState, ActivityStateMachine, ActivityStateError, RetryPolicy,
-    SUPPORTED_ACTIVITY_STATES, ACTIVITY_STATE_COUNT,
+    ActivityState, ActivityStateError, ActivityStateMachine, RetryPolicy, ACTIVITY_STATE_COUNT,
+    SUPPORTED_ACTIVITY_STATES,
 };
 
 /// 持久执行原语的可判别错误。

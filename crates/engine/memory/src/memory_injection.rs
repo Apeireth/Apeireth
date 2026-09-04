@@ -25,8 +25,7 @@ pub fn build_memory_injection(entries: &[String]) -> String {
     if entries.is_empty() {
         return String::new();
     }
-    let mut s =
-        String::from("[记忆证据 — 你只知道以下条目, 不要声称记得列表之外的任何对话]\n");
+    let mut s = String::from("[记忆证据 — 你只知道以下条目, 不要声称记得列表之外的任何对话]\n");
     for (i, e) in entries.iter().enumerate() {
         s.push_str(&format!(
             "{}. {}\n",
@@ -56,15 +55,11 @@ pub fn build_preference_injection(entries: &[(u8, String)]) -> String {
         .collect();
     ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
-    let mut s =
-        String::from("【主人偏好画像】(来自记忆提炼, 做审美/风格/交互类事情时优先沿用):\n");
+    let mut s = String::from("【主人偏好画像】(来自记忆提炼, 做审美/风格/交互类事情时优先沿用):\n");
     for (_, _, content) in ranked.iter().take(PREFERENCE_INJECTION_LIMIT) {
         s.push_str(&format!(
             "  • {}\n",
-            content
-                .chars()
-                .take(EVIDENCE_MAX_CHARS)
-                .collect::<String>()
+            content.chars().take(EVIDENCE_MAX_CHARS).collect::<String>()
         ));
     }
     s
@@ -104,7 +99,10 @@ mod tests {
             "entries truncate to {EVIDENCE_MAX_CHARS} chars: {}",
             s.matches('x').count()
         );
-        assert!(s.contains("禁止说"), "anti-hallucination rule still present");
+        assert!(
+            s.contains("禁止说"),
+            "anti-hallucination rule still present"
+        );
     }
 
     #[test]

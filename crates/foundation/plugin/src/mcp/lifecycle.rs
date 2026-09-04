@@ -268,9 +268,8 @@ pub fn handle_initialize(req: &JsonRpcRequest, default_server_info: ServerInfo) 
         Err(e) => return JsonRpcResponse::err(req.id.clone(), e),
     };
     let result = init_req.negotiate(default_server_info);
-    let value = serde_json::to_value(&result).unwrap_or_else(|e| {
-        json!({ "error": format!("serialize ServerInfo failed: {e}") })
-    });
+    let value = serde_json::to_value(&result)
+        .unwrap_or_else(|e| json!({ "error": format!("serialize ServerInfo failed: {e}") }));
     JsonRpcResponse::ok(req.id.clone(), value)
 }
 
@@ -340,11 +339,7 @@ impl ClientSession {
             ));
         }
         let id = self.next_id();
-        let params = build_initialize_params(
-            MCP_PROTOCOL_VERSION,
-            &self.client_info,
-            capabilities,
-        );
+        let params = build_initialize_params(MCP_PROTOCOL_VERSION, &self.client_info, capabilities);
         self.state = SessionState::Initializing;
         Ok(JsonRpcRequest::new("initialize", Some(params), id))
     }
@@ -538,11 +533,7 @@ mod tests {
 
     #[test]
     fn handle_initialize_invalid_params_errors() {
-        let req = JsonRpcRequest::new(
-            "initialize",
-            Some(json!({"wrong": "shape"})),
-            Id::Num(3),
-        );
+        let req = JsonRpcRequest::new("initialize", Some(json!({"wrong": "shape"})), Id::Num(3));
         let resp = handle_initialize(&req, ServerInfo::for_server("x"));
         let err = resp.error.unwrap();
         assert_eq!(err.code, JsonRpcError::CODE_INVALID_PARAMS);
@@ -567,7 +558,8 @@ mod tests {
         let req = s.begin_initialize(&ClientCapabilities::default()).unwrap();
         assert_eq!(req.method, "initialize");
         assert_eq!(s.state(), SessionState::Initializing);
-        s.complete_initialize(ServerInfo::for_server("srv")).unwrap();
+        s.complete_initialize(ServerInfo::for_server("srv"))
+            .unwrap();
         assert_eq!(s.state(), SessionState::Ready);
         s.ensure_ready().unwrap();
         s.close();

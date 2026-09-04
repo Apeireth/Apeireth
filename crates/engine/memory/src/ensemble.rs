@@ -671,22 +671,18 @@ mod tests {
 
     #[test]
     fn lmsr_try_new_rejects_bad_config() {
-        assert!(
-            PredictionMarket::try_new(MarketConfig {
-                liquidity_b: 0.0,
-                num_outcomes: 2,
-                contrarian_weight: 0.0,
-            })
-            .is_err()
-        );
-        assert!(
-            PredictionMarket::try_new(MarketConfig {
-                liquidity_b: 1.0,
-                num_outcomes: 1,
-                contrarian_weight: 0.0,
-            })
-            .is_err()
-        );
+        assert!(PredictionMarket::try_new(MarketConfig {
+            liquidity_b: 0.0,
+            num_outcomes: 2,
+            contrarian_weight: 0.0,
+        })
+        .is_err());
+        assert!(PredictionMarket::try_new(MarketConfig {
+            liquidity_b: 1.0,
+            num_outcomes: 1,
+            contrarian_weight: 0.0,
+        })
+        .is_err());
     }
 
     #[test]

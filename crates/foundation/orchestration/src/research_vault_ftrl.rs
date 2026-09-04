@@ -132,7 +132,11 @@ impl ResearchVaultLruFtrl {
     }
 
     /// 按价值降序 + tie-break id 稳定排序 (RA-3: append-only tail 原则的基础)。
-    pub fn rank(&self, segments: &[ResearchSegment], features: &[ResearchSegmentFeatures]) -> Vec<String> {
+    pub fn rank(
+        &self,
+        segments: &[ResearchSegment],
+        features: &[ResearchSegmentFeatures],
+    ) -> Vec<String> {
         let mut idx: Vec<usize> = (0..segments.len()).collect();
         idx.sort_by(|&a, &b| {
             let va = self.score(&features[a]);
@@ -141,7 +145,9 @@ impl ResearchVaultLruFtrl {
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| segments[a].segment.name.cmp(&segments[b].segment.name))
         });
-        idx.into_iter().map(|i| segments[i].segment.name.clone()).collect()
+        idx.into_iter()
+            .map(|i| segments[i].segment.name.clone())
+            .collect()
     }
 
     /// 前缀命中率: 两次排序的最长公共前缀比例 (RA-3 护栏 5 的模型级近似)。
@@ -186,11 +192,13 @@ impl ResearchVaultLruFtrl {
             order.sort_by(|&a, &b| {
                 let ca = segments[a].segment.core;
                 let cb = segments[b].segment.core;
-                cb.cmp(&ca).then_with(|| {
-                    segments[a].segment.name.cmp(&segments[b].segment.name)
-                })
+                cb.cmp(&ca)
+                    .then_with(|| segments[a].segment.name.cmp(&segments[b].segment.name))
             });
-            order.into_iter().map(|i| segments[i].segment.name.clone()).collect()
+            order
+                .into_iter()
+                .map(|i| segments[i].segment.name.clone())
+                .collect()
         } else {
             ranked.clone()
         };
@@ -230,13 +238,13 @@ impl ResearchVaultLruFtrl {
     }
 
     /// 后悔 (在线损失 − 最优固定权重的事后损失, 负值 = 优于固定基线)。
-    pub fn regret_so_far(
-        &self,
-        history: &[(ResearchSegmentFeatures, f32)],
-    ) -> f32 {
+    pub fn regret_so_far(&self, history: &[(ResearchSegmentFeatures, f32)]) -> f32 {
         // 最优固定 w*: 事后最小二乘 (小维特征闭式解或网格)。
         let best = best_fixed_linear_loss(history);
-        let online: f32 = history.iter().map(|(f, r)| (self.score(f) - r).powi(2)).sum();
+        let online: f32 = history
+            .iter()
+            .map(|(f, r)| (self.score(f) - r).powi(2))
+            .sum();
         online - best
     }
 }
@@ -257,18 +265,22 @@ pub fn best_fixed_linear_loss(history: &[(ResearchSegmentFeatures, f32)]) -> f32
     }
     // 4×4 求逆 (伴随矩阵法)。
     let det = |m: &[[f32; 4]; 4]| {
-        m[0][0] * (m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-            - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-            + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]))
-            - m[0][1] * (m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-                - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]))
-            + m[0][2] * (m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-                - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
-            - m[0][3] * (m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
-                - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
-                + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
+        m[0][0]
+            * (m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+                - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+                + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]))
+            - m[0][1]
+                * (m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+                    - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+                    + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]))
+            + m[0][2]
+                * (m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+                    - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+                    + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
+            - m[0][3]
+                * (m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+                    - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+                    + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
     };
     let d = det(&xtx);
     if d.abs() < 1e-9 {
@@ -310,11 +322,14 @@ pub fn best_fixed_linear_loss(history: &[(ResearchSegmentFeatures, f32)]) -> f32
     for i in 0..4 {
         w[i] = inv[i][0] * xty[0] + inv[i][1] * xty[1] + inv[i][2] * xty[2] + inv[i][3] * xty[3];
     }
-    history.iter().map(|(f, r)| {
-        let x = f.as_vec();
-        let pred = w[0] * x[0] + w[1] * x[1] + w[2] * x[2] + w[3] * x[3];
-        (pred - r).powi(2)
-    }).sum()
+    history
+        .iter()
+        .map(|(f, r)| {
+            let x = f.as_vec();
+            let pred = w[0] * x[0] + w[1] * x[1] + w[2] * x[2] + w[3] * x[3];
+            (pred - r).powi(2)
+        })
+        .sum()
 }
 
 /// 确定性合成反馈生成: reward = σ(⟨w_true, x⟩ + noise), xorshift64* PRNG。
@@ -412,14 +427,21 @@ mod tests {
     fn prefix_guard_trips_and_falls_back() {
         let mut learner = ResearchVaultLruFtrl::new(
             ResearchOgdConfig::default(),
-            ResearchPrefixGuardConfig { theta: 0.8, window: 8 },
+            ResearchPrefixGuardConfig {
+                theta: 0.8,
+                window: 8,
+            },
         );
         let segs: Vec<ResearchSegment> = (0..6)
             .map(|i| ResearchSegment::new(format!("s{i}"), format!("c{i}"), 1))
             .collect();
         // 第一次: 无历史, 按策略排序。
         let f0: Vec<ResearchSegmentFeatures> = (0..6)
-            .map(|i| ResearchSegmentFeatures { retr_score: i as f32 / 6.0, recency: 1.0, novelty: 0.5 })
+            .map(|i| ResearchSegmentFeatures {
+                retr_score: i as f32 / 6.0,
+                recency: 1.0,
+                novelty: 0.5,
+            })
             .collect();
         let stackpin = ResearchStackPinPolicy::new(3, 1, false);
         let (rank1, fb1) = learner.decide_ranking(&segs, &f0, &stackpin);
@@ -427,16 +449,28 @@ mod tests {
         // 学习后权重翻转 → 排序剧烈变化 → 护栏触发 fallback。
         for _ in 0..200 {
             learner.update(
-                &ResearchSegmentFeatures { retr_score: 1.0, recency: 1.0, novelty: 1.0 },
+                &ResearchSegmentFeatures {
+                    retr_score: 1.0,
+                    recency: 1.0,
+                    novelty: 1.0,
+                },
                 0.0,
             );
             learner.update(
-                &ResearchSegmentFeatures { retr_score: 0.0, recency: 0.0, novelty: 0.0 },
+                &ResearchSegmentFeatures {
+                    retr_score: 0.0,
+                    recency: 0.0,
+                    novelty: 0.0,
+                },
                 1.0,
             );
         }
         let f1: Vec<ResearchSegmentFeatures> = (0..6)
-            .map(|i| ResearchSegmentFeatures { retr_score: i as f32 / 6.0, recency: 0.2, novelty: 0.1 })
+            .map(|i| ResearchSegmentFeatures {
+                retr_score: i as f32 / 6.0,
+                recency: 0.2,
+                novelty: 0.1,
+            })
             .collect();
         let (rank2, fb2) = learner.decide_ranking(&segs, &f1, &stackpin);
         assert_ne!(rank1, rank2, "学习后排序应变化");
@@ -454,9 +488,21 @@ mod tests {
             ResearchSegment::new("m", "m", 1),
         ];
         let feats = vec![
-            ResearchSegmentFeatures { retr_score: 0.1, recency: 0.1, novelty: 0.1 },
-            ResearchSegmentFeatures { retr_score: 0.1, recency: 0.1, novelty: 0.1 },
-            ResearchSegmentFeatures { retr_score: 0.1, recency: 0.1, novelty: 0.1 },
+            ResearchSegmentFeatures {
+                retr_score: 0.1,
+                recency: 0.1,
+                novelty: 0.1,
+            },
+            ResearchSegmentFeatures {
+                retr_score: 0.1,
+                recency: 0.1,
+                novelty: 0.1,
+            },
+            ResearchSegmentFeatures {
+                retr_score: 0.1,
+                recency: 0.1,
+                novelty: 0.1,
+            },
         ];
         let stackpin = ResearchStackPinPolicy::new(3, 1, false);
         let (rank, _) = learner.decide_ranking(&segs, &feats, &stackpin);

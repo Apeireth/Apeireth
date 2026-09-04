@@ -249,7 +249,9 @@ fn rate_limiter_token_bucket_burst_and_refill() {
         assert!(l.try_acquire_at("k", 1, now).unwrap());
     }
     assert!(!l.try_acquire_at("k", 1, now).unwrap());
-    assert!(l.try_acquire_at("k", 1, now + Duration::from_millis(20)).unwrap());
+    assert!(l
+        .try_acquire_at("k", 1, now + Duration::from_millis(20))
+        .unwrap());
     let s: RateLimiterStats = l.stats();
     assert_eq!(s.hits, 6);
     assert_eq!(s.misses, 1);

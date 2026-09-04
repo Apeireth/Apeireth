@@ -140,7 +140,11 @@ impl BetaBinomial {
 }
 
 fn finite_min(x: f64, floor: f64) -> f64 {
-    if x.is_finite() { x.max(floor) } else { floor }
+    if x.is_finite() {
+        x.max(floor)
+    } else {
+        floor
+    }
 }
 
 #[cfg(test)]

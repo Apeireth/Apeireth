@@ -61,11 +61,16 @@ mod tests {
     use super::*;
 
     fn seed() -> Vec<DreamSource> {
-        ["线代: 特征值最后一题卡住", "高数: 换元忘换 dx", "明天交线代作业", "council bug: advisor 低频误报"]
-            .iter()
-            .enumerate()
-            .map(|(i, c)| DreamSource::new(format!("mem-{i}"), 1 + i as i64, *c))
-            .collect()
+        [
+            "线代: 特征值最后一题卡住",
+            "高数: 换元忘换 dx",
+            "明天交线代作业",
+            "council bug: advisor 低频误报",
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, c)| DreamSource::new(format!("mem-{i}"), 1 + i as i64, *c))
+        .collect()
     }
 
     #[test]

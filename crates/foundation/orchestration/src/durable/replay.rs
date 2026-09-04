@@ -270,9 +270,7 @@ impl DurableRun {
             };
             if sched_id != activity_id {
                 return Err(DurableError::HistoryCorrupted {
-                    reason: format!(
-                        "attempt chain jumped from {activity_id:?} to {sched_id:?}"
-                    ),
+                    reason: format!("attempt chain jumped from {activity_id:?} to {sched_id:?}"),
                 });
             }
             self.cursor += 1;
@@ -567,8 +565,11 @@ mod tests {
         let b = run
             .execute_activity("echo", json!(2), &exec, no_retry(), 1002)
             .unwrap();
-        run.complete(json!({"sum": a.as_i64().unwrap() + b.as_i64().unwrap()}), 1003)
-            .unwrap();
+        run.complete(
+            json!({"sum": a.as_i64().unwrap() + b.as_i64().unwrap()}),
+            1003,
+        )
+        .unwrap();
         assert_eq!(exec.hits(), 2);
         assert_eq!(
             kinds_of(run.history()),
@@ -640,7 +641,11 @@ mod tests {
         assert_eq!(p1, r1);
         assert_eq!(p2, r2);
         assert_eq!(exec.hits(), 2, "completed activities must not re-execute");
-        assert_eq!(replayed.history(), &history, "replay must not extend a finished journal");
+        assert_eq!(
+            replayed.history(),
+            &history,
+            "replay must not extend a finished journal"
+        );
     }
 
     /// 尝试链 Scheduled→Failed→Scheduled→Completed 重放时零副作用返回成功。
@@ -706,7 +711,11 @@ mod tests {
             .execute_activity("echo", json!(7), &exec, no_retry(), 5)
             .unwrap();
         assert_eq!(again, json!(7));
-        assert_eq!(exec.hits(), 2, "second resume must skip recovered completion");
+        assert_eq!(
+            exec.hits(),
+            2,
+            "second resume must skip recovered completion"
+        );
     }
 
     /// Failed 后、下一次 Scheduled 前崩溃: 按政策继续新鲜重试并追加。
@@ -721,8 +730,8 @@ mod tests {
         let history = DurableHistory::from_jsonl(&truncated).unwrap();
 
         let exec2 = FailThenSucceed::new(1); // 下一次失败一次再成功; 但 recover 从 attempt 2 起
-        // resume 看到 Failed attempt=1, should_retry → execute_fresh attempt=2
-        // exec2: 第一次调用 (attempt 2) 失败, 第二次成功。
+                                             // resume 看到 Failed attempt=1, should_retry → execute_fresh attempt=2
+                                             // exec2: 第一次调用 (attempt 2) 失败, 第二次成功。
         let mut resumed = DurableRun::resume(history).unwrap();
         let out = resumed
             .execute_activity("flaky", json!(1), &exec2, policy_3(), 9)
@@ -867,7 +876,11 @@ mod tests {
             .unwrap();
         assert_eq!(second, json!(2));
         resumed.complete(json!({"sum": 3}), 5).unwrap();
-        assert_eq!(exec.hits(), 2, "first activity replayed, second executed once");
+        assert_eq!(
+            exec.hits(),
+            2,
+            "first activity replayed, second executed once"
+        );
         assert_eq!(resumed.history().len(), 6);
     }
 }

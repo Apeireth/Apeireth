@@ -316,13 +316,15 @@ async fn real_http_entry_closes_the_canonical_tool_loop() {
         .all(|entry| entry["at"].as_str() == Some("2023-11-14T22:13:20Z")));
     let events = body["events"].as_array().expect("product-facing events");
     assert!(
-        events.iter().any(|event| event["event"] == "tool_started"
-            && event["tool_call_id"] == "call-1"),
+        events
+            .iter()
+            .any(|event| event["event"] == "tool_started" && event["tool_call_id"] == "call-1"),
         "{events:?}"
     );
     assert!(
-        events.iter().any(|event| event["event"] == "tool_completed"
-            && event["succeeded"] == true),
+        events
+            .iter()
+            .any(|event| event["event"] == "tool_completed" && event["succeeded"] == true),
         "{events:?}"
     );
 }
@@ -663,15 +665,15 @@ async fn openai_compatible_path_exposes_tool_events_without_client_execution() {
         "{events:?}"
     );
     assert!(
-        events.iter().any(|event| event["event"] == "tool_completed"),
+        events
+            .iter()
+            .any(|event| event["event"] == "tool_completed"),
         "{events:?}"
     );
     assert_eq!(calculator_calls.load(Ordering::SeqCst), 1);
     assert!(
         body["choices"][0]["message"]["tool_calls"].is_null()
-            || body["choices"][0]["message"]
-                .get("tool_calls")
-                .is_none(),
+            || body["choices"][0]["message"].get("tool_calls").is_none(),
         "OpenAI tool_calls must not move execution to the client: {body}"
     );
 }

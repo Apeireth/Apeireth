@@ -154,7 +154,11 @@ impl XorShift64 {
     /// Create from a nonzero seed (`0` is remapped to a fixed nonzero constant,
     /// mirroring the donor's initialization guard).
     pub fn new(seed: u64) -> Self {
-        let state = if seed == 0 { 0x9e37_79b9_7f4a_7c15 } else { seed };
+        let state = if seed == 0 {
+            0x9e37_79b9_7f4a_7c15
+        } else {
+            seed
+        };
         Self { state }
     }
 
@@ -474,7 +478,13 @@ mod tests {
         let mut rng = XorShift64::new(1);
         let base = Duration::from_secs(5);
         assert_eq!(
-            jittered_sleep(base, JitterMode::None, None, Duration::from_secs(60), &mut rng),
+            jittered_sleep(
+                base,
+                JitterMode::None,
+                None,
+                Duration::from_secs(60),
+                &mut rng
+            ),
             base
         );
     }
@@ -484,7 +494,13 @@ mod tests {
         let mut rng = XorShift64::new(42);
         let base = Duration::from_secs(10);
         for _ in 0..50 {
-            let r = jittered_sleep(base, JitterMode::Full, None, Duration::from_secs(60), &mut rng);
+            let r = jittered_sleep(
+                base,
+                JitterMode::Full,
+                None,
+                Duration::from_secs(60),
+                &mut rng,
+            );
             assert!(r <= base, "Full jitter must be <= base");
         }
     }
@@ -495,7 +511,13 @@ mod tests {
         let base = Duration::from_secs(10);
         let half = base / 2;
         for _ in 0..50 {
-            let r = jittered_sleep(base, JitterMode::Equal, None, Duration::from_secs(60), &mut rng);
+            let r = jittered_sleep(
+                base,
+                JitterMode::Equal,
+                None,
+                Duration::from_secs(60),
+                &mut rng,
+            );
             assert!(r >= half, "Equal jitter must be >= base/2");
             assert!(r <= base, "Equal jitter must be <= base");
         }
@@ -508,8 +530,7 @@ mod tests {
         let prev = Duration::from_secs(5);
         let cap = Duration::from_secs(60);
         for _ in 0..50 {
-            let r =
-                jittered_sleep(base, JitterMode::Decorrelated, Some(prev), cap, &mut rng);
+            let r = jittered_sleep(base, JitterMode::Decorrelated, Some(prev), cap, &mut rng);
             assert!(r >= base, "Decorrelated must be >= base");
             assert!(r <= cap, "Decorrelated must respect cap");
         }
@@ -519,7 +540,13 @@ mod tests {
     fn jitter_decorrelated_without_prev_uses_base_as_upper_bound() {
         let mut rng = XorShift64::new(7);
         let base = Duration::from_secs(3);
-        let r = jittered_sleep(base, JitterMode::Decorrelated, None, Duration::from_secs(60), &mut rng);
+        let r = jittered_sleep(
+            base,
+            JitterMode::Decorrelated,
+            None,
+            Duration::from_secs(60),
+            &mut rng,
+        );
         assert_eq!(r, base);
     }
 

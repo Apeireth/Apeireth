@@ -99,7 +99,11 @@ pub fn verify_experience(
 }
 
 /// Mark as already proposed (stops promotion nag). Chain preserved, rev++.
-pub fn mark_proposed(exp: &PracticeExperience, new_id: impl Into<String>, at: i64) -> PracticeExperience {
+pub fn mark_proposed(
+    exp: &PracticeExperience,
+    new_id: impl Into<String>,
+    at: i64,
+) -> PracticeExperience {
     let mut next = exp.clone();
     next.proposed = true;
     next.updated_at = at;
@@ -116,9 +120,10 @@ pub fn list_latest<'a>(
 ) -> Vec<PracticeExperience> {
     let mut by_chain: std::collections::HashMap<String, PracticeExperience> =
         std::collections::HashMap::new();
-    for e in records.into_iter().filter(|x| {
-        scene.is_none_or(|s| x.scene.contains(s))
-    }) {
+    for e in records
+        .into_iter()
+        .filter(|x| scene.is_none_or(|s| x.scene.contains(s)))
+    {
         match by_chain.get(&e.chain) {
             Some(existing) if existing.rev > e.rev => {}
             _ => {
@@ -133,10 +138,7 @@ pub fn list_latest<'a>(
 
 /// Ready and not yet proposed.
 pub fn ready_for_capability(records: &[PracticeExperience]) -> Vec<&PracticeExperience> {
-    records
-        .iter()
-        .filter(|e| e.ready && !e.proposed)
-        .collect()
+    records.iter().filter(|e| e.ready && !e.proposed).collect()
 }
 
 /// Prompt hint for promotion (empty if none ready). Caps at 5 lines.
@@ -144,9 +146,8 @@ pub fn build_promotion_hint(ready: &[&PracticeExperience]) -> String {
     if ready.is_empty() {
         return String::new();
     }
-    let mut s = String::from(
-        "【经验晋级提示】以下经验已验证达标, 考虑用 propose_capability 提案为能力:\n",
-    );
+    let mut s =
+        String::from("【经验晋级提示】以下经验已验证达标, 考虑用 propose_capability 提案为能力:\n");
     for e in ready.iter().take(5) {
         s.push_str(&format!(
             "  • {} (验证 {} 次, 评分 {:.2}) — 做法: {}\n",

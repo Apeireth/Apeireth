@@ -377,13 +377,20 @@ mod tests {
             ProtocolKind::detect_from_hints("/random", Some("  "), None),
             None
         );
-        assert_eq!(ProtocolKind::detect_from_hints("/random", Some(""), None), None);
+        assert_eq!(
+            ProtocolKind::detect_from_hints("/random", Some(""), None),
+            None
+        );
     }
 
     #[test]
     fn detect_via_anthropic_content_type() {
         assert_eq!(
-            ProtocolKind::detect_from_hints("/random", None, Some("application/vnd.anthropic+json")),
+            ProtocolKind::detect_from_hints(
+                "/random",
+                None,
+                Some("application/vnd.anthropic+json")
+            ),
             Some(ProtocolKind::AnthropicMessages)
         );
         assert_eq!(

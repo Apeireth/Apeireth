@@ -122,7 +122,12 @@ pub fn is_high_risk(capability: &str, prefixes: &[&str]) -> bool {
 }
 
 /// Count same-capability records inside `(now - window, now]`.
-pub fn frequency_count(capability: &str, history: &[CallRecord], now_ms: i64, window_ms: u64) -> u32 {
+pub fn frequency_count(
+    capability: &str,
+    history: &[CallRecord],
+    now_ms: i64,
+    window_ms: u64,
+) -> u32 {
     let window_start = now_ms.saturating_sub(window_ms as i64);
     history
         .iter()
@@ -281,10 +286,7 @@ impl ApprovalPolicyEngine {
                 best_approval_match(&self.approval_list, capability, &commands)
             {
                 return (
-                    Decision::require_approval(format!(
-                        "approval list matched [{}]",
-                        entry.raw
-                    )),
+                    Decision::require_approval(format!("approval list matched [{}]", entry.raw)),
                     PolicyMatch {
                         matched_rule: Some("approval_list".into()),
                         matched_command,
@@ -322,10 +324,7 @@ mod tests {
             "command1": "whoami",
             "other": "ignored"
         });
-        assert_eq!(
-            extract_commands(&args),
-            vec!["ls", "whoami", "rm -rf /"]
-        );
+        assert_eq!(extract_commands(&args), vec!["ls", "whoami", "rm -rf /"]);
     }
 
     #[test]
@@ -344,8 +343,7 @@ mod tests {
             parse_approval_entry("shell:ls::SilentReject").unwrap(),
             parse_approval_entry("shell:ls").unwrap(),
         ];
-        let (matched, command) =
-            best_approval_match(&entries, "shell", &["ls".into()]).unwrap();
+        let (matched, command) = best_approval_match(&entries, "shell", &["ls".into()]).unwrap();
         assert_eq!(matched.base, "shell:ls");
         assert!(matched.silent);
         assert_eq!(command.as_deref(), Some("ls"));

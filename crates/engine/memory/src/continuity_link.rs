@@ -441,9 +441,7 @@ mod tests {
         let ledger = crate::context_ledger::ContextLedger::new(&db, "me")
             .unwrap()
             .with_max_records(10);
-        ledger
-            .record("user", None, "web", "账本旧锚", 50)
-            .unwrap();
+        ledger.record("user", None, "web", "账本旧锚", 50).unwrap();
         let r = migrate_subject(&db, "me", "c-main", 200).unwrap();
         assert_eq!(r.ledger_rekeyed, 1);
         let moved = crate::context_ledger::ContextLedger::new(&db, "c-main").unwrap();
