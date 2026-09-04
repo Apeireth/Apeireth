@@ -172,29 +172,51 @@ Re-run isolated: 1 pass, 1 fail. Remaining workspace tests including tools proce
 
 ## Remote Verification
 
-Filled after push:
+Local migration commits (not yet on GitHub):
 
 ```text
-remote URL: https://github.com/Apeireth/Apeireth.git
-remote branch: migration/runtime-microkernel-capability-convergence
-final commit SHA: (see git log after push)
-git diff local-vs-remote = empty  (required)
+base:   406adcee  origin/main
+HEAD:   3d663dbb6a33b63fbb1b85cbb698e251fce12287
+branch: migration/runtime-microkernel-capability-convergence
+0e542d03 refactor(runtime): extract concrete assembly from microkernel
+823c6ad8 refactor(gateway): align capability IDs and governed memory recall
+3d663dbb chore(fmt): rustfmt remaining workspace crates
+```
+
+Push attempted 2026-09-04:
+
+```text
+git push -u origin migration/runtime-microkernel-capability-convergence
+remote: Permission to Apeireth/apeireth-rust.git denied to Jimmyxiao2009.
+fatal: unable to access 'https://github.com/Apeireth/apeireth-rust.git/': 403
+```
+
+`gh` as `Jimmyxiao2009`: org member of `Apeireth`, but `Apeireth/Apeireth` viewerPermission is **READ** (`push: false`). Criterion **C** (`git diff HEAD origin/migration/...` empty) is therefore **not met** until write access is granted and the branch is pushed.
+
+To finish after write access:
+
+```text
+git remote set-url origin https://github.com/Apeireth/Apeireth.git
+git push -u origin migration/runtime-microkernel-capability-convergence
+git fetch origin
+git diff HEAD origin/migration/runtime-microkernel-capability-convergence
 ```
 
 ## Remaining Problems
 
-1. **Flaky test** `apeireth-tools-canonical::spill::tests::concurrent_different_sessions_stay_isolated` — Windows concurrent isolation assertion; unrelated to kernel/assembly files. Not skipped in CI config; documented here.
-2. **Sibling `apeireth-ui` is still not its own git remote.** Product UI for this repo is in-tree `frontend/companion-desktop` after overlay. Local `../apeireth-ui` remains a working copy without `.git`; it is backed up under `apeireth-untracked-backup/apeireth-ui-src`.
-3. **Untracked local-only files (not pushed):** `rc_fix.bundle`, `rc_wave.bundle`, `rc_wave2.bundle`, `fix.patch/`.
-4. **Gateway flags fallback:** if `memory_governance` port is absent, CLI panel code can still consult `memory-flags.jsonl`. Production composition injects governance; flags are not the authority when the port exists.
-5. **Svelte warnings** in `MessageContent.svelte` / `SettingsView.svelte` (unused CSS, initial state capture). Non-fatal.
-6. **gitleaks** CLI was not installed on this machine. Manual diff scan of this branch vs `origin/main` found no new live secrets; historical `sk-` strings in old reports/tests/legacy remain as they were on the remote tree.
-7. **`cargo fmt --all`** also reformatted some remote research/storage/plugin files (style only) so `fmt --check` is green on Windows. Those edits are chore formatting, not behavior.
+1. **Push blocked (blocking criterion C).** Authenticated GitHub user `Jimmyxiao2009` cannot write to `Apeireth/Apeireth`. Grant that account write (or push from an org owner), then run the commands above. No force push. Do not push `main`.
+2. **Flaky test** `apeireth-tools-canonical::spill::tests::concurrent_different_sessions_stay_isolated` — Windows concurrent isolation assertion; unrelated to kernel/assembly files. Not skipped in CI config; documented here.
+3. **Sibling `apeireth-ui` is still not its own git remote.** Product UI for this repo is in-tree `frontend/companion-desktop` after overlay. Local `../apeireth-ui` remains a working copy without `.git`; it is backed up under `apeireth-untracked-backup/apeireth-ui-src`.
+4. **Untracked local-only files (not pushed):** `rc_fix.bundle`, `rc_wave.bundle`, `rc_wave2.bundle`, `fix.patch/`.
+5. **Gateway flags fallback:** if `memory_governance` port is absent, CLI panel code can still consult `memory-flags.jsonl`. Production composition injects governance; flags are not the authority when the port exists.
+6. **Svelte warnings** in `MessageContent.svelte` / `SettingsView.svelte` (unused CSS, initial state capture). Non-fatal.
+7. **gitleaks** CLI was not installed on this machine. Manual diff scan of this branch vs `origin/main` found no new live secrets; historical `sk-` strings in old reports/tests/legacy remain as they were on the remote tree.
+8. **`cargo fmt --all`** also reformatted some remote research/storage/plugin files (style only) so `fmt --check` is green on Windows. Those edits are chore formatting, not behavior.
 
 ## Hard criteria
 
-- **A** Local valid source (kernel, assembly, gateway, CLI, memory governance, frontend capability work, tests, docs) is on the migration branch and is intended to be fully recoverable from the remote branch after push.
-- **B** `git status --short` leftovers after commit: bundles + `fix.patch` only, explained above.
-- **C** `git diff HEAD origin/migration/...` must be empty after fetch (verified post-push).
+- **A** Local valid source is on `migration/runtime-microkernel-capability-convergence` (`3d663dbb`). Not yet recoverable from GitHub because push is blocked.
+- **B** `git status --short` leftovers: `fix.patch/` and three `rc_*.bundle` files only, explained above.
+- **C** **Not met.** Remote branch does not exist; `Jimmyxiao2009` has pull-only on `Apeireth/Apeireth`.
 - **D** Kernel / Assembly / Gateway / Manifest / Frontend IDs aligned (`permissions.approval.*` canonical; `memory.update` declared).
 - **E** No `reset --hard` / conflict ours-theirs file clobber; WIP snapshot retained on `safety/pre-remote-tree-migration`.
