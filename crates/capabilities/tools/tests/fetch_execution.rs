@@ -650,8 +650,8 @@ async fn response_cache_serves_the_second_request_without_contacting() {
     })
     .await;
 
-    let config = FetchConfig::new(Arc::new(allowlist_egress()))
-        .with_response_cache(Duration::from_secs(60));
+    let config =
+        FetchConfig::new(Arc::new(allowlist_egress())).with_response_cache(Duration::from_secs(60));
     let cache = config.response_cache().cloned();
     let tool = FetchTool::new(config);
     let url = format!("http://127.0.0.1:{port}/cached");

@@ -59,15 +59,25 @@ pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
                 in_skip = 3;
                 continue;
             }
-            if tag_lc.starts_with("/script") || tag_lc.starts_with("/style") || tag_lc.starts_with("/pre") {
+            if tag_lc.starts_with("/script")
+                || tag_lc.starts_with("/style")
+                || tag_lc.starts_with("/pre")
+            {
                 in_skip = 0;
                 continue;
             }
             if matches!(
                 tag_lc.as_str(),
                 "br" | "br/"
-                    | "/p" | "/div" | "/li"
-                    | "/h1" | "/h2" | "/h3" | "/h4" | "/h5" | "/h6"
+                    | "/p"
+                    | "/div"
+                    | "/li"
+                    | "/h1"
+                    | "/h2"
+                    | "/h3"
+                    | "/h4"
+                    | "/h5"
+                    | "/h6"
                     | "/tr"
             ) {
                 out.push('\n');
@@ -100,7 +110,11 @@ pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
                     "nbsp" => '\u{00A0}',
                     other => {
                         if let Some(digits) = other.strip_prefix('#') {
-                            digits.parse::<u32>().ok().and_then(char::from_u32).unwrap_or('?')
+                            digits
+                                .parse::<u32>()
+                                .ok()
+                                .and_then(char::from_u32)
+                                .unwrap_or('?')
                         } else {
                             '?'
                         }

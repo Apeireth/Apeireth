@@ -111,9 +111,7 @@ impl EnergyVadConfig {
             return Err(VadError::MinSpeechOutOfRange);
         }
         if !matches!(frame_size_ms, 10 | 20 | 30) {
-            return Err(VadError::InvalidFrameSize {
-                got: frame_size_ms,
-            });
+            return Err(VadError::InvalidFrameSize { got: frame_size_ms });
         }
         Ok(Self {
             energy_threshold,
@@ -160,7 +158,10 @@ impl EnergyVadResult {
 }
 
 /// Run Energy VAD over a whole PCM16 buffer (offline).
-pub fn detect_energy(samples: &[i16], config: &EnergyVadConfig) -> Result<EnergyVadResult, VadError> {
+pub fn detect_energy(
+    samples: &[i16],
+    config: &EnergyVadConfig,
+) -> Result<EnergyVadResult, VadError> {
     if samples.is_empty() {
         return Err(VadError::EmptyAudio);
     }

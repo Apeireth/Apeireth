@@ -126,8 +126,8 @@ pub use retry::{
 };
 pub use usage::{CostTracker, ModelPricing, UsageRecord};
 pub use ws_session::{
-    WsFrameDecision, WsSessionGuard, WsSessionState, WS_CLOSE_NORMAL,
-    WS_CLOSE_TOO_MANY_CONCURRENT, WS_CLOSE_UNAUTHORIZED,
+    WsFrameDecision, WsSessionGuard, WsSessionState, WS_CLOSE_NORMAL, WS_CLOSE_TOO_MANY_CONCURRENT,
+    WS_CLOSE_UNAUTHORIZED,
 };
 
 // ============================================================

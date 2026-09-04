@@ -33,9 +33,7 @@ pub use audio_session::{
     NoopSpeechInput, NoopSpeechOutput, RecordingError, RecordingSession, RecordingStatus,
     SpeechInput, SpeechOutput, VoiceSession, VoiceTurn,
 };
-pub use emotion_voice::{
-    AcousticParameters, EmotionCategory, EmotionVoiceSynthesizer, PadEmotion,
-};
+pub use emotion_voice::{AcousticParameters, EmotionCategory, EmotionVoiceSynthesizer, PadEmotion};
 pub use energy_vad::{detect_energy, EnergyVadConfig, EnergyVadResult, EnergyVadStream, VadError};
 pub use minimax_tts::{
     AudioChunk, EmotionToneModulation, MiniMaxLiveTtsClient, MiniMaxTtsRequest, TtsError,

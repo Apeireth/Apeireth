@@ -146,7 +146,10 @@ mod tests {
         rl.record("a.com");
         rl.record("a.com");
         assert_eq!(rl.count("a.com"), 3);
-        assert!(!rl.check("a.com"), "4th request within window must be denied");
+        assert!(
+            !rl.check("a.com"),
+            "4th request within window must be denied"
+        );
     }
 
     #[test]
@@ -179,7 +182,10 @@ mod tests {
         rl.record("a.com");
         assert!(!rl.check("a.com"));
         std::thread::sleep(Duration::from_millis(70));
-        assert!(rl.check("a.com"), "after the window the host must be allowed again");
+        assert!(
+            rl.check("a.com"),
+            "after the window the host must be allowed again"
+        );
     }
 
     #[test]

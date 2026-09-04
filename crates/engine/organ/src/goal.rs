@@ -146,10 +146,18 @@ impl fmt::Display for GoalError {
             Self::NoGoal => write!(f, "no current goal"),
             Self::AlreadyExists => write!(f, "unfinished goal already exists"),
             Self::IllegalTransition { from, to } => {
-                write!(f, "illegal goal transition {} → {}", from.label(), to.label())
+                write!(
+                    f,
+                    "illegal goal transition {} → {}",
+                    from.label(),
+                    to.label()
+                )
             }
             Self::StaleRevision { expected, actual } => {
-                write!(f, "stale goal revision: expected {expected}, actual {actual}")
+                write!(
+                    f,
+                    "stale goal revision: expected {expected}, actual {actual}"
+                )
             }
             Self::NoRoundsRemaining => write!(f, "no goal-driven rounds remaining"),
             Self::Persist(err) => write!(f, "{err}"),
@@ -192,10 +200,9 @@ impl GoalStore {
     pub fn save(&self, g: &GoalSnapshot) -> Result<(), GoalPersistError> {
         fs::create_dir_all(&self.dir).map_err(|e| persist_io("create goal dir", &self.dir, e))?;
         let nonce = TMP_NONCE.fetch_add(1, Ordering::Relaxed);
-        let tmp = self.dir.join(format!(
-            "{}.tmp-{nonce}",
-            sanitize_goal_id(&g.id)
-        ));
+        let tmp = self
+            .dir
+            .join(format!("{}.tmp-{nonce}", sanitize_goal_id(&g.id)));
         let bytes = serde_json::to_vec_pretty(g).map_err(|e| GoalPersistError::Serialization {
             reason: e.to_string(),
         })?;
@@ -228,10 +235,11 @@ impl GoalStore {
         let path = self.path_for(id);
         match fs::read(&path) {
             Ok(bytes) => {
-                let snap = serde_json::from_slice(&bytes).map_err(|e| GoalPersistError::Corrupt {
-                    id: id.to_string(),
-                    reason: e.to_string(),
-                })?;
+                let snap =
+                    serde_json::from_slice(&bytes).map_err(|e| GoalPersistError::Corrupt {
+                        id: id.to_string(),
+                        reason: e.to_string(),
+                    })?;
                 Ok(Some(snap))
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
@@ -386,7 +394,11 @@ impl GoalService {
     }
 
     /// Active → Paused.
-    pub fn pause(&mut self, expected_revision: u64, now_ms: i64) -> Result<GoalSnapshot, GoalError> {
+    pub fn pause(
+        &mut self,
+        expected_revision: u64,
+        now_ms: i64,
+    ) -> Result<GoalSnapshot, GoalError> {
         let mut g = self.cas_clone(expected_revision)?;
         if g.phase != GoalPhase::Active {
             return Err(GoalError::IllegalTransition {
@@ -591,10 +603,8 @@ mod tests {
 
     fn tmp(tag: &str) -> PathBuf {
         let n = TEST_SEQ.fetch_add(1, Ordering::Relaxed);
-        let d = std::env::temp_dir().join(format!(
-            "apeireth-goal-{tag}-{}-{n}",
-            std::process::id()
-        ));
+        let d =
+            std::env::temp_dir().join(format!("apeireth-goal-{tag}-{}-{n}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         d
     }
@@ -613,7 +623,10 @@ mod tests {
         let g2 = s.edit(rev(&s), "learn substitution + rank", 1_001).unwrap();
         assert_eq!(g2.revision, 2);
         assert_eq!(g2.phase, GoalPhase::Active);
-        assert_eq!(s.create("x", 1, 1_002).unwrap_err(), GoalError::AlreadyExists);
+        assert_eq!(
+            s.create("x", 1, 1_002).unwrap_err(),
+            GoalError::AlreadyExists
+        );
     }
 
     #[test]
@@ -636,7 +649,9 @@ mod tests {
                 to: GoalPhase::Paused
             }
         );
-        let b = s.block(rev(&s), "provider-limit", "rate limited", 13).unwrap();
+        let b = s
+            .block(rev(&s), "provider-limit", "rate limited", 13)
+            .unwrap();
         assert_eq!(b.phase, GoalPhase::Blocked);
         assert_eq!(b.blocked_reason.as_ref().unwrap().code, "provider-limit");
         let r = s.resume(rev(&s), 14).unwrap();
@@ -668,7 +683,10 @@ mod tests {
         assert_eq!(cur.blocked_reason.as_ref().unwrap().code, "max-rounds");
         assert_eq!(cur.rounds_started, 2);
         // resume with exhausted budget is refused and leaves Blocked
-        assert_eq!(s.resume(rev(&s), 5).unwrap_err(), GoalError::NoRoundsRemaining);
+        assert_eq!(
+            s.resume(rev(&s), 5).unwrap_err(),
+            GoalError::NoRoundsRemaining
+        );
         assert_eq!(s.current().unwrap().phase, GoalPhase::Blocked);
     }
 
