@@ -42,15 +42,33 @@ impl MockPanels {
         }
     }
 
-    fn mutate(&self, id: &str, expected_rev: u64, apply: impl FnOnce(&mut (bool, bool, u64))) -> Result<EpisodeMutationDto, String> {
+    fn mutate(
+        &self,
+        id: &str,
+        expected_rev: u64,
+        apply: impl FnOnce(&mut (bool, bool, u64)),
+    ) -> Result<EpisodeMutationDto, String> {
         let mut flags = self.flags.lock().unwrap();
-        let entry = flags.get_mut(id).ok_or_else(|| format!("episode {id} not found"))?;
+        let entry = flags
+            .get_mut(id)
+            .ok_or_else(|| format!("episode {id} not found"))?;
         if entry.2 != expected_rev {
-            return Err(format!("revision conflict: expected {expected_rev}, current {}", entry.2));
+            return Err(format!(
+                "revision conflict: expected {expected_rev}, current {}",
+                entry.2
+            ));
         }
         apply(entry);
         entry.2 += 1;
-        Ok(EpisodeMutationDto { ok: true, rev: entry.2 })
+        Ok(EpisodeMutationDto {
+            ok: true,
+            rev: entry.2,
+            id: id.to_string(),
+            status: if entry.1 { "forgotten" } else { "active" }.into(),
+            protected: entry.0,
+            revision: entry.2,
+            content: String::new(),
+        })
     }
 }
 
@@ -184,11 +202,19 @@ impl PanelData for MockPanels {
         Ok(dto)
     }
 
-    async fn protect_episode(&self, id: &str, expected_rev: u64) -> Result<EpisodeMutationDto, String> {
+    async fn protect_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
         self.mutate(id, expected_rev, |entry| entry.0 = true)
     }
 
-    async fn unprotect_episode(&self, id: &str, expected_rev: u64) -> Result<EpisodeMutationDto, String> {
+    async fn unprotect_episode(
+        &self,
+        id: &str,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
         self.mutate(id, expected_rev, |entry| entry.0 = false)
     }
 
@@ -210,7 +236,10 @@ impl PanelData for MockPanels {
             kind: "session".into(),
         }];
         let mut edges = Vec::new();
-        for ep in episodes.iter().filter(|ep| !flags.get(&ep.id).map(|f| f.1).unwrap_or(false)) {
+        for ep in episodes
+            .iter()
+            .filter(|ep| !flags.get(&ep.id).map(|f| f.1).unwrap_or(false))
+        {
             nodes.push(GraphNodeDto {
                 id: ep.id.clone(),
                 label: ep.content.chars().take(20).collect(),
@@ -435,9 +464,20 @@ async fn panel_routes_serve_contract_shapes() {
             .unwrap(),
     )
     .await;
-    assert_eq!(after["episodes"].as_array().unwrap().len(), 1, "forgotten hidden");
+    assert_eq!(
+        after["episodes"].as_array().unwrap().len(),
+        1,
+        "forgotten hidden"
+    );
 
-    let graph = body_json(router.clone().oneshot(get("/v1/panel/graph")).await.unwrap()).await;
+    let graph = body_json(
+        router
+            .clone()
+            .oneshot(get("/v1/panel/graph"))
+            .await
+            .unwrap(),
+    )
+    .await;
     assert_eq!(graph["nodes"][0]["kind"], "session");
     assert!(graph["edges"].as_array().unwrap().len() >= 1);
 
@@ -496,7 +536,7 @@ async fn panel_routes_serve_contract_shapes() {
     assert_eq!(find_group("memory")["capabilities"][0]["id"], "memory.read");
     assert_eq!(
         find_group("permissions")["capabilities"][0]["id"],
-        "permissions.approval.read"
+        "approvals.read"
     );
     assert_eq!(find_group("trace")["capabilities"][0]["supported"], true);
     assert_eq!(
@@ -505,15 +545,15 @@ async fn panel_routes_serve_contract_shapes() {
         "the SSE bus is core gateway infrastructure, always available"
     );
     assert_eq!(
-        find_group("permissions")["capabilities"][1]["id"],
+        find_group("permissions")["capabilities"][2]["id"],
         "permissions.grants.read"
     );
     assert_eq!(
-        find_group("permissions")["capabilities"][1]["supported"],
+        find_group("permissions")["capabilities"][2]["supported"],
         true
     );
     assert_eq!(
-        find_group("permissions")["capabilities"][2]["supported"],
+        find_group("permissions")["capabilities"][3]["supported"],
         true,
         "revoke is available alongside grants.read"
     );
@@ -554,11 +594,7 @@ async fn panel_routes_degrade_to_501_without_backends() {
         .await
         .unwrap();
     assert_eq!(grants.status(), StatusCode::NOT_IMPLEMENTED);
-    let organs = router
-        .clone()
-        .oneshot(get("/v1/organs"))
-        .await
-        .unwrap();
+    let organs = router.clone().oneshot(get("/v1/organs")).await.unwrap();
     assert_eq!(organs.status(), StatusCode::NOT_IMPLEMENTED);
 
     // The manifest stays available and honest even without backends.

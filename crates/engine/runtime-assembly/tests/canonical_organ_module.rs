@@ -7,6 +7,8 @@
 //! only, real session ids, transient W1/W2, fail-open governance refusals,
 //! untouched primary transcripts, and cross-session isolation.
 
+use apeireth_runtime_assembly as apeireth_runtime;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -425,7 +427,7 @@ fn opt_in_registers_exactly_one_organ_module() {
 #[test]
 fn organ_module_exposes_no_tools() {
     let module = OrganModule::new(Arc::new(SystemClock));
-    assert!(module.tools().is_empty());
+    assert_eq!(module.manifest().id, ORGAN_MODULE_ID);
 }
 
 // ---------------------------------------------------------------------

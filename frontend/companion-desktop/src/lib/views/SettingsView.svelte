@@ -25,10 +25,13 @@
     ChevronDown,
     ChevronUp,
     Plus,
+    Palette,
+    Search,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
+  import ThemeSettingsPanel from '../components/ThemeSettingsPanel.svelte';
   import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile} from '../types';
   import {checkHealthDetailed, listModels, testProviderConnection, DEFAULT_PERSONAS} from '../runtime';
 
@@ -43,6 +46,7 @@
   } = $props();
 
   type SettingsSection =
+    | 'appearance'
     | 'models'
     | 'personality'
     | 'memory'
@@ -51,7 +55,7 @@
     | 'data'
     | 'developer';
 
-  let activeSection = $state<SettingsSection>('models');
+  let activeSection = $state<SettingsSection>('appearance');
 
   // Gateway backend fields
   let editBaseUrl = $state('');
@@ -229,7 +233,21 @@
   const currentPresetObj = $derived(currentPresets.find((p) => p.id === activePreset) || currentPresets[currentPresets.length - 1]);
   const recommendedModels = $derived(currentPresetObj?.models || []);
 
+  let modelSearchQuery = $state('');
+
+  const filteredDiscoveredModels = $derived.by(() => {
+    const list = testResult?.models ?? [];
+    const q = modelSearchQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((m) => m.toLowerCase().includes(q));
+  });
+
+  const providerStatusLabel = $derived(
+    testResult?.ok ? '已连通' : testResult && !testResult.ok ? '连接失败' : providerApiKey.trim() ? '待测试' : '未配置密钥',
+  );
+
   const sections = [
+    {id: 'appearance', label: '外观与主题', icon: Palette},
     {id: 'models', label: '模型与提供商', icon: Cpu},
     {id: 'personality', label: '伙伴人设与行为', icon: User},
     {id: 'memory', label: '记忆策略', icon: Layers3},
@@ -397,164 +415,175 @@
 
     <!-- Right Settings Panel -->
     <div class="settings-content">
-      {#if activeSection === 'models'}
+      {#if activeSection === 'appearance'}
         <div class="setting-block">
-          <h3 class="block-title">模型提供商与协议配置</h3>
-          <p class="block-desc">选择大语言模型提供商协议，支持 Anthropic Messages API 与 OpenAI 兼容协议。</p>
+          <h3 class="block-title">外观与主题</h3>
+          <p class="block-desc">选择界面照明档位与背景风格，立即生效并写入本地配置。</p>
+          <ThemeSettingsPanel {config} {onSave} />
+        </div>
 
-          <!-- Protocol Selector Tabs -->
-          <div class="protocol-tabs">
-            <button
-              class="protocol-tab"
-              class:selected={activeProtocol === 'openai'}
-              onclick={() => switchProtocol('openai')}
-            >
-              <Globe size={15} />
-              <div class="proto-text">
-                <span class="proto-title">OpenAI 兼容协议</span>
-                <span class="proto-sub">OpenAI / DeepSeek / MiniMax / Ollama / vLLM</span>
-              </div>
-            </button>
+      {:else if activeSection === 'models'}
+        <div class="setting-block">
+          <h3 class="block-title">模型与提供商</h3>
+          <p class="block-desc">配置 LLM 协议、服务商端点与活动模型；与 Dock 模型选择器共用同一配置源。</p>
 
-            <button
-              class="protocol-tab"
-              class:selected={activeProtocol === 'anthropic'}
-              onclick={() => switchProtocol('anthropic')}
-            >
-              <Sparkles size={15} />
-              <div class="proto-text">
-                <span class="proto-title">Anthropic Claude 协议</span>
-                <span class="proto-sub">Anthropic Messages API / Claude 3.5 & 3.7</span>
-              </div>
-            </button>
+          <div class="provider-summary">
+            <div class="summary-main">
+              <span class="summary-badge">{activeProtocol === 'openai' ? 'OpenAI 兼容' : 'Anthropic'}</span>
+              <strong>{currentPresetObj?.name ?? '自定义'}</strong>
+              <span class="summary-model">{providerModel || '未指定模型'}</span>
+            </div>
+            <div class="summary-side">
+              <span class="status-pill" class:ok={testResult?.ok} class:warn={!testResult?.ok && testResult} class:idle={!testResult}>
+                {providerStatusLabel}
+              </span>
+              <span class="summary-url">{providerBaseUrl || '—'}</span>
+            </div>
           </div>
 
-          <!-- Provider Presets -->
-          <div class="form-group">
-            <span class="group-label">快速预设服务商 (Preset Provider)</span>
-            <div class="presets-row">
-              {#each currentPresets as p}
+          <div class="config-step">
+            <span class="step-num">1</span>
+            <div class="step-body">
+              <h4 class="step-title">选择协议</h4>
+              <div class="protocol-tabs">
                 <button
-                  class="preset-chip"
-                  class:selected={activePreset === p.id}
-                  onclick={() => selectPreset(p.id)}
+                  class="protocol-tab"
+                  class:selected={activeProtocol === 'openai'}
+                  onclick={() => switchProtocol('openai')}
                 >
-                  <span>{p.name}</span>
+                  <Globe size={15} />
+                  <div class="proto-text">
+                    <span class="proto-title">OpenAI 兼容协议</span>
+                    <span class="proto-sub">OpenAI · DeepSeek · MiniMax · Ollama · vLLM</span>
+                  </div>
                 </button>
-              {/each}
+                <button
+                  class="protocol-tab"
+                  class:selected={activeProtocol === 'anthropic'}
+                  onclick={() => switchProtocol('anthropic')}
+                >
+                  <Sparkles size={15} />
+                  <div class="proto-text">
+                    <span class="proto-title">Anthropic Claude 协议</span>
+                    <span class="proto-sub">Messages API · Claude 3.5 / 3.7</span>
+                  </div>
+                </button>
+              </div>
             </div>
           </div>
 
-          <!-- Base URL Input -->
-          <div class="form-group">
-            <label for="provider-url-input">API 端点地址 (Base URL)</label>
-            <input
-              id="provider-url-input"
-              type="text"
-              bind:value={providerBaseUrl}
-              placeholder={activeProtocol === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'}
-            />
-            <small class="field-hint">
-              {activeProtocol === 'openai'
-                ? 'OpenAI 兼容网关地址，通常以 /v1 结尾（如 https://api.deepseek.com/v1 或 http://localhost:11434/v1）。'
-                : 'Anthropic 服务网关地址（默认 https://api.anthropic.com）。'}
-            </small>
-          </div>
-
-          <!-- API Key Input -->
-          <div class="form-group">
-            <label for="provider-key-input">
-              {activeProtocol === 'openai' ? 'OpenAI API 密钥 (API Key)' : 'Anthropic API 密钥 (x-api-key)'}
-            </label>
-            <div class="key-input-wrapper">
-              <input
-                id="provider-key-input"
-                type={showApiKey ? 'text' : 'password'}
-                bind:value={providerApiKey}
-                placeholder={activeProtocol === 'openai' ? 'sk-...' : 'sk-ant-...'}
-                autocomplete="off"
-              />
-              <button
-                class="key-toggle-btn"
-                type="button"
-                onclick={() => showApiKey = !showApiKey}
-                title={showApiKey ? '隐藏密钥' : '显示密钥'}
-              >
-                {#if showApiKey}
-                  <EyeOff size={14} />
-                {:else}
-                  <Eye size={14} />
-                {/if}
-              </button>
-            </div>
-            <small class="field-hint">
-              {activeProtocol === 'openai'
-                ? '用于发起模型请求的 Bearer Token，安全保存在客户端本地配置中。'
-                : '用于 Anthropic Messages API 的 x-api-key 鉴权凭据。'}
-            </small>
-          </div>
-
-          <!-- Anthropic Version (if Anthropic) -->
-          {#if activeProtocol === 'anthropic'}
-            <div class="form-group">
-              <label for="anthropic-ver-input">Anthropic API 版本 (anthropic-version Header)</label>
-              <input
-                id="anthropic-ver-input"
-                type="text"
-                bind:value={anthropicVersion}
-                placeholder="2023-06-01"
-              />
-              <small class="field-hint">默认值为 2023-06-01，可根据需要自定义。</small>
-            </div>
-          {/if}
-
-          <!-- Model Input & Recommended Chips -->
-          <div class="form-group">
-            <label for="provider-model-input">活动模型名称 (Model Identifier)</label>
-            <div class="model-input-row">
-              <input
-                id="provider-model-input"
-                type="text"
-                bind:value={providerModel}
-                placeholder={activeProtocol === 'openai' ? 'gpt-4o' : 'claude-3-7-sonnet-20250219'}
-              />
-              <button
-                class="quiet-button"
-                onclick={handleTestProviderConnection}
-                disabled={isTestingConnection || !providerBaseUrl}
-              >
-                <RotateCcw size={13} class={isTestingConnection ? 'spin' : ''} />
-                <span>{isTestingConnection ? '测试中…' : '测试提供商连接'}</span>
-              </button>
-            </div>
-
-            <!-- Recommended Model Chips -->
-            {#if recommendedModels.length > 0}
-              <div class="models-chip-list">
-                <span class="chip-label">推荐模型:</span>
-                {#each recommendedModels as m}
+          <div class="config-step">
+            <span class="step-num">2</span>
+            <div class="step-body">
+              <h4 class="step-title">选择服务商预设</h4>
+              <div class="presets-row">
+                {#each currentPresets as p}
                   <button
-                    class="model-chip"
-                    class:selected={providerModel === m}
-                    onclick={() => providerModel = m}
+                    class="preset-chip"
+                    class:selected={activePreset === p.id}
+                    onclick={() => selectPreset(p.id)}
                   >
-                    {m}
+                    <span>{p.name}</span>
                   </button>
                 {/each}
               </div>
-            {/if}
+            </div>
           </div>
 
-          <!-- Connection Test Result Banner -->
+          <div class="config-step">
+            <span class="step-num">3</span>
+            <div class="step-body">
+              <h4 class="step-title">端点、密钥与模型</h4>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="provider-url-input">API 端点 (Base URL)</label>
+                  <input
+                    id="provider-url-input"
+                    type="text"
+                    bind:value={providerBaseUrl}
+                    placeholder={activeProtocol === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'}
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="provider-model-input">活动模型 ID</label>
+                  <input
+                    id="provider-model-input"
+                    type="text"
+                    bind:value={providerModel}
+                    placeholder={activeProtocol === 'openai' ? 'gpt-4o' : 'claude-3-7-sonnet-20250219'}
+                  />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="provider-key-input">
+                  {activeProtocol === 'openai' ? 'API Key (Bearer)' : 'API Key (x-api-key)'}
+                </label>
+                <div class="key-input-wrapper">
+                  <input
+                    id="provider-key-input"
+                    type={showApiKey ? 'text' : 'password'}
+                    bind:value={providerApiKey}
+                    placeholder={activeProtocol === 'openai' ? 'sk-...' : 'sk-ant-...'}
+                    autocomplete="off"
+                  />
+                  <button
+                    class="key-toggle-btn"
+                    type="button"
+                    onclick={() => (showApiKey = !showApiKey)}
+                    title={showApiKey ? '隐藏密钥' : '显示密钥'}
+                  >
+                    {#if showApiKey}
+                      <EyeOff size={14} />
+                    {:else}
+                      <Eye size={14} />
+                    {/if}
+                  </button>
+                </div>
+              </div>
+
+              {#if activeProtocol === 'anthropic'}
+                <div class="form-group">
+                  <label for="anthropic-ver-input">anthropic-version</label>
+                  <input id="anthropic-ver-input" type="text" bind:value={anthropicVersion} placeholder="2023-06-01" />
+                </div>
+              {/if}
+
+              <div class="model-actions">
+                <button
+                  class="primary-button"
+                  onclick={handleTestProviderConnection}
+                  disabled={isTestingConnection || !providerBaseUrl}
+                >
+                  <RotateCcw size={13} class={isTestingConnection ? 'spin' : ''} />
+                  <span>{isTestingConnection ? '探测中…' : '测试连接并拉取模型'}</span>
+                </button>
+                {#if recommendedModels.length > 0}
+                  <span class="chip-label">预设推荐</span>
+                  {#each recommendedModels as m}
+                    <button
+                      class="model-chip"
+                      class:selected={providerModel === m}
+                      onclick={() => (providerModel = m)}
+                    >
+                      {m}
+                    </button>
+                  {/each}
+                {/if}
+              </div>
+            </div>
+          </div>
+
           {#if testResult}
             <div class="test-result-box" class:success={testResult.ok} class:failed={!testResult.ok}>
               <div class="test-result-head">
                 {#if testResult.ok}
                   <CheckCircle2 size={16} class="head-icon success-icon" />
-                  <strong>提供商连通正常</strong>
+                  <strong>连接成功</strong>
                 {:else}
                   <XCircle size={16} class="head-icon failed-icon" />
-                  <strong>提供商连接异常</strong>
+                  <strong>连接失败</strong>
                 {/if}
                 {#if testResult.latencyMs !== undefined}
                   <span class="latency-badge">{testResult.latencyMs} ms</span>
@@ -563,21 +592,32 @@
               <p class="test-result-msg">{testResult.message}</p>
               {#if testResult.models && testResult.models.length > 0}
                 <div class="discovered-models">
-                  <span class="disc-label">远端模型列表 ({testResult.models.length}):</span>
-                  <div class="models-chip-list">
-                    {#each testResult.models.slice(0, 12) as dm}
-                      <button
-                        class="model-chip"
-                        class:selected={providerModel === dm}
-                        onclick={() => providerModel = dm}
-                      >
-                        {dm}
-                      </button>
-                    {/each}
-                    {#if testResult.models.length > 12}
-                      <span class="more-models">+{testResult.models.length - 12} 更多…</span>
-                    {/if}
+                  <div class="disc-head">
+                    <span class="disc-label">远端模型 ({testResult.models.length})</span>
+                    <div class="disc-search">
+                      <Search size={13} />
+                      <input type="search" placeholder="筛选模型…" bind:value={modelSearchQuery} />
+                    </div>
                   </div>
+                  <div class="model-catalog">
+                    {#each filteredDiscoveredModels.slice(0, 24) as dm}
+                      <button
+                        class="catalog-item"
+                        class:selected={providerModel === dm}
+                        onclick={() => (providerModel = dm)}
+                      >
+                        <span class="catalog-name">{dm}</span>
+                        {#if providerModel === dm}
+                          <Check size={12} />
+                        {/if}
+                      </button>
+                    {:else}
+                      <p class="catalog-empty">无匹配模型</p>
+                    {/each}
+                  </div>
+                  {#if filteredDiscoveredModels.length > 24}
+                    <p class="more-models">仅显示前 24 项，请用搜索缩小范围</p>
+                  {/if}
                 </div>
               {/if}
             </div>
@@ -906,7 +946,7 @@
   .settings-content {
     overflow-y: auto;
     padding: 24px 36px 48px;
-    max-width: 680px;
+    max-width: 900px;
   }
   .setting-block {
     display: flex;
@@ -923,6 +963,201 @@
     margin: -10px 0 6px;
     font-size: 13px;
     color: var(--muted);
+  }
+
+  /* Provider summary */
+  .provider-summary {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-2);
+    flex-wrap: wrap;
+  }
+  .summary-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .summary-badge {
+    align-self: flex-start;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--amber-wash);
+    color: var(--amber);
+    font-weight: 600;
+  }
+  .summary-main strong {
+    font-size: 15px;
+    color: var(--text);
+  }
+  .summary-model {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .summary-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    min-width: 0;
+  }
+  .summary-url {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--faint);
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .status-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    background: var(--surface);
+  }
+  .status-pill.ok {
+    border-color: rgba(61, 122, 92, 0.35);
+    color: var(--green);
+    background: var(--green-wash);
+  }
+  .status-pill.warn {
+    border-color: rgba(168, 72, 64, 0.35);
+    color: var(--danger);
+    background: rgba(168, 72, 64, 0.08);
+  }
+  .status-pill.idle {
+    color: var(--faint);
+  }
+
+  /* Config steps */
+  .config-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .step-num {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--amber-wash);
+    color: var(--amber);
+    border: 1px solid var(--amber-line);
+    margin-top: 2px;
+  }
+  .step-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .step-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  @media (max-width: 720px) {
+    .form-row-2 {
+      grid-template-columns: 1fr;
+    }
+  }
+  .model-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .disc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .disc-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    min-width: 180px;
+  }
+  .disc-search input {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 12px;
+    color: var(--text);
+    width: 140px;
+  }
+  .model-catalog {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .catalog-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .catalog-item:last-child {
+    border-bottom: 0;
+  }
+  .catalog-item:hover {
+    background: var(--surface-2);
+  }
+  .catalog-item.selected {
+    background: var(--amber-wash);
+    color: var(--amber);
+  }
+  .catalog-empty {
+    margin: 0;
+    padding: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--faint);
   }
 
   /* Protocol Tabs */

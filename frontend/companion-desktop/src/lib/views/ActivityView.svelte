@@ -33,7 +33,7 @@
   import LoadingState from '../components/LoadingState.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import type {ActivityItem, ApeirethConfig, CapabilityManifest} from '../types';
-  import {fetchAuditLogs, fetchTraceDetail, capabilitySupported, friendlyErrorMessage} from '../runtime';
+  import {fetchAuditLogs, fetchTraceDetail, capabilityAvailable, capabilitySupported, friendlyErrorMessage} from '../runtime';
   import {splitPresenceLine, type PresenceFrame} from '../presence';
   import {
     getCallLogs,
@@ -62,7 +62,7 @@
   let copiedCallId = $state<string | null>(null);
 
   // Capability gating: trace 关联 (Phase 5).
-  let canReadTrace = $derived(capabilitySupported(capabilities, 'trace.read'));
+  let canReadTrace = $derived(capabilityAvailable(capabilities, 'trace.read'));
 
   // Trace detail modal (Phase 5): 点击带 traceId 的活动 → 打开 span 树.
   import type {TraceSpanItem} from '../runtime';
@@ -71,7 +71,7 @@
   async function openTrace(traceId: string): Promise<void> {
     if (!canReadTrace) return;
 
-    if (!capabilitySupported(capabilities, 'trace.read')) {
+    if (!capabilitySupported(capabilities, 'trace.read') || !capabilityAvailable(capabilities, 'trace.read')) {
       traceDetail = {traceId, spans: [], loading: false, error: '追踪详情不支持: 当前运行时未实现 trace.read (Apeireth 2.0 canonical gateway 无此内省 API)'};
       return;
     }
@@ -246,7 +246,7 @@
     error = '';
     try {
       // Capability gate: prevent calling unsupported /v1/panel/audit
-      if (!capabilitySupported(capabilities, 'audit.read')) {
+      if (!capabilitySupported(capabilities, 'audit.read') || !capabilityAvailable(capabilities, 'audit.read')) {
         error = '审计日志不支持: 当前运行时未实现 audit.read (Apeireth 2.0 canonical gateway 无此内省 API)';
         loading = false;
         return;
@@ -319,7 +319,7 @@
     }
 
     if (!isLive) return;
-    if (!capabilitySupported(capabilities, 'activity.sse')) {
+    if (!capabilitySupported(capabilities, 'activity.sse') || !capabilityAvailable(capabilities, 'activity.sse')) {
       return;
     }
 

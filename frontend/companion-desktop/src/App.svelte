@@ -1,31 +1,32 @@
 <script lang="ts">
   import {onMount, tick, untrack} from 'svelte';
   import {
-    MessageCircleMore,
-    Settings,
-    MessagesSquare,
-    Layers3,
-    Activity,
-    Wrench,
     Plus,
     ArrowUp,
     Square,
-    Plug,
     ChevronDown,
     Sparkles,
     AlertCircle,
+    PhoneCall,
     Sofa,
     Gauge,
     Eclipse,
-    PhoneCall,
+    MessageCircleMore,
+    History,
+    Layers3,
+    Wrench,
+    Activity,
+    ScrollText,
+    Settings,
+    PanelRight,
+    X,
+    Search,
   } from 'lucide-svelte';
   import MessageContent from './lib/MessageContent.svelte';
-  import StatusDot from './components/StatusDot.svelte';
   import RuntimeModal from './lib/components/RuntimeModal.svelte';
   import VoiceCallModal from './components/VoiceCallModal.svelte';
   import { voiceCallManager } from './lib/voice';
 
-  import EmptyState from './lib/components/EmptyState.svelte';
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte';
   import SceneLayer from './lib/scene/SceneLayer.svelte';
   import PlanetLayer from './lib/scene/PlanetLayer.svelte';
@@ -38,6 +39,9 @@
   import ToolsView from './lib/views/ToolsView.svelte';
   import MemoryView from './lib/MemoryView.svelte';
   import SettingsView from './lib/views/SettingsView.svelte';
+  import Workbench from './lib/components/Workbench.svelte';
+  import {applyDocumentTheme, resolveTheme} from './lib/theme';
+  import type {Theme} from './lib/types';
 
   import type {
     ApeirethConfig,
@@ -48,7 +52,6 @@
     HealthState,
     RuntimeHealthReport,
     ToolCallDetails,
-    ViewId,
   } from './lib/types';
   import {
     checkHealthDetailed,
@@ -60,8 +63,10 @@
     loadConversations,
     saveConfig,
     saveConversations,
+    listModels,
     fetchCapabilities,
     subscribeCompanionEvents,
+    capabilityAvailable,
     capabilitySupported,
     activePersonaOf,
     DEFAULT_PERSONAS,
@@ -71,15 +76,45 @@
   import {presenceStore, subscribePresence} from './lib/presence';
   import {isDesktop, resolveBackendEndpoint} from './lib/desktop-bridge';
 
-  // 6 大一级导航（信息架构不变；视觉改为左侧细竖条，金色 = 当前项，规范 §2.1 金色纪律）
-  const nav = [
-    {id: 'chat', label: '对话', icon: MessageCircleMore},
-    {id: 'conversations', label: '会话', icon: MessagesSquare},
-    {id: 'activity', label: '活动', icon: Activity},
-    {id: 'tools', label: '工具', icon: Wrench},
-    {id: 'memory', label: '记忆', icon: Layers3},
-    {id: 'settings', label: '设置', icon: Settings},
-  ] as const;
+  type DrawerId = 'history' | 'memory' | 'tools' | 'status' | 'logs' | 'settings';
+  const DRAWER_META: Record<DrawerId, {eyebrow: string; title: string; sub: string; action: string}> = {
+    history: {
+      eyebrow: '管理',
+      title: '历史',
+      sub: '本地对话上下文与后端持久账本；删除需确认，归档不丢记录。',
+      action: '新对话',
+    },
+    memory: {
+      eyebrow: '认知',
+      title: '记忆与知识库',
+      sub: '持久化情节记忆、六历史流与结构化知识图谱。',
+      action: '',
+    },
+    tools: {
+      eyebrow: '能力',
+      title: '工具管理与权限',
+      sub: '注册工具、参数规范及待主人批准的高危调用。',
+      action: '',
+    },
+    status: {
+      eyebrow: '微内核',
+      title: '系统状态',
+      sub: '网关、模型服务、账本与记忆流的实时探测。',
+      action: '深度诊断',
+    },
+    logs: {
+      eyebrow: '观察与审计',
+      title: '活动与调用日志',
+      sub: '每一轮交互的延迟、Token、Prompt 与 CoT 思考流。',
+      action: '',
+    },
+    settings: {
+      eyebrow: '首选项',
+      title: '设置',
+      sub: '模型提供商、人设、记忆策略、权限与数据。',
+      action: '',
+    },
+  };
 
   // ---------- 波次 4：三模式骨架 ----------
   // companion=陪伴（舰桥+对话，默认）｜engineering=工程（深舱+页面层）｜focus=专注（临渊机位+chrome 淡出）
@@ -90,6 +125,17 @@
   const initialMode: ModeId =
     modeQuery === 'engineering' || modeQuery === 'focus' ? modeQuery : 'companion';
   let mode = $state<ModeId>(initialMode);
+
+  const modes = [
+    {id: 'companion' as const, label: '陪伴 · 舰桥', icon: Sofa},
+    {id: 'engineering' as const, label: '工程 · 深舱', icon: Gauge},
+    {id: 'focus' as const, label: '专注 · 临渊', icon: Eclipse},
+  ];
+
+  const themeQuery =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('theme') : null;
+  let activeTheme = $state<Theme>(resolveTheme(loadConfig().theme, themeQuery));
+  const isEssenceTheme = $derived(activeTheme === 'essence');
 
   // ---------- 开场动画（火之文明史序章）门禁 ----------
   // 【2026-08-22 封存】v1 审美验收未过（主人评：一言难尽），默认关闭不再自动播放，
@@ -117,15 +163,13 @@
     }
   }
 
-  // 初始视图与初始模式对齐：工程直接落「活动」页（深舱是页面层的家），其余落对话
-  let activeView = $state<ViewId>(initialMode === 'engineering' ? 'activity' : 'chat');
-
-  // 模式切换器（右缘三段胶囊）：舰桥 / 深舱 / 临渊
-  const modes = [
-    {id: 'companion', label: '陪伴 · 舰桥', icon: Sofa},
-    {id: 'engineering', label: '工程 · 深舱', icon: Gauge},
-    {id: 'focus', label: '专注 · 临渊', icon: Eclipse},
-  ] as const;
+  // 初始视图：对话始终居中；工程/专注只切场景层，不再把主区换成页面层
+  let drawerSec = $state<DrawerId | null>(null);
+  let wbOpen = $state(false);
+  let openPanel = $state<'model' | 'ctx' | null>(null);
+  let availableModels = $state<string[]>([]);
+  let modelsLoading = $state(false);
+  let modelQuery = $state('');
 
   // 场景受控机位：专注=临渊(1)，陪伴=远眺(0)，工程=null（深舱不透明盖住场景，引擎自管理）
   const sceneCamera = $derived(mode === 'focus' ? 1 : mode === 'engineering' ? null : 0);
@@ -133,12 +177,8 @@
   function setMode(next: ModeId): void {
     if (next === mode) return;
     mode = next;
-    if (next === 'focus') {
-      activeView = 'chat'; // 进专注时若正开着页面层视图，退回 chat
-    } else if (next === 'engineering') {
-      if (activeView === 'chat') activeView = 'activity'; // 工程模式落在页面层（活动），左 rail 照常工作
-    } else {
-      activeView = 'chat'; // 切回陪伴：回对话（相机由 sceneCamera 带回远眺）
+    if (next !== 'focus') {
+      drawerSec = null;
     }
   }
 
@@ -165,12 +205,11 @@
   let timelineHour = $state(hourOverride ?? localClockHour());
   let config = $state<ApeirethConfig>(loadConfig());
   const activePersona = $derived(activePersonaOf(config));
-  // 旧配置无 personas 字段时回退默认人设 (切换器与注入同源).
   const personaList = $derived(
     config.personas && config.personas.length > 0 ? config.personas : DEFAULT_PERSONAS,
   );
+  let personaMenuOpen = $state(false);
 
-  // 切换伙伴身份 (数据驱动, 无重编译): 同步激活人设 + 可选固定模型, 持久化配置.
   function setActivePersona(id: string): void {
     const target = personaList.find((p) => p.id === id);
     if (!target) return;
@@ -182,8 +221,6 @@
     personaMenuOpen = false;
   }
 
-  // 伙伴身份下拉 (纯 Svelte 自绘, 避免 WebView2 原生 select 弹窗挂起问题)
-  let personaMenuOpen = $state(false);
   let conversations = $state<Conversation[]>(loadConversations());
   let activeId = $state<string | null>(null);
   let draft = $state('');
@@ -745,7 +782,6 @@
     };
     conversations = [branchConv, ...conversations];
     activeId = branchConv.id;
-    activeView = 'chat';
     persist();
   }
 
@@ -762,13 +798,13 @@
     };
     conversations = [conversation, ...conversations];
     activeId = conversation.id;
-    activeView = 'chat';
+    drawerSec = null;
     persist();
   }
 
   function openConversation(id: string): void {
     activeId = id;
-    activeView = 'chat';
+    drawerSec = null;
   }
 
   function archiveConversation(id: string): void {
@@ -785,6 +821,139 @@
   function applyQuickPrompt(promptText: string) {
     draft = promptText;
   }
+
+  function relativeTime(ts: number): string {
+    const d = Date.now() - ts;
+    if (d < 60_000) return '刚刚';
+    if (d < 3_600_000) return `${Math.max(1, Math.round(d / 60_000))} 分钟前`;
+    if (d < 86_400_000) return '今天';
+    if (d < 172_800_000) return '昨天';
+    return `${Math.round(d / 86_400_000)} 天前`;
+  }
+
+  const drawerMeta = $derived(drawerSec ? DRAWER_META[drawerSec] : null);
+  const modelLetter = $derived(
+    (config.model.match(/[A-Za-z]/)?.[0] ?? 'M').toUpperCase(),
+  );
+  const hdState = $derived(
+    busy
+      ? '正在输出'
+      : healthState === 'offline'
+        ? '离线'
+        : healthState === 'error'
+          ? '异常'
+          : healthState === 'degraded'
+            ? '降级'
+            : '在线',
+  );
+  const suggestions = $derived(
+    conversations
+      .filter((c) => !c.archived)
+      .slice(0, 3)
+      .map((c) => ({id: c.id, title: c.title, src: relativeTime(c.updatedAt)})),
+  );
+  const ctxUsage = $derived.by(() => {
+    const chars = activeMessages.reduce((n, m) => n + (m.text?.length ?? 0), 0);
+    const tokens = Math.max(0, Math.round(chars / 4));
+    const cap = 200_000;
+    const pct = Math.min(100, Math.round((tokens / cap) * 100));
+    const circ = 2 * Math.PI * 9;
+    return {tokens, cap, pct, dashoffset: circ * (1 - pct / 100), dasharray: circ};
+  });
+  const filteredModels = $derived(
+    availableModels.filter((id) =>
+      modelQuery.trim() ? id.toLowerCase().includes(modelQuery.trim().toLowerCase()) : true,
+    ),
+  );
+
+  function openDrawer(id: DrawerId): void {
+    drawerSec = id;
+    openPanel = null;
+  }
+
+  function closeDrawer(): void {
+    drawerSec = null;
+  }
+
+  function toggleRail(id: 'chat' | DrawerId): void {
+    if (id === 'chat') {
+      closeDrawer();
+      return;
+    }
+    if (drawerSec === id) closeDrawer();
+    else openDrawer(id);
+  }
+
+  function onDrawerAction(): void {
+    if (drawerSec === 'history') newConversation();
+    else if (drawerSec === 'status') showRuntimeModal = true;
+  }
+
+  function toggleWb(force?: boolean): void {
+    wbOpen = force === undefined ? !wbOpen : force;
+  }
+
+  function closePanels(): void {
+    openPanel = null;
+  }
+
+  function togglePanel(id: 'model' | 'ctx'): void {
+    openPanel = openPanel === id ? null : id;
+    if (openPanel === 'model') void loadModelList();
+  }
+
+  async function loadModelList(): Promise<void> {
+    modelsLoading = true;
+    try {
+      const ids = await listModels(config.baseUrl, config.apiKey);
+      availableModels = ids.length ? ids : [config.model];
+    } catch {
+      availableModels = config.model ? [config.model] : [];
+    } finally {
+      modelsLoading = false;
+    }
+  }
+
+  function selectModel(id: string): void {
+    if (!id || id === config.model) {
+      closePanels();
+      return;
+    }
+    config = {...config, model: id};
+    saveConfig(config);
+    agentRuntime = createAgentRuntime(config);
+    closePanels();
+  }
+
+  function handleComposerInput(event: Event): void {
+    const el = event.currentTarget as HTMLTextAreaElement;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
+  function handleChromeKey(e: KeyboardEvent): void {
+    handleModeKeydown(e);
+    if (e.key === 'Escape') {
+      closePanels();
+      closeDrawer();
+    }
+  }
+
+  function pickSuggestion(item: {id: string; title: string}): void {
+    draft = item.title;
+  }
+
+  const overallLabel = $derived(
+    healthReport.overall === 'online'
+      ? '正常'
+      : healthReport.overall === 'degraded'
+        ? '降级'
+        : healthReport.overall === 'offline'
+          ? '离线'
+          : healthReport.overall === 'error'
+            ? '异常'
+            : '连接中',
+  );
 
   // 星尘条：监听 presenceStore.recentEvents，新 memory_recall 事件落进当前会话流。
   // recentEvents 已由 store 按 (type, at) 去重；此处按 receivedAt 水位线消费，幂等。
@@ -832,7 +1001,9 @@
   }
 
   onMount(() => {
+    applyDocumentTheme(activeTheme);
     if (!activeId && conversations.length) activeId = conversations[0].id;
+    if (window.innerWidth < 1180) wbOpen = false;
     // Resolve the real endpoint first, then probe: in packaged mode a probe
     // against the stale persisted port would report a false offline state.
     void adoptSupervisorEndpoint().then(() => refreshConnection());
@@ -846,12 +1017,11 @@
         : null;
 
     // Capability gate for the two /v1/apeireth/events subscribers below.
-    // The canonical 2.0 gateway does not serve that route (404), and
-    // subscribeCompanionEvents retries on an exponential backoff loop that never
-    // gives up — so without this gate an unsupported runtime is reconnected to
-    // forever. Both are re-armed by refreshConnection() if a manifest ever
-    // declares activity.sse.
-    const eventStreamSupported = capabilitySupported(capabilities, 'activity.sse');
+    // subscribeCompanionEvents retries on an exponential backoff loop that
+    // never gives up, so gate it on both static support and live availability.
+    const eventStreamSupported =
+      capabilitySupported(capabilities, 'activity.sse') &&
+      capabilityAvailable(capabilities, 'activity.sse');
 
     // presence 频道主订阅（波次 2 壳层整合点）：EventSource + 指数退避 + SIM 纪律。
     // 与下方 legacy 订阅并存是设计内行为——store 按 (type, at) 去重（presence.ts dedupKey）。
@@ -895,203 +1065,362 @@
   });
 </script>
 
-<svelte:window onkeydown={handleModeKeydown} />
+<svelte:window onkeydown={handleChromeKey} />
 
 <div
-  class="shell"
+  class="app-root"
+  class:busy
+  class:theme-essence={isEssenceTheme}
   class:mode-focus={mode === 'focus'}
   class:mode-engineering={mode === 'engineering'}
   class:intro-playing={introPlaying}
 >
-  <!-- 场景层（z 最低，规范 §5.1）：黑洞星空铺底，用户从未离开舰桥。
-       页面层面板打开或运行时弹窗时关掉鼠标视差（interactive=false）。
-       hour 与 BridgeLayer 共用同一舰内时刻（含 ?hour= 开发覆写），两层照明保持同步。
-       波次 4：cameraIndex 受控机位（专注=临渊/陪伴=远眺/工程=自管理）；
-       点黑洞 = 进入专注模式。 -->
-  <SceneLayer
-    presence={$presenceStore.current}
-    hour={timelineHour}
-    interactive={activeView === 'chat' && !showRuntimeModal}
-    cameraIndex={sceneCamera}
-    onBlackholeClick={handleBlackholeClick}
-  />
-
-  <!-- 窗外巨行星层（波次 3b）：DOM 序在场景层之后、舰桥内装之前——行星 physically
-       在舷窗外，舰桥窗框会正确压住它；与场景层共用同一舰内时刻（含 ?hour= 覆写）。
-       波次 4 补丁：专注模式下随舰桥一起淡出（只留黑洞+星空），保持挂载不断状态。 -->
-  <div class="planet-xfade" class:layer-off={mode === 'focus'}>
-    <PlanetLayer hour={timelineHour} />
+  <div class="essence-scene" aria-hidden="true"></div>
+  <div class="scene-underlay">
+    <SceneLayer
+      presence={$presenceStore.current}
+      hour={timelineHour}
+      interactive={!drawerSec && !showRuntimeModal && !openPanel}
+      cameraIndex={sceneCamera}
+      onBlackholeClick={handleBlackholeClick}
+    />
+    <div class="planet-xfade" class:layer-off={mode === 'focus'}>
+      <PlanetLayer hour={timelineHour} />
+    </div>
+    <div class="layer-xfade" class:layer-off={mode !== 'companion'}>
+      <BridgeLayer hour={timelineHour} />
+    </div>
+    <div class="layer-xfade" class:layer-off={mode !== 'engineering'}>
+      <DeepCabinLayer hour={timelineHour} />
+    </div>
   </div>
 
-  <!-- 舰桥/深舱内装交叉淡（波次 4）：两层常驻 DOM 按模式切 opacity（工程交叉淡 0.8s、
-       专注淡出 0.6s），黑洞场景与行星层保持挂载不断状态；深舱整幅不透明，工程模式下
-       盖住下层场景。舰桥在工程与专注模式都淡出——专注时全屏只剩黑洞+星空。 -->
-  <div class="layer-xfade" class:layer-off={mode !== 'companion'}>
-    <BridgeLayer hour={timelineHour} />
-  </div>
-  <div class="layer-xfade" class:layer-off={mode !== 'engineering'}>
-    <DeepCabinLayer hour={timelineHour} />
-  </div>
+  <div id="presence" aria-hidden="true"></div>
+  <div id="vignette" aria-hidden="true"></div>
 
-  <div class="bridge-ui">
-    <!-- 左侧细竖条导航：金色高亮当前项（§2.1 金色纪律 = 他的存在色兼作激活态） -->
-    <nav class="rail" aria-label="主要导航">
-      <div class="rail-brand" title="Apeireth 舰桥">A</div>
-
+  <div class="shell">
+    <nav class="rail" aria-label="主导航">
+      <div class="rail-brand" title="Apeireth">燧</div>
       <div class="rail-nav">
-        {#each nav as item (item.id)}
-          <button
-            class="rail-btn"
-            class:active={activeView === item.id}
-            onclick={() => (activeView = item.id)}
-            title={item.label}
-            aria-label={item.label}
-            aria-current={activeView === item.id ? 'page' : undefined}
-          >
-            <item.icon size={17} />
-          </button>
-        {/each}
-      </div>
-
-      <div class="rail-foot">
-        <button class="rail-btn" onclick={newConversation} title="新对话" aria-label="新对话">
-          <Plus size={17} />
+        <button
+          class="rail-btn"
+          class:active={!drawerSec}
+          onclick={() => toggleRail('chat')}
+          title="当前对话"
+        >
+          <MessageCircleMore size={17} class="shell-icon" />
+          <span class="rail-label">对话</span>
         </button>
         <button
-          class="rail-status"
-          class:offline={healthState === 'offline'}
-          class:degraded={healthState === 'degraded'}
-          class:error={healthState === 'error'}
-          onclick={() => (showRuntimeModal = true)}
-          title="{healthLabel[healthState]} — 点击查看运行时详情"
-          aria-label="运行时状态"
+          class="rail-btn"
+          class:active={drawerSec === 'history'}
+          onclick={() => toggleRail('history')}
+          title="历史"
         >
-          <StatusDot
-            size="small"
-            off={healthState === 'offline'}
-            active={healthState === 'generating'}
-          />
+          <History size={17} class="shell-icon" />
+          <span class="rail-label">历史</span>
+        </button>
+        <button
+          class="rail-btn"
+          class:active={drawerSec === 'memory'}
+          onclick={() => toggleRail('memory')}
+          title="认知 / 记忆"
+        >
+          <Layers3 size={17} class="shell-icon" />
+          <span class="rail-label">记忆</span>
+        </button>
+        <button
+          class="rail-btn"
+          class:active={drawerSec === 'tools'}
+          onclick={() => toggleRail('tools')}
+          title="工具管理"
+        >
+          <Wrench size={17} class="shell-icon" />
+          <span class="rail-label">工具</span>
+        </button>
+      </div>
+      <div class="rail-foot">
+        <div class="rail-sep"></div>
+        <button
+          class="rail-btn"
+          class:active={drawerSec === 'status'}
+          onclick={() => toggleRail('status')}
+          title="系统状态"
+        >
+          <Activity size={17} class="shell-icon" />
+          <span class="rail-label">状态</span>
+        </button>
+        <button
+          class="rail-btn"
+          class:active={drawerSec === 'logs'}
+          onclick={() => toggleRail('logs')}
+          title="日志"
+        >
+          <ScrollText size={17} class="shell-icon" />
+          <span class="rail-label">日志</span>
+        </button>
+        <button
+          class="rail-btn"
+          class:active={drawerSec === 'settings'}
+          onclick={() => toggleRail('settings')}
+          title="设置"
+        >
+          <Settings size={17} class="shell-icon" />
+          <span class="rail-label">设置</span>
         </button>
       </div>
     </nav>
 
-    <!-- Main View Area -->
-    <main class="main">
-      {#if activeView === 'chat'}
-        <section class="chat-view">
-          <!-- Chat Header：透明浮于场景上，状态行含 SIM 标记（§5.4） -->
-          <header class="chat-header">
-            <div class="chat-header-info">
-              <h1 class="chat-title">{activeConversation?.title || '新对话'}</h1>
-              <div class="chat-statusline">
-                <span class="model-badge">{config.model}</span>
-                <span class="dot-sep">·</span>
-                <button class="conn-text-btn" onclick={() => (showRuntimeModal = true)}>
-                  <span class="conn-status-text {healthState}">
-                    {healthState === 'online' ? '已连接' : healthLabel[healthState]}
-                  </span>
-                </button>
-                {#if $presenceStore.simulated}
-                  <span
-                    class="sim-badge"
-                    title="presence 频道断连超过 30 秒：当前呈现为本机中性默认值（模拟态标注，设计规范 §5.4）"
-                  >SIM</span>
-                {/if}
+    <div
+      id="drawerScrim"
+      class:on={drawerSec !== null}
+      role="button"
+      tabindex="-1"
+      aria-label="关闭侧边面板"
+      onclick={closeDrawer}
+      onkeydown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') closeDrawer();
+      }}
+    ></div>
+    <div
+      id="scrim"
+      class:show={openPanel !== null}
+      role="button"
+      tabindex="-1"
+      aria-label="关闭弹出层"
+      onclick={closePanels}
+      onkeydown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') closePanels();
+      }}
+    ></div>
+
+    <aside class="drawer" class:open={drawerSec !== null} aria-label="侧边面板">
+      {#if drawerMeta}
+        <div class="drawer-head">
+          <div>
+            <p class="eyebrow">{drawerMeta.eyebrow}</p>
+            <h2>{drawerMeta.title}</h2>
+            <p class="sub">{drawerMeta.sub}</p>
+          </div>
+          <div class="drawer-actions">
+            {#if drawerMeta.action}
+              <button class="quiet-btn" onclick={onDrawerAction}>{drawerMeta.action}</button>
+            {/if}
+            <button class="mini" onclick={closeDrawer} aria-label="关闭">
+              <X size={15} class="shell-icon-sm" />
+            </button>
+          </div>
+        </div>
+      {/if}
+      <div class="drawer-body" class:embed={drawerSec !== 'status' && drawerSec !== null}>
+        {#if drawerSec === 'history'}
+          <ConversationsView
+            {conversations}
+            activeId={activeId || ''}
+            {config}
+            {capabilities}
+            onOpen={openConversation}
+            onCreate={newConversation}
+            onArchive={archiveConversation}
+            onDelete={deleteConversation}
+            onRename={(id, title) => updateConversation(id, {title})}
+            onPin={(id) => {
+              const conv = conversations.find((item) => item.id === id);
+              if (conv) updateConversation(id, {pinned: !conv.pinned});
+            }}
+          />
+        {:else if drawerSec === 'memory'}
+          <MemoryView {config} {capabilities} />
+        {:else if drawerSec === 'tools'}
+          <ToolsView {config} {capabilities} />
+        {:else if drawerSec === 'logs'}
+          <ActivityView {config} {capabilities} />
+        {:else if drawerSec === 'settings'}
+          <SettingsView
+            {config}
+            onSave={(newCfg) => {
+              config = newCfg;
+              saveConfig(newCfg);
+              agentRuntime = createAgentRuntime(newCfg);
+              const nextTheme = resolveTheme(newCfg.theme, themeQuery);
+              activeTheme = nextTheme;
+              applyDocumentTheme(nextTheme);
+              void refreshConnection();
+            }}
+            onClearLocalData={() => {
+              conversations = [];
+              activeId = null;
+              persist();
+            }}
+          />
+        {:else if drawerSec === 'status'}
+          <div class="stats">
+            <div class="stat">
+              <div
+                class="num"
+                class:ok={overallLabel === '正常'}
+                class:bad={overallLabel === '离线' || overallLabel === '异常'}
+              >
+                {overallLabel}
               </div>
+              <div class="lbl">总体状态</div>
             </div>
-            <div class="chat-header-actions">
-              <div class="persona-menu">
-                <button
-                  class="persona-trigger"
-                  onclick={() => (personaMenuOpen = !personaMenuOpen)}
-                  title="切换伙伴身份"
-                  aria-label="切换伙伴身份"
-                  aria-expanded={personaMenuOpen}
-                >
-                  <span>{activePersona?.name || '伙伴'}</span>
-                  <ChevronDown size={12} />
-                </button>
-                {#if personaMenuOpen}
-                  <div class="persona-pop" role="menu">
-                    {#each personaList as p (p.id)}
-                      <button
-                        class="persona-item"
-                        class:active={p.id === activePersona?.id}
-                        role="menuitem"
-                        onclick={() => setActivePersona(p.id)}
-                      >
-                        <span class="persona-item-name">{p.name}</span>
-                        {#if p.model}
-                          <span class="persona-item-model">{p.model}</span>
-                        {/if}
-                      </button>
-                    {/each}
-                  </div>
-                {/if}
+            <div class="stat">
+              <div class="num">
+                {healthReport.latencyMs ?? '—'}{#if healthReport.latencyMs}<small> ms</small>{/if}
               </div>
-              <button class="new-chat-trigger-btn" onclick={newConversation} title="新建对话 (Ctrl+N)">
-                <Plus size={13} />
-                <span>新建对话</span>
-              </button>
-              <button class="voice-call-trigger-btn" onclick={openVoiceCall} title="开启全双工实时语音通话">
-                <PhoneCall size={14} />
-                <span>实时语音</span>
-              </button>
-              {#if busy}
-                <button class="text-action stop-action" onclick={stop}>
-                  <Square size={13} />
-                  <span>停止生成</span>
-                </button>
+              <div class="lbl">总延迟</div>
+            </div>
+            <div class="stat">
+              <div class="num">{config.model}</div>
+              <div class="lbl">活动模型</div>
+            </div>
+            <div class="stat">
+              <div class="num">{healthReport.subsystems.length}</div>
+              <div class="lbl">子系统</div>
+            </div>
+          </div>
+          <h3 class="sec-title">子系统</h3>
+          {#each healthReport.subsystems as sub (sub.key)}
+            <div class="rowline">
+              <span
+                class="dot-st"
+                class:ok={sub.status === 'ok'}
+                class:warn={sub.status === 'degraded'}
+                class:bad={sub.status === 'offline'}
+              ></span>
+              <span class="k">{sub.name}</span>
+              <code>{sub.endpoint}</code>
+              <span class="v">{sub.latencyMs != null ? `${sub.latencyMs} ms` : sub.detail || sub.status}</span>
+            </div>
+          {:else}
+            <p class="wb-empty">尚未完成探测。点「深度诊断」查看详情。</p>
+          {/each}
+        {/if}
+      </div>
+    </aside>
+
+    <div class="main">
+      <button
+        class="wb-toggle"
+        class:on={wbOpen}
+        title="工作台"
+        aria-label="工作台"
+        aria-pressed={wbOpen}
+        onclick={() => toggleWb()}
+      >
+        <PanelRight size={14} class="shell-icon-sm" />
+        <span>工作台</span>
+      </button>
+      <div
+        class="scroll"
+        id="chatScroll"
+        bind:this={messagesContainer}
+        onscroll={handleScroll}
+        style:--presence-glow={presenceGlow.toFixed(3)}
+      >
+        {#if !flowItems.length}
+          <section class="home col">
+            <svg class="ember" viewBox="0 0 56 56" aria-hidden="true">
+              <circle class="halo" cx="28" cy="30" r="19"></circle>
+              <circle class="core" cx="28" cy="30" r="7"></circle>
+              <path class="halo" d="M28 6v9"></path>
+            </svg>
+            <h1 class="ask">今天想干些什么？</h1>
+            <p class="lede">与 Apeireth 交流你的想法、创意与工作。</p>
+            <div class="sugs">
+              {#if suggestions.length}
+                {#each suggestions as item (item.id)}
+                  <button class="sug" onclick={() => pickSuggestion(item)}>
+                    <Sparkles size={13} class="shell-icon-sm" />
+                    <span>{item.title}</span>
+                    <span class="src">{item.src}</span>
+                  </button>
+                {/each}
+              {:else}
+                {#each quickPrompts as prompt}
+                  <button class="sug" onclick={() => applyQuickPrompt(prompt)}>
+                    <Plus size={13} class="shell-icon-sm" />
+                    <span>{prompt}</span>
+                    <span class="src">开始</span>
+                  </button>
+                {/each}
               {/if}
             </div>
-
-          </header>
-
-          <!-- Messages Stream：容器让出空区指针事件给场景（点黑洞=临渊机位），
-               消息行整行带宽恢复事件以保滚动。--presence-glow 由真实 presence 驱动。 -->
-          <div
-            class="messages"
-            bind:this={messagesContainer}
-            onscroll={handleScroll}
-            style:--presence-glow={presenceGlow.toFixed(3)}
-          >
-            {#if !flowItems.length}
-              <div class="chat-empty-container">
-                <EmptyState
-                  icon="⌁"
-                  title="开启新对话"
-                  description="与阿佩瑞斯智能伙伴交谈。记忆提取、工具执行与安全审查均由底层运行时驱动。"
-                >
-                  <div class="quick-prompts-grid">
-                    {#each quickPrompts as prompt}
-                      <button class="quick-prompt-btn" onclick={() => applyQuickPrompt(prompt)}>
-                        <Sparkles size={12} class="sparkle-icon" />
-                        <span>{prompt}</span>
-                      </button>
-                    {/each}
+            <p class="sug-note">若干个性化条目 · 由近期记忆与对话生成</p>
+            <div class="orbar">或者</div>
+            <div class="calls">
+              <button class="call" onclick={openVoiceCall}>
+                <PhoneCall size={13} />
+                语音通话
+              </button>
+            </div>
+          </section>
+        {:else}
+          <section class="col">
+            <div class="chat-head">
+              <div>
+                <h2 class="chat-title">{activeConversation?.title || '新对话'}</h2>
+                <div class="statusline">
+                  <div class="persona-menu">
+                    <button
+                      class="persona-trigger"
+                      onclick={() => (personaMenuOpen = !personaMenuOpen)}
+                      title="切换伙伴身份"
+                      aria-label="切换伙伴身份"
+                      aria-expanded={personaMenuOpen}
+                    >
+                      <span>{activePersona?.name || '伙伴'}</span>
+                      <ChevronDown size={12} />
+                    </button>
+                    {#if personaMenuOpen}
+                      <div class="persona-pop" role="menu">
+                        {#each personaList as p (p.id)}
+                          <button
+                            class="persona-item"
+                            class:active={p.id === activePersona?.id}
+                            role="menuitem"
+                            onclick={() => setActivePersona(p.id)}
+                          >
+                            <span class="persona-item-name">{p.name}</span>
+                            {#if p.model}
+                              <span class="persona-item-model">{p.model}</span>
+                            {/if}
+                          </button>
+                        {/each}
+                      </div>
+                    {/if}
                   </div>
-                </EmptyState>
+                  <span class="mono-note" style="opacity:.4">·</span>
+                  <span class="mono-note">{config.model}</span>
+                  <span class="mono-note" style="opacity:.4">·</span>
+                  <button class="mono-note live" onclick={() => (showRuntimeModal = true)}>{hdState}</button>
+                  {#if $presenceStore.simulated}
+                    <span class="sim-badge" title="presence 频道断连：当前为本机中性默认值">SIM</span>
+                  {/if}
+                </div>
               </div>
-            {:else}
+              <div style="display:flex;gap:8px">
+                <button class="quiet-btn" onclick={newConversation}>
+                  <Plus size={13} />
+                  新对话
+                </button>
+              </div>
+            </div>
+            <div class="thread">
               {#each flowItems as item (item.id)}
                 {#if item.kind === 'dust'}
-                  <!-- 星尘条（§5.3）：他想起了 N 段记忆 —— 脱敏，不含原文 -->
                   <div class="stardust" role="status">
-                    <span class="stardust-line" aria-hidden="true"></span>
+                    <span class="stardust-line"></span>
                     <span class="stardust-text">他想起了 {item.dust.found} 段记忆</span>
                     {#if item.dust.keywords.length}
                       <span class="stardust-keys">{item.dust.keywords.slice(0, 4).join(' · ')}</span>
                     {/if}
-                    <span class="stardust-line" aria-hidden="true"></span>
+                    <span class="stardust-line"></span>
                   </div>
-                {:else}
-                  <article
-                    class="msg-row"
-                    class:user={item.message.role === 'user'}
-                    class:assistant={item.message.role === 'assistant'}
-                    class:system={item.message.role === 'system'}
-                  >
-                    <div class="msg-card" class:ap-clip-corner={item.message.role === 'user'}>
+                {:else if item.message.role === 'user'}
+                  <div class="row user">
+                    <div class="user-card">
                       <MessageContent
                         message={item.message}
                         onRetry={(msgId) => retryAssistantMessage(msgId)}
@@ -1100,130 +1429,186 @@
                         onBranch={(msgId) => branchFromMessage(msgId)}
                       />
                     </div>
-                  </article>
+                  </div>
+                {:else}
+                  <div class="row">
+                    <div class="ai-card">
+                      <MessageContent
+                        message={item.message}
+                        onRetry={(msgId) => retryAssistantMessage(msgId)}
+                        onEditSave={(msgId, newText) => editUserMessageSave(msgId, newText)}
+                        onEditAndRegenerate={(msgId, newText) => editUserMessageAndRegenerate(msgId, newText)}
+                        onBranch={(msgId) => branchFromMessage(msgId)}
+                      />
+                    </div>
+                  </div>
                 {/if}
               {/each}
-            {/if}
-
-            {#if error}
-              <div class="error-banner" role="alert">
-                <AlertCircle size={14} />
-                <span>{error}</span>
-              </div>
-            {/if}
-          </div>
-
-          <!-- Scroll to bottom float button -->
-          {#if showScrollBottomBtn}
-            <button class="scroll-bottom-btn" onclick={() => scrollToBottom(true)} aria-label="回到底部">
-              <ChevronDown size={16} />
-              <span>回到底部</span>
-            </button>
-          {/if}
-
-          <!-- Composer：底部居中细长输入条，近黑面板 + 金边聚焦态，发送按钮金色 -->
-          <footer class="composer-wrap">
-            <div class="composer-bar">
-              <textarea
-                bind:value={draft}
-                rows="1"
-                placeholder="给阿佩瑞斯留言…… (Enter 发送, Shift+Enter 换行)"
-                disabled={busy}
-                onkeydown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    void send();
-                  }
-                }}
-              ></textarea>
-
-              {#if busy}
-                <button class="composer-btn stop" onclick={stop} aria-label="停止生成" title="停止生成">
-                  <Square size={14} />
-                </button>
-              {:else}
-                <button
-                  class="composer-btn send"
-                  onclick={() => send()}
-                  disabled={!draft.trim() || healthState === 'offline'}
-                  aria-label="发送消息"
-                  title="发送"
-                >
-                  <ArrowUp size={16} />
-                </button>
+              {#if error}
+                <div class="error-banner" role="alert">
+                  <AlertCircle size={14} />
+                  <span>{error}</span>
+                </div>
               {/if}
             </div>
-            <p class="composer-hint">Enter 发送 · Shift+Enter 换行</p>
-          </footer>
-        </section>
-      {:else}
-        <!-- 页面层（§5.1）：近黑半透明面板浮在虚化场景上，括号角标（§5.2）。场景透见，不离开舰桥。 -->
-        <div class="page-layer ap-panel ap-bracket">
-          {#if activeView === 'conversations'}
-            <ConversationsView
-              {conversations}
-              activeId={activeId || ''}
-              {config}
-              {capabilities}
-              onOpen={openConversation}
-              onCreate={newConversation}
-              onArchive={archiveConversation}
-              onDelete={deleteConversation}
-              onRename={(id, title) => updateConversation(id, {title})}
-              onPin={(id) => {
-                const conv = conversations.find((item) => item.id === id);
-                if (conv) updateConversation(id, {pinned: !conv.pinned});
-              }}
-            />
-          {:else if activeView === 'activity'}
-            <ActivityView {config} {capabilities} />
-          {:else if activeView === 'tools'}
-            <ToolsView {config} {capabilities} />
-          {:else if activeView === 'memory'}
-            <MemoryView {config} {capabilities} />
-          {:else if activeView === 'settings'}
-            <SettingsView
-              {config}
-              onSave={(newCfg) => {
-                config = newCfg;
-                saveConfig(newCfg);
-                agentRuntime = createAgentRuntime(newCfg);
-                void refreshConnection();
-              }}
-              onClearLocalData={() => {
-                conversations = [];
-                activeId = null;
-                persist();
-              }}
-            />
-          {/if}
-        </div>
+          </section>
+        {/if}
+      </div>
+
+      {#if showScrollBottomBtn}
+        <button class="scroll-bottom-btn" onclick={() => scrollToBottom(true)} aria-label="回到底部">
+          <ChevronDown size={16} />
+          <span>回到底部</span>
+        </button>
       {/if}
-    </main>
+
+      <div class="dock">
+        <div class="col dock-col">
+          <div class="composer-row">
+            <div class="composer">
+              <div class="editor">
+                <button class="round-btn" title="新对话" onclick={newConversation} aria-label="新对话">
+                  <Plus size={16} />
+                </button>
+                <textarea
+                  bind:value={draft}
+                  rows="1"
+                  placeholder="与 Apeireth 交流……"
+                  disabled={busy}
+                  oninput={handleComposerInput}
+                  onkeydown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      void send();
+                    }
+                  }}
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="composer-side">
+              <div class="composer-caps" aria-label="模型与上下文">
+                <div class="panel" class:show={openPanel === 'ctx'} id="panel-ctx" role="dialog" aria-label="上下文窗口">
+                  <h2>上下文窗口</h2>
+                  <div class="bar"><i style:width={`${ctxUsage.pct}%`}></i></div>
+                  <div class="bar-head">
+                    <b>{ctxUsage.pct}%</b>
+                    <span>{ctxUsage.tokens} / {ctxUsage.cap}</span>
+                  </div>
+                  <div class="kv"><span class="dot"></span>用户消息<span class="v">{ctxUsage.tokens}</span></div>
+                  <h2>本轮</h2>
+                  <div class="kv"><span class="dot"></span>消息数<span class="v">{activeMessages.length}</span></div>
+                  <div class="kv"><span class="dot"></span>模型<span class="v">{config.model}</span></div>
+                </div>
+
+                <div class="panel" class:show={openPanel === 'model'} id="panel-model" role="dialog" aria-label="模型选择器">
+                  <h2>当前模型</h2>
+                  <div class="cur">
+                    <span class="provider">{modelLetter}</span>
+                    <span>{config.model}</span>
+                  </div>
+                  <div class="search" style="margin:14px 0 4px">
+                    <Search size={13} class="shell-icon-sm" />
+                    <input placeholder="切换模型" bind:value={modelQuery} />
+                  </div>
+                  {#if modelsLoading}
+                    <p class="wb-empty">正在拉取模型列表…</p>
+                  {:else if filteredModels.length}
+                    {#each filteredModels as id (id)}
+                      <button
+                        class="model"
+                        aria-current={id === config.model ? 'true' : undefined}
+                        onclick={() => selectModel(id)}
+                      >
+                        {id}
+                      </button>
+                    {/each}
+                  {:else}
+                    <p class="wb-empty">暂无可用模型。可在设置中配置提供商。</p>
+                  {/if}
+                </div>
+
+                <button
+                  class="cap-btn pill-model"
+                  aria-expanded={openPanel === 'model'}
+                  onclick={() => togglePanel('model')}
+                  title={`模型：${config.model}`}
+                  aria-label={`切换模型：${config.model}`}
+                >
+                  <span class="provider">{modelLetter}</span>
+                </button>
+                <span class="cap-sep" aria-hidden="true"></span>
+                <button
+                  class="cap-btn pill-ctx"
+                  aria-expanded={openPanel === 'ctx'}
+                  title={`上下文窗口 ${ctxUsage.pct}%`}
+                  aria-label={`上下文窗口 ${ctxUsage.pct}%`}
+                  onclick={() => togglePanel('ctx')}
+                >
+                  <svg class="ctx-ring" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle class="bg" cx="12" cy="12" r="9"></circle>
+                    <circle
+                      class="fg"
+                      cx="12"
+                      cy="12"
+                      r="9"
+                      stroke-dasharray={ctxUsage.dasharray}
+                      stroke-dashoffset={ctxUsage.dashoffset}
+                    ></circle>
+                  </svg>
+                </button>
+              </div>
+
+              <div class="composer-send">
+                {#if busy}
+                  <button class="send stop" onclick={stop} aria-label="中断">
+                    <Square size={14} />
+                  </button>
+                {:else}
+                  <button
+                    class="send"
+                    onclick={() => send()}
+                    disabled={!draft.trim() || healthState === 'offline'}
+                    aria-label="发送"
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                {/if}
+              </div>
+            </div>
+          </div>
+          <p class="hint">ENTER 发送 · SHIFT+ENTER 换行</p>
+        </div>
+      </div>
+    </div>
+
+    <Workbench
+      conversation={activeConversation}
+      {busy}
+      closed={!wbOpen}
+      onClose={() => toggleWb(false)}
+    />
   </div>
 
-  <!-- 模式切换器（波次 4）：右缘中部竖向三段胶囊，与左 rail 视觉平衡——
-       金色当前态 + 左缘刻度线（沿用 rail 语言），title 中文标签。
-       专注模式下随 chrome 一起淡出（退出靠下方「返回舰桥」胶囊 + Esc）。 -->
-  <nav class="mode-switch" aria-label="模式切换">
-    {#each modes as item (item.id)}
-      <button
-        class="mode-btn"
-        class:active={mode === item.id}
-        onclick={() => setMode(item.id)}
-        title={item.label}
-        aria-label={item.label}
-        aria-current={mode === item.id ? 'page' : undefined}
-      >
-        <item.icon size={16} />
-      </button>
-    {/each}
-  </nav>
+  {#if !isEssenceTheme}
+    <nav class="mode-switch" aria-label="模式切换">
+      {#each modes as item (item.id)}
+        <button
+          class="mode-btn"
+          class:active={mode === item.id}
+          onclick={() => setMode(item.id)}
+          title={item.label}
+          aria-label={item.label}
+          aria-current={mode === item.id ? 'page' : undefined}
+        >
+          <item.icon size={16} />
+        </button>
+      {/each}
+    </nav>
+  {/if}
 
-  <!-- 专注模式退出胶囊：底部居中极简，金色描边半透明黑底，hover 增亮 -->
   <button class="focus-exit" onclick={() => setMode('companion')}>返回舰桥</button>
 
-  <!-- 非「他说」legacy 行（测试事件等）：轻量 toast，不进对话流 -->
   {#if legacyToast}
     <div class="legacy-toast" role="status">
       <Sparkles size={12} />
@@ -1231,15 +1616,11 @@
     </div>
   {/if}
 
-  <!-- 开场动画「火之文明史」：全屏覆盖一切（z 最高），播放期 chrome 以 .intro-playing
-       隐藏；SceneLayer/PlanetLayer/BridgeLayer 全程挂载绝不卸载——落幅 1.5s IntroLayer
-       整体淡出，底下活舰桥显形完成无缝接缝；播完卸载（引擎 loseContext 释放 GL） -->
   {#if introPlaying}
     <IntroLayer onComplete={handleIntroComplete} />
   {/if}
 </div>
 
-<!-- Voice Call Modal (Phase 3 Full-Duplex Audio & PAD Visualizer) -->
 <VoiceCallModal
   isOpen={showVoiceCall}
   padState={{
@@ -1247,7 +1628,7 @@
     arousal: (($presenceStore.current?.a ?? -0.2) + 1) / 2,
     dominance: (($presenceStore.current?.d ?? 0.2) + 1) / 2,
   }}
-  onClose={() => showVoiceCall = false}
+  onClose={() => (showVoiceCall = false)}
   onSendMessage={handleVoiceMessage}
 />
 
@@ -1261,632 +1642,90 @@
   onCancel={() => void resolvePending('reject')}
 />
 
-<!-- Runtime Diagnostics Modal -->
 <RuntimeModal
   open={showRuntimeModal}
   report={healthReport}
   {capabilities}
   isRefreshing={isRefreshingHealth}
-  onClose={() => showRuntimeModal = false}
+  onClose={() => (showRuntimeModal = false)}
   onRefresh={refreshConnection}
 />
 
-
 <style>
-  /* ============================================================
-     壳层：场景铺底 + 全息 UI 浮层（规范 §5.1 三层架构）
-     ============================================================ */
-  .shell {
+  .app-root {
     position: relative;
     height: 100vh;
     overflow: hidden;
     background: var(--ap-space-void, #07070c);
+    color: var(--ap-bone);
   }
-  /* UI 浮层整体不截获指针——空区点击穿透到场景（§4.2 点黑洞 = 临渊机位）；
-     各交互件自行恢复 pointer-events。 */
-  .bridge-ui {
+  .scene-underlay {
     position: absolute;
     inset: 0;
-    z-index: 2;
-    display: flex;
+    z-index: 0;
+  }
+  .layer-xfade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+  }
+  .layer-xfade.layer-off {
+    opacity: 0;
+  }
+  .app-root.mode-focus .layer-xfade {
+    transition-duration: 0.6s;
+  }
+  .planet-xfade {
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+  }
+  .planet-xfade.layer-off {
+    opacity: 0;
+  }
+  .app-root.mode-focus .planet-xfade {
+    transition-duration: 0.6s;
+  }
+  .app-root.mode-focus .shell,
+  .app-root.intro-playing .shell,
+  .app-root.mode-focus #presence,
+  .app-root.intro-playing #presence,
+  .app-root.mode-focus #vignette,
+  .app-root.intro-playing #vignette {
+    opacity: 0;
     pointer-events: none;
   }
-  .rail,
-  .chat-header,
-  .composer-wrap,
-  .scroll-bottom-btn,
-  .page-layer,
-  .legacy-toast {
-    pointer-events: auto;
+  .app-root.mode-focus .shell,
+  .app-root.intro-playing .shell {
+    transition: opacity 0.6s ease;
   }
-
-  /* ---------- 左侧细竖条导航 ---------- */
-  .rail {
-    width: 60px;
-    flex: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 14px 0 12px;
-    /* 极轻的可读性渐变，非面板——竖条浮在深空上 */
-    background: linear-gradient(90deg, rgba(7, 7, 12, 0.62), rgba(7, 7, 12, 0.2) 72%, transparent);
-    user-select: none;
-  }
-  .rail-brand {
-    width: 40px;
-    height: 40px;
-    display: grid;
-    place-items: center;
-    margin-bottom: 10px;
-    font-family: var(--ap-font-voice);
-    font-size: 19px;
-    color: var(--ap-gold);
-    text-shadow: 0 0 14px rgba(255, 210, 122, 0.45);
-  }
-  .rail-nav {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    width: 100%;
-  }
-  .rail-btn {
-    position: relative;
-    width: 40px;
-    height: 40px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: rgba(232, 224, 204, 0.42);
-    display: grid;
-    place-items: center;
-    padding: 0;
-    transition: color 0.25s ease, background 0.25s ease;
-  }
-  .rail-btn:hover {
-    color: rgba(232, 224, 204, 0.85);
-    background: rgba(232, 224, 204, 0.05);
-  }
-  .rail-btn.active {
-    color: var(--ap-gold);
-    background: rgba(255, 210, 122, 0.07);
-  }
-  /* 当前项左缘金色刻度线 */
-  .rail-btn.active::before {
-    content: "";
+  .focus-exit {
     position: absolute;
-    left: -10px;
-    top: 11px;
-    bottom: 11px;
-    width: 2px;
-    border-radius: 2px;
-    background: var(--ap-gold);
-    box-shadow: 0 0 8px rgba(255, 210, 122, 0.6);
-  }
-  .rail-foot {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-  }
-  .rail-status {
-    width: 40px;
-    height: 32px;
-    border: 0;
-    background: transparent;
-    display: grid;
-    place-items: center;
-    padding: 0;
-    border-radius: 8px;
-  }
-  .rail-status:hover {
-    background: rgba(232, 224, 204, 0.05);
-  }
-
-  /* ---------- 主区 ---------- */
-  .main {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    position: relative;
-    pointer-events: none;
-  }
-  .chat-view {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* ---------- 对话头：透明，状态行等宽小字（§6.2 数据文字） ---------- */
-  .chat-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 15px 30px 11px;
-    background: linear-gradient(180deg, rgba(7, 7, 12, 0.55), transparent);
-    user-select: none;
-  }
-  .chat-title {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    color: var(--ap-bone);
-  }
-  .chat-statusline {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    margin-top: 3px;
-  }
-  .model-badge {
-    font-family: var(--ap-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    color: rgba(232, 224, 204, 0.4);
-  }
-  .dot-sep {
-    color: rgba(232, 224, 204, 0.25);
-    font-size: 10px;
-  }
-  .conn-text-btn {
-    border: 0;
-    background: transparent;
-    padding: 0;
-    cursor: pointer;
-  }
-  .conn-status-text {
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    color: var(--ap-semantic-success);
-  }
-  .conn-status-text.offline { color: var(--ap-semantic-danger); }
-  .conn-status-text.degraded { color: var(--ap-semantic-warning); }
-  .conn-status-text.generating { color: var(--ap-gold); }
-  .conn-status-text.error { color: var(--ap-semantic-danger); }
-  .conn-status-text.connecting { color: rgba(232, 224, 204, 0.5); }
-
-  /* SIM 标记（§5.4 模拟态标注）：极小等宽字，状态行内可识别 */
-  .sim-badge {
-    font-family: var(--ap-font-mono);
-    font-size: 9px;
-    letter-spacing: 0.28em;
-    padding: 1px 4px 1px 7px;
-    border: 1px solid rgba(232, 217, 176, 0.4);
-    border-radius: 2px;
-    color: var(--ap-gold-ui);
-    opacity: 0.85;
-  }
-
-  .chat-header-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  /* 伙伴身份切换器 (多 Agent): 纯 Svelte 自绘下拉, 金色细框, 与状态行同语言 */
-  .persona-menu {
-    position: relative;
-  }
-  .persona-trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: rgba(232, 217, 176, 0.06);
-    border: 1px solid rgba(232, 217, 176, 0.25);
-    border-radius: 6px;
-    color: var(--ap-gold-ui);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    padding: 4px 9px;
-    cursor: pointer;
-  }
-  .persona-trigger:hover { border-color: var(--ap-gold-ui); }
-  .persona-pop {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    min-width: 170px;
-    background: rgba(12, 12, 20, 0.97);
-    border: 1px solid var(--ap-gold-line, rgba(232, 217, 176, 0.3));
-    border-radius: 8px;
-    padding: 5px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    z-index: 60;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-  }
-  .persona-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 7px 10px;
-    border: 0;
-    border-radius: 5px;
-    background: transparent;
-    color: var(--ap-bone);
-    font-size: 12px;
-    text-align: left;
-    cursor: pointer;
-  }
-  .persona-item:hover { background: rgba(232, 217, 176, 0.08); }
-  .persona-item.active { color: var(--ap-gold-ui); }
-  .persona-item-model {
-    font-family: var(--ap-font-mono);
-    font-size: 10px;
-    color: var(--faint, rgba(232, 224, 204, 0.4));
-  }
-  .new-chat-trigger-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 11px;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--ap-bone);
-    background: rgba(255, 210, 122, 0.12);
-    border: 1px solid rgba(255, 210, 122, 0.35);
-    border-radius: 9999px;
-    cursor: pointer;
-    backdrop-filter: blur(8px);
-    transition: all 0.2s ease;
-  }
-  .new-chat-trigger-btn:hover {
-    background: rgba(255, 210, 122, 0.25);
-    border-color: var(--ap-gold);
-    color: var(--ap-gold);
-    transform: scale(1.02);
-  }
-  .voice-call-trigger-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    font-size: 11px;
-    font-weight: 500;
-    color: #e2e8f0;
-    background: rgba(99, 102, 241, 0.18);
-    border: 1px solid rgba(129, 140, 248, 0.35);
-    border-radius: 9999px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-  .voice-call-trigger-btn:hover {
-    background: rgba(99, 102, 241, 0.32);
-    border-color: rgba(129, 140, 248, 0.6);
-    transform: scale(1.02);
-  }
-  .stop-action {
-
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: 6px;
-    border: 1px solid rgba(192, 88, 78, 0.45);
-    background: rgba(192, 88, 78, 0.12);
-    color: var(--ap-semantic-danger);
-    font-size: 11px;
-    cursor: pointer;
-  }
-
-  /* ---------- 消息流 ---------- */
-  .messages {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 14px 15% 28px;
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-    pointer-events: none; /* 空区穿透到场景；子行恢复 */
-    scrollbar-width: thin;
-    scrollbar-color: rgba(232, 224, 204, 0.18) transparent;
-  }
-  .chat-empty-container {
-    margin: auto 0;
-    pointer-events: auto;
-    /* 空态文字压得住亮盘的可读性底晕（非面板，径向渐隐） */
-    background: radial-gradient(closest-side, rgba(7, 7, 12, 0.62), rgba(7, 7, 12, 0.28) 58%, transparent);
-    border-radius: 24px;
-    padding: 24px 0;
-  }
-  .quick-prompts-grid {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: center;
-    max-width: 600px;
-    margin-top: 14px;
-  }
-  .quick-prompt-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 13px;
-    border-radius: 999px;
-    background: rgba(11, 13, 18, 0.55);
-    border: 1px solid var(--ap-line);
-    color: rgba(232, 224, 204, 0.68);
-    font-size: 12px;
-    cursor: pointer;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    transition: border-color 0.25s ease, color 0.25s ease;
-  }
-  .quick-prompt-btn:hover {
-    border-color: rgba(255, 210, 122, 0.5);
-    color: var(--ap-gold);
-  }
-  :global(.sparkle-icon) {
-    color: var(--ap-gold);
-  }
-
-  /* 消息行：整行带宽恢复指针事件（保滚动），卡片对齐左右 */
-  .msg-row {
-    display: flex;
-    width: 100%;
-    pointer-events: auto;
-  }
-  .msg-row.assistant { justify-content: flex-start; }
-  .msg-row.user { justify-content: flex-end; }
-  .msg-row.system { justify-content: center; }
-
-  /* 他的卡片（§5.3 BAKER 映射）：近黑半透明 + 左缘金色存在线 + 光晕随 presence 呼吸。
-     衬线引语排版由 MessageContent 的 .ap-voice 承担。 */
-  .msg-row.assistant .msg-card {
-    position: relative;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    padding: 14px 24px 12px 26px;
-    background: rgba(11, 13, 18, 0.74);
-    border: 1px solid var(--ap-line);
-    border-left: 0;
-    border-radius: 2px 7px 7px 2px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: -12px 0 30px -14px rgba(255, 210, 122, var(--presence-glow, 0.18));
-    transition: box-shadow 1.2s ease;
-  }
-  /* 存在线：白热 → 金 → 琥珀（§2.1 存在色梯度），透明度随 presence 光晕呼吸 */
-  .msg-row.assistant .msg-card::before {
-    content: "";
-    position: absolute;
-    left: -1px;
-    top: 10px;
-    bottom: 10px;
-    width: 2px;
-    border-radius: 2px;
-    background: linear-gradient(180deg, var(--ap-gold-white-hot), var(--ap-gold) 45%, var(--ap-gold-amber));
-    opacity: calc(0.45 + var(--presence-glow, 0.18) * 0.8);
-    box-shadow: 0 0 10px rgba(255, 210, 122, var(--presence-glow, 0.18));
-    transition: opacity 1.2s ease, box-shadow 1.2s ease;
-  }
-  /* 工具/任务卡在他的卡内保持可读宽度 */
-  .msg-row.assistant .msg-card :global(.tool-calls-container) {
-    width: 100%;
-  }
-
-  /* 用户卡片（§5.3）：右侧哑白实体卡（.ap-card 配方），无晕无金无衬线，斜切角 */
-  .msg-row.user .msg-card {
-    max-width: 90%;
-    background: var(--ap-card);
-    color: var(--ap-register-archive-ink);
-    padding: 0;
-  }
-  .msg-row.user .msg-card :global(.user-text) {
-    background: transparent;
-    border: 0;
-    border-radius: 0;
-    padding: 10px 16px;
-    color: inherit;
-    font-family: var(--ap-font-ui);
-    font-size: 13.5px;
-    line-height: 1.75;
-  }
-  /* 复制钮收进卡内右下角（斜切角切的是右上/左下，避开） */
-  .msg-row.user .msg-card :global(.user-copy-btn) {
-    top: auto;
-    bottom: 3px;
-    right: 8px;
-    color: rgba(38, 38, 42, 0.4);
-  }
-  .msg-row.user .msg-card :global(.user-copy-btn:hover) {
-    color: rgba(38, 38, 42, 0.85);
-  }
-  .msg-row.user .msg-card :global(.user-bubble) {
-    display: block;
-  }
-
-  /* 系统消息：无卡片，居中胶囊由 MessageContent 自带样式承担 */
-  .msg-row.system .msg-card {
-    background: transparent;
-    border: 0;
-    padding: 0;
-  }
-
-  /* ---------- 星尘条（§5.3）：细长居中，金色微光 ---------- */
-  .stardust {
-    align-self: center;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    width: min(600px, 88%);
-    pointer-events: auto;
-    user-select: none;
-  }
-  .stardust-line {
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 210, 122, 0.38), transparent);
-  }
-  .stardust-text {
-    font-family: var(--ap-font-voice);
-    font-size: 11px;
-    letter-spacing: 0.38em;
-    white-space: nowrap;
-    color: rgba(255, 210, 122, 0.8);
-    text-shadow: 0 0 12px rgba(255, 210, 122, 0.35);
-  }
-  .stardust-keys {
-    font-family: var(--ap-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 34%;
-    color: rgba(232, 224, 204, 0.38);
-  }
-
-  .error-banner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    background: rgba(192, 88, 78, 0.14);
-    border: 1px solid rgba(192, 88, 78, 0.38);
-    color: var(--ap-semantic-danger);
-    border-radius: 6px;
-    font-size: 12px;
-    pointer-events: auto;
-  }
-
-  .scroll-bottom-btn {
-    position: absolute;
-    bottom: 118px;
     left: 50%;
+    bottom: 28px;
     transform: translateX(-50%);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
+    z-index: 6;
+    display: none;
+    padding: 7px 18px;
     border-radius: 999px;
-    background: var(--ap-panel);
-    border: 1px solid var(--ap-line);
-    color: var(--ap-bone);
-    font-size: 12px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    cursor: pointer;
-    z-index: 10;
-    transition: border-color 0.25s ease, color 0.25s ease;
-  }
-  .scroll-bottom-btn:hover {
-    border-color: rgba(255, 210, 122, 0.5);
+    border: 1px solid rgba(255, 210, 122, 0.45);
+    background: rgba(7, 7, 12, 0.72);
     color: var(--ap-gold);
-  }
-
-  /* ---------- Composer：底部居中细长输入条，近黑面板 + 金边聚焦 ---------- */
-  .composer-wrap {
-    padding: 8px 15% 18px;
-  }
-  .composer-bar {
-    display: flex;
-    align-items: flex-end;
-    gap: 10px;
-    background: var(--ap-panel);
-    border: 1px solid var(--ap-line);
-    border-radius: 9px;
-    padding: 9px 9px 9px 16px;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-  }
-  .composer-bar:focus-within {
-    border-color: rgba(255, 210, 122, 0.55);
-    box-shadow: 0 0 0 1px rgba(255, 210, 122, 0.2), 0 8px 32px -12px rgba(255, 210, 122, 0.2);
-  }
-  .composer-bar textarea {
-    flex: 1;
-    resize: none;
-    border: 0;
-    outline: 0;
-    background: transparent;
-    color: var(--ap-bone);
-    font-size: 13.5px;
-    line-height: 1.6;
-    min-height: 22px;
-    max-height: 132px;
-    field-sizing: content; /* Chromium ≥123：随内容伸长；不支持时退化为固定单行可滚 */
-    padding: 2px 0;
-  }
-  .composer-bar textarea::placeholder {
-    color: rgba(232, 224, 204, 0.3);
-  }
-  .composer-btn {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    border: 0;
-    display: grid;
-    place-items: center;
-    flex: none;
+    font-size: 12px;
+    letter-spacing: 0.16em;
     cursor: pointer;
-    padding: 0;
-    transition: background 0.25s ease, opacity 0.25s ease;
-  }
-  .composer-btn.send {
-    background: var(--ap-gold);
-    color: #19120a;
-  }
-  .composer-btn.send:hover:not(:disabled) {
-    background: var(--ap-gold-white-hot);
-  }
-  .composer-btn.send:disabled {
-    opacity: 0.32;
-    cursor: default;
-  }
-  .composer-btn.stop {
-    background: transparent;
-    border: 1px solid rgba(192, 88, 78, 0.5);
-    color: var(--ap-semantic-danger);
-  }
-  .composer-hint {
-    margin: 6px 6px 0;
-    font-family: var(--ap-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    color: rgba(232, 224, 204, 0.26);
-    text-align: right;
-    user-select: none;
-  }
-
-  /* ---------- 页面层（§5.1）：非对话视图浮在虚化场景上的近黑面板 ---------- */
-  .page-layer {
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    display: flex;
-    margin: 12px 18px 18px 12px;
-    border-radius: 4px;
-    overflow: hidden;
     pointer-events: auto;
-    width: calc(100% - 30px);
-    height: calc(100% - 30px);
   }
-  .page-layer > :global(*) {
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    width: 100%;
-    height: 100%;
+  .app-root.mode-focus .focus-exit {
+    display: inline-flex;
   }
-
-  /* ---------- legacy 轻量 toast（非「他说」行，如测试事件） ---------- */
   .legacy-toast {
     position: absolute;
     left: 50%;
     bottom: 98px;
     transform: translateX(-50%);
-    z-index: 4;
+    z-index: 8;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1896,217 +1735,38 @@
     background: var(--ap-panel);
     border: 1px solid var(--ap-line);
     backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     color: rgba(232, 224, 204, 0.75);
     font-size: 11px;
     letter-spacing: 0.06em;
+    pointer-events: auto;
   }
   .legacy-toast :global(svg) {
     color: var(--ap-gold);
     flex: none;
   }
-
-  /* ============================================================
-     波次 4：三模式骨架（陪伴/工程/专注）
-     ============================================================ */
-
-  /* ---------- 舰桥/深舱/行星交叉淡：常驻 DOM，按模式切 opacity（工程交叉淡 0.8s） ---------- */
-  .layer-xfade {
-    position: fixed;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-    transition: opacity 0.8s ease;
+  .drawer-body code {
+    font-family: var(--ap-font-mono);
+    font-size: 10.5px;
+    color: var(--ap-bone-68);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 5px;
+    border-radius: 3px;
   }
-  .layer-xfade.layer-off {
-    opacity: 0;
-  }
-  /* 专注模式：舰桥+行星随 chrome 同节奏淡出（0.6s），全屏只剩黑洞+星空 */
-  .shell.mode-focus .layer-xfade {
-    transition-duration: 0.6s;
-  }
-  /* 行星层专用淡出容器（波次 4b 回归修复）：不许带 position/z-index——任何定位祖先
-     都会成为 stacking context，把 .planet 的 screen 混合隔离在空背景上，黑底显形为
-     黑箱盖死黑洞（PlanetLayer 文件头纪律）。static 祖先 + 静止态 opacity:1 = 无上下文、
-     混合穿透；淡出中途 opacity<1 的短暂隔离面纱可接受（0.6s 内淡没）。 */
-  .planet-xfade {
-    pointer-events: none;
-    transition: opacity 0.8s ease;
-  }
-  .planet-xfade.layer-off {
-    opacity: 0;
-  }
-  .shell.mode-focus .planet-xfade {
-    transition-duration: 0.6s;
-  }
-
-  /* ---------- 工程模式：页面层收成「主控台主屏」 ----------
-     max-width 1150px，水平居中；高度收 40vh、顶 5vh——底缘落在视口 45% 处，
-     恰好让开深舱椅背顶沿（新深舱图椅背起于 ~45.3%），整把椅子+舱底圆盘全露出来；
-     圆角、近黑半透明、边框/角标语言不变；面板内部视图滚动不受影响。陪伴模式不动。 */
-  .shell.mode-engineering .page-layer {
-    flex: none;
-    width: 100%;
-    max-width: 1150px;
-    height: 100%;
-    max-height: 40vh;
-    margin: 5vh auto auto;
-  }
-
-  /* ---------- chrome 淡出（专注模式） ----------
-     左 rail、chat-header、composer、模式切换器、消息流本体 0.6s ease；
-     opacity+visibility 联动（隐藏后不可聚焦、不截获指针），场景本身继续活。
-     波次 4b：主人"只留黑洞"——消息流/快捷按钮/回底按钮一并淡出，
-     专注模式的对话形态留给后续波次设计。 */
-  .rail,
-  .chat-header,
-  .composer-wrap,
-  .mode-switch,
-  .messages,
-  .scroll-bottom-btn,
-  .focus-exit {
-    transition: opacity 0.6s ease, visibility 0s linear 0s;
-  }
-  .shell.mode-focus .rail,
-  .shell.mode-focus .chat-header,
-  .shell.mode-focus .composer-wrap,
-  .shell.mode-focus .mode-switch,
-  .shell.mode-focus .messages,
-  .shell.mode-focus .scroll-bottom-btn {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity 0.6s ease, visibility 0s linear 0.6s;
-  }
-  /* 工程模式：composer 隐藏（左 rail 照常工作——它就是工程导航的家） */
-  .shell.mode-engineering .composer-wrap {
-    display: none;
-  }
-  /* 开场动画播放期：全部 chrome 隐藏（沿用专注模式的 opacity+visibility 联动纪律）；
-     播放结束 .intro-playing 移除 → chrome 0.6s 淡入，与落幅后活舰桥接管同节奏 */
-  .shell.intro-playing .rail,
-  .shell.intro-playing .chat-header,
-  .shell.intro-playing .composer-wrap,
-  .shell.intro-playing .mode-switch,
-  .shell.intro-playing .messages,
-  .shell.intro-playing .scroll-bottom-btn,
-  .shell.intro-playing .focus-exit {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity 0.6s ease, visibility 0s linear 0.6s;
-  }
-  /* reduced-motion：模式/chrome 过渡瞬切 */
-  @media (prefers-reduced-motion: reduce) {
-    .rail,
-    .chat-header,
-    .composer-wrap,
-    .mode-switch,
-    .messages,
-    .scroll-bottom-btn,
-    .layer-xfade,
-    .planet-xfade,
-    .focus-exit {
-      transition-duration: 0.01s !important;
-      transition-delay: 0s !important;
-    }
-  }
-
-  /* ---------- 模式切换器：右缘中部竖向三段胶囊（左 rail 的镜像语言） ---------- */
-  .mode-switch {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 3;
+  .search {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 3px;
-    padding: 5px;
-    border-radius: 999px;
-    background: rgba(7, 7, 12, 0.5);
+    gap: 8px;
     border: 1px solid var(--ap-line);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    user-select: none;
+    border-radius: 5px;
+    padding: 7px 11px;
+    color: var(--ap-bone-30);
   }
-  .mode-btn {
-    position: relative;
-    width: 32px;
-    height: 32px;
+  .search input {
+    flex: 1;
     border: 0;
-    border-radius: 999px;
+    outline: 0;
     background: transparent;
-    color: rgba(232, 224, 204, 0.42);
-    display: grid;
-    place-items: center;
-    padding: 0;
-    cursor: pointer;
-    transition: color 0.25s ease, background 0.25s ease;
-  }
-  .mode-btn:hover {
-    color: rgba(232, 224, 204, 0.85);
-    background: rgba(232, 224, 204, 0.05);
-  }
-  .mode-btn.active {
-    color: var(--ap-gold);
-    background: rgba(255, 210, 122, 0.07);
-  }
-  /* 当前段左缘金色刻度线（沿用 rail 语言，贴胶囊左缘） */
-  .mode-btn.active::before {
-    content: "";
-    position: absolute;
-    left: -6px;
-    top: 8px;
-    bottom: 8px;
-    width: 2px;
-    border-radius: 2px;
-    background: var(--ap-gold);
-    box-shadow: 0 0 8px rgba(255, 210, 122, 0.6);
-  }
-
-  /* ---------- 专注模式退出胶囊：底部居中极简，金色描边半透明黑底 ---------- */
-  .focus-exit {
-    position: absolute;
-    left: 50%;
-    bottom: 26px;
-    transform: translateX(-50%);
-    z-index: 3;
-    padding: 8px 22px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 210, 122, 0.55);
-    background: rgba(7, 7, 12, 0.55);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    color: var(--ap-gold);
     font-size: 12px;
-    letter-spacing: 0.22em;
-    cursor: pointer;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition:
-      opacity 0.6s ease,
-      visibility 0s linear 0.6s,
-      border-color 0.25s ease,
-      background 0.25s ease,
-      box-shadow 0.25s ease;
-  }
-  .shell.mode-focus .focus-exit {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transition:
-      opacity 0.6s ease,
-      visibility 0s linear 0s,
-      border-color 0.25s ease,
-      background 0.25s ease,
-      box-shadow 0.25s ease;
-  }
-  .focus-exit:hover {
-    border-color: var(--ap-gold);
-    background: rgba(20, 16, 8, 0.72);
-    box-shadow: 0 0 18px rgba(255, 210, 122, 0.18);
+    color: var(--ap-bone);
   }
 </style>

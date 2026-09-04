@@ -1,0 +1,352 @@
+/* ============================================================================
+   Essence 浅色主题补全层
+   修复 shell 硬编码深色 + 抽屉嵌入视图在 data-theme=essence 下的残留深色块
+   ============================================================================ */
+
+/* 壁纸：底图 + 白色遮罩 */
+.app-root.theme-essence .essence-scene {
+  background: url('/assets/themes/essence-bg.png') center / cover no-repeat;
+}
+
+/* 主区透明，让壁纸透出；仅 UI 面板做雾面 */
+html[data-theme='essence'] .main {
+  background: transparent;
+}
+
+html[data-theme='essence'] .drawer {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(22px);
+  border-right-color: var(--ap-line);
+  box-shadow: 26px 0 60px -30px rgba(20, 19, 22, 0.12);
+}
+
+html[data-theme='essence'] .wb,
+html[data-theme='essence'] .wb.closed {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border-left-color: var(--ap-line);
+}
+
+html[data-theme='essence'] .composer {
+  background: var(--ap-panel);
+  border-color: var(--ap-line);
+}
+
+html[data-theme='essence'] .composer:focus-within {
+  border-color: rgba(138, 115, 85, 0.45);
+  box-shadow: 0 0 0 1px rgba(138, 115, 85, 0.15), 0 8px 32px -12px rgba(20, 19, 22, 0.12);
+}
+
+html[data-theme='essence'] .panel {
+  background: var(--ap-shell-elevated);
+  border-color: var(--ap-line);
+  box-shadow: 0 24px 70px rgba(20, 19, 22, 0.12);
+}
+
+html[data-theme='essence'] .sug,
+html[data-theme='essence'] .call {
+  background: var(--ap-shell-chip);
+  border-color: var(--ap-line);
+  color: var(--ap-bone-68);
+  backdrop-filter: blur(10px);
+}
+
+html[data-theme='essence'] .sug:hover,
+html[data-theme='essence'] .call:hover {
+  border-color: rgba(138, 115, 85, 0.4);
+  color: var(--ap-gold-ui);
+}
+
+html[data-theme='essence'] .ai-card {
+  background: var(--ap-panel);
+  border-color: var(--ap-line);
+  box-shadow: 0 8px 32px -16px rgba(20, 19, 22, 0.1);
+}
+
+html[data-theme='essence'] .ai-card::before {
+  opacity: 0.85;
+}
+
+html[data-theme='essence'] .hint {
+  color: var(--ap-bone-30);
+}
+
+html[data-theme='essence'] .orbar {
+  color: var(--ap-bone-30);
+}
+
+html[data-theme='essence'] .quiet-btn {
+  color: var(--ap-bone-68);
+  border-color: var(--ap-line);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+html[data-theme='essence'] .quiet-btn:hover {
+  border-color: rgba(138, 115, 85, 0.4);
+  color: var(--ap-gold-ui);
+}
+
+html[data-theme='essence'] .gold-btn {
+  color: #fff;
+}
+
+html[data-theme='essence'] .send {
+  background: var(--ap-gold);
+  color: #fff;
+}
+
+html[data-theme='essence'] .send:hover:not(:disabled) {
+  background: var(--ap-gold-white-hot);
+}
+
+html[data-theme='essence'] .rail {
+  background: rgba(255, 255, 255, 0.88);
+  border-right-color: var(--ap-line);
+}
+
+html[data-theme='essence'] .rail-btn {
+  color: var(--ap-bone-42);
+}
+
+html[data-theme='essence'] .rail-btn:hover {
+  color: var(--ap-bone);
+  background: rgba(20, 19, 22, 0.05);
+}
+
+html[data-theme='essence'] .rail-btn.active {
+  color: var(--ap-gold-ui);
+  background: rgba(138, 115, 85, 0.1);
+}
+
+html[data-theme='essence'] .rail-brand {
+  color: var(--ap-gold-ui);
+  text-shadow: none;
+}
+
+html[data-theme='essence'] .drawer-head .eyebrow,
+html[data-theme='essence'] .drawer-head .sub {
+  color: var(--ap-bone-42);
+}
+
+html[data-theme='essence'] .drawer-head h2 {
+  color: var(--ap-bone);
+}
+
+html[data-theme='essence'] .mini {
+  color: var(--ap-bone-42);
+}
+
+html[data-theme='essence'] .mini:hover {
+  color: var(--ap-bone);
+  background: rgba(20, 19, 22, 0.05);
+}
+
+html[data-theme='essence'] .wb-toggle {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(20, 19, 22, 0.1);
+  color: var(--ap-bone-68);
+}
+
+html[data-theme='essence'] .wb-toggle:hover,
+html[data-theme='essence'] .wb-toggle.on {
+  border-color: rgba(138, 115, 85, 0.4);
+  color: var(--ap-gold-ui);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+html[data-theme='essence'] .composer-caps {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(20, 19, 22, 0.1);
+}
+
+html[data-theme='essence'] .cap-btn:hover,
+html[data-theme='essence'] .cap-btn[aria-expanded='true'] {
+  background: rgba(138, 115, 85, 0.08);
+}
+
+html[data-theme='essence'] .pill:hover,
+html[data-theme='essence'] .pill[aria-expanded='true'],
+html[data-theme='essence'] .pill.on {
+  border-color: rgba(138, 115, 85, 0.4);
+  color: var(--ap-gold-ui);
+}
+
+html[data-theme='essence'] .provider {
+  border-color: rgba(138, 115, 85, 0.35);
+  color: var(--ap-gold-ui);
+}
+
+html[data-theme='essence'] .ctx-ring .bg {
+  stroke: rgba(20, 19, 22, 0.12);
+}
+
+html[data-theme='essence'] .ctx-ring .fg {
+  stroke: var(--ap-gold-ui);
+}
+
+html[data-theme='essence'] .wave {
+  color: var(--ap-bone-30);
+}
+
+html[data-theme='essence'] .editor textarea {
+  color: var(--ap-bone);
+}
+
+html[data-theme='essence'] .editor textarea::placeholder {
+  color: var(--ap-bone-30);
+}
+
+html[data-theme='essence'] .round-btn {
+  color: var(--ap-bone-42);
+}
+
+html[data-theme='essence'] .round-btn:hover {
+  color: var(--ap-bone);
+  background: rgba(20, 19, 22, 0.05);
+}
+
+html[data-theme='essence'] .mono-note {
+  color: var(--ap-bone-42);
+}
+
+html[data-theme='essence'] .mono-note.live {
+  color: var(--ap-gold-ui);
+}
+
+html[data-theme='essence'] .chat-title {
+  color: var(--ap-bone);
+}
+
+html[data-theme='essence'] h1.ask {
+  color: var(--ap-bone);
+  text-shadow: 0 2px 24px rgba(255, 255, 255, 0.85);
+}
+
+html[data-theme='essence'] p.lede,
+html[data-theme='essence'] .sug-note {
+  color: var(--ap-bone-42);
+}
+
+html[data-theme='essence'] .wb-head h2,
+html[data-theme='essence'] .blk-head,
+html[data-theme='essence'] .goal,
+html[data-theme='essence'] .agent {
+  color: var(--ap-bone);
+}
+
+html[data-theme='essence'] .wb-empty {
+  color: var(--ap-bone-30);
+}
+
+html[data-theme='essence'] #drawerScrim.on {
+  background: rgba(20, 19, 22, 0.18);
+}
+
+html[data-theme='essence'] .legacy-toast {
+  background: var(--ap-panel);
+  border-color: var(--ap-line);
+  color: var(--ap-bone-68);
+}
+
+html[data-theme='essence'] .scroll-bottom-btn {
+  background: var(--ap-panel);
+  border-color: var(--ap-line);
+  color: var(--ap-bone);
+}
+
+/* 抽屉内嵌入视图：去掉深色页边距感，与抽屉头对齐 */
+html[data-theme='essence'] .drawer-body.embed {
+  background: transparent;
+}
+
+html[data-theme='essence'] .drawer-body.embed .sessions-view,
+html[data-theme='essence'] .drawer-body.embed .settings-view,
+html[data-theme='essence'] .drawer-body.embed .memory-view,
+html[data-theme='essence'] .drawer-body.embed .tools-view,
+html[data-theme='essence'] .drawer-body.embed .activity-view {
+  background: transparent;
+}
+
+html[data-theme='essence'] .stardust-text {
+  color: var(--ap-gold-ui);
+  text-shadow: none;
+}
+
+html[data-theme='essence'] .persona-pop {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(20, 19, 22, 0.1);
+}
+
+html[data-theme='essence'] .persona-trigger {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(20, 19, 22, 0.12);
+  color: var(--ap-gold-ui);
+}
+
+html[data-theme='essence'] .persona-item {
+  color: var(--ap-bone-68);
+}
+
+html[data-theme='essence'] .persona-item:hover {
+  background: rgba(138, 115, 85, 0.08);
+}
+
+html[data-theme='essence'] .mode-switch {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(20, 19, 22, 0.08);
+}
+
+html[data-theme='essence'] .mode-btn {
+  color: var(--ap-bone-42);
+}
+
+html[data-theme='essence'] .mode-btn.active {
+  color: var(--ap-gold-ui);
+  background: rgba(138, 115, 85, 0.12);
+}
+
+@media (max-width: 1180px) {
+  html[data-theme='essence'] .wb {
+    background: var(--ap-panel-solid);
+    box-shadow: -26px 0 60px -30px rgba(20, 19, 22, 0.12);
+  }
+}
+
+html[data-theme='essence'] .model {
+  color: var(--ap-bone-68);
+}
+
+html[data-theme='essence'] .model:hover {
+  color: var(--ap-bone);
+  background: rgba(20, 19, 22, 0.04);
+}
+
+html[data-theme='essence'] .model[aria-current='true'] {
+  color: var(--ap-gold-ui);
+  background: rgba(138, 115, 85, 0.1);
+}
+
+html[data-theme='essence'] .panel h2,
+html[data-theme='essence'] .panel .kv,
+html[data-theme='essence'] .bar-head {
+  color: var(--ap-bone-42);
+}
+
+html[data-theme='essence'] .bar-head b,
+html[data-theme='essence'] .panel .kv .v {
+  color: var(--ap-bone);
+}
+
+html[data-theme='essence'] .cur {
+  color: var(--ap-bone);
+}
+
+html[data-theme='essence'] .search input {
+  color: var(--ap-bone);
+}
+
+html[data-theme='essence'] .error-banner {
+  background: rgba(168, 72, 64, 0.1);
+  border-color: rgba(168, 72, 64, 0.25);
+  color: var(--danger);
+}

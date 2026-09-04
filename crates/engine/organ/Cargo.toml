@@ -20,11 +20,6 @@ apeireth-orchestration = { path = "../../foundation/orchestration" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
-# organ_llm_bridge_compat test: prove W1/W2 constructors consume the runtime
-# canonical bridge (`InvokerLlmFactory` over `ModuleInvoker`) without
-# algorithm changes. dev-only; the library dependency graph is unchanged.
-apeireth-runtime = { path = "../runtime" }
-apeireth-protocol = { path = "../../foundation/protocol" }
 
 [lib]
 name = "apeireth_organ"

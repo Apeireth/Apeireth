@@ -153,3 +153,64 @@ async fn minimal_kernel_without_standard_modules_completes_plain_chat_turn() {
     assert_eq!(session.messages.len(), 2);
     assert_eq!(session.revision, 4);
 }
+
+struct RecordingSink {
+    events: std::sync::Mutex<Vec<String>>,
+}
+
+impl RecordingSink {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            events: std::sync::Mutex::new(Vec::new()),
+        })
+    }
+
+    fn names(&self) -> Vec<String> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
+impl apeireth_runtime::RuntimeEventSink for RecordingSink {
+    fn emit(&self, event: apeireth_runtime::RuntimeEvent) {
+        let name = match event {
+            apeireth_runtime::RuntimeEvent::TurnStarted { .. } => "TurnStarted",
+            apeireth_runtime::RuntimeEvent::TurnCompleted { .. } => "TurnCompleted",
+            apeireth_runtime::RuntimeEvent::TurnFailed { .. } => "TurnFailed",
+            apeireth_runtime::RuntimeEvent::ApprovalRequired { .. } => "ApprovalRequired",
+            apeireth_runtime::RuntimeEvent::Trace { .. } => "Trace",
+        };
+        self.events.lock().unwrap().push(name.to_string());
+    }
+}
+
+#[tokio::test]
+async fn one_completed_turn_emits_one_started_and_one_completed_event() {
+    let provider = PureChatProvider::new();
+    let plugin = PureChatPlugin::new(Arc::clone(&provider));
+    let sink = RecordingSink::new();
+
+    let mut runtime = Runtime::builder()
+        .with_plugin(plugin)
+        .with_default_model("pure-chat-model")
+        .with_event_sink(Arc::clone(&sink) as Arc<dyn apeireth_runtime::RuntimeEventSink>)
+        .build()
+        .await
+        .expect("runtime builds");
+
+    let response = runtime
+        .execute(TurnRequest::new(SessionId::new(), "hello").with_model("pure-chat-model"))
+        .await
+        .expect("turn completes");
+    assert_eq!(response.text, "Hello from pure microkernel!");
+
+    let lifecycle: Vec<_> = sink
+        .names()
+        .into_iter()
+        .filter(|name| name != "Trace")
+        .collect();
+    assert_eq!(
+        lifecycle,
+        vec!["TurnStarted".to_string(), "TurnCompleted".to_string()],
+        "one completed turn must emit exactly one start and one commit: {lifecycle:?}"
+    );
+}

@@ -2,6 +2,8 @@
 //! runtime, governance, plugin registry, and real ProcessExecutor-backed shell
 //! tool. Only harmless platform-native echo commands are executed.
 
+use apeireth_runtime_assembly as apeireth_runtime;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
