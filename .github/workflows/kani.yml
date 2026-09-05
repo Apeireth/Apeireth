@@ -1,0 +1,52 @@
+name: Kani formal verification (Phase 5 approval SM)
+
+# Phase 5 (RA-5) 三不变量机器证明: crates/engine/runtime/src/canonical/research_approval_sm.rs
+# 的 #[cfg(kani)] harness (3 个 #[kani::proof])。
+# 本机 Windows 无 Kani 支持 (Kani 仅 Linux/macOS), 证明跑在 ubuntu runner 上;
+# 同源不变量另有 TLA+/TLC 本机验证 (research/verification/tla/)。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/engine/runtime/src/canonical/research_approval_sm.rs'
+      - 'crates/engine/runtime/src/canonical/**'
+      - '.github/workflows/kani.yml'
+  pull_request:
+    paths:
+      - 'crates/engine/runtime/src/canonical/research_approval_sm.rs'
+      - 'crates/engine/runtime/src/canonical/**'
+      - '.github/workflows/kani.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  kani:
+    name: cargo kani -p apeireth-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system deps (libdbus + libwayland + libpipewire + libegl)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev libwayland-dev libpipewire-0.3-dev libspa-0.2-dev libegl1-mesa-dev libgbm-dev pkg-config
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Kani (kani-verifier + cargo-kani)
+        run: cargo install kani-verifier --locked
+
+      - name: Kani setup (download CBMC bundle)
+        run: cargo kani setup
+
+      - name: Verify Phase 5 invariants (InvA / InvB / InvC harness)
+        run: cargo kani -p apeireth-runtime
