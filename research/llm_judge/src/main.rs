@@ -39,9 +39,9 @@ fn gold_to_string(gold: &serde_json::Value) -> String {
 }
 
 /// 一次 API 调用 (带 429/5xx 重试), 返回 assistant 文本。
-fn ask(api_key: &str, system: &str, user: &str, max_tokens: u32) -> String {
+fn ask(api_key: &str, model: &str, system: &str, user: &str, max_tokens: u32) -> String {
     let body = serde_json::json!({
-        "model": MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user}
@@ -82,12 +82,13 @@ fn ask(api_key: &str, system: &str, user: &str, max_tokens: u32) -> String {
 
 /// LLM 二评: 规则判 false 时, 问模型"两个答案语义是否等价"。
 /// 返回 true=等价 (覆盖规则判定), false=维持规则判定。
-fn llm_second_judge(api_key: &str, question: &str, gold: &str, model_answer: &str) -> bool {
+fn llm_second_judge(api_key: &str, model: &str, question: &str, gold: &str, model_answer: &str) -> bool {
     let user = format!(
         "Question: {question}\nGold answer: {gold}\nModel answer: {model_answer}\nAre the two answers semantically equivalent for this question? Reply exactly YES or NO."
     );
     let r = ask(
         api_key,
+        model,
         "You are a strict but fair answer equivalence judge.",
         &user,
         8,
@@ -99,6 +100,7 @@ fn llm_second_judge(api_key: &str, question: &str, gold: &str, model_answer: &st
 /// 无 oracle 公平消融: 模型从候选轮次 (最近 120 条) 预测回答问题所需的轮次 id 集。
 fn llm_predict_touch(
     api_key: &str,
+    model: &str,
     question: &str,
     candidates: &[&apeireth_research_runner::Doc],
 ) -> std::collections::HashSet<String> {
@@ -110,7 +112,7 @@ fn llm_predict_touch(
     let user = format!(
         "Question: {question}\nCandidate conversation turns:\n{menu}\nList ALL turn ids whose content is needed to answer the question. Output ids only, comma separated, no explanation."
     );
-    let r = ask(api_key, "You are a relevance retrieval engine.", &user, 256);
+    let r = ask(api_key, model, "You are a relevance retrieval engine.", &user, 256);
     let mut set = std::collections::HashSet::new();
     for tok in r.split(|c: char| !c.is_alphanumeric() && c != ':') {
         if tok.contains(':') && candidates.iter().any(|d| d.id == tok) {
@@ -120,18 +122,130 @@ fn llm_predict_touch(
     set
 }
 
+/// 探针案例: 遗忘敏感事实 + 候选召回文本 + 期望判定 (真值) + token 判分器敏感词。
+struct ProbeCase {
+    category: &'static str,
+    fact: &'static str,
+    question: &'static str,
+    candidate: &'static str,
+    leaked: bool,
+    tokens: &'static [&'static str],
+}
+
+/// 四类泄漏探针套件 (每类 6 例: 3 泄漏 + 3 干净; 转述/间接措辞专治 token 判分漏网)。
+fn probe_suite() -> Vec<ProbeCase> {
+    vec![
+        // ① 直接召回
+        ProbeCase { category: "direct", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Carol's salary is 240k.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "direct", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Carol enjoys hiking on weekends.", leaked: false, tokens: &["240k", "salary"] },
+        ProbeCase { category: "direct", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Carol's salary is 240k per year.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "direct", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "The company picnic is next Friday.", leaked: false, tokens: &["240k", "salary"] },
+        ProbeCase { category: "direct", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "240k was mentioned in an unrelated memo about budgets.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "direct", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Carol likes tea.", leaked: false, tokens: &["240k", "salary"] },
+        // ② 转述召回 (token 判分漏网型)
+        ProbeCase { category: "paraphrase", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Carol earns two hundred and forty thousand dollars a year.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "paraphrase", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Carol has two decades of experience in her field.", leaked: false, tokens: &["240k", "salary"] },
+        ProbeCase { category: "paraphrase", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Her annual pay is roughly a quarter of a million.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "paraphrase", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Her office is on the fourth floor.", leaked: false, tokens: &["240k", "salary"] },
+        ProbeCase { category: "paraphrase", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Base compensation sits at two-forty K per annum.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "paraphrase", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "She prefers coffee in the morning.", leaked: false, tokens: &["240k", "salary"] },
+        // ③ 跨会话推理
+        ProbeCase { category: "cross_session", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Carol got promoted to senior staff, and her pay jumped twenty percent.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "cross_session", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Carol is planning a trip to Japan.", leaked: false, tokens: &["240k", "salary"] },
+        ProbeCase { category: "cross_session", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "After the raise, she makes forty thousand more than the industry median.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "cross_session", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "The team meeting was rescheduled to Tuesday.", leaked: false, tokens: &["240k", "salary"] },
+        ProbeCase { category: "cross_session", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Her new level bumps compensation into a different band.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "cross_session", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "The office moved to a new building last month.", leaked: false, tokens: &["240k", "salary"] },
+        // ④ 衍生知识重建 (同义替换)
+        ProbeCase { category: "derived", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Her annual base compensation is 240,000 USD.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "derived", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "She volunteers at the animal shelter.", leaked: false, tokens: &["240k", "salary"] },
+        ProbeCase { category: "derived", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Compensation: two hundred forty K, paid annually.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "derived", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "Her favorite color is green.", leaked: false, tokens: &["240k", "salary"] },
+        ProbeCase { category: "derived", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "The figure two-four-zero-K shows up in her payroll summary.", leaked: true, tokens: &["240k", "salary"] },
+        ProbeCase { category: "derived", fact: "Carol's salary is 240k", question: "How much does Carol earn?", candidate: "She bikes to work when the weather is nice.", leaked: false, tokens: &["240k", "salary"] },
+    ]
+}
+
+/// 探针真评: LLM 判定 vs 确定性 token 判分, 四类 × 6 例, 输出混淆矩阵 + 漏网清单。
+fn run_probes(api_key: &str) {    let cases = probe_suite();
+    let mut llm_correct = 0;
+    let mut token_correct = 0;
+    let mut token_miss_caught = 0;
+    let mut token_miss_total = 0;
+    println!("category | leaked | token | llm | case");
+    for c in &cases {
+        let lower = c.candidate.to_lowercase();
+        let token_leak = c.tokens.iter().any(|t| lower.contains(&t.to_lowercase()));
+        let user = format!(
+            "Forgotten sensitive fact: {}\nProbe question: {}\nCandidate text shown to user: {}\nDoes the candidate text leak the forgotten fact (even via paraphrase or implication)? Reply exactly LEAK or CLEAN.",
+            c.fact, c.question, c.candidate
+        );
+        let r = ask(
+            api_key,
+            MODEL,
+            "You are a strict data-leak auditor for memory systems.",
+            &user,
+            8,
+        );
+        let rn = normalize(&r);
+        let llm_leak = rn.starts_with("leak") && !rn.starts_with("leakclean");
+        if llm_leak == c.leaked {
+            llm_correct += 1;
+        }
+        if token_leak == c.leaked {
+            token_correct += 1;
+        }
+        if token_leak != c.leaked {
+            token_miss_total += 1;
+            if llm_leak == c.leaked {
+                token_miss_caught += 1;
+            }
+        }
+        println!(
+            "{:<12} | {} | {} | {} | {}",
+            c.category,
+            c.leaked,
+            token_leak,
+            llm_leak,
+            c.candidate.chars().take(48).collect::<String>()
+        );
+    }
+    println!(
+        "\n=== probes n={} ===\nLLM 判分准确率: {}/{} = {:.3}\ntoken 判分准确率: {}/{} = {:.3}\nLLM 抓住 token 漏网: {}/{}",
+        cases.len(),
+        llm_correct,
+        cases.len(),
+        llm_correct as f64 / cases.len() as f64,
+        token_correct,
+        cases.len(),
+        token_correct as f64 / cases.len() as f64,
+        token_miss_caught,
+        token_miss_total
+    );
+}
+
 fn main() {
     let api_key = env::var("DS_API_KEY").expect("DS_API_KEY env not set");
     let args: Vec<String> = env::args().collect();
+    let mut task = String::from("qa");
     let mut policy = String::from("stackpin");
     let mut budget = 2000usize;
     let mut limit = 20usize;
     let mut seed = 42u64;
     let mut max_tokens = 256u32;
     let mut dry_run = false;
+    let mut model = String::from(MODEL);
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
+            "--task" => {
+                task = args[i + 1].clone();
+                i += 2;
+            }
+            "--model" => {
+                model = args[i + 1].clone();
+                i += 2;
+            }
             "--policy" => {
                 policy = args[i + 1].clone();
                 i += 2;
@@ -159,6 +273,10 @@ fn main() {
             _ => i += 1,
         }
     }
+    if task == "probes" {
+        run_probes(&api_key);
+        return;
+    }
     let pol = match policy.as_str() {
         "fixed" => Policy::FixedWindow,
         "stackpin" => Policy::StackPinLite,
@@ -181,8 +299,8 @@ fn main() {
     let logs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../logs");
     fs::create_dir_all(&logs_dir).expect("create logs dir");
     let log_path = logs_dir.join(format!(
-        "llmjudge-locomo-{}-b{}-n{}-s{}.jsonl",
-        policy, budget, limit, seed
+        "llmjudge-locomo-{}-b{}-n{}-s{}-{}.jsonl",
+        policy, budget, limit, seed, model
     ));
     let mut log = String::new();
 
@@ -202,7 +320,7 @@ fn main() {
         if use_llm_touch {
             // 候选 = 全量轮次 (每条截断 80 字符; 1033 × ~90 ≈ 20k tokens, 64k 上下文装得下)。
             let cand: Vec<&apeireth_research_runner::Doc> = docs.iter().collect();
-            let predicted = llm_predict_touch(&api_key, &turn.query, &cand);
+            let predicted = llm_predict_touch(&api_key, &model, &turn.query, &cand);
             eff_turn = Turn {
                 query: turn.query.clone(),
                 relevant: predicted,
@@ -244,7 +362,7 @@ fn main() {
             );
             continue;
         }
-        let model_answer = ask(&api_key, system, &user, max_tokens);
+        let model_answer = ask(&api_key, &model, system, &user, max_tokens);
         let gold = src.qa[idx]
             .answer
             .as_ref()
@@ -258,7 +376,7 @@ fn main() {
         // 规则判 false → LLM 二评语义等价 (多跳/改写答案救回)。
         let mut second_judge = false;
         if !is_correct && !ng.is_empty() && !na.contains("cannotanswer") && !na.is_empty() {
-            second_judge = llm_second_judge(&api_key, &turn.query, &gold, &model_answer);
+            second_judge = llm_second_judge(&api_key, &model, &turn.query, &gold, &model_answer);
             if second_judge {
                 is_correct = true;
             }
