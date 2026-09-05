@@ -91,7 +91,11 @@ impl RuntimeEventSink for GuardDatasetObserver {
                     succeeded,
                     round: _,
                 } => {
-                    let outcome = if succeeded { "success" } else { "failure" };
+                    let outcome = if succeeded {
+                        apeireth_guard::GuardExecutionOutcome::Success.as_str()
+                    } else {
+                        apeireth_guard::GuardExecutionOutcome::CapabilityFailure.as_str()
+                    };
                     self.recorder.record_execution(
                         &trace.to_string(),
                         &tool_call_id,
@@ -106,7 +110,7 @@ impl RuntimeEventSink for GuardDatasetObserver {
                         None,
                         None,
                         None,
-                        Some("turn_completed"),
+                        Some(apeireth_guard::GuardExecutionOutcome::Success.as_str()),
                     );
                 }
                 _ => {}
@@ -118,17 +122,18 @@ impl RuntimeEventSink for GuardDatasetObserver {
                     None,
                     None,
                     None,
-                    Some("turn_completed"),
+                    Some(apeireth_guard::GuardExecutionOutcome::Success.as_str()),
                 );
             }
             RuntimeEvent::TurnFailed { trace, error, .. } => {
+                let outcome = apeireth_guard::GuardExecutionOutcome::from_failure_hint(&error);
                 self.recorder.record_outcome(
                     &trace.to_string(),
                     None,
                     None,
                     None,
                     None,
-                    Some(&format!("turn_failed: {error}")),
+                    Some(outcome.as_str()),
                 );
             }
             _ => {}

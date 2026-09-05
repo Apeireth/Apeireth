@@ -7,6 +7,7 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     MemoryCandidate, MemoryError, MemoryRankingConfig, MemoryReranker, MemoryScope, ScoreComponents,
@@ -24,7 +25,7 @@ pub trait LexicalCandidateSource: MemoryCandidateSource {}
 /// Marker for a semantic/vector source.
 pub trait VectorCandidateSource: MemoryCandidateSource {}
 
-/// A small deterministic lexical source suitable for local BM25 fallback and
+/// A small deterministic lexical source suitable for local token-overlap fallback and
 /// unit tests. It uses Unicode-aware tokens rather than ASCII whitespace.
 #[derive(Debug, Clone, Default)]
 pub struct BasicLexicalCandidateSource {
@@ -63,6 +64,88 @@ impl MemoryCandidateSource for BasicLexicalCandidateSource {
 
 impl LexicalCandidateSource for BasicLexicalCandidateSource {}
 
+use crate::hybrid_search::{Bm25Config, Bm25Index};
+
+/// Legacy token-overlap source alias for honesty in naming.
+pub type TokenOverlapCandidateSource = BasicLexicalCandidateSource;
+
+/// Production lexical candidate source backed by the canonical deterministic Okapi BM25 engine.
+#[derive(Debug, Clone)]
+pub struct Bm25LexicalCandidateSource {
+    index: Bm25Index,
+    candidates_by_id: HashMap<String, MemoryCandidate>,
+    insertion_order: Vec<String>,
+}
+
+impl Bm25LexicalCandidateSource {
+    pub fn new(candidates: Vec<MemoryCandidate>) -> Self {
+        let mut index = Bm25Index::new(Bm25Config::default());
+        let mut candidates_by_id = HashMap::new();
+        let mut insertion_order = Vec::new();
+        for candidate in candidates {
+            index.insert(candidate.id.clone(), &candidate.content);
+            insertion_order.push(candidate.id.clone());
+            candidates_by_id.insert(candidate.id.clone(), candidate);
+        }
+        Self {
+            index,
+            candidates_by_id,
+            insertion_order,
+        }
+    }
+
+    pub fn push(&mut self, candidate: MemoryCandidate) {
+        self.index.insert(candidate.id.clone(), &candidate.content);
+        self.insertion_order.push(candidate.id.clone());
+        self.candidates_by_id
+            .insert(candidate.id.clone(), candidate);
+    }
+}
+
+impl MemoryCandidateSource for Bm25LexicalCandidateSource {
+    fn candidates(&self, query: &str, limit: usize) -> Result<Vec<MemoryCandidate>, MemoryError> {
+        if self.candidates_by_id.is_empty() || limit == 0 {
+            return Ok(Vec::new());
+        }
+        let hits = self.index.search(query, self.candidates_by_id.len());
+        let max_score = hits.first().map(|h| h.score).unwrap_or(0.0);
+        let mut hit_scores: HashMap<String, f64> = HashMap::new();
+        for hit in hits {
+            let normalized = if max_score > 0.0 {
+                f64::from(hit.score / max_score)
+            } else {
+                0.0
+            };
+            hit_scores.insert(hit.id, normalized);
+        }
+
+        let mut out = Vec::new();
+        for id in &self.insertion_order {
+            if let Some(candidate) = self.candidates_by_id.get(id) {
+                let mut c = candidate.clone();
+                if let Some(&lexical) = hit_scores.get(id) {
+                    c.score_components.lexical = lexical;
+                } else {
+                    c.score_components.lexical = 0.0;
+                }
+                c.score = c.score_components.lexical;
+                out.push(c);
+            }
+        }
+
+        out.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        out.truncate(limit);
+        Ok(out)
+    }
+}
+
+impl LexicalCandidateSource for Bm25LexicalCandidateSource {}
+
 /// An already-embedded candidate source. Embedding creation remains outside
 /// the Memory crate; this type only consumes validated candidate metadata.
 #[derive(Debug, Clone, Default)]
@@ -95,7 +178,7 @@ impl VectorCandidateSource for StaticVectorCandidateSource {}
 
 /// Output of the hybrid pipeline, including whether the vector stage was
 /// available so status projections can be truthful.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RetrievalStatus {
     pub lexical_candidates: usize,
     pub vector_candidates: usize,

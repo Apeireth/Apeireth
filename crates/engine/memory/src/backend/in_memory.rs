@@ -158,6 +158,54 @@ impl MemoryBackend for InMemoryBackend {
     }
 }
 
+impl crate::scope::ScopedMemoryBackend for InMemoryBackend {
+    fn query_candidates(
+        &self,
+        query: &crate::scope::MemoryCandidateQuery,
+    ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        if query.visible_scopes.is_empty() || query.limit == 0 {
+            return Ok(Vec::new());
+        }
+        let episodes = self
+            .episodes_by_id
+            .lock()
+            .expect("InMemoryBackend poisoned");
+        let metadata_map = self
+            .metadata_by_episode
+            .lock()
+            .expect("InMemoryBackend poisoned");
+
+        let mut matched = Vec::new();
+        for ep in episodes.values() {
+            if let Some(as_of_ms) = query.as_of_ms {
+                if (ep.timestamp * 1000) > as_of_ms {
+                    continue;
+                }
+            }
+            let scope = if let Some(meta) = metadata_map.get(&ep.id) {
+                meta.get("scope")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_else(|| crate::scope::MemoryScope::Session {
+                        session_id: ep.session_id.clone(),
+                    })
+            } else {
+                crate::scope::MemoryScope::Session {
+                    session_id: ep.session_id.clone(),
+                }
+            };
+
+            if scope.is_visible_in(&query.visible_scopes) {
+                matched.push(ep.clone());
+            }
+        }
+
+        matched.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| b.id.cmp(&a.id)));
+        matched.truncate(query.limit);
+        matched.reverse();
+        Ok(matched)
+    }
+}
+
 fn stream_name_to_kind(_name: &str) -> MemoryResult<StreamKind> {
     // 0 装: typed enum 编译期保证 6 个 StreamKind, 无运行时转换
     // 保留为 helper 占位给 caller 用 (e.g. CLI 参数解析); rc 阶段接 SchemaRegistry 时改

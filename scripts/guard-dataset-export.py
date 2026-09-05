@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -28,6 +29,11 @@ FORBIDDEN_KEYS = {
     "arguments",
 }
 
+MAX_STRING_LENGTH = 512
+SUSPICIOUS_PREFIXES = ("bearer ", "basic ", "sk-", "ghp_", "xoxb-", "token ")
+CREDENTIAL_PATTERN = re.compile(r"(?i)\b(?:sk-[a-zA-Z0-9_\-]{8,}|ghp_[a-zA-Z0-9]{20,}|bearer\s+[a-zA-Z0-9_\-\.]{8,})")
+URL_OR_PATH_PATTERN = re.compile(r"(?i)(?:https?://|ftp://|file://|[a-zA-Z]:[\\/]|/(?:home|Users|usr|etc|var|tmp)[\\/])")
+
 
 def contains_forbidden_key(value: Any) -> str | None:
     if isinstance(value, dict):
@@ -43,6 +49,31 @@ def contains_forbidden_key(value: Any) -> str | None:
             found = contains_forbidden_key(child)
             if found:
                 return found
+    return None
+
+
+def contains_suspicious_value(value: Any) -> str | None:
+    if isinstance(value, str):
+        if len(value) > MAX_STRING_LENGTH:
+            return f"string length {len(value)} exceeds max allowed {MAX_STRING_LENGTH}"
+        lowered = value.lower()
+        for prefix in SUSPICIOUS_PREFIXES:
+            if lowered.startswith(prefix):
+                return f"suspicious prefix {prefix!r}"
+        if CREDENTIAL_PATTERN.search(value):
+            return "credential-like pattern detected"
+        if URL_OR_PATH_PATTERN.search(value):
+            return "raw url or path pattern detected"
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            violation = contains_suspicious_value(child)
+            if violation:
+                return f"field {key!r}: {violation}"
+    elif isinstance(value, list):
+        for child in value:
+            violation = contains_suspicious_value(child)
+            if violation:
+                return violation
     return None
 
 
@@ -63,6 +94,14 @@ def read_records(path: Path) -> tuple[list[dict[str, Any]], int]:
             if forbidden:
                 print(
                     f"skip line {line_number}: unsafe field {forbidden!r}",
+                    file=sys.stderr,
+                )
+                rejected += 1
+                continue
+            suspicious = contains_suspicious_value(record)
+            if suspicious:
+                print(
+                    f"skip line {line_number}: unsafe value ({suspicious})",
                     file=sys.stderr,
                 )
                 rejected += 1

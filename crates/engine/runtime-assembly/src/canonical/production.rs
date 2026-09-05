@@ -8,7 +8,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_core::kernel::Clock;
-use apeireth_memory::{MemoryCoordinator, MemoryGovernanceStore};
+use apeireth_memory::{
+    EmbeddingProvider, MemoryCoordinator, MemoryGovernanceStore, ScopedMemoryBackend,
+};
 use apeireth_orchestration::Council;
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEntryStore};
 use apeireth_plugin::memory_backend::MemoryBackend;
@@ -121,6 +123,10 @@ pub struct ProductionBackends {
     pub council: Option<Arc<Council>>,
     /// Workspace root directory for local file tools.
     pub workspace_root: Option<PathBuf>,
+    /// Scoped memory backend for cross-session storage queries.
+    pub scoped_memory: Option<Arc<dyn ScopedMemoryBackend>>,
+    /// Embedding provider for semantic memory retrieval.
+    pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
 }
 
 /// Compatibility alias for [`ProductionBackends`].
@@ -210,6 +216,12 @@ impl ProductionModules {
             )?;
             let mut coordinator =
                 MemoryCoordinator::new(Arc::clone(&memory), Arc::clone(&governance));
+            if let Some(scoped) = &backends.scoped_memory {
+                coordinator = coordinator.with_scoped_backend(Arc::clone(scoped));
+            }
+            if let Some(embed) = &backends.embedding_provider {
+                coordinator = coordinator.with_embedding_provider(Arc::clone(embed));
+            }
             if let Some(pref) = &backends.preferences {
                 coordinator = coordinator.with_preferences(Arc::clone(pref));
             }

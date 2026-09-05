@@ -24,7 +24,7 @@ pub use chain_guard::ChainGuard;
 pub use classifier::{
     ChainRiskClassifier, NoClassifier, RiskClass, RiskPrediction, ThresholdClassifier,
 };
-pub use dataset::{DatasetRecorder, GuardDatasetRecord};
+pub use dataset::{DatasetRecorder, GuardDatasetRecord, GuardExecutionOutcome};
 pub use decision::{GuardDecision, GuardStage};
 pub use enforcement::EnforcementDirective;
 pub use fast_guard::{FastGuard, FastGuardResult};

@@ -27,10 +27,26 @@ pub enum MemoryScope {
     Session { session_id: String },
 }
 
-impl Default for MemoryScope {
-    fn default() -> Self {
-        Self::Global
-    }
+/// Query specification for storage backends that can retrieve candidate episodes
+/// according to explicit visibility scopes, rather than restricting only to
+/// the active session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryCandidateQuery {
+    pub source_session: Option<String>,
+    pub visible_scopes: Vec<MemoryScope>,
+    pub limit: usize,
+    pub as_of_ms: Option<i64>,
+}
+
+/// A storage backend capable of evaluating candidate visibility across scopes.
+///
+/// This moves candidate generation from `WHERE session_id = ?` into a true
+/// scope-aware query at the storage layer.
+pub trait ScopedMemoryBackend: Send + Sync {
+    fn query_candidates(
+        &self,
+        query: &MemoryCandidateQuery,
+    ) -> Result<Vec<apeireth_core::Episode>, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 impl MemoryScope {

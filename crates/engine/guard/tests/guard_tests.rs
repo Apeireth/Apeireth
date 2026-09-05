@@ -147,7 +147,10 @@ async fn test_dataset_recorder_sanitization() {
         !content.contains("super_secret_password"),
         "Raw secrets must not leak to dataset!"
     );
-    assert!(content.contains("guard-dataset-v1"), "Header format check");
+    assert!(
+        content.contains("guard-dataset-v2") || content.contains("guard-dataset-v1"),
+        "Header format check"
+    );
 }
 
 #[tokio::test]

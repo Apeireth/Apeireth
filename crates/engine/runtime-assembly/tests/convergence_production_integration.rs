@@ -157,12 +157,14 @@ fn test_closed_world_memory_contract() {
         score: 0.95,
         importance: 0.8,
         source_ref: Some("working:session-1".into()),
+        score_components: None,
     }];
     let recalled = MemoryRecallResult {
         items,
         total_candidates: 1,
         governance_filtered: 0,
         total_chars: 100,
+        retrieval_status: None,
     };
     let compiled = compiler
         .compile(&recalled, "session-1", 4000)

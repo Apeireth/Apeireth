@@ -243,7 +243,7 @@ async fn build_canonical_runtime_with_parts(
         .await
         .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
     if let Some(recorder) = guard_hook.dataset_recorder() {
-        runtime.set_event_sink(Arc::new(
+        runtime.add_event_sink(Arc::new(
             apeireth_runtime_assembly::GuardDatasetObserver::new(recorder),
         ));
     }
@@ -293,10 +293,7 @@ async fn build_canonical_runtime_from_env_with_observability(
         services.trace_commands.clone(),
         services.audit_commands.clone(),
     ));
-    let sinks: Vec<Arc<dyn apeireth_runtime::canonical::RuntimeEventSink>> = vec![observer.clone()];
-    runtime.set_event_sink(Arc::new(
-        apeireth_runtime::canonical::CompositeRuntimeEventSink::new(sinks),
-    ));
+    runtime.add_event_sink(observer.clone());
     Ok((runtime, observer))
 }
 
@@ -414,6 +411,7 @@ async fn build_cognitive_modules_from_env(
     } else {
         None
     };
+    let scoped_memory: Arc<dyn apeireth_memory::ScopedMemoryBackend> = sqlite_backend.clone();
     let backends = CognitiveBackends {
         memory: Some(memory.clone()),
         memory_governance: Some(memory_governance),
@@ -424,6 +422,8 @@ async fn build_cognitive_modules_from_env(
         self_assessments: Some(self_assessments),
         council,
         workspace_root: std::env::current_dir().ok(),
+        scoped_memory: Some(scoped_memory),
+        embedding_provider: None,
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)
