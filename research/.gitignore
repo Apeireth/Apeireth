@@ -14,3 +14,4 @@ verification/tla/*.jar
 # 生成的运行日志可复现 (同 seed 再生), 不入库; 保留本地作为证据.
 logs/*.jsonl
 verification/tla/states/
+verification/kani/target/
