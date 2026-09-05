@@ -1,0 +1,12 @@
+[package]
+name = "apeireth-research-llm-judge"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "LLM-as-judge / 端到端 QA 判分批 (DeepSeek API). key 走 DS_API_KEY 环境变量, 不落盘不入库."
+
+[dependencies]
+apeireth-research-runner = { path = "../runners" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2.12", features = ["json"] }

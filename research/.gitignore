@@ -17,3 +17,5 @@ verification/tla/*.jar
 logs/*.jsonl
 verification/tla/states/
 verification/kani/target/
+llm_judge/target/
+llm_judge/.env
