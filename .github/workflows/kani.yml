@@ -53,5 +53,11 @@ jobs:
       - name: Kani setup (download CBMC bundle)
         run: cargo kani setup
 
-      - name: Verify Phase 5 invariants (InvA / InvB / InvC harness)
-        run: cargo kani --manifest-path research/verification/kani/Cargo.toml
+      - name: Verify harness 1 (terminal lock, no outgoing from finals)
+        run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_terminal_lock_no_outgoing_transitions
+
+      - name: Verify harness 2 (executed monotonic, at-most-once dispatch)
+        run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_executed_monotonic_once
+
+      - name: Verify harness 3 (crash recovery -> InvC fail-closed)
+        run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_crash_recovery_invariant_c
