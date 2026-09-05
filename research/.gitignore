@@ -4,6 +4,10 @@ runners/target/
 # 大文件数据集不入库 (见 datasets/README.md MANIFEST 约定)。
 datasets/**/raw/*.bin
 datasets/**/raw/*.db
+datasets/locomo/src/
+datasets/locomo-mc10/*.json
+datasets/locomo-mc10/LICENSE
+datasets/locomo-mc10/README.md
 
 # 生成的运行日志可复现 (同 seed 再生), 不入库; 保留本地作为证据.
 logs/*.jsonl
