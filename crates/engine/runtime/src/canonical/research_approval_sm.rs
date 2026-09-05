@@ -559,7 +559,14 @@ pub fn research_run_fault_injection(seed: u64, rounds: u64) -> ResearchFaultInje
 mod kani_proofs {
     use super::*;
 
+    // 注 (2026-09-05, CI 实测): Kani 把 String 字节缓冲当符号长度处理,
+    // HashMap 的 SipHash Hasher::write 循环会无限展开 (实测 1900+ 迭代 × 2s)。
+    // 本 harness 全部使用具体短键 ("a1"), 真实展开深度 ≤ 2 字节 + 桶遍历;
+    // 上界 32 覆盖全部真实执行 (超出上界的符号路径不检查, 属有界模型检查口径,
+    // 与 TLC 穷举互相印证)。该属性仅 cfg(kani) 生效, 生产零影响。
+
     #[kani::proof]
+    #[kani::unwind(32)]
     fn kani_terminal_lock_no_outgoing_transitions() {
         for status in [
             ResearchApprovalStatus::Consumed,
@@ -579,6 +586,7 @@ mod kani_proofs {
     }
 
     #[kani::proof]
+    #[kani::unwind(32)]
     fn kani_executed_monotonic_once() {
         let mut m = ResearchApprovalMachine::new();
         m.create("a1", None);
@@ -591,6 +599,7 @@ mod kani_proofs {
     }
 
     #[kani::proof]
+    #[kani::unwind(32)]
     fn kani_crash_recovery_invariant_c() {
         let mut m = ResearchApprovalMachine::new();
         m.create("a1", None);
