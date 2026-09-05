@@ -45,6 +45,8 @@ struct Turn {
     query: String,
     /// 本轮命中即成功的文档 id 集。
     relevant: HashSet<String>,
+    /// 本轮专属文档宇宙 (LongMemEval 每问自带 haystack); None = 用全局 docs。
+    docs: Option<Vec<Doc>>,
 }
 
 /// 真实数据集即插即用接口。
@@ -91,6 +93,7 @@ impl SyntheticSource {
                 Turn {
                     query: format!("q{t}"),
                     relevant,
+                    docs: None,
                 }
             })
             .collect();
@@ -178,6 +181,7 @@ impl LocomoSource {
                 turns.push(Turn {
                     query: q.question.clone(),
                     relevant: q.evidence.iter().cloned().collect(),
+                    docs: None,
                 });
             }
         }
@@ -241,6 +245,7 @@ impl LocomoMc10Source {
                 turns.push(Turn {
                     query: q.question,
                     relevant: rel.clone(),
+                    docs: None,
                 });
                 matched += 1;
             }
@@ -255,6 +260,84 @@ impl LocomoMc10Source {
 }
 
 impl BenchmarkSource for LocomoMc10Source {
+    fn docs(&self) -> Vec<Doc> {
+        self.docs.clone()
+    }
+    fn turns(&self) -> Vec<Turn> {
+        self.turns.clone()
+    }
+}
+
+// ---------- LongMemEval 数据源 (MIT License, ICLR 2025) ----------
+// 结构: 每条 QA 自带 haystack (独立文档宇宙) + answer_session_ids 会话级真值,
+// 轮次级真值 (has_answer) 备用。docs/turns 按条流式解析 (文件 ~277MB)。
+
+#[derive(serde::Deserialize)]
+struct LmeTurn {
+    #[allow(dead_code)]
+    role: String,
+    content: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    has_answer: Option<bool>,
+}
+
+#[derive(serde::Deserialize)]
+struct LmeEntry {
+    #[allow(dead_code)]
+    question_id: String,
+    question: String,
+    #[allow(dead_code)]
+    question_type: Option<String>,
+    answer_session_ids: Vec<String>,
+    haystack_session_ids: Vec<String>,
+    haystack_sessions: Vec<Vec<LmeTurn>>,
+}
+
+/// LongMemEval 源: turns 每条自带 docs (haystack 会话), relevant = answer_session_ids。
+struct LongMemEvalSource {
+    docs: Vec<Doc>, // 空壳占位: 全部轮次用 turn.docs
+    turns: Vec<Turn>,
+}
+
+impl LongMemEvalSource {
+    fn load(path: &str) -> Self {
+        let f = fs::File::open(path).expect("open longmemeval json");
+        let reader = std::io::BufReader::new(f);
+        // 注: serde_json StreamDeserializer 把整个顶层数组当一个元素, 不做流式展开,
+        // 所以这里直接一次性 typed 读取 (500 条 ≈ 277MB, 内存可接受)。
+        let entries: Vec<LmeEntry> =
+            serde_json::from_reader(reader).expect("parse longmemeval json");
+        let mut turns = Vec::new();
+        for entry in entries {
+            let mut docs = Vec::new();
+            for (i, (sid, sess)) in entry
+                .haystack_session_ids
+                .iter()
+                .zip(entry.haystack_sessions.iter())
+                .enumerate()
+            {
+                let chars: usize = sess.iter().map(|t| t.content.chars().count()).sum();
+                docs.push(Doc {
+                    id: sid.clone(),
+                    tokens: (chars / 4).max(1),
+                    created_turn: i,
+                });
+            }
+            turns.push(Turn {
+                query: entry.question,
+                relevant: entry.answer_session_ids.into_iter().collect(),
+                docs: Some(docs),
+            });
+        }
+        Self {
+            docs: Vec::new(),
+            turns,
+        }
+    }
+}
+
+impl BenchmarkSource for LongMemEvalSource {
     fn docs(&self) -> Vec<Doc> {
         self.docs.clone()
     }
@@ -376,11 +459,13 @@ fn run_turn(
     budget: usize,
     rng: &mut Rng,
 ) -> (bool, usize) {
-    let kept = select(policy, docs, turn, budget, rng);
+    // LongMemEval: 每问自带 haystack 文档宇宙; 其余源用全局 docs。
+    let universe: &[Doc] = turn.docs.as_deref().unwrap_or(docs);
+    let kept = select(policy, universe, turn, budget, rng);
     let hit = kept.iter().any(|k| turn.relevant.contains(k));
     let cost: usize = kept
         .iter()
-        .filter_map(|k| docs.iter().find(|d| d.id == *k).map(|d| d.tokens))
+        .filter_map(|k| universe.iter().find(|d| d.id == *k).map(|d| d.tokens))
         .sum();
     (hit, cost)
 }
@@ -437,6 +522,7 @@ fn main() {
     let mut turns_n = 500usize;
     let mut budgets: Vec<usize> = vec![2000, 4000, 8000, 16000, 32000];
     let mut source_name = String::from("synthetic");
+    let mut lme_file = String::new();
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -457,6 +543,10 @@ fn main() {
             }
             "--source" => {
                 source_name = args[i + 1].clone();
+                i += 2;
+            }
+            "--lme-file" => {
+                lme_file = args[i + 1].clone();
                 i += 2;
             }
             _ => i += 1,
@@ -490,6 +580,26 @@ fn main() {
             src.total
         );
         (d, t, "locomo-mc10-retention")
+    } else if source_name == "longmemeval" {
+        let path = if lme_file.is_empty() {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../datasets/longmemeval/longmemeval_s_cleaned.json")
+        } else {
+            Path::new(&lme_file).to_path_buf()
+        };
+        let src = LongMemEvalSource::load(path.to_str().expect("path utf8"));
+        let t = src.turns();
+        let avg_docs: f64 = t
+            .iter()
+            .map(|x| x.docs.as_ref().map(|d| d.len()).unwrap_or(0))
+            .sum::<usize>() as f64
+            / t.len().max(1) as f64;
+        println!(
+            "source: LongMemEval ({} QA turns, 平均每问 haystack {:.0} 会话)",
+            t.len(),
+            avg_docs
+        );
+        (src.docs(), t, "longmemeval-retention")
     } else {
         let src = SyntheticSource::new(seed, 200, turns_n, 20, 0.7);
         (src.docs(), src.turns(), "synthetic-retention")

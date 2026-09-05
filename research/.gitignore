@@ -8,6 +8,8 @@ datasets/locomo/src/
 datasets/locomo-mc10/*.json
 datasets/locomo-mc10/LICENSE
 datasets/locomo-mc10/README.md
+datasets/longmemeval/src/
+datasets/longmemeval/*.json
 # 验证工具 jar (tla2tools, MIT; 按 README 指引自取) 不入库。
 verification/tla/*.jar
 
