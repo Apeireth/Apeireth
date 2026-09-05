@@ -22,9 +22,22 @@
 | FixedWindow @2k | 0.017 | **0.000** (0/20) | 1.7pp |
 | FixedWindow @8k | 0.104 | **0.000** (0/20) | 10.4pp |
 | StackPinLite (oracle touch) @2k | 0.995 | **0.500** (10/20) | 49.5pp |
-| StackPinLite (oracle touch) @8k | 0.995 | **0.500** (10/20) | 49.5pp |
+| StackPinLite (oracle touch) @8k | 0.995 | **0.450** (9/20) | 54.5pp |
+| **LLM-touch (无 oracle) @8k** | — (模型自预测相关轮次) | **0.250** (5/20) | — |
 
-## 3. 读图 (讲人话)
+## 3. 三信号对比 (公平消融, n=20 @8k)
+
+| 相关性信号 | 端到端答对率 | 相对 oracle |
+|---|---|---|
+| 纯 recency (FixedWindow) | 0.000 | 0% |
+| **模型检索 touch (LLM-touch)** | **0.250** | **50%** |
+| oracle touch (evidence 真值) | 0.450–0.500 | ≈100% |
+
+**单调且可解释**: 模型自预测的检索信号在零真值标签下恢复了 oracle 约一半的收益;
+三信号顺序 0% < 25% < ~50% 说明 StackPin 的收益不依赖"偷看答案", 部署形态 (模型 touch)
+仍显著优于纯 recency。n=20 是 pilot 口径, 论文级扩样见 §5。
+
+## 4. 读图 (讲人话)
 
 1. **保留 ≠ 答对, gap 巨大且非均匀**: oracle 级保留 (99.5% 证据在上下文) 也只换来 50% 答对
    —— LoCoMo 多跳/时间推理问题的瓶颈在**模型推理**, 不在保留。审稿人最可能问
@@ -38,20 +51,23 @@
    答出快照日期本身); ②多跳拼接失败 (证据分布在多轮, 模型只读到单轮); ③长上下文噪声
    下过早放弃 ("cannot answer" 占 stackpin 配置 ~30%)。
 
-## 4. 口径警示 (0 装)
+## 5. 口径警示 (0 装)
 
 1. **pilot n=20**, 单模型 (deepseek-chat), 结论是方向性的; 论文级需要 n≥100 + 至少两个模型。
-2. StackPin 的 touch 仍是 **oracle (evidence 真值)** —— 无 oracle 公平消融 (模型自身检索 touch)
-   是下一项工作。
+   **同配置重跑波动 ±1/20** (stackpin@8k 首跑 10/20, 重跑 9/20; temperature 0 服务端仍非
+   完全确定) —— 报告取重跑值 9/20, 扩样后波动会被摊平。
+2. LLM-touch 的候选菜单 = 全量 1033 轮各截断 80 字符 (~20k tokens/问), 检索质量受截断影响;
+   论文级可换两跳检索或 embedding。
 3. LLM 二评本身有噪声 (未做双评者一致性 κ), 原始答案已落盘可重判。
 4. 判分用 deepseek-chat 与答题同模型 (self-judge bias 可能偏高), 论文级建议换模型二评。
 
-## 5. 复现
+## 6. 复现
 
 ```powershell
 # key 走环境变量, 不入库不落盘
 $env:DS_API_KEY = "<your-key>"
 cargo run --release --manifest-path research/llm_judge/Cargo.toml -- --policy stackpin --budget 2000 --limit 20 --seed 42
+cargo run --release --manifest-path research/llm_judge/Cargo.toml -- --policy llmtouch --budget 8000 --limit 20 --seed 42
 ```
 
 日志: `research/logs/llmjudge-locomo-{policy}-b{budget}-n{limit}-s{seed}.jsonl`

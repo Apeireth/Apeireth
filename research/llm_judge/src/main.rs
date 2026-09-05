@@ -96,6 +96,30 @@ fn llm_second_judge(api_key: &str, question: &str, gold: &str, model_answer: &st
     rn.starts_with("yes") && !rn.starts_with("yesno")
 }
 
+/// 无 oracle 公平消融: 模型从候选轮次 (最近 120 条) 预测回答问题所需的轮次 id 集。
+fn llm_predict_touch(
+    api_key: &str,
+    question: &str,
+    candidates: &[&apeireth_research_runner::Doc],
+) -> std::collections::HashSet<String> {
+    let mut menu = String::new();
+    for d in candidates {
+        let text: String = d.text.chars().take(80).collect();
+        menu.push_str(&format!("{}: {}\n", d.id, text));
+    }
+    let user = format!(
+        "Question: {question}\nCandidate conversation turns:\n{menu}\nList ALL turn ids whose content is needed to answer the question. Output ids only, comma separated, no explanation."
+    );
+    let r = ask(api_key, "You are a relevance retrieval engine.", &user, 256);
+    let mut set = std::collections::HashSet::new();
+    for tok in r.split(|c: char| !c.is_alphanumeric() && c != ':') {
+        if tok.contains(':') && candidates.iter().any(|d| d.id == tok) {
+            set.insert(tok.to_string());
+        }
+    }
+    set
+}
+
 fn main() {
     let api_key = env::var("DS_API_KEY").expect("DS_API_KEY env not set");
     let args: Vec<String> = env::args().collect();
@@ -140,8 +164,10 @@ fn main() {
         "stackpin" => Policy::StackPinLite,
         "vault" => Policy::VaultLruLite,
         "random" => Policy::RandomRetain,
+        "llmtouch" => Policy::StackPinLite, // 特殊路径: touch 用模型预测, 见下
         other => panic!("unknown policy {other}"),
     };
+    let use_llm_touch = policy == "llmtouch";
 
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../datasets/locomo/src/data/locomo10.json");
@@ -156,10 +182,7 @@ fn main() {
     fs::create_dir_all(&logs_dir).expect("create logs dir");
     let log_path = logs_dir.join(format!(
         "llmjudge-locomo-{}-b{}-n{}-s{}.jsonl",
-        pol.name().to_lowercase(),
-        budget,
-        limit,
-        seed
+        policy, budget, limit, seed
     ));
     let mut log = String::new();
 
@@ -174,7 +197,21 @@ fn main() {
 
     for (idx, turn) in turns.iter().take(n).enumerate() {
         let mut rng = Rng::new(seed + idx as u64);
-        let kept = apeireth_research_runner::select(pol, &docs, turn, budget, &mut rng);
+        // 无 oracle 消融: 用模型预测的 touch 集替换 evidence 真值。
+        let eff_turn: Turn;
+        if use_llm_touch {
+            // 候选 = 全量轮次 (每条截断 80 字符; 1033 × ~90 ≈ 20k tokens, 64k 上下文装得下)。
+            let cand: Vec<&apeireth_research_runner::Doc> = docs.iter().collect();
+            let predicted = llm_predict_touch(&api_key, &turn.query, &cand);
+            eff_turn = Turn {
+                query: turn.query.clone(),
+                relevant: predicted,
+                docs: None,
+            };
+        } else {
+            eff_turn = turn.clone();
+        }
+        let kept = apeireth_research_runner::select(pol, &docs, &eff_turn, budget, &mut rng);
         let kept_set: std::collections::HashSet<&str> =
             kept.iter().map(|s| s.as_str()).collect();
         // 呈现顺序按时间正序 (docs 已按首次出现序), 保留集合不变 —— 只改喂给模型的方式。
