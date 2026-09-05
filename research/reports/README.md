@@ -29,3 +29,4 @@
 |---|---|
 | `eval-locomo-2026-09-05.md` | LoCoMo 1986 QA：效用-成本曲线 + bootstrap CI + 口径警示（recency 占优 / oracle 上界） |
 | `eval-longmemeval-2026-09-05.md` | LongMemEval s/m 两版各 500 QA：非 recency 语料 + 每问独立 haystack + **haystack 规模敏感性消融**（FixedWindow 0.48→0.054, StackPin 恒 1.0） |
+| `eval-llmjudge-2026-09-05.md` | **端到端 LLM 判分 pilot**（deepseek-chat, n=20/配置）：保留≠答对 gap（oracle 保留 99.5% → 答对 50%；固定窗口端到端 0%） |
