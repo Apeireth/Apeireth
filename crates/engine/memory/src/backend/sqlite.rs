@@ -348,6 +348,98 @@ impl MemoryBackend for SqliteBackend {
     }
 }
 
+impl crate::scope::ScopedMemoryBackend for SqliteBackend {
+    fn query_candidates(
+        &self,
+        query: &crate::scope::MemoryCandidateQuery,
+    ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        if query.visible_scopes.is_empty() || query.limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut scope_clauses = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        for scope in &query.visible_scopes {
+            match scope {
+                crate::scope::MemoryScope::Global => {
+                    scope_clauses.push(
+                        "json_extract(m.metadata_json, '$.scope.scope') = 'global'".to_string(),
+                    );
+                }
+                crate::scope::MemoryScope::Project { project_id } => {
+                    scope_clauses.push("(json_extract(m.metadata_json, '$.scope.scope') = 'project' AND json_extract(m.metadata_json, '$.scope.project_id') = ?)".to_string());
+                    params.push(Box::new(project_id.clone()));
+                }
+                crate::scope::MemoryScope::User { user_id } => {
+                    scope_clauses.push("(json_extract(m.metadata_json, '$.scope.scope') = 'user' AND json_extract(m.metadata_json, '$.scope.user_id') = ?)".to_string());
+                    params.push(Box::new(user_id.clone()));
+                }
+                crate::scope::MemoryScope::Persona {
+                    persona_id,
+                    user_id,
+                } => {
+                    scope_clauses.push("(json_extract(m.metadata_json, '$.scope.scope') = 'persona' AND json_extract(m.metadata_json, '$.scope.persona_id') = ? AND json_extract(m.metadata_json, '$.scope.user_id') = ?)".to_string());
+                    params.push(Box::new(persona_id.clone()));
+                    params.push(Box::new(user_id.clone()));
+                }
+                crate::scope::MemoryScope::Session { session_id } => {
+                    scope_clauses.push("((json_extract(m.metadata_json, '$.scope.scope') = 'session' AND json_extract(m.metadata_json, '$.scope.session_id') = ?) OR (m.metadata_json IS NULL AND e.session_id = ?))".to_string());
+                    params.push(Box::new(session_id.clone()));
+                    params.push(Box::new(session_id.clone()));
+                }
+            }
+        }
+
+        if scope_clauses.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let scope_sql = scope_clauses.join(" OR ");
+        let mut sql = format!(
+            "SELECT e.id, e.timestamp, e.role,
+                    COALESCE(g.content_override, e.content), e.session_id
+               FROM episodes e
+               LEFT JOIN episode_memory_metadata m ON m.episode_id = e.id
+               LEFT JOIN episode_governance g ON g.episode_id = e.id
+              WHERE (g.status IS NULL OR g.status <> 'forgotten')
+                AND ({scope_sql})"
+        );
+
+        if let Some(as_of_ms) = query.as_of_ms {
+            let as_of_sec = as_of_ms / 1000;
+            sql.push_str(" AND e.timestamp <= ?");
+            params.push(Box::new(as_of_sec));
+        }
+
+        sql.push_str(" ORDER BY e.timestamp DESC, e.id DESC LIMIT ?");
+        params.push(Box::new(query.limit as i64));
+
+        self.pool
+            .read(move |conn| {
+                let mut stmt = conn.prepare(&sql)?;
+                let param_refs: Vec<&dyn rusqlite::ToSql> =
+                    params.iter().map(|p| p.as_ref()).collect();
+                let rows = stmt.query_map(param_refs.as_slice(), |row| {
+                    Ok(Episode {
+                        id: row.get(0)?,
+                        timestamp: row.get(1)?,
+                        role: row.get(2)?,
+                        content: row.get(3)?,
+                        session_id: row.get(4)?,
+                    })
+                })?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r?);
+                }
+                out.reverse();
+                Ok(out)
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    }
+}
+
 // 注: `MemoryError::from` impl (rusqlite::Error → MemoryError) 已在 memory/src/error.rs 给出.
 // 如未提供, 这里需手写 impl. 假设 v1 era SqliteMemoryStore 已有对应 impl.
 // (snapshot: 0 重写 24 个 memory 子模块的 public API; `MemoryError::from` 是 crate 内 trait.)

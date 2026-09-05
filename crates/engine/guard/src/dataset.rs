@@ -18,6 +18,79 @@ use crate::decision::GuardDecision;
 use crate::fast_guard::FastGuardResult;
 use crate::observation::SafetyObservation;
 
+/// Controlled taxonomy for execution outcomes recorded into the Guard dataset.
+/// Raw runtime errors, sensitive URLs, paths, or credentials must never be recorded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuardExecutionOutcome {
+    Success,
+    CapabilityFailure,
+    ProviderFailure,
+    Timeout,
+    Cancelled,
+    ApprovalDenied,
+    GovernanceDenied,
+    RuntimeFailure,
+    InternalFailure,
+}
+
+impl GuardExecutionOutcome {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::CapabilityFailure => "capability_failure",
+            Self::ProviderFailure => "provider_failure",
+            Self::Timeout => "timeout",
+            Self::Cancelled => "cancelled",
+            Self::ApprovalDenied => "approval_denied",
+            Self::GovernanceDenied => "governance_denied",
+            Self::RuntimeFailure => "runtime_failure",
+            Self::InternalFailure => "internal_failure",
+        }
+    }
+
+    /// Conservatively classify a failure text into a safe taxonomy category.
+    /// The input string is ONLY inspected for pattern matching; it is never stored.
+    pub fn from_failure_hint(hint: &str) -> Self {
+        let lowered = hint.to_ascii_lowercase();
+        if lowered.contains("timeout") || lowered.contains("timed out") {
+            Self::Timeout
+        } else if lowered.contains("cancel") {
+            Self::Cancelled
+        } else if lowered.contains("approval denied") || lowered.contains("approval rejected") {
+            Self::ApprovalDenied
+        } else if lowered.contains("governance")
+            || lowered.contains("denied")
+            || lowered.contains("permission")
+            || lowered.contains("unauthorized")
+        {
+            Self::GovernanceDenied
+        } else if lowered.contains("provider") {
+            Self::ProviderFailure
+        } else if lowered.contains("capability") || lowered.contains("tool") {
+            Self::CapabilityFailure
+        } else {
+            Self::RuntimeFailure
+        }
+    }
+
+    /// Normalize an outcome string, ensuring only safe taxonomy values are accepted.
+    pub fn normalize(outcome: &str) -> &'static str {
+        match outcome.trim().to_ascii_lowercase().as_str() {
+            "success" | "turn_completed" => Self::Success.as_str(),
+            "capability_failure" | "tool_failure" => Self::CapabilityFailure.as_str(),
+            "provider_failure" => Self::ProviderFailure.as_str(),
+            "timeout" => Self::Timeout.as_str(),
+            "cancelled" | "canceled" => Self::Cancelled.as_str(),
+            "approval_denied" | "denied" | "rejected" => Self::ApprovalDenied.as_str(),
+            "governance_denied" => Self::GovernanceDenied.as_str(),
+            "runtime_failure" => Self::RuntimeFailure.as_str(),
+            "internal_failure" => Self::InternalFailure.as_str(),
+            other => Self::from_failure_hint(other).as_str(),
+        }
+    }
+}
+
 /// A single entry in the event-sourced Guard dataset.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "record_type", rename_all = "snake_case")]
@@ -162,7 +235,7 @@ impl DatasetRecorder {
         }
 
         let record = GuardDatasetRecord::Classification(ClassificationRecord {
-            format: "guard-dataset-v1".to_string(),
+            format: "guard-dataset-v2".to_string(),
             feature_schema_version: default_feature_schema_version(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: obs.trace_id.clone(),
@@ -207,15 +280,16 @@ impl DatasetRecorder {
             return;
         }
 
+        let safe_outcome = execution_outcome.map(GuardExecutionOutcome::normalize);
         let record = GuardDatasetRecord::Outcome(OutcomeRecord {
-            format: "guard-dataset-v1".to_string(),
+            format: "guard-dataset-v2".to_string(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: trace_id.to_string(),
             action_id: action_id.map(str::to_string),
             tool_call_id: tool_call_id.map(str::to_string),
             approval_id: approval_id.map(str::to_string),
             human_approval: human_approval.map(str::to_string),
-            execution_outcome: execution_outcome.map(str::to_string),
+            execution_outcome: safe_outcome.map(str::to_string),
         });
 
         self.write_line(&record);
@@ -256,13 +330,14 @@ impl DatasetRecorder {
         if !self.is_enabled() {
             return;
         }
+        let safe_outcome = GuardExecutionOutcome::normalize(outcome);
         self.write_line(&GuardDatasetRecord::Execution(ExecutionRecord {
             format: "guard-dataset-v2".to_string(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: trace_id.to_string(),
             action_id: action_id.to_string(),
             tool_call_id: tool_call_id.to_string(),
-            outcome: outcome.to_string(),
+            outcome: safe_outcome.to_string(),
         }));
     }
 

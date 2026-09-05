@@ -6,16 +6,16 @@
 //! - Semantic / Personal Memory (user preferences, profile cards)
 //! - Relational / Temporal Memory (knowledge graph facts, entity links)
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use apeireth_core::kernel::memory::Episode;
 use apeireth_core::kernel::SessionId;
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
-use std::sync::Mutex;
 
 use crate::consolidation::{ConsolidationReport, MemoryConsolidationJob};
 use crate::context_compiler::ClosedWorldContextCompiler;
@@ -27,14 +27,23 @@ use crate::layers::{
 use crate::memory_governance::{
     GovernedEpisode, MemoryGovernanceError, MemoryGovernanceStatus, MemoryGovernanceStore,
 };
+use crate::retrieval_pipeline::{
+    Bm25LexicalCandidateSource, HybridRetrievalPipeline, MemoryCandidateSource, RetrievalStatus,
+    StaticVectorCandidateSource,
+};
+use crate::scope::{
+    EmbeddingProvider, MemoryCandidate, MemoryCandidateQuery, MemoryProvenance,
+    MemoryRankingConfig, MemoryScope, ScopedMemoryBackend, ScoreComponents,
+};
 use crate::MemoryError;
-use crate::{MemoryProvenance, MemoryRankingConfig, MemoryScope, ScoreComponents};
 
 const WORKING_RING_BUFFER_CAP: usize = 30;
 
 /// Unified memory orchestrator coordinating all memory layers and pipelines.
 pub struct MemoryCoordinator {
     backend: Arc<dyn MemoryBackend>,
+    scoped_backend: Option<Arc<dyn ScopedMemoryBackend>>,
+    embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
     governance: Arc<dyn MemoryGovernanceStore>,
     working: Mutex<HashMap<String, VecDeque<Episode>>>,
     preferences: Option<Arc<dyn PreferenceStore>>,
@@ -54,6 +63,8 @@ impl MemoryCoordinator {
     ) -> Self {
         Self {
             backend,
+            scoped_backend: None,
+            embedding_provider: None,
             governance,
             working: Mutex::new(HashMap::new()),
             preferences: None,
@@ -64,6 +75,23 @@ impl MemoryCoordinator {
             consolidation: MemoryConsolidationJob::new(),
             ranking: MemoryRankingConfig::default(),
         }
+    }
+
+    /// Attach optional scoped storage backend for cross-session queries.
+    #[must_use]
+    pub fn with_scoped_backend(mut self, scoped_backend: Arc<dyn ScopedMemoryBackend>) -> Self {
+        self.scoped_backend = Some(scoped_backend);
+        self
+    }
+
+    /// Attach optional embedding provider for semantic candidate retrieval.
+    #[must_use]
+    pub fn with_embedding_provider(
+        mut self,
+        embedding_provider: Arc<dyn EmbeddingProvider>,
+    ) -> Self {
+        self.embedding_provider = Some(embedding_provider);
+        self
     }
 
     /// Attach optional semantic preference store.
@@ -95,6 +123,16 @@ impl MemoryCoordinator {
         self.backend.as_ref()
     }
 
+    /// Reference to the optional scoped memory backend.
+    pub fn scoped_backend(&self) -> Option<&dyn ScopedMemoryBackend> {
+        self.scoped_backend.as_deref()
+    }
+
+    /// Reference to the optional embedding provider.
+    pub fn embedding_provider(&self) -> Option<&dyn EmbeddingProvider> {
+        self.embedding_provider.as_deref()
+    }
+
     /// Configure the centralized deterministic ranking weights.
     #[must_use]
     pub fn with_ranking_config(mut self, ranking: MemoryRankingConfig) -> Self {
@@ -102,65 +140,149 @@ impl MemoryCoordinator {
         self
     }
 
-    /// Execute the Unified Recall Pipeline across requested layers.
-    pub fn recall(&self, query: &MemoryRecallQuery) -> Result<MemoryRecallResult, MemoryError> {
-        let now_ms = query
-            .as_of_ms
-            .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+    /// Collect memory candidates across all requested layers.
+    fn collect_candidates(
+        &self,
+        query: &MemoryRecallQuery,
+        now_ms: i64,
+    ) -> (
+        Vec<MemoryCandidate>,
+        HashMap<String, (MemoryLayerKind, i64, Option<String>)>,
+        usize,
+    ) {
         let mut candidates = Vec::new();
+        let mut candidate_meta = HashMap::new();
         let mut governance_filtered = 0;
 
-        // 1. Candidate Generation
         // Layer 1: Working Memory
         if query.layers.contains(&MemoryLayerKind::Working) {
             let working_lock = self.working.lock().expect("working memory mutex");
             if let Some(session_episodes) = working_lock.get(&query.session_id) {
-                for ep in session_episodes.iter().rev().take(query.limit) {
+                for ep in session_episodes
+                    .iter()
+                    .rev()
+                    .take((query.limit * 4).max(32))
+                {
                     if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
                         if gov.status == MemoryGovernanceStatus::Forgotten {
                             governance_filtered += 1;
                             continue;
                         }
                     }
-                    let (scope, _provenance) = self.episode_scope_metadata(ep);
+                    let (scope, provenance) = self.episode_scope_metadata(ep);
                     if !scope.is_visible_in(&query.visible_scopes) {
                         governance_filtered += 1;
                         continue;
                     }
-                    candidates.push(RecalledMemoryItem {
-                        id: ep.id.clone(),
-                        layer: MemoryLayerKind::Working,
+                    let delta_hours =
+                        (now_ms - ep.timestamp * 1000).max(0) as f64 / (1000.0 * 3600.0);
+                    let s_rec = (-query.recency_decay_lambda * delta_hours)
+                        .exp()
+                        .clamp(0.1, 1.0);
+                    let id = ep.id.clone();
+                    candidate_meta.insert(
+                        id.clone(),
+                        (
+                            MemoryLayerKind::Working,
+                            ep.timestamp * 1000,
+                            Some(format!("working:{}", ep.session_id)),
+                        ),
+                    );
+                    candidates.push(MemoryCandidate {
+                        id,
+                        layer: "working".to_string(),
+                        scope,
                         content: ep.content.clone(),
-                        timestamp_ms: ep.timestamp * 1000,
                         score: 0.0,
-                        importance: 0.8,
-                        source_ref: Some(format!("working:{}", ep.session_id)),
+                        score_components: ScoreComponents {
+                            recency: s_rec,
+                            importance: 0.8,
+                            confidence: 0.8,
+                            ..Default::default()
+                        },
+                        provenance,
                     });
                 }
             }
         }
 
-        // Layer 2: Episodic Memory (Governed SQLite)
+        // Layer 2: Episodic Memory (Governed SQLite / Scoped Storage)
         if query.layers.contains(&MemoryLayerKind::Episodic) {
-            if let Ok(raw_eps) = self
+            if let Some(scoped) = &self.scoped_backend {
+                let candidate_query = MemoryCandidateQuery {
+                    source_session: Some(query.session_id.clone()),
+                    visible_scopes: query.visible_scopes.clone(),
+                    limit: (query.limit * 8).max(64),
+                    as_of_ms: query.as_of_ms,
+                };
+                if let Ok(scoped_episodes) = scoped.query_candidates(&candidate_query) {
+                    for ep in scoped_episodes {
+                        let (scope, provenance) = self.episode_scope_metadata(&ep);
+                        if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
+                            if gov.status == MemoryGovernanceStatus::Forgotten {
+                                governance_filtered += 1;
+                                continue;
+                            }
+                        }
+                        let mut content = ep.content.clone();
+                        let mut importance = 0.5;
+                        if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
+                            if let Some(c_override) = gov.content_override {
+                                content = c_override;
+                            }
+                            if gov.protected {
+                                importance = 0.9;
+                            }
+                        }
+                        let delta_hours =
+                            (now_ms - ep.timestamp * 1000).max(0) as f64 / (1000.0 * 3600.0);
+                        let s_rec = (-query.recency_decay_lambda * delta_hours)
+                            .exp()
+                            .clamp(0.1, 1.0);
+                        let id = ep.id.clone();
+                        candidate_meta.insert(
+                            id.clone(),
+                            (
+                                MemoryLayerKind::Episodic,
+                                ep.timestamp * 1000,
+                                Some(format!("episodic:{}", ep.session_id)),
+                            ),
+                        );
+                        candidates.push(MemoryCandidate {
+                            id,
+                            layer: "episodic".to_string(),
+                            scope,
+                            content,
+                            score: 0.0,
+                            score_components: ScoreComponents {
+                                recency: s_rec,
+                                importance,
+                                confidence: importance,
+                                ..Default::default()
+                            },
+                            provenance,
+                        });
+                    }
+                }
+            } else if let Ok(raw_eps) = self
                 .backend
-                .recent_episodes(&query.session_id, query.limit * 2)
+                .recent_episodes(&query.session_id, (query.limit * 8).max(64))
             {
                 for ep in raw_eps {
-                    let mut content = ep.content.clone();
-                    let mut importance = 0.5;
-
-                    let (scope, _provenance) = self.episode_scope_metadata(&ep);
+                    let (scope, provenance) = self.episode_scope_metadata(&ep);
                     if !scope.is_visible_in(&query.visible_scopes) {
                         governance_filtered += 1;
                         continue;
                     }
-
                     if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
                         if gov.status == MemoryGovernanceStatus::Forgotten {
                             governance_filtered += 1;
                             continue;
                         }
+                    }
+                    let mut content = ep.content.clone();
+                    let mut importance = 0.5;
+                    if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
                         if let Some(c_override) = gov.content_override {
                             content = c_override;
                         }
@@ -168,15 +290,33 @@ impl MemoryCoordinator {
                             importance = 0.9;
                         }
                     }
-
-                    candidates.push(RecalledMemoryItem {
-                        id: ep.id.clone(),
-                        layer: MemoryLayerKind::Episodic,
+                    let delta_hours =
+                        (now_ms - ep.timestamp * 1000).max(0) as f64 / (1000.0 * 3600.0);
+                    let s_rec = (-query.recency_decay_lambda * delta_hours)
+                        .exp()
+                        .clamp(0.1, 1.0);
+                    let id = ep.id.clone();
+                    candidate_meta.insert(
+                        id.clone(),
+                        (
+                            MemoryLayerKind::Episodic,
+                            ep.timestamp * 1000,
+                            Some(format!("episodic:{}", ep.session_id)),
+                        ),
+                    );
+                    candidates.push(MemoryCandidate {
+                        id,
+                        layer: "episodic".to_string(),
+                        scope,
                         content,
-                        timestamp_ms: ep.timestamp * 1000,
                         score: 0.0,
-                        importance,
-                        source_ref: Some(format!("episodic:{}", ep.session_id)),
+                        score_components: ScoreComponents {
+                            recency: s_rec,
+                            importance,
+                            confidence: importance,
+                            ..Default::default()
+                        },
+                        provenance,
                     });
                 }
             }
@@ -190,7 +330,7 @@ impl MemoryCoordinator {
                 if let Ok(prefs) = pref_store.recall_for_context(
                     &session_id_parsed,
                     &query.query_text,
-                    query.limit as u32,
+                    (query.limit * 2).max(10) as u32,
                 ) {
                     for pref in prefs {
                         let pref_ts_ms = if pref.created_at < 10_000_000_000 {
@@ -198,14 +338,39 @@ impl MemoryCoordinator {
                         } else {
                             pref.created_at
                         };
-                        candidates.push(RecalledMemoryItem {
-                            id: format!("pref:{}", pref.id),
-                            layer: MemoryLayerKind::Semantic,
+                        let delta_hours = (now_ms - pref_ts_ms).max(0) as f64 / (1000.0 * 3600.0);
+                        let s_rec = (-query.recency_decay_lambda * delta_hours)
+                            .exp()
+                            .clamp(0.1, 1.0);
+                        let s_imp = pref.confidence.clamp(0.1, 1.0);
+                        let id = format!("pref:{}", pref.id);
+                        candidate_meta.insert(
+                            id.clone(),
+                            (
+                                MemoryLayerKind::Semantic,
+                                pref_ts_ms,
+                                Some(format!("preference:{}", pref.id)),
+                            ),
+                        );
+                        candidates.push(MemoryCandidate {
+                            id,
+                            layer: "semantic".to_string(),
+                            scope: MemoryScope::Session {
+                                session_id: query.session_id.clone(),
+                            },
                             content: format!("Topic: {}. Preference: {}", pref.topic, pref.stance),
-                            timestamp_ms: pref_ts_ms,
                             score: 0.0,
-                            importance: pref.confidence.clamp(0.1, 1.0),
-                            source_ref: Some(format!("preference:{}", pref.id)),
+                            score_components: ScoreComponents {
+                                recency: s_rec,
+                                importance: s_imp,
+                                confidence: s_imp,
+                                ..Default::default()
+                            },
+                            provenance: MemoryProvenance {
+                                source: "preference".to_string(),
+                                source_session: Some(query.session_id.clone()),
+                                ..Default::default()
+                            },
                         });
                     }
                 }
@@ -217,110 +382,226 @@ impl MemoryCoordinator {
             && !query.query_text.trim().is_empty()
         {
             if let Some(graph_store) = &self.graph {
-                if let Ok(facts) = graph_store.facts_from(&query.query_text, query.limit as u32) {
+                if let Ok(facts) =
+                    graph_store.facts_from(&query.query_text, (query.limit * 2).max(10) as u32)
+                {
                     for fact in facts {
-                        candidates.push(RecalledMemoryItem {
-                            id: format!(
-                                "fact:{}:{}:{}",
-                                fact.subject_id, fact.predicate, fact.object_id
+                        let id = format!(
+                            "fact:{}:{}:{}",
+                            fact.subject_id, fact.predicate, fact.object_id
+                        );
+                        candidate_meta.insert(
+                            id.clone(),
+                            (
+                                MemoryLayerKind::Relational,
+                                now_ms,
+                                Some("knowledge_graph".to_string()),
                             ),
-                            layer: MemoryLayerKind::Relational,
+                        );
+                        candidates.push(MemoryCandidate {
+                            id,
+                            layer: "relational".to_string(),
+                            scope: MemoryScope::Session {
+                                session_id: query.session_id.clone(),
+                            },
                             content: format!(
                                 "{} {} {}",
                                 fact.subject_id, fact.predicate, fact.object_id
                             ),
-                            timestamp_ms: now_ms,
                             score: 0.0,
-                            importance: 0.6,
-                            source_ref: Some("knowledge_graph".to_string()),
+                            score_components: ScoreComponents {
+                                recency: 1.0,
+                                importance: 0.6,
+                                confidence: 0.6,
+                                ..Default::default()
+                            },
+                            provenance: MemoryProvenance {
+                                source: "knowledge_graph".to_string(),
+                                source_session: Some(query.session_id.clone()),
+                                ..Default::default()
+                            },
                         });
                     }
                 }
             }
         }
 
-        let total_candidates = candidates.len();
+        (candidates, candidate_meta, governance_filtered)
+    }
 
-        // 2. Multi-factor Ranking
-        let query_tokens = unicode_tokens(&query.query_text);
-
-        for item in &mut candidates {
-            // Keyword match ratio
-            let item_tokens = unicode_tokens(&item.content);
-            let matched_tokens = if query_tokens.is_empty() {
-                0.0
-            } else {
-                let matches = query_tokens
-                    .iter()
-                    .filter(|token| item_tokens.iter().any(|candidate| candidate == *token))
-                    .count();
-                matches as f64 / query_tokens.len() as f64
-            };
-            let s_rel = matched_tokens.clamp(0.0, 1.0);
-
-            // Recency decay: S_rec = exp(-lambda * delta_hours)
-            let delta_hours = (now_ms - item.timestamp_ms).max(0) as f64 / (1000.0 * 3600.0);
-            let s_rec = (-query.recency_decay_lambda * delta_hours)
-                .exp()
-                .clamp(0.1, 1.0);
-
-            // Importance
-            let s_imp = item.importance.clamp(0.1, 1.0);
-
-            // Preference boost
-            let components = ScoreComponents {
-                semantic: 0.0,
-                lexical: s_rel,
-                importance: s_imp,
-                recency: s_rec,
-                activation: 0.0,
-                continuity: 0.0,
-                confidence: s_imp,
-            };
-            item.score = components.weighted(&self.ranking);
-        }
-
-        // 3. Diversity & Dedup
-        let mut seen_contents = HashSet::new();
-        let mut deduplicated = Vec::new();
-
-        // Sort descending by score
-        candidates.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        for item in candidates {
-            let normalized_content: String = item
-                .content
-                .chars()
-                .filter(|c| c.is_alphanumeric())
-                .collect();
-
-            if normalized_content.is_empty() || seen_contents.contains(&normalized_content) {
-                continue;
+    /// Execute the Unified Recall Pipeline across requested layers synchronously.
+    pub fn recall(&self, query: &MemoryRecallQuery) -> Result<MemoryRecallResult, MemoryError> {
+        if self.embedding_provider.is_none() {
+            let now_ms = query
+                .as_of_ms
+                .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+            let (candidates, candidate_meta, governance_filtered) =
+                self.collect_candidates(query, now_ms);
+            let total_candidates = candidates.len();
+            if total_candidates == 0 {
+                return Ok(MemoryRecallResult {
+                    items: Vec::new(),
+                    total_candidates: 0,
+                    governance_filtered,
+                    total_chars: 0,
+                    retrieval_status: Some(RetrievalStatus {
+                        lexical_candidates: 0,
+                        vector_candidates: 0,
+                        used_lexical_fallback: true,
+                        reranked: false,
+                    }),
+                });
             }
-            seen_contents.insert(normalized_content);
-            deduplicated.push(item);
+            self.execute_hybrid_retrieval(
+                query,
+                candidates,
+                candidate_meta,
+                governance_filtered,
+                total_candidates,
+                None,
+                now_ms,
+            )
+        } else {
+            block_on_future(self.recall_async(query))
+        }
+    }
+
+    /// Execute the Unified Recall Pipeline asynchronously, running semantic embeddings if configured.
+    pub async fn recall_async(
+        &self,
+        query: &MemoryRecallQuery,
+    ) -> Result<MemoryRecallResult, MemoryError> {
+        let now_ms = query
+            .as_of_ms
+            .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+        let (candidates, candidate_meta, governance_filtered) =
+            self.collect_candidates(query, now_ms);
+
+        let total_candidates = candidates.len();
+        if total_candidates == 0 {
+            return Ok(MemoryRecallResult {
+                items: Vec::new(),
+                total_candidates: 0,
+                governance_filtered,
+                total_chars: 0,
+                retrieval_status: Some(RetrievalStatus {
+                    lexical_candidates: 0,
+                    vector_candidates: 0,
+                    used_lexical_fallback: self.embedding_provider.is_none(),
+                    reranked: false,
+                }),
+            });
         }
 
-        // 4. Budget Truncation
+        let mut vector_source = None;
+        if let Some(ref provider) = self.embedding_provider {
+            if !query.query_text.trim().is_empty() {
+                if let Ok(query_vector) = provider.embed(&query.query_text).await {
+                    if !query_vector.is_empty() {
+                        let mut vector_candidates = Vec::new();
+                        for cand in &candidates {
+                            let cand_vec_opt = if let Ok(Some(meta)) =
+                                self.backend.get_episode_metadata(&cand.id)
+                            {
+                                meta.get("vector").and_then(|v| {
+                                    serde_json::from_value::<Vec<f32>>(v.clone()).ok()
+                                })
+                            } else {
+                                None
+                            };
+                            let cand_vec = match cand_vec_opt {
+                                Some(v) => Some(v),
+                                None => provider.embed(&cand.content).await.ok(),
+                            };
+                            if let Some(cand_vec) = cand_vec {
+                                if cand_vec.len() == query_vector.len() {
+                                    let sim = crate::canonical::vector::cosine_similarity(
+                                        &query_vector,
+                                        &cand_vec,
+                                    );
+                                    let mut vc = cand.clone();
+                                    vc.score_components.semantic =
+                                        f64::from(sim).clamp(0.0, 1.0);
+                                    vector_candidates.push(vc);
+                                }
+                            }
+                        }
+                        if !vector_candidates.is_empty() {
+                            vector_source =
+                                Some(StaticVectorCandidateSource::new(vector_candidates));
+                        }
+                    }
+                }
+            }
+        }
+
+        self.execute_hybrid_retrieval(
+            query,
+            candidates,
+            candidate_meta,
+            governance_filtered,
+            total_candidates,
+            vector_source,
+            now_ms,
+        )
+    }
+
+    fn execute_hybrid_retrieval(
+        &self,
+        query: &MemoryRecallQuery,
+        candidates: Vec<MemoryCandidate>,
+        candidate_meta: HashMap<String, (MemoryLayerKind, i64, Option<String>)>,
+        governance_filtered: usize,
+        total_candidates: usize,
+        vector_source: Option<StaticVectorCandidateSource>,
+        now_ms: i64,
+    ) -> Result<MemoryRecallResult, MemoryError> {
+        let lexical_source = Bm25LexicalCandidateSource::new(candidates);
+        let mut sources: Vec<&dyn MemoryCandidateSource> = vec![&lexical_source];
+        if let Some(ref vs) = vector_source {
+            sources.push(vs);
+        }
+
+        let pipeline = HybridRetrievalPipeline::new(self.ranking);
+        let (ranked_candidates, mut status) = pipeline.retrieve_with_status(
+            &query.query_text,
+            &query.visible_scopes,
+            &sources,
+            query.limit,
+            query.max_chars,
+        )?;
+
+        if self.embedding_provider.is_none() {
+            status.used_lexical_fallback = true;
+        }
+
         let mut final_items = Vec::new();
         let mut total_chars = 0;
-
-        for item in deduplicated {
-            if item.score < query.min_score {
+        for cand in ranked_candidates {
+            if cand.score < query.min_score {
                 continue;
             }
             if final_items.len() >= query.limit {
                 break;
             }
-            if total_chars + item.content.len() > query.max_chars && !final_items.is_empty() {
+            if total_chars + cand.content.len() > query.max_chars && !final_items.is_empty() {
                 break;
             }
-            total_chars += item.content.len();
-            final_items.push(item);
+            total_chars += cand.content.len();
+            let (layer, timestamp_ms, source_ref) = candidate_meta
+                .get(&cand.id)
+                .cloned()
+                .unwrap_or((MemoryLayerKind::Episodic, now_ms, None));
+            final_items.push(RecalledMemoryItem {
+                id: cand.id,
+                layer,
+                content: cand.content,
+                timestamp_ms,
+                score: cand.score,
+                importance: cand.score_components.importance,
+                source_ref,
+                score_components: Some(cand.score_components),
+            });
         }
 
         Ok(MemoryRecallResult {
@@ -328,6 +609,7 @@ impl MemoryCoordinator {
             total_candidates,
             governance_filtered,
             total_chars,
+            retrieval_status: Some(status),
         })
     }
 
@@ -371,7 +653,8 @@ impl MemoryCoordinator {
                 serde_json::json!({
                     "scope": entry.scope,
                     "provenance": entry.provenance,
-                    "layer": "episodic"
+                    "layer": "episodic",
+                    "content_hash": crate::canonical::vector::content_hash(&entry.content),
                 }),
             )
             .map_err(|e| MemoryError::Invalid(e.to_string()))?;
@@ -421,8 +704,16 @@ impl MemoryCoordinator {
         reason: Option<&str>,
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
-        self.governance
-            .forget_episode(episode_id, reason, expected_rev)
+        let result = self
+            .governance
+            .forget_episode(episode_id, reason, expected_rev)?;
+        {
+            let mut working_lock = self.working.lock().expect("working memory mutex");
+            for ring in working_lock.values_mut() {
+                ring.retain(|ep| ep.id != episode_id);
+            }
+        }
+        Ok(result)
     }
 
     /// Protect an episode from automatic purging or forgetting.
@@ -451,8 +742,24 @@ impl MemoryCoordinator {
         updated_by: Option<&str>,
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
-        self.governance
-            .update_episode_content(episode_id, new_content, updated_by, expected_rev)
+        let result = self.governance.update_episode_content(
+            episode_id,
+            new_content,
+            updated_by,
+            expected_rev,
+        )?;
+        if let Ok(Some(mut meta)) = self.backend.get_episode_metadata(episode_id) {
+            let new_hash = crate::canonical::vector::content_hash(new_content);
+            if let Some(obj) = meta.as_object_mut() {
+                obj.insert(
+                    "content_hash".to_string(),
+                    serde_json::Value::String(new_hash),
+                );
+                obj.remove("vector");
+                let _ = self.backend.put_episode_metadata(episode_id, meta);
+            }
+        }
+        Ok(result)
     }
 
     fn episode_scope_metadata(&self, episode: &Episode) -> (MemoryScope, MemoryProvenance) {
@@ -480,37 +787,32 @@ impl MemoryCoordinator {
     }
 }
 
-/// Basic Unicode-aware segmentation used by the coordinator's lexical stage.
-/// ASCII whitespace alone would make Chinese recall silently fail; CJK
-/// characters are emitted as single-character fallback tokens.
-fn unicode_tokens(text: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
-    let mut latin = String::new();
-    for ch in text.chars() {
-        if ch.is_alphanumeric() {
-            if is_cjk(ch) {
-                if !latin.is_empty() {
-                    tokens.push(latin.to_lowercase());
-                    latin.clear();
-                }
-                tokens.push(ch.to_string());
-            } else {
-                latin.push(ch);
+fn block_on_future<F>(f: F) -> F::Output
+where
+    F: std::future::Future + Send,
+    F::Output: Send,
+{
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => match handle.runtime_flavor() {
+            tokio::runtime::RuntimeFlavor::MultiThread => {
+                tokio::task::block_in_place(|| handle.block_on(f))
             }
-        } else if !latin.is_empty() {
-            tokens.push(latin.to_lowercase());
-            latin.clear();
-        }
+            _ => std::thread::scope(|s| {
+                s.spawn(|| {
+                    tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("local runtime")
+                        .block_on(f)
+                })
+                .join()
+                .expect("thread join")
+            }),
+        },
+        Err(_) => tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("local runtime")
+            .block_on(f),
     }
-    if !latin.is_empty() {
-        tokens.push(latin.to_lowercase());
-    }
-    tokens
-}
-
-fn is_cjk(ch: char) -> bool {
-    matches!(
-        ch as u32,
-        0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF
-    )
 }

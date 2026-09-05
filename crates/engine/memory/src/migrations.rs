@@ -178,6 +178,34 @@ CREATE INDEX IF NOT EXISTS idx_episode_memory_metadata_scope
     ON episode_memory_metadata(json_extract(metadata_json, '$.scope.scope'));
 "#,
     },
+    // Memory 2.2: additive indices for scoped cross-session candidate queries.
+    Migration {
+        version: 10,
+        name: "V10__episode_metadata_scope_indices",
+        sql: r#"
+CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_project
+    ON episode_memory_metadata(
+        json_extract(metadata_json, '$.scope.scope'),
+        json_extract(metadata_json, '$.scope.project_id')
+    );
+CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_session
+    ON episode_memory_metadata(
+        json_extract(metadata_json, '$.scope.scope'),
+        json_extract(metadata_json, '$.scope.session_id')
+    );
+CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_user
+    ON episode_memory_metadata(
+        json_extract(metadata_json, '$.scope.scope'),
+        json_extract(metadata_json, '$.scope.user_id')
+    );
+CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_persona
+    ON episode_memory_metadata(
+        json_extract(metadata_json, '$.scope.scope'),
+        json_extract(metadata_json, '$.scope.persona_id'),
+        json_extract(metadata_json, '$.scope.user_id')
+    );
+"#,
+    },
 ];
 
 const HALLWAYS_SQL: &str = r#"
@@ -643,8 +671,8 @@ mod tests {
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            5,
-            "V5/V6/V7/V8/V9 各一条"
+            6,
+            "V5/V6/V7/V8/V9/V10 各一条"
         );
     }
 

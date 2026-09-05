@@ -15,6 +15,7 @@
 | 向量持久化 | 旧 vector 仅内存语义 | ADAPT | `VectorRecord` 保存 model、dimension、content hash、更新时间；SQLite migration v3 + metadata store |
 | 记忆压缩 / continuity | 旧连续性压缩语义 | ADAPT | `ContinuityState` 扩展 rolling summary、goals、unresolved threads 等；`ContextWindowManager` 只改变 provider projection，不改 transcript |
 | 远程 embedding / LLM extraction | 旧扩展或未定 canonical provider | DEFER | 已定义 `EmbeddingProvider` / `MemoryExtractor` trait；没有把 HTTP、密钥或未验证模型写进 Memory owner |
+| DialoguePool / MemoryScope | 旧 DialoguePool 跨会话沉淀与对话池语义 | ADAPTED / production | `MemoryScope` (Global/Project/Persona/Session) + `ScopedMemoryBackend` + SQLite `episode_memory_metadata` 索引；无 metadata 严格 fail-narrow 到 Session(session_id)，经由 T3..=T6 垂直验证 |
 | 外部 memory provider（Mongo / remote 等） | `legacy/donor/apeireth-memory-extensions` | REJECT / DEFER | 当前没有批准的 canonical repository contract，不恢复旧 provider bridge |
 | Yanshuai-AI / OnDeviceAI 的 Windows C# UWP / D3D11 实现 | `docs/04-internal/borrow-from-jimmyxiao2009.md` | REJECT | 与跨平台 Rust + provider capability 架构不匹配；不移植 UI / 平台绑定代码 |
 

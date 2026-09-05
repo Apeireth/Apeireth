@@ -46,6 +46,9 @@ pub struct RecalledMemoryItem {
     pub importance: f64,
     /// Source provenance reference (session ID, file, topic).
     pub source_ref: Option<String>,
+    /// Explainable score breakdown from hybrid ranking.
+    #[serde(default)]
+    pub score_components: Option<crate::ScoreComponents>,
 }
 
 /// Query specification for unified memory recall.
@@ -85,12 +88,9 @@ impl MemoryRecallQuery {
             recency_decay_lambda: 0.05,
             min_score: 0.10,
             as_of_ms: None,
-            visible_scopes: vec![
-                MemoryScope::Global,
-                MemoryScope::Session {
-                    session_id: session_id.clone(),
-                },
-            ],
+            visible_scopes: vec![MemoryScope::Session {
+                session_id: session_id.clone(),
+            }],
         }
     }
 
@@ -143,6 +143,8 @@ pub struct MemoryRecallResult {
     pub total_candidates: usize,
     pub governance_filtered: usize,
     pub total_chars: usize,
+    #[serde(default)]
+    pub retrieval_status: Option<crate::RetrievalStatus>,
 }
 
 /// Structured writeback entry to persist after turn completion.
@@ -155,7 +157,6 @@ pub struct MemoryWritebackEntry {
     pub timestamp_ms: Option<i64>,
     pub tags: Vec<String>,
     /// Scope assigned before persistence; defaults to the source session.
-    #[serde(default)]
     pub scope: MemoryScope,
     /// Structured, non-secret provenance for the write.
     #[serde(default)]
