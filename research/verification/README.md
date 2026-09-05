@@ -7,7 +7,7 @@ InvC 效果不确定强制 fail-closed):
 |---|---|---|---|
 | ① 模型级故障注入 | `research_approval_sm.rs` fault injection (6 持久化点 × 100 轮随机事件/崩溃交错) | ✅ 0 违例 (Phase 5 交付时) | 随机采样, 概率保证 |
 | ② TLA+/TLC 穷举 | `tla/ApprovalSM.tla` + TLC 2.16 (JDK 17) | ✅ 2026-09-05: 单记录 36 状态 / 三记录 3164 状态全通过 | **全可达状态** 枚举, 指纹碰撞 2.9E-12 |
-| ③ Kani 机器证明 | `kani/` mirror crate (零复制 `#[path]` 包含 canonical) + GitHub Actions | ✅ 2026-09-05: harness 1 (终态锁) / 2 (executed 单调) 已证; harness 3 见 run 记录 | 符号执行, 有界展开 (unwind 32) |
+| ③ Kani 机器证明 | `kani/` mirror crate (零复制 `#[path]` 包含 canonical) + GitHub Actions | ✅ 2026-09-05: **3/3 harness 全部 VERIFICATION SUCCESSFUL** (run 33945573291) | 符号执行, 有界展开 (unwind 32) |
 
 ## 关键工程事实 (2026-09-05)
 
