@@ -505,9 +505,10 @@ fn log_event(
     ));
 }
 
-fn config_hash(seed: u64, turns: usize, budgets: &str) -> String {
+fn config_hash(seed: u64, turns: usize, budgets: &str, experiment: &str) -> String {
     // sha256 不可用 (零依赖) → 用 FNV-1a 64 的 8 hex 位。
-    let s = format!("{seed}:{turns}:{budgets}");
+    // experiment 参与哈希: 不同源/文件不得互相覆盖 JSONL 日志。
+    let s = format!("{seed}:{turns}:{budgets}:{experiment}");
     let mut h: u64 = 0xcbf29ce484222325;
     for b in s.bytes() {
         h ^= b as u64;
@@ -594,12 +595,33 @@ fn main() {
             .map(|x| x.docs.as_ref().map(|d| d.len()).unwrap_or(0))
             .sum::<usize>() as f64
             / t.len().max(1) as f64;
+        // 实验名带文件标识 (s/m/oracle), 避免不同文件日志互相覆盖。
+        let variant = if lme_file.is_empty() {
+            "s"
+        } else {
+            let stem = Path::new(&lme_file)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if stem.contains("_m_") {
+                "m"
+            } else if stem.contains("oracle") {
+                "oracle"
+            } else {
+                "s"
+            }
+        };
         println!(
-            "source: LongMemEval ({} QA turns, 平均每问 haystack {:.0} 会话)",
+            "source: LongMemEval-{variant} ({} QA turns, 平均每问 haystack {:.0} 会话)",
             t.len(),
             avg_docs
         );
-        (src.docs(), t, "longmemeval-retention")
+        let experiment: &'static str = match variant {
+            "m" => "longmemeval-m-retention",
+            "oracle" => "longmemeval-oracle-retention",
+            _ => "longmemeval-s-retention",
+        };
+        (src.docs(), t, experiment)
     } else {
         let src = SyntheticSource::new(seed, 200, turns_n, 20, 0.7);
         (src.docs(), src.turns(), "synthetic-retention")
@@ -611,7 +633,7 @@ fn main() {
         .map(|b| b.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let hash = config_hash(seed, turns_n, &budgets_s);
+    let hash = config_hash(seed, turns_n, &budgets_s, experiment);
 
     // 日志目录: 固定到 research/logs/ (schema 对齐 research/logs/README.md)。
     let logs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../logs");
