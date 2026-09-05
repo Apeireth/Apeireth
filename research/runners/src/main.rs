@@ -9,9 +9,10 @@
 //! 真实数据集 (LoCoMo/LongMemEval) 即插即用接口: 实现 `BenchmarkSource` trait
 //! 并替换 `SyntheticSource` 即可, 运行器骨架不变。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
+use std::io::BufRead;
 use std::path::Path;
 
 // ---------- 确定性 PRNG (xorshift64*) ----------
@@ -170,18 +171,7 @@ impl LocomoSource {
         let text = fs::read_to_string(path).expect("read locomo10.json");
         let sessions: Vec<LocomoSession> =
             serde_json::from_str(&text).expect("parse locomo10.json");
-        let mut docs = Vec::new();
-        let mut created = 0usize;
-        for s in &sessions {
-            for t in s.turns() {
-                docs.push(Doc {
-                    id: t.dia_id,
-                    tokens: (t.text.chars().count() / 4).max(1),
-                    created_turn: created,
-                });
-                created += 1;
-            }
-        }
+        let docs = docs_from_sessions(&sessions);
         let mut turns = Vec::new();
         for s in &sessions {
             for q in &s.qa {
@@ -202,6 +192,92 @@ impl BenchmarkSource for LocomoSource {
     fn turns(&self) -> Vec<Turn> {
         self.turns.clone()
     }
+}
+
+/// mc10 多选版 (Percena/locomo-mc10, CC BY-NC 4.0):
+/// JSONL, 每行一条多选 QA (question/choices/correct_choice_index/haystack...),
+/// 但**不带证据轮次标签**。用 question 文本精确匹配 locomo10 的 QA,
+/// 把 evidence 真值借过来 (0 LLM); 匹配不上的跳过并计数。
+#[derive(serde::Deserialize)]
+struct Mc10Question {
+    question: String,
+}
+
+/// mc10 源: docs = locomo10 全部对话轮次; turns = mc10 中能借到 evidence 真值的 QA。
+struct LocomoMc10Source {
+    docs: Vec<Doc>,
+    turns: Vec<Turn>,
+    matched: usize,
+    total: usize,
+}
+
+impl LocomoMc10Source {
+    fn load(locomo_path: &str, mc10_path: &str) -> Self {
+        let text = fs::read_to_string(locomo_path).expect("read locomo10.json");
+        let sessions: Vec<LocomoSession> =
+            serde_json::from_str(&text).expect("parse locomo10.json");
+        let docs = docs_from_sessions(&sessions);
+        let mut evidence: HashMap<String, HashSet<String>> = HashMap::new();
+        for s in &sessions {
+            for q in &s.qa {
+                evidence
+                    .insert(q.question.clone(), q.evidence.iter().cloned().collect());
+            }
+        }
+        let f = fs::File::open(mc10_path).expect("open locomo_mc10.json");
+        let mut turns = Vec::new();
+        let mut matched = 0usize;
+        let mut total = 0usize;
+        for line in std::io::BufReader::new(f).lines() {
+            let line = line.expect("read mc10 line");
+            if line.trim().is_empty() {
+                continue;
+            }
+            let Ok(q) = serde_json::from_str::<Mc10Question>(&line) else {
+                continue;
+            };
+            total += 1;
+            if let Some(rel) = evidence.get(&q.question) {
+                turns.push(Turn {
+                    query: q.question,
+                    relevant: rel.clone(),
+                });
+                matched += 1;
+            }
+        }
+        Self {
+            docs,
+            turns,
+            matched,
+            total,
+        }
+    }
+}
+
+impl BenchmarkSource for LocomoMc10Source {
+    fn docs(&self) -> Vec<Doc> {
+        self.docs.clone()
+    }
+    fn turns(&self) -> Vec<Turn> {
+        self.turns.clone()
+    }
+}
+
+/// locomo10 会话 → 全部对话轮次 docs (id=dia_id, tokens≈chars/4, 按出现序编号)。
+fn docs_from_sessions(sessions: &[LocomoSession]) -> Vec<Doc> {
+    let mut docs = Vec::new();
+    let mut created = 0usize;
+    for s in sessions {
+        for t in s.turns() {
+            docs.push(Doc {
+                id: t.dia_id,
+                tokens: (t.text.chars().count() / 4).max(1),
+                created_turn: created,
+            });
+            created += 1;
+        }
+    }
+    docs
 }
 
 // ---------- 策略 ----------
@@ -395,6 +471,25 @@ fn main() {
         let t = src.turns();
         println!("source: LoCoMo ({} docs / {} turns)", d.len(), t.len());
         (d, t, "locomo-retention")
+    } else if source_name == "locomo-mc10" {
+        let locomo = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../datasets/locomo/src/data/locomo10.json");
+        let mc10 = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../datasets/locomo-mc10/locomo_mc10.json");
+        let src = LocomoMc10Source::load(
+            locomo.to_str().expect("path utf8"),
+            mc10.to_str().expect("path utf8"),
+        );
+        let d = src.docs();
+        let t = src.turns();
+        println!(
+            "source: LoCoMo-MC10 ({} docs / {} turns; 借到 evidence 真值的 QA {}/{}; 匹配不上被跳过)",
+            d.len(),
+            t.len(),
+            src.matched,
+            src.total
+        );
+        (d, t, "locomo-mc10-retention")
     } else {
         let src = SyntheticSource::new(seed, 200, turns_n, 20, 0.7);
         (src.docs(), src.turns(), "synthetic-retention")
