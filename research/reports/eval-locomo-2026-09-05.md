@@ -6,36 +6,42 @@
 
 ## 1. 实验设计
 
-**任务**: 超长对话记忆保留 —— 在 token 预算约束下从 5882 条历史对话轮次中选出保留子集,
+**任务**: 超长对话记忆保留 —— 在 token 预算约束下从对话历史轮次中选出保留子集,
 使 QA 的证据轮次 (ground-truth evidence) 落在保留集中。
 
 | 项 | 值 |
 |---|---|
-| 文档集 | LoCoMo locomo10: 10 会话 / 32 对话 / **5882 轮次** (id=dia_id, tokens≈chars/4) |
+| 文档集 | LoCoMo locomo10: 10 会话 / 32 对话 / **1033 唯一轮次** (id=dia_id, tokens≈chars/4) |
 | 查询集 (locomo) | **1986 条 QA**, relevant = evidence dia_id (数据集自带真值) |
 | 查询集 (mc10) | mc10 JSONL 多选 QA, question 文本精确匹配 locomo10 借 evidence 真值 (见 §4) |
 | 策略 | FixedWindow / RandomRetain / StackPinLite / VaultLruLite (runner v0.1 固定实现) |
-| 预算档 | 2k / 4k / 8k / 16k / 32k tokens (每档独立跑) |
+| 预算档 | 2k / 4k / 8k / 16k / 32k tokens (每档独立跑; 全语料 ≈ 31k tokens) |
 | 种子 | 42 (RandomRetain/StackPin 确定性复现) |
 
 **效用定义**: 单轮成功 = 保留集 ∩ evidence ≠ ∅; 效用 = 成功率。成本 = 保留集 tokens。
 
-## 2. 结果 (locomo, 1986 QA)
+**数据预处理 (2026-09-05 修正)**: locomo10 的 session_N 快照重复携带历史轮次
+(实测 D1:3 出现 61 次, 原始拼接 5882 条含 5.7× 重复) —— 同一 dia_id 内容相同,
+按首次出现去重为 1033 条, 等价于"提问时刻的记忆"模型。本文所有数字均为去重后口径。
+
+## 2. 结果 (locomo, 1986 QA, 去重后 1033 文档)
 
 | 策略 | B=2k | B=4k | B=8k | B=16k | B=32k |
 |---|---|---|---|---|---|
-| FixedWindow | 0.050 | 0.125 | 0.292 | 0.673 | 0.917 |
-| RandomRetain | 0.133 | 0.224 | 0.400 | 0.591 | 0.803 |
+| FixedWindow | 0.017 | 0.031 | 0.104 | 0.392 | 0.995 |
+| RandomRetain | 0.096 | 0.189 | 0.346 | 0.611 | 0.995 |
 | **StackPinLite** | **0.995** | **0.995** | **0.995** | **0.995** | **0.995** |
-| VaultLruLite | 0.900 | 0.909 | 0.923 | 0.933 | 0.962 |
+| VaultLruLite | 0.637 | 0.777 | 0.916 | 0.985 | 0.995 |
 
 bootstrap 95% CI (效用差 vs FixedWindow, 同预算档) —— 全部显著非零:
-- StackPinLite 在 B=2k 领先 **+0.933 ~ +0.954**; B=32k 仍领先 +0.061 ~ +0.083。
-- VaultLruLite 领先 +0.839 ~ +0.869 (B=2k) → +0.032 ~ +0.050 (B=32k)。
-- RandomRetain 在低预算小幅领先 (+0.080 ~ +0.118), 高预算落后 (B=32k: -0.125 ~ -0.089)。
+- StackPinLite 在 B=2k 领先 **+0.972 ~ +0.985**; B=32k 时全部策略收敛 (全语料 31k tokens 恰好装下)。
+- VaultLruLite 领先 +0.605 ~ +0.648 (B=2k) → +0.570 ~ +0.614 (B=16k)。
+- RandomRetain 全档小幅领先 (B=2k: +0.058 ~ +0.084)。
 
-**读图 (讲人话)**: 预算越紧, 结构化的"新近+相关性"策略越值钱; 固定窗口在 2k 预算下
-几乎全瞎 (5%), 而栈式保留 99.5% —— 差距在统计上不可能是噪声。
+**读图 (讲人话)**: 全语料只有 ~31k tokens, 32k 预算 = 全装下 (所有人 99.5%);
+预算越紧, 结构策略越值钱 —— 2k 预算 (6% 语料) 下固定窗口 1.7%, 栈式保留 99.5%,
+差距近 100 个百分点且 CI 不含 0。VaultLru 在低预算显著强于 RandomRetain/固定窗口,
+弱于 oracle touch 的 StackPin (无 oracle 的公平对比待 LLM 接入)。
 
 ## 3. 结果 (locomo-mc10, 多选口径)
 
