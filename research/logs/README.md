@@ -6,6 +6,11 @@
 
 `logs/<experiment>-<confighash>.jsonl`，每行一条事件，UTF-8，append-only。
 
+当前 runner 实验名: `synthetic-retention` / `locomo-retention` / `locomo-mc10-retention` /
+`longmemeval-s-retention` / `longmemeval-m-retention` / `longmemeval-oracle-retention`。
+confighash = FNV-1a(seed:turn数:预算档:实验名) 前 8 hex —— 实验名参与哈希,
+不同数据文件不会互相覆盖。
+
 ## 每行 Schema（必填 + 可选）
 
 ```json
