@@ -106,6 +106,104 @@ impl BenchmarkSource for SyntheticSource {
     }
 }
 
+// ---------- LoCoMo 真实数据源 (CC BY-NC 4.0, 仅非商业研究) ----------
+
+#[derive(serde::Deserialize)]
+struct LocomoTurn {
+    dia_id: String,
+    #[allow(dead_code)]
+    speaker: String,
+    text: String,
+}
+
+#[derive(serde::Deserialize)]
+struct LocomoQa {
+    question: String,
+    evidence: Vec<String>,
+    #[allow(dead_code)]
+    answer: Option<serde_json::Value>,
+}
+
+#[derive(serde::Deserialize)]
+struct LocomoSession {
+    conversation: serde_json::Value,
+    qa: Vec<LocomoQa>,
+}
+
+impl LocomoSession {
+    /// conversation 是 {speaker_a, speaker_b, session_1_date_time, session_1: [...], ...}
+    /// 提取全部对话轮次, 按 session_ 编号排序。
+    fn turns(&self) -> Vec<LocomoTurn> {
+        let mut out = Vec::new();
+        let Some(obj) = self.conversation.as_object() else {
+            return out;
+        };
+        let mut keys: Vec<&String> = obj
+            .keys()
+            .filter(|k| k.starts_with("session_") && !k.ends_with("date_time"))
+            .collect();
+        keys.sort_by_key(|k| {
+            let n: u64 = k.trim_start_matches("session_").parse().unwrap_or(0);
+            n
+        });
+        for k in keys {
+            if let Some(arr) = obj.get(k).and_then(|v| v.as_array()) {
+                for t in arr {
+                    if let Ok(turn) = serde_json::from_value::<LocomoTurn>(t.clone()) {
+                        out.push(turn);
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
+/// LoCoMo 源: docs = 全部对话轮次 (id=dia_id); turns = QA, relevant = evidence dia_id。
+struct LocomoSource {
+    docs: Vec<Doc>,
+    turns: Vec<Turn>,
+}
+
+impl LocomoSource {
+    fn load(path: &str) -> Self {
+        let text = fs::read_to_string(path).expect("read locomo10.json");
+        let sessions: Vec<LocomoSession> =
+            serde_json::from_str(&text).expect("parse locomo10.json");
+        let mut docs = Vec::new();
+        let mut created = 0usize;
+        for s in &sessions {
+            for t in s.turns() {
+                docs.push(Doc {
+                    id: t.dia_id,
+                    tokens: (t.text.chars().count() / 4).max(1),
+                    created_turn: created,
+                });
+                created += 1;
+            }
+        }
+        let mut turns = Vec::new();
+        for s in &sessions {
+            for q in &s.qa {
+                turns.push(Turn {
+                    query: q.question.clone(),
+                    relevant: q.evidence.iter().cloned().collect(),
+                });
+            }
+        }
+        Self { docs, turns }
+    }
+}
+
+impl BenchmarkSource for LocomoSource {
+    fn docs(&self) -> Vec<Doc> {
+        self.docs.clone()
+    }
+    fn turns(&self) -> Vec<Turn> {
+        self.turns.clone()
+    }
+}
+
 // ---------- 策略 ----------
 #[derive(Clone, Copy, PartialEq)]
 enum Policy {
@@ -262,6 +360,7 @@ fn main() {
     let mut seed = 42u64;
     let mut turns_n = 500usize;
     let mut budgets: Vec<usize> = vec![2000, 4000, 8000, 16000, 32000];
+    let mut source_name = String::from("synthetic");
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -280,13 +379,27 @@ fn main() {
                     .collect();
                 i += 2;
             }
+            "--source" => {
+                source_name = args[i + 1].clone();
+                i += 2;
+            }
             _ => i += 1,
         }
     }
 
-    let source = SyntheticSource::new(seed, 200, turns_n, 20, 0.7);
-    let docs = source.docs();
-    let turns = source.turns();
+    let (docs, turns, experiment): (Vec<Doc>, Vec<Turn>, &str) = if source_name == "locomo" {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../datasets/locomo/src/data/locomo10.json");
+        let src = LocomoSource::load(path.to_str().expect("path utf8"));
+        let d = src.docs();
+        let t = src.turns();
+        println!("source: LoCoMo ({} docs / {} turns)", d.len(), t.len());
+        (d, t, "locomo-retention")
+    } else {
+        let src = SyntheticSource::new(seed, 200, turns_n, 20, 0.7);
+        (src.docs(), src.turns(), "synthetic-retention")
+    };
+    let turns_n = turns.len();
     let policies = Policy::all();
     let budgets_s = budgets
         .iter()
@@ -294,7 +407,6 @@ fn main() {
         .collect::<Vec<_>>()
         .join(",");
     let hash = config_hash(seed, turns_n, &budgets_s);
-    let experiment = "synthetic-retention";
 
     // 日志目录: 固定到 research/logs/ (schema 对齐 research/logs/README.md)。
     let logs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../logs");
