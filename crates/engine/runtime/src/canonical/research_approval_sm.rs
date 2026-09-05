@@ -9,7 +9,9 @@
 //!   Interrupted) 可被确定性状态机机械验证。
 //! - **状态**: 原型已实现 — 纯状态机 (Next 关系 + 非法转移拒绝) + 崩溃前缀模型 +
 //!   三不变量判定 + 副作用描述符 schema + 恢复动作映射 + 模型级故障注入 harness
-//!   (6 持久化点 × 100 轮)。TLA+/TLC 真机验证与 Kani 工具链留后续 (本机未装)。
+//!   (6 持久化点 × 100 轮)。TLA+/TLC 机器验证已完成 (2026-09-05, `research/verification/tla/`:
+//!   单记录 36 状态 / 三记录 3164 状态全通过); Kani 证明跑在 GitHub Actions
+//!   (`.github/workflows/kani.yml`, 本机 Windows 无 Kani 支持)。
 //! - **引用**: `_research_mem/ra/ra5-approval-state-machine-spec.md` §2–§7 与
 //!   `ra5-formal-proof-plan.md` §4 (P1–P6 注入点); Newcombe et al. CACM 2015
 //!   (TLA+ 工业先例); Pillai et al. OSDI'14 (fsync 语义, 只能测不能证)。
@@ -17,7 +19,7 @@
 //! - **已知局限**: ① 本模块是**模型级**验证 (纯状态机), 生产 `approval.rs`/
 //!   `execute.rs` 的 G1–G7 差距未改代码 (默认关闭, 铁律 1); ② 崩溃模型用
 //!   durable 前缀布尔抽象, 未建模真实 fsync 语义; ③ Kani harness 以 `#[cfg(kani)]`
-//!   门控写好, 待工具链安装后运行。
+//!   门控写好, 由 `.github/workflows/kani.yml` 在 ubuntu runner 上运行。
 //!
 //! # 默认关闭 (铁律 1 + Phase 5 闸门)
 //! - 本模块不挂生产审批路径; `approval.rs` / `execute.rs` 零改动。
