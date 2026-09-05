@@ -10,5 +10,5 @@ publish = false
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-# #[kani::proof] 宏 (cfg(kani) 关闭时零开销; 版本对齐 kani-verifier 0.67)。
-kani = "0.67"
+# 注: `kani` 宏 crate 不在此声明 —— cargo kani 会自动注入 (安装包内 path 版本,
+# crates.io 上 kani crate 无对应版本); 显式声明反而与注入版本冲突。
