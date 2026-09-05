@@ -10,3 +10,5 @@ publish = false
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+# #[kani::proof] 宏 (cfg(kani) 关闭时零开销; 版本对齐 kani-verifier 0.67)。
+kani = "0.67"
