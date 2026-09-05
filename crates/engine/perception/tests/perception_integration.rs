@@ -39,7 +39,12 @@ async fn perception_voice_and_vision_backends_wire_cleanly() {
     // 2. 装配 Vision backend
     let vision: Arc<dyn VisionBackend> = Arc::new(XcapVisionBackend::default_monitor());
     assert_eq!(vision.name(), "xcap_vision");
-    assert!(vision.ping().await.is_ok());
+    let ping_res = vision.ping().await;
+    assert!(
+        ping_res.is_ok() || matches!(ping_res, Err(PerceptionBackendError::BackendUnavailable(_))),
+        "expected Ok or BackendUnavailable in headless, got {:?}",
+        ping_res
+    );
 
     // 3. 装配 Noop Vision backend
     let noop_vision: Arc<dyn VisionBackend> = Arc::new(NoopVisionBackend);
@@ -146,7 +151,8 @@ fn voice_session_loopback_does_not_own_a_transcript() {
             Ok(())
         }
     }
-    let mut session = VoiceSession::new(Box::new(In(vec!["ping".into()])), Box::new(Out::default()));
+    let mut session =
+        VoiceSession::new(Box::new(In(vec!["ping".into()])), Box::new(Out::default()));
     let turn = session.turn(&|t| t.to_uppercase()).unwrap();
     assert_eq!(turn.reply, "PING");
     assert_eq!(session.turn_count, 1);

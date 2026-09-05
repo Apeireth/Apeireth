@@ -7,9 +7,9 @@
 // v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring / EncryptedFile backend
 // (per `v2.0.0-rc-roadmap.md` §3 RC-9: "keyring 真正接到 EnvCredentialResolver 之前").
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
+pub mod gateway_panels;
 pub mod keyring_bootstrap;
 pub mod portable_bundle;
-pub mod gateway_panels;
 
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
 
@@ -23,9 +23,10 @@ use apeireth_governance::{
 };
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_runtime::canonical::{
-    ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore,
-    SqliteSessionStore, TurnOutcome, TurnRequest, TurnResponse,
+    ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore, TurnOutcome,
+    TurnRequest, TurnResponse,
 };
+use apeireth_runtime_assembly::SqliteSessionStore;
 
 /// One persistent SQLite database is shared by the cognitive backends.
 /// `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
@@ -62,7 +63,9 @@ pub fn build_production_governance_parts(
     let policy = Arc::new(std::sync::Mutex::new(policy));
 
     let pipeline = GovernancePipeline::new()
-        .with(Arc::new(PermissionGovernanceHook::new_shared(policy.clone())))
+        .with(Arc::new(PermissionGovernanceHook::new_shared(
+            policy.clone(),
+        )))
         .with(Arc::new(CredentialDisclosureHook::new()))
         .with(Arc::new(PromptInjectionHook::new()));
     (pipeline, policy)
@@ -120,7 +123,7 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
 
 async fn build_canonical_runtime_with_parts(
     session_store: Arc<dyn SessionStore>,
-    cognitive: apeireth_runtime::canonical::ProductionCognitiveModules,
+    cognitive: apeireth_runtime_assembly::ProductionCognitiveModules,
     clock: Arc<dyn apeireth_core::kernel::Clock>,
 ) -> Result<(Runtime, Arc<std::sync::Mutex<PermissionPolicy>>), String> {
     use apeireth_provider::canonical_anthropic::AnthropicProviderPlugin;
@@ -195,6 +198,39 @@ async fn production_session_store() -> Result<Arc<dyn apeireth_runtime::SessionS
         .map_err(|error| format!("session store open failed: {error}"))
 }
 
+/// Build the direct CLI runtime with the same trace/audit observer used by the
+/// HTTP gateway. The CLI has no SSE transport, but its turns must still be
+/// observable and durable through the gateway bounded-context ports.
+async fn build_canonical_runtime_from_env_with_observability(
+) -> Result<(Arc<Runtime>, Arc<apeireth_gateway::RuntimeObservationSink>), String> {
+    let (runtime, sessions, memory, policy) =
+        build_canonical_runtime_with_sessions_from_env().await?;
+    let runtime = Arc::new(runtime);
+    let governance = Arc::new(
+        apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
+            .map_err(|error| format!("memory governance store open failed: {error}"))?,
+    );
+    let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let panel = Arc::new(crate::gateway_panels::CliPanelData::new_with_runtime(
+        Arc::clone(&runtime),
+        sessions,
+        memory,
+        governance,
+        policy,
+        enable_local_read_tools,
+        default_panel_data_dir(),
+    ));
+    let services = crate::gateway_panels::gateway_services(panel);
+    let observer = Arc::new(apeireth_gateway::RuntimeObservationSink::new(
+        services.trace_commands.clone(),
+        services.audit_commands.clone(),
+    ));
+    runtime.set_event_sink(observer.clone());
+    Ok((runtime, observer))
+}
+
 /// Completed turn or a pending approval that still has its [`ApprovalId`].
 #[derive(Debug, Clone)]
 pub enum CanonicalCliTurn {
@@ -208,7 +244,7 @@ async fn build_cognitive_modules_from_env(
     clock: Arc<dyn apeireth_core::kernel::Clock>,
 ) -> Result<
     (
-        apeireth_runtime::canonical::ProductionCognitiveModules,
+        apeireth_runtime_assembly::ProductionCognitiveModules,
         Arc<dyn MemoryBackend>,
     ),
     String,
@@ -219,13 +255,10 @@ async fn build_cognitive_modules_from_env(
         preference_store_sqlite::SQLitePreferenceStore,
         self_assessment_store_sqlite::SQLiteSelfAssessmentStore,
     };
-    use apeireth_runtime::canonical::{CognitiveBackends, CognitiveModuleConfig, JudgeConfig};
+    use apeireth_runtime_assembly::{CognitiveBackends, CognitiveModuleConfig, JudgeConfig};
     use apeireth_storage::{SqliteConnectionPool, StorageError};
 
-    let path = std::env::var(COGNITIVE_DB_ENV)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| ".apeireth/cognitive.sqlite3".into());
+    let path = cognitive_db_path();
     let pool = Arc::new(
         SqliteConnectionPool::open(&path)
             .await
@@ -321,11 +354,18 @@ async fn build_cognitive_modules_from_env(
         council,
         workspace_root: std::env::current_dir().ok(),
     };
-    let modules = apeireth_runtime::canonical::ProductionCognitiveModules::build(
-        config, backends, clock,
-    )
-    .map_err(|error| error.to_string())?;
+    let modules =
+        apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)
+            .map_err(|error| error.to_string())?;
     Ok((modules, memory))
+}
+
+fn cognitive_db_path() -> PathBuf {
+    std::env::var(COGNITIVE_DB_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".apeireth/cognitive.sqlite3"))
 }
 
 /// Execute one CLI turn directly through [`Runtime::execute_outcome`].
@@ -371,8 +411,10 @@ pub async fn dispatch_canonical_chat(
     let session = session
         .map(|id| id.parse::<SessionId>().map_err(|error| error.to_string()))
         .transpose()?;
-    let runtime = build_canonical_runtime_from_env().await?;
-    execute_canonical_cli_turn(&runtime, prompt, model, session).await
+    let (runtime, observer) = build_canonical_runtime_from_env_with_observability().await?;
+    let result = execute_canonical_cli_turn(&runtime, prompt, model, session).await;
+    observer.flush().await;
+    result
 }
 
 /// Bootstrap and resolve a pending approval on the production session store.
@@ -387,36 +429,60 @@ pub async fn dispatch_canonical_approval(
     let approval = approval
         .parse::<ApprovalId>()
         .map_err(|error| error.to_string())?;
-    let runtime = build_canonical_runtime_from_env().await?;
-    resolve_canonical_cli_approval(&runtime, session, approval, decision).await
+    let (runtime, observer) = build_canonical_runtime_from_env_with_observability().await?;
+    let result = resolve_canonical_cli_approval(&runtime, session, approval, decision).await;
+    observer.flush().await;
+    result
 }
 
 /// Start the HTTP Gateway backed by one long-lived canonical runtime.
 /// Blocks until the server exits.
 pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
-    let (runtime, sessions, memory, policy) = build_canonical_runtime_with_sessions_from_env().await?;
+    dispatch_gateway_serve_on("127.0.0.1", port).await
+}
+
+/// Start the HTTP Gateway on an explicitly selected bind address.
+///
+/// Loopback is the safe default. Binding a non-loopback address is an
+/// intentional operator decision and is called out before the listener starts.
+pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, String> {
+    let (runtime, sessions, memory, policy) =
+        build_canonical_runtime_with_sessions_from_env().await?;
+    let runtime = Arc::new(runtime);
+    let governance = Arc::new(
+        apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
+            .map_err(|error| format!("memory governance store open failed: {error}"))?,
+    );
     let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
-    let panels: Arc<dyn apeireth_gateway::PanelData> = Arc::new(
-        crate::gateway_panels::CliPanelData::new(
-            sessions,
-            memory,
-            policy,
-            enable_local_read_tools,
-            default_panel_data_dir(),
-        ),
-    );
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
+    let panel = Arc::new(crate::gateway_panels::CliPanelData::new_with_runtime(
+        Arc::clone(&runtime),
+        sessions,
+        memory,
+        governance,
+        policy,
+        enable_local_read_tools,
+        default_panel_data_dir(),
+    ));
+    let services = crate::gateway_panels::gateway_services(panel);
+    let address = format!("{bind}:{port}");
+    let listener = tokio::net::TcpListener::bind(&address)
         .await
-        .map_err(|error| format!("bind 0.0.0.0:{port} failed: {error}"))?;
+        .map_err(|error| format!("bind {address} failed: {error}"))?;
     let local_addr = listener
         .local_addr()
         .map_err(|error| format!("local_addr: {error}"))?;
     let url = format!("http://{local_addr}");
 
-    eprintln!("canonical gateway started at {url}");
-    apeireth_gateway::serve_canonical(listener, Arc::new(runtime), Some(panels))
+    if local_addr.ip().is_loopback() {
+        eprintln!("canonical gateway started at {url}");
+    } else {
+        eprintln!(
+            "WARNING: canonical gateway is exposed on non-loopback address {local_addr}; use this only on a trusted network"
+        );
+    }
+    apeireth_gateway::serve_canonical_with_services(listener, runtime, services)
         .await
         .map_err(|error| format!("gateway server failed: {error}"))?;
 

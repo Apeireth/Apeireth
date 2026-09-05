@@ -100,7 +100,10 @@ async fn sessions_map_to_contract_summaries() {
     let store = Arc::new(InMemorySessionStore::new());
     let (virtual_clock, clock) = clock_pair();
     let mut older = Session::new(SessionId::new(), clock.as_ref());
-    older.append(NormalizedMessage::user("第一条消息, 用来当标题"), clock.as_ref());
+    older.append(
+        NormalizedMessage::user("第一条消息, 用来当标题"),
+        clock.as_ref(),
+    );
     virtual_clock.advance(chrono::Duration::seconds(30));
     let mut newer = Session::new(SessionId::new(), clock.as_ref());
     newer.append(NormalizedMessage::user("second"), clock.as_ref());
@@ -108,7 +111,13 @@ async fn sessions_map_to_contract_summaries() {
     store.save(&newer).await.unwrap();
 
     let dir = tempfile::tempdir().unwrap();
-    let panels = CliPanelData::new(store, FakeMemory::new(), test_policy(), true, dir.path().to_path_buf());
+    let panels = CliPanelData::new(
+        store,
+        FakeMemory::new(),
+        test_policy(),
+        true,
+        dir.path().to_path_buf(),
+    );
     let sessions = panels.list_sessions().await.unwrap();
 
     assert_eq!(sessions.len(), 2);
@@ -123,7 +132,13 @@ async fn sessions_map_to_contract_summaries() {
 async fn trace_and_audit_archives_round_trip_across_reopen() {
     let store = Arc::new(InMemorySessionStore::new());
     let dir = tempfile::tempdir().unwrap();
-    let panels = CliPanelData::new(store.clone(), FakeMemory::new(), test_policy(), false, dir.path().to_path_buf());
+    let panels = CliPanelData::new(
+        store.clone(),
+        FakeMemory::new(),
+        test_policy(),
+        false,
+        dir.path().to_path_buf(),
+    );
 
     panels
         .append_trace(
@@ -162,7 +177,13 @@ async fn trace_and_audit_archives_round_trip_across_reopen() {
     assert_eq!(audit[0].detail.as_deref(), Some("session=x"));
 
     // A fresh instance over the same dir must reload both archives.
-    let reopened = CliPanelData::new(store, FakeMemory::new(), test_policy(), false, dir.path().to_path_buf());
+    let reopened = CliPanelData::new(
+        store,
+        FakeMemory::new(),
+        test_policy(),
+        false,
+        dir.path().to_path_buf(),
+    );
     assert_eq!(reopened.list_traces(10).await.unwrap().len(), 1);
     assert_eq!(reopened.list_audit(10).await.unwrap().len(), 1);
 }
@@ -172,7 +193,13 @@ async fn tool_catalog_follows_local_read_flag() {
     let store = Arc::new(InMemorySessionStore::new());
     let dir = tempfile::tempdir().unwrap();
 
-    let off = CliPanelData::new(store.clone(), FakeMemory::new(), test_policy(), false, dir.path().to_path_buf());
+    let off = CliPanelData::new(
+        store.clone(),
+        FakeMemory::new(),
+        test_policy(),
+        false,
+        dir.path().to_path_buf(),
+    );
     let tools = off.list_tools().await.unwrap();
     assert_eq!(tools.len(), 3);
     assert_eq!(tools[0].name, "tool.repo");
@@ -181,7 +208,13 @@ async fn tool_catalog_follows_local_read_flag() {
     assert!(!tools[1].available, "local read tools off by default");
     assert_eq!(tools[1].permission, "none");
 
-    let on = CliPanelData::new(store, FakeMemory::new(), test_policy(), true, dir.path().to_path_buf());
+    let on = CliPanelData::new(
+        store,
+        FakeMemory::new(),
+        test_policy(),
+        true,
+        dir.path().to_path_buf(),
+    );
     let tools = on.list_tools().await.unwrap();
     assert!(tools[1].available);
     assert_eq!(tools[1].permission, "granted");
@@ -202,12 +235,13 @@ async fn real_sqlite_backend_persists_episodes_over_file_pool() {
             .unwrap(),
     );
     pool.write(|conn| {
-        apeireth_memory::run_migrations(conn)
-            .map_err(|e| apeireth_storage::StorageError::Migration {
+        apeireth_memory::run_migrations(conn).map_err(|e| {
+            apeireth_storage::StorageError::Migration {
                 version: 0,
                 name: "cognitive_memory",
                 message: e.to_string(),
-            })
+            }
+        })
     })
     .await
     .unwrap();
@@ -223,7 +257,11 @@ async fn real_sqlite_backend_persists_episodes_over_file_pool() {
     backend.put_episode(&episode).unwrap();
 
     let recent = backend.recent_episodes("sess-persist", 10).unwrap();
-    assert_eq!(recent.len(), 1, "file-pool put must survive into recent reads");
+    assert_eq!(
+        recent.len(),
+        1,
+        "file-pool put must survive into recent reads"
+    );
     assert_eq!(recent[0].content, "persisted?");
 
     // Independent raw connection must see the row on disk.
@@ -243,7 +281,13 @@ async fn memory_surface_append_list_protect_forget_graph() {
     store.save(&session).await.unwrap();
 
     let dir = tempfile::tempdir().unwrap();
-    let panels = CliPanelData::new(store.clone(), FakeMemory::new(), test_policy(), false, dir.path().to_path_buf());
+    let panels = CliPanelData::new(
+        store.clone(),
+        FakeMemory::new(),
+        test_policy(),
+        false,
+        dir.path().to_path_buf(),
+    );
 
     // append via the panel surface
     let appended = panels
@@ -277,7 +321,10 @@ async fn memory_surface_append_list_protect_forget_graph() {
     let protected = panels.protect_episode(&appended.id, 0).await.unwrap();
     assert!(protected.ok);
     assert_eq!(protected.rev, 1);
-    assert!(panels.protect_episode(&appended.id, 0).await.is_err(), "stale rev must conflict");
+    assert!(
+        panels.protect_episode(&appended.id, 0).await.is_err(),
+        "stale rev must conflict"
+    );
     let listed = panels
         .list_episodes(Some(&session.id.to_string()), None, 10)
         .await
@@ -308,10 +355,10 @@ async fn memory_surface_append_list_protect_forget_graph() {
     assert!(graph.nodes.iter().any(|n| n.kind == "episode"));
     assert_eq!(graph.edges.len(), 1);
     assert_eq!(graph.edges[0].from, format!("session:{}", session.id));
-    assert!(!graph
-        .edges
-        .iter()
-        .any(|e| e.to == appended.id), "forgotten episode must not be in the graph");
+    assert!(
+        !graph.edges.iter().any(|e| e.to == appended.id),
+        "forgotten episode must not be in the graph"
+    );
 
     // append to a brand-new session creates it in the ledger, so the global
     // (session-less) list can reach the episode too
@@ -330,7 +377,13 @@ async fn memory_surface_append_list_protect_forget_graph() {
         .any(|s| s.id == ghost_id.to_string()));
 
     // flags survive reopen
-    let reopened = CliPanelData::new(store, FakeMemory::new(), test_policy(), false, dir.path().to_path_buf());
+    let reopened = CliPanelData::new(
+        store,
+        FakeMemory::new(),
+        test_policy(),
+        false,
+        dir.path().to_path_buf(),
+    );
     assert!(reopened.forget_episode(&appended.id, 3, None).await.is_ok());
 }
 
@@ -375,4 +428,3 @@ async fn grants_list_revoke_and_organ_catalog() {
     assert!(organs.iter().all(|o| !o.enabled));
     assert!(organs.iter().any(|o| o.id == "Memory"));
 }
-

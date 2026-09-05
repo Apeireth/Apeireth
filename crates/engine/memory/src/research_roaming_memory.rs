@@ -170,12 +170,18 @@ impl ResearchRoamingMemory {
 
     /// 存活条目 (未删除)。
     pub fn alive(&self) -> Vec<&ResearchRoamingItem> {
-        self.items.values().filter(|i| i.deleted.is_none()).collect()
+        self.items
+            .values()
+            .filter(|i| i.deleted.is_none())
+            .collect()
     }
 
     /// 已删除条目 (墓碑审计)。
     pub fn tombstones(&self) -> Vec<&ResearchRoamingItem> {
-        self.items.values().filter(|i| i.deleted.is_some()).collect()
+        self.items
+            .values()
+            .filter(|i| i.deleted.is_some())
+            .collect()
     }
 }
 

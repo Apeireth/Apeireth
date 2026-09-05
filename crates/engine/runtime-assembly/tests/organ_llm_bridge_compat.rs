@@ -12,7 +12,7 @@ use apeireth_core::kernel::CapabilityId;
 use apeireth_orchestration::SubagentRole;
 use apeireth_plugin::llm_factory::{CompletionRequest, LlmError, LlmFactory};
 use apeireth_protocol::canonical::NormalizedResponse;
-use apeireth_runtime::canonical::{
+use apeireth_runtime_assembly::canonical::{
     InvokerLlmFactory, ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse,
     ModuleInvoker,
 };

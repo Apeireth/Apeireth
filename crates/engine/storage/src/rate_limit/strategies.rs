@@ -137,7 +137,9 @@ impl TokenBucket {
     }
 
     fn refill(&mut self, now: Instant) {
-        let elapsed = now.saturating_duration_since(self.last_refill).as_secs_f64();
+        let elapsed = now
+            .saturating_duration_since(self.last_refill)
+            .as_secs_f64();
         if elapsed <= 0.0 {
             return;
         }
@@ -728,9 +730,13 @@ mod tests {
     #[test]
     fn fixed_counts_within_window() {
         let now = Instant::now();
-        let mut fw =
-            FixedWindow::new_at(Duration::from_secs(10), 3, FixedWindowReset::OnWindowEnd, now)
-                .unwrap();
+        let mut fw = FixedWindow::new_at(
+            Duration::from_secs(10),
+            3,
+            FixedWindowReset::OnWindowEnd,
+            now,
+        )
+        .unwrap();
         assert!(fw.try_acquire_at(now));
         assert!(fw.try_acquire_at(now));
         assert!(fw.try_acquire_at(now));
@@ -788,9 +794,13 @@ mod tests {
     #[test]
     fn fixed_remaining_decreases() {
         let now = Instant::now();
-        let mut fw =
-            FixedWindow::new_at(Duration::from_secs(10), 3, FixedWindowReset::OnWindowEnd, now)
-                .unwrap();
+        let mut fw = FixedWindow::new_at(
+            Duration::from_secs(10),
+            3,
+            FixedWindowReset::OnWindowEnd,
+            now,
+        )
+        .unwrap();
         assert_eq!(fw.remaining(now), 3);
         let _ = fw.try_acquire_at(now);
         assert_eq!(fw.remaining(now), 2);

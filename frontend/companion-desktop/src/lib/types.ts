@@ -1,7 +1,7 @@
 // Apeireth 桌面伙伴 — 核心共享类型定义 (Svelte 5 + Tauri 2)
 
 export type ViewId = 'chat' | 'conversations' | 'activity' | 'tools' | 'memory' | 'settings';
-export type Theme = 'night' | 'day' | 'ocean' | 'forest' | 'paper';
+export type Theme = 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'essence';
 export type MemoryCategory =
   | '工作记忆'
   | '近期记忆'
@@ -151,6 +151,8 @@ export interface Capability {
   available?: boolean;
   /** 不可用原因 (machine-readable, 仅 available === false 时存在). */
   reason?: CapabilityAvailabilityReason;
+  /** Explicit compatibility alias of another canonical capability id. */
+  alias_of?: string;
 }
 
 /** Capability 不可用的 machine-readable 原因 (镜像 Rust AvailabilityReason). */
@@ -158,7 +160,9 @@ export type CapabilityAvailabilityReason =
   | 'provider_not_configured'
   | 'provider_unavailable'
   | 'platform_unsupported'
-  | 'disabled_by_policy';
+  | 'disabled_by_policy'
+  | 'not_implemented'
+  | 'not_exposed';
 
 /** 一个能力组 (如 sessions / memory / permissions / trace). */
 export interface CapabilityGroup {
@@ -190,6 +194,8 @@ export interface ProviderConfig {
   apiKey: string;
   model: string;
   anthropicVersion?: string;
+  /** Explicit diagnostics-only escape hatch; normal chat always uses Gateway. */
+  debugDirect?: boolean;
 }
 
 /**

@@ -78,7 +78,10 @@ impl AcpEnvelope {
             return Err(AcpError::EmptySender(self.sender.clone()));
         }
         if self.recipient.trim().is_empty() {
-            return Err(AcpError::EmptySender(format!("recipient={}", self.recipient)));
+            return Err(AcpError::EmptySender(format!(
+                "recipient={}",
+                self.recipient
+            )));
         }
         Ok(())
     }
@@ -98,8 +101,8 @@ pub fn checksum(env: &AcpEnvelope) -> AcpResult<String> {
         "kind":      env.kind,
         "payload":   env.payload,
     });
-    let mut serialized = serde_json::to_string(&record)
-        .map_err(|e| AcpError::SerializationError(e.to_string()))?;
+    let mut serialized =
+        serde_json::to_string(&record).map_err(|e| AcpError::SerializationError(e.to_string()))?;
     serialized.insert(0, 'E');
     let mut hasher = DefaultHasher::new();
     serialized.hash(&mut hasher);
@@ -254,7 +257,10 @@ mod tests {
     #[test]
     fn sequence_number_is_stable_for_same_pair() {
         let e = AcpEnvelope::new("a", "b", "ping", json!({}));
-        assert_eq!(sequence_number(&e, 7).unwrap(), sequence_number(&e, 7).unwrap());
+        assert_eq!(
+            sequence_number(&e, 7).unwrap(),
+            sequence_number(&e, 7).unwrap()
+        );
     }
 
     #[test]

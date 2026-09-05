@@ -33,9 +33,14 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      # keyring → dbus-secret-service → libdbus-sys 需要系统库
-      - name: "Install system deps (Linux: libdbus)"
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      # keyring/dbus/wayland/pipewire/egl 需要系统库
+      - name: "Install system deps (Linux: libdbus + libwayland + libpipewire + libegl)"
+        run: |
+          sudo apt-get update && sudo apt-get install -y libdbus-1-dev libwayland-dev libpipewire-0.3-dev libspa-0.2-dev libegl1-mesa-dev libgbm-dev pkg-config
+          pkg-config --exists libpipewire-0.3
+          pkg-config --modversion libpipewire-0.3
+          pkg-config --exists egl
+          pkg-config --modversion egl
 
       - uses: Swatinem/rust-cache@v2
 
@@ -109,7 +114,7 @@ jobs:
           ANCHOR_COUNT=0
           for anchor in 'S-1 北极星' 'S-2 实事求是' 'S-3 质量工程化' 'O-1 安全优先' 'O-2 前人肩上' 'O-3 干到底' 'O-4 任何人都能接手' 'O-5 不假装' 'O-6'; do
             # 匹配: `| S-1 北极星` 或 `| **S-1 北极星` 等
-            if grep -qF "| ${anchor}" docs/01-architecture/philosophy.md; then
+            if grep -qF "| ${anchor}" docs/01-architecture/philosophy.md || grep -qF "| **${anchor}" docs/01-architecture/philosophy.md; then
               ANCHOR_COUNT=$((ANCHOR_COUNT + 1))
             else
               echo "❌ O-6 锚 #4 违约: 哲学锚 '${anchor}' 缺失"

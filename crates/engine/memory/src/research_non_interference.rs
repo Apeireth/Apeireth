@@ -210,9 +210,7 @@ mod tests {
         use ResearchSetOp::Insert;
         for (na, nb) in [(3usize, 3usize), (4, 2), (2, 4), (5, 1)] {
             let ops_a: Vec<_> = (0..na).map(|i| Add(i as u64 + 1)).collect();
-            let ops_b: Vec<_> = (0..nb)
-                .map(|i| Insert(format!("tag{i}")))
-                .collect();
+            let ops_b: Vec<_> = (0..nb).map(|i| Insert(format!("tag{i}"))).collect();
             let report = research_check_non_interference::<ResearchCounterModule, ResearchSetModule>(
                 ops_a, ops_b,
             );

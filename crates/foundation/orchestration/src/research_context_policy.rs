@@ -458,7 +458,10 @@ mod tests {
         let d3 = p3.decide(0, &segs, "", 100);
         let kept2: HashSet<&str> = d2.kept_ids.iter().map(|s| s.as_str()).collect();
         let kept3: HashSet<&str> = d3.kept_ids.iter().map(|s| s.as_str()).collect();
-        assert!(kept2.is_subset(&kept3), "栈属性: 容量 2 保留集 ⊆ 容量 3 保留集");
+        assert!(
+            kept2.is_subset(&kept3),
+            "栈属性: 容量 2 保留集 ⊆ 容量 3 保留集"
+        );
     }
 
     /// core 段永不被 Drop（H3）。
@@ -480,7 +483,11 @@ mod tests {
     /// touch 提升 recency：被 touch 的旧段在容量内幸存（touch 是外部观测事件）。
     #[test]
     fn touch_updates_recency_and_survives() {
-        let segs = vec![seg("old", 1, false), seg("mid", 1, false), seg("new", 1, false)];
+        let segs = vec![
+            seg("old", 1, false),
+            seg("mid", 1, false),
+            seg("new", 1, false),
+        ];
         let mut p = ResearchStackPinPolicy::new(2, 1, false);
         // 观测顺序: new → mid → old ⇒ 栈 [old, mid, new] → 保留 old, mid
         p.touch("new");
@@ -545,7 +552,8 @@ mod tests {
             cache_prefix_ratio: 0.85,
         });
         let jsonl = log.to_jsonl();
-        let parsed: serde_json::Value = serde_json::from_str(jsonl.lines().next().unwrap()).unwrap();
+        let parsed: serde_json::Value =
+            serde_json::from_str(jsonl.lines().next().unwrap()).unwrap();
         for f in [
             "turn",
             "query",

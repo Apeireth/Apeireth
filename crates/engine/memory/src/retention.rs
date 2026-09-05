@@ -12,9 +12,7 @@
 //! ContextLedger's own rolling DELETE stays inside [`crate::context_ledger`] because a
 //! ledger is a recent-window, not an archive.
 
-use crate::memory_governance::{
-    MemoryGovernanceStatus, MemoryGovernanceStore,
-};
+use crate::memory_governance::{MemoryGovernanceStatus, MemoryGovernanceStore};
 use crate::{EpisodeQuery, EpisodeStore, MemoryResult, SqliteMemoryStore};
 
 /// Ebbinghaus strength at `now_unix` relative to `last_unix` (both epoch seconds).

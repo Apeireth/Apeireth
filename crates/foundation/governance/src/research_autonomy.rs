@@ -438,7 +438,10 @@ mod tests {
             ..d_strong_ok()
         };
         // low: base=Autonomous → demote → Consult
-        assert_eq!(l.decide(&drift, "low", false), ResearchAutonomyState::Consult);
+        assert_eq!(
+            l.decide(&drift, "low", false),
+            ResearchAutonomyState::Consult
+        );
         // high: base=Consult → demote → RequireApproval
         assert_eq!(
             l.decide(&drift, "high", false),
@@ -496,7 +499,11 @@ mod tests {
             ..d_strong_ok()
         };
         let s = g.step(&l, &drift, "low", false);
-        assert_eq!(s, ResearchAutonomyState::RequireApproval, "漂移跳过 Consult 直接熔断");
+        assert_eq!(
+            s,
+            ResearchAutonomyState::RequireApproval,
+            "漂移跳过 Consult 直接熔断"
+        );
     }
 
     #[test]

@@ -1,5 +1,7 @@
 //! Stage 5 集成测试: L0-L5 UpgradeCycle driver 完整跑通 happy path.
 
+use apeireth_runtime_assembly as apeireth_runtime;
+
 use std::sync::Arc;
 
 use apeireth_core::clock::VirtualClock;

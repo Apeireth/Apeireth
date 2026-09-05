@@ -78,9 +78,7 @@ impl SubscriptionManager {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, HashSet<String>>> {
-        self.inner
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.inner.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     pub fn subscribe(&self, uri: &str, client_id: &str) -> Result<(), JsonRpcError> {
@@ -330,9 +328,7 @@ impl ToolEventBroker {
     fn lock(
         &self,
     ) -> std::sync::MutexGuard<'_, HashMap<String, HashMap<String, ToolSubscription>>> {
-        self.inner
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.inner.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     pub fn subscribe(&self, sub: ToolSubscription) -> Result<(), JsonRpcError> {
@@ -557,8 +553,14 @@ mod tests {
     #[test]
     fn subscribe_invalid_uri_or_client_rejected() {
         let m = SubscriptionManager::new();
-        assert_eq!(m.subscribe("", "c1").unwrap_err().code, SUBSCRIBE_INVALID_URI);
-        assert_eq!(m.subscribe("uri", "").unwrap_err().code, SUBSCRIBE_INVALID_URI);
+        assert_eq!(
+            m.subscribe("", "c1").unwrap_err().code,
+            SUBSCRIBE_INVALID_URI
+        );
+        assert_eq!(
+            m.subscribe("uri", "").unwrap_err().code,
+            SUBSCRIBE_INVALID_URI
+        );
     }
 
     #[test]
@@ -676,11 +678,7 @@ mod tests {
             "long-task",
             "running"
         )));
-        assert!(!s.matches(&ToolEvent::new(
-            ToolEventKind::Failed,
-            "long-task",
-            "error"
-        )));
+        assert!(!s.matches(&ToolEvent::new(ToolEventKind::Failed, "long-task", "error")));
     }
 
     #[test]
@@ -790,9 +788,6 @@ mod tests {
         assert_eq!(n.method, "notifications/tools/list_changed");
         let c = build_tool_completed_notification("long-task", "result: 42");
         assert_eq!(c.method, "notifications/tools/completed");
-        assert_eq!(
-            c.params.unwrap()["result_summary"],
-            "result: 42"
-        );
+        assert_eq!(c.params.unwrap()["result_summary"], "result: 42");
     }
 }

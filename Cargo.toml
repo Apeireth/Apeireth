@@ -9,6 +9,7 @@ members = [
     "crates/foundation/credentials",
     "crates/foundation/orchestration",
     "crates/engine/runtime",
+    "crates/engine/runtime-assembly",
     "crates/engine/provider",
     "crates/engine/storage",
     "crates/engine/memory",
@@ -53,7 +54,7 @@ license = "Apache-2.0 OR MIT"
 repository = "https://github.com/Apeireth/Apeireth"
 # 1.0 release 描述 (per decision-22 §3 + decision-57 §0 + decision-58 §0 + 2026-08-19 subagent 验证)
 # 借鉴 8/11 + 24 LOCKED (per R148 仅保 3 不可变脊柱) + 8 哲学锚 + V0.5 24 维 (30 维升级 R126 P1-4 未合入) + 9 重守门 v9 (lineage v6→v7→v8→v9) + 13 键 verdict cache = 1.0 release
-description = "Apeireth — AGI 操作系统 / LLM 基地（Rust）。v2.0 工程重构线：16-crate 单一工作区（foundation/engine/capabilities/adapters）+ canonical agent loop + 3 provider 插件 + 受控工具与进程边界；设计/哲学/愿景沿袭 v1.0（8 哲学锚 + 三洋葱 + 13 键 + 0 装 PASS，v1 历史详单见 docs/archive/）"
+description = "Apeireth — AGI 操作系统 / LLM 基地（Rust）。v2.0 工程重构线：17-crate 单一工作区（foundation/engine/capabilities/adapters）+ runtime kernel/assembly + canonical agent loop + 受控工具与进程边界；设计/哲学/愿景沿袭 v1.0（8 哲学锚 + 三洋葱 + 13 键 + 0 装 PASS，v1 历史详单见 docs/archive/）"
 homepage = "https://github.com/Apeireth/Apeireth"
 keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]
 categories = ["ai", "asynchronous", "compilers"]

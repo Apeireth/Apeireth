@@ -154,7 +154,10 @@ impl BitemporalGraph {
     }
 
     fn bump_entity_frequency(&mut self, subject: &str, object: &str) {
-        *self.entity_frequency.entry(subject.to_string()).or_insert(0) += 1;
+        *self
+            .entity_frequency
+            .entry(subject.to_string())
+            .or_insert(0) += 1;
         *self.entity_frequency.entry(object.to_string()).or_insert(0) += 1;
     }
 
@@ -340,11 +343,7 @@ impl BitemporalGraph {
     /// 1. 每键取 `b_s ≤ t_belief` 的**最高 rev** 版本 (无论其 valid 区间);
     /// 2. 该版本为撤回 tombstone ⇒ 整键排除 (撤回语义);
     /// 3. 否则在 `t_ask ∈ V` 且 `b_s ≤ t_belief` 的版本中取最高 rev 输出。
-    fn retrospective_impl(
-        &self,
-        t_ask_ms: u64,
-        t_belief_ms: u64,
-    ) -> Vec<&BitemporalFact> {
+    fn retrospective_impl(&self, t_ask_ms: u64, t_belief_ms: u64) -> Vec<&BitemporalFact> {
         // 按键收集 (最新已到达版本, 可选有效版本)。
         let mut latest: HashMap<(String, String), &BitemporalFact> = HashMap::new();
         for f in &self.facts {
@@ -391,7 +390,11 @@ impl BitemporalGraph {
                 out.push(b);
             }
         }
-        out.sort_by(|a, b| a.subject.cmp(&b.subject).then(a.predicate.cmp(&b.predicate)));
+        out.sort_by(|a, b| {
+            a.subject
+                .cmp(&b.subject)
+                .then(a.predicate.cmp(&b.predicate))
+        });
         out
     }
 
@@ -574,11 +577,38 @@ mod tests {
     fn ra2_worked_example_late_arrival_and_correction() {
         let mut graph = BitemporalGraph::new();
         // d1: 北京 V=[0,200) B=[100,300) rev=1
-        graph.insert_fact_full("user", "lives_in", "北京", 0.8, 0, Some(200), 100, FactProvenance::Dialog);
+        graph.insert_fact_full(
+            "user",
+            "lives_in",
+            "北京",
+            0.8,
+            0,
+            Some(200),
+            100,
+            FactProvenance::Dialog,
+        );
         // d2: 上海 V=[200,∞) B=[300,400) rev=2
-        graph.insert_fact_full("user", "lives_in", "上海", 0.9, 200, None, 300, FactProvenance::Dialog);
+        graph.insert_fact_full(
+            "user",
+            "lives_in",
+            "上海",
+            0.9,
+            200,
+            None,
+            300,
+            FactProvenance::Dialog,
+        );
         // d3: 上海 V=[180,∞) B=[400,∞) rev=3 (迟到更正)
-        graph.insert_fact_full("user", "lives_in", "上海", 0.9, 180, None, 400, FactProvenance::Manual);
+        graph.insert_fact_full(
+            "user",
+            "lives_in",
+            "上海",
+            0.9,
+            180,
+            None,
+            400,
+            FactProvenance::Manual,
+        );
         let tau = 500;
 
         let f = |t: u64| {
@@ -611,7 +641,10 @@ mod tests {
         assert_eq!(b(350), vec!["上海"], "当时认为上海自 200 起");
         // 注 (0 装): 提案 §4 表格此行写 r(250,250)=北京, 但 250∉V(d1)=[0,200),
         // 与 §3.2 Datalog 规范矛盾; 以代数为准 → 空集.
-        assert!(r(250, 250).is_empty(), "250 不在任何截至 250 已到达版本的 valid 区间内");
+        assert!(
+            r(250, 250).is_empty(),
+            "250 不在任何截至 250 已到达版本的 valid 区间内"
+        );
         assert_eq!(r(250, 500), vec!["上海"], "截至 500 的信念: 已更正");
         assert_eq!(r(190, 350), vec!["北京"], "截至 350 尚未收到迟到更正");
     }
@@ -620,9 +653,36 @@ mod tests {
     #[test]
     fn audit_history_immutable_belief_slice() {
         let mut graph = BitemporalGraph::new();
-        graph.insert_fact_full("user", "lives_in", "北京", 0.8, 0, Some(200), 100, FactProvenance::Dialog);
-        graph.insert_fact_full("user", "lives_in", "上海", 0.9, 200, None, 300, FactProvenance::Dialog);
-        graph.insert_fact_full("user", "lives_in", "上海", 0.9, 180, None, 400, FactProvenance::Manual);
+        graph.insert_fact_full(
+            "user",
+            "lives_in",
+            "北京",
+            0.8,
+            0,
+            Some(200),
+            100,
+            FactProvenance::Dialog,
+        );
+        graph.insert_fact_full(
+            "user",
+            "lives_in",
+            "上海",
+            0.9,
+            200,
+            None,
+            300,
+            FactProvenance::Dialog,
+        );
+        graph.insert_fact_full(
+            "user",
+            "lives_in",
+            "上海",
+            0.9,
+            180,
+            None,
+            400,
+            FactProvenance::Manual,
+        );
         let old = graph
             .beliefs_as_of(250)
             .into_iter()
@@ -636,7 +696,16 @@ mod tests {
     #[test]
     fn retract_appends_tombstone_and_excludes_key() {
         let mut graph = BitemporalGraph::new();
-        graph.insert_fact_full("user", "lives_in", "北京", 0.8, 0, Some(200), 100, FactProvenance::Manual);
+        graph.insert_fact_full(
+            "user",
+            "lives_in",
+            "北京",
+            0.8,
+            0,
+            Some(200),
+            100,
+            FactProvenance::Manual,
+        );
         let n_before = graph.facts.len();
         let tomb = graph.retract_fact("user", "lives_in", 500, "用户要求撤回");
         assert_eq!(graph.facts.len(), n_before + 1, "撤回是追加, 不删旧行");
@@ -681,7 +750,16 @@ mod tests {
         assert!(t_late < t_early);
         // 来源权重: Reflection < Manual
         let mut g2 = BitemporalGraph::new();
-        let r = g2.insert_fact_full("k2", "p2", "v", 1.0, 0, None, 100, FactProvenance::Reflection);
+        let r = g2.insert_fact_full(
+            "k2",
+            "p2",
+            "v",
+            1.0,
+            0,
+            None,
+            100,
+            FactProvenance::Reflection,
+        );
         let m = g2.insert_fact_full("k3", "p3", "v", 1.0, 0, None, 100, FactProvenance::Manual);
         assert!(g2.belief_trust(&r, 200, &w) < g2.belief_trust(&m, 200, &w));
     }

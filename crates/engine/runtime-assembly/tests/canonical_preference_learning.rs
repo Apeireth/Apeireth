@@ -6,6 +6,8 @@
 //! `cognitive.preference_recall` overlay — proven on the provider-visible
 //! request, not by reading the store directly.
 
+use apeireth_runtime_assembly as apeireth_runtime;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 

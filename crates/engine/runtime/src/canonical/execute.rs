@@ -59,6 +59,7 @@ use super::approval::{
     FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 use super::error::{RuntimeError, RuntimeResult};
+use super::events::RuntimeEvent;
 use super::module::{
     HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleInvoker, ModuleOutcome,
     ModuleTurnState, PromptOverlay,
@@ -253,11 +254,21 @@ impl Runtime {
         let _guard = lock.lock().await;
 
         let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
+        let request_id = RequestId::new();
+        let trace_id = TraceId::new();
+        self.emit_event(RuntimeEvent::TurnStarted {
+            session: request.session,
+            request: request_id,
+            trace: trace_id,
+        });
         let observed_request = request.clone();
-        let result = self.execute_outcome_locked(request, state.clone()).await;
+        let result = self
+            .execute_outcome_locked(request, state.clone(), request_id, trace_id)
+            .await;
         if let Err(error) = &result {
             self.observe_error(&observed_request, state, error).await;
         }
+        self.emit_outcome_events(observed_request.session, request_id, trace_id, &result);
         result
     }
 
@@ -265,9 +276,9 @@ impl Runtime {
         &self,
         request: TurnRequest,
         module_state: Arc<ModuleTurnState>,
+        request_id: RequestId,
+        trace_id: TraceId,
     ) -> RuntimeResult<TurnOutcome> {
-        let trace_id = TraceId::new();
-        let request_id = RequestId::new();
         let mut trace = ExecutionTrace::new(trace_id, request.session, request_id);
 
         let clock = self.clock.as_ref();
@@ -399,6 +410,19 @@ impl Runtime {
         let lock = self.session_locks.acquire(session_id).await;
         let _guard = lock.lock().await;
 
+        let event_ids = self
+            .sessions
+            .load(&session_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|session| {
+                session
+                    .approvals
+                    .get(&approval_id)
+                    .map(|approval| (approval.request_id, approval.trace_id))
+            })
+            .unwrap_or_else(|| (RequestId::new(), TraceId::new()));
         let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
         let request = TurnRequest::new(session_id, "");
         let result = self
@@ -406,6 +430,23 @@ impl Runtime {
             .await;
         if let Err(error) = &result {
             self.observe_error(&request, state, error).await;
+        }
+        match &result {
+            Ok(ApprovalResolution::Resumed(outcome)) => {
+                self.emit_outcome_events(
+                    session_id,
+                    event_ids.0,
+                    event_ids.1,
+                    &Ok(outcome.clone()),
+                );
+            }
+            Ok(_) => {}
+            Err(error) => self.emit_event(RuntimeEvent::TurnFailed {
+                session: session_id,
+                request: event_ids.0,
+                trace: event_ids.1,
+                error: error.to_string(),
+            }),
         }
         result
     }
@@ -1712,7 +1753,7 @@ impl Runtime {
     ) -> RuntimeResult<ToolDispatch> {
         let clock = self.clock.as_ref();
 
-        let module_tool = self.modules.find_tool_by_name(&call.name);
+        let module_tool = self.capabilities.find_by_name(&call.name);
         let plugin_tool = self.plugins.tool_by_name(&call.name);
         let Some(tool) = (match (module_tool, plugin_tool) {
             (Some(tool), None) | (None, Some(tool)) => Some(tool),
@@ -2010,6 +2051,50 @@ impl Runtime {
         }
 
         Ok(())
+    }
+
+    fn emit_outcome_events(
+        &self,
+        session: SessionId,
+        request: RequestId,
+        trace: TraceId,
+        result: &RuntimeResult<TurnOutcome>,
+    ) {
+        match result {
+            Ok(TurnOutcome::Completed(response)) => {
+                for entry in &response.trace.entries {
+                    self.emit_event(RuntimeEvent::Trace {
+                        session: response.session,
+                        trace: response.trace.trace,
+                        at: entry.at,
+                        event: entry.event.clone(),
+                    });
+                }
+                self.emit_event(RuntimeEvent::TurnCompleted {
+                    session: response.session,
+                    request: response.request,
+                    trace: response.trace.trace,
+                    rounds: response.rounds,
+                    served_by: response.served_by.clone(),
+                });
+            }
+            Ok(TurnOutcome::PendingApproval(view)) => {
+                self.emit_event(RuntimeEvent::ApprovalRequired {
+                    session: view.session_id,
+                    request: view.request_id,
+                    trace: view.trace_id,
+                    approval: view.approval_id,
+                    capability: view.capability_id.clone(),
+                    tool_name: view.tool_name.clone(),
+                });
+            }
+            Err(error) => self.emit_event(RuntimeEvent::TurnFailed {
+                session,
+                request,
+                trace,
+                error: error.to_string(),
+            }),
+        }
     }
 
     /// Record the assistant's answer, persist the session, and close the trace.

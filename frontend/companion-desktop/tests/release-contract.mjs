@@ -15,6 +15,8 @@ const {
   legacyCapabilityManifest,
   capabilitySupported,
   capabilityAvailable,
+  loadConfig,
+  saveConfig,
   friendlyErrorMessage,
   HttpError,
   toRuntimeError,
@@ -29,11 +31,18 @@ const check = (name, fn) => {
 
 console.log('--- Canonical release contract (real module) ---');
 
-// The routes canonical_entry.rs actually registers.
-const CANONICAL = ['health', 'models.list', 'chat.completions', 'approvals.resolve'];
+const storage = new Map();
+globalThis.localStorage = {
+  getItem: (key) => storage.get(key) ?? null,
+  setItem: (key, value) => storage.set(key, String(value)),
+  removeItem: (key) => storage.delete(key),
+};
 
-// Introspection the canonical gateway does NOT serve. Each of these was declared
-// supported by the old permissive fallback, which silently defeated every gate.
+// The routes canonical_entry.rs actually registers.
+const CANONICAL = ['health', 'models.list', 'chat.completions', 'permissions.approval.resolve'];
+
+// Optional runtime projections are deliberately not assumed when discovery is
+// unavailable. The live manifest can enable them after a successful fetch.
 const UNSUPPORTED = [
   'sessions.read',
   'memory.read',
@@ -44,9 +53,7 @@ const UNSUPPORTED = [
   'tools.list',
   'audit.read',
   'trace.read',
-  'activity.sse',
   'activity.audit',
-  'permissions.requests.read',
   'permissions.grants.read',
   'permissions.revoke',
 ];
@@ -56,6 +63,11 @@ check('canonical capabilities are supported', () => {
   for (const id of CANONICAL) {
     assert.equal(capabilitySupported(manifest, id), true, `${id} should be supported`);
   }
+});
+
+check('approvals.resolve remains a compatibility alias of permissions.approval.resolve', () => {
+  const manifest = releaseContractManifest();
+  assert.equal(capabilitySupported(manifest, 'approvals.resolve'), true);
 });
 
 check('no introspection capability is claimed', () => {
@@ -93,6 +105,16 @@ check('availability falls back to supported', () => {
   }
 });
 
+check('availability never overrides unsupported status', () => {
+  const manifest = {
+    schema_version: 1,
+    runtime: {service: 'test', version: 'test'},
+    capabilities: [{name: 'test', capabilities: [{id: 'test.cap', supported: false, available: true}]}],
+  };
+  assert.equal(capabilitySupported(manifest, 'test.cap'), false);
+  assert.equal(capabilityAvailable(manifest, 'test.cap'), false);
+});
+
 check('manifest is marked as not runtime-sourced', () => {
   const manifest = releaseContractManifest();
   assert.equal(manifest.legacy, true, 'must be flagged as not from the runtime itself');
@@ -107,6 +129,37 @@ check('deprecated alias still resolves to the same contract', () => {
     JSON.stringify(releaseContractManifest()),
     'the retained alias must not reintroduce the permissive profile',
   );
+});
+
+check('config persistence strips nested credentials', () => {
+  saveConfig({
+    baseUrl: 'http://127.0.0.1:8080',
+    apiKey: 'top-level-secret',
+    model: 'x',
+    provider: {
+      protocol: 'openai',
+      preset: 'custom',
+      baseUrl: 'https://provider.invalid',
+      apiKey: 'nested-secret',
+      model: 'x',
+      metadata: {accessToken: 'deep-secret', safe: 'kept'},
+    },
+  });
+  const saved = storage.get('apeireth-config');
+  assert.equal(saved.includes('secret'), false);
+  assert.equal(saved.includes('accessToken'), false);
+
+  storage.set('apeireth-config', JSON.stringify({
+    baseUrl: 'http://127.0.0.1:8080',
+    model: 'x',
+    provider: {protocol: 'openai', apiKey: 'legacy-secret', token: 'legacy-token'},
+  }));
+  const loaded = loadConfig();
+  assert.equal(loaded.apiKey, '');
+  assert.equal(loaded.provider.apiKey, '');
+  const migrated = storage.get('apeireth-config');
+  assert.equal(migrated.includes('legacy-secret'), false);
+  assert.equal(migrated.includes('legacy-token'), false);
 });
 
 console.log('--- Error surface ---');

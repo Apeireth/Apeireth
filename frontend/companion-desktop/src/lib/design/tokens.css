@@ -29,11 +29,17 @@
   --ap-space-blue-console-white: #919eb0;
 
   /* ---------- 文字骨白 ✅ 规范 §2.3 / JSON color.text ---------- */
-  --ap-bone: #e8e0cc;            /* 正文/引用/UI 主文字 */
+  --ap-bone: #e8e0cc;
+  --ap-bone-68: rgba(232, 224, 204, 0.68);
+  --ap-bone-42: rgba(232, 224, 204, 0.42);
+  --ap-bone-30: rgba(232, 224, 204, 0.3);
+  --ap-ink: #26262a;
 
   /* ---------- UI 面板与卡片 🟡 规范 §2.3/§5 / JSON color.ui ---------- */
   --ap-panel: rgba(11, 13, 18, 0.82); /* 页面层面板底：#0b0d12 @ 82%，浮于虚化场景上 */
   --ap-panel-solid: #0b0d12;          /* 不透明近黑（设置页等专注场景） */
+  --ap-shell-chip: rgba(11, 13, 18, 0.52);   /* 建议 pill / 次要胶囊底 */
+  --ap-shell-elevated: rgba(9, 11, 16, 0.96); /* 弹出层 / 工作台底 */
   --ap-card: #ece7da;                 /* 哑白卡片（内容卡/消息卡，终末地配方） */
   --ap-card-dark: #15181f;            /* 深灰卡片（列表项/次要容器） */
   --ap-line: rgba(232, 224, 204, 0.14); /* 1px 细分隔线/描边：#e8e0cc @ 14% */
@@ -101,11 +107,36 @@
   --ap-dur-pulse: 3.3s;     /* shader pulseWave 周期 ✅ index.html:370 */
   --ap-dur-timeline: 90s;   /* 照明档位过渡默认 🟡 §3.3 */
   --ap-dur-timeline-min: 60s; /* 照明档位过渡下限 🟡 §3.3 */
+  --ap-ease: var(--ap-ease-standard);
 }
 
-/* ============================================================================
-   基础工具类（规范出处见各条注释）
-   ============================================================================ */
+/* ---------- Essence 浅色主题（星空山脉壁纸 + 雾面玻璃 UI） ---------- */
+html[data-theme='essence'] {
+  --ap-space-void: #ebe8e2;
+  --ap-gold: #8a7355;
+  --ap-gold-white-hot: #a89272;
+  --ap-gold-amber: #6f5e48;
+  --ap-gold-ui: #5c4f3f;
+  --ap-gold-platinum: #c4b8a8;
+  --ap-bone: #1c1b1f;
+  --ap-bone-68: rgba(28, 27, 31, 0.72);
+  --ap-bone-42: rgba(28, 27, 31, 0.52);
+  --ap-bone-30: rgba(28, 27, 31, 0.38);
+  --ap-ink: #141316;
+  --ap-panel: rgba(255, 255, 255, 0.76);
+  --ap-panel-solid: #f7f5f1;
+  --ap-shell-chip: rgba(255, 255, 255, 0.72);
+  --ap-shell-elevated: rgba(255, 255, 255, 0.92);
+  --ap-card: #ffffff;
+  --ap-card-dark: #eceae5;
+  --ap-line: rgba(20, 19, 22, 0.1);
+  --ap-accent-tab: #8a7355;
+  --ap-semantic-success: #3d7a5c;
+  --ap-semantic-warning: #9a6f2e;
+  --ap-semantic-danger: #a84840;
+  --ap-semantic-info: #4a6278;
+}
+
 
 /* 他的声音排版 ✅ 规范 §6.1：衬线 + 0.13em 字距 + 2.1 行高
    「他的每一句话都按引语对待」。 */

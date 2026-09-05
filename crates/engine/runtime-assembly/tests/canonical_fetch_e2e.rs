@@ -4,6 +4,8 @@
 //! router, session store, and FetchTool are real. The provider is scripted and
 //! HTTP uses a local loopback server with an explicit allow-list policy.
 
+use apeireth_runtime_assembly as apeireth_runtime;
+
 use apeireth_governance::{
     DenyCapabilities, GovernancePipeline, Permission, PermissionGovernanceHook, PermissionPolicy,
 };

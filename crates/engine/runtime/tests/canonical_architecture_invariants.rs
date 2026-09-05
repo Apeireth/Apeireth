@@ -49,11 +49,17 @@ fn execution_core_sources() -> Vec<(&'static str, &'static str)> {
 
 fn composition_sources() -> Vec<(&'static str, &'static str)> {
     vec![
-        ("cognitive", include_str!("../src/canonical/cognitive.rs")),
-        ("production", include_str!("../src/canonical/production.rs")),
+        (
+            "cognitive",
+            include_str!("../../runtime-assembly/src/canonical/cognitive.rs"),
+        ),
+        (
+            "production",
+            include_str!("../../runtime-assembly/src/canonical/production.rs"),
+        ),
         (
             "tool_modules",
-            include_str!("../src/canonical/tool_modules.rs"),
+            include_str!("../../runtime-assembly/src/canonical/tool_modules.rs"),
         ),
     ]
 }

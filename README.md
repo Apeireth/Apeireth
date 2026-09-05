@@ -6,9 +6,9 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-3119%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
+[![Tests](https://img.shields.io/badge/tests-see%20CI-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
-[![Architecture](https://img.shields.io/badge/architecture-16--Crate%20Microkernel-orange.svg)](docs/01-architecture/architecture.md)
+[![Architecture](https://img.shields.io/badge/architecture-17--Crate%20Kernel%20%2B%20Assembly-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
@@ -68,9 +68,9 @@ Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny
 | **Real-Time Voice Barge-In** | Stream cancellation lookup + `tokio::Notify` broadcast | $< 1.0 \text{ ms}$ | **0.18 ms** | ✅ **VERIFIED** |
 | **Ember HUD Render Tick** | Physiological breathing curve + WGSL uniform synthesis | $< 0.5 \text{ ms}$ | **0.08 ms** | ✅ **VERIFIED** |
 | **JobObject OS Sandbox Spawn** | Win32 Job Object creation + limits + process containment | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **VERIFIED** |
-| **Microkernel Cold Start** | 16-crate kernel bootstrap to ready state | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **VERIFIED** |
+| **Microkernel Cold Start** | 17-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **VERIFIED** |
 | **Runtime Idle Footprint** | Complete microkernel background daemon memory usage | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **VERIFIED** |
-| **Workspace Test Suite** | Full regression pass across all 16 crates | 100% Pass | **3119 / 3119 PASS** | ✅ **0 FAILED** |
+| **Workspace Test Suite** | Full regression pass across the 17-crate kernel+assembly workspace | 100% Pass | **see CI / local `cargo test --workspace`** | ⏳ **re-measured after assembly split** |
 
 > *All benchmarks are hardware-verified on AMD Ryzen 9 / Intel Core i9, 32GB RAM, Windows 11 / Ubuntu 24.04 (see [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md) for full reproduction steps).*
 
@@ -78,7 +78,7 @@ Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny
 
 ## ⚡ What is Apeireth 2.0+?
 
-**Apeireth 2.0+** is a **Pure Safe Rust, 16-crate AGI Operating System and Cognitive Microkernel**. It is engineered from first principles to transcend naive single-turn LLM wrappers, fragile Python scripts, and chunked vector databases. 
+**Apeireth 2.0+** is a **Pure Safe Rust, 17-crate AGI Operating System with a Runtime Kernel and Runtime Assembly**. The kernel owns the canonical turn protocol and abstract ports; concrete cognition, tools, Organ adapters, and SQLite wiring are installed by `apeireth-runtime-assembly`.
 
 By unifying **Continuous Fluid Topological Memory**, **Cognitive Quota Preemptive Scheduling**, **Causal World Model Fork/Commit**, **Micro-Luminescent Ambient Presence (Ember HUD)**, and **Triple-Onion Zero-Trust Governance**, Apeireth provides a permanent, self-evolving, and cryptographically verified sanctuary for artificial intelligence to co-exist with humans.
 
@@ -170,7 +170,7 @@ When $U_{\text{care}} \ge \Theta_{\text{action}}$ and user flow friction is zero
 
 ---
 
-## 🧱 16-Crate Microkernel Architectural Breakdown
+## 🧱 17-Crate Runtime Kernel + Assembly Breakdown
 
 The root Cargo workspace strictly enforces an acyclic, single-direction dependency hierarchy across four distinct layers:
 
@@ -185,7 +185,8 @@ crates/
 │   └── plugin                # Dynamic plugin hooks & capability extension registries
 ├── engine/                   # Layer 1: Cognitive Engines & Memory Manifolds
 │   ├── memory                # Betti Homology, Kuramoto, DualScaled field, Chronicle, Three-Tier Vault
-│   ├── runtime               # Agent loop, Causal World Model, FlowLock, Heartbeat
+│   ├── runtime               # Mechanism kernel, registries, events, ports, Main Loop
+│   ├── runtime-assembly      # Concrete cognition, tools, Organ bridge, SQLite wiring
 │   ├── organ                 # 9 Cognitive organs, Persona Synthesizer, Reflection
 │   ├── perception            # Whisper HTTP, MiniMax TTS, Xcap screen vision
 │   ├── provider              # Anthropic, OpenAI-compatible, Google Gemini, Ollama
@@ -209,7 +210,8 @@ crates/
 | **Foundation** | `apeireth-orchestration`| Quota scheduler, Care Potential, Lineage spawning | `CognitiveQuotaScheduler::schedule()`, `CarePotentialField::step()` |
 | **Foundation** | `apeireth-plugin` | Extensible capability registry & lifecycle hooks | `PluginRegistry::register()`, `CapabilityDescriptor` |
 | **Engine** | `apeireth-memory` | Topological Betti holes, Kuramoto phase lock, DualScaled field | `BettiHoleDetector::analyze()`, `KuramotoResonance::step()` |
-| **Engine** | `apeireth-runtime` | Causal World Model, FlowLock, Agent main execution | `CausalWorldModel::fork_branch()`, `Runtime::execute_outcome()`|
+| **Engine** | `apeireth-runtime` | Runtime mechanism kernel, Main Loop, registries, events, abstract ports | `Runtime::execute_outcome()`, `BehaviorRegistry`, `CapabilityRegistry`|
+| **Engine** | `apeireth-runtime-assembly` | Production cognitive/tool/Organ composition and SQLite session adapter | `production_runtime()`, `SqliteSessionStore` |
 | **Engine** | `apeireth-organ` | 9 Cognitive organs, self-reflection, persona synth | `OrganRegistry::evaluate()`, `PersonaSynthesizer::blend()` |
 | **Engine** | `apeireth-perception` | Whisper speech, MiniMax 128kbps TTS, Xcap vision | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
 | **Engine** | `apeireth-provider` | Multi-LLM provider abstraction (Anthropic/OpenAI/Gemini)| `ProviderRegistry::dispatch()`, `NormalizedChatCompletions` |

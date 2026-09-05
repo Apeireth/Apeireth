@@ -21,8 +21,6 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use apeireth_storage::{run_migrations, SqliteConnectionPool, StorageError};
-
 use super::approval::PendingApproval;
 use super::error::{RuntimeError, RuntimeResult};
 
@@ -277,114 +275,12 @@ impl SessionStore for InMemorySessionStore {
 
     async fn list(&self) -> RuntimeResult<Vec<Session>> {
         let mut all: Vec<Session> = self.sessions.lock().await.values().cloned().collect();
-        all.sort_by(|a, b| b.updated_at.epoch_millis().cmp(&a.updated_at.epoch_millis()));
+        all.sort_by(|a, b| {
+            b.updated_at
+                .epoch_millis()
+                .cmp(&a.updated_at.epoch_millis())
+        });
         Ok(all)
-    }
-}
-
-/// A SQLite-backed [`SessionStore`].
-///
-/// This store serializes [`Session`] into the `sessions` table owned by the
-/// `apeireth-storage` schema. The runtime still owns the [`SessionStore`]
-/// trait and the [`Session`] type; `apeireth-storage` stays a low-level
-/// storage foundation and does not import runtime domain types.
-pub struct SqliteSessionStore {
-    pool: SqliteConnectionPool,
-}
-
-impl SqliteSessionStore {
-    /// Opens a file-backed SQLite store and applies storage migrations.
-    pub async fn open(path: impl AsRef<std::path::Path>) -> RuntimeResult<Self> {
-        let path = path.as_ref().to_path_buf();
-        let pool = SqliteConnectionPool::open(&path)
-            .await
-            .map_err(|e| RuntimeError::session_store_open(e.to_string()))?;
-        pool.write(|conn| run_migrations(conn))
-            .await
-            .map_err(|e| RuntimeError::session_store_open(e.to_string()))?;
-        Ok(Self { pool })
-    }
-
-    /// Opens a shared in-memory SQLite store and applies storage migrations.
-    pub async fn in_memory() -> RuntimeResult<Self> {
-        let pool = SqliteConnectionPool::in_memory()
-            .await
-            .map_err(|e| RuntimeError::session_store_open(e.to_string()))?;
-        pool.write(|conn| run_migrations(conn))
-            .await
-            .map_err(|e| RuntimeError::session_store_open(e.to_string()))?;
-        Ok(Self { pool })
-    }
-
-    fn storage_err(session: SessionId, operation: &'static str, e: StorageError) -> RuntimeError {
-        match operation {
-            "loaded" => RuntimeError::session_load(session, e.to_string()),
-            _ => RuntimeError::session_save(session, e.to_string()),
-        }
-    }
-}
-
-#[async_trait]
-impl SessionStore for SqliteSessionStore {
-    async fn load(&self, id: &SessionId) -> RuntimeResult<Option<Session>> {
-        use rusqlite::OptionalExtension;
-
-        let id = *id;
-        let loaded = self
-            .pool
-            .read(move |conn| {
-                let data: Option<String> = conn
-                    .prepare("SELECT data FROM sessions WHERE id = ?1")?
-                    .query_row([id.to_string()], |row| row.get(0))
-                    .optional()?;
-                data.map(|data| {
-                    serde_json::from_str::<Session>(&data)
-                        .map_err(|e| StorageError::Serialization(e.to_string()))
-                })
-                .transpose()
-            })
-            .map_err(|e| Self::storage_err(id, "loaded", e))?;
-        Ok(loaded)
-    }
-
-    async fn save(&self, session: &Session) -> RuntimeResult<()> {
-        let id = session.id;
-        let data = serde_json::to_string(session)
-            .map_err(|e| StorageError::Serialization(e.to_string()))
-            .map_err(|e| Self::storage_err(id, "saved", e))?;
-
-        self.pool
-            .write(move |conn| {
-                conn.execute(
-                    "INSERT INTO sessions (id, data) VALUES (?1, ?2)
-                     ON CONFLICT(id) DO UPDATE SET data = excluded.data",
-                    rusqlite::params![id.to_string(), data],
-                )?;
-                Ok(())
-            })
-            .await
-            .map_err(|e| Self::storage_err(id, "saved", e))?;
-        Ok(())
-    }
-
-    async fn list(&self) -> RuntimeResult<Vec<Session>> {
-        let mut sessions = self
-            .pool
-            .read(|conn| {
-                let mut stmt = conn.prepare("SELECT data FROM sessions")?;
-                let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-                let mut sessions = Vec::new();
-                for row in rows {
-                    let data = row.map_err(|e| StorageError::Serialization(e.to_string()))?;
-                    let session = serde_json::from_str::<Session>(&data)
-                        .map_err(|e| StorageError::Serialization(e.to_string()))?;
-                    sessions.push(session);
-                }
-                Ok::<_, StorageError>(sessions)
-            })
-            .map_err(|e| RuntimeError::session_store_open(format!("list: {e}")))?;
-        sessions.sort_by(|a, b| b.updated_at.epoch_millis().cmp(&a.updated_at.epoch_millis()));
-        Ok(sessions)
     }
 }
 
@@ -560,38 +456,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sqlite_store_round_trips_across_reopen() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("sessions.sqlite");
-
-        let manager = {
-            let store = Arc::new(SqliteSessionStore::open(&path).await.unwrap());
-            SessionManager::new(store, clock())
-        };
-
-        let id = SessionId::new();
-        let mut session = manager.load_or_create(id).await.unwrap();
-        session.append(NormalizedMessage::user("durable hello"), clock().as_ref());
-        manager.save(&session).await.unwrap();
-
-        // Reopen a fresh store over the same file. This is a real file-backed
-        // reopen, not a shared in-memory Arc.
-        let manager = {
-            let store = Arc::new(SqliteSessionStore::open(&path).await.unwrap());
-            SessionManager::new(store, clock())
-        };
-        let reloaded = manager.load_or_create(id).await.unwrap();
-        assert_eq!(reloaded.len(), 1);
-        assert!(
-            matches!(
-                &reloaded.messages[0].content[0],
-                apeireth_protocol::canonical::ContentPart::Text { text } if text == "durable hello"
-            ),
-            "the transcript must survive a file-backed reopen"
-        );
-    }
-
-    #[tokio::test]
     async fn list_returns_sessions_most_recently_updated_first() {
         let virtual_clock = VirtualClock::new(
             Timestamp::from_epoch_millis(1_700_000_000_000)
@@ -611,30 +475,6 @@ mod tests {
         let listed = store.list().await.unwrap();
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].id, newer.id, "newest updated first");
-        assert_eq!(listed[1].id, older.id);
-    }
-
-    #[tokio::test]
-    async fn sqlite_list_returns_sessions_most_recently_updated_first() {
-        let dir = tempfile::tempdir().unwrap();
-        let store = SqliteSessionStore::open(dir.path().join("sessions.sqlite"))
-            .await
-            .unwrap();
-        let virtual_clock = VirtualClock::new(
-            Timestamp::from_epoch_millis(1_700_000_000_000)
-                .unwrap()
-                .as_datetime(),
-        );
-        let clock: Arc<dyn Clock> = Arc::new(virtual_clock.clone());
-        let older = Session::new(SessionId::new(), clock.as_ref());
-        virtual_clock.advance(chrono::Duration::seconds(30));
-        let newer = Session::new(SessionId::new(), clock.as_ref());
-        store.save(&older).await.unwrap();
-        store.save(&newer).await.unwrap();
-
-        let listed = store.list().await.unwrap();
-        assert_eq!(listed.len(), 2);
-        assert_eq!(listed[0].id, newer.id);
         assert_eq!(listed[1].id, older.id);
     }
 }

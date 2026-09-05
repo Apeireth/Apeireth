@@ -12,11 +12,11 @@
 //!   replacement; Windows falls back to a backup+rename dance because `rename` cannot
 //!   replace an existing file).
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Patch 应用错误.
@@ -40,9 +40,17 @@ pub enum ApplyPatchError {
 /// 单个文件操作类型.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilePatchAction {
-    Add { path: PathBuf, content: String },
-    Delete { path: PathBuf },
-    Update { path: PathBuf, hunks: Vec<PatchHunk> },
+    Add {
+        path: PathBuf,
+        content: String,
+    },
+    Delete {
+        path: PathBuf,
+    },
+    Update {
+        path: PathBuf,
+        hunks: Vec<PatchHunk>,
+    },
 }
 
 /// 补丁修改块 (Hunk).
@@ -140,7 +148,9 @@ impl TransactionalPatchApplier {
                             i += 1;
                         }
                         if i >= lines.len() || lines[i].trim() != "=======" {
-                            return Err(ApplyPatchError::ParseError("缺少 '=======' 分隔符".to_string()));
+                            return Err(ApplyPatchError::ParseError(
+                                "缺少 '=======' 分隔符".to_string(),
+                            ));
                         }
                         i += 1; // 跳过 =======
                         let mut replace_lines = Vec::new();
@@ -149,7 +159,9 @@ impl TransactionalPatchApplier {
                             i += 1;
                         }
                         if i >= lines.len() || lines[i].trim() != ">>>>>>>" {
-                            return Err(ApplyPatchError::ParseError("缺少 '>>>>>>>' 结束符".to_string()));
+                            return Err(ApplyPatchError::ParseError(
+                                "缺少 '>>>>>>>' 结束符".to_string(),
+                            ));
                         }
                         i += 1; // 跳过 >>>>>>>
                         hunks.push(PatchHunk {
@@ -236,7 +248,9 @@ impl TransactionalPatchApplier {
                 FilePatchAction::Add { path, content } => {
                     let full_path = root_dir.join(path);
                     if full_path.exists() {
-                        return Err(ApplyPatchError::FileAlreadyExists(path.to_string_lossy().to_string()));
+                        return Err(ApplyPatchError::FileAlreadyExists(
+                            path.to_string_lossy().to_string(),
+                        ));
                     }
                     original_backups.insert(full_path.clone(), None);
                     staged_writes.insert(full_path, content.clone());
@@ -245,9 +259,12 @@ impl TransactionalPatchApplier {
                 FilePatchAction::Delete { path } => {
                     let full_path = root_dir.join(path);
                     if !full_path.exists() {
-                        return Err(ApplyPatchError::FileNotFound(path.to_string_lossy().to_string()));
+                        return Err(ApplyPatchError::FileNotFound(
+                            path.to_string_lossy().to_string(),
+                        ));
                     }
-                    let old_content = fs::read_to_string(&full_path).map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+                    let old_content = fs::read_to_string(&full_path)
+                        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
                     original_backups.insert(full_path.clone(), Some(old_content));
                     staged_deletes.push(full_path);
                     files_deleted.push(path.to_string_lossy().to_string());
@@ -255,9 +272,12 @@ impl TransactionalPatchApplier {
                 FilePatchAction::Update { path, hunks } => {
                     let full_path = root_dir.join(path);
                     if !full_path.exists() {
-                        return Err(ApplyPatchError::FileNotFound(path.to_string_lossy().to_string()));
+                        return Err(ApplyPatchError::FileNotFound(
+                            path.to_string_lossy().to_string(),
+                        ));
                     }
-                    let original = fs::read_to_string(&full_path).map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+                    let original = fs::read_to_string(&full_path)
+                        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
                     original_backups.insert(full_path.clone(), Some(original.clone()));
 
                     let mut updated = original;
@@ -326,9 +346,7 @@ impl TransactionalPatchApplier {
 
 /// True when `line` (already trimmed) starts a Codex-style hunk.
 fn is_codex_hunk_start(trimmed_line: &str) -> bool {
-    trimmed_line.starts_with("@@")
-        || trimmed_line.starts_with('-')
-        || trimmed_line.starts_with('+')
+    trimmed_line.starts_with("@@") || trimmed_line.starts_with('-') || trimmed_line.starts_with('+')
 }
 
 /// Add File body: Codex requires a `+` prefix on every line; the v2 SEARCH/REPLACE
@@ -526,12 +544,16 @@ replaced
             }
             other => panic!("expected AmbiguousMatch, got {other:?}"),
         }
-        assert_eq!(fs::read_to_string(dir.path().join("a.rs")).unwrap(), "foo\nfoo\n");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("a.rs")).unwrap(),
+            "foo\nfoo\n"
+        );
     }
 
     #[test]
     fn parse_codex_update_hunk() {
-        let patch = "*** Begin Patch\n*** Update File: a.txt\n@@ anchor 1\n-old\n+new\n*** End Patch";
+        let patch =
+            "*** Begin Patch\n*** Update File: a.txt\n@@ anchor 1\n-old\n+new\n*** End Patch";
         let ops = TransactionalPatchApplier::parse_patch(patch).unwrap();
         assert_eq!(ops.len(), 1);
         match &ops[0] {
@@ -582,7 +604,10 @@ replaced
             }
             other => panic!("expected AmbiguousMatch, got {other:?}"),
         }
-        assert_eq!(fs::read_to_string(dir.path().join("a.txt")).unwrap(), "x x x");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+            "x x x"
+        );
     }
 
     #[test]

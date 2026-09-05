@@ -1,0 +1,243 @@
+/* ============================================================================
+   Apeireth UI — 动效与高斯模糊增强层
+   依赖 tokens.css 中的 --ap-ease / --ap-dur-*；尊重 prefers-reduced-motion
+   ============================================================================ */
+
+/* ── 壳层进入 ── */
+@media (prefers-reduced-motion: no-preference) {
+  .shell {
+    animation: ap-shell-in 0.55s var(--ap-ease) both;
+  }
+  @keyframes ap-shell-in {
+    from {
+      opacity: 0;
+      filter: blur(6px);
+    }
+    to {
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+
+  .rail-btn {
+    transition:
+      color 0.28s var(--ap-ease),
+      background 0.28s var(--ap-ease),
+      transform 0.22s var(--ap-ease);
+  }
+  .rail-btn:hover {
+    transform: translateY(-1px);
+  }
+  .rail-btn:active {
+    transform: translateY(0) scale(0.97);
+  }
+  .rail-btn.active::before {
+    animation: ap-rail-glow 2.4s ease-in-out infinite;
+  }
+  @keyframes ap-rail-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 6px rgba(255, 210, 122, 0.45);
+    }
+    50% {
+      box-shadow: 0 0 12px rgba(255, 210, 122, 0.75);
+    }
+  }
+
+  /* 首页建议卡片错落入场 */
+  .home .sug {
+    animation: ap-card-rise 0.5s var(--ap-ease) both;
+  }
+  .home .sug:nth-child(1) {
+    animation-delay: 0.04s;
+  }
+  .home .sug:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+  .home .sug:nth-child(3) {
+    animation-delay: 0.16s;
+  }
+  .home .sug:nth-child(4) {
+    animation-delay: 0.22s;
+  }
+  @keyframes ap-card-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+      filter: blur(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+  }
+
+  .home h1 {
+    animation: ap-fade-up 0.6s var(--ap-ease) both;
+  }
+  .home .lede {
+    animation: ap-fade-up 0.6s var(--ap-ease) 0.08s both;
+  }
+  @keyframes ap-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* ── 抽屉 / 遮罩：模糊渐入 ── */
+#drawerScrim {
+  backdrop-filter: blur(0);
+  transition:
+    opacity 0.32s var(--ap-ease),
+    backdrop-filter 0.38s var(--ap-ease),
+    visibility 0.32s;
+}
+#drawerScrim.on {
+  backdrop-filter: blur(10px);
+}
+#scrim {
+  backdrop-filter: blur(0);
+  transition:
+    opacity 0.26s ease,
+    backdrop-filter 0.32s ease,
+    visibility 0.26s;
+}
+#scrim.show {
+  backdrop-filter: blur(8px);
+}
+
+.drawer {
+  backdrop-filter: blur(18px);
+  transition:
+    transform 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.38s var(--ap-ease),
+    backdrop-filter 0.38s var(--ap-ease);
+}
+.drawer.open {
+  box-shadow: 26px 0 60px -24px rgba(0, 0, 0, 0.55);
+}
+
+/* ── 工作台滑入 ── */
+.wb {
+  backdrop-filter: blur(16px);
+  transition:
+    transform 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.32s var(--ap-ease),
+    backdrop-filter 0.36s var(--ap-ease);
+}
+.wb:not(.closed) {
+  backdrop-filter: blur(20px);
+}
+
+/* ── 输入区聚焦：雾面加深 ── */
+.composer {
+  backdrop-filter: blur(14px);
+  transition:
+    border-color 0.3s var(--ap-ease),
+    box-shadow 0.32s var(--ap-ease),
+    backdrop-filter 0.32s var(--ap-ease);
+}
+.composer:focus-within {
+  backdrop-filter: blur(20px);
+}
+.composer-caps {
+  transition:
+    border-color 0.3s var(--ap-ease),
+    box-shadow 0.3s var(--ap-ease),
+    backdrop-filter 0.3s var(--ap-ease);
+}
+.composer-caps:has(.cap-btn[aria-expanded='true']) {
+  backdrop-filter: blur(18px);
+}
+
+/* ── 发送按钮微交互 ── */
+@media (prefers-reduced-motion: no-preference) {
+  .composer-send .send {
+    transition:
+      transform 0.2s var(--ap-ease),
+      background 0.2s ease,
+      box-shadow 0.25s ease;
+  }
+  .composer-send .send:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px -8px rgba(255, 210, 122, 0.45);
+  }
+  .composer-send .send:not(:disabled):active {
+    transform: translateY(0) scale(0.96);
+  }
+}
+
+/* ── 工作台切换钮 ── */
+.wb-toggle {
+  backdrop-filter: blur(12px);
+  transition:
+    color 0.25s ease,
+    background 0.25s ease,
+    border-color 0.25s ease,
+    backdrop-filter 0.3s ease,
+    box-shadow 0.3s ease;
+}
+.wb-toggle.on {
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px -10px rgba(255, 210, 122, 0.35);
+}
+
+/* ── AI 消息卡片 ── */
+@media (prefers-reduced-motion: no-preference) {
+  .ai-card {
+    animation: ap-msg-in 0.42s var(--ap-ease) both;
+  }
+  @keyframes ap-msg-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+      filter: blur(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+  }
+}
+
+/* ── Essence 主题：更强雾面 ── */
+html[data-theme='essence'] .rail {
+  backdrop-filter: blur(20px) saturate(1.05);
+}
+html[data-theme='essence'] .composer,
+html[data-theme='essence'] .composer-caps {
+  backdrop-filter: blur(16px) saturate(1.02);
+}
+html[data-theme='essence'] .composer:focus-within {
+  backdrop-filter: blur(24px) saturate(1.04);
+}
+html[data-theme='essence'] #drawerScrim.on {
+  backdrop-filter: blur(14px) saturate(1.02);
+}
+html[data-theme='essence'] .panel.show {
+  backdrop-filter: blur(26px) saturate(1.03);
+}
+
+/* Lucide 图标在壳层中的尺寸统一 */
+.shell-icon {
+  flex: none;
+  stroke-width: 1.75;
+}
+.rail-btn .shell-icon {
+  width: 17px;
+  height: 17px;
+}
+.shell-icon-sm {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.75;
+  flex: none;
+}

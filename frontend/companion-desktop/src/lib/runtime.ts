@@ -30,6 +30,72 @@ import type {
 import {recordCallLog} from './call-logger.ts';
 
 const STORAGE_KEY = 'apeireth-config';
+const SECRET_CONFIG_KEYS = new Set([
+  'apiKey',
+  'api_key',
+  'masterToken',
+  'master_token',
+  'accessToken',
+  'access_token',
+  'token',
+  'secret',
+]);
+
+/** Remove credentials at every nesting level before a config touches storage. */
+function purgeConfigSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(purgeConfigSecrets);
+  if (!value || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (SECRET_CONFIG_KEYS.has(key)) continue;
+    out[key] = purgeConfigSecrets(child);
+  }
+  return out;
+}
+
+function parseProviderConfig(value: unknown): ApeirethConfig['provider'] {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  const protocol = raw.protocol === 'anthropic' ? 'anthropic' : 'openai';
+  const baseUrl = typeof raw.baseUrl === 'string' ? raw.baseUrl : '';
+  const model = typeof raw.model === 'string' ? raw.model : '';
+  return {
+    protocol,
+    preset: typeof raw.preset === 'string' ? raw.preset : 'custom',
+    baseUrl,
+    apiKey: '',
+    model,
+    anthropicVersion: typeof raw.anthropicVersion === 'string' ? raw.anthropicVersion : undefined,
+    debugDirect: raw.debugDirect === true,
+  };
+}
+
+function parseModelSetup(value: unknown): ModelSetup | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  return {
+    baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : '',
+    apiKey: '',
+    model: typeof raw.model === 'string' ? raw.model : '',
+  };
+}
+
+function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
+  return purgeConfigSecrets({
+    baseUrl: config.baseUrl,
+    model: config.model,
+    theme: config.theme,
+    provider: config.provider,
+    openaiConfig: config.openaiConfig,
+    anthropicConfig: config.anthropicConfig,
+    personas: config.personas,
+    activePersonaId: config.activePersonaId,
+  }) as Record<string, unknown>;
+}
+
+function isDirectProviderDebugEnabled(provider: ApeirethConfig['provider']): boolean {
+  return provider?.debugDirect === true;
+}
 
 /**
  * Canonical Apeireth 2.0 gateway address used when nothing is configured.
@@ -288,25 +354,11 @@ export function loadConfig(): ApeirethConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      // Security migration: purge any legacy apiKey or masterToken from local storage
-      let modified = false;
-      if ('apiKey' in parsed) {
-        delete parsed.apiKey;
-        modified = true;
-      }
-      if ('api_key' in parsed) {
-        delete parsed.api_key;
-        modified = true;
-      }
-      if ('masterToken' in parsed) {
-        delete parsed.masterToken;
-        modified = true;
-      }
-      if ('master_token' in parsed) {
-        delete parsed.master_token;
-        modified = true;
-      }
+      const rawParsed = JSON.parse(raw) as Record<string, unknown>;
+      const parsed = purgeConfigSecrets(rawParsed) as Record<string, unknown>;
+      // Security migration: purge credentials from every nested provider or
+      // legacy object, not only from the top-level config.
+      let modified = JSON.stringify(parsed) !== JSON.stringify(rawParsed);
       let baseUrl = typeof parsed.baseUrl === 'string' ? parsed.baseUrl : DEFAULT_BASE_URL;
       // Migrate legacy default placeholder (:3000) to canonical Apeireth Gateway (:8080)
       if (baseUrl === 'http://127.0.0.1:3000') {
@@ -320,9 +372,9 @@ export function loadConfig(): ApeirethConfig {
         model = DEFAULT_MODEL;
         modified = true;
       }
-      let provider = parsed.provider as ApeirethConfig['provider'] | undefined;
-      let openaiConfig = parsed.openaiConfig as ApeirethConfig['openaiConfig'] | undefined;
-      let anthropicConfig = parsed.anthropicConfig as ApeirethConfig['anthropicConfig'] | undefined;
+      const provider = parseProviderConfig(parsed.provider);
+      const openaiConfig = parseModelSetup(parsed.openaiConfig);
+      const anthropicConfig = parseModelSetup(parsed.anthropicConfig);
       let personas: ApeirethConfig['personas'];
       const rawPersonas = parsed.personas;
       if (Array.isArray(rawPersonas)) {
@@ -350,16 +402,7 @@ export function loadConfig(): ApeirethConfig {
         activePersonaId,
       };
       if (modified) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          baseUrl: cleaned.baseUrl,
-          model: cleaned.model,
-          theme: cleaned.theme,
-          provider: cleaned.provider,
-          openaiConfig: cleaned.openaiConfig,
-          anthropicConfig: cleaned.anthropicConfig,
-          personas: cleaned.personas,
-          activePersonaId: cleaned.activePersonaId,
-        }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedConfig(cleaned)));
       }
       return cleaned;
     }
@@ -396,17 +439,7 @@ export function loadConfig(): ApeirethConfig {
 }
 
 export function saveConfig(config: ApeirethConfig): void {
-  const safeConfig = {
-    baseUrl: config.baseUrl,
-    model: config.model,
-    theme: config.theme,
-    provider: config.provider,
-    openaiConfig: config.openaiConfig,
-    anthropicConfig: config.anthropicConfig,
-    personas: config.personas,
-    activePersonaId: config.activePersonaId,
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(safeConfig));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedConfig(config)));
 }
 
 /** 测试模型提供商（OpenAI 或 Anthropic 协议）连通性与模型列表获取 */
@@ -685,6 +718,7 @@ export async function streamChat(
 ): Promise<string> {
   const provider = config.provider;
   const isDirectCustom = !!(
+    isDirectProviderDebugEnabled(provider) &&
     provider &&
     (provider.apiKey?.trim() ||
       (provider.baseUrl &&
@@ -1096,6 +1130,7 @@ export async function streamChat(
 export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<string> {
   const provider = config.provider;
   const isDirectCustom = !!(
+    isDirectProviderDebugEnabled(provider) &&
     provider &&
     (provider.apiKey?.trim() ||
       (provider.baseUrl &&
@@ -1286,13 +1321,8 @@ export async function fetchCapabilities(_config: ApeirethConfig): Promise<Capabi
  * 应使用 capabilityAvailable() — 它反映 provider/凭据状态.
  */
 export function capabilitySupported(manifest: CapabilityManifest | null, id: string): boolean {
-  if (!manifest) return false;
-  for (const group of manifest.capabilities) {
-    for (const cap of group.capabilities) {
-      if (cap.id === id) return cap.supported === true;
-    }
-  }
-  return false;
+  const cap = findCapability(manifest, id);
+  return cap?.supported === true;
 }
 
 /**
@@ -1327,7 +1357,7 @@ export function capabilityAvailable(manifest: CapabilityManifest | null, id: str
   const cap = findCapability(manifest, id);
   if (!cap) return false;
   // 回落: 旧 manifest 无 available → 按 supported 解释.
-  return cap.available === undefined ? cap.supported === true : cap.available === true;
+  return cap.supported === true && (cap.available === undefined || cap.available === true);
 }
 
 /**
@@ -1346,14 +1376,26 @@ export function capabilityUnavailableReason(
 }
 
 /** 查找某 capability 完整声明 (跨组). */
+const CAPABILITY_ALIASES: Record<string, string> = {
+  'approvals.read': 'permissions.approval.read',
+  'approvals.resolve': 'permissions.approval.resolve',
+};
+
+function canonicalCapabilityId(id: string): string {
+  return CAPABILITY_ALIASES[id] ?? id;
+}
+
 export function findCapability(manifest: CapabilityManifest | null, id: string): Capability | null {
   if (!manifest) return null;
+  const want = canonicalCapabilityId(id);
+  let aliasMatch: Capability | null = null;
   for (const group of manifest.capabilities) {
     for (const cap of group.capabilities) {
-      if (cap.id === id) return cap;
+      if (cap.id === want || cap.id === id) return cap;
+      if (cap.alias_of === want || cap.alias_of === id) aliasMatch = cap;
     }
   }
-  return null;
+  return aliasMatch;
 }
 
 /**
@@ -1373,12 +1415,10 @@ export function findCapability(manifest: CapabilityManifest | null, id: string):
  * Everything else is unsupported. Unknown is unsupported — a capability is
  * never assumed present because an older backend once served it.
  *
- * History: this function previously declared sessions.read, memory.read,
- * tools.list, activity.sse and activity.audit as supported. Since
- * `fetchCapabilities` falls back here on 404, and canonical 2.0 returns 404 for
- * /v1/apeireth/capabilities, that fallback asserted five capabilities the
- * gateway does not have — which silently defeated every capability gate and let
- * the UI keep calling known-404 routes.
+ * History: this function previously declared panel introspection and SSE
+ * capabilities optimistically. The fallback is intentionally smaller than the
+ * live manifest so an older/unreachable gateway cannot make the desktop call a
+ * route it has not proved to support.
  */
 export function releaseContractManifest(): CapabilityManifest {
   const cap = (id: string, read: boolean, write: boolean, ops: string[]): Capability => ({
@@ -1398,31 +1438,7 @@ export function releaseContractManifest(): CapabilityManifest {
       {name: 'health', capabilities: [cap('health', true, false, ['check'])]},
       {name: 'models', capabilities: [cap('models.list', true, false, ['list'])]},
       {name: 'chat', capabilities: [cap('chat.completions', true, true, ['stream'])]},
-      {name: 'sessions', capabilities: [cap('sessions.read', true, false, ['list'])]},
-      {
-        name: 'memory',
-        capabilities: [
-          cap('memory.read', true, false, ['list', 'search']),
-          cap('memory.write', true, true, ['append']),
-          cap('memory.forget', false, true, ['forget']),
-          cap('memory.protect', false, true, ['protect']),
-          cap('memory.unprotect', false, true, ['unprotect']),
-          cap('memory.graph.read', true, false, ['graph']),
-        ],
-      },
-      {name: 'tools', capabilities: [cap('tools.list', true, false, ['list'])]},
-      {
-        name: 'permissions',
-        capabilities: [
-          cap('permissions.approval.read', true, false, ['list']),
-          cap('permissions.grants.read', true, false, ['list']),
-          cap('permissions.revoke', false, true, ['revoke']),
-        ],
-      },
-      {name: 'organs', capabilities: [cap('organs.list', true, false, ['list'])]},
-      {name: 'trace', capabilities: [cap('trace.read', true, false, ['list', 'detail'])]},
-      {name: 'audit', capabilities: [cap('audit.read', true, false, ['list'])]},
-      {name: 'activity', capabilities: [cap('activity.sse', true, false, ['subscribe'])]},
+      {name: 'permissions', capabilities: [cap('permissions.approval.resolve', false, true, ['resolve'])]},
     ],
   };
 }

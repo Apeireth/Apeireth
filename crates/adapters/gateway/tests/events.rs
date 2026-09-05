@@ -5,7 +5,7 @@ use std::sync::Arc;
 use apeireth_gateway::{
     build_gateway_state, canonical_router_with_state, EventBus, GatewayEvent, GatewayState,
 };
-use apeireth_runtime::canonical::Runtime;
+use apeireth_runtime::canonical::{Runtime, RuntimeEvent, RuntimeEventSink};
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
@@ -32,6 +32,25 @@ async fn event_bus_delivers_published_events_in_order() {
     let second = receiver.recv().await.unwrap();
     assert_eq!(second.event, "turn_completed");
     assert_eq!(second.data["rounds"], 2);
+}
+
+#[tokio::test]
+async fn one_runtime_event_becomes_one_sse_event() {
+    let bus = EventBus::new(16);
+    let mut receiver = bus.subscribe();
+    let sink: &dyn RuntimeEventSink = &bus;
+
+    sink.emit(RuntimeEvent::TurnStarted {
+        session: "00000000-0000-0000-0000-000000000001".parse().unwrap(),
+        request: apeireth_core::kernel::RequestId::new(),
+        trace: apeireth_core::kernel::TraceId::new(),
+    });
+
+    assert_eq!(receiver.recv().await.unwrap().event, "turn_started");
+    assert!(matches!(
+        receiver.try_recv(),
+        Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+    ));
 }
 
 #[tokio::test]
@@ -66,7 +85,8 @@ async fn sse_endpoint_streams_events_to_subscribers() {
     let mut collected = String::new();
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
     loop {
-        let next = tokio::time::timeout_at(deadline, tokio_stream::StreamExt::next(&mut stream)).await;
+        let next =
+            tokio::time::timeout_at(deadline, tokio_stream::StreamExt::next(&mut stream)).await;
         match next {
             Ok(Some(Ok(frame))) => {
                 let bytes = frame.into_data().unwrap_or_default();

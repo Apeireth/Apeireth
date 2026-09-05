@@ -11,6 +11,8 @@
 //!   仍待 v2.0.0 release 后启动 (per R11 spec §8.4 + 子代理 R12 估 1-3 周).
 //! - 0 引新外部 dep (Cargo.lock 0 行 diff), 0 触碰 LOCKED 5 项.
 
+use apeireth_runtime_assembly as apeireth_runtime;
+
 use std::sync::Arc;
 
 use apeireth_core::clock::VirtualClock;

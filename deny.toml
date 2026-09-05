@@ -35,15 +35,12 @@ allow = [
     "0BSD",
     "Apache-2.0 WITH LLVM-exception",
     "Apache-2.0",
-    "Artistic-2.0",       # notify v5.2.0 的 license 组合之一
     "BSD-2-Clause",
     "BSD-3-Clause",
     "BSL-1.0",            # xxhash-rust v0.8.18
-    "CC0-1.0",            # notify v5.2.0 的 license 组合之一
     "CDLA-Permissive-2.0",
     "ISC",
     "MIT",
-    "MIT-0",              # borrow-or-share v0.2.4
     "MPL-2.0",
     "Unicode-3.0",
     "Unlicense",
@@ -118,21 +115,15 @@ skip = [
     { name = "rustc-hash", reason = "tokio / anyhow 决定" },
     { name = "sha2", reason = "0.10 (keyring) + 0.10 (other) 跨 minor dup" },
     { name = "strum", reason = "proc macro 决定" },
-    { name = "strum_macros", reason = "跟随 strum" },
-    { name = "unicode-truncate", reason = "ratatui 决定" },
     # ---- CI fix 2026-08 (依赖升级后新增多版本, 有理由 skip) ----
-    # crypto 链 (aes/chacha20/cipher/inout): 升级 lopdf 0.44 + keyring 链时 cargo update
-    # 把 crypto 升到新 minor — 0.8/0.9 与 0.4/0.5 API 不兼容, 各自依赖树决定
-    { name = "aes", reason = "0.8 (crypto 旧链) vs 0.9 (新链) — RustCrypto 依赖树决定" },
     { name = "chacha20", reason = "0.9 vs 0.10 — RustCrypto 依赖树决定" },
     { name = "cipher", reason = "0.4 vs 0.5 — RustCrypto 依赖树决定" },
     { name = "inout", reason = "0.1 vs 0.2 — RustCrypto 依赖树决定" },
-    # tract 0.23 升级引入 nom 8 / prost 0.14 (tract-onnx 用); 旧链 (nom 1.x / prost 0.13) 是
-    # 其它依赖 (lopdf 用 nom 7→8? 实为 tract 链) 决定
     { name = "nom", reason = "1.x vs 8.0 — tract 0.23 引入 nom 8, 旧链保留 1.x" },
-    { name = "prost", reason = "0.13 (tonic 旧) vs 0.14 (tract-onnx 0.23) — 各自依赖决定" },
-    { name = "prost-derive", reason = "跟随 prost 版本" },
-    { name = "weezl", reason = "0.1 (旧) vs 0.2 (lopdf 0.44) — lopdf 决定" },
+    # ---- PR #7 / 迁移收敛新增多版本 (有理由 skip) ----
+    { name = "drm", reason = "gbm 0.18 (drm 0.14) vs libwayshot-xcap 0.3 (drm 0.15) 依赖树分裂" },
+    { name = "miniz_oxide", reason = "png 0.18 (0.8) vs flate2 1.1 (0.9) 依赖树分裂" },
+    { name = "shlex", reason = "bindgen 0.72 (shlex 1.3) vs cc 1.4 (shlex 2.0) 跨 major 版本" },
 ]
 
 # ----------------------------------------------------------------------------
@@ -179,20 +170,10 @@ ignore = [
     # - proc-macro-error (RUSTSEC-2024-0370): anyhow / thiserror 间接拉
     # - proc-macro-error2 (RUSTSEC-2026-0173): 同上
     # - unic-* (RUSTSEC-2025-0081/0075/0080/0100/0098): url / idna 间接拉
-    # - Authorization (RUSTSEC-2026-0174): http crate 已知
+    # R139-1-retry 2026-08-11: unmaintained 已知项 (gtk-rs 链, 0 直接业务依赖):
     "RUSTSEC-2024-0413",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
     "RUSTSEC-2024-0416",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
     "RUSTSEC-2024-0419",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
-    "RUSTSEC-2024-0436",  # paste - no longer maintained (proc-macro-error 链)
-    "RUSTSEC-2024-0370",  # proc-macro-error is unmaintained (anyhow / thiserror 间接拉)
-    "RUSTSEC-2026-0173",  # proc-macro-error2 is unmaintained (同上)
-    "RUSTSEC-2025-0081",  # unic-char-property is unmaintained (url / idna 链)
-    "RUSTSEC-2025-0075",  # unic-char-range is unmaintained (url / idna 链)
-    "RUSTSEC-2025-0080",  # unic-common is unmaintained (url / idna 链)
-    "RUSTSEC-2025-0100",  # unic-ucd-ident is unmaintained (url / idna 链)
-    "RUSTSEC-2025-0098",  # unic-ucd-version is unmaintained (url / idna 链)
-    "RUSTSEC-2026-0174",  # Authorization::value ASCII invariant violation (http crate 已知)
-    # R139-1-retry 2026-08-11 第二批 (8 unmaintained, gtk-rs 5 + bincode 1 + tauri 链 2):
     "RUSTSEC-2024-0411",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-tauri-stub gtk test 链)
     "RUSTSEC-2024-0412",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
     "RUSTSEC-2024-0414",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk-sys 链)
@@ -200,5 +181,4 @@ ignore = [
     "RUSTSEC-2024-0417",  # gtk-rs GTK3 bindings - no longer maintained (gtk 链)
     "RUSTSEC-2024-0418",  # gtk-rs GTK3 bindings - no longer maintained (gtk 链)
     "RUSTSEC-2024-0420",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
-    "RUSTSEC-2025-0141",  # bincode is unmaintained (doxxing incident, version 1.3.3 视为 complete, 等 apeireth-tauri 升 bincode 替代)
 ]

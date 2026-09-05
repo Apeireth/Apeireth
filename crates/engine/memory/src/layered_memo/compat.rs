@@ -1,8 +1,12 @@
 //! VCP layered_memo compatibility (1 router).
+//!
+//! `layered_memo` keeps the wire/command spelling from the VCP protocol rather
+//! than Rust enum style, so call sites can round-trip the original identifier.
 
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LayeredMemoCommand {
+    #[allow(non_camel_case_types)] // protocol command id `layered_memo`, not a Rust type name
     layered_memo,
     MemoryConsolidator,
     Unknown,
@@ -49,7 +53,10 @@ mod tests {
     }
     #[test]
     fn unknown_maps() {
-        assert_eq!(LayeredMemoCommand::from_str("xyz"), LayeredMemoCommand::Unknown);
+        assert_eq!(
+            LayeredMemoCommand::from_str("xyz"),
+            LayeredMemoCommand::Unknown
+        );
     }
     #[test]
     fn router_count() {

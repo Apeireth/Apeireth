@@ -1,7 +1,7 @@
 # Apeireth Architecture
 
 > 当前基线：默认分支 `main`，tag `v2.0.0-rc.1`（测试基线见 `research/baselines/`）。
-> 根 Cargo workspace（16 个 crate）+ 独立的
+> 根 Cargo workspace（17 个 crate）+ 独立的
 > `frontend/companion-desktop` workspace。历史 donor 不属于生产依赖。
 
 ## Layer view
@@ -11,7 +11,9 @@ frontend/companion-desktop
         │ HTTP / JSON
 crates/adapters/{gateway,cli,sdk}
         │ transport adapters
-crates/engine/runtime  ── governance / providers / storage
+crates/engine/runtime  ── kernel: governance / provider router / ports / events
+        │
+crates/engine/runtime-assembly ── concrete cognition / tools / Organ / SQLite
         │
 crates/capabilities/tools  ── built-in capabilities + ProcessExecutor
         │
@@ -28,7 +30,7 @@ contracts. The current dependency graph is intentionally explicit in the root
 | Group | Crates | Ownership |
 | --- | --- | --- |
 | Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration` | Stable domain primitives, normalized protocol types, capability/plugin contracts, governance decisions, credential backends, orchestration/council/context |
-| Engine | `apeireth-runtime`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ` | Runtime composition, vendor provider capabilities, SQLite/storage foundation, durable memory and retrieval, perception, organ modules |
+| Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ` | Runtime kernel, concrete production assembly, vendor provider capabilities, SQLite/storage foundation, durable memory/retrieval, perception, and Organ domain |
 | Capabilities | `apeireth-tools-canonical` | Built-in filesystem/search/repository/fetch/shell capabilities and the canonical process execution boundary |
 | Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk` | HTTP/CLI/SDK entry surfaces; no second orchestration root |
 
@@ -39,12 +41,16 @@ and a documented dependency edge.
 ## Runtime and process ownership
 
 `apeireth-runtime::canonical::Runtime` is the single user-facing Main Loop and
-minimal microkernel composition root. It owns session lifecycle, governance
-evaluation, provider routing, module lifecycle dispatch, and continuation.
+minimal microkernel. It owns session lifecycle, governance evaluation, provider
+routing, behavior lifecycle dispatch, capability dispatch, event emission, and
+continuation through abstract ports. `apeireth-runtime-assembly` is the
+composition root that installs concrete behavior modules, tool capabilities,
+Organ bridges, memory services, and SQLite session storage.
 
-The runtime adopts a unified **Module System** (`apeireth_runtime::Module`):
-- All cognitive capabilities (Memory, Preference, Judge, Council, SelfAssessment, Experience) and tool capabilities (Filesystem, Search, Repo, Shell, Fetch, MCP) are provided through modules.
-- The microkernel remains minimal and pure: it boots with zero modules and can execute plain chat turns without any tool or cognitive overhead.
+The runtime exposes separate registries:
+- `BehaviorModule` / `BehaviorRegistry` contains lifecycle behaviors such as Memory, Preference, Judge, Council, SelfAssessment, and Organ cognition.
+- `CapabilityProvider` / `CapabilityRegistry` contains model-facing actions such as Filesystem, Search, Repo, Shell, Fetch, and MCP.
+- The microkernel boots with zero behaviors and zero capabilities and can execute plain chat turns without concrete product implementations.
 - Modules can initiate bounded **SubLoops** (`apeireth_runtime::SubLoopSpawner`) running on private, ephemeral transcripts with explicit capability allowlists, never mutating the main session or emitting direct user chat output.
 
 `apeireth-tools-canonical::process::ProcessExecutor` is the sole process
@@ -62,10 +68,10 @@ process-tree runtime model, filesystem/network sandboxing, or security engine.
 
 ## Desktop boundary
 
-`frontend/companion-desktop/` is an independent Svelte 5 + Tauri 2 workspace.
+`frontend/companion-desktop/` is the in-tree Tauri 2 + Svelte 5 product UI.
 Its Rust shell is thin and does not depend on the root Apeireth crates; its UI
-uses the documented HTTP contract. Frontend tests and the mock upstream live
-under `frontend/companion-desktop/tests/`.
+uses the documented HTTP contract and live `/v1/apeireth/capabilities` gates.
+Frontend tests and the mock upstream live under `frontend/companion-desktop/tests/`.
 
 ## Historical material
 

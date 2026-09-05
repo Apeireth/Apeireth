@@ -126,7 +126,12 @@ impl MemoryBackend for SqliteBackend {
         self.pool
             .read(|conn| {
                 let mut stmt = conn.prepare_cached(
-                    "SELECT id, timestamp, role, content, session_id FROM episodes WHERE id = ?1",
+                    "SELECT e.id, e.timestamp, e.role,
+                            COALESCE(g.content_override, e.content), e.session_id
+                       FROM episodes e
+                       LEFT JOIN episode_governance g ON g.episode_id = e.id
+                      WHERE e.id = ?1
+                        AND (g.status IS NULL OR g.status <> 'forgotten')",
                 )?;
                 let mut rows = stmt.query(rusqlite::params![id])?;
                 if let Some(row) = rows.next()? {
@@ -153,9 +158,12 @@ impl MemoryBackend for SqliteBackend {
         self.pool
             .read(|conn| {
                 let mut stmt = conn.prepare_cached(
-                    "SELECT id, timestamp, role, content, session_id \
-                         FROM episodes \
-                         WHERE session_id = ?1 \
+                    "SELECT e.id, e.timestamp, e.role,
+                            COALESCE(g.content_override, e.content), e.session_id
+                         FROM episodes e
+                         LEFT JOIN episode_governance g ON g.episode_id = e.id
+                         WHERE e.session_id = ?1
+                           AND (g.status IS NULL OR g.status <> 'forgotten') \
                          ORDER BY timestamp DESC, id DESC \
                          LIMIT ?2",
                 )?;
@@ -311,6 +319,17 @@ mod tests {
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     session_id TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS episode_governance (
+                    episode_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    protected INTEGER NOT NULL DEFAULT 0,
+                    content_override TEXT,
+                    revision INTEGER NOT NULL DEFAULT 0,
+                    updated_at INTEGER,
+                    updated_by TEXT,
+                    reason TEXT,
+                    forgotten_at INTEGER
                 );
                 CREATE TABLE IF NOT EXISTS thought_stream (
                     id TEXT PRIMARY KEY,

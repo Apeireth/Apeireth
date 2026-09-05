@@ -6,29 +6,22 @@
 
 #![deny(unsafe_code)]
 
-/// Canonical runtime composition root and execution model.
+/// Canonical runtime mechanism kernel and execution model.
 pub mod canonical;
 
 pub use canonical::{
-    operation_fingerprint, operation_fingerprint_with_invocation, plugin_ids,
-    turn_request_from_perception, AgentModule, ApprovalDecision, ApprovalResolution,
-    ApprovalStatus, CognitiveBackends, CognitiveModuleConfig, CognitiveModuleEvent,
-    CognitiveTelemetry, CouncilModule, ExecutionTrace, FetchModule, FilesystemModule, HookPoint,
-    InMemorySessionStore, InvocationContext, InvocationOrigin, InvokerLlmFactory,
-    InvokerLlmInstance, JudgeConfig, JudgeModule, JudgeObservations, JudgeResult, JudgeVerdict,
-    McpModule, MemoryRecallModule, MemoryWritebackModule, Module, ModuleContext, ModuleDirective,
-    ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse,
-    ModuleInvoker, ModuleManifest, ModuleMetricsSnapshot, ModuleOutcome, ModuleRegistry,
-    OrganModule, OrganModuleObservation, PendingApproval, PendingApprovalView, PreferenceEvidence,
-    PreferenceLearningModule, PreferenceLearningStats, PreferencePolarity, PreferenceRecallModule,
-    ProductionBackends, ProductionCognitiveModules, ProductionModules, ProductionModulesConfig,
-    PromptOverlay, ProviderHealth, ProviderRouter, RepoModule, RoutedCompletion, Runtime,
-    RuntimeBuilder, RuntimeConfig, RuntimeError, RuntimeResult, RuntimeSubLoopSpawner,
-    SearchModule, SelfAssessmentModule, Session, SessionEvent, SessionEventKind, SessionManager,
-    SessionStore, ShellModule, SqliteSessionStore, SubLoopError, SubLoopResult, SubLoopSpawner,
-    SubLoopSpec, TraceEntry, TraceEvent, TurnOutcome, TurnRequest, TurnResponse, COUNCIL_MODULE_ID,
-    DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS, DEFAULT_MAX_ROUNDS,
-    DEFERRED_COGNITIVE_SLOTS, INVOKER_LLM_FACTORY_NAME, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID,
-    MEMORY_WRITEBACK_MODULE_ID, ORGAN_MODULE_ID, PREFERENCE_LEARNING_MODULE_ID,
-    PREFERENCE_RECALL_MODULE_ID, SELF_ASSESSMENT_MODULE_ID,
+    operation_fingerprint, operation_fingerprint_with_invocation, plugin_ids, AgentModule,
+    ApprovalDecision, ApprovalResolution, ApprovalStatus, BehaviorModule, CapabilityProvider,
+    CapabilityRegistry, CompositeEventSink, CompositeRuntimeEventSink, ExecutionTrace, HookPoint,
+    InMemorySessionStore, InvocationContext, InvocationOrigin, Module, ModuleContext,
+    ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
+    ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, ModuleRegistry,
+    PendingApproval, PendingApprovalView, PromptOverlay, ProviderHealth, ProviderRouter,
+    RoutedCompletion, Runtime, RuntimeBuilder, RuntimeCapabilitySnapshot, RuntimeConfig,
+    RuntimeError, RuntimeEvent, RuntimeEventSink, RuntimeHealthSnapshot, RuntimeModelSnapshot,
+    RuntimeModuleSnapshot, RuntimeProviderSnapshot, RuntimeResult, RuntimeSnapshot,
+    RuntimeSubLoopSpawner, Session, SessionEvent, SessionEventKind, SessionManager, SessionStore,
+    SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec, TraceEntry, TraceEvent, TurnOutcome,
+    TurnRequest, TurnResponse, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
+    DEFAULT_MAX_ROUNDS,
 };

@@ -137,11 +137,12 @@ impl DurableHistory {
     }
 
     /// 按 activity_id 过滤 (supervisor `Journal::filter_child` 语义)。
-    pub fn filter_activity<'a>(&'a self, activity_id: &str) -> impl Iterator<Item = &'a ActivityEvent> + 'a {
+    pub fn filter_activity<'a>(
+        &'a self,
+        activity_id: &str,
+    ) -> impl Iterator<Item = &'a ActivityEvent> + 'a {
         let needle = activity_id.to_string();
-        self.events
-            .iter()
-            .filter(move |e| e.activity_id == needle)
+        self.events.iter().filter(move |e| e.activity_id == needle)
     }
 
     /// 按类型过滤 (supervisor `Journal::filter_kind` 语义)。
@@ -189,11 +190,10 @@ impl DurableHistory {
             if line.trim().is_empty() {
                 continue;
             }
-            let event: ActivityEvent = serde_json::from_str(line).map_err(|e| {
-                DurableError::HistoryCorrupted {
+            let event: ActivityEvent =
+                serde_json::from_str(line).map_err(|e| DurableError::HistoryCorrupted {
                     reason: format!("JSONL line {} parse failed: {e}", idx + 1),
-                }
-            })?;
+                })?;
             let expected_seq = history.events.len() as u64 + 1;
             if event.seq != expected_seq {
                 return Err(DurableError::HistoryCorrupted {
@@ -292,7 +292,15 @@ mod tests {
     #[test]
     fn record_reassigns_external_seq() {
         let mut h = DurableHistory::new();
-        h.record(ActivityEventKind::RunStarted, RUN_EVENT_ACTOR, None, None, None, 0, 1);
+        h.record(
+            ActivityEventKind::RunStarted,
+            RUN_EVENT_ACTOR,
+            None,
+            None,
+            None,
+            0,
+            1,
+        );
         // 故意传入错误 attempt/时间, seq 仍单调
         let s = h.record(
             ActivityEventKind::ActivityScheduled,
@@ -310,11 +318,37 @@ mod tests {
     #[test]
     fn filter_kind_and_activity_isolate() {
         let mut h = DurableHistory::new();
-        h.record(ActivityEventKind::ActivityScheduled, "a", None, None, None, 1, 1);
-        h.record(ActivityEventKind::ActivityFailed, "b", None, None, Some("x".into()), 1, 2);
-        h.record(ActivityEventKind::ActivityCompleted, "a", None, Some(json!(1)), None, 1, 3);
+        h.record(
+            ActivityEventKind::ActivityScheduled,
+            "a",
+            None,
+            None,
+            None,
+            1,
+            1,
+        );
+        h.record(
+            ActivityEventKind::ActivityFailed,
+            "b",
+            None,
+            None,
+            Some("x".into()),
+            1,
+            2,
+        );
+        h.record(
+            ActivityEventKind::ActivityCompleted,
+            "a",
+            None,
+            Some(json!(1)),
+            None,
+            1,
+            3,
+        );
 
-        let scheduled: Vec<_> = h.filter_kind(ActivityEventKind::ActivityScheduled).collect();
+        let scheduled: Vec<_> = h
+            .filter_kind(ActivityEventKind::ActivityScheduled)
+            .collect();
         assert_eq!(scheduled.len(), 1);
         assert_eq!(scheduled[0].activity_id, "a");
 
@@ -329,9 +363,25 @@ mod tests {
     #[test]
     fn jsonl_lines_are_independently_parseable() {
         let mut h = DurableHistory::new();
-        h.record(ActivityEventKind::RunStarted, RUN_EVENT_ACTOR, Some(json!({"k":1})), None, None, 0, 1);
+        h.record(
+            ActivityEventKind::RunStarted,
+            RUN_EVENT_ACTOR,
+            Some(json!({"k":1})),
+            None,
+            None,
+            0,
+            1,
+        );
         // 不用 json!(null): serde 把 JSON null 解成 Option::None, 与 Some(Null) 无法往返。
-        h.record(ActivityEventKind::ActivityScheduled, "a", Some(json!({"i": 0})), None, None, 1, 2);
+        h.record(
+            ActivityEventKind::ActivityScheduled,
+            "a",
+            Some(json!({"i": 0})),
+            None,
+            None,
+            1,
+            2,
+        );
         let jsonl = h.to_jsonl();
         let lines: Vec<&str> = jsonl.lines().collect();
         assert_eq!(lines.len(), 2);
@@ -379,9 +429,33 @@ mod tests {
     #[test]
     fn since_and_last_n_query_semantics() {
         let mut h = DurableHistory::new();
-        h.record(ActivityEventKind::ActivityScheduled, "a", None, None, None, 1, 100);
-        h.record(ActivityEventKind::ActivityScheduled, "b", None, None, None, 1, 200);
-        h.record(ActivityEventKind::ActivityCompleted, "a", None, Some(json!(1)), None, 1, 300);
+        h.record(
+            ActivityEventKind::ActivityScheduled,
+            "a",
+            None,
+            None,
+            None,
+            1,
+            100,
+        );
+        h.record(
+            ActivityEventKind::ActivityScheduled,
+            "b",
+            None,
+            None,
+            None,
+            1,
+            200,
+        );
+        h.record(
+            ActivityEventKind::ActivityCompleted,
+            "a",
+            None,
+            Some(json!(1)),
+            None,
+            1,
+            300,
+        );
 
         let since = h.since_ms(150);
         assert_eq!(since.len(), 2);

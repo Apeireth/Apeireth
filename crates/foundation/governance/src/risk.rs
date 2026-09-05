@@ -253,10 +253,7 @@ mod tests {
             check_no_degrade("high", "critical"),
             NoDegradeCheck::Pass
         ));
-        assert!(matches!(
-            check_no_degrade("high", ""),
-            NoDegradeCheck::Pass
-        ));
+        assert!(matches!(check_no_degrade("high", ""), NoDegradeCheck::Pass));
         assert!(matches!(
             check_no_degrade("high", "high"),
             NoDegradeCheck::Pass
