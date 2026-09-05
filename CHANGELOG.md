@@ -1,5 +1,17 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Research 证据链补全：真实数据评测 + 形式验证 (2026-09-05)
+
+- **真实数据集评测批（0 LLM 判分，确定性 evidence 命中）**：
+  - LoCoMo (ACL 2024, CC BY-NC 4.0)：5882 轮次 / 1986 QA，四策略 × 5 预算档效用-成本曲线 + bootstrap 95% CI（`research/reports/eval-locomo-2026-09-05.md`）。
+  - LoCoMo-MC10：question 文本与 locomo10 **1986/1986 全量匹配** → 两版同源（mc10 = 10 选 1 重打包，不构成独立第二数据集，MANIFEST 已如实标注）。
+  - LongMemEval (ICLR 2025, MIT)：s/m 两版各 500 QA、每问独立 haystack（48 / 475 会话）；**非 recency 语料上 FixedWindow 32k 预算仅 48%→5.4%，相关性驱动策略 8k 预算即 100%**；haystack 规模敏感性消融入报告（`research/reports/eval-longmemeval-2026-09-05.md`）。
+  - 运行器升级：`--source locomo / locomo-mc10 / longmemeval`（`--lme-file` 可选）；Turn 支持每问独立文档宇宙；实验名参与日志 hash（防跨文件覆盖）。
+- **Phase 5 形式验证三路互证（`research/verification/`）**：
+  - TLA+/TLC 本机模型检查：`ApprovalSM.tla` 1:1 规格，单记录 36 状态 / 三记录 3164 状态，TypeOK + InvA/InvB/InvC + 终态锁全通过（指纹碰撞 2.9E-12）。
+  - Kani 机器证明（GitHub Actions `.github/workflows/kani.yml`，run 33945573291）：3/3 harness VERIFICATION SUCCESSFUL；本机 Windows 无 Kani → mirror crate 零复制 `#[path]` 包含 canonical 源文件绕开 rust-version 墙；SipHash 符号展开爆炸 → `#[kani::unwind(32)]` 有界口径（仅 cfg(kani) 生效，生产零影响）。
+  - 与既有故障注入（100 轮 0 违例）构成三路互证，边界与口径如实标注（`research/verification/README.md`）。
+
 ## [Unreleased] — Research Phase 0–6 交付 + 双协议 + 文档对账 (2026-09-04)
 
 - **research 工作区**:`research/`(baselines/metrics/runners/logs schema);Phase 0 冻结基线 3061 → 交付后全量 **3119 passed / 0 failed / 13 ignored / 106 suites**。

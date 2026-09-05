@@ -1,13 +1,23 @@
 //! Apeireth 评测批运行器 (research/runners, 独立项目)。
 //!
-//! 用法: cargo run --release -- --seed 42 --turns 500
+//! 用法:
+//!   cargo run --release -- --source synthetic --seed 42 --turns 500
+//!   cargo run --release -- --source locomo --seed 42
+//!   cargo run --release -- --source locomo-mc10 --seed 42
+//!   cargo run --release -- --source longmemeval --seed 42
+//!   cargo run --release -- --source longmemeval --lme-file <path> --seed 42
+//! 可选: --budgets 2000,4000,8000,16000,32000
 //! 输出:
 //!   1. 效用-成本曲线 (每策略 × 每预算档): utility (任务成功率) vs avg prompt tokens;
 //!   2. bootstrap 95% CI (1000 次重采样) 的策略间效用差;
 //!   3. JSONL 研究日志 (schema 对齐 research/logs/README.md)。
 //!
-//! 真实数据集 (LoCoMo/LongMemEval) 即插即用接口: 实现 `BenchmarkSource` trait
-//! 并替换 `SyntheticSource` 即可, 运行器骨架不变。
+//! 数据源 (license 见各 datasets/*/MANIFEST.md):
+//!   synthetic   合成源 (局部性 hot 集)
+//!   locomo      LoCoMo locomo10.json (CC BY-NC 4.0): 共享文档宇宙 + evidence 真值
+//!   locomo-mc10 mc10 多选版 (question 文本借 evidence 真值, 与 locomo 同源)
+//!   longmemeval LongMemEval s/m (MIT): 每条 QA 自带 haystack 文档宇宙
+//!               (Turn.docs 非空时优先于全局 docs)。
 
 use std::collections::{HashMap, HashSet};
 use std::env;
