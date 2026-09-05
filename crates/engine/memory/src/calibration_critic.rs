@@ -21,8 +21,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::calibration::{
-    BrierDecomposition, CalibrationBin, DEFAULT_NUM_BINS, Observation, calibration_bins, decompose,
-    expected_calibration_error, mean_brier_score,
+    calibration_bins, decompose, expected_calibration_error, mean_brier_score, BrierDecomposition,
+    CalibrationBin, Observation, DEFAULT_NUM_BINS,
 };
 
 /// Recommended action reflecting a calibration diagnosis.

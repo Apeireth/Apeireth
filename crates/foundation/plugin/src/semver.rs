@@ -47,7 +47,10 @@ impl fmt::Display for SemverError {
         match self {
             Self::Empty => write!(f, "semver string is empty"),
             Self::NotThreeSegments(v) => {
-                write!(f, "semver `{v}` must contain three segments (MAJOR.MINOR.PATCH)")
+                write!(
+                    f,
+                    "semver `{v}` must contain three segments (MAJOR.MINOR.PATCH)"
+                )
             }
             Self::InvalidSegment {
                 input,
@@ -363,7 +366,10 @@ mod tests {
 
     #[test]
     fn parse_rejects_two_and_four_segments() {
-        assert!(matches!(parse("1.0"), Err(SemverError::NotThreeSegments(_))));
+        assert!(matches!(
+            parse("1.0"),
+            Err(SemverError::NotThreeSegments(_))
+        ));
         assert!(parse("1.2.3.4").is_err());
     }
 
@@ -414,8 +420,14 @@ mod tests {
 
     #[test]
     fn parse_accepts_hyphens_and_alphanumeric_prerelease() {
-        assert_eq!(parse("1.0.0-x.7.z.92").unwrap().pre_release.as_deref(), Some("x.7.z.92"));
-        assert_eq!(parse("1.0.0-x-y-z").unwrap().pre_release.as_deref(), Some("x-y-z"));
+        assert_eq!(
+            parse("1.0.0-x.7.z.92").unwrap().pre_release.as_deref(),
+            Some("x.7.z.92")
+        );
+        assert_eq!(
+            parse("1.0.0-x-y-z").unwrap().pre_release.as_deref(),
+            Some("x-y-z")
+        );
     }
 
     #[test]
@@ -430,10 +442,22 @@ mod tests {
 
     #[test]
     fn compare_major_minor_patch() {
-        assert_eq!(compare(&parse("2.0.0").unwrap(), &parse("1.0.0").unwrap()), 1);
-        assert_eq!(compare(&parse("1.2.0").unwrap(), &parse("1.1.0").unwrap()), 1);
-        assert_eq!(compare(&parse("1.0.2").unwrap(), &parse("1.0.1").unwrap()), 1);
-        assert_eq!(compare(&parse("1.0.0").unwrap(), &parse("1.0.0").unwrap()), 0);
+        assert_eq!(
+            compare(&parse("2.0.0").unwrap(), &parse("1.0.0").unwrap()),
+            1
+        );
+        assert_eq!(
+            compare(&parse("1.2.0").unwrap(), &parse("1.1.0").unwrap()),
+            1
+        );
+        assert_eq!(
+            compare(&parse("1.0.2").unwrap(), &parse("1.0.1").unwrap()),
+            1
+        );
+        assert_eq!(
+            compare(&parse("1.0.0").unwrap(), &parse("1.0.0").unwrap()),
+            0
+        );
     }
 
     #[test]

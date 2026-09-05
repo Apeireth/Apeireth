@@ -159,6 +159,7 @@ dependencies = [
  "apeireth-protocol",
  "apeireth-provider",
  "apeireth-runtime",
+ "apeireth-runtime-assembly",
  "apeireth-storage",
  "async-trait",
  "chrono",
@@ -221,7 +222,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tower",
- "tower-http",
  "uuid",
 ]
 
@@ -283,8 +283,6 @@ dependencies = [
  "apeireth-core",
  "apeireth-orchestration",
  "apeireth-plugin",
- "apeireth-protocol",
- "apeireth-runtime",
  "async-trait",
  "serde",
  "serde_json",
@@ -356,10 +354,33 @@ dependencies = [
  "apeireth-core",
  "apeireth-governance",
  "apeireth-orchestration",
- "apeireth-organ",
  "apeireth-plugin",
  "apeireth-protocol",
  "apeireth-provider",
+ "async-trait",
+ "chrono",
+ "parking_lot",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "apeireth-runtime-assembly"
+version = "2.0.0-rc.1"
+dependencies = [
+ "apeireth-core",
+ "apeireth-governance",
+ "apeireth-memory",
+ "apeireth-orchestration",
+ "apeireth-organ",
+ "apeireth-plugin",
+ "apeireth-protocol",
+ "apeireth-runtime",
  "apeireth-storage",
  "apeireth-tools-canonical",
  "async-trait",

@@ -108,9 +108,7 @@ impl<'a> ContextLedger<'a> {
     ) -> MemoryResult<LedgerEntry> {
         let continuity = continuity.trim();
         if continuity.is_empty() {
-            return Err(MemoryError::Invalid(
-                "continuity 锚点为空, 拒绝留痕".into(),
-            ));
+            return Err(MemoryError::Invalid("continuity 锚点为空, 拒绝留痕".into()));
         }
         if role != ROLE_USER && role != ROLE_ASSISTANT {
             return Err(MemoryError::Invalid(format!(
@@ -311,7 +309,8 @@ mod tests {
             .unwrap()
             .with_max_records(3);
         for i in 0..10 {
-            l.record("user", None, "web", &format!("第{i}条"), i).unwrap();
+            l.record("user", None, "web", &format!("第{i}条"), i)
+                .unwrap();
         }
         assert_eq!(l.len().unwrap(), 3);
         let evs = l.recent(10).unwrap();

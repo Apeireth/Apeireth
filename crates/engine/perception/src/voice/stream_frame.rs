@@ -57,13 +57,19 @@ impl fmt::Display for StreamFrameError {
         match self {
             Self::Empty => write!(f, "empty stream payload rejected"),
             Self::AudioTooLarge { got, max } => {
-                write!(f, "audio buffer too large: got {got} bytes, max {max} bytes")
+                write!(
+                    f,
+                    "audio buffer too large: got {got} bytes, max {max} bytes"
+                )
             }
             Self::ImageTooLarge { got, max } => {
                 write!(f, "image input too large: got {got} bytes, max {max} bytes")
             }
             Self::IllegalTransition { from, attempted } => {
-                write!(f, "illegal input-buffer transition: {from:?} cannot {attempted}")
+                write!(
+                    f,
+                    "illegal input-buffer transition: {from:?} cannot {attempted}"
+                )
             }
             Self::Audio(msg) => write!(f, "stream audio error: {msg}"),
         }

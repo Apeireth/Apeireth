@@ -1,7 +1,31 @@
 # Apeireth 2.0 能力矩阵与契约参考 (Capabilities Matrix & Contract Reference)
 
-> **版本**: 2.0.0-preview  
+> **版本**: 2.0.0-rc.1 / runtime-assembly refactor (2026-09-04)
 > **适用范围**: 开发者集成、API 调用方、前端控制台与多 Agent 协同网络
+
+---
+
+## 0. 当前生产投影（唯一事实源）
+
+生产 Desktop 不把本表当作运行时状态。实际的 `supported`、`available`、
+`reason` 来自 `/v1/apeireth/capabilities`；工具来自 `CapabilityRegistry`，
+行为模块来自 `BehaviorRegistry`，Provider/Model 来自 live `ProviderRouter`。
+
+| Capability ID | supported | available | Source / frontend surface |
+|---|---:|---:|---|
+| `health`, `runtime.snapshot.read` | true | true | Gateway + Runtime snapshot / RuntimeModal |
+| `models.list`, `providers.list`, `chat.completions` | true | 取决于已注册 Provider | ProviderRouter / Settings、Conversations |
+| `sessions.read` | 取决于 SessionQuery port | 同 supported | SessionQuery / Conversations |
+| `memory.read`, `memory.write`, `memory.forget`, `memory.protect`, `memory.unprotect`, `memory.graph.read` | 取决于 governed memory ports | 同 supported | GovernedMemoryService / Memory |
+| `memory.update` | false | false (`reason=not_implemented`) | Declared in the universe, not wired |
+| `tools.list` | 取决于 CapabilityQuery port | 同 supported | CapabilityRegistry / Tools |
+| `permissions.approval.read`, `permissions.approval.resolve` | true | true | Runtime approval protocol / Tools (`approvals.read` / `approvals.resolve` are explicit `alias_of` compatibility ids) |
+| `permissions.grants.read`, `permissions.revoke` | 取决于 grant ports | 同 supported | Grant ports / Tools |
+| `trace.read`, `audit.read`, `activity.sse` | 取决于 observability ports；SSE 由 Event Spine 提供 | 同 supported | RuntimeEventSink / Activity |
+| `organs.list`, `modules.list` | 取决于 BehaviorRegistry projection | 同 supported | BehaviorRegistry / RuntimeModal |
+
+`supported=true, available=false` 表示实现存在但当前 Provider/凭据/装配不可用；
+客户端必须显示后端 `reason`。未知能力与缺失 manifest 不得推测为已支持。
 
 ---
 
@@ -34,12 +58,12 @@
 | **记忆 (Memory)** | `mem.dreaming` | `apeireth-memory::dreaming` | `advance_cycle()`, `dream_state()` | 6 阶段昼夜认知循环与经验沉淀 |
 | **记忆 (Memory)** | `mem.wiki_fs` | `apeireth-memory::wiki_fs` | `compile_page()`, `run_lint()` | 知识编译胜于检索 + `[[WikiLink]]` + 反熵 Lint |
 | **运行时 (Runtime)** | `rt.heartbeat` | `apeireth-runtime::canonical::heartbeat`| `schedule_task()`, `acquire_flow_lock()` | 5 触发源 + 二叉最大堆 + FlowLock 心流锁 |
-| **运行时 (Runtime)** | `rt.causal_world_model` | `apeireth-runtime::canonical::causal_world_model`| `CausalWorldModel::fork_branch()`, `commit_branch()` | CoW 假说分支推演 + SAGA 逆向补偿 LIFO 回滚 |
-| **运行时 (Runtime)** | `rt.harness_patch` | `apeireth-runtime::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| 失败轨迹自动演绎策略补丁 |
-| **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` | `RepoMapGenerator::generate_map()` | 跨语言 AST 符号提取 + PageRank 代码地图 |
+| **运行时 Assembly** | `rt.causal_world_model` | `apeireth-runtime-assembly::canonical::causal_world_model`| `CausalWorldModel::fork_branch()`, `commit_branch()` | CoW 假说分支推演 + SAGA 逆向补偿 LIFO 回滚 |
+| **运行时 Assembly** | `rt.harness_patch` | `apeireth-runtime-assembly::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| 失败轨迹自动演绎策略补丁 |
+| **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` + runtime-assembly registration | `RepoMapGenerator::generate_map()` | 跨语言 AST 符号提取 + PageRank 代码地图 |
 | **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | 两阶段提交 + 100% 自动原子回滚 |
 | **工具 (Capabilities)** | `tool.guardrail` | `apeireth-tools-canonical::guardrail` | `pre_call_guard()`, `post_call_guard()` | 路径/命令拦截 + API Key/私钥出站绊线 |
-| **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
+| **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` + runtime-assembly registration | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
 | **工具 (Capabilities)** | `tool.stealth_crawler`| `apeireth-tools-canonical::stealth_crawler` | `StealthCrawlerEngine::parse_scraped_document()` | 高反爬异步无头浏览器 + 指纹伪装 + 短视频多模态提取 |
 | **适配器 (Adapters)** | `cli.portable_bundle` | `apeireth-cli::portable_bundle` | `PortableBundleSynthesizer::generate_windows_launcher()` | 随身 U 盘生命体便携化打包器 + `./data/` 相对隔离 |
 | **网关 (Gateway)** | `gw.file_fetcher` | `apeireth-gateway::file_fetcher` | `TransparentFileFetcher::fetch_file()` | 超栈追踪 V2 跨节点透明文件穿透 + SHA-256 缓存 |
@@ -48,7 +72,7 @@
 | **协议 (Protocol)** | `proto.p2p_mesh` | `apeireth-protocol::p2p_mesh` | `P2pMeshController::wrap_onion_packet()` | 去中心化 P2P 蓝牙/LAN Mesh + Noise 密钥交换 + 洋葱路由 + 记忆漫游 |
 | **感知 (Perception)** | `perc.minimax_tts` | `apeireth-perception::voice::minimax_tts`| `synthesize_stream()` | 128kbps 32kHz 音频流 + 3D PAD 情感调制 |
 
-> **状态标注 (0 装 PASS, 基线 candidate `8b7e3111`)**：本矩阵描述的是各能力域的**库级实现契约 (IMPLEMENTED)**——"实现模块"列确认对应模块存在于候选代码中并有测试覆盖（远端 Windows 验证机 `cargo test --workspace --locked` = 2012 通过 / 0 失败），**不代表** PRODUCTION WIRED（接入 canonical 运行时主路径）或 DEFAULT ENABLED（默认开启）。除特别标注外，所有模块均需显式 opt-in；`gw.duplex_ws` 与 barge-in 为网关库级模块，**未**挂载到 canonical HTTP 生产路由（生产路由仅 `/health`、`/v1/models`、`/v1/chat`、`/v1/chat/completions`、`/v1/approvals/resolve`）；canonical 网关的 chat SSE 为缓冲成帧（完整 canonical 完成路径结束后返回帧与 `[DONE]`），非逐 token 增量流式。Xcap 视觉捕获为 opt-in 后端，仅 Windows 硬件验证。逐项状态详见 `CHANGELOG.md` Unreleased 段。
+> **状态标注**：本节保留库级能力契约与历史实现索引；是否 PRODUCTION WIRED、DEFAULT ENABLED 或当前可用，必须以运行时 `/v1/apeireth/capabilities` 为准。当前 runtime kernel 只保留机制与抽象端口；具体认知、工具、Organ、SQLite 装配位于 `apeireth-runtime-assembly`。canonical 网关的 chat SSE 当前为缓冲成帧（完整 canonical 完成路径结束后返回帧与 `[DONE]`），非逐 token 增量流式；Activity SSE 的生命周期事件则来自 Runtime Event Spine。没有真实 production backend 的能力保持 `supported=false`。
 
 ---
 

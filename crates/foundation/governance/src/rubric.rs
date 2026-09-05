@@ -218,17 +218,9 @@ fn opposite_to(a: StanceKind, b: StanceKind) -> bool {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HoldThreshold {
-    StrongDisapprovePercent {
-        actual_percent: u8,
-        threshold: u8,
-    },
-    UnanimousDisapprove {
-        opposing_count: usize,
-    },
-    DeliberationTimeout {
-        actual_ms: u64,
-        threshold_ms: u64,
-    },
+    StrongDisapprovePercent { actual_percent: u8, threshold: u8 },
+    UnanimousDisapprove { opposing_count: usize },
+    DeliberationTimeout { actual_ms: u64, threshold_ms: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -268,7 +260,10 @@ impl HoldTrigger {
                     actual_percent: strong_pct,
                     threshold: HOLD_STRONG_DISAPPROVE_PERCENT,
                 },
-                dissenting_opinions: strong.iter().map(|ballot| ballot.advisor_id.clone()).collect(),
+                dissenting_opinions: strong
+                    .iter()
+                    .map(|ballot| ballot.advisor_id.clone())
+                    .collect(),
             });
         }
         if disapprove.len() == non_abstain.len() {
@@ -334,7 +329,11 @@ pub enum VotingStrategy {
 }
 
 /// Evaluate a voting strategy against already-synthesized ballots.
-pub fn passes_strategy(strategy: VotingStrategy, ballots: &[Ballot], report: &SynthesisReport) -> bool {
+pub fn passes_strategy(
+    strategy: VotingStrategy,
+    ballots: &[Ballot],
+    report: &SynthesisReport,
+) -> bool {
     match strategy {
         VotingStrategy::WeightedMajority => report.weighted_score > 0.0,
         VotingStrategy::TopScoring => ballots
@@ -406,7 +405,10 @@ mod tests {
         let trigger = HoldTrigger::evaluate(&ballots).unwrap();
         assert!(matches!(
             trigger.threshold,
-            HoldThreshold::StrongDisapprovePercent { actual_percent: 33, .. }
+            HoldThreshold::StrongDisapprovePercent {
+                actual_percent: 33,
+                ..
+            }
         ));
     }
 
@@ -443,7 +445,11 @@ mod tests {
             ballot("c", StanceKind::Disapprove, 1.0),
         ];
         let report = synthesize(&ballots);
-        assert!(passes_strategy(VotingStrategy::Supermajority, &ballots, &report));
+        assert!(passes_strategy(
+            VotingStrategy::Supermajority,
+            &ballots,
+            &report
+        ));
         let mixed = vec![
             ballot("a", StanceKind::Approve, 1.0),
             ballot("b", StanceKind::Disapprove, 1.0),

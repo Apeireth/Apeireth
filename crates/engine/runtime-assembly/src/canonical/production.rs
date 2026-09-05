@@ -13,14 +13,16 @@ use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEnt
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
 use apeireth_plugin::self_assessment::SelfAssessmentStore;
+use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
 
+use super::capability::CapabilityProvider;
 use super::cognitive::{
     CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule, JudgeObservations,
     MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule, SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
-use super::module::{Module, ModuleManifest};
+use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::tool_modules::{
@@ -124,6 +126,7 @@ pub type CognitiveBackends = ProductionBackends;
 /// The validated, ordered module set to pass to [`RuntimeBuilder::with_module`].
 pub struct ProductionModules {
     modules: Vec<Arc<dyn Module>>,
+    capabilities: Vec<Arc<dyn ToolCapability>>,
     telemetry: Arc<CognitiveTelemetry>,
 }
 
@@ -138,6 +141,7 @@ impl ProductionModules {
         clock: Arc<dyn Clock>,
     ) -> RuntimeResult<Self> {
         let mut modules: Vec<Arc<dyn Module>> = Vec::new();
+        let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
 
@@ -155,35 +159,41 @@ impl ProductionModules {
             ));
         }
 
-        // Register tool modules when configured and available
+        // Register tool capabilities independently of behavior modules.
         if config.filesystem {
             if let Some(root) = &backends.workspace_root {
-                modules.push(Arc::new(FilesystemModule::new(root.clone())));
+                let provider = FilesystemModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
             }
         }
 
         if config.search {
             if let Some(root) = &backends.workspace_root {
-                modules.push(Arc::new(SearchModule::new(root.clone())));
+                let provider = SearchModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
             }
         }
 
         if config.repo {
             if let Some(root) = &backends.workspace_root {
-                modules.push(Arc::new(RepoModule::new(root.clone())));
+                let provider = RepoModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
             }
         }
 
         if let Some(shell_config) = config.shell {
-            modules.push(Arc::new(ShellModule::new(shell_config)));
+            let provider = ShellModule::new(shell_config);
+            capabilities.extend(provider.capabilities());
         }
 
         if let Some(fetch_config) = config.fetch {
-            modules.push(Arc::new(FetchModule::new(fetch_config)));
+            let provider = FetchModule::new(fetch_config);
+            capabilities.extend(provider.capabilities());
         }
 
         if config.mcp {
-            modules.push(Arc::new(McpModule::new()));
+            let provider = McpModule::new();
+            capabilities.extend(provider.capabilities());
         }
 
         // Register cognitive modules
@@ -289,7 +299,11 @@ impl ProductionModules {
             }
         }
 
-        Ok(Self { modules, telemetry })
+        Ok(Self {
+            modules,
+            capabilities,
+            telemetry,
+        })
     }
 
     /// Ordered modules for registration in the canonical runtime.
@@ -297,14 +311,21 @@ impl ProductionModules {
         &self.modules
     }
 
+    /// Capabilities contributed by concrete production providers.
+    pub fn capabilities(&self) -> &[Arc<dyn ToolCapability>] {
+        &self.capabilities
+    }
+
     /// Consume the set into the builder's module registration calls.
     pub fn register_into(
         self,
         mut builder: super::runtime::RuntimeBuilder,
     ) -> super::runtime::RuntimeBuilder {
-        builder = builder.with_cognitive_telemetry(Arc::clone(&self.telemetry));
         for module in self.modules {
             builder = builder.with_module(module);
+        }
+        for capability in self.capabilities {
+            builder = builder.with_capability(capability);
         }
         builder
     }

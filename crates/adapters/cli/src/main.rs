@@ -3,13 +3,13 @@ use std::process::ExitCode;
 
 use apeireth_cli::{
     build_canonical_runtime_from_env, dispatch_canonical_approval, dispatch_canonical_chat,
-    dispatch_gateway_serve, CanonicalCliTurn,
+    dispatch_gateway_serve_on, CanonicalCliTurn,
 };
 use apeireth_runtime::ApprovalDecision;
 
 fn print_help() {
     println!(
-        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--port PORT]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
+        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
     );
 }
 
@@ -101,7 +101,7 @@ fn run_approval(session: String, approval: String, decision: ApprovalDecision) -
     }
 }
 
-fn run_gateway(port: u16) -> ExitCode {
+fn run_gateway(bind: String, port: u16) -> ExitCode {
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -109,7 +109,7 @@ fn run_gateway(port: u16) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(dispatch_gateway_serve(port)) {
+    match runtime.block_on(dispatch_gateway_serve_on(&bind, port)) {
         Ok(message) => {
             println!("{message}");
             ExitCode::SUCCESS
@@ -233,10 +233,18 @@ fn main() -> ExitCode {
             }
         },
         "gateway" if args.get(1).map(String::as_str) == Some("serve") => {
+            let mut bind = "127.0.0.1".to_string();
             let mut port = 8080;
             let mut index = 2;
             while index < args.len() {
-                if args[index] == "--port" {
+                if args[index] == "--bind" {
+                    index += 1;
+                    let Some(value) = args.get(index) else {
+                        eprintln!("gateway serve --bind requires a value");
+                        return ExitCode::FAILURE;
+                    };
+                    bind = value.clone();
+                } else if args[index] == "--port" {
                     index += 1;
                     let Some(value) = args.get(index) else {
                         eprintln!("gateway serve --port requires a value");
@@ -256,7 +264,7 @@ fn main() -> ExitCode {
                 }
                 index += 1;
             }
-            run_gateway(port)
+            run_gateway(bind, port)
         }
         _ => {
             eprintln!("unknown command");

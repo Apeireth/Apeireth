@@ -11,11 +11,10 @@ use apeireth_tools_canonical::{
     FetchConfig, FetchTool, FilesystemTool, RepoTool, SearchTool, ShellTool, TrustedShellConfig,
 };
 
-use super::module::{Module, ModuleManifest};
+use super::capability::CapabilityProvider;
 
 /// Module providing filesystem capabilities (`tool.filesystem`).
 pub struct FilesystemModule {
-    manifest: ModuleManifest,
     tool: Arc<FilesystemTool>,
 }
 
@@ -23,7 +22,6 @@ impl FilesystemModule {
     /// Create a filesystem module rooted at `workspace_root`.
     pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
         Self {
-            manifest: ModuleManifest::new("module.tool.filesystem", "Filesystem Tool Module"),
             tool: Arc::new(FilesystemTool::new(workspace_root)),
         }
     }
@@ -34,19 +32,18 @@ impl FilesystemModule {
     }
 }
 
-impl Module for FilesystemModule {
-    fn manifest(&self) -> &ModuleManifest {
-        &self.manifest
+impl CapabilityProvider for FilesystemModule {
+    fn id(&self) -> &str {
+        "module.tool.filesystem"
     }
 
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         vec![self.tool.clone()]
     }
 }
 
 /// Module providing search capabilities (`tool.search`).
 pub struct SearchModule {
-    manifest: ModuleManifest,
     tool: Arc<SearchTool>,
 }
 
@@ -54,7 +51,6 @@ impl SearchModule {
     /// Create a search module rooted at `workspace_root`.
     pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
         Self {
-            manifest: ModuleManifest::new("module.tool.search", "Search Tool Module"),
             tool: Arc::new(SearchTool::new(workspace_root)),
         }
     }
@@ -65,19 +61,18 @@ impl SearchModule {
     }
 }
 
-impl Module for SearchModule {
-    fn manifest(&self) -> &ModuleManifest {
-        &self.manifest
+impl CapabilityProvider for SearchModule {
+    fn id(&self) -> &str {
+        "module.tool.search"
     }
 
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         vec![self.tool.clone()]
     }
 }
 
 /// Module providing git repository inspection capabilities (`tool.repo`).
 pub struct RepoModule {
-    manifest: ModuleManifest,
     tool: Arc<RepoTool>,
 }
 
@@ -85,7 +80,6 @@ impl RepoModule {
     /// Create a repo module rooted at `workspace_root`.
     pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
         Self {
-            manifest: ModuleManifest::new("module.tool.repo", "Repository Tool Module"),
             tool: Arc::new(RepoTool::new(workspace_root)),
         }
     }
@@ -96,19 +90,18 @@ impl RepoModule {
     }
 }
 
-impl Module for RepoModule {
-    fn manifest(&self) -> &ModuleManifest {
-        &self.manifest
+impl CapabilityProvider for RepoModule {
+    fn id(&self) -> &str {
+        "module.tool.repo"
     }
 
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         vec![self.tool.clone()]
     }
 }
 
 /// Module providing trusted shell command execution capabilities (`tool.shell`).
 pub struct ShellModule {
-    manifest: ModuleManifest,
     tool: Arc<ShellTool>,
 }
 
@@ -116,7 +109,6 @@ impl ShellModule {
     /// Create a shell module with explicit configuration.
     pub fn new(config: TrustedShellConfig) -> Self {
         Self {
-            manifest: ModuleManifest::new("module.tool.shell", "Trusted Shell Tool Module"),
             tool: Arc::new(ShellTool::new(config)),
         }
     }
@@ -127,19 +119,18 @@ impl ShellModule {
     }
 }
 
-impl Module for ShellModule {
-    fn manifest(&self) -> &ModuleManifest {
-        &self.manifest
+impl CapabilityProvider for ShellModule {
+    fn id(&self) -> &str {
+        "module.tool.shell"
     }
 
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         vec![self.tool.clone()]
     }
 }
 
 /// Module providing controlled HTTP fetch capabilities (`tool.fetch`).
 pub struct FetchModule {
-    manifest: ModuleManifest,
     tool: Arc<FetchTool>,
 }
 
@@ -147,7 +138,6 @@ impl FetchModule {
     /// Create a fetch module with explicit egress policy.
     pub fn new(config: FetchConfig) -> Self {
         Self {
-            manifest: ModuleManifest::new("module.tool.fetch", "Controlled Fetch Tool Module"),
             tool: Arc::new(FetchTool::new(config)),
         }
     }
@@ -158,19 +148,18 @@ impl FetchModule {
     }
 }
 
-impl Module for FetchModule {
-    fn manifest(&self) -> &ModuleManifest {
-        &self.manifest
+impl CapabilityProvider for FetchModule {
+    fn id(&self) -> &str {
+        "module.tool.fetch"
     }
 
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         vec![self.tool.clone()]
     }
 }
 
 /// Module that manages and dynamically contributes Model Context Protocol (MCP) tool capabilities.
 pub struct McpModule {
-    manifest: ModuleManifest,
     tools: std::sync::RwLock<Vec<Arc<dyn ToolCapability>>>,
 }
 
@@ -178,7 +167,6 @@ impl McpModule {
     /// Create a new MCP module.
     pub fn new() -> Self {
         Self {
-            manifest: ModuleManifest::new("module.mcp", "MCP Capability Module"),
             tools: std::sync::RwLock::new(Vec::new()),
         }
     }
@@ -217,16 +205,12 @@ impl Default for McpModule {
     }
 }
 
-impl Module for McpModule {
-    fn manifest(&self) -> &ModuleManifest {
-        &self.manifest
+impl CapabilityProvider for McpModule {
+    fn id(&self) -> &str {
+        "module.mcp"
     }
 
-    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         self.tools.read().expect("mcp lock poisoned").clone()
-    }
-
-    fn register_dynamic_tool(&self, tool: Arc<dyn ToolCapability>) -> Result<(), String> {
-        self.register_tool(tool)
     }
 }

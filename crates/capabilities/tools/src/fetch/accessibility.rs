@@ -551,7 +551,11 @@ mod tests {
         let html = r#"<button>OK</button><a href="/">Home</a><h1>Title</h1>"#;
         let tree = extract_tree(html);
         let refs = tree.interactive_refs();
-        assert_eq!(refs.len(), 2, "button and link are interactive, heading is not");
+        assert_eq!(
+            refs.len(),
+            2,
+            "button and link are interactive, heading is not"
+        );
     }
 
     #[test]

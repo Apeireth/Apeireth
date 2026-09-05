@@ -244,8 +244,10 @@ impl PromptServer for StaticPromptServer {
                 rendered = rendered.replace(&needle, &replacement);
             }
         }
-        Ok(GetPromptResult::new(vec![PromptMessage::user_text(rendered)])
-            .with_description(prompt.description.clone().unwrap_or_default()))
+        Ok(
+            GetPromptResult::new(vec![PromptMessage::user_text(rendered)])
+                .with_description(prompt.description.clone().unwrap_or_default()),
+        )
     }
 }
 
@@ -340,7 +342,10 @@ mod tests {
         let s = TestPromptServer;
         assert_eq!(s.list().len(), 2);
         let result = s
-            .get("summarize", &json!({"topic": "Rust async", "max_words": 50}))
+            .get(
+                "summarize",
+                &json!({"topic": "Rust async", "max_words": 50}),
+            )
             .unwrap();
         assert_eq!(result.messages.len(), 2);
         match &result.messages[0].content {
@@ -400,10 +405,7 @@ mod tests {
         let ok = dispatch(&JsonRpcRequest::new("prompts/list", None, Id::Num(5)), &s);
         assert!(ok.error.is_none());
         let bad = dispatch(&JsonRpcRequest::new("prompts/foo", None, Id::Num(6)), &s);
-        assert_eq!(
-            bad.error.unwrap().code,
-            JsonRpcError::CODE_METHOD_NOT_FOUND
-        );
+        assert_eq!(bad.error.unwrap().code, JsonRpcError::CODE_METHOD_NOT_FOUND);
     }
 
     #[test]
@@ -422,6 +424,9 @@ mod tests {
             ContentBlock::Text { text, .. } => assert_eq!(text, "Hello Ada!"),
             _ => panic!("expected Text"),
         }
-        assert_eq!(s.get("nope", &json!({})).unwrap_err().code, PROMPT_NOT_FOUND);
+        assert_eq!(
+            s.get("nope", &json!({})).unwrap_err().code,
+            PROMPT_NOT_FOUND
+        );
     }
 }

@@ -107,11 +107,7 @@ impl ClusterStore {
     }
 
     /// 创建一个思考文件落盘；文件名 = `{日期}-{当日序号:03}.md`.
-    pub fn create_file(
-        &self,
-        cluster: &str,
-        content: &str,
-    ) -> Result<PathBuf, ClusterStoreError> {
+    pub fn create_file(&self, cluster: &str, content: &str) -> Result<PathBuf, ClusterStoreError> {
         if content.trim().is_empty() {
             return Err(ClusterStoreError::EmptyContent);
         }

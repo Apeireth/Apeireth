@@ -343,8 +343,8 @@ mod tests {
     #[test]
     #[cfg(not(windows))] // Unix-only portable cmd
     fn real_spawn_works() {
-        // /bin/true 是 Unix 上总是 exit 0 的 cmd, 跨平台
-        let spec = ChildSpec::new("true-1", "/bin/true");
+        // `true` 是 Unix 上总是 exit 0 的 cmd, 跨平台 (Linux/macOS PATH 解析)
+        let spec = ChildSpec::new("true-1", "true");
         let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
         // start 真启进程
         s.start().expect("start");
@@ -354,17 +354,17 @@ mod tests {
         let mut handles = s.handles.lock().unwrap();
         let child = handles.get_mut("true-1").expect("handle exists");
         let status = child.try_wait().expect("try_wait");
-        assert!(status.is_some(), "/bin/true 应已 exit");
+        assert!(status.is_some(), "true 应已 exit");
         let status = status.unwrap();
-        assert!(status.success(), "/bin/true exit 0");
+        assert!(status.success(), "true exit 0");
     }
 
-    /// RC-8 验收: start 后 stop 真 kill 进程 (这里用 /bin/sleep 1s, 立即 stop)
+    /// RC-8 验收: start 后 stop 真 kill 进程 (这里用 sleep 60s, 立即 stop)
     #[test]
     #[cfg(not(windows))]
     fn real_kill_works() {
-        // /bin/sleep 60 持久进程, 立即 stop 应 kill 它
-        let mut spec = ChildSpec::new("sleep-1", "/bin/sleep");
+        // sleep 60 持久进程, 立即 stop 应 kill 它
+        let mut spec = ChildSpec::new("sleep-1", "sleep");
         spec.args = vec!["60".into()];
         let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
         s.start().expect("start");
@@ -377,8 +377,8 @@ mod tests {
     /// RC-8 验收: duplicate child id in start → StartFailed error
     #[test]
     fn duplicate_child_id_returns_error() {
-        let spec1 = ChildSpec::new("dup", "/bin/true");
-        let spec2 = ChildSpec::new("dup", "/bin/false");
+        let spec1 = ChildSpec::new("dup", "true");
+        let spec2 = ChildSpec::new("dup", "false");
         let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec1, spec2]);
         let r = s.start();
         assert!(matches!(r, Err(SupervisorError::StartFailed(_))));

@@ -1675,12 +1675,11 @@ mod tests {
             ]
         );
         let telemetry = modules.telemetry();
-        let runtime = modules
+        let _runtime = modules
             .register_into(Runtime::builder())
             .build()
             .await
             .unwrap();
-        assert!(runtime.cognitive_telemetry().is_some());
         assert!(telemetry.events().is_empty());
     }
 

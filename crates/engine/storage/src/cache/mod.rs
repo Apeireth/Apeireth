@@ -221,8 +221,7 @@ where
                     evictor.on_remove(key);
                 }
                 self.stats.set_size(self.shards.len());
-                self.stats
-                    .record_miss(start.elapsed().as_micros() as u64);
+                self.stats.record_miss(start.elapsed().as_micros() as u64);
                 None
             }
             Some(e) => {
@@ -233,8 +232,7 @@ where
                 Some(e.into_value())
             }
             None => {
-                self.stats
-                    .record_miss(start.elapsed().as_micros() as u64);
+                self.stats.record_miss(start.elapsed().as_micros() as u64);
                 None
             }
         }
@@ -260,12 +258,12 @@ where
         let replacing = self.shards.contains_key(&key);
         if !replacing && self.shards.len() >= self.config.max_size {
             let victim = {
-                let mut evictor = self
-                    .evictor
-                    .lock()
-                    .map_err(|_| CacheError::CapacityExceeded {
-                        max_size: self.config.max_size,
-                    })?;
+                let mut evictor =
+                    self.evictor
+                        .lock()
+                        .map_err(|_| CacheError::CapacityExceeded {
+                            max_size: self.config.max_size,
+                        })?;
                 evictor.pick_victim()
             };
             if let Some(victim) = victim {
@@ -307,8 +305,7 @@ where
         self.stats.set_size(self.shards.len());
         match entry {
             Some(e) => {
-                self.stats
-                    .record_remove(start.elapsed().as_micros() as u64);
+                self.stats.record_remove(start.elapsed().as_micros() as u64);
                 Some(e.into_value())
             }
             None => None,
@@ -433,16 +430,10 @@ mod tests {
     #[test]
     fn memory_cache_lru_evicts_one_when_over_capacity() {
         let cache = small_lru();
-        cache
-            .put("a".into(), 1, Duration::from_secs(60))
-            .unwrap();
-        cache
-            .put("b".into(), 2, Duration::from_secs(60))
-            .unwrap();
+        cache.put("a".into(), 1, Duration::from_secs(60)).unwrap();
+        cache.put("b".into(), 2, Duration::from_secs(60)).unwrap();
         assert_eq!(cache.len(), 2);
-        cache
-            .put("c".into(), 3, Duration::from_secs(60))
-            .unwrap();
+        cache.put("c".into(), 3, Duration::from_secs(60)).unwrap();
         assert_eq!(cache.len(), 2);
         assert!(cache.get(&"a".into()).is_none());
         assert_eq!(cache.get(&"b".into()), Some(2));
@@ -457,17 +448,11 @@ mod tests {
             .shards(16)
             .build();
         let cache: MemoryCache<String, i32> = MemoryCache::new(config).unwrap();
-        cache
-            .put("a".into(), 1, Duration::from_secs(60))
-            .unwrap();
-        cache
-            .put("b".into(), 2, Duration::from_secs(60))
-            .unwrap();
+        cache.put("a".into(), 1, Duration::from_secs(60)).unwrap();
+        cache.put("b".into(), 2, Duration::from_secs(60)).unwrap();
         cache.get(&"a".into());
         cache.get(&"a".into());
-        cache
-            .put("c".into(), 3, Duration::from_secs(60))
-            .unwrap();
+        cache.put("c".into(), 3, Duration::from_secs(60)).unwrap();
         assert!(cache.get(&"b".into()).is_none());
         assert_eq!(cache.get(&"a".into()), Some(1));
         assert_eq!(cache.get(&"c".into()), Some(3));
@@ -481,16 +466,10 @@ mod tests {
             .shards(16)
             .build();
         let cache: MemoryCache<String, i32> = MemoryCache::new(config).unwrap();
-        cache
-            .put("a".into(), 1, Duration::from_secs(60))
-            .unwrap();
-        cache
-            .put("b".into(), 2, Duration::from_secs(60))
-            .unwrap();
+        cache.put("a".into(), 1, Duration::from_secs(60)).unwrap();
+        cache.put("b".into(), 2, Duration::from_secs(60)).unwrap();
         cache.get(&"a".into());
-        cache
-            .put("c".into(), 3, Duration::from_secs(60))
-            .unwrap();
+        cache.put("c".into(), 3, Duration::from_secs(60)).unwrap();
         assert!(cache.get(&"a".into()).is_none());
         assert_eq!(cache.get(&"b".into()), Some(2));
     }
@@ -500,12 +479,7 @@ mod tests {
         let now = Instant::now();
         let cache = small_lru();
         cache
-            .put_at(
-                "a".into(),
-                1,
-                Duration::from_millis(10),
-                now,
-            )
+            .put_at("a".into(), 1, Duration::from_millis(10), now)
             .unwrap();
         assert_eq!(cache.get_at(&"a".into(), now), Some(1));
         let later = now + Duration::from_millis(20);
@@ -516,9 +490,7 @@ mod tests {
     fn stats_hit_miss_and_zero_rate() {
         let cache = small_lru();
         assert_eq!(cache.stats().hit_rate, 0.0);
-        cache
-            .put("a".into(), 1, Duration::from_secs(60))
-            .unwrap();
+        cache.put("a".into(), 1, Duration::from_secs(60)).unwrap();
         assert_eq!(cache.get(&"a".into()), Some(1));
         assert!(cache.get(&"missing".into()).is_none());
         let snap = cache.stats();
@@ -530,9 +502,7 @@ mod tests {
     #[test]
     fn clear_resets_stats() {
         let cache = small_lru();
-        cache
-            .put("a".into(), 1, Duration::from_secs(60))
-            .unwrap();
+        cache.put("a".into(), 1, Duration::from_secs(60)).unwrap();
         cache.get(&"a".into());
         cache.clear();
         assert_eq!(cache.len(), 0);
@@ -550,9 +520,7 @@ mod tests {
     #[test]
     fn remove_existing_and_missing() {
         let cache = small_lru();
-        cache
-            .put("a".into(), 1, Duration::from_secs(60))
-            .unwrap();
+        cache.put("a".into(), 1, Duration::from_secs(60)).unwrap();
         assert_eq!(cache.remove(&"a".into()), Some(1));
         assert_eq!(cache.remove(&"a".into()), None);
         assert_eq!(cache.len(), 0);

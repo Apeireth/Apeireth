@@ -171,7 +171,9 @@ pub fn validate_version(v: &str) -> Result<(), BoundError> {
             "version must be 1..={MAX_VERSION_LEN} chars: {v:?}"
         )));
     }
-    semver::parse(v).map(|_| ()).map_err(|e| BoundError::Schema(e.to_string()))
+    semver::parse(v)
+        .map(|_| ())
+        .map_err(|e| BoundError::Schema(e.to_string()))
 }
 
 /// Validate a permission list: length, per-item length, no duplicates.
@@ -219,9 +221,7 @@ pub fn validate_resource_bounds(bounds: &ResourceBounds) -> Result<(), BoundErro
 /// Donor audit layer: at least one permission, I/O ≥ 1 KiB, timeout ≤ 10 min.
 pub fn audit_bounds(permissions: &[String], bounds: &ResourceBounds) -> Result<(), BoundError> {
     if permissions.is_empty() {
-        return Err(BoundError::AuditRejected(
-            "no permissions declared".into(),
-        ));
+        return Err(BoundError::AuditRejected("no permissions declared".into()));
     }
     if bounds.max_input_bytes < MIN_AUDITED_IO_BYTES {
         return Err(BoundError::AuditRejected(format!(
@@ -313,13 +313,7 @@ pub fn default_caller_permissions() -> BTreeSet<String> {
 /// Privileged grant from the donor sandbox.
 pub fn privileged_caller_permissions() -> BTreeSet<String> {
     [
-        "invoke",
-        "read",
-        "write",
-        "system",
-        "llm_call",
-        "ask_user",
-        "render",
+        "invoke", "read", "write", "system", "llm_call", "ask_user", "render",
     ]
     .into_iter()
     .map(str::to_string)
@@ -351,8 +345,8 @@ pub fn validate_plugin_manifest_text(manifest: &PluginManifest) -> Result<(), Bo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::kernel::PluginId;
     use crate::manifest::PluginManifest;
+    use apeireth_core::kernel::PluginId;
 
     #[test]
     fn kebab_id_rules() {
@@ -426,7 +420,14 @@ mod tests {
             timeout_ms: 1_000,
         };
         let caller = privileged_caller_permissions();
-        assert!(check_call("p", &["invoke".into(), "write".into()], &caller, 100, &bounds).is_ok());
+        assert!(check_call(
+            "p",
+            &["invoke".into(), "write".into()],
+            &caller,
+            100,
+            &bounds
+        )
+        .is_ok());
         assert!(matches!(
             check_call("p", &["invoke".into()], &caller, 101, &bounds),
             Err(BoundError::InputTooLarge { actual: 101, .. })
@@ -445,7 +446,14 @@ mod tests {
             ),
             Err(BoundError::PermissionDenied { .. })
         ));
-        assert!(check_call("p", &["invoke".into()], &default_caller_permissions(), 10, &bounds).is_ok());
+        assert!(check_call(
+            "p",
+            &["invoke".into()],
+            &default_caller_permissions(),
+            10,
+            &bounds
+        )
+        .is_ok());
     }
 
     #[test]

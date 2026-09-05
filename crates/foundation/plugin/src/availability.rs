@@ -128,13 +128,22 @@ impl std::fmt::Display for AvailabilityError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AvailableWithoutSupport { name } => {
-                write!(f, "availability {name:?} cannot be available if unsupported")
+                write!(
+                    f,
+                    "availability {name:?} cannot be available if unsupported"
+                )
             }
             Self::ReasonOnAvailable { name } => {
-                write!(f, "availability {name:?} is available so reason must be None")
+                write!(
+                    f,
+                    "availability {name:?} is available so reason must be None"
+                )
             }
             Self::MissingReason { name } => {
-                write!(f, "availability {name:?} is unavailable so reason is required")
+                write!(
+                    f,
+                    "availability {name:?} is unavailable so reason is required"
+                )
             }
         }
     }

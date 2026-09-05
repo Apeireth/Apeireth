@@ -63,9 +63,9 @@ pub use research_vault_ftrl::{
     ResearchPrefixGuardConfig, ResearchSegmentFeatures, ResearchVaultLruFtrl,
 };
 pub mod continuation;
-pub mod durable;
 pub mod council;
 pub mod cron;
+pub mod durable;
 pub mod lineage_spawning;
 pub mod llm;
 pub mod prompt_stabilizer;
@@ -98,12 +98,16 @@ pub use continuation::{
     ContinuationSnapshot, ContinuationStore, EditAction, FileContinuationStore,
     InMemoryContinuationStore, PendingToolCall, SegmentEditError, SegmentEditor,
 };
-pub use lineage_spawning::{
-    LineageProgenySpec, LineageSpawningOrchestrator, NurturingPhase, ProgenySpecialization,
+pub use cron::{
+    describe, next_after, validate_expr, validate_schedule, CronError, CronExpr, CronResult,
+    Schedule as CronSchedule, DOW_ALIASES, MONTH_ALIASES,
 };
 pub use durable::{
     ActivityEvent, ActivityEventKind, ActivityExecutor, ActivityState, ActivityStateError,
     ActivityStateMachine, DurableError, DurableHistory, DurableResult, DurableRun, RetryPolicy,
+};
+pub use lineage_spawning::{
+    LineageProgenySpec, LineageSpawningOrchestrator, NurturingPhase, ProgenySpecialization,
 };
 pub use prompt_stabilizer::{
     assemble_tiered, EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage,
@@ -114,10 +118,6 @@ pub use speech_arbiter::{
 };
 pub use worktree_sandbox::{
     RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,
-};
-pub use cron::{
-    describe, next_after, validate_expr, validate_schedule, CronError, CronExpr, CronResult,
-    Schedule as CronSchedule, DOW_ALIASES, MONTH_ALIASES,
 };
 
 // ============================================

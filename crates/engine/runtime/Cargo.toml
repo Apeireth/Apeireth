@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Canonical Apeireth runtime orchestration for sessions, providers, tools, and governance"
+description = "Canonical Apeireth runtime mechanism kernel with abstract ports, registries, approvals, and events"
 keywords = ["ai", "agent", "runtime", "orchestration", "autopoietic"]
 categories = ["asynchronous"]
 
@@ -16,12 +16,6 @@ apeireth-protocol = { path = "../../foundation/protocol" }
 apeireth-plugin = { path = "../../foundation/plugin" }
 apeireth-governance = { path = "../../foundation/governance" }
 apeireth-orchestration = { path = "../../foundation/orchestration" }
-# OrganModule owns the existing organ implementations (engine layer, no cycle:
-# apeireth-organ does not depend on the runtime).
-apeireth-organ = { path = "../organ" }
-apeireth-storage = { path = "../storage" }
-apeireth-tools-canonical = { path = "../../capabilities/tools" }
-rusqlite = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

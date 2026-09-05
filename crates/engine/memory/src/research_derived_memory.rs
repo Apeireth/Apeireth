@@ -117,7 +117,11 @@ pub enum DualRaterResult {
     /// 双评者一致。
     Agree { leaked: bool },
     /// 不一致：保守取泄漏=真（安全侧）。
-    Disagree { a: bool, b: bool, conservative: bool },
+    Disagree {
+        a: bool,
+        b: bool,
+        conservative: bool,
+    },
 }
 
 /// LLM-as-judge 评审判定（真 LLM 留部署层，测试用确定性 stub）。
@@ -241,7 +245,10 @@ impl SqliteMemoryStore {
             let mut derived: Vec<(String, String)> = Vec::new();
             for row in rows {
                 let (k, i) = row?;
-                if closure.contains(&DerivedRef { kind: k.clone(), id: i.clone() }) {
+                if closure.contains(&DerivedRef {
+                    kind: k.clone(),
+                    id: i.clone(),
+                }) {
                     continue;
                 }
                 derived.push((k, i));
@@ -313,7 +320,11 @@ impl SqliteMemoryStore {
                     continue;
                 }
                 let total = self.research_source_count(&conn, &dref)?;
-                let lost = self.research_lost_source_count(&conn, &dref, &forgotten.iter().cloned().collect::<HashSet<_>>())?;
+                let lost = self.research_lost_source_count(
+                    &conn,
+                    &dref,
+                    &forgotten.iter().cloned().collect::<HashSet<_>>(),
+                )?;
                 let in_closure = match &mode {
                     ClosureMode::Taint => lost > 0,
                     ClosureMode::Support { theta } => {
@@ -338,7 +349,11 @@ impl SqliteMemoryStore {
         })
     }
 
-    fn research_source_count(&self, conn: &rusqlite::Connection, d: &DerivedRef) -> MemoryResult<usize> {
+    fn research_source_count(
+        &self,
+        conn: &rusqlite::Connection,
+        d: &DerivedRef,
+    ) -> MemoryResult<usize> {
         let n: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM research_derived_from \
@@ -381,9 +396,8 @@ impl SqliteMemoryStore {
         let notes: Vec<(String, Vec<String>)> = {
             let conn = self.conn()?;
             let mut stmt = conn.prepare("SELECT id, source_episode_ids_json FROM notes")?;
-            let rows = stmt.query_map([], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })?;
+            let rows =
+                stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
             let mut out = Vec::new();
             for row in rows {
                 let (id, json) = row?;
@@ -565,7 +579,10 @@ mod tests {
         .unwrap();
         // 根遗忘后: 转述召回面审计必须命中 note.
         let audit = s
-            .research_audit_forgotten_leaks(&[DerivedRef::new("episode", "ep-1")], ClosureMode::Taint)
+            .research_audit_forgotten_leaks(
+                &[DerivedRef::new("episode", "ep-1")],
+                ClosureMode::Taint,
+            )
             .unwrap();
         assert_eq!(audit.items.len(), 1);
         assert_eq!(audit.items[0].id, "note-1");
@@ -579,7 +596,10 @@ mod tests {
                 None,
             )
             .unwrap();
-        assert!(report.nodes.iter().any(|n| n.kind == "note" && n.id == "note-1"));
+        assert!(report
+            .nodes
+            .iter()
+            .any(|n| n.kind == "note" && n.id == "note-1"));
         assert!(!report.deleted_anything, "闭包只审计不删除");
         assert!(report.audit_event_seq.is_some());
     }
@@ -594,7 +614,10 @@ mod tests {
         let wiki = DerivedRef::new("wiki", "w-1");
         s.research_record_derivation(
             &note,
-            &[DerivedRef::new("episode", "ep-a"), DerivedRef::new("episode", "ep-b")],
+            &[
+                DerivedRef::new("episode", "ep-a"),
+                DerivedRef::new("episode", "ep-b"),
+            ],
             None,
         )
         .unwrap();
@@ -602,7 +625,12 @@ mod tests {
         s.research_record_derivation(&wiki, &[note.clone()], Some("compiled from n-1"))
             .unwrap();
         let report = s
-            .research_forget_closure(&[DerivedRef::new("episode", "ep-a")], ClosureMode::Taint, None, None)
+            .research_forget_closure(
+                &[DerivedRef::new("episode", "ep-a")],
+                ClosureMode::Taint,
+                None,
+                None,
+            )
             .unwrap();
         let ids: Vec<&str> = report.nodes.iter().map(|n| n.id.as_str()).collect();
         assert!(ids.contains(&"ep-a"));
@@ -669,9 +697,13 @@ mod tests {
         let s = store();
         let d = DerivedRef::new("diary", "d-1");
         let src = DerivedRef::new("episode", "ep-1");
-        let first = s.research_record_derivation(&d, &[src.clone()], None).unwrap();
+        let first = s
+            .research_record_derivation(&d, &[src.clone()], None)
+            .unwrap();
         assert_eq!(first, 1);
-        let again = s.research_record_derivation(&d, &[src.clone()], None).unwrap();
+        let again = s
+            .research_record_derivation(&d, &[src.clone()], None)
+            .unwrap();
         assert_eq!(again, 0, "主键去重幂等");
         let err = s.research_record_derivation(&d, &[], None).unwrap_err();
         assert!(err.to_string().contains("must not be empty"));
@@ -698,7 +730,10 @@ mod tests {
         let imported = s.research_import_note_lineage().unwrap();
         assert_eq!(imported, 2);
         let audit = s
-            .research_audit_forgotten_leaks(&[DerivedRef::new("episode", "ep-1")], ClosureMode::Taint)
+            .research_audit_forgotten_leaks(
+                &[DerivedRef::new("episode", "ep-1")],
+                ClosureMode::Taint,
+            )
             .unwrap();
         assert!(audit.items.iter().any(|i| i.id == "n-9"));
         assert!(!audit.items.iter().any(|i| i.id == "n-10"));
@@ -738,7 +773,12 @@ mod tests {
         assert!(cache.get("q1").is_some());
         // 空闭包: 不推进.
         let empty = s
-            .research_forget_closure(&[DerivedRef::new("episode", "ghost")], ClosureMode::Taint, None, None)
+            .research_forget_closure(
+                &[DerivedRef::new("episode", "ghost")],
+                ClosureMode::Taint,
+                None,
+                None,
+            )
             .unwrap();
         research_invalidate_cache_on_forget(&cache, &empty);
         assert_eq!(cache.generation(), 0);
@@ -748,7 +788,12 @@ mod tests {
         s.research_record_derivation(&d, &[DerivedRef::new("episode", "ep-1")], None)
             .unwrap();
         let report = s
-            .research_forget_closure(&[DerivedRef::new("episode", "ep-1")], ClosureMode::Taint, None, None)
+            .research_forget_closure(
+                &[DerivedRef::new("episode", "ep-1")],
+                ClosureMode::Taint,
+                None,
+                None,
+            )
             .unwrap();
         research_invalidate_cache_on_forget(&cache, &report);
         assert!(cache.generation() >= 1);

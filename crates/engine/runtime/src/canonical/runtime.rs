@@ -1,11 +1,11 @@
-//! The composition root.
+//! The runtime kernel's mechanism container.
 //!
 //! # One place where the system is assembled
 //!
-//! [`Runtime`] is the single application-level composition root. CLI, gateway,
-//! desktop, and tests all build one and talk to it; none of them assembles
-//! providers, sessions, or tool dispatch for itself. A gateway that manages its
-//! own sessions is a second runtime wearing an HTTP hat, and the two drift.
+//! [`Runtime`] is the single canonical execution container. The production
+//! assembly crate, CLI, gateway, desktop, and tests all use the same instance;
+//! concrete providers, behaviors, capabilities, and session adapters arrive
+//! through explicit ports and registries.
 //!
 //! # What it borrows, and what it refuses, from `UnifiedRuntimeHost`
 //!
@@ -31,6 +31,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use tokio::sync::Mutex as TokioMutex;
 
@@ -41,11 +42,14 @@ use apeireth_governance::{DenyUnconfigured, GovernanceHook};
 use apeireth_plugin::{
     CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
 };
+use apeireth_protocol::canonical::{ModelDescriptor, ModelFeature};
+use serde::Serialize;
 
 use super::approval::PendingApprovalView;
-use super::cognitive::CognitiveTelemetry;
+use super::capability::CapabilityRegistry;
 use super::error::{RuntimeError, RuntimeResult};
-use super::module::{Module, ModuleRegistry, DEFAULT_MAX_MODULE_INVOCATIONS};
+use super::events::{NoopRuntimeEventSink, RuntimeEvent, RuntimeEventSink};
+use super::module::{BehaviorModule, BehaviorRegistry, DEFAULT_MAX_MODULE_INVOCATIONS};
 use super::provider::ProviderRouter;
 use super::session::{InMemorySessionStore, SessionManager, SessionStore};
 
@@ -70,6 +74,61 @@ pub struct RuntimeConfig {
     pub approval_ttl_ms: u64,
     /// Maximum isolated module provider calls in one top-level turn.
     pub max_module_invocations: usize,
+}
+
+/// Secret-free diagnostic projection of the live runtime graph.
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeSnapshot {
+    pub default_model: Option<String>,
+    pub max_rounds: u32,
+    pub max_module_invocations: usize,
+    pub providers: Vec<RuntimeProviderSnapshot>,
+    pub models: Vec<RuntimeModelSnapshot>,
+    pub behavior_modules: Vec<RuntimeModuleSnapshot>,
+    pub capabilities: Vec<RuntimeCapabilitySnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeProviderSnapshot {
+    pub id: String,
+    pub available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub health: Option<RuntimeHealthSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeHealthSnapshot {
+    pub healthy: bool,
+    pub latency_p50_ms: u64,
+    pub error_rate: f64,
+    pub consecutive_failures: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeModelSnapshot {
+    pub id: String,
+    pub provider: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
+    pub features: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeModuleSnapshot {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeCapabilitySnapshot {
+    pub id: String,
+    pub name: String,
+    pub owner: String,
+    pub available: bool,
 }
 
 impl Default for RuntimeConfig {
@@ -113,9 +172,10 @@ pub struct Runtime {
     pub(super) governance: Arc<dyn GovernanceHook>,
     pub(super) clock: Arc<dyn Clock>,
     pub(super) config: RuntimeConfig,
-    pub(super) modules: ModuleRegistry,
-    pub(super) cognitive_telemetry: Option<Arc<CognitiveTelemetry>>,
+    pub(super) modules: BehaviorRegistry,
+    pub(super) capabilities: CapabilityRegistry,
     pub(super) session_locks: SessionLocks,
+    pub(super) event_sink: RwLock<Arc<dyn RuntimeEventSink>>,
 }
 
 impl Runtime {
@@ -149,11 +209,118 @@ impl Runtime {
         &self.config
     }
 
+    /// Return a live, secret-free projection for diagnostics and capability
+    /// discovery. It never includes credentials, prompts, tool arguments, or
+    /// provider metadata that may contain vendor-specific secrets.
+    pub fn snapshot(&self) -> RuntimeSnapshot {
+        let providers = self
+            .providers
+            .provider_ids()
+            .into_iter()
+            .map(|id| {
+                let health = self.providers.health(&id);
+                RuntimeProviderSnapshot {
+                    id: id.to_string(),
+                    available: health.as_ref().is_none_or(|value| value.healthy),
+                    health: health.map(|value| RuntimeHealthSnapshot {
+                        healthy: value.healthy,
+                        latency_p50_ms: value.latency_p50_ms,
+                        error_rate: value.error_rate,
+                        consecutive_failures: value.consecutive_failures,
+                    }),
+                }
+            })
+            .collect();
+        let models = self
+            .providers
+            .model_descriptors()
+            .into_iter()
+            .map(|model: ModelDescriptor| RuntimeModelSnapshot {
+                id: model.id.to_string(),
+                provider: model.provider.to_string(),
+                display_name: model.display_name,
+                context_window: model.context_window,
+                max_output_tokens: model.max_output_tokens,
+                features: model
+                    .features
+                    .into_iter()
+                    .map(|feature| match feature {
+                        ModelFeature::ToolCalls => "tool_calls",
+                        ModelFeature::Streaming => "streaming",
+                        ModelFeature::Vision => "vision",
+                        ModelFeature::SystemPrompt => "system_prompt",
+                        ModelFeature::StructuredOutput => "structured_output",
+                    })
+                    .map(str::to_string)
+                    .collect(),
+            })
+            .collect();
+        let behavior_modules = self
+            .modules()
+            .iter()
+            .map(|module| RuntimeModuleSnapshot {
+                id: module.manifest().id.clone(),
+                name: module.manifest().name.clone(),
+            })
+            .collect();
+        let mut capabilities = self
+            .capabilities
+            .entries()
+            .into_iter()
+            .map(|(owner, capability)| RuntimeCapabilitySnapshot {
+                id: capability.id().to_string(),
+                name: capability.declaration().name,
+                owner,
+                available: true,
+            })
+            .collect::<Vec<_>>();
+        capabilities.extend(self.plugins.active_tools().into_iter().map(|capability| {
+            RuntimeCapabilitySnapshot {
+                id: capability.id().to_string(),
+                name: capability.declaration().name,
+                owner: "plugin".to_string(),
+                available: true,
+            }
+        }));
+        RuntimeSnapshot {
+            default_model: self.config.default_model.clone(),
+            max_rounds: self.config.max_rounds,
+            max_module_invocations: self.config.max_module_invocations,
+            providers,
+            models,
+            behavior_modules,
+            capabilities,
+        }
+    }
+
     /// Every tool that can currently be dispatched to.
     pub fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        let mut tools = self.modules.tools();
+        let mut tools = self.capabilities.capabilities();
         tools.extend(self.plugins.active_tools());
         tools
+    }
+
+    /// The runtime-owned registry for non-plugin capabilities.
+    pub fn capability_registry(&self) -> &CapabilityRegistry {
+        &self.capabilities
+    }
+
+    /// Replace the host event sink without changing the runtime graph.
+    ///
+    /// This is used by adapters that are assembled after the runtime. Event
+    /// delivery is observational and never changes the turn result.
+    pub fn set_event_sink(&self, sink: Arc<dyn RuntimeEventSink>) {
+        *self
+            .event_sink
+            .write()
+            .expect("runtime event sink poisoned") = sink;
+    }
+
+    pub(crate) fn emit_event(&self, event: RuntimeEvent) {
+        self.event_sink
+            .read()
+            .expect("runtime event sink poisoned")
+            .emit(event);
     }
 
     /// Register a dynamic tool on a named module after build.
@@ -165,34 +332,25 @@ impl Runtime {
         module_id: &str,
         tool: Arc<dyn ToolCapability>,
     ) -> Result<(), RuntimeError> {
+        let visible_plugins = self.plugins.active_tools();
         crate::canonical::module::reject_tool_identity_collisions(
-            &self.tools(),
+            &visible_plugins,
             std::slice::from_ref(&tool),
             module_id,
         )
         .map_err(RuntimeError::misconfigured)?;
-        let module = self
-            .modules
-            .iter()
-            .find(|module| module.manifest().id == module_id)
-            .ok_or_else(|| {
-                RuntimeError::misconfigured(format!(
-                    "dynamic tool registration target {module_id:?} is not registered"
-                ))
-            })?;
-        module
-            .register_dynamic_tool(tool)
+        self.capabilities
+            .register(module_id, tool)
             .map_err(RuntimeError::misconfigured)
     }
 
     /// Model-facing tool declarations for all active tools.
     pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
         let mut declarations: Vec<apeireth_protocol::canonical::NormalizedTool> = self
-            .modules
-            .tools()
-            .iter()
-            .map(|t| t.declaration())
-            .collect();
+            .capabilities
+            .declarations()
+            .into_iter()
+            .collect::<Vec<_>>();
         declarations.extend(self.plugins.tool_declarations());
         declarations
     }
@@ -214,18 +372,13 @@ impl Runtime {
     }
 
     /// The modules registered with this runtime, in execution order.
-    pub fn modules(&self) -> &[Arc<dyn Module>] {
+    pub fn modules(&self) -> &[Arc<dyn BehaviorModule>] {
         self.modules.modules()
     }
 
     /// The module registry holding all registered modules.
-    pub fn module_registry(&self) -> &ModuleRegistry {
+    pub fn module_registry(&self) -> &BehaviorRegistry {
         &self.modules
-    }
-
-    /// Shared non-sensitive telemetry for the production cognitive slots.
-    pub fn cognitive_telemetry(&self) -> Option<&Arc<CognitiveTelemetry>> {
-        self.cognitive_telemetry.as_ref()
     }
 
     /// Pending approvals waiting on a human for one session.
@@ -281,8 +434,9 @@ pub struct RuntimeBuilder {
     session_store: Arc<dyn SessionStore>,
     governance: Arc<dyn GovernanceHook>,
     plugins: Vec<Arc<dyn Plugin>>,
-    modules: Vec<Arc<dyn Module>>,
-    cognitive_telemetry: Option<Arc<CognitiveTelemetry>>,
+    modules: Vec<Arc<dyn BehaviorModule>>,
+    capabilities: Vec<Arc<dyn ToolCapability>>,
+    event_sink: Arc<dyn RuntimeEventSink>,
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
 }
@@ -303,7 +457,8 @@ impl RuntimeBuilder {
             governance: Arc::new(DenyUnconfigured),
             plugins: Vec::new(),
             modules: Vec::new(),
-            cognitive_telemetry: None,
+            capabilities: Vec::new(),
+            event_sink: Arc::new(NoopRuntimeEventSink),
             fallback_order: None,
             config: RuntimeConfig::default(),
         }
@@ -349,15 +504,36 @@ impl RuntimeBuilder {
 
     /// Register a cognitive module. Modules run in registration order.
     #[must_use]
-    pub fn with_module(mut self, module: Arc<dyn Module>) -> Self {
+    pub fn with_module(mut self, module: Arc<dyn BehaviorModule>) -> Self {
         self.modules.push(module);
         self
     }
 
-    /// Attach the telemetry sink owned by a production cognitive composition.
+    /// Compatibility alias that makes the behavior/capability distinction
+    /// explicit at composition sites.
     #[must_use]
-    pub fn with_cognitive_telemetry(mut self, telemetry: Arc<CognitiveTelemetry>) -> Self {
-        self.cognitive_telemetry = Some(telemetry);
+    pub fn with_behavior(self, module: Arc<dyn BehaviorModule>) -> Self {
+        self.with_module(module)
+    }
+
+    /// Register a dispatchable capability independently of behavior hooks.
+    #[must_use]
+    pub fn with_capability(mut self, capability: Arc<dyn ToolCapability>) -> Self {
+        self.capabilities.push(capability);
+        self
+    }
+
+    /// Compatibility spelling for tool capability registration.
+    #[must_use]
+    pub fn with_tool(mut self, capability: Arc<dyn ToolCapability>) -> Self {
+        self.capabilities.push(capability);
+        self
+    }
+
+    /// Send canonical lifecycle events to a host-owned sink.
+    #[must_use]
+    pub fn with_event_sink(mut self, sink: Arc<dyn RuntimeEventSink>) -> Self {
+        self.event_sink = sink;
         self
     }
 
@@ -415,12 +591,17 @@ impl RuntimeBuilder {
                 "max_module_invocations must be at least 1",
             ));
         }
-        let mut module_registry = ModuleRegistry::new();
+        let mut module_registry = BehaviorRegistry::new();
         for module in self.modules {
             module_registry
                 .register(module)
                 .map_err(RuntimeError::misconfigured)?;
         }
+
+        let capability_registry = CapabilityRegistry::new();
+        capability_registry
+            .register_all_for_builder(self.capabilities)
+            .map_err(RuntimeError::misconfigured)?;
 
         let mut manager = PluginManager::new();
         for plugin in self.plugins {
@@ -435,7 +616,7 @@ impl RuntimeBuilder {
         manager.start_all(&ctx).await?;
 
         crate::canonical::module::reject_tool_identity_collisions(
-            &module_registry.tools(),
+            &capability_registry.capabilities(),
             &manager.active_tools(),
             "plugin tools",
         )
@@ -458,8 +639,9 @@ impl RuntimeBuilder {
             clock: self.clock,
             config: self.config,
             modules: module_registry,
-            cognitive_telemetry: self.cognitive_telemetry,
+            capabilities: capability_registry,
             session_locks: SessionLocks::default(),
+            event_sink: RwLock::new(self.event_sink),
         })
     }
 }

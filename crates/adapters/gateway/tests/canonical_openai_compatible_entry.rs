@@ -202,7 +202,7 @@ async fn the_gateway_reports_an_openai_compatible_missing_credential_as_unavaila
 }
 
 #[tokio::test]
-async fn the_gateway_serves_models_list_endpoint() {
+async fn the_gateway_models_list_is_projected_from_live_providers() {
     let resolver: Arc<dyn CredentialResolver> = Arc::new(StaticCredentials::new());
     let runtime = Runtime::builder()
         .with_clock(frozen_clock())
@@ -230,7 +230,10 @@ async fn the_gateway_serves_models_list_endpoint() {
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(body["object"], "list");
     let data = body["data"].as_array().expect("data array");
-    assert!(data.iter().any(|m| m["id"] == MODEL));
+    assert!(
+        data.iter().all(|model| model["id"] != MODEL),
+        "a runtime with no provider must not advertise a static model"
+    );
 }
 
 #[tokio::test]

@@ -69,7 +69,9 @@ pub enum ResearchApprovalEvent {
     Approve,
     Reject,
     Cancel,
-    Expire { now: u64 },
+    Expire {
+        now: u64,
+    },
     BeginDispatch,
     Complete,
     Interrupt,
@@ -93,7 +95,11 @@ impl std::fmt::Display for ResearchApprovalError {
         match self {
             Self::NotFound(id) => write!(f, "approval `{id}` not found"),
             Self::IllegalTransition { id, from, event } => {
-                write!(f, "approval `{id}`: illegal transition {event} from {}", from.as_str())
+                write!(
+                    f,
+                    "approval `{id}`: illegal transition {event} from {}",
+                    from.as_str()
+                )
             }
         }
     }
@@ -146,7 +152,8 @@ impl ResearchApprovalMachine {
     /// P1: 创建 Pending 审批。
     pub fn create(&mut self, id: impl Into<String>, expires_at: Option<u64>) {
         let id = id.into();
-        self.records.insert(id.clone(), ResearchApprovalRecord::new(id, expires_at));
+        self.records
+            .insert(id.clone(), ResearchApprovalRecord::new(id, expires_at));
     }
 
     /// Next 关系: 事件驱动转移; 非法转移拒绝 (Safety)。
@@ -563,9 +570,10 @@ mod kani_proofs {
         let mut m = ResearchApprovalMachine::new();
         m.create("a1", None);
         m.next("a1", ResearchApprovalEvent::Reject).unwrap();
-        assert!(m
-            .next("a1", ResearchApprovalEvent::Approve)
-            .is_err(), "Rejected 无出边");
+        assert!(
+            m.next("a1", ResearchApprovalEvent::Approve).is_err(),
+            "Rejected 无出边"
+        );
     }
 
     #[kani::proof]
@@ -575,9 +583,7 @@ mod kani_proofs {
         m.next("a1", ResearchApprovalEvent::Approve).unwrap();
         m.next("a1", ResearchApprovalEvent::BeginDispatch).unwrap();
         // Dispatched 下再次 BeginDispatch 非法 (InvA/InvC: 至多一次派发)。
-        assert!(m
-            .next("a1", ResearchApprovalEvent::BeginDispatch)
-            .is_err());
+        assert!(m.next("a1", ResearchApprovalEvent::BeginDispatch).is_err());
         assert!(m.inv_a_no_double_side_effect());
         assert!(m.inv_c_fail_closed_under_uncertain_effect());
     }
@@ -610,9 +616,18 @@ mod tests {
     fn happy_path_pending_claimed_consumed() {
         let mut m = ResearchApprovalMachine::new();
         m.create("a1", None);
-        assert_eq!(m.next("a1", ResearchApprovalEvent::Approve).unwrap(), ResearchApprovalStatus::Claimed);
-        assert_eq!(m.next("a1", ResearchApprovalEvent::BeginDispatch).unwrap(), ResearchApprovalStatus::Dispatched);
-        assert_eq!(m.next("a1", ResearchApprovalEvent::Complete).unwrap(), ResearchApprovalStatus::Consumed);
+        assert_eq!(
+            m.next("a1", ResearchApprovalEvent::Approve).unwrap(),
+            ResearchApprovalStatus::Claimed
+        );
+        assert_eq!(
+            m.next("a1", ResearchApprovalEvent::BeginDispatch).unwrap(),
+            ResearchApprovalStatus::Dispatched
+        );
+        assert_eq!(
+            m.next("a1", ResearchApprovalEvent::Complete).unwrap(),
+            ResearchApprovalStatus::Consumed
+        );
         assert!(m.inv_a_no_double_side_effect());
         assert!(m.inv_b_no_lost_approval());
         assert!(m.inv_c_fail_closed_under_uncertain_effect());
@@ -661,12 +676,14 @@ mod tests {
         let mut m3 = ResearchApprovalMachine::new();
         m3.create("a1", Some(5000));
         assert_eq!(
-            m3.next("a1", ResearchApprovalEvent::Expire { now: 100 }).unwrap(),
+            m3.next("a1", ResearchApprovalEvent::Expire { now: 100 })
+                .unwrap(),
             ResearchApprovalStatus::Pending
         );
         // 到点过期
         assert_eq!(
-            m3.next("a1", ResearchApprovalEvent::Expire { now: 6000 }).unwrap(),
+            m3.next("a1", ResearchApprovalEvent::Expire { now: 6000 })
+                .unwrap(),
             ResearchApprovalStatus::Expired
         );
     }
@@ -688,7 +705,10 @@ mod tests {
         m.simulate_crash();
         assert_eq!(m.records["a1"].status, ResearchApprovalStatus::Claimed);
         assert_eq!(m.active.as_deref(), Some("a1"));
-        assert_eq!(m.recovery_advice("a1"), Some(ResearchRecoveryAdvice::SafeToResume));
+        assert_eq!(
+            m.recovery_advice("a1"),
+            Some(ResearchRecoveryAdvice::SafeToResume)
+        );
         assert!(m.inv_b_no_lost_approval());
     }
 
@@ -699,7 +719,10 @@ mod tests {
         m.next("a1", ResearchApprovalEvent::BeginDispatch).unwrap();
         m.simulate_crash();
         assert_eq!(m.records["a1"].status, ResearchApprovalStatus::Interrupted);
-        assert_eq!(m.recovery_advice("a1"), Some(ResearchRecoveryAdvice::EffectUncertain));
+        assert_eq!(
+            m.recovery_advice("a1"),
+            Some(ResearchRecoveryAdvice::EffectUncertain)
+        );
         assert!(m.inv_c_fail_closed_under_uncertain_effect());
     }
 
@@ -759,7 +782,12 @@ mod tests {
         );
         // Claimed 未派发 → 可安全续跑
         assert_eq!(
-            research_allowed_recovery(&ResearchSideEffectDescriptor::default(), false, false, ResearchApprovalStatus::Claimed),
+            research_allowed_recovery(
+                &ResearchSideEffectDescriptor::default(),
+                false,
+                false,
+                ResearchApprovalStatus::Claimed
+            ),
             ResearchRecoveryAction::ResumeDeterministic
         );
         // nondeterministic → 零重执行 (Interrupt)
@@ -782,7 +810,10 @@ mod tests {
                 "seed {seed}: 注入后出现不变量违例 {report:?}"
             );
             assert!(report.steps > 0);
-            assert!(report.illegal_transitions_rejected > 0, "应观察到非法转移被拒");
+            assert!(
+                report.illegal_transitions_rejected > 0,
+                "应观察到非法转移被拒"
+            );
         }
     }
 }

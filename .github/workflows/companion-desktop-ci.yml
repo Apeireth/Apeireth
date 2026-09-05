@@ -59,6 +59,12 @@ jobs:
         with:
           workspaces: 'frontend/companion-desktop/src-tauri -> target'
 
+      - name: Prepare Tauri sidecar placeholder (Linux check)
+        run: |
+          mkdir -p frontend/companion-desktop/src-tauri/binaries
+          touch frontend/companion-desktop/src-tauri/binaries/apeireth-x86_64-unknown-linux-gnu
+          chmod +x frontend/companion-desktop/src-tauri/binaries/apeireth-x86_64-unknown-linux-gnu
+
       - name: cargo check (Tauri shell)
         working-directory: frontend/companion-desktop/src-tauri
         run: cargo check --workspace --all-targets

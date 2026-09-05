@@ -10,7 +10,7 @@ Historical design proposals and donor implementations live under `docs/archive/`
 apeireth/
 ├── crates/
 │   ├── foundation/       # stable domain types, protocol, plugins, policy, credentials
-│   ├── engine/            # runtime orchestration, providers, storage, memory
+│   ├── engine/            # runtime kernel, assembly, providers, storage, memory
 │   ├── capabilities/      # canonical tools and process execution
 │   └── adapters/          # gateway, CLI, SDK entry surfaces
 ├── frontend/companion-desktop/  # independent Svelte + Tauri workspace
@@ -23,13 +23,13 @@ apeireth/
 └── previews/              # design/reference assets
 ```
 
-The root `Cargo.toml` is the only product Rust workspace. It contains thirteen
+The root `Cargo.toml` is the only product Rust workspace. It contains seventeen
 packages, grouped by responsibility rather than development history:
 
 | Group | Packages | Responsibility |
 | --- | --- | --- |
-| Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials` | stable types, wire contracts, plugin contracts, policy, credential resolution |
-| Engine | `apeireth-runtime`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory` | execution orchestration, provider adapters, persistence, memory domain |
+| Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration` | stable types, wire contracts, plugin contracts, policy, credential resolution, orchestration |
+| Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ` | mechanism kernel, concrete production assembly, provider adapters, persistence, memory, perception, and organ domains |
 | Capabilities | `apeireth-tools-canonical` | built-in tools and the single process-execution boundary |
 | Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk` | HTTP gateway, command-line entry point, SDK surface |
 
@@ -49,10 +49,12 @@ foundation/core ──┐
 foundation/protocol ──┼──> foundation/plugin/governance/credentials
                      │
 engine/storage ──────┼──> engine/memory
-                     └──> engine/provider ──┐
-engine/runtime ─────────────────────────────┼──> adapters/gateway
-capabilities/tools ────────────────────────┘
-adapters/cli ──> runtime + gateway + provider + tools
+                     └──> engine/provider ───────────┐
+engine/runtime ──────────────────────────────────────┼──> adapters/gateway
+engine/runtime-assembly ──> runtime + memory/organ/  │
+                             storage/tools ──────────┘
+capabilities/tools ─────────────────────────────────┘
+adapters/cli ──> runtime-assembly + gateway
 adapters/sdk ──> protocol
 ```
 
@@ -65,14 +67,16 @@ plugin -> core, protocol
 memory -> storage, core
 provider -> core, plugin, protocol
 tools-canonical -> core, plugin, protocol
-runtime -> core, governance, plugin, protocol, storage
+runtime -> core, governance, plugin, protocol
+runtime-assembly -> runtime, memory, organ, storage, tools, provider
 gateway -> core, protocol, runtime
 cli -> core, gateway, plugin, provider, runtime, tools-canonical
 sdk -> protocol
 ```
 
-Foundation packages do not depend on adapters. Runtime owns orchestration;
-gateway and CLI translate external requests and do not create a second runtime.
+Foundation packages do not depend on adapters. Runtime owns orchestration and
+abstract ports; runtime-assembly owns concrete cognitive/tool/storage wiring.
+Gateway and CLI translate external requests and do not create a second runtime.
 
 ## Ownership boundaries
 
@@ -83,7 +87,8 @@ gateway and CLI translate external requests and do not create a second runtime.
 | Plugin and capability contracts | `crates/foundation/plugin` | declarations and lifecycle contracts, not tool implementations |
 | Policy decisions | `crates/foundation/governance` | policy evaluation; no transport or process spawning |
 | Credential resolution | `crates/foundation/credentials` | backend behind the plugin credential contract |
-| Runtime/session/execution loop | `crates/engine/runtime` | owns orchestration, approvals, provider selection, and trace |
+| Runtime/session/execution loop | `crates/engine/runtime` | mechanism kernel: orchestration, approvals, provider selection, behavior/capability registries, events, and abstract ports |
+| Production runtime assembly | `crates/engine/runtime-assembly` | concrete cognitive behaviors, Organ bridge, tool capabilities, composition, and SQLite session adapter |
 | Provider transport and routing inputs | `crates/engine/provider` | provider implementations and response normalization |
 | Durable storage | `crates/engine/storage` | SQLite pool, writer, and migrations |
 | Memory domain and retrieval | `crates/engine/memory` | memory entities, repository, retrieval, vector/graph primitives |
@@ -97,7 +102,8 @@ gateway and CLI translate external requests and do not create a second runtime.
 
 `ProcessExecutor` is owned by `apeireth-tools-canonical` at
 `crates/capabilities/tools/src/process/`. `RepoTool` and other built-in tools
-must use this boundary; no adapter or frontend may create a competing executor.
+must use this boundary; `apeireth-runtime-assembly` registers those tools as
+capabilities, and no adapter or frontend may create a competing executor.
 
 The pre-freeze cleanup did not modify its contract or implementation. The
 existing behavior remains the source of truth for:
@@ -118,10 +124,15 @@ The CLI exposes the current product entry points:
 ```text
 apeireth session
 apeireth chat
-apeireth gateway serve --port 8080
+apeireth gateway serve --bind 127.0.0.1 --port 8080
 ```
 
-The gateway owns HTTP transport and exposes the health endpoint at `/health`.
+The gateway defaults to loopback (`127.0.0.1`); explicitly requested
+non-loopback binding is warned about at startup. It exposes `/health`, live
+capability/provider/model projections, runtime diagnostics, canonical chat, and
+compatibility panel routes. Provider credentials are resolved by the
+provider/credentials path; the desktop frontend remains a separate build and
+release boundary.
 Provider credentials are resolved by the provider/credentials path; the desktop
 frontend remains a separate build and release boundary.
 

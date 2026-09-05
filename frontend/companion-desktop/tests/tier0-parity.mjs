@@ -38,21 +38,36 @@ console.log('--- Tier 0 parity (real module) ---');
 {
   calls.length = 0;
   const manifest = await fetchCapabilities({baseUrl: 'http://127.0.0.1:8080', model: 'x'});
-  assert.equal(calls.length, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://127.0.0.1:8080/v1/apeireth/capabilities');
   assert.equal(manifest.runtime.service, 'apeireth-gateway-2.0');
-  console.log('  ok  fetchCapabilities does not probe /v1/apeireth/capabilities');
+  console.log('  ok  fetchCapabilities probes the manifest and falls back conservatively');
   checks += 1;
 }
 
 {
   calls.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({url, method: init?.method || 'GET', body: init?.body});
+    if (url.endsWith('/v1/panel/grants')) {
+      return {ok: true, status: 200, json: async () => ({grants: []})};
+    }
+    if (url.endsWith('/v1/panel/grants/revoke')) {
+      return {ok: true, status: 200, json: async () => ({ok: true})};
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  };
   const result = await grantToolPermission({baseUrl: 'http://127.0.0.1:8080', model: 'x'}, 'shell', 1, 'token');
   assert.equal(result.ok, false);
   assert.deepEqual(await fetchApprovalRequests({baseUrl: 'http://127.0.0.1:8080', model: 'x'}), []);
   assert.deepEqual(await fetchGrants({baseUrl: 'http://127.0.0.1:8080', model: 'x'}), []);
-  assert.equal((await revokeGrant({baseUrl: 'http://127.0.0.1:8080', model: 'x'}, 'g1', 'token')).ok, false);
-  assert.equal(calls.length, 0);
-  console.log('  ok  legacy grant path does not fetch');
+  assert.equal((await revokeGrant({baseUrl: 'http://127.0.0.1:8080', model: 'x'}, 'g1', 'token')).ok, true);
+  assert.deepEqual(calls.map((call) => call.url), [
+    'http://127.0.0.1:8080/v1/panel/grants',
+    'http://127.0.0.1:8080/v1/panel/grants/revoke',
+  ]);
+  console.log('  ok  legacy grant mutation is inert; canonical grant projections use live routes');
   checks += 1;
 }
 
@@ -158,7 +173,7 @@ const runtimeSrc = readFileSync(join(srcDir, 'lib/runtime.ts'), 'utf8');
 check('production runtime no longer requests grant or fake success', () => {
   assert.equal(runtimeSrc.includes("callbacks.onToolResult?.(tc.id, true, '执行成功')"), false);
   assert.equal(/fetch\([^)]*\/v1\/apeireth\/grant/.test(runtimeSrc), false);
-  assert.equal(/fetch\([^)]*\/v1\/apeireth\/capabilities/.test(runtimeSrc), false);
+  assert.equal(/fetch\([^)]*\/v1\/apeireth\/capabilities/.test(runtimeSrc), true);
 });
 
 globalThis.fetch = originalFetch;

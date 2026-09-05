@@ -29,8 +29,8 @@ pub const PCM16_MAX_AUDIO_SECONDS: u32 = 30;
 pub const PCM16_CHANNELS_MONO: u8 = 1;
 
 /// Maximum duration in milliseconds implied by [`PCM16_MAX_AUDIO_SECONDS`].
-    #[allow(clippy::cast_lossless)]
-    pub const PCM16_MAX_DURATION_MS: u64 = PCM16_MAX_AUDIO_SECONDS as u64 * 1000;
+#[allow(clippy::cast_lossless)]
+pub const PCM16_MAX_DURATION_MS: u64 = PCM16_MAX_AUDIO_SECONDS as u64 * 1000;
 
 /// PCM16 / hex-audio errors.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -273,9 +273,7 @@ impl Pcm16Buffer {
             return Err(AudioFrameError::Empty);
         }
         if self.channels != PCM16_CHANNELS_MONO {
-            return Err(AudioFrameError::UnsupportedChannels {
-                got: self.channels,
-            });
+            return Err(AudioFrameError::UnsupportedChannels { got: self.channels });
         }
         self.assert_sample_rate()?;
         self.assert_duration_within_limit()
@@ -327,7 +325,10 @@ mod tests {
 
     #[test]
     fn pcm16_buffer_rejects_empty() {
-        assert_eq!(Pcm16Buffer::from_samples(vec![]), Err(AudioFrameError::Empty));
+        assert_eq!(
+            Pcm16Buffer::from_samples(vec![]),
+            Err(AudioFrameError::Empty)
+        );
     }
 
     #[test]

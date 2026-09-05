@@ -1,0 +1,39 @@
+[package]
+name = "apeireth-runtime-assembly"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Production assembly for the Apeireth runtime kernel"
+keywords = ["ai", "agent", "runtime", "assembly"]
+categories = ["asynchronous"]
+
+[dependencies]
+apeireth-core = { path = "../../foundation/core" }
+apeireth-protocol = { path = "../../foundation/protocol" }
+apeireth-plugin = { path = "../../foundation/plugin" }
+apeireth-governance = { path = "../../foundation/governance" }
+apeireth-orchestration = { path = "../../foundation/orchestration" }
+apeireth-runtime = { path = "../runtime" }
+apeireth-memory = { path = "../memory" }
+apeireth-organ = { path = "../organ" }
+apeireth-storage = { path = "../storage" }
+apeireth-tools-canonical = { path = "../../capabilities/tools" }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = "0.12"
+chrono = { workspace = true }
+rusqlite = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+reqwest = { workspace = true }
+
+[lints]
+workspace = true

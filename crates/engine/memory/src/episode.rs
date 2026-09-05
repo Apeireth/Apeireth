@@ -425,8 +425,8 @@ mod tests {
         .unwrap();
         assert_eq!(by_cid.len(), 1);
         assert_eq!(by_cid[0].id, "e-sub");
-        let by_default = <SqliteMemoryStore as EpisodeStore>::list_by_subject(&store, "default")
-            .unwrap();
+        let by_default =
+            <SqliteMemoryStore as EpisodeStore>::list_by_subject(&store, "default").unwrap();
         assert!(by_default.iter().all(|e| e.id != "e-sub"));
     }
 

@@ -25,7 +25,7 @@
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
   import type {ApeirethConfig, ApprovalRequestItem, CapabilityManifest, ToolItem} from '../types';
-  import {fetchApprovalRequests, fetchGrants, fetchTools, grantToolPermission, revokeGrant, capabilitySupported, friendlyErrorMessage} from '../runtime';
+  import {fetchApprovalRequests, fetchGrants, fetchTools, grantToolPermission, revokeGrant, capabilityAvailable, capabilitySupported, friendlyErrorMessage} from '../runtime';
 
   let {
     config,
@@ -36,8 +36,8 @@
   } = $props();
 
   // Capability gating.
-  let canRevoke = $derived(capabilitySupported(capabilities, 'permissions.revoke'));
-  let canListGrants = $derived(capabilitySupported(capabilities, 'permissions.grants.read'));
+  let canRevoke = $derived(capabilityAvailable(capabilities, 'permissions.revoke'));
+  let canListGrants = $derived(capabilityAvailable(capabilities, 'permissions.grants.read'));
 
   let tools = $state<ToolItem[]>([]);
   let approvalRequests = $state<ApprovalRequestItem[]>([]);
@@ -69,18 +69,18 @@
     error = '';
     try {
       // Capability gates for tools/approvals/grants introspection
-      const toolsPromise = capabilitySupported(capabilities, 'tools.list')
+      const toolsPromise = capabilityAvailable(capabilities, 'tools.list')
         ? fetchTools(config).catch((e) => {
             error = friendlyErrorMessage(e, '/v1/tools/list');
             return [];
           })
         : Promise.resolve([]);
 
-      const approvalsPromise = capabilitySupported(capabilities, 'permissions.approval.read')
+      const approvalsPromise = capabilityAvailable(capabilities, 'permissions.approval.read')
         ? fetchApprovalRequests(config).catch(() => [])
         : Promise.resolve([]);
 
-      const grantsPromise = (canListGrants && capabilitySupported(capabilities, 'permissions.grants.read'))
+      const grantsPromise = canListGrants
         ? fetchGrants(config).catch(() => [])
         : Promise.resolve([]);
 
@@ -111,7 +111,7 @@
     if (!revokingGrant) return;
 
     // Capability gate for revoke
-    if (!capabilitySupported(capabilities, 'permissions.revoke')) {
+    if (!capabilitySupported(capabilities, 'permissions.revoke') || !capabilityAvailable(capabilities, 'permissions.revoke')) {
       revokeError = '撤销权限不支持: 当前运行时未实现 permissions.revoke (Apeireth 2.0 canonical gateway 无此治理 API)';
       return;
     }
