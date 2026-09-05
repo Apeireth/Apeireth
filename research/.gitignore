@@ -8,6 +8,9 @@ datasets/locomo/src/
 datasets/locomo-mc10/*.json
 datasets/locomo-mc10/LICENSE
 datasets/locomo-mc10/README.md
+# 验证工具 jar (tla2tools, MIT; 按 README 指引自取) 不入库。
+verification/tla/*.jar
 
 # 生成的运行日志可复现 (同 seed 再生), 不入库; 保留本地作为证据.
 logs/*.jsonl
+verification/tla/states/
