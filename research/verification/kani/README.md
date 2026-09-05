@@ -9,6 +9,9 @@
   (CI: `.github/workflows/kani.yml`, ubuntu runner)。
 - **同步**: 无需同步 —— 指向同一文件。canonical 文件改名/移动时改 `lib.rs` 的 path 即可。
 - **验证目标**: 3 个 `#[kani::proof]` (终态锁 / executed 单调至多一次 / crash 恢复 InvC)。
+- **验证结果 (2026-09-05)**: ✅ **3/3 harness VERIFICATION SUCCESSFUL**
+  (GitHub Actions run [33945573291](https://github.com/Apeireth/Apeireth/actions/runs/33945573291);
+  分步限时 25m + continue-on-error, 逐 harness 日志可查)。
 - **循环展开上界 (2026-09-05 CI 实测)**: Kani 将 String 字节缓冲当符号长度,
   HashMap SipHash `Hasher::write` 循环无限展开 (实测 1900+ 迭代 × 2s 卡死)。
   canonical 文件的 3 个 harness 均带 `#[kani::unwind(32)]` (仅 cfg(kani) 生效):

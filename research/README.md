@@ -12,13 +12,14 @@
 
 | 目录 | 用途 |
 |---|---|
-| `datasets/` | 实验数据集（原始 + 派生），大文件不入 git |
-| `baselines/` | 冻结基线记录（commit / 测试数 / 指标快照） |
+| `datasets/` | 实验数据集(LoCoMo / LoCoMo-MC10 / LongMemEval, 各带 MANIFEST: 来源/规模/license/口径), 大文件不入 git |
+| `baselines/` | 冻结基线记录(commit / 测试数 / 指标快照) |
 | `metrics/` | 统一指标层定义与计算约定 |
-| `runners/` | 实验运行器(已实现:`apeireth-research-runner`,独立 cargo 项目,合成基准 + 效用-成本曲线 + bootstrap CI) |
-| `configs/` | 实验配置（seed、参数矩阵、config hash 约定） |
-| `reports/` | 实验报告（每实验一份：假设/设置/结果/局限/失败判据） |
-| `logs/` | JSONL 研究日志（schema 见 `logs/README.md`） |
+| `runners/` | 实验运行器(独立 cargo 项目; `--source synthetic/locomo/locomo-mc10/longmemeval`; 效用-成本曲线 + bootstrap CI + JSONL 日志) |
+| `configs/` | 实验配置(seed、参数矩阵、config hash 约定) |
+| `reports/` | 实验报告(Phase 交付 + 真实数据评测; 索引见 `reports/README.md`) |
+| `logs/` | JSONL 研究日志(schema 见 `logs/README.md`) |
+| `verification/` | 形式验证(TLA+/TLC 规格与模型检查、Kani mirror crate、三路互证总览) |
 
 ## JSONL 研究日志
 
