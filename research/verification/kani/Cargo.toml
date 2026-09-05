@@ -1,0 +1,12 @@
+[package]
+name = "apeireth-research-kani-mirror"
+version = "0.1.0"
+edition = "2021"
+publish = false
+# 无 rust-version 字段: Kani 0.67 自带 nightly-2025-11-21 (rustc 1.93),
+# 而 workspace 声明 rustc 1.97 最低版本, 直接 `cargo kani -p apeireth-runtime`
+# 会被 cargo 的 rust-version 检查拒绝。本 mirror 是独立 crate (root workspace
+# 已 exclude research/), 只编译 canonical 状态机一个文件, 无版本冲突。
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

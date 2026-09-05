@@ -4,6 +4,11 @@ name: Kani formal verification (Phase 5 approval SM)
 # 的 #[cfg(kani)] harness (3 个 #[kani::proof])。
 # 本机 Windows 无 Kani 支持 (Kani 仅 Linux/macOS), 证明跑在 ubuntu runner 上;
 # 同源不变量另有 TLA+/TLC 本机验证 (research/verification/tla/)。
+#
+# 为什么经 research/verification/kani mirror 跑: workspace 声明 rustc 1.97,
+# Kani 0.67 (crates.io 最新) 自带 nightly 1.93, `cargo kani -p apeireth-runtime`
+# 被 rust-version 检查拒绝。mirror 用 #[path] 直接包含 canonical 源文件 (零复制),
+# 验证的是同一份代码。
 
 on:
   push:
@@ -27,7 +32,7 @@ permissions:
 
 jobs:
   kani:
-    name: cargo kani -p apeireth-runtime
+    name: cargo kani (Phase 5 approval SM, mirror crate)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,4 +54,4 @@ jobs:
         run: cargo kani setup
 
       - name: Verify Phase 5 invariants (InvA / InvB / InvC harness)
-        run: cargo kani -p apeireth-runtime
+        run: cargo kani --manifest-path research/verification/kani/Cargo.toml
