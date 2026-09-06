@@ -17,11 +17,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, SessionId};
+use apeireth_governance::TurnSecurityContext;
 use apeireth_governance::{
     CredentialDisclosureHook, GovernancePipeline, Permission, PermissionGovernanceHook,
     PermissionPolicy, PromptInjectionHook,
 };
-use apeireth_guard::DatasetRecorder;
+use apeireth_guard::{DatasetRecorder, IntentInput, IntentInterpreter, RuleIntentInterpreter};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore, TurnOutcome,
@@ -451,7 +452,16 @@ pub async fn execute_canonical_cli_turn(
     model: Option<String>,
     session: Option<SessionId>,
 ) -> Result<CanonicalCliTurn, String> {
-    let mut request = TurnRequest::new(session.unwrap_or_else(SessionId::new), prompt);
+    let session = session.unwrap_or_else(SessionId::new);
+    let prompt = prompt.into();
+    let intent = RuleIntentInterpreter.interpret(IntentInput {
+        session_id: session.to_string(),
+        trace_id: String::new(),
+        user_request: prompt.clone(),
+        created_at_ms: 0,
+    });
+    let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
+    let mut request = TurnRequest::new(session, prompt).with_security_context(context);
     if let Some(model) = model {
         request = request.with_model(model);
     }

@@ -4,8 +4,10 @@
 //! capturing temporal sequence, causal impact, data flows, and permission
 //! dependencies.
 
+use apeireth_governance::{OperationClass, TaskIntentEnvelopeV1};
 use serde::{Deserialize, Serialize};
 
+use crate::intent::AlignmentClass;
 use crate::observation::{ResourceClass, SafetyObservation, SinkClass, SourceClass};
 
 /// Directed edge types in a behavior chain.
@@ -19,6 +21,11 @@ pub enum EdgeType {
     ResourceDependency,
     Retry,
     AlternativeExecution,
+    DerivedFrom,
+    SameTarget,
+    SameEffect,
+    Escalation,
+    DestinationChange,
 }
 
 /// Action node in the behavior chain.
@@ -32,6 +39,26 @@ pub struct ActionNode {
     pub status: ActionStatus,
     pub denied: bool,
     pub external_effect: bool,
+    #[serde(default)]
+    pub operation_class: OperationClass,
+    #[serde(default)]
+    pub resource_classes: Vec<ResourceClass>,
+    #[serde(default)]
+    pub source_classes: Vec<SourceClass>,
+    #[serde(default)]
+    pub sink_classes: Vec<SinkClass>,
+    #[serde(default)]
+    pub alignment_class: Option<AlignmentClass>,
+    #[serde(default)]
+    pub approval_status: String,
+    #[serde(default)]
+    pub execution_status: String,
+    #[serde(default)]
+    pub persistent_effect: bool,
+    #[serde(default)]
+    pub destructive_effect: bool,
+    #[serde(default)]
+    pub effect_fingerprint: String,
 }
 
 /// Status of an action.
@@ -89,6 +116,8 @@ pub struct BehaviorChain {
     pub nodes: Vec<BehaviorNode>,
     pub edges: Vec<BehaviorEdge>,
     pub declared_task_scope: Option<String>,
+    #[serde(default)]
+    pub intent: Option<TaskIntentEnvelopeV1>,
 }
 
 impl BehaviorChain {
@@ -100,12 +129,18 @@ impl BehaviorChain {
             nodes: Vec::new(),
             edges: Vec::new(),
             declared_task_scope: None,
+            intent: None,
         }
     }
 
     /// Set the declared user intent / task scope (e.g. "read_only", "explore", "edit").
     pub fn set_declared_scope(&mut self, scope: impl Into<String>) {
         self.declared_task_scope = Some(scope.into());
+    }
+
+    pub fn set_intent(&mut self, intent: TaskIntentEnvelopeV1) {
+        self.declared_task_scope = intent.allowed_scopes.first().cloned();
+        self.intent = Some(intent);
     }
 
     /// Add an action observation to the chain and wire temporal and dataflow edges.
@@ -144,6 +179,16 @@ impl BehaviorChain {
             status: ActionStatus::Pending,
             denied: false,
             external_effect: obs.external_effect,
+            operation_class: obs.operation_class,
+            resource_classes: obs.resource_classes.clone(),
+            source_classes: obs.source_classes.clone(),
+            sink_classes: obs.sink_classes.clone(),
+            alignment_class: None,
+            approval_status: "pending".to_string(),
+            execution_status: "not_started".to_string(),
+            persistent_effect: obs.persistent_effect,
+            destructive_effect: obs.destructive_effect,
+            effect_fingerprint: obs.effect_fingerprint.clone(),
         };
         self.nodes.push(BehaviorNode::Action(action_node));
 
@@ -154,12 +199,14 @@ impl BehaviorChain {
                 edge_type: EdgeType::Temporal,
                 label: Some("seq".to_string()),
             });
-            let actions = self.actions();
-            let previous_action = actions.iter().rev().nth(1);
+            let previous_action = {
+                let actions = self.actions();
+                actions.iter().rev().nth(1).map(|action| (*action).clone())
+            };
             if let Some(previous_action) = previous_action {
                 if previous_action.denied || previous_action.status == ActionStatus::Denied {
                     self.edges.push(BehaviorEdge {
-                        from: prev,
+                        from: prev.clone(),
                         to: action_id.clone(),
                         edge_type: if previous_action.capability_id == obs.capability_id {
                             EdgeType::Retry
@@ -167,6 +214,16 @@ impl BehaviorChain {
                             EdgeType::AlternativeExecution
                         },
                         label: Some("post_denial".to_string()),
+                    });
+                }
+                if previous_action.effect_fingerprint == obs.effect_fingerprint
+                    && !obs.effect_fingerprint.is_empty()
+                {
+                    self.edges.push(BehaviorEdge {
+                        from: prev.clone(),
+                        to: action_id.clone(),
+                        edge_type: EdgeType::SameEffect,
+                        label: Some("same_semantic_effect".to_string()),
                     });
                 }
             }
@@ -218,9 +275,25 @@ impl BehaviorChain {
                     if matches!(status, ActionStatus::Denied) {
                         act.denied = true;
                     }
+                    act.approval_status = match status {
+                        ActionStatus::RequireApproval => "pending".to_string(),
+                        ActionStatus::Allowed | ActionStatus::Succeeded => {
+                            "not_required".to_string()
+                        }
+                        ActionStatus::Denied => "denied".to_string(),
+                        _ => act.approval_status.clone(),
+                    };
                     break;
                 }
             }
+        }
+    }
+
+    pub fn set_action_alignment(&mut self, action_id: &str, alignment: AlignmentClass) {
+        if let Some(BehaviorNode::Action(action)) = self.nodes.iter_mut().find(
+            |node| matches!(node, BehaviorNode::Action(candidate) if candidate.id == action_id),
+        ) {
+            action.alignment_class = Some(alignment);
         }
     }
 
@@ -368,5 +441,10 @@ impl BehaviorChain {
     pub fn extract_features(&self) -> serde_json::Value {
         serde_json::to_value(crate::features::AgentChainFeatureV1::from_chain(self))
             .unwrap_or_else(|_| serde_json::json!({"schema_version": "AgentChainFeatureV1"}))
+    }
+
+    pub fn extract_features_v2(&self) -> serde_json::Value {
+        serde_json::to_value(crate::features_v2::AgentChainFeatureV2::from_chain(self))
+            .unwrap_or_else(|_| serde_json::json!({"schema_version": "AgentChainFeatureV2"}))
     }
 }

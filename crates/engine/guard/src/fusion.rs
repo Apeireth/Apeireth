@@ -6,12 +6,38 @@ use crate::classifier::{RiskClass, RiskPrediction};
 use crate::decision::{GuardDecision, GuardStage};
 use crate::fast_guard::FastGuardResult;
 use crate::features::AgentChainFeatureV1;
+use crate::features_v2::AgentChainFeatureV2;
 
 /// Final decision fusion.  Deterministic denials always win; model output can
 /// raise an allow to approval or denial only when the feature evidence agrees.
 pub struct DecisionFusion;
 
 impl DecisionFusion {
+    pub fn fuse_v2(
+        base: &GuardDecision,
+        fast: &FastGuardResult,
+        prediction: &RiskPrediction,
+        features: &AgentChainFeatureV2,
+    ) -> GuardDecision {
+        let mut fused = Self::fuse(base, fast, prediction, &features.v1);
+        if features.alignment_score >= 0.9
+            && matches!(fused.decision, Decision::Allow)
+            && prediction.available
+        {
+            fused.decision = Decision::deny("intent and action semantics are contradictory");
+            fused.risk_score = fused.risk_score.max(features.alignment_score);
+            fused
+                .reasons
+                .push("intent_alignment_high_risk_mismatch".to_string());
+            fused.evidence.push(format!(
+                "alignment_score={:.2} schema={} intent={:?}",
+                features.alignment_score, features.schema_version, features.intent_class
+            ));
+            fused.stage = GuardStage::DecisionFusion;
+        }
+        fused
+    }
+
     pub fn fuse(
         base: &GuardDecision,
         fast: &FastGuardResult,

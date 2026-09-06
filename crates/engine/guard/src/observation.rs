@@ -5,7 +5,7 @@
 //! memory bodies, or raw chain-of-thought.
 
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
-use apeireth_governance::{Action, GovernanceRequest};
+use apeireth_governance::{Action, GovernanceRequest, OperationClass};
 use serde::{Deserialize, Serialize};
 
 /// Classification of resources touched by an action.
@@ -21,7 +21,37 @@ pub enum ResourceClass {
     MemoryEpisodic,
     MemorySemantic,
     EnvironmentVariables,
+    Repository,
+    RepositoryRemote,
+    UserPrivateData,
+    RuntimePolicy,
+    GovernancePolicy,
+    AuditStore,
+    DatasetStore,
+    PluginConfiguration,
+    SystemPersistence,
     Unknown,
+}
+
+/// Sensitivity label propagated through the bounded trace-local taint state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DataSensitivity {
+    Public,
+    UserProvided,
+    WorkspacePrivate,
+    UserPrivate,
+    MemoryPrivate,
+    Secret,
+    Credential,
+    SystemSensitive,
+    Unknown,
+}
+
+impl Default for DataSensitivity {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 /// Source classification for data flow analysis.
@@ -76,6 +106,20 @@ pub struct SafetyObservation {
     pub denied_before: bool,
     pub prior_actions: Vec<String>,
     pub external_effect: bool,
+    #[serde(default)]
+    pub operation_class: OperationClass,
+    #[serde(default)]
+    pub data_sensitivity: DataSensitivity,
+    #[serde(default)]
+    pub persistent_effect: bool,
+    #[serde(default)]
+    pub destructive_effect: bool,
+    #[serde(default)]
+    pub requires_network: bool,
+    #[serde(default)]
+    pub may_access_credentials: bool,
+    #[serde(default)]
+    pub effect_fingerprint: String,
 }
 
 impl SafetyObservation {
@@ -117,14 +161,26 @@ impl SafetyObservation {
                 denied_before,
                 prior_actions,
                 external_effect: false,
+                operation_class: OperationClass::Read,
+                data_sensitivity: DataSensitivity::Public,
+                persistent_effect: false,
+                destructive_effect: false,
+                requires_network: false,
+                may_access_credentials: false,
+                effect_fingerprint: "completion".to_string(),
             },
             Action::CapabilityDispatch {
                 capability,
                 arguments,
             } => {
                 let cap_str = capability.as_str();
-                let (res_classes, src_classes, sink_classes, ext_effect) =
-                    classify_capability(cap_str, arguments);
+                let descriptor = crate::semantics::descriptor_for_capability(cap_str, arguments);
+                let (res_classes, src_classes, sink_classes, ext_effect) = (
+                    descriptor.resource_classes.clone(),
+                    descriptor.input_sources.clone(),
+                    descriptor.output_sinks.clone(),
+                    descriptor.external_effect,
+                );
                 let redacted_features = redact_and_extract_features(arguments);
 
                 Self {
@@ -147,6 +203,16 @@ impl SafetyObservation {
                     denied_before,
                     prior_actions,
                     external_effect: ext_effect,
+                    operation_class: descriptor.primary_operation(),
+                    data_sensitivity: descriptor.data_sensitivity,
+                    persistent_effect: descriptor.persistent_effect,
+                    destructive_effect: descriptor.destructive,
+                    requires_network: descriptor.requires_network,
+                    may_access_credentials: descriptor.may_access_credentials,
+                    effect_fingerprint: crate::semantics::effect_fingerprint(
+                        &descriptor,
+                        arguments,
+                    ),
                 }
             }
             _ => Self {
@@ -169,6 +235,13 @@ impl SafetyObservation {
                 denied_before,
                 prior_actions,
                 external_effect: false,
+                operation_class: OperationClass::Unknown,
+                data_sensitivity: DataSensitivity::Unknown,
+                persistent_effect: false,
+                destructive_effect: false,
+                requires_network: false,
+                may_access_credentials: false,
+                effect_fingerprint: "unknown".to_string(),
             },
         }
     }
@@ -187,83 +260,6 @@ fn extract_model_family(model: &str) -> String {
     } else {
         "custom_llm".to_string()
     }
-}
-
-fn classify_capability(
-    cap: &str,
-    args: &serde_json::Value,
-) -> (Vec<ResourceClass>, Vec<SourceClass>, Vec<SinkClass>, bool) {
-    let lower = cap.to_lowercase();
-    let mut res = Vec::new();
-    let mut src = Vec::new();
-    let mut sink = Vec::new();
-    let mut ext = false;
-
-    if lower.contains("shell") || lower.contains("bash") || lower.contains("exec") {
-        res.push(ResourceClass::ProcessExecution);
-        src.push(SourceClass::UserPrompt);
-        sink.push(SinkClass::ShellExecution);
-        ext = true;
-    } else if lower.contains("fs") || lower.contains("file") {
-        let is_write =
-            lower.contains("write") || lower.contains("delete") || lower.contains("edit");
-        res.push(ResourceClass::FilesystemWorkspace);
-        if is_write {
-            src.push(SourceClass::UserPrompt);
-            sink.push(SinkClass::WorkspaceFile);
-            ext = true;
-        } else {
-            src.push(SourceClass::WorkspaceFile);
-            sink.push(SinkClass::UserDisplay);
-        }
-    } else if lower.contains("fetch") || lower.contains("http") || lower.contains("network") {
-        res.push(ResourceClass::NetworkPublic);
-        src.push(SourceClass::UserPrompt);
-        sink.push(SinkClass::ExternalNetwork);
-        ext = true;
-    } else if lower.contains("memory") {
-        let is_write =
-            lower.contains("append") || lower.contains("write") || lower.contains("forget");
-        res.push(ResourceClass::MemoryEpisodic);
-        if is_write {
-            sink.push(SinkClass::MemoryWrite);
-            ext = true;
-        } else {
-            src.push(SourceClass::PrivateMemory);
-            sink.push(SinkClass::UserDisplay);
-        }
-    } else if lower.contains("secret") || lower.contains("credential") || lower.contains("keyring")
-    {
-        res.push(ResourceClass::CredentialStore);
-        src.push(SourceClass::CredentialStore);
-        sink.push(SinkClass::UserDisplay);
-    } else {
-        res.push(ResourceClass::Unknown);
-        src.push(SourceClass::Unknown);
-        sink.push(SinkClass::Unknown);
-    }
-
-    // Inspect command arguments for network or credential patterns
-    if let Some(cmd) = args.get("command").and_then(|v| v.as_str()) {
-        let cmd_lc = cmd.to_lowercase();
-        if cmd_lc.contains("curl") || cmd_lc.contains("wget") || cmd_lc.contains("fetch") {
-            res.push(ResourceClass::NetworkPublic);
-            sink.push(SinkClass::ExternalNetwork);
-        }
-        if cmd_lc.contains("ssh") || cmd_lc.contains("scp") || cmd_lc.contains("sftp") {
-            res.push(ResourceClass::NetworkPublic);
-            sink.push(SinkClass::ExternalNetwork);
-        }
-        if cmd_lc.contains(".git-credentials")
-            || cmd_lc.contains("id_rsa")
-            || cmd_lc.contains("api_key")
-        {
-            res.push(ResourceClass::CredentialStore);
-            src.push(SourceClass::CredentialStore);
-        }
-    }
-
-    (res, src, sink, ext)
 }
 
 fn summarize_argument_shape(args: &serde_json::Value) -> String {
@@ -299,6 +295,106 @@ fn redact_and_extract_features(args: &serde_json::Value) -> serde_json::Value {
         features.insert(
             "has_redirect".to_string(),
             serde_json::Value::Bool(cmd.contains('>') || cmd.contains('<')),
+        );
+        let tokens: Vec<&str> = cmd.split_whitespace().collect();
+        let command_head = tokens.first().copied().unwrap_or_default();
+        let command_family = if ["curl", "wget", "fetch", "http", "ssh", "scp"]
+            .iter()
+            .any(|value| command_head.eq_ignore_ascii_case(value))
+        {
+            "network_utility"
+        } else if ["rm", "del", "rmdir", "mkfs", "format", "dd"]
+            .iter()
+            .any(|value| command_head.eq_ignore_ascii_case(value))
+        {
+            "destructive_utility"
+        } else if ["cargo", "npm", "pnpm", "git", "rustc"]
+            .iter()
+            .any(|value| command_head.eq_ignore_ascii_case(value))
+        {
+            "development_utility"
+        } else {
+            "other"
+        };
+        features.insert(
+            "command_family".to_string(),
+            serde_json::json!(command_family),
+        );
+        features.insert(
+            "argument_count".to_string(),
+            serde_json::json!(tokens.len().saturating_sub(1)),
+        );
+        features.insert(
+            "pipeline_count".to_string(),
+            serde_json::json!(cmd.matches('|').count()),
+        );
+        features.insert(
+            "redirection_count".to_string(),
+            serde_json::json!(cmd.matches('>').count() + cmd.matches('<').count()),
+        );
+        features.insert(
+            "subshell_present".to_string(),
+            serde_json::json!(cmd.contains("$(") || cmd.contains('`')),
+        );
+        features.insert(
+            "background_execution".to_string(),
+            serde_json::json!(cmd.trim_end().ends_with('&')),
+        );
+        features.insert(
+            "interpreter_nesting".to_string(),
+            serde_json::json!(cmd.matches("bash -c").count() + cmd.matches("sh -c").count()),
+        );
+        features.insert(
+            "network_utility".to_string(),
+            serde_json::json!(command_family == "network_utility"),
+        );
+        features.insert(
+            "privilege_modifier".to_string(),
+            serde_json::json!(cmd.contains("sudo ") || cmd.contains("runas ")),
+        );
+        features.insert(
+            "recursive_operation".to_string(),
+            serde_json::json!(cmd.contains(" -r") || cmd.contains(" --recursive")),
+        );
+        features.insert(
+            "destructive_flag".to_string(),
+            serde_json::json!(
+                cmd.contains("rm -rf") || cmd.contains(" --delete") || cmd.contains(" --force")
+            ),
+        );
+        features.insert(
+            "persistence_indicator".to_string(),
+            serde_json::json!(
+                cmd.contains("cron") || cmd.contains("startup") || cmd.contains("systemd")
+            ),
+        );
+        features.insert(
+            "download_execute_pattern".to_string(),
+            serde_json::json!(
+                (cmd.contains("curl") || cmd.contains("wget"))
+                    && (cmd.contains("| sh") || cmd.contains("| bash"))
+            ),
+        );
+        features.insert(
+            "encoded_payload_indicator".to_string(),
+            serde_json::json!(
+                cmd.contains("base64") || cmd.contains("\u{25}3c") || cmd.contains("\\x")
+            ),
+        );
+        features.insert(
+            "credential_path_indicator".to_string(),
+            serde_json::json!(
+                cmd.contains(".env")
+                    || cmd.contains("id_rsa")
+                    || cmd.contains("credential")
+                    || cmd.contains("token")
+            ),
+        );
+        features.insert(
+            "system_path_indicator".to_string(),
+            serde_json::json!(
+                cmd.contains("/etc/") || cmd.contains("/dev/") || cmd.contains("C:\\Windows")
+            ),
         );
     }
 

@@ -63,6 +63,7 @@ pub mod trace;
 // **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
 // L1 接 SelfAssessmentStore. 主人 Veto dashboard 留 v2.0.0 release 接入.
 
+pub use apeireth_governance::TurnSecurityContext;
 pub use approval::{
     operation_fingerprint, operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus,
     PendingApproval, PendingApprovalView,
