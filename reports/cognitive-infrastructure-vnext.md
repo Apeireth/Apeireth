@@ -2,7 +2,7 @@
 
 日期：2026-09-06
 工作分支：`feature/cognitive-infrastructure-vnext`
-本轮基准：`origin/main` / `upstream/main` = `7647d2c91d55901aeae7202f3842b65233bd053c`。分支已 rebase 到该提交；最终提交 SHA 以推送后记录为准。
+本轮基准：`origin/main` / `upstream/main` = `7647d2c91d55901aeae7202f3842b65233bd053c`。分支已 rebase 到该提交；当前已推送提交：`eee68ad005444102acdfb807a2388a2bcb63812e`。
 
 ## 1. 状态定义
 
@@ -17,7 +17,7 @@
 
 ## 2. 最终状态矩阵
 
-`CI_VERIFIED` 在最终 SHA 推送并查询 GitHub Actions 前保持 `NO`；不会把本地绿灯写成远端绿灯。
+`CI_VERIFIED` 在最终 SHA 有 commit-specific GitHub Actions run 前保持 `NO`；不会把本地绿灯写成远端绿灯。
 
 | 能力 | IMPLEMENTED | PRODUCTION_WIRED | VERTICAL_TESTED | CI_VERIFIED | 结论 / 证据 |
 |---|---:|---:|---:|---:|---|
@@ -141,7 +141,7 @@ cargo audit
 
 远端 CI 必须按最终推送 SHA 查询，而不是只看分支最新状态。至少记录 Ubuntu / Windows / macOS、fmt、clippy、nextest / workspace tests、docs、audit、deny、secret scan、desktop checks 和 coverage workflow 的实际状态；仓库未配置的 workflow 标记为 `NOT_PRESENT`，不能虚报为 passed。
 
-最终 SHA、`git ls-remote` 结果及 GitHub Actions commit-specific run 状态在推送后补入交付消息。只要仍有 `PENDING`、`FAILURE`、`NOT_VERIFIED`，PR readiness 就是 **NO**；全部要求项针对同一最终 SHA 通过后才是 **YES**。
+实际结果：`git ls-remote origin refs/heads/feature/cognitive-infrastructure-vnext` 已指向 `eee68ad005444102acdfb807a2388a2bcb63812e`；GitHub Actions 按 `feature/cognitive-infrastructure-vnext` 过滤为 0 个 run，因此 commit-specific CI = **NOT_VERIFIED / NO RUN**。本次未创建 PR（用户只要求推送分支），故 PR 触发的门禁不会自动出现。只要仍有 `PENDING`、`FAILURE`、`NOT_VERIFIED`，PR readiness 就是 **NO**；全部要求项针对同一最终 SHA 通过后才是 **YES**。
 
 ## 7. Deferred / explicitly not implemented
 
@@ -160,8 +160,8 @@ cargo audit
 | CLI fan-out / dataset privacy / scope / hybrid recall 真实代码与垂直证据 | YES |
 | Persona / extraction / context / ML / compensation 状态诚实拆分 | YES |
 | Rust + dependency + frontend 本地门禁 | YES — all required local commands passed |
-| Final branch force-with-lease push | PENDING |
-| Final-SHA remote CI | PENDING |
+| Final branch force-with-lease push | YES — remote branch = `eee68ad005444102acdfb807a2388a2bcb63812e` |
+| Final-SHA remote CI | NO — no commit-specific run exists for this feature branch push |
 | PR ready | NO — until final push and commit-specific CI verification |
 
 证据文件：
