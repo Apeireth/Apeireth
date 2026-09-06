@@ -19,16 +19,16 @@ Author:          主代理 Mavis (反思 session)
 
 ## 0. TL;DR (1 段总结)
 
-**Apeireth v2.0.0-rc.1 = 新架构完成 (16-crate + 7 capability trait + 认知模块 + 9 哲学锚 + 5 重守门) + 9/10 RC 真实现 + 9 organ 全部真移植 + OrganOrchestrator 串联层真实施落地 (R12) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 + 哲学锚本体 LOCKED 真加 O-6 + 自我升级 cycle 设计完成 + 真 LLM call 1.16s 跑通 (RC-5 MiniMax adapter)**.
+**Apeireth v2.0.0-rc.1 = 新架构完成 (17-crate[对账注：写作时 16-crate] + 7 capability trait + 认知模块 + 9 哲学锚 + 5 重守门) + 9/10 RC 真实现 + 9 organ 全部真移植 + OrganOrchestrator 串联层真实施落地 (R12) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 + 哲学锚本体 LOCKED 真加 O-6 + 自我升级 cycle 设计完成 + 真 LLM call 1.16s 跑通 (RC-5 MiniMax adapter)**.
 
 **总进度 ≈ 80%** (v2.0.0 release 估 4-6 月, 2027-01-08 至 2027-02 月, 因 A 块 OrganOrchestrator 完整化提前完成). 距离 v1.0 parity = frontend 对接 + 6 DEFERRED slot 激活 + RC-7 真 modality + RC-11 真生产验证 = **3 块真实施** (A 块已 ✅), 估 1-3 月 (2027-Q1 启动).
 
-**本会话累计 85+ commit (从 `ef075420` 基线, 主代理亲算; A 块 5 stage + 复盘配对 amend 后 6 commit)**, **1739 tests passed 0 FAILED** (主代理 2026-08-28 amend 后亲跑 `cargo test --workspace --locked`; 1726 baseline + 13 new A 块; **Round 4-6 后仍 1739 passed / 0 failed**), **0 clippy 警告**, **0 触碰 LOCKED 5 项**.
+**本会话累计 85+ commit (从 `ef075420` 基线, 主代理亲算; A 块 5 stage + 复盘配对 amend 后 6 commit)**, **1739 tests passed 0 FAILED** (主代理 2026-08-28 amend 后亲跑 `cargo test --workspace --locked`; 1726 baseline + 13 new A 块; **Round 4-6 后仍 1739 passed / 0 failed**; **2026-09-05 对账实测：3120 passed / 0 failed / 13 ignored**), **0 clippy 警告**, **0 触碰 LOCKED 5 项**.
 
 ```bash
 # 接手人首件事 (0 装诚实核验 HEAD, 不裸信文档):
 git log --oneline -5
-cargo test --workspace --locked        # 期望: 1739 passed, 0 FAILED
+cargo test --workspace --locked        # 期望 (2026-09-05 实测): 3120 passed / 0 failed / 13 ignored（历史: 1739 passed, 0 FAILED）
 cargo clippy --workspace --all-targets --locked -- -D warnings   # 期望: 0 警告
 ```
 
@@ -81,7 +81,7 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 
 | 维度 | 完成度 | 子项 |
 |---|---|---|
-| **新架构** | 100% | 16-crate + 7 capability trait + 认知模块 12 slot + 9 哲学锚 + 5 重守门 |
+| **新架构** | 100% | 17-crate（写作时 16-crate, 2026-09-05 对账注） + 7 capability trait + 认知模块 12 slot + 9 哲学锚 + 5 重守门 |
 | **RC 真实现** | 90% (9/10) | RC-1/2/3/4/5/6/8/9/10/11 真写, RC-7 真 modality spec 已完 (R14) 待硬件 |
 | **9 organ 真移植** | 100% (9/9) | 整合 #2 commit `bbf70293` 一次性拍板, 9 organ trait 抽象 + 1:1 v1 翻译 |
 | **OrganOrchestrator 串联层** | ✅ **R12 + A 块完整化已落** | 13 gate + 5 状态机 + 9 organ 顺序 process (R12 commit `2550b99d`) + 5 stage A 块完整化 (amend 后 commits `c003e078` / `087ab2ac` / `50ba2e57` / `29e5ce66` / `0afa733f`, 详 `organ-orchestrator-completion-plan.md`) + O-6 三阶审查 amend (commit `bbbfb75b`, 详 `A-block-o6-true-account.md`); 缺口 D ratify_fresh_policy 5 状态链 / B F1 PAD mood / A check_8_gates + E7 last_hold / C Council decide_with_invoker / E L0-L5 UpgradeCycle driver 全部真实施 |
@@ -127,7 +127,7 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 | 1 | clippy 0 警告 (`cargo clippy --workspace --all-targets --locked -- -D warnings`) | ✅ 0 警告 |
 | 2 | workspace tests 0 失败 (`cargo test --workspace --locked`) | ✅ 0 FAILED |
 | 3 | legacy compat path < 100 引用 | ✅ |
-| 4 | 13 键 LOCKED + 9 哲学锚 + workspace.version 1.2.0 + R11 baseline 3 值 0 触碰 | ✅ 0 触碰 |
+| 4 | 13 键 LOCKED + 9 哲学锚 + workspace.version 2.0.0-rc.1（2026-08-30 起）+ R11 baseline 3 值 0 触碰 | ✅ 0 触碰 |
 | 5 | 哲学锚表头 0 减 | ✅ |
 
 ---
@@ -136,14 +136,14 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 
 ### 3.1 工程形态收敛
 
-- v1 86-crate → v2 16-crate = **70 crates removed (81.4% 收敛)**
+- v1 86-crate → v2 17-crate = **69 crates removed (80.2% 收敛)**（写作时 16-crate / 81.4%，2026-09-05 对账注）
 - 4 层分组: foundation 6 + engine 6 (含 `apeireth-organ`) + capabilities 1 + adapters 3
 - 单向依赖: memory/tools/cli/credentials/orchestration → plugin
 - 0 反向, 0 循环, 100+ consumer 0 破
 
 ### 3.2 新架构就位
 
-- **16-crate workspace** (Cargo.toml members)
+- **17-crate workspace** (Cargo.toml members, 2026-09-05 实测)
 - **7 capability trait** (位置: `apeireth-plugin`)
   - MemoryBackend / Experience / Perception / PreferenceStore / SelfAssessmentStore / LlmFactory / SubSupervisor
 - **认知模块 12 slot ledger** (其他 dev 推 5 commit, **6 WIRED + 6 DEFERRED**, judge/council 为 WIRED OFF by default)
@@ -246,7 +246,7 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 
 ```
 Apeireth-rust/
-├── Cargo.toml                    # workspace members (16 crates)
+├── Cargo.toml                    # workspace members (17 crates)
 ├── ROADMAP.md                    # 顶层路线
 ├── CHANGELOG.md                  # 12/12 O-6 ledger + 9/10 RC + R12 + 8 spec
 ├── RELEASE_NOTES.md              # v1.0 0 装诚实行数修正
@@ -278,7 +278,7 @@ Apeireth-rust/
 │   │   ├── TO-NEW-TEAM.md               # 给新团队的话
 │   │   └── FINAL-HANDOFF-V2.0.0-RC.1.md   # 本文
 │   └── archive/cognitive-module-wiring.md # 12 slot ledger
-├── crates/                       # 16 crates workspace
+├── crates/                       # 17 crates workspace
 │   ├── foundation/               # 6 (core/protocol/plugin/governance/credentials/orchestration)
 │   ├── engine/                   # 6 (runtime/provider/storage/memory/perception/organ)
 │   ├── capabilities/             # 1 (tools)
@@ -356,7 +356,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory \
 | **v1.0.0 总 tracked LOC** | **1,154,516 行** | 实测同上 |
 | **v1.0.0 active crates** | 85 (三层生态) | 实测 `git ls-tree -r v1.0.0 crates` |
 | **v2 (收盘批) workspace crates** | **16** | Cargo.toml members |
-| **v2 测试** | **1726 passed / 0 FAILED (A 块前; **A 块后 1739 passed**)** | 主代理 2026-08-28 亲跑 `cargo test --workspace --locked` |
+| **v2 测试** | **1726 passed / 0 FAILED (A 块前; **A 块后 1739 passed**; 2026-09-05 对账：3120 passed / 0 failed / 13 ignored**)** | 主代理 2026-08-28 亲跑 `cargo test --workspace --locked` |
 | **v2 真 LLM call 延迟** | 1.16s | 子代理 M `real_llm_call_smoke` 实测 |
 | **本会话累计 commit** | **85** (从 `ef075420` 基线) | `git log ef075420..HEAD --oneline | measure` 主代理亲算 |
 | **子代理派** | **31** (第一批 14 A-N + 第二批 17 Q1/R1-R15/Z) | (见 §3.5) |
@@ -402,7 +402,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory \
 9. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
 10. 读 docs/04-internal/TO-NEW-TEAM.md (给新团队的话 + 3 块真实施清单)
 11. 读 docs/01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
-12. 跑 cargo test --workspace --locked (验证 1739 passed 0 FAILED) + cargo clippy --workspace --all-targets --locked -- -D warnings (验证 0 警告)
+12. 跑 cargo test --workspace --locked (验证 3120 passed / 0 failed / 13 ignored；历史 1739 passed 0 FAILED) + cargo clippy --workspace --all-targets --locked -- -D warnings (验证 0 警告)
 ```
 
 ### 5.5 给新团队的话 (主代理 Mavis 致, 完整版见 `TO-NEW-TEAM.md`)
@@ -478,9 +478,9 @@ Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + OrganO
 8. A 块 O-6 复盘: docs/04-internal/A-block-o6-true-account.md
 
 主代理 Mavis 收盘 rc.1 + 8 spec + A 块完整化 + O-6 复盘 阶段, 你来接.
-有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline (期望 1739 tests / 0 clippy 警告).
+有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline (期望 3120 tests / 0 clippy 警告).
 ```
 
 ---
 
-_本文档 Final-1.0 首发 (2026-08-28, 主代理 Mavis 写于 rc.1 收盘 session, 当时 HEAD = `395fe0f0`, 19 commit; **当前 HEAD (Round 6 完) = `7d990297`**). Final-2.0 更新 (2026-08-28): 9 organ 真移植 100% + R12 OrganOrchestrator 真实施落地 (`2550b99d`) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 (`ccf29c57`) + 1726 tests 0 FAILED + 85 commit 实测 + 16 crates. 0 触碰 LOCKED, 真 LLM call 1.16s 跑通. 接手人按 §5.4 10 步读 + §5.3 4 阻塞真做, v2.0.0 release 估 2027-01-08 至 2027-03 月. **Final-2.1 更新 (2026-08-28)**: A 块 OrganOrchestrator 完整化 5 stage 真实施 (amend 后 commits `c003e078` ~ `0afa733f`) + O-6 三阶审查 amend 复盘 (commit `bbbfb75b`); 1739 tests 0 FAILED (1726 baseline + 13 new A 块); 剩 **3 块**真实施 (frontend / 6 DEFERRED / RC-7); v2.0.0 release 估 **2027-01-08 至 2027-02 月, 4-6 月** (因 A 块提前完成, 从 5-7 月缩短为 4-6 月)._
+_本文档 Final-1.0 首发 (2026-08-28, 主代理 Mavis 写于 rc.1 收盘 session, 当时 HEAD = `395fe0f0`, 19 commit; **当前 HEAD (Round 6 完) = `7d990297`**). Final-2.0 更新 (2026-08-28): 9 organ 真移植 100% + R12 OrganOrchestrator 真实施落地 (`2550b99d`) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 (`ccf29c57`) + 1726 tests 0 FAILED + 85 commit 实测 + 16 crates. 0 触碰 LOCKED, 真 LLM call 1.16s 跑通. 接手人按 §5.4 10 步读 + §5.3 4 阻塞真做, v2.0.0 release 估 2027-01-08 至 2027-03 月. **Final-2.1 更新 (2026-08-28)**: A 块 OrganOrchestrator 完整化 5 stage 真实施 (amend 后 commits `c003e078` ~ `0afa733f`) + O-6 三阶审查 amend 复盘 (commit `bbbfb75b`); 1739 tests 0 FAILED (1726 baseline + 13 new A 块); 剩 **3 块**真实施 (frontend / 6 DEFERRED / RC-7); v2.0.0 release 估 **2027-01-08 至 2027-02 月, 4-6 月** (因 A 块提前完成, 从 5-7 月缩短为 4-6 月). **Final-3.0 更新 (2026-09-05 对账批)**: 实测基线 17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1 (6b81c210) / v2.0.0-rc.1 tag 已打 (854831fc) + release authority 关闭 (a0417f55); 装机 E2E 与远端 Windows 验证证据仍待补 (per RC1_HANDOFF); release 估时按 Round 12-13 真调研修订为 2027-Q3. 历史数字 (16 crates / 1739 tests / 1.2.0) 属实于写作时点, 不追溯改写._

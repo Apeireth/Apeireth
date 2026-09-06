@@ -63,7 +63,7 @@ decoupled. Provider未配置 ≠ Companion Runtime启动失败.
 {
   "status": "ok",                       // legacy, preserved
   "service": "apeireth-companion-serve-v4",
-  "version": "1.2.0",
+  "version": "2.0.0-rc.1",
   "features": [...],                    // legacy, preserved
   "core":     { "status": "healthy" },  // NEW — core runtime health
   "provider": { "status": "unconfigured" }  // NEW — ready | unconfigured

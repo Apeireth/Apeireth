@@ -120,7 +120,7 @@
 
 1. **总体最优**: 在更大语境 (release 路线图 / 当前工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? **与 alternatives 比较 + 选最优 + 拒理由**.
 2. **系统最优**: 在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? **与 alternatives 比较 + 选最优 + 拒理由**.
-3. **架构最优**: 在 workspace 16-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? **拒的 alternatives + 拒理由**.
+3. **架构最优**: 在 workspace 17-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? **拒的 alternatives + 拒理由**.
 
 不复用 v1 alignment 代替 v2 总体最优. 不描述 WHAT 代替 WHY. 每段需有具体拒的 alternative + 拒理由.
 

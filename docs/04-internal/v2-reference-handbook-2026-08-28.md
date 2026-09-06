@@ -17,7 +17,7 @@ Author:          主代理 Mavis
 
 ## 0. 一句话接手
 
-Apeireth v2.0.0-rc.1 在 `origin/main @ 70281cc6` (Round 9 完), **9 哲学锚 LOCKED, 1739 tests PASS, 0 clippy 警告, 0 触碰 LOCKED 5 项**. A 块 (OrganOrchestrator 完整化) 已落地, B/C/D 3 块调研真账已写完 (~1586 行 调研 docs), **派单顺序 + critical path 5-7 周 调研就位**, 接手工程师读本 handbook + 6 调研 doc + ENGINEER-MANIFESTO.md, 按本手册 §8 实施顺序开干即可.
+Apeireth v2.0.0-rc.1 在 `origin/main @ 70281cc6` (Round 9 完; **2026-09-05 对账：origin/main @ 7647d2c9, 17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1**), **9 哲学锚 LOCKED, 1739 tests PASS[写作时; 现 3120], 0 clippy 警告, 0 触碰 LOCKED 5 项**. A 块 (OrganOrchestrator 完整化) 已落地, B/C/D 3 块调研真账已写完 (~1586 行 调研 docs), **派单顺序 + critical path 5-7 周 调研就位**, 接手工程师读本 handbook + 6 调研 doc + ENGINEER-MANIFESTO.md, 按本手册 §8 实施顺序开干即可.
 
 ---
 
@@ -27,13 +27,13 @@ Apeireth v2.0.0-rc.1 在 `origin/main @ 70281cc6` (Round 9 完), **9 哲学锚 L
 
 | 项 | 值 | 来源 |
 |---|---|---|
-| HEAD (origin/main) | `70281cc6` | Round 9 7 doc batch commit |
-| Workspace | **16 crates** | foundation 6 / engine 6 / capabilities 1 / adapters 3 |
-| 代码量 | ~74k 行 active (不含 legacy/) | per ROADMAP §3 |
-| 测试 | **1739 passed / 0 failed / 12 ignored** | per cargo test --workspace --locked |
+| HEAD (origin/main) | `70281cc6`（2026-09-05 对账：现 `7647d2c9`） | Round 9 7 doc batch commit |
+| Workspace | **17 crates** | foundation 6 / engine 7 / capabilities 1 / adapters 3（写作时 16；2026-09-04 `0e542d03` 抽出 runtime-assembly 后为 17） |
+| 代码量 | crates/ 内 .rs src-only **147,732 行** + tests **25,972 行** | 2026-09-05 实测（写作时 ~74k 行 active） |
+| 测试 | **3120 passed / 0 failed / 13 ignored** | 2026-09-05 亲跑 cargo test --workspace --locked（写作时 1739 passed / 0 failed / 12 ignored） |
 | Clippy | **0 警告 / 0 错误** | per cargo clippy --workspace --all-targets --locked -- -D warnings |
 | 总进度 | **80%** (A 块完成贡献 +10%, per ROADMAP §7 主代理估) | subjective 加权 |
-| v2.0.0 release 估 | **2027-01-08 至 2027-02 月** (4-6 月, 因 A 块提前从 5-7 月缩短) | per ROADMAP §0 |
+| v2.0.0 release 估 | **2027-Q3** (修订 per Round 12-13 真调研: 6-9 月, 因 ~23 项 1.0 缺口 + 1.0 maturity 补查) | per MANIFESTO §1 / round-14 plan |
 
 ### 1.2 9 哲学锚 LOCKED 真账 (Round 9 维持)
 
@@ -57,7 +57,7 @@ O-2 前人肩上 | O-3 干到底 | O-4 任何人都能接手 | O-5 不假装 (0 
 | `cognitive.council` | WIRED, OFF by default |
 | `cognitive.self_assessment` | WIRED, Judge-backed |
 | `cognitive.memory_writeback` | WIRED |
-| **`cognitive.preference_learning`** | **DEFERRED → R20 派单 (调研真账就位, 2-3 周)** |
+| **`cognitive.preference_learning`** | **WIRED, OFF by default（`canonical_preference_learning` 14 测试；`topic_predictor` 仍未接线进 recall；2026-09-05 对账注）** |
 | `cognitive.critic` | DEFERRED INTO JUDGE → R21 派单 (1 周, critic.rs 1:1 翻译) |
 | `cognitive.reflection` | DEFERRED INTO SELF-ASSESSMENT → R22 派单 (1 周) |
 | `cognitive.planner` | NOT AN AGENT MODULE → R23 派单 (3 周, LLM Adapter 新设计) |
@@ -73,7 +73,7 @@ O-2 前人肩上 | O-3 干到底 | O-4 任何人都能接手 | O-5 不假装 (0 
 | 9 哲学锚本体 | `crates/foundation/core/src/eight_anchors.rs:58-79` + `NINE_ANCHORS_HARDCODE` 编译期锁 222-366 | 主人明确授权 (例: 2026-08-27 加 O-6) |
 | 13 键 | `crates/foundation/core/src/philosophy.rs:142` `RUNTIME_ENFORCED = false` | 已拍板降级, 不接回 runtime 强制 |
 | 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` (Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义) | 同 9 哲学锚 |
-| workspace.version | `Cargo.toml:44` `"1.2.0"` 双轴制 | tag 推进 v2.0.0 → v2.0.1 改 patch, 主代理拍板 |
+| workspace.version | `Cargo.toml:46` `"2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210；旧 1.2.0 双轴制终结） | 随 release 推进, 主代理/release authority 拍板 |
 | R11 baseline 3 值 | legacy reference (`legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` `R11_V1141_BASELINE: f64 = 0.8682` / `R11_V1131_BASELINE: f64 = 0.8532` / `R11_V1136_BASELINE: f64 = 0.9063`) — **active workspace 无 const source**, 等 R12 spec 重新审定后移植 | R11 数字更新需 R12 spec 重新审定 + active workspace 移植, 主代理拍板 |
 
 ### 1.5 A 块完成真账 (Round 1-2 实施, Round 3 amend + 复盘, Round 4 author 修)
@@ -130,7 +130,7 @@ c003e078 refactor(runtime): OrganOrchestrator 完整化 stage 1 (A 块)
 
 > Verify before writing; truth over narrative.
 
-**工程兑现**: 0 装诚实标 (Round 1-9 13 处 flag) + 数字实测 (cargo test 1739 / cargo clippy 0 / git rev-parse 真实 hash / wc -l 行数实测) + 文档数字漂移修 (Round 1 5 处 + Round 3 5 docs 8 处 + Round 7 20 处 + Round 8 4 处 = 28 处数字漂移全清).
+**工程兑现**: 0 装诚实标 (Round 1-9 13 处 flag) + 数字实测 (cargo test 1739 [当时; 2026-09-05 对账 3120] / cargo clippy 0 / git rev-parse 真实 hash / wc -l 行数实测) + 文档数字漂移修 (Round 1 5 处 + Round 3 5 docs 8 处 + Round 7 20 处 + Round 8 4 处 = 28 处数字漂移全清).
 
 **改前自问**: "数字必实测, 我有没有复用旧值?"
 
@@ -253,7 +253,7 @@ c003e078 refactor(runtime): OrganOrchestrator 完整化 stage 1 (A 块)
 cd C:\Users\31683\apeireth-rust
 
 # 1. 5 重守门 baseline (改前)
-cargo test --workspace --locked                    # 期望: 1739 passed / 0 failed / 12 ignored
+cargo test --workspace --locked                    # 期望: 3120 passed / 0 failed / 13 ignored
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望: 0 warning / 0 error
 
 # 2. §10 改前必查 LOCKED (改前)
@@ -294,7 +294,7 @@ grep -r "legacy/" crates/ | wc -l                  # 期望: < 100 (现 36)
   - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里改动放在哪一层最合适?>
     拒方案 A: <拒>+ 拒理由
     选: <选>+ 理由
-  - 架构最优: <在 workspace 16-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优?>
+  - 架构最优: <在 workspace 17-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优?>
     拒方案 A: <拒>+ 拒理由
     拒方案 B: <拒>+ 拒理由
     选: <选>+ 理由
@@ -544,7 +544,7 @@ git config core.hooksPath .githooks
 
 ### 10.5 5 重守门 baseline 严守 (每 commit)
 
-- cargo test --workspace --locked (期望 1739 passed)
+- cargo test --workspace --locked (期望 3120 passed / 0 failed / 13 ignored)
 - cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 warning)
 - git diff LOCKED 5 项 (期望 0 行)
 - legacy compat path < 100 (期望 < 100, 现 36)
@@ -604,7 +604,7 @@ git config core.hooksPath .githooks
 
 ## 13. 1 段交付 (给接手工程师)
 
-Apeireth v2.0.0-rc.1 在 `origin/main @ 70281cc6` (Round 9 完), **9 哲学锚 LOCKED, 1739 tests PASS, 0 警告, 0 触碰 LOCKED 5 项, 0 装诚实**. A 块 (OrganOrchestrator 完整化 5 stage) 已落地, B/C/D 3 块调研真账 ~1586 行已就位, 派单顺序 + critical path 5-7 周 调研清楚. **接手 = 1-2 小时读 5 份 doc + 1-2 天主代理亲做 6 项决策冻结 + 派 4-6 个 sub-agent 真实施 + 5 重守门 baseline 严守 + commit msg 5 段模板 + §8.5 hook 启用**. 2027-Q1 启动, 2027-Q2 完.
+Apeireth v2.0.0-rc.1 在 `origin/main @ 70281cc6` (Round 9 完), **9 哲学锚 LOCKED, 1739 tests PASS[写作时; 2026-09-05 对账: origin/main @ 7647d2c9, 17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1], 0 警告, 0 触碰 LOCKED 5 项, 0 装诚实**. A 块 (OrganOrchestrator 完整化 5 stage) 已落地, B/C/D 3 块调研真账 ~1586 行已就位, 派单顺序 + critical path 5-7 周 调研清楚. **接手 = 1-2 小时读 5 份 doc + 1-2 天主代理亲做 6 项决策冻结 + 派 4-6 个 sub-agent 真实施 + 5 重守门 baseline 严守 + commit msg 5 段模板 + §8.5 hook 启用**. 2027-Q1 启动, 2027-Q2 完.
 
 主代理 Mavis 收盘. 接手 = 你.
 

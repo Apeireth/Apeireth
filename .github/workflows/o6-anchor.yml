@@ -165,7 +165,7 @@ jobs:
           echo "  ✅ #1: clippy 0 警告"
           echo "  ✅ #2: 全 workspace 测试 0 失败"
           echo "  ✅ #3: legacy compat path 在预算内"
-          echo "  ✅ #4: 13 键 LOCKED + 9 哲学锚 + workspace.version 1.2.0 + R11 baseline 0 触碰"
+          echo "  ✅ #4: 13 键 LOCKED + 9 哲学锚 + workspace.version (release authority, 现 2.0.0-rc.1) + R11 baseline 0 触碰"
           echo "  ✅ #5: 9 个哲学锚全在 (S-1/S-2/S-3/O-1/O-2/O-3/O-4/O-5/O-6)"
           echo ""
           echo "  O-6 锚兑现 - 工程最优严守"

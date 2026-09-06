@@ -30,8 +30,8 @@ Author:          主代理 Mavis
 
 | 维度 | 真账 (2026-08-28 收盘) |
 |---|---|
-| workspace | **16 crates** (foundation 6 + engine 6 + capabilities 1 + adapters 3), 单向依赖, 0 循环 |
-| 架构收敛 | v1 86-crate → v2 16-crate = **81.4% 收敛** |
+| workspace | **17 crates** (foundation 6 + engine 7 + capabilities 1 + adapters 3), 单向依赖, 0 循环 |
+| 架构收敛 | v1 86-crate → v2 17-crate = **80.2% 收敛**（16-crate 口径于 2026-09-04 `0e542d03` 抽出 runtime-assembly 后作废） |
 | 哲学锚 | **9 项 LOCKED** (S-1/S-2/S-3 + O-1..O-6, O-6 永远追求最优 2026-08-27 主人授权加) |
 | 测试 (A 块前) | **1726 passed, 0 FAILED** (主代理 2026-08-28 亲跑 `cargo test --workspace --locked` 当时; **A 块后 1739 passed**) |
 | clippy | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |
@@ -42,7 +42,7 @@ Author:          主代理 Mavis
 | 10 RC | **9/10 真实现**, RC-7 (Whisper + 屏幕感知) 待硬件, spec 已完 (R14) |
 | 真 LLM | MiniMax adapter 真 call **1.16s** 跑通 (RC-5) |
 | v1.0 真实体量 | 551,208 行 .rs / 1,154,516 总 tracked LOC / 85 active crates (文档曾误写 34 万, 已实测修正) |
-| **测试 (A 块后)** | **1739 passed, 0 FAILED** (主代理 2026-08-28 amend 后亲跑; 比 baseline 1726 + 13 新增, 详见 A 块真账) |
+| **测试 (A 块后)** | **1739 passed, 0 FAILED** (主代理 2026-08-28 amend 后亲跑; 比 baseline 1726 + 13 新增, 详见 A 块真账; **2026-09-05 对账实测：当前 3120 passed / 0 failed / 13 ignored**) |
 
 ---
 
@@ -113,7 +113,7 @@ Author:          主代理 Mavis
 |---|---|
 | `ROADMAP.md` | 顶层路线: §3 当前状态 + §4 P1-P8 (v2.0 下一步) |
 | `CHANGELOG.md` | `[Unreleased]` 段: 12/12 O-6 + 9/10 RC + R12 + 8 spec |
-| `Cargo.toml` | workspace members (16 crates) + workspace.version 1.2.0 (LOCKED) |
+| `Cargo.toml` | workspace members (17 crates) + workspace.version 2.0.0-rc.1 (2026-08-30 RC1 发布起, per 6b81c210; 旧 1.2.0 双轴制终结) |
 | `.github/workflows/o6-anchor.yml` | 5 重守门 CI 自动验证 |
 
 ---
@@ -123,11 +123,12 @@ Author:          主代理 Mavis
 ```bash
 # 1. 确认 HEAD (0 装诚实: 不信文档, 跑命令)
 git fetch origin && git checkout main && git log --oneline -5
-#    期望: 最近 commit 是 93c2d9d7 (收盘交付)
+#    期望: 最近 commit 是 7647d2c9 (2026-09-05 对账批实测基线; 历史收盘交付 93c2d9d7)
 
 # 2. 全量测试
 cargo test --workspace --locked
-#    期望 (A 块前): 1726 passed, 0 FAILED (**A 块后 1739 passed**)
+#    期望 (2026-09-05 实测): 3120 passed / 0 failed / 13 ignored
+#    (历史: A 块前 1726 → A 块后 1739 passed)
 
 # 3. clippy 0 警告
 cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -199,7 +200,7 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
 - O-6 三阶审查:
   - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
   - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? 与 alternatives 比较 + 选最优 + 拒理由>
-  - 架构最优: <在 workspace 16-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
+  - 架构最优: <在 workspace 17-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
 ```
 
 > **不**复用 v1 alignment 代替 v2 总体最优. **不**描述 WHAT 代替 WHY. 每段需有具体拒的 alternative + 拒理由. 详 `docs/01-architecture/organ-orchestrator-completion-plan.md` §7.
@@ -223,7 +224,7 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
 | 9 哲学锚本体 | `crates/foundation/core/src/eight_anchors.rs:58-79` | `NINE_ANCHORS_HARDCODE` 编译期锁 |
 | 13 键 | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` |
 | 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` | Self-Disable / L0 HA / 13 键 verdict cache |
-| workspace.version | `Cargo.toml` | `"1.2.0"` 双轴制 |
+| workspace.version | `Cargo.toml` | `"2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210；旧 "1.2.0 双轴制" 已终结） |
 | R11 baseline 3 值 | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (active workspace 无 const source) | 0.8682 / 0.8532 / 0.9063 (数字严守, R12 spec 重新审定后移植) |
 
 > 例外: 主人明确授权 (例: 2026-08-27 授权加 O-6). 其余情况 0 触碰.

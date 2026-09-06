@@ -12,7 +12,7 @@
 - **用户原话**: "新架构有没有考虑到升级的扩展性啥的, 新架构我还不太懂你给我讲解一下, 再和旧架构对比一下, 然后你反思一下新架构对不对, 好不好, 然后你告诉我, 新架构完成后, Apeireth的自我升级应该是什么样的"
 - **HEAD 状态 (写本文时)**: `02faa6d0` (子代理 M 真写 RC-5 + 子代理 I 真写 RC-11)
 - **v1 era**: 86 crates, 23,806 tests, 9 organ 完整
-- **v2 era**: 15 crates, ~1500+ tests, 8/10 RC 真写完成
+- **v2 era**: 15 crates, ~1500+ tests, 8/10 RC 真写完成（当时）
 
 ---
 
@@ -52,16 +52,16 @@
 
 ---
 
-## 2. 新架构 (v2, 15-crate)
+## 2. 新架构 (v2, 17-crate)
 
 ### 2.1 结构 (4 层分组)
 
 ```
 adapters/ (3) - 入口层 (cli/gateway/sdk)
     ↓
-engine/ (5) - 实现层 (runtime/provider/storage/memory/perception)
+engine/ (7) - 实现层 (runtime/runtime-assembly/provider/storage/memory/perception/organ)
     ↓
-foundation/ (7) - 抽象层 (core/protocol/plugin/governance/credentials/orchestration/...)
+foundation/ (6) - 抽象层 (core/protocol/plugin/governance/credentials/orchestration)
     ↓
 capabilities/ (1) - 工具 (tools)
 ```
@@ -121,9 +121,9 @@ runtime 调能力, 不直接 import impl.
 
 ## 3. 新旧架构对比
 
-| 维度 | 旧 v1 (86-crate) | 新 v2 (15-crate) |
+| 维度 | 旧 v1 (86-crate) | 新 v2 (17-crate) |
 |---|---|---|
-| **Crate 数** | 86 (散落) | 15 (4 层分组) |
+| **Crate 数** | 86 (散落) | 17 (4 层分组) |
 | **核心能力抽象** | 9 organ 独立 crate, 无统一 trait | 7 capability trait, 1 个 plugin crate |
 | **LLM 调用** | 1 provider per crate, runtime 知道 vendor | `Arc<dyn LlmFactory>` 注入, runtime 0 知道 vendor |
 | **凭证** | 散落 `String` | 统一 `CredentialResolver` (4 backend + 自动 fallback) |
@@ -190,7 +190,7 @@ runtime 调能力, 不直接 import impl.
 ### 5.2 v2.0 完成距离
 
 按用户定义 "新架构 + 1.0 全部功能 + 实现":
-- **新架构** ✅ 完成 (15-crate + 7 capability trait + 认知模块 + 哲学锚 9 + 5 重守门)
+- **新架构** ✅ 完成 (17-crate + 7 capability trait + 认知模块 + 哲学锚 9 + 5 重守门)
 - **1.0 全部功能** = **9 organ + 其他 77 crates 功能** = **估 5-7 月真完成** (子代理 L 估 2027-01-08 至 2027-03 月)
 - **总进度** = **~28%** (新架构 15% + RC 80% × 20% + 器官 0% × 40% + 认知 50% × 25%)
 
@@ -208,7 +208,7 @@ runtime 调能力, 不直接 import impl.
 ### 6.1 前提
 
 新架构完成后 (估 2027-01-08 至 2027-03 月 v2.0.0 release 后):
-- **15-crate + 7 capability trait** 就位
+- **17-crate + 7 capability trait** 就位
 - **认知模块 6 WIRED** 就位 (memory_recall / preference_recall / judge / self_assessment / memory_writeback + council slot ready)
 - **9 organ 至少 1 真移植** (估 E4 curiosity 4 周, 子代理 L 估)
 - **9 哲学锚 LOCKED + 13 键降级 + 5 重守门** 就位
@@ -443,7 +443,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 - 8 spec 收齐 (R9/R10/R11/R13/R14/R15 + Z + 本报告)
 - R12 OrganOrchestrator 真实施落地 (13 gate + 5 状态机 + 9 organ 串联, 3 integration tests)
 - 6 处错账修正 (commit `ccf29c57`, 主代理亲做)
-- **1726 passed 0 FAILED / 0 clippy 警告 / 0 触碰 LOCKED 5 项 (当时; **A 块后 1739 passed**)**
+- **1726 passed 0 FAILED / 0 clippy 警告 / 0 触碰 LOCKED 5 项 (当时; **A 块后 1739 passed**)（2026-09-05 对账：当前 3120 passed）**
 - 本会话累计 85 commit (从 `ef075420` 基线, 主代理亲算)
 - 给新团队的话: `docs/04-internal/TO-NEW-TEAM.md`
 

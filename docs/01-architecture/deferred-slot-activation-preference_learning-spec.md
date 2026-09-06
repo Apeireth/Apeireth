@@ -495,7 +495,7 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 | **9 项哲学锚本体** (per `crates/foundation/core/src/eight_anchors.rs:58-79`) | LOCKED | ✅ 0 改 (本 spec 不改 `eight_anchors.rs`) |
 | **13 键 LOCKED** (per `crates/foundation/core/src/philosophy.rs:142`) | LOCKED | ✅ 0 改 (本 spec 不改 `philosophy.rs`) |
 | **3 项不可变脊柱** (per `crates/foundation/core/src/onion.rs:249`) | LOCKED | ✅ 0 改 (本 spec 不改 `onion.rs`) |
-| **workspace.version** (per `Cargo.toml:43`) | `1.2.0` | ✅ 0 改 (本 spec 不改 `Cargo.toml`) |
+| **workspace.version** (per `Cargo.toml:46`) | `2.0.0-rc.1`（2026-08-30 RC1 发布起, per 6b81c210） | ✅ 0 改 (本 spec 不改 `Cargo.toml`) |
 | **R11 baseline 3 值** (0.8682/0.8532/0.9063) | LOCKED | ✅ 0 改 (本 spec 不动 baseline) |
 
 ### 7.2 R15 0 触碰文件清单

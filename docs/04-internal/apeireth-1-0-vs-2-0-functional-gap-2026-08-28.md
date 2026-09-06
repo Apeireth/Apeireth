@@ -21,8 +21,8 @@ Author:          主代理 Mavis
 
 **关键 directive 真账 (per O-5 + S-2 实事求是)**:
 1. **v2.0 release 必须 = v1.0 功能全集 + 架构升级**, 不能缺功能 — 这是 release 阻断条件
-2. **从功能性视角** vs **架构视角**: 之前我看的是 "v2 工程现状 (16 crates / 9 organ / 12 slot)" — 架构视角. 现在看 "1.0 vs 2.0 功能全集对比" — 功能视角
-3. **架构不同**: 1.0 master (legacy/donor/, 86-crate, God Object UnifiedRuntimeHost) → 2.0 canonical (16-crate workspace, 三面一体 + 五原型 + 物种化). **架构可不同, 功能不能缺**.
+2. **从功能性视角** vs **架构视角**: 之前我看的是 "v2 工程现状 (17 crates / 9 organ / 12 slot)" — 架构视角. 现在看 "1.0 vs 2.0 功能全集对比" — 功能视角
+3. **架构不同**: 1.0 master (legacy/donor/, 86-crate, God Object UnifiedRuntimeHost) → 2.0 canonical (17-crate workspace, 三面一体 + 五原型 + 物种化). **架构可不同, 功能不能缺**.
 
 **主代理自省 (per O-5)**:
 - Round 1-10 一直画 "v2 工程架构现状", 缺 1.0 vs 2.0 功能对比 — 这就是 release 必补盲点

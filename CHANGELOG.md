@@ -1,5 +1,16 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 文档对账批：实测基线校准 (2026-09-05)
+
+> 本批按"实测优先于文档"原则，把过时的当前值统一为 HEAD `7647d2c9` 实测基线（0 装诚实真账）：
+
+- **17 crates**：`0e542d03`（2026-09-04）抽出 `crates/engine/runtime-assembly` 后 workspace 实为 17 members（foundation 6 / engine 7 / capabilities 1 / adapters 3）；此前"16 crates"口径作废，全量文档同步。
+- **3120 passed / 0 failed / 13 ignored**：`cargo test --workspace --locked` 亲跑两遍一致；此前的 3119（9/4 对账时）→ 3120（+1，9/4 晚至 9/5 的 crates 变更）。
+- **workspace.version = 2.0.0-rc.1**：`6b81c210`（2026-08-30，RC1 发布）已把 workspace 轴从 1.2.0 升为 2.0.0-rc.1，旧"1.2.0 双轴制"终结；CI o6-anchor 守门已改为提取 release authority 而非断言 1.2.0。全量文档的 "1.2.0 (LOCKED)" 表述同步修正。
+- **代码量**：crates/ 内 .rs src-only 147,732 行（406 文件）+ tests 25,972 行（73 文件）；"~80k 行 active" 口径作废。
+- **P2 加固 commit hash 修正**：正文引用的 6 个 hash（`8b7e3111`/`b2446e67`/`4f5395b2`/`a4ba09fc`/`53c0376a`/`778a0fcb`）是候选机 hash，任何 ref 均无法解析；**内容已以不同 hash 落地 main**（实测：检索确定性 → `aeb9f66d`；Xcap 真后端 → `8df5f550` 等，代码与测试全部在树）。
+- 历史会话记录类文档不改写历史数字，统一加顶部对账 banner（历史数字属实于写作时点）。
+
 ## [Unreleased] — Research 证据链补全：真实数据评测 + 形式验证 (2026-09-05)
 
 - **真实数据集评测批（0 LLM 判分，确定性 evidence 命中）**：
@@ -14,13 +25,15 @@
 
 ## [Unreleased] — Research Phase 0–6 交付 + 双协议 + 文档对账 (2026-09-04)
 
-- **research 工作区**:`research/`(baselines/metrics/runners/logs schema);Phase 0 冻结基线 3061 → 交付后全量 **3119 passed / 0 failed / 13 ignored / 106 suites**。
+- **research 工作区**:`research/`(baselines/metrics/runners/logs schema);Phase 0 冻结基线 3061 → 交付后全量 **3119 passed / 0 failed / 13 ignored / 106 suites**（写作时点属实；2026-09-05 对账实测现为 **3120 passed / 0 failed / 13 ignored**）。
 - **Research 前缀模块(全部默认关闭,生产路径零行为变化)**:派生记忆血缘与遗忘闭包审计、BTFM 真双时态(additive,旧 API 不变)、StackPin 上下文保留(竞争比护栏)、ShadowLogger、校准门控自治(风险阶梯+hysteresis)、审批状态机形式化(Dispatched 拆分+崩溃模型+故障注入)、漫游记忆 CRDT、模块非干扰、VaultLRU/FTRL(O(√T) 后悔界)。
 - **评测运行器**:`research/runners/`(独立 cargo 项目,合成基准 + 效用-成本曲线 + bootstrap 95% CI + JSONL 日志)。
 - **双协议**:`Apache-2.0 OR MIT`(SPDX 更新,`LICENSE-MIT` 新增)+ CONTRIBUTING DCO 等效贡献声明。
-- **文档对账**:仓库 URL 迁移 `Apeireth/Apeireth`(96 文件);crate 数统一为实测 16;测试数统一为实测 3119;architecture/CONTRIBUTING/INSTALL/SECURITY/README 全量更新。
+- **文档对账**:仓库 URL 迁移 `Apeireth/Apeireth`(96 文件);crate 数统一为实测 16（写作时点属实；同日晚 `0e542d03` 抽出 runtime-assembly 后为 **17**，见顶部 2026-09-05 对账条目）;测试数统一为实测 3119（现 3120，见顶部对账条目）;architecture/CONTRIBUTING/INSTALL/SECURITY/README 全量更新。
 
 ## [Unreleased] — P2 加固波次 (candidate `8b7e3111`, 2026-08-30)
+
+> **2026-09-05 对账批 hash 修正（0 装）**：本节引用的 6 个 commit hash 是候选机（远端 Windows 验证机）上的 hash，在任何 ref 中均无法解析；六项内容的代码与测试**已通过不同 hash 的 commit 落地 main 并实测在树**（检索确定性 → `aeb9f66d`；原则审批绑定 / Continuation 单赢家 / Reflexion 有界持久化 / 会话级 Spill → 相关 `fix(memory)`/`fix(orchestration)`/`fix(tools)` commits；真实 Xcap 捕获 → `8df5f550`）。
 
 > **状态标注 (0 装 PASS)**：下列六项 P2 加固提交全部为 **IMPLEMENTED（库级实现）且经远端 Windows 验证机测试验证**（candidate `8b7e3111`，clean tree，HEAD 已核验）：
 > `cargo test --workspace --locked` = **2012 passed / 0 failed**（13 ignored）；`cargo check --workspace --locked`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`git diff --check` 全部通过。
@@ -49,7 +62,7 @@
 
 > **版本定位与状态说明**:
 > 本版本为 **Apeireth 2.0 预览版 (Preview)**。
-> - **工程建设状态**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 16 Crates 100% 编译与单元/集成测试通过，前端桌面端打包与类型全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
+> - **工程建设状态**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 16 Crates[写作时属实；2026-09-04 `0e542d03` 抽出 runtime-assembly 后为 17] 100% 编译与单元/集成测试通过，前端桌面端打包与类型全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
 > - **后续发布路线**: 当前阶段已就绪，转入**协作者生产压测、真机环境与端到端联调交叉验证**阶段。待协作者压测与交叉验证闭环后，由协作者提议正式发布 2.0 最终正式版 (GA)。
 
 ### 🌟 2.0 核心建设成果总览

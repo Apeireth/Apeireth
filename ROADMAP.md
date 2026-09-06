@@ -3,12 +3,12 @@
 ```
 [Document-Meta]
 Document:        ROADMAP.md
-Version:         3.0-reconstruct-v2
-Last-Modified:   2026-08-27
+Version:         3.1-reconstruct-v2（2026-09-05 对账批更新）
+Last-Modified:   2026-09-05
 Status:          🟢 活跃
 Branch:          main（默认分支；2026-08-27 由 reconstruct_v2 晋升，旧 master 归档为 archive/v1.0-master）
-HEAD:            d6910cf7
-Tag:             v2.0.0-alpha.1 → d6910cf7（v2 工程重构首个 alpha）
+HEAD:            7647d2c9（2026-09-05 对账批实测基线）
+Tag:             v2.0.0-rc.1 → 854831fc（2026-08-30，RC1 发布 + release authority 关闭 a0417f55）；v2.0.0-preview → 32f8a2c1；v2.0.0-alpha.1 → d6910cf7
 Source-of-Truth: CHANGELOG.md + ARCHITECTURE.md + docs/01-architecture/ 系列审计
 ```
 
@@ -28,7 +28,7 @@ Source-of-Truth: CHANGELOG.md + ARCHITECTURE.md + docs/01-architecture/ 系列�
   - **agent loop 真实现**——旧审计结论"任何地方都没有 agent loop"已被 `crates/engine/runtime/src/canonical/execute.rs` 推翻；
   - 3 家 provider 插件化（MiniMax/Anthropic/OpenAI-compatible）、5 内置工具（3 只读默认可用；shell/fetch 默认关）、三 OS 进程封装（Windows Job Object 完整 / Linux·macOS 进程组部分）；
   - CI 全绿：cargo-nextest ~1476、clippy 3 档、fmt、audit、deny、miri、rustdoc、coverage、13 键测试契约、M2B/M2C/M3A 三 OS 验证。
-- **已知缺口（诚实）**：13 键 verdict cache 已拍板降级为哲学标准（`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注，详见 `docs/04-internal/v2-unabsorbed-features.md` §A4 与 `docs/04-internal/scene-d-v2-plan.md` §3.4），不接 runtime 强制机制；`apeireth-credentials` 未接线；M1B 记忆/向量/图未移植；MCP、companion 器官、voice/screen 未移植。
+- **已知缺口（诚实）**：13 键 verdict cache 已拍板降级为哲学标准（`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注，详见 `docs/04-internal/v2-unabsorbed-features.md` §A4 与 `docs/04-internal/scene-d-v2-plan.md` §3.4），不接 runtime 强制机制；`apeireth-credentials` 已接线（RC-9, 2026-09-05 对账注）；M1B 记忆/向量/图未移植；MCP、companion 器官、voice/screen 未移植。
 - **v2.0.0-alpha.1 = 骨架 + 主链的 alpha**：governance P0 已 ✅ 接线（upstream `873d2857`），13 键降级决策 P0 已 ✅ 拍板完成，场景 D 路线见 `docs/04-internal/scene-d-v2-plan.md`。
 - **O-6 重构批次 (2026-08-27 启动, 哲学锚 #9 登记后立刻做)**：v2.0.0-rc.1 前的架构最优整理批次, 详见 `docs/04-internal/v2-arch-refactor-batch.md` (5 项 trait 搬 crate + 12 consumer use 行迁移). 工作量约 1-2 天, "不重做" = 默认接受次优, 这是 O-6 锚的第一次兑现.
 
@@ -61,20 +61,22 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ---
 
-## 3. 当前状态（v2.0.0-preview 预览版，2026-08-29 发布）
+## 3. 当前状态（v2.0.0-preview 已发布 + v2.0.0-rc.1 已打 tag，2026-09-05 对账批实测）
+
+> **2026-09-05 对账批注记**：下表数字为本批实测基线（HEAD `7647d2c9`）。workspace 已为 **17 crates**（`0e542d03` 于 2026-09-04 抽出 runtime-assembly 后，此前"16 crates"口径作废）；测试 **3120 passed / 0 failed / 13 ignored**；workspace.version = **2.0.0-rc.1**（2026-08-30 RC1 发布起，旧 1.2.0 双轴制终结）。
 
 > **v2.0.0-preview 定位与说明**:
-> - **建设完全性**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 16 Crates 100% 编译与数百项单元/集成测试通过，前端桌面端 Svelte 5 + Tauri 2 打包与类型验证全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
+> - **建设完全性**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 17 Crates 100% 编译与 3120 项单元/集成测试通过，前端桌面端 Svelte 5 + Tauri 2 打包与类型验证全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
 > - **后续发布路线**: 当前转入**协作者生产压测、真机环境与端到端联调交叉验证**阶段。待协作者压测与交叉验证闭环后，由协作者提议发布 2.0 最终正式版 (GA)。
 
 | 项 | 值（实测） |
 |---|---|
 | 分支 | `main`（默认分支，v1 → `archive/v1.0-master`） |
-| Tag | `v1.0.0` / `v1.5.0` / `v2.0.0-alpha.1` / `v2.0.0-rc.1` / `v2.0.0-preview` |
-| Workspace | **16 crates**（foundation 6 / engine 6 / capabilities 1 / adapters 3） + `frontend/companion-desktop` (Svelte 5 + Tauri 2) |
-| 代码量 | ~80k 行 active（不含 legacy/） |
-| 测试 | **全工作区单元/集成测试 100% PASS**（含感知、多器官、长期记忆、工具隔离、网关流式及桌面端 build/check 0 警告） |
-| CI / 守门 | 5 重守门全绿 + `cargo clippy --workspace --all-targets -- -D warnings` 0 警告 + LOCKED 5 项 0 触碰 (0 diff) |
+| Tag | `v1.0.0` / `v1.5.0` / `v2.0.0-alpha.1` / `v2.0.0-preview` / `v2.0.0-rc.1`（→ `854831fc`） |
+| Workspace | **17 crates**（foundation 6 / engine 7 / capabilities 1 / adapters 3；第 17 个 = `crates/engine/runtime-assembly`） + `frontend/companion-desktop` (Svelte 5 + Tauri 2) |
+| 代码量 | crates/ 内 .rs：src-only **147,732 行**（406 文件）+ tests **25,972 行**（73 文件）（2026-09-05 实测，不含 legacy/）；前端 companion-desktop 61 文件 ~21k 行（不含 node_modules/dist） |
+| 测试 | **3120 passed / 0 failed / 13 ignored**（2026-09-05 亲跑 `cargo test --workspace --locked`；含感知、多器官、长期记忆、工具隔离、网关流式及桌面端） |
+| CI / 守门 | 5 重守门全绿 + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告（2026-09-05 亲跑）+ 9 锚 / 13 键 / 3 脊柱 / R11 baseline 0 触碰；workspace.version 已随 RC1 发布推进为 2.0.0-rc.1 |
 | **v2.0 核心建设** | ✅ **100% 落地**：14 大战区（Whisper HTTP + Xcap 截屏多模态、Okapi BM25 + 向量 RRF 混合检索、上下文衰减 3 因子、SpillStore 溢出隔离、7 阶段伙伴羁绊、8 分类里程碑、动态原则洋葱、三层语调合成、断点续行与 O-1 核心段删除防御、叙事日记本与日活动聚合、跨日记图共享词元索引、口头强化反思闭环、微积分换元符号规则检查、Gateway SSE 流式通道及桌面端伙伴）。 |
 | **当前状态与下一步** | **预览版已就绪 (v2.0.0-preview)**，转交协作者开展生产压测与交叉验证，待协作者确认后提议发布 2.0 正式版。 |
 
@@ -99,7 +101,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 |---|---|---|---|---|---|
 | **v1.0.0** | ✅ 已发布（历史） | `v1.0.0` → `993e9107` | 86-crate + 23k tests + 9 organ 完整 + companion_serve | 2026-08-18 已发 | — |
 | **v2.0.0-alpha.1** | ✅ 已发布 | `v2.0.0-alpha.1` → `d6910cf7` | 15-crate 工程重构 + governance P0 + 13 键降级 + ROADMAP §4 P1-P6 trait 边界 | 2026-08-27 已发 | — |
-| **v2.0.0-rc.1** | 🎯 下一阶段，**接手人继续** | `v2.0.0-rc.1`（待发） | alpha 7 trait 接真 backend（**8/10 RC 已完成或适配**） + RC-5 harness / RC-7 modality 仍需补齐 | 2026-12 月 | **剩余重点 = RC-5 Orchestrator harness、RC-7 perception、provider E2E 与长程 cognition** |
+| **v2.0.0-rc.1** | ✅ 已打 tag（`854831fc`，2026-08-30）；release authority 关闭（`a0417f55`） | `v2.0.0-rc.1` → `854831fc` | alpha 7 trait 接真 backend（8/10 RC 已完成或适配）+ RC-5 harness / RC-7 modality 仍需补齐 | 2026-08-30 | **装机 E2E / 远端 Windows 验证证据仍待补（per RC1_HANDOFF）**；剩余重点 = RC-5 Orchestrator harness、RC-7 perception、provider E2E 与长程 cognition |
 | **v2.0.0** | 远期 | `v2.0.0`（待发） | rc 全绿 + 至少 1 器官移植（W1/W2/E4/F1/F6 选 1） + frontend companion-desktop 接入 v2 gateway | 2027-02-04 月 | rc 后约 6-8 周 |
 | **v2.x (商业化)** | 远期 | — | 多用户 / 跨载体 / 租赁 / marketplace | 2027-Q3+ | — |
 | v1 (legacy) | 维护 | `v1.0.0` / `archive/v1.0-master` | 86-crate 完整功能 + 9 organ + companion；v2 rc 后只修严重 bug | 永久 | — |
@@ -111,8 +113,8 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | P | 任务 | 说明 | 依赖 |
 |---|---|---|---|
 | **P0** | ✅ 完成（upstream `873d2857`）：`build_canonical_runtime_from_env` 装 `GovernancePipeline(PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)` | — |
-| **P1** | **文档对账**（本批进行中） | ROADMAP/CHANGELOG/交接手册/审计数字统一到 13-crate 实测值 | 无 |
-| P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 |
+| **P1** | **文档对账**（2026-09-05 批执行中） | ROADMAP/CHANGELOG/交接手册/审计数字统一到 17-crate 实测值（17 crates / 3120 tests / workspace.version 2.0.0-rc.1） | 无 |
+| P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 | 🟡 credentials 已接线（RC-9, `crates/adapters/cli/src/keyring_bootstrap.rs`, 2026-09-05 实测）；core 脊椎去留仍待 |
 | P3 | M1B 记忆移植 | ACT-R 记忆、检索、向量/图全量移植进 `crates/engine/memory` | P2 |
 | P4 | MCP 动态能力注册 | MCP 作为 transport capability 接入 plugin registry | P2 |
 | P5 | ProcessSupervisor + 沙箱强化 | 进程树快照、Linux cgroup、macOS 强隔离、文件/网络隔离 | P0 |
@@ -143,7 +145,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 |---|---|---|
 | 生产路径 governance（已 ✅） | PII/注入/凭据泄漏 3 hook 已装（upstream `873d2857`） | **13 键 verdict cache 已降级为哲学标准**（`RUNTIME_ENFORCED = false`，映射到 5 原则洋葱）；**场景 D 长程 AI 判断待评估**（见 `docs/04-internal/scene-d-v2-plan.md`）|
 | 功能退坡（26 项 Lost Capabilities） | 产品能力暂时不可用 | 按 §4 P3-P7 顺序恢复；legacy/ 保留全部实现 |
-| 文档数字矛盾（v1 era 残留：23,874 vs 23,806；3 vs 5 provider 等） | 误导接手者 | ✅ 文档对账批已统一为 v2 实测值（1739 tests / 16 crates / 3 provider canonical / A 块完成 + O-6 复盘 amend 后）; 工程师 reference 手册 `docs/04-internal/ENGINEER-MANIFESTO.md` (14 章, 改 src / 改 doc / 派子代理前必读) |
+| 文档数字矛盾（v1 era 残留：23,874 vs 23,806；3 vs 5 provider 等） | 误导接手者 | ✅ 文档对账批已统一为 v2 实测值（2026-09-05 批：17 crates / 3120 tests / workspace.version 2.0.0-rc.1）；工程师 reference 手册 `docs/04-internal/ENGINEER-MANIFESTO.md` (14 章, 改 src / 改 doc / 派子代理前必读) |
 | `crates/_archived` 1.4GB 未跟踪构建垃圾 | 本地仓库膨胀 | 可删除（git 历史已含） |
 | 本地 `reconstruction_v2/` 26GB 未跟踪垃圾 | 磁盘占用 | 可删除 |
 
@@ -167,4 +169,4 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ---
 
-_本 ROADMAP 由文档对账批重写 (2026-08-27)，反映 reconstruct_v2 工程重构完成 + main 晋升 + v2.0.0-alpha.1。思想层（9 锚 / 13 键 / 三洋葱 / 9 organ / R11 baseline 3 值）LOCKED 保留。v1.0 时代详单见 `docs/archive/roadmap/`。_
+_本 ROADMAP 由文档对账批重写 (2026-08-27)，反映 reconstruct_v2 工程重构完成 + main 晋升 + v2.0.0-alpha.1；2026-09-05 对账批更新为实测基线（17 crates / 3120 tests / workspace.version 2.0.0-rc.1 / rc.1 tag 已打）。思想层（9 锚 / 13 键 / 三洋葱 / 9 organ / R11 baseline 3 值）LOCKED 保留。v1.0 时代详单见 `docs/archive/roadmap/`。_

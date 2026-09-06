@@ -1,3 +1,5 @@
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+
 # R11 协调 + 上下文 gap 真调研 (1.0 vs 2.0) — 2026-08-28
 
 > **作者**: sub-agent R11-CoordinationContext (Round 11 派单). **关系**: 跟 `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` §2.7+§3.1#13/14/15 + `apeireth-true-understanding-2026-08-28.md` + `v2-reference-handbook-2026-08-28.md` 互补.

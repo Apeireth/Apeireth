@@ -95,8 +95,8 @@ Author:          主代理 Mavis
 ### 2.1 综合审计方法
 
 按 `apeireth-true-understanding-2026-08-28.md` 三面一体 + 五原型 + 物种化框架, 综合审计:
-1. **基地层** (LLM 操作系统): 16 crates v2 真实施现状 vs 1.0 ~100 modules 差距
-2. **Agent 平台层** (16 crates workspace + 12 cognitive slot + 9 organ + OrganOrchestrator): 真实施 vs 1.0 差距
+1. **基地层** (LLM 操作系统): 17 crates v2 真实施现状 vs 1.0 ~100 modules 差距
+2. **Agent 平台层** (17 crates workspace + 12 cognitive slot + 9 organ + OrganOrchestrator): 真实施 vs 1.0 差距
 3. **她层** (物种实现, per-user 塑形): 真实施 vs 1.0 物种化功能差距
 
 ### 2.2 🟢 OK 真账 (~30 项, v2 已就位)

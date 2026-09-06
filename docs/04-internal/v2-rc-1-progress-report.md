@@ -1,3 +1,5 @@
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+
 # v2.0.0-rc.1 整体进展报告（历史快照：2026-08-27 → `ae182c8c`）
 
 > **本文档定位**: 保留上游在 `ae182c8c` 的完整历史快照（commit 序列 + 子代理报告 + LOCKED 状态 + 当时阻塞项）。当前交付状态以 `HANDOFF-NOTES.md`、`cognitive-module-wiring.md` 与 `v2.0.0-rc-roadmap.md` 为准。

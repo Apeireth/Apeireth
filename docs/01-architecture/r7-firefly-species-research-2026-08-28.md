@@ -4,6 +4,8 @@
 > **关系**: 跟 `apeireth-true-understanding-2026-08-28.md` (物种化真理解) + `youyou-list-research-2026-08-28.md` L49 (Firefly P0) + `r7-neko-species-research-2026-08-28.md` + `r7-open-llm-vtuber-species-research-2026-08-28.md` 互补
 > **0 装诚实标 (per O-5)**: 已读用户清单 L30 (Firefly 真账 1 行) + 你you-list L49 + Apeireth 真理解 + vision.md + v2 handbook §1 + RC-7 spec + Open-LLM-VTuber 调研真账; **未 git clone Firefly 仓库** (per 主代理 brief 4h 限 + 网络 timeout); web_search auth fail + raw.githubusercontent.com timeout, **仅基于 README 推论 + 你you-list L49 + v2 真理解评估**, 真实施前主代理必亲验
 
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+
 ```
 [Document-Meta]
 Document:        docs/01-architecture/r7-firefly-species-research-2026-08-28.md

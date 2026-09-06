@@ -205,7 +205,7 @@ per `v2-architecture-reflection.md` §6 (子代理 R11 整合 v1 AwakeCompanion 
 
 | 项 | 说明 |
 |---|---|
-| **位置** | git tag + workspace.version (1.2.0 → 1.2.1 patch) |
+| **位置** | git tag + workspace.version（现 2.0.0-rc.1；下一 patch 由 release authority 拍板，旧 "1.2.0 → 1.2.1" 示例已过时） |
 | **真实现** | ✅ git tag v2.0.0-rc.1 已拍板 (per `b9026186`) |
 | **v2 OrganOrchestrator 待做** | ⏳ 实施时每 cycle 完成 `git tag v2.x+1` (per `v2-architecture-reflection.md:255-261`) |
 
@@ -400,7 +400,7 @@ per 主代理 Mavis 设计 (子代理 R11 整合 v1 AwakeCompanion 真路径):
 | **5 项 LOCKED** | ✅ 0 触碰 | per `10-locked.md` + `philosophy.md` (9 锚) |
 | **9 哲学锚本体** | ✅ 0 触碰 | per `philosophy.md` + O-6 子代理 K |
 | **13 键** | ✅ 0 触碰 | per `governance` 13 键 verdict cache |
-| **workspace.version = "1.2.0"** | ✅ 0 触碰 | per `Cargo.toml:44` |
+| **workspace.version = "2.0.0-rc.1"**（2026-08-30 RC1 发布起, per 6b81c210） | ✅ 0 触碰 | per `Cargo.toml:46` |
 | **R11 baseline** | ✅ 0 触碰 | `cognitive.rs` 12 slot 0 改 + Cargo.lock 0 行 diff (本文仅文档) |
 
 **本 spec 仅文档**: 1 个新文件 `docs/01-architecture/organ-orchestrator-spec.md` + 0 改 Rust 代码 + 0 引新 dep + 0 改 Cargo.toml + 0 改 Cargo.lock.
@@ -424,7 +424,7 @@ per `FINAL-HANDOFF-V2.0.0-RC.1.md` §10 接手人 actionable:
 1. `cargo test --workspace --locked 2>&1 | tail -3` → workspace 0 FAILED (本批 0 改 Rust 代码, 应维持 0 FAILED)
 2. `cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tail -3` → 0 warnings (本批 0 改 Rust 代码, 应维持 0)
 3. 13 键 LOCKED (per governance) → 0 改
-4. workspace.version = "1.2.0" (per `Cargo.toml:44`) → 0 改
+4. workspace.version = "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210） (per `Cargo.toml:46`) → 0 改
 5. R11 baseline (per `cognitive-module-wiring.md`) → 0 改
 
 ---

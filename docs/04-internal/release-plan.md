@@ -43,7 +43,7 @@ Status:          🟢 活跃 (v2 发布路线)
 | 轴 | 当前值 | 来源 | 备注 |
 | | | | |
 | **产品轴（git tag）** | `v2.0.0-alpha.1` → `d6910cf7` | `git tag` | 公开 semver，crate.io publish 跟这个 |
-| **workspace 轴（`Cargo.toml [workspace.package] version`）** | `1.2.0` | `Cargo.toml:41` | 内部 crate 版本（跟产品轴独立，per R148 双轨制）|
+| **workspace 轴（`Cargo.toml [workspace.package] version`）** | `2.0.0-rc.1` | `Cargo.toml:46` | 2026-08-30 RC1 发布起（per 6b81c210）；旧 "1.2.0 双轴制"（R148 双轨制）已终结，workspace 轴 = 产品轴 |
 
 ### 2. tag 历史
 
@@ -60,7 +60,7 @@ Status:          🟢 活跃 (v2 发布路线)
 |---|---|---|---|
 | **P0** | 生产 governance 接线（`build_canonical_runtime_from_env` 装 `GovernancePipeline`）| ✅ done (upstream `873d2857`) | — |
 | **P0** | 13 键 verdict cache 角色**降级完成**（哲学标准 + 5 原则洋葱映射，`RUNTIME_ENFORCED = false`） | — | — |
-| **P1** | core crate 脊椎去留（onion/gate/lifecycle/philosophy/memory 5 legacy 模块）+ `apeireth-credentials` 接线 | ⏳ | `v2.0.0-beta.1` |
+| **P1** | core crate 脊椎去留（onion/gate/lifecycle/philosophy/memory 5 legacy 模块）+ `apeireth-credentials` 接线 | 🟡 半完成（credentials 已接线：RC-9 `crates/adapters/cli/src/keyring_bootstrap.rs`；core 脊椎去留仍待） | `v2.0.0-beta.1` |
 | **P3** | M1B 记忆全量移植（ACT-R + 完整管线） | ⏳ | `v2.0.0-beta.2` |
 | **P4** | MCP 动态能力注册 | ⏳ | `v2.0.0-rc.1` |
 | **P5** | ProcessSupervisor + 进程树隔离 | ⏳ | 同上 |
@@ -76,7 +76,7 @@ Status:          🟢 活跃 (v2 发布路线)
 ### 已通过（CI 实测 2026-08-27）
 
 - [x] **构建**：`cargo build --workspace --tests --locked` ✅
-- [x] **测试**：`cargo test --workspace --tests --bins --lib --locked` (首版 2026-08-27 拍版时) → **1338 passed / 0 failed**; 现 main = `9080cc93` 实测 → **~1476 passed / 0 failed**（+138 新测试：B1 Experience 3 + P4 Perception 5 + P6 Orchestration 5 + 8 守门 + ...; **A 块后 1739 passed / 0 failed**）
+- [x] **测试**：`cargo test --workspace --tests --bins --lib --locked` (首版 2026-08-27 拍版时) → **1338 passed / 0 failed**; 现 main = `9080cc93` 实测 → **~1476 passed / 0 failed**（+138 新测试：B1 Experience 3 + P4 Perception 5 + P6 Orchestration 5 + 8 守门 + ...; **A 块后 1739 passed / 0 failed**；**2026-09-05 对账实测 3120 passed / 0 failed / 13 ignored**）
 - [x] **lint**：`rust-lint.yml`（clippy 3 档 + fmt）✅
 - [x] **fmt**：`cargo fmt --all --check` ✅
 - [x] **audit**：`cargo-audit.yml`（RUSTSEC database）✅

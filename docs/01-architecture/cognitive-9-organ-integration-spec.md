@@ -162,7 +162,7 @@
 - **9 organ 关联**: LlmFactory 新 model 即时生效 (per `v2-architecture-reflection.md:255-261`).
   9 organ 各自 trait impl 即时生效.
 - **cognitive module 关联**: 12 slot 即时激活/废弃 (forward-declared 边界严守).
-- **LOCKED**: `Cargo.toml:43` workspace.version = "1.2.0" 0 改 (per Q1 任务 #5).
+- **LOCKED**: `Cargo.toml:46` workspace.version = "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210） 0 改 (per Q1 任务 #5).
 - **真实施估时**: 1 周 (release script + 9 organ 回归 + cognitive slot 激活/废弃流程).
 
 ---
@@ -678,7 +678,7 @@ LlmFactory 真接 (v2.1) → 真渲染 Initiative.action.label() → 自然话�
 - **真接**: 主代理批 → `git tag v2.x+1` → 新版本生效.
 - **9 organ 关联**: LlmFactory 新 model 即时生效 (per `v2-architecture-reflection.md:255-261`).
 - **cognitive module 关联**: 12 slot 即时激活/废弃 (forward-declared 边界严守).
-- **LOCKED**: `Cargo.toml:43` workspace.version = "1.2.0" 0 改 (per Q1 任务 #5).
+- **LOCKED**: `Cargo.toml:46` workspace.version = "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210） 0 改 (per Q1 任务 #5).
 - **真实施估时**: 1 周 (release script + 9 organ 回归 + cognitive slot 激活/废弃).
 
 ### 9.7 自升级 cycle 时间表 (per `v2-architecture-reflection.md:298-305`)
@@ -781,7 +781,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 3. **13 键** `crates/foundation/core/src/philosophy.rs:142` `RUNTIME_ENFORCED = false`
    0 改 (LOCKED, 降级为哲学标准)
 4. **3 项不可变脊柱** `crates/foundation/core/src/onion.rs:249` 0 改 (LOCKED, 仅 rustfmt)
-5. **`Cargo.toml:43`** `workspace.version = "1.2.0"` 0 改 (LOCKED)
+5. **`Cargo.toml:46`** `workspace.version = "2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210） 0 改 (LOCKED)
 
 ### 11.2 扩展 LOCKED 边界 (本 spec 新增严守)
 
@@ -807,7 +807,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 - [ ] `organ.rs:69-89` `OrganKind` enum 0 行 diff
 - [ ] `organ.rs:157-188` `OrganOutput` enum 0 行 diff
 - [ ] `Cargo.lock` 0 行 diff
-- [ ] `Cargo.toml:43` workspace.version 0 行 diff
+- [ ] `Cargo.toml:46` workspace.version 0 行 diff
 - [ ] R11 baseline 3 值 0 行 diff
 
 ---

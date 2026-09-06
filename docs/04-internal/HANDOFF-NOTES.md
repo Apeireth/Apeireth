@@ -1,7 +1,7 @@
 # 接手人手册 (HANDOFF-NOTES.md)
 
 > **给谁看**：从零接手 v2 工程的新人. 你**不**知道这个项目, 这份文档给你**第一个**上下文.
-> **HEAD**：以 `main` 当前提交为准（`7d990297`, 2026-08-28 Round 6 完; A 块 OrganOrchestrator 完整化 + O-6 复盘 amend + 4 doc drift fix + SDK 真 bug fix + §8.5 hook + §4.5 术语表）。历史: A 块后 = `bbbfb75b` (Round 2 amend 复盘配对 commit)。
+> **HEAD**：以 `main` 当前提交为准（`7d990297`, 2026-08-28 Round 6 完; A 块 OrganOrchestrator 完整化 + O-6 复盘 amend + 4 doc drift fix + SDK 真 bug fix + §8.5 hook + §4.5 术语表）。**2026-09-05 对账注：当前 HEAD = `7647d2c9`，17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。** 历史: A 块后 = `bbbfb75b` (Round 2 amend 复盘配对 commit)。
 > **状态（2026-08-28, Final-2.1）**：RC-1/2/3/4/5/6/8/9/10 已有真实实现或适配，RC-11 v1→APX2 migration utility 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root。MiniMax provider E2E 仍需凭证；**A 块 OrganOrchestrator 完整化 5 stage 真实施已落** (amend 后 commits `c003e078` ~ `0afa733f` + 复盘 `bbbfb75b`; 详 `organ-orchestrator-completion-plan.md` + `A-block-o6-true-account.md`); 偏好学习、长程 reflection、非文本 perception 仍明确延期; frontend 对接 + RC-7 真 modality 待硬件.
 
 ```yaml
@@ -16,7 +16,7 @@ Status:          🟢 活跃 (接手人入口)
 
 ## 1. 项目 1 段简介
 
-**Apeireth** 是 Rust 写的 AI 伙伴底座 (base), 不是 AI 本身 — LLM 是 tenant, 换 model 不重做 base. v2 是从 v1 (86-crate, 完整 9 器官) 工程重构后的形态: **15-crate 工作区, 单 SQLite WAL, external hook 治理, OpenAI Chat 兼容入口**. 当前主线 = `main` 分支 (默认), 旧 v1 走 `archive/v1.0-master` (永久维护). v2 设计哲学 / 8+1 哲学锚 / 13 键 / 三洋葱 / L0 HA / 0 装 PASS 全部 **LOCKED 跨阶段 0 改**, 变的是工程形态.
+**Apeireth** 是 Rust 写的 AI 伙伴底座 (base), 不是 AI 本身 — LLM 是 tenant, 换 model 不重做 base. v2 是从 v1 (86-crate, 完整 9 器官) 工程重构后的形态: **17-crate 工作区, 单 SQLite WAL, external hook 治理, OpenAI Chat 兼容入口**. 当前主线 = `main` 分支 (默认), 旧 v1 走 `archive/v1.0-master` (永久维护). v2 设计哲学 / 9 哲学锚 / 13 键 / 三洋葱 / L0 HA / 0 装 PASS 全部 **LOCKED 跨阶段 0 改**, 变的是工程形态.
 
 ---
 
@@ -63,23 +63,25 @@ Status:          🟢 活跃 (接手人入口)
 
 ---
 
-## 4. 15-crate 拓扑 + 7 capability trait 边界
+## 4. 17-crate 拓扑 + 7 capability trait 边界
 
 ```
 crates/
-├── foundation/         (7 — 抽象 / 协议 / 治理)
+├── foundation/         (6 — 抽象 / 协议 / 治理)
 │   ├── core/           (13 键哲学 + L2 哲学标准)
 │   ├── protocol/       (NormalizedTool + 协议归一化)
 │   ├── plugin/         ◀ 7 capability trait 集中地 (O-6 重构后)
 │   ├── governance/     (L1 hook 闸: Permission / CredentialDisclosure / PromptInjection)
 │   ├── credentials/    (KeyringCredentialResolver, 4 backend)
-│   └── orchestration/  (Council + TeamLead + Orchestrator trait, alpha 阶段 0 装)
-├── engine/             (5 — 执行 / 调度)
+│   └── orchestration/  (Council + TeamLead + Orchestrator trait + Research* 策略默认关闭)
+├── engine/             (7 — 执行 / 调度)
 │   ├── runtime/        (canonical agent loop + governance pipeline 接线)
+│   ├── runtime-assembly/ (concrete assembly: cognitive modules + production composition root, 2026-09-04 抽出)
 │   ├── provider/       (3 provider: MiniMax / Anthropic / OpenAI-compatible)
 │   ├── storage/        (SQLite WAL + reader pool + migrations)
-│   ├── memory/         (M1B 记忆 primitive, trait 边界已锁)
-│   └── perception/     (PerceptionInput 5 modality, alpha Text impl)
+│   ├── memory/         (M1B 记忆 primitive + Research* 模块, trait 边界已锁)
+│   ├── perception/     (Voice/Vision backend 真实现, 默认不接线)
+│   └── organ/          (9 organ 真移植: E4/F1/F4/F6/W1/W2/W3/E7/Memory)
 ├── capabilities/       (1)
 │   └── tools/          (5 内置工具: filesystem/search/repo 只读默认开; shell/fetch opt-in)
 └── adapters/           (3 — 入口)
@@ -109,7 +111,7 @@ crates/
 | **9 哲学锚** | `docs/01-architecture/philosophy.md` | S-1~3 + O-1~6 全部 LOCKED, 0 增 0 减 0 改 |
 | **13 键 verdict cache** | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` (永久降级为哲学标准, **不**接 runtime 强制) |
 | **3 项不可变脊柱** | `crates/foundation/governance/` | Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义 |
-| **workspace.version** | `Cargo.toml:43` | `version = "1.2.0"` (产品轴 tag + workspace 轴双轴制) |
+| **workspace.version** | `Cargo.toml:46` | `version = "2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210；旧 1.2.0 双轴制终结） |
 | **R11 baseline 3 值** | ASI R-Measure | `0.8682 / 0.8532 / 0.9063` 数字严守 (per `Cargo.toml:94` 注释) |
 
 **子代理反馈已修 2 项 (本批)**：

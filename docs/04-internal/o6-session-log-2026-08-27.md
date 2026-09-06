@@ -20,7 +20,7 @@ Status:          📝 工作日志 (Reflective, not authoritative)
 
 | Commit | 内容 | O-6 锚 #9 兑现 |
 |---|---|---|
-| `d6910cf7` | v2.0.0-alpha.1 tag 晋升 main (15-crate 工程重构) | - |
+| `d6910cf7` | v2.0.0-alpha.1 tag 晋升 main (15-crate (当时) 工程重构) | - |
 | `bad99fd4` | P5 B5 process supervisor trait 骨架 | ✅ |
 | `9819db2b` | 同上 (gitignore fix 配套) | ✅ |
 | `5b132988` | A4 MemoryBackend trait + 3 impl | ✅ |

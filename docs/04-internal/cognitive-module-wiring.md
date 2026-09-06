@@ -27,7 +27,7 @@ additions are explicit and remain subject to the runtime's duplicate-id check.
 | `cognitive.council` | runtime cognitive adapter | `AfterModelResponse` | WIRED, OFF by default | bounded typed advisor path through `ModuleInvoker`; no tool dispatch |
 | `cognitive.self_assessment` | runtime cognitive adapter | `AfterTurn` | WIRED, Judge-backed | records only a real Judge result; no fabricated heuristic score |
 | `cognitive.memory_writeback` | runtime cognitive adapter | `AfterTurn` | WIRED | successful final turn only; append-only user/assistant Episodes |
-| `cognitive.preference_learning` | deferred, no owner yet | — | DEFERRED | no evidence-extraction side-call or implicit preference mutation |
+| `cognitive.preference_learning` | runtime cognitive adapter | `AfterTurn` | WIRED, OFF by default | writes learned preferences for later turns (`ProductionModulesConfig.preference_learning` default false; `canonical_preference_learning` 14 tests); `topic_predictor` still not wired into recall |
 | `cognitive.critic` | Judge owner | — | DEFERRED INTO JUDGE | Judge's bounded critique is the single critique path; no duplicate evaluator |
 | `cognitive.reflection` | SelfAssessment owner | `AfterTurn` | DEFERRED INTO SELF-ASSESSMENT | current-turn assessment is distinct from durable memory; long-term reflection pipeline remains future work |
 | `cognitive.planner` | orchestration service | — | NOT AN AGENT MODULE | no per-turn planner loop; future adapter must remain an adapter |
@@ -39,7 +39,7 @@ Registration order is deterministic:
 ```text
 TurnStart:          memory_recall -> preference_recall
 AfterModelResponse: judge -> council
-AfterTurn:          self_assessment -> memory_writeback
+AfterTurn:          self_assessment -> memory_writeback -> preference_learning
 ```
 
 The runtime remains responsible for hook lifecycle, directive precedence,

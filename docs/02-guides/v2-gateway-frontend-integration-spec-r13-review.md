@@ -256,8 +256,8 @@ $ git log ef075420..HEAD --oneline | Measure-Object
 
 $ cargo test --workspace --locked 2>&1 | tail -3
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-[子代理 R13 实测: 95 test binary, 1713 passed, 0 failed, 12 ignored]
-# 真账核验: 1713 passed 0 FAILED (per 子代理 Z 独立审计, 与 R9 spec §11.1 一致)
+[子代理 R13 实测: 95 test binary, 1713 passed, 0 failed, 12 ignored]（2026-09-05 对账：当前 3120 passed）
+# 真账核验: 1713 passed 0 FAILED (per 子代理 Z 独立审计, 与 R9 spec §11.1 一致)（2026-09-05 对账：当前 3120 passed）
 
 $ cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tail -3
 Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
@@ -297,8 +297,8 @@ per R11 spec §9 + R10 spec §11 + 主代理整合文档 §1.3, 子代理 R13 �
 | **5 项 LOCKED** | ✅ 0 触碰 | per `10-locked.md` + `philosophy.md` (9 锚) |
 | **9 哲学锚本体** (`eight_anchors.rs:58-79`) | ✅ 0 触碰 | per `philosophy.md` + O-6 子代理 K |
 | **13 键** (`philosophy.rs:142 RUNTIME_ENFORCED = false`) | ✅ 0 触碰 | per `governance` 13 键 verdict cache |
-| **workspace.version = "1.2.0"** (`Cargo.toml:43`) | ✅ 0 触碰 | per `Cargo.toml:44` 0 改 |
-| **R11 baseline** (`cognitive.rs` 12 slot + Cargo.lock) | ✅ 0 触碰 | per `cargo test --locked` 1713 passed 0 FAILED |
+| **workspace.version = "2.0.0-rc.1"**（2026-08-30 RC1 发布起, per 6b81c210）(`Cargo.toml:46`) | ✅ 0 触碰 | per `Cargo.toml:46` 0 改 |
+| **R11 baseline** (`cognitive.rs` 12 slot + Cargo.lock) | ✅ 0 触碰 | per `cargo test --locked` 1713 passed 0 FAILED（2026-09-05 对账：当前 3120 passed） |
 
 **R13 本 spec 仅文档**:
 - 1 个新文件 `docs/02-guides/v2-gateway-frontend-integration-spec-r13-review.md` (本文)
@@ -333,7 +333,7 @@ per `v2.0.0-release-path-integration.md:218-222` + R14 RC-7 spec + 子代理 R13
 - ✅ R13 接力审 R9 quickstart 找到 1 处错账 (§1 §23)
 - ✅ R13 补 frontend 真实施准备 checklist (6 周分阶段, §3)
 - ✅ R13 标 R12 working tree 已起 (vs R9 spec 标的 "R11 待实施" 旧账)
-- ✅ R13 标 1713 tests 真账 (核验 cargo test --workspace --locked)
+- ✅ R13 标 1713 tests 真账 (核验 cargo test --workspace --locked)（2026-09-05 对账：当前 3120 passed）
 
 ---
 

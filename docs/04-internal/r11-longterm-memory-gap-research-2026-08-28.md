@@ -1,3 +1,5 @@
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+
 # Apeireth v2 长期记忆塑形 gap 真调研 (R11-LongTermMemory, 2026-08-28)
 
 > **作者**: sub-agent R11-LongTermMemory (主代理 Mavis 派单, ≤4h)

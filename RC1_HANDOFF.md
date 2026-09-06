@@ -1,5 +1,7 @@
 # Apeireth 2.0 RC1 Preflight Handoff
 
+> **2026-09-05 对账批状态注记（主代理实测）**：本文件写于 2026-08-31（H: 盘工作树）。现状：tag `v2.0.0-rc.1` 已打（→ `854831fc`，2026-08-30）；release authority 关闭已提交（`a0417f55`，本仓库 hash；原文引用的 `f16e11b`/`8db752d3` 为候选机 hash，任何 ref 均不可解析）；rc 分支已完全并入 main（merge-base = rc tip）。**仍缺的证据（诚实保留为待办）**：装机 MSI/NSIS E2E、卸载残留验证、真 provider GUI E2E、远端 Windows 验证（原文 SSH 被拒后无新进展）。§Next Required Steps 的 Tauri clippy/生产打包在本机未重跑——workspace 级 `cargo clippy --workspace --all-targets --locked -- -D warnings` 已 0 警告（2026-09-05 实测），但 Tauri shell 的独立 clippy/安装包未重验。
+
 **Date:** 2026-08-31
 **Purpose:** Continue RC1 packaging and installed-product validation from the isolated candidate worktree.
 

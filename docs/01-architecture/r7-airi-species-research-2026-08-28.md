@@ -5,6 +5,8 @@
 > **关系**: 跟 `apeireth-true-understanding-2026-08-28.md` (物种化真理解) + `youyou-list-research-2026-08-28.md` L47 (AIRI P0 HIGH) + `round-10-youyou-list-mainagent-verify-2026-08-28.md` §2.1.1 互补; 跟 R7-N.E.K.O / R7-Firefly / R7-Open-LLM-VTuber / R7-Mio 同 P0 5 sub-agent 真调研
 > **0 装诚实标**: 已读用户清单 L13 (AIRI 真账) + 你you-list L47 + Apeireth 真理解 §1-3 + vision.md L29-49 + v2 handbook §1 (完整真账); **未 git clone AIRI 仓库** (per 主代理 brief 4h 限 + github 直连 firewall 验证 HTTP 408 + web_search auth fail 双 0 装); 仅基于用户清单 L13 + 你you-list L47 + v2 真理解评估, 真实施前主代理必亲验
 
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+
 ```
 [Document-Meta]
 Document:        docs/01-architecture/r7-airi-species-research-2026-08-28.md

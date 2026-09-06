@@ -51,37 +51,41 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 
 ### 1.3 工程哲学（不漂移）
 
-8 哲学锚（per [philosophy.md](../01-architecture/philosophy.md)）必穿透：S-1 北极星 / S-2 实事求是 / S-3 质量工程化 / O-1 安全优先 / O-2 走在前前 / O-3 干到底 / O-4 接手 / O-5 不假装。
+9 哲学锚（per [philosophy.md](../01-architecture/philosophy.md)）必穿透：S-1 北极星 / S-2 实事求是 / S-3 质量工程化 / O-1 安全优先 / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装 / O-6 永远追求最优。
 
 3 不漂移（per [ROADMAP.md](../../ROADMAP.md) §5 + conventions/03-adr.md）：
 - **0 触碰** 3 项不可变脊柱（Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义）
-- **0 改** workspace.version（当前 1.2.0；产品轴 vs workspace 轴分离）
+- **随 release 推进** workspace.version（当前 2.0.0-rc.1, 2026-08-30 RC1 发布起 per 6b81c210；旧 "1.2.0 双轴制" 已终结，workspace 轴 = 产品轴）
 - **0 改** R11 baseline 3 值（0.8682/0.8532/0.906）
 
 ---
 
-## 2. 13-crate 模块地图（v2 当前真实）
+## 2. 17-crate 模块地图（v2 当前真实，2026-09-05 实测）
 
-来源：`[ARCHITECTURE.md](../../ARCHITECTURE.md)` + `[architecture.md](../01-architecture/architecture.md)` + 实测依赖图。
+来源：根 `Cargo.toml` members（17）+ [`ARCHITECTURE.md`](../../ARCHITECTURE.md) + `cargo metadata --no-deps` 实测依赖边（2026-09-05）。
 
-### 2.1 Foundation（5 crate, 稳定契约层）
+### 2.1 Foundation（6 crate, 稳定契约层）
 
 | crate | 职责 | 公共面要点 | 关键源文件 |
-| | | |
-| `apeireth-core` | 域原语（kernel: ids/time/lifecycle/event/metadata/errors） + 旧"哲学"模块保留（onion/gate/lifecycle/memory/philosophy 在 crate 根 re-export，P2 决策见 ROADMAP）| `kernel::CapabilityId / PluginId / RequestId / SessionId / TraceId / Clock / Metadata` | `src/kernel/{ids,time,lifecycle,event,metadata,error}.rs` |
+|---|---|---|---|
+| `apeireth-core` | 域原语（kernel: ids/time/lifecycle/event/metadata/errors）+ 9 哲学锚 + 13 键 + 3 不可变脊柱 + 旧"哲学"模块保留（onion/gate/lifecycle/memory/philosophy 在 crate 根 re-export，P2 决策见 ROADMAP） | `kernel::CapabilityId / PluginId / RequestId / SessionId / TraceId / Clock / Metadata` | `src/kernel/{ids,time,lifecycle,event,metadata,error}.rs` |
 | `apeireth-protocol` | vendor-wire 归一化（OpenAI Chat/Responses/Anthropic/Gemini）→ `NormalizedRequest/Response/Tool` | `NormalizedTool::function(name, desc, schema)` 工具声明 | `src/canonical/` |
-| `apeireth-plugin` | plugin + capability 单一契约（两个 registry 唯一事实源）| `Plugin`/`ToolCapability`/`ProviderCapability`/`CredentialResolver` | `src/{plugin,tool,provider,manifest,registry,manager,capability,credentials}.rs` |
+| `apeireth-plugin` | plugin + capability 单一契约（两个 registry 唯一事实源）+ 7 capability trait | `Plugin`/`ToolCapability`/`ProviderCapability`/`CredentialResolver`/`MemoryBackend`/`PreferenceStore` 等 | `src/{plugin,tool,provider,manifest,registry,manager,capability,credentials}.rs` |
 | `apeireth-governance` | 决策 trait + hook 实现（policy 库） | `AllowAll` /DenyCapabilities /MaxRounds /GovernancePipeline /PermissionGovernanceHook /PromptInjectionHook /CredentialDisclosureHook /AuditHashChain | `src/{lib,permission,input_security,audit}.rs` |
-| `apeireth-credentials` | **🔴 孤儿**：keyring + encrypted file backend；生产用 provider/credentials::EnvCredentialResolver | `Secret<T>` /`CredentialsStore` /`KeyringSelector`（待接线） | 整 crate 未被依赖（grep 验证） |
+| `apeireth-credentials` | keyring / encrypted-file / in-memory backend + `KeyringCredentialResolver`；**已接线**（RC-9：CLI bootstrap `crates/adapters/cli/src/keyring_bootstrap.rs`，无 env 时 fallback `EnvCredentialResolver`） | `Secret<T>` /`CredentialsStore` /`KeyringSelector` | 依赖方：`apeireth-cli`（cargo metadata 实测） |
+| `apeireth-orchestration` | Council + TeamLead + Orchestrator trait + Research* 保留策略（StackPin/ShadowLogger/VaultLruFtrl，默认关闭） | `Council` / `Orchestrator` / `ResearchStackPinPolicy` / `ResearchShadowLogger` / `ResearchVaultLruFtrl` | `src/{council,continuation,context_rot,research_*}.rs` |
 
-### 2.2 Engine（4 crate, 运行时执行）
+### 2.2 Engine（7 crate, 运行时执行）
 
 | crate | 职责 | 公共面要点 |
-| | | |
-| `apeireth-runtime` | **canonical agent loop 单一入口**（execute.rs 1189 行）+ governance + provider 选择 + tool dispatch + approval 生命周期 + trace | `Runtime::builder().with_governance(...).with_plugin(...).build()` / `Runtime::execute(req)` / `Runtime::execute_outcome(req)` |
+|---|---|---|
+| `apeireth-runtime` | **canonical agent loop 单一入口**（execute.rs）+ governance + provider 选择 + tool dispatch + approval 生命周期 + trace | `Runtime::builder().with_governance(...).with_plugin(...).build()` / `Runtime::execute(req)` / `Runtime::execute_outcome(req)` |
+| `apeireth-runtime-assembly` | **concrete assembly**（2026-09-04 `0e542d03` 从 runtime 抽出）：cognitive modules + Organ bridge + tool wiring + SQLite session adapter + production composition root | `ProductionModulesConfig` / `MemoryRecallModule` / `PreferenceRecallModule` / `PreferenceLearningModule` / `JudgeModule` / `CouncilModule` / `OrganModule` / `UpgradeCycle` |
 | `apeireth-provider` | 3 canonical provider（MiniMax/Anthropic/OpenAI-compatible）+ EnvCredentialResolver | `MinimaxProviderPlugin::from_env()` 等；环境变量：APEIRETH_API_KEY / APEIRETH_ANTHROPIC_KEY / OPENAI_API_KEY |
 | `apeireth-storage` | SQLite pool + WAL + `PRAGMA user_version` 迁移 | `SqlitePool::open` + `Migrations` |
-| `apeireth-memory` | 域原语复用 + vector/graph/检索契约 primitive（M1B 部分落地） | `Episode` / `Session` / `IdentityCard`（**走 `apeireth_core::Episode` 等 legacy re-export**——P2 drain 排期见 ROADMAP）|
+| `apeireth-memory` | 域原语 + BM25/向量 RRF 混合检索 + preference/approval/reflexion + Research* 模块（默认关闭） | `Episode` / `Session` / `TopicPredictor`（**仍未接线进 PreferenceRecallModule**）/ `ResearchRoamingMemory` / `research_check_non_interference` |
+| `apeireth-perception` | Voice/Vision 真后端：`WhisperHttpBackend`（OpenAI/MiniMax）、`XcapVisionBackend`（仅 Windows 硬件验证）；**默认不接线，opt-in 构造** | `WhisperHttpBackend::openai(creds)` / `XcapVisionBackend::default_monitor()` |
+| `apeireth-organ` | 9 organ 真移植（E4/F1/F4/F6/W1/W2/W3/E7/Memory） | `curiosity.rs` / `emotion_memory.rs` / `hypothesis.rs` / `value_cases.rs` / `world_model.rs` / `causal_world_model.rs` / `emergence.rs` / `memory.rs` |
 
 ### 2.3 Capabilities（1 crate, 唯一 ProcessExecutor 边界）
 
@@ -99,29 +103,35 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 | `apeireth-cli` | `apeireth session / chat / gateway serve` 三命令入口 | 走 `build_canonical_runtime_from_env`，**已挂 GovernancePipeline = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`**（upstream `873d2857`）；MaxRounds 结构性，AuditHashChain 按部署需要挂 |
 | `apeireth-sdk` | **stub 模式**：6 工具白名单 + 鉴权 5 组件 + WS 8 帧协议类型已就位；真实 HTTP/WS 走 `unimplemented!()` 守门；R21 真接 | 真实用户 = R21 后才出现 |
 
-### 2.5 依赖 DAG（实测，13 crate）
+### 2.5 依赖 DAG（`cargo metadata --no-deps` 实测，17 crate，2026-09-05）
 
 ```
 foundation/
-  core           (leaf)
-  credentials    (leaf, 孤儿)
-  protocol       -> core
-  governance     -> core
-  plugin         -> core, protocol
+  core            (leaf)
+  protocol        -> core
+  plugin          -> core, protocol, orchestration
+  governance      -> core
+  credentials     -> plugin
+  orchestration   -> core
 engine/
-  storage        (leaf)
-  memory         -> core, storage
-  provider       -> core, plugin, protocol
-  runtime        -> core, protocol, plugin, governance, storage
+  storage         (leaf)
+  memory          -> core, plugin, storage
+  provider        -> core, plugin, protocol, orchestration
+  perception      -> core, plugin
+  organ           -> core, plugin, orchestration
+  runtime         -> core, protocol, plugin, governance, orchestration, provider
+  runtime-assembly -> core, protocol, plugin, governance, orchestration, runtime,
+                      storage, memory, organ, tools-canonical
 capabilities/
-  tools          -> core, plugin, protocol
+  tools           -> core, plugin, protocol
 adapters/
-  gateway        -> core, protocol, runtime
-  cli            -> core, gateway, plugin, provider, runtime, tools, protocol(SDK 路径走 protocol)
-  sdk            -> protocol
+  gateway         -> core, protocol, runtime, governance, plugin, provider
+  cli             -> 全仓 composition root（core/protocol/plugin/governance/credentials/
+                      orchestration/runtime/runtime-assembly/provider/storage/memory/gateway）
+  sdk             -> protocol
 ```
 
-**无环**。**无违规边**（foundation ← engine ← capabilities ← adapters 单向）。验证脚本：根 [ARCHITECTURE.md](../../ARCHITECTURE.md) "Effective package edges" 表 + `cargo metadata --no-deps` 解析（13 edge counts 对得上）。
+**无环**。依赖方向与 [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §Dependency direction 一致：foundation 不依赖 adapters；`runtime-assembly` 拥有 concrete wiring（含 tools 注册），是 engine 内唯一合法依赖 capabilities 的装配点。
 
 ---
 
@@ -133,7 +143,7 @@ adapters/
 
 ```bash
 make check       # cargo check --workspace --all-targets
-make test        # cargo test --workspace --all-targets --locked (~1476 tests, v2 main = 9080cc93)
+make test        # cargo test --workspace --all-targets --locked (2026-09-05 实测 3120 passed / 0 failed / 13 ignored)
 make fmt         # cargo fmt --all
 make ci          # make ci-build + ci-test + ci-release (一键)
 ```
@@ -256,11 +266,11 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 
 **0 触碰**：
 - 3 项不可变脊柱（Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义）——见 governance + core/src/philosophy.rs
-- workspace.version 1.2.0（产品轴 vs workspace 轴分离，根 [ROADMAP.md](../../ROADMAP.md) §0）
+- workspace.version 2.0.0-rc.1（2026-08-30 RC1 发布起；旧 1.2.0 双轴制终结，根 [ROADMAP.md](../../ROADMAP.md) §3）
 
 **0 改**：
 - R11 baseline 3 值（0.8682/0.8532/0.906，per [11-baseline.md](../../docs/archive/conventions/11-baseline.md)）——仅守，代码不在当前工作区，约束在 git 历史
-- 8 哲学锚穿透（per [09-anchor.md](../../docs/archive/conventions/09-anchor.md)）
+- 9 哲学锚穿透（per [09-anchor.md](../../docs/archive/conventions/09-anchor.md)；O-6 永远追求最优 2026-08-27 登记）
 
 **R 假装**：
 - v2 路径接 governance hook 之外的任何机制（per ROADMAP P0 = 接线 hook 是排期，不是完成）— **上游 `873d2857` 已落实 P0 的 3 个核心 hook**（Permission + 凭据泄漏 + 注入检测），其余按部署需要
