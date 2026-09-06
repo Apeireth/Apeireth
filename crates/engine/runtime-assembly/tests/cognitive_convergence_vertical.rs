@@ -16,12 +16,13 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
+use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, RequestId, SessionId, TraceId};
 use apeireth_governance::GovernancePipeline;
 use apeireth_guard::{BehaviorChainGuardHook, DatasetRecorder};
 use apeireth_memory::{
-    EmbeddingError, EmbeddingProvider, MemoryCoordinator, MemoryGovernanceStore, MemoryRecallQuery,
-    MemoryScope, MemoryWritebackEntry, ScopedMemoryBackend, SqliteMemoryStore,
+    backend::sqlite::SqliteBackend, EmbeddingError, EmbeddingProvider, MemoryCoordinator,
+    MemoryGovernanceStore, MemoryRecallQuery, MemoryScope, MemoryWritebackEntry,
+    ScopedMemoryBackend, SqliteMemoryStore,
 };
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::{
@@ -34,6 +35,7 @@ use apeireth_protocol::canonical::{
 };
 use apeireth_runtime::canonical::{Runtime, RuntimeEvent, RuntimeEventSink, TurnRequest};
 use apeireth_runtime_assembly::canonical::guard_observer::GuardDatasetObserver;
+use apeireth_storage::{SqliteConnectionPool, StorageError};
 use async_trait::async_trait;
 use tempfile::tempdir;
 
@@ -208,6 +210,22 @@ impl RuntimeEventSink for RecordingEventSink {
 
 struct DeterministicFakeEmbeddingProvider;
 
+async fn production_sqlite_backend() -> Arc<SqliteBackend> {
+    let pool = Arc::new(SqliteConnectionPool::in_memory().await.unwrap());
+    let migration_pool = Arc::clone(&pool);
+    migration_pool
+        .write(|conn| {
+            apeireth_memory::run_migrations(conn).map_err(|error| StorageError::Migration {
+                version: 0,
+                name: "cognitive_scope_vertical",
+                message: error.to_string(),
+            })
+        })
+        .await
+        .unwrap();
+    Arc::new(SqliteBackend::from_arc(pool))
+}
+
 #[async_trait]
 impl EmbeddingProvider for DeterministicFakeEmbeddingProvider {
     async fn embed(&self, text: &str) -> Result<Vec<f32>, EmbeddingError> {
@@ -312,7 +330,7 @@ async fn test_t2_dataset_privacy_safe_taxonomy() {
         .await
         .unwrap();
 
-    runtime.add_event_sink(observer);
+    runtime.add_event_sink(observer.clone());
 
     // Execute turn that fails with sensitive upstream error
     let turn_res = runtime
@@ -352,6 +370,21 @@ async fn test_t2_dataset_privacy_safe_taxonomy() {
         Some("provider_failure"),
         "outcome must use controlled safe taxonomy"
     );
+
+    // A direct runtime failure event carries a private diagnostic at the
+    // event boundary. The dataset observer must classify it and discard the
+    // diagnostic rather than serializing the error string.
+    observer.emit(RuntimeEvent::TurnFailed {
+        session: SessionId::new(),
+        request: RequestId::new(),
+        trace: TraceId::new(),
+        error: "Bearer sk-test-secret https://private.example/user/file".into(),
+    });
+    let raw_jsonl = std::fs::read_to_string(&jsonl_path).unwrap();
+    for forbidden in ["sk-test-secret", "private.example", "/user/file"] {
+        assert!(!raw_jsonl.contains(forbidden), "dataset leaked {forbidden}");
+    }
+    assert!(raw_jsonl.contains("runtime_failure"));
 }
 
 // ---------------------------------------------------------------------------
@@ -895,5 +928,137 @@ async fn test_t11_content_update_invalidates_vector() {
     assert!(
         meta_after.get("vector").is_none(),
         "cached vector must be stripped on content update to prevent stale vector matches"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T12: Production SqliteBackend Scope Matrix
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_t12_production_sqlite_backend_scope_and_legacy_boundary() {
+    let store = production_sqlite_backend().await;
+    let backend: Arc<dyn MemoryBackend> = store.clone();
+    let governance: Arc<dyn MemoryGovernanceStore> = store.clone();
+    let scoped: Arc<dyn ScopedMemoryBackend> = store.clone();
+    let coordinator =
+        Arc::new(MemoryCoordinator::new(backend, governance).with_scoped_backend(scoped));
+
+    let mut global = MemoryWritebackEntry::new(
+        "session-production-a",
+        "assistant",
+        "Production global invariant: the runtime kernel is deterministic",
+    );
+    global.scope = MemoryScope::Global;
+    coordinator.writeback(&global).unwrap();
+
+    let mut project = MemoryWritebackEntry::new(
+        "session-production-a",
+        "user",
+        "Production project alpha deployment constraint",
+    );
+    project.scope = MemoryScope::Project {
+        project_id: "alpha".into(),
+    };
+    coordinator.writeback(&project).unwrap();
+
+    let mut user = MemoryWritebackEntry::new(
+        "session-production-a",
+        "user",
+        "Production user preference is compact output",
+    );
+    user.scope = MemoryScope::User {
+        user_id: "user-production".into(),
+    };
+    coordinator.writeback(&user).unwrap();
+
+    let mut persona = MemoryWritebackEntry::new(
+        "session-production-a",
+        "user",
+        "Production persona prefers a concise engineering voice",
+    );
+    persona.scope = MemoryScope::Persona {
+        user_id: "user-production".into(),
+        persona_id: "persona-production".into(),
+    };
+    coordinator.writeback(&persona).unwrap();
+
+    let global_query =
+        MemoryRecallQuery::new("session-production-b", "runtime kernel deterministic")
+            .with_visible_scopes(vec![
+                MemoryScope::Session {
+                    session_id: "session-production-b".into(),
+                },
+                MemoryScope::Global,
+            ]);
+    assert_eq!(coordinator.recall(&global_query).unwrap().items.len(), 1);
+
+    let project_alpha = MemoryRecallQuery::new("session-production-b", "project alpha deployment")
+        .with_visible_scopes(vec![MemoryScope::Project {
+            project_id: "alpha".into(),
+        }]);
+    assert_eq!(coordinator.recall(&project_alpha).unwrap().items.len(), 1);
+    let project_beta = MemoryRecallQuery::new("session-production-b", "project alpha deployment")
+        .with_visible_scopes(vec![MemoryScope::Project {
+            project_id: "beta".into(),
+        }]);
+    assert!(coordinator.recall(&project_beta).unwrap().items.is_empty());
+
+    let user_query = MemoryRecallQuery::new("session-production-b", "compact output")
+        .with_visible_scopes(vec![MemoryScope::User {
+            user_id: "user-production".into(),
+        }]);
+    assert_eq!(coordinator.recall(&user_query).unwrap().items.len(), 1);
+
+    let persona_query = MemoryRecallQuery::new("session-production-b", "concise engineering voice")
+        .with_visible_scopes(vec![MemoryScope::Persona {
+            user_id: "user-production".into(),
+            persona_id: "persona-production".into(),
+        }]);
+    assert_eq!(coordinator.recall(&persona_query).unwrap().items.len(), 1);
+    let wrong_persona = MemoryRecallQuery::new("session-production-b", "concise engineering voice")
+        .with_visible_scopes(vec![MemoryScope::Persona {
+            user_id: "user-production".into(),
+            persona_id: "persona-other".into(),
+        }]);
+    assert!(coordinator.recall(&wrong_persona).unwrap().items.is_empty());
+
+    // A legacy row with no sidecar metadata is visible only to its source
+    // session, even when a caller also requests Global scope.
+    store
+        .pool()
+        .write(|conn| {
+            conn.execute(
+                "INSERT INTO episodes (id, continuity_id, timestamp, role, content, session_id)
+                 VALUES ('ep-production-legacy', 'legacy', 1700000000, 'user',
+                         'Production legacy session-bound record', 'session-production-legacy')",
+                [],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    let legacy_source =
+        MemoryRecallQuery::new("session-production-legacy", "legacy session-bound record")
+            .with_visible_scopes(vec![MemoryScope::Session {
+                session_id: "session-production-legacy".into(),
+            }]);
+    assert_eq!(coordinator.recall(&legacy_source).unwrap().items.len(), 1);
+    let legacy_other =
+        MemoryRecallQuery::new("session-production-other", "legacy session-bound record")
+            .with_visible_scopes(vec![
+                MemoryScope::Session {
+                    session_id: "session-production-other".into(),
+                },
+                MemoryScope::Global,
+            ]);
+    let legacy_other_result = coordinator.recall(&legacy_other).unwrap();
+    assert!(
+        !legacy_other_result
+            .items
+            .iter()
+            .any(|item| item.id == "ep-production-legacy"),
+        "legacy row leaked to other scope: {:?}",
+        legacy_other_result.items
     );
 }

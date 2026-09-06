@@ -13,11 +13,13 @@
 use std::sync::Mutex;
 
 use apeireth_cli::{
-    build_canonical_runtime_from_env, execute_canonical_cli_turn, CanonicalCliTurn,
+    build_canonical_runtime_from_env, build_canonical_runtime_from_env_with_observability,
+    execute_canonical_cli_turn, CanonicalCliTurn,
 };
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
 use serde_json::Value;
+use tempfile::tempdir;
 
 /// Serializes env-mutating tests (std::env is process-global).
 static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -76,6 +78,61 @@ const SUCCESS_BODY: &str = r#"{
     "choices": [{"index": 0, "message": {"role": "assistant", "content": "hello from canonical cli"}, "finish_reason": "stop"}],
     "usage": {"prompt_tokens": 5, "completion_tokens": 4, "total_tokens": 9}
 }"#;
+
+#[tokio::test]
+async fn the_cli_bootstrap_fans_out_guard_dataset_and_trace_audit_observation() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let dir = tempdir().unwrap();
+    let base_url = mock_vendor(SUCCESS_BODY).await;
+    let dataset_path = dir.path().join("guard-dataset.jsonl");
+    let cognitive_db = dir.path().join("cognitive.sqlite3");
+    let session_db = dir.path().join("sessions.sqlite3");
+    let data_dir = dir.path().join("data");
+
+    let _g_key = EnvGuard::set("APEIRETH_API_KEY", Some("sk-fake-cli-fanout"));
+    let _g_url = EnvGuard::set("APEIRETH_API_URL", Some(&base_url));
+    let _g_models = EnvGuard::set("APEIRETH_API_MODELS", Some("MiniMax-M3"));
+    let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("MiniMax-M3"));
+    let _g_ant_key = EnvGuard::set("APEIRETH_ANTHROPIC_KEY", None);
+    let _g_openai_models = EnvGuard::set("APEIRETH_OPENAI_MODELS", None);
+    let _g_local_read = EnvGuard::set("APEIRETH_ENABLE_LOCAL_READ_TOOLS", None);
+    let _g_dataset_enabled = EnvGuard::set("APEIRETH_GUARD_DATASET_ENABLED", Some("1"));
+    let dataset_path = dataset_path.to_string_lossy().into_owned();
+    let _g_dataset_path = EnvGuard::set("APEIRETH_GUARD_DATASET_PATH", Some(&dataset_path));
+    let cognitive_db = cognitive_db.to_string_lossy().into_owned();
+    let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
+    let session_db = session_db.to_string_lossy().into_owned();
+    let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
+    let data_dir = data_dir.to_string_lossy().into_owned();
+    let _g_data_dir = EnvGuard::set("APEIRETH_DATA_DIR", Some(&data_dir));
+
+    let (runtime, observer) = build_canonical_runtime_from_env_with_observability()
+        .await
+        .expect("the production CLI bootstrap builds with all observers");
+    let CanonicalCliTurn::Completed(outcome) =
+        execute_canonical_cli_turn(&runtime, "hello", None, None)
+            .await
+            .expect("the observed CLI turn completes")
+    else {
+        panic!("expected a completed turn");
+    };
+    assert_eq!(outcome.served_by.as_str(), "provider.minimax");
+    observer.flush().await;
+
+    let dataset = std::fs::read_to_string(&dataset_path).expect("dataset JSONL exists");
+    assert!(dataset.contains(r#""record_type":"outcome""#));
+    assert!(dataset.contains(r#""execution_outcome":"success""#));
+    assert!(
+        std::fs::read_to_string(dir.path().join("data/traces.jsonl"))
+            .expect("trace archive exists")
+            .contains("provider")
+    );
+    assert!(
+        std::fs::read_to_string(dir.path().join("data/daemon-audit.jsonl"))
+            .expect("audit archive exists")
+            .contains("chat.turn.completed")
+    );
+}
 
 #[tokio::test]
 async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax() {

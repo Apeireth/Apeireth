@@ -89,6 +89,18 @@ impl GuardExecutionOutcome {
             other => Self::from_failure_hint(other).as_str(),
         }
     }
+
+    /// Normalize a human approval label without retaining an optional private
+    /// rejection reason or any caller-provided diagnostic text.
+    pub fn normalize_approval(decision: &str) -> &'static str {
+        match decision.trim().to_ascii_lowercase().as_str() {
+            "approved" | "approve" => "approved",
+            "rejected" | "reject" | "denied" => "rejected",
+            "cancelled" | "canceled" | "cancel" => "cancelled",
+            "expired" => "expired",
+            _ => "unknown",
+        }
+    }
 }
 
 /// A single entry in the event-sourced Guard dataset.
@@ -288,7 +300,9 @@ impl DatasetRecorder {
             action_id: action_id.map(str::to_string),
             tool_call_id: tool_call_id.map(str::to_string),
             approval_id: approval_id.map(str::to_string),
-            human_approval: human_approval.map(str::to_string),
+            human_approval: human_approval
+                .map(GuardExecutionOutcome::normalize_approval)
+                .map(str::to_string),
             execution_outcome: safe_outcome.map(str::to_string),
         });
 
@@ -315,7 +329,7 @@ impl DatasetRecorder {
             action_id: action_id.to_string(),
             tool_call_id: tool_call_id.to_string(),
             approval_id: approval_id.to_string(),
-            decision: decision.to_string(),
+            decision: GuardExecutionOutcome::normalize_approval(decision).to_string(),
         }));
     }
 
@@ -346,12 +360,13 @@ impl DatasetRecorder {
         if !self.is_enabled() {
             return;
         }
+        let safe_outcome = GuardExecutionOutcome::normalize(outcome);
         self.write_line(&GuardDatasetRecord::Compensation(CompensationRecord {
             format: "guard-dataset-v2".to_string(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: trace_id.to_string(),
             action_id: action_id.to_string(),
-            outcome: outcome.to_string(),
+            outcome: safe_outcome.to_string(),
         }));
     }
 
@@ -491,5 +506,52 @@ impl DatasetRecorder {
         }
 
         samples
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lifecycle_labels_never_persist_raw_diagnostics() {
+        let dir = tempfile::tempdir().expect("temporary dataset directory");
+        let path = dir.path().join("guard.jsonl");
+        let recorder = DatasetRecorder::new(&path);
+        recorder.set_enabled(true);
+
+        recorder.record_outcome(
+            "trace-1",
+            Some("action-1"),
+            Some("call-1"),
+            None,
+            Some("rejected: private reason"),
+            Some("Bearer sk-test-secret https://private.example/user/file"),
+        );
+        recorder.record_approval(
+            "trace-1",
+            "action-1",
+            "call-1",
+            "approval-1",
+            "approved: private reason",
+        );
+        recorder.record_compensation(
+            "trace-1",
+            "action-1",
+            "internal diagnostic with /private/path",
+        );
+
+        let raw = std::fs::read_to_string(path).expect("dataset should be written");
+        for forbidden in [
+            "sk-test-secret",
+            "private.example",
+            "/user/file",
+            "private reason",
+            "/private/path",
+        ] {
+            assert!(!raw.contains(forbidden), "dataset leaked {forbidden:?}");
+        }
+        assert!(raw.contains("runtime_failure"));
+        assert!(raw.contains("unknown"));
     }
 }

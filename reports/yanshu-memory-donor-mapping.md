@@ -1,6 +1,6 @@
 # Yanshu / Memory donor mapping — vNext
 
-日期：2026-09-05
+日期：2026-09-06
 
 这份映射记录的是“可吸收的语义”和“不能假装已经吸收的实现”。当前仓库的 canonical owner 仍是 `crates/engine/memory`；旧实现只作为行为和兼容性参照。
 
@@ -15,7 +15,7 @@
 | 向量持久化 | 旧 vector 仅内存语义 | ADAPT | `VectorRecord` 保存 model、dimension、content hash、更新时间；SQLite migration v3 + metadata store |
 | 记忆压缩 / continuity | 旧连续性压缩语义 | ADAPT | `ContinuityState` 扩展 rolling summary、goals、unresolved threads 等；`ContextWindowManager` 只改变 provider projection，不改 transcript |
 | 远程 embedding / LLM extraction | 旧扩展或未定 canonical provider | DEFER | 已定义 `EmbeddingProvider` / `MemoryExtractor` trait；没有把 HTTP、密钥或未验证模型写进 Memory owner |
-| DialoguePool / MemoryScope | 旧 DialoguePool 跨会话沉淀与对话池语义 | ADAPTED / production | `MemoryScope` (Global/Project/Persona/Session) + `ScopedMemoryBackend` + SQLite `episode_memory_metadata` 索引；无 metadata 严格 fail-narrow 到 Session(session_id)，经由 T3..=T6 垂直验证 |
+| DialoguePool / MemoryScope | 旧 DialoguePool 跨会话沉淀与对话池语义 | ADAPTED / production | `MemoryScope` (Global/User/Project/Persona/Session) + `ScopedMemoryBackend` + production `SqliteBackend` + SQLite `episode_memory_metadata` 索引；无 metadata 严格 fail-narrow 到 Session(session_id)，经由 T3..=T6 与 T12 垂直验证 |
 | 外部 memory provider（Mongo / remote 等） | `legacy/donor/apeireth-memory-extensions` | REJECT / DEFER | 当前没有批准的 canonical repository contract，不恢复旧 provider bridge |
 | Yanshuai-AI / OnDeviceAI 的 Windows C# UWP / D3D11 实现 | `docs/04-internal/borrow-from-jimmyxiao2009.md` | REJECT | 与跨平台 Rust + provider capability 架构不匹配；不移植 UI / 平台绑定代码 |
 
@@ -28,5 +28,5 @@
 
 ## 证据边界
 
-`crates/engine/runtime-assembly/tests/cognitive_vnext_production.rs` 驱动真实 production module assembly、runtime、scripted provider 和 SQLite backend，证明“写入 → provider 请求注入 → 重启 → forget 后不再召回”。它没有证明远程 embedding 质量、模型抽取质量或跨平台桌面发布包质量；这些保持 DEFER/待 CI。
+`crates/engine/runtime-assembly/tests/cognitive_vnext_production.rs` 驱动真实 production module assembly、runtime、scripted provider 和 coordinator-backed SQLite memory path，证明“写入 → provider 请求注入 → 重启 → forget 后不再召回”。`crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs::test_t12_production_sqlite_backend_scope_and_legacy_boundary` 直接驱动 CLI 使用的 pooled `SqliteBackend`，证明 scope persistence、跨 session 查询与 legacy fail-narrow。两者都没有证明远程 embedding 质量、模型抽取质量或跨平台桌面发布包质量；这些保持 DEFER/待 CI。
 
