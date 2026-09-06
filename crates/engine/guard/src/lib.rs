@@ -25,7 +25,8 @@ pub mod semantics;
 pub use chain::{ActionNode, ActionStatus, BehaviorChain, BehaviorEdge, BehaviorNode, EdgeType};
 pub use chain_guard::ChainGuard;
 pub use classifier::{
-    ChainRiskClassifier, NoClassifier, RiskClass, RiskPrediction, ThresholdClassifier,
+    ChainRiskClassifier, ClassifierEnforcementMode, JointModelArtifact, JointRiskClassifier,
+    NoClassifier, RiskClass, RiskPrediction, ThresholdClassifier,
 };
 pub use dataset::{DatasetRecorder, GuardDatasetRecord, GuardExecutionOutcome};
 pub use decision::{GuardDecision, GuardStage};

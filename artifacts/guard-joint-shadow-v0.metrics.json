@@ -1,0 +1,15 @@
+{
+  "sample_count": 32,
+  "positive_count": 22.0,
+  "confusion_matrix": {
+    "tp": 22,
+    "fp": 0,
+    "tn": 10,
+    "fn": 0
+  },
+  "precision": 1.0,
+  "recall": 1.0,
+  "f1": 1.0,
+  "brier": 0.006140418799877769,
+  "note": "synthetic deterministic shadow evaluation; not production calibrated"
+}

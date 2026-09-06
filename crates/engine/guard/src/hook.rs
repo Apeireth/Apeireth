@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::chain::{ActionStatus, BehaviorChain};
 use crate::chain_guard::ChainGuard;
-use crate::classifier::{ChainRiskClassifier, NoClassifier};
+use crate::classifier::{ChainRiskClassifier, ClassifierEnforcementMode, NoClassifier};
 use crate::dataset::DatasetRecorder;
 use crate::decision::GuardDecision;
 use crate::fast_guard::FastGuard;
@@ -235,6 +235,8 @@ impl BehaviorChainGuardHook {
             dataset_recording_enabled: rec_enabled,
             ml_classifier_available: self.classifier.available(),
             ml_model_version: self.classifier.model_version(),
+            ml_mode: self.classifier.enforcement_mode().as_str().to_string(),
+            ml_reason: self.classifier.model_reason(),
             feature_schema_version: crate::features_v2::AGENT_CHAIN_FEATURE_V2.to_string(),
             dataset_version: "guard-dataset-v3".to_string(),
         }
@@ -307,7 +309,11 @@ impl BehaviorChainGuardHook {
         };
         let features = AgentChainFeatureV2::from_chain(&temp_chain);
         let prediction = self.classifier.classify_v2(&features);
-        let decision = DecisionFusion::fuse_v2(&decision, &fast_res, &prediction, &features);
+        let decision = if self.classifier.enforcement_mode() == ClassifierEnforcementMode::Shadow {
+            DecisionFusion::attach_prediction(&decision, &prediction)
+        } else {
+            DecisionFusion::fuse_v2(&decision, &fast_res, &prediction, &features)
+        };
 
         GuardDryRunResponse {
             decision: decision.decision.label().to_string(),
@@ -425,7 +431,11 @@ impl BehaviorChainGuardHook {
         );
         let prediction = self.classifier.classify_v2(&features);
         let guard_decision =
-            DecisionFusion::fuse_v2(&guard_decision, &fast_res, &prediction, &features);
+            if self.classifier.enforcement_mode() == ClassifierEnforcementMode::Shadow {
+                DecisionFusion::attach_prediction(&guard_decision, &prediction)
+            } else {
+                DecisionFusion::fuse_v2(&guard_decision, &fast_res, &prediction, &features)
+            };
 
         // Update action status in chain
         let status = match &guard_decision.decision {
