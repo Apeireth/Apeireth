@@ -141,7 +141,7 @@ cargo audit
 
 远端 CI 必须按最终推送 SHA 查询，而不是只看分支最新状态。至少记录 Ubuntu / Windows / macOS、fmt、clippy、nextest / workspace tests、docs、audit、deny、secret scan、desktop checks 和 coverage workflow 的实际状态；仓库未配置的 workflow 标记为 `NOT_PRESENT`，不能虚报为 passed。
 
-实际结果：`git ls-remote origin refs/heads/feature/cognitive-infrastructure-vnext` 已指向 `eee68ad005444102acdfb807a2388a2bcb63812e`；GitHub Actions 按 `feature/cognitive-infrastructure-vnext` 过滤为 0 个 run，因此 commit-specific CI = **NOT_VERIFIED / NO RUN**。本次未创建 PR（用户只要求推送分支），故 PR 触发的门禁不会自动出现。只要仍有 `PENDING`、`FAILURE`、`NOT_VERIFIED`，PR readiness 就是 **NO**；全部要求项针对同一最终 SHA 通过后才是 **YES**。
+实际结果：收口代码提交 `eee68ad005444102acdfb807a2388a2bcb63812e` 已用 `force-with-lease` 推送，随后报告状态提交快进到同一 feature branch；GitHub Actions 按 `feature/cognitive-infrastructure-vnext` 过滤为 0 个 run，因此 commit-specific CI = **NOT_VERIFIED / NO RUN**。本次未创建 PR（用户只要求推送分支），故 PR 触发的门禁不会自动出现。只要仍有 `PENDING`、`FAILURE`、`NOT_VERIFIED`，PR readiness 就是 **NO**；全部要求项针对同一最终 SHA 通过后才是 **YES**。
 
 ## 7. Deferred / explicitly not implemented
 
@@ -160,7 +160,7 @@ cargo audit
 | CLI fan-out / dataset privacy / scope / hybrid recall 真实代码与垂直证据 | YES |
 | Persona / extraction / context / ML / compensation 状态诚实拆分 | YES |
 | Rust + dependency + frontend 本地门禁 | YES — all required local commands passed |
-| Final branch force-with-lease push | YES — remote branch = `eee68ad005444102acdfb807a2388a2bcb63812e` |
+| Final branch force-with-lease push | YES — convergence code commit `eee68ad005444102acdfb807a2388a2bcb63812e` pushed; report follow-up also pushed |
 | Final-SHA remote CI | NO — no commit-specific run exists for this feature branch push |
 | PR ready | NO — until final push and commit-specific CI verification |
 
