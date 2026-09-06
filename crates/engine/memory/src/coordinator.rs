@@ -520,8 +520,7 @@ impl MemoryCoordinator {
                                         &cand_vec,
                                     );
                                     let mut vc = cand.clone();
-                                    vc.score_components.semantic =
-                                        f64::from(sim).clamp(0.0, 1.0);
+                                    vc.score_components.semantic = f64::from(sim).clamp(0.0, 1.0);
                                     vector_candidates.push(vc);
                                 }
                             }

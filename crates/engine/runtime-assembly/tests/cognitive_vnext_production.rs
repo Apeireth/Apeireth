@@ -10,7 +10,9 @@ use std::sync::{Arc, Mutex};
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
 use apeireth_governance::GovernancePipeline;
 use apeireth_guard::{BehaviorChainGuardHook, DatasetRecorder};
-use apeireth_memory::{MemoryGovernanceStore, MemoryWritebackEntry, SqliteMemoryStore};
+use apeireth_memory::{
+    MemoryGovernanceStore, MemoryWritebackEntry, ScopedMemoryBackend, SqliteMemoryStore,
+};
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
     ProviderError, ToolCapability,
@@ -196,6 +198,7 @@ async fn production_memory_module_recalls_after_restart_and_honors_forget() {
         CognitiveBackends {
             memory: Some(backend.clone()),
             memory_governance: Some(governance.clone()),
+            scoped_memory: Some(store.clone() as Arc<dyn ScopedMemoryBackend>),
             ..CognitiveBackends::default()
         },
         apeireth_core::kernel::system_clock(),
@@ -244,6 +247,7 @@ async fn production_memory_module_recalls_after_restart_and_honors_forget() {
         CognitiveBackends {
             memory: Some(reopened_backend),
             memory_governance: Some(reopened_governance),
+            scoped_memory: Some(reopened.clone() as Arc<dyn ScopedMemoryBackend>),
             ..CognitiveBackends::default()
         },
         apeireth_core::kernel::system_clock(),

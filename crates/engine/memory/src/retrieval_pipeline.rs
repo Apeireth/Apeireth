@@ -48,7 +48,7 @@ impl MemoryCandidateSource for BasicLexicalCandidateSource {
         let mut out = self.documents.clone();
         for candidate in &mut out {
             let tokens = unicode_tokens(&candidate.content);
-            candidate.score_components.lexical = bm25_like_score(&query_tokens, &tokens);
+            candidate.score_components.lexical = token_overlap_score(&query_tokens, &tokens);
             candidate.score = candidate.score_components.lexical;
         }
         out.sort_by(|a, b| {
@@ -327,7 +327,7 @@ impl HybridRetrievalPipeline {
     }
 }
 
-fn bm25_like_score(query: &[String], document: &[String]) -> f64 {
+fn token_overlap_score(query: &[String], document: &[String]) -> f64 {
     if query.is_empty() || document.is_empty() {
         return 0.0;
     }

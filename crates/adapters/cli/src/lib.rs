@@ -264,7 +264,12 @@ async fn production_session_store() -> Result<Arc<dyn apeireth_runtime::SessionS
 /// Build the direct CLI runtime with the same trace/audit observer used by the
 /// HTTP gateway. The CLI has no SSE transport, but its turns must still be
 /// observable and durable through the gateway bounded-context ports.
-async fn build_canonical_runtime_from_env_with_observability(
+/// Build the direct CLI runtime together with its trace/audit observer.
+///
+/// Dataset recording is installed during the inner canonical bootstrap and
+/// the returned observation sink is added additively, so both observers see
+/// the same runtime event spine.
+pub async fn build_canonical_runtime_from_env_with_observability(
 ) -> Result<(Arc<Runtime>, Arc<apeireth_gateway::RuntimeObservationSink>), String> {
     let (runtime, sessions, memory, policy, guard_hook) =
         build_canonical_runtime_with_sessions_from_env().await?;
