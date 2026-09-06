@@ -51,6 +51,7 @@ pub mod colang;
 pub mod eval;
 pub mod evidence;
 pub mod input_security;
+pub mod intent;
 pub mod permission;
 pub mod rate_limit;
 // B5 · Phase 4 (research, 默认关闭): 校准门控自治 (RA-4 风险优先阶梯 + hysteresis + shadow).
@@ -69,6 +70,11 @@ pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_H
 pub use input_security::{
     CredentialDisclosureHook, PiiDetector, PiiFinding, PiiKind, PromptInjectionHeuristic,
     PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal,
+};
+pub use intent::{
+    CredentialPolicy, DestructivePolicy, IntentClass, IntentExplicitness, IntentProvenance,
+    MutationPolicy, NetworkPolicy, OperationClass, PersistencePolicy, ShellPolicy,
+    TaskIntentEnvelopeV1, TurnSecurityContext,
 };
 pub use permission::{Permission, PermissionGovernanceHook, PermissionPolicy, PermissionSet};
 pub use rate_limit::{RateLimitConfig, RateLimitGovernanceHook, TrustTier};
@@ -157,6 +163,8 @@ pub struct GovernanceRequest<'a> {
     /// evaluated (normally the provider/tool call id).  Completion requests
     /// may leave this unset; hooks then derive a deterministic identity.
     pub action_id: Option<&'a str>,
+    /// Trusted turn context, if the caller initialized one before tool use.
+    pub security_context: Option<&'a TurnSecurityContext>,
 }
 
 impl<'a> GovernanceRequest<'a> {
@@ -168,6 +176,7 @@ impl<'a> GovernanceRequest<'a> {
             trace,
             round,
             action_id: None,
+            security_context: None,
         }
     }
 
@@ -176,6 +185,22 @@ impl<'a> GovernanceRequest<'a> {
     #[must_use]
     pub const fn with_action_id(mut self, action_id: &'a str) -> Self {
         self.action_id = Some(action_id);
+        self
+    }
+
+    /// Bind the request to the immutable context created at turn start.
+    #[must_use]
+    pub const fn with_security_context(mut self, context: &'a TurnSecurityContext) -> Self {
+        self.security_context = Some(context);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_optional_security_context(
+        mut self,
+        context: Option<&'a TurnSecurityContext>,
+    ) -> Self {
+        self.security_context = context;
         self
     }
 }

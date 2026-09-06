@@ -135,6 +135,12 @@ pub struct ClassificationRecord {
     pub final_decision: String,
     #[serde(default)]
     pub weak_label: bool,
+    #[serde(default)]
+    pub intent_class: Option<String>,
+    #[serde(default)]
+    pub alignment_class: Option<String>,
+    #[serde(default)]
+    pub operation_class: Option<String>,
 }
 
 fn default_feature_schema_version() -> String {
@@ -204,6 +210,10 @@ pub struct SupervisedTrainingSample {
     pub execution_outcome: Option<String>,
     pub compensation_outcome: Option<String>,
     pub weak_label: bool,
+    #[serde(default)]
+    pub intent_class: Option<String>,
+    #[serde(default)]
+    pub alignment_class: Option<String>,
 }
 
 /// Thread-safe desensitized dataset recorder.
@@ -247,14 +257,14 @@ impl DatasetRecorder {
         }
 
         let record = GuardDatasetRecord::Classification(ClassificationRecord {
-            format: "guard-dataset-v2".to_string(),
-            feature_schema_version: default_feature_schema_version(),
+            format: "guard-dataset-v3".to_string(),
+            feature_schema_version: "AgentChainFeatureV2".to_string(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: obs.trace_id.clone(),
             session_id: obs.session_id.clone(),
             action_id: action_id.to_string(),
             capability_id: obs.capability_id.clone(),
-            chain_features: chain.extract_features(),
+            chain_features: chain.extract_features_v2(),
             fast_guard: serde_json::json!({
                 "clear": fast_res.clear,
                 "reasons": fast_res.reasons,
@@ -273,6 +283,18 @@ impl DatasetRecorder {
                 .and_then(|prediction| serde_json::to_value(prediction).ok()),
             final_decision: guard_dec.decision.label().to_string(),
             weak_label: true,
+            intent_class: chain
+                .intent
+                .as_ref()
+                .map(|intent| format!("{:?}", intent.intent_class)),
+            alignment_class: chain
+                .actions()
+                .last()
+                .and_then(|action| action.alignment_class.map(|value| format!("{value:?}"))),
+            operation_class: chain
+                .actions()
+                .last()
+                .map(|action| format!("{:?}", action.operation_class)),
         });
 
         self.write_line(&record);
@@ -502,6 +524,8 @@ impl DatasetRecorder {
                 execution_outcome: matched_outcome,
                 compensation_outcome: matched_compensation,
                 weak_label: c.weak_label,
+                intent_class: c.intent_class.clone(),
+                alignment_class: c.alignment_class.clone(),
             });
         }
 

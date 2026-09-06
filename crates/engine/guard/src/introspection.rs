@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::decision::GuardStage;
+use apeireth_governance::TaskIntentEnvelopeV1;
 
 /// Overall status of the safety guard service.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,6 +14,10 @@ pub struct GuardStatusDto {
     pub enabled: bool,
     pub fast_guard_active: bool,
     pub chain_guard_active: bool,
+    #[serde(default)]
+    pub intent_guard_active: bool,
+    #[serde(default)]
+    pub cross_turn_monitoring_active: bool,
     pub active_chains: usize,
     pub total_evaluations: u64,
     pub total_allowed: u64,
@@ -23,6 +28,10 @@ pub struct GuardStatusDto {
     pub ml_classifier_available: bool,
     #[serde(default)]
     pub ml_model_version: Option<String>,
+    #[serde(default)]
+    pub feature_schema_version: String,
+    #[serde(default)]
+    pub dataset_version: String,
 }
 
 /// A recent guard evaluation event suitable for SSE or audit log display in Desktop.
@@ -47,6 +56,8 @@ pub struct GuardDryRunRequest {
     pub capability_id: String,
     pub arguments: serde_json::Value,
     pub declared_scope: Option<String>,
+    #[serde(default)]
+    pub intent: Option<TaskIntentEnvelopeV1>,
 }
 
 /// Result payload for a dry-run evaluation.

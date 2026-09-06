@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::features::AgentChainFeatureV1;
+use crate::features_v2::AgentChainFeatureV2;
 
 /// Coarse risk class emitted by a local classifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,6 +51,10 @@ impl RiskPrediction {
 /// Synchronous, allocation-light classifier boundary for the hot path.
 pub trait ChainRiskClassifier: Send + Sync {
     fn classify(&self, features: &AgentChainFeatureV1) -> RiskPrediction;
+
+    fn classify_v2(&self, features: &AgentChainFeatureV2) -> RiskPrediction {
+        self.classify(&features.v1)
+    }
 
     fn available(&self) -> bool {
         true
@@ -120,6 +125,32 @@ impl ChainRiskClassifier for ThresholdClassifier {
             model_version: self.model_version.clone(),
             available: true,
         }
+    }
+
+    fn classify_v2(&self, features: &AgentChainFeatureV2) -> RiskPrediction {
+        let mut prediction = self.classify(&features.v1);
+        let joint_score = [
+            (features.alignment_score >= 0.9, 0.96),
+            (features.credential_to_external, 0.98),
+            (features.unrequested_network_egress, 0.9),
+            (features.unrequested_publish, 0.78),
+            (features.scope_expansion_count > 0, 0.72),
+        ]
+        .into_iter()
+        .filter_map(|(matched, value)| matched.then_some(value))
+        .max_by(f64::total_cmp)
+        .unwrap_or(prediction.score);
+        prediction.score = prediction.score.max(joint_score);
+        prediction.class = if prediction.score >= 0.9 {
+            RiskClass::Critical
+        } else if prediction.score >= 0.75 {
+            RiskClass::High
+        } else if prediction.score >= 0.4 {
+            RiskClass::Medium
+        } else {
+            RiskClass::Low
+        };
+        prediction
     }
 
     fn model_version(&self) -> Option<String> {

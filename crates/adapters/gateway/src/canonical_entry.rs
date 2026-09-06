@@ -8,10 +8,11 @@
 use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, SessionId, Timestamp};
+use apeireth_guard::{IntentInput, IntentInterpreter, RuleIntentInterpreter};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, ExecutionTrace, PendingApprovalView, Runtime,
-    RuntimeError, TraceEvent, TurnOutcome, TurnRequest,
+    RuntimeError, TraceEvent, TurnOutcome, TurnRequest, TurnSecurityContext,
 };
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
@@ -228,7 +229,15 @@ pub async fn execute_chat(
     }
 
     let session = request.session.unwrap_or_else(SessionId::new);
-    let mut turn = TurnRequest::new(session, request.input);
+    let input = request.input;
+    let intent = RuleIntentInterpreter.interpret(IntentInput {
+        session_id: session.to_string(),
+        trace_id: String::new(),
+        user_request: input.clone(),
+        created_at_ms: 0,
+    });
+    let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
+    let mut turn = TurnRequest::new(session, input).with_security_context(context);
     if let Some(model) = request.model {
         turn = turn.with_model(model);
     }
