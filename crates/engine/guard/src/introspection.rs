@@ -29,6 +29,10 @@ pub struct GuardStatusDto {
     #[serde(default)]
     pub ml_model_version: Option<String>,
     #[serde(default)]
+    pub ml_mode: String,
+    #[serde(default)]
+    pub ml_reason: Option<String>,
+    #[serde(default)]
     pub feature_schema_version: String,
     #[serde(default)]
     pub dataset_version: String,

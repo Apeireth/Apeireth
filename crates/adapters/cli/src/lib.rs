@@ -22,7 +22,10 @@ use apeireth_governance::{
     CredentialDisclosureHook, GovernancePipeline, Permission, PermissionGovernanceHook,
     PermissionPolicy, PromptInjectionHook,
 };
-use apeireth_guard::{DatasetRecorder, IntentInput, IntentInterpreter, RuleIntentInterpreter};
+use apeireth_guard::{
+    ClassifierEnforcementMode, DatasetRecorder, IntentInput, IntentInterpreter,
+    JointRiskClassifier, RuleIntentInterpreter,
+};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore, TurnOutcome,
@@ -40,6 +43,10 @@ const COGNITIVE_COUNCIL_ENV: &str = "APEIRETH_COGNITIVE_COUNCIL";
 pub const GUARD_DATASET_ENABLED_ENV: &str = "APEIRETH_GUARD_DATASET_ENABLED";
 /// Optional JSONL path for the composition-owned Guard dataset recorder.
 pub const GUARD_DATASET_PATH_ENV: &str = "APEIRETH_GUARD_DATASET_PATH";
+/// Local Guard model mode: disabled, shadow, advisory, or enforce.
+pub const GUARD_ML_MODE_ENV: &str = "APEIRETH_GUARD_ML_MODE";
+/// Local JSON model artifact path. Paths are never returned in Guard status.
+pub const GUARD_ML_MODEL_ENV: &str = "APEIRETH_GUARD_ML_MODEL";
 
 /// Enables the local filesystem and search tools in the production policy.
 pub const ENABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_ENABLE_LOCAL_READ_TOOLS";
@@ -88,6 +95,7 @@ fn build_production_governance_parts_with_dataset(
     if let Some(dataset) = dataset {
         guard = guard.with_dataset_recorder(dataset);
     }
+    guard = configure_guard_classifier(guard);
     let guard_hook = Arc::new(guard);
 
     let pipeline = GovernancePipeline::new()
@@ -106,10 +114,27 @@ fn build_production_governance_parts_with_dataset(
 /// `1` enables the two local read tools; shell, fetch, and unknown capabilities
 /// remain denied even if a future plugin registers them.
 pub fn build_production_governance_from_env() -> GovernancePipeline {
-    let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
+    build_production_governance_parts_from_env().0
+}
+
+fn configure_guard_classifier(mut guard: BehaviorChainGuardHook) -> BehaviorChainGuardHook {
+    let mode = std::env::var(GUARD_ML_MODE_ENV)
         .ok()
-        .is_some_and(|value| value.trim() == "1");
-    build_production_governance(enable_local_read_tools)
+        .and_then(|value| ClassifierEnforcementMode::parse(&value));
+    let Some(mode) = mode else {
+        return guard;
+    };
+    let Some(path) = std::env::var(GUARD_ML_MODEL_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return guard;
+    };
+    if let Ok(classifier) = JointRiskClassifier::from_path(path).map(|model| model.with_mode(mode))
+    {
+        guard = guard.with_classifier(Arc::new(classifier));
+    }
+    guard
 }
 
 fn build_production_governance_parts_from_env() -> (
@@ -136,7 +161,7 @@ fn production_guard_dataset_recorder() -> Option<Arc<DatasetRecorder>> {
     let path = std::env::var(GUARD_DATASET_PATH_ENV)
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| ".apeireth/guard-dataset-v2.jsonl".to_string());
+        .unwrap_or_else(|| ".apeireth/guard-dataset-v3.jsonl".to_string());
     let recorder = Arc::new(DatasetRecorder::new(path));
     recorder.set_enabled(true);
     Some(recorder)

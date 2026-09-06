@@ -13,6 +13,12 @@ use crate::features_v2::AgentChainFeatureV2;
 pub struct DecisionFusion;
 
 impl DecisionFusion {
+    pub fn attach_prediction(base: &GuardDecision, prediction: &RiskPrediction) -> GuardDecision {
+        let mut observed = base.clone();
+        observed.classifier_prediction = Some(prediction.clone());
+        observed
+    }
+
     pub fn fuse_v2(
         base: &GuardDecision,
         fast: &FastGuardResult,
