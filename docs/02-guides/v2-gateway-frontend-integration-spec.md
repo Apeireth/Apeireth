@@ -36,7 +36,7 @@ Author:          子代理 R9
 
 v1 `apeireth-companion` (`legacy/donor/apeireth-companion/`) 是 86-crate 单体, `companion_serve.rs` 提供 :8090 HTTP/SSE (legacy/donor/apeireth-companion/examples/companion_serve.rs). 9 organ 散落在 lib.rs 顶层 mod, 内部 if-else 散落 (`crates/engine/organ/src/lib.rs:3-7`).
 
-v2 canonical gateway 是 15-crate workspace 的 HTTP adapter (`crates/adapters/gateway/src/lib.rs:7-15`), 通过 axum router 暴露 OpenAI Chat 兼容入口, 不持有 provider 路由 / 会话 / 治理 / 工具分发 / 第二编排引擎 (per `crates/adapters/gateway/src/lib.rs:2-6`).
+v2 canonical gateway 是 17-crate workspace 的 HTTP adapter (`crates/adapters/gateway/src/lib.rs:7-15`), 通过 axum router 暴露 OpenAI Chat 兼容入口, 不持有 provider 路由 / 会话 / 治理 / 工具分发 / 第二编排引擎 (per `crates/adapters/gateway/src/lib.rs:2-6`).
 
 **关键变化**:
 - 端点: v1 :8090 18 条路由 → v2 :8080 3 条主路由 (`/health`, `/v1/chat`, `/v1/chat/completions`, `canonical_entry.rs:168-174`)
@@ -54,7 +54,7 @@ per `frontend/companion-desktop/README.md:6-7`: "当前保留历史 companion HT
 
 - **不**写真实施代码 (4-6 周真实施 = 估 2027-Q1 启动, 由主代理后续派 sub-agent)
 - **不**改 LOCKED 5 项 (per §10.0 严守)
-- **不**改 Cargo.toml workspace.version = "1.2.0" (per R11 LOCKED)
+- **不**改 Cargo.toml workspace.version = "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210）(per R11 LOCKED)
 - **不**假装 "frontend 已对接" — 标 "spec 完成 + 真实施待"
 
 ---
@@ -453,7 +453,7 @@ per `docs/04-internal/v2.0.0-release-path.md:30-36`:
 cargo clippy --workspace --all-targets --locked -- -D warnings  # ✅ 0 警告
 cargo test --workspace --locked                                   # ✅ 0 FAILED
 # legacy compat path < 100 引用 (✅)
-# 13 键 LOCKED + 9 哲学锚 + workspace.version 1.2.0 + R11 baseline 3 值 0 触碰 (✅)
+# 13 键 LOCKED + 9 哲学锚 + workspace.version 2.0.0-rc.1（2026-08-30 RC1 发布起, per 6b81c210）+ R11 baseline 3 值 0 触碰 (✅)
 # 哲学锚表头 0 减 (✅)
 ```
 
@@ -500,10 +500,10 @@ per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` + 子代理 D handoff + R13 
 
 per 子代理 Z 独立审计触发主代理亲做 (`docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md`):
 
-### 11.1 9 organ 真兑现 + 1713 tests + 0 clippy + 0 触碰 LOCKED
+### 11.1 9 organ 真兑现 + 1713 tests + 0 clippy + 0 触碰 LOCKED（2026-09-05 对账：当前 3120 passed）
 
 - 9 organ 真兑现: ✅ 9/9 done (`crates/engine/organ/src/lib.rs:11-32`)
-- workspace tests: ✅ 1713 passed 0 FAILED (子代理 Z 当时实测, per `v2.0.0-release-path.md:26`; A 块后 1739 passed)
+- workspace tests: ✅ 1713 passed 0 FAILED (子代理 Z 当时实测, per `v2.0.0-release-path.md:26`; A 块后 1739 passed)（2026-09-05 对账：当前 3120 passed）
 - clippy: ✅ 0 警告
 - LOCKED 5 项: ✅ 0 触碰 (per §10 actionable 验证)
 

@@ -82,7 +82,7 @@ Apeireth v2.0 真实施必读 (主代理亲做 spec + 派 sub-agent 真实施 �
    - crates/engine/runtime/src/canonical/{orchestrator.rs, organ_kani_proofs.rs} (A 块 Stage 5 L0-L5 UpgradeCycle + organ_kani_proofs)
    - crates/engine/memory/src/{layered_memo/search.rs, dailynote/search.rs} (v2 BM25-lite 子模块, 不是 storage 主线)
    - crates/foundation/core/src/{eight_anchors.rs:58-79 (9 哲学锚 LOCKED), philosophy.rs:142 (13 键 LOCKED), onion.rs:249 (3 项不可变脊柱 LOCKED)} (LOCKED 5 项, 0 触碰)
-   - Cargo.toml:44 ("1.2.0", workspace.version LOCKED, 0 改)
+   - Cargo.toml:46 ("2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210）, workspace.version LOCKED, 0 改)
    - legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44 (R11_V1141/1131/1136_BASELINE = 0.8682/0.8532/0.9063, R11 baseline LOCKED, 0 触碰)
 
 5. 真账 brief 模板 (Round 15):
@@ -107,17 +107,17 @@ Apeireth v2.0 真实施必读 (主代理亲做 spec + 派 sub-agent 真实施 �
 - 真实施 7 段: 1.0 真账 1:1 翻译 (RotBlock + Segment) + 2.0 真账对接 (v2 cognitive memory 模块) + 融合策略 + 集成测试 + 0 装诚实 + 下一步
 
 ### 2. 5 重守门 baseline 实测 (≤ 30 行)
-- cargo test --workspace --locked (期望 1739+N passed / 0 failed, 含新 rot_score 测试)
+- cargo test --workspace --locked (期望 3120+N passed / 0 failed, 含新 rot_score 测试)
 - cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 warning)
 - cargo check --workspace --locked (期望 0 副作用)
-- git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:44 crates/foundation/core/src/cognitive.rs (期望 0 行, LOCKED 0 触碰)
+- git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:46 crates/foundation/core/src/cognitive.rs (期望 0 行, LOCKED 0 触碰)
 - grep -r "legacy/" crates/ | wc -l (期望 < 100)
 
 ### 3. LOCKED 5 项 0 触碰 (≤ 30 行)
 - 9 哲学锚本体 (eight_anchors.rs:58-79): 0 行
 - 13 键 (philosophy.rs:142): 0 行
 - 3 项不可变脊柱 (onion.rs:249): 0 行
-- workspace.version (Cargo.toml:44): 0 改
+- workspace.version (Cargo.toml:46): 0 改
 - R11 baseline 3 值 (legacy reference): 0 触碰
 - 9 哲学锚表头 (eight_anchors.rs enum): 0 减
 
@@ -153,7 +153,7 @@ Apeireth v2.0 真实施必读 (主代理亲做 spec + 派 sub-agent 真实施 �
 ```
 真实施时主代理亲测 (0 装诚实 doctrine):
 - 1.0 .rs 0 实测部分补查 (35 项中 Round 13 亲测 8 项, 余 27 项需真实施时主代理亲测, context.rs + context_rot.rs 是余 27 项中 2 项, 本次融合是余 27 项中 1 项)
-- 2.0 真账实测 (16 crates workspace 真账, 本地 working tree 已就位)
+- 2.0 真账实测 (17 crates workspace 真账, 本地 working tree 已就位)
 - 真实施时主代理必亲测 (~2-3 天本地实测, 0 git clone 必要, per Round 15 用户 catch 修订)
 
 真账 brief 必含 (per O-6 永远追求最优):
@@ -181,14 +181,14 @@ Apeireth v2.0 真实施必读 (主代理亲做 spec + 派 sub-agent 真实施 �
    - 当前实测: 0 warning
 2. tests 0 fail:
    - 命令: cargo test --workspace --locked
-   - 期望: 1739+N passed / 0 failed / 12 ignored
-   - 当前实测: 1739 passed
+   - 期望: 3120+N passed / 0 failed / 13 ignored
+   - 当前实测: 3120 passed / 0 failed / 13 ignored（2026-09-05 实测）
 3. legacy compat path < 100:
    - 命令: grep -r "legacy/" crates/ | wc -l
    - 期望: < 100
    - 当前实测: 36
 4. LOCKED 5 项 0 触碰:
-   - 命令: git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:44 crates/foundation/core/src/cognitive.rs
+   - 命令: git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:46 crates/foundation/core/src/cognitive.rs
    - 期望: 0 行
    - 当前实测: 0 行
 5. 9 哲学锚表头 0 减:
@@ -200,7 +200,7 @@ LOCKED 5 项 0 触碰 verify:
 - 9 哲学锚本体: crates/foundation/core/src/eight_anchors.rs:58-79 (enum)
 - 13 键: crates/foundation/core/src/philosophy.rs:142 (RUNTIME_ENFORCED = false)
 - 3 项不可变脊柱: crates/foundation/core/src/onion.rs:249
-- workspace.version: Cargo.toml:44 ("1.2.0")
+- workspace.version: Cargo.toml:46 ("2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210）)
 - R11 baseline 3 值: legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44 (R11_V1141/1131/1136_BASELINE = 0.8682/0.8532/0.9063)
 
 真实施必含 §3 + §4 5 重守门 baseline + LOCKED 0 触碰 verify (走扩展 trait 接口, 不破现有 9 organ trait + 12 cognitive slot wiring + LOCKED 5 项)
@@ -298,7 +298,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 - ✅ 真实施时主代理必亲测 (~2-3 天本地实测, 不依赖网络, 本地 working tree 已就位, 0 git clone 必要)
 - ✅ 1.0 真账 maturity 补查 (Round 13 主代理亲测 8 个核心 .rs, 余 27 项需真实施时主代理亲测, context.rs + context_rot.rs 是余 27 项中 2 项, 本次融合是余 27 项中 1 项)
-- ✅ 2.0 真账实测 (本地 working tree, 16 crates workspace)
+- ✅ 2.0 真账实测 (本地 working tree, 17 crates workspace)
 
 ---
 

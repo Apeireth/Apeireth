@@ -1,3 +1,5 @@
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+
 # Sub-Agent 审计报告 — Round 4 (2026-08-28)
 
 > **作者**: 主代理 Mavis (写于 Round 4 收盘, 含 sub-agent 报告 + 主代理亲验修订 + 处理真账)

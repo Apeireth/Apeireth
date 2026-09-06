@@ -178,7 +178,7 @@ Author:          主代理 Mavis
 | 守门 | 实测 |
 |---|---|
 | clippy 0 warning | ✅ (前 baseline) |
-| tests 0 fail (1739 passed) | ✅ (前 baseline) |
+| tests 0 fail (1739 passed) | ✅ (前 baseline)（2026-09-05 对账：当前 3120 passed） |
 | legacy compat path < 100 (36) | ✅ (前 baseline) |
 | LOCKED 5 项 0 触碰 | ✅ (本轮 0 改 src / Cargo.toml / Cargo.lock) |
 | 9 哲学锚 0 减 | ✅ |

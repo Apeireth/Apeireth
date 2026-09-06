@@ -104,7 +104,7 @@
 | 5 项 LOCKED (`10-locked.md` + `philosophy.md`) | ❌ | frontend 独立 workspace, 0 改根 cargo |
 | 9 哲学锚本体 (`eight_anchors.rs:58-79`) | ❌ | runtime.ts O-5 = 调失败如实报错, 不假装 OK |
 | 13 键 (`philosophy.rs:142 RUNTIME_ENFORCED = false`) | ❌ | 13 键降级哲学标准, frontend 不引入 |
-| workspace.version = "1.2.0" (`Cargo.toml:43`) | ❌ | frontend 在 `frontend/companion-desktop/`, 0 改根 `Cargo.toml` |
+| workspace.version = "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210） (`Cargo.toml:46`) | ❌ | frontend 在 `frontend/companion-desktop/`, 0 改根 `Cargo.toml` |
 | R11 baseline (12 slot + Cargo.lock) | ❌ | R12 working tree 不在 frontend 范围 |
 | 3 不可变脊柱 | ❌ | 前端不涉及 |
 

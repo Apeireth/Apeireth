@@ -36,7 +36,7 @@
 //! - ✅ struct UpgradeCycle + run_full_cycle (L0-L5 5 步骤串行)
 //! - ✅ L0/L2/L3 真调 Orchestrator + governance hook (Stage 5 完整化)
 //! - ✅ L1 真调 SelfAssessmentStore (Stage 5 完整化)
-//! - ✅ L5 TagSuggester trait + DefaultTagSuggester (per workspace.version "1.2.0" → "1.2.1")
+//! - ✅ L5 TagSuggester trait + DefaultTagSuggester (示例 bump "1.2.0" → "1.2.1"; 当前 workspace.version = 2.0.0-rc.1)
 //! - ⏳ L4 GovernancePipeline 真接 + 主人 Veto dashboard (留 v2.0.0 release 接入)
 
 use std::sync::Arc;
@@ -91,7 +91,7 @@ impl CycleStep {
     }
 }
 
-/// 默认 TagSuggester — bump patch 字段 (e.g. "1.2.0" → "1.2.1").
+/// 默认 TagSuggester — bump patch 字段 (示例 "1.2.0" → "1.2.1"; 输入即当前版本号, 当前 workspace.version = 2.0.0-rc.1).
 ///
 /// **0 装诚实**: 不调 `git describe` (Stage 5 简化). 真生产路径在 governance composition root
 /// 注入 `GitTagSuggester` (调 `Command::new("git", ["describe", "--tags"])`).
@@ -103,7 +103,7 @@ impl TagSuggester for DefaultTagSuggester {
         if last_cycle_step != CycleStep::Tagged {
             return format!("{current_version}-NOT-READY");
         }
-        // 简化 bump: "1.2.0" → "1.2.1"; 拿不到数字部分保留原值.
+        // 简化 bump: "1.2.0" → "1.2.1" (示例); 拿不到数字部分保留原值.
         let parts: Vec<&str> = current_version.split('.').collect();
         if parts.len() >= 3 {
             if let Ok(patch) = parts[2].parse::<u32>() {
@@ -375,7 +375,7 @@ impl<RS: RelationshipState + 'static> UpgradeCycle<RS> {
 mod tests {
     use super::*;
 
-    /// 默认 TagSuggester 简单测试 (per workspace.version "1.2.0").
+    /// 默认 TagSuggester 简单测试 (示例输入 "1.2.0"; 当前 workspace.version = 2.0.0-rc.1).
     #[test]
     fn default_tag_suggester_bumps_patch() {
         let sug = DefaultTagSuggester;

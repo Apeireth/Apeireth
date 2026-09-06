@@ -74,7 +74,7 @@
 1. 9 哲学锚本体 (`crates/foundation/core/src/eight_anchors.rs:58-79`) 0 改
 2. 13 键 (`crates/foundation/core/src/philosophy.rs:142`) 0 改
 3. 3 项不可变脊柱 (`crates/foundation/core/src/onion.rs:249`) 0 改
-4. workspace.version (`Cargo.toml` "1.2.0") 0 改
+4. workspace.version (`Cargo.toml` "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210）) 0 改
 5. R11 baseline (legacy reference: `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` const `R11_V1141_BASELINE: f64 = 0.8682` / `R11_V1131_BASELINE: f64 = 0.8532` / `R11_V1136_BASELINE: f64 = 0.9063` — active workspace 无 const source, 等 R12 spec 重新审定后移植) 0 改
 
 **commit message 模板** (per §5.2):
@@ -188,7 +188,7 @@ cargo test --doc --workspace --locked  # 0 FAILED
 # LOCKED 5 项 0 触碰验证
 grep -n "NINE_ANCHORS_HARDCODE" crates/foundation/core/src/eight_anchors.rs  # 0 行 diff
 grep -n "RUNTIME_ENFORCED" crates/foundation/core/src/philosophy.rs  # 0 行 diff
-grep "version" Cargo.toml | head -5  # workspace.version = "1.2.0" 0 改
+grep "version" Cargo.toml | head -5  # workspace.version = "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210） 0 改
 ```
 
 ---
@@ -207,7 +207,7 @@ grep "version" Cargo.toml | head -5  # workspace.version = "1.2.0" 0 改
 | 2 | B | `ea9aa14f` (主代理亲做) | 1727 passed / 0 failed (+1 new) | 0 警告 | ✅ done (pushed); + extract_emotion_mood() + tick 步骤 3 真路径 |
 | 3 | A | `ed6353f4` (主代理亲做) | 1728 passed / 0 failed (+1 new) | 0 警告 | ✅ done (pushed); + InitiativeGate 移 plugin + OrganOutput::Emergence.gate + extract_e7_gate() |
 | 4 | C | `1972b040` (主代理亲做) | 1729 passed / 0 failed (+1 new) | 0 警告 | ✅ done (pushed); + CouncilInvoker 参数 + MockCouncilInvoker + decide_with_invoker |
-| 5 | E | `edc98170` (amended from `24d163ff`) | 1739 passed / 0 failed (+10 new) | 0 警告 | ✅ done (pushed); + UpgradeCycle + TagSuggester + 6 步骤 run_full_cycle |
+| 5 | E | `edc98170` (amended from `24d163ff`) | 1739 passed / 0 failed (+10 new)（2026-09-05 对账：当前 3120 passed） | 0 警告 | ✅ done (pushed); + UpgradeCycle + TagSuggester + 6 步骤 run_full_cycle |
 
 > **O-6 复盘 amend 真账** (主代理被用户提醒 "修" 后): 之前 5 commit O-6 三阶审查 sections 多是描述 WHAT 不是 WHY 最优 vs alternatives, O-6 失守 + O-5 0 装诚实标. 详 `docs/04-internal/A-block-o6-true-account.md`. amend 后 5 commit message 修订版 sections 真回答"为什么最优 vs alternatives + 拒理由", 符合八锚本体 O-6 description "总体/系统/架构三阶审查 + 不做借口清单".
 
@@ -233,7 +233,7 @@ grep "version" Cargo.toml | head -5  # workspace.version = "1.2.0" 0 改
 
 1. **总体最优**: 在更大语境 (release 路线图 / 当前工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? **与 alternatives 比较 + 选最优 + 拒理由**.
 2. **系统最优**: 在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? **与 alternatives 比较 + 选最优 + 拒理由**.
-3. **架构最优**: 在 workspace 16-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? **拒的 alternatives + 拒理由**.
+3. **架构最优**: 在 workspace 17-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? **拒的 alternatives + 拒理由**.
 
 不复用 v1 alignment 代替 v2 总体最优. 不描述 WHAT 代替 WHY. 每段需有具体拒的 alternative + 拒理由.
 

@@ -5,6 +5,8 @@
 > **关系**: 跟 `apeireth-true-understanding-2026-08-28.md` (物种化真理解) + `youyou-list-research-2026-08-28.md` L50 (Mio P0) + `rc7-perception-research-2026-08-28.md` §1.2 (Vision xcap) + `v2-reference-handbook-2026-08-28.md` §1.3 (12 cognitive slot) 互补
 > **0 装诚实标**: 已读用户清单 L11 + Apeireth 真理解 §1-3 + vision.md L29-49 + v2 handbook §1.3 + R20 真账; **未 git clone Mio** (brief 4h 限 + github.com 直连防火墙 [exit code: 1] 21s + web_search auth fail 双 0 装); 仅基于用户清单 L11 + 你you-list L50 + 真理解推论, **真实施前主代理必亲验**
 
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+
 ```
 [Document-Meta]
 Document:        docs/01-architecture/r7-mio-species-research-2026-08-28.md

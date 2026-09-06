@@ -209,4 +209,4 @@ graph TD
 1. **Fail-Closed 默认安全原则**：任何解析异常、校验冲突或超时，系统一律按最严格安全策略拒绝，绝不默认放行。
 2. **纯 Safe Rust 编译屏障**：全工作区开启 `#![deny(unsafe_code)]`，核心凭据开启 `#![forbid(unsafe_code)]`，零 C-FFI 外部黑盒。
 3. **零凭据落盘 (Zero-Secret Persistence)**：API Key、Master Token 仅以 `SecretString` / `SecretBuf` 存在于内存中，离开作用域自动物理清零（Zeroize），严禁进入日志、Trace、持久化 DB 或 Prompt。
-4. **不可变核心资产 0 漂移**：9 哲学锚、13 键原则、3 项不可变脊柱（Self-Disable、L0 HA、13 键 Cache）、workspace.version 1.2.0 与 R11 baseline 三值严格保持绝对锁定。
+4. **不可变核心资产 0 漂移**：9 哲学锚、13 键原则、3 项不可变脊柱（Self-Disable、L0 HA、13 键 Cache）、workspace.version 2.0.0-rc.1（2026-08-30 RC1 发布起, per 6b81c210） 与 R11 baseline 三值严格保持绝对锁定。

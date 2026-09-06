@@ -32,7 +32,7 @@ Author:          主代理 Mavis
 ### 1.1 S-1 北极星 (Everything serves the ASI north star 五原型)
 
 **真账**: v2.0 release = 1.0 功能全集 + 架构升级, 不是 "框架" 是 **AI 物种实现** (per `apeireth-true-understanding-2026-08-28.md`):
-- **基地** (LLM 操作系统, 16 crates) ✅ done
+- **基地** (LLM 操作系统, 17 crates) ✅ done
 - **Agent 平台** (OrganOrchestrator + 12 cognitive slot) ✅ A 块 done
 - **她** (物种实现, per-user 塑形) — 真实施 (28 项 1:1 可移植 + 4 项 trait 口 + 5 项 PARTIAL, ~35 项 1.0 缺口)
 
@@ -52,16 +52,16 @@ Author:          主代理 Mavis
 
 **实事求是路径**:
 1. **不假装** 1.0 全部完整 (Round 13 maturity 补查发现 5 项 PARTIAL + 4 项 trait 口 + 28 项 REAL)
-2. **不假装** 调研 100% 完成 (R11 sub-agent + 主代理都 0 实测 1.0 .rs, **本地 working tree 已就位 86-crate v1 + 16 crates v2 真账** 0 git clone 必要, 仅真账 + 推断)
+2. **不假装** 调研 100% 完成 (R11 sub-agent + 主代理都 0 实测 1.0 .rs, **本地 working tree 已就位 86-crate v1 + 17 crates v2 真账** 0 git clone 必要, 仅真账 + 推断)
 3. **不假装** release 时间 (4-6 月 → 6-9 月修订, 因 ~35 项 1.0 缺口 + 1.0 maturity 补查)
 
-### 1.3 S-3 质量工程化 (Engineering rigor = 1739 tests / 0 clippy / clippy 0 / LOCKED 0)
+### 1.3 S-3 质量工程化 (Engineering rigor = 3120 passed / 0 failed / 13 ignored / 0 clippy / clippy 0 / LOCKED 0)
 
 **真账 (5 重守门 baseline 维持)**:
 | 守门 | 当前实测 | 真实施时要求 |
 |---|---|---|
 | clippy 0 warning | ✅ | 1 真实施 1 测 (per §13) |
-| tests 0 fail (1739 passed) | ✅ | 1 真实施 1 测 (per §13) |
+| tests 0 fail (3120 passed / 0 failed / 13 ignored（2026-09-05 实测）) | ✅ | 1 真实施 1 测 (per §13) |
 | legacy compat path < 100 (36) | ✅ | 1 真实施 1 测 (per §13) |
 | LOCKED 5 项 0 触碰 | ✅ | 1 真实施 1 测 (per §13, 走扩展 trait 接口) |
 | 9 哲学锚表头 0 减 | ✅ | 1 真实施 1 测 (per §13) |
@@ -80,7 +80,7 @@ Author:          主代理 Mavis
 | 9 哲学锚本体 | `crates/foundation/core/src/eight_anchors.rs:58-79` | ✅ 0 触碰 | 走扩展 trait 接口 |
 | 13 键 verdict cache | `crates/foundation/core/src/philosophy.rs:142` `RUNTIME_ENFORCED = false` | ✅ 0 触碰 | 走扩展 trait 接口 |
 | 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` | ✅ 0 触碰 | 走扩展 trait 接口 |
-| workspace.version | `Cargo.toml:44` "1.2.0" | ✅ 0 改 | 走 `version.workspace = true` |
+| workspace.version | `Cargo.toml:46` "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210） | ✅ 0 改 | 走 `version.workspace = true` |
 | R11 baseline 3 值 (0.8682/0.8532/0.9063) | legacy reference | ✅ 0 触碰 | 走扩展 trait 接口 |
 
 **安全优先路径**:
@@ -289,7 +289,7 @@ Week 7-10: R20 preference_learning (in-progress)
 ### 3.3 release 流程 (Week 18-20, 估时 1-2 周)
 
 ```
-- 5 重守门 baseline 实测 (test 1739 / clippy 0 / LOCKED 0 触碰 / legacy 36 / 9 哲学锚 0 减)
+- 5 重守门 baseline 实测 (test 3120 / clippy 0 / LOCKED 0 触碰 / legacy 36 / 9 哲学锚 0 减)
 - o6-anchor.yml workflow 自动跑 5 重守门
 - ROADMAP §7 总进度 check + MANIFESTO §14 release timeline check
 - ROADMAP §12 release path check
@@ -374,7 +374,7 @@ Week 7-10: R20 preference_learning (in-progress)
 | **Round 11 6 sub-agent 调研 0 实测 1.0 .rs** | 仅凭真账 + 推断, 跟 0 实测 2.0 master branch 同失守 | Round 13 主代理亲测 8 个核心 1.0 .rs maturity, 修订主代理真账 §2.4 maturity 区分 |
 | **主代理 §3.1 估 3-4 周 ❌ 偏乐观** | 修订 → 12-14 周 critical path (Round 14 release 修订 commit `3ea454f1` 已 push) | 主代理亲做 spec ~2 周 + 派 sub-agent 12-14 周 = 真实施 14-16 周 critical path |
 | **release timeline 修订** | 4-6 月 → 6-9 月 (因 ~35 项 1.0 缺口 + 1.0 maturity 补查) | Round 14 commit `3ea454f1` 已 push 修订 |
-| **0 实测 2.0 master branch** | 本地 working tree 已就位 ~86-crate v1 + 16 crates v2 真账, 仅真账 + 推断 + R7/R11 真调研推论 | 真实施时主代理必亲验 (~2-3 天本地实测 27 项 1.0 .rs + 2.0 真账, 0 git clone 必要) |
+| **0 实测 2.0 master branch** | 本地 working tree 已就位 ~86-crate v1 + 17 crates v2 真账, 仅真账 + 推断 + R7/R11 真调研推论 | 真实施时主代理必亲验 (~2-3 天本地实测 27 项 1.0 .rs + 2.0 真账, 0 git clone 必要) |
 | **1.0 maturity 35 项中 8 项实测 (~23%)** | Round 13 主代理亲测 8 个核心 1.0 .rs, 余 27 项仅凭推断 | 真实施时主代理必亲测 (~35 项 1.0 .rs 实测 + 物种化扩展 + 0 触碰 LOCKED) |
 | **0 引新外部 dep** | per 真账 brief 约束, 1:1 翻译优先借签 1.0 真账 | 物种化借签边界: 借签 1.0 真账 + R7 真调研 + research/source 真开源, 0 新外部 dep |
 

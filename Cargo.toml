@@ -38,9 +38,9 @@ members = [
 #
 # Cargo.toml license field 0 装 PASS 严守 verify (P15-1 R128-2 阶段 C):
 #   - [workspace.package] license = "Apache-2.0 OR MIT"  ← 主仓 license 单一来源 (双协议, 2026-09-03 拍板)
-#   - 90+ sub-crate 中 65+ 已用 `license.workspace = true` 继承
-#   - 27 skeleton 阶段硬编码 (license = "Apache-2.0" + version 硬编码 0.1.0/1.0.0) = **已知 TODO, 1.0 release 后清**
-#     (per decision-22 §2.2 B2 1.2.0 严守 → 0 改 version 边界 + P15-1 0 主动 commit 严守 → 0 改 27 crate scope creep)
+#   - 17/17 子 crate 全部 `license.workspace = true` 继承 (2026-09-05 实测)
+#   - 17/17 子 crate version 全部 `version.workspace = true` 继承 workspace 轴 2.0.0-rc.1, 0 硬编码
+#     (2026-09-05 对账批实测; v1 era "27 skeleton 硬编码" 已随 v2 重构清零)
 # ============================================================================
 [workspace.package]
 version = "2.0.0-rc.1"
@@ -54,7 +54,7 @@ license = "Apache-2.0 OR MIT"
 repository = "https://github.com/Apeireth/Apeireth"
 # 1.0 release 描述 (per decision-22 §3 + decision-57 §0 + decision-58 §0 + 2026-08-19 subagent 验证)
 # 借鉴 8/11 + 24 LOCKED (per R148 仅保 3 不可变脊柱) + 8 哲学锚 + V0.5 24 维 (30 维升级 R126 P1-4 未合入) + 9 重守门 v9 (lineage v6→v7→v8→v9) + 13 键 verdict cache = 1.0 release
-description = "Apeireth — AGI 操作系统 / LLM 基地（Rust）。v2.0 工程重构线：17-crate 单一工作区（foundation/engine/capabilities/adapters）+ runtime kernel/assembly + canonical agent loop + 受控工具与进程边界；设计/哲学/愿景沿袭 v1.0（8 哲学锚 + 三洋葱 + 13 键 + 0 装 PASS，v1 历史详单见 docs/archive/）"
+description = "Apeireth — AGI 操作系统 / LLM 基地（Rust）。v2.0 工程重构线：17-crate 单一工作区（foundation/engine/capabilities/adapters）+ runtime kernel/assembly + canonical agent loop + 受控工具与进程边界；设计/哲学/愿景沿袭 v1.0（9 哲学锚 + 三洋葱 + 13 键 + 0 装 PASS，v1 历史详单见 docs/archive/）"
 homepage = "https://github.com/Apeireth/Apeireth"
 keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]
 categories = ["ai", "asynchronous", "compilers"]
@@ -104,16 +104,16 @@ borrow_local_path = ".openclaw/workspace/borrowed-repos/"
 # - C2 0 fake PASS strict maintained (decision-74)
 # - 0 proactive push strict maintained (decision-126)
 # R148 hard_walls metadata 反映 B1 已形式撤销 (per decision-130). 2026-08-19 subagent 验证代码实际 9 重 v9.
-hard_walls = "8 (B1 24 LOCKED 已形式撤销 R148 (仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache) / B2 workspace.version 1.2.0 双轴制 (产品轴 tag v1.0.0 + workspace 轴 1.2.0) / B3 V0.5 24 维 (30 维升级 R126 P1-4 未合入 master) / B4 9 重守门 v9 (lineage v6→v7→v8→v9) / B5 8 哲学锚 / B6 三洋葱 (R125-5 升) / B7 9 organ 内部 fn / A1 R11 baseline 3 值 0.8682/0.8532/0.9063 数字严守 / A2 9 子测度结构严守 / A3 12 键 + PHL-07 = 13 键 / C1 0 主动 commit 已放宽 R126 / C2 0 装 PASS 严守 / C3 升 9 重 v9 / 0 主动 push 严守 / 3 不可变脊柱: Self-Disable + L0 HA + 13 键 verdict cache)"
+hard_walls = "8 (B1 24 LOCKED 已形式撤销 R148 (仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache) / B2 workspace.version 2.0.0-rc.1 (2026-08-30 RC1 发布起, per 6b81c210; 旧 1.2.0 双轴制已终结) / B3 V0.5 24 维 (30 维升级 R126 P1-4 未合入 master) / B4 9 重守门 v9 (lineage v6→v7→v8→v9) / B5 9 哲学锚 (8 + O-6, 2026-08-27 登记) / B6 三洋葱 (R125-5 升) / B7 9 organ 内部 fn / A1 R11 baseline 3 值 0.8682/0.8532/0.9063 数字严守 / A2 9 子测度结构严守 / A3 12 键 + PHL-07 = 13 键 / C1 0 主动 commit 已放宽 R126 / C2 0 装 PASS 严守 / C3 升 9 重 v9 / 0 主动 push 严守 / 3 不可变脊柱: Self-Disable + L0 HA + 13 键 verdict cache)"
 
 # R148 状态 (per decision-74 + decision-130, 主人 8/11 22:31 拍板): 24 LOCKED 入口签名 0 改 已形式撤销, 不再有约束力.
 # 仅保 3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache). 见 docs/conventions/10-locked.md + docs/omnibus/24-locked-crates.md.
 # locked_crates_count 字段保留作为历史技术事实 (R125 B1 落实的 24 crate 名单), 0 约束力.
 locked_crates_count = 24
 
-# 8 哲学锚 (per decision-22 §2.5 B5 + R126 P1-2 8 哲学锚升级 done)
-# S-1 北极星 + S-2 实事求是 + S-3 质量工程化 + O-1 安全优先 + O-2 走在前人 + O-3 干到底 + O-4 接手 + O-5 不假装
-philosophy_anchors = ["S-1", "S-2", "S-3", "O-1", "O-2", "O-3", "O-4", "O-5"]
+# 9 哲学锚 (per decision-22 §2.5 B5 + R126 P1-2 8 哲学锚升级 done + 2026-08-27 主人授权加 O-6)
+# S-1 北极星 + S-2 实事求是 + S-3 质量工程化 + O-1 安全优先 + O-2 走在前人 + O-3 干到底 + O-4 接手 + O-5 不假装 + O-6 永远追求最优
+philosophy_anchors = ["S-1", "S-2", "S-3", "O-1", "O-2", "O-3", "O-4", "O-5", "O-6"]
 
 # V0.5 24 维 (实际 `V05_DIM_COUNT: usize = 24` @ `apeireth-asi/src/lib.rs:56`, 2026-08-19 subagent 验证)
 # 历史 30 维升级 (R126 P1-4 25→30 维) 在 master HEAD 9bf36b1e 未合入 (git log 搜 P1-4 / 30 维 / v05.*30 全 0 命中)

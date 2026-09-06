@@ -44,7 +44,7 @@ Author:          主代理 Mavis
 - 真账 brief 模板必含 7 段 (任务 + 必读 + 必输出 + 0 装诚实 + 5 重守门 + LOCKED 0 触碰 + 真实施流程)
 
 物种化维度 (per vision.md L29-49 + apeireth-true-understanding-2026-08-28.md):
-- 三面一体: 基地 (LLM 操作系统) + Agent 平台 (16 crates workspace) + 她 (物种实现, per-user 塑形)
+- 三面一体: 基地 (LLM 操作系统) + Agent 平台 (17 crates workspace) + 她 (物种实现, per-user 塑形)
 - 五原型: 世界模型 + 自我改进 + 自主好奇心 + 连续感知 + 价值内化
 - 物种化: "发布后每个用户养的她, 机制/哲学/安全同源, 记忆/偏好/好奇形状被各自的共同生活塑形"
 ```
@@ -74,7 +74,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
    - docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md (8 个核心 .rs 实测 + 修订真实施估时)
 
 5. v2 真账 (本地 working tree):
-   - crates/ (16 crates workspace, 0 git clone 必要)
+   - crates/ (17 crates workspace, 0 git clone 必要)
    - legacy/donor/apeireth-companion/src/ (~100 modules, 1.0 真账)
    - _research_mem/apeireth-rust-fork/ (~86-crate v1 era)
 
@@ -99,17 +99,17 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
 - 真实施 7 段 (1.0 → 2.0 真账对接 + 真实施代码 + 真账对接 + 物种化借签 + 集成测试 + 0 装诚实 + 下一步)
 
 ### 2. 5 重守门 baseline 实测 (≤ 30 行)
-- cargo test --workspace --locked (期望 1739+N passed / 0 failed)
+- cargo test --workspace --locked (期望 3120+N passed / 0 failed)
 - cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 warning)
 - cargo check --workspace --locked (期望 0 副作用)
-- git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:44 (期望 0 行, LOCKED 0 触碰)
+- git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:46 (期望 0 行, LOCKED 0 触碰)
 - grep -r "legacy/" crates/ | wc -l (期望 < 100)
 
 ### 3. LOCKED 5 项 0 触碰 (≤ 30 行)
 - 9 哲学锚本体 (eight_anchors.rs:58-79): 0 行
 - 13 键 (philosophy.rs:142): 0 行
 - 3 项不可变脊柱 (onion.rs:249): 0 行
-- workspace.version (Cargo.toml:44): 0 改
+- workspace.version (Cargo.toml:46): 0 改
 - R11 baseline 3 值 (legacy reference): 0 触碰
 - 9 哲学锚表头 (eight_anchors.rs enum): 0 减
 
@@ -145,7 +145,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
 ```
 真实施时主代理必亲测 (0 装诚实 doctrine):
 - 1.0 .rs 0 实测部分补查 (35 项中 Round 13 亲测 8 项, 余 27 项需真实施时主代理亲测)
-- 2.0 真账实测 (16 crates workspace 真账, 本地 working tree 已就位)
+- 2.0 真账实测 (17 crates workspace 真账, 本地 working tree 已就位)
 - 真实施时主代理必亲测 (~2-3 天本地实测, 0 git clone 必要, per Round 15 用户 catch 修订)
 
 真账 brief 必含 (per O-6 永远追求最优):
@@ -173,14 +173,14 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
    - 当前实测: 0 warning
 2. tests 0 fail:
    - 命令: cargo test --workspace --locked
-   - 期望: 1739+N passed / 0 failed / 12 ignored
-   - 当前实测: 1739 passed
+   - 期望: 3120+N passed / 0 failed / 13 ignored
+   - 当前实测: 3120 passed / 0 failed / 13 ignored（2026-09-05 实测）
 3. legacy compat path < 100:
    - 命令: grep -r "legacy/" crates/ | wc -l
    - 期望: < 100
    - 当前实测: 36
 4. LOCKED 5 项 0 触碰:
-   - 命令: git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:44 crates/foundation/core/src/cognitive.rs
+   - 命令: git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:46 crates/foundation/core/src/cognitive.rs
    - 期望: 0 行
    - 当前实测: 0 行
 5. 9 哲学锚表头 0 减:
@@ -192,7 +192,7 @@ LOCKED 5 项 0 触碰 verify:
 - 9 哲学锚本体: crates/foundation/core/src/eight_anchors.rs:58-79 (enum)
 - 13 键: crates/foundation/core/src/philosophy.rs:142 (RUNTIME_ENFORCED = false)
 - 3 项不可变脊柱: crates/foundation/core/src/onion.rs:249
-- workspace.version: Cargo.toml:44 ("1.2.0")
+- workspace.version: Cargo.toml:46 ("2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210）)
 - R11 baseline 3 值: legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44 (R11_V1141/1131/1136_BASELINE = 0.8682/0.8532/0.9063)
 
 真实施必含 §3 + §4 5 重守门 baseline + LOCKED 0 触碰 verify (走扩展 trait 接口, 不破现有 9 organ trait + 12 cognitive slot wiring + LOCKED 5 项)
@@ -267,7 +267,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 ### 2.3 release 流程 (Week 18-20, 1-2 周)
 
 ```
-- 5 重守门 baseline 实测 (test 1739 / clippy 0 / LOCKED 0 / legacy 36 / 9 哲学锚 0 减)
+- 5 重守门 baseline 实测 (test 3120 / clippy 0 / LOCKED 0 / legacy 36 / 9 哲学锚 0 减)
 - ROADMAP §7 + MANIFESTO §14 + ROADMAP §12 check
 - git tag v2.0.0 (per 真账 §6 修订)
 - push v2.0.0 tag + release notes + release announcement
@@ -306,10 +306,10 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 - 0 引新外部 dep (per 真账 brief 约束)
 
 5 重守门 baseline + LOCKED 0 触碰:
-- cargo test --workspace --locked (期望 1739+N passed / 0 failed)
+- cargo test --workspace --locked (期望 3120+N passed / 0 failed)
 - cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 warning)
 - cargo check --workspace --locked (期望 0 副作用)
-- git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:44 crates/foundation/core/src/cognitive.rs (期望 0 行, LOCKED 0 触碰)
+- git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:46 crates/foundation/core/src/cognitive.rs (期望 0 行, LOCKED 0 触碰)
 - grep -r "legacy/" crates/ | wc -l (期望 < 100)
 
 真实施流程:
@@ -598,7 +598,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 - ✅ 真实施时主代理必亲测 (~2-3 天本地实测, 不依赖网络, 本地 working tree 已就位, 0 git clone 必要)
 - ✅ 1.0 真账 maturity 补查 (Round 13 主代理亲测 8 .rs, 余 27 项需真实施时主代理亲测)
-- ✅ 2.0 真账实测 (本地 working tree, 16 crates workspace)
+- ✅ 2.0 真账实测 (本地 working tree, 17 crates workspace)
 
 ---
 

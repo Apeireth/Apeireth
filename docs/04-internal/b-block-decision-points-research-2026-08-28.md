@@ -1,3 +1,5 @@
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+
 # B 块 frontend 对接 6 项主代理亲做决策 真账 (2026-08-28)
 
 **作者**: Sub-Agent | **HEAD**: `3eb7f26b` | **关系**: 1 份决策文档, 不写代码, 不 git add/commit

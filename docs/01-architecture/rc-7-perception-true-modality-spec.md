@@ -528,7 +528,7 @@ macos-capture = ["dep:xcap", "dep:cocoa"]
 | 9 variant enum | `crates/foundation/core/src/eight_anchors.rs:58-79` | 0 |
 | 13 键 `RUNTIME_ENFORCED = false` | `crates/foundation/core/src/philosophy.rs:142` | 0 |
 | 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` | 0 |
-| workspace.version = "1.2.0" | `Cargo.toml:43` | 0 |
+| workspace.version = "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210） | `Cargo.toml:46` | 0 |
 | R11 baseline 3 值 (0.8682/0.8532/0.9063) | (organ 模块) | 0 |
 | **`perception_backend.rs` 0 改** | `crates/foundation/plugin/src/perception_backend.rs:1-408` | 0 (R6 真写) |
 | **`perception.rs` 0 改** | `crates/foundation/plugin/src/perception.rs:1-458` | 0 (R6 真写) |

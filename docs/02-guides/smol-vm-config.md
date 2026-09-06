@@ -1,3 +1,5 @@
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+
 # smol-vm / libkrun 真接配置指南（历史设计记录）
 
 > Historical record. The smol-vm workflow and prototype workspace are not part

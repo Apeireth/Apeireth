@@ -34,9 +34,9 @@ Author:          主代理 Mavis
 ### 1.1 HEAD + 测试 + LOCKED
 
 - `origin/main @ 8286dac8` (Round 9 完)
-- 1739 tests passed / 0 failed / 12 ignored
+- 3120 passed / 0 failed / 13 ignored（2026-09-05 实测）
 - 0 clippy 警告 / 0 错误
-- 16 crates / ~74k 行 active (不含 legacy/)
+- 17 crates / ~74k 行 active (不含 legacy/)
 - 9 哲学锚 LOCKED, 0 触碰 LOCKED 5 项
 - A 块 (OrganOrchestrator 完整化 5 stage) done
 
@@ -66,7 +66,7 @@ Author:          主代理 Mavis
 | 9 哲学锚本体 | `crates/foundation/core/src/eight_anchors.rs:58-79` |
 | 13 键 | `crates/foundation/core/src/philosophy.rs:142` `RUNTIME_ENFORCED = false` |
 | 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` |
-| workspace.version | `Cargo.toml:44` `"1.2.0"` |
+| workspace.version | `Cargo.toml:46` `"2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210） |
 | R11 baseline 3 值 | legacy reference (`legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44`) |
 
 ### 1.4 Apeireth v2 已有借鉴链
@@ -102,7 +102,7 @@ Author:          主代理 Mavis
 | 维度 | HIGH | MED | LOW | NONE |
 |---|---|---|---|---|
 | **定义** | 直接可借鉴 (代码 / 设计 / 思路) | 同领域参考 (了解趋势, 不直接借鉴) | 远领域 (知道就行) | 完全无关 |
-| **Apeireth v2 路径** | AI Agent framework (16 crates, 9 organ, 12 slot, governance P0 hook 装) |
+| **Apeireth v2 路径** | AI Agent framework (17 crates, 9 organ, 12 slot, governance P0 hook 装) |
 | **直接借鉴** | 代码可移植 / 借鉴边界 / 0 触碰 LOCKED | 趋势参考 / 设计思路 |
 | **不直接借鉴** | 太远或风险高 | 太远或不合规 |
 
@@ -216,7 +216,7 @@ Author:          主代理 Mavis
 **0 触碰 LOCKED**: 0 改 nine_anchors.rs / philosophy.rs / onion.rs / Cargo.toml version / R11 baseline. 新增 `scripts/portable.sh` + `docs/portable-guide.md`.
 
 **对接现状**:
-- 16 crates Cargo workspace 兼容 portable (cargo metadata)
+- 17 crates Cargo workspace 兼容 portable (cargo metadata)
 - v2.0 release 后用户可用 U 盘随身带
 - 估时 1 周 (1 commit, 文档 + script + 测试)
 

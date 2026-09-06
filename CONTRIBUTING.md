@@ -1,11 +1,11 @@
 # 贡献指南 (Apeireth v2 工程线)
 
-> Apeireth 是我们的伙伴型 AGI 操作系统。贡献前请先读哲学——[docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md)（8 锚 / 三洋葱 / 0 装 PASS）。
+> Apeireth 是我们的伙伴型 AGI 操作系统。贡献前请先读哲学——[docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md)（9 锚 / 三洋葱 / 0 装 PASS）。
 
 ## 必读
 
-- [docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md) — 哲学（8 锚 / 三洋葱 / 0 装 PASS）
-- [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（16 crates 分组）
+- [docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md) — 哲学（9 锚 / 三洋葱 / 0 装 PASS）
+- [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（17 crates 分组）
 - [docs/01-architecture/security.md](docs/01-architecture/security.md) — 安全模型
 - [docs/03-reference/crates.md](docs/03-reference/crates.md) — crates 索引
 - [docs/04-internal/design-intent.md](docs/04-internal/design-intent.md) — 设计意图与我们拍板历史
@@ -15,7 +15,7 @@
 
 ```bash
 cargo check --workspace --all-targets   # 编译全 target 干净（含 examples/bins/tests）
-cargo test --workspace                  # 全量测试 0 失败（当前 16-crate 工作区 3119）
+cargo test --workspace                  # 全量测试 0 失败（当前 17-crate 工作区 3120）
 cargo fmt --all --check                 # 格式
 ```
 
