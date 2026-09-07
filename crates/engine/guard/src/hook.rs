@@ -13,17 +13,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::chain::{ActionStatus, BehaviorChain};
 use crate::chain_guard::ChainGuard;
-use crate::classifier::{ChainRiskClassifier, ClassifierEnforcementMode, NoClassifier};
+use crate::classifier::{ChainRiskClassifier, NoClassifier};
 use crate::dataset::DatasetRecorder;
 use crate::decision::GuardDecision;
 use crate::fast_guard::FastGuard;
-use crate::features_v2::{AgentChainFeatureV2, CrossTurnRiskSummary};
+use crate::features_v2::AgentChainFeatureV2;
 use crate::fusion::DecisionFusion;
-use crate::intent::{AlignmentAssessment, AlignmentClass, IntentAlignmentGuard};
+use crate::intent::{AlignmentAssessment, IntentAlignmentGuard};
 use crate::introspection::{
     GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto,
 };
 use crate::observation::SafetyObservation;
+use crate::semantics::{CapabilitySafetyMetadataProvider, CapabilitySafetyRegistry};
+use crate::session::{SessionBehaviorHistory, TurnBehaviorSummary};
+use crate::snapshot::FeatureSnapshot;
 
 const MAX_RECENT_EVENTS: usize = 200;
 
@@ -106,9 +109,12 @@ pub struct BehaviorChainGuardHook {
     session_scopes: Mutex<HashMap<SessionId, String>>,
     session_risk_history: Mutex<HashMap<SessionId, SessionRiskHistory>>,
     session_behavior_summary: Mutex<HashMap<SessionId, SessionBehaviorSummary>>,
+    session_history: Mutex<HashMap<SessionId, SessionBehaviorHistory>>,
     turn_intents: Mutex<HashMap<(SessionId, String), TaskIntentEnvelopeV1>>,
+    last_snapshots: Mutex<HashMap<(SessionId, String), FeatureSnapshot>>,
     dataset_recorder: Option<Arc<DatasetRecorder>>,
     classifier: Arc<dyn ChainRiskClassifier>,
+    safety_provider: Arc<dyn CapabilitySafetyMetadataProvider>,
     recent_events: Mutex<VecDeque<GuardEventDto>>,
     counters: Mutex<GuardCounters>,
 }
@@ -129,9 +135,12 @@ impl BehaviorChainGuardHook {
             session_scopes: Mutex::new(HashMap::new()),
             session_risk_history: Mutex::new(HashMap::new()),
             session_behavior_summary: Mutex::new(HashMap::new()),
+            session_history: Mutex::new(HashMap::new()),
             turn_intents: Mutex::new(HashMap::new()),
+            last_snapshots: Mutex::new(HashMap::new()),
             dataset_recorder: None,
             classifier: Arc::new(NoClassifier),
+            safety_provider: Arc::new(CapabilitySafetyRegistry::canonical()),
             recent_events: Mutex::new(VecDeque::with_capacity(MAX_RECENT_EVENTS)),
             counters: Mutex::new(GuardCounters::default()),
         }
@@ -155,6 +164,56 @@ impl BehaviorChainGuardHook {
     pub fn with_classifier(mut self, classifier: Arc<dyn ChainRiskClassifier>) -> Self {
         self.classifier = classifier;
         self
+    }
+
+    pub fn with_safety_provider(
+        mut self,
+        provider: Arc<dyn CapabilitySafetyMetadataProvider>,
+    ) -> Self {
+        self.safety_provider = provider;
+        self
+    }
+
+    pub fn last_feature_snapshot(
+        &self,
+        session_id: &SessionId,
+        action_id: &str,
+    ) -> Option<FeatureSnapshot> {
+        self.last_snapshots
+            .lock()
+            .get(&(*session_id, action_id.to_string()))
+            .cloned()
+    }
+
+    pub fn session_history(&self, session_id: &SessionId) -> Vec<TurnBehaviorSummary> {
+        self.session_history
+            .lock()
+            .get(session_id)
+            .map(|history| history.turns.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn update_action_execution(
+        &self,
+        session_id: &SessionId,
+        trace_id: &str,
+        action_id: &str,
+        succeeded: bool,
+    ) {
+        if let Some(chain) = self
+            .chains
+            .lock()
+            .get_mut(&(*session_id, trace_id.to_string()))
+        {
+            chain.update_action_status(
+                action_id,
+                if succeeded {
+                    ActionStatus::Succeeded
+                } else {
+                    ActionStatus::Failed
+                },
+            );
+        }
     }
 
     /// Set the declared task scope for a given session.
@@ -238,7 +297,7 @@ impl BehaviorChainGuardHook {
             ml_mode: self.classifier.enforcement_mode().as_str().to_string(),
             ml_reason: self.classifier.model_reason(),
             feature_schema_version: crate::features_v2::AGENT_CHAIN_FEATURE_V2.to_string(),
-            dataset_version: "guard-dataset-v3".to_string(),
+            dataset_version: crate::dataset::GUARD_DATASET_V3.to_string(),
         }
     }
 
@@ -256,6 +315,7 @@ impl BehaviorChainGuardHook {
         self.session_scopes.lock().remove(session_id);
         self.session_risk_history.lock().remove(session_id);
         self.session_behavior_summary.lock().remove(session_id);
+        self.session_history.lock().remove(session_id);
         self.turn_intents
             .lock()
             .retain(|(session, _), _| session != session_id);
@@ -287,6 +347,8 @@ impl BehaviorChainGuardHook {
             prior_actions: Vec::new(),
             external_effect: false,
             operation_class: apeireth_governance::OperationClass::Unknown,
+            operation_classes: vec![apeireth_governance::OperationClass::Unknown],
+            descriptor_source: crate::semantics::DescriptorSource::Unknown,
             data_sensitivity: crate::observation::DataSensitivity::Unknown,
             persistent_effect: false,
             destructive_effect: false,
@@ -309,11 +371,13 @@ impl BehaviorChainGuardHook {
         };
         let features = AgentChainFeatureV2::from_chain(&temp_chain);
         let prediction = self.classifier.classify_v2(&features);
-        let decision = if self.classifier.enforcement_mode() == ClassifierEnforcementMode::Shadow {
-            DecisionFusion::attach_prediction(&decision, &prediction)
-        } else {
-            DecisionFusion::fuse_v2(&decision, &fast_res, &prediction, &features)
-        };
+        let decision = DecisionFusion::apply(
+            self.classifier.enforcement_mode(),
+            &decision,
+            &fast_res,
+            &prediction,
+            &features,
+        );
 
         GuardDryRunResponse {
             decision: decision.decision.label().to_string(),
@@ -378,11 +442,12 @@ impl BehaviorChainGuardHook {
         let prior_actions = actions.iter().map(|a| a.capability_id.clone()).collect();
 
         // Extract normalized safety observation
-        let obs = SafetyObservation::from_governance_request(
+        let obs = SafetyObservation::from_governance_request_with_provider(
             request,
             retry_count,
             denied_before,
             prior_actions,
+            Some(self.safety_provider.as_ref()),
         );
 
         // Add action to behavior chain
@@ -403,8 +468,20 @@ impl BehaviorChainGuardHook {
             self.chain_guard.evaluate(chain, &obs, &fast_res)
         };
         guard_decision = apply_alignment(guard_decision, &alignment);
-        let summary = self.session_behavior_summary(&request.session);
-        if summary.credential_probe_count >= 2 && obs.may_access_credentials {
+        let cross_turn = self
+            .session_history
+            .lock()
+            .entry(request.session)
+            .or_default()
+            .cross_turn_features(&trace_id);
+        if cross_turn.sensitive_probe_turn_count >= 2
+            && (obs.may_access_credentials
+                || matches!(
+                    obs.data_sensitivity,
+                    crate::observation::DataSensitivity::Credential
+                        | crate::observation::DataSensitivity::Secret
+                ))
+        {
             guard_decision.decision = Decision::deny("repeated sensitive probing across turns");
             guard_decision.risk_score = guard_decision.risk_score.max(0.95);
             guard_decision
@@ -416,26 +493,16 @@ impl BehaviorChainGuardHook {
             );
             guard_decision.stage = crate::decision::GuardStage::ChainGuard;
         }
-        let features = AgentChainFeatureV2::from_chain_with_cross_turn(
-            chain,
-            CrossTurnRiskSummary {
-                recent_turns: summary.recent_turns,
-                denied_action_count: summary.denied_action_count,
-                credential_probe_count: summary.credential_probe_count,
-                sensitive_read_count: summary.sensitive_read_count,
-                network_egress_count: summary.network_egress_count,
-                repeated_scope_expansion_count: summary.repeated_scope_expansion_count,
-                repeated_alternate_tool_count: summary.repeated_alternate_tool_count,
-                risk_trend: summary.risk_trend,
-            },
+        let features = AgentChainFeatureV2::from_chain_with_cross_turn(chain, cross_turn);
+        let snapshot = FeatureSnapshot::capture(&trace_id, &action_id, features.clone());
+        let prediction = self.classifier.classify_v2(&snapshot.features);
+        let guard_decision = DecisionFusion::apply(
+            self.classifier.enforcement_mode(),
+            &guard_decision,
+            &fast_res,
+            &prediction,
+            &snapshot.features,
         );
-        let prediction = self.classifier.classify_v2(&features);
-        let guard_decision =
-            if self.classifier.enforcement_mode() == ClassifierEnforcementMode::Shadow {
-                DecisionFusion::attach_prediction(&guard_decision, &prediction)
-            } else {
-                DecisionFusion::fuse_v2(&guard_decision, &fast_res, &prediction, &features)
-            };
 
         // Update action status in chain
         let status = match &guard_decision.decision {
@@ -458,27 +525,44 @@ impl BehaviorChainGuardHook {
         }
 
         {
+            let mut histories = self.session_history.lock();
+            let history = histories.entry(request.session).or_default();
+            history.upsert(TurnBehaviorSummary::from_chain(
+                chain,
+                &obs,
+                guard_decision.risk_score,
+                matches!(guard_decision.decision, Decision::Deny { .. }),
+                matches!(guard_decision.decision, Decision::RequireApproval { .. }),
+                chrono::Utc::now().timestamp_millis(),
+            ));
             let mut summary = self.session_behavior_summary.lock();
             let state = summary.entry(request.session).or_default();
-            state.recent_turns = state.recent_turns.saturating_add(1).min(16);
-            state.denied_action_count +=
-                u32::from(matches!(guard_decision.decision, Decision::Deny { .. }));
+            let cross = history.cross_turn_features(&trace_id);
+            state.recent_turns = history.recent_turn_count();
+            state.denied_action_count = cross.denied_action_count
+                + u32::from(matches!(guard_decision.decision, Decision::Deny { .. }));
             state.approval_rejection_count += u32::from(matches!(
                 guard_decision.decision,
                 Decision::RequireApproval { .. }
             ));
-            state.credential_probe_count += u32::from(obs.may_access_credentials);
-            state.sensitive_read_count +=
-                u32::from(!obs.source_classes.is_empty() && obs.may_access_credentials);
-            state.network_egress_count += u32::from(obs.requires_network && obs.external_effect);
-            state.repeated_scope_expansion_count += u32::from(matches!(
-                alignment.class,
-                AlignmentClass::ScopeExpansion
-                    | AlignmentClass::Contradictory
-                    | AlignmentClass::HighRiskMismatch
-            ));
-            state.risk_trend =
-                (state.risk_trend * 0.75 + guard_decision.risk_score * 0.25).clamp(0.0, 1.0);
+            state.credential_probe_count = history
+                .turns
+                .iter()
+                .map(|turn| turn.credential_probe_count)
+                .sum();
+            state.sensitive_read_count = history
+                .turns
+                .iter()
+                .map(|turn| turn.sensitive_read_count)
+                .sum();
+            state.network_egress_count = history
+                .turns
+                .iter()
+                .map(|turn| turn.network_egress_count)
+                .sum();
+            state.repeated_scope_expansion_count = cross.repeated_scope_expansion_count;
+            state.repeated_alternate_tool_count = cross.repeated_alternate_tool_count;
+            state.risk_trend = cross.risk_trend;
         }
 
         // Update counters
@@ -516,8 +600,18 @@ impl BehaviorChainGuardHook {
 
         // Record dataset record if recorder is configured
         if let Some(recorder) = &self.dataset_recorder {
-            recorder.record_classification(&action_id, &obs, chain, &fast_res, &guard_decision);
+            recorder.record_classification(
+                &action_id,
+                &obs,
+                chain,
+                &fast_res,
+                &guard_decision,
+                &snapshot,
+            );
         }
+        self.last_snapshots
+            .lock()
+            .insert((request.session, action_id.clone()), snapshot);
 
         let verdict = guard_decision.to_verdict(self.name());
         (guard_decision, verdict)

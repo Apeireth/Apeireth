@@ -24,6 +24,7 @@ pub enum RiskClass {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ClassifierEnforcementMode {
+    Disabled,
     Shadow,
     Advisory,
     Enforce,
@@ -32,6 +33,7 @@ pub enum ClassifierEnforcementMode {
 impl ClassifierEnforcementMode {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::Disabled => "disabled",
             Self::Shadow => "shadow",
             Self::Advisory => "advisory",
             Self::Enforce => "enforce",
@@ -40,6 +42,7 @@ impl ClassifierEnforcementMode {
 
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
+            "disabled" | "off" | "none" => Some(Self::Disabled),
             "shadow" => Some(Self::Shadow),
             "advisory" => Some(Self::Advisory),
             "enforce" => Some(Self::Enforce),
@@ -48,14 +51,41 @@ impl ClassifierEnforcementMode {
     }
 }
 
+pub const MARGIN_CONFIDENCE_KIND: &str = "uncalibrated_margin";
+
+pub const KNOWN_FEATURE_NAMES: &[&str] = &[
+    "alignment_score",
+    "credential_to_external",
+    "unrequested_network_egress",
+    "unrequested_credential_access",
+    "unrequested_shell_execution",
+    "unrequested_delete",
+    "unrequested_publish",
+    "sensitive_to_external_flow",
+    "retry_after_denial",
+    "alternate_tool_after_denial",
+    "denied_count",
+    "external_effect_count",
+    "scope_expansion_count",
+    "cross_turn_denied_action_count",
+    "cross_turn_credential_probe_count",
+    "failed_action_ratio",
+];
+
 /// Model output with explicit availability and provenance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RiskPrediction {
     pub class: RiskClass,
     pub score: f64,
     pub confidence: f64,
+    #[serde(default = "default_confidence_kind")]
+    pub confidence_kind: String,
     pub model_version: String,
     pub available: bool,
+}
+
+fn default_confidence_kind() -> String {
+    MARGIN_CONFIDENCE_KIND.to_string()
 }
 
 impl RiskPrediction {
@@ -64,6 +94,7 @@ impl RiskPrediction {
             class: RiskClass::Unavailable,
             score: 0.0,
             confidence: 0.0,
+            confidence_kind: "unavailable".to_string(),
             model_version: "none".to_string(),
             available: false,
         }
@@ -115,7 +146,7 @@ impl ChainRiskClassifier for NoClassifier {
     }
 
     fn enforcement_mode(&self) -> ClassifierEnforcementMode {
-        ClassifierEnforcementMode::Shadow
+        ClassifierEnforcementMode::Disabled
     }
 
     fn model_reason(&self) -> Option<String> {
@@ -166,6 +197,7 @@ impl ChainRiskClassifier for ThresholdClassifier {
             class,
             score,
             confidence: 0.55,
+            confidence_kind: MARGIN_CONFIDENCE_KIND.to_string(),
             model_version: self.model_version.clone(),
             available: true,
         }
@@ -215,7 +247,11 @@ impl ChainRiskClassifier for ThresholdClassifier {
 /// service. The artifact is rejected when its feature schema does not match.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JointModelArtifact {
+    #[serde(default)]
+    pub artifact_schema: Option<String>,
     pub schema_version: String,
+    #[serde(default)]
+    pub feature_schema: Option<String>,
     pub model_id: String,
     pub model_version: String,
     pub feature_names: Vec<String>,
@@ -226,6 +262,21 @@ pub struct JointModelArtifact {
     pub medium_threshold: f64,
     #[serde(default)]
     pub mode: Option<ClassifierEnforcementMode>,
+    #[serde(default)]
+    pub training_dataset_hash: Option<String>,
+    #[serde(default)]
+    pub training_commit: Option<String>,
+    #[serde(default)]
+    pub training_script_version: Option<String>,
+    #[serde(default)]
+    pub artifact_sha256: Option<String>,
+    #[serde(default)]
+    pub calibration: Option<ModelCalibration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelCalibration {
+    pub kind: String,
 }
 
 /// Runtime inference for a trained/synthetic joint intent-behavior artifact.
@@ -239,16 +290,42 @@ impl JointRiskClassifier {
     pub fn from_json_str(serialized: &str) -> Result<Self, String> {
         let artifact: JointModelArtifact = serde_json::from_str(serialized)
             .map_err(|_| "invalid local model artifact".to_string())?;
-        if artifact.schema_version != crate::features_v2::AGENT_CHAIN_FEATURE_V2
-            || artifact.feature_names.len() != artifact.weights.len()
+        let feature_schema = artifact
+            .feature_schema
+            .as_deref()
+            .unwrap_or(artifact.schema_version.as_str());
+        if feature_schema != crate::features_v2::AGENT_CHAIN_FEATURE_V2 {
+            return Err("local model schema or numeric validation failed".to_string());
+        }
+        if artifact.feature_names.len() != artifact.weights.len()
             || artifact.feature_names.is_empty()
-            || !artifact
-                .weights
-                .iter()
-                .chain(std::iter::once(&artifact.bias))
-                .all(|value| value.is_finite())
         {
             return Err("local model schema or numeric validation failed".to_string());
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for name in &artifact.feature_names {
+            if !KNOWN_FEATURE_NAMES.contains(&name.as_str()) {
+                return Err(format!("unknown model feature {name}"));
+            }
+            if !seen.insert(name) {
+                return Err("duplicate model feature names".to_string());
+            }
+        }
+        if !artifact
+            .weights
+            .iter()
+            .chain(std::iter::once(&artifact.bias))
+            .all(|value| value.is_finite())
+        {
+            return Err("local model schema or numeric validation failed".to_string());
+        }
+        if !(0.0..=1.0).contains(&artifact.medium_threshold)
+            || !(0.0..=1.0).contains(&artifact.high_threshold)
+            || !(0.0..=1.0).contains(&artifact.critical_threshold)
+            || artifact.medium_threshold >= artifact.high_threshold
+            || artifact.high_threshold >= artifact.critical_threshold
+        {
+            return Err("invalid model thresholds".to_string());
         }
         let mode = artifact.mode.unwrap_or(ClassifierEnforcementMode::Shadow);
         Ok(Self { artifact, mode })
@@ -286,8 +363,14 @@ impl JointRiskClassifier {
             "cross_turn_credential_probe_count" => {
                 f64::from(features.cross_turn.credential_probe_count)
             }
-            "failed_action_ratio" => features.failed_action_ratio,
-            _ => 0.0,
+            "failed_action_ratio" => {
+                if features.failed_action_ratio_available {
+                    features.failed_action_ratio
+                } else {
+                    0.0
+                }
+            }
+            _ => unreachable!("artifact validation rejects unknown features"),
         }
     }
 }
@@ -325,6 +408,7 @@ impl ChainRiskClassifier for JointRiskClassifier {
             class,
             score,
             confidence: (0.5 + (score - 0.5).abs()).clamp(0.0, 1.0),
+            confidence_kind: MARGIN_CONFIDENCE_KIND.to_string(),
             model_version: self.artifact.model_version.clone(),
             available: true,
         }
@@ -392,6 +476,19 @@ mod tests {
     fn joint_artifact_rejects_wrong_feature_schema() {
         let invalid = artifact_json().replace("AgentChainFeatureV2", "AgentChainFeatureV1");
         assert!(JointRiskClassifier::from_json_str(&invalid).is_err());
+    }
+
+    #[test]
+    fn joint_artifact_rejects_unknown_feature_name() {
+        let invalid = artifact_json().replace("alignment_score", "unrequested_network_egres");
+        assert!(JointRiskClassifier::from_json_str(&invalid).is_err());
+    }
+
+    #[test]
+    fn joint_artifact_rejects_inverted_thresholds() {
+        let mut value: serde_json::Value = serde_json::from_str(&artifact_json()).unwrap();
+        value["medium_threshold"] = serde_json::json!(0.95);
+        assert!(JointRiskClassifier::from_json_str(&value.to_string()).is_err());
     }
 
     #[test]

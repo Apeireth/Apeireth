@@ -1,14 +1,26 @@
 //! Canonical capability safety semantics.
 //!
-//! Providers should eventually supply these descriptors with their capability
-//! metadata. The local registry is the conservative fallback for legacy and
-//! unknown tools; unknown external-effect tools are never treated as safe.
+//! Production truth comes from capability metadata when present. The local
+//! registry is the conservative fallback for legacy and unknown tools; unknown
+//! external-effect tools are never treated as safe.
 
 use std::collections::BTreeMap;
 
 use apeireth_governance::OperationClass;
 
+use crate::command_effect::CommandEffectAnalyzer;
 use crate::observation::{DataSensitivity, ResourceClass, SinkClass, SourceClass};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DescriptorSource {
+    Canonical,
+    PluginDeclared,
+    AdapterInferred,
+    FallbackHeuristic,
+    #[default]
+    Unknown,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CapabilitySafetyDescriptor {
@@ -26,6 +38,8 @@ pub struct CapabilitySafetyDescriptor {
     pub risk_tags: Vec<String>,
     pub data_sensitivity: DataSensitivity,
     pub known: bool,
+    #[serde(default)]
+    pub source: DescriptorSource,
 }
 
 impl CapabilitySafetyDescriptor {
@@ -45,15 +59,27 @@ impl CapabilitySafetyDescriptor {
             risk_tags: vec!["unknown_capability".to_string()],
             data_sensitivity: DataSensitivity::Unknown,
             known: false,
+            source: DescriptorSource::Unknown,
         }
     }
 
     pub fn primary_operation(&self) -> OperationClass {
         self.operation_classes
-            .first()
+            .iter()
             .copied()
+            .find(|operation| {
+                !matches!(
+                    *operation,
+                    OperationClass::Execute | OperationClass::Unknown
+                )
+            })
+            .or_else(|| self.operation_classes.first().copied())
             .unwrap_or(OperationClass::Unknown)
     }
+}
+
+pub trait CapabilitySafetyMetadataProvider: Send + Sync {
+    fn safety_descriptor(&self, capability_id: &str) -> Option<CapabilitySafetyDescriptor>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -62,6 +88,14 @@ pub struct CapabilitySafetyRegistry {
 }
 
 impl CapabilitySafetyRegistry {
+    pub fn canonical() -> Self {
+        let mut registry = Self::default();
+        for descriptor in canonical_descriptors() {
+            registry.register(descriptor);
+        }
+        registry
+    }
+
     pub fn register(&mut self, descriptor: CapabilitySafetyDescriptor) {
         self.descriptors
             .insert(descriptor.capability_id.clone(), descriptor);
@@ -75,7 +109,17 @@ impl CapabilitySafetyRegistry {
         self.descriptors
             .get(capability_id)
             .cloned()
+            .map(|mut descriptor| {
+                merge_command_effects(&mut descriptor, arguments);
+                descriptor
+            })
             .unwrap_or_else(|| infer_descriptor(capability_id, arguments))
+    }
+}
+
+impl CapabilitySafetyMetadataProvider for CapabilitySafetyRegistry {
+    fn safety_descriptor(&self, capability_id: &str) -> Option<CapabilitySafetyDescriptor> {
+        self.descriptors.get(capability_id).cloned()
     }
 }
 
@@ -83,35 +127,340 @@ pub fn descriptor_for_capability(
     capability_id: &str,
     arguments: &serde_json::Value,
 ) -> CapabilitySafetyDescriptor {
-    CapabilitySafetyRegistry::default().descriptor_for(capability_id, arguments)
+    CapabilitySafetyRegistry::canonical().descriptor_for(capability_id, arguments)
+}
+
+pub fn resolve_descriptor(
+    capability_id: &str,
+    arguments: &serde_json::Value,
+    provider: Option<&dyn CapabilitySafetyMetadataProvider>,
+) -> CapabilitySafetyDescriptor {
+    if let Some(mut descriptor) = provider.and_then(|item| item.safety_descriptor(capability_id)) {
+        merge_command_effects(&mut descriptor, arguments);
+        return descriptor;
+    }
+    CapabilitySafetyRegistry::canonical().descriptor_for(capability_id, arguments)
 }
 
 pub fn effect_fingerprint(
     descriptor: &CapabilitySafetyDescriptor,
-    arguments: &serde_json::Value,
+    _arguments: &serde_json::Value,
 ) -> String {
     use std::hash::{Hash, Hasher};
-    let target_class = arguments
-        .get("path")
-        .or_else(|| arguments.get("url"))
-        .map(|value| {
-            let text = value.as_str().unwrap_or_default();
-            if text.contains(".env") || text.contains("secret") || text.contains("credential") {
-                "sensitive_target"
-            } else if text.starts_with("http") {
-                "external_target"
-            } else {
-                "local_target"
-            }
+    let destination = descriptor
+        .output_sinks
+        .iter()
+        .copied()
+        .find(|sink| {
+            matches!(
+                *sink,
+                SinkClass::ExternalNetwork | SinkClass::WorkspaceFile | SinkClass::SystemFile
+            )
         })
-        .unwrap_or("argument_shape");
+        .or_else(|| descriptor.output_sinks.first().copied())
+        .unwrap_or(SinkClass::Unknown);
+    let target_class = if descriptor.may_access_credentials
+        || descriptor
+            .resource_classes
+            .contains(&ResourceClass::CredentialStore)
+    {
+        "sensitive_target"
+    } else if descriptor
+        .resource_classes
+        .contains(&ResourceClass::FilesystemSystem)
+        || descriptor
+            .resource_classes
+            .contains(&ResourceClass::SystemPersistence)
+    {
+        "system_target"
+    } else if descriptor.requires_network
+        || descriptor
+            .output_sinks
+            .contains(&SinkClass::ExternalNetwork)
+        || descriptor
+            .resource_classes
+            .contains(&ResourceClass::RepositoryRemote)
+    {
+        "external_target"
+    } else if descriptor
+        .resource_classes
+        .contains(&ResourceClass::FilesystemWorkspace)
+        || descriptor
+            .resource_classes
+            .contains(&ResourceClass::Repository)
+    {
+        "local_target"
+    } else {
+        "argument_shape"
+    };
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    descriptor.primary_operation().hash(&mut hasher);
-    descriptor.resource_classes.hash(&mut hasher);
-    descriptor.output_sinks.hash(&mut hasher);
+    let mut ops: Vec<_> = descriptor
+        .operation_classes
+        .iter()
+        .copied()
+        .filter(|operation| {
+            !matches!(
+                *operation,
+                OperationClass::Execute | OperationClass::SpawnProcess | OperationClass::Unknown
+            )
+        })
+        .collect();
+    if ops.is_empty() {
+        ops.push(descriptor.primary_operation());
+    }
+    ops.sort_by_key(|operation| format!("{operation:?}"));
+    ops.dedup();
+    ops.hash(&mut hasher);
+    destination.hash(&mut hasher);
     descriptor.destructive.hash(&mut hasher);
+    descriptor.persistent_effect.hash(&mut hasher);
     target_class.hash(&mut hasher);
     format!("effect:{:016x}", hasher.finish())
+}
+
+fn merge_command_effects(
+    descriptor: &mut CapabilitySafetyDescriptor,
+    arguments: &serde_json::Value,
+) {
+    let Some(command) = arguments.get("command").and_then(serde_json::Value::as_str) else {
+        return;
+    };
+    let summary = CommandEffectAnalyzer::analyze(command);
+    for operation in summary.operation_classes {
+        if !descriptor.operation_classes.contains(&operation) {
+            descriptor.operation_classes.push(operation);
+        }
+    }
+    for resource in summary.resource_classes {
+        if !descriptor.resource_classes.contains(&resource) {
+            descriptor.resource_classes.push(resource);
+        }
+    }
+    for sink in summary.sink_classes {
+        if !descriptor.output_sinks.contains(&sink) {
+            descriptor.output_sinks.push(sink);
+        }
+    }
+    descriptor.destructive |= summary.destructive;
+    descriptor.persistent_effect |=
+        summary.persistence_change || summary.filesystem_write || summary.repository_publish;
+    descriptor.requires_network |= summary.network_read || summary.network_send;
+    descriptor.may_access_credentials |= summary.credential_probe;
+    descriptor.external_effect |= summary.network_send || summary.repository_publish;
+    if summary.destructive {
+        descriptor.data_sensitivity = match descriptor.data_sensitivity {
+            DataSensitivity::Public => DataSensitivity::SystemSensitive,
+            other => other,
+        };
+    }
+}
+
+fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
+    vec![
+        describe(
+            "fs.read",
+            vec![OperationClass::Read],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "workspace",
+        ),
+        describe(
+            "fs.write",
+            vec![OperationClass::Write, OperationClass::Modify],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::UserPrompt],
+            vec![SinkClass::WorkspaceFile],
+            false,
+            false,
+            true,
+            false,
+            "workspace",
+        ),
+        describe(
+            "fs.delete",
+            vec![OperationClass::Delete],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::UserPrompt],
+            vec![SinkClass::WorkspaceFile],
+            false,
+            true,
+            true,
+            false,
+            "workspace",
+        ),
+        describe(
+            "shell.exec",
+            vec![OperationClass::Execute],
+            vec![ResourceClass::ProcessExecution],
+            vec![SourceClass::UserPrompt],
+            vec![SinkClass::ShellExecution],
+            true,
+            false,
+            false,
+            false,
+            "process",
+        ),
+        describe(
+            "tool.shell",
+            vec![OperationClass::Execute],
+            vec![ResourceClass::ProcessExecution],
+            vec![SourceClass::UserPrompt],
+            vec![SinkClass::ShellExecution],
+            true,
+            false,
+            false,
+            false,
+            "process",
+        ),
+        describe(
+            "http.get",
+            vec![OperationClass::NetworkRead],
+            vec![ResourceClass::NetworkPublic],
+            vec![SourceClass::ExternalNetwork],
+            vec![SinkClass::UserDisplay],
+            true,
+            false,
+            false,
+            true,
+            "external_network",
+        ),
+        describe(
+            "http.send",
+            vec![OperationClass::NetworkSend],
+            vec![ResourceClass::NetworkPublic],
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::ExternalNetwork],
+            true,
+            false,
+            false,
+            true,
+            "external_network",
+        ),
+        describe(
+            "tool.fetch",
+            vec![OperationClass::NetworkRead],
+            vec![ResourceClass::NetworkPublic],
+            vec![SourceClass::ExternalNetwork],
+            vec![SinkClass::UserDisplay],
+            true,
+            false,
+            false,
+            true,
+            "external_network",
+        ),
+        describe(
+            "repo.publish",
+            vec![OperationClass::Publish, OperationClass::NetworkSend],
+            vec![ResourceClass::RepositoryRemote],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::ExternalNetwork],
+            true,
+            false,
+            true,
+            true,
+            "repository_remote",
+        ),
+        describe(
+            "credential.read",
+            vec![OperationClass::CredentialRead],
+            vec![ResourceClass::CredentialStore],
+            vec![SourceClass::CredentialStore],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "credential",
+        ),
+        describe(
+            "env.read",
+            vec![OperationClass::Read],
+            vec![ResourceClass::EnvironmentVariables],
+            vec![SourceClass::Environment],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "environment",
+        ),
+        describe(
+            "secret.read",
+            vec![OperationClass::CredentialRead],
+            vec![ResourceClass::CredentialStore],
+            vec![SourceClass::CredentialStore],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "credential",
+        ),
+        describe(
+            "guard.policy.write",
+            vec![
+                OperationClass::AdminChange,
+                OperationClass::PersistenceChange,
+            ],
+            vec![ResourceClass::GovernancePolicy],
+            vec![SourceClass::UserPrompt],
+            vec![SinkClass::SystemFile],
+            false,
+            false,
+            true,
+            false,
+            "governance",
+        ),
+    ]
+}
+
+fn describe(
+    id: &str,
+    operations: Vec<OperationClass>,
+    resources: Vec<ResourceClass>,
+    sources: Vec<SourceClass>,
+    sinks: Vec<SinkClass>,
+    external: bool,
+    destructive: bool,
+    persistent: bool,
+    network: bool,
+    scope: &str,
+) -> CapabilitySafetyDescriptor {
+    let credential = operations.iter().any(|operation| {
+        matches!(
+            *operation,
+            OperationClass::CredentialRead | OperationClass::CredentialWrite
+        )
+    }) || resources.contains(&ResourceClass::CredentialStore);
+    let data_sensitivity = if credential {
+        DataSensitivity::Credential
+    } else if resources.contains(&ResourceClass::EnvironmentVariables) {
+        DataSensitivity::Secret
+    } else {
+        DataSensitivity::WorkspacePrivate
+    };
+    CapabilitySafetyDescriptor {
+        capability_id: id.to_string(),
+        operation_classes: operations,
+        resource_classes: resources,
+        input_sources: sources,
+        output_sinks: sinks,
+        external_effect: external,
+        destructive,
+        persistent_effect: persistent,
+        requires_network: network,
+        may_access_credentials: credential,
+        effect_scope: scope.to_string(),
+        risk_tags: vec!["canonical".to_string()],
+        data_sensitivity,
+        known: true,
+        source: DescriptorSource::Canonical,
+    }
 }
 
 fn infer_descriptor(
@@ -122,16 +471,16 @@ fn infer_descriptor(
     let command = arguments
         .get("command")
         .and_then(serde_json::Value::as_str)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+        .unwrap_or_default();
+    let mut descriptor = CapabilitySafetyDescriptor::unknown(capability_id);
+    descriptor.source = DescriptorSource::FallbackHeuristic;
+    descriptor.risk_tags = vec!["fallback_heuristic".to_string()];
     let is_shell = lower.contains("shell") || lower.contains("bash") || lower.contains("exec");
     let is_network = lower.contains("fetch")
         || lower.contains("http")
         || lower.contains("network")
         || command.contains("curl")
-        || command.contains("wget")
-        || command.contains("ssh")
-        || command.contains("scp");
+        || command.contains("wget");
     let is_publish =
         lower.contains("push") || lower.contains("publish") || lower.contains("upload");
     let is_credential = lower.contains("credential")
@@ -139,7 +488,6 @@ fn infer_descriptor(
         || lower.contains("keyring")
         || command.contains(".env")
         || command.contains("id_rsa");
-    let is_sensitive_probe = is_credential || lower.contains("env");
     let is_delete =
         lower.contains("delete") || lower.contains("remove") || lower.contains("unlink");
     let is_write = lower.contains("write")
@@ -147,10 +495,8 @@ fn infer_descriptor(
         || lower.contains("modify")
         || lower.contains("update")
         || is_delete;
-    let operation = if is_credential {
+    descriptor.operation_classes = vec![if is_credential {
         OperationClass::CredentialRead
-    } else if lower.contains("env") {
-        OperationClass::Read
     } else if is_delete {
         OperationClass::Delete
     } else if is_publish {
@@ -165,94 +511,84 @@ fn infer_descriptor(
         OperationClass::Execute
     } else if is_write {
         OperationClass::Modify
-    } else if lower.contains("search") || lower.contains("grep") {
-        OperationClass::Search
-    } else if lower.contains("list") || lower.contains("enum") {
-        OperationClass::Enumerate
-    } else if lower.contains("read") || lower.contains("file") || lower.contains("fs") {
+    } else if lower.contains("read") || lower.contains("fs") {
         OperationClass::Read
     } else {
         OperationClass::Unknown
-    };
-
-    let mut descriptor = CapabilitySafetyDescriptor {
-        capability_id: capability_id.to_string(),
-        operation_classes: vec![operation],
-        resource_classes: vec![ResourceClass::Unknown],
-        input_sources: vec![SourceClass::Unknown],
-        output_sinks: vec![SinkClass::Unknown],
-        external_effect: is_shell
-            || is_network
-            || is_publish
-            || is_write
-            || operation == OperationClass::Unknown,
-        destructive: is_delete,
-        persistent_effect: is_write,
-        requires_network: is_network,
-        may_access_credentials: is_sensitive_probe,
-        effect_scope: "unknown".to_string(),
-        risk_tags: vec!["fallback_semantics".to_string()],
-        data_sensitivity: if is_credential {
-            DataSensitivity::Credential
-        } else if is_sensitive_probe {
-            DataSensitivity::Secret
-        } else {
-            DataSensitivity::Unknown
-        },
-        known: false,
-    };
-
+    }];
+    descriptor.external_effect = is_shell
+        || is_network
+        || is_publish
+        || descriptor.primary_operation() == OperationClass::Unknown;
+    descriptor.destructive = is_delete;
+    descriptor.persistent_effect = is_write;
+    descriptor.requires_network = is_network;
+    descriptor.may_access_credentials = is_credential || lower.contains("env");
+    descriptor.known = false;
     if is_credential {
         descriptor.resource_classes = vec![ResourceClass::CredentialStore];
         descriptor.input_sources = vec![SourceClass::CredentialStore];
-        descriptor.output_sinks = vec![SinkClass::UserDisplay];
-        descriptor.effect_scope = "credential".to_string();
-        descriptor.risk_tags.push("sensitive_source".to_string());
-    } else if lower.contains("memory") {
-        descriptor.resource_classes = vec![ResourceClass::MemoryEpisodic];
-        descriptor.input_sources = vec![SourceClass::PrivateMemory];
-        descriptor.output_sinks = vec![SinkClass::UserDisplay];
-        descriptor.data_sensitivity = DataSensitivity::MemoryPrivate;
-        descriptor.effect_scope = "private_memory".to_string();
+        descriptor.data_sensitivity = DataSensitivity::Credential;
     } else if lower.contains("env") {
         descriptor.resource_classes = vec![ResourceClass::EnvironmentVariables];
         descriptor.input_sources = vec![SourceClass::Environment];
-        descriptor.output_sinks = vec![SinkClass::UserDisplay];
         descriptor.data_sensitivity = DataSensitivity::Secret;
-        descriptor.effect_scope = "environment".to_string();
-    } else if lower.contains("repo") || lower.contains("git") {
-        descriptor.resource_classes = vec![ResourceClass::Repository];
-        descriptor.input_sources = vec![SourceClass::WorkspaceFile];
-        descriptor.output_sinks = vec![SinkClass::UserDisplay];
-        descriptor.effect_scope = "repository".to_string();
     } else if is_network || is_publish {
         descriptor.resource_classes = vec![ResourceClass::NetworkPublic];
-        descriptor.input_sources = vec![SourceClass::ToolOutput];
-        descriptor.output_sinks = vec![if operation == OperationClass::NetworkRead {
-            SinkClass::UserDisplay
-        } else {
-            SinkClass::ExternalNetwork
-        }];
-        descriptor.effect_scope = "external_network".to_string();
+        descriptor.output_sinks = vec![SinkClass::ExternalNetwork];
     } else if is_shell {
         descriptor.resource_classes = vec![ResourceClass::ProcessExecution];
-        descriptor.input_sources = vec![SourceClass::UserPrompt];
         descriptor.output_sinks = vec![SinkClass::ShellExecution];
-        descriptor.effect_scope = "process".to_string();
     } else if lower.contains("file") || lower.contains("fs") {
         descriptor.resource_classes = vec![ResourceClass::FilesystemWorkspace];
-        descriptor.input_sources = if is_write {
-            vec![SourceClass::UserPrompt]
-        } else {
-            vec![SourceClass::WorkspaceFile]
-        };
-        descriptor.output_sinks = vec![if is_write {
-            SinkClass::WorkspaceFile
-        } else {
-            SinkClass::UserDisplay
-        }];
-        descriptor.effect_scope = "workspace".to_string();
     }
-
+    merge_command_effects(&mut descriptor, arguments);
+    if descriptor.primary_operation() != OperationClass::Unknown {
+        descriptor.source = DescriptorSource::FallbackHeuristic;
+    }
     descriptor
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_effect_fingerprints_align_across_tool_families() {
+        let delete = descriptor_for_capability("fs.delete", &serde_json::json!({}));
+        let rm = descriptor_for_capability(
+            "shell.exec",
+            &serde_json::json!({ "command": "rm file.txt" }),
+        );
+        assert_eq!(
+            effect_fingerprint(&delete, &serde_json::json!({})),
+            effect_fingerprint(&rm, &serde_json::json!({ "command": "rm file.txt" }))
+        );
+
+        let publish = descriptor_for_capability("repo.publish", &serde_json::json!({}));
+        let push = descriptor_for_capability(
+            "shell.exec",
+            &serde_json::json!({ "command": "git push origin main" }),
+        );
+        assert_eq!(
+            effect_fingerprint(&publish, &serde_json::json!({})),
+            effect_fingerprint(
+                &push,
+                &serde_json::json!({ "command": "git push origin main" })
+            )
+        );
+
+        let send = descriptor_for_capability("http.send", &serde_json::json!({}));
+        let curl = descriptor_for_capability(
+            "shell.exec",
+            &serde_json::json!({ "command": "curl -X POST https://example.invalid -d a=1" }),
+        );
+        assert_eq!(
+            effect_fingerprint(&send, &serde_json::json!({})),
+            effect_fingerprint(
+                &curl,
+                &serde_json::json!({ "command": "curl -X POST https://example.invalid -d a=1" })
+            )
+        );
+    }
 }

@@ -325,7 +325,19 @@ fn test_guard_dataset_loop_closure() {
     let chain = BehaviorChain::new("test-session", trace_str.clone());
     let fast_res = apeireth_guard::FastGuardResult::allow();
     let decision = GuardDecision::allow_fast();
-    recorder.record_classification("act:test:1:0", &obs, &chain, &fast_res, &decision);
+    let snapshot = apeireth_guard::FeatureSnapshot::capture(
+        &trace_str,
+        "act:test:1:0",
+        apeireth_guard::AgentChainFeatureV2::from_chain(&chain),
+    );
+    recorder.record_classification(
+        "act:test:1:0",
+        &obs,
+        &chain,
+        &fast_res,
+        &decision,
+        &snapshot,
+    );
 
     // 2. Observer receives runtime events
     observer.emit(RuntimeEvent::Trace {

@@ -42,6 +42,8 @@ pub struct ActionNode {
     #[serde(default)]
     pub operation_class: OperationClass,
     #[serde(default)]
+    pub operation_classes: Vec<OperationClass>,
+    #[serde(default)]
     pub resource_classes: Vec<ResourceClass>,
     #[serde(default)]
     pub source_classes: Vec<SourceClass>,
@@ -59,6 +61,8 @@ pub struct ActionNode {
     pub destructive_effect: bool,
     #[serde(default)]
     pub effect_fingerprint: String,
+    #[serde(default)]
+    pub descriptor_source: crate::semantics::DescriptorSource,
 }
 
 /// Status of an action.
@@ -180,6 +184,7 @@ impl BehaviorChain {
             denied: false,
             external_effect: obs.external_effect,
             operation_class: obs.operation_class,
+            operation_classes: obs.all_operations(),
             resource_classes: obs.resource_classes.clone(),
             source_classes: obs.source_classes.clone(),
             sink_classes: obs.sink_classes.clone(),
@@ -189,6 +194,7 @@ impl BehaviorChain {
             persistent_effect: obs.persistent_effect,
             destructive_effect: obs.destructive_effect,
             effect_fingerprint: obs.effect_fingerprint.clone(),
+            descriptor_source: obs.descriptor_source,
         };
         self.nodes.push(BehaviorNode::Action(action_node));
 
@@ -225,6 +231,14 @@ impl BehaviorChain {
                         edge_type: EdgeType::SameEffect,
                         label: Some("same_semantic_effect".to_string()),
                     });
+                    if previous_action.denied || previous_action.status == ActionStatus::Denied {
+                        self.edges.push(BehaviorEdge {
+                            from: prev.clone(),
+                            to: action_id.clone(),
+                            edge_type: EdgeType::Escalation,
+                            label: Some("same_effect_after_denial".to_string()),
+                        });
+                    }
                 }
             }
         }
@@ -295,6 +309,20 @@ impl BehaviorChain {
         ) {
             action.alignment_class = Some(alignment);
         }
+    }
+
+    pub fn has_same_effect_after_denial(&self) -> bool {
+        self.edges.iter().any(|edge| {
+            edge.edge_type == EdgeType::SameEffect
+                && self.edges.iter().any(|other| {
+                    other.from == edge.from
+                        && other.to == edge.to
+                        && matches!(
+                            other.edge_type,
+                            EdgeType::Escalation | EdgeType::AlternativeExecution
+                        )
+                })
+        })
     }
 
     /// Retrieve all action nodes.
@@ -446,5 +474,50 @@ impl BehaviorChain {
     pub fn extract_features_v2(&self) -> serde_json::Value {
         serde_json::to_value(crate::features_v2::AgentChainFeatureV2::from_chain(self))
             .unwrap_or_else(|_| serde_json::json!({"schema_version": "AgentChainFeatureV2"}))
+    }
+}
+
+impl ActionNode {
+    pub fn all_operations(&self) -> Vec<OperationClass> {
+        if self.operation_classes.is_empty() {
+            vec![self.operation_class]
+        } else {
+            self.operation_classes.clone()
+        }
+    }
+
+    pub fn may_access_credentials(&self) -> bool {
+        self.source_classes.contains(&SourceClass::CredentialStore)
+            || self
+                .resource_classes
+                .contains(&ResourceClass::CredentialStore)
+            || self.all_operations().iter().any(|operation| {
+                matches!(
+                    *operation,
+                    OperationClass::CredentialRead | OperationClass::CredentialWrite
+                )
+            })
+    }
+
+    pub fn is_sensitive_read(&self) -> bool {
+        self.source_classes.iter().any(|source| {
+            matches!(
+                source,
+                SourceClass::CredentialStore
+                    | SourceClass::Environment
+                    | SourceClass::PrivateMemory
+                    | SourceClass::PrivateFile
+            )
+        })
+    }
+
+    pub fn has_network_egress(&self) -> bool {
+        self.sink_classes.contains(&SinkClass::ExternalNetwork)
+            || self.all_operations().iter().any(|operation| {
+                matches!(
+                    *operation,
+                    OperationClass::NetworkSend | OperationClass::Publish
+                )
+            })
     }
 }

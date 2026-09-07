@@ -6,13 +6,14 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use apeireth_guard::DatasetRecorder;
+use apeireth_guard::{BehaviorChainGuardHook, DatasetRecorder};
 use apeireth_runtime::canonical::{RuntimeEvent, RuntimeEventSink, TraceEvent};
 
 /// Observer implementing `RuntimeEventSink` for closing the loop on Guard ML dataset collection.
 #[derive(Clone)]
 pub struct GuardDatasetObserver {
     recorder: Arc<DatasetRecorder>,
+    hook: Option<Arc<BehaviorChainGuardHook>>,
     approvals: Arc<Mutex<HashMap<String, (String, String)>>>,
 }
 
@@ -21,8 +22,15 @@ impl GuardDatasetObserver {
     pub fn new(recorder: Arc<DatasetRecorder>) -> Self {
         Self {
             recorder,
+            hook: None,
             approvals: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    #[must_use]
+    pub fn with_hook(mut self, hook: Arc<BehaviorChainGuardHook>) -> Self {
+        self.hook = Some(hook);
+        self
     }
 
     /// Access the underlying dataset recorder.
@@ -51,7 +59,7 @@ impl RuntimeEventSink for GuardDatasetObserver {
                 // eventual resolution below is the approval event.
             }
             RuntimeEvent::Trace {
-                session: _,
+                session,
                 trace,
                 at: _,
                 event,
@@ -102,6 +110,14 @@ impl RuntimeEventSink for GuardDatasetObserver {
                         &tool_call_id,
                         outcome,
                     );
+                    if let Some(hook) = &self.hook {
+                        hook.update_action_execution(
+                            &session,
+                            &trace.to_string(),
+                            &tool_call_id,
+                            succeeded,
+                        );
+                    }
                 }
                 TraceEvent::TurnCompleted { .. } => {
                     self.recorder.record_outcome(

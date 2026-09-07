@@ -20,6 +20,8 @@ pub struct CrossTurnRiskSummary {
     pub repeated_scope_expansion_count: u32,
     pub repeated_alternate_tool_count: u32,
     pub risk_trend: f64,
+    #[serde(default)]
+    pub sensitive_probe_turn_count: u32,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -60,11 +62,21 @@ pub struct AgentChainFeatureV2 {
     pub target_switch_rate: f64,
     pub destination_switch_rate: f64,
     pub failed_action_ratio: f64,
+    #[serde(default)]
+    pub failed_action_ratio_available: bool,
     pub denial_followup_count: u32,
     pub risk_acceleration: f64,
     pub effect_repetition_count: u32,
     pub scope_expansion_velocity: f64,
     pub cross_turn: CrossTurnRiskSummary,
+    #[serde(default)]
+    pub target_switch_available: bool,
+    #[serde(default)]
+    pub destination_switch_available: bool,
+    #[serde(default)]
+    pub intent_resource_mismatch_available: bool,
+    #[serde(default)]
+    pub descriptor_source_canonical_ratio: f64,
 }
 
 impl AgentChainFeatureV2 {
@@ -136,34 +148,40 @@ impl AgentChainFeatureV2 {
             )
         });
         for action in &actions {
-            let operation = action.operation_class;
-            if matches!(
-                operation,
-                OperationClass::NetworkSend | OperationClass::Publish
-            ) && !allowed_network
+            let operations = action.all_operations();
+            if operations.iter().any(|operation| {
+                matches!(
+                    *operation,
+                    OperationClass::NetworkSend | OperationClass::Publish
+                )
+            }) && !allowed_network
                 && !allowed_publish
             {
                 unrequested_network_egress = true;
                 sink_mismatch_count += 1;
             }
-            if matches!(
-                operation,
-                OperationClass::CredentialRead | OperationClass::CredentialWrite
-            ) && !allowed_credentials
+            if operations.iter().any(|operation| {
+                matches!(
+                    *operation,
+                    OperationClass::CredentialRead | OperationClass::CredentialWrite
+                )
+            }) && !allowed_credentials
             {
                 unrequested_credential_access = true;
             }
-            if matches!(
-                operation,
-                OperationClass::Execute | OperationClass::SpawnProcess
-            ) && !allowed_shell
+            if operations.iter().any(|operation| {
+                matches!(
+                    *operation,
+                    OperationClass::Execute | OperationClass::SpawnProcess
+                )
+            }) && !allowed_shell
             {
                 unrequested_shell_execution = true;
             }
-            if operation == OperationClass::Delete && !allowed_delete {
+            if operations.contains(&OperationClass::Delete) && !allowed_delete {
                 unrequested_delete = true;
             }
-            if operation == OperationClass::Publish && !allowed_publish {
+            if operations.contains(&OperationClass::Publish) && !allowed_publish {
                 unrequested_publish = true;
             }
             if action.persistent_effect
@@ -178,7 +196,10 @@ impl AgentChainFeatureV2 {
             }
         }
         let action_count = actions.len() as u32;
-        let failed_action_ratio = if action_count == 0 {
+        let execution_observed = actions
+            .iter()
+            .any(|action| !matches!(action.execution_status.as_str(), "" | "not_started"));
+        let failed_action_ratio = if action_count == 0 || !execution_observed {
             0.0
         } else {
             f64::from(failed_count) / f64::from(action_count)
@@ -191,6 +212,62 @@ impl AgentChainFeatureV2 {
             0.0
         } else {
             transitions as f64 / f64::from(action_count - 1)
+        };
+        let known_targets = actions
+            .iter()
+            .filter(|action| {
+                action
+                    .resource_classes
+                    .iter()
+                    .any(|class| *class != crate::observation::ResourceClass::Unknown)
+            })
+            .count();
+        let target_switch_available = known_targets >= 2;
+        let target_switch_rate = if target_switch_available {
+            let switches = actions
+                .windows(2)
+                .filter(|pair| pair[0].resource_classes.first() != pair[1].resource_classes.first())
+                .count();
+            switches as f64 / f64::from(action_count - 1)
+        } else {
+            0.0
+        };
+        let known_destinations = actions
+            .iter()
+            .filter(|action| {
+                action
+                    .sink_classes
+                    .iter()
+                    .any(|class| *class != crate::observation::SinkClass::Unknown)
+            })
+            .count();
+        let destination_switch_available = known_destinations >= 2;
+        let destination_switch_rate = if destination_switch_available {
+            let switches = actions
+                .windows(2)
+                .filter(|pair| pair[0].sink_classes.first() != pair[1].sink_classes.first())
+                .count();
+            switches as f64 / f64::from(action_count - 1)
+        } else {
+            0.0
+        };
+        let expected_resources = intent
+            .map(|value| value.expected_resource_classes.clone())
+            .unwrap_or_default();
+        let intent_resource_mismatch_available = !expected_resources.is_empty();
+        let intent_resource_mismatch_count = if intent_resource_mismatch_available {
+            actions
+                .iter()
+                .filter(|action| {
+                    !action.resource_classes.iter().any(|class| {
+                        expected_resources
+                            .iter()
+                            .any(|expected| expected.eq_ignore_ascii_case(&format!("{class:?}")))
+                    })
+                })
+                .count() as u32
+        } else {
+            0
         };
         let effect_repetition_count: u32 =
             effects.values().map(|count| count.saturating_sub(1)).sum();
@@ -214,7 +291,7 @@ impl AgentChainFeatureV2 {
             unexpected_operation_count,
             scope_expansion_count,
             intent_capability_mismatch_count: capability_mismatch_count,
-            intent_resource_mismatch_count: 0,
+            intent_resource_mismatch_count,
             intent_sink_mismatch_count: sink_mismatch_count,
             unrequested_network_egress,
             unrequested_credential_access,
@@ -234,9 +311,10 @@ impl AgentChainFeatureV2 {
             sensitive_source_count: v1.sensitive_source_count,
             external_sink_count: v1.external_sink_count,
             capability_switch_rate,
-            target_switch_rate: capability_switch_rate,
-            destination_switch_rate: capability_switch_rate,
+            target_switch_rate,
+            destination_switch_rate,
             failed_action_ratio,
+            failed_action_ratio_available: execution_observed,
             denial_followup_count,
             risk_acceleration: if scope_expansion_count > 0 {
                 alignment_score
@@ -250,6 +328,24 @@ impl AgentChainFeatureV2 {
                 f64::from(scope_expansion_count) / f64::from(action_count)
             },
             cross_turn,
+            target_switch_available,
+            destination_switch_available,
+            intent_resource_mismatch_available,
+            descriptor_source_canonical_ratio: if action_count == 0 {
+                0.0
+            } else {
+                f64::from(
+                    actions
+                        .iter()
+                        .filter(|action| {
+                            matches!(
+                                action.descriptor_source,
+                                crate::semantics::DescriptorSource::Canonical
+                            )
+                        })
+                        .count() as u32,
+                ) / f64::from(action_count)
+            },
         }
     }
 }

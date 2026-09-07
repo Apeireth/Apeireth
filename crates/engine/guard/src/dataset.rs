@@ -17,6 +17,10 @@ use crate::chain::BehaviorChain;
 use crate::decision::GuardDecision;
 use crate::fast_guard::FastGuardResult;
 use crate::observation::SafetyObservation;
+use crate::snapshot::FeatureSnapshot;
+
+pub const GUARD_DATASET_V3: &str = "guard-dataset-v3";
+pub const GUARD_DATASET_V2: &str = "guard-dataset-v2";
 
 /// Controlled taxonomy for execution outcomes recorded into the Guard dataset.
 /// Raw runtime errors, sensitive URLs, paths, or credentials must never be recorded.
@@ -141,6 +145,8 @@ pub struct ClassificationRecord {
     pub alignment_class: Option<String>,
     #[serde(default)]
     pub operation_class: Option<String>,
+    #[serde(default)]
+    pub feature_snapshot_id: Option<String>,
 }
 
 fn default_feature_schema_version() -> String {
@@ -251,20 +257,22 @@ impl DatasetRecorder {
         chain: &BehaviorChain,
         fast_res: &FastGuardResult,
         guard_dec: &GuardDecision,
+        snapshot: &FeatureSnapshot,
     ) {
         if !self.is_enabled() {
             return;
         }
 
         let record = GuardDatasetRecord::Classification(ClassificationRecord {
-            format: "guard-dataset-v3".to_string(),
-            feature_schema_version: "AgentChainFeatureV2".to_string(),
+            format: GUARD_DATASET_V3.to_string(),
+            feature_schema_version: snapshot.schema_version.clone(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: obs.trace_id.clone(),
             session_id: obs.session_id.clone(),
             action_id: action_id.to_string(),
             capability_id: obs.capability_id.clone(),
-            chain_features: chain.extract_features_v2(),
+            chain_features: serde_json::to_value(&snapshot.features)
+                .unwrap_or_else(|_| serde_json::json!({"schema_version": "AgentChainFeatureV2"})),
             fast_guard: serde_json::json!({
                 "clear": fast_res.clear,
                 "reasons": fast_res.reasons,
@@ -295,6 +303,7 @@ impl DatasetRecorder {
                 .actions()
                 .last()
                 .map(|action| format!("{:?}", action.operation_class)),
+            feature_snapshot_id: Some(snapshot.snapshot_id.clone()),
         });
 
         self.write_line(&record);
@@ -316,7 +325,7 @@ impl DatasetRecorder {
 
         let safe_outcome = execution_outcome.map(GuardExecutionOutcome::normalize);
         let record = GuardDatasetRecord::Outcome(OutcomeRecord {
-            format: "guard-dataset-v2".to_string(),
+            format: GUARD_DATASET_V3.to_string(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: trace_id.to_string(),
             action_id: action_id.map(str::to_string),
@@ -345,7 +354,7 @@ impl DatasetRecorder {
             return;
         }
         self.write_line(&GuardDatasetRecord::Approval(ApprovalRecord {
-            format: "guard-dataset-v2".to_string(),
+            format: GUARD_DATASET_V3.to_string(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: trace_id.to_string(),
             action_id: action_id.to_string(),
@@ -368,7 +377,7 @@ impl DatasetRecorder {
         }
         let safe_outcome = GuardExecutionOutcome::normalize(outcome);
         self.write_line(&GuardDatasetRecord::Execution(ExecutionRecord {
-            format: "guard-dataset-v2".to_string(),
+            format: GUARD_DATASET_V3.to_string(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: trace_id.to_string(),
             action_id: action_id.to_string(),
@@ -384,7 +393,7 @@ impl DatasetRecorder {
         }
         let safe_outcome = GuardExecutionOutcome::normalize(outcome);
         self.write_line(&GuardDatasetRecord::Compensation(CompensationRecord {
-            format: "guard-dataset-v2".to_string(),
+            format: GUARD_DATASET_V3.to_string(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             trace_id: trace_id.to_string(),
             action_id: action_id.to_string(),
@@ -403,7 +412,12 @@ impl DatasetRecorder {
         execution_outcome: Option<&str>,
     ) {
         let action_id = format!("act:{}:{}:0", obs.request_id, 0);
-        self.record_classification(&action_id, obs, chain, fast_res, guard_dec);
+        let snapshot = crate::snapshot::FeatureSnapshot::capture(
+            &obs.trace_id,
+            &action_id,
+            crate::features_v2::AgentChainFeatureV2::from_chain(chain),
+        );
+        self.record_classification(&action_id, obs, chain, fast_res, guard_dec, &snapshot);
         if human_approval.is_some() || execution_outcome.is_some() {
             self.record_outcome(
                 &obs.trace_id,

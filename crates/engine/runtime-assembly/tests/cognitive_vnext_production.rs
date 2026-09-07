@@ -322,5 +322,5 @@ async fn production_runtime_events_close_guard_dataset_by_action_id() {
     assert!(tool_sample.classifier_prediction.is_some());
     assert!(samples
         .iter()
-        .any(|sample| { sample.features["schema_version"] == "AgentChainFeatureV1" }));
+        .any(|sample| { sample.features["schema_version"] == "AgentChainFeatureV2" }));
 }
