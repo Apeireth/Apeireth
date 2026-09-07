@@ -8,11 +8,17 @@ This round did not create a new Guard branch and did not modify `main`.
 - Branch: `feature/cognitive-infrastructure-vnext`
 - Canonical repository: `Apeireth/Apeireth` (`apeireth-rust`)
 - Base SHA: `3d4d4ab997a81b038b33ae1b9b41a7ab06ac5af9`
+- Final SHA: `4c28da2ec35b691f58c76d941403fb943fe2fcbe`
 - `origin/main`: `7647d2c91d55901aeae7202f3842b65233bd053c`
 - Next vs main at start: ahead, behind = 0
 
-Final SHA is the tip of this branch after the Guard 3.1 commits. Record it from
-`git rev-parse HEAD` after those commits land; do not treat the 3.0 SHA as current.
+## Commit list
+
+- `ae2395e4` fix(guard): make intent, fusion, and FeatureV2 snapshots semantically truthful
+- `2f9cfe1c` feat(guard-scenarios): generate FeatureV2 from real intent-action simulations
+- `4c28da2e` docs: report Guard 3.1 correctness and evaluation status
+
+The SHA of this docs file after the follow-up record commit is the branch tip.
 
 ## P0 findings and fixes
 
