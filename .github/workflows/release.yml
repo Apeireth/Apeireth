@@ -92,7 +92,7 @@ jobs:
 
       - name: Upload .deb artifact
         if: ${{ !inputs.skip_upload }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-deb-${{ matrix.target }}
           path: |
@@ -131,7 +131,7 @@ jobs:
 
       - name: Upload .rpm artifact
         if: ${{ !inputs.skip_upload }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-rpm-x86_64
           path: |
@@ -183,7 +183,7 @@ jobs:
 
       - name: Upload tarball artifact
         if: ${{ !inputs.skip_upload }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-tarball-${{ matrix.target }}
           path: |
@@ -232,7 +232,7 @@ jobs:
 
       - name: Upload formula artifact
         if: ${{ !inputs.skip_upload }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-brew-formula
           path: packaging/brew/apeireth.rb
@@ -288,7 +288,7 @@ jobs:
 
       - name: Upload manifest artifact
         if: ${{ !inputs.skip_upload }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-scoop-manifest
           path: packaging/scoop/apeireth.json
@@ -386,7 +386,7 @@ jobs:
       # === upload SBOM 作为 release artifact ===
       - name: Upload SBOM artifact
         if: ${{ !inputs.skip_upload }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-cyclonedx-sbom
           path: cyclonedx-sbom.json
@@ -395,7 +395,7 @@ jobs:
 
       - name: Upload audit-report.json
         if: ${{ !inputs.skip_upload }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-audit-report
           path: audit-report.json
@@ -404,7 +404,7 @@ jobs:
 
       - name: Upload vet+audit+deny logs
         if: ${{ !inputs.skip_upload }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-tp20-s5-supply-chain-logs
           path: reports/tp20-s5-cargo-*.txt
