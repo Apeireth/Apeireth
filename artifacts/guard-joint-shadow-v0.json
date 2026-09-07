@@ -1,7 +1,13 @@
 {
-  "schema_version": "AgentChainFeatureV2",
-  "model_id": "guard-joint-shadow-v0",
-  "model_version": "guard-joint-shadow-v0.1",
+  "artifact_schema": "guard-joint-artifact-v1",
+  "artifact_sha256": "4bdd284740595fc576c78dea73d4477e033e1d0afd8337fd87cc7082e4def1e8",
+  "bias": -5.307219520061563,
+  "calibration": {
+    "a": 0.6966120120342474,
+    "b": -0.7914091848870944,
+    "kind": "platt"
+  },
+  "critical_threshold": 0.9,
   "feature_names": [
     "alignment_score",
     "credential_to_external",
@@ -20,27 +26,33 @@
     "cross_turn_credential_probe_count",
     "failed_action_ratio"
   ],
-  "weights": [
-    4.616623125797672,
-    0.268702500498861,
-    0.6514334625573509,
-    0.725492503020631,
-    0.6849011439826428,
-    0.5803749290637252,
-    0.6868438198414504,
-    0.9537311182599817,
-    0.23500803679187787,
-    0.35801711127461255,
-    0.7325563010733044,
-    -0.8523722252260482,
-    1.316440624291383,
-    0.0,
-    0.5006930833264672,
-    0.0559276753084292
-  ],
-  "bias": -1.557345325224183,
-  "critical_threshold": 0.9,
+  "feature_schema": "AgentChainFeatureV2",
+  "feature_schema_hash": "065fca115611d552b1915dbed8ecdcc64cdb9848df8c9892286844bbb115cbc1",
   "high_threshold": 0.7,
   "medium_threshold": 0.4,
-  "mode": "shadow"
+  "mode": "shadow",
+  "model_id": "guard-joint-shadow-v0",
+  "model_version": "guard-joint-shadow-v0.2",
+  "schema_version": "AgentChainFeatureV2",
+  "training_commit": "f05351e47bfb1d4738340286e9b376799058774c",
+  "training_dataset_hash": "b50c43ca00565dc7c463faced6ae917e9404f03698a6e37282d22b441d932112",
+  "training_script_version": "train_shadow.py",
+  "weights": [
+    5.070487837057538,
+    0.0,
+    3.8121702692376,
+    9.005981141667531,
+    -2.681325214470374,
+    8.434492528504544,
+    9.407759748720563,
+    0.0,
+    0.8408420350234279,
+    0.0,
+    0.8408420350234279,
+    -0.4428298265095894,
+    4.994288127599348,
+    0.0,
+    0.0,
+    0.0
+  ]
 }
