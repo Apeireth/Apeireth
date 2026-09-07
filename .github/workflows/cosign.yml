@@ -183,7 +183,7 @@ jobs:
       # 私钥永不入 step log, 永不入 repo, 永不入 artifact
       - name: Save private key as job artifact (owner-only)
         if: false  # 默认 false, 防止误配; owner 临时 re-key 时改 true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cosign-private-key-EMERGENCY-ONLY
           path: /tmp/cosign-keygen/cosign.key
@@ -386,7 +386,7 @@ jobs:
 
       # === Upload 8 包 .sig 产物 ===
       - name: Upload cosign signatures
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cosign-signatures-${{ env.APEIRETH_VERSION }}
           path: dist/signatures/
@@ -397,7 +397,7 @@ jobs:
       # 让 workflow_dispatch skip_sign=true 模式可以从同一 run 拿 build + sig
       # (per run_url 解析 → run_id)
       - name: Re-upload 8 packages for verify-only mode (R21 续 D-1 100%)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-builds-${{ env.APEIRETH_VERSION }}
           path: dist/
