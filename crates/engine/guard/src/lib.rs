@@ -21,6 +21,7 @@ pub mod hook;
 pub mod intent;
 pub mod introspection;
 pub mod observation;
+pub mod oracle;
 pub mod scenario;
 pub mod semantics;
 pub mod session;
@@ -29,9 +30,10 @@ pub mod snapshot;
 pub use chain::{ActionNode, ActionStatus, BehaviorChain, BehaviorEdge, BehaviorNode, EdgeType};
 pub use chain_guard::ChainGuard;
 pub use classifier::{
-    ChainRiskClassifier, ClassifierEnforcementMode, JointModelArtifact, JointRiskClassifier,
-    NoClassifier, RiskClass, RiskPrediction, ThresholdClassifier, KNOWN_FEATURE_NAMES,
-    MARGIN_CONFIDENCE_KIND,
+    canonical_artifact_sha256, feature_schema_hash, stamp_artifact_file, ChainRiskClassifier,
+    ClassifierEnforcementMode, JointModelArtifact, JointRiskClassifier, ModelCalibration,
+    NoClassifier, RiskClass, RiskPrediction, ThresholdClassifier, CALIBRATED_CONFIDENCE_KIND,
+    KNOWN_FEATURE_NAMES, MARGIN_CONFIDENCE_KIND,
 };
 pub use command_effect::{CommandEffectAnalyzer, CommandEffectSummary};
 pub use dataset::{DatasetRecorder, GuardDatasetRecord, GuardExecutionOutcome, GUARD_DATASET_V3};
@@ -48,10 +50,14 @@ pub use intent::{
 };
 pub use introspection::{GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto};
 pub use observation::{DataSensitivity, ResourceClass, SafetyObservation, SinkClass, SourceClass};
-pub use scenario::{run_scenario, GuardScenario, ScenarioCatalog};
+pub use oracle::{ScenarioOracle, SecurityScenarioOracle};
+pub use scenario::{
+    family_split, run_scenario, GuardScenario, ScenarioCatalog, ScenarioOutcome, ScenarioPair,
+};
 pub use semantics::{
-    descriptor_for_capability, CapabilitySafetyDescriptor, CapabilitySafetyMetadataProvider,
-    CapabilitySafetyRegistry, DescriptorSource,
+    canonical_descriptor_coverage, descriptor_for_capability, CapabilitySafetyDescriptor,
+    CapabilitySafetyMetadataProvider, CapabilitySafetyRegistry, DescriptorCoverageReport,
+    DescriptorSource, BUILTIN_CANONICAL_CAPABILITY_IDS,
 };
 pub use session::{SessionBehaviorHistory, TurnBehaviorSummary, MAX_TURN_HISTORY};
 pub use snapshot::FeatureSnapshot;

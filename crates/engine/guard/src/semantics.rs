@@ -130,6 +130,71 @@ pub fn descriptor_for_capability(
     CapabilitySafetyRegistry::canonical().descriptor_for(capability_id, arguments)
 }
 
+pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
+    "fs.read",
+    "fs.write",
+    "fs.delete",
+    "shell.exec",
+    "tool.shell",
+    "http.get",
+    "http.send",
+    "tool.fetch",
+    "repo.publish",
+    "tool.repo",
+    "credential.read",
+    "env.read",
+    "secret.read",
+    "guard.policy.write",
+    "tool.filesystem",
+    "tool.search",
+];
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DescriptorCoverageReport {
+    pub canonical_count: usize,
+    pub explicit_count: usize,
+    pub coverage_pct: f64,
+    pub unknown_pct: f64,
+    pub fallback_pct: f64,
+}
+
+pub fn canonical_descriptor_coverage() -> DescriptorCoverageReport {
+    let empty = serde_json::json!({});
+    let total = BUILTIN_CANONICAL_CAPABILITY_IDS.len();
+    let mut explicit = 0usize;
+    let mut unknown = 0usize;
+    let mut fallback = 0usize;
+    for id in BUILTIN_CANONICAL_CAPABILITY_IDS {
+        let descriptor = descriptor_for_capability(id, &empty);
+        match descriptor.source {
+            DescriptorSource::Canonical | DescriptorSource::PluginDeclared => explicit += 1,
+            DescriptorSource::FallbackHeuristic | DescriptorSource::AdapterInferred => {
+                fallback += 1
+            }
+            DescriptorSource::Unknown => unknown += 1,
+        }
+    }
+    DescriptorCoverageReport {
+        canonical_count: total,
+        explicit_count: explicit,
+        coverage_pct: if total == 0 {
+            0.0
+        } else {
+            100.0 * explicit as f64 / total as f64
+        },
+        unknown_pct: if total == 0 {
+            0.0
+        } else {
+            100.0 * unknown as f64 / total as f64
+        },
+        fallback_pct: if total == 0 {
+            0.0
+        } else {
+            100.0 * fallback as f64 / total as f64
+        },
+    }
+}
+
 pub fn resolve_descriptor(
     capability_id: &str,
     arguments: &serde_json::Value,
@@ -400,6 +465,42 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             false,
             "credential",
+        ),
+        describe(
+            "tool.repo",
+            vec![OperationClass::Read],
+            vec![ResourceClass::Repository],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "repository",
+        ),
+        describe(
+            "tool.filesystem",
+            vec![OperationClass::Read, OperationClass::Write],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::WorkspaceFile],
+            false,
+            false,
+            true,
+            false,
+            "workspace",
+        ),
+        describe(
+            "tool.search",
+            vec![OperationClass::Read],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "workspace",
         ),
         describe(
             "guard.policy.write",

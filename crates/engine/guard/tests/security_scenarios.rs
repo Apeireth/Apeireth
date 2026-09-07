@@ -1,7 +1,7 @@
 use apeireth_guard::{AgentChainFeatureV2, ChainRiskClassifier, JointRiskClassifier};
 
 const SCENARIOS: &str = include_str!("../../../../scripts/guard_ml/scenarios.jsonl");
-const ARTIFACT: &str = include_str!("../../../../artifacts/guard-joint-shadow-v0.json");
+const ARTIFACT: &str = include_str!("../../../../scripts/guard_ml/fixture_artifact.json");
 
 fn feature_from_row(values: &serde_json::Value) -> AgentChainFeatureV2 {
     let number = |name: &str| {
@@ -63,7 +63,15 @@ fn scenario_fixture_is_bounded_and_covers_required_categories() {
 
 #[test]
 fn generated_shadow_classifier_matches_fixture_labels() {
-    let classifier = JointRiskClassifier::from_json_str(ARTIFACT).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(ARTIFACT).unwrap();
+    value["feature_schema"] = serde_json::json!("AgentChainFeatureV2");
+    value["feature_schema_hash"] = serde_json::json!(apeireth_guard::feature_schema_hash());
+    if let Some(object) = value.as_object_mut() {
+        object.remove("artifact_sha256");
+    }
+    let sha = apeireth_guard::canonical_artifact_sha256(&value.to_string()).unwrap();
+    value["artifact_sha256"] = serde_json::json!(sha);
+    let classifier = JointRiskClassifier::from_json_str(&value.to_string()).unwrap();
     for line in SCENARIOS.lines().filter(|line| !line.trim().is_empty()) {
         let row: serde_json::Value = serde_json::from_str(line).unwrap();
         let features = feature_from_row(&row["features"]);

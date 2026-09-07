@@ -378,8 +378,9 @@ async fn same_effect_bypass_across_tool_families() {
 
 #[test]
 fn unknown_model_feature_and_bad_thresholds_are_rejected() {
-    let ok = serde_json::json!({
+    let mut ok = serde_json::json!({
         "schema_version": "AgentChainFeatureV2",
+        "feature_schema": "AgentChainFeatureV2",
         "model_id": "x",
         "model_version": "x",
         "feature_names": ["alignment_score"],
@@ -389,13 +390,17 @@ fn unknown_model_feature_and_bad_thresholds_are_rejected() {
         "high_threshold": 0.7,
         "medium_threshold": 0.4
     });
+    ok["feature_schema_hash"] = serde_json::json!(apeireth_guard::feature_schema_hash());
+    let sha = apeireth_guard::canonical_artifact_sha256(&ok.to_string()).unwrap();
+    ok["artifact_sha256"] = serde_json::json!(sha);
     assert!(JointRiskClassifier::from_json_str(&ok.to_string()).is_ok());
     let typo = ok
         .to_string()
         .replace("alignment_score", "unrequested_network_egres");
     assert!(JointRiskClassifier::from_json_str(&typo).is_err());
-    let bad = ok.to_string().replace("0.4", "0.95");
-    assert!(JointRiskClassifier::from_json_str(&bad).is_err());
+    let mut bad = ok.clone();
+    bad["medium_threshold"] = serde_json::json!(0.95);
+    assert!(JointRiskClassifier::from_json_str(&bad.to_string()).is_err());
 }
 
 #[tokio::test]

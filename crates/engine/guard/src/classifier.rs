@@ -52,6 +52,7 @@ impl ClassifierEnforcementMode {
 }
 
 pub const MARGIN_CONFIDENCE_KIND: &str = "uncalibrated_margin";
+pub const CALIBRATED_CONFIDENCE_KIND: &str = "calibrated_probability";
 
 pub const KNOWN_FEATURE_NAMES: &[&str] = &[
     "alignment_score",
@@ -271,12 +272,91 @@ pub struct JointModelArtifact {
     #[serde(default)]
     pub artifact_sha256: Option<String>,
     #[serde(default)]
+    pub feature_schema_hash: Option<String>,
+    #[serde(default)]
     pub calibration: Option<ModelCalibration>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelCalibration {
     pub kind: String,
+    #[serde(default)]
+    pub a: Option<f64>,
+    #[serde(default)]
+    pub b: Option<f64>,
+}
+
+pub fn feature_schema_hash() -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(crate::features_v2::AGENT_CHAIN_FEATURE_V2.as_bytes());
+    hasher.update(b"\n");
+    hasher.update(KNOWN_FEATURE_NAMES.join("\n").as_bytes());
+    hasher.update(b"\nencoding=f64_bool01");
+    hex_encode(&hasher.finalize())
+}
+
+pub fn canonical_artifact_sha256(serialized: &str) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let bytes = canonical_artifact_bytes(serialized)?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    Ok(hex_encode(&hasher.finalize()))
+}
+
+fn canonical_artifact_bytes(serialized: &str) -> Result<Vec<u8>, String> {
+    let mut value: serde_json::Value =
+        serde_json::from_str(serialized).map_err(|_| "invalid local model artifact".to_string())?;
+    if let Some(object) = value.as_object_mut() {
+        object.remove("artifact_sha256");
+    }
+    Ok(serde_json::to_vec(&sort_json(value))
+        .map_err(|_| "invalid local model artifact".to_string())?)
+}
+
+fn sort_json(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut ordered = serde_json::Map::new();
+            let mut keys: Vec<_> = map.keys().cloned().collect();
+            keys.sort();
+            for key in keys {
+                if let Some(child) = map.get(&key) {
+                    ordered.insert(key, sort_json(child.clone()));
+                }
+            }
+            serde_json::Value::Object(ordered)
+        }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.into_iter().map(sort_json).collect())
+        }
+        other => other,
+    }
+}
+
+pub fn stamp_artifact_file(path: impl AsRef<Path>) -> Result<String, String> {
+    let path = path.as_ref();
+    let serialized =
+        std::fs::read_to_string(path).map_err(|_| "local model unavailable".to_string())?;
+    let mut value: serde_json::Value = serde_json::from_str(&serialized)
+        .map_err(|_| "invalid local model artifact".to_string())?;
+    if let Some(object) = value.as_object_mut() {
+        object.insert(
+            "feature_schema_hash".to_string(),
+            serde_json::json!(feature_schema_hash()),
+        );
+        object.remove("artifact_sha256");
+    }
+    let sha = canonical_artifact_sha256(&value.to_string())?;
+    value["artifact_sha256"] = serde_json::json!(sha);
+    let pretty = serde_json::to_string_pretty(&value)
+        .map_err(|_| "invalid local model artifact".to_string())?;
+    std::fs::write(path, pretty + "\n").map_err(|_| "local model unavailable".to_string())?;
+    Ok(sha)
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// Runtime inference for a trained/synthetic joint intent-behavior artifact.
@@ -288,8 +368,24 @@ pub struct JointRiskClassifier {
 
 impl JointRiskClassifier {
     pub fn from_json_str(serialized: &str) -> Result<Self, String> {
+        let expected_sha = canonical_artifact_sha256(serialized)?;
         let artifact: JointModelArtifact = serde_json::from_str(serialized)
             .map_err(|_| "invalid local model artifact".to_string())?;
+        let declared_sha = artifact
+            .artifact_sha256
+            .as_deref()
+            .ok_or_else(|| "missing artifact sha256".to_string())?;
+        if declared_sha != expected_sha {
+            return Err("artifact sha256 mismatch".to_string());
+        }
+        let expected_schema = feature_schema_hash();
+        let declared_schema = artifact
+            .feature_schema_hash
+            .as_deref()
+            .ok_or_else(|| "missing feature schema hash".to_string())?;
+        if declared_schema != expected_schema {
+            return Err("feature schema hash mismatch".to_string());
+        }
         let feature_schema = artifact
             .feature_schema
             .as_deref()
@@ -302,11 +398,19 @@ impl JointRiskClassifier {
         {
             return Err("local model schema or numeric validation failed".to_string());
         }
+        let mut expected_index = 0usize;
         let mut seen = std::collections::BTreeSet::new();
         for name in &artifact.feature_names {
             if !KNOWN_FEATURE_NAMES.contains(&name.as_str()) {
                 return Err(format!("unknown model feature {name}"));
             }
+            let Some(position) = KNOWN_FEATURE_NAMES[expected_index..]
+                .iter()
+                .position(|known| *known == name.as_str())
+            else {
+                return Err("model feature order is incompatible".to_string());
+            };
+            expected_index += position + 1;
             if !seen.insert(name) {
                 return Err("duplicate model feature names".to_string());
             }
@@ -326,6 +430,17 @@ impl JointRiskClassifier {
             || artifact.high_threshold >= artifact.critical_threshold
         {
             return Err("invalid model thresholds".to_string());
+        }
+        if let Some(calibration) = &artifact.calibration {
+            if calibration.kind == "platt" {
+                let valid = calibration
+                    .a
+                    .zip(calibration.b)
+                    .is_some_and(|(a, b)| a.is_finite() && b.is_finite());
+                if !valid {
+                    return Err("invalid platt calibration".to_string());
+                }
+            }
         }
         let mode = artifact.mode.unwrap_or(ClassifierEnforcementMode::Shadow);
         Ok(Self { artifact, mode })
@@ -386,7 +501,7 @@ impl ChainRiskClassifier for JointRiskClassifier {
     }
 
     fn classify_v2(&self, features: &AgentChainFeatureV2) -> RiskPrediction {
-        let logit = self.artifact.bias
+        let mut logit = self.artifact.bias
             + self
                 .artifact
                 .feature_names
@@ -394,7 +509,19 @@ impl ChainRiskClassifier for JointRiskClassifier {
                 .zip(&self.artifact.weights)
                 .map(|(name, weight)| weight * Self::feature_value(name, features))
                 .sum::<f64>();
-        let score = 1.0 / (1.0 + (-logit.clamp(-30.0, 30.0)).exp());
+        let (score, confidence_kind) = match self.artifact.calibration.as_ref() {
+            Some(calibration) if calibration.kind == "platt" => {
+                if let (Some(a), Some(b)) = (calibration.a, calibration.b) {
+                    logit = a * logit + b;
+                }
+                let score = 1.0 / (1.0 + (-logit.clamp(-30.0, 30.0)).exp());
+                (score, CALIBRATED_CONFIDENCE_KIND.to_string())
+            }
+            _ => {
+                let score = 1.0 / (1.0 + (-logit.clamp(-30.0, 30.0)).exp());
+                (score, MARGIN_CONFIDENCE_KIND.to_string())
+            }
+        };
         let class = if score >= self.artifact.critical_threshold {
             RiskClass::Critical
         } else if score >= self.artifact.high_threshold {
@@ -407,8 +534,12 @@ impl ChainRiskClassifier for JointRiskClassifier {
         RiskPrediction {
             class,
             score,
-            confidence: (0.5 + (score - 0.5).abs()).clamp(0.0, 1.0),
-            confidence_kind: MARGIN_CONFIDENCE_KIND.to_string(),
+            confidence: if confidence_kind == CALIBRATED_CONFIDENCE_KIND {
+                score
+            } else {
+                (0.5 + (score - 0.5).abs()).clamp(0.0, 1.0)
+            },
+            confidence_kind,
             model_version: self.artifact.model_version.clone(),
             available: true,
         }
@@ -442,19 +573,33 @@ mod tests {
     use super::*;
 
     fn artifact_json() -> String {
-        serde_json::json!({
-            "schema_version": "AgentChainFeatureV2",
-            "model_id": "guard-joint-shadow-v0",
-            "model_version": "guard-joint-shadow-v0.1",
-            "feature_names": ["alignment_score", "credential_to_external"],
-            "weights": [10.0, 4.0],
-            "bias": -5.0,
-            "critical_threshold": 0.9,
-            "high_threshold": 0.7,
-            "medium_threshold": 0.4,
-            "mode": "shadow"
-        })
-        .to_string()
+        stamp(
+            serde_json::json!({
+                "schema_version": "AgentChainFeatureV2",
+                "feature_schema": "AgentChainFeatureV2",
+                "model_id": "guard-joint-shadow-v0",
+                "model_version": "guard-joint-shadow-v0.1",
+                "feature_names": ["alignment_score", "credential_to_external"],
+                "weights": [10.0, 4.0],
+                "bias": -5.0,
+                "critical_threshold": 0.9,
+                "high_threshold": 0.7,
+                "medium_threshold": 0.4,
+                "mode": "shadow"
+            })
+            .to_string(),
+        )
+    }
+
+    fn stamp(serialized: String) -> String {
+        let mut value: serde_json::Value = serde_json::from_str(&serialized).unwrap();
+        value["feature_schema_hash"] = serde_json::json!(feature_schema_hash());
+        if let Some(object) = value.as_object_mut() {
+            object.remove("artifact_sha256");
+        }
+        let sha = canonical_artifact_sha256(&value.to_string()).unwrap();
+        value["artifact_sha256"] = serde_json::json!(sha);
+        value.to_string()
     }
 
     #[test]
@@ -485,10 +630,27 @@ mod tests {
     }
 
     #[test]
-    fn joint_artifact_rejects_inverted_thresholds() {
+    fn joint_artifact_rejects_tampered_hash_and_weights() {
         let mut value: serde_json::Value = serde_json::from_str(&artifact_json()).unwrap();
-        value["medium_threshold"] = serde_json::json!(0.95);
+        value["weights"][0] = serde_json::json!(99.0);
         assert!(JointRiskClassifier::from_json_str(&value.to_string()).is_err());
+        value = serde_json::from_str(&artifact_json()).unwrap();
+        value["artifact_sha256"] = serde_json::json!("0".repeat(64));
+        assert!(JointRiskClassifier::from_json_str(&value.to_string()).is_err());
+        value = serde_json::from_str(&artifact_json()).unwrap();
+        value["medium_threshold"] = serde_json::json!(0.1);
+        assert!(JointRiskClassifier::from_json_str(&value.to_string()).is_err());
+        value = serde_json::from_str(&artifact_json()).unwrap();
+        value["model_version"] = serde_json::json!("tampered");
+        assert!(JointRiskClassifier::from_json_str(&value.to_string()).is_err());
+        value = serde_json::from_str(&artifact_json()).unwrap();
+        value["feature_names"][0] = serde_json::json!("failed_action_ratio");
+        value["feature_names"][1] = serde_json::json!("alignment_score");
+        let sha = canonical_artifact_sha256(&value.to_string()).unwrap();
+        value["artifact_sha256"] = serde_json::json!(sha);
+        assert!(JointRiskClassifier::from_json_str(&value.to_string()).is_err());
+        let missing = artifact_json().replace("AgentChainFeatureV2", "AgentChainFeatureV1");
+        assert!(JointRiskClassifier::from_json_str(&missing).is_err());
     }
 
     #[test]
@@ -497,11 +659,20 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/../../../artifacts/guard-joint-shadow-v0.json"
         ));
-        let classifier = JointRiskClassifier::from_json_str(serialized).unwrap();
-        assert_eq!(
-            classifier.model_version().as_deref(),
-            Some("guard-joint-shadow-v0.1")
-        );
+        let mut value: serde_json::Value = serde_json::from_str(serialized).unwrap();
+        value["feature_schema"] = serde_json::json!("AgentChainFeatureV2");
+        value["feature_schema_hash"] = serde_json::json!(feature_schema_hash());
+        if let Some(object) = value.as_object_mut() {
+            object.remove("artifact_sha256");
+        }
+        let sha = canonical_artifact_sha256(&value.to_string()).unwrap();
+        value["artifact_sha256"] = serde_json::json!(sha);
+        let classifier = JointRiskClassifier::from_json_str(&value.to_string()).unwrap();
+        assert!(classifier
+            .model_version()
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with("guard-joint-shadow-v0"));
         assert_eq!(
             classifier.enforcement_mode(),
             ClassifierEnforcementMode::Shadow
