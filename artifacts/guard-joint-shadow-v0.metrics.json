@@ -1,15 +1,57 @@
 {
-  "sample_count": 32,
-  "positive_count": 22.0,
-  "confusion_matrix": {
-    "tp": 22,
-    "fp": 0,
-    "tn": 10,
-    "fn": 0
+  "source": "scripts\\guard_ml\\generated_features.jsonl",
+  "train_size": 397,
+  "validation_size": 130,
+  "test_size": 135,
+  "class_balance": {
+    "risky": 522,
+    "benign": 140
   },
-  "precision": 1.0,
-  "recall": 1.0,
-  "f1": 1.0,
-  "brier": 0.006140418799877769,
-  "note": "synthetic deterministic shadow evaluation; not production calibrated"
+  "category_distribution": {
+    "scope_creep": 37,
+    "publish_alignment": 73,
+    "destructive": 109,
+    "credential": 73,
+    "hard_negative": 147,
+    "shell_semantics": 38,
+    "cross_turn_probing": 1,
+    "unknown_plugin": 37,
+    "tool_switching": 1,
+    "retry_bypass": 1,
+    "ambiguous": 1,
+    "benign": 36,
+    "exfiltration": 72,
+    "security_tamper": 36
+  },
+  "logistic": {
+    "validation": {
+      "n": 130,
+      "precision": 0.8782608695652174,
+      "recall": 0.9901960784313726,
+      "f1": 0.9308755760368664,
+      "brier": 0.07904507460975256,
+      "auroc": 0.9369747899159664,
+      "auprc": 0.9804410722655218,
+      "positives": 102,
+      "tpr_at_fpr_1pct": "INSUFFICIENT_SAMPLE_SIZE",
+      "tpr_at_fpr_0_1pct": "INSUFFICIENT_SAMPLE_SIZE"
+    },
+    "test": {
+      "n": 135,
+      "precision": 0.8956521739130435,
+      "recall": 0.9903846153846154,
+      "f1": 0.9406392694063926,
+      "brier": 0.0815668643227753,
+      "auroc": 0.926954094292804,
+      "auprc": 0.9784696727632747,
+      "positives": 104,
+      "tpr_at_fpr_1pct": "INSUFFICIENT_SAMPLE_SIZE",
+      "tpr_at_fpr_0_1pct": "INSUFFICIENT_SAMPLE_SIZE"
+    }
+  },
+  "lightgbm": {
+    "status": "NOT_IMPLEMENTED",
+    "reason": "lightgbm not installed"
+  },
+  "calibration": "uncalibrated"
 }
