@@ -109,6 +109,10 @@ pub struct SafetyObservation {
     #[serde(default)]
     pub operation_class: OperationClass,
     #[serde(default)]
+    pub operation_classes: Vec<OperationClass>,
+    #[serde(default)]
+    pub descriptor_source: crate::semantics::DescriptorSource,
+    #[serde(default)]
     pub data_sensitivity: DataSensitivity,
     #[serde(default)]
     pub persistent_effect: bool,
@@ -123,12 +127,36 @@ pub struct SafetyObservation {
 }
 
 impl SafetyObservation {
+    pub fn all_operations(&self) -> Vec<OperationClass> {
+        if self.operation_classes.is_empty() {
+            vec![self.operation_class]
+        } else {
+            self.operation_classes.clone()
+        }
+    }
+
     /// Create a normalized, desensitized safety observation from a governance request.
     pub fn from_governance_request(
         req: &GovernanceRequest<'_>,
         retry_count: u32,
         denied_before: bool,
         prior_actions: Vec<String>,
+    ) -> Self {
+        Self::from_governance_request_with_provider(
+            req,
+            retry_count,
+            denied_before,
+            prior_actions,
+            None,
+        )
+    }
+
+    pub fn from_governance_request_with_provider(
+        req: &GovernanceRequest<'_>,
+        retry_count: u32,
+        denied_before: bool,
+        prior_actions: Vec<String>,
+        provider: Option<&dyn crate::semantics::CapabilitySafetyMetadataProvider>,
     ) -> Self {
         let trace_id = req.trace.to_string();
         let session_id = req.session.to_string();
@@ -162,6 +190,8 @@ impl SafetyObservation {
                 prior_actions,
                 external_effect: false,
                 operation_class: OperationClass::Read,
+                operation_classes: vec![OperationClass::Read],
+                descriptor_source: crate::semantics::DescriptorSource::Canonical,
                 data_sensitivity: DataSensitivity::Public,
                 persistent_effect: false,
                 destructive_effect: false,
@@ -174,7 +204,7 @@ impl SafetyObservation {
                 arguments,
             } => {
                 let cap_str = capability.as_str();
-                let descriptor = crate::semantics::descriptor_for_capability(cap_str, arguments);
+                let descriptor = crate::semantics::resolve_descriptor(cap_str, arguments, provider);
                 let (res_classes, src_classes, sink_classes, ext_effect) = (
                     descriptor.resource_classes.clone(),
                     descriptor.input_sources.clone(),
@@ -204,6 +234,8 @@ impl SafetyObservation {
                     prior_actions,
                     external_effect: ext_effect,
                     operation_class: descriptor.primary_operation(),
+                    operation_classes: descriptor.operation_classes.clone(),
+                    descriptor_source: descriptor.source,
                     data_sensitivity: descriptor.data_sensitivity,
                     persistent_effect: descriptor.persistent_effect,
                     destructive_effect: descriptor.destructive,
@@ -236,6 +268,8 @@ impl SafetyObservation {
                 prior_actions,
                 external_effect: false,
                 operation_class: OperationClass::Unknown,
+                operation_classes: vec![OperationClass::Unknown],
+                descriptor_source: crate::semantics::DescriptorSource::Unknown,
                 data_sensitivity: DataSensitivity::Unknown,
                 persistent_effect: false,
                 destructive_effect: false,

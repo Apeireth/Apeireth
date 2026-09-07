@@ -87,6 +87,15 @@ impl ChainGuard {
             risk_score = risk_score.max(0.92);
         }
 
+        if chain.has_same_effect_after_denial() {
+            reasons.push("same_effect_bypass_after_denial".to_string());
+            evidence.push(format!(
+                "action '{}' repeats a denied semantic effect through an alternative capability",
+                obs.capability_id
+            ));
+            risk_score = risk_score.max(0.9);
+        }
+
         // 5. Scope creep check against declared task scope
         if let Some(scope) = &chain.declared_task_scope {
             let scope_lc = scope.to_lowercase();

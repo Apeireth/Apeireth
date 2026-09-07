@@ -270,7 +270,8 @@ async fn build_canonical_runtime_with_parts(
         .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
     if let Some(recorder) = guard_hook.dataset_recorder() {
         runtime.add_event_sink(Arc::new(
-            apeireth_runtime_assembly::GuardDatasetObserver::new(recorder),
+            apeireth_runtime_assembly::GuardDatasetObserver::new(recorder)
+                .with_hook(guard_hook.clone()),
         ));
     }
     Ok((runtime, policy, guard_hook))

@@ -9,6 +9,7 @@
 pub mod chain;
 pub mod chain_guard;
 pub mod classifier;
+pub mod command_effect;
 pub mod dataset;
 pub mod decision;
 pub mod enforcement;
@@ -20,28 +21,37 @@ pub mod hook;
 pub mod intent;
 pub mod introspection;
 pub mod observation;
+pub mod scenario;
 pub mod semantics;
+pub mod session;
+pub mod snapshot;
 
 pub use chain::{ActionNode, ActionStatus, BehaviorChain, BehaviorEdge, BehaviorNode, EdgeType};
 pub use chain_guard::ChainGuard;
 pub use classifier::{
     ChainRiskClassifier, ClassifierEnforcementMode, JointModelArtifact, JointRiskClassifier,
-    NoClassifier, RiskClass, RiskPrediction, ThresholdClassifier,
+    NoClassifier, RiskClass, RiskPrediction, ThresholdClassifier, KNOWN_FEATURE_NAMES,
+    MARGIN_CONFIDENCE_KIND,
 };
-pub use dataset::{DatasetRecorder, GuardDatasetRecord, GuardExecutionOutcome};
+pub use command_effect::{CommandEffectAnalyzer, CommandEffectSummary};
+pub use dataset::{DatasetRecorder, GuardDatasetRecord, GuardExecutionOutcome, GUARD_DATASET_V3};
 pub use decision::{GuardDecision, GuardStage};
 pub use enforcement::EnforcementDirective;
 pub use fast_guard::{FastGuard, FastGuardResult};
 pub use features::{AgentChainFeatureV1, AGENT_CHAIN_FEATURE_V1};
 pub use features_v2::{AgentChainFeatureV2, CrossTurnRiskSummary, AGENT_CHAIN_FEATURE_V2};
 pub use fusion::DecisionFusion;
-pub use hook::BehaviorChainGuardHook;
+pub use hook::{BehaviorChainGuardHook, SessionBehaviorSummary, TurnRiskSummary};
 pub use intent::{
     constrain_to_trusted, AlignmentAssessment, AlignmentClass, IntentAlignmentGuard, IntentInput,
-    IntentInterpreter, RuleIntentInterpreter,
+    IntentInterpreter, NegationAwareOperationExtractor, OperationPolarity, RuleIntentInterpreter,
 };
 pub use introspection::{GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto};
 pub use observation::{DataSensitivity, ResourceClass, SafetyObservation, SinkClass, SourceClass};
+pub use scenario::{run_scenario, GuardScenario, ScenarioCatalog};
 pub use semantics::{
-    descriptor_for_capability, CapabilitySafetyDescriptor, CapabilitySafetyRegistry,
+    descriptor_for_capability, CapabilitySafetyDescriptor, CapabilitySafetyMetadataProvider,
+    CapabilitySafetyRegistry, DescriptorSource,
 };
+pub use session::{SessionBehaviorHistory, TurnBehaviorSummary, MAX_TURN_HISTORY};
+pub use snapshot::FeatureSnapshot;
