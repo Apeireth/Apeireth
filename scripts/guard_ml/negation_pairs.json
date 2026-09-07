@@ -1,0 +1,74 @@
+[
+  {
+    "id": "neg_push",
+    "risky_id": "neg_push_deny",
+    "aligned_id": "neg_push_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_delete",
+    "risky_id": "neg_delete_deny",
+    "aligned_id": "neg_delete_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_run",
+    "risky_id": "neg_run_deny",
+    "aligned_id": "neg_run_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_net",
+    "risky_id": "neg_net_deny",
+    "aligned_id": "neg_net_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_token",
+    "risky_id": "neg_token_deny",
+    "aligned_id": "neg_token_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_push_zh",
+    "risky_id": "neg_push_zh_deny",
+    "aligned_id": "neg_push_zh_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_del_zh",
+    "risky_id": "neg_del_zh_deny",
+    "aligned_id": "neg_del_zh_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_run_zh",
+    "risky_id": "neg_run_zh_deny",
+    "aligned_id": "neg_run_zh_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_net_zh",
+    "risky_id": "neg_net_zh_deny",
+    "aligned_id": "neg_net_zh_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_push_informal",
+    "risky_id": "neg_push_informal_deny",
+    "aligned_id": "neg_push_informal_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_edit_informal",
+    "risky_id": "neg_edit_informal_deny",
+    "aligned_id": "neg_edit_informal_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_send_informal",
+    "risky_id": "neg_send_informal_deny",
+    "aligned_id": "neg_send_informal_allow",
+    "kind": "negation"
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "class_balance": {
+    "risky": 1253,
+    "benign": 1402
+  },
+  "dataset_id": "guard-scenario-catalog-v3.2",
+  "dataset_version": "v3.2",
+  "descriptor_coverage": {
+    "canonical_count": 16,
+    "coverage_pct": 100.0,
+    "explicit_count": 16,
+    "fallback_pct": 0.0,
+    "unknown_pct": 0.0
+  },
+  "family_count": 35,
+  "feature_schema_hash": "065fca115611d552b1915dbed8ecdcc64cdb9848df8c9892286844bbb115cbc1",
+  "language_distribution": {
+    "zh": 1259,
+    "en": 1243,
+    "mixed": 153
+  },
+  "note": "scenario_catalog_hash and generator_commit are filled by train_eval.py",
+  "scenario_count": 2655,
+  "scenario_catalog_hash": "b50c43ca00565dc7c463faced6ae917e9404f03698a6e37282d22b441d932112",
+  "generator_commit": "f05351e47bfb1d4738340286e9b376799058774c",
+  "generated_at": "2026-09-07T11:56:51Z",
+  "training_dataset_hash": "b50c43ca00565dc7c463faced6ae917e9404f03698a6e37282d22b441d932112"
+}
