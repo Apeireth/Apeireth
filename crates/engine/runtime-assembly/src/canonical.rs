@@ -77,10 +77,11 @@ pub mod upgrade_cycle;
 
 pub use cognitive::{
     turn_request_from_perception, CognitiveModuleEvent, CognitiveTelemetry, CouncilModule,
-    JudgeConfig, JudgeModule, JudgeObservations, JudgeResult, JudgeVerdict, MemoryRecallModule,
-    MemoryWritebackModule, ModuleMetricsSnapshot, PreferenceRecallModule, SelfAssessmentModule,
-    COUNCIL_MODULE_ID, DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID,
-    MEMORY_WRITEBACK_MODULE_ID, PREFERENCE_RECALL_MODULE_ID, SELF_ASSESSMENT_MODULE_ID,
+    JudgeConfig, JudgeModule, JudgeObservations, JudgeResult, JudgeVerdict,
+    MemoryRecallAccessRecorder, MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule,
+    ModuleMetricsSnapshot, PreferenceRecallModule, SelfAssessmentModule, COUNCIL_MODULE_ID,
+    DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID, MEMORY_WRITEBACK_MODULE_ID,
+    PREFERENCE_RECALL_MODULE_ID, SELF_ASSESSMENT_MODULE_ID,
 };
 pub use guard_observer::GuardDatasetObserver;
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
@@ -90,8 +91,9 @@ pub use preference_learning::{
     PREFERENCE_LEARNING_MODULE_ID,
 };
 pub use production::{
-    CognitiveBackends, CognitiveModuleConfig, ProductionBackends, ProductionCognitiveModules,
-    ProductionModules, ProductionModulesConfig,
+    with_memory_context_projection, CognitiveBackends, CognitiveModuleConfig,
+    MemoryContextProjector, ProductionBackends, ProductionCognitiveModules, ProductionModules,
+    ProductionModulesConfig,
 };
 pub use tool_modules::{
     FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,

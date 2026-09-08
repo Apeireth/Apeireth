@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
-use apeireth_memory::{MemoryCoordinator, MemoryRecallQuery, MemoryWritebackEntry};
+use apeireth_memory::{
+    MemoryCoordinator, MemoryRecallQuery, SelectedMemoryAccess, SqliteAccessHistoryStore,
+};
 use apeireth_orchestration::{
     Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
     CouncilInvoker, Proposal,
@@ -25,7 +27,9 @@ use apeireth_plugin::self_assessment::{SelfAssessment, SelfAssessmentStore};
 use apeireth_protocol::canonical::{
     ContentPart, MessageRole, NormalizedMessage, NormalizedResponse,
 };
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use super::module::{
@@ -105,6 +109,81 @@ impl CognitiveTelemetry {
             .lock()
             .expect("cognitive telemetry mutex")
             .clone()
+    }
+}
+
+/// Async durable sink for selected context IDs. Implementations must be fail-open
+/// at call sites: recording must never change recall behavior.
+#[async_trait]
+pub trait MemoryRecallAccessStore: Send + Sync {
+    async fn record_selected(
+        &self,
+        session_id: &str,
+        accessed_at_ms: i64,
+        selected_candidate_ids: &[String],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+}
+
+/// Assembly adapter for the durable SQLite access history implementation.
+#[async_trait]
+impl MemoryRecallAccessStore for SqliteAccessHistoryStore {
+    async fn record_selected(
+        &self,
+        session_id: &str,
+        accessed_at_ms: i64,
+        selected_candidate_ids: &[String],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        for (rank, memory_id) in selected_candidate_ids.iter().enumerate() {
+            self.record_selected_context(
+                memory_id,
+                None,
+                Some(session_id.to_owned()),
+                accessed_at_ms,
+                None,
+                Some(rank as i64),
+                None,
+                json!({}),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+}
+
+/// Thread-safe, dependency-free observation of memory IDs selected for recall.
+///
+/// The recorder deliberately stores only session IDs and selected candidate IDs.
+/// It never stores the query, overlay, recalled content, or any provider data,
+/// so production assembly can consume selection telemetry without persisting
+/// prompts or secrets. A caller opts in with [`MemoryRecallModule::with_access_recorder`].
+#[derive(Debug, Default)]
+pub struct MemoryRecallAccessRecorder {
+    selected_by_session: Mutex<BTreeMap<String, Vec<String>>>,
+}
+
+impl MemoryRecallAccessRecorder {
+    fn clear(&self, session_id: &str) {
+        self.selected_by_session
+            .lock()
+            .expect("memory access recorder mutex")
+            .remove(session_id);
+    }
+
+    fn record_selected(&self, session_id: &str, access: &SelectedMemoryAccess) {
+        self.selected_by_session
+            .lock()
+            .expect("memory access recorder mutex")
+            .insert(session_id.to_owned(), access.selected_candidate_ids.clone());
+    }
+
+    /// Return the selected candidate IDs for the latest recall of a session.
+    pub fn selected_candidate_ids(&self, session_id: &str) -> Vec<String> {
+        self.selected_by_session
+            .lock()
+            .expect("memory access recorder mutex")
+            .get(session_id)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -263,6 +342,9 @@ pub struct MemoryRecallModule {
     limit: usize,
     max_context_chars: usize,
     metrics: ModuleMetrics,
+    access_recorder: Option<Arc<MemoryRecallAccessRecorder>>,
+    access_store: Option<Arc<dyn MemoryRecallAccessStore>>,
+    clock: Option<Arc<dyn Clock>>,
 }
 
 impl MemoryRecallModule {
@@ -279,6 +361,9 @@ impl MemoryRecallModule {
             limit: DEFAULT_RECALL_LIMIT,
             max_context_chars: DEFAULT_MAX_CONTEXT_CHARS,
             metrics: ModuleMetrics::default(),
+            access_recorder: None,
+            access_store: None,
+            clock: None,
         }
     }
 
@@ -286,6 +371,30 @@ impl MemoryRecallModule {
     #[must_use]
     pub fn with_coordinator(mut self, coordinator: Arc<MemoryCoordinator>) -> Self {
         self.coordinator = Some(coordinator);
+        self
+    }
+
+    /// Attach an optional dependency-free recorder for selected candidate IDs.
+    #[must_use]
+    pub fn with_access_recorder(mut self, recorder: Arc<MemoryRecallAccessRecorder>) -> Self {
+        self.access_recorder = Some(recorder);
+        self
+    }
+
+    /// Return the configured selection recorder, if any.
+    pub fn access_recorder(&self) -> Option<Arc<MemoryRecallAccessRecorder>> {
+        self.access_recorder.clone()
+    }
+
+    /// Attach a durable async access sink and clock. Sink failures are fail-open.
+    #[must_use]
+    pub fn with_access_store(
+        mut self,
+        store: Arc<dyn MemoryRecallAccessStore>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        self.access_store = Some(store);
+        self.clock = Some(clock);
         self
     }
 
@@ -343,10 +452,35 @@ impl AgentModule for MemoryRecallModule {
                 let query = MemoryRecallQuery::new(session.clone(), topic)
                     .with_limit(self.limit)
                     .with_max_chars(self.max_context_chars);
-                match coord.compile_prompt_overlay(&query) {
-                    Ok(Some(overlay)) => ModuleOutcome::continue_()
-                        .with_prompt_overlay(PromptOverlay::system(overlay)),
-                    Ok(None) => ModuleOutcome::continue_(),
+                match coord.compile_prompt_overlay_with_selected_access(&query) {
+                    Ok(Some(selected)) => {
+                        if let Some(recorder) = &self.access_recorder {
+                            recorder.record_selected(&session, &selected);
+                        }
+                        if !selected.selected_candidate_ids.is_empty() {
+                            if let (Some(store), Some(clock)) = (&self.access_store, &self.clock) {
+                                if store
+                                    .record_selected(
+                                        &session,
+                                        clock.now().timestamp_millis(),
+                                        &selected.selected_candidate_ids,
+                                    )
+                                    .await
+                                    .is_err()
+                                {
+                                    self.metrics.warning();
+                                }
+                            }
+                        }
+                        ModuleOutcome::continue_()
+                            .with_prompt_overlay(PromptOverlay::system(selected.overlay))
+                    }
+                    Ok(None) => {
+                        if let Some(recorder) = &self.access_recorder {
+                            recorder.clear(&session);
+                        }
+                        ModuleOutcome::continue_()
+                    }
                     Err(_) => {
                         self.metrics.warning();
                         ModuleOutcome::continue_()
@@ -534,13 +668,8 @@ impl AgentModule for MemoryWritebackModule {
                     // Post-commit persistence is fail-open for the current
                     // answer, but the warning counter makes the loss visible.
                     let write_res = if let Some(coord) = &self.coordinator {
-                        let entry = MemoryWritebackEntry::new(
-                            &episode.session_id,
-                            &episode.role,
-                            &episode.content,
-                        );
                         coord
-                            .writeback(&entry)
+                            .writeback_episode(&episode)
                             .map(|_| ())
                             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
                     } else {

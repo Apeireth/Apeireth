@@ -9,7 +9,8 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::Clock;
 use apeireth_memory::{
-    EmbeddingProvider, MemoryCoordinator, MemoryGovernanceStore, ScopedMemoryBackend,
+    ContextWindowManager, EmbeddingProvider, MemoryCoordinator, MemoryGovernanceStore,
+    ScopedMemoryBackend, SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::Council;
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEntryStore};
@@ -17,12 +18,15 @@ use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
 use apeireth_plugin::self_assessment::SelfAssessmentStore;
 use apeireth_plugin::ToolCapability;
+use apeireth_protocol::canonical::NormalizedMessage;
+use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
 
 use super::capability::CapabilityProvider;
 use super::cognitive::{
     CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule, JudgeObservations,
-    MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule, SelfAssessmentModule,
+    MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule,
+    SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
 use super::module::Module;
@@ -32,9 +36,45 @@ use super::tool_modules::{
     FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
 };
 
+/// Adapter that exposes memory's context-window implementation through the
+/// runtime-owned projection port. It is kept in assembly so the runtime kernel
+/// does not depend on memory or storage.
+pub struct MemoryContextProjector {
+    manager: ContextWindowManager,
+}
+
+impl MemoryContextProjector {
+    pub fn new(manager: ContextWindowManager) -> Self {
+        Self { manager }
+    }
+}
+
+impl ContextProjector for MemoryContextProjector {
+    fn project(
+        &self,
+        transcript: &[NormalizedMessage],
+        model_context_tokens: Option<u32>,
+    ) -> Result<Vec<NormalizedMessage>, ContextProjectionError> {
+        Ok(self
+            .manager
+            .project(
+                transcript,
+                model_context_tokens.unwrap_or_default() as usize,
+            )
+            .messages)
+    }
+}
+
+/// Attach the default memory-backed context projector to a runtime builder.
+#[must_use]
+pub fn with_memory_context_projection(
+    builder: RuntimeBuilder,
+    manager: ContextWindowManager,
+) -> RuntimeBuilder {
+    builder.with_context_projector(Arc::new(MemoryContextProjector::new(manager)))
+}
+
 /// Feature switches for the production cognitive and tool modules.
-///
-/// Memory and preference recall/writeback are cheap local calls and are on by
 /// default when their injected stores exist. Judge, Council, Shell and Fetch are explicitly
 /// opt-in; Judge and Council side-calls stay behind the runtime invoker.
 #[derive(Debug, Clone)]
@@ -127,8 +167,9 @@ pub struct ProductionBackends {
     pub scoped_memory: Option<Arc<dyn ScopedMemoryBackend>>,
     /// Embedding provider for semantic memory retrieval.
     pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
+    /// Optional durable selected-context access history.
+    pub access_history: Option<Arc<SqliteAccessHistoryStore>>,
 }
-
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
 
@@ -248,6 +289,10 @@ impl ProductionModules {
                     Arc::clone(associations),
                 );
             }
+            if let Some(history) = &backends.access_history {
+                let history: Arc<dyn MemoryRecallAccessStore> = history.clone();
+                module = module.with_access_store(history, Arc::clone(&clock));
+            }
             modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }
 
@@ -348,7 +393,15 @@ impl ProductionModules {
         })
     }
 
-    /// Ordered modules for registration in the canonical runtime.
+    /// Attach the context-window projector using its default policy.
+    #[must_use]
+    pub fn register_context_projection(
+        &self,
+        builder: super::runtime::RuntimeBuilder,
+    ) -> super::runtime::RuntimeBuilder {
+        with_memory_context_projection(builder, ContextWindowManager::default())
+    }
+
     pub fn modules(&self) -> &[Arc<dyn Module>] {
         &self.modules
     }

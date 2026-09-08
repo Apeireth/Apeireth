@@ -96,22 +96,23 @@ impl WikiEntryStore for SQLiteExperienceStore {
     fn put_wiki(&self, entry: &WikiEntry) -> CapabilityResult<()> {
         let tags_json = serde_json::to_string(&entry.tags)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        let id = entry.id.clone();
+        let session_id = entry.session_id.clone();
+        let source_episode_id = entry.source_episode_id.clone();
+        let topic = entry.topic.clone();
+        let summary = entry.summary.clone();
+        let body = entry.body.clone();
+        let confidence = entry.confidence;
+        let extracted_at = entry.extracted_at;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR REPLACE INTO wiki_entries \
                      (id, session_id, source_episode_id, topic, summary, body, confidence, tags, extracted_at) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     rusqlite::params![
-                        entry.id,
-                        entry.session_id,
-                        entry.source_episode_id,
-                        entry.topic,
-                        entry.summary,
-                        entry.body,
-                        entry.confidence,
-                        tags_json,
-                        entry.extracted_at,
+                        id, session_id, source_episode_id, topic, summary, body,
+                        confidence, tags_json, extracted_at,
                     ],
                 )?;
                 Ok(())
@@ -214,24 +215,34 @@ impl WikiEntryStore for SQLiteExperienceStore {
 
 impl KnowledgeGraphStore for SQLiteExperienceStore {
     fn put_fact(&self, fact: &GraphFact) -> CapabilityResult<()> {
+        let id = fact.id.clone();
+        let subject_id = fact.subject_id.clone();
+        let subject_kind = fact.subject_kind.clone();
+        let predicate = fact.predicate.clone();
+        let object_id = fact.object_id.clone();
+        let object_kind = fact.object_kind.clone();
+        let valid_from = fact.valid_from;
+        let valid_until = fact.valid_until;
+        let source_episode_id = fact.source_episode_id.clone();
+        let confidence = fact.confidence;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR REPLACE INTO kg_facts \
                      (id, subject_id, subject_kind, predicate, object_id, object_kind, \
                       valid_from_ms, valid_until_ms, source_episode_id, confidence) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                     rusqlite::params![
-                        fact.id,
-                        fact.subject_id,
-                        fact.subject_kind,
-                        fact.predicate,
-                        fact.object_id,
-                        fact.object_kind,
-                        fact.valid_from,
-                        fact.valid_until,
-                        fact.source_episode_id,
-                        fact.confidence,
+                        id,
+                        subject_id,
+                        subject_kind,
+                        predicate,
+                        object_id,
+                        object_kind,
+                        valid_from,
+                        valid_until,
+                        source_episode_id,
+                        confidence,
                     ],
                 )?;
                 Ok(())
@@ -240,20 +251,19 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
     }
 
     fn put_link(&self, link: &GraphLink) -> CapabilityResult<()> {
+        let from_id = link.from_id.clone();
+        let to_id = link.to_id.clone();
+        let kind = link.kind.clone();
+        let weight = link.weight;
+        let source_episode_id = link.source_episode_id.clone();
+        let created_at = link.created_at;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR REPLACE INTO kg_links \
                      (from_id, to_id, kind, weight, source_episode_id, created_at) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    rusqlite::params![
-                        link.from_id,
-                        link.to_id,
-                        link.kind,
-                        link.weight,
-                        link.source_episode_id,
-                        link.created_at,
-                    ],
+                    rusqlite::params![from_id, to_id, kind, weight, source_episode_id, created_at,],
                 )?;
                 Ok(())
             })
@@ -331,8 +341,9 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
     }
 
     fn forget_subject(&self, subject_id: &str) -> CapabilityResult<()> {
+        let subject_id = subject_id.to_string();
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "DELETE FROM kg_facts WHERE subject_id = ?1",
                     rusqlite::params![subject_id],
@@ -350,37 +361,41 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
 impl AssociationStore for SQLiteExperienceStore {
     fn record_cooccurrence(&self, from: &str, to: &str, episode_id: &str) -> CapabilityResult<()> {
         let now = chrono::Utc::now().timestamp();
-        self.pool.read(|conn| {
-            let inserted = conn.execute(
-                "INSERT OR IGNORE INTO association_observations \
-                 (from_entity, to_entity, source_episode_id) VALUES (?1, ?2, ?3)",
-                rusqlite::params![from, to, episode_id],
-            )?;
-            if inserted == 0 {
-                return Ok(());
-            }
-            conn.execute(
-                "INSERT INTO association_edges (from_entity, to_entity, co_occurrence_count, last_seen_episode_id, last_seen_at) \
-                 VALUES (?1, ?2, 1, ?3, ?4) \
-                 ON CONFLICT (from_entity, to_entity) DO UPDATE SET \
-                    co_occurrence_count = co_occurrence_count + 1, \
-                    last_seen_episode_id = excluded.last_seen_episode_id, \
-                    last_seen_at = excluded.last_seen_at",
-                rusqlite::params![from, to, episode_id, now],
-            )?;
-            for entity in [from, to] {
-                conn.execute(
-                    "INSERT INTO association_nodes (entity_id, co_occurrence_count, last_seen_at) \
-                     VALUES (?1, 1, ?2) \
-                     ON CONFLICT (entity_id) DO UPDATE SET \
-                        co_occurrence_count = co_occurrence_count + 1, \
-                        last_seen_at = excluded.last_seen_at",
-                    rusqlite::params![entity, now],
+        let from = from.to_string();
+        let to = to.to_string();
+        let episode_id = episode_id.to_string();
+        self.pool
+            .write_sync(move |conn| {
+                let inserted = conn.execute(
+                    "INSERT OR IGNORE INTO association_observations \
+                     (from_entity, to_entity, source_episode_id) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![from, to, episode_id],
                 )?;
-            }
-            Ok(())
-        })
-        .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
+                if inserted == 0 {
+                    return Ok(());
+                }
+                conn.execute(
+                    "INSERT INTO association_edges (from_entity, to_entity, co_occurrence_count, last_seen_episode_id, last_seen_at) \
+                     VALUES (?1, ?2, 1, ?3, ?4) \
+                     ON CONFLICT (from_entity, to_entity) DO UPDATE SET \
+                        co_occurrence_count = co_occurrence_count + 1, \
+                        last_seen_episode_id = excluded.last_seen_episode_id, \
+                        last_seen_at = excluded.last_seen_at",
+                    rusqlite::params![from, to, episode_id, now],
+                )?;
+                for entity in [from, to] {
+                    conn.execute(
+                        "INSERT INTO association_nodes (entity_id, co_occurrence_count, last_seen_at) \
+                         VALUES (?1, 1, ?2) \
+                         ON CONFLICT (entity_id) DO UPDATE SET \
+                            co_occurrence_count = co_occurrence_count + 1, \
+                            last_seen_at = excluded.last_seen_at",
+                        rusqlite::params![entity, now],
+                    )?;
+                }
+                Ok(())
+            })
+            .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))
     }
 
     fn top_associations(&self, entity: &str, limit: u32) -> CapabilityResult<Vec<AssociationEdge>> {

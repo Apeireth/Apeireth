@@ -6,11 +6,13 @@
 //! over the `r2d2` pool and should be used for queries only.
 
 use std::path::{Path, PathBuf};
+use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
 use r2d2::ManageConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::Connection;
+
 use tokio::sync::{mpsc, oneshot};
 
 use crate::StorageError;
@@ -258,6 +260,49 @@ impl SqliteConnectionPool {
         f(&conn)
     }
 
+    /// Runs a mutation on the single serialized writer from synchronous code.
+    ///
+    /// This is the bridge for synchronous public traits. It submits to the same
+    /// writer queue as [`Self::write`] and waits on a standard-library channel;
+    /// it never enters or blocks on a Tokio runtime.
+    pub fn write_sync<F, R>(&self, f: F) -> Result<R, StorageError>
+    where
+        F: FnOnce(&mut Connection) -> Result<R, StorageError> + Send + 'static,
+        R: Send + 'static,
+    {
+        if tokio::runtime::Handle::try_current().is_ok() {
+            std::thread::scope(|scope| {
+                scope
+                    .spawn(|| self.write_sync_blocking(f))
+                    .join()
+                    .map_err(|_| {
+                        StorageError::WriteQueue("synchronous writer thread panicked".to_string())
+                    })?
+            })
+        } else {
+            self.write_sync_blocking(f)
+        }
+    }
+
+    fn write_sync_blocking<F, R>(&self, f: F) -> Result<R, StorageError>
+    where
+        F: FnOnce(&mut Connection) -> Result<R, StorageError> + Send + 'static,
+        R: Send + 'static,
+    {
+        let (tx, rx) = std_mpsc::sync_channel(0);
+        let task: WriteTask = Box::new(move |conn: &mut Connection| {
+            let result = f(conn);
+            let _ = tx.send(result);
+        });
+
+        self.write_tx
+            .blocking_send(task)
+            .map_err(|_| StorageError::WriteQueue("writer channel is closed".to_string()))?;
+
+        rx.recv().map_err(|_| {
+            StorageError::WriteQueue("writer task did not return a result".to_string())
+        })?
+    }
     /// Runs a mutation on the single serialized writer and returns its result.
     ///
     /// Writes are ordered by channel arrival and executed by exactly one

@@ -232,6 +232,7 @@ async fn build_canonical_runtime_with_parts(
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
     // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
+    builder = cognitive.register_context_projection(builder);
     builder = cognitive.register_into(builder);
 
     let first_default_model: Option<String>;
@@ -354,7 +355,7 @@ async fn build_cognitive_modules_from_env(
         self_assessment_store_sqlite::SQLiteSelfAssessmentStore,
     };
     use apeireth_runtime_assembly::{CognitiveBackends, CognitiveModuleConfig, JudgeConfig};
-    use apeireth_storage::{SqliteConnectionPool, StorageError};
+    use apeireth_storage::SqliteConnectionPool;
 
     let path = cognitive_db_path();
     let pool = Arc::new(
@@ -387,15 +388,7 @@ async fn build_cognitive_modules_from_env(
     // Memory migrations own the episode and six-stream tables. The preference,
     // experience, and assessment stores own their additive tables. All use
     // this one injected pool; no module opens a connection itself.
-    let migration_pool = Arc::clone(&pool);
-    migration_pool
-        .write(|conn| {
-            apeireth_memory::run_migrations(conn).map_err(|error| StorageError::Migration {
-                version: 0,
-                name: "cognitive_memory",
-                message: error.to_string(),
-            })
-        })
+    apeireth_memory::run_migrations_on_pool(&pool)
         .await
         .map_err(|error| format!("cognitive memory schema failed: {error}"))?;
 
@@ -415,6 +408,14 @@ async fn build_cognitive_modules_from_env(
         .await
         .map_err(|error| format!("cognitive assessment schema failed: {error}"))?;
 
+    let access_history = Arc::new(apeireth_memory::SqliteAccessHistoryStore::from_arc(
+        Arc::clone(&pool),
+        256,
+    ));
+    access_history
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive access history schema failed: {error}"))?;
     let judge_enabled = std::env::var(COGNITIVE_JUDGE_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
@@ -456,6 +457,7 @@ async fn build_cognitive_modules_from_env(
         workspace_root: std::env::current_dir().ok(),
         scoped_memory: Some(scoped_memory),
         embedding_provider: None,
+        access_history: Some(access_history),
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)

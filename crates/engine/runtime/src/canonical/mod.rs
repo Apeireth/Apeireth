@@ -27,6 +27,7 @@
 
 pub mod approval;
 pub mod capability;
+pub mod context;
 // B6 · Phase 5 (research, 默认关闭): 审批状态机形式化 (RA-5 规格, 模型级验证).
 pub mod research_approval_sm;
 pub use research_approval_sm::{
@@ -69,6 +70,7 @@ pub use approval::{
     PendingApproval, PendingApprovalView,
 };
 pub use capability::{CapabilityProvider, CapabilityRegistry};
+pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
 pub use error::{RuntimeError, RuntimeResult};
 pub use events::{
     event_sink, CompositeEventSink, CompositeRuntimeEventSink, NoopRuntimeEventSink, RuntimeEvent,

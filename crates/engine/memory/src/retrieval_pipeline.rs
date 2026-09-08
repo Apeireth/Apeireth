@@ -276,12 +276,55 @@ impl HybridRetrievalPipeline {
                 .then_with(|| a.id.cmp(&b.id))
         });
 
+        // Greedy, deterministic MMR selection.  Candidate sources do not expose
+        // vectors, so lexical Jaccard is the honest pairwise relation fallback;
+        // semantic cosine is already used by the coordinator for relevance when
+        // valid vectors are available.
+        let lambda = self.ranking.diversity_lambda.clamp(0.0, 1.0);
+        let mut remaining = candidates;
         let mut seen_content = HashSet::new();
+        let mut selected_tokens: Vec<HashSet<String>> = Vec::new();
         let mut result = Vec::new();
         let mut chars = 0;
-        for candidate in candidates {
-            if result.len() >= limit {
+        while result.len() < limit && !remaining.is_empty() {
+            let mut best: Option<(usize, f64, f64)> = None;
+            for (index, candidate) in remaining.iter().enumerate() {
+                let normalized: String = candidate
+                    .content
+                    .chars()
+                    .filter(|ch| ch.is_alphanumeric())
+                    .flat_map(char::to_lowercase)
+                    .collect();
+                if normalized.is_empty() || seen_content.contains(&normalized) {
+                    continue;
+                }
+                let candidate_tokens = token_set(&candidate.content);
+                let max_similarity = selected_tokens
+                    .iter()
+                    .map(|selected| jaccard_similarity(&candidate_tokens, selected))
+                    .fold(0.0, f64::max);
+                let novelty = 1.0 - max_similarity;
+                let mmr = (1.0 - lambda) * candidate.score + lambda * novelty;
+                let better = match best {
+                    None => true,
+                    Some((best_index, best_mmr, _)) => {
+                        mmr > best_mmr + f64::EPSILON
+                            || ((mmr - best_mmr).abs() <= f64::EPSILON
+                                && candidate.id < remaining[best_index].id)
+                    }
+                };
+                if better {
+                    best = Some((index, mmr, novelty));
+                }
+            }
+            let Some((index, _, novelty)) = best else {
                 break;
+            };
+            let mut candidate = remaining.swap_remove(index);
+            let content_chars = candidate.content.chars().count();
+            if chars + content_chars > max_chars {
+                // Skip oversized candidates and continue looking for a bounded item.
+                continue;
             }
             let normalized: String = candidate
                 .content
@@ -289,13 +332,12 @@ impl HybridRetrievalPipeline {
                 .filter(|ch| ch.is_alphanumeric())
                 .flat_map(char::to_lowercase)
                 .collect();
-            if normalized.is_empty() || !seen_content.insert(normalized) {
-                continue;
-            }
-            if chars + candidate.content.len() > max_chars && !result.is_empty() {
-                break;
-            }
-            chars += candidate.content.len();
+            seen_content.insert(normalized);
+            // Keep source relevance and make novelty explainable without
+            // letting the post-selection annotation change ordering.
+            candidate.score_components.novelty = novelty;
+            selected_tokens.push(token_set(&candidate.content));
+            chars += content_chars;
             result.push(candidate);
         }
         Ok((result, status))
@@ -324,6 +366,23 @@ impl HybridRetrievalPipeline {
             }
         }
         Ok((items, status))
+    }
+}
+
+fn token_set(text: &str) -> HashSet<String> {
+    unicode_tokens(text).into_iter().collect()
+}
+
+fn jaccard_similarity(left: &HashSet<String>, right: &HashSet<String>) -> f64 {
+    if left.is_empty() && right.is_empty() {
+        return 1.0;
+    }
+    let intersection = left.intersection(right).count() as f64;
+    let union = left.union(right).count() as f64;
+    if union == 0.0 {
+        0.0
+    } else {
+        intersection / union
     }
 }
 
@@ -387,6 +446,76 @@ mod tests {
         }
     }
 
+    #[test]
+    fn mmr_suppresses_near_duplicates_and_populates_novelty() {
+        let scope = MemoryScope::Global;
+        let source = BasicLexicalCandidateSource::new(vec![
+            candidate("a", "rust memory retrieval design", scope.clone()),
+            candidate("b", "rust memory retrieval design details", scope.clone()),
+            candidate("c", "sqlite governance retention", scope.clone()),
+        ]);
+        let pipeline = HybridRetrievalPipeline::new(MemoryRankingConfig {
+            diversity_lambda: 0.8,
+            ..MemoryRankingConfig::default()
+        });
+        let items = pipeline
+            .retrieve("rust memory", &[scope], &[&source], 3, 1_000)
+            .unwrap();
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "c", "b"]
+        );
+        assert!(items[0].score_components.novelty > 0.99);
+        assert!(items[1].score_components.novelty > 0.99);
+        assert!(items[2].score_components.novelty < 0.5);
+    }
+
+    #[test]
+    fn mmr_tie_order_is_stable_and_character_budget_is_strict() {
+        let scope = MemoryScope::Global;
+        let source = BasicLexicalCandidateSource::new(vec![
+            candidate("b", "alpha", scope.clone()),
+            candidate("a", "beta", scope.clone()),
+            candidate("c", "gamma", scope.clone()),
+        ]);
+        let pipeline = HybridRetrievalPipeline::default();
+        let items = pipeline.retrieve("", &[scope], &[&source], 3, 9).unwrap();
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "b"]
+        );
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.content.chars().count())
+                .sum::<usize>(),
+            9
+        );
+    }
+
+    #[test]
+    fn invalid_vector_metadata_is_ignored_by_lexical_pipeline() {
+        let scope = MemoryScope::Global;
+        let source = BasicLexicalCandidateSource::new(vec![candidate(
+            "invalid",
+            "fallback lexical content",
+            scope.clone(),
+        )]);
+        let pipeline = HybridRetrievalPipeline::default();
+        let (items, status) = pipeline
+            .retrieve_with_status("fallback", &[scope], &[&source], 1, 100)
+            .unwrap();
+        assert_eq!(items[0].id, "invalid");
+        assert!(status.used_lexical_fallback);
+        assert_eq!(items[0].score_components.semantic, 0.0);
+        assert!(items[0].score_components.lexical > 0.0);
+    }
     #[test]
     fn chinese_lexical_fallback_and_scope_filter_are_deterministic() {
         let source = BasicLexicalCandidateSource::new(vec![

@@ -9,10 +9,11 @@ pub mod canonical;
 pub mod sqlite_session;
 
 pub use canonical::{
-    CognitiveBackends, CognitiveModuleConfig, CognitiveModuleEvent, CognitiveTelemetry,
-    CouncilModule, FetchModule, FilesystemModule, GuardDatasetObserver, InvokerLlmFactory,
-    InvokerLlmInstance, JudgeConfig, JudgeModule, JudgeObservations, JudgeResult, JudgeVerdict,
-    McpModule, MemoryRecallModule, MemoryWritebackModule, ModuleMetricsSnapshot, OrganModule,
+    with_memory_context_projection, CognitiveBackends, CognitiveModuleConfig, CognitiveModuleEvent,
+    CognitiveTelemetry, CouncilModule, FetchModule, FilesystemModule, GuardDatasetObserver,
+    InvokerLlmFactory, InvokerLlmInstance, JudgeConfig, JudgeModule, JudgeObservations,
+    JudgeResult, JudgeVerdict, McpModule, MemoryContextProjector, MemoryRecallAccessRecorder,
+    MemoryRecallModule, MemoryWritebackModule, ModuleMetricsSnapshot, OrganModule,
     OrganModuleObservation, PreferenceEvidence, PreferenceLearningModule, PreferenceLearningStats,
     PreferencePolarity, PreferenceRecallModule, ProductionBackends, ProductionCognitiveModules,
     ProductionModules, ProductionModulesConfig, RepoModule, SearchModule, SelfAssessmentModule,
