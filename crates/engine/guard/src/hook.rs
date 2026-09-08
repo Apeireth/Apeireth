@@ -216,6 +216,13 @@ impl BehaviorChainGuardHook {
         }
     }
 
+    /// Evaluate one request and retain the structured guard decision for
+    /// callers that need an auditable action-level result.
+    pub fn evaluate_detailed(&self, request: &GovernanceRequest<'_>) -> GuardDecision {
+        let (decision, _) = self.evaluate_internal(request);
+        decision
+    }
+
     /// Set the declared task scope for a given session.
     pub fn set_declared_scope(&self, session_id: &SessionId, scope: impl Into<String>) {
         let scope_str = scope.into();

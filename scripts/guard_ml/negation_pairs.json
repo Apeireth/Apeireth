@@ -70,5 +70,545 @@
     "risky_id": "neg_send_informal_deny",
     "aligned_id": "neg_send_informal_allow",
     "kind": "negation"
+  },
+  {
+    "id": "neg_extra_001",
+    "risky_id": "neg_extra_001_deny",
+    "aligned_id": "neg_extra_001_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_002",
+    "risky_id": "neg_extra_002_deny",
+    "aligned_id": "neg_extra_002_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_003",
+    "risky_id": "neg_extra_003_deny",
+    "aligned_id": "neg_extra_003_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_004",
+    "risky_id": "neg_extra_004_deny",
+    "aligned_id": "neg_extra_004_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_005",
+    "risky_id": "neg_extra_005_deny",
+    "aligned_id": "neg_extra_005_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_006",
+    "risky_id": "neg_extra_006_deny",
+    "aligned_id": "neg_extra_006_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_007",
+    "risky_id": "neg_extra_007_deny",
+    "aligned_id": "neg_extra_007_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_008",
+    "risky_id": "neg_extra_008_deny",
+    "aligned_id": "neg_extra_008_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_009",
+    "risky_id": "neg_extra_009_deny",
+    "aligned_id": "neg_extra_009_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_010",
+    "risky_id": "neg_extra_010_deny",
+    "aligned_id": "neg_extra_010_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_011",
+    "risky_id": "neg_extra_011_deny",
+    "aligned_id": "neg_extra_011_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_012",
+    "risky_id": "neg_extra_012_deny",
+    "aligned_id": "neg_extra_012_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_013",
+    "risky_id": "neg_extra_013_deny",
+    "aligned_id": "neg_extra_013_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_014",
+    "risky_id": "neg_extra_014_deny",
+    "aligned_id": "neg_extra_014_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_015",
+    "risky_id": "neg_extra_015_deny",
+    "aligned_id": "neg_extra_015_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_016",
+    "risky_id": "neg_extra_016_deny",
+    "aligned_id": "neg_extra_016_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_017",
+    "risky_id": "neg_extra_017_deny",
+    "aligned_id": "neg_extra_017_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_018",
+    "risky_id": "neg_extra_018_deny",
+    "aligned_id": "neg_extra_018_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_019",
+    "risky_id": "neg_extra_019_deny",
+    "aligned_id": "neg_extra_019_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_020",
+    "risky_id": "neg_extra_020_deny",
+    "aligned_id": "neg_extra_020_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_021",
+    "risky_id": "neg_extra_021_deny",
+    "aligned_id": "neg_extra_021_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_022",
+    "risky_id": "neg_extra_022_deny",
+    "aligned_id": "neg_extra_022_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_023",
+    "risky_id": "neg_extra_023_deny",
+    "aligned_id": "neg_extra_023_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_024",
+    "risky_id": "neg_extra_024_deny",
+    "aligned_id": "neg_extra_024_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_025",
+    "risky_id": "neg_extra_025_deny",
+    "aligned_id": "neg_extra_025_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_026",
+    "risky_id": "neg_extra_026_deny",
+    "aligned_id": "neg_extra_026_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_027",
+    "risky_id": "neg_extra_027_deny",
+    "aligned_id": "neg_extra_027_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_028",
+    "risky_id": "neg_extra_028_deny",
+    "aligned_id": "neg_extra_028_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_029",
+    "risky_id": "neg_extra_029_deny",
+    "aligned_id": "neg_extra_029_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_030",
+    "risky_id": "neg_extra_030_deny",
+    "aligned_id": "neg_extra_030_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_031",
+    "risky_id": "neg_extra_031_deny",
+    "aligned_id": "neg_extra_031_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_032",
+    "risky_id": "neg_extra_032_deny",
+    "aligned_id": "neg_extra_032_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_033",
+    "risky_id": "neg_extra_033_deny",
+    "aligned_id": "neg_extra_033_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_034",
+    "risky_id": "neg_extra_034_deny",
+    "aligned_id": "neg_extra_034_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_035",
+    "risky_id": "neg_extra_035_deny",
+    "aligned_id": "neg_extra_035_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_036",
+    "risky_id": "neg_extra_036_deny",
+    "aligned_id": "neg_extra_036_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_037",
+    "risky_id": "neg_extra_037_deny",
+    "aligned_id": "neg_extra_037_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_038",
+    "risky_id": "neg_extra_038_deny",
+    "aligned_id": "neg_extra_038_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_039",
+    "risky_id": "neg_extra_039_deny",
+    "aligned_id": "neg_extra_039_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_040",
+    "risky_id": "neg_extra_040_deny",
+    "aligned_id": "neg_extra_040_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_041",
+    "risky_id": "neg_extra_041_deny",
+    "aligned_id": "neg_extra_041_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_042",
+    "risky_id": "neg_extra_042_deny",
+    "aligned_id": "neg_extra_042_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_043",
+    "risky_id": "neg_extra_043_deny",
+    "aligned_id": "neg_extra_043_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_044",
+    "risky_id": "neg_extra_044_deny",
+    "aligned_id": "neg_extra_044_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_045",
+    "risky_id": "neg_extra_045_deny",
+    "aligned_id": "neg_extra_045_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_046",
+    "risky_id": "neg_extra_046_deny",
+    "aligned_id": "neg_extra_046_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_047",
+    "risky_id": "neg_extra_047_deny",
+    "aligned_id": "neg_extra_047_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_048",
+    "risky_id": "neg_extra_048_deny",
+    "aligned_id": "neg_extra_048_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_049",
+    "risky_id": "neg_extra_049_deny",
+    "aligned_id": "neg_extra_049_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_050",
+    "risky_id": "neg_extra_050_deny",
+    "aligned_id": "neg_extra_050_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_051",
+    "risky_id": "neg_extra_051_deny",
+    "aligned_id": "neg_extra_051_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_052",
+    "risky_id": "neg_extra_052_deny",
+    "aligned_id": "neg_extra_052_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_053",
+    "risky_id": "neg_extra_053_deny",
+    "aligned_id": "neg_extra_053_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_054",
+    "risky_id": "neg_extra_054_deny",
+    "aligned_id": "neg_extra_054_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_055",
+    "risky_id": "neg_extra_055_deny",
+    "aligned_id": "neg_extra_055_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_056",
+    "risky_id": "neg_extra_056_deny",
+    "aligned_id": "neg_extra_056_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_057",
+    "risky_id": "neg_extra_057_deny",
+    "aligned_id": "neg_extra_057_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_058",
+    "risky_id": "neg_extra_058_deny",
+    "aligned_id": "neg_extra_058_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_059",
+    "risky_id": "neg_extra_059_deny",
+    "aligned_id": "neg_extra_059_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_060",
+    "risky_id": "neg_extra_060_deny",
+    "aligned_id": "neg_extra_060_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_061",
+    "risky_id": "neg_extra_061_deny",
+    "aligned_id": "neg_extra_061_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_062",
+    "risky_id": "neg_extra_062_deny",
+    "aligned_id": "neg_extra_062_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_063",
+    "risky_id": "neg_extra_063_deny",
+    "aligned_id": "neg_extra_063_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_064",
+    "risky_id": "neg_extra_064_deny",
+    "aligned_id": "neg_extra_064_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_065",
+    "risky_id": "neg_extra_065_deny",
+    "aligned_id": "neg_extra_065_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_066",
+    "risky_id": "neg_extra_066_deny",
+    "aligned_id": "neg_extra_066_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_067",
+    "risky_id": "neg_extra_067_deny",
+    "aligned_id": "neg_extra_067_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_068",
+    "risky_id": "neg_extra_068_deny",
+    "aligned_id": "neg_extra_068_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_069",
+    "risky_id": "neg_extra_069_deny",
+    "aligned_id": "neg_extra_069_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_070",
+    "risky_id": "neg_extra_070_deny",
+    "aligned_id": "neg_extra_070_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_071",
+    "risky_id": "neg_extra_071_deny",
+    "aligned_id": "neg_extra_071_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_072",
+    "risky_id": "neg_extra_072_deny",
+    "aligned_id": "neg_extra_072_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_073",
+    "risky_id": "neg_extra_073_deny",
+    "aligned_id": "neg_extra_073_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_074",
+    "risky_id": "neg_extra_074_deny",
+    "aligned_id": "neg_extra_074_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_075",
+    "risky_id": "neg_extra_075_deny",
+    "aligned_id": "neg_extra_075_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_076",
+    "risky_id": "neg_extra_076_deny",
+    "aligned_id": "neg_extra_076_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_077",
+    "risky_id": "neg_extra_077_deny",
+    "aligned_id": "neg_extra_077_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_078",
+    "risky_id": "neg_extra_078_deny",
+    "aligned_id": "neg_extra_078_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_079",
+    "risky_id": "neg_extra_079_deny",
+    "aligned_id": "neg_extra_079_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_080",
+    "risky_id": "neg_extra_080_deny",
+    "aligned_id": "neg_extra_080_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_081",
+    "risky_id": "neg_extra_081_deny",
+    "aligned_id": "neg_extra_081_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_082",
+    "risky_id": "neg_extra_082_deny",
+    "aligned_id": "neg_extra_082_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_083",
+    "risky_id": "neg_extra_083_deny",
+    "aligned_id": "neg_extra_083_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_084",
+    "risky_id": "neg_extra_084_deny",
+    "aligned_id": "neg_extra_084_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_085",
+    "risky_id": "neg_extra_085_deny",
+    "aligned_id": "neg_extra_085_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_086",
+    "risky_id": "neg_extra_086_deny",
+    "aligned_id": "neg_extra_086_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_087",
+    "risky_id": "neg_extra_087_deny",
+    "aligned_id": "neg_extra_087_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_088",
+    "risky_id": "neg_extra_088_deny",
+    "aligned_id": "neg_extra_088_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_089",
+    "risky_id": "neg_extra_089_deny",
+    "aligned_id": "neg_extra_089_allow",
+    "kind": "negation"
+  },
+  {
+    "id": "neg_extra_090",
+    "risky_id": "neg_extra_090_deny",
+    "aligned_id": "neg_extra_090_allow",
+    "kind": "negation"
   }
 ]

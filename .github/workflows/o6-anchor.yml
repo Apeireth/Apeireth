@@ -10,7 +10,7 @@ name: O-6 锚 #9 兑现守门 (永远追求最优)
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, feature/cognitive-infrastructure-vnext]
   pull_request:
     branches: ['**']
 

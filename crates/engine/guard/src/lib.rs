@@ -50,9 +50,11 @@ pub use intent::{
 };
 pub use introspection::{GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto};
 pub use observation::{DataSensitivity, ResourceClass, SafetyObservation, SinkClass, SourceClass};
-pub use oracle::{ScenarioOracle, SecurityScenarioOracle};
+pub use oracle::{ActionOracleLabel, ScenarioOracle, SecurityScenarioOracle};
 pub use scenario::{
-    family_split, run_scenario, GuardScenario, ScenarioCatalog, ScenarioOutcome, ScenarioPair,
+    family_split, run_scenario, run_scenario_checked, GuardScenario, ScenarioAction,
+    ScenarioActionResult, ScenarioCatalog, ScenarioExecutionTrace, ScenarioOutcome, ScenarioPair,
+    ScenarioTraceError, ScenarioTurn, ScenarioTurnTrace,
 };
 pub use semantics::{
     canonical_descriptor_coverage, descriptor_for_capability, CapabilitySafetyDescriptor,

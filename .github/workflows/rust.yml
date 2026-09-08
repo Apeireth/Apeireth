@@ -20,7 +20,7 @@ name: Rust tests (OS matrix + cargo-nextest)
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/cognitive-infrastructure-vnext]
   pull_request:
     branches: ['**']
   workflow_dispatch:

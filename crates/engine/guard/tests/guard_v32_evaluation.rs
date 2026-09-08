@@ -86,6 +86,90 @@ fn catalog_has_required_benchmark_volume() {
 }
 
 #[test]
+fn negation_catalog_has_complete_pairs_and_preserves_conventions() {
+    let catalog = ScenarioCatalog::all();
+    let pairs = ScenarioCatalog::negation_pairs();
+    assert!(pairs.len() >= 100, "negation pair count {}", pairs.len());
+    let mut pair_ids = std::collections::BTreeSet::new();
+    for pair in pairs {
+        assert!(
+            pair_ids.insert(pair.id.clone()),
+            "duplicate pair {}",
+            pair.id
+        );
+        assert_eq!(pair.kind, "negation");
+        let deny = catalog
+            .iter()
+            .find(|scenario| scenario.id == pair.risky_id)
+            .unwrap_or_else(|| panic!("missing deny member {}", pair.risky_id));
+        let allow = catalog
+            .iter()
+            .find(|scenario| scenario.id == pair.aligned_id)
+            .unwrap_or_else(|| panic!("missing allow member {}", pair.aligned_id));
+        assert_eq!(deny.pair_id.as_deref(), Some(pair.id.as_str()));
+        assert_eq!(allow.pair_id.as_deref(), Some(pair.id.as_str()));
+        assert_eq!(deny.category, "negation");
+        assert_eq!(allow.category, "negation");
+        assert_eq!(deny.family, allow.family, "family split in {}", pair.id);
+        assert_eq!(
+            family_split(&deny.family),
+            family_split(&allow.family),
+            "dataset split in {}",
+            pair.id
+        );
+        assert!(deny.id.ends_with("_deny"));
+        assert!(allow.id.ends_with("_allow"));
+        assert_eq!(
+            deny.language, allow.language,
+            "language changed in {}",
+            pair.id
+        );
+        assert_eq!(deny.actions.len(), allow.actions.len());
+        assert_eq!(
+            deny.actions[0].capability, allow.actions[0].capability,
+            "capability changed in {}",
+            pair.id
+        );
+    }
+    assert!(catalog
+        .iter()
+        .any(|scenario| scenario.intent_text == "不要只检查，直接修改"));
+}
+
+#[test]
+fn realization_holdouts_are_explicit_and_isolated() {
+    let catalog = ScenarioCatalog::all();
+    let shell: Vec<_> = catalog
+        .iter()
+        .filter(|item| item.holdout_group == "tool_shell")
+        .collect();
+    assert!(!shell.is_empty(), "shell realization holdout is empty");
+    assert!(shell.iter().all(|item| item.tool_origin == "shell_holdout"));
+    assert!(shell
+        .iter()
+        .all(|item| item.action_template_id.starts_with("shell_")));
+
+    let plugin: Vec<_> = catalog
+        .iter()
+        .filter(|item| item.tool_origin == "plugin")
+        .collect();
+    assert!(!plugin.is_empty(), "plugin realization coverage is empty");
+    assert!(plugin.iter().all(|item| item.holdout_group != "tool_shell"));
+
+    let canonical = catalog
+        .iter()
+        .filter(|item| item.tool_origin == "canonical" && item.holdout_group.is_empty())
+        .collect::<Vec<_>>();
+    assert!(
+        !canonical.is_empty(),
+        "canonical training-side realization is empty"
+    );
+    assert!(canonical
+        .iter()
+        .any(|item| item.action_template_id == "fs_read"));
+}
+
+#[test]
 fn artifact_tamper_is_rejected() {
     let mut value = serde_json::json!({
         "schema_version": "AgentChainFeatureV2",

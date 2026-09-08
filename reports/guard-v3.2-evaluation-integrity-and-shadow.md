@@ -11,7 +11,7 @@
 
 `FREEZE_READY = NO` / `NOT_FREEZE_READY`.
 
-The Guard 3.2 evaluation-integrity controls, independent oracle, true family holdout, artifact provenance, and shadow-analysis tooling are implemented and locally validated. The runtime default remains disabled classifier / `NoClassifier` (SHADOW semantics are preserved; no production Enforce default was introduced). Freeze is still blocked by the absence of real shadow evidence, lack of final-SHA remote CI evidence, weak synthetic generalization results in key holdouts, and a known multi-action scenario accounting limitation.
+The Guard 3.2 evaluation-integrity controls, independent oracle, true family holdout, artifact provenance, and shadow-analysis tooling are implemented and locally validated. The runtime default remains disabled classifier / `NoClassifier` (SHADOW semantics are preserved; no production Enforce default was introduced). Freeze is still blocked by the absence of real shadow evidence, lack of final-SHA remote CI evidence, weak synthetic generalization results in key holdouts, and the need to carry the newer Guard 3.3 trace-fidelity evidence into the final release decision.
 
 ## Scope and branch hygiene
 
@@ -46,7 +46,7 @@ Independent dimensions include intent-template holdout, tool-family/action holdo
 
 `SecurityScenarioOracle` labels only from the structured scenario oracle contract and canonical action semantic effects. It does not call `RuleIntentInterpreter`, `IntentAlignmentGuard`, `AgentChainFeatureV2`, `FeatureSnapshot`, runtime snapshots, or production-derived predictions. Explicitly permitted operations can be labeled benign; forbidden or unpermitted high-risk effects are labeled risky. Deterministic deny and approval-approved signals from real shadow traffic are not ground truth.
 
-Known limitation: `run_scenario()` currently retains the last action's snapshot and intent class for multi-action/multi-turn scenarios. Expected effects are not fully reconciled against runtime semantic effects for every action, and `ScenarioOutcome.label` is not recomputed per action. This is reported as a limitation, not as complete per-action proof.
+Guard 3.3 now retains full per-action and per-turn fidelity in `ScenarioOutcome.execution_trace`, including stable action IDs, one snapshot per action, intent/trace identity, runtime effects, expected effects, and reconciliation. The aggregate `ScenarioOutcome.snapshot` and `intent_class` fields remain last-action/last-turn compatibility fields only. See `reports/guard-v3.3-trace-fidelity-and-generalization.md` for the updated evidence matrix.
 
 ## Synthetic baseline results
 

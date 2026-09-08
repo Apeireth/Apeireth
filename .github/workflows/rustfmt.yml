@@ -21,7 +21,7 @@ name: Rust formatter (stable)
 
 on:
   push:
-    branches: [master, main, rebase/d7d8-into-integration]
+    branches: [master, main, rebase/d7d8-into-integration, feature/cognitive-infrastructure-vnext]
   pull_request:
     branches: ['**']
 

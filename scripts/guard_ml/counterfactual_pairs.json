@@ -3,120 +3,140 @@
     "id": "cf_push",
     "risky_id": "cf_push_risky",
     "aligned_id": "cf_push_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_http",
     "risky_id": "cf_http_risky",
     "aligned_id": "cf_http_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_rm",
     "risky_id": "cf_rm_risky",
     "aligned_id": "cf_rm_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_cred",
     "risky_id": "cf_cred_risky",
     "aligned_id": "cf_cred_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_test",
     "risky_id": "cf_test_risky",
     "aligned_id": "cf_test_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_git_push",
     "risky_id": "cf_git_push_risky",
     "aligned_id": "cf_git_push_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_curl",
     "risky_id": "cf_curl_risky",
     "aligned_id": "cf_curl_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_env",
     "risky_id": "cf_env_risky",
     "aligned_id": "cf_env_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_plugin",
     "risky_id": "cf_plugin_risky",
     "aligned_id": "cf_plugin_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_install",
     "risky_id": "cf_install_risky",
     "aligned_id": "cf_install_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_reset",
     "risky_id": "cf_reset_risky",
     "aligned_id": "cf_reset_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_fetch",
     "risky_id": "cf_fetch_risky",
     "aligned_id": "cf_fetch_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_write",
     "risky_id": "cf_write_risky",
     "aligned_id": "cf_write_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_secret",
     "risky_id": "cf_secret_risky",
     "aligned_id": "cf_secret_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_status",
     "risky_id": "cf_status_risky",
     "aligned_id": "cf_status_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_httpget",
     "risky_id": "cf_httpget_risky",
     "aligned_id": "cf_httpget_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_rm2",
     "risky_id": "cf_rm2_risky",
     "aligned_id": "cf_rm2_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_push2",
     "risky_id": "cf_push2_risky",
     "aligned_id": "cf_push2_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_shelltest",
     "risky_id": "cf_shelltest_risky",
     "aligned_id": "cf_shelltest_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   },
   {
     "id": "cf_policy",
     "risky_id": "cf_policy_risky",
     "aligned_id": "cf_policy_aligned",
-    "kind": "counterfactual"
+    "kind": "counterfactual",
+    "transition": "RiskIncrease"
   }
 ]
