@@ -72,6 +72,8 @@ jobs:
       - name: Verify repository hygiene
         shell: bash
         run: |
+          # Evaluation imports create only regenerable Python caches.
+          find scripts/guard_ml -type d -name __pycache__ -prune -exec rm -rf {} +
           test -z "$(git status --short --untracked-files=all | grep -E '^\?\? scripts/guard_ml/__pycache__/' || true)"
           git status --short --untracked-files=all
 
