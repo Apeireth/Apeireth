@@ -126,6 +126,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | P-arch-2 (2026-08-28 待做) | 6 DEFERRED slot 激活 (per §4 P-arch C 块) | 6-10 周估; 起点 `docs/01-architecture/cognitive-9-organ-integration-spec.md` + `deferred-slot-activation-preference_learning-spec.md` | A 块 ✅ |
 | P-arch-3 (2026-08-28 待做) | RC-7 Perception 真 modality (per §4 P-arch D 块) | 2-3 周估; 需硬件 (Whisper + xcap); 起点 `docs/01-architecture/rc-7-perception-true-modality-spec.md` | 硬件 |
 | **P1 (新)** | **RC-10 metadata-bound APX2 header + RC-11 migration** | 已完成：v2 写入的 AAD 绑定 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length；旧 v1 `[sealed_len:4 BE][sealed:N]` 保持只读兼容，当前格式不落盘 raw `record_id`。`scripts/migrate_v1_to_v2_encrypted.py` 与 7 个 Rust 集成测试完成离线 v1→APX2 重签、截断/超长 ID fail-closed 验证 | RC-10/11 ✅ |
+| **P2 (KV 参考清单, 2026-09-06 登记)** | KV 层逐出/压缩三篇（RA-15 派单包） | 📋 后置：本地推理路线（便携 U 盘 SLM）启动后吸收——arXiv:2607.10582 MemDecay 区域感知逐出 / arXiv:2608.00528 S4R 采样+子空间+稀疏重建 / arXiv:2601.18999 随机化逐出+学习路由。对照见 `docs/03-reference/absorption-2026-09.md` §P2 | 本地推理路线 |
 
 ---
 

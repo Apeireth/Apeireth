@@ -162,6 +162,26 @@ pub const MIGRATIONS: &[Migration] = &[
               );\n\
               CREATE INDEX IF NOT EXISTS idx_research_lineage_events_ts ON research_lineage_events(ts);",
     },
+    // B2 · RA-15 P0-A (research, 默认关闭): 执行态遗忘登记表.
+    // 吸收自 arXiv:2609.04875 (execution-state unlearning):
+    // 遗忘闭包除派生记忆面外, 还要审计执行态 (会话 token 跨度 / 挂起工具计划 /
+    // 在途 summary / prompt 缓存片段). 纯登记表: 只 INSERT/UPSERT + 查询, 无删除路径,
+    // 生产路径零触碰.
+    Migration {
+        version: 9,
+        name: "V9__research_execution_state",
+        sql: "CREATE TABLE IF NOT EXISTS research_execution_state (\n\
+              kind           TEXT NOT NULL,\n\
+              ref_id         TEXT NOT NULL,\n\
+              injection_step INTEGER,\n\
+              taint_kind     TEXT NOT NULL,\n\
+              taint_id       TEXT NOT NULL,\n\
+              note           TEXT NOT NULL DEFAULT '',\n\
+              ts             INTEGER NOT NULL,\n\
+              PRIMARY KEY (kind, ref_id)\n\
+              );\n\
+              CREATE INDEX IF NOT EXISTS idx_research_exec_state_taint ON research_execution_state(taint_kind, taint_id);",
+    },
 ];
 
 const HALLWAYS_SQL: &str = r#"
@@ -627,8 +647,8 @@ mod tests {
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            4,
-            "V5/V6/V7/V8 各一条"
+            5,
+            "V5/V6/V7/V8/V9 各一条"
         );
     }
 

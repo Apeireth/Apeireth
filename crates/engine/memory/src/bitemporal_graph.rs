@@ -88,7 +88,8 @@ impl Default for TrustWeights {
 }
 
 impl TrustWeights {
-    fn w(&self, p: FactProvenance) -> f32 {
+    /// 来源类型先验权重（RA-2 §5.2；RA-15 P1-A 准入门控复用）。
+    pub fn w(&self, p: FactProvenance) -> f32 {
         match p {
             FactProvenance::Manual => self.w_manual,
             FactProvenance::Tool => self.w_tool,

@@ -249,12 +249,24 @@ pub use agent_trace::{
     redact_attributes, sanitize_summary, summary_is_safe, TraceQueryError, TraceSpan,
     TraceSpanKind, TraceSpanStatus, TraceStore,
 };
-// B2 · Phase 1 (research, 默认关闭): 派生记忆血缘 + 遗忘传播审计 (RA-1 A.4).
+// B2 · Phase 1 (research, 默认关闭): 派生记忆血缘 + 遗忘传播审计 (RA-1 A.4)
+// + RA-15 P0-A 执行态遗忘闭包 (吸收自 arXiv:2609.04875).
 pub mod research_derived_memory;
 pub use research_derived_memory::{
-    dual_rater_protocol, research_invalidate_cache_on_forget, ClosureMode, ClosureNode,
-    ClosureReport, DerivedRef, DeterministicLeakJudge, DualRaterResult, GovernedRecall,
-    JudgeVerdict, LeakAuditItem, LeakAuditReport, ResearchJudge,
+    dual_rater_protocol, execution_state_prefix_crop, research_invalidate_cache_on_forget,
+    ClosureMode, ClosureNode, ClosureReport, DerivedRef, DeterministicLeakJudge, DualRaterResult,
+    ExecutionStateEntry, ExecutionStateInventory, ExecutionStateKind, GovernedRecall, JudgeVerdict,
+    LeakAuditItem, LeakAuditReport, ResearchJudge,
+};
+// B2 · RA-15 P0-B (research, 默认关闭): 屏障优先级联修复执行器
+// (吸收自 arXiv:2605.07242 MEMOREPAIR; 自写 Dinic, 0 新外部依赖).
+pub mod derived_repair;
+pub use derived_repair::{RepairExecutor, RepairNode, RepairOutcome, RepairTradeoff};
+// B2 · RA-15 P1-A (research, 默认关闭): 记忆准入控制 (吸收自 arXiv:2603.04549 A-MAC).
+pub mod admission_gate;
+pub use admission_gate::{
+    AdmissionDecision, AdmissionPolicy, AdmissionSignal, AdmissionVerdict, AdmissionWeights,
+    ConflictScorer, KeywordConflictScorer, ResearchAdmissionGate,
 };
 // B7 · Phase 6 原型一 (research, 不进默认路径): 漫游记忆 CRDT.
 pub mod research_roaming_memory;
