@@ -313,6 +313,35 @@ fn test_continuity_state_compression() {
 }
 
 #[test]
+fn test_consolidation_uses_governed_visible_content() {
+    let coord = setup_coordinator();
+    let session = "sess-governed-consolidation";
+    let forgotten = coord
+        .writeback(&MemoryWritebackEntry::new(session, "user", "error: stale"))
+        .unwrap();
+    let overridden = coord
+        .writeback(&MemoryWritebackEntry::new(session, "user", "original"))
+        .unwrap();
+
+    coord
+        .forget_episode(&forgotten, Some("user request"), 0)
+        .unwrap();
+    coord
+        .update_episode_content(&overridden, "resolved: governed override", Some("user"), 0)
+        .unwrap();
+
+    let report = coord.run_consolidation(session).unwrap();
+    assert_eq!(report.episodes_evaluated, 1);
+    assert!(report
+        .extracted_insights
+        .iter()
+        .any(|insight| insight.contains("resolved: governed override")));
+    assert!(!report
+        .extracted_insights
+        .iter()
+        .any(|insight| insight.contains("stale")));
+}
+#[test]
 fn test_consolidation_job() {
     let coord = setup_coordinator();
     let session = "sess-consolidation";

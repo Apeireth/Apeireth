@@ -930,6 +930,114 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn wuhan_to_shanghai_supersede_has_current_history_and_as_of_views() {
+        let store = store().await;
+        let wuhan = store
+            .append(fact("city", "traveller", "Wuhan", 100))
+            .await
+            .unwrap();
+        let mut correction = fact("city", "traveller", "Shanghai", 200);
+        correction.believed_at_ms = 250;
+        let shanghai = store.supersede(&wuhan.id, correction).await.unwrap();
+
+        assert_eq!(shanghai.revision, 1);
+        assert_eq!(shanghai.supersedes_id.as_deref(), Some(wuhan.id.as_str()));
+        assert_eq!(
+            store.history("city").unwrap(),
+            vec![wuhan.clone(), shanghai.clone()]
+        );
+        assert_eq!(
+            store.query(&TemporalGraphQuery::new(150)).unwrap()[0].object_id,
+            "Wuhan"
+        );
+        assert_eq!(
+            store.query(&TemporalGraphQuery::new(200)).unwrap()[0].object_id,
+            "Wuhan",
+            "late-believed supersede must not change the default as-of view"
+        );
+        assert_eq!(
+            store
+                .query(&TemporalGraphQuery::new(200).with_belief_as_of_ms(250))
+                .unwrap()[0]
+                .object_id,
+            "Shanghai"
+        );
+        assert_eq!(
+            store
+                .query(&TemporalGraphQuery::new(250).with_belief_as_of_ms(250))
+                .unwrap()[0]
+                .object_id,
+            "Shanghai"
+        );
+    }
+
+    #[tokio::test]
+    async fn traversal_respects_as_of_and_budgets_without_following_cycles_forever() {
+        let store = store().await;
+        store
+            .append(fact("ab", "Wuhan", "Shanghai", 10))
+            .await
+            .unwrap();
+        store
+            .append(fact("bc", "Shanghai", "Tokyo", 10))
+            .await
+            .unwrap();
+        store
+            .append(fact("ca", "Tokyo", "Wuhan", 10))
+            .await
+            .unwrap();
+        store
+            .append(fact("future", "Wuhan", "Osaka", 100))
+            .await
+            .unwrap();
+
+        let result = store
+            .traverse(
+                "Wuhan",
+                &TemporalGraphQuery::new(20),
+                TraversalBudget {
+                    max_depth: 10,
+                    max_nodes: 3,
+                    max_edges: 3,
+                },
+            )
+            .unwrap();
+        assert_eq!(result.nodes, vec!["Wuhan", "Shanghai", "Tokyo"]);
+        assert_eq!(result.facts.len(), 3);
+        assert!(!result.facts.iter().any(|fact| fact.object_id == "Osaka"));
+        assert!(!result.truncated);
+
+        let depth_limited = store
+            .traverse(
+                "Wuhan",
+                &TemporalGraphQuery::new(20),
+                TraversalBudget {
+                    max_depth: 1,
+                    max_nodes: 10,
+                    max_edges: 10,
+                },
+            )
+            .unwrap();
+        assert_eq!(depth_limited.nodes, vec!["Wuhan", "Shanghai"]);
+        assert!(depth_limited.truncated);
+    }
+
+    #[tokio::test]
+    async fn supersede_rejects_cross_relation_and_unknown_predecessors() {
+        let store = store().await;
+        let original = store
+            .append(fact("city", "traveller", "Wuhan", 1))
+            .await
+            .unwrap();
+        let other = fact("other-city", "traveller", "Beijing", 2);
+        assert!(store.supersede("missing", other.clone()).await.is_err());
+
+        let mut wrong_relation = fact("other-city", "traveller", "Shanghai", 3);
+        wrong_relation.relation_key = "other-city".into();
+        assert!(store.supersede(&original.id, wrong_relation).await.is_err());
+    }
+
+    #[tokio::test]
     async fn invalid_rows_are_rejected_and_hard_delete_is_blocked() {
         let store = store().await;
         assert!(store.append(fact("", "a", "b", 1)).await.is_err());
