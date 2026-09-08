@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::Clock;
 use apeireth_memory::{
-    ContextWindowManager, EmbeddingProvider, MemoryCoordinator, MemoryGovernanceStore,
-    ScopedMemoryBackend, SqliteAccessHistoryStore,
+    ContextWindowManager, EmbeddingProvider, MemoryCoordinator, MemoryExtractor,
+    MemoryGovernanceStore, ScopedMemoryBackend, SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::Council;
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEntryStore};
@@ -55,13 +55,38 @@ impl ContextProjector for MemoryContextProjector {
         transcript: &[NormalizedMessage],
         model_context_tokens: Option<u32>,
     ) -> Result<Vec<NormalizedMessage>, ContextProjectionError> {
-        Ok(self
-            .manager
-            .project(
-                transcript,
-                model_context_tokens.unwrap_or_default() as usize,
-            )
-            .messages)
+        let projection = match model_context_tokens {
+            // An unknown provider limit must not be treated as a tiny/default
+            // budget: preserve the transcript rather than compacting eagerly.
+            None => transcript.to_vec(),
+            Some(context_tokens) => {
+                self.manager
+                    .project(transcript, context_tokens as usize)
+                    .messages
+            }
+        };
+        Ok(projection)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use apeireth_protocol::canonical::ContentPart;
+
+    #[test]
+    fn unknown_context_limit_preserves_transcript() {
+        let projector = MemoryContextProjector::new(ContextWindowManager::default());
+        let transcript = vec![
+            NormalizedMessage::user("older context ".repeat(200)),
+            NormalizedMessage::assistant("recent response"),
+            NormalizedMessage::user("latest request"),
+            NormalizedMessage::assistant("latest answer"),
+            NormalizedMessage::user("follow-up"),
+        ];
+        let projected = projector.project(&transcript, None).unwrap();
+        assert_eq!(projected, transcript);
+        assert!(ContentPart::join_text(&projected[0].content).contains("older context"));
     }
 }
 
@@ -169,6 +194,8 @@ pub struct ProductionBackends {
     pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
     /// Optional durable selected-context access history.
     pub access_history: Option<Arc<SqliteAccessHistoryStore>>,
+    /// Optional unified extractor for bounded AfterTurn memory extraction.
+    pub memory_extractor: Option<Arc<dyn MemoryExtractor>>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -363,6 +390,9 @@ impl ProductionModules {
             );
             if let Some(coord) = &shared_coordinator {
                 module = module.with_coordinator(Arc::clone(coord));
+            }
+            if let Some(extractor) = &backends.memory_extractor {
+                module = module.with_extractor(Arc::clone(extractor));
             }
             if let (Some(wiki), Some(graph), Some(associations)) =
                 (&backends.wiki, &backends.graph, &backends.associations)

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use apeireth_core::kernel::memory::Episode;
 
-use crate::memory_governance::{MemoryGovernanceStatus, MemoryGovernanceStore};
+use crate::memory_governance::{GovernedEpisode, MemoryGovernanceStatus, MemoryGovernanceStore};
 use crate::MemoryError;
 
 /// Report summarizing memory consolidation execution.
@@ -82,6 +82,21 @@ impl MemoryConsolidationJob {
             tool_invocations,
             extracted_insights,
         }
+    }
+
+    /// Consolidate a governance-resolved view, preserving content overrides and
+    /// protected active episodes while excluding forgotten episodes.
+    pub fn consolidate_governed_episodes(
+        &self,
+        session_id: &str,
+        episodes: &[GovernedEpisode],
+    ) -> ConsolidationReport {
+        let visible: Vec<Episode> = episodes
+            .iter()
+            .filter(|episode| episode.status != MemoryGovernanceStatus::Forgotten)
+            .map(|episode| episode.episode.clone())
+            .collect();
+        self.consolidate(session_id, &visible)
     }
 
     /// Consolidate only governance-visible episodes. This is the production

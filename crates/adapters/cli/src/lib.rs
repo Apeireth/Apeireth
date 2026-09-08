@@ -458,6 +458,7 @@ async fn build_cognitive_modules_from_env(
         scoped_memory: Some(scoped_memory),
         embedding_provider: None,
         access_history: Some(access_history),
+        memory_extractor: None,
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)

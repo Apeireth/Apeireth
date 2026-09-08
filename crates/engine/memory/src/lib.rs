@@ -299,8 +299,10 @@ pub mod context_window;
 pub mod continuity_state;
 pub mod coordinator;
 pub mod extraction;
+pub mod facade;
 pub mod layers;
 pub mod persona_store_sqlite;
+pub mod reconciler;
 pub mod retrieval_pipeline;
 pub mod scope;
 pub mod temporal_graph_store;
@@ -312,6 +314,7 @@ pub use commitments::{
     Commitment, CommitmentError, CommitmentEvent, CommitmentEventRecord, CommitmentKind,
     CommitmentStatus, SqliteCommitmentStore,
 };
+pub use facade::MemoryMutationFacade;
 pub use persona_store_sqlite::SqlitePersonaProfileStore;
 pub use temporal_graph_store::{
     SqliteTemporalGraphStore, TemporalGraphError, TemporalGraphFact, TemporalGraphQuery,
@@ -331,6 +334,10 @@ pub use extraction::{
 pub use layers::{
     MemoryLayerKind, MemoryRecallQuery, MemoryRecallResult, MemoryWritebackEntry,
     RecalledMemoryItem,
+};
+pub use reconciler::{
+    MemoryReconciler, MemoryReconciliationDecision, MemoryReconciliationOutcome,
+    MemoryReconciliationRecord, MemoryReconciliationReport,
 };
 pub use retrieval_pipeline::{
     unicode_tokens, BasicLexicalCandidateSource, HybridRetrievalPipeline, LexicalCandidateSource,

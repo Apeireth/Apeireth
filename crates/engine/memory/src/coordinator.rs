@@ -742,10 +742,12 @@ impl MemoryCoordinator {
     /// Run background or idle memory consolidation job for a session.
     pub fn run_consolidation(&self, session_id: &str) -> Result<ConsolidationReport, MemoryError> {
         let episodes = self
-            .backend
-            .recent_episodes(session_id, 100)
-            .map_err(|e| MemoryError::Invalid(e.to_string()))?;
-        Ok(self.consolidation.consolidate(session_id, &episodes))
+            .governance
+            .governed_recent_episodes(session_id, 100)
+            .map_err(|error| MemoryError::Invalid(error.to_string()))?;
+        Ok(self
+            .consolidation
+            .consolidate_governed_episodes(session_id, &episodes))
     }
 
     /// Forget an episode via the governance sidecar.

@@ -12,7 +12,9 @@ use std::time::Instant;
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
 use apeireth_memory::{
-    MemoryCoordinator, MemoryRecallQuery, SelectedMemoryAccess, SqliteAccessHistoryStore,
+    MemoryCoordinator, MemoryExtractionInput, MemoryExtractionMessage, MemoryExtractor,
+    MemoryRecallQuery, MemoryScope, RuleMemoryExtractor, SelectedMemoryAccess,
+    SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::{
     Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
@@ -569,6 +571,7 @@ pub struct MemoryWritebackModule {
     wiki: Option<Arc<dyn WikiEntryStore>>,
     graph: Option<Arc<dyn KnowledgeGraphStore>>,
     associations: Option<Arc<dyn AssociationStore>>,
+    extractor: Arc<dyn MemoryExtractor>,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
 }
@@ -583,6 +586,7 @@ impl MemoryWritebackModule {
             wiki: None,
             graph: None,
             associations: None,
+            extractor: Arc::new(RuleMemoryExtractor),
             clock,
             metrics: ModuleMetrics::default(),
         }
@@ -607,6 +611,13 @@ impl MemoryWritebackModule {
         self.wiki = Some(wiki);
         self.graph = Some(graph);
         self.associations = Some(associations);
+        self
+    }
+
+    /// Attach a unified memory extractor for deterministic or model-backed extraction.
+    #[must_use]
+    pub fn with_extractor(mut self, extractor: Arc<dyn MemoryExtractor>) -> Self {
+        self.extractor = extractor;
         self
     }
 
@@ -664,6 +675,58 @@ impl AgentModule for MemoryWritebackModule {
                     content: candidate.content.clone(),
                     session_id: session,
                 });
+
+                // The unified extractor observes exactly one bounded user+assistant
+                // turn. It is deliberately after candidate construction and before
+                // legacy experience projection, so the old projection remains intact.
+                let extraction_input = MemoryExtractionInput {
+                    scope: MemoryScope::Session {
+                        session_id: episodes[0].session_id.clone(),
+                    },
+                    source_session: Some(episodes[0].session_id.clone()),
+                    source_trace: None,
+                    source_request: Some(candidate.id.clone()),
+                    messages: episodes
+                        .iter()
+                        .map(|episode| MemoryExtractionMessage {
+                            role: episode.role.clone(),
+                            content: bounded(&episode.content, 4_096),
+                        })
+                        .collect(),
+                };
+                match self.extractor.extract(extraction_input).await {
+                    Ok(extracted) => {
+                        let mut memories = extracted.preferences;
+                        memories.extend(extracted.facts);
+                        memories.extend(extracted.events);
+                        memories.extend(extracted.experiences);
+                        memories.extend(extracted.relations);
+                        for (index, memory) in memories.into_iter().enumerate() {
+                            let episode = Episode {
+                                id: hash_id(
+                                    "ep-extracted",
+                                    &[&episodes[0].session_id, &candidate.id, &index.to_string()],
+                                ),
+                                timestamp: now,
+                                role: format!("memory:{:?}", memory.class).to_lowercase(),
+                                content: memory.content,
+                                session_id: episodes[0].session_id.clone(),
+                            };
+                            let result = if let Some(coord) = &self.coordinator {
+                                coord.writeback_episode(&episode).map(|_| ())
+                            } else {
+                                self.memory.put_episode(&episode).map_err(|e| {
+                                    apeireth_memory::MemoryError::Invalid(e.to_string())
+                                })
+                            };
+                            if result.is_err() {
+                                self.metrics.warning();
+                            }
+                        }
+                    }
+                    Err(_) => self.metrics.warning(),
+                }
+
                 for episode in episodes {
                     // Post-commit persistence is fail-open for the current
                     // answer, but the warning counter makes the loss visible.
