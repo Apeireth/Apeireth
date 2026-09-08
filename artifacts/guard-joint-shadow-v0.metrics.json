@@ -4129,7 +4129,7 @@
     "dataset_hash": "c201a363f356c3903fdd3122970bdaa1e287333e40a12b79fbedb0a6cb5bfd57",
     "dataset_path": "scripts/guard_ml/generated_features.jsonl",
     "feature_schema_hash": "065fca115611d552b1915dbed8ecdcc64cdb9848df8c9892286844bbb115cbc1",
-    "training_commit": "9289f4f0c0e729f4be62500403bdab65b7d75c4b",
+    "training_commit": "499cdb42869f8904178deec0ae758dd6231f8ea5",
     "training_commit_is_worktree_head": false,
     "training_script_version": "train_shadow.py",
     "evaluation_script_version": "train_eval.py",
@@ -4137,7 +4137,7 @@
     "input_hashes": {
       "dataset": "c201a363f356c3903fdd3122970bdaa1e287333e40a12b79fbedb0a6cb5bfd57",
       "train_shadow_script": "3ef7b135835d7b8648521e1aaef8886f40a431ef6072a4653abd798265bea624",
-      "train_eval_script": "a8bd6f4c092f55549fde91467e62417832ca03035805694dc97621aaf52febd2",
+      "train_eval_script": "b66ce76882b75b048edb2f8630135da543a481d4ab0cc6f80ef95f92a68d0e61",
       "analyze_shadow_script": "d0477a337ce5b63791e461689954cad376716d76703a974f475368a683671837",
       "counterfactual_pairs": "0b7bd0841c7933086249ae6af1c364afe33ad028ea5ec84635ec159e94ac8461",
       "negation_pairs": "1e8b59e5bef1ac47449bec9685382ef18dc4a3fb99f6e3b39cbe262852176652",
