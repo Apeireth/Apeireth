@@ -100,7 +100,7 @@ impl MemoryBackend for SqliteBackend {
         // 以 session_id 派生 (episode 的主体 = 其会话), 0 装诚实并保持写入可见.
         let ep = ep.clone();
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR IGNORE INTO episodes (id, continuity_id, timestamp, role, content, session_id) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -194,7 +194,7 @@ impl MemoryBackend for SqliteBackend {
         let episode_id = episode_id.to_string();
         let metadata = serde_json::to_string(&metadata)?;
         self.pool
-            .read(move |conn| {
+            .write_sync(move |conn| {
                 // Keep this self-healing for older test/embedded schemas that
                 // predate V9; the production migration creates the same table.
                 conn.execute_batch(
@@ -267,7 +267,7 @@ impl MemoryBackend for SqliteBackend {
         let tags_json = serde_json::to_string(&entry.tags)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     &format!(
                         "INSERT OR IGNORE INTO {table} (id, subject_id, subject_rev, created_at, payload, source, tags) \

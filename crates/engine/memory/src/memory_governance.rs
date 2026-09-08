@@ -614,8 +614,9 @@ impl MemoryGovernanceStore for crate::backend::sqlite::SqliteBackend {
         &self,
         episode_id: &str,
     ) -> Result<Option<GovernedEpisode>, MemoryGovernanceError> {
+        let episode_id = episode_id.to_owned();
         self.pool()
-            .read(|conn| Ok(get_governed_impl(conn, episode_id)))
+            .write_sync(move |conn| Ok(get_governed_impl(conn, &episode_id)))
             .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?
     }
 
@@ -626,13 +627,16 @@ impl MemoryGovernanceStore for crate::backend::sqlite::SqliteBackend {
         updated_by: Option<&str>,
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+        let episode_id = episode_id.to_owned();
+        let new_content = new_content.to_owned();
+        let updated_by = updated_by.map(str::to_owned);
         self.pool()
-            .read(|conn| {
+            .write_sync(move |conn| {
                 Ok(update_episode_content_impl(
                     conn,
-                    episode_id,
-                    new_content,
-                    updated_by,
+                    &episode_id,
+                    &new_content,
+                    updated_by.as_deref(),
                     expected_rev,
                 ))
             })
@@ -645,8 +649,17 @@ impl MemoryGovernanceStore for crate::backend::sqlite::SqliteBackend {
         reason: Option<&str>,
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+        let episode_id = episode_id.to_owned();
+        let reason = reason.map(str::to_owned);
         self.pool()
-            .read(|conn| Ok(forget_episode_impl(conn, episode_id, reason, expected_rev)))
+            .write_sync(move |conn| {
+                Ok(forget_episode_impl(
+                    conn,
+                    &episode_id,
+                    reason.as_deref(),
+                    expected_rev,
+                ))
+            })
             .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?
     }
 
@@ -655,8 +668,9 @@ impl MemoryGovernanceStore for crate::backend::sqlite::SqliteBackend {
         episode_id: &str,
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+        let episode_id = episode_id.to_owned();
         self.pool()
-            .read(|conn| Ok(protect_episode_impl(conn, episode_id, expected_rev)))
+            .write_sync(move |conn| Ok(protect_episode_impl(conn, &episode_id, expected_rev)))
             .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?
     }
 
@@ -665,8 +679,9 @@ impl MemoryGovernanceStore for crate::backend::sqlite::SqliteBackend {
         episode_id: &str,
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+        let episode_id = episode_id.to_owned();
         self.pool()
-            .read(|conn| Ok(unprotect_episode_impl(conn, episode_id, expected_rev)))
+            .write_sync(move |conn| Ok(unprotect_episode_impl(conn, &episode_id, expected_rev)))
             .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?
     }
 

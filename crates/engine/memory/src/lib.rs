@@ -228,7 +228,9 @@ pub use vector_distance::{
 // 方法以 inherent impl on SqliteMemoryStore 暴露, 不引入 trait (减少 import, 保持向后兼容).
 pub mod provenance;
 pub use identity::{IdentityCardRecord, IdentityCardStore, IdentityConflict};
-pub use migrations::{run_migrations, Migration as SchemaMigration, MIGRATIONS};
+pub use migrations::{
+    run_migrations, run_migrations_on_pool, Migration as SchemaMigration, MIGRATIONS,
+};
 pub use provenance::{normalize_meta, validate_meta, EpisodeMeta, Provenance};
 pub use session_note::{NoteQuery, NoteRecord, NoteStore, SessionRecord, SessionStore};
 // Core Capability Expansion Phase 2: 后端会话生命周期 (state machine + 乐观并发).
@@ -289,6 +291,8 @@ pub use streams::{
 pub use three_layer::{ThreeLayerMemory, SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY}; // R30 U9
 
 // Unified Memory 2.0 (coordinator, 4-layer architecture, closed-world prompt injection)
+pub mod access_history;
+pub mod commitments;
 pub mod consolidation;
 pub mod context_compiler;
 pub mod context_window;
@@ -296,11 +300,27 @@ pub mod continuity_state;
 pub mod coordinator;
 pub mod extraction;
 pub mod layers;
+pub mod persona_store_sqlite;
 pub mod retrieval_pipeline;
 pub mod scope;
+pub mod temporal_graph_store;
 
-pub use consolidation::{ConsolidationReport, MemoryConsolidationJob, MemoryConsolidationOutput};
-pub use context_compiler::ClosedWorldContextCompiler;
+pub use access_history::{
+    act_r_activation, AccessEvent, AccessHistoryError, SqliteAccessHistoryStore,
+};
+pub use commitments::{
+    Commitment, CommitmentError, CommitmentEvent, CommitmentEventRecord, CommitmentKind,
+    CommitmentStatus, SqliteCommitmentStore,
+};
+pub use persona_store_sqlite::SqlitePersonaProfileStore;
+pub use temporal_graph_store::{
+    SqliteTemporalGraphStore, TemporalGraphError, TemporalGraphFact, TemporalGraphQuery,
+    TraversalBudget, TraversalResult,
+};
+
+pub use context_compiler::{
+    ClosedWorldContextCompiler, MemoryAccessObserver, SelectedMemoryAccess,
+};
 pub use context_window::{ContextWindow, ContextWindowManager, ContextWindowPolicy};
 pub use continuity_state::{ContinuityCompressor, ContinuityState};
 pub use coordinator::MemoryCoordinator;

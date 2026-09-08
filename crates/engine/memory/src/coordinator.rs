@@ -18,7 +18,7 @@ use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
 
 use crate::consolidation::{ConsolidationReport, MemoryConsolidationJob};
-use crate::context_compiler::ClosedWorldContextCompiler;
+use crate::context_compiler::{ClosedWorldContextCompiler, SelectedMemoryAccess};
 use crate::continuity_state::{ContinuityCompressor, ContinuityState};
 use crate::layers::{
     MemoryLayerKind, MemoryRecallQuery, MemoryRecallResult, MemoryWritebackEntry,
@@ -198,6 +198,7 @@ impl MemoryCoordinator {
                             recency: s_rec,
                             importance: 0.8,
                             confidence: 0.8,
+                            activation: 1.0,
                             ..Default::default()
                         },
                         provenance,
@@ -258,6 +259,7 @@ impl MemoryCoordinator {
                                 recency: s_rec,
                                 importance,
                                 confidence: importance,
+                                activation: 0.8,
                                 ..Default::default()
                             },
                             provenance,
@@ -314,6 +316,7 @@ impl MemoryCoordinator {
                             recency: s_rec,
                             importance,
                             confidence: importance,
+                            activation: 0.8,
                             ..Default::default()
                         },
                         provenance,
@@ -413,6 +416,8 @@ impl MemoryCoordinator {
                                 recency: 1.0,
                                 importance: 0.6,
                                 confidence: 0.6,
+                                activation: 0.7,
+                                graph: 1.0,
                                 ..Default::default()
                             },
                             provenance: MemoryProvenance {
@@ -509,16 +514,23 @@ impl MemoryCoordinator {
                             } else {
                                 None
                             };
+                            if !valid_embedding(&query_vector, None) {
+                                continue;
+                            }
                             let cand_vec = match cand_vec_opt {
-                                Some(v) => Some(v),
-                                None => provider.embed(&cand.content).await.ok(),
+                                Some(v) if valid_embedding(&v, Some(query_vector.len())) => Some(v),
+                                _ => provider
+                                    .embed(&cand.content)
+                                    .await
+                                    .ok()
+                                    .filter(|v| valid_embedding(v, Some(query_vector.len()))),
                             };
                             if let Some(cand_vec) = cand_vec {
-                                if cand_vec.len() == query_vector.len() {
-                                    let sim = crate::canonical::vector::cosine_similarity(
-                                        &query_vector,
-                                        &cand_vec,
-                                    );
+                                let sim = crate::canonical::vector::cosine_similarity(
+                                    &query_vector,
+                                    &cand_vec,
+                                );
+                                if sim.is_finite() {
                                     let mut vc = cand.clone();
                                     vc.score_components.semantic = f64::from(sim).clamp(0.0, 1.0);
                                     vector_candidates.push(vc);
@@ -629,11 +641,38 @@ impl MemoryCoordinator {
             session_id: entry.session_id.clone(),
         };
 
-        // 1. Update working memory ring buffer
+        self.persist_episode(&episode, &entry.scope, &entry.provenance)?;
+        Ok(episode_id)
+    }
+
+    /// Persist a caller-owned episode without replacing its stable identifier.
+    ///
+    /// This is the coordinator path for runtimes that derive an episode ID before
+    /// persistence. The compatibility [`Self::writeback`] API intentionally keeps
+    /// generating IDs for [`MemoryWritebackEntry`] callers.
+    pub fn writeback_episode(&self, episode: &Episode) -> Result<String, MemoryError> {
+        let scope = MemoryScope::Session {
+            session_id: episode.session_id.clone(),
+        };
+        let provenance = MemoryProvenance {
+            source_session: Some(episode.session_id.clone()),
+            ..MemoryProvenance::default()
+        };
+        self.persist_episode(episode, &scope, &provenance)?;
+        Ok(episode.id.clone())
+    }
+
+    fn persist_episode(
+        &self,
+        episode: &Episode,
+        scope: &MemoryScope,
+        provenance: &MemoryProvenance,
+    ) -> Result<(), MemoryError> {
+        // 1. Update working memory ring buffer.
         {
             let mut working_lock = self.working.lock().expect("working memory mutex");
             let ring = working_lock
-                .entry(entry.session_id.clone())
+                .entry(episode.session_id.clone())
                 .or_insert_with(|| VecDeque::with_capacity(WORKING_RING_BUFFER_CAP));
             if ring.len() >= WORKING_RING_BUFFER_CAP {
                 ring.pop_front();
@@ -641,24 +680,38 @@ impl MemoryCoordinator {
             ring.push_back(episode.clone());
         }
 
-        // 2. Persist to storage backend
+        // 2. Persist to storage backend using the supplied ID.
         self.backend
-            .put_episode(&episode)
+            .put_episode(episode)
             .map_err(|e| MemoryError::Invalid(e.to_string()))?;
 
         self.backend
             .put_episode_metadata(
-                &episode_id,
+                &episode.id,
                 serde_json::json!({
-                    "scope": entry.scope,
-                    "provenance": entry.provenance,
+                    "scope": scope,
+                    "provenance": provenance,
                     "layer": "episodic",
-                    "content_hash": crate::canonical::vector::content_hash(&entry.content),
+                    "content_hash": crate::canonical::vector::content_hash(&episode.content),
                 }),
             )
             .map_err(|e| MemoryError::Invalid(e.to_string()))?;
 
-        Ok(episode_id)
+        Ok(())
+    }
+
+    /// Compile a structured overlay and report the candidate IDs selected after
+    /// sanitization and the overlay character budget is applied.
+    pub fn compile_prompt_overlay_with_selected_access(
+        &self,
+        query: &MemoryRecallQuery,
+    ) -> Result<Option<SelectedMemoryAccess>, MemoryError> {
+        let recall_result = self.recall(query)?;
+        Ok(self.compiler.compile_with_selected_access(
+            &recall_result,
+            &query.session_id,
+            query.max_chars,
+        ))
     }
 
     /// Compile a structured closed-world prompt overlay from a recall query.
@@ -666,10 +719,9 @@ impl MemoryCoordinator {
         &self,
         query: &MemoryRecallQuery,
     ) -> Result<Option<String>, MemoryError> {
-        let recall_result = self.recall(query)?;
         Ok(self
-            .compiler
-            .compile(&recall_result, &query.session_id, query.max_chars))
+            .compile_prompt_overlay_with_selected_access(query)?
+            .map(|selected| selected.overlay))
     }
 
     /// Generate a bounded continuity state compression for a session.
@@ -784,6 +836,12 @@ impl MemoryCoordinator {
             .unwrap_or(fallback_provenance);
         (scope, provenance)
     }
+}
+
+fn valid_embedding(vector: &[f32], expected_len: Option<usize>) -> bool {
+    !vector.is_empty()
+        && expected_len.is_none_or(|len| vector.len() == len)
+        && vector.iter().all(|value| value.is_finite())
 }
 
 fn block_on_future<F>(f: F) -> F::Output

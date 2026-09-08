@@ -849,14 +849,16 @@ impl Runtime {
 
                 let mut provider_overlays = request_overlays;
                 provider_overlays.extend(before_model_overlays);
-                let provider_request = NormalizedRequest::new(
-                    continuation.model.clone(),
-                    compose_provider_messages(
+                let provider_messages = self.project_provider_messages(
+                    &compose_provider_messages(
                         &session.messages,
                         &retry_scaffolding,
                         &provider_overlays,
                     ),
+                    &continuation.model,
                 );
+                let provider_request =
+                    NormalizedRequest::new(continuation.model.clone(), provider_messages);
                 retry_scaffolding.clear();
                 let routed = self
                     .providers
@@ -1507,7 +1509,20 @@ impl Runtime {
         Ok(effects)
     }
 
-    /// Close the current assistant tool-call batch when a module prevents the
+    fn project_provider_messages(
+        &self,
+        messages: &[NormalizedMessage],
+        model: &str,
+    ) -> Vec<NormalizedMessage> {
+        match self
+            .context_projector
+            .project(messages, self.providers.model_context_tokens(model))
+        {
+            Ok(projected) => projected,
+            Err(_) => messages.to_vec(),
+        }
+    }
+
     /// remaining calls from being dispatched. A tool result is required for
     /// every call in the assistant message before that transcript can be sent
     /// to another provider. The module's retry feedback remains a separate

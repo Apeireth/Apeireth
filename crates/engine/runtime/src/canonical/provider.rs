@@ -157,7 +157,21 @@ impl ProviderRouter {
         models
     }
 
-    /// Current health of a provider, if it has been exercised.
+    /// Context window advertised by the selected model, when known.
+    pub fn model_context_tokens(&self, model: &str) -> Option<u32> {
+        self.providers
+            .iter()
+            .flat_map(|provider| provider.models())
+            .find(|descriptor| {
+                descriptor.id.as_str() == model
+                    || descriptor
+                        .display_name
+                        .as_deref()
+                        .is_some_and(|display_name| display_name == model)
+            })
+            .and_then(|descriptor| descriptor.context_window)
+    }
+
     pub fn health(&self, id: &CapabilityId) -> Option<ProviderHealth> {
         self.health.read().get(id).cloned()
     }

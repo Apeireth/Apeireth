@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use apeireth_core::kernel::memory::Episode;
 use apeireth_memory::{
     MemoryCoordinator, MemoryGovernanceError, MemoryGovernanceStore, MemoryLayerKind,
     MemoryRecallQuery, MemoryWritebackEntry, SqliteMemoryStore,
@@ -10,6 +11,55 @@ fn setup_coordinator() -> Arc<MemoryCoordinator> {
     let backend = store.clone();
     let governance: Arc<dyn MemoryGovernanceStore> = store;
     Arc::new(MemoryCoordinator::new(backend, governance))
+}
+
+#[test]
+fn test_writeback_episode_preserves_supplied_id() {
+    let coord = setup_coordinator();
+    let episode = Episode {
+        id: "ep-runtime-stable".into(),
+        timestamp: 1_700_000_000,
+        role: "assistant".into(),
+        content: "stable runtime episode".into(),
+        session_id: "sess-runtime".into(),
+    };
+
+    let returned = coord
+        .writeback_episode(&episode)
+        .expect("supplied episode should persist");
+
+    assert_eq!(returned, episode.id);
+    let stored = coord
+        .backend()
+        .get_episode(&episode.id)
+        .expect("backend lookup should succeed")
+        .expect("supplied episode should be stored");
+    assert_eq!(stored.id, episode.id);
+    assert_eq!(stored.content, episode.content);
+}
+
+#[test]
+fn test_selection_aware_overlay_reports_only_selected_ids() {
+    let coord = setup_coordinator();
+    let session = "sess-selected";
+    let first = coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "user",
+            "first selected memory",
+        ))
+        .unwrap();
+
+    let query = MemoryRecallQuery::new(session, "selected")
+        .with_limit(10)
+        .with_max_chars(400);
+    let selected = coord
+        .compile_prompt_overlay_with_selected_access(&query)
+        .unwrap()
+        .expect("non-empty recall should compile");
+
+    assert_eq!(selected.selected_candidate_ids, vec![first]);
+    assert!(selected.overlay.contains("first selected memory"));
 }
 
 #[test]

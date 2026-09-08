@@ -137,6 +137,12 @@ pub struct ScoreComponents {
     pub activation: f64,
     pub continuity: f64,
     pub confidence: f64,
+    /// Relevance supplied by the knowledge graph or relational layer.
+    #[serde(default)]
+    pub graph: f64,
+    /// A residual/coverage signal favouring information not already represented.
+    #[serde(default)]
+    pub novelty: f64,
 }
 
 impl ScoreComponents {
@@ -148,11 +154,17 @@ impl ScoreComponents {
             + self.activation * config.activation_weight
             + self.continuity * config.continuity_weight
             + self.confidence * config.confidence_weight
+            + self.graph * config.graph_weight
+            + self.novelty * config.novelty_weight
     }
 }
 
 /// Centralized ranking weights. No retrieval stage should own magic weights.
+///
+/// `diversity_lambda` is the control for a later MMR selection stage: zero
+/// means relevance-only selection and one means diversity-only selection.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct MemoryRankingConfig {
     pub semantic_weight: f64,
     pub lexical_weight: f64,
@@ -161,19 +173,141 @@ pub struct MemoryRankingConfig {
     pub activation_weight: f64,
     pub continuity_weight: f64,
     pub confidence_weight: f64,
+    pub graph_weight: f64,
+    pub novelty_weight: f64,
+    pub diversity_lambda: f64,
 }
 
 impl Default for MemoryRankingConfig {
     fn default() -> Self {
         Self {
-            semantic_weight: 0.30,
-            lexical_weight: 0.25,
+            semantic_weight: 0.25,
+            lexical_weight: 0.20,
             importance_weight: 0.15,
             recency_weight: 0.10,
             activation_weight: 0.10,
             continuity_weight: 0.05,
             confidence_weight: 0.05,
+            graph_weight: 0.05,
+            novelty_weight: 0.05,
+            diversity_lambda: 0.20,
         }
+    }
+}
+
+/// Structured, serializable policy shared by callers performing memory recall.
+///
+/// The empty default visibility set is intentional: callers must opt into the
+/// scopes they want to expose (closed-world recall).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RecallPolicy {
+    pub visible_scopes: Vec<MemoryScope>,
+    pub layers: Vec<crate::layers::MemoryLayerKind>,
+    pub limit: usize,
+    pub max_chars: usize,
+    pub proactive_budget: usize,
+    pub min_score: f64,
+    pub as_of_ms: Option<i64>,
+    pub token_budget: usize,
+}
+
+impl Default for RecallPolicy {
+    fn default() -> Self {
+        Self {
+            visible_scopes: Vec::new(),
+            layers: vec![
+                crate::layers::MemoryLayerKind::Working,
+                crate::layers::MemoryLayerKind::Episodic,
+                crate::layers::MemoryLayerKind::Semantic,
+                crate::layers::MemoryLayerKind::Relational,
+            ],
+            limit: 8,
+            max_chars: 4_000,
+            proactive_budget: 2,
+            min_score: 0.10,
+            as_of_ms: None,
+            token_budget: 1_024,
+        }
+    }
+}
+
+impl RecallPolicy {
+    /// Construct a policy with the supplied visibility boundary.
+    #[must_use]
+    pub fn new(visible_scopes: Vec<MemoryScope>) -> Self {
+        Self {
+            visible_scopes,
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn with_visible_scopes(mut self, visible_scopes: Vec<MemoryScope>) -> Self {
+        self.visible_scopes = visible_scopes;
+        self
+    }
+
+    #[must_use]
+    pub fn with_visible_scope(mut self, scope: MemoryScope) -> Self {
+        if !self.visible_scopes.contains(&scope) {
+            self.visible_scopes.push(scope);
+        }
+        self
+    }
+
+    #[must_use]
+    pub fn with_layers(mut self, layers: Vec<crate::layers::MemoryLayerKind>) -> Self {
+        self.layers = layers;
+        self
+    }
+
+    #[must_use]
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = limit.max(1);
+        self
+    }
+
+    #[must_use]
+    pub fn with_max_chars(mut self, max_chars: usize) -> Self {
+        self.max_chars = max_chars.max(128);
+        self
+    }
+
+    #[must_use]
+    pub fn with_proactive_budget(mut self, proactive_budget: usize) -> Self {
+        self.proactive_budget = proactive_budget;
+        self
+    }
+
+    #[must_use]
+    pub fn with_min_score(mut self, min_score: f64) -> Self {
+        self.min_score = min_score;
+        self
+    }
+
+    #[must_use]
+    pub fn with_as_of_ms(mut self, as_of_ms: i64) -> Self {
+        self.as_of_ms = Some(as_of_ms);
+        self
+    }
+
+    #[must_use]
+    pub fn without_as_of(mut self) -> Self {
+        self.as_of_ms = None;
+        self
+    }
+
+    #[must_use]
+    pub fn with_token_budget(mut self, token_budget: usize) -> Self {
+        self.token_budget = token_budget.max(1);
+        self
+    }
+
+    #[must_use]
+    pub fn with_as_of(mut self, as_of_ms: Option<i64>) -> Self {
+        self.as_of_ms = as_of_ms;
+        self
     }
 }
 
@@ -341,6 +475,57 @@ impl PersonaProfileStore for InMemoryPersonaProfileStore {
         });
         profile.apply_delta(&delta, expected_revision, updated_at)?;
         Ok(profile.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn weighted_includes_graph_and_novelty_components() {
+        let components = ScoreComponents {
+            graph: 2.0,
+            novelty: 3.0,
+            ..ScoreComponents::default()
+        };
+        let config = MemoryRankingConfig {
+            graph_weight: 0.25,
+            novelty_weight: 0.50,
+            ..MemoryRankingConfig::default()
+        };
+
+        assert!((components.weighted(&config) - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn recall_policy_defaults_are_bounded_and_structured() {
+        let policy = RecallPolicy::default();
+
+        assert!(policy.visible_scopes.is_empty());
+        assert_eq!(policy.layers.len(), 4);
+        assert_eq!(policy.limit, 8);
+        assert_eq!(policy.max_chars, 4_000);
+        assert_eq!(policy.proactive_budget, 2);
+        assert_eq!(policy.min_score, 0.10);
+        assert_eq!(policy.as_of_ms, None);
+        assert_eq!(policy.token_budget, 1_024);
+    }
+
+    #[test]
+    fn recall_policy_builders_clamp_hard_budgets() {
+        let policy = RecallPolicy::default()
+            .with_limit(0)
+            .with_max_chars(0)
+            .with_token_budget(0)
+            .with_min_score(0.4)
+            .with_as_of_ms(123);
+
+        assert_eq!(policy.limit, 1);
+        assert_eq!(policy.max_chars, 128);
+        assert_eq!(policy.token_budget, 1);
+        assert_eq!(policy.min_score, 0.4);
+        assert_eq!(policy.as_of_ms, Some(123));
     }
 }
 
