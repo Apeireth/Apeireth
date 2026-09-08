@@ -62,6 +62,10 @@ pub use research_vault_ftrl::{
     best_fixed_linear_loss, research_synthetic_feedback, ResearchOgdConfig,
     ResearchPrefixGuardConfig, ResearchSegmentFeatures, ResearchVaultLruFtrl,
 };
+// B2 · RA-15 P1-B (research, 默认关闭): 统一内存成本账本 (吸收自 arXiv:2607.08032
+// rate-distortion 统一; 四层三元组记账 + 效用-成本曲线 + 压缩顺序推荐).
+pub mod research_cost_ledger;
+pub use research_cost_ledger::{CostTriple, LedgerEntry, MemoryLayer, ResearchCostLedger};
 pub mod continuation;
 pub mod council;
 pub mod cron;

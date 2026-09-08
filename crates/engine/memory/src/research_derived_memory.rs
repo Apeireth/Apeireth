@@ -15,6 +15,16 @@
 //!   按 query 级驱逐留后续；③ 闭包审计只写本模块的 append-only 事件表，
 //!   不改 `episode_governance` 任何行。
 //!
+//! # RA-15 P0-A: 执行态遗忘闭包（吸收自 arXiv:2609.04875 "execution-state unlearning"）
+//! - **对手贡献**: forget 只删明文记录即停 → 执行态（KV 缓存段 / 挂起工具计划 /
+//!   在途 summary / prompt 缓存片段）继续泄漏；形式化"遗忘后行为=从未观察"并证明
+//!   pre-target 前缀免费共享、post-target 后缀不可约污染（T−τ+1 重放下界）。
+//! - **工程版本**: 闭包/审计报告增加**执行态清单**（`ExecutionStateInventory`）——
+//!   会话 token 跨度（τ 之后的后缀）、挂起工具计划、在途 summary、prompt 缓存片段;
+//!   前缀等价裁剪 (`execution_state_prefix_crop`) 把论文结论做成确定性回归断言。
+//! - **仍只审计不删除**（与本模块既有语义一致）; 外部 API 无 KV 句柄的诚实口径
+//!   见 `ExecutionStateInventory::unobservable_note`。
+//!
 //! # 默认关闭（铁律 1 + B2 闸门）
 //! - `GovernedRecall` 不挂任何生产检索路径；只有显式调用才过滤。
 //! - 闭包/审计**不自动删除任何数据**：结果只写入 `research_lineage_events`。
@@ -74,6 +84,90 @@ pub struct ClosureNode {
     pub triggered_by: Option<DerivedRef>,
 }
 
+/// 执行态条目类别（RA-15 P0-A，吸收自 arXiv:2609.04875 "execution-state unlearning"）。
+///
+/// 对手定义: forget 必须覆盖执行态——KV 缓存段、挂起工具计划、在途 summary、
+/// prompt 缓存片段。Apeireth 走外部 provider API（无 KV 句柄），工程等价物:
+/// - `SessionTokenSpan` = 目标注入步 τ 之后的会话 token 跨度（论文的
+///   "post-target suffix is irreducibly tainted"；裁剪等价于论文的 KV 裁剪）;
+/// - `PendingToolPlan` / `InFlightSummary` / `PromptCacheFragment` 由调用方
+///   经 `research_record_execution_state` 显式登记（与血缘登记同模式）。
+/// 语义: **只审计不删除**——本模块不执行任何清理动作。
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ExecutionStateKind {
+    SessionTokenSpan,
+    PendingToolPlan,
+    InFlightSummary,
+    PromptCacheFragment,
+}
+
+impl ExecutionStateKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::SessionTokenSpan => "session_token_span",
+            Self::PendingToolPlan => "pending_tool_plan",
+            Self::InFlightSummary => "in_flight_summary",
+            Self::PromptCacheFragment => "prompt_cache_fragment",
+        }
+    }
+
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "session_token_span" => Some(Self::SessionTokenSpan),
+            "pending_tool_plan" => Some(Self::PendingToolPlan),
+            "in_flight_summary" => Some(Self::InFlightSummary),
+            "prompt_cache_fragment" => Some(Self::PromptCacheFragment),
+            _ => None,
+        }
+    }
+}
+
+/// 执行态登记条目：该执行态由 `taint_source` 派生（该来源被遗忘 ⇒ 条目被污染）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExecutionStateEntry {
+    pub kind: ExecutionStateKind,
+    pub ref_id: String,
+    /// `SessionTokenSpan`: 目标注入步 τ（论文记号）；其他类为 None。
+    pub injection_step: Option<usize>,
+    pub taint_source: DerivedRef,
+    pub note: String,
+}
+
+/// 执行态泄漏清单（forget 审计报告的"执行态泄漏"节）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExecutionStateInventory {
+    pub items: Vec<ExecutionStateEntry>,
+    /// 0 装口径: 外部 provider API 无 KV 句柄——会话 KV 裁剪以
+    /// `SessionTokenSpan`（注入步 τ 之后的后缀）登记为等价物；
+    /// 未显式登记的执行态无法审计。
+    pub unobservable_note: String,
+}
+
+impl Default for ExecutionStateInventory {
+    fn default() -> Self {
+        Self {
+            items: Vec::new(),
+            unobservable_note: "外部 provider API 无 KV 句柄: 会话 KV 裁剪以 SessionTokenSpan(注入步 τ 之后的后缀) 登记为等价物; 未登记的执行态无法审计".into(),
+        }
+    }
+}
+
+/// 前缀等价裁剪（吸收自 arXiv:2609.04875 定理 2/3 的工程结论，不复刻证明）:
+/// pre-target 前缀与"从未观察"世界**免费共享**；post-target 后缀不可约污染。
+/// 精确去学习 = 把会话跨度裁剪到注入步 τ 之前，再从裁剪点重放清洗后的后缀
+/// （对手下界：至少 T−τ+1 次重算转移）。
+///
+/// 返回保留前缀的末步（含）；τ=0 ⇒ `None`（整段污染，须从空前缀重建）。
+pub fn execution_state_prefix_crop(
+    injection_step: usize,
+    current_end_step: usize,
+) -> Option<usize> {
+    if injection_step == 0 {
+        return None;
+    }
+    Some((injection_step - 1).min(current_end_step))
+}
+
 /// 闭包计算结果（纯审计：不修改任何产品表）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClosureReport {
@@ -81,6 +175,8 @@ pub struct ClosureReport {
     pub mode: String,
     /// 闭包节点（含根），按传播广度序。
     pub nodes: Vec<ClosureNode>,
+    /// 执行态泄漏清单（RA-15 P0-A；只审计不删除）。
+    pub execution_state: ExecutionStateInventory,
     /// 写入审计事件表后返回的 seq（可溯源）。
     pub audit_event_seq: Option<i64>,
     /// 语义保证：本模块永不删除数据。
@@ -107,6 +203,8 @@ pub struct LeakAuditReport {
     pub forgotten_roots: Vec<DerivedRef>,
     pub mode: String,
     pub items: Vec<LeakAuditItem>,
+    /// 执行态泄漏节（RA-15 P0-A；只报告不删除）。
+    pub execution_state: ExecutionStateInventory,
     /// 未在任何血缘表中出现的派生类，无法审计（诚实标注）。
     pub unobservable_note: String,
 }
@@ -188,7 +286,7 @@ impl SqliteMemoryStore {
     }
 
     /// 写一条 append-only 审计事件（A8），返回 seq。
-    fn research_write_event(
+    pub(crate) fn research_write_event(
         &self,
         op: &str,
         actor: Option<&str>,
@@ -207,8 +305,82 @@ impl SqliteMemoryStore {
         Ok(conn.last_insert_rowid())
     }
 
+    /// 登记执行态（RA-15 P0-A；吸收自 arXiv:2609.04875）。幂等 UPSERT；
+    /// 只写入 research 登记表，不触碰任何产品表。
+    pub fn research_record_execution_state(
+        &self,
+        entry: &ExecutionStateEntry,
+    ) -> MemoryResult<usize> {
+        let conn = self.conn()?;
+        let n = conn.execute(
+            "INSERT INTO research_execution_state \
+             (kind, ref_id, injection_step, taint_kind, taint_id, note, ts) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
+             ON CONFLICT(kind, ref_id) DO UPDATE SET \
+               injection_step = excluded.injection_step, \
+               taint_kind = excluded.taint_kind, \
+               taint_id = excluded.taint_id, \
+               note = excluded.note, \
+               ts = excluded.ts",
+            params![
+                entry.kind.as_str(),
+                entry.ref_id,
+                entry.injection_step.map(|s| s as i64),
+                entry.taint_source.kind,
+                entry.taint_source.id,
+                entry.note,
+                now_ms(),
+            ],
+        )?;
+        Ok(n)
+    }
+
+    /// 执行态泄漏清单：被遗忘根集**直接**污染的执行态条目（只读，不删除）。
+    pub fn research_execution_state_inventory(
+        &self,
+        forgotten: &[DerivedRef],
+    ) -> MemoryResult<ExecutionStateInventory> {
+        let conn = self.conn()?;
+        let mut items: Vec<ExecutionStateEntry> = Vec::new();
+        for f in forgotten {
+            let mut stmt = conn.prepare(
+                "SELECT kind, ref_id, injection_step, taint_kind, taint_id, note \
+                 FROM research_execution_state \
+                 WHERE taint_kind = ?1 AND taint_id = ?2",
+            )?;
+            let rows = stmt.query_map(params![f.kind, f.id], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, Option<i64>>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, String>(5)?,
+                ))
+            })?;
+            for row in rows {
+                let (kind, ref_id, step, tk, ti, note) = row?;
+                let Some(kind) = ExecutionStateKind::from_str(&kind) else {
+                    continue;
+                };
+                items.push(ExecutionStateEntry {
+                    kind,
+                    ref_id,
+                    injection_step: step.map(|s| s as usize),
+                    taint_source: DerivedRef::new(tk, ti),
+                    note,
+                });
+            }
+        }
+        Ok(ExecutionStateInventory {
+            items,
+            ..ExecutionStateInventory::default()
+        })
+    }
+
     /// 遗忘闭包（RA-1 A.4.3）：以 roots 为根集，沿血缘表做 BFS 传播。
     /// **只审计不删除**：结果仅写 `research_lineage_events`，不触碰任何产品表。
+    /// RA-15 P0-A：报告同时输出被遗忘根集直接污染的执行态清单（仍只审计）。
     pub fn research_forget_closure(
         &self,
         roots: &[DerivedRef],
@@ -275,10 +447,12 @@ impl SqliteMemoryStore {
             }
         }
         drop(conn);
+        let execution_state = self.research_execution_state_inventory(roots)?;
         let detail = serde_json::json!({
             "roots": roots,
             "mode": mode.desc(),
             "closure_size": nodes.len(),
+            "execution_state_items": execution_state.items.len(),
             "deleted_anything": false,
         });
         let seq = self.research_write_event("forget_closure", actor, reason, "closure", &detail)?;
@@ -286,6 +460,7 @@ impl SqliteMemoryStore {
             roots: roots.to_vec(),
             mode: mode.desc(),
             nodes,
+            execution_state,
             audit_event_seq: Some(seq),
             deleted_anything: false,
         })
@@ -341,10 +516,13 @@ impl SqliteMemoryStore {
                 });
             }
         }
+        drop(stmt);
+        drop(conn); // 先释放连接锁, 再取执行态清单 (防嵌套拿锁死锁).
         Ok(LeakAuditReport {
             forgotten_roots: forgotten.to_vec(),
             mode: mode.desc(),
             items,
+            execution_state: self.research_execution_state_inventory(forgotten)?,
             unobservable_note: "血缘表外的派生面（未登记 derive 的 diary/wiki/chronicle/cache）无法审计，需先经 research_record_derivation 登记".into(),
         })
     }
@@ -856,5 +1034,161 @@ mod tests {
             )
             .unwrap();
         assert!(ev_exists);
+    }
+
+    // ========================================================================
+    // RA-15 P0-A: 执行态遗忘闭包（吸收自 arXiv:2609.04875）
+    // ========================================================================
+
+    /// 执行态清单: 被遗忘根集直接污染的执行态 (会话跨度 τ 后缀 / 挂起工具计划 /
+    /// 在途 summary) 在闭包与审计报告中可见; 未污染项不可见; 只审计不删除.
+    #[test]
+    fn p0a_execution_state_inventory_lists_tainted_items() {
+        let s = store();
+        put(&s, "ep-1", "me", "根事实");
+        s.research_record_execution_state(&ExecutionStateEntry {
+            kind: ExecutionStateKind::SessionTokenSpan,
+            ref_id: "sess-1".into(),
+            injection_step: Some(3),
+            taint_source: DerivedRef::new("episode", "ep-1"),
+            note: "ep-1 于第 3 步注入该会话".into(),
+        })
+        .unwrap();
+        s.research_record_execution_state(&ExecutionStateEntry {
+            kind: ExecutionStateKind::PendingToolPlan,
+            ref_id: "plan-9".into(),
+            injection_step: None,
+            taint_source: DerivedRef::new("episode", "ep-1"),
+            note: "计划引用根事实".into(),
+        })
+        .unwrap();
+        s.research_record_execution_state(&ExecutionStateEntry {
+            kind: ExecutionStateKind::InFlightSummary,
+            ref_id: "sum-clean".into(),
+            injection_step: None,
+            taint_source: DerivedRef::new("episode", "ep-other"),
+            note: "与 ep-1 无关".into(),
+        })
+        .unwrap();
+
+        let closure = s
+            .research_forget_closure(
+                &[DerivedRef::new("episode", "ep-1")],
+                ClosureMode::Taint,
+                Some("p0a"),
+                Some("执行态遗忘闭包回归"),
+            )
+            .unwrap();
+        let ids: Vec<&str> = closure
+            .execution_state
+            .items
+            .iter()
+            .map(|e| e.ref_id.as_str())
+            .collect();
+        assert!(ids.contains(&"sess-1"), "会话跨度必须在闭包执行态清单中");
+        assert!(
+            ids.contains(&"plan-9"),
+            "挂起工具计划必须在闭包执行态清单中"
+        );
+        assert!(
+            !ids.contains(&"sum-clean"),
+            "未污染执行态不得进入清单: {ids:?}"
+        );
+        assert!(!closure.deleted_anything, "执行态审计同样不删除任何数据");
+
+        // 审计报告的执行态节 (仍只报告).
+        let audit = s
+            .research_audit_forgotten_leaks(
+                &[DerivedRef::new("episode", "ep-1")],
+                ClosureMode::Taint,
+            )
+            .unwrap();
+        let audit_ids: Vec<&str> = audit
+            .execution_state
+            .items
+            .iter()
+            .map(|e| e.ref_id.as_str())
+            .collect();
+        assert!(audit_ids.contains(&"sess-1"));
+        assert!(audit_ids.contains(&"plan-9"));
+    }
+
+    /// 前缀等价裁剪 (论文结论的确定性回归断言, 不复刻证明):
+    /// pre-target 前缀免费共享; τ=0 ⇒ 整段污染须重建.
+    #[test]
+    fn p0a_prefix_crop_matches_paper_semantics() {
+        assert_eq!(execution_state_prefix_crop(3, 12), Some(2));
+        assert_eq!(execution_state_prefix_crop(0, 12), None, "τ=0 整段污染");
+        assert_eq!(
+            execution_state_prefix_crop(5, 2),
+            Some(2),
+            "末步小于 τ 时按末步封顶"
+        );
+        assert_eq!(execution_state_prefix_crop(1, 0), Some(0));
+    }
+
+    /// "遗忘后行为等价于从未观察"回归: 遗忘根 + 裁剪前缀 + 血缘过滤召回
+    /// 三者组合后, 目标派生内容在受治理召回中不可见.
+    #[test]
+    fn p0a_forget_then_crop_behaves_as_never_observed() {
+        let s = std::sync::Arc::new(store());
+        put(&s, "ep-1", "me", "根事实");
+        let summary = DerivedRef::new("note", "note-s1");
+        s.research_record_derivation(
+            &summary,
+            &[DerivedRef::new("episode", "ep-1")],
+            Some("summary of ep-1"),
+        )
+        .unwrap();
+        s.research_record_execution_state(&ExecutionStateEntry {
+            kind: ExecutionStateKind::SessionTokenSpan,
+            ref_id: "sess-1".into(),
+            injection_step: Some(3),
+            taint_source: DerivedRef::new("episode", "ep-1"),
+            note: String::new(),
+        })
+        .unwrap();
+
+        // 遗忘闭包: 执行态清单给出注入步 τ=3 → 前缀 [0..2] 免费共享.
+        let closure = s
+            .research_forget_closure(
+                &[DerivedRef::new("episode", "ep-1")],
+                ClosureMode::Taint,
+                None,
+                None,
+            )
+            .unwrap();
+        let span = closure
+            .execution_state
+            .items
+            .iter()
+            .find(|e| e.kind == ExecutionStateKind::SessionTokenSpan)
+            .expect("会话跨度必须在清单中");
+        let tau = span.injection_step.unwrap();
+        assert_eq!(execution_state_prefix_crop(tau, 12), Some(2));
+
+        // 受治理召回 (显式启用) 过滤派生摘要 → 与"从未观察"世界不可区分.
+        let gr = GovernedRecall::new(std::sync::Arc::clone(&s))
+            .with_filter(ClosureMode::Taint, vec![DerivedRef::new("episode", "ep-1")]);
+        let (kept, filtered) = gr.recall(vec![summary]).unwrap();
+        assert!(kept.is_empty(), "污染派生摘要必须被过滤");
+        assert_eq!(filtered.len(), 1);
+    }
+
+    /// V9 迁移存在 (新库自动应用).
+    #[test]
+    fn v9_migration_applied_on_fresh_db() {
+        let s = store();
+        let applied = s.applied_migrations().unwrap();
+        assert!(applied.contains(&9), "V9 应已应用");
+        let conn = s.conn().unwrap();
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_execution_state')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(exists);
     }
 }

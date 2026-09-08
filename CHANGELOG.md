@@ -1,5 +1,17 @@
 # Changelog — Apeireth
 
+## [Unreleased] — RA-15 工程线吸收批：2026 追兵方案 P0/P1 落地 (2026-09-06)
+
+> 派单依据 `_research_mem/ra/ra15`；逐行对照 `docs/03-reference/absorption-2026-09.md`。全部机制**默认关闭**（Research 前缀/并列），不替换生产路径；代码注释标来源；四道闸门照走；0 新外部依赖（Cargo.lock 0 行 diff）。
+
+- **P0-C（自研 bug 修复）** `apeireth-memory::betti_hole_detector`：4-环候选过滤恒真 → 物化全部 C(n,4) 环（n=150 OOM）。修复 = 4-环尺度上界（ε·max_dist 默认 0.8）+ 出生存活条件（两对角线 > 最长边界边）+ 退化守卫（max_dist≤1e-6 跳过）+ **持久化地板移除**（原 `max(birth+0.1)`/`max(0.15)` 使 threshold≤0.1 恒通过）。验收：n=150 确定性云回归测试完成；memory crate 666→680 tests。
+- **P0-A（吸收 arXiv:2609.04875 执行态遗忘）** `research_derived_memory` + V9 migration `research_execution_state`：遗忘闭包/审计报告新增执行态清单（会话 token 跨度[τ 后缀等价物] / 挂起工具计划 / 在途 summary / prompt 缓存片段）+ `execution_state_prefix_crop` 前缀等价裁剪；"遗忘后=从未观察"回归测试。
+- **P0-B（吸收 arXiv:2605.07242 MEMOREPAIR）** 新 `apeireth-memory::derived_repair`：屏障式修复执行器（撤回→阶段重建→前驱闭包验证→放行）；修复选择 = 最大权前驱闭包，自写 Dinic s-t 最小割（确定性整数化，0 新依赖）。
+- **P1-A（吸收 arXiv:2603.04549 A-MAC）** 新 `apeireth-memory::admission_gate`：五因子准入打分（类型先验复用 RA-2 TrustWeights；置信/新颖/效用/新近 + 冲突惩罚）→ Admit/PendingReview；决定写 append-only 审计事件链；LLM 效用评估留 trait 口。
+- **P1-B（吸收 arXiv:2607.08032）** 新 `apeireth-orchestration::research_cost_ledger`：四层（context/summary/cache/vault）统一 (token/延迟/失真) 三元组记账 + 效用-成本曲线 + 边际失真率驱动的压缩顺序推荐；context_rot/prompt cache/VaultLRU/summary 适配器接入。
+- **P2 登记**：KV 三篇（2607.10582 MemDecay / 2608.00528 S4R / 2601.18999 随机化逐出）挂本地推理路线，ROADMAP §4 参考清单。
+- 学术线通知：`_research_mem/ra/ra16-engineering-p0-p1-delivery-2026-09-06.md`（含 B1 漂移基线影响 + 阈值调优建议）。
+
 ## [Unreleased] — 文档对账批：实测基线校准 (2026-09-05)
 
 > 本批按"实测优先于文档"原则，把过时的当前值统一为 HEAD `7647d2c9` 实测基线（0 装诚实真账）：
