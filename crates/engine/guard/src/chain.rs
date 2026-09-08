@@ -336,6 +336,14 @@ impl BehaviorChain {
             .collect()
     }
 
+    /// Retrieve an action by its stable identity.
+    pub fn action_by_id(&self, action_id: &str) -> Option<&ActionNode> {
+        self.nodes.iter().find_map(|node| match node {
+            BehaviorNode::Action(action) if action.id == action_id => Some(action),
+            _ => None,
+        })
+    }
+
     /// Retrieve the most recent N actions.
     pub fn recent_actions(&self, n: usize) -> Vec<&ActionNode> {
         let all = self.actions();

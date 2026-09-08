@@ -5,13 +5,16 @@ use apeireth_governance::{
     Action, DestructivePolicy, GovernanceHook, GovernanceRequest, IntentClass, MutationPolicy,
     NetworkPolicy, ShellPolicy, TurnSecurityContext,
 };
-use apeireth_guard::run_scenario;
+use apeireth_guard::{
+    run_scenario, run_scenario_checked, GuardScenario, ScenarioAction, ScenarioCatalog,
+    ScenarioTurn,
+};
 use apeireth_guard::{
     AgentChainFeatureV2, BehaviorChainGuardHook, ChainRiskClassifier, ClassifierEnforcementMode,
     CommandEffectAnalyzer, DatasetRecorder, DecisionFusion, DescriptorSource, FeatureSnapshot,
     IntentInput, IntentInterpreter, JointRiskClassifier, NegationAwareOperationExtractor,
-    NoClassifier, RiskClass, RiskPrediction, RuleIntentInterpreter, ScenarioCatalog,
-    SessionBehaviorHistory, TurnBehaviorSummary, GUARD_DATASET_V3, MAX_TURN_HISTORY,
+    NoClassifier, RiskClass, RiskPrediction, RuleIntentInterpreter, SessionBehaviorHistory,
+    TurnBehaviorSummary, GUARD_DATASET_V3, MAX_TURN_HISTORY,
 };
 
 fn interpret(text: &str) -> apeireth_governance::TaskIntentEnvelopeV1 {
@@ -477,4 +480,196 @@ fn descriptor_source_is_explicit() {
     let unknown =
         apeireth_guard::descriptor_for_capability("plugin.mystery", &serde_json::json!({}));
     assert_ne!(unknown.source, DescriptorSource::Canonical);
+}
+
+fn scenario_fixture(actions: Vec<ScenarioAction>, turns: Vec<ScenarioTurn>) -> GuardScenario {
+    GuardScenario {
+        id: "edge_case".into(),
+        category: "test".into(),
+        family: "edge_case".into(),
+        language: "en".into(),
+        label: "benign".into(),
+        intent_text: "inspect the workspace".into(),
+        actions,
+        expected_intent_class: None,
+        intent_template_id: "intent.test".into(),
+        action_template_id: "action.test".into(),
+        oracle: Default::default(),
+        tool_origin: "test".into(),
+        benchmarks: Vec::new(),
+        holdout_group: String::new(),
+        pair_id: None,
+        turns,
+    }
+}
+
+fn read_action(id: Option<&str>, trace_index: u32) -> ScenarioAction {
+    ScenarioAction {
+        capability: "fs.read".into(),
+        arguments: serde_json::json!({ "path_class": "workspace" }),
+        trace_index,
+        expected_effects: vec!["read".into()],
+        action_id: id.map(str::to_string),
+    }
+}
+
+#[tokio::test]
+async fn scenario_emits_oracle_label_for_every_action_and_preserves_explicit_ids() {
+    let scenario = scenario_fixture(
+        vec![read_action(Some("stable-action"), 0), read_action(None, 0)],
+        Vec::new(),
+    );
+    let outcome = run_scenario(&scenario).await;
+    assert_eq!(outcome.execution_trace.actions.len(), 2);
+    assert!(outcome
+        .execution_trace
+        .actions
+        .iter()
+        .all(|action| !action.oracle_label.class.is_empty()));
+    assert_eq!(
+        outcome.execution_trace.actions[0].action_id,
+        "stable-action"
+    );
+    assert_ne!(
+        outcome.execution_trace.actions[0].action_id,
+        outcome.execution_trace.actions[1].action_id
+    );
+}
+
+#[tokio::test]
+async fn scenario_same_trace_groups_actions_and_action_by_id_is_stable() {
+    let scenario = scenario_fixture(
+        vec![
+            read_action(Some("first"), 0),
+            read_action(Some("second"), 0),
+        ],
+        Vec::new(),
+    );
+    let outcome = run_scenario(&scenario).await;
+    assert_eq!(outcome.execution_trace.turns.len(), 1);
+    assert_eq!(outcome.execution_trace.turns[0].actions.len(), 2);
+
+    let hook = BehaviorChainGuardHook::new();
+    let session = SessionId::new();
+    let trace = TraceId::new();
+    let cap = CapabilityId::new("fs.read").unwrap();
+    let args = serde_json::json!({});
+    let request = GovernanceRequest::new(
+        Action::CapabilityDispatch {
+            capability: &cap,
+            arguments: &args,
+        },
+        session,
+        trace,
+        1,
+    )
+    .with_action_id("stable");
+    let _ = hook.evaluate(&request).await;
+    let chain = hook.chain_for_trace(&session, &trace.to_string()).unwrap();
+    assert_eq!(chain.action_by_id("stable").unwrap().id, "stable");
+    assert!(chain.action_by_id("missing").is_none());
+}
+
+#[test]
+fn catalog_rejects_duplicate_explicit_action_ids_across_turns_and_empty_ids() {
+    let duplicate = scenario_fixture(
+        Vec::new(),
+        vec![
+            ScenarioTurn {
+                intent_text: "first".into(),
+                actions: vec![read_action(Some("same"), 0)],
+            },
+            ScenarioTurn {
+                intent_text: "second".into(),
+                actions: vec![read_action(Some("same"), 0)],
+            },
+        ],
+    );
+    let error = ScenarioCatalog::validate(&[duplicate]).unwrap_err();
+    assert!(error.contains("invalid or duplicate action id"), "{error}");
+
+    let empty = scenario_fixture(vec![read_action(Some("  "), 0)], Vec::new());
+    let error = ScenarioCatalog::validate(&[empty]).unwrap_err();
+    assert!(error.contains("invalid or duplicate action id"), "{error}");
+}
+
+#[tokio::test]
+async fn scenario_cross_turn_and_same_turn_multi_trace_preserve_boundaries() {
+    let scenario = scenario_fixture(
+        Vec::new(),
+        vec![
+            ScenarioTurn {
+                intent_text: "inspect first".into(),
+                actions: vec![read_action(Some("a"), 1), read_action(Some("b"), 2)],
+            },
+            ScenarioTurn {
+                intent_text: "inspect second".into(),
+                actions: vec![read_action(Some("c"), 0)],
+            },
+        ],
+    );
+    let outcome = run_scenario(&scenario).await;
+    assert_eq!(outcome.execution_trace.actions.len(), 3);
+    assert_eq!(outcome.execution_trace.turns.len(), 3);
+    assert_ne!(
+        outcome.execution_trace.actions[0].trace_id,
+        outcome.execution_trace.actions[1].trace_id
+    );
+    assert_ne!(
+        outcome.execution_trace.actions[1].trace_id,
+        outcome.execution_trace.actions[2].trace_id
+    );
+    assert_eq!(outcome.execution_trace.turns[0].actions.len(), 1);
+    assert_eq!(outcome.execution_trace.turns[1].actions.len(), 1);
+    assert_eq!(outcome.execution_trace.turns[2].actions.len(), 1);
+    assert!(outcome
+        .execution_trace
+        .turns
+        .windows(2)
+        .all(|pair| pair[0].session_history.len() <= pair[1].session_history.len()));
+}
+#[tokio::test]
+async fn scenario_trace_index_round_and_overflow_are_safe() {
+    let scenario = scenario_fixture(
+        Vec::new(),
+        vec![ScenarioTurn {
+            intent_text: "inspect".into(),
+            actions: vec![read_action(Some("max-trace"), u32::MAX)],
+        }],
+    );
+    let outcome = run_scenario(&scenario).await;
+    let action = &outcome.execution_trace.actions[0];
+    assert_eq!(action.action_id, "max-trace");
+    assert_eq!(outcome.execution_trace.turns[0].trace_id, action.trace_id);
+    assert!(outcome.execution_trace.effects_reconciled);
+}
+
+#[tokio::test]
+async fn scenario_empty_and_unknown_capability_are_safe() {
+    let empty = scenario_fixture(Vec::new(), Vec::new());
+    let outcome = run_scenario(&empty).await;
+    assert!(outcome.execution_trace.actions.is_empty());
+    assert_eq!(outcome.execution_trace.turns.len(), 1);
+    assert_eq!(outcome.snapshot.schema_version, "AgentChainFeatureV2");
+
+    let unknown = scenario_fixture(
+        vec![ScenarioAction {
+            capability: "not a capability".into(),
+            arguments: serde_json::json!({}),
+            trace_index: 0,
+            expected_effects: vec!["unknown_external".into()],
+            action_id: None,
+        }],
+        Vec::new(),
+    );
+    let outcome = run_scenario(&unknown).await;
+    assert_eq!(outcome.execution_trace.actions.len(), 1);
+    assert_eq!(
+        outcome.execution_trace.actions[0].capability,
+        "not a capability"
+    );
+    assert!(!outcome.execution_trace.actions[0]
+        .oracle_label
+        .class
+        .is_empty());
 }

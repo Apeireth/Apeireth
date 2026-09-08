@@ -35,36 +35,54 @@ FEATURES = [
 ]
 
 
+def resolve_path(value: str | pathlib.Path) -> pathlib.Path:
+    path = pathlib.Path(value)
+    return path if path.is_absolute() else ROOT / path
+
+
+def _feature_values(row: dict) -> list[float]:
+    src = row.get("features") or row.get("chain_features")
+    if not isinstance(src, dict):
+        raise ValueError(f"row {row.get('id', '<unknown>')} has no feature object")
+    values = []
+    for name in FEATURES:
+        if name.startswith("cross_turn_"):
+            nested = src.get("cross_turn")
+            key = name[len("cross_turn_") :]
+            raw = nested.get(key) if isinstance(nested, dict) and key in nested else src.get(name)
+        elif name in {"sensitive_to_external_flow", "retry_after_denial", "alternate_tool_after_denial", "denied_count", "external_effect_count"}:
+            v1 = src.get("v1")
+            raw = v1.get(name) if isinstance(v1, dict) and name in v1 else src.get(name)
+        else:
+            raw = src.get(name)
+        if raw is None:
+            raise ValueError(f"row {row.get('id', '<unknown>')} missing required feature {name}")
+        try:
+            number = float(int(raw) if isinstance(raw, bool) else raw)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"row {row.get('id', '<unknown>')} feature {name} is not numeric") from error
+        if not math.isfinite(number):
+            raise ValueError(f"row {row.get('id', '<unknown>')} feature {name} is non-finite")
+        values.append(number)
+    return values
+
+
 def load_rows(path: pathlib.Path) -> list[dict]:
     rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if line.strip():
-            rows.append(json.loads(line))
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ValueError(f"line {line_number} is not an object")
+            _feature_values(row)
+            rows.append(row)
+    if not rows:
+        raise ValueError(f"dataset is empty: {path}")
     return rows
 
 
 def feature_vec(row: dict) -> list[float]:
-    src = row.get("features") or row.get("chain_features") or {}
-    values = []
-    for name in FEATURES:
-        if name.startswith("cross_turn_"):
-            nested = src.get("cross_turn") or {}
-            key = name[len("cross_turn_") :]
-            values.append(float(nested.get(key, src.get(name, 0.0)) or 0.0))
-        elif name in (
-            "sensitive_to_external_flow",
-            "retry_after_denial",
-            "alternate_tool_after_denial",
-            "denied_count",
-            "external_effect_count",
-        ):
-            v1 = src.get("v1") or {}
-            raw = v1.get(name, src.get(name, 0.0))
-            values.append(float(raw if not isinstance(raw, bool) else int(raw)))
-        else:
-            raw = src.get(name, 0.0)
-            values.append(float(raw if not isinstance(raw, bool) else int(raw)))
-    return values
+    return _feature_values(row)
 
 
 def sigmoid(z: float) -> float:
@@ -160,10 +178,15 @@ def fit_platt(rows: list[dict], weights: list[float], bias: float) -> tuple[floa
 
 
 def main() -> int:
-    src = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "scripts/guard_ml/generated_features.jsonl"
+    src = resolve_path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "scripts/guard_ml/generated_features.jsonl"
     if not src.exists():
-        src = ROOT / "scripts/guard_ml/scenarios.jsonl"
-    rows = load_rows(src)
+        print(f"missing dataset {src}; refusing implicit fixture fallback", file=sys.stderr)
+        return 2
+    try:
+        rows = load_rows(src)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"invalid dataset {src}: {error}", file=sys.stderr)
+        return 2
     train_rows = [
         row
         for row in rows

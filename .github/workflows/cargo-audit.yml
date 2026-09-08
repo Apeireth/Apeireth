@@ -14,7 +14,7 @@ name: Cargo audit (RUSTSEC advisories)
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, feature/cognitive-infrastructure-vnext]
   pull_request:
     branches: ['**']
   schedule:

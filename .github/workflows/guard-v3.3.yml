@@ -1,0 +1,90 @@
+name: Guard 3.3 evaluation integrity
+
+on:
+  push:
+    branches: [main, feature/cognitive-infrastructure-vnext]
+  pull_request:
+    branches: ['**']
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+
+jobs:
+  guard-v3-3:
+    name: Guard 3.3 trace and evidence gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Export Guard scenarios
+        run: cargo run -p apeireth-guard --example export_guard_scenarios --locked
+
+      - name: Compile Python evaluation tools
+        run: |
+          python -m py_compile scripts/guard_ml/train_shadow.py scripts/guard_ml/train_eval.py scripts/guard_ml/analyze_shadow.py
+          # py_compile emits local caches; remove only these known regenerable files
+          find scripts/guard_ml -type d -name __pycache__ -prune -exec rm -rf {} +
+
+      - name: Train and evaluate synthetic benchmark
+        run: python scripts/guard_ml/train_eval.py
+
+      - name: Guard Rust tests
+        run: cargo test -p apeireth-guard --all-targets --locked
+
+      - name: Shadow analyzer privacy self-test
+        run: python scripts/guard_ml/analyze_shadow.py --self-test
+
+      - name: Verify generated files and privacy invariants
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('.')
+          manifest = json.loads((root / 'artifacts/guard-dataset-manifest.json').read_text())
+          required = ['generated_features.jsonl', 'action_samples.jsonl', 'trace_samples.jsonl', 'pair_samples.jsonl']
+          for name in required:
+              path = root / 'scripts/guard_ml' / name
+              assert path.exists(), name
+              assert path.stat().st_size > 0, name
+          assert manifest['dataset_version'] == 'v3.3'
+          assert all(value is False for value in manifest['privacy'].values())
+          forbidden = ('prompt', 'command', 'path', 'url', 'secret', 'password', 'token', 'cot')
+          for name in required:
+              for line in (root / 'scripts/guard_ml' / name).read_text().splitlines():
+                  value = json.loads(line)
+                  keys = {str(key).lower() for key in value}
+                  assert not any(any(word in key for word in forbidden) for key in keys), (name, keys)
+          PY
+          git diff --check
+
+      - name: Verify repository hygiene
+        shell: bash
+        run: |
+          test -z "$(git status --short --untracked-files=all | grep -E '^\?\? scripts/guard_ml/__pycache__/' || true)"
+          git status --short --untracked-files=all
+
+      - name: Upload Guard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guard-v3-3-evidence
+          path: |
+            artifacts/guard-dataset-manifest.json
+            artifacts/guard-joint-shadow-v0.json
+            artifacts/guard-joint-shadow-v0.metrics.json
+            scripts/guard_ml/generated_features.jsonl
+            scripts/guard_ml/action_samples.jsonl
+            scripts/guard_ml/trace_samples.jsonl
+            scripts/guard_ml/pair_samples.jsonl

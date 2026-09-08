@@ -80,6 +80,10 @@ impl NegationAwareOperationExtractor {
                     "do not show the token",
                     "don't display the token",
                     "without revealing the token",
+                    "without reading its value",
+                    "without reading the value",
+                    "不读取其值",
+                    "不要读取值",
                 ],
             ),
             ..ExtractedOperations::default()
@@ -251,11 +255,12 @@ impl NegationAwareOperationExtractor {
 }
 
 fn polarity(text: &str, positive: &[&str], deny_phrases: &[&str]) -> Option<OperationPolarity> {
+    // Evaluate every occurrence so a denied clause cannot hide a requested
+    // operation that appears earlier or later in the same request.
     let denied = deny_phrases.iter().any(|phrase| text.contains(phrase))
         || positive.iter().any(|term| negated_match(text, term));
     let requested = positive.iter().any(|term| {
-        text.contains(term)
-            && !negated_match(text, term)
+        has_unnegated_match(text, term)
             && !deny_phrases
                 .iter()
                 .any(|p| p.contains(term) && text.contains(p))
@@ -269,10 +274,37 @@ fn polarity(text: &str, positive: &[&str], deny_phrases: &[&str]) -> Option<Oper
     }
 }
 
+fn has_unnegated_match(text: &str, term: &str) -> bool {
+    let mut offset = 0;
+    while let Some(relative) = text[offset..].find(term) {
+        let index = offset + relative;
+        if !negated_at(text, index) {
+            return true;
+        }
+        offset = index + term.len();
+        if offset >= text.len() {
+            break;
+        }
+    }
+    false
+}
+
 fn negated_match(text: &str, term: &str) -> bool {
-    let Some(index) = text.find(term) else {
-        return false;
-    };
+    let mut offset = 0;
+    while let Some(relative) = text[offset..].find(term) {
+        let index = offset + relative;
+        if negated_at(text, index) {
+            return true;
+        }
+        offset = index + term.len();
+        if offset >= text.len() {
+            break;
+        }
+    }
+    false
+}
+
+fn negated_at(text: &str, index: usize) -> bool {
     let before = text[..index].trim_end_matches(|ch: char| {
         ch.is_whitespace() || matches!(ch, ',' | '.' | ';' | ':' | '，' | '。' | '、')
     });
@@ -480,7 +512,9 @@ impl IntentInterpreter for RuleIntentInterpreter {
         } else {
             NetworkPolicy::Deny
         };
-        envelope.credential_policy = if credential {
+        envelope.credential_policy = if extracted.credential_disclosure_denied {
+            CredentialPolicy::Deny
+        } else if credential {
             CredentialPolicy::ReadOnly
         } else {
             CredentialPolicy::Deny
@@ -764,5 +798,25 @@ mod tests {
         let intent = interpret("不要 push，只提交本地修改");
         assert!(!intent.allows_publish());
         assert!(intent.allows_mutation());
+    }
+
+    #[test]
+    fn clause_local_denial_does_not_disable_editing() {
+        let intent = interpret("you may edit, but do not push");
+        assert!(intent.allows_mutation());
+        assert!(!intent.allows_publish());
+    }
+
+    #[test]
+    fn clause_local_denial_does_not_disable_tests() {
+        let intent = interpret("run tests, but do not install anything");
+        assert!(intent.allows_shell());
+        assert_eq!(intent.persistence_policy, PersistencePolicy::Deny);
+    }
+
+    #[test]
+    fn credential_existence_check_denies_value_read() {
+        let intent = interpret("check whether a credential exists without reading its value");
+        assert!(!intent.allows_credentials());
     }
 }
