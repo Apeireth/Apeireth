@@ -12,8 +12,8 @@
 | Pre-rebase Memory SHA | `35931b49d790ea92cb6b1735e18b1dd8e4d94dce` |
 | Next SHA rebased onto | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
 | Post-rebase base / merge-base | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
-| Final Memory SHA before push | `08c5a0cf855a064d6a3263a0db5c8ebe608ddf4d` |
-| Final remote Memory SHA | pending final push |
+| Final Memory SHA before push | `cba63e543cd73b4b543b06a96449283c9aa9eae5` |
+| Final remote Memory SHA | `cba63e543cd73b4b543b06a96449283c9aa9eae5` |
 | Final next SHA | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
 | Final relation before push | `0 ahead / 5 behind` by `rev-list --left-right --count next...Memory` |
 | Main SHA | `71774651f4256993936b37cd4f265e5bc45c8e33` |
@@ -105,7 +105,7 @@ The implementation deliberately keeps durable stores and runtime composition sep
 | Frontend `pnpm check` | PASS: 0 errors, 5 existing Svelte warnings |
 | Frontend `pnpm build` | PASS with same 5 warnings |
 | Tauri check | `TAURI_PACKAGING_BLOCKED`: required Windows sidecar is absent; official staging script exists, but the sidecar was not fabricated or downloaded |
-| Remote CI for final SHA | NOT_VERIFIED until final push and workflow lookup |
+| Remote CI for final SHA | NO: `gh run list` returned no runs for the Memory branch |
 
 ## Known remaining limitations
 
@@ -149,7 +149,8 @@ These remain NO because the strict acceptance criteria require all five main mem
 - Frontend checks/tests/build: **YES**, 5 warnings
 - Tauri: **TAURI_PACKAGING_BLOCKED**
 - Branch clean before report commit: **YES**
-- Final remote SHA and CI: **PENDING final push**
+- Final remote SHA: **YES** (`cba63e543cd73b4b543b06a96449283c9aa9eae5`)
+- Final-SHA remote CI: **NO** (no runs returned)
 
 ## Final acceptance values
 
