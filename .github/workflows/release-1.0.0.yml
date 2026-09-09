@@ -191,7 +191,7 @@ jobs:
 
       # === Upload 包产物 (per arch) ===
       - name: Upload ${{ matrix.target }}-${{ matrix.arch }} artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apeireth-${{ matrix.target }}-${{ matrix.arch }}
           path: |
@@ -330,7 +330,7 @@ jobs:
           cargo test -p apeireth-memory --tests --locked
 
       - name: Upload bench baseline
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: engine-validation-1.0.0
           path: target/criterion/
@@ -376,7 +376,7 @@ jobs:
       # === 上传报告 ===
       - name: Upload checklist report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-checklist-report
           path: reports/r20-v1.0.0-release-checklist-*.md
