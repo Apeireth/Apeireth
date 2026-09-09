@@ -267,6 +267,8 @@ name = "apeireth-orchestration"
 version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
+ "apeireth-plugin",
+ "apeireth-provider",
  "async-trait",
  "futures",
  "serde",
