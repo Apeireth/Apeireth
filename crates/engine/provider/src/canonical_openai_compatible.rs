@@ -31,9 +31,9 @@
 //!
 //! # Feature truthfulness (§6/§25)
 //!
-//! Only `SystemPrompt` is advertised. The implementation sends `stream:false`
-//! and rejects tools/images/tool-results, so it does not claim `Streaming`,
-//! `ToolCalls`, or `Vision`.
+//! `SystemPrompt` + `ToolCalls` are advertised. The implementation sends
+//! `stream:false` and rejects images/tool-results-without-id, so it does not
+//! claim `Streaming` or `Vision`.
 
 use std::sync::{Arc, Mutex};
 
@@ -388,8 +388,10 @@ impl std::fmt::Debug for OpenAiCompatibleProviderPlugin {
 }
 
 /// Build the provider model list from configured ids, de-duplicating by
-/// canonical id. Only `SystemPrompt` is advertised — the implementation sends
-/// `stream:false` and rejects tools/images/tool-results (§6/§25).
+/// canonical id. `SystemPrompt` + `ToolCalls` are advertised — the
+/// implementation transports tool declarations / calls / results (2026-09-08)
+/// but sends `stream:false` and rejects images, so it does not claim
+/// `Streaming` or `Vision`.
 fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<ProviderModel>> {
     if model_ids.is_empty() {
         return Err(PluginError::InvalidArguments {
@@ -409,7 +411,7 @@ fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<P
         models.push(ProviderModel::from_configured(
             model,
             id,
-            [ModelFeature::SystemPrompt],
+            [ModelFeature::SystemPrompt, ModelFeature::ToolCalls],
         )?);
     }
     Ok(models)
@@ -461,10 +463,10 @@ mod tests {
         assert!(cap.supports_model("gpt-4o-mini"));
         assert!(cap.supports_model("GPT-4O-Mini"), "case-insensitive");
         assert!(!cap.supports_model("minimax-m3"), "distinct from minimax");
-        // Truthful features: only SystemPrompt.
+        // Truthful features: SystemPrompt + ToolCalls (2026-09-08 tool transport).
         assert!(cap.models()[0].supports(ModelFeature::SystemPrompt));
+        assert!(cap.models()[0].supports(ModelFeature::ToolCalls));
         assert!(!cap.models()[0].supports(ModelFeature::Streaming));
-        assert!(!cap.models()[0].supports(ModelFeature::ToolCalls));
         assert!(!cap.models()[0].supports(ModelFeature::Vision));
     }
 
@@ -517,12 +519,28 @@ mod tests {
     }
 
     #[test]
-    fn adapt_request_rejects_tools_and_images() {
+    fn adapt_request_transports_tools_and_rejects_images() {
         let cap = capability(empty_resolver_slot());
+        // 工具声明进入原生 function 形状 (2026-09-08 tool transport).
         let mut req = request();
         req.tools
             .push(apeireth_protocol::canonical::NormalizedTool::new("t"));
-        let err = cap.adapt_request(&req).unwrap_err();
+        let body = cap.adapt_request(&req).expect("tools are transported");
+        assert_eq!(body["tools"].as_array().unwrap().len(), 1);
+        assert_eq!(body["tools"][0]["function"]["name"], "t");
+        // 图像仍拒绝 (未声明 Vision).
+        let mut img = request();
+        img.messages.push(NormalizedMessage {
+            role: apeireth_protocol::canonical::MessageRole::User,
+            content: vec![apeireth_protocol::canonical::ContentPart::ImageUrl {
+                url: "https://example.invalid/i.png".into(),
+                detail: None,
+            }],
+            tool_calls: Vec::new(),
+            tool_call_id: None,
+            name: None,
+        });
+        let err = cap.adapt_request(&img).unwrap_err();
         assert!(matches!(err, ProviderError::BadResponse { .. }));
     }
 

@@ -16,36 +16,24 @@
 use apeireth_plugin::ProviderError;
 use apeireth_protocol::canonical::{
     ContentPart, MessageRole, NormalizedFinishReason, NormalizedRequest, NormalizedResponse,
-    NormalizedUsage,
+    NormalizedToolChoice, NormalizedUsage, ToolCall,
 };
 
 /// Build the OpenAI Chat Completions request body from a canonical request.
 ///
 /// `wire_model` is the vendor wire spelling the provider resolved from the
 /// canonical requested model — callers map canonical→wire before this. Text
-/// content of each message is joined; tools, tool calls/results, and image
-/// parts are not transported and surface as a permanent `BadResponse` rather
-/// than being silently dropped (§10/§26). `stream:false` is set explicitly.
+/// content of each message is joined. 2026-09-08 (tool transport): tool
+/// declarations, assistant `tool_calls`, and tool-result messages are
+/// transported in the native OpenAI wire shape; image parts remain rejected
+/// (providers do not claim Vision). `stream:false` is set explicitly.
 pub fn build_request_body(
     request: &NormalizedRequest,
     wire_model: &str,
     provider: &str,
 ) -> Result<serde_json::Value, ProviderError> {
-    if !request.tools.is_empty() {
-        return Err(ProviderError::BadResponse {
-            provider: provider.to_string(),
-            detail: "provider does not transport tool declarations".into(),
-        });
-    }
-
     let mut messages = Vec::with_capacity(request.messages.len());
     for message in &request.messages {
-        if !message.tool_calls.is_empty() || message.role == MessageRole::Tool {
-            return Err(ProviderError::BadResponse {
-                provider: provider.to_string(),
-                detail: "provider does not transport tool calls/results".into(),
-            });
-        }
         if message
             .content
             .iter()
@@ -57,16 +45,59 @@ pub fn build_request_body(
             });
         }
 
-        let role = match message.role {
-            MessageRole::System => "system",
-            MessageRole::User => "user",
-            MessageRole::Assistant => "assistant",
-            MessageRole::Tool => unreachable!("tool messages rejected above"),
-        };
-        messages.push(serde_json::json!({
-            "role": role,
-            "content": ContentPart::join_text(&message.content),
-        }));
+        match message.role {
+            // 2026-09-08 tool transport: tool 结果消息 (原生 OpenAI wire 形状).
+            MessageRole::Tool => {
+                let tool_call_id =
+                    message
+                        .tool_call_id
+                        .as_ref()
+                        .ok_or_else(|| ProviderError::BadResponse {
+                            provider: provider.to_string(),
+                            detail: "tool message requires a tool_call_id".into(),
+                        })?;
+                messages.push(serde_json::json!({
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": ContentPart::join_text(&message.content),
+                }));
+            }
+            // 2026-09-08 tool transport: assistant tool_calls (原生 wire 形状).
+            MessageRole::Assistant if !message.tool_calls.is_empty() => {
+                let tool_calls: Vec<serde_json::Value> = message
+                    .tool_calls
+                    .iter()
+                    .map(|c| {
+                        serde_json::json!({
+                            "id": c.id,
+                            "type": "function",
+                            "function": {
+                                "name": c.name,
+                                "arguments": c.arguments.to_string(),
+                            }
+                        })
+                    })
+                    .collect();
+                let text = ContentPart::join_text(&message.content);
+                messages.push(serde_json::json!({
+                    "role": "assistant",
+                    "content": if text.is_empty() { serde_json::Value::Null } else { serde_json::json!(text) },
+                    "tool_calls": tool_calls,
+                }));
+            }
+            _ => {
+                let role = match message.role {
+                    MessageRole::System => "system",
+                    MessageRole::User => "user",
+                    MessageRole::Assistant => "assistant",
+                    MessageRole::Tool => unreachable!("tool messages handled above"),
+                };
+                messages.push(serde_json::json!({
+                    "role": role,
+                    "content": ContentPart::join_text(&message.content),
+                }));
+            }
+        }
     }
 
     let mut body = serde_json::json!({
@@ -82,6 +113,35 @@ pub fn build_request_body(
     }
     if !request.stop.is_empty() {
         body["stop"] = serde_json::json!(request.stop);
+    }
+    // 2026-09-08 tool transport: 工具声明 (原生 function 形状).
+    if !request.tools.is_empty() {
+        let tools: Vec<serde_json::Value> = request
+            .tools
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description.clone().unwrap_or_default(),
+                        "parameters": t.parameters,
+                    }
+                })
+            })
+            .collect();
+        body["tools"] = serde_json::json!(tools);
+    }
+    if let Some(choice) = &request.tool_choice {
+        body["tool_choice"] = match choice {
+            NormalizedToolChoice::Auto => serde_json::json!("auto"),
+            NormalizedToolChoice::None => serde_json::json!("none"),
+            NormalizedToolChoice::Required => serde_json::json!("required"),
+            NormalizedToolChoice::Specific { name } => serde_json::json!({
+                "type": "function",
+                "function": { "name": name }
+            }),
+        };
     }
     Ok(body)
 }
@@ -142,6 +202,39 @@ pub fn parse_response(
         .unwrap_or(request_model)
         .to_string();
 
+    // 2026-09-08 tool transport: 解析 choices[0].message.tool_calls
+    // (原生 OpenAI 形状: id + function.name + function.arguments[字符串]).
+    let mut tool_calls: Vec<ToolCall> = Vec::new();
+    if let Some(tcs) = choice
+        .get("message")
+        .and_then(|m| m.get("tool_calls"))
+        .and_then(|t| t.as_array())
+    {
+        for tc in tcs {
+            let id = tc
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let function = tc.get("function").cloned().unwrap_or_default();
+            let name = function
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let arguments = function
+                .get("arguments")
+                .and_then(|v| v.as_str())
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or(serde_json::Value::Null);
+            tool_calls.push(ToolCall {
+                id,
+                name,
+                arguments,
+            });
+        }
+    }
+
     Ok(NormalizedResponse {
         id: body
             .get("id")
@@ -152,7 +245,7 @@ pub fn parse_response(
         content,
         finish_reason: Some(NormalizedFinishReason::from_openai(finish_reason)),
         usage,
-        tool_calls: Vec::new(),
+        tool_calls,
         raw_metadata: serde_json::Map::new(),
     })
 }
@@ -245,12 +338,107 @@ mod tests {
     }
 
     #[test]
-    fn build_request_body_rejects_tools_and_images() {
+    fn build_request_body_transports_tools_and_rejects_images() {
+        // 2026-09-08 tool transport: 工具声明进入原生 function 形状.
         let mut req = request();
-        req.tools
-            .push(apeireth_protocol::canonical::NormalizedTool::new("t"));
-        let err = build_request_body(&req, "m", "provider.test").unwrap_err();
+        req.tools.push(
+            apeireth_protocol::canonical::NormalizedTool::new("t")
+                .with_description("a tool")
+                .with_parameters(
+                    [("x".to_string(), serde_json::json!({"type": "string"}))]
+                        .into_iter()
+                        .collect(),
+                ),
+        );
+        req.tool_choice = Some(NormalizedToolChoice::Required);
+        let body = build_request_body(&req, "m", "provider.test").unwrap();
+        let tools = body["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0]["type"], "function");
+        assert_eq!(tools[0]["function"]["name"], "t");
+        assert_eq!(body["tool_choice"], "required");
+
+        // 图像仍拒绝 (未声明 Vision).
+        let mut img = request();
+        img.messages.push(NormalizedMessage {
+            role: MessageRole::User,
+            content: vec![ContentPart::ImageUrl {
+                url: "https://example.invalid/i.png".into(),
+                detail: None,
+            }],
+            tool_calls: Vec::new(),
+            tool_call_id: None,
+            name: None,
+        });
+        let err = build_request_body(&img, "m", "provider.test").unwrap_err();
         assert!(matches!(err, ProviderError::BadResponse { .. }));
+    }
+
+    #[test]
+    fn build_request_body_transports_tool_calls_and_results() {
+        // assistant tool_calls → 原生 wire 形状; tool 结果消息 → role=tool.
+        let mut req = request();
+        req.messages.push(NormalizedMessage {
+            role: MessageRole::Assistant,
+            content: Vec::new(),
+            tool_calls: vec![ToolCall {
+                id: "call_1".into(),
+                name: "tool.shell".into(),
+                arguments: serde_json::json!({"command": "echo hi"}),
+            }],
+            tool_call_id: None,
+            name: None,
+        });
+        req.messages.push(NormalizedMessage::tool_result(
+            "call_1",
+            Some("tool.shell".into()),
+            "hello-from-tool",
+        ));
+        let body = build_request_body(&req, "m", "provider.test").unwrap();
+        let messages = body["messages"].as_array().unwrap();
+        let assistant = &messages[2];
+        assert_eq!(assistant["role"], "assistant");
+        assert_eq!(assistant["content"], serde_json::Value::Null);
+        assert_eq!(assistant["tool_calls"][0]["id"], "call_1");
+        assert_eq!(assistant["tool_calls"][0]["function"]["name"], "tool.shell");
+        assert_eq!(
+            assistant["tool_calls"][0]["function"]["arguments"],
+            "{\"command\":\"echo hi\"}"
+        );
+        let tool_msg = &messages[3];
+        assert_eq!(tool_msg["role"], "tool");
+        assert_eq!(tool_msg["tool_call_id"], "call_1");
+        assert_eq!(tool_msg["content"], "hello-from-tool");
+    }
+
+    #[test]
+    fn parse_response_extracts_tool_calls() {
+        let body = serde_json::json!({
+            "id": "chatcmpl-y",
+            "model": "wire-model",
+            "choices": [{
+                "message": {
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call_9",
+                        "type": "function",
+                        "function": {"name": "tool.shell", "arguments": "{\"command\":\"echo hi\"}"}
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5}
+        });
+        let resp = parse_response(body, "m", "provider.test").unwrap();
+        assert_eq!(resp.content, "");
+        assert_eq!(resp.finish_reason, Some(NormalizedFinishReason::ToolCalls));
+        assert_eq!(resp.tool_calls.len(), 1);
+        assert_eq!(resp.tool_calls[0].id, "call_9");
+        assert_eq!(resp.tool_calls[0].name, "tool.shell");
+        assert_eq!(
+            resp.tool_calls[0].arguments,
+            serde_json::json!({"command": "echo hi"})
+        );
     }
 
     #[test]
