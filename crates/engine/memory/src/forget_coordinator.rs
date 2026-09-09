@@ -56,7 +56,7 @@ impl SqliteMemoryStore {
         approval_id: &str,
     ) -> MemoryResult<usize> {
         let conn = self.conn()?;
-        let ts = crate::research_derived_memory::now_ms_pub();
+        let ts = crate::research_derived_memory::now_ms();
         let n = conn.execute(
             "INSERT INTO research_forgotten_artifacts (kind, id, reason, approval_id, ts) \
              VALUES (?1, ?2, ?3, ?4, ?5) \
