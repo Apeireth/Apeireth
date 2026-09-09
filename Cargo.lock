@@ -283,6 +283,7 @@ dependencies = [
  "apeireth-core",
  "apeireth-orchestration",
  "apeireth-plugin",
+ "apeireth-provider",
  "async-trait",
  "serde",
  "serde_json",
