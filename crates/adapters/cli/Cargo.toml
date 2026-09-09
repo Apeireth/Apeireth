@@ -24,6 +24,8 @@ apeireth-provider = { path = "../../engine/provider" }
 apeireth-runtime = { path = "../../engine/runtime" }
 apeireth-runtime-assembly = { path = "../../engine/runtime-assembly" }
 apeireth-storage = { path = "../../engine/storage" }
+# 2026-09-08 用户旋钮批: shell/fetch 工具配置类型 (TrustedShellConfig / FetchConfig).
+apeireth-tools-canonical = { path = "../../capabilities/tools" }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

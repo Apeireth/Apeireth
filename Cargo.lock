@@ -161,6 +161,7 @@ dependencies = [
  "apeireth-runtime",
  "apeireth-runtime-assembly",
  "apeireth-storage",
+ "apeireth-tools-canonical",
  "async-trait",
  "chrono",
  "reqwest",

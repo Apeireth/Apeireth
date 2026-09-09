@@ -259,6 +259,38 @@ EOF
 
 ---
 
+## 🎛️ 启用高级能力（用户旋钮，2026-09-08 落地）
+
+> 设计原则：**默认拒绝**。每个旋钮 = 主人的一次显式授权；值为 `1` 才生效。
+> 全部旋钮均为 env 变量，在启动 CLI/gateway 前设置。0 装说明：逐 token 流式
+> 仍为缓冲成帧（冻结 seam），无旋钮。
+
+| 旋钮 | 作用 | 额外成本/风险 |
+|---|---|---|
+| `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` | 允许 AI 用 filesystem/search 读本地文件 | 低（只读，工作区为根） |
+| `APEIRETH_ENABLE_SHELL=1` | **注册** shell 工具；每次调用走人工审批（`approve`/`reject`） | 高——任意代码执行；审批不可绕过，无审批者则拒绝 |
+| `APEIRETH_ENABLE_FETCH=1` | **注册** fetch 工具（仅公网、GET-only、DNS 钉扎）；每次调用走审批 | 中——出站数据 |
+| `APEIRETH_COGNITIVE_JUDGE=1` | 每回合 AI 自我评审（低分触发重试/停止） | 每回合 +1 次 LLM 调用 |
+| `APEIRETH_COGNITIVE_COUNCIL=1` | 多视角审议（7 advisor 并行，10s/60s 有界） | 每回合最多 +7 次 LLM 调用 |
+| `APEIRETH_ENABLE_ORGANS=1` | 装配 9 器官模块（W1/W2 等，LLM 重的器官会真调 LLM） | 视器官而定 |
+| `APEIRETH_ENABLE_PREFERENCE_LEARNING=1` | 让 AI 把学到的偏好写回长期记忆 | 写入权交给模型；配 P1-A 准入控制使用更稳 |
+
+**shell 审批流示例**（开启后）：
+
+```powershell
+$env:APEIRETH_ENABLE_SHELL='1'
+apeireth chat "用 shell 执行 echo hello" --model deepseek-v4-flash
+# 回合暂停 → 输出 approval id（不会直接执行）
+apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才执行
+# 或 apeireth reject --session <sid> --approval <approval-id> --reason "不需要"
+```
+
+**与工具同批的既有旋钮**：`APEIRETH_COGNITIVE_DB`（记忆库路径）、
+`APEIRETH_SESSION_DB`（会话库路径）、`APEIRETH_MODEL`（默认模型）、
+`APEIRETH_OPENAI_URL`/`APEIRETH_OPENAI_MODELS`/`OPENAI_API_KEY`（provider 配置）。
+
+---
+
 _安装指南 v1 修订版（leader 亲自产出）._
 _依据我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 1.97.1 锁定._
 _主哲学 8 锚穿透 (S-1 北极星 / S-2 实事求是 / S-3 质量工程化 NEW / O-1 安全优先 NEW / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装; per R125 B5 升 8 锚 + R126 P1-2 实施)._
