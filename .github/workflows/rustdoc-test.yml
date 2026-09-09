@@ -50,7 +50,7 @@ jobs:
 
       - name: "Upload doc test artifacts (Linux only)"
         if: matrix.os == 'ubuntu-latest' && failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: doc-test-${{ github.sha }}-${{ matrix.os }}
           path: target/doc-test-output
