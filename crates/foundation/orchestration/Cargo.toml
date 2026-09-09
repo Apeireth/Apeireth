@@ -19,6 +19,11 @@ uuid = { workspace = true, features = ["v4"] }
 [dev-dependencies]
 tempfile = "3"
 tokio = { workspace = true, features = ["macros", "rt", "time"] }
+# RA-15/RC-6 补全 (2026-09-08): council live E2E 用 OpenAI-compatible factory
+# (DeepSeek) 经测试本地适配器桥到镜像 LlmFactory trait — 仅 dev-dep,
+# 生产依赖图 0 变化 (orchestration 生产仍只依赖 core)。
+apeireth-plugin = { path = "../plugin" }
+apeireth-provider = { path = "../../engine/provider" }
 
 [lib]
 name = "apeireth_orchestration"
