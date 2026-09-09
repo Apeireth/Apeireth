@@ -20,6 +20,9 @@ apeireth-orchestration = { path = "../../foundation/orchestration" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
+# RA-15/RC-5 补全 (2026-09-08): organ live E2E 用 OpenAI-compatible factory
+# (DeepSeek) 注入真 LLM 路径 — 仅 dev-dep, 生产依赖图 0 变化。
+apeireth-provider = { path = "../provider" }
 
 [lib]
 name = "apeireth_organ"

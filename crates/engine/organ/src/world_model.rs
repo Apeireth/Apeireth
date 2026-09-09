@@ -639,13 +639,29 @@ impl LlmTimelineLlm {
             }],
             temperature: 0.7,
             tools: vec![],
-            max_tokens: Some(500),
+            // 2026-09-08 实测调校: 500/2048 是按非推理模型标定的预算;
+            // DeepSeek v4-flash 等推理型模型会把预算耗在 reasoning_content 上,
+            // 500 必截断、2048 仍有 1/3 概率 finish=length 且 content 为空
+            // (live 探针 6 次实测)。4096 实测 3/3 finish=stop。
+            // 截断仍由下方 finish=length 分支显式报错 (不静默当链结束)。
+            max_tokens: Some(4096),
         };
 
         let resp = instance
             .complete(req)
             .await
             .map_err(|e| format!("LlmInstance::complete failed: {e}"))?;
+
+        // 0 装语义边界 (2026-09-08 live E2E 发现): 空叙事只有在模型**主动**
+        // 停止时才是"链结束"信号; finish=length 空内容是**截断** (推理预算被
+        // reasoning 耗尽), 必须报错, 否则反事实链被静默截断且下游拿到空链。
+        if resp.message.content.trim().is_empty() && resp.finish_reason == "length" {
+            return Err(format!(
+                "LLM 响应被 max_tokens 截断且无内容 (finish=length, completion_tokens={}): \
+                 推理型模型预算不足, 请提高 max_tokens",
+                resp.usage.completion_tokens
+            ));
+        }
 
         Ok(Self::parse_response(
             &resp.message.content,
@@ -1213,5 +1229,108 @@ mod tests {
         fn load_resolved(&self) -> Result<Vec<Forecast>, String> {
             Ok(self.resolved.clone())
         }
+    }
+
+    // ========================================================================
+    // 2026-09-08: 截断语义边界回归 (live E2E 发现 finish=length + 空内容 ≠ 链结束)
+    // ========================================================================
+
+    /// Stub factory 返固定 (content, finish_reason) 响应。
+    struct StubLlmFactory {
+        content: String,
+        finish: String,
+    }
+
+    #[async_trait]
+    impl LlmFactory for StubLlmFactory {
+        async fn spawn(
+            &self,
+            _role: apeireth_orchestration::SubagentRole,
+            _model: &str,
+        ) -> Result<Box<dyn LlmInstance>, LlmError> {
+            Ok(Box::new(StubLlmInstance {
+                content: self.content.clone(),
+                finish: self.finish.clone(),
+            }))
+        }
+
+        async fn available_models(&self) -> Result<Vec<String>, LlmError> {
+            Ok(vec!["stub".into()])
+        }
+
+        fn name(&self) -> &str {
+            "stub"
+        }
+    }
+
+    struct StubLlmInstance {
+        content: String,
+        finish: String,
+    }
+
+    #[async_trait]
+    impl LlmInstance for StubLlmInstance {
+        async fn complete(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<apeireth_plugin::llm_factory::CompletionResponse, LlmError> {
+            Ok(apeireth_plugin::llm_factory::CompletionResponse {
+                message: CompletionMessage {
+                    role: "assistant".into(),
+                    content: self.content.clone(),
+                },
+                tool_calls: vec![],
+                finish_reason: self.finish.clone(),
+                usage: apeireth_plugin::llm_factory::TokenUsage {
+                    prompt_tokens: 1,
+                    completion_tokens: 1,
+                    total_tokens: 2,
+                },
+            })
+        }
+
+        fn name(&self) -> &str {
+            "stub-instance"
+        }
+    }
+
+    fn truncation_ctx() -> TimelineContext {
+        TimelineContext {
+            start_state: WorldState::default(),
+            hypothesis: "h".into(),
+            prior_narrative: String::new(),
+            prior_state: WorldState::default(),
+            tick: 0,
+        }
+    }
+
+    /// finish=length + 空内容 = 截断 ⇒ 报错, 绝不静默当"链结束"。
+    #[tokio::test]
+    async fn truncated_empty_content_is_error_not_chain_end() {
+        let factory: Arc<dyn LlmFactory> = Arc::new(StubLlmFactory {
+            content: String::new(),
+            finish: "length".into(),
+        });
+        let llm = LlmTimelineLlm::new(factory, "stub");
+        let err = llm
+            .expand_step(&truncation_ctx())
+            .await
+            .expect_err("truncation must error");
+        assert!(err.contains("截断"), "必须报告截断原因, got: {err}");
+    }
+
+    /// finish=stop + 空内容 = 模型主动链结束 (v1 语义保留)。
+    #[tokio::test]
+    async fn deliberate_stop_with_empty_narrative_is_chain_end() {
+        let factory: Arc<dyn LlmFactory> = Arc::new(StubLlmFactory {
+            content: String::new(),
+            finish: "stop".into(),
+        });
+        let llm = LlmTimelineLlm::new(factory, "stub");
+        let step = llm
+            .expand_step(&truncation_ctx())
+            .await
+            .expect("deliberate stop must be Ok");
+        assert!(step.narrative.is_empty(), "主动停止 + 空 = 链结束信号");
     }
 }

@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — DeepSeek E2E 接线 + W1 推理型模型截断修复 (2026-09-08)
+
+- **OpenAI-compatible LlmFactory**（`apeireth-provider::openai_compatible_llm_factory`）：RC-5 `LlmFactory` 第二个真 backend（DeepSeek / 任意兼容端点）；与 MiniMax factory 同构（multi-instance 隔离 + single-transport 共享；key per-turn 走 CredentialResolver）。共享转换逻辑抽 `llm_factory_adapters`（pub(crate)，minimax factory 同步重构，0 复制粘贴）。
+- **Live E2E ×4**（`#[ignore]`，key 走 env，0 入库）：provider capability 级 + factory 级 smoke（"ok" 1.05s）；CLI canonical 双轮对话（同会话连续性 + `provider=provider.openai-compatible` trace）；organ W1 反事实推演 + W2 因果图推演（`crates/engine/organ/tests/organ_live_llm.rs`，44s 全过）。
+- **W1 截断语义修复**（live E2E 实测发现）：推理型模型（DeepSeek v4-flash）会把 max_tokens 预算耗在 reasoning_content 上——500 必截断、2048 仍有 1/3 概率 finish=length 且 content 为空（6 次探针实测）。修复：预算 500→4096（与实测分布对齐）+ **finish=length 空内容 = 截断 ⇒ 显式报错**（原语义把它静默当"链结束"），finish=stop 空内容才保留 v1 链结束语义；+2 mock 回归测试。
+- **MiniMax E2E 永久挂账（诚实）**：无 MiniMax key（用户侧无预算），`minimax_llm_factory::real_llm_call_smoke` 保持 `#[ignore]` 未跑；E2E 口径以 DeepSeek（openai-compatible）为唯一实测路径，MiniMax 路径只保 mock/确定性测试。
+- 守门：3152 passed / 0 failed / 17 ignored（organ +2 截断测试 + live ×2 ignored）；clippy 0 / fmt 0 / diff-check 0；Cargo.lock 仅新增 workspace 内部 dev-dep 边（organ dev-depends provider），**0 新外部依赖**。
+
 ## [Unreleased] — RA-15 工程线吸收批：2026 追兵方案 P0/P1 落地 (2026-09-06)
 
 > 派单依据 `_research_mem/ra/ra15`；逐行对照 `docs/03-reference/absorption-2026-09.md`。全部机制**默认关闭**（Research 前缀/并列），不替换生产路径；代码注释标来源；四道闸门照走；0 新外部依赖（Cargo.lock 0 行 diff）。
