@@ -8,7 +8,7 @@ name: Cargo deny
 
 on:
   push:
-    branches: [master, main, feature/cognitive-infrastructure-vnext]
+    branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion]
   pull_request:
     branches: ['**']
 

@@ -412,6 +412,35 @@ async fn build_cognitive_modules_from_env(
         Arc::clone(&pool),
         256,
     ));
+    let commitment_store = Arc::new(apeireth_memory::SqliteCommitmentStore::from_arc(
+        Arc::clone(&pool),
+    ));
+    commitment_store
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive commitment schema failed: {error}"))?;
+    let persona_store = Arc::new(apeireth_memory::SqlitePersonaProfileStore::new(
+        (*pool).clone(),
+    ));
+    persona_store
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive persona schema failed: {error}"))?;
+    let relation_store = Arc::new(apeireth_memory::SqliteTemporalGraphStore::from_arc(
+        Arc::clone(&pool),
+    ));
+    relation_store
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive relation schema failed: {error}"))?;
+    let persona_store: Arc<dyn apeireth_memory::PersonaProfileStore> = persona_store;
+    let typed_sink = Arc::new(
+        apeireth_runtime_assembly::CanonicalMemoryTypedSink::new()
+            .with_commitments(Arc::clone(&commitment_store))
+            .with_persona_store(Arc::clone(&persona_store))
+            .with_relations(Arc::clone(&relation_store)),
+    );
+    let typed_sink: Arc<dyn apeireth_memory::MemoryTypedMaterializationSink> = typed_sink;
     access_history
         .ensure_schema()
         .await
@@ -460,6 +489,7 @@ async fn build_cognitive_modules_from_env(
         access_history: Some(access_history),
         memory_extractor: None,
         memory_materializer: None,
+        typed_sink: Some(typed_sink),
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)

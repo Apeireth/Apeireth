@@ -11,7 +11,8 @@ use apeireth_core::kernel::Clock;
 use apeireth_memory::{
     AccessHistoryActivationSource, ContextWindowManager, EmbeddingProvider, MemoryCoordinator,
     MemoryExtractor, MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
-    ProactiveRecallPolicy, ScopedMemoryBackend, SqliteAccessHistoryStore,
+    MemoryTypedMaterializationSink, ProactiveRecallPolicy, ScopedMemoryBackend,
+    SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::Council;
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEntryStore};
@@ -30,6 +31,7 @@ use super::cognitive::{
     SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
+use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
@@ -202,6 +204,8 @@ pub struct ProductionBackends {
     pub memory_materializer: Option<Arc<dyn MemoryMaterializerPort>>,
     /// Optional unified extractor used to build a default materializer.
     pub memory_extractor: Option<Arc<dyn MemoryExtractor>>,
+    /// Optional concrete typed durable sink for commitment/persona/relation projections.
+    pub typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -409,6 +413,9 @@ impl ProductionModules {
                 module = module.with_materializer(Arc::clone(materializer));
             } else if let Some(extractor) = &backends.memory_extractor {
                 module = module.with_extractor(Arc::clone(extractor));
+            }
+            if let Some(sink) = &backends.typed_sink {
+                module = module.with_typed_sink(Arc::clone(sink));
             }
             if let (Some(wiki), Some(graph), Some(associations)) =
                 (&backends.wiki, &backends.graph, &backends.associations)

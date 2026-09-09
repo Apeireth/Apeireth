@@ -60,6 +60,8 @@ pub mod cognitive;
 pub mod guard_observer;
 #[path = "canonical/harness_patch.rs"]
 pub mod harness_patch;
+#[path = "canonical/memory_typed_sink.rs"]
+pub mod memory_typed_sink;
 #[path = "canonical/orchestrator.rs"]
 pub mod orchestrator;
 #[path = "canonical/organ_llm_bridge.rs"]
@@ -84,6 +86,7 @@ pub use cognitive::{
     PREFERENCE_RECALL_MODULE_ID, SELF_ASSESSMENT_MODULE_ID,
 };
 pub use guard_observer::GuardDatasetObserver;
+pub use memory_typed_sink::CanonicalMemoryTypedSink;
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
 pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};
 pub use preference_learning::{
