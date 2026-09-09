@@ -59,7 +59,38 @@ impl From<rusqlite::Error> for AccessHistoryError {
     }
 }
 
-#[derive(Clone)]
+/// Supplies an optional activation value for a memory candidate.
+///
+/// `None` means that the coordinator should retain the candidate's existing
+/// activation. This keeps activation opt-in and preserves the legacy ranking
+/// behavior when no source is configured (or when a source has no value).
+pub trait ActivationSource: Send + Sync {
+    fn activation(&self, memory_id: &str, as_of_ms: i64) -> Option<f64>;
+}
+
+/// Adapter that exposes the existing access-history ACT-R API as an activation
+/// source for the coordinator.
+pub struct AccessHistoryActivationSource {
+    store: Arc<SqliteAccessHistoryStore>,
+    decay: f64,
+    beta: f64,
+}
+
+impl AccessHistoryActivationSource {
+    pub fn new(store: Arc<SqliteAccessHistoryStore>, decay: f64, beta: f64) -> Self {
+        Self { store, decay, beta }
+    }
+}
+
+impl ActivationSource for AccessHistoryActivationSource {
+    fn activation(&self, memory_id: &str, as_of_ms: i64) -> Option<f64> {
+        self.store
+            .activation(memory_id, as_of_ms, self.decay, self.beta)
+            .ok()
+            .filter(|value| value.is_finite())
+    }
+}
+
 pub struct SqliteAccessHistoryStore {
     pool: Arc<SqliteConnectionPool>,
     cap: usize,
@@ -488,6 +519,37 @@ mod tests {
             SqliteAccessHistoryStore::new(SqliteConnectionPool::in_memory().await.unwrap(), cap);
         store.ensure_schema().await.unwrap();
         store
+    }
+
+    #[tokio::test]
+    async fn activation_source_uses_access_history_api() {
+        let store = Arc::new(store(4).await);
+        store
+            .record_access("memory-a", 1_000, "session", "search")
+            .await
+            .unwrap();
+        let source = AccessHistoryActivationSource::new(store, 0.5, 0.25);
+        let value = source.activation("memory-a", 2_000).unwrap();
+        assert!((value - 0.25).abs() < f64::EPSILON);
+        assert!(source.activation("missing", 2_000).is_some());
+    }
+
+    struct FakeActivationSource {
+        value: Option<f64>,
+    }
+
+    impl ActivationSource for FakeActivationSource {
+        fn activation(&self, _memory_id: &str, _as_of_ms: i64) -> Option<f64> {
+            self.value
+        }
+    }
+
+    #[test]
+    fn fake_activation_source_preserves_none_contract() {
+        let source = FakeActivationSource { value: None };
+        assert_eq!(source.activation("memory-a", 1_000), None);
+        let source = FakeActivationSource { value: Some(0.75) };
+        assert_eq!(source.activation("memory-a", 1_000), Some(0.75));
     }
 
     #[tokio::test]

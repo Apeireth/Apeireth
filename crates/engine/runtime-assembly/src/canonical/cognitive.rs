@@ -12,9 +12,9 @@ use std::time::Instant;
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
 use apeireth_memory::{
-    MemoryCoordinator, MemoryExtractionInput, MemoryExtractionMessage, MemoryExtractor,
-    MemoryRecallQuery, MemoryScope, RuleMemoryExtractor, SelectedMemoryAccess,
-    SqliteAccessHistoryStore,
+    BoundedMemoryInput, MemoryCoordinator, MemoryExtractor, MemoryMaterializer,
+    MemoryMaterializerPort, MemoryRecallQuery, MemoryScope, ProactiveRecallPolicy,
+    ProactiveRecallService, RuleMemoryExtractor, SelectedMemoryAccess, SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::{
     Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
@@ -347,6 +347,7 @@ pub struct MemoryRecallModule {
     access_recorder: Option<Arc<MemoryRecallAccessRecorder>>,
     access_store: Option<Arc<dyn MemoryRecallAccessStore>>,
     clock: Option<Arc<dyn Clock>>,
+    proactive_recall: Option<ProactiveRecallService>,
 }
 
 impl MemoryRecallModule {
@@ -366,7 +367,15 @@ impl MemoryRecallModule {
             access_recorder: None,
             access_store: None,
             clock: None,
+            proactive_recall: None,
         }
+    }
+
+    /// Opt into deterministic proactive candidate filtering with a hard budget.
+    #[must_use]
+    pub fn with_proactive_recall(mut self, policy: ProactiveRecallPolicy) -> Self {
+        self.proactive_recall = Some(ProactiveRecallService::new(policy));
+        self
     }
 
     /// Attach a Unified Memory 2.0 coordinator for closed-world multi-layer recall.
@@ -454,7 +463,31 @@ impl AgentModule for MemoryRecallModule {
                 let query = MemoryRecallQuery::new(session.clone(), topic)
                     .with_limit(self.limit)
                     .with_max_chars(self.max_context_chars);
-                match coord.compile_prompt_overlay_with_selected_access(&query) {
+                let result = if let Some(proactive) = &self.proactive_recall {
+                    let cue = apeireth_memory::TopicCue {
+                        recent_user_messages: ctx
+                            .messages
+                            .iter()
+                            .filter(|message| message.role == MessageRole::User)
+                            .map(|message| ContentPart::join_text(&message.content))
+                            .collect(),
+                        recent_assistant_messages: ctx
+                            .messages
+                            .iter()
+                            .filter(|message| message.role == MessageRole::Assistant)
+                            .map(|message| ContentPart::join_text(&message.content))
+                            .collect(),
+                        ..Default::default()
+                    };
+                    coord.compile_prompt_overlay_with_proactive_access(
+                        &query,
+                        proactive.policy(),
+                        &cue,
+                    )
+                } else {
+                    coord.compile_prompt_overlay_with_selected_access(&query)
+                };
+                match result {
                     Ok(Some(selected)) => {
                         if let Some(recorder) = &self.access_recorder {
                             recorder.record_selected(&session, &selected);
@@ -571,7 +604,7 @@ pub struct MemoryWritebackModule {
     wiki: Option<Arc<dyn WikiEntryStore>>,
     graph: Option<Arc<dyn KnowledgeGraphStore>>,
     associations: Option<Arc<dyn AssociationStore>>,
-    extractor: Arc<dyn MemoryExtractor>,
+    materializer: Arc<dyn MemoryMaterializerPort>,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
 }
@@ -586,7 +619,7 @@ impl MemoryWritebackModule {
             wiki: None,
             graph: None,
             associations: None,
-            extractor: Arc::new(RuleMemoryExtractor),
+            materializer: Arc::new(MemoryMaterializer::default()),
             clock,
             metrics: ModuleMetrics::default(),
         }
@@ -614,10 +647,18 @@ impl MemoryWritebackModule {
         self
     }
 
-    /// Attach a unified memory extractor for deterministic or model-backed extraction.
+    /// Attach the bounded-turn materializer. The extractor setter remains for source compatibility.
+    #[must_use]
+    pub fn with_materializer(mut self, materializer: Arc<dyn MemoryMaterializerPort>) -> Self {
+        self.materializer = materializer;
+        self
+    }
+
+    /// Attach a unified memory extractor for source compatibility. The materializer
+    /// owns extraction for AfterTurn writeback.
     #[must_use]
     pub fn with_extractor(mut self, extractor: Arc<dyn MemoryExtractor>) -> Self {
-        self.extractor = extractor;
+        self.materializer = Arc::new(MemoryMaterializer::new(extractor));
         self
     }
 
@@ -676,10 +717,10 @@ impl AgentModule for MemoryWritebackModule {
                     session_id: session,
                 });
 
-                // The unified extractor observes exactly one bounded user+assistant
-                // turn. It is deliberately after candidate construction and before
-                // legacy experience projection, so the old projection remains intact.
-                let extraction_input = MemoryExtractionInput {
+                // Materialize exactly this bounded user+assistant turn. Legacy coordinator
+                // episode writeback below remains unchanged; generic extraction is written
+                // only through the materializer to avoid duplicate projections.
+                let input = BoundedMemoryInput {
                     scope: MemoryScope::Session {
                         session_id: episodes[0].session_id.clone(),
                     },
@@ -688,34 +729,21 @@ impl AgentModule for MemoryWritebackModule {
                     source_request: Some(candidate.id.clone()),
                     messages: episodes
                         .iter()
-                        .map(|episode| MemoryExtractionMessage {
+                        .map(|episode| apeireth_memory::MemoryExtractionMessage {
                             role: episode.role.clone(),
-                            content: bounded(&episode.content, 4_096),
+                            content: episode.content.clone(),
                         })
                         .collect(),
+                    max_messages: 2,
+                    max_message_chars: 4_096,
                 };
-                match self.extractor.extract(extraction_input).await {
-                    Ok(extracted) => {
-                        let mut memories = extracted.preferences;
-                        memories.extend(extracted.facts);
-                        memories.extend(extracted.events);
-                        memories.extend(extracted.experiences);
-                        memories.extend(extracted.relations);
-                        for (index, memory) in memories.into_iter().enumerate() {
-                            let episode = Episode {
-                                id: hash_id(
-                                    "ep-extracted",
-                                    &[&episodes[0].session_id, &candidate.id, &index.to_string()],
-                                ),
-                                timestamp: now,
-                                role: format!("memory:{:?}", memory.class).to_lowercase(),
-                                content: memory.content,
-                                session_id: episodes[0].session_id.clone(),
-                            };
+                match self.materializer.materialize_episodes(input, now).await {
+                    Ok(materialized) => {
+                        for item in materialized {
                             let result = if let Some(coord) = &self.coordinator {
-                                coord.writeback_episode(&episode).map(|_| ())
+                                coord.writeback_episode(&item.episode).map(|_| ())
                             } else {
-                                self.memory.put_episode(&episode).map_err(|e| {
+                                self.memory.put_episode(&item.episode).map_err(|e| {
                                     apeireth_memory::MemoryError::Invalid(e.to_string())
                                 })
                             };
@@ -1737,6 +1765,21 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn proactive_recall_is_opt_in_and_budgeted() {
+        let memory = Arc::new(FakeMemory::default());
+        let disabled = MemoryRecallModule::new(memory.clone());
+        assert!(disabled.proactive_recall.is_none());
+        let enabled = MemoryRecallModule::new(memory).with_proactive_recall(
+            ProactiveRecallPolicy::default()
+                .enabled(true)
+                .with_budget(1),
+        );
+        assert_eq!(
+            enabled.proactive_recall.as_ref().unwrap().policy().budget,
+            1
+        );
+    }
     #[tokio::test]
     async fn recall_is_transient_and_writeback_is_after_turn_only() {
         let session = SessionId::new();

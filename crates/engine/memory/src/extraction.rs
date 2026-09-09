@@ -20,6 +20,22 @@ pub enum ExtractionClass {
     PersonaDelta,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CommitmentCandidate {
+    pub content: String,
+    pub confidence: f64,
+    pub deadline_hint: Option<String>,
+    pub provenance: MemoryProvenance,
+    pub scope: MemoryScope,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CommitmentSignal {
+    Create,
+    Complete,
+    Cancel,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemoryExtractionMessage {
     pub role: String,
@@ -53,6 +69,10 @@ pub struct MemoryExtractionResult {
     pub experiences: Vec<ExtractedMemory>,
     pub profile_delta: Option<PersonaProfileDelta>,
     pub relations: Vec<ExtractedMemory>,
+    #[serde(default)]
+    pub commitments: Vec<CommitmentCandidate>,
+    #[serde(default)]
+    pub commitment_signals: Vec<(CommitmentSignal, ExtractedMemory)>,
 }
 
 #[async_trait]
@@ -61,6 +81,19 @@ pub trait MemoryExtractor: Send + Sync {
         &self,
         input: MemoryExtractionInput,
     ) -> Result<MemoryExtractionResult, MemoryError>;
+}
+
+#[async_trait]
+impl<T> MemoryExtractor for std::sync::Arc<T>
+where
+    T: MemoryExtractor + ?Sized,
+{
+    async fn extract(
+        &self,
+        input: MemoryExtractionInput,
+    ) -> Result<MemoryExtractionResult, MemoryError> {
+        (**self).extract(input).await
+    }
 }
 
 const MAX_MEMORY_CHARS: usize = 512;
@@ -105,9 +138,7 @@ impl MemoryExtractor for RuleMemoryExtractor {
 
             let (class, confidence) = if is_preference(&lower) {
                 (ExtractionClass::Preference, 0.90)
-            } else if is_commitment(&lower) {
-                // There is no public Commitment class; commitments are durable
-                // events, preserving the existing public enum contract.
+            } else if is_commitment(&lower) && !is_hedged_commitment(&lower) {
                 (ExtractionClass::Event, 0.86)
             } else if is_relation(&lower) {
                 (ExtractionClass::Relation, 0.90)
@@ -268,6 +299,22 @@ fn is_commitment(lower: &str) -> bool {
             "截止日期",
             "到期日",
             "跟进",
+        ],
+    )
+}
+
+fn is_hedged_commitment(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "i might ",
+            "i may ",
+            "i could ",
+            "sometime",
+            "maybe ",
+            "我可能",
+            "也许",
+            "有空再",
         ],
     )
 }
