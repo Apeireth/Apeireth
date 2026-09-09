@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 用户能力旋钮批：shell/fetch/organs/偏好学习 + Council 真工厂 (2026-09-08)
+
+- **新 env 旋钮**（CLI/gateway bootstrap，均为 `=1` 显式开启）：`APEIRETH_ENABLE_SHELL`（注册 tool.shell + 策略 grant + **require_approval**——每次调用走人工审批，fail-closed）、`APEIRETH_ENABLE_FETCH`（同语义，公网 GET-only）、`APEIRETH_ENABLE_ORGANS`、`APEIRETH_ENABLE_PREFERENCE_LEARNING`。既有旋钮 `APEIRETH_COGNITIVE_JUDGE`/`APEIRETH_COGNITIVE_COUNCIL` 一并文档化（INSTALL.md 新增"启用高级能力"章）。
+- **Council 真工厂接线**：`APEIRETH_COGNITIVE_COUNCIL=1` 时优先 OpenAI-compatible（DeepSeek）→ 回退 MiniMax → Noop（0 装）；新 `llm_mirror_adapter`（plugin→orchestration 镜像 trait 生产桥，composition root 是桥的主人）。
+- 回归：3 个 knob 测试（shell/fetch 注册+审批标记；organs+preference_learning 模块装配）。守门 3161 passed / 0 failed / 18 ignored；clippy 0 / fmt 0 / diff-check 0；Cargo.lock 仅 +1 workspace 内部边。
+- **已知缺口（0 装，live 实测发现）**：三家 canonical provider 的 wire 层均不传输工具声明（模型看不到工具）——工具回路（注册/治理/审批/派发）在库级全通，但真模型还调不了工具；tool transport 是下一批。
+
 ## [Unreleased] — P1-B 回合级测点适配器 (2026-09-08)
 
 - **`runtime-assembly::canonical::cost_telemetry::record_turn_cost`**（opt-in 默认关闭）：把 canonical 回合实测（NormalizedUsage token / 延迟 / context_rot 失真）记进统一成本账本 Context 层；Summary/Cache/Vault 层由子系统专有测点供给（0 装不代报）。生产面板接线（composition 持账本 + B 块前端消费曲线）留 B 块。

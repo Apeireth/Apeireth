@@ -9,6 +9,7 @@
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
 pub mod gateway_panels;
 pub mod keyring_bootstrap;
+pub mod llm_mirror_adapter;
 pub mod portable_bundle;
 
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
@@ -27,6 +28,7 @@ use apeireth_runtime::canonical::{
     TurnRequest, TurnResponse,
 };
 use apeireth_runtime_assembly::SqliteSessionStore;
+use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
 
 /// One persistent SQLite database is shared by the cognitive backends.
 /// `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
@@ -37,6 +39,13 @@ const COGNITIVE_COUNCIL_ENV: &str = "APEIRETH_COGNITIVE_COUNCIL";
 
 /// Enables the local filesystem and search tools in the production policy.
 pub const ENABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_ENABLE_LOCAL_READ_TOOLS";
+// 2026-09-08 用户旋钮 (per docs/01-architecture/forget-three-phase-production-spec 同批):
+// shell/fetch 注册 + 策略 grant + require_approval (每次调用仍走人工审批);
+// organs / preference_learning 为认知模块装配旋钮。
+const ENABLE_SHELL_ENV: &str = "APEIRETH_ENABLE_SHELL";
+const ENABLE_FETCH_ENV: &str = "APEIRETH_ENABLE_FETCH";
+const ENABLE_ORGANS_ENV: &str = "APEIRETH_ENABLE_ORGANS";
+const ENABLE_PREFERENCE_LEARNING_ENV: &str = "APEIRETH_ENABLE_PREFERENCE_LEARNING";
 
 /// Build the production governance policy from an explicit local-read choice.
 ///
@@ -88,7 +97,31 @@ fn build_production_governance_parts_from_env(
     let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
-    build_production_governance_parts(enable_local_read_tools)
+    let (pipeline, policy) = build_production_governance_parts(enable_local_read_tools);
+
+    // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
+    // 语义 (fail-closed): 主人 env 显式授权"可以提议执行", 但**每次调用仍走
+    // 人工审批流** (与既有 approval 生命周期一致; 无审批者时拒绝)。
+    let enable_shell = std::env::var(ENABLE_SHELL_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let enable_fetch = std::env::var(ENABLE_FETCH_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    if enable_shell || enable_fetch {
+        let mut guard = policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)");
+        if enable_shell {
+            guard.grant(Permission::ExecuteTool("tool.shell".to_string()));
+            guard.require_approval_for("tool.shell");
+        }
+        if enable_fetch {
+            guard.grant(Permission::ExecuteTool("tool.fetch".to_string()));
+            guard.require_approval_for("tool.fetch");
+        }
+    }
+    (pipeline, policy)
 }
 
 /// Build the one canonical runtime used by CLI chat and the HTTP gateway.
@@ -323,12 +356,30 @@ async fn build_cognitive_modules_from_env(
     let council_enabled = std::env::var(COGNITIVE_COUNCIL_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
+    let organs_enabled = std::env::var(ENABLE_ORGANS_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let preference_learning_enabled = std::env::var(ENABLE_PREFERENCE_LEARNING_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let shell_enabled = std::env::var(ENABLE_SHELL_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let fetch_enabled = std::env::var(ENABLE_FETCH_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let workspace_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let config = CognitiveModuleConfig {
         judge: JudgeConfig {
             enabled: judge_enabled,
             ..JudgeConfig::default()
         },
         council: council_enabled,
+        organs: organs_enabled,
+        preference_learning: preference_learning_enabled,
+        // shell/fetch 旋钮: 只注册工具; 执行许可由治理层 grant+approval 决定.
+        shell: shell_enabled.then(|| TrustedShellConfig::new(workspace_root.clone())),
+        fetch: fetch_enabled.then(FetchConfig::public_internet_only),
         ..CognitiveModuleConfig::default()
     };
     let memory: Arc<dyn apeireth_plugin::memory_backend::MemoryBackend> =
@@ -340,7 +391,9 @@ async fn build_cognitive_modules_from_env(
     let self_assessments: Arc<dyn apeireth_plugin::self_assessment::SelfAssessmentStore> =
         self_assessments.clone();
     let council = if council_enabled {
-        Some(Arc::new(apeireth_orchestration::Council::default_llm()))
+        // 2026-09-08: Council 需要真 LlmFactory (镜像 trait 经 llm_mirror_adapter 桥).
+        // 优先 openai-compatible (DeepSeek 等), 回退 MiniMax, 最后 Noop (0 装).
+        Some(Arc::new(build_council_from_env()))
     } else {
         None
     };
@@ -358,6 +411,47 @@ async fn build_cognitive_modules_from_env(
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)
             .map_err(|error| error.to_string())?;
     Ok((modules, memory))
+}
+
+/// 构造 Council 后端（2026-09-08 用户旋钮批）：优先 OpenAI-compatible
+/// （DeepSeek 等, env 配置时）→ 回退 MiniMax → 最后 Noop（0 装, advisors 会
+/// 显式 NotImplemented 而非静默）。
+fn build_council_from_env() -> apeireth_orchestration::Council {
+    use apeireth_orchestration::Council;
+    use apeireth_plugin::llm_factory::LlmFactory as PluginLlmFactory;
+
+    if std::env::var("APEIRETH_OPENAI_MODELS")
+        .ok()
+        .is_some_and(|v| !v.trim().is_empty())
+    {
+        if let Ok(factory) =
+            apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env()
+        {
+            let model = factory
+                .model_ids()
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "deepseek-v4-flash".to_string());
+            let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
+                Arc::new(llm_mirror_adapter::MirrorLlmFactory {
+                    inner: Arc::new(factory),
+                });
+            return Council::with_factory(mirror, model);
+        }
+    }
+    if let Ok(factory) = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env() {
+        let model = factory
+            .model_ids()
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "MiniMax-M3".to_string());
+        let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
+            Arc::new(llm_mirror_adapter::MirrorLlmFactory {
+                inner: Arc::new(factory),
+            });
+        return Council::with_factory(mirror, model);
+    }
+    Council::default_llm()
 }
 
 fn cognitive_db_path() -> PathBuf {
