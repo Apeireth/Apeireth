@@ -9,16 +9,16 @@
 
 | Item | Value |
 |---|---|
-| Pre-rebase Memory SHA | `35931b49d790ea92cb6b1735e18b1dd8e4d94dce` |
+| Pre-rebase Memory SHA | `bccc9253ce2d66acd089640df29c26f6d710f2f1` |
 | Next SHA rebased onto | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
 | Post-rebase base / merge-base | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
-| Final Memory SHA before push | `4ea5b3014dfa0667877e2fe2a981167c0cb4f694` |
-| Final remote Memory SHA | `4ea5b3014dfa0667877e2fe2a981167c0cb4f694` |
+| Final Memory SHA before push | `0104699917dda60438cf6e546dae4aff647ab8f5` |
+| Final remote Memory SHA | `0104699917dda60438cf6e546dae4aff647ab8f5` |
 | Final next SHA | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
 | Final relation before push | `0 ahead / 5 behind` by `rev-list --left-right --count next...Memory` |
 | Main SHA | `71774651f4256993936b37cd4f265e5bc45c8e33` |
 
-The Memory branch was rebased onto the latest fetched next. Guard and classifier training logic were not modified. No model training was performed. The Memory branch was not merged into next or main.
+The Memory branch was rebased onto the latest fetched next. Guard and classifier training logic were not modified. No model training was performed. The Memory branch was not merged into next or main. The concrete typed sink is now composed in runtime-assembly and injected by the CLI; typed commitment/persona/relation writes are real when the required explicit identity/store configuration is present, otherwise they return `Skipped`.
 
 ## Architecture delivered
 
@@ -57,9 +57,9 @@ The implementation deliberately keeps durable stores and runtime composition sep
 | Episodic SQLite | YES | YES | YES | YES | PARTIAL |
 | Facts | YES | Generic episode/materializer path | YES as bounded candidate | YES at episode/coordinator level | NO |
 | Preferences | YES | Generic episode/materializer path; existing preference owner remains separate | YES as candidate | PARTIAL | NO |
-| Temporal graph | YES | Existing experience path and bounded store | PARTIAL; typed relation sink is explicit but no concrete CLI sink | YES at store level | NO |
-| Commitments | YES | Facade and typed candidate contract | PARTIAL; automatic durable commitment sink not configured in canonical CLI | CAS/restart store tests | NO |
-| Persona | YES | Facade and typed candidate contract | PARTIAL; automatic durable persona sink not configured in canonical CLI | CAS/restart store tests | NO |
+| Temporal graph | YES | Concrete runtime-assembly sink injected by CLI | YES for structured relation candidates; full provider E2E NO | YES at store level | NO |
+| Commitments | YES | Concrete runtime-assembly sink injected by CLI | YES for explicit identity/signals; full conversation E2E NO | CAS/restart store tests | NO |
+| Persona | YES | Concrete runtime-assembly sink available; explicit identity required | YES when identity supplied; full conversation E2E NO | CAS/restart store tests | NO |
 | Activation | YES | Optional access-history adapter in coordinator | Selected-context writes access events | NO full ranking restart E2E | NO |
 | Consolidation | YES | Governed coordinator path | N/A | Governance tests | NO |
 | Proactive recall | YES, candidate-only | Explicit opt-in seam | TurnStart seam exists, default disabled | Unit only | NO |
@@ -105,11 +105,11 @@ The implementation deliberately keeps durable stores and runtime composition sep
 | Frontend `pnpm check` | PASS: 0 errors, 5 existing Svelte warnings |
 | Frontend `pnpm build` | PASS with same 5 warnings |
 | Tauri check | `TAURI_PACKAGING_BLOCKED`: required Windows sidecar is absent; official staging script exists, but the sidecar was not fabricated or downloaded |
-| Remote CI for final SHA | NO: `gh run list` returned no runs for the Memory branch |
+| Remote CI for final SHA | PASS: five required workflows completed successfully for head SHA `0104699917dda60438cf6e546dae4aff647ab8f5` |
 
 ## Known remaining limitations
 
-1. The typed sink contract is real and explicit, but the canonical CLI currently has no concrete commitment/persona/temporal relation sink injection. Therefore universal typed durable materialization is not claimed complete.
+1. The canonical CLI now injects `CanonicalMemoryTypedSink` backed by the shared SQLite pool. Automatic typed lifecycle remains conditional on explicit principal identity and structured candidate data; unknown identity is intentionally skipped.
 2. The coordinator activation source is wired and reads access history, but a full real-file ranking-after-restart proof is still missing.
 3. Proactive recall is candidate-only, bounded, opt-in, and has no daemon; full canonical provider receipt E2E remains deferred.
 4. Full provider-level real-file E2E distinguishing retrieved/selected/provider-received IDs remains not verified.
@@ -149,8 +149,8 @@ These remain NO because the strict acceptance criteria require all five main mem
 - Frontend checks/tests/build: **YES**, 5 warnings
 - Tauri: **TAURI_PACKAGING_BLOCKED**
 - Branch clean before report commit: **YES**
-- Final remote SHA: **YES** (`cba63e543cd73b4b543b06a96449283c9aa9eae5`)
-- Final-SHA remote CI: **NO** (no runs returned)
+- Final remote SHA: **YES** (`0104699917dda60438cf6e546dae4aff647ab8f5`)
+- Final-SHA remote CI: **YES** (five required workflows succeeded)
 
 ## Final acceptance values
 
