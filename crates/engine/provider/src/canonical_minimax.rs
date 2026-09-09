@@ -417,10 +417,10 @@ impl std::fmt::Debug for MinimaxProviderPlugin {
 /// Each configured id becomes a [`ProviderModel`]: a lower-cased canonical id
 /// (routing identity) paired with the original spelling as the vendor wire name
 /// (HTTP body identity). Features advertised are **only those the implementation
-/// actually supports**: this provider transports system messages (SystemPrompt)
-/// and honours a custom temperature, but sends `stream:false` and rejects
-/// tools/images/tool-results, so it does **not** advertise `Streaming`,
-/// `ToolCalls`, or `Vision` (§9/§30 — feature truthfulness).
+/// actually supports**: this provider transports system messages (SystemPrompt),
+/// tool declarations/calls/results (ToolCalls, 2026-09-08), and honours a
+/// custom temperature, but sends `stream:false` and rejects images, so it does
+/// **not** advertise `Streaming` or `Vision` (§9/§30 — feature truthfulness).
 fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<ProviderModel>> {
     if model_ids.is_empty() {
         return Err(PluginError::InvalidArguments {
@@ -440,7 +440,7 @@ fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<P
         models.push(ProviderModel::from_configured(
             model,
             id,
-            [ModelFeature::SystemPrompt],
+            [ModelFeature::SystemPrompt, ModelFeature::ToolCalls],
         )?);
     }
     Ok(models)
@@ -491,12 +491,12 @@ mod tests {
         assert!(cap.supports_model("MiniMax-M3"));
         assert!(cap.supports_model("minimax-m3"));
         assert!(!cap.supports_model("gpt-4o"));
-        // Feature truthfulness (§9/§30): only SystemPrompt is advertised. The
-        // implementation sends stream:false and rejects tools/images, so it
-        // must NOT claim Streaming, ToolCalls, or Vision.
+        // Feature truthfulness (§9/§30): SystemPrompt + ToolCalls (2026-09-08
+        // tool transport). The implementation sends stream:false and rejects
+        // images, so it must NOT claim Streaming or Vision.
         assert!(cap.models()[0].supports(ModelFeature::SystemPrompt));
+        assert!(cap.models()[0].supports(ModelFeature::ToolCalls));
         assert!(!cap.models()[0].supports(ModelFeature::Streaming));
-        assert!(!cap.models()[0].supports(ModelFeature::ToolCalls));
         assert!(!cap.models()[0].supports(ModelFeature::Vision));
     }
 
@@ -589,12 +589,29 @@ mod tests {
     }
 
     #[test]
-    fn adapt_request_rejects_tools_and_images() {
+    fn adapt_request_transports_tools_and_rejects_images() {
         let cap = capability(empty_resolver_slot());
+        // 工具声明进入原生 function 形状 (2026-09-08 tool transport).
         let mut req = request();
         req.tools
             .push(apeireth_protocol::canonical::NormalizedTool::new("t"));
-        let err = cap.adapt_request(&req).unwrap_err();
+        let body = cap.adapt_request(&req).expect("tools are transported");
+        assert_eq!(body["tools"].as_array().unwrap().len(), 1);
+        assert_eq!(body["tools"][0]["function"]["name"], "t");
+        // 图像仍拒绝 (未声明 Vision).
+        let mut img = request();
+        img.messages
+            .push(apeireth_protocol::canonical::NormalizedMessage {
+                role: apeireth_protocol::canonical::MessageRole::User,
+                content: vec![apeireth_protocol::canonical::ContentPart::ImageUrl {
+                    url: "https://example.invalid/i.png".into(),
+                    detail: None,
+                }],
+                tool_calls: Vec::new(),
+                tool_call_id: None,
+                name: None,
+            });
+        let err = cap.adapt_request(&img).unwrap_err();
         assert!(matches!(err, ProviderError::BadResponse { .. }));
     }
 

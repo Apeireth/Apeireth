@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Provider 工具传输 (tool transport)：真模型工具调用闭环 (2026-09-08)
+
+- **wire 层工具传输**（`openai_chat` 共享 helper）：工具声明（原生 function 形状）、assistant `tool_calls`、tool 结果消息（role=tool + tool_call_id）全部传输；响应侧解析 `choices[0].message.tool_calls` → `NormalizedResponse.tool_calls`；`tool_choice`（auto/none/required/specific）映射。图像仍拒绝（未声明 Vision）。
+- **能力真值更新**：minimax + openai-compatible 模型声明 `ToolCalls`（模块文档与 5 个测试同步翻转）；anthropic 保持不声明（wire 不同，未动）。
+- **首个真模型工具 E2E**（DeepSeek live 实测）：`APEIRETH_ENABLE_SHELL=1` 下模型真调用 `tool.shell` → 治理冻结（`capability tool.shell requires human approval`）→ `apeireth approve` → Trace 实证 `CapabilityDispatched/CapabilityCompleted(succeeded)` → 模型回报 "hello-from-apeireth" 退出码 0。完整"提议→审批→执行→回灌→总结"闭环在真 provider 上首次打通（此前仅有 mock E2E）。
+- 守门：3163 passed / 0 failed / 18 ignored（+2 wire 测试）；clippy 0 / fmt 0 / diff-check 0。
+
 ## [Unreleased] — 用户能力旋钮批：shell/fetch/organs/偏好学习 + Council 真工厂 (2026-09-08)
 
 - **新 env 旋钮**（CLI/gateway bootstrap，均为 `=1` 显式开启）：`APEIRETH_ENABLE_SHELL`（注册 tool.shell + 策略 grant + **require_approval**——每次调用走人工审批，fail-closed）、`APEIRETH_ENABLE_FETCH`（同语义，公网 GET-only）、`APEIRETH_ENABLE_ORGANS`、`APEIRETH_ENABLE_PREFERENCE_LEARNING`。既有旋钮 `APEIRETH_COGNITIVE_JUDGE`/`APEIRETH_COGNITIVE_COUNCIL` 一并文档化（INSTALL.md 新增"启用高级能力"章）。
