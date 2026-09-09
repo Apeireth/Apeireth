@@ -262,6 +262,10 @@ pub use research_derived_memory::{
 // (吸收自 arXiv:2605.07242 MEMOREPAIR; 自写 Dinic, 0 新外部依赖).
 pub mod derived_repair;
 pub use derived_repair::{RepairExecutor, RepairNode, RepairOutcome, RepairTradeoff};
+// B2 · RA-15 P0-A 生产接线 (opt-in, 默认关闭): 三段式协调遗忘
+// (吸收自 arXiv:2609.04875; 持久化遗忘集 V10 + 行为契约自验 + P0-B 结局应用).
+pub mod forget_coordinator;
+pub use forget_coordinator::{CoordinatedForget, CoordinatedForgetReport};
 // B2 · RA-15 P1-A (research, 默认关闭): 记忆准入控制 (吸收自 arXiv:2603.04549 A-MAC).
 pub mod admission_gate;
 pub use admission_gate::{

@@ -182,6 +182,24 @@ pub const MIGRATIONS: &[Migration] = &[
               );\n\
               CREATE INDEX IF NOT EXISTS idx_research_exec_state_taint ON research_execution_state(taint_kind, taint_id);",
     },
+    // B2 · RA-15 P0-A 生产接线 (2026-09-08): 持久化遗忘集.
+    // 治理语义的 forgotten set 从"调用方内存集"升级为 store 内持久事实
+    // (per docs/01-architecture/forget-three-phase-production-spec.md);
+    // GovernedRecall::from_store_persisted 读它; P0-B 修复再发布清标记.
+    // 纯新增表, 生产路径零触碰.
+    Migration {
+        version: 10,
+        name: "V10__research_forgotten_artifacts",
+        sql: "CREATE TABLE IF NOT EXISTS research_forgotten_artifacts (\n\
+              kind        TEXT NOT NULL,\n\
+              id          TEXT NOT NULL,\n\
+              reason      TEXT NOT NULL DEFAULT '',\n\
+              approval_id TEXT NOT NULL DEFAULT '',\n\
+              ts          INTEGER NOT NULL,\n\
+              PRIMARY KEY (kind, id)\n\
+              );\n\
+              CREATE INDEX IF NOT EXISTS idx_research_forgotten_ts ON research_forgotten_artifacts(ts);",
+    },
 ];
 
 const HALLWAYS_SQL: &str = r#"
@@ -647,8 +665,8 @@ mod tests {
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            5,
-            "V5/V6/V7/V8/V9 各一条"
+            6,
+            "V5/V6/V7/V8/V9/V10 各一条"
         );
     }
 

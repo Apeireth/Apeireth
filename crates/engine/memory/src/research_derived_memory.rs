@@ -122,6 +122,11 @@ impl ExecutionStateKind {
     }
 }
 
+/// 字符串 → 类别（forget_coordinator 复用；pub(crate) 不扩公开面）。
+pub(crate) fn execution_state_kind_from_str(s: &str) -> Option<ExecutionStateKind> {
+    ExecutionStateKind::from_str(s)
+}
+
 /// 执行态登记条目：该执行态由 `taint_source` 派生（该来源被遗忘 ⇒ 条目被污染）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExecutionStateEntry {
@@ -254,6 +259,11 @@ fn now_ms() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+/// 时间戳 helper（forget_coordinator 复用；pub(crate) 不扩公开面）。
+pub(crate) fn now_ms_pub() -> i64 {
+    now_ms()
 }
 
 impl SqliteMemoryStore {
@@ -642,6 +652,17 @@ impl GovernedRecall {
         self.mode = Some(mode);
         self.forgotten = forgotten.into_iter().collect();
         self
+    }
+
+    /// 从 store 持久化遗忘集构造（P0-A 生产接线, 2026-09-08）:
+    /// 治理遗忘集从"调用方内存集"升级为 store 内持久事实, 重启后仍过滤。
+    /// 等价于 `with_filter(mode, research_forgotten_set())`。
+    pub fn from_store_persisted(
+        store: std::sync::Arc<SqliteMemoryStore>,
+        mode: ClosureMode,
+    ) -> MemoryResult<Self> {
+        let forgotten: Vec<DerivedRef> = store.research_forgotten_set()?.into_iter().collect();
+        Ok(Self::new(store).with_filter(mode, forgotten))
     }
 
     /// 对候选派生项做血缘过滤：闭包内的项被排除；血缘不可见的项放行并标注

@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — P0-A 三段式协调遗忘生产接线 + P0-B 持久化 (2026-09-08)
+
+- **三段式协调遗忘**（`apeireth-memory::forget_coordinator`，opt-in 默认关闭）：设计 spec `docs/01-architecture/forget-three-phase-production-spec.md`；`research_coordinated_forget` 按"审计闭包 → P1 明文（episode sidecar + V10 持久化遗忘集）→ P2 派生标记 → P3 执行态注册行删除 + runtime 清理清单"执行，行为契约自验内建（`behavior_contract_verified`：清单空 + 根被排除 + 持久集覆盖闭包）。审批语义 = `approval_id` 引用上游工件，不内建第二审批权威（架构不变量）。
+- **持久化遗忘集**（V10 `research_forgotten_artifacts`）：`GovernedRecall::from_store_persisted` 使治理遗忘集跨重启生效（旧 `with_filter` 保留，等价性门）。
+- **P0-B 持久化接线**：`research_apply_repair_outcome` 把 `RepairExecutor` 结局应用到持久标记（仍撤回→标记；已修复再发布→清标记）+ repair_apply 审计事件。
+- 守门：3156 passed / 0 failed / 18 ignored（memory 680→684：+4 coordinator/持久化测试）；clippy 0 / fmt 0 / diff-check 0；0 新外部依赖。
+
 ## [Unreleased] — DeepSeek E2E 接线 + W1 推理型模型截断修复 (2026-09-08)
 
 - **OpenAI-compatible LlmFactory**（`apeireth-provider::openai_compatible_llm_factory`）：RC-5 `LlmFactory` 第二个真 backend（DeepSeek / 任意兼容端点）；与 MiniMax factory 同构（multi-instance 隔离 + single-transport 共享；key per-turn 走 CredentialResolver）。共享转换逻辑抽 `llm_factory_adapters`（pub(crate)，minimax factory 同步重构，0 复制粘贴）。
