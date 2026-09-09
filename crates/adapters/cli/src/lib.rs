@@ -9,7 +9,6 @@
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
 pub mod gateway_panels;
 pub mod keyring_bootstrap;
-pub mod llm_mirror_adapter;
 pub mod portable_bundle;
 
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
@@ -433,23 +432,26 @@ fn build_council_from_env() -> apeireth_orchestration::Council {
                 .next()
                 .unwrap_or_else(|| "deepseek-v4-flash".to_string());
             let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
-                Arc::new(llm_mirror_adapter::MirrorLlmFactory {
-                    inner: Arc::new(factory),
-                });
+                Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory)));
             return Council::with_factory(mirror, model);
         }
     }
-    if let Ok(factory) = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env() {
-        let model = factory
-            .model_ids()
-            .into_iter()
-            .next()
-            .unwrap_or_else(|| "MiniMax-M3".to_string());
-        let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
-            Arc::new(llm_mirror_adapter::MirrorLlmFactory {
-                inner: Arc::new(factory),
-            });
-        return Council::with_factory(mirror, model);
+    // MiniMax 回退仅在显式配了 MiniMax key 时成立 (0 装: 不凭空造一个会在
+    // 调用时才失败的 council).
+    if std::env::var("APEIRETH_API_KEY")
+        .ok()
+        .is_some_and(|v| !v.trim().is_empty())
+    {
+        if let Ok(factory) = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env() {
+            let model = factory
+                .model_ids()
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "MiniMax-M3".to_string());
+            let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
+                Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory)));
+            return Council::with_factory(mirror, model);
+        }
     }
     Council::default_llm()
 }

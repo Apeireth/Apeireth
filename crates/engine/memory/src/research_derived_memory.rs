@@ -254,16 +254,12 @@ pub fn dual_rater_protocol(a: &JudgeVerdict, b: &JudgeVerdict) -> DualRaterResul
     }
 }
 
-fn now_ms() -> i64 {
+/// 时间戳 helper（forget_coordinator 复用；pub(crate) 不扩公开面）。
+pub(crate) fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
-}
-
-/// 时间戳 helper（forget_coordinator 复用；pub(crate) 不扩公开面）。
-pub(crate) fn now_ms_pub() -> i64 {
-    now_ms()
 }
 
 impl SqliteMemoryStore {
