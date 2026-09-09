@@ -56,6 +56,8 @@ pub use trace::*;
 pub mod causal_world_model;
 #[path = "canonical/cognitive.rs"]
 pub mod cognitive;
+#[path = "canonical/cost_telemetry.rs"]
+pub mod cost_telemetry;
 #[path = "canonical/harness_patch.rs"]
 pub mod harness_patch;
 #[path = "canonical/orchestrator.rs"]

@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — P1-B 回合级测点适配器 (2026-09-08)
+
+- **`runtime-assembly::canonical::cost_telemetry::record_turn_cost`**（opt-in 默认关闭）：把 canonical 回合实测（NormalizedUsage token / 延迟 / context_rot 失真）记进统一成本账本 Context 层；Summary/Cache/Vault 层由子系统专有测点供给（0 装不代报）。生产面板接线（composition 持账本 + B 块前端消费曲线）留 B 块。
+- 守门：3158 passed / 0 failed / 18 ignored（+2 测点测试）；clippy 0 / fmt 0 / diff-check 0。
+
 ## [Unreleased] — P0-A 三段式协调遗忘生产接线 + P0-B 持久化 (2026-09-08)
 
 - **三段式协调遗忘**（`apeireth-memory::forget_coordinator`，opt-in 默认关闭）：设计 spec `docs/01-architecture/forget-three-phase-production-spec.md`；`research_coordinated_forget` 按"审计闭包 → P1 明文（episode sidecar + V10 持久化遗忘集）→ P2 派生标记 → P3 执行态注册行删除 + runtime 清理清单"执行，行为契约自验内建（`behavior_contract_verified`：清单空 + 根被排除 + 持久集覆盖闭包）。审批语义 = `approval_id` 引用上游工件，不内建第二审批权威（架构不变量）。
