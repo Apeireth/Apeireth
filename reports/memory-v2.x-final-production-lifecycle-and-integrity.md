@@ -12,8 +12,8 @@
 | Pre-rebase Memory SHA | `bccc9253ce2d66acd089640df29c26f6d710f2f1` |
 | Next SHA rebased onto | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
 | Post-rebase base / merge-base | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
-| Final Memory SHA before push | `07092c24` |
-| Final remote Memory SHA | `07092c24` |
+| Final Memory SHA before push | `d2fdbbb3ef6fd69fff6578855c3c8da98c307ce5` |
+| Final remote Memory SHA | `d2fdbbb3ef6fd69fff6578855c3c8da98c307ce5` |
 | Final next SHA | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
 | Final relation before push | `0 ahead / 5 behind` by `rev-list --left-right --count next...Memory` |
 | Main SHA | `71774651f4256993936b37cd4f265e5bc45c8e33` |
@@ -105,7 +105,7 @@ The implementation deliberately keeps durable stores and runtime composition sep
 | Frontend `pnpm check` | PASS: 0 errors, 5 existing Svelte warnings |
 | Frontend `pnpm build` | PASS with same 5 warnings |
 | Tauri check | `TAURI_PACKAGING_BLOCKED`: required Windows sidecar is absent; official staging script exists, but the sidecar was not fabricated or downloaded |
-| Remote CI for final SHA | PASS: five required workflows completed successfully for head SHA `07092c24` |
+| Remote CI for final SHA | PARTIAL: formatter, deny, and audit passed; Clippy failed during Ubuntu dependency installation due an external Google Chrome apt `Hash Sum mismatch`; Rust tests remained in progress at report time |
 
 ## Known remaining limitations
 
