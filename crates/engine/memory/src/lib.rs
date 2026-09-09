@@ -79,6 +79,7 @@ pub mod online_calibration;
 pub mod partner;
 pub mod persistent_vector;
 pub mod principles;
+pub mod proactive_recall;
 pub mod procedural;
 pub mod query_expand;
 pub mod reflexion;
@@ -214,6 +215,7 @@ pub use principles::{
     check_dynamic_principles, constant_time_eq, DynamicPrinciple, InMemoryPrincipleStore,
     PrincipleStatus, PrincipleStore, PromotionCandidate,
 };
+pub use proactive_recall::{ProactiveRecallPolicy, ProactiveRecallService};
 pub use query_expand::{expand_query, ExpandedQuery};
 pub use topic_predictor::{
     CompositeChannel, ImportanceChannel, KeywordChannel, PreloadChannel, TimeChannel, TopicCue,
@@ -301,6 +303,7 @@ pub mod coordinator;
 pub mod extraction;
 pub mod facade;
 pub mod layers;
+pub mod memory_materializer;
 pub mod persona_store_sqlite;
 pub mod reconciler;
 pub mod retrieval_pipeline;
@@ -308,7 +311,8 @@ pub mod scope;
 pub mod temporal_graph_store;
 
 pub use access_history::{
-    act_r_activation, AccessEvent, AccessHistoryError, SqliteAccessHistoryStore,
+    act_r_activation, AccessEvent, AccessHistoryActivationSource, AccessHistoryError,
+    ActivationSource, SqliteAccessHistoryStore,
 };
 pub use commitments::{
     Commitment, CommitmentError, CommitmentEvent, CommitmentEventRecord, CommitmentKind,
@@ -328,12 +332,18 @@ pub use context_window::{ContextWindow, ContextWindowManager, ContextWindowPolic
 pub use continuity_state::{ContinuityCompressor, ContinuityState};
 pub use coordinator::MemoryCoordinator;
 pub use extraction::{
-    ExtractedMemory, ExtractionClass, MemoryExtractionInput, MemoryExtractionMessage,
-    MemoryExtractionResult, MemoryExtractor, RuleMemoryExtractor,
+    CommitmentCandidate, CommitmentSignal, ExtractedMemory, ExtractionClass, MemoryExtractionInput,
+    MemoryExtractionMessage, MemoryExtractionResult, MemoryExtractor, RuleMemoryExtractor,
 };
 pub use layers::{
     MemoryLayerKind, MemoryRecallQuery, MemoryRecallResult, MemoryWritebackEntry,
     RecalledMemoryItem,
+};
+pub use memory_materializer::{
+    BoundedMemoryInput, MaterializedMemoryEpisode, MemoryMaterializationOutcome,
+    MemoryMaterializationReport, MemoryMaterializationSink, MemoryMaterializationStatus,
+    MemoryMaterializer, MemoryMaterializerPort, MemorySinkReport, MemoryTypedCandidate,
+    MemoryTypedMaterializationSink, RelationCandidate,
 };
 pub use reconciler::{
     MemoryReconciler, MemoryReconciliationDecision, MemoryReconciliationOutcome,

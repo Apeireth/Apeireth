@@ -9,8 +9,9 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::Clock;
 use apeireth_memory::{
-    ContextWindowManager, EmbeddingProvider, MemoryCoordinator, MemoryExtractor,
-    MemoryGovernanceStore, ScopedMemoryBackend, SqliteAccessHistoryStore,
+    AccessHistoryActivationSource, ContextWindowManager, EmbeddingProvider, MemoryCoordinator,
+    MemoryExtractor, MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
+    ProactiveRecallPolicy, ScopedMemoryBackend, SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::Council;
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEntryStore};
@@ -106,6 +107,8 @@ pub fn with_memory_context_projection(
 pub struct ProductionModulesConfig {
     /// Register memory recall when a memory backend is supplied.
     pub memory_recall: bool,
+    /// Opt-in deterministic proactive recall policy; disabled by default.
+    pub proactive_recall: Option<ProactiveRecallPolicy>,
     /// Register AfterTurn memory writeback when a memory backend is supplied.
     pub memory_writeback: bool,
     /// Register preference recall when a preference store is supplied.
@@ -143,6 +146,7 @@ impl Default for ProductionModulesConfig {
     fn default() -> Self {
         Self {
             memory_recall: true,
+            proactive_recall: None,
             memory_writeback: true,
             preference_recall: true,
             self_assessment: true,
@@ -194,7 +198,9 @@ pub struct ProductionBackends {
     pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
     /// Optional durable selected-context access history.
     pub access_history: Option<Arc<SqliteAccessHistoryStore>>,
-    /// Optional unified extractor for bounded AfterTurn memory extraction.
+    /// Optional unified materializer for bounded AfterTurn memory writeback.
+    pub memory_materializer: Option<Arc<dyn MemoryMaterializerPort>>,
+    /// Optional unified extractor used to build a default materializer.
     pub memory_extractor: Option<Arc<dyn MemoryExtractor>>,
 }
 /// Compatibility alias for [`ProductionBackends`].
@@ -297,6 +303,11 @@ impl ProductionModules {
                 coordinator =
                     coordinator.with_experience(Arc::clone(graph), Arc::clone(associations));
             }
+            if let Some(history) = &backends.access_history {
+                coordinator = coordinator.with_activation_source(Arc::new(
+                    AccessHistoryActivationSource::new(Arc::clone(history), 0.5, 0.0),
+                ));
+            }
             shared_coordinator = Some(Arc::new(coordinator));
         }
 
@@ -319,6 +330,9 @@ impl ProductionModules {
             if let Some(history) = &backends.access_history {
                 let history: Arc<dyn MemoryRecallAccessStore> = history.clone();
                 module = module.with_access_store(history, Arc::clone(&clock));
+            }
+            if let Some(policy) = &config.proactive_recall {
+                module = module.with_proactive_recall(policy.clone());
             }
             modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }
@@ -391,7 +405,9 @@ impl ProductionModules {
             if let Some(coord) = &shared_coordinator {
                 module = module.with_coordinator(Arc::clone(coord));
             }
-            if let Some(extractor) = &backends.memory_extractor {
+            if let Some(materializer) = &backends.memory_materializer {
+                module = module.with_materializer(Arc::clone(materializer));
+            } else if let Some(extractor) = &backends.memory_extractor {
                 module = module.with_extractor(Arc::clone(extractor));
             }
             if let (Some(wiki), Some(graph), Some(associations)) =

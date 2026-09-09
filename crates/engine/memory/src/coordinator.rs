@@ -17,6 +17,7 @@ use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
 
+use crate::access_history::ActivationSource;
 use crate::consolidation::{ConsolidationReport, MemoryConsolidationJob};
 use crate::context_compiler::{ClosedWorldContextCompiler, SelectedMemoryAccess};
 use crate::continuity_state::{ContinuityCompressor, ContinuityState};
@@ -27,6 +28,7 @@ use crate::layers::{
 use crate::memory_governance::{
     GovernedEpisode, MemoryGovernanceError, MemoryGovernanceStatus, MemoryGovernanceStore,
 };
+use crate::proactive_recall::{ProactiveRecallPolicy, ProactiveRecallService};
 use crate::retrieval_pipeline::{
     Bm25LexicalCandidateSource, HybridRetrievalPipeline, MemoryCandidateSource, RetrievalStatus,
     StaticVectorCandidateSource,
@@ -35,6 +37,7 @@ use crate::scope::{
     EmbeddingProvider, MemoryCandidate, MemoryCandidateQuery, MemoryProvenance,
     MemoryRankingConfig, MemoryScope, ScopedMemoryBackend, ScoreComponents,
 };
+use crate::topic_predictor::TopicCue;
 use crate::MemoryError;
 
 const WORKING_RING_BUFFER_CAP: usize = 30;
@@ -53,6 +56,7 @@ pub struct MemoryCoordinator {
     compiler: ClosedWorldContextCompiler,
     consolidation: MemoryConsolidationJob,
     ranking: MemoryRankingConfig,
+    activation_source: Option<Arc<dyn ActivationSource>>,
 }
 
 impl MemoryCoordinator {
@@ -74,6 +78,7 @@ impl MemoryCoordinator {
             compiler: ClosedWorldContextCompiler::new(),
             consolidation: MemoryConsolidationJob::new(),
             ranking: MemoryRankingConfig::default(),
+            activation_source: None,
         }
     }
 
@@ -113,7 +118,14 @@ impl MemoryCoordinator {
         self
     }
 
-    /// Reference to the underlying governance store for direct mutations.
+    /// Attach an optional activation source. When absent, candidate activation
+    /// values remain unchanged for backwards-compatible ranking.
+    #[must_use]
+    pub fn with_activation_source(mut self, source: Arc<dyn ActivationSource>) -> Self {
+        self.activation_source = Some(source);
+        self
+    }
+
     pub fn governance(&self) -> &dyn MemoryGovernanceStore {
         self.governance.as_ref()
     }
@@ -567,6 +579,14 @@ impl MemoryCoordinator {
         vector_source: Option<StaticVectorCandidateSource>,
         now_ms: i64,
     ) -> Result<MemoryRecallResult, MemoryError> {
+        let mut candidates = candidates;
+        if let Some(source) = &self.activation_source {
+            for candidate in &mut candidates {
+                if let Some(activation) = source.activation(&candidate.id, now_ms) {
+                    candidate.score_components.activation = activation;
+                }
+            }
+        }
         let lexical_source = Bm25LexicalCandidateSource::new(candidates);
         let mut sources: Vec<&dyn MemoryCandidateSource> = vec![&lexical_source];
         if let Some(ref vs) = vector_source {
@@ -714,7 +734,45 @@ impl MemoryCoordinator {
         ))
     }
 
-    /// Compile a structured closed-world prompt overlay from a recall query.
+    /// Compile a bounded overlay after optional deterministic proactive candidate selection.
+    /// The policy is evaluated only against this invocation's retrieved candidates;
+    /// no storage, worker, or provider call is introduced.
+    pub fn compile_prompt_overlay_with_proactive_access(
+        &self,
+        query: &MemoryRecallQuery,
+        policy: &ProactiveRecallPolicy,
+        cue: &TopicCue,
+    ) -> Result<Option<SelectedMemoryAccess>, MemoryError> {
+        let mut recalled = self.recall(query)?;
+        let candidates = recalled
+            .items
+            .iter()
+            .map(|item| MemoryCandidate {
+                id: item.id.clone(),
+                layer: item.layer.as_str().to_string(),
+                scope: MemoryScope::Global,
+                content: item.content.clone(),
+                score: item.score,
+                score_components: item.score_components.unwrap_or_default(),
+                provenance: MemoryProvenance::default(),
+            })
+            .collect::<Vec<_>>();
+        let selected = ProactiveRecallService::new(policy.clone()).recall(cue, &candidates);
+        let selected_ids = selected
+            .iter()
+            .map(|candidate| candidate.id.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        recalled
+            .items
+            .retain(|item| selected_ids.contains(item.id.as_str()));
+        Ok(self.compiler.compile_with_selected_access(
+            &recalled,
+            &query.session_id,
+            query.max_chars,
+        ))
+    }
+
+    /// Compile a structured closed-world prompt overlay from a memory recall query.
     pub fn compile_prompt_overlay(
         &self,
         query: &MemoryRecallQuery,
