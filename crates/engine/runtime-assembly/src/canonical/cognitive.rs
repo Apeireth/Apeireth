@@ -13,8 +13,9 @@ use std::time::Instant;
 use apeireth_core::kernel::{Clock, Episode, SessionId};
 use apeireth_memory::{
     BoundedMemoryInput, MemoryCoordinator, MemoryExtractor, MemoryMaterializer,
-    MemoryMaterializerPort, MemoryRecallQuery, MemoryScope, ProactiveRecallPolicy,
-    ProactiveRecallService, RuleMemoryExtractor, SelectedMemoryAccess, SqliteAccessHistoryStore,
+    MemoryMaterializerPort, MemoryRecallQuery, MemoryScope, MemoryTypedMaterializationSink,
+    ProactiveRecallPolicy, ProactiveRecallService, RuleMemoryExtractor, SelectedMemoryAccess,
+    SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::{
     Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
@@ -605,6 +606,7 @@ pub struct MemoryWritebackModule {
     graph: Option<Arc<dyn KnowledgeGraphStore>>,
     associations: Option<Arc<dyn AssociationStore>>,
     materializer: Arc<dyn MemoryMaterializerPort>,
+    typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
 }
@@ -620,6 +622,7 @@ impl MemoryWritebackModule {
             graph: None,
             associations: None,
             materializer: Arc::new(MemoryMaterializer::default()),
+            typed_sink: None,
             clock,
             metrics: ModuleMetrics::default(),
         }
@@ -651,6 +654,12 @@ impl MemoryWritebackModule {
     #[must_use]
     pub fn with_materializer(mut self, materializer: Arc<dyn MemoryMaterializerPort>) -> Self {
         self.materializer = materializer;
+        self
+    }
+
+    #[must_use]
+    pub fn with_typed_sink(mut self, sink: Arc<dyn MemoryTypedMaterializationSink>) -> Self {
+        self.typed_sink = Some(sink);
         self
     }
 
@@ -737,6 +746,34 @@ impl AgentModule for MemoryWritebackModule {
                     max_messages: 2,
                     max_message_chars: 4_096,
                 };
+                if let Some(sink) = &self.typed_sink {
+                    let typed_input = BoundedMemoryInput {
+                        scope: MemoryScope::Session {
+                            session_id: episodes[0].session_id.clone(),
+                        },
+                        source_session: Some(episodes[0].session_id.clone()),
+                        source_trace: None,
+                        source_request: Some(candidate.id.clone()),
+                        messages: episodes
+                            .iter()
+                            .map(|episode| apeireth_memory::MemoryExtractionMessage {
+                                role: episode.role.clone(),
+                                content: episode.content.clone(),
+                            })
+                            .collect(),
+                        max_messages: 2,
+                        max_message_chars: 4_096,
+                    };
+                    if self
+                        .materializer
+                        .materialize_typed(typed_input, now, sink.as_ref())
+                        .await
+                        .is_err()
+                    {
+                        self.metrics.warning();
+                    }
+                }
+
                 match self.materializer.materialize_episodes(input, now).await {
                     Ok(materialized) => {
                         for item in materialized {

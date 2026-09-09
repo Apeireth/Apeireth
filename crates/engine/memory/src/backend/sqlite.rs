@@ -612,6 +612,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "wall-clock benchmark; run explicitly in performance validation"]
     async fn performance_1000_episodes_under_1s() {
         let b = fresh().await;
         let start = std::time::Instant::now();

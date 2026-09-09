@@ -206,6 +206,18 @@ pub trait MemoryMaterializerPort: Send + Sync {
         input: BoundedMemoryInput,
         timestamp_secs: i64,
     ) -> Result<Vec<MaterializedMemoryEpisode>, MemoryError>;
+
+    /// Materialize one turn including typed projections when a sink is supplied.
+    /// The default keeps compatibility for lightweight embedding implementations.
+    async fn materialize_typed(
+        &self,
+        input: BoundedMemoryInput,
+        timestamp_secs: i64,
+        sink: &dyn MemoryTypedMaterializationSink,
+    ) -> Result<MemorySinkReport, MemoryError> {
+        let _ = (input, timestamp_secs, sink);
+        Ok(MemorySinkReport::default())
+    }
 }
 
 pub struct MemoryMaterializer<E = RuleMemoryExtractor> {
@@ -231,6 +243,19 @@ where
         timestamp_secs: i64,
     ) -> Result<Vec<MaterializedMemoryEpisode>, MemoryError> {
         MemoryMaterializer::materialize_episodes(self, input, timestamp_secs).await
+    }
+
+    async fn materialize_typed(
+        &self,
+        input: BoundedMemoryInput,
+        timestamp_secs: i64,
+        sink: &dyn MemoryTypedMaterializationSink,
+    ) -> Result<MemorySinkReport, MemoryError> {
+        let existing: Vec<MemoryReconciliationRecord> = Vec::new();
+        let (_report, sink_report) = self
+            .materialize_to_typed_sink(input, &existing, timestamp_secs, sink)
+            .await?;
+        Ok(sink_report)
     }
 }
 
@@ -309,7 +334,7 @@ where
     /// Deliver every typed candidate in the report to a storage-independent sink.
     /// A skipped outcome is retained in the returned counts and is not presented as
     /// automatic persistence.
-    pub async fn materialize_typed_to_sink<S: MemoryTypedMaterializationSink>(
+    pub async fn materialize_typed_to_sink<S: MemoryTypedMaterializationSink + ?Sized>(
         &self,
         report: &MemoryMaterializationReport,
         sink: &S,
@@ -334,7 +359,7 @@ where
     }
 
     /// Materialize episodes and typed projections, then deliver both sinks.
-    pub async fn materialize_to_typed_sink<S: MemoryTypedMaterializationSink>(
+    pub async fn materialize_to_typed_sink<S: MemoryTypedMaterializationSink + ?Sized>(
         &self,
         input: BoundedMemoryInput,
         existing: &[MemoryReconciliationRecord],
