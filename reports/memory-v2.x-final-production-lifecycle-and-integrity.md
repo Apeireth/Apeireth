@@ -9,107 +9,115 @@
 
 | Item | Value |
 |---|---|
-| Original Memory SHA | `3dac5b2c2088241f472ce25e3f35b097805ced1b` |
-| Memory feature base | `1373287744e9ad682de48eebf82c442f500b2a9d` |
-| Initial/final fetched cognitive-next SHA | `d359868f8d3332af0a5f4d118c6e8ec26e598cf9` |
-| Final Memory SHA | `a4884aaaac065481479716d6a9b00f67dd3565f9` |
-| Final remote Memory SHA | `a4884aaaac065481479716d6a9b00f67dd3565f9` |
-| Final next SHA observed | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
-| Final relation to next | `0 ahead / 3 behind` by `rev-list --left-right --count next...Memory` (the three commits are the Memory branch commits) |
+| Pre-rebase Memory SHA | `35931b49d790ea92cb6b1735e18b1dd8e4d94dce` |
+| Next SHA rebased onto | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
+| Post-rebase base / merge-base | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
+| Final Memory SHA before push | `08c5a0cf855a064d6a3263a0db5c8ebe608ddf4d` |
+| Final remote Memory SHA | pending final push |
+| Final next SHA | `9c7ae92757ea8317489964a1324b1ba2120c6365` |
+| Final relation before push | `0 ahead / 5 behind` by `rev-list --left-right --count next...Memory` |
 | Main SHA | `71774651f4256993936b37cd4f265e5bc45c8e33` |
 
-The branch was already based on the fetched cognitive-next history; no rebase was needed. Guard files and classifier training logic were not modified. The Memory branch was pushed without force.
+The Memory branch was rebased onto the latest fetched next. Guard and classifier training logic were not modified. No model training was performed. The Memory branch was not merged into next or main.
 
 ## Architecture delivered
 
 ```text
 committed conversation turn
-  -> AfterTurn bounded user + assistant messages
-  -> RuleMemoryExtractor (injectable; fail-open warning)
-  -> typed extracted memories / provenance / scope
-  -> deterministic MemoryReconciler (pure, no SQL)
-  -> governed durable SQLite episode stores
-  -> MemoryCoordinator recall (scope + governance + lexical/vector/graph layers)
-  -> ranking, deduplication, budget, selected-context access audit
-  -> runtime-owned ContextProjector / MemoryContextProjector
+  -> bounded AfterTurn user + assistant input
+  -> injectable MemoryMaterializer
+  -> RuleMemoryExtractor / typed candidates
+  -> validation, scope, deterministic reconciliation
+  -> governed episodic projection and typed sink contract
+  -> MemoryCoordinator recall
+  -> hybrid ranking + optional persisted ACT-R activation
+  -> diversity/budget and selected-context access audit
+  -> optional bounded candidate-only proactive recall
+  -> runtime-owned ContextProjector
   -> provider payload
 ```
 
-Existing canonical SQLite, governance, recall, graph, preference, and self-assessment paths remain the production composition root. Added lifecycle helpers do not create a second database manager.
+The implementation deliberately keeps durable stores and runtime composition separate. `MemoryMaterializationSink` and typed sink ports do not claim persistence when no concrete sink is configured.
 
-## Implemented changes
+## Implemented changes in this closure
 
-- Unified injectable AfterTurn `MemoryExtractor` path using one bounded turn input; secrets, prompt-injection text, credentials, and hidden reasoning remain filtered; failures are warnings and do not fail a committed turn.
-- Added deterministic, store-independent `MemoryReconciler` with typed/scope-aware duplicate, reinforcement, and revision outcomes.
-- Added `MemoryMutationFacade` for commitment creation/completion and persona CAS updates using existing durable stores.
-- Consolidation now consumes governance-resolved episodes and excludes forgotten records.
-- Unknown provider context limits preserve the transcript and do not trigger aggressive compaction.
-- Added real file-backed restart/recall/forget/protect integration tests.
-- Added temporal graph supersede/current/history/as-of and bounded cycle-safe traversal tests.
+- Rebased the isolated Memory branch onto `9c7ae927`.
+- Added bounded `MemoryMaterializer` and object-safe runtime port; AfterTurn now invokes one materialization boundary instead of duplicating generic extraction writes.
+- Added stable content-derived materialization IDs, typed commitment/persona/relation candidate projections, sink outcomes, and explicit skipped-sink semantics.
+- Added structured commitment signals and conservative hedged-commitment rejection (`might`, `may`, `sometime`, and equivalents).
+- Connected optional SQLite access history to coordinator activation scoring through a trait-based source; absence remains backward-compatible.
+- Added opt-in, budgeted, candidate-only `ProactiveRecallService` and TurnStart configuration seam; default remains disabled and no background task is created.
+- Added old-fixture migration/idempotence coverage and an executable SQLite query-plan assertion that the validity query uses an index and avoids a full table scan.
+- Preserved unknown provider context-limit safety and existing governance/forget/protect behavior.
 
 ## Status matrix
 
-| Memory type / service | Implemented | Production wired | Vertical/restart evidence |
-|---|---:|---:|---:|
-| Episodic SQLite | YES | YES | YES |
-| Facts / preferences via extractor | YES | AfterTurn episodic path YES; semantic projection partial | Extractor + restart tests YES |
-| Temporal graph store | YES | Existing experience path; tested store lifecycle | YES for supersede/as-of; full AfterTurn graph E2E NO |
-| Commitments | YES | Facade callable; automatic AfterTurn commitment materialization DEFERRED | Store CAS tests YES; full conversation E2E NO |
-| Persona | YES | Facade callable; automatic AfterTurn persona materialization DEFERRED | CAS/restart store tests YES; full conversation E2E NO |
-| Activation | Existing score fields/access history | Selected-context recorder YES; durable ACT-R update into final production score NOT proven | NO full restart ranking proof |
-| Consolidation | Governed callable coordinator path | YES | Governed filtering tests YES |
-| Proactive recall | No complete scheduler/service found | NO | DEFERRED |
-| Context projection | Runtime port and production projector | YES | Unknown-limit and runtime tests YES |
-| Diversity/MMR | Existing retrieval logic | Existing coordinator path | Unit coverage YES; large corpus benchmark NO |
+| Memory type / service | Implemented | Production wired | AfterTurn wired | Restart tested | Provider E2E |
+|---|---:|---:|---:|---:|---:|
+| Episodic SQLite | YES | YES | YES | YES | PARTIAL |
+| Facts | YES | Generic episode/materializer path | YES as bounded candidate | YES at episode/coordinator level | NO |
+| Preferences | YES | Generic episode/materializer path; existing preference owner remains separate | YES as candidate | PARTIAL | NO |
+| Temporal graph | YES | Existing experience path and bounded store | PARTIAL; typed relation sink is explicit but no concrete CLI sink | YES at store level | NO |
+| Commitments | YES | Facade and typed candidate contract | PARTIAL; automatic durable commitment sink not configured in canonical CLI | CAS/restart store tests | NO |
+| Persona | YES | Facade and typed candidate contract | PARTIAL; automatic durable persona sink not configured in canonical CLI | CAS/restart store tests | NO |
+| Activation | YES | Optional access-history adapter in coordinator | Selected-context writes access events | NO full ranking restart E2E | NO |
+| Consolidation | YES | Governed coordinator path | N/A | Governance tests | NO |
+| Proactive recall | YES, candidate-only | Explicit opt-in seam | TurnStart seam exists, default disabled | Unit only | NO |
+| Context projection | YES | Runtime port + production projector | N/A | YES for unknown limit/invariants | PARTIAL |
 
-## Security and privacy matrix
+## Governance / privacy matrix
 
 | Property | Status |
 |---|---|
-| Fail-narrow scope defaults | YES for coordinator/extractor session scope |
-| Forget filters normal recall and governed consolidation | YES; graph/persona/commitment/proactive full bypass matrix not fully proven |
+| Fail-narrow scope defaults | YES for bounded extractor/coordinator session scope |
+| Governance before generic durable episode mutation | YES through coordinator; typed sinks are explicit and cannot claim unconfigured persistence |
+| Forget excludes normal recall/consolidation | YES |
+| Full graph/persona/commitment/proactive bypass matrix | NOT_VERIFIED |
 | Protect blocks forget and preserves append-only provenance | YES in existing governance tests |
 | Credential filtering | YES |
 | Hidden reasoning / CoT filtering | YES |
-| Prompt injection represented as untrusted evidence | Extractor rejects injection candidates; full provider evidence E2E DEFERRED |
-| Provenance / source lineage | Existing episode provenance plus extractor provenance; reconciler output carries candidate provenance |
-| Raw query in selected access history | NO: selected recorder passes `query = None` |
+| Prompt-injection candidate filtering | YES for deterministic extractor; full provider-evidence E2E NOT_VERIFIED |
+| Query privacy in selected access history | YES: selected recorder stores no raw query |
 | Low-cardinality telemetry | YES |
+| No model training / no Guard ML | YES |
 
 ## Validation matrix
 
 | Gate | Result |
 |---|---|
-| `cargo check -p apeireth-memory` | PASS |
+| Rebase onto next | PASS: post-rebase base/merge-base `9c7ae927` |
+| `cargo fmt --all -- --check` | PASS |
 | `cargo check --workspace --all-targets --locked` | PASS |
 | `cargo test --workspace --all-targets --locked` | PASS |
-| `cargo test -p apeireth-memory --tests` | PASS (all suites; 710 library tests plus integration suites) |
-| `cargo test -p apeireth-runtime-assembly --lib` | PASS (35 tests) |
+| `cargo test -p apeireth-memory --tests` | PASS |
+| Memory library tests | PASS on rerun; one timing-sensitive 1000-write threshold failed once at 1.006s, then passed on immediate rerun at 0.17s |
+| `cargo test -p apeireth-runtime-assembly --lib` | PASS: 35 tests |
 | `cargo clippy --workspace --all-targets --locked -- -D warnings` | PASS |
-| `cargo fmt --all -- --check` | PASS |
+| `cargo deny check` | PASS with existing skip/license configuration warnings |
+| `cargo audit` | PASS with existing allowed yanked `chacha20 0.10.1` warning |
+| Old fixture migration/idempotence tests | PASS |
+| SQLite query-plan test | PASS; indexed plan, no full table scan |
 | `git diff --check` | PASS |
-| `git fsck --no-progress` | PASS; reports existing dangling objects only |
-| `cargo deny check` | PASS with existing configuration warnings |
-| `cargo audit` | PASS with one allowed yanked warning: `chacha20 0.10.1` |
-| Frontend `pnpm install --frozen-lockfile` | PASS |
-| Frontend `pnpm test` | PASS (7/7 suites) |
-| Frontend `pnpm check` | PASS: 0 errors, 5 pre-existing Svelte warnings |
-| Frontend `pnpm build` | PASS with the same 5 warnings |
-| Tauri `cargo check --locked` | DEFERRED/FAIL: referenced `src-tauri/binaries/apeireth-x86_64-pc-windows-msvc.exe` is absent in this worktree |
-| Runtime dependency wall | Existing architecture preserved; no new runtime concrete memory dependency introduced |
-| Legacy dependency search | No new legacy Memory dependency introduced |
-| Remote CI | NO: no completed required workflow evidence for final Memory SHA was available |
+| `git fsck --no-progress` | PASS; existing dangling objects reported, no corruption |
+| Runtime dependency wall | PASS; runtime has no concrete `apeireth-memory`, rusqlite, storage, or runtime-assembly dependency |
+| Legacy Memory dependency search | PASS for changed production path; only archived/reference matches remain |
+| Frontend `pnpm test` | PASS: 7/7 suites |
+| Frontend `pnpm check` | PASS: 0 errors, 5 existing Svelte warnings |
+| Frontend `pnpm build` | PASS with same 5 warnings |
+| Tauri check | `TAURI_PACKAGING_BLOCKED`: required Windows sidecar is absent; official staging script exists, but the sidecar was not fabricated or downloaded |
+| Remote CI for final SHA | NOT_VERIFIED until final push and workflow lookup |
 
-## Known deferrals and limitations
+## Known remaining limitations
 
-1. No existing host scheduler was found, so no fake background proactive daemon was added. A candidate-only proactive service and trigger policy remain DEFERRED.
-2. Commitment and persona durable stores/facades are production-callable, but automatic AfterTurn materialization from extracted candidates is not yet a complete vertical path.
-3. Full provider-level real-file E2E for relation, commitment, persona, forget/protect bypasses, and retrieved-vs-selected-vs-provider-received metrics remains DEFERRED.
-4. Durable ACT-R activation update/restart influence in the final coordinator score is not proven end-to-end.
-5. Tauri check requires the missing sidecar binary; frontend and Rust workspace gates are independent and passed.
-6. Large-scale retrieval/performance and hardware validation were not run; no fabricated benchmark numbers are reported.
+1. The typed sink contract is real and explicit, but the canonical CLI currently has no concrete commitment/persona/temporal relation sink injection. Therefore universal typed durable materialization is not claimed complete.
+2. The coordinator activation source is wired and reads access history, but a full real-file ranking-after-restart proof is still missing.
+3. Proactive recall is candidate-only, bounded, opt-in, and has no daemon; full canonical provider receipt E2E remains deferred.
+4. Full provider-level real-file E2E distinguishing retrieved/selected/provider-received IDs remains not verified.
+5. Broad fault-injection and concurrency matrix remains partial; CAS and fail-open behavior have targeted coverage.
+6. Tauri packaging requires the legitimate sidecar staging script and a buildable Windows sidecar; no opaque or placeholder executable was created.
+7. Large-scale retrieval benchmark and hardware validation were not run.
 
-## Final statuses
+## Strict final statuses before final push
 
 ```text
 MEMORY_PRODUCTION_LIFECYCLE_COMPLETE = NO
@@ -118,43 +126,36 @@ MEMORY_FREEZE_READY = NO
 CI_VERIFIED = NO
 ```
 
-`MEMORY_PRODUCTION_LIFECYCLE_COMPLETE` is NO because the requested end-to-end chain is not fully proven for all planned main types (especially automatic commitment/persona/graph materialization and provider receipt). `MEMORY_INTEGRATION_READY` is NO under the strict definition because the Tauri gate is blocked and no remote CI evidence is available, despite the Memory branch being clean and pushed. `MEMORY_FREEZE_READY` is NO because the remaining P1-level lifecycle coverage gaps are explicitly deferred rather than hidden.
+These remain NO because the strict acceptance criteria require all five main memory types to pass real AfterTurn → materialize → restart → recall → context/provider E2E, plus complete governance bypass, concurrency, and final-SHA CI evidence. The missing evidence is recorded as `PARTIAL`, `DEFERRED`, or `NOT_VERIFIED`, not represented as a pass.
 
-## DoD checklist (honest status)
+## DoD summary
 
-- Branch rebased onto final fetched next: **YES**
-- Guard code preserved / no ML training: **YES**
-- RuleMemoryExtractor production-wired: **YES**
-- AfterTurn structured candidate path: **YES**
-- Governance before storage: **PARTIAL** (existing coordinator governance; reconciler is pure and not yet the universal materializer)
-- Facts deduplicate/reinforce: **YES** in deterministic reconciler; full durable materializer **NO**
-- Fact contradictions: **PARTIAL**
-- Temporal persistence/superseding/current-history/as-of: **YES** at store level
-- Graph recall production-wired: **PARTIAL**
-- Commitment persistence/completion/recall: **YES** at store/facade level; automatic lifecycle **NO**
-- Persona persistence/CAS/restart: **YES** at store/facade level; automatic lifecycle **NO**
-- Scope fail-narrow/cross-user isolation: **YES** in existing coordinator/store tests
-- Selected-context-only access history: **YES**
-- ACT-R final ranking and restart: **NO**
-- Central truthful score policy/MMR production proof: **PARTIAL**
-- Forget/protect normal paths: **YES**; all requested bypass paths **NO full E2E**
-- Governed callable consolidation: **YES**
-- Proactive candidate-only recall/budget: **NO / DEFERRED**
-- Context projector production wiring and unknown-limit safety: **YES**
-- Transcript/latest user/tool structure invariants: **PARTIAL**
-- Injection remains untrusted evidence: **PARTIAL**
-- Additive/idempotent migration: **YES** existing V1–V10; old-fixture full coverage **PARTIAL**
-- Real file restart E2E: **YES** for episodic coordinator path
-- Temporal contradiction/commitment/persona/forget/protect full vertical E2E: **NO**
-- Fault injection/concurrency/CAS: **PARTIAL** (CAS and fail-closed unit coverage; broad fault/concurrency matrix absent)
-- Privacy audit/runtime wall/no legacy dependency: **YES** for changed path
-- Rust fmt/check/test/clippy: **YES**
-- deny/audit: **YES with recorded warnings**
-- Frontend install/test/check/build: **YES** (check/build have 5 warnings)
-- Tauri check: **NO** due missing sidecar binary
-- Git integrity/clean tree: **YES** after report creation is committed
-- Branch pushed/final SHA confirmed: **YES** (`a4884aaa...`)
-- Remote CI checked: **NO evidence**
-- Memory Production Lifecycle Complete: **NO**
-- Memory Integration Ready: **NO**
-- Memory Freeze Ready: **NO**
+- Rebased onto final next: **YES**
+- Guard 3.3 preserved / no Guard ML: **YES**
+- Universal materializer boundary implemented: **YES**, typed durable sink completion **PARTIAL**
+- Governance before generic storage: **YES**, all typed store paths **PARTIAL**
+- Fact/preference candidate extraction and deterministic reconciliation: **YES** at generic candidate level
+- Fact/relation automatic durable typed materialization: **PARTIAL**
+- Temporal current/history/as-of and bounded traversal: **YES** at store level
+- Commitment candidate extraction and conservative hedge filtering: **YES**; automatic canonical durable lifecycle **PARTIAL**
+- Persona CAS facade and typed candidate: **YES**; automatic canonical AfterTurn profile update **PARTIAL**
+- Activation source enters coordinator candidate score when configured: **YES**; restart ranking proof **NOT_VERIFIED**
+- Proactive candidate-only service with budget/threshold: **YES**; full provider path **NOT_VERIFIED**
+- Forget/protect normal paths: **YES**; universal bypass table **NOT_VERIFIED**
+- Consolidation governed path: **YES**
+- Context projector and unknown-limit safety: **YES**
+- Migration/idempotence/query-plan checks: **YES**
+- Rust workspace checks/tests/clippy: **YES**
+- Frontend checks/tests/build: **YES**, 5 warnings
+- Tauri: **TAURI_PACKAGING_BLOCKED**
+- Branch clean before report commit: **YES**
+- Final remote SHA and CI: **PENDING final push**
+
+## Final acceptance values
+
+```text
+MEMORY_PRODUCTION_LIFECYCLE_COMPLETE = NO
+MEMORY_INTEGRATION_READY = NO
+MEMORY_FREEZE_READY = NO
+CI_VERIFIED = NO
+```
