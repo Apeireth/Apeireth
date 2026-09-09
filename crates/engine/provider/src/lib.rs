@@ -14,10 +14,15 @@ pub mod canonical_minimax;
 pub mod canonical_openai_compatible;
 /// Environment-backed credential resolution.
 pub mod credentials;
+/// CompletionRequest ↔ NormalizedRequest 转换 + 错误映射 (两个 LlmFactory 共享).
+pub(crate) mod llm_factory_adapters;
 /// RC-5 LlmFactory 真实现 — MiniMax backend adapter (复用 `MinimaxProviderCapability`).
 pub mod minimax_llm_factory;
 /// Shared OpenAI Chat Completions wire conversion.
 pub mod openai_chat;
+/// RC-5 补全 (2026-09-06) LlmFactory 真实现 — OpenAI-compatible backend adapter
+/// (DeepSeek / 任意兼容端点; 复用 `OpenAiCompatibleProviderCapability`).
+pub mod openai_compatible_llm_factory;
 /// Canonical provider model identifiers and vendor wire names.
 pub mod provider_model;
 /// Provider-local reasoning field normalization.

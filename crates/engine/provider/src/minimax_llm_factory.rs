@@ -46,16 +46,13 @@ use std::sync::Arc;
 
 use apeireth_orchestration::SubagentRole;
 use apeireth_plugin::llm_factory::{
-    CompletionMessage, CompletionRequest, CompletionResponse, LlmError, LlmFactory, LlmInstance,
-    TokenUsage,
+    CompletionRequest, CompletionResponse, LlmError, LlmFactory, LlmInstance,
 };
 use apeireth_plugin::{CredentialResolver, ProviderCapability, ProviderError};
-use apeireth_protocol::canonical::{
-    ContentPart, MessageRole, NormalizedFinishReason, NormalizedMessage, NormalizedRequest,
-};
 use async_trait::async_trait;
 
 use crate::canonical_minimax::{MinimaxProviderCapability, MinimaxProviderPlugin};
+use crate::llm_factory_adapters;
 
 /// 工厂名字 (用于监控 / 日志; per llm_factory.rs:162 "factory 名字")。
 pub const FACTORY_NAME: &str = "minimax";
@@ -241,114 +238,6 @@ impl MinimaxLlmInstance {
     pub fn model(&self) -> &str {
         &self.model
     }
-
-    /// 转换 `CompletionRequest` (factory 边界) → `NormalizedRequest` (provider 边界)。
-    ///
-    /// **字段映射**:
-    /// - `system_prompt` → 头部 `NormalizedMessage::system(...)` (provider 内部决定 wire)
-    /// - `messages` (factory 风格 role/content 字符串) → `NormalizedMessage` (枚举 role + 多模 content)
-    /// - `temperature` (f64) → `temperature` (Option<f32>) (provider 内部序列化时按协议)
-    /// - `max_tokens` → `max_tokens`
-    /// - `tools` (factory 风格 JSON Value) → **0 装**: minimax 当前**不**支持 tool calls
-    ///   (per canonical_minimax.rs:148 `adapt_request` 拒绝 tools; `feature = ToolCalls` 0 装),
-    ///   传 tools → 返 `LlmError::Provider` (provider 自会返 `BadResponse`, 我们透传)
-    fn to_normalized(&self, req: &CompletionRequest) -> NormalizedRequest {
-        let mut messages = Vec::with_capacity(req.messages.len() + 1);
-        if !req.system_prompt.is_empty() {
-            messages.push(NormalizedMessage::system(&req.system_prompt));
-        }
-        for m in &req.messages {
-            messages.push(NormalizedMessage {
-                role: MessageRole::from_legacy_value(&m.role),
-                content: vec![ContentPart::Text {
-                    text: m.content.clone(),
-                }],
-                tool_calls: Vec::new(),
-                tool_call_id: None,
-                name: None,
-            });
-        }
-        NormalizedRequest {
-            model: self.model.clone(),
-            messages,
-            temperature: Some(req.temperature as f32),
-            max_tokens: req.max_tokens,
-            stream: false,
-            stop: Vec::new(),
-            tools: Vec::new(), // 0 装: minimax 0 装支持 tool calls (per capability feature truthfulness)
-            tool_choice: None,
-            metadata: Default::default(),
-        }
-    }
-
-    /// 转换 `NormalizedResponse` (provider 边界) → `CompletionResponse` (factory 边界)。
-    fn from_normalized(
-        &self,
-        resp: apeireth_protocol::canonical::NormalizedResponse,
-    ) -> CompletionResponse {
-        let finish_reason = match resp.finish_reason {
-            Some(NormalizedFinishReason::Stop) => "stop",
-            Some(NormalizedFinishReason::Length) => "length",
-            Some(NormalizedFinishReason::ToolCalls) => "tool_calls",
-            Some(NormalizedFinishReason::ContentFilter) => "content_filter",
-            Some(NormalizedFinishReason::StopSequence) => "stop_sequence",
-            Some(NormalizedFinishReason::Other) | None => "other",
-        }
-        .to_string();
-
-        let tool_calls: Vec<serde_json::Value> = resp
-            .tool_calls
-            .into_iter()
-            .map(|c| {
-                serde_json::json!({
-                    "id": c.id,
-                    "type": "function",
-                    "function": {
-                        "name": c.name,
-                        "arguments": c.arguments,
-                    }
-                })
-            })
-            .collect();
-
-        CompletionResponse {
-            message: CompletionMessage {
-                role: "assistant".into(),
-                content: resp.content,
-            },
-            tool_calls,
-            finish_reason,
-            usage: TokenUsage {
-                prompt_tokens: resp.usage.prompt_tokens,
-                completion_tokens: resp.usage.completion_tokens,
-                total_tokens: resp.usage.total_tokens,
-            },
-        }
-    }
-
-    /// 把 `ProviderError` 一对一映射到 `LlmError`。
-    ///
-    /// 映射保持 provider 已分类的语义 (transient vs permanent), 上层 router 拿到
-    /// `LlmError` 后可按 `is_retryable` 派生决定 fallback / 重试 (per ProviderError:86
-    /// `is_retryable`); LlmError 0 装重派生, 直接透传。
-    fn map_provider_error(&self, err: ProviderError) -> LlmError {
-        match err {
-            ProviderError::AuthFailed { detail, .. } => LlmError::Credentials(detail),
-            ProviderError::RateLimited { retry_after_ms, .. } => {
-                LlmError::RateLimited { retry_after_ms }
-            }
-            ProviderError::Timeout { timeout_ms, .. } => {
-                LlmError::Stream(format!("timeout after {timeout_ms}ms"))
-            }
-            ProviderError::Network { detail, .. } => LlmError::Network(detail),
-            ProviderError::BadResponse { detail, .. } => LlmError::Provider(detail),
-            ProviderError::Refused { detail, .. } => LlmError::Provider(detail),
-            // 0 装诚实: `ProviderError` 标 `#[non_exhaustive]`, 未来加 variant 时 (e.g.
-            // ContentFilter / PolicyViolation), 兜底成 LlmError::Provider, 0 panic.
-            // 0 装, 0 假装 "全分类完成".
-            other => LlmError::Provider(format!("unclassified provider error: {other}")),
-        }
-    }
 }
 
 #[async_trait]
@@ -356,17 +245,13 @@ impl LlmInstance for MinimaxLlmInstance {
     async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, LlmError> {
         // 0 装诚实: 0 重试, 0 fallback (per canonical_minimax.rs:23 "One retry owner per layer";
         // router 才拥有 fallback)。单次 HTTP, 错误透传。
-        let normalized = self.to_normalized(&req);
+        // Conversion 与错误映射复用 llm_factory_adapters (O-6: 与 openai-compatible
+        // factory 共享, 0 复制粘贴)。
+        let normalized = llm_factory_adapters::to_normalized(&self.model, &req);
         let result = self.capability.complete(&normalized).await;
         match result {
-            Ok(resp) => Ok(self.from_normalized(resp)),
-            Err(err) => {
-                // 0 装诚实: error 字符串走 provider 已分类的 detail, 0 在这层加 key / 0 在 log
-                // 泄漏 Secret (ProviderError 是 provider-side classification, 不含 secret,
-                // per canonical_minimax.rs:236 `classify_status` 0 把 Authorization 写进
-                // body_text).
-                Err(self.map_provider_error(err))
-            }
+            Ok(resp) => Ok(llm_factory_adapters::from_normalized(resp)),
+            Err(err) => Err(llm_factory_adapters::map_provider_error(err)),
         }
     }
 
@@ -380,6 +265,7 @@ impl LlmInstance for MinimaxLlmInstance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use apeireth_plugin::llm_factory::CompletionMessage;
 
     /// 空 resolver slot 工厂 (0 装: 0 真接 key)
     fn empty_capability() -> Arc<MinimaxProviderCapability> {
