@@ -1,34 +1,39 @@
 # Apeireth 桌面伙伴 (companion-desktop)
 
-Svelte 5 + Tauri 2 桌面 App，**独立的薄 Tauri shell + 前端运行时适配层**。
-它不属于根 Rust workspace；根 workspace 的 canonical gateway 与本桌面的
-兼容适配层分开维护。桌面当前保留历史 companion HTTP/SSE 接口的适配，
-完整迁移到 canonical gateway 属于 deferred work。
+Svelte 5 + Tauri 2 桌面 App，**独立的薄 Tauri shell + 前端 canonical gateway 客户端**。
+它不属于根 Rust workspace；根 workspace 的 canonical gateway 以 **bundled-backend 侧车**
+方式随桌面分发（Tauri `externalBin`），由 `src-tauri/src/backend_supervisor.rs`
+在启动时 spawn 并探活；前端 `runtime.ts` 全程讲 canonical Apeireth 2.0 gateway
+协议（`/health`、`/v1/chat/completions`、`/v1/apeireth/events`、panel 内省），
+旧 companion :8090 兼容层已不再承载主链路。
 
 ## 架构
 
 ```
 ┌─────────────────────────────────────────┐
-│ Tauri shell (Rust, ~110 lines)          │   窗口 + 托盘 + 通知 + 全局快捷键
-│  frontend/companion-desktop/src-tauri/  │   0 apeireth-* deps (隔离)
+│ Tauri shell (Rust)                      │   窗口 + 托盘 + 通知 + 单实例
+│  frontend/companion-desktop/src-tauri/  │   0 apeireth-* 依赖 (进程隔离)
+│  backend_supervisor.rs                  │   spawn + 探活 + 优雅回收侧车
 └────────────────┬────────────────────────┘
-                 │ IPC
+                 │ spawn (externalBin sidecar)
 ┌────────────────┴────────────────────────┐
-│ Svelte 5 UI (~390 lines + deps)         │   App.svelte / runtime.ts / 主题 / Markdown
-│  frontend/companion-desktop/src/       │   runtime.ts = OpenAI-compatible adapter
+│ apeireth gateway serve                  │   canonical v2 runtime（根 workspace 产出）
+│  自动选端口 → 前端 launch 时解析         │   /health · /v1/chat/completions · events · panel
 └────────────────┬────────────────────────┘
-                 │ HTTP/SSE
+                 │ HTTP/SSE (canonical gateway 协议)
 ┌────────────────┴────────────────────────┐
-│ legacy companion compatibility :8090     │   历史桌面兼容接口
-│  HTTP/SSE                                  │   不属于根 workspace
+│ Svelte 5 UI                             │   App.svelte / runtime.ts / 面板内省
+│  frontend/companion-desktop/src/        │   runtime.ts = canonical gateway 客户端
 └─────────────────────────────────────────┘
 ```
 
-- **Tauri shell** 不持任何业务逻辑 — 业务请求由前端 runtime adapter 转发
-- **Svelte 5 UI** 把 `runtime.ts` 当契约, 不裸碰后端
-- `runtime.ts` 中面向旧 companion/API 的面板适配器保留作兼容参考，未并入根
-  workspace；完整对接属于 deferred work。
-- **设计参考**: 移植 Pattern 项目 (`App.svelte` / `runtime.ts` / CSS) 到 apeireth, 改传输层
+- **Tauri shell** 不持任何业务逻辑 — 只负责侧车生命周期（`backend_supervisor`：
+  bundled 侧车优先、dev 下回落 workspace 构建；`kill_on_drop` 优雅回收；端口冲突
+  自动换口，前端 `desktop-bridge.ts` 每次启动重新解析端点）
+- **Svelte 5 UI** 把 `runtime.ts` 当契约，不裸碰后端；面板内省对 gateway 未实现的
+  API 显式报"不支持"（0 装），不伪造数据
+- **装机实证 (2026-09-08)**：装机 E2E 确认桌面端启动后自行拉起
+  `apeireth gateway serve` 并探活——bundled-backend 设计真机验证通过
 
 ## 开发
 
@@ -81,10 +86,33 @@ APEIRETH_LLM_BACKEND=scripted npx tsx tests/e2e-streamChat-test.mts
 # 桌面 binary (.app / .exe / .AppImage per host)
 pnpm tauri build
 
+# 仅 Windows NSIS 包（装机 E2E 用此产物）
+pnpm tauri build --bundles nsis
+
 # multi-arch 需 QEMU + docker buildx (Linux host)
 pnpm tauri build --target universal-apple-darwin    # macOS universal
 pnpm tauri build --target x86_64-unknown-linux-gnu
 pnpm tauri build --target aarch64-unknown-linux-gnu
+```
+
+### 装机与卸载 (Windows NSIS)
+
+```powershell
+# 静默安装（perMachine，装到 C:\Program Files\Apeireth Companion）
+.\Apeireth Companion_2.0.0-rc.1_x64-setup.exe /S
+
+# 静默卸载：uninstall.exe /S
+# 语义（installer.nsh hook，2026-09-08 修复）：卸载前先杀主程序再杀侧车
+# （apeireth.exe）——侧车运行中卸载不再出现"删不掉文件却清掉注册表"的半卸载；
+# 杀不掉进程则 Abort 非零，绝不静默留残留。MSI 包走 WiX 模板无此 hook，
+# Windows 推荐用 NSIS 包。
+```
+
+装机 E2E（全自动，需 DeepSeek 兼容 env）：
+
+```powershell
+$env:OPENAI_API_KEY='sk-...'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'
+pwsh scripts/install-e2e.ps1   # 装机→真聊天→gateway→桌面冒烟→孤儿复现→卸载残留检查
 ```
 
 ## 设计文档（历史集成记录）
@@ -110,15 +138,19 @@ pnpm tauri build --target aarch64-unknown-linux-gnu
 
 ## 已知 follow-up
 
-- **Real LLM E2E** (deferred, 无 APEIRETH_API_KEY in CI) — `phase5-report.md §已知`
+- **真 LLM 对话 E2E 已在根 workspace 打通**（DeepSeek，`#[ignore]` live 测试：
+  provider factory / CLI 双轮 / organ W1+W2 / Council 7-advisor）；桌面装机 E2E
+  `scripts/install-e2e.ps1` 同样走真模型。CI 仍无 key，`tests/mock-openai-sse.mjs`
+  保持 mock 路径（`phase5-report.md §已知`）。
+- **真实流式**：SSE 事件端点存在，但缓冲默认关（B2 纪律），前端消费真实流式待授权
 - **macOS universal binary** (deferred, 仅 Windows + WebView2 验证)
 - **Linux native packaging** (Tauri + .deb/.rpm/AppImage) — 跟根 release pipeline 独立
-- **Tauri shell rustfmt / clippy 守门** — companion-desktop-ci.yml 可加, 当前只 check
+- **MSI 卸载与 NSIS 对齐**：WiX 模板无侧车进程检查，卸载时侧车运行中可能留文件
 
 ## 仓库边界 (per 8 硬墙)
 
 - `companion-desktop/src-tauri/Cargo.toml` 顶层有 `[workspace]` — **不污染 root cargo workspace**
 - `cargo test --workspace` (root) **不会碰 Tauri shell** — companion-desktop-ci.yml 单独管
-- 0 apeireth-* 依赖 (Tauri shell 只用 tauri + serde + serde_json)
-- runtime.ts 通过 HTTP/SSE 适配后端；旧 companion/API 端点字符串仅属于
-  兼容适配与历史测试，不代表根 workspace 的当前 package。
+- 0 apeireth-* 依赖 (Tauri shell 只用 tauri + plugins + serde + serde_json + tokio + reqwest + fs-err；canonical 侧车以进程 spawn，不链接)
+- runtime.ts 通过 canonical gateway HTTP/SSE 协议对接后端；旧 companion/API 端点字符串仅属于
+  历史测试 fixture，不代表当前主链路。
