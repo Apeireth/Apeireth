@@ -16,6 +16,12 @@
 > process **在同一 runtime hook 链里串成 L0-L5 自升级 cycle**. 本 spec 不真做这 1 周, **只**写
 > "未来实施者怎么串 + 哪些契约严守 0 改".
 
+> **⚠️ 对账 banner (2026-09-08, 按实际走)**: 本 spec 写作时的核心前提已被后续工程推进超越，正文各章状态栏以写作时点为准，**现状以本 banner 为准**：
+>
+> 1. **串接层已存在**（不再是"缺失"）：`crates/engine/runtime-assembly/src/canonical/organ_module.rs` — 第 13 槽 `cognitive.organs`（AfterTurn，env 旋钮 `APEIRETH_ENABLE_ORGANS=1` 默认关）承载 `Main Loop → ModuleRegistry → OrganModule → OrganOrchestrator → 9 organs`；7 个确定性 organ 长活 + W1/W2 回合瞬态（persistent slot 里为 Noop 占位）；fail-open（hook 恒 `Continue`）；council 依赖休眠（被咨询即 fail-closed）。
+> 2. **6 DEFERRED 已收敛**：`preference_learning` → WIRED（2026-09-08 双索引 + 召回三段展开，旋钮 `APEIRETH_ENABLE_PREFERENCE_LEARNING=1`）；`critic`→并入 judge、`reflection`→并入 self_assessment（宿主均 WIRED）；`planner`/`orchestrator`/`perception` → 重分类 NOT AN AGENT MODULE（服务/适配器另居）。12 slot ledger 更新见 `docs/04-internal/cognitive-module-wiring.md`。
+> 3. **仍为真账的未做项**：5 状态机 + 8 重门控与 cognitive slot 的串接（§8 所述）、L0-L5 自升级 cycle 端到端（§9）、真实流式前端消费。§4.5/§10 的 "ledger 0 改" 边界已被本 banner 取代（对账按实际走）。
+
 ---
 
 ## 目录

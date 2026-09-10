@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — TopicPredictor 真正接线：偏好召回按主题簇展开 (2026-09-08)
+
+- **接线缺口关闭**：topic_predictor 与偏好系统此前是两个平行世界——预测器训练/预测都通（单元级），但召回链从不问它。现在 `PreferenceRecallModule::on_hook` 按三段展开查询：①原始最近用户消息（等价性门：不改旧行为）②`cluster_topic_for` 预测簇（TopicCue 接 `recent_user_messages`）③空主题 top-N 兜底（修掉"高相关命中压制兜底"的路径）→ 按 id 去重、封顶 `self.limit`。
+- **双索引持久化**（`canonical::preference_learning`）：`learn()` 同一条偏好写双行——原始行 + 簇孪生行（`topic_cluster` tag，如 `rust → project`），`MemoryPrefStore::snapshot` 补上；召回同时命中原始/簇行，预测器产出首次在存储层被消费。
+- 回归：`QueryRecordingPreferences` 断言查询序 `["我在复习高数", "exam_prep", ""]`；8 个集成测试行数断言 1→2（双索引语义）；turn2 覆盖 python 主题的连续性测试。
+- 守门：3168 passed / 0 failed / 18 ignored；clippy 0 / fmt 0 / diff-check 0。
+
 ## [Unreleased] — Provider 工具传输 (tool transport)：真模型工具调用闭环 (2026-09-08)
 
 - **wire 层工具传输**（`openai_chat` 共享 helper）：工具声明（原生 function 形状）、assistant `tool_calls`、tool 结果消息（role=tool + tool_call_id）全部传输；响应侧解析 `choices[0].message.tool_calls` → `NormalizedResponse.tool_calls`；`tool_choice`（auto/none/required/specific）映射。图像仍拒绝（未声明 Vision）。

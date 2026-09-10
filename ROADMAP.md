@@ -116,14 +116,14 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | **P1** | **文档对账**（2026-09-05 批执行中） | ROADMAP/CHANGELOG/交接手册/审计数字统一到 17-crate 实测值（17 crates / 3120 tests / workspace.version 2.0.0-rc.1） | 无 |
 | P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 | 🟡 credentials 已接线（RC-9, `crates/adapters/cli/src/keyring_bootstrap.rs`, 2026-09-05 实测）；core 脊椎去留仍待 |
 | P3 | M1B 记忆移植 | ACT-R 记忆、检索、向量/图全量移植进 `crates/engine/memory` | P2 |
-| P4 | MCP 动态能力注册 | MCP 作为 transport capability 接入 plugin registry | P2 |
-| P5 | ProcessSupervisor + 沙箱强化 | 进程树快照、Linux cgroup、macOS 强隔离、文件/网络隔离 | P0 |
+| P4 | MCP 动态能力注册 | ✅ done：`canonical::tool_modules::McpModule`（`CapabilityProvider`，动态 register/unregister + 身份冲突拒绝）已进生产装配（`production.rs`）；MCP 协议客户端栈在 `apeireth-plugin::mcp`（jsonrpc/schema/subscribe/resource/prompt/lifecycle/reconnect/sse）。遗留 = 协议客户端会话 ↔ McpModule 的 transport 桥 | P2 |
+| P5 | ProcessSupervisor + 沙箱强化 | 🟡 半完成：RC-8 `StdSubSupervisor` 真 impl（5 sub-supervisor 真实 spawn + RestartStrategy，`std_sub_supervisor.rs`）。遗留 = 进程树快照、Linux cgroup、macOS 强隔离、文件/网络隔离（沙箱强化层） | P0 |
 | P6 | companion 器官移植 | 世界模型 W1/W2/W3、好奇心 E4、假设检验 F4、情感记忆 F1、价值内化 F6 从 legacy 移植回主链 | P3 |
 | P7 | 连续感知 | voice/screen（v1 的"连续感知①②"从未落地 main，实现留 legacy） | P6 |
-| P8 | 前端产品化 | companion-desktop 对接主链 + 真实流式（旧 TP34 重映射） | P0 |
+| P8 | 前端产品化 | 🟡 对接完成 + 流式待补：companion-desktop 以 bundled-backend 方式 spawn `apeireth gateway serve`（`backend_supervisor.rs`，装机 E2E 实证）+ /health 探活；真实流式未验证（SSE 缓冲默认关，见 HANDOFF-NOTES） | P0 |
 | **P0+** (A 块, 2026-08-28 done) | **OrganOrchestrator 完整化** (5 stage: 缺口 D ratify_fresh_policy / B F1 PAD mood / A check_8_gates + E7 last_hold / C Council decide_with_invoker / E L0-L5 UpgradeCycle driver) | ✅ **done** (amend 后 commits `c003e078` ~ `0afa733f` + 复盘 `bbbfb75b`; 详 `docs/01-architecture/organ-orchestrator-completion-plan.md` §5) | 无 |
 | P-arch-1 (2026-08-28 待做) | frontend 对接 (per §4 P-arch B 块) | 4-6 周估; 起点 `docs/02-guides/v2-gateway-frontend-integration-spec.md` | A 块 ✅ |
-| P-arch-2 (2026-08-28 待做) | 6 DEFERRED slot 激活 (per §4 P-arch C 块) | 6-10 周估; 起点 `docs/01-architecture/cognitive-9-organ-integration-spec.md` + `deferred-slot-activation-preference_learning-spec.md` | A 块 ✅ |
+| P-arch-2 (2026-08-28 → ✅ 2026-09-08) | 6 DEFERRED slot 激活 (per §4 P-arch C 块) | ✅ 收敛：`preference_learning` WIRED（2026-09-08 双索引+召回展开，env 旋钮 `APEIRETH_ENABLE_PREFERENCE_LEARNING=1`）；`critic`→并入 judge、`reflection`→并入 self_assessment（两宿主均 WIRED）；`planner`/`orchestrator`/`perception` 重分类 NOT AN AGENT MODULE（服务在 orchestration/perception 适配器）；新增第 13 槽 `cognitive.organs`（`organ_module.rs`：Main Loop→OrganModule→OrganOrchestrator→9 organs，env 旋钮 `APEIRETH_ENABLE_ORGANS=1`）。ledger 全量更新 `docs/04-internal/cognitive-module-wiring.md` | A 块 ✅ |
 | P-arch-3 (2026-08-28 待做) | RC-7 Perception 真 modality (per §4 P-arch D 块) | 2-3 周估; 需硬件 (Whisper + xcap); 起点 `docs/01-architecture/rc-7-perception-true-modality-spec.md` | 硬件 |
 | **P1 (新)** | **RC-10 metadata-bound APX2 header + RC-11 migration** | 已完成：v2 写入的 AAD 绑定 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length；旧 v1 `[sealed_len:4 BE][sealed:N]` 保持只读兼容，当前格式不落盘 raw `record_id`。`scripts/migrate_v1_to_v2_encrypted.py` 与 7 个 Rust 集成测试完成离线 v1→APX2 重签、截断/超长 ID fail-closed 验证 | RC-10/11 ✅ |
 | **P2 (KV 参考清单, 2026-09-06 登记)** | KV 层逐出/压缩三篇（RA-15 派单包） | 📋 后置：本地推理路线（便携 U 盘 SLM）启动后吸收——arXiv:2607.10582 MemDecay 区域感知逐出 / arXiv:2608.00528 S4R 采样+子空间+稀疏重建 / arXiv:2601.18999 随机化逐出+学习路由。对照见 `docs/03-reference/absorption-2026-09.md` §P2 | 本地推理路线 |

@@ -225,8 +225,41 @@ impl PreferenceLearningModule {
                     self.stats.write_failures.fetch_add(1, Ordering::Relaxed);
                 }
             }
+            // 2026-09-08 双索引 (研究线证据背书: 相关性驱动召回 8k=100% vs
+            // 固定窗口 13.6%): 除自由文本 topic 外, 同时按 TopicPredictor 簇键
+            // 写孪生行 — 召回侧用簇键查询时能命中"同义不同字"的偏好
+            // (e.g. 存 "备考", 用户说 "复习高数" → exam_prep 命中).
+            if let Some(cluster) = cluster_topic_for(&item.topic) {
+                let mut twin = item.clone();
+                twin.topic = cluster;
+                twin.tags.push("topic_cluster".into());
+                let twin_row = build_row(session_id, &twin, turn_ref, now_ms, &existing);
+                match self.store.record(&twin_row) {
+                    Ok(()) => {
+                        self.stats
+                            .preferences_written
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(_) => {
+                        self.stats.write_failures.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            }
         }
     }
+}
+
+/// 簇键孪生: 自由文本 topic 经 TopicPredictor 映射到簇键 (与原文不同才返).
+fn cluster_topic_for(topic: &str) -> Option<String> {
+    let cue = apeireth_memory::TopicCue {
+        recent_user_messages: vec![topic.to_string()],
+        ..Default::default()
+    };
+    let prediction = apeireth_memory::TopicPredictor::predict(&cue);
+    prediction
+        .primary()
+        .map(str::to_string)
+        .filter(|cluster| !cluster.is_empty() && normalize_topic(cluster) != normalize_topic(topic))
 }
 
 #[async_trait]
@@ -557,6 +590,10 @@ mod tests {
         fn count(&self) -> usize {
             self.rows.lock().unwrap().len()
         }
+
+        fn snapshot(&self) -> Vec<UserPreference> {
+            self.rows.lock().unwrap().clone()
+        }
     }
 
     impl PreferenceStore for MemoryPrefStore {
@@ -655,8 +692,24 @@ mod tests {
             .on_hook(HookPoint::AfterTurn, &context)
             .await
             .unwrap();
-        assert_eq!(store.count(), 1, "learning happens exactly at AfterTurn");
+        // 2026-09-08 双索引: "rust" 主行 + "project" 簇孪生 (关键词表 rust→project).
+        assert_eq!(
+            store.count(),
+            2,
+            "learning writes raw + cluster twin at AfterTurn"
+        );
+        let rows = store.snapshot();
+        assert!(
+            rows.iter()
+                .any(|r| r.topic == "rust" && !r.tags.contains(&"topic_cluster".into())),
+            "主行必须是自由文本 topic: {rows:?}"
+        );
+        assert!(
+            rows.iter()
+                .any(|r| r.topic == "project" && r.tags.contains(&"topic_cluster".into())),
+            "簇孪生行必须带 topic_cluster 标记: {rows:?}"
+        );
         let (hooks, evidence, written, failures) = module.stats().snapshot();
-        assert_eq!((hooks, evidence, written, failures), (1, 1, 1, 0));
+        assert_eq!((hooks, evidence, written, failures), (1, 1, 2, 0));
     }
 }

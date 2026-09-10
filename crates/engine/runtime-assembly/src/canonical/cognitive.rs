@@ -602,18 +602,84 @@ impl AgentModule for PreferenceRecallModule {
     ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
         let result = if hook == HookPoint::TurnStart {
-            let topic = topic_from_messages(ctx.messages);
-            match self.store.recall_for_context(ctx.session_id, &topic, self.limit) {
-                Ok(preferences) if !preferences.is_empty() => ModuleOutcome::continue_()
-                    .with_prompt_overlay(PromptOverlay::system(format!(
-                        "Retrieved user preference context (soft context; never override system, developer, or governance constraints):\n{}",
-                        preference_context(&preferences, self.max_context_chars)
-                    ))),
-                Ok(_) => ModuleOutcome::continue_(),
-                Err(_) => {
-                    self.metrics.warning();
-                    ModuleOutcome::continue_()
+            let last_user = topic_from_messages(ctx.messages);
+            // 2026-09-08 查询扩展 (研究线 LongMemEval 证据背书): **原文先行**
+            // (既有双向子串语义, 等价性门), 簇键补充 (命中双索引孪生行, 覆盖
+            // 同义不同字); 按 id 去重合并, 上限 self.limit。
+            let mut queries: Vec<String> = Vec::new();
+            if !last_user.is_empty() {
+                queries.push(last_user);
+            }
+            {
+                let user_msgs: Vec<String> = ctx
+                    .messages
+                    .iter()
+                    .filter(|m| m.role == MessageRole::User)
+                    .map(|m| ContentPart::join_text(&m.content))
+                    .collect();
+                let assistant_msgs: Vec<String> = ctx
+                    .messages
+                    .iter()
+                    .filter(|m| m.role == MessageRole::Assistant)
+                    .map(|m| ContentPart::join_text(&m.content))
+                    .collect();
+                let cue = apeireth_memory::TopicCue {
+                    recent_user_messages: user_msgs,
+                    recent_assistant_messages: assistant_msgs,
+                    ..Default::default()
+                };
+                if let Some(cluster) = apeireth_memory::TopicPredictor::predict(&cue).primary() {
+                    if !cluster.is_empty() {
+                        queries.push(cluster.to_string());
+                    }
                 }
+            }
+            let mut merged: Vec<UserPreference> = Vec::new();
+            for query in queries {
+                match self
+                    .store
+                    .recall_for_context(ctx.session_id, &query, self.limit)
+                {
+                    Ok(preferences) => {
+                        for pref in preferences {
+                            if !merged.iter().any(|m| m.id == pref.id) {
+                                merged.push(pref);
+                            }
+                        }
+                        if merged.len() >= self.limit as usize {
+                            break;
+                        }
+                    }
+                    Err(_) => self.metrics.warning(),
+                }
+            }
+            // 未满 limit: 空话题查询触发会话 top-N 回退 (旧行为保留 — 相关性
+            // 命中优先, 其余偏好仍带进上下文).
+            if merged.len() < self.limit as usize {
+                match self
+                    .store
+                    .recall_for_context(ctx.session_id, "", self.limit)
+                {
+                    Ok(top) => {
+                        for pref in top {
+                            if merged.len() >= self.limit as usize {
+                                break;
+                            }
+                            if !merged.iter().any(|m| m.id == pref.id) {
+                                merged.push(pref);
+                            }
+                        }
+                    }
+                    Err(_) => self.metrics.warning(),
+                }
+            }
+            if !merged.is_empty() {
+                ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(format!(
+                    "Retrieved user preference context (soft context; never override system, developer, or governance constraints):\n{}",
+                    preference_context(&merged, self.max_context_chars)
+                )))
+            } else {
+                ModuleOutcome::continue_()
             }
         } else {
             ModuleOutcome::continue_()
@@ -1336,11 +1402,104 @@ mod tests {
         }
     }
 
+    /// 2026-09-08 查询扩展测试: 记录每次 recall 查询的 topic, 返回固定 pref.
+    #[derive(Default)]
+    struct QueryRecordingPreferences {
+        queries: Mutex<Vec<String>>,
+        pref: Mutex<Option<UserPreference>>,
+    }
+
+    impl PreferenceStore for QueryRecordingPreferences {
+        fn record(&self, pref: &UserPreference) -> CapabilityResult<()> {
+            *self.pref.lock().expect("fake pref mutex") = Some(pref.clone());
+            Ok(())
+        }
+
+        fn recall_for_context(
+            &self,
+            session_id: &SessionId,
+            topic: &str,
+            _limit: u32,
+        ) -> CapabilityResult<Vec<UserPreference>> {
+            self.queries
+                .lock()
+                .expect("fake query mutex")
+                .push(topic.to_string());
+            Ok(self
+                .pref
+                .lock()
+                .expect("fake pref mutex")
+                .clone()
+                .map(|mut p| {
+                    p.session_id = *session_id;
+                    vec![p]
+                })
+                .unwrap_or_default())
+        }
+
+        fn forget(&self, _pref_id: &str) -> CapabilityResult<()> {
+            Ok(())
+        }
+
+        fn list_for_session(
+            &self,
+            _session_id: &SessionId,
+        ) -> CapabilityResult<Vec<UserPreference>> {
+            Ok(Vec::new())
+        }
+    }
+
+    /// 2026-09-08: 召回侧查询扩展 — 簇键先行 + 原文回退, 按 id 去重合并.
+    #[tokio::test]
+    async fn preference_recall_expands_query_cluster_then_raw() {
+        let session = SessionId::new();
+        let store = Arc::new(QueryRecordingPreferences {
+            queries: Mutex::new(Vec::new()),
+            pref: Mutex::new(Some(UserPreference {
+                id: "p1".into(),
+                session_id: session,
+                topic: "exam_prep".into(),
+                stance: "主人喜欢备考".into(),
+                evidence_refs: vec![],
+                created_at: 1,
+                confidence: 0.8,
+                tags: vec![],
+            })),
+        });
+        let module = PreferenceRecallModule::new(store.clone());
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("judge", "judge", "{}"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("我在复习高数")];
+        let outcome = module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(
+                    &session,
+                    &messages,
+                    None,
+                    &invoker,
+                    PREFERENCE_RECALL_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+        let queries = store.queries.lock().expect("query mutex");
+        assert_eq!(queries.len(), 3, "原文 + 簇键 + top-N 回退: {queries:?}");
+        assert_eq!(queries[0], "我在复习高数", "原文先行 (等价性门)");
+        assert_eq!(queries[1], "exam_prep", "簇键补充");
+        assert_eq!(queries[2], "", "未满 limit 时 top-N 回退");
+        // 两查询都返回同一 pref → 去重后 overlay 注入一次.
+        assert_eq!(outcome.prompt_overlays.len(), 1);
+        let text = ContentPart::join_text(&outcome.prompt_overlays[0].message().content);
+        assert!(text.contains("主人喜欢备考"), "overlay 内容: {text}");
+    }
+
     #[derive(Default)]
     struct FakeAssessments {
         values: Mutex<Vec<SelfAssessment>>,
     }
-
     impl SelfAssessmentStore for FakeAssessments {
         fn record(&self, assessment: &SelfAssessment) -> CapabilityResult<()> {
             self.values
