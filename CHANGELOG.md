@@ -7,6 +7,7 @@
 - **P1 `/v1/models` 重复 id 去重**：anthropic 插件默认端点即 MiniMax Anthropic 兼容网关，与原生 minimax 插件同报 `minimax-m3`——展示层按 id 去重（live 实测 2→1，`minimax-m3-thinking` 保留）；跨 provider 同 id 去重测试入网关测试集。
 - **验收**：`provider_env_reaches_the_backend` lifecycle 真后端测试（注入 env → 重启换新端口 → `/v1/models` 出现注入模型 → 重复 apply 不重启）；desktop 21 unit + 5 lifecycle 全绿；gateway 全绿；svelte-check 0 错 + 7/7 前端套件（含 secret-persistence 安全守门）。
 - 新 NSIS 包 SHA256 `CB31875618E91162E6123BB6897D909C8F4BA922B651A9CD245ED2EF9CB7DC04`。诚实挂账不变：token 级真流式待授权、首启向导页未做（设置页已可用）、MiniMax 无 key、MSI 卸载无侧车检查。
+- **实测验证台账**：新 `docs/04-internal/live-verification-ledger.md`——已实测项（绿表，含复现命令与证据）+ 挂账项（含"桌面 UI 点击流人工实测"这个唯一建议后人做一次的测试），HANDOFF-NOTES 与桌面 README 均指向它，写"已验证/未验证"前先查表。
 
 ## [Unreleased] — 装机 E2E 首通 + NSIS 卸载缺陷修复 (2026-09-08)
 

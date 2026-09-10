@@ -1,0 +1,69 @@
+# 实测验证台账 (Live Verification Ledger)
+
+> **给谁看**：任何要写"X 已经验证过/还没验证"的人——写进文档、代码注释、
+> commit message 之前先查这张表。**目的：别让后人反复测试已经测过的东西，
+> 也别把没测过的当测过的。**
+>
+> **口径**：只有"当时真跑了、有可复现命令/提交记录/输出"的才上绿表。
+> 挂账 = 明确未测或测不了，写明原因。本表随每次新实测更新（更新规则见 §4）。
+> 更细的产品能力对账见 `docs/03-reference/absorption-2026-09.md`（RA-15 吸收批）。
+
+## 1. 已实测（绿）——不要再重测，除非要复核
+
+### 1.1 真模型 E2E（DeepSeek = openai-compatible，唯一实测 provider）
+
+| # | 项 | 何时 | 证据 | 复现命令（需 key） |
+|---|---|---|---|---|
+| 1 | provider 能力级 + factory 级 smoke | 2026-09-08 | `crates/engine/provider/tests/openai_compatible_live.rs`（2 个 `#[ignore]` live） | `$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'; cargo test -p apeireth-provider --test openai_compatible_live -- --ignored` |
+| 2 | CLI canonical 双轮对话（会话连续性 + trace/provider） | 2026-09-08 | 会话记录（commit `e2ab8213` 前后） | `apeireth chat "…" --model deepseek-v4-flash --session (uuid)`（同上 env） |
+| 3 | shell 工具全闭环（提议→冻结→approve→执行→回灌→总结，真模型真调用） | 2026-09-08 | commit `edbd7694`；Trace 实证 `CapabilityDispatched/CapabilityCompleted(succeeded)` | `$env:APEIRETH_ENABLE_SHELL=1` + chat 触发工具 → `apeireth approve --session … --approval …` |
+| 4 | organ W1 反事实推演 + W2 因果图（live LLM） | 2026-09-08 | `crates/engine/organ/tests/organ_live_llm.rs`（44s 全过） | `cargo test -p apeireth-organ --test organ_live_llm -- --ignored` |
+| 5 | Council 7-advisor → Approved | 2026-09-08 | `crates/foundation/orchestration/tests/council_live.rs`（5.0s） | `cargo test -p apeireth-orchestration --test council_live -- --ignored` |
+
+### 1.2 桌面 HTTP 主链路（gateway 协议 = 桌面前端实际调用面）
+
+| # | 项 | 何时 | 证据 | 说明 |
+|---|---|---|---|---|
+| 6 | `/v1/chat/completions` 真模型多轮 + 会话连续性（turn2 正确回忆 turn1 事实） | 2026-09-10（新 key） | 本会话探针输出；commit `1a265600` | 桌面同款 payload：`{model, messages:[{role:'user',content}], session_id, stream:false}`；`served_by=provider.openai-compatible`；panel/sessions 持久化 |
+| 7 | `stream:true` SSE 帧（init/content/final + apeireth 元数据） | 2026-09-10 | 同上 | 语义 = 整段完成后分帧（**不是 token 级**，见挂账 #5） |
+| 8 | 错误路径 JSON body（`error` + `session_id`） | 2026-09-10 live + 库级测试更早 | `canonical_openai_compatible_entry.rs::the_gateway_reports_an_openai_compatible_missing_credential_as_unavailable` | 502/503 均带体；"裸 502"是早期探针读流姿势问题，不是产品缺陷 |
+| 9 | `/v1/models` 按 id 去重（`minimax-m3` 2→1，`minimax-m3-thinking` 保留） | 2026-09-10 | live 实测 + `the_gateway_models_list_dedupes_ids_shared_across_providers` | 根因：anthropic 插件默认端点即 MiniMax Anthropic 兼容网关 |
+
+### 1.3 装机 / 卸载 / 配置注入（Windows NSIS）
+
+| # | 项 | 何时 | 证据 | 复现命令 |
+|---|---|---|---|---|
+| 10 | 装机 E2E 全链 11/11（安装→装机侧车真聊天→gateway /health→桌面冒烟→孤儿复现→卸载零残留） | 2026-09-10（新包 `CB318756…`） | `frontend/companion-desktop/scripts/install-e2e.ps1` | `$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'; pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
+| 11 | NSIS 卸载器侧车进程检查（运行中侧车被卸载器杀掉，零残留） | 2026-09-08 | `installer.nsh` hook + install-e2e 孤儿场景回归 | 同 #10 |
+| 12 | Settings provider 配置注入侧车环境（apply → 重启换端口 → `/v1/models` 出现注入模型 → 重复 apply 不重启） | 2026-09-10 | `frontend/companion-desktop/src-tauri/tests/supervisor_lifecycle.rs::provider_env_reaches_the_backend`（**真后端、无需 key**） | `cargo test -p companion-desktop --test supervisor_lifecycle`（src-tauri 内） |
+
+## 2. 挂账（未测 / 测不了）——不要声称已验
+
+| # | 项 | 原因 | 若要做时的路径 |
+|---|---|---|---|
+| 1 | **MiniMax provider 真机** | 无 MiniMax key（用户侧无预算） | `#[ignore]` 测试齐备：`minimax_llm_factory::real_llm_call_smoke` 等，有 key 后 `cargo test -p apeireth-provider --test minimax_llm_factory -- --ignored` + env `MINIMAX_API_KEY` |
+| 2 | **桌面 UI 点击流人工实测**（真窗口里：设置选 provider 填 key → 保存 → 网关重启 → 聊天出字） | 各链路段都有自动化验证（#6/#10/#12），但**真窗口的端到端点击流从未人工点过**——这是唯一建议后人做一次的测试 | 装机 → 启动 companion-desktop → 设置 → 保存 → 聊天；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
+| 3 | `/v1/apeireth/events` 订阅端到端（桌面 UI 里收事件） | 端点已确认是活流（探针连接保持），UI 消费未人工验证 | presence 订阅代码在 `presence.ts`；UI 验证并入 #2 |
+| 4 | approvals 的 HTTP 完整闭环 | 完整闭环在 CLI 实测过（#3）；HTTP 路由只验了参数校验响应 | HTTP 闭环可并入 #2（工具触发 → 面板审批按钮） |
+| 5 | **token 级真流式** | 当前 `stream:true` = 整段完成后分帧（B2 纪律：缓冲默认关，需授权开 provider 流直通） | provider SSE → gateway 直通 + 前端逐 token 渲染 |
+| 6 | macOS / Linux 打包与装机 | 仅 Windows NSIS 装机实测 | Tauri bundle 命令已有，缺真机验证环境 |
+| 7 | MSI 卸载与 NSIS 对齐（侧车检查） | WiX 模板无此 hook，Windows 推荐 NSIS | 若 MSI 变主力分发，需 WiX CustomAction |
+| 8 | RC-7 非文本感知（voice/screen） | 待硬件 | ROADMAP P7/P-arch-3 |
+
+## 3. 环境口径（live 测试统一契约）
+
+```powershell
+# DeepSeek（openai-compatible，唯一实测路径）
+$env:OPENAI_API_KEY='…'                 # 每次会话新给；不进 repo、不进 commit（secret-scan 守门）
+$env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'
+$env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'
+```
+
+- key 卫生：DeepSeek key 在聊天记录出现过后应轮换；测试脚本只从 env 读 key。
+- 无需 key 的回归：装机 E2E 里除"真聊天"外全部步骤 + lifecycle 测试（#12）在 CI 无 key 环境可跑。
+
+## 4. 更新规则
+
+- 新实测过 → 移到 §1 并填"何时/证据/复现命令"；挂账解除 → 从 §2 删行。
+- 只写"当时真跑了"的事实；探针脚本失败/输出存疑 = 不算实测，留在挂账。
+- 涉及 commit 的写 commit 短 hash；涉及测试文件的写 `file::test_name`。
