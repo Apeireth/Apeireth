@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 前后端接面对账：核心面 100%，缺口登记 ROADMAP P9 (2026-09-10)
+
+- **对账方法**：后端 gateway 全部路由 + 能力旋钮 vs 前端 runtime.ts/视图逐条核对（grep 实测，非叙述）。
+- **已接入（每个路由都有真实消费方）**：`/v1/chat/completions`（主聊天双路径）、`/v1/models`、`/v1/panel/sessions`、记忆全套（episodes/graph/append/forget/protect/unprotect）、`/v1/tools/list`、`/v1/approvals`(+resolve)、`/v1/panel/grants`(+revoke)、`/v1/apeireth/capabilities`、`/v1/apeireth/events`（presence + 活动视图）、`/v1/panel/audit`、`/v1/panel/traces/:id`。
+- **缺口（登记 ROADMAP P9 + 桌面 README follow-up，暂不做）**：① 能力旋钮无 UI——shell/fetch/organs/preference_learning/judge/council 仍靠系统环境变量（复用 P0-A 管道接 Settings 开关区，默认全关 fail-closed）；② `/v1/organs` + `/v1/modules` 后端有、零消费方（器官观察无展示面）；③ `/v1/providers` + `/v1/runtime/snapshot` 无消费方（设置页 provider 预设前端硬编码）。
+
 ## [Unreleased] — 桌面开箱即用：Settings 配置直通侧车 + 桌面 HTTP 主链路真机全绿 (2026-09-10)
 
 - **P0-A 两套配置源消灭**：设置界面成为唯一 provider 配置源——Settings 保存 → Tauri 命令 `apply_backend_provider_env` → `BackendSupervisor` 把三家口径的环境变量（`OPENAI_API_KEY`+`APEIRETH_OPENAI_URL/MODELS`、`APEIRETH_API_KEY`+`APEIRETH_API_URL/MODELS`、`APEIRETH_ANTHROPIC_KEY/URL/MODELS`，与 CLI 口径一致）注入侧车；配置变化自动重启网关（没变不重启），前端自动重新解析新端口。url/模型持久化到 app-data `backend-provider-env.json`（**密钥字段强制剥离，不落盘**；key 只在 supervisor 内存 + 侧车进程环境）；启动时从该文件恢复非密配置，首启零额外重启。
