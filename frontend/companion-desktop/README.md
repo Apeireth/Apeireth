@@ -157,6 +157,7 @@ pwsh scripts/install-e2e.ps1   # 装机→真聊天→gateway→桌面冒烟→�
 
 ## 已知 follow-up
 
+- **后端功能面接全（ROADMAP P9，2026-09-10 接面对账登记）**：能力旋钮 UI（shell/fetch/organs/preference_learning/judge/council 的 Settings 开关，复用 provider 注入管道）、`/v1/organs` + `/v1/modules` 器官观察视图、`/v1/providers` + `/v1/runtime/snapshot` 内省。当前核心面（聊天/记忆/工具审批/事件/审计）已 100% 接入，缺的即上述旋钮与内省面
 - **真 LLM 对话 E2E 已在根 workspace 打通**（DeepSeek，`#[ignore]` live 测试：
   provider factory / CLI 双轮 / organ W1+W2 / Council 7-advisor）；桌面装机 E2E
   `scripts/install-e2e.ps1` 同样走真模型。CI 仍无 key，`tests/mock-openai-sse.mjs`
