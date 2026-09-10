@@ -157,16 +157,12 @@ pwsh scripts/install-e2e.ps1   # 装机→真聊天→gateway→桌面冒烟→�
 
 ## 已知 follow-up
 
-- **真实流式**：`stream:true` 返回规范 SSE 帧，但语义是"整段完成后分帧"，非 token 级；provider 流直通待授权
-- **桌面 UI 点击流人工实测**（台账挂账 #2）：设置选 provider 填 key → 保存 → 网关重启 → 聊天出字的真窗口点击流从未人工点过——链路段全部有自动化验证（install-e2e / supervisor_lifecycle / 前端套件），建议后人做一次
+- **桌面 UI 点击流人工实测**（台账挂账 #2）：首启向导→填 key→保存→网关重启→流式聊天→shell 审批的真窗口点击流从未人工点过——链路段全部有自动化验证（install-e2e / supervisor_lifecycle / 前端套件 / 真机流式探针），**10 步清单已备**：`docs/first-run-click-through-checklist.md`
 - **真 LLM 对话 E2E 已在根 workspace 打通**（DeepSeek，`#[ignore]` live 测试：
-  provider factory / CLI 双轮 / organ W1+W2 / Council 7-advisor）；桌面装机 E2E
+  provider factory / CLI 双轮 / organ W1+W2 / Council 7-advisor；token 级流式
+  210 帧 live 实测 2026-09-10）；桌面装机 E2E
   `scripts/install-e2e.ps1` 同样走真模型。CI 仍无 key，`tests/mock-openai-sse.mjs`
   保持 mock 路径（`phase5-report.md §已知`）。
-- **首次启动引导页**：provider 配置已在设置界面 + IPC 接通，但还没有专门的
-  首启向导（引导用户选 provider 填 key 后再进聊天）
-- **真实流式**：`stream:true` 返回规范 SSE 帧，但语义是"整段完成后分帧"，
-  非 token 级；provider 流直通待授权
 - **macOS universal binary** (deferred, 仅 Windows + WebView2 验证)
 - **Linux native packaging** (Tauri + .deb/.rpm/AppImage) — 跟根 release pipeline 独立
 - **MSI 卸载与 NSIS 对齐**：WiX 模板无侧车进程检查，卸载时侧车运行中可能留文件

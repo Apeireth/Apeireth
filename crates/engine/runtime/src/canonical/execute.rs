@@ -250,6 +250,29 @@ impl Runtime {
     /// and tests should migrate to this; [`Runtime::execute`] is the
     /// compatibility wrapper.
     pub async fn execute_outcome(&self, request: TurnRequest) -> RuntimeResult<TurnOutcome> {
+        self.execute_outcome_with_sink(request, None).await
+    }
+
+    /// Run one turn, forwarding assistant content deltas to `on_delta` as the
+    /// provider streams them (non-streaming providers emit one final delta).
+    ///
+    /// Deltas arrive before the outcome: a transport can open an SSE response
+    /// and forward them immediately. The callback is invoked from the runtime's
+    /// own task; it must be non-blocking (the transport should enqueue).
+    pub async fn execute_outcome_streaming(
+        &self,
+        request: TurnRequest,
+        on_delta: Arc<dyn Fn(String) + Send + Sync>,
+    ) -> RuntimeResult<TurnOutcome> {
+        self.execute_outcome_with_sink(request, Some(on_delta))
+            .await
+    }
+
+    async fn execute_outcome_with_sink(
+        &self,
+        request: TurnRequest,
+        stream_sink: Option<Arc<dyn Fn(String) + Send + Sync>>,
+    ) -> RuntimeResult<TurnOutcome> {
         let lock = self.session_locks.acquire(request.session).await;
         let _guard = lock.lock().await;
 
@@ -263,7 +286,7 @@ impl Runtime {
         });
         let observed_request = request.clone();
         let result = self
-            .execute_outcome_locked(request, state.clone(), request_id, trace_id)
+            .execute_outcome_locked(request, state.clone(), request_id, trace_id, stream_sink)
             .await;
         if let Err(error) = &result {
             self.observe_error(&observed_request, state, error).await;
@@ -278,6 +301,7 @@ impl Runtime {
         module_state: Arc<ModuleTurnState>,
         request_id: RequestId,
         trace_id: TraceId,
+        stream_sink: Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) -> RuntimeResult<TurnOutcome> {
         let mut trace = ExecutionTrace::new(trace_id, request.session, request_id);
 
@@ -374,6 +398,7 @@ impl Runtime {
             turn_start.prompt_overlays,
             invocation,
             module_state,
+            stream_sink,
         )
         .await
     }
@@ -386,6 +411,24 @@ impl Runtime {
     /// [`ApprovalId`] so a caller can still resume without a second subsystem.
     pub async fn execute(&self, request: TurnRequest) -> RuntimeResult<TurnResponse> {
         match self.execute_outcome(request).await? {
+            TurnOutcome::Completed(response) => Ok(response),
+            TurnOutcome::PendingApproval(view) => Err(RuntimeError::ApprovalRequired {
+                hook: view.governance_hook,
+                reason: view.governance_reason,
+                approval: Some(view.approval_id),
+                session: Some(view.session_id),
+            }),
+        }
+    }
+
+    /// Streaming variant of [`Runtime::execute`] for callers still on the
+    /// response-model API: forwards deltas, returns the completed response.
+    pub async fn execute_streaming(
+        &self,
+        request: TurnRequest,
+        on_delta: Arc<dyn Fn(String) + Send + Sync>,
+    ) -> RuntimeResult<TurnResponse> {
+        match self.execute_outcome_streaming(request, on_delta).await? {
             TurnOutcome::Completed(response) => Ok(response),
             TurnOutcome::PendingApproval(view) => Err(RuntimeError::ApprovalRequired {
                 hook: view.governance_hook,
@@ -638,6 +681,7 @@ impl Runtime {
                         pending_overlays,
                         InvocationContext::user_turn(),
                         Arc::clone(&module_state),
+                        None,
                     )
                     .await?;
                 Ok(ApprovalResolution::Resumed(outcome))
@@ -700,6 +744,7 @@ impl Runtime {
                         Vec::new(),
                         InvocationContext::user_turn(),
                         Arc::clone(&module_state),
+                        None,
                     )
                     .await?;
                 Ok(ApprovalResolution::Resumed(outcome))
@@ -725,6 +770,7 @@ impl Runtime {
         mut pending_overlays: Vec<PromptOverlay>,
         invocation: InvocationContext,
         module_state: Arc<ModuleTurnState>,
+        stream_sink: Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) -> RuntimeResult<TurnOutcome> {
         let clock = self.clock.as_ref();
 
@@ -831,10 +877,18 @@ impl Runtime {
                     ),
                 );
                 retry_scaffolding.clear();
-                let routed = self
-                    .providers
-                    .complete_with_tools(&provider_request, &tools)
-                    .await;
+                let routed = match &stream_sink {
+                    Some(sink) => {
+                        self.providers
+                            .complete_with_tools_streaming(&provider_request, &tools, sink)
+                            .await
+                    }
+                    None => {
+                        self.providers
+                            .complete_with_tools(&provider_request, &tools)
+                            .await
+                    }
+                };
 
                 let routed = match routed {
                     Ok(routed) => routed,

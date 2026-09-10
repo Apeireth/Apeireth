@@ -24,6 +24,7 @@
   } from 'lucide-svelte';
   import MessageContent from './lib/MessageContent.svelte';
   import RuntimeModal from './lib/components/RuntimeModal.svelte';
+  import FirstRunWizard from './lib/components/FirstRunWizard.svelte';
   import VoiceCallModal from './components/VoiceCallModal.svelte';
   import { voiceCallManager } from './lib/voice';
 
@@ -249,6 +250,22 @@
     model: loadConfig().model,
   });
   let showRuntimeModal = $state(false);
+  let showFirstRun = $state(false);
+  const FIRST_RUN_DONE_KEY = 'apeireth-first-run-done';
+
+  function completeFirstRun(next: ApeirethConfig): void {
+    config = {...config, ...next, apiKey: ''};
+    saveConfig(config);
+    agentRuntime = createAgentRuntime(config);
+    localStorage.setItem(FIRST_RUN_DONE_KEY, '1');
+    showFirstRun = false;
+    void pushProviderEnvAndRefresh(config);
+  }
+
+  function skipFirstRun(): void {
+    localStorage.setItem(FIRST_RUN_DONE_KEY, '1');
+    showFirstRun = false;
+  }
   let showVoiceCall = $state(false);
   let isRefreshingHealth = $state(false);
 
@@ -1037,6 +1054,10 @@
     applyDocumentTheme(activeTheme);
     if (!activeId && conversations.length) activeId = conversations[0].id;
     if (window.innerWidth < 1180) wbOpen = false;
+    // 首启向导：桌面模式下未完成过向导时先引导选 provider / 填 key。
+    if (isDesktop() && !localStorage.getItem(FIRST_RUN_DONE_KEY)) {
+      showFirstRun = true;
+    }
     // Resolve the real endpoint first, then probe: in packaged mode a probe
     // against the stale persisted port would report a false offline state.
     // Pushing the config first makes the sidecar pick up the persisted
@@ -1700,6 +1721,10 @@
   onClose={() => (showRuntimeModal = false)}
   onRefresh={refreshConnection}
 />
+
+{#if showFirstRun}
+  <FirstRunWizard onComplete={completeFirstRun} onSkip={skipFirstRun} />
+{/if}
 
 <style>
   .app-root {
