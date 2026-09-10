@@ -24,10 +24,20 @@ $ErrorActionPreference = 'Continue'
 Set-Location $PSScriptRoot\..\..
 
 if ($SetupPath -eq "") {
-    $SetupPath = Get-ChildItem 'target\desktop-nsis' -Filter '*_x64-setup.exe' -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+    # Workspace-root staging copy (what release notes + sha256 live beside),
+    # then the raw bundle output directory.
+    $candidates = @(
+        (Join-Path $PSScriptRoot '..\..\..\target\desktop-nsis'),
+        (Join-Path $PSScriptRoot '..\src-tauri\target\release\bundle\nsis')
+    )
+    foreach ($dir in $candidates) {
+        $found = Get-ChildItem $dir -Filter '*_x64-setup.exe' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+        if ($found) { $SetupPath = $found.FullName; break }
+    }
     if (-not $SetupPath) {
-        Write-Error 'no setup found under target\desktop-nsis; pass -SetupPath'
+        Write-Error 'no setup found under workspace target\desktop-nsis or the bundle dir; pass -SetupPath'
         exit 1
     }
 }

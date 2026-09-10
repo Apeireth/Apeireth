@@ -108,6 +108,21 @@ pnpm tauri build --target aarch64-unknown-linux-gnu
 # Windows 推荐用 NSIS 包。
 ```
 
+### 首次启动（provider 配置）
+
+不需要再手动设系统环境变量：**设置界面是唯一的配置源**。在"设置"里选
+provider（DeepSeek / OpenAI / MiniMax / Anthropic / Ollama 预置，或自定义
+端点）→ 保存即通过 Tauri 命令推给 `BackendSupervisor` → 侧车以注入的
+环境变量重启（`OPENAI_API_KEY` + `APEIRETH_OPENAI_URL/…`，与 CLI 口径一致）
+→ 前端自动重新解析新端口并探活。
+
+- **密钥安全**：API key 只存在于 supervisor 内存和侧车进程环境，**不落盘**
+  （不写 localStorage、不写 backend-provider-env.json；Rust 侧持久化时强制
+  剥离全部 key 字段，前端节点测试 `reality-check.mjs` 守门）。每次启动重新
+  输入 key 即可（url/模型名会记住）。
+- **为什么保存会重启网关**：环境变量只在进程 spawn 时生效，provider 变化
+  必须重启侧车；配置没变时不会重启（no-op）。
+
 装机 E2E（全自动，需 DeepSeek 兼容 env）：
 
 ```powershell
@@ -142,7 +157,10 @@ pwsh scripts/install-e2e.ps1   # 装机→真聊天→gateway→桌面冒烟→�
   provider factory / CLI 双轮 / organ W1+W2 / Council 7-advisor）；桌面装机 E2E
   `scripts/install-e2e.ps1` 同样走真模型。CI 仍无 key，`tests/mock-openai-sse.mjs`
   保持 mock 路径（`phase5-report.md §已知`）。
-- **真实流式**：SSE 事件端点存在，但缓冲默认关（B2 纪律），前端消费真实流式待授权
+- **首次启动引导页**：provider 配置已在设置界面 + IPC 接通，但还没有专门的
+  首启向导（引导用户选 provider 填 key 后再进聊天）
+- **真实流式**：`stream:true` 返回规范 SSE 帧，但语义是"整段完成后分帧"，
+  非 token 级；provider 流直通待授权
 - **macOS universal binary** (deferred, 仅 Windows + WebView2 验证)
 - **Linux native packaging** (Tauri + .deb/.rpm/AppImage) — 跟根 release pipeline 独立
 - **MSI 卸载与 NSIS 对齐**：WiX 模板无侧车进程检查，卸载时侧车运行中可能留文件

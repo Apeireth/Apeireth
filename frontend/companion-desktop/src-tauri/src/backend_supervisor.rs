@@ -14,7 +14,7 @@
 //! - Graceful shutdown on app exit
 
 use crate::logging::{DesktopLogger, LogLevel};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -55,6 +55,110 @@ pub enum BackendOwnership {
     External,
 }
 
+/// Provider environment the desktop injects into the spawned sidecar.
+///
+/// The Settings UI is the single configuration source for a packaged desktop:
+/// the user's provider choice (key / endpoint / models) is pushed here over IPC
+/// and becomes the sidecar's environment, exactly as the canonical CLI reads
+/// it (`OPENAI_API_KEY` + `APEIRETH_OPENAI_URL` + `APEIRETH_OPENAI_MODELS`,
+/// `APEIRETH_API_KEY` + `APEIRETH_API_URL` + `APEIRETH_API_MODELS` for
+/// MiniMax, `APEIRETH_ANTHROPIC_KEY` + `APEIRETH_ANTHROPIC_URL` +
+/// `APEIRETH_ANTHROPIC_MODELS` for Anthropic). Without this, a packaged app
+/// would only ever see whatever environment the user happened to export
+/// system-wide — two configuration sources with no guidance.
+///
+/// Secret hygiene: key fields are in-memory only. They cross IPC to reach the
+/// child's environment, but are never persisted to the app-data config file
+/// (see [`BackendSupervisor::persist_provider_env`]) and never appear in
+/// [`BackendInfo`].
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct BackendProviderEnv {
+    pub openai_api_key: Option<String>,
+    pub openai_url: Option<String>,
+    pub openai_models: Option<String>,
+    pub minimax_api_key: Option<String>,
+    pub minimax_url: Option<String>,
+    pub minimax_models: Option<String>,
+    pub anthropic_api_key: Option<String>,
+    pub anthropic_url: Option<String>,
+    pub anthropic_models: Option<String>,
+}
+
+impl BackendProviderEnv {
+    /// Normalize for storage: trim whitespace; empty values mean "unset".
+    pub fn sanitized(mut self) -> Self {
+        let clean = |value: &mut Option<String>| {
+            if let Some(v) = value {
+                let trimmed = v.trim();
+                if trimmed.is_empty() {
+                    *value = None;
+                } else {
+                    *value = Some(trimmed.to_string());
+                }
+            }
+        };
+        clean(&mut self.openai_api_key);
+        clean(&mut self.openai_url);
+        clean(&mut self.openai_models);
+        clean(&mut self.minimax_api_key);
+        clean(&mut self.minimax_url);
+        clean(&mut self.minimax_models);
+        clean(&mut self.anthropic_api_key);
+        clean(&mut self.anthropic_url);
+        clean(&mut self.anthropic_models);
+        self
+    }
+
+    /// True when nothing would be injected.
+    pub fn is_empty(&self) -> bool {
+        self.env_pairs().is_empty()
+    }
+
+    /// The exact (variable, value) pairs injected into the sidecar.
+    pub fn env_pairs(&self) -> Vec<(&'static str, &str)> {
+        let mut pairs = Vec::new();
+        if let Some(value) = &self.openai_api_key {
+            pairs.push(("OPENAI_API_KEY", value.as_str()));
+        }
+        if let Some(value) = &self.openai_url {
+            pairs.push(("APEIRETH_OPENAI_URL", value.as_str()));
+        }
+        if let Some(value) = &self.openai_models {
+            pairs.push(("APEIRETH_OPENAI_MODELS", value.as_str()));
+        }
+        if let Some(value) = &self.minimax_api_key {
+            pairs.push(("APEIRETH_API_KEY", value.as_str()));
+        }
+        if let Some(value) = &self.minimax_url {
+            pairs.push(("APEIRETH_API_URL", value.as_str()));
+        }
+        if let Some(value) = &self.minimax_models {
+            pairs.push(("APEIRETH_API_MODELS", value.as_str()));
+        }
+        if let Some(value) = &self.anthropic_api_key {
+            pairs.push(("APEIRETH_ANTHROPIC_KEY", value.as_str()));
+        }
+        if let Some(value) = &self.anthropic_url {
+            pairs.push(("APEIRETH_ANTHROPIC_URL", value.as_str()));
+        }
+        if let Some(value) = &self.anthropic_models {
+            pairs.push(("APEIRETH_ANTHROPIC_MODELS", value.as_str()));
+        }
+        pairs
+    }
+
+    /// Copy without any key material (what may reach disk).
+    pub fn without_secrets(&self) -> Self {
+        Self {
+            openai_api_key: None,
+            minimax_api_key: None,
+            anthropic_api_key: None,
+            ..self.clone()
+        }
+    }
+}
+
 impl Default for BackendInfo {
     fn default() -> Self {
         Self {
@@ -83,17 +187,62 @@ pub struct BackendSupervisor {
     info: Arc<RwLock<BackendInfo>>,
     process: Arc<RwLock<Option<BackendProcess>>>,
     logger: Option<Arc<DesktopLogger>>,
+    provider_env: RwLock<BackendProviderEnv>,
 }
 
 impl BackendSupervisor {
     /// Base constructor. Production always attaches a logger via
     /// [`Self::with_logger`]; tests use `build(None)` when no log file is wanted.
     fn build(logger: Option<Arc<DesktopLogger>>) -> Self {
+        // Restore the persisted non-secret provider config (endpoints/models)
+        // so the very first spawn already lists the user's provider models.
+        // Keys are deliberately NOT persisted; they arrive per session over
+        // IPC from the Settings UI.
+        let persisted = logger
+            .as_ref()
+            .and_then(|l| Self::load_persisted_provider_env(l))
+            .unwrap_or_default()
+            .without_secrets();
         Self {
             info: Arc::new(RwLock::new(BackendInfo::default())),
             process: Arc::new(RwLock::new(None)),
             logger,
+            provider_env: RwLock::new(persisted),
         }
+    }
+
+    /// App-data file for the non-secret part of the provider environment.
+    fn provider_env_path(logger: &DesktopLogger) -> PathBuf {
+        logger
+            .log_directory()
+            .parent()
+            .map(|dir| dir.join("backend-provider-env.json"))
+            .unwrap_or_else(|| logger.log_directory().join("backend-provider-env.json"))
+    }
+
+    fn load_persisted_provider_env(logger: &DesktopLogger) -> Option<BackendProviderEnv> {
+        let path = Self::provider_env_path(logger);
+        let raw = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str::<BackendProviderEnv>(&raw)
+            .ok()
+            .map(BackendProviderEnv::sanitized)
+            .map(|env| env.without_secrets())
+    }
+
+    /// Persist only the non-secret part of the provider environment so the
+    /// next launch restores endpoints/models without a restart cycle.
+    fn persist_provider_env(&self, env: &BackendProviderEnv) {
+        let Some(logger) = &self.logger else {
+            return;
+        };
+        let path = Self::provider_env_path(logger);
+        let Ok(json) = serde_json::to_string_pretty(&env.without_secrets()) else {
+            return;
+        };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(path, json);
     }
 
     /// Attach a persistent logger so backend stdout/stderr reaches
@@ -343,6 +492,77 @@ impl BackendSupervisor {
         self.start().await
     }
 
+    /// Apply the Settings-UI provider configuration.
+    ///
+    /// Stores the environment (keys in memory only; endpoints/models also
+    /// persisted for the next launch) and makes a running backend pick it up:
+    ///
+    /// - `Ready`: restart with the new environment;
+    /// - `Starting`/`Stopping`: wait for the in-flight transition to settle,
+    ///   then restart/start so the change is deterministically applied;
+    /// - `Failed`: start again with the new environment (a provider fix is
+    ///   exactly what should recover a failed boot);
+    /// - `Stopped`: store only — the next `start()` uses it.
+    ///
+    /// An unchanged environment is a no-op (no restart), so a settings save
+    /// that only touched UI state never bounces the gateway.
+    pub async fn apply_provider_env(
+        &self,
+        env: BackendProviderEnv,
+    ) -> Result<BackendInfo, String> {
+        let sanitized = env.sanitized();
+        let changed = {
+            let mut current = self.provider_env.write().await;
+            if *current == sanitized {
+                false
+            } else {
+                *current = sanitized.clone();
+                true
+            }
+        };
+        self.persist_provider_env(&sanitized);
+
+        if !changed {
+            return Ok(self.info().await);
+        }
+
+        let state = self.info.read().await.state.clone();
+        match state {
+            BackendState::Stopped => {}
+            BackendState::Ready => {
+                self.restart().await?;
+            }
+            BackendState::Failed => {
+                self.start().await?;
+            }
+            BackendState::Starting | BackendState::Stopping => {
+                self.wait_for_settle().await;
+                let settled = self.info.read().await.state.clone();
+                match settled {
+                    BackendState::Ready => {
+                        self.restart().await?;
+                    }
+                    BackendState::Stopped | BackendState::Failed => {
+                        self.start().await?;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(self.info().await)
+    }
+
+    /// Wait until the state machine leaves its transitional states.
+    async fn wait_for_settle(&self) {
+        for _ in 0..60 {
+            let state = self.info.read().await.state.clone();
+            if state != BackendState::Starting && state != BackendState::Stopping {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+    }
+
     /// Platform executable name for the canonical CLI.
     pub fn backend_executable_name() -> &'static str {
         if cfg!(windows) {
@@ -468,6 +688,14 @@ impl BackendSupervisor {
             .stderr(Stdio::piped())
             .stdin(Stdio::null())
             .kill_on_drop(true);
+
+        // Inject the Settings-UI provider configuration as the child's
+        // environment. This is the packaged-desktop equivalent of the user
+        // exporting provider env vars before running `apeireth gateway serve`.
+        let provider_env = self.provider_env.read().await.clone();
+        for (key, value) in provider_env.env_pairs() {
+            cmd.env(key, value);
+        }
 
         // Keep the child in the app's lifetime, not the user's screen: without
         // CREATE_NO_WINDOW a console window flashes on every launch.
@@ -629,6 +857,84 @@ mod tests {
                 "legacy token {legacy:?} leaked into spawn args: {args}"
             );
         }
+    }
+
+    /// The injected variable names must match the canonical CLI contract
+    /// (see `crates/adapters/cli` + `crates/engine/provider/src/credentials.rs`).
+    #[test]
+    fn provider_env_pairs_match_canonical_cli_contract() {
+        let env = BackendProviderEnv {
+            openai_api_key: Some("sk-openai".into()),
+            openai_url: Some("https://api.deepseek.com/v1".into()),
+            openai_models: Some("deepseek-v4-flash".into()),
+            minimax_api_key: Some("sk-mm".into()),
+            minimax_url: Some("https://api.minimax.chat/v1".into()),
+            minimax_models: Some("minimax-m3".into()),
+            anthropic_api_key: Some("sk-ant".into()),
+            anthropic_url: Some("https://api.anthropic.com".into()),
+            anthropic_models: Some("claude-sonnet-4-5".into()),
+        };
+        let pairs: Vec<(&str, &str)> = env.env_pairs();
+        let mut map = std::collections::HashMap::new();
+        for (key, value) in pairs {
+            map.insert(key, value);
+        }
+        assert_eq!(map["OPENAI_API_KEY"], "sk-openai");
+        assert_eq!(map["APEIRETH_OPENAI_URL"], "https://api.deepseek.com/v1");
+        assert_eq!(map["APEIRETH_OPENAI_MODELS"], "deepseek-v4-flash");
+        assert_eq!(map["APEIRETH_API_KEY"], "sk-mm");
+        assert_eq!(map["APEIRETH_API_URL"], "https://api.minimax.chat/v1");
+        assert_eq!(map["APEIRETH_API_MODELS"], "minimax-m3");
+        assert_eq!(map["APEIRETH_ANTHROPIC_KEY"], "sk-ant");
+        assert_eq!(map["APEIRETH_ANTHROPIC_URL"], "https://api.anthropic.com");
+        assert_eq!(map["APEIRETH_ANTHROPIC_MODELS"], "claude-sonnet-4-5");
+        assert_eq!(map.len(), 9);
+    }
+
+    #[test]
+    fn provider_env_sanitized_trims_and_drops_empties() {
+        let env = BackendProviderEnv {
+            openai_api_key: Some("  sk-key  ".into()),
+            openai_url: Some("   ".into()),
+            openai_models: Some("deepseek-v4-flash".into()),
+            ..Default::default()
+        }
+        .sanitized();
+        assert_eq!(env.openai_api_key.as_deref(), Some("sk-key"));
+        assert_eq!(env.openai_url, None);
+        assert_eq!(env.openai_models.as_deref(), Some("deepseek-v4-flash"));
+        assert!(BackendProviderEnv::default().is_empty());
+    }
+
+    #[test]
+    fn provider_env_without_secrets_keeps_no_keys() {
+        let env = BackendProviderEnv {
+            openai_api_key: Some("sk-openai".into()),
+            openai_url: Some("https://api.deepseek.com/v1".into()),
+            minimax_api_key: Some("sk-mm".into()),
+            anthropic_api_key: Some("sk-ant".into()),
+            anthropic_url: Some("https://api.anthropic.com".into()),
+            ..Default::default()
+        };
+        let stripped = env.without_secrets();
+        assert_eq!(stripped.openai_api_key, None);
+        assert_eq!(stripped.minimax_api_key, None);
+        assert_eq!(stripped.anthropic_api_key, None);
+        assert_eq!(stripped.openai_url.as_deref(), Some("https://api.deepseek.com/v1"));
+        assert_eq!(stripped.anthropic_url.as_deref(), Some("https://api.anthropic.com"));
+    }
+
+    /// The serialized shape is what the frontend sends over IPC.
+    #[test]
+    fn provider_env_serde_shape_is_snake_case() {
+        let env = BackendProviderEnv {
+            openai_models: Some("deepseek-v4-flash".into()),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&env).unwrap();
+        assert!(json.contains("\"openai_models\":\"deepseek-v4-flash\""), "{json}");
+        let round: BackendProviderEnv = serde_json::from_str(&json).unwrap();
+        assert_eq!(round, env);
     }
 
     #[test]

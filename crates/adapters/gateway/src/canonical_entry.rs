@@ -514,11 +514,18 @@ async fn health() -> Json<serde_json::Value> {
 
 async fn list_models(State(state): State<GatewayState>) -> Json<ModelListResponse> {
     let created = Timestamp::from_clock(state.runtime.clock().as_ref()).epoch_millis() / 1_000;
+    // Dedupe by model id: two providers can serve the same canonical model over
+    // different wires (the anthropic plugin defaults to MiniMax's
+    // Anthropic-compatible gateway, so both it and the native minimax plugin
+    // advertise `minimax-m3`). The UI model list needs one entry per id; model
+    // resolution by the runtime is unaffected by this display layer.
+    let mut seen = std::collections::HashSet::new();
     let data = state
         .runtime
         .providers()
         .model_descriptors()
         .into_iter()
+        .filter(|model| seen.insert(model.id.to_string()))
         .map(|model| ModelListItem {
             id: model.id.to_string(),
             object: "model",
