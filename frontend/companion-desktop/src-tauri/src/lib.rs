@@ -11,7 +11,9 @@
 pub mod backend_supervisor;
 mod logging;
 
-use backend_supervisor::{BackendInfo, BackendProviderEnv, BackendSupervisor};
+use backend_supervisor::{
+    BackendCapabilityEnv, BackendInfo, BackendProviderEnv, BackendSupervisor,
+};
 use logging::{DesktopLogger, LogLevel};
 use std::sync::Arc;
 use tauri::{
@@ -56,6 +58,18 @@ async fn apply_backend_provider_env(
     env: BackendProviderEnv,
 ) -> Result<BackendInfo, String> {
     supervisor.apply_provider_env(env).await
+}
+
+/// Apply the Settings-UI configuration (provider env + advanced-capability
+/// toggles) in one call, so a save that changed both restarts the backend
+/// exactly once. Either part may be omitted (no-op for that part).
+#[tauri::command]
+async fn apply_backend_config(
+    supervisor: State<'_, Arc<BackendSupervisor>>,
+    provider: Option<BackendProviderEnv>,
+    capabilities: Option<BackendCapabilityEnv>,
+) -> Result<BackendInfo, String> {
+    supervisor.apply_backend_config(provider, capabilities).await
 }
 
 #[tauri::command]
@@ -170,6 +184,7 @@ pub fn run() {
             stop_backend,
             restart_backend,
             apply_backend_provider_env,
+            apply_backend_config,
             get_log_directory,
             open_log_directory,
             open_settings,

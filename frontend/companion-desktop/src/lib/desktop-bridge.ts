@@ -137,6 +137,52 @@ export async function applyBackendProviderEnv(env: BackendProviderEnv): Promise<
   return info?.endpoint ?? null;
 }
 
+/**
+ * Advanced-capability toggles, mirroring the Rust `BackendCapabilityEnv`.
+ * Fail-closed: the supervisor injects `"1"` only for true values; absent
+ * means OFF in the canonical CLI.
+ */
+export interface BackendCapabilityEnv {
+  enable_shell: boolean;
+  enable_fetch: boolean;
+  enable_organs: boolean;
+  enable_preference_learning: boolean;
+  cognitive_judge: boolean;
+  cognitive_council: boolean;
+}
+
+/** Map the config's capability toggles onto the canonical knob names. */
+export function capabilityEnvFromConfig(toggles: {
+  shell?: boolean;
+  fetch?: boolean;
+  organs?: boolean;
+  preferenceLearning?: boolean;
+  judge?: boolean;
+  council?: boolean;
+} | undefined | null): BackendCapabilityEnv {
+  return {
+    enable_shell: toggles?.shell === true,
+    enable_fetch: toggles?.fetch === true,
+    enable_organs: toggles?.organs === true,
+    enable_preference_learning: toggles?.preferenceLearning === true,
+    cognitive_judge: toggles?.judge === true,
+    cognitive_council: toggles?.council === true,
+  };
+}
+
+/**
+ * Apply provider env + capability toggles in one IPC call so a settings save
+ * that changed both restarts the backend exactly once. Either part may be
+ * null (no-op). Returns the live endpoint or null in web mode / on failure.
+ */
+export async function applyBackendConfig(
+  provider: BackendProviderEnv | null,
+  capabilities: BackendCapabilityEnv | null,
+): Promise<string | null> {
+  const info = await invokeOptional<BackendStatus>('apply_backend_config', {provider, capabilities});
+  return info?.endpoint ?? null;
+}
+
 /** Absolute path of the log directory. */
 export function getLogDirectory(): Promise<string | null> {
   return invokeOptional<string>('get_log_directory');

@@ -159,6 +159,57 @@ impl BackendProviderEnv {
     }
 }
 
+/// Advanced-capability toggles the desktop injects into the sidecar.
+///
+/// Mirrors the canonical CLI knobs (`APEIRETH_ENABLE_SHELL/FETCH/ORGANS/
+/// PREFERENCE_LEARNING` + `APEIRETH_COGNITIVE_JUDGE/COUNCIL`). Fail-closed by
+/// construction: only `true` values emit `"1"`; absent variables mean OFF in
+/// the CLI, so a false toggle injects nothing. Shell/fetch stay behind the
+/// runtime's require-approval governance even when enabled, so the UI toggle
+/// alone never grants unrestricted execution.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct BackendCapabilityEnv {
+    pub enable_shell: bool,
+    pub enable_fetch: bool,
+    pub enable_organs: bool,
+    pub enable_preference_learning: bool,
+    pub cognitive_judge: bool,
+    pub cognitive_council: bool,
+}
+
+impl BackendCapabilityEnv {
+    /// The (variable, "1") pairs injected into the sidecar. Only enabled
+    /// capabilities appear; the CLI treats absence as OFF.
+    pub fn env_pairs(&self) -> Vec<(&'static str, &'static str)> {
+        let mut pairs = Vec::new();
+        if self.enable_shell {
+            pairs.push(("APEIRETH_ENABLE_SHELL", "1"));
+        }
+        if self.enable_fetch {
+            pairs.push(("APEIRETH_ENABLE_FETCH", "1"));
+        }
+        if self.enable_organs {
+            pairs.push(("APEIRETH_ENABLE_ORGANS", "1"));
+        }
+        if self.enable_preference_learning {
+            pairs.push(("APEIRETH_ENABLE_PREFERENCE_LEARNING", "1"));
+        }
+        if self.cognitive_judge {
+            pairs.push(("APEIRETH_COGNITIVE_JUDGE", "1"));
+        }
+        if self.cognitive_council {
+            pairs.push(("APEIRETH_COGNITIVE_COUNCIL", "1"));
+        }
+        pairs
+    }
+
+    /// True when no capability would be enabled.
+    pub fn is_empty(&self) -> bool {
+        self.env_pairs().is_empty()
+    }
+}
+
 impl Default for BackendInfo {
     fn default() -> Self {
         Self {
@@ -188,6 +239,7 @@ pub struct BackendSupervisor {
     process: Arc<RwLock<Option<BackendProcess>>>,
     logger: Option<Arc<DesktopLogger>>,
     provider_env: RwLock<BackendProviderEnv>,
+    capability_env: RwLock<BackendCapabilityEnv>,
 }
 
 impl BackendSupervisor {
@@ -195,19 +247,24 @@ impl BackendSupervisor {
     /// [`Self::with_logger`]; tests use `build(None)` when no log file is wanted.
     fn build(logger: Option<Arc<DesktopLogger>>) -> Self {
         // Restore the persisted non-secret provider config (endpoints/models)
-        // so the very first spawn already lists the user's provider models.
-        // Keys are deliberately NOT persisted; they arrive per session over
-        // IPC from the Settings UI.
-        let persisted = logger
+        // and capability toggles so the very first spawn already reflects the
+        // user's last settings. Keys are deliberately NOT persisted; they
+        // arrive per session over IPC from the Settings UI.
+        let persisted_provider = logger
             .as_ref()
             .and_then(|l| Self::load_persisted_provider_env(l))
             .unwrap_or_default()
             .without_secrets();
+        let persisted_capabilities = logger
+            .as_ref()
+            .and_then(|l| Self::load_persisted_capability_env(l))
+            .unwrap_or_default();
         Self {
             info: Arc::new(RwLock::new(BackendInfo::default())),
             process: Arc::new(RwLock::new(None)),
             logger,
-            provider_env: RwLock::new(persisted),
+            provider_env: RwLock::new(persisted_provider),
+            capability_env: RwLock::new(persisted_capabilities),
         }
     }
 
@@ -220,6 +277,15 @@ impl BackendSupervisor {
             .unwrap_or_else(|| logger.log_directory().join("backend-provider-env.json"))
     }
 
+    /// App-data file for the capability toggles (no secrets involved).
+    fn capability_env_path(logger: &DesktopLogger) -> PathBuf {
+        logger
+            .log_directory()
+            .parent()
+            .map(|dir| dir.join("backend-capability-env.json"))
+            .unwrap_or_else(|| logger.log_directory().join("backend-capability-env.json"))
+    }
+
     fn load_persisted_provider_env(logger: &DesktopLogger) -> Option<BackendProviderEnv> {
         let path = Self::provider_env_path(logger);
         let raw = std::fs::read_to_string(path).ok()?;
@@ -227,6 +293,12 @@ impl BackendSupervisor {
             .ok()
             .map(BackendProviderEnv::sanitized)
             .map(|env| env.without_secrets())
+    }
+
+    fn load_persisted_capability_env(logger: &DesktopLogger) -> Option<BackendCapabilityEnv> {
+        let path = Self::capability_env_path(logger);
+        let raw = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str::<BackendCapabilityEnv>(&raw).ok()
     }
 
     /// Persist only the non-secret part of the provider environment so the
@@ -237,6 +309,21 @@ impl BackendSupervisor {
         };
         let path = Self::provider_env_path(logger);
         let Ok(json) = serde_json::to_string_pretty(&env.without_secrets()) else {
+            return;
+        };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(path, json);
+    }
+
+    /// Persist capability toggles (no secrets) for the next launch.
+    fn persist_capability_env(&self, env: &BackendCapabilityEnv) {
+        let Some(logger) = &self.logger else {
+            return;
+        };
+        let path = Self::capability_env_path(logger);
+        let Ok(json) = serde_json::to_string_pretty(env) else {
             return;
         };
         if let Some(parent) = path.parent() {
@@ -494,35 +581,70 @@ impl BackendSupervisor {
 
     /// Apply the Settings-UI provider configuration.
     ///
-    /// Stores the environment (keys in memory only; endpoints/models also
-    /// persisted for the next launch) and makes a running backend pick it up:
-    ///
-    /// - `Ready`: restart with the new environment;
-    /// - `Starting`/`Stopping`: wait for the in-flight transition to settle,
-    ///   then restart/start so the change is deterministically applied;
-    /// - `Failed`: start again with the new environment (a provider fix is
-    ///   exactly what should recover a failed boot);
-    /// - `Stopped`: store only — the next `start()` uses it.
-    ///
-    /// An unchanged environment is a no-op (no restart), so a settings save
-    /// that only touched UI state never bounces the gateway.
+    /// Compatibility wrapper over [`Self::apply_backend_config`]; the frontend
+    /// uses the combined command so a settings save with both provider and
+    /// capability changes restarts the backend exactly once.
     pub async fn apply_provider_env(
         &self,
         env: BackendProviderEnv,
     ) -> Result<BackendInfo, String> {
-        let sanitized = env.sanitized();
-        let changed = {
-            let mut current = self.provider_env.write().await;
-            if *current == sanitized {
-                false
-            } else {
-                *current = sanitized.clone();
-                true
-            }
-        };
-        self.persist_provider_env(&sanitized);
+        self.apply_backend_config(Some(env), None).await
+    }
 
-        if !changed {
+    /// Apply the Settings-UI configuration (provider env and/or capability
+    /// toggles).
+    ///
+    /// Stores both (keys in memory only; endpoints/models and toggles also
+    /// persisted for the next launch) and makes a running backend pick the
+    /// changes up with a single restart when anything changed:
+    ///
+    /// - `Ready`: restart with the new environment;
+    /// - `Starting`/`Stopping`: wait for the in-flight transition to settle,
+    ///   then restart/start so the change is deterministically applied;
+    /// - `Failed`: start again with the new environment (a configuration fix
+    ///   is exactly what should recover a failed boot);
+    /// - `Stopped`: store only — the next `start()` uses it.
+    ///
+    /// An unchanged configuration is a no-op (no restart), so a settings save
+    /// that only touched UI state never bounces the gateway.
+    pub async fn apply_backend_config(
+        &self,
+        provider: Option<BackendProviderEnv>,
+        capabilities: Option<BackendCapabilityEnv>,
+    ) -> Result<BackendInfo, String> {
+        let provider_changed = if let Some(env) = provider {
+            let sanitized = env.sanitized();
+            let changed = {
+                let mut current = self.provider_env.write().await;
+                if *current == sanitized {
+                    false
+                } else {
+                    *current = sanitized.clone();
+                    true
+                }
+            };
+            self.persist_provider_env(&sanitized);
+            changed
+        } else {
+            false
+        };
+        let capabilities_changed = if let Some(env) = capabilities {
+            let changed = {
+                let mut current = self.capability_env.write().await;
+                if *current == env {
+                    false
+                } else {
+                    *current = env.clone();
+                    true
+                }
+            };
+            self.persist_capability_env(&env);
+            changed
+        } else {
+            false
+        };
+
+        if !provider_changed && !capabilities_changed {
             return Ok(self.info().await);
         }
 
@@ -694,6 +816,12 @@ impl BackendSupervisor {
         // exporting provider env vars before running `apeireth gateway serve`.
         let provider_env = self.provider_env.read().await.clone();
         for (key, value) in provider_env.env_pairs() {
+            cmd.env(key, value);
+        }
+        // Same for the advanced-capability toggles (fail-closed: only "1"
+        // values are emitted).
+        let capability_env = self.capability_env.read().await.clone();
+        for (key, value) in capability_env.env_pairs() {
             cmd.env(key, value);
         }
 
@@ -935,6 +1063,30 @@ mod tests {
         assert!(json.contains("\"openai_models\":\"deepseek-v4-flash\""), "{json}");
         let round: BackendProviderEnv = serde_json::from_str(&json).unwrap();
         assert_eq!(round, env);
+    }
+
+    /// Capability env names must match the canonical CLI knobs, and the
+    /// fail-closed contract holds: only true emits "1", false emits nothing.
+    #[test]
+    fn capability_env_pairs_match_canonical_knobs_and_fail_closed() {
+        let caps = BackendCapabilityEnv {
+            enable_shell: true,
+            enable_fetch: false,
+            enable_organs: true,
+            enable_preference_learning: false,
+            cognitive_judge: true,
+            cognitive_council: false,
+        };
+        let pairs = caps.env_pairs();
+        let mut map = std::collections::HashMap::new();
+        for (key, value) in pairs {
+            map.insert(key, value);
+        }
+        assert_eq!(map["APEIRETH_ENABLE_SHELL"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_ORGANS"], "1");
+        assert_eq!(map["APEIRETH_COGNITIVE_JUDGE"], "1");
+        assert_eq!(map.len(), 3, "false toggles must emit nothing: {map:?}");
+        assert!(BackendCapabilityEnv::default().is_empty());
     }
 
     #[test]

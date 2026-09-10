@@ -16,11 +16,13 @@
     XCircle,
     AlertTriangle,
   } from 'lucide-svelte';
-  import type {CapabilityManifest, RuntimeHealthReport} from '../types';
+  import type {ApeirethConfig, CapabilityManifest, RuntimeHealthReport} from '../types';
+  import {fetchRuntimeSnapshot} from '../runtime';
 
   let {
     open = false,
     report,
+    config,
     capabilities = null,
     onClose,
     onRefresh,
@@ -28,11 +30,30 @@
   }: {
     open: boolean;
     report: RuntimeHealthReport;
+    config: ApeirethConfig;
     capabilities: CapabilityManifest | null;
     onClose: () => void;
     onRefresh: () => Promise<void> | void;
     isRefreshing?: boolean;
   } = $props();
+
+  // P9: /v1/runtime/snapshot 内省（providers/modules/状态全量）。
+  let snapshot = $state<Record<string, unknown> | null>(null);
+  let snapshotError = $state('');
+  let snapshotLoading = $state(false);
+
+  async function loadSnapshot(): Promise<void> {
+    snapshotLoading = true;
+    snapshotError = '';
+    const result = await fetchRuntimeSnapshot(config);
+    if ('error' in result) {
+      snapshotError = result.error;
+      snapshot = null;
+    } else {
+      snapshot = result.snapshot;
+    }
+    snapshotLoading = false;
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape' && open) {
@@ -157,6 +178,26 @@
             {/each}
           </div>
         </div>
+
+        <!-- P9: 运行时快照 (GET /v1/runtime/snapshot) -->
+        <div class="snapshot-wrap">
+          <div class="snapshot-head">
+            <h3 class="section-title">运行时快照</h3>
+            <button class="snapshot-btn" onclick={() => void loadSnapshot()} disabled={snapshotLoading}>
+              <RotateCw size={12} class={snapshotLoading ? 'spin' : ''} />
+              <span>{snapshot ? '刷新快照' : '拉取快照'}</span>
+            </button>
+          </div>
+          {#if snapshotLoading}
+            <p class="snapshot-hint">拉取中…</p>
+          {:else if snapshotError}
+            <p class="snapshot-hint error">{snapshotError}</p>
+          {:else if snapshot}
+            <pre class="snapshot-json">{JSON.stringify(snapshot, null, 2)}</pre>
+          {:else}
+            <p class="snapshot-hint">包含后端注册的 providers / 模块 / 执行状态全量内省，点击拉取。</p>
+          {/if}
+        </div>
       </div>
 
       {#if capabilities}
@@ -199,6 +240,57 @@
 {/if}
 
 <style>
+  /* 运行时快照 (P9) */
+  .snapshot-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 18px 4px;
+  }
+  .snapshot-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .snapshot-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .snapshot-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .snapshot-hint {
+    font-size: 12px;
+    color: var(--faint);
+    margin: 0;
+  }
+  .snapshot-hint.error {
+    color: var(--danger, #e5484d);
+  }
+  .snapshot-json {
+    max-height: 260px;
+    overflow: auto;
+    font-family: monospace;
+    font-size: 11px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
   .modal-backdrop {
     position: fixed;
     inset: 0;

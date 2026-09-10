@@ -14,6 +14,7 @@
 
 import type {
   ApeirethConfig,
+  CapabilityToggles,
   ChatMessage,
   Conversation,
   ModelSetup,
@@ -27,6 +28,7 @@ import type {
   CapabilityManifest,
   Capability,
 } from './types';
+import {DEFAULT_CAPABILITY_TOGGLES} from './types.ts';
 import {recordCallLog} from './call-logger.ts';
 
 const STORAGE_KEY = 'apeireth-config';
@@ -88,9 +90,23 @@ function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
     provider: config.provider,
     openaiConfig: config.openaiConfig,
     anthropicConfig: config.anthropicConfig,
+    capabilities: config.capabilities,
     personas: config.personas,
     activePersonaId: config.activePersonaId,
   }) as Record<string, unknown>;
+}
+
+/** Parse persisted capability toggles; anything unknown/absent = OFF (fail-closed). */
+function parseCapabilityToggles(value: unknown): CapabilityToggles {
+  const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  return {
+    shell: raw.shell === true,
+    fetch: raw.fetch === true,
+    organs: raw.organs === true,
+    preferenceLearning: raw.preferenceLearning === true,
+    judge: raw.judge === true,
+    council: raw.council === true,
+  };
 }
 
 function isDirectProviderDebugEnabled(provider: ApeirethConfig['provider']): boolean {
@@ -375,6 +391,7 @@ export function loadConfig(): ApeirethConfig {
       const provider = parseProviderConfig(parsed.provider);
       const openaiConfig = parseModelSetup(parsed.openaiConfig);
       const anthropicConfig = parseModelSetup(parsed.anthropicConfig);
+      const capabilities = parseCapabilityToggles(parsed.capabilities);
       let personas: ApeirethConfig['personas'];
       const rawPersonas = parsed.personas;
       if (Array.isArray(rawPersonas)) {
@@ -398,6 +415,7 @@ export function loadConfig(): ApeirethConfig {
         provider,
         openaiConfig,
         anthropicConfig,
+        capabilities,
         personas,
         activePersonaId,
       };
@@ -433,6 +451,7 @@ export function loadConfig(): ApeirethConfig {
       model: 'claude-3-7-sonnet-20250219',
       anthropicVersion: '2023-06-01',
     },
+    capabilities: {...DEFAULT_CAPABILITY_TOGGLES},
     personas: DEFAULT_PERSONAS,
     activePersonaId: 'apeireth-default',
   };
@@ -1537,6 +1556,60 @@ export async function fetchGraphData(config: ApeirethConfig): Promise<{facts: Me
       category: 'link',
     })),
   };
+}
+
+/** 器官链摘要 (GET /v1/organs)。后端未实现时返回 {error}。 */
+export interface OrganSummaryDto {
+  id: string;
+  name: string;
+  enabled: boolean;
+  description?: string | null;
+}
+
+export async function fetchOrgans(config: ApeirethConfig): Promise<{organs: OrganSummaryDto[]} | {error: string}> {
+  const result = await fetchOrganLikeList(config, '/v1/organs', 'organs');
+  return 'error' in result ? result : {organs: result.items};
+}
+
+/** 认知模块清单 (GET /v1/modules)。后端未实现时返回 {error}。 */
+export async function fetchModules(config: ApeirethConfig): Promise<{modules: OrganSummaryDto[]} | {error: string}> {
+  const result = await fetchOrganLikeList(config, '/v1/modules', 'modules');
+  return 'error' in result ? result : {modules: result.items};
+}
+
+async function fetchOrganLikeList(
+  config: ApeirethConfig,
+  path: string,
+  field: 'organs' | 'modules',
+): Promise<{items: OrganSummaryDto[]} | {error: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    });
+    if (!res.ok) {
+      return {error: res.status === 501 ? `当前运行时未实现 ${field}.list` : `HTTP ${res.status}`};
+    }
+    const data = (await checkJson(res)) as Record<string, unknown>;
+    const items = Array.isArray(data[field]) ? (data[field] as OrganSummaryDto[]) : [];
+    return {items: items.map((o) => ({...o, description: o.description ?? null}))};
+  } catch (caught) {
+    return {error: describeCaught(caught)};
+  }
+}
+
+/** 运行时快照 (GET /v1/runtime/snapshot)：providers/modules/状态 全量内省。 */
+export async function fetchRuntimeSnapshot(
+  config: ApeirethConfig,
+): Promise<{snapshot: Record<string, unknown>} | {error: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/runtime/snapshot`, {
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    });
+    if (!res.ok) return {error: `HTTP ${res.status}`};
+    return {snapshot: (await checkJson(res)) as Record<string, unknown>};
+  } catch (caught) {
+    return {error: describeCaught(caught)};
+  }
 }
 
 /** 获取持久化审计记录 */

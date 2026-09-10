@@ -36,13 +36,14 @@
 | 10 | 装机 E2E 全链 11/11（安装→装机侧车真聊天→gateway /health→桌面冒烟→孤儿复现→卸载零残留） | 2026-09-10（新包 `CB318756…`） | `frontend/companion-desktop/scripts/install-e2e.ps1` | `$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'; pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
 | 11 | NSIS 卸载器侧车进程检查（运行中侧车被卸载器杀掉，零残留） | 2026-09-08 | `installer.nsh` hook + install-e2e 孤儿场景回归 | 同 #10 |
 | 12 | Settings provider 配置注入侧车环境（apply → 重启换端口 → `/v1/models` 出现注入模型 → 重复 apply 不重启） | 2026-09-10 | `frontend/companion-desktop/src-tauri/tests/supervisor_lifecycle.rs::provider_env_reaches_the_backend`（**真后端、无需 key**） | `cargo test -p companion-desktop --test supervisor_lifecycle`（src-tauri 内） |
+| 13 | 高级能力旋钮注入侧车（P9：`apply_backend_config` 开 shell → 重启 → `/v1/tools/list` 出现 `"name":"shell"` 且 `permission:"granted"` → 重复 apply 不重启；合并 apply 单次重启契约） | 2026-09-10 | `supervisor_lifecycle.rs::capability_env_reaches_the_backend`（**真后端、无需 key**）+ `capability_env_pairs_match_canonical_knobs_and_fail_closed`（fail-closed 单元测试） | `cargo test -p companion-desktop --test supervisor_lifecycle` |
 
 ## 2. 挂账（未测 / 测不了）——不要声称已验
 
 | # | 项 | 原因 | 若要做时的路径 |
 |---|---|---|---|
 | 1 | **MiniMax provider 真机** | 无 MiniMax key（用户侧无预算） | `#[ignore]` 测试齐备：`minimax_llm_factory::real_llm_call_smoke` 等，有 key 后 `cargo test -p apeireth-provider --test minimax_llm_factory -- --ignored` + env `MINIMAX_API_KEY` |
-| 2 | **桌面 UI 点击流人工实测**（真窗口里：设置选 provider 填 key → 保存 → 网关重启 → 聊天出字） | 各链路段都有自动化验证（#6/#10/#12），但**真窗口的端到端点击流从未人工点过**——这是唯一建议后人做一次的测试 | 装机 → 启动 companion-desktop → 设置 → 保存 → 聊天；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
+| 2 | **桌面 UI 点击流人工实测**（真窗口里：设置选 provider 填 key → 保存 → 网关重启 → 聊天出字，含能力旋钮开关） | 各链路段都有自动化验证（#6/#10/#12/#13），但**真窗口的端到端点击流从未人工点过**——这是唯一建议后人做一次的测试 | 装机 → 启动 companion-desktop → 设置（provider + 高级能力）→ 保存 → 聊天；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
 | 3 | `/v1/apeireth/events` 订阅端到端（桌面 UI 里收事件） | 端点已确认是活流（探针连接保持），UI 消费未人工验证 | presence 订阅代码在 `presence.ts`；UI 验证并入 #2 |
 | 4 | approvals 的 HTTP 完整闭环 | 完整闭环在 CLI 实测过（#3）；HTTP 路由只验了参数校验响应 | HTTP 闭环可并入 #2（工具触发 → 面板审批按钮） |
 | 5 | **token 级真流式** | 当前 `stream:true` = 整段完成后分帧（B2 纪律：缓冲默认关，需授权开 provider 流直通） | provider SSE → gateway 直通 + 前端逐 token 渲染 |
