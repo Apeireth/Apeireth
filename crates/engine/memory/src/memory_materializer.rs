@@ -87,6 +87,9 @@ pub enum MemoryMaterializationStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelationCandidate {
+    pub subject_id: String,
+    pub predicate: String,
+    pub object_id: String,
     pub content: String,
     pub confidence: f64,
     pub provenance: MemoryProvenance,
@@ -440,8 +443,17 @@ where
 
 fn typed_candidate(candidate: &ExtractedMemory) -> Option<MemoryTypedCandidate> {
     if candidate.class == ExtractionClass::Relation {
+        let mut parts = candidate.content.splitn(3, ' ');
+        let (Some(subject_id), Some(predicate), Some(object_id)) =
+            (parts.next(), parts.next(), parts.next())
+        else {
+            return None;
+        };
         return Some(MemoryTypedCandidate::Relation {
             candidate: RelationCandidate {
+                subject_id: subject_id.to_string(),
+                predicate: predicate.to_string(),
+                object_id: object_id.to_string(),
                 content: candidate.content.clone(),
                 confidence: candidate.confidence,
                 provenance: candidate.provenance.clone(),
@@ -625,6 +637,9 @@ mod tests {
                 },
                 MemoryTypedCandidate::Relation {
                     candidate: RelationCandidate {
+                        subject_id: "Ada".into(),
+                        predicate: "works_with".into(),
+                        object_id: "team".into(),
                         content: "works with team".into(),
                         confidence: 0.8,
                         provenance: MemoryProvenance::default(),
