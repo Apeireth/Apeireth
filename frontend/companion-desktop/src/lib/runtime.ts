@@ -1558,45 +1558,6 @@ export async function fetchGraphData(config: ApeirethConfig): Promise<{facts: Me
   };
 }
 
-/** 器官链摘要 (GET /v1/organs)。后端未实现时返回 {error}。 */
-export interface OrganSummaryDto {
-  id: string;
-  name: string;
-  enabled: boolean;
-  description?: string | null;
-}
-
-export async function fetchOrgans(config: ApeirethConfig): Promise<{organs: OrganSummaryDto[]} | {error: string}> {
-  const result = await fetchOrganLikeList(config, '/v1/organs', 'organs');
-  return 'error' in result ? result : {organs: result.items};
-}
-
-/** 认知模块清单 (GET /v1/modules)。后端未实现时返回 {error}。 */
-export async function fetchModules(config: ApeirethConfig): Promise<{modules: OrganSummaryDto[]} | {error: string}> {
-  const result = await fetchOrganLikeList(config, '/v1/modules', 'modules');
-  return 'error' in result ? result : {modules: result.items};
-}
-
-async function fetchOrganLikeList(
-  config: ApeirethConfig,
-  path: string,
-  field: 'organs' | 'modules',
-): Promise<{items: OrganSummaryDto[]} | {error: string}> {
-  try {
-    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-    });
-    if (!res.ok) {
-      return {error: res.status === 501 ? `当前运行时未实现 ${field}.list` : `HTTP ${res.status}`};
-    }
-    const data = (await checkJson(res)) as Record<string, unknown>;
-    const items = Array.isArray(data[field]) ? (data[field] as OrganSummaryDto[]) : [];
-    return {items: items.map((o) => ({...o, description: o.description ?? null}))};
-  } catch (caught) {
-    return {error: describeCaught(caught)};
-  }
-}
-
 /** 运行时快照 (GET /v1/runtime/snapshot)：providers/modules/状态 全量内省。 */
 export async function fetchRuntimeSnapshot(
   config: ApeirethConfig,
