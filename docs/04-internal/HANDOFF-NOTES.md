@@ -4,6 +4,8 @@
 > **HEAD**：以 `main` 当前提交为准（`7d990297`, 2026-08-28 Round 6 完; A 块 OrganOrchestrator 完整化 + O-6 复盘 amend + 4 doc drift fix + SDK 真 bug fix + §8.5 hook + §4.5 术语表）。**2026-09-05 对账注：当前 HEAD = `7647d2c9`，17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。** 历史: A 块后 = `bbbfb75b` (Round 2 amend 复盘配对 commit)。
 > **状态（2026-08-28, Final-2.1）**：RC-1/2/3/4/5/6/8/9/10 已有真实实现或适配，RC-11 v1→APX2 migration utility 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root。MiniMax provider E2E 仍需凭证；**A 块 OrganOrchestrator 完整化 5 stage 真实施已落** (amend 后 commits `c003e078` ~ `0afa733f` + 复盘 `bbbfb75b`; 详 `organ-orchestrator-completion-plan.md` + `A-block-o6-true-account.md`); 偏好学习、长程 reflection、非文本 perception 仍明确延期; frontend 对接 + RC-7 真 modality 待硬件.
 
+> **⚠️ 2026-09-08 对账注（按实际走，现状以此为准）**：上一条状态行的"仍明确延期/待硬件"部分已过期——**偏好学习已接线**（`preference_learning` 双索引 + 召回三段展开，旋钮 `APEIRETH_ENABLE_PREFERENCE_LEARNING=1`）；**frontend 对接已落地**（companion-desktop 2.0.0-rc.1 以 bundled-backend 方式 spawn `apeireth gateway serve`，装机 E2E 实测：聊天探针 / gateway health / 桌面端存活 6s 全过）；**Council 真 provider E2E 已过**（DeepSeek 7 advisor → Approved 5.0s，`council_live.rs`）。仍延期：长程 reflection、非文本 perception（RC-7 待硬件）、MiniMax E2E（无 key，永久挂账）、真实流式（SSE 缓冲默认关）。能力旋钮全集：`APEIRETH_ENABLE_SHELL/FETCH/ORGANS/PREFERENCE_LEARNING` + `APEIRETH_COGNITIVE_JUDGE/COUNCIL`（均默认关，INSTALL.md 有用户手册）。
+
 ```yaml
 [Document-Meta]
 Document:        docs/04-internal/HANDOFF-NOTES.md
@@ -138,7 +140,7 @@ crates/
 2. **Cognitive module 集成 review** (其他 dev 推, 接手人看 3 commit) — `a699c5f5` ABI / `1d227d6a` integration / `64e64f46` lifecycle. 重点看 `crates/engine/runtime/src/canonical/module.rs` 与 `execute.rs` 边界.
 3. **v1.0 parity 完成 (ROADMAP §4 P3-P6)** — 子代理 B 估 14-19 周: M1B 记忆移植 (P3) → perception trait (P4) → tool-runtime + supervisor + SelfAssessment (P5) → council + team-lead + cognition (P6).
 4. **13 键永久降级后** 仍有 3 用法 (hook deny reason / CapabilityDescriptor risk 分级 / ROADMAP §5 语义定义) — 不接回 runtime 强制.
-5. **前端 companion-desktop 对接 v2 gateway** — v2.0.0 阶段, 当前 0.5.0 前端接 v1.
+5. **前端 companion-desktop 对接 v2 gateway** — ✅ 已落地（2026-09-08 装机 E2E）：2.0.0-rc.1 以 bundled-backend 方式 spawn `apeireth gateway serve`（`frontend/companion-desktop/src-tauri/src/backend_supervisor.rs`），装机后聊天探针 / gateway health / 桌面端存活实测全过。遗留 = 真实流式（SSE 缓冲默认关）。
 
 ### 7.1 Cognitive module wiring (本轮新增)
 
@@ -150,11 +152,17 @@ crates/
 并接受 runtime 的 duplicate-id / hook / round / side-call 守门。
 
 默认无额外模型成本：memory/preference recall、AfterTurn writeback 与
-保守 Experience extraction 走注入 backend；Judge/Council 只有对应环境开关才
-开启。Council 通过 runtime-owned `ModuleInvoker` 做有界 typed advisor side-call，
-默认最多 7 个 advisor、单 advisor 10s、整体 60s；真实 provider E2E 仍需凭证。
+保守 Experience extraction 走注入 backend；Judge/Council/preference_learning/
+organs 只有对应环境开关才开启（`APEIRETH_COGNITIVE_JUDGE=1` /
+`APEIRETH_COGNITIVE_COUNCIL=1` / `APEIRETH_ENABLE_PREFERENCE_LEARNING=1` /
+`APEIRETH_ENABLE_ORGANS=1`，默认全关；shell/fetch 另见 `APEIRETH_ENABLE_SHELL/FETCH`）。
+Council 通过 runtime-owned `ModuleInvoker` 做有界 typed advisor side-call，
+默认最多 7 个 advisor、单 advisor 10s、整体 60s；真实 provider E2E 已于
+2026-09-08 在 DeepSeek 通过（`crates/foundation/orchestration/tests/council_live.rs`，
+7 advisor → Approved 5.0s；MiniMax 无凭证保持 `#[ignore]` 永久挂账）。
 Experience 只在 episode durable commit 成功后提炼有界摘要与显式 marker，并保留
-source episode evidence；不宣称长程 cognition、偏好学习或完整语义 LLM extraction
+source episode evidence；偏好学习已接线但默认关（双索引 + 三段召回展开，见
+`cognitive-module-wiring.md`）；不宣称长程 cognition 或完整语义 LLM extraction
 已完成。
 
 ### 7.2 远程验证记录 (2026-08-28)

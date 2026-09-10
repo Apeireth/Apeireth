@@ -445,10 +445,13 @@ async fn explicit_positive_preference_is_learned_without_llm() {
         .unwrap();
 
     let rows = store.rows();
-    assert_eq!(rows.len(), 1);
+    // 2026-09-08 双索引: "rust" 主行 + "project" 簇孪生 (关键词表 rust→project).
+    assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].topic, "rust");
     assert!(rows[0].stance.contains("likes rust"));
     assert!(rows[0].tags.iter().any(|tag| tag == "explicit"));
+    assert_eq!(rows[1].topic, "project");
+    assert!(rows[1].tags.iter().any(|tag| tag == "topic_cluster"));
     // Deterministic learning: the main completion is the ONLY provider call.
     assert_eq!(provider.call_count(), 1);
 }
@@ -494,10 +497,16 @@ async fn preference_comparison_is_coherent() {
         .unwrap();
 
     let rows = store.rows();
-    assert_eq!(rows.len(), 1, "one coherent row for the comparison");
+    // 双索引: "rust" 主行 + "project" 簇孪生 (2026-09-08).
+    assert_eq!(
+        rows.len(),
+        2,
+        "one coherent row for the comparison + cluster twin"
+    );
     assert_eq!(rows[0].topic, "rust");
     assert!(rows[0].stance.contains("prefers rust over python"));
     assert!(rows[0].tags.iter().any(|tag| tag == "comparison"));
+    assert_eq!(rows[1].topic, "project");
 }
 
 // ---------------------------------------------------------------------
@@ -555,7 +564,8 @@ async fn repeated_evidence_reinforces_without_duplicates() {
         .unwrap();
 
     let rows = store.rows();
-    assert_eq!(rows.len(), 1, "same topic reinforces, never explodes");
+    // 双索引: 主行 + 簇孪生各自 reinforce, 永不爆炸 (2026-09-08).
+    assert_eq!(rows.len(), 2, "same topic reinforces, never explodes");
     assert!(
         (rows[0].confidence - 0.8).abs() < 1e-9,
         "confidence takes the max across observations, got {}",
@@ -584,7 +594,8 @@ async fn contradiction_flips_stance_deterministically() {
         .unwrap();
 
     let rows = store.rows();
-    assert_eq!(rows.len(), 1, "contradiction replaces, not appends");
+    // 双索引: 主行翻转 + 簇孪生同翻转 (2026-09-08).
+    assert_eq!(rows.len(), 2, "contradiction replaces, not appends");
     assert!(
         rows[0].stance.starts_with("dislikes"),
         "latest evidence wins: got {:?}",
@@ -620,7 +631,11 @@ async fn deny_shaped_governance_leaves_learning_intact() {
     assert!(matches!(outcome, TurnOutcome::Completed(_)));
     // Deterministic learning never calls the provider beyond the main round.
     assert_eq!(provider.call_count(), 1);
-    assert_eq!(store.rows().len(), 1, "explicit evidence is still learned");
+    assert_eq!(
+        store.rows().len(),
+        2,
+        "explicit evidence is still learned (+ cluster twin)"
+    );
 }
 
 #[tokio::test]
@@ -647,7 +662,7 @@ async fn require_approval_shaped_governance_creates_no_hidden_approval() {
         .await
         .unwrap();
     assert!(matches!(outcome, TurnOutcome::Completed(_)));
-    assert_eq!(store.rows().len(), 1);
+    assert_eq!(store.rows().len(), 2, "raw + cluster twin");
 }
 
 // ---------------------------------------------------------------------
@@ -703,7 +718,7 @@ async fn preferences_do_not_leak_across_sessions() {
         .execute_outcome(TurnRequest::new(session_a, "I like Rust."))
         .await
         .unwrap();
-    assert_eq!(store.rows().len(), 1);
+    assert_eq!(store.rows().len(), 2, "raw + cluster twin");
 
     // Session B: no preference evidence, and its recall must not surface
     // session A's rows.

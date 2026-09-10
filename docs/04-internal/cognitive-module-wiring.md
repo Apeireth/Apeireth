@@ -27,7 +27,8 @@ additions are explicit and remain subject to the runtime's duplicate-id check.
 | `cognitive.council` | runtime cognitive adapter | `AfterModelResponse` | WIRED, OFF by default | bounded typed advisor path through `ModuleInvoker`; no tool dispatch |
 | `cognitive.self_assessment` | runtime cognitive adapter | `AfterTurn` | WIRED, Judge-backed | records only a real Judge result; no fabricated heuristic score |
 | `cognitive.memory_writeback` | runtime cognitive adapter | `AfterTurn` | WIRED | successful final turn only; append-only user/assistant Episodes |
-| `cognitive.preference_learning` | runtime cognitive adapter | `AfterTurn` | WIRED, OFF by default | writes learned preferences for later turns (`ProductionModulesConfig.preference_learning` default false; `canonical_preference_learning` 14 tests); `topic_predictor` still not wired into recall |
+| `cognitive.preference_learning` | runtime cognitive adapter | `AfterTurn` | WIRED, OFF by default | writes learned preferences for later turns (`ProductionModulesConfig.preference_learning` default false; `canonical_preference_learning` 14 tests); dual-index write (raw row + topic-cluster twin); recall query expansion = raw → `cluster_topic_for` predicted cluster → top-N fallback (wired 2026-09-08) |
+| `cognitive.organs` | runtime cognitive adapter (`canonical/organ_module.rs`, post-freeze 13th slot) | `AfterTurn` | WIRED, OFF by default | the ONE organ-ownership module: `OrganModule → OrganOrchestrator → 9 organs`; 7 deterministic organs long-lived + W1/W2 transient per turn (Noop placeholders in persistent slots); fail-open (hook always `Continue`); council dependency dormant (fails closed if consulted) |
 | `cognitive.critic` | Judge owner | — | DEFERRED INTO JUDGE | Judge's bounded critique is the single critique path; no duplicate evaluator |
 | `cognitive.reflection` | SelfAssessment owner | `AfterTurn` | DEFERRED INTO SELF-ASSESSMENT | current-turn assessment is distinct from durable memory; long-term reflection pipeline remains future work |
 | `cognitive.planner` | orchestration service | — | NOT AN AGENT MODULE | no per-turn planner loop; future adapter must remain an adapter |
@@ -39,7 +40,7 @@ Registration order is deterministic:
 ```text
 TurnStart:          memory_recall -> preference_recall
 AfterModelResponse: judge -> council
-AfterTurn:          self_assessment -> memory_writeback -> preference_learning
+AfterTurn:          self_assessment -> memory_writeback -> preference_learning -> organs
 ```
 
 The runtime remains responsible for hook lifecycle, directive precedence,
@@ -60,9 +61,11 @@ The same pool is injected into:
 
 No module opens SQLite, reads environment variables, constructs a provider, or
 executes a tool. The environment is read only by the adapter's small production
-config: `APEIRETH_COGNITIVE_DB`, `APEIRETH_COGNITIVE_JUDGE=1`, and
-`APEIRETH_COGNITIVE_COUNCIL=1`. Judge is disabled unless explicitly enabled;
-normal memory recall/writeback has no additional model cost.
+config: `APEIRETH_COGNITIVE_DB`, `APEIRETH_COGNITIVE_JUDGE=1`,
+`APEIRETH_COGNITIVE_COUNCIL=1`, `APEIRETH_ENABLE_PREFERENCE_LEARNING=1`, and
+`APEIRETH_ENABLE_ORGANS=1`. Judge/council/preference-learning/organs are
+disabled unless explicitly enabled; normal memory recall/writeback has no
+additional model cost.
 
 `LlmFactory` remains the future logical advisor/subagent factory. It is not
 called by these modules. All current cognitive side-calls use the existing
