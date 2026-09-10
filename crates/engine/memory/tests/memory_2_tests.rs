@@ -375,3 +375,133 @@ fn test_consolidation_job() {
     assert_eq!(report.tool_invocations, 1);
     assert!(!report.extracted_insights.is_empty());
 }
+
+#[test]
+fn table_driven_governance_forget_and_protect_contracts() {
+    struct Case {
+        name: &'static str,
+        protect_first: bool,
+        unprotect_before_forget: bool,
+        expect_protected_error: bool,
+    }
+    let cases = [
+        Case {
+            name: "forget-active",
+            protect_first: false,
+            unprotect_before_forget: false,
+            expect_protected_error: false,
+        },
+        Case {
+            name: "protected-blocks-forget",
+            protect_first: true,
+            unprotect_before_forget: false,
+            expect_protected_error: true,
+        },
+        Case {
+            name: "unprotect-allows-forget",
+            protect_first: true,
+            unprotect_before_forget: true,
+            expect_protected_error: false,
+        },
+    ];
+
+    for case in cases {
+        let coord = setup_coordinator();
+        let session = format!("sess-governance-{}", case.name);
+        let episode = coord
+            .writeback(&MemoryWritebackEntry::new(
+                &session,
+                "user",
+                "governance target",
+            ))
+            .unwrap();
+        let mut revision = 0;
+        if case.protect_first {
+            let state = coord.protect_episode(&episode, revision).unwrap();
+            assert!(state.protected, "{}", case.name);
+            revision += 1;
+        }
+        if case.unprotect_before_forget {
+            let state = coord.unprotect_episode(&episode, revision).unwrap();
+            assert!(!state.protected, "{}", case.name);
+            revision += 1;
+        }
+        let result = coord.forget_episode(&episode, Some(case.name), revision);
+        if case.expect_protected_error {
+            assert!(
+                matches!(result, Err(MemoryGovernanceError::Protected(_))),
+                "{}",
+                case.name
+            );
+        } else {
+            assert_eq!(
+                result.unwrap().status.as_str(),
+                "forgotten",
+                "{}",
+                case.name
+            );
+        }
+    }
+}
+
+#[test]
+fn table_driven_consolidation_respects_governance_and_deduplicates() {
+    struct Case {
+        name: &'static str,
+        forgotten: bool,
+        duplicate: bool,
+        evaluated: usize,
+        merged: bool,
+    }
+    let cases = [
+        Case {
+            name: "visible",
+            forgotten: false,
+            duplicate: false,
+            evaluated: 1,
+            merged: false,
+        },
+        Case {
+            name: "forgotten-excluded",
+            forgotten: true,
+            duplicate: false,
+            evaluated: 0,
+            merged: false,
+        },
+        Case {
+            name: "duplicate-merged",
+            forgotten: false,
+            duplicate: true,
+            evaluated: 2,
+            merged: true,
+        },
+    ];
+    for case in cases {
+        let coord = setup_coordinator();
+        let session = format!("sess-consolidation-{}", case.name);
+        let first = coord
+            .writeback(&MemoryWritebackEntry::new(
+                &session,
+                "user",
+                "resolved: same fact",
+            ))
+            .unwrap();
+        if case.forgotten {
+            coord.forget_episode(&first, Some("test"), 0).unwrap();
+        }
+        if case.duplicate {
+            coord
+                .writeback(&MemoryWritebackEntry::new(
+                    &session,
+                    "assistant",
+                    "resolved: same fact",
+                ))
+                .unwrap();
+        }
+        let report = coord.run_consolidation(&session).unwrap();
+        assert_eq!(report.episodes_evaluated, case.evaluated, "{}", case.name);
+        if case.merged {
+            assert_eq!(report.extracted_insights.len(), 1, "{}", case.name);
+        }
+    }
+}

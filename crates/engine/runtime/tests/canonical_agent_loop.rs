@@ -1103,6 +1103,106 @@ async fn consecutive_turns_share_one_session_transcript() {
 }
 
 #[tokio::test]
+async fn context_tool_call_result_latest_user_and_transcript_invariants_are_table_driven() {
+    struct InvariantCase {
+        name: &'static str,
+        check: fn(&[NormalizedMessage], &[NormalizedMessage]),
+    }
+
+    fn tool_call_precedes_result(request: &[NormalizedMessage], _: &[NormalizedMessage]) {
+        let call = request
+            .iter()
+            .position(|message| !message.tool_calls.is_empty());
+        let result = request
+            .iter()
+            .position(|message| message.role == MessageRole::Tool);
+        assert!(
+            call.is_some() && result.is_some() && call < result,
+            "tool call/result order"
+        );
+    }
+    fn tool_result_matches_call(request: &[NormalizedMessage], _: &[NormalizedMessage]) {
+        let call = request
+            .iter()
+            .find_map(|message| message.tool_calls.first());
+        let result = request
+            .iter()
+            .find(|message| message.role == MessageRole::Tool);
+        assert_eq!(
+            call.map(|value| value.id.as_str()),
+            result.and_then(|value| value.tool_call_id.as_deref())
+        );
+    }
+    fn latest_user_is_current_turn(request: &[NormalizedMessage], _: &[NormalizedMessage]) {
+        let latest = request
+            .iter()
+            .rev()
+            .find(|message| message.role == MessageRole::User);
+        assert_eq!(latest.map(message_text), Some("calculate 1+1".to_string()));
+    }
+    fn transcript_is_append_only(_: &[NormalizedMessage], transcript: &[NormalizedMessage]) {
+        assert_eq!(
+            transcript
+                .iter()
+                .filter(|message| message.role == MessageRole::User)
+                .count(),
+            1
+        );
+        assert_eq!(
+            transcript
+                .iter()
+                .filter(|message| message.role == MessageRole::Tool)
+                .count(),
+            1
+        );
+        assert_eq!(
+            transcript.last().map(message_text),
+            Some("The answer is 2.".to_string())
+        );
+    }
+
+    let cases = [
+        InvariantCase {
+            name: "tool-call-before-result",
+            check: tool_call_precedes_result,
+        },
+        InvariantCase {
+            name: "result-correlates-to-call",
+            check: tool_result_matches_call,
+        },
+        InvariantCase {
+            name: "latest-user-is-current-turn",
+            check: latest_user_is_current_turn,
+        },
+        InvariantCase {
+            name: "persisted-transcript-is-complete",
+            check: transcript_is_append_only,
+        },
+    ];
+    let provider = FakeProvider::new("provider.fake", calculator_script());
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_governance(Arc::new(AllowAll))
+        .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
+        .with_plugin(CalculatorPlugin::new())
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .unwrap();
+    let session_id = SessionId::new();
+    runtime
+        .execute(TurnRequest::new(session_id, "calculate 1+1"))
+        .await
+        .unwrap();
+    let request = provider.request(1);
+    let persisted = runtime.sessions().load(&session_id).await.unwrap().unwrap();
+    for case in cases {
+        (case.check)(&request.messages, &persisted.messages);
+        assert!(!case.name.is_empty());
+    }
+}
+
+#[tokio::test]
 async fn the_model_is_offered_exactly_the_active_tools() {
     let provider = FakeProvider::new("provider.fake", vec![Scripted::Say("ok")]);
     let runtime = Runtime::builder()
