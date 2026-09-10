@@ -1091,7 +1091,10 @@ export async function streamChat(
                 };
                 finish_reason?: string;
               }>;
-              apeireth?: {events?: CanonicalExecutionEvent[]};
+              apeireth?: {
+                events?: CanonicalExecutionEvent[];
+                pending_approval?: CanonicalPendingApproval;
+              };
             };
 
             const choice = json.choices?.[0];
@@ -1104,8 +1107,21 @@ export async function streamChat(
               emitReasoning(delta.reasoning_content);
             }
 
+            // Streaming contract (2026-09-10): a pending approval terminates
+            // the SSE stream with an explicit approval_required frame; the
+            // 202-JSON branch above covers non-streaming / older gateways.
+            if (
+              choice?.finish_reason === 'approval_required' &&
+              json.apeireth?.pending_approval
+            ) {
+              callbacks.onApprovalRequired?.(json.apeireth.pending_approval);
+              throw new ApprovalRequiredError(json.apeireth.pending_approval);
+            }
+
             applyCanonicalEvents(json.apeireth?.events, callbacks);
-          } catch {}
+          } catch (caught) {
+            if (caught instanceof ApprovalRequiredError) throw caught;
+          }
         }
       }
     } finally {

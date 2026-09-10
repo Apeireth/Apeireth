@@ -31,10 +31,12 @@
 //!
 //! # Feature truthfulness (§6/§25)
 //!
-//! `SystemPrompt` + `ToolCalls` are advertised. The implementation sends
-//! `stream:false` and rejects images/tool-results-without-id, so it does not
-//! claim `Streaming` or `Vision`.
+//! `SystemPrompt` + `ToolCalls` + `Streaming` are advertised: the wire is the
+//! OpenAI Chat Completions protocol, which streams over SSE with
+//! `stream:true` (incremental deltas through `complete_streaming`). Images are
+//! still rejected, so `Vision` is not claimed.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, PluginId};
@@ -240,6 +242,182 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
 
         self.adapt_response(body, &request.model)
     }
+
+    /// Stream the completion over the vendor's SSE wire, forwarding content
+    /// deltas to `on_delta` as they arrive, and reassembling the accumulated
+    /// stream into the canonical full-response shape (same adapter as the
+    /// non-streaming path, so tool calls / finish reason / usage normalize
+    /// identically).
+    async fn complete_streaming(
+        &self,
+        request: &NormalizedRequest,
+        on_delta: Arc<dyn Fn(String) + Send + Sync>,
+    ) -> Result<apeireth_protocol::canonical::NormalizedResponse, ProviderError> {
+        let key = self.resolve_key()?;
+        let mut body = self.adapt_request(request)?;
+        body["stream"] = serde_json::Value::Bool(true);
+        body["stream_options"] = serde_json::json!({"include_usage": true});
+        let url = openai_chat::join_endpoint(&self.base_url, "chat/completions");
+
+        let send_result = self
+            .http
+            .post(&url)
+            .timeout(std::time::Duration::from_millis(self.timeout_ms))
+            .bearer_auth(key.expose())
+            .json(&body)
+            .send()
+            .await;
+
+        let mut response = match send_result {
+            Ok(resp) => resp,
+            Err(err) if err.is_timeout() => {
+                return Err(ProviderError::Timeout {
+                    provider: self.id.to_string(),
+                    timeout_ms: self.timeout_ms,
+                });
+            }
+            Err(err) => {
+                return Err(ProviderError::Network {
+                    provider: self.id.to_string(),
+                    detail: err.to_string(),
+                });
+            }
+        };
+
+        let status = response.status();
+        if !status.is_success() {
+            let body_text = response.text().await.unwrap_or_default();
+            return Err(self.classify_status(status, body_text));
+        }
+
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut full_text = String::new();
+        let mut tool_ids: BTreeMap<usize, String> = BTreeMap::new();
+        let mut tool_names: BTreeMap<usize, String> = BTreeMap::new();
+        let mut tool_args: BTreeMap<usize, String> = BTreeMap::new();
+        let mut finish_reason: Option<String> = None;
+        let mut usage: Option<serde_json::Value> = None;
+
+        loop {
+            let chunk = response
+                .chunk()
+                .await
+                .map_err(|e| ProviderError::BadResponse {
+                    provider: self.id.to_string(),
+                    detail: format!("stream read: {e}"),
+                })?;
+            let Some(chunk) = chunk else {
+                break;
+            };
+            buffer.extend_from_slice(&chunk);
+            while let Some(end) = find_sse_frame_end(&buffer) {
+                let frame: Vec<u8> = buffer.drain(..end).collect();
+                for raw_line in String::from_utf8_lossy(&frame).split('\n') {
+                    let line = raw_line.trim_end_matches('\r').trim();
+                    let Some(payload) = line.strip_prefix("data:") else {
+                        continue;
+                    };
+                    let payload = payload.trim();
+                    if payload.is_empty() || payload == "[DONE]" {
+                        continue;
+                    }
+                    let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else {
+                        continue;
+                    };
+                    if let Some(usage_value) = value.get("usage").filter(|u| !u.is_null()) {
+                        usage = Some(usage_value.clone());
+                    }
+                    let Some(choices) = value.get("choices").and_then(|c| c.as_array()) else {
+                        continue;
+                    };
+                    for choice in choices {
+                        let Some(delta) = choice.get("delta") else {
+                            continue;
+                        };
+                        if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                            if !content.is_empty() {
+                                on_delta(content.to_string());
+                                full_text.push_str(content);
+                            }
+                        }
+                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|t| t.as_array())
+                        {
+                            for call in tool_calls {
+                                let index = call.get("index").and_then(|i| i.as_u64()).unwrap_or(0)
+                                    as usize;
+                                if let Some(id) = call.get("id").and_then(|i| i.as_str()) {
+                                    tool_ids.insert(index, id.to_string());
+                                }
+                                let function = call.get("function");
+                                if let Some(name) = function
+                                    .and_then(|f| f.get("name"))
+                                    .and_then(|n| n.as_str())
+                                {
+                                    tool_names.insert(index, name.to_string());
+                                }
+                                if let Some(args) = function
+                                    .and_then(|f| f.get("arguments"))
+                                    .and_then(|a| a.as_str())
+                                {
+                                    tool_args.entry(index).or_default().push_str(args);
+                                }
+                            }
+                        }
+                        if let Some(reason) = choice.get("finish_reason").and_then(|f| f.as_str()) {
+                            if !reason.is_empty() {
+                                finish_reason = Some(reason.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Reassemble the accumulated stream into the canonical full-response
+        // shape and run it through the same adapter as the non-streaming path.
+        let mut message = serde_json::json!({ "role": "assistant", "content": full_text });
+        if !tool_ids.is_empty() {
+            let calls: Vec<serde_json::Value> = tool_ids
+                .keys()
+                .map(|index| {
+                    serde_json::json!({
+                        "id": tool_ids.get(index).cloned().unwrap_or_default(),
+                        "type": "function",
+                        "function": {
+                            "name": tool_names.get(index).cloned().unwrap_or_default(),
+                            "arguments": tool_args.get(index).cloned().unwrap_or_default(),
+                        },
+                    })
+                })
+                .collect();
+            message["tool_calls"] = serde_json::Value::Array(calls);
+        }
+        let mut synthetic = serde_json::json!({
+            "choices": [{
+                "message": message,
+                "finish_reason": finish_reason.unwrap_or_else(|| "stop".to_string()),
+            }],
+        });
+        if let Some(usage) = usage {
+            synthetic["usage"] = usage;
+        }
+        self.adapt_response(synthetic, &request.model)
+    }
+}
+
+/// Position just past the next blank-line SSE frame separator.
+fn find_sse_frame_end(buffer: &[u8]) -> Option<usize> {
+    let lf = buffer.windows(2).position(|w| w == b"\n\n").map(|i| i + 2);
+    let crlf = buffer
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .map(|i| i + 4);
+    match (lf, crlf) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
 }
 
 impl std::fmt::Debug for OpenAiCompatibleProviderCapability {
@@ -390,8 +568,8 @@ impl std::fmt::Debug for OpenAiCompatibleProviderPlugin {
 /// Build the provider model list from configured ids, de-duplicating by
 /// canonical id. `SystemPrompt` + `ToolCalls` are advertised — the
 /// implementation transports tool declarations / calls / results (2026-09-08)
-/// but sends `stream:false` and rejects images, so it does not claim
-/// `Streaming` or `Vision`.
+/// The wire is OpenAI Chat Completions with `stream:false` by default and
+/// `stream:true` (incremental SSE) through [`ProviderCapability::complete_streaming`].
 fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<ProviderModel>> {
     if model_ids.is_empty() {
         return Err(PluginError::InvalidArguments {
@@ -411,7 +589,11 @@ fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<P
         models.push(ProviderModel::from_configured(
             model,
             id,
-            [ModelFeature::SystemPrompt, ModelFeature::ToolCalls],
+            [
+                ModelFeature::SystemPrompt,
+                ModelFeature::ToolCalls,
+                ModelFeature::Streaming,
+            ],
         )?);
     }
     Ok(models)
@@ -453,6 +635,92 @@ mod tests {
         )
     }
 
+    /// One-shot mock vendor speaking the OpenAI SSE stream protocol.
+    async fn sse_mock_server(frames: &'static [&'static str]) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            let mut buf = [0u8; 4096];
+            let _ = socket.read(&mut buf).await;
+            let request_text = String::from_utf8_lossy(&buf);
+            assert!(
+                request_text.contains("\"stream\":true"),
+                "streaming call must request stream:true: {request_text}"
+            );
+            let head =
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n";
+            let mut out = head.to_string();
+            for frame in frames {
+                out.push_str(frame);
+                out.push_str("\n\n");
+            }
+            let _ = socket.write_all(out.as_bytes()).await;
+            let _ = socket.flush().await;
+            // Give the client time to read before the close.
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        });
+        format!("http://{addr}")
+    }
+
+    /// The streaming path forwards incremental content deltas (not one final
+    /// blob) and reassembles the same canonical response the non-streaming
+    /// path would produce.
+    #[tokio::test]
+    async fn complete_streaming_forwards_incremental_deltas() {
+        let base_url = sse_mock_server(&[
+            "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"好\"}}]}",
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}",
+            "data: [DONE]",
+        ])
+        .await;
+        let resolver = Arc::new(Mutex::new(Some(Arc::new(
+            apeireth_plugin::StaticCredentials::new().with(OPENAI_COMPATIBLE_API_KEY, "sk-mock"),
+        ) as Arc<dyn CredentialResolver>)));
+        let cap = OpenAiCompatibleProviderCapability::new(
+            base_url,
+            vec!["gpt-4o-mini".into()],
+            http(),
+            DEFAULT_TIMEOUT_MS,
+            resolver,
+        )
+        .expect("capability builds");
+
+        let deltas = Arc::new(Mutex::new(Vec::<String>::new()));
+        let deltas_sink = Arc::clone(&deltas);
+        let response = cap
+            .complete_streaming(
+                &request(),
+                Arc::new(move |delta: String| {
+                    deltas_sink.lock().unwrap().push(delta);
+                }),
+            )
+            .await
+            .expect("streaming completes");
+
+        let deltas = deltas.lock().unwrap().clone();
+        assert_eq!(deltas, vec!["你".to_string(), "好".to_string()]);
+        assert_eq!(response.content, "你好");
+        assert_eq!(
+            response.finish_reason,
+            Some(NormalizedFinishReason::Stop),
+            "finish_reason from the final stream chunk"
+        );
+        assert_eq!(
+            response.usage,
+            NormalizedUsage {
+                prompt_tokens: 5,
+                completion_tokens: 2,
+                total_tokens: 7,
+            }
+        );
+    }
+
     #[test]
     fn builds_with_stable_protocol_family_id_and_truthful_features() {
         let cap = capability(empty_resolver_slot());
@@ -463,10 +731,11 @@ mod tests {
         assert!(cap.supports_model("gpt-4o-mini"));
         assert!(cap.supports_model("GPT-4O-Mini"), "case-insensitive");
         assert!(!cap.supports_model("minimax-m3"), "distinct from minimax");
-        // Truthful features: SystemPrompt + ToolCalls (2026-09-08 tool transport).
+        // Truthful features: SystemPrompt + ToolCalls + Streaming
+        // (2026-09-08 tool transport; 2026-09-10 incremental SSE).
         assert!(cap.models()[0].supports(ModelFeature::SystemPrompt));
         assert!(cap.models()[0].supports(ModelFeature::ToolCalls));
-        assert!(!cap.models()[0].supports(ModelFeature::Streaming));
+        assert!(cap.models()[0].supports(ModelFeature::Streaming));
         assert!(!cap.models()[0].supports(ModelFeature::Vision));
     }
 

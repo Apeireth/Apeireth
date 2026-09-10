@@ -168,7 +168,7 @@ impl ProviderRouter {
     /// [`ProviderRouter::complete_with_tools`] when tool declarations must be
     /// sent only to providers that support tool calls.
     pub async fn complete(&self, request: &NormalizedRequest) -> RuntimeResult<RoutedCompletion> {
-        self.complete_inner(request, None).await
+        self.complete_inner(request, None, None).await
     }
 
     /// Serve a completion with per-provider tool declarations.
@@ -183,13 +183,32 @@ impl ProviderRouter {
         request: &NormalizedRequest,
         tool_declarations: &[NormalizedTool],
     ) -> RuntimeResult<RoutedCompletion> {
-        self.complete_inner(request, Some(tool_declarations)).await
+        self.complete_inner(request, Some(tool_declarations), None)
+            .await
+    }
+
+    /// Serve a completion with per-provider tool declarations, forwarding
+    /// content deltas to `on_delta` as they arrive.
+    ///
+    /// Streaming providers emit incremental deltas; providers without a real
+    /// streaming wire fall back to `complete` + one final delta (see
+    /// [`ProviderCapability::complete_streaming`]), so callers always get the
+    /// same callback contract and the same full [`RoutedCompletion`] result.
+    pub async fn complete_with_tools_streaming(
+        &self,
+        request: &NormalizedRequest,
+        tool_declarations: &[NormalizedTool],
+        on_delta: &Arc<dyn Fn(String) + Send + Sync>,
+    ) -> RuntimeResult<RoutedCompletion> {
+        self.complete_inner(request, Some(tool_declarations), Some(on_delta))
+            .await
     }
 
     async fn complete_inner(
         &self,
         request: &NormalizedRequest,
         tool_declarations: Option<&[NormalizedTool]>,
+        on_delta: Option<&Arc<dyn Fn(String) + Send + Sync>>,
     ) -> RuntimeResult<RoutedCompletion> {
         let supporting: Vec<&Arc<dyn ProviderCapability>> = self
             .providers
@@ -249,7 +268,16 @@ impl ProviderRouter {
 
             let started = Timestamp::from_clock(self.clock.as_ref());
 
-            match provider.complete(&candidate_request).await {
+            let attempt = match on_delta {
+                Some(sink) => {
+                    provider
+                        .complete_streaming(&candidate_request, Arc::clone(sink))
+                        .await
+                }
+                None => provider.complete(&candidate_request).await,
+            };
+
+            match attempt {
                 Ok(response) => {
                     let elapsed = Timestamp::from_clock(self.clock.as_ref())
                         .epoch_millis()

@@ -37,19 +37,19 @@
 | 11 | NSIS 卸载器侧车进程检查（运行中侧车被卸载器杀掉，零残留） | 2026-09-08 | `installer.nsh` hook + install-e2e 孤儿场景回归 | 同 #10 |
 | 12 | Settings provider 配置注入侧车环境（apply → 重启换端口 → `/v1/models` 出现注入模型 → 重复 apply 不重启） | 2026-09-10 | `frontend/companion-desktop/src-tauri/tests/supervisor_lifecycle.rs::provider_env_reaches_the_backend`（**真后端、无需 key**） | `cargo test -p companion-desktop --test supervisor_lifecycle`（src-tauri 内） |
 | 13 | 高级能力旋钮注入侧车（P9：`apply_backend_config` 开 shell → 重启 → `/v1/tools/list` 出现 `"name":"shell"` 且 `permission:"granted"` → 重复 apply 不重启；合并 apply 单次重启契约） | 2026-09-10 | `supervisor_lifecycle.rs::capability_env_reaches_the_backend`（**真后端、无需 key**）+ `capability_env_pairs_match_canonical_knobs_and_fail_closed`（fail-closed 单元测试） | `cargo test -p companion-desktop --test supervisor_lifecycle` |
+| 14 | **token 级真流式增量**（provider SSE → runtime sink → gateway 逐帧直通；审批/错误以显式终帧终止流） | 2026-09-10 | live 实测（DeepSeek，210 帧 ~23ms 逐帧到达）；`complete_streaming_forwards_incremental_deltas`（provider，mock SSE 顺序+合成同语义）；`the_gateway_streams_incremental_deltas_when_requested`（gateway，role<hel<lo<[DONE] + usage/元数据）；`openai_compatible_stream_ends_with_pending_approval_frame`（审批流式契约） | `curl -N -X POST …/v1/chat/completions -d '{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"…"}],"stream":true}'`（需 key） |
 
 ## 2. 挂账（未测 / 测不了）——不要声称已验
 
 | # | 项 | 原因 | 若要做时的路径 |
 |---|---|---|---|
 | 1 | **MiniMax provider 真机** | 无 MiniMax key（用户侧无预算） | `#[ignore]` 测试齐备：`minimax_llm_factory::real_llm_call_smoke` 等，有 key 后 `cargo test -p apeireth-provider --test minimax_llm_factory -- --ignored` + env `MINIMAX_API_KEY` |
-| 2 | **桌面 UI 点击流人工实测**（真窗口里：设置选 provider 填 key → 保存 → 网关重启 → 聊天出字，含能力旋钮开关） | 各链路段都有自动化验证（#6/#10/#12/#13），但**真窗口的端到端点击流从未人工点过**——这是唯一建议后人做一次的测试 | 装机 → 启动 companion-desktop → 设置（provider + 高级能力）→ 保存 → 聊天；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
+| 2 | **桌面 UI 点击流人工实测**（首启向导→填 key→保存→网关重启→流式聊天→shell 审批闭环，10 步） | 各链路段都有自动化验证（#6/#10/#12/#13/#14），但**真窗口的端到端点击流从未人工点过**——唯一建议后人做一次的测试 | **清单：`frontend/companion-desktop/docs/first-run-click-through-checklist.md`**（逐条预期 + 失败处置）；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
 | 3 | `/v1/apeireth/events` 订阅端到端（桌面 UI 里收事件） | 端点已确认是活流（探针连接保持），UI 消费未人工验证 | presence 订阅代码在 `presence.ts`；UI 验证并入 #2 |
 | 4 | approvals 的 HTTP 完整闭环 | 完整闭环在 CLI 实测过（#3）；HTTP 路由只验了参数校验响应 | HTTP 闭环可并入 #2（工具触发 → 面板审批按钮） |
-| 5 | **token 级真流式** | 当前 `stream:true` = 整段完成后分帧（B2 纪律：缓冲默认关，需授权开 provider 流直通） | provider SSE → gateway 直通 + 前端逐 token 渲染 |
-| 6 | macOS / Linux 打包与装机 | 仅 Windows NSIS 装机实测 | Tauri bundle 命令已有，缺真机验证环境 |
-| 7 | MSI 卸载与 NSIS 对齐（侧车检查） | WiX 模板无此 hook，Windows 推荐 NSIS | 若 MSI 变主力分发，需 WiX CustomAction |
-| 8 | RC-7 非文本感知（voice/screen） | 待硬件 | ROADMAP P7/P-arch-3 |
+| 5 | macOS / Linux 打包与装机 | 仅 Windows NSIS 装机实测 | Tauri bundle 命令已有，缺真机验证环境 |
+| 6 | MSI 卸载与 NSIS 对齐（侧车检查） | WiX 模板无此 hook，Windows 推荐 NSIS | 若 MSI 变主力分发，需 WiX CustomAction |
+| 7 | RC-7 非文本感知（voice/screen） | 待硬件 | ROADMAP P7/P-arch-3 |
 
 ## 3. 环境口径（live 测试统一契约）
 

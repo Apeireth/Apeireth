@@ -1,5 +1,18 @@
 # Changelog — Apeireth
 
+## [Unreleased] — token 级真流式打通 + 首启向导 (2026-09-10)
+
+- **真流式增量链路（provider → runtime → gateway → 客户端）**：
+  - `ProviderCapability::complete_streaming`（`Arc<dyn Fn(String)>` 回调；默认回退 = `complete` + 单 delta，非流式 provider 自动兼容，传输层无需分支）+ `supports_streaming`（`ModelFeature::Streaming` 能力级声明，B2 安全：增量是纯新增路径）。
+  - openai-compatible 真流实现：`stream:true` + `stream_options.include_usage`；SSE 逐帧解析（content 增量回调、`tool_calls` 按 index 累积、`finish_reason`/`usage` 捕获），流毕合成完整响应走同一 `adapt_response`（工具调用/归一化语义与非流式一致）；模型特征声明 `SystemPrompt+ToolCalls+Streaming`。
+  - runtime：`execute_outcome_streaming`/`execute_streaming`（sink 穿透 execute_outcome_locked→advance→router→provider；审批恢复路径 sink=None 天然无流）；router 增 `complete_with_tools_streaming`（按候选 provider 自动流/回退）。
+  - gateway：`stream:true` 走真流分支——role 帧 → 每 delta 一帧 → 终帧（finish_reason + apeireth 元数据 + usage）→ `[DONE]`；审批暂停以 `finish_reason:"approval_required"` + `pending_approval` 帧终止流（客户端不挂起）；错误以 error 帧终止。
+  - **live 实测（DeepSeek）**：210 个数据帧 ~23ms 内逐帧到达（旧行为 = 整段完成后 3 帧）。前端 gateway 路径本就在发 `stream:true` 并按 delta 渲染，本批补审批帧契约（`onApprovalRequired` + `ApprovalRequiredError` 穿透）。
+  - 测试：provider 增量 mock（"你"/"好" 顺序 + 合成响应同语义）；gateway 增量帧序测试（role < hel < lo < [DONE] + usage/元数据断言）；审批流式契约测试改造（202→SSE 终帧）。
+- **首启向导**：新 `FirstRunWizard.svelte`——选服务商（DeepSeek 默认推荐）→ 填 key → "开始使用"→ 保存 provider 配置并经 P0-A 管道应用（网关重启一次）；key 仍不落盘；"以后再说"不再打扰（localStorage 标记）。
+- **点击流人工实测清单**：`frontend/companion-desktop/docs/first-run-click-through-checklist.md`（10 步逐条预期 + 失败处置）；台账挂账 #2 指向它。
+- 守门：3171 passed（流式新增 2 测试 + 审批契约改造）；clippy/fmt/diff-check 0。
+
 ## [Unreleased] — ROADMAP P9 交付：能力旋钮 UI + 运行时快照内省（器官前端视图按用户要求不做）(2026-09-10)
 
 - **① 能力旋钮 UI**（对账批缺口的最大项）：Settings 新增"高级能力"区——shell/fetch/organs/preference_learning/judge/council 六个开关 → `BackendCapabilityEnv` 注入侧车（`APEIRETH_ENABLE_*`/`APEIRETH_COGNITIVE_*`，只注入 "1"、缺失即关，**fail-closed**）；与 provider 配置合并进 `apply_backend_config`（**单次 IPC = 单次重启**，不变 no-op）。验收：lifecycle 真后端测试 `capability_env_reaches_the_backend`——开 shell 后 `/v1/tools/list` 出现 `"name":"shell"` + `permission:"granted"`（治理授予同验），重复 apply 不重启；fail-closed 单元测试。

@@ -237,6 +237,124 @@ async fn the_gateway_models_list_is_projected_from_live_providers() {
     );
 }
 
+/// One-shot mock vendor speaking the OpenAI SSE stream protocol. The
+/// incremental frames make the gateway's true-streaming path distinguishable
+/// from the post-hoc "complete then frame" fallback: content arrives as
+/// separate `data:` frames.
+struct MockSseServer {
+    base_url: String,
+}
+
+impl MockSseServer {
+    async fn start() -> Self {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            let mut buf = [0u8; 8192];
+            let _ = socket.read(&mut buf).await;
+            let request_text = String::from_utf8_lossy(&buf);
+            assert!(
+                request_text.contains("\"stream\":true"),
+                "gateway must forward stream:true to the vendor: {request_text}"
+            );
+            let head =
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n";
+            let mut out = head.to_string();
+            for frame in [
+                "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}",
+                "data: {\"choices\":[{\"delta\":{\"content\":\"hel\"}}]}",
+                "data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}",
+                "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":6,\"completion_tokens\":2,\"total_tokens\":8}}",
+                "data: [DONE]",
+            ] {
+                out.push_str(frame);
+                out.push_str("\n\n");
+            }
+            let _ = socket.write_all(out.as_bytes()).await;
+            let _ = socket.flush().await;
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        });
+        Self {
+            base_url: format!("http://{addr}"),
+        }
+    }
+}
+
+/// The gateway forwards provider deltas incrementally (separate data frames,
+/// in order) and terminates with a metadata-carrying final chunk + [DONE].
+#[tokio::test]
+async fn the_gateway_streams_incremental_deltas_when_requested() {
+    let server = MockSseServer::start().await;
+    let http = reqwest::Client::builder().build().unwrap();
+    let plugin = Arc::new(
+        OpenAiCompatibleProviderPlugin::new(server.base_url, vec![MODEL.into()], http, 2_000)
+            .unwrap(),
+    );
+    let resolver: Arc<dyn CredentialResolver> =
+        Arc::new(StaticCredentials::new().with(OPENAI_COMPATIBLE_API_KEY, FAKE_KEY));
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_session_store(Arc::new(InMemorySessionStore::new()))
+        .with_governance(Arc::new(AllowAll))
+        .with_credentials(resolver)
+        .with_plugin(plugin)
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .expect("runtime builds");
+
+    let body = serde_json::json!({
+        "model": MODEL,
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": true,
+    });
+    let request = Request::builder()
+        .uri("/v1/chat/completions")
+        .method("POST")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let response = canonical_router(Arc::new(runtime))
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "text/event-stream");
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8_lossy(&bytes);
+
+    let role_pos = text
+        .find("\"role\":\"assistant\"")
+        .unwrap_or_else(|| panic!("role chunk missing: {text}"));
+    let hel_pos = text
+        .find("\"content\":\"hel\"")
+        .unwrap_or_else(|| panic!("first delta frame missing: {text}"));
+    let lo_pos = text
+        .find("\"content\":\"lo\"")
+        .unwrap_or_else(|| panic!("second delta frame missing: {text}"));
+    let done_pos = text
+        .find("[DONE]")
+        .unwrap_or_else(|| panic!("[DONE] missing: {text}"));
+    assert!(
+        role_pos < hel_pos && hel_pos < lo_pos && lo_pos < done_pos,
+        "frames must arrive in order: {text}"
+    );
+    assert!(text.contains("\"finish_reason\":\"stop\""), "{text}");
+    assert!(
+        text.contains("total_tokens"),
+        "usage reaches the final chunk: {text}"
+    );
+    assert!(
+        text.contains("\"session_id\"") && text.contains("\"served_by\""),
+        "final chunk carries apeireth metadata: {text}"
+    );
+}
+
 /// Two providers may serve the same canonical model over different wires
 /// (production: the anthropic plugin defaults to MiniMax's Anthropic-compatible
 /// gateway, so both it and the native minimax plugin advertise `minimax-m3`).

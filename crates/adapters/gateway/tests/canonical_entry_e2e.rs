@@ -679,7 +679,7 @@ async fn openai_compatible_path_exposes_tool_events_without_client_execution() {
 }
 
 #[tokio::test]
-async fn openai_compatible_path_returns_pending_approval_as_accepted() {
+async fn openai_compatible_stream_ends_with_pending_approval_frame() {
     let provider = FakeProvider::new();
     let calculator_calls = Arc::new(AtomicUsize::new(0));
     let runtime = Arc::new(
@@ -694,16 +694,23 @@ async fn openai_compatible_path_returns_pending_approval_as_accepted() {
             .unwrap(),
     );
     let session = SessionId::from_uuid(Uuid::from_u128(50));
-    let (status, body) = json_body(
-        canonical_router(runtime)
-            .oneshot(openai_request(session, "calculate 1 + 1", true))
-            .await
-            .unwrap(),
-    )
-    .await;
-    assert_eq!(status, StatusCode::ACCEPTED, "{body}");
-    assert_eq!(body["session"], session.to_string());
-    assert_eq!(body["tool_name"], "calculator");
+    // stream:true → the response is an SSE stream whose terminal frame carries
+    // the pending approval (the client never hangs on an approval pause).
+    let response = canonical_router(runtime)
+        .oneshot(openai_request(session, "calculate 1 + 1", true))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "text/event-stream");
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(
+        text.contains("\"finish_reason\":\"approval_required\""),
+        "stream must terminate with the approval marker: {text}"
+    );
+    assert!(text.contains("\"tool_name\":\"calculator\""), "{text}");
+    assert!(text.contains("\"approval_id\""), "{text}");
+    assert!(text.contains("[DONE]"), "{text}");
     assert_eq!(calculator_calls.load(Ordering::SeqCst), 0);
 }
 

@@ -9,6 +9,8 @@
 //! *not* own routing, fallback, or health policy — those are one level up, in the
 //! runtime's router, because they are decisions *between* providers.
 
+use std::sync::Arc;
+
 use apeireth_core::kernel::CapabilityId;
 use apeireth_protocol::canonical::{
     ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse,
@@ -133,6 +135,18 @@ pub trait ProviderCapability: Send + Sync {
             .any(|m| m.id.as_str() == model && m.features.contains(&ModelFeature::ToolCalls))
     }
 
+    /// Whether this provider's `model` can stream content deltas.
+    ///
+    /// Defaults to the [`ModelFeature::Streaming`] feature on the matching
+    /// descriptor. Providers without a real streaming wire keep `false`; the
+    /// runtime then collects a complete response and
+    /// [`Self::complete_streaming`] emits it as one final delta.
+    fn supports_streaming(&self, model: &str) -> bool {
+        self.models()
+            .iter()
+            .any(|m| m.id.as_str() == model && m.features.contains(&ModelFeature::Streaming))
+    }
+
     /// Serve one completion.
     ///
     /// Takes a canonical [`NormalizedRequest`] and returns a canonical
@@ -142,6 +156,28 @@ pub trait ProviderCapability: Send + Sync {
         &self,
         request: &NormalizedRequest,
     ) -> Result<NormalizedResponse, ProviderError>;
+
+    /// Serve one completion, forwarding content deltas to `on_delta` as they
+    /// arrive from the vendor.
+    ///
+    /// The returned response still carries the full final text and usage; the
+    /// concatenation of all emitted deltas must equal the final text (or be
+    /// absent for providers that cannot stream). The default implementation is
+    /// the honest fallback for non-streaming providers: `complete`, then one
+    /// delta with the whole text — transport layers can therefore always call
+    /// this method and never need a provider-specific branch. `on_delta` is
+    /// owned so providers can move it across their own awaits.
+    async fn complete_streaming(
+        &self,
+        request: &NormalizedRequest,
+        on_delta: Arc<dyn Fn(String) + Send + Sync>,
+    ) -> Result<NormalizedResponse, ProviderError> {
+        let response = self.complete(request).await?;
+        if !response.content.is_empty() {
+            on_delta(response.content.clone());
+        }
+        Ok(response)
+    }
 }
 
 #[cfg(test)]
