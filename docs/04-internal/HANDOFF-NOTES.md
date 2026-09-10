@@ -5,6 +5,7 @@
 > **状态（2026-08-28, Final-2.1）**：RC-1/2/3/4/5/6/8/9/10 已有真实实现或适配，RC-11 v1→APX2 migration utility 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root。MiniMax provider E2E 仍需凭证；**A 块 OrganOrchestrator 完整化 5 stage 真实施已落** (amend 后 commits `c003e078` ~ `0afa733f` + 复盘 `bbbfb75b`; 详 `organ-orchestrator-completion-plan.md` + `A-block-o6-true-account.md`); 偏好学习、长程 reflection、非文本 perception 仍明确延期; frontend 对接 + RC-7 真 modality 待硬件.
 
 > **⚠️ 2026-09-08 对账注（按实际走，现状以此为准）**：上一条状态行的"仍明确延期/待硬件"部分已过期——**偏好学习已接线**（`preference_learning` 双索引 + 召回三段展开，旋钮 `APEIRETH_ENABLE_PREFERENCE_LEARNING=1`）；**frontend 对接已落地**（companion-desktop 2.0.0-rc.1 以 bundled-backend 方式 spawn `apeireth gateway serve`，装机 E2E 实测：聊天探针 / gateway health / 桌面端存活 6s 全过）；**Council 真 provider E2E 已过**（DeepSeek 7 advisor → Approved 5.0s，`council_live.rs`）。仍延期：长程 reflection、非文本 perception（RC-7 待硬件）、MiniMax E2E（无 key，永久挂账）、真实流式（SSE 缓冲默认关）。能力旋钮全集：`APEIRETH_ENABLE_SHELL/FETCH/ORGANS/PREFERENCE_LEARNING` + `APEIRETH_COGNITIVE_JUDGE/COUNCIL`（均默认关，INSTALL.md 有用户手册）。
+> **2026-09-10 追加**：桌面开箱即用已落地（Settings 是唯一 provider 配置源，经 IPC 注入侧车环境，key 不落盘；commit `1a265600`）。**"什么测过、什么没测"以 `docs/04-internal/live-verification-ledger.md` 为权威——写文档/注释/commit 前先查它，别重测已绿的，别把挂账的当已验的。**
 
 ```yaml
 [Document-Meta]

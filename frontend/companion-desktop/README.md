@@ -130,6 +130,10 @@ $env:OPENAI_API_KEY='sk-...'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com
 pwsh scripts/install-e2e.ps1   # 装机→真聊天→gateway→桌面冒烟→孤儿复现→卸载残留检查
 ```
 
+**"什么测过、什么没测"**：以仓库根 `docs/04-internal/live-verification-ledger.md`
+为权威台账（真模型 E2E / 桌面 HTTP 主链路 / 装机卸载 / 配置注入 的绿表与挂账）。
+写"已验证/未验证"声明前先查它。
+
 ## 设计文档（历史集成记录）
 
 - `docs/integration/README.md` — 说明这些文件均为历史记录
