@@ -1,5 +1,14 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 装机 E2E 首通 + NSIS 卸载缺陷修复 (2026-09-08)
+
+- **装机 E2E 首通**（v2 desktop 装机验证缺口关闭，此前仅 v1 有装机验证）：静默安装 NSIS 包 → 装机侧车真聊天（DeepSeek，`provider=provider.openai-compatible`）→ `gateway serve /health` 200 → 桌面端存活 6s（并实证 bundled-backend 设计：companion-desktop 自行 spawn `apeireth gateway serve`）→ 静默卸载零残留（目录 + 注册表全清）。
+- **E2E 挖出的真缺陷**：NSIS 卸载器只检查主程序进程，侧车 `apeireth.exe` 运行中时卸载——删不掉被锁的 apeireth.exe、目录残留，却**仍清注册表且 exit 0**（半卸载状态，实测复现）。
+- **修复**：`frontend/companion-desktop/src-tauri/installer.nsh`（Tauri `installerHooks` → `NSIS_HOOK_PREUNINSTALL`）——先杀主程序（防 supervisor 重拉侧车）再杀侧车，与主程序检查同语义（/S 静默杀，杀不掉 Abort 非零）。缺陷场景回归：孤儿侧车运行中卸载 → 侧车被杀、目录/注册表全清、exit 0。
+- **可复用 E2E 脚本**：`frontend/companion-desktop/scripts/install-e2e.ps1`（装机→聊天→gateway→桌面→孤儿复现→卸载残留检查，全自动断言）。
+- 新 NSIS 包 SHA256 `720D524AD2D1340982965D4B59B9FCFF131F351D69B70567361317E4156CE7C9`。已知局限（诚实）：MSI 包走 WiX 模板，无此 hook，卸载时侧车运行中可能留文件——Windows 下推荐 NSIS 包。
+- 守门：全仓 3168 passed / 0 failed / 18 ignored；clippy 0 / fmt 0 / diff-check 0（本批无 Rust 源码改动，仅 NSIS 配置 + 脚本 + 文档）。
+
 ## [Unreleased] — TopicPredictor 真正接线：偏好召回按主题簇展开 (2026-09-08)
 
 - **接线缺口关闭**：topic_predictor 与偏好系统此前是两个平行世界——预测器训练/预测都通（单元级），但召回链从不问它。现在 `PreferenceRecallModule::on_hook` 按三段展开查询：①原始最近用户消息（等价性门：不改旧行为）②`cluster_topic_for` 预测簇（TopicCue 接 `recent_user_messages`）③空主题 top-N 兜底（修掉"高相关命中压制兜底"的路径）→ 按 id 去重、封顶 `self.limit`。
