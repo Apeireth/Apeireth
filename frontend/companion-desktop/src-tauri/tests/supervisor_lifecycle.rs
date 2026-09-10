@@ -24,7 +24,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
 use companion_desktop_lib::backend_supervisor::{
-    BackendOwnership, BackendState, BackendSupervisor,
+    BackendOwnership, BackendProviderEnv, BackendState, BackendSupervisor,
 };
 
 fn gateway_lock() -> MutexGuard<'static, ()> {
@@ -125,6 +125,71 @@ fn spawns_real_backend_and_reaches_ready() {
             "stopped backend should no longer answer on {port}"
         );
         eprintln!("verified lifecycle: pid={pid} port={port}");
+    });
+}
+
+/// Settings-UI provider configuration must reach the real child's environment:
+/// applying an OpenAI-compatible env restarts the backend, and the restarted
+/// gateway then lists the injected model (model registration reads
+/// `APEIRETH_OPENAI_MODELS`, no auth needed at list time). Re-applying the same
+/// env is a no-op that must not restart again.
+#[test]
+fn provider_env_reaches_the_backend() {
+    if !backend_available() {
+        eprintln!("SKIP: no canonical backend build found");
+        return;
+    }
+    let _guard = gateway_lock();
+    isolate_backend_data();
+
+    runtime().block_on(async {
+        let supervisor = BackendSupervisor::new_for_test();
+        supervisor.start().await.expect("backend should start");
+        let first_port = supervisor.info().await.port.expect("initial port");
+
+        let env = BackendProviderEnv {
+            openai_url: Some("https://api.deepseek.com/v1".into()),
+            openai_models: Some("supervisor-test-model-x9".into()),
+            ..Default::default()
+        };
+        let info = supervisor
+            .apply_provider_env(env.clone())
+            .await
+            .expect("apply should restart the Ready backend");
+        assert_eq!(info.state, BackendState::Ready);
+        assert_eq!(info.restart_count, 1, "a changed env restarts exactly once");
+        let endpoint = info.endpoint.clone().expect("endpoint after restart");
+        assert_ne!(
+            info.port.expect("port after restart"),
+            first_port,
+            "restart picks a fresh port; old {first_port} new {:?}",
+            info.port
+        );
+
+        let models = reqwest::get(format!("{endpoint}/v1/models"))
+            .await
+            .expect("models request")
+            .text()
+            .await
+            .unwrap_or_default();
+        assert!(
+            models.contains("supervisor-test-model-x9"),
+            "injected APEIRETH_OPENAI_MODELS must appear in /v1/models: {models}"
+        );
+
+        // Same env again: no restart.
+        let before = supervisor.info().await.restart_count;
+        supervisor
+            .apply_provider_env(env)
+            .await
+            .expect("no-op apply");
+        assert_eq!(
+            supervisor.info().await.restart_count,
+            before,
+            "unchanged env must not restart"
+        );
+
+        supervisor.stop().await.expect("cleanup stop");
     });
 }
 

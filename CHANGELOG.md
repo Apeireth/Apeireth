@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 桌面开箱即用：Settings 配置直通侧车 + 桌面 HTTP 主链路真机全绿 (2026-09-10)
+
+- **P0-A 两套配置源消灭**：设置界面成为唯一 provider 配置源——Settings 保存 → Tauri 命令 `apply_backend_provider_env` → `BackendSupervisor` 把三家口径的环境变量（`OPENAI_API_KEY`+`APEIRETH_OPENAI_URL/MODELS`、`APEIRETH_API_KEY`+`APEIRETH_API_URL/MODELS`、`APEIRETH_ANTHROPIC_KEY/URL/MODELS`，与 CLI 口径一致）注入侧车；配置变化自动重启网关（没变不重启），前端自动重新解析新端口。url/模型持久化到 app-data `backend-provider-env.json`（**密钥字段强制剥离，不落盘**；key 只在 supervisor 内存 + 侧车进程环境）；启动时从该文件恢复非密配置，首启零额外重启。
+- **P0-B 桌面 HTTP 主链路真机验收**（此前唯一未实测的主链路）：gateway `/v1/chat/completions` 桌面同款 payload 多轮实测——turn2 正确回忆 turn1 事实、`served_by=provider.openai-compatible`、panel/sessions 持久化；`stream:true` 返回规范 SSE 帧（init/content/final + apeireth 元数据）；错误路径返回带 `error`/`session_id` 的 JSON（此前"裸 502"是探针读流姿势问题，实测有体，库级测试早已覆盖）。
+- **P1 `/v1/models` 重复 id 去重**：anthropic 插件默认端点即 MiniMax Anthropic 兼容网关，与原生 minimax 插件同报 `minimax-m3`——展示层按 id 去重（live 实测 2→1，`minimax-m3-thinking` 保留）；跨 provider 同 id 去重测试入网关测试集。
+- **验收**：`provider_env_reaches_the_backend` lifecycle 真后端测试（注入 env → 重启换新端口 → `/v1/models` 出现注入模型 → 重复 apply 不重启）；desktop 21 unit + 5 lifecycle 全绿；gateway 全绿；svelte-check 0 错 + 7/7 前端套件（含 secret-persistence 安全守门）。
+- 新 NSIS 包 SHA256 `CB31875618E91162E6123BB6897D909C8F4BA922B651A9CD245ED2EF9CB7DC04`。诚实挂账不变：token 级真流式待授权、首启向导页未做（设置页已可用）、MiniMax 无 key、MSI 卸载无侧车检查。
+
 ## [Unreleased] — 装机 E2E 首通 + NSIS 卸载缺陷修复 (2026-09-08)
 
 - **装机 E2E 首通**（v2 desktop 装机验证缺口关闭，此前仅 v1 有装机验证）：静默安装 NSIS 包 → 装机侧车真聊天（DeepSeek，`provider=provider.openai-compatible`）→ `gateway serve /health` 200 → 桌面端存活 6s（并实证 bundled-backend 设计：companion-desktop 自行 spawn `apeireth gateway serve`）→ 静默卸载零残留（目录 + 注册表全清）。

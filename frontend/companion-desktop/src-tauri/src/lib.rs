@@ -11,7 +11,7 @@
 pub mod backend_supervisor;
 mod logging;
 
-use backend_supervisor::{BackendInfo, BackendSupervisor};
+use backend_supervisor::{BackendInfo, BackendProviderEnv, BackendSupervisor};
 use logging::{DesktopLogger, LogLevel};
 use std::sync::Arc;
 use tauri::{
@@ -43,6 +43,19 @@ async fn stop_backend(supervisor: State<'_, Arc<BackendSupervisor>>) -> Result<S
 #[tauri::command]
 async fn restart_backend(supervisor: State<'_, Arc<BackendSupervisor>>) -> Result<String, String> {
     supervisor.restart().await
+}
+
+/// Apply the Settings-UI provider configuration to the sidecar environment.
+///
+/// Keys live in supervisor memory and the child's environment only; they are
+/// never persisted (see `BackendProviderEnv`). Returns the safe `BackendInfo`
+/// so the frontend can adopt the (possibly new) gateway endpoint.
+#[tauri::command]
+async fn apply_backend_provider_env(
+    supervisor: State<'_, Arc<BackendSupervisor>>,
+    env: BackendProviderEnv,
+) -> Result<BackendInfo, String> {
+    supervisor.apply_provider_env(env).await
 }
 
 #[tauri::command]
@@ -156,6 +169,7 @@ pub fn run() {
             start_backend,
             stop_backend,
             restart_backend,
+            apply_backend_provider_env,
             get_log_directory,
             open_log_directory,
             open_settings,

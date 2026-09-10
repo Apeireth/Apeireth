@@ -27,6 +27,7 @@ use apeireth_core::kernel::{Clock, SessionId, Timestamp, VirtualClock};
 use apeireth_gateway::canonical_router;
 use apeireth_governance::AllowAll;
 use apeireth_plugin::{CredentialResolver, StaticCredentials};
+use apeireth_provider::canonical_anthropic::AnthropicProviderPlugin;
 use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
 use apeireth_provider::credentials::OPENAI_COMPATIBLE_API_KEY;
 use apeireth_runtime::canonical::{InMemorySessionStore, Runtime};
@@ -233,6 +234,62 @@ async fn the_gateway_models_list_is_projected_from_live_providers() {
     assert!(
         data.iter().all(|model| model["id"] != MODEL),
         "a runtime with no provider must not advertise a static model"
+    );
+}
+
+/// Two providers may serve the same canonical model over different wires
+/// (production: the anthropic plugin defaults to MiniMax's Anthropic-compatible
+/// gateway, so both it and the native minimax plugin advertise `minimax-m3`).
+/// The display layer must collapse duplicate ids to one entry.
+#[tokio::test]
+async fn the_gateway_models_list_dedupes_ids_shared_across_providers() {
+    let http = reqwest::Client::builder().build().unwrap();
+    let shared = "shared-model-id";
+    let openai = Arc::new(
+        OpenAiCompatibleProviderPlugin::new(
+            "http://127.0.0.1:1/v1",
+            vec![shared.into()],
+            http.clone(),
+            2_000,
+        )
+        .unwrap(),
+    );
+    let anthropic = Arc::new(
+        AnthropicProviderPlugin::new("http://127.0.0.1:1", vec![shared.into()], http, 2_000)
+            .unwrap(),
+    );
+    let resolver: Arc<dyn CredentialResolver> = Arc::new(StaticCredentials::new());
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_session_store(Arc::new(InMemorySessionStore::new()))
+        .with_governance(Arc::new(AllowAll))
+        .with_credentials(resolver)
+        .with_plugin(openai)
+        .with_plugin(anthropic)
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .expect("runtime builds");
+
+    let request = Request::builder()
+        .uri("/v1/models")
+        .method("GET")
+        .body(Body::empty())
+        .unwrap();
+    let response = canonical_router(Arc::new(runtime))
+        .oneshot(request)
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let data = body["data"].as_array().expect("data array");
+    let matches: Vec<&serde_json::Value> =
+        data.iter().filter(|model| model["id"] == shared).collect();
+    assert_eq!(
+        matches.len(),
+        1,
+        "duplicate model id must be collapsed, got: {body}"
     );
 }
 

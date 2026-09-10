@@ -74,7 +74,12 @@
     type CanonicalPendingApproval,
   } from './lib/runtime';
   import {presenceStore, subscribePresence} from './lib/presence';
-  import {isDesktop, resolveBackendEndpoint} from './lib/desktop-bridge';
+  import {
+    applyBackendProviderEnv,
+    backendProviderEnvFromConfig,
+    isDesktop,
+    resolveBackendEndpoint,
+  } from './lib/desktop-bridge';
 
   type DrawerId = 'history' | 'memory' | 'tools' | 'status' | 'logs' | 'settings';
   const DRAWER_META: Record<DrawerId, {eyebrow: string; title: string; sub: string; action: string}> = {
@@ -1000,13 +1005,49 @@
     }
   }
 
+  /**
+   * Push the Settings-UI provider configuration into the sidecar's
+   * environment. The supervisor restarts the backend when the config changed,
+   * which allocates a fresh port — so after applying we re-adopt the endpoint
+   * before probing. No-op in web mode.
+   */
+  async function pushProviderEnvAndRefresh(cfg: ApeirethConfig): Promise<void> {
+    if (!isDesktop()) {
+      void refreshConnection();
+      return;
+    }
+    const env = backendProviderEnvFromConfig(cfg);
+    if (!env) {
+      void refreshConnection();
+      return;
+    }
+    const endpoint = await applyBackendProviderEnv(env);
+    if (endpoint && endpoint !== cfg.baseUrl) {
+      config = {...cfg, baseUrl: endpoint};
+      agentRuntime = createAgentRuntime(config);
+      healthReport = {...healthReport, baseUrl: endpoint};
+    }
+    void refreshConnection();
+  }
+
   onMount(() => {
     applyDocumentTheme(activeTheme);
     if (!activeId && conversations.length) activeId = conversations[0].id;
     if (window.innerWidth < 1180) wbOpen = false;
     // Resolve the real endpoint first, then probe: in packaged mode a probe
     // against the stale persisted port would report a false offline state.
-    void adoptSupervisorEndpoint().then(() => refreshConnection());
+    // Pushing the provider env first makes the sidecar pick up the persisted
+    // provider endpoints/models before the first health probe (a config
+    // change restarts the backend on a fresh port, which the subsequent
+    // endpoint adoption handles).
+    void (async () => {
+      if (isDesktop()) {
+        const env = backendProviderEnvFromConfig(config);
+        if (env) await applyBackendProviderEnv(env);
+      }
+      await adoptSupervisorEndpoint();
+      void refreshConnection();
+    })();
 
     // 舰内时刻心跳：无 ?hour= 覆写时每 30s 对齐本地时钟（照明过渡由 CSS/rAF 慢性子承担）
     const hourTimer =
@@ -1245,7 +1286,10 @@
               const nextTheme = resolveTheme(newCfg.theme, themeQuery);
               activeTheme = nextTheme;
               applyDocumentTheme(nextTheme);
-              void refreshConnection();
+              // Provider changes must reach the sidecar environment; the
+              // push re-adopts the endpoint (a restart allocates a new port)
+              // and then re-probes.
+              void pushProviderEnvAndRefresh(newCfg);
             }}
             onClearLocalData={() => {
               conversations = [];

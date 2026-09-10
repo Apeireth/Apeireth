@@ -71,6 +71,72 @@ export function restartBackend(): Promise<string | null> {
   return invokeOptional<string>('restart_backend');
 }
 
+/**
+ * Provider environment injected into the sidecar, mirroring the Rust
+ * `BackendProviderEnv`. Only the families the user actually configured are
+ * populated; keys cross IPC in memory and are never persisted (Rust side
+ * strips them before any disk write).
+ */
+export interface BackendProviderEnv {
+  openai_api_key?: string;
+  openai_url?: string;
+  openai_models?: string;
+  minimax_api_key?: string;
+  minimax_url?: string;
+  minimax_models?: string;
+  anthropic_api_key?: string;
+  anthropic_url?: string;
+  anthropic_models?: string;
+}
+
+/**
+ * Map the Settings-UI provider config onto the canonical sidecar env family:
+ * anthropic protocol → APEIRETH_ANTHROPIC_*; MiniMax endpoints →
+ * APEIRETH_API_*; everything else (OpenAI / DeepSeek / Ollama / custom) →
+ * the OpenAI-compatible family (OPENAI_API_KEY + APEIRETH_OPENAI_*).
+ */
+export function backendProviderEnvFromConfig(config: {
+  model?: string;
+  provider?: {protocol?: string; preset?: string; baseUrl?: string; apiKey?: string; model?: string} | null;
+}): BackendProviderEnv | null {
+  const provider = config.provider;
+  if (!provider) return null;
+  const baseUrl = (provider.baseUrl || '').trim();
+  const model = (provider.model || config.model || '').trim();
+  const key = (provider.apiKey || '').trim();
+
+  if (provider.protocol === 'anthropic' || baseUrl.includes('minimaxi.com')) {
+    return {
+      anthropic_api_key: key || undefined,
+      anthropic_url: baseUrl || undefined,
+      anthropic_models: model || undefined,
+    };
+  }
+  if (provider.preset === 'minimax' || baseUrl.includes('minimax.chat')) {
+    return {
+      minimax_api_key: key || undefined,
+      minimax_url: baseUrl || 'https://api.minimax.chat/v1',
+      minimax_models: model || undefined,
+    };
+  }
+  return {
+    openai_api_key: key || undefined,
+    openai_url: baseUrl || undefined,
+    openai_models: model || undefined,
+  };
+}
+
+/**
+ * Push the provider environment to the shell. The supervisor stores it and
+ * restarts the backend when it changed, so the caller must re-adopt the
+ * endpoint. Returns the live endpoint (post-restart) or null in web mode /
+ * on failure.
+ */
+export async function applyBackendProviderEnv(env: BackendProviderEnv): Promise<string | null> {
+  const info = await invokeOptional<BackendStatus>('apply_backend_provider_env', {env});
+  return info?.endpoint ?? null;
+}
+
 /** Absolute path of the log directory. */
 export function getLogDirectory(): Promise<string | null> {
   return invokeOptional<string>('get_log_directory');
