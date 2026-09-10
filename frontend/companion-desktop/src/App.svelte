@@ -75,8 +75,9 @@
   } from './lib/runtime';
   import {presenceStore, subscribePresence} from './lib/presence';
   import {
-    applyBackendProviderEnv,
+    applyBackendConfig,
     backendProviderEnvFromConfig,
+    capabilityEnvFromConfig,
     isDesktop,
     resolveBackendEndpoint,
   } from './lib/desktop-bridge';
@@ -1006,22 +1007,24 @@
   }
 
   /**
-   * Push the Settings-UI provider configuration into the sidecar's
-   * environment. The supervisor restarts the backend when the config changed,
-   * which allocates a fresh port — so after applying we re-adopt the endpoint
-   * before probing. No-op in web mode.
+   * Push the Settings-UI configuration (provider + advanced-capability
+   * toggles) into the sidecar's environment. The supervisor restarts the
+   * backend exactly once when anything changed, which allocates a fresh
+   * port — so after applying we re-adopt the endpoint before probing.
+   * No-op in web mode.
    */
   async function pushProviderEnvAndRefresh(cfg: ApeirethConfig): Promise<void> {
     if (!isDesktop()) {
       void refreshConnection();
       return;
     }
-    const env = backendProviderEnvFromConfig(cfg);
-    if (!env) {
+    const provider = backendProviderEnvFromConfig(cfg);
+    if (!provider) {
       void refreshConnection();
       return;
     }
-    const endpoint = await applyBackendProviderEnv(env);
+    const capabilities = capabilityEnvFromConfig(cfg.capabilities);
+    const endpoint = await applyBackendConfig(provider, capabilities);
     if (endpoint && endpoint !== cfg.baseUrl) {
       config = {...cfg, baseUrl: endpoint};
       agentRuntime = createAgentRuntime(config);
@@ -1036,14 +1039,16 @@
     if (window.innerWidth < 1180) wbOpen = false;
     // Resolve the real endpoint first, then probe: in packaged mode a probe
     // against the stale persisted port would report a false offline state.
-    // Pushing the provider env first makes the sidecar pick up the persisted
-    // provider endpoints/models before the first health probe (a config
-    // change restarts the backend on a fresh port, which the subsequent
-    // endpoint adoption handles).
+    // Pushing the config first makes the sidecar pick up the persisted
+    // provider endpoints/models and capability toggles before the first
+    // health probe (a config change restarts the backend on a fresh port,
+    // which the subsequent endpoint adoption handles).
     void (async () => {
       if (isDesktop()) {
         const env = backendProviderEnvFromConfig(config);
-        if (env) await applyBackendProviderEnv(env);
+        if (env) {
+          await applyBackendConfig(env, capabilityEnvFromConfig(config.capabilities));
+        }
       }
       await adoptSupervisorEndpoint();
       void refreshConnection();
@@ -1689,6 +1694,7 @@
 <RuntimeModal
   open={showRuntimeModal}
   report={healthReport}
+  {config}
   {capabilities}
   isRefreshing={isRefreshingHealth}
   onClose={() => (showRuntimeModal = false)}

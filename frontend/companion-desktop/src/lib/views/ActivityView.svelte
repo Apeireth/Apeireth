@@ -33,7 +33,7 @@
   import LoadingState from '../components/LoadingState.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import type {ActivityItem, ApeirethConfig, CapabilityManifest} from '../types';
-  import {fetchAuditLogs, fetchTraceDetail, capabilityAvailable, capabilitySupported, friendlyErrorMessage} from '../runtime';
+  import {fetchAuditLogs, fetchTraceDetail, fetchOrgans, fetchModules, type OrganSummaryDto, capabilityAvailable, capabilitySupported, friendlyErrorMessage} from '../runtime';
   import {splitPresenceLine, type PresenceFrame} from '../presence';
   import {
     getCallLogs,
@@ -51,8 +51,35 @@
     capabilities: CapabilityManifest | null;
   } = $props();
 
-  // Tab mode: 'calls' (模型调用日志) | 'audit' (系统事件审计)
-  let activeTab = $state<'calls' | 'audit'>('calls');
+  // Tab mode: 'calls' (模型调用日志) | 'audit' (系统事件审计) | 'organs' (器官/模块)
+  let activeTab = $state<'calls' | 'audit' | 'organs'>('calls');
+
+  // Organs / modules introspection state (P9: /v1/organs + /v1/modules)
+  let organs = $state<OrganSummaryDto[]>([]);
+  let modules = $state<OrganSummaryDto[]>([]);
+  let organsError = $state('');
+  let organsLoading = $state(false);
+
+  async function loadOrgansAndModules(): Promise<void> {
+    organsLoading = true;
+    organsError = '';
+    const [organsResult, modulesResult] = await Promise.all([fetchOrgans(config), fetchModules(config)]);
+    if ('error' in organsResult) {
+      organsError = organsResult.error;
+      organs = [];
+    } else {
+      organs = organsResult.organs;
+    }
+    if ('error' in modulesResult) {
+      modules = [];
+    } else {
+      modules = modulesResult.modules;
+    }
+    if (!organsError && organs.length === 0 && modules.length === 0) {
+      organsError = '当前运行时未提供器官/模块清单（organs.list / modules.list 未实现）';
+    }
+    organsLoading = false;
+  }
 
   // Call Logs state
   let callLogs = $state<CallLogEntry[]>([]);
@@ -489,6 +516,17 @@
         <span>系统事件审计</span>
         <span class="tab-badge">{activities.length}</span>
       </button>
+      <button
+        class="mode-tab-btn"
+        class:active={activeTab === 'organs'}
+        onclick={() => {
+          activeTab = 'organs';
+          void loadOrgansAndModules();
+        }}
+      >
+        <Cpu size={13} />
+        <span>器官与模块</span>
+      </button>
     </div>
 
     {#if activeTab === 'calls'}
@@ -502,7 +540,7 @@
           <span>清空</span>
         </button>
       </div>
-    {:else}
+    {:else if activeTab === 'audit'}
       <div class="tab-header-actions">
         <button
           class="live-toggle-btn"
@@ -521,6 +559,13 @@
         <button class="quiet-button" onclick={loadPersistedAudit} disabled={loading}>
           <RotateCcw size={13} class={loading ? 'spin' : ''} />
           <span>刷新审计</span>
+        </button>
+      </div>
+    {:else}
+      <div class="tab-header-actions">
+        <button class="quiet-button" onclick={() => void loadOrgansAndModules()} disabled={organsLoading}>
+          <RotateCcw size={13} class={organsLoading ? 'spin' : ''} />
+          <span>刷新</span>
         </button>
       </div>
     {/if}
@@ -692,7 +737,7 @@
         </div>
       {/if}
     </div>
-  {:else}
+  {:else if activeTab === 'audit'}
     <!-- Toolbar & Filters for Audit -->
     <div class="activity-toolbar">
       <div class="search-input-wrap">
@@ -827,6 +872,46 @@
         </div>
       {/if}
     </div>
+  {:else}
+    <!-- Organs & Modules introspection (P9: /v1/organs + /v1/modules) -->
+    <div class="organs-panel">
+      {#if organsLoading}
+        <LoadingState message="正在读取器官与模块清单…" />
+      {:else if organsError && organs.length === 0 && modules.length === 0}
+        <ErrorState title="器官/模块清单不可用" message={organsError} onRetry={() => void loadOrgansAndModules()} />
+      {:else}
+        <div class="organ-section">
+          <h4 class="organ-section-title">器官（9 organs）</h4>
+          {#if organs.length === 0}
+            <p class="organ-empty">器官链未装配（设置 → 高级能力 → 器官链 开启后重启网关生效）。</p>
+          {:else}
+            {#each organs as organ (organ.id)}
+              <div class="organ-row">
+                <span class="organ-id">{organ.id}</span>
+                <span class="organ-name">{organ.name}</span>
+                <StatusBadge label={organ.enabled ? '已启用' : '未启用'} variant={organ.enabled ? 'green' : 'neutral'} size="small" />
+                {#if organ.description}<span class="organ-desc">{organ.description}</span>{/if}
+              </div>
+            {/each}
+          {/if}
+        </div>
+        <div class="organ-section">
+          <h4 class="organ-section-title">认知模块</h4>
+          {#if modules.length === 0}
+            <p class="organ-empty">无模块清单。</p>
+          {:else}
+            {#each modules as moduleItem (moduleItem.id)}
+              <div class="organ-row">
+                <span class="organ-id">{moduleItem.id}</span>
+                <span class="organ-name">{moduleItem.name}</span>
+                <StatusBadge label={moduleItem.enabled ? '已启用' : '未启用'} variant={moduleItem.enabled ? 'green' : 'neutral'} size="small" />
+                {#if moduleItem.description}<span class="organ-desc">{moduleItem.description}</span>{/if}
+              </div>
+            {/each}
+          {/if}
+        </div>
+      {/if}
+    </div>
   {/if}
 </section>
 
@@ -869,6 +954,54 @@
 {/if}
 
 <style>
+  /* 器官/模块清单 (P9) */
+  .organs-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px 0;
+    overflow-y: auto;
+  }
+  .organ-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .organ-section-title {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+    margin: 0;
+  }
+  .organ-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .organ-id {
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--accent, #6ea8fe);
+  }
+  .organ-name {
+    font-size: 13px;
+  }
+  .organ-desc {
+    flex-basis: 100%;
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .organ-empty {
+    font-size: 12px;
+    color: var(--faint);
+    margin: 0;
+  }
+
   .activity-view {
     flex: 1;
     display: flex;

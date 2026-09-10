@@ -212,6 +212,31 @@ export interface PersonaProfile {
   model?: string;
 }
 
+/** 后端高级能力开关（注入侧车环境，默认全关 fail-closed）。 */
+export interface CapabilityToggles {
+  /** 工具: shell 命令（开启后每次调用仍走人工审批） */
+  shell: boolean;
+  /** 工具: 公网 GET-only fetch */
+  fetch: boolean;
+  /** AfterTurn 器官链（9 organs） */
+  organs: boolean;
+  /** 偏好学习双索引写回 */
+  preferenceLearning: boolean;
+  /** AfterModelResponse 评审 */
+  judge: boolean;
+  /** AfterModelResponse 议会（7 advisor） */
+  council: boolean;
+}
+
+export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
+  shell: false,
+  fetch: false,
+  organs: false,
+  preferenceLearning: false,
+  judge: false,
+  council: false,
+};
+
 export interface ApeirethConfig {
   baseUrl: string;
   apiKey: string;
@@ -231,6 +256,8 @@ export interface ApeirethConfig {
     model: string;
     anthropicVersion?: string;
   };
+  /** 后端高级能力开关（持久化于本地配置，不含 secret） */
+  capabilities?: CapabilityToggles;
   /** 多 Agent 人设列表 (持久化于本地配置, 不含 secret) */
   personas?: PersonaProfile[];
   /** 当前激活人设 id (缺省时取列表第一个) */

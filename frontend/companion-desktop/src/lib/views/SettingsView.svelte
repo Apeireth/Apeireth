@@ -32,7 +32,8 @@
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
   import ThemeSettingsPanel from '../components/ThemeSettingsPanel.svelte';
-  import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile} from '../types';
+  import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile, CapabilityToggles} from '../types';
+  import {DEFAULT_CAPABILITY_TOGGLES} from '../types';
   import {checkHealthDetailed, listModels, testProviderConnection, DEFAULT_PERSONAS} from '../runtime';
 
   let {
@@ -50,6 +51,7 @@
     | 'models'
     | 'personality'
     | 'memory'
+    | 'capabilities'
     | 'tools'
     | 'runtime'
     | 'data'
@@ -61,6 +63,21 @@
   let editBaseUrl = $state('');
   let saveSuccess = $state(false);
   let showAdvancedGateway = $state(false);
+
+  // Backend advanced-capability toggles (fail-closed defaults, applied on save)
+  let capabilities = $state<CapabilityToggles>({
+    ...DEFAULT_CAPABILITY_TOGGLES,
+    ...(config.capabilities ?? {}),
+  });
+
+  const CAPABILITY_TOGGLE_DEFS: Array<{key: keyof CapabilityToggles; label: string; desc: string}> = [
+    {key: 'shell', label: 'Shell 命令工具', desc: '模型可提议本地命令，每次执行前需你在审批面板确认（fail-closed 授权）。'},
+    {key: 'fetch', label: '网络读取工具', desc: '模型可发起公网 GET 请求（只读，无凭据转发）。'},
+    {key: 'organs', label: '器官链（9 organs）', desc: '回合后跑 9 器官反事实推演/好奇心/情绪记忆等（AfterTurn，fail-open，不阻塞回复）。'},
+    {key: 'preferenceLearning', label: '偏好学习', desc: '回合后把主人偏好写成双索引记忆（原始 + 主题簇），后续召回按主题展开。'},
+    {key: 'judge', label: '评审 (Judge)', desc: '模型回复后由评审模块判一次（每次评审最多一次 side-call）。'},
+    {key: 'council', label: '议会 (Council)', desc: '模型回复后由 7 个 advisor 并行评审（整体 60s 超时）。'},
+  ];
 
   // Model Provider protocol & preset configurations
   const OPENAI_PRESETS = [
@@ -75,8 +92,8 @@
       id: 'deepseek',
       name: 'DeepSeek',
       baseUrl: 'https://api.deepseek.com/v1',
-      defaultModel: 'deepseek-chat',
-      models: ['deepseek-chat', 'deepseek-reasoner'],
+      defaultModel: 'deepseek-v4-flash',
+      models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
     },
     {
       id: 'minimax',
@@ -251,6 +268,7 @@
     {id: 'models', label: '模型与提供商', icon: Cpu},
     {id: 'personality', label: '伙伴人设与行为', icon: User},
     {id: 'memory', label: '记忆策略', icon: Layers3},
+    {id: 'capabilities', label: '高级能力', icon: Sparkles},
     {id: 'tools', label: '工具与权限策略', icon: Shield},
     {id: 'runtime', label: '运行时与诊断', icon: Activity},
     {id: 'data', label: '数据与存储', icon: Trash2},
@@ -352,6 +370,7 @@
       provider: currentProvider,
       openaiConfig: currentOpenai,
       anthropicConfig: currentAnthropic,
+      capabilities,
       personas: personas.length > 0 ? personas : config.personas,
       activePersonaId,
     };
@@ -753,6 +772,39 @@
           <div class="info-card">
             <strong class="info-title">后台做梦与反思循环 (Dream & Reflection)</strong>
             <p class="info-text">伴随常驻 daemon 运行，安静期后自动触发做梦提炼与经验入库。</p>
+          </div>
+        </div>
+
+      {:else if activeSection === 'capabilities'}
+        <div class="setting-block">
+          <h3 class="block-title">高级能力（后端旋钮）</h3>
+          <p class="block-desc">
+            保存后注入侧车环境并重启网关（配置没变不会重启）。全部默认关闭，
+            逐项显式开启；shell/fetch 开启后每次调用仍走人工审批。
+          </p>
+
+          {#each CAPABILITY_TOGGLE_DEFS as item (item.key)}
+            <label class="toggle-row">
+              <span class="toggle-text">
+                <strong>{item.label}</strong>
+                <small>{item.desc}</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={capabilities[item.key]}
+                onchange={(e) => {
+                  capabilities = {...capabilities, [item.key]: (e.target as HTMLInputElement).checked};
+                }}
+              />
+            </label>
+          {/each}
+
+          <div class="info-card">
+            <strong class="info-title">fail-closed 语义</strong>
+            <p class="info-text">
+              关闭（默认）时不注入任何环境变量，后端能力完全不存在；开启只注入
+              "1"。shell/fetch 有 require_approval 治理标，开启 ≠ 无审批执行。
+            </p>
           </div>
         </div>
 
@@ -1448,6 +1500,37 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+  /* 高级能力开关行 */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .toggle-text strong {
+    font-size: 13px;
+  }
+  .toggle-text small {
+    font-size: 11px;
+    color: var(--faint);
+    line-height: 1.5;
+  }
+  .toggle-row input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent, #6ea8fe);
+    flex-shrink: 0;
   }
   /* 多 Agent 人设卡片 */
   .persona-card {

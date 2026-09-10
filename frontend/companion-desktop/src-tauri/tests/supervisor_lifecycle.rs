@@ -24,7 +24,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
 use companion_desktop_lib::backend_supervisor::{
-    BackendOwnership, BackendProviderEnv, BackendState, BackendSupervisor,
+    BackendCapabilityEnv, BackendOwnership, BackendProviderEnv, BackendState, BackendSupervisor,
 };
 
 fn gateway_lock() -> MutexGuard<'static, ()> {
@@ -187,6 +187,64 @@ fn provider_env_reaches_the_backend() {
             supervisor.info().await.restart_count,
             before,
             "unchanged env must not restart"
+        );
+
+        supervisor.stop().await.expect("cleanup stop");
+    });
+}
+
+/// Advanced-capability toggles reach the real child the same way: enabling
+/// shell via `apply_backend_config` restarts the backend and the restarted
+/// gateway then serves `tool.shell` in `/v1/tools/list` (registration reads
+/// `APEIRETH_ENABLE_SHELL`, no auth needed at list time). The combined call
+/// with an unchanged provider must still restart exactly once, proving the
+/// single-restart contract.
+#[test]
+fn capability_env_reaches_the_backend() {
+    if !backend_available() {
+        eprintln!("SKIP: no canonical backend build found");
+        return;
+    }
+    let _guard = gateway_lock();
+    isolate_backend_data();
+
+    runtime().block_on(async {
+        let supervisor = BackendSupervisor::new_for_test();
+        supervisor.start().await.expect("backend should start");
+
+        let caps = BackendCapabilityEnv {
+            enable_shell: true,
+            ..Default::default()
+        };
+        let info = supervisor
+            .apply_backend_config(None, Some(caps.clone()))
+            .await
+            .expect("capability apply should restart the Ready backend");
+        assert_eq!(info.state, BackendState::Ready);
+        assert_eq!(info.restart_count, 1, "changed capabilities restart exactly once");
+        let endpoint = info.endpoint.clone().expect("endpoint after restart");
+
+        let tools = reqwest::get(format!("{endpoint}/v1/tools/list"))
+            .await
+            .expect("tools request")
+            .text()
+            .await
+            .unwrap_or_default();
+        assert!(
+            tools.contains("\"name\":\"shell\"") && tools.contains("\"permission\":\"granted\""),
+            "injected APEIRETH_ENABLE_SHELL must register the shell tool with the governance grant: {tools}"
+        );
+
+        // Same capabilities again (provider unchanged/omitted): no restart.
+        let before = supervisor.info().await.restart_count;
+        supervisor
+            .apply_backend_config(None, Some(caps))
+            .await
+            .expect("no-op apply");
+        assert_eq!(
+            supervisor.info().await.restart_count,
+            before,
+            "unchanged capabilities must not restart"
         );
 
         supervisor.stop().await.expect("cleanup stop");

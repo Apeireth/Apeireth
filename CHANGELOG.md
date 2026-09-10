@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — ROADMAP P9 交付：能力旋钮 UI + 器官/模块/快照内省视图 (2026-09-10)
+
+- **① 能力旋钮 UI**（对账批缺口的最大项）：Settings 新增"高级能力"区——shell/fetch/organs/preference_learning/judge/council 六个开关 → `BackendCapabilityEnv` 注入侧车（`APEIRETH_ENABLE_*`/`APEIRETH_COGNITIVE_*`，只注入 "1"、缺失即关，**fail-closed**）；与 provider 配置合并进 `apply_backend_config`（**单次 IPC = 单次重启**，不变 no-op）。验收：lifecycle 真后端测试 `capability_env_reaches_the_backend`——开 shell 后 `/v1/tools/list` 出现 `"name":"shell"` + `permission:"granted"`（治理授予同验），重复 apply 不重启；fail-closed 单元测试。
+- **② 器官/模块视图**：`/v1/organs` + `/v1/modules` 挂"活动 → 器官与模块"页（此前零消费方；OrganDto 的 id/name/enabled/description 展示 + 501 优雅降级）。
+- **③ 运行时快照内省**：`/v1/runtime/snapshot` 挂运行时诊断弹窗（providers/modules/状态全量 JSON 内省）。`/v1/providers` 由 snapshot 覆盖（providers 含于其中）。
+- **顺手修正**：设置页 DeepSeek 预设默认模型 `deepseek-chat` → **`deepseek-v4-flash`**（实测可用模型；原预设模型在本端点不可用）。
+- 验收：desktop 22 unit + 6 lifecycle 全绿；svelte-check 0 错；前端套件 7/7；装机 E2E 回归全过（新 NSIS 包）。台账新增绿表 #13；挂账 #2（UI 点击流人工实测）范围同步扩充。
+
 ## [Unreleased] — 前后端接面对账：核心面 100%，缺口登记 ROADMAP P9 (2026-09-10)
 
 - **对账方法**：后端 gateway 全部路由 + 能力旋钮 vs 前端 runtime.ts/视图逐条核对（grep 实测，非叙述）。
