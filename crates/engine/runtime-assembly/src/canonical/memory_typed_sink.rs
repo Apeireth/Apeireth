@@ -209,27 +209,28 @@ impl MemoryTypedMaterializationSink for CanonicalMemoryTypedSink {
                 reason: "relation store is not configured".into(),
             });
         };
-        let mut parts = candidate.content.split_whitespace();
-        let (Some(subject), Some(predicate), Some(object)) =
-            (parts.next(), parts.next(), parts.next())
-        else {
+        if candidate.subject_id.is_empty()
+            || candidate.predicate.is_empty()
+            || candidate.object_id.is_empty()
+        {
             return Ok(MemoryMaterializationOutcome::Skipped {
-                reason: "relation is not structured as subject predicate object".into(),
-            });
-        };
-        if parts.next().is_some() {
-            return Ok(MemoryMaterializationOutcome::Skipped {
-                reason: "relation has ambiguous structure".into(),
+                reason: "relation candidate fields are empty".into(),
             });
         }
         let at = now_ms();
-        let relation_key = stable_id("memory-relation", &[subject, predicate, object]);
+        let relation_key = stable_id(
+            "memory-relation",
+            &[&candidate.subject_id, &candidate.predicate],
+        );
         let fact = TemporalGraphFact {
-            id: stable_id("memory-fact", &[&relation_key, &candidate.content]),
+            id: stable_id(
+                "memory-fact",
+                &[&relation_key, &candidate.object_id, &candidate.content],
+            ),
             relation_key,
-            subject_id: subject.into(),
-            predicate: predicate.into(),
-            object_id: object.into(),
+            subject_id: candidate.subject_id.clone(),
+            predicate: candidate.predicate.clone(),
+            object_id: candidate.object_id.clone(),
             valid_from_ms: at,
             valid_until_ms: None,
             believed_at_ms: at,
