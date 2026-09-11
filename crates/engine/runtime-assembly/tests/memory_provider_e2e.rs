@@ -183,7 +183,7 @@ async fn file_backed_sqlite_runtime_writeback_then_restart_recall_overlays_provi
     let first_response = first_runtime
         .execute(TurnRequest::new(
             session,
-            "Remember that the launch codename is Cedar and answer briefly.",
+            "I prefer concise technical explanations. Ada is my colleague. I will submit the report Friday. I live in Wuhan.",
         ))
         .await
         .unwrap();
@@ -198,7 +198,13 @@ async fn file_backed_sqlite_runtime_writeback_then_restart_recall_overlays_provi
         .governed_recent_episodes(&session.to_string(), 10)
         .unwrap();
     assert!(persisted.iter().any(|episode| {
-        episode.episode.role == "user" && episode.episode.content.contains("Cedar")
+        episode.episode.role == "user"
+            && episode
+                .episode
+                .content
+                .contains("concise technical explanations")
+            && episode.episode.content.contains("Ada")
+            && episode.episode.content.contains("Wuhan")
     }));
     assert!(persisted.iter().any(|episode| {
         episode.episode.role == "assistant"
@@ -216,7 +222,10 @@ async fn file_backed_sqlite_runtime_writeback_then_restart_recall_overlays_provi
     let second_provider = RecordingProvider::new();
     let second_runtime = build_runtime(&db_path, second_provider.clone()).await;
     second_runtime
-        .execute(TurnRequest::new(session, "What was the launch codename?"))
+        .execute(TurnRequest::new(
+            session,
+            "What do you remember about Ada, my report, where I live, and how I prefer answers?",
+        ))
         .await
         .unwrap();
 
@@ -228,11 +237,19 @@ async fn file_backed_sqlite_runtime_writeback_then_restart_recall_overlays_provi
         "{provider_text}"
     );
     assert!(
-        provider_text.contains("Cedar"),
-        "recall overlay missing: {provider_text}"
+        provider_text.contains("concise technical explanations"),
+        "preference recall overlay missing: {provider_text}"
     );
     assert!(
-        provider_text.contains("durable answer was produced"),
-        "assistant writeback missing from governed overlay: {provider_text}"
+        provider_text.contains("Ada"),
+        "relation text missing: {provider_text}"
+    );
+    assert!(
+        provider_text.contains("Wuhan"),
+        "location fact missing: {provider_text}"
+    );
+    assert!(
+        provider_text.contains("submit the report"),
+        "commitment text missing: {provider_text}"
     );
 }

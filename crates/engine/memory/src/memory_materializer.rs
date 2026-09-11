@@ -443,17 +443,28 @@ where
 
 fn typed_candidate(candidate: &ExtractedMemory) -> Option<MemoryTypedCandidate> {
     if candidate.class == ExtractionClass::Relation {
-        let mut parts = candidate.content.splitn(3, ' ');
-        let (Some(subject_id), Some(predicate), Some(object_id)) =
-            (parts.next(), parts.next(), parts.next())
-        else {
-            return None;
-        };
+        let (subject_id, predicate, object_id) =
+            if let Some(rest) = candidate.content.strip_prefix("relation:") {
+                let fields = rest.split('|').map(str::trim).collect::<Vec<_>>();
+                if fields.len() != 3 || fields.iter().any(|field| field.is_empty()) {
+                    return None;
+                }
+                (
+                    fields[0].to_string(),
+                    fields[1].to_string(),
+                    fields[2].to_string(),
+                )
+            } else {
+                // Natural-language relation recognition is useful for generic
+                // episodic memory, but it is not sufficiently structured for a
+                // typed graph write. Require the explicit relation contract.
+                return None;
+            };
         return Some(MemoryTypedCandidate::Relation {
             candidate: RelationCandidate {
-                subject_id: subject_id.to_string(),
-                predicate: predicate.to_string(),
-                object_id: object_id.to_string(),
+                subject_id,
+                predicate,
+                object_id,
                 content: candidate.content.clone(),
                 confidence: candidate.confidence,
                 provenance: candidate.provenance.clone(),

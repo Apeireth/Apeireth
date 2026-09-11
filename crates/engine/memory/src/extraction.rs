@@ -136,9 +136,14 @@ impl MemoryExtractor for RuleMemoryExtractor {
             }
             let content = truncate_content(&normalized);
 
+            // Completion/cancellation are their own explicit lifecycle signals;
+            // only a *create* statement is subject to hedge rejection.
+            let is_create = is_commitment(&lower) && !is_hedged_commitment(&lower);
+            let is_complete = is_commitment_completion(&lower);
+            let is_cancel = is_commitment_cancellation(&lower);
             let (class, confidence) = if is_preference(&lower) {
                 (ExtractionClass::Preference, 0.90)
-            } else if is_commitment(&lower) && !is_hedged_commitment(&lower) {
+            } else if is_create || is_complete || is_cancel {
                 (ExtractionClass::Event, 0.86)
             } else if is_relation(&lower) {
                 (ExtractionClass::Relation, 0.90)
@@ -303,6 +308,36 @@ fn is_commitment(lower: &str) -> bool {
     )
 }
 
+fn is_commitment_completion(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "i submitted ",
+            "i called ",
+            "i completed ",
+            "i finished ",
+            "i have submitted ",
+            "i have called ",
+            "已提交",
+            "已完成",
+        ],
+    )
+}
+
+fn is_commitment_cancellation(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "i no longer need ",
+            "i cancelled ",
+            "i canceled ",
+            "cancel the ",
+            "不再需要",
+            "取消",
+        ],
+    )
+}
+
 fn is_hedged_commitment(lower: &str) -> bool {
     contains_any(
         lower,
@@ -320,7 +355,12 @@ fn is_hedged_commitment(lower: &str) -> bool {
 }
 
 fn is_relation(lower: &str) -> bool {
-    contains_any(
+    lower.strip_prefix("relation:").is_some_and(|rest| {
+        let fields = rest.split('|').map(str::trim).collect::<Vec<_>>();
+        fields.len() == 3
+            && fields.iter().all(|field| !field.is_empty())
+            && fields.iter().all(|field| field.chars().count() <= 160)
+    }) || contains_any(
         lower,
         &[
             " is my wife",
@@ -463,12 +503,40 @@ mod tests {
         let result = RuleMemoryExtractor
             .extract(input(&[
                 "fact: rust | property | fast",
+                "relation: Ada | colleague | team",
                 "Ada is my colleague.",
             ]))
             .await
             .unwrap();
         assert_eq!(result.facts.len(), 1);
-        assert_eq!(result.relations.len(), 1);
+        assert_eq!(result.relations.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn completion_and_cancellation_are_lifecycle_events() {
+        let result = RuleMemoryExtractor
+            .extract(input(&[
+                "I submitted the report.",
+                "I no longer need to submit draft B.",
+                "I might call Ada sometime.",
+            ]))
+            .await
+            .unwrap();
+        assert_eq!(result.events.len(), 2);
+        assert!(result
+            .events
+            .iter()
+            .any(|event| event.content.contains("submitted")));
+        assert!(result
+            .events
+            .iter()
+            .any(|event| event.content.contains("no longer need")));
+
+        let hedged = RuleMemoryExtractor
+            .extract(input(&["I might call Ada sometime."]))
+            .await
+            .unwrap();
+        assert!(hedged.events.is_empty());
     }
 
     #[tokio::test]
