@@ -108,6 +108,12 @@ pnpm tauri build --target aarch64-unknown-linux-gnu
 # Windows 推荐用 NSIS 包。
 ```
 
+**数据删除语义（2026-09-28 修复）**：
+- **图形界面卸载 + 勾选"删除应用程序数据"** → 连 `%LOCALAPPDATA%\Apeireth`
+  （对话/认知数据库、日志、provider 配置）与 WebView2 配置目录一起删除
+  （此前勾了只删注册表——真 bug，已修）；
+- **静默卸载 /S 或未勾选** → 保留用户数据（对话历史、配置），重装即接上。
+
 ### 首次启动（provider 配置）
 
 不需要再手动设系统环境变量：**设置界面是唯一的配置源**。在"设置"里选

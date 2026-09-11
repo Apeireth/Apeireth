@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 修复：卸载"删除应用程序数据"勾选真实生效 (2026-09-28)
+
+- **真机卸载审计抓出的 bug**：用户图形卸载勾选"删除应用程序数据"，但 Tauri NSIS 默认模板该分支只删注册表键——对话数据库、日志、provider 配置（`%LOCALAPPDATA%\Apeireth`）全部幸存，勾了等于没勾。
+- **修复**（`installer.nsh` hook 扩展）：`$DeleteAppDataCheckboxState = 1` 且非更新模式时，在杀完主程序/侧车（释放 SQLite 锁）之后 `RMDir /r` 删除 `%LOCALAPPDATA%\Apeireth` 与 WebView2 配置目录 `app.apeireth.companion`；**静默卸载 /S 不勾选 = 保留数据**（安全默认，install-e2e 新增断言）。
+- 新 NSIS `CE254834B9DB6F6C9B523A71B37C72ABB9B12F58E2FB6B0F4FE5DF1CFABE60DD`；E2E 16/16。勾选路径属 GUI 交互，待用户下次卸载实测闭环（台账挂账）。
+
 ## [Unreleased] — 修复：侧车启动锚定 app-data（System32 CWD 启动失败）(2026-09-28)
 
 - **真机点击流挖出的 P0 bug**：用户从开始菜单启动桌面 → 侧车 CWD = System32 → 默认相对路径 `.apeireth/sessions.sqlite3` 创建失败（"failed to create parent directory: 拒绝访问 (os error 5)"）→ 网关 exit 1 → 前端"后端离线"。此前所有装机 E2E 都从可写 CWD 启动，此坑被系统性掩盖——真窗口点击流第一发就把它打了出来。
