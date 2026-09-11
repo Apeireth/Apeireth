@@ -15,6 +15,7 @@ const {
   streamChat,
   ApprovalRequiredError,
   classifyHttpError,
+  normalizeBaseUrl,
 } = runtime;
 
 const srcDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
@@ -174,6 +175,13 @@ check('production runtime no longer requests grant or fake success', () => {
   assert.equal(runtimeSrc.includes("callbacks.onToolResult?.(tc.id, true, '执行成功')"), false);
   assert.equal(/fetch\([^)]*\/v1\/apeireth\/grant/.test(runtimeSrc), false);
   assert.equal(/fetch\([^)]*\/v1\/apeireth\/capabilities/.test(runtimeSrc), true);
+});
+
+// IME hardening (2026-09-28 production failure: `127、.0.0.1:65244`).
+check('normalizeBaseUrl repairs full-width punctuation', () => {
+  assert.equal(normalizeBaseUrl('http://127、.0.0.1:65244/'), 'http://127.0.0.1:65244');
+  assert.equal(normalizeBaseUrl('http：//127．0．0．1：8080'), 'http://127.0.0.1:8080');
+  assert.equal(normalizeBaseUrl('https://api.deepseek.com/v1/'), 'https://api.deepseek.com/v1');
 });
 
 globalThis.fetch = originalFetch;

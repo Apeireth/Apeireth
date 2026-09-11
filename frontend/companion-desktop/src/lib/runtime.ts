@@ -547,8 +547,16 @@ export async function testProviderConnection(provider: NonNullable<ApeirethConfi
 
 
 
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, '');
+export function normalizeBaseUrl(baseUrl: string): string {
+  // IME hardening (2026-09-28 real-world failure): Chinese input methods turn
+  // ASCII punctuation into full-width forms while typing URLs — `127、.0.0.1`
+  // was actually seen in production. Map full-width dots/colons to ASCII,
+  // strip full-width commas that have no URL meaning, then trim trailing `/`.
+  return baseUrl
+    .replace(/[．]/g, '.')
+    .replace(/[：]/g, ':')
+    .replace(/[、，。]/g, '')
+    .replace(/\/+$/, '');
 }
 
 async function checkJson(response: Response): Promise<unknown> {
