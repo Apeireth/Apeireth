@@ -1136,6 +1136,14 @@ export async function streamChat(
       reader.releaseLock();
     }
 
+    // Reasoning-model guard (deepseek-v4-flash, live 2026-09-28): the stream
+    // can end with zero content when the model spends its budget on
+    // reasoning_content. Surface a retryable error instead of rendering
+    // "(空响应)" — the provider-side max_tokens default is the long-term fix.
+    if (!fullText.trim()) {
+      throw new HttpError(200, '模型返回空内容（思考耗尽了输出预算），请重试');
+    }
+
     recordCallLog({
       conversationId: sessionId,
       protocol: 'gateway',
