@@ -49,6 +49,18 @@ impl DesktopLogger {
     /// Create a new logger with platform-appropriate log directory
     pub fn new() -> Result<Self, String> {
         let log_dir = Self::resolve_log_directory()?;
+        Self::from_log_dir(log_dir)
+    }
+
+    /// Test-only constructor with an explicit log directory, so lifecycle
+    /// tests exercise the production data-path injection without touching the
+    /// user's real `%LOCALAPPDATA%\Apeireth\logs`.
+    #[doc(hidden)]
+    pub fn new_in_dir(log_dir: PathBuf) -> Result<Self, String> {
+        Self::from_log_dir(log_dir)
+    }
+
+    fn from_log_dir(log_dir: PathBuf) -> Result<Self, String> {
         fs::create_dir_all(&log_dir)
             .map_err(|e| format!("Failed to create log directory: {}", e))?;
 
