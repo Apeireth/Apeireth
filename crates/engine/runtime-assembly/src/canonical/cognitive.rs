@@ -1089,10 +1089,14 @@ impl AgentModule for CouncilModule {
                 let outcome = match result.decision {
                     CouncilDecision::Continue => ModuleOutcome::continue_(),
                     CouncilDecision::Retry => ModuleOutcome::retry(result.retry_feedback()),
-                    CouncilDecision::Stop => ModuleOutcome::stop("Council hard-stop"),
-                    CouncilDecision::DeferToHuman => {
-                        ModuleOutcome::stop("Council could not reach a safe decision")
-                    }
+                    CouncilDecision::Stop => ModuleOutcome::stop(format!(
+                        "Council hard-stop: {}",
+                        result.stop_feedback()
+                    )),
+                    CouncilDecision::DeferToHuman => ModuleOutcome::stop(format!(
+                        "Council could not reach a safe decision: {}",
+                        result.stop_feedback()
+                    )),
                 };
                 self.metrics.record(
                     COUNCIL_MODULE_ID,

@@ -701,8 +701,14 @@
         updateMessage(conversationId, assistantMessage.id, {streaming: false, aborted: true});
       } else {
         error = msg;
+        // 保留已流出的正文，把失败原因作为附注渲染在下方——
+        // 而不是清空文字让"回了话又消失"（2026-09-28 议会拦停实况）。
+        const currentText =
+          conversations
+            .find((item) => item.id === conversationId)
+            ?.messages.find((m) => m.id === assistantMessage.id)?.text ?? '';
         updateMessage(conversationId, assistantMessage.id, {
-          text: '',
+          text: currentText,
           streaming: false,
           error: msg,
         });
