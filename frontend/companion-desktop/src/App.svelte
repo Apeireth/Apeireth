@@ -700,7 +700,12 @@
       if (isAborted) {
         updateMessage(conversationId, assistantMessage.id, {streaming: false, aborted: true});
       } else {
-        error = msg;
+        // "is waiting for approval" = 会话还挂着审批，用户却在发新消息。
+        // 说人话 + 自动把审批弹窗拉出来（refreshConnection 的 inbox 自愈）。
+        const waiting = /is waiting for approval/.test(msg);
+        error = waiting
+          ? '本轮还在等待你的审批——先在审批弹窗里点"批准"或"拒绝"，再发新消息。'
+          : msg;
         // 保留已流出的正文，把失败原因作为附注渲染在下方——
         // 而不是清空文字让"回了话又消失"（2026-09-28 议会拦停实况）。
         const currentText =
@@ -710,9 +715,12 @@
         updateMessage(conversationId, assistantMessage.id, {
           text: currentText,
           streaming: false,
-          error: msg,
+          error: waiting ? undefined : msg,
         });
         healthState = 'error';
+        if (waiting) {
+          void refreshConnection();
+        }
       }
     } finally {
       busy = false;
