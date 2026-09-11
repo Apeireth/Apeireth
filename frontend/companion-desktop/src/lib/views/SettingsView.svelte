@@ -906,6 +906,17 @@
       {/if}
 
     </div>
+
+    <!-- 常驻保存栏：填完配置点这里（保存会重启本地网关以应用配置） -->
+    <div class="settings-save-bar">
+      <span class="save-bar-hint">
+        {saveSuccess ? '✓ 已保存，本地网关已应用新配置' : '填好配置后点"保存设置"（会重启本地网关）'}
+      </span>
+      <button class="primary-button save-bar-btn" onclick={handleSaveSettings}>
+        <Check size={14} />
+        <span>{saveSuccess ? '已保存！' : '保存设置'}</span>
+      </button>
+    </div>
   </div>
 </section>
 
@@ -922,23 +933,23 @@
       aria-labelledby="api-key-dialog-title"
     >
       <div class="modal-header">
-        <h3 id="api-key-dialog-title">配置网关认证密钥</h3>
+        <h3 id="api-key-dialog-title">配置模型 API 密钥</h3>
       </div>
       <div class="modal-body">
         <p class="modal-desc">
-          网关认证密钥用于 Apeireth 核心网关访问鉴权。留空并保存可清除已配置凭据。
+          这是**模型提供商**的密钥（如 DeepSeek），保存后会注入本地网关并重启生效；只存内存与侧车环境，不落盘。留空保存可清除。
         </p>
         <div class="form-group">
           <input
             type="password"
-            placeholder="输入网关认证密钥（可选）"
+            placeholder="输入 API Key（例如 sk-…）"
             bind:value={tempApiKey}
           />
         </div>
       </div>
       <div class="modal-footer">
         <button class="quiet-button" onclick={() => showApiKeyModal = false}>取消</button>
-        <button class="primary-button" onclick={saveNewApiKey}>保存 Key</button>
+        <button class="primary-button" onclick={saveNewApiKey}>保存并应用</button>
       </div>
     </div>
   </div>
@@ -959,6 +970,24 @@
 />
 
 <style>
+  .settings-save-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 14px;
+    padding: 10px 18px;
+    border-top: 1px solid var(--line, #2a323c);
+    background: var(--surface-1, #101418);
+    flex-shrink: 0;
+  }
+  .save-bar-hint {
+    font-size: 12px;
+    color: var(--faint, #8b97a5);
+  }
+  .save-bar-btn {
+    font-weight: 600;
+  }
+
   .settings-view {
     flex: 1;
     display: flex;
