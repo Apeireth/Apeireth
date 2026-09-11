@@ -411,6 +411,54 @@ async fn the_gateway_models_list_dedupes_ids_shared_across_providers() {
     );
 }
 
+/// The desktop WebView is a distinct origin; every UI fetch needs CORS
+/// headers even against loopback. Regression for the 2026-09-28 real-world
+/// "backend unreachable or CORS refused" failure that curl-only probes could
+/// never see.
+#[tokio::test]
+async fn the_gateway_answers_cors_for_webview_origins() {
+    let resolver: Arc<dyn CredentialResolver> = Arc::new(StaticCredentials::new());
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(frozen_clock())
+            .with_session_store(Arc::new(InMemorySessionStore::new()))
+            .with_governance(Arc::new(AllowAll))
+            .with_credentials(resolver)
+            .with_default_model(MODEL)
+            .build()
+            .await
+            .expect("runtime builds"),
+    );
+
+    for origin in [
+        "http://tauri.localhost",
+        "tauri://localhost",
+        "http://127.0.0.1:1420",
+    ] {
+        let request = Request::builder()
+            .uri("/health")
+            .method("GET")
+            .header("Origin", origin)
+            .body(Body::empty())
+            .unwrap();
+        let response = canonical_router(Arc::clone(&runtime))
+            .oneshot(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let allow_origin = response
+            .headers()
+            .get("access-control-allow-origin")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        assert!(
+            allow_origin.contains(origin) || allow_origin == "*",
+            "origin {origin} must be allowed, got: {allow_origin}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn the_gateway_serves_sse_stream_chat_completions() {
     let server = MockServer::start(openai_success_body()).await;

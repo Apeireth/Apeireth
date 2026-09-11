@@ -477,9 +477,17 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/approvals/resolve", post(native_resolve_approval))
         .route("/v1/apeireth/events", get(events_handler))
         .merge(panel_routes())
-        // The desktop gateway is loopback by default and does not need an
-        // open cross-origin policy. Deployments that intentionally expose the
-        // gateway must add an explicit, trusted-origin policy at their edge.
+        // CORS is mandatory, not optional: the desktop WebView is a distinct
+        // origin (tauri://localhost / http://tauri.localhost), and browsers
+        // enforce cross-origin policy even against loopback addresses. Without
+        // this layer every UI fetch fails with "backend unreachable or CORS
+        // refused" while curl probes keep passing — a real-world 2026-09-28
+        // failure that curl-only E2E could not see.
+        //
+        // The gateway binds 127.0.0.1 by default, so permissive CORS does not
+        // widen network exposure. Deployments that intentionally expose the
+        // gateway must replace this with an explicit trusted-origin policy.
+        .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(state)
 }
 

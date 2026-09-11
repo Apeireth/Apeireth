@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 修复：网关 CORS 缺失（UI 永远"后端不可达"的真凶）(2026-09-28)
+
+- **真机点击流抓出的最后一块拼图**：网关路由**完全没有 CORS 头**。Tauri WebView 是独立源（tauri://localhost），浏览器对回环地址同样执行同源策略——UI 的每个 fetch 都被拦，表现为"后端不可达或跨域拒绝"，而 curl/Invoke-WebRequest 探针不受 CORS 管，所以此前一切自动化全绿、UI 却永远连不上。原代码注释"回环网关不需要跨域策略"是设计误解（回环只限网络暴露，与 CORS 无关）。
+- **修复**（`canonical_entry.rs`）：整个路由（含 panel 路由）套 `tower_http::cors::CorsLayer::permissive()`；网关默认绑 127.0.0.1，permissive CORS 不扩大暴露面；对外部署需换显式可信源策略（注释已写明）。
+- **回归**：`the_gateway_answers_cors_for_webview_origins`（tauri://localhost / http://tauri.localhost / 127.0.0.1:1420 三个源断言 allow-origin）；live 实测安装后的网关对 Origin 请求返回 `access-control-allow-origin: *`。
+- 守门：3172 passed / 0 failed / 18 ignored（+1 CORS 测试）；clippy/fmt/diff-check 0；Cargo.lock +18 行（tower-http 直接依赖边，包集不变）。新 NSIS `0D0AC8EC…`。
+
 ## [Unreleased] — 修复：卸载"删除应用程序数据"勾选真实生效 (2026-09-28)
 
 - **真机卸载审计抓出的 bug**：用户图形卸载勾选"删除应用程序数据"，但 Tauri NSIS 默认模板该分支只删注册表键——对话数据库、日志、provider 配置（`%LOCALAPPDATA%\Apeireth`）全部幸存，勾了等于没勾。
