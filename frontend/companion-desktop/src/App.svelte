@@ -713,29 +713,58 @@
     if (!pendingCanonical || approvalBusy) return;
     approvalBusy = true;
     const conversationId = activeId;
+    const pending = pendingCanonical;
     try {
-      const result = await resolveCanonicalApproval(config, pendingCanonical, decision);
-      if (result.kind === 'pending') {
-        pendingCanonical = result.pending;
+      // 网关 resolve 会同步等待工具执行完成（最长数分钟）；用 15s 超时
+      // 解绑 UI，避免弹窗按钮全部锁死（2026-09-28 真机卡死：拒绝/批准/叉
+      // 全无反应 = approvalBusy 卡 true）。超时后结果晚到仍自动回填。
+      const request = resolveCanonicalApproval(config, pending, decision);
+      const result = await Promise.race([
+        request,
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 15_000)),
+      ]);
+      if (result === 'timeout') {
+        pendingCanonical = null;
+        error = '已提交，工具正在执行（最长 5 分钟）；结果稍后自动回填，你可以继续操作。';
+        void request
+          .then((late) => applyResolvedResult(late, conversationId, decision))
+          .catch(() => {});
         return;
       }
-      pendingCanonical = null;
-      if (conversationId) {
-        const conversation = conversations.find((item) => item.id === conversationId);
-        const last = conversation?.messages.filter((m) => m.role === 'assistant').at(-1);
-        if (last) {
-          updateMessage(conversationId, last.id, {
-            text: result.text || (decision === 'approve' ? '(空响应)' : '已拒绝该工具调用'),
-            streaming: false,
-          });
-        }
-      }
+      await applyResolvedResult(result, conversationId, decision);
     } catch (caught) {
       error = describeCaughtSafe(caught);
     } finally {
       approvalBusy = false;
       await refreshConnection();
     }
+  }
+
+  async function applyResolvedResult(
+    result: Awaited<ReturnType<typeof resolveCanonicalApproval>>,
+    conversationId: string | null,
+    decision: 'approve' | 'reject',
+  ): Promise<void> {
+    if (result.kind === 'pending') {
+      pendingCanonical = result.pending;
+      return;
+    }
+    pendingCanonical = null;
+    if (conversationId) {
+      const conversation = conversations.find((item) => item.id === conversationId);
+      const last = conversation?.messages.filter((m) => m.role === 'assistant').at(-1);
+      if (last) {
+        updateMessage(conversationId, last.id, {
+          text: result.text || (decision === 'approve' ? '工具执行完成' : '已拒绝该工具调用'),
+          streaming: false,
+        });
+      }
+    }
+  }
+
+  /** X / 遮罩：仅关闭弹窗，不做业务决策（区别于"拒绝"按钮）。 */
+  function dismissPendingApproval(): void {
+    pendingCanonical = null;
   }
 
   function describeCaughtSafe(caught: unknown): string {
@@ -1710,6 +1739,7 @@
   cancelText="拒绝"
   onConfirm={() => void resolvePending('approve')}
   onCancel={() => void resolvePending('reject')}
+  onDismiss={dismissPendingApproval}
 />
 
 <RuntimeModal

@@ -10,6 +10,7 @@
     danger = false,
     onConfirm,
     onCancel,
+    onDismiss,
   }: {
     open: boolean;
     title?: string;
@@ -19,6 +20,8 @@
     danger?: boolean;
     onConfirm: () => void;
     onCancel: () => void;
+    /** X 按钮与遮罩：仅关闭弹窗、不做业务决策（区别于取消按钮）。 */
+    onDismiss?: () => void;
   } = $props();
 
   function handleKeydown(e: KeyboardEvent) {
@@ -32,7 +35,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
-  <div class="dialog-backdrop" onclick={onCancel} role="presentation">
+  <div class="dialog-backdrop" onclick={onDismiss ?? onCancel} role="presentation">
     <div
       class="dialog-container"
       onclick={(e) => e.stopPropagation()}
@@ -49,7 +52,7 @@
           {/if}
           <h3 id="dialog-title">{title}</h3>
         </div>
-        <button class="close-btn" onclick={onCancel} aria-label="关闭">
+        <button class="close-btn" onclick={onDismiss ?? onCancel} aria-label="关闭">
           <X size={16} />
         </button>
       </div>
