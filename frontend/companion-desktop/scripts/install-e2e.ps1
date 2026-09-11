@@ -139,6 +139,7 @@ $reg = Get-ChildItem 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
 Check (-not $reg) 'uninstall registry entry removed'
 $left = Get-Process apeireth -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $sidecar }
 Check ($null -eq $left) 'orphaned sidecar killed by uninstaller'
+Check (Test-Path (Join-Path $env:LOCALAPPDATA 'Apeireth')) 'silent uninstall preserves app data (checkbox default off)'
 
 if ($fails -gt 0) {
     Write-Host "FAILED $fails check(s)" -ForegroundColor Red

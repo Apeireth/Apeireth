@@ -22,7 +22,23 @@
 ; Update mode (/UPDATE): the generated script kills the main binary
 ; unconditionally in that flow too, so the sidecar must be handled identically
 ; or updates would never replace the locked apeireth.exe.
+;
+; "删除应用程序数据" checkbox (2026-09-28 fix): the generated branch only
+; clears registry keys — a user who ticks the box expects their DATA to be
+; deleted, and it silently survives. This hook therefore removes the real
+; app-data directory (`%LOCALAPPDATA%\Apeireth`: conversation/cognitive
+; SQLite stores, logs, backend provider/capability config) and the app's
+; WebView2 profile (`%LOCALAPPDATA%\app.apeireth.companion`: frontend
+; localStorage config, cookies). The kills above release the SQLite locks
+; before the deletion. Silent uninstalls never tick the box (state = 0) and
+; therefore keep user data — the safe default.
 !macro NSIS_HOOK_PREUNINSTALL
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
   !insertmacro CheckIfAppIsRunning "apeireth.exe" "${PRODUCTNAME} (apeireth sidecar)"
+
+  ${If} $DeleteAppDataCheckboxState = 1
+  ${AndIf} $UpdateMode <> 1
+    RMDir /r "$LOCALAPPDATA\Apeireth"
+    RMDir /r "$LOCALAPPDATA\app.apeireth.companion"
+  ${EndIf}
 !macroend
