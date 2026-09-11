@@ -146,6 +146,13 @@ impl OpenAiCompatibleProviderCapability {
     /// Translate a canonical request into the OpenAI Chat Completions body.
     /// Delegates to the shared [`openai_chat`] helper; this provider supplies
     /// the vendor-resolved wire model name and its own id for attribution.
+    ///
+    /// Reasoning models (deepseek-v4-flash, live-verified 2026-09-08/28) burn
+    /// their whole output budget on `reasoning_content` and can finish with an
+    /// EMPTY `content` when `max_tokens` is left to the vendor default (W1
+    /// organ hit this: 500 always truncated, 2048 still 1/3 empty; 4096 works).
+    /// The canonical chain never sets max_tokens, so default it here to give
+    /// reasoning headroom instead of shipping empty responses to the UI.
     fn adapt_request(
         &self,
         request: &NormalizedRequest,
@@ -156,7 +163,11 @@ impl OpenAiCompatibleProviderCapability {
                 provider: self.id.to_string(),
                 detail: format!("model {} is not served by {}", request.model, self.id),
             })?;
-        openai_chat::build_request_body(request, &wire_model, self.id.as_str())
+        let mut body = openai_chat::build_request_body(request, &wire_model, self.id.as_str())?;
+        if body.get("max_tokens").is_none() {
+            body["max_tokens"] = serde_json::json!(4096);
+        }
+        Ok(body)
     }
 
     /// Classify a vendor HTTP outcome. Delegates to the shared [`openai_chat`]
