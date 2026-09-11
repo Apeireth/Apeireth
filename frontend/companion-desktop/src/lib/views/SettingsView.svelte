@@ -383,9 +383,19 @@
   }
 
   function saveNewApiKey() {
+    const key = tempApiKey.trim();
+    // 2026-09-28 real-world trap: this modal used to set only the vestigial
+    // gateway `apiKey` field, which never reaches the sidecar — users filled
+    // it, saved, and chat still failed with "missing API key". The key must
+    // ALSO land in the provider config, because that is what the desktop
+    // pushes into the sidecar environment via apply_backend_config.
     const updated: ApeirethConfig = {
       ...config,
-      apiKey: tempApiKey.trim(),
+      apiKey: key,
+      provider: config.provider ? {...config.provider, apiKey: key} : config.provider,
+      openaiConfig: config.openaiConfig
+        ? {...config.openaiConfig, apiKey: key}
+        : config.openaiConfig,
     };
     onSave(updated);
     tempApiKey = '';
