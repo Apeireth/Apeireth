@@ -45,7 +45,7 @@
 | # | 项 | 原因 | 若要做时的路径 |
 |---|---|---|---|
 | 1 | **MiniMax provider 真机** | 无 MiniMax key（用户侧无预算） | `#[ignore]` 测试齐备：`minimax_llm_factory::real_llm_call_smoke` 等，有 key 后 `cargo test -p apeireth-provider --test minimax_llm_factory -- --ignored` + env `MINIMAX_API_KEY` |
-| 2 | **桌面 UI 点击流人工实测**（首启向导→填 key→保存→网关重启→流式聊天→shell 审批闭环，10 步） | 各链路段都有自动化验证（#6/#10/#12/#13/#14），但**真窗口的端到端点击流从未人工点过**——唯一建议后人做一次的测试 | **清单：`frontend/companion-desktop/docs/first-run-click-through-checklist.md`**（逐条预期 + 失败处置）；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
+| 2 | **桌面 UI 点击流人工实测** | 🟡 核心链路已人工走通（2026-09-28 用户实测：装机→启动→设置填 key→保存→网关重启→真实流式对话出字，全程抓出 5 个真 bug：CWD 启动失败 / CORS 缺失 / 密钥弹窗不推侧车 / 保存按钮不可见 / 错误帧被吞）；**剩余两步待人工**：① 工具面板 shell 审批闭环（开 shell 旋钮→触发→批准）② 图形卸载勾选"删除应用程序数据"验证数据目录真删（新 hook 的 GUI 路径） | 清单：`frontend/companion-desktop/docs/first-run-click-through-checklist.md`；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
 | 3 | `/v1/apeireth/events` 订阅端到端（桌面 UI 里收事件） | 端点已确认是活流（探针连接保持），UI 消费未人工验证 | presence 订阅代码在 `presence.ts`；UI 验证并入 #2 |
 | 4 | approvals 的 HTTP 完整闭环 | 完整闭环在 CLI 实测过（#3）；HTTP 路由只验了参数校验响应 | HTTP 闭环可并入 #2（工具触发 → 面板审批按钮） |
 | 5 | macOS / Linux 打包与装机 | 仅 Windows NSIS 装机实测 | Tauri bundle 命令已有，缺真机验证环境 |
