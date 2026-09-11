@@ -6,6 +6,7 @@
 - **修复**（`backend_supervisor.rs`）：有 logger 时（生产形态）spawn 注入绝对路径 `APEIRETH_SESSION_DB`/`APEIRETH_COGNITIVE_DB` = `%LOCALAPPDATA%\Apeireth\data\*.sqlite3` 并把子进程 `current_dir` 锚定到 app-data——侧车启动与 CWD 彻底解耦。测试构造器 `DesktopLogger::new_in_dir` / `BackendSupervisor::with_logger_in_dir`。
 - **回归防线**：lifecycle 真后端测试 `sidecar_stores_land_in_app_data_regardless_of_cwd`（敌意继承 env 下存储必须落在 app-data、stale 路径不得沾文件）；install-e2e 新增 "hostile-CWD boot (System32)" 步骤（13/13 全过）；聊天探针无 key 时改为 SKIP 不再误报失败（无 key 回归可用）。
 - 实测：System32 启动 → 侧车存活 + 存储落 app-data + /health 200 + 卸载零残留。新 NSIS `DF55B2966D79AF992DC6AF027EA2B084A3AB6B0A30BABBFB88771B8FDBF30D4C`。
+- **装机验证踩出的两个 NSIS 陷阱（已固化进 install-e2e）**：① 同版本静默安装**不覆盖**（exit 0 但文件不换）——脚本现安装前先卸载旧装；② NSIS `InstallDirRegKey` 记住上次安装目录，若曾用 `/D=` 探测过其他目录，后续所有安装都被吸过去——脚本现断言文件落在**预期目录**（落位守卫）。本次真机排障靠哈希比对揪出"重装其实没生效"，教训：**装完必哈希**。最终装机包 `05696BA0…`（含修复，装机哈希 `0CFFCE60…`）。
 
 ## [Unreleased] — token 级真流式打通 + 首启向导 (2026-09-10)
 

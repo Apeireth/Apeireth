@@ -56,12 +56,24 @@ function Check([bool]$Ok, [string]$Message) {
     else { Write-Host "  [FAIL] $Message" -ForegroundColor Red; $script:fails++ }
 }
 
+Write-Host "=== pre-clean: uninstall any existing install (same-version silent installs never overwrite) ==="
+if (Test-Path (Join-Path $InstDir 'uninstall.exe')) {
+    $pre = Start-Process -FilePath (Join-Path $InstDir 'uninstall.exe') -ArgumentList '/S' -PassThru -Wait
+    Start-Sleep -Seconds 3
+    Check ($pre.ExitCode -eq 0) "pre-existing uninstall exit 0 (got $($pre.ExitCode))"
+    Check (-not (Test-Path $InstDir)) 'pre-existing install dir removed'
+} else {
+    Write-Host '  [SKIP] no pre-existing install'
+}
+
 Write-Host "=== install (silent, perMachine) ==="
 $p = Start-Process -FilePath $SetupPath -ArgumentList '/S' -PassThru -Wait
 Start-Sleep -Seconds 3
 Check ($p.ExitCode -eq 0) "installer exit 0 (got $($p.ExitCode))"
-Check (Test-Path $sidecar) "installed sidecar present: $sidecar"
-Check (Test-Path $app) "installed app present: $app"
+# Location trap guard: NSIS remembers the previous install dir in the registry
+# (InstallDirRegKey); a stale key silently redirects the install elsewhere.
+Check (Test-Path $sidecar) "installed sidecar present at EXPECTED dir: $sidecar"
+Check (Test-Path $app) "installed app present at EXPECTED dir: $app"
 
 Write-Host '=== installed sidecar chat probe (real provider; SKIP without key) ==='
 if ($env:OPENAI_API_KEY -and $env:APEIRETH_OPENAI_MODELS) {
