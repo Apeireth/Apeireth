@@ -574,6 +574,18 @@
             reason: item.governance_reason,
             status: 'pending' as const,
           }));
+          // 自愈（2026-09-28 卡死根因类）：弹窗以"后端真值"为准——
+          // 若弹窗持有的审批 id 已不在待审批列表（过期/已被处理），
+          // 换成后端最新一条；后端说没有待审批就关掉陈旧弹窗。
+          if (inbox.length > 0) {
+            const currentId = pendingCanonical?.approval_id ?? null;
+            const stillPending = inbox.some((item) => item.approval_id === currentId);
+            if (!pendingCanonical || !stillPending) {
+              pendingCanonical = inbox[0];
+            }
+          } else if (pendingCanonical) {
+            pendingCanonical = null;
+          }
         } else {
           pendingApprovals = [];
         }
@@ -733,6 +745,9 @@
       }
       await applyResolvedResult(result, conversationId, decision);
     } catch (caught) {
+      // 失败就关弹窗 + 留错误信息，绝不让同一个弹窗卡死；
+      // finally 里的 refreshConnection 会从后端重新拉取真值（若有新审批会再弹）。
+      pendingCanonical = null;
       error = describeCaughtSafe(caught);
     } finally {
       approvalBusy = false;
