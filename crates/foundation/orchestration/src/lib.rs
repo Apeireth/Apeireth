@@ -331,6 +331,30 @@ impl CouncilResult {
         }
         feedback.chars().take(2_000).collect()
     }
+
+    /// Short feedback suitable for the canonical stop directive: the critiques
+    /// from advisors that vetoed, so the human sees WHY the reply was withheld
+    /// instead of a bare "Council hard-stop" (real-world 2026-09-28 feedback).
+    pub fn stop_feedback(&self) -> String {
+        let mut feedback = self
+            .evaluations
+            .iter()
+            .filter(|evaluation| evaluation.verdict.verdict == AdvisorDecision::Stop)
+            .map(|evaluation| evaluation.verdict.critique.as_str())
+            .filter(|critique| !critique.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("; ");
+        if feedback.is_empty() {
+            if self.timed_out {
+                feedback = "Council timed out before reaching a safe decision".into();
+            } else if !self.failures.is_empty() {
+                feedback = format!("{} advisor(s) failed to evaluate the candidate", self.failures.len());
+            } else {
+                feedback = "Council vetoed the candidate".into();
+            }
+        }
+        feedback.chars().take(2_000).collect()
+    }
 }
 
 /// Failure returned by an injected Council side-call adapter.
