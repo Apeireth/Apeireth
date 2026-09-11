@@ -268,6 +268,19 @@ impl BackendSupervisor {
         }
     }
 
+    /// App-data directory that owns the logs (e.g. `%LOCALAPPDATA%\Apeireth`).
+    /// `None` for logger-less test supervisors, where tests control the
+    /// sidecar's store paths through their own environment.
+    fn app_data_dir(&self) -> Option<PathBuf> {
+        self.logger.as_ref().map(|logger| {
+            logger
+                .log_directory()
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| logger.log_directory().to_path_buf())
+        })
+    }
+
     /// App-data file for the non-secret part of the provider environment.
     fn provider_env_path(logger: &DesktopLogger) -> PathBuf {
         logger
@@ -345,6 +358,16 @@ impl BackendSupervisor {
     #[doc(hidden)]
     pub fn new_for_test() -> Self {
         Self::build(None)
+    }
+
+    /// Test-only production-shaped supervisor whose logs and app-data anchors
+    /// live under `dir` (the parent of `dir\logs` becomes the app-data dir).
+    /// Used by the regression test proving the sidecar's stores land in
+    /// app-data regardless of the launch CWD.
+    #[doc(hidden)]
+    pub fn with_logger_in_dir(dir: PathBuf) -> Result<Self, String> {
+        let logger = DesktopLogger::new_in_dir(dir.join("logs"))?;
+        Ok(Self::with_logger(Arc::new(logger)))
     }
 
     /// Expose dev-build resolution so an integration test can report a missing
@@ -823,6 +846,22 @@ impl BackendSupervisor {
         let capability_env = self.capability_env.read().await.clone();
         for (key, value) in capability_env.env_pairs() {
             cmd.env(key, value);
+        }
+
+        // Anchor the sidecar's persistent stores to absolute app-data paths
+        // and pin its working directory there. The canonical CLI defaults its
+        // session/cognitive DBs to RELATIVE `.apeireth/...` paths, which break
+        // when the desktop is launched from a non-writable CWD (Start-menu
+        // shortcuts run with CWD = System32 → "failed to create parent
+        // directory: 拒绝访问 (os error 5)", gateway exits 1 — real-world
+        // boot failure, 2026-09-28). With a logger attached (production),
+        // app data = the directory that owns `logs/`.
+        if let Some(data_dir) = self.app_data_dir() {
+            let store_dir = data_dir.join("data");
+            let _ = std::fs::create_dir_all(&store_dir);
+            cmd.env("APEIRETH_SESSION_DB", store_dir.join("sessions.sqlite3"));
+            cmd.env("APEIRETH_COGNITIVE_DB", store_dir.join("cognitive.sqlite3"));
+            cmd.current_dir(&data_dir);
         }
 
         // Keep the child in the app's lifetime, not the user's screen: without

@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 修复：侧车启动锚定 app-data（System32 CWD 启动失败）(2026-09-28)
+
+- **真机点击流挖出的 P0 bug**：用户从开始菜单启动桌面 → 侧车 CWD = System32 → 默认相对路径 `.apeireth/sessions.sqlite3` 创建失败（"failed to create parent directory: 拒绝访问 (os error 5)"）→ 网关 exit 1 → 前端"后端离线"。此前所有装机 E2E 都从可写 CWD 启动，此坑被系统性掩盖——真窗口点击流第一发就把它打了出来。
+- **修复**（`backend_supervisor.rs`）：有 logger 时（生产形态）spawn 注入绝对路径 `APEIRETH_SESSION_DB`/`APEIRETH_COGNITIVE_DB` = `%LOCALAPPDATA%\Apeireth\data\*.sqlite3` 并把子进程 `current_dir` 锚定到 app-data——侧车启动与 CWD 彻底解耦。测试构造器 `DesktopLogger::new_in_dir` / `BackendSupervisor::with_logger_in_dir`。
+- **回归防线**：lifecycle 真后端测试 `sidecar_stores_land_in_app_data_regardless_of_cwd`（敌意继承 env 下存储必须落在 app-data、stale 路径不得沾文件）；install-e2e 新增 "hostile-CWD boot (System32)" 步骤（13/13 全过）；聊天探针无 key 时改为 SKIP 不再误报失败（无 key 回归可用）。
+- 实测：System32 启动 → 侧车存活 + 存储落 app-data + /health 200 + 卸载零残留。新 NSIS `DF55B2966D79AF992DC6AF027EA2B084A3AB6B0A30BABBFB88771B8FDBF30D4C`。
+
 ## [Unreleased] — token 级真流式打通 + 首启向导 (2026-09-10)
 
 - **真流式增量链路（provider → runtime → gateway → 客户端）**：

@@ -251,6 +251,66 @@ fn capability_env_reaches_the_backend() {
     });
 }
 
+/// Regression for the 2026-09-28 real-world boot failure: the sidecar must
+/// never resolve its default relative `.apeireth/...` store paths against the
+/// launch CWD (Start-menu launches run with CWD = System32, where creating
+/// `.apeireth` fails with Access Denied). With a logger attached, the
+/// supervisor injects absolute app-data store paths and pins the child's CWD;
+/// this test proves the stores actually land there even while stale store
+/// paths linger in the inherited environment.
+#[test]
+fn sidecar_stores_land_in_app_data_regardless_of_cwd() {
+    if !backend_available() {
+        eprintln!("SKIP: no canonical backend build found");
+        return;
+    }
+    let _guard = gateway_lock();
+
+    let app_data = std::env::temp_dir().join(format!(
+        "apeireth-desktop-data-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&app_data);
+    // Stale inherited values must NOT win over the injected app-data anchors.
+    std::env::set_var(
+        "APEIRETH_SESSION_DB",
+        app_data.join("stale").join("sessions.sqlite3"),
+    );
+    std::env::set_var(
+        "APEIRETH_COGNITIVE_DB",
+        app_data.join("stale").join("cognitive.sqlite3"),
+    );
+
+    runtime().block_on(async {
+        let supervisor = BackendSupervisor::with_logger_in_dir(app_data.clone())
+            .expect("production-shaped supervisor in temp dir");
+        supervisor
+            .start()
+            .await
+            .expect("backend should start with app-data anchors");
+        let info = supervisor.info().await;
+        assert_eq!(info.state, BackendState::Ready);
+
+        let sessions = app_data.join("data").join("sessions.sqlite3");
+        let cognitive = app_data.join("data").join("cognitive.sqlite3");
+        assert!(
+            sessions.is_file(),
+            "sessions store must land in app data: {sessions:?}"
+        );
+        assert!(
+            cognitive.is_file(),
+            "cognitive store must land in app data: {cognitive:?}"
+        );
+        assert!(
+            !app_data.join("stale").exists(),
+            "stale inherited paths must not receive stores: {:?}",
+            app_data.join("stale")
+        );
+
+        supervisor.stop().await.expect("cleanup stop");
+    });
+}
+
 /// The path `watch_for_exit` exists for: a backend that dies after reaching
 /// Ready must stop being reported as healthy.
 #[test]

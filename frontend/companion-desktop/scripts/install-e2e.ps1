@@ -63,10 +63,14 @@ Check ($p.ExitCode -eq 0) "installer exit 0 (got $($p.ExitCode))"
 Check (Test-Path $sidecar) "installed sidecar present: $sidecar"
 Check (Test-Path $app) "installed app present: $app"
 
-Write-Host '=== installed sidecar chat probe (real provider) ==='
-$sid = [guid]::NewGuid().ToString()
-$r = & $sidecar chat "你好" --model $env:APEIRETH_OPENAI_MODELS --session $sid 2>&1 | Out-String
-Check ($r -match 'provider=provider.openai-compatible') "installed chat via openai-compatible provider"
+Write-Host '=== installed sidecar chat probe (real provider; SKIP without key) ==='
+if ($env:OPENAI_API_KEY -and $env:APEIRETH_OPENAI_MODELS) {
+    $sid = [guid]::NewGuid().ToString()
+    $r = & $sidecar chat "你好" --model $env:APEIRETH_OPENAI_MODELS --session $sid 2>&1 | Out-String
+    Check ($r -match 'provider=provider.openai-compatible') "installed chat via openai-compatible provider"
+} else {
+    Write-Host '  [SKIP] no OPENAI_API_KEY / APEIRETH_OPENAI_MODELS; chat probe skipped'
+}
 
 Write-Host '=== gateway serve /health (installed binary) ==='
 $gp = Start-Process -FilePath $sidecar -ArgumentList @('gateway', 'serve', '--port', '18124') -PassThru -WindowStyle Hidden
@@ -96,8 +100,24 @@ if ($dp.HasExited) {
 Start-Sleep -Seconds 2
 $orphan = Get-Process apeireth -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $sidecar }
 Check ($null -ne $orphan) "defect precondition reproduced: orphaned sidecar running (pid $($orphan.Id -join ','))"
+if ($orphan) { Stop-Process -Id $orphan.Id -Force; Start-Sleep -Seconds 1 }
+
+Write-Host '=== hostile-CWD boot (System32): stores must land in app data (2026-09-28 regression) ==='
+$hostile = Start-Process -FilePath $app -WorkingDirectory 'C:\Windows\System32' -PassThru
+Start-Sleep -Seconds 8
+$sidecarUp = Get-Process apeireth -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $sidecar }
+Check ($null -ne $sidecarUp) "sidecar survives a System32-CWD launch (pid $($sidecarUp.Id -join ','))"
+$dataDir = Join-Path $env:LOCALAPPDATA 'Apeireth\data'
+Check (Test-Path (Join-Path $dataDir 'sessions.sqlite3')) 'sessions store anchored in app data'
+Check (Test-Path (Join-Path $dataDir 'cognitive.sqlite3')) 'cognitive store anchored in app data'
+if (-not $hostile.HasExited) { Stop-Process -Id $hostile.Id -Force }
+Start-Sleep -Seconds 2
+$leftover = Get-Process apeireth -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $sidecar }
+if ($leftover) { Stop-Process -Id $leftover.Id -Force }
 
 Write-Host '=== uninstall while sidecar running (installer.nsh hook must kill it) ==='
+$stray = Start-Process -FilePath $sidecar -ArgumentList @('gateway', 'serve', '--port', '18125') -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 2
 $up = Start-Process -FilePath (Join-Path $InstDir 'uninstall.exe') -ArgumentList '/S' -PassThru -Wait
 Start-Sleep -Seconds 4
 Check ($up.ExitCode -eq 0) "uninstall exit 0 (got $($up.ExitCode))"
@@ -112,5 +132,5 @@ if ($fails -gt 0) {
     Write-Host "FAILED $fails check(s)" -ForegroundColor Red
     exit 1
 }
-Write-Host 'install-e2e: PASS (install / chat / gateway / desktop / uninstall-with-running-sidecar)'
+Write-Host 'install-e2e: PASS (install / chat / gateway / desktop / hostile-CWD boot / uninstall-with-running-sidecar)'
 exit 0
