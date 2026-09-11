@@ -1103,7 +1103,17 @@ export async function streamChat(
                 events?: CanonicalExecutionEvent[];
                 pending_approval?: CanonicalPendingApproval;
               };
+              error?: string;
             };
+
+            // Error frames terminate the stream with the REAL failure reason
+            // (provider auth / no provider / etc.). Never swallow them: an
+            // earlier build silently skipped these, so a failed turn surfaced
+            // as a misleading "empty content" instead of the actual error
+            // (real-world 2026-09-28: session had 4 user turns, 0 assistant).
+            if (typeof json.error === 'string' && json.error) {
+              throw new HttpError(502, json.error);
+            }
 
             const choice = json.choices?.[0];
             const delta = choice?.delta;
@@ -1128,7 +1138,9 @@ export async function streamChat(
 
             applyCanonicalEvents(json.apeireth?.events, callbacks);
           } catch (caught) {
-            if (caught instanceof ApprovalRequiredError) throw caught;
+            if (caught instanceof ApprovalRequiredError || caught instanceof HttpError) {
+              throw caught;
+            }
           }
         }
       }
