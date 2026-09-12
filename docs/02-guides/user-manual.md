@@ -45,7 +45,7 @@ v2 真实在 13-crate 工作区里运行的：
 
 v2 唯一进程执行边界 = **`crates/capabilities/tools/src/process/`**（`ProcessExecutor`，Windows Job Object + CREATE_SUSPENDED 完整，Linux/macOS 进程组部分）。
 
-**`BuiltinToolsPlugin::new(workspace_root)` 默认注册 3 个只读工具**：
+**`BuiltinToolsPlugin::new(workspace_root)` 默认注册 3 个只读工具，且执行许可默认放行（与 `tool.repo` 同待遇）**（2026-09-12 起）：
 
 | 工具 | 风险 | 用途 |
 | | | |
@@ -54,6 +54,10 @@ v2 唯一进程执行边界 = **`crates/capabilities/tools/src/process/`**（`Pr
 | `tool.repo` | low | 只读 git 仓库探查（status / commit / diff / log）|
 
 **`tool.shell` 与 `tool.fetch` 默认关闭**，需 `BuiltinToolsOptions { shell: Some(TrustedShellConfig), fetch: Some(FetchConfig) }` 显式开启（opt-in，非默认）。这与 v1 companion_serve `APEIRETH_GRANT=...` 的临时放行模型不同——v2 的批准模型是**编译时 / bootstrap 时**的显式配置 + **运行时** governance pipeline（见 §6）。
+
+CLI 隐私逃生门：`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 关闭 filesystem/search 执行许可；旧 `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` 保留兼容（等同默认）；两者同设时 DISABLE 赢（fail-closed）。敏感路径保护恒开。
+
+**会话级审批策略（2026-09-12）**：`SessionSettings` 支持 `permission_preset`（`read_only` 拒写/执行 / `standard` 沿用审批 / `full` 免审批留日志）+ `approval_remember`（`standard` 下"会话内记住"：某工具批准一次后该会话内同工具后续调用跳过审批；进程内记忆、重启清零；inner 的 `Deny` 永不绕过）。桌面端会话头提供 4 档选择器：只读 / 标准·每次审批 / 标准·会话内记住 / 完全放行。
 
 工具调用走 **`<<<[TOOL_REQUEST]>>>` 已废弃**：v2 工具调用由各 provider 的原生 tool_calls 流式协议处理（OpenAI `tool_calls` 数组），不再走 marker 解析。`crates/capabilities/tools/src/plugin.rs` 的 plugin descriptor（`CapabilityDescriptor`）声明每个工具的 CapabilityId / kind / risk / M2* stage 标注，是唯一权威来源。
 
@@ -121,7 +125,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | 问题 | 答案 |
 | | |
 | 怎么跑？ | `cargo run -p apeireth-cli -- gateway serve --port 8080`（HTTP）或 `cargo run -p apeireth-cli -- chat "<prompt>"`（CLI）。 |
-| 换模型？ | `APEIRETH_MINIMAX_API_KEY` / `APEIRETH_ANTHROPIC_KEY` / `OPENAI_API_KEY` 任一即可，按 fallback 顺序生效。改 provider 不用重编译（plugin 注入）。 |
+| 换模型？ | `APEIRETH_API_KEY` / `APEIRETH_ANTHROPIC_KEY` / `OPENAI_API_KEY` 任一即可，按 fallback 顺序生效。改 provider 不用重编译（plugin 注入）。 |
 | 启用 shell/fetch？ | bootstrap 时 `BuiltinToolsPlugin::with_options(root, BuiltinToolsOptions { shell: Some(...), fetch: Some(...) })`。CLI 默认不启用。 |
 | 工具被拒了？ | 预期行为：要么工具未启用（opt-in 关），要么 governance hook deny / RequireApproval。当前 AllowAll 默认下工具不拒；启用 hook 后才生效。 |
 | 我想接一个 IDE 一样的自定义模型？ | 实现 `ProviderCapability` trait + 注册为 plugin；参考 `crates/engine/provider/src/canonical_minimax.rs` 作为示例。 |

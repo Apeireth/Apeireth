@@ -94,7 +94,7 @@ v1 和 v2 跑同一台机没问题，端口不同即可：
 - v1 companion_serve :8090（保留原配置）
 - v2 gateway :8080（新增）
 
-**配置上完全独立**（v1 配 `apikey-ultra.txt`，v2 配 `APEIRETH_MINIMAX_API_KEY` 或 keyring entry）。两边可同时跑。
+**配置上完全独立**（v1 配 `apikey-ultra.txt`，v2 配 `APEIRETH_API_KEY` 或 keyring entry）。两边可同时跑。
 
 ### 路径 C：生产 v1 → v2 完全切换（不推荐 rc 之前做）
 
@@ -142,7 +142,7 @@ Apeireth-rust/                              # 仓库根 (Cargo workspace)
 ~/.config/apeireth/credentials.json           # EncryptedFileBackend (rc 路线)
 # 或 OS keyring (Linux Secret Service / macOS Keychain / Windows Credential Manager)
 # 或环境变量:
-export APEIRETH_MINIMAX_API_KEY=sk-...
+export APEIRETH_API_KEY=sk-...
 export APEIRETH_ANTHROPIC_KEY=sk-...
 export OPENAI_API_KEY=sk-...
 ```
@@ -151,7 +151,7 @@ export OPENAI_API_KEY=sk-...
 
 | v1 (`apikey-ultra.txt`) | v2 env | v2 keyring service |
 |---|---|---|
-| minimax API key | `APEIRETH_MINIMAX_API_KEY` | `provider.minimax.api_key` |
+| minimax API key | `APEIRETH_API_KEY` | `provider.minimax.api_key` |
 | anthropic API key | `APEIRETH_ANTHROPIC_KEY` | `provider.anthropic.api_key` |
 | OpenAI API key | `OPENAI_API_KEY` | `provider.openai-compatible.api_key` |
 | 主 token (master) | 不在 v2 runtime 自动读取 (需 keyring + 显式 GatedCredentialsStore) | `master` (with DenyAllGate 兜底) |
@@ -239,7 +239,7 @@ curl -X POST http://localhost:8090/v1/apeireth/approval-requests \
 **v2**：
 ```bash
 # 凭证 (env var / keyring)
-export APEIRETH_MINIMAX_API_KEY=sk-...
+export APEIRETH_API_KEY=sk-...
 
 # 启动
 cargo run -p apeireth-cli -- gateway serve --port 8080
@@ -295,7 +295,7 @@ cat data/apikey-ultra.txt
 # 输出: sk-... (一行)
 
 # 2. 设 v2 env var (按 provider)
-export APEIRETH_MINIMAX_API_KEY=sk-...
+export APEIRETH_API_KEY=sk-...
 # 或 (按 OpenAI 兼容)
 export OPENAI_API_KEY=sk-...
 

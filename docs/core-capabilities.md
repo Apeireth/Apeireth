@@ -1,6 +1,6 @@
 # Apeireth Core Capabilities — Contract & Invariants
 
-> **端点接线状态 (基线 candidate `8b7e3111`, 2026-08-30)**：本文件记录的是历史 Core Capability Expansion 轮次设计的**端点契约与不变量**。当前 canonical 网关生产路由（`apeireth-gateway::canonical_router`）仅暴露 `/health`、`/v1/models`、`/v1/chat`、`/v1/chat/completions`、`/v1/approvals/resolve`；下文的 `/v1/apeireth/capabilities`、`/v1/apeireth/sessions`、memory 治理、grants、`/v1/panel/traces` 与 `/v1/apeireth/events` SSE 端点**未**挂载到当前生产路由。下文内容保留为设计/历史契约参考，集成前请以实际路由为准。
+> **端点接线状态 (2026-09-12 对账)**：本文件记录历史 Core Capability Expansion 轮次设计的**端点契约与不变量**。当前 canonical 网关生产路由（`apeireth-gateway::canonical_router`）实际暴露：`/health`、`/v1/models`、`/v1/providers`、`/v1/runtime/snapshot`、`/v1/apeireth/runtime/snapshot`、`/v1/chat`、`/v1/chat/completions`、`/v1/approvals`、`/v1/approvals/resolve`、`/v1/apeireth/events` (SSE)、`/v1/sessions/:id/settings` (2026-09-12)、`/v1/admin/config` GET+POST (2026-09-12)；panel 组路由（capabilities/sessions 治理/grants/traces/memory 治理等）在未挂 `PanelData` 时一律 `501 unsupported`。端点权威口径见 `docs/gateway-api-contract.md`；下文设计/历史契约仅供参考，集成前以实际路由为准。
 
 > **当前基线 (v2.0.0-preview)**：
 > Apeireth 2.0 拥有覆盖四层架构的**全域系统能力体系**，涵盖基石治理 (Foundation & Governance)、认知记忆 (Engine & Cognition)、工具沙箱 (Capabilities & Sandbox) 以及网关全双工 (Gateway & Adapters)（各能力的实现/接线/默认启用层级见 [`docs/01-architecture/system-capabilities.md`](01-architecture/system-capabilities.md) 状态标注）。

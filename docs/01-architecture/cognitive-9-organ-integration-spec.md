@@ -99,11 +99,11 @@
   (PermissionGovernance / CredentialDisclosure / PromptInjection) 在 runtime 主循环.
 - **LOCKED**: `crates/foundation/core/src/philosophy/eight_anchors.rs:58-79` (S-1 北极星 +
   O-1 安全优先) 0 改.
-- **真实施估时**: 0 (L0 已就位, 物理隔离).
+- **真实施估时**: 0（L0 人类审批由 approval 生命周期 (Pending→Approved→Consumed, TTL 5min, at-most-once) + governance RequireApproval + 桌面审批卡实现；"物理隔离"指 L0 HA 常量语义而非 runtime 隔离机制；L1-L2 runtime 真实现, L3-L5 0 装——与 `v2-architecture-reflection.md:154/178` 口径对齐）。
 
 ### 2.2 L1 自我诊断 (runtime 主动)
 
-- **入口**: `cognitive.self_assessment` (WIRED, OFF by default, Judge-backed).
+- **入口**: `cognitive.self_assessment` (WIRED, **默认开**——`ProductionCognitiveModules` 默认配置 `self_assessment: true`, 无 env 旋钮; Judge-backed)。
 - **真接路径** (per `crates/engine/runtime/src/canonical/cognitive.rs:875` + `:948`):
   - `SelfAssessmentModule` 挂 `AfterTurn` hook.
   - 真实路径: 真 Judge result → typed in-process → 持久化到 `SQLiteSelfAssessmentStore`.

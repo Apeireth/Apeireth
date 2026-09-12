@@ -51,14 +51,10 @@
 6. **L0 是否已硬实现**: v2-architecture-reflection:178 "runtime 还没硬实现" vs cognitive-9:102 "已就位物理隔离"。
 7. 其余 20+ 处 (见三路子代理报告全文, 多为 v1 遗留/时间演进, 已在各文件头注部分自标)。
 
-## 4. 建议方向 (提案, 未实施, 待主人拍板)
+## 4. 建议方向 → 实施状态 (2026-09-12 整改批)
 
-1. **只读工具默认可用**: filesystem/search 与 repo 同待遇 (默认 grant),
-   `APEIRETH_ENABLE_LOCAL_READ_TOOLS` 语义改为"显式关闭只读工具" (CLI 隐私逃生门)。
-   依据: 4 份文档口径 + 只读 + 敏感路径保护恒开 + 风险 low/medium。
-2. **全局权限预设接入会话创建**: 新会话用设置页选定预设初始化 (补 settings 代理留下的尾巴)。
-3. **审批策略预设档**: 每次审批 / 会话内记住 / 完全放行 (完全放行仅在 full 预设下可选),
-   落点 SessionSettings + PermissionPresetGovernanceHook (基础设施已就位)。
-4. **认知深度预设** (可选, 远期): 轻量(全关)/平衡(judge)/深度(judge+council) 替代两个裸旋钮;
-   文档已注 judge 默认 ON 是 2027-Q1 远期路线, 预设档是过渡形态。
-5. **文档对账修复**: 上述 §3 矛盾 + 旋钮口径统一 (一次 doc-fix 批次)。
+1. **只读工具默认可用** — ✅ 已落地 (commit `7e3690a6`/merge `6e16aedc`): filesystem/search 默认 grant 与 repo 同待遇; `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 为 CLI 隐私逃生门 (旧 ENABLE 兼容, DISABLE 赢 fail-closed); 4 个新测试覆盖语义矩阵。
+2. **全局权限预设接入会话创建** — ✅ 已落地 (merge `390b4998`): 新建会话/分支时读 localStorage 默认预设, send() 后静默 PATCH, 404 静默重试。
+3. **审批策略预设档** — ✅ 已落地 (commit `6a2d134a`/merge `6569556b`): `SessionSettings.approval_remember` + `GovernanceHook::approval_resolved` 回调 + 进程内记忆; standard+remember 把同 (会话,工具) 的 RequireApproval 改 Allow, **Deny 永不绕过**; 桌面会话头 4 档选择器 (只读/每次审批/会话内记住/完全放行)。
+4. **认知深度预设档** — ✅ 已落地 (merge `390b4998`): 设置页轻量/平衡/深度/自定义 映射 judge/council, 文案注明延迟与 token 成本。
+5. **文档对账修复** — ✅ 本批: MiniMax key 名统一 `APEIRETH_API_KEY` (user-manual/migration-v1-to-v2); crate 数 13→17 (maintenance-guide); canonical 路由口径 (core-capabilities); self_assessment 默认开 (cognitive-9); L0 诚实口径 (cognitive-9); 旋钮口径与审批策略 (user-manual/HANDOFF-NOTES)。其余次要矛盾 (v1 遗留/时间演进类) 见三路子代理报告, 未逐一改。
