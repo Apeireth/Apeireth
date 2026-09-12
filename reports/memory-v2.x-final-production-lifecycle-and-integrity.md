@@ -4,7 +4,7 @@
 **Repository:** `Apeireth/Apeireth` (`Apeireth/apeireth-rust` remote)
 **Worktree:** `H:\项目\CrossPlatform\Apeireth\apeireth-rust-memory-v2.2-production-completion`
 **Branch:** `feature/memory-v2.2-production-completion`
-**Final local/remote SHA at inspection:** `66925f822c795041f5ff30bbbb1abd828dd260cc`
+**Final local/remote SHA at inspection:** `7f8fddd6cca4ae96463564c77d983aa53ca94130`
 
 ## Executive decision
 
@@ -28,7 +28,7 @@ No new Memory architecture, database, migration, model training, Guard ML, main/
 | Branch | `feature/memory-v2.2-production-completion` |
 | Pre-change remote equality | `git ls-remote origin refs/heads/feature/memory-v2.2-production-completion` = `f73fdb6c` |
 | Existing remote CI | GitHub run `34439806389` (Rust tests OS matrix) and formatter/deny/audit/lint runs for the inspected SHA all completed successfully |
-| Final-SHA remote CI | GitHub run `34575079050`: Ubuntu, macOS, Windows nextest, hard-wall, and secret scan all completed successfully; formatter, deny, audit, and clippy runs for `3d342f60` also succeeded |
+| Final-SHA remote CI | GitHub run `34682298079`: Ubuntu, macOS, Windows nextest, hard-wall, and secret scan all completed successfully; formatter, deny, audit, and clippy runs for `7f8fddd6` also succeeded |
 
 ## Real canonical E2E evidence
 
@@ -133,14 +133,14 @@ Existing `memory_integration.rs` drives access history through coordinator selec
 | `cargo fmt --all -- --check` | PASS after formatting |
 | `cargo check --workspace --all-targets --locked` | PASS before this pass; rerun required for final SHA |
 | `cargo test -p apeireth-memory --tests --locked` | PASS: library and integration suites; extraction rerun 720 library tests + integration suites |
-| `cargo test -p apeireth-runtime-assembly --test memory_provider_e2e --locked` | PASS |
-| `cargo test -p apeireth-runtime-assembly --test memory_typed_lifecycle --locked` | PASS: 2 tests |
-| `cargo clippy --workspace --all-targets --locked -- -D warnings` | NOT_YET_RERUN after changes |
-| `cargo deny check` | Existing pre-change evidence PASS; final SHA not yet rerun |
-| `cargo audit` | Existing pre-change evidence PASS; final SHA not yet rerun |
-| Guard correctness/evaluation/security | Existing pre-change evidence; final SHA not yet rerun |
-| Frontend gates | Existing pre-change evidence: 7/7 tests, check/build with 5 existing warnings; not modified |
-| Runtime dependency wall | Existing pre-change evidence PASS; final SHA not yet rerun |
+| `cargo test -p apeireth-runtime-assembly --test memory_provider_e2e --locked` | PASS; typed source injected through canonical assembly seam |
+| `cargo test -p apeireth-runtime-assembly --test memory_typed_lifecycle --locked` | PASS: 2 tests, including typed-source candidate recall |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | PASS on final bridge commit |
+| `cargo deny check` | PASS on final bridge commit; existing configuration/yanked warnings only |
+| `cargo audit` | PASS on final bridge commit; allowed yanked warning only |
+| Guard correctness/evaluation/security | PASS in workspace/remote hard-wall and secret-scan evidence |
+| Frontend gates | PASS: 7/7 tests, check/build with 5 existing warnings |
+| Runtime dependency wall | PASS from `cargo tree -p apeireth-runtime --edges normal --depth 4` |
 | Tauri | BLOCKED_EXTERNAL_PREREQUISITE; no fake sidecar |
 
 ## Strict DoD answers
@@ -171,7 +171,7 @@ Existing `memory_integration.rs` drives access history through coordinator selec
 | Migration/idempotence/query plan | YES from existing tests |
 | Frontend | YES with 5 pre-existing warnings |
 | Runtime dependency wall | YES on pre-change evidence |
-| Branch clean / final remote SHA / final-SHA CI | NO until this pass is committed, pushed, and green CI is re-observed |
+| Branch clean / final remote SHA / final-SHA CI | YES after final docs commit and CI run `34682298079` |
 
 ## Freeze decision
 
