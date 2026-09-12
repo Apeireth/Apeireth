@@ -55,8 +55,8 @@ use apeireth_protocol::canonical::{
 };
 
 use super::approval::{
-    operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus,
-    FrozenTurnContinuation, PendingApproval, PendingApprovalView,
+    approval_arguments_summary, approval_command_text, operation_fingerprint_with_invocation,
+    ApprovalDecision, ApprovalStatus, FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 use super::error::{RuntimeError, RuntimeResult};
 use super::events::RuntimeEvent;
@@ -325,9 +325,14 @@ impl Runtime {
         session.record(request_id, trace_id, SessionEventKind::TurnStarted, clock);
         self.sessions.save(&session).await?;
 
+        // Per-session settings are read once per turn. A non-empty session
+        // model overrides the runtime/global default; an explicit per-turn
+        // `request.model` still wins over the session setting.
+        let session_model = session.settings.model.clone();
         let Some(model) = request
             .model
             .clone()
+            .or(session_model)
             .or_else(|| self.config.default_model.clone())
         else {
             let error = RuntimeError::misconfigured(
@@ -1343,6 +1348,10 @@ impl Runtime {
                             approved_approval_id: None,
                             module_invocations: module_state.used(),
                         };
+                        let command_text =
+                            approval_command_text(&tool_name, &tool_call, effective_invocation.as_ref());
+                        let arguments_summary =
+                            approval_arguments_summary(&tool_name, &tool_call);
                         let pending = PendingApproval {
                             approval_id,
                             session_id,
@@ -1355,6 +1364,8 @@ impl Runtime {
                             effective_invocation,
                             governance_hook: governance_hook.clone(),
                             governance_reason,
+                            command_text,
+                            arguments_summary,
                             operation_fingerprint: fingerprint,
                             created_at,
                             expires_at,

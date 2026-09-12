@@ -114,3 +114,59 @@ impl SessionStore for SqliteSessionStore {
 pub fn as_session_store(store: SqliteSessionStore) -> Arc<dyn SessionStore> {
     Arc::new(store)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use apeireth_core::kernel::system_clock;
+    use apeireth_protocol::canonical::{ContentPart, NormalizedMessage};
+    use apeireth_runtime::canonical::{PermissionPreset, Session, SessionSettings};
+    use apeireth_storage::SqliteConnectionPool;
+
+    #[tokio::test]
+    async fn legacy_session_json_without_settings_opens_with_defaults_and_no_data_loss() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.sqlite3");
+
+        // Simulate a pre-settings database: create only the `sessions` table
+        // (as migration v1 did) and store a session JSON with no `settings`
+        // key — the on-disk shape this feature must migrate from.
+        let pool = SqliteConnectionPool::open(&path).await.unwrap();
+        let clock = system_clock();
+        let mut session = Session::new(SessionId::new(), clock.as_ref());
+        session.append(NormalizedMessage::user("hello"), clock.as_ref());
+        let session_id = session.id;
+        let mut legacy = serde_json::to_value(&session).unwrap();
+        legacy
+            .as_object_mut()
+            .expect("session serializes as object")
+            .remove("settings");
+        let data = serde_json::to_string(&legacy).unwrap();
+
+        pool.write(move |conn| {
+            conn.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, data TEXT);")?;
+            conn.execute(
+                "INSERT INTO sessions (id, data) VALUES (?1, ?2)",
+                rusqlite::params![session_id.to_string(), data],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        drop(pool);
+
+        // Reopen through the production store. `run_migrations` is idempotent
+        // against the existing table and must not drop or rewrite the row.
+        let store = SqliteSessionStore::open(&path).await.unwrap();
+        let loaded = store.load(&session_id).await.unwrap().unwrap();
+
+        assert_eq!(loaded.settings, SessionSettings::default());
+        assert_eq!(loaded.settings.model, None);
+        assert_eq!(
+            loaded.settings.permission_preset,
+            PermissionPreset::Standard
+        );
+        assert_eq!(loaded.messages.len(), 1, "transcript must survive migration");
+        assert_eq!(ContentPart::join_text(&loaded.messages[0].content), "hello");
+    }
+}
