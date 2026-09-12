@@ -64,8 +64,9 @@ pub mod trace;
 // L1 接 SelfAssessmentStore. 主人 Veto dashboard 留 v2.0.0 release 接入.
 
 pub use approval::{
-    operation_fingerprint, operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus,
-    PendingApproval, PendingApprovalView,
+    approval_arguments_summary, approval_command_text, operation_fingerprint,
+    operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus, PendingApproval,
+    PendingApprovalView,
 };
 pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use error::{RuntimeError, RuntimeResult};
@@ -88,7 +89,8 @@ pub use runtime::{
     RuntimeSnapshot, DEFAULT_MAX_ROUNDS,
 };
 pub use session::{
-    InMemorySessionStore, Session, SessionEvent, SessionEventKind, SessionManager, SessionStore,
+    InMemorySessionStore, PermissionPreset, Session, SessionEvent, SessionEventKind,
+    SessionManager, SessionSettings, SessionStore,
 };
 pub use subloop::{
     RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,

@@ -184,6 +184,11 @@ pub struct PendingApproval {
     pub governance_hook: String,
     /// Governance reason that is shown to the human.
     pub governance_reason: String,
+    /// One-line human-readable command text, e.g.
+    /// `shell: bash -c 'ls -la /tmp'`.
+    pub command_text: String,
+    /// Shorter human summary, e.g. `执行命令 ls -la /tmp`.
+    pub arguments_summary: String,
     /// Canonical fingerprint over every operation-relevant field.
     pub operation_fingerprint: String,
     pub created_at: Timestamp,
@@ -222,6 +227,10 @@ pub struct PendingApprovalView {
     pub effective_invocation: Option<serde_json::Value>,
     pub governance_hook: String,
     pub governance_reason: String,
+    /// One-line human-readable command text (from [`PendingApproval`]).
+    pub command_text: String,
+    /// Shorter human summary (from [`PendingApproval`]).
+    pub arguments_summary: String,
     pub created_at: Timestamp,
     pub expires_at: Timestamp,
     pub operation_fingerprint: String,
@@ -244,11 +253,84 @@ impl From<&PendingApproval> for PendingApprovalView {
                 .map(|frozen| frozen.display.clone()),
             governance_hook: value.governance_hook.clone(),
             governance_reason: value.governance_reason.clone(),
+            command_text: value.command_text.clone(),
+            arguments_summary: value.arguments_summary.clone(),
             created_at: value.created_at,
             expires_at: value.expires_at,
             operation_fingerprint: value.operation_fingerprint.clone(),
         }
     }
+}
+
+/// Build a one-line human-readable command text for an approval payload.
+///
+/// It prefers the redacted frozen-invocation display (the executable shape a
+/// human actually approves) and falls back to the raw tool arguments.
+pub fn approval_command_text(
+    tool_name: &str,
+    call: &ToolCall,
+    effective_invocation: Option<&FrozenInvocation>,
+) -> String {
+    let command = effective_invocation
+        .and_then(|frozen| shell_command_from_display(&frozen.display))
+        .or_else(|| command_from_arguments(&call.arguments))
+        .unwrap_or_else(|| compact_json(&call.arguments));
+    format!("{}: {}", tool_name, command)
+}
+
+/// Build a shorter human summary of one approval's arguments.
+///
+/// This is intentionally heuristic and deterministic: it never invokes a model
+/// and never exposes secret values beyond what the approval already shows.
+pub fn approval_arguments_summary(tool_name: &str, call: &ToolCall) -> String {
+    let args = &call.arguments;
+    if let Some(command) = args.get("command").and_then(|value| value.as_str()) {
+        return format!("执行命令 {}", bounded(command, 120));
+    }
+    if let (Some(operation), Some(path)) = (
+        args.get("operation").and_then(|value| value.as_str()),
+        args.get("path").and_then(|value| value.as_str()),
+    ) {
+        return format!("{} {}", operation, bounded(path, 120));
+    }
+    if let Some(path) = args.get("path").and_then(|value| value.as_str()) {
+        return format!("操作 {}", bounded(path, 120));
+    }
+    format!(
+        "{} {}",
+        tool_name,
+        bounded(&compact_json(args), 120)
+    )
+}
+
+fn shell_command_from_display(display: &serde_json::Value) -> Option<String> {
+    let executable = display.get("shell_executable")?.as_str()?;
+    let args = display
+        .get("shell_args")?
+        .as_array()?
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(if args.is_empty() {
+        executable.to_string()
+    } else {
+        format!("{} {}", executable, args)
+    })
+}
+
+fn command_from_arguments(args: &serde_json::Value) -> Option<String> {
+    args.get("command")
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+}
+
+fn bounded(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
+}
+
+fn compact_json(value: &serde_json::Value) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "{}".into())
 }
 
 /// Canonical deterministic JSON representation used for fingerprints.
@@ -458,6 +540,76 @@ mod tests {
             1,
         );
         assert_ne!(base, changed_call);
+    }
+
+    #[test]
+    fn approval_command_text_prefers_frozen_shell_display() {
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: serde_json::json!({ "command": "ls -la /tmp" }),
+        };
+        let frozen = FrozenInvocation::new(
+            serde_json::json!({ "command": "ls -la /tmp" }),
+            serde_json::json!({
+                "shell_executable": "bash",
+                "shell_args": ["-c", "ls -la /tmp"],
+            }),
+        );
+
+        let text = approval_command_text("shell", &call, Some(&frozen));
+        assert!(text.starts_with("shell: bash -c"), "{text}");
+        assert!(text.contains("ls -la /tmp"), "{text}");
+
+        let summary = approval_arguments_summary("shell", &call);
+        assert!(summary.contains("ls -la /tmp"), "{summary}");
+    }
+
+    #[test]
+    fn approval_command_text_falls_back_to_raw_arguments() {
+        let call = ToolCall {
+            id: "call_2".into(),
+            name: "filesystem".into(),
+            arguments: serde_json::json!({ "operation": "read", "path": "notes.txt" }),
+        };
+
+        let text = approval_command_text("filesystem", &call, None);
+        assert!(text.starts_with("filesystem: "), "{text}");
+        assert!(text.contains("read") && text.contains("notes.txt"), "{text}");
+
+        let summary = approval_arguments_summary("filesystem", &call);
+        assert_eq!(summary, "read notes.txt");
+    }
+
+    #[test]
+    fn pending_approval_view_serializes_command_text_and_summary() {
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: serde_json::json!({ "command": "ls -la /tmp" }),
+        };
+        let view = PendingApprovalView {
+            approval_id: ApprovalId::new(),
+            session_id: SessionId::new(),
+            request_id: RequestId::new(),
+            trace_id: TraceId::new(),
+            round: 1,
+            capability_id: CapabilityId::new("tool.example").unwrap(),
+            tool_name: "shell".into(),
+            tool_call: call.clone(),
+            effective_invocation: None,
+            governance_hook: "hook".into(),
+            governance_reason: "reason".into(),
+            command_text: approval_command_text("shell", &call, None),
+            arguments_summary: approval_arguments_summary("shell", &call),
+            created_at: Timestamp::from_epoch_millis(1_700_000_000_000).unwrap(),
+            expires_at: Timestamp::from_epoch_millis(1_700_000_300_000).unwrap(),
+            operation_fingerprint: "fp".into(),
+        };
+
+        let json = serde_json::to_value(&view).unwrap();
+        assert_eq!(json["command_text"], "shell: ls -la /tmp");
+        assert_eq!(json["arguments_summary"], "执行命令 ls -la /tmp");
     }
 
     #[test]
