@@ -401,7 +401,10 @@
   }
 
   const errorCode = $derived.by(() => {
-    if (lastError && typeof lastError === 'object' && 'code' in lastError) {
+    if (lastError && typeof lastError === 'object') {
+      // 优先后端错误帧的 machine-readable code (具体原因), 兜底前端分类码.
+      const backend = (lastError as {backendCode?: unknown}).backendCode;
+      if (typeof backend === 'string' && backend) return backend;
       const code = (lastError as {code?: unknown}).code;
       return typeof code === 'string' ? code : undefined;
     }

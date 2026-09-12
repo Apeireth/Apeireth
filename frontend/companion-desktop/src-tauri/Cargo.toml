@@ -25,10 +25,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-# OS keychain persistence (Windows Credential Manager, macOS Keychain, Linux Secret Service).
+# OS keychain persistence. Windows speaks to Credential Manager directly
+# (see src/keychain.rs — keyring v3's CRED_PERSIST_ENTERPRISE is broken on
+# Microsoft-account machines); keyring remains the macOS/Linux backend.
 keyring = "3.6.3"
 # Workspace policy (clippy.toml): fs_err over std::fs for path-carrying errors.
 fs-err = "3.0"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Credentials"] }
 
 [profile.release]
 codegen-units = 1

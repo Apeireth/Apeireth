@@ -222,6 +222,10 @@ export interface RuntimeError {
     | 'backend';
   message: string;
   status?: number;
+  /** 后端错误帧 code (ApiErrorFrame.code), 有则说明具体原因与解决方案. */
+  backendCode?: ErrorCode;
+  /** 后端错误帧 solution (中文可操作提示). */
+  solution?: string;
 }
 
 export interface CanonicalPendingApproval {
@@ -356,10 +360,16 @@ export const ERROR_SOLUTIONS: Record<ErrorCode, {title: string; solution: string
   internal: {title: '内部错误', solution: '重启 Companion 后重试, 复现请提交日志'},
 };
 
-/** 从 HttpError.code 查解决方案; 无 code / 未知 code 返回通用条目. */
+/** 从 HttpError.code 或 RuntimeError.backendCode 查解决方案; 无 code / 未知 code 返回通用条目. */
 export function describeError(err: unknown): {title: string; solution: string} {
-  if (err instanceof HttpError && err.code) {
-    const entry = (ERROR_SOLUTIONS as Record<string, {title: string; solution: string} | undefined>)[err.code];
+  let backendCode: unknown;
+  if (err instanceof HttpError) {
+    backendCode = err.code;
+  } else if (typeof err === 'object' && err !== null && 'backendCode' in err) {
+    backendCode = (err as {backendCode?: unknown}).backendCode;
+  }
+  if (typeof backendCode === 'string' && backendCode) {
+    const entry = (ERROR_SOLUTIONS as Record<string, {title: string; solution: string} | undefined>)[backendCode];
     if (entry) return entry;
   }
   return GENERIC_ERROR_SOLUTION;
@@ -442,6 +452,11 @@ export function toRuntimeError(caught: unknown): RuntimeError {
       code: classifyHttpError(caught.status),
       message: caught.message,
       status: caught.status,
+      // 后端错误帧的 machine-readable code 与中文提示必须透传, 否则
+      // 错误横幅只能给通用文案 (2026-09-12 真机: missing API key 本应提示
+      // "去设置保存密钥", 却显示 "请重试").
+      backendCode: caught.code as ErrorCode | undefined,
+      solution: caught.solution,
     };
   }
   // One shared guarantee: describeCaught never yields "[object Object]".
