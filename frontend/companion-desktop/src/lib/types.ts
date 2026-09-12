@@ -314,6 +314,8 @@ export interface ApprovalRequestItem {
   summary?: string;
   requestedAt?: number;
   params?: unknown;
+  command_text?: string;
+  arguments_summary?: string;
   status: 'pending' | 'approved' | 'expired' | 'rejected';
 }
 
@@ -354,4 +356,48 @@ export function importanceStars(value: number): 1 | 2 | 3 {
   if (value >= 0.75) return 3;
   if (value >= 0.4) return 2;
   return 1;
+}
+
+// ============================================================
+// Wave-1 前端数据层契约 (与后端并行代理严格一致)
+// ============================================================
+
+/** 模型列表条目 (GET /v1/models 的 data[] 投影). */
+export interface ModelInfo {
+  id: string;
+  ownedBy?: string;
+  description?: string;
+}
+
+/** 后端错误帧 machine-readable 错误码. */
+export type ErrorCode =
+  | 'auth_missing_key'
+  | 'auth_invalid_key'
+  | 'provider_unreachable'
+  | 'provider_error'
+  | 'invalid_request'
+  | 'session_not_found'
+  | 'rate_limited'
+  | 'internal';
+
+/** 后端错误帧 (错误响应体 / SSE error 帧的规范形状). */
+export interface ApiErrorFrame {
+  message: string;
+  code?: ErrorCode;
+  solution?: string;
+}
+
+/** 会话级设置 (GET/PATCH /v1/sessions/{id}/settings). */
+export interface SessionSettings {
+  model: string | null;
+  permission_preset: 'read_only' | 'standard' | 'full';
+}
+
+/** 管理配置 patch (POST /v1/admin/config). */
+export interface AdminConfigPatch {
+  provider?: string;
+  base_url?: string;
+  api_key?: string;
+  model?: string;
+  capabilities?: Record<string, boolean>;
 }
