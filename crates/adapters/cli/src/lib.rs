@@ -489,6 +489,8 @@ async fn build_cognitive_modules_from_env(
         access_history: Some(access_history),
         memory_extractor: None,
         memory_materializer: None,
+        typed_recall: None,
+        typed_recall_identity: None,
         typed_sink: Some(typed_sink),
     };
     let modules =

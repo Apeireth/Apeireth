@@ -323,6 +323,25 @@ pub struct MemoryCandidate {
     pub provenance: MemoryProvenance,
 }
 
+/// Explicit principal identity used by typed durable-memory recall.
+/// A session identifier is deliberately not a substitute for either field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TypedRecallIdentity {
+    pub persona_id: String,
+    pub subject_id: String,
+}
+
+/// Provider-neutral source of typed durable-memory candidates.
+/// Implementations return candidates for the coordinator's existing ranking path.
+pub trait TypedMemoryRecallSource: Send + Sync {
+    fn candidates(
+        &self,
+        query: &crate::layers::MemoryRecallQuery,
+        identity: &TypedRecallIdentity,
+        now_ms: i64,
+    ) -> Result<Vec<MemoryCandidate>, Box<dyn std::error::Error + Send + Sync>>;
+}
+
 /// Embedding adapter boundary. Memory never constructs HTTP clients or reads
 /// credentials; Assembly injects an implementation when semantic recall is
 /// available.

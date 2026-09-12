@@ -12,7 +12,7 @@ use apeireth_memory::{
     AccessHistoryActivationSource, ContextWindowManager, EmbeddingProvider, MemoryCoordinator,
     MemoryExtractor, MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
     MemoryTypedMaterializationSink, ProactiveRecallPolicy, ScopedMemoryBackend,
-    SqliteAccessHistoryStore,
+    SqliteAccessHistoryStore, TypedMemoryRecallSource, TypedRecallIdentity,
 };
 use apeireth_orchestration::Council;
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEntryStore};
@@ -204,6 +204,10 @@ pub struct ProductionBackends {
     pub memory_materializer: Option<Arc<dyn MemoryMaterializerPort>>,
     /// Optional unified extractor used to build a default materializer.
     pub memory_extractor: Option<Arc<dyn MemoryExtractor>>,
+    /// Optional typed durable candidate source for unified recall.
+    pub typed_recall: Option<Arc<dyn TypedMemoryRecallSource>>,
+    /// Explicit identity paired with the typed recall source.
+    pub typed_recall_identity: Option<TypedRecallIdentity>,
     /// Optional concrete typed durable sink for commitment/persona/relation projections.
     pub typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
 }
@@ -311,6 +315,11 @@ impl ProductionModules {
                 coordinator = coordinator.with_activation_source(Arc::new(
                     AccessHistoryActivationSource::new(Arc::clone(history), 0.5, 0.0),
                 ));
+            }
+            if let (Some(source), Some(identity)) =
+                (&backends.typed_recall, &backends.typed_recall_identity)
+            {
+                coordinator = coordinator.with_typed_recall(Arc::clone(source), identity.clone());
             }
             shared_coordinator = Some(Arc::new(coordinator));
         }

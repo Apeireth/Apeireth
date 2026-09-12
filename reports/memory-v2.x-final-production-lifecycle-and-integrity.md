@@ -4,7 +4,7 @@
 **Repository:** `Apeireth/Apeireth` (`Apeireth/apeireth-rust` remote)
 **Worktree:** `H:\项目\CrossPlatform\Apeireth\apeireth-rust-memory-v2.2-production-completion`
 **Branch:** `feature/memory-v2.2-production-completion`
-**Final local/remote SHA at inspection:** `3d342f604204442b888122a3366f70602ee60da8`
+**Final local/remote SHA at inspection:** `66925f822c795041f5ff30bbbb1abd828dd260cc`
 
 ## Executive decision
 
@@ -42,13 +42,20 @@ Turn 1 now contains the requested preference, relation, commitment, and location
 | Preference text | YES | YES | YES | YES | YES (episodic text; separate preference owner not asserted here) |
 | Relation text | YES | YES | YES | YES | YES (episodic text) |
 | Commitment text | YES | YES | YES | YES | YES (episodic text) |
-| Typed temporal relation | candidate/sink only | durable-store tests | YES at store level | NO unified recall bridge | NO |
-| Typed commitment | candidate/sink only | durable-store tests | YES at store level | NO unified recall bridge | NO |
-| Typed persona | no RuleExtractor output; explicit fixture only | durable-store tests | YES at store level | NO unified recall bridge | NO |
+| Typed temporal relation | candidate/sink only | durable-store tests | YES at store level | YES when `TypedMemoryRecallSource` is injected | YES in typed-source E2E; canonical provider wiring remains explicit-config only |
+| Typed commitment | candidate/sink only | durable-store tests | YES at store level | YES when `TypedMemoryRecallSource` is injected | YES in typed-source E2E; canonical provider wiring remains explicit-config only |
+| Typed persona | explicit identity fixture | durable-store tests | YES at store level | YES when an explicit profile fixture/source is injected | YES in typed-source E2E; missing identity remains skipped |
 
-The provider request is checked for the governed-memory overlay and for the four statement contents. A full ID-level `provider_received ⊆ selected ⊆ retrieved` assertion remains a gap because the provider payload contains rendered memory lines, not a separate selection receipt channel.
+This follow-up also wires the typed source through the canonical assembly seam in test/embedding configurations; the canonical provider E2E now passes a real typed source for the same file-backed store and explicit identity. Typed IDs therefore enter the same provider overlay path rather than being only store-level fixtures.
 
-## Typed durable lifecycle evidence
+## Typed recall bridge and universal forget status
+
+This follow-up pass adds the provider-neutral `TypedMemoryRecallSource` port in `crates/engine/memory/src/scope.rs`, the existing-ranking-path integration in `MemoryCoordinator`, and the assembly-owned `SqliteTypedMemoryRecallSource` adapter. Typed commitment, persona, and temporal candidates now have stable IDs and can flow through the same retrieval/compiler path when an explicit `{persona_id, subject_id}` is supplied. The adapter never derives identity from a session.
+
+The follow-up also adds `UniversalForgetFacade` as an existing-store composition boundary and keeps generic episode governance persistent. It does not physically delete append-only typed provenance. The current matrix proves episodic governance and typed terminal/tombstone store semantics, but a complete cross-store principal-level forget transaction and persona tombstone lifecycle still require additional production wiring; therefore universal typed Forget remains `PARTIAL`, not a false PASS.
+
+The provider E2E now extracts memory IDs from the actual rendered `[mem:<id>]` lines and asserts the receipt inclusion relation for the IDs that reached the provider. The test's retrieved/selected sets are derived from the exact selected overlay in this harness; a production receipt channel carrying independent pre-budget retrieved IDs remains a follow-up observability enhancement.
+
 
 `crates/engine/runtime-assembly/tests/memory_typed_lifecycle.rs` uses one real SQLite file and the production `CanonicalMemoryTypedSink` plus official store/query APIs.
 
@@ -71,9 +78,9 @@ These are **durable lifecycle proofs**, not provider-recall proofs.
 |---|---|---|
 | Episodic recall | coordinator governance filtering | PASS |
 | Fact/preference as episodic text | same governed episode path | PASS for episodic representation |
-| Temporal typed store | no universal governance boundary | NOT_TESTED |
-| Commitment typed store | no universal governance boundary | NOT_TESTED |
-| Persona typed store | no Forget API; identity-scoped store only | NOT_TESTED |
+| Temporal typed store | source/tombstone-aware typed recall + store tests | PASS for active/current eligibility; universal principal transaction PARTIAL |
+| Commitment typed store | active-only typed recall + terminal transition tests | PASS for active eligibility; universal principal transaction PARTIAL |
+| Persona typed store | explicit identity/profile isolation | PARTIAL: no durable persona tombstone API |
 | Activation bypass after episode Forget | file-backed high-activation test | PASS |
 | Proactive recall after Forget | no cross-store typed target path | PARTIAL |
 | Consolidation after Forget | governed consolidation tests | PASS |
@@ -145,8 +152,8 @@ Existing `memory_integration.rs` drives access history through coordinator selec
 | Real AfterTurn materializer invocation | YES for generic episodic path |
 | Canonical typed sink used | YES in typed durable lifecycle test; CLI composition has sink available but no explicit identity |
 | Fact/preference/relation/commitment text durable and provider-received | YES as episodic text |
-| Typed commitment/persona/temporal provider-received | NO: no recall bridge |
-| Provider received subset selected subset retrieved | PARTIAL: content/overlay proven; separate ID receipt not exposed |
+| Typed commitment/persona/temporal provider receipt | YES when explicit typed source + identity are injected; canonical CLI defaults remain explicit-config only |
+| Provider received subset selected subset retrieved | YES in the canonical overlay ID harness; independent pre-budget retrieved receipt is PARTIAL |
 | Wuhan→Shanghai revision and Wuhan history | YES at typed store level |
 | Commitment create/complete/cancel | PARTIAL: create/complete/cancel extraction and store APIs covered; full canonical conversational transition is not complete |
 | Hedged commitment rejected | YES |
@@ -154,7 +161,7 @@ Existing `memory_integration.rs` drives access history through coordinator selec
 | Persona same-user/cross-user/missing identity | YES at explicit sink/store level |
 | Preference duplicate owner absent | YES for existing preference upsert contract; not re-proven in canonical multi-type E2E |
 | Episodic Forget / high-activation bypass | YES |
-| Universal typed Forget matrix | NO |
+| Universal typed Forget matrix | PARTIAL: facade + active/tombstone eligibility; persona durable tombstone and atomic cross-store transaction remain |
 | Protect/consolidation episodic lifecycle | YES |
 | ACT-R actual selection and restart score | YES for episodic coordinator path |
 | Proactive relevant/irrelevant/default disabled | PARTIAL/YES for service policy; provider receipt NO |
@@ -168,4 +175,4 @@ Existing `memory_integration.rs` drives access history through coordinator selec
 
 ## Freeze decision
 
-`MEMORY_FREEZE_READY = NO`. The stop rule is not met because the strict P0-A typed provider-receipt requirement, universal typed Forget requirement, and final-SHA CI evidence are still missing. The correct next action after this report is either to implement an explicitly approved recall/governance bridge or to keep Memory unfrozen; no additional feature expansion is justified by this acceptance pass.
+`MEMORY_FREEZE_READY = NO`. The strict stop rule is still not met: typed stores now have a unified provider-neutral recall bridge and real ID inclusion evidence, but Universal Forget is only PARTIAL because persona tombstone lifecycle and one atomic principal-scoped cross-store operation are not yet present. The correct next action is to finish that governance contract rather than claim a false freeze.

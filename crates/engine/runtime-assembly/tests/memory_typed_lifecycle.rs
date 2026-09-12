@@ -5,9 +5,9 @@ use apeireth_memory::{
     Commitment, CommitmentKind, CommitmentStatus, MemoryMaterializationOutcome, MemoryProvenance,
     MemoryScope, MemoryTypedMaterializationSink, PersonaProfileDelta, PersonaProfileStore,
     SqliteCommitmentStore, SqlitePersonaProfileStore, SqliteTemporalGraphStore, TemporalGraphFact,
-    TemporalGraphQuery,
+    TemporalGraphQuery, TypedMemoryRecallSource,
 };
-use apeireth_runtime_assembly::CanonicalMemoryTypedSink;
+use apeireth_runtime_assembly::{CanonicalMemoryTypedSink, SqliteTypedMemoryRecallSource};
 use apeireth_storage::SqliteConnectionPool;
 use tempfile::tempdir;
 
@@ -136,6 +136,38 @@ async fn typed_stores_share_file_restart_and_preserve_lifecycle_state() {
     assert_eq!(history.len(), 2);
     assert_eq!(history[0].object_id, "Wuhan");
     assert_eq!(history[1].id, second.id);
+
+    let typed_source = SqliteTypedMemoryRecallSource::new()
+        .with_commitments(Arc::new(reopened_commitments.clone()))
+        .with_persona(Arc::new(reopened_persona.clone()))
+        .with_profile(profile.clone())
+        .with_relations(Arc::new(reopened_relations.clone()));
+    let identity = apeireth_memory::TypedRecallIdentity {
+        persona_id: "persona-a".into(),
+        subject_id: "user-a".into(),
+    };
+    let query = apeireth_memory::MemoryRecallQuery::new("session", "report Wuhan concise")
+        .with_visible_scopes(vec![
+            MemoryScope::User {
+                user_id: "user-a".into(),
+            },
+            MemoryScope::Persona {
+                persona_id: "persona-a".into(),
+                user_id: "user-a".into(),
+            },
+        ]);
+    let candidates = typed_source
+        .candidates(&query, &identity, 1_900_000_000_000)
+        .unwrap();
+    assert!(candidates
+        .iter()
+        .any(|item| item.id.starts_with("typed:persona:")));
+    assert!(candidates
+        .iter()
+        .any(|item| item.id.starts_with("typed:relation:")));
+    assert!(!candidates
+        .iter()
+        .any(|item| item.id.starts_with("typed:commitment:")));
 }
 
 #[tokio::test]
