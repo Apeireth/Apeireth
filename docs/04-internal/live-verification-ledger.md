@@ -53,6 +53,7 @@
 | 20 | **桌面钥匙串 IPC + 无重启应用（404/405 回退重启）+ 工作区目录**（keyring 只进系统钥匙串不落盘；绝对 env > 锚定 > 相对 env 视为无效的新 store 契约） | companion-desktop 30 单测 + `supervisor_lifecycle.rs` 8 集成测试（**真 sidecar**，含 `explicit_env_store_paths_take_priority`） | `cargo test`（src-tauri 内） |
 | 21 | **前端数据层 + 6 个新组件 + SettingsView/App.svelte 集成**（审批卡显示命令文本、错误解决方案横幅、会话模型/预设选择器、工具生命周期卡、斜杠菜单、工作区选择器） | `npm run check` 0 errors（警告 5 条全为既有）+ `npm run test` 7/7 | `cd frontend/companion-desktop; npm run check; npm run test` |
 | 22 | **本批新包装机回归 + 真聊天探针**（新 store 锚定契约的 hostile-CWD 启动 + 卸载钩子零残留 + 桌面冒烟 + 装机侧车真聊天） | install-e2e 17/17（2026-09-12，新 NSIS 包，新 key） | `$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'; pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
+| 23 | **审批载荷旧 blob 迁移修复**（升级前持久化的审批记录缺 `command_text`/`arguments_summary` 导致整会话加载失败 → 两个字段加 `#[serde(default)]`；真机用户会话 `5f05690d` 实测修复后加载 200） | commit `f69cd68d` + 回归测试 `approval_view_serialized_before_command_text_still_deserializes` + **真实数据验证**（用户 `%LOCALAPPDATA%\Apeireth\data\sessions.sqlite3` 副本 → `GET /v1/sessions/5f05690d…/settings` 200） | `cargo test -p apeireth-runtime`；复核：gateway 指 DB 副本查 settings |
 
 ## 2. 挂账（未测 / 测不了）——不要声称已验
 
