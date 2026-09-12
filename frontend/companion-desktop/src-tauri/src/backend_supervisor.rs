@@ -182,6 +182,24 @@ impl BackendProviderEnv {
         }
         self
     }
+
+    /// The (variable, value) pairs that CANNOT be hot-applied through the
+    /// gateway's `/v1/admin/config` endpoint and therefore require a sidecar
+    /// restart when they change.
+    ///
+    /// The endpoint can hot-apply exactly: the openai-compatible provider's
+    /// `api_key` (keyring write) and `base_url` (capability hot-set) plus the
+    /// default-model injection. Everything else — model lists (the provider's
+    /// model registry is fixed at boot), the minimax/anthropic families, and
+    /// all capability toggles — only reaches the sidecar through its
+    /// environment. Hot-applying those would silently leave the running
+    /// gateway on stale configuration (2026-09-12 real-machine finding).
+    pub fn restart_relevant_pairs(&self) -> Vec<(&'static str, &str)> {
+        self.env_pairs()
+            .into_iter()
+            .filter(|(key, _)| *key != "OPENAI_API_KEY" && *key != "APEIRETH_OPENAI_URL")
+            .collect()
+    }
 }
 
 /// Advanced-capability toggles the desktop injects into the sidecar.
@@ -341,6 +359,12 @@ pub struct BackendSupervisor {
     provider_env: RwLock<BackendProviderEnv>,
     capability_env: RwLock<BackendCapabilityEnv>,
     workspace_dir: RwLock<Option<PathBuf>>,
+    /// The provider env the RUNNING sidecar was actually spawned with (raw,
+    /// without keychain fallback). Compared against new config to decide
+    /// hot-apply vs restart: only key/base_url changes are hot-applicable.
+    spawned_provider_env: RwLock<BackendProviderEnv>,
+    /// The capability toggles the RUNNING sidecar was spawned with.
+    spawned_capability_env: RwLock<BackendCapabilityEnv>,
 }
 
 impl BackendSupervisor {
@@ -369,9 +393,11 @@ impl BackendSupervisor {
             info: Arc::new(RwLock::new(BackendInfo::default())),
             process: Arc::new(RwLock::new(None)),
             logger,
-            provider_env: RwLock::new(persisted_provider),
-            capability_env: RwLock::new(persisted_capabilities),
+            provider_env: RwLock::new(persisted_provider.clone()),
+            capability_env: RwLock::new(persisted_capabilities.clone()),
             workspace_dir: RwLock::new(persisted_workspace),
+            spawned_provider_env: RwLock::new(persisted_provider),
+            spawned_capability_env: RwLock::new(persisted_capabilities),
         }
     }
 
@@ -813,30 +839,56 @@ impl BackendSupervisor {
         Ok(self.info().await)
     }
 
-    /// Apply the current config to a gateway that is already `Ready`: hot-apply
-    /// first, then fall back to the legacy restart when the gateway has no
-    /// admin-config endpoint (or the hot apply fails for any reason).
+    /// Apply the current config to a gateway that is already `Ready`.
+    ///
+    /// Only key/base_url changes are hot-applicable through
+    /// `/v1/admin/config`; anything else (model lists, capability toggles,
+    /// other provider families) only reaches the sidecar through its
+    /// environment, so those changes restart the process. A gateway without
+    /// the admin endpoint (old build) always takes the restart path.
     async fn apply_to_ready_gateway(&self) -> Result<(), String> {
-        match self.try_hot_apply().await {
-            HotApply::Applied => {
-                self.log_desktop(LogLevel::Info, "backend.hot_apply applied");
-                Ok(())
+        let hot_ok = self.hot_apply_sufficient().await;
+        if hot_ok {
+            match self.try_hot_apply().await {
+                HotApply::Applied => {
+                    self.log_desktop(LogLevel::Info, "backend.hot_apply applied");
+                    Ok(())
+                }
+                HotApply::Unsupported => {
+                    self.log_desktop(
+                        LogLevel::Info,
+                        "backend.hot_apply unsupported (pre-admin gateway); restarting",
+                    );
+                    self.restart().await.map(|_| ())
+                }
+                HotApply::Failed(error) => {
+                    self.log_desktop(
+                        LogLevel::Warn,
+                        &format!("backend.hot_apply failed ({error}); restarting"),
+                    );
+                    self.restart().await.map(|_| ())
+                }
             }
-            HotApply::Unsupported => {
-                self.log_desktop(
-                    LogLevel::Info,
-                    "backend.hot_apply unsupported (pre-admin gateway); restarting",
-                );
-                self.restart().await.map(|_| ())
-            }
-            HotApply::Failed(error) => {
-                self.log_desktop(
-                    LogLevel::Warn,
-                    &format!("backend.hot_apply failed ({error}); restarting"),
-                );
-                self.restart().await.map(|_| ())
-            }
+        } else {
+            self.log_desktop(
+                LogLevel::Info,
+                "backend.restart required (models/capabilities/other-family change is not hot-applicable)",
+            );
+            self.restart().await.map(|_| ())
         }
+    }
+
+    /// Whether the pending config change can be applied without a restart:
+    /// only the restart-relevant pairs (everything except the openai-compatible
+    /// key/base_url) and capability toggles must be unchanged vs what the
+    /// running sidecar was spawned with.
+    async fn hot_apply_sufficient(&self) -> bool {
+        let current = self.provider_env.read().await.clone();
+        let spawned = self.spawned_provider_env.read().await.clone();
+        let caps_current = self.capability_env.read().await.clone();
+        let caps_spawned = self.spawned_capability_env.read().await.clone();
+        current.restart_relevant_pairs() == spawned.restart_relevant_pairs()
+            && caps_current == caps_spawned
     }
 
     /// POST the current config to `{endpoint}/v1/admin/config`.
@@ -1084,6 +1136,10 @@ impl BackendSupervisor {
         // Priority: in-memory env > OS keychain (env wins when a key was pushed
         // this session; the keychain restores it on later launches).
         let provider_env = self.provider_env.read().await.clone();
+        // Snapshot what THIS process is spawned with (raw, keychain-less) so
+        // later config changes can be classified hot-able or restart-required.
+        *self.spawned_provider_env.write().await = provider_env.clone();
+        *self.spawned_capability_env.write().await = self.capability_env.read().await.clone();
         let provider_env =
             provider_env.with_keychain_fallback(|provider| keychain::get_provider_key(provider));
         for (key, value) in provider_env.env_pairs() {
