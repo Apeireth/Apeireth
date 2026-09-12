@@ -36,6 +36,7 @@ use crate::retrieval_pipeline::{
 use crate::scope::{
     EmbeddingProvider, MemoryCandidate, MemoryCandidateQuery, MemoryProvenance,
     MemoryRankingConfig, MemoryScope, ScopedMemoryBackend, ScoreComponents,
+    TypedMemoryRecallSource, TypedRecallIdentity,
 };
 use crate::topic_predictor::TopicCue;
 use crate::MemoryError;
@@ -57,6 +58,8 @@ pub struct MemoryCoordinator {
     consolidation: MemoryConsolidationJob,
     ranking: MemoryRankingConfig,
     activation_source: Option<Arc<dyn ActivationSource>>,
+    typed_recall_source: Option<Arc<dyn TypedMemoryRecallSource>>,
+    typed_identity: Option<TypedRecallIdentity>,
 }
 
 impl MemoryCoordinator {
@@ -79,6 +82,8 @@ impl MemoryCoordinator {
             consolidation: MemoryConsolidationJob::new(),
             ranking: MemoryRankingConfig::default(),
             activation_source: None,
+            typed_recall_source: None,
+            typed_identity: None,
         }
     }
 
@@ -118,7 +123,18 @@ impl MemoryCoordinator {
         self
     }
 
-    /// Attach an optional activation source. When absent, candidate activation
+    /// Attach typed durable candidates to the existing unified ranking path.
+    #[must_use]
+    pub fn with_typed_recall(
+        mut self,
+        source: Arc<dyn TypedMemoryRecallSource>,
+        identity: TypedRecallIdentity,
+    ) -> Self {
+        self.typed_recall_source = Some(source);
+        self.typed_identity = Some(identity);
+        self
+    }
+
     /// values remain unchanged for backwards-compatible ranking.
     #[must_use]
     pub fn with_activation_source(mut self, source: Arc<dyn ActivationSource>) -> Self {
@@ -439,6 +455,29 @@ impl MemoryCoordinator {
                             },
                         });
                     }
+                }
+            }
+        }
+
+        if let (Some(source), Some(identity)) = (&self.typed_recall_source, &self.typed_identity) {
+            if let Ok(typed_candidates) = source.candidates(query, identity, now_ms) {
+                for candidate in typed_candidates {
+                    if !candidate.scope.is_visible_in(&query.visible_scopes)
+                        && !typed_scope_visible(&candidate.scope, identity)
+                    {
+                        governance_filtered += 1;
+                        continue;
+                    }
+                    let layer = if candidate.layer == "relational" {
+                        MemoryLayerKind::Relational
+                    } else {
+                        MemoryLayerKind::Semantic
+                    };
+                    candidate_meta.insert(
+                        candidate.id.clone(),
+                        (layer, now_ms, candidate.provenance.source_request.clone()),
+                    );
+                    candidates.push(candidate);
                 }
             }
         }
@@ -896,6 +935,11 @@ impl MemoryCoordinator {
             .unwrap_or(fallback_provenance);
         (scope, provenance)
     }
+}
+
+fn typed_scope_visible(scope: &MemoryScope, identity: &TypedRecallIdentity) -> bool {
+    matches!(scope, MemoryScope::User { user_id } if user_id == &identity.subject_id)
+        || matches!(scope, MemoryScope::Persona { persona_id, user_id } if persona_id == &identity.persona_id && user_id == &identity.subject_id)
 }
 
 fn valid_embedding(vector: &[f32], expected_len: Option<usize>) -> bool {

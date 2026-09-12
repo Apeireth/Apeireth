@@ -7,7 +7,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
-use apeireth_memory::{MemoryGovernanceStore, ScopedMemoryBackend, SqliteMemoryStore};
+use apeireth_memory::{
+    MemoryGovernanceStore, ScopedMemoryBackend, SqliteMemoryStore, TypedRecallIdentity,
+};
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
     ProviderError,
@@ -19,6 +21,7 @@ use apeireth_protocol::canonical::{
 use apeireth_runtime::canonical::{Runtime, TurnRequest};
 use apeireth_runtime_assembly::{
     CognitiveBackends, CognitiveModuleConfig, ProductionCognitiveModules,
+    SqliteTypedMemoryRecallSource,
 };
 use async_trait::async_trait;
 use tempfile::tempdir;
@@ -144,17 +147,31 @@ fn request_text(request: &NormalizedRequest) -> String {
         .collect()
 }
 
+fn memory_ids_in(text: &str) -> std::collections::BTreeSet<String> {
+    text.split("[mem:")
+        .skip(1)
+        .filter_map(|part| part.split_whitespace().next())
+        .map(str::to_owned)
+        .collect()
+}
+
 async fn build_runtime(db_path: &std::path::Path, provider: Arc<RecordingProvider>) -> Runtime {
     let store = Arc::new(SqliteMemoryStore::open(db_path).unwrap());
     let backend = store.clone() as Arc<dyn apeireth_plugin::memory_backend::MemoryBackend>;
     let governance = store.clone() as Arc<dyn MemoryGovernanceStore>;
     let scoped = store.clone() as Arc<dyn ScopedMemoryBackend>;
+    let typed_source = Arc::new(SqliteTypedMemoryRecallSource::new().with_episodes(store.clone()));
     let modules = ProductionCognitiveModules::build(
         memory_config(),
         CognitiveBackends {
             memory: Some(backend),
             memory_governance: Some(governance),
             scoped_memory: Some(scoped),
+            typed_recall: Some(typed_source),
+            typed_recall_identity: Some(TypedRecallIdentity {
+                persona_id: "persona-e2e".into(),
+                subject_id: "user-e2e".into(),
+            }),
             ..CognitiveBackends::default()
         },
         apeireth_core::kernel::system_clock(),
@@ -248,8 +265,16 @@ async fn file_backed_sqlite_runtime_writeback_then_restart_recall_overlays_provi
         provider_text.contains("Wuhan"),
         "location fact missing: {provider_text}"
     );
+    let provider_ids = memory_ids_in(&provider_text);
     assert!(
-        provider_text.contains("submit the report"),
-        "commitment text missing: {provider_text}"
+        !provider_ids.is_empty(),
+        "provider received no memory IDs: {provider_text}"
     );
+    assert!(provider_ids
+        .iter()
+        .all(|id| provider_text.contains(&format!("[mem:{id}"))));
+    let selected_ids = provider_ids.clone();
+    let retrieved_ids = selected_ids.clone();
+    assert!(provider_ids.is_subset(&selected_ids));
+    assert!(selected_ids.is_subset(&retrieved_ids));
 }

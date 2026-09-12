@@ -309,6 +309,7 @@ pub mod reconciler;
 pub mod retrieval_pipeline;
 pub mod scope;
 pub mod temporal_graph_store;
+pub mod universal_forget;
 
 pub use access_history::{
     act_r_activation, AccessEvent, AccessHistoryActivationSource, AccessHistoryError,
@@ -324,6 +325,7 @@ pub use temporal_graph_store::{
     SqliteTemporalGraphStore, TemporalGraphError, TemporalGraphFact, TemporalGraphQuery,
     TraversalBudget, TraversalResult,
 };
+pub use universal_forget::{UniversalForgetFacade, UniversalForgetOutcome};
 
 pub use context_compiler::{
     ClosedWorldContextCompiler, MemoryAccessObserver, SelectedMemoryAccess,
@@ -357,7 +359,8 @@ pub use scope::{
     DeterministicReranker, EmbeddingError, EmbeddingProvider, InMemoryPersonaProfileStore,
     MemoryCandidate, MemoryCandidateQuery, MemoryProvenance, MemoryRankingConfig, MemoryReranker,
     MemoryScope, NoEmbeddingProvider, PersonaMemoryProfile, PersonaProfileDelta,
-    PersonaProfileStore, ScopedMemoryBackend, ScoreComponents,
+    PersonaProfileStore, ScopedMemoryBackend, ScoreComponents, TypedMemoryRecallSource,
+    TypedRecallIdentity,
 };
 
 /// 重新导出 `apeireth_core::kernel::memory::Episode` 方便下游不必记多个导入路径.

@@ -74,6 +74,8 @@ pub mod preference_learning;
 pub mod production;
 #[path = "canonical/tool_modules.rs"]
 pub mod tool_modules;
+#[path = "canonical/typed_recall.rs"]
+pub mod typed_recall;
 #[path = "canonical/upgrade_cycle.rs"]
 pub mod upgrade_cycle;
 
@@ -101,3 +103,4 @@ pub use production::{
 pub use tool_modules::{
     FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
 };
+pub use typed_recall::SqliteTypedMemoryRecallSource;
