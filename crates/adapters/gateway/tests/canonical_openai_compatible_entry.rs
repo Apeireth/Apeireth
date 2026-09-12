@@ -204,6 +204,11 @@ async fn the_gateway_reports_an_openai_compatible_missing_credential_as_unavaila
 
 #[tokio::test]
 async fn the_gateway_models_list_is_projected_from_live_providers() {
+    // A missing key is the deterministic cause here: no provider is registered
+    // and the gateway's hot config reads no ambient `OPENAI_API_KEY`.
+    let saved_key = std::env::var("OPENAI_API_KEY").ok();
+    std::env::remove_var("OPENAI_API_KEY");
+
     let resolver: Arc<dyn CredentialResolver> = Arc::new(StaticCredentials::new());
     let runtime = Runtime::builder()
         .with_clock(frozen_clock())
@@ -226,15 +231,18 @@ async fn the_gateway_models_list_is_projected_from_live_providers() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::OK);
+    if let Some(key) = saved_key {
+        std::env::set_var("OPENAI_API_KEY", key);
+    }
+
+    // No provider + no key must be an explicit 401 error frame, never a 200
+    // empty list that the UI would misread as "zero models".
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(body["object"], "list");
-    let data = body["data"].as_array().expect("data array");
-    assert!(
-        data.iter().all(|model| model["id"] != MODEL),
-        "a runtime with no provider must not advertise a static model"
-    );
+    assert_eq!(body["error"]["code"], "auth_missing_key", "{body}");
+    assert!(!body["error"]["message"].as_str().unwrap().is_empty());
+    assert!(!body["error"]["solution"].as_str().unwrap().is_empty());
 }
 
 /// One-shot mock vendor speaking the OpenAI SSE stream protocol. The

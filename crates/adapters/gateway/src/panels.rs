@@ -9,7 +9,7 @@
 //! Response shapes follow `docs/gateway-api-contract.md` §4-§9 and mirror the
 //! desktop types in the sibling `apeireth-ui/src/lib/types.ts` workspace.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use apeireth_runtime::canonical::Runtime;
 use async_trait::async_trait;
@@ -28,6 +28,9 @@ pub struct GatewayState {
     pub services: GatewayServices,
     pub events: crate::events::EventBus,
     pub observations: Arc<crate::events::RuntimeObservationSink>,
+    /// Live runtime config, readable by every request path and patchable through
+    /// `/v1/admin/config`.
+    pub hot_config: Arc<RwLock<crate::admin::GatewayRuntimeConfig>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -396,6 +399,8 @@ pub struct GatewayServices {
     pub grants: Option<Arc<dyn GrantQuery>>,
     pub grant_commands: Option<Arc<dyn GrantCommand>>,
     pub modules: Option<Arc<dyn ModuleQuery>>,
+    /// Writes hot-reloaded API keys to the process credential backend (keyring).
+    pub credentials: Option<Arc<dyn crate::admin::CredentialWriter>>,
 }
 
 impl GatewayServices {
@@ -424,6 +429,7 @@ impl GatewayServices {
             grants: permissions.then(|| adapter.clone() as Arc<dyn GrantQuery>),
             grant_commands: permissions.then(|| adapter.clone() as Arc<dyn GrantCommand>),
             modules: modules.then(|| adapter as Arc<dyn ModuleQuery>),
+            credentials: None,
         }
     }
 }

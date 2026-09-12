@@ -561,7 +561,10 @@ pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, 
         enable_local_read_tools,
         default_panel_data_dir(),
     ));
-    let services = crate::gateway_panels::gateway_services(panel);
+    let mut services = crate::gateway_panels::gateway_services(panel);
+    // Wire the hot-reload api_key writer to the same keyring backend the
+    // runtime's credential resolver reads (or None on the env-resolver path).
+    services.credentials = crate::keyring_bootstrap::build_keyring_credential_writer();
     let address = format!("{bind}:{port}");
     let listener = tokio::net::TcpListener::bind(&address)
         .await
