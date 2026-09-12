@@ -186,8 +186,14 @@ pub struct PendingApproval {
     pub governance_reason: String,
     /// One-line human-readable command text, e.g.
     /// `shell: bash -c 'ls -la /tmp'`.
+    ///
+    /// `#[serde(default)]`: approvals persisted before this field existed
+    /// (pre-2026-09-12 session blobs) must still deserialize — a missing field
+    /// is an empty display string, never a load failure.
+    #[serde(default)]
     pub command_text: String,
     /// Shorter human summary, e.g. `执行命令 ls -la /tmp`.
+    #[serde(default)]
     pub arguments_summary: String,
     /// Canonical fingerprint over every operation-relevant field.
     pub operation_fingerprint: String,
@@ -228,8 +234,10 @@ pub struct PendingApprovalView {
     pub governance_hook: String,
     pub governance_reason: String,
     /// One-line human-readable command text (from [`PendingApproval`]).
+    #[serde(default)]
     pub command_text: String,
     /// Shorter human summary (from [`PendingApproval`]).
+    #[serde(default)]
     pub arguments_summary: String,
     pub created_at: Timestamp,
     pub expires_at: Timestamp,
@@ -610,6 +618,46 @@ mod tests {
         let json = serde_json::to_value(&view).unwrap();
         assert_eq!(json["command_text"], "shell: ls -la /tmp");
         assert_eq!(json["arguments_summary"], "执行命令 ls -la /tmp");
+    }
+
+    /// Regression for the 2026-09-12 real-machine failure: sessions persisted
+    /// BEFORE `command_text`/`arguments_summary` existed must still load —
+    /// a missing field is an empty display string, never
+    /// `missing field \`command_text\``.
+    #[test]
+    fn approval_view_serialized_before_command_text_still_deserializes() {
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: serde_json::json!({ "command": "ls -la /tmp" }),
+        };
+        let view = PendingApprovalView {
+            approval_id: ApprovalId::new(),
+            session_id: SessionId::new(),
+            request_id: RequestId::new(),
+            trace_id: TraceId::new(),
+            round: 1,
+            capability_id: CapabilityId::new("tool.example").unwrap(),
+            tool_name: "shell".into(),
+            tool_call: call,
+            effective_invocation: None,
+            governance_hook: "hook".into(),
+            governance_reason: "reason".into(),
+            command_text: String::new(),
+            arguments_summary: String::new(),
+            created_at: Timestamp::from_epoch_millis(1_700_000_000_000).unwrap(),
+            expires_at: Timestamp::from_epoch_millis(1_700_000_300_000).unwrap(),
+            operation_fingerprint: "fp".into(),
+        };
+        let mut json = serde_json::to_value(&view).unwrap();
+        let object = json.as_object_mut().unwrap();
+        object.remove("command_text");
+        object.remove("arguments_summary");
+
+        let migrated: PendingApprovalView = serde_json::from_value(json).unwrap();
+        assert_eq!(migrated.command_text, "");
+        assert_eq!(migrated.arguments_summary, "");
+        assert_eq!(migrated.tool_name, "shell");
     }
 
     #[test]
