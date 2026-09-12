@@ -6,6 +6,9 @@
 
 #![deny(unsafe_code)]
 
+/// Unified JSON error frame contract (`{"error": {"message", "code", "solution"}}`).
+pub mod error_frame;
+
 /// Native and OpenAI-compatible HTTP chat entry points.
 pub mod canonical_entry;
 
@@ -41,6 +44,8 @@ pub use canonical_entry::{
     CanonicalApprovalRequest, CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse,
     CanonicalEntryError, CanonicalExecutionEvent, CanonicalPendingApproval,
 };
+
+pub use error_frame::{ErrorCode, ErrorEnvelope, ErrorFrame};
 
 pub use events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
 
