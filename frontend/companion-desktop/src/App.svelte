@@ -6,7 +6,6 @@
     Square,
     ChevronDown,
     Sparkles,
-    AlertCircle,
     PhoneCall,
     Sofa,
     Gauge,
@@ -28,7 +27,11 @@
   import VoiceCallModal from './components/VoiceCallModal.svelte';
   import { voiceCallManager } from './lib/voice';
 
-  import ConfirmDialog from './lib/components/ConfirmDialog.svelte';
+  import ApprovalRequestCard from './lib/components/ApprovalRequestCard.svelte';
+  import ErrorSolutionBanner from './lib/components/ErrorSolutionBanner.svelte';
+  import ToolCallLifecycleCard from './lib/components/ToolCallLifecycleCard.svelte';
+  import ComposerMenu from './lib/components/ComposerMenu.svelte';
+  import SessionModelPicker from './lib/components/SessionModelPicker.svelte';
   import SceneLayer from './lib/scene/SceneLayer.svelte';
   import PlanetLayer from './lib/scene/PlanetLayer.svelte';
   import BridgeLayer from './lib/bridge/BridgeLayer.svelte';
@@ -51,7 +54,9 @@
     ChatMessage,
     Conversation,
     HealthState,
+    ModelInfo,
     RuntimeHealthReport,
+    SessionSettings,
     ToolCallDetails,
   } from './lib/types';
   import {
@@ -65,6 +70,9 @@
     saveConfig,
     saveConversations,
     listModels,
+    describeError,
+    getSessionSettings,
+    patchSessionSettings,
     fetchCapabilities,
     subscribeCompanionEvents,
     capabilityAvailable,
@@ -233,6 +241,8 @@
   let draft = $state('');
   let busy = $state(false);
   let error = $state('');
+  /** 最近一次错误对象（保留 code/solution，供 ErrorSolutionBanner 使用）。 */
+  let lastError = $state<unknown>(null);
   let pendingApprovals = $state<ApprovalRequestItem[]>([]);
   let pendingCanonical = $state<CanonicalPendingApproval | null>(null);
   let approvalBusy = $state(false);
@@ -240,6 +250,191 @@
   let isExecutingTool = $state(false);
   let legacyToast = $state('');
   let agentRuntime = $state(createAgentRuntime(loadConfig()));
+
+  // 会话级设置（GET/PATCH /v1/sessions/{id}/settings）与会话模型选择器数据。
+  let sessionSettings = $state<SessionSettings | null>(null);
+  let sessionModels = $state<ModelInfo[]>([]);
+
+  // 斜杠菜单（输入框聚焦且首字符 "/" 时显示）。
+  let composerFocused = $state(false);
+  let composerMenuOpen = $state(false);
+  let composerTextarea = $state<HTMLTextAreaElement | null>(null);
+
+  // ---------- 会话权限预设（P1-2）----------
+  const SESSION_PRESETS: Array<{
+    id: SessionSettings['permission_preset'];
+    label: string;
+    title: string;
+  }> = [
+    {id: 'read_only', label: '只读', title: '只读：工具仅读，写操作需审批'},
+    {id: 'standard', label: '标准', title: '标准：常规工具，高危操作需审批'},
+    {id: 'full', label: '完全', title: '完全：全部工具（仍受治理审批约束）'},
+  ];
+
+  // ---------- 斜杠命令（P1-6）----------
+  const SLASH_COMMANDS = [
+    {command: '/new', title: '新建会话', hint: '开启一个全新会话'},
+    {command: '/clear', title: '清空上下文', hint: '清空当前会话消息'},
+    {command: '/model', title: '切换模型', hint: '打开模型选择器'},
+    {command: '/help', title: '帮助', hint: '查看快捷键与说明'},
+  ];
+
+  const currentSessionModel = $derived(sessionSettings?.model ?? config.model);
+  const currentPreset = $derived(sessionSettings?.permission_preset ?? 'standard');
+
+  function toEpochMs(value: unknown): number | undefined {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+    if (typeof value === 'string') {
+      const t = Date.parse(value);
+      return Number.isNaN(t) ? undefined : t;
+    }
+    return undefined;
+  }
+
+  function ensureSessionSettings(patch: Partial<SessionSettings>): SessionSettings {
+    const cur = sessionSettings;
+    return {
+      model: patch.model !== undefined ? patch.model : (cur?.model ?? null),
+      permission_preset:
+        patch.permission_preset ?? cur?.permission_preset ?? 'standard',
+    };
+  }
+
+  async function loadSessionModels(): Promise<void> {
+    try {
+      const models = await listModels(config);
+      sessionModels = models.length ? models : [{id: config.model}];
+    } catch {
+      // 拉取失败静默降级：picker 只显示全局模型。
+      sessionModels = config.model ? [{id: config.model}] : [];
+    }
+  }
+
+  async function loadSessionSettings(sessionId: string): Promise<void> {
+    try {
+      const settings = await getSessionSettings(config, sessionId);
+      if (activeId === sessionId) sessionSettings = settings;
+    } catch {
+      // 拉取失败静默降级：picker 回落到全局模型。
+      if (activeId === sessionId) sessionSettings = null;
+    }
+  }
+
+  async function selectSessionModel(id: string): Promise<void> {
+    const sessionId = activeId;
+    if (!sessionId) return;
+    const prev = sessionSettings;
+    sessionSettings = ensureSessionSettings({model: id});
+    try {
+      const updated = await patchSessionSettings(config, sessionId, {model: id});
+      if (activeId === sessionId) sessionSettings = updated;
+    } catch {
+      if (activeId === sessionId) sessionSettings = prev;
+    }
+  }
+
+  async function selectSessionPreset(
+    preset: SessionSettings['permission_preset'],
+  ): Promise<void> {
+    const sessionId = activeId;
+    if (!sessionId) return;
+    const prev = sessionSettings;
+    sessionSettings = ensureSessionSettings({permission_preset: preset});
+    try {
+      const updated = await patchSessionSettings(config, sessionId, {
+        permission_preset: preset,
+      });
+      if (activeId === sessionId) sessionSettings = updated;
+    } catch {
+      if (activeId === sessionId) sessionSettings = prev;
+    }
+  }
+
+  function mapToolCallLifecycle(call: ToolCallDetails): {
+    id: string;
+    name: string;
+    status: 'pending' | 'running' | 'success' | 'error';
+    latencyMs?: number;
+    error?: string;
+    arguments?: unknown;
+    result?: unknown;
+  } {
+    const statusMap: Record<
+      ToolCallDetails['status'],
+      'pending' | 'running' | 'success' | 'error'
+    > = {
+      pending: 'pending',
+      running: 'running',
+      succeeded: 'success',
+      failed: 'error',
+      cancelled: 'error',
+    };
+    return {
+      id: call.id,
+      name: call.name,
+      status: statusMap[call.status] ?? 'pending',
+      latencyMs: call.durationMs,
+      error: call.error,
+      arguments: call.args,
+      result: call.resultFull ?? call.resultSummary,
+    };
+  }
+
+  function updateComposerMenu(value: string): void {
+    composerMenuOpen = composerFocused && value.trimStart().startsWith('/');
+  }
+
+  function handleComposerFocus(): void {
+    composerFocused = true;
+    updateComposerMenu(draft);
+  }
+
+  function handleComposerBlur(): void {
+    composerFocused = false;
+    composerMenuOpen = false;
+  }
+
+  function pickComposerItem(insert: string): void {
+    draft = insert;
+    composerMenuOpen = false;
+    composerTextarea?.focus();
+  }
+
+  const errorCode = $derived.by(() => {
+    if (lastError && typeof lastError === 'object' && 'code' in lastError) {
+      const code = (lastError as {code?: unknown}).code;
+      return typeof code === 'string' ? code : undefined;
+    }
+    return undefined;
+  });
+
+  type PendingApprovalWithDetails = CanonicalPendingApproval & {
+    command_text?: string;
+    arguments_summary?: string;
+  };
+
+  const approvalCardItem = $derived.by(() => {
+    const p = pendingCanonical as PendingApprovalWithDetails | null;
+    if (!p) {
+      return {
+        title: '需要批准的操作',
+      } as {
+        title: string;
+        commandText?: string;
+        argumentsSummary?: string;
+        reason?: string;
+        createdAt?: number;
+      };
+    }
+    return {
+      title: '需要批准的操作',
+      commandText: typeof p.command_text === 'string' ? p.command_text : undefined,
+      argumentsSummary:
+        typeof p.arguments_summary === 'string' ? p.arguments_summary : undefined,
+      reason: p.governance_reason || undefined,
+      createdAt: toEpochMs(p.created_at),
+    };
+  });
 
   // 深度运行时报告与健康状态
   let healthState = $state<HealthState>('connecting');
@@ -566,7 +761,10 @@
         if (!capabilities || fresh.runtime.version !== prevVersion || fresh.legacy !== capabilities.legacy) {
           capabilities = fresh;
         }
+        // 会话模型选择器数据 + 会话级设置（拉取失败静默降级）。
+        if (!sessionModels.length) void loadSessionModels();
         if (activeId) {
+          if (!sessionSettings) void loadSessionSettings(activeId);
           const inbox = await fetchCanonicalApprovals(config, activeId).catch(() => []);
           pendingApprovals = inbox.map((item) => ({
             id: item.approval_id,
@@ -612,6 +810,7 @@
     isExecutingTool = false;
     healthState = 'generating';
     error = '';
+    lastError = null;
     // presence 遗留整合点 2：对话请求开始 → thinking（等首字节）；首段文本到达 → speaking
     presenceStore.setChatActive(true);
 
@@ -706,6 +905,9 @@
         error = waiting
           ? '本轮还在等待你的审批——先在审批弹窗里点"批准"或"拒绝"，再发新消息。'
           : msg;
+        // 保留错误对象供 ErrorSolutionBanner 读取 code/solution；
+        // waiting 分支是前端人话提示，不保留原始错误码。
+        lastError = waiting ? null : caught;
         // 保留已流出的正文，把失败原因作为附注渲染在下方——
         // 而不是清空文字让"回了话又消失"（2026-09-28 议会拦停实况）。
         const currentText =
@@ -752,6 +954,7 @@
       if (result === 'timeout') {
         pendingCanonical = null;
         error = '已提交，工具正在执行（最长 5 分钟）；结果稍后自动回填，你可以继续操作。';
+        lastError = null;
         void request
           .then((late) => applyResolvedResult(late, conversationId, decision))
           .catch(() => {});
@@ -763,6 +966,7 @@
       // finally 里的 refreshConnection 会从后端重新拉取真值（若有新审批会再弹）。
       pendingCanonical = null;
       error = describeCaughtSafe(caught);
+      lastError = caught;
     } finally {
       approvalBusy = false;
       await refreshConnection();
@@ -1010,6 +1214,7 @@
     const el = event.currentTarget as HTMLTextAreaElement;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
+    updateComposerMenu(el.value);
   }
 
   function handleChromeKey(e: KeyboardEvent): void {
@@ -1017,6 +1222,8 @@
     if (e.key === 'Escape') {
       closePanels();
       closeDrawer();
+      // 审批卡：Escape 仅关闭（与「拒绝」按钮分离，不做业务决策）。
+      if (pendingCanonical) dismissPendingApproval();
     }
   }
 
@@ -1062,6 +1269,17 @@
       stardusts = {...stardusts, [convId]: [...list, ...fresh]};
       void triggerAutoScroll();
     });
+  });
+
+  // 会话切换 / 首次激活时拉取会话级设置（失败静默降级，picker 回落全局模型）。
+  $effect(() => {
+    const id = activeId;
+    if (!id) {
+      sessionSettings = null;
+      return;
+    }
+    sessionSettings = null;
+    void loadSessionSettings(id);
   });
 
   /**
@@ -1520,7 +1738,12 @@
                     {/if}
                   </div>
                   <span class="mono-note" style="opacity:.4">·</span>
-                  <span class="mono-note">{config.model}</span>
+                  <SessionModelPicker
+                    models={sessionModels}
+                    value={currentSessionModel}
+                    onSelect={(id) => void selectSessionModel(id)}
+                    disabled={busy}
+                  />
                   <span class="mono-note" style="opacity:.4">·</span>
                   <button class="mono-note live" onclick={() => (showRuntimeModal = true)}>{hdState}</button>
                   {#if $presenceStore.simulated}
@@ -1528,7 +1751,20 @@
                   {/if}
                 </div>
               </div>
-              <div style="display:flex;gap:8px">
+              <div class="chat-head-actions">
+                <div class="preset-group" role="group" aria-label="会话权限预设">
+                  {#each SESSION_PRESETS as preset (preset.id)}
+                    <button
+                      class="preset-btn"
+                      class:active={currentPreset === preset.id}
+                      onclick={() => void selectSessionPreset(preset.id)}
+                      title={preset.title}
+                      aria-pressed={currentPreset === preset.id}
+                    >
+                      {preset.label}
+                    </button>
+                  {/each}
+                </div>
                 <button class="quiet-btn" onclick={newConversation}>
                   <Plus size={13} />
                   新对话
@@ -1561,6 +1797,13 @@
                 {:else}
                   <div class="row">
                     <div class="ai-card">
+                      {#if item.message.toolCalls?.length}
+                        <div class="tool-lifecycle-list">
+                          {#each item.message.toolCalls as toolCall (toolCall.id)}
+                            <ToolCallLifecycleCard call={mapToolCallLifecycle(toolCall)} />
+                          {/each}
+                        </div>
+                      {/if}
                       <MessageContent
                         message={item.message}
                         onRetry={(msgId) => retryAssistantMessage(msgId)}
@@ -1573,10 +1816,15 @@
                 {/if}
               {/each}
               {#if error}
-                <div class="error-banner" role="alert">
-                  <AlertCircle size={14} />
-                  <span>{error}</span>
-                </div>
+                <ErrorSolutionBanner
+                  code={errorCode}
+                  message={error}
+                  solution={describeError(lastError).solution}
+                  onClose={() => {
+                    error = '';
+                    lastError = null;
+                  }}
+                />
               {/if}
             </div>
           </section>
@@ -1600,17 +1848,31 @@
                 </button>
                 <textarea
                   bind:value={draft}
+                  bind:this={composerTextarea}
                   rows="1"
                   placeholder="与 Apeireth 交流……"
                   disabled={busy}
                   oninput={handleComposerInput}
+                  onfocus={handleComposerFocus}
+                  onblur={handleComposerBlur}
                   onkeydown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
+                    if (event.key === 'Enter' && !event.shiftKey && !composerMenuOpen) {
                       event.preventDefault();
                       void send();
                     }
                   }}
                 ></textarea>
+              </div>
+              <!-- 斜杠菜单：菜单项 mousedown 阻止默认，避免 textarea 失焦抢跑。 -->
+              <div role="presentation" onmousedown={(e) => e.preventDefault()}>
+                <ComposerMenu
+                  open={composerMenuOpen}
+                  query={draft.slice(1)}
+                  slashCommands={SLASH_COMMANDS}
+                  files={[]}
+                  onPick={pickComposerItem}
+                  onClose={() => (composerMenuOpen = false)}
+                />
               </div>
             </div>
 
@@ -1760,16 +2022,33 @@
   onSendMessage={handleVoiceMessage}
 />
 
-<ConfirmDialog
-  open={pendingCanonical !== null}
-  title="需要批准"
-  message={pendingCanonical ? `${pendingCanonical.tool_name}：${pendingCanonical.governance_reason}` : ''}
-  confirmText={approvalBusy ? '处理中…' : '批准'}
-  cancelText="拒绝"
-  onConfirm={() => void resolvePending('approve')}
-  onCancel={() => void resolvePending('reject')}
-  onDismiss={dismissPendingApproval}
-/>
+{#if pendingCanonical}
+  <div
+    class="approval-backdrop"
+    role="presentation"
+    onclick={() => dismissPendingApproval()}
+  >
+    <div
+      class="approval-wrap"
+      role="dialog"
+      aria-modal="true"
+      aria-label="待批准操作"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => {
+        if (e.key === 'Escape') dismissPendingApproval();
+      }}
+    >
+      <ApprovalRequestCard
+        item={approvalCardItem}
+        busy={approvalBusy}
+        onAllow={() => void resolvePending('approve')}
+        onReject={() => void resolvePending('reject')}
+        onDismiss={dismissPendingApproval}
+      />
+    </div>
+  </div>
+{/if}
 
 <RuntimeModal
   open={showRuntimeModal}
@@ -1902,5 +2181,85 @@
     background: transparent;
     font-size: 12px;
     color: var(--ap-bone);
+  }
+
+  /* ---------- 会话头：模型选择器 + 权限预设（P0-3 / P1-2） ---------- */
+  .chat-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+  .preset-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px;
+    background: var(--ap-panel);
+    border: 1px solid var(--ap-line);
+    border-radius: 7px;
+  }
+  .preset-btn {
+    border: 0;
+    background: transparent;
+    color: var(--ap-bone-42);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s;
+  }
+  .preset-btn:hover {
+    color: var(--ap-bone);
+  }
+  .preset-btn.active {
+    color: var(--ap-gold);
+    background: rgba(255, 210, 122, 0.12);
+  }
+
+  /* ---------- 工具生命周期卡（P1-5） ----------
+     旧 ToolCallCard 由 MessageContent 内部渲染；此处用新卡接管展示，
+     隐藏旧容器避免双份工具条目。 */
+  :global(.tool-calls-container) {
+    display: none;
+  }
+  .tool-lifecycle-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  /* ---------- 审批卡遮罩（P0-4） ---------- */
+  .approval-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    animation: ap-fade-in 0.15s ease-out;
+  }
+  .approval-wrap {
+    width: 100%;
+    max-width: 480px;
+  }
+  @keyframes ap-fade-in {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* ---------- 斜杠菜单锚点（P1-6） ---------- */
+  .composer {
+    position: relative;
   }
 </style>
