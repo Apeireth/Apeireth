@@ -513,7 +513,7 @@ async fn http_pending_approval_can_be_approved_without_double_execution() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(
-        body["error"]
+        body["error"]["message"]
             .as_str()
             .unwrap_or_default()
             .contains("already resolved"),

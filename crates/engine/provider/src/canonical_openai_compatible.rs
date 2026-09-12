@@ -37,12 +37,12 @@
 //! still rejected, so `Vision` is not claimed.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use apeireth_core::kernel::{CapabilityId, PluginId};
 use apeireth_plugin::{
     CapabilityKind, CredentialResolver, Plugin, PluginContext, PluginError, PluginManifest,
-    PluginResult, ProviderCapability, ProviderError, Secret,
+    PluginResult, ProviderCapability, ProviderError, ProviderHotConfig, Secret,
 };
 use apeireth_protocol::canonical::{ModelDescriptor, ModelFeature, NormalizedRequest};
 use async_trait::async_trait;
@@ -91,7 +91,9 @@ type ResolverSlot = Arc<Mutex<Option<Arc<dyn CredentialResolver>>>>;
 pub struct OpenAiCompatibleProviderCapability {
     id: CapabilityId,
     models: Vec<ProviderModel>,
-    base_url: String,
+    /// Mutable so `/v1/admin/config` can repoint the provider without a
+    /// process restart. Read through [`Self::base_url`].
+    base_url: RwLock<String>,
     http: reqwest::Client,
     timeout_ms: u64,
     credential_key: String,
@@ -113,12 +115,28 @@ impl OpenAiCompatibleProviderCapability {
         Ok(Self {
             id,
             models,
-            base_url: base_url.into(),
+            base_url: RwLock::new(base_url.into()),
             http,
             timeout_ms,
             credential_key: OPENAI_COMPATIBLE_API_KEY.to_string(),
             resolver,
         })
+    }
+
+    /// The current live base URL.
+    pub fn base_url(&self) -> String {
+        self.base_url
+            .read()
+            .expect("openai-compatible base_url lock poisoned")
+            .clone()
+    }
+
+    /// Replace the live base URL for subsequent requests.
+    pub fn set_base_url(&self, base_url: impl Into<String>) {
+        *self
+            .base_url
+            .write()
+            .expect("openai-compatible base_url lock poisoned") = base_url.into();
     }
 
     /// Resolve the API key for this turn, or fail permanently. A missing key
@@ -202,6 +220,13 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         self.models.iter().any(|m| m.matches(model))
     }
 
+    fn apply_hot_config(&self, patch: &ProviderHotConfig) -> Result<(), String> {
+        if let Some(base_url) = &patch.base_url {
+            self.set_base_url(base_url.clone());
+        }
+        Ok(())
+    }
+
     async fn complete(
         &self,
         request: &NormalizedRequest,
@@ -209,7 +234,8 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         // One HTTP attempt. The router, not this provider, owns fallback.
         let key = self.resolve_key()?;
         let body = self.adapt_request(request)?;
-        let url = openai_chat::join_endpoint(&self.base_url, "chat/completions");
+        let base_url = self.base_url();
+        let url = openai_chat::join_endpoint(&base_url, "chat/completions");
 
         let send_result = self
             .http
@@ -268,7 +294,8 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         let mut body = self.adapt_request(request)?;
         body["stream"] = serde_json::Value::Bool(true);
         body["stream_options"] = serde_json::json!({"include_usage": true});
-        let url = openai_chat::join_endpoint(&self.base_url, "chat/completions");
+        let base_url = self.base_url();
+        let url = openai_chat::join_endpoint(&base_url, "chat/completions");
 
         let send_result = self
             .http
@@ -435,7 +462,7 @@ impl std::fmt::Debug for OpenAiCompatibleProviderCapability {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OpenAiCompatibleProviderCapability")
             .field("id", &self.id)
-            .field("base_url", &self.base_url)
+            .field("base_url", &self.base_url())
             .field("models", &self.models.len())
             .field("timeout_ms", &self.timeout_ms)
             .finish_non_exhaustive()
@@ -525,9 +552,9 @@ impl OpenAiCompatibleProviderPlugin {
             .collect()
     }
 
-    /// The configured base URL (non-secret configuration).
-    pub fn base_url(&self) -> &str {
-        &self.capability.base_url
+    /// The current live base URL (non-secret configuration).
+    pub fn base_url(&self) -> String {
+        self.capability.base_url()
     }
 
     /// Attach a credential resolver without booting a full runtime (tests).

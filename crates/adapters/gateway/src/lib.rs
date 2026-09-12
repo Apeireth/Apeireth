@@ -6,6 +6,15 @@
 
 #![deny(unsafe_code)]
 
+/// Unified JSON error frame contract (`{"error": {"message", "code", "solution"}}`).
+pub mod error_frame;
+
+/// Wire-level error code string catalog and frame constructor helpers.
+pub mod error_codes;
+
+/// Runtime configuration hot reload (`/v1/admin/config`).
+pub mod admin;
+
 /// Native and OpenAI-compatible HTTP chat entry points.
 pub mod canonical_entry;
 
@@ -44,6 +53,12 @@ pub use canonical_entry::{
     CanonicalApprovalRequest, CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse,
     CanonicalEntryError, CanonicalExecutionEvent, CanonicalPendingApproval,
 };
+
+pub use admin::{
+    credential_name, CapabilitiesConfig, ConfigPatch, ConfigView, CredentialWriter,
+    GatewayRuntimeConfig,
+};
+pub use error_frame::{ErrorCode, ErrorEnvelope, ErrorFrame};
 
 pub use events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
 

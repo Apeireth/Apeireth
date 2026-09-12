@@ -9,7 +9,7 @@
 //! Response shapes follow `docs/gateway-api-contract.md` §4-§9 and mirror the
 //! desktop types in the sibling `apeireth-ui/src/lib/types.ts` workspace.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use apeireth_runtime::canonical::Runtime;
 use async_trait::async_trait;
@@ -28,6 +28,9 @@ pub struct GatewayState {
     pub services: GatewayServices,
     pub events: crate::events::EventBus,
     pub observations: Arc<crate::events::RuntimeObservationSink>,
+    /// Live runtime config, readable by every request path and patchable through
+    /// `/v1/admin/config`.
+    pub hot_config: Arc<RwLock<crate::admin::GatewayRuntimeConfig>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -396,6 +399,8 @@ pub struct GatewayServices {
     pub grants: Option<Arc<dyn GrantQuery>>,
     pub grant_commands: Option<Arc<dyn GrantCommand>>,
     pub modules: Option<Arc<dyn ModuleQuery>>,
+    /// Writes hot-reloaded API keys to the process credential backend (keyring).
+    pub credentials: Option<Arc<dyn crate::admin::CredentialWriter>>,
 }
 
 impl GatewayServices {
@@ -424,6 +429,7 @@ impl GatewayServices {
             grants: permissions.then(|| adapter.clone() as Arc<dyn GrantQuery>),
             grant_commands: permissions.then(|| adapter.clone() as Arc<dyn GrantCommand>),
             modules: modules.then(|| adapter as Arc<dyn ModuleQuery>),
+            credentials: None,
         }
     }
 }
@@ -600,7 +606,8 @@ fn unsupported(what: &str) -> Response {
         Json(serde_json::json!({
             "error": {
                 "code": "unsupported",
-                "message": format!("{what} 不支持: 当前运行时未实现该内省 API (Apeireth 2.0 canonical gateway)")
+                "message": format!("{what} 不支持: 当前运行时未实现该内省 API (Apeireth 2.0 canonical gateway)"),
+                "solution": "该内省能力当前不可用, 请升级 Companion 后重试"
             }
         })),
     )
@@ -610,7 +617,7 @@ fn unsupported(what: &str) -> Response {
 fn panel_error(message: String) -> Response {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
-        Json(serde_json::json!({ "error": { "code": "runtime_error", "message": message } })),
+        Json(serde_json::json!({ "error": { "code": "runtime_error", "message": message, "solution": "重启 Companion 后重试, 若复现请提交日志" } })),
     )
         .into_response()
 }
@@ -674,7 +681,7 @@ async fn trace_detail(State(state): State<GatewayState>, Path(trace_id): Path<St
         Ok(Some(detail)) => (StatusCode::OK, Json(detail)).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": { "code": "not_found", "message": format!("trace {trace_id} not found") } })),
+            Json(serde_json::json!({ "error": { "code": "not_found", "message": format!("trace {trace_id} not found"), "solution": "回到列表重新选择" } })),
         )
             .into_response(),
         Err(e) => panel_error(e),
@@ -773,7 +780,7 @@ async fn append_episode(
     if request.content.trim().is_empty() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": { "code": "invalid_request", "message": "content must not be empty" } })),
+            Json(serde_json::json!({ "error": { "code": "invalid_request", "message": "content must not be empty", "solution": "检查参数后重试" } })),
         )
             .into_response();
     }

@@ -107,6 +107,16 @@ impl ProviderError {
     }
 }
 
+/// A hot-config patch for a running provider capability.
+///
+/// Fields are optional; `None` leaves the current value untouched. This is the
+/// runtime-visible surface used by the gateway's `/v1/admin/config` hot reload.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProviderHotConfig {
+    /// Replace the provider's live `base_url`.
+    pub base_url: Option<String>,
+}
+
 /// Something that can serve a completion.
 #[async_trait]
 pub trait ProviderCapability: Send + Sync {
@@ -177,6 +187,19 @@ pub trait ProviderCapability: Send + Sync {
             on_delta(response.content.clone());
         }
         Ok(response)
+    }
+
+    /// Apply a runtime hot-config patch to this live capability.
+    ///
+    /// The default reports that the provider is not hot-configurable; providers
+    /// with mutable live knobs override it. This is intentionally a default
+    /// method (not a separate trait) so the router can call it on any
+    /// [`ProviderCapability`] without downcasting.
+    fn apply_hot_config(&self, _patch: &ProviderHotConfig) -> Result<(), String> {
+        Err(format!(
+            "provider {} does not support hot configuration",
+            self.id()
+        ))
     }
 }
 
