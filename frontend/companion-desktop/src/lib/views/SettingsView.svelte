@@ -93,6 +93,45 @@
     ...(config.capabilities ?? {}),
   });
 
+  // 认知深度预设：轻量 / 平衡 / 深度 / 自定义（judge + council 的快捷档位）。
+  type CognitiveDepth = 'light' | 'balanced' | 'deep' | 'custom';
+
+  function deriveCognitiveDepth(caps: CapabilityToggles): CognitiveDepth {
+    if (!caps.judge && !caps.council) return 'light';
+    if (caps.judge && !caps.council) return 'balanced';
+    if (caps.judge && caps.council) return 'deep';
+    return 'custom';
+  }
+
+  let cognitiveDepth = $state<CognitiveDepth>('light');
+
+  // 仅在外部 config 变化时重新派生初始档位；不跟踪本地 capabilities，
+  // 保证页内手动改 judge/council 开关后 select 稳定停在「自定义」。
+  $effect(() => {
+    cognitiveDepth = deriveCognitiveDepth({
+      ...DEFAULT_CAPABILITY_TOGGLES,
+      ...(config.capabilities ?? {}),
+    });
+  });
+
+  function applyCognitiveDepth(): void {
+    if (cognitiveDepth === 'balanced') {
+      capabilities = {...capabilities, judge: true, council: false};
+    } else if (cognitiveDepth === 'deep') {
+      capabilities = {...capabilities, judge: true, council: true};
+    } else if (cognitiveDepth === 'light') {
+      capabilities = {...capabilities, judge: false, council: false};
+    }
+    // custom: 用户手动改 judge/council，保持现状。
+  }
+
+  function handleCapabilityToggle(key: keyof CapabilityToggles, checked: boolean): void {
+    capabilities = {...capabilities, [key]: checked};
+    if (key === 'judge' || key === 'council') {
+      cognitiveDepth = 'custom';
+    }
+  }
+
   const CAPABILITY_TOGGLE_DEFS: Array<{key: keyof CapabilityToggles; label: string; desc: string}> = [
     {key: 'shell', label: 'Shell 命令工具', desc: '模型可提议本地命令，每次执行前需你在审批面板确认（fail-closed 授权）。'},
     {key: 'fetch', label: '网络读取工具', desc: '模型可发起公网 GET 请求（只读，无凭据转发）。'},
@@ -1099,6 +1138,17 @@
             逐项显式开启；shell/fetch 开启后每次调用仍走人工审批。
           </p>
 
+          <div class="form-group">
+            <label for="cognitive-depth">认知深度</label>
+            <select id="cognitive-depth" bind:value={cognitiveDepth} onchange={() => applyCognitiveDepth()}>
+              <option value="light">轻量 — judge 关 / council 关 (默认)</option>
+              <option value="balanced">平衡 — judge 开 / council 关</option>
+              <option value="deep">深度 — judge 开 / council 开</option>
+              <option value="custom">自定义 — 手动设置 judge/council</option>
+            </select>
+            <small class="field-hint">judge/council 会在回复后追加评审，增加延迟与 token 消耗。</small>
+          </div>
+
           {#each CAPABILITY_TOGGLE_DEFS as item (item.key)}
             <label class="toggle-row">
               <span class="toggle-text">
@@ -1109,7 +1159,7 @@
                 type="checkbox"
                 checked={capabilities[item.key]}
                 onchange={(e) => {
-                  capabilities = {...capabilities, [item.key]: (e.target as HTMLInputElement).checked};
+                  handleCapabilityToggle(item.key, (e.target as HTMLInputElement).checked);
                 }}
               />
             </label>
@@ -1130,13 +1180,13 @@
           <p class="block-desc">高危特权工具（如 FileOperator、ShellExec）需要主人授权。</p>
 
           <div class="form-group">
-            <label for="permission-preset">全局权限预设 (新会话默认)</label>
+            <label for="permission-preset">全局权限预设</label>
             <select id="permission-preset" bind:value={permissionPreset}>
               <option value="read_only">read_only — 只读</option>
               <option value="standard">standard — 标准 (推荐)</option>
               <option value="full">full — 完全权限</option>
             </select>
-            <small class="field-hint">作为新会话默认；已有会话在会话内可单独改。</small>
+            <small class="field-hint">作为新会话默认 (已生效)：仅对新会话生效，已有会话请在会话内改。</small>
           </div>
 
           <div class="info-card">
