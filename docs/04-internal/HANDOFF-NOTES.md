@@ -5,6 +5,7 @@
 > **状态（2026-08-28, Final-2.1）**：RC-1/2/3/4/5/6/8/9/10 已有真实实现或适配，RC-11 v1→APX2 migration utility 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment/Council adapter/Experience extraction 已接入单一 composition root。MiniMax provider E2E 仍需凭证；**A 块 OrganOrchestrator 完整化 5 stage 真实施已落** (amend 后 commits `c003e078` ~ `0afa733f` + 复盘 `bbbfb75b`; 详 `organ-orchestrator-completion-plan.md` + `A-block-o6-true-account.md`); 偏好学习、长程 reflection、非文本 perception 仍明确延期; frontend 对接 + RC-7 真 modality 待硬件.
 
 > **⚠️ 2026-09-08 对账注（按实际走，现状以此为准）**：上一条状态行的"仍明确延期/待硬件"部分已过期——**偏好学习已接线**（`preference_learning` 双索引 + 召回三段展开，旋钮 `APEIRETH_ENABLE_PREFERENCE_LEARNING=1`）；**frontend 对接已落地**（companion-desktop 2.0.0-rc.1 以 bundled-backend 方式 spawn `apeireth gateway serve`，装机 E2E 实测：聊天探针 / gateway health / 桌面端存活 6s 全过）；**Council 真 provider E2E 已过**（DeepSeek 7 advisor → Approved 5.0s，`council_live.rs`）。仍延期：长程 reflection、非文本 perception（RC-7 待硬件）、MiniMax E2E（无 key，永久挂账）。能力旋钮全集：`APEIRETH_ENABLE_SHELL/FETCH/ORGANS/PREFERENCE_LEARNING` + `APEIRETH_COGNITIVE_JUDGE/COUNCIL`（均默认关，INSTALL.md 有用户手册）。
+> **2026-09-12 旋钮整改批（对账审计 `capability-knob-audit-2026-09-12.md`）**：① 只读工具 `filesystem/search` **执行许可默认放行**（与 repo 同待遇），`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 为 CLI 隐私逃生门（旧 ENABLE 兼容、DISABLE 赢）；② 会话级审批策略新增 `approval_remember`（standard 下"会话内记住"，`GovernanceHook::approval_resolved` 回调 + 进程内记忆；Deny 永不绕过）；桌面会话头 4 档策略选择器（只读/每次审批/会话内记住/完全放行）+ 全局权限预设接入新会话创建 + 设置页认知深度预设档（轻量/平衡/深度/自定义）。
 > **2026-09-10 追加**：桌面开箱即用已落地（Settings 是唯一 provider 配置源，经 IPC 注入侧车环境，key 不落盘；commit `1a265600`）；**token 级真流式已打通**（provider SSE → runtime sink → gateway 逐帧直通，live 实测 210 帧增量；首启向导 `FirstRunWizard.svelte`；点击流人工实测清单 `frontend/companion-desktop/docs/first-run-click-through-checklist.md`）。**"什么测过、什么没测"以 `docs/04-internal/live-verification-ledger.md` 为权威——写文档/注释/commit 前先查它，别重测已绿的，别把挂账的当已验的。**
 
 ```yaml
@@ -86,7 +87,7 @@ crates/
 │   ├── perception/     (Voice/Vision backend 真实现, 默认不接线)
 │   └── organ/          (9 organ 真移植: E4/F1/F4/F6/W1/W2/W3/E7/Memory)
 ├── capabilities/       (1)
-│   └── tools/          (5 内置工具: filesystem/search/repo 只读默认开; shell/fetch opt-in)
+│   └── tools/          (5 内置工具: filesystem/search/repo 只读默认注册且执行许可默认放行; shell/fetch opt-in 每次审批)
 └── adapters/           (3 — 入口)
     ├── gateway/        (:8080 HTTP, OpenAI Chat 兼容)
     ├── cli/            (session / chat / gateway serve sub-command)

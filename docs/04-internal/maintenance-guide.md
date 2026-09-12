@@ -1,21 +1,21 @@
 # Apeireth 维护指南（v2 工程重构线, 2026-08-27）
 
-> **现状 (2026-08-27)**：本文**重写**为 v2 维护指南（13-crate 工作区）。取代 v1 `apeireth-companion` 维护手册（现 `legacy/`）。当前基线：默认分支 `main`、13-crate 工作区、tag `v2.0.0-alpha.1` @ `d6910cf7`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。
+> **现状 (2026-09-12 对账)**：本文为 v2 维护指南。当前基线：默认分支 `main`、**17-crate 工作区**（2026-09-04 抽出 runtime-assembly 后 13→17）、workspace.version `2.0.0-rc.1`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。历史注：tag `v2.0.0-alpha.1` @ `d6910cf7` 时代为 13-crate。
 
 ```
 [Document-Meta]
 Document:        docs/04-internal/maintenance-guide.md
 Version:         Manual-Rev-N (v2 重写)
-Last-Modified:   2026-08-27
-Status:          🟢 活跃 (v2 13-crate)
+Last-Modified:   2026-09-12
+Status:          🟢 活跃 (v2 17-crate)
 ```
 
 > 给谁看：维护代码的人（人或 AI）。先读 [ARCHITECTURE.md](../../ARCHITECTURE.md) 顶层，再读 [architecture.md](../01-architecture/architecture.md) 详细归属，再来这份。
-> 读法：§1 概念词典（澄清易混词）→ §2 13-crate 模块地图 → §3 维护流程 → §4 进程封装 → §5 v1 时代的"现在不这样做" → §6 不漂移承诺。
+> 读法：§1 概念词典（澄清易混词）→ §2 17-crate 模块地图 → §3 维护流程 → §4 进程封装 → §5 v1 时代的"现在不这样做" → §6 不漂移承诺。
 
 ---
 
-## 1. 概念词典（v2 13-crate 语境）
+## 1. 概念词典（v2 17-crate 语境）
 
 ### 1.1 能力栈（v2 一句话定义）
 
@@ -212,7 +212,7 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 
 ### 4.3 ProcessSupervisor（v1 计划，v2 **P5 排期**）
 
-`ProcessSupervisor` + 进程树快照模型 + 跨进程血缘追踪，**当前不在 13-crate 工作区**。见 [ROADMAP.md](../../ROADMAP.md) §4 P5。R**发明"我们用 supervisor 做 X"——明确不在 scope。
+`ProcessSupervisor` + 进程树快照模型 + 跨进程血缘追踪，**当前不在 17-crate 工作区**。见 [ROADMAP.md](../../ROADMAP.md) §4 P5。R**发明"我们用 supervisor 做 X"——明确不在 scope。
 
 ---
 
@@ -282,8 +282,8 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 
 ## 9. 一句话
 
-**v2 13-crate 工作区 = 单一事实源（PluginManager）+ 单一执行入口（Runtime::execute）+ 单一进程边界（ProcessExecutor）+ 单一协议抽象（NormalizedRequest/Response）+ 单一工具 trait（ToolCapability）+ 单一插件 trait（Plugin 4 方法）+ 单一凭据契约（CredentialResolver）+ 单一决策 trait（GovernanceHook + Allow/Deny/RequireApproval 三态）。**其它任何"创新点"都先回到这 8 个"单一"过一遍。
+**v2 17-crate 工作区 = 单一事实源（PluginManager）+ 单一执行入口（Runtime::execute）+ 单一进程边界（ProcessExecutor）+ 单一协议抽象（NormalizedRequest/Response）+ 单一工具 trait（ToolCapability）+ 单一插件 trait（Plugin 4 方法）+ 单一凭据契约（CredentialResolver）+ 单一决策 trait（GovernanceHook + Allow/Deny/RequireApproval 三态）。**其它任何"创新点"都先回到这 8 个"单一"过一遍。
 
 ---
 
-_本指南 v2 重写 (2026-08-27)：取代 v1 `apeireth-companion` 维护手册（`crates/apeireth-companion` 模块地图 → 现 13-crate foundation|engine|capabilities|adapters 分组）；v2 维护的 = PluginManager 唯一注册点 + 8 哲学锚穿透 + 3 不漂移承诺。v2 下一步（governance 接线 / core drain / 记忆移植）见根 ROADMAP §4。_
+_本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17：取代 v1 `apeireth-companion` 维护手册（`crates/apeireth-companion` 模块地图 → 现 17-crate foundation|engine|capabilities|adapters 分组）；v2 维护的 = PluginManager 唯一注册点 + 8 哲学锚穿透 + 3 不漂移承诺。v2 下一步（governance 接线 / core drain / 记忆移植）见根 ROADMAP §4。_
