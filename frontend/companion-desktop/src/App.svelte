@@ -255,20 +255,33 @@
   let sessionSettings = $state<SessionSettings | null>(null);
   let sessionModels = $state<ModelInfo[]>([]);
 
+  // 全局权限预设（设置页 tools 区写入 localStorage）接入新会话创建：
+  // 新建会话/分支时读入 pendingPreset[conversationId]，首次 send 完成后静默 PATCH 到后端。
+  const GLOBAL_PRESET_KEY = 'apeireth-permission-preset-default';
+  let pendingPreset = $state<Record<string, 'read_only' | 'standard' | 'full'>>({});
+  // getSessionSettings 成功过的会话 id —— pendingPreset 不覆盖已有后端 settings。
+  let sessionsWithSettings = $state<Record<string, boolean>>({});
+
   // 斜杠菜单（输入框聚焦且首字符 "/" 时显示）。
   let composerFocused = $state(false);
   let composerMenuOpen = $state(false);
   let composerTextarea = $state<HTMLTextAreaElement | null>(null);
 
-  // ---------- 会话权限预设（P1-2）----------
-  const SESSION_PRESETS: Array<{
-    id: SessionSettings['permission_preset'];
+  // ---------- 会话头审批策略（P1-2）----------
+  // 4 档：只读 / 标准·每次审批 / 标准·会话内记住 / 完全放行。
+  // approval_remember 仅对 standard 档有意义（会话内记住审批结果）。
+  type SessionApprovalStrategy = {
+    id: string;
+    permission_preset: SessionSettings['permission_preset'];
+    approval_remember: boolean;
     label: string;
     title: string;
-  }> = [
-    {id: 'read_only', label: '只读', title: '只读：工具仅读，写操作需审批'},
-    {id: 'standard', label: '标准', title: '标准：常规工具，高危操作需审批'},
-    {id: 'full', label: '完全', title: '完全：全部工具（仍受治理审批约束）'},
+  };
+  const SESSION_PRESETS: SessionApprovalStrategy[] = [
+    {id: 'read_only', permission_preset: 'read_only', approval_remember: false, label: '只读', title: '只读：工具仅读，写操作需审批'},
+    {id: 'standard', permission_preset: 'standard', approval_remember: false, label: '标准·每次审批', title: '标准：常规工具，高危操作每次审批'},
+    {id: 'standard_remember', permission_preset: 'standard', approval_remember: true, label: '标准·会话内记住', title: '标准：高危操作在本会话内记住审批结果'},
+    {id: 'full', permission_preset: 'full', approval_remember: false, label: '完全放行', title: '完全：全部工具（仍受治理审批约束）'},
   ];
 
   // ---------- 斜杠命令（P1-6）----------
@@ -280,7 +293,16 @@
   ];
 
   const currentSessionModel = $derived(sessionSettings?.model ?? config.model);
-  const currentPreset = $derived(sessionSettings?.permission_preset ?? 'standard');
+  // 会话头策略 active 态：permission_preset + approval_remember 共同决定。
+  const activeApprovalStrategyId = $derived.by(() => {
+    const preset = sessionSettings?.permission_preset ?? 'standard';
+    const remember = sessionSettings?.approval_remember ?? false;
+    return (
+      SESSION_PRESETS.find(
+        (p) => p.permission_preset === preset && p.approval_remember === remember,
+      )?.id ?? 'standard'
+    );
+  });
 
   function toEpochMs(value: unknown): number | undefined {
     if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
@@ -297,7 +319,59 @@
       model: patch.model !== undefined ? patch.model : (cur?.model ?? null),
       permission_preset:
         patch.permission_preset ?? cur?.permission_preset ?? 'standard',
+      approval_remember:
+        patch.approval_remember ?? cur?.approval_remember ?? false,
     };
+  }
+
+  function readGlobalPreset(): 'read_only' | 'standard' | 'full' | null {
+    try {
+      const raw = localStorage.getItem(GLOBAL_PRESET_KEY);
+      if (raw === 'read_only' || raw === 'standard' || raw === 'full') return raw;
+    } catch {
+      // localStorage 不可用时静默跳过。
+    }
+    return null;
+  }
+
+  function markPendingPreset(conversationId: string): void {
+    const preset = readGlobalPreset();
+    if (preset) {
+      pendingPreset = {...pendingPreset, [conversationId]: preset};
+    }
+  }
+
+  function clearPendingPreset(conversationId: string): void {
+    if (!(conversationId in pendingPreset)) return;
+    const next = {...pendingPreset};
+    delete next[conversationId];
+    pendingPreset = next;
+  }
+
+  /**
+   * 全局权限预设接入会话创建：在 send() 完成后（成功/失败，只要 backend 会话已创建）
+   * 静默 PATCH 一次。时机选在 finally 而非会话创建处，是因为 backend 在首个 chat 请求
+   * 之前未必有该会话记录（GET/PATCH settings 会 404），创建处就打补丁会空耗一次失败。
+   */
+  async function applyPendingPreset(conversationId: string): Promise<void> {
+    const preset = pendingPreset[conversationId];
+    if (!preset) return;
+    // 会话已有 settings（getSessionSettings 成功过）时不覆盖，避免冲掉后端真值。
+    if (sessionsWithSettings[conversationId]) {
+      clearPendingPreset(conversationId);
+      return;
+    }
+    try {
+      const updated = await patchSessionSettings(config, conversationId, {
+        permission_preset: preset,
+      });
+      // 成功一次后清除，避免后续 send 重复打补丁。
+      clearPendingPreset(conversationId);
+      sessionsWithSettings = {...sessionsWithSettings, [conversationId]: true};
+      if (activeId === conversationId) sessionSettings = updated;
+    } catch {
+      // 404 / 网络失败静默忽略；保留 pendingPreset，下次 send 后再试。
+    }
   }
 
   async function loadSessionModels(): Promise<void> {
@@ -313,7 +387,12 @@
   async function loadSessionSettings(sessionId: string): Promise<void> {
     try {
       const settings = await getSessionSettings(config, sessionId);
-      if (activeId === sessionId) sessionSettings = settings;
+      if (activeId === sessionId) {
+        sessionSettings = settings;
+        sessionsWithSettings = {...sessionsWithSettings, [sessionId]: true};
+        // 后端已有 settings，不再用全局预设覆盖。
+        clearPendingPreset(sessionId);
+      }
     } catch {
       // 拉取失败静默降级：picker 回落到全局模型。
       if (activeId === sessionId) sessionSettings = null;
@@ -334,17 +413,25 @@
   }
 
   async function selectSessionPreset(
-    preset: SessionSettings['permission_preset'],
+    strategy: SessionApprovalStrategy,
   ): Promise<void> {
     const sessionId = activeId;
     if (!sessionId) return;
     const prev = sessionSettings;
-    sessionSettings = ensureSessionSettings({permission_preset: preset});
+    sessionSettings = ensureSessionSettings({
+      permission_preset: strategy.permission_preset,
+      approval_remember: strategy.approval_remember,
+    });
     try {
       const updated = await patchSessionSettings(config, sessionId, {
-        permission_preset: preset,
+        permission_preset: strategy.permission_preset,
+        approval_remember: strategy.approval_remember,
       });
-      if (activeId === sessionId) sessionSettings = updated;
+      if (activeId === sessionId) {
+        sessionSettings = updated;
+        // 用户已在会话头显式选择策略，全局默认预设不再覆盖。
+        clearPendingPreset(sessionId);
+      }
     } catch {
       if (activeId === sessionId) sessionSettings = prev;
     }
@@ -611,6 +698,7 @@
     };
     conversations = [conversation, ...conversations];
     activeId = conversation.id;
+    markPendingPreset(conversation.id);
     persist();
     return conversation;
   }
@@ -933,6 +1021,9 @@
       isExecutingTool = false;
       presenceStore.setSpeaking(false);
       presenceStore.setChatActive(false);
+      // 全局权限预设: send 已把 sessionId 送达后端（会话此时已创建），
+      // 成功/失败都先静默补一次预设；失败会保留 pendingPreset 待下次 send 重试。
+      await applyPendingPreset(conversationId);
       // 生成结束: 恢复真实 health (backend 可能已离线)
       await refreshConnection();
       await tick();
@@ -1070,6 +1161,7 @@
     };
     conversations = [branchConv, ...conversations];
     activeId = branchConv.id;
+    markPendingPreset(branchConv.id);
     persist();
   }
 
@@ -1086,6 +1178,7 @@
     };
     conversations = [conversation, ...conversations];
     activeId = conversation.id;
+    markPendingPreset(conversation.id);
     drawerSec = null;
     persist();
   }
@@ -1755,14 +1848,14 @@
                 </div>
               </div>
               <div class="chat-head-actions">
-                <div class="preset-group" role="group" aria-label="会话权限预设">
+                <div class="preset-group" role="group" aria-label="会话审批策略">
                   {#each SESSION_PRESETS as preset (preset.id)}
                     <button
                       class="preset-btn"
-                      class:active={currentPreset === preset.id}
-                      onclick={() => void selectSessionPreset(preset.id)}
+                      class:active={activeApprovalStrategyId === preset.id}
+                      onclick={() => void selectSessionPreset(preset)}
                       title={preset.title}
-                      aria-pressed={currentPreset === preset.id}
+                      aria-pressed={activeApprovalStrategyId === preset.id}
                     >
                       {preset.label}
                     </button>

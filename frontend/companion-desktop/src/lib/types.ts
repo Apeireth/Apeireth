@@ -391,6 +391,8 @@ export interface ApiErrorFrame {
 export interface SessionSettings {
   model: string | null;
   permission_preset: 'read_only' | 'standard' | 'full';
+  /** 审批是否在本会话内记住 (backend 契约, 默认 false). */
+  approval_remember?: boolean;
 }
 
 /** 管理配置 patch (POST /v1/admin/config). */
