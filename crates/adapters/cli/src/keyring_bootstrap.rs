@@ -27,9 +27,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use apeireth_credentials::keyring::{AuditSink, CountingAudit, NoopAudit};
+use apeireth_credentials::keyring::{AuditSink, CountingAudit, KeyringBackend, NoopAudit};
 use apeireth_credentials::keyring_resolver::KeyringCredentialResolver;
-use apeireth_credentials::KeyringSelector;
+use apeireth_credentials::{KeyringSelector, SecretBuf};
+use apeireth_gateway::CredentialWriter;
 use apeireth_plugin::CredentialResolver;
 
 /// CLI/gateway 启动时构造 `Arc<dyn CredentialResolver>`, 优先用 KeyringSelector 真接
@@ -61,6 +62,15 @@ pub fn build_keyring_resolver() -> Arc<dyn CredentialResolver> {
 
 /// 真接 KeyringSelector, 失败返 Err (退化由 caller 处理)
 fn try_build_keyring_resolver() -> Result<Arc<dyn CredentialResolver>, String> {
+    Ok(Arc::new(KeyringCredentialResolver::new(
+        try_build_keyring_backend()?,
+    )))
+}
+
+/// 真接 KeyringSelector 选 backend, 失败返 Err (退化由 caller 处理)。
+/// 与 [`try_build_keyring_resolver`] 共用同一选择逻辑, 供 `/v1/admin/config`
+/// 的 api_key 热写入口复用同一个 keyring backend。
+fn try_build_keyring_backend() -> Result<Arc<dyn KeyringBackend>, String> {
     // 读 env: APEIRETH_KEYRING_BACKEND (per v2.0.0-rc-roadmap.md §3 RC-9: "KeyringSelector::select()
     // 真实按 APEIRETH_KEYRING_BACKEND env 选择")
     let env_value = std::env::var("APEIRETH_KEYRING_BACKEND").ok();
@@ -95,9 +105,27 @@ fn try_build_keyring_resolver() -> Result<Arc<dyn CredentialResolver>, String> {
     eprintln!("[keyring] KeyringSelector 选 backend: {:?}", selected.kind);
     // KeyringCredentialResolver::new 接受 Arc<dyn KeyringBackend>,
     // selected.backend 是 Box<dyn KeyringBackend>, 转 Arc
-    let backend_arc: Arc<dyn apeireth_credentials::keyring::KeyringBackend> =
-        selected.backend.into();
-    Ok(Arc::new(KeyringCredentialResolver::new(backend_arc)))
+    Ok(selected.backend.into())
+}
+
+/// `/v1/admin/config` 的 api_key 热写端口: 复用 keyring backend 的 `set`。
+/// 未配置 keyring backend (env resolver 路径) 时返 None, gateway 会在 warnings
+/// 里如实说明而非假装写入成功。
+pub fn build_keyring_credential_writer() -> Option<Arc<dyn CredentialWriter>> {
+    match try_build_keyring_backend() {
+        Ok(backend) => Some(Arc::new(KeyringCredentialWriter(backend))),
+        Err(_) => None,
+    }
+}
+
+struct KeyringCredentialWriter(Arc<dyn KeyringBackend>);
+
+impl CredentialWriter for KeyringCredentialWriter {
+    fn write(&self, name: &str, value: &str) -> Result<(), String> {
+        self.0
+            .set(name, &SecretBuf::from_str(value))
+            .map_err(|error| error.to_string())
+    }
 }
 
 #[cfg(test)]
