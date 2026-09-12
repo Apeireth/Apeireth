@@ -26,6 +26,7 @@ pub struct SessionSettingsBody {
     pub session_id: String,
     pub model: Option<String>,
     pub permission_preset: PermissionPreset,
+    pub approval_remember: bool,
 }
 
 impl SessionSettingsBody {
@@ -34,6 +35,7 @@ impl SessionSettingsBody {
             session_id: session_id.to_string(),
             model: settings.model.clone(),
             permission_preset: settings.permission_preset,
+            approval_remember: settings.approval_remember,
         }
     }
 }
@@ -46,6 +48,8 @@ pub struct PatchSessionSettingsRequest {
     pub model: Option<Option<String>>,
     #[serde(default)]
     pub permission_preset: Option<PermissionPreset>,
+    #[serde(default)]
+    pub approval_remember: Option<bool>,
 }
 
 /// Deserialize a present-but-null field as `Some(None)` so `Option<Option<T>>`
@@ -144,6 +148,9 @@ pub(crate) async fn patch_session_settings(
     if let Some(preset) = request.permission_preset {
         session.settings.permission_preset = preset;
     }
+    if let Some(remember) = request.approval_remember {
+        session.settings.approval_remember = remember;
+    }
 
     state
         .runtime
@@ -230,6 +237,7 @@ mod tests {
         assert_eq!(body["session_id"], sid.to_string());
         assert_eq!(body["model"], serde_json::Value::Null);
         assert_eq!(body["permission_preset"], "standard");
+        assert_eq!(body["approval_remember"], false);
     }
 
     #[tokio::test]
@@ -246,7 +254,7 @@ mod tests {
                     .uri(format!("/v1/sessions/{sid}/settings"))
                     .header("content-type", "application/json")
                     .body(Body::from(
-                        r#"{"model":"anthropic/claude-3-5","permission_preset":"full"}"#,
+                        r#"{"model":"anthropic/claude-3-5","permission_preset":"full","approval_remember":true}"#,
                     ))
                     .unwrap(),
             )
@@ -255,6 +263,46 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = json_body(response).await;
         assert_eq!(body["model"], "anthropic/claude-3-5");
+        assert_eq!(body["permission_preset"], "full");
+        assert_eq!(body["approval_remember"], true);
+    }
+
+    #[tokio::test]
+    async fn patch_approval_remember_is_partial_and_preserves_other_fields() {
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let sid = SessionId::new();
+        save_session(&store, sid).await;
+        let app = test_router(store).await;
+
+        // Set model + preset first.
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(format!("/v1/sessions/{sid}/settings"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"model":"some/model","permission_preset":"full"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Then toggle only approval_remember; model and preset must survive.
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(format!("/v1/sessions/{sid}/settings"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"approval_remember":true}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = json_body(response).await;
+        assert_eq!(body["approval_remember"], true);
+        assert_eq!(body["model"], "some/model");
         assert_eq!(body["permission_preset"], "full");
     }
 
@@ -294,6 +342,7 @@ mod tests {
         let body = json_body(response).await;
         assert_eq!(body["model"], serde_json::Value::Null);
         assert_eq!(body["permission_preset"], "standard");
+        assert_eq!(body["approval_remember"], false);
     }
 
     #[tokio::test]

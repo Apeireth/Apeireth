@@ -720,6 +720,13 @@ impl Runtime {
                 // before the approved tool is invoked.
                 self.sessions.save(&session).await?;
 
+                // The human approved this (session, capability) pair exactly
+                // once. Notify governance after the claim is durable so hooks
+                // with session-scoped approval memory can suppress the next
+                // identical approval prompt when `approval_remember` is on.
+                self.governance
+                    .approval_resolved(&approval.session_id, &approval.capability_id);
+
                 let mut continuation = approval.continuation.clone();
                 continuation.approved_tool_index = Some(continuation.next_tool_index);
                 continuation.approved_approval_id = Some(approval_id);

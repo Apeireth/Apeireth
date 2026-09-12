@@ -59,6 +59,14 @@ pub struct SessionSettings {
     /// Session-level permission posture for subsequent turns.
     #[serde(default)]
     pub permission_preset: PermissionPreset,
+    /// Remember a human approval for a `(session, capability)` pair and skip
+    /// the next identical approval prompt in this session.
+    ///
+    /// Defaults to `false` (every occurrence still requires approval). The
+    /// memory itself lives in-process in the governance hook, so it is cleared
+    /// on restart; this flag only controls whether that memory is consulted.
+    #[serde(default)]
+    pub approval_remember: bool,
 }
 
 impl Default for SessionSettings {
@@ -66,6 +74,7 @@ impl Default for SessionSettings {
         Self {
             model: None,
             permission_preset: PermissionPreset::Standard,
+            approval_remember: false,
         }
     }
 }
@@ -532,6 +541,27 @@ mod tests {
         );
         assert_eq!(migrated.messages.len(), 1, "transcript must survive migration");
         assert_eq!(migrated.revision, 1);
+    }
+
+    #[test]
+    fn session_settings_without_approval_remember_migrates_to_false_without_loss() {
+        // A settings blob persisted before `approval_remember` existed must
+        // deserialize with `approval_remember == false` and keep every other
+        // field intact.
+        let settings = SessionSettings {
+            model: Some("some/model".into()),
+            permission_preset: PermissionPreset::Full,
+            approval_remember: true,
+        };
+
+        let mut json = serde_json::to_value(&settings).unwrap();
+        let object = json.as_object_mut().expect("settings serializes as object");
+        assert!(object.remove("approval_remember").is_some());
+
+        let migrated: SessionSettings = serde_json::from_value(json).unwrap();
+        assert!(!migrated.approval_remember);
+        assert_eq!(migrated.model, Some("some/model".into()));
+        assert_eq!(migrated.permission_preset, PermissionPreset::Full);
     }
 
     #[tokio::test]
