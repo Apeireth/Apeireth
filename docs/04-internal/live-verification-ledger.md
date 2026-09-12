@@ -40,17 +40,32 @@
 | 14 | **token 级真流式增量**（provider SSE → runtime sink → gateway 逐帧直通；审批/错误以显式终帧终止流） | 2026-09-10 | live 实测（DeepSeek，210 帧 ~23ms 逐帧到达）；`complete_streaming_forwards_incremental_deltas`（provider，mock SSE 顺序+合成同语义）；`the_gateway_streams_incremental_deltas_when_requested`（gateway，role<hel<lo<[DONE] + usage/元数据）；`openai_compatible_stream_ends_with_pending_approval_frame`（审批流式契约） | `curl -N -X POST …/v1/chat/completions -d '{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"…"}],"stream":true}'`（需 key） |
 | 15 | **侧车启动与 CWD 解耦**（System32 CWD 启动：侧车存活 + 存储落 `%LOCALAPPDATA%\Apeireth\data\` + /health 200） | 2026-09-28 | `supervisor_lifecycle.rs::sidecar_stores_land_in_app_data_regardless_of_cwd`（真后端、无需 key）+ install-e2e "hostile-CWD boot" 步骤（**用户真机点击流首发现的 P0 bug 的回归**） | `pwsh frontend/companion-desktop/scripts/install-e2e.ps1`（无 key 可跑，聊天探针自动 SKIP） |
 
+### 1.4 DSH 参考采纳批（P0×5 / P1×6，2026-09-12）
+
+> 全部为「自动化测试已证」口径；需要人工点击流验证的部分仍在 §2 挂账 #2。
+
+| # | 项 | 证据 | 复现命令 |
+|---|---|---|---|
+| 16 | **网关统一错误帧契约**（`{"error":{"message","code","solution"}}`，8 码中文解决方案目录；SSE 错误帧同形状） | `crates/adapters/gateway` 单测（error_frame/error_codes）+ 4 处既有断言同步 + `tests/admin_config.rs`；**真机实证**：失效 key 的 vendor 401 经新契约上浮为可读错误（认证往返完成） | `cargo test -p apeireth-gateway` |
+| 17 | **`/v1/admin/config` 无重启热配置**（model/base_url/api_key 热更新下一请求生效，非法 config 拒绝且旧值不变，GET 打码回显） | `gateway/tests/admin_config.rs` 2 个集成测试（mock server + 内存凭证 store） | `cargo test -p apeireth-gateway --test admin_config` |
+| 18 | **会话级模型记忆 + 会话级权限预设三态**（read_only 拒写/执行、standard 沿用审批、full 免审批留日志；老库 JSON 自动迁移不丢数据；预设钩子已接生产 CLI 治理管线） | `runtime-assembly/tests/session_permission_preset.rs` + `sqlite_session.rs` 迁移测试 + CLI 接线 commit `e7da5809` | `cargo test -p apeireth-runtime-assembly -p apeireth-cli` |
+| 19 | **审批载荷带命令文本**（`command_text` / `arguments_summary`，现有字段全保留） | `crates/engine/runtime/src/canonical/approval.rs` 序列化单测 | `cargo test -p apeireth-runtime` |
+| 20 | **桌面钥匙串 IPC + 无重启应用（404/405 回退重启）+ 工作区目录**（keyring 只进系统钥匙串不落盘；绝对 env > 锚定 > 相对 env 视为无效的新 store 契约） | companion-desktop 30 单测 + `supervisor_lifecycle.rs` 8 集成测试（**真 sidecar**，含 `explicit_env_store_paths_take_priority`） | `cargo test`（src-tauri 内） |
+| 21 | **前端数据层 + 6 个新组件 + SettingsView/App.svelte 集成**（审批卡显示命令文本、错误解决方案横幅、会话模型/预设选择器、工具生命周期卡、斜杠菜单、工作区选择器） | `npm run check` 0 errors（警告 5 条全为既有）+ `npm run test` 7/7 | `cd frontend/companion-desktop; npm run check; npm run test` |
+| 22 | **本批新包装机回归**（新 store 锚定契约的 hostile-CWD 启动 + 卸载钩子零残留 + 桌面冒烟） | install-e2e 16/16（2026-09-12，新 NSIS 包；聊天探针因 key 失效 SKIP） | `pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
+
 ## 2. 挂账（未测 / 测不了）——不要声称已验
 
 | # | 项 | 原因 | 若要做时的路径 |
 |---|---|---|---|
 | 1 | **MiniMax provider 真机** | 无 MiniMax key（用户侧无预算） | `#[ignore]` 测试齐备：`minimax_llm_factory::real_llm_call_smoke` 等，有 key 后 `cargo test -p apeireth-provider --test minimax_llm_factory -- --ignored` + env `MINIMAX_API_KEY` |
-| 2 | **桌面 UI 点击流人工实测** | 🟡 核心链路已人工走通（2026-09-28 用户实测：装机→启动→设置填 key→保存→网关重启→真实流式对话出字，全程抓出 5 个真 bug：CWD 启动失败 / CORS 缺失 / 密钥弹窗不推侧车 / 保存按钮不可见 / 错误帧被吞）；**剩余两步待人工**：① 工具面板 shell 审批闭环（开 shell 旋钮→触发→批准）② 图形卸载勾选"删除应用程序数据"验证数据目录真删（新 hook 的 GUI 路径） | 清单：`frontend/companion-desktop/docs/first-run-click-through-checklist.md`；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
+| 2 | **桌面 UI 点击流人工实测** | 🟡 核心链路已人工走通（2026-09-28 用户实测：装机→启动→设置填 key→保存→网关重启→真实流式对话出字，全程抓出 5 个真 bug：CWD 启动失败 / CORS 缺失 / 密钥弹窗不推侧车 / 保存按钮不可见 / 错误帧被吞）；**剩余人工步骤**：① 工具面板 shell 审批闭环（开 shell 旋钮→触发→批准，现审批卡已显示命令文本）② 图形卸载勾选"删除应用程序数据"验证数据目录真删 ③ 设置页钥匙串保存→重启后 key 仍在（P0-1 GUI 路径）④ 会话模型/预设选择器 + 斜杠菜单的点击流 | 清单：`frontend/companion-desktop/docs/first-run-click-through-checklist.md`；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
 | 3 | `/v1/apeireth/events` 订阅端到端（桌面 UI 里收事件） | 端点已确认是活流（探针连接保持），UI 消费未人工验证 | presence 订阅代码在 `presence.ts`；UI 验证并入 #2 |
 | 4 | approvals 的 HTTP 完整闭环 | 完整闭环在 CLI 实测过（#3）；HTTP 路由只验了参数校验响应 | HTTP 闭环可并入 #2（工具触发 → 面板审批按钮） |
 | 5 | macOS / Linux 打包与装机 | 仅 Windows NSIS 装机实测 | Tauri bundle 命令已有，缺真机验证环境 |
 | 6 | MSI 卸载与 NSIS 对齐（侧车检查） | WiX 模板无此 hook，Windows 推荐 NSIS | 若 MSI 变主力分发，需 WiX CustomAction |
 | 7 | RC-7 非文本感知（voice/screen） | 待硬件 | ROADMAP P7/P-arch-3 |
+| 8 | **本批新包的聊天探针（CLI chat 真模型）** | 旧 DeepSeek key 已失效（vendor 401 `****fc4a is invalid`），需新 key；**认证往返已实测**：401 经新错误帧契约正确上浮 | 拿到新 key 后：`$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'; pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
 
 ## 3. 环境口径（live 测试统一契约）
 
