@@ -5,7 +5,7 @@
 //! owns no provider selection, governance composition, session orchestration,
 //! plugin lifecycle, tool dispatch, retry, or agent loop.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use apeireth_core::kernel::{ApprovalId, RequestId, SessionId, Timestamp};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
@@ -21,6 +21,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 
+use crate::admin::{admin_config_get, admin_config_update, GatewayRuntimeConfig};
 use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::events::{events_handler, EventBus, GatewayEvent};
 use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
@@ -391,6 +392,8 @@ struct ModelListItem {
     object: &'static str,
     created: i64,
     owned_by: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -439,6 +442,7 @@ pub fn build_gateway_state_with_services(
         services,
         events,
         observations,
+        hot_config: Arc::new(RwLock::new(GatewayRuntimeConfig::from_env())),
     }
 }
 
@@ -477,6 +481,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/approvals", get(list_pending_approvals))
         .route("/v1/approvals/resolve", post(native_resolve_approval))
         .route("/v1/apeireth/events", get(events_handler))
+        .route("/v1/admin/config", get(admin_config_get).post(admin_config_update))
         .merge(panel_routes())
         // CORS is mandatory, not optional: the desktop WebView is a distinct
         // origin (tauri://localhost / http://tauri.localhost), and browsers
@@ -526,7 +531,7 @@ async fn health() -> Json<serde_json::Value> {
     }))
 }
 
-async fn list_models(State(state): State<GatewayState>) -> Json<ModelListResponse> {
+async fn list_models(State(state): State<GatewayState>) -> Result<Json<ModelListResponse>, Response> {
     let created = Timestamp::from_clock(state.runtime.clock().as_ref()).epoch_millis() / 1_000;
     // Dedupe by model id: two providers can serve the same canonical model over
     // different wires (the anthropic plugin defaults to MiniMax's
@@ -534,7 +539,7 @@ async fn list_models(State(state): State<GatewayState>) -> Json<ModelListRespons
     // advertise `minimax-m3`). The UI model list needs one entry per id; model
     // resolution by the runtime is unaffected by this display layer.
     let mut seen = std::collections::HashSet::new();
-    let data = state
+    let data: Vec<ModelListItem> = state
         .runtime
         .providers()
         .model_descriptors()
@@ -545,12 +550,35 @@ async fn list_models(State(state): State<GatewayState>) -> Json<ModelListRespons
             object: "model",
             created,
             owned_by: model.provider.to_string(),
+            description: model.display_name.clone(),
         })
         .collect();
-    Json(ModelListResponse {
+
+    if data.is_empty() {
+        let has_key = state
+            .hot_config
+            .read()
+            .expect("gateway hot config lock poisoned")
+            .api_key
+            .is_some();
+        let (code, message) = if has_key {
+            (
+                ErrorCode::ProviderUnreachable,
+                "没有可用的 provider/model; 请检查 base_url 与网络连通性".to_string(),
+            )
+        } else {
+            (
+                ErrorCode::AuthMissingKey,
+                "未配置 API 密钥; 请在「设置 → 模型」中保存密钥后重试".to_string(),
+            )
+        };
+        return Err(ErrorFrame::response(StatusCode::UNAUTHORIZED, code, message));
+    }
+
+    Ok(Json(ModelListResponse {
         object: "list",
         data,
-    })
+    }))
 }
 
 async fn list_providers(State(state): State<GatewayState>) -> Json<serde_json::Value> {
@@ -569,6 +597,9 @@ async fn native_chat(
     Json(request): Json<CanonicalChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
+    if request.model.is_none() {
+        request.model = hot_model_override(&state);
+    }
     let session = request.session.unwrap_or_else(SessionId::new);
     request.session = Some(session);
     let outcome = execute_chat(state.runtime.as_ref(), request).await;
@@ -647,6 +678,10 @@ async fn openai_chat(
     State(state): State<GatewayState>,
     Json(request): Json<OpenAiChatRequest>,
 ) -> Result<Response, HttpError> {
+    let mut request = request;
+    if request.model.is_none() {
+        request.model = hot_model_override(&state);
+    }
     let is_stream = request.stream;
     let session = request.session_id.unwrap_or_else(SessionId::new);
     let input = request
@@ -879,6 +914,17 @@ async fn openai_chat_streaming(
                 Some(session),
             )
         })?)
+}
+
+/// The admin-patched default model, when one was set through
+/// `/v1/admin/config`. The startup env baseline is deliberately not injected:
+/// the composition root already made it the runtime's own default model.
+fn hot_model_override(state: &GatewayState) -> Option<String> {
+    let config = state
+        .hot_config
+        .read()
+        .expect("gateway hot config lock poisoned");
+    config.admin_model_set.then(|| config.model.clone()).flatten()
 }
 
 fn http_error(error: CanonicalEntryError, session: Option<SessionId>) -> HttpError {

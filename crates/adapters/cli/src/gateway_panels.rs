@@ -975,5 +975,6 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         grants: Some(panel.clone() as Arc<dyn GrantQuery>),
         grant_commands: Some(panel.clone() as Arc<dyn GrantCommand>),
         modules: Some(panel as Arc<dyn ModuleQuery>),
+        credentials: None,
     }
 }
