@@ -66,6 +66,8 @@ pub mod orchestrator;
 pub mod organ_llm_bridge;
 #[path = "canonical/organ_module.rs"]
 pub mod organ_module;
+#[path = "canonical/permission_preset.rs"]
+pub mod permission_preset;
 #[path = "canonical/preference_learning.rs"]
 pub mod preference_learning;
 #[path = "canonical/production.rs"]
@@ -84,6 +86,9 @@ pub use cognitive::{
 };
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
 pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};
+pub use permission_preset::{
+    is_write_or_execute_capability, PermissionPresetGovernanceHook,
+};
 pub use preference_learning::{
     PreferenceEvidence, PreferenceLearningModule, PreferenceLearningStats, PreferencePolarity,
     PREFERENCE_LEARNING_MODULE_ID,

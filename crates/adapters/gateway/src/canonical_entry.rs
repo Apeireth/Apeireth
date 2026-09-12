@@ -16,7 +16,7 @@ use apeireth_runtime::canonical::{
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
@@ -165,6 +165,8 @@ pub struct CanonicalPendingApproval {
     pub tool_name: String,
     pub governance_hook: String,
     pub governance_reason: String,
+    pub command_text: String,
+    pub arguments_summary: String,
     pub created_at: Timestamp,
     pub expires_at: Timestamp,
 }
@@ -180,6 +182,8 @@ impl From<PendingApprovalView> for CanonicalPendingApproval {
             tool_name: view.tool_name,
             governance_hook: view.governance_hook,
             governance_reason: view.governance_reason,
+            command_text: view.command_text,
+            arguments_summary: view.arguments_summary,
             created_at: view.created_at,
             expires_at: view.expires_at,
         }
@@ -475,6 +479,11 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals", get(list_pending_approvals))
         .route("/v1/approvals/resolve", post(native_resolve_approval))
+        .route(
+            "/v1/sessions/:session_id/settings",
+            get(crate::session_settings::get_session_settings)
+                .patch(crate::session_settings::patch_session_settings),
+        )
         .route("/v1/apeireth/events", get(events_handler))
         .merge(panel_routes())
         // CORS is mandatory, not optional: the desktop WebView is a distinct
