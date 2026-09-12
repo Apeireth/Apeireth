@@ -52,7 +52,7 @@
 | 19 | **审批载荷带命令文本**（`command_text` / `arguments_summary`，现有字段全保留） | `crates/engine/runtime/src/canonical/approval.rs` 序列化单测 | `cargo test -p apeireth-runtime` |
 | 20 | **桌面钥匙串 IPC + 无重启应用（404/405 回退重启）+ 工作区目录**（keyring 只进系统钥匙串不落盘；绝对 env > 锚定 > 相对 env 视为无效的新 store 契约） | companion-desktop 30 单测 + `supervisor_lifecycle.rs` 8 集成测试（**真 sidecar**，含 `explicit_env_store_paths_take_priority`） | `cargo test`（src-tauri 内） |
 | 21 | **前端数据层 + 6 个新组件 + SettingsView/App.svelte 集成**（审批卡显示命令文本、错误解决方案横幅、会话模型/预设选择器、工具生命周期卡、斜杠菜单、工作区选择器） | `npm run check` 0 errors（警告 5 条全为既有）+ `npm run test` 7/7 | `cd frontend/companion-desktop; npm run check; npm run test` |
-| 22 | **本批新包装机回归 + 真聊天探针**（新 store 锚定契约的 hostile-CWD 启动 + 卸载钩子零残留 + 桌面冒烟 + 装机侧车真聊天） | install-e2e 17/17（2026-09-12，新 NSIS 包，新 key） | `$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'; pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
+| 22 | **本批新包装机回归 + 真聊天探针**（新 store 锚定契约的 hostile-CWD 启动 + 卸载钩子零残留 + 桌面冒烟 + 装机侧车真聊天） | install-e2e 17/17（2026-09-12，新 NSIS 包，key `sk-3f4a…3544`） | `$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-flash'; pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
 | 23 | **审批载荷旧 blob 迁移修复**（升级前持久化的审批记录缺 `command_text`/`arguments_summary` 导致整会话加载失败 → 两个字段加 `#[serde(default)]`；真机用户会话 `5f05690d` 实测修复后加载 200） | commit `f69cd68d` + 回归测试 `approval_view_serialized_before_command_text_still_deserializes` + **真实数据验证**（用户 `%LOCALAPPDATA%\Apeireth\data\sessions.sqlite3` 副本 → `GET /v1/sessions/5f05690d…/settings` 200） | `cargo test -p apeireth-runtime`；复核：gateway 指 DB 副本查 settings |
 | 24 | **真机三连修复**（① 前端错误码透传：`toRuntimeError` 曾丢弃后端 `code`/`solution` 导致横幅永远显示通用文案 → `RuntimeError.backendCode/solution` 透传 + `describeError` 识别；② Windows 凭据跨进程持久化：keyring v3.6 的 `CRED_PERSIST_ENTERPRISE` 在微软账户机器上对其他进程不可见 → 直写 Credential Manager `CRED_PERSIST_LOCAL_MACHINE`，跨进程探针两遍验证 + cmdkey 互操作验证；③ 热应用/重启契约：capabilities/模型列表等非热可应用变更必须重启 → 按 spawn 快照分类，30 单测 + 8 集成全绿） | commit `d610bb2a`；真机注入链验证：凭据库 key 已送达侧车并完成 DeepSeek 认证往返（vendor 401 因 key 被撤销，非链路问题） | `cargo test`（src-tauri 内）+ 两遍 `--ignored` keychain 跨进程探针 |
 
@@ -67,7 +67,6 @@
 | 5 | macOS / Linux 打包与装机 | 仅 Windows NSIS 装机实测 | Tauri bundle 命令已有，缺真机验证环境 |
 | 6 | MSI 卸载与 NSIS 对齐（侧车检查） | WiX 模板无此 hook，Windows 推荐 NSIS | 若 MSI 变主力分发，需 WiX CustomAction |
 | 7 | RC-7 非文本感知（voice/screen） | 待硬件 | ROADMAP P7/P-arch-3 |
-| 8 | **装机侧车真聊天终确认** | 凭据库注入链已实测打通（key 送达侧车、DeepSeek 认证往返完成），但 `sk-984d…8daa` 于 2026-09-12 14:0x 被撤销；待用户提供新 key 后按 #22 命令复跑 | 同 #22 |
 
 ## 3. 环境口径（live 测试统一契约）
 
