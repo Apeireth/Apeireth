@@ -52,7 +52,7 @@
 | 19 | **审批载荷带命令文本**（`command_text` / `arguments_summary`，现有字段全保留） | `crates/engine/runtime/src/canonical/approval.rs` 序列化单测 | `cargo test -p apeireth-runtime` |
 | 20 | **桌面钥匙串 IPC + 无重启应用（404/405 回退重启）+ 工作区目录**（keyring 只进系统钥匙串不落盘；绝对 env > 锚定 > 相对 env 视为无效的新 store 契约） | companion-desktop 30 单测 + `supervisor_lifecycle.rs` 8 集成测试（**真 sidecar**，含 `explicit_env_store_paths_take_priority`） | `cargo test`（src-tauri 内） |
 | 21 | **前端数据层 + 6 个新组件 + SettingsView/App.svelte 集成**（审批卡显示命令文本、错误解决方案横幅、会话模型/预设选择器、工具生命周期卡、斜杠菜单、工作区选择器） | `npm run check` 0 errors（警告 5 条全为既有）+ `npm run test` 7/7 | `cd frontend/companion-desktop; npm run check; npm run test` |
-| 22 | **本批新包装机回归**（新 store 锚定契约的 hostile-CWD 启动 + 卸载钩子零残留 + 桌面冒烟） | install-e2e 16/16（2026-09-12，新 NSIS 包；聊天探针因 key 失效 SKIP） | `pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
+| 22 | **本批新包装机回归 + 真聊天探针**（新 store 锚定契约的 hostile-CWD 启动 + 卸载钩子零残留 + 桌面冒烟 + 装机侧车真聊天） | install-e2e 17/17（2026-09-12，新 NSIS 包，新 key） | `$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'; pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
 
 ## 2. 挂账（未测 / 测不了）——不要声称已验
 
@@ -65,7 +65,6 @@
 | 5 | macOS / Linux 打包与装机 | 仅 Windows NSIS 装机实测 | Tauri bundle 命令已有，缺真机验证环境 |
 | 6 | MSI 卸载与 NSIS 对齐（侧车检查） | WiX 模板无此 hook，Windows 推荐 NSIS | 若 MSI 变主力分发，需 WiX CustomAction |
 | 7 | RC-7 非文本感知（voice/screen） | 待硬件 | ROADMAP P7/P-arch-3 |
-| 8 | **本批新包的聊天探针（CLI chat 真模型）** | 旧 DeepSeek key 已失效（vendor 401 `****fc4a is invalid`），需新 key；**认证往返已实测**：401 经新错误帧契约正确上浮 | 拿到新 key 后：`$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'; pwsh frontend/companion-desktop/scripts/install-e2e.ps1` |
 
 ## 3. 环境口径（live 测试统一契约）
 
