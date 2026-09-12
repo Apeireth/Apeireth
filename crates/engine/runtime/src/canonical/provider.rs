@@ -38,7 +38,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use apeireth_core::kernel::{CapabilityId, Clock, Timestamp};
-use apeireth_plugin::{ProviderCapability, ProviderError};
+use apeireth_plugin::{ProviderCapability, ProviderError, ProviderHotConfig};
 use apeireth_protocol::canonical::{
     ModelDescriptor, NormalizedRequest, NormalizedResponse, NormalizedTool,
 };
@@ -160,6 +160,27 @@ impl ProviderRouter {
     /// Current health of a provider, if it has been exercised.
     pub fn health(&self, id: &CapabilityId) -> Option<ProviderHealth> {
         self.health.read().get(id).cloned()
+    }
+
+    /// Forward a hot base_url update to one live provider capability.
+    ///
+    /// Used by the gateway's `/v1/admin/config` endpoint to repoint a provider
+    /// without restarting the process. Providers that do not support the update
+    /// return an explicit error (they never fail silently).
+    pub fn apply_hot_config(
+        &self,
+        provider_id: &CapabilityId,
+        base_url: Option<&str>,
+    ) -> Result<(), String> {
+        let provider = self
+            .providers
+            .iter()
+            .find(|provider| provider.id() == provider_id)
+            .ok_or_else(|| format!("unknown provider {provider_id}"))?;
+        let patch = ProviderHotConfig {
+            base_url: base_url.map(str::to_string),
+        };
+        provider.apply_hot_config(&patch)
     }
 
     /// Serve a completion, falling back on transient failures.
