@@ -7,7 +7,8 @@
 use std::sync::Mutex;
 
 use apeireth_cli::{
-    build_production_governance, build_production_governance_from_env, ENABLE_LOCAL_READ_TOOLS_ENV,
+    build_production_governance, build_production_governance_from_env,
+    DISABLE_LOCAL_READ_TOOLS_ENV, ENABLE_LOCAL_READ_TOOLS_ENV,
 };
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 use apeireth_governance::{Action, Decision, GovernancePipeline, GovernanceRequest};
@@ -16,25 +17,33 @@ use serde_json::{json, Value};
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 struct EnvGuard {
-    previous: Option<String>,
+    keys: &'static [&'static str],
+    previous: Vec<(&'static str, Option<String>)>,
 }
 
 impl EnvGuard {
-    fn set(value: Option<&str>) -> Self {
-        let previous = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV).ok();
-        match value {
-            Some(value) => std::env::set_var(ENABLE_LOCAL_READ_TOOLS_ENV, value),
-            None => std::env::remove_var(ENABLE_LOCAL_READ_TOOLS_ENV),
+    fn guard(keys: &'static [&'static str]) -> Self {
+        let previous = keys
+            .iter()
+            .map(|key| (*key, std::env::var(key).ok()))
+            .collect();
+        Self { keys, previous }
+    }
+
+    fn clear(&self) {
+        for key in self.keys {
+            std::env::remove_var(key);
         }
-        Self { previous }
     }
 }
 
 impl Drop for EnvGuard {
     fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => std::env::set_var(ENABLE_LOCAL_READ_TOOLS_ENV, value),
-            None => std::env::remove_var(ENABLE_LOCAL_READ_TOOLS_ENV),
+        for (key, previous) in &self.previous {
+            match previous {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
         }
     }
 }
@@ -75,7 +84,7 @@ async fn assert_decision(governance: &GovernancePipeline, capability: &str, expe
 }
 
 #[tokio::test]
-async fn default_production_policy_is_deny_by_default_with_repo_only() {
+async fn explicit_false_policy_grants_repo_only_and_denies_read_tools() {
     let governance = build_production_governance(false);
     assert_eq!(
         governance.hook_names(),
@@ -115,22 +124,34 @@ async fn local_read_opt_in_grants_only_filesystem_and_search() {
 }
 
 #[tokio::test]
-async fn env_wrapper_requires_exact_local_read_opt_in() {
+async fn env_wrapper_grants_local_read_tools_by_default_and_honors_disable() {
     let _lock = ENV_LOCK.lock().unwrap();
+    let guard = EnvGuard::guard(&[ENABLE_LOCAL_READ_TOOLS_ENV, DISABLE_LOCAL_READ_TOOLS_ENV]);
 
-    let _unset = EnvGuard::set(None);
+    // Neither knob set: filesystem/search are granted by default (like repo).
+    guard.clear();
     let default = build_production_governance_from_env();
-    assert_decision(&default, "tool.filesystem", Decision::deny("expected deny")).await;
-    drop(_unset);
+    assert_decision(&default, "tool.filesystem", Decision::Allow).await;
+    assert_decision(&default, "tool.search", Decision::Allow).await;
 
-    let _enabled = EnvGuard::set(Some("1"));
+    // Legacy opt-in still works: it is equivalent to the default.
+    std::env::set_var(ENABLE_LOCAL_READ_TOOLS_ENV, "1");
     let enabled = build_production_governance_from_env();
     assert_decision(&enabled, "tool.filesystem", Decision::Allow).await;
-    drop(_enabled);
+    assert_decision(&enabled, "tool.search", Decision::Allow).await;
 
-    let _other = EnvGuard::set(Some("true"));
-    let other = build_production_governance_from_env();
-    assert_decision(&other, "tool.filesystem", Decision::deny("expected deny")).await;
+    // The privacy escape hatch revokes the read tools.
+    std::env::remove_var(ENABLE_LOCAL_READ_TOOLS_ENV);
+    std::env::set_var(DISABLE_LOCAL_READ_TOOLS_ENV, "1");
+    let disabled = build_production_governance_from_env();
+    assert_decision(&disabled, "tool.filesystem", Decision::deny("expected deny")).await;
+    assert_decision(&disabled, "tool.search", Decision::deny("expected deny")).await;
+
+    // Fail-closed: DISABLE wins when both knobs are set.
+    std::env::set_var(ENABLE_LOCAL_READ_TOOLS_ENV, "1");
+    let both = build_production_governance_from_env();
+    assert_decision(&both, "tool.filesystem", Decision::deny("expected deny")).await;
+    assert_decision(&both, "tool.search", Decision::deny("expected deny")).await;
 }
 
 #[tokio::test]

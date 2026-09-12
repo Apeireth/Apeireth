@@ -36,8 +36,12 @@ const SESSION_DB_ENV: &str = "APEIRETH_SESSION_DB";
 const COGNITIVE_JUDGE_ENV: &str = "APEIRETH_COGNITIVE_JUDGE";
 const COGNITIVE_COUNCIL_ENV: &str = "APEIRETH_COGNITIVE_COUNCIL";
 
-/// Enables the local filesystem and search tools in the production policy.
+/// Legacy opt-in for the local filesystem and search tools. Accepted for
+/// compatibility; the tools are granted by default now.
 pub const ENABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_ENABLE_LOCAL_READ_TOOLS";
+/// Privacy escape hatch: when set to `1`, the local filesystem and search
+/// tools are NOT granted, even though they default to on.
+pub const DISABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_DISABLE_LOCAL_READ_TOOLS";
 // 2026-09-08 用户旋钮 (per docs/01-architecture/forget-three-phase-production-spec 同批):
 // shell/fetch 注册 + 策略 grant + require_approval (每次调用仍走人工审批);
 // organs / preference_learning 为认知模块装配旋钮。
@@ -45,6 +49,28 @@ const ENABLE_SHELL_ENV: &str = "APEIRETH_ENABLE_SHELL";
 const ENABLE_FETCH_ENV: &str = "APEIRETH_ENABLE_FETCH";
 const ENABLE_ORGANS_ENV: &str = "APEIRETH_ENABLE_ORGANS";
 const ENABLE_PREFERENCE_LEARNING_ENV: &str = "APEIRETH_ENABLE_PREFERENCE_LEARNING";
+
+/// Resolve the local read-tools switch from the process environment.
+///
+/// Semantics (fail-closed): `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` disables
+/// the tools; the legacy `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` explicitly
+/// enables them; with neither set (or any other value) they default to on.
+/// When both are set to `1`, DISABLE wins.
+fn local_read_tools_enabled_from_env() -> bool {
+    if std::env::var(DISABLE_LOCAL_READ_TOOLS_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+    {
+        return false;
+    }
+    if std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+    {
+        return true;
+    }
+    true
+}
 
 /// Build the production governance policy from an explicit local-read choice.
 ///
@@ -81,21 +107,18 @@ pub fn build_production_governance_parts(
 
 /// Build the production governance policy using the process environment.
 ///
-/// Production is default-deny for capability execution. Only the exact value
-/// `1` enables the two local read tools; shell, fetch, and unknown capabilities
-/// remain denied even if a future plugin registers them.
+/// The local read tools (`tool.filesystem`/`tool.search`) are granted by
+/// default, matching `tool.repo`. `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1`
+/// disables them (privacy escape hatch) and wins over the legacy
+/// `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` opt-in. Shell, fetch, and unknown
+/// capabilities remain denied even if a future plugin registers them.
 pub fn build_production_governance_from_env() -> GovernancePipeline {
-    let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
-        .ok()
-        .is_some_and(|value| value.trim() == "1");
-    build_production_governance(enable_local_read_tools)
+    build_production_governance(local_read_tools_enabled_from_env())
 }
 
 fn build_production_governance_parts_from_env(
 ) -> (GovernancePipeline, Arc<std::sync::Mutex<PermissionPolicy>>) {
-    let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
-        .ok()
-        .is_some_and(|value| value.trim() == "1");
+    let enable_local_read_tools = local_read_tools_enabled_from_env();
     let (pipeline, policy) = build_production_governance_parts(enable_local_read_tools);
 
     // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
@@ -250,9 +273,7 @@ async fn build_canonical_runtime_from_env_with_observability(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
             .map_err(|error| format!("memory governance store open failed: {error}"))?,
     );
-    let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
-        .ok()
-        .is_some_and(|value| value.trim() == "1");
+    let enable_local_read_tools = local_read_tools_enabled_from_env();
     let panel = Arc::new(crate::gateway_panels::CliPanelData::new_with_runtime(
         Arc::clone(&runtime),
         sessions,
@@ -557,9 +578,7 @@ pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, 
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
             .map_err(|error| format!("memory governance store open failed: {error}"))?,
     );
-    let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
-        .ok()
-        .is_some_and(|value| value.trim() == "1");
+    let enable_local_read_tools = local_read_tools_enabled_from_env();
     let panel = Arc::new(crate::gateway_panels::CliPanelData::new_with_runtime(
         Arc::clone(&runtime),
         sessions,
