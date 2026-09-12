@@ -24,11 +24,64 @@ use tokio::sync::Mutex;
 use super::approval::PendingApproval;
 use super::error::{RuntimeError, RuntimeResult};
 
+/// Session-level permission posture applied to subsequent turns.
+///
+/// This is part of the durable session record, not a live runtime policy: it
+/// changes what the agent loop does on the *next* turn, and it never rewrites
+/// an approval that is already in flight.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionPreset {
+    /// Refuse every write/execute tool call with a human-readable explanation.
+    ReadOnly,
+    /// Dangerous tools require human approval (the default behaviour).
+    Standard,
+    /// Dangerous tools are allowed per policy without approval, but keep the
+    /// full audit log.
+    Full,
+}
+
+impl Default for PermissionPreset {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
+/// Durable, session-scoped model and permission settings.
+///
+/// `model: None` means "follow the runtime/global default". `permission_preset`
+/// defaults to [`PermissionPreset::Standard`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionSettings {
+    /// Session-level model override. `None` = follow the global default.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Session-level permission posture for subsequent turns.
+    #[serde(default)]
+    pub permission_preset: PermissionPreset,
+}
+
+impl Default for SessionSettings {
+    fn default() -> Self {
+        Self {
+            model: None,
+            permission_preset: PermissionPreset::Standard,
+        }
+    }
+}
+
 /// One conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     /// Stable identity.
     pub id: SessionId,
+    /// Durable session-scoped settings (model override + permission preset).
+    ///
+    /// `#[serde(default)]` is the on-disk migration path: sessions persisted
+    /// before this field existed deserialize with [`SessionSettings::default`]
+    /// and lose nothing from their transcript or approval history.
+    #[serde(default)]
+    pub settings: SessionSettings,
     /// The transcript, in order. Includes assistant tool-call messages and
     /// tool-result messages, so a resumed session can continue mid-tool-loop.
     pub messages: Vec<NormalizedMessage>,
@@ -59,6 +112,7 @@ impl Session {
             events: Vec::new(),
             approvals: BTreeMap::new(),
             active_approval_id: None,
+            settings: SessionSettings::default(),
             revision: 0,
             created_at: now,
             updated_at: now,
@@ -453,6 +507,31 @@ mod tests {
         assert_eq!(manager.load_or_create(a.id).await.unwrap().len(), 1);
         assert_eq!(manager.load_or_create(b.id).await.unwrap().len(), 0);
         assert_eq!(store.len().await, 2);
+    }
+
+    #[test]
+    fn legacy_session_json_without_settings_migrates_with_defaults_and_no_loss() {
+        // A session persisted before the `settings` field existed: serialize a
+        // real session, strip the new `settings` key, and reload it. The
+        // transcript must survive and settings must fall back to defaults.
+        let clock = clock();
+        let mut session = Session::new(SessionId::new(), clock.as_ref());
+        session.append(NormalizedMessage::user("hello"), clock.as_ref());
+
+        let mut legacy = serde_json::to_value(&session).unwrap();
+        let object = legacy.as_object_mut().expect("session serializes as object");
+        assert!(object.remove("settings").is_some());
+
+        let migrated: Session = serde_json::from_value(legacy).expect("legacy session must load");
+
+        assert_eq!(migrated.settings, SessionSettings::default());
+        assert_eq!(migrated.settings.model, None);
+        assert_eq!(
+            migrated.settings.permission_preset,
+            PermissionPreset::Standard
+        );
+        assert_eq!(migrated.messages.len(), 1, "transcript must survive migration");
+        assert_eq!(migrated.revision, 1);
     }
 
     #[tokio::test]

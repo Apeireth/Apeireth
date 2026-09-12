@@ -27,6 +27,9 @@ pub mod file_fetcher;
 /// Ember HUD 4.0s breath and peripheral vignette glow driver.
 pub mod ember_hud_driver;
 
+/// Session-scoped model + permission settings (`/v1/sessions/{id}/settings`).
+pub mod session_settings;
+
 pub use barge_in::{format_sse_interrupt_event, BargeInController, InterruptReason, StreamHandle};
 pub use duplex_gateway::{DuplexFrame, DuplexSessionController, SentenceDivider};
 pub use ember_hud_driver::{EmberCognitiveStance, EmberHudDriver, EmberShaderUniforms};
