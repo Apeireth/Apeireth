@@ -34,6 +34,41 @@ fn gateway_lock() -> MutexGuard<'static, ()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// Scoped process-env mutation: restores previous values on drop, so tests
+/// that set/clear `APEIRETH_*_DB` cannot leak state into sibling tests.
+struct EnvGuard(Vec<(&'static str, Option<std::ffi::OsString>)>);
+
+impl EnvGuard {
+    fn set(vars: &[(&'static str, &str)]) -> Self {
+        let mut saved = Vec::new();
+        for (key, value) in vars {
+            saved.push((*key, std::env::var_os(key)));
+            std::env::set_var(key, value);
+        }
+        Self(saved)
+    }
+
+    fn clear(keys: &[&'static str]) -> Self {
+        let mut saved = Vec::new();
+        for key in keys {
+            saved.push((*key, std::env::var_os(key)));
+            std::env::remove_var(key);
+        }
+        Self(saved)
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        for (key, value) in self.0.drain(..) {
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
+}
+
 /// Point the child at throwaway sqlite files so a leaked process cannot lock
 /// the developer's checkout `.apeireth/` directory, and so tests do not share
 /// the default relative `sessions.sqlite3` path.
@@ -264,9 +299,13 @@ fn sidecar_stores_land_in_app_data_regardless_of_cwd() {
         return;
     }
     let _guard = gateway_lock();
+    // Sibling tests set absolute APEIRETH_*_DB env vars via isolate_backend_data;
+    // this test must observe the pure app-data anchor path, so clear them for
+    // its duration (restored on drop).
+    let _env = EnvGuard::clear(&["APEIRETH_SESSION_DB", "APEIRETH_COGNITIVE_DB"]);
 
     let app_data = std::env::temp_dir().join(format!(
-        "apeireth-desktop-data-{}",
+        "apeireth-desktop-data-{}-stores",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&app_data);
@@ -308,18 +347,25 @@ fn explicit_env_store_paths_take_priority() {
     let _guard = gateway_lock();
 
     let app_data = std::env::temp_dir().join(format!(
-        "apeireth-desktop-data-{}",
+        "apeireth-desktop-data-{}-envprio",
         std::process::id()
     ));
     let custom = std::env::temp_dir().join(format!(
-        "apeireth-desktop-custom-{}",
+        "apeireth-desktop-custom-{}-envprio",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&app_data);
     let _ = std::fs::remove_dir_all(&custom);
 
-    std::env::set_var("APEIRETH_SESSION_DB", custom.join("sessions.sqlite3"));
-    std::env::set_var("APEIRETH_COGNITIVE_DB", custom.join("cognitive.sqlite3"));
+    let custom_session = custom.join("sessions.sqlite3").to_string_lossy().to_string();
+    let custom_cognitive = custom
+        .join("cognitive.sqlite3")
+        .to_string_lossy()
+        .to_string();
+    let _env = EnvGuard::set(&[
+        ("APEIRETH_SESSION_DB", &custom_session),
+        ("APEIRETH_COGNITIVE_DB", &custom_cognitive),
+    ]);
 
     runtime().block_on(async {
         let supervisor = BackendSupervisor::with_logger_in_dir(app_data.clone())
@@ -347,9 +393,6 @@ fn explicit_env_store_paths_take_priority() {
 
         supervisor.stop().await.expect("cleanup stop");
     });
-
-    std::env::remove_var("APEIRETH_SESSION_DB");
-    std::env::remove_var("APEIRETH_COGNITIVE_DB");
 }
 
 /// The path `watch_for_exit` exists for: a backend that dies after reaching

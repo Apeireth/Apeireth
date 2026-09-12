@@ -174,7 +174,15 @@ async fn build_canonical_runtime_with_parts(
         keyring_bootstrap::build_keyring_resolver();
     builder = builder.with_credentials(resolver);
     let (governance, policy) = build_production_governance_parts_from_env();
-    builder = builder.with_governance(Arc::new(governance));
+    // Session-level permission presets (read_only/standard/full) layer on top
+    // of the production policy. The wrapper reads the session's durable
+    // settings on every capability dispatch and delegates everything else.
+    let preset_governance =
+        apeireth_runtime_assembly::canonical::PermissionPresetGovernanceHook::new(
+            Arc::new(governance),
+            Arc::clone(&session_store),
+        );
+    builder = builder.with_governance(Arc::new(preset_governance));
     builder = builder.with_session_store(session_store);
 
     // The CLI is the composition root. Gateway reuses this function, while

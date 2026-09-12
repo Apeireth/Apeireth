@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use apeireth_core::kernel::CapabilityId;
-use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
+use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest, GovernanceVerdict};
 use apeireth_runtime::canonical::{PermissionPreset, SessionStore};
 use async_trait::async_trait;
 
@@ -60,17 +60,27 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
     }
 
     async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        self.evaluate_verbose(request).await.decision
+    }
+
+    /// Preserve the identity of the deciding hook: delegated decisions keep the
+    /// inner hook's attribution (e.g. `permission_governance`), while preset
+    /// denials and `full`-mode approval rewrites are attributed to this hook.
+    async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
         let Action::CapabilityDispatch { capability, .. } = &request.action else {
-            return self.inner.evaluate(request).await;
+            return self.inner.evaluate_verbose(request).await;
         };
 
         let loaded = match self.sessions.load(&request.session).await {
             Ok(loaded) => loaded,
             // Fail closed: refusing to read settings must never widen access.
             Err(error) => {
-                return Decision::deny(format!(
-                    "无法读取会话权限预设，已拒绝执行 (fail closed): {error}"
-                ));
+                return GovernanceVerdict::new(
+                    self.name(),
+                    Decision::deny(format!(
+                        "无法读取会话权限预设，已拒绝执行 (fail closed): {error}"
+                    )),
+                );
             }
         };
 
@@ -83,17 +93,25 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
 
         match preset {
             PermissionPreset::ReadOnly if is_write_or_execute_capability(capability) => {
-                Decision::deny(format!(
-                    "当前会话为只读权限预设 (read_only)，已拒绝写/执行类工具 {}。如需执行，请将会话权限预设调整为 standard 或 full。",
-                    capability
-                ))
+                GovernanceVerdict::new(
+                    self.name(),
+                    Decision::deny(format!(
+                        "当前会话为只读权限预设 (read_only)，已拒绝写/执行类工具 {}。如需执行，请将会话权限预设调整为 standard 或 full。",
+                        capability
+                    )),
+                )
             }
-            PermissionPreset::Full => match self.inner.evaluate(request).await {
-                Decision::RequireApproval { .. } => Decision::Allow,
-                other => other,
-            },
+            PermissionPreset::Full => {
+                let verdict = self.inner.evaluate_verbose(request).await;
+                match verdict.decision {
+                    Decision::RequireApproval { .. } => {
+                        GovernanceVerdict::new(self.name(), Decision::Allow)
+                    }
+                    _ => verdict,
+                }
+            }
             // `standard` and read-only-but-read-tool keep existing policy.
-            _ => self.inner.evaluate(request).await,
+            _ => self.inner.evaluate_verbose(request).await,
         }
     }
 }

@@ -1108,14 +1108,28 @@ impl BackendSupervisor {
             let workspace_dir = self.workspace_dir.read().await.clone();
             let store_dir = workspace::resolve_store_dir(workspace_dir.as_deref(), Some(&data_dir))
                 .unwrap_or_else(|| data_dir.join("data"));
-            let _ = std::fs::create_dir_all(&store_dir);
 
-            // Explicit env vars are the highest priority; only anchor the
-            // defaults when the user has not exported their own paths.
-            if std::env::var("APEIRETH_SESSION_DB").is_err() {
+            // Explicit ABSOLUTE env vars are the highest priority; anchor the
+            // defaults otherwise. Relative env values (e.g. a stale
+            // `.apeireth/...` left in the inherited environment) are treated
+            // as absent: honoring them would resurrect the 2026-09-28 CWD
+            // boot failure (System32 + relative path = Access Denied).
+            let session_env = std::env::var("APEIRETH_SESSION_DB").ok();
+            let cognitive_env = std::env::var("APEIRETH_COGNITIVE_DB").ok();
+            let anchor_session = session_env.as_deref().is_none_or(|v| !Path::new(v).is_absolute());
+            let anchor_cognitive =
+                cognitive_env.as_deref().is_none_or(|v| !Path::new(v).is_absolute());
+
+            // Only create the store dir when we are actually going to anchor
+            // paths into it: an explicit absolute env store dir is the user's
+            // own location and must not cause app-data side effects.
+            if anchor_session || anchor_cognitive {
+                let _ = std::fs::create_dir_all(&store_dir);
+            }
+            if anchor_session {
                 cmd.env("APEIRETH_SESSION_DB", store_dir.join("sessions.sqlite3"));
             }
-            if std::env::var("APEIRETH_COGNITIVE_DB").is_err() {
+            if anchor_cognitive {
                 cmd.env("APEIRETH_COGNITIVE_DB", store_dir.join("cognitive.sqlite3"));
             }
             cmd.current_dir(&data_dir);
