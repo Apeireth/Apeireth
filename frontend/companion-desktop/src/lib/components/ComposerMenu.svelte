@@ -106,7 +106,7 @@
 {#if open}
   <div class="composer-menu" role="listbox" aria-label="命令与文件">
     {#if items.length === 0}
-      <div class="empty" role="option" aria-disabled="true">无匹配</div>
+      <div class="empty" role="presentation">无匹配</div>
     {:else}
       {#each items as item, index (item.key)}
         <button

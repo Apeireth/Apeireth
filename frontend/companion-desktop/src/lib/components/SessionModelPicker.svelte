@@ -69,7 +69,7 @@
     title={value || '选择模型'}
   >
     <span class="value">{value || '选择模型'}</span>
-    <ChevronDown size={14} class:rotated={open} />
+    <span class="chevron" class:rotated={open}><ChevronDown size={14} /></span>
   </button>
 
   {#if open}
@@ -81,11 +81,11 @@
       </div>
 
       {#if models.length === 0}
-        <div class="empty" role="option" aria-disabled="true">
+        <div class="empty" role="presentation">
           从 /v1/models 加载失败 — 检查密钥配置
         </div>
       {:else if filtered.length === 0}
-        <div class="empty" role="option" aria-disabled="true">无匹配</div>
+        <div class="empty" role="presentation">无匹配</div>
       {:else}
         {#each filtered as model (model.id)}
           <button
@@ -140,12 +140,13 @@
     white-space: nowrap;
     font-family: var(--mono);
   }
-  .trigger svg {
+  .trigger .chevron {
+    display: inline-flex;
     flex: none;
     color: var(--muted);
     transition: transform 0.15s ease;
   }
-  .trigger svg.rotated {
+  .trigger .chevron.rotated {
     transform: rotate(180deg);
   }
   .scrim {
