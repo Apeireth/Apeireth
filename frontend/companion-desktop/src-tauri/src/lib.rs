@@ -9,7 +9,9 @@
 // the Ready transition, crash detection, restart, and owned shutdown only exist
 // at runtime and are exercised from that integration test.
 pub mod backend_supervisor;
+mod keychain;
 mod logging;
+mod workspace;
 
 use backend_supervisor::{
     BackendCapabilityEnv, BackendInfo, BackendProviderEnv, BackendSupervisor,
@@ -70,6 +72,61 @@ async fn apply_backend_config(
     capabilities: Option<BackendCapabilityEnv>,
 ) -> Result<BackendInfo, String> {
     supervisor.apply_backend_config(provider, capabilities).await
+}
+
+/// Fetch the gateway's effective config for the settings UI (wave-2 echo-back).
+#[tauri::command]
+async fn get_gateway_effective_config(
+    supervisor: State<'_, Arc<BackendSupervisor>>,
+) -> Result<serde_json::Value, String> {
+    supervisor.get_gateway_effective_config().await
+}
+
+/// Read a provider key from the OS keychain. `None` when not stored.
+#[tauri::command]
+fn get_provider_key(provider: String) -> Option<String> {
+    keychain::get_provider_key(&provider)
+}
+
+/// Persist a provider key to the OS keychain (never to disk).
+#[tauri::command]
+fn set_provider_key(provider: String, key: String) -> Result<(), String> {
+    keychain::set_provider_key(&provider, &key)
+}
+
+/// Remove a provider key from the OS keychain.
+#[tauri::command]
+fn delete_provider_key(provider: String) -> Result<(), String> {
+    keychain::delete_provider_key(&provider)
+}
+
+/// Whether a provider key is currently stored.
+#[tauri::command]
+fn has_provider_key(provider: String) -> bool {
+    keychain::has_provider_key(&provider)
+}
+
+/// The current workspace directory, or an empty string when unset.
+#[tauri::command]
+async fn get_workspace_dir(supervisor: State<'_, Arc<BackendSupervisor>>) -> Result<String, String> {
+    Ok(supervisor.get_workspace_dir().await)
+}
+
+/// Validate, persist and apply a workspace directory, returning the new value.
+#[tauri::command]
+async fn set_workspace_dir(
+    supervisor: State<'_, Arc<BackendSupervisor>>,
+    dir: String,
+) -> Result<String, String> {
+    supervisor.set_workspace_dir(dir).await
+}
+
+/// Common workspace candidates: home, documents, desktop, last-used.
+#[tauri::command]
+async fn list_workspace_suggestions(
+    supervisor: State<'_, Arc<BackendSupervisor>>,
+) -> Result<Vec<String>, String> {
+    Ok(supervisor.list_workspace_suggestions().await)
 }
 
 #[tauri::command]
@@ -185,6 +242,14 @@ pub fn run() {
             restart_backend,
             apply_backend_provider_env,
             apply_backend_config,
+            get_gateway_effective_config,
+            get_provider_key,
+            set_provider_key,
+            delete_provider_key,
+            has_provider_key,
+            get_workspace_dir,
+            set_workspace_dir,
+            list_workspace_suggestions,
             get_log_directory,
             open_log_directory,
             open_settings,
