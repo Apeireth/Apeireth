@@ -21,6 +21,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 
+use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::events::{events_handler, EventBus, GatewayEvent};
 use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
 
@@ -400,7 +401,7 @@ struct ModelListResponse {
 
 #[derive(Debug, Serialize)]
 struct ErrorBody {
-    error: String,
+    error: ErrorFrame,
     #[serde(skip_serializing_if = "Option::is_none")]
     session_id: Option<String>,
 }
@@ -852,8 +853,9 @@ async fn openai_chat_streaming(
                 }
             }
             Err(error) => {
+                let (_, code) = classify_runtime_error(&error);
                 let frame = serde_json::json!({
-                    "error": error.to_string(),
+                    "error": ErrorFrame::new(code, error.to_string()),
                     "session_id": session.to_string(),
                 });
                 if let Ok(json) = serde_json::to_string(&frame) {
@@ -880,29 +882,66 @@ async fn openai_chat_streaming(
 }
 
 fn http_error(error: CanonicalEntryError, session: Option<SessionId>) -> HttpError {
-    let status = match &error {
-        CanonicalEntryError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-        CanonicalEntryError::Runtime(RuntimeError::Denied { .. }) => StatusCode::FORBIDDEN,
-        CanonicalEntryError::Runtime(RuntimeError::ApprovalRequired { .. })
-        | CanonicalEntryError::Runtime(RuntimeError::SessionApprovalPending { .. }) => {
-            StatusCode::CONFLICT
-        }
-        CanonicalEntryError::Runtime(RuntimeError::NoProvider { .. })
-        | CanonicalEntryError::Runtime(RuntimeError::NoHealthyProvider { .. })
-        | CanonicalEntryError::Runtime(RuntimeError::Misconfigured(_)) => {
-            StatusCode::SERVICE_UNAVAILABLE
-        }
-        CanonicalEntryError::Runtime(RuntimeError::Provider(_))
-        | CanonicalEntryError::Runtime(RuntimeError::ProvidersExhausted { .. }) => {
-            StatusCode::BAD_GATEWAY
-        }
-        CanonicalEntryError::Runtime(_) => StatusCode::INTERNAL_SERVER_ERROR,
-    };
+    let (status, code) = classify_entry_error(&error);
     (
         status,
         Json(ErrorBody {
-            error: error.to_string(),
+            error: ErrorFrame::new(code, error.to_string()),
             session_id: session.map(|id| id.to_string()),
         }),
     )
+}
+
+fn classify_entry_error(error: &CanonicalEntryError) -> (StatusCode, ErrorCode) {
+    match error {
+        CanonicalEntryError::InvalidRequest(_) => {
+            (StatusCode::BAD_REQUEST, ErrorCode::InvalidRequest)
+        }
+        CanonicalEntryError::Runtime(runtime) => classify_runtime_error(runtime),
+    }
+}
+
+fn classify_runtime_error(error: &RuntimeError) -> (StatusCode, ErrorCode) {
+    match error {
+        RuntimeError::Provider(provider) => (
+            StatusCode::BAD_GATEWAY,
+            provider_code(&provider.to_string()),
+        ),
+        RuntimeError::ProvidersExhausted { source, .. } => (
+            StatusCode::BAD_GATEWAY,
+            provider_code(&source.to_string()),
+        ),
+        RuntimeError::NoProvider { .. } | RuntimeError::NoHealthyProvider { .. } => {
+            (StatusCode::SERVICE_UNAVAILABLE, ErrorCode::ProviderUnreachable)
+        }
+        RuntimeError::Misconfigured(_) => (StatusCode::SERVICE_UNAVAILABLE, ErrorCode::Internal),
+        RuntimeError::Denied { .. } => (StatusCode::FORBIDDEN, ErrorCode::InvalidRequest),
+        RuntimeError::ApprovalRequired { .. } | RuntimeError::SessionApprovalPending { .. } => {
+            (StatusCode::CONFLICT, ErrorCode::InvalidRequest)
+        }
+        _ => (StatusCode::INTERNAL_SERVER_ERROR, ErrorCode::Internal),
+    }
+}
+
+/// Classify a provider failure from its human-readable rendering.
+///
+/// The gateway crate has no regular dependency on `apeireth_plugin` (where
+/// `ProviderError` is declared), so it cannot destructure the error type. It
+/// reads the stable `Display` wording instead and preserves the full text in
+/// the frame `message`.
+fn provider_code(text: &str) -> ErrorCode {
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("rate limited") {
+        ErrorCode::RateLimited
+    } else if lower.contains("timed out") || lower.contains("network error") {
+        ErrorCode::ProviderUnreachable
+    } else if lower.contains("authentication failed") {
+        if lower.contains("missing") {
+            ErrorCode::AuthMissingKey
+        } else {
+            ErrorCode::AuthInvalidKey
+        }
+    } else {
+        ErrorCode::ProviderError
+    }
 }

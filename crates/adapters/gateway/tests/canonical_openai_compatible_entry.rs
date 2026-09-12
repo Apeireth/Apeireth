@@ -191,7 +191,7 @@ async fn the_gateway_reports_an_openai_compatible_missing_credential_as_unavaila
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let err = body["error"].as_str().unwrap_or("");
+    let err = body["error"]["message"].as_str().unwrap_or("");
     assert!(
         err.contains("api_key") || err.contains("auth"),
         "the error must name the credential problem: {err}"
