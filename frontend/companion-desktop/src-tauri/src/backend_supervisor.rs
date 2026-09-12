@@ -13,7 +13,9 @@
 //! - Expose safe state to frontend
 //! - Graceful shutdown on app exit
 
+use crate::keychain;
 use crate::logging::{DesktopLogger, LogLevel};
+use crate::workspace;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -157,6 +159,29 @@ impl BackendProviderEnv {
             ..self.clone()
         }
     }
+
+    /// Fill missing key fields from the OS keychain (or any injected lookup).
+    ///
+    /// Priority is `env > keychain`: a key already present in memory (from a
+    /// settings save this session) wins; only absent fields fall back to the
+    /// keychain, so a fresh launch restores persisted keys without touching
+    /// endpoints/models. The lookup is injected so the merge is unit-testable
+    /// without touching the real OS credential store.
+    pub fn with_keychain_fallback(
+        mut self,
+        mut lookup: impl FnMut(&str) -> Option<String>,
+    ) -> Self {
+        if self.openai_api_key.is_none() {
+            self.openai_api_key = lookup(keychain::PROVIDER_OPENAI);
+        }
+        if self.minimax_api_key.is_none() {
+            self.minimax_api_key = lookup(keychain::PROVIDER_MINIMAX);
+        }
+        if self.anthropic_api_key.is_none() {
+            self.anthropic_api_key = lookup(keychain::PROVIDER_ANTHROPIC);
+        }
+        self
+    }
 }
 
 /// Advanced-capability toggles the desktop injects into the sidecar.
@@ -210,6 +235,81 @@ impl BackendCapabilityEnv {
     }
 }
 
+/// Body for the gateway's hot-config endpoint (`POST /v1/admin/config`).
+///
+/// The canonical gateway may serve this endpoint to hot-apply configuration
+/// without a process restart; older gateways return 404/405, which the caller
+/// turns back into the legacy restart path.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct AdminConfigRequest {
+    provider: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    model: Option<String>,
+    capabilities: BackendCapabilityEnv,
+}
+
+impl AdminConfigRequest {
+    /// Build the request from the merged provider env + capability toggles.
+    ///
+    /// Only the active provider family is emitted. When several families are
+    /// populated, the first in struct order wins (openai > minimax > anthropic).
+    fn from_env(provider: &BackendProviderEnv, capabilities: &BackendCapabilityEnv) -> Self {
+        let (name, base_url, api_key, model) = if provider.openai_api_key.is_some()
+            || provider.openai_url.is_some()
+            || provider.openai_models.is_some()
+        {
+            (
+                Some(keychain::PROVIDER_OPENAI),
+                provider.openai_url.clone(),
+                provider.openai_api_key.clone(),
+                provider.openai_models.clone(),
+            )
+        } else if provider.minimax_api_key.is_some()
+            || provider.minimax_url.is_some()
+            || provider.minimax_models.is_some()
+        {
+            (
+                Some(keychain::PROVIDER_MINIMAX),
+                provider.minimax_url.clone(),
+                provider.minimax_api_key.clone(),
+                provider.minimax_models.clone(),
+            )
+        } else if provider.anthropic_api_key.is_some()
+            || provider.anthropic_url.is_some()
+            || provider.anthropic_models.is_some()
+        {
+            (
+                Some(keychain::PROVIDER_ANTHROPIC),
+                provider.anthropic_url.clone(),
+                provider.anthropic_api_key.clone(),
+                provider.anthropic_models.clone(),
+            )
+        } else {
+            (None, None, None, None)
+        };
+
+        Self {
+            provider: name.map(str::to_string),
+            base_url,
+            api_key,
+            model,
+            capabilities: capabilities.clone(),
+        }
+    }
+}
+
+/// Outcome of a gateway hot-config apply attempt.
+enum HotApply {
+    /// The gateway accepted the config; no restart is needed.
+    Applied,
+    /// The gateway does not support `/v1/admin/config` (404/405) — old build.
+    Unsupported,
+    /// The request failed for another reason (network / server error).
+    Failed(String),
+}
+
 impl Default for BackendInfo {
     fn default() -> Self {
         Self {
@@ -240,16 +340,18 @@ pub struct BackendSupervisor {
     logger: Option<Arc<DesktopLogger>>,
     provider_env: RwLock<BackendProviderEnv>,
     capability_env: RwLock<BackendCapabilityEnv>,
+    workspace_dir: RwLock<Option<PathBuf>>,
 }
 
 impl BackendSupervisor {
     /// Base constructor. Production always attaches a logger via
     /// [`Self::with_logger`]; tests use `build(None)` when no log file is wanted.
     fn build(logger: Option<Arc<DesktopLogger>>) -> Self {
-        // Restore the persisted non-secret provider config (endpoints/models)
-        // and capability toggles so the very first spawn already reflects the
-        // user's last settings. Keys are deliberately NOT persisted; they
-        // arrive per session over IPC from the Settings UI.
+        // Restore the persisted non-secret provider config (endpoints/models),
+        // capability toggles, and workspace dir so the very first spawn already
+        // reflects the user's last settings. Keys are deliberately NOT persisted
+        // to the app-data config; they live in memory for the session and are
+        // otherwise restored from the OS keychain at spawn (env > keychain).
         let persisted_provider = logger
             .as_ref()
             .and_then(|l| Self::load_persisted_provider_env(l))
@@ -259,12 +361,17 @@ impl BackendSupervisor {
             .as_ref()
             .and_then(|l| Self::load_persisted_capability_env(l))
             .unwrap_or_default();
+        let persisted_workspace = logger
+            .as_ref()
+            .map(|l| Self::logger_app_data_dir(l))
+            .and_then(|dir| workspace::load_workspace_dir(&dir));
         Self {
             info: Arc::new(RwLock::new(BackendInfo::default())),
             process: Arc::new(RwLock::new(None)),
             logger,
             provider_env: RwLock::new(persisted_provider),
             capability_env: RwLock::new(persisted_capabilities),
+            workspace_dir: RwLock::new(persisted_workspace),
         }
     }
 
@@ -272,13 +379,16 @@ impl BackendSupervisor {
     /// `None` for logger-less test supervisors, where tests control the
     /// sidecar's store paths through their own environment.
     fn app_data_dir(&self) -> Option<PathBuf> {
-        self.logger.as_ref().map(|logger| {
-            logger
-                .log_directory()
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_else(|| logger.log_directory().to_path_buf())
-        })
+        self.logger.as_ref().map(|l| Self::logger_app_data_dir(l))
+    }
+
+    /// The directory that owns the logs and every app-data config file.
+    fn logger_app_data_dir(logger: &DesktopLogger) -> PathBuf {
+        logger
+            .log_directory()
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| logger.log_directory().to_path_buf())
     }
 
     /// App-data file for the non-secret part of the provider environment.
@@ -619,14 +729,18 @@ impl BackendSupervisor {
     ///
     /// Stores both (keys in memory only; endpoints/models and toggles also
     /// persisted for the next launch) and makes a running backend pick the
-    /// changes up with a single restart when anything changed:
+    /// changes up. The single IPC call stays a single application:
     ///
-    /// - `Ready`: restart with the new environment;
+    /// - `Ready`: hot-apply via `POST /v1/admin/config` when the gateway
+    ///   supports it; a pre-admin gateway (404/405) falls back to the legacy
+    ///   whole-process restart;
     /// - `Starting`/`Stopping`: wait for the in-flight transition to settle,
-    ///   then restart/start so the change is deterministically applied;
+    ///   then hot-apply/restart or start so the change is deterministically
+    ///   applied;
     /// - `Failed`: start again with the new environment (a configuration fix
     ///   is exactly what should recover a failed boot);
-    /// - `Stopped`: store only — the next `start()` uses it.
+    /// - `Stopped`: start with the new environment (applying a config implies
+    ///   the sidecar should be running).
     ///
     /// An unchanged configuration is a no-op (no restart), so a settings save
     /// that only touched UI state never bounces the gateway.
@@ -673,9 +787,11 @@ impl BackendSupervisor {
 
         let state = self.info.read().await.state.clone();
         match state {
-            BackendState::Stopped => {}
+            BackendState::Stopped => {
+                self.start().await?;
+            }
             BackendState::Ready => {
-                self.restart().await?;
+                self.apply_to_ready_gateway().await?;
             }
             BackendState::Failed => {
                 self.start().await?;
@@ -685,7 +801,7 @@ impl BackendSupervisor {
                 let settled = self.info.read().await.state.clone();
                 match settled {
                     BackendState::Ready => {
-                        self.restart().await?;
+                        self.apply_to_ready_gateway().await?;
                     }
                     BackendState::Stopped | BackendState::Failed => {
                         self.start().await?;
@@ -695,6 +811,134 @@ impl BackendSupervisor {
             }
         }
         Ok(self.info().await)
+    }
+
+    /// Apply the current config to a gateway that is already `Ready`: hot-apply
+    /// first, then fall back to the legacy restart when the gateway has no
+    /// admin-config endpoint (or the hot apply fails for any reason).
+    async fn apply_to_ready_gateway(&self) -> Result<(), String> {
+        match self.try_hot_apply().await {
+            HotApply::Applied => {
+                self.log_desktop(LogLevel::Info, "backend.hot_apply applied");
+                Ok(())
+            }
+            HotApply::Unsupported => {
+                self.log_desktop(
+                    LogLevel::Info,
+                    "backend.hot_apply unsupported (pre-admin gateway); restarting",
+                );
+                self.restart().await.map(|_| ())
+            }
+            HotApply::Failed(error) => {
+                self.log_desktop(
+                    LogLevel::Warn,
+                    &format!("backend.hot_apply failed ({error}); restarting"),
+                );
+                self.restart().await.map(|_| ())
+            }
+        }
+    }
+
+    /// POST the current config to `{endpoint}/v1/admin/config`.
+    async fn try_hot_apply(&self) -> HotApply {
+        let Some(endpoint) = self.info.read().await.endpoint.clone() else {
+            return HotApply::Failed("gateway endpoint not available".to_string());
+        };
+        let provider_env = self.provider_env.read().await.clone();
+        let provider_env =
+            provider_env.with_keychain_fallback(|provider| keychain::get_provider_key(provider));
+        let capabilities = self.capability_env.read().await.clone();
+        let payload = AdminConfigRequest::from_env(&provider_env, &capabilities);
+        let url = format!("{endpoint}/v1/admin/config");
+
+        let client = match reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+        {
+            Ok(client) => client,
+            Err(error) => return HotApply::Failed(format!("client build failed: {error}")),
+        };
+
+        match client.post(&url).json(&payload).send().await {
+            Ok(response) if response.status().is_success() => HotApply::Applied,
+            Ok(response)
+                if response.status() == reqwest::StatusCode::NOT_FOUND
+                    || response.status() == reqwest::StatusCode::METHOD_NOT_ALLOWED =>
+            {
+                HotApply::Unsupported
+            }
+            Ok(response) => HotApply::Failed(format!("HTTP {}", response.status())),
+            Err(error) => HotApply::Failed(error.to_string()),
+        }
+    }
+
+    /// Fetch the gateway's effective config (`GET /v1/admin/config`) and pass
+    /// the JSON body through for the settings UI to echo back.
+    pub async fn get_gateway_effective_config(&self) -> Result<serde_json::Value, String> {
+        let endpoint = self
+            .info
+            .read()
+            .await
+            .endpoint
+            .clone()
+            .ok_or_else(|| "gateway not running".to_string())?;
+        let url = format!("{endpoint}/v1/admin/config");
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .map_err(|e| format!("failed to build admin client: {e}"))?;
+        let response = client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("gateway admin config request failed: {e}"))?;
+
+        if response.status().is_success() {
+            response
+                .json::<serde_json::Value>()
+                .await
+                .map_err(|e| format!("gateway admin config returned invalid JSON: {e}"))
+        } else {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            Err(format!("gateway admin config unavailable (HTTP {status}): {body}"))
+        }
+    }
+
+    /// The current workspace directory, or an empty string when unset.
+    pub async fn get_workspace_dir(&self) -> String {
+        self.workspace_dir
+            .read()
+            .await
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default()
+    }
+
+    /// Validate, persist and apply a workspace directory, returning the new
+    /// (normalized) value.
+    pub async fn set_workspace_dir(&self, dir: String) -> Result<String, String> {
+        let raw = PathBuf::from(dir.trim());
+        if raw.as_os_str().is_empty() {
+            return Err("workspace directory must not be empty".to_string());
+        }
+        let normalized = workspace::normalize_dir(&raw);
+        workspace::ensure_writable_dir(&normalized)?;
+
+        // The path is non-secret, so plain JSON under app-data is fine.
+        if let Some(app_data) = self.app_data_dir() {
+            workspace::persist_workspace_dir(&app_data, &normalized)?;
+        }
+
+        let value = normalized.to_string_lossy().to_string();
+        *self.workspace_dir.write().await = Some(normalized);
+        Ok(value)
+    }
+
+    /// Common workspace candidates: home, documents, desktop, last-used.
+    pub async fn list_workspace_suggestions(&self) -> Vec<String> {
+        let last = self.workspace_dir.read().await.clone();
+        workspace::workspace_suggestions(last.as_deref())
     }
 
     /// Wait until the state machine leaves its transitional states.
@@ -837,7 +1081,11 @@ impl BackendSupervisor {
         // Inject the Settings-UI provider configuration as the child's
         // environment. This is the packaged-desktop equivalent of the user
         // exporting provider env vars before running `apeireth gateway serve`.
+        // Priority: in-memory env > OS keychain (env wins when a key was pushed
+        // this session; the keychain restores it on later launches).
         let provider_env = self.provider_env.read().await.clone();
+        let provider_env =
+            provider_env.with_keychain_fallback(|provider| keychain::get_provider_key(provider));
         for (key, value) in provider_env.env_pairs() {
             cmd.env(key, value);
         }
@@ -848,8 +1096,8 @@ impl BackendSupervisor {
             cmd.env(key, value);
         }
 
-        // Anchor the sidecar's persistent stores to absolute app-data paths
-        // and pin its working directory there. The canonical CLI defaults its
+        // Anchor the sidecar's persistent stores to absolute paths and pin its
+        // working directory to app-data. The canonical CLI defaults its
         // session/cognitive DBs to RELATIVE `.apeireth/...` paths, which break
         // when the desktop is launched from a non-writable CWD (Start-menu
         // shortcuts run with CWD = System32 → "failed to create parent
@@ -857,10 +1105,19 @@ impl BackendSupervisor {
         // boot failure, 2026-09-28). With a logger attached (production),
         // app data = the directory that owns `logs/`.
         if let Some(data_dir) = self.app_data_dir() {
-            let store_dir = data_dir.join("data");
+            let workspace_dir = self.workspace_dir.read().await.clone();
+            let store_dir = workspace::resolve_store_dir(workspace_dir.as_deref(), Some(&data_dir))
+                .unwrap_or_else(|| data_dir.join("data"));
             let _ = std::fs::create_dir_all(&store_dir);
-            cmd.env("APEIRETH_SESSION_DB", store_dir.join("sessions.sqlite3"));
-            cmd.env("APEIRETH_COGNITIVE_DB", store_dir.join("cognitive.sqlite3"));
+
+            // Explicit env vars are the highest priority; only anchor the
+            // defaults when the user has not exported their own paths.
+            if std::env::var("APEIRETH_SESSION_DB").is_err() {
+                cmd.env("APEIRETH_SESSION_DB", store_dir.join("sessions.sqlite3"));
+            }
+            if std::env::var("APEIRETH_COGNITIVE_DB").is_err() {
+                cmd.env("APEIRETH_COGNITIVE_DB", store_dir.join("cognitive.sqlite3"));
+            }
             cmd.current_dir(&data_dir);
         }
 
@@ -1102,6 +1359,72 @@ mod tests {
         assert!(json.contains("\"openai_models\":\"deepseek-v4-flash\""), "{json}");
         let round: BackendProviderEnv = serde_json::from_str(&json).unwrap();
         assert_eq!(round, env);
+    }
+
+    #[test]
+    fn provider_env_keychain_fallback_env_wins_over_keychain() {
+        let env = BackendProviderEnv {
+            openai_api_key: Some("sk-env".into()),
+            ..Default::default()
+        };
+        let merged = env.with_keychain_fallback(|provider| Some(format!("sk-keychain-{provider}")));
+        assert_eq!(merged.openai_api_key.as_deref(), Some("sk-env"));
+        assert_eq!(
+            merged.minimax_api_key.as_deref(),
+            Some("sk-keychain-minimax")
+        );
+        assert_eq!(
+            merged.anthropic_api_key.as_deref(),
+            Some("sk-keychain-anthropic")
+        );
+    }
+
+    #[test]
+    fn provider_env_keychain_fallback_fills_missing_keys_only() {
+        let env = BackendProviderEnv {
+            minimax_url: Some("https://api.minimax.chat/v1".into()),
+            ..Default::default()
+        };
+        let merged = env.with_keychain_fallback(|provider| match provider {
+            keychain::PROVIDER_OPENAI => Some("sk-oai".into()),
+            keychain::PROVIDER_MINIMAX => Some("sk-mm".into()),
+            keychain::PROVIDER_ANTHROPIC => Some("sk-ant".into()),
+            _ => None,
+        });
+        assert_eq!(merged.openai_api_key.as_deref(), Some("sk-oai"));
+        assert_eq!(merged.minimax_api_key.as_deref(), Some("sk-mm"));
+        assert_eq!(merged.anthropic_api_key.as_deref(), Some("sk-ant"));
+        assert_eq!(
+            merged.minimax_url.as_deref(),
+            Some("https://api.minimax.chat/v1"),
+            "non-key fields must pass through unchanged"
+        );
+    }
+
+    #[test]
+    fn admin_config_request_emits_active_provider_fields() {
+        let provider = BackendProviderEnv {
+            openai_api_key: Some("sk-oai".into()),
+            openai_url: Some("https://api.deepseek.com/v1".into()),
+            openai_models: Some("deepseek-v4-flash".into()),
+            ..Default::default()
+        };
+        let caps = BackendCapabilityEnv {
+            enable_shell: true,
+            ..Default::default()
+        };
+        let request = AdminConfigRequest::from_env(&provider, &caps);
+        assert_eq!(request.provider.as_deref(), Some("openai"));
+        assert_eq!(request.base_url.as_deref(), Some("https://api.deepseek.com/v1"));
+        assert_eq!(request.api_key.as_deref(), Some("sk-oai"));
+        assert_eq!(request.model.as_deref(), Some("deepseek-v4-flash"));
+        assert!(request.capabilities.enable_shell);
+
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("\"provider\":\"openai\""), "{json}");
+        assert!(json.contains("\"base_url\""), "{json}");
+        assert!(json.contains("\"api_key\":\"sk-oai\""), "{json}");
+        assert!(json.contains("\"capabilities\""), "{json}");
     }
 
     /// Capability env names must match the canonical CLI knobs, and the

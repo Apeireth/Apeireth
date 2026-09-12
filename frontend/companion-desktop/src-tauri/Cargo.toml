@@ -24,7 +24,9 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+# OS keychain persistence (Windows Credential Manager, macOS Keychain, Linux Secret Service).
+keyring = "3.6.3"
 # Workspace policy (clippy.toml): fs_err over std::fs for path-carrying errors.
 fs-err = "3.0"
 

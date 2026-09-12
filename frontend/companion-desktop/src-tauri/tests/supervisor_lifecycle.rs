@@ -254,10 +254,9 @@ fn capability_env_reaches_the_backend() {
 /// Regression for the 2026-09-28 real-world boot failure: the sidecar must
 /// never resolve its default relative `.apeireth/...` store paths against the
 /// launch CWD (Start-menu launches run with CWD = System32, where creating
-/// `.apeireth` fails with Access Denied). With a logger attached, the
-/// supervisor injects absolute app-data store paths and pins the child's CWD;
-/// this test proves the stores actually land there even while stale store
-/// paths linger in the inherited environment.
+/// `.apeireth` fails with Access Denied). With a logger attached and no
+/// explicit `APEIRETH_*_DB` env, the supervisor injects absolute app-data store
+/// paths and pins the child's CWD; this test proves the stores land there.
 #[test]
 fn sidecar_stores_land_in_app_data_regardless_of_cwd() {
     if !backend_available() {
@@ -271,15 +270,6 @@ fn sidecar_stores_land_in_app_data_regardless_of_cwd() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&app_data);
-    // Stale inherited values must NOT win over the injected app-data anchors.
-    std::env::set_var(
-        "APEIRETH_SESSION_DB",
-        app_data.join("stale").join("sessions.sqlite3"),
-    );
-    std::env::set_var(
-        "APEIRETH_COGNITIVE_DB",
-        app_data.join("stale").join("cognitive.sqlite3"),
-    );
 
     runtime().block_on(async {
         let supervisor = BackendSupervisor::with_logger_in_dir(app_data.clone())
@@ -301,14 +291,65 @@ fn sidecar_stores_land_in_app_data_regardless_of_cwd() {
             cognitive.is_file(),
             "cognitive store must land in app data: {cognitive:?}"
         );
+
+        supervisor.stop().await.expect("cleanup stop");
+    });
+}
+
+/// Explicit `APEIRETH_SESSION_DB` / `APEIRETH_COGNITIVE_DB` env vars are the
+/// highest-priority store paths: even with a logger attached (which would
+/// otherwise anchor app-data), the child must use the user-provided paths.
+#[test]
+fn explicit_env_store_paths_take_priority() {
+    if !backend_available() {
+        eprintln!("SKIP: no canonical backend build found");
+        return;
+    }
+    let _guard = gateway_lock();
+
+    let app_data = std::env::temp_dir().join(format!(
+        "apeireth-desktop-data-{}",
+        std::process::id()
+    ));
+    let custom = std::env::temp_dir().join(format!(
+        "apeireth-desktop-custom-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&app_data);
+    let _ = std::fs::remove_dir_all(&custom);
+
+    std::env::set_var("APEIRETH_SESSION_DB", custom.join("sessions.sqlite3"));
+    std::env::set_var("APEIRETH_COGNITIVE_DB", custom.join("cognitive.sqlite3"));
+
+    runtime().block_on(async {
+        let supervisor = BackendSupervisor::with_logger_in_dir(app_data.clone())
+            .expect("production-shaped supervisor in temp dir");
+        supervisor
+            .start()
+            .await
+            .expect("backend should start with explicit env store paths");
+        assert_eq!(supervisor.info().await.state, BackendState::Ready);
+
         assert!(
-            !app_data.join("stale").exists(),
-            "stale inherited paths must not receive stores: {:?}",
-            app_data.join("stale")
+            custom.join("sessions.sqlite3").is_file(),
+            "explicit APEIRETH_SESSION_DB must win: {:?}",
+            custom.join("sessions.sqlite3")
+        );
+        assert!(
+            custom.join("cognitive.sqlite3").is_file(),
+            "explicit APEIRETH_COGNITIVE_DB must win"
+        );
+        assert!(
+            !app_data.join("data").exists(),
+            "app-data anchors must not be used when explicit env is set: {:?}",
+            app_data.join("data")
         );
 
         supervisor.stop().await.expect("cleanup stop");
     });
+
+    std::env::remove_var("APEIRETH_SESSION_DB");
+    std::env::remove_var("APEIRETH_COGNITIVE_DB");
 }
 
 /// The path `watch_for_exit` exists for: a backend that dies after reaching
