@@ -301,6 +301,15 @@ pub trait GovernanceHook: Send + Sync {
         GovernanceVerdict::new(self.name(), self.evaluate(request).await)
             .with_owner(self.owner().cloned())
     }
+
+    /// Notification that a human approved one pending approval.
+    ///
+    /// Called exactly once when the runtime consumes an `Approved` decision for
+    /// a `(session, capability)` pair. The default is a no-op so hooks that do
+    /// not keep session-scoped approval memory need not know this callback
+    /// exists. Implementations that do keep memory use it to suppress a later
+    /// identical approval prompt in the same session.
+    fn approval_resolved(&self, _session: &SessionId, _capability: &CapabilityId) {}
 }
 
 /// Allows everything.
@@ -475,6 +484,16 @@ impl GovernanceHook for GovernancePipeline {
         }
         GovernanceVerdict::new(self.name(), Decision::Allow)
     }
+
+    fn approval_resolved(&self, session: &SessionId, capability: &CapabilityId) {
+        // A resolved approval is a broadcast, not a decision: every inner hook
+        // gets the notification so session-scoped memory is populated wherever
+        // it lives. The default implementation is a no-op and must not abort
+        // the loop, so errors are not surfaced here.
+        for hook in &self.hooks {
+            hook.approval_resolved(session, capability);
+        }
+    }
 }
 
 impl GovernancePipeline {
@@ -490,6 +509,26 @@ impl GovernancePipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct CountingApprovalHook {
+        approvals: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl GovernanceHook for CountingApprovalHook {
+        fn name(&self) -> &str {
+            "counting_approval"
+        }
+
+        async fn evaluate(&self, _request: &GovernanceRequest<'_>) -> Decision {
+            Decision::Allow
+        }
+
+        fn approval_resolved(&self, _session: &SessionId, _capability: &CapabilityId) {
+            self.approvals.fetch_add(1, Ordering::SeqCst);
+        }
+    }
 
     struct OwnedDeny {
         owner: PluginId,
@@ -644,6 +683,27 @@ mod tests {
             .await;
         assert!(verdict.is_allowed());
         assert_eq!(verdict.hook, "pipeline");
+    }
+
+    #[test]
+    fn approval_resolved_is_forwarded_to_every_inner_hook() {
+        let approvals = Arc::new(AtomicUsize::new(0));
+        let pipeline = GovernancePipeline::new()
+            .with(Arc::new(CountingApprovalHook {
+                approvals: approvals.clone(),
+            }))
+            .with(Arc::new(CountingApprovalHook {
+                approvals: approvals.clone(),
+            }))
+            .with(Arc::new(CountingApprovalHook {
+                approvals: approvals.clone(),
+            }));
+
+        let session = SessionId::new();
+        let capability = CapabilityId::new("tool.shell").unwrap();
+        pipeline.approval_resolved(&session, &capability);
+
+        assert_eq!(approvals.load(Ordering::SeqCst), 3);
     }
 
     #[tokio::test]
