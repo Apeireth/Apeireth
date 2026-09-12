@@ -27,6 +27,11 @@ import type {
   ApprovalRequestItem,
   CapabilityManifest,
   Capability,
+  ModelInfo,
+  ErrorCode,
+  ApiErrorFrame,
+  SessionSettings,
+  AdminConfigPatch,
 } from './types';
 import {DEFAULT_CAPABILITY_TOGGLES} from './types.ts';
 import {recordCallLog} from './call-logger.ts';
@@ -276,11 +281,88 @@ export function classifyHttpError(status: number): RuntimeError['code'] {
 
 export class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** 后端错误帧 code (ApiErrorFrame.code), 无则为 undefined. */
+  code?: string;
+  /** 后端错误帧 solution (ApiErrorFrame.solution), 无则为 undefined. */
+  solution?: string;
+  constructor(status: number, message: string, code?: string, solution?: string) {
     super(message);
     this.name = 'HttpError';
     this.status = status;
+    if (code !== undefined) this.code = code;
+    if (solution !== undefined) this.solution = solution;
   }
+}
+
+/**
+ * 从后端错误体解析 ApiErrorFrame. 兼容三种常见形状:
+ *   {message, code?, solution?}
+ *   {error: {message, code?, solution?}}
+ *   {error: '字符串消息'}
+ */
+function extractErrorFrame(value: unknown): ApiErrorFrame | null {
+  if (!value || typeof value !== 'object') return null;
+  const root = value as Record<string, unknown>;
+  const message = root.message;
+  if (typeof message === 'string' && message.trim()) {
+    const frame: ApiErrorFrame = {message};
+    if (typeof root.code === 'string') frame.code = root.code as ErrorCode;
+    if (typeof root.solution === 'string') frame.solution = root.solution;
+    return frame;
+  }
+  const error = root.error;
+  if (typeof error === 'string' && error.trim()) {
+    return {message: error};
+  }
+  if (error && typeof error === 'object') {
+    const nested = error as Record<string, unknown>;
+    if (typeof nested.message === 'string' && nested.message.trim()) {
+      const frame: ApiErrorFrame = {message: nested.message};
+      if (typeof nested.code === 'string') frame.code = nested.code as ErrorCode;
+      if (typeof nested.solution === 'string') frame.solution = nested.solution;
+      return frame;
+    }
+  }
+  return null;
+}
+
+/** 把 (status, raw body text) 解析为携带 code/solution 的 HttpError. */
+function httpErrorFromText(status: number, text: string, label: string): HttpError {
+  let parsed: unknown = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    parsed = null;
+  }
+  const frame = extractErrorFrame(parsed);
+  const detail = frame?.message || text.slice(0, 300);
+  return new HttpError(status, `${label}${detail}`, frame?.code, frame?.solution);
+}
+
+const GENERIC_ERROR_SOLUTION = {
+  title: '出错了',
+  solution: '请重试, 若持续出现请提交日志',
+};
+
+/** 错误码 → 中文解决方案目录 (P0-5 / P1-3 前端). */
+export const ERROR_SOLUTIONS: Record<ErrorCode, {title: string; solution: string}> = {
+  auth_missing_key: {title: '缺少 API 密钥', solution: '在「设置 → 模型」中保存密钥后重试'},
+  auth_invalid_key: {title: 'API 密钥无效', solution: '检查是否过期或被撤销, 在设置中重新保存'},
+  provider_unreachable: {title: '模型服务不可达', solution: '检查 base_url 与网络后重试'},
+  provider_error: {title: '模型服务返回错误', solution: '查看错误详情中的上游信息'},
+  invalid_request: {title: '请求参数错误', solution: '检查输入后重试'},
+  session_not_found: {title: '会话不存在', solution: '回到会话列表重新选择'},
+  rate_limited: {title: '请求被限流', solution: '稍后重试或降低频率'},
+  internal: {title: '内部错误', solution: '重启 Companion 后重试, 复现请提交日志'},
+};
+
+/** 从 HttpError.code 查解决方案; 无 code / 未知 code 返回通用条目. */
+export function describeError(err: unknown): {title: string; solution: string} {
+  if (err instanceof HttpError && err.code) {
+    const entry = (ERROR_SOLUTIONS as Record<string, {title: string; solution: string} | undefined>)[err.code];
+    if (entry) return entry;
+  }
+  return GENERIC_ERROR_SOLUTION;
 }
 
 /**
@@ -562,7 +644,7 @@ export function normalizeBaseUrl(baseUrl: string): string {
 async function checkJson(response: Response): Promise<unknown> {
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new HttpError(response.status, `HTTP ${response.status} ${text.slice(0, 300)}`);
+    throw httpErrorFromText(response.status, text, `HTTP ${response.status} `);
   }
   return response.json();
 }
@@ -675,12 +757,118 @@ export async function checkHealthDetailed(
   };
 }
 
-export async function listModels(baseUrl: string, apiKey: string): Promise<string[]> {
-  // NOTE: Provider credentials loaded by backend from env vars, not frontend Authorization header.
-  // apiKey parameter kept for signature compatibility but not used for canonical endpoint.
+/**
+ * 获取模型列表.
+ *
+ * - 新契约 `listModels(config)` 返回 ModelInfo[] (id + ownedBy + description).
+ * - 旧调用 `listModels(baseUrl, apiKey)` 仍返回 string[] (向后兼容, App.svelte 使用).
+ *
+ * NOTE: Provider credentials loaded by backend from env vars, not frontend
+ * Authorization header. apiKey parameter kept for signature compatibility but
+ * not used for canonical endpoint.
+ */
+export async function listModels(baseUrl: string, apiKey?: string): Promise<string[]>;
+export async function listModels(config: ApeirethConfig): Promise<ModelInfo[]>;
+export async function listModels(
+  baseUrlOrConfig: string | ApeirethConfig,
+  apiKey?: string,
+): Promise<string[] | ModelInfo[]> {
+  const baseUrl = typeof baseUrlOrConfig === 'string' ? baseUrlOrConfig : baseUrlOrConfig.baseUrl;
   const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/models`);
-  const data = (await checkJson(response)) as {data?: Array<{id: string}>};
-  return (data.data || []).map((item) => item.id);
+  const data = (await checkJson(response)) as {
+    data?: Array<{id?: unknown; owned_by?: unknown; description?: unknown}>;
+  };
+  const items = Array.isArray(data.data) ? data.data : [];
+  if (typeof baseUrlOrConfig === 'string') {
+    return items.map((item) => (typeof item.id === 'string' ? item.id : ''));
+  }
+  return items.map((item) => ({
+    id: typeof item.id === 'string' ? item.id : '',
+    ownedBy: typeof item.owned_by === 'string' ? item.owned_by : undefined,
+    description: typeof item.description === 'string' ? item.description : undefined,
+  }));
+}
+
+// ============================================================
+// Admin config + session settings (canonical 2.0 代理契约)
+// ============================================================
+
+async function requestJson(
+  config: ApeirethConfig,
+  path: string,
+  options: {method?: string; body?: unknown} = {},
+): Promise<unknown> {
+  const hasBody = options.body !== undefined;
+  const headers: Record<string, string> = {
+    Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+  };
+  if (hasBody) headers['Content-Type'] = 'application/json';
+  const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
+    method: options.method ?? 'GET',
+    headers,
+    body: hasBody ? JSON.stringify(options.body) : undefined,
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw httpErrorFromText(response.status, text, `HTTP ${response.status}: `);
+  }
+  return response.json();
+}
+
+/** POST /v1/admin/config — 应用管理配置 patch. */
+export async function applyAdminConfig(
+  config: ApeirethConfig,
+  patch: AdminConfigPatch,
+): Promise<{ok: boolean; warnings: string[]}> {
+  const data = (await requestJson(config, '/v1/admin/config', {method: 'POST', body: patch})) as {
+    ok?: boolean;
+    warnings?: unknown;
+  };
+  const warnings = Array.isArray(data.warnings)
+    ? data.warnings.map((w) => (typeof w === 'string' ? w : String(w)))
+    : [];
+  return {ok: data.ok === true, warnings};
+}
+
+/** GET /v1/admin/config — 读取管理配置 (api_key 为后端打码后的值). */
+export async function getAdminConfig(config: ApeirethConfig): Promise<{
+  provider?: string;
+  base_url?: string;
+  api_key?: string;
+  model?: string;
+  capabilities?: Record<string, boolean>;
+}> {
+  return (await requestJson(config, '/v1/admin/config')) as {
+    provider?: string;
+    base_url?: string;
+    api_key?: string;
+    model?: string;
+    capabilities?: Record<string, boolean>;
+  };
+}
+
+/** GET /v1/sessions/{sessionId}/settings — 读取会话级设置. */
+export async function getSessionSettings(
+  config: ApeirethConfig,
+  sessionId: string,
+): Promise<SessionSettings> {
+  return (await requestJson(
+    config,
+    `/v1/sessions/${encodeURIComponent(sessionId)}/settings`,
+  )) as SessionSettings;
+}
+
+/** PATCH /v1/sessions/{sessionId}/settings — 更新会话级设置并返回完整结果. */
+export async function patchSessionSettings(
+  config: ApeirethConfig,
+  sessionId: string,
+  patch: Partial<SessionSettings>,
+): Promise<SessionSettings> {
+  return (await requestJson(
+    config,
+    `/v1/sessions/${encodeURIComponent(sessionId)}/settings`,
+    {method: 'PATCH', body: patch},
+  )) as SessionSettings;
 }
 
 /**
@@ -885,12 +1073,7 @@ export async function streamChat(
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        let detail = text.slice(0, 300);
-        try {
-          const parsed = JSON.parse(text);
-          if (parsed?.error?.message) detail = parsed.error.message;
-        } catch {}
-        throw new HttpError(response.status, `Anthropic HTTP ${response.status}: ${detail}`);
+        throw httpErrorFromText(response.status, text, `Anthropic HTTP ${response.status}: `);
       }
       if (!response.body) throw new Error('Anthropic 响应流为空');
 
@@ -968,13 +1151,7 @@ export async function streamChat(
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        let detail = text.slice(0, 300);
-        try {
-          const parsed = JSON.parse(text);
-          if (parsed?.error?.message) detail = parsed.error.message;
-          else if (typeof parsed?.error === 'string') detail = parsed.error;
-        } catch {}
-        throw new HttpError(response.status, `OpenAI HTTP ${response.status}: ${detail}`);
+        throw httpErrorFromText(response.status, text, `OpenAI HTTP ${response.status}: `);
       }
       if (!response.body) throw new Error('OpenAI 响应流为空');
 
@@ -1061,14 +1238,7 @@ export async function streamChat(
     }
     if (!response.ok) {
       const text = await response.text().catch(() => '');
-      let detail = text.slice(0, 300);
-      try {
-        const parsed = JSON.parse(text);
-        if (parsed && typeof parsed.error === 'string') {
-          detail = parsed.error;
-        }
-      } catch {}
-      throw new HttpError(response.status, `HTTP ${response.status}: ${detail}`);
+      throw httpErrorFromText(response.status, text, `HTTP ${response.status}: `);
     }
     if (!response.body) throw new Error('响应流为空');
 
@@ -1103,7 +1273,7 @@ export async function streamChat(
                 events?: CanonicalExecutionEvent[];
                 pending_approval?: CanonicalPendingApproval;
               };
-              error?: string;
+              error?: string | ApiErrorFrame;
             };
 
             // Error frames terminate the stream with the REAL failure reason
@@ -1111,8 +1281,9 @@ export async function streamChat(
             // earlier build silently skipped these, so a failed turn surfaced
             // as a misleading "empty content" instead of the actual error
             // (real-world 2026-09-28: session had 4 user turns, 0 assistant).
-            if (typeof json.error === 'string' && json.error) {
-              throw new HttpError(502, json.error);
+            const errorFrame = extractErrorFrame(json);
+            if (errorFrame) {
+              throw new HttpError(502, errorFrame.message, errorFrame.code, errorFrame.solution);
             }
 
             const choice = json.choices?.[0];
