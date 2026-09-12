@@ -57,11 +57,17 @@
 <svelte:window onkeydown={handleWindowKeydown} />
 
 {#if open}
-  <div class="picker-backdrop" onclick={onCancel} role="presentation">
+  <div
+    class="picker-backdrop"
+    onclick={(e) => {
+      if (e.target === e.currentTarget) onCancel();
+    }}
+    role="presentation"
+  >
     <div
       class="picker-card"
-      onclick={(e) => e.stopPropagation()}
       role="dialog"
+      tabindex="-1"
       aria-modal="true"
       aria-labelledby="picker-title"
     >
