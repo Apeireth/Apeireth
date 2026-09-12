@@ -27,14 +27,37 @@
     Plus,
     Palette,
     Search,
+    Folder,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
   import ThemeSettingsPanel from '../components/ThemeSettingsPanel.svelte';
-  import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile, CapabilityToggles} from '../types';
+  import SessionModelPicker from '../components/SessionModelPicker.svelte';
+  import WorkspacePickerModal from '../components/WorkspacePickerModal.svelte';
+  import ErrorSolutionBanner from '../components/ErrorSolutionBanner.svelte';
+  import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile, CapabilityToggles, ModelInfo, AdminConfigPatch} from '../types';
   import {DEFAULT_CAPABILITY_TOGGLES} from '../types';
-  import {checkHealthDetailed, listModels, testProviderConnection, DEFAULT_PERSONAS} from '../runtime';
+  import {
+    checkHealthDetailed,
+    listModels,
+    testProviderConnection,
+    DEFAULT_PERSONAS,
+    applyAdminConfig,
+    getAdminConfig,
+    describeError,
+    describeCaught,
+    HttpError,
+    normalizeBaseUrl,
+  } from '../runtime';
+  import {
+    getProviderKey,
+    setProviderKey,
+    deleteProviderKey,
+    getWorkspaceDir,
+    setWorkspaceDir,
+    listWorkspaceSuggestions,
+  } from '../tauri-bridge';
 
   let {
     config,
@@ -237,6 +260,41 @@
   let showApiKeyModal = $state(false);
   let tempApiKey = $state('');
 
+  // ---- wave-2 集成状态 (P0-1 钥匙串 / P1-1 无重启 / P0-2 模型 / P1-2 权限 / P1-4 工作区) ----
+
+  // P0-1: 系统钥匙串回显状态（只存打码值，永不回显完整密钥）
+  let storedKeyMasked = $state('');
+  let storedKeyExists = $state(false);
+  let keychainLoading = $state(false);
+  let keychainSaving = $state(false);
+  let keychainDeleting = $state(false);
+  let keychainActionError = $state('');
+
+  // P1-1: 无重启热应用状态
+  let applying = $state(false);
+  let applyError = $state<{code?: string; message: string; solution?: string} | null>(null);
+  let applyResult = $state<{ok: boolean; warnings: string[]} | null>(null);
+  let effectiveConfig = $state<{provider?: string; base_url?: string; api_key?: string; model?: string} | null>(null);
+
+  // P0-2: 从 /v1/models 拉取的模型列表
+  let discoveredModels = $state<ModelInfo[]>([]);
+  let modelsLoading = $state(false);
+  let modelsLoadedOnce = false;
+  let modelsError = $state('');
+
+  // P1-2: 全局权限预设默认值。admin config 契约无 permission_preset 字段
+  // (它是会话级 session settings)，这里仅作 UI 状态 + 本地记录，不进入保存 patch。
+  const PERMISSION_PRESET_KEY = 'apeireth-permission-preset-default';
+  let permissionPreset = $state<'read_only' | 'standard' | 'full'>(initialPermissionPreset());
+
+  // P1-4: 工作区目录
+  let workspaceDir = $state('');
+  let workspaceLoading = $state(false);
+  let workspaceLoadedOnce = false;
+  let workspaceError = $state('');
+  let showWorkspacePicker = $state(false);
+  let workspaceSuggestions = $state<string[]>([]);
+
   // Clear data confirmation modal
   let showClearConfirm = $state(false);
 
@@ -345,7 +403,149 @@
     }
   }
 
-  function handleSaveSettings() {
+  const DEFAULT_MODEL_ID = 'deepseek-v4-flash';
+
+  /** 钥匙串 / env family 标识：OpenAI 兼容预设统一用 'openai'。 */
+  function providerFamily(): 'openai' | 'minimax' | 'anthropic' {
+    if (activeProtocol === 'anthropic') return 'anthropic';
+    if (activePreset === 'minimax') return 'minimax';
+    return 'openai';
+  }
+
+  /** 与后端 mask_api_key 一致：首 3 + **** + 末 3，短密钥整体打码。 */
+  function maskApiKey(key: string): string {
+    const value = key.trim();
+    if (value.length <= 8) return '****';
+    return `${value.slice(0, 3)}****${value.slice(-3)}`;
+  }
+
+  function errorBannerFrom(err: unknown): {code?: string; message: string; solution?: string} {
+    const described = describeError(err);
+    if (err instanceof HttpError) {
+      return {
+        code: err.code ?? (err.status ? `HTTP ${err.status}` : undefined),
+        message: err.message,
+        solution: err.solution ?? described.solution,
+      };
+    }
+    return {
+      message: describeCaught(err),
+      solution: described.solution,
+    };
+  }
+
+  function initialPermissionPreset(): 'read_only' | 'standard' | 'full' {
+    try {
+      const raw = localStorage.getItem(PERMISSION_PRESET_KEY);
+      if (raw === 'read_only' || raw === 'standard' || raw === 'full') return raw;
+    } catch {
+      // localStorage 不可用时保持内存默认值。
+    }
+    return 'standard';
+  }
+
+  async function loadModels() {
+    modelsLoading = true;
+    modelsError = '';
+    discoveredModels = [];
+    try {
+      discoveredModels = await listModels(config);
+    } catch {
+      modelsError = '从 /v1/models 加载失败 — 检查密钥配置';
+    } finally {
+      modelsLoading = false;
+    }
+  }
+
+  async function openApiKeyModal() {
+    tempApiKey = '';
+    keychainActionError = '';
+    storedKeyExists = false;
+    storedKeyMasked = '';
+    keychainLoading = true;
+    showApiKeyModal = true;
+    const stored = await getProviderKey(providerFamily());
+    if (stored) {
+      storedKeyExists = true;
+      storedKeyMasked = maskApiKey(stored);
+    }
+    keychainLoading = false;
+  }
+
+  async function deleteStoredKey() {
+    keychainDeleting = true;
+    keychainActionError = '';
+    const removed = await deleteProviderKey(providerFamily());
+    if (!removed) {
+      keychainDeleting = false;
+      keychainActionError = '删除钥匙串密钥失败，请重试。';
+      return;
+    }
+    storedKeyExists = false;
+    storedKeyMasked = '';
+    keychainDeleting = false;
+
+    // 同步清掉内存中的 provider 密钥，避免删除后测试连接仍带上旧 key。
+    providerApiKey = '';
+    const updated: ApeirethConfig = {
+      ...config,
+      apiKey: '',
+      provider: config.provider ? {...config.provider, apiKey: ''} : config.provider,
+      openaiConfig: config.openaiConfig
+        ? {...config.openaiConfig, apiKey: ''}
+        : config.openaiConfig,
+    };
+    onSave(updated);
+  }
+
+  async function loadWorkspace() {
+    workspaceLoading = true;
+    workspaceError = '';
+    const dir = await getWorkspaceDir();
+    workspaceDir = dir ?? '';
+    workspaceLoading = false;
+  }
+
+  async function openWorkspacePicker() {
+    workspaceError = '';
+    showWorkspacePicker = true;
+    const suggestions = await listWorkspaceSuggestions();
+    workspaceSuggestions = suggestions ?? [];
+  }
+
+  async function handleWorkspacePick(dir: string) {
+    workspaceError = '';
+    const applied = await setWorkspaceDir(dir);
+    if (applied !== null) {
+      workspaceDir = applied;
+    } else {
+      workspaceError = '设置工作区目录失败，请检查路径权限后重试。';
+    }
+    showWorkspacePicker = false;
+  }
+
+  // 首次挂载即拉取模型列表与工作区目录。
+  $effect(() => {
+    if (!modelsLoadedOnce) {
+      modelsLoadedOnce = true;
+      void loadModels();
+    }
+    if (!workspaceLoadedOnce) {
+      workspaceLoadedOnce = true;
+      void loadWorkspace();
+    }
+  });
+
+  // 权限预设默认值仅做本地记录（会话级设置，不属于 admin config patch）。
+  $effect(() => {
+    try {
+      localStorage.setItem(PERMISSION_PRESET_KEY, permissionPreset);
+    } catch {
+      // 忽略 localStorage 不可用
+    }
+  });
+
+  async function handleSaveSettings() {
     const currentProvider: ProviderConfig = {
       protocol: activeProtocol,
       preset: activePreset,
@@ -366,7 +566,7 @@
     const updated: ApeirethConfig = {
       ...config,
       baseUrl: editBaseUrl.trim(),
-      model: providerModel.trim() || config.model,
+      model: providerModel.trim() || DEFAULT_MODEL_ID,
       provider: currentProvider,
       openaiConfig: currentOpenai,
       anthropicConfig: currentAnthropic,
@@ -380,10 +580,52 @@
     setTimeout(() => {
       saveSuccess = false;
     }, 1500);
+
+    // P1-1: 无重启热应用，成功后回显网关生效配置。
+    applying = true;
+    applyError = null;
+    applyResult = null;
+    effectiveConfig = null;
+    try {
+      const patch: AdminConfigPatch = {
+        provider: providerFamily(),
+        base_url: normalizeBaseUrl(providerBaseUrl),
+        model: providerModel.trim() || DEFAULT_MODEL_ID,
+      };
+      applyResult = await applyAdminConfig(updated, patch);
+      effectiveConfig = await getAdminConfig(updated);
+    } catch (err) {
+      applyError = errorBannerFrom(err);
+    } finally {
+      applying = false;
+    }
   }
 
-  function saveNewApiKey() {
+  async function saveNewApiKey() {
     const key = tempApiKey.trim();
+    if (!key) {
+      keychainActionError = '请输入 API Key';
+      return;
+    }
+
+    keychainSaving = true;
+    keychainActionError = '';
+
+    // P0-1: 密钥写入系统钥匙串（不落盘明文）。
+    const stored = await setProviderKey(providerFamily(), key);
+    if (!stored) {
+      keychainSaving = false;
+      keychainActionError = '写入系统钥匙串失败：请检查系统钥匙串是否可用后重试。';
+      return;
+    }
+
+    // 同时热更新到运行中网关，避免重启。
+    try {
+      await applyAdminConfig(config, {api_key: key});
+    } catch (err) {
+      applyError = errorBannerFrom(err);
+    }
+
     // 2026-09-28 real-world trap: this modal used to set only the vestigial
     // gateway `apiKey` field, which never reaches the sidecar — users filled
     // it, saved, and chat still failed with "missing API key". The key must
@@ -398,8 +640,12 @@
         : config.openaiConfig,
     };
     onSave(updated);
+    providerApiKey = key;
+    storedKeyExists = true;
+    storedKeyMasked = maskApiKey(key);
     tempApiKey = '';
     showApiKeyModal = false;
+    keychainSaving = false;
   }
 
   async function checkDiagnostics() {
@@ -469,6 +715,42 @@
               <span class="summary-url">{providerBaseUrl || '—'}</span>
             </div>
           </div>
+
+          {#if applying}
+            <div class="apply-status"><RotateCcw size={13} class="spin" /><span>正在应用配置…</span></div>
+          {/if}
+
+          {#if applyError}
+            <ErrorSolutionBanner
+              code={applyError.code}
+              message={applyError.message}
+              solution={applyError.solution}
+              onClose={() => (applyError = null)}
+            />
+          {/if}
+
+          {#if applyResult && applyResult.warnings.length > 0}
+            <div class="warnings-box">
+              <strong>配置已应用，但有 {applyResult.warnings.length} 条警告：</strong>
+              <ul>
+                {#each applyResult.warnings as warning (warning)}
+                  <li>{warning}</li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
+
+          {#if effectiveConfig}
+            <div class="effective-config info-card">
+              <strong class="info-title">网关生效配置 (无重启热应用)</strong>
+              <div class="effective-grid">
+                <span>Provider: <code>{effectiveConfig.provider ?? '—'}</code></span>
+                <span>Base URL: <code>{effectiveConfig.base_url ?? '—'}</code></span>
+                <span>Model: <code>{effectiveConfig.model ?? '—'}</code></span>
+                <span>API Key: <code>{effectiveConfig.api_key ?? '未配置'}</code></span>
+              </div>
+            </div>
+          {/if}
 
           <div class="config-step">
             <span class="step-num">1</span>
@@ -543,6 +825,30 @@
                     placeholder={activeProtocol === 'openai' ? 'gpt-4o' : 'claude-3-7-sonnet-20250219'}
                   />
                 </div>
+              </div>
+
+              <div class="form-group">
+                <span class="group-label">从 /v1/models 选择模型</span>
+                <div class="model-picker-row">
+                  <SessionModelPicker
+                    models={discoveredModels.map((m) => ({id: m.id, ownedBy: m.ownedBy}))}
+                    value={providerModel || DEFAULT_MODEL_ID}
+                    onSelect={(id) => (providerModel = id)}
+                    disabled={modelsLoading}
+                  />
+                  <button
+                    class="quiet-button"
+                    onclick={() => void loadModels()}
+                    disabled={modelsLoading}
+                  >
+                    <RotateCcw size={13} class={modelsLoading ? 'spin' : ''} />
+                    <span>{modelsLoading ? '加载中…' : '重新加载'}</span>
+                  </button>
+                </div>
+                {#if modelsError}
+                  <small class="field-hint error-hint">{modelsError}</small>
+                {/if}
+                <small class="field-hint">默认模型 deepseek-v4-flash；列表来自网关 /v1/models。</small>
               </div>
 
               <div class="form-group">
@@ -689,7 +995,7 @@
                       <Lock size={14} />
                       <span>{hasApiKey ? '已配置 (Configured)' : '未配置 (Not configured)'}</span>
                     </div>
-                    <button class="quiet-button" onclick={() => { tempApiKey = ''; showApiKeyModal = true; }}>
+                    <button class="quiet-button" onclick={() => void openApiKeyModal()}>
                       {hasApiKey ? '更换 Key' : '配置 Key'}
                     </button>
                   </div>
@@ -823,6 +1129,16 @@
           <h3 class="block-title">工具权限与安全架构</h3>
           <p class="block-desc">高危特权工具（如 FileOperator、ShellExec）需要主人授权。</p>
 
+          <div class="form-group">
+            <label for="permission-preset">全局权限预设 (新会话默认)</label>
+            <select id="permission-preset" bind:value={permissionPreset}>
+              <option value="read_only">read_only — 只读</option>
+              <option value="standard">standard — 标准 (推荐)</option>
+              <option value="full">full — 完全权限</option>
+            </select>
+            <small class="field-hint">作为新会话默认；已有会话在会话内可单独改。</small>
+          </div>
+
           <div class="info-card">
             <strong class="info-title">权限洋葱与即时授权 (On-demand Permission Pack)</strong>
             <p class="info-text">
@@ -873,6 +1189,21 @@
           <h3 class="block-title">数据与本地缓存</h3>
           <p class="block-desc">管理客户端本地存储的会话与配置缓存。</p>
 
+          <div class="info-card">
+            <strong class="info-title">工作区目录</strong>
+            <div class="workspace-row">
+              <code class="workspace-path">{workspaceDir || '默认 (应用数据目录)'}</code>
+              <button class="quiet-button" onclick={() => void openWorkspacePicker()} disabled={workspaceLoading}>
+                <Folder size={13} />
+                <span>更改</span>
+              </button>
+            </div>
+            {#if workspaceError}
+              <p class="field-hint error-hint">{workspaceError}</p>
+            {/if}
+            <p class="field-hint">新路径在下次启动 sidecar 时生效。</p>
+          </div>
+
           <div class="danger-zone-box">
             <div class="danger-head">
               <AlertTriangle size={16} class="danger-icon" />
@@ -910,7 +1241,7 @@
     <!-- 常驻保存栏：填完配置点这里（保存会重启本地网关以应用配置） -->
     <div class="settings-save-bar">
       <span class="save-bar-hint">
-        {saveSuccess ? '✓ 已保存，本地网关已应用新配置' : '填好配置后点"保存设置"（会重启本地网关）'}
+        {saveSuccess ? '✓ 已保存，本地网关已应用新配置' : '填好配置后点"保存设置"（无重启热应用，不支持时自动重启网关）'}
       </span>
       <button class="primary-button save-bar-btn" onclick={handleSaveSettings}>
         <Check size={14} />
@@ -937,23 +1268,60 @@
       </div>
       <div class="modal-body">
         <p class="modal-desc">
-          这是**模型提供商**的密钥（如 DeepSeek），保存后会注入本地网关并重启生效；只存内存与侧车环境，不落盘。留空保存可清除。
+          这是**模型提供商**的密钥（如 DeepSeek）。密钥存入系统钥匙串，不落盘明文；保存后热更新到本地网关，无需重启。
         </p>
+
+        <div class="keychain-status">
+          {#if keychainLoading}
+            <span class="keychain-muted">正在读取系统钥匙串…</span>
+          {:else if storedKeyExists}
+            <span class="keychain-stored">{storedKeyMasked} (已存钥匙串)</span>
+          {:else}
+            <span class="keychain-muted">系统钥匙串中暂无该提供商的密钥</span>
+          {/if}
+        </div>
+
         <div class="form-group">
           <input
             type="password"
-            placeholder="输入 API Key（例如 sk-…）"
+            placeholder="输入新的 API Key（例如 sk-…）"
             bind:value={tempApiKey}
+            autocomplete="off"
           />
         </div>
+
+        {#if keychainActionError}
+          <p class="modal-error">{keychainActionError}</p>
+        {/if}
       </div>
       <div class="modal-footer">
+        {#if storedKeyExists}
+          <button
+            class="quiet-button danger-text delete-key-btn"
+            onclick={deleteStoredKey}
+            disabled={keychainDeleting}
+          >
+            <Trash2 size={13} />
+            <span>{keychainDeleting ? '删除中…' : '删除已存密钥'}</span>
+          </button>
+        {/if}
         <button class="quiet-button" onclick={() => showApiKeyModal = false}>取消</button>
-        <button class="primary-button" onclick={saveNewApiKey}>保存并应用</button>
+        <button class="primary-button" onclick={saveNewApiKey} disabled={keychainSaving}>
+          {keychainSaving ? '保存中…' : '保存并应用'}
+        </button>
       </div>
     </div>
   </div>
 {/if}
+
+<!-- Workspace Directory Picker -->
+<WorkspacePickerModal
+  open={showWorkspacePicker}
+  current={workspaceDir}
+  suggestions={workspaceSuggestions}
+  onPick={(dir) => void handleWorkspacePick(dir)}
+  onCancel={() => (showWorkspacePicker = false)}
+/>
 
 <!-- Clear Data Confirmation -->
 <ConfirmDialog
@@ -1771,5 +2139,122 @@
   }
   :global(.spin) {
     animation: spin 1s linear infinite;
+  }
+
+  /* ---- wave-2 设置页新增样式 ---- */
+  .keychain-status {
+    padding: 8px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+  .keychain-stored {
+    color: var(--green);
+    font-family: var(--mono);
+  }
+  .keychain-muted {
+    color: var(--faint);
+  }
+  .modal-error {
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: var(--danger);
+    line-height: 1.5;
+  }
+  .delete-key-btn {
+    margin-right: auto;
+  }
+  .apply-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .warnings-box {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--amber-line);
+    background: var(--amber-wash);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .warnings-box strong {
+    color: var(--amber);
+    display: block;
+    margin-bottom: 6px;
+  }
+  .warnings-box ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .warnings-box li {
+    line-height: 1.5;
+  }
+  .effective-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 16px;
+    margin-top: 8px;
+  }
+  .effective-grid span {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .effective-grid code {
+    font-family: var(--mono);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .model-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .workspace-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 6px;
+  }
+  .workspace-path {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .error-hint {
+    color: var(--danger);
+  }
+  .form-group select {
+    padding: 8px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 13px;
+    outline: 0;
+  }
+  .form-group select:focus {
+    border-color: var(--amber-line);
   }
 </style>
