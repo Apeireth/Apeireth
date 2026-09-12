@@ -205,7 +205,7 @@ async fn tool_catalog_follows_local_read_flag() {
     assert_eq!(tools[0].name, "tool.repo");
     assert_eq!(tools[0].permission, "granted");
     assert!(tools[0].available);
-    assert!(!tools[1].available, "local read tools off by default");
+    assert!(!tools[1].available, "local read tools off when flag is false");
     assert_eq!(tools[1].permission, "none");
 
     let on = CliPanelData::new(
