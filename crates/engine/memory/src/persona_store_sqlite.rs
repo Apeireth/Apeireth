@@ -13,7 +13,8 @@ use rusqlite::{types::Type, OptionalExtension, Row};
 use serde::de::DeserializeOwned;
 
 use crate::scope::{
-    MemoryProvenance, PersonaMemoryProfile, PersonaProfileDelta, PersonaProfileStore,
+    MemoryProvenance, PersonaGovernanceState, PersonaMemoryProfile, PersonaProfileDelta,
+    PersonaProfileStore,
 };
 
 /// Durable persona profile store using the storage crate's serialized writer.
@@ -69,6 +70,16 @@ impl SqlitePersonaProfileStore {
                     CREATE INDEX IF NOT EXISTS idx_persona_profiles_subject
                         ON persona_profiles(subject_id, updated_at_ms DESC);
 
+                    CREATE TABLE IF NOT EXISTS persona_profile_governance (
+                        persona_id TEXT NOT NULL,
+                        subject_id TEXT NOT NULL,
+                        tombstoned_at_ms INTEGER,
+                        protected INTEGER NOT NULL DEFAULT 0,
+                        revision INTEGER NOT NULL DEFAULT 0,
+                        updated_at_ms INTEGER,
+                        reason TEXT,
+                        PRIMARY KEY (persona_id, subject_id)
+                    );
                     CREATE TABLE IF NOT EXISTS persona_profile_history (
                         id TEXT PRIMARY KEY,
                         persona_id TEXT NOT NULL,
@@ -87,6 +98,8 @@ impl SqlitePersonaProfileStore {
                     CREATE INDEX IF NOT EXISTS idx_persona_profile_history_subject
                         ON persona_profile_history(subject_id, changed_at_ms DESC);
 
+                    CREATE INDEX IF NOT EXISTS idx_persona_profile_governance_visibility
+                        ON persona_profile_governance(subject_id, tombstoned_at_ms, protected);
                     CREATE TRIGGER IF NOT EXISTS persona_profile_history_no_delete
                     BEFORE DELETE ON persona_profile_history BEGIN
                         SELECT RAISE(ABORT, 'persona_profile_history: hard DELETE forbidden');
@@ -103,7 +116,25 @@ impl SqlitePersonaProfileStore {
             .map_err(|error| Box::new(error) as Box<dyn std::error::Error + Send + Sync>)
     }
 
-    /// Returns all immutable snapshots in revision order.
+    pub async fn persona_governance(
+        &self,
+        persona_id: &str,
+        subject_id: &str,
+    ) -> Result<PersonaGovernanceState, String> {
+        self.pool
+            .read(|conn| {
+                let row = conn
+                    .query_row(
+                        "SELECT tombstoned_at_ms, protected, revision FROM persona_profile_governance WHERE persona_id=?1 AND subject_id=?2",
+                        rusqlite::params![persona_id, subject_id],
+                        |row| Ok((row.get::<_, Option<i64>>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?)),
+                    )
+                    .optional()?;
+                Ok(row.map_or(PersonaGovernanceState { tombstoned_at_ms: None, protected: false, revision: 0 }, |(tombstoned_at_ms, protected, revision)| PersonaGovernanceState { tombstoned_at_ms, protected: protected != 0, revision: revision.max(0) as u64 }))
+            })
+            .map_err(|error| error.to_string())
+    }
+
     pub async fn history(
         &self,
         persona_id: &str,
@@ -126,7 +157,7 @@ impl SqlitePersonaProfileStore {
             .map_err(|error| error.to_string())
     }
 
-    /// Alias for callers that prefer an explicit getter name.
+    /// Returns all immutable snapshots in revision order.
     pub async fn get_history(
         &self,
         persona_id: &str,
@@ -145,6 +176,16 @@ impl PersonaProfileStore for SqlitePersonaProfileStore {
     ) -> Result<Option<PersonaMemoryProfile>, String> {
         self.pool
             .read(|conn| {
+                let tombstoned: Option<i64> = conn
+                    .query_row(
+                        "SELECT tombstoned_at_ms FROM persona_profile_governance WHERE persona_id=?1 AND subject_id=?2",
+                        rusqlite::params![persona_id, subject_id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                if tombstoned.is_some() {
+                    return Ok(None);
+                }
                 Ok(conn
                     .query_row(
                         "SELECT persona_id, subject_id, portrait, traits_json, known_facts_json, \
@@ -157,6 +198,53 @@ impl PersonaProfileStore for SqlitePersonaProfileStore {
                     .optional()?)
             })
             .map_err(|error| error.to_string())
+    }
+
+    async fn governance(
+        &self,
+        persona_id: &str,
+        subject_id: &str,
+    ) -> Result<PersonaGovernanceState, String> {
+        self.persona_governance(persona_id, subject_id).await
+    }
+
+    async fn tombstone(
+        &self,
+        persona_id: &str,
+        subject_id: &str,
+        expected_revision: u64,
+        at_ms: i64,
+        reason: Option<&str>,
+    ) -> Result<PersonaGovernanceState, String> {
+        let persona_id = persona_id.to_owned();
+        let subject_id = subject_id.to_owned();
+        let reason = reason.map(str::to_owned);
+        self.pool.write(move |conn| {
+            let tx = conn.transaction()?;
+            tx.execute("INSERT OR IGNORE INTO persona_profile_governance (persona_id, subject_id) VALUES (?1,?2)", rusqlite::params![persona_id, subject_id])?;
+            let current: (Option<i64>, i64, i64) = tx.query_row("SELECT tombstoned_at_ms, protected, revision FROM persona_profile_governance WHERE persona_id=?1 AND subject_id=?2", rusqlite::params![persona_id, subject_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+            if current.1 != 0 { return Err(apeireth_storage::StorageError::InvalidConfiguration("persona is protected".into())); }
+            if current.2 != expected_revision as i64 { return Err(apeireth_storage::StorageError::Serialization("persona governance revision conflict".into())); }
+            if current.0.is_some() { return Err(apeireth_storage::StorageError::Serialization("persona is already tombstoned".into())); }
+            tx.execute("UPDATE persona_profile_governance SET tombstoned_at_ms=?1, revision=revision+1, updated_at_ms=?1, reason=?2 WHERE persona_id=?3 AND subject_id=?4", rusqlite::params![at_ms, reason, persona_id, subject_id])?;
+            tx.commit()?;
+            Ok(PersonaGovernanceState { tombstoned_at_ms: Some(at_ms), protected: false, revision: expected_revision + 1 })
+        }).await.map_err(|e| e.to_string())
+    }
+
+    async fn set_protected(
+        &self,
+        persona_id: &str,
+        subject_id: &str,
+        expected_revision: u64,
+        protected: bool,
+        at_ms: i64,
+        reason: Option<&str>,
+    ) -> Result<PersonaGovernanceState, String> {
+        let persona_id = persona_id.to_owned();
+        let subject_id = subject_id.to_owned();
+        let reason = reason.map(str::to_owned);
+        self.pool.write(move |conn| { let tx=conn.transaction()?; tx.execute("INSERT OR IGNORE INTO persona_profile_governance (persona_id,subject_id) VALUES (?1,?2)", rusqlite::params![persona_id,subject_id])?; let rev:i64=tx.query_row("SELECT revision FROM persona_profile_governance WHERE persona_id=?1 AND subject_id=?2",rusqlite::params![persona_id,subject_id],|r|r.get(0))?; if rev != expected_revision as i64 { return Err(apeireth_storage::StorageError::Serialization("persona governance revision conflict".into())); } tx.execute("UPDATE persona_profile_governance SET protected=?1, revision=revision+1, updated_at_ms=?2, reason=?3 WHERE persona_id=?4 AND subject_id=?5",rusqlite::params![i64::from(protected),at_ms,reason,persona_id,subject_id])?; tx.commit()?; Ok(PersonaGovernanceState { tombstoned_at_ms: None, protected, revision: expected_revision+1 }) }).await.map_err(|e|e.to_string())
     }
 
     async fn apply_delta(
@@ -615,6 +703,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tombstone_hides_profile_but_retains_history_after_restart() {
+        let path = tempfile::NamedTempFile::new().expect("temp db");
+        let pool = SqliteConnectionPool::open(path.path()).await.unwrap();
+        let store = SqlitePersonaProfileStore::new(pool);
+        store.ensure_schema().await.unwrap();
+        store
+            .apply_delta(
+                "persona-a",
+                "subject-a",
+                0,
+                delta("tombstone"),
+                timestamp(1_700_000_000_000),
+            )
+            .await
+            .unwrap();
+        let state = store
+            .tombstone(
+                "persona-a",
+                "subject-a",
+                0,
+                1_700_000_000_100,
+                Some("erasure"),
+            )
+            .await
+            .unwrap();
+        assert!(state.tombstoned_at_ms.is_some());
+        assert!(store
+            .get_profile("persona-a", "subject-a")
+            .await
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            store.history("persona-a", "subject-a").await.unwrap().len(),
+            1
+        );
+        drop(store);
+        let reopened =
+            SqlitePersonaProfileStore::new(SqliteConnectionPool::open(path.path()).await.unwrap());
+        assert!(reopened
+            .get_profile("persona-a", "subject-a")
+            .await
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            reopened
+                .history("persona-a", "subject-a")
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+    #[tokio::test]
     async fn profile_and_history_survive_reopening_file_pool() {
         let path = tempfile::NamedTempFile::new().expect("temp db");
         let pool = SqliteConnectionPool::open(path.path())
@@ -633,11 +774,11 @@ mod tests {
             .await
             .expect("apply delta");
         drop(store);
-
-        let reopened_pool = SqliteConnectionPool::open(path.path())
-            .await
-            .expect("reopen pool");
-        let reopened = SqlitePersonaProfileStore::new(reopened_pool);
+        let reopened = SqlitePersonaProfileStore::new(
+            SqliteConnectionPool::open(path.path())
+                .await
+                .expect("reopen pool"),
+        );
         assert_eq!(
             reopened
                 .get_profile("persona-a", "subject-a")
