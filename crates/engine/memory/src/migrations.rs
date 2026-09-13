@@ -216,7 +216,48 @@ CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_persona
         name: "V11__memory_2_2_durable_tables",
         sql: V11_SQL,
     },
+    // Memory 2.2 governance completion: explicit principal ownership and
+    // durable persona tombstones. Legacy rows are intentionally not backfilled.
+    Migration {
+        version: 12,
+        name: "V12__principal_ownership_and_persona_governance",
+        sql: V12_SQL,
+    },
 ];
+
+const V12_SQL: &str = r#"
+CREATE TABLE IF NOT EXISTS memory_principal_sessions (
+    principal_id TEXT NOT NULL,
+    session_id TEXT NOT NULL PRIMARY KEY,
+    created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_principal_sessions_principal
+    ON memory_principal_sessions(principal_id, session_id);
+
+CREATE TABLE IF NOT EXISTS persona_profile_governance (
+    persona_id TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    tombstoned_at_ms INTEGER,
+    protected INTEGER NOT NULL DEFAULT 0,
+    revision INTEGER NOT NULL DEFAULT 0,
+    updated_at_ms INTEGER,
+    reason TEXT,
+    PRIMARY KEY (persona_id, subject_id)
+);
+CREATE INDEX IF NOT EXISTS idx_persona_profile_governance_visibility
+    ON persona_profile_governance(subject_id, tombstoned_at_ms, protected);
+CREATE TRIGGER IF NOT EXISTS persona_profile_governance_no_delete
+BEFORE DELETE ON persona_profile_governance BEGIN
+    SELECT RAISE(ABORT, 'persona_profile_governance: hard DELETE forbidden');
+END;
+CREATE TRIGGER IF NOT EXISTS persona_profile_governance_no_tombstone_reversal
+BEFORE UPDATE ON persona_profile_governance
+FOR EACH ROW
+WHEN OLD.tombstoned_at_ms IS NOT NULL AND NEW.tombstoned_at_ms IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'persona_profile_governance: tombstone reversal forbidden');
+END;
+"#;
 
 const V11_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS temporal_graph_facts (
@@ -959,8 +1000,8 @@ mod tests {
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            7,
-            "V5/V6/V7/V8/V9/V10/V11 各一条"
+            8,
+            "V5/V6/V7/V8/V9/V10/V11/V12 各一条"
         );
     }
 

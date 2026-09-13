@@ -426,9 +426,13 @@ pub struct PersonaProfileDelta {
     pub provenance: MemoryProvenance,
 }
 
-/// Persistence boundary for persona profiles. Implementations may be backed
-/// by SQLite or another governed store; the trait never accepts a raw model
-/// replacement without a revision check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonaGovernanceState {
+    pub tombstoned_at_ms: Option<i64>,
+    pub protected: bool,
+    pub revision: u64,
+}
+
 #[async_trait]
 pub trait PersonaProfileStore: Send + Sync {
     async fn get_profile(
@@ -436,6 +440,52 @@ pub trait PersonaProfileStore: Send + Sync {
         persona_id: &str,
         subject_id: &str,
     ) -> Result<Option<PersonaMemoryProfile>, String>;
+
+    async fn governance(
+        &self,
+        persona_id: &str,
+        subject_id: &str,
+    ) -> Result<PersonaGovernanceState, String> {
+        let _ = (persona_id, subject_id);
+        Ok(PersonaGovernanceState {
+            tombstoned_at_ms: None,
+            protected: false,
+            revision: 0,
+        })
+    }
+
+    async fn tombstone(
+        &self,
+        persona_id: &str,
+        subject_id: &str,
+        expected_revision: u64,
+        at_ms: i64,
+        reason: Option<&str>,
+    ) -> Result<PersonaGovernanceState, String> {
+        let _ = (persona_id, subject_id, expected_revision, at_ms, reason);
+        Err("persona governance is not configured".into())
+    }
+
+    async fn set_protected(
+        &self,
+        persona_id: &str,
+        subject_id: &str,
+        expected_revision: u64,
+        protected: bool,
+        at_ms: i64,
+        reason: Option<&str>,
+    ) -> Result<PersonaGovernanceState, String> {
+        let _ = (
+            persona_id,
+            subject_id,
+            expected_revision,
+            protected,
+            at_ms,
+            reason,
+        );
+        Err("persona governance is not configured".into())
+    }
+
     async fn apply_delta(
         &self,
         persona_id: &str,

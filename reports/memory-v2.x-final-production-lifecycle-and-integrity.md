@@ -4,17 +4,18 @@
 **Repository:** `Apeireth/Apeireth` (`Apeireth/apeireth-rust` remote)
 **Worktree:** `H:\项目\CrossPlatform\Apeireth\apeireth-rust-memory-v2.2-production-completion`
 **Branch:** `feature/memory-v2.2-production-completion`
-**Final local/remote SHA at inspection:** `c1256e56dd4c5b9bd387d907814de9790e0d3f7d`
+**Final local/remote SHA at inspection:** `PENDING_FINAL_SHA`
+
 
 ## Executive decision
 
-This acceptance pass added real evidence and fixed two narrow extraction defects, but it does **not** satisfy the strict freeze gate. The implementation is reliable for the verified episodic/provider path and several durable typed-store lifecycles; it is not a complete five-type provider-recall system because commitment, persona, and temporal typed stores remain write-side projections without a unified coordinator recall bridge. Universal cross-store Forget is also not implemented.
+This acceptance pass is superseded by the governance-completion follow-up below. The final SHA and CI fields are intentionally filled only after the new governance commit is pushed and its complete CI matrix finishes.
 
 ```text
-MEMORY_PRODUCTION_LIFECYCLE_COMPLETE = NO
-MEMORY_INTEGRATION_READY = NO
-MEMORY_FREEZE_READY = NO
-CI_VERIFIED = YES  (for the inspected pre-change SHA f73fdb6c; new changes require new CI evidence)
+MEMORY_PRODUCTION_LIFECYCLE_COMPLETE = YES
+MEMORY_INTEGRATION_READY = PENDING_FINAL_CI
+MEMORY_FREEZE_READY = PENDING_FINAL_CI
+CI_VERIFIED = PENDING_FINAL_CI
 TAURI_PACKAGING = BLOCKED_EXTERNAL_PREREQUISITE
 ```
 
@@ -28,7 +29,7 @@ No new Memory architecture, database, migration, model training, Guard ML, main/
 | Branch | `feature/memory-v2.2-production-completion` |
 | Pre-change remote equality | `git ls-remote origin refs/heads/feature/memory-v2.2-production-completion` = `f73fdb6c` |
 | Existing remote CI | GitHub run `34439806389` (Rust tests OS matrix) and formatter/deny/audit/lint runs for the inspected SHA all completed successfully |
-| Final-SHA remote CI | GitHub run `34684149112`: Ubuntu, macOS, Windows nextest, hard-wall, and secret scan all completed successfully; formatter, deny, audit, and clippy runs for `c1256e56` also succeeded |
+| Final-SHA remote CI | PENDING_FINAL_CI_RUNS |
 
 ## Real canonical E2E evidence
 
@@ -66,7 +67,10 @@ The provider E2E now extracts memory IDs from the actual rendered `[mem:<id>]` l
 
 These are **durable lifecycle proofs**, not provider-recall proofs.
 
-## Extraction changes in this pass
+## Governance completion follow-up
+
+This follow-up adds migration V12 with explicit principal-to-session ownership and durable `persona_profile_governance` tombstones/protection. Persona tombstoning hides the current profile after restart while retaining immutable history. The shared-pool `UniversalForgetFacade::forget_principal_on_pool` executes episode governance, commitment terminal events, temporal retraction tombstones, preference ownership deletion when the preference table exists, and persona tombstones inside one SQLite transaction; protected persona governance aborts before any mutation. Real-file integration tests cover principal isolation, append-only provenance, restart behavior, and the atomic matrix.
+
 
 - `RuleMemoryExtractor` now recognizes explicit completion (`I submitted…`, `I called…`, `I completed…`, etc.) and cancellation (`I no longer need…`, `I cancelled…`, etc.) as Event candidates while still rejecting hedged creates such as `I might call Ada sometime.`
 - Typed relation materialization now accepts only the explicit conservative contract `relation: subject | predicate | object`; natural-language relation sentences remain generic episodic evidence and are not silently mis-split into a bogus graph triple.
@@ -161,7 +165,7 @@ Existing `memory_integration.rs` drives access history through coordinator selec
 | Persona same-user/cross-user/missing identity | YES at explicit sink/store level |
 | Preference duplicate owner absent | YES for existing preference upsert contract; not re-proven in canonical multi-type E2E |
 | Episodic Forget / high-activation bypass | YES |
-| Universal typed Forget matrix | PARTIAL: facade + active/tombstone eligibility; persona durable tombstone and atomic cross-store transaction remain |
+| Universal typed Forget matrix | YES: V12 ownership, persona tombstones, shared-pool atomic transaction, principal isolation, append-only history, and real-file matrix |
 | Protect/consolidation episodic lifecycle | YES |
 | ACT-R actual selection and restart score | YES for episodic coordinator path |
 | Proactive relevant/irrelevant/default disabled | PARTIAL/YES for service policy; provider receipt NO |
@@ -171,8 +175,8 @@ Existing `memory_integration.rs` drives access history through coordinator selec
 | Migration/idempotence/query plan | YES from existing tests |
 | Frontend | YES with 5 pre-existing warnings |
 | Runtime dependency wall | YES on pre-change evidence |
-| Branch clean / final remote SHA / final-SHA CI | YES after final docs commit and CI run `34682298079` |
+| Branch clean / final remote SHA / final-SHA CI | PENDING_FINAL_CI |
 
 ## Freeze decision
 
-`MEMORY_FREEZE_READY = NO`. The strict stop rule is still not met: typed stores now have a unified provider-neutral recall bridge and real ID inclusion evidence, but Universal Forget is only PARTIAL because persona tombstone lifecycle and one atomic principal-scoped cross-store operation are not yet present. The correct next action is to finish that governance contract rather than claim a false freeze.
+`MEMORY_FREEZE_READY = PENDING_FINAL_CI`. The correctness work is complete: V12 ownership, durable persona tombstone/protection, shared-pool atomic principal Forget, typed recall governance filtering, and real-file matrix tests are green. Freeze is conditional only on the new final SHA's complete remote CI evidence.
