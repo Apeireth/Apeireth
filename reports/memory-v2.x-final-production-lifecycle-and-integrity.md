@@ -4,12 +4,12 @@
 **Repository:** `Apeireth/Apeireth` (`Apeireth/apeireth-rust` remote)
 **Worktree:** `H:\项目\CrossPlatform\Apeireth\apeireth-rust-memory-v2.2-production-completion`
 **Branch:** `feature/memory-v2.2-production-completion`
-**Final local/remote SHA at inspection:** `a6051e54a3b0076060afc81661483292d426713a`
+**Final local/remote SHA at inspection:** `ed50c95ed7ff443c4d7009db7b37d5d5a1d94d81`
 
 
 ## Executive decision
 
-This acceptance pass is superseded by the governance-completion follow-up below. The final SHA and CI fields are intentionally filled only after the new governance commit is pushed and its complete CI matrix finishes.
+This acceptance pass records the completed governance follow-up. The final source and documentation SHA is listed above, and its complete CI matrix is green.
 
 ```text
 MEMORY_PRODUCTION_LIFECYCLE_COMPLETE = YES
@@ -35,7 +35,7 @@ No new Memory architecture, database, migration, model training, Guard ML, main/
 
 `crates/engine/runtime-assembly/tests/memory_provider_e2e.rs` uses the canonical `ProductionCognitiveModules` assembly, a temporary **file-backed SQLite database**, a real `Runtime`, a recording provider, a full restart, and provider request inspection.
 
-Turn 1 now contains the requested preference, relation, commitment, and location statements. After restart, Turn 2 asks about all four. The test passes and proves these statements survive as episodic user text and appear in a governed provider overlay. The test also verifies the assistant response is persisted. It does **not** claim typed commitment/persona/temporal provider recall, because the coordinator does not read those typed stores.
+Turn 1 now contains the requested preference, relation, commitment, and location statements. After restart, Turn 2 asks about all four. The test passes and proves these statements survive as episodic user text and appear in a governed provider overlay. The test also verifies the assistant response is persisted. Typed commitment, persona, and temporal recall are additionally exercised through the injected SQLite typed source and the same coordinator/compiler/provider path.
 
 | Type | AfterTurn | Durable | Restart | Retrieved/overlay | Provider request |
 |---|---:|---:|---:|---:|---:|
@@ -53,7 +53,7 @@ This follow-up also wires the typed source through the canonical assembly seam i
 
 This follow-up pass adds the provider-neutral `TypedMemoryRecallSource` port in `crates/engine/memory/src/scope.rs`, the existing-ranking-path integration in `MemoryCoordinator`, and the assembly-owned `SqliteTypedMemoryRecallSource` adapter. Typed commitment, persona, and temporal candidates now have stable IDs and can flow through the same retrieval/compiler path when an explicit `{persona_id, subject_id}` is supplied. The adapter never derives identity from a session.
 
-The follow-up also adds `UniversalForgetFacade` as an existing-store composition boundary and keeps generic episode governance persistent. It does not physically delete append-only typed provenance. The current matrix proves episodic governance and typed terminal/tombstone store semantics, but a complete cross-store principal-level forget transaction and persona tombstone lifecycle still require additional production wiring; therefore universal typed Forget remains `PARTIAL`, not a false PASS.
+The follow-up also adds `UniversalForgetFacade` as an existing-store composition boundary and keeps generic episode governance persistent. It does not physically delete append-only typed provenance. The shared-pool principal transaction covers episodic governance, owned preferences, commitment terminal events, temporal retraction tombstones, and persona tombstones, with protected-persona abort and principal-isolation coverage.
 
 The provider E2E now extracts memory IDs from the actual rendered `[mem:<id>]` lines and asserts the receipt inclusion relation for the IDs that reached the provider. The test's retrieved/selected sets are derived from the exact selected overlay in this harness; a production receipt channel carrying independent pre-budget retrieved IDs remains a follow-up observability enhancement.
 
@@ -82,9 +82,9 @@ This follow-up adds migration V12 with explicit principal-to-session ownership a
 |---|---|---|
 | Episodic recall | coordinator governance filtering | PASS |
 | Fact/preference as episodic text | same governed episode path | PASS for episodic representation |
-| Temporal typed store | source/tombstone-aware typed recall + store tests | PASS for active/current eligibility; universal principal transaction PARTIAL |
-| Commitment typed store | active-only typed recall + terminal transition tests | PASS for active eligibility; universal principal transaction PARTIAL |
-| Persona typed store | explicit identity/profile isolation | PARTIAL: no durable persona tombstone API |
+| Temporal typed store | source/tombstone-aware typed recall + store tests | PASS for active/current eligibility; principal transaction PASS |
+| Commitment typed store | active-only typed recall + terminal transition tests | PASS for active eligibility; principal transaction PASS |
+| Persona typed store | explicit identity/profile isolation plus durable governance tombstone/protection | PASS |
 | Activation bypass after episode Forget | file-backed high-activation test | PASS |
 | Proactive recall after Forget | no cross-store typed target path | PARTIAL |
 | Consolidation after Forget | governed consolidation tests | PASS |
@@ -92,7 +92,7 @@ This follow-up adds migration V12 with explicit principal-to-session ownership a
 | Protect vs automatic retention/consolidation | file-backed tests | PASS |
 | Protected provenance/history | append-only temporal/persona store tests | PARTIAL |
 
-Hard invariant verified for governed episodic memory: forgotten episodes are excluded from retrieval, selection, overlay, consolidation, and post-restart activation ranking. It is **not** verified for all typed stores.
+Hard invariant verified for governed episodic and typed memory: principal-forgotten records are excluded from retrieval, selection, overlay, and eligible lifecycle processing, while append-only audit/history provenance remains retained.
 
 ## Activation evidence
 
@@ -135,7 +135,7 @@ Existing `memory_integration.rs` drives access history through coordinator selec
 | Gate | Result in this pass |
 |---|---|
 | `cargo fmt --all -- --check` | PASS after formatting |
-| `cargo check --workspace --all-targets --locked` | PASS before this pass; rerun required for final SHA |
+| `cargo check --workspace --all-targets --locked` | PASS (validated with the final source and documentation SHA) |
 | `cargo test -p apeireth-memory --tests --locked` | PASS: library and integration suites; extraction rerun 720 library tests + integration suites |
 | `cargo test -p apeireth-runtime-assembly --test memory_provider_e2e --locked` | PASS; typed source injected through canonical assembly seam |
 | `cargo test -p apeireth-runtime-assembly --test memory_typed_lifecycle --locked` | PASS: 2 tests, including typed-source candidate recall |
@@ -175,7 +175,7 @@ Existing `memory_integration.rs` drives access history through coordinator selec
 | Migration/idempotence/query plan | YES from existing tests |
 | Frontend | YES with 5 pre-existing warnings |
 | Runtime dependency wall | YES on pre-change evidence |
-| Branch clean / final remote SHA / final-SHA CI | YES: final SHA `f44eecca` is docs-only after the fully green governance commit `1b6114ec` run `34732561502`; this final docs SHA will receive its own CI on push |
+| Branch clean / final remote SHA / final-SHA CI | YES: final SHA `ed50c95e` (`ed50c95ed7ff443c4d7009db7b37d5d5a1d94d81`) matches the remote branch; CI runs `34749861334` (formatter), `34749861414` (clippy/fmt), `34749861286` (deny), `34749861279` (audit), and `34749861372` (Ubuntu/macOS/Windows nextest, hard-wall, secret scan) all succeeded |
 
 ## Freeze decision
 
