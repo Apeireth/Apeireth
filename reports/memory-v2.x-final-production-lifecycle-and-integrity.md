@@ -4,7 +4,7 @@
 **Repository:** `Apeireth/Apeireth` (`Apeireth/apeireth-rust` remote)
 **Worktree:** `H:\项目\CrossPlatform\Apeireth\apeireth-rust-memory-v2.2-production-completion`
 **Branch:** `feature/memory-v2.2-production-completion`
-**Final local/remote SHA at inspection:** `f44eeccaa24732ffdc872e65c14d2534ab9e40a9`
+**Final local/remote SHA at inspection:** `a6051e54a3b0076060afc81661483292d426713a`
 
 
 ## Executive decision
@@ -29,7 +29,7 @@ No new Memory architecture, database, migration, model training, Guard ML, main/
 | Branch | `feature/memory-v2.2-production-completion` |
 | Pre-change remote equality | `git ls-remote origin refs/heads/feature/memory-v2.2-production-completion` = `f73fdb6c` |
 | Existing remote CI | GitHub run `34439806389` (Rust tests OS matrix) and formatter/deny/audit/lint runs for the inspected SHA all completed successfully |
-| Final-SHA remote CI | GitHub run `34733134913`: Ubuntu, macOS, Windows nextest, hard-wall, and secret scan all completed successfully; formatter `34733134903`, clippy `34733134909`, deny `34733134921`, audit `34733134917` all succeeded |
+| Final-SHA remote CI | Governance commit run `34732561502` (source/test SHA `1b6114ec`) and final docs-only SHA run `34749439429`: Ubuntu, macOS, Windows nextest, hard-wall, and secret scan all completed successfully; final docs SHA formatter/deny/audit/clippy also succeeded |
 
 ## Real canonical E2E evidence
 
