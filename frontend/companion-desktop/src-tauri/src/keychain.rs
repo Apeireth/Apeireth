@@ -247,7 +247,7 @@ mod platform {
     }
 
     pub fn get(account: &str) -> Result<Option<String>, String> {
-        match entry(account).and_then(|e| e.get_password()) {
+        match entry(account)?.get_password() {
             Ok(key) if !key.is_empty() => Ok(Some(key)),
             Ok(_) => Ok(None),
             Err(keyring::Error::NoEntry) => Ok(None),
