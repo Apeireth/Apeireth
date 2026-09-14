@@ -348,7 +348,10 @@ impl CouncilResult {
             if self.timed_out {
                 feedback = "Council timed out before reaching a safe decision".into();
             } else if !self.failures.is_empty() {
-                feedback = format!("{} advisor(s) failed to evaluate the candidate", self.failures.len());
+                feedback = format!(
+                    "{} advisor(s) failed to evaluate the candidate",
+                    self.failures.len()
+                );
             } else {
                 feedback = "Council vetoed the candidate".into();
             }

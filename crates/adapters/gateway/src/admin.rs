@@ -256,9 +256,12 @@ pub async fn admin_config_update(
 }
 
 fn provider_registered(state: &GatewayState, provider: &str) -> bool {
-    state.runtime.providers().provider_ids().iter().any(|id| {
-        id.as_str() == provider || id.as_str() == format!("provider.{provider}")
-    })
+    state
+        .runtime
+        .providers()
+        .provider_ids()
+        .iter()
+        .any(|id| id.as_str() == provider || id.as_str() == format!("provider.{provider}"))
 }
 
 fn provider_capability_id(provider: &str) -> Result<CapabilityId, String> {
@@ -337,7 +340,9 @@ mod tests {
             "provider.openai-compatible.api_key"
         );
         assert_eq!(
-            provider_capability_id("openai-compatible").unwrap().as_str(),
+            provider_capability_id("openai-compatible")
+                .unwrap()
+                .as_str(),
             "provider.openai-compatible"
         );
     }

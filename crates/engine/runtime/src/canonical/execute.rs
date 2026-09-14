@@ -47,7 +47,7 @@
 use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
-use apeireth_governance::{Action, Decision, GovernanceRequest};
+use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{
     NormalizedMessage, NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedUsage,
@@ -84,6 +84,8 @@ pub struct TurnRequest {
     /// accumulate duplicate system messages, which quietly change behaviour and
     /// cost tokens on every subsequent request.
     pub system: Option<String>,
+    /// Immutable intent/authorization context created before provider use.
+    pub security_context: Option<TurnSecurityContext>,
 }
 
 impl TurnRequest {
@@ -94,6 +96,7 @@ impl TurnRequest {
             input: input.into(),
             model: None,
             system: None,
+            security_context: None,
         }
     }
 
@@ -108,6 +111,12 @@ impl TurnRequest {
     #[must_use]
     pub fn with_system(mut self, system: impl Into<String>) -> Self {
         self.system = Some(system.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_security_context(mut self, context: TurnSecurityContext) -> Self {
+        self.security_context = Some(context);
         self
     }
 }
@@ -279,6 +288,19 @@ impl Runtime {
         let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
         let request_id = RequestId::new();
         let trace_id = TraceId::new();
+        let mut request = request;
+        let session_text = request.session.to_string();
+        if let Some(context) = request.security_context.as_mut() {
+            context.trace_id = trace_id.to_string();
+            if context.intent_id == "intent:" {
+                context.intent_id = format!("intent:{trace_id}");
+            }
+            if let Some(intent) = context.intent.as_mut() {
+                intent.trace_id = trace_id.to_string();
+                intent.session_id = session_text.clone();
+                intent.intent_id = context.intent_id.clone();
+            }
+        }
         self.emit_event(RuntimeEvent::TurnStarted {
             session: request.session,
             request: request_id,
@@ -397,6 +419,7 @@ impl Runtime {
             request.session,
             request_id,
             trace_id,
+            request.security_context.as_ref(),
             tools,
             continuation,
             initial_retry,
@@ -680,6 +703,7 @@ impl Runtime {
                         session_id,
                         approval.request_id,
                         approval.trace_id,
+                        None,
                         tools,
                         continuation,
                         retry_scaffolding,
@@ -750,6 +774,7 @@ impl Runtime {
                         session_id,
                         approval.request_id,
                         approval.trace_id,
+                        None,
                         tools,
                         continuation,
                         Vec::new(),
@@ -776,6 +801,7 @@ impl Runtime {
         session_id: SessionId,
         request_id: RequestId,
         trace_id: TraceId,
+        security_context: Option<&TurnSecurityContext>,
         tools: Vec<NormalizedTool>,
         mut continuation: FrozenTurnContinuation,
         mut retry_scaffolding: Vec<NormalizedMessage>,
@@ -871,6 +897,7 @@ impl Runtime {
                         &continuation.model,
                         &mut session,
                         continuation.round,
+                        security_context,
                     )
                     .await
                 {
@@ -880,14 +907,16 @@ impl Runtime {
 
                 let mut provider_overlays = request_overlays;
                 provider_overlays.extend(before_model_overlays);
-                let provider_request = NormalizedRequest::new(
-                    continuation.model.clone(),
-                    compose_provider_messages(
+                let provider_messages = self.project_provider_messages(
+                    &compose_provider_messages(
                         &session.messages,
                         &retry_scaffolding,
                         &provider_overlays,
                     ),
+                    &continuation.model,
                 );
+                let provider_request =
+                    NormalizedRequest::new(continuation.model.clone(), provider_messages);
                 retry_scaffolding.clear();
                 let routed = match &stream_sink {
                     Some(sink) => {
@@ -1230,6 +1259,7 @@ impl Runtime {
                         trace_id,
                         &call,
                         continuation.round,
+                        security_context,
                         is_preapproved,
                         approved_approval.as_ref(),
                     )
@@ -1355,10 +1385,12 @@ impl Runtime {
                             approved_approval_id: None,
                             module_invocations: module_state.used(),
                         };
-                        let command_text =
-                            approval_command_text(&tool_name, &tool_call, effective_invocation.as_ref());
-                        let arguments_summary =
-                            approval_arguments_summary(&tool_name, &tool_call);
+                        let command_text = approval_command_text(
+                            &tool_name,
+                            &tool_call,
+                            effective_invocation.as_ref(),
+                        );
+                        let arguments_summary = approval_arguments_summary(&tool_name, &tool_call);
                         let pending = PendingApproval {
                             approval_id,
                             session_id,
@@ -1551,7 +1583,20 @@ impl Runtime {
         Ok(effects)
     }
 
-    /// Close the current assistant tool-call batch when a module prevents the
+    fn project_provider_messages(
+        &self,
+        messages: &[NormalizedMessage],
+        model: &str,
+    ) -> Vec<NormalizedMessage> {
+        match self
+            .context_projector
+            .project(messages, self.providers.model_context_tokens(model))
+        {
+            Ok(projected) => projected,
+            Err(_) => messages.to_vec(),
+        }
+    }
+
     /// remaining calls from being dispatched. A tool result is required for
     /// every call in the assistant message before that transcript can be sent
     /// to another provider. The module's retry feedback remains a separate
@@ -1734,6 +1779,7 @@ impl Runtime {
         model: &str,
         session: &mut Session,
         round: u32,
+        security_context: Option<&TurnSecurityContext>,
     ) -> RuntimeResult<()> {
         let action = Action::Completion {
             model,
@@ -1742,12 +1788,10 @@ impl Runtime {
         let label = action.label();
         let verdict = self
             .governance
-            .evaluate_verbose(&GovernanceRequest::new(
-                action,
-                *session_id,
-                trace_id,
-                round,
-            ))
+            .evaluate_verbose(
+                &GovernanceRequest::new(action, *session_id, trace_id, round)
+                    .with_optional_security_context(security_context),
+            )
             .await;
         let hook = verdict.hook;
         let owner = verdict.owner;
@@ -1820,6 +1864,7 @@ impl Runtime {
         trace_id: TraceId,
         call: &ToolCall,
         round: u32,
+        security_context: Option<&TurnSecurityContext>,
         preapproved: bool,
         approved_approval: Option<&PendingApproval>,
     ) -> RuntimeResult<ToolDispatch> {
@@ -1959,12 +2004,11 @@ impl Runtime {
         let label = action.label();
         let verdict = self
             .governance
-            .evaluate_verbose(&GovernanceRequest::new(
-                action,
-                *session_id,
-                trace_id,
-                round,
-            ))
+            .evaluate_verbose(
+                &GovernanceRequest::new(action, *session_id, trace_id, round)
+                    .with_action_id(&call.id)
+                    .with_optional_security_context(security_context),
+            )
             .await;
         let hook = verdict.hook;
         let owner = verdict.owner;
@@ -2158,6 +2202,7 @@ impl Runtime {
                     approval: view.approval_id,
                     capability: view.capability_id.clone(),
                     tool_name: view.tool_name.clone(),
+                    tool_call_id: view.tool_call.id.clone(),
                 });
             }
             Err(error) => self.emit_event(RuntimeEvent::TurnFailed {
