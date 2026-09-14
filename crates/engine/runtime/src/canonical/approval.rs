@@ -304,11 +304,7 @@ pub fn approval_arguments_summary(tool_name: &str, call: &ToolCall) -> String {
     if let Some(path) = args.get("path").and_then(|value| value.as_str()) {
         return format!("操作 {}", bounded(path, 120));
     }
-    format!(
-        "{} {}",
-        tool_name,
-        bounded(&compact_json(args), 120)
-    )
+    format!("{} {}", tool_name, bounded(&compact_json(args), 120))
 }
 
 fn shell_command_from_display(display: &serde_json::Value) -> Option<String> {
@@ -583,7 +579,10 @@ mod tests {
 
         let text = approval_command_text("filesystem", &call, None);
         assert!(text.starts_with("filesystem: "), "{text}");
-        assert!(text.contains("read") && text.contains("notes.txt"), "{text}");
+        assert!(
+            text.contains("read") && text.contains("notes.txt"),
+            "{text}"
+        );
 
         let summary = approval_arguments_summary("filesystem", &call);
         assert_eq!(summary, "read notes.txt");

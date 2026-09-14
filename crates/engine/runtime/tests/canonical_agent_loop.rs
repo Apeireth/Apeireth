@@ -33,12 +33,12 @@ use apeireth_plugin::{
     ProviderError, ToolCapability,
 };
 use apeireth_protocol::canonical::{
-    ContentPart, MessageRole, ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse,
-    NormalizedTool, NormalizedUsage, ToolCall, ToolParameters, ToolResult,
+    ContentPart, MessageRole, ModelDescriptor, ModelFeature, NormalizedMessage, NormalizedRequest,
+    NormalizedResponse, NormalizedTool, NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
 use apeireth_runtime::canonical::{
-    ExecutionTrace, InMemorySessionStore, Runtime, RuntimeError, SessionEventKind, TraceEvent,
-    TurnRequest,
+    ContextProjectionError, ContextProjector, ExecutionTrace, InMemorySessionStore, Runtime,
+    RuntimeError, SessionEventKind, TraceEvent, TurnRequest,
 };
 use async_trait::async_trait;
 
@@ -332,6 +332,43 @@ impl GovernanceHook for DenyEveryCompletion {
     }
 }
 
+struct RecordingProjector {
+    calls: AtomicUsize,
+    projected: Mutex<Vec<NormalizedMessage>>,
+}
+
+impl RecordingProjector {
+    fn new(projected: Vec<NormalizedMessage>) -> Arc<Self> {
+        Arc::new(Self {
+            calls: AtomicUsize::new(0),
+            projected: Mutex::new(projected),
+        })
+    }
+}
+
+impl ContextProjector for RecordingProjector {
+    fn project(
+        &self,
+        _transcript: &[NormalizedMessage],
+        _model_context_tokens: Option<u32>,
+    ) -> Result<Vec<NormalizedMessage>, ContextProjectionError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(self.projected.lock().unwrap().clone())
+    }
+}
+
+struct FailingProjector;
+
+impl ContextProjector for FailingProjector {
+    fn project(
+        &self,
+        _transcript: &[NormalizedMessage],
+        _model_context_tokens: Option<u32>,
+    ) -> Result<Vec<NormalizedMessage>, ContextProjectionError> {
+        Err(ContextProjectionError::new("projection unavailable"))
+    }
+}
+
 struct ApproveEveryCompletion;
 
 #[async_trait]
@@ -350,9 +387,59 @@ impl GovernanceHook for ApproveEveryCompletion {
     }
 }
 
-// ---------------------------------------------------------------------------
-// The specified end-to-end case
-// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn context_projection_happens_before_provider_and_preserves_transcript() {
+    let provider = FakeProvider::new("provider.fake", vec![Scripted::Say("projected")]);
+    let projector = RecordingProjector::new(vec![NormalizedMessage::user("bounded context")]);
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_governance(Arc::new(AllowAll))
+        .with_context_projector(projector.clone())
+        .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .unwrap();
+
+    let session_id = SessionId::new();
+    runtime
+        .execute(TurnRequest::new(session_id, "original transcript"))
+        .await
+        .unwrap();
+
+    assert_eq!(projector.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        message_text(&provider.request(0).messages[0]),
+        "bounded context"
+    );
+    let persisted = runtime.sessions().load(&session_id).await.unwrap().unwrap();
+    assert_eq!(persisted.messages.len(), 2);
+    assert_eq!(message_text(&persisted.messages[0]), "original transcript");
+}
+
+#[tokio::test]
+async fn projection_failure_falls_back_to_original_provider_messages() {
+    let provider = FakeProvider::new("provider.fake", vec![Scripted::Say("fallback")]);
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_governance(Arc::new(AllowAll))
+        .with_context_projector(Arc::new(FailingProjector))
+        .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .unwrap();
+
+    runtime
+        .execute(TurnRequest::new(SessionId::new(), "must remain"))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        message_text(&provider.request(0).messages[0]),
+        "must remain"
+    );
+}
 
 #[tokio::test]
 async fn minimal_tool_call_agent_loop_closes_end_to_end() {
@@ -1013,6 +1100,106 @@ async fn consecutive_turns_share_one_session_transcript() {
     );
     let texts: Vec<String> = second_request.messages.iter().map(message_text).collect();
     assert_eq!(texts, ["You are terse.", "one", "first", "two"]);
+}
+
+#[tokio::test]
+async fn context_tool_call_result_latest_user_and_transcript_invariants_are_table_driven() {
+    struct InvariantCase {
+        name: &'static str,
+        check: fn(&[NormalizedMessage], &[NormalizedMessage]),
+    }
+
+    fn tool_call_precedes_result(request: &[NormalizedMessage], _: &[NormalizedMessage]) {
+        let call = request
+            .iter()
+            .position(|message| !message.tool_calls.is_empty());
+        let result = request
+            .iter()
+            .position(|message| message.role == MessageRole::Tool);
+        assert!(
+            call.is_some() && result.is_some() && call < result,
+            "tool call/result order"
+        );
+    }
+    fn tool_result_matches_call(request: &[NormalizedMessage], _: &[NormalizedMessage]) {
+        let call = request
+            .iter()
+            .find_map(|message| message.tool_calls.first());
+        let result = request
+            .iter()
+            .find(|message| message.role == MessageRole::Tool);
+        assert_eq!(
+            call.map(|value| value.id.as_str()),
+            result.and_then(|value| value.tool_call_id.as_deref())
+        );
+    }
+    fn latest_user_is_current_turn(request: &[NormalizedMessage], _: &[NormalizedMessage]) {
+        let latest = request
+            .iter()
+            .rev()
+            .find(|message| message.role == MessageRole::User);
+        assert_eq!(latest.map(message_text), Some("calculate 1+1".to_string()));
+    }
+    fn transcript_is_append_only(_: &[NormalizedMessage], transcript: &[NormalizedMessage]) {
+        assert_eq!(
+            transcript
+                .iter()
+                .filter(|message| message.role == MessageRole::User)
+                .count(),
+            1
+        );
+        assert_eq!(
+            transcript
+                .iter()
+                .filter(|message| message.role == MessageRole::Tool)
+                .count(),
+            1
+        );
+        assert_eq!(
+            transcript.last().map(message_text),
+            Some("The answer is 2.".to_string())
+        );
+    }
+
+    let cases = [
+        InvariantCase {
+            name: "tool-call-before-result",
+            check: tool_call_precedes_result,
+        },
+        InvariantCase {
+            name: "result-correlates-to-call",
+            check: tool_result_matches_call,
+        },
+        InvariantCase {
+            name: "latest-user-is-current-turn",
+            check: latest_user_is_current_turn,
+        },
+        InvariantCase {
+            name: "persisted-transcript-is-complete",
+            check: transcript_is_append_only,
+        },
+    ];
+    let provider = FakeProvider::new("provider.fake", calculator_script());
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_governance(Arc::new(AllowAll))
+        .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
+        .with_plugin(CalculatorPlugin::new())
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .unwrap();
+    let session_id = SessionId::new();
+    runtime
+        .execute(TurnRequest::new(session_id, "calculate 1+1"))
+        .await
+        .unwrap();
+    let request = provider.request(1);
+    let persisted = runtime.sessions().load(&session_id).await.unwrap().unwrap();
+    for case in cases {
+        (case.check)(&request.messages, &persisted.messages);
+        assert!(!case.name.is_empty());
+    }
 }
 
 #[tokio::test]

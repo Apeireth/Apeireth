@@ -93,7 +93,13 @@ impl ErrorFrame {
 
     /// Build a complete HTTP error response (`{"error": {...}}`).
     pub fn response(status: StatusCode, code: ErrorCode, message: impl Into<String>) -> Response {
-        (status, Json(ErrorEnvelope { error: Self::new(code, message) })).into_response()
+        (
+            status,
+            Json(ErrorEnvelope {
+                error: Self::new(code, message),
+            }),
+        )
+            .into_response()
     }
 }
 

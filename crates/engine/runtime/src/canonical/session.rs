@@ -528,7 +528,9 @@ mod tests {
         session.append(NormalizedMessage::user("hello"), clock.as_ref());
 
         let mut legacy = serde_json::to_value(&session).unwrap();
-        let object = legacy.as_object_mut().expect("session serializes as object");
+        let object = legacy
+            .as_object_mut()
+            .expect("session serializes as object");
         assert!(object.remove("settings").is_some());
 
         let migrated: Session = serde_json::from_value(legacy).expect("legacy session must load");
@@ -539,7 +541,11 @@ mod tests {
             migrated.settings.permission_preset,
             PermissionPreset::Standard
         );
-        assert_eq!(migrated.messages.len(), 1, "transcript must survive migration");
+        assert_eq!(
+            migrated.messages.len(),
+            1,
+            "transcript must survive migration"
+        );
         assert_eq!(migrated.revision, 1);
     }
 

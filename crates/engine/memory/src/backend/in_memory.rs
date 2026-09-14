@@ -19,6 +19,7 @@ use super::{BackendKind, MemoryBackend};
 /// 进程内 HashMap 后端（测试用）。
 pub struct InMemoryBackend {
     episodes_by_id: Mutex<HashMap<String, Episode>>,
+    metadata_by_episode: Mutex<HashMap<String, serde_json::Value>>,
     /// `(stream_kind, session_id) -> ordered list of entries`
     streams: Mutex<HashMap<(StreamKind, String), Vec<HistoryEntry>>>,
 }
@@ -27,6 +28,7 @@ impl InMemoryBackend {
     pub fn new() -> Self {
         Self {
             episodes_by_id: Mutex::new(HashMap::new()),
+            metadata_by_episode: Mutex::new(HashMap::new()),
             streams: Mutex::new(HashMap::new()),
         }
     }
@@ -95,6 +97,30 @@ impl MemoryBackend for InMemoryBackend {
         Ok(all)
     }
 
+    fn put_episode_metadata(
+        &self,
+        episode_id: &str,
+        metadata: serde_json::Value,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.metadata_by_episode
+            .lock()
+            .expect("InMemoryBackend poisoned")
+            .insert(episode_id.to_string(), metadata);
+        Ok(())
+    }
+
+    fn get_episode_metadata(
+        &self,
+        episode_id: &str,
+    ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self
+            .metadata_by_episode
+            .lock()
+            .expect("InMemoryBackend poisoned")
+            .get(episode_id)
+            .cloned())
+    }
+
     fn append_stream(
         &self,
         kind: StreamKind,
@@ -129,6 +155,54 @@ impl MemoryBackend for InMemoryBackend {
             alive.drain(..skip);
         }
         Ok(alive)
+    }
+}
+
+impl crate::scope::ScopedMemoryBackend for InMemoryBackend {
+    fn query_candidates(
+        &self,
+        query: &crate::scope::MemoryCandidateQuery,
+    ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        if query.visible_scopes.is_empty() || query.limit == 0 {
+            return Ok(Vec::new());
+        }
+        let episodes = self
+            .episodes_by_id
+            .lock()
+            .expect("InMemoryBackend poisoned");
+        let metadata_map = self
+            .metadata_by_episode
+            .lock()
+            .expect("InMemoryBackend poisoned");
+
+        let mut matched = Vec::new();
+        for ep in episodes.values() {
+            if let Some(as_of_ms) = query.as_of_ms {
+                if (ep.timestamp * 1000) > as_of_ms {
+                    continue;
+                }
+            }
+            let scope = if let Some(meta) = metadata_map.get(&ep.id) {
+                meta.get("scope")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_else(|| crate::scope::MemoryScope::Session {
+                        session_id: ep.session_id.clone(),
+                    })
+            } else {
+                crate::scope::MemoryScope::Session {
+                    session_id: ep.session_id.clone(),
+                }
+            };
+
+            if scope.is_visible_in(&query.visible_scopes) {
+                matched.push(ep.clone());
+            }
+        }
+
+        matched.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| b.id.cmp(&a.id)));
+        matched.truncate(query.limit);
+        matched.reverse();
+        Ok(matched)
     }
 }
 

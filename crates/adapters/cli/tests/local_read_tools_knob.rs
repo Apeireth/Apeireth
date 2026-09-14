@@ -104,7 +104,11 @@ async fn decision(runtime: &Runtime, capability: &str) -> Decision {
         TraceId::new(),
         1,
     );
-    runtime.governance().evaluate_verbose(&request).await.decision
+    runtime
+        .governance()
+        .evaluate_verbose(&request)
+        .await
+        .decision
 }
 
 async fn assert_allow(runtime: &Runtime, capability: &str) {

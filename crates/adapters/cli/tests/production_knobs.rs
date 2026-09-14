@@ -60,9 +60,10 @@ async fn shell_knob_registers_tool_and_requires_approval() {
     let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("shell")));
     let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("shell-session")));
 
-    let (runtime, _sessions, _memory, policy) = build_canonical_runtime_with_sessions_from_env()
-        .await
-        .expect("bootstrap with shell knob");
+    let (runtime, _sessions, _memory, policy, _guard_hook) =
+        build_canonical_runtime_with_sessions_from_env()
+            .await
+            .expect("bootstrap with shell knob");
 
     let tool_ids: Vec<String> = runtime
         .tools()
@@ -93,9 +94,10 @@ async fn fetch_knob_registers_tool_and_requires_approval() {
     let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("fetch")));
     let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("fetch-session")));
 
-    let (runtime, _sessions, _memory, policy) = build_canonical_runtime_with_sessions_from_env()
-        .await
-        .expect("bootstrap with fetch knob");
+    let (runtime, _sessions, _memory, policy, _guard_hook) =
+        build_canonical_runtime_with_sessions_from_env()
+            .await
+            .expect("bootstrap with fetch knob");
 
     let tool_ids: Vec<String> = runtime
         .tools()
@@ -118,9 +120,10 @@ async fn organs_and_preference_learning_knobs_register_modules() {
     let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("organs")));
     let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("organs-session")));
 
-    let (runtime, _sessions, _memory, _policy) = build_canonical_runtime_with_sessions_from_env()
-        .await
-        .expect("bootstrap with organ knobs");
+    let (runtime, _sessions, _memory, _policy, _guard_hook) =
+        build_canonical_runtime_with_sessions_from_env()
+            .await
+            .expect("bootstrap with organ knobs");
 
     let ids = module_ids(&runtime);
     assert!(

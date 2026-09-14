@@ -58,8 +58,12 @@ pub mod causal_world_model;
 pub mod cognitive;
 #[path = "canonical/cost_telemetry.rs"]
 pub mod cost_telemetry;
+#[path = "canonical/guard_observer.rs"]
+pub mod guard_observer;
 #[path = "canonical/harness_patch.rs"]
 pub mod harness_patch;
+#[path = "canonical/memory_typed_sink.rs"]
+pub mod memory_typed_sink;
 #[path = "canonical/orchestrator.rs"]
 pub mod orchestrator;
 #[path = "canonical/organ_llm_bridge.rs"]
@@ -74,29 +78,34 @@ pub mod preference_learning;
 pub mod production;
 #[path = "canonical/tool_modules.rs"]
 pub mod tool_modules;
+#[path = "canonical/typed_recall.rs"]
+pub mod typed_recall;
 #[path = "canonical/upgrade_cycle.rs"]
 pub mod upgrade_cycle;
 
 pub use cognitive::{
     turn_request_from_perception, CognitiveModuleEvent, CognitiveTelemetry, CouncilModule,
-    JudgeConfig, JudgeModule, JudgeObservations, JudgeResult, JudgeVerdict, MemoryRecallModule,
-    MemoryWritebackModule, ModuleMetricsSnapshot, PreferenceRecallModule, SelfAssessmentModule,
-    COUNCIL_MODULE_ID, DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID,
-    MEMORY_WRITEBACK_MODULE_ID, PREFERENCE_RECALL_MODULE_ID, SELF_ASSESSMENT_MODULE_ID,
+    JudgeConfig, JudgeModule, JudgeObservations, JudgeResult, JudgeVerdict,
+    MemoryRecallAccessRecorder, MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule,
+    ModuleMetricsSnapshot, PreferenceRecallModule, SelfAssessmentModule, COUNCIL_MODULE_ID,
+    DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID, MEMORY_WRITEBACK_MODULE_ID,
+    PREFERENCE_RECALL_MODULE_ID, SELF_ASSESSMENT_MODULE_ID,
 };
+pub use guard_observer::GuardDatasetObserver;
+pub use memory_typed_sink::CanonicalMemoryTypedSink;
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
 pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};
-pub use permission_preset::{
-    is_write_or_execute_capability, PermissionPresetGovernanceHook,
-};
+pub use permission_preset::{is_write_or_execute_capability, PermissionPresetGovernanceHook};
 pub use preference_learning::{
     PreferenceEvidence, PreferenceLearningModule, PreferenceLearningStats, PreferencePolarity,
     PREFERENCE_LEARNING_MODULE_ID,
 };
 pub use production::{
-    CognitiveBackends, CognitiveModuleConfig, ProductionBackends, ProductionCognitiveModules,
-    ProductionModules, ProductionModulesConfig,
+    with_memory_context_projection, CognitiveBackends, CognitiveModuleConfig,
+    MemoryContextProjector, ProductionBackends, ProductionCognitiveModules, ProductionModules,
+    ProductionModulesConfig,
 };
 pub use tool_modules::{
     FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
 };
+pub use typed_recall::SqliteTypedMemoryRecallSource;

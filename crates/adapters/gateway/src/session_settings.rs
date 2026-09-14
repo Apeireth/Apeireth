@@ -203,10 +203,7 @@ mod tests {
 
     async fn save_session(store: &Arc<dyn SessionStore>, id: SessionId) {
         let clock = system_clock();
-        store
-            .save(&Session::new(id, clock.as_ref()))
-            .await
-            .unwrap();
+        store.save(&Session::new(id, clock.as_ref())).await.unwrap();
     }
 
     async fn json_body(response: Response) -> serde_json::Value {
@@ -281,7 +278,9 @@ mod tests {
                     .method("PATCH")
                     .uri(format!("/v1/sessions/{sid}/settings"))
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"model":"some/model","permission_preset":"full"}"#))
+                    .body(Body::from(
+                        r#"{"model":"some/model","permission_preset":"full"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -363,7 +362,10 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         let body = json_body(response).await;
         assert_eq!(body["error"]["code"], "session_not_found");
-        assert!(body["error"]["message"].as_str().unwrap().contains(&sid.to_string()));
+        assert!(body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains(&sid.to_string()));
         assert!(body["error"]["solution"].is_string());
     }
 

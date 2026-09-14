@@ -218,11 +218,17 @@ async fn read_only_refuses_dangerous_tool_with_chinese_explanation() {
     );
 
     let stored = runtime.sessions().load(&session).await.unwrap().unwrap();
-    assert!(stored.approvals.is_empty(), "read_only must not mint approval");
+    assert!(
+        stored.approvals.is_empty(),
+        "read_only must not mint approval"
+    );
     let denied = stored.events.iter().find(|event| {
         matches!(&event.event, apeireth_runtime::canonical::SessionEventKind::GovernanceDenied { hook, reason, .. } if hook == "permission_preset" && reason.contains("只读"))
     });
-    assert!(denied.is_some(), "expected a Chinese read_only denial event");
+    assert!(
+        denied.is_some(),
+        "expected a Chinese read_only denial event"
+    );
 }
 
 #[tokio::test]

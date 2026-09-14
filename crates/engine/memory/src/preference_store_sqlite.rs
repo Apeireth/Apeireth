@@ -129,22 +129,26 @@ impl PreferenceStore for SQLitePreferenceStore {
         let tags_json = serde_json::to_string(&pref.tags)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let session_id_str = pref.session_id.to_string();
-        // 同步读 — RC-3 trait method 是 sync, 用 reader pool
+        let id = pref.id.clone();
+        let topic = pref.topic.clone();
+        let stance = pref.stance.clone();
+        let confidence = pref.confidence;
+        let created_at = pref.created_at;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR REPLACE INTO user_preferences \
                      (id, session_id, topic, stance, confidence, evidence_refs, tags, created_at) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                     rusqlite::params![
-                        pref.id,
+                        id,
                         session_id_str,
-                        pref.topic,
-                        pref.stance,
-                        pref.confidence,
+                        topic,
+                        stance,
+                        confidence,
                         evidence_refs_json,
                         tags_json,
-                        pref.created_at,
+                        created_at,
                     ],
                 )?;
                 Ok(())
@@ -214,8 +218,9 @@ impl PreferenceStore for SQLitePreferenceStore {
 
     fn forget(&self, pref_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // 0 装诚实: 真删, 不留 tombstone (preference 是事实记录, 不是 audit log)
+        let pref_id = pref_id.to_owned();
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "DELETE FROM user_preferences WHERE id = ?1",
                     rusqlite::params![pref_id],

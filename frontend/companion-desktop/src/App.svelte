@@ -58,6 +58,7 @@
     RuntimeHealthReport,
     SessionSettings,
     ToolCallDetails,
+    GuardStatus,
   } from './lib/types';
   import {
     checkHealthDetailed,
@@ -74,6 +75,7 @@
     getSessionSettings,
     patchSessionSettings,
     fetchCapabilities,
+    fetchGuardStatus,
     subscribeCompanionEvents,
     capabilityAvailable,
     capabilitySupported,
@@ -120,7 +122,7 @@
     logs: {
       eyebrow: '观察与审计',
       title: '活动与调用日志',
-      sub: '每一轮交互的延迟、Token、Prompt 与 CoT 思考流。',
+      sub: '每一轮交互的延迟、Token、执行事件与工具调用轨迹。',
       action: '',
     },
     settings: {
@@ -553,6 +555,7 @@
   }
   let showVoiceCall = $state(false);
   let isRefreshingHealth = $state(false);
+  let guardStatus = $state<GuardStatus | null>(null);
 
   async function openVoiceCall() {
     showVoiceCall = true;
@@ -854,6 +857,8 @@
         }
         // 会话模型选择器数据 + 会话级设置（拉取失败静默降级）。
         if (!sessionModels.length) void loadSessionModels();
+        const guard = await fetchGuardStatus(config);
+        guardStatus = 'error' in guard ? null : guard;
         if (activeId) {
           if (!sessionSettings) void loadSessionSettings(activeId);
           const inbox = await fetchCanonicalApprovals(config, activeId).catch(() => []);
@@ -880,6 +885,7 @@
         }
       } else {
         pendingApprovals = [];
+        guardStatus = null;
       }
     } finally {
       isRefreshingHealth = false;
@@ -1738,6 +1744,23 @@
           {:else}
             <p class="wb-empty">尚未完成探测。点「深度诊断」查看详情。</p>
           {/each}
+          <h3 class="sec-title">行为安全</h3>
+          {#if guardStatus}
+            <div class="rowline">
+              <span class="dot-st" class:ok={guardStatus.enabled} class:bad={!guardStatus.enabled}></span>
+              <span class="k">Guard</span>
+              <code>{guardStatus.ml_classifier_available ? (guardStatus.ml_model_version || '模型已启用') : '确定性模式'}</code>
+              <span class="v">评估 {guardStatus.total_evaluations} · 拒绝 {guardStatus.total_denied} · 待审批 {guardStatus.total_approval_required}</span>
+            </div>
+            <div class="rowline">
+              <span class="dot-st" class:ok={guardStatus.dataset_recording_enabled}></span>
+              <span class="k">数据集</span>
+              <code>{guardStatus.dataset_recording_enabled ? 'recording' : 'off'}</code>
+              <span class="v">分类与运行结果按 action_id 关联</span>
+            </div>
+          {:else}
+            <p class="wb-empty">Guard 状态暂不可用。</p>
+          {/if}
         {/if}
       </div>
     </aside>
@@ -1792,9 +1815,16 @@
             <p class="sug-note">若干个性化条目 · 由近期记忆与对话生成</p>
             <div class="orbar">或者</div>
             <div class="calls">
-              <button class="call" onclick={openVoiceCall}>
+              <button
+                class="call"
+                onclick={openVoiceCall}
+                title={capabilityAvailable(capabilities, 'voice.duplex') ? '开始语音通话' : '全双工语音服务尚未组装 (not_assembled)'}
+              >
                 <PhoneCall size={13} />
                 语音通话
+                {#if !capabilityAvailable(capabilities, 'voice.duplex')}
+                  <span style="opacity: 0.6; font-size: 11px;">(未组装)</span>
+                {/if}
               </button>
             </div>
           </section>
