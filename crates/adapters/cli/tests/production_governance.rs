@@ -91,7 +91,8 @@ async fn explicit_false_policy_grants_repo_only_and_denies_read_tools() {
         [
             "permission_governance",
             "input_security.credential_disclosure",
-            "input_security.prompt_injection"
+            "input_security.prompt_injection",
+            "behavior_chain_guard",
         ]
     );
 
@@ -144,7 +145,12 @@ async fn env_wrapper_grants_local_read_tools_by_default_and_honors_disable() {
     std::env::remove_var(ENABLE_LOCAL_READ_TOOLS_ENV);
     std::env::set_var(DISABLE_LOCAL_READ_TOOLS_ENV, "1");
     let disabled = build_production_governance_from_env();
-    assert_decision(&disabled, "tool.filesystem", Decision::deny("expected deny")).await;
+    assert_decision(
+        &disabled,
+        "tool.filesystem",
+        Decision::deny("expected deny"),
+    )
+    .await;
     assert_decision(&disabled, "tool.search", Decision::deny("expected deny")).await;
 
     // Fail-closed: DISABLE wins when both knobs are set.

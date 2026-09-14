@@ -100,7 +100,7 @@ impl MemoryBackend for SqliteBackend {
         // 以 session_id 派生 (episode 的主体 = 其会话), 0 装诚实并保持写入可见.
         let ep = ep.clone();
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR IGNORE INTO episodes (id, continuity_id, timestamp, role, content, session_id) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -186,6 +186,61 @@ impl MemoryBackend for SqliteBackend {
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
+    fn put_episode_metadata(
+        &self,
+        episode_id: &str,
+        metadata: serde_json::Value,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let episode_id = episode_id.to_string();
+        let metadata = serde_json::to_string(&metadata)?;
+        self.pool
+            .write_sync(move |conn| {
+                // Keep this self-healing for older test/embedded schemas that
+                // predate V9; the production migration creates the same table.
+                conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS episode_memory_metadata (\
+                     episode_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL)",
+                )?;
+                conn.execute(
+                    "INSERT INTO episode_memory_metadata (episode_id, metadata_json)\
+                     VALUES (?1, ?2) ON CONFLICT(episode_id) DO UPDATE SET metadata_json = excluded.metadata_json",
+                    rusqlite::params![episode_id, metadata],
+                )?;
+                Ok(())
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    }
+
+    fn get_episode_metadata(
+        &self,
+        episode_id: &str,
+    ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
+        let episode_id = episode_id.to_string();
+        let raw = self
+            .pool
+            .read(move |conn| {
+                let result = conn.query_row(
+                    "SELECT metadata_json FROM episode_memory_metadata WHERE episode_id = ?1",
+                    rusqlite::params![episode_id],
+                    |row| row.get::<_, String>(0),
+                );
+                match result {
+                    Ok(raw) => Ok(Some(raw)),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(rusqlite::Error::SqliteFailure(_, Some(message)))
+                        if message.contains("no such table") =>
+                    {
+                        Ok(None)
+                    }
+                    Err(error) => Err(error.into()),
+                }
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        raw.map(|value| serde_json::from_str(&value))
+            .transpose()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+
     fn append_stream(
         &self,
         kind: apeireth_core::kernel::StreamKind,
@@ -212,7 +267,7 @@ impl MemoryBackend for SqliteBackend {
         let tags_json = serde_json::to_string(&entry.tags)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     &format!(
                         "INSERT OR IGNORE INTO {table} (id, subject_id, subject_rev, created_at, payload, source, tags) \
@@ -287,6 +342,98 @@ impl MemoryBackend for SqliteBackend {
                     out.push(r?);
                 }
                 out.retain(|e| e.tombstoned_at.is_none());
+                Ok(out)
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    }
+}
+
+impl crate::scope::ScopedMemoryBackend for SqliteBackend {
+    fn query_candidates(
+        &self,
+        query: &crate::scope::MemoryCandidateQuery,
+    ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        if query.visible_scopes.is_empty() || query.limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut scope_clauses = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        for scope in &query.visible_scopes {
+            match scope {
+                crate::scope::MemoryScope::Global => {
+                    scope_clauses.push(
+                        "json_extract(m.metadata_json, '$.scope.scope') = 'global'".to_string(),
+                    );
+                }
+                crate::scope::MemoryScope::Project { project_id } => {
+                    scope_clauses.push("(json_extract(m.metadata_json, '$.scope.scope') = 'project' AND json_extract(m.metadata_json, '$.scope.project_id') = ?)".to_string());
+                    params.push(Box::new(project_id.clone()));
+                }
+                crate::scope::MemoryScope::User { user_id } => {
+                    scope_clauses.push("(json_extract(m.metadata_json, '$.scope.scope') = 'user' AND json_extract(m.metadata_json, '$.scope.user_id') = ?)".to_string());
+                    params.push(Box::new(user_id.clone()));
+                }
+                crate::scope::MemoryScope::Persona {
+                    persona_id,
+                    user_id,
+                } => {
+                    scope_clauses.push("(json_extract(m.metadata_json, '$.scope.scope') = 'persona' AND json_extract(m.metadata_json, '$.scope.persona_id') = ? AND json_extract(m.metadata_json, '$.scope.user_id') = ?)".to_string());
+                    params.push(Box::new(persona_id.clone()));
+                    params.push(Box::new(user_id.clone()));
+                }
+                crate::scope::MemoryScope::Session { session_id } => {
+                    scope_clauses.push("((json_extract(m.metadata_json, '$.scope.scope') = 'session' AND json_extract(m.metadata_json, '$.scope.session_id') = ?) OR (m.metadata_json IS NULL AND e.session_id = ?))".to_string());
+                    params.push(Box::new(session_id.clone()));
+                    params.push(Box::new(session_id.clone()));
+                }
+            }
+        }
+
+        if scope_clauses.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let scope_sql = scope_clauses.join(" OR ");
+        let mut sql = format!(
+            "SELECT e.id, e.timestamp, e.role,
+                    COALESCE(g.content_override, e.content), e.session_id
+               FROM episodes e
+               LEFT JOIN episode_memory_metadata m ON m.episode_id = e.id
+               LEFT JOIN episode_governance g ON g.episode_id = e.id
+              WHERE (g.status IS NULL OR g.status <> 'forgotten')
+                AND ({scope_sql})"
+        );
+
+        if let Some(as_of_ms) = query.as_of_ms {
+            let as_of_sec = as_of_ms / 1000;
+            sql.push_str(" AND e.timestamp <= ?");
+            params.push(Box::new(as_of_sec));
+        }
+
+        sql.push_str(" ORDER BY e.timestamp DESC, e.id DESC LIMIT ?");
+        params.push(Box::new(query.limit as i64));
+
+        self.pool
+            .read(move |conn| {
+                let mut stmt = conn.prepare(&sql)?;
+                let param_refs: Vec<&dyn rusqlite::ToSql> =
+                    params.iter().map(|p| p.as_ref()).collect();
+                let rows = stmt.query_map(param_refs.as_slice(), |row| {
+                    Ok(Episode {
+                        id: row.get(0)?,
+                        timestamp: row.get(1)?,
+                        role: row.get(2)?,
+                        content: row.get(3)?,
+                        session_id: row.get(4)?,
+                    })
+                })?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r?);
+                }
+                out.reverse();
                 Ok(out)
             })
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
@@ -465,6 +612,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "wall-clock benchmark; run explicitly in performance validation"]
     async fn performance_1000_episodes_under_1s() {
         let b = fresh().await;
         let start = std::time::Instant::now();

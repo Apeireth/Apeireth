@@ -8,20 +8,30 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_core::kernel::Clock;
+use apeireth_memory::{
+    AccessHistoryActivationSource, ContextWindowManager, EmbeddingProvider, MemoryCoordinator,
+    MemoryExtractor, MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
+    MemoryTypedMaterializationSink, ProactiveRecallPolicy, ScopedMemoryBackend,
+    SqliteAccessHistoryStore, TypedMemoryRecallSource, TypedRecallIdentity,
+};
 use apeireth_orchestration::Council;
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEntryStore};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
 use apeireth_plugin::self_assessment::SelfAssessmentStore;
 use apeireth_plugin::ToolCapability;
+use apeireth_protocol::canonical::NormalizedMessage;
+use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
 
 use super::capability::CapabilityProvider;
 use super::cognitive::{
     CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule, JudgeObservations,
-    MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule, SelfAssessmentModule,
+    MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule,
+    SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
+use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
@@ -29,15 +39,78 @@ use super::tool_modules::{
     FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
 };
 
+/// Adapter that exposes memory's context-window implementation through the
+/// runtime-owned projection port. It is kept in assembly so the runtime kernel
+/// does not depend on memory or storage.
+pub struct MemoryContextProjector {
+    manager: ContextWindowManager,
+}
+
+impl MemoryContextProjector {
+    pub fn new(manager: ContextWindowManager) -> Self {
+        Self { manager }
+    }
+}
+
+impl ContextProjector for MemoryContextProjector {
+    fn project(
+        &self,
+        transcript: &[NormalizedMessage],
+        model_context_tokens: Option<u32>,
+    ) -> Result<Vec<NormalizedMessage>, ContextProjectionError> {
+        let projection = match model_context_tokens {
+            // An unknown provider limit must not be treated as a tiny/default
+            // budget: preserve the transcript rather than compacting eagerly.
+            None => transcript.to_vec(),
+            Some(context_tokens) => {
+                self.manager
+                    .project(transcript, context_tokens as usize)
+                    .messages
+            }
+        };
+        Ok(projection)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use apeireth_protocol::canonical::ContentPart;
+
+    #[test]
+    fn unknown_context_limit_preserves_transcript() {
+        let projector = MemoryContextProjector::new(ContextWindowManager::default());
+        let transcript = vec![
+            NormalizedMessage::user("older context ".repeat(200)),
+            NormalizedMessage::assistant("recent response"),
+            NormalizedMessage::user("latest request"),
+            NormalizedMessage::assistant("latest answer"),
+            NormalizedMessage::user("follow-up"),
+        ];
+        let projected = projector.project(&transcript, None).unwrap();
+        assert_eq!(projected, transcript);
+        assert!(ContentPart::join_text(&projected[0].content).contains("older context"));
+    }
+}
+
+/// Attach the default memory-backed context projector to a runtime builder.
+#[must_use]
+pub fn with_memory_context_projection(
+    builder: RuntimeBuilder,
+    manager: ContextWindowManager,
+) -> RuntimeBuilder {
+    builder.with_context_projector(Arc::new(MemoryContextProjector::new(manager)))
+}
+
 /// Feature switches for the production cognitive and tool modules.
-///
-/// Memory and preference recall/writeback are cheap local calls and are on by
 /// default when their injected stores exist. Judge, Council, Shell and Fetch are explicitly
 /// opt-in; Judge and Council side-calls stay behind the runtime invoker.
 #[derive(Debug, Clone)]
 pub struct ProductionModulesConfig {
     /// Register memory recall when a memory backend is supplied.
     pub memory_recall: bool,
+    /// Opt-in deterministic proactive recall policy; disabled by default.
+    pub proactive_recall: Option<ProactiveRecallPolicy>,
     /// Register AfterTurn memory writeback when a memory backend is supplied.
     pub memory_writeback: bool,
     /// Register preference recall when a preference store is supplied.
@@ -75,6 +148,7 @@ impl Default for ProductionModulesConfig {
     fn default() -> Self {
         Self {
             memory_recall: true,
+            proactive_recall: None,
             memory_writeback: true,
             preference_recall: true,
             self_assessment: true,
@@ -104,6 +178,8 @@ pub type CognitiveModuleConfig = ProductionModulesConfig;
 pub struct ProductionBackends {
     /// Episode and history-stream backend.
     pub memory: Option<Arc<dyn MemoryBackend>>,
+    /// Memory governance store (active/forgotten status, protection, overrides).
+    pub memory_governance: Option<Arc<dyn MemoryGovernanceStore>>,
     /// Optional progressive-disclosure wiki store.
     pub wiki: Option<Arc<dyn WikiEntryStore>>,
     /// Optional knowledge graph store.
@@ -118,8 +194,23 @@ pub struct ProductionBackends {
     pub council: Option<Arc<Council>>,
     /// Workspace root directory for local file tools.
     pub workspace_root: Option<PathBuf>,
+    /// Scoped memory backend for cross-session storage queries.
+    pub scoped_memory: Option<Arc<dyn ScopedMemoryBackend>>,
+    /// Embedding provider for semantic memory retrieval.
+    pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
+    /// Optional durable selected-context access history.
+    pub access_history: Option<Arc<SqliteAccessHistoryStore>>,
+    /// Optional unified materializer for bounded AfterTurn memory writeback.
+    pub memory_materializer: Option<Arc<dyn MemoryMaterializerPort>>,
+    /// Optional unified extractor used to build a default materializer.
+    pub memory_extractor: Option<Arc<dyn MemoryExtractor>>,
+    /// Optional typed durable candidate source for unified recall.
+    pub typed_recall: Option<Arc<dyn TypedMemoryRecallSource>>,
+    /// Explicit identity paired with the typed recall source.
+    pub typed_recall_identity: Option<TypedRecallIdentity>,
+    /// Optional concrete typed durable sink for commitment/persona/relation projections.
+    pub typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
 }
-
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
 
@@ -196,10 +287,50 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
+        // Unified Memory 2.0 coordinator wiring
+        let mut shared_coordinator: Option<Arc<MemoryCoordinator>> = None;
+        if config.memory_recall || config.memory_writeback {
+            let memory = required(backends.memory.clone(), "memory", "memory")?;
+            let governance = required(
+                backends.memory_governance.clone(),
+                "memory_governance",
+                "memory_governance",
+            )?;
+            let mut coordinator =
+                MemoryCoordinator::new(Arc::clone(&memory), Arc::clone(&governance));
+            if let Some(scoped) = &backends.scoped_memory {
+                coordinator = coordinator.with_scoped_backend(Arc::clone(scoped));
+            }
+            if let Some(embed) = &backends.embedding_provider {
+                coordinator = coordinator.with_embedding_provider(Arc::clone(embed));
+            }
+            if let Some(pref) = &backends.preferences {
+                coordinator = coordinator.with_preferences(Arc::clone(pref));
+            }
+            if let (Some(graph), Some(associations)) = (&backends.graph, &backends.associations) {
+                coordinator =
+                    coordinator.with_experience(Arc::clone(graph), Arc::clone(associations));
+            }
+            if let Some(history) = &backends.access_history {
+                coordinator = coordinator.with_activation_source(Arc::new(
+                    AccessHistoryActivationSource::new(Arc::clone(history), 0.5, 0.0),
+                ));
+            }
+            if let (Some(source), Some(identity)) =
+                (&backends.typed_recall, &backends.typed_recall_identity)
+            {
+                coordinator = coordinator.with_typed_recall(Arc::clone(source), identity.clone());
+            }
+            shared_coordinator = Some(Arc::new(coordinator));
+        }
+
         // Register cognitive modules
         if config.memory_recall {
             let memory = required(backends.memory.clone(), "memory_recall", "memory")?;
             let mut module = MemoryRecallModule::new(memory);
+            if let Some(coord) = &shared_coordinator {
+                module = module.with_coordinator(Arc::clone(coord));
+            }
             if let (Some(wiki), Some(graph), Some(associations)) =
                 (&backends.wiki, &backends.graph, &backends.associations)
             {
@@ -208,6 +339,13 @@ impl ProductionModules {
                     Arc::clone(graph),
                     Arc::clone(associations),
                 );
+            }
+            if let Some(history) = &backends.access_history {
+                let history: Arc<dyn MemoryRecallAccessStore> = history.clone();
+                module = module.with_access_store(history, Arc::clone(&clock));
+            }
+            if let Some(policy) = &config.proactive_recall {
+                module = module.with_proactive_recall(policy.clone());
             }
             modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }
@@ -277,6 +415,17 @@ impl ProductionModules {
                 required(backends.memory, "memory_writeback", "memory")?,
                 clock,
             );
+            if let Some(coord) = &shared_coordinator {
+                module = module.with_coordinator(Arc::clone(coord));
+            }
+            if let Some(materializer) = &backends.memory_materializer {
+                module = module.with_materializer(Arc::clone(materializer));
+            } else if let Some(extractor) = &backends.memory_extractor {
+                module = module.with_extractor(Arc::clone(extractor));
+            }
+            if let Some(sink) = &backends.typed_sink {
+                module = module.with_typed_sink(Arc::clone(sink));
+            }
             if let (Some(wiki), Some(graph), Some(associations)) =
                 (&backends.wiki, &backends.graph, &backends.associations)
             {
@@ -306,7 +455,15 @@ impl ProductionModules {
         })
     }
 
-    /// Ordered modules for registration in the canonical runtime.
+    /// Attach the context-window projector using its default policy.
+    #[must_use]
+    pub fn register_context_projection(
+        &self,
+        builder: super::runtime::RuntimeBuilder,
+    ) -> super::runtime::RuntimeBuilder {
+        with_memory_context_projection(builder, ContextWindowManager::default())
+    }
+
     pub fn modules(&self) -> &[Arc<dyn Module>] {
         &self.modules
     }

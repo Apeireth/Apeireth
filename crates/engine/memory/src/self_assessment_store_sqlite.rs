@@ -92,22 +92,22 @@ impl SelfAssessmentStore for SQLiteSelfAssessmentStore {
         let deviations_json = serde_json::to_string(&sa.deviations)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let session_id_str = sa.session_id.to_string();
+        let id = sa.id.clone();
+        let task_id = sa.task_id.clone();
+        let reviewer_id = sa.reviewer_id.clone();
+        let round = sa.round;
+        let alignment = sa.alignment;
+        let quality = sa.quality;
+        let assessed_at = sa.assessed_at;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR REPLACE INTO self_assessments \
                      (id, round, session_id, task_id, alignment, quality, deviations, assessed_at, reviewer_id) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     rusqlite::params![
-                        sa.id,
-                        sa.round,
-                        session_id_str,
-                        sa.task_id,
-                        sa.alignment,
-                        sa.quality,
-                        deviations_json,
-                        sa.assessed_at,
-                        sa.reviewer_id,
+                        id, round, session_id_str, task_id, alignment, quality,
+                        deviations_json, assessed_at, reviewer_id,
                     ],
                 )?;
                 Ok(())

@@ -1,0 +1,65 @@
+//! Two-Stage Agent Behavior-Chain Safety Classifier (`apeireth-guard`).
+//!
+//! Provides deterministic Fast Guard (Stage A) for immediate sub-millisecond risk rejection,
+//! combined with multi-step Behavior Chain Guard (Stage B) for compound risk, escalation,
+//! and data egress tracking. Exposes canonical [`apeireth_governance::GovernanceHook`]
+//! integration, desensitized ML dataset collection (`guard-dataset-v1`), and Desktop
+//! observability endpoints.
+
+pub mod chain;
+pub mod chain_guard;
+pub mod classifier;
+pub mod command_effect;
+pub mod dataset;
+pub mod decision;
+pub mod enforcement;
+pub mod fast_guard;
+pub mod features;
+pub mod features_v2;
+pub mod fusion;
+pub mod hook;
+pub mod intent;
+pub mod introspection;
+pub mod observation;
+pub mod oracle;
+pub mod scenario;
+pub mod semantics;
+pub mod session;
+pub mod snapshot;
+
+pub use chain::{ActionNode, ActionStatus, BehaviorChain, BehaviorEdge, BehaviorNode, EdgeType};
+pub use chain_guard::ChainGuard;
+pub use classifier::{
+    canonical_artifact_sha256, feature_schema_hash, stamp_artifact_file, ChainRiskClassifier,
+    ClassifierEnforcementMode, JointModelArtifact, JointRiskClassifier, ModelCalibration,
+    NoClassifier, RiskClass, RiskPrediction, ThresholdClassifier, CALIBRATED_CONFIDENCE_KIND,
+    KNOWN_FEATURE_NAMES, MARGIN_CONFIDENCE_KIND,
+};
+pub use command_effect::{CommandEffectAnalyzer, CommandEffectSummary};
+pub use dataset::{DatasetRecorder, GuardDatasetRecord, GuardExecutionOutcome, GUARD_DATASET_V3};
+pub use decision::{GuardDecision, GuardStage};
+pub use enforcement::EnforcementDirective;
+pub use fast_guard::{FastGuard, FastGuardResult};
+pub use features::{AgentChainFeatureV1, AGENT_CHAIN_FEATURE_V1};
+pub use features_v2::{AgentChainFeatureV2, CrossTurnRiskSummary, AGENT_CHAIN_FEATURE_V2};
+pub use fusion::DecisionFusion;
+pub use hook::{BehaviorChainGuardHook, SessionBehaviorSummary, TurnRiskSummary};
+pub use intent::{
+    constrain_to_trusted, AlignmentAssessment, AlignmentClass, IntentAlignmentGuard, IntentInput,
+    IntentInterpreter, NegationAwareOperationExtractor, OperationPolarity, RuleIntentInterpreter,
+};
+pub use introspection::{GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto};
+pub use observation::{DataSensitivity, ResourceClass, SafetyObservation, SinkClass, SourceClass};
+pub use oracle::{ActionOracleLabel, ScenarioOracle, SecurityScenarioOracle};
+pub use scenario::{
+    family_split, run_scenario, run_scenario_checked, GuardScenario, ScenarioAction,
+    ScenarioActionResult, ScenarioCatalog, ScenarioExecutionTrace, ScenarioOutcome, ScenarioPair,
+    ScenarioTraceError, ScenarioTurn, ScenarioTurnTrace,
+};
+pub use semantics::{
+    canonical_descriptor_coverage, descriptor_for_capability, CapabilitySafetyDescriptor,
+    CapabilitySafetyMetadataProvider, CapabilitySafetyRegistry, DescriptorCoverageReport,
+    DescriptorSource, BUILTIN_CANONICAL_CAPABILITY_IDS,
+};
+pub use session::{SessionBehaviorHistory, TurnBehaviorSummary, MAX_TURN_HISTORY};
+pub use snapshot::FeatureSnapshot;

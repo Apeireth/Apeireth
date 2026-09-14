@@ -41,12 +41,14 @@ pub fn frame(code: ErrorCode, message: impl Into<String>) -> ErrorFrame {
 }
 
 /// Build a complete HTTP error response (`{"error": {...}}`).
-pub fn error_response(
-    status: StatusCode,
-    code: ErrorCode,
-    message: impl Into<String>,
-) -> Response {
-    (status, Json(ErrorEnvelope { error: frame(code, message) })).into_response()
+pub fn error_response(status: StatusCode, code: ErrorCode, message: impl Into<String>) -> Response {
+    (
+        status,
+        Json(ErrorEnvelope {
+            error: frame(code, message),
+        }),
+    )
+        .into_response()
 }
 
 #[cfg(test)]

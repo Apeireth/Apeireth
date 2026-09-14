@@ -71,7 +71,11 @@ impl CredentialWriter for SharedCredentials {
 
 impl CredentialResolver for SharedCredentials {
     fn resolve(&self, name: &str) -> Option<Secret> {
-        self.0.lock().unwrap().get(name).map(|value| Secret::new(value.clone()))
+        self.0
+            .lock()
+            .unwrap()
+            .get(name)
+            .map(|value| Secret::new(value.clone()))
     }
 }
 
@@ -204,7 +208,14 @@ async fn admin_config_hot_update_takes_effect_on_the_next_request() {
     let router = canonical_router_with_state(state);
 
     // Initial GET: defaults from env (which this test clears).
-    let body = json_body(router.clone().oneshot(get("/v1/admin/config")).await.unwrap()).await;
+    let body = json_body(
+        router
+            .clone()
+            .oneshot(get("/v1/admin/config"))
+            .await
+            .unwrap(),
+    )
+    .await;
     assert_eq!(body["provider"], "openai-compatible");
     assert_eq!(body["base_url"], "https://api.openai.com/v1");
     assert!(body["api_key"].is_null(), "{body}");
@@ -227,7 +238,14 @@ async fn admin_config_hot_update_takes_effect_on_the_next_request() {
     assert!(body["warnings"].is_array(), "{body}");
 
     // GET reflects the new values with a masked api_key.
-    let body = json_body(router.clone().oneshot(get("/v1/admin/config")).await.unwrap()).await;
+    let body = json_body(
+        router
+            .clone()
+            .oneshot(get("/v1/admin/config"))
+            .await
+            .unwrap(),
+    )
+    .await;
     assert_eq!(body["provider"], "openai-compatible");
     assert_eq!(body["base_url"], server_b.base_url);
     assert_eq!(body["api_key"], "sk-****c4a");
@@ -305,7 +323,14 @@ async fn admin_config_rejects_invalid_input_and_keeps_the_old_config() {
     assert_eq!(body["error"]["code"], "invalid_request");
 
     // Neither invalid patch changed the effective config.
-    let body = json_body(router.clone().oneshot(get("/v1/admin/config")).await.unwrap()).await;
+    let body = json_body(
+        router
+            .clone()
+            .oneshot(get("/v1/admin/config"))
+            .await
+            .unwrap(),
+    )
+    .await;
     assert_eq!(body["provider"], "openai-compatible");
     assert_eq!(body["base_url"], "https://api.openai.com/v1");
 }

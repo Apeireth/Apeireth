@@ -47,8 +47,11 @@ use serde::Serialize;
 
 use super::approval::PendingApprovalView;
 use super::capability::CapabilityRegistry;
+use super::context::{ContextProjector, NoContextProjector};
 use super::error::{RuntimeError, RuntimeResult};
-use super::events::{NoopRuntimeEventSink, RuntimeEvent, RuntimeEventSink};
+use super::events::{
+    CompositeRuntimeEventSink, NoopRuntimeEventSink, RuntimeEvent, RuntimeEventSink,
+};
 use super::module::{BehaviorModule, BehaviorRegistry, DEFAULT_MAX_MODULE_INVOCATIONS};
 use super::provider::ProviderRouter;
 use super::session::{InMemorySessionStore, SessionManager, SessionStore};
@@ -176,6 +179,7 @@ pub struct Runtime {
     pub(super) capabilities: CapabilityRegistry,
     pub(super) session_locks: SessionLocks,
     pub(super) event_sink: RwLock<Arc<dyn RuntimeEventSink>>,
+    pub(super) context_projector: Arc<dyn ContextProjector>,
 }
 
 impl Runtime {
@@ -316,6 +320,22 @@ impl Runtime {
             .expect("runtime event sink poisoned") = sink;
     }
 
+    /// Add an observer while preserving sinks installed by another
+    /// composition root. Gateway setup uses this so dataset/audit observers
+    /// attached during runtime bootstrap are not silently discarded.
+    pub fn add_event_sink(&self, sink: Arc<dyn RuntimeEventSink>) {
+        let existing = self
+            .event_sink
+            .read()
+            .expect("runtime event sink poisoned")
+            .clone();
+        *self
+            .event_sink
+            .write()
+            .expect("runtime event sink poisoned") =
+            Arc::new(CompositeRuntimeEventSink::new(vec![existing, sink]));
+    }
+
     pub(crate) fn emit_event(&self, event: RuntimeEvent) {
         self.event_sink
             .read()
@@ -353,6 +373,11 @@ impl Runtime {
             .collect::<Vec<_>>();
         declarations.extend(self.plugins.tool_declarations());
         declarations
+    }
+
+    /// The configured context projector.
+    pub fn context_projector(&self) -> &Arc<dyn ContextProjector> {
+        &self.context_projector
     }
 
     /// The router over every provider that can currently serve a completion.
@@ -437,6 +462,7 @@ pub struct RuntimeBuilder {
     modules: Vec<Arc<dyn BehaviorModule>>,
     capabilities: Vec<Arc<dyn ToolCapability>>,
     event_sink: Arc<dyn RuntimeEventSink>,
+    context_projector: Arc<dyn ContextProjector>,
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
 }
@@ -459,6 +485,7 @@ impl RuntimeBuilder {
             modules: Vec::new(),
             capabilities: Vec::new(),
             event_sink: Arc::new(NoopRuntimeEventSink),
+            context_projector: Arc::new(NoContextProjector),
             fallback_order: None,
             config: RuntimeConfig::default(),
         }
@@ -537,7 +564,13 @@ impl RuntimeBuilder {
         self
     }
 
-    /// Order in which providers are tried.
+    /// Project transcript messages immediately before provider requests.
+    #[must_use]
+    pub fn with_context_projector(mut self, projector: Arc<dyn ContextProjector>) -> Self {
+        self.context_projector = projector;
+        self
+    }
+
     ///
     /// Providers absent from `order` remain usable and are tried after every
     /// listed one. Without this, providers are tried in registration order.
@@ -642,6 +675,7 @@ impl RuntimeBuilder {
             capabilities: capability_registry,
             session_locks: SessionLocks::default(),
             event_sink: RwLock::new(self.event_sink),
+            context_projector: self.context_projector,
         })
     }
 }

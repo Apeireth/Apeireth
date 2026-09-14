@@ -232,7 +232,10 @@ mod tests {
         let after = hook
             .evaluate_verbose(&dispatch_request(session, &capability, &args))
             .await;
-        assert!(after.decision.is_allowed(), "remembered approval must allow");
+        assert!(
+            after.decision.is_allowed(),
+            "remembered approval must allow"
+        );
         assert_eq!(after.hook, "permission_preset");
     }
 
