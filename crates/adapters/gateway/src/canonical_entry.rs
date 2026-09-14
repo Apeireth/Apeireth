@@ -8,10 +8,11 @@
 use std::sync::{Arc, RwLock};
 
 use apeireth_core::kernel::{ApprovalId, RequestId, SessionId, Timestamp};
+use apeireth_guard::{IntentInput, IntentInterpreter, RuleIntentInterpreter};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, ExecutionTrace, PendingApprovalView, Runtime,
-    RuntimeError, TraceEvent, TurnOutcome, TurnRequest,
+    RuntimeError, TraceEvent, TurnOutcome, TurnRequest, TurnSecurityContext,
 };
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
@@ -235,7 +236,15 @@ pub async fn execute_chat(
     }
 
     let session = request.session.unwrap_or_else(SessionId::new);
-    let mut turn = TurnRequest::new(session, request.input);
+    let input = request.input;
+    let intent = RuleIntentInterpreter.interpret(IntentInput {
+        session_id: session.to_string(),
+        trace_id: String::new(),
+        user_request: input.clone(),
+        created_at_ms: 0,
+    });
+    let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
+    let mut turn = TurnRequest::new(session, input).with_security_context(context);
     if let Some(model) = request.model {
         turn = turn.with_model(model);
     }
@@ -435,7 +444,7 @@ pub fn build_gateway_state_with_services(
         services.trace_commands.clone(),
         services.audit_commands.clone(),
     ));
-    runtime.set_event_sink(Arc::new(
+    runtime.add_event_sink(Arc::new(
         apeireth_runtime::canonical::CompositeRuntimeEventSink::new(vec![
             Arc::new(events.clone()),
             observations.clone(),
@@ -490,7 +499,10 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
                 .patch(crate::session_settings::patch_session_settings),
         )
         .route("/v1/apeireth/events", get(events_handler))
-        .route("/v1/admin/config", get(admin_config_get).post(admin_config_update))
+        .route(
+            "/v1/admin/config",
+            get(admin_config_get).post(admin_config_update),
+        )
         .merge(panel_routes())
         // CORS is mandatory, not optional: the desktop WebView is a distinct
         // origin (tauri://localhost / http://tauri.localhost), and browsers
@@ -540,7 +552,9 @@ async fn health() -> Json<serde_json::Value> {
     }))
 }
 
-async fn list_models(State(state): State<GatewayState>) -> Result<Json<ModelListResponse>, Response> {
+async fn list_models(
+    State(state): State<GatewayState>,
+) -> Result<Json<ModelListResponse>, Response> {
     let created = Timestamp::from_clock(state.runtime.clock().as_ref()).epoch_millis() / 1_000;
     // Dedupe by model id: two providers can serve the same canonical model over
     // different wires (the anthropic plugin defaults to MiniMax's
@@ -581,7 +595,11 @@ async fn list_models(State(state): State<GatewayState>) -> Result<Json<ModelList
                 "未配置 API 密钥; 请在「设置 → 模型」中保存密钥后重试".to_string(),
             )
         };
-        return Err(ErrorFrame::response(StatusCode::UNAUTHORIZED, code, message));
+        return Err(ErrorFrame::response(
+            StatusCode::UNAUTHORIZED,
+            code,
+            message,
+        ));
     }
 
     Ok(Json(ModelListResponse {
@@ -933,7 +951,10 @@ fn hot_model_override(state: &GatewayState) -> Option<String> {
         .hot_config
         .read()
         .expect("gateway hot config lock poisoned");
-    config.admin_model_set.then(|| config.model.clone()).flatten()
+    config
+        .admin_model_set
+        .then(|| config.model.clone())
+        .flatten()
 }
 
 fn http_error(error: CanonicalEntryError, session: Option<SessionId>) -> HttpError {
@@ -962,13 +983,13 @@ fn classify_runtime_error(error: &RuntimeError) -> (StatusCode, ErrorCode) {
             StatusCode::BAD_GATEWAY,
             provider_code(&provider.to_string()),
         ),
-        RuntimeError::ProvidersExhausted { source, .. } => (
-            StatusCode::BAD_GATEWAY,
-            provider_code(&source.to_string()),
-        ),
-        RuntimeError::NoProvider { .. } | RuntimeError::NoHealthyProvider { .. } => {
-            (StatusCode::SERVICE_UNAVAILABLE, ErrorCode::ProviderUnreachable)
+        RuntimeError::ProvidersExhausted { source, .. } => {
+            (StatusCode::BAD_GATEWAY, provider_code(&source.to_string()))
         }
+        RuntimeError::NoProvider { .. } | RuntimeError::NoHealthyProvider { .. } => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            ErrorCode::ProviderUnreachable,
+        ),
         RuntimeError::Misconfigured(_) => (StatusCode::SERVICE_UNAVAILABLE, ErrorCode::Internal),
         RuntimeError::Denied { .. } => (StatusCode::FORBIDDEN, ErrorCode::InvalidRequest),
         RuntimeError::ApprovalRequired { .. } | RuntimeError::SessionApprovalPending { .. } => {

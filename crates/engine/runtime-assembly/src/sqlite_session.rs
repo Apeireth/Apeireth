@@ -166,7 +166,11 @@ mod tests {
             loaded.settings.permission_preset,
             PermissionPreset::Standard
         );
-        assert_eq!(loaded.messages.len(), 1, "transcript must survive migration");
+        assert_eq!(
+            loaded.messages.len(),
+            1,
+            "transcript must survive migration"
+        );
         assert_eq!(ContentPart::join_text(&loaded.messages[0].content), "hello");
     }
 }

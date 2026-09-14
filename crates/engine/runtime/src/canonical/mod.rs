@@ -27,6 +27,7 @@
 
 pub mod approval;
 pub mod capability;
+pub mod context;
 // B6 · Phase 5 (research, 默认关闭): 审批状态机形式化 (RA-5 规格, 模型级验证).
 pub mod research_approval_sm;
 pub use research_approval_sm::{
@@ -63,12 +64,14 @@ pub mod trace;
 // **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
 // L1 接 SelfAssessmentStore. 主人 Veto dashboard 留 v2.0.0 release 接入.
 
+pub use apeireth_governance::TurnSecurityContext;
 pub use approval::{
     approval_arguments_summary, approval_command_text, operation_fingerprint,
     operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus, PendingApproval,
     PendingApprovalView,
 };
 pub use capability::{CapabilityProvider, CapabilityRegistry};
+pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
 pub use error::{RuntimeError, RuntimeResult};
 pub use events::{
     event_sink, CompositeEventSink, CompositeRuntimeEventSink, NoopRuntimeEventSink, RuntimeEvent,

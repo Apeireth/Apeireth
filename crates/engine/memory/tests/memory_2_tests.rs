@@ -1,0 +1,507 @@
+use std::sync::Arc;
+
+use apeireth_core::kernel::memory::Episode;
+use apeireth_memory::{
+    MemoryCoordinator, MemoryGovernanceError, MemoryGovernanceStore, MemoryLayerKind,
+    MemoryRecallQuery, MemoryWritebackEntry, SqliteMemoryStore,
+};
+
+fn setup_coordinator() -> Arc<MemoryCoordinator> {
+    let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open in-memory sqlite store"));
+    let backend = store.clone();
+    let governance: Arc<dyn MemoryGovernanceStore> = store;
+    Arc::new(MemoryCoordinator::new(backend, governance))
+}
+
+#[test]
+fn test_writeback_episode_preserves_supplied_id() {
+    let coord = setup_coordinator();
+    let episode = Episode {
+        id: "ep-runtime-stable".into(),
+        timestamp: 1_700_000_000,
+        role: "assistant".into(),
+        content: "stable runtime episode".into(),
+        session_id: "sess-runtime".into(),
+    };
+
+    let returned = coord
+        .writeback_episode(&episode)
+        .expect("supplied episode should persist");
+
+    assert_eq!(returned, episode.id);
+    let stored = coord
+        .backend()
+        .get_episode(&episode.id)
+        .expect("backend lookup should succeed")
+        .expect("supplied episode should be stored");
+    assert_eq!(stored.id, episode.id);
+    assert_eq!(stored.content, episode.content);
+}
+
+#[test]
+fn test_selection_aware_overlay_reports_only_selected_ids() {
+    let coord = setup_coordinator();
+    let session = "sess-selected";
+    let first = coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "user",
+            "first selected memory",
+        ))
+        .unwrap();
+
+    let query = MemoryRecallQuery::new(session, "selected")
+        .with_limit(10)
+        .with_max_chars(400);
+    let selected = coord
+        .compile_prompt_overlay_with_selected_access(&query)
+        .unwrap()
+        .expect("non-empty recall should compile");
+
+    assert_eq!(selected.selected_candidate_ids, vec![first]);
+    assert!(selected.overlay.contains("first selected memory"));
+}
+
+#[test]
+fn test_writeback_and_multi_layer_recall() {
+    let coord = setup_coordinator();
+    let session = "test-session-1";
+
+    let entry = MemoryWritebackEntry::new(
+        session,
+        "user",
+        "Rust is our chosen language for performance",
+    );
+    let ep_id = coord.writeback(&entry).expect("writeback should succeed");
+    assert!(!ep_id.is_empty());
+
+    let query = MemoryRecallQuery::new(session, "Rust language")
+        .with_limit(5)
+        .with_max_chars(1000);
+
+    let result = coord.recall(&query).expect("recall should succeed");
+    assert!(
+        !result.items.is_empty(),
+        "Should recall at least one memory"
+    );
+
+    let found = result
+        .items
+        .iter()
+        .any(|item| item.content.contains("Rust"));
+    assert!(found, "Should find the recalled content about Rust");
+}
+
+#[test]
+fn test_governance_forget_strictly_excluded_from_recall() {
+    let coord = setup_coordinator();
+    let session = "sess-forget";
+
+    let ep1 = coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "user",
+            "Memory to keep",
+        ))
+        .unwrap();
+    let ep2 = coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "user",
+            "Secret info to forget",
+        ))
+        .unwrap();
+
+    // Verify both exist before forgetting
+    let q1 = MemoryRecallQuery::new(session, "info").with_limit(10);
+    let r1 = coord.recall(&q1).unwrap();
+    assert!(r1.items.iter().any(|i| i.id == ep2));
+
+    // Forget ep2 via governance
+    coord
+        .forget_episode(&ep2, Some("User requested erasure"), 0)
+        .expect("forget should succeed");
+
+    // Clear working memory for session to force episodic layer governance read
+    let q2 = MemoryRecallQuery::new(session, "info")
+        .with_layers(vec![MemoryLayerKind::Episodic])
+        .with_limit(10);
+    let r2 = coord.recall(&q2).unwrap();
+
+    // Verify forgotten item is strictly excluded
+    assert!(
+        !r2.items.iter().any(|i| i.id == ep2),
+        "Forgotten episode must NEVER be returned in recall!"
+    );
+    assert!(
+        r2.items.iter().any(|i| i.id == ep1),
+        "Non-forgotten episode must remain accessible"
+    );
+    assert!(
+        r2.governance_filtered >= 1,
+        "Governance filtered counter must record soft-deleted episodes"
+    );
+}
+
+#[test]
+fn test_governance_protect_blocks_forget() {
+    let coord = setup_coordinator();
+    let session = "sess-protect";
+
+    let ep = coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "user",
+            "Important constitutional invariant",
+        ))
+        .unwrap();
+
+    // Protect episode
+    let prot = coord
+        .protect_episode(&ep, 0)
+        .expect("protect should succeed");
+    assert!(prot.protected);
+
+    // Attempt to forget protected episode
+    let err = coord
+        .forget_episode(&ep, Some("try to forget"), 1)
+        .unwrap_err();
+    assert!(
+        matches!(err, MemoryGovernanceError::Protected(_)),
+        "Protected episode must reject forget operation"
+    );
+
+    // Unprotect and forget should succeed
+    coord
+        .unprotect_episode(&ep, 1)
+        .expect("unprotect should succeed");
+    let forgotten = coord
+        .forget_episode(&ep, Some("now allowed"), 2)
+        .expect("forget should succeed");
+    assert_eq!(forgotten.status.as_str(), "forgotten");
+}
+
+#[test]
+fn test_governance_content_override_reflected() {
+    let coord = setup_coordinator();
+    let session = "sess-override";
+
+    let ep = coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "user",
+            "User preferred python scripts",
+        ))
+        .unwrap();
+
+    // User edits memory
+    coord
+        .update_episode_content(&ep, "User preferred Rust binaries", Some("user"), 0)
+        .expect("update content should succeed");
+
+    // Recall from episodic layer
+    let q = MemoryRecallQuery::new(session, "preferred")
+        .with_layers(vec![MemoryLayerKind::Episodic])
+        .with_limit(5);
+    let result = coord.recall(&q).unwrap();
+
+    let item = result
+        .items
+        .iter()
+        .find(|i| i.id == ep)
+        .expect("item should be found");
+    assert_eq!(item.content, "User preferred Rust binaries");
+    assert!(!item.content.contains("python"));
+}
+
+#[test]
+fn test_budget_truncation_and_deduplication() {
+    let coord = setup_coordinator();
+    let session = "sess-budget";
+
+    // Write duplicates and long entries
+    for _ in 0..5 {
+        coord
+            .writeback(&MemoryWritebackEntry::new(
+                session,
+                "assistant",
+                "Identical duplicate statement",
+            ))
+            .unwrap();
+    }
+
+    let q = MemoryRecallQuery::new(session, "duplicate")
+        .with_limit(10)
+        .with_max_chars(200);
+
+    let result = coord.recall(&q).unwrap();
+    // Duplicates should be suppressed
+    assert_eq!(
+        result.items.len(),
+        1,
+        "Duplicate items should be deduplicated"
+    );
+    assert!(
+        result.total_chars <= 200,
+        "Should stay strictly within max_chars budget"
+    );
+}
+
+#[test]
+fn test_closed_world_context_compiler_sanitizes_secrets() {
+    let coord = setup_coordinator();
+    let session = "sess-compiler";
+
+    coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "tool",
+            "Authenticated with token=super_secret_jwt_payload_12345 to host",
+        ))
+        .unwrap();
+
+    let q = MemoryRecallQuery::new(session, "authenticated").with_limit(5);
+    let overlay = coord
+        .compile_prompt_overlay(&q)
+        .unwrap()
+        .expect("overlay should not be empty");
+
+    assert!(overlay.starts_with("<governed_memory"));
+    assert!(overlay.contains("Non-authoritative"));
+    assert!(overlay.ends_with("</governed_memory>"));
+    assert!(
+        !overlay.contains("super_secret_jwt_payload_12345"),
+        "Raw secrets must never leak to prompt overlay!"
+    );
+    assert!(
+        overlay.contains("[REDACTED]"),
+        "Secret should be replaced with redacted marker"
+    );
+}
+
+#[test]
+fn test_continuity_state_compression() {
+    let coord = setup_coordinator();
+    let session = "sess-continuity";
+
+    coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "user",
+            "We must never run tests on dirty git branches in crates/engine/guard",
+        ))
+        .unwrap();
+    coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "assistant",
+            "Understood. Editing src/main.rs to add verification",
+        ))
+        .unwrap();
+
+    let continuity = coord.compress_continuity(session, 500).unwrap();
+    assert_eq!(continuity.session_id, session);
+    assert_eq!(continuity.turn_count, 2);
+    assert!(
+        !continuity.active_constraints.is_empty(),
+        "Should capture 'must' constraints"
+    );
+    assert!(continuity
+        .key_entities
+        .iter()
+        .any(|e| e.contains("main.rs") || e.contains("guard")));
+}
+
+#[test]
+fn test_consolidation_uses_governed_visible_content() {
+    let coord = setup_coordinator();
+    let session = "sess-governed-consolidation";
+    let forgotten = coord
+        .writeback(&MemoryWritebackEntry::new(session, "user", "error: stale"))
+        .unwrap();
+    let overridden = coord
+        .writeback(&MemoryWritebackEntry::new(session, "user", "original"))
+        .unwrap();
+
+    coord
+        .forget_episode(&forgotten, Some("user request"), 0)
+        .unwrap();
+    coord
+        .update_episode_content(&overridden, "resolved: governed override", Some("user"), 0)
+        .unwrap();
+
+    let report = coord.run_consolidation(session).unwrap();
+    assert_eq!(report.episodes_evaluated, 1);
+    assert!(report
+        .extracted_insights
+        .iter()
+        .any(|insight| insight.contains("resolved: governed override")));
+    assert!(!report
+        .extracted_insights
+        .iter()
+        .any(|insight| insight.contains("stale")));
+}
+#[test]
+fn test_consolidation_job() {
+    let coord = setup_coordinator();
+    let session = "sess-consolidation";
+
+    coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "user",
+            "Please resolve the compilation error",
+        ))
+        .unwrap();
+    coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "tool",
+            "error: unresolved import",
+        ))
+        .unwrap();
+    coord
+        .writeback(&MemoryWritebackEntry::new(
+            session,
+            "assistant",
+            "fixed: imported module correctly",
+        ))
+        .unwrap();
+
+    let report = coord.run_consolidation(session).unwrap();
+    assert_eq!(report.session_id, session);
+    assert_eq!(report.episodes_evaluated, 3);
+    assert_eq!(report.user_requests, 1);
+    assert_eq!(report.tool_invocations, 1);
+    assert!(!report.extracted_insights.is_empty());
+}
+
+#[test]
+fn table_driven_governance_forget_and_protect_contracts() {
+    struct Case {
+        name: &'static str,
+        protect_first: bool,
+        unprotect_before_forget: bool,
+        expect_protected_error: bool,
+    }
+    let cases = [
+        Case {
+            name: "forget-active",
+            protect_first: false,
+            unprotect_before_forget: false,
+            expect_protected_error: false,
+        },
+        Case {
+            name: "protected-blocks-forget",
+            protect_first: true,
+            unprotect_before_forget: false,
+            expect_protected_error: true,
+        },
+        Case {
+            name: "unprotect-allows-forget",
+            protect_first: true,
+            unprotect_before_forget: true,
+            expect_protected_error: false,
+        },
+    ];
+
+    for case in cases {
+        let coord = setup_coordinator();
+        let session = format!("sess-governance-{}", case.name);
+        let episode = coord
+            .writeback(&MemoryWritebackEntry::new(
+                &session,
+                "user",
+                "governance target",
+            ))
+            .unwrap();
+        let mut revision = 0;
+        if case.protect_first {
+            let state = coord.protect_episode(&episode, revision).unwrap();
+            assert!(state.protected, "{}", case.name);
+            revision += 1;
+        }
+        if case.unprotect_before_forget {
+            let state = coord.unprotect_episode(&episode, revision).unwrap();
+            assert!(!state.protected, "{}", case.name);
+            revision += 1;
+        }
+        let result = coord.forget_episode(&episode, Some(case.name), revision);
+        if case.expect_protected_error {
+            assert!(
+                matches!(result, Err(MemoryGovernanceError::Protected(_))),
+                "{}",
+                case.name
+            );
+        } else {
+            assert_eq!(
+                result.unwrap().status.as_str(),
+                "forgotten",
+                "{}",
+                case.name
+            );
+        }
+    }
+}
+
+#[test]
+fn table_driven_consolidation_respects_governance_and_deduplicates() {
+    struct Case {
+        name: &'static str,
+        forgotten: bool,
+        duplicate: bool,
+        evaluated: usize,
+        merged: bool,
+    }
+    let cases = [
+        Case {
+            name: "visible",
+            forgotten: false,
+            duplicate: false,
+            evaluated: 1,
+            merged: false,
+        },
+        Case {
+            name: "forgotten-excluded",
+            forgotten: true,
+            duplicate: false,
+            evaluated: 0,
+            merged: false,
+        },
+        Case {
+            name: "duplicate-merged",
+            forgotten: false,
+            duplicate: true,
+            evaluated: 2,
+            merged: true,
+        },
+    ];
+    for case in cases {
+        let coord = setup_coordinator();
+        let session = format!("sess-consolidation-{}", case.name);
+        let first = coord
+            .writeback(&MemoryWritebackEntry::new(
+                &session,
+                "user",
+                "resolved: same fact",
+            ))
+            .unwrap();
+        if case.forgotten {
+            coord.forget_episode(&first, Some("test"), 0).unwrap();
+        }
+        if case.duplicate {
+            coord
+                .writeback(&MemoryWritebackEntry::new(
+                    &session,
+                    "assistant",
+                    "resolved: same fact",
+                ))
+                .unwrap();
+        }
+        let report = coord.run_consolidation(&session).unwrap();
+        assert_eq!(report.episodes_evaluated, case.evaluated, "{}", case.name);
+        if case.merged {
+            assert_eq!(report.extracted_insights.len(), 1, "{}", case.name);
+        }
+    }
+}

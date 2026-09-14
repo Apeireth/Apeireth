@@ -17,9 +17,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, SessionId};
+use apeireth_governance::TurnSecurityContext;
 use apeireth_governance::{
     CredentialDisclosureHook, GovernancePipeline, Permission, PermissionGovernanceHook,
     PermissionPolicy, PromptInjectionHook,
+};
+use apeireth_guard::{
+    ClassifierEnforcementMode, DatasetRecorder, IntentInput, IntentInterpreter,
+    JointRiskClassifier, RuleIntentInterpreter,
 };
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_runtime::canonical::{
@@ -35,6 +40,14 @@ const COGNITIVE_DB_ENV: &str = "APEIRETH_COGNITIVE_DB";
 const SESSION_DB_ENV: &str = "APEIRETH_SESSION_DB";
 const COGNITIVE_JUDGE_ENV: &str = "APEIRETH_COGNITIVE_JUDGE";
 const COGNITIVE_COUNCIL_ENV: &str = "APEIRETH_COGNITIVE_COUNCIL";
+/// Enables the desensitized Guard dataset event stream when set to `1`.
+pub const GUARD_DATASET_ENABLED_ENV: &str = "APEIRETH_GUARD_DATASET_ENABLED";
+/// Optional JSONL path for the composition-owned Guard dataset recorder.
+pub const GUARD_DATASET_PATH_ENV: &str = "APEIRETH_GUARD_DATASET_PATH";
+/// Local Guard model mode: disabled, shadow, advisory, or enforce.
+pub const GUARD_ML_MODE_ENV: &str = "APEIRETH_GUARD_ML_MODE";
+/// Local JSON model artifact path. Paths are never returned in Guard status.
+pub const GUARD_ML_MODEL_ENV: &str = "APEIRETH_GUARD_ML_MODEL";
 
 /// Legacy opt-in for the local filesystem and search tools. Accepted for
 /// compatibility; the tools are granted by default now.
@@ -82,12 +95,29 @@ pub fn build_production_governance(enable_local_read_tools: bool) -> GovernanceP
     build_production_governance_parts(enable_local_read_tools).0
 }
 
+use apeireth_guard::BehaviorChainGuardHook;
+
 /// Build the production pipeline and return the shared policy handle alongside
 /// it, so the gateway can serve grants listing and session-scoped hot revoke
 /// against the same policy the live hooks evaluate.
 pub fn build_production_governance_parts(
     enable_local_read_tools: bool,
-) -> (GovernancePipeline, Arc<std::sync::Mutex<PermissionPolicy>>) {
+) -> (
+    GovernancePipeline,
+    Arc<std::sync::Mutex<PermissionPolicy>>,
+    Arc<BehaviorChainGuardHook>,
+) {
+    build_production_governance_parts_with_dataset(enable_local_read_tools, None)
+}
+
+fn build_production_governance_parts_with_dataset(
+    enable_local_read_tools: bool,
+    dataset: Option<Arc<DatasetRecorder>>,
+) -> (
+    GovernancePipeline,
+    Arc<std::sync::Mutex<PermissionPolicy>>,
+    Arc<BehaviorChainGuardHook>,
+) {
     let mut policy = PermissionPolicy::new();
     policy.grant(Permission::ExecuteTool("tool.repo".to_string()));
     if enable_local_read_tools {
@@ -95,14 +125,21 @@ pub fn build_production_governance_parts(
         policy.grant(Permission::ExecuteTool("tool.search".to_string()));
     }
     let policy = Arc::new(std::sync::Mutex::new(policy));
+    let mut guard = BehaviorChainGuardHook::new();
+    if let Some(dataset) = dataset {
+        guard = guard.with_dataset_recorder(dataset);
+    }
+    guard = configure_guard_classifier(guard);
+    let guard_hook = Arc::new(guard);
 
     let pipeline = GovernancePipeline::new()
         .with(Arc::new(PermissionGovernanceHook::new_shared(
             policy.clone(),
         )))
         .with(Arc::new(CredentialDisclosureHook::new()))
-        .with(Arc::new(PromptInjectionHook::new()));
-    (pipeline, policy)
+        .with(Arc::new(PromptInjectionHook::new()))
+        .with(guard_hook.clone());
+    (pipeline, policy, guard_hook)
 }
 
 /// Build the production governance policy using the process environment.
@@ -113,13 +150,55 @@ pub fn build_production_governance_parts(
 /// `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` opt-in. Shell, fetch, and unknown
 /// capabilities remain denied even if a future plugin registers them.
 pub fn build_production_governance_from_env() -> GovernancePipeline {
-    build_production_governance(local_read_tools_enabled_from_env())
+    build_production_governance_parts_from_env().0
 }
 
-fn build_production_governance_parts_from_env(
-) -> (GovernancePipeline, Arc<std::sync::Mutex<PermissionPolicy>>) {
+fn configure_guard_classifier(mut guard: BehaviorChainGuardHook) -> BehaviorChainGuardHook {
+    let mode = std::env::var(GUARD_ML_MODE_ENV)
+        .ok()
+        .and_then(|value| ClassifierEnforcementMode::parse(&value));
+    let Some(mode) = mode else {
+        return guard;
+    };
+    let Some(path) = std::env::var(GUARD_ML_MODEL_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return guard;
+    };
+    if let Ok(classifier) = JointRiskClassifier::from_path(path).map(|model| model.with_mode(mode))
+    {
+        guard = guard.with_classifier(Arc::new(classifier));
+    }
+    guard
+}
+
+fn production_guard_dataset_recorder() -> Option<Arc<DatasetRecorder>> {
+    let enabled = std::env::var(GUARD_DATASET_ENABLED_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    if !enabled {
+        return None;
+    }
+    let path = std::env::var(GUARD_DATASET_PATH_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| ".apeireth/guard-dataset-v3.jsonl".to_string());
+    let recorder = Arc::new(DatasetRecorder::new(path));
+    recorder.set_enabled(true);
+    Some(recorder)
+}
+
+fn build_production_governance_parts_from_env() -> (
+    GovernancePipeline,
+    Arc<std::sync::Mutex<PermissionPolicy>>,
+    Arc<BehaviorChainGuardHook>,
+) {
     let enable_local_read_tools = local_read_tools_enabled_from_env();
-    let (pipeline, policy) = build_production_governance_parts(enable_local_read_tools);
+    let (pipeline, policy, guard_hook) = build_production_governance_parts_with_dataset(
+        enable_local_read_tools,
+        production_guard_dataset_recorder(),
+    );
 
     // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
     // 语义 (fail-closed): 主人 env 显式授权"可以提议执行", 但**每次调用仍走
@@ -143,7 +222,7 @@ fn build_production_governance_parts_from_env(
             guard.require_approval_for("tool.fetch");
         }
     }
-    (pipeline, policy)
+    (pipeline, policy, guard_hook)
 }
 
 /// Build the one canonical runtime used by CLI chat and the HTTP gateway.
@@ -151,7 +230,7 @@ fn build_production_governance_parts_from_env(
 /// Provider implementations are injected as plugins. Credentials are resolved
 /// at execution time, so neither the runtime nor a provider stores API keys.
 pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
-    let (runtime, _, _, _) = build_canonical_runtime_with_sessions_from_env().await?;
+    let (runtime, _, _, _, _) = build_canonical_runtime_with_sessions_from_env().await?;
     Ok(runtime)
 }
 
@@ -165,22 +244,30 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
         Arc<dyn SessionStore>,
         Arc<dyn MemoryBackend>,
         Arc<std::sync::Mutex<PermissionPolicy>>,
+        Arc<BehaviorChainGuardHook>,
     ),
     String,
 > {
     let session_store = production_session_store().await?;
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
     let (cognitive, memory) = build_cognitive_modules_from_env(Arc::clone(&clock)).await?;
-    let (runtime, policy) =
+    let (runtime, policy, guard_hook) =
         build_canonical_runtime_with_parts(session_store.clone(), cognitive, clock).await?;
-    Ok((runtime, session_store, memory, policy))
+    Ok((runtime, session_store, memory, policy, guard_hook))
 }
 
 async fn build_canonical_runtime_with_parts(
     session_store: Arc<dyn SessionStore>,
     cognitive: apeireth_runtime_assembly::ProductionCognitiveModules,
     clock: Arc<dyn apeireth_core::kernel::Clock>,
-) -> Result<(Runtime, Arc<std::sync::Mutex<PermissionPolicy>>), String> {
+) -> Result<
+    (
+        Runtime,
+        Arc<std::sync::Mutex<PermissionPolicy>>,
+        Arc<BehaviorChainGuardHook>,
+    ),
+    String,
+> {
     use apeireth_provider::canonical_anthropic::AnthropicProviderPlugin;
     use apeireth_provider::canonical_minimax::MinimaxProviderPlugin;
     use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
@@ -196,7 +283,7 @@ async fn build_canonical_runtime_with_parts(
     let resolver: Arc<dyn apeireth_plugin::CredentialResolver> =
         keyring_bootstrap::build_keyring_resolver();
     builder = builder.with_credentials(resolver);
-    let (governance, policy) = build_production_governance_parts_from_env();
+    let (governance, policy, guard_hook) = build_production_governance_parts_from_env();
     // Session-level permission presets (read_only/standard/full) layer on top
     // of the production policy. The wrapper reads the session's durable
     // settings on every capability dispatch and delegates everything else.
@@ -211,6 +298,7 @@ async fn build_canonical_runtime_with_parts(
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
     // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
+    builder = cognitive.register_context_projection(builder);
     builder = cognitive.register_into(builder);
 
     let first_default_model: Option<String>;
@@ -247,7 +335,13 @@ async fn build_canonical_runtime_with_parts(
         .build()
         .await
         .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
-    Ok((runtime, policy))
+    if let Some(recorder) = guard_hook.dataset_recorder() {
+        runtime.add_event_sink(Arc::new(
+            apeireth_runtime_assembly::GuardDatasetObserver::new(recorder)
+                .with_hook(guard_hook.clone()),
+        ));
+    }
+    Ok((runtime, policy, guard_hook))
 }
 
 async fn production_session_store() -> Result<Arc<dyn apeireth_runtime::SessionStore>, String> {
@@ -264,9 +358,14 @@ async fn production_session_store() -> Result<Arc<dyn apeireth_runtime::SessionS
 /// Build the direct CLI runtime with the same trace/audit observer used by the
 /// HTTP gateway. The CLI has no SSE transport, but its turns must still be
 /// observable and durable through the gateway bounded-context ports.
-async fn build_canonical_runtime_from_env_with_observability(
+/// Build the direct CLI runtime together with its trace/audit observer.
+///
+/// Dataset recording is installed during the inner canonical bootstrap and
+/// the returned observation sink is added additively, so both observers see
+/// the same runtime event spine.
+pub async fn build_canonical_runtime_from_env_with_observability(
 ) -> Result<(Arc<Runtime>, Arc<apeireth_gateway::RuntimeObservationSink>), String> {
-    let (runtime, sessions, memory, policy) =
+    let (runtime, sessions, memory, policy, guard_hook) =
         build_canonical_runtime_with_sessions_from_env().await?;
     let runtime = Arc::new(runtime);
     let governance = Arc::new(
@@ -274,21 +373,24 @@ async fn build_canonical_runtime_from_env_with_observability(
             .map_err(|error| format!("memory governance store open failed: {error}"))?,
     );
     let enable_local_read_tools = local_read_tools_enabled_from_env();
-    let panel = Arc::new(crate::gateway_panels::CliPanelData::new_with_runtime(
-        Arc::clone(&runtime),
-        sessions,
-        memory,
-        governance,
-        policy,
-        enable_local_read_tools,
-        default_panel_data_dir(),
-    ));
+    let panel = Arc::new(
+        crate::gateway_panels::CliPanelData::new_with_runtime(
+            Arc::clone(&runtime),
+            sessions,
+            memory,
+            governance,
+            policy,
+            enable_local_read_tools,
+            default_panel_data_dir(),
+        )
+        .with_guard(guard_hook.clone()),
+    );
     let services = crate::gateway_panels::gateway_services(panel);
     let observer = Arc::new(apeireth_gateway::RuntimeObservationSink::new(
         services.trace_commands.clone(),
         services.audit_commands.clone(),
     ));
-    runtime.set_event_sink(observer.clone());
+    runtime.add_event_sink(observer.clone());
     Ok((runtime, observer))
 }
 
@@ -317,7 +419,7 @@ async fn build_cognitive_modules_from_env(
         self_assessment_store_sqlite::SQLiteSelfAssessmentStore,
     };
     use apeireth_runtime_assembly::{CognitiveBackends, CognitiveModuleConfig, JudgeConfig};
-    use apeireth_storage::{SqliteConnectionPool, StorageError};
+    use apeireth_storage::SqliteConnectionPool;
 
     let path = cognitive_db_path();
     let pool = Arc::new(
@@ -350,15 +452,7 @@ async fn build_cognitive_modules_from_env(
     // Memory migrations own the episode and six-stream tables. The preference,
     // experience, and assessment stores own their additive tables. All use
     // this one injected pool; no module opens a connection itself.
-    let migration_pool = Arc::clone(&pool);
-    migration_pool
-        .write(|conn| {
-            apeireth_memory::run_migrations(conn).map_err(|error| StorageError::Migration {
-                version: 0,
-                name: "cognitive_memory",
-                message: error.to_string(),
-            })
-        })
+    apeireth_memory::run_migrations_on_pool(&pool)
         .await
         .map_err(|error| format!("cognitive memory schema failed: {error}"))?;
 
@@ -378,6 +472,43 @@ async fn build_cognitive_modules_from_env(
         .await
         .map_err(|error| format!("cognitive assessment schema failed: {error}"))?;
 
+    let access_history = Arc::new(apeireth_memory::SqliteAccessHistoryStore::from_arc(
+        Arc::clone(&pool),
+        256,
+    ));
+    let commitment_store = Arc::new(apeireth_memory::SqliteCommitmentStore::from_arc(
+        Arc::clone(&pool),
+    ));
+    commitment_store
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive commitment schema failed: {error}"))?;
+    let persona_store = Arc::new(apeireth_memory::SqlitePersonaProfileStore::new(
+        (*pool).clone(),
+    ));
+    persona_store
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive persona schema failed: {error}"))?;
+    let relation_store = Arc::new(apeireth_memory::SqliteTemporalGraphStore::from_arc(
+        Arc::clone(&pool),
+    ));
+    relation_store
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive relation schema failed: {error}"))?;
+    let persona_store: Arc<dyn apeireth_memory::PersonaProfileStore> = persona_store;
+    let typed_sink = Arc::new(
+        apeireth_runtime_assembly::CanonicalMemoryTypedSink::new()
+            .with_commitments(Arc::clone(&commitment_store))
+            .with_persona_store(Arc::clone(&persona_store))
+            .with_relations(Arc::clone(&relation_store)),
+    );
+    let typed_sink: Arc<dyn apeireth_memory::MemoryTypedMaterializationSink> = typed_sink;
+    access_history
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive access history schema failed: {error}"))?;
     let judge_enabled = std::env::var(COGNITIVE_JUDGE_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
@@ -410,8 +541,9 @@ async fn build_cognitive_modules_from_env(
         fetch: fetch_enabled.then(FetchConfig::public_internet_only),
         ..CognitiveModuleConfig::default()
     };
-    let memory: Arc<dyn apeireth_plugin::memory_backend::MemoryBackend> =
-        Arc::new(SqliteBackend::from_arc(Arc::clone(&pool)));
+    let sqlite_backend = Arc::new(SqliteBackend::from_arc(Arc::clone(&pool)));
+    let memory: Arc<dyn apeireth_plugin::memory_backend::MemoryBackend> = sqlite_backend.clone();
+    let memory_governance: Arc<dyn apeireth_memory::MemoryGovernanceStore> = sqlite_backend.clone();
     let wiki: Arc<dyn apeireth_plugin::experience::WikiEntryStore> = experience.clone();
     let graph: Arc<dyn apeireth_plugin::experience::KnowledgeGraphStore> = experience.clone();
     let associations: Arc<dyn apeireth_plugin::experience::AssociationStore> = experience.clone();
@@ -425,8 +557,10 @@ async fn build_cognitive_modules_from_env(
     } else {
         None
     };
+    let scoped_memory: Arc<dyn apeireth_memory::ScopedMemoryBackend> = sqlite_backend.clone();
     let backends = CognitiveBackends {
         memory: Some(memory.clone()),
+        memory_governance: Some(memory_governance),
         wiki: Some(wiki),
         graph: Some(graph),
         associations: Some(associations),
@@ -434,6 +568,14 @@ async fn build_cognitive_modules_from_env(
         self_assessments: Some(self_assessments),
         council,
         workspace_root: std::env::current_dir().ok(),
+        scoped_memory: Some(scoped_memory),
+        embedding_provider: None,
+        access_history: Some(access_history),
+        memory_extractor: None,
+        memory_materializer: None,
+        typed_recall: None,
+        typed_recall_identity: None,
+        typed_sink: Some(typed_sink),
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)
@@ -500,7 +642,16 @@ pub async fn execute_canonical_cli_turn(
     model: Option<String>,
     session: Option<SessionId>,
 ) -> Result<CanonicalCliTurn, String> {
-    let mut request = TurnRequest::new(session.unwrap_or_else(SessionId::new), prompt);
+    let session = session.unwrap_or_else(SessionId::new);
+    let prompt = prompt.into();
+    let intent = RuleIntentInterpreter.interpret(IntentInput {
+        session_id: session.to_string(),
+        trace_id: String::new(),
+        user_request: prompt.clone(),
+        created_at_ms: 0,
+    });
+    let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
+    let mut request = TurnRequest::new(session, prompt).with_security_context(context);
     if let Some(model) = model {
         request = request.with_model(model);
     }
@@ -571,7 +722,7 @@ pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
 /// Loopback is the safe default. Binding a non-loopback address is an
 /// intentional operator decision and is called out before the listener starts.
 pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, String> {
-    let (runtime, sessions, memory, policy) =
+    let (runtime, sessions, memory, policy, guard_hook) =
         build_canonical_runtime_with_sessions_from_env().await?;
     let runtime = Arc::new(runtime);
     let governance = Arc::new(
@@ -579,15 +730,18 @@ pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, 
             .map_err(|error| format!("memory governance store open failed: {error}"))?,
     );
     let enable_local_read_tools = local_read_tools_enabled_from_env();
-    let panel = Arc::new(crate::gateway_panels::CliPanelData::new_with_runtime(
-        Arc::clone(&runtime),
-        sessions,
-        memory,
-        governance,
-        policy,
-        enable_local_read_tools,
-        default_panel_data_dir(),
-    ));
+    let panel = Arc::new(
+        crate::gateway_panels::CliPanelData::new_with_runtime(
+            Arc::clone(&runtime),
+            sessions,
+            memory,
+            governance,
+            policy,
+            enable_local_read_tools,
+            default_panel_data_dir(),
+        )
+        .with_guard(guard_hook),
+    );
     let mut services = crate::gateway_panels::gateway_services(panel);
     // Wire the hot-reload api_key writer to the same keyring backend the
     // runtime's credential resolver reads (or None on the env-resolver path).
