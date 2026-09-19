@@ -100,6 +100,8 @@ export interface Conversation {
   scope: ConversationScope;
   projectId?: string;
   model?: string;
+  /** 会话级工作区根目录; 未设时跟随全局默认 (设置页). */
+  workspace?: string;
 }
 
 export interface ModelSetup {
