@@ -1891,16 +1891,34 @@ export async function resolveCanonicalApproval(
   decision: 'approve' | 'reject' | 'cancel',
   reason?: string,
 ): Promise<{kind: 'completed'; text: string; events: CanonicalExecutionEvent[]} | {kind: 'pending'; pending: CanonicalPendingApproval}> {
-  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/approvals/resolve`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      session: pending.session,
-      approval: pending.approval_id,
-      decision,
-      reason,
-    }),
-  });
+  // 解析请求会同步等待工具执行完成（可达数分钟）。显式 5 分钟超时:
+  // 无超时的 fetch 会在侧车重启/断连时永远挂起, UI 永远等不到回填
+  // (2026-10-06 真机: 审批通过后"一直在等回复就没有后续")。
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5 * 60_000);
+  let res: Response;
+  try {
+    res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/approvals/resolve`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        session: pending.session,
+        approval: pending.approval_id,
+        decision,
+        reason,
+      }),
+      signal: controller.signal,
+    });
+  } catch (caught) {
+    const aborted = caught instanceof DOMException && caught.name === 'AbortError';
+    throw new Error(
+      aborted
+        ? '审批执行超时（5 分钟未返回）——后端可能仍在执行；稍后重试或重启应用。'
+        : `审批请求失败：${caught instanceof Error ? caught.message : String(caught)}`,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
   if (res.status === 202) {
     const next = (await res.json()) as CanonicalPendingApproval;
     return {kind: 'pending', pending: next};
