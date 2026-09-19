@@ -64,6 +64,12 @@ fn is_sensitive_file_name(name: &str) -> bool {
         return true;
     }
 
+    // Git/curl 凭据存储与历史 apikey 文件 — 2026-10-06 真机: 工作区根=用户主目录
+    // 时, 模型亲眼见到 .git-credentials/_netrc/apikey-ultra.txt 躺在工作区里.
+    if name == ".git-credentials" || name == ".netrc" || name == "_netrc" || name.starts_with("apikey") {
+        return true;
+    }
+
     if ["pem", "key", "p12", "pfx", "jks", "kdbx"]
         .iter()
         .any(|extension| name.ends_with(&format!(".{extension}")))
@@ -97,6 +103,11 @@ mod tests {
             "id_ed25519.pub",
             "credentials",
             "credentials.json",
+            ".git-credentials",
+            ".netrc",
+            "_netrc",
+            "apikey-ultra.txt",
+            "apikey.txt",
             "secret",
             "secrets.production",
             ".ssh/config",

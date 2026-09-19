@@ -366,6 +366,10 @@ export const ERROR_SOLUTIONS: Record<ErrorCode, {title: string; solution: string
     title: '回复被认知评审驳回',
     solution: '点「重新生成」再试；若频繁出现，在设置 → 高级能力中把认知深度调低（轻量/平衡）',
   },
+  turn_not_converged: {
+    title: '本轮未收敛',
+    solution: '本轮工具链过长——把问题拆小一点再问，或点「重新生成」',
+  },
   internal: {title: '内部错误', solution: '重启 Companion 后重试, 复现请提交日志'},
 };
 
