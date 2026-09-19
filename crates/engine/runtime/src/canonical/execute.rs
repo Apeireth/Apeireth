@@ -61,8 +61,8 @@ use super::approval::{
 use super::error::{RuntimeError, RuntimeResult};
 use super::events::RuntimeEvent;
 use super::module::{
-    HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleInvoker, ModuleOutcome,
-    ModuleTurnState, PromptOverlay,
+    HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError, ModuleInvocationError,
+    ModuleInvoker, ModuleOutcome, ModuleTurnState, PromptOverlay,
 };
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
@@ -206,6 +206,11 @@ struct HookEffects {
     prompt_overlays: Vec<PromptOverlay>,
     directive: ModuleDirective,
     directive_module_id: Option<String>,
+    /// Modules skipped this pass because the turn's side-call budget was
+    /// exhausted (`(module_id, legible error)`). The turn survives and the
+    /// current candidate is committed; entries are recorded as session events
+    /// by [`crate::canonical::execute::RuntimeInternals::run_hook_checked`].
+    degraded: Vec<(String, String)>,
 }
 
 impl Default for HookEffects {
@@ -214,6 +219,7 @@ impl Default for HookEffects {
             prompt_overlays: Vec::new(),
             directive: ModuleDirective::Continue,
             directive_module_id: None,
+            degraded: Vec::new(),
         }
     }
 }
@@ -1506,7 +1512,22 @@ impl Runtime {
             )
             .await
         {
-            Ok(effects) => Ok(effects),
+            Ok(mut effects) => {
+                // 0 装: 被预算降级跳过的模块也要留痕——事件明确标注该模块
+                // 本 pass 未运行, 回合继续。
+                for (module_id, error) in effects.degraded.drain(..) {
+                    session.record(
+                        request_id,
+                        trace_id,
+                        SessionEventKind::ExecutionFailed {
+                            phase: "module_budget_degraded".into(),
+                            error: format!("{module_id}: {error}"),
+                        },
+                        self.clock.as_ref(),
+                    );
+                }
+                Ok(effects)
+            }
             Err(runtime_error) => {
                 session.record(
                     request_id,
@@ -1570,14 +1591,30 @@ impl Runtime {
                 invoker_handle,
                 subloop: &*spawner,
             };
-            let outcome =
-                module
-                    .on_hook(hook, &context)
-                    .await
-                    .map_err(|source| RuntimeError::Module {
-                        module_id: manifest.id.clone(),
-                        source,
-                    })?;
+            let outcome = match module.on_hook(hook, &context).await {
+                Ok(outcome) => outcome,
+                Err(source) => {
+                    // Budget exhaustion must not abort the whole turn: the
+                    // current candidate is a legitimate answer. Degrade this
+                    // module to Continue for the pass and record the skip
+                    // (0 装: the event says the module did NOT run).
+                    let budget_exhausted = matches!(
+                        &source,
+                        ModuleError::Invocation(ModuleInvocationError::BudgetExceeded { .. })
+                    );
+                    if budget_exhausted {
+                        effects
+                            .degraded
+                            .push((manifest.id.clone(), source.to_string()));
+                        ModuleOutcome::continue_()
+                    } else {
+                        return Err(RuntimeError::Module {
+                            module_id: manifest.id.clone(),
+                            source,
+                        });
+                    }
+                }
+            };
             effects.push(&manifest.id, outcome);
         }
         Ok(effects)
