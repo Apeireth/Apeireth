@@ -1067,7 +1067,18 @@
         lastError = null;
         void request
           .then((late) => applyResolvedResult(late, conversationId, decision))
-          .catch(() => {});
+          .catch((caught) => {
+            // 晚到结果失败也不能静默: 至少留提示, 并定时重拉 inbox 自救
+            // (2026-10-06 真机: 这里曾经 .catch(() => {}) 导致永远无后续)。
+            notice =
+              caught instanceof Error
+                ? `审批结果未返回：${caught.message}`
+                : '审批结果未返回，请稍后刷新会话。';
+            scheduleApprovalRecovery();
+          });
+        // 后端可能在 15s 后继续执行并 mint 下一个审批/完成结果;
+        // 定时重拉 inbox 把下一个审批弹出来, 而不是让用户干等。
+        scheduleApprovalRecovery();
         return;
       }
       await applyResolvedResult(result, conversationId, decision);
@@ -1077,9 +1088,20 @@
       pendingCanonical = null;
       error = describeCaughtSafe(caught);
       lastError = caught;
+      scheduleApprovalRecovery();
     } finally {
       approvalBusy = false;
       await refreshConnection();
+    }
+  }
+
+  /** 审批解析后的自救: 延迟重拉 inbox, 把执行中 mint 出的下一个审批弹出。 */
+  function scheduleApprovalRecovery(): void {
+    for (const delayMs of [10_000, 30_000]) {
+      setTimeout(() => {
+        if (approvalBusy || pendingCanonical) return;
+        void refreshConnection();
+      }, delayMs);
     }
   }
 
@@ -1090,6 +1112,17 @@
   ): Promise<void> {
     if (result.kind === 'pending') {
       pendingCanonical = result.pending;
+      // 同步消息文案, 让"等待批准"始终指向当前待批的工具。
+      if (conversationId) {
+        const conversation = conversations.find((item) => item.id === conversationId);
+        const last = conversation?.messages.filter((m) => m.role === 'assistant').at(-1);
+        if (last) {
+          updateMessage(conversationId, last.id, {
+            text: `等待批准：${result.pending.tool_name ?? '工具'}`,
+            streaming: false,
+          });
+        }
+      }
       return;
     }
     pendingCanonical = null;
