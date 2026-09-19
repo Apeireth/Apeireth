@@ -491,12 +491,26 @@ impl ShellTool {
         }
     }
 
+    /// Decode captured command output. UTF-8 first; when that fails, the bytes
+    /// are almost certainly GBK (cp936) from a Chinese-Windows cmd console —
+    /// `String::from_utf8_lossy` alone turned `date`'s output into 乱码
+    /// (2026-10-06 真机). GBK fallback restores readable Chinese.
+    fn decode_command_output(bytes: &[u8]) -> String {
+        match std::str::from_utf8(bytes) {
+            Ok(text) => text.to_string(),
+            Err(_) => {
+                let (decoded, _, _) = encoding_rs::GBK.decode(bytes);
+                decoded.into_owned()
+            }
+        }
+    }
+
     fn format_result(result: &ProcessResult) -> serde_json::Value {
         serde_json::json!({
             "exit_code": result.exit_code(),
             "timed_out": result.timed_out(),
-            "stdout": String::from_utf8_lossy(&result.stdout).to_string(),
-            "stderr": String::from_utf8_lossy(&result.stderr).to_string(),
+            "stdout": Self::decode_command_output(&result.stdout),
+            "stderr": Self::decode_command_output(&result.stderr),
             "stdout_truncated": result.stdout_truncated,
             "stderr_truncated": result.stderr_truncated,
         })
@@ -579,6 +593,20 @@ impl ToolCapability for ShellTool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn command_output_decodes_utf8_then_gbk() {
+        // UTF-8 passes through untouched.
+        let utf8 = "现在是 13:21".as_bytes();
+        assert_eq!(ShellTool::decode_command_output(utf8), "现在是 13:21");
+        // GBK bytes (Chinese-Windows cmd, cp936) decode instead of 乱码.
+        let gbk = encoding_rs::GBK.encode("日期 2026/09/19").0;
+        assert!(
+            std::str::from_utf8(&gbk).is_err(),
+            "fixture must not be valid UTF-8"
+        );
+        assert_eq!(ShellTool::decode_command_output(&gbk), "日期 2026/09/19");
+    }
 
     #[test]
     fn declaration_is_honest_and_not_sandbox_named() {
