@@ -1209,7 +1209,14 @@ impl AgentModule for JudgeModule {
                         *retry_count += 1;
                         ModuleOutcome::retry(bounded(&judged.critique, 2_000))
                     } else {
-                        ModuleOutcome::stop("AI Judge retry budget exhausted")
+                        // Retry budget exhausted = best-effort acceptance, NOT a
+                        // turn-killing stop. Hard-stopping here turned a
+                        // long approval-resumed turn (tool → approve → tool →
+                        // approve) into HTTP 500 with the user's real answer
+                        // thrown away (2026-10-06 真机). The candidate is the
+                        // best the budget affords; the Retry verdict is already
+                        // recorded in observations (0 装).
+                        ModuleOutcome::continue_()
                     }
                 }
                 JudgeVerdict::Retry => ModuleOutcome::continue_(),
@@ -2151,7 +2158,9 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(matches!(second.directive, ModuleDirective::Stop { .. }));
+        // Budget exhausted degrades to best-effort acceptance (2026-10-06:
+        // a Stop here killed approval-resumed turns with HTTP 500).
+        assert!(matches!(second.directive, ModuleDirective::Continue));
         assert_eq!(invoker_counter.calls.load(Ordering::Relaxed), 2);
         assert_eq!(judge.metrics().side_calls, 2);
         assert!(JudgeModule::parse_result("not json").is_err());
