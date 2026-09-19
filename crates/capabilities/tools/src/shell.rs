@@ -234,6 +234,9 @@ impl ShellTool {
     fn shell_args(&self, script: &str) -> Vec<OsString> {
         #[cfg(windows)]
         {
+            // 展示用: 审批卡上呈现 "/D /S /C <script>" 的形态。真正执行时
+            // Windows 走 raw_arg 尾巴 (`/D /S /C "<script>"`), 保证内层双引号
+            // 存活 (见 execute_frozen, 2026-10-06 真机引号被吃修复)。
             vec![
                 OsString::from("/D"),
                 OsString::from("/S"),
@@ -355,14 +358,30 @@ impl ShellTool {
                 .collect(),
         );
 
-        Ok(
+        // Windows: the script travels as a verbatim command-line tail
+        // (`/D /S /C "<script>"`) so embedded double quotes survive cmd's /S
+        // rule; Rust's normal arg quoting mangles them (2026-10-06 真机:
+        // powershell -Command "..." 只回显不执行). Non-Windows keeps argv.
+        #[cfg(windows)]
+        let request = {
+            let script = frozen
+                .shell_args
+                .last()
+                .map(|arg| arg.as_str())
+                .unwrap_or_default();
             ProcessRequest::new(Self::os_string(&frozen.shell_executable))
-                .with_args(frozen.shell_args.iter().map(|arg| Self::os_string(arg)))
-                .with_working_directory(PathBuf::from(&frozen.cwd))
-                .with_environment(environment)
-                .with_limits(limits)
-                .with_isolation(frozen.isolation.clone()),
-        )
+                .with_raw_arg(format!("/D /S /C \"{script}\""))
+        };
+        #[cfg(not(windows))]
+        let request =
+            ProcessRequest::new(Self::os_string(&frozen.shell_executable))
+                .with_args(frozen.shell_args.iter().map(|arg| Self::os_string(arg)));
+
+        Ok(request
+            .with_working_directory(PathBuf::from(&frozen.cwd))
+            .with_environment(environment)
+            .with_limits(limits)
+            .with_isolation(frozen.isolation.clone()))
     }
 
     fn build_frozen(&self, call: &ToolCall) -> Result<ShellFrozenInvocation, ToolResult> {

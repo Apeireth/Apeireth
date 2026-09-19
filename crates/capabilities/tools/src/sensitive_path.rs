@@ -64,9 +64,20 @@ fn is_sensitive_file_name(name: &str) -> bool {
         return true;
     }
 
-    // Git/curl 凭据存储与历史 apikey 文件 — 2026-10-06 真机: 工作区根=用户主目录
-    // 时, 模型亲眼见到 .git-credentials/_netrc/apikey-ultra.txt 躺在工作区里.
-    if name == ".git-credentials" || name == ".netrc" || name == "_netrc" || name.starts_with("apikey") {
+    // Git/curl 凭据存储与 apikey 文件 — 2026-10-06 真机: 工作区根=用户主目录
+    // 时, 模型亲眼见到 .git-credentials/_netrc/apikey-ultra.txt/GeminiApiKey.txt
+    // 躺在工作区里. "apikey" 用 contains 而非前缀, 覆盖 GeminiApiKey.txt 这类
+    // 品牌前缀变体; .git-credentials 用后缀匹配覆盖 Users31683.git-credentials.
+    if name.ends_with(".git-credentials")
+        || name == ".netrc"
+        || name == "_netrc"
+        || name.contains("apikey")
+    {
+        return true;
+    }
+
+    // 产品自身的网关/会话数据库 — 内容敏感, 从只读工具视野中屏蔽.
+    if name == "apeireth_gateway.db" || name == "apeireth_v2.db" || name == "apeireth.db" {
         return true;
     }
 
@@ -106,8 +117,12 @@ mod tests {
             ".git-credentials",
             ".netrc",
             "_netrc",
+            "Users31683.git-credentials",
+            "GeminiApiKey.txt",
             "apikey-ultra.txt",
             "apikey.txt",
+            "apeireth_gateway.db",
+            "apeireth_v2.db",
             "secret",
             "secrets.production",
             ".ssh/config",
