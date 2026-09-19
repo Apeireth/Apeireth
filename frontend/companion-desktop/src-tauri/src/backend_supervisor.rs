@@ -1188,7 +1188,15 @@ impl BackendSupervisor {
             if anchor_cognitive {
                 cmd.env("APEIRETH_COGNITIVE_DB", store_dir.join("cognitive.sqlite3"));
             }
-            cmd.current_dir(&data_dir);
+            // Pin the sidecar's CWD. A configured workspace wins: the builtin
+            // tools (filesystem/search/repo) and TrustedShell root themselves at
+            // the sidecar's current_dir, so pinning to the user's chosen
+            // workspace makes the model actually work on their real project
+            // instead of the app-data dir (2026-10-06 真机: 模型报"此非 git
+            // 库"且读不到用户项目). The anchor is always ABSOLUTE, so the
+            // System32-CWD boot regression cannot resurface.
+            let cwd = workspace_dir.unwrap_or(data_dir);
+            cmd.current_dir(&cwd);
         }
 
         // Keep the child in the app's lifetime, not the user's screen: without
