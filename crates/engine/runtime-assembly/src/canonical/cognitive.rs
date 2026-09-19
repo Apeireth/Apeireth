@@ -1197,29 +1197,40 @@ impl AgentModule for JudgeModule {
             };
             let response = ctx.invoker().invoke(request).await?;
             side_calls = 1;
-            let judged = Self::parse_result(response.text())?;
-            self.observations.record(*ctx.session_id, judged.clone());
-            match judged.verdict {
-                JudgeVerdict::Pass => ModuleOutcome::continue_(),
-                JudgeVerdict::Stop => ModuleOutcome::stop("AI Judge rejected the candidate"),
-                JudgeVerdict::Retry if judged.score < self.config.retry_below => {
-                    let mut retries = self.retries.lock().expect("judge retries mutex");
-                    let retry_count = retries.entry(*ctx.session_id).or_default();
-                    if *retry_count < self.config.max_retries {
-                        *retry_count += 1;
-                        ModuleOutcome::retry(bounded(&judged.critique, 2_000))
-                    } else {
-                        // Retry budget exhausted = best-effort acceptance, NOT a
-                        // turn-killing stop. Hard-stopping here turned a
-                        // long approval-resumed turn (tool → approve → tool →
-                        // approve) into HTTP 500 with the user's real answer
-                        // thrown away (2026-10-06 真机). The candidate is the
-                        // best the budget affords; the Retry verdict is already
-                        // recorded in observations (0 装).
-                        ModuleOutcome::continue_()
+            match Self::parse_result(response.text()) {
+                Ok(judged) => {
+                    self.observations.record(*ctx.session_id, judged.clone());
+                    match judged.verdict {
+                        JudgeVerdict::Pass => ModuleOutcome::continue_(),
+                        JudgeVerdict::Stop => ModuleOutcome::stop("AI Judge rejected the candidate"),
+                        JudgeVerdict::Retry if judged.score < self.config.retry_below => {
+                            let mut retries = self.retries.lock().expect("judge retries mutex");
+                            let retry_count = retries.entry(*ctx.session_id).or_default();
+                            if *retry_count < self.config.max_retries {
+                                *retry_count += 1;
+                                ModuleOutcome::retry(bounded(&judged.critique, 2_000))
+                            } else {
+                                // Retry budget exhausted = best-effort acceptance,
+                                // NOT a turn-killing stop (2026-10-06 真机: Stop
+                                // 把审批续跑回合打成 HTTP 500). The Retry verdict
+                                // is already recorded in observations (0 装).
+                                ModuleOutcome::continue_()
+                            }
+                        }
+                        JudgeVerdict::Retry => ModuleOutcome::continue_(),
                     }
                 }
-                JudgeVerdict::Retry => ModuleOutcome::continue_(),
+                Err(error) => {
+                    // 侧调用空响应/坏 JSON = 评审不可用。Best-effort 放行候选,
+                    // 绝不因元层解析失败杀死主任务 (2026-10-06 真机: DeepSeek
+                    // 对纯 JSON 指令偶发空回复 → "EOF at line 1 column 0" →
+                    // HTTP 500 杀死了审批续跑回合)。0 装: stderr 留痕 + metrics
+                    // 记录 Continue, 不伪造任何评分。
+                    eprintln!(
+                        "[cognitive.judge] side-call unparseable; best-effort continue (candidate NOT evaluated): {error}"
+                    );
+                    ModuleOutcome::continue_()
+                }
             }
         };
         self.metrics.record(
@@ -2164,6 +2175,42 @@ mod tests {
         assert_eq!(invoker_counter.calls.load(Ordering::Relaxed), 2);
         assert_eq!(judge.metrics().side_calls, 2);
         assert!(JudgeModule::parse_result("not json").is_err());
+    }
+
+    #[tokio::test]
+    async fn judge_side_call_empty_response_degrades_to_continue() {
+        let session = SessionId::new();
+        // DeepSeek 对纯 JSON 指令偶发空回复 (2026-10-06 真机: EOF at line 1
+        // column 0) — 评审不可用必须降级放行候选, 而不是 Err 杀死回合.
+        let invoker_counter = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("", "fake", "empty"),
+            calls: AtomicU64::new(0),
+        });
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = invoker_counter.clone();
+        let judge = JudgeModule::new(
+            JudgeConfig {
+                enabled: true,
+                ..JudgeConfig::default()
+            },
+            Arc::new(JudgeObservations::default()),
+        );
+        let messages = vec![NormalizedMessage::user("request")];
+        let candidate = NormalizedResponse::text("answer-1", "fake", "candidate");
+        let outcome = judge
+            .on_hook(
+                HookPoint::AfterModelResponse,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&candidate),
+                    &invoker,
+                    JUDGE_MODULE_ID,
+                ),
+            )
+            .await
+            .expect("empty side-call must not surface as a module error");
+        assert!(matches!(outcome.directive, ModuleDirective::Continue));
+        assert_eq!(invoker_counter.calls.load(Ordering::Relaxed), 1);
     }
 
     #[tokio::test]
