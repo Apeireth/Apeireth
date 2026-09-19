@@ -1146,7 +1146,11 @@
               <option value="deep">深度 — judge 开 / council 开</option>
               <option value="custom">自定义 — 手动设置 judge/council</option>
             </select>
-            <small class="field-hint">judge/council 会在回复后追加评审，增加延迟与 token 消耗。</small>
+            <small class="field-hint">
+              评审在每条回复后追加，会增加延迟与 token 消耗。实测（DeepSeek flash，
+              2026-10-06）：轻量 ≈1.1s / 平衡 ≈2.6s / 深度 ≈13s 每轮——日常对话建议
+              轻量或平衡，深度留给重要问题。
+            </small>
           </div>
 
           {#each CAPABILITY_TOGGLE_DEFS as item (item.key)}
