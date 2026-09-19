@@ -20,6 +20,7 @@
     PanelRight,
     X,
     Search,
+    Info,
   } from 'lucide-svelte';
   import MessageContent from './lib/MessageContent.svelte';
   import RuntimeModal from './lib/components/RuntimeModal.svelte';
@@ -245,6 +246,8 @@
   let error = $state('');
   /** 最近一次错误对象（保留 code/solution，供 ErrorSolutionBanner 使用）。 */
   let lastError = $state<unknown>(null);
+  /** 非错误的状态提示（如"审批已提交、工具执行中"）——绝不挂"请重试"方案。 */
+  let notice = $state('');
   let pendingApprovals = $state<ApprovalRequestItem[]>([]);
   let pendingCanonical = $state<CanonicalPendingApproval | null>(null);
   let approvalBusy = $state(false);
@@ -908,6 +911,7 @@
     healthState = 'generating';
     error = '';
     lastError = null;
+    notice = '';
     // presence 遗留整合点 2：对话请求开始 → thinking（等首字节）；首段文本到达 → speaking
     presenceStore.setChatActive(true);
 
@@ -998,10 +1002,14 @@
       } else {
         // "is waiting for approval" = 会话还挂着审批，用户却在发新消息。
         // 说人话 + 自动把审批弹窗拉出来（refreshConnection 的 inbox 自愈）。
+        // 这是状态提示不是错误：走 notice，绝不挂"请重试"方案。
         const waiting = /is waiting for approval/.test(msg);
-        error = waiting
-          ? '本轮还在等待你的审批——先在审批弹窗里点"批准"或"拒绝"，再发新消息。'
-          : msg;
+        if (waiting) {
+          error = '';
+          notice = '本轮还在等待你的审批——先在审批弹窗里点"批准"或"拒绝"，再发新消息。';
+        } else {
+          error = msg;
+        }
         // 保留错误对象供 ErrorSolutionBanner 读取 code/solution；
         // waiting 分支是前端人话提示，不保留原始错误码。
         lastError = waiting ? null : caught;
@@ -1053,7 +1061,9 @@
       ]);
       if (result === 'timeout') {
         pendingCanonical = null;
-        error = '已提交，工具正在执行（最长 5 分钟）；结果稍后自动回填，你可以继续操作。';
+        // 状态提示，不是错误：走 notice，不挂"请重试"方案。
+        error = '';
+        notice = '已提交，工具正在执行（最长 5 分钟）；结果稍后自动回填，你可以继续操作。';
         lastError = null;
         void request
           .then((late) => applyResolvedResult(late, conversationId, decision))
@@ -1952,6 +1962,19 @@
                   }}
                 />
               {/if}
+              {#if notice}
+                <div class="notice-banner" role="status">
+                  <Info size={14} />
+                  <span class="notice-text">{notice}</span>
+                  <button
+                    class="notice-close"
+                    onclick={() => (notice = '')}
+                    aria-label="关闭提示"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              {/if}
             </div>
           </section>
         {/if}
@@ -2355,6 +2378,38 @@
     flex-direction: column;
     gap: 6px;
     margin-bottom: 8px;
+  }
+
+  /* ---------- 状态提示横幅（非错误，不挂"请重试"方案） ---------- */
+  .notice-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--blue);
+    border-radius: 10px;
+    background: var(--blue-wash);
+    color: var(--text);
+    font-size: 13px;
+  }
+  .notice-text {
+    flex: 1;
+  }
+  .notice-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 6px;
+  }
+  .notice-close:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   /* ---------- 审批卡遮罩（P0-4） ---------- */
