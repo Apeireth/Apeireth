@@ -381,6 +381,7 @@ export type ErrorCode =
   | 'session_not_found'
   | 'rate_limited'
   | 'review_rejected'
+  | 'turn_not_converged'
   | 'internal';
 
 /** 后端错误帧 (错误响应体 / SSE error 帧的规范形状). */

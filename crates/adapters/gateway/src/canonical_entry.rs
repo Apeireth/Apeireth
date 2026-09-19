@@ -996,6 +996,10 @@ fn classify_runtime_error(error: &RuntimeError) -> (StatusCode, ErrorCode) {
             StatusCode::UNPROCESSABLE_ENTITY,
             ErrorCode::ReviewRejected,
         ),
+        RuntimeError::RoundLimitExceeded { .. } => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            ErrorCode::TurnNotConverged,
+        ),
         RuntimeError::ApprovalRequired { .. } | RuntimeError::SessionApprovalPending { .. } => {
             (StatusCode::CONFLICT, ErrorCode::InvalidRequest)
         }

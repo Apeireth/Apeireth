@@ -41,6 +41,8 @@ pub enum ErrorCode {
     RateLimited,
     /// A cognitive review module (judge/council) rejected the candidate.
     ReviewRejected,
+    /// The turn hit the structural round limit without reaching an answer.
+    TurnNotConverged,
     /// An unexpected internal error.
     Internal,
 }
@@ -57,6 +59,7 @@ impl ErrorCode {
             Self::SessionNotFound => "session_not_found",
             Self::RateLimited => "rate_limited",
             Self::ReviewRejected => "review_rejected",
+            Self::TurnNotConverged => "turn_not_converged",
             Self::Internal => "internal",
         }
     }
@@ -72,6 +75,7 @@ impl ErrorCode {
             Self::SessionNotFound => "回到会话列表重新选择",
             Self::RateLimited => "稍后重试或降低请求频率",
             Self::ReviewRejected => "回复被认知评审驳回——点「重新生成」再试; 若频繁出现, 在设置 → 高级能力中把认知深度调低",
+            Self::TurnNotConverged => "本轮工具链过长未收敛——把问题拆小一点再问, 或点「重新生成」",
             Self::Internal => "重启 Companion 后重试, 若复现请提交日志",
         }
     }
