@@ -33,6 +33,12 @@
   import ToolCallLifecycleCard from './lib/components/ToolCallLifecycleCard.svelte';
   import ComposerMenu from './lib/components/ComposerMenu.svelte';
   import SessionModelPicker from './lib/components/SessionModelPicker.svelte';
+  import WorkspacePickerModal from './lib/components/WorkspacePickerModal.svelte';
+  import {
+    getWorkspaceDir,
+    setWorkspaceDir,
+    listWorkspaceSuggestions,
+  } from './lib/tauri-bridge';
   import SceneLayer from './lib/scene/SceneLayer.svelte';
   import PlanetLayer from './lib/scene/PlanetLayer.svelte';
   import BridgeLayer from './lib/bridge/BridgeLayer.svelte';
@@ -546,6 +552,9 @@
     model: loadConfig().model,
   });
   let showRuntimeModal = $state(false);
+  let workspacePickerOpen = $state(false);
+  let currentWorkspace = $state('');
+  let workspaceSuggestions = $state<string[]>([]);
   let showFirstRun = $state(false);
   const FIRST_RUN_DONE_KEY = 'apeireth-first-run-done';
 
@@ -1213,6 +1222,8 @@
       messages: sliced,
       scope: 'global',
       model: config.model,
+      // 分支继承父会话的工作区 (同一项目上下文).
+      workspace: activeConversation?.workspace,
     };
     conversations = [branchConv, ...conversations];
     activeId = branchConv.id;
@@ -1236,11 +1247,45 @@
     markPendingPreset(conversation.id);
     drawerSec = null;
     persist();
+    // 每个新会话自动弹出工作区选择 (2026-10-06 用户需求): 不选则跟随全局默认.
+    void openWorkspacePicker();
+  }
+
+  /** 打开工作区选择器: 刷新候选与当前值. */
+  async function openWorkspacePicker(): Promise<void> {
+    workspaceSuggestions = (await listWorkspaceSuggestions()) ?? [];
+    currentWorkspace = (await getWorkspaceDir()) ?? '';
+    workspacePickerOpen = true;
+  }
+
+  /** 应用会话级工作区: 持久化到会话 + 侧车快速重根 (supervisor 自动重启). */
+  async function applyConversationWorkspace(dir: string): Promise<void> {
+    workspacePickerOpen = false;
+    const applied = await setWorkspaceDir(dir);
+    if (applied && activeId) updateConversation(activeId, {workspace: applied});
+    if (applied) {
+      currentWorkspace = applied;
+      void refreshConnection();
+    }
   }
 
   function openConversation(id: string): void {
     activeId = id;
     drawerSec = null;
+    // 会话级工作区随切换生效: 与侧车当前根不同则重根 (supervisor 快速重启).
+    const conv = conversations.find((item) => item.id === id);
+    if (conv?.workspace) {
+      void (async () => {
+        const current = await getWorkspaceDir();
+        if ((current ?? '') !== conv.workspace) {
+          const applied = await setWorkspaceDir(conv.workspace as string);
+          if (applied) {
+            currentWorkspace = applied;
+            void refreshConnection();
+          }
+        }
+      })();
+    }
   }
 
   function archiveConversation(id: string): void {
@@ -2246,6 +2291,14 @@
   isRefreshing={isRefreshingHealth}
   onClose={() => (showRuntimeModal = false)}
   onRefresh={refreshConnection}
+/>
+
+<WorkspacePickerModal
+  open={workspacePickerOpen}
+  current={currentWorkspace}
+  suggestions={workspaceSuggestions}
+  onPick={(dir) => void applyConversationWorkspace(dir)}
+  onCancel={() => (workspacePickerOpen = false)}
 />
 
 {#if showFirstRun}

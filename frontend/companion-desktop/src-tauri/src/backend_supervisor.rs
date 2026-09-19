@@ -969,6 +969,11 @@ impl BackendSupervisor {
 
     /// Validate, persist and apply a workspace directory, returning the new
     /// (normalized) value.
+    ///
+    /// The sidecar's tools (filesystem/search/repo/shell) root at its CWD, so
+    /// when the value actually changes and the backend is running, the sidecar
+    /// is restarted with the new root — a ~1s process restart, transparent to
+    /// the user (per-conversation workspace switching, 2026-10-06).
     pub async fn set_workspace_dir(&self, dir: String) -> Result<String, String> {
         let raw = PathBuf::from(dir.trim());
         if raw.as_os_str().is_empty() {
@@ -977,13 +982,29 @@ impl BackendSupervisor {
         let normalized = workspace::normalize_dir(&raw);
         workspace::ensure_writable_dir(&normalized)?;
 
+        let changed = {
+            let mut current = self.workspace_dir.write().await;
+            let changed = current.as_deref() != Some(normalized.as_path());
+            *current = Some(normalized.clone());
+            changed
+        };
+
         // The path is non-secret, so plain JSON under app-data is fine.
         if let Some(app_data) = self.app_data_dir() {
             workspace::persist_workspace_dir(&app_data, &normalized)?;
         }
 
         let value = normalized.to_string_lossy().to_string();
-        *self.workspace_dir.write().await = Some(normalized);
+        if changed {
+            let state = self.info.read().await.state.clone();
+            if state == BackendState::Ready {
+                self.log_desktop(
+                    LogLevel::Info,
+                    "backend.restart required (workspace dir changed; tools reroot)",
+                );
+                self.restart().await.map(|_| ())?;
+            }
+        }
         Ok(value)
     }
 
