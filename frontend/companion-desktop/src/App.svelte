@@ -436,6 +436,12 @@
         sessionSettings = updated;
         // 用户已在会话头显式选择策略，全局默认预设不再覆盖。
         clearPendingPreset(sessionId);
+        // 预设变更不追溯: 此前产生的未决审批仍会弹。主动说明, 避免用户
+        // 误以为"切了完全放行还在弹新审批" (2026-10-06 真机反馈)。
+        const inbox = await fetchCanonicalApprovals(config, sessionId).catch(() => []);
+        if (inbox.length > 0) {
+          notice = `该会话还有 ${inbox.length} 个此前产生的未决审批——策略变更不追溯，请先批准或拒绝；之后的请求即按「${strategy.label}」执行。`;
+        }
       }
     } catch {
       if (activeId === sessionId) sessionSettings = prev;
