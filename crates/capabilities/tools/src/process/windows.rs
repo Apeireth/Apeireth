@@ -301,6 +301,13 @@ impl WindowsStdChild {
     fn spawn(request: &ProcessRequest, job: JobObject) -> Result<Self, ProcessError> {
         let mut command = Command::new(&request.executable);
         command.args(&request.args);
+        // Verbatim command-line tail: appended after args without quoting, so
+        // `cmd /D /S /C "<script>"` reaches cmd byte-for-byte (embedded double
+        // quotes survive cmd's /S rule; 2026-10-06 真机 powershell 引号被吃).
+        if let Some(tail) = request.raw_arg() {
+            use std::os::windows::process::CommandExt;
+            command.raw_arg(tail);
+        }
         command.creation_flags(CREATE_SUSPENDED);
         apply_request_to_command(&mut command, request)?;
         command

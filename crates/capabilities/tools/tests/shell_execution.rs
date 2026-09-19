@@ -55,6 +55,28 @@ async fn echo_fixture_executes_and_captures_stdout() {
     assert_eq!(value["timed_out"], json!(false));
 }
 
+/// Regression for 2026-10-06 真机: 双引号命令 (powershell -Command "...") 曾被
+/// cmd /S 的引号规则吃掉, 只回显不执行。外层引号包裹后内层双引号必须存活。
+#[cfg(windows)]
+#[tokio::test]
+async fn double_quoted_powershell_command_executes() {
+    let tmp = tempdir().unwrap();
+    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+    let value = invoke(
+        &tool,
+        r#"powershell -NoProfile -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Write-Output wrapped-doublequote-ok""#,
+        None,
+        None,
+    )
+    .await;
+    let stdout = value["stdout"].as_str().unwrap();
+    assert!(
+        stdout.contains("wrapped-doublequote-ok"),
+        "double-quoted command must execute, stdout was {stdout:?}"
+    );
+    assert_eq!(value["exit_code"], json!(0));
+}
+
 #[tokio::test]
 async fn explicit_cwd_is_used() {
     let tmp = tempdir().unwrap();

@@ -424,6 +424,12 @@ pub enum EnvironmentSpec {
 pub struct ProcessRequest {
     executable: OsString,
     args: Vec<OsString>,
+    /// Windows-only verbatim command-line tail, appended AFTER `args` without
+    /// quoting or escaping (std's `raw_arg`). Used by the Trusted Shell so
+    /// `cmd /S /C "<script>"` reaches cmd byte-for-byte — Rust's normal arg
+    /// quoting mangles embedded double quotes under cmd's /S rules
+    /// (2026-10-06 真机: powershell -Command "..." 只回显不执行).
+    raw_arg: Option<OsString>,
     working_directory: Option<PathBuf>,
     environment: EnvironmentSpec,
     limits: ProcessLimits,
@@ -436,6 +442,7 @@ impl ProcessRequest {
         Self {
             executable: executable.into(),
             args: Vec::new(),
+            raw_arg: None,
             working_directory: None,
             environment: EnvironmentSpec::Inherit,
             limits: ProcessLimits::default(),
@@ -457,6 +464,17 @@ impl ProcessRequest {
     {
         self.args.extend(args.into_iter().map(Into::into));
         self
+    }
+
+    /// Set the Windows-only verbatim command-line tail (ignored elsewhere).
+    pub fn with_raw_arg(mut self, tail: impl Into<OsString>) -> Self {
+        self.raw_arg = Some(tail.into());
+        self
+    }
+
+    /// The Windows-only verbatim command-line tail, when set.
+    pub fn raw_arg(&self) -> Option<&OsString> {
+        self.raw_arg.as_ref()
     }
 
     /// Set the working directory for the child.
