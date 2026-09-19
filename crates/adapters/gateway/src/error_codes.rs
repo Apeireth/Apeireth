@@ -18,6 +18,7 @@ pub const PROVIDER_ERROR: &str = "provider_error";
 pub const INVALID_REQUEST: &str = "invalid_request";
 pub const SESSION_NOT_FOUND: &str = "session_not_found";
 pub const RATE_LIMITED: &str = "rate_limited";
+pub const REVIEW_REJECTED: &str = "review_rejected";
 pub const INTERNAL: &str = "internal";
 
 /// Resolve a wire code string to its typed [`ErrorCode`].
@@ -30,6 +31,7 @@ pub fn parse_code(code: &str) -> Option<ErrorCode> {
         INVALID_REQUEST => Some(ErrorCode::InvalidRequest),
         SESSION_NOT_FOUND => Some(ErrorCode::SessionNotFound),
         RATE_LIMITED => Some(ErrorCode::RateLimited),
+        REVIEW_REJECTED => Some(ErrorCode::ReviewRejected),
         INTERNAL => Some(ErrorCode::Internal),
         _ => None,
     }
@@ -65,6 +67,7 @@ mod tests {
             INVALID_REQUEST,
             SESSION_NOT_FOUND,
             RATE_LIMITED,
+            REVIEW_REJECTED,
             INTERNAL,
         ];
         for code in codes {

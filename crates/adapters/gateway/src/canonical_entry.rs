@@ -992,6 +992,10 @@ fn classify_runtime_error(error: &RuntimeError) -> (StatusCode, ErrorCode) {
         ),
         RuntimeError::Misconfigured(_) => (StatusCode::SERVICE_UNAVAILABLE, ErrorCode::Internal),
         RuntimeError::Denied { .. } => (StatusCode::FORBIDDEN, ErrorCode::InvalidRequest),
+        RuntimeError::ModuleStopped { .. } => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            ErrorCode::ReviewRejected,
+        ),
         RuntimeError::ApprovalRequired { .. } | RuntimeError::SessionApprovalPending { .. } => {
             (StatusCode::CONFLICT, ErrorCode::InvalidRequest)
         }
