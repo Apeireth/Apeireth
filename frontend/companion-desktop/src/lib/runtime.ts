@@ -362,6 +362,10 @@ export const ERROR_SOLUTIONS: Record<ErrorCode, {title: string; solution: string
   invalid_request: {title: '请求参数错误', solution: '检查输入后重试'},
   session_not_found: {title: '会话不存在', solution: '回到会话列表重新选择'},
   rate_limited: {title: '请求被限流', solution: '稍后重试或降低频率'},
+  review_rejected: {
+    title: '回复被认知评审驳回',
+    solution: '点「重新生成」再试；若频繁出现，在设置 → 高级能力中把认知深度调低（轻量/平衡）',
+  },
   internal: {title: '内部错误', solution: '重启 Companion 后重试, 复现请提交日志'},
 };
 

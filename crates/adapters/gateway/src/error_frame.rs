@@ -39,6 +39,8 @@ pub enum ErrorCode {
     SessionNotFound,
     /// The request was rate limited.
     RateLimited,
+    /// A cognitive review module (judge/council) rejected the candidate.
+    ReviewRejected,
     /// An unexpected internal error.
     Internal,
 }
@@ -54,6 +56,7 @@ impl ErrorCode {
             Self::InvalidRequest => "invalid_request",
             Self::SessionNotFound => "session_not_found",
             Self::RateLimited => "rate_limited",
+            Self::ReviewRejected => "review_rejected",
             Self::Internal => "internal",
         }
     }
@@ -68,6 +71,7 @@ impl ErrorCode {
             Self::InvalidRequest => "检查参数后重试",
             Self::SessionNotFound => "回到会话列表重新选择",
             Self::RateLimited => "稍后重试或降低请求频率",
+            Self::ReviewRejected => "回复被认知评审驳回——点「重新生成」再试; 若频繁出现, 在设置 → 高级能力中把认知深度调低",
             Self::Internal => "重启 Companion 后重试, 若复现请提交日志",
         }
     }

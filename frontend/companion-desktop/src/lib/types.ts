@@ -378,6 +378,7 @@ export type ErrorCode =
   | 'invalid_request'
   | 'session_not_found'
   | 'rate_limited'
+  | 'review_rejected'
   | 'internal';
 
 /** 后端错误帧 (错误响应体 / SSE error 帧的规范形状). */
