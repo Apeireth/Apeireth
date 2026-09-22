@@ -282,6 +282,7 @@
 .drawer-body.embed .sessions-view,
 .drawer-body.embed .memory-view,
 .drawer-body.embed .tools-view,
+.drawer-body.embed .governance-view,
 .drawer-body.embed .activity-view {
   max-width: none;
 }

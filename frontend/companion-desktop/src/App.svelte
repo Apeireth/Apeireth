@@ -14,6 +14,7 @@
     History,
     Layers3,
     Wrench,
+    Landmark,
     Activity,
     ScrollText,
     Settings,
@@ -56,6 +57,7 @@
   } from './lib/chat-shell/gateway-events';
   import ActivityView from './lib/views/ActivityView.svelte';
   import ToolsView from './lib/views/ToolsView.svelte';
+  import GovernanceView, {type GovernanceTabId} from './lib/views/GovernanceView.svelte';
   import MemoryView from './lib/MemoryView.svelte';
   import SettingsView from './lib/views/SettingsView.svelte';
   import Workbench from './lib/components/Workbench.svelte';
@@ -109,7 +111,7 @@
     resolveBackendEndpoint,
   } from './lib/desktop-bridge';
 
-  type DrawerId = 'history' | 'memory' | 'tools' | 'status' | 'logs' | 'settings';
+  type DrawerId = 'history' | 'memory' | 'tools' | 'governance' | 'status' | 'logs' | 'settings';
   const DRAWER_META: Record<DrawerId, {eyebrow: string; title: string; sub: string; action: string}> = {
     history: {
       eyebrow: '管理',
@@ -127,6 +129,12 @@
       eyebrow: '能力',
       title: '工具管理与权限',
       sub: '注册工具、参数规范及待主人批准的高危调用。',
+      action: '',
+    },
+    governance: {
+      eyebrow: '照看 · 事后卷宗',
+      title: '治理卷宗',
+      sub: '审批的账、授权的账、守卫的账、执行的账——对话内完成的判断，在这里成卷。',
       action: '',
     },
     status: {
@@ -223,7 +231,23 @@
   }
 
   // 初始视图：对话始终居中；工程/专注只切场景层，不再把主区换成页面层
-  let drawerSec = $state<DrawerId | null>(null);
+  // 开发覆写 ?drawer=<id>&govtab=<tab>（与 ?mode= 同纪律：仅供无头截图/联调
+  // 直接落到某个抽屉与卷宗 tab，正常启动不受影响）。
+  const drawerQuery =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('drawer') : null;
+  const govtabQuery =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('govtab') : null;
+  const initialDrawer: DrawerId | null =
+    drawerQuery === 'history' || drawerQuery === 'memory' || drawerQuery === 'tools' ||
+    drawerQuery === 'governance' || drawerQuery === 'status' || drawerQuery === 'logs' ||
+    drawerQuery === 'settings'
+      ? drawerQuery
+      : null;
+  const govInitialTab: GovernanceTabId =
+    govtabQuery === 'grants' || govtabQuery === 'guard' || govtabQuery === 'audit'
+      ? govtabQuery
+      : 'approvals';
+  let drawerSec = $state<DrawerId | null>(initialDrawer);
   let wbOpen = $state(false);
   let openPanel = $state<'model' | 'ctx' | null>(null);
   let availableModels = $state<string[]>([]);
@@ -1859,6 +1883,15 @@
           <Wrench size={17} class="shell-icon" />
           <span class="rail-label">工具</span>
         </button>
+        <button
+          class="rail-btn"
+          class:active={drawerSec === 'governance'}
+          onclick={() => toggleRail('governance')}
+          title="治理卷宗——审批 / 授权 / 守卫 / 审计的账"
+        >
+          <Landmark size={17} class="shell-icon" />
+          <span class="rail-label">治理</span>
+        </button>
       </div>
       <div class="rail-foot">
         <div class="rail-sep"></div>
@@ -1954,6 +1987,16 @@
           <MemoryView {config} {capabilities} />
         {:else if drawerSec === 'tools'}
           <ToolsView {config} {capabilities} />
+        {:else if drawerSec === 'governance'}
+          <GovernanceView
+            {config}
+            {capabilities}
+            initialTab={govInitialTab}
+            onOpenChat={() => {
+              closeDrawer();
+              backToList();
+            }}
+          />
         {:else if drawerSec === 'logs'}
           <ActivityView {config} {capabilities} />
         {:else if drawerSec === 'settings'}

@@ -420,6 +420,9 @@ export interface GuardStatus {
   enabled: boolean;
   fast_guard_active: boolean;
   chain_guard_active: boolean;
+  /** introspection.rs serde(default) 字段：新后端恒序列化，旧后端可能缺省。 */
+  intent_guard_active?: boolean;
+  cross_turn_monitoring_active?: boolean;
   active_chains: number;
   total_evaluations: number;
   total_allowed: number;
