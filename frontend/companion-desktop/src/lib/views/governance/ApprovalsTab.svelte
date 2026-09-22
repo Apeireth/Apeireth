@@ -235,9 +235,24 @@
     return `${leftMin} 分钟后过期`;
   }
 
-  onMount(() => {
+  // 能力门控是异步到达的（manifest 在 App 启动节拍里拉取）：drawer 可能在
+  // capabilities=null 时挂载，onMount 一次性早退会永久停在空态——首载改由
+  // 能力翻转到位的 effect 触发（一次性闸，重复翻正不重复拉）。
+  let loadStarted = false;
+  $effect(() => {
+    if (!canRead || loadStarted) return;
+    loadStarted = true;
     void loadLedger();
-    startSse();
+  });
+
+  let sseStarted = false;
+  $effect(() => {
+    if (capabilities === null || sseStarted || destroyed) return;
+    sseStarted = true;
+    startSse(); // 内部对 !canSse / 无 EventSource 置 unsupported
+  });
+
+  onMount(() => {
     clockTimer = setInterval(() => (nowMs = Date.now()), 30000);
   });
 
@@ -256,7 +271,10 @@
     审批在对话内完成——对话里的金色待签文书是「当下」；这里是账：全局待批的总账。已落笔的记录在审计。
   </p>
 
-  {#if !canRead}
+  {#if capabilities === null}
+    <!-- 清单未到达 ≠ 不支持：health→capabilities 串行拉取进行中，诚实显加载 -->
+    <LoadingState message="正在读取运行时能力清单…" />
+  {:else if !canRead}
     <GovUnsupported
       capabilityId="permissions.approval.read"
       reason={readReason}

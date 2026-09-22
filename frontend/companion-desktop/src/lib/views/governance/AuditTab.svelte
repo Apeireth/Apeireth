@@ -7,7 +7,6 @@
   // ActivityView 共用 lib/governance/trace.ts 一份实现。
   //
   // 空态即契约（原则 5）：写「当 X 发生时这里会出现 Y」。
-  import {onMount} from 'svelte';
   import {RotateCcw} from 'lucide-svelte';
   import EmptyState from '../../components/EmptyState.svelte';
   import ErrorState from '../../components/ErrorState.svelte';
@@ -114,7 +113,11 @@
     else traceDetailError = r.error;
   }
 
-  onMount(() => {
+  // 能力异步到达：首载由任一审计能力翻正触发（一次性闸）。
+  let loadStarted = false;
+  $effect(() => {
+    if (!(canTrace || canAudit) || loadStarted) return;
+    loadStarted = true;
     void load();
   });
 </script>
@@ -124,7 +127,9 @@
     审计是落笔之后的卷宗：每一轮执行的轨迹树、每一条系统留痕，都可在此检索复核。
   </p>
 
-  {#if !canTrace && !canAudit}
+  {#if capabilities === null}
+    <LoadingState message="正在读取运行时能力清单…" />
+  {:else if !canTrace && !canAudit}
     <GovUnsupported
       capabilityId="trace.read / audit.read"
       reason={traceReason ?? auditReason}

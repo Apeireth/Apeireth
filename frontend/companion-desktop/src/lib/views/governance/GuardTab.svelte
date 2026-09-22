@@ -9,7 +9,6 @@
   // 这里能真跑一次工具调用。守卫否决的实时通报当前不走 SSE 总线
   // （chat-shell/gateway-events.ts 头注的诚实断点），本 tab 是事后账，
   // 不轮询伪造节奏——刷新由用户手动触发。
-  import {onMount} from 'svelte';
   import {RotateCcw, FlaskConical, ChevronDown, ChevronRight} from 'lucide-svelte';
   import EmptyState from '../../components/EmptyState.svelte';
   import ErrorState from '../../components/ErrorState.svelte';
@@ -119,7 +118,11 @@
     dryRaw = {reasons: r.reasons, evidence: r.evidence};
   }
 
-  onMount(() => {
+  // 能力异步到达：首载由任一守卫能力翻正触发（一次性闸）。
+  let loadStarted = false;
+  $effect(() => {
+    if (!anyGuard || loadStarted) return;
+    loadStarted = true;
     void load();
   });
 </script>
@@ -129,7 +132,9 @@
     守卫的账：每一次评估、放行、否决、转人工都记在这里。守卫的实时通报不进本页——否决当下在对话内呈现。
   </p>
 
-  {#if !anyGuard}
+  {#if capabilities === null}
+    <LoadingState message="正在读取运行时能力清单…" />
+  {:else if !anyGuard}
     <GovUnsupported
       capabilityId="safety.guard.*"
       reason={statusReason ?? eventsReason ?? evaluateReason}

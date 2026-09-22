@@ -8,7 +8,6 @@
   //
   // 不可逆操作纪律（gap-plan §4.4 组件 13）：revoke 用卡内红色边框确认块，
   // 不弹二次窗。
-  import {onMount} from 'svelte';
   import {RotateCcw, ShieldAlert} from 'lucide-svelte';
   import EmptyState from '../../components/EmptyState.svelte';
   import ErrorState from '../../components/ErrorState.svelte';
@@ -75,7 +74,12 @@
     }
   }
 
-  onMount(() => {
+  // 能力异步到达：manifest 未到位时 onMount 会带着 canRead=false 早退——
+  // 首载改由能力翻正触发（一次性闸）。
+  let loadStarted = false;
+  $effect(() => {
+    if (!canRead || loadStarted) return;
+    loadStarted = true;
     void load();
   });
 </script>
@@ -85,7 +89,9 @@
     授权是「他获得的能力」的账。撤销即刻生效、作用于当前进程；进程重启后按默认策略恢复。
   </p>
 
-  {#if !canRead}
+  {#if capabilities === null}
+    <LoadingState message="正在读取运行时能力清单…" />
+  {:else if !canRead}
     <GovUnsupported
       capabilityId="permissions.grants.read"
       reason={readReason}
