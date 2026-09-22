@@ -515,6 +515,126 @@
   width: min(720px, calc(100% - 56px));
   margin: 0 auto;
 }
+
+/* ── 三栏主从骨架（2026-09-22 主人拍板：微信电脑版/QQ 桌面范式）──────────
+   图标轨（.rail）｜会话列表栏（.session-col 常驻，260–320 弹性）｜聊天区。
+   栏体 = 页面层承托（§5.1：#0b0d12@82% + blur 20px），场景从栏外透出；
+   栏内逐行卡片/hover 金线/空态契约保持第①②轮已验收语言，不重复定义。 */
+.chat-columns {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.session-col {
+  flex: none;
+  width: clamp(260px, 24vw, 320px);
+  margin: 14px 0 14px 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--ap-line);
+  border-radius: 12px;
+  background: var(--ap-panel);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  pointer-events: auto;
+}
+.chat-area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 未选中态 = 个性化背景显影区（§8 增补①）：背景本身即是内容，
+   只放一句指引 + 右下角背景署名（如实标注来源，0 装）。 */
+.bg-reveal {
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+.bg-hint {
+  margin: 0;
+  font-family: var(--ap-font-voice);
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  color: var(--ap-bone-68);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
+}
+.bg-caption {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--ap-line);
+  border-radius: 6px;
+  background: var(--ap-shell-chip);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-family: var(--ap-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--ap-bone-42);
+}
+
+/* 窄窗降级开关：桌面恒隐，≤980px 媒体查询里亮起（断点见下方诚实标注） */
+.col-toggle {
+  display: none;
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 12;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--ap-line);
+  border-radius: 999px;
+  background: var(--ap-panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--ap-bone-68);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: border-color 0.25s, color 0.25s;
+}
+.col-toggle:hover {
+  border-color: rgba(255, 210, 122, 0.45);
+  color: var(--ap-bone);
+}
+
+/* 窄窗降级（诚实断点 ≤980px，桌面优先）：列表栏折叠为覆盖层，
+   由 .col-toggle 召出，选中会话即收（openConversation 里置 false）。 */
+@media (max-width: 980px) {
+  .session-col {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: min(300px, calc(100% - 64px));
+    margin: 0;
+    border-radius: 0 12px 12px 0;
+    background: var(--ap-shell-elevated);
+    transform: translateX(-105%);
+    transition: transform 0.3s var(--ap-ease);
+  }
+  .session-col.open {
+    transform: none;
+  }
+  .col-toggle {
+    display: inline-flex;
+  }
+  /* 给覆盖层开关让位，避免压住会话头标题 */
+  .chat-head {
+    padding-left: 84px;
+  }
+}
 .home {
   min-height: 100%;
   display: flex;

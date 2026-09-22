@@ -36,6 +36,7 @@
     himStatus,
     himAttention = false,
     reloadKey = 0,
+    activeId = null,
     onOpen,
     onOpenHim,
     onNew,
@@ -53,6 +54,8 @@
     himAttention?: boolean;
     /** App 节拍/SSE 驱动的重拉信号（变化即重拉账本）。 */
     reloadKey?: number;
+    /** 三栏主从（2026-09-22 主人拍板）：当前选中会话 id，行内金线 active 态。 */
+    activeId?: string | null;
     onOpen: (item: HomeSessionItem) => void;
     onOpenHim: () => void;
     onNew: () => void;
@@ -105,7 +108,7 @@
   });
 </script>
 
-<section class="home-list col" aria-label="往来">
+<section class="home-list" aria-label="往来">
   <header class="home-head">
     <p class="eyebrow">往来</p>
     <h1 class="home-title">谁找我了</h1>
@@ -128,7 +131,7 @@
     <ul class="session-list">
       {#each items as item (item.id)}
         <li>
-          <button class="session-row" onclick={() => onOpen(item)}>
+          <button class="session-row" class:active={item.id === activeId} onclick={() => onOpen(item)}>
             <span class="session-main">
               <span class="session-title">
                 {item.title}
@@ -169,11 +172,13 @@
 
 <style>
   .home-list {
-    padding: 42px 0 24px;
+    /* 三栏主从（2026-09-22 主人拍板）：本组件常驻 ~300px 列表栏，
+       栏体面板承托由外层 .session-col 承担，此处只留内距。 */
+    padding: 20px 14px 16px;
     pointer-events: auto;
   }
   .home-head {
-    margin-bottom: 18px;
+    margin-bottom: 16px;
   }
   .eyebrow {
     margin: 0 0 6px;
@@ -301,6 +306,13 @@
   .session-row:hover {
     border-color: rgba(255, 210, 122, 0.45);
     box-shadow: 0 0 22px -8px rgba(255, 210, 122, 0.3);
+  }
+  /* 三栏主从：选中行金线 active 态（已验收语言——hover 金细线的常驻版） */
+  .session-row.active {
+    border-color: rgba(255, 210, 122, 0.55);
+    box-shadow:
+      inset 2px 0 0 var(--ap-gold),
+      0 0 18px -8px rgba(255, 210, 122, 0.28);
   }
   .session-main {
     flex: 1;

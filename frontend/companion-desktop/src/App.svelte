@@ -59,7 +59,7 @@
   import MemoryView from './lib/MemoryView.svelte';
   import SettingsView from './lib/views/SettingsView.svelte';
   import Workbench from './lib/components/Workbench.svelte';
-  import {applyDocumentTheme, isStaticBgTheme, resolveTheme} from './lib/theme';
+  import {applyDocumentTheme, isStaticBgTheme, resolveTheme, themeLabel} from './lib/theme';
   import type {Theme} from './lib/types';
 
   import type {
@@ -269,6 +269,15 @@
   let pendingApprovalSessions = $state<ReadonlySet<string>>(new Set());
   // 主页账本重拉节拍（refreshConnection / SSE 事件后 bump）。
   let homeReloadKey = $state(0);
+  // 三栏主从（2026-09-22 主人拍板）：窄窗（≤980px）下列表栏折叠为覆盖层，
+  // 此开关只在窄窗生效（桌面端 .session-col 常驻，open class 无视觉效果）。
+  let sessionColOpen = $state(false);
+  // 背景显影区 caption（§8 增补①）：如实标注当前背景来源。
+  const bgCaption = $derived(
+    customBgUrl !== null
+      ? '自定义上传图片'
+      : `${themeLabel(activeTheme)} · ${isStaticBgTheme(activeTheme) ? '静态图' : '实时场景'}`,
+  );
   // 从主页点开的 backend-only 会话：本机无消息副本，hero 区给诚实标注。
   let ledgerHint = $state<{id: string; episodeCount: number} | null>(null);
   let draft = $state('');
@@ -1335,6 +1344,7 @@
   function openConversation(id: string): void {
     activeId = id;
     drawerSec = null;
+    sessionColOpen = false; // 窄窗覆盖层：选中即收（桌面端无视觉效果）
     // 会话级工作区随切换生效: 与侧车当前根不同则重根 (supervisor 快速重启).
     const conv = conversations.find((item) => item.id === id);
     if (conv?.workspace) {
@@ -2020,20 +2030,17 @@
         <PanelRight size={14} class="shell-icon-sm" />
         <span>工作台</span>
       </button>
-      <div
-        class="scroll"
-        id="chatScroll"
-        bind:this={messagesContainer}
-        onscroll={handleScroll}
-        style:--presence-glow={presenceGlow.toFixed(3)}
-      >
-        {#if activeId === null}
-          <!-- T0 壳（00-PHILOSOPHY §3.1）：第一屏 = 会话列表（谁找我了） -->
+      <!-- 三栏主从骨架（2026-09-22 主人拍板，微信电脑版/QQ 桌面范式）：
+           图标轨（已有）｜会话列表栏（常驻 ~300px，点行不跳转）｜聊天区。
+           未选中会话时右栏 = 个性化背景显影区（§8 增补①），不再是列表页跳转。 -->
+      <div class="chat-columns">
+        <aside class="session-col" class:open={sessionColOpen} aria-label="往来列表">
           <SessionListHome
             {conversations}
             {config}
             {capabilities}
             {pendingApprovalSessions}
+            {activeId}
             himName={activePersona?.name || '他'}
             {himStatus}
             {himAttention}
@@ -2042,6 +2049,33 @@
             onOpenHim={openHim}
             onNew={newConversation}
           />
+        </aside>
+        <div class="chat-area">
+          <!-- 窄窗折叠（≤980px，诚实断点）时的列表开关；桌面恒隐 -->
+          <button
+            class="col-toggle"
+            onclick={() => (sessionColOpen = !sessionColOpen)}
+            aria-expanded={sessionColOpen}
+            aria-label="往来列表"
+            title="往来列表"
+          >
+            <MessageCircleMore size={13} />
+            往来
+          </button>
+      <div
+        class="scroll"
+        id="chatScroll"
+        bind:this={messagesContainer}
+        onscroll={handleScroll}
+        style:--presence-glow={presenceGlow.toFixed(3)}
+      >
+        {#if activeId === null}
+          <!-- 未选中态 = 个性化背景显影区：内容随用户设置（主题默认图/自定义上传/实时场景），
+               只放一句指引与背景署名，背景本身即是内容 -->
+          <section class="bg-reveal" aria-label="个性化背景显影区">
+            <p class="bg-hint">从左边选一段往来，或开始新的一段。</p>
+            <p class="bg-caption">背景 · {bgCaption}</p>
+          </section>
         {:else if !flowItems.length}
           <section class="home col">
             <svg class="ember" viewBox="0 0 56 56" aria-hidden="true">
@@ -2096,12 +2130,8 @@
           <section class="col">
             <div class="chat-head">
               <div class="chat-head-main">
-                <button class="back-btn" onclick={backToList} aria-label="返回往来列表" title="返回往来列表">
-                  ‹ 往来
-                </button>
-                <!-- 长标题横排单行省略（打回修复②轮）：.chat-head-main 出 flex:1 +
-                     min-width:0，.chat-title 自身 nowrap/ellipsis；状态行移到头部
-                     第二行（.chat-head flex-wrap）独占整宽，不与右侧操作组抢宽 -->
+                <!-- 三栏主从下取消「‹ 往来」返回键：列表栏常驻，不存在返回；
+                     长标题横排单行省略（flex:1 + min-width:0 收缩链） -->
                 <h2 class="chat-title">{activeConversation?.title || '新对话'}</h2>
               </div>
               <div class="chat-head-actions">
@@ -2405,6 +2435,8 @@
           <p class="hint">ENTER 发送 · SHIFT+ENTER 换行</p>
         </div>
       </div>
+        </div>
+      </div>
     </div>
 
     <Workbench
@@ -2685,28 +2717,13 @@
     position: relative;
   }
 
-  /* ---------- T0 壳：会话头返回 + backend-only 诚实标注 ---------- */
+  /* ---------- T0 壳：会话头 + backend-only 诚实标注（三栏主从下返回键已取消） ---------- */
   .chat-head-main {
     display: flex;
     align-items: center;
     gap: 12px;
     flex: 1;
     min-width: 0;
-  }
-  .back-btn {
-    flex: none;
-    border: 0;
-    background: transparent;
-    padding: 0;
-    font-family: var(--ap-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    color: var(--ap-bone-42);
-    cursor: pointer;
-    transition: color 0.2s ease;
-  }
-  .back-btn:hover {
-    color: var(--ap-bone);
   }
   .ledger-hint {
     margin: 0 0 18px;
