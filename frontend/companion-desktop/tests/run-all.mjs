@@ -29,7 +29,7 @@ const SUITES = [
   {file: 'desktop-capability-gating.mjs', name: 'capability gating (mirrored)'},
   {file: 'reality-check.mjs', name: 'storage + secret-persistence safety'},
   {file: 'security-attack.mjs', name: 'redaction / spoofing defence'},
-  {file: 'presence-split.mjs', name: 'presence frame parsing', strip: true},
+  {file: 'presence-state.mjs', name: 'presence_state frame parsing', strip: true},
   {file: 'chat-shell.mjs', name: 'T0 chat shell logic (session ledger / approval events)', strip: true},
   {file: 'governance.mjs', name: 'governance ledger (approvals / guard / trace-audit)', strip: true},
   {file: 'commands.mjs', name: 'command palette registry (filter / alias / recent-first)', strip: true},

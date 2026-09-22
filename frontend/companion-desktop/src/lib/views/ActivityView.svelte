@@ -33,7 +33,7 @@
   import StatusBadge from '../components/StatusBadge.svelte';
   import type {ActivityItem, ApeirethConfig, CapabilityManifest} from '../types';
   import {fetchAuditLogs, fetchTraceDetail, capabilityAvailable, capabilitySupported, friendlyErrorMessage} from '../runtime';
-  import {splitPresenceLine, type PresenceFrame} from '../presence';
+  import {parsePresenceStateFrame, type PresenceStateFrame} from '../presence';
   import {
     getCallLogs,
     clearCallLogs,
@@ -255,53 +255,32 @@
   }
 
   /**
-   * presence 帧 → 活动条目（波次 2：契约 §8.1 分流纪律，修 G5 缺口）。
-   * - initiative/held（欲言又止 = 他的内心）不进对话流，但在此可见；
-   * - emotion 心跳（60s tick）与 legacy 测试行不进活动流——防刷屏，不是数据丢失；
-   * - memory_recall 只带 found/keywords（redacted 恒 true，原文设计上不在 SSE）。
+   * presence_state 帧 → 活动条目（契约 §8a 显影分级纪律）。
+   * - heartbeat（60s 心跳）不进活动流——防刷屏，不是数据丢失；它只驱动 T0 余烬点呼吸。
+   * - turn（回合级）显影为一条 agent 条目，标注 heuristic_v0 接线来源与置信度。
+   * - ritual：契约空间无生产者（v0 永不产出），保留分支以迎接契约演进。
    */
-  function presenceEventToActivity(ev: PresenceFrame): ActivityItem | null {
-    const ts = 'at' in ev && typeof ev.at === 'string' ? Date.parse(ev.at) || Date.now() : Date.now();
-    const id = `presence-${ev.type}-${ts}-${Math.random().toString(36).slice(2, 6)}`;
-    if (ev.type === 'emotion') return null; // 心跳由场景层与状态行呈现
-    if (ev.type === 'initiative') {
-      if (ev.outcome === 'held') {
-        return {
-          id, timestamp: ts, category: 'agent', source: 'sse', severity: 'info',
-          title: '他欲言又止',
-          summary: `门控：${ev.gate_label || ev.gate || '未知'}`,
-          detail: JSON.stringify(ev, null, 2), raw: ev,
-        };
-      }
+  function presenceStateToActivity(frame: PresenceStateFrame): ActivityItem | null {
+    if (frame.significance === 'heartbeat') return null; // 心跳由场景层与余烬点呈现
+    const ts = frame.at || Date.now();
+    const id = `presence-state-${frame.significance}-${ts}-${Math.random().toString(36).slice(2, 6)}`;
+    if (frame.significance === 'ritual') {
+      // 契约空间：v0 后端不产出 ritual/empathetic_care 帧；此分支为前向兼容保留。
       return {
-        id, timestamp: ts, category: 'conversation', source: 'sse', severity: 'info',
-        title: '他主动开口',
-        summary: ev.action ? `动作：${ev.action}` : '完整话术见对话视图',
-        detail: JSON.stringify(ev, null, 2), raw: ev,
+        id, timestamp: ts, category: 'agent', source: 'sse', severity: 'info',
+        title: '他的状态显影 · 仪式级',
+        summary: `姿态 ${frame.stance} · 主导 ${frame.dominant} · 强度 ${frame.intensity.toFixed(2)}`,
+        detail: JSON.stringify(frame, null, 2), raw: frame,
       };
     }
-    if (ev.type === 'dream') {
-      return {
-        id, timestamp: ts, category: 'memory', source: 'sse', severity: 'success',
-        title: '做梦整合完成',
-        summary: `合并 ${ev.merged_count} 条记忆${ev.summary_prefix ? ` · ${ev.summary_prefix}` : ''}`,
-        detail: JSON.stringify(ev, null, 2), raw: ev,
-      };
-    }
-    if (ev.type === 'memory_recall') {
-      return {
-        id, timestamp: ts, category: 'memory', source: 'sse', severity: 'info',
-        title: `他想起了 ${ev.found} 段记忆`,
-        summary: ev.keywords?.length ? `关键词：${ev.keywords.join(' · ')}` : '（脱敏事件，不含原文）',
-        detail: JSON.stringify(ev, null, 2), raw: ev,
-      };
-    }
-    // presence_error：序列化兜底帧，显式呈报而非静默
+    const srcNote = frame.source.kind === 'heuristic_v0'
+      ? `heuristic_v0 接线（置信度 ${frame.source.confidence.toFixed(2)}）`
+      : frame.source.kind;
     return {
-      id, timestamp: ts, category: 'runtime', source: 'sse', severity: 'error',
-      title: 'presence 频道序列化异常',
-      summary: ev.error,
-      detail: JSON.stringify(ev, null, 2), raw: ev,
+      id, timestamp: ts, category: 'agent', source: 'sse', severity: 'info',
+      title: '他的状态显影',
+      summary: `姿态 ${frame.stance} · 主导 ${frame.dominant} · 强度 ${frame.intensity.toFixed(2)} · ${srcNote}`,
+      detail: JSON.stringify(frame, null, 2), raw: frame,
     };
   }
 
@@ -320,14 +299,22 @@
       const base = config.baseUrl.replace(/\/+$/, '');
       sseEventSource = new EventSource(`${base}/v1/apeireth/events`);
 
+      // 契约 §8a：presence_state 是具名 SSE 帧，onmessage 收不到，必须具名监听。
+      sseEventSource.addEventListener('presence_state', (event) => {
+        const raw = typeof (event as MessageEvent).data === 'string' ? (event as MessageEvent).data : '';
+        const frame = parsePresenceStateFrame(raw);
+        if (!frame) return; // 坏帧静默丢弃（显影宁可缺席不可错显）
+        const item = presenceStateToActivity(frame);
+        if (item) activities = mergeActivities(activities, [item]);
+      });
+
       sseEventSource.onmessage = (event) => {
         const raw = typeof event.data === 'string' ? event.data : '';
-        // 契约 §8.1 分流：行首 { → presence JSON；否则 legacy 文本（[他说]/测试事件）
-        const split = splitPresenceLine(raw);
-        if (split.kind === 'legacy') {
-          const text = split.text ?? '';
-          if (!text.startsWith('[他说]')) return; // 测试事件行 = 链路验证，不进活动流
-          const said = text.slice('[他说]'.length).trim();
+        // legacy 文本分支：canonical 上 onmessage 只可能收到无名帧文本（[他说]/测试事件），
+        // presence 四事件已成为考古（见 presence.ts 头注）；此分支蛰伏保留。
+        if (!raw.startsWith('{')) {
+          if (!raw.startsWith('[他说]')) return; // 测试事件行 = 链路验证，不进活动流
+          const said = raw.slice('[他说]'.length).trim();
           activities = mergeActivities(activities, [{
             id: `legacy-say-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             timestamp: Date.now(),
@@ -337,11 +324,6 @@
             source: 'sse',
             severity: 'info',
           }]);
-          return;
-        }
-        if (split.kind === 'presence' && split.event) {
-          const item = presenceEventToActivity(split.event);
-          if (item) activities = mergeActivities(activities, [item]);
           return;
         }
         // 其余 JSON（未来 span 帧等）：保留既有通用解析路径
