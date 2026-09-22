@@ -97,6 +97,10 @@ function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
     baseUrl: config.baseUrl,
     model: config.model,
     theme: config.theme,
+    // 个性化字段（§8 增补④⑤）：白名单显式携带——曾漏列导致保存后被静默丢弃，
+    // reload 即失忆（截图自查抓获）。新增可持久化字段时此处必须同步。
+    customBg: config.customBg,
+    accent: config.accent,
     provider: config.provider,
     openaiConfig: config.openaiConfig,
     anthropicConfig: config.anthropicConfig,
@@ -522,6 +526,10 @@ export function loadConfig(): ApeirethConfig {
         apiKey: '', // transient in-memory gateway key only; not persisted
         model,
         theme: typeof parsed.theme === 'string' ? (parsed.theme as any) : undefined,
+        // 个性化字段读取侧（§8 增补④⑤）：与 persistedConfig 白名单成对；
+        // customBg 缺省/非 true 一律不落（诚实缺省），accent 非法值交给 resolveAccent 回落
+        customBg: parsed.customBg === true ? true : undefined,
+        accent: typeof parsed.accent === 'string' ? (parsed.accent as ApeirethConfig['accent']) : undefined,
         provider,
         openaiConfig,
         anthropicConfig,
