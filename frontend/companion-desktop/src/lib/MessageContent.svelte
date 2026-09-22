@@ -1,4 +1,5 @@
 <script lang="ts">
+  import {untrack} from 'svelte';
   import {Copy, Check, Pencil, RotateCw, GitFork, Terminal, X, ArrowUp} from 'lucide-svelte';
   import {renderMarkdown} from './markdown';
   import TaskCard from '../components/TaskCard.svelte';
@@ -24,7 +25,8 @@
 
   let copied = $state(false);
   let isEditing = $state(false);
-  let editDraft = $state(message.text || '');
+  // 编辑草稿只取 message 初值快照（进入编辑时 onclick 还会再同步一次），untrack 显式声明。
+  let editDraft = $state(untrack(() => message.text || ''));
 
   const role = $derived(message.role);
   const text = $derived(message.text || '');

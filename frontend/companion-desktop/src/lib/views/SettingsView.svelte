@@ -1,4 +1,5 @@
 <script lang="ts">
+  import {untrack} from 'svelte';
   import {
     Settings,
     Server,
@@ -88,10 +89,13 @@
   let showAdvancedGateway = $state(false);
 
   // Backend advanced-capability toggles (fail-closed defaults, applied on save)
-  let capabilities = $state<CapabilityToggles>({
-    ...DEFAULT_CAPABILITY_TOGGLES,
-    ...(config.capabilities ?? {}),
-  });
+  // 草稿语义：只取 config 初值快照（保存时才回写），untrack 显式声明不跟踪。
+  let capabilities = $state<CapabilityToggles>(
+    untrack(() => ({
+      ...DEFAULT_CAPABILITY_TOGGLES,
+      ...(config.capabilities ?? {}),
+    })),
+  );
 
   // 认知深度预设：轻量 / 平衡 / 深度 / 自定义（judge + council 的快捷档位）。
   type CognitiveDepth = 'light' | 'balanced' | 'deep' | 'custom';
@@ -1820,20 +1824,6 @@
     gap: 8px;
     font-size: 12px;
     color: var(--text);
-  }
-  .model-input-row {
-    display: flex;
-    gap: 8px;
-  }
-  .model-input-row input {
-    flex: 1;
-  }
-  .models-chip-list {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    margin-top: 4px;
   }
   .chip-label {
     font-size: 11px;
