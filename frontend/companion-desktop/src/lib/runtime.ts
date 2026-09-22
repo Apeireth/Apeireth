@@ -2043,6 +2043,12 @@ export interface CompanionEvent {
   text: string;
   ts: number;
   kind?: string;
+  /**
+   * 原始事件 payload（approval_required/approval_resolved 等网关卡事件透传，
+   * 供 T0 壳做会话级路由：主页待签标 + 对话内待签文书卡实时推入）。
+   * 字段形状以后端 events.rs 为准，前端经 chat-shell/gateway-events.ts 归一化。
+   */
+  payload?: Record<string, unknown>;
 }
 
 /**
@@ -2078,7 +2084,7 @@ export function subscribeCompanionEvents(
     } else if (kind === 'approval_resolved') {
       text = '[审批已处理]';
     }
-    if (text) onEvent({text, ts: Date.now(), kind});
+    if (text) onEvent({text, ts: Date.now(), kind, payload: payload ?? undefined});
   };
 
   const connect = () => {

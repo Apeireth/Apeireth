@@ -251,13 +251,15 @@
     background: var(--surface-3);
   }
   .allow-btn {
-    background: var(--amber);
-    border: 1px solid var(--amber);
+    /* 存在金（00-PHILOSOPHY §7）：审批卡用金，因为「他停下了」等你签字 */
+    background: var(--ap-gold);
+    border: 1px solid var(--ap-gold);
     color: #1a1408;
     font-weight: 600;
   }
   .allow-btn:hover:not(:disabled) {
-    background: var(--amber-hi);
+    background: var(--ap-gold-white-hot);
+    border-color: var(--ap-gold-white-hot);
   }
   .reject-btn:disabled,
   .allow-btn:disabled,
