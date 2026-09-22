@@ -64,7 +64,10 @@
   let canReadTrace = $derived(capabilityAvailable(capabilities, 'trace.read'));
 
   // Trace detail modal (Phase 5): 点击带 traceId 的活动 → 打开 span 树.
+  // span 树排序/缩进逻辑与治理卷宗④审计共用 lib/governance/trace.ts 一份实现
+  // （复用吸收，不另起炉灶）。
   import type {TraceSpanItem} from '../runtime';
+  import {spanTreeSort, spanDepth} from '../governance/trace';
   let traceDetail = $state<{traceId: string; spans: TraceSpanItem[]; loading: boolean; error: string} | null>(null);
 
   async function openTrace(traceId: string): Promise<void> {
@@ -85,20 +88,11 @@
   }
 
   function spanTree(spans: TraceSpanItem[]): TraceSpanItem[] {
-    return [...spans].sort((a, b) => a.started_at - b.started_at);
+    return spanTreeSort(spans);
   }
 
   function spanIndent(spans: TraceSpanItem[], span: TraceSpanItem): number {
-    let depth = 0;
-    let cur = span.parent_span_id;
-    const guard = new Set<string>();
-    while (cur && !guard.has(cur)) {
-      guard.add(cur);
-      depth++;
-      const parent = spans.find((s) => s.span_id === cur);
-      cur = parent?.parent_span_id ?? null;
-    }
-    return Math.min(depth, 6);
+    return spanDepth(spans, span);
   }
 
   type CategoryFilter = 'all' | 'tool' | 'agent' | 'memory' | 'workflow' | 'runtime' | 'error';
