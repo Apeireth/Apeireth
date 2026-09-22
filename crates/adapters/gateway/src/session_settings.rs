@@ -189,6 +189,7 @@ mod tests {
             services: crate::panels::GatewayServices::default(),
             events: crate::events::EventBus::default(),
             observations: Arc::new(crate::events::RuntimeObservationSink::new(None, None)),
+            presence: crate::presence::PresenceService::new(crate::events::EventBus::default()),
             hot_config: Arc::new(std::sync::RwLock::new(
                 crate::admin::GatewayRuntimeConfig::from_env(),
             )),

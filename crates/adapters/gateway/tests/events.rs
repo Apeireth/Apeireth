@@ -105,3 +105,20 @@ async fn sse_endpoint_streams_events_to_subscribers() {
     assert!(collected.contains("event: turn_started"), "{collected}");
     assert!(collected.contains("s9"), "{collected}");
 }
+
+#[tokio::test]
+async fn gateway_state_wires_presence_service_onto_the_bus() {
+    // 装配接线证明: build_gateway_state 注入的 presence 服务与总线同源,
+    // 心跳帧能到达订阅者 (契约 §8a: presence_state 与 turn_* 同管道)。
+    let runtime = Arc::new(Runtime::builder().build().await.unwrap());
+    let state: GatewayState = build_gateway_state(runtime, None);
+    let mut receiver = state.events.subscribe();
+
+    state.presence.emit_heartbeat();
+
+    let frame = receiver.recv().await.unwrap();
+    assert_eq!(frame.event, "presence_state");
+    assert_eq!(frame.data["type"], "presence_state");
+    assert_eq!(frame.data["significance"], "heartbeat");
+    assert_eq!(frame.data["source"]["kind"], "heuristic_v0");
+}

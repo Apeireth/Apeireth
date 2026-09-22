@@ -36,12 +36,20 @@ pub mod file_fetcher;
 /// Ember HUD 4.0s breath and peripheral vignette glow driver.
 pub mod ember_hud_driver;
 
+/// Presence state synthesizer (`presence_state` event, contract §10 / §8a).
+pub mod presence;
+
 /// Session-scoped model + permission settings (`/v1/sessions/{id}/settings`).
 pub mod session_settings;
 
 pub use barge_in::{format_sse_interrupt_event, BargeInController, InterruptReason, StreamHandle};
 pub use duplex_gateway::{DuplexFrame, DuplexSessionController, SentenceDivider};
 pub use ember_hud_driver::{EmberCognitiveStance, EmberHudDriver, EmberShaderUniforms};
+pub use presence::{
+    spawn_presence_heartbeat, InitiativeBudget, PresenceBreath, PresencePad, PresenceService,
+    PresenceSignificance, PresenceSource, PresenceState, PresenceSynthesizer,
+    HEARTBEAT_INTERVAL_SECS, INITIATIVE_DAILY_CAP,
+};
 pub use file_fetcher::{
     FetchedFile, FileFetchError, InternalFileRequest, InternalFileResponse, TransparentFileFetcher,
 };

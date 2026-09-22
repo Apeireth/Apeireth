@@ -2,7 +2,11 @@
 //!
 //! Emits product-facing lifecycle events:
 //! `backend_ready` / `turn_started` / `turn_delta` / `turn_completed` /
-//! `approval_required` / `approval_resolved`.
+//! `approval_required` / `approval_resolved` / `presence_state`.
+//!
+//! `presence_state` frames are produced by [`crate::presence`] (contract:
+//! `docs/design/00-PHILOSOPHY.md` §10, wire: `docs/gateway-api-contract.md`
+//! §8a) on turn end and on a 60 s heartbeat — never at higher frequency.
 //!
 //! Boundary notes (contract §8):
 //! - `turn_delta` is a lifecycle MIRROR: it carries the final assistant text as
