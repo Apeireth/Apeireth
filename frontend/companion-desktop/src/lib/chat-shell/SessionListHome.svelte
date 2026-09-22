@@ -192,6 +192,13 @@
   }
   .ledger-note {
     margin: 10px 0 0;
+    display: inline-block;
+    padding: 6px 10px;
+    border: 1px solid var(--ap-line);
+    border-radius: 6px;
+    background: var(--ap-shell-chip);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     font-family: var(--ap-font-mono);
     font-size: 10px;
     letter-spacing: 0.08em;
@@ -210,13 +217,15 @@
     border: 1px solid var(--ap-line);
     border-radius: 10px;
     background: var(--ap-panel);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     cursor: pointer;
     text-align: left;
-    transition: border-color 0.25s ease;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
   }
   .him-row:hover {
     border-color: rgba(255, 210, 122, 0.45);
+    box-shadow: 0 0 22px -8px rgba(255, 210, 122, 0.35);
   }
   .ember-dot {
     flex: none;
@@ -263,29 +272,35 @@
     color: var(--ap-gold);
   }
 
-  /* ---------- 会话行（用户侧元素：无金，金只给待签标） ---------- */
+  /* ---------- 会话行（用户侧元素：无金，金只给待签标与 hover 细线） ----------
+     页面层承托（01-DESIGN-SYSTEM §5.1）：逐行卡片 = ui.panel #0b0d12@82% +
+     blur 20px，场景在行间透见而不是透视穿字；行照亮档下同样可读。 */
   .session-list {
     list-style: none;
     margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
+    gap: 8px;
   }
   .session-row {
     display: flex;
     align-items: flex-start;
     gap: 14px;
     width: 100%;
-    padding: 12px 4px;
-    border: 0;
-    border-bottom: 1px solid var(--ap-line);
-    background: transparent;
+    padding: 12px 14px;
+    border: 1px solid var(--ap-line);
+    border-radius: 10px;
+    background: var(--ap-panel);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     cursor: pointer;
     text-align: left;
-    transition: background 0.2s ease;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
   }
   .session-row:hover {
-    background: rgba(232, 224, 204, 0.04);
+    border-color: rgba(255, 210, 122, 0.45);
+    box-shadow: 0 0 22px -8px rgba(255, 210, 122, 0.3);
   }
   .session-main {
     flex: 1;
@@ -351,13 +366,18 @@
     color: var(--ap-bone-30);
   }
 
-  /* ---------- 空态契约 ---------- */
+  /* ---------- 空态契约（同在页面层：面板承托，不印在场景上） ---------- */
   .empty-contract {
-    padding: 34px 0 8px;
+    padding: 22px 24px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+    border: 1px solid var(--ap-line);
+    border-radius: 12px;
+    background: var(--ap-panel);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
   .empty-line {
     margin: 0;
