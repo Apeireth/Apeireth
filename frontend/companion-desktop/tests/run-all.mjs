@@ -31,6 +31,7 @@ const SUITES = [
   {file: 'security-attack.mjs', name: 'redaction / spoofing defence'},
   {file: 'presence-split.mjs', name: 'presence frame parsing', strip: true},
   {file: 'chat-shell.mjs', name: 'T0 chat shell logic (session ledger / approval events)', strip: true},
+  {file: 'governance.mjs', name: 'governance ledger (approvals / guard / trace-audit)', strip: true},
   {file: 'theme-system.mjs', name: 'theme system (default/catalog/static-bg, real module)', strip: true},
   {file: 'personalization-bg.mjs', name: 'custom background upload validation (real module)', strip: true},
   {file: 'config-persistence.mjs', name: 'config persistence round-trip (accent/customBg/secret purge, real module)', strip: true},
