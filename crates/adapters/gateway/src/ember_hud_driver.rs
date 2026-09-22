@@ -28,7 +28,13 @@ pub struct EmberShaderUniforms {
 }
 
 /// Dynamic cognitive stance driving Ember HUD rendering.
+///
+/// Wire form is the four lowercase snake_case values fixed by the `presence_state`
+/// contract (`docs/design/00-PHILOSOPHY.md` §10 / `docs/gateway-api-contract.md`
+/// §8a): `deep_coding_focus` / `attentive_presence` / `dreaming_consolidation` /
+/// `empathetic_care`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EmberCognitiveStance {
     /// In deep focus; glow dims to 1% to protect flow.
     DeepCodingFocus,
@@ -169,5 +175,25 @@ mod tests {
         assert_eq!(uniforms.stance_label, "empathetic_care");
         assert!(uniforms.rgb_tint[0] > 0.8); // High red for warm amber
         assert!(uniforms.current_glow_intensity >= 0.0);
+    }
+
+    #[test]
+    fn test_ember_cognitive_stance_serializes_contract_values() {
+        // presence_state 契约 (00-PHILOSOPHY §10) 固定了四个线上值。
+        let cases = [
+            (EmberCognitiveStance::DeepCodingFocus, "deep_coding_focus"),
+            (EmberCognitiveStance::AttentivePresence, "attentive_presence"),
+            (
+                EmberCognitiveStance::DreamingConsolidation,
+                "dreaming_consolidation",
+            ),
+            (EmberCognitiveStance::EmpatheticCare, "empathetic_care"),
+        ];
+        for (stance, wire) in cases {
+            let json = serde_json::to_string(&stance).unwrap();
+            assert_eq!(json, format!("\"{wire}\""));
+            let back: EmberCognitiveStance = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, stance);
+        }
     }
 }
