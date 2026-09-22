@@ -74,6 +74,10 @@
   --ap-register-archive-card-dark: #454041;    /* 条目深卡 */
   --ap-register-archive-card-deep: #131212;    /* 稀有度色条深 */
   --ap-register-archive-accent: #ffd27a;       /* 纸面调内强调仍用存在金（跨调性纪律） */
+  /* ⑥ 记忆卷宗实拍校准新增（🔵 提案，待主人拍板后回写规范 §5.6②）：
+     #ffd27a 在纸白 #e2e1df 上对比度不足——文字级强调用下沉金（金家族色相 42°），
+     实体填充强调（选中条/主按钮底）仍用 accent 金配墨字。 */
+  --ap-register-archive-ink-gold: #8a6d1f;
 
   /* ---------- 数据深舱调 🔵 规范 §5.6③ / JSON registers.deepOps ----------
      适用于系统状态/审批审计/任务面板/设置；识别色 ≤6 且避开存在金。 */
