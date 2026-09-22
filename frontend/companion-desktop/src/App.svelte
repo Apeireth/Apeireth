@@ -46,6 +46,8 @@
   import IntroLayer from './lib/intro/IntroLayer.svelte';
   import {localClockHour} from './lib/scene/timeline';
   import ConversationsView from './lib/ConversationsView.svelte';
+  import SessionListHome from './lib/chat-shell/SessionListHome.svelte';
+  import type {HomeSessionItem} from './lib/chat-shell/session-list';
   import ActivityView from './lib/views/ActivityView.svelte';
   import ToolsView from './lib/views/ToolsView.svelte';
   import MemoryView from './lib/MemoryView.svelte';
@@ -246,7 +248,16 @@
   }
 
   let conversations = $state<Conversation[]>(loadConversations());
+  // T0 聊天壳（00-PHILOSOPHY §3.1 消息列表是主页）：activeId 缺省为 null ——
+  // 打开应用第一屏 = 会话列表（「谁找我了」），进入会话才是消息流 + composer。
   let activeId = $state<string | null>(null);
+  // 会话级「待签」账本（SSE approval_required − approval_resolved 推导，真实信号）；
+  // 主页列表据此打金色待签标。applyApprovalEventToPending 不可变更新。
+  let pendingApprovalSessions = $state<ReadonlySet<string>>(new Set());
+  // 主页账本重拉节拍（refreshConnection / SSE 事件后 bump）。
+  let homeReloadKey = $state(0);
+  // 从主页点开的 backend-only 会话：本机无消息副本，hero 区给诚实标注。
+  let ledgerHint = $state<{id: string; episodeCount: number} | null>(null);
   let draft = $state('');
   let busy = $state(false);
   let error = $state('');
@@ -659,6 +670,21 @@
     conversations.find((item) => item.id === activeId) || null,
   );
 
+  // 主页置顶行「他」的状态词 —— 全部由前端真实状态推导（流式/审批/健康探测），
+  // 无假数据；「他停下了」用金（00-PHILOSOPHY §7：审批卡的金是因为他停下了）。
+  const himAttention = $derived(pendingCanonical !== null || pendingApprovals.length > 0);
+  const himStatus = $derived(
+    himAttention
+      ? '他停下了 · 等你签字'
+      : busy
+        ? '正在输出…'
+        : isReasoning
+          ? '思考中…'
+          : healthState === 'offline'
+            ? '离线'
+            : '在',
+  );
+
   const activeMessages = $derived(activeConversation?.messages || []);
 
   // 对话流 = 消息 + 星尘条，按时间戳归并（同刻消息优先于星尘）
@@ -886,6 +912,16 @@
             reason: item.governance_reason,
             status: 'pending' as const,
           }));
+          // 主页待签账本同步（当前会话的 inbox 真值；其他会话由 SSE 事件维护）。
+          const nextPending = new Set(pendingApprovalSessions);
+          if (inbox.length > 0) nextPending.add(activeId);
+          else nextPending.delete(activeId);
+          if (
+            nextPending.size !== pendingApprovalSessions.size ||
+            [...nextPending].some((id) => !pendingApprovalSessions.has(id))
+          ) {
+            pendingApprovalSessions = nextPending;
+          }
           // 自愈（2026-09-28 卡死根因类）：弹窗以"后端真值"为准——
           // 若弹窗持有的审批 id 已不在待审批列表（过期/已被处理），
           // 换成后端最新一条；后端说没有待审批就关掉陈旧弹窗。
@@ -907,6 +943,8 @@
       }
     } finally {
       isRefreshingHealth = false;
+      // 主页账本节拍：健康探测/审批同步后让会话列表对齐一次后端账本。
+      homeReloadKey += 1;
     }
   }
 
@@ -1293,6 +1331,53 @@
     if (conv) updateConversation(id, {archived: !conv.archived});
   }
 
+  // ---------- T0 壳：主页（会话列表）导航 ----------
+  /** 回到会话列表主页（微信范式：消息列表是主页，会话可返回）。 */
+  function backToList(): void {
+    activeId = null;
+    ledgerHint = null;
+    drawerSec = null;
+    homeReloadKey += 1; // 回主页即对齐一次他的账本
+  }
+
+  /** 主页置顶行「他」：进入最近的进行中的会话，没有则新建。 */
+  function openHim(): void {
+    const latest = conversations.filter((c) => !c.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    if (latest) openConversation(latest.id);
+    else newConversation();
+  }
+
+  /**
+   * 主页点开一行会话：
+   * - 本地有副本 → 直接进入；
+   * - backend-only（本机无消息副本）→ 以同一 session id 建本地壳（之后的发言
+   *   后端会续上该会话账本），并在 hero 区诚实标注内容在他的账本里。
+   */
+  function openHomeSession(item: HomeSessionItem): void {
+    const local = conversations.find((c) => c.id === item.id);
+    if (!local) {
+      const now = Date.now();
+      const conv: Conversation = {
+        id: item.id,
+        title: item.title,
+        createdAt: item.lastActiveAt || now,
+        updatedAt: item.lastActiveAt || now,
+        messages: [],
+        scope: 'global',
+        model: config.model,
+      };
+      conversations = [conv, ...conversations];
+      persist();
+      if (item.origin === 'backend' && item.messageCount > 0) {
+        ledgerHint = {id: item.id, episodeCount: item.messageCount};
+      }
+      markPendingPreset(conv.id);
+    } else {
+      ledgerHint = null;
+    }
+    openConversation(item.id);
+  }
+
   function deleteConversation(id: string): void {
     conversations = conversations.filter((item) => item.id !== id);
     if (activeId === id) activeId = null;
@@ -1358,7 +1443,8 @@
 
   function toggleRail(id: 'chat' | DrawerId): void {
     if (id === 'chat') {
-      closeDrawer();
+      // 「对话」= 往来主页（00-PHILOSOPHY §3.1：消息列表是主页）
+      backToList();
       return;
     }
     if (drawerSec === id) closeDrawer();
@@ -1524,7 +1610,7 @@
 
   onMount(() => {
     applyDocumentTheme(activeTheme);
-    if (!activeId && conversations.length) activeId = conversations[0].id;
+    // T0 壳（§3.1）：不再自动进入最近会话 —— 第一屏 = 会话列表（谁找我了）。
     if (window.innerWidth < 1180) wbOpen = false;
     // 首启向导：桌面模式下未完成过向导时先引导选 provider / 填 key。
     if (isDesktop() && !localStorage.getItem(FIRST_RUN_DONE_KEY)) {
@@ -1878,7 +1964,22 @@
         onscroll={handleScroll}
         style:--presence-glow={presenceGlow.toFixed(3)}
       >
-        {#if !flowItems.length}
+        {#if activeId === null}
+          <!-- T0 壳（00-PHILOSOPHY §3.1）：第一屏 = 会话列表（谁找我了） -->
+          <SessionListHome
+            {conversations}
+            {config}
+            {capabilities}
+            {pendingApprovalSessions}
+            himName={activePersona?.name || '他'}
+            {himStatus}
+            {himAttention}
+            reloadKey={homeReloadKey}
+            onOpen={openHomeSession}
+            onOpenHim={openHim}
+            onNew={newConversation}
+          />
+        {:else if !flowItems.length}
           <section class="home col">
             <svg class="ember" viewBox="0 0 56 56" aria-hidden="true">
               <circle class="halo" cx="28" cy="30" r="19"></circle>
@@ -1887,6 +1988,12 @@
             </svg>
             <h1 class="ask">今天想干些什么？</h1>
             <p class="lede">与 Apeireth 交流你的想法、创意与工作。</p>
+            {#if ledgerHint && ledgerHint.id === activeId}
+              <!-- backend-only 会话：本机无消息副本的诚实标注（0 装空态契约） -->
+              <p class="ledger-hint" role="status">
+                这段会话在他的账本里有 {ledgerHint.episodeCount} 条记录；本机没有消息副本——从下一句开始，他会接着同一本账继续。
+              </p>
+            {/if}
             <div class="sugs">
               {#if suggestions.length}
                 {#each suggestions as item (item.id)}
@@ -1925,7 +2032,10 @@
         {:else}
           <section class="col">
             <div class="chat-head">
-              <div>
+              <div class="chat-head-main">
+                <button class="back-btn" onclick={backToList} aria-label="返回往来列表" title="返回往来列表">
+                  ‹ 往来
+                </button>
                 <h2 class="chat-title">{activeConversation?.title || '新对话'}</h2>
                 <div class="statusline">
                   <div class="persona-menu">
@@ -2534,5 +2644,37 @@
   /* ---------- 斜杠菜单锚点（P1-6） ---------- */
   .composer {
     position: relative;
+  }
+
+  /* ---------- T0 壳：会话头返回 + backend-only 诚实标注 ---------- */
+  .chat-head-main {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+  }
+  .back-btn {
+    flex: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font-family: var(--ap-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--ap-bone-42);
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  .back-btn:hover {
+    color: var(--ap-bone);
+  }
+  .ledger-hint {
+    margin: 0 0 18px;
+    max-width: 52ch;
+    font-family: var(--ap-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    line-height: 1.8;
+    color: var(--ap-bone-42);
   }
 </style>
