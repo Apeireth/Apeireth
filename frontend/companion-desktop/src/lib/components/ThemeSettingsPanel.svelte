@@ -1,7 +1,9 @@
 <script lang="ts">
-  import {Check} from 'lucide-svelte';
+  import {onMount} from 'svelte';
+  import {Check, Upload, ImageOff} from 'lucide-svelte';
   import type {ApeirethConfig, Theme} from '../types';
   import {THEME_CATALOG, applyDocumentTheme, resolveTheme} from '../theme';
+  import {clearCustomBg, getCustomBg, putCustomBg, validateCustomBgFile} from '../bg-store';
 
   let {
     config,
@@ -18,11 +20,78 @@
     applyDocumentTheme(theme);
     onSave({...config, theme});
   }
+
+  /* ---------- 自定义背景（规范 §8 增补④）----------
+     图本体存 IndexedDB（bg-store.ts），config 只记开关 customBg。
+     真实边界（0 装）：web dev 按 localhost 原点持久化，换端口/换浏览器需重传；
+     Tauri 壳走 WebView2 的 IndexedDB，desktop-bridge 无磁盘文件持久化能力。 */
+  let bgBusy = $state(false);
+  let bgError = $state('');
+  let customPreview = $state<string | null>(null);
+  let fileInput = $state<HTMLInputElement | undefined>();
+
+  onMount(() => {
+    if (config.customBg) {
+      void getCustomBg()
+        .then((blob) => {
+          if (blob) customPreview = URL.createObjectURL(blob);
+        })
+        .catch(() => {
+          /* 读不出就保持无预览，App 侧会诚实回落开关 */
+        });
+    }
+    return () => {
+      if (customPreview) URL.revokeObjectURL(customPreview);
+    };
+  });
+
+  async function handleFile(e: Event): Promise<void> {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // 允许重选同一文件
+    if (!file) return;
+    const verdict = validateCustomBgFile(file.size, file.type);
+    if (!verdict.ok) {
+      bgError = verdict.reason;
+      return;
+    }
+    bgBusy = true;
+    bgError = '';
+    try {
+      await putCustomBg(file);
+      if (customPreview) URL.revokeObjectURL(customPreview);
+      customPreview = URL.createObjectURL(file);
+      onSave({...config, customBg: true});
+    } catch (err) {
+      bgError = err instanceof Error ? err.message : '写入本机浏览器数据库失败';
+    } finally {
+      bgBusy = false;
+    }
+  }
+
+  /** 恢复主题默认背景：上传的图保留在 IndexedDB，随时可重新启用。 */
+  function useThemeDefault(): void {
+    onSave({...config, customBg: false});
+  }
+
+  async function clearBg(): Promise<void> {
+    bgBusy = true;
+    try {
+      await clearCustomBg();
+      if (customPreview) {
+        URL.revokeObjectURL(customPreview);
+        customPreview = null;
+      }
+      onSave({...config, customBg: false});
+    } finally {
+      bgBusy = false;
+    }
+  }
 </script>
 
 <div class="theme-panel">
   <p class="theme-lede">
-    切换界面照明与背景。Essence 使用星空山脉壁纸；深空舰桥保留 WebGL 场景与金色存在纪律。
+    切换界面照明与背景。默认遗产星空为静态图；深空舰桥保留 WebGL 实时场景与金色存在纪律；Essence 使用星空山脉浅色雾面。
   </p>
   <div class="theme-grid" role="listbox" aria-label="界面主题">
     {#each THEME_CATALOG as item (item.id)}
@@ -43,6 +112,47 @@
         {/if}
       </button>
     {/each}
+  </div>
+
+  <div class="bg-section">
+    <h3 class="bg-title">自定义背景</h3>
+    <p class="bg-lede">
+      上传一张图片盖住主题默认背景（未选中会话时的右侧显影区与全局底）。
+      图片只存在本机浏览器数据库里——开发模式换端口或换浏览器后需要重传。
+    </p>
+    <div class="bg-row">
+      {#if config.customBg && customPreview}
+        <div
+          class="bg-thumb"
+          style:background-image={`url(${customPreview})`}
+          role="img"
+          aria-label="当前自定义背景预览"
+        ></div>
+      {/if}
+      <div class="bg-actions">
+        <button class="quiet-btn" onclick={() => fileInput?.click()} disabled={bgBusy}>
+          <Upload size={13} />
+          {config.customBg ? '重新上传' : '上传图片'}
+        </button>
+        {#if config.customBg}
+          <button class="quiet-btn" onclick={useThemeDefault} disabled={bgBusy}>恢复主题默认</button>
+          <button class="quiet-btn" onclick={clearBg} disabled={bgBusy}>
+            <ImageOff size={13} />
+            清除已传图片
+          </button>
+        {/if}
+      </div>
+    </div>
+    {#if bgError}
+      <p class="bg-error" role="alert">{bgError}</p>
+    {/if}
+    <input
+      bind:this={fileInput}
+      type="file"
+      accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
+      class="bg-file"
+      onchange={handleFile}
+    />
   </div>
 </div>
 
@@ -122,5 +232,60 @@
     background: var(--amber);
     color: #1b1409;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  /* ---------- 自定义背景（规范 §8 增补④） ---------- */
+  .bg-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+  }
+  .bg-title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+  .bg-lede {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--muted);
+    max-width: 62ch;
+  }
+  .bg-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .bg-thumb {
+    width: 128px;
+    height: 72px;
+    border-radius: 8px;
+    border: 1px solid var(--line-strong);
+    background: center / cover no-repeat;
+  }
+  .bg-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .bg-actions :global(.quiet-btn) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .bg-error {
+    margin: 0;
+    font-size: 12px;
+    color: var(--danger);
+  }
+  .bg-file {
+    display: none;
   }
 </style>

@@ -264,6 +264,9 @@ export interface ApeirethConfig {
   personas?: PersonaProfile[];
   /** 当前激活人设 id (缺省时取列表第一个) */
   activePersonaId?: string;
+  /** 自定义上传背景开关（规范 §8 增补④）：true = 用 IndexedDB 里的上传图
+   *  盖住主题默认背景；图本体在 IndexedDB（bg-store.ts），不落 config。 */
+  customBg?: boolean;
 }
 
 export interface ActivityItem {

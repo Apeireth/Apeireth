@@ -32,6 +32,7 @@ const SUITES = [
   {file: 'presence-split.mjs', name: 'presence frame parsing', strip: true},
   {file: 'chat-shell.mjs', name: 'T0 chat shell logic (session ledger / approval events)', strip: true},
   {file: 'theme-system.mjs', name: 'theme system (default/catalog/static-bg, real module)', strip: true},
+  {file: 'personalization-bg.mjs', name: 'custom background upload validation (real module)', strip: true},
   {file: 'tier0-parity.mjs', name: 'tier 0 tool/approval/dead-url parity', strip: true},
 ];
 
