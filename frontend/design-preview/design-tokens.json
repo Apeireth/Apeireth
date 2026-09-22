@@ -63,6 +63,7 @@
       "cardDark":   { "hex": "#15181f", "role": "深灰卡片（列表项/次要容器）" },
       "line":       { "hex": "#e8e0cc", "alpha": 0.14, "role": "1px 细分隔线/描边" },
       "accentTab":  { "hex": "#ffd27a", "role": "激活 tab/进度/高亮——复用存在金，同金色纪律" },
+      "accentUi":   { "hex": "#ffd27a", "role": "UI 强调色（选中描边/聚焦/链接等）。分工：accentTab 跟随主题金家族不随用户配色变（深色主题 = 存在金 #ffd27a，essence 浅色 = 下沉金 #8a7355）；accentUi 开放个性化，目录 = gold 默认 / deep-space #7d9cc0 / sage #7fb894 / bone #e6e2da，html[data-accent] 覆写", "_status": "proposal（2026-09-22 K3 个性化批次落地；theme.ts ACCENT_CATALOG 机器断言可选色不占存在金家族）" },
       "stamp":      { "hex": "#ece7da", "role": "图章/编号文字（括号角标内）" }
     },
     "semantic": {
@@ -435,7 +436,7 @@
   },
 
   "registers": {
-    "_status": "proposal（主人 2026-08-21 确认三调性方向；Archive/Deep-Ops 色值为参考图采样，calibration）",
+    "_status": "proposal（主人 2026-08-21 确认三调性方向；Archive/Deep-Ops 色值为参考图采样，calibration；2026-09-22 K3 批次两调性均完成首轮实拍——Archive = 记忆卷宗+日记，Deep-Ops = 治理卷宗）",
     "_doc": "docs/design/01-DESIGN-SYSTEM.md §5.6 三种调性登记",
     "_source": "frontend/design-preview/reference/endfield-pages/（01 百科首页 / 02 图鉴展开 / 03 武器图鉴 / 04 工业计划树 / 05 总控中枢，2026-08-21 PIL 采样）",
     "scene": {
@@ -446,7 +447,7 @@
       "note": "实时、在场、场景类；已验收基准（index.html 原型 + 概念图 A/B）"
     },
     "archive": {
-      "_status": "calibration",
+      "_status": "calibration（2026-09-22 记忆卷宗/日记首轮实拍完成；inkGold 提案待主人拍板）",
       "label": "纸面档案调",
       "appliesTo": ["他的日记（默认）", "记忆星图列表态", "百科/图鉴"],
       "paper":      { "hex": "#e2e1df", "range": ["#cfcdcc", "#e9e8e7"], "_source": "01/02/03 纸面底采样" },
@@ -456,11 +457,12 @@
       "iconGray":   { "hex": "#acabaa", "role": "像素/网格图标", "_source": "01 采样" },
       "cardDark":   { "hex": "#454041", "deep": "#131212", "role": "条目深卡 + 稀有度色条", "_source": "03 采样" },
       "accent":     { "hex": "#ffd27a", "role": "纸面调内强调色仍用存在金（金色=他 纪律跨调性有效）" },
+      "inkGold":    { "hex": "#8a6d1f", "role": "纸面文字级强调（下沉金，金家族色相 42°）——#ffd27a 在纸白 #e2e1df 上对比度不足的实拍校准值；实体填充强调（选中条/主按钮底）仍用 accent 金配墨字", "_status": "proposal（2026-09-22 记忆卷宗/日记实拍校准，待主人拍板）" },
       "extras": ["图章", "翻页如翻阅一册日志"],
       "note": "日记是被「写」下来的，纸面是诚实的载体；深色屏幕是显示，纸面是记录"
     },
     "deepOps": {
-      "_status": "calibration",
+      "_status": "calibration（2026-09-22 治理卷宗首次实拍；紫/青/红为提案值待主人拍板）",
       "label": "数据深舱调",
       "appliesTo": ["系统状态", "审批审计", "任务面板", "工具注册表", "设置", "未来的主题管理界面"],
       "base":  { "hex": "#1d262c", "deep": "#050a0f", "bottom": "#171a21", "_source": "05-总控中枢.png 采样" },
@@ -471,11 +473,11 @@
           { "hex": "#2392fb", "role": "蓝（核心/中枢类）", "_source": "05 采样亮部" },
           { "hex": "#6fae5f", "role": "绿（培养/生产类）", "_source": "05 采样（亮部 #98eaa3）" },
           { "hex": "#e8c33a", "role": "工业黄（制造类；04 节点采样 #cead2f 偏暗，取更亮提案值）", "_source": "04/05 采样" },
-          { "hex": "#d95f55", "role": "红（安全守卫类）", "_status": "proposal", "_source": "gap-plan §4.1 建议值；治理卷宗守卫 tab 首次消费（2026-10-14），待实拍校准" },
+          { "hex": "#d95f55", "role": "红（安全守卫类）", "_status": "proposal", "_source": "gap-plan §4.1 建议值；治理卷宗守卫 tab 首次消费（2026-09-22），待实拍校准" },
           { "hex": "#8f7ad9", "role": "紫（情感/姿态类）", "_status": "proposal", "_source": "gap-plan §4.1 建议值；卷宗暂未消费" },
           { "hex": "#3fb0c4", "role": "青（记忆类）", "_status": "proposal", "_source": "gap-plan §4.1 建议值；卷宗暂未消费" }
         ],
-        "todo": "6 色已补足（3 采样 + 3 提案）；治理卷宗模块分工：审批=蓝 / 授权=绿 / 守卫=红 / 审计=工业黄",
+        "todo": "6 色已补足（3 采样 + 3 提案）；治理卷宗模块分工：审批=蓝 / 授权=绿 / 守卫=红 / 审计=工业黄"
       },
       "connectionGraph": { "grammar": "树状节点 + 直角连线 + 对勾图章", "_source": "04-工业计划树.png", "_honesty": "04 在原作为浅灰底金节点——采纳其连线语法，底色系按本节决策取 05 深色系" }
     },
