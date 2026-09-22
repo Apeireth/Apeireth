@@ -2192,8 +2192,9 @@
                   </div>
                 {/if}
               {/each}
-              {#if pendingCanonical}
-                <!-- 待签文书（§3.2/§6.4）：对话内浮起，在发生处批准/拒绝，不跳窗 -->
+              {#if pendingCanonical && pendingCanonical.session === activeId}
+                <!-- 待签文书（§3.2/§6.4）：对话内浮起，在发生处批准/拒绝，不跳窗。
+                     按 session 归属渲染：切换会话后文书只留在它自己的会话里。 -->
                 <PendingDocumentDock
                   approvalId={pendingCanonical.approval_id}
                   item={approvalCardItem}
