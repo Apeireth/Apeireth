@@ -246,6 +246,10 @@ export interface CanonicalPendingApproval {
   tool_name: string;
   governance_hook: string;
   governance_reason: string;
+  /** 后端 canonical_entry.rs 恒序列化的两个展示字段（治理卷宗审批卡直接消费）。 */
+  command_text?: string;
+  arguments_summary?: string;
+  /** RFC 3339 字符串（kernel Timestamp serde transparent，非 epoch 数字）。 */
   created_at: string;
   expires_at: string;
 }
@@ -2290,6 +2294,37 @@ export async function revokeGrant(
 }
 
 // --- Trace ---
+
+/** Trace 摘要 (GET /v1/panel/traces 列表项, 对应 Rust TraceSummaryDto)。 */
+export interface TraceSummaryItem {
+  trace_id: string;
+  span_count: number;
+  started_at: number;
+  root_span: TraceSpanItem;
+}
+
+/**
+ * 执行轨迹列表 (契约 §8, `GET /v1/panel/traces?limit=`)。
+ * 调用方应先由 capabilitySupported(manifest, 'trace.read') 门控。
+ */
+export async function fetchTraceList(
+  config: ApeirethConfig,
+  limit = 50,
+): Promise<TraceSummaryItem[] | {error: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/traces?limit=${limit}`, {
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as {message?: string};
+      return {error: err.message || `HTTP ${res.status}`};
+    }
+    const data = (await res.json()) as {traces?: TraceSummaryItem[]};
+    return Array.isArray(data.traces) ? data.traces : [];
+  } catch (caught) {
+    return {error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
 
 export async function fetchTraceDetail(config: ApeirethConfig, traceId: string): Promise<TraceSpanItem[] | {error: string}> {
   try {

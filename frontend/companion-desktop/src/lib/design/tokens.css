@@ -83,6 +83,12 @@
   --ap-register-deepops-blue: #2392fb;   /* 核心/中枢类 */
   --ap-register-deepops-green: #6fae5f;  /* 培养/生产类 */
   --ap-register-deepops-yellow: #e8c33a; /* 工业黄（制造类） */
+  /* 余 3 色补足 🔵 提案（gap-plan §4.1 建议：紫=情感/姿态、青=记忆、红=安全守卫；
+     治理卷宗首次落地消费——审批=蓝 / 授权=绿 / 守卫=红 / 审计=工业黄；
+     三值均为提案值，实拍校准后回写规范 §5.6③ 与 design-tokens.json） */
+  --ap-register-deepops-purple: #8f7ad9; /* 情感/姿态类（🔵 提案，卷宗暂不消费） */
+  --ap-register-deepops-cyan: #3fb0c4;   /* 记忆类（🔵 提案，卷宗暂不消费） */
+  --ap-register-deepops-red: #d95f55;    /* 安全守卫类（🔵 提案，守卫 tab 消费） */
 
   /* ---------- 排版 ✅ 规范 §6 / JSON typography ---------- */
   /* 他的声音（引用/日记/正式发言）：衬线栈 index.html:20 */
