@@ -47,9 +47,11 @@
   import ConversationsView from './lib/ConversationsView.svelte';
   import SessionListHome from './lib/chat-shell/SessionListHome.svelte';
   import PendingDocumentDock from './lib/chat-shell/PendingDocumentDock.svelte';
+  import GuardNoticeCard from './lib/chat-shell/GuardNoticeCard.svelte';
   import type {HomeSessionItem} from './lib/chat-shell/session-list';
   import {
     applyApprovalEventToPending,
+    classifyGovernanceNotice,
     parseApprovalEventPayload,
   } from './lib/chat-shell/gateway-events';
   import ActivityView from './lib/views/ActivityView.svelte';
@@ -530,6 +532,11 @@
     return undefined;
   });
 
+  // 守卫通报分流（§3.2 琥珀卡）：回合被治理面拦停（当前唯一真实信号 =
+  // review_rejected，断点见 chat-shell/gateway-events.ts 头注）时在发生处
+  // 浮出通报卡，取代红色错误 banner；其余错误仍走 ErrorSolutionBanner。
+  const governanceNotice = $derived(classifyGovernanceNotice(lastError));
+
   type PendingApprovalWithDetails = CanonicalPendingApproval & {
     command_text?: string;
     arguments_summary?: string;
@@ -652,6 +659,10 @@
 
   // 星尘条（规范 §5.3：memory_recall → 对话流中的「他想起了 N 段记忆」，脱敏，不含原文）。
   // 会话内瞬态：不持久化——星尘是「此刻」的痕迹，刷新即散。按会话 id 分桶。
+  // 蛰伏断点（0 装，00-PHILOSOPHY §9 / 契约 §8a）：现役 canonical 总线没有
+  // memory_recall 事件（v1 legacy donor 才有；MemoryRecallModule 的 prompt-overlay
+  // 召回路径不上 RuntimeEvent 总线）——卡片只接真实 presence 信号，无信号即蛰伏，
+  // 禁止假数据演示。presence_state 已落地（§8a）但不含召回计数，不构成此卡数据源。
   interface Stardust {
     id: string;
     found: number;
@@ -2194,7 +2205,18 @@
                   onDismiss={dismissPendingApproval}
                 />
               {/if}
-              {#if error}
+              {#if governanceNotice}
+                <!-- 守卫通报卡（琥珀，§3.2）：治理面拦停在发生处呈现，不跳窗 -->
+                <GuardNoticeCard
+                  title={governanceNotice.title}
+                  message={error}
+                  solution={describeError(lastError).solution}
+                  onClose={() => {
+                    error = '';
+                    lastError = null;
+                  }}
+                />
+              {:else if error}
                 <ErrorSolutionBanner
                   code={errorCode}
                   message={error}
