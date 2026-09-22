@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {onMount, tick, untrack} from 'svelte';
+  import {onMount, tick} from 'svelte';
   import {
     Plus,
     ArrowUp,
@@ -122,7 +122,7 @@
     type CompanionPresentationState,
     type CanonicalPendingApproval,
   } from './lib/runtime';
-  import {presenceStore, subscribePresence} from './lib/presence';
+  import {presenceStore, subscribePresence, derivePresenceGlow} from './lib/presence';
   import {
     applyBackendConfig,
     backendProviderEnvFromConfig,
@@ -760,7 +760,6 @@
     ts: number;
   }
   let stardusts = $state<Record<string, Stardust[]>>({});
-  let lastDustAt = 0; // 非响应式记账：已消费到的 memory_recall receivedAt
 
   // 后端信号驱动的伴随体表现态 (严禁前端造假). Reconciled from master.
   const companionPresentation = $derived.by<CompanionPresentationState>(() => {
@@ -812,12 +811,8 @@
 
   // 他的卡片左缘光晕强度：由真实 presence 状态驱动（规范 §5.3 光晕随 bright 呼吸）；
   // 无数据时取静息微光 —— 金线本身不消失，消失的只是呼吸。
-  const presenceGlow = $derived.by(() => {
-    const cur = $presenceStore.current;
-    if (!cur) return 0.14;
-    const base = cur.mode === 'speaking' ? 0.5 : cur.mode === 'thinking' ? 0.32 : 0.16;
-    return Math.min(0.65, base + Math.max(0, cur.p) * 0.12);
-  });
+  // 公式与 heuristic_v0 增益收敛在 presence.ts derivePresenceGlow（契约 §8a）。
+  const presenceGlow = $derived(derivePresenceGlow($presenceStore.current));
 
   const healthLabel: Record<HealthState, string> = {
     connecting: '连接中…',
@@ -1814,33 +1809,11 @@
             : '连接中',
   );
 
-  // 星尘条：监听 presenceStore.recentEvents，新 memory_recall 事件落进当前会话流。
-  // recentEvents 已由 store 按 (type, at) 去重；此处按 receivedAt 水位线消费，幂等。
-  $effect(() => {
-    const records = $presenceStore.recentEvents;
-    const fresh: Stardust[] = [];
-    let maxAt = lastDustAt;
-    for (const r of records) {
-      if (r.event.type !== 'memory_recall') continue;
-      if (r.receivedAt <= lastDustAt) continue;
-      maxAt = Math.max(maxAt, r.receivedAt);
-      fresh.push({
-        id: `dust-${r.receivedAt}`,
-        found: r.event.found,
-        keywords: Array.isArray(r.event.keywords) ? r.event.keywords : [],
-        ts: r.receivedAt,
-      });
-    }
-    if (!fresh.length) return;
-    lastDustAt = maxAt;
-    untrack(() => {
-      const convId = activeId;
-      if (!convId) return; // 无活动会话时不落（边缘：事件发生在对话外）
-      const list = stardusts[convId] ?? [];
-      stardusts = {...stardusts, [convId]: [...list, ...fresh]};
-      void triggerAutoScroll();
-    });
-  });
+  // 星尘条：蛰伏断点（0 装，00-PHILOSOPHY §9 / 契约 §8a）。
+  // 旧实现消费 presenceStore.recentEvents 里的 memory_recall 事件；presence_state 契约
+  // （§8a）不含召回计数，v0 总线上不存在任何星尘数据源——此 effect 整体退役。
+  // Stardust 接口与 flowItems 归并保留：渲染空列表，不假数据演示；待契约给出
+  // 召回信号后在此复活。
 
   // 待签文书卡（§3.2/§6.4）：新文书（approval_id 变化）自动重新浮起并滚动到发生处；
   // 同一文书保持用户的收起选择（自愈重拉 inbox 不打扰）。
@@ -1973,8 +1946,8 @@
       capabilityAvailable(capabilities, 'activity.sse');
 
     // 订阅 SSE 伴随体事件通道 (主动涌现与反思通知). Reconciled from master.
-    // G5 修复: 频道现为 legacy 文本行 + presence JSON 行共流 (契约 §5.1/§8.1) —
-    // 先经 presence 分流: JSON 行进 presenceStore, 仅 legacy 文本行继续下行。
+    // 契约 §8a：presence_state 具名帧由 subscribePresence 独立订阅（presence.ts），
+    // 不在此通道分流；此处只剩 legacy 文本行（[他说]/测试事件，canonical 上本就罕见）。
     // 波次 2：`[他说]` 行 = 他主动开口 → 进入对话流（规范 §5.3）；
     // 其余 legacy 行（如测试事件）→ 轻量 toast，不进对话。
     const unsubscribeEvents = !eventStreamSupported ? () => {} : subscribeCompanionEvents(config, (event) => {
@@ -1997,7 +1970,6 @@
         }
         return;
       }
-      if (presenceStore.ingestLine(event.text) !== 'legacy') return;
       const text = event.text.trim();
       if (text.startsWith('[他说]')) {
         const said = text.slice('[他说]'.length).trim();

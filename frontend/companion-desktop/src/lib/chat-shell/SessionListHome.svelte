@@ -14,6 +14,7 @@
   //   他停下了，§7 金色纪律），由 SSE approval_required 真实信号驱动。
   import {Plus} from 'lucide-svelte';
   import type {ApeirethConfig, CapabilityManifest, Conversation} from '../types';
+  import {presenceStore, deriveEmberBreath} from '../presence';
   import {
     capabilityAvailable,
     capabilitySupported,
@@ -69,6 +70,10 @@
     mergeSessionLedger({local: conversations, backend, pendingApprovalSessions}),
   );
 
+  // T0 余烬点呼吸参数：契约 §8a breath 通道（每帧更新，含 60s 心跳——
+  // 显影分级：心跳只动余烬点，不动光环）。无帧/SIM 时回落契约基线 4s/0.65。
+  const emberBreath = $derived(deriveEmberBreath($presenceStore.breath));
+
   async function loadLedger(): Promise<void> {
     // manifest 尚未到达 ≠ 不支持：先给中性探测态，等能力清单到了再判定（诚实时序）。
     if (capabilities === null) {
@@ -119,10 +124,15 @@
     {/if}
   </header>
 
-  <!-- 置顶行：他。金色余烬 = 他在（§7 金色纪律；T0 余烬呼吸 4s，§8 性能表）。
+  <!-- 置顶行：他。金色余烬 = 他在（§7 金色纪律；T0 余烬呼吸接 §8a breath，§8 性能表）。
        状态词全部来自前端真实状态（流式/审批/健康），无假数据。 -->
   <button class="him-row" onclick={onOpenHim} aria-label={`与 ${himName} 继续`}>
-    <span class="ember-dot" aria-hidden="true"></span>
+    <span
+      class="ember-dot"
+      aria-hidden="true"
+      style:--ember-period={`${emberBreath.periodSecs}s`}
+      style:--ember-amp={emberBreath.amplitude}
+    ></span>
     <span class="him-name">{himName}</span>
     <span class="him-status" class:gold={himAttention}>{himStatus}</span>
   </button>
@@ -239,19 +249,21 @@
     border-radius: 50%;
     background: var(--ap-gold);
     box-shadow: 0 0 10px rgba(255, 210, 122, 0.6);
-    /* T0 余烬呼吸：4s（00-PHILOSOPHY §8 性能表 / §8a breath.period_secs=4.0）。
-       presence_state  amplitude 接线后可在 App 侧参数化，此处保持契约基线。 */
-    animation: ap-ember-breathe 4s ease-in-out infinite;
+    /* T0 余烬呼吸：周期/振幅由 §8a breath 通道经 CSS 变量驱动（heuristic_v0 保守
+       增益在 presence.ts deriveEmberBreath 内钳制）；无帧回落契约基线 4s/0.65
+       （00-PHILOSOPHY §8 性能表 / §8a breath.period_secs=4.0）。 */
+    animation: ap-ember-breathe var(--ember-period, 4s) ease-in-out infinite;
   }
   @keyframes ap-ember-breathe {
     0%,
     100% {
-      opacity: 0.35;
+      /* amp 0.65 → opacity 0.35 / scale 1.13（≈旧静态基线 0.35/1.12） */
+      opacity: calc(1 - var(--ember-amp, 0.65));
       transform: scale(1);
     }
     50% {
       opacity: 1;
-      transform: scale(1.12);
+      transform: scale(calc(1 + 0.2 * var(--ember-amp, 0.65)));
     }
   }
   @media (prefers-reduced-motion: reduce) {

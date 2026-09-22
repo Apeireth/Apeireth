@@ -281,6 +281,15 @@ export const PRESENCE_STATES: Record<SceneMode, PresenceStateParams> = {
 /** 状态参数指数趋近速率（/s），同 MOTION.stateSmoothingRate */
 export const PRESENCE_SMOOTHING_RATE = 2.4;
 
+/**
+ * 🟡 presence_state 接线增益（00-PHILOSOPHY §10 / 契约 §8a，2026-09-22 落地）：
+ * 后端 v0 是 heuristic_v0 启发式——语义方向真实、数值粗。消费侧把 PAD/intensity
+ * 先乘此增益再进 §4.1 映射表：显影幅度保守收紧，语义方向不变；
+ * 未来情感引擎上线（source.kind 换届）后回 1.0。presence.ts 与 blackhole.ts
+ * 共用此值，禁止两处各写一份。
+ */
+export const PRESENCE_HEURISTIC_V0_GAIN = 0.75;
+
 /* ================================================================
  * 时间线四档照明参数（🟡 proposal —— 时段与升降沿已验收，五参数待滑杆验收，附录 B-1）
  * ================================================================ */

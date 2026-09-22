@@ -28,6 +28,7 @@ import {
   CAMERA_PRESETS,
   MOTION,
   PERFORMANCE,
+  PRESENCE_HEURISTIC_V0_GAIN,
   PRESENCE_STATES,
   SCENE_LAYOUT,
   STAR_LAYERS,
@@ -38,15 +39,17 @@ import {localClockHour, normalizeHour, timelineParams} from './timeline';
 
 export type {SceneMode} from './tokens';
 
-/** SceneLayer 的 presence prop 形状（与将来的 src/lib/presence.ts presenceStore 订阅值对齐） */
+/** SceneLayer 的 presence prop 形状（与 src/lib/presence.ts presenceStore.current 对齐） */
 export interface PresenceInput {
   p: number;
   a: number;
   d: number;
+  /** 回合级帧携带的整体强度 ∈ [0,1]（驱动 §4.1 turb 映射） */
+  intensity: number;
   mode: SceneMode;
 }
 
-/** PAD 偏移（v1 简化映射；d 暂存不消费 —— warmth 需改 shader 新增 uniform，列 v1.1，规范 §4.1/B-2） */
+/** PAD 偏移（§4.1 映射表的原料；d 暂存不消费 —— warmth 需改 shader 新增 uniform，列 v1.1，规范 §4.1/B-2） */
 export interface PadBias {
   p: number;
   a: number;
@@ -373,6 +376,8 @@ export class BlackholeScene {
   /* ---- presence 状态机 ---- */
   private stateName: SceneMode = 'quiet';
   private padBias: PadBias = {p: 0, a: 0, d: 0};
+  /** 回合级 presence_state 帧的 intensity；null = 从未收到真实帧（回落模式基线，不编造 PAD） */
+  private presenceIntensity: number | null = null;
   private cur = {speed: PRESENCE_STATES.quiet.speed, bright: PRESENCE_STATES.quiet.bright, turb: PRESENCE_STATES.quiet.turb, pulse: PRESENCE_STATES.quiet.pulse};
   private rot = 0.0;
   private tSec = 0.0;
@@ -485,14 +490,15 @@ export class BlackholeScene {
   }
 
   /**
-   * PAD → 视觉的 v1 简化映射（🟡 proposal，数值 TODO 待实拍校准，规范 §4.1 / 附录 B-2）：
-   *   bright += p * 0.15
-   *   speed  += a * 0.4
-   * d 暂存不消费（warmth 列 v1.1，需改 shader）。
+   * presence_state 帧的 PAD 与强度（契约 §8a；null intensity = 无真实帧）。
+   * 有真实帧时走规范 §4.1 PAD→光环映射表（heuristic_v0 保守增益）；无帧时
+   * 回落三态模式基线（quiet/thinking/speaking 由本地流式真信号驱动）。
+   * d 暂存不消费（warmth 列 v1.1，需改 shader 新增 uniform —— 规范 §4.1/B-2）。
    */
-  setPadBias(bias: PadBias): void {
+  setPadBias(bias: PadBias, intensity: number | null): void {
     if (this.destroyed) return;
     this.padBias = {p: bias.p, a: bias.a, d: bias.d};
+    this.presenceIntensity = intensity;
     this.refreshStatic();
   }
 
@@ -629,15 +635,34 @@ export class BlackholeScene {
   }
 
   /* ================================================================
-   * presence 目标值（含 v1 PAD 偏移）
+   * presence 目标值（规范 §4.1 PAD→光环映射表）
    * ================================================================ */
 
   private currentTargets(): {speed: number; bright: number; turb: number; pulse: number} {
     const base = PRESENCE_STATES[this.stateName];
-    // TODO(v1 简化映射，数值待实拍校准 —— 规范 §4.1 / 附录 B-2)
-    const speed = Math.max(0, base.speed + this.padBias.a * 0.4);
-    const bright = base.bright + this.padBias.p * 0.15;
-    return {speed, bright, turb: base.turb, pulse: base.pulse};
+    if (this.presenceIntensity === null) {
+      // 无真实 presence 帧：模式基线（speaking/thinking 是本地流式真信号），
+      // PAD 不编造 —— 静息回落不是模拟，是「尚未有数据」的默认档位。
+      return {speed: base.speed, bright: base.bright, turb: base.turb, pulse: base.pulse};
+    }
+    // §4.1 映射表（🟡 附录 B-2；锚点 = 已验收三态）：
+    //   speed = 0.015 + 0.365 · clamp01((a+1)/2)   —— speaking 时开口动作直接置 0.160
+    //   bright = 0.32 + 0.73 · clamp01((p+1)/2)
+    //   turb   = clamp01(intensity)，下限 0.12
+    //   pulse  = 仅当他在输出（本地流式进行中）置 1.0
+    // heuristic_v0 数值粗：PAD/intensity 先乘保守增益（tokens.ts
+    // PRESENCE_HEURISTIC_V0_GAIN），显影幅度收紧、语义方向不变。
+    const g = PRESENCE_HEURISTIC_V0_GAIN;
+    const p = this.padBias.p * g;
+    const a = this.padBias.a * g;
+    const intensity = Math.min(1, Math.max(0, this.presenceIntensity)) * g;
+    const speaking = this.stateName === 'speaking';
+    return {
+      speed: speaking ? PRESENCE_STATES.speaking.speed : 0.015 + 0.365 * Math.min(1, Math.max(0, (a + 1) / 2)),
+      bright: 0.32 + 0.73 * Math.min(1, Math.max(0, (p + 1) / 2)),
+      turb: Math.max(0.12, intensity),
+      pulse: speaking ? 1.0 : 0.0,
+    };
   }
 
   private resolveHour(): number {
@@ -779,6 +804,14 @@ export class BlackholeScene {
     const gl = this.gl;
     if (!gl) return;
     const tp = timelineParams(this.resolveHour());
+    if (this.presenceIntensity !== null) {
+      // §3.1 双驱动的「他的状态」半边：pad 档内微调金色占比与光强。
+      // heuristic_v0 语义方向真实但数值粗 —— 增益刻意保守（0.06/0.08 档内微调，
+      // 不抢本地时钟那半边的驾驶权），情感引擎上线后再校准。
+      const p = this.padBias.p * PRESENCE_HEURISTIC_V0_GAIN;
+      tp.bright *= 1 + 0.06 * p;
+      tp.gold = Math.min(1, Math.max(0, tp.gold * (1 + 0.08 * p)));
+    }
     gl.uniform2f(this.uni.uRes, this.canvas.width, this.canvas.height);
     gl.uniform2f(this.uni.uCenter, cam.cx * this.dpr, (this.cssH - cam.cy) * this.dpr);
     gl.uniform1f(this.uni.uScale, this.holeR * cam.zoom * this.dpr);
