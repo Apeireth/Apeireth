@@ -13,6 +13,7 @@
     MessageCircleMore,
     History,
     Layers3,
+    BookOpen,
     Wrench,
     Landmark,
     Activity,
@@ -74,6 +75,7 @@
   import ToolsView from './lib/views/ToolsView.svelte';
   import GovernanceView, {type GovernanceTabId} from './lib/views/GovernanceView.svelte';
   import MemoryView from './lib/MemoryView.svelte';
+  import DiaryView from './lib/views/DiaryView.svelte';
   import SettingsView from './lib/views/SettingsView.svelte';
   import Workbench from './lib/components/Workbench.svelte';
   import {applyDocumentAccent, applyDocumentTheme, isStaticBgTheme, resolveAccent, resolveTheme, themeLabel, THEME_CATALOG} from './lib/theme';
@@ -129,7 +131,7 @@
     resolveBackendEndpoint,
   } from './lib/desktop-bridge';
 
-  type DrawerId = 'history' | 'memory' | 'tools' | 'governance' | 'status' | 'logs' | 'settings';
+  type DrawerId = 'history' | 'memory' | 'diary' | 'tools' | 'governance' | 'status' | 'logs' | 'settings';
   const DRAWER_META: Record<DrawerId, {eyebrow: string; title: string; sub: string; action: string}> = {
     history: {
       eyebrow: '管理',
@@ -138,9 +140,15 @@
       action: '新对话',
     },
     memory: {
-      eyebrow: '认知',
-      title: '记忆与知识库',
-      sub: '持久化情节记忆、六历史流与结构化知识图谱。',
+      eyebrow: '认知 · 纸面档案',
+      title: '记忆卷宗',
+      sub: '持久化情节记忆的主从卷宗——检索、出处、图谱关联与保护/遗忘治理。',
+      action: '',
+    },
+    diary: {
+      eyebrow: '档案 · 纸面',
+      title: '他的日记',
+      sub: '他写下的日子——纸面档案调（§5.6②）；后端尚无日记端点，当前为空态契约页。',
       action: '',
     },
     tools: {
@@ -256,9 +264,9 @@
   const govtabQuery =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('govtab') : null;
   const initialDrawer: DrawerId | null =
-    drawerQuery === 'history' || drawerQuery === 'memory' || drawerQuery === 'tools' ||
-    drawerQuery === 'governance' || drawerQuery === 'status' || drawerQuery === 'logs' ||
-    drawerQuery === 'settings'
+    drawerQuery === 'history' || drawerQuery === 'memory' || drawerQuery === 'diary' ||
+    drawerQuery === 'tools' || drawerQuery === 'governance' || drawerQuery === 'status' ||
+    drawerQuery === 'logs' || drawerQuery === 'settings'
       ? drawerQuery
       : null;
   // govInitialTab 可变：状态条「守卫计数 → 守卫 tab」入口需要指令式落 tab；
@@ -1676,6 +1684,9 @@
         run: () => openDrawer('governance')},
       {id: 'nav.memory', title: '打开记忆', aliases: ['jiyi', 'memory', 'jy'], group: '导航',
         run: () => openDrawer('memory')},
+      {id: 'nav.diary', title: '打开他的日记', aliases: ['riji', 'diary', 'rj'], group: '导航',
+        hint: '纸面档案调 · 空态契约页',
+        run: () => openDrawer('diary')},
       {id: 'nav.tools', title: '打开工具', aliases: ['gongju', 'tools', 'gj'], group: '导航',
         run: () => openDrawer('tools')},
       {id: 'nav.status', title: '打开状态', aliases: ['zhuangtai', 'status'], group: '导航',
@@ -2084,10 +2095,19 @@
           class="rail-btn"
           class:active={drawerSec === 'memory'}
           onclick={() => toggleRail('memory')}
-          title="认知 / 记忆"
+          title="记忆卷宗（纸面档案调）"
         >
           <Layers3 size={17} class="shell-icon" />
           <span class="rail-label">记忆</span>
+        </button>
+        <button
+          class="rail-btn"
+          class:active={drawerSec === 'diary'}
+          onclick={() => toggleRail('diary')}
+          title="他的日记（纸面档案调 · 空态契约）"
+        >
+          <BookOpen size={17} class="shell-icon" />
+          <span class="rail-label">日记</span>
         </button>
         <button
           class="rail-btn"
@@ -2200,6 +2220,8 @@
           />
         {:else if drawerSec === 'memory'}
           <MemoryView {config} {capabilities} />
+        {:else if drawerSec === 'diary'}
+          <DiaryView />
         {:else if drawerSec === 'tools'}
           <ToolsView {config} {capabilities} />
         {:else if drawerSec === 'governance'}
