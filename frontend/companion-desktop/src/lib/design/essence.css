@@ -64,7 +64,13 @@ html[data-theme='essence'] .ai-card {
 }
 
 html[data-theme='essence'] .ai-card::before {
+  /* 浅色纸面调维持既有静态强边缘：夜间呼吸金辉在雾面玻璃上显脏，不引入。 */
+  animation: none;
   opacity: 0.85;
+}
+
+html[data-theme='essence'] .ai-card::after {
+  display: none;
 }
 
 html[data-theme='essence'] .hint {

@@ -2083,50 +2083,10 @@
                 <button class="back-btn" onclick={backToList} aria-label="返回往来列表" title="返回往来列表">
                   ‹ 往来
                 </button>
+                <!-- 长标题横排单行省略（打回修复②轮）：.chat-head-main 出 flex:1 +
+                     min-width:0，.chat-title 自身 nowrap/ellipsis；状态行移到头部
+                     第二行（.chat-head flex-wrap）独占整宽，不与右侧操作组抢宽 -->
                 <h2 class="chat-title">{activeConversation?.title || '新对话'}</h2>
-                <div class="statusline">
-                  <div class="persona-menu">
-                    <button
-                      class="persona-trigger"
-                      onclick={() => (personaMenuOpen = !personaMenuOpen)}
-                      title="切换伙伴身份"
-                      aria-label="切换伙伴身份"
-                      aria-expanded={personaMenuOpen}
-                    >
-                      <span>{activePersona?.name || '伙伴'}</span>
-                      <ChevronDown size={12} />
-                    </button>
-                    {#if personaMenuOpen}
-                      <div class="persona-pop" role="menu">
-                        {#each personaList as p (p.id)}
-                          <button
-                            class="persona-item"
-                            class:active={p.id === activePersona?.id}
-                            role="menuitem"
-                            onclick={() => setActivePersona(p.id)}
-                          >
-                            <span class="persona-item-name">{p.name}</span>
-                            {#if p.model}
-                              <span class="persona-item-model">{p.model}</span>
-                            {/if}
-                          </button>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                  <span class="mono-note" style="opacity:.4">·</span>
-                  <SessionModelPicker
-                    models={sessionModels}
-                    value={currentSessionModel}
-                    onSelect={(id) => void selectSessionModel(id)}
-                    disabled={busy}
-                  />
-                  <span class="mono-note" style="opacity:.4">·</span>
-                  <button class="mono-note live" onclick={() => (showRuntimeModal = true)}>{hdState}</button>
-                  {#if $presenceStore.simulated}
-                    <span class="sim-badge" title="presence 频道断连：当前为本机中性默认值">SIM</span>
-                  {/if}
-                </div>
               </div>
               <div class="chat-head-actions">
                 <div class="preset-group" role="group" aria-label="会话审批策略">
@@ -2146,6 +2106,50 @@
                   <Plus size={13} />
                   新对话
                 </button>
+              </div>
+              <!-- 状态行：头部第二行，独占整宽（打回修复②轮） -->
+              <div class="statusline">
+                <div class="persona-menu">
+                  <button
+                    class="persona-trigger"
+                    onclick={() => (personaMenuOpen = !personaMenuOpen)}
+                    title="切换伙伴身份"
+                    aria-label="切换伙伴身份"
+                    aria-expanded={personaMenuOpen}
+                  >
+                    <span>{activePersona?.name || '伙伴'}</span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {#if personaMenuOpen}
+                    <div class="persona-pop" role="menu">
+                      {#each personaList as p (p.id)}
+                        <button
+                          class="persona-item"
+                          class:active={p.id === activePersona?.id}
+                          role="menuitem"
+                          onclick={() => setActivePersona(p.id)}
+                        >
+                          <span class="persona-item-name">{p.name}</span>
+                          {#if p.model}
+                            <span class="persona-item-model">{p.model}</span>
+                          {/if}
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+                <span class="mono-note" style="opacity:.4">·</span>
+                <SessionModelPicker
+                  models={sessionModels}
+                  value={currentSessionModel}
+                  onSelect={(id) => void selectSessionModel(id)}
+                  disabled={busy}
+                />
+                <span class="mono-note" style="opacity:.4">·</span>
+                <button class="mono-note live" onclick={() => (showRuntimeModal = true)}>{hdState}</button>
+                {#if $presenceStore.simulated}
+                  <span class="sim-badge" title="presence 频道断连：当前为本机中性默认值">SIM</span>
+                {/if}
               </div>
             </div>
             <div class="thread">
@@ -2668,8 +2672,9 @@
   /* ---------- T0 壳：会话头返回 + backend-only 诚实标注 ---------- */
   .chat-head-main {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 12px;
+    flex: 1;
     min-width: 0;
   }
   .back-btn {

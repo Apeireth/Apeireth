@@ -642,6 +642,7 @@ p.lede {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
   padding: 16px 0 12px;
   pointer-events: auto;
 }
@@ -651,12 +652,22 @@ p.lede {
   font-weight: 500;
   letter-spacing: 0.04em;
   color: var(--ap-bone);
+  /* 长会话名横排单行省略（打回修复②轮）；收缩空间由 .chat-head-main
+     的 flex:1 + min-width:0 让出，此处 min-width:0 打通收缩链。 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .statusline {
   display: flex;
   align-items: center;
   gap: 7px;
   margin-top: 3px;
+  /* 独占会话头第二行（打回修复②轮）：操作组 flex:none 占走第一行右半，
+     状态行若留在同一 flex 行会被挤到控件文字竖排；flex-wrap 下取整宽。 */
+  flex: none;
+  flex-basis: 100%;
 }
 .mono-note {
   font-family: var(--ap-font-mono);
@@ -777,6 +788,54 @@ p.lede {
   opacity: calc(0.45 + var(--presence-glow, 0.18) * 0.8);
   background: linear-gradient(180deg, var(--ap-gold-white-hot), var(--ap-gold) 45%, var(--ap-gold-amber));
   box-shadow: 0 0 10px rgba(255, 210, 122, var(--presence-glow, 0.18));
+}
+/* 左缘宽幅软辉（打回修复②轮）：2px 金条之外再铺一层径向渐变的弥散光，
+   与金条同相位呼吸；blur 软化边缘，溢出卡片左缘落在深空底上。
+   强度真实接线（presence → --presence-glow 调幅）留给第 ⑦ 项，此处先落静态呼吸。 */
+.ai-card::after {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 6px;
+  bottom: 6px;
+  width: 30px;
+  pointer-events: none;
+  opacity: calc(0.32 + var(--presence-glow, 0.18) * 0.5);
+  background: radial-gradient(closest-side, rgba(255, 210, 122, 0.5), rgba(255, 210, 122, 0));
+  filter: blur(4px);
+}
+/* 光晕呼吸 = motion.breathe ✅ 2.8s，opacity 0.22→0.65（打回验收口径）。
+   reduced-motion 由 tokens.css 全局降级停动画，回落到上面的静态微光（§7.3）。 */
+@media (prefers-reduced-motion: no-preference) {
+  .ai-card::before,
+  .ai-card::after {
+    animation: ap-edge-breathe var(--ap-dur-breathe) ease-in-out infinite;
+  }
+  @keyframes ap-edge-breathe {
+    0%,
+    100% {
+      opacity: 0.22;
+    }
+    50% {
+      opacity: 0.65;
+    }
+  }
+}
+/* 他的声音正文（规范 §6.1，打回修复②轮）：衬线引语级排版在往来会话卡片内提级。
+   根因：prose.css 的 .md-body 基础规则（14px / 1.75 / var(--text)）与 tokens.css
+   的 .ap-voice 同为 (0,1,0) 且加载更晚，把引语级字号/行高/墨色压回散文默认值，
+   14px 的 SimSun 位图渲染在截图里读作「非衬线」；此处以 .ai-card 语境提级 (0,3,0)，
+   作用面仅往来会话（quick 窗不用 .ai-card），代码/表格回落纪律仍由
+   MessageContent.svelte 的语境规则承担（§6.2/§6.3）。
+   行宽 35em ≈ 31 个中文 × (1 + 0.13em 字距)（验收口径）；§6.1 令牌原文 "31ch"
+   在半角 ch 下仅 ~15 汉字/行，属令牌口径冲突，建议回写规范 §6.1。 */
+.ai-card .md-body.ap-voice {
+  font-family: var(--ap-font-voice);
+  font-size: var(--ap-voice-size);
+  line-height: var(--ap-voice-line-height);
+  letter-spacing: var(--ap-voice-letter-spacing);
+  max-width: 35em;
+  color: var(--ap-bone);
 }
 .error-banner {
   display: flex;
