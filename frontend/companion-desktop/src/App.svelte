@@ -60,6 +60,7 @@
   import SettingsView from './lib/views/SettingsView.svelte';
   import Workbench from './lib/components/Workbench.svelte';
   import {applyDocumentTheme, isStaticBgTheme, resolveTheme, themeLabel} from './lib/theme';
+  import {getCustomBg} from './lib/bg-store';
   import type {Theme} from './lib/types';
 
   import type {
@@ -175,6 +176,25 @@
   // 这里只持有其对象 URL；null = 未启用。加载/清除逻辑随设置面板接线。
   let customBgUrl = $state<string | null>(null);
   const isStaticScene = $derived(isStaticBgTheme(activeTheme) || customBgUrl !== null);
+
+  /** 自定义背景开关同步：开 = 从 IndexedDB 取图；取不到（换原点/清库）诚实回落关开关。 */
+  async function syncCustomBg(on: boolean): Promise<void> {
+    if (!on) {
+      if (customBgUrl) URL.revokeObjectURL(customBgUrl);
+      customBgUrl = null;
+      return;
+    }
+    const blob = await getCustomBg().catch(() => null);
+    if (blob) {
+      if (customBgUrl) URL.revokeObjectURL(customBgUrl);
+      customBgUrl = URL.createObjectURL(blob);
+    } else {
+      customBgUrl = null;
+      const back = {...config, customBg: false};
+      config = back;
+      saveConfig(back);
+    }
+  }
 
   // ---------- 开场动画（火之文明史序章）门禁 ----------
   // 【2026-08-22 封存】v1 审美验收未过（主人评：一言难尽），默认关闭不再自动播放，
@@ -1655,6 +1675,8 @@
 
   onMount(() => {
     applyDocumentTheme(activeTheme);
+    // 自定义背景（§8 增补④）：开关开着就从 IndexedDB 取图；取不到 = 诚实回落关开关
+    if (config.customBg) void syncCustomBg(true);
     // T0 壳（§3.1）：不再自动进入最近会话 —— 第一屏 = 会话列表（谁找我了）。
     if (window.innerWidth < 1180) wbOpen = false;
     // 首启向导：桌面模式下未完成过向导时先引导选 provider / 填 key。
@@ -1937,12 +1959,15 @@
           <SettingsView
             {config}
             onSave={(newCfg) => {
+              const customBgToggled = (newCfg.customBg ?? false) !== (config.customBg ?? false);
               config = newCfg;
               saveConfig(newCfg);
               agentRuntime = createAgentRuntime(newCfg);
               const nextTheme = resolveTheme(newCfg.theme, themeQuery);
               activeTheme = nextTheme;
               applyDocumentTheme(nextTheme);
+              // 自定义背景开关变化（§8 增补④）：从 IndexedDB 取图或回落
+              if (customBgToggled) void syncCustomBg(newCfg.customBg === true);
               // Provider changes must reach the sidecar environment; the
               // push re-adopts the endpoint (a restart allocates a new port)
               // and then re-probes.
