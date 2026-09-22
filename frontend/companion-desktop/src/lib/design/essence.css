@@ -3,10 +3,8 @@
    修复 shell 硬编码深色 + 抽屉嵌入视图在 data-theme=essence 下的残留深色块
    ============================================================================ */
 
-/* 壁纸：底图 + 白色遮罩 */
-.app-root.theme-essence .essence-scene {
-  background: url('/assets/themes/essence-bg.png') center / cover no-repeat;
-}
+/* 壁纸规则已并入 shell.css 的 .static-bg 静态背景层（规范 §8 增补泛化），
+   本文件只保留 essence 主题的面板/文字补色。 */
 
 /* 主区透明，让壁纸透出；仅 UI 面板做雾面 */
 html[data-theme='essence'] .main {

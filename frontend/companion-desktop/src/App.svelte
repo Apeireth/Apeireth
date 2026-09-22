@@ -59,7 +59,7 @@
   import MemoryView from './lib/MemoryView.svelte';
   import SettingsView from './lib/views/SettingsView.svelte';
   import Workbench from './lib/components/Workbench.svelte';
-  import {applyDocumentTheme, resolveTheme} from './lib/theme';
+  import {applyDocumentTheme, isStaticBgTheme, resolveTheme} from './lib/theme';
   import type {Theme} from './lib/types';
 
   import type {
@@ -168,6 +168,13 @@
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('theme') : null;
   let activeTheme = $state<Theme>(resolveTheme(loadConfig().theme, themeQuery));
   const isEssenceTheme = $derived(activeTheme === 'essence');
+  // 静态背景主题（规范 §8 增补）：场景层隐藏 + 渲染循环暂停；自定义上传背景
+  // 开启时同样盖掉场景（画面被静态图接管），暂停同样生效。
+  const isHeritageTheme = $derived(activeTheme === 'heritage-void');
+  // 自定义上传背景（规范 §8 增补④）：blob 持久化在 IndexedDB（bg-store.ts），
+  // 这里只持有其对象 URL；null = 未启用。加载/清除逻辑随设置面板接线。
+  let customBgUrl = $state<string | null>(null);
+  const isStaticScene = $derived(isStaticBgTheme(activeTheme) || customBgUrl !== null);
 
   // ---------- 开场动画（火之文明史序章）门禁 ----------
   // 【2026-08-22 封存】v1 审美验收未过（主人评：一言难尽），默认关闭不再自动播放，
@@ -1743,17 +1750,26 @@
   class="app-root"
   class:busy
   class:theme-essence={isEssenceTheme}
+  class:theme-heritage={isHeritageTheme}
+  class:custom-bg={customBgUrl !== null}
   class:mode-focus={mode === 'focus'}
   class:mode-engineering={mode === 'engineering'}
   class:intro-playing={introPlaying}
 >
-  <div class="essence-scene" aria-hidden="true"></div>
+  <!-- 静态背景层（规范 §8 增补）：essence/heritage-void 主题各带默认图，
+       自定义上传（customBgUrl）以 inline 背景覆盖主题默认图 -->
+  <div
+    class="static-bg"
+    style:background-image={customBgUrl ? `url(${customBgUrl})` : undefined}
+    aria-hidden="true"
+  ></div>
   <div class="scene-underlay">
     <SceneLayer
       presence={$presenceStore.current}
       hour={timelineHour}
       interactive={!drawerSec && !showRuntimeModal && !openPanel}
       cameraIndex={sceneCamera}
+      paused={isStaticScene}
       onBlackholeClick={handleBlackholeClick}
     />
     <div class="planet-xfade" class:layer-off={mode === 'focus'}>
@@ -2399,7 +2415,7 @@
     />
   </div>
 
-  {#if !isEssenceTheme}
+  {#if !isStaticScene}
     <nav class="mode-switch" aria-label="模式切换">
       {#each modes as item (item.id)}
         <button

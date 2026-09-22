@@ -1,7 +1,7 @@
 // Apeireth 桌面伙伴 — 核心共享类型定义 (Svelte 5 + Tauri 2)
 
 export type ViewId = 'chat' | 'conversations' | 'activity' | 'tools' | 'memory' | 'settings';
-export type Theme = 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'essence';
+export type Theme = 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'essence' | 'heritage-void';
 export type MemoryCategory =
   | '工作记忆'
   | '近期记忆'

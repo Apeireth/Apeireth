@@ -365,6 +365,7 @@ export class BlackholeScene {
   private readonly opts: BlackholeSceneOptions;
   private readonly reduceMotion: boolean;
   private destroyed = false;
+  private themePaused = false;
 
   /** true → Canvas 2D 降级路径 */
   readonly fallback: boolean;
@@ -510,6 +511,15 @@ export class BlackholeScene {
       this.mouseTX = 0;
       this.mouseTY = 0;
     }
+  }
+
+  /** 静态背景主题下暂停渲染循环（规范 §8 增补：静态图默认时 WebGL 不空转）。
+   *  引擎实例保留，切回实时主题即恢复；与 visibilitychange 暂停同向叠加，
+   *  startLoop 内的 themePaused 守门保证「窗口重新可见」不会误唤醒。 */
+  setPaused(paused: boolean): void {
+    this.themePaused = paused;
+    if (paused) this.stopLoop();
+    else if (!document.hidden) this.startLoop();
   }
 
   /** 机位切换（reduced-motion 时锁定远眺，与原型一致） */
@@ -811,7 +821,7 @@ export class BlackholeScene {
   };
 
   private startLoop(): void {
-    if (this.destroyed || this.fallback || this.reduceMotion || this.rafId !== null) return;
+    if (this.destroyed || this.fallback || this.reduceMotion || this.themePaused || this.rafId !== null) return;
     this.lastT = performance.now();
     this.rafId = requestAnimationFrame(this.loop);
   }

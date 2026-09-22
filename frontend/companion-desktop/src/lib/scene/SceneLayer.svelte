@@ -26,6 +26,7 @@
     hour = null,
     interactive = true,
     cameraIndex = null,
+    paused = false,
     onBlackholeClick,
   }: {
     presence?: PresenceInput | null;
@@ -34,6 +35,8 @@
     /** 受控机位（波次 4 三模式）：null = 引擎内部自管理（快捷键/点黑洞，现状不变）；
      *  非 null 时按值调 engine.setCamera。reduced-motion 下引擎仍锁定远眺，纪律不变。 */
     cameraIndex?: number | null;
+    /** 静态背景主题 = true：暂停渲染循环（规范 §8 增补，WebGL 不在静态图下空转）。 */
+    paused?: boolean;
     onBlackholeClick?: () => void;
   } = $props();
 
@@ -82,6 +85,9 @@
   });
   $effect(() => {
     if (cameraIndex !== null) engine?.setCamera(cameraIndex);
+  });
+  $effect(() => {
+    engine?.setPaused(paused);
   });
 
   function handleSceneClick(e: MouseEvent): void {
