@@ -33,6 +33,14 @@
   import ToolCallLifecycleCard from './lib/components/ToolCallLifecycleCard.svelte';
   import ComposerMenu from './lib/components/ComposerMenu.svelte';
   import CommandPalette from './lib/components/CommandPalette.svelte';
+  import StatusBar from './lib/components/StatusBar.svelte';
+  import {
+    sseSourceOf,
+    sseIndicator,
+    turnIndicator,
+    guardIndicator,
+    memoryIndicator,
+  } from './lib/statusbar';
   import {
     pushRecentId,
     loadRecentIds,
@@ -101,6 +109,8 @@
     patchSessionSettings,
     fetchCapabilities,
     fetchGuardStatus,
+    fetchGuardEvents,
+    fetchMemoryEpisodes,
     subscribeCompanionEvents,
     capabilityAvailable,
     capabilitySupported,
@@ -251,10 +261,14 @@
     drawerQuery === 'settings'
       ? drawerQuery
       : null;
-  const govInitialTab: GovernanceTabId =
+  // govInitialTab 可变：状态条「守卫计数 → 守卫 tab」入口需要指令式落 tab；
+  // GovernanceView 的 initialTab 是挂载快照，配 govTabKey 重挂载生效。
+  let govInitialTab = $state<GovernanceTabId>(
     govtabQuery === 'grants' || govtabQuery === 'guard' || govtabQuery === 'audit'
       ? govtabQuery
-      : 'approvals';
+      : 'approvals',
+  );
+  let govTabKey = $state(0);
   let drawerSec = $state<DrawerId | null>(initialDrawer);
   let wbOpen = $state(false);
   let openPanel = $state<'model' | 'ctx' | null>(null);
@@ -986,6 +1000,26 @@
         if (!sessionModels.length) void loadSessionModels();
         const guard = await fetchGuardStatus(config);
         guardStatus = 'error' in guard ? null : guard;
+        // 状态条两个窗口计数（能力门内取数；失败 = null = 诚实「读取失败」而非零）。
+        if (capabilityAvailable(capabilities, 'safety.guard.events.read')) {
+          const events = await fetchGuardEvents(config, GUARD_EVENTS_WINDOW);
+          if (Array.isArray(events)) {
+            guardEventCount = events.length;
+            guardEventLatestTs = events.reduce((max, e) => Math.max(max, e.timestamp_ms ?? 0), 0);
+            if (guardSeenLatestTs < 0) guardSeenLatestTs = guardEventLatestTs; // 首载基线不闪
+          } else {
+            guardEventCount = null;
+          }
+        } else {
+          guardEventCount = null;
+        }
+        if (capabilityAvailable(capabilities, 'memory.read')) {
+          memoryEpisodeCount = await fetchMemoryEpisodes(config, '', MEMORY_EPISODES_WINDOW)
+            .then((list) => list.length)
+            .catch(() => null);
+        } else {
+          memoryEpisodeCount = null;
+        }
         if (activeId) {
           if (!sessionSettings) void loadSessionSettings(activeId);
           const inbox = await fetchCanonicalApprovals(config, activeId).catch(() => []);
@@ -1684,6 +1718,58 @@
     void cmd.run();
   }
 
+  // ---- 底部状态条（余光投影；00-PHILOSOPHY §2 / gap-plan §4.3 P1）----
+  // 四指标推导纯逻辑在 lib/statusbar.ts（Node 单测覆盖）；此处只接线取数与点击。
+  // 窗口口径：guard events limit 50 / memory episodes limit 100，端点不供总数——
+  // 满窗显示「N+」，拉取失败 = null（诚实「读取失败」，不是零）。
+  const GUARD_EVENTS_WINDOW = 50;
+  const MEMORY_EPISODES_WINDOW = 100;
+  let guardEventCount = $state<number | null>(null);
+  let guardEventLatestTs = $state(0);
+  /** 首载基线前为 -1：首载不闪「新事件」；点守卫计数即视为已读。 */
+  let guardSeenLatestTs = $state(-1);
+  let memoryEpisodeCount = $state<number | null>(null);
+
+  const sbSse = $derived(
+    sseIndicator(
+      sseSourceOf({
+        // 清单未到达/离线 = 未知（null），不是缺席——按连接事实报。
+        supported:
+          capabilities === null ? null : capabilityAvailable(capabilities, 'activity.sse'),
+        connected: $presenceStore.connected,
+        simulated: $presenceStore.simulated,
+      }),
+    ),
+  );
+  const sbTurn = $derived(turnIndicator(busy));
+  const sbGuard = $derived(
+    guardIndicator({
+      supported: capabilityAvailable(capabilities, 'safety.guard.events.read'),
+      count: guardEventCount,
+      limit: GUARD_EVENTS_WINDOW,
+      hasNew: guardSeenLatestTs >= 0 && guardEventLatestTs > guardSeenLatestTs,
+    }),
+  );
+  const sbMemory = $derived(
+    memoryIndicator({
+      supported: capabilityAvailable(capabilities, 'memory.read'),
+      count: memoryEpisodeCount,
+      limit: MEMORY_EPISODES_WINDOW,
+    }),
+  );
+
+  /** 指令式落治理卷宗某 tab：initialTab 是挂载快照，靠 govTabKey 重挂载生效。 */
+  function openGovernanceTab(tab: GovernanceTabId): void {
+    govInitialTab = tab;
+    govTabKey += 1;
+    openDrawer('governance');
+  }
+
+  function handleSbGuardClick(): void {
+    guardSeenLatestTs = guardEventLatestTs; // 看过即不新
+    openGovernanceTab('guard');
+  }
+
   function handleChromeKey(e: KeyboardEvent): void {
     handleModeKeydown(e);
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -1810,6 +1896,25 @@
     void refreshConnection();
   }
 
+  // presence 频道主订阅（波次 2 壳层整合点）：EventSource + 指数退避 + SIM 纪律。
+  // ⑤ 修复：原在 onMount 同步门控，mount 时清单恒 null → 订阅从不启动，
+  // presenceStore.connected/simulated 成死值（§5.4 SIM 纪律空转，状态条恒误报
+  // 「重连中」——静是默认的反面）。改为清单真正到达且声明 activity.sse 可用时
+  // 启动一次（presenceStarted 幂等守卫）；endpoint adopt 先于首次清单拉取完成，
+  // 此刻 config.baseUrl 已是真端口。双订阅去重设计见 presence.ts dedupKey。
+  let unsubscribePresence: (() => void) | null = null;
+  let presenceStarted = false;
+  $effect(() => {
+    if (
+      !presenceStarted &&
+      capabilitySupported(capabilities, 'activity.sse') &&
+      capabilityAvailable(capabilities, 'activity.sse')
+    ) {
+      presenceStarted = true;
+      unsubscribePresence = subscribePresence(config.baseUrl);
+    }
+  });
+
   onMount(() => {
     applyDocumentTheme(activeTheme);
     applyDocumentAccent(resolveAccent(config.accent));
@@ -1846,18 +1951,15 @@
           }, 30000)
         : null;
 
-    // Capability gate for the two /v1/apeireth/events subscribers below.
+    // Capability gate for the legacy /v1/apeireth/events subscriber below.
     // subscribeCompanionEvents retries on an exponential backoff loop that
     // never gives up, so gate it on both static support and live availability.
+    // ⚠ 诚实标注（⑤ 发现，保持现状待拍板）：mount 时 capabilities 恒为 null
+    // （清单异步拉取），此门永假——legacy 伴随体订阅实际从未启动。点亮它会
+    // 同时唤醒审批推送/[他说]主动开口等整条行为链，超出状态条任务 scope。
     const eventStreamSupported =
       capabilitySupported(capabilities, 'activity.sse') &&
       capabilityAvailable(capabilities, 'activity.sse');
-
-    // presence 频道主订阅（波次 2 壳层整合点）：EventSource + 指数退避 + SIM 纪律。
-    // 与下方 legacy 订阅并存是设计内行为——store 按 (type, at) 去重（presence.ts dedupKey）。
-    const unsubscribePresence = eventStreamSupported
-      ? subscribePresence(config.baseUrl)
-      : () => {};
 
     // 订阅 SSE 伴随体事件通道 (主动涌现与反思通知). Reconciled from master.
     // G5 修复: 频道现为 legacy 文本行 + presence JSON 行共流 (契约 §5.1/§8.1) —
@@ -1909,7 +2011,7 @@
       window.clearInterval(timer);
       if (hourTimer !== null) window.clearInterval(hourTimer);
       unsubscribeEvents();
-      unsubscribePresence();
+      unsubscribePresence?.();
     };
   });
 </script>
@@ -2101,15 +2203,17 @@
         {:else if drawerSec === 'tools'}
           <ToolsView {config} {capabilities} />
         {:else if drawerSec === 'governance'}
-          <GovernanceView
-            {config}
-            {capabilities}
-            initialTab={govInitialTab}
-            onOpenChat={() => {
-              closeDrawer();
-              backToList();
-            }}
-          />
+          {#key govTabKey}
+            <GovernanceView
+              {config}
+              {capabilities}
+              initialTab={govInitialTab}
+              onOpenChat={() => {
+                closeDrawer();
+                backToList();
+              }}
+            />
+          {/key}
         {:else if drawerSec === 'logs'}
           <ActivityView {config} {capabilities} />
         {:else if drawerSec === 'settings'}
@@ -2632,6 +2736,21 @@
       </div>
         </div>
       </div>
+
+      <!-- 余光投影（00-PHILOSOPHY §2 第四个投影 / gap-plan §4.3 P1）：
+           四指标一行通栏，静是默认，异常才挣色；入口不是面板。 -->
+      <StatusBar
+        sse={sbSse}
+        turn={sbTurn}
+        guard={sbGuard}
+        memory={sbMemory}
+        onSseClick={() => void refreshConnection()}
+        onTurnClick={() => {
+          if (busy) stop();
+        }}
+        onGuardClick={handleSbGuardClick}
+        onMemoryClick={() => openDrawer('memory')}
+      />
     </div>
 
     <Workbench
