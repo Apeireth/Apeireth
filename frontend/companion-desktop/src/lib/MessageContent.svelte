@@ -105,6 +105,13 @@
         <p class="message-error" role="alert">{message.error}</p>
       {/if}
 
+      {#if message.aborted}
+        <!-- 打断的诚实语义（gap-plan §5 缺口：后端无 /v1/turn/interrupt）：
+             前端打断 = 切断收听（abort 流式读取），后端回合仍会跑完；
+             这是「你不再听了」，不是「他停下了」。 -->
+        <p class="message-aborted" role="note">你不再听他说完——他的话在后端跑完了，只是没有进这扇窗。</p>
+      {/if}
+
       {#if !streaming && (text || message.error)}
         <div class="message-toolbar">
           <button class="tool-icon-btn" onclick={copyText} title="复制内容" aria-label="复制">
@@ -436,5 +443,13 @@
     font-size: 12px;
     line-height: 1.6;
     color: var(--ap-semantic-danger);
+  }
+
+  /* 打断标记：中性小字，不是错误色——打断是主人的选择，不是事故 */
+  .message-aborted {
+    margin: 6px 0 0;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--ap-bone-42, rgba(232, 224, 204, 0.42));
   }
 </style>

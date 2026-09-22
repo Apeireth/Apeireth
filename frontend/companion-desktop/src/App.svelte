@@ -32,6 +32,13 @@
   import ErrorSolutionBanner from './lib/components/ErrorSolutionBanner.svelte';
   import ToolCallLifecycleCard from './lib/components/ToolCallLifecycleCard.svelte';
   import ComposerMenu from './lib/components/ComposerMenu.svelte';
+  import CommandPalette from './lib/components/CommandPalette.svelte';
+  import {
+    pushRecentId,
+    loadRecentIds,
+    saveRecentIds,
+    type CommandItem,
+  } from './lib/commands/registry';
   import SessionModelPicker from './lib/components/SessionModelPicker.svelte';
   import WorkspacePickerModal from './lib/components/WorkspacePickerModal.svelte';
   import {
@@ -61,7 +68,7 @@
   import MemoryView from './lib/MemoryView.svelte';
   import SettingsView from './lib/views/SettingsView.svelte';
   import Workbench from './lib/components/Workbench.svelte';
-  import {applyDocumentAccent, applyDocumentTheme, isStaticBgTheme, resolveAccent, resolveTheme, themeLabel} from './lib/theme';
+  import {applyDocumentAccent, applyDocumentTheme, isStaticBgTheme, resolveAccent, resolveTheme, themeLabel, THEME_CATALOG} from './lib/theme';
   import {getCustomBg} from './lib/bg-store';
   import type {Theme} from './lib/types';
 
@@ -97,6 +104,7 @@
     subscribeCompanionEvents,
     capabilityAvailable,
     capabilitySupported,
+    capabilityUnavailableReason,
     activePersonaOf,
     DEFAULT_PERSONAS,
     type CompanionPresentationState,
@@ -1279,6 +1287,12 @@
     return String(caught);
   }
 
+  /**
+   * 打断当前回合（前端近似，gap-plan §5：后端无 POST /v1/turn/interrupt）。
+   * 语义 = 「不再听他说」：abort 只切断本地流式读取与输入复位；
+   * 后端回合仍跑完，barge_in 的 interrupt 事件广播暂无 HTTP 面可达。
+   * 消息侧以 message.aborted 标记此语义（MessageContent 渲染诚实注记）。
+   */
   function stop(): void {
     agentRuntime.abort();
   }
@@ -1578,8 +1592,107 @@
     updateComposerMenu(el.value);
   }
 
+  // ---- Ctrl+K 命令面板（00-PHILOSOPHY §6 原则 3「一个入口」；gap-plan §4.3 P0）----
+  // 注册表驱动：命令是数据，执行闭包在此处注入；筛选/别名/最近优先的纯逻辑在
+  // lib/commands/registry.ts（Node 单测覆盖）。最近榜 localStorage 诚实持久化。
+  let paletteOpen = $state(false);
+  let commandRecentIds = $state<string[]>(loadRecentIds());
+
+  /** 主题切换（与 SettingsView onSave 同路径：persist + applyDocument）。 */
+  function setTheme(next: Theme): void {
+    if (next === activeTheme) return;
+    config = {...config, theme: next};
+    saveConfig(config);
+    activeTheme = resolveTheme(next, themeQuery);
+    applyDocumentTheme(activeTheme);
+  }
+
+  const THEME_PINYIN: Record<Theme, string> = {
+    'heritage-void': 'yichan',
+    essence: 'essence',
+    night: 'shenkong',
+    day: 'riguang',
+    paper: 'zhimian',
+    ocean: 'shenhai',
+    forest: 'linhai',
+  };
+
+  interface PaletteCommand extends CommandItem {
+    run: () => void | Promise<void>;
+  }
+
+  const paletteCommands = $derived.by<PaletteCommand[]>(() => {
+    const approveReason = !capabilities
+      ? '运行时能力清单未到达'
+      : !capabilityAvailable(capabilities, 'permissions.approval.resolve')
+        ? (capabilityUnavailableReason(capabilities, 'permissions.approval.resolve') ??
+          '当前运行时不支持审批签批')
+        : approvalBusy
+          ? '上一笔签批仍在路上'
+          : !pendingCanonical
+            ? '当前没有等待签字的文书'
+            : undefined;
+    return [
+      // —— 导航：视图切换（纯前端，恒可用）——
+      {id: 'nav.chat', title: '打开对话', aliases: ['duihua', 'chat', 'dh'], group: '导航',
+        run: () => { closeDrawer(); backToList(); }},
+      {id: 'nav.history', title: '打开会话历史', aliases: ['lishi', 'history', 'ls'], group: '导航',
+        run: () => openDrawer('history')},
+      {id: 'nav.governance', title: '打开治理卷宗', aliases: ['zhili', 'governance', 'gov', 'zl'], group: '导航',
+        run: () => openDrawer('governance')},
+      {id: 'nav.memory', title: '打开记忆', aliases: ['jiyi', 'memory', 'jy'], group: '导航',
+        run: () => openDrawer('memory')},
+      {id: 'nav.tools', title: '打开工具', aliases: ['gongju', 'tools', 'gj'], group: '导航',
+        run: () => openDrawer('tools')},
+      {id: 'nav.status', title: '打开状态', aliases: ['zhuangtai', 'status'], group: '导航',
+        run: () => openDrawer('status')},
+      {id: 'nav.logs', title: '打开日志', aliases: ['rizhi', 'logs', 'rz', 'activity'], group: '导航',
+        run: () => openDrawer('logs')},
+      {id: 'nav.settings', title: '打开设置', aliases: ['shezhi', 'settings', 'sz'], group: '导航',
+        run: () => openDrawer('settings')},
+      // —— 主题：七套现役主题（VALID_THEMES 目录驱动）——
+      ...THEME_CATALOG.map((t) => ({
+        id: `theme.${t.id}`,
+        title: `主题：${t.label}`,
+        aliases: ['zhuti', 'theme', t.id, THEME_PINYIN[t.id]],
+        group: '主题',
+        hint: activeTheme === t.id ? `当前 · ${t.desc}` : t.desc,
+        run: () => setTheme(t.id),
+      })),
+      // —— 动作 ——
+      {id: 'act.new', title: '新建会话', aliases: ['xinjian', 'new', 'xj'], group: '动作',
+        run: () => newConversation()},
+      {id: 'act.reconnect', title: '健康检查重连', aliases: ['chonglian', 'reconnect', 'health', 'cl'], group: '动作',
+        run: () => refreshConnection()},
+      {id: 'act.approve', title: '批准当前待签文书', aliases: ['pizhun', 'approve', 'pz'], group: '动作',
+        hint: pendingCanonical ? `待签：${pendingCanonical.tool_name}` : undefined,
+        disabledReason: approveReason,
+        run: () => resolvePending('approve')},
+      {id: 'act.interrupt', title: '打断当前回合', aliases: ['daduan', 'interrupt', 'stop', 'dd'], group: '动作',
+        hint: busy ? '不再听他说完（后端回合仍会跑完）' : undefined,
+        disabledReason: busy ? undefined : '当前没有进行中的回合',
+        run: () => stop()},
+    ];
+  });
+
+  function executePaletteCommand(id: string): void {
+    const cmd = paletteCommands.find((c) => c.id === id);
+    if (!cmd || cmd.disabledReason) return; // 置灰命令不入账不执行（0 装）
+    paletteOpen = false;
+    commandRecentIds = pushRecentId(commandRecentIds, id);
+    saveRecentIds(commandRecentIds);
+    void cmd.run();
+  }
+
   function handleChromeKey(e: KeyboardEvent): void {
     handleModeKeydown(e);
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      paletteOpen = !paletteOpen;
+      return;
+    }
+    // 面板开着时 Esc/方向键归面板管——不穿到抽屉/文书层。
+    if (paletteOpen) return;
     if (e.key === 'Escape') {
       closePanels();
       closeDrawer();
@@ -2486,7 +2599,19 @@
 
               <div class="composer-send">
                 {#if busy}
-                  <button class="send stop" onclick={stop} aria-label="中断">
+                  <!-- 打断按钮（任务 B，gap-plan §5 缺口的前端近似）：
+                       后端无 POST /v1/turn/interrupt，此钮只切断本地收听
+                       （agentRuntime.abort → 关闭流式读取、复位输入态）；
+                       后端回合仍跑完，下一条消息开新轮。显隐信号 = busy
+                       （本地流真值），不取 SSE turn_*：那是网关级事件，
+                       本地打断后后端仍在跑，挂它会违背按钮的真实语义。
+                       语言克制、非金色（金=他；打断是主人的动作）。 -->
+                  <button
+                    class="send stop"
+                    onclick={stop}
+                    aria-label="打断当前回合"
+                    title="不再听他说完——后端回合仍会跑完（打断的是收听，不是他）"
+                  >
                     <Square size={14} />
                   </button>
                 {:else}
@@ -2567,6 +2692,14 @@
   isRefreshing={isRefreshingHealth}
   onClose={() => (showRuntimeModal = false)}
   onRefresh={refreshConnection}
+/>
+
+<CommandPalette
+  open={paletteOpen}
+  commands={paletteCommands}
+  recentIds={commandRecentIds}
+  onExecute={executePaletteCommand}
+  onClose={() => (paletteOpen = false)}
 />
 
 <WorkspacePickerModal
