@@ -44,6 +44,10 @@
   --ap-card-dark: #15181f;            /* 深灰卡片（列表项/次要容器） */
   --ap-line: rgba(232, 224, 204, 0.14); /* 1px 细分隔线/描边：#e8e0cc @ 14% */
   --ap-accent-tab: #ffd27a;           /* 激活 tab/进度/高亮——复用存在金，同金色纪律 */
+  /* UI 配色方案（规范 §8 增补⑤）：accent 默认 = 存在金（现状视觉不变）；
+     可选配色经 html[data-accent] 覆写，且机器断言不占存在金家族（theme.ts）。 */
+  --ap-accent-ui: #ffd27a;
+  --ap-accent-ui-ink: #1b1409;
   --ap-stamp: #ece7da;                /* 图章/编号文字（括号角标内，等宽，§6.3） */
 
   /* ---------- 语义色 🟡 待确认（规范 §2.4 / 附录 B-5；纪律已确认，数值提案） ----------
@@ -131,10 +135,28 @@ html[data-theme='essence'] {
   --ap-card-dark: #eceae5;
   --ap-line: rgba(20, 19, 22, 0.1);
   --ap-accent-tab: #8a7355;
+  --ap-accent-ui: #8a7355;
+  --ap-accent-ui-ink: #f7f5f1;
   --ap-semantic-success: #3d7a5c;
   --ap-semantic-warning: #9a6f2e;
   --ap-semantic-danger: #a84840;
   --ap-semantic-info: #4a6278;
+}
+
+/* ---------- UI 配色方案覆写（规范 §8 增补⑤）----------
+   置于主题块之后：显式选择的配色优先于主题默认 accent（同特异性，后定义者胜）。
+   值与 theme.ts 的 ACCENT_CATALOG 一一对应，改任一边必须同步（测试锁定纪律）。 */
+html[data-accent='deep-space'] {
+  --ap-accent-ui: #7d9cc0;
+  --ap-accent-ui-ink: #0b0d12;
+}
+html[data-accent='sage'] {
+  --ap-accent-ui: #7fb894;
+  --ap-accent-ui-ink: #0b0d12;
+}
+html[data-accent='bone'] {
+  --ap-accent-ui: #e6e2da;
+  --ap-accent-ui-ink: #1c1b1f;
 }
 
 

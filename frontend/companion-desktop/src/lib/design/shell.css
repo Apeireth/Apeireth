@@ -157,12 +157,12 @@
   opacity: 0.95;
 }
 .rail-btn.active {
-  color: var(--ap-gold);
-  background: rgba(255, 210, 122, 0.09);
+  color: var(--ap-accent-ui);
+  background: color-mix(in srgb, var(--ap-accent-ui) 9%, transparent);
 }
 .rail-btn.active .rail-label {
   opacity: 1;
-  color: var(--ap-gold-ui);
+  color: var(--ap-accent-ui);
 }
 .rail-btn.active::before {
   content: "";
@@ -172,8 +172,8 @@
   bottom: 10px;
   width: 2px;
   border-radius: 2px;
-  background: var(--ap-gold);
-  box-shadow: 0 0 8px rgba(255, 210, 122, 0.6);
+  background: var(--ap-accent-ui);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ap-accent-ui) 60%, transparent);
 }
 .rail-btn .tip {
   display: none;
@@ -500,9 +500,9 @@
 }
 .wb-toggle:hover,
 .wb-toggle.on {
-  border-color: rgba(232, 217, 176, 0.5);
-  color: var(--ap-gold-ui);
-  background: color-mix(in srgb, var(--ap-panel) 88%, var(--ap-gold) 12%);
+  border-color: color-mix(in srgb, var(--ap-accent-ui) 50%, transparent);
+  color: var(--ap-accent-ui);
+  background: color-mix(in srgb, var(--ap-panel) 88%, var(--ap-accent-ui) 12%);
 }
 .scroll {
   flex: 1;
@@ -606,7 +606,7 @@
   transition: border-color 0.25s, color 0.25s;
 }
 .col-toggle:hover {
-  border-color: rgba(255, 210, 122, 0.45);
+  border-color: color-mix(in srgb, var(--ap-accent-ui) 45%, transparent);
   color: var(--ap-bone);
 }
 
@@ -1732,9 +1732,9 @@ p.lede {
   background: rgba(232, 224, 204, 0.06);
 }
 .mode-btn.active {
-  color: var(--ap-gold);
-  background: rgba(255, 210, 122, 0.12);
-  box-shadow: 0 0 12px rgba(255, 210, 122, 0.25);
+  color: var(--ap-accent-ui);
+  background: color-mix(in srgb, var(--ap-accent-ui) 12%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ap-accent-ui) 25%, transparent);
 }
 .app-root.mode-focus .mode-switch,
 .app-root.intro-playing .mode-switch {

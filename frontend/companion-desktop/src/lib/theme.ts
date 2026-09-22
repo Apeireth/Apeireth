@@ -1,4 +1,4 @@
-import type {Theme} from './types';
+import type {Accent, Theme} from './types';
 
 export const VALID_THEMES: Theme[] = ['heritage-void', 'night', 'day', 'ocean', 'forest', 'paper', 'essence'];
 
@@ -84,4 +84,91 @@ export function isStaticBgTheme(theme: Theme): boolean {
 
 export function themeLabel(theme: Theme): string {
   return THEME_CATALOG.find((t) => t.id === theme)?.label ?? theme;
+}
+
+/* ============================================================================
+   UI 配色方案（规范 §8 增补⑤，2026-09-22 主人拍板）
+   配色只染 UI 高亮（导航激活/工作台开关这类界面 chrome），经 --ap-accent-ui
+   覆写落地；金色纪律不可破——存在金（#ffd27a 系）是他的，可选方案里没有金色系，
+   isPresenceGoldFamily 是这条纪律的机器断言（tests/theme-system.mjs 锁定）。
+   ============================================================================ */
+
+export const VALID_ACCENTS: Accent[] = ['presence-gold', 'deep-space', 'sage', 'bone'];
+
+export type AccentOption = {
+  id: Accent;
+  label: string;
+  desc: string;
+  /** accent 主色与其上文字色（设置预览真渲染与 tokens.css 的 data-accent 覆写共用同一份值） */
+  accent: string;
+  ink: string;
+};
+
+export const ACCENT_CATALOG: AccentOption[] = [
+  {
+    id: 'presence-gold',
+    label: '存在金（默认）',
+    desc: 'UI 高亮与他同色——金色纪律的默认态',
+    accent: '#ffd27a',
+    ink: '#1b1409',
+  },
+  {
+    id: 'deep-space',
+    label: '深空蓝',
+    desc: '舷窗远星色调 · 克制中性',
+    accent: '#7d9cc0',
+    ink: '#0b0d12',
+  },
+  {
+    id: 'sage',
+    label: '雾原绿',
+    desc: '清晨苔原色调 · 安静收敛',
+    accent: '#7fb894',
+    ink: '#0b0d12',
+  },
+  {
+    id: 'bone',
+    label: '骨白',
+    desc: '无彩色档案调 · 几乎隐形',
+    accent: '#e6e2da',
+    ink: '#1c1b1f',
+  },
+];
+
+export function resolveAccent(configAccent?: Accent): Accent {
+  return configAccent && VALID_ACCENTS.includes(configAccent) ? configAccent : 'presence-gold';
+}
+
+export function applyDocumentAccent(accent: Accent): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (accent === 'presence-gold') {
+    root.removeAttribute('data-accent');
+  } else {
+    root.setAttribute('data-accent', accent);
+  }
+}
+
+/** 金色纪律守卫（纯函数）：存在金家族 = 色相 32°–52° 且高饱和高亮
+ *  （#ffd27a / #e8a33d / #fff2d1 系都在此区间）。非默认配色必须返回 false。 */
+export function isPresenceGoldFamily(hex: string): boolean {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = 60 * (((g - b) / d) % 6);
+    else if (max === g) h = 60 * ((b - r) / d + 2);
+    else h = 60 * ((r - g) / d + 4);
+  }
+  if (h < 0) h += 360;
+  return h >= 32 && h <= 52 && s > 0.35 && l > 0.45;
 }

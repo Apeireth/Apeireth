@@ -2,6 +2,9 @@
 
 export type ViewId = 'chat' | 'conversations' | 'activity' | 'tools' | 'memory' | 'settings';
 export type Theme = 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'essence' | 'heritage-void';
+
+/** UI 配色方案 id（规范 §8 增补⑤）：只染 UI 高亮，不占存在金 */
+export type Accent = 'presence-gold' | 'deep-space' | 'sage' | 'bone';
 export type MemoryCategory =
   | '工作记忆'
   | '近期记忆'
@@ -267,6 +270,8 @@ export interface ApeirethConfig {
   /** 自定义上传背景开关（规范 §8 增补④）：true = 用 IndexedDB 里的上传图
    *  盖住主题默认背景；图本体在 IndexedDB（bg-store.ts），不落 config。 */
   customBg?: boolean;
+  /** UI 配色方案（规范 §8 增补⑤）：缺省 = 存在金（视觉现状不变） */
+  accent?: Accent;
 }
 
 export interface ActivityItem {
