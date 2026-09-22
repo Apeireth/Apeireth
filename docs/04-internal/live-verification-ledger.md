@@ -25,7 +25,7 @@
 | # | 项 | 何时 | 证据 | 说明 |
 |---|---|---|---|---|
 | 6 | `/v1/chat/completions` 真模型多轮 + 会话连续性（turn2 正确回忆 turn1 事实） | 2026-09-10（新 key） | 本会话探针输出；commit `1a265600` | 桌面同款 payload：`{model, messages:[{role:'user',content}], session_id, stream:false}`；`served_by=provider.openai-compatible`；panel/sessions 持久化 |
-| 7 | `stream:true` SSE 帧（init/content/final + apeireth 元数据） | 2026-09-10 | 同上 | 语义 = 整段完成后分帧（**不是 token 级**，见挂账 #5） |
+| 7 | `stream:true` SSE 帧（init/content/final + apeireth 元数据） | 2026-09-10 | 同上 | **token 级真流式**（语义与证据见 #14；本条早期"整段后分帧"表述作废） |
 | 8 | 错误路径 JSON body（`error` + `session_id`） | 2026-09-10 live + 库级测试更早 | `canonical_openai_compatible_entry.rs::the_gateway_reports_an_openai_compatible_missing_credential_as_unavailable` | 502/503 均带体；"裸 502"是早期探针读流姿势问题，不是产品缺陷 |
 | 9 | `/v1/models` 按 id 去重（`minimax-m3` 2→1，`minimax-m3-thinking` 保留） | 2026-09-10 | live 实测 + `the_gateway_models_list_dedupes_ids_shared_across_providers` | 根因：anthropic 插件默认端点即 MiniMax Anthropic 兼容网关 |
 

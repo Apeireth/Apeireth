@@ -53,6 +53,12 @@
 ```
 `/v1/chat/completions` 请求/响应遵循 OpenAI `chat.completions` 形状(`messages[{role,content}]`、`model`、`stream`)。
 
+**流式契约**(`stream:true`,2026-09-10 起 token 级真流式,实测 210 帧 ~23ms 逐帧到达):
+- 帧序列:`role` chunk → provider 逐 content delta 各一 chunk → 终帧(带 `usage` 与 apeireth 元数据)。
+- 挂起审批以 `finish_reason:"approval_required"` 显式终帧终止流;provider 错误经统一错误帧契约上浮
+  (`{"error":{"message","code","solution"}}`,见 ledger #16)。
+- 增量链路:provider SSE → runtime sink(`execute_outcome_streaming`)→ gateway 逐 chunk 直通,非整段后分帧。
+
 ## §4 会话 `[P0]`
 
 `GET /v1/panel/sessions?limit=50` →
@@ -133,8 +139,10 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
   `backend_ready`(启动,仅广播一次)/ `turn_started` / `turn_delta` / `turn_completed` /
   `approval_required` / `approval_resolved`。
   帧格式:`event: <name>` + `data: <json>`;15s keep-alive;容量 256,慢订阅者被断连(不无限缓存)。
-  > 当前诚实边界:`turn_delta` 携带**最终全文作为单条增量**——canonical 运行时在网关编码前
-  > 已完整收口,网关边界观测不到 token 级增量。事件在进程内广播,不跨重启持久。
+  > 诚实边界:`turn_delta` 是**生命周期镜像**——canonical 运行时在事件总线编码前整轮已收口,
+  > 所以它携带最终全文作为单条增量,总线上观测不到 token 级增量。
+  > **逐字渲染请走 `POST /v1/chat/completions` 的 `stream:true` SSE**(token 级真流式,见 §3)。
+  > 事件在进程内广播,不跨重启持久。
 
 ## §9 能力清单 `[P0]`
 

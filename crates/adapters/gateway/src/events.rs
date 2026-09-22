@@ -4,10 +4,12 @@
 //! `backend_ready` / `turn_started` / `turn_delta` / `turn_completed` /
 //! `approval_required` / `approval_resolved`.
 //!
-//! v1 honesty notes (contract §8):
-//! - `turn_delta` carries the final assistant text as ONE delta: the canonical
-//!   runtime completes a turn before the gateway encodes it, so token-level
-//!   deltas are not observable at this boundary.
+//! Boundary notes (contract §8):
+//! - `turn_delta` is a lifecycle MIRROR: it carries the final assistant text as
+//!   ONE delta, because the canonical runtime completes a turn before the
+//!   gateway encodes it onto this bus. Token-level rendering does NOT go
+//!   through this bus — it goes through `POST /v1/chat/completions` with
+//!   `stream:true` (true incremental provider SSE, since 2026-09-10).
 //! - The bus is in-process broadcast; a subscriber that lags behind is
 //!   disconnected by tokio broadcast semantics (no unbounded buffering).
 
