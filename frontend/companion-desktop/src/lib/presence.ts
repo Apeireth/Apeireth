@@ -470,7 +470,14 @@ export interface SubscribePresenceOptions {
 export function subscribePresence(baseUrl: string, options: SubscribePresenceOptions = {}): () => void {
   const store = options.store ?? presenceStore;
   const url = `${baseUrl.replace(/\/+$/, '')}/v1/apeireth/events`;
-  // Caller must capability-gate. Canonical 2.0 does not serve this URL.
+  // Caller must capability-gate (activity.sse).
+  // 诚实断点（2026-10-13 核实 events.rs / 契约 §8-§8a）：canonical 2.0 提供此
+  // URL，但全部事件以具名帧（event: <name>）发出——es.onmessage 只收无名帧，
+  // 因此本订阅在 canonical 上连通却无事件到达；legacy 四事件（emotion /
+  // initiative / dream / memory_recall）在 canonical 总线上不存在（契约断线，
+  // 00-PHILOSOPHY §9），presence_state 是具名帧、不在本函数消费面内。
+  // 结果：store.connected 可为 true 而 current 恒 null（前端回落静息微光，
+  // 不编造情绪）。presence_state 的消费接线是后续波次的事。
 
   let active = true;
   let source: EventSource | null = null;
