@@ -28,6 +28,9 @@ pub struct GatewayState {
     pub services: GatewayServices,
     pub events: crate::events::EventBus,
     pub observations: Arc<crate::events::RuntimeObservationSink>,
+    /// Presence synthesizer behind `presence_state` frames (contract §8a); held
+    /// here so the service outlives the assembly scope and its heartbeat task.
+    pub presence: Arc<crate::presence::PresenceService>,
     /// Live runtime config, readable by every request path and patchable through
     /// `/v1/admin/config`.
     pub hot_config: Arc<RwLock<crate::admin::GatewayRuntimeConfig>>,

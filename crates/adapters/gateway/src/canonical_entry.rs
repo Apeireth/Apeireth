@@ -444,17 +444,21 @@ pub fn build_gateway_state_with_services(
         services.trace_commands.clone(),
         services.audit_commands.clone(),
     ));
+    let presence = crate::presence::PresenceService::new(events.clone());
     runtime.add_event_sink(Arc::new(
         apeireth_runtime::canonical::CompositeRuntimeEventSink::new(vec![
             Arc::new(events.clone()),
             observations.clone(),
+            presence.clone(),
         ]),
     ));
+    crate::presence::spawn_presence_heartbeat(&presence);
     GatewayState {
         runtime,
         services,
         events,
         observations,
+        presence,
         hot_config: Arc::new(RwLock::new(GatewayRuntimeConfig::from_env())),
     }
 }
