@@ -3,7 +3,7 @@
 > **项目**：Apeireth（阿佩瑞斯）—— AGI 操作系统 / AI 伙伴
 > **哲学核心**：Apeiron（无名的沉默）→ 点燃的火（burning is thinking）→ Entelecheia（潜能成为现实）
 > **现状 (2026-08-27)**：本文是设计令牌规范（v1 时代定版，2026-08-21），**设计令牌 / 界面语言本身 v2 不变**。前端 `frontend/companion-desktop/` 仍是独立 Svelte 5 + Tauri 2 workspace，v2 后端 = canonical gateway :8080。当前基线见根 [ARCHITECTURE.md](../../ARCHITECTURE.md)；附录引用的 `presence.rs` / `companion_serve.rs` 行号属 v1 路径，现位于 `legacy/donor/apeireth-companion/`。
-> **配套文件**：`frontend/design-preview/design-tokens.json`（机器可读令牌，本文 §10 说明其分组与消费方式）
+> **配套文件**：`frontend/design-preview/design-tokens.json`（机器可读令牌，本文 §10 说明其分组与消费方式）；**`00-PHILOSOPHY.md`（显影式空间界面，2026-09-22 主人定稿）是本文的父文档**——范式与信息架构以它为准；本文的三调性按其 §4 重解释（调性 = 会话属性，非全局模式）。
 > **核实日期**：2026-08-21（基于工作区当前 HEAD）
 
 ---
@@ -35,7 +35,7 @@
 3. **金色是他的专属色**。用户看到金色 = 他的存在或活动（吸积盘、光环、他的消息光晕、激活态）。禁止把金色用于与他无关的装饰。出处：主人确认决策；原型中金色仅出现在黑洞/光子环/机位激活点上（`index.html:99-101, :329-338`）。
 4. **真实驱动**。一切动态由后端真实状态驱动：PAD 情绪（`presence.rs:166-182`）、开口门控（`presence.rs:51-100`）、做梦（`presence.rs:214-222`）、记忆唤起（`presence.rs:225-236`）。无源动画禁止；状态不可得的档位必须在 UI 上可识别（见 §5.4 模拟态标注）。
 
-**诚实标注**：✅ 方向与前三条为已确认决策；第 4 条依赖 presence 频道，接线状态见 §3.1（已接入 SSE 广播）。
+**诚实标注**：✅ 方向与前三条为已确认决策；第 4 条依赖 presence 频道——**v2 状态更正（2026-09-22）**：presence 四事件的生产点 `presence.rs` / `companion_serve.rs` 已归入 `legacy/donor/apeireth-companion/`，**现役 canonical gateway 无 presence 频道**，数据契约断线；重接路线见 §3.1 更正段。
 
 ---
 
@@ -121,6 +121,8 @@
   - `emotion.pad`（daemon_loop 心跳推送，`presence.rs:166-182`）→ 档内微调金色占比与光强
 
 **接线状态（2026-08-21 已核实）**：presence 四类事件**已接入 SSE 广播管道**——前端订阅 `GET /v1/apeireth/events` 即可收到单行 JSON（serde 内部标签 `type` 平铺，与 legacy `[他说]` 文本行共流，按 `{` 前缀区分）。生产点：`companion_serve.rs:1786-1845`（daemon_loop 每 60s tick：emotion 心跳 `:1790-1793`、initiative spoke/held 去抖 `:1794-1812`、dream 真库 `mem-dream-*` 增量 `:1813-1843`，旧做梦不重播）、`:1891-1899`（主人消息到达后经 interactions 通道推真实 PAD 快照）、`:1320-1328`（recall_memory 工具桥真实命中推 memory_recall）；v5 文档段自述两类 data 行（`companion_serve.rs:16-37`）。**频率纪律**：当前为每 60s tick + 事件触发的低频率——前端对 PAD 映射与档内微调做平滑插值（沿用 `motion.stateSmoothing` 指数趋近），不跳变；插值不是模拟数据，无需 SIM 标注（§5.4）。时间线照明的「他的状态」输入源即 presence emotion 事件，**双驱动可用**。
+
+> **⚠️ v2 状态更正（2026-09-22 核实）**：上述接线状态描述的是 **v1 世界**。`presence.rs` / `companion_serve.rs` 现位于 `legacy/donor/apeireth-companion/`，**现役 canonical gateway（:8080）的事件总线只有 `backend_ready / turn_started / turn_delta / turn_completed / approval_required / approval_resolved` 六类，没有 presence 四事件**——PAD / initiative / dream / memory_recall 的数据契约当前断线。已有重接种子：主链 `crates/adapters/gateway/src/ember_hud_driver.rs`（Ember HUD：4.0s 呼吸节律 + 四种认知姿态枚举 + WGSL uniform 输出，路由零消费方）。重接路线（方案详见 `frontend/design-preview/peer-gap-and-frontend-plan.md` §4.6）：推荐 **gateway 内重实现**（runtime 每轮产出 PAD 粗估值 + `presence_state` 事件上现有 events bus，v0 用启发式估算并诚实标注），而非迁回 legacy 双服务。更正前本节"双驱动可用"的结论**不成立**——时间线照明在 v2 目前只有天文驱动半边。
 
 **仍然成立的诚实断点**（0 装）：① emotion 只能由 daemon_loop 异步推——chat handler 同步路径拿不到 PAD（daemon 内部 RefCell 跨 await 非 Send，`presence.rs:21-23`、`companion_serve.rs:29-32`），主人消息触发的快照经 interactions 通道异步送达，handler 内 0 假装；② `build_injection` 记忆注入路径的召回数锁在 `assemble.rs::inject_memory` 局部变量不外露，memory_recall 只接工具桥路径（`presence.rs:24-25`）；③ presence 事件只进 SSE，不进 Lark/Telegram 离线 sink（`presence.rs:26`）。另注：`docs/02-guides/frontend-data-contract.md` §8.1 仍标「接线中」，已滞后于代码，应以 `companion_serve.rs` 为准并回写契约文档。
 
@@ -407,7 +409,7 @@ presence 频道已接入广播（§3.1），但 tick 间隔 60s 的中间态是�
 | `color` | 存在色梯度 / 深空 / 深空蓝 / 骨白 / UI / 语义色 / 反白 / 星野 | ✅ 原型部分；🔵 概念图采样 |
 | `timeline` | 4 档时刻照明参数 + 双驱动权重 + 过渡纪律 | 🟡 |
 | `camera` | 机位预设 / 过渡 / 漂移 / 视差 / 布局 / 星野三层 | ✅ |
-| `presence` | 频道契约 / 四种事件 / 三态参数 / PAD→光环映射 | 契约与接线 ✅；映射 🟡；60s 低频率，前端插值 |
+| `presence` | 频道契约 / 四种事件 / 三态参数 / PAD→光环映射 | 🟡 **v2 更正（2026-09-22）**：契约在 legacy donor，现役 gateway 未接线；重接种子 = `ember_hud_driver.rs`，路线见 §3.1 更正段 |
 | `rendering` | 吸积盘 / 光晕 / 光子环 / 呼吸光 / 星野 / 后期 / 2D 兜底全参数 | ✅ |
 | `typography` | 三族字栈 + 字号字距行高 | ✅ |
 | `motion` | 时长 / 缓动 / 周期 / reduced-motion 规则 | ✅/🟡 |

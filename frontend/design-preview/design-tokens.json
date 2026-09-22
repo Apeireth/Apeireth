@@ -102,7 +102,7 @@
           { "signal": "dream 事件（做梦整合完成）", "effect": "夜间档确认/加深", "source": "presence.rs:213-222 (DreamPayload)" },
           { "signal": "emotion.pad（ daemon_loop 心跳推送）", "effect": "档内微调金色占比与光强", "source": "presence.rs:165-182 (EmotionPayload)" }
         ],
-        "_honesty": "presence 四类事件已接入 SSE 广播管道（companion_serve.rs:1786-1845 daemon_loop 每 60s tick + :1891-1899 主人消息经 interactions 通道触发 + :1320-1328 工具桥 memory_recall；v5 文档段 :16-37）。当前为每 60s tick + 事件触发的低频率，前端对档内微调做平滑插值；双驱动可用，emotion 事件即『他的状态』输入源。"
+        "_honesty": "v2 更正（2026-09-22）：backendState 半边驱动当前断线——presence 四类事件属 legacy donor（companion_serve.rs，见 presence.channel.wireStatusNote），现役 canonical gateway 无此频道；时间线照明目前仅 localClock 半边生效，backendState 信号应按权重 0.5 缺席处理（前端不得假装驱动存在）。原 v1 记录：presence 四类事件已接入 SSE 广播管道（companion_serve.rs:1786-1845 daemon_loop 每 60s tick + :1891-1899 主人消息经 interactions 通道触发 + :1320-1328 工具桥 memory_recall；v5 文档段 :16-37）。当前为每 60s tick + 事件触发的低频率，前端对档内微调做平滑插值。"
       }
     },
     "modes": {
@@ -236,8 +236,8 @@
     "channel": {
       "endpoint": "GET /v1/apeireth/events",
       "format": "单行 JSON（serde 内部标签 type 平铺），与 legacy 纯文本『[他说] …』行共用一条 SSE 流；前端按 `{` 前缀区分",
-      "wireStatus": "wired",
-      "wireStatusNote": "PresenceEvent 四种事件在 crates/apeireth-companion/src/presence.rs:152-236 定义并被单测锁定（:337-502），已接入 SSE 广播管道：companion_serve.rs:1786-1845（daemon_loop 每 60s tick：emotion 心跳 :1790-1793、initiative spoke/held 去抖 :1794-1812、dream 真库 mem-dream-* 增量 :1813-1843，旧做梦不重播）、:1891-1899（主人消息到达后经 interactions 通道推 PAD 快照）、:1320-1328（recall_memory 工具桥真实命中推 memory_recall）；v5 文档段 companion_serve.rs:16-37 自述两类 data 行",
+      "wireStatus": "legacy-wired-v2-disconnected",
+      "wireStatusNote": "v2 更正（2026-09-22）：下述接线状态属 v1 世界。presence.rs / companion_serve.rs 现位于 legacy/donor/apeireth-companion/；现役 canonical gateway（:8080）事件总线只有 backend_ready/turn_started/turn_delta/turn_completed/approval_required/approval_resolved 六类，无 presence 四事件。重接种子 = crates/adapters/gateway/src/ember_hud_driver.rs（路由零消费方）；路线见 docs/design/01-DESIGN-SYSTEM.md §3.1 更正段。—— 原 v1 记录：PresenceEvent 四种事件在 crates/apeireth-companion/src/presence.rs:152-236 定义并被单测锁定（:337-502），已接入 SSE 广播管道：companion_serve.rs:1786-1845（daemon_loop 每 60s tick：emotion 心跳 :1790-1793、initiative spoke/held 去抖 :1794-1812、dream 真库 mem-dream-* 增量 :1813-1843，旧做梦不重播）、:1891-1899（主人消息到达后经 interactions 通道推 PAD 快照）、:1320-1328（recall_memory 工具桥真实命中推 memory_recall）；v5 文档段 companion_serve.rs:16-37 自述两类 data 行",
       "cadence": {
         "emotion": "每 60s tick 一条心跳 + 主人消息到达后一条（低频率；on_user_message 只喂节律不触情绪事件，推的是当前真实 PAD，多为基线）",
         "initiative": "spoke 每次都推；held 仅门控原因变化时推（去抖，否则每 60s 刷屏）",
