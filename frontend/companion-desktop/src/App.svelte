@@ -28,7 +28,6 @@
   import VoiceCallModal from './components/VoiceCallModal.svelte';
   import { voiceCallManager } from './lib/voice';
 
-  import ApprovalRequestCard from './lib/components/ApprovalRequestCard.svelte';
   import ErrorSolutionBanner from './lib/components/ErrorSolutionBanner.svelte';
   import ToolCallLifecycleCard from './lib/components/ToolCallLifecycleCard.svelte';
   import ComposerMenu from './lib/components/ComposerMenu.svelte';
@@ -47,7 +46,12 @@
   import {localClockHour} from './lib/scene/timeline';
   import ConversationsView from './lib/ConversationsView.svelte';
   import SessionListHome from './lib/chat-shell/SessionListHome.svelte';
+  import PendingDocumentDock from './lib/chat-shell/PendingDocumentDock.svelte';
   import type {HomeSessionItem} from './lib/chat-shell/session-list';
+  import {
+    applyApprovalEventToPending,
+    parseApprovalEventPayload,
+  } from './lib/chat-shell/gateway-events';
   import ActivityView from './lib/views/ActivityView.svelte';
   import ToolsView from './lib/views/ToolsView.svelte';
   import MemoryView from './lib/MemoryView.svelte';
@@ -1191,9 +1195,12 @@
     }
   }
 
-  /** X / 遮罩：仅关闭弹窗，不做业务决策（区别于"拒绝"按钮）。 */
+  /** X / Esc：仅收起待签文书为 slim 金线，不做业务决策（区别于"拒绝"按钮）。
+   *  收起选择按 approval_id 记忆：自愈重拉不打扰，新文书自动重新浮起。 */
+  let approvalDockCollapsed = $state(false);
+  let lastApprovalDocId = $state('');
   function dismissPendingApproval(): void {
-    pendingCanonical = null;
+    approvalDockCollapsed = true;
   }
 
   function describeCaughtSafe(caught: unknown): string {
@@ -1504,7 +1511,7 @@
     if (e.key === 'Escape') {
       closePanels();
       closeDrawer();
-      // 审批卡：Escape 仅关闭（与「拒绝」按钮分离，不做业务决策）。
+      // 待签文书：Escape 仅收起为 slim 金线（与「拒绝」按钮分离，不做业务决策）。
       if (pendingCanonical) dismissPendingApproval();
     }
   }
@@ -1551,6 +1558,16 @@
       stardusts = {...stardusts, [convId]: [...list, ...fresh]};
       void triggerAutoScroll();
     });
+  });
+
+  // 待签文书卡（§3.2/§6.4）：新文书（approval_id 变化）自动重新浮起并滚动到发生处；
+  // 同一文书保持用户的收起选择（自愈重拉 inbox 不打扰）。
+  $effect(() => {
+    const id = pendingCanonical?.approval_id ?? '';
+    if (id === lastApprovalDocId) return;
+    lastApprovalDocId = id;
+    approvalDockCollapsed = false;
+    if (id) void triggerAutoScroll();
   });
 
   // 会话切换 / 首次激活时拉取会话级设置（失败静默降级，picker 回落全局模型）。
@@ -1660,6 +1677,25 @@
     // 波次 2：`[他说]` 行 = 他主动开口 → 进入对话流（规范 §5.3）；
     // 其余 legacy 行（如测试事件）→ 轻量 toast，不进对话。
     const unsubscribeEvents = !eventStreamSupported ? () => {} : subscribeCompanionEvents(config, (event) => {
+      // T0 壳（§3.2）：审批事件 = 待签文书实时推入对话，不进 toast 流。
+      // 当前会话 → 重拉 inbox（卡在发生处浮起/resolved 后自愈收起）；
+      // 其他会话 → 只更新主页列表的金色待签标。
+      if (event.kind === 'approval_required' || event.kind === 'approval_resolved') {
+        const info = parseApprovalEventPayload(event.payload);
+        if (info) {
+          pendingApprovalSessions = applyApprovalEventToPending(
+            pendingApprovalSessions,
+            info,
+            event.kind,
+          );
+        }
+        if (!info || !info.session || info.session === activeId) {
+          void refreshConnection();
+        } else {
+          homeReloadKey += 1;
+        }
+        return;
+      }
       if (presenceStore.ingestLine(event.text) !== 'legacy') return;
       const text = event.text.trim();
       if (text.startsWith('[他说]')) {
@@ -2145,6 +2181,19 @@
                   </div>
                 {/if}
               {/each}
+              {#if pendingCanonical}
+                <!-- 待签文书（§3.2/§6.4）：对话内浮起，在发生处批准/拒绝，不跳窗 -->
+                <PendingDocumentDock
+                  approvalId={pendingCanonical.approval_id}
+                  item={approvalCardItem}
+                  busy={approvalBusy}
+                  collapsed={approvalDockCollapsed}
+                  onExpand={() => (approvalDockCollapsed = false)}
+                  onAllow={() => void resolvePending('approve')}
+                  onReject={() => void resolvePending('reject')}
+                  onDismiss={dismissPendingApproval}
+                />
+              {/if}
               {#if error}
                 <ErrorSolutionBanner
                   code={errorCode}
@@ -2364,34 +2413,6 @@
   onClose={() => (showVoiceCall = false)}
   onSendMessage={handleVoiceMessage}
 />
-
-{#if pendingCanonical}
-  <div
-    class="approval-backdrop"
-    role="presentation"
-    onclick={() => dismissPendingApproval()}
-  >
-    <div
-      class="approval-wrap"
-      role="dialog"
-      aria-modal="true"
-      aria-label="待批准操作"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => {
-        if (e.key === 'Escape') dismissPendingApproval();
-      }}
-    >
-      <ApprovalRequestCard
-        item={approvalCardItem}
-        busy={approvalBusy}
-        onAllow={() => void resolvePending('approve')}
-        onReject={() => void resolvePending('reject')}
-        onDismiss={dismissPendingApproval}
-      />
-    </div>
-  </div>
-{/if}
 
 <RuntimeModal
   open={showRuntimeModal}
@@ -2614,32 +2635,7 @@
     background: rgba(255, 255, 255, 0.06);
   }
 
-  /* ---------- 审批卡遮罩（P0-4） ---------- */
-  .approval-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(4px);
-    display: grid;
-    place-items: center;
-    padding: 20px;
-    animation: ap-fade-in 0.15s ease-out;
-  }
-  .approval-wrap {
-    width: 100%;
-    max-width: 480px;
-  }
-  @keyframes ap-fade-in {
-    from {
-      opacity: 0;
-      transform: scale(0.98);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
+  /* ---------- 待签文书卡的视觉语言在 chat-shell/PendingDocumentDock.svelte ---------- */
 
   /* ---------- 斜杠菜单锚点（P1-6） ---------- */
   .composer {
