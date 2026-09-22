@@ -137,12 +137,59 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
   由 RuntimeEventSink 的审计端口归档；网关不再从响应结果反推一套 turn 事实。
 - `GET /v1/apeireth/events` ✅ — Runtime Event Spine 的 SSE 投影:
   `backend_ready`(启动,仅广播一次)/ `turn_started` / `turn_delta` / `turn_completed` /
-  `approval_required` / `approval_resolved`。
+  `approval_required` / `approval_resolved` / `presence_state`(见下)。
   帧格式:`event: <name>` + `data: <json>`;15s keep-alive;容量 256,慢订阅者被断连(不无限缓存)。
   > 诚实边界:`turn_delta` 是**生命周期镜像**——canonical 运行时在事件总线编码前整轮已收口,
   > 所以它携带最终全文作为单条增量,总线上观测不到 token 级增量。
   > **逐字渲染请走 `POST /v1/chat/completions` 的 `stream:true` SSE**(token 级真流式,见 §3)。
   > 事件在进程内广播,不跨重启持久。
+
+### §8a presence_state 事件 ✅(2026-09-22,契约来源 `docs/design/00-PHILOSOPHY.md` §10 草案 v0)
+
+`presence_state` 是「一份契约 × 四个投影」的地基事件:后端把对"他当前状态"的粗估值
+送上同一条 SSE 总线,四个前端投影(T0 余烬点 / T1 光晕 / T2 光环 / 桌宠)显影同一份状态。
+帧:`event: presence_state`,`data` 形状:
+
+```json
+{
+  "type": "presence_state",
+  "at": 1726992000000,
+  "pad": { "p": 0.2, "a": -0.1, "d": 0.3 },
+  "dominant": "serene",
+  "intensity": 0.38,
+  "stance": "attentive_presence",
+  "breath": { "period_secs": 4.0, "amplitude": 0.6 },
+  "significance": "turn",
+  "source": { "kind": "heuristic_v0", "confidence": 0.5 }
+}
+```
+
+- `at`:epoch 毫秒(与全契约时间戳一致)。
+- `pad`:pleasure/arousal/dominance 三通道粗估值,各 ∈ [-1, 1];`dominant` 是从 PAD 推导的
+  离散标签(`engaged`/`serene`/`strained`/`subdued`/`neutral`),`intensity` ∈ [0, 1] 为整体强度。
+- `stance`:四姿态,线上值为小写下划线串,枚举复用 `ember_hud_driver.rs` 的 `EmberCognitiveStance`:
+  `deep_coding_focus` / `attentive_presence` / `dreaming_consolidation` / `empathetic_care`。
+  > v0 诚实边界:`empathetic_care` 在总线上没有诚实的触发信号,heuristic_v0 **永不产出**它;
+  > 它留在枚举里是为未来情感引擎预留的契约空间,不是谎报现役能力。
+- `breath`:呼吸节律参数,`period_secs` 固定 4.0(生理呼吸节律),`amplitude` ∈ [0, 1] 随强度变化。
+- `significance` 显影三档:`heartbeat`(只动余烬点)/ `turn`(动光环/姿态)/
+  `ritual`(仪式级,月频罕见,允许全屏金脉冲)。**显影必须稀缺才有效**;
+  v0 没有诚实的 ritual 触发器,**永不产出 `ritual`**。
+- `source.kind` 恒为 `heuristic_v0`,`confidence` 反映启发式的不确定度(当前固定 0.5):
+  v0 不承诺精度,只承诺语义方向真实;未来器官/情感引擎移植后换 `source.kind` 即可平滑升级,
+  契约形状不变。
+
+**生产时机(heuristic_v0)**:回合结束(轮次时长/工具调用数/审批频率 → PAD 粗估值;
+回合失败负向微调)、长时无交互(心跳拍上 PAD 向 baseline 衰减,30 分钟无交互 stance 落入
+`dreaming_consolidation`)、记忆召回命中(正向微调——仅当召回以**总线上可见的能力调用**
+形态发生时,即 capability id 含 `recall`/`memory` 的 dispatched 工具;canonical 装配里
+`MemoryRecallModule` 的 prompt-overlay 召回路径目前**不上** RuntimeEvent 总线,v0 观测不到它,
+此处不谎报)。
+
+**频率纪律**:回合级事件(回合结束一拍)+ 低频心跳(恰好每 60s 一拍),无高频推送。
+initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类型、不在本帧内;
+其"单用户日常 ≤ 少量次/天"的限量纪律由后端 presence 模块的预算器强制执行(默认 ≤3 次/天,
+高信号才开口,宁少勿多),v0 尚无 initiative 生产者,预算器先行落地防唠叨。
 
 ## §9 能力清单 `[P0]`
 
