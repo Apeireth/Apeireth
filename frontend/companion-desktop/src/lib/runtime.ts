@@ -1750,8 +1750,8 @@ export async function fetchBackendSessions(config: ApeirethConfig): Promise<Arra
 }
 
 /** 搜索记忆条目 */
-export async function fetchMemoryEpisodes(config: ApeirethConfig, query = '', limit = 100): Promise<MemoryEpisodeItem[]> {
-  const url = `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/episodes?limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}`;
+export async function fetchMemoryEpisodes(config: ApeirethConfig, query = '', limit = 100, session = ''): Promise<MemoryEpisodeItem[]> {
+  const url = `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/episodes?limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}${session ? `&session=${encodeURIComponent(session)}` : ''}`;
   const res = await fetch(url, {
     headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
   });
@@ -1781,8 +1781,15 @@ export async function fetchMemoryEpisodes(config: ApeirethConfig, query = '', li
   }));
 }
 
-/** 获取知识图谱节点和边 */
-export async function fetchGraphData(config: ApeirethConfig): Promise<{facts: MemoryEpisodeItem[]; links: MemoryEpisodeItem[]}> {
+/** 获取知识图谱节点和边（契约 §5：nodes{id,label,kind} + edges{from,to,weight,label?}）。
+ *  facts/links 是视图友好的 MemoryEpisodeItem 化投影；nodes/edges 保留原始结构，
+ *  供主从详情按 episode id 查真实关联（memory-ledger.episodeGraphLinks）。 */
+export async function fetchGraphData(config: ApeirethConfig): Promise<{
+  facts: MemoryEpisodeItem[];
+  links: MemoryEpisodeItem[];
+  nodes: Array<{id: string; label: string; kind: string}>;
+  edges: Array<{from: string; to: string; weight?: number; label?: string | null}>;
+}> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/graph`, {
     headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
   });
@@ -1791,6 +1798,17 @@ export async function fetchGraphData(config: ApeirethConfig): Promise<{facts: Me
     nodes?: Array<{id?: string; label?: string; kind?: string}>;
     edges?: Array<{from?: string; to?: string; weight?: number; label?: string | null}>;
   };
+  const nodes = (data.nodes || [])
+    .filter((n) => typeof n.id === 'string')
+    .map((n) => ({id: n.id as string, label: typeof n.label === 'string' ? n.label : '', kind: n.kind || ''}));
+  const edges = (data.edges || [])
+    .filter((e) => typeof e.from === 'string' && typeof e.to === 'string')
+    .map((e) => ({
+      from: e.from as string,
+      to: e.to as string,
+      weight: typeof e.weight === 'number' ? e.weight : undefined,
+      label: typeof e.label === 'string' ? e.label : null,
+    }));
   return {
     facts: (data.nodes || [])
       .filter((n) => n.kind === 'episode')
@@ -1810,6 +1828,8 @@ export async function fetchGraphData(config: ApeirethConfig): Promise<{facts: Me
       sessionId: 'graph',
       category: 'link',
     })),
+    nodes,
+    edges,
   };
 }
 
@@ -1968,26 +1988,28 @@ export async function grantToolPermission(
 }
 
 /** 写入记忆条目 */
+/**
+ * 写入一条记忆（契约 §5：POST /v1/memory/append {session, role, content}）。
+ * 0 装修正（⑥）：旧签名收 category/sessionId 并把 `[category]` 拼进正文——
+ * 后端 schema 不存 category（契约诚实边界），那是把假分类藏进文本，已拆除。
+ * session 恒定走面板专用 UUID 账本（下方），调用方不再传 'me' 之类的假标签。
+ */
 export async function appendMemoryEpisode(
   config: ApeirethConfig,
   content: string,
-  category: string = 'fact',
-  sessionId: string = 'me',
 ): Promise<boolean> {
   // The canonical gateway requires a UUID session. The panel keeps one stable
   // "panel memory" session so scattered writes stay discoverable.
   const MEMORY_SESSION_KEY = 'apeireth-panel-memory-session';
-  let target = sessionId && sessionId !== 'me' ? sessionId : '';
-  if (!target) {
-    try {
-      target = localStorage.getItem(MEMORY_SESSION_KEY) || '';
-      if (!target) {
-        target = crypto.randomUUID();
-        localStorage.setItem(MEMORY_SESSION_KEY, target);
-      }
-    } catch {
+  let target = '';
+  try {
+    target = localStorage.getItem(MEMORY_SESSION_KEY) || '';
+    if (!target) {
       target = crypto.randomUUID();
+      localStorage.setItem(MEMORY_SESSION_KEY, target);
     }
+  } catch {
+    target = crypto.randomUUID();
   }
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/memory/append`, {
     method: 'POST',
@@ -1998,7 +2020,7 @@ export async function appendMemoryEpisode(
     body: JSON.stringify({
       session: target,
       role: 'user',
-      content: `[${category}] ${content}`,
+      content,
     }),
   });
   return res.ok;
@@ -2233,20 +2255,23 @@ async function patchJson(config: ApeirethConfig, path: string, body: unknown): P
 }
 
 // --- Memory governance ---
+// error 分支带 status：409 = expected_rev 修订冲突（契约 §5），视图据此呈现
+// 真实冲突态并重新对齐账本，不静默重试（memory-ledger.classifyMemoryMutationError）。
+export type MemoryMutationResult = GovernedEpisodeItem | {error: string; status?: number};
 
-export async function forgetMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number, reason?: string): Promise<GovernedEpisodeItem | {error: string}> {
+export async function forgetMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number, reason?: string): Promise<MemoryMutationResult> {
   const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/forget`, {expected_rev: expectedRev, reason});
-  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'forget failed'};
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'forget failed', status: r.status};
 }
 
-export async function protectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<GovernedEpisodeItem | {error: string}> {
+export async function protectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<MemoryMutationResult> {
   const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/protect`, {expected_rev: expectedRev});
-  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'protect failed'};
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'protect failed', status: r.status};
 }
 
-export async function unprotectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<GovernedEpisodeItem | {error: string}> {
+export async function unprotectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<MemoryMutationResult> {
   const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/unprotect`, {expected_rev: expectedRev});
-  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'unprotect failed'};
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'unprotect failed', status: r.status};
 }
 
 // --- Permission grants (list + revoke) ---

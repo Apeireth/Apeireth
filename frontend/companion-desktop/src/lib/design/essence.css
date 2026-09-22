@@ -258,14 +258,15 @@ html[data-theme='essence'] .scroll-bottom-btn {
   color: var(--ap-bone);
 }
 
-/* 抽屉内嵌入视图：去掉深色页边距感，与抽屉头对齐 */
+/* 抽屉内嵌入视图：去掉深色页边距感，与抽屉头对齐。
+   ⑥ 注：.memory-view 已自此列表移除——记忆卷宗落地 Archive 纸面调（§5.6②），
+   调性由页面职能决定（纸面恒纸面），不再随 essence 主题透明化。 */
 html[data-theme='essence'] .drawer-body.embed {
   background: transparent;
 }
 
 html[data-theme='essence'] .drawer-body.embed .sessions-view,
 html[data-theme='essence'] .drawer-body.embed .settings-view,
-html[data-theme='essence'] .drawer-body.embed .memory-view,
 html[data-theme='essence'] .drawer-body.embed .tools-view,
 html[data-theme='essence'] .drawer-body.embed .activity-view {
   background: transparent;
