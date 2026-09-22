@@ -59,7 +59,7 @@
   import MemoryView from './lib/MemoryView.svelte';
   import SettingsView from './lib/views/SettingsView.svelte';
   import Workbench from './lib/components/Workbench.svelte';
-  import {applyDocumentTheme, isStaticBgTheme, resolveTheme, themeLabel} from './lib/theme';
+  import {applyDocumentAccent, applyDocumentTheme, isStaticBgTheme, resolveAccent, resolveTheme, themeLabel} from './lib/theme';
   import {getCustomBg} from './lib/bg-store';
   import type {Theme} from './lib/types';
 
@@ -1675,6 +1675,7 @@
 
   onMount(() => {
     applyDocumentTheme(activeTheme);
+    applyDocumentAccent(resolveAccent(config.accent));
     // 自定义背景（§8 增补④）：开关开着就从 IndexedDB 取图；取不到 = 诚实回落关开关
     if (config.customBg) void syncCustomBg(true);
     // T0 壳（§3.1）：不再自动进入最近会话 —— 第一屏 = 会话列表（谁找我了）。
@@ -1966,6 +1967,7 @@
               const nextTheme = resolveTheme(newCfg.theme, themeQuery);
               activeTheme = nextTheme;
               applyDocumentTheme(nextTheme);
+              applyDocumentAccent(resolveAccent(newCfg.accent));
               // 自定义背景开关变化（§8 增补④）：从 IndexedDB 取图或回落
               if (customBgToggled) void syncCustomBg(newCfg.customBg === true);
               // Provider changes must reach the sidecar environment; the

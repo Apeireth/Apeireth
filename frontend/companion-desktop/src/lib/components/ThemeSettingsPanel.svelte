@@ -1,8 +1,15 @@
 <script lang="ts">
   import {onMount} from 'svelte';
   import {Check, Upload, ImageOff} from 'lucide-svelte';
-  import type {ApeirethConfig, Theme} from '../types';
-  import {THEME_CATALOG, applyDocumentTheme, resolveTheme} from '../theme';
+  import type {Accent, ApeirethConfig, Theme} from '../types';
+  import {
+    ACCENT_CATALOG,
+    THEME_CATALOG,
+    applyDocumentAccent,
+    applyDocumentTheme,
+    resolveAccent,
+    resolveTheme,
+  } from '../theme';
   import {clearCustomBg, getCustomBg, putCustomBg, validateCustomBgFile} from '../bg-store';
 
   let {
@@ -19,6 +26,15 @@
     if (theme === active) return;
     applyDocumentTheme(theme);
     onSave({...config, theme});
+  }
+
+  /* ---------- UI 配色（规范 §8 增补⑤）：只染 UI chrome，可选方案无金色系 ---------- */
+  const activeAccent = $derived(resolveAccent(config.accent));
+
+  function pickAccent(accent: Accent): void {
+    if (accent === activeAccent) return;
+    applyDocumentAccent(accent);
+    onSave({...config, accent});
   }
 
   /* ---------- 自定义背景（规范 §8 增补④）----------
@@ -154,6 +170,42 @@
       onchange={handleFile}
     />
   </div>
+
+  <div class="accent-section">
+    <h3 class="bg-title">UI 配色</h3>
+    <p class="bg-lede">
+      配色只染界面高亮（导航激活、开关这类 UI 元素）。金色是他的存在色——可选方案里没有金色系。
+    </p>
+    <div class="accent-grid" role="listbox" aria-label="UI 配色方案">
+      {#each ACCENT_CATALOG as item (item.id)}
+        <button
+          class="accent-card"
+          class:selected={activeAccent === item.id}
+          role="option"
+          aria-selected={activeAccent === item.id}
+          onclick={() => pickAccent(item.id)}
+        >
+          <!-- 真渲染预览：内联覆写 accent 变量，样品是真实 CSS 级联产物，不是示意图 -->
+          <span
+            class="accent-sample"
+            style:--ap-accent-ui={item.accent}
+            style:--ap-accent-ui-ink={item.ink}
+            aria-hidden="true"
+          >
+            <span class="sample-tab">导航</span>
+            <span class="sample-pill">开关</span>
+          </span>
+          <span class="accent-meta">
+            <span class="accent-name">{item.label}</span>
+            <span class="accent-desc">{item.desc}</span>
+          </span>
+          {#if activeAccent === item.id}
+            <span class="accent-check" aria-hidden="true"><Check size={12} /></span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  </div>
 </div>
 
 <style>
@@ -194,8 +246,8 @@
     transform: translateY(-1px);
   }
   .theme-card.selected {
-    border-color: var(--amber);
-    box-shadow: 0 0 0 1px var(--amber-line), 0 8px 28px -8px rgba(0, 0, 0, 0.2);
+    border-color: var(--ap-accent-ui);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ap-accent-ui) 45%, transparent), 0 8px 28px -8px rgba(0, 0, 0, 0.2);
   }
   .theme-swatch {
     height: 72px;
@@ -213,7 +265,7 @@
     color: var(--text);
   }
   .theme-card.selected .theme-name {
-    color: var(--amber);
+    color: var(--ap-accent-ui);
   }
   .theme-desc {
     font-size: 11px;
@@ -229,8 +281,8 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    background: var(--amber);
-    color: #1b1409;
+    background: var(--ap-accent-ui);
+    color: var(--ap-accent-ui-ink);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
@@ -287,5 +339,88 @@
   }
   .bg-file {
     display: none;
+  }
+
+  /* ---------- UI 配色（规范 §8 增补⑤） ---------- */
+  .accent-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+  }
+  .accent-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .accent-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--surface-2);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .accent-card:hover {
+    border-color: color-mix(in srgb, var(--ap-accent-ui) 45%, transparent);
+  }
+  .accent-card.selected {
+    border-color: var(--ap-accent-ui);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ap-accent-ui) 40%, transparent);
+  }
+  .accent-sample {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+  }
+  .sample-tab {
+    padding: 4px 12px;
+    border-left: 2px solid var(--ap-accent-ui);
+    border-radius: 0 6px 6px 0;
+    background: color-mix(in srgb, var(--ap-accent-ui) 12%, transparent);
+    color: var(--ap-accent-ui);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+  .sample-pill {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--ap-accent-ui);
+    color: var(--ap-accent-ui-ink);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+  .accent-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .accent-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .accent-desc {
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .accent-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--ap-accent-ui);
+    color: var(--ap-accent-ui-ink);
   }
 </style>

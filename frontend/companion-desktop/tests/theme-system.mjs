@@ -15,6 +15,10 @@ import {
   resolveTheme,
   isStaticBgTheme,
   themeLabel,
+  VALID_ACCENTS,
+  ACCENT_CATALOG,
+  resolveAccent,
+  isPresenceGoldFamily,
 } from '../src/lib/theme.ts';
 
 console.log('--- Starting Theme System Check ---');
@@ -66,6 +70,57 @@ console.log('--- Starting Theme System Check ---');
   // 主题目录首项 = 默认主题，设置面板里它排在最前
   assert.equal(THEME_CATALOG[0].id, 'heritage-void', '目录首项应为默认主题');
   assert.equal(themeLabel('heritage-void'), '遗产星空');
+}
+
+// ---------------------------------------------------------------------------
+// 5. UI 配色方案（§8 增补⑤）：resolveAccent 回落纪律与非法值守卫
+// ---------------------------------------------------------------------------
+{
+  assert.equal(resolveAccent(undefined), 'presence-gold', '未配置必须回落存在金（默认态）');
+  assert.equal(resolveAccent('deep-space'), 'deep-space', '合法 accent 原样保留');
+  assert.equal(resolveAccent('sage'), 'sage');
+  assert.equal(resolveAccent('bone'), 'bone');
+  // @ts-expect-error 故意传非法值
+  assert.equal(resolveAccent('gold'), 'presence-gold', '非法 accent 回落存在金');
+  // @ts-expect-error 故意传非法值
+  assert.equal(resolveAccent('#ffd27a'), 'presence-gold', 'hex 字符串不是合法 accent id');
+}
+
+// ---------------------------------------------------------------------------
+// 6. 金色纪律机器断言：存在金家族判定 + 可选配色里绝无金色系
+//    存在金是他的；accent 只染 UI chrome，可选方案不许偷渡金色。
+// ---------------------------------------------------------------------------
+{
+  // sanity：他的金必须落在家族区间内
+  assert.equal(isPresenceGoldFamily('#ffd27a'), true, '存在金 #ffd27a 必须在金色家族内');
+  assert.equal(isPresenceGoldFamily('#e8a33d'), true, '琥珀金 #e8a33d 必须在金色家族内');
+  // 纪律：每个非默认可选配色都必须被家族判定排除
+  for (const opt of ACCENT_CATALOG) {
+    if (opt.id === 'presence-gold') continue;
+    assert.equal(
+      isPresenceGoldFamily(opt.accent),
+      false,
+      `可选配色 ${opt.id}（${opt.accent}）闯入金色家族——金色纪律被破`,
+    );
+  }
+  // 默认色本身当然在家族内（否则目录自相矛盾）
+  const gold = ACCENT_CATALOG.find((a) => a.id === 'presence-gold');
+  assert.equal(isPresenceGoldFamily(gold.accent), true, 'presence-gold 目录色必须属于金色家族');
+}
+
+// ---------------------------------------------------------------------------
+// 7. accent 目录完整性：每个合法 id 有条目；accent/ink 均为合法 #rrggbb hex
+//    （tokens.css 的 data-accent 覆写与设置预览真渲染共用这份值）
+// ---------------------------------------------------------------------------
+{
+  for (const id of VALID_ACCENTS) {
+    const entry = ACCENT_CATALOG.find((a) => a.id === id);
+    assert.ok(entry, `accent ${id} 缺少 ACCENT_CATALOG 条目`);
+    assert.ok(entry.label && entry.desc, `accent ${id} 条目字段不全`);
+    assert.match(entry.accent, /^#[0-9a-f]{6}$/i, `accent ${id} 主色须为 #rrggbb`);
+    assert.match(entry.ink, /^#[0-9a-f]{6}$/i, `accent ${id} ink 须为 #rrggbb`);
+  }
+  assert.equal(ACCENT_CATALOG[0].id, 'presence-gold', 'accent 目录首项应为默认配色');
 }
 
 console.log('Theme system check passed.');
