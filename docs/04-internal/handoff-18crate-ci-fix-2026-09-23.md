@@ -226,3 +226,32 @@ cargo audit --json --deny warnings --ignore RUSTSEC-2024-0411 ... > $env:TEMP\au
 ---
 
 _本文由本会话主代理撰写，事实均有命令支撑；不确定处已显式标注。审核发现问题请直接在本文追加"审核注"（不要改我的原文），以便形成可追溯的修正链。_
+
+---
+
+## 8. 复核记录（2026-10-06 复核批；续接会话执行，模型已切 MiMo）
+
+> 按文首约定以"审核注"形式追加，§1-§7 原文未改。全部结论 = 命令重跑实测。
+
+| # | Claim | 判定 | 实测 |
+|---|---|---|---|
+| 1 | 18 members | ✅ 证实 | `"crates/` = 18；`version = "2.0.0-rc.1"` |
+| 2 | 18-crate 对账覆盖所有活跃文档 | ⚠️ 部分正确 | 实质成立（活跃结构文档均 18；README/SECURITY 的"18-Crate"命中为本批新文的正则误报）。两处未尽：① `user-manual.md:3` 头部仍写"13-crate 工作区"（我的对账注在 :14，按"正文不改"未动，两行口径不一致）；② "有意未改"枚举不完整（CHANGELOG / `*.backup-v2.md` / `commit-msg-*.md` / `sota-benchmarks-absorption-report.md` 等历史证据未逐个列出，结论不变） |
+| 3 | `5b0a3062` 无 .rs 改动 | ✅ 证实 | 27 文件 / `.rs` 0（唯一非 md/toml/yml = `Makefile` 帮助文案） |
+| 4 | `03e5087c` 只改 2 文件 | ✅ 证实 | 恰好 workflow + Cargo.lock |
+| 5 | rustls 漏洞已解 | ✅ 证实 | `cargo audit --no-fetch` 0 漏洞（仅 `chacha20@0.10.1` yanked 警告）；`cargo deny --offline check advisories` → `advisories ok` |
+| 6 | 新 rustls 可编译 | ✅ 证实 | `cargo check -p apeireth-provider --locked` exit 0（0.87s） |
+| 7 | SARIF `bool` 缺陷 | ✅ 证实 | 合成报告复现：`found` 迭代 → `TypeError: 'bool' object is not iterable`（exit 1）；`list` 迭代 → findings=1（exit 0） |
+| 8 | CI 两 job 已绿 | ✅ 证实 | `afd5a7e2`（本交接提交）与 `ae116210` 上 Cargo audit / Cargo deny 4 run 全 `success` |
+| 9 | Dependabot 5 条 | ✅ 证实 | API 实取不变（jsonwebtoken / git2 / lru / glib / devalue；rustls 仍不在其中） |
+| 10 | 没碰前端与 research | ✅ 证实 | 提交清单与工作区 tracked 改动（仍只 `research/` 两处，非本会话） |
+| 11 | src-tauri 未被本会话改动 | ✅ 证实 | 其 `Cargo.lock` 最后改动 `d610bb2a`（前端提交） |
+
+**基线复核（本批亲跑）**：`cargo test --workspace` → **129 suites / 3406 passed / 0 failed / 19 ignored，exit 0**，与并行交接包 §3.1 记录逐字一致。
+
+**并行交接包 §2 矩阵**（详见 `engineering-review-handoff-2026-10-06.md` §2.7）：17 项中 14 ✅、2 ⚠️（C4 侧枚举漏 `APEIRETH_REASONING_ENABLED/MODEL_FILTERS/TAG`；D1 "0 命中"差 1 条 VCP 注释）、1 项子结论 ❌（B1 "真宏调用 7 处"实为 **0 处真调用**：8 处文本命中全是文档注释——workspace 比原表述更干净）。
+
+**§4 待办推进**：
+- §4.4 ✅ 本批完成：`deny.toml` 10 条 / `audit.toml` 20 条 / `cargo-audit.yml` 21 条过期 ignore 全部 unmatched（实证：不带 ignore 全量审计 0 unmaintained 命中 + deny 报 advisory-not-detected），按 0-ignore austere 模式清空，三处同步为空；"收敛单一来源"的重构仍留待后续。
+- §4.5 ✅ 本批完成：当前态测试数 3120 → 实测 **3406**（README / README.zh-CN / INSTALL / maintenance-guide / SECURITY / ROADMAP 表与注）；带日期的真账行（ENGINEER-MANIFESTO、TO-NEW-TEAM、ROADMAP 历史注）按约定保留原值。
+- §4.1 / §4.2（前端施工区）、§4.3（legacy 警报处置）**未动**，仍待主人拍板。

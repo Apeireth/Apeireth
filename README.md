@@ -385,7 +385,7 @@ The canonical gateway exposes HTTP/SSE endpoints alongside an 8-frame full-duple
 git clone https://github.com/Apeireth/Apeireth.git
 cd Apeireth
 
-# Run all 3120 unit and integration tests across the 18 crates
+# Run all 3406 unit and integration tests across the 18 crates (measured 2026-10-06)
 cargo test --workspace
 
 # Verify pure Safe Rust and zero clippy warnings
