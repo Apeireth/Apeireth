@@ -428,6 +428,90 @@ mod subagent_parse_tests {
     }
 }
 
+/// `apeireth nightwatch [--session <id>] [--limit N]` 解析 (守夜人 = 显式命令即授权)。
+fn parse_nightwatch(args: &[String]) -> Result<(Option<String>, usize), String> {
+    let mut session = None;
+    let mut limit = 50;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--session" => {
+                index += 1;
+                session = Some(
+                    args.get(index)
+                        .ok_or("nightwatch --session requires a value")?
+                        .clone(),
+                );
+            }
+            "--limit" => {
+                index += 1;
+                let raw = args
+                    .get(index)
+                    .ok_or("nightwatch --limit requires a value")?;
+                limit = raw
+                    .parse::<usize>()
+                    .map_err(|_| "nightwatch --limit must be a positive integer".to_string())?;
+                if limit == 0 {
+                    return Err("nightwatch --limit must be >= 1".to_string());
+                }
+            }
+            other => return Err(format!("nightwatch: unknown argument {other}")),
+        }
+        index += 1;
+    }
+    Ok((session, limit))
+}
+
+fn run_nightwatch(session: Option<String>, limit: usize) -> ExitCode {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("runtime init failed: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(apeireth_cli::dispatch_nightwatch(session, limit)) {
+        Ok(output) => {
+            println!("{output}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod nightwatch_parse_tests {
+    use super::*;
+
+    fn s(items: &[&str]) -> Vec<String> {
+        items.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn nightwatch_defaults_are_sessionless_structural_audit() {
+        // 缺省 = 无会话素材 + 50 条上限 (episodes 空 → 干净报告 + 具名缺口)。
+        assert_eq!(parse_nightwatch(&[]).unwrap(), (None, 50));
+    }
+
+    #[test]
+    fn nightwatch_parses_session_and_limit() {
+        assert_eq!(
+            parse_nightwatch(&s(&["--session", "abc", "--limit", "5"])).unwrap(),
+            (Some("abc".to_string()), 5)
+        );
+    }
+
+    #[test]
+    fn nightwatch_rejects_bad_args() {
+        assert!(parse_nightwatch(&s(&["--nope"])).is_err());
+        assert!(parse_nightwatch(&s(&["--limit", "0"])).is_err());
+        assert!(parse_nightwatch(&s(&["--limit", "x"])).is_err());
+    }
+}
+
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() {
@@ -472,6 +556,14 @@ fn main() -> ExitCode {
         },
         "subagent" => match parse_subagent(&args[1..]) {
             Ok((title, payload)) => run_subagent(title, payload),
+            Err(error) => {
+                eprintln!("{error}");
+                print_help();
+                ExitCode::FAILURE
+            }
+        },
+        "nightwatch" => match parse_nightwatch(&args[1..]) {
+            Ok((session, limit)) => run_nightwatch(session, limit),
             Err(error) => {
                 eprintln!("{error}");
                 print_help();
