@@ -347,6 +347,87 @@ mod council_parse_tests {
     }
 }
 
+/// `apeireth subagent "<标题>" [--payload <JSON>]` 解析 (长程任务 = 显式命令授权)。
+fn parse_subagent(args: &[String]) -> Result<(String, Option<String>), String> {
+    let mut title_words: Vec<String> = Vec::new();
+    let mut payload: Option<String> = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--payload" => {
+                index += 1;
+                payload = Some(
+                    args.get(index)
+                        .ok_or("subagent --payload requires a JSON value")?
+                        .clone(),
+                );
+            }
+            other if other.starts_with("--") => {
+                return Err(format!("subagent: unknown argument {other}"));
+            }
+            other => title_words.push(other.to_string()),
+        }
+        index += 1;
+    }
+    let title = title_words.join(" ").trim().to_string();
+    if title.is_empty() {
+        return Err("subagent requires a non-empty title".to_string());
+    }
+    Ok((title, payload))
+}
+
+fn run_subagent(title: String, payload: Option<String>) -> ExitCode {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("runtime init failed: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(apeireth_cli::dispatch_subagent(title, payload)) {
+        Ok(output) => {
+            println!("{output}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod subagent_parse_tests {
+    use super::*;
+
+    fn s(items: &[&str]) -> Vec<String> {
+        items.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn subagent_title_joins_words() {
+        assert_eq!(
+            parse_subagent(&s(&["给", "记忆", "做", "体检"])).unwrap(),
+            ("给 记忆 做 体检".to_string(), None)
+        );
+    }
+
+    #[test]
+    fn subagent_payload_flag_takes_json() {
+        let (title, payload) = parse_subagent(&s(&["升级", "--payload", "{\"x\":1}"])).unwrap();
+        assert_eq!(title, "升级");
+        assert_eq!(payload.as_deref(), Some("{\"x\":1}"));
+    }
+
+    #[test]
+    fn subagent_rejects_empty_and_unknown_flags() {
+        assert!(parse_subagent(&[]).is_err());
+        assert!(parse_subagent(&["   ".to_string()]).is_err());
+        assert!(parse_subagent(&s(&["--nope"])).is_err());
+        assert!(parse_subagent(&s(&["t", "--payload"])).is_err());
+    }
+}
+
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() {
@@ -383,6 +464,14 @@ fn main() -> ExitCode {
         },
         "council" => match parse_council_topic(&args[1..]) {
             Ok(topic) => run_council(topic),
+            Err(error) => {
+                eprintln!("{error}");
+                print_help();
+                ExitCode::FAILURE
+            }
+        },
+        "subagent" => match parse_subagent(&args[1..]) {
+            Ok((title, payload)) => run_subagent(title, payload),
             Err(error) => {
                 eprintln!("{error}");
                 print_help();
