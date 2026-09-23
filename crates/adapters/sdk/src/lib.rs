@@ -6,8 +6,9 @@
 //!
 //! 本 crate 是 Apeireth AGI 操作系统的 **多语言 SDK 统一入口**:
 //! - 跨语言 (Python/Node/Go/Rust) 客户能拿到一致的 WireFormat / 版本协商 / 错误码
-//! - R20 阶段 6 增 `ApeirethClient` 客户 SDK 表面 (1.0 release #13 sdk)
-//! - 6 工具 method + 8 帧 WS + 5 auth 组件 + K-1 强校验 4 条
+//! - R20 阶段 6 增 `ApeirethClient` 客户 SDK 表面 (1.0 release #13 sdk;
+//!   W5 2026-10-10 HTTP 真传输已接, WS 仍 stub)
+//! - 6 工具 method (HTTP 真传输) + WS 8 帧 (stub 守门) + 5 auth 组件 + K-1 强校验 4 条
 //!
 //! 任何破坏跨语言一致性的"优化"都违反 S-1 (北: 统一表面).
 //!
@@ -23,7 +24,10 @@
 //! - 复用 `apeireth-protocol::ws_v1` 5 集成点 (WsFrame / ToolInvokeFrame / 3 个 WS 编译期常量)
 //! - 复用 workspace 共享 deps (reqwest 0.12 / tokio 1.40 / serde 1.0 / thiserror 1.0)
 //! - 1:1 翻译 `apeireth-api::auth` 5 组件 (Bearer / keyring / token bucket / audit / quota)
-//! - 1:1 翻译 `apeireth-api::ws_v1` 8 帧 (阶段 6 stub, R21 真接)
+//! - 1:1 翻译 `apeireth-api::auth` 5 组件 (Bearer / keyring / token bucket / audit / quota)
+//! - **W5 真传输 (2026-10-10)**: 6 工具 method + `invoke_tool` = 真 HTTP
+//!   (reqwest → `/v1/tools/{tool}/invoke`); WS 8 帧 (`invoke_stream`) 仍 stub
+//!   (`STUB_MODE` 守门, WS 服务端端点 = 后续项)
 //!
 //! 不写自己的 wire format parser / version compare / token bucket 状态机.
 //!

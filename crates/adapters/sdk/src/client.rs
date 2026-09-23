@@ -362,6 +362,15 @@ impl Default for TokenBucket {
     }
 }
 
+/// 工具调用请求体 (纯函数, wiremock 测试锚点): tool + action + args。
+fn tool_invoke_body(tool: &str, action: &str, args: &Value) -> Value {
+    serde_json::json!({
+        "tool": tool,
+        "action": action,
+        "args": args,
+    })
+}
+
 /// **Auth 组件 4: 审计日志** (per 蓝图 §2.4 组件 4, 1:1 翻译 `apeireth-api::auth::AuditLogger`).
 ///
 /// 阶段 6 stub 走 in-memory Vec 累积, 真写 `~/.apeireth/audit.log` 留 R21.
@@ -522,10 +531,11 @@ impl AuthPipeline {
 
 /// **Apeireth 平台 SDK 客户 client** (1:1 翻译 v0.9.21 client 表面).
 ///
-/// 阶段 6 stub 守门:
-/// - 6 工具 client method 签名就位
-/// - `invoke_tool` / `invoke_stream` 通用 method 签名就位
-/// - 真 HTTP/WS 调 `apeireth-api` 走 `unimplemented!()` (R21 真接)
+/// W5 真传输守门 (2026-10-10):
+/// - 6 工具 client method + `invoke_tool`: **HTTP 真传输** (reqwest → 平台 API
+///   契约 `/v1/tools/{tool}/invoke`, Bearer + JSON + 有界超时 + audit);
+/// - `invoke_stream` (WS 8 帧): 仍 stub (`STUB_MODE` 守门) —— WS 服务端端点
+///   接线 = 后续项 (R21 HTTP 半场已落地)。
 #[derive(Debug, Clone)]
 pub struct ApeirethClient {
     /// base URL (e.g. `https://api.apeireth.io`).
@@ -690,7 +700,11 @@ impl ApeirethClient {
 
     /// **通用 invoke (HTTP)** — 任意 TOOL_WHITELIST 工具的 HTTP 调用.
     ///
-    /// **阶段 6 stub**: 走 `unimplemented!()` 守门, 编译期显式不假装.
+    /// **R21 真传输 (2026-10-10, W5)**: 真 HTTP POST 到平台 API 契约端点
+    /// (`tool_url(tool)` = `{base}/v1/tools/{tool}/invoke`), Bearer 鉴权 +
+    /// JSON 体 + 有界超时 + audit 留痕。错误面 1:1 映射 (401/403 → AuthFailed,
+    /// 429 → RateLimited, 5xx → ServerInternal, 传输 → Network)。
+    /// WS 侧 (`invoke_stream`) 仍 stub (WS 服务端端点 = 后续项)。
     pub async fn invoke_tool(
         &self,
         tool: &str,
@@ -701,11 +715,58 @@ impl ApeirethClient {
         validate_tool_call(tool, &args)?;
         // Auth 5 组件 preflight.
         self.auth.preflight(tool, action)?;
-        // 阶段 6 stub: 显式 unimplemented, 不假装支持.
-        let _ = (tool, action, args);
-        Err(SdkClientError::NotImplemented(format!(
-            "invoke_tool({tool}, {action}) — R21 真接 apeireth-api"
-        )))
+
+        // 真传输 (W5): POST 平台 API 契约端点.
+        let url = self.tool_url(tool).ok_or_else(|| {
+            SdkClientError::ToolNotWhitelisted(format!("unknown tool path: {tool}"))
+        })?;
+        let started = std::time::Instant::now();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(
+                self.config.http_timeout_secs,
+            ))
+            .user_agent(self.config.user_agent.clone())
+            .build()
+            .map_err(|error| SdkClientError::Network(format!("client build failed: {error}")))?;
+        let response = client
+            .post(&url)
+            .bearer_auth(&self.auth.api_key)
+            .json(&tool_invoke_body(tool, action, &args))
+            .send()
+            .await
+            .map_err(|error| SdkClientError::Network(format!("POST {url} failed: {error}")))?;
+
+        let status = response.status();
+        let outcome = match status.as_u16() {
+            200..=299 => {
+                let value: Value = response.json().await.map_err(|error| {
+                    SdkClientError::Other(format!("response parse failed: {error}"))
+                })?;
+                Ok(value)
+            }
+            401 | 403 => Err(SdkClientError::AuthFailed(format!("{url} -> {status}"))),
+            429 => Err(SdkClientError::RateLimited(60)),
+            500..=599 => Err(SdkClientError::ServerInternal(format!("{url} -> {status}"))),
+            other => Err(SdkClientError::Other(format!("{url} -> {other}"))),
+        };
+
+        // Auth 组件 4: audit 留痕 (in-memory; 落盘 `~/.apeireth/audit.log` 留后续).
+        if self.config.audit_enabled {
+            let api_key_hash: String = self.auth.api_key.chars().take(16).collect();
+            self.auth.audit.append(AuditEntry {
+                ts_ms: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or_default(),
+                api_key_hash,
+                tool: tool.to_string(),
+                action: action.to_string(),
+                ok: outcome.is_ok(),
+                duration_ms: started.elapsed().as_millis() as u64,
+                trace_id: next_trace_id_string(),
+            });
+        }
+        outcome
     }
 
     /// **通用 invoke (WS stream)** — 任意 TOOL_WHITELIST 工具的 WS 8 帧调用.
@@ -748,7 +809,7 @@ impl ApeirethClient {
         PLATFORM_NAME
     }
 
-    /// 查 STUB_MODE (R21 真接前必返 `true`).
+    /// 查 STUB_MODE (WS 传输层守门; HTTP 已真接 R21, 2026-10-10).
     pub fn is_stub(&self) -> bool {
         STUB_MODE
     }
@@ -1131,21 +1192,77 @@ mod client_tests {
         assert_eq!(c.ws_url(), "wss://api.apeireth.io/v1/stream");
     }
 
-    /// **ApeirethClient invoke_tool stub**: 阶段 6 返 unimplemented.
+    /// **ApeirethClient invoke_tool 真传输** (W5, 2026-10-10): wiremock 200 →
+    /// Ok(parsed) + Bearer 头 + audit 留痕 (R21 真接, 阶段 6 stub 退役)。
     #[tokio::test]
-    async fn client_invoke_tool_returns_unimplemented_in_stub() {
-        let c =
-            ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
-        let err = c
-            .invoke_tool("web_search", "search", serde_json::json!({}))
+    async fn client_invoke_tool_transports_over_http() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/tools/web_search/invoke"))
+            .and(header("authorization", "Bearer a-valid-api-key-1234567890"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "results": [{"title": "rust", "url": "https://rust-lang.org", "snippet": "lang"}],
+                "total": 1
+            })))
+            .mount(&server)
             .await;
-        match err {
-            Err(SdkClientError::NotImplemented(msg)) => {
-                assert!(msg.contains("invoke_tool"));
-                assert!(msg.contains("R21"));
-            }
-            other => panic!("expected NotImplemented, got {other:?}"),
-        }
+
+        let c = ApeirethClient::new(&server.uri(), "a-valid-api-key-1234567890").unwrap();
+        let value = c
+            .invoke_tool("web_search", "search", serde_json::json!({"query": "rust"}))
+            .await
+            .expect("invoke ok");
+        assert_eq!(value["total"], 1);
+        assert_eq!(value["results"][0]["title"], "rust");
+        // Auth 组件 4: audit 留痕 (preflight 尝试 1 条 + 调用后结果 1 条 = 配对语义).
+        assert_eq!(c.auth.audit.len(), 2, "preflight + 结果各一条");
+    }
+
+    /// **错误面 1:1**: 401 → AuthFailed; 500 → ServerInternal; 429 → RateLimited。
+    #[tokio::test]
+    async fn client_invoke_tool_maps_http_errors() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/tools/web_search/invoke"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/tools/web_search/invoke"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/tools/web_search/invoke"))
+            .respond_with(ResponseTemplate::new(429).set_body_string("slow down"))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+
+        let c = ApeirethClient::new(&server.uri(), "a-valid-api-key-1234567890").unwrap();
+        assert!(matches!(
+            c.invoke_tool("web_search", "search", serde_json::json!({}))
+                .await,
+            Err(SdkClientError::AuthFailed(_))
+        ));
+        assert!(matches!(
+            c.invoke_tool("web_search", "search", serde_json::json!({}))
+                .await,
+            Err(SdkClientError::ServerInternal(_))
+        ));
+        assert!(matches!(
+            c.invoke_tool("web_search", "search", serde_json::json!({}))
+                .await,
+            Err(SdkClientError::RateLimited(_))
+        ));
     }
 
     /// **ApeirethClient invoke_stream stub**: 阶段 6 返 unimplemented.

@@ -98,20 +98,36 @@ fn k1_must_do_five_keywords() {
 }
 
 // =====================================================================
-// Fixture 5: K-1 #5 — STUB_MODE 守门
+// Fixture 5: K-1 #5 — STUB_MODE 守门 (W5 翻面, 2026-10-10)
+// HTTP 传输已真接 (R21); STUB_MODE 退守 WS 层 (invoke_stream 仍 NotImplemented
+// —— WS 服务端端点 = 后续项)。
 // =====================================================================
 
-#[test]
-fn k1_stub_mode_is_true() {
-    let _ = STUB_MODE;
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
-    rt.block_on(async {
-        assert!(matches!(
-            c.web_search("x").await,
-            Err(SdkClientError::NotImplemented(_))
-        ));
-    });
+#[tokio::test]
+async fn k1_http_transport_is_real_and_ws_remains_stub() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/tools/web_search/invoke"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "results": [],
+            "total": 0
+        })))
+        .mount(&server)
+        .await;
+
+    let c = ApeirethClient::new(&server.uri(), "a-valid-api-key-1234567890").unwrap();
+    // ① HTTP 真传输: web_search 走通 (不再 NotImplemented).
+    let result = c.web_search("x").await.expect("http transport is real");
+    assert_eq!(result.total, 0);
+    // ② WS 层仍 stub (STUB_MODE 守门边界).
+    assert!(matches!(
+        c.invoke_stream("file_ops", "read", serde_json::json!({}))
+            .await,
+        Err(SdkClientError::NotImplemented(_))
+    ));
 }
 
 // =====================================================================

@@ -335,7 +335,7 @@ perception 不做 per-turn module
 | thought_cluster | ✅ **已移植** —— v2 `cluster_store.rs` = v1 `thought_cluster` 完整改名移植 (四审表 #5, 从缺口清单移出) |
 | onering (OneRingLedger) | 🔴 → ✅ **[2026-10-10 五审纠错]** 账本本体**早已在 v2**: `memory/src/context_ledger.rs` (`ContextLedger`, 头注明写 "salvage of the companion ledger") = v1 OneRingLedger 完整打捞 (API 同构 + `DEFAULT_MAX_RECORDS=200` + 单调 seq + 计数 prune + 迁移 rekey); 原"仅元数据透传"观测遗漏了该模块。本次补**生产消费** (cli 回合记账, `APEIRETH_ENABLE_ONERING_LEDGER=1` 默认关, 台账 #58) |
 | 真文件/网络隔离 | 🔴 实测 `EnforcementLevel::Unsupported` (`process/linux.rs:62-67`), 仅进程树遏制 |
-| SDK 真实 HTTP/WS | 🔴 自标"阶段 6 stub, R21 真接"（**[复核修正]**: 原写"7 处 `unimplemented!()`"系本审计的计数错误——那 7 处是**文档注释里的宏名提及**, 全仓库真宏调用 = **0**; SDK 0 装守门实为编译期 `STUB_MODE=true` 断言 + `SdkError::NotImplemented` 枚举返回。见交接包 §2.7 B1 判定 + 台账 #42） |
+| SDK 真实 HTTP/WS | 🔴 → 🟡 **[2026-10-10 W5]** HTTP 真传输已接: `apeireth-sdk` 6 工具 method + `invoke_tool` = 真 reqwest POST 平台 API 契约 (`/v1/tools/{tool}/invoke`, Bearer+JSON+有界超时+audit, 错误面 1:1), wiremock 61 测全绿; **WS (`invoke_stream`) 仍 stub** (`STUB_MODE` 守门, WS 服务端端点 = 后续项)。0 装纪律保持: STUB_MODE=true 只守 WS 层, 不假装 WS 可用 |
 | 三洋葱 L3-L5 | 🔴 未实现 (runtime 仅 L1-L2) |
 
 ### 7.3 对结论的修正
