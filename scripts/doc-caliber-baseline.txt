@@ -1,0 +1,16 @@
+# 文档四级口径存量欠账基线 (check_doc_caliber.py --update-baseline 生成)
+# 格式: rel:line。命中基线的违规不红, 新增违规才红 (ratchet: 基线只减不增)。
+ROADMAP.md:31
+ROADMAP.md:119
+docs/01-architecture/v2-architecture-reflection.md:274
+docs/01-architecture/v2-line-by-line-verification-and-upgrade-blueprint.md:3
+docs/02-guides/v2-gateway-frontend-integration-spec.md:21
+docs/04-internal/HANDOFF-NOTES.md:7
+docs/04-internal/HANDOFF-NOTES.md:161
+docs/04-internal/backlog.md:156
+docs/04-internal/backlog.md:351
+docs/04-internal/live-verification-ledger.md:74
+docs/design/00-PHILOSOPHY.md:112
+docs/gateway-api-contract.md:3
+docs/gateway-api-contract.md:23
+docs/gateway-api-contract.md:111

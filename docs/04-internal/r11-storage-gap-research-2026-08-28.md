@@ -1,5 +1,7 @@
 # R11-Storage 子代理真调研: Storage 抽象层 gap (2026-08-28)
 
+> ⚠️ 2026-10-06 复核批补标注（本文件原缺历史横幅，与其余 5 份 R11 子文档同口径）：本文为历史记录，写作时数字属实于当时；当前基线（crates 数 / 测试数等）以 `docs/04-internal/live-verification-ledger.md` 与根 `ROADMAP.md` §3 为准，正文不改。
+
 > **作者**: sub-agent R11-Storage
 > **用途**: 真调研 v2.0 缺 Storage 抽象层 gap (1.0 vs 2.0 功能对比), 给主代理决策参考
 > **关系**: 主代理真账 §1.1 Storage 层 + §3.1 P0 必补 #1 + #2 + #3
