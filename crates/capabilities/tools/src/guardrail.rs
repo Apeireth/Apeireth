@@ -49,7 +49,8 @@ fn find_ascii_ci(haystack: &str, needle: &str) -> Option<usize> {
     if nee.len() > hay.len() {
         return None;
     }
-    hay.windows(nee.len()).position(|w| w.eq_ignore_ascii_case(nee))
+    hay.windows(nee.len())
+        .position(|w| w.eq_ignore_ascii_case(nee))
 }
 
 impl ToolGuardrail {
@@ -336,7 +337,10 @@ mod tests {
             .contains(&LeakedCredentialKind::PlaintextPassword));
         assert!(!res.sanitized_output.contains("hunter2secret"), "值已截断");
         assert!(res.sanitized_output.contains("[REDACTED_PASSWORD]"));
-        assert!(res.sanitized_output.contains("下一行完好"), "只截命中值到行尾");
+        assert!(
+            res.sanitized_output.contains("下一行完好"),
+            "只截命中值到行尾"
+        );
     }
 
     #[test]
