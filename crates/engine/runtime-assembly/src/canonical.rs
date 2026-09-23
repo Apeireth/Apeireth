@@ -58,6 +58,8 @@ pub mod causal_world_model;
 pub mod cognitive;
 #[path = "canonical/cost_telemetry.rs"]
 pub mod cost_telemetry;
+#[path = "canonical/dream_llm.rs"]
+pub mod dream_llm;
 #[path = "canonical/guard_observer.rs"]
 pub mod guard_observer;
 #[path = "canonical/harness_patch.rs"]
@@ -92,6 +94,7 @@ pub use cognitive::{
     MEMORY_WRITEBACK_MODULE_ID, PREFERENCE_RECALL_MODULE_ID, REFLEXION_MODULE_ID,
     SELF_ASSESSMENT_MODULE_ID,
 };
+pub use dream_llm::{FallbackMetaThinker, LlmMetaThinker};
 pub use guard_observer::GuardDatasetObserver;
 pub use memory_typed_sink::CanonicalMemoryTypedSink;
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};

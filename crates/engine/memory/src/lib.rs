@@ -65,6 +65,7 @@ pub mod confidence;
 pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
+pub mod dream_wiring;
 pub mod dreaming;
 pub mod ensemble;
 pub mod five_dimensional;

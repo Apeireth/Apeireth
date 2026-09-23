@@ -9,6 +9,8 @@
 > **验证权威**: `docs/04-internal/live-verification-ledger.md` (写"已验证"之前必查)。
 > **状态 (2026-10-06 夜)**: 6 组已接线 ✅ / 4 组余下 (§4 路线) / 2 项挂账卡客观条件 (§3.3)。
 
+> **接手批注 (2026-10-10, 资深工程师线)**: 本线连同 W4/W5/安全线统一由我接管 (主人指示: 另一 AI 已停, 我负责一切工作)。**§4.1 dreaming 已落地** (决策拍板: D1 = LLM 思考器 `dream_llm::LlmMetaThinker` 经 LlmFactory 桥 + 确定性降级链(降级留痕) / D2 = CLI 显式命令 `apeireth dream` (免旋钮=显式授权) / D3 = `DreamReport::to_markdown()` 落 DiaryStore; 理由全文见 `crates/engine/memory/src/dream_wiring.rs` 头注) —— 详见台账 #45, §3.1/§4.1 已同步。同日: W3 报告 §9 修正 (沙箱 v1 翻案, 与 §2.6 对账一致)、W4①② 凭据收口 (真治理 hook + 审计真落档)、Cargo.lock 补漏 (`f11ade68`)。**§5 四项红线仍等主人**, 未动。
+
 ---
 
 ## 0. 三分钟接手
@@ -119,7 +121,7 @@
 | consolidation | ✅ | ✅ (本线) | ❌ | `APEIRETH_ENABLE_CONSOLIDATION` | `consolidation_is_opt_in_...` |
 | reflexion | ✅ | ✅ (本线) | ❌ | `APEIRETH_ENABLE_REFLEXION` / `_DIR` | `reflexion_records_judge_failures_...` |
 | memory_injection | ✅ | ✅ (本线) | ❌ | `APEIRETH_ENABLE_MEMORY_INJECTION` | `memory_injection_format_switches_...` + 注入格式 3 单测 |
-| dreaming | ✅ | ❌ | — | 待 §4.1 | — |
+| dreaming | ✅ | ✅ (2026-10-10 接线) | 显式命令 (免旋钮) | `apeireth dream [--session <id>] [--limit N] [--date YYYY-MM-DD]` | `dream_writes_diary_entry_holding_the_report` 等 5 + `dream_llm` 4 + cli parse 3 |
 | partner / principles | ✅ | ❌ | — | 待 §4.2 | — |
 | morphology / education / worktree_sandbox | ✅ | ❌ | — | 待 §4.3 | — |
 | 吸收批 (betti/residual_pyramid/river_topology/kuramoto) | ✅ | ❌ | — | 待 §4.4 | — |
@@ -147,7 +149,7 @@
 
 ## 4. 后续路线 (按序, 每项照 W2 验收门做)
 
-### 4.1 dreaming 接线 (下一项, 设计决策点已列)
+### 4.1 dreaming 接线 ✅ 已落地 (2026-10-10)
 
 - **现状**: 6 状态机引擎真实现 (`memory/src/dreaming.rs`, `DreamEngine::execute_dream_cycle`), 内部调 `meta_thinking` + `procedural`。
 - **三个设计决策点 (拍板或自行判断后记录理由)**:
@@ -155,6 +157,11 @@
   2. 触发载体: 空闲 15min 语义 (`DreamEngineConfig.min_idle_for_dream_ms`) 在模块钩子里**无法实现** (无回合=无钩子)。选项: CLI 子命令 `apeireth dream` (显式授权=无需旋钮, 最诚实) / gateway 空闲 watcher (presence.rs 有空闲信号) / admin 路由。
   3. 落库去向: `DreamReport::to_markdown()` → diary (`memory/src/dary.rs` DiaryStore) 是引擎设计本意 ("苏醒阶段写入日记")。
 - **验收门**: 同 W2 五件 (若走 CLI 子命令, ①②改为"显式命令即授权 + 默认不自动跑测试")。
+- **✅ 落地记录 (2026-10-10, 资深工程师线)**: 三点全部按建议拍板 ——
+  ① D1 = `LlmMetaThinker` (装配层 `canonical/dream_llm.rs`, 经 plugin `LlmFactory` 桥, 私有 current-thread runtime 隔离同步口) + `FallbackMetaThinker` 确定性降级链 (降级产出带 `[LLM 不可用(…), 降级]` 留痕); 兜底 `DeterministicMetaThinker` 在 memory 层 (零 LLM 依赖)。
+  ② D2 = **CLI 显式命令 `apeireth dream`** (理由: 显式授权最诚实、免旋钮、与引擎"只在被召唤时做梦"语义同构; gateway 空闲 watcher 留观察项)。验收门走命令变体 ✓ (显式命令即授权 + `dream_engine_is_pull_only_defaults_untouched` 默认不自动跑测试)。
+  ③ D3 = `dream_and_journal` 胶水 (`memory/src/dream_wiring.rs`): 苏醒 `report.to_markdown()` 落 `FileDiaryStore` (`<data>/diary`, source=`dream`); 日记失败**不伪装成功** (Err 显式声明"周期已成但写档失败", 测试 `journal_failure_is_reported_honestly_without_faking_the_cycle`)。
+  测试 +12 (memory 5 / assembly 4 / cli parse 3)。0 假装: `InMemoryProceduralStore` 固化载体重启即散 (报告留档为准), 持久习惯库属后续层。
 
 ### 4.2 partner / principles 接线
 

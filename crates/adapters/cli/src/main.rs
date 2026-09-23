@@ -198,6 +198,106 @@ fn parse_approval(
     Ok((session, approval, decision))
 }
 
+/// `apeireth dream` 参数解析 (W2 §4.1 触发载体: 显式命令 = 显式授权, 免旋钮)。
+fn parse_dream(args: &[String]) -> Result<(Option<String>, usize, Option<String>), String> {
+    let mut session = None;
+    let mut limit = 20usize;
+    let mut date = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--session" => {
+                index += 1;
+                session = Some(
+                    args.get(index)
+                        .ok_or("dream --session requires a value")?
+                        .clone(),
+                );
+            }
+            "--limit" => {
+                index += 1;
+                let raw = args.get(index).ok_or("dream --limit requires a value")?;
+                limit = raw
+                    .parse::<usize>()
+                    .map_err(|_| "dream --limit must be a positive integer".to_string())?;
+                if limit == 0 {
+                    return Err("dream --limit must be >= 1".to_string());
+                }
+            }
+            "--date" => {
+                index += 1;
+                date = Some(
+                    args.get(index)
+                        .ok_or("dream --date requires a value YYYY-MM-DD")?
+                        .clone(),
+                );
+            }
+            other => return Err(format!("dream: unknown argument {other}")),
+        }
+        index += 1;
+    }
+    Ok((session, limit, date))
+}
+
+fn run_dream(session: Option<String>, limit: usize, date: Option<String>) -> ExitCode {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("runtime init failed: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(apeireth_cli::dispatch_dream(session, limit, date)) {
+        Ok(output) => {
+            println!("{output}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod dream_parse_tests {
+    use super::*;
+
+    fn s(items: &[&str]) -> Vec<String> {
+        items.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn dream_defaults_are_sessionless_structural_dream() {
+        // W2 验收门(命令变体)①②: 显式命令即授权, 缺省 = 无会话素材 + 20 条上限 + 今天。
+        assert_eq!(parse_dream(&[]).unwrap(), (None, 20, None));
+    }
+
+    #[test]
+    fn dream_parses_session_limit_date() {
+        let (session, limit, date) = parse_dream(&s(&[
+            "--session",
+            "abc",
+            "--limit",
+            "5",
+            "--date",
+            "2026-10-10",
+        ]))
+        .unwrap();
+        assert_eq!(session.as_deref(), Some("abc"));
+        assert_eq!(limit, 5);
+        assert_eq!(date.as_deref(), Some("2026-10-10"));
+    }
+
+    #[test]
+    fn dream_rejects_unknown_args_and_bad_limits() {
+        assert!(parse_dream(&s(&["--nope"])).is_err());
+        assert!(parse_dream(&s(&["--limit", "0"])).is_err());
+        assert!(parse_dream(&s(&["--limit", "x"])).is_err());
+        assert!(parse_dream(&s(&["--session"])).is_err());
+    }
+}
+
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() {
@@ -218,6 +318,14 @@ fn main() -> ExitCode {
     match args[0].as_str() {
         "chat" => match parse_chat(&args[1..]) {
             Ok((prompt, model, session)) => run_chat(prompt, model, session),
+            Err(error) => {
+                eprintln!("{error}");
+                print_help();
+                ExitCode::FAILURE
+            }
+        },
+        "dream" => match parse_dream(&args[1..]) {
+            Ok((session, limit, date)) => run_dream(session, limit, date),
             Err(error) => {
                 eprintln!("{error}");
                 print_help();
