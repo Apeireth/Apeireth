@@ -158,6 +158,8 @@ pub struct ProductionModulesConfig {
     pub morphology_recall: bool,
     /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册。
     pub education: bool,
+    /// W2 §4.4 (2026-10-10, 默认关): 研究吸收批认知体操 (四算法实验性洞察)。
+    pub absorption_insight: bool,
 }
 
 impl Default for ProductionModulesConfig {
@@ -184,6 +186,7 @@ impl Default for ProductionModulesConfig {
             partner_bond: false,
             morphology_recall: false,
             education: false,
+            absorption_insight: false,
         }
     }
 }
@@ -457,6 +460,10 @@ impl ProductionModules {
                 )
                 .with_telemetry(Arc::clone(&telemetry)),
             ));
+        }
+
+        if config.absorption_insight {
+            modules.push(Arc::new(super::cognitive::AbsorptionInsightModule::new()));
         }
 
         if config.partner_bond {
