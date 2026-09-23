@@ -133,3 +133,21 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 2. 未评估移植的具体 API 形状（那是各立项的实施 brief 的活）。
 3. §3/§4 因 v1 无实现，无从考证"该长什么样"——立项前需要单独设计文档。
 4. 未替主人拍板顺序（上表是**建议**；§5 W3 原裁决"一次一个"仍然有效）。
+
+---
+
+## 9. 修正记录（2026-10-10 复盘更正；与 `handoff-w2-wiring-2026-10-06.md` §2.6 翻案表对账后）
+
+> 起因：W2 线的 §2.6 翻案表对两处的判定与本报告冲突。**逐个验源码后确认对方正确**，本报告两处更正如下（原文不改，修正挂链）：
+
+### 9.1 §7 真文件/网络沙箱 —— 原判"❌ v1 也只有骨架"是**过度概括**，更正为 🟡 部分（v1 有整 crate 真实施）
+
+- **新证据（本次实证）**: `legacy/frozen/apeireth-sandbox/` 整 crate 存在且真接 Docker：
+  - `src/real.rs`（**1228 行**）：`SandboxRealImpl` 真接 **Docker daemon HTTP API v1.43+**（`real.rs:5-21`）——`exec`=`POST /containers/create`+`/start`、`kill`=`POST /containers/{id}/kill`、`status`=`GET /containers/{id}/json`、`network`=`networks/create|delete|CONNECT|DISCONNECT`、`filesystem`=`containers/{id}/archive`+`volumes/create`、`resource_limit`=`POST /containers/{id}/update`（--cpus/--memory）；3 RuntimeKind（Container 真 / Process fallback / WASM 显式 0 装）；`DaemonClient` trait 三层（`HttpDaemonClient` 真 / `BollardDaemonClient` 留 R21+ / `MockDaemonClient` 测试）。
+  - `tests/test_sandbox_real_wiremock.rs`（496 行）+ `examples/sandbox_real_demo.rs`（227 行）。
+- **两说可并存（为什么我会错）**: 原报告证据（`tool-shell` 的 TODO seccomp/JobObject、`sandbox_pass.rs`/`sandbox_net`/`vm_sandbox` 全 Noop）**仍全部成立**——它们是 companion 侧的 trait 端口与 tool-shell，与 `frozen/apeireth-sandbox` 是**不同模块**。原判把"我没扫到"写成了"不存在"，违反了本报告自己主张的三关判定法（`handoff-w2-wiring` §6.1）：**归档区（frozen/archived）也要扫**。
+- **对排期的影响**: 工作量从"L 纯新造"修正为 **M–L 可回收移植**（v1 Docker 方案整 crate 可回收）。与 W1 的关系：W1 shell-sandbox-lite（AppContainer 轻量档）是 Windows 优先路线；Docker daemon 方案覆盖 Linux/CI 场景——**互补而非替代**，开工仍以 W1 设计文档为准绳（W1 属 §5 红线，等主人拍板）。
+
+### 9.2 §1 community —— "分诊在 v1 是 brief 级"低估，更正为真分诊函数
+
+- **新证据**: `legacy/donor/apeireth-companion/src/community.rs:155` `pub fn triage(...)` 真分诊入口存在，且有专项测试 `triage_entity_vs_broad`（`:323`）。v1 的社群识别→分诊是**真功能**（detect_communities + triage + deterministic_summary 三件套），§1 工作量判断 **M 不变**，但移植范围应含 triage 分诊逻辑（原先按 brief 级估会漏）。
