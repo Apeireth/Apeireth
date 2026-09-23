@@ -183,6 +183,21 @@ pub fn parse_response(
         .and_then(|f| f.as_str())
         .unwrap_or("stop");
 
+    // 0 装 fail-loud (2026-10-10 真缺陷 #4 加固): 思考型模型把 max_tokens 全喂给
+    // reasoning_content 时 content 落空 (教训见 canonical_openai_compatible.rs
+    // adapt_request 注释: 500 必截断 / 2048 仍空 1/3 / 4096 稳)。空 content +
+    // length 截断 = 预算耗尽的空壳响应 —— 显式报错并给行动指引, 不发假响应。
+    // 非截断的空 content (finish=stop) 不拦: 那是模型的真实输出。
+    if content.is_empty() && finish_reason == "length" {
+        return Err(ProviderError::BadResponse {
+            provider: provider_owned.clone(),
+            detail: "output budget exhausted: content empty while finish_reason=length \
+                     (reasoning models burn max_tokens on reasoning_content). Raise \
+                     max_tokens (4096 known-good) or omit it (canonical default fills 4096)."
+                .into(),
+        });
+    }
+
     let usage = body
         .get("usage")
         .map(|u| NormalizedUsage {
