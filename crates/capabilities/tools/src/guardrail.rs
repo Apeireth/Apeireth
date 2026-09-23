@@ -26,6 +26,8 @@ pub enum LeakedCredentialKind {
     JwtToken,
     SlackToken,
     GenericBearer,
+    /// 明文口令赋值 (`password=...` / `password: ...`, W1 §2.2 设计点名).
+    PlaintextPassword,
 }
 
 /// 后置出站绊线扫描结果.
@@ -39,6 +41,16 @@ pub struct TripwireScanResult {
 /// 工具执行守门员.
 #[derive(Debug, Clone, Default)]
 pub struct ToolGuardrail;
+
+/// ASCII 快速子串定位 (大小写不敏感, 字节偏移安全 —— 多字节文本不移位)。
+fn find_ascii_ci(haystack: &str, needle: &str) -> Option<usize> {
+    let hay = haystack.as_bytes();
+    let nee = needle.as_bytes();
+    if nee.len() > hay.len() {
+        return None;
+    }
+    hay.windows(nee.len()).position(|w| w.eq_ignore_ascii_case(nee))
+}
 
 impl ToolGuardrail {
     pub fn new() -> Self {
@@ -116,6 +128,20 @@ impl ToolGuardrail {
             "shutdown -h now",
             "shutdown /s",
             "reboot",
+            // W1 §2.3 系统修改命令 (2026-10-10 批): 注册表/服务/网络配置/属性隐藏。
+            // 白名单否定式纵深 —— 守门不是沙箱的替代。
+            "reg add",
+            "reg delete",
+            "reg import",
+            "sc create",
+            "sc config",
+            "sc delete",
+            "netsh set",
+            "netsh add",
+            "netsh delete",
+            "netsh reset",
+            "attrib +s",
+            "attrib +h",
         ];
 
         for cmd in &forbidden_commands {
@@ -125,6 +151,19 @@ impl ToolGuardrail {
                     cmd
                 )));
             }
+        }
+
+        // netsh 写入类 (W1 §2.3): 单纯子串表抓不到 "netsh advfirewall set ..." 这种
+        // 动词后置形态 —— "netsh" 出现且伴随写动词 (set/add/delete/reset/import) 即拦;
+        // show/display 只读放行 (否定式保守, 误报可接受 —— 纵深不是沙箱的替代)。
+        if lower.contains("netsh")
+            && [" set", " add", " delete", " reset", " import"]
+                .iter()
+                .any(|verb| lower.contains(verb))
+        {
+            return Err(PreCallGuardError::DangerousCommandInjection(
+                "拦截 netsh 写入类系统配置指令".to_string(),
+            ));
         }
 
         Ok(())
@@ -202,6 +241,43 @@ impl ToolGuardrail {
             }
         }
 
+        // 6. 明文口令赋值扫描 (W1 §2.2 设计点名: `password\s*[:=]\s*\S+`; 手写等价,
+        //    不引 regex 依赖)。值截断到行尾 (截断而非放行), key 名保留可读。
+        //    匹配用 ASCII 快速比较 —— 不走 to_lowercase 的字节偏移 (中文输出下
+        //    大小写折叠可能移位, 切片会错位)。
+        {
+            let mut search_from = 0usize;
+            while let Some(rel) = find_ascii_ci(&sanitized[search_from..], "password") {
+                let key_start = search_from + rel;
+                let after_key = key_start + "password".len();
+                let rest = &sanitized[after_key..];
+                let trimmed_start = after_key + (rest.len() - rest.trim_start().len());
+                if sanitized[trimmed_start..].starts_with(':')
+                    || sanitized[trimmed_start..].starts_with('=')
+                {
+                    let value_start_raw = &sanitized[trimmed_start + 1..];
+                    let lead = value_start_raw.len() - value_start_raw.trim_start().len();
+                    let value_start = trimmed_start + 1 + lead;
+                    let value_end = sanitized[value_start..]
+                        .find('\n')
+                        .map(|i| value_start + i)
+                        .unwrap_or(sanitized.len());
+                    let value = &sanitized[value_start..value_end];
+                    if value.len() >= 4 {
+                        leaked_kinds.push(LeakedCredentialKind::PlaintextPassword);
+                        sanitized.replace_range(value_start..value_end, "[REDACTED_PASSWORD]");
+                        // 文本已变, 从头再扫会错位; 多处口令以首处命中为准
+                        // (0 装: 不声称全扫, 单次调用一个命中段)。
+                        break;
+                    }
+                }
+                search_from = after_key;
+                if search_from >= sanitized.len() {
+                    break;
+                }
+            }
+        }
+
         let is_clean = leaked_kinds.is_empty();
         TripwireScanResult {
             is_clean,
@@ -247,6 +323,45 @@ mod tests {
             .contains(&LeakedCredentialKind::AwsAccessKey));
         assert!(res.sanitized_output.contains("[REDACTED_OPENAI_KEY]"));
         assert!(res.sanitized_output.contains("[REDACTED_AWS_KEY]"));
+    }
+
+    #[test]
+    fn tripwire_redacts_plaintext_password_assignment() {
+        // W1 §2.2 设计点名模式; 含中文上下文 (回归 to_lowercase 偏移隐患)。
+        let raw = "数据库登录 ok\npassword = hunter2secret\n下一行完好";
+        let res = ToolGuardrail::scan_and_sanitize_output(raw);
+        assert!(!res.is_clean);
+        assert!(res
+            .leaked_kinds
+            .contains(&LeakedCredentialKind::PlaintextPassword));
+        assert!(!res.sanitized_output.contains("hunter2secret"), "值已截断");
+        assert!(res.sanitized_output.contains("[REDACTED_PASSWORD]"));
+        assert!(res.sanitized_output.contains("下一行完好"), "只截命中值到行尾");
+    }
+
+    #[test]
+    fn password_keyword_without_assignment_passes() {
+        let res = ToolGuardrail::scan_and_sanitize_output("the password field is empty here");
+        assert!(res.is_clean, "{res:?}");
+    }
+
+    #[test]
+    fn system_modification_commands_are_guarded() {
+        // W1 §2.3 扩展: 注册表/服务/网络配置/属性隐藏类系统修改命令。
+        for cmd in [
+            "reg add HKLM\\Software\\x /v y",
+            "sc create evil binPath= x",
+            "netsh advfirewall set allprofiles off",
+            "attrib +s +h secret.txt",
+        ] {
+            assert!(
+                ToolGuardrail::verify_shell_command(cmd).is_err(),
+                "{cmd} 应被守门拦截"
+            );
+        }
+        assert!(ToolGuardrail::verify_shell_command("netsh show all").is_ok());
+        // 否定式保守语义: 含子串即拦 (纵深防线接受误报, 守门不是沙箱的替代)。
+        assert!(ToolGuardrail::verify_shell_command("echo reg add is a phrase").is_err());
     }
 
     #[test]
