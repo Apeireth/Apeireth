@@ -1408,7 +1408,10 @@
     padding: 12px 18px;
     border: 1px solid var(--line, #2a323c);
     border-radius: 10px;
-    background: var(--surface-1, #101418);
+    /* --surface-2：根（深）/essence（浅）双模式都有定义——曾用 --surface-1
+       （无任何主题定义），浅色模式下跌回深色硬编码，浅页面上出现深色保存栏（主人
+       2026-09-23 真机指出「浅色模式 + 深色保存设置很违和」）。 */
+    background: var(--surface-2, #1b1a20);
   }
   .save-bar-hint {
     font-size: 12px;

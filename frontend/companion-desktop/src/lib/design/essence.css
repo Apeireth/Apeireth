@@ -242,8 +242,20 @@ html[data-theme='essence'] .wb-empty {
   color: var(--ap-bone-30);
 }
 
+/* 面板内的 wb-empty 是功能性文字（「正在拉取模型列表…」「暂无可用模型」），
+   不是装饰性空态——42% 黑在浅底上不可读，提到 68%。工作台装饰性 wb-empty 不动。 */
+html[data-theme='essence'] .panel .wb-empty {
+  color: var(--ap-bone-68);
+}
+
 html[data-theme='essence'] #drawerScrim.on {
   background: rgba(20, 19, 22, 0.18);
+}
+
+html[data-theme='essence'] #scrim.show {
+  /* 2026-09-23 真机实证：浅色下 8px 毛玻璃把整窗罩成奶雾，面板观感「看不清」
+     的主因之一。收到 4px——聚焦层次保留，雾感减半。 */
+  backdrop-filter: blur(4px);
 }
 
 html[data-theme='essence'] .legacy-toast {
@@ -318,7 +330,8 @@ html[data-theme='essence'] .mode-btn.active {
 }
 
 html[data-theme='essence'] .model {
-  color: var(--ap-bone-68);
+  /* 模型列表是主操作文字：bone-68（78%）在 0.94 白底上仍偏虚，提实色 */
+  color: var(--ap-bone);
 }
 
 html[data-theme='essence'] .model:hover {
@@ -334,7 +347,9 @@ html[data-theme='essence'] .model[aria-current='true'] {
 html[data-theme='essence'] .panel h2,
 html[data-theme='essence'] .panel .kv,
 html[data-theme='essence'] .bar-head {
-  color: var(--ap-bone-42);
+  /* 2026-09-23 真机实证（主人截屏 + 像素采样）：bone-42（56% 黑）在白底上
+     对比度仅约 2:1，面板内容「看不清」——提到 bone-68（78%）。 */
+  color: var(--ap-bone-68);
 }
 
 html[data-theme='essence'] .bar-head b,

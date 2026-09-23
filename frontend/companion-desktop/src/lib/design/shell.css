@@ -1027,6 +1027,12 @@ p.lede {
 }
 .composer-caps {
   position: relative;
+  /* 2026-09-23 真机实证（elementFromPoint）：本元素的 backdrop-filter 生成
+     层叠上下文，把绝对定位于此的 .panel（M/◯ 弹出层）困在 z-auto 层——
+     #scrim(z17) 盖在其上：面板文字被 scrim 毛玻璃糊住（浅色下「看不清」），
+     点击也全被 scrim 拦截（点模型行 = 关面板，选不中）。抬到 18：
+     caps 连面板整体高于 scrim；抽屉(30+)/persona(31/32) 不受影响。 */
+  z-index: 18;
   display: flex;
   align-items: center;
   gap: 0;
