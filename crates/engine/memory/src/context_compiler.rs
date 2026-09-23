@@ -123,6 +123,56 @@ impl ClosedWorldContextCompiler {
         })
     }
 
+    /// Compile an overlay in the donor closed-world **injection** format
+    /// (2026-10-06 W2 接线批: `memory_injection` 渲染器接线, 与 XML 格式互斥可选).
+    ///
+    /// 渲染走 [`crate::memory_injection::build_memory_injection`]: 编号证据清单 +
+    /// 显式反幻觉规则 ("禁止说「我记得我们以前聊过」"). 预算语义: 每条证据按 donor
+    /// 口径截 120 字, 渲染整体超出 `max_chars` 时从尾部弹条目 (0 装: 截断而非放行);
+    /// 预算容不下任何条目或空召回时返回 `None` (donor 渲染器空输入出空串, 空 overlay 无意义).
+    pub fn compile_injection_with_selected_access(
+        &self,
+        recalled: &MemoryRecallResult,
+        _session_id: &str,
+        max_chars: usize,
+    ) -> Option<SelectedMemoryAccess> {
+        use crate::memory_injection::{build_memory_injection, EVIDENCE_MAX_CHARS};
+        if recalled.items.is_empty() {
+            return None;
+        }
+        // 标题 + 反幻觉规则文案的保守预留。
+        const RULES_RESERVE: usize = 160;
+        let mut entries: Vec<String> = Vec::new();
+        let mut selected_candidate_ids = Vec::new();
+        let mut current_chars = RULES_RESERVE;
+        for item in &recalled.items {
+            let sanitized_content = sanitize_text(&item.content);
+            let cost = sanitized_content.chars().count().min(EVIDENCE_MAX_CHARS) + 8;
+            if current_chars + cost > max_chars {
+                break;
+            }
+            current_chars += cost;
+            entries.push(sanitized_content);
+            selected_candidate_ids.push(item.id.clone());
+        }
+        loop {
+            let rendered = build_memory_injection(&entries);
+            if rendered.chars().count() <= max_chars {
+                if entries.is_empty() {
+                    return None;
+                }
+                return Some(SelectedMemoryAccess {
+                    overlay: rendered,
+                    selected_candidate_ids,
+                });
+            }
+            if entries.pop().is_none() {
+                return None;
+            }
+            selected_candidate_ids.pop();
+        }
+    }
+
     /// Compile an overlay and notify an observer only after selection is
     /// complete.
     ///
@@ -263,6 +313,64 @@ mod tests {
         assert_eq!(observations.len(), 1);
         assert_eq!(observations[0].selected_candidate_ids, vec!["selected"]);
         assert_eq!(observations[0].overlay, overlay.unwrap());
+    }
+
+    #[test]
+    fn injection_format_renders_antihallucination_rules() {
+        let recalled = recalled(vec![
+            ("first", "主人明天要交线代作业"),
+            ("second", "主人换元法常忘换 dx"),
+        ]);
+        let compiler = ClosedWorldContextCompiler::default();
+        let selected = compiler
+            .compile_injection_with_selected_access(&recalled, "session-4", 4_000)
+            .expect("non-empty recall produces an overlay");
+        assert!(
+            selected.overlay.contains("[记忆证据"),
+            "{}",
+            selected.overlay
+        );
+        assert!(
+            selected.overlay.contains("禁止说「我记得我们以前聊过」"),
+            "{}",
+            selected.overlay
+        );
+        assert!(selected.overlay.contains("主人明天要交线代作业"));
+        assert_eq!(selected.selected_candidate_ids, vec!["first", "second"]);
+    }
+
+    #[test]
+    fn injection_format_never_overflows_the_budget() {
+        let recalled = recalled(vec![
+            ("first", "keep this preference"),
+            ("second", "another fact that will not fit"),
+        ]);
+        let compiler = ClosedWorldContextCompiler::default();
+        for budget in [1usize, 40, 120, 200, 400, 100_000] {
+            if let Some(selected) =
+                compiler.compile_injection_with_selected_access(&recalled, "session-5", budget)
+            {
+                assert!(
+                    selected.overlay.chars().count() <= budget,
+                    "budget {budget} overflowed: {}",
+                    selected.overlay.chars().count()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn injection_format_sanitizes_credentials() {
+        let recalled = recalled(vec![("first", "password=super_secret token")]);
+        let compiler = ClosedWorldContextCompiler::default();
+        let selected = compiler
+            .compile_injection_with_selected_access(&recalled, "session-6", 4_000)
+            .expect("overlay");
+        assert!(
+            !selected.overlay.contains("super_secret"),
+            "{}",
+            selected.overlay
+        );
     }
 
     #[test]

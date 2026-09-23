@@ -61,8 +61,8 @@ use super::approval::{
 use super::error::{RuntimeError, RuntimeResult};
 use super::events::RuntimeEvent;
 use super::module::{
-    HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError, ModuleInvocationError,
-    ModuleInvoker, ModuleOutcome, ModuleTurnState, PromptOverlay,
+    HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError,
+    ModuleInvocationError, ModuleInvoker, ModuleOutcome, ModuleTurnState, PromptOverlay,
 };
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};

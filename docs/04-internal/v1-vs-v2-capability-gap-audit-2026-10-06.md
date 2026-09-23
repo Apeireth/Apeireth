@@ -283,22 +283,38 @@ perception 不做 per-turn module
 > | 模块 | 上面记的 | 调用链真相 | 本批处置 |
 > |---|---|---|---|
 > | `hybrid_search` (BM25) | 0 引用→未接 | **已接**: `MemoryCoordinator::execute_hybrid_retrieval` (`coordinator.rs:611-674`) 用 `Bm25LexicalCandidateSource` + `HybridRetrievalPipeline`; 生产经 `production.rs:291-324` 构造 coordinator → `MemoryRecallModule` 每轮调 `compile_prompt_overlay_with_*`; **T7/T8/T9 生产级测试实证** (`cognitive_convergence_vertical.rs`) | 无需接线; 只补语义阶段 |
-> | `consolidation` | 0 引用→未接 | **API 级已接、触发未接**: coordinator 内部持有 `MemoryConsolidationJob` (`coordinator.rs:82`) 并公开 `run_consolidation` (`:840`), 但生产零触发点 | 归记忆闭环批 (下一批) |
+> | `consolidation` | 0 引用→未接 | **API 级已接、触发未接**: coordinator 内部持有 `MemoryConsolidationJob` (`coordinator.rs:82`) 并公开 `run_consolidation` (`:840`), 但生产零触发点 | **W2b 本批接上** (writeback AfterTurn 触发 + `APEIRETH_ENABLE_CONSOLIDATION=1` 默认关; 洞察稳定 ID 落库幂等 + 自我增殖修复) ✅ |
 > | `topic_predictor` | 0 引用→未接 | 只被借用 `TopicCue` **类型** (`coordinator.rs:41`); `TopicPredictor` 本体零调用 | 维持未接 |
-> | `diary` / `dreaming` / `meta_thinking` | 0 引用→未接 | crate 内部互调 (`cross_diary→diary`, `dreaming→meta_thinking`), 但**闭环根** (dreaming/consolidation 触发点) 仍未接 | 归记忆闭环批 |
+> | `diary` / `dreaming` / `meta_thinking` | 0 引用→未接 | crate 内部互调 (`cross_diary→diary`, `dreaming→meta_thinking`), 但**闭环根** (dreaming/consolidation 触发点) 仍未接 | consolidation 触发点 **W2b 已接** ✅; dreaming (6 状态机 + MetaThinker 生产注入) 归 dreaming 批 |
 > | `typed_recall` 读侧 (commitment/persona/relation 召回) | 未列 | **写读不对称 bug**: 写侧 `typed_sink` 在生产落库, 读侧 `typed_recall: None` (`cli/src/lib.rs:576` 改前) —— **数据入库永不召回**; `SqliteTypedMemoryRecallSource` 适配器+测试全在, 只差组装根一行 | **本批修复** (默认开 + `APEIRETH_DISABLE_TYPED_RECALL=1` 逃生门) |
 > | 语义向量阶段 (`embedding_provider`) | 未列 | **实现缺失**: `ProductionBackends.embedding_provider` 恒 `None`, 全仓库只有 `NoEmbeddingProvider`+测试 fake; coordinator 的向量阶段 (`recall_async`) 从未激活, 恒 `used_lexical_fallback=true` | **本批补真实现** `OpenAiCompatibleEmbeddingProvider` + `APEIRETH_EMBEDDING_URL/MODEL/KEY` 旋钮 (fail-loud 半配) |
-> | partner/principles/reflexion/memory_injection/intent_brier/吸收批 4 个等 | 0 引用→未接 | **确证**: crate 内部互调排查同样零命中 | 维持未接, 按序接线 |
+> | ~~reflexion / memory_injection~~ (原列本行) | 0 引用→未接 | **W2b 本批已接**: reflexion = 新模块 `cognitive.reflexion` (TurnStart 教训注入 + AfterTurn 消费 Judge 显式判定沉淀 + RuleCritic 蒸馏, `APEIRETH_ENABLE_REFLEXION=1`); memory_injection = donor 反幻觉注入格式 (`APEIRETH_ENABLE_MEMORY_INJECTION=1`) ✅ | partner/principles/intent_brier/吸收批 4 个等: 确证未接 (crate 内部互调亦零命中), 维持按序接线 |
 
 ### 7.2 仍为真缺口 (源码确认不存在)
+
+> **[2026-10-06 夜四审: legacy 源码级核验 (挂账核销批), 本表多行定性修正]**
+> 此前对 `legacy/` 只做名称级扫描; 本批逐项打开 v1 源码实证 (0 装: 读实现体, 不读名字)。
+> **结论: "v1 有真实现"这个前提本身有两处反例**; thought_cluster 从缺口移出。
+>
+> | # | 项 | v1 legacy 实况 (文件+证据) | 修正定性 |
+> |---|---|---|---|
+> | 1 | community | ✅ 真: `donor/apeireth-companion/community.rs` (`Community` + `triage()` + 测试; `memory_graph.rs:429` 消费 `TriageResult`) | 真缺口成立 (v1→v2 未移植) |
+> | 2 | experiment_field | ✅ 真框架: `donor/.../experiment_field.rs` (`ExperimentField` + `VMRunner` 注入边界 + 提案→实验→批准→部署→回滚学习) | 真缺口成立 (框架可回收) |
+> | 3 | HybridCognitiveRouter | ❌ **v1 也无** (legacy 全文 0 命中) | **改判: 纯愿景项** (非"v1 有 v2 无") |
+> | 4 | ToolSynthesizer | ❌ **v1 也无** (`synthes*` 命中全是 TTS/报告合成语义) | **改判: 纯愿景项** |
+> | 5 | thought_cluster | ✅ 真: `donor/.../thought_cluster.rs` (`ThoughtClusterManager` + `ThoughtClusterReader` + search + 链注册表) | **从缺口移出**: v2 `cluster_store.rs` 是完整改名移植 (API 五件套 + trait 同构, 还多了路径穿越防御) |
+> | 6 | onering | ✅ 真: `donor/.../onering.rs` (`OneRingLedger` 统一上下文账本, 溯源强制, SSE/Lark/Telegram/Web/CLI 五前端同一锚点时间线, 8 测试) | 真缺口成立 (原"仅元数据透传"观测的是 v2 侧) |
+> | 7 | 真文件/网络沙箱 | ✅ 真: `frozen/apeireth-sandbox/real.rs` (**真接 Docker daemon HTTP API**, `HttpDaemonClient` 6 API + wiremock 测试) + `companion/{sandbox,vm_sandbox}.rs` 5 层门 | 真缺口成立且 **v1 有 Docker 容器方案整 crate 可回收** |
+> | 8 | SDK 真 HTTP/WS | ✅ 大量真: `donor/apeireth-http-client` (reqwest + LIFO 池) / `apeireth-api/ws_v1` (axum WS 8 帧 handler) / `apeireth-bus/l4` (tokio-tungstenite 真双端) / `voice/{real,minimax_live}` / `lark/real` / `update` (真下载 + minisign 验签) / `memory-extensions/provider_s3` | 真缺口成立且 v1 真 HTTP/WS 客户端**群**可回收 |
+> | 9 | 三洋葱 L3-L5 | ✅ **整 crate 真**: `donor/apeireth-onion` (双洋葱统一体: 原则洋葱 E/S/A/M/O + 权限洋葱 L0..L5 **全六层** + L0 HA + `unify_check` 三段门 + `arbitrate`) + `archived/apeireth-formal` **Kani 形式化证明** (`double_onion_sample`: L0 requires HA) + `constraint` V2 门 + `companion/security.rs` 洋葱门接线 + `bench/self_disable_bench` 5 攻击类别 guards | 真缺口成立且比原估计更广: v2 `core::onion` 只有数据模型 (多签 hex 占位), v1 有统一门 + 形式化证明 |
 
 | 项 | 状态 |
 |---|---|
 | community (社群识别与分诊) | 🔴 v2 crates 内 0 命中 |
-| experiment_field (隔离实验场) | 🔴 0 命中 |
-| HybridCognitiveRouter | 🔴 0 命中 |
-| ToolSynthesizer | 🔴 0 命中 |
-| thought_cluster (按此名) | 🔴 0 命中 (有 `cluster_store.rs`, 疑似改名/部分) |
+| experiment_field (隔离实验场) | 🔴 0 命中 (v2 侧; v1 有真框架 —— 四审表 #2) |
+| HybridCognitiveRouter | 🔴 0 命中 (**v1 亦无 —— 纯愿景项**, 四审表 #3) |
+| ToolSynthesizer | 🔴 0 命中 (**v1 亦无 —— 纯愿景项**, 四审表 #4) |
+| thought_cluster | ✅ **已移植** —— v2 `cluster_store.rs` = v1 `thought_cluster` 完整改名移植 (四审表 #5, 从缺口清单移出) |
 | onering (OneRingLedger) | 🔴 仅元数据透传注释, 账本本体 0 |
 | 真文件/网络隔离 | 🔴 实测 `EnforcementLevel::Unsupported` (`process/linux.rs:62-67`), 仅进程树遏制 |
 | SDK 真实 HTTP/WS | 🔴 自标"阶段 6 stub, R21 真接"（**[复核修正]**: 原写"7 处 `unimplemented!()`"系本审计的计数错误——那 7 处是**文档注释里的宏名提及**, 全仓库真宏调用 = **0**; SDK 0 装守门实为编译期 `STUB_MODE=true` 断言 + `SdkError::NotImplemented` 枚举返回。见交接包 §2.7 B1 判定 + 台账 #42） |

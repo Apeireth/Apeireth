@@ -276,6 +276,9 @@ EOF
 | `APEIRETH_ENABLE_PREFERENCE_LEARNING=1` | 让 AI 把学到的偏好写回长期记忆 | 写入权交给模型；配 P1-A 准入控制使用更稳 |
 | `APEIRETH_ENABLE_PROACTIVE_RECALL=1` | 记忆主动召回：已存记忆按对话线索主动浮现（每次 ≤2 条、有置信度阈值，确定性选择器） | 低——不额外调 LLM |
 | `APEIRETH_DISABLE_TYPED_RECALL=1` | 关闭承诺/画像/关系三类记忆的**召回读侧**（写侧不动） | 关掉后这三类记忆不再浮现；默认**开**（写读对称，2026-10-06 修复入库不召回的断链） |
+| `APEIRETH_ENABLE_MEMORY_INJECTION=1` | 记忆 overlay 换 donor 反幻觉格式（编号证据清单 + 「禁止说『我记得我们以前聊过』」） | 低——纯渲染切换；默认关（XML 封闭世界格式不变） |
+| `APEIRETH_ENABLE_CONSOLIDATION=1` | 每回合后跑确定性记忆整理，提炼洞察落库（稳定 ID 幂等，只从原始证据提炼） | 低——0 模型调用；默认关 |
+| `APEIRETH_ENABLE_REFLEXION=1` | 失败闭环：TurnStart 注入历史教训 + AfterTurn 把 Judge 显式否决沉淀为反思 | 低——需 Judge 开启才有信号源；默认关 |
 
 **shell 审批流示例**（开启后）：
 
@@ -300,6 +303,7 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
   其他兼容端点。每回合约 +N 次嵌入调用（候选逐条）。
 - `APEIRETH_PERSONA_ID` / `APEIRETH_SUBJECT_ID`——typed 记忆（承诺/画像/关系）的
   主体身份。本地单用户无需设置（默认 `apeireth` / `local-user`）；多主体部署时覆写。
+- `APEIRETH_REFLEXION_DIR`——reflexion 反思库目录（默认 `<data>/reflexion`）。
 
 ---
 

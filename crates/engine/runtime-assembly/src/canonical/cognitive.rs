@@ -607,6 +607,7 @@ pub struct MemoryWritebackModule {
     associations: Option<Arc<dyn AssociationStore>>,
     materializer: Arc<dyn MemoryMaterializerPort>,
     typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
+    consolidation: bool,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
 }
@@ -623,6 +624,7 @@ impl MemoryWritebackModule {
             associations: None,
             materializer: Arc::new(MemoryMaterializer::default()),
             typed_sink: None,
+            consolidation: false,
             clock,
             metrics: ModuleMetrics::default(),
         }
@@ -660,6 +662,14 @@ impl MemoryWritebackModule {
     #[must_use]
     pub fn with_typed_sink(mut self, sink: Arc<dyn MemoryTypedMaterializationSink>) -> Self {
         self.typed_sink = Some(sink);
+        self
+    }
+
+    /// Run the deterministic consolidation report after each turn and persist
+    /// its extracted insights (2026-10-06 W2 记忆闭环批; 默认关).
+    #[must_use]
+    pub fn with_consolidation(mut self) -> Self {
+        self.consolidation = true;
         self
     }
 
@@ -723,7 +733,7 @@ impl AgentModule for MemoryWritebackModule {
                     timestamp: now,
                     role: "assistant".into(),
                     content: candidate.content.clone(),
-                    session_id: session,
+                    session_id: session.clone(),
                 });
 
                 // Materialize exactly this bounded user+assistant turn. Legacy coordinator
@@ -836,6 +846,30 @@ impl AgentModule for MemoryWritebackModule {
                                         )
                                         .is_err()
                                     {
+                                        self.metrics.warning();
+                                    }
+                                }
+                            }
+                            Err(_) => self.metrics.warning(),
+                        }
+                    }
+                }
+                // 2026-10-06 W2 记忆闭环批: consolidation 触发点 (with_consolidation 开, 默认关).
+                // run_consolidation = 确定性治理视图分析 (0 模型调用); 提炼 insights 以
+                // 稳定 ID 落库 (跨轮幂等), 下一轮召回可见 —— 效果闭环.
+                if self.consolidation {
+                    if let Some(coord) = &self.coordinator {
+                        match coord.run_consolidation(&session) {
+                            Ok(report) => {
+                                for insight in report.extracted_insights {
+                                    let episode = Episode {
+                                        id: hash_id("ep-consolidation", &[&insight]),
+                                        timestamp: now,
+                                        role: "consolidation".into(),
+                                        content: format!("[记忆整理洞察] {insight}"),
+                                        session_id: session.clone(),
+                                    };
+                                    if coord.writeback_episode(&episode).is_err() {
                                         self.metrics.warning();
                                     }
                                 }
@@ -996,6 +1030,136 @@ impl AgentModule for PreferenceRecallModule {
             started,
             0,
         );
+        Ok(result)
+    }
+}
+
+/// Reflexion module ID (2026-10-06 W2 记忆闭环批).
+pub const REFLEXION_MODULE_ID: &str = "cognitive.reflexion";
+
+/// 失败闭环模块 (donor `apeireth-companion` 口头强化反思, 2026-10-06 W2 接线).
+///
+/// - `TurnStart`: 按任务标签召回历史教训, 字符预算内注入 (确定性, 0 LLM 调用).
+/// - `AfterTurn`: 消费 [`JudgeObservations`] 的**显式**非 Pass 判定, 沉淀
+///   `FailureKind::DecisionRejected` 并即时经 `RuleCritic` 蒸馏反思.
+///
+/// **0 装信号边界**: 只认 Judge 的显式判定 —— Judge 未开 = 无信号 = 不记录,
+/// 绝不从文本启发式猜"失败". `ValidationFailed` / `ExperienceFailed` 两类
+/// 失败信号生产暂无诚实来源 (store API 就绪, 留待信号接入).
+pub struct ReflexionModule {
+    manifest: ModuleManifest,
+    store: Arc<dyn apeireth_memory::reflexion::ReflexionStore>,
+    observations: Arc<JudgeObservations>,
+    task_type: String,
+    budget_chars: usize,
+    clock: Arc<dyn Clock>,
+    metrics: ModuleMetrics,
+}
+
+impl ReflexionModule {
+    /// Build the module against an explicit store and the shared judge observations.
+    pub fn new(
+        store: Arc<dyn apeireth_memory::reflexion::ReflexionStore>,
+        observations: Arc<JudgeObservations>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            manifest: ModuleManifest::new(REFLEXION_MODULE_ID, "Reflexion failure feedback"),
+            store,
+            observations,
+            task_type: "chat".to_string(),
+            budget_chars: 600,
+            clock,
+            metrics: ModuleMetrics::default(),
+        }
+    }
+
+    /// Set the task label used for record/retrieve matching.
+    #[must_use]
+    pub fn with_task_type(mut self, task_type: impl Into<String>) -> Self {
+        self.task_type = task_type.into();
+        self
+    }
+
+    /// Bound the retry-injection block size.
+    #[must_use]
+    pub fn with_budget(mut self, budget_chars: usize) -> Self {
+        self.budget_chars = budget_chars.max(1);
+        self
+    }
+
+    /// Read-only metrics for embedding callers.
+    pub fn metrics(&self) -> ModuleMetricsSnapshot {
+        self.metrics.snapshot()
+    }
+
+    /// Attach the shared non-sensitive telemetry sink.
+    #[must_use]
+    pub fn with_telemetry(self, telemetry: Arc<CognitiveTelemetry>) -> Self {
+        self.metrics.attach_telemetry(telemetry);
+        self
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentModule for ReflexionModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        use apeireth_memory::reflexion::{FailureKind, RuleCritic};
+        let started = Instant::now();
+        let result = if hook == HookPoint::TurnStart {
+            match self
+                .store
+                .retry_injection(&self.task_type, self.budget_chars)
+            {
+                Ok(Some(text)) => {
+                    ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(text))
+                }
+                Ok(None) => ModuleOutcome::continue_(),
+                Err(_) => {
+                    self.metrics.warning();
+                    ModuleOutcome::continue_()
+                }
+            }
+        } else if hook == HookPoint::AfterTurn {
+            let now = self.clock.now().timestamp_millis();
+            if let Some(observation) = self.observations.get(ctx.session_id) {
+                if observation.verdict != JudgeVerdict::Pass {
+                    let summary = if observation.critique.trim().is_empty() {
+                        format!("judge verdict: {:?}", observation.verdict)
+                    } else {
+                        observation.critique.clone()
+                    };
+                    if self
+                        .store
+                        .record_failure(
+                            FailureKind::DecisionRejected,
+                            &self.task_type,
+                            &summary,
+                            now,
+                        )
+                        .is_err()
+                    {
+                        self.metrics.warning();
+                    }
+                }
+            }
+            if self.store.process_unreflected(&RuleCritic, now).is_err() {
+                self.metrics.warning();
+            }
+            ModuleOutcome::continue_()
+        } else {
+            ModuleOutcome::continue_()
+        };
+        self.metrics
+            .record(REFLEXION_MODULE_ID, hook, &result.directive, started, 0);
         Ok(result)
     }
 }
@@ -1202,7 +1366,9 @@ impl AgentModule for JudgeModule {
                     self.observations.record(*ctx.session_id, judged.clone());
                     match judged.verdict {
                         JudgeVerdict::Pass => ModuleOutcome::continue_(),
-                        JudgeVerdict::Stop => ModuleOutcome::stop("AI Judge rejected the candidate"),
+                        JudgeVerdict::Stop => {
+                            ModuleOutcome::stop("AI Judge rejected the candidate")
+                        }
                         JudgeVerdict::Retry if judged.score < self.config.retry_below => {
                             let mut retries = self.retries.lock().expect("judge retries mutex");
                             let retry_count = retries.entry(*ctx.session_id).or_default();
@@ -1658,11 +1824,33 @@ mod tests {
 
         fn governed_recent_episodes(
             &self,
-            _session_id: &str,
-            _n: usize,
+            session_id: &str,
+            n: usize,
         ) -> Result<Vec<apeireth_memory::GovernedEpisode>, apeireth_memory::MemoryGovernanceError>
         {
-            Ok(Vec::new())
+            // 2026-10-06: 治理视图从 episodes 如实派生 (此前恒返空 = 半真 fake,
+            // 被 consolidation 效果测试咬出). fake 无遗忘态, 全部按 Active 上报.
+            let mut governed: Vec<apeireth_memory::GovernedEpisode> = self
+                .episodes
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|episode| episode.session_id == session_id)
+                .rev()
+                .take(n)
+                .map(|episode| apeireth_memory::GovernedEpisode {
+                    episode: episode.clone(),
+                    status: apeireth_memory::MemoryGovernanceStatus::Active,
+                    protected: false,
+                    content_override: None,
+                    revision: 0,
+                    updated_at: None,
+                    updated_by: None,
+                    forgotten_at: None,
+                })
+                .collect();
+            governed.reverse();
+            Ok(governed)
         }
 
         fn governed_query(
@@ -1981,6 +2169,210 @@ mod tests {
             invoker_handle: Arc::clone(invoker),
             subloop: &DUMMY_SUBLOOP,
         }
+    }
+
+    struct FakeScoped {
+        episodes: std::sync::Mutex<Vec<Episode>>,
+    }
+
+    impl apeireth_memory::ScopedMemoryBackend for FakeScoped {
+        fn query_candidates(
+            &self,
+            _query: &apeireth_memory::MemoryCandidateQuery,
+        ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(self.episodes.lock().unwrap().clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn memory_injection_format_switches_the_overlay_shape() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        let scoped = Arc::new(FakeScoped {
+            episodes: std::sync::Mutex::new(vec![Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "主人明天要交线代作业".into(),
+                session_id: session.to_string(),
+            }]),
+        });
+        let xml = MemoryCoordinator::new(memory.clone(), memory.clone())
+            .with_scoped_backend(scoped.clone());
+        let injection = MemoryCoordinator::new(memory.clone(), memory.clone())
+            .with_scoped_backend(scoped)
+            .with_memory_injection_format();
+        let query = apeireth_memory::MemoryRecallQuery::new(session.to_string(), "线代作业");
+
+        let xml_overlay = xml
+            .compile_prompt_overlay(&query)
+            .unwrap()
+            .expect("xml overlay");
+        assert!(xml_overlay.contains("<governed_memory"), "{xml_overlay}");
+
+        let inj_overlay = injection
+            .compile_prompt_overlay(&query)
+            .unwrap()
+            .expect("injection overlay");
+        assert!(inj_overlay.contains("[记忆证据"), "{inj_overlay}");
+        assert!(
+            inj_overlay.contains("禁止说「我记得我们以前聊过」"),
+            "{inj_overlay}"
+        );
+    }
+
+    #[tokio::test]
+    async fn consolidation_is_opt_in_and_persists_insights_idempotently() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        memory
+            .put_episode(&Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "we resolved the build error: xyz".into(),
+                session_id: session.to_string(),
+            })
+            .unwrap();
+        let coordinator = Arc::new(MemoryCoordinator::new(memory.clone(), memory.clone()));
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let candidate = NormalizedResponse::text("answer-1", "fake", "resolved the issue");
+
+        // 默认关: 不落任何 consolidation 洞察.
+        let off = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator));
+        off.on_hook(
+            HookPoint::AfterTurn,
+            &context(
+                &session,
+                &messages,
+                Some(&candidate),
+                &invoker,
+                MEMORY_WRITEBACK_MODULE_ID,
+            ),
+        )
+        .await
+        .unwrap();
+        assert_eq!(insight_ids(&memory, &session.to_string()).len(), 0);
+
+        // 开: 洞察落库; 重复运行幂等 (稳定 ID + 派生记忆不再入料).
+        let on = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator))
+            .with_consolidation();
+        on.on_hook(
+            HookPoint::AfterTurn,
+            &context(
+                &session,
+                &messages,
+                Some(&candidate),
+                &invoker,
+                MEMORY_WRITEBACK_MODULE_ID,
+            ),
+        )
+        .await
+        .unwrap();
+        // 原始证据 = 种子 user 条目 + 本轮 assistant 回复, 各提炼 1 条洞察.
+        let first = insight_ids(&memory, &session.to_string());
+        assert_eq!(first.len(), 2, "one insight per raw evidence: {first:?}");
+
+        // 再跑一轮: ID 集合不变 (幂等; 洞察自我增殖必须为 0).
+        on.on_hook(
+            HookPoint::AfterTurn,
+            &context(
+                &session,
+                &messages,
+                Some(&candidate),
+                &invoker,
+                MEMORY_WRITEBACK_MODULE_ID,
+            ),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            insight_ids(&memory, &session.to_string()),
+            first,
+            "second run must not spawn derived-insight cascades"
+        );
+    }
+
+    fn insight_ids(memory: &FakeMemory, session: &str) -> std::collections::BTreeSet<String> {
+        memory
+            .recent_episodes(session, 50)
+            .unwrap()
+            .into_iter()
+            .filter(|episode| episode.role == "consolidation")
+            .map(|episode| episode.id)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn reflexion_records_judge_failures_and_injects_lessons() {
+        use apeireth_memory::reflexion::ReflexionStore;
+        let session = SessionId::new();
+        let store = Arc::new(apeireth_memory::reflexion::InMemoryReflexionStore::new());
+        let observations = Arc::new(JudgeObservations::default());
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let module = ReflexionModule::new(store.clone(), Arc::clone(&observations), clock);
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+
+        // 无判定 → 不记录, TurnStart 无注入 (行为不变).
+        let quiet = module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        assert!(quiet.prompt_overlays.is_empty());
+        assert!(store.list_failures().unwrap().is_empty());
+
+        // Judge 显式非 Pass 判定 → 沉淀失败 + RuleCritic 即时蒸馏反思.
+        observations.record(
+            session,
+            JudgeResult {
+                score: 0.3,
+                verdict: JudgeVerdict::Retry,
+                critique: "answer too terse".into(),
+            },
+        );
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        assert_eq!(store.list_failures().unwrap().len(), 1);
+        assert_eq!(store.list_reflections().unwrap().len(), 1);
+
+        // TurnStart 注入教训块 (donor 反刍格式).
+        let injected = module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        assert_eq!(injected.prompt_overlays.len(), 1);
+        let text = ContentPart::join_text(&injected.prompt_overlays[0].message().content);
+        assert!(text.contains("历史失败反思备忘"), "{text}");
     }
 
     #[tokio::test]

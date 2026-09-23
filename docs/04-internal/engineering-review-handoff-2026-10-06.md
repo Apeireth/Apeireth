@@ -207,6 +207,12 @@ pwsh frontend\companion-desktop\scripts\install-e2e.ps1     # 除"真聊天"外�
 
 ## 4. 我**没有**验证的东西 (审核方请勿假设我已验)
 
+> **[2026-10-06 夜挂账核销批状态]** 8 项中 3 项本批核销: **#3** legacy 只做名称级扫描 →
+> 源码级核验完成 (9 项逐个 read 实现体, 修正表见差距审计 §7.2 四审表); **#5** `thought_cluster`
+> → 查清 (v2 `cluster_store.rs` = 完整改名移植, 从缺口移出); **#8** `jimmy` 死指针 → 已删
+> (删前复验 Repository not found)。仍欠: #1 真机点击流 / #2 `--ignored` E2E / #6 Option
+> 默认关配置全量排查 / #7 shell 可达范围实测重放 —— 本轮续核, 不留过夜账。
+
 1. **没有跑真机点击流**: 本批全部结论来自源码与库级测试; 桌面 UI 的人工点击流验收在台账 §2 挂账 #2。
 2. **没有真机跑 `--ignored` 的 E2E**: organ live LLM (35 处 ignore)、provider live (7 处) 本批一次都没跑。
    台账绿表 #1-#39 里那些是**历史**跑过的, 不代表在你机器上现在还能跑。

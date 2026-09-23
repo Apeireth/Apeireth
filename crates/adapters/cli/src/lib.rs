@@ -71,6 +71,11 @@ const PERSONA_ID_ENV: &str = "APEIRETH_PERSONA_ID";
 const SUBJECT_ID_ENV: &str = "APEIRETH_SUBJECT_ID";
 const DEFAULT_PERSONA_ID: &str = "apeireth";
 const DEFAULT_SUBJECT_ID: &str = "local-user";
+// 2026-10-06 W2 记忆闭环批: donor 反幻觉注入格式 / 每轮记忆整理 / 失败闭环。
+const ENABLE_MEMORY_INJECTION_ENV: &str = "APEIRETH_ENABLE_MEMORY_INJECTION";
+const ENABLE_CONSOLIDATION_ENV: &str = "APEIRETH_ENABLE_CONSOLIDATION";
+const ENABLE_REFLEXION_ENV: &str = "APEIRETH_ENABLE_REFLEXION";
+const REFLEXION_DIR_ENV: &str = "APEIRETH_REFLEXION_DIR";
 
 /// Resolve the local read-tools switch from the process environment.
 ///
@@ -159,6 +164,40 @@ pub fn embedding_provider_from_env(
             "partial embedding config: set both {EMBEDDING_URL_ENV} and {EMBEDDING_MODEL_ENV} or neither"
         ))),
     }
+}
+
+/// donor 反幻觉注入格式 (2026-10-06 W2): `APEIRETH_ENABLE_MEMORY_INJECTION=1`
+/// 把记忆 overlay 换成编号证据清单 + 「禁止说『我记得我们以前聊过』」规则; 默认 XML 格式不变。
+pub fn memory_injection_enabled_from_env() -> bool {
+    std::env::var(ENABLE_MEMORY_INJECTION_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 每轮记忆整理 (2026-10-06 W2): `APEIRETH_ENABLE_CONSOLIDATION=1` 时 AfterTurn
+/// 跑确定性 consolidation 报告并把提炼洞察落库 (稳定 ID 幂等); 默认关。
+pub fn consolidation_enabled_from_env() -> bool {
+    std::env::var(ENABLE_CONSOLIDATION_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// reflexion 失败闭环 (2026-10-06 W2): `APEIRETH_ENABLE_REFLEXION=1` 注册
+/// `cognitive.reflexion` 模块 (TurnStart 教训注入 + AfterTurn 判定沉淀); 默认关。
+pub fn reflexion_enabled_from_env() -> bool {
+    std::env::var(ENABLE_REFLEXION_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// reflexion 存储根目录: `APEIRETH_REFLEXION_DIR` 覆写, 默认 `<data>/reflexion`。
+pub fn reflexion_store_root_from_env() -> PathBuf {
+    std::env::var(REFLEXION_DIR_ENV)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| default_panel_data_dir().join("reflexion"))
 }
 
 /// Build the production governance policy from an explicit local-read choice.
@@ -620,6 +659,7 @@ async fn build_cognitive_modules_from_env(
     let fetch_enabled = std::env::var(ENABLE_FETCH_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
+    let reflexion_enabled = reflexion_enabled_from_env();
     let workspace_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let config = CognitiveModuleConfig {
         judge: JudgeConfig {
@@ -630,6 +670,9 @@ async fn build_cognitive_modules_from_env(
         organs: organs_enabled,
         preference_learning: preference_learning_enabled,
         proactive_recall: proactive_recall_policy_from_env(),
+        memory_injection: memory_injection_enabled_from_env(),
+        consolidation: consolidation_enabled_from_env(),
+        reflexion: reflexion_enabled,
         // shell/fetch 旋钮: 只注册工具; 执行许可由治理层 grant+approval 决定.
         shell: shell_enabled.then(|| TrustedShellConfig::new(workspace_root.clone())),
         fetch: fetch_enabled.then(FetchConfig::public_internet_only),
@@ -652,6 +695,12 @@ async fn build_cognitive_modules_from_env(
         None
     };
     let scoped_memory: Arc<dyn apeireth_memory::ScopedMemoryBackend> = sqlite_backend.clone();
+    let reflexion_store: Option<Arc<dyn apeireth_memory::reflexion::ReflexionStore>> =
+        reflexion_enabled.then(|| -> Arc<dyn apeireth_memory::reflexion::ReflexionStore> {
+            Arc::new(apeireth_memory::reflexion::FileReflexionStore::new(
+                reflexion_store_root_from_env(),
+            ))
+        });
     let backends = CognitiveBackends {
         memory: Some(memory.clone()),
         memory_governance: Some(memory_governance),
@@ -671,6 +720,7 @@ async fn build_cognitive_modules_from_env(
         typed_recall: typed_recall_enabled.then(|| Arc::clone(&typed_source)),
         typed_recall_identity: typed_recall_enabled.then_some(typed_identity),
         typed_sink: Some(typed_sink),
+        reflexion_store,
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)

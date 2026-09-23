@@ -45,13 +45,13 @@ pub mod session_settings;
 pub use barge_in::{format_sse_interrupt_event, BargeInController, InterruptReason, StreamHandle};
 pub use duplex_gateway::{DuplexFrame, DuplexSessionController, SentenceDivider};
 pub use ember_hud_driver::{EmberCognitiveStance, EmberHudDriver, EmberShaderUniforms};
+pub use file_fetcher::{
+    FetchedFile, FileFetchError, InternalFileRequest, InternalFileResponse, TransparentFileFetcher,
+};
 pub use presence::{
     spawn_presence_heartbeat, InitiativeBudget, PresenceBreath, PresencePad, PresenceService,
     PresenceSignificance, PresenceSource, PresenceState, PresenceSynthesizer,
     HEARTBEAT_INTERVAL_SECS, INITIATIVE_DAILY_CAP,
-};
-pub use file_fetcher::{
-    FetchedFile, FileFetchError, InternalFileRequest, InternalFileResponse, TransparentFileFetcher,
 };
 
 pub use canonical_entry::{

@@ -486,8 +486,7 @@ pub fn spawn_presence_heartbeat(service: &Arc<PresenceService>) {
     };
     let weak = Arc::downgrade(service);
     handle.spawn(async move {
-        let mut interval =
-            tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
+        let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await; // the first tick is immediate; skip it
         loop {
@@ -591,14 +590,20 @@ mod tests {
 
         for (stance, wire) in [
             (EmberCognitiveStance::DeepCodingFocus, "deep_coding_focus"),
-            (EmberCognitiveStance::AttentivePresence, "attentive_presence"),
+            (
+                EmberCognitiveStance::AttentivePresence,
+                "attentive_presence",
+            ),
             (
                 EmberCognitiveStance::DreamingConsolidation,
                 "dreaming_consolidation",
             ),
             (EmberCognitiveStance::EmpatheticCare, "empathetic_care"),
         ] {
-            assert_eq!(serde_json::to_value(stance).unwrap(), serde_json::json!(wire));
+            assert_eq!(
+                serde_json::to_value(stance).unwrap(),
+                serde_json::json!(wire)
+            );
         }
         for (significance, wire) in [
             (PresenceSignificance::Heartbeat, "heartbeat"),
@@ -692,7 +697,10 @@ mod tests {
         // 从启动就无任何回合:他一直在后台整合。
         let mut fresh = PresenceSynthesizer::new();
         let first_tick = fresh.heartbeat(T0);
-        assert_eq!(first_tick.stance, EmberCognitiveStance::DreamingConsolidation);
+        assert_eq!(
+            first_tick.stance,
+            EmberCognitiveStance::DreamingConsolidation
+        );
     }
 
     #[test]

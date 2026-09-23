@@ -142,6 +142,15 @@ pub struct ProductionModulesConfig {
     /// side-calls, and this is the explicit rollout boundary for the first
     /// production organ integration.
     pub organs: bool,
+    /// Render prompt overlays in the donor closed-world injection format
+    /// (numbered evidence + anti-hallucination rules). Off by default.
+    pub memory_injection: bool,
+    /// Run the deterministic consolidation report after each turn and persist
+    /// its extracted insights. Off by default.
+    pub consolidation: bool,
+    /// Register the reflexion failure-feedback module (TurnStart lessons +
+    /// AfterTurn judge-failure sedimentation). Off by default.
+    pub reflexion: bool,
 }
 
 impl Default for ProductionModulesConfig {
@@ -162,6 +171,9 @@ impl Default for ProductionModulesConfig {
             mcp: false,
             preference_learning: false,
             organs: false,
+            memory_injection: false,
+            consolidation: false,
+            reflexion: false,
         }
     }
 }
@@ -210,6 +222,8 @@ pub struct ProductionBackends {
     pub typed_recall_identity: Option<TypedRecallIdentity>,
     /// Optional concrete typed durable sink for commitment/persona/relation projections.
     pub typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
+    /// Reflexion failure-feedback store (2026-10-06 W2 记忆闭环批).
+    pub reflexion_store: Option<Arc<dyn apeireth_memory::reflexion::ReflexionStore>>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -304,6 +318,9 @@ impl ProductionModules {
             if let Some(embed) = &backends.embedding_provider {
                 coordinator = coordinator.with_embedding_provider(Arc::clone(embed));
             }
+            if config.memory_injection {
+                coordinator = coordinator.with_memory_injection_format();
+            }
             if let Some(pref) = &backends.preferences {
                 coordinator = coordinator.with_preferences(Arc::clone(pref));
             }
@@ -390,7 +407,7 @@ impl ProductionModules {
                         "self_assessments",
                     )?,
                     Arc::clone(&clock),
-                    observations,
+                    Arc::clone(&observations),
                 )
                 .with_telemetry(Arc::clone(&telemetry)),
             ));
@@ -410,6 +427,17 @@ impl ProductionModules {
             modules.push(Arc::new(OrganModule::new(Arc::clone(&clock))));
         }
 
+        if config.reflexion {
+            modules.push(Arc::new(
+                super::cognitive::ReflexionModule::new(
+                    required(backends.reflexion_store, "reflexion", "reflexion_store")?,
+                    Arc::clone(&observations),
+                    Arc::clone(&clock),
+                )
+                .with_telemetry(Arc::clone(&telemetry)),
+            ));
+        }
+
         if config.memory_writeback {
             let mut module = MemoryWritebackModule::new(
                 required(backends.memory, "memory_writeback", "memory")?,
@@ -425,6 +453,9 @@ impl ProductionModules {
             }
             if let Some(sink) = &backends.typed_sink {
                 module = module.with_typed_sink(Arc::clone(sink));
+            }
+            if config.consolidation {
+                module = module.with_consolidation();
             }
             if let (Some(wiki), Some(graph), Some(associations)) =
                 (&backends.wiki, &backends.graph, &backends.associations)
