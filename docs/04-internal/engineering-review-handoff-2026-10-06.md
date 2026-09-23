@@ -86,6 +86,14 @@ frozen 13), v2 是 18 个 crate 的重构形态。**"v1 有真实现、v2 有没
 > 我把它记成四级口径的 **IMPLEMENTED ✅ / PRODUCTION WIRED ❌ (proactive_recall: WIRED ✅ /
 > DEFAULT ENABLED ❌)**。如果审核方发现别的模块也有非零引用, 必须逐个查明它是
 > "类型出现在同一文件里" 还是"真的被构造/注入" —— 后者才算 WIRED。
+>
+> **[2026-10-06 夜 W2 实施时三审补充]** 本组结论被深挖调用链后**部分推翻** —— 详见差距审计
+> §7.1"三次复核"表: `hybrid_search`/BM25 经 `MemoryCoordinator` **早已接线**
+> (T7-T9 生产级测试实证, "0 引用"是名字扫描陷阱); 真缺口是 **typed 写读不对称**
+> (`typed_sink` 在写 / `typed_recall` 读侧恒 None = 入库永不召回) 与 **语义向量阶段
+> 无真实现** (`embedding_provider` 恒 None)。两者已在 W2 首批修复/补齐 (台账 #41)。
+> 复核教训第三条: 判"未接线"要过三关 —— ① 名字引用扫描 ② **crate 内部互调**
+> ③ **`Option<...>` 配置的 `Default` 值**。
 
 ### 2.4 真缺口 (源码确认不存在)
 

@@ -62,6 +62,15 @@ const ENABLE_SHELL_ENV: &str = "APEIRETH_ENABLE_SHELL";
 const ENABLE_FETCH_ENV: &str = "APEIRETH_ENABLE_FETCH";
 const ENABLE_ORGANS_ENV: &str = "APEIRETH_ENABLE_ORGANS";
 const ENABLE_PREFERENCE_LEARNING_ENV: &str = "APEIRETH_ENABLE_PREFERENCE_LEARNING";
+// 2026-10-06 W2 接线批 (engineering-review-handoff-2026-10-06.md §5 W2):
+// 记忆召回三组旋钮 —— proactive recall 补缺 (已接线无开关)、typed 写读对称
+// (默认开 + 逃生门)、语义向量阶段 (真实现 + opt-in, 词法回退兜底)。
+const ENABLE_PROACTIVE_RECALL_ENV: &str = "APEIRETH_ENABLE_PROACTIVE_RECALL";
+const TYPED_RECALL_DISABLE_ENV: &str = "APEIRETH_DISABLE_TYPED_RECALL";
+const PERSONA_ID_ENV: &str = "APEIRETH_PERSONA_ID";
+const SUBJECT_ID_ENV: &str = "APEIRETH_SUBJECT_ID";
+const DEFAULT_PERSONA_ID: &str = "apeireth";
+const DEFAULT_SUBJECT_ID: &str = "local-user";
 
 /// Resolve the local read-tools switch from the process environment.
 ///
@@ -83,6 +92,73 @@ fn local_read_tools_enabled_from_env() -> bool {
         return true;
     }
     true
+}
+
+/// Opt-in proactive recall policy (2026-10-06 W2 接线批补缺: 该路径早已接进
+/// `MemoryRecallModule`, 但 `Default = None` 且无任何旋钮可达)。
+///
+/// `APEIRETH_ENABLE_PROACTIVE_RECALL=1` → 确定性默认策略 (enabled, budget 2,
+/// 阈值 0.10); 其余值或缺省 → `None` (默认关, 行为不变)。
+pub fn proactive_recall_policy_from_env() -> Option<apeireth_memory::ProactiveRecallPolicy> {
+    std::env::var(ENABLE_PROACTIVE_RECALL_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+        .then(|| apeireth_memory::ProactiveRecallPolicy::default().enabled(true))
+}
+
+/// Typed (commitment/persona/relation) 召回读侧开关 (2026-10-06 W2 写读对称修复)。
+///
+/// **默认开**: 写侧 `CanonicalMemoryTypedSink` 早已在生产落库, 读侧此前恒缺
+/// (数据入库永不召回) —— 开关默认开是对称修复而非新功能; `APEIRETH_DISABLE_TYPED_RECALL=1`
+/// 为整体逃生门 (fail-closed 惯例)。
+pub fn typed_recall_enabled_from_env() -> bool {
+    !std::env::var(TYPED_RECALL_DISABLE_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// Typed memory 的显式主体身份 (写侧 persona delta 与读侧 typed 召回共用)。
+///
+/// 本地产品单主体: 默认 `apeireth` / `local-user`, 多主体部署用
+/// `APEIRETH_PERSONA_ID` / `APEIRETH_SUBJECT_ID` 覆写 (空白值视为未设)。
+pub fn typed_recall_identity_from_env() -> apeireth_memory::TypedRecallIdentity {
+    fn value(key: &str, default: &str) -> String {
+        std::env::var(key)
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| default.to_string())
+    }
+    apeireth_memory::TypedRecallIdentity {
+        persona_id: value(PERSONA_ID_ENV, DEFAULT_PERSONA_ID),
+        subject_id: value(SUBJECT_ID_ENV, DEFAULT_SUBJECT_ID),
+    }
+}
+
+/// 语义向量阶段 (2026-10-06 W2): 召回的 embedding 候选打分接线。
+///
+/// Fail-closed 语义: URL 与 MODEL **双缺** → `Ok(None)` (词法回退, 行为不变);
+/// **只设其一** → 报错 (半配是配置事故, 大声失败绝不静默); 双全 → 构造
+/// OpenAI-compatible embeddings transport 注入组装根 (构造不发网络)。
+/// `APEIRETH_EMBEDDING_KEY` 可选 (本地免鉴权端点不设)。
+pub fn embedding_provider_from_env(
+) -> Result<Option<Arc<dyn apeireth_memory::EmbeddingProvider>>, apeireth_memory::EmbeddingError> {
+    use apeireth_provider::embeddings::{
+        OpenAiCompatibleEmbeddingProvider, EMBEDDING_MODEL_ENV, EMBEDDING_URL_ENV,
+    };
+    let url = std::env::var(EMBEDDING_URL_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let model = std::env::var(EMBEDDING_MODEL_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    match (url, model) {
+        (None, None) => Ok(None),
+        (Some(_), Some(_)) => Ok(Some(Arc::new(OpenAiCompatibleEmbeddingProvider::from_env()?))),
+        _ => Err(apeireth_memory::EmbeddingError::Unavailable(format!(
+            "partial embedding config: set both {EMBEDDING_URL_ENV} and {EMBEDDING_MODEL_ENV} or neither"
+        ))),
+    }
 }
 
 /// Build the production governance policy from an explicit local-read choice.
@@ -497,11 +573,28 @@ async fn build_cognitive_modules_from_env(
         .ensure_schema()
         .await
         .map_err(|error| format!("cognitive relation schema failed: {error}"))?;
+    // 2026-10-06 W2 接线批: typed 写读对称修复。写侧 typed_sink 早已在生产
+    // 落 commitment/persona/relation, 但读侧 typed_recall 恒 None —— 入库后
+    // 永不进召回。此处把同一组 store 接给 SqliteTypedMemoryRecallSource。
+    // episodes 槽**不**接: episodic 候选已由 scoped_memory 供, 且该槽吃
+    // `SqliteMemoryStore` 与生产池 `SqliteBackend` 不同型, 不为接线引入第二套连接。
+    let typed_identity = typed_recall_identity_from_env();
+    let typed_recall_enabled = typed_recall_enabled_from_env();
+    let typed_source: Arc<dyn apeireth_memory::TypedMemoryRecallSource> = Arc::new(
+        apeireth_runtime_assembly::SqliteTypedMemoryRecallSource::new()
+            .with_commitments(Arc::clone(&commitment_store))
+            .with_persona(Arc::clone(&persona_store))
+            .with_relations(Arc::clone(&relation_store)),
+    );
     let persona_store: Arc<dyn apeireth_memory::PersonaProfileStore> = persona_store;
     let typed_sink = Arc::new(
         apeireth_runtime_assembly::CanonicalMemoryTypedSink::new()
             .with_commitments(Arc::clone(&commitment_store))
             .with_persona_store(Arc::clone(&persona_store))
+            .with_identity(
+                typed_identity.persona_id.clone(),
+                typed_identity.subject_id.clone(),
+            )
             .with_relations(Arc::clone(&relation_store)),
     );
     let typed_sink: Arc<dyn apeireth_memory::MemoryTypedMaterializationSink> = typed_sink;
@@ -536,6 +629,7 @@ async fn build_cognitive_modules_from_env(
         council: council_enabled,
         organs: organs_enabled,
         preference_learning: preference_learning_enabled,
+        proactive_recall: proactive_recall_policy_from_env(),
         // shell/fetch 旋钮: 只注册工具; 执行许可由治理层 grant+approval 决定.
         shell: shell_enabled.then(|| TrustedShellConfig::new(workspace_root.clone())),
         fetch: fetch_enabled.then(FetchConfig::public_internet_only),
@@ -569,12 +663,13 @@ async fn build_cognitive_modules_from_env(
         council,
         workspace_root: std::env::current_dir().ok(),
         scoped_memory: Some(scoped_memory),
-        embedding_provider: None,
+        embedding_provider: embedding_provider_from_env()
+            .map_err(|error| format!("embedding provider config invalid: {error}"))?,
         access_history: Some(access_history),
         memory_extractor: None,
         memory_materializer: None,
-        typed_recall: None,
-        typed_recall_identity: None,
+        typed_recall: typed_recall_enabled.then(|| Arc::clone(&typed_source)),
+        typed_recall_identity: typed_recall_enabled.then_some(typed_identity),
         typed_sink: Some(typed_sink),
     };
     let modules =

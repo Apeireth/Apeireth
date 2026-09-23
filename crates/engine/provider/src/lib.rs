@@ -14,6 +14,8 @@ pub mod canonical_minimax;
 pub mod canonical_openai_compatible;
 /// Environment-backed credential resolution.
 pub mod credentials;
+/// OpenAI-compatible embeddings transport (semantic recall vector stage).
+pub mod embeddings;
 /// CompletionRequest ↔ NormalizedRequest 转换 + 错误映射 (两个 LlmFactory 共享).
 pub(crate) mod llm_factory_adapters;
 /// RC-5 LlmFactory 真实现 — MiniMax backend adapter (复用 `MinimaxProviderCapability`).
