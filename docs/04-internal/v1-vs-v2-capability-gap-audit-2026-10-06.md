@@ -287,3 +287,125 @@ perception 不做 per-turn module
   (把"已实现未接线"也标成 0), 修订时须按四级口径重标;
 - **教训 (0 装纪律的双向性)**: 0 装要求"不假装完成", 同样要求"不假装未完成" ——
   审计必须对源码实证, 不能只信历史文档。
+
+---
+
+## 8. 附录 A: v2 现役 18 crate 源码清单 (逐 crate + 逐能力, 2026-10-06 复核)
+
+> **口径**: 全部结论来自 `crates/` **源码第一手** (`lib.rs` 声明 + 模块文件 + 行号),
+> **未读 docs/** —— 目的是给"历史文档说 X, 源码其实 Y"提供独立证据面。
+> 三档状态: **真实现** / **部分** (框架真、真 backend 未接: HTTP/crypto/持久化/硬件) /
+> **stub·0装** (源码内显式标 0 装 或返 `NotImplemented`)。
+
+### 8.1 逐 crate 职责与公开入口
+
+| crate | 一句话职责 | 关键公开入口 |
+|---|---|---|
+| `core` (F) | 主路径核心类型 + 内核原语 + 双洋葱 + 哲学锚 + 状态机 + SelfDisable/OTA | `Episode/Note/Session/IdentityCard`; `kernel/gate/lifecycle/onion/philosophy/statechart/eight_anchors`; `OtaChannel`, `trait Evolution`, `trait SelfDisable`, `SelfDisableAudit` |
+| `plugin` (F) | canonical plugin/capability 模型 + 注册表 + MCP + organ/perception 抽象 | `trait Plugin`, `PluginManager/Manifest`, `CapabilityRegistry`, `Tool/ProviderCapability`, `trait OrganTrait`/`OrganKind`, `trait PerceptionBackend`, `trait PreferenceStore/SelfAssessmentStore` |
+| `protocol` (F) | LLM 协议归一化 (OpenAI Chat/Responses + Anthropic + Gemini) + WS 8 帧 + 用量 | `trait ProtocolAdapter`, `adapters::{openai_chat,openai_responses,anthropic_messages,gemini}`, `bridge/bridge_ext`, `normalized`, `canonical`, `ws_v1/ws_session`, `acp`, `usage::CostTracker`, `p2p_mesh` |
+| `governance` (F) | 运行时行动前的**唯一**治理决策点 (单 hook + 五门 pipeline) | `trait GovernanceHook`, `Action/Decision`, `GovernanceVerdict`, `GovernancePipeline`, `Permission/PermissionSet`, `RateLimitGovernanceHook/TrustTier`, `AuditHashChain`, `input_security`, `colang`, `research_autonomy` |
+| `storage` (E) | 存储基础: SQLite pool/config/migrations + cache + 限流 + quota | `SqliteConnectionPool/SqliteConfig`, `Migration/run_migrations/current_version`, `cache::{lru,shard,ttl,stats,evictor}`, `rate_limit::{retry,strategies}`, `quota`, `machine_id` |
+| `credentials` (F) | 统一凭据存取 + keyring + 加密文件后端 + 脱敏 | `trait CredentialsStore`, `FileCredentialsStore`, `InMemoryKeyring`, `EncryptedFileBackend`, `NoopAudit/CountingAudit`, `SecretBuf/SecretString`, `KeyringCredentialResolver`, `trait CredentialResolver` |
+| `guard` (E) | 两阶段行为链安全分类器 (runtime 治理) | `ChainGuard`, `FastGuard/FastGuardResult`, `DecisionFusion`, `BehaviorChain`, `ScenarioOracle`, `CommandEffectAnalyzer`, `SessionBehaviorHistory`, `EnforcementDirective`, `GuardDryRunRequest/Response` |
+| `memory` (E) | canonical 记忆: SQLite 持久化 + ACT-R 检索 + 图 + BM25/向量混合索引 | `SqliteMemoryStore`, `MemoryMutationFacade`, `MemoryCoordinator`, `HybridSearchEngine`, `PersistentVectorIndex`, `BitemporalGraph`, `UniversalForgetFacade`, `layered_memo::*` (L1-L4), `dailynote::*`, `Episode/Note/SessionStore` |
+| `organ` (E) | 9 organ 真移植 (v1 companion 1:1 → `OrganTrait`) | `Curiosity/Hypothesis/ValueCases/Emotion/WorldModel/CausalWorldModel/EdgeMiner/Emergence/MemoryMerger` 9 impl + `NoopOrgan`; `morphology/motivation/tone/context_assembly/prompt_assembly/goal/experience_growth` |
+| `perception` (E) | 感知层 5 modality (v2.0 仅 Text 真) | `PerceptionEvent/Input/Modality`, `normalize/observe/capture/screen/owner/vision/voice`, `NoopScreenSource`, `XcapVisionBackend`, `WhisperHttpBackend`, `EnergyVadStream` |
+| `runtime` (E) | runtime 机制内核 (session/路由/agent loop/审批), `#![deny(unsafe_code)]` | `Runtime/Builder/Config`, `SessionManager/SessionStore`, `ProviderRouter/RoutedCompletion`, `ModuleRegistry/Module/AgentModule/ModuleInvoker`, `PendingApproval/ApprovalDecision/TurnOutcome`, `RuntimeEvent`, `ExecutionTrace`, `ContextProjector` |
+| `runtime-assembly` (E) | **生产装配** (concrete Memory/Organ/Tool/SQLite wiring) | `ProductionBackends/Modules/CognitiveModules`, `Council/Judge/Organ/MemoryRecall/MemoryWriteback/PreferenceLearning/SelfAssessment` Module, `Fetch/Filesystem/Repo/Search/Shell/Mcp` Module, `InvokerLlmFactory`, `SqliteSessionStore`, `PermissionPresetGovernanceHook`, `DEFERRED_COGNITIVE_SLOTS` |
+| `provider` (E) | canonical 3 Provider (Anthropic/MiniMax/OpenAI-compatible) + LLM factory | `canonical_anthropic/canonical_minimax/canonical_openai_compatible`, `minimax_llm_factory/openai_compatible_llm_factory`, `openai_chat`, `reasoning_adapter`, `provider_model`, `credentials` |
+| `orchestration` (F) | 7 Advisor + Council 评审 + Orchestrator + context/durable 工具 | `trait Advisor`, `Council/CouncilVerdict/CouncilInvoker`, `trait Orchestrator`, `SubagentRole/Spec`, `trait LlmFactory/LlmInstance`, `NoopLlmFactory`, `context_fold/context_rot/continuation/durable/cron/speech_arbiter/worktree_sandbox` |
+| `tools-canonical` (C) | 内建工具 (filesystem/search/repo 默认开; shell/fetch opt-in) + 三 OS 隔离 | `BuiltinToolsPlugin`, `ProcessExecutor`, `ControlledEgress/EgressPolicy`, `ToolGuardrail`, `McpClient`, `SpillStore`, `TransactionalPatchApplier`, `RepoMapGenerator`, `StealthCrawlerEngine`, `StdSubSupervisor/NoopSubSupervisor` |
+| `gateway` (A) | HTTP 网关适配器 (传输 ↔ runtime) | `GatewayState/Services`, `canonical_entry` (native/openai + SSE), `panels`, `EventBus`, `admin` (热配置), `BargeInController`, `DuplexSessionController`, `TransparentFileFetcher`, `EmberHudDriver`, `ErrorCode/ErrorFrame`, `trait CredentialWriter/PanelData` |
+| `cli` (A) | CLI (session/chat/gateway 命令 + **生产装配入口**) | `enum CanonicalCliTurn`, `build_production_governance`, `build_canonical_runtime_from_env`, `execute_canonical_cli_turn`, `dispatch_gateway_serve_on`, `PortableBundleSynthesizer`, bin `apeireth` |
+| `sdk` (A) | 客户端 SDK (**阶段 6 stub**: 类型/鉴权/白名单就位, 真 HTTP/WS 待 R21) | `ApeirethClient/AuthPipeline/ClientConfig`, `STUB_MODE`, `TOOL_WHITELIST`, `SdkError/SdkErrorCode`, `negotiate/SdkVersion`, `Envelope/WireKind` |
+
+### 8.2 逐域能力状态 (真实现 / 部分 / stub)
+
+**记忆域** — 全部真实现: SQLite 主库 + migrations (`memory/src/lib.rs:448,233`),
+门面/协调器 (`facade.rs`/`coordinator.rs`), **BM25 + 向量 RRF 混合检索** (`hybrid_search.rs:137,292`),
+持久化向量索引 (`persistent_vector.rs:37`), 向量距离原语, 双时相图 (`bitemporal_graph.rs`),
+分层记忆 L1-L4 (`layered_memo/*`), 日记/日报 (`dailynote/*` + `diary.rs` + `daily_summary.rs`),
+全局遗忘 (`universal_forget.rs`), persona/preference/experience/self-assessment SQLite store。
+**部分/0 装 4 处**: `preference_store.rs` (`NoopPreferenceStore`, "rc 阶段换 SQLite"),
+`gen_cache.rs:112-118` (`SigSource` trait 口 0 装), `admission_gate.rs:165-171` (冲突度打分 stub),
+`derived_repair.rs:12,54` (真持久化留部署层)。
+
+**认知/器官域** — 9 organ **9/9 库级真实现** (`organ/src/lib.rs:31`, 逐条 `:12-26`);
+`OrganOrchestrator` 串联层真存在 (`runtime-assembly/src/canonical/organ_module.rs:107`);
+E7 Emergence 8 重门控真 (`organ/src/lib.rs:20-25`); Judge 真 (`JudgeModule/JudgeVerdict`)。
+**部分/未实现**: W1/W2 真接 LLM 但 dev 用 `NoopLlmFactory` → 诚实 `NotImplemented`;
+E7 `PolicyStage` 5 状态机 forward-declared; MemoryMerger persist 用 `Vec` 非 SQLite (`memory.rs:38-39`);
+`DEFERRED_COGNITIVE_SLOTS` (`cognitive.rs:1514-1527`) — `cognitive.critic/reflection/planner` 三槽 deferred。
+
+**编排域** — Council 7 Advisor 框架真 + `LlmAdvisor` 真接 LLM (`council/advisors_llm.rs:34`);
+`NoopAdvisor` (`lib.rs:700-730`) 无 key 兜底 0 装; `trait Orchestrator` (`lib.rs:851`) 0 装
+(真调 subagent 需 runtime 介入); context_fold/rot 确定性真 (`DeterministicCompactor`),
+LLM Summary 是 honest stub (`fold.rs:7,22`); durable 真重放已实现但**存储路径未接线** (`replay.rs:774`);
+continuation/cron/speech_arbiter/worktree_sandbox/lineage 真实现。
+
+**治理/安全域** — `GovernancePipeline` + `GovernanceHook` 单契约真 (`governance/lib.rs:471,319`);
+权限/限流/未信任标记/工具描述审计/审计哈希链/输入安全 PII 真;
+`colang`/`approval_policy`/`eval`/`evidence`/`rubric`/`risk` 是**真实现但 default-off helper**
+(`governance/lib.rs:11-17` 明示"不实现 `GovernanceHook` 不装进 pipeline");
+`research_autonomy` 校准门控自治 (RA-4) 真、默认关; `guard` 两阶段分类器真。
+**0 装**: `credentials/gate.rs` 高危凭据审批门 (trait 口); `core/onion.rs:80-83,156` 多签 M-of-N
+是 hex 占位签名, 真 crypto (Ed25519) 排 v2.1。
+
+**工具/进程/沙箱域** — filesystem(只读)/search/repo(只读 git)/shell(opt-in)/fetch(opt-in) 真;
+`ProcessExecutor` 三 OS (Job Object / CREATE_SUSPENDED) 真 (`process/mod.rs:664`, `windows.rs:67`);
+受控网络出口 (DNS 钉扎) 真; `ToolGuardrail` (路径/命令/凭据绊线) 真;
+`StdSubSupervisor` 真 spawn/kill/重启 (`std_sub_supervisor.rs:46`, 但 `:81` **未接 Job Object**)。
+**0 装/未实现**: 写操作 (write/delete/rename/copy) 源码显式 deferred 到 M2B (`filesystem.rs:9-10`);
+`trait SubSupervisor` + `NoopSubSupervisor` 0 装 (`supervisor.rs:131,189`);
+`trait McpTransport` 无生产 impl (`mcp.rs:120`); `StealthCrawlerEngine` 仅 UA 选择 + 文本包裹,
+无真抓取 (`stealth_crawler.rs:65`); **真文件/网络沙箱 = 未实现** (只有进程树遏制)。
+
+**协议/网关/交付域** — 4 协议归一化 + bridge + WS 8 帧 + ACP 类型 + `CostTracker` 真
+(纯翻译层, 无 HTTP); 3 Provider + 2 LLM factory 真; HTTP 网关 (native + OpenAI-compatible + SSE) 真
+(`canonical_entry.rs:489-523`); 面板内省 + 501 诚实降级真 (`panels.rs:641-696`)。
+**部分/0 装**: `protocol/gateway.rs:250,286` openclaw-gateway 是"简化 stub, echo 响应";
+8 帧全双工 + 语音打断**类型/控制器/分句就位但无真实 WS 传输接线**;
+`panels.rs:690,1168-1234` `memory.update` → `not_implemented`,
+`voice.duplex`/`subagents.orchestration` → `not_assembled`;
+`presence.rs:68-72,111-122` 固定 `heuristic_v0` + 置信 0.5, `Ritual` 永不发射;
+`plugin/mcp/sse.rs:6` SseTransport deferred; `plugin/mcp/reconnect.rs:15` donor 重连原本就是 stub。
+
+**持久化/可观测域** — SQLite pool/migrations/cache/限流/quota/machine_id 真;
+SSE 事件总线 + trace/audit 落档真; 统一错误帧 + 错误码目录真; 认知/成本遥测真。
+**部分**: 密钥审计 sink 默认 `NoopAudit` (`credentials/keyring.rs:195`), 真 audit 未挂;
+audit salt 是"上层加盐占位" (`keyring.rs:275`)。
+
+**SDK (唯一全量 stub crate)** — `STUB_MODE = true` 编译期硬编码 (`sdk/src/client.rs:112`);
+`invoke_tool/invoke_stream` 返 `NotImplemented("R21 真接 apeireth-api")` (`:706-708,732-734`);
+`QuotaStub::check` 永远 501 (`:441-446`); lark 8 API / livekit 6 API (JWT 占位
+`stub.jwt.{identity}`, `livekit/auth.rs:186-204`) / sandbox 6 API / voice 6 API 全 stub;
+C ABI `apeireth_sdk_init/last_error` 是 skeleton (`last_error` 返 -1, `abi.rs:16-24`)。
+
+### 8.3 测试形态 (源码计数)
+
+`crates/*/*/tests/*.rs` 共 **92 个**文件, 另有大量 `src` 内联 `#[test]`/`#[tokio::test]`
+(credentials ≈50、protocol ≈51、sdk ≈410、memory 数十)。
+`#[ignore]` 标记 **47 处** (`rg -n '#\[ignore' crates/` 全 crate 计数), 分布**全部集中在需真 key / 真硬件的 E2E**:
+`engine/organ` **35** 处 (`world_model` 5 / `causal_world_model` 5 / `value_cases` 5 /
+`curiosity` 6 / `emotion_memory` 4 / `hypothesis` 4 / `memory` 3 / `organ_live_llm` 3)、
+`engine/provider` **7** 处 (`openai_compatible_live` 3 / `minimax_llm_factory` 3 / 另 1)、
+`foundation/orchestration` **3** 处 (`council_live.rs` 需 `OPENAI_API_KEY`)、
+`engine/memory` **1** 处 (benchmark)、`engine/perception` **1** 处 (xcap, 需真显示器)。
+→ 即 `cargo test` 默认**不跑**任何真模型/真硬件用例, 这正是台账
+`live-verification-ledger.md` 存在的理由 (绿表 = 曾经手动跑过的 `--ignored`)。
+
+### 8.4 源码内部不一致 (须修文档, 非须修代码)
+
+| 位置 | 写的 | 实际 | 裁决 |
+|---|---|---|---|
+| `plugin/src/organ.rs:19-29` 9-organ 状态表 | W1/W2/W3/F4/F1/F6/E7/Memory **"0 装 (rc 阶段或 v2.1)"**, 仅 E4 ✅ | `engine/organ/src/lib.rs:31` **9 organ 全实装** | **engine 为权威**; plugin 表最后一次触碰 2026-08-30 (`9ce172a9`), engine 表 2026-09-04 (`3d663dbb`), 中间 R1-R5 子代理批把 9 organ 全落了 → **plugin 表是陈旧遗留**, 应改 |
+| `plugin/src/organ.rs:1` 头注释 | 已更新为 "9-organ trait 抽象边界" | 与 `:19-29` 表矛盾 | 同文件内新旧未同步 |
+| 主账 `apeireth-1-0-vs-2-0-functional-gap` (2026-08-28) | 🔴 大清单 + "🟢 活跃" | 见 §7 | 按 §4 建议: 加历史批注 + 四级口径重标 |
+
+### 8.5 本节的自我限制 (0 装)
+
+- 本节只覆盖 `crates/` **18 个 v2 crate**; `legacy/` 105 crate 的对照见 §1/§6;
+- "真实现"= **库级代码路径存在且自洽**; 是否经真机点击流验证, 一律以
+  `live-verification-ledger.md` 为准, 本节**不**代替台账;
+- 行号取自 2026-10-06 的工作树; 代码变动后行号会漂移, 检索时以符号名 (grep) 为准。
