@@ -247,6 +247,14 @@ pwsh frontend\companion-desktop\scripts\install-e2e.ps1     # 除"真聊天"外�
 
 ### W2 — 库级模块生产接线批 (P0, 投入产出比最高)
 
+> **[2026-10-06 夜 W2 执行进度 (commits `9242f03d` / `acc70087`)]** 已落地: typed 写读对称修复 ✅ /
+> 语义向量阶段真实现 ✅ / `proactive_recall` 旋钮 ✅ / consolidation 触发点 ✅ / reflexion 失败闭环 ✅ /
+> memory_injection 反幻觉格式 ✅ (旋钮全默认关, 手册 INSTALL)。**余下**: dreaming (6 状态机 +
+> MetaThinker 生产注入 + 触发载体) → partner/principles → morphology/education/worktree_sandbox →
+> 吸收批 4 个。**接线前必读**差距审计 §7.1 三次复核 + §7.2 四审表 —— hybrid_search / consolidation /
+> thought_cluster 都曾被 "0 引用 = 未接" 误判 (判"未接线"要过三关: 名字扫描 / crate 内部互调 /
+> Option 的 Default 值)。
+
 - **现状**: §2.3 C1 列的模块全是 `IMPLEMENTED ✅ / PRODUCTION WIRED ❌`。
 - **做法 (每个模块独立成一小步, 不许一次性大爆炸)**:
   1. 先读该模块的 `lib.rs` 头注释 —— 仓库惯例是头注释里写明"真实现的边界在哪、哪些是 0 装";
