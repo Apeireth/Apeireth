@@ -1,6 +1,6 @@
 # Apeireth 用户手册（v2 工程重构线）
 
-> 给运行 Apeireth 的人：它在做什么、我怎么控制它。机制描述以真实代码为准（v2 工程重构：默认分支 `main`，13-crate 工作区，tag `v2.0.0-alpha.1`）。
+> 给运行 Apeireth 的人：它在做什么、我怎么控制它。机制描述以真实代码为准（写作时点 v2.0.0-alpha.1 / 13-crate；当前 **18-crate / v2.0.0-rc.1**，能力性判断以下方 2026-10-06 对账注与台账为准）。
 > 快速跑起来见 [quick-start.md](quick-start.md)；部署见 [deployment.md](deployment.md)；架构总览见根 [ARCHITECTURE.md](../../ARCHITECTURE.md)。
 
 ```
