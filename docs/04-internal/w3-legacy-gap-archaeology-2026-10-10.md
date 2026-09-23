@@ -105,6 +105,16 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 
 ## 9. 三洋葱 L3-L5 — 🟡 部分（层模型 + 判定真实施 / 无物理执行面）
 
+> **[2026-10-10 判定模型移植完成]** v1 `donor/apeireth-onion` 判定层已移植为
+> `crates/foundation/core/src/onion_gate.rs`（台账 #55）：层身份枚举 + 5+6=11 编译期
+> 断言 + `arbitrate_principles`（E>S>A>M>O）+ `ElectronicRing`（11 节点满环）+ 
+> `OnionAction`/`OnionVerdict` + `DoubleOnionGate::unify_check` 三段门（HA 离线物拒 /
+> L5 E 层兜底 / 11 环全放行）+ r177 Kani 等价证明组平移为 Rust 测试（15 测）。
+> **0 重定义**：复用 `onion.rs` 既有 struct（`PermissionLayer.requires_ha` 字段替代
+> v1 slice trait）+ 多签密码学仍由 `HumanAuthority::verify_multisig` 承担（0 装占位
+> 不动，真 Ed25519 留 v2.1）。**剩余物理执行面装配**（判定接入治理/审批 + W1 沙箱
+> 路径：ApprovalMemoryGate / ControlledEgress / worktree）= 下一工作项。
+
 - **位置**: `legacy/donor/apeireth-onion/src/lib.rs` + `examples/onion_demo.rs`。
 - **证据**:
   - 真实部分：`lib.rs:21` "原则 5 层 (E/S/A/M/O) + 权限 6 层 (L0-L5) + 11 节点电子环"；`lib.rs:66-79` `PermissionLayer` L0..L5 完整枚举（L3 关键操作 / L4 核心升级 / L5 核武器级）；`onion_demo.rs:65-72` `unify_check(&action)` 对 L3/L5 触碰给出判定——**判定模型是活的**；
@@ -124,7 +134,7 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 | 3 | §6 onering 移植 | v1 真货 + 8 测试；建议与"会话转录重载 API"（挂账项）合并设计归属 |
 | 4 | §2 experiment_field 机制移植 | 状态机/回路真货先落（执行面与 §7 合并），与 `runtime-assembly/upgrade_cycle.rs` 衔接 |
 | 5 | §7 真沙箱（=W1） | **前置：主人对 shell-sandbox-lite 设计拍板**；这是九项中唯一有现成设计文档的 |
-| 6 | §9 onion L3-L5 判定模型移植 | 执行面等 W1；真签名留 v2.1 |
+| 6 | §9 onion L3-L5 判定模型移植 | **✅ 已移植**（onion_gate.rs，台账 #55）；物理执行面装配 = 下一工作项（W1 已就绪：ApprovalMemoryGate/ControlledEgress/worktree_sandbox）；真签名留 v2.1 |
 | 7-9 | §3/§4 愿景新造 + §8 SDK | XL 项先出设计再谈排期；SDK 已在 W5 |
 
 ## 本报告没有做的事

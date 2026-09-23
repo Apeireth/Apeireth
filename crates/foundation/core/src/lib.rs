@@ -52,6 +52,8 @@ pub use crate::kernel::memory::{Episode, IdentityCard, Migration, Note, Session}
 pub mod gate;
 pub mod lifecycle;
 pub mod onion;
+/// 双洋葱统一体判定层 (W3 三洋葱 L3-L5 判定模型移植, 2026-10-10)。
+pub mod onion_gate;
 pub mod philosophy;
 /// XState-subset statechart (atomic / compound / final + guard / action).
 /// Recovered from `legacy/donor/apeireth-state`; not a second runtime loop.
