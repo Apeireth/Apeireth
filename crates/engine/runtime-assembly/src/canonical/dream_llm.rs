@@ -96,7 +96,9 @@ impl MetaThinker for LlmMetaThinker {
             }],
             temperature: 0.7,
             tools: Vec::new(),
-            max_tokens: Some(400),
+            // 思考型模型 reasoning_content 吃预算致 content 落空 (canonical_openai_
+            // compatible.rs adapt_request 注释教训) —— 给足 reasoning 余量。
+            max_tokens: Some(2048),
         };
         let outcome = self.rt.block_on(async {
             let instance = self

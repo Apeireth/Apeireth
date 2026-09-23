@@ -56,7 +56,10 @@ async fn council_7_advisor_live_decide() {
             }],
             temperature: 0.0,
             tools: vec![],
-            max_tokens: Some(64),
+            // 思考型模型 reasoning_content 吃预算 (canonical_openai_compatible.rs
+            // adapt_request 注释: 2048 仍空 1/3, 4096 稳) —— 探针要"真内容", 给足
+            // reasoning 余量; 给 64 会把预算喂光、content 落空 (2026-10-10 实锤)。
+            max_tokens: Some(2048),
         })
         .await
         .expect("probe completion: channel dead must fail loudly, never degrade into a green");

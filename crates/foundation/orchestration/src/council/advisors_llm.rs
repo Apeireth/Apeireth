@@ -115,7 +115,12 @@ impl Advisor for LlmAdvisor {
             }],
             temperature: 0.0,
             tools: vec![],
-            max_tokens: Some(512),
+            // 缺省 = 不设上限, 由 provider 层 fill 4096 (canonical_openai_compatible.rs
+            // adapt_request 的 reasoning 余量兜底)。原 Some(512) 对思考型模型必死
+            // (reasoning_content 吃光预算 → content 空 → fail-loud; 教训: 500 必截断/
+            // 2048 仍空 1/3/4096 稳), 2026-10-10 live 实锤: 顾问全灭被映射成
+            // advisor error → Stop。答案本身只需几个 token, 余量是给 reasoning 的。
+            max_tokens: None,
         };
 
         let instance: Box<dyn LlmInstance> = match self
