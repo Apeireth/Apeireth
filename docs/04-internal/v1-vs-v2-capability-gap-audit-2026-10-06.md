@@ -290,6 +290,24 @@ perception 不做 per-turn module
 > | 语义向量阶段 (`embedding_provider`) | 未列 | **实现缺失**: `ProductionBackends.embedding_provider` 恒 `None`, 全仓库只有 `NoEmbeddingProvider`+测试 fake; coordinator 的向量阶段 (`recall_async`) 从未激活, 恒 `used_lexical_fallback=true` | **本批补真实现** `OpenAiCompatibleEmbeddingProvider` + `APEIRETH_EMBEDDING_URL/MODEL/KEY` 旋钮 (fail-loud 半配) |
 > | ~~reflexion / memory_injection~~ (原列本行) | 0 引用→未接 | **W2b 本批已接**: reflexion = 新模块 `cognitive.reflexion` (TurnStart 教训注入 + AfterTurn 消费 Judge 显式判定沉淀 + RuleCritic 蒸馏, `APEIRETH_ENABLE_REFLEXION=1`); memory_injection = donor 反幻觉注入格式 (`APEIRETH_ENABLE_MEMORY_INJECTION=1`) ✅ | partner/principles/intent_brier/吸收批 4 个等: 确证未接 (crate 内部互调亦零命中), 维持按序接线 |
 
+> **[2026-10-10 W2 线收口终局复核 (五审)]** W2 接线工作线全批完成后的 §7.1 处置列终局
+> (每项均过五件验收门: 默认关旋钮 / 默认关不变测试 / 效果可见测试 / 四级口径行 / 台账条目):
+>
+> | 模块 | 三次复核后 | **终局 (2026-10-10)** | 落点 |
+> |---|---|---|---|
+> | dreaming / diary / daily_summary / cross_diary | 归 dreaming 批 | **WIRED ✅ / DEFAULT OFF** (`apeireth dream` 显式命令 + `LlmMetaThinker` 生产注入 + 降级确定性思考器; dream_and_journal 写日记) | `dream_llm` / `dream_wiring` (台账 #45/#48) |
+> | partner | 维持按序接线 | **WIRED ✅ / DEFAULT OFF** (`APEIRETH_ENABLE_PARTNER_BOND=1`; TurnStart 关系注入 + AfterTurn 羁绊演化) | `cognitive.partner_bond` (台账 #50) |
+> | principles | 维持按序接线 | **有意不接** (P2 生产接线禁令自证: 须走 governance/approval 专项, 禁 Runtime 直连) | — (台账 #50) |
+> | morphology | 维持按序接线 | **WIRED ✅ / DEFAULT OFF** (`APEIRETH_ENABLE_MORPHOLOGY_RECALL=1`; 检索深度自适应, 只收紧不放大) | `MemoryRecallModule` (台账 #51) |
+> | education | 维持按序接线 | **WIRED ✅ / DEFAULT OFF** (`APEIRETH_ENABLE_EDUCATION=1`) | `module.tool.education` (台账 #51) |
+> | 吸收批 4 个 | 维持按序接线 | **WIRED ✅ / DEFAULT OFF** (`APEIRETH_ENABLE_ABSORPTION_INSIGHT=1`; 认知体操实验性洞察, 不涉生产语义决策) | `cognitive.absorption_insight` (台账 #52) |
+> | worktree_sandbox | 维持按序接线 | **接好线等主角** ✅⏳ (`WorktreeSandboxedOrchestrator` 装饰器 + 3 测试落地; 生产 `Orchestrator` 实现 = 独立工作项 —— 全仓 trait 就绪但零实现) | `Orchestrator` 装饰器 (台账 #53) |
+> | topic_predictor | 维持未接 | **维持未接** (query_expand 借其簇词表, 本体零调用) | — |
+> | intent_brier / confidence / calibration | 确证未接 | **维持未接**, 归守夜人 (Nightwatch) 批设计处置 | — |
+>
+> **处置汇总**: 接线 6 项 + 接好线等主角 1 项 + 有意不接 1 项 + 维持未接 2 项 ——
+> **§7.1 表内 W2 接线工作线全部处置完毕, 本工作线宣告完成 (2026-10-10)**。
+
 ### 7.2 仍为真缺口 (源码确认不存在)
 
 > **[2026-10-06 夜四审: legacy 源码级核验 (挂账核销批), 本表多行定性修正]**

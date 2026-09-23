@@ -347,3 +347,232 @@ mod tests {
         assert_eq!(backoff.next_delay(), 1000);
     }
 }
+
+// ===========================================================================
+// W2 §4.3 (2026-10-10): WorktreeSandboxedOrchestrator — worktree 隔离调度装饰器
+// ===========================================================================
+
+use crate::{Orchestrator, OrchestratorError, SubagentOutcome, SubagentSpec};
+
+/// worktree 命令执行器 (生产 = 真 `git`; 测试 = 记录型假执行器, 0 git 依赖)。
+pub type CommandRunner = std::sync::Arc<dyn Fn(&[String]) -> Result<(), String> + Send + Sync>;
+
+/// **worktree 隔离调度装饰器** (W2 §4.3 落点 = subagent/Orchestrator):
+/// 包任意 [`Orchestrator`] ——
+/// - `dispatch` 前建独立 git worktree (物理目录级隔离, 防并发/长程 subagent 污染
+///   主工作区);
+/// - 把 worktree 路径注入 `spec.payload["worktree"]` (subagent 以该目录为工作区,
+///   非破坏性扩展字段);
+/// - 完成后移除 worktree。**清理失败只降级不枪毙**: outcome 主体不受影响, 仅在
+///   output 的 `_worktree_cleanup_failed` 留痕; 失败路径同样清理 (残骸不留)。
+///
+/// **0 假装边界**: `Orchestrator` 生产实现与调用方是独立工作项 (trait 就绪, 本装饰器
+/// 把隔离层接好后等主角 —— 见台账 W2 §4.3); `TddStateMachine` / `RateLimitBackoff`
+/// 为驱动侧库工具 (状态机自证), 未接 dispatch 协议 (协议扩展属后续)。
+pub struct WorktreeSandboxedOrchestrator<O: Orchestrator> {
+    inner: O,
+    repo_root: std::path::PathBuf,
+    runner: CommandRunner,
+}
+
+impl<O: Orchestrator> WorktreeSandboxedOrchestrator<O> {
+    /// 包装 inner orchestrator; `runner` 执行 `git <args...>` 形态命令。
+    pub fn new(inner: O, repo_root: impl Into<std::path::PathBuf>, runner: CommandRunner) -> Self {
+        Self {
+            inner,
+            repo_root: repo_root.into(),
+            runner,
+        }
+    }
+
+    fn run(&self, args: &[String]) -> Result<(), String> {
+        (self.runner)(args)
+    }
+}
+
+#[async_trait::async_trait]
+impl<O: Orchestrator> Orchestrator for WorktreeSandboxedOrchestrator<O> {
+    async fn start(&mut self) -> Result<(), OrchestratorError> {
+        self.inner.start().await
+    }
+
+    async fn stop(&mut self) -> Result<(), OrchestratorError> {
+        self.inner.stop().await
+    }
+
+    async fn dispatch(&self, mut spec: SubagentSpec) -> Result<SubagentOutcome, OrchestratorError> {
+        let config = WorktreeConfig::new(
+            &self.repo_root,
+            spec.id.clone(),
+            format!("apeireth/worktree-{}", spec.id),
+        )
+        .map_err(|e| OrchestratorError::Io(format!("worktree config invalid: {e}")))?;
+
+        // ① 建 worktree (失败即拒 —— 隔离层不裸跑)。
+        self.run(&config.create_command_args())
+            .map_err(|e| OrchestratorError::Io(format!("worktree create failed: {e}")))?;
+
+        // ② 注入 worktree 路径 (payload 非破坏性扩展字段)。
+        if let Some(obj) = spec.payload.as_object_mut() {
+            obj.insert(
+                "worktree".to_string(),
+                serde_json::Value::String(config.worktree_path.to_string_lossy().to_string()),
+            );
+        }
+
+        // ③④ 内层 dispatch + 清理 (成败两路都清; 清理失败只降级)。
+        match self.inner.dispatch(spec).await {
+            Ok(mut done) => {
+                if self.run(&config.remove_command_args()).is_err() {
+                    if let Some(obj) = done.output.as_object_mut() {
+                        obj.insert(
+                            "_worktree_cleanup_failed".to_string(),
+                            serde_json::Value::Bool(true),
+                        );
+                    }
+                }
+                Ok(done)
+            }
+            Err(e) => {
+                let _ = self.run(&config.remove_command_args());
+                Err(e)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod worktree_dispatch_tests {
+    use super::*;
+    use crate::SubagentRole;
+
+    fn spec(id: &str) -> SubagentSpec {
+        SubagentSpec {
+            id: id.to_string(),
+            role: SubagentRole::Reviewer,
+            title: "t".to_string(),
+            payload: serde_json::json!({"goal": "demo"}),
+            model: None,
+            system_prompt: None,
+            require_human_approval: false,
+        }
+    }
+
+    struct FakeOrchestrator {
+        seen: std::sync::Mutex<Vec<serde_json::Value>>,
+    }
+
+    #[async_trait::async_trait]
+    impl Orchestrator for FakeOrchestrator {
+        async fn start(&mut self) -> Result<(), OrchestratorError> {
+            Ok(())
+        }
+        async fn stop(&mut self) -> Result<(), OrchestratorError> {
+            Ok(())
+        }
+        async fn dispatch(&self, spec: SubagentSpec) -> Result<SubagentOutcome, OrchestratorError> {
+            self.seen
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(spec.payload.clone());
+            Ok(SubagentOutcome {
+                spec_id: spec.id,
+                role: spec.role,
+                output: serde_json::json!({"ok": true}),
+                success: true,
+                error: None,
+                completed_at: 0,
+            })
+        }
+    }
+
+    fn recording_runner(
+        fail_remove: bool,
+    ) -> (CommandRunner, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let log: std::sync::Arc<std::sync::Mutex<Vec<String>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log2 = std::sync::Arc::clone(&log);
+        let runner: CommandRunner = std::sync::Arc::new(move |args: &[String]| {
+            log2.lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(args.join(" "));
+            if fail_remove && args.get(1).map(String::as_str) == Some("remove") {
+                return Err("forced cleanup failure".to_string());
+            }
+            Ok(())
+        });
+        (runner, log)
+    }
+
+    #[tokio::test]
+    async fn decorator_creates_injects_and_removes_worktree() {
+        // W2 五件验收门③: 效果可见 = create 先行、payload 带 worktree、remove 收尾。
+        let inner = FakeOrchestrator {
+            seen: std::sync::Mutex::new(Vec::new()),
+        };
+        let (runner, log) = recording_runner(false);
+        let orch = WorktreeSandboxedOrchestrator::new(inner, "/repo", runner);
+
+        let out = orch.dispatch(spec("t1")).await.expect("dispatch");
+        assert!(out.success);
+        let seen = orch
+            .inner
+            .seen
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        assert_eq!(seen.len(), 1);
+        let worktree = seen[0]["worktree"].as_str().expect("payload 注入 worktree");
+        assert!(worktree.contains(".worktrees"), "{worktree}");
+
+        let calls = log.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        assert_eq!(calls.len(), 2, "create + remove 各一次: {calls:?}");
+        assert!(calls[0].starts_with("worktree add"), "{calls:?}");
+        assert!(calls[1].starts_with("worktree remove"), "{calls:?}");
+        assert!(
+            out.output["_worktree_cleanup_failed"].is_null(),
+            "清理成功不误报"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_failure_fails_closed_without_dispatch() {
+        // W2 五件验收门② 对偶: 建不出 worktree = 拒绝执行 (不裸跑)。
+        let inner = FakeOrchestrator {
+            seen: std::sync::Mutex::new(Vec::new()),
+        };
+        let log: std::sync::Arc<std::sync::Mutex<Vec<String>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let runner: CommandRunner =
+            std::sync::Arc::new(|_args: &[String]| Err("no git".to_string()));
+        let orch = WorktreeSandboxedOrchestrator::new(inner, "/repo", runner);
+        assert!(orch.dispatch(spec("t2")).await.is_err());
+        assert!(
+            orch.inner
+                .seen
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .is_empty(),
+            "create 失败不得进入 dispatch"
+        );
+        let _ = log;
+    }
+
+    #[tokio::test]
+    async fn cleanup_failure_only_degrades() {
+        // 只降级不枪毙: 清理失败不改变 outcome 主体, 仅留痕。
+        let inner = FakeOrchestrator {
+            seen: std::sync::Mutex::new(Vec::new()),
+        };
+        let (runner, _log) = recording_runner(true);
+        let orch = WorktreeSandboxedOrchestrator::new(inner, "/repo", runner);
+
+        let out = orch.dispatch(spec("t3")).await.expect("dispatch");
+        assert!(out.success, "清理失败不得枪毙主结果");
+        assert_eq!(
+            out.output["_worktree_cleanup_failed"],
+            serde_json::Value::Bool(true),
+            "失败须留痕"
+        );
+    }
+}
