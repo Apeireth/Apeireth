@@ -329,7 +329,7 @@ perception 不做 per-turn module
 | 项 | 状态 |
 |---|---|
 | community (社群识别与分诊) | 🔴 v2 crates 内 0 命中 |
-| experiment_field (隔离实验场) | 🔴 0 命中 (v2 侧; v1 有真框架 —— 四审表 #2) |
+| experiment_field (隔离实验场) | 🔴 → ✅ **[2026-10-10 五审]** 机制已移植: `runtime-assembly/src/canonical/experiment_field.rs` (ExperimentStatus 状态机 + VMRunner 口 + NoopVMRunner 诚实 Err + FailureLearningSink 回滚学习 → WikiEntry, 与部署侧 upgrade_cycle 互补成环; 真 VM 执行后端仍 0 装 = 后续 smol-vm/libkrun 项) |
 | HybridCognitiveRouter | 🔴 0 命中 (**v1 亦无 —— 纯愿景项**, 四审表 #3) |
 | ToolSynthesizer | 🔴 0 命中 (**v1 亦无 —— 纯愿景项**, 四审表 #4) |
 | thought_cluster | ✅ **已移植** —— v2 `cluster_store.rs` = v1 `thought_cluster` 完整改名移植 (四审表 #5, 从缺口清单移出) |

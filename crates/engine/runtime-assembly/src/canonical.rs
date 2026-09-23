@@ -60,6 +60,9 @@ pub mod cognitive;
 pub mod cost_telemetry;
 #[path = "canonical/dream_llm.rs"]
 pub mod dream_llm;
+/// W3 移植批: 自我改进闭环实验侧 (v1 donor experiment_field, 2026-10-10)。
+#[path = "canonical/experiment_field.rs"]
+pub mod experiment_field;
 #[path = "canonical/guard_observer.rs"]
 pub mod guard_observer;
 #[path = "canonical/harness_patch.rs"]
@@ -86,6 +89,11 @@ pub mod tool_modules;
 pub mod typed_recall;
 #[path = "canonical/upgrade_cycle.rs"]
 pub mod upgrade_cycle;
+
+pub use experiment_field::{
+    Experiment, ExperimentField, ExperimentStatus, FailureLearningRecord, FailureLearningSink,
+    NoopVMRunner, VMRunner, Verdict, WikiFailureLearningSink,
+};
 
 pub use cognitive::{
     turn_request_from_perception, CognitiveModuleEvent, CognitiveTelemetry, CouncilModule,

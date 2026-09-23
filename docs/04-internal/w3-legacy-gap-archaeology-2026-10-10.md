@@ -22,7 +22,7 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 | 5 | `thought_cluster` 思维簇 | ✅ 真做成了，**且 v2 已移植**（= `cluster_store.rs` 改名，悬案闭合） | **库级缺口已闭合**（IMPLEMENTED）；欠生产接线 | S（核查接线即可） | **1** |
 | 1 | `community` 社群识别与分诊 | ✅ 真做成了（图社群检测算法 + 确定性摘要 + 测试） | **✅ 已移植**（`memory/community.rs` 三件，9 测，台账 #57）；生产消费 = 契约扩展接线项 | M | 2 |
 | 6 | `onering` 账本 | ✅ 真做成了（318 行 + 8 项测试） | **✅ 本体早已在 v2**（`context_ledger.rs` = companion ledger 打捞，API 同构；考古原判"仅 VCP 注释"系误判——五审纠错）+ 本次补生产消费（cli 记账，台账 #58） | M | 3 |
-| 2 | `experiment_field` 隔离实验场 | 🟡 部分：**机制真实施，执行后端 0 装** | 未移植 | M | 4 |
+| 2 | `experiment_field` 隔离实验场 | 🟡 部分：**机制真实施，执行后端 0 装** | **✅ 机制已移植**（runtime-assembly/experiment_field.rs：状态机+VMRunner 口+Noop 诚实 Err+回滚学习 sink，5 测，台账 #59）；执行后端（真 VM）仍 0 装留后续 | M | 4 |
 | 7 | 真文件/网络沙箱 | ❌ **v1 也只有骨架**（seccomp/JobObject/netns/WFP 全是 TODO/Noop） | v2 进程树遏制**已反超 v1** | L（新造，走 W1 设计） | 5 |
 | 9 | 三洋葱 L3-L5 | 🟡 部分：**层模型 + 判定逻辑真实施；无物理执行面** | v2 有数据模型 + hex 占位签名 | L | 6 |
 | 3 | `HybridCognitiveRouter` | ❌ **不存在**（v1、v2 全部零命中） | 无 | XL（纯新造） | 8 |
@@ -65,6 +65,18 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 - **v2 归属**: `crates/engine/runtime-assembly`（升级回路已有 `upgrade_cycle.rs`）+ `crates/capabilities/tools`（VM 执行面）。
 - **移植风险**: 机制件可直接移植；**真执行面是新造活**（v1 也没做成，见 §7）。
 - **工作量**: **M**（机制移植）+ 执行面并入 §7/L。
+
+> **[2026-10-10 机制移植完成]** → `crates/engine/runtime-assembly/src/canonical/experiment_field.rs`
+> （台账 #59）：`ExperimentStatus` 五态状态机 + `VMRunner`/`NoopVMRunner`（0 装诚实 Err，
+> "VM 未接不假装已实验"——run 失败状态回 Proposed）+ propose/run/approve_for_deploy/
+> learn_from_failure 全回路 + v1 5 测试原样平移。**回滚学习适配**：v1 写
+> `Experience{scene,practice,result}` 记录；v2 无该记录型（经验=WikiEntry 容器）→
+> `FailureLearningSink` trait + `WikiFailureLearningSink`（失败信号 → WikiEntry，
+> topic="实验失败: {proposal}", confidence=0.0, tags=["experiment-failure"]），集成
+> 而非分立（v1 同精神）。**执行后端仍 0 装**（NoopVMRunner；smol-vm/libkrun = 后续
+> 真 VM 接入项），机制与部署侧 `upgrade_cycle.rs` 互补成环（"独立的是实验，批准的是
+> 部署"）。机制层无旋钮（与 upgrade_cycle 同层：真触发=L0 主人手动/审计，CLI 命令面
+> 为后续批）。
 
 ## 3. `HybridCognitiveRouter` — ❌ 不存在（v1 也没有）
 
