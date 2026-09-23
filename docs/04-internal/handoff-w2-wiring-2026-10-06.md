@@ -110,6 +110,11 @@
 
 ## 3. 当前精确状态
 
+> **✅ 本工作线已宣告完成 (2026-10-10)**。§4.1-4.5 全部处置完毕 (dreaming 批 /
+> partner+principles / morphology+education+worktree_sandbox / 吸收批 4 算法 / 杂项双核销),
+> 差距审计 §7.1 处置列已录终局复核 (五审)。剩余路线转常规队列: 生产 `Orchestrator`
+> 实现 (worktree 装饰器的主角) → 三洋葱 L3-L5 / 守夜人 / community·onering 移植 / W5 SDK。
+
 ### 3.1 接线矩阵 (四级口径; 手册 = INSTALL.md 旋钮区)
 
 | 模块 | IMPL | WIRED | DEFAULT | 旋钮 | 效果测试 |
@@ -202,9 +207,13 @@
   同契约) + `EducationModule` (CapabilityProvider `module.tool.education`) + production
   注册 + 旋钮 `APEIRETH_ENABLE_EDUCATION=1` 默认关。效果测试: 真 Dx-Check 调用产出
   结构化诊断 (漏 dθ 必抓) + 缺参拒绝。
-- **worktree_sandbox 待接** (诚实排期, 单独批): 落点 = **Orchestrator/subloop 的子代理
-  工作树分配** (spawn 前 create_command_args / 收束后 remove_command_args + TDD 状态机) ——
-  涉子代理生命周期, 非小改, 单独一批做实 (与 §4.4 吸收批同批或紧随)。
+- **worktree_sandbox 落地 (2026-10-10 终批, "接好线等主角")**: `WorktreeSandboxedOrchestrator<O: Orchestrator>`
+  装饰器 —— `dispatch` 前建独立 git worktree (物理隔离) + `spec.payload["worktree"]` 注入
+  工作区路径 + 成败两路清理 (清理失败只降级不枪毙, `_worktree_cleanup_failed` 留痕);
+  命令执行器可注入 (`CommandRunner`, 测试零 git 依赖)。3 测试: create→inject→remove 顺序 /
+  create 失败 fail-closed 不裸跑 / 清理失败只降级。**0 假装边界**: 全仓 `Orchestrator`
+  trait 就绪但**零生产实现** —— 生产 Orchestrator 实现与调用方 = 独立工作项 (本批把
+  隔离层接好后等主角); TDD 状态机/RateLimitBackoff 为驱动侧库工具未接 dispatch 协议。
 
 ### 4.4 吸收批 4 个 (betti_hole_detector / residual_pyramid / river_topology / kuramoto_resonance)
 

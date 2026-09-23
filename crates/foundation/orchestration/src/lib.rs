@@ -121,7 +121,8 @@ pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
 };
 pub use worktree_sandbox::{
-    RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,
+    CommandRunner, RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,
+    WorktreeSandboxedOrchestrator,
 };
 
 // ============================================
