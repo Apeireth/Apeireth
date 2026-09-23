@@ -174,7 +174,7 @@ cargo run --bin apeireth session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（应该 3406 passed / 0 failed / 19 ignored——2026-10-06 复核实测；2026-09-05 口径为 3120/13；v1 时代 86-crate 全量为 23,806，见 CHANGELOG）
+# 2. Test（应该 3418 passed / 0 failed / 19 ignored——2026-10-06 W2 批后实测；同日复核批口径 3406、2026-09-05 口径为 3120/13；v1 时代 86-crate 全量为 23,806，见 CHANGELOG）
 cargo test --workspace
 
 # 3. Clippy（应该 0 warning）
