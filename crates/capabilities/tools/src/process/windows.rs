@@ -216,13 +216,16 @@ pub(crate) fn capabilities() -> IsolationCapabilities {
         IsolationCapability::PrivilegeReduction,
         restricted_launch_capability(),
     );
+    // W1 §2.1 (2026-10-10): 文件/网络隔离经 AppContainer 实施 —— 探针实测
+    // (真实派生 + 真实创建 AppContainer 子进程) 成功才报 Enforced, 否则如实
+    // Unsupported (0 装: 不实测不称已实施)。
     caps.set(
         IsolationCapability::FilesystemIsolation,
-        EnforcementLevel::Unsupported,
+        super::appcontainer::appcontainer_launch_capability(),
     );
     caps.set(
         IsolationCapability::NetworkIsolation,
-        EnforcementLevel::Unsupported,
+        super::appcontainer::appcontainer_launch_capability(),
     );
     caps.set(
         IsolationCapability::FailClosedPreExecutionContainment,
@@ -237,7 +240,20 @@ pub(crate) fn spawn_and_supervise(
 ) -> Result<ProcessResult, ProcessError> {
     let job = JobObject::create(&request.limits)?;
 
-    let child: WindowsChild = if request
+    // W1 §2.1 路径选择 (2026-10-10): 要求文件/网络隔离 = 走 AppContainer 沙箱
+    // (不可用即拒绝执行 —— 沙箱开时绝不裸跑)。其次受限 token, 最后 std 路径。
+    let sandbox_required = request
+        .isolation()
+        .requires(IsolationCapability::FilesystemIsolation)
+        .is_some()
+        || request
+            .isolation()
+            .requires(IsolationCapability::NetworkIsolation)
+            .is_some();
+
+    let child: WindowsChild = if sandbox_required {
+        WindowsChild::Raw(spawn_appcontainered_child(request, job)?)
+    } else if request
         .isolation()
         .requires(IsolationCapability::PrivilegeReduction)
         .is_some()
@@ -716,6 +732,168 @@ fn spawn_restricted_child(
     }
 }
 
+/// **W1 §2.1 AppContainer 沙箱 spawn** (2026-10-10): 文件仅工作区 (调用方先
+/// `grant_directory`), 零网络 capability (`CapabilityCount = 0` → socket 创建即败),
+/// 挂起创建 → JobObject → 恢复 (与受限 token 路径同序)。
+///
+/// **raw_arg 尾部逐字追加** (shell 的 `cmd /D /S /C "<script>"` 依赖此语义 ——
+/// 与 std `Command::raw_arg` 一致; 注意受限 token 路径不含尾部, 见台账)。
+/// 降级契约: AppContainer 不可用 → `ContainmentFailed` 拒绝执行 (绝不裸跑)。
+fn spawn_appcontainered_child(
+    request: &ProcessRequest,
+    job: JobObject,
+) -> Result<WindowsRawChild, ProcessError> {
+    use super::appcontainer::{appcontainer_launch_capability, AppContainerSandbox, AttributeList};
+    use windows_sys::Win32::System::Threading::{
+        CreateProcessW, CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, STARTUPINFOEXW,
+    };
+
+    if appcontainer_launch_capability() != EnforcementLevel::Enforced {
+        return Err(ProcessError::ContainmentFailed(
+            "AppContainer 沙箱不可用, 拒绝执行 (沙箱开时绝不裸跑; 显式裸跑需 \
+             APEIRETH_SHELL_SANDBOX=0 自担风险)"
+                .into(),
+        ));
+    }
+    let sandbox = AppContainerSandbox::acquire()?;
+    // `\\?\` 扩展前缀路径在 lpCurrentDirectory 不被接受 (真机实测: 子进程落到
+    // %WINDIR%, 2026-10-10) —— 授权与 cwd 均用剥前缀的普通形态对齐。
+    let cwd_normalized: Option<std::path::PathBuf> = request
+        .working_directory()
+        .map(|p| strip_extended_prefix(p));
+    if let Some(cwd) = cwd_normalized.as_ref() {
+        sandbox.grant_directory(cwd)?;
+    }
+    let mut sec_caps = sandbox.security_capabilities();
+    let attrs = unsafe { AttributeList::new(&mut sec_caps) }?;
+
+    let mut command_line = build_windows_command_line(&request.executable, &request.args);
+    if let Some(tail) = request.raw_arg() {
+        command_line.pop();
+        command_line.push(u16::from(b' '));
+        command_line.extend(tail.encode_wide());
+        command_line.push(0);
+    }
+    let environment_block = build_environment_block(&request.environment)?;
+    let cwd_block = build_cwd_block(cwd_normalized.as_ref())?;
+
+    // AppContainer 下 PATH 搜索以零访问 token 解析会 "找不到文件" (真机实测
+    // os error 2) —— 父进程侧解析可执行文件绝对路径作 lpApplicationName。
+    let exe_abs = resolve_executable_absolute(&request.executable)?;
+    let application: Vec<u16> = exe_abs.as_os_str().encode_wide().chain(Some(0)).collect();
+
+    unsafe {
+        let (stdout_read, stdout_write) = create_pipe()?;
+        let (stderr_read, stderr_write) = create_pipe()?;
+        let (stdin_read, stdin_write) = create_pipe()?;
+        SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation(stdin_write, HANDLE_FLAG_INHERIT, 0);
+
+        let mut siex: STARTUPINFOEXW = std::mem::zeroed();
+        siex.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+        siex.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        siex.StartupInfo.hStdInput = stdin_read;
+        siex.StartupInfo.hStdOutput = stdout_write;
+        siex.StartupInfo.hStdError = stderr_write;
+        siex.lpAttributeList = attrs.as_raw();
+
+        let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
+        // CREATE_UNICODE_ENVIRONMENT: 宽字符环境块必须带此旗, 否则按 ANSI 解释 →
+        // os error 203 "找不到环境选项" (真机咬出, 2026-10-10)。
+        let ret = CreateProcessW(
+            application.as_ptr(),
+            command_line.as_mut_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+            CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+            environment_block
+                .as_ref()
+                .map(|b| b.as_ptr().cast::<c_void>())
+                .unwrap_or(std::ptr::null()),
+            cwd_block
+                .as_ref()
+                .map(|b| b.as_ptr().cast::<u16>())
+                .unwrap_or(std::ptr::null()),
+            &siex.StartupInfo,
+            &mut pi,
+        );
+
+        CloseHandle(stdout_write);
+        CloseHandle(stderr_write);
+        CloseHandle(stdin_write);
+
+        if ret == 0 {
+            let message = std::io::Error::last_os_error().to_string();
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
+            CloseHandle(stdin_read);
+            return Err(ProcessError::SpawnFailed {
+                executable: request.executable.to_string_lossy().into_owned(),
+                message: format!("CreateProcessW(AppContainer) failed: {message}"),
+            });
+        }
+        drop(attrs);
+
+        if let Err(e) = job.assign(pi.hProcess) {
+            TerminateProcess(pi.hProcess, 0);
+            WaitForSingleObject(pi.hProcess, 5000);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            return Err(e);
+        }
+
+        if let Err(e) = resume_main_thread(pi.dwProcessId) {
+            TerminateProcess(pi.hProcess, 0);
+            WaitForSingleObject(pi.hProcess, 5000);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            return Err(e);
+        }
+
+        Ok(WindowsRawChild {
+            process_handle: pi.hProcess,
+            thread_handle: pi.hThread,
+            job,
+            stdout: Some(File::from_raw_handle(stdout_read.cast())),
+            stderr: Some(File::from_raw_handle(stderr_read.cast())),
+        })
+    }
+}
+
+/// 剥 `\\?\` 扩展前缀 (lpCurrentDirectory 不接受该形态; ACL 授权同用普通形态)。
+fn strip_extended_prefix(path: &std::path::Path) -> std::path::PathBuf {
+    let text = path.as_os_str().to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\") {
+        std::path::PathBuf::from(rest)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+/// 父进程侧解析可执行文件绝对路径 (AppContainer 子进程零访问无法做 PATH 搜索,
+/// 真机实测 os error 2)。相对名按 PATH 逐目录探测; 找不到即拒 (fail-closed)。
+fn resolve_executable_absolute(executable: &OsStr) -> Result<std::path::PathBuf, ProcessError> {
+    let path = std::path::PathBuf::from(executable);
+    if path.is_absolute() {
+        return Ok(path);
+    }
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            let candidate = dir.join(&path);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+    Err(ProcessError::SpawnFailed {
+        executable: executable.to_string_lossy().into_owned(),
+        message: "cannot resolve executable to an absolute path (AppContainer spawn requires it)"
+            .into(),
+    })
+}
+
 fn create_pipe() -> Result<(HANDLE, HANDLE), ProcessError> {
     unsafe {
         let mut read: HANDLE = std::ptr::null_mut();
@@ -786,8 +964,13 @@ fn build_environment_block(
         super::EnvironmentSpec::Inherit => Ok(None),
         super::EnvironmentSpec::Clear => Ok(Some(vec![0, 0])),
         super::EnvironmentSpec::Explicit(vars) => {
+            // CreateProcessW 硬性要求环境块**大小写不敏感排序** (真机实测: 乱序块
+            // 报 os error 203 "找不到环境选项", 2026-10-10 AppContainer 路径咬出)。
+            // 在块构造处排序 —— 所有裸 CreateProcess* 路径同受益。
+            let mut sorted: Vec<&(OsString, OsString)> = vars.iter().collect();
+            sorted.sort_by_key(|(key, _)| key.to_string_lossy().to_lowercase());
             let mut block = Vec::new();
-            for (key, value) in vars {
+            for (key, value) in sorted {
                 let mut entry: Vec<u16> = key.encode_wide().collect();
                 entry.push(u16::from(b'='));
                 entry.extend(value.encode_wide());
