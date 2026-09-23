@@ -48,9 +48,11 @@ docs/
 | [../../ROADMAP.md](../../ROADMAP.md) | 顶层路线图（v2 下一步按优先级；v1 时代详单在 archive/roadmap） |
 | [../../CHANGELOG.md](../../CHANGELOG.md) | 变更流水（v2.0.0-alpha.1 段为重构版记录，其余为 v1 历史） |
 
-## 当前基线（2026-08-27）
+## 当前基线（2026-10-06 对账更新；2026-08-27 快照保留在下方）
 
-默认分支 `main` @ `d6910cf7`，tag `v2.0.0-alpha.1`；13-crate 工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）+ 独立前端 workspace；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。
+默认分支 `main`（HEAD 以实际提交为准），tag `v2.0.0-rc.1`；**18-crate 工作区**（foundation 6 / engine 8 / capabilities 1 / adapters 3；2026-10-06 协作者批新增 `crates/engine/guard`）+ 独立前端 workspace；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。
+
+历史快照（2026-08-27）：`main` @ `d6910cf7`，tag `v2.0.0-alpha.1`，13-crate 工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）。
 
 ## Archive
 

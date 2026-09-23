@@ -36,7 +36,7 @@ Author:          子代理 R9
 
 v1 `apeireth-companion` (`legacy/donor/apeireth-companion/`) 是 86-crate 单体, `companion_serve.rs` 提供 :8090 HTTP/SSE (legacy/donor/apeireth-companion/examples/companion_serve.rs). 9 organ 散落在 lib.rs 顶层 mod, 内部 if-else 散落 (`crates/engine/organ/src/lib.rs:3-7`).
 
-v2 canonical gateway 是 17-crate workspace 的 HTTP adapter (`crates/adapters/gateway/src/lib.rs:7-15`), 通过 axum router 暴露 OpenAI Chat 兼容入口, 不持有 provider 路由 / 会话 / 治理 / 工具分发 / 第二编排引擎 (per `crates/adapters/gateway/src/lib.rs:2-6`).
+v2 canonical gateway 是 18-crate workspace 的 HTTP adapter (`crates/adapters/gateway/src/lib.rs:7-15`), 通过 axum router 暴露 OpenAI Chat 兼容入口, 不持有 provider 路由 / 会话 / 治理 / 工具分发 / 第二编排引擎 (per `crates/adapters/gateway/src/lib.rs:2-6`).
 
 **关键变化**:
 - 端点: v1 :8090 18 条路由 → v2 :8080 3 条主路由 (`/health`, `/v1/chat`, `/v1/chat/completions`, `canonical_entry.rs:168-174`)

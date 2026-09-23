@@ -8,7 +8,7 @@
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
 [![Tests](https://img.shields.io/badge/tests-3120%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
-[![Architecture](https://img.shields.io/badge/architecture-17--Crate%20微内核-orange.svg)](docs/01-architecture/architecture.md)
+[![Architecture](https://img.shields.io/badge/architecture-18--Crate%20微内核-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
@@ -68,7 +68,7 @@ Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsa
 | **全双工打断响应 (Barge-in)** | 语音流原子取消检索 + `tokio::Notify` 广播 | $< 1.0 \text{ ms}$ | **0.18 ms** | ✅ **实测通过** |
 | **Ember HUD 渲染帧** | 4.0s 生理呼吸律动 + WGSL 着色器 Uniform 合成 | $< 0.5 \text{ ms}$ | **0.08 ms** | ✅ **实测通过** |
 | **JobObject 物理沙箱** | Win32 Job Object 边界初始化 + 进程隔离限制 | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **实测通过** |
-| **微内核冷启动耗时** | 17-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **实测通过** |
+| **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **实测通过** |
 | **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **实测通过** |
 | **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | **3120 / 3120 通过** | ✅ **0 失败** |
 
@@ -78,7 +78,7 @@ Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsa
 
 ## ⚡ 什么是 Apeireth 2.0+？
 
-**Apeireth 2.0+** 是一个基于 **纯 Safe Rust 构建、拥有 16 个核心 Crate 的 AGI 操作系统与认知微内核**。它从第一性原理出发，彻底摒弃了传统脆弱的单程 Python 脚本、简单的单轮 LLM 胶水封装与断裂的 Top-K 分块向量数据库。
+**Apeireth 2.0+** 是一个基于 **纯 Safe Rust 构建、拥有 18 个核心 Crate 的 AGI 操作系统与认知微内核**。它从第一性原理出发，彻底摒弃了传统脆弱的单程 Python 脚本、简单的单轮 LLM 胶水封装与断裂的 Top-K 分块向量数据库。
 
 Apeireth 创新性地融合了**类脑连续流体拓扑记忆**、**多维认知配额抢占式调度**、**因果世界模型 CoW 分支推演**、**微光在场感知（Ember HUD）** 与 **零信任三洋葱物理沙箱**，为人工智能与人类的终身共生提供了一个永久、可自进化且受密码学严格核验的生命载体。
 
@@ -170,7 +170,7 @@ $$\frac{dU_{\text{care}}}{dt} = \nabla U_{\text{circadian}} + \nabla U_{\text{fr
 
 ---
 
-## 🧱 16 个核心 Crate 微内核架构深度解剖
+## 🧱 18 个核心 Crate 微内核架构深度解剖
 
 根 Cargo Workspace 严格遵循单向依赖，划分为四大核心层级：
 
@@ -186,10 +186,12 @@ crates/
 ├── engine/                   # Layer 1: 认知引擎与类脑拓扑流形
 │   ├── memory                # Betti 同调、Kuramoto 振子、双标度连续场、编年史结晶、三层知识库
 │   ├── runtime               # 代理主循环、因果世界模型、FlowLock 心流锁、自驱心跳
+│   ├── runtime-assembly      # 生产组装根：认知模块/工具装配/Organ 桥/SQLite 会话适配
 │   ├── organ                 # 9 大认知器官、人格合成器、自我反思
 │   ├── perception            # Whisper 语音识别、MiniMax TTS 语音流、Xcap 屏幕视觉
 │   ├── provider              # Anthropic、OpenAI 兼容协议、Google Gemini、Ollama 后端
-│   └── storage               # SQLite 连接池、ACID 迁移管理、双时态事实图谱
+│   ├── storage               # SQLite 连接池、ACID 迁移管理、双时态事实图谱
+│   └── guard                 # 行为链安全 Guard：两阶段行为链分类器 + 生产治理钩子
 ├── capabilities/             # Layer 2: 极致工具沙箱与物理隔离
 │   └── tools                 # ProcessExecutor (JobObject/cgroups)、RepoMap、高反爬爬虫
 └── adapters/                 # Layer 3: 传输网关与交互表面
@@ -210,10 +212,12 @@ crates/
 | **Foundation** | `apeireth-plugin` | 动态插件系统与扩展能力生命周期挂载 | `PluginRegistry::register()`, `CapabilityDescriptor` |
 | **Engine** | `apeireth-memory` | Betti 拓扑洞、Kuramoto 振子、双标度连续场、编年史 | `BettiHoleDetector::analyze()`, `KuramotoResonance::step()` |
 | **Engine** | `apeireth-runtime` | 因果世界模型、心流锁、代理主循环 | `CausalWorldModel::fork_branch()`, `Runtime::execute_outcome()`|
+| **Engine** | `apeireth-runtime-assembly` | 生产组装根：认知模块/工具装配/Organ 桥/SQLite 会话适配 | `production_runtime()`, `SqliteSessionStore` |
 | **Engine** | `apeireth-organ` | 9 大认知器官、人格合成器、自我反思循环 | `OrganRegistry::evaluate()`, `PersonaSynthesizer::blend()` |
 | **Engine** | `apeireth-perception` | Whisper 语音识别、MiniMax TTS 音频流、Xcap 视觉 | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
 | **Engine** | `apeireth-provider` | 多模型抽象 (Anthropic/OpenAI/Gemini/Ollama) | `ProviderRegistry::dispatch()`, `NormalizedChatCompletions` |
 | **Engine** | `apeireth-storage` | SQLite 连接池、双时态事实图谱、ACID 迁移 | `SqliteConnectionPool::acquire()`, `BitemporalGraph::upsert()`|
+| **Engine** | `apeireth-guard` | 行为链安全 Guard：两阶段行为链分类器，接生产治理管线 | `ChainGuard`, `BehaviorChainGuardHook`, `DecisionFusion` |
 | **Capabilities**| `apeireth-tools-canonical`| ProcessExecutor (JobObject/cgroups)、RepoMap AST | `ProcessExecutor::spawn_bounded()`, `RepoMap::generate()` |
 | **Adapters** | `apeireth-cli` | 标准 CLI 二进制入口、随身 U 盘打包器 | `cli::main()`, `PortableBundleSynthesizer::generate()` |
 | **Adapters** | `apeireth-gateway` | Axum HTTP/SSE 网关、全双工 WebSocket、Ember HUD | `GatewayServer::serve()`, `EmberHudDriver::synthesize()` |

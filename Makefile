@@ -36,7 +36,7 @@ help: ## 列出所有 make target
 	@echo ""
 	@echo "  === 日常开发 (本地反馈环) ==="
 	@echo "  make check            cargo check --workspace --all-targets (~25s, 增量编译)"
-	@echo "  make test             cargo test --workspace --all-targets --locked (1338 tests, v2 13-crate)"
+	@echo "  make test             cargo test --workspace --all-targets --locked (v2 18-crate 工作区)"
 	@echo "  make fmt              cargo fmt --all (格式)"
 	@echo ""
 	@echo "  === CI 复刻 (本地 == GitHub Actions, 防 push 后 fail) ==="

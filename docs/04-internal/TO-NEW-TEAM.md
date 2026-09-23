@@ -30,8 +30,8 @@ Author:          主代理 Mavis
 
 | 维度 | 真账 (2026-08-28 收盘) |
 |---|---|
-| workspace | **17 crates** (foundation 6 + engine 7 + capabilities 1 + adapters 3), 单向依赖, 0 循环 |
-| 架构收敛 | v1 86-crate → v2 17-crate = **80.2% 收敛**（16-crate 口径于 2026-09-04 `0e542d03` 抽出 runtime-assembly 后作废） |
+| workspace | **18 crates** (foundation 6 + engine 8 + capabilities 1 + adapters 3), 单向依赖, 0 循环 |
+| 架构收敛 | v1 86-crate → v2 18-crate = **79.1% 收敛**（17-crate 口径于 2026-10-06 协作者批新增 `crates/engine/guard` 后更新为 18；16-crate 口径已于 2026-09-04 `0e542d03` 抽出 runtime-assembly 后作废） |
 | 哲学锚 | **9 项 LOCKED** (S-1/S-2/S-3 + O-1..O-6, O-6 永远追求最优 2026-08-27 主人授权加) |
 | 测试 (A 块前) | **1726 passed, 0 FAILED** (主代理 2026-08-28 亲跑 `cargo test --workspace --locked` 当时; **A 块后 1739 passed**) |
 | clippy | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |
@@ -113,7 +113,7 @@ Author:          主代理 Mavis
 |---|---|
 | `ROADMAP.md` | 顶层路线: §3 当前状态 + §4 P1-P8 (v2.0 下一步) |
 | `CHANGELOG.md` | `[Unreleased]` 段: 12/12 O-6 + 9/10 RC + R12 + 8 spec |
-| `Cargo.toml` | workspace members (17 crates) + workspace.version 2.0.0-rc.1 (2026-08-30 RC1 发布起, per 6b81c210; 旧 1.2.0 双轴制终结) |
+| `Cargo.toml` | workspace members (18 crates) + workspace.version 2.0.0-rc.1 (2026-08-30 RC1 发布起, per 6b81c210; 旧 1.2.0 双轴制终结) |
 | `.github/workflows/o6-anchor.yml` | 5 重守门 CI 自动验证 |
 
 ---
@@ -200,7 +200,7 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
 - O-6 三阶审查:
   - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
   - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? 与 alternatives 比较 + 选最优 + 拒理由>
-  - 架构最优: <在 workspace 17-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
+  - 架构最优: <在 workspace 18-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
 ```
 
 > **不**复用 v1 alignment 代替 v2 总体最优. **不**描述 WHAT 代替 WHY. 每段需有具体拒的 alternative + 拒理由. 详 `docs/01-architecture/organ-orchestrator-completion-plan.md` §7.
