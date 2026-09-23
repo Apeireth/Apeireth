@@ -1845,6 +1845,38 @@ p.lede {
   opacity: 1;
   background-image: url('/assets/themes/heritage-void-bg.png');
 }
+/* ── 补全四主题（2026-09-23 主人指示，纯 CSS 渐变背景，无照片资产）────────
+   日光/纸面=浅底（白雾面承托由面板承担，不叠遮罩）；深海/林海=深底
+   （叠轻微压暗，同 heritage 纪律）。场景层与 presence 四主题同隐藏。 */
+.app-root.theme-day .static-bg {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 78% 14%, rgba(255, 238, 205, 0.9) 0%, rgba(255, 238, 205, 0) 36%),
+    radial-gradient(ellipse at 50% 110%, rgba(214, 200, 176, 0.55) 0%, rgba(214, 200, 176, 0) 55%),
+    linear-gradient(180deg, #faf8f3 0%, #efe9dc 100%);
+}
+.app-root.theme-paper .static-bg {
+  opacity: 1;
+  /* 2026-09-23 走查修复：底调暗一档 + 横线加浓——原底 #f0eee9 与面板
+     rgba(250,249,246,.86) 几乎同灰，面板边界全失；线 0.035 不可见。 */
+  background:
+    repeating-linear-gradient(180deg, rgba(20, 19, 22, 0.05) 0 1px, transparent 1px 28px),
+    linear-gradient(180deg, #e9e6de 0%, #d2cfc6 100%);
+}
+.app-root.theme-ocean .static-bg {
+  opacity: 1;
+  background:
+    linear-gradient(205deg, rgba(110, 160, 195, 0.35) 0%, rgba(110, 160, 195, 0) 42%),
+    radial-gradient(ellipse at 50% 118%, rgba(28, 62, 86, 0.6) 0%, rgba(28, 62, 86, 0) 60%),
+    linear-gradient(180deg, #1c2933 0%, #060b10 100%);
+}
+.app-root.theme-forest .static-bg {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 30% 0%, rgba(127, 184, 148, 0.3) 0%, rgba(127, 184, 148, 0) 46%),
+    radial-gradient(ellipse at 85% 100%, rgba(38, 66, 50, 0.55) 0%, rgba(38, 66, 50, 0) 55%),
+    linear-gradient(180deg, #1b2521 0%, #0a100d 100%);
+}
 .app-root.custom-bg .static-bg {
   opacity: 1; /* 图由 inline style 给出 */
 }
@@ -1866,20 +1898,37 @@ p.lede {
   opacity: 1;
   background: rgba(7, 7, 12, 0.34);
 }
+/* 深海/林海：渐变底已够深，轻压暗提对比；日光/纸面不叠遮罩。 */
+.app-root.theme-ocean .static-bg::after,
+.app-root.theme-forest .static-bg::after {
+  opacity: 1;
+  background: rgba(4, 8, 10, 0.22);
+}
 .app-root.theme-essence .scene-underlay,
 .app-root.theme-heritage .scene-underlay,
+.app-root.theme-day .scene-underlay,
+.app-root.theme-paper .scene-underlay,
+.app-root.theme-ocean .scene-underlay,
+.app-root.theme-forest .scene-underlay,
 .app-root.custom-bg .scene-underlay {
   opacity: 0;
   pointer-events: none;
 }
 .app-root.theme-essence #presence,
-.app-root.theme-heritage #presence {
+.app-root.theme-heritage #presence,
+.app-root.theme-day #presence,
+.app-root.theme-paper #presence,
+.app-root.theme-ocean #presence,
+.app-root.theme-forest #presence {
   opacity: 0 !important;
 }
-.app-root.theme-essence #vignette {
+.app-root.theme-essence #vignette,
+.app-root.theme-day #vignette,
+.app-root.theme-paper #vignette {
   background: radial-gradient(ellipse 120% 88% at 50% 38%, rgba(255, 255, 255, 0) 40%, rgba(235, 232, 226, 0.35) 100%);
 }
-/* heritage/自定义保持夜色晕影（#vignette 默认即深色），不覆写 */
+/* heritage/自定义保持夜色晕影（#vignette 默认即深色），不覆写；
+   深海/林海同为深底，默认深色晕影正好，不覆写。 */
 
 @media (max-width: 820px) {
   .panel,

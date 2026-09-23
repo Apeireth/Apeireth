@@ -1,9 +1,9 @@
 import type {Accent, Theme} from './types';
 
-export const VALID_THEMES: Theme[] = ['heritage-void', 'essence', 'night'];
+export const VALID_THEMES: Theme[] = ['heritage-void', 'essence', 'night', 'day', 'ocean', 'forest', 'paper'];
 
 /** 静态背景主题（无 WebGL 场景层）：场景层隐藏并暂停渲染循环。 */
-export const STATIC_BG_THEMES: readonly Theme[] = ['heritage-void', 'essence'];
+export const STATIC_BG_THEMES: readonly Theme[] = ['heritage-void', 'essence', 'day', 'ocean', 'forest', 'paper'];
 
 export type ThemeOption = {
   id: Theme;
@@ -35,6 +35,38 @@ export const THEME_CATALOG: ThemeOption[] = [
     // 黑洞 + 金色吸积环的存在金预览（该主题实景即含金，预览合法）
     swatch:
       'radial-gradient(circle at 62% 55%, rgba(255, 210, 122, 0.85) 0%, rgba(255, 210, 122, 0.25) 7%, rgba(255, 210, 122, 0) 13%), radial-gradient(circle at 62% 55%, #000000 0%, #000000 10%, rgba(0, 0, 0, 0) 11%), radial-gradient(ellipse at 50% 30%, #1a1520 0%, #07070c 70%)',
+  },
+  {
+    id: 'day',
+    label: '日光',
+    desc: '明亮纸面 · 档案调',
+    // 高位暖阳——与纸面/essence 的冷白拉开区分
+    swatch:
+      'radial-gradient(circle at 78% 16%, rgba(255, 236, 200, 0.95) 0%, rgba(255, 236, 200, 0) 34%), linear-gradient(180deg, #f9f7f2 0%, #ede8dc 100%)',
+  },
+  {
+    id: 'paper',
+    label: '纸面',
+    desc: '注册表档案 · 低饱和',
+    // 注册表横线纹理——纸面调的识别特征
+    swatch:
+      'repeating-linear-gradient(180deg, rgba(20, 19, 22, 0.05) 0 1px, transparent 1px 9px), linear-gradient(180deg, #efede8 0%, #e2e0db 100%)',
+  },
+  {
+    id: 'ocean',
+    label: '深海',
+    desc: '深舱蓝调 · 工程感',
+    // 顶侧冷光柱——工程舱照明特征
+    swatch:
+      'linear-gradient(205deg, rgba(110, 160, 195, 0.4) 0%, rgba(110, 160, 195, 0) 42%), linear-gradient(180deg, #1d2a33 0%, #050a0f 100%)',
+  },
+  {
+    id: 'forest',
+    label: '林海',
+    desc: '沉稳绿调 · 专注',
+    // 林冠漏光——顶部绿晕
+    swatch:
+      'radial-gradient(circle at 30% 0%, rgba(127, 184, 148, 0.35) 0%, rgba(127, 184, 148, 0) 46%), linear-gradient(180deg, #1a2420 0%, #0a100e 100%)',
   },
 ];
 

@@ -63,6 +63,100 @@ html[data-theme='essence'] body {
   color: var(--text);
 }
 
+/* 四主题补全（2026-09-23）：嵌入视图（ConversationsView/SettingsView 等）消费的
+   旧 Pattern 令牌。day/paper=浅底深字；ocean/forest=深底浅字（取值对齐 :root）。 */
+html[data-theme='day'] {
+  --bg: transparent;
+  --surface: rgba(255, 253, 247, 0.9);
+  --surface-2: rgba(255, 253, 247, 0.78);
+  --surface-3: #f3ecdd;
+  --line: rgba(40, 32, 20, 0.1);
+  --line-strong: rgba(40, 32, 20, 0.16);
+  --text: #1c1b1f;
+  --muted: #6b6252;
+  --faint: #948b7a;
+  --amber: #8a6f42;
+  --amber-hi: #a5844f;
+  --amber-wash: rgba(138, 111, 66, 0.12);
+  --amber-line: rgba(138, 111, 66, 0.32);
+  --green: #3d7a5c;
+  --green-wash: rgba(61, 122, 92, 0.12);
+  --blue: #4a6278;
+  --blue-wash: rgba(74, 98, 120, 0.12);
+  --danger: #a84840;
+  --shadow: 0 16px 48px rgba(40, 32, 20, 0.1);
+  --bg-input: rgba(255, 253, 247, 0.88);
+}
+
+html[data-theme='paper'] {
+  --bg: transparent;
+  --surface: rgba(252, 251, 248, 0.94);
+  --surface-2: rgba(252, 251, 248, 0.84);
+  --surface-3: #f0eee9;
+  --line: rgba(25, 24, 28, 0.1);
+  --line-strong: rgba(25, 24, 28, 0.16);
+  --text: #1f1e22;
+  --muted: #5f5b64;
+  --faint: #8d8992;
+  --amber: #7d6c4e;
+  --amber-hi: #97845f;
+  --amber-wash: rgba(125, 108, 78, 0.12);
+  --amber-line: rgba(125, 108, 78, 0.32);
+  --green: #3d7a5c;
+  --green-wash: rgba(61, 122, 92, 0.12);
+  --blue: #4a5f74;
+  --blue-wash: rgba(74, 95, 116, 0.12);
+  --danger: #a04a42;
+  --shadow: 0 16px 48px rgba(25, 24, 28, 0.1);
+  --bg-input: rgba(250, 249, 246, 0.88);
+}
+
+html[data-theme='ocean'] {
+  --bg: transparent;
+  --surface: #0e1924;
+  --surface-2: #132030;
+  --surface-3: #1a2c3e;
+  --line: rgba(160, 195, 220, 0.1);
+  --line-strong: rgba(160, 195, 220, 0.17);
+  --text: #e6edf4;
+  --muted: #93a7ba;
+  --faint: #5f7285;
+  --amber: #d9a24a;
+  --amber-hi: #f1b95d;
+  --amber-wash: rgba(217, 162, 74, 0.12);
+  --amber-line: rgba(217, 162, 74, 0.36);
+  --green: #4db380;
+  --green-wash: rgba(77, 179, 128, 0.13);
+  --blue: #6faadf;
+  --blue-wash: rgba(111, 170, 223, 0.13);
+  --danger: #c0584e;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  --bg-input: rgba(14, 25, 36, 0.88);
+}
+
+html[data-theme='forest'] {
+  --bg: transparent;
+  --surface: #101a14;
+  --surface-2: #152219;
+  --surface-3: #1c2d22;
+  --line: rgba(160, 205, 175, 0.1);
+  --line-strong: rgba(160, 205, 175, 0.16);
+  --text: #e7efe9;
+  --muted: #94ab9c;
+  --faint: #5f7466;
+  --amber: #d9a24a;
+  --amber-hi: #f1b95d;
+  --amber-wash: rgba(217, 162, 74, 0.12);
+  --amber-line: rgba(217, 162, 74, 0.36);
+  --green: #6fae86;
+  --green-wash: rgba(111, 174, 134, 0.13);
+  --blue: #7d9cc0;
+  --blue-wash: rgba(125, 156, 192, 0.13);
+  --danger: #c0584e;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  --bg-input: rgba(16, 26, 20, 0.88);
+}
+
 /* ---------- 基础重置（原压缩块开头，全部元素级，全局生效） ---------- */
 * { box-sizing: border-box; }
 html, body { height: 100%; }

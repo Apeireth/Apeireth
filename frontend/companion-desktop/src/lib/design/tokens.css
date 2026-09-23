@@ -155,6 +155,91 @@ html[data-theme='essence'] {
   --ap-semantic-info: #4a6278;
 }
 
+/* ---------- 日光 day（浅·暖档案调；2026-09-23 四主题补全）----------
+   浅底深字，金家族沿用 essence 校准值；面板偏暖白与 essence 冷白拉开区分。 */
+html[data-theme='day'] {
+  --ap-space-void: #f3eee3;
+  --ap-gold: #a08050;
+  --ap-gold-white-hot: #bd9a68;
+  --ap-gold-amber: #84663f;
+  --ap-gold-ui: #6b5238;
+  --ap-gold-platinum: #c9b898;
+  --ap-bone: #1c1b1f;
+  --ap-bone-68: rgba(28, 27, 31, 0.78);
+  --ap-bone-42: rgba(28, 27, 31, 0.56);
+  --ap-bone-30: rgba(28, 27, 31, 0.42);
+  --ap-ink: #141316;
+  --ap-panel: rgba(255, 253, 247, 0.85);
+  --ap-panel-solid: #faf6ec;
+  --ap-shell-chip: rgba(255, 253, 247, 0.8);
+  --ap-shell-elevated: rgba(255, 253, 247, 0.94);
+  --ap-card: #fffef9;
+  --ap-card-dark: #efe8d8;
+  --ap-line: rgba(40, 32, 20, 0.15);
+  --ap-accent-tab: #a08050;
+  --ap-accent-ui: #a08050;
+  --ap-accent-ui-ink: #faf7f2;
+  --ap-semantic-success: #35705a;
+  --ap-semantic-warning: #96691f;
+  --ap-semantic-danger: #a84840;
+  --ap-semantic-info: #4a6278;
+}
+
+/* ---------- 纸面 paper（浅·注册表低饱和；四主题补全）----------
+   比 essence 更中性的灰白；金家族降饱和一档，让位给纸面横线纹理。 */
+html[data-theme='paper'] {
+  --ap-space-void: #eae8e3;
+  --ap-gold: #8f7a58;
+  --ap-gold-white-hot: #a89272;
+  --ap-gold-amber: #6f6046;
+  --ap-gold-ui: #5f5138;
+  --ap-gold-platinum: #b5ab98;
+  --ap-bone: #1f1e22;
+  --ap-bone-68: rgba(31, 30, 34, 0.78);
+  --ap-bone-42: rgba(31, 30, 34, 0.56);
+  --ap-bone-30: rgba(31, 30, 34, 0.42);
+  --ap-ink: #161519;
+  --ap-panel: rgba(252, 251, 248, 0.92);
+  --ap-panel-solid: #f5f4f0;
+  --ap-shell-chip: rgba(252, 251, 248, 0.85);
+  --ap-shell-elevated: rgba(252, 251, 248, 0.97);
+  --ap-card: #ffffff;
+  --ap-card-dark: #e8e6e1;
+  --ap-line: rgba(25, 24, 28, 0.16);
+  --ap-accent-tab: #8f7a58;
+  --ap-accent-ui: #8f7a58;
+  --ap-accent-ui-ink: #faf9f6;
+  --ap-semantic-success: #35705a;
+  --ap-semantic-warning: #8a6420;
+  --ap-semantic-danger: #a04a42;
+  --ap-semantic-info: #4a5f74;
+}
+
+/* ---------- 深海 ocean（深·舱蓝工程调；四主题补全）----------
+   深底浅字继承 :root 骨白/存在金不动；只染面板族与分隔线色相。 */
+html[data-theme='ocean'] {
+  --ap-space-void: #060b10;
+  --ap-panel: rgba(12, 22, 31, 0.84);
+  --ap-panel-solid: #0c1620;
+  --ap-shell-chip: rgba(12, 22, 31, 0.55);
+  --ap-shell-elevated: rgba(10, 18, 26, 0.96);
+  --ap-card-dark: #131e29;
+  --ap-line: rgba(160, 195, 220, 0.16);
+  --ap-semantic-info: #6faadf;
+}
+
+/* ---------- 林海 forest（深·绿调专注；四主题补全）---------- */
+html[data-theme='forest'] {
+  --ap-space-void: #080f0b;
+  --ap-panel: rgba(13, 22, 17, 0.84);
+  --ap-panel-solid: #0d1611;
+  --ap-shell-chip: rgba(13, 22, 17, 0.55);
+  --ap-shell-elevated: rgba(11, 18, 14, 0.96);
+  --ap-card-dark: #14211a;
+  --ap-line: rgba(160, 205, 175, 0.15);
+  --ap-semantic-success: #6fae86;
+}
+
 /* ---------- UI 配色方案覆写（规范 §8 增补⑤）----------
    置于主题块之后：显式选择的配色优先于主题默认 accent（同特异性，后定义者胜）。
    值与 theme.ts 的 ACCENT_CATALOG 一一对应，改任一边必须同步（测试锁定纪律）。 */
