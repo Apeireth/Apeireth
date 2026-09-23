@@ -28,6 +28,12 @@
       argumentsSummary?: string;
       reason?: string;
       createdAt?: number;
+      /** W1 沙箱徽标（后端 display_invocation.sandbox；批准前看见墙）。 */
+      sandbox?: string;
+      /** 冻结工作目录（卷宗 cwd）。 */
+      cwd?: string;
+      /** 隔离态摘要（文件/网络）。 */
+      isolation?: string;
     };
     busy: boolean;
     /** 收起态由调用方持有（Esc/会话切换统一走调用方语义）。 */
