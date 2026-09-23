@@ -65,7 +65,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 > **2026-09-05 对账批注记**：下表数字为本批实测基线（HEAD `7647d2c9`）。workspace 已为 **17 crates**（`0e542d03` 于 2026-09-04 抽出 runtime-assembly 后，此前"16 crates"口径作废）；测试 **3120 passed / 0 failed / 13 ignored**；workspace.version = **2.0.0-rc.1**（2026-08-30 RC1 发布起，旧 1.2.0 双轴制终结）。
 
-> **2026-10-06 对账追加**：协作者批（PR #15）新增 `crates/engine/guard`（`apeireth-guard`，行为链安全 Guard，已接生产治理管线），workspace 实为 **18 crates（engine 8）**；下表 crate 数按此更新。测试数与代码量维持 2026-09-05 口径（本批未重跑全量）。
+> **2026-10-06 对账追加**：协作者批（PR #15）新增 `crates/engine/guard`（`apeireth-guard`，行为链安全 Guard，已接生产治理管线），workspace 实为 **18 crates（engine 8）**；下表 crate 数按此更新。测试数同日复核已全量重跑：**3406 passed / 0 failed / 19 ignored**（129 suites，`cargo test --workspace`，exit 0）；代码量维持 2026-09-05 口径。
 
 > **v2.0.0-preview 定位与说明**:
 > - **建设完全性**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 18 Crates 100% 编译与 3120 项单元/集成测试通过，前端桌面端 Svelte 5 + Tauri 2 打包与类型验证全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
@@ -77,7 +77,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | Tag | `v1.0.0` / `v1.5.0` / `v2.0.0-alpha.1` / `v2.0.0-preview` / `v2.0.0-rc.1`（→ `854831fc`） |
 | Workspace | **18 crates**（foundation 6 / engine 8 / capabilities 1 / adapters 3；engine 第 7 个 = `crates/engine/runtime-assembly`，第 8 个 = `crates/engine/guard`（2026-10-06 协作者批）） + `frontend/companion-desktop` (Svelte 5 + Tauri 2) |
 | 代码量 | crates/ 内 .rs：src-only **147,732 行**（406 文件）+ tests **25,972 行**（73 文件）（2026-09-05 实测，不含 legacy/）；前端 companion-desktop 61 文件 ~21k 行（不含 node_modules/dist） |
-| 测试 | **3120 passed / 0 failed / 13 ignored**（2026-09-05 亲跑 `cargo test --workspace --locked`；含感知、多器官、长期记忆、工具隔离、网关流式及桌面端） |
+| 测试 | **3406 passed / 0 failed / 19 ignored**（2026-10-06 复核重跑 `cargo test --workspace`，129 suites，exit 0；2026-09-05 口径为 3120/13） |
 | CI / 守门 | 5 重守门全绿 + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告（2026-09-05 亲跑）+ 9 锚 / 13 键 / 3 脊柱 / R11 baseline 0 触碰；workspace.version 已随 RC1 发布推进为 2.0.0-rc.1 |
 | **v2.0 核心建设** | ✅ **100% 落地**：14 大战区（Whisper HTTP + Xcap 截屏多模态、Okapi BM25 + 向量 RRF 混合检索、上下文衰减 3 因子、SpillStore 溢出隔离、7 阶段伙伴羁绊、8 分类里程碑、动态原则洋葱、三层语调合成、断点续行与 O-1 核心段删除防御、叙事日记本与日活动聚合、跨日记图共享词元索引、口头强化反思闭环、微积分换元符号规则检查、Gateway SSE 流式通道及桌面端伙伴）。 |
 | **当前状态与下一步** | **预览版已就绪 (v2.0.0-preview)**，转交协作者开展生产压测与交叉验证，待协作者确认后提议发布 2.0 正式版。 |

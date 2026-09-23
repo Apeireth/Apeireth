@@ -72,4 +72,4 @@ v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`
 
 ---
 
-_Last updated_: 2026-10-06 (文档对账：18-crate 范围核验——新增 `apeireth-guard` 安全边界；测试基线 3120、workspace.version 2.0.0-rc.1、仓库 URL `Apeireth/Apeireth` 维持 2026-09-05 口径未重跑)
+_Last updated_: 2026-10-06 (文档对账：18-crate 范围核验——新增 `apeireth-guard` 安全边界；测试基线已复核重跑 = **3406 passed / 0 failed / 19 ignored**（`cargo test --workspace`，129 suites，exit 0）；workspace.version 2.0.0-rc.1、仓库 URL `Apeireth/Apeireth` 不变)

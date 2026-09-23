@@ -115,6 +115,33 @@ frozen 13), v2 是 18 个 crate 的重构形态。**"v1 有真实现、v2 有没
 > **F1-F3 的实践含义 (审核方请确认这条推论)**: 本仓库的"测试全绿"**不等于**"功能可用"。
 > 一切"能跑"的声明, 只能引用 `live-verification-ledger.md` 的绿表; 台账没写的 = 没验过。
 
+### 2.7 复核结论（2026-10-06 复核批填写；按 §2 约定给出判定，为免改动原表汇总于此）
+
+| # | 判定 | 复核批注 |
+|---|---|---|
+| A1 | ✅ 证实 | 18 members + `version = "2.0.0-rc.1"` |
+| A2 | ✅ 证实 | `legacy/` 106 个 Cargo.toml |
+| B1 | ⚠️ 部分正确（子结论 ❌ 推翻） | 命中 8 处对，但**全部是文档注释**（`//!`/`///`）；过滤非注释行后**真宏调用 = 0 处**。"真调用 7 处"不成立——正确表述：**0 真调用 / 8 文档提及**（7 在 `sdk/client.rs`，1 在 `plugin/perception.rs:23`）。主结论（SDK 唯一 stub crate、0 装物理形态）**强于**原表述 |
+| B1b | ✅ 证实 | `perception.rs:185/:191` 枚举变体 + `:326/:330` 两分支 Err |
+| B2 | ✅ 证实 | 366 / 847 逐字吻合 |
+| B3 | ✅ 证实 | `client.rs:112` const true + `:131` 编译期断言；另 lark/livekit/sandbox/voice 四个子 SDK 同款镜像守门（多于原文） |
+| C1 | ✅ 证实 | 19 模块名在 runtime-assembly/src + cli/src 引用全 0（除 C2 两项） |
+| C2 | ✅ 证实 | context_rot=3、proactive_recall=13 逐字吻合 |
+| C3 | ✅ 证实 | `production.rs:113` Option / `:151` None / `:347-348` if-let |
+| C4 | ⚠️ 部分正确 | 核心结论"无 proactive recall 开关"证实。但"能力类旋钮只有…"漏 `APEIRETH_REASONING_ENABLED` / `APEIRETH_REASONING_MODEL_FILTERS` / `APEIRETH_REASONING_TAG`（reasoning_adapter 真开关）；另 KEYRING_*/DATA_DIR/SESSION_DB/COGNITIVE_DB/MODEL/CONTINUITY_ID/M2B_TEST_ENV 配置类亦未列 |
+| D1 | ⚠️ 部分正确 | 实质证实（无实现）；"0 命中"差 1 条——`foundation/protocol:498` 注释提及 VCP `__oneRingMeta`（非实现） |
+| D2 | ✅ 证实 | thought_cluster=0、cluster_store=4；关系仍未查清（原文已诚实标注） |
+| D3 | ✅ 证实 | Filesystem/NetworkIsolation → Unsupported、PrivilegeReduction → Partial、FileSizeLimit + FailClosedPreExecutionContainment → Enforced |
+| D4 | ✅ 证实 | `JobObject|CREATE_SUSPENDED` 32 命中 |
+| E1 | ✅ 证实 | Okapi BM25（k1 参数化）+ RRF 真实现 |
+| E2 | ✅ 证实 | `organ/lib.rs:31` "9 organ 全实装"；`plugin/organ.rs` 最后改动 `e4f2f451` |
+| E3 | ✅ 证实 | 枚举变体 + Noop fail-closed 两分支 |
+| F1 | ✅ 证实 | tests/ 92 个 .rs |
+| F2 | ✅ 证实 | `#[ignore]` 47：organ 35 / provider 7 / orchestration 3 / memory 1 / perception 1 |
+| F3 | ✅ 推论成立 | 基线亲跑复现 **129 suites / 3406 passed / 0 failed / 19 ignored**（与 §3.1 逐字一致） |
+
+> 复核明细、两个安全提交的证据链与 §4 工作包推进记录：`handoff-18crate-ci-fix-2026-09-23.md` §8。
+
 ---
 
 ## 3. 复核用的可复制命令
