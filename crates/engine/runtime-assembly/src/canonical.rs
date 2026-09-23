@@ -87,9 +87,10 @@ pub use cognitive::{
     turn_request_from_perception, CognitiveModuleEvent, CognitiveTelemetry, CouncilModule,
     JudgeConfig, JudgeModule, JudgeObservations, JudgeResult, JudgeVerdict,
     MemoryRecallAccessRecorder, MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule,
-    ModuleMetricsSnapshot, PreferenceRecallModule, SelfAssessmentModule, COUNCIL_MODULE_ID,
-    DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID, MEMORY_WRITEBACK_MODULE_ID,
-    PREFERENCE_RECALL_MODULE_ID, SELF_ASSESSMENT_MODULE_ID,
+    ModuleMetricsSnapshot, PreferenceRecallModule, ReflexionModule, SelfAssessmentModule,
+    COUNCIL_MODULE_ID, DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID,
+    MEMORY_WRITEBACK_MODULE_ID, PREFERENCE_RECALL_MODULE_ID, REFLEXION_MODULE_ID,
+    SELF_ASSESSMENT_MODULE_ID,
 };
 pub use guard_observer::GuardDatasetObserver;
 pub use memory_typed_sink::CanonicalMemoryTypedSink;

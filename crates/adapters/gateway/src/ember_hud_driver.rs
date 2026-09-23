@@ -182,7 +182,10 @@ mod tests {
         // presence_state 契约 (00-PHILOSOPHY §10) 固定了四个线上值。
         let cases = [
             (EmberCognitiveStance::DeepCodingFocus, "deep_coding_focus"),
-            (EmberCognitiveStance::AttentivePresence, "attentive_presence"),
+            (
+                EmberCognitiveStance::AttentivePresence,
+                "attentive_presence",
+            ),
             (
                 EmberCognitiveStance::DreamingConsolidation,
                 "dreaming_consolidation",

@@ -53,11 +53,15 @@ impl MemoryConsolidationJob {
                 _ => {}
             }
 
-            // Extract distinct error resolutions or accomplishments
+            // Extract distinct error resolutions or accomplishments.
+            // 2026-10-06 W2 补丁: 只从**原始证据角色** (user/assistant/tool) 提炼 ——
+            // 派生记忆 (如 consolidation 自己落库的洞察, 内含 "resolved" 等标记词)
+            // 再入料会自我增殖 (效果测试实测 2 轮增出级联副本).
             let content = &ep.content;
-            if content.contains("error:")
-                || content.contains("fixed")
-                || content.contains("resolved")
+            if matches!(ep.role.as_str(), "user" | "assistant" | "tool")
+                && (content.contains("error:")
+                    || content.contains("fixed")
+                    || content.contains("resolved"))
             {
                 let snippet: String = content
                     .lines()

@@ -149,8 +149,8 @@ fn proactive_recall_knob_is_opt_in() {
         "default must stay off"
     );
     let _g_on = EnvGuard::set("APEIRETH_ENABLE_PROACTIVE_RECALL", Some("1"));
-    let policy = apeireth_cli::proactive_recall_policy_from_env()
-        .expect("knob =1 must produce a policy");
+    let policy =
+        apeireth_cli::proactive_recall_policy_from_env().expect("knob =1 must produce a policy");
     assert!(policy.enabled, "policy must be enabled");
     assert_eq!(policy.budget, 2, "deterministic default budget");
 }
@@ -238,4 +238,37 @@ async fn bootstrap_succeeds_with_typed_recall_killed() {
         build_canonical_runtime_with_sessions_from_env()
             .await
             .expect("bootstrap with typed recall killed must succeed");
+}
+
+/// W2b 记忆闭环旋钮: 三组默认关; reflexion 开 = `cognitive.reflexion` 模块注册
+/// (效果级证据: assembly 的 consolidation/reflexion 测试 + memory 的注入格式测试)。
+#[tokio::test]
+async fn memory_loop_knobs_register_reflexion_module() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_inj = EnvGuard::set("APEIRETH_ENABLE_MEMORY_INJECTION", None);
+    let _g_con = EnvGuard::set("APEIRETH_ENABLE_CONSOLIDATION", None);
+    let _g_ref = EnvGuard::set("APEIRETH_ENABLE_REFLEXION", None);
+    assert!(!apeireth_cli::memory_injection_enabled_from_env());
+    assert!(!apeireth_cli::consolidation_enabled_from_env());
+    assert!(!apeireth_cli::reflexion_enabled_from_env());
+
+    let reflex_dir = std::env::temp_dir()
+        .join(format!("apeireth-reflex-{}", std::process::id()))
+        .to_string_lossy()
+        .into_owned();
+    let _g_ref_on = EnvGuard::set("APEIRETH_ENABLE_REFLEXION", Some("1"));
+    let _g_dir = EnvGuard::set("APEIRETH_REFLEXION_DIR", Some(&reflex_dir));
+    let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("reflex")));
+    let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("reflex-session")));
+
+    let (runtime, _sessions, _memory, _policy, _guard_hook) =
+        build_canonical_runtime_with_sessions_from_env()
+            .await
+            .expect("bootstrap with reflexion knob");
+    let ids = module_ids(&runtime);
+    assert!(
+        ids.contains(&"cognitive.reflexion".to_string()),
+        "reflexion module must be wired, got {ids:?}"
+    );
+    assert!(apeireth_cli::reflexion_enabled_from_env());
 }

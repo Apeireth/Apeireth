@@ -373,9 +373,8 @@ impl ShellTool {
                 .with_raw_arg(format!("/D /S /C \"{script}\""))
         };
         #[cfg(not(windows))]
-        let request =
-            ProcessRequest::new(Self::os_string(&frozen.shell_executable))
-                .with_args(frozen.shell_args.iter().map(|arg| Self::os_string(arg)));
+        let request = ProcessRequest::new(Self::os_string(&frozen.shell_executable))
+            .with_args(frozen.shell_args.iter().map(|arg| Self::os_string(arg)));
 
         Ok(request
             .with_working_directory(PathBuf::from(&frozen.cwd))

@@ -60,6 +60,7 @@ pub struct MemoryCoordinator {
     activation_source: Option<Arc<dyn ActivationSource>>,
     typed_recall_source: Option<Arc<dyn TypedMemoryRecallSource>>,
     typed_identity: Option<TypedRecallIdentity>,
+    injection_format: bool,
 }
 
 impl MemoryCoordinator {
@@ -84,6 +85,7 @@ impl MemoryCoordinator {
             activation_source: None,
             typed_recall_source: None,
             typed_identity: None,
+            injection_format: false,
         }
     }
 
@@ -132,6 +134,14 @@ impl MemoryCoordinator {
     ) -> Self {
         self.typed_recall_source = Some(source);
         self.typed_identity = Some(identity);
+        self
+    }
+
+    /// Switch the prompt overlay renderer to the donor closed-world injection
+    /// format (2026-10-06 W2: `memory_injection` 反幻觉证据清单; 默认 XML 格式不变).
+    #[must_use]
+    pub fn with_memory_injection_format(mut self) -> Self {
+        self.injection_format = true;
         self
     }
 
@@ -766,11 +776,26 @@ impl MemoryCoordinator {
         query: &MemoryRecallQuery,
     ) -> Result<Option<SelectedMemoryAccess>, MemoryError> {
         let recall_result = self.recall(query)?;
-        Ok(self.compiler.compile_with_selected_access(
-            &recall_result,
-            &query.session_id,
-            query.max_chars,
-        ))
+        Ok(self.compile_selected(&recall_result, query))
+    }
+
+    /// Render one selected overlay with the configured format (XML closed-world
+    /// by default; donor injection format behind `with_memory_injection_format`).
+    fn compile_selected(
+        &self,
+        recalled: &crate::layers::MemoryRecallResult,
+        query: &MemoryRecallQuery,
+    ) -> Option<SelectedMemoryAccess> {
+        if self.injection_format {
+            self.compiler.compile_injection_with_selected_access(
+                recalled,
+                &query.session_id,
+                query.max_chars,
+            )
+        } else {
+            self.compiler
+                .compile_with_selected_access(recalled, &query.session_id, query.max_chars)
+        }
     }
 
     /// Compile a bounded overlay after optional deterministic proactive candidate selection.
@@ -804,11 +829,7 @@ impl MemoryCoordinator {
         recalled
             .items
             .retain(|item| selected_ids.contains(item.id.as_str()));
-        Ok(self.compiler.compile_with_selected_access(
-            &recalled,
-            &query.session_id,
-            query.max_chars,
-        ))
+        Ok(self.compile_selected(&recalled, query))
     }
 
     /// Compile a structured closed-world prompt overlay from a memory recall query.

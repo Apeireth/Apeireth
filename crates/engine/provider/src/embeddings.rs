@@ -60,9 +60,9 @@ impl OpenAiCompatibleEmbeddingProvider {
         if model.is_empty() {
             return Err(EmbeddingError::Unavailable("empty embedding model".into()));
         }
-        let http = reqwest::Client::builder()
-            .build()
-            .map_err(|error| EmbeddingError::Unavailable(format!("reqwest client build failed: {error}")))?;
+        let http = reqwest::Client::builder().build().map_err(|error| {
+            EmbeddingError::Unavailable(format!("reqwest client build failed: {error}"))
+        })?;
         Ok(Self {
             http,
             base_url,
@@ -99,15 +99,13 @@ impl EmbeddingProvider for OpenAiCompatibleEmbeddingProvider {
             Some(key) => request.bearer_auth(key),
             None => request,
         };
-        let response = request
-            .send()
-            .await
-            .map_err(|error| EmbeddingError::Unavailable(format!("embeddings request failed: {error}")))?;
+        let response = request.send().await.map_err(|error| {
+            EmbeddingError::Unavailable(format!("embeddings request failed: {error}"))
+        })?;
         let status = response.status();
-        let body = response
-            .text()
-            .await
-            .map_err(|error| EmbeddingError::Unavailable(format!("embeddings body read failed: {error}")))?;
+        let body = response.text().await.map_err(|error| {
+            EmbeddingError::Unavailable(format!("embeddings body read failed: {error}"))
+        })?;
         if !status.is_success() {
             return Err(classify_status(status, body));
         }
@@ -163,27 +161,38 @@ mod tests {
     #[test]
     fn rejects_invalid_json() {
         let error = parse_embedding_body("not json").expect_err("must fail");
-        assert!(matches!(error, EmbeddingError::InvalidVector(_)), "{error:?}");
+        assert!(
+            matches!(error, EmbeddingError::InvalidVector(_)),
+            "{error:?}"
+        );
     }
 
     #[test]
     fn rejects_missing_data_array() {
         let error = parse_embedding_body(r#"{"object":"list"}"#).expect_err("must fail");
-        assert!(matches!(error, EmbeddingError::InvalidVector(_)), "{error:?}");
+        assert!(
+            matches!(error, EmbeddingError::InvalidVector(_)),
+            "{error:?}"
+        );
     }
 
     #[test]
     fn rejects_empty_embedding() {
-        let error =
-            parse_embedding_body(r#"{"data":[{"embedding":[]}]}"#).expect_err("must fail");
-        assert!(matches!(error, EmbeddingError::InvalidVector(_)), "{error:?}");
+        let error = parse_embedding_body(r#"{"data":[{"embedding":[]}]}"#).expect_err("must fail");
+        assert!(
+            matches!(error, EmbeddingError::InvalidVector(_)),
+            "{error:?}"
+        );
     }
 
     #[test]
     fn rejects_non_numeric_entries() {
-        let error = parse_embedding_body(r#"{"data":[{"embedding":[1.0,"x"]}]}"#)
-            .expect_err("must fail");
-        assert!(matches!(error, EmbeddingError::InvalidVector(_)), "{error:?}");
+        let error =
+            parse_embedding_body(r#"{"data":[{"embedding":[1.0,"x"]}]}"#).expect_err("must fail");
+        assert!(
+            matches!(error, EmbeddingError::InvalidVector(_)),
+            "{error:?}"
+        );
     }
 
     #[test]
