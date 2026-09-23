@@ -232,3 +232,58 @@ perception 不做 per-turn module
   **IMPLEMENTED 层级**理解, 不等于"v1 已达成、v2 退步";
 - v2 是**形态重构 + 工程化收敛** (18 crate / 7 重 CI / 四级状态诚实标注), 代价是
   v1 的宽度 (105 crate 的生态) 大量留在 `legacy/` 待按 P 序回收。
+
+## 7. 更正与源码复核 (2026-10-06 晚, 重要)
+
+> **主账 `apeireth-1-0-vs-2-0-functional-gap` (2026-08-28) 的 🔴 清单已大面积过时** ——
+> 其后多波 (R12-SpeciesCore-1 / memory v2.2 / R30 claude-mem 三层 / 研究吸收批)
+> 已把其中许多做成**库级实现**。本节以源码实证更正 §2/§3 的对应条目。
+
+### 7.1 已存在但**未接生产路径** (IMPLEMENTED, NOT PRODUCTION WIRED)
+
+源码证据 (模块文件 + lib.rs 声明):
+
+| 主账标 🔴 的项 | v2 实际 | 证据 |
+|---|---|---|
+| partner | ✅ 库级实现 | `memory/src/partner.rs` ("伙伴与双向羁绊模型, R12-SpeciesCore-1 实施") |
+| principles | ✅ 库级实现 | `memory/src/principles.rs` ("动态原则层与原则洋葱晋级候选") |
+| diary / daily_summary / cross_diary | ✅ 库级实现 | `memory/src/{diary,daily_summary,cross_diary}.rs` |
+| consolidation / dreaming | ✅ 库级实现 | `memory/src/{consolidation,dreaming,dream_consolidation}.rs` |
+| memory_injection | ✅ 库级实现 | `memory/src/memory_injection.rs` |
+| meta_thinking | ✅ 库级实现 | `memory/src/meta_thinking.rs` |
+| intent_brier / confidence / calibration | ✅ 库级实现 | `memory/src/{intent_brier,confidence,calibration,online_calibration}.rs` |
+| reflexion | ✅ 库级实现 | `memory/src/reflexion.rs` |
+| topic_predictor / proactive_recall | ✅ 库级实现 | `memory/src/{topic_predictor,proactive_recall}.rs` |
+| morphology | ✅ 库级实现 | `organ/src/morphology.rs` ("Query morphology softmax") |
+| education | ✅ 工具级实现 | `tools/src/education.rs` ("Education Dx-Check 换元检查工具") |
+| worktree_sandbox | ✅ 库级实现 | `orchestration/src/worktree_sandbox.rs` |
+| BM25 混合检索 (主账标缺) | ✅ 已实现 | `memory/src/hybrid_search.rs` (Okapi BM25 + 向量 RRF, 0 外部 NLP 依赖) |
+| 吸收批 (betti/残差金字塔/河流拓扑/Kuramoto…) | ✅ 已实现 | `memory/src/{betti_hole_detector,residual_pyramid,river_topology,kuramoto_resonance}.rs` |
+
+**接线状态实测**: 上述模块在 `runtime-assembly/src/canonical/` 与 `adapters/cli/src/`
+中的引用数**全部为 0** (唯 `context_rot` 有 3 处引用) —— 即**库级真实现, 未接生产装配**。
+按四级口径记: **IMPLEMENTED ✅ / PRODUCTION WIRED ❌**。
+
+### 7.2 仍为真缺口 (源码确认不存在)
+
+| 项 | 状态 |
+|---|---|
+| community (社群识别与分诊) | 🔴 v2 crates 内 0 命中 |
+| experiment_field (隔离实验场) | 🔴 0 命中 |
+| HybridCognitiveRouter | 🔴 0 命中 |
+| ToolSynthesizer | 🔴 0 命中 |
+| thought_cluster (按此名) | 🔴 0 命中 (有 `cluster_store.rs`, 疑似改名/部分) |
+| onering (OneRingLedger) | 🔴 仅元数据透传注释, 账本本体 0 |
+| 真文件/网络隔离 | 🔴 实测 `EnforcementLevel::Unsupported` (`process/linux.rs:62-67`), 仅进程树遏制 |
+| SDK 真实 HTTP/WS | 🔴 7 处 `unimplemented!()` + 自标"阶段 6 stub, R21 真接" |
+| 三洋葱 L3-L5 | 🔴 未实现 (runtime 仅 L1-L2) |
+
+### 7.3 对结论的修正
+
+- §3.1 "🔴 0 真实施"应分两级读: **真缺口** (§7.2, 源码确证不存在) 与
+  **库级已实现未接线** (§7.1, 占多数) —— 后者距生产化只差"装配 + 测试 + 门禁",
+  不是从零研发;
+- 这**加强** §4 的文档治理建议: 主账 FG 不仅缺历史批注, 其 🔴 清单还**低估 v2**
+  (把"已实现未接线"也标成 0), 修订时须按四级口径重标;
+- **教训 (0 装纪律的双向性)**: 0 装要求"不假装完成", 同样要求"不假装未完成" ——
+  审计必须对源码实证, 不能只信历史文档。
