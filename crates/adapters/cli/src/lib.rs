@@ -858,6 +858,126 @@ pub async fn dispatch_canonical_approval(
 
 /// Start the HTTP Gateway backed by one long-lived canonical runtime.
 /// Blocks until the server exits.
+/// **W2 §4.1 dreaming 触发载体 (决策点 D2)**: 显式命令 `apeireth dream` = 显式授权。
+///
+/// 语义: 取近 N 条 episodes 为梦境素材 (显式 `--session`; 未给 = 空素材, 走引擎的
+/// "常规认知结构自整定"路径) → 6 阶段做梦循环 (LLM 思考器 + 确定性降级链) →
+/// 苏醒写日记 (`<data>/diary`, source = `dream`)。**无旋钮**: 做梦只在此命令下
+/// 发生 (W2 验收门命令变体: 显式命令即授权 + 默认不自动跑)。
+pub async fn dispatch_dream(
+    session: Option<String>,
+    limit: usize,
+    date: Option<String>,
+) -> Result<String, String> {
+    use apeireth_memory::backend::sqlite::SqliteBackend;
+    use apeireth_memory::diary::FileDiaryStore;
+    use apeireth_memory::dream_wiring::{dream_and_journal, DeterministicMetaThinker};
+    use apeireth_memory::dreaming::{DreamEngine, DreamEngineConfig};
+    use apeireth_memory::meta_thinking::MetaThinker;
+    use apeireth_memory::procedural::InMemoryProceduralStore;
+    use apeireth_plugin::memory_backend::MemoryBackend;
+    use apeireth_runtime_assembly::canonical::{FallbackMetaThinker, LlmMetaThinker};
+    use apeireth_storage::SqliteConnectionPool;
+
+    let path = cognitive_db_path();
+    let pool = Arc::new(
+        SqliteConnectionPool::open(&path)
+            .await
+            .map_err(|error| format!("cognitive backend open failed: {error}"))?,
+    );
+    let backend = SqliteBackend::from_arc(Arc::clone(&pool));
+
+    let recent: Vec<String> = match &session {
+        Some(session_id) => backend
+            .recent_episodes(session_id, limit)
+            .map_err(|error| format!("read recent episodes failed: {error}"))?
+            .into_iter()
+            .map(|episode| format!("[{}] {}", episode.role, episode.content))
+            .collect(),
+        None => Vec::new(),
+    };
+
+    // 决策点 D1: LLM 思考器 + 确定性降级链; 未配 LLM = 纯规则 (不造假可用)。
+    let thinker: Arc<dyn MetaThinker> = match build_dream_llm_thinker() {
+        Ok(llm) => Arc::new(FallbackMetaThinker::new(llm, DeterministicMetaThinker)),
+        Err(_) => Arc::new(DeterministicMetaThinker),
+    };
+
+    let mut engine = DreamEngine::new(DreamEngineConfig::default());
+    let procedural = InMemoryProceduralStore::new(1000);
+    let diary_root = default_panel_data_dir().join("diary");
+    let diary = FileDiaryStore::new(diary_root.clone());
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    // 决策点 D3: DreamReport 落日记 (引擎"苏醒阶段写入日记"本意)。
+    let date = date.unwrap_or_else(|| {
+        chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string()
+    });
+    let report = dream_and_journal(
+        &mut engine,
+        &recent,
+        thinker.as_ref(),
+        &procedural,
+        &diary,
+        &date,
+        now_ms,
+    )?;
+    Ok(format!(
+        "dream {} 完成 (素材 {} 条, 日记 {}): 6 阶段循环结束\n\n{}",
+        report.dream_id,
+        recent.len(),
+        diary_root.display(),
+        report.to_markdown()
+    ))
+}
+
+/// 构造做梦 LLM 思考器 (openai-compatible 优先, MiniMax 回退; 都未配则 Err)。
+fn build_dream_llm_thinker() -> Result<apeireth_runtime_assembly::canonical::LlmMetaThinker, String>
+{
+    use apeireth_runtime_assembly::canonical::LlmMetaThinker;
+    if std::env::var("APEIRETH_OPENAI_MODELS")
+        .ok()
+        .is_some_and(|v| !v.trim().is_empty())
+    {
+        if let Ok(factory) =
+            apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env()
+        {
+            let model = factory
+                .model_ids()
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "deepseek-v4-flash".to_string());
+            return Ok(LlmMetaThinker::new(
+                Arc::new(factory) as Arc<dyn apeireth_plugin::llm_factory::LlmFactory>,
+                model,
+            ));
+        }
+    }
+    if std::env::var("APEIRETH_API_KEY")
+        .ok()
+        .is_some_and(|v| !v.trim().is_empty())
+    {
+        if let Ok(factory) = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env() {
+            let model = factory
+                .model_ids()
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "MiniMax-M3".to_string());
+            return Ok(LlmMetaThinker::new(
+                Arc::new(factory) as Arc<dyn apeireth_plugin::llm_factory::LlmFactory>,
+                model,
+            ));
+        }
+    }
+    Err("no llm factory configured (dream uses deterministic thinker)".to_string())
+}
+
 pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
     dispatch_gateway_serve_on("127.0.0.1", port).await
 }

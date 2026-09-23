@@ -290,6 +290,8 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
 # 或 apeireth reject --session <sid> --approval <approval-id> --reason "不需要"
 ```
 
+**2026-10-10 W2 §4.1 做梦（不是旋钮——显式命令即授权）**：`apeireth dream [--session <id>] [--limit N] [--date YYYY-MM-DD]`。取该会话近 N 条 episodes 为梦境素材（不给 `--session` = 空素材，走引擎"常规认知结构自整定"路径），跑 6 阶段做梦循环（LLM 元思考器 + 确定性降级链，LLM 未配则纯规则浅推演），苏醒把 `DreamReport` 写入 `<data>/diary` 日记（source=`dream`）。**默认不自动跑**——做梦只在这个命令下发生。
+
 **与工具同批的既有旋钮**：`APEIRETH_COGNITIVE_DB`（记忆库路径）、
 `APEIRETH_SESSION_DB`（会话库路径）、`APEIRETH_MODEL`（默认模型）、
 `APEIRETH_OPENAI_URL`/`APEIRETH_OPENAI_MODELS`/`OPENAI_API_KEY`（provider 配置）。
