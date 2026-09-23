@@ -276,6 +276,20 @@ perception 不做 per-turn module
 > 教训: "引用数为 0"这种结论必须**用脚本全量扫**, 不能凭印象点几个名字;
 > 且 `Option<...>` 类型的配置项要**连 `Default` 值一起看**, 否则会把"接线了但默认关"误判成"没接线"。
 
+> **[2026-10-06 夜三次复核 (W2 接线批实施前调用链审计, 重要 —— 又推翻/收窄了上面两条)]**
+> "名字在 runtime-assembly/cli 里 0 引用"≠"未接生产": **crate 内部互调**一样是生产路径。
+> 逐模块调用链实证后:
+>
+> | 模块 | 上面记的 | 调用链真相 | 本批处置 |
+> |---|---|---|---|
+> | `hybrid_search` (BM25) | 0 引用→未接 | **已接**: `MemoryCoordinator::execute_hybrid_retrieval` (`coordinator.rs:611-674`) 用 `Bm25LexicalCandidateSource` + `HybridRetrievalPipeline`; 生产经 `production.rs:291-324` 构造 coordinator → `MemoryRecallModule` 每轮调 `compile_prompt_overlay_with_*`; **T7/T8/T9 生产级测试实证** (`cognitive_convergence_vertical.rs`) | 无需接线; 只补语义阶段 |
+> | `consolidation` | 0 引用→未接 | **API 级已接、触发未接**: coordinator 内部持有 `MemoryConsolidationJob` (`coordinator.rs:82`) 并公开 `run_consolidation` (`:840`), 但生产零触发点 | 归记忆闭环批 (下一批) |
+> | `topic_predictor` | 0 引用→未接 | 只被借用 `TopicCue` **类型** (`coordinator.rs:41`); `TopicPredictor` 本体零调用 | 维持未接 |
+> | `diary` / `dreaming` / `meta_thinking` | 0 引用→未接 | crate 内部互调 (`cross_diary→diary`, `dreaming→meta_thinking`), 但**闭环根** (dreaming/consolidation 触发点) 仍未接 | 归记忆闭环批 |
+> | `typed_recall` 读侧 (commitment/persona/relation 召回) | 未列 | **写读不对称 bug**: 写侧 `typed_sink` 在生产落库, 读侧 `typed_recall: None` (`cli/src/lib.rs:576` 改前) —— **数据入库永不召回**; `SqliteTypedMemoryRecallSource` 适配器+测试全在, 只差组装根一行 | **本批修复** (默认开 + `APEIRETH_DISABLE_TYPED_RECALL=1` 逃生门) |
+> | 语义向量阶段 (`embedding_provider`) | 未列 | **实现缺失**: `ProductionBackends.embedding_provider` 恒 `None`, 全仓库只有 `NoEmbeddingProvider`+测试 fake; coordinator 的向量阶段 (`recall_async`) 从未激活, 恒 `used_lexical_fallback=true` | **本批补真实现** `OpenAiCompatibleEmbeddingProvider` + `APEIRETH_EMBEDDING_URL/MODEL/KEY` 旋钮 (fail-loud 半配) |
+> | partner/principles/reflexion/memory_injection/intent_brier/吸收批 4 个等 | 0 引用→未接 | **确证**: crate 内部互调排查同样零命中 | 维持未接, 按序接线 |
+
 ### 7.2 仍为真缺口 (源码确认不存在)
 
 | 项 | 状态 |

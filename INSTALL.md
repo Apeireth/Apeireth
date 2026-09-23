@@ -274,6 +274,8 @@ EOF
 | `APEIRETH_COGNITIVE_COUNCIL=1` | 多视角审议（7 advisor 并行，10s/60s 有界） | 每回合最多 +7 次 LLM 调用 |
 | `APEIRETH_ENABLE_ORGANS=1` | 装配 9 器官模块（W1/W2 等，LLM 重的器官会真调 LLM） | 视器官而定 |
 | `APEIRETH_ENABLE_PREFERENCE_LEARNING=1` | 让 AI 把学到的偏好写回长期记忆 | 写入权交给模型；配 P1-A 准入控制使用更稳 |
+| `APEIRETH_ENABLE_PROACTIVE_RECALL=1` | 记忆主动召回：已存记忆按对话线索主动浮现（每次 ≤2 条、有置信度阈值，确定性选择器） | 低——不额外调 LLM |
+| `APEIRETH_DISABLE_TYPED_RECALL=1` | 关闭承诺/画像/关系三类记忆的**召回读侧**（写侧不动） | 关掉后这三类记忆不再浮现；默认**开**（写读对称，2026-10-06 修复入库不召回的断链） |
 
 **shell 审批流示例**（开启后）：
 
@@ -288,6 +290,16 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
 **与工具同批的既有旋钮**：`APEIRETH_COGNITIVE_DB`（记忆库路径）、
 `APEIRETH_SESSION_DB`（会话库路径）、`APEIRETH_MODEL`（默认模型）、
 `APEIRETH_OPENAI_URL`/`APEIRETH_OPENAI_MODELS`/`OPENAI_API_KEY`（provider 配置）。
+
+**2026-10-06 W2 记忆检索旋钮**（不是 `=1` 开关，是配置项）：
+
+- `APEIRETH_EMBEDDING_URL` + `APEIRETH_EMBEDDING_MODEL`（`APEIRETH_EMBEDDING_KEY`
+  可选，本地免鉴权端点不设）——记忆检索的**语义向量阶段**（OpenAI 兼容
+  `/embeddings` 端点）。**双缺 = 纯词法检索（默认，行为不变）；只设其一 = 启动报错**
+  （半配是配置事故，大声失败）；DeepSeek 没有 embeddings 端点，需本地模型或
+  其他兼容端点。每回合约 +N 次嵌入调用（候选逐条）。
+- `APEIRETH_PERSONA_ID` / `APEIRETH_SUBJECT_ID`——typed 记忆（承诺/画像/关系）的
+  主体身份。本地单用户无需设置（默认 `apeireth` / `local-user`）；多主体部署时覆写。
 
 ---
 

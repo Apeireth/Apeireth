@@ -363,6 +363,7 @@ name = "apeireth-provider"
 version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
+ "apeireth-memory",
  "apeireth-orchestration",
  "apeireth-plugin",
  "apeireth-protocol",
