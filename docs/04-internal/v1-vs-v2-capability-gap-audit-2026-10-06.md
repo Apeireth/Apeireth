@@ -182,3 +182,53 @@ perception 不做 per-turn module
 4. **建议的恢复序** (与 ROADMAP P 序一致, 未变更): P3 记忆移植 (M1B) → P6 companion
    器官 (含物种/关系/元认知四块) → P7 连续感知 (硬件到位后) → P5 沙箱强化
    (可提前: `shell-sandbox-lite-design-2026-10-06.md`)。
+
+## 6. 附录: v1 全量域清单 (差距文档未覆盖的部分)
+
+> 既有差距文档 `apeireth-1-0-vs-2-0-functional-gap` 只覆盖 v1 的一部分子系统。
+> v1 源码清单 (105 crate) 显示 v1 的实际广度远超该文档, 以下为**文档未列**的
+> v1 子系统及其 v2 状态 (均未移植, 除非注明):
+
+| v1 子系统 | 内容 | v2 状态 |
+|---|---|---|
+| 终端沙箱 6 后端 | Local / Docker / SSH / Daytona / Modal / Singularity (`apeireth-environment`) | ⛔ 未移植 (v2 仅 ProcessExecutor + JobObject) |
+| Docker 沙箱真接 | `frozen/apeireth-sandbox` (bollard REST v1.43) | ⛔ 冻结参考 |
+| microVM (libkrun FFI) | companion `vm_sandbox.rs` / `sandbox_ffi_libkrun.rs` (feature 默认关) | 🖥️ 未移植 |
+| 网络隔离 | netns / cgroup / WFP (`sandbox_net.rs`) | ⛔ 0 装 stub |
+| 受限 token + AppContainer | companion `restricted_token.rs` / `app_container.rs` | ⛔ (本审计 §3.1; 轻量档设计将以此实现) |
+| Leptos Web 前端 | `apeireth-web` (SSR+WASM, council/memory/asi 页) | ⛔ 未移植 (v2 走 Tauri 桌面) |
+| TUI 5 页 | `apeireth-tui` (ratatui + 9 器官视图) | ⛔ 未移植 |
+| PyO3 Python 桥 | `apeireth-pybridge` (含 `reflection_self_loop.rs`) | ⛔ 未移植 (v2 纯 Rust deny(unsafe)) |
+| 图编排 / 工作流引擎 | `apeireth-graph` (LangGraph 式) / `apeireth-workflow` (Temporal 式) | ⛔ 未移植 (v2 单 agent loop) |
+| 主 chat 管线 (独立 crate) | `apeireth-pipeline` (token 预算三层 + 165 单测 + wiremock e2e) | 🟡 概念并入 runtime |
+| 5 阶段 pipeline + 熔断 | `apeireth-pipeline-g5` (circuit_breaker + bounded_reliability) | ⛔ 未移植 |
+| L0-L4 五层总线 | `apeireth-bus` | 🟡 v2 仅 EventBus core |
+| MEWG 五重治理 + 物理多签 | `apeireth-sovereignty` (mewg/physical_multisig/multi_human/multi_ai) | ⛔ 未移植 |
+| HASH-SQL 仲裁 | `apeireth-arbitration` (唯一事实时间线) | ⛔ 未移植 |
+| 13 键 FourGates 实现 | `apeireth-constraint` (+ SelfModifyGuard) | 🔒 v2 永久降级 (RUNTIME_ENFORCED=false) |
+| 三洋葱 trait 抽象 | `apeireth-onion` (原则 5 层 + 权限 6 层) | 🟡 v2 仅 3 项脊柱 + hooks |
+| 7 种记忆 provider | `apeireth-memory-extensions` (in_memory/redis/sqlite/postgres/s3/disk_lru/hybrid) | ⛔ 未移植 (v2 仅 SQLite) |
+| 跨 session token 折叠 | `apeireth-context-fold` (FoldStrategy/FoldMarker) | ⛔ 未移植 |
+| 7 强制 Advisor 智囊团 (独立 crate) | `apeireth-council` (含 mock LLM 默认 + multi_model_backend) | 🟡 v2 有 Council (WIRED, 默认关) |
+| 工具注册/运行时/审批 三 crate | `tool-registry` (5 轴正交 + 热加载) / `tool-runtime` / `tool-approval` (5 规则 + 5 分钟窗口) | 🟡 v2 简化为 plugin+capability 注册 + 审批生命周期 |
+| 9 工具子 crate | browser(Playwright a11y) / codesearch(Aho-Corasick) / image-gen / image-process / tool-shell(seccomp+SSH+多签) / tool-fetch(search+deep+Bilibili) | ⛔ 未移植 (v2 仅 5 内置工具) |
+| 进程 supervisor (PID1) | `apeireth-supervisor` (5 sub-supervisor + 3 restart 策略 + actor mailbox) | ⛔ 未移植 (ROADMAP P5 "不在 17-crate 工作区") |
+| CentralAI + 11 Skill | `apeireth-central` (含 Skill 注册 + semver) | ⛔ 未移植 |
+| Agent 管理 + subagent | `apeireth-agent` (alias/LRU/notify 热加载/subagent) | ⛔ 未移植 |
+| Team Lead Orchestrator | `apeireth-team-lead` (approval_bridge + lease) | 🟡 v2 有 orchestration crate (Council) |
+| 节律 / cron | `apeireth-cron` + companion `emergence` (RhythmEstimator) | 🟡 v2 E7 emergence 已 1:1; cron 未移植 |
+| 遥测栈 3 crate | telemetry / observability / metrics / tracing (frozen) | ⛔ 未移植 (v2 仅 session event + trace) |
+| 形式化验证 | `archived/apeireth-formal` (Kani/TLA+ harnesses) | 🟡 v2 organ_kani 已装 6 crate |
+| 交付通道 | Lark / LiveKit / ACP / Web / TUI / companion_serve(OpenAI 兼容) | ⛔ 未移植 (v2 仅 gateway HTTP + 桌面) |
+| SDK (HTTP/WS 客户端) | v1 REAL | 🔴 v2 stub (`unimplemented!()`, 待 R21) |
+| 配置/状态/i18n/扩展/限流 等基建 | config / state(9 organ state) / i18n / extension / rate-limiter / http-client(LIFO 池) | ⛔ 未移植 |
+
+**补充判断**:
+- v1 的**治理与工具链其实最实** (13 键/MEWG/三洋葱/工具注册运行时审批/9 工具),
+  **自我改进类最"愿景化"** (演化的 LLM 实现多为 trait 口);
+- 但 v1 的**器官层大量是"确定性规则完整 + LLM trait 口留而未接 + stub/0 装 PASS"**
+  (`organs.rs:15` 明写 ToneRefiner 实现未接; curiosity/emotion_memory/hypothesis/
+  value_cases 均标"确定性无 LLM") —— 所以"v1 有而 v2 没有"的账, 需要按
+  **IMPLEMENTED 层级**理解, 不等于"v1 已达成、v2 退步";
+- v2 是**形态重构 + 工程化收敛** (18 crate / 7 重 CI / 四级状态诚实标注), 代价是
+  v1 的宽度 (105 crate 的生态) 大量留在 `legacy/` 待按 P 序回收。
