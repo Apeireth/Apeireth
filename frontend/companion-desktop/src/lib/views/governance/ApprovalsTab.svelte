@@ -12,6 +12,7 @@
   import {onMount, onDestroy} from 'svelte';
   import {Inbox, RotateCcw, Radio, MessageCircleMore, ScrollText, Clock} from 'lucide-svelte';
   import EmptyState from '../../components/EmptyState.svelte';
+  import GovManifestPending from './GovManifestPending.svelte';
   import ErrorState from '../../components/ErrorState.svelte';
   import LoadingState from '../../components/LoadingState.svelte';
   import StatusBadge from '../../components/StatusBadge.svelte';
@@ -272,8 +273,8 @@
   </p>
 
   {#if capabilities === null}
-    <!-- 清单未到达 ≠ 不支持：health→capabilities 串行拉取进行中，诚实显加载 -->
-    <LoadingState message="正在读取运行时能力清单…" />
+    <!-- 清单未到达 ≠ 不支持：health→capabilities 串行拉取进行中；离线超时给诚实说明 -->
+    <GovManifestPending message="正在读取运行时能力清单…" />
   {:else if !canRead}
     <GovUnsupported
       capabilityId="permissions.approval.read"

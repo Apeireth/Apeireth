@@ -1397,6 +1397,9 @@
 
 <style>
   .settings-save-bar {
+    /* 走查修复（rev-settings 实证）：本元素是 .settings-layout 网格的第三个子项，
+       不跨列会被自动摆进第 2 行第 1 列（200px 窄条，按钮竖排、文字截断）。 */
+    grid-column: 1 / -1;
     display: flex;
     align-items: center;
     justify-content: flex-end;

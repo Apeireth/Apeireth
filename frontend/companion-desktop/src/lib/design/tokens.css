@@ -124,31 +124,33 @@
   --ap-ease: var(--ap-ease-standard);
 }
 
-/* ---------- Essence 浅色主题（星空山脉壁纸 + 雾面玻璃 UI） ---------- */
+/* ---------- Essence 浅色主题（星空山脉壁纸 + 雾面玻璃 UI） ----------
+   2026-09-23 视觉走查校准（rev-essence-hour22 实证）：原值三层白近无分界、
+   金家族过灰——面板加实、描边加深、金家族提亮一档（accent-tab 仍随金家族）。 */
 html[data-theme='essence'] {
-  --ap-space-void: #ebe8e2;
-  --ap-gold: #8a7355;
-  --ap-gold-white-hot: #a89272;
-  --ap-gold-amber: #6f5e48;
-  --ap-gold-ui: #5c4f3f;
-  --ap-gold-platinum: #c4b8a8;
+  --ap-space-void: #e6e2da;
+  --ap-gold: #a08050;
+  --ap-gold-white-hot: #bd9a68;
+  --ap-gold-amber: #84663f;
+  --ap-gold-ui: #6b5238;
+  --ap-gold-platinum: #c9b898;
   --ap-bone: #1c1b1f;
-  --ap-bone-68: rgba(28, 27, 31, 0.72);
-  --ap-bone-42: rgba(28, 27, 31, 0.52);
-  --ap-bone-30: rgba(28, 27, 31, 0.38);
+  --ap-bone-68: rgba(28, 27, 31, 0.78);
+  --ap-bone-42: rgba(28, 27, 31, 0.56);
+  --ap-bone-30: rgba(28, 27, 31, 0.42);
   --ap-ink: #141316;
-  --ap-panel: rgba(255, 255, 255, 0.76);
+  --ap-panel: rgba(255, 255, 255, 0.85);
   --ap-panel-solid: #f7f5f1;
-  --ap-shell-chip: rgba(255, 255, 255, 0.72);
-  --ap-shell-elevated: rgba(255, 255, 255, 0.92);
+  --ap-shell-chip: rgba(255, 255, 255, 0.8);
+  --ap-shell-elevated: rgba(255, 255, 255, 0.94);
   --ap-card: #ffffff;
-  --ap-card-dark: #eceae5;
-  --ap-line: rgba(20, 19, 22, 0.1);
-  --ap-accent-tab: #8a7355;
-  --ap-accent-ui: #8a7355;
-  --ap-accent-ui-ink: #f7f5f1;
-  --ap-semantic-success: #3d7a5c;
-  --ap-semantic-warning: #9a6f2e;
+  --ap-card-dark: #e9e6e0;
+  --ap-line: rgba(20, 19, 22, 0.16);
+  --ap-accent-tab: #a08050;
+  --ap-accent-ui: #a08050;
+  --ap-accent-ui-ink: #faf7f2;
+  --ap-semantic-success: #35705a;
+  --ap-semantic-warning: #96691f;
   --ap-semantic-danger: #a84840;
   --ap-semantic-info: #4a6278;
 }

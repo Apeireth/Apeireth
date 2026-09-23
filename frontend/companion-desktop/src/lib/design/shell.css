@@ -559,13 +559,20 @@
   justify-content: center;
   pointer-events: auto;
 }
+/* 承托与右下角署名同款 chip（§5.1 承托纪律）：裸 text-shadow 在复杂背景
+   （night 黑洞亮环 / essence 山脉）上实测不可读——走查 rev-night-hour2 实证。 */
 .bg-hint {
   margin: 0;
+  padding: 10px 24px;
+  border: 1px solid var(--ap-line);
+  border-radius: 999px;
+  background: var(--ap-shell-chip);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   font-family: var(--ap-font-voice);
   font-size: 15px;
   letter-spacing: 0.18em;
   color: var(--ap-bone-68);
-  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
 }
 .bg-caption {
   position: absolute;
@@ -1838,7 +1845,9 @@ p.lede {
 }
 .app-root.theme-essence .static-bg::after {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.52);
+  /* 走查校准：0.52 → 0.38——原值把山脉洗成灰白纸面，失了景深；
+     UI 面板已加实（tokens.css --ap-panel 0.85），承托由面板承担。 */
+  background: rgba(255, 255, 255, 0.38);
 }
 .app-root.theme-heritage .static-bg::after,
 .app-root.custom-bg .static-bg::after {

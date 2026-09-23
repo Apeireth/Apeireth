@@ -15,6 +15,7 @@
   import LoadingState from '../../components/LoadingState.svelte';
   import StatusBadge from '../../components/StatusBadge.svelte';
   import GovUnsupported from './GovUnsupported.svelte';
+  import GovManifestPending from './GovManifestPending.svelte';
   import type {ApeirethConfig, CapabilityManifest, GuardEvent, GuardStatus} from '../../types';
   import {
     capabilityAvailable,
@@ -133,7 +134,7 @@
   </p>
 
   {#if capabilities === null}
-    <LoadingState message="正在读取运行时能力清单…" />
+    <GovManifestPending message="正在读取运行时能力清单…" />
   {:else if !anyGuard}
     <GovUnsupported
       capabilityId="safety.guard.*"
