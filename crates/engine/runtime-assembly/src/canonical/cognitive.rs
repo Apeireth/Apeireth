@@ -335,6 +335,210 @@ fn preference_context(preferences: &[UserPreference], max_chars: usize) -> Strin
 }
 
 /// Recall context from the injected memory and optional experience stores.
+/// 模块 id: W2 §4.2 partner 双向羁绊 (2026-10-10)。
+pub const PARTNER_BOND_MODULE_ID: &str = "cognitive.partner_bond";
+
+/// 每回合羁绊深度增量 (温和演化: ~10 回合 Familiar, ~22 Trusted; 阶段阈值见
+/// `apeireth_memory::partner` 测试注)。
+pub const BOND_DEPTH_INCREMENT_PER_TURN: f64 = 0.02;
+
+/// **W2 §4.2 partner 羁绊模块** (2026-10-10): 双向落点 ——
+/// - `TurnStart` **关系状态注入** (`PromptOverlay::system`): 羁绊阶段/深度/演化次数,
+///   供语气与信任校准参考 (工程化关系状态, 非情绪伪装);
+/// - `AfterTurn` **羁绊演化**: `touch` + `Bond::evolve` 回写 [`PartnerStore`]
+///   (纯确定性状态机, 0 LLM 调用)。
+///
+/// **身份口径**: partner id = `subject_id` (`APEIRETH_SUBJECT_ID`, W2 首批身份
+/// 旋钮) —— 跨会话稳定, 与 typed 身份体系同源 (羁绊本义即跨 Session 连续)。
+///
+/// **0 假装边界**: 存储现为 `InMemoryPartnerStore` (进程内, 重启即散) —— 持久
+/// partner 后端落点 = `PartnerStore` trait, 后续接 sqlite 实现即可, 本模块不动。
+pub struct PartnerBondModule {
+    manifest: ModuleManifest,
+    partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,
+    subject_id: String,
+    clock: Arc<dyn Clock>,
+    depth_increment: f64,
+    metrics: ModuleMetrics,
+}
+
+impl PartnerBondModule {
+    /// 构造 (subject_id = 跨会话伙伴身份)。
+    pub fn new(
+        partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,
+        subject_id: impl Into<String>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            manifest: ModuleManifest::new(PARTNER_BOND_MODULE_ID, "Partner bond"),
+            partner_store,
+            subject_id: subject_id.into(),
+            clock,
+            depth_increment: BOND_DEPTH_INCREMENT_PER_TURN,
+            metrics: ModuleMetrics::default(),
+        }
+    }
+
+    /// 覆盖每回合深度增量 (测试/调参用)。
+    #[must_use]
+    pub fn with_depth_increment(mut self, increment: f64) -> Self {
+        self.depth_increment = increment;
+        self
+    }
+
+    /// Attach the shared non-sensitive telemetry sink.
+    #[must_use]
+    pub fn with_telemetry(self, telemetry: Arc<CognitiveTelemetry>) -> Self {
+        self.metrics.attach_telemetry(telemetry);
+        self
+    }
+
+    fn partner_id(&self) -> apeireth_memory::partner::PartnerId {
+        apeireth_memory::partner::PartnerId(self.subject_id.clone())
+    }
+
+    /// 取或建伙伴记录 (store 错误 → None, 调用方降级继续)。
+    fn get_or_create_partner(&self) -> Option<apeireth_memory::partner::Partner> {
+        use apeireth_memory::partner::{Partner, PartnerPreferences};
+        let id = self.partner_id();
+        let now = self.clock.now().timestamp_millis();
+        match self.partner_store.get_partner(&id) {
+            Ok(Some(partner)) => Some(partner),
+            Ok(None) => {
+                let partner = Partner::new(
+                    id,
+                    self.subject_id.clone(),
+                    PartnerPreferences::default(),
+                    now,
+                );
+                if self.partner_store.save_partner(&partner).is_err() {
+                    self.metrics.warning();
+                    return None;
+                }
+                Some(partner)
+            }
+            Err(_) => {
+                self.metrics.warning();
+                None
+            }
+        }
+    }
+}
+
+/// 羁绊注入文本 (纯函数, 供 TurnStart overlay 与测试)。
+fn bond_overlay_text(partner: &apeireth_memory::partner::Partner) -> String {
+    format!(
+        "【关系状态】羁绊阶段: {}, 羁绊深度: {:.2}, 演化次数: {} (工程化关系状态, 供语气与信任校准参考)",
+        bond_stage_cn(&partner.bond.stage),
+        partner.bond.depth.value(),
+        partner.bond.evolution_count
+    )
+}
+
+/// 阶段中文名 (展示用)。
+fn bond_stage_cn(stage: &apeireth_memory::partner::BondStage) -> &'static str {
+    use apeireth_memory::partner::BondStage;
+    match stage {
+        BondStage::Initial => "初识",
+        BondStage::Familiar => "熟悉",
+        BondStage::Trusted => "信任",
+        BondStage::Intimate => "亲密",
+        BondStage::LongTerm => "长久",
+        _ => "未知阶段",
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentModule for PartnerBondModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        let result = match hook {
+            HookPoint::TurnStart => match self.get_or_create_partner() {
+                Some(partner) => {
+                    let text = bond_overlay_text(&partner);
+                    ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(text))
+                }
+                None => ModuleOutcome::continue_(),
+            },
+            HookPoint::AfterTurn => {
+                // 羁绊演化: 纯确定性状态机 (touch + evolve), 0 LLM 调用。
+                if let Some(mut partner) = self.get_or_create_partner() {
+                    let now = self.clock.now().timestamp_millis();
+                    partner.touch(now);
+                    partner.bond.evolve(self.depth_increment.max(0.0), now);
+                    if self.partner_store.save_partner(&partner).is_err() {
+                        self.metrics.warning();
+                    }
+                }
+                ModuleOutcome::continue_()
+            }
+            _ => ModuleOutcome::continue_(),
+        };
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod partner_bond_tests {
+    use super::*;
+    use apeireth_memory::partner::{BondStage, InMemoryPartnerStore, PartnerId, PartnerStore};
+
+    #[test]
+    fn config_defaults_to_partner_bond_off() {
+        // W2 五件验收门②: 默认关 = 行为不变 (不建模块不注入不演化)。
+        let config = crate::canonical::production::CognitiveModuleConfig::default();
+        assert!(!config.partner_bond, "partner_bond 必须默认关");
+    }
+
+    #[test]
+    fn bond_overlay_reports_stage_and_depth() {
+        use apeireth_memory::partner::{Bond, Partner, PartnerPreferences};
+        let mut partner = Partner::new(
+            PartnerId("local-user".to_string()),
+            "local-user",
+            PartnerPreferences::default(),
+            1000,
+        );
+        partner.bond = Bond::new(1000);
+        let text = bond_overlay_text(&partner);
+        assert!(text.contains("羁绊阶段: 初识"), "{text}");
+        assert!(text.contains("羁绊深度: 0.00"), "{text}");
+    }
+
+    #[test]
+    fn evolve_partner_bond_is_visible_in_store() {
+        // W2 五件验收门③: 效果可见 = 阶段跃迁出现在存储行为里 (非字段自证)。
+        let store = InMemoryPartnerStore::new();
+        let id = PartnerId("local-user".to_string());
+        let now = 1_000i64;
+        let mut partner = apeireth_memory::partner::Partner::new(
+            id.clone(),
+            "local-user",
+            apeireth_memory::partner::PartnerPreferences::default(),
+            now,
+        );
+
+        // 11 次温和演化 (11 × 0.02 = 0.22) 应跨过 Familiar 阈值 (0.20)。
+        for step in 0..11 {
+            let at = now + (step + 1) * 60_000;
+            partner.touch(at);
+            partner.bond.evolve(BOND_DEPTH_INCREMENT_PER_TURN, at);
+        }
+        store.save_partner(&partner).unwrap();
+        let loaded = store.get_partner(&id).unwrap().expect("partner persisted");
+        assert_eq!(loaded.bond.stage, BondStage::Familiar);
+        assert!(loaded.bond.depth.value() >= 0.20);
+        assert_eq!(loaded.bond.evolution_count, 11);
+    }
+}
+
 pub struct MemoryRecallModule {
     manifest: ModuleManifest,
     memory: Arc<dyn MemoryBackend>,

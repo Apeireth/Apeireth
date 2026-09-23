@@ -238,8 +238,19 @@ async fn trusted_shell_pending_approval_then_approve_executes_once_and_continues
         "effective cwd {:?} should match canonical workspace root {expected_cwd:?}",
         effective["cwd"]
     );
-    assert_eq!(effective["filesystem_isolation"], "Unsupported");
-    assert_eq!(effective["network_isolation"], "Unsupported");
+    // W1 §2.5 断言反转 (2026-10-10): 这两个字段是**能力探针快照**, 不是常量 ——
+    // Windows AppContainer 实测 Enforced (沙箱墙真, 台账 #49 双探针实证), 平台无
+    // 实施能力时如实 Unsupported。断言对齐当前平台能力报告本身 (0 装: 报什么测
+    // 什么, 不硬编码期望; 跨平台 CI 自洽)。
+    let caps = apeireth_tools_canonical::process::current_platform_capabilities();
+    let expected_fs = format!("{:?}", caps.filesystem_isolation);
+    let expected_net = format!("{:?}", caps.network_isolation);
+    assert_eq!(effective["filesystem_isolation"], expected_fs);
+    assert_eq!(effective["network_isolation"], expected_net);
+    // 墙存在时审批卡应带沙箱徽标 (§2.4: 批准前看见墙)。
+    if expected_fs == "Enforced" {
+        assert_eq!(effective["sandbox"], "工作区限定 + 断网 (AppContainer)");
+    }
 
     let resolution = runtime
         .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
