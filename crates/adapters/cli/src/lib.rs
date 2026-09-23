@@ -997,12 +997,20 @@ pub async fn dispatch_canonical_chat(
     model: Option<String>,
     session: Option<String>,
 ) -> Result<CanonicalCliTurn, String> {
+    let prompt = prompt.into();
     let session = session
         .map(|id| id.parse::<SessionId>().map_err(|error| error.to_string()))
         .transpose()?;
     let (runtime, observer) = build_canonical_runtime_from_env_with_observability().await?;
-    let result = execute_canonical_cli_turn(&runtime, prompt, model, session).await;
+    let result = execute_canonical_cli_turn(&runtime, prompt.as_str(), model, session).await;
     observer.flush().await;
+    // W3 onering 消费 (2026-10-10, 默认关): 完成的回合留痕到跨前端统一账本
+    // (best-effort 旁路, 不影响回合结果; 挂起待审批的回合不记 —— 回合未完成)。
+    if onering_ledger_enabled_from_env() {
+        if let Ok(CanonicalCliTurn::Completed(response)) = &result {
+            onering_record_turn(&prompt, &response.text);
+        }
+    }
     result
 }
 
@@ -1022,6 +1030,67 @@ pub async fn dispatch_canonical_approval(
     let result = resolve_canonical_cli_approval(&runtime, session, approval, decision).await;
     observer.flush().await;
     result
+}
+
+/// **W3 onering 账本消费旋钮** (2026-10-10, 默认关):
+/// `APEIRETH_ENABLE_ONERING_LEDGER=1` —— 完成的 CLI 回合把 user/assistant
+/// 发言记入跨前端统一上下文账本 (`ContextLedger` = v1 `OneRingLedger` 的 v2
+/// 打捞件, 见 `memory/context_ledger.rs`)。
+fn onering_ledger_enabled_from_env() -> bool {
+    std::env::var("APEIRETH_ENABLE_ONERING_LEDGER")
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 回合 → 账本条目 (纯函数, 测试用): user prompt + assistant text, 空文本不入账
+/// (账本自身也拒空留痕, 0 假装不留空行)。
+fn onering_turn_entries<'a>(user: &'a str, assistant: &'a str) -> Vec<(&'static str, &'a str)> {
+    let mut entries = Vec::new();
+    if !user.trim().is_empty() {
+        entries.push((apeireth_memory::ROLE_USER, user));
+    }
+    if !assistant.trim().is_empty() {
+        entries.push((apeireth_memory::ROLE_ASSISTANT, assistant));
+    }
+    entries
+}
+
+/// 记账 (best-effort 旁路): 账本实例与治理同源 (cognitive_db_path 同一 DB,
+/// 无第二连接池); **失败只降级不翻转回合** —— 账本是旁路留痕, 不是回合成败条件。
+fn onering_record_turn(user: &str, assistant: &str) {
+    let entries = onering_turn_entries(user, assistant);
+    if entries.is_empty() {
+        return;
+    }
+    let store = match apeireth_memory::SqliteMemoryStore::open(cognitive_db_path()) {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("[onering] 账本打开失败 (旁路降级, 不影响回合): {error}");
+            return;
+        }
+    };
+    let continuity = apeireth_memory::continuity_link::current_continuity_id();
+    let ledger = match apeireth_memory::ContextLedger::new(&store, continuity) {
+        Ok(ledger) => ledger,
+        Err(error) => {
+            eprintln!("[onering] 账本构造失败 (旁路降级): {error}");
+            return;
+        }
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or_default();
+    for (role, content) in entries {
+        let sender = if role == apeireth_memory::ROLE_USER {
+            "cli-user"
+        } else {
+            "cli-assistant"
+        };
+        if let Err(error) = ledger.record(role, Some(sender), "cli", content, ts) {
+            eprintln!("[onering] 留痕失败 (旁路降级): {error}");
+        }
+    }
 }
 
 /// Start the HTTP Gateway backed by one long-lived canonical runtime.
@@ -1328,4 +1397,81 @@ fn default_panel_data_dir() -> PathBuf {
         .or_else(|_| std::env::var("HOME"))
         .unwrap_or_else(|_| ".".to_string());
     PathBuf::from(home).join(".apeireth")
+}
+
+#[cfg(test)]
+mod onering_ledger_tests {
+    use super::*;
+
+    #[test]
+    fn turn_entries_builder_filters_empty_and_orders_roles() {
+        // 五件门③ 纯函数部分: 空文本不入账, user 先 assistant 后。
+        assert!(onering_turn_entries("  ", "  ").is_empty());
+        let both = onering_turn_entries("问题", "回答");
+        assert_eq!(both.len(), 2);
+        assert_eq!(both[0].0, apeireth_memory::ROLE_USER);
+        assert_eq!(both[1].0, apeireth_memory::ROLE_ASSISTANT);
+        let only_assistant = onering_turn_entries("", "回答");
+        assert_eq!(only_assistant.len(), 1);
+        assert_eq!(only_assistant[0].0, apeireth_memory::ROLE_ASSISTANT);
+    }
+
+    #[tokio::test]
+    async fn ledger_roundtrip_records_and_reads_back() {
+        // 真库回路: record → recent 原样读回 (账本语义 = 统一时间线留痕)。
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("onering-test.sqlite3");
+        let store = apeireth_memory::SqliteMemoryStore::open(&path).expect("open");
+        let continuity = "companion-main";
+        let ledger = apeireth_memory::ContextLedger::new(&store, continuity).expect("ledger");
+        assert!(ledger.is_empty().expect("empty"));
+
+        ledger
+            .record(
+                apeireth_memory::ROLE_USER,
+                Some("cli-user"),
+                "cli",
+                "第一问",
+                1_700_000_000_000,
+            )
+            .expect("record user");
+        ledger
+            .record(
+                apeireth_memory::ROLE_ASSISTANT,
+                Some("cli-assistant"),
+                "cli",
+                "第一答",
+                1_700_000_000_001,
+            )
+            .expect("record assistant");
+
+        assert_eq!(ledger.len().expect("len"), 2);
+        let recent = ledger.recent(10).expect("recent");
+        assert_eq!(recent.len(), 2);
+        assert_eq!(recent[0].content, "第一问");
+        assert_eq!(recent[1].content, "第一答");
+        assert_eq!(recent[0].frontend, "cli");
+    }
+
+    #[tokio::test]
+    async fn ledger_rejects_empty_content_fail_loud() {
+        // 账本既有守门 (溯源强制): 空内容/空角色显式拒绝 —— 消费侧不再自带校验。
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store =
+            apeireth_memory::SqliteMemoryStore::open(dir.path().join("onering-empty.sqlite3"))
+                .expect("open");
+        let ledger = apeireth_memory::ContextLedger::new(&store, "companion-main").expect("ledger");
+        assert!(ledger
+            .record(
+                apeireth_memory::ROLE_USER,
+                Some("cli-user"),
+                "cli",
+                "   ",
+                1
+            )
+            .is_err());
+        assert!(ledger
+            .record("system", Some("x"), "cli", "内容", 1)
+            .is_err());
+    }
 }
