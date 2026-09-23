@@ -29,10 +29,42 @@ fn sample_proposal() -> Proposal {
 #[tokio::test]
 #[ignore = "requires OPENAI_API_KEY + APEIRETH_OPENAI_MODELS env (DeepSeek live E2E, manual)"]
 async fn council_7_advisor_live_decide() {
+    use apeireth_plugin::llm_factory::{CompletionMessage, CompletionRequest, LlmInstance};
+
     let inner: Arc<dyn PluginLlmFactory> = Arc::new(
         OpenAiCompatibleLlmFactory::from_env()
             .expect("factory from env (需 OPENAI_API_KEY + APEIRETH_OPENAI_MODELS)"),
     );
+
+    // 0 装护栏 (2026-10-06 核销批堵洞): 先做一次最小真 LLM 往返, **证明通道活着**。
+    // 否则 key 撤销/断网时 7 个 advisor 全部秒失败并汇聚成 `DeferToHuman` 降级出口,
+    // 本测试会**假绿** (实锤: 401 那次 0.67s "通过" vs 真跑历史 5.0s)。通道死必须
+    // 在此显式炸, 不许降级冒充 live。
+    let probe = inner
+        .spawn(
+            apeireth_orchestration::SubagentRole::Reviewer,
+            "deepseek-v4-flash",
+        )
+        .await
+        .expect("probe spawn");
+    let probe_resp = probe
+        .complete(CompletionRequest {
+            system_prompt: "be very brief".into(),
+            messages: vec![CompletionMessage {
+                role: "user".into(),
+                content: "Reply with the single word 'ok' and nothing else.".into(),
+            }],
+            temperature: 0.0,
+            tools: vec![],
+            max_tokens: Some(64),
+        })
+        .await
+        .expect("probe completion: channel dead must fail loudly, never degrade into a green");
+    assert!(
+        !probe_resp.message.content.is_empty(),
+        "probe must return real content before council live runs"
+    );
+
     let factory: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
         Arc::new(MirrorLlmFactory::new(inner));
     let council = Council::with_factory(factory, "deepseek-v4-flash");
