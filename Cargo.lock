@@ -191,7 +191,10 @@ dependencies = [
 name = "apeireth-credentials"
 version = "2.0.0-rc.1"
 dependencies = [
+ "apeireth-core",
+ "apeireth-governance",
  "apeireth-plugin",
+ "async-trait",
  "chacha20poly1305",
  "hex",
  "keyring",
@@ -200,6 +203,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "thiserror 1.0.69",
+ "tokio",
  "zeroize",
 ]
 
