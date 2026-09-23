@@ -3,7 +3,7 @@
 > **交给人**: 独立审核方 (可以是另一个 AI 或新接手工程师)。
 > **交给人做什么**: **先复核我的结论**(第 2 节, 每条带可复现命令与预期输出),
 > **再按第 5 节的工作包推进**(每个包带验收门)。第 4 节明确列出我**没有**验证的东西。
-> **日期**: 2026-10-06。**HEAD**: `e4f2f451` (main, 已推 origin)。
+> **日期**: 2026-10-06。**HEAD**: `909d67e9` (main, 已推 origin; 其父 `e4f2f451` = 台账 #39 那批)。
 > **口径**: 本文件遵守仓库四级诚实口径 (`docs/03-reference/system-capabilities.md:8-10`) ——
 > **IMPLEMENTED ≠ PRODUCTION WIRED ≠ DEFAULT ENABLED ≠ HARDWARE VALIDATED**。
 > 本文件里每一条"已完成/已实现"都必须能落到四条里的一条, 不许含混。
@@ -58,7 +58,7 @@ frozen 13), v2 是 18 个 crate 的重构形态。**"v1 有真实现、v2 有没
 | A1 | v2 工作区 = **18 crate**, workspace.version = `2.0.0-rc.1` | `(Select-String -Path Cargo.toml -Pattern '^\s*"crates/').Count` + `Select-String -Path Cargo.toml -Pattern '^version'` | `18` + `version = "2.0.0-rc.1"` | |
 | A2 | v1 在 `legacy/` = **106 个 Cargo.toml** (105 crate + workspace 根) | `(Get-ChildItem legacy -Recurse -Filter Cargo.toml).Count` | `106`; `legacy/Cargo.toml` members = `["donor/*","archived/*","frozen/*"]` | |
 
-**若 A1/A2 不符**: 先确认 HEAD 与分支 (`git log --oneline -1` 应为 `e4f2f451` 或其子提交)。
+**若 A1/A2 不符**: 先确认 HEAD 与分支 (`git log --oneline -1` 应为 `909d67e9` 或其子提交)。
 
 ### 2.2 诚实纪律的"物理形态" (最重要的一组)
 
@@ -66,7 +66,7 @@ frozen 13), v2 是 18 个 crate 的重构形态。**"v1 有真实现、v2 有没
 |---|---|---|---|---|
 | B1 | **全 workspace 真宏调用 `unimplemented!(` / `todo!(` 只有 7 处, 全在 `adapters/sdk/src/client.rs`** (行 30/37/457/528/602/693/713) | `Select-String -Path (Get-ChildItem crates -Recurse -Filter *.rs).FullName -Pattern 'unimplemented!\(\|todo!\('` | 恰好 **8 处文本命中**, 其中 `foundation/plugin/src/perception.rs:23` 是**文档注释里提到这个宏名**(不是调用) —— 真调用 7 处, 全在 SDK | |
 | B1b | perception 的非文本 modality 用**枚举变体**返回, 不是宏: `PerceptionError::NotImplemented { modality, when }` / `BackendNotWired { modality, backend, when }` | `Get-Content crates\foundation\plugin\src\perception.rs \| Select-Object -Skip 323 -First 12` | `VoiceInput::next_event` 分两支: 无 backend → `NotImplemented`; 有 backend 未接线 → `BackendNotWired` (带 `when` 字段写明 v2.1) | |
-| B2 | 其余"未实现"走**枚举变体 + 注释**: `NotImplemented` 出现 **366** 处; `0 装` 字样出现 **847** 处 | `Select-String ... -Pattern 'NotImplemented' \| Measure-Object` / `-Pattern '0 装'` | `366` / `847` | |
+| B2 | 其余"未实现"走**枚举变体 + 注释**: `NotImplemented` 出现 **366** 处; `0 装` 字样出现 **847** 处 (**口径警告**: 这两个数是**原始文本命中数**, 含测试代码、文档注释、SDK 错误类型名; 它证明的是"这套写法在本仓库是主流形态", **不是**"有 366 个未实现功能") | `Select-String -Path (Get-ChildItem crates -Recurse -Filter *.rs).FullName -Pattern 'NotImplemented' \| Measure-Object` / `-Pattern '0 装'` | `366` / `847` | |
 | B3 | **唯一全量 stub crate = `apeireth-sdk`**; `STUB_MODE = true` 是编译期硬编码, 且有 `const_assert` 守门 | `Select-String -Path crates\adapters\sdk\src\client.rs -Pattern 'STUB_MODE'` | `client.rs:112: pub const STUB_MODE: bool = true;` + `:129/:131` 编译期守门注释与断言 | |
 
 > **B3 的解读请审核方重点判**: `STUB_MODE` 是**编译期常量**而非运行时开关 ——
