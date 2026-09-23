@@ -76,8 +76,13 @@ jobs:
       - name: Convert JSON report to SARIF (R66)
         # 借鉴 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
         # 0 引新 dep; 走 python3 (GitHub Actions ubuntu-latest 默认带).
-        # CI fix 2026-08: cargo-audit 0.22 的 vulnerabilities.found 在 0 漏洞时是 false (非 []),
-        # 脚本要 or [] 兜底 (之前 TypeError: 'bool' object is not iterable)
+        # CI fix 2026-09: cargo-audit 0.22 的 JSON 里 vulnerabilities.found 是布尔值
+        # (true/false), 漏洞条目在 vulnerabilities.list。原实现迭代 `found` 并用 `or []`
+        # 兜底 —— `or []` 只兜 falsy, 兜不住 true, 所以 0 漏洞时正常、一旦真有漏洞就
+        # TypeError: 'bool' object is not iterable (2026-09-23 首次真实漏洞暴露:
+        # run 35835024572 步骤 "Convert JSON report to SARIF" 失败)。
+        # 守门机制必须能在"发现漏洞"这一时刻工作, 故改为迭代 list; severity 缺省/为
+        # null 时按 1 (warning) 处理, 不因缺字段崩。
         run: |
           python3 - <<'PYEOF'
           import json, sys, datetime, hashlib
@@ -86,7 +91,7 @@ jobs:
           findings = []
           vuln_index = {}
           vulns = report.get("vulnerabilities") or {}
-          for v in (vulns.get("found") or []):
+          for v in (vulns.get("list") or []):
               advisory = v.get("advisory", {})
               aid = advisory.get("id", "UNKNOWN")
               pkg = v.get("package", {})
@@ -96,7 +101,7 @@ jobs:
               vuln_index[rule_id] = {"package": pkg_name, "version": pkg_version}
               findings.append({
                   "ruleId": rule_id,
-                  "level": "error" if advisory.get("severity", 1) >= 5 else "warning",
+                  "level": "error" if (advisory.get("severity") or 1) >= 5 else "warning",
                   "message": {"text": advisory.get("description", advisory.get("title", aid))},
                   "locations": [{
                       "physicalLocation": {
