@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_plugin::ToolCapability;
+use apeireth_tools_canonical::education::EducationTool;
 use apeireth_tools_canonical::{
     FetchConfig, FetchTool, FilesystemTool, RepoTool, SearchTool, ShellTool, TrustedShellConfig,
 };
@@ -212,5 +213,43 @@ impl CapabilityProvider for McpModule {
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         self.tools.read().expect("mcp lock poisoned").clone()
+    }
+}
+
+/// Module providing education Dx-Check substitution verification (`tool.education`).
+///
+/// W2 §4.3 (2026-10-10): 包装 `DxCheckTool` 纯确定性换元检查 (微分标记一致性 /
+/// 残留原变量 / 经典根号三角代换模式) —— 0 副作用, 默认关注册。
+pub struct EducationModule {
+    tool: Arc<EducationTool>,
+}
+
+impl EducationModule {
+    /// Create the education module (无状态工具)。
+    pub fn new() -> Self {
+        Self {
+            tool: Arc::new(EducationTool::new()),
+        }
+    }
+
+    /// Access the underlying education tool.
+    pub fn tool(&self) -> &Arc<EducationTool> {
+        &self.tool
+    }
+}
+
+impl Default for EducationModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CapabilityProvider for EducationModule {
+    fn id(&self) -> &str {
+        "module.tool.education"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![self.tool.clone()]
     }
 }

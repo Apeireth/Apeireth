@@ -36,7 +36,8 @@ use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::tool_modules::{
-    FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
+    EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,
+    ShellModule,
 };
 
 /// Adapter that exposes memory's context-window implementation through the
@@ -153,6 +154,10 @@ pub struct ProductionModulesConfig {
     pub reflexion: bool,
     /// W2 §4.2 partner 羁绊 (2026-10-10, 默认关): TurnStart 关系注入 + AfterTurn 羁绊演化。
     pub partner_bond: bool,
+    /// W2 §4.3 (2026-10-10, 默认关): 查询形态学自适应检索深度 (organ/morphology)。
+    pub morphology_recall: bool,
+    /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册。
+    pub education: bool,
 }
 
 impl Default for ProductionModulesConfig {
@@ -177,6 +182,8 @@ impl Default for ProductionModulesConfig {
             consolidation: false,
             reflexion: false,
             partner_bond: false,
+            morphology_recall: false,
+            education: false,
         }
     }
 }
@@ -291,6 +298,12 @@ impl ProductionModules {
             }
         }
 
+        // W2 §4.3 (2026-10-10, 默认关): education Dx-Check 工具 (纯确定性, 0 副作用)。
+        if config.education {
+            let provider = EducationModule::new();
+            capabilities.extend(provider.capabilities());
+        }
+
         if let Some(shell_config) = config.shell {
             let provider = ShellModule::new(shell_config);
             capabilities.extend(provider.capabilities());
@@ -368,6 +381,9 @@ impl ProductionModules {
             }
             if let Some(policy) = &config.proactive_recall {
                 module = module.with_proactive_recall(policy.clone());
+            }
+            if config.morphology_recall {
+                module = module.with_morphology_recall();
             }
             modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }

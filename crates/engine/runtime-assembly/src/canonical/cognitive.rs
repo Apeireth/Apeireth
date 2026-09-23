@@ -486,6 +486,33 @@ impl AgentModule for PartnerBondModule {
 }
 
 #[cfg(test)]
+mod morphology_recall_tests {
+    use super::morphology_recall_limit;
+
+    #[test]
+    fn default_off_keeps_configured_ceiling() {
+        let deep = "为什么系统在高并发下会出现级联失败？请展开分析并给出判据。";
+        assert_eq!(morphology_recall_limit(deep, 8, false), 8);
+        assert_eq!(morphology_recall_limit("hi", 8, false), 8);
+    }
+
+    #[test]
+    fn shallow_query_narrows_and_ceiling_caps() {
+        // W2 五件验收门③: 效果可见 = 浅查询显著收紧, 深查询回满, 且绝不越上限。
+        assert!(
+            morphology_recall_limit("hi", 8, true) <= 3,
+            "浅查询应显著收紧"
+        );
+        let deep = "为什么系统在高并发下会出现这种级联失败？请从架构与历史决策两个层面展开分析，并给出可验证的判据与对照实验设计思路，且说明缓存击穿与雪崩的区别。";
+        assert!(morphology_recall_limit(deep, 8, true) >= 3, "深查询应放宽");
+        assert!(
+            morphology_recall_limit(deep, 2, true) <= 2,
+            "绝不越过配置上限"
+        );
+    }
+}
+
+#[cfg(test)]
 mod partner_bond_tests {
     use super::*;
     use apeireth_memory::partner::{BondStage, InMemoryPartnerStore, PartnerId, PartnerStore};
@@ -553,6 +580,24 @@ pub struct MemoryRecallModule {
     access_store: Option<Arc<dyn MemoryRecallAccessStore>>,
     clock: Option<Arc<dyn Clock>>,
     proactive_recall: Option<ProactiveRecallService>,
+    /// W2 §4.3 (2026-10-10, 默认关): 查询形态学自适应检索深度。
+    morphology_recall: bool,
+}
+
+/// W2 §4.3: 形态学自适应检索深度 (纯函数, 供 recall 前置与测试)。
+///
+/// `crawl_budget` [1,6] 为查询形态学 softmax 预算 (Shallow 1 / Standard 3 /
+/// Deep 6); 只能在配置上限内**收紧** (浅查询少召回), 绝不越过配置上限
+/// (不放大成本)。温度 = `APEIRETH_MORPHOLOGY_TEMPERATURE` (非法回 1.0)。
+fn morphology_recall_limit(topic: &str, ceiling: usize, enabled: bool) -> usize {
+    if !enabled {
+        return ceiling;
+    }
+    let budget = apeireth_organ::morphology::crawl_budget(
+        topic,
+        apeireth_organ::morphology::env_temperature(),
+    );
+    budget.clamp(1, ceiling.max(1))
 }
 
 impl MemoryRecallModule {
@@ -573,7 +618,15 @@ impl MemoryRecallModule {
             access_store: None,
             clock: None,
             proactive_recall: None,
+            morphology_recall: false,
         }
+    }
+
+    /// W2 §4.3: 开启查询形态学自适应检索深度 (默认关)。
+    #[must_use]
+    pub fn with_morphology_recall(mut self) -> Self {
+        self.morphology_recall = true;
+        self
     }
 
     /// Opt into deterministic proactive candidate filtering with a hard budget.
@@ -665,8 +718,9 @@ impl AgentModule for MemoryRecallModule {
             let session = session_text(ctx.session_id);
             if let Some(coord) = &self.coordinator {
                 let topic = topic_from_messages(ctx.messages);
+                let limit = morphology_recall_limit(&topic, self.limit, self.morphology_recall);
                 let query = MemoryRecallQuery::new(session.clone(), topic)
-                    .with_limit(self.limit)
+                    .with_limit(limit)
                     .with_max_chars(self.max_context_chars);
                 let result = if let Some(proactive) = &self.proactive_recall {
                     let cue = apeireth_memory::TopicCue {

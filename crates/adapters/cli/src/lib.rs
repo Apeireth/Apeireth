@@ -674,6 +674,8 @@ async fn build_cognitive_modules_from_env(
         consolidation: consolidation_enabled_from_env(),
         reflexion: reflexion_enabled,
         partner_bond: partner_bond_enabled_from_env(),
+        morphology_recall: morphology_recall_enabled_from_env(),
+        education: education_enabled_from_env(),
         // shell/fetch 旋钮: 只注册工具; 执行许可由治理层 grant+approval 决定.
         // W1 §2.4 (2026-10-10): shell 沙箱全局旋钮, 默认**开** (设计拍板
         // "产品定位=桌面伴侣"); APEIRETH_SHELL_SANDBOX=0 显式裸跑自担风险。
@@ -1066,6 +1068,22 @@ fn shell_sandbox_enabled_from_env() -> bool {
 /// (`APEIRETH_ENABLE_PARTNER_BOND=1`): TurnStart 关系状态注入 + AfterTurn 羁绊演化。
 fn partner_bond_enabled_from_env() -> bool {
     std::env::var("APEIRETH_ENABLE_PARTNER_BOND")
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// **W2 §4.3 旋钮** (2026-10-10, 默认关): 查询形态学自适应检索深度
+/// (`APEIRETH_ENABLE_MORPHOLOGY_RECALL=1`; 温度另见 `APEIRETH_MORPHOLOGY_TEMPERATURE`)。
+fn morphology_recall_enabled_from_env() -> bool {
+    std::env::var("APEIRETH_ENABLE_MORPHOLOGY_RECALL")
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// **W2 §4.3 旋钮** (2026-10-10, 默认关): education Dx-Check 换元检查工具
+/// (`APEIRETH_ENABLE_EDUCATION=1`)。
+fn education_enabled_from_env() -> bool {
+    std::env::var("APEIRETH_ENABLE_EDUCATION")
         .ok()
         .is_some_and(|value| value.trim() == "1")
 }

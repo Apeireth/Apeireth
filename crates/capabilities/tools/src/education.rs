@@ -276,3 +276,136 @@ mod tests {
         assert!(report.checks.iter().any(|c| c.contains("匹配 ✓")));
     }
 }
+
+// ===========================================================================
+// W2 §4.3 (2026-10-10): EducationTool — Dx-Check 的 ToolCapability 包装
+// (Simple-invoke 型工具, 与 SearchTool 同契约: id/declaration/invoke)。
+// ===========================================================================
+
+use apeireth_core::kernel::CapabilityId;
+use apeireth_plugin::ToolCapability;
+use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
+use async_trait::async_trait;
+
+/// Dx-Check 换元检查工具 (教育/符号微积分域)。
+///
+/// 纯确定性文本规则 (0 LLM / 0 IO / 0 副作用): 传入原问题/换元声明/换元后表达式,
+/// 输出结构化诊断 (`pass` + 可读报告)。
+pub struct EducationTool {
+    id: CapabilityId,
+}
+
+impl EducationTool {
+    /// 构造 (静态能力 id `tool.education`)。
+    pub fn new() -> Self {
+        Self {
+            id: CapabilityId::new("tool.education").expect("static capability id is valid"),
+        }
+    }
+}
+
+impl Default for EducationTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl ToolCapability for EducationTool {
+    fn id(&self) -> &CapabilityId {
+        &self.id
+    }
+
+    fn declaration(&self) -> NormalizedTool {
+        let parameters = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "problem": {
+                    "type": "string",
+                    "description": "原问题文本 (含积分/微分表达式)"
+                },
+                "substitution": {
+                    "type": "string",
+                    "description": "换元声明 (如 u = x²)"
+                },
+                "after": {
+                    "type": "string",
+                    "description": "换元后的表达式文本"
+                }
+            },
+            "required": ["problem", "substitution", "after"],
+            "additionalProperties": false
+        });
+        let mut params = ToolParameters::new();
+        params.extend(parameters.as_object().cloned().unwrap_or_default());
+
+        NormalizedTool::new("education")
+            .with_description(
+                "Dx-Check 换元检查: 符号微积分换元前置规则校验 (微分标记一致性 / \
+                 残留原变量 / 经典根号三角代换模式)。纯确定性文本规则, 0 副作用, \
+                 输出结构化诊断报告。",
+            )
+            .with_parameters(params)
+    }
+
+    async fn invoke(&self, call: &ToolCall) -> ToolResult {
+        let get = |key: &str| -> String {
+            call.arguments
+                .get(key)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        let (problem, substitution, after) = (get("problem"), get("substitution"), get("after"));
+        if problem.trim().is_empty() || substitution.trim().is_empty() || after.trim().is_empty() {
+            return ToolResult::permanent_error(
+                &call.id,
+                "education requires non-empty problem, substitution and after",
+            )
+            .with_name("education");
+        }
+
+        let report = DxCheckTool::analyze(&problem, &substitution, &after);
+        let value = serde_json::json!({
+            "pass": report.is_pass(),
+            "diagnosis": report.render(),
+        });
+        ToolResult::ok(&call.id, value).with_name("education")
+    }
+}
+
+#[cfg(test)]
+mod education_tool_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn education_tool_invokes_dx_check_and_renders_report() {
+        // W2 五件验收门③: 效果可见 = 工具调用真的产出诊断 (漏 dx 必须被抓)。
+        let tool = EducationTool::new();
+        let call = ToolCall {
+            id: "call_edu_1".into(),
+            name: "education".into(),
+            arguments: serde_json::json!({
+                "problem": "∫ x·cos(x²) dx",
+                "substitution": "u = x²",
+                "after": "∫ cos(u) du",   // 漏了 du=2x·dx 的一致性声明
+            }),
+        };
+        let result = tool.invoke(&call).await;
+        assert!(result.is_ok(), "{:?}", result.render());
+        let text = result.render();
+        assert!(!text.is_empty(), "诊断必须可见: {text}");
+    }
+
+    #[tokio::test]
+    async fn education_tool_rejects_missing_fields() {
+        let tool = EducationTool::new();
+        let call = ToolCall {
+            id: "call_edu_2".into(),
+            name: "education".into(),
+            arguments: serde_json::json!({"problem": "x", "substitution": "", "after": "y"}),
+        };
+        let result = tool.invoke(&call).await;
+        assert!(!result.is_ok(), "空 substitution 必须拒");
+    }
+}

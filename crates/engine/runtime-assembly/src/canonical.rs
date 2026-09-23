@@ -110,6 +110,7 @@ pub use production::{
     ProductionModulesConfig,
 };
 pub use tool_modules::{
-    FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule, ShellModule,
+    EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,
+    ShellModule,
 };
 pub use typed_recall::SqliteTypedMemoryRecallSource;
