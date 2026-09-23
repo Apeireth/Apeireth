@@ -284,6 +284,20 @@ html[data-theme='essence'] .drawer-body.embed .activity-view {
   background: transparent;
 }
 
+/* 治理卷宗 = 深舱注册表（Deep-Ops 渐变底，§B-12 拍板的档调性）：底色刻意不随
+   essence 变浅，但 essence 全局文字令牌是浅底深字——在深舱底上直接不可读
+   （2026-09-23 全抽屉审计实证：加载态/挂账说明文字全糊）。在此子树把文字
+   令牌还原为深底浅字（取值 = :root 默认），档调性不动。 */
+html[data-theme='essence'] .governance-view {
+  --ap-bone: #e8e0cc;
+  --ap-bone-68: rgba(232, 224, 204, 0.68);
+  --ap-bone-42: rgba(232, 224, 204, 0.42);
+  --ap-bone-30: rgba(232, 224, 204, 0.3);
+  --text: #ebe8e2;
+  --muted: #96919c;
+  --faint: #625f69;
+}
+
 html[data-theme='essence'] .stardust-text {
   color: var(--ap-gold-ui);
   text-shadow: none;
