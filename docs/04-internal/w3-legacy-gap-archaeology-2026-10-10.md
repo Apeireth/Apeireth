@@ -20,7 +20,7 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 | # | 缺口 | v1 真的做成了吗 | v2 现状 | 工作量 | 建议序 |
 |---|---|---|---|---|---|
 | 5 | `thought_cluster` 思维簇 | ✅ 真做成了，**且 v2 已移植**（= `cluster_store.rs` 改名，悬案闭合） | **库级缺口已闭合**（IMPLEMENTED）；欠生产接线 | S（核查接线即可） | **1** |
-| 1 | `community` 社群识别与分诊 | ✅ 真做成了（图社群检测算法 + 确定性摘要 + 测试） | 未移植 | M | 2 |
+| 1 | `community` 社群识别与分诊 | ✅ 真做成了（图社群检测算法 + 确定性摘要 + 测试） | **✅ 已移植**（`memory/community.rs` 三件，9 测，台账 #57）；生产消费 = 契约扩展接线项 | M | 2 |
 | 6 | `onering` 账本 | ✅ 真做成了（318 行 + 8 项测试） | 未移植（v2 仅一条 VCP 注释提及） | M | 3 |
 | 2 | `experiment_field` 隔离实验场 | 🟡 部分：**机制真实施，执行后端 0 装** | 未移植 | M | 4 |
 | 7 | 真文件/网络沙箱 | ❌ **v1 也只有骨架**（seccomp/JobObject/netns/WFP 全是 TODO/Noop） | v2 进程树遏制**已反超 v1** | L（新造，走 W1 设计） | 5 |
@@ -44,6 +44,17 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 - **v2 归属**: `crates/engine/memory`（图域：`bitemporal_graph.rs` / `graph_algo.rs` 同区）。
 - **移植风险**: `GraphFact` 类型需对 v2 的 `BitemporalFact` 适配；分诊（"社群 → 行动建议"）在 v1 是 brief 级，接入召回管线属接线活。
 - **工作量**: **M**（移植 + 适配 + 测试 ≈ 2-4 天）。
+
+> **[2026-10-10 移植完成]** → `crates/engine/memory/src/community.rs`（台账 #57）。
+> 三件全落：`detect_communities`（s/p/o **全参**共现并查集聚类，谓词即共现键，
+> 成员/社区 id 字典序稳定）+ `deterministic_summary` + `Summarizer` trait 0 装升级口
+> + `triage` Entity↔Broad 双级路由（s/o 子串命中且长度≥2 → Entity；否则 Broad 摘要
+> 按事实数降序）。9 测全绿（含复测必同 + 单字符护栏 + Broad 封顶）。
+> **风险项实测结论**：v2 的 `GraphFact`（`amem_graph.rs`）字段与 v1 消费形态同构，
+> **无需适配层**；`bitemporal_graph` 非其型。**防重 diff**：`graph_algo::connected_components`
+> 是 Memory(Id) 域原语，本模块 = GraphFact 字符串值域共现图（不同输入域）。
+> **0 假装消费边界**：生产图谱契约（`KnowledgeGraphStore`）仅 `facts_from(subject)`
+> 单跳读、无全量列举 → 生产接线（检索前置）= 契约扩展后的接线项。
 
 ## 2. `experiment_field` 隔离实验场 — 🟡 部分（机制真实施 / 执行后端 0 装）
 
