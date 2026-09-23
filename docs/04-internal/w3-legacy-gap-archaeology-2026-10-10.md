@@ -114,6 +114,15 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 > v1 slice trait）+ 多签密码学仍由 `HumanAuthority::verify_multisig` 承担（0 装占位
 > 不动，真 Ed25519 留 v2.1）。**剩余物理执行面装配**（判定接入治理/审批 + W1 沙箱
 > 路径：ApprovalMemoryGate / ControlledEgress / worktree）= 下一工作项。
+>
+> **[2026-10-10 物理执行面装配完成]** 判定层已接入生产治理管线（台账 #56）：
+> `runtime-assembly/src/canonical/onion_layer.rs` `OnionLayerHook`（`GovernanceHook`
+> 实现）——capability→权限层映射（filesystem=L1 / fetch=L2 / shell·process·MCP=L3 /
+> 未知=L2）+ 三段门 → `Decision::{Allow, Deny}`（两门均 Deny，reason 直达模型）；
+> 管线位点 = cli 治理装配末层（授权→凭证→注入→guard 之后，"只收紧不越权"）；
+> 旋钮 `APEIRETH_ENABLE_ONION_LAYER=1` 默认关（五件门齐，561 全绿含既有链路
+> = 默认关行为不变实证）。**§9 onion 项至此三层全落地**（层模型+判定+生产执行面；
+> 仅真 Ed25519 多签留 v2.1）。
 
 - **位置**: `legacy/donor/apeireth-onion/src/lib.rs` + `examples/onion_demo.rs`。
 - **证据**:

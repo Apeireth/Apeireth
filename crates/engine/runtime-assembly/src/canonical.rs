@@ -66,6 +66,8 @@ pub mod guard_observer;
 pub mod harness_patch;
 #[path = "canonical/memory_typed_sink.rs"]
 pub mod memory_typed_sink;
+/// W3 三洋葱 L3-L5 物理执行面: 双洋葱判定的治理 hook (2026-10-10)。
+pub mod onion_layer;
 #[path = "canonical/orchestrator.rs"]
 pub mod orchestrator;
 #[path = "canonical/organ_llm_bridge.rs"]
@@ -97,6 +99,7 @@ pub use cognitive::{
 pub use dream_llm::{FallbackMetaThinker, LlmMetaThinker};
 pub use guard_observer::GuardDatasetObserver;
 pub use memory_typed_sink::CanonicalMemoryTypedSink;
+pub use onion_layer::{onion_layer_for_capability, OnionLayerHook};
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
 pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};
 pub use permission_preset::{is_write_or_execute_capability, PermissionPresetGovernanceHook};

@@ -155,14 +155,7 @@ impl PrincipleOnion {
 impl PermissionOnion {
     /// 6 层切片按"外→内"顺序 (L0..L5, 与 `PERMISSION_LAYERS_OUTER_IN` 对齐)。
     pub fn slices_outer_in(&self) -> [&PermissionLayer; 6] {
-        [
-            &self.l0,
-            &self.l1,
-            &self.l2,
-            &self.l3,
-            &self.l4,
-            &self.l5,
-        ]
+        [&self.l0, &self.l1, &self.l2, &self.l3, &self.l4, &self.l5]
     }
 
     /// 按层身份取切片。
@@ -194,10 +187,7 @@ impl PermissionOnion {
 // ============================================================
 
 /// 原则跨层冲突仲裁 (纯函数): 更深的层胜 —— E > S > A > M > O。
-pub fn arbitrate_principles(
-    a: PrincipleLayerKind,
-    b: PrincipleLayerKind,
-) -> PrincipleLayerKind {
+pub fn arbitrate_principles(a: PrincipleLayerKind, b: PrincipleLayerKind) -> PrincipleLayerKind {
     fn depth(kind: PrincipleLayerKind) -> u8 {
         match kind {
             PrincipleLayerKind::Existence => 0,
@@ -392,6 +382,13 @@ impl DoubleOnionGate {
         &self.principle
     }
 
+    /// 替换 HA 权威 (builder; 不变式 L0 恒需 HA 仍由构造期锁定)。
+    #[must_use]
+    pub fn with_human_authority(mut self, human_authority: HumanAuthority) -> Self {
+        self.human_authority = human_authority;
+        self
+    }
+
     /// 权限层视图。
     pub fn permission(&self) -> &PermissionOnion {
         &self.permission
@@ -432,7 +429,9 @@ impl DoubleOnionGate {
         for kind in PERMISSION_LAYERS_OUTER_IN {
             cleared.push(ElectronicRingNode::Permission(kind));
         }
-        OnionVerdict::Allow { cleared_layers: cleared }
+        OnionVerdict::Allow {
+            cleared_layers: cleared,
+        }
     }
 
     /// 11 节点电子环统一视图 (原则外→内 + 权限外→内)。
@@ -458,7 +457,9 @@ pub enum OnionGateError {
 impl std::fmt::Display for OnionGateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvariantViolation(reason) => write!(f, "onion gate invariant violated: {reason}"),
+            Self::InvariantViolation(reason) => {
+                write!(f, "onion gate invariant violated: {reason}")
+            }
         }
     }
 }
@@ -550,7 +551,7 @@ pub fn single_human_authority() -> HumanAuthority {
 pub fn standard_double_onion_gate() -> DoubleOnionGate {
     DoubleOnionGate::new(
         standard_principle_onion(),
-            standard_permission_onion(),
+        standard_permission_onion(),
         single_human_authority(),
     )
     .expect("standard assemblies satisfy the L0-HA invariant")
@@ -607,11 +608,7 @@ mod onion_gate_tests {
         let mut broken = standard_permission_onion();
         broken.l0.requires_ha = false;
         assert!(matches!(
-            DoubleOnionGate::new(
-                standard_principle_onion(),
-                broken,
-                single_human_authority()
-            ),
+            DoubleOnionGate::new(standard_principle_onion(), broken, single_human_authority()),
             Err(OnionGateError::InvariantViolation(_))
         ));
     }
@@ -634,7 +631,10 @@ mod onion_gate_tests {
     #[test]
     fn arbitrate_prefers_deeper_layer() {
         assert_eq!(
-            arbitrate_principles(PrincipleLayerKind::Operational, PrincipleLayerKind::Existence),
+            arbitrate_principles(
+                PrincipleLayerKind::Operational,
+                PrincipleLayerKind::Existence
+            ),
             PrincipleLayerKind::Existence
         );
         assert_eq!(
@@ -642,7 +642,10 @@ mod onion_gate_tests {
             PrincipleLayerKind::Spirit
         );
         assert_eq!(
-            arbitrate_principles(PrincipleLayerKind::Methodology, PrincipleLayerKind::Operational),
+            arbitrate_principles(
+                PrincipleLayerKind::Methodology,
+                PrincipleLayerKind::Operational
+            ),
             PrincipleLayerKind::Methodology
         );
     }
@@ -674,7 +677,8 @@ mod onion_gate_tests {
     #[test]
     fn unify_check_allows_clearing_all_eleven() {
         let gate = standard_double_onion_gate();
-        let verdict = gate.unify_check(&OnionAction::new("a1", "受控写").touches(PermissionLayerKind::L1));
+        let verdict =
+            gate.unify_check(&OnionAction::new("a1", "受控写").touches(PermissionLayerKind::L1));
         assert!(verdict.is_allowed());
         let OnionVerdict::Allow { cleared_layers } = verdict else {
             panic!("expected Allow");
@@ -699,14 +703,15 @@ mod onion_gate_tests {
     fn unify_check_blocks_ha_layer_when_offline() {
         let mut gate = standard_double_onion_gate();
         gate.human_authority.mode = HAMode::Offline;
-        let verdict = gate.unify_check(&OnionAction::new("a3", "核心升级").touches(PermissionLayerKind::L4));
+        let verdict =
+            gate.unify_check(&OnionAction::new("a3", "核心升级").touches(PermissionLayerKind::L4));
         match verdict {
             OnionVerdict::BlockByHumanAuthority { .. } => {}
             other => panic!("expected BlockByHumanAuthority, got {other:?}"),
         }
         // 离线但触及非 HA 层 (L1) = 仍放行 (物理隔离只挡需 HA 的动作)。
-        let verdict_l1 = gate
-            .unify_check(&OnionAction::new("a4", "受控写").touches(PermissionLayerKind::L1));
+        let verdict_l1 =
+            gate.unify_check(&OnionAction::new("a4", "受控写").touches(PermissionLayerKind::L1));
         assert!(verdict_l1.is_allowed(), "L1 不触 HA 应放行");
     }
 

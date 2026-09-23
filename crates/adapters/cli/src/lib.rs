@@ -247,13 +247,20 @@ fn build_production_governance_parts_with_dataset(
     guard = configure_guard_classifier(guard);
     let guard_hook = Arc::new(guard);
 
-    let pipeline = GovernancePipeline::new()
+    let mut pipeline = GovernancePipeline::new()
         .with(Arc::new(PermissionGovernanceHook::new_shared(
             policy.clone(),
         )))
         .with(Arc::new(CredentialDisclosureHook::new()))
         .with(Arc::new(PromptInjectionHook::new()))
         .with(guard_hook.clone());
+    // W3 三洋葱 L3-L5 物理执行面 (2026-10-10, 默认关): 末层纵深防御 ——
+    // 授权已放行的动作再过一次双洋葱权威判定 (只收紧, 不把未授权变审批)。
+    if onion_layer_enabled_from_env() {
+        pipeline = pipeline.with(Arc::new(apeireth_runtime_assembly::OnionLayerHook::new(
+            apeireth_core::onion_gate::standard_double_onion_gate(),
+        )));
+    }
     (pipeline, policy, guard_hook)
 }
 
@@ -266,6 +273,14 @@ fn build_production_governance_parts_with_dataset(
 /// capabilities remain denied even if a future plugin registers them.
 pub fn build_production_governance_from_env() -> GovernancePipeline {
     build_production_governance_parts_from_env().0
+}
+
+/// **W3 洋葱层旋钮** (2026-10-10, 默认关): `APEIRETH_ENABLE_ONION_LAYER=1` ——
+/// 生产治理管线末层追加双洋葱权威判定 (HA 离线物拒 / L5 E 层兜底)。
+fn onion_layer_enabled_from_env() -> bool {
+    std::env::var("APEIRETH_ENABLE_ONION_LAYER")
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
 }
 
 fn configure_guard_classifier(mut guard: BehaviorChainGuardHook) -> BehaviorChainGuardHook {
@@ -836,47 +851,46 @@ fn build_subagent_orchestrator_from_env(
         CommandRunner, HumanApprovalGate, LlmSubagentOrchestrator, WorktreeSandboxedOrchestrator,
     };
 
-    let (mirror, model): (Arc<dyn MirrorLlmFactoryTrait>, String) = if std::env::var(
-        "APEIRETH_OPENAI_MODELS",
-    )
-    .ok()
-    .is_some_and(|value| !value.trim().is_empty())
-    {
-        let factory =
+    let (mirror, model): (Arc<dyn MirrorLlmFactoryTrait>, String) =
+        if std::env::var("APEIRETH_OPENAI_MODELS")
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
+        {
+            let factory =
             apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env(
             )
             .map_err(|error| format!("OpenAI-compatible 工厂配置无效: {error}"))?;
-        let model = factory
-            .model_ids()
-            .into_iter()
-            .next()
-            .unwrap_or_else(|| "deepseek-v4-flash".to_string());
-        (
-            Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
-            model,
-        )
-    } else if std::env::var("APEIRETH_API_KEY")
-        .ok()
-        .is_some_and(|value| !value.trim().is_empty())
-    {
-        let factory = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env()
-            .map_err(|error| format!("MiniMax 工厂配置无效: {error}"))?;
-        let model = factory
-            .model_ids()
-            .into_iter()
-            .next()
-            .unwrap_or_else(|| "MiniMax-M3".to_string());
-        (
-            Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
-            model,
-        )
-    } else {
-        return Err(
-            "subagent 需要 LLM 工厂: 请设 APEIRETH_OPENAI_MODELS (+URL/KEY) 或 \
+            let model = factory
+                .model_ids()
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "deepseek-v4-flash".to_string());
+            (
+                Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
+                model,
+            )
+        } else if std::env::var("APEIRETH_API_KEY")
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
+        {
+            let factory = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env()
+                .map_err(|error| format!("MiniMax 工厂配置无效: {error}"))?;
+            let model = factory
+                .model_ids()
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "MiniMax-M3".to_string());
+            (
+                Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
+                model,
+            )
+        } else {
+            return Err(
+                "subagent 需要 LLM 工厂: 请设 APEIRETH_OPENAI_MODELS (+URL/KEY) 或 \
              APEIRETH_API_KEY (MiniMax)"
-                .to_string(),
-        );
-    };
+                    .to_string(),
+            );
+        };
 
     // 人工审批门: CLI 交互 y/N (plan 步要主人点头; 拒绝 = HumanDenied)。
     let gate: HumanApprovalGate = Arc::new(|spec| {
