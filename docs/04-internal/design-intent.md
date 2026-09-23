@@ -1,7 +1,7 @@
 # Apeireth 设计意图记录（Design Intent）
 
 > **为什么存在**: 代码回答"怎么做的", 本文档回答"**为什么这么做**"。后人接手时先读这里——
-> 否则 86 个 crate（v1 时代；现 15 active crate + legacy/ 完整 v1 归档）只有注释没有意图, 每一个机制看起来都是"可以删掉的复杂度"。
+> 否则 86 个 crate（v1 时代；现 18-crate 工作区 + legacy/ 完整 v1 归档）只有注释没有意图, 每一个机制看起来都是"可以删掉的复杂度"。
 > **维护规范**: 任何主人拍板/哲学决策落成机制时, 必须在本文件登记 (文档同步自觉)。
 > 本文与 docs/team-work-doc.md §1 (三哲学) 的关系: 三哲学是"原则", 本文是"原则的落点与历史"。
 
@@ -9,7 +9,7 @@
 
 ## 1. 哲学 → 机制的映射（为什么有这些机制）【v2.0.0-alpha.1 当前落点】
 
-| 哲学原则 | 机制落点（13-crate 工作区当前所有者） | 为什么这样落 |
+| 哲学原则 | 机制落点（当前 18-crate 工作区所有者；表初写于 v2.0.0-alpha.1 13-crate 时代，路径仍有效） | 为什么这样落 |
 |---|---|---|
 | 基地不是 AI 本身 | `ProviderCapability` trait 在 `crates/foundation/plugin`；3 家 canonical provider 在 `crates/engine/provider::canonical_*`；运行时通过 plugin registry 持有 provider = "model is a tenant" | LLM 只是基地的租客；换模型只换 plugin 注册，不动 runtime / governance / tools |
 | 涌现优先于预定义 | `crates/foundation/plugin::CapabilityRegistry` + `Runtime::execute` 的 round loop；tool dispatcher 由 capability descriptor 声明而非硬编码 | 模型自发的能力表现由 capability 注册位 + runtime 的 decision-driven loop 承担，能力 = 已声明契约 + 运行时拼装 |

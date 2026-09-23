@@ -2,7 +2,7 @@
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **当前基线**: 默认分支 `main`、17-crate 工作区（v2.0.0-rc.1, 2026-09-05 对账实测）；`legacy/` 不参与构建。
+> **当前基线**: 默认分支 `main`、18-crate 工作区（v2.0.0-rc.1；2026-10-06 对账更新 crate 数，测试基线维持 2026-09-05 口径）；`legacy/` 不参与构建。
 
 ---
 
@@ -174,7 +174,7 @@ cargo run --bin apeireth session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（应该 3120 passed / 0 failed / 13 ignored——17-crate 工作区实测，2026-09-05 对账批；v1 时代 86-crate 全量为 23,806，见 CHANGELOG）
+# 2. Test（应该 3120 passed / 0 failed / 13 ignored——2026-09-05 对账批实测；当前 18-crate 工作区，v1 时代 86-crate 全量为 23,806，见 CHANGELOG）
 cargo test --workspace
 
 # 3. Clippy（应该 0 warning）

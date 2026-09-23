@@ -1,21 +1,21 @@
 # Apeireth 维护指南（v2 工程重构线, 2026-08-27）
 
-> **现状 (2026-09-12 对账)**：本文为 v2 维护指南。当前基线：默认分支 `main`、**17-crate 工作区**（2026-09-04 抽出 runtime-assembly 后 13→17）、workspace.version `2.0.0-rc.1`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。历史注：tag `v2.0.0-alpha.1` @ `d6910cf7` 时代为 13-crate。
+> **现状 (2026-10-06 对账)**：本文为 v2 维护指南。当前基线：默认分支 `main`、**18-crate 工作区**（2026-09-04 抽出 runtime-assembly 后 13→17；2026-10-06 协作者批新增 `crates/engine/guard` 后 17→18）、workspace.version `2.0.0-rc.1`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。历史注：tag `v2.0.0-alpha.1` @ `d6910cf7` 时代为 13-crate。
 
 ```
 [Document-Meta]
 Document:        docs/04-internal/maintenance-guide.md
 Version:         Manual-Rev-N (v2 重写)
 Last-Modified:   2026-09-12
-Status:          🟢 活跃 (v2 17-crate)
+Status:          🟢 活跃 (v2 18-crate)
 ```
 
 > 给谁看：维护代码的人（人或 AI）。先读 [ARCHITECTURE.md](../../ARCHITECTURE.md) 顶层，再读 [architecture.md](../01-architecture/architecture.md) 详细归属，再来这份。
-> 读法：§1 概念词典（澄清易混词）→ §2 17-crate 模块地图 → §3 维护流程 → §4 进程封装 → §5 v1 时代的"现在不这样做" → §6 不漂移承诺。
+> 读法：§1 概念词典（澄清易混词）→ §2 18-crate 模块地图 → §3 维护流程 → §4 进程封装 → §5 v1 时代的"现在不这样做" → §6 不漂移承诺。
 
 ---
 
-## 1. 概念词典（v2 17-crate 语境）
+## 1. 概念词典（v2 18-crate 语境）
 
 ### 1.1 能力栈（v2 一句话定义）
 
@@ -60,9 +60,9 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 
 ---
 
-## 2. 17-crate 模块地图（v2 当前真实，2026-09-05 实测）
+## 2. 18-crate 模块地图（v2 当前真实，2026-10-06 对账更新）
 
-来源：根 `Cargo.toml` members（17）+ [`ARCHITECTURE.md`](../../ARCHITECTURE.md) + `cargo metadata --no-deps` 实测依赖边（2026-09-05）。
+来源：根 `Cargo.toml` members（18）+ [`ARCHITECTURE.md`](../../ARCHITECTURE.md) + `cargo metadata --no-deps` 实测依赖边（2026-09-05；2026-10-06 对账补 `apeireth-guard`，其依赖边取自 `crates/engine/guard/Cargo.toml`）。
 
 ### 2.1 Foundation（6 crate, 稳定契约层）
 
@@ -75,7 +75,7 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 | `apeireth-credentials` | keyring / encrypted-file / in-memory backend + `KeyringCredentialResolver`；**已接线**（RC-9：CLI bootstrap `crates/adapters/cli/src/keyring_bootstrap.rs`，无 env 时 fallback `EnvCredentialResolver`） | `Secret<T>` /`CredentialsStore` /`KeyringSelector` | 依赖方：`apeireth-cli`（cargo metadata 实测） |
 | `apeireth-orchestration` | Council + TeamLead + Orchestrator trait + Research* 保留策略（StackPin/ShadowLogger/VaultLruFtrl，默认关闭） | `Council` / `Orchestrator` / `ResearchStackPinPolicy` / `ResearchShadowLogger` / `ResearchVaultLruFtrl` | `src/{council,continuation,context_rot,research_*}.rs` |
 
-### 2.2 Engine（7 crate, 运行时执行）
+### 2.2 Engine（8 crate, 运行时执行）
 
 | crate | 职责 | 公共面要点 |
 |---|---|---|
@@ -86,6 +86,7 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 | `apeireth-memory` | 域原语 + BM25/向量 RRF 混合检索 + preference/approval/reflexion + Research* 模块（默认关闭） | `Episode` / `Session` / `TopicPredictor`（**仍未接线进 PreferenceRecallModule**）/ `ResearchRoamingMemory` / `research_check_non_interference` |
 | `apeireth-perception` | Voice/Vision 真后端：`WhisperHttpBackend`（OpenAI/MiniMax）、`XcapVisionBackend`（仅 Windows 硬件验证）；**默认不接线，opt-in 构造** | `WhisperHttpBackend::openai(creds)` / `XcapVisionBackend::default_monitor()` |
 | `apeireth-organ` | 9 organ 真移植（E4/F1/F4/F6/W1/W2/W3/E7/Memory） | `curiosity.rs` / `emotion_memory.rs` / `hypothesis.rs` / `value_cases.rs` / `world_model.rs` / `causal_world_model.rs` / `emergence.rs` / `memory.rs` |
+| `apeireth-guard` | **行为链安全 Guard**（2026-10-06 协作者批）：两阶段行为链分类（`FastGuard` 快判 → `DecisionFusion` 融合）、命令效果分析、会话行为历史、数据集录制与 oracle 评估；经 `BehaviorChainGuardHook` 接生产治理管线（旋钮 `APEIRETH_GUARD_DATASET_ENABLED/PATH`、`APEIRETH_GUARD_ML_MODE/MODEL`）。**名字历史**：v1 legacy/donor 的 `apeireth-guard` 是 PII 隐私护栏（不同物），PII 脱敏在 v2 位于 `apeireth-governance::input_security` | `ChainGuard` / `BehaviorChainGuardHook` / `DecisionFusion` / `FastGuard` / `ActionOracleLabel` |
 
 ### 2.3 Capabilities（1 crate, 唯一 ProcessExecutor 边界）
 
@@ -103,7 +104,7 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 | `apeireth-cli` | `apeireth session / chat / gateway serve` 三命令入口 | 走 `build_canonical_runtime_from_env`，**已挂 GovernancePipeline = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`**（upstream `873d2857`）；MaxRounds 结构性，AuditHashChain 按部署需要挂 |
 | `apeireth-sdk` | **stub 模式**：6 工具白名单 + 鉴权 5 组件 + WS 8 帧协议类型已就位；真实 HTTP/WS 走 `unimplemented!()` 守门；R21 真接 | 真实用户 = R21 后才出现 |
 
-### 2.5 依赖 DAG（`cargo metadata --no-deps` 实测，17 crate，2026-09-05）
+### 2.5 依赖 DAG（`cargo metadata --no-deps` 实测，18 crate，2026-09-05 + 2026-10-06 对账）
 
 ```
 foundation/
@@ -119,6 +120,7 @@ engine/
   provider        -> core, plugin, protocol, orchestration
   perception      -> core, plugin
   organ           -> core, plugin, orchestration
+  guard           -> core, governance, protocol
   runtime         -> core, protocol, plugin, governance, orchestration, provider
   runtime-assembly -> core, protocol, plugin, governance, orchestration, runtime,
                       storage, memory, organ, tools-canonical
@@ -212,7 +214,7 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 
 ### 4.3 ProcessSupervisor（v1 计划，v2 **P5 排期**）
 
-`ProcessSupervisor` + 进程树快照模型 + 跨进程血缘追踪，**当前不在 17-crate 工作区**。见 [ROADMAP.md](../../ROADMAP.md) §4 P5。R**发明"我们用 supervisor 做 X"——明确不在 scope。
+`ProcessSupervisor` + 进程树快照模型 + 跨进程血缘追踪，**当前不在 18-crate 工作区**。见 [ROADMAP.md](../../ROADMAP.md) §4 P5。R**发明"我们用 supervisor 做 X"——明确不在 scope。
 
 ---
 
@@ -282,8 +284,8 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 
 ## 9. 一句话
 
-**v2 17-crate 工作区 = 单一事实源（PluginManager）+ 单一执行入口（Runtime::execute）+ 单一进程边界（ProcessExecutor）+ 单一协议抽象（NormalizedRequest/Response）+ 单一工具 trait（ToolCapability）+ 单一插件 trait（Plugin 4 方法）+ 单一凭据契约（CredentialResolver）+ 单一决策 trait（GovernanceHook + Allow/Deny/RequireApproval 三态）。**其它任何"创新点"都先回到这 8 个"单一"过一遍。
+**v2 18-crate 工作区 = 单一事实源（PluginManager）+ 单一执行入口（Runtime::execute）+ 单一进程边界（ProcessExecutor）+ 单一协议抽象（NormalizedRequest/Response）+ 单一工具 trait（ToolCapability）+ 单一插件 trait（Plugin 4 方法）+ 单一凭据契约（CredentialResolver）+ 单一决策 trait（GovernanceHook + Allow/Deny/RequireApproval 三态）。**其它任何"创新点"都先回到这 8 个"单一"过一遍。
 
 ---
 
-_本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17：取代 v1 `apeireth-companion` 维护手册（`crates/apeireth-companion` 模块地图 → 现 17-crate foundation|engine|capabilities|adapters 分组）；v2 维护的 = PluginManager 唯一注册点 + 8 哲学锚穿透 + 3 不漂移承诺。v2 下一步（governance 接线 / core drain / 记忆移植）见根 ROADMAP §4。_
+_本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17、2026-10-06 对账更新为 18（新增 `crates/engine/guard`）：取代 v1 `apeireth-companion` 维护手册（`crates/apeireth-companion` 模块地图 → 现 18-crate foundation|engine|capabilities|adapters 分组）；v2 维护的 = PluginManager 唯一注册点 + 8 哲学锚穿透 + 3 不漂移承诺。v2 下一步（governance 接线 / core drain / 记忆移植）见根 ROADMAP §4。_

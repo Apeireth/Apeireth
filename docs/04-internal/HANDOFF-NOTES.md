@@ -6,7 +6,7 @@
 
 > **⚠️ 2026-09-08 对账注（按实际走，现状以此为准）**：上一条状态行的"仍明确延期/待硬件"部分已过期——**偏好学习已接线**（`preference_learning` 双索引 + 召回三段展开，旋钮 `APEIRETH_ENABLE_PREFERENCE_LEARNING=1`）；**frontend 对接已落地**（companion-desktop 2.0.0-rc.1 以 bundled-backend 方式 spawn `apeireth gateway serve`，装机 E2E 实测：聊天探针 / gateway health / 桌面端存活 6s 全过）；**Council 真 provider E2E 已过**（DeepSeek 7 advisor → Approved 5.0s，`council_live.rs`）。仍延期：长程 reflection、非文本 perception（RC-7 待硬件）、MiniMax E2E（无 key，永久挂账）。能力旋钮全集：`APEIRETH_ENABLE_SHELL/FETCH/ORGANS/PREFERENCE_LEARNING` + `APEIRETH_COGNITIVE_JUDGE/COUNCIL`（均默认关，INSTALL.md 有用户手册）。
 > **2026-09-12 旋钮整改批（对账审计 `capability-knob-audit-2026-09-12.md`）**：① 只读工具 `filesystem/search` **执行许可默认放行**（与 repo 同待遇），`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 为 CLI 隐私逃生门（旧 ENABLE 兼容、DISABLE 赢）；② 会话级审批策略新增 `approval_remember`（standard 下"会话内记住"，`GovernanceHook::approval_resolved` 回调 + 进程内记忆；Deny 永不绕过）；桌面会话头 4 档策略选择器（只读/每次审批/会话内记住/完全放行）+ 全局权限预设接入新会话创建 + 设置页认知深度预设档（轻量/平衡/深度/自定义）。
-> **2026-10-06 协作者批整合 + 真机修复批次（现状以此为准，详 `engineering-log-2026-10-06.md`）**：协作者 56 提交（记忆 v2.2 收口 + 行为链安全 Guard `apeireth-guard` 接生产治理管线 + 认知 vnext）快进整合全绿；随后主人桌面实测抓出 11 个真机问题并全部修复（评审机制三处降级化、resolve 鲁棒性、notice/error 分离、GBK、shell raw_arg 引号、敏感名单补漏、新错误码 `review_rejected`/`turn_not_converged`、会话级工作区）。**确立元层原则：评审类机制只降级不枪毙主任务**。遗留: shell 非沙箱（设计 `docs/01-architecture/shell-sandbox-lite-design-2026-10-06.md` 待拍板）、会话转录重载 API、信任分级 (RC-13)。
+> **2026-10-06 协作者批整合 + 真机修复批次（现状以此为准，详 `engineering-log-2026-10-06.md`）**：协作者 56 提交（记忆 v2.2 收口 + 行为链安全 Guard `apeireth-guard` 接生产治理管线 + 认知 vnext）快进整合全绿；随后主人桌面实测抓出 11 个真机问题并全部修复（评审机制三处降级化、resolve 鲁棒性、notice/error 分离、GBK、shell raw_arg 引号、敏感名单补漏、新错误码 `review_rejected`/`turn_not_converged`、会话级工作区）。**确立元层原则：评审类机制只降级不枪毙主任务**。遗留: shell 非沙箱（设计 `docs/01-architecture/shell-sandbox-lite-design-2026-10-06.md` 待拍板）、会话转录重载 API、信任分级 (RC-13)。**workspace 因此由 17 → 18 crates（engine 8，新增 `crates/engine/guard`；`docs/03-reference/crates.md` / `ARCHITECTURE.md` / `docs/04-internal/maintenance-guide.md` 已同步）。**
 > **2026-09-10 追加**：桌面开箱即用已落地（Settings 是唯一 provider 配置源，经 IPC 注入侧车环境，key 不落盘；commit `1a265600`）；**token 级真流式已打通**（provider SSE → runtime sink → gateway 逐帧直通，live 实测 210 帧增量；首启向导 `FirstRunWizard.svelte`；点击流人工实测清单 `frontend/companion-desktop/docs/first-run-click-through-checklist.md`）。**"什么测过、什么没测"以 `docs/04-internal/live-verification-ledger.md` 为权威——写文档/注释/commit 前先查它，别重测已绿的，别把挂账的当已验的。**
 > **2026-09-23 K3 前端产品化批次收官（现状以此为准，详 `handoff-k3-frontend-2026-09-23.md`）**：`presence_state` 契约全线贯通（gateway `presence.rs` heuristic_v0 → SSE → 前端 `presence.ts` 显影分级）；前端落地微信式三栏聊天壳（heritage-void 静态默认背景 + 个性化上传/accent 配色）、治理卷宗四 tab、记忆卷宗主从化（Archive 纸面调首次实拍）+ 日记纸面空态、Ctrl+K 命令面板 + 打断、底部状态条。批次 30 支 commit（索引见 `engineering-log-2026-09-22.md`），验收台账 #29/#30，质量门全绿。待主人拍板：B-12 提案值、点亮「他说」主动开口链、挂账 #2/#4 真机闭环。下一梯队：桌宠 → 会话设置抽屉 → 会话分支。
 
@@ -22,7 +22,7 @@ Status:          🟢 活跃 (接手人入口)
 
 ## 1. 项目 1 段简介
 
-**Apeireth** 是 Rust 写的 AI 伙伴底座 (base), 不是 AI 本身 — LLM 是 tenant, 换 model 不重做 base. v2 是从 v1 (86-crate, 完整 9 器官) 工程重构后的形态: **17-crate 工作区, 单 SQLite WAL, external hook 治理, OpenAI Chat 兼容入口**. 当前主线 = `main` 分支 (默认), 旧 v1 走 `archive/v1.0-master` (永久维护). v2 设计哲学 / 9 哲学锚 / 13 键 / 三洋葱 / L0 HA / 0 装 PASS 全部 **LOCKED 跨阶段 0 改**, 变的是工程形态.
+**Apeireth** 是 Rust 写的 AI 伙伴底座 (base), 不是 AI 本身 — LLM 是 tenant, 换 model 不重做 base. v2 是从 v1 (86-crate, 完整 9 器官) 工程重构后的形态: **18-crate 工作区, 单 SQLite WAL, external hook 治理, OpenAI Chat 兼容入口**. 当前主线 = `main` 分支 (默认), 旧 v1 走 `archive/v1.0-master` (永久维护). v2 设计哲学 / 9 哲学锚 / 13 键 / 三洋葱 / L0 HA / 0 装 PASS 全部 **LOCKED 跨阶段 0 改**, 变的是工程形态.
 
 ---
 
@@ -69,7 +69,7 @@ Status:          🟢 活跃 (接手人入口)
 
 ---
 
-## 4. 17-crate 拓扑 + 7 capability trait 边界
+## 4. 18-crate 拓扑 + 7 capability trait 边界
 
 ```
 crates/
@@ -80,14 +80,15 @@ crates/
 │   ├── governance/     (L1 hook 闸: Permission / CredentialDisclosure / PromptInjection)
 │   ├── credentials/    (KeyringCredentialResolver, 4 backend)
 │   └── orchestration/  (Council + TeamLead + Orchestrator trait + Research* 策略默认关闭)
-├── engine/             (7 — 执行 / 调度)
+├── engine/             (8 — 执行 / 调度)
 │   ├── runtime/        (canonical agent loop + governance pipeline 接线)
 │   ├── runtime-assembly/ (concrete assembly: cognitive modules + production composition root, 2026-09-04 抽出)
 │   ├── provider/       (3 provider: MiniMax / Anthropic / OpenAI-compatible)
 │   ├── storage/        (SQLite WAL + reader pool + migrations)
 │   ├── memory/         (M1B 记忆 primitive + Research* 模块, trait 边界已锁)
 │   ├── perception/     (Voice/Vision backend 真实现, 默认不接线)
-│   └── organ/          (9 organ 真移植: E4/F1/F4/F6/W1/W2/W3/E7/Memory)
+│   ├── organ/          (9 organ 真移植: E4/F1/F4/F6/W1/W2/W3/E7/Memory)
+│   └── guard/          (行为链安全 Guard: 两阶段行为链分类器 + BehaviorChainGuardHook 接生产治理管线, 2026-10-06 协作者批)
 ├── capabilities/       (1)
 │   └── tools/          (5 内置工具: filesystem/search/repo 只读默认注册且执行许可默认放行; shell/fetch opt-in 每次审批)
 └── adapters/           (3 — 入口)

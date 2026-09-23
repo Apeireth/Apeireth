@@ -11,6 +11,8 @@ Last-Modified:   2026-08-27
 Status:          🟢 活跃
 ```
 
+> ⚠️ **2026-10-06 对账注**：本文正文写于 v2.0.0-alpha.1（13-crate）时代。当前工作区为 **18-crate**（foundation 6 / engine 8 / capabilities 1 / adapters 3，2026-10-06 新增 `crates/engine/guard`）。正文中"记忆端到端管线不在工作区里"等**能力性判断已被后续批次取代**（记忆 v2.2 生产收口于 2026-09-19 整合，见 `docs/04-internal/live-verification-ledger.md` #26），读前请对照该台账；本文主体内容待按当前实现重写。
+
 ## 1. Apeireth 是什么（v2）
 
 **基地，不是 AI 本身**：Apeireth 是给 LLM 的操作系统——提供工具、记忆、治理边界、协议、运行时；不定义 AI 是什么。接入一个 LLM（默认 MiniMax-M3，Anthropic / OpenAI 兼容也可），基地给它：工具、记忆生命周期、治理闸门、可观测 trace。

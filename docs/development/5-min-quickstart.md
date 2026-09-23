@@ -22,7 +22,7 @@ Clone the repository and verify the core workspace:
 git clone https://github.com/Apeireth/Apeireth.git
 cd apeireth-rust
 
-# 2. Run all workspace tests (17 crates)
+# 2. Run all workspace tests (18 crates)
 cargo test --workspace
 ```
 

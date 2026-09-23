@@ -27,12 +27,13 @@ Apeireth 团队承诺漏洞披露过程透明，通过以下渠道公告：
 
 ## 适用范围 (Scope)
 
-以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 17-crate 工作区）：
+以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 18-crate 工作区）：
 
 - `apeireth-core`（`crates/foundation/core`）— 稳定域原语 + kernel（IDs/时间/生命周期/事件）；13 键 verdict cache 与洋葱/守门语义（v1 脊椎，接线状态见 ROADMAP P0/P2）
 - `apeireth-protocol`（`crates/foundation/protocol`）— 规范化协议 DTO 与 vendor wire 翻译（不含 HTTP client）
 - `apeireth-plugin`（`crates/foundation/plugin`）— Plugin/Capability 契约、凭据解析契约、capability 注册唯一权威
 - `apeireth-governance`（`crates/foundation/governance`）— Allow/Deny/RequireApproval 决策、PII/注入检测、防篡改审计哈希链
+- `apeireth-guard`（`crates/engine/guard`）— 行为链安全 Guard：两阶段行为链分类、决策融合、命令效果与会话行为分析，经 `BehaviorChainGuardHook` 接生产治理管线；威胁建模与误判降级语义属本政策范围
 - `apeireth-runtime`（`crates/engine/runtime`）— agent loop 单一执行入口、approval 生命周期、execution trace
 - `apeireth-provider`（`crates/engine/provider`）— 供应商凭据解析、认证头构造、wire 适配
 - `apeireth-tools-canonical`（`crates/capabilities/tools`）— 进程执行唯一边界（Job Object/进程组）、egress 策略、受控 fetch（DNS 钉扎）
@@ -71,4 +72,4 @@ v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`
 
 ---
 
-_Last updated_: 2026-09-05 (文档对账：17-crate 范围核验、测试基线 3120、workspace.version 2.0.0-rc.1、仓库 URL `Apeireth/Apeireth`)
+_Last updated_: 2026-10-06 (文档对账：18-crate 范围核验——新增 `apeireth-guard` 安全边界；测试基线 3120、workspace.version 2.0.0-rc.1、仓库 URL `Apeireth/Apeireth` 维持 2026-09-05 口径未重跑)

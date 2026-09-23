@@ -28,7 +28,7 @@ Apeireth v2.0.0-rc.1 在 `origin/main @ 70281cc6` (Round 9 完; **2026-09-05 对
 | 项 | 值 | 来源 |
 |---|---|---|
 | HEAD (origin/main) | `70281cc6`（2026-09-05 对账：现 `7647d2c9`） | Round 9 7 doc batch commit |
-| Workspace | **17 crates** | foundation 6 / engine 7 / capabilities 1 / adapters 3（写作时 16；2026-09-04 `0e542d03` 抽出 runtime-assembly 后为 17） |
+| Workspace | **17 crates** | foundation 6 / engine 7 / capabilities 1 / adapters 3（写作时 16；2026-09-04 `0e542d03` 抽出 runtime-assembly 后为 17；**2026-10-06 对账：协作者批新增 `crates/engine/guard` 后为 18 / engine 8**） |
 | 代码量 | crates/ 内 .rs src-only **147,732 行** + tests **25,972 行** | 2026-09-05 实测（写作时 ~74k 行 active） |
 | 测试 | **3120 passed / 0 failed / 13 ignored** | 2026-09-05 亲跑 cargo test --workspace --locked（写作时 1739 passed / 0 failed / 12 ignored） |
 | Clippy | **0 警告 / 0 错误** | per cargo clippy --workspace --all-targets --locked -- -D warnings |

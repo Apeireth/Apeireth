@@ -1,7 +1,7 @@
 # Apeireth Architecture
 
 > 当前基线：默认分支 `main`，tag `v2.0.0-rc.1`（测试基线见 `research/baselines/`）。
-> 根 Cargo workspace（17 个 crate）+ 独立的
+> 根 Cargo workspace（18 个 crate）+ 独立的
 > `frontend/companion-desktop` workspace。历史 donor 不属于生产依赖。
 
 ## Layer view
@@ -30,7 +30,7 @@ contracts. The current dependency graph is intentionally explicit in the root
 | Group | Crates | Ownership |
 | --- | --- | --- |
 | Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration` | Stable domain primitives, normalized protocol types, capability/plugin contracts, governance decisions, credential backends, orchestration/council/context |
-| Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ` | Runtime kernel, concrete production assembly, vendor provider capabilities, SQLite/storage foundation, durable memory/retrieval, perception, and Organ domain |
+| Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ`, `apeireth-guard` | Runtime kernel, concrete production assembly, vendor provider capabilities, SQLite/storage foundation, durable memory/retrieval, perception, Organ domain, and the behavior-chain safety guard |
 | Capabilities | `apeireth-tools-canonical` | Built-in filesystem/search/repository/fetch/shell capabilities and the canonical process execution boundary |
 | Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk` | HTTP/CLI/SDK entry surfaces; no second orchestration root |
 

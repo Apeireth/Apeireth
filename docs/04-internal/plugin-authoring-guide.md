@@ -462,7 +462,7 @@ async fn plugin_registers_and_resolves_tools() {
 | 治理（hooks + Decision）| `crates/foundation/governance/src/lib.rs` |
 | 协议 DTO（NormalizedTool/Request/Response）| `crates/foundation/protocol/src/canonical/` |
 
-> 相关文档：[team-work-doc.md](team-work-doc.md)（§1 三哲学 / §3 文档规范 / §2 工程规范）· [maintenance-guide.md](maintenance-guide.md)（13-crate 模块地图 + v2 维护流程）· [ROADMAP.md](../../ROADMAP.md)（§4 v2 路线 + §5 硬墙）· [ARCHITECTURE.md](../../ARCHITECTURE.md)（架构契约）· [architecture.md](../01-architecture/architecture.md)（foundation/engine/capabilities/adapters 详细归属）
+> 相关文档：[team-work-doc.md](team-work-doc.md)（§1 三哲学 / §3 文档规范 / §2 工程规范）· [maintenance-guide.md](maintenance-guide.md)（18-crate 模块地图 + v2 维护流程）· [ROADMAP.md](../../ROADMAP.md)（§4 v2 路线 + §5 硬墙）· [ARCHITECTURE.md](../../ARCHITECTURE.md)（架构契约）· [architecture.md](../01-architecture/architecture.md)（foundation/engine/capabilities/adapters 详细归属）
 
 ---
 

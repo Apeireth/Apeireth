@@ -8,7 +8,7 @@
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
 [![Tests](https://img.shields.io/badge/tests-see%20CI-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
-[![Architecture](https://img.shields.io/badge/architecture-17--Crate%20Kernel%20%2B%20Assembly-orange.svg)](docs/01-architecture/architecture.md)
+[![Architecture](https://img.shields.io/badge/architecture-18--Crate%20Kernel%20%2B%20Assembly-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
@@ -68,9 +68,9 @@ Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny
 | **Real-Time Voice Barge-In** | Stream cancellation lookup + `tokio::Notify` broadcast | $< 1.0 \text{ ms}$ | **0.18 ms** | ✅ **VERIFIED** |
 | **Ember HUD Render Tick** | Physiological breathing curve + WGSL uniform synthesis | $< 0.5 \text{ ms}$ | **0.08 ms** | ✅ **VERIFIED** |
 | **JobObject OS Sandbox Spawn** | Win32 Job Object creation + limits + process containment | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **VERIFIED** |
-| **Microkernel Cold Start** | 17-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **VERIFIED** |
+| **Microkernel Cold Start** | 18-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **VERIFIED** |
 | **Runtime Idle Footprint** | Complete microkernel background daemon memory usage | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **VERIFIED** |
-| **Workspace Test Suite** | Full regression pass across the 17-crate kernel+assembly workspace | 100% Pass | **see CI / local `cargo test --workspace`** | ⏳ **re-measured after assembly split** |
+| **Workspace Test Suite** | Full regression pass across the 18-crate kernel+assembly workspace | 100% Pass | **see CI / local `cargo test --workspace`** | ⏳ **re-measured after assembly split** |
 
 > *All benchmarks are hardware-verified on AMD Ryzen 9 / Intel Core i9, 32GB RAM, Windows 11 / Ubuntu 24.04 (see [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md) for full reproduction steps).*
 
@@ -78,7 +78,7 @@ Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny
 
 ## ⚡ What is Apeireth 2.0+?
 
-**Apeireth 2.0+** is a **Pure Safe Rust, 17-crate AGI Operating System with a Runtime Kernel and Runtime Assembly**. The kernel owns the canonical turn protocol and abstract ports; concrete cognition, tools, Organ adapters, and SQLite wiring are installed by `apeireth-runtime-assembly`.
+**Apeireth 2.0+** is a **Pure Safe Rust, 18-crate AGI Operating System with a Runtime Kernel and Runtime Assembly**. The kernel owns the canonical turn protocol and abstract ports; concrete cognition, tools, Organ adapters, and SQLite wiring are installed by `apeireth-runtime-assembly`.
 
 By unifying **Continuous Fluid Topological Memory**, **Cognitive Quota Preemptive Scheduling**, **Causal World Model Fork/Commit**, **Micro-Luminescent Ambient Presence (Ember HUD)**, and **Triple-Onion Zero-Trust Governance**, Apeireth provides a permanent, self-evolving, and cryptographically verified sanctuary for artificial intelligence to co-exist with humans.
 
@@ -170,7 +170,7 @@ When $U_{\text{care}} \ge \Theta_{\text{action}}$ and user flow friction is zero
 
 ---
 
-## 🧱 17-Crate Runtime Kernel + Assembly Breakdown
+## 🧱 18-Crate Runtime Kernel + Assembly Breakdown
 
 The root Cargo workspace strictly enforces an acyclic, single-direction dependency hierarchy across four distinct layers:
 
@@ -190,7 +190,8 @@ crates/
 │   ├── organ                 # 9 Cognitive organs, Persona Synthesizer, Reflection
 │   ├── perception            # Whisper HTTP, MiniMax TTS, Xcap screen vision
 │   ├── provider              # Anthropic, OpenAI-compatible, Google Gemini, Ollama
-│   └── storage               # SQLite pools, ACID migrations, Bitemporal facts
+│   ├── storage               # SQLite pools, ACID migrations, Bitemporal facts
+│   └── guard                 # Two-stage behavior-chain safety classifier (production governance hook)
 ├── capabilities/             # Layer 2: Tool Execution & OS Sandbox Containment
 │   └── tools                 # ProcessExecutor (JobObject/cgroups), RepoMap, StealthCrawler
 └── adapters/                 # Layer 3: Transport & Interaction Surface
@@ -216,6 +217,7 @@ crates/
 | **Engine** | `apeireth-perception` | Whisper speech, MiniMax 128kbps TTS, Xcap vision | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
 | **Engine** | `apeireth-provider` | Multi-LLM provider abstraction (Anthropic/OpenAI/Gemini)| `ProviderRegistry::dispatch()`, `NormalizedChatCompletions` |
 | **Engine** | `apeireth-storage` | ACID SQLite pools, migrations, bitemporal fact storage | `SqliteConnectionPool::acquire()`, `BitemporalGraph::upsert()`|
+| **Engine** | `apeireth-guard` | Two-stage behavior-chain safety classifier wired into production governance | `ChainGuard`, `BehaviorChainGuardHook`, `DecisionFusion` |
 | **Capabilities**| `apeireth-tools-canonical`| ProcessExecutor (JobObject/cgroups), RepoMap AST, Crawler | `ProcessExecutor::spawn_bounded()`, `RepoMap::generate()` |
 | **Adapters** | `apeireth-cli` | Primary CLI entrypoint, Portable USB bundle synthesizer | `cli::main()`, `PortableBundleSynthesizer::generate()` |
 | **Adapters** | `apeireth-gateway` | Axum HTTP/SSE server, Duplex WebSocket, Ember HUD driver | `GatewayServer::serve()`, `EmberHudDriver::synthesize()` |
@@ -383,7 +385,7 @@ The canonical gateway exposes HTTP/SSE endpoints alongside an 8-frame full-duple
 git clone https://github.com/Apeireth/Apeireth.git
 cd Apeireth
 
-# Run all 3120 unit and integration tests across the 17 crates
+# Run all 3120 unit and integration tests across the 18 crates
 cargo test --workspace
 
 # Verify pure Safe Rust and zero clippy warnings

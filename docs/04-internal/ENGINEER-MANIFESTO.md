@@ -50,8 +50,8 @@ Author:          主代理 Mavis
 
 | 维度 | 真账 |
 |---|---|
-| **Workspace** | **17 crates** (foundation 6 / engine 7 / capabilities 1 / adapters 3), 单向依赖, 0 循环（2026-09-05 实测；此前"16 crates"口径因 2026-09-04 `0e542d03` 抽出 runtime-assembly 作废） |
-| **架构收敛** | v1 86-crate → v2 17-crate = **80.2% 收敛** |
+| **Workspace** | **18 crates** (foundation 6 / engine 8 / capabilities 1 / adapters 3), 单向依赖, 0 循环（2026-09-05 实测 + 2026-10-06 对账新增 `crates/engine/guard`；此前"16 crates"口径因 2026-09-04 `0e542d03` 抽出 runtime-assembly 作废） |
+| **架构收敛** | v1 86-crate → v2 18-crate = **79.1% 收敛**（17-crate 口径于 2026-10-06 `apeireth-guard` 加入后更新） |
 | **哲学锚** | **9 项 LOCKED** (S-1/S-2/S-3 + O-1..O-6, O-6 永远追求最优 2026-08-27 主人授权加) |
 | **测试** | **3120 passed / 0 failed / 13 ignored** (2026-09-05 亲跑 `cargo test --workspace --locked`; 历史: 2026-08-28 A 块后 1739 passed) |
 | **clippy** | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |
@@ -174,7 +174,7 @@ git status                                             # 期望: clean 或仅 .h
 - O-6 三阶审查:
   - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
   - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? 与 alternatives 比较 + 选最优 + 拒理由>
-  - 架构最优: <在 workspace 17-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
+  - 架构最优: <在 workspace 18-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
 ```
 
 **0 装诚实标** (主代理 A 块 O-6 复盘真账): 之前 A 块 5 commit O-6 三阶审查 sections **多描述 WHAT 不是 WHY**. 这是 O-6 失守. amend 后修订版 sections 真答案 + 拒 alternatives + 拒理由. 详 `A-block-o6-true-account.md` + 修订版 5 sections 真账.
@@ -326,7 +326,7 @@ docs/04-internal/9-organ-progress-2026-08-28.md  ← 9 organ 实时进度
 - O-6 三阶审查:
   - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
   - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? 与 alternatives 比较 + 选最优 + 拒理由>
-  - 架构最优: <在 workspace 17-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
+  - 架构最优: <在 workspace 18-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
 - 影响面: <文件清单 + 行数>
 - 后续 stage: <如果分阶段, 列下一步>
 ```
