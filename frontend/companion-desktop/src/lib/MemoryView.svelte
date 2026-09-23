@@ -544,13 +544,13 @@
      局部覆写中性变量 → 共享组件（EmptyState/ErrorState/LoadingState）自动墨化。 ── */
   .memory-view {
     --text: var(--ap-register-archive-ink);
-    --muted: rgba(38, 38, 42, 0.6);
-    --faint: rgba(38, 38, 42, 0.4);
-    --line: rgba(38, 38, 42, 0.14);
-    --line-strong: rgba(38, 38, 42, 0.26);
+    --muted: var(--ap-register-archive-ink-60);
+    --faint: var(--ap-register-archive-ink-40);
+    --line: var(--ap-register-archive-ink-14);
+    --line-strong: var(--ap-register-archive-ink-26);
     --surface: var(--ap-register-archive-paper-hi);
-    --surface-2: #ecebe9;
-    --surface-3: #e5e4e2;
+    --surface-2: var(--ap-register-archive-surface-2);
+    --surface-3: var(--ap-register-archive-surface-3);
     /* 文字级强调：纸面可读的下沉金（实拍校准提案，tokens.css §5.6② 段注记） */
     --amber: var(--ap-register-archive-ink-gold);
     /* 语义色纸面口径（借 day/essence 已校准的深值组） */
@@ -635,7 +635,7 @@
   .mv-chip.on {
     background: var(--ap-register-archive-accent);
     border-color: var(--ap-register-archive-accent);
-    color: #26262a;
+    color: var(--ap-register-archive-ink-solid);
   }
   .mv-chip-count {
     font-family: var(--ap-font-mono);
@@ -680,7 +680,7 @@
     border: 1px solid var(--ap-register-archive-accent);
     border-radius: 6px;
     background: var(--ap-register-archive-accent);
-    color: #26262a;
+    color: var(--ap-register-archive-ink-solid);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
@@ -781,7 +781,7 @@
   }
   .mv-diamond.gold {
     background: var(--ap-register-archive-accent);
-    border: 1px solid rgba(38, 38, 42, 0.35);
+    border: 1px solid var(--ap-register-archive-ink-35);
   }
   .mv-diamond.lg {
     width: 12px;

@@ -75,7 +75,7 @@
     margin: 0;
     font-size: 11px;
     letter-spacing: 0.5em;
-    color: rgba(38, 38, 42, 0.55);
+    color: var(--ap-register-archive-ink-55);
   }
 
   /* 金色纪律跨调性（§5.6 纪律 3）：强调 = 存在金。
@@ -123,7 +123,7 @@
     font-family: var(--ap-font-mono);
     font-size: 10px;
     letter-spacing: 0.28em;
-    color: rgba(38, 38, 42, 0.4);
+    color: var(--ap-register-archive-ink-40);
     text-align: center;
   }
 
