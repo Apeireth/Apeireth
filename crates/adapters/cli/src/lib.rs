@@ -1014,6 +1014,66 @@ pub async fn dispatch_canonical_chat(
     result
 }
 
+/// **守夜人 Nightwatch** (2026-10-10, 主人批准设计): 显式命令即授权 ——
+/// 离线闲时审计 (report-only)。读近 N 条 episodes 为被动快照 → 五件组合审计
+/// (risk 核词扫描 / eval 行为质量 / no-degrade 复盘 / evidence 断言缺口 /
+/// rubric 平衡 / colang 健康) → 报告落 `<data>/nightwatch/`。
+/// **不阻塞不批准**: approval_policy 留热路径; 审计链/ballot 未持久化 = 具名缺口。
+pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Result<String, String> {
+    use apeireth_memory::backend::sqlite::SqliteBackend;
+    use apeireth_plugin::memory_backend::MemoryBackend;
+    use apeireth_runtime_assembly::canonical::nightwatch::{EpisodeSnapshot, NightwatchInputs};
+    use apeireth_storage::SqliteConnectionPool;
+
+    let pool = Arc::new(
+        SqliteConnectionPool::open(cognitive_db_path())
+            .await
+            .map_err(|error| format!("cognitive backend open failed: {error}"))?,
+    );
+    let backend = SqliteBackend::from_arc(Arc::clone(&pool));
+
+    let episodes = match &session {
+        Some(session_id) => backend
+            .recent_episodes(session_id, limit)
+            .map_err(|error| format!("read recent episodes failed: {error}"))?,
+        None => Vec::new(),
+    };
+    let snapshots: Vec<EpisodeSnapshot> = episodes
+        .iter()
+        .map(|episode| EpisodeSnapshot {
+            id: episode.id.clone(),
+            session: session.clone().unwrap_or_else(|| "unknown".to_string()),
+            role: episode.role.clone(),
+            content: episode.content.clone(),
+        })
+        .collect();
+
+    let inputs = NightwatchInputs {
+        episodes: snapshots,
+        ..Default::default()
+    };
+    let report = apeireth_runtime_assembly::canonical::nightwatch_audit(&inputs);
+    let report_dir = default_panel_data_dir().join("nightwatch");
+    let path = apeireth_runtime_assembly::canonical::write_nightwatch_report(&report_dir, &report)
+        .map_err(|error| format!("nightwatch report write failed: {error}"))?;
+
+    let mut text = format!(
+        "守夜复盘完成 (report-only, 不阻塞不批准):\n{}\n报告: {}\n",
+        report.summary,
+        path.display()
+    );
+    for finding in &report.findings {
+        text.push_str(&format!(
+            " - [{}] {:?}: {}\n",
+            finding.severity, finding.area, finding.detail
+        ));
+    }
+    for gap in &report.advisory_gaps {
+        text.push_str(&format!(" - [gap] {gap}\n"));
+    }
+    Ok(text)
+}
+
 /// Bootstrap and resolve a pending approval on the production session store.
 pub async fn dispatch_canonical_approval(
     session: String,

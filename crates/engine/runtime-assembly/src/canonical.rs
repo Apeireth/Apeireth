@@ -69,6 +69,9 @@ pub mod guard_observer;
 pub mod harness_patch;
 #[path = "canonical/memory_typed_sink.rs"]
 pub mod memory_typed_sink;
+/// 守夜人 Nightwatch — 离线闲时审计器 (2026-10-10, 主人批准设计)。
+#[path = "canonical/nightwatch.rs"]
+pub mod nightwatch;
 /// W3 三洋葱 L3-L5 物理执行面: 双洋葱判定的治理 hook (2026-10-10)。
 pub mod onion_layer;
 #[path = "canonical/orchestrator.rs"]
@@ -93,6 +96,11 @@ pub mod upgrade_cycle;
 pub use experiment_field::{
     Experiment, ExperimentField, ExperimentStatus, FailureLearningRecord, FailureLearningSink,
     NoopVMRunner, VMRunner, Verdict, WikiFailureLearningSink,
+};
+
+pub use nightwatch::{
+    audit as nightwatch_audit, write_report as write_nightwatch_report, AuditSnapshot,
+    EpisodeSnapshot, Finding, FindingArea, NightwatchInputs, NightwatchReport,
 };
 
 pub use cognitive::{
