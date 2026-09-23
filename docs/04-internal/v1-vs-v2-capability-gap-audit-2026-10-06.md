@@ -261,8 +261,20 @@ perception 不做 per-turn module
 | 吸收批 (betti/残差金字塔/河流拓扑/Kuramoto…) | ✅ 已实现 | `memory/src/{betti_hole_detector,residual_pyramid,river_topology,kuramoto_resonance}.rs` |
 
 **接线状态实测**: 上述模块在 `runtime-assembly/src/canonical/` 与 `adapters/cli/src/`
-中的引用数**全部为 0** (唯 `context_rot` 有 3 处引用) —— 即**库级真实现, 未接生产装配**。
+中的引用数**几乎全部为 0** —— 即**库级真实现, 未接生产装配**。
 按四级口径记: **IMPLEMENTED ✅ / PRODUCTION WIRED ❌**。
+
+> **[2026-10-06 晚二次复核修正]** 精确重扫 (脚本见 `engineering-review-handoff-2026-10-06.md` §3.2)
+> 后有两个**非零**引用, 原"唯 `context_rot` 有 3 处"的说法**不完整**:
+>
+> | 模块 | 引用数 | 真实状态 (四级口径) |
+> |---|---|---|
+> | `context_rot` | 3 | **WIRED ✅ / DEFAULT ENABLED ✅** (确定性压缩真接进上下文管理) |
+> | `proactive_recall` | **13** | **WIRED ✅ / DEFAULT ENABLED ❌** —— `ProductionModulesConfig.proactive_recall: Option<ProactiveRecallPolicy>` (`production.rs:113`), `Default` 给 `None` (`:151`), 仅 `:347-348` 在显式配置时 `with_proactive_recall`; **且全仓库无 `APEIRETH_*` 旋钮可开** |
+> | §7.1 表格其余全部模块 | 0 | **IMPLEMENTED ✅ / PRODUCTION WIRED ❌** |
+>
+> 教训: "引用数为 0"这种结论必须**用脚本全量扫**, 不能凭印象点几个名字;
+> 且 `Option<...>` 类型的配置项要**连 `Default` 值一起看**, 否则会把"接线了但默认关"误判成"没接线"。
 
 ### 7.2 仍为真缺口 (源码确认不存在)
 
@@ -386,7 +398,8 @@ C ABI `apeireth_sdk_init/last_error` 是 skeleton (`last_error` 返 -1, `abi.rs:
 
 `crates/*/*/tests/*.rs` 共 **92 个**文件, 另有大量 `src` 内联 `#[test]`/`#[tokio::test]`
 (credentials ≈50、protocol ≈51、sdk ≈410、memory 数十)。
-`#[ignore]` 标记 **47 处** (`rg -n '#\[ignore' crates/` 全 crate 计数), 分布**全部集中在需真 key / 真硬件的 E2E**:
+`#[ignore]` 标记 **47 处** (`rg -n '#\[ignore' crates/` 全 crate 计数: `tests/` 目录 19 处 +
+`src/` 内联 28 处), 分布**全部集中在需真 key / 真硬件的 E2E**:
 `engine/organ` **35** 处 (`world_model` 5 / `causal_world_model` 5 / `value_cases` 5 /
 `curiosity` 6 / `emotion_memory` 4 / `hypothesis` 4 / `memory` 3 / `organ_live_llm` 3)、
 `engine/provider` **7** 处 (`openai_compatible_live` 3 / `minimax_llm_factory` 3 / 另 1)、
