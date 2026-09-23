@@ -5,7 +5,9 @@
 // 锁定三条主人拍板纪律：
 //   ① 默认主题 = heritage-void（静态星空山脉图），黑洞实时场景降级为可选；
 //   ② ?theme= URL 覆写纪律不破（query 优先于 config）；
-//   ③ 静态背景主题判定准确（场景层隐藏 + 渲染循环暂停的依据）。
+//   ③ 静态背景主题判定准确（场景层隐藏 + 渲染循环暂停的依据）；
+//   ④ 空心主题不得出现在目录（2026-09-23 主人指示：day/ocean/forest/paper
+//      无实现即删，补全列入 backlog，0 装是底线）。
 // 不依赖后端进程。
 import assert from 'node:assert/strict';
 
@@ -52,7 +54,12 @@ console.log('--- Starting Theme System Check ---');
   assert.equal(isStaticBgTheme('heritage-void'), true);
   assert.equal(isStaticBgTheme('essence'), true);
   assert.equal(isStaticBgTheme('night'), false, 'night = 黑洞实时场景（可选主题），不暂停');
-  assert.equal(isStaticBgTheme('day'), false);
+  // 2026-09-23：空心主题已删（主人指示），出现即回落默认，目录里不得有
+  for (const hollow of ['day', 'ocean', 'forest', 'paper']) {
+    assert.equal(VALID_THEMES.includes(hollow), false, `空心主题 ${hollow} 不得留在 VALID_THEMES`);
+    assert.equal(resolveTheme(hollow), 'heritage-void', `config 里的 ${hollow} 必须回落默认`);
+    assert.ok(!THEME_CATALOG.find((t) => t.id === hollow), `空心主题 ${hollow} 不得留在 THEME_CATALOG`);
+  }
 }
 
 // ---------------------------------------------------------------------------

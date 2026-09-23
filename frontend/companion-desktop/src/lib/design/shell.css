@@ -1273,11 +1273,14 @@ p.lede {
   bottom: calc(100% + 10px);
   left: 0;
   width: 356px;
-  max-width: 100%;
+  max-width: min(356px, calc(100vw - 80px));
   background: var(--ap-shell-elevated);
   border: 1px solid var(--ap-line);
   border-radius: 7px;
-  backdrop-filter: blur(20px);
+  /* 2026-09-23 真机实证修复： backdrop-filter 与父级 .composer-caps 的
+     backdrop-filter 嵌套触发 Edge 合成 bug——打开面板时整个窗口被糊化。
+     本层底 --ap-shell-elevated 实为近不透明（深 0.96/浅 0.94），
+     去掉滤镜对视觉无影响。 */
   padding: 16px;
   display: none;
   z-index: 18;
