@@ -127,13 +127,76 @@ async fn bounded_timeout_terminates_long_sleep() {
     let tmp = tempdir().unwrap();
     let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
 
+    // 2026-10-10: 原用 `ping -n 30 127.0.0.1` 当长命令 —— 沙箱断网后 ping 秒死
+    // (连 loopback 都不开), 超时语义前提失效。换无网络长命令 (powershell 休眠)。
     #[cfg(windows)]
-    let command = "ping -n 30 127.0.0.1 > nul";
+    let command = "powershell -NoProfile -Command \"Start-Sleep -Seconds 30\"";
     #[cfg(not(windows))]
     let command = "sleep 30";
 
     let value = invoke(&tool, command, None, Some(1_000)).await;
     assert_eq!(value["timed_out"], json!(true));
+}
+
+/// W1 §2.5 E2E「断网」: AppContainer 零网络 capability → 连 loopback 都建不起
+/// socket。`ping` 必须**快速失败** (不是超时) —— 这就是沙箱断网的行为证据。
+#[tokio::test]
+async fn sandbox_denies_network_even_loopback() {
+    let tmp = tempdir().unwrap();
+    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+
+    let value = invoke(&tool, "ping -n 2 127.0.0.1", None, Some(5_000)).await;
+    assert_eq!(
+        value["timed_out"],
+        json!(false),
+        "ping 应立即失败而非运行到超时 (网络能力缺失, socket 起不来)"
+    );
+    assert_ne!(
+        value["exit_code"],
+        json!(0),
+        "ping 不应成功 —— 沙箱断网含 loopback: {value}"
+    );
+}
+
+/// W1 §2.5 E2E「界外读败」(断言反转锚点): 未授权的**用户空间**路径零访问。
+///
+/// 真实边界 (2026-10-10 ACL 验尸, 台账 #49): Windows 给系统文件自带
+/// `ALL APPLICATION PACKAGES` 继承读执行 (win.ini 在列, 沙箱内仍可读 —— 系统
+/// 自我放行, 非本墙缺口); 墙挡的是**用户空间全盘** (C:\Users\* 无任何 AAP ACE)。
+/// 2026-10-06 真机 "全盘可读" 的非沙箱实锤, 在此以用户空间界外文件反转。
+#[tokio::test]
+async fn sandbox_denies_workspace_external_reads() {
+    let outside = tempdir().unwrap();
+    let secret_path = outside.path().join("secret.txt");
+    std::fs::write(&secret_path, "APEIRETH_OUTSIDE_SECRET_987").unwrap();
+
+    let ws = tempdir().unwrap();
+    let tool = ShellTool::new(TrustedShellConfig::new(ws.path().to_path_buf()));
+
+    let command = format!("type {}", secret_path.display());
+    let value = invoke(&tool, &command, None, None).await;
+    let stdout = value["stdout"].as_str().unwrap_or_default();
+    assert!(
+        !stdout.contains("APEIRETH_OUTSIDE_SECRET_987"),
+        "界外用户空间文件必须零访问 (沙箱墙): {value}"
+    );
+}
+
+/// W1 §2.5 E2E「工作区写成」: 授予的工作区目录读写正常 —— 墙不挡自己人。
+#[tokio::test]
+async fn sandbox_allows_workspace_writes() {
+    let tmp = tempdir().unwrap();
+    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+
+    #[cfg(windows)]
+    let command = "echo sandbox-ok > probe.txt && type probe.txt";
+    #[cfg(not(windows))]
+    let command = "echo sandbox-ok > probe.txt && cat probe.txt";
+
+    let value = invoke(&tool, command, None, None).await;
+    assert_eq!(value["exit_code"], json!(0), "{value}");
+    let stdout = value["stdout"].as_str().unwrap_or_default();
+    assert!(stdout.contains("sandbox-ok"), "{value}");
 }
 
 #[tokio::test]

@@ -42,6 +42,10 @@ pub struct TrustedShellConfig {
     pub max_stdout_bytes: usize,
     /// stderr bound in bytes.
     pub max_stderr_bytes: usize,
+    /// **W1 §2.4 沙箱开关** (2026-10-10, 默认**开** —— 设计拍板"产品定位=桌面
+    /// 伴侣"): 开 = 文件限定工作区 + 断网 (AppContainer, 不可实施时**拒绝执行**,
+    /// 绝不裸跑); 关 (`APEIRETH_SHELL_SANDBOX=0`) = 本机全权, 显式裸跑自担风险。
+    pub sandbox: bool,
 }
 
 impl Default for TrustedShellConfig {
@@ -54,6 +58,7 @@ impl Default for TrustedShellConfig {
             max_timeout_ms: 300_000,
             max_stdout_bytes: 64 * 1024,
             max_stderr_bytes: 64 * 1024,
+            sandbox: true,
         }
     }
 }
@@ -69,6 +74,13 @@ impl TrustedShellConfig {
     #[must_use]
     pub fn with_shell_executable(mut self, executable: impl Into<PathBuf>) -> Self {
         self.shell_executable = Some(executable.into());
+        self
+    }
+
+    /// W1 §2.4: 显式关闭沙箱 (裸跑, 本机全权) —— 进阶用户主动选择。
+    #[must_use]
+    pub fn with_sandbox(mut self, sandbox: bool) -> Self {
+        self.sandbox = sandbox;
         self
     }
 
@@ -264,6 +276,15 @@ impl ShellTool {
                 "PATH",
                 "PATHEXT",
                 "COMSPEC",
+                // W1 §2.1 (2026-10-10 真机矩阵定案): AppContainer 进程初始化要
+                // 档案基础变量 —— 缺失报 os error 203 "找不到环境选项"。均为标准
+                // 用户/档案元数据 (零密钥), "最小化不泄密"原则保留。
+                "USERPROFILE",
+                "APPDATA",
+                "LOCALAPPDATA",
+                "HOMEDRIVE",
+                "HOMEPATH",
+                "USERNAME",
             ] {
                 if let Some(value) = std::env::var_os(key) {
                     let value = value
@@ -287,7 +308,26 @@ impl ShellTool {
         Ok(vars)
     }
 
-    fn isolation_requirements() -> IsolationRequirement {
+    /// W1 §2.4 (2026-10-10): 沙箱开关决定隔离要求集 —— 开 = 在历史集之上**要求**
+    /// 文件+网络隔离 Enforced (AppContainer 实施; 平台无能力即拒绝执行, 绝不裸跑),
+    /// 关 = 维持历史要求集。
+    fn isolation_requirements_for(sandbox: bool) -> IsolationRequirement {
+        let base = Self::base_isolation_requirements();
+        if sandbox {
+            base.require(
+                IsolationCapability::FilesystemIsolation,
+                crate::process::EnforcementLevel::Enforced,
+            )
+            .require(
+                IsolationCapability::NetworkIsolation,
+                crate::process::EnforcementLevel::Enforced,
+            )
+        } else {
+            base
+        }
+    }
+
+    fn base_isolation_requirements() -> IsolationRequirement {
         IsolationRequirement::new()
             .require(
                 IsolationCapability::StructuredSpawn,
@@ -448,7 +488,7 @@ impl ShellTool {
             max_stdout_bytes: self.config.max_stdout_bytes,
             max_stderr_bytes: self.config.max_stderr_bytes,
             environment,
-            isolation: Self::isolation_requirements(),
+            isolation: Self::isolation_requirements_for(self.config.sandbox),
         })
     }
 
@@ -468,6 +508,11 @@ impl ShellTool {
                 .iter()
                 .map(|(key, _value)| key)
                 .collect::<Vec<_>>(),
+            "sandbox": if frozen.isolation.requires(IsolationCapability::FilesystemIsolation).is_some() {
+                "工作区限定 + 断网 (AppContainer)"
+            } else {
+                "未沙箱 (本机全权)"
+            },
             "filesystem_isolation": format!("{:?}", capabilities.filesystem_isolation),
             "network_isolation": format!("{:?}", capabilities.network_isolation),
             "process_tree_containment": format!("{:?}", capabilities.process_tree_containment),
@@ -528,14 +573,12 @@ impl ShellTool {
         // 零生产调用 (IMPLEMENTED ≠ PRODUCTION WIRED)。shell 输出是唯一"全权出口"
         // (2026-10-06 真机边界测试结论) —— stdout/stderr 双双过绊线, 命中即脱敏
         // 截断并打 credential_tripwire 标记 (审批卡/UI 可见墙的存在)。
-        let stdout =
-            crate::guardrail::ToolGuardrail::scan_and_sanitize_output(&Self::decode_command_output(
-                &result.stdout,
-            ));
-        let stderr =
-            crate::guardrail::ToolGuardrail::scan_and_sanitize_output(&Self::decode_command_output(
-                &result.stderr,
-            ));
+        let stdout = crate::guardrail::ToolGuardrail::scan_and_sanitize_output(
+            &Self::decode_command_output(&result.stdout),
+        );
+        let stderr = crate::guardrail::ToolGuardrail::scan_and_sanitize_output(
+            &Self::decode_command_output(&result.stderr),
+        );
         let mut leaked_kinds = stdout.leaked_kinds.clone();
         for kind in &stderr.leaked_kinds {
             if !leaked_kinds.contains(kind) {
@@ -564,11 +607,20 @@ impl ToolCapability for ShellTool {
     }
 
     fn declaration(&self) -> NormalizedTool {
+        // W1 §2.4 声明诚实 (2026-10-10): 描述随沙箱状态走 —— 开 = 声明墙的存在
+        // (平台无法实施时拒绝执行), 关 = 如实声明本机全权 (双态都不假称)。
+        let description = if self.config.sandbox {
+            "Executes a platform-native local shell command after explicit user approval. \
+             Sandboxed (W1): workspace-directory-only filesystem access and no network \
+             (Windows AppContainer); when the platform cannot enforce the sandbox, \
+             execution is refused instead of running unsandboxed. \
+             APEIRETH_SHELL_SANDBOX=0 explicitly opts out (full user account authority)."
+        } else {
+            "Executes a platform-native local shell command after explicit user approval. \
+             Runs with the user's OS account authority; not a filesystem or network sandbox."
+        };
         NormalizedTool::new("shell")
-            .with_description(
-                "Executes a platform-native local shell command after explicit user approval. \
-                 Runs with the user's OS account authority; not a filesystem or network sandbox.",
-            )
+            .with_description(description)
             .with_parameters(Self::declaration_parameters())
     }
 
@@ -661,6 +713,51 @@ mod tests {
     }
 
     #[test]
+    fn declaration_honesty_covers_both_sandbox_states() {
+        // W1 §2.4 双态诚实 (2026-10-10): 开 = 声明墙的存在与"绝不裸跑"语义;
+        // 关 = 如实声明本机全权。两态都不假称。
+        let on = ShellTool::new(TrustedShellConfig::new("."));
+        let on_desc = on.declaration().description.unwrap_or_default();
+        assert!(on_desc.contains("Sandboxed (W1)"), "{on_desc}");
+        assert!(
+            on_desc.contains("refused instead of running unsandboxed"),
+            "{on_desc}"
+        );
+
+        let off = ShellTool::new(TrustedShellConfig::new(".").with_sandbox(false));
+        let off_desc = off.declaration().description.unwrap_or_default();
+        assert!(
+            off_desc.contains("not a filesystem or network sandbox"),
+            "{off_desc}"
+        );
+        assert!(off_desc.contains("user approval"), "{off_desc}");
+    }
+
+    #[test]
+    fn sandbox_default_on_and_knob_turns_off() {
+        // W1 §2.4 保护默认 (设计拍板"默认开"): 默认沙箱; with_sandbox(false) 显式裸跑。
+        // 要求集随之变化: 开 = 文件+网络 Enforced 要求 (AppContainer 路径), 关 = 历史集。
+        assert!(TrustedShellConfig::new(".").sandbox);
+        assert!(!TrustedShellConfig::new(".").with_sandbox(false).sandbox);
+
+        let on_req = ShellTool::isolation_requirements_for(true);
+        assert!(on_req
+            .requires(IsolationCapability::FilesystemIsolation)
+            .is_some());
+        assert!(on_req
+            .requires(IsolationCapability::NetworkIsolation)
+            .is_some());
+
+        let off_req = ShellTool::isolation_requirements_for(false);
+        assert!(off_req
+            .requires(IsolationCapability::FilesystemIsolation)
+            .is_none());
+        assert!(off_req
+            .requires(IsolationCapability::NetworkIsolation)
+            .is_none());
+    }
+
+    #[test]
     fn empty_command_is_rejected() {
         let tool = ShellTool::new(TrustedShellConfig::new("."));
         let call = ToolCall {
@@ -750,27 +847,35 @@ mod tests {
 
     #[test]
     fn frozen_display_does_not_expose_environment_values() {
-        let tool = ShellTool::new(TrustedShellConfig::new("."));
-        let call = ToolCall {
-            id: "call_1".into(),
-            name: "shell".into(),
-            arguments: json!({ "command": "echo hi" }),
+        // 反泄露通道测试 (2026-10-10 重写): 真值子串断言结构性脆 (HOMEDRIVE="C:"
+        // 撞路径、USERPROFILE 撞 cwd 展示) 且 crate forbid(unsafe_code) 不能突变
+        // 进程 env —— 手造含唯一标记值的冻结载荷, 纯函数直测 display 通道。
+        const MARKER_KEY: &str = "PATHEXT";
+        const MARKER_VALUE: &str = "APEIRETH_UNIQ_SECRET_MARKER_12345";
+        let frozen = ShellFrozenInvocation {
+            version: SHELL_FROZEN_VERSION,
+            shell_executable: "cmd.exe".to_string(),
+            shell_args: vec!["/c".to_string(), "echo hi".to_string()],
+            cwd: "C:\\work".to_string(),
+            timeout_ms: 1_000,
+            max_stdout_bytes: 1_024,
+            max_stderr_bytes: 1_024,
+            environment: vec![(MARKER_KEY.to_string(), MARKER_VALUE.to_string())],
+            isolation: ShellTool::base_isolation_requirements(),
         };
+        let display_text = serde_json::to_string(&ShellTool::display_invocation(&frozen)).unwrap();
 
-        let frozen = tool.freeze_invocation(&call).unwrap().unwrap();
-        let shell_frozen: ShellFrozenInvocation =
-            serde_json::from_value(frozen.payload).expect("payload deserializes");
-        let display_text = serde_json::to_string(&frozen.display).unwrap();
-
-        for (_key, value) in &shell_frozen.environment {
-            assert!(
-                !display_text.contains(value.as_str()),
-                "display payload must not expose environment value {value:?}"
-            );
-        }
+        assert!(
+            !display_text.contains(MARKER_VALUE),
+            "display payload must not expose environment values: {display_text}"
+        );
         assert!(
             display_text.contains("environment_vars"),
             "display payload should still show environment variable names"
+        );
+        assert!(
+            display_text.contains(MARKER_KEY),
+            "键名应可见 (approval 可读性)"
         );
     }
 

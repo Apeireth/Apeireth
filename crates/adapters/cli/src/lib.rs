@@ -674,7 +674,12 @@ async fn build_cognitive_modules_from_env(
         consolidation: consolidation_enabled_from_env(),
         reflexion: reflexion_enabled,
         // shell/fetch 旋钮: 只注册工具; 执行许可由治理层 grant+approval 决定.
-        shell: shell_enabled.then(|| TrustedShellConfig::new(workspace_root.clone())),
+        // W1 §2.4 (2026-10-10): shell 沙箱全局旋钮, 默认**开** (设计拍板
+        // "产品定位=桌面伴侣"); APEIRETH_SHELL_SANDBOX=0 显式裸跑自担风险。
+        shell: shell_enabled.then(|| {
+            TrustedShellConfig::new(workspace_root.clone())
+                .with_sandbox(shell_sandbox_enabled_from_env())
+        }),
         fetch: fetch_enabled.then(FetchConfig::public_internet_only),
         ..CognitiveModuleConfig::default()
     };
@@ -1039,6 +1044,14 @@ pub async fn dispatch_council(topic: String) -> Result<String, String> {
         "council 裁决 — 议题「{topic}」 (顾问 {} 个, 模型 {model})\n  {summary}\n\n完整判定: {verdict:?}",
         council.advisors().len()
     ))
+}
+
+/// **W1 §2.4 全局旋钮** (2026-10-10, 默认**开**): shell 沙箱 (工作区限定 + 断网)。
+/// `APEIRETH_SHELL_SANDBOX=0` = 显式裸跑 (本机全权, 自担风险)。
+fn shell_sandbox_enabled_from_env() -> bool {
+    !std::env::var("APEIRETH_SHELL_SANDBOX")
+        .ok()
+        .is_some_and(|v| v.trim() == "0")
 }
 
 /// 构造做梦 LLM 思考器 (工厂未配则 Err, 调用方降级确定性思考器)。
