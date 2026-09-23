@@ -1,9 +1,10 @@
 // Apeireth 桌面伙伴 — 核心共享类型定义 (Svelte 5 + Tauri 2)
 
 export type ViewId = 'chat' | 'conversations' | 'activity' | 'tools' | 'memory' | 'settings';
-// 2026-09-23 主人指示：day/ocean/forest/paper 四个主题无实现（点了无反应），
-// 从目录删除，补全列入 backlog；现役 = 有真实现的三套。
-export type Theme = 'heritage-void' | 'essence' | 'night';
+// 2026-09-23 主人指示「最后我们都是要做的」：day/ocean/forest/paper 四主题
+// 当日曾作为空心项删除（无实现点了无反应），现在真实现补全（令牌+背景见
+// tokens.css/base.css/shell.css），从空心回归现役。
+export type Theme = 'heritage-void' | 'essence' | 'night' | 'day' | 'ocean' | 'forest' | 'paper';
 
 /** UI 配色方案 id（规范 §8 增补⑤）：只染 UI 高亮，不占存在金 */
 export type Accent = 'presence-gold' | 'deep-space' | 'sage' | 'bone';

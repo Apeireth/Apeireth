@@ -6,8 +6,8 @@
 //   ① 默认主题 = heritage-void（静态星空山脉图），黑洞实时场景降级为可选；
 //   ② ?theme= URL 覆写纪律不破（query 优先于 config）；
 //   ③ 静态背景主题判定准确（场景层隐藏 + 渲染循环暂停的依据）；
-//   ④ 空心主题不得出现在目录（2026-09-23 主人指示：day/ocean/forest/paper
-//      无实现即删，补全列入 backlog，0 装是底线）。
+//   ④ 补全主题必须真实现（2026-09-23 主人指示「最后我们都是要做的」）：
+//      day/ocean/forest/paper 当日曾作为空心项删除，现在令牌+背景补全回归现役。
 // 不依赖后端进程。
 import assert from 'node:assert/strict';
 
@@ -54,11 +54,13 @@ console.log('--- Starting Theme System Check ---');
   assert.equal(isStaticBgTheme('heritage-void'), true);
   assert.equal(isStaticBgTheme('essence'), true);
   assert.equal(isStaticBgTheme('night'), false, 'night = 黑洞实时场景（可选主题），不暂停');
-  // 2026-09-23：空心主题已删（主人指示），出现即回落默认，目录里不得有
-  for (const hollow of ['day', 'ocean', 'forest', 'paper']) {
-    assert.equal(VALID_THEMES.includes(hollow), false, `空心主题 ${hollow} 不得留在 VALID_THEMES`);
-    assert.equal(resolveTheme(hollow), 'heritage-void', `config 里的 ${hollow} 必须回落默认`);
-    assert.ok(!THEME_CATALOG.find((t) => t.id === hollow), `空心主题 ${hollow} 不得留在 THEME_CATALOG`);
+  // 2026-09-23 四主题补全（主人指示「最后我们都是要做的」）：day/ocean/forest/paper
+  // 从空心回归现役——有真实现（tokens/base/shell 令牌+背景），必须合法、静态、有目录条目。
+  for (const id of ['day', 'ocean', 'forest', 'paper']) {
+    assert.equal(VALID_THEMES.includes(id), true, `补全主题 ${id} 必须在 VALID_THEMES`);
+    assert.equal(isStaticBgTheme(id), true, `补全主题 ${id} 为静态背景（无 WebGL 场景层）`);
+    assert.equal(resolveTheme(id), id, `config 里的 ${id} 原样保留`);
+    assert.ok(THEME_CATALOG.find((t) => t.id === id), `补全主题 ${id} 必须有 THEME_CATALOG 条目`);
   }
 }
 

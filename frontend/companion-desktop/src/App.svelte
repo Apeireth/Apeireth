@@ -1648,6 +1648,10 @@
     'heritage-void': 'yichan',
     essence: 'essence',
     night: 'shenkong',
+    day: 'riguang',
+    paper: 'zhimian',
+    ocean: 'shenhai',
+    forest: 'linhai',
   };
 
   interface PaletteCommand extends CommandItem {
@@ -2002,6 +2006,10 @@
   class:busy
   class:theme-essence={isEssenceTheme}
   class:theme-heritage={isHeritageTheme}
+  class:theme-day={activeTheme === 'day'}
+  class:theme-paper={activeTheme === 'paper'}
+  class:theme-ocean={activeTheme === 'ocean'}
+  class:theme-forest={activeTheme === 'forest'}
   class:custom-bg={customBgUrl !== null}
   class:mode-focus={mode === 'focus'}
   class:mode-engineering={mode === 'engineering'}

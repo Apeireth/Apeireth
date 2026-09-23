@@ -95,7 +95,7 @@ Author:          K3 施工集群主会话（团队负责人/验收人）
 3. **审批卡真闭环联调**（等主人给 key，挂账 #2）；
 4. **会话分支**（需 §5 后端数据模型先行，第二梯队）；
 5. 看板/终端（独立立项，超 companion 定位的边界问题先问主人）。
-6. **主题系统补全**（2026-09-23 主人指示「加入要做的计划」）：day/ocean/forest/paper 四个主题**无实现**（点了无反应），当日已从 THEME_CATALOG/VALID_THEMES/Theme 联合类型删除（0 装底线），`base.css` 休眠的亮色令牌块一并清掉；后续要把它们**真做出来**（各自 data-theme 令牌体系 + 背景资产/实时场景），并与「全局浅色/深色模式」统一规划——**Essence=浅色模式已拍板（§5-9，主人 2026-09-23 确认）**，亮色令牌以 essence 为准。实现时以 essence 浅色令牌为基推导亮色令牌。
+6. ~~**主题系统补全**（2026-09-23 主人指示「加入要做的计划」）：day/ocean/forest/paper 四个主题**无实现**（点了无反应），当日已从 THEME_CATALOG/VALID_THEMES/Theme 联合类型删除（0 装底线），`base.css` 休眠的亮色令牌块一并清掉；后续要把它们**真做出来**（各自 data-theme 令牌体系 + 背景资产/实时场景），并与「全局浅色/深色模式」统一规划——**Essence=浅色模式已拍板（§5-9，主人 2026-09-23 确认）**，亮色令牌以 essence 为准。实现时以 essence 浅色令牌为基推导亮色令牌。~~ **✅ 2026-09-23 当日已补全（台账 #37）**：四主题真实现并全量视觉验收——接线回归（Theme 联合类型/VALID_THEMES/THEME_CATALOG 目录原文）、纯 CSS 渐变背景（无照片资产：日光暖阳/纸面横线/深海冷光柱/林海林冠）、tokens.css+base.css 完整令牌、essence.css 浅色覆写扩 day/paper（89 条规则逐行展开，12 处金字面量化 color-mix）、paper 对比走查修复；`npm run check` 0/0 + `npm run test` 15/15；12 张验收截图 `artifacts/p9-*.png`。教训入档：批量 sed 扩展选择器曾断行成裸 html 致 day 整页 display:none（白屏），严禁对选择器列表用盲 sed。
 
 **v0 诚实边界（开工前必读，别假装它们存在）**：`empathetic_care` / `ritual` 无生产者（契约空间保留）；initiative 只有预算器（≤3 次/天）无生产者；prompt-overlay 召回命中不上总线（需 runtime 加 TraceEvent 变体）；星尘卡蛰伏（总线无 memory_recall）；warmth=f(d) v1.0 不实现。
 

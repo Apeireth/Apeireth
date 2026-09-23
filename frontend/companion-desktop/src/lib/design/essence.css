@@ -7,11 +7,15 @@
    本文件只保留 essence 主题的面板/文字补色。 */
 
 /* 主区透明，让壁纸透出；仅 UI 面板做雾面 */
-html[data-theme='essence'] .main {
+html[data-theme='essence'] .main,
+html[data-theme='day'] .main,
+html[data-theme='paper'] .main {
   background: transparent;
 }
 
-html[data-theme='essence'] .drawer {
+html[data-theme='essence'] .drawer,
+html[data-theme='day'] .drawer,
+html[data-theme='paper'] .drawer {
   background: rgba(255, 255, 255, 0.86);
   backdrop-filter: blur(22px);
   border-right-color: var(--ap-line);
@@ -19,30 +23,44 @@ html[data-theme='essence'] .drawer {
 }
 
 html[data-theme='essence'] .wb,
-html[data-theme='essence'] .wb.closed {
+html[data-theme='day'] .wb,
+html[data-theme='paper'] .wb,
+html[data-theme='essence'] .wb.closed,
+html[data-theme='day'] .wb.closed,
+html[data-theme='paper'] .wb.closed {
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(20px);
   border-left-color: var(--ap-line);
 }
 
-html[data-theme='essence'] .composer {
+html[data-theme='essence'] .composer,
+html[data-theme='day'] .composer,
+html[data-theme='paper'] .composer {
   background: var(--ap-panel);
   border-color: var(--ap-line);
 }
 
-html[data-theme='essence'] .composer:focus-within {
-  border-color: rgba(160, 128, 80, 0.45);
-  box-shadow: 0 0 0 1px rgba(160, 128, 80, 0.15), 0 8px 32px -12px rgba(20, 19, 22, 0.12);
+html[data-theme='essence'] .composer:focus-within,
+html[data-theme='day'] .composer:focus-within,
+html[data-theme='paper'] .composer:focus-within {
+  border-color: color-mix(in srgb, var(--ap-gold) 0.45%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ap-gold) 0.15%, transparent), 0 8px 32px -12px rgba(20, 19, 22, 0.12);
 }
 
-html[data-theme='essence'] .panel {
+html[data-theme='essence'] .panel,
+html[data-theme='day'] .panel,
+html[data-theme='paper'] .panel {
   background: var(--ap-shell-elevated);
   border-color: var(--ap-line);
   box-shadow: 0 24px 70px rgba(20, 19, 22, 0.12);
 }
 
 html[data-theme='essence'] .sug,
-html[data-theme='essence'] .call {
+html[data-theme='day'] .sug,
+html[data-theme='paper'] .sug,
+html[data-theme='essence'] .call,
+html[data-theme='day'] .call,
+html[data-theme='paper'] .call {
   background: var(--ap-shell-chip);
   border-color: var(--ap-line);
   color: var(--ap-bone-68);
@@ -50,221 +68,331 @@ html[data-theme='essence'] .call {
 }
 
 html[data-theme='essence'] .sug:hover,
-html[data-theme='essence'] .call:hover {
-  border-color: rgba(160, 128, 80, 0.4);
+html[data-theme='day'] .sug:hover,
+html[data-theme='paper'] .sug:hover,
+html[data-theme='essence'] .call:hover,
+html[data-theme='day'] .call:hover,
+html[data-theme='paper'] .call:hover {
+  border-color: color-mix(in srgb, var(--ap-gold) 0.4%, transparent);
   color: var(--ap-gold-ui);
 }
 
-html[data-theme='essence'] .ai-card {
+html[data-theme='essence'] .ai-card,
+html[data-theme='day'] .ai-card,
+html[data-theme='paper'] .ai-card {
   background: var(--ap-panel);
   border-color: var(--ap-line);
   box-shadow: 0 8px 32px -16px rgba(20, 19, 22, 0.1);
 }
 
-html[data-theme='essence'] .ai-card::before {
+html[data-theme='essence'] .ai-card::before,
+html[data-theme='day'] .ai-card::before,
+html[data-theme='paper'] .ai-card::before {
   /* 浅色纸面调维持既有静态强边缘：夜间呼吸金辉在雾面玻璃上显脏，不引入。 */
   animation: none;
   opacity: 0.85;
 }
 
-html[data-theme='essence'] .ai-card::after {
+html[data-theme='essence'] .ai-card::after,
+html[data-theme='day'] .ai-card::after,
+html[data-theme='paper'] .ai-card::after {
   display: none;
 }
 
-html[data-theme='essence'] .hint {
+html[data-theme='essence'] .hint,
+html[data-theme='day'] .hint,
+html[data-theme='paper'] .hint {
   color: var(--ap-bone-30);
 }
 
-html[data-theme='essence'] .orbar {
+html[data-theme='essence'] .orbar,
+html[data-theme='day'] .orbar,
+html[data-theme='paper'] .orbar {
   color: var(--ap-bone-30);
 }
 
-html[data-theme='essence'] .quiet-btn {
+html[data-theme='essence'] .quiet-btn,
+html[data-theme='day'] .quiet-btn,
+html[data-theme='paper'] .quiet-btn {
   color: var(--ap-bone-68);
   border-color: var(--ap-line);
   background: rgba(255, 255, 255, 0.5);
 }
 
-html[data-theme='essence'] .quiet-btn:hover {
-  border-color: rgba(160, 128, 80, 0.4);
+html[data-theme='essence'] .quiet-btn:hover,
+html[data-theme='day'] .quiet-btn:hover,
+html[data-theme='paper'] .quiet-btn:hover {
+  border-color: color-mix(in srgb, var(--ap-gold) 0.4%, transparent);
   color: var(--ap-gold-ui);
 }
 
-html[data-theme='essence'] .gold-btn {
+html[data-theme='essence'] .gold-btn,
+html[data-theme='day'] .gold-btn,
+html[data-theme='paper'] .gold-btn {
   color: #fff;
 }
 
-html[data-theme='essence'] .send {
+html[data-theme='essence'] .send,
+html[data-theme='day'] .send,
+html[data-theme='paper'] .send {
   background: var(--ap-gold);
   color: #fff;
 }
 
-html[data-theme='essence'] .send:hover:not(:disabled) {
+html[data-theme='essence'] .send:hover:not(:disabled),
+html[data-theme='day'] .send:hover:not(:disabled),
+html[data-theme='paper'] .send:hover:not(:disabled) {
   background: var(--ap-gold-white-hot);
 }
 
-html[data-theme='essence'] .rail {
+html[data-theme='essence'] .rail,
+html[data-theme='day'] .rail,
+html[data-theme='paper'] .rail {
   background: rgba(255, 255, 255, 0.88);
   border-right-color: var(--ap-line);
 }
 
-html[data-theme='essence'] .rail-btn {
+html[data-theme='essence'] .rail-btn,
+html[data-theme='day'] .rail-btn,
+html[data-theme='paper'] .rail-btn {
   color: var(--ap-bone-42);
 }
 
-html[data-theme='essence'] .rail-btn:hover {
+html[data-theme='essence'] .rail-btn:hover,
+html[data-theme='day'] .rail-btn:hover,
+html[data-theme='paper'] .rail-btn:hover {
   color: var(--ap-bone);
   background: rgba(20, 19, 22, 0.05);
 }
 
-html[data-theme='essence'] .rail-btn.active {
+html[data-theme='essence'] .rail-btn.active,
+html[data-theme='day'] .rail-btn.active,
+html[data-theme='paper'] .rail-btn.active {
   color: var(--ap-gold-ui);
-  background: rgba(160, 128, 80, 0.1);
+  background: color-mix(in srgb, var(--ap-gold) 0.1%, transparent);
 }
 
-html[data-theme='essence'] .rail-brand {
+html[data-theme='essence'] .rail-brand,
+html[data-theme='day'] .rail-brand,
+html[data-theme='paper'] .rail-brand {
   color: var(--ap-gold-ui);
   text-shadow: none;
 }
 
 html[data-theme='essence'] .drawer-head .eyebrow,
-html[data-theme='essence'] .drawer-head .sub {
+html[data-theme='day'] .drawer-head .eyebrow,
+html[data-theme='paper'] .drawer-head .eyebrow,
+html[data-theme='essence'] .drawer-head .sub,
+html[data-theme='day'] .drawer-head .sub,
+html[data-theme='paper'] .drawer-head .sub {
   color: var(--ap-bone-42);
 }
 
-html[data-theme='essence'] .drawer-head h2 {
+html[data-theme='essence'] .drawer-head h2,
+html[data-theme='day'] .drawer-head h2,
+html[data-theme='paper'] .drawer-head h2 {
   color: var(--ap-bone);
 }
 
-html[data-theme='essence'] .mini {
+html[data-theme='essence'] .mini,
+html[data-theme='day'] .mini,
+html[data-theme='paper'] .mini {
   color: var(--ap-bone-42);
 }
 
-html[data-theme='essence'] .mini:hover {
+html[data-theme='essence'] .mini:hover,
+html[data-theme='day'] .mini:hover,
+html[data-theme='paper'] .mini:hover {
   color: var(--ap-bone);
   background: rgba(20, 19, 22, 0.05);
 }
 
-html[data-theme='essence'] .wb-toggle {
+html[data-theme='essence'] .wb-toggle,
+html[data-theme='day'] .wb-toggle,
+html[data-theme='paper'] .wb-toggle {
   background: rgba(255, 255, 255, 0.82);
   border-color: rgba(20, 19, 22, 0.1);
   color: var(--ap-bone-68);
 }
 
 html[data-theme='essence'] .wb-toggle:hover,
-html[data-theme='essence'] .wb-toggle.on {
-  border-color: rgba(160, 128, 80, 0.4);
+html[data-theme='day'] .wb-toggle:hover,
+html[data-theme='paper'] .wb-toggle:hover,
+html[data-theme='essence'] .wb-toggle.on,
+html[data-theme='day'] .wb-toggle.on,
+html[data-theme='paper'] .wb-toggle.on {
+  border-color: color-mix(in srgb, var(--ap-gold) 0.4%, transparent);
   color: var(--ap-gold-ui);
   background: rgba(255, 255, 255, 0.92);
 }
 
-html[data-theme='essence'] .composer-caps {
+html[data-theme='essence'] .composer-caps,
+html[data-theme='day'] .composer-caps,
+html[data-theme='paper'] .composer-caps {
   background: rgba(255, 255, 255, 0.88);
   border-color: rgba(20, 19, 22, 0.1);
 }
 
 html[data-theme='essence'] .cap-btn:hover,
-html[data-theme='essence'] .cap-btn[aria-expanded='true'] {
-  background: rgba(160, 128, 80, 0.08);
+html[data-theme='day'] .cap-btn:hover,
+html[data-theme='paper'] .cap-btn:hover,
+html[data-theme='essence'] .cap-btn[aria-expanded='true'],
+html[data-theme='day'] .cap-btn[aria-expanded='true'],
+html[data-theme='paper'] .cap-btn[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--ap-gold) 0.08%, transparent);
 }
 
 html[data-theme='essence'] .pill:hover,
+html[data-theme='day'] .pill:hover,
+html[data-theme='paper'] .pill:hover,
 html[data-theme='essence'] .pill[aria-expanded='true'],
-html[data-theme='essence'] .pill.on {
-  border-color: rgba(160, 128, 80, 0.4);
+html[data-theme='day'] .pill[aria-expanded='true'],
+html[data-theme='paper'] .pill[aria-expanded='true'],
+html[data-theme='essence'] .pill.on,
+html[data-theme='day'] .pill.on,
+html[data-theme='paper'] .pill.on {
+  border-color: color-mix(in srgb, var(--ap-gold) 0.4%, transparent);
   color: var(--ap-gold-ui);
 }
 
-html[data-theme='essence'] .provider {
-  border-color: rgba(160, 128, 80, 0.35);
+html[data-theme='essence'] .provider,
+html[data-theme='day'] .provider,
+html[data-theme='paper'] .provider {
+  border-color: color-mix(in srgb, var(--ap-gold) 0.35%, transparent);
   color: var(--ap-gold-ui);
 }
 
-html[data-theme='essence'] .ctx-ring .bg {
+html[data-theme='essence'] .ctx-ring .bg,
+html[data-theme='day'] .ctx-ring .bg,
+html[data-theme='paper'] .ctx-ring .bg {
   stroke: rgba(20, 19, 22, 0.12);
 }
 
-html[data-theme='essence'] .ctx-ring .fg {
+html[data-theme='essence'] .ctx-ring .fg,
+html[data-theme='day'] .ctx-ring .fg,
+html[data-theme='paper'] .ctx-ring .fg {
   stroke: var(--ap-gold-ui);
 }
 
-html[data-theme='essence'] .wave {
+html[data-theme='essence'] .wave,
+html[data-theme='day'] .wave,
+html[data-theme='paper'] .wave {
   color: var(--ap-bone-30);
 }
 
-html[data-theme='essence'] .editor textarea {
+html[data-theme='essence'] .editor textarea,
+html[data-theme='day'] .editor textarea,
+html[data-theme='paper'] .editor textarea {
   color: var(--ap-bone);
 }
 
-html[data-theme='essence'] .editor textarea::placeholder {
+html[data-theme='essence'] .editor textarea::placeholder,
+html[data-theme='day'] .editor textarea::placeholder,
+html[data-theme='paper'] .editor textarea::placeholder {
   color: var(--ap-bone-30);
 }
 
-html[data-theme='essence'] .round-btn {
+html[data-theme='essence'] .round-btn,
+html[data-theme='day'] .round-btn,
+html[data-theme='paper'] .round-btn {
   color: var(--ap-bone-42);
 }
 
-html[data-theme='essence'] .round-btn:hover {
+html[data-theme='essence'] .round-btn:hover,
+html[data-theme='day'] .round-btn:hover,
+html[data-theme='paper'] .round-btn:hover {
   color: var(--ap-bone);
   background: rgba(20, 19, 22, 0.05);
 }
 
-html[data-theme='essence'] .mono-note {
+html[data-theme='essence'] .mono-note,
+html[data-theme='day'] .mono-note,
+html[data-theme='paper'] .mono-note {
   color: var(--ap-bone-42);
 }
 
-html[data-theme='essence'] .mono-note.live {
+html[data-theme='essence'] .mono-note.live,
+html[data-theme='day'] .mono-note.live,
+html[data-theme='paper'] .mono-note.live {
   color: var(--ap-gold-ui);
 }
 
-html[data-theme='essence'] .chat-title {
+html[data-theme='essence'] .chat-title,
+html[data-theme='day'] .chat-title,
+html[data-theme='paper'] .chat-title {
   color: var(--ap-bone);
 }
 
-html[data-theme='essence'] h1.ask {
+html[data-theme='essence'] h1.ask,
+html[data-theme='day'] h1.ask,
+html[data-theme='paper'] h1.ask {
   color: var(--ap-bone);
   text-shadow: 0 2px 24px rgba(255, 255, 255, 0.85);
 }
 
 html[data-theme='essence'] p.lede,
-html[data-theme='essence'] .sug-note {
+html[data-theme='day'] p.lede,
+html[data-theme='paper'] p.lede,
+html[data-theme='essence'] .sug-note,
+html[data-theme='day'] .sug-note,
+html[data-theme='paper'] .sug-note {
   color: var(--ap-bone-42);
 }
 
 html[data-theme='essence'] .wb-head h2,
+html[data-theme='day'] .wb-head h2,
+html[data-theme='paper'] .wb-head h2,
 html[data-theme='essence'] .blk-head,
+html[data-theme='day'] .blk-head,
+html[data-theme='paper'] .blk-head,
 html[data-theme='essence'] .goal,
-html[data-theme='essence'] .agent {
+html[data-theme='day'] .goal,
+html[data-theme='paper'] .goal,
+html[data-theme='essence'] .agent,
+html[data-theme='day'] .agent,
+html[data-theme='paper'] .agent {
   color: var(--ap-bone);
 }
 
-html[data-theme='essence'] .wb-empty {
+html[data-theme='essence'] .wb-empty,
+html[data-theme='day'] .wb-empty,
+html[data-theme='paper'] .wb-empty {
   color: var(--ap-bone-30);
 }
 
 /* 面板内的 wb-empty 是功能性文字（「正在拉取模型列表…」「暂无可用模型」），
    不是装饰性空态——42% 黑在浅底上不可读，提到 68%。工作台装饰性 wb-empty 不动。 */
-html[data-theme='essence'] .panel .wb-empty {
+html[data-theme='essence'] .panel .wb-empty,
+html[data-theme='day'] .panel .wb-empty,
+html[data-theme='paper'] .panel .wb-empty {
   color: var(--ap-bone-68);
 }
 
-html[data-theme='essence'] #drawerScrim.on {
+html[data-theme='essence'] #drawerScrim.on,
+html[data-theme='day'] #drawerScrim.on,
+html[data-theme='paper'] #drawerScrim.on {
   background: rgba(20, 19, 22, 0.18);
 }
 
-html[data-theme='essence'] #scrim.show {
+html[data-theme='essence'] #scrim.show,
+html[data-theme='day'] #scrim.show,
+html[data-theme='paper'] #scrim.show {
   /* 2026-09-23 真机实证：浅色下 8px 毛玻璃把整窗罩成奶雾，面板观感「看不清」
      的主因之一。收到 4px——聚焦层次保留，雾感减半。 */
   backdrop-filter: blur(4px);
 }
 
-html[data-theme='essence'] .legacy-toast {
+html[data-theme='essence'] .legacy-toast,
+html[data-theme='day'] .legacy-toast,
+html[data-theme='paper'] .legacy-toast {
   background: var(--ap-panel);
   border-color: var(--ap-line);
   color: var(--ap-bone-68);
 }
 
-html[data-theme='essence'] .scroll-bottom-btn {
+html[data-theme='essence'] .scroll-bottom-btn,
+html[data-theme='day'] .scroll-bottom-btn,
+html[data-theme='paper'] .scroll-bottom-btn {
   background: var(--ap-panel);
   border-color: var(--ap-line);
   color: var(--ap-bone);
@@ -273,14 +401,24 @@ html[data-theme='essence'] .scroll-bottom-btn {
 /* 抽屉内嵌入视图：去掉深色页边距感，与抽屉头对齐。
    ⑥ 注：.memory-view 已自此列表移除——记忆卷宗落地 Archive 纸面调（§5.6②），
    调性由页面职能决定（纸面恒纸面），不再随 essence 主题透明化。 */
-html[data-theme='essence'] .drawer-body.embed {
+html[data-theme='essence'] .drawer-body.embed,
+html[data-theme='day'] .drawer-body.embed,
+html[data-theme='paper'] .drawer-body.embed {
   background: transparent;
 }
 
 html[data-theme='essence'] .drawer-body.embed .sessions-view,
+html[data-theme='day'] .drawer-body.embed .sessions-view,
+html[data-theme='paper'] .drawer-body.embed .sessions-view,
 html[data-theme='essence'] .drawer-body.embed .settings-view,
+html[data-theme='day'] .drawer-body.embed .settings-view,
+html[data-theme='paper'] .drawer-body.embed .settings-view,
 html[data-theme='essence'] .drawer-body.embed .tools-view,
-html[data-theme='essence'] .drawer-body.embed .activity-view {
+html[data-theme='day'] .drawer-body.embed .tools-view,
+html[data-theme='paper'] .drawer-body.embed .tools-view,
+html[data-theme='essence'] .drawer-body.embed .activity-view,
+html[data-theme='day'] .drawer-body.embed .activity-view,
+html[data-theme='paper'] .drawer-body.embed .activity-view {
   background: transparent;
 }
 
@@ -288,7 +426,9 @@ html[data-theme='essence'] .drawer-body.embed .activity-view {
    essence 变浅，但 essence 全局文字令牌是浅底深字——在深舱底上直接不可读
    （2026-09-23 全抽屉审计实证：加载态/挂账说明文字全糊）。在此子树把文字
    令牌还原为深底浅字（取值 = :root 默认），档调性不动。 */
-html[data-theme='essence'] .governance-view {
+html[data-theme='essence'] .governance-view,
+html[data-theme='day'] .governance-view,
+html[data-theme='paper'] .governance-view {
   --ap-bone: #e8e0cc;
   --ap-bone-68: rgba(232, 224, 204, 0.68);
   --ap-bone-42: rgba(232, 224, 204, 0.42);
@@ -298,42 +438,58 @@ html[data-theme='essence'] .governance-view {
   --faint: #625f69;
 }
 
-html[data-theme='essence'] .stardust-text {
+html[data-theme='essence'] .stardust-text,
+html[data-theme='day'] .stardust-text,
+html[data-theme='paper'] .stardust-text {
   color: var(--ap-gold-ui);
   text-shadow: none;
 }
 
-html[data-theme='essence'] .persona-pop {
+html[data-theme='essence'] .persona-pop,
+html[data-theme='day'] .persona-pop,
+html[data-theme='paper'] .persona-pop {
   background: rgba(255, 255, 255, 0.96);
   border-color: rgba(20, 19, 22, 0.1);
 }
 
-html[data-theme='essence'] .persona-trigger {
+html[data-theme='essence'] .persona-trigger,
+html[data-theme='day'] .persona-trigger,
+html[data-theme='paper'] .persona-trigger {
   background: rgba(255, 255, 255, 0.6);
   border-color: rgba(20, 19, 22, 0.12);
   color: var(--ap-gold-ui);
 }
 
-html[data-theme='essence'] .persona-item {
+html[data-theme='essence'] .persona-item,
+html[data-theme='day'] .persona-item,
+html[data-theme='paper'] .persona-item {
   color: var(--ap-bone-68);
 }
 
-html[data-theme='essence'] .persona-item:hover {
-  background: rgba(160, 128, 80, 0.08);
+html[data-theme='essence'] .persona-item:hover,
+html[data-theme='day'] .persona-item:hover,
+html[data-theme='paper'] .persona-item:hover {
+  background: color-mix(in srgb, var(--ap-gold) 0.08%, transparent);
 }
 
-html[data-theme='essence'] .mode-switch {
+html[data-theme='essence'] .mode-switch,
+html[data-theme='day'] .mode-switch,
+html[data-theme='paper'] .mode-switch {
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(20, 19, 22, 0.08);
 }
 
-html[data-theme='essence'] .mode-btn {
+html[data-theme='essence'] .mode-btn,
+html[data-theme='day'] .mode-btn,
+html[data-theme='paper'] .mode-btn {
   color: var(--ap-bone-42);
 }
 
-html[data-theme='essence'] .mode-btn.active {
+html[data-theme='essence'] .mode-btn.active,
+html[data-theme='day'] .mode-btn.active,
+html[data-theme='paper'] .mode-btn.active {
   color: var(--ap-gold-ui);
-  background: rgba(160, 128, 80, 0.12);
+  background: color-mix(in srgb, var(--ap-gold) 0.12%, transparent);
 }
 
 @media (max-width: 1180px) {
@@ -343,43 +499,65 @@ html[data-theme='essence'] .mode-btn.active {
   }
 }
 
-html[data-theme='essence'] .model {
+html[data-theme='essence'] .model,
+html[data-theme='day'] .model,
+html[data-theme='paper'] .model {
   /* 模型列表是主操作文字：bone-68（78%）在 0.94 白底上仍偏虚，提实色 */
   color: var(--ap-bone);
 }
 
-html[data-theme='essence'] .model:hover {
+html[data-theme='essence'] .model:hover,
+html[data-theme='day'] .model:hover,
+html[data-theme='paper'] .model:hover {
   color: var(--ap-bone);
   background: rgba(20, 19, 22, 0.04);
 }
 
-html[data-theme='essence'] .model[aria-current='true'] {
+html[data-theme='essence'] .model[aria-current='true'],
+html[data-theme='day'] .model[aria-current='true'],
+html[data-theme='paper'] .model[aria-current='true'] {
   color: var(--ap-gold-ui);
-  background: rgba(160, 128, 80, 0.1);
+  background: color-mix(in srgb, var(--ap-gold) 0.1%, transparent);
 }
 
 html[data-theme='essence'] .panel h2,
+html[data-theme='day'] .panel h2,
+html[data-theme='paper'] .panel h2,
 html[data-theme='essence'] .panel .kv,
-html[data-theme='essence'] .bar-head {
+html[data-theme='day'] .panel .kv,
+html[data-theme='paper'] .panel .kv,
+html[data-theme='essence'] .bar-head,
+html[data-theme='day'] .bar-head,
+html[data-theme='paper'] .bar-head {
   /* 2026-09-23 真机实证（主人截屏 + 像素采样）：bone-42（56% 黑）在白底上
      对比度仅约 2:1，面板内容「看不清」——提到 bone-68（78%）。 */
   color: var(--ap-bone-68);
 }
 
 html[data-theme='essence'] .bar-head b,
-html[data-theme='essence'] .panel .kv .v {
+html[data-theme='day'] .bar-head b,
+html[data-theme='paper'] .bar-head b,
+html[data-theme='essence'] .panel .kv .v,
+html[data-theme='day'] .panel .kv .v,
+html[data-theme='paper'] .panel .kv .v {
   color: var(--ap-bone);
 }
 
-html[data-theme='essence'] .cur {
+html[data-theme='essence'] .cur,
+html[data-theme='day'] .cur,
+html[data-theme='paper'] .cur {
   color: var(--ap-bone);
 }
 
-html[data-theme='essence'] .search input {
+html[data-theme='essence'] .search input,
+html[data-theme='day'] .search input,
+html[data-theme='paper'] .search input {
   color: var(--ap-bone);
 }
 
-html[data-theme='essence'] .error-banner {
+html[data-theme='essence'] .error-banner,
+html[data-theme='day'] .error-banner,
+html[data-theme='paper'] .error-banner {
   background: rgba(168, 72, 64, 0.1);
   border-color: rgba(168, 72, 64, 0.25);
   color: var(--danger);
