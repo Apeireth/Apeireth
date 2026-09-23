@@ -7,6 +7,8 @@
 //! - [`FileCredentialsStore`] — 文件形态后端 (JSON 单文件, 权限 600 语义)
 //! - [`SecretString`] — 明文脱敏载体 (Debug/Display 恒为 `[REDACTED len=N]`)
 //! - [`CredentialGate`] / [`GatedCredentialsStore`] — 权限洋葱衔接审批门
+//! - [`CredentialApprovalHook`] / [`ApprovalMemoryGate`] — W4① 真治理 hook
+//!   (**IMPLEMENTED**; 生产装配挂接待接, 见 `hook.rs` 0 假装边界)
 //!
 //! **TP20-S3 (塞缝批, 安全凭证)** 增量:
 //!
@@ -16,7 +18,8 @@
 //! - [`InMemoryKeyring`] — 内存 stub (单测 / 限流 / 0 装 placeholder)
 //! - [`KeyringSelector`] — `APEIRETH_KEYRING_BACKEND` env 选择 + 自动降级
 //! - [`SecretBuf`] — `Drop` zeroize 字节容器 (用于 KeyringBackend trait)
-//! - [`AuditSink`] / [`CountingAudit`] / [`NoopAudit`] — 审计 (name_hash 不含明文)
+//! - [`AuditSink`] / [`FileAuditSink`] (真落档) / [`AuditContext`] (可加盐) /
+//!   [`CountingAudit`] / [`NoopAudit`] — 审计 (name_hash 不含明文)
 //!
 //! ## 安全红线 (任务纪律)
 //!
@@ -36,8 +39,9 @@
 //!   属后续层, 接入时实现 [`CredentialsStore`] 换后端即可, 接口不变。
 //! - **SecretString 非内存安全容器**: 未做 zeroize/mlock, 只保证不泄漏到
 //!   输出通道。内存级擦除属 TP20-S3 新增的 `SecretBuf` (Drop zeroize)。
-//! - **审计日志不持久化**: 默认实现 `NoopAudit`, 装配侧可挂真 audit sink
-//!   (telemetry / 经验库), 此处为 trait 口 (0 装 PASS 标注)。
+//! - **审计落档已真实施** (W4②, 2026-10-10, **IMPLEMENTED**): [`FileAuditSink`]
+//!   JSONL 追加写 + [`AuditContext::with_salt`] 盐化; [`NoopAudit`] 保留为测试/显式
+//!   禁用。装配侧把生产路径从 `NoopAudit` 换到 [`FileAuditSink`] 仍为显式后续。
 //! - **平台 keyring crate 3.6 不支持 list**: `PlatformKeyring::list` 返 Backend
 //!   错误, 上层应走 `EncryptedFileBackend` 或 `InMemoryKeyring` 兜底 (0 假装)。
 //!
@@ -52,6 +56,7 @@
 
 pub mod error;
 pub mod gate;
+pub mod hook;
 pub mod keyring;
 pub mod keyring_resolver;
 pub mod secret;

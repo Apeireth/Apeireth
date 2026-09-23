@@ -29,11 +29,12 @@
 //! - **平台 keyring 不可用时**才 fallback `EncryptedFileBackend`, 后者依赖 master.key
 //!   文件权限 (unix 0600) 收敛访问 — 这与 [`FileCredentialsStore`] (明文文件) 同
 //!   "靠 OS 权限" 边界, 升级到 OS DPAPI / KMS / HSM 属后续层.
-//! - **审计日志不持久化**: 默认实现 `NoopAudit`, 装配侧可挂真 audit sink
-//!   (telemetry / 经验库), 此处为 trait 口 (0 装 PASS 标注).
+//! - **审计落档已真实施** (W4②, 2026-10-10, **IMPLEMENTED**): [`FileAuditSink`]
+//!   JSONL 追加写真落档; [`NoopAudit`] 保留为测试/显式禁用 (0 装 PASS 标注).
 //! - **name_hash = SHA-256(service)[:16] hex** — 不可逆 (单向散列) 但同 service
-//!   同 hash, 仍可关联审计, 不暴露 service 名原文. 若需要更强匿名, 上层
-//!   应再加盐 (`AuditContext::with_salt`).
+//!   同 hash, 仍可关联审计, 不暴露 service 名原文. 加盐形态已真实施:
+//!   [`AuditContext::with_salt`] → [`name_hash_salted`] = SHA-256(salt‖service)[:16]
+//!   (防跨安装 rainbow 比对; salt 由装配侧保管).
 
 #![allow(clippy::result_large_err)] // KeyringError 变体多, 不强求 box 化
 
@@ -272,12 +273,252 @@ impl AuditSink for CountingAudit {
 /// **SHA-256(service) 前 16 hex** (64 bit 截断). 单向, 同 service 同 hash.
 ///
 /// 设计: 16 hex = 64 bit, 平衡 "可关联 (同 service 同 hash)" 与 "不可逆".
-/// 若需更强匿名 (防 rainbow table), 上层加盐 (见 `AuditContext::with_salt` 占位).
+/// 更强匿名 (防 rainbow table) 用 [`AuditContext::with_salt`] (W4② 真身化, 2026-10-10).
 pub fn name_hash(service: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(service.as_bytes());
     let digest = hasher.finalize();
     hex::encode(&digest[..8])
+}
+
+/// **盐化名哈希**: `SHA-256(salt ‖ service)[:16] hex` (W4②).
+///
+/// 同 salt 内同 service 同 hash (审计可关联); 换 salt 即换 hash (防跨安装比对)。
+pub fn name_hash_salted(salt: &[u8], service: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(salt);
+    hasher.update(service.as_bytes());
+    let digest = hasher.finalize();
+    hex::encode(&digest[..8])
+}
+
+/// **加盐审计上下文** (原 `AuditContext::with_salt` 占位 — W4② 真身化, 2026-10-10).
+///
+/// 红线不变: 任一输出**不含** service 名原文与凭据明文。
+#[derive(Debug, Clone, Default)]
+pub struct AuditContext {
+    salt: Option<Vec<u8>>,
+}
+
+impl AuditContext {
+    /// 无盐 (与 [`name_hash`] 同口径).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 有盐 (推荐生产使用; salt 由装配侧保管, 例如机器指纹派生).
+    pub fn with_salt(salt: impl Into<Vec<u8>>) -> Self {
+        Self {
+            salt: Some(salt.into()),
+        }
+    }
+
+    /// 计算 service 的审计名哈希 (16 hex).
+    pub fn hash(&self, service: &str) -> String {
+        match &self.salt {
+            Some(salt) => name_hash_salted(salt, service),
+            None => name_hash(service),
+        }
+    }
+}
+
+/// **真落档审计 sink** (JSONL 追加写 — W4②, 2026-10-10; 原"审计日志不持久化 0 装"升级).
+///
+/// 每条一行 JSON: `{"ts_ms":…,"event":"get|set|delete|list","name_hash":…,"backend":…,"success":…}`。
+/// **红线**: 行内只含元信息 (经 [`AuditContext::hash`]), 无 service 原文、无凭据明文。
+/// **只降级不枪毙** (元层原则): IO 失败不 panic, 计数进 [`Self::failures`] —
+/// 审计故障绝不打死主任务; 审计缺失由调用方巡检发现。
+pub struct FileAuditSink {
+    path: PathBuf,
+    context: AuditContext,
+    file: std::sync::Mutex<Option<std::fs::File>>,
+    failures: std::sync::atomic::AtomicU64,
+    now_ms: Arc<dyn Fn() -> u64 + Send + Sync>,
+}
+
+impl std::fmt::Debug for FileAuditSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileAuditSink")
+            .field("path", &self.path)
+            .field(
+                "failures",
+                &self.failures.load(std::sync::atomic::Ordering::Relaxed),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+impl FileAuditSink {
+    /// 打开 (追加模式; 目录/文件首次写入时惰性创建). now_ms = UNIX 纪元毫秒.
+    pub fn open(path: impl Into<PathBuf>, context: AuditContext) -> Self {
+        Self {
+            path: path.into(),
+            context,
+            file: std::sync::Mutex::new(None),
+            failures: std::sync::atomic::AtomicU64::new(0),
+            now_ms: Arc::new(|| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0)
+            }),
+        }
+    }
+
+    /// 带盐便捷构造.
+    pub fn with_salt(path: impl Into<PathBuf>, salt: impl Into<Vec<u8>>) -> Self {
+        Self::open(path, AuditContext::with_salt(salt))
+    }
+
+    /// 注入时钟 (虚拟时钟可重放, 测试用).
+    #[must_use]
+    pub fn with_clock(mut self, now_ms: Arc<dyn Fn() -> u64 + Send + Sync>) -> Self {
+        self.now_ms = now_ms;
+        self
+    }
+
+    /// 写入失败计数 (0 = 全部落盘).
+    pub fn failures(&self) -> u64 {
+        self.failures.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// 审计文件路径.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn append_line(&self, line: &str) {
+        use std::io::Write;
+        use std::sync::atomic::Ordering as AtomicOrdering;
+        let mut guard = self.file.lock().unwrap_or_else(|p| p.into_inner());
+        if guard.is_none() {
+            if let Some(parent) = self.path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)
+            {
+                Ok(f) => *guard = Some(f),
+                Err(_) => {
+                    self.failures.fetch_add(1, AtomicOrdering::Relaxed);
+                    return;
+                }
+            }
+        }
+        let outcome = guard
+            .as_mut()
+            .map(|f| writeln!(f, "{line}").and_then(|_| f.sync_data()))
+            .unwrap_or(Ok(()));
+        if outcome.is_err() {
+            self.failures.fetch_add(1, AtomicOrdering::Relaxed);
+        }
+    }
+}
+
+impl AuditSink for FileAuditSink {
+    fn record(&self, event: AuditEvent, service: &str, backend: &'static str, success: bool) {
+        let event_str = match event {
+            AuditEvent::Get => "get",
+            AuditEvent::Set => "set",
+            AuditEvent::Delete => "delete",
+            AuditEvent::List => "list",
+        };
+        let line = format!(
+            "{{\"ts_ms\":{},\"event\":\"{}\",\"name_hash\":\"{}\",\"backend\":\"{}\",\"success\":{}}}",
+            (self.now_ms)(),
+            event_str,
+            self.context.hash(service),
+            backend,
+            success
+        );
+        self.append_line(&line);
+    }
+}
+
+#[cfg(test)]
+mod w4_tests {
+    use super::*;
+    use std::sync::atomic::Ordering as AtomicOrdering;
+
+    #[test]
+    fn salted_hash_links_within_salt_and_separates_across() {
+        assert_eq!(
+            name_hash_salted(b"salt-a", "openai"),
+            name_hash_salted(b"salt-a", "openai"),
+            "同 salt 同 service 同 hash (可关联)"
+        );
+        assert_ne!(
+            name_hash_salted(b"salt-a", "openai"),
+            name_hash_salted(b"salt-b", "openai"),
+            "换 salt 换 hash (防跨安装比对)"
+        );
+        assert_ne!(name_hash_salted(b"salt-a", "openai"), name_hash("openai"));
+        assert_eq!(name_hash_salted(b"salt-a", "openai").len(), 16);
+    }
+
+    #[test]
+    fn file_audit_sink_writes_jsonl_without_plaintext() {
+        let dir = std::env::temp_dir().join(format!(
+            "apeireth-credentials-file-audit-{}",
+            std::process::id()
+        ));
+        let path = dir.join("audit.jsonl");
+        let sink = FileAuditSink::open(&path, AuditContext::with_salt(b"unit-salt"))
+            .with_clock(Arc::new(|| 1_700_000_000_000u64));
+
+        sink.record(AuditEvent::Set, "openai", "platform_keyring", true);
+        sink.record(AuditEvent::Get, "openai", "platform_keyring", false);
+
+        let text = std::fs::read_to_string(&path).expect("audit file");
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("\"ts_ms\":1700000000000"));
+        assert!(lines[0].contains("\"event\":\"set\""));
+        assert!(lines[0].contains("\"backend\":\"platform_keyring\""));
+        assert!(lines[0].contains("\"success\":true"));
+        assert!(lines[1].contains("\"event\":\"get\""));
+        assert!(lines[1].contains("\"success\":false"));
+        // 红线: 无 service 原文, name_hash 为盐化 16 hex
+        let expected = name_hash_salted(b"unit-salt", "openai");
+        assert!(lines[0].contains(&format!("\"name_hash\":\"{expected}\"")));
+        assert!(!text.contains("openai"));
+        assert_eq!(sink.failures(), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn audit_io_failure_degrades_not_panics() {
+        // 元层原则: 审计只降级不枪毙 — 把父路径做成文件, 惰性建目录必失败。
+        let dir = std::env::temp_dir().join(format!(
+            "apeireth-credentials-audit-fail-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let blocker = dir.join("blocker");
+        std::fs::write(&blocker, b"i am a file").unwrap();
+        let sink = FileAuditSink::open(blocker.join("audit.jsonl"), AuditContext::new());
+        sink.record(AuditEvent::Get, "openai", "in_memory", true); // 不 panic
+        sink.record(AuditEvent::Get, "openai", "in_memory", true);
+        assert_eq!(sink.failures(), 2);
+        assert_eq!(
+            sink.file.lock().unwrap().is_none(),
+            true,
+            "未能打开文件时不留半开句柄"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unhashed_audit_context_matches_plain_name_hash() {
+        assert_eq!(AuditContext::new().hash("openai"), name_hash("openai"));
+        assert_ne!(
+            AuditContext::with_salt(b"s").hash("openai"),
+            name_hash("openai")
+        );
+        let _ = AtomicOrdering::Relaxed; // 保持 import 使用
+    }
 }
 
 // ============================================================================
