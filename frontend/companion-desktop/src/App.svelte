@@ -1648,10 +1648,6 @@
     'heritage-void': 'yichan',
     essence: 'essence',
     night: 'shenkong',
-    day: 'riguang',
-    paper: 'zhimian',
-    ocean: 'shenhai',
-    forest: 'linhai',
   };
 
   interface PaletteCommand extends CommandItem {
@@ -1690,7 +1686,7 @@
         run: () => openDrawer('logs')},
       {id: 'nav.settings', title: '打开设置', aliases: ['shezhi', 'settings', 'sz'], group: '导航',
         run: () => openDrawer('settings')},
-      // —— 主题：七套现役主题（VALID_THEMES 目录驱动）——
+      // —— 主题：现役主题（THEME_CATALOG 目录驱动，2026-09-23 起三套）——
       ...THEME_CATALOG.map((t) => ({
         id: `theme.${t.id}`,
         title: `主题：${t.label}`,

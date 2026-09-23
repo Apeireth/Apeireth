@@ -31,28 +31,8 @@
   --mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 }
 
-/* 亮色令牌覆写。当前休眠：全 src 无代码设置 data-theme（审计 §4.3），保留待用。 */
-html[data-theme="day"] {
-  --bg: #e8e7e4;
-  --surface: #f7f6f3;
-  --surface-2: #fff;
-  --surface-3: #eeece9;
-  --line: rgba(25, 20, 30, 0.09);
-  --line-strong: rgba(25, 20, 30, 0.16);
-  --text: #28242c;
-  --muted: #6f6975;
-  --faint: #aaa5ae;
-  --amber: #b77712;
-  --amber-hi: #9d650e;
-  --amber-wash: rgba(183, 119, 18, 0.1);
-  --amber-line: rgba(183, 119, 18, 0.35);
-  --green: #25845a;
-  --green-wash: rgba(37, 132, 90, 0.1);
-  --blue: #3f71aa;
-  --blue-wash: rgba(63, 113, 170, 0.1);
-  --danger: #c33e35;
-  --shadow: 0 24px 70px rgba(40, 32, 50, 0.18);
-}
+/* 2026-09-23：day 亮色令牌随空心主题一并移除（主人指示）。未来的全局浅色模式
+   列入 backlog（交接文档 §6），届时以 essence 浅色令牌为基重新推导。 */
 
 /* Essence 浅色：嵌入视图（ConversationsView / SettingsView 等）消费的旧 Pattern 令牌 */
 html[data-theme='essence'] {

@@ -1294,17 +1294,18 @@
         </div>
       {/if}
 
-    </div>
-
-    <!-- 常驻保存栏：填完配置点这里（保存会重启本地网关以应用配置） -->
-    <div class="settings-save-bar">
-      <span class="save-bar-hint">
-        {saveSuccess ? '✓ 已保存，本地网关已应用新配置' : '填好配置后点"保存设置"（无重启热应用，不支持时自动重启网关）'}
-      </span>
-      <button class="primary-button save-bar-btn" onclick={handleSaveSettings}>
-        <Check size={14} />
-        <span>{saveSuccess ? '已保存！' : '保存设置'}</span>
-      </button>
+      <!-- 2026-09-23 主人指示：保存栏移入内容流末尾（每个分页最下面），
+           不再做通栏固定黑带（2549 宽屏上比例失调且不优雅）。
+           保存会重启本地网关以应用配置。 -->
+      <div class="settings-save-bar">
+        <span class="save-bar-hint">
+          {saveSuccess ? '✓ 已保存，本地网关已应用新配置' : '填好配置后点"保存设置"（无重启热应用，不支持时自动重启网关）'}
+        </span>
+        <button class="primary-button save-bar-btn" onclick={handleSaveSettings}>
+          <Check size={14} />
+          <span>{saveSuccess ? '已保存！' : '保存设置'}</span>
+        </button>
+      </div>
     </div>
   </div>
 </section>
@@ -1397,17 +1398,17 @@
 
 <style>
   .settings-save-bar {
-    /* 走查修复（rev-settings 实证）：本元素是 .settings-layout 网格的第三个子项，
-       不跨列会被自动摆进第 2 行第 1 列（200px 窄条，按钮竖排、文字截断）。 */
-    grid-column: 1 / -1;
+    /* 2026-09-23 主人指示：从 .settings-layout 通栏带改为内容流末尾的保存卡片
+       （每个分页最下面）。不再跨 grid 列，比例随 900px 内容列收敛。 */
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: 14px;
-    padding: 10px 18px;
-    border-top: 1px solid var(--line, #2a323c);
+    margin-top: 28px;
+    padding: 12px 18px;
+    border: 1px solid var(--line, #2a323c);
+    border-radius: 10px;
     background: var(--surface-1, #101418);
-    flex-shrink: 0;
   }
   .save-bar-hint {
     font-size: 12px;
