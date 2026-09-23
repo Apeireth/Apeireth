@@ -63,7 +63,7 @@
       "cardDark":   { "hex": "#15181f", "role": "深灰卡片（列表项/次要容器）" },
       "line":       { "hex": "#e8e0cc", "alpha": 0.14, "role": "1px 细分隔线/描边" },
       "accentTab":  { "hex": "#ffd27a", "role": "激活 tab/进度/高亮——复用存在金，同金色纪律" },
-      "accentUi":   { "hex": "#ffd27a", "role": "UI 强调色（选中描边/聚焦/链接等）。分工：accentTab 跟随主题金家族不随用户配色变（深色主题 = 存在金 #ffd27a，essence 浅色 = 下沉金 #8a7355）；accentUi 开放个性化，目录 = gold 默认 / deep-space #7d9cc0 / sage #7fb894 / bone #e6e2da，html[data-accent] 覆写", "_status": "proposal（2026-09-22 K3 个性化批次落地；theme.ts ACCENT_CATALOG 机器断言可选色不占存在金家族）" },
+      "accentUi":   { "hex": "#ffd27a", "role": "UI 强调色（选中描边/聚焦/链接等）。分工：accentTab 跟随主题金家族不随用户配色变（深色主题 = 存在金 #ffd27a，essence 浅色 = 下沉金 #a08050（2026-09-23 走查校准，原 #8a7355 过灰））；accentUi 开放个性化，目录 = gold 默认 / deep-space #7d9cc0 / sage #7fb894 / bone #e6e2da，html[data-accent] 覆写", "_status": "proposal（2026-09-22 K3 个性化批次落地；theme.ts ACCENT_CATALOG 机器断言可选色不占存在金家族）" },
       "stamp":      { "hex": "#ece7da", "role": "图章/编号文字（括号角标内）" }
     },
     "semantic": {
