@@ -524,13 +524,35 @@ impl ShellTool {
     }
 
     fn format_result(result: &ProcessResult) -> serde_json::Value {
+        // W1 §2.2 后置出站凭据绊线接线 (2026-10-10): 此前 scan_and_sanitize_output
+        // 零生产调用 (IMPLEMENTED ≠ PRODUCTION WIRED)。shell 输出是唯一"全权出口"
+        // (2026-10-06 真机边界测试结论) —— stdout/stderr 双双过绊线, 命中即脱敏
+        // 截断并打 credential_tripwire 标记 (审批卡/UI 可见墙的存在)。
+        let stdout =
+            crate::guardrail::ToolGuardrail::scan_and_sanitize_output(&Self::decode_command_output(
+                &result.stdout,
+            ));
+        let stderr =
+            crate::guardrail::ToolGuardrail::scan_and_sanitize_output(&Self::decode_command_output(
+                &result.stderr,
+            ));
+        let mut leaked_kinds = stdout.leaked_kinds.clone();
+        for kind in &stderr.leaked_kinds {
+            if !leaked_kinds.contains(kind) {
+                leaked_kinds.push(*kind);
+            }
+        }
         serde_json::json!({
             "exit_code": result.exit_code(),
             "timed_out": result.timed_out(),
-            "stdout": Self::decode_command_output(&result.stdout),
-            "stderr": Self::decode_command_output(&result.stderr),
+            "stdout": stdout.sanitized_output,
+            "stderr": stderr.sanitized_output,
             "stdout_truncated": result.stdout_truncated,
             "stderr_truncated": result.stderr_truncated,
+            "credential_tripwire": {
+                "triggered": !leaked_kinds.is_empty(),
+                "leaked_kinds": leaked_kinds,
+            },
         })
     }
 }
