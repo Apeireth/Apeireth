@@ -298,6 +298,55 @@ mod dream_parse_tests {
     }
 }
 
+/// `apeireth council "<议题>"` 议题解析 (决策环节 D: 显式咨询 = 显式授权)。
+fn parse_council_topic(args: &[String]) -> Result<String, String> {
+    let topic = args.join(" ").trim().to_string();
+    if topic.is_empty() {
+        return Err("council requires a non-empty topic".to_string());
+    }
+    Ok(topic)
+}
+
+fn run_council(topic: String) -> ExitCode {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("runtime init failed: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(apeireth_cli::dispatch_council(topic)) {
+        Ok(output) => {
+            println!("{output}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod council_parse_tests {
+    use super::*;
+
+    #[test]
+    fn council_topic_joins_words() {
+        let args: Vec<String> = ["是否", "允许", "自动升级"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(parse_council_topic(&args).unwrap(), "是否 允许 自动升级");
+    }
+
+    #[test]
+    fn council_topic_rejects_empty() {
+        assert!(parse_council_topic(&[]).is_err());
+        assert!(parse_council_topic(&["   ".to_string()]).is_err());
+    }
+}
+
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() {
@@ -326,6 +375,14 @@ fn main() -> ExitCode {
         },
         "dream" => match parse_dream(&args[1..]) {
             Ok((session, limit, date)) => run_dream(session, limit, date),
+            Err(error) => {
+                eprintln!("{error}");
+                print_help();
+                ExitCode::FAILURE
+            }
+        },
+        "council" => match parse_council_topic(&args[1..]) {
+            Ok(topic) => run_council(topic),
             Err(error) => {
                 eprintln!("{error}");
                 print_help();

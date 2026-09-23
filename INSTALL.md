@@ -292,6 +292,8 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
 
 **2026-10-10 W2 §4.1 做梦（不是旋钮——显式命令即授权）**：`apeireth dream [--session <id>] [--limit N] [--date YYYY-MM-DD]`。取该会话近 N 条 episodes 为梦境素材（不给 `--session` = 空素材，走引擎"常规认知结构自整定"路径），跑 6 阶段做梦循环（LLM 元思考器 + 确定性降级链，LLM 未配则纯规则浅推演），苏醒把 `DreamReport` 写入 `<data>/diary` 日记（source=`dream`）。**默认不自动跑**——做梦只在这个命令下发生。
 
+**2026-10-10 council 改造（每轮评审器 → 决策环节顾问）**：council 不再按轮常开（深度档 = 深思直答，省下原先每轮开庭的延迟），只在**决策环节**用：A 升级/部署批准、B 高危操作（L3+）、C 待裁冲突批量裁决（空闲时）三个位点随对应模块接入；**D 显式咨询已可用**：`apeireth council "<议题>"`（显式授权 = 显式命令，真顾问裁决链；未配 LLM 会 fail-loud 报错而不是给假裁决）。旋钮：`APEIRETH_COUNCIL_ADVISORS=N`（裁决顾问数 1–7，**默认 3**（7→3 拍板），规范序取前 N：Safety/Performance/Philosophy/History/Strategy/Ethics/Legal，Safety 恒首位）、`APEIRETH_COUNCIL_TIMEOUT_MS`（单顾问超时，默认 30000）。
+
 **与工具同批的既有旋钮**：`APEIRETH_COGNITIVE_DB`（记忆库路径）、
 `APEIRETH_SESSION_DB`（会话库路径）、`APEIRETH_MODEL`（默认模型）、
 `APEIRETH_OPENAI_URL`/`APEIRETH_OPENAI_MODELS`/`OPENAI_API_KEY`（provider 配置）。
