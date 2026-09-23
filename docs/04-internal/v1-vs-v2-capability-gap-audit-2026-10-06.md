@@ -301,7 +301,7 @@ perception 不做 per-turn module
 | thought_cluster (按此名) | 🔴 0 命中 (有 `cluster_store.rs`, 疑似改名/部分) |
 | onering (OneRingLedger) | 🔴 仅元数据透传注释, 账本本体 0 |
 | 真文件/网络隔离 | 🔴 实测 `EnforcementLevel::Unsupported` (`process/linux.rs:62-67`), 仅进程树遏制 |
-| SDK 真实 HTTP/WS | 🔴 7 处 `unimplemented!()` + 自标"阶段 6 stub, R21 真接" |
+| SDK 真实 HTTP/WS | 🔴 自标"阶段 6 stub, R21 真接"（**[复核修正]**: 原写"7 处 `unimplemented!()`"系本审计的计数错误——那 7 处是**文档注释里的宏名提及**, 全仓库真宏调用 = **0**; SDK 0 装守门实为编译期 `STUB_MODE=true` 断言 + `SdkError::NotImplemented` 枚举返回。见交接包 §2.7 B1 判定 + 台账 #42） |
 | 三洋葱 L3-L5 | 🔴 未实现 (runtime 仅 L1-L2) |
 
 ### 7.3 对结论的修正

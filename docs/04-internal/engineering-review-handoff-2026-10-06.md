@@ -69,6 +69,10 @@ frozen 13), v2 是 18 个 crate 的重构形态。**"v1 有真实现、v2 有没
 | B2 | 其余"未实现"走**枚举变体 + 注释**: `NotImplemented` 出现 **366** 处; `0 装` 字样出现 **847** 处 (**口径警告**: 这两个数是**原始文本命中数**, 含测试代码、文档注释、SDK 错误类型名; 它证明的是"这套写法在本仓库是主流形态", **不是**"有 366 个未实现功能") | `Select-String -Path (Get-ChildItem crates -Recurse -Filter *.rs).FullName -Pattern 'NotImplemented' \| Measure-Object` / `-Pattern '0 装'` | `366` / `847` | |
 | B3 | **唯一全量 stub crate = `apeireth-sdk`**; `STUB_MODE = true` 是编译期硬编码, 且有 `const_assert` 守门 | `Select-String -Path crates\adapters\sdk\src\client.rs -Pattern 'STUB_MODE'` | `client.rs:112: pub const STUB_MODE: bool = true;` + `:129/:131` 编译期守门注释与断言 | |
 
+> **[B1 判定 ⚠️→子结论 ❌ 已推翻 (见 §2.7)]** B1 行原文保留为送审记录; 正确表述:
+> **0 真宏调用 / 8 处文档注释提及** (7 在 `sdk/client.rs`, 1 在 `perception.rs:23`) ——
+> 复核批过滤非注释行后零真调用, 我方逐行亲验一致 (仓库 0 装纪律比原文更强)。
+>
 > **B3 的解读请审核方重点判**: `STUB_MODE` 是**编译期常量**而非运行时开关 ——
 > 意味着"接真 HTTP/WS"不是配 env 就能开, 必须**改代码**(见 §5 工作包 W5)。
 > 这是设计选择 (阶段 6 明确未开始), 不是 bug; 但任何"SDK 可用"的说法都必须是错的。
