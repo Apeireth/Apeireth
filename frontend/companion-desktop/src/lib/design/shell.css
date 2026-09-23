@@ -217,9 +217,12 @@
 .drawer-head .eyebrow {
   margin: 0 0 4px;
   font-family: var(--ap-font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.34em;
-  color: var(--ap-bone-30);
+  /* 走查校准：9.5px/bone-30/0.34em 在深色底上远看是噪点（rev-gov-approvals 实证）；
+     提到 10px/bone-42/0.26em——仍弱于正文，但轮廓可辨。essence.css 的覆写
+     与本值同为 bone-42，两主题从此一致。 */
+  font-size: 10px;
+  letter-spacing: 0.26em;
+  color: var(--ap-bone-42);
   text-transform: none;
   font-weight: 400;
 }

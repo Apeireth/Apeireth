@@ -167,8 +167,11 @@
         </li>
       {/each}
     </ul>
-  {:else if !ledgerLoading && capabilities !== null}
-    <!-- 空态即契约（00-PHILOSOPHY 原则 5）：不写"暂无数据"。 -->
+  {:else if !ledgerLoading}
+    <!-- 空态即契约（00-PHILOSOPHY 原则 5）：不写"暂无数据"。
+         走查修复：原门槛要求 capabilities !== null——网关离线时清单恒 null，
+         全新用户看到整栏空白、无任何入口；CTA 本身本地可用（发送时离线
+         会如实弹错误横幅），不应被后端状态吞掉。 -->
     <div class="empty-contract">
       <p class="empty-line">这里还没有任何会话。</p>
       <p class="empty-promise">当你们开始第一段对话后，这里会出现它；他停下等你签字时，对应的一行会亮起金色「待签」。</p>
@@ -193,9 +196,10 @@
   .eyebrow {
     margin: 0 0 6px;
     font-family: var(--ap-font-mono);
+    /* 走查校准：同 drawer-head .eyebrow——0.5em 字距把两字眉题拉成噪点。 */
     font-size: 10px;
-    letter-spacing: 0.5em;
-    color: var(--ap-bone-30);
+    letter-spacing: 0.26em;
+    color: var(--ap-bone-42);
   }
   .home-title {
     margin: 0;

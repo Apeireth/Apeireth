@@ -24,38 +24,49 @@ export const THEME_CATALOG: ThemeOption[] = [
     id: 'essence',
     label: 'Essence',
     desc: '星空山脉 · 浅色雾面',
+    // 渐变层必须半透明——曾用不透明渐变把底图完全盖住，卡片看起来是空白的
     swatch:
-      'linear-gradient(160deg, #f7f5f1 0%, #e8e4dc 45%, #c9d4e8 100%), url(/assets/themes/essence-bg.png) center/cover',
+      'linear-gradient(rgba(247, 245, 241, 0.45), rgba(247, 245, 241, 0.45)), url(/assets/themes/essence-bg.png) center/cover',
   },
   {
     id: 'night',
     label: '深空舰桥',
     desc: '实时场景 · 金色存在',
-    swatch: 'radial-gradient(ellipse at 50% 30%, #1a1520 0%, #07070c 70%)',
+    // 黑洞 + 金色吸积环的存在金预览（该主题实景即含金，预览合法）
+    swatch:
+      'radial-gradient(circle at 62% 55%, rgba(255, 210, 122, 0.85) 0%, rgba(255, 210, 122, 0.25) 7%, rgba(255, 210, 122, 0) 13%), radial-gradient(circle at 62% 55%, #000000 0%, #000000 10%, rgba(0, 0, 0, 0) 11%), radial-gradient(ellipse at 50% 30%, #1a1520 0%, #07070c 70%)',
   },
   {
     id: 'day',
     label: '日光',
     desc: '明亮纸面 · 档案调',
-    swatch: 'linear-gradient(180deg, #f7f6f3 0%, #e8e7e4 100%)',
+    // 高位暖阳——与纸面/essence 的冷白拉开区分
+    swatch:
+      'radial-gradient(circle at 78% 16%, rgba(255, 236, 200, 0.95) 0%, rgba(255, 236, 200, 0) 34%), linear-gradient(180deg, #f9f7f2 0%, #ede8dc 100%)',
   },
   {
     id: 'paper',
     label: '纸面',
     desc: '注册表档案 · 低饱和',
-    swatch: 'linear-gradient(180deg, #eceae5 0%, #e2e1df 100%)',
+    // 注册表横线纹理——纸面调的识别特征
+    swatch:
+      'repeating-linear-gradient(180deg, rgba(20, 19, 22, 0.05) 0 1px, transparent 1px 9px), linear-gradient(180deg, #efede8 0%, #e2e0db 100%)',
   },
   {
     id: 'ocean',
     label: '深海',
     desc: '深舱蓝调 · 工程感',
-    swatch: 'linear-gradient(180deg, #1d262c 0%, #050a0f 100%)',
+    // 顶侧冷光柱——工程舱照明特征
+    swatch:
+      'linear-gradient(205deg, rgba(110, 160, 195, 0.4) 0%, rgba(110, 160, 195, 0) 42%), linear-gradient(180deg, #1d2a33 0%, #050a0f 100%)',
   },
   {
     id: 'forest',
     label: '林海',
     desc: '沉稳绿调 · 专注',
-    swatch: 'linear-gradient(180deg, #1a2420 0%, #0a100e 100%)',
+    // 林冠漏光——顶部绿晕
+    swatch:
+      'radial-gradient(circle at 30% 0%, rgba(127, 184, 148, 0.35) 0%, rgba(127, 184, 148, 0) 46%), linear-gradient(180deg, #1a2420 0%, #0a100e 100%)',
   },
 ];
 
