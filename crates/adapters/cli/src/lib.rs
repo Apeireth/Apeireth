@@ -788,6 +788,144 @@ fn build_council_from_env() -> apeireth_orchestration::Council {
     Council::default_llm()
 }
 
+/// **生产 subagent 长程任务** (2026-10-10): `plan → impl → review` 三步链
+/// (`Orchestrator::orchestrate` 默认实现)。plan 步 `require_human_approval`
+/// —— 主人在 CLI 交互点头 (无门自动 deny, fail-closed)。
+pub async fn dispatch_subagent(
+    title: String,
+    payload_json: Option<String>,
+) -> Result<String, String> {
+    use apeireth_orchestration::Orchestrator as _;
+
+    let payload: serde_json::Value = match payload_json {
+        Some(raw) => {
+            serde_json::from_str(&raw).map_err(|error| format!("payload 不是合法 JSON: {error}"))?
+        }
+        None => serde_json::json!({}),
+    };
+    let orchestrator = build_subagent_orchestrator_from_env()?;
+    let outcomes = orchestrator
+        .orchestrate(title.clone(), payload)
+        .await
+        .map_err(|error| format!("subagent orchestrate 失败: {error}"))?;
+
+    let mut text = format!(
+        "subagent 长程任务「{title}」完成: {} 个结果 (plan→impl→review)\n",
+        outcomes.len()
+    );
+    for outcome in outcomes {
+        text.push_str(&format!(
+            "- [{}] success={} output={}\n",
+            outcome.spec_id,
+            outcome.success,
+            serde_json::to_string(&outcome.output).unwrap_or_default()
+        ));
+    }
+    Ok(text)
+}
+
+/// 构造 subagent Orchestrator (工厂配方与 `build_council_from_env` 同源;
+/// 0 装: 没有 key 显式报错, 不造调用时才失败的假可用)。
+///
+/// **W2 worktree 装饰器** (`APEIRETH_ENABLE_WORKTREE_SANDBOX=1`, 默认关): 开启时
+/// 子代理跑在独立 git worktree (物理隔离, 真 `git` 命令执行器)。
+fn build_subagent_orchestrator_from_env(
+) -> Result<Box<dyn apeireth_orchestration::Orchestrator>, String> {
+    use apeireth_orchestration::llm::LlmFactory as MirrorLlmFactoryTrait;
+    use apeireth_orchestration::{
+        CommandRunner, HumanApprovalGate, LlmSubagentOrchestrator, WorktreeSandboxedOrchestrator,
+    };
+
+    let (mirror, model): (Arc<dyn MirrorLlmFactoryTrait>, String) = if std::env::var(
+        "APEIRETH_OPENAI_MODELS",
+    )
+    .ok()
+    .is_some_and(|value| !value.trim().is_empty())
+    {
+        let factory =
+            apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env(
+            )
+            .map_err(|error| format!("OpenAI-compatible 工厂配置无效: {error}"))?;
+        let model = factory
+            .model_ids()
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "deepseek-v4-flash".to_string());
+        (
+            Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
+            model,
+        )
+    } else if std::env::var("APEIRETH_API_KEY")
+        .ok()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        let factory = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env()
+            .map_err(|error| format!("MiniMax 工厂配置无效: {error}"))?;
+        let model = factory
+            .model_ids()
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "MiniMax-M3".to_string());
+        (
+            Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
+            model,
+        )
+    } else {
+        return Err(
+            "subagent 需要 LLM 工厂: 请设 APEIRETH_OPENAI_MODELS (+URL/KEY) 或 \
+             APEIRETH_API_KEY (MiniMax)"
+                .to_string(),
+        );
+    };
+
+    // 人工审批门: CLI 交互 y/N (plan 步要主人点头; 拒绝 = HumanDenied)。
+    let gate: HumanApprovalGate = Arc::new(|spec| {
+        use std::io::Write;
+        print!("subagent [{}] 需要主人批准执行 (y/N): ", spec.id);
+        std::io::stdout().flush().ok();
+        let mut line = String::new();
+        std::io::stdin()
+            .read_line(&mut line)
+            .map_err(|error| error.to_string())?;
+        if line.trim().eq_ignore_ascii_case("y") {
+            Ok(())
+        } else {
+            Err("主人拒绝".to_string())
+        }
+    });
+    let core = LlmSubagentOrchestrator::new(mirror, model).with_approval_gate(gate);
+
+    if worktree_sandbox_enabled_from_env() {
+        let repo_root = std::env::current_dir().map_err(|error| error.to_string())?;
+        let runner_root = repo_root.clone();
+        let runner: CommandRunner = Arc::new(move |args: &[String]| {
+            let status = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&runner_root)
+                .status()
+                .map_err(|error| error.to_string())?;
+            if status.success() {
+                Ok(())
+            } else {
+                Err(format!("git {args:?} 失败: {status}"))
+            }
+        });
+        Ok(Box::new(WorktreeSandboxedOrchestrator::new(
+            core, repo_root, runner,
+        )))
+    } else {
+        Ok(Box::new(core))
+    }
+}
+
+/// **W2 worktree 装饰器旋钮** (2026-10-10, 默认关): `APEIRETH_ENABLE_WORKTREE_SANDBOX=1`
+/// —— subagent 跑在独立 git worktree (物理隔离)。
+fn worktree_sandbox_enabled_from_env() -> bool {
+    std::env::var("APEIRETH_ENABLE_WORKTREE_SANDBOX")
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
 fn cognitive_db_path() -> PathBuf {
     std::env::var(COGNITIVE_DB_ENV)
         .ok()

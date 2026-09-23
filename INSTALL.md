@@ -294,6 +294,8 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
 
 **2026-10-10 council 改造（每轮评审器 → 决策环节顾问）**：council 不再按轮常开（深度档 = 深思直答，省下原先每轮开庭的延迟），只在**决策环节**用：A 升级/部署批准、B 高危操作（L3+）、C 待裁冲突批量裁决（空闲时）三个位点随对应模块接入；**D 显式咨询已可用**：`apeireth council "<议题>"`（显式授权 = 显式命令，真顾问裁决链；未配 LLM 会 fail-loud 报错而不是给假裁决）。旋钮：`APEIRETH_COUNCIL_ADVISORS=N`（裁决顾问数 1–7，**默认 3**（7→3 拍板），规范序取前 N：Safety/Performance/Philosophy/History/Strategy/Ethics/Legal，Safety 恒首位）、`APEIRETH_COUNCIL_TIMEOUT_MS`（单顾问超时，默认 30000）。
 
+**2026-10-10 生产 Orchestrator（不是旋钮——显式命令即授权）**：`apeireth subagent "<标题>" [--payload <JSON>]` —— 长程任务 `plan→impl→review` 三步链（IMPLEMENTED → PRODUCTION WIRED：每步**独立 LLM 实例**按角色隔离，`spec.model` 可换 model 做隔离实验）。**人工审批 fail-closed**：plan 步需主人在 CLI 交互点头（y/N），无审批门时自动 deny（绝不静默放行）；dispatch 超时有界（默认 120s）；未配 LLM 显式报错（0 装）。旋钮：`APEIRETH_ENABLE_WORKTREE_SANDBOX=1`（**默认关**）——子代理跑在独立 git worktree（物理目录级隔离，防污染主工作区；worktree 创建失败即拒、不裸跑）。
+
 **与工具同批的既有旋钮**：`APEIRETH_COGNITIVE_DB`（记忆库路径）、
 `APEIRETH_SESSION_DB`（会话库路径）、`APEIRETH_MODEL`（默认模型）、
 `APEIRETH_OPENAI_URL`/`APEIRETH_OPENAI_MODELS`/`OPENAI_API_KEY`（provider 配置）。

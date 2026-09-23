@@ -74,6 +74,8 @@ pub mod lineage_spawning;
 pub mod llm;
 pub mod prompt_stabilizer;
 pub mod speech_arbiter;
+/// 生产 Orchestrator: LLM 驱动 subagent 调度 (2026-10-10, worktree 装饰器的主角)。
+pub mod subagent_llm;
 pub mod worktree_sandbox;
 
 pub use ambient_context::{
@@ -120,6 +122,7 @@ pub use prompt_stabilizer::{
 pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
 };
+pub use subagent_llm::{HumanApprovalGate, LlmSubagentOrchestrator};
 pub use worktree_sandbox::{
     CommandRunner, RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,
     WorktreeSandboxedOrchestrator,
@@ -817,7 +820,7 @@ pub struct SubagentSpec {
 }
 
 /// Subagent 输出结果
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubagentOutcome {
     /// 对应 spec.id
     pub spec_id: String,
