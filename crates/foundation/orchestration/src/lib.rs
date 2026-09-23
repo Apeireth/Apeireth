@@ -406,7 +406,10 @@ impl Default for CouncilConfig {
     fn default() -> Self {
         Self {
             max_advisors: 7,
-            per_advisor_timeout: Duration::from_secs(10),
+            // 2026-10-10 调 (台账 #46 实测): 思考型模型 reasoning 余量下 10s 不够
+            // (live 实锤 PerformanceAdvisor 超时→DeferToHuman), 30s 覆盖实测延迟。
+            // CLI 层可用 APEIRETH_COUNCIL_TIMEOUT_MS 覆盖。
+            per_advisor_timeout: Duration::from_secs(30),
             overall_timeout: Duration::from_secs(60),
         }
     }

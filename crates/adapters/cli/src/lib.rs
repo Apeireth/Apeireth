@@ -937,10 +937,10 @@ pub async fn dispatch_dream(
     ))
 }
 
-/// 构造做梦 LLM 思考器 (openai-compatible 优先, MiniMax 回退; 都未配则 Err)。
-fn build_dream_llm_thinker() -> Result<apeireth_runtime_assembly::canonical::LlmMetaThinker, String>
-{
-    use apeireth_runtime_assembly::canonical::LlmMetaThinker;
+/// 从 env 找真 LLM 工厂 (openai-compatible 优先, MiniMax 回退) + 首个模型 id。
+/// 都未配 → Err (0 装: 不造"调用时才失败"的假可用)。
+fn llm_factory_from_env(
+) -> Result<(Arc<dyn apeireth_plugin::llm_factory::LlmFactory>, String), String> {
     if std::env::var("APEIRETH_OPENAI_MODELS")
         .ok()
         .is_some_and(|v| !v.trim().is_empty())
@@ -953,7 +953,7 @@ fn build_dream_llm_thinker() -> Result<apeireth_runtime_assembly::canonical::Llm
                 .into_iter()
                 .next()
                 .unwrap_or_else(|| "deepseek-v4-flash".to_string());
-            return Ok(LlmMetaThinker::new(
+            return Ok((
                 Arc::new(factory) as Arc<dyn apeireth_plugin::llm_factory::LlmFactory>,
                 model,
             ));
@@ -969,13 +969,86 @@ fn build_dream_llm_thinker() -> Result<apeireth_runtime_assembly::canonical::Llm
                 .into_iter()
                 .next()
                 .unwrap_or_else(|| "MiniMax-M3".to_string());
-            return Ok(LlmMetaThinker::new(
+            return Ok((
                 Arc::new(factory) as Arc<dyn apeireth_plugin::llm_factory::LlmFactory>,
                 model,
             ));
         }
     }
-    Err("no llm factory configured (dream uses deterministic thinker)".to_string())
+    Err("no llm factory configured".to_string())
+}
+
+/// **council 旋钮** (2026-10-10 拍板, 默认 3): `APEIRETH_COUNCIL_ADVISORS=N` (1-7) =
+/// 裁决顾问数 (规范序取前 N: Safety/Performance/Philosophy/History/Strategy/
+/// Ethics/Legal, Safety 恒首位); `APEIRETH_COUNCIL_TIMEOUT_MS` = 单顾问超时
+/// (默认 30000, 台账 #46 实测: 思考型模型 reasoning 余量下 10s 不够)。
+fn council_config_from_env() -> apeireth_orchestration::CouncilConfig {
+    use apeireth_orchestration::CouncilConfig;
+    use std::time::Duration;
+    let max_advisors = std::env::var("APEIRETH_COUNCIL_ADVISORS")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .map(|n| n.clamp(1, 7))
+        .unwrap_or(3);
+    let per_advisor_timeout = std::env::var("APEIRETH_COUNCIL_TIMEOUT_MS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(Duration::from_millis(30_000));
+    CouncilConfig {
+        max_advisors,
+        per_advisor_timeout,
+        ..CouncilConfig::default()
+    }
+}
+
+/// **council 决策环节 D —— 显式咨询** (2026-10-10 拍板): `apeireth council "<议题>"`。
+///
+/// council 语义改造 (主人 2026-10-10): 从"每轮评审器"改为"决策环节顾问"。触发位点:
+/// A 升级/部署批准、B 高危操作 (L3+)、C 待裁冲突批量裁决 (空闲时) —— 随对应模块
+/// (upgrade_cycle ratification / 洋葱 L3-L5 / Nightwatch 守夜人) 接入; D = 本命令
+/// (显式授权, 免旋钮)。一般轮次不再常开 council (深度档 = 深思直答)。
+pub async fn dispatch_council(topic: String) -> Result<String, String> {
+    use apeireth_core::kernel::SessionId;
+    use apeireth_orchestration::{Council, CouncilVerdict, Proposal};
+
+    let (factory, model) = llm_factory_from_env()?;
+    let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
+        Arc::new(apeireth_plugin::MirrorLlmFactory::new(factory));
+    let council =
+        Council::with_factory(mirror, model.clone()).with_config(council_config_from_env());
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    let proposal = Proposal {
+        id: format!("council-{now_ms}"),
+        proposer: "cli-explicit".to_string(),
+        payload: serde_json::json!({ "topic": topic, "kind": "explicit_consultation" }),
+        submitted_at: now_ms,
+        session_id: SessionId::new(),
+    };
+    let verdict = council.decide(&proposal).await;
+    let summary = match &verdict {
+        CouncilVerdict::Approved => "Approved (多数 Allow, 无强反对)".to_string(),
+        CouncilVerdict::Vetoed { by, reason } => format!("Vetoed (by: {by:?}): {reason}"),
+        CouncilVerdict::DeferToHuman { reason } => format!("DeferToHuman: {reason}"),
+    };
+    Ok(format!(
+        "council 裁决 — 议题「{topic}」 (顾问 {} 个, 模型 {model})\n  {summary}\n\n完整判定: {verdict:?}",
+        council.advisors().len()
+    ))
+}
+
+/// 构造做梦 LLM 思考器 (工厂未配则 Err, 调用方降级确定性思考器)。
+fn build_dream_llm_thinker() -> Result<apeireth_runtime_assembly::canonical::LlmMetaThinker, String>
+{
+    let (factory, model) =
+        llm_factory_from_env().map_err(|e| format!("{e} (dream uses deterministic thinker)"))?;
+    Ok(apeireth_runtime_assembly::canonical::LlmMetaThinker::new(
+        factory, model,
+    ))
 }
 
 pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
