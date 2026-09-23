@@ -122,7 +122,8 @@
 | reflexion | ✅ | ✅ (本线) | ❌ | `APEIRETH_ENABLE_REFLEXION` / `_DIR` | `reflexion_records_judge_failures_...` |
 | memory_injection | ✅ | ✅ (本线) | ❌ | `APEIRETH_ENABLE_MEMORY_INJECTION` | `memory_injection_format_switches_...` + 注入格式 3 单测 |
 | dreaming | ✅ | ✅ (2026-10-10 接线) | 显式命令 (免旋钮) | `apeireth dream [--session <id>] [--limit N] [--date YYYY-MM-DD]` | `dream_writes_diary_entry_holding_the_report` 等 5 + `dream_llm` 4 + cli parse 3 |
-| partner / principles | ✅ | ❌ | — | 待 §4.2 | — |
+| partner.md/persona.md | ✅ | ✅ (2026-10-10 接线) | 默认关 `APEIRETH_ENABLE_PARTNER_BOND=1` | TurnStart 关系注入 + AfterTurn 羁绊演化 (§4.2 落地记录) | `partner_bond_tests` 3 |
+| principles | ✅ | ❌ (有意不接) | — | **P2 生产接线禁令自证** (头注: 须走 governance/approval 专项设计, 禁 Runtime 直连 store/artifact/token) | — |
 | morphology / education / worktree_sandbox | ✅ | ❌ | — | 待 §4.3 | — |
 | 吸收批 (betti/residual_pyramid/river_topology/kuramoto) | ✅ | ❌ | — | 待 §4.4 | — |
 
@@ -167,6 +168,23 @@
 
 - **现状**: 零调用者确证 (crate 内部互调也零命中)。`partner.rs` (7 阶段伙伴羁绊模型), `principles.rs` (动态原则层 + 原则洋葱晋级候选)。
 - **落点候选**: AfterTurn 写回 (羁绊状态更新) / TurnStart overlay (关系状态注入)。先读两文件头注释再定。
+
+**✅ 落地记录 (2026-10-10, 资深工程师线)**:
+- **partner 已接线** (五件验收门齐): 新模块 `cognitive.partner_bond` (`PartnerBondModule`) ——
+  TurnStart `PromptOverlay::system` 注入关系状态 (羁绊阶段/深度/演化次数, 供语气与信任
+  校准参考) + AfterTurn `touch`+`Bond::evolve` 纯确定性演化回写 `PartnerStore` (0 LLM)。
+  ① 旋钮 `APEIRETH_ENABLE_PARTNER_BOND=1` 默认关; ② 默认关测试 (`config_defaults_to_partner_bond_off`);
+  ③ 效果可见测试 (`evolve_partner_bond_is_visible_in_store`: 11×0.02 跨过 Familiar 阈值
+  在**存储行为**里可见; `bond_overlay_reports_stage_and_depth`); ④ 四级口径: **IMPLEMENTED
+  → PRODUCTION WIRED (DEFAULT OFF)**; ⑤ 台账 #50。
+  **身份口径**: partner id = `subject_id` (`APEIRETH_SUBJECT_ID`, W2 首批身份旋钮) ——
+  跨会话稳定 (羁绊本义), 与 typed 身份体系同源。**0 假装**: 存储现为 `InMemoryPartnerStore`
+  (进程内重启即散), 持久 sqlite 后端为后续层 (trait 落点已备, 模块不动)。
+- **principles 有意不接** (处置, 非遗漏): 其头注载明 **P2 生产接线禁令** —— 任何生产
+  激活必须经 canonical Runtime 的 governance/approval 路径, 且不得从 Runtime 构造或
+  消费本模块 store/artifact/master token (安全边界: 主人批准权在主人手里)。**未来路径** =
+  governance/approval 专项设计 (与 §5 红线 #4 的默认关 helper 处置同场评估); 本批
+  按"确认有意不接"处置入矩阵。
 
 ### 4.3 morphology / education / worktree_sandbox
 

@@ -151,6 +151,8 @@ pub struct ProductionModulesConfig {
     /// Register the reflexion failure-feedback module (TurnStart lessons +
     /// AfterTurn judge-failure sedimentation). Off by default.
     pub reflexion: bool,
+    /// W2 §4.2 partner 羁绊 (2026-10-10, 默认关): TurnStart 关系注入 + AfterTurn 羁绊演化。
+    pub partner_bond: bool,
 }
 
 impl Default for ProductionModulesConfig {
@@ -174,6 +176,7 @@ impl Default for ProductionModulesConfig {
             memory_injection: false,
             consolidation: false,
             reflexion: false,
+            partner_bond: false,
         }
     }
 }
@@ -224,6 +227,8 @@ pub struct ProductionBackends {
     pub typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
     /// Reflexion failure-feedback store (2026-10-06 W2 记忆闭环批).
     pub reflexion_store: Option<Arc<dyn apeireth_memory::reflexion::ReflexionStore>>,
+    /// W2 §4.2: partner 羁绊存储 (InMemoryPartnerStore 或未来 sqlite 实现)。
+    pub partner_store: Option<Arc<dyn apeireth_memory::partner::PartnerStore>>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -435,6 +440,19 @@ impl ProductionModules {
                     Arc::clone(&clock),
                 )
                 .with_telemetry(Arc::clone(&telemetry)),
+            ));
+        }
+
+        if config.partner_bond {
+            let store = required(backends.partner_store, "partner_bond", "partner_store")?;
+            let subject_id = backends
+                .typed_recall_identity
+                .as_ref()
+                .map(|identity| identity.subject_id.clone())
+                .unwrap_or_else(|| "local-user".to_string());
+            modules.push(Arc::new(
+                super::cognitive::PartnerBondModule::new(store, subject_id, Arc::clone(&clock))
+                    .with_telemetry(Arc::clone(&telemetry)),
             ));
         }
 
