@@ -486,6 +486,37 @@ impl AgentModule for PartnerBondModule {
 }
 
 #[cfg(test)]
+mod absorption_insight_tests {
+    use super::*;
+
+    #[test]
+    fn config_defaults_to_absorption_insight_off() {
+        // W2 五件验收门②: 默认关 = 行为不变。
+        let config = crate::canonical::production::CognitiveModuleConfig::default();
+        assert!(!config.absorption_insight, "absorption_insight 必须默认关");
+    }
+
+    #[test]
+    fn absorption_insight_reports_four_algorithm_sections_and_is_deterministic() {
+        // W2 五件验收门③: 效果可见 = 四算法各出一节 + 同输入恒同输出 (可重放)。
+        let messages = vec![
+            "帮我梳理一下记忆系统的架构，特别是检索那一层。".to_string(),
+            "检索层有 ACT-R 激活与混合检索；但治理层的取舍我们还没聊过。".to_string(),
+        ];
+        let first = absorption_insight_text(&messages);
+        let second = absorption_insight_text(&messages);
+        assert_eq!(first, second, "同输入恒同输出 (纯确定性)");
+        assert!(first.contains("【认知体操】"), "{first}");
+        assert!(first.contains("认知空洞"), "{first}");
+        assert!(first.contains("语义新颖度"), "{first}");
+        assert!(first.contains("关联传导"), "{first}");
+        assert!(first.contains("顿悟涌现"), "{first}");
+        // 空输入 = 空报告 (0 装: 不凭空造洞察)。
+        assert_eq!(absorption_insight_text(&[]), "");
+    }
+}
+
+#[cfg(test)]
 mod morphology_recall_tests {
     use super::morphology_recall_limit;
 
@@ -563,6 +594,192 @@ mod partner_bond_tests {
         assert_eq!(loaded.bond.stage, BondStage::Familiar);
         assert!(loaded.bond.depth.value() >= 0.20);
         assert_eq!(loaded.bond.evolution_count, 11);
+    }
+}
+
+/// 模块 id: W2 §4.4 研究吸收批 (2026-10-10)。
+pub const ABSORPTION_INSIGHT_MODULE_ID: &str = "cognitive.absorption_insight";
+
+/// 吸收批特征维度 (确定性字节直方图, 与 OrthogonalResidualPyramid 对齐)。
+pub const ABSORPTION_FEATURE_DIM: usize = 32;
+
+/// 确定性文本特征 (字节直方图归一化)。
+///
+/// **0 假装**: 这是浅层确定性特征 (与 morphology 手调启发式同口径), **不是**语义
+/// 嵌入 —— 吸收批的产出是实验性认知体操洞察, 不是生产语义召回。
+fn text_features(text: &str) -> Vec<f32> {
+    let mut hist = vec![0.0f32; ABSORPTION_FEATURE_DIM];
+    for byte in text.bytes() {
+        hist[(byte as usize) % ABSORPTION_FEATURE_DIM] += 1.0;
+    }
+    let norm: f32 = hist.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-12);
+    hist.iter().map(|x| x / norm).collect()
+}
+
+/// **W2 §4.4 认知体操报告** (纯函数): 四算法对本轮消息做实验性分析 ——
+/// - **betti** (持久同调): β₁ 认知空洞 → "值得追问" 驱动;
+/// - **residual_pyramid** (MGS 残差金字塔): 语义新颖度/白噪门控;
+/// - **river_topology** (LIF spike 传导): 关联扩展信号;
+/// - **kuramoto** (相位锁定): 顿悟事件/涌现元概念。
+///
+/// 纯确定性 (同输入恒同输出, 0 LLM / 0 IO)。输出供 TurnStart overlay 注入。
+fn absorption_insight_text(messages: &[String]) -> String {
+    use apeireth_memory::betti_hole_detector::{BettiHoleDetector, ManifoldConceptNode};
+    use apeireth_memory::kuramoto_resonance::{KuramotoOscillator, KuramotoResonanceEngine};
+    use apeireth_memory::residual_pyramid::{FieldActivationGate, OrthogonalResidualPyramid};
+    use apeireth_memory::river_topology::{RiverDynamicsEngine, TagNode};
+
+    if messages.is_empty() {
+        return String::new();
+    }
+
+    // 流形节点 = 各消息的确定性特征向量。
+    let nodes: Vec<ManifoldConceptNode> = messages
+        .iter()
+        .enumerate()
+        .map(|(i, text)| ManifoldConceptNode {
+            name: format!("msg-{i}"),
+            embedding: text_features(text),
+            activation_energy: 1.0,
+        })
+        .collect();
+
+    // ① betti: 认知空洞 + 内聚。
+    let betti = BettiHoleDetector::new(0.1, 4).analyze(&nodes);
+
+    // ② residual: 末条消息对"已知概念子空间"的新颖度/激活门控。
+    let query_vec = text_features(messages.last().map(String::as_str).unwrap_or_default());
+    let known: Vec<(u64, Vec<f32>)> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (i as u64, n.embedding.clone()))
+        .collect();
+    let analysis = OrthogonalResidualPyramid::new(ABSORPTION_FEATURE_DIM)
+        .analyze(&query_vec, |_q, k| known.iter().take(k).cloned().collect());
+    let activation = FieldActivationGate::compute_activation(&analysis);
+
+    // ③ river: 消息链上的 spike 传导 (关联扩展信号)。
+    let mut river = RiverDynamicsEngine::new();
+    for (i, node) in nodes.iter().enumerate() {
+        river.add_node(TagNode {
+            id: i as u64,
+            name: node.name.clone(),
+            vector: node.embedding.clone(),
+            intrinsic_residual: analysis.novelty_signal.min(1.0).max(0.0),
+        });
+        if i > 0 {
+            river.add_edge((i - 1) as u64, i as u64, 0.5);
+        }
+    }
+    let spread = river.propagate_spikes(&[(0, 1.0)], 3);
+
+    // ④ kuramoto: 相位锁定 → 顿悟事件。
+    let mut oscillators: Vec<KuramotoOscillator> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| KuramotoOscillator {
+            concept_id: n.name.clone(),
+            domain_tag: format!("d{}", i % 3),
+            natural_frequency_omega: 0.5 + 0.1 * (i as f32),
+            current_phase_theta: 0.1 * (i as f32),
+            intrinsic_residual: n.embedding.clone(),
+            phase_velocity: 0.0,
+        })
+        .collect();
+    let epiphanies = KuramotoResonanceEngine::new(1.0, 0.65).step(&mut oscillators, 1.0);
+
+    format!(
+        "【认知体操】(研究吸收批实验性洞察, 非生产语义)\n\
+         - 认知空洞: β0 岛屿 {} 个 / β1 空洞 {} 处 / 内聚 {:.2}{}\n\
+         - 语义新颖度: {:.2} (激活门控 {:.2})\n\
+         - 关联传导: {} 个节点受激\n\
+         - 顿悟涌现: {} 起",
+        betti.betti_0_islands,
+        betti.betti_1_voids.len(),
+        betti.cohesion_score,
+        if betti.betti_1_voids.is_empty() {
+            ""
+        } else {
+            " —— 有空洞, 值得主动追问补齐"
+        },
+        analysis.novelty_signal,
+        activation,
+        spread.len(),
+        epiphanies.len(),
+    )
+}
+
+/// **W2 §4.4 研究吸收批模块** (2026-10-10): 认知体操 ——
+/// `AfterTurn` 对本轮消息跑四算法实验性分析 (0 LLM / 0 IO / 纯确定性),
+/// `TurnStart` 把洞察注入 prompt overlay (只注一次)。
+///
+/// **0 假装边界**: 特征是字节直方图级浅特征 (非语义嵌入); 产出是实验性洞察
+/// (研究吸收批的涌现行为试验场), 不参与生产语义召回与决策。
+pub struct AbsorptionInsightModule {
+    manifest: ModuleManifest,
+    pending_insight: Mutex<Option<String>>,
+}
+
+impl AbsorptionInsightModule {
+    /// 构造。
+    pub fn new() -> Self {
+        Self {
+            manifest: ModuleManifest::new(ABSORPTION_INSIGHT_MODULE_ID, "Absorption insight"),
+            pending_insight: Mutex::new(None),
+        }
+    }
+}
+
+impl Default for AbsorptionInsightModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentModule for AbsorptionInsightModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        match hook {
+            HookPoint::AfterTurn => {
+                let texts: Vec<String> = ctx
+                    .messages
+                    .iter()
+                    .map(|message| ContentPart::join_text(&message.content))
+                    .collect();
+                let insight = absorption_insight_text(&texts);
+                if !insight.is_empty() {
+                    let mut slot = self
+                        .pending_insight
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner());
+                    *slot = Some(insight);
+                }
+                Ok(ModuleOutcome::continue_())
+            }
+            HookPoint::TurnStart => {
+                let taken = self
+                    .pending_insight
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .take();
+                match taken {
+                    Some(text) => {
+                        Ok(ModuleOutcome::continue_()
+                            .with_prompt_overlay(PromptOverlay::system(text)))
+                    }
+                    None => Ok(ModuleOutcome::continue_()),
+                }
+            }
+            _ => Ok(ModuleOutcome::continue_()),
+        }
     }
 }
 
