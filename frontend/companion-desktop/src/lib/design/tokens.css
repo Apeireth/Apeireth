@@ -78,6 +78,17 @@
      #ffd27a 在纸白 #e2e1df 上对比度不足——文字级强调用下沉金（金家族色相 42°），
      实体填充强调（选中条/主按钮底）仍用 accent 金配墨字。 */
   --ap-register-archive-ink-gold: #8a6d1f;
+  /* 伴随值令牌化（2026-09-23 深色档案批）：组件局部覆写原先硬编码
+     rgba(38,38,42,*) / #ecebe9 / #e5e4e2——深色主题要整套反色，必须走令牌。 */
+  --ap-register-archive-ink-60: rgba(38, 38, 42, 0.6);
+  --ap-register-archive-ink-55: rgba(38, 38, 42, 0.55);
+  --ap-register-archive-ink-40: rgba(38, 38, 42, 0.4);
+  --ap-register-archive-ink-35: rgba(38, 38, 42, 0.35);
+  --ap-register-archive-ink-26: rgba(38, 38, 42, 0.26);
+  --ap-register-archive-ink-14: rgba(38, 38, 42, 0.14);
+  --ap-register-archive-ink-solid: #26262a;    /* 金字底上的墨字 */
+  --ap-register-archive-surface-2: #ecebe9;
+  --ap-register-archive-surface-3: #e5e4e2;
 
   /* ---------- 数据深舱调 🔵 规范 §5.6③ / JSON registers.deepOps ----------
      适用于系统状态/审批审计/任务面板/设置；识别色 ≤6 且避开存在金。 */
@@ -238,6 +249,37 @@ html[data-theme='forest'] {
   --ap-card-dark: #14211a;
   --ap-line: rgba(160, 205, 175, 0.15);
   --ap-semantic-success: #6fae86;
+}
+
+/* ---------- 档案调·深舱反色（2026-09-23 主人真机反馈：深色主题里记忆/日记
+   一块白纸违和，「纸面恒纸面」拍板收窄为浅色语境）----------
+   深色主题（深空舰桥/遗产星空/深海/林海）下 Archive 档案转石墨深底 + 骨白墨；
+   金色纪律不动（accent 金配墨字两态通用；文字级强调深底换亮金，原下沉金
+   #8a6d1f 在深底不可读）。浅色系（essence/day/paper）保持纸面原值。
+   ⚠ 深空舰桥 = 默认主题，applyDocumentTheme 对它**移除** data-theme 属性
+   （theme.ts）——必须 :not([data-theme]) 选中，写 [data-theme='night'] 永不命中。 */
+html:not([data-theme]),
+html[data-theme='heritage-void'],
+html[data-theme='ocean'],
+html[data-theme='forest'] {
+  --ap-register-archive-paper: #16181d;
+  --ap-register-archive-paper-lo: #0e1013;
+  --ap-register-archive-paper-hi: #1f2227;
+  --ap-register-archive-ink: #e8e0cc;
+  --ap-register-archive-ink-60: rgba(232, 224, 204, 0.6);
+  --ap-register-archive-ink-55: rgba(232, 224, 204, 0.55);
+  --ap-register-archive-ink-40: rgba(232, 224, 204, 0.4);
+  --ap-register-archive-ink-35: rgba(232, 224, 204, 0.35);
+  --ap-register-archive-ink-26: rgba(232, 224, 204, 0.26);
+  --ap-register-archive-ink-14: rgba(232, 224, 204, 0.14);
+  /* ink-solid（金字底上的墨字）与 marker-orange / accent 两态通用，不覆写 */
+  --ap-register-archive-ghost-number: #2e3339;
+  --ap-register-archive-icon-gray: #5f636a;
+  --ap-register-archive-card-dark: #d9d4c8;   /* 条目深卡 → 浅卡 */
+  --ap-register-archive-card-deep: #efe9db;
+  --ap-register-archive-ink-gold: #ecc271;    /* 深底文字级强调用亮金 */
+  --ap-register-archive-surface-2: #23262b;
+  --ap-register-archive-surface-3: #2b2f34;
 }
 
 /* ---------- UI 配色方案覆写（规范 §8 增补⑤）----------
