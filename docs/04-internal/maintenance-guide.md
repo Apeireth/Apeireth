@@ -112,7 +112,7 @@ foundation/
   protocol        -> core
   plugin          -> core, protocol, orchestration
   governance      -> core
-  credentials     -> plugin
+  credentials     -> core, plugin, governance
   orchestration   -> core
 engine/
   storage         (leaf)
