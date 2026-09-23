@@ -643,8 +643,17 @@
         argumentsSummary?: string;
         reason?: string;
         createdAt?: number;
+        sandbox?: string;
+        cwd?: string;
+        isolation?: string;
       };
     }
+    // W1 沙箱卷宗（2026-10-10）：批准前看见墙 —— 徽标 + 冻结 cwd + 隔离态。
+    const effective = p.effective_invocation;
+    const isolation =
+      effective?.filesystem_isolation && effective?.network_isolation
+        ? `文件 ${effective.filesystem_isolation} · 网络 ${effective.network_isolation}`
+        : undefined;
     return {
       title: '需要批准的操作',
       commandText: typeof p.command_text === 'string' ? p.command_text : undefined,
@@ -652,6 +661,9 @@
         typeof p.arguments_summary === 'string' ? p.arguments_summary : undefined,
       reason: p.governance_reason || undefined,
       createdAt: toEpochMs(p.created_at),
+      sandbox: typeof effective?.sandbox === 'string' ? effective.sandbox : undefined,
+      cwd: typeof effective?.cwd === 'string' ? effective.cwd : undefined,
+      isolation,
     };
   });
 

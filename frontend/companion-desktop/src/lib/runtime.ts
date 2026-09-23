@@ -249,6 +249,17 @@ export interface CanonicalPendingApproval {
   /** 后端 canonical_entry.rs 恒序列化的两个展示字段（治理卷宗审批卡直接消费）。 */
   command_text?: string;
   arguments_summary?: string;
+  /** W1 沙箱卷宗（后端 ApprovalView.effective_invocation，冻结调用的隔离态）：
+   *  sandbox = 徽标文案（「工作区限定 + 断网 (AppContainer)」/「未沙箱 (本机全权)」）；
+   *  cwd = 冻结工作目录；environment_vars = 交给运行的变量**名**（只露名不露值）。 */
+  effective_invocation?: {
+    cwd?: string;
+    environment_mode?: string;
+    filesystem_isolation?: string;
+    network_isolation?: string;
+    sandbox?: string;
+    environment_vars?: unknown;
+  };
   /** RFC 3339 字符串（kernel Timestamp serde transparent，非 epoch 数字）。 */
   created_at: string;
   expires_at: string;

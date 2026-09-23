@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {X, Copy, Check} from 'lucide-svelte';
+  import {ShieldCheck, ShieldAlert, X, Copy, Check} from 'lucide-svelte';
 
   interface ApprovalRequestCardProps {
     item: {
@@ -8,6 +8,12 @@
       argumentsSummary?: string;
       reason?: string;
       createdAt?: number;
+      /** W1 沙箱徽标（后端 display_invocation.sandbox；批准前看见墙）。 */
+      sandbox?: string;
+      /** 冻结工作目录（卷宗 cwd）。 */
+      cwd?: string;
+      /** 隔离态摘要（文件/网络）。 */
+      isolation?: string;
     };
     busy: boolean;
     onAllow: () => void;
@@ -77,6 +83,34 @@
   </div>
 
   <div class="card-body">
+    {#if item.sandbox}
+      <!-- W1 沙箱卷宗：批准前看见墙。有墙 = 青盾（存在金之外的第二种许
+           可色，00-PHILOSOPHY §7 金纪律只属「他停下了」）；无墙 = 灰警。 -->
+      <div class="sandbox-row">
+        <span
+          class="sandbox-badge"
+          class:unsandboxed={item.sandbox.includes('未沙箱')}
+          title="该操作将在沙箱内执行：工作区限定 + 断网"
+        >
+          {#if item.sandbox.includes('未沙箱')}
+            <ShieldAlert size={12} />
+          {:else}
+            <ShieldCheck size={12} />
+          {/if}
+          {item.sandbox}
+        </span>
+        {#if item.isolation}
+          <span class="sandbox-meta">{item.isolation}</span>
+        {/if}
+      </div>
+      {#if item.cwd}
+        <div class="section">
+          <span class="section-label">工作目录（已冻结）</span>
+          <p class="section-text mono-path" title={item.cwd}>{item.cwd}</p>
+        </div>
+      {/if}
+    {/if}
+
     {#if item.commandText}
       <div class="command-row">
         <code class="command">{item.commandText}</code>
@@ -189,6 +223,40 @@
     white-space: pre-wrap;
     word-break: break-all;
     line-height: 1.5;
+  }
+  .sandbox-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sandbox-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--teal, #4fd1c5);
+    background: rgba(79, 209, 197, 0.1);
+    border: 1px solid rgba(79, 209, 197, 0.32);
+  }
+  .sandbox-badge.unsandboxed {
+    color: var(--muted);
+    background: var(--surface-2);
+    border-color: var(--line-strong);
+  }
+  .sandbox-meta {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--faint);
+  }
+  .mono-path {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    word-break: break-all;
   }
   .copy-btn {
     flex: none;
