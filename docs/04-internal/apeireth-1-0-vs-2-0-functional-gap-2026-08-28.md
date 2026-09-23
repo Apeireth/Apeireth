@@ -1,5 +1,15 @@
 # Apeireth 1.0 vs 2.0 功能差距真账 (2026-08-28)
 
+> ⚠️ **2026-10-06 复核批历史批注（正文按约定不改，结论以新审计为准）**：本文写于 2026-08-28（Round 11），其 🔴/🟢 结论已**大面积过时**。按四级口径（`docs/01-architecture/system-capabilities.md` 头部定义：IMPLEMENTED ≠ PRODUCTION WIRED ≠ DEFAULT ENABLED ≠ HARDWARE VALIDATED）重读后，权威结论见 `docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md`（§7 两级化 / §8 附录 A）与 `engineering-review-handoff-2026-10-06.md` §2.7 复核判定。已知修正对照（复核实测）：
+>
+> | 本文旧结论 | 修正 |
+> |---|---|
+> | "v2 缺 BM25 混合检索" | ❌ 错：`crates/engine/memory/src/hybrid_search.rs` 有 Okapi BM25 + RRF 真实现（**IMPLEMENTED**） |
+> | "organ 仅 E4 真实现，其余 0 装" | ❌ 陈旧：engine 侧 9/9 **IMPLEMENTED**（`organ/lib.rs:31`；`plugin/src/organ.rs` 假账已由 `e4f2f451` 更正） |
+> | "perception 5 modality 仅 Text 真" | ⚠️ 基本成立：5 modality 类型/后端抽象 **IMPLEMENTED**，真后端仅 Text（其余 Noop fail-closed），均未 **PRODUCTION WIRED** |
+>
+> 状态：本文降级为**历史记录**，仅保留"v1 功能全集清单"用途；任何"v2 有没有 X"的判断按四级口径 + `docs/04-internal/live-verification-ledger.md` 为准。
+
 > **作者**: 主代理 Mavis (写于 Round 11, 用户原话 "看 1.0 缺什么, 2.0 最终功能应该和 1.0 相同, 但架构不同而已" 触发)
 > **用途**: 主代理真账 Apeireth v1.0 vs v2.0 功能差距, 给 v2 release 前 必补 / 必决策 / 必调研 清单, 同时给后续 sub-agent 真调研具体 gap 派单 brief
 > **关系**: 跟 `apeireth-true-understanding-2026-08-28.md` (物种化真理解) + `v2-reference-handbook-2026-08-28.md` (Round 9 一站式 reference) + 5 R7 真调研真账 (N.E.K.O / Open-LLM-VTuber / Firefly / Mio / AIRI) + `master-functionality-port-audit.md` (L138 1.0 真账 ~100 modules) 互补
@@ -9,7 +19,7 @@
 Document:        docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 11)
 Last-Modified:   2026-08-28
-Status:          🟢 活跃 (主代理真账 1.0 vs 2.0 功能差距, 派 sub-agent 真调研基础)
+Status:          🟠 历史记录 (2026-10-06 复核批降级; 🔴/🟢 结论大面积过时, 见文首批注; 保留作 v1 功能全集清单)
 Author:          主代理 Mavis
 ```
 
