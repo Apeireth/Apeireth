@@ -192,6 +192,20 @@
 - `education`: `tools/src/education.rs` (Dx-Check 换元检查工具) —— 接为 `ToolCapability` 注册即成工具。
 - `worktree_sandbox`: `orchestration/src/worktree_sandbox.rs` (git worktree 隔离) —— 落点疑为 subagent/Orchestrator。
 
+**✅ 落地记录 (2026-10-10, 资深工程师线)**:
+- **morphology 已接线** (真身纠偏: 在 `engine/organ/morphology.rs` 非 memory!): 落点 =
+  **检索前置** = `MemoryRecallModule` 的 `with_limit` 自适应 —— `morphology_recall_limit()`
+  纯函数 (crawl_budget [1,6] 只**收紧**不放大, 绝不越过配置上限)。旋钮
+  `APEIRETH_ENABLE_MORPHOLOGY_RECALL=1` 默认关; 温度旋钮 `APEIRETH_MORPHOLOGY_TEMPERATURE`
+  原生已在 (`env_temperature()`, 非法回 1.0)。测试: 默认关不变 + 浅收紧/深回满/上限封顶。
+- **education 已注册**: `EducationTool` (ToolCapability, 简单 invoke 型, 与 SearchTool
+  同契约) + `EducationModule` (CapabilityProvider `module.tool.education`) + production
+  注册 + 旋钮 `APEIRETH_ENABLE_EDUCATION=1` 默认关。效果测试: 真 Dx-Check 调用产出
+  结构化诊断 (漏 dθ 必抓) + 缺参拒绝。
+- **worktree_sandbox 待接** (诚实排期, 单独批): 落点 = **Orchestrator/subloop 的子代理
+  工作树分配** (spawn 前 create_command_args / 收束后 remove_command_args + TDD 状态机) ——
+  涉子代理生命周期, 非小改, 单独一批做实 (与 §4.4 吸收批同批或紧随)。
+
 ### 4.4 吸收批 4 个 (betti_hole_detector / residual_pyramid / river_topology / kuramoto_resonance)
 
 - 纯算法库 (研究吸收批)。接线点未读模块头前**不许猜** —— 各自头注释会写用途与边界 (仓库惯例)。
