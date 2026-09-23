@@ -171,14 +171,10 @@ ignore = [
     # - proc-macro-error2 (RUSTSEC-2026-0173): 同上
     # - unic-* (RUSTSEC-2025-0081/0075/0080/0100/0098): url / idna 间接拉
     # R139-1-retry 2026-08-11: unmaintained 已知项 (gtk-rs 链, 0 直接业务依赖):
-    "RUSTSEC-2024-0413",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
-    "RUSTSEC-2024-0416",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
-    "RUSTSEC-2024-0419",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
-    "RUSTSEC-2024-0411",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-tauri-stub gtk test 链)
-    "RUSTSEC-2024-0412",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
-    "RUSTSEC-2024-0414",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk-sys 链)
-    "RUSTSEC-2024-0415",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
-    "RUSTSEC-2024-0417",  # gtk-rs GTK3 bindings - no longer maintained (gtk 链)
-    "RUSTSEC-2024-0418",  # gtk-rs GTK3 bindings - no longer maintained (gtk 链)
-    "RUSTSEC-2024-0420",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
+    #   10 条 gtk-rs ignore 于 2026-10-06 复核批 (交接工作包 §4.4) 清空 —— 当前
+    #   Cargo.lock 无 gtk 链 (该测试只存在于 legacy/archived/apeireth-integration-r20-stage4,
+    #   不在工作区), `cargo deny check advisories` 对每条报 advisory-not-detected:
+    #   no crate matched。按上方 0-ignore austere 模式回归留空。
+    #   同批清空 audit.toml 20 条与 cargo-audit.yml 21 条过期 ignore (三处口径本就
+    #   漂移: 20/10/21), 此后三处同步为空; 新增 ignore 须三处同步并写理由。
 ]
