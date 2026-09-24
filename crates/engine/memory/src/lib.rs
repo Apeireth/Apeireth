@@ -49,10 +49,10 @@ pub mod history_streams;
 
 pub mod arbitration;
 pub mod betti_hole_detector;
-/// 图社区分层聚合 + 双级检索分诊 (W3 移植批, v1 donor community, 2026-10-10)。
-pub mod community;
 pub mod bitemporal_graph;
 pub mod chronicle_crystallizer;
+/// 图社区分层聚合 + 双级检索分诊 (W3 移植批, v1 donor community, 2026-10-10)。
+pub mod community;
 pub mod continuity_link;
 pub use continuity_link::{
     continuity_id_from_env, current_continuity_id, ensure_identity, migrate_subject,
