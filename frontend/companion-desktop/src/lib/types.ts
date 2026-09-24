@@ -220,29 +220,85 @@ export interface PersonaProfile {
   model?: string;
 }
 
-/** 后端高级能力开关（注入侧车环境，默认全关 fail-closed）。 */
+/** 后端高级能力开关（注入侧车环境，默认全关 fail-closed）。
+ *  2026-10-10 W2/W3 收官批扩展：补齐 v1→v2 补漏落地的全部认知旋钮，
+ *  与 crates/adapters/cli 的 APEIRETH_* env 一一对应。 */
 export interface CapabilityToggles {
   /** 工具: shell 命令（开启后每次调用仍走人工审批） */
   shell: boolean;
+  /** 工具: shell 沙箱执行（AppContainer 断网 + 用户空间隔离；默认开，关闭 = 显式裸跑自担风险） */
+  shellSandbox: boolean;
   /** 工具: 公网 GET-only fetch */
   fetch: boolean;
+  /** 工具: 本地只读工具（file/search/repo 不经审批的读侧） */
+  localReadTools: boolean;
   /** AfterTurn 器官链（9 organs） */
   organs: boolean;
   /** 偏好学习双索引写回 */
   preferenceLearning: boolean;
+  /** 前瞻召回（闲置期主动浮现相关记忆） */
+  proactiveRecall: boolean;
+  /** 记忆注入（把召回内容注进上下文） */
+  memoryInjection: boolean;
+  /** 记忆固化（consolidation 提炼） */
+  consolidation: boolean;
+  /** 反思沉淀（reflexion 文件回流） */
+  reflexion: boolean;
+  /** 类型化召回（默认开；关闭 = 注入 APEIRETH_DISABLE_TYPED_RECALL） */
+  typedRecall: boolean;
+  /** 伙伴羁绊（TurnStart 关系状态注入 + 确定性演化，W2 §4.2） */
+  partnerBond: boolean;
+  /** 检索深度自适应 morphology（只收紧不放大，W2 §4.3） */
+  morphologyRecall: boolean;
+  /** morphology 温度（检索活跃度，默认 1.0） */
+  morphologyTemperature: number;
+  /** Dx-Check 教育工具（W2 §4.3） */
+  education: boolean;
+  /** 认知体操四算法洞察（betti/residual/river/kuramoto，W2 §4.4） */
+  absorptionInsight: boolean;
+  /** 图社区分诊（检索前置 Entity/Broad 路由，W3 §1） */
+  communityTriage: boolean;
+  /** onering 账本记账（回合留痕入 context_ledger，W3） */
+  oneringLedger: boolean;
   /** AfterModelResponse 评审 */
   judge: boolean;
-  /** AfterModelResponse 议会（7 advisor） */
+  /** AfterModelResponse 议会 */
   council: boolean;
+  /** 议会顾问数 1-7（默认 3，Safety 恒首位） */
+  councilAdvisors: number;
+  /** 单顾问超时毫秒（默认 30000） */
+  councilTimeoutMs: number;
+  /** 三洋葱治理层 L3-L5 三段门（默认关，W3 工作项 6） */
+  onionLayer: boolean;
+  /** 子代理 git worktree 隔离（默认关） */
+  worktreeSandbox: boolean;
 }
 
 export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   shell: false,
+  shellSandbox: true,
   fetch: false,
+  localReadTools: false,
   organs: false,
   preferenceLearning: false,
+  proactiveRecall: false,
+  memoryInjection: false,
+  consolidation: false,
+  reflexion: false,
+  typedRecall: true,
+  partnerBond: false,
+  morphologyRecall: false,
+  morphologyTemperature: 1.0,
+  education: false,
+  absorptionInsight: false,
+  communityTriage: false,
+  oneringLedger: false,
   judge: false,
   council: false,
+  councilAdvisors: 3,
+  councilTimeoutMs: 30000,
+  onionLayer: false,
+  worktreeSandbox: false,
 };
 
 export interface ApeirethConfig {

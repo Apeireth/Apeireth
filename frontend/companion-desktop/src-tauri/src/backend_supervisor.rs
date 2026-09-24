@@ -204,45 +204,145 @@ impl BackendProviderEnv {
 
 /// Advanced-capability toggles the desktop injects into the sidecar.
 ///
-/// Mirrors the canonical CLI knobs (`APEIRETH_ENABLE_SHELL/FETCH/ORGANS/
-/// PREFERENCE_LEARNING` + `APEIRETH_COGNITIVE_JUDGE/COUNCIL`). Fail-closed by
-/// construction: only `true` values emit `"1"`; absent variables mean OFF in
-/// the CLI, so a false toggle injects nothing. Shell/fetch stay behind the
-/// runtime's require-approval governance even when enabled, so the UI toggle
-/// alone never grants unrestricted execution.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+/// Mirrors the canonical CLI knobs (`APEIRETH_ENABLE_*` + `APEIRETH_COGNITIVE_*`).
+/// Fail-closed by construction: only `true` values emit `"1"`; absent variables
+/// mean OFF in the CLI, so a false toggle injects nothing. The two exceptions
+/// are spelled out explicitly: `shell_sandbox_off = true` emits
+/// `APEIRETH_SHELL_SANDBOX=0` (the backend default is ON, so opting out needs
+/// an explicit value), and the numeric knobs emit their value only when > 0
+/// (0 = "do not inject", letting the backend keep its own default).
+/// Shell/fetch stay behind the runtime's require-approval governance even when
+/// enabled, so the UI toggle alone never grants unrestricted execution.
+///
+/// 2026-10-10 W2/W3 收官批：补齐 v1→v2 补漏落地的全部认知旋钮
+/// (partner_bond / morphology / education / absorption / community /
+/// onering_ledger / onion_layer / worktree_sandbox + 记忆流四件 + 议会数值)。
+/// `serde(default)` keeps persisted JSON from before this extension loadable;
+/// missing fields default to false/0 = inject nothing = backend defaults hold.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "snake_case")]
 pub struct BackendCapabilityEnv {
     pub enable_shell: bool,
+    /// true → inject APEIRETH_SHELL_SANDBOX=0 (explicit unsandboxed run).
+    pub shell_sandbox_off: bool,
     pub enable_fetch: bool,
+    pub enable_local_read_tools: bool,
+    pub disable_typed_recall: bool,
     pub enable_organs: bool,
     pub enable_preference_learning: bool,
+    pub enable_proactive_recall: bool,
+    pub enable_memory_injection: bool,
+    pub enable_consolidation: bool,
+    pub enable_reflexion: bool,
+    pub enable_partner_bond: bool,
+    pub enable_morphology_recall: bool,
+    pub enable_education: bool,
+    pub enable_absorption_insight: bool,
+    pub enable_community_triage: bool,
+    pub enable_onering_ledger: bool,
     pub cognitive_judge: bool,
     pub cognitive_council: bool,
+    /// 1-7 advisor count; 0 = do not inject (backend default 3).
+    pub council_advisors: u32,
+    /// Per-advisor timeout in ms; 0 = do not inject (backend default 30000).
+    pub council_timeout_ms: u32,
+    /// Morphology recall temperature (f64, like the backend's `env_temperature`);
+    /// 0.0 = do not inject (backend default 1.0).
+    pub morphology_temperature: f64,
+    pub enable_onion_layer: bool,
+    pub enable_worktree_sandbox: bool,
 }
 
 impl BackendCapabilityEnv {
-    /// The (variable, "1") pairs injected into the sidecar. Only enabled
+    /// The (variable, value) pairs injected into the sidecar. Only enabled
     /// capabilities appear; the CLI treats absence as OFF.
-    pub fn env_pairs(&self) -> Vec<(&'static str, &'static str)> {
+    pub fn env_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if self.enable_shell {
-            pairs.push(("APEIRETH_ENABLE_SHELL", "1"));
+            pairs.push(("APEIRETH_ENABLE_SHELL", "1".to_string()));
+        }
+        if self.shell_sandbox_off {
+            // Backend default is sandbox ON; only the explicit opt-out ("0")
+            // needs injecting.
+            pairs.push(("APEIRETH_SHELL_SANDBOX", "0".to_string()));
         }
         if self.enable_fetch {
-            pairs.push(("APEIRETH_ENABLE_FETCH", "1"));
+            pairs.push(("APEIRETH_ENABLE_FETCH", "1".to_string()));
+        }
+        if self.enable_local_read_tools {
+            pairs.push(("APEIRETH_ENABLE_LOCAL_READ_TOOLS", "1".to_string()));
+        }
+        if self.disable_typed_recall {
+            pairs.push(("APEIRETH_DISABLE_TYPED_RECALL", "1".to_string()));
         }
         if self.enable_organs {
-            pairs.push(("APEIRETH_ENABLE_ORGANS", "1"));
+            pairs.push(("APEIRETH_ENABLE_ORGANS", "1".to_string()));
         }
         if self.enable_preference_learning {
-            pairs.push(("APEIRETH_ENABLE_PREFERENCE_LEARNING", "1"));
+            pairs.push(("APEIRETH_ENABLE_PREFERENCE_LEARNING", "1".to_string()));
+        }
+        if self.enable_proactive_recall {
+            pairs.push(("APEIRETH_ENABLE_PROACTIVE_RECALL", "1".to_string()));
+        }
+        if self.enable_memory_injection {
+            pairs.push(("APEIRETH_ENABLE_MEMORY_INJECTION", "1".to_string()));
+        }
+        if self.enable_consolidation {
+            pairs.push(("APEIRETH_ENABLE_CONSOLIDATION", "1".to_string()));
+        }
+        if self.enable_reflexion {
+            pairs.push(("APEIRETH_ENABLE_REFLEXION", "1".to_string()));
+        }
+        if self.enable_partner_bond {
+            pairs.push(("APEIRETH_ENABLE_PARTNER_BOND", "1".to_string()));
+        }
+        if self.enable_morphology_recall {
+            pairs.push(("APEIRETH_ENABLE_MORPHOLOGY_RECALL", "1".to_string()));
+        }
+        if self.enable_education {
+            pairs.push(("APEIRETH_ENABLE_EDUCATION", "1".to_string()));
+        }
+        if self.enable_absorption_insight {
+            pairs.push(("APEIRETH_ENABLE_ABSORPTION_INSIGHT", "1".to_string()));
+        }
+        if self.enable_community_triage {
+            pairs.push(("APEIRETH_ENABLE_COMMUNITY_TRIAGE", "1".to_string()));
+        }
+        if self.enable_onering_ledger {
+            pairs.push(("APEIRETH_ENABLE_ONERING_LEDGER", "1".to_string()));
         }
         if self.cognitive_judge {
-            pairs.push(("APEIRETH_COGNITIVE_JUDGE", "1"));
+            pairs.push(("APEIRETH_COGNITIVE_JUDGE", "1".to_string()));
         }
         if self.cognitive_council {
-            pairs.push(("APEIRETH_COGNITIVE_COUNCIL", "1"));
+            pairs.push(("APEIRETH_COGNITIVE_COUNCIL", "1".to_string()));
+        }
+        if self.council_advisors > 0 {
+            pairs.push((
+                "APEIRETH_COUNCIL_ADVISORS",
+                self.council_advisors.to_string(),
+            ));
+        }
+        if self.council_timeout_ms > 0 {
+            pairs.push((
+                "APEIRETH_COUNCIL_TIMEOUT_MS",
+                self.council_timeout_ms.to_string(),
+            ));
+        }
+        if self.morphology_temperature > 0.0 {
+            let t = self.morphology_temperature;
+            let rendered = if t.fract() == 0.0 {
+                format!("{t:.0}")
+            } else {
+                t.to_string()
+            };
+            pairs.push(("APEIRETH_MORPHOLOGY_TEMPERATURE", rendered));
+        }
+        if self.enable_onion_layer {
+            pairs.push(("APEIRETH_ENABLE_ONION_LAYER", "1".to_string()));
+        }
+        if self.enable_worktree_sandbox {
+            pairs.push(("APEIRETH_ENABLE_WORKTREE_SANDBOX", "1".to_string()));
         }
         pairs
     }
@@ -1528,6 +1628,9 @@ mod tests {
 
     /// Capability env names must match the canonical CLI knobs, and the
     /// fail-closed contract holds: only true emits "1", false emits nothing.
+    /// The two explicit exceptions: `shell_sandbox = false` emits
+    /// `APEIRETH_SHELL_SANDBOX=0` (backend default is ON), and numeric knobs
+    /// emit their value only when > 0.
     #[test]
     fn capability_env_pairs_match_canonical_knobs_and_fail_closed() {
         let caps = BackendCapabilityEnv {
@@ -1537,6 +1640,7 @@ mod tests {
             enable_preference_learning: false,
             cognitive_judge: true,
             cognitive_council: false,
+            ..Default::default()
         };
         let pairs = caps.env_pairs();
         let mut map = std::collections::HashMap::new();
@@ -1546,8 +1650,98 @@ mod tests {
         assert_eq!(map["APEIRETH_ENABLE_SHELL"], "1");
         assert_eq!(map["APEIRETH_ENABLE_ORGANS"], "1");
         assert_eq!(map["APEIRETH_COGNITIVE_JUDGE"], "1");
+        // 沙箱默认开：shell_sandbox_off=false 不注入；只有显式关闭才注入 "0"。
+        assert!(!map.contains_key("APEIRETH_SHELL_SANDBOX"));
         assert_eq!(map.len(), 3, "false toggles must emit nothing: {map:?}");
         assert!(BackendCapabilityEnv::default().is_empty());
+    }
+
+    /// W2/W3 收官批新旋钮: 每个新 env 名与 canonical CLI 对齐, 数值旋钮
+    /// 只在 > 0 时注入, 沙箱关闭显式注入 "0"。
+    #[test]
+    fn capability_env_pairs_cover_w2w3_knobs() {
+        let caps = BackendCapabilityEnv {
+            shell_sandbox_off: true,
+            enable_local_read_tools: true,
+            disable_typed_recall: true,
+            enable_proactive_recall: true,
+            enable_memory_injection: true,
+            enable_consolidation: true,
+            enable_reflexion: true,
+            enable_partner_bond: true,
+            enable_morphology_recall: true,
+            enable_education: true,
+            enable_absorption_insight: true,
+            enable_community_triage: true,
+            enable_onering_ledger: true,
+            cognitive_council: true,
+            council_advisors: 5,
+            council_timeout_ms: 45000,
+            morphology_temperature: 1.5,
+            enable_onion_layer: true,
+            enable_worktree_sandbox: true,
+            ..Default::default()
+        };
+        let pairs = caps.env_pairs();
+        let mut map = std::collections::HashMap::new();
+        for (key, value) in pairs {
+            map.insert(key, value);
+        }
+        assert_eq!(map["APEIRETH_SHELL_SANDBOX"], "0");
+        assert_eq!(map["APEIRETH_ENABLE_LOCAL_READ_TOOLS"], "1");
+        assert_eq!(map["APEIRETH_DISABLE_TYPED_RECALL"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_PROACTIVE_RECALL"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_MEMORY_INJECTION"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_CONSOLIDATION"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_REFLEXION"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_PARTNER_BOND"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_MORPHOLOGY_RECALL"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_EDUCATION"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_ABSORPTION_INSIGHT"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_COMMUNITY_TRIAGE"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_ONERING_LEDGER"], "1");
+        assert_eq!(map["APEIRETH_COGNITIVE_COUNCIL"], "1");
+        assert_eq!(map["APEIRETH_COUNCIL_ADVISORS"], "5");
+        assert_eq!(map["APEIRETH_COUNCIL_TIMEOUT_MS"], "45000");
+        assert_eq!(map["APEIRETH_MORPHOLOGY_TEMPERATURE"], "1.5");
+        assert_eq!(map["APEIRETH_ENABLE_ONION_LAYER"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_WORKTREE_SANDBOX"], "1");
+        assert_eq!(map.len(), 19, "exact knob coverage: {map:?}");
+
+        // 数值为 0 = 不注入（后端用自带默认）；温度整数渲染不带小数点。
+        let minimal = BackendCapabilityEnv {
+            council_advisors: 3,
+            morphology_temperature: 2.0,
+            ..Default::default()
+        };
+        let minimal: std::collections::HashMap<_, _> = minimal.env_pairs().into_iter().collect();
+        assert_eq!(minimal["APEIRETH_COUNCIL_ADVISORS"], "3");
+        assert_eq!(minimal["APEIRETH_MORPHOLOGY_TEMPERATURE"], "2");
+        assert_eq!(minimal.len(), 2);
+    }
+
+    /// 旧版本持久化的 capability JSON（无 W2/W3 字段）必须仍能反序列化：
+    /// serde(default) 把缺失字段补成 false/0 = 全部不注入（fail-closed）。
+    #[test]
+    fn capability_env_legacy_persisted_json_still_loads() {
+        let legacy = r#"{
+            "enable_shell": true,
+            "enable_fetch": false,
+            "enable_organs": true,
+            "enable_preference_learning": false,
+            "cognitive_judge": true,
+            "cognitive_council": false
+        }"#;
+        let caps: BackendCapabilityEnv = serde_json::from_str(legacy).expect("legacy JSON loads");
+        assert!(caps.enable_shell);
+        assert!(caps.enable_organs);
+        assert!(caps.cognitive_judge);
+        assert!(
+            !caps.shell_sandbox_off,
+            "missing shell_sandbox_off defaults to false = sandbox stays ON"
+        );
+        assert_eq!(caps.council_advisors, 0, "missing numerics default to 0");
+        assert_eq!(caps.env_pairs().len(), 3);
     }
 
     #[test]

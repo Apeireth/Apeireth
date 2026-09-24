@@ -29,6 +29,27 @@
     Palette,
     Search,
     Folder,
+    Brain,
+    Scale,
+    Wrench,
+    HeartHandshake,
+    Network,
+    BookOpen,
+    Dumbbell,
+    Users,
+    GitBranch,
+    Landmark,
+    SlidersHorizontal,
+    ShieldCheck,
+    ShieldOff,
+    FolderSearch,
+    Terminal,
+    RefreshCcw,
+    Radar,
+    Workflow,
+    Timer,
+    MessageSquarePlus,
+    Archive,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
@@ -74,8 +95,8 @@
     | 'appearance'
     | 'models'
     | 'personality'
-    | 'memory'
-    | 'capabilities'
+    | 'cognition'
+    | 'governance'
     | 'tools'
     | 'runtime'
     | 'data'
@@ -136,14 +157,94 @@
     }
   }
 
-  const CAPABILITY_TOGGLE_DEFS: Array<{key: keyof CapabilityToggles; label: string; desc: string}> = [
-    {key: 'shell', label: 'Shell 命令工具', desc: '模型可提议本地命令，每次执行前需你在审批面板确认（fail-closed 授权）。'},
-    {key: 'fetch', label: '网络读取工具', desc: '模型可发起公网 GET 请求（只读，无凭据转发）。'},
-    {key: 'organs', label: '器官链（9 organs）', desc: '回合后跑 9 器官反事实推演/好奇心/情绪记忆等（AfterTurn，fail-open，不阻塞回复）。'},
-    {key: 'preferenceLearning', label: '偏好学习', desc: '回合后把主人偏好写成双索引记忆（原始 + 主题簇），后续召回按主题展开。'},
-    {key: 'judge', label: '评审 (Judge)', desc: '模型回复后由评审模块判一次（每次评审最多一次 side-call）。'},
-    {key: 'council', label: '议会 (Council)', desc: '模型回复后由 7 个 advisor 并行评审（整体 60s 超时）。'},
+  // ---- 能力中心（2026-10-10 W2/W3 收官批）：分组卡片式旋钮注册表 ----
+  // 设计语言：电脑版微信/QQ 设置页——图标 + 标题 + 副文案 + 右侧开关的分组列表。
+  // 每个旋钮如实标注后端 env 名（工程诚实），env 芯片用等宽弱色，不抢视觉。
+
+  type CapDef = {
+    key: keyof CapabilityToggles;
+    icon: typeof Network;
+    label: string;
+    desc: string;
+    env: string;
+    /** 反向旋钮：开启 = 不注入（如 DISABLE_TYPED_RECALL，默认开）。 */
+    invert?: boolean;
+    /** 前置能力：未开启时本行不可用（如沙箱行依赖 shell）。 */
+    requires?: keyof CapabilityToggles;
+  };
+
+  /** 记忆流：六历史流体系的运行态开关。 */
+  const MEMORY_FLOW_DEFS: CapDef[] = [
+    {key: 'memoryInjection', icon: MessageSquarePlus, label: '记忆注入', env: 'APEIRETH_ENABLE_MEMORY_INJECTION', desc: '把召回的相关记忆注进每轮上下文，越聊越懂你。'},
+    {key: 'consolidation', icon: Archive, label: '记忆固化', env: 'APEIRETH_ENABLE_CONSOLIDATION', desc: '后台把散碎对话提炼成长期记忆（consolidation）。'},
+    {key: 'reflexion', icon: RefreshCcw, label: '反思沉淀', env: 'APEIRETH_ENABLE_REFLEXION', desc: 'reflexion 文件回流：从错误与复盘里沉淀经验。'},
+    {key: 'proactiveRecall', icon: Radar, label: '前瞻召回', env: 'APEIRETH_ENABLE_PROACTIVE_RECALL', desc: '闲置时主动浮现可能相关的记忆，不打断但在场。'},
+    {key: 'typedRecall', icon: Layers3, label: '类型化召回', env: 'APEIRETH_DISABLE_TYPED_RECALL', invert: true, desc: '按事件/偏好/事实等类型分别召回（默认开）。'},
   ];
+
+  /** 认知增强：W2 接线批落地的五件 + 器官链/偏好学习。 */
+  const COGNITION_DEFS: CapDef[] = [
+    {key: 'organs', icon: Network, label: '器官链（9 organs）', env: 'APEIRETH_ENABLE_ORGANS', desc: '回合后跑反事实推演/好奇心/情绪记忆等（AfterTurn，不阻塞回复）。'},
+    {key: 'preferenceLearning', icon: HeartHandshake, label: '偏好学习', env: 'APEIRETH_ENABLE_PREFERENCE_LEARNING', desc: '把主人偏好写成双索引记忆，后续召回按主题展开。'},
+    {key: 'partnerBond', icon: Users, label: '伙伴羁绊', env: 'APEIRETH_ENABLE_PARTNER_BOND', desc: '关系阶段/深度注入语气校准，回合后确定性演化（W2 §4.2）。'},
+    {key: 'morphologyRecall', icon: SlidersHorizontal, label: '检索深度自适应', env: 'APEIRETH_ENABLE_MORPHOLOGY_RECALL', desc: '按形态学读数收紧检索条数——只收紧不放大（W2 §4.3）。'},
+    {key: 'education', icon: BookOpen, label: 'Dx-Check 教育工具', env: 'APEIRETH_ENABLE_EDUCATION', desc: '模型可调用自查式教学工具，回答前先自检（W2 §4.3）。'},
+    {key: 'absorptionInsight', icon: Dumbbell, label: '认知体操', env: 'APEIRETH_ENABLE_ABSORPTION_INSIGHT', desc: '四算法洞察注入（betti/残差金字塔/river/kuramoto，实验性，W2 §4.4）。'},
+  ];
+
+  /** 社区与账本：W3 移植批的检索路由与可溯源记账。 */
+  const COMMUNITY_DEFS: CapDef[] = [
+    {key: 'communityTriage', icon: GitBranch, label: '图社区分诊', env: 'APEIRETH_ENABLE_COMMUNITY_TRIAGE', desc: '检索前置双路路由：命中实体走实体链，否则给社区摘要（W3 §1）。'},
+    {key: 'oneringLedger', icon: Landmark, label: 'onering 账本', env: 'APEIRETH_ENABLE_ONERING_LEDGER', desc: '每回合 user/assistant 留痕入 context_ledger，全程可溯源（W3）。'},
+  ];
+
+  /** 决策：评审/议会 + 深度预设。 */
+  const DECISION_DEFS: CapDef[] = [
+    {key: 'judge', icon: Scale, label: '评审 (Judge)', env: 'APEIRETH_COGNITIVE_JUDGE', desc: '模型回复后由评审模块判一次（每次评审最多一次 side-call）。'},
+    {key: 'council', icon: Users, label: '议会 (Council)', env: 'APEIRETH_COGNITIVE_COUNCIL', desc: '决策环节多顾问并行裁决；一般运行时不常开，只在重要决策用。'},
+  ];
+
+  /** 治理：三洋葱三段门 + 子代理 worktree 隔离。 */
+  const GUARD_DEFS: CapDef[] = [
+    {key: 'onionLayer', icon: ShieldCheck, label: '三洋葱治理层', env: 'APEIRETH_ENABLE_ONION_LAYER', desc: 'L3-L5 三段门：HA 离线 = 物理隔离拒绝；只收紧已放行的（W3 工作项 6）。'},
+    {key: 'worktreeSandbox', icon: Workflow, label: '子代理 worktree 隔离', env: 'APEIRETH_ENABLE_WORKTREE_SANDBOX', desc: '子代理在独立 git worktree 里干活，物理目录级隔离，收束后清理。'},
+  ];
+
+  /** 工具：三类可授予的工具权限。 */
+  const TOOL_DEFS: CapDef[] = [
+    {key: 'shell', icon: Terminal, label: 'Shell 命令工具', env: 'APEIRETH_ENABLE_SHELL', desc: '模型可提议本地命令——每次执行前仍需你在审批卡点头。'},
+    {key: 'fetch', icon: Globe, label: '网络读取工具', env: 'APEIRETH_ENABLE_FETCH', desc: '公网 GET 只读请求，无凭据转发。'},
+    {key: 'localReadTools', icon: FolderSearch, label: '本地只读工具', env: 'APEIRETH_ENABLE_LOCAL_READ_TOOLS', desc: '文件/搜索/仓库读侧工具（file / search / repo）。'},
+  ];
+
+  function isCapOn(def: CapDef): boolean {
+    const value = capabilities[def.key];
+    return def.invert ? value === false : value === true;
+  }
+
+  function toggleCap(def: CapDef): void {
+    handleCapabilityToggle(def.key, def.invert ? capabilities[def.key] === true : capabilities[def.key] !== true);
+  }
+
+  function capDisabled(def: CapDef): boolean {
+    return def.requires !== undefined && capabilities[def.requires] !== true;
+  }
+
+  function enabledCount(defs: CapDef[]): number {
+    return defs.filter((def) => isCapOn(def) && !capDisabled(def)).length;
+  }
+
+  function setCouncilAdvisors(value: number): void {
+    capabilities = {...capabilities, councilAdvisors: Math.min(7, Math.max(1, Math.round(value) || 1))};
+  }
+
+  function setCouncilTimeout(value: number): void {
+    capabilities = {...capabilities, councilTimeoutMs: Math.max(1000, Math.round(value) || 30000)};
+  }
+
+  function setMorphologyTemperature(value: number): void {
+    capabilities = {...capabilities, morphologyTemperature: Math.min(2, Math.max(0.1, Math.round(value * 10) / 10))};
+  }
 
   // Model Provider protocol & preset configurations
   const OPENAI_PRESETS = [
@@ -368,9 +469,9 @@
     {id: 'appearance', label: '外观与主题', icon: Palette},
     {id: 'models', label: '模型与提供商', icon: Cpu},
     {id: 'personality', label: '伙伴人设与行为', icon: User},
-    {id: 'memory', label: '记忆策略', icon: Layers3},
-    {id: 'capabilities', label: '高级能力', icon: Sparkles},
-    {id: 'tools', label: '工具与权限策略', icon: Shield},
+    {id: 'cognition', label: '记忆与认知', icon: Brain},
+    {id: 'governance', label: '决策与治理', icon: Scale},
+    {id: 'tools', label: '工具与安全', icon: Wrench},
     {id: 'runtime', label: '运行时与诊断', icon: Activity},
     {id: 'data', label: '数据与存储', icon: Trash2},
     {id: 'developer', label: '开发者选项', icon: Code},
@@ -705,7 +806,7 @@
   <PageHeader
     eyebrow="首选项"
     title="系统设置"
-    subtitle="配置模型提供商（Anthropic / OpenAI 兼容协议）、后端连接、权限与数据。"
+    subtitle="配置模型提供商、记忆与认知、决策治理、工具安全与数据存储。"
   >
     <button class="primary-button" onclick={handleSaveSettings}>
       <Check size={14} />
@@ -1118,74 +1219,266 @@
           </div>
         </div>
 
-      {:else if activeSection === 'memory'}
+      {:else if activeSection === 'cognition'}
         <div class="setting-block">
-          <h3 class="block-title">记忆流与提取策略</h3>
-          <p class="block-desc">伙伴常驻后台记忆提炼与做梦机制。</p>
+          <h3 class="block-title">记忆与认知</h3>
+          <p class="block-desc">
+            记忆流运行态 + W2/W3 收官批落地的认知增强件。全部默认关闭、逐项显式开启；
+            保存后注入侧车环境并重启网关（配置没变不会重启）。
+          </p>
 
-          <div class="info-card">
-            <strong class="info-title">6 历史流体系</strong>
-            <p class="info-text">包含会话历史、偏好模型、事实抽取、反思沉淀、经验总结与图谱关联。</p>
+          <div class="cap-summary">
+            <Brain size={14} />
+            <span>本页已启用 <b>{enabledCount(MEMORY_FLOW_DEFS) + enabledCount(COGNITION_DEFS) + enabledCount(COMMUNITY_DEFS)}</b> / {MEMORY_FLOW_DEFS.length + COGNITION_DEFS.length + COMMUNITY_DEFS.length} 项认知能力</span>
+          </div>
+
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Layers3 size={13} /> 记忆流</span>
+              <span class="cap-card-count">{enabledCount(MEMORY_FLOW_DEFS)}/{MEMORY_FLOW_DEFS.length}</span>
+            </div>
+            {#each MEMORY_FLOW_DEFS as def (def.key)}
+              <button
+                class="cap-row"
+                class:dim={capDisabled(def)}
+                onclick={() => toggleCap(def)}
+                role="switch"
+                aria-checked={isCapOn(def)}
+                aria-label={def.label}
+              >
+                <span class="cap-icon"><def.icon size={15} /></span>
+                <span class="cap-text">
+                  <strong>{def.label}<code class="cap-env">{def.env}</code></strong>
+                  <small>{def.desc}</small>
+                </span>
+                <span class="cap-switch" class:on={isCapOn(def)}><span class="cap-knob"></span></span>
+              </button>
+            {/each}
+          </div>
+
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Sparkles size={13} /> 认知增强 · W2 接线批</span>
+              <span class="cap-card-count">{enabledCount(COGNITION_DEFS)}/{COGNITION_DEFS.length}</span>
+            </div>
+            {#each COGNITION_DEFS as def (def.key)}
+              <button
+                class="cap-row"
+                class:dim={capDisabled(def)}
+                onclick={() => toggleCap(def)}
+                role="switch"
+                aria-checked={isCapOn(def)}
+                aria-label={def.label}
+              >
+                <span class="cap-icon"><def.icon size={15} /></span>
+                <span class="cap-text">
+                  <strong>{def.label}<code class="cap-env">{def.env}</code></strong>
+                  <small>{def.desc}</small>
+                </span>
+                <span class="cap-switch" class:on={isCapOn(def)}><span class="cap-knob"></span></span>
+              </button>
+              {#if def.key === 'morphologyRecall' && capabilities.morphologyRecall}
+                <div class="cap-row cap-row-static">
+                  <span class="cap-icon"><SlidersHorizontal size={15} /></span>
+                  <span class="cap-text">
+                    <strong>检索温度<code class="cap-env">APEIRETH_MORPHOLOGY_TEMPERATURE</code></strong>
+                    <small>形态学读数活跃度，默认 1.0；越高检索面越宽。</small>
+                  </span>
+                  <span class="cap-slider-wrap">
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="2"
+                      step="0.1"
+                      value={capabilities.morphologyTemperature}
+                      aria-label="检索温度"
+                      oninput={(e) => setMorphologyTemperature(Number((e.currentTarget as HTMLInputElement).value))}
+                    />
+                    <b>{capabilities.morphologyTemperature.toFixed(1)}</b>
+                  </span>
+                </div>
+              {/if}
+            {/each}
+          </div>
+
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><GitBranch size={13} /> 社区与账本 · W3 移植批</span>
+              <span class="cap-card-count">{enabledCount(COMMUNITY_DEFS)}/{COMMUNITY_DEFS.length}</span>
+            </div>
+            {#each COMMUNITY_DEFS as def (def.key)}
+              <button
+                class="cap-row"
+                class:dim={capDisabled(def)}
+                onclick={() => toggleCap(def)}
+                role="switch"
+                aria-checked={isCapOn(def)}
+                aria-label={def.label}
+              >
+                <span class="cap-icon"><def.icon size={15} /></span>
+                <span class="cap-text">
+                  <strong>{def.label}<code class="cap-env">{def.env}</code></strong>
+                  <small>{def.desc}</small>
+                </span>
+                <span class="cap-switch" class:on={isCapOn(def)}><span class="cap-knob"></span></span>
+              </button>
+            {/each}
           </div>
 
           <div class="info-card">
             <strong class="info-title">后台做梦与反思循环 (Dream & Reflection)</strong>
-            <p class="info-text">伴随常驻 daemon 运行，安静期后自动触发做梦提炼与经验入库。</p>
+            <p class="info-text">
+              「做梦」伴随常驻后台安静触发：苏醒后把提炼结果写日记（source=dream），
+              日记失败不伪装成功。命令行亦可显式触发 <code>apeireth dream</code>。
+            </p>
           </div>
-        </div>
-
-      {:else if activeSection === 'capabilities'}
-        <div class="setting-block">
-          <h3 class="block-title">高级能力（后端旋钮）</h3>
-          <p class="block-desc">
-            保存后注入侧车环境并重启网关（配置没变不会重启）。全部默认关闭，
-            逐项显式开启；shell/fetch 开启后每次调用仍走人工审批。
-          </p>
-
-          <div class="form-group">
-            <label for="cognitive-depth">认知深度</label>
-            <select id="cognitive-depth" bind:value={cognitiveDepth} onchange={() => applyCognitiveDepth()}>
-              <option value="light">轻量 — judge 关 / council 关 (默认)</option>
-              <option value="balanced">平衡 — judge 开 / council 关</option>
-              <option value="deep">深度 — judge 开 / council 开</option>
-              <option value="custom">自定义 — 手动设置 judge/council</option>
-            </select>
-            <small class="field-hint">
-              评审在每条回复后追加，会增加延迟与 token 消耗。实测（DeepSeek flash，
-              2026-10-06）：轻量 ≈1.1s / 平衡 ≈2.6s / 深度 ≈13s 每轮——日常对话建议
-              轻量或平衡，深度留给重要问题。
-            </small>
-          </div>
-
-          {#each CAPABILITY_TOGGLE_DEFS as item (item.key)}
-            <label class="toggle-row">
-              <span class="toggle-text">
-                <strong>{item.label}</strong>
-                <small>{item.desc}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={capabilities[item.key]}
-                onchange={(e) => {
-                  handleCapabilityToggle(item.key, (e.target as HTMLInputElement).checked);
-                }}
-              />
-            </label>
-          {/each}
 
           <div class="info-card">
             <strong class="info-title">fail-closed 语义</strong>
             <p class="info-text">
-              关闭（默认）时不注入任何环境变量，后端能力完全不存在；开启只注入
-              "1"。shell/fetch 有 require_approval 治理标，开启 ≠ 无审批执行。
+              关闭（默认）时不注入任何环境变量，后端能力完全不存在；开启只注入 "1"。
+              唯一的例外是沙箱（后端默认开），见「工具与安全」。
+            </p>
+          </div>
+        </div>
+
+      {:else if activeSection === 'governance'}
+        <div class="setting-block">
+          <h3 class="block-title">决策与治理</h3>
+          <p class="block-desc">
+            评审/议会深度、三洋葱权限门与子代理隔离。议会默认 3 位顾问、日常轻量运行，
+            重要决策再加深。
+          </p>
+
+          <div class="cap-summary">
+            <Scale size={14} />
+            <span>本页已启用 <b>{enabledCount(DECISION_DEFS) + enabledCount(GUARD_DEFS)}</b> / {DECISION_DEFS.length + GUARD_DEFS.length} 项治理件</span>
+          </div>
+
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Users size={13} /> 评审与议会</span>
+              <span class="cap-card-count">{enabledCount(DECISION_DEFS)}/{DECISION_DEFS.length}</span>
+            </div>
+
+            <div class="cap-row cap-row-static">
+              <span class="cap-icon"><Brain size={15} /></span>
+              <span class="cap-text">
+                <strong>认知深度</strong>
+                <small>快捷档位：轻量 ≈1.1s / 平衡 ≈2.6s / 深度 ≈13s 每轮（实测 2026-10-06）。</small>
+              </span>
+              <span class="cap-select-wrap">
+                <select id="cognitive-depth" bind:value={cognitiveDepth} onchange={() => applyCognitiveDepth()}>
+                  <option value="light">轻量</option>
+                  <option value="balanced">平衡</option>
+                  <option value="deep">深度</option>
+                  <option value="custom">自定义</option>
+                </select>
+              </span>
+            </div>
+
+            {#each DECISION_DEFS as def (def.key)}
+              <button
+                class="cap-row"
+                class:dim={capDisabled(def)}
+                onclick={() => toggleCap(def)}
+                role="switch"
+                aria-checked={isCapOn(def)}
+                aria-label={def.label}
+              >
+                <span class="cap-icon"><def.icon size={15} /></span>
+                <span class="cap-text">
+                  <strong>{def.label}<code class="cap-env">{def.env}</code></strong>
+                  <small>{def.desc}</small>
+                </span>
+                <span class="cap-switch" class:on={isCapOn(def)}><span class="cap-knob"></span></span>
+              </button>
+            {/each}
+
+            {#if capabilities.council}
+              <div class="cap-row cap-row-static">
+                <span class="cap-icon"><Users size={15} /></span>
+                <span class="cap-text">
+                  <strong>顾问数量<code class="cap-env">APEIRETH_COUNCIL_ADVISORS</code></strong>
+                  <small>1-7 位，Safety 恒首位；默认 3（7→3 收敛批）。</small>
+                </span>
+                <span class="cap-slider-wrap">
+                  <input
+                    type="range"
+                    min="1"
+                    max="7"
+                    step="1"
+                    value={capabilities.councilAdvisors}
+                    aria-label="顾问数量"
+                    oninput={(e) => setCouncilAdvisors(Number((e.currentTarget as HTMLInputElement).value))}
+                  />
+                  <b>{capabilities.councilAdvisors}</b>
+                </span>
+              </div>
+              <div class="cap-row cap-row-static">
+                <span class="cap-icon"><Timer size={15} /></span>
+                <span class="cap-text">
+                  <strong>单顾问超时 (ms)<code class="cap-env">APEIRETH_COUNCIL_TIMEOUT_MS</code></strong>
+                  <small>默认 30000；思考型模型延迟高时可放宽。</small>
+                </span>
+                <span class="cap-slider-wrap">
+                  <input
+                    type="number"
+                    min="1000"
+                    step="5000"
+                    value={capabilities.councilTimeoutMs}
+                    aria-label="单顾问超时毫秒"
+                    oninput={(e) => setCouncilTimeout(Number((e.currentTarget as HTMLInputElement).value))}
+                  />
+                </span>
+              </div>
+            {/if}
+          </div>
+
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><ShieldCheck size={13} /> 权限与子代理</span>
+              <span class="cap-card-count">{enabledCount(GUARD_DEFS)}/{GUARD_DEFS.length}</span>
+            </div>
+            {#each GUARD_DEFS as def (def.key)}
+              <button
+                class="cap-row"
+                class:dim={capDisabled(def)}
+                onclick={() => toggleCap(def)}
+                role="switch"
+                aria-checked={isCapOn(def)}
+                aria-label={def.label}
+              >
+                <span class="cap-icon"><def.icon size={15} /></span>
+                <span class="cap-text">
+                  <strong>{def.label}<code class="cap-env">{def.env}</code></strong>
+                  <small>{def.desc}</small>
+                </span>
+                <span class="cap-switch" class:on={isCapOn(def)}><span class="cap-knob"></span></span>
+              </button>
+            {/each}
+          </div>
+
+          <div class="info-card">
+            <strong class="info-title">议会语义（2026-10-10 改造批）</strong>
+            <p class="info-text">
+              议会是决策环节的顾问团，不是每轮评审器：升级/部署批准、高危操作、
+              待裁冲突批量裁决时启用，日常对话保持轻量。未配 LLM 时 fail-loud 不造假裁决。
             </p>
           </div>
         </div>
 
       {:else if activeSection === 'tools'}
         <div class="setting-block">
-          <h3 class="block-title">工具权限与安全架构</h3>
-          <p class="block-desc">高危特权工具（如 FileOperator、ShellExec）需要主人授权。</p>
+          <h3 class="block-title">工具与安全</h3>
+          <p class="block-desc">
+            工具权限授予 + 沙箱边界。开启工具 ≠ 无审批执行——shell 每次调用仍走审批卡。
+          </p>
+
+          <div class="cap-summary">
+            <Wrench size={14} />
+            <span>本页已授予 <b>{enabledCount(TOOL_DEFS)}</b> / {TOOL_DEFS.length} 类工具 · 沙箱{capabilities.shellSandbox ? '开' : '关'}</span>
+          </div>
 
           <div class="form-group">
             <label for="permission-preset">全局权限预设</label>
@@ -1195,6 +1488,63 @@
               <option value="full">full — 完全权限</option>
             </select>
             <small class="field-hint">作为新会话默认 (已生效)：仅对新会话生效，已有会话请在会话内改。</small>
+          </div>
+
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Terminal size={13} /> 工具授予</span>
+              <span class="cap-card-count">{enabledCount(TOOL_DEFS)}/{TOOL_DEFS.length}</span>
+            </div>
+            {#each TOOL_DEFS as def (def.key)}
+              <button
+                class="cap-row"
+                class:dim={capDisabled(def)}
+                onclick={() => toggleCap(def)}
+                role="switch"
+                aria-checked={isCapOn(def)}
+                aria-label={def.label}
+              >
+                <span class="cap-icon"><def.icon size={15} /></span>
+                <span class="cap-text">
+                  <strong>{def.label}<code class="cap-env">{def.env}</code></strong>
+                  <small>{def.desc}</small>
+                </span>
+                <span class="cap-switch" class:on={isCapOn(def)}><span class="cap-knob"></span></span>
+              </button>
+
+              {#if def.key === 'shell' && capabilities.shell}
+                <button
+                  class="cap-row cap-row-nested"
+                  class:sandbox-off={!capabilities.shellSandbox}
+                  onclick={() => handleCapabilityToggle('shellSandbox', !capabilities.shellSandbox)}
+                  role="switch"
+                  aria-checked={capabilities.shellSandbox}
+                  aria-label="AppContainer 沙箱执行"
+                >
+                  <span class="cap-icon">
+                    {#if capabilities.shellSandbox}
+                      <ShieldCheck size={15} />
+                    {:else}
+                      <ShieldOff size={15} />
+                    {/if}
+                  </span>
+                  <span class="cap-text">
+                    <strong>AppContainer 沙箱执行<code class="cap-env">APEIRETH_SHELL_SANDBOX</code></strong>
+                    <small>
+                      断网 + 用户空间零访问（双探针实证，默认开）。关闭 = 显式裸跑，
+                      命令获得你的完整用户权限——危险操作会红标提醒。
+                    </small>
+                  </span>
+                  <span class="cap-switch" class:on={capabilities.shellSandbox}><span class="cap-knob"></span></span>
+                </button>
+                {#if !capabilities.shellSandbox}
+                  <div class="cap-warning">
+                    <AlertTriangle size={13} />
+                    <span>沙箱已关闭：shell 命令将以你的完整用户权限裸跑，请确认你信任正在运行的任务。</span>
+                  </div>
+                {/if}
+              {/if}
+            {/each}
           </div>
 
           <div class="info-card">
@@ -1959,36 +2309,226 @@
     flex-direction: column;
     gap: 6px;
   }
-  /* 高级能力开关行 */
-  .toggle-row {
+
+  /* ===== 能力中心 · 微信/QQ 式分组卡片（2026-10-10 W2/W3 收官批）===== */
+  .cap-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .cap-summary b {
+    color: var(--amber);
+    font-family: var(--mono);
+    font-weight: 600;
+  }
+
+  .cap-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .cap-card-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 12px 14px;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    cursor: pointer;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
   }
-  .toggle-text {
+  .cap-card-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .cap-card-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--faint);
+  }
+
+  /* 行：图标 + 标题/副文案 + 右侧控制。整行可点（微信设置项语义）。 */
+  .cap-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 11px 14px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    color: var(--text);
+  }
+  .cap-row:last-child {
+    border-bottom: 0;
+  }
+  .cap-row:hover {
+    background: var(--surface);
+  }
+  .cap-row.dim {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .cap-row-nested {
+    padding-left: 40px;
+    background: color-mix(in srgb, var(--surface) 40%, transparent);
+  }
+  .cap-row.sandbox-off {
+    background: rgba(168, 72, 64, 0.07);
+  }
+  .cap-row-static {
+    cursor: default;
+  }
+  .cap-row-static:hover {
+    background: transparent;
+  }
+
+  .cap-icon {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .cap-row-nested .cap-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .cap-text {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
   }
-  .toggle-text strong {
+  .cap-text strong {
     font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
   }
-  .toggle-text small {
+  .cap-text small {
     font-size: 11px;
     color: var(--faint);
     line-height: 1.5;
   }
-  .toggle-row input[type='checkbox'] {
-    width: 16px;
-    height: 16px;
+  /* 工程诚实：每个旋钮如实标注后端 env 名，等宽弱色芯片，不抢视觉。 */
+  .cap-env {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 400;
+    color: var(--faint);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    letter-spacing: 0.02em;
+  }
+
+  /* 开关（微信式圆钮） */
+  .cap-switch {
+    position: relative;
+    flex: none;
+    width: 36px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    transition: background 0.18s ease, border-color 0.18s ease;
+  }
+  .cap-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: left 0.18s ease, background 0.18s ease;
+  }
+  .cap-switch.on {
+    background: var(--accent, #6ea8fe);
+    border-color: transparent;
+  }
+  .cap-switch.on .cap-knob {
+    left: 18px;
+    background: #fff;
+  }
+
+  /* 数值行（滑杆 / 数字输入） */
+  .cap-slider-wrap {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .cap-slider-wrap input[type='range'] {
+    width: 110px;
     accent-color: var(--accent, #6ea8fe);
-    flex-shrink: 0;
+  }
+  .cap-slider-wrap input[type='number'] {
+    width: 90px;
+    padding: 6px 8px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: var(--mono);
+    outline: 0;
+  }
+  .cap-slider-wrap input[type='number']:focus {
+    border-color: var(--amber-line);
+  }
+  .cap-slider-wrap b {
+    font-family: var(--mono);
+    font-size: 12px;
+    min-width: 30px;
+    text-align: right;
+    color: var(--text);
+  }
+  .cap-select-wrap select {
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 12px;
+    outline: 0;
+  }
+
+  .cap-warning {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 14px 12px 40px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(168, 72, 64, 0.35);
+    background: rgba(168, 72, 64, 0.08);
+    color: var(--danger);
+    font-size: 11.5px;
+    line-height: 1.5;
   }
   /* 多 Agent 人设卡片 */
   .persona-card {

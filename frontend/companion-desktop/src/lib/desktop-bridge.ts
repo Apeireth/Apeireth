@@ -11,6 +11,8 @@
 // imported at module scope by shared code — `@tauri-apps/api` is loaded through
 // a dynamic import that is only reached when the Tauri global is present.
 
+import type {CapabilityToggles} from './types';
+
 /** Backend lifecycle states, mirroring the Rust `BackendState` enum. */
 export type BackendState = 'Stopped' | 'Starting' | 'Ready' | 'Failed' | 'Stopping';
 
@@ -140,33 +142,75 @@ export async function applyBackendProviderEnv(env: BackendProviderEnv): Promise<
 /**
  * Advanced-capability toggles, mirroring the Rust `BackendCapabilityEnv`.
  * Fail-closed: the supervisor injects `"1"` only for true values; absent
- * means OFF in the canonical CLI.
+ * means OFF in the canonical CLI. Numeric knobs use 0 = "do not inject"
+ * so the backend keeps its own default.
+ *
+ * 2026-10-10 W2/W3 收官批：补齐补漏落地的全部认知旋钮（partner_bond /
+ * morphology / education / absorption / community / onering / onion /
+ * worktree + 记忆流四件 + 议会数值旋钮）。
  */
 export interface BackendCapabilityEnv {
   enable_shell: boolean;
+  /** true → 注入 APEIRETH_SHELL_SANDBOX=0（显式裸跑）；false → 不注入（后端默认沙箱开）。 */
+  shell_sandbox_off: boolean;
   enable_fetch: boolean;
+  enable_local_read_tools: boolean;
+  disable_typed_recall: boolean;
   enable_organs: boolean;
   enable_preference_learning: boolean;
+  enable_proactive_recall: boolean;
+  enable_memory_injection: boolean;
+  enable_consolidation: boolean;
+  enable_reflexion: boolean;
+  enable_partner_bond: boolean;
+  enable_morphology_recall: boolean;
+  enable_education: boolean;
+  enable_absorption_insight: boolean;
+  enable_community_triage: boolean;
+  enable_onering_ledger: boolean;
   cognitive_judge: boolean;
   cognitive_council: boolean;
+  /** 1-7；0 = 不注入（后端默认 3）。 */
+  council_advisors: number;
+  /** 毫秒；0 = 不注入（后端默认 30000）。 */
+  council_timeout_ms: number;
+  /** 检索温度；0 = 不注入（后端默认 1.0）。 */
+  morphology_temperature: number;
+  enable_onion_layer: boolean;
+  enable_worktree_sandbox: boolean;
 }
 
 /** Map the config's capability toggles onto the canonical knob names. */
-export function capabilityEnvFromConfig(toggles: {
-  shell?: boolean;
-  fetch?: boolean;
-  organs?: boolean;
-  preferenceLearning?: boolean;
-  judge?: boolean;
-  council?: boolean;
-} | undefined | null): BackendCapabilityEnv {
+export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined | null): BackendCapabilityEnv {
+  const advisors = Math.min(7, Math.max(1, Math.round(toggles?.councilAdvisors ?? 3)));
+  const timeout = Math.max(1000, Math.round(toggles?.councilTimeoutMs ?? 30000));
+  const temperature = toggles?.morphologyTemperature ?? 1.0;
   return {
     enable_shell: toggles?.shell === true,
+    // 反向语义：UI 默认开沙箱；显式关沙箱才注入 =0（fail-closed）。
+    shell_sandbox_off: toggles?.shellSandbox === false,
     enable_fetch: toggles?.fetch === true,
+    enable_local_read_tools: toggles?.localReadTools === true,
+    disable_typed_recall: toggles?.typedRecall === false,
     enable_organs: toggles?.organs === true,
     enable_preference_learning: toggles?.preferenceLearning === true,
+    enable_proactive_recall: toggles?.proactiveRecall === true,
+    enable_memory_injection: toggles?.memoryInjection === true,
+    enable_consolidation: toggles?.consolidation === true,
+    enable_reflexion: toggles?.reflexion === true,
+    enable_partner_bond: toggles?.partnerBond === true,
+    enable_morphology_recall: toggles?.morphologyRecall === true,
+    enable_education: toggles?.education === true,
+    enable_absorption_insight: toggles?.absorptionInsight === true,
+    enable_community_triage: toggles?.communityTriage === true,
+    enable_onering_ledger: toggles?.oneringLedger === true,
     cognitive_judge: toggles?.judge === true,
     cognitive_council: toggles?.council === true,
+    council_advisors: toggles?.council === true ? advisors : 0,
+    council_timeout_ms: toggles?.council === true ? timeout : 0,
+    morphology_temperature: toggles?.morphologyRecall === true && temperature > 0 ? temperature : 0,
+    enable_onion_layer: toggles?.onionLayer === true,
+    enable_worktree_sandbox: toggles?.worktreeSandbox === true,
   };
 }
 
