@@ -296,7 +296,7 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
 
 **2026-10-10 生产 Orchestrator（不是旋钮——显式命令即授权）**：`apeireth subagent "<标题>" [--payload <JSON>]` —— 长程任务 `plan→impl→review` 三步链（IMPLEMENTED → PRODUCTION WIRED：每步**独立 LLM 实例**按角色隔离，`spec.model` 可换 model 做隔离实验）。**人工审批 fail-closed**：plan 步需主人在 CLI 交互点头（y/N），无审批门时自动 deny（绝不静默放行）；dispatch 超时有界（默认 120s）；未配 LLM 显式报错（0 装）。旋钮：`APEIRETH_ENABLE_WORKTREE_SANDBOX=1`（**默认关**）——子代理跑在独立 git worktree（物理目录级隔离，防污染主工作区；worktree 创建失败即拒、不裸跑）。
 
-**2026-10-10 守夜人 Nightwatch（不是旋钮——显式命令即授权）**：`apeireth nightwatch [--session <id>] [--limit N]`。离线闲时审计（**report-only，不阻塞不批准**——approval_policy 留热路径）：读近 N 条 episodes 为被动快照 → 五件组合审计（risk 核词扫描 / eval 行为质量趋势 / no-degrade 复盘 / evidence 断言缺口 / rubric 立场平衡 / colang DSL 健康）→ 报告落 `<data>/nightwatch/nightwatch-<ts>.json`。**默认不自动跑**（"用户空闲时自动跑"的调度钩子 = 后续项）；审计链/council ballot 未持久化的分析段如实报"接线缺口"，不造假输入。
+**2026-10-10 守夜人 Nightwatch（不是旋钮——显式命令即授权）**：`apeireth nightwatch [--session <id>] [--limit N]`。离线闲时审计（**report-only，不阻塞不批准**——approval_policy 留热路径）：读近 N 条 episodes 为被动快照 → 五件组合审计（risk 核词扫描 / eval 行为质量趋势 / no-degrade 复盘 / evidence 断言缺口 / rubric 立场平衡 / colang DSL 健康）→ 报告落 `<data>/nightwatch/nightwatch-<ts>.json`。**默认不自动跑**；审计链/council ballot 未持久化的分析段如实报"接线缺口"，不造假输入。**后台守护（2026-10-10 设计闭环）**：`apeireth nightwatch --watch [--idle 900] [--cooldown 3600] [--interval 60]` —— 只在**用户空闲时**复盘：活动信号 = 认知库 episode 时间戳（用户说话=新 episode，`--session` 指定观测会话），双闸（距最近活动 ≥ idle 且距上次复盘 ≥ cooldown）过后跑一次，轮询间隔 interval；Ctrl-C 退出，报告已落盘无中间态。
 
 **与工具同批的既有旋钮**：`APEIRETH_COGNITIVE_DB`（记忆库路径）、
 `APEIRETH_SESSION_DB`（会话库路径）、`APEIRETH_MODEL`（默认模型）、
