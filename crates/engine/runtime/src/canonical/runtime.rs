@@ -7,6 +7,16 @@
 //! concrete providers, behaviors, capabilities, and session adapters arrive
 //! through explicit ports and registries.
 //!
+//! # One module world
+//!
+//! The runtime holds exactly one module registry. Everything a capability needs
+//! — ownership, lifecycle, dependency order, dispatch, the tool and provider
+//! views — is answered by the single [`ModuleManager`]. There is no second
+//! registry for behavior modules, no third for bare tool capabilities, and no
+//! bridge that merges two worlds at dispatch time: a tool, a provider, and a
+//! turn-observing module are the same kind of object, and
+//! [`Runtime::tools`] reports what actually is.
+//!
 //! # What it borrows, and what it refuses, from `UnifiedRuntimeHost`
 //!
 //! Borrowed: the idea of *one living runtime* rather than a fresh object graph
@@ -17,7 +27,7 @@
 //! `api_key: String`. Consequently it could not serve a second vendor, could not
 //! be built without a key, and exposed a secret to every `Debug` print.
 //!
-//! Here: providers arrive as capabilities from the plugin registry, so the
+//! Here: providers arrive as module capabilities, so the
 //! runtime names no vendor anywhere; credentials arrive through an injected
 //! resolver, so no secret is stored on the struct; and the fields are private,
 //! so the surface is the methods rather than the layout.
@@ -33,26 +43,29 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use async_trait::async_trait;
 use tokio::sync::Mutex as TokioMutex;
 
 use apeireth_core::kernel::{
-    system_clock, ApprovalId, CapabilityId, Clock, PluginId, SessionId, Timestamp, TraceId,
+    system_clock, ApprovalId, CapabilityId, Clock, ModuleId, SessionId, Timestamp, TraceId,
 };
 use apeireth_governance::{DenyUnconfigured, GovernanceHook};
+use apeireth_plugin::ModuleManager as PluginManager;
 use apeireth_plugin::{
-    CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
+    CapabilityKind, CredentialResolver, Module as Plugin, ModuleExports,
+    ModuleInitContext as PluginContext, ModuleManager, ModuleManifest, NoCredentials,
+    ToolCapability,
 };
 use apeireth_protocol::canonical::{ModelDescriptor, ModelFeature};
 use serde::Serialize;
 
 use super::approval::PendingApprovalView;
-use super::capability::CapabilityRegistry;
 use super::context::{ContextProjector, NoContextProjector};
 use super::error::{RuntimeError, RuntimeResult};
 use super::events::{
     CompositeRuntimeEventSink, NoopRuntimeEventSink, RuntimeEvent, RuntimeEventSink,
 };
-use super::module::{BehaviorModule, BehaviorRegistry, DEFAULT_MAX_MODULE_INVOCATIONS};
+use super::module::{HookPoint, Module, ModuleRegistry, DEFAULT_MAX_MODULE_INVOCATIONS};
 use super::provider::ProviderRouter;
 use super::session::{InMemorySessionStore, SessionManager, SessionStore};
 
@@ -203,7 +216,10 @@ impl SessionLocks {
 
 /// The assembled runtime.
 pub struct Runtime {
-    pub(super) plugins: PluginManager,
+    /// The one canonical module registry: ownership, lifecycle, dependency
+    /// order, capability index, hooks. Nothing else holds a second copy of any
+    /// of those facts.
+    pub(super) modules: ModuleManager,
     // Arc so per-turn invoker handles can carry the one canonical router
     // without borrowing the runtime. Still exactly one router instance.
     pub(super) providers: Arc<ProviderRouter>,
@@ -211,8 +227,6 @@ pub struct Runtime {
     pub(super) governance: Arc<dyn GovernanceHook>,
     pub(super) clock: Arc<dyn Clock>,
     pub(super) config: RuntimeConfig,
-    pub(super) modules: BehaviorRegistry,
-    pub(super) capabilities: CapabilityRegistry,
     pub(super) session_locks: SessionLocks,
     pub(super) event_sink: RwLock<Arc<dyn RuntimeEventSink>>,
     pub(super) context_projector: Arc<dyn ContextProjector>,
@@ -224,9 +238,16 @@ impl Runtime {
         RuntimeBuilder::new()
     }
 
-    /// The plugin manager, and through it both canonical registries.
+    /// The module manager, and through it the one canonical registry pair.
+    ///
+    /// Compatibility spelling: the module manager is the only manager there is.
     pub fn plugins(&self) -> &PluginManager {
-        &self.plugins
+        &self.modules
+    }
+
+    /// The module manager: lifecycle, dependency order, capability index.
+    pub fn module_manager(&self) -> &ModuleManager {
+        &self.modules
     }
 
     /// The session manager.
@@ -299,29 +320,24 @@ impl Runtime {
             .modules()
             .iter()
             .map(|module| RuntimeModuleSnapshot {
-                id: module.manifest().id.clone(),
+                id: module.manifest().id.to_string(),
                 name: module.manifest().name.clone(),
             })
             .collect();
-        let mut capabilities = self
-            .capabilities
-            .entries()
+        // One source: every dispatchable tool with its owning module. There is
+        // no second world to merge in, so nothing is double-counted and nothing
+        // is silently dropped from the listing.
+        let capabilities = self
+            .modules
+            .tool_entries()
             .into_iter()
             .map(|(owner, capability)| RuntimeCapabilitySnapshot {
                 id: capability.id().to_string(),
                 name: capability.declaration().name,
-                owner,
+                owner: owner.to_string(),
                 available: true,
             })
             .collect::<Vec<_>>();
-        capabilities.extend(self.plugins.active_tools().into_iter().map(|capability| {
-            RuntimeCapabilitySnapshot {
-                id: capability.id().to_string(),
-                name: capability.declaration().name,
-                owner: "plugin".to_string(),
-                available: true,
-            }
-        }));
         RuntimeSnapshot {
             default_model: self.config.default_model.clone(),
             max_rounds: self.config.max_rounds,
@@ -334,15 +350,27 @@ impl Runtime {
     }
 
     /// Every tool that can currently be dispatched to.
+    ///
+    /// A single view over the one capability index — the runtime no longer
+    /// merges a module world with a plugin world, so a tool cannot appear twice
+    /// or be missing because it arrived through the "other" path.
     pub fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        let mut tools = self.capabilities.capabilities();
-        tools.extend(self.plugins.active_tools());
-        tools
+        self.modules.active_tools()
     }
 
-    /// The runtime-owned registry for non-plugin capabilities.
-    pub fn capability_registry(&self) -> &CapabilityRegistry {
-        &self.capabilities
+    /// Every dispatchable tool together with its owning module.
+    ///
+    /// The honest listing for diagnostics and admin surfaces: what exists, and
+    /// who owns it, from the one source of truth.
+    pub fn tool_entries(&self) -> Vec<(ModuleId, Arc<dyn ToolCapability>)> {
+        self.modules.tool_entries()
+    }
+
+    /// Which modules declare that they observe each hook point.
+    ///
+    /// A derived view over the manifests, not a second registry.
+    pub fn hook_index(&self) -> std::collections::BTreeMap<HookPoint, Vec<ModuleId>> {
+        self.modules.hook_index()
     }
 
     /// Replace the host event sink without changing the runtime graph.
@@ -370,34 +398,42 @@ impl Runtime {
 
     /// Register a dynamic tool on a named module after build.
     ///
-    /// The tool is rejected if its capability id or model-facing name collides
-    /// with any already-visible module or plugin tool.
-    pub fn register_dynamic_tool(
-        &self,
+    /// The one path by which a capability can appear after boot. The module
+    /// manager rejects the tool unless its capability id and model-facing name
+    /// are unique across every module and the named module genuinely owns
+    /// dynamic capability — there is no second registry for it to slip into.
+    pub async fn register_dynamic_tool(
+        &mut self,
         module_id: &str,
         tool: Arc<dyn ToolCapability>,
     ) -> Result<(), RuntimeError> {
-        let visible_plugins = self.plugins.active_tools();
-        crate::canonical::module::reject_tool_identity_collisions(
-            &visible_plugins,
-            std::slice::from_ref(&tool),
-            module_id,
-        )
-        .map_err(RuntimeError::misconfigured)?;
-        self.capabilities
-            .register(module_id, tool)
-            .map_err(RuntimeError::misconfigured)
+        let owner = ModuleId::new(module_id)
+            .map_err(|error| RuntimeError::misconfigured(error.to_string()))?;
+        self.modules
+            .register_dynamic_tool(&owner, tool)
+            .await
+            .map_err(RuntimeError::Plugin)
+    }
+
+    /// Remove one dynamic tool from a named module after build.
+    ///
+    /// Returns whether anything was actually removed.
+    pub async fn unregister_dynamic_tool(
+        &mut self,
+        module_id: &str,
+        capability_id: &apeireth_core::kernel::CapabilityId,
+    ) -> Result<bool, RuntimeError> {
+        let owner = ModuleId::new(module_id)
+            .map_err(|error| RuntimeError::misconfigured(error.to_string()))?;
+        self.modules
+            .unregister_dynamic_tool(&owner, capability_id)
+            .await
+            .map_err(RuntimeError::Plugin)
     }
 
     /// Model-facing tool declarations for all active tools.
     pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
-        let mut declarations: Vec<apeireth_protocol::canonical::NormalizedTool> = self
-            .capabilities
-            .declarations()
-            .into_iter()
-            .collect::<Vec<_>>();
-        declarations.extend(self.plugins.tool_declarations());
-        declarations
+        self.modules.tool_declarations()
     }
 
     /// The configured context projector.
@@ -407,8 +443,8 @@ impl Runtime {
 
     /// The router over every provider that can currently serve a completion.
     ///
-    /// Its members come from the capability registry, which is why the runtime
-    /// can name no vendor: it knows only that some plugin declared
+    /// Its members come from the one capability index, which is why the runtime
+    /// can name no vendor: it knows only that some module exports
     /// `provider.something`.
     pub fn providers(&self) -> &ProviderRouter {
         &self.providers
@@ -421,14 +457,14 @@ impl Runtime {
         Arc::clone(&self.providers)
     }
 
-    /// The modules registered with this runtime, in execution order.
-    pub fn modules(&self) -> &[Arc<dyn BehaviorModule>] {
-        self.modules.modules()
+    /// The modules registered with this runtime, in registration order.
+    pub fn modules(&self) -> Vec<&Arc<dyn Module>> {
+        self.modules.modules().modules()
     }
 
-    /// The module registry holding all registered modules.
-    pub fn module_registry(&self) -> &BehaviorRegistry {
-        &self.modules
+    /// The canonical module registry: ownership, lifecycle, capability index.
+    pub fn module_registry(&self) -> &ModuleRegistry {
+        self.modules.modules()
     }
 
     /// Pending approvals waiting on a human for one session.
@@ -451,23 +487,22 @@ impl Runtime {
             .collect())
     }
 
-    /// Stop every plugin in reverse start order.
+    /// Stop every module in reverse start order.
     ///
     /// Returns the failures encountered; shutdown continues past each one.
     pub async fn shutdown(&mut self) -> Vec<apeireth_plugin::PluginError> {
-        self.plugins.shutdown_all().await
+        self.modules.shutdown_all().await
     }
 }
 
 impl std::fmt::Debug for Runtime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Runtime")
-            .field("plugins", &self.plugins.plugins().len())
-            .field("capabilities", &self.plugins.capabilities().len())
+            .field("modules", &self.modules.modules().len())
+            .field("capabilities", &self.modules.capabilities().len())
             .field("providers", &self.providers.len())
             .field("governance", &self.governance.name())
             .field("config", &self.config)
-            .field("modules", &self.modules.len())
             .finish_non_exhaustive()
     }
 }
@@ -478,13 +513,18 @@ impl std::fmt::Debug for Runtime {
 /// `Runtime::builder().build().await`. Defaults are inert rather than
 /// surprising: no credentials, fail-closed capability dispatch, memory-backed
 /// sessions. Completions remain allowed so a zero-module kernel can still chat.
+///
+/// There is one registration path for everything: [`Self::with_module`].
+/// [`Self::with_plugin`] is the historical spelling of the same call, and
+/// [`Self::with_capability`] wraps loose tool capabilities in one system module
+/// so that they still enter the same registry, lifecycle, and capability index
+/// as any other module instead of living in a registry of their own.
 pub struct RuntimeBuilder {
     clock: Arc<dyn Clock>,
     credentials: Arc<dyn CredentialResolver>,
     session_store: Arc<dyn SessionStore>,
     governance: Arc<dyn GovernanceHook>,
-    plugins: Vec<Arc<dyn Plugin>>,
-    modules: Vec<Arc<dyn BehaviorModule>>,
+    modules: Vec<Arc<dyn Module>>,
     capabilities: Vec<Arc<dyn ToolCapability>>,
     event_sink: Arc<dyn RuntimeEventSink>,
     context_projector: Arc<dyn ContextProjector>,
@@ -506,7 +546,6 @@ impl RuntimeBuilder {
             credentials: Arc::new(NoCredentials),
             session_store: Arc::new(InMemorySessionStore::new()),
             governance: Arc::new(DenyUnconfigured),
-            plugins: Vec::new(),
             modules: Vec::new(),
             capabilities: Vec::new(),
             event_sink: Arc::new(NoopRuntimeEventSink),
@@ -546,29 +585,31 @@ impl RuntimeBuilder {
         self
     }
 
-    /// Add a plugin. Order is irrelevant; start order comes from declared
-    /// dependencies.
+    /// Add a module. Order is irrelevant for start-up, which comes from declared
+    /// dependencies; registration order is preserved wherever dependencies do
+    /// not force otherwise, including hook dispatch.
     #[must_use]
-    pub fn with_plugin(mut self, plugin: Arc<dyn Plugin>) -> Self {
-        self.plugins.push(plugin);
-        self
-    }
-
-    /// Register a cognitive module. Modules run in registration order.
-    #[must_use]
-    pub fn with_module(mut self, module: Arc<dyn BehaviorModule>) -> Self {
+    pub fn with_module(mut self, module: Arc<dyn Module>) -> Self {
         self.modules.push(module);
         self
     }
 
-    /// Compatibility alias that makes the behavior/capability distinction
-    /// explicit at composition sites.
+    /// Compatibility spelling of [`Self::with_module`].
+    ///
+    /// A plugin was never a second runtime primitive — it was always a module
+    /// with a different name. This entry point feeds the same registry.
     #[must_use]
-    pub fn with_behavior(self, module: Arc<dyn BehaviorModule>) -> Self {
-        self.with_module(module)
+    pub fn with_plugin(mut self, plugin: Arc<dyn Plugin>) -> Self {
+        self.modules.push(plugin);
+        self
     }
 
-    /// Register a dispatchable capability independently of behavior hooks.
+    /// Register a dispatchable capability without a module of its own.
+    ///
+    /// The capability is owned by one system module ([`CAPABILITY_MODULE_ID`])
+    /// that is registered through the ordinary path: same manifest schema, same
+    /// lifecycle, same capability index. A capability cannot exist in this
+    /// runtime without an owner.
     #[must_use]
     pub fn with_capability(mut self, capability: Arc<dyn ToolCapability>) -> Self {
         self.capabilities.push(capability);
@@ -578,8 +619,7 @@ impl RuntimeBuilder {
     /// Compatibility spelling for tool capability registration.
     #[must_use]
     pub fn with_tool(mut self, capability: Arc<dyn ToolCapability>) -> Self {
-        self.capabilities.push(capability);
-        self
+        self.with_capability(capability)
     }
 
     /// Send canonical lifecycle events to a host-owned sink.
@@ -633,11 +673,14 @@ impl RuntimeBuilder {
         self
     }
 
-    /// Register the plugins, start them in dependency order, and assemble.
+    /// Register every module, start them in dependency order, and assemble.
     ///
-    /// Plugins are started here rather than lazily on first use, so that a
+    /// Modules are started here rather than lazily on first use, so that a
     /// misconfiguration surfaces at boot rather than inside somebody's first
-    /// request.
+    /// request. All validation — duplicate module ids, duplicate capability ids,
+    /// duplicate model-facing tool names, missing dependencies, dependency
+    /// cycles, declared-but-unimplemented capabilities — happens before the
+    /// first `initialize` runs.
     pub async fn build(self) -> RuntimeResult<Runtime> {
         if self.config.max_rounds == 0 {
             return Err(RuntimeError::misconfigured(
@@ -649,21 +692,20 @@ impl RuntimeBuilder {
                 "max_module_invocations must be at least 1",
             ));
         }
-        let mut module_registry = BehaviorRegistry::new();
+
+        // One registry for everything. Registration order (modules, then the
+        // compatibility plugin entries land in the same list as modules, then
+        // the loose-capability system module) is what start order and hook
+        // dispatch follow wherever no declared dependency forces otherwise.
+        let mut manager = ModuleManager::new();
         for module in self.modules {
-            module_registry
-                .register(module)
-                .map_err(RuntimeError::misconfigured)?;
+            manager.register(module).map_err(RuntimeError::Plugin)?;
         }
-
-        let capability_registry = CapabilityRegistry::new();
-        capability_registry
-            .register_all_for_builder(self.capabilities)
-            .map_err(RuntimeError::misconfigured)?;
-
-        let mut manager = PluginManager::new();
-        for plugin in self.plugins {
-            manager.register(plugin)?;
+        if !self.capabilities.is_empty() {
+            let owned = RuntimeCapabilityModule::new(self.capabilities)?;
+            manager
+                .register(Arc::new(owned))
+                .map_err(RuntimeError::Plugin)?;
         }
 
         let ctx = PluginContext::new(
@@ -673,16 +715,9 @@ impl RuntimeBuilder {
         );
         manager.start_all(&ctx).await?;
 
-        crate::canonical::module::reject_tool_identity_collisions(
-            &capability_registry.capabilities(),
-            &manager.active_tools(),
-            "plugin tools",
-        )
-        .map_err(RuntimeError::misconfigured)?;
-
-        // Providers are read out of the capability registry *after* start-up, so
-        // the router contains exactly those whose plugins actually came up. A
-        // provider whose plugin failed to initialize is never routed to.
+        // Providers are read out of the capability index *after* start-up, so
+        // the router contains exactly those whose modules actually came up. A
+        // provider whose module failed to initialize is never routed to.
         let mut providers =
             ProviderRouter::new(manager.active_providers(), Arc::clone(&self.clock));
         if let Some(order) = self.fallback_order {
@@ -690,14 +725,12 @@ impl RuntimeBuilder {
         }
 
         Ok(Runtime {
-            plugins: manager,
+            modules: manager,
             providers: Arc::new(providers),
             sessions: SessionManager::new(self.session_store, Arc::clone(&self.clock)),
             governance: self.governance,
             clock: self.clock,
             config: self.config,
-            modules: module_registry,
-            capabilities: capability_registry,
             session_locks: SessionLocks::default(),
             event_sink: RwLock::new(self.event_sink),
             context_projector: self.context_projector,
@@ -705,9 +738,81 @@ impl RuntimeBuilder {
     }
 }
 
-/// Plugin ids known to a runtime, in id order. Convenience for diagnostics.
-pub fn plugin_ids(runtime: &Runtime) -> Vec<&PluginId> {
-    runtime.plugins.plugins().ids().collect()
+/// Module id of the system module that owns capabilities registered without a
+/// module of their own.
+pub const CAPABILITY_MODULE_ID: &str = "builtin.runtime.capabilities";
+
+/// The system module that owns loose tool capabilities.
+///
+/// Registering a bare `ToolCapability` is a convenience for embedders and
+/// tests; it is not a second registry. The capability is still owned by a
+/// module with a real manifest, which is why the manifest declares each
+/// capability it exports and why the ordinary uniqueness checks apply to them.
+struct RuntimeCapabilityModule {
+    manifest: ModuleManifest,
+    tools: Vec<Arc<dyn ToolCapability>>,
+}
+
+impl RuntimeCapabilityModule {
+    /// Take ownership of `tools`, declaring each one in the manifest.
+    ///
+    /// Fails loudly rather than dropping anything: a capability that cannot be
+    /// declared is a configuration error, and silently omitting it would make
+    /// the tool vanish with no explanation.
+    fn new(tools: Vec<Arc<dyn ToolCapability>>) -> RuntimeResult<Self> {
+        let mut manifest = ModuleManifest::system(
+            CAPABILITY_MODULE_ID,
+            env!("CARGO_PKG_VERSION"),
+            "Runtime-registered tool capabilities (system origin)",
+        )
+        .with_name("runtime capabilities");
+        let mut owned = Vec::with_capacity(tools.len());
+        for tool in tools {
+            let id = tool.id().clone();
+            if CapabilityKind::from_id(&id) != Some(CapabilityKind::Tool) {
+                // A tool capability must carry the conventional `tool.*` prefix
+                // so the index classifies it exactly like a declared one.
+                return Err(RuntimeError::misconfigured(format!(
+                    "capability {id} registered as a tool must use the tool.* prefix"
+                )));
+            }
+            let description = tool
+                .declaration()
+                .description
+                .unwrap_or_else(|| "runtime-registered tool capability".to_string());
+            manifest = manifest
+                .declare_capability(id, CapabilityKind::Tool, description)
+                .map_err(RuntimeError::Plugin)?;
+            owned.push(tool);
+        }
+        Ok(Self {
+            manifest,
+            tools: owned,
+        })
+    }
+}
+
+#[async_trait]
+impl Module for RuntimeCapabilityModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    fn exports(&self) -> ModuleExports {
+        ModuleExports::new().with_tools(self.tools.clone())
+    }
+}
+
+/// Module ids known to a runtime, in id order. Convenience for diagnostics.
+///
+/// Historical spelling kept for callers that still say "plugin".
+pub fn plugin_ids(runtime: &Runtime) -> Vec<&ModuleId> {
+    runtime.module_manager().modules().ids().collect()
+}
+
+/// Module ids known to a runtime, in id order.
+pub fn module_ids(runtime: &Runtime) -> Vec<&ModuleId> {
+    runtime.module_manager().modules().ids().collect()
 }
 
 #[cfg(test)]
@@ -771,7 +876,7 @@ mod tests {
     fn key_reader() -> Arc<KeyReader> {
         Arc::new(KeyReader {
             manifest: PluginManifest::new(
-                PluginId::new("builtin.key_reader").unwrap(),
+                ModuleId::new("builtin.key_reader").unwrap(),
                 "1.0.0",
                 "reads a key at boot",
             )
@@ -788,7 +893,7 @@ mod tests {
     #[tokio::test]
     async fn the_smallest_runtime_builds_with_no_arguments() {
         let runtime = Runtime::builder().build().await.unwrap();
-        assert_eq!(runtime.plugins().plugins().len(), 0);
+        assert_eq!(runtime.module_manager().modules().len(), 0);
         assert!(runtime.tools().is_empty());
         assert!(runtime.providers().is_empty());
         assert_eq!(runtime.config().max_rounds, DEFAULT_MAX_ROUNDS);
@@ -805,8 +910,8 @@ mod tests {
 
         assert_eq!(
             runtime
-                .plugins()
-                .state(&PluginId::new("builtin.key_reader").unwrap())
+                .module_manager()
+                .state(&ModuleId::new("builtin.key_reader").unwrap())
                 .unwrap(),
             Lifecycle::Active,
             "no key must not prevent boot"
@@ -912,11 +1017,17 @@ mod tests {
             .build()
             .await
             .unwrap();
-        let id = PluginId::new("builtin.key_reader").unwrap();
+        let id = ModuleId::new("builtin.key_reader").unwrap();
 
-        assert_eq!(runtime.plugins().state(&id).unwrap(), Lifecycle::Active);
+        assert_eq!(
+            runtime.module_manager().state(&id).unwrap(),
+            Lifecycle::Active
+        );
         assert!(runtime.shutdown().await.is_empty());
-        assert_eq!(runtime.plugins().state(&id).unwrap(), Lifecycle::Stopped);
+        assert_eq!(
+            runtime.module_manager().state(&id).unwrap(),
+            Lifecycle::Stopped
+        );
     }
 
     #[tokio::test]
@@ -928,5 +1039,44 @@ mod tests {
             .unwrap();
         let ids: Vec<&str> = plugin_ids(&runtime).iter().map(|i| i.as_str()).collect();
         assert_eq!(ids, ["builtin.key_reader"]);
+    }
+
+    #[tokio::test]
+    async fn a_loose_capability_is_owned_by_the_system_capability_module() {
+        // The `with_capability`/`with_tool` compat entries do not open a second
+        // registry: the loose tool is owned by one system module, registered
+        // through the ordinary path with an ordinary manifest.
+        let runtime = Runtime::builder()
+            .with_tool(
+                Arc::new(Echo(CapabilityId::new("tool.echo").unwrap())) as Arc<dyn ToolCapability>
+            )
+            .build()
+            .await
+            .unwrap();
+        let owner = runtime
+            .module_manager()
+            .capabilities()
+            .owner(&CapabilityId::new("tool.echo").unwrap())
+            .unwrap();
+        assert_eq!(owner.as_str(), CAPABILITY_MODULE_ID);
+        assert_eq!(runtime.tools().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn compatibility_entries_collide_in_the_one_capability_index() {
+        // `with_plugin` and `with_tool` both feed the one manager: a loose
+        // capability re-declaring a plugin-owned id must be rejected at build
+        // against the same capability index — possible only if there is one.
+        let result = Runtime::builder()
+            .with_plugin(key_reader())
+            .with_tool(
+                Arc::new(Echo(CapabilityId::new("tool.echo").unwrap())) as Arc<dyn ToolCapability>
+            )
+            .build()
+            .await;
+        let Err(error) = result else {
+            panic!("a loose duplicate of a plugin-owned capability must be rejected");
+        };
+        assert!(matches!(error, RuntimeError::Plugin(_)), "{error}");
     }
 }

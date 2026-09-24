@@ -210,7 +210,12 @@ struct BasicSubLoopModule {
 impl BasicSubLoopModule {
     fn new(allowed_tool: Arc<dyn ToolCapability>) -> Self {
         Self {
-            manifest: ModuleManifest::new("module.subloop.basic", "Basic SubLoop Module"),
+            manifest: ModuleManifest::system(
+                "module.subloop.basic",
+                "1.0.0",
+                "Basic SubLoop Module",
+            )
+            .observes(HookPoint::TurnStart),
             allowed_tool,
         }
     }
@@ -386,7 +391,8 @@ async fn hostile_provider_attempting_denied_capability_is_blocked_and_invoke_cou
     let provider = ScriptedProvider::new("provider.mock", script);
     let plugin = ScriptedProviderPlugin::new(provider);
     let module = Arc::new(HostileSubLoopModule {
-        manifest: ModuleManifest::new("module.hostile", "Hostile Tester Module"),
+        manifest: ModuleManifest::system("module.hostile", "1.0.0", "Hostile Tester Module")
+            .observes(HookPoint::TurnStart),
         allowed_tool: Arc::new(allowed_tool),
         denied_tool: Arc::new(denied_tool),
     });
@@ -507,7 +513,8 @@ async fn globally_denied_capability_remains_denied_inside_subloop() {
     let provider = ScriptedProvider::new("provider.mock", script);
     let plugin = ScriptedProviderPlugin::new(provider);
     let module = Arc::new(GovernanceSubLoopModule {
-        manifest: ModuleManifest::new("module.gov.test", "Governance Tester Module"),
+        manifest: ModuleManifest::system("module.gov.test", "1.0.0", "Governance Tester Module")
+            .observes(HookPoint::TurnStart),
         tool: Arc::new(tool),
     });
 
@@ -619,7 +626,8 @@ async fn effectful_capability_requiring_approval_fails_cleanly_in_subloop() {
     let provider = ScriptedProvider::new("provider.mock", script);
     let plugin = ScriptedProviderPlugin::new(provider);
     let module = Arc::new(ApprovalSubLoopModule {
-        manifest: ModuleManifest::new("module.appr.test", "Approval Tester Module"),
+        manifest: ModuleManifest::system("module.appr.test", "1.0.0", "Approval Tester Module")
+            .observes(HookPoint::TurnStart),
         tool: Arc::new(tool),
     });
 
@@ -714,7 +722,8 @@ async fn subloop_timeout_enforces_overall_execution_deadline() {
     let provider = ScriptedProvider::new("provider.mock", script);
     let plugin = ScriptedProviderPlugin::new(provider);
     let module = Arc::new(TimeoutSubLoopModule {
-        manifest: ModuleManifest::new("module.timeout.test", "Timeout Tester Module"),
+        manifest: ModuleManifest::system("module.timeout.test", "1.0.0", "Timeout Tester Module")
+            .observes(HookPoint::TurnStart),
     });
 
     let mut runtime = Runtime::builder()
@@ -800,7 +809,8 @@ async fn global_completion_deny_blocks_subloop_and_does_not_call_provider() {
     let provider = ScriptedProvider::new("provider.mock", vec![ScriptStep::Say("must not run")]);
     let error = Arc::new(std::sync::Mutex::new(None));
     let module = Arc::new(IsolatedCompletionSubLoopModule {
-        manifest: ModuleManifest::new("module.completion.deny", "completion deny"),
+        manifest: ModuleManifest::system("module.completion.deny", "1.0.0", "completion deny")
+            .observes(HookPoint::TurnStart),
         error: Arc::clone(&error),
     });
     let mut runtime = Runtime::builder()

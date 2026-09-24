@@ -1,7 +1,8 @@
 //! Tests proving the minimal microkernel core.
 //!
-//! A minimal runtime boots with zero modules (no cognitive spine, no builtin tools),
-//! requiring only a provider to complete pure user chat turns.
+//! A minimal runtime boots with no cognitive spine and no builtin tools,
+//! requiring only a provider — owned, like every capability, by exactly one
+//! module — to complete pure user chat turns.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -113,18 +114,25 @@ async fn minimal_kernel_without_standard_modules_completes_plain_chat_turn() {
     let provider = PureChatProvider::new();
     let plugin = PureChatPlugin::new(Arc::clone(&provider));
 
-    // Build the microkernel runtime with ZERO modules
+    // Build the microkernel runtime with no standard modules: in one module
+    // world the provider capability is owned by exactly one module, and that
+    // owner is the only registration.
     let mut runtime = Runtime::builder()
         .with_plugin(plugin)
         .with_default_model("pure-chat-model")
         .build()
         .await
-        .expect("minimal kernel runtime builds cleanly without any modules");
+        .expect("minimal kernel runtime builds cleanly with only the provider owner");
 
     assert_eq!(
         runtime.modules().len(),
-        0,
-        "no modules should be registered"
+        1,
+        "exactly one module — the provider's owner — should be registered"
+    );
+    assert_eq!(
+        runtime.modules()[0].manifest().id.as_str(),
+        "vendor.pure",
+        "the only module is the one that owns the provider capability"
     );
     assert_eq!(runtime.tools().len(), 0, "no tools should be registered");
     assert_eq!(

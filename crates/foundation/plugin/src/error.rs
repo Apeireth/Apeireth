@@ -1,24 +1,34 @@
-//! Failures in the plugin and capability layer.
+//! Failures in the module and capability layer.
+//!
+//! The type is named `ModuleSystemError` because the runtime entity is a
+//! module; the historical spelling [`PluginError`] and [`PluginResult`] survive
+//! as aliases so embedders compile unchanged until the follow-up rename.
 
-use apeireth_core::kernel::{CapabilityId, CoreError, PluginId};
+use apeireth_core::kernel::{CapabilityId, CoreError, ModuleId};
 use thiserror::Error;
 
-/// Result alias for the plugin layer.
-pub type PluginResult<T> = Result<T, PluginError>;
+/// Result alias for the module system layer.
+pub type ModuleResult<T> = Result<T, ModuleSystemError>;
 
-/// A failure registering, starting, stopping, or dispatching to a plugin.
+/// Compatibility alias for [`ModuleSystemError`].
+pub type PluginResult<T> = ModuleResult<T>;
+
+/// Compatibility alias for [`ModuleSystemError`].
+pub use self::ModuleSystemError as PluginError;
+
+/// A failure registering, starting, stopping, or dispatching to a module.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
-pub enum PluginError {
+pub enum ModuleSystemError {
     /// A primitive-layer failure, typically an illegal lifecycle transition.
     #[error(transparent)]
     Core(#[from] CoreError),
 
-    /// Two plugins claim the same [`PluginId`].
-    #[error("plugin {0} is already registered")]
-    DuplicatePlugin(PluginId),
+    /// Two modules claim the same [`ModuleId`].
+    #[error("module {0} is already registered")]
+    DuplicateModule(ModuleId),
 
-    /// Two plugins declare the same [`CapabilityId`].
+    /// Two modules declare the same [`CapabilityId`].
     ///
     /// Rejected rather than resolved by precedence: silently letting the second
     /// registration win is how a system acquires a capability whose behaviour
@@ -27,10 +37,10 @@ pub enum PluginError {
     DuplicateCapability {
         /// The contested capability.
         capability: CapabilityId,
-        /// The plugin that declared it first.
-        incumbent: PluginId,
-        /// The plugin that tried to declare it second.
-        challenger: PluginId,
+        /// The module that declared it first.
+        incumbent: ModuleId,
+        /// The module that tried to declare it second.
+        challenger: ModuleId,
     },
 
     /// A capability id does not match the kind it was registered under, e.g.
@@ -45,24 +55,24 @@ pub enum PluginError {
         expected: &'static str,
     },
 
-    /// A manifest declaration has no implementation on its owning plugin.
+    /// A manifest declaration has no implementation on its owning module.
     #[error(
-        "plugin {plugin} declares {kind} capability {capability} but provides no implementation"
+        "module {module} declares {kind} capability {capability} but provides no implementation"
     )]
     MissingCapabilityImplementation {
-        /// Plugin whose manifest and implementation disagree.
-        plugin: PluginId,
+        /// Module whose manifest and implementation disagree.
+        module: ModuleId,
         /// Declared capability with no implementation.
         capability: CapabilityId,
         /// Canonical capability kind.
         kind: &'static str,
     },
 
-    /// A plugin exposes an implementation its manifest does not declare.
-    #[error("plugin {plugin} provides undeclared {kind} capability {capability}")]
+    /// A module exposes an implementation its manifest does not declare.
+    #[error("module {module} provides undeclared {kind} capability {capability}")]
     UndeclaredCapabilityImplementation {
-        /// Plugin whose implementation is not declared.
-        plugin: PluginId,
+        /// Module whose implementation is not declared.
+        module: ModuleId,
         /// Implementation missing from the manifest.
         capability: CapabilityId,
         /// Canonical capability kind.
@@ -80,46 +90,46 @@ pub enum PluginError {
         challenger: CapabilityId,
     },
 
-    /// A plugin declares a dependency that was never registered.
-    #[error("plugin {dependent} depends on {missing}, which is not registered")]
+    /// A module declares a dependency that was never registered.
+    #[error("module {dependent} depends on {missing}, which is not registered")]
     MissingDependency {
-        /// The plugin with the unsatisfied dependency.
-        dependent: PluginId,
+        /// The module with the unsatisfied dependency.
+        dependent: ModuleId,
         /// The dependency that is absent.
-        missing: PluginId,
+        missing: ModuleId,
     },
 
-    /// Plugin dependencies form a cycle, so no valid start order exists.
-    #[error("plugin dependency cycle among: {0}")]
+    /// Module dependencies form a cycle, so no valid start order exists.
+    #[error("module dependency cycle among: {0}")]
     DependencyCycle(String),
 
-    /// No plugin is registered under this id.
-    #[error("plugin {0} is not registered")]
-    UnknownPlugin(PluginId),
+    /// No module is registered under this id.
+    #[error("module {0} is not registered")]
+    UnknownModule(ModuleId),
 
     /// No capability is registered under this id.
     #[error("capability {0} is not registered")]
     UnknownCapability(CapabilityId),
 
-    /// The capability exists but its owning plugin is not currently active.
-    #[error("capability {capability} is not available: owning plugin {plugin} is {state}")]
+    /// The capability exists but its owning module is not currently active.
+    #[error("capability {capability} is not available: owning module {module} is {state}")]
     NotActive {
         /// The capability that was requested.
         capability: CapabilityId,
-        /// The plugin that owns it.
-        plugin: PluginId,
-        /// The state that plugin is actually in.
+        /// The module that owns it.
+        module: ModuleId,
+        /// The state that module is actually in.
         state: &'static str,
     },
 
-    /// The plugin's own start-up or shutdown failed.
-    #[error("plugin {plugin} failed during {phase}: {reason}")]
-    PluginFailed {
-        /// The failing plugin.
-        plugin: PluginId,
+    /// The module's own start-up or shutdown failed.
+    #[error("module {module} failed during {phase}: {reason}")]
+    ModuleFailed {
+        /// The failing module.
+        module: ModuleId,
         /// Which phase failed, `initialize` or `shutdown`.
         phase: &'static str,
-        /// What the plugin reported.
+        /// What the module reported.
         reason: String,
     },
 
@@ -131,22 +141,34 @@ pub enum PluginError {
         /// Why.
         reason: String,
     },
+
+    /// A module was asked to take a dynamic capability it does not own.
+    ///
+    /// Only modules with genuine dynamic ownership (an MCP server discovering
+    /// tools at runtime) may accept tools after registration. Every other
+    /// module reports this, and the manager validates global uniqueness first,
+    /// so a static module never sees the request at all.
+    #[error("module {module} does not accept dynamic capabilities")]
+    DynamicCapabilityUnsupported {
+        /// The module that was asked.
+        module: ModuleId,
+    },
 }
 
-impl PluginError {
-    /// A plugin's `initialize` failed.
-    pub fn init_failed(plugin: PluginId, reason: impl Into<String>) -> Self {
-        Self::PluginFailed {
-            plugin,
+impl ModuleSystemError {
+    /// A module's `initialize` failed.
+    pub fn init_failed(module: ModuleId, reason: impl Into<String>) -> Self {
+        Self::ModuleFailed {
+            module,
             phase: "initialize",
             reason: reason.into(),
         }
     }
 
-    /// A plugin's `shutdown` failed.
-    pub fn shutdown_failed(plugin: PluginId, reason: impl Into<String>) -> Self {
-        Self::PluginFailed {
-            plugin,
+    /// A module's `shutdown` failed.
+    pub fn shutdown_failed(module: ModuleId, reason: impl Into<String>) -> Self {
+        Self::ModuleFailed {
+            module,
             phase: "shutdown",
             reason: reason.into(),
         }
@@ -159,10 +181,10 @@ mod tests {
 
     #[test]
     fn duplicate_capability_names_both_claimants() {
-        let e = PluginError::DuplicateCapability {
+        let e = ModuleSystemError::DuplicateCapability {
             capability: CapabilityId::new("tool.shell").unwrap(),
-            incumbent: PluginId::new("builtin.shell").unwrap(),
-            challenger: PluginId::new("thirdparty.shell").unwrap(),
+            incumbent: ModuleId::new("builtin.shell").unwrap(),
+            challenger: ModuleId::new("thirdparty.shell").unwrap(),
         };
         let msg = e.to_string();
         assert!(msg.contains("tool.shell"), "{msg}");
@@ -172,11 +194,17 @@ mod tests {
 
     #[test]
     fn not_active_reports_the_state_that_blocked_dispatch() {
-        let e = PluginError::NotActive {
+        let e = ModuleSystemError::NotActive {
             capability: CapabilityId::new("tool.shell").unwrap(),
-            plugin: PluginId::new("builtin.shell").unwrap(),
+            module: ModuleId::new("builtin.shell").unwrap(),
             state: "registered",
         };
         assert!(e.to_string().contains("registered"), "{e}");
+    }
+
+    #[test]
+    fn the_historical_spellings_resolve_to_the_same_types() {
+        let via_old: PluginResult<()> = Ok(());
+        assert!(via_old.is_ok());
     }
 }

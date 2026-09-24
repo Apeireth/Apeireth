@@ -323,7 +323,7 @@ pub fn privileged_caller_permissions() -> BTreeSet<String> {
 /// Validate a live [`PluginManifest`] description length and (if present)
 /// strict version. Plugin ids already pass core's stable-id grammar.
 ///
-/// Opt-in: [`crate::PluginManager::register`] does not call this. Donor
+/// Opt-in: [`crate::ModuleManager::register`] does not call this. Donor
 /// `extension.toml` required a description and a semver-like version; v2
 /// manifests still allow a free-form version unless a caller asks.
 pub fn validate_plugin_manifest_text(manifest: &PluginManifest) -> Result<(), BoundError> {

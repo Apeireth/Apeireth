@@ -211,7 +211,12 @@ struct ProbeModule {
 impl ProbeModule {
     fn new(steps: Vec<ProbeStep>) -> Arc<Self> {
         Arc::new(Self {
-            manifest: ModuleManifest::new("probe.invoker_handle", "Invoker handle probe"),
+            manifest: ModuleManifest::system(
+                "probe.invoker_handle",
+                "1.0.0",
+                "Invoker handle probe",
+            )
+            .observes(HookPoint::TurnStart),
             steps: Mutex::new(steps),
             records: Mutex::new(Vec::new()),
         })

@@ -6,9 +6,6 @@
 pub mod approval {
     pub use apeireth_runtime::canonical::approval::*;
 }
-pub mod capability {
-    pub use apeireth_runtime::canonical::capability::*;
-}
 pub mod error {
     pub use apeireth_runtime::canonical::error::*;
 }
@@ -41,7 +38,6 @@ pub mod trace {
 // composition: kernel ports remain available from the same canonical surface,
 // while concrete implementations below stay owned by this crate.
 pub use approval::*;
-pub use capability::*;
 pub use error::*;
 pub use events::*;
 pub use execute::*;
@@ -129,8 +125,5 @@ pub use production::{
     MemoryContextProjector, ProductionBackends, ProductionCognitiveModules, ProductionModules,
     ProductionModulesConfig,
 };
-pub use tool_modules::{
-    EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,
-    ShellModule,
-};
+pub use tool_modules::{BuiltinToolsModule, McpModule, MCP_MODULE_ID};
 pub use typed_recall::SqliteTypedMemoryRecallSource;

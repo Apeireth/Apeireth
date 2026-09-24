@@ -1627,7 +1627,11 @@ impl Runtime {
     ) -> RuntimeResult<HookEffects> {
         let mut effects = HookEffects::default();
         let active_tools = self.tools();
-        for module in &self.modules {
+        // The manifest's hook declaration is the dispatch list: a module that
+        // did not declare this point is never called for it, and neither is one
+        // whose lifecycle is not active. Registration order is the invocation
+        // order, so the same module set always fuses its outcomes the same way.
+        for module in self.modules.dispatchable_observers(hook) {
             let manifest = module.manifest();
             // One turn-scoped spawner per hook: the borrowed accessor and the
             // owned handle below dereference the same Arc allocation, so every
@@ -1652,7 +1656,7 @@ impl Runtime {
                 tool_call,
                 tool_result,
                 invocation,
-                module_id: &manifest.id,
+                module_id: manifest.id.as_str(),
                 error,
                 invoker: &*spawner,
                 invoker_handle,
@@ -1672,17 +1676,17 @@ impl Runtime {
                     if budget_exhausted {
                         effects
                             .degraded
-                            .push((manifest.id.clone(), source.to_string()));
+                            .push((manifest.id.to_string(), source.to_string()));
                         ModuleOutcome::continue_()
                     } else {
                         return Err(RuntimeError::Module {
-                            module_id: manifest.id.clone(),
+                            module_id: manifest.id.to_string(),
                             source,
                         });
                     }
                 }
             };
-            effects.push(&manifest.id, outcome);
+            effects.push(manifest.id.as_str(), outcome);
         }
         Ok(effects)
     }
@@ -1974,13 +1978,10 @@ impl Runtime {
     ) -> RuntimeResult<ToolDispatch> {
         let clock = self.clock.as_ref();
 
-        let module_tool = self.capabilities.find_by_name(&call.name);
-        let plugin_tool = self.plugins.tool_by_name(&call.name);
-        let Some(tool) = (match (module_tool, plugin_tool) {
-            (Some(tool), None) | (None, Some(tool)) => Some(tool),
-            (None, None) => None,
-            (Some(_), Some(_)) => None,
-        }) else {
+        // One world: every tool, whoever owns it, is reachable through the same
+        // index. A name collision could never be registered in the first place,
+        // so there is no "found in both worlds" case to fail closed on here.
+        let Some(tool) = self.modules.tool_by_name(&call.name) else {
             let available = self
                 .tool_declarations()
                 .iter()

@@ -164,10 +164,12 @@ impl PreferenceLearningModule {
     /// Build the learning slot over the existing preference store.
     pub fn new(store: Arc<dyn PreferenceStore>) -> Self {
         Self {
-            manifest: ModuleManifest::new(
+            manifest: ModuleManifest::system(
                 PREFERENCE_LEARNING_MODULE_ID,
+                "1.0.0",
                 "Preference learning (deterministic)",
-            ),
+            )
+            .observes(HookPoint::AfterTurn),
             store,
             stats: Arc::new(PreferenceLearningStats::default()),
             telemetry: Mutex::new(None),

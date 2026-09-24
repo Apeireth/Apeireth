@@ -267,7 +267,7 @@ struct RecordingModule {
 impl RecordingModule {
     fn new(id: &str, hooks: Arc<Mutex<Vec<HookPoint>>>) -> Arc<Self> {
         Arc::new(Self {
-            manifest: ModuleManifest::new(id, id),
+            manifest: ModuleManifest::system(id, "1.0.0", id).observes_all(HookPoint::ALL),
             hooks,
         })
     }
@@ -298,7 +298,7 @@ struct OverlayModule {
 impl OverlayModule {
     fn new(id: &str, marker: &str) -> Arc<Self> {
         Arc::new(Self {
-            manifest: ModuleManifest::new(id, id),
+            manifest: ModuleManifest::system(id, "1.0.0", id).observes(HookPoint::BeforeModelCall),
             marker: marker.into(),
             first_turn: AtomicBool::new(true),
         })
@@ -331,7 +331,8 @@ struct RetryModule {
 impl RetryModule {
     fn new() -> Arc<Self> {
         Arc::new(Self {
-            manifest: ModuleManifest::new("module.retry", "retry"),
+            manifest: ModuleManifest::system("module.retry", "1.0.0", "retry")
+                .observes(HookPoint::BeforeFinalCommit),
             calls: AtomicUsize::new(0),
         })
     }
@@ -615,7 +616,10 @@ impl AgentModule for OutcomeModule {
         _ctx: &ModuleContext<'_>,
     ) -> Result<ModuleOutcome, ModuleError> {
         if hook == HookPoint::BeforeFinalCommit {
-            self.order.lock().unwrap().push(self.manifest.id.clone());
+            self.order
+                .lock()
+                .unwrap()
+                .push(self.manifest.id.to_string());
             return Ok(self.outcome.clone());
         }
         Ok(ModuleOutcome::continue_())
@@ -691,7 +695,9 @@ async fn hooks_fire_and_overlays_are_ordered_transient_and_not_persisted() {
 async fn overlays_are_recomputed_for_each_provider_retry() {
     let provider = FakeProvider::new(vec![Reply::Text("candidate 1"), Reply::Text("candidate 2")]);
     let module = Arc::new(RetryOverlayModule {
-        manifest: ModuleManifest::new("module.retry_overlay", "retry overlay"),
+        manifest: ModuleManifest::system("module.retry_overlay", "1.0.0", "retry overlay")
+            .observes(HookPoint::BeforeModelCall)
+            .observes(HookPoint::BeforeFinalCommit),
         before_model_calls: AtomicUsize::new(0),
         final_checks: AtomicUsize::new(0),
     });
@@ -716,7 +722,12 @@ async fn overlays_are_recomputed_for_each_provider_retry() {
 async fn before_model_retry_consumes_one_logical_round_without_double_provider_calling() {
     let provider = FakeProvider::new(vec![Reply::Text("answer")]);
     let module = Arc::new(BeforeModelRetryModule {
-        manifest: ModuleManifest::new("module.before_model_retry", "before model retry"),
+        manifest: ModuleManifest::system(
+            "module.before_model_retry",
+            "1.0.0",
+            "before model retry",
+        )
+        .observes(HookPoint::BeforeModelCall),
         calls: AtomicUsize::new(0),
     });
     let runtime = runtime(Arc::clone(&provider), vec![module]).await;
@@ -788,7 +799,8 @@ async fn before_final_commit_retry_uses_the_same_round_budget_and_transient_scaf
 async fn before_final_commit_stop_rejects_without_committing_the_candidate() {
     let provider = FakeProvider::new(vec![Reply::Text("must not commit")]);
     let module = Arc::new(StopModule {
-        manifest: ModuleManifest::new("module.stop", "stop"),
+        manifest: ModuleManifest::system("module.stop", "1.0.0", "stop")
+            .observes(HookPoint::BeforeFinalCommit),
     });
     let runtime = runtime(Arc::clone(&provider), vec![module]).await;
     let session_id = SessionId::new();
@@ -817,22 +829,26 @@ async fn directive_precedence_is_strongest_first_and_all_modules_run() {
     let order = Arc::new(Mutex::new(Vec::new()));
     let modules: Vec<Arc<dyn AgentModule>> = vec![
         Arc::new(OutcomeModule {
-            manifest: ModuleManifest::new("module.continue", "continue"),
+            manifest: ModuleManifest::system("module.continue", "1.0.0", "continue")
+                .observes(HookPoint::BeforeFinalCommit),
             order: Arc::clone(&order),
             outcome: ModuleOutcome::continue_(),
         }),
         Arc::new(OutcomeModule {
-            manifest: ModuleManifest::new("module.retry", "retry"),
+            manifest: ModuleManifest::system("module.retry", "1.0.0", "retry")
+                .observes(HookPoint::BeforeFinalCommit),
             order: Arc::clone(&order),
             outcome: ModuleOutcome::retry("retry"),
         }),
         Arc::new(OutcomeModule {
-            manifest: ModuleManifest::new("module.stop.first", "stop first"),
+            manifest: ModuleManifest::system("module.stop.first", "1.0.0", "stop first")
+                .observes(HookPoint::BeforeFinalCommit),
             order: Arc::clone(&order),
             outcome: ModuleOutcome::stop("stop first"),
         }),
         Arc::new(OutcomeModule {
-            manifest: ModuleManifest::new("module.stop.second", "stop second"),
+            manifest: ModuleManifest::system("module.stop.second", "1.0.0", "stop second")
+                .observes(HookPoint::BeforeFinalCommit),
             order: Arc::clone(&order),
             outcome: ModuleOutcome::stop("stop second"),
         }),
@@ -865,7 +881,9 @@ async fn runtime_errors_are_observable_through_on_error_without_being_swallowed(
     let provider = FakeProvider::new(vec![Reply::Text("never reached")]);
     let saw_error = Arc::new(AtomicBool::new(false));
     let module = Arc::new(FailingModule {
-        manifest: ModuleManifest::new("module.failing", "failing"),
+        manifest: ModuleManifest::system("module.failing", "1.0.0", "failing")
+            .observes(HookPoint::TurnStart)
+            .observes(HookPoint::OnError),
         saw_error: Arc::clone(&saw_error),
     });
     let runtime = runtime(Arc::clone(&provider), vec![module]).await;
@@ -886,7 +904,8 @@ async fn isolated_side_calls_use_the_provider_without_tools_or_recursive_hooks()
     let hook_count = Arc::new(AtomicUsize::new(0));
     let origin = Arc::new(Mutex::new(None));
     let module = Arc::new(SideCallModule {
-        manifest: ModuleManifest::new("module.side", "side"),
+        manifest: ModuleManifest::system("module.side", "1.0.0", "side")
+            .observes_all(HookPoint::ALL),
         side_text: Arc::clone(&side_text),
         side_tool_calls: Arc::clone(&side_tool_calls),
         hook_count: Arc::clone(&hook_count),
@@ -931,7 +950,12 @@ async fn side_call_tool_responses_are_never_dispatched() {
     let hook_count = Arc::new(AtomicUsize::new(0));
     let origin = Arc::new(Mutex::new(None));
     let module = Arc::new(SideCallModule {
-        manifest: ModuleManifest::new("module.side_tool_response", "side tool response"),
+        manifest: ModuleManifest::system(
+            "module.side_tool_response",
+            "1.0.0",
+            "side tool response",
+        )
+        .observes_all(HookPoint::ALL),
         side_text,
         side_tool_calls: Arc::clone(&side_tool_calls),
         hook_count,
@@ -966,7 +990,8 @@ async fn side_call_budget_is_shared_and_explicit() {
     ]);
     let budget_error = Arc::new(Mutex::new(None));
     let module = Arc::new(BudgetModule {
-        manifest: ModuleManifest::new("module.budget", "budget"),
+        manifest: ModuleManifest::system("module.budget", "1.0.0", "budget")
+            .observes(HookPoint::BeforeFinalCommit),
         budget_error: Arc::clone(&budget_error),
     });
     let runtime = Runtime::builder()
@@ -993,7 +1018,9 @@ async fn tool_hooks_run_around_governed_dispatch() {
     let provider = FakeProvider::new(vec![Reply::Tool, Reply::Text("done")]);
     let hooks = Arc::new(Mutex::new(Vec::new()));
     let module = Arc::new(ToolHookModule {
-        manifest: ModuleManifest::new("module.tools", "tools"),
+        manifest: ModuleManifest::system("module.tools", "1.0.0", "tools")
+            .observes(HookPoint::BeforeToolCall)
+            .observes(HookPoint::AfterToolResult),
         hooks: Arc::clone(&hooks),
     });
     let tool_plugin = EchoPlugin::new();
@@ -1026,7 +1053,8 @@ async fn tool_hooks_run_around_governed_dispatch() {
 async fn before_tool_retry_closes_the_tool_transcript_before_the_next_provider_call() {
     let provider = FakeProvider::new(vec![Reply::Tool, Reply::Text("done")]);
     let module = Arc::new(BeforeToolRetryModule {
-        manifest: ModuleManifest::new("module.before_tool_retry", "before tool retry"),
+        manifest: ModuleManifest::system("module.before_tool_retry", "1.0.0", "before tool retry")
+            .observes(HookPoint::BeforeToolCall),
         calls: AtomicUsize::new(0),
     });
     let runtime = runtime(Arc::clone(&provider), vec![module]).await;
@@ -1063,7 +1091,8 @@ async fn after_tool_retry_closes_remaining_calls_without_mixing_feedback_into_re
     let provider = FakeProvider::new(vec![Reply::TwoTools, Reply::Text("done")]);
     let tool_plugin = EchoPlugin::new();
     let module = Arc::new(AfterToolRetryModule {
-        manifest: ModuleManifest::new("module.after_tool_retry", "after tool retry"),
+        manifest: ModuleManifest::system("module.after_tool_retry", "1.0.0", "after tool retry")
+            .observes(HookPoint::AfterToolResult),
         calls: AtomicUsize::new(0),
     });
     let runtime = Runtime::builder()
@@ -1110,7 +1139,9 @@ async fn rejected_approval_still_emits_after_tool_result() {
     let tool_plugin = EchoPlugin::new();
     let hooks = Arc::new(Mutex::new(Vec::new()));
     let module = Arc::new(ToolHookModule {
-        manifest: ModuleManifest::new("module.approval_hooks", "approval hooks"),
+        manifest: ModuleManifest::system("module.approval_hooks", "1.0.0", "approval hooks")
+            .observes(HookPoint::BeforeToolCall)
+            .observes(HookPoint::AfterToolResult),
         hooks: Arc::clone(&hooks),
     });
     let mut policy = PermissionPolicy::new();
@@ -1170,7 +1201,8 @@ async fn module_veto_of_a_claimed_approval_clears_the_active_pause_fail_closed()
         .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
         .with_plugin(tool_plugin.clone())
         .with_module(Arc::new(ApprovedToolStopModule {
-            manifest: ModuleManifest::new("module.approved_stop", "approved stop"),
+            manifest: ModuleManifest::system("module.approved_stop", "1.0.0", "approved stop")
+                .observes(HookPoint::BeforeToolCall),
             calls: AtomicUsize::new(0),
         }))
         .build()
@@ -1244,7 +1276,8 @@ async fn isolated_module_invoker_obeys_completion_governance() {
     let provider = FakeProvider::new(vec![Reply::Text("must not run")]);
     let side_text = Arc::new(Mutex::new(None));
     let module = Arc::new(SideCallModule {
-        manifest: ModuleManifest::new("module.side_denied", "side denied"),
+        manifest: ModuleManifest::system("module.side_denied", "1.0.0", "side denied")
+            .observes_all(HookPoint::ALL),
         side_text: Arc::clone(&side_text),
         side_tool_calls: Arc::new(Mutex::new(None)),
         hook_count: Arc::new(AtomicUsize::new(0)),
@@ -1307,7 +1340,8 @@ impl AgentModule for PropagatingBudgetModule {
 async fn budget_exhaustion_degrades_the_module_instead_of_aborting_the_turn() {
     let provider = FakeProvider::new(vec![Reply::Text("candidate"), Reply::Text("side")]);
     let module = Arc::new(PropagatingBudgetModule {
-        manifest: ModuleManifest::new("module.budget_propagate", "budget propagate"),
+        manifest: ModuleManifest::system("module.budget_propagate", "1.0.0", "budget propagate")
+            .observes(HookPoint::BeforeFinalCommit),
     });
     let runtime = Runtime::builder()
         .with_default_model(MODEL)

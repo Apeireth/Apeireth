@@ -360,7 +360,9 @@ impl PartnerBondModule {
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
-            manifest: ModuleManifest::new(PARTNER_BOND_MODULE_ID, "Partner bond"),
+            manifest: ModuleManifest::system(PARTNER_BOND_MODULE_ID, "1.0.0", "Partner bond")
+                .observes(HookPoint::TurnStart)
+                .observes(HookPoint::AfterTurn),
             partner_store,
             subject_id: subject_id.into(),
             clock,
@@ -799,7 +801,13 @@ impl AbsorptionInsightModule {
     /// 构造。
     pub fn new() -> Self {
         Self {
-            manifest: ModuleManifest::new(ABSORPTION_INSIGHT_MODULE_ID, "Absorption insight"),
+            manifest: ModuleManifest::system(
+                ABSORPTION_INSIGHT_MODULE_ID,
+                "1.0.0",
+                "Absorption insight",
+            )
+            .observes(HookPoint::TurnStart)
+            .observes(HookPoint::AfterTurn),
             pending_insight: Mutex::new(None),
         }
     }
@@ -980,7 +988,8 @@ impl MemoryRecallModule {
     /// current release has real SQLite tables but no extraction pipeline.
     pub fn new(memory: Arc<dyn MemoryBackend>) -> Self {
         Self {
-            manifest: ModuleManifest::new(MEMORY_RECALL_MODULE_ID, "Memory recall"),
+            manifest: ModuleManifest::system(MEMORY_RECALL_MODULE_ID, "1.0.0", "Memory recall")
+                .observes(HookPoint::TurnStart),
             memory,
             coordinator: None,
             wiki: None,
@@ -1265,7 +1274,12 @@ impl MemoryWritebackModule {
     /// Build an AfterTurn-only writeback slot.
     pub fn new(memory: Arc<dyn MemoryBackend>, clock: Arc<dyn Clock>) -> Self {
         Self {
-            manifest: ModuleManifest::new(MEMORY_WRITEBACK_MODULE_ID, "Memory writeback"),
+            manifest: ModuleManifest::system(
+                MEMORY_WRITEBACK_MODULE_ID,
+                "1.0.0",
+                "Memory writeback",
+            )
+            .observes(HookPoint::AfterTurn),
             memory,
             coordinator: None,
             wiki: None,
@@ -1556,7 +1570,12 @@ impl PreferenceRecallModule {
     /// Build a preference recall slot.
     pub fn new(store: Arc<dyn PreferenceStore>) -> Self {
         Self {
-            manifest: ModuleManifest::new(PREFERENCE_RECALL_MODULE_ID, "Preference recall"),
+            manifest: ModuleManifest::system(
+                PREFERENCE_RECALL_MODULE_ID,
+                "1.0.0",
+                "Preference recall",
+            )
+            .observes(HookPoint::TurnStart),
             store,
             limit: DEFAULT_RECALL_LIMIT as u32,
             max_context_chars: DEFAULT_MAX_CONTEXT_CHARS,
@@ -1713,7 +1732,13 @@ impl ReflexionModule {
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
-            manifest: ModuleManifest::new(REFLEXION_MODULE_ID, "Reflexion failure feedback"),
+            manifest: ModuleManifest::system(
+                REFLEXION_MODULE_ID,
+                "1.0.0",
+                "Reflexion failure feedback",
+            )
+            .observes(HookPoint::TurnStart)
+            .observes(HookPoint::AfterTurn),
             store,
             observations,
             task_type: "chat".to_string(),
@@ -1908,7 +1933,9 @@ impl JudgeModule {
     /// Build a Judge slot and a shared observation channel for self-assessment.
     pub fn new(config: JudgeConfig, observations: Arc<JudgeObservations>) -> Self {
         Self {
-            manifest: ModuleManifest::new(JUDGE_MODULE_ID, "AI evaluates AI"),
+            manifest: ModuleManifest::system(JUDGE_MODULE_ID, "1.0.0", "AI evaluates AI")
+                .observes(HookPoint::TurnStart)
+                .observes(HookPoint::AfterModelResponse),
             config,
             observations,
             retries: Mutex::new(BTreeMap::new()),
@@ -2073,7 +2100,8 @@ impl SelfAssessmentModule {
         observations: Arc<JudgeObservations>,
     ) -> Self {
         Self {
-            manifest: ModuleManifest::new(SELF_ASSESSMENT_MODULE_ID, "Self assessment"),
+            manifest: ModuleManifest::system(SELF_ASSESSMENT_MODULE_ID, "1.0.0", "Self assessment")
+                .observes(HookPoint::AfterTurn),
             store,
             clock,
             observations,
@@ -2172,7 +2200,8 @@ impl CouncilModule {
     /// Build a no-tool council adapter.
     pub fn new(council: Arc<Council>, clock: Arc<dyn Clock>) -> Self {
         Self {
-            manifest: ModuleManifest::new(COUNCIL_MODULE_ID, "Council adapter"),
+            manifest: ModuleManifest::system(COUNCIL_MODULE_ID, "1.0.0", "Council adapter")
+                .observes(HookPoint::AfterModelResponse),
             council,
             clock,
             metrics: ModuleMetrics::default(),

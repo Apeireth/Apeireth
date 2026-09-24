@@ -1,4 +1,12 @@
-//! Bounded Module-owned SubLoops.
+//! Bounded module-owned SubLoops: the runtime-side implementation.
+//!
+//! The spec, the result, the failure type, and the [`SubLoopSpawner`] port are
+//! declared in `apeireth-plugin` next to the rest of the module ABI, because a
+//! module needs them to ask for a side loop while the runtime provides it. This
+//! module owns the one implementation,
+//! [`RuntimeSubLoopSpawner`], plus the
+//! [`ModuleInvoker`](crate::canonical::ModuleInvoker) implementation that lets a
+//! spawner also serve a single isolated completion.
 //!
 //! # Invariants
 //!
@@ -9,11 +17,15 @@
 //! 3. A SubLoop has an explicit capability allowlist. Only tools matching the
 //!    allowlist are available during its execution.
 //! 4. A SubLoop never emits events directly to the user frontend; it returns a
-//!    structured [`SubLoopResult`] to its owning module.
+//!    structured result to its owning module.
 //! 5. A SubLoop is never a second user-facing loop.
+//!
+//! The tool set a SubLoop may draw from is whatever the canonical module manager
+//! reports as dispatchable — there is no second tool world to consult.
 
 use std::sync::Arc;
-use std::time::Duration;
+
+pub use apeireth_plugin::subloop::{SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec};
 
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
@@ -23,141 +35,12 @@ use apeireth_protocol::canonical::{
     ToolResult,
 };
 use async_trait::async_trait;
-use thiserror::Error;
 
 use super::module::{
     authorize_isolated_completion, ModuleInvocationError, ModuleInvocationRequest,
     ModuleInvocationResponse, ModuleInvoker, ModuleTurnState, DEFAULT_MAX_INVOCATION_DEPTH,
 };
 use super::provider::ProviderRouter;
-
-/// Specification defining the bounded constraints and goals of a SubLoop.
-#[derive(Debug, Clone)]
-pub struct SubLoopSpec {
-    /// Bounded round limit.
-    pub max_rounds: u32,
-    /// Explicit list of capability IDs allowed to be executed within this SubLoop.
-    pub allowed_capabilities: Vec<CapabilityId>,
-    /// Optional execution timeout across the whole SubLoop.
-    pub timeout: Option<Duration>,
-    /// Initial messages for the ephemeral transcript.
-    pub messages: Vec<NormalizedMessage>,
-    /// System prompt instructions for the SubLoop.
-    pub system_prompt: Option<String>,
-    /// Target model override. If None, inherits the parent turn's model.
-    pub model: Option<String>,
-}
-
-impl SubLoopSpec {
-    /// Create a single-round, zero-tool isolated prompt spec.
-    pub fn single_turn(prompt: impl Into<String>) -> Self {
-        Self {
-            max_rounds: 1,
-            allowed_capabilities: Vec::new(),
-            timeout: None,
-            messages: vec![NormalizedMessage::user(prompt.into())],
-            system_prompt: None,
-            model: None,
-        }
-    }
-
-    /// Add a system prompt.
-    pub fn with_system_prompt(mut self, system_prompt: impl Into<String>) -> Self {
-        self.system_prompt = Some(system_prompt.into());
-        self
-    }
-
-    /// Set round limit.
-    pub fn with_max_rounds(mut self, max_rounds: u32) -> Self {
-        self.max_rounds = max_rounds;
-        self
-    }
-
-    /// Set timeout duration.
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = Some(timeout);
-        self
-    }
-
-    /// Allow a capability ID.
-    pub fn with_allowed_capability(mut self, capability: CapabilityId) -> Self {
-        self.allowed_capabilities.push(capability);
-        self
-    }
-
-    /// Set model override.
-    pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = Some(model.into());
-        self
-    }
-}
-
-/// Structured outcome returned upon SubLoop completion.
-#[derive(Debug, Clone)]
-pub struct SubLoopResult {
-    /// Final text content produced by the SubLoop.
-    pub text: String,
-    /// Number of rounds executed.
-    pub rounds: u32,
-    /// Aggregate token usage.
-    pub usage: NormalizedUsage,
-    /// History of tool invocations performed within the ephemeral session.
-    pub tool_results: Vec<ToolResult>,
-}
-
-/// Failures that can occur during bounded SubLoop execution.
-#[derive(Debug, Error)]
-pub enum SubLoopError {
-    /// Turn budget for side invocations exceeded.
-    #[error("subloop budget exceeded: limit is {limit}")]
-    BudgetExceeded { limit: usize },
-    /// Nesting recursion limit exceeded.
-    #[error("subloop recursion limit {depth} exceeds maximum {maximum}")]
-    RecursionLimit { depth: u8, maximum: u8 },
-    /// No model available.
-    #[error("subloop execution has no model")]
-    NoModel,
-    /// Specified timeout expired.
-    #[error("subloop execution timed out")]
-    Timeout,
-    /// Round limit reached without convergence.
-    #[error("subloop reached round limit ({rounds}) without final response")]
-    RoundLimitReached { rounds: u32 },
-    /// Requested tool capability was denied by the SubLoop allowlist.
-    #[error("subloop tool {name:?} is not permitted by capability allowlist")]
-    CapabilityDenied { name: String },
-    /// Provider failure.
-    #[error("subloop provider failed: {reason}")]
-    Provider { reason: String },
-    /// Canonical completion governance refused the SubLoop provider call.
-    #[error("subloop completion refused by governance: {reason}")]
-    Denied { reason: String },
-    /// SubLoops cannot mint a hidden human approval for completions.
-    #[error("subloop completion requires approval which is not permitted: {reason}")]
-    ApprovalRequired { reason: String },
-}
-
-impl From<ModuleInvocationError> for SubLoopError {
-    fn from(err: ModuleInvocationError) -> Self {
-        match err {
-            ModuleInvocationError::BudgetExceeded { limit } => Self::BudgetExceeded { limit },
-            ModuleInvocationError::RecursionLimit { depth, maximum } => {
-                Self::RecursionLimit { depth, maximum }
-            }
-            ModuleInvocationError::NoModel => Self::NoModel,
-            ModuleInvocationError::Provider { reason } => Self::Provider { reason },
-            ModuleInvocationError::Denied { reason } => Self::Denied { reason },
-            ModuleInvocationError::ApprovalRequired { reason } => Self::ApprovalRequired { reason },
-        }
-    }
-}
-
-/// Trait implemented by runtime hosts to spawn bounded SubLoops.
-#[async_trait]
-pub trait SubLoopSpawner: Send + Sync {
-    /// Spawn and execute a bounded SubLoop with a private transcript.
-    async fn spawn(&self, spec: SubLoopSpec) -> Result<SubLoopResult, SubLoopError>;
-}
 
 /// Runtime-owned spawner that executes bounded SubLoops against router and tools.
 ///

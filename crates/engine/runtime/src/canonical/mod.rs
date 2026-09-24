@@ -26,7 +26,6 @@
 //! there is no second orchestration driver or legacy runtime dependency.
 
 pub mod approval;
-pub mod capability;
 pub mod context;
 // B6 · Phase 5 (research, 默认关闭): 审批状态机形式化 (RA-5 规格, 模型级验证).
 pub mod research_approval_sm;
@@ -65,12 +64,12 @@ pub mod trace;
 // L1 接 SelfAssessmentStore. 主人 Veto dashboard 留 v2.0.0 release 接入.
 
 pub use apeireth_governance::TurnSecurityContext;
+pub use apeireth_plugin::ModuleManager;
 pub use approval::{
     approval_arguments_summary, approval_command_text, operation_fingerprint,
     operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus, PendingApproval,
     PendingApprovalView,
 };
-pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
 pub use error::{RuntimeError, RuntimeResult};
 pub use events::{
@@ -80,16 +79,17 @@ pub use events::{
 pub use execute::{ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse};
 pub use heartbeat::{FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource};
 pub use module::{
-    AgentModule, BehaviorModule, HookPoint, InvocationContext, InvocationOrigin, Module,
-    ModuleContext, ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
-    ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, ModuleRegistry,
-    PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
+    reject_tool_identity_collisions, AgentModule, BehaviorModule, HookPoint, InvocationContext,
+    InvocationOrigin, Module, ModuleContext, ModuleDirective, ModuleError, ModuleExports,
+    ModuleInitContext, ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse,
+    ModuleInvoker, ModuleManifest, ModuleOrigin, ModuleOutcome, ModuleRegistry, PromptOverlay,
+    RuntimeModuleInvoker, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{
-    plugin_ids, Runtime, RuntimeBuilder, RuntimeCapabilitySnapshot, RuntimeConfig,
+    module_ids, plugin_ids, Runtime, RuntimeBuilder, RuntimeCapabilitySnapshot, RuntimeConfig,
     RuntimeHealthSnapshot, RuntimeModelSnapshot, RuntimeModuleSnapshot, RuntimeProviderSnapshot,
-    RuntimeSnapshot, DEFAULT_MAX_ROUNDS,
+    RuntimeSnapshot, CAPABILITY_MODULE_ID, DEFAULT_MAX_ROUNDS,
 };
 pub use session::{
     InMemorySessionStore, PermissionPreset, Session, SessionEvent, SessionEventKind,
@@ -98,4 +98,5 @@ pub use session::{
 pub use subloop::{
     RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
 };
+
 pub use trace::{ExecutionTrace, TraceEntry, TraceEvent};

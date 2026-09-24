@@ -1,11 +1,17 @@
-//! Canonical plugin and capability model.
+//! Canonical module and capability model.
 //!
 //! # The one idea
 //!
-//! **A plugin is a capability provider.** Not a tool. One plugin may provide any
-//! number of capabilities of any kinds, and every capability in the system —
-//! tools, providers, memory backends, transports — is reached the same way,
-//! through one registry.
+//! **A module is a capability provider, and the only runtime extension
+//! entity.** Not a tool, and not a thing a "plugin" would be a second kind of.
+//! One module may own any number of capabilities of any kinds, observe any
+//! number of hook points, and carry a lifecycle; every capability in the system
+//! — tools, providers, memory backends, transports — is reached the same way,
+//! through one registry, no matter whether the module was compiled in, installed
+//! as a package, or loaded from a development build.
+//!
+//! "Plugin" survives only as the product-layer name for a user-installed module
+//! package, and as compatibility aliases in [`plugin`].
 //!
 //! # Why this crate exists
 //!
@@ -16,11 +22,11 @@
 //! became another place that had to be consulted, kept in sync, and eventually
 //! contradicted the others.
 //!
-//! This crate replaces that with two registries and a rule: [`PluginRegistry`]
-//! owns plugins, [`CapabilityRegistry`] owns the id-to-owner index, and nothing
+//! This crate replaces that with two registries and a rule: [`ModuleRegistry`]
+//! owns modules, [`CapabilityRegistry`] owns the id-to-owner index, and nothing
 //! else stores a second copy of either fact. The index is an index, not a copy —
 //! a capability's declaration continues to live only in its owner's manifest.
-//! Typed views over the registries are encouraged, and [`PluginManager`] provides
+//! Typed views over the registries are encouraged, and [`ModuleManager`] provides
 //! them; second sources of truth are not.
 //!
 //! # Layering
@@ -28,23 +34,24 @@
 //! Depends on `apeireth-core` and `apeireth-protocol`. Must not depend on
 //! `apeireth-runtime`: capabilities are things the runtime composes, so a
 //! capability that knew about the runtime would invert the whole arrangement.
+//! The runtime implements the two ports this crate declares — [`ModuleInvoker`]
+//! and [`SubLoopSpawner`] — which is what lets modules observe a turn without
+//! ever seeing a runtime type.
 //!
 //! # Scope
 //!
-//! Static, in-process plugins. Dynamic library loading, WASM, hot reload, remote
-//! plugins, and a marketplace are out of scope. See [`plugin::Plugin`].
+//! Static, in-process modules. Dynamic library loading, WASM, hot reload, remote
+//! modules, and a marketplace are out of scope. See [`Module`].
 //!
 //! # Shape
 //!
 //! ```text
-//!   PluginManifest  declares  ->  CapabilityDescriptor (id + kind)
-//!         |                              |
-//!    PluginRegistry                CapabilityRegistry (id -> owner)
-//!         \                              /
-//!          `------  PluginManager  ------'
-//!                  lifecycle + typed views
-//!                          |
-//!            ToolCapability / ProviderCapability
+//! ModuleManifest  declares  ->  CapabilityDescriptor (id + kind)
+//!       |                              |
+//! ModuleRegistry (canonical)     CapabilityRegistry (id -> owner index)
+//!       \                              /
+//!        `------  ModuleManager  ------'
+//!            lifecycle + deps + hook index + typed views
 //! ```
 
 #![deny(unsafe_code)]
@@ -66,6 +73,7 @@ pub mod manager;
 pub mod manifest;
 pub mod mcp;
 pub mod memory_backend;
+pub mod module;
 pub mod organ;
 pub mod perception;
 pub mod perception_backend;
@@ -75,6 +83,7 @@ pub mod provider;
 pub mod registry;
 pub mod self_assessment;
 pub mod semver;
+pub mod subloop;
 pub mod tool;
 pub mod watch;
 
@@ -91,9 +100,15 @@ pub use bounds::{
 };
 pub use capability::{CapabilityDescriptor, CapabilityKind};
 pub use credentials::{CredentialResolver, NoCredentials, Secret, StaticCredentials};
-pub use error::{PluginError, PluginResult};
-pub use manager::PluginManager;
-pub use manifest::PluginManifest;
+pub use error::{ModuleResult, ModuleSystemError, PluginError, PluginResult};
+pub use manager::ModuleManager;
+pub use manifest::ModuleManifest;
+// Root-level spellings of the historical "plugin" vocabulary, so embedders keep
+// compiling unchanged. They resolve to the same types as the Module-centric
+// names above; see [`plugin`] for the rationale.
+pub use manifest::ModuleManifest as PluginManifest;
+pub use module::{Module as Plugin, ModuleInitContext as PluginContext};
+pub use registry::ModuleRegistry as PluginRegistry;
 pub use semver::{
     compare as compare_semver, is_valid as is_valid_semver, parse as parse_semver, Semver,
     SemverError,
@@ -104,11 +119,18 @@ pub use watch::{
 // O-6 锚兑现 #12: 统一 capability trait 错误通道 `CapabilityResult<T>` 在 crate root
 // 可用, 避免每个 use 点写 `crate::memory_backend::CapabilityResult`.
 pub use memory_backend::CapabilityResult;
+pub use module::{
+    reject_tool_identity_collisions, CapabilityOwnership, HookPoint, InvocationContext,
+    InvocationOrigin, Module, ModuleContext, ModuleDirective, ModuleError, ModuleExports,
+    ModuleInitContext, ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse,
+    ModuleInvoker, ModuleOrigin, ModuleOutcome, ModuleTurnState, PromptOverlay,
+    DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
+};
 pub use perception_backend::{
     AudioBuffer, LangHint, NoopVoiceBackend, PerceptionBackendError, ScreenshotBytes, TactileState,
     Transcription, VoiceBackend, WhisperBackend,
 };
-pub use plugin::{Plugin, PluginContext};
 pub use provider::{ProviderCapability, ProviderError, ProviderHotConfig};
-pub use registry::{CapabilityRecord, CapabilityRegistry, PluginRegistry};
+pub use registry::{CapabilityRecord, CapabilityRegistry, ModuleRegistry};
+pub use subloop::{SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec};
 pub use tool::{FrozenInvocation, ToolCapability};

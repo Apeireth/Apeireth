@@ -45,7 +45,13 @@ pub mod time;
 
 pub use error::{CoreError, CoreResult};
 pub use event::{Event, Topic};
-pub use ids::{ApprovalId, CapabilityId, ModelId, PluginId, RequestId, SessionId, TaskId, TraceId};
+/// Compatibility alias. The runtime extension entity is a **module** and its id
+/// is [`ModuleId`]; this spelling is kept so existing manifests, configs, and
+/// logs keep resolving to the same type.
+pub use ids::ModuleId as PluginId;
+pub use ids::{
+    ApprovalId, CapabilityId, ModelId, ModuleId, RequestId, SessionId, TaskId, TraceId,
+};
 pub use lifecycle::Lifecycle;
 pub use metadata::Metadata;
 pub use stream_kind::StreamKind;

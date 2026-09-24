@@ -224,8 +224,14 @@ macro_rules! stable_id {
 }
 
 stable_id! {
-    /// Identifies a plugin across restarts and releases, e.g. `builtin.calculator`.
-    PluginId
+    /// Identifies a module across restarts and releases, e.g. `builtin.calculator`.
+    ///
+    /// A module is the one runtime extension entity: it owns a lifecycle, a set
+    /// of capabilities, and hook observations. `PluginId` is a compatibility
+    /// alias for this type — the convergence retired "plugin" as a runtime
+    /// primitive but kept the identifier so existing manifests and logs remain
+    /// valid.
+    ModuleId
 }
 
 stable_id! {

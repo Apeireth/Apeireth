@@ -180,6 +180,7 @@ fn fetch_plugin() -> BuiltinToolsPlugin {
         BuiltinToolsOptions {
             shell: None,
             fetch: Some(FetchConfig::new(egress)),
+            education: false,
         },
     )
 }

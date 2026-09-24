@@ -334,9 +334,10 @@ fn project_live_tool_catalog(
     policy: &std::sync::Mutex<PermissionPolicy>,
 ) -> Vec<ToolDto> {
     let policy = policy.lock().ok();
-    let mut tools = runtime
-        .capability_registry()
-        .entries()
+    // One source: every dispatchable tool with the module that owns it. The
+    // projection no longer merges a module listing with a plugin listing.
+    let tools = runtime
+        .tool_entries()
         .into_iter()
         .map(|(owner, capability)| {
             let declaration = capability.declaration();
@@ -351,37 +352,35 @@ fn project_live_tool_catalog(
                 description: declaration.description.unwrap_or_default(),
                 args_schema: (!declaration.parameters.is_empty())
                     .then(|| serde_json::Value::Object(declaration.parameters)),
-                source: owner,
-                permission: if granted { "granted" } else { "none" }.to_string(),
+                source: owner.to_string(),
+                permission: if granted { "granted".to_string() } else { "none".to_string() },
                 available: true,
             }
         })
         .collect::<Vec<_>>();
-
-    for capability in runtime.plugins().active_tools() {
-        let declaration = capability.declaration();
-        tools.push(ToolDto {
-            name: declaration.name,
-            description: declaration.description.unwrap_or_default(),
-            args_schema: (!declaration.parameters.is_empty())
-                .then(|| serde_json::Value::Object(declaration.parameters)),
-            source: "plugin".to_string(),
-            permission: "plugin-managed".to_string(),
-            available: true,
-        });
-    }
     tools
 }
 
 fn project_live_behavior_catalog(runtime: &Runtime) -> Vec<OrganDto> {
+    // The Behavior panel lists behaviors: modules that observe at least one
+    // hook point. A tool or provider module is the same kind of object and
+    // simply has no hooks to show here — this is a derived filter over the one
+    // module registry, never a second catalog to keep in sync.
+    let manager = runtime.module_manager();
     runtime
         .modules()
         .iter()
-        .map(|module| OrganDto {
-            id: module.manifest().id.clone(),
-            name: module.manifest().name.clone(),
-            enabled: true,
-            description: Some("runtime behavior module".to_string()),
+        .filter(|module| !module.manifest().hooks.is_empty())
+        .map(|module| {
+            let id = module.manifest().id.clone();
+            OrganDto {
+                id: id.to_string(),
+                name: module.manifest().name.clone(),
+                enabled: manager
+                    .state(&id)
+                    .is_ok_and(|state| state.is_dispatchable()),
+                description: Some("runtime module".to_string()),
+            }
         })
         .collect()
 }

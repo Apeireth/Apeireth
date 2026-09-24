@@ -1,166 +1,46 @@
 //! Canonical module wrappers for builtin tool capabilities and MCP.
 //!
-//! Tools are owned by modules; the microkernel dispatches to them through the
-//! unified module/capability registry without hardcoding tool names.
+//! After the Module/Plugin convergence there are exactly two kinds of module
+//! here:
+//!
+//! - [`BuiltinToolsModule`] — one owner for every builtin tool capability
+//!   (`tool.filesystem`, `tool.search`, `tool.repo`, and the opt-in
+//!   `tool.shell` / `tool.fetch` / `tool.education`). It is the aggregate the
+//!   tools crate already owned as a "plugin": one unit of lifecycle with many
+//!   capabilities, rather than one module per tool.
+//! - [`McpModule`] — the one module with genuine *dynamic* capability
+//!   ownership. An MCP server discovers tools at runtime, so this module can
+//!   grow its export set after boot, through the same
+//!   [`Module::add_tool`] path every other module is checked against.
+//!
+//! Both register through the ordinary module path: same manifest schema, same
+//! lifecycle, same capability index, same duplicate-identity discipline. There
+//! is no capability registry beside the module registry.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
-use apeireth_plugin::ToolCapability;
-use apeireth_tools_canonical::education::EducationTool;
-use apeireth_tools_canonical::{
-    FetchConfig, FetchTool, FilesystemTool, RepoTool, SearchTool, ShellTool, TrustedShellConfig,
+use apeireth_core::kernel::CapabilityId;
+use apeireth_plugin::{
+    CapabilityOwnership, Module, ModuleManifest, ModuleSystemError, PluginResult, ToolCapability,
 };
 
-use super::capability::CapabilityProvider;
+pub use apeireth_tools_canonical::BuiltinToolsModule;
 
-/// Module providing filesystem capabilities (`tool.filesystem`).
-pub struct FilesystemModule {
-    tool: Arc<FilesystemTool>,
-}
+/// Module id of the MCP capability owner (matches the historical `module.mcp`
+/// owner string so existing admin panels and configuration keep resolving).
+pub const MCP_MODULE_ID: &str = "module.mcp";
 
-impl FilesystemModule {
-    /// Create a filesystem module rooted at `workspace_root`.
-    pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
-        Self {
-            tool: Arc::new(FilesystemTool::new(workspace_root)),
-        }
-    }
-
-    /// Access the underlying filesystem tool.
-    pub fn tool(&self) -> &Arc<FilesystemTool> {
-        &self.tool
-    }
-}
-
-impl CapabilityProvider for FilesystemModule {
-    fn id(&self) -> &str {
-        "module.tool.filesystem"
-    }
-
-    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.tool.clone()]
-    }
-}
-
-/// Module providing search capabilities (`tool.search`).
-pub struct SearchModule {
-    tool: Arc<SearchTool>,
-}
-
-impl SearchModule {
-    /// Create a search module rooted at `workspace_root`.
-    pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
-        Self {
-            tool: Arc::new(SearchTool::new(workspace_root)),
-        }
-    }
-
-    /// Access the underlying search tool.
-    pub fn tool(&self) -> &Arc<SearchTool> {
-        &self.tool
-    }
-}
-
-impl CapabilityProvider for SearchModule {
-    fn id(&self) -> &str {
-        "module.tool.search"
-    }
-
-    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.tool.clone()]
-    }
-}
-
-/// Module providing git repository inspection capabilities (`tool.repo`).
-pub struct RepoModule {
-    tool: Arc<RepoTool>,
-}
-
-impl RepoModule {
-    /// Create a repo module rooted at `workspace_root`.
-    pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
-        Self {
-            tool: Arc::new(RepoTool::new(workspace_root)),
-        }
-    }
-
-    /// Access the underlying repo tool.
-    pub fn tool(&self) -> &Arc<RepoTool> {
-        &self.tool
-    }
-}
-
-impl CapabilityProvider for RepoModule {
-    fn id(&self) -> &str {
-        "module.tool.repo"
-    }
-
-    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.tool.clone()]
-    }
-}
-
-/// Module providing trusted shell command execution capabilities (`tool.shell`).
-pub struct ShellModule {
-    tool: Arc<ShellTool>,
-}
-
-impl ShellModule {
-    /// Create a shell module with explicit configuration.
-    pub fn new(config: TrustedShellConfig) -> Self {
-        Self {
-            tool: Arc::new(ShellTool::new(config)),
-        }
-    }
-
-    /// Access the underlying shell tool.
-    pub fn tool(&self) -> &Arc<ShellTool> {
-        &self.tool
-    }
-}
-
-impl CapabilityProvider for ShellModule {
-    fn id(&self) -> &str {
-        "module.tool.shell"
-    }
-
-    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.tool.clone()]
-    }
-}
-
-/// Module providing controlled HTTP fetch capabilities (`tool.fetch`).
-pub struct FetchModule {
-    tool: Arc<FetchTool>,
-}
-
-impl FetchModule {
-    /// Create a fetch module with explicit egress policy.
-    pub fn new(config: FetchConfig) -> Self {
-        Self {
-            tool: Arc::new(FetchTool::new(config)),
-        }
-    }
-
-    /// Access the underlying fetch tool.
-    pub fn tool(&self) -> &Arc<FetchTool> {
-        &self.tool
-    }
-}
-
-impl CapabilityProvider for FetchModule {
-    fn id(&self) -> &str {
-        "module.tool.fetch"
-    }
-
-    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.tool.clone()]
-    }
-}
-
-/// Module that manages and dynamically contributes Model Context Protocol (MCP) tool capabilities.
+/// Module that manages and dynamically contributes Model Context Protocol (MCP)
+/// tool capabilities.
+///
+/// The only module in the runtime whose capability set can grow after boot.
+/// Dynamic tools are still admitted by the module *manager*, which checks the
+/// capability id and the model-facing name against every module's exports
+/// first; this module's own bag check is the second, module-local line of
+/// defence. A tool that is in the bag but was never admitted by the manager is
+/// not dispatchable and does not appear in any listing.
 pub struct McpModule {
+    manifest: ModuleManifest,
     tools: std::sync::RwLock<Vec<Arc<dyn ToolCapability>>>,
 }
 
@@ -168,6 +48,15 @@ impl McpModule {
     /// Create a new MCP module.
     pub fn new() -> Self {
         Self {
+            manifest: ModuleManifest::system(
+                MCP_MODULE_ID,
+                env!("CARGO_PKG_VERSION"),
+                "Model Context Protocol tools discovered at runtime",
+            )
+            .with_name("mcp")
+            // Dynamic ownership is declared in the manifest — the one place the
+            // manager reads it from. This is the only module that declares it.
+            .with_capability_ownership(CapabilityOwnership::Dynamic),
             tools: std::sync::RwLock::new(Vec::new()),
         }
     }
@@ -181,15 +70,43 @@ impl McpModule {
     /// Register a dynamic tool capability provided by an MCP source.
     ///
     /// Rejects duplicate capability ids and duplicate model-facing names inside
-    /// this module. Cross-module collisions are rejected by the runtime.
+    /// this module. Cross-module collisions are rejected by the module manager,
+    /// which owns the single capability index and checks every module.
     pub fn register_tool(&self, tool: Arc<dyn ToolCapability>) -> Result<(), String> {
-        // poison 容错 (2026-09-24 修复轮补漏): 锁保护的是可重建的工具注册表,
-        // 持锁线程 panic 不应让后续注册/查询连锁 panic (与 G 组 poison 修复同模式)。
+        self.admit_tool(tool).map_err(|error| error.to_string())
+    }
+
+    /// Typed admission into the module-local bag.
+    ///
+    /// The manager performs the same two checks across every module before it
+    /// asks; this is the module-local half, so a bag cannot disagree with itself
+    /// even if it is filled directly.
+    fn admit_tool(&self, tool: Arc<dyn ToolCapability>) -> PluginResult<()> {
+        // poison 容错 (2026-09-24 修复轮): 锁保护的是可重建的工具注册表,
+        // 持锁线程 panic 不应让后续注册/查询连锁 panic。
         let mut tools = self
             .tools
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        super::module::reject_tool_identity_collisions(&tools, &[Arc::clone(&tool)], "mcp")?;
+        if tools.iter().any(|t| t.id() == tool.id()) {
+            return Err(ModuleSystemError::DuplicateCapability {
+                capability: tool.id().clone(),
+                // Both claimants are this module: the bag collided with itself,
+                // which the manager would have caught first anyway.
+                incumbent: self.manifest.id.clone(),
+                challenger: self.manifest.id.clone(),
+            });
+        }
+        if let Some(incumbent) = tools
+            .iter()
+            .find(|t| t.declaration().name == tool.declaration().name)
+        {
+            return Err(ModuleSystemError::AmbiguousToolName {
+                name: tool.declaration().name,
+                incumbent: incumbent.id().clone(),
+                challenger: tool.id().clone(),
+            });
+        }
         tools.push(tool);
         Ok(())
     }
@@ -197,11 +114,19 @@ impl McpModule {
     /// Unregister a dynamic tool capability by capability ID.
     ///
     /// Only tools whose id matches are removed; other owners are untouched.
-    pub fn unregister_tool(&self, capability_id: &apeireth_core::kernel::CapabilityId) {
+    pub fn unregister_tool(&self, capability_id: &CapabilityId) {
         self.tools
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .retain(|t| t.id() != capability_id);
+    }
+
+    /// Tools this module currently holds, admitted or not.
+    pub fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+        self.tools
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 }
 
@@ -211,53 +136,112 @@ impl Default for McpModule {
     }
 }
 
-impl CapabilityProvider for McpModule {
-    fn id(&self) -> &str {
-        "module.mcp"
-    }
-
-    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
-        self.tools
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-    }
-}
-
-/// Module providing education Dx-Check substitution verification (`tool.education`).
+/// The unified module surface: manifest, lifecycle, and the live export set.
 ///
-/// W2 §4.3 (2026-10-10): 包装 `DxCheckTool` 纯确定性换元检查 (微分标记一致性 /
-/// 残留原变量 / 经典根号三角代换模式) —— 0 副作用, 默认关注册。
-pub struct EducationModule {
-    tool: Arc<EducationTool>,
+/// `tools()` is read live rather than snapshotted at construction, which is
+/// what lets the manager's index resolve a tool admitted after boot.
+#[async_trait::async_trait]
+impl Module for McpModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+        self.tools()
+    }
+
+    async fn add_tool(&self, tool: Arc<dyn ToolCapability>) -> PluginResult<()> {
+        self.admit_tool(tool)
+    }
+
+    async fn remove_tool(&self, id: &CapabilityId) -> PluginResult<bool> {
+        let mut tools = self.tools.write().expect("mcp lock poisoned");
+        let before = tools.len();
+        tools.retain(|tool| tool.id() != id);
+        Ok(tools.len() != before)
+    }
 }
 
-impl EducationModule {
-    /// Create the education module (无状态工具)。
-    pub fn new() -> Self {
-        Self {
-            tool: Arc::new(EducationTool::new()),
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use apeireth_plugin::ModuleInitContext;
+    use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
+    use async_trait::async_trait;
+
+    struct FakeTool {
+        id: CapabilityId,
+        name: &'static str,
+    }
+
+    #[async_trait]
+    impl ToolCapability for FakeTool {
+        fn id(&self) -> &CapabilityId {
+            &self.id
+        }
+        fn declaration(&self) -> NormalizedTool {
+            NormalizedTool {
+                name: self.name.into(),
+                description: Some("fake".into()),
+                parameters: ToolParameters::new(),
+                strict: false,
+            }
+        }
+        async fn invoke(&self, call: &ToolCall) -> ToolResult {
+            ToolResult::ok(&call.id, serde_json::json!({}))
         }
     }
 
-    /// Access the underlying education tool.
-    pub fn tool(&self) -> &Arc<EducationTool> {
-        &self.tool
-    }
-}
-
-impl Default for EducationModule {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl CapabilityProvider for EducationModule {
-    fn id(&self) -> &str {
-        "module.tool.education"
+    fn tool(id: &str, name: &'static str) -> Arc<dyn ToolCapability> {
+        Arc::new(FakeTool {
+            id: CapabilityId::new(id).unwrap(),
+            name,
+        })
     }
 
-    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
-        vec![self.tool.clone()]
+    #[tokio::test]
+    async fn a_dynamic_tool_is_visible_through_the_module_surface() {
+        let module = McpModule::new();
+        assert!(module.tools().is_empty());
+        module
+            .add_tool(tool("tool.mcp.custom_search", "mcp_custom_search"))
+            .await
+            .expect("dynamic tool admitted");
+        assert_eq!(module.tools().len(), 1);
+        assert_eq!(module.manifest().id.as_str(), MCP_MODULE_ID);
+
+        // A refused duplicate leaves the bag untouched.
+        assert!(module
+            .add_tool(tool("tool.mcp.custom_search", "other_name"))
+            .await
+            .is_err());
+        assert!(module
+            .add_tool(tool("tool.mcp.imposter", "mcp_custom_search"))
+            .await
+            .is_err());
+        assert_eq!(module.tools().len(), 1);
+
+        assert!(module
+            .remove_tool(&CapabilityId::new("tool.mcp.custom_search").unwrap())
+            .await
+            .unwrap());
+        assert!(module.tools().is_empty());
+        assert!(!module
+            .remove_tool(&CapabilityId::new("tool.mcp.custom_search").unwrap())
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn the_module_declares_no_static_capabilities() {
+        // Nothing is declared up front: every capability arrives dynamically, so
+        // the manifest starts empty and the index follows the live bag.
+        let module = McpModule::new();
+        assert!(module.manifest().capabilities.is_empty());
+        let _ = ModuleInitContext::new(
+            apeireth_core::kernel::system_clock(),
+            Arc::new(apeireth_plugin::NoCredentials),
+            apeireth_core::kernel::TraceId::new(),
+        );
     }
 }

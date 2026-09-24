@@ -2,7 +2,7 @@
 //!
 //! Recovered from donor `apeireth-mcp` as **types and algorithms**, not as a
 //! production MCP host. This module is **default-off**: nothing here is wired
-//! into [`crate::PluginManager`], [`crate::CapabilityRegistry`], or the
+//! into [`crate::ModuleManager`], [`crate::CapabilityRegistry`], or the
 //! runtime dispatch loop. Tool ownership stays with Module-exposed
 //! [`crate::ToolCapability`] implementations.
 //!

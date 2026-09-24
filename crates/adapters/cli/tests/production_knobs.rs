@@ -48,7 +48,7 @@ fn module_ids(runtime: &apeireth_runtime::canonical::Runtime) -> Vec<String> {
     runtime
         .modules()
         .iter()
-        .map(|m| m.manifest().id.clone())
+        .map(|m| m.manifest().id.to_string())
         .collect()
 }
 

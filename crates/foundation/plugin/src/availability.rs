@@ -10,7 +10,7 @@
 //!
 //! A record with `available = true` and a `reason`, or `available = false`
 //! without one, is a construction error. Callers that want a live listing
-//! still ask [`crate::PluginManager`] / [`crate::CapabilityRegistry`]; this
+//! still ask [`crate::ModuleManager`] / [`crate::CapabilityRegistry`]; this
 //! type is only the observation row.
 
 /// One honesty row: code present, currently usable, and why not if not.

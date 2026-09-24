@@ -144,7 +144,8 @@ impl OrganModule {
             clock.clone(),
         );
         Self {
-            manifest: ModuleManifest::new(ORGAN_MODULE_ID, "Organ cognition"),
+            manifest: ModuleManifest::system(ORGAN_MODULE_ID, "1.0.0", "Organ cognition")
+                .observes(HookPoint::AfterTurn),
             orchestrator,
             clock,
             observations: Mutex::new(Vec::new()),

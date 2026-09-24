@@ -3,6 +3,11 @@
 //! Adapters supply concrete backends, tools, and the optional Council. This module
 //! owns ordering and slot validation, so CLI, gateway, and future
 //! embedding callers cannot accidentally register a second cognitive or tool spine.
+//!
+//! Everything it produces is a **module**: the cognitive slots are modules, and
+//! the builtin tools are capabilities of one aggregate module rather than a
+//! module per tool. The composition root therefore hands the runtime a single
+//! list of modules and nothing else.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,12 +24,10 @@ use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEnt
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
 use apeireth_plugin::self_assessment::SelfAssessmentStore;
-use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::NormalizedMessage;
 use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
-use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
+use apeireth_tools_canonical::{BuiltinToolsOptions, FetchConfig, TrustedShellConfig};
 
-use super::capability::CapabilityProvider;
 use super::cognitive::{
     CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule, JudgeObservations,
     MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule,
@@ -35,10 +38,7 @@ use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
-use super::tool_modules::{
-    EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,
-    ShellModule,
-};
+use super::tool_modules::{BuiltinToolsModule, McpModule};
 
 /// Adapter that exposes memory's context-window implementation through the
 /// runtime-owned projection port. It is kept in assembly so the runtime kernel
@@ -122,17 +122,20 @@ pub struct ProductionModulesConfig {
     pub judge: JudgeConfig,
     /// Register the no-tool Council adapter.
     pub council: bool,
-    /// Register filesystem tool module when workspace root is supplied.
+    /// Register `tool.filesystem` on the builtin tools module when a workspace
+    /// root is supplied.
     pub filesystem: bool,
-    /// Register search tool module when workspace root is supplied.
+    /// Register `tool.search` on the builtin tools module when a workspace root
+    /// is supplied.
     pub search: bool,
-    /// Register repository inspection tool module when workspace root is supplied.
+    /// Register `tool.repo` on the builtin tools module when a workspace root is
+    /// supplied.
     pub repo: bool,
-    /// Register shell tool module when config is supplied.
+    /// Register `tool.shell` on the builtin tools module when config is supplied.
     pub shell: Option<TrustedShellConfig>,
-    /// Register fetch tool module when config is supplied.
+    /// Register `tool.fetch` on the builtin tools module when config is supplied.
     pub fetch: Option<FetchConfig>,
-    /// Register MCP capability module.
+    /// Register the MCP module: the one module with dynamic capability ownership.
     pub mcp: bool,
     /// Register deterministic preference learning (AfterTurn, explicit
     /// evidence only). Requires the preference backend when enabled.
@@ -158,7 +161,8 @@ pub struct ProductionModulesConfig {
     pub morphology_recall: bool,
     /// W3 (2026-10-10, 默认关): community 社区分诊接检索前置 (需 graph 后端)。
     pub community_triage: bool,
-    /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册。
+    /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册
+    /// (`tool.education` 作为内置工具模块的一个 capability)。
     pub education: bool,
     /// W2 §4.4 (2026-10-10, 默认关): 研究吸收批认知体操 (四算法实验性洞察)。
     pub absorption_insight: bool,
@@ -247,9 +251,12 @@ pub struct ProductionBackends {
 pub type CognitiveBackends = ProductionBackends;
 
 /// The validated, ordered module set to pass to [`RuntimeBuilder::with_module`].
+///
+/// Every entry is a module; tool capabilities arrive as capabilities of the
+/// aggregate builtin tools module rather than as a separate list the runtime
+/// would have to register into a registry of its own.
 pub struct ProductionModules {
     modules: Vec<Arc<dyn Module>>,
-    capabilities: Vec<Arc<dyn ToolCapability>>,
     telemetry: Arc<CognitiveTelemetry>,
 }
 
@@ -264,7 +271,6 @@ impl ProductionModules {
         clock: Arc<dyn Clock>,
     ) -> RuntimeResult<Self> {
         let mut modules: Vec<Arc<dyn Module>> = Vec::new();
-        let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
 
@@ -282,47 +288,38 @@ impl ProductionModules {
             ));
         }
 
-        // Register tool capabilities independently of behavior modules.
-        if config.filesystem {
+        // One aggregate module owns every builtin tool capability. This is the
+        // granularity the tools crate always had: one unit of lifecycle with
+        // filesystem, search, repo, and the opt-in shell/fetch/education tools
+        // as capabilities, not one module per tool.
+        let tools_wanted = config.filesystem
+            || config.search
+            || config.repo
+            || config.shell.is_some()
+            || config.fetch.is_some()
+            || config.education;
+        if tools_wanted {
             if let Some(root) = &backends.workspace_root {
-                let provider = FilesystemModule::new(root.clone());
-                capabilities.extend(provider.capabilities());
+                modules.push(Arc::new(BuiltinToolsModule::with_options(
+                    root.clone(),
+                    BuiltinToolsOptions {
+                        shell: config.shell.clone(),
+                        fetch: config.fetch.clone(),
+                        education: config.education,
+                    },
+                )));
+            } else if config.shell.is_some() || config.fetch.is_some() || config.education {
+                // Shell, fetch, and education do not need a workspace root, so
+                // requesting them without one is a configuration mistake rather
+                // than a silently absent tool.
+                return Err(RuntimeError::misconfigured(
+                    "shell/fetch/education tool registration requires an injected workspace root",
+                ));
             }
-        }
-
-        if config.search {
-            if let Some(root) = &backends.workspace_root {
-                let provider = SearchModule::new(root.clone());
-                capabilities.extend(provider.capabilities());
-            }
-        }
-
-        if config.repo {
-            if let Some(root) = &backends.workspace_root {
-                let provider = RepoModule::new(root.clone());
-                capabilities.extend(provider.capabilities());
-            }
-        }
-
-        // W2 §4.3 (2026-10-10, 默认关): education Dx-Check 工具 (纯确定性, 0 副作用)。
-        if config.education {
-            let provider = EducationModule::new();
-            capabilities.extend(provider.capabilities());
-        }
-
-        if let Some(shell_config) = config.shell {
-            let provider = ShellModule::new(shell_config);
-            capabilities.extend(provider.capabilities());
-        }
-
-        if let Some(fetch_config) = config.fetch {
-            let provider = FetchModule::new(fetch_config);
-            capabilities.extend(provider.capabilities());
         }
 
         if config.mcp {
-            let provider = McpModule::new();
-            capabilities.extend(provider.capabilities());
+            modules.push(Arc::new(McpModule::new()));
         }
 
         // Unified Memory 2.0 coordinator wiring
@@ -518,6 +515,10 @@ impl ProductionModules {
             modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }
 
+        // The unified module manager rejects a duplicate id at registration,
+        // but this set is produced before it is handed over, so it still checks
+        // its own slots: a composition root that asks for the same cognitive
+        // slot twice is a configuration error, not a runtime surprise.
         let mut seen = std::collections::BTreeSet::new();
         for module in &modules {
             let id = module.manifest().id.clone();
@@ -528,11 +529,7 @@ impl ProductionModules {
             }
         }
 
-        Ok(Self {
-            modules,
-            capabilities,
-            telemetry,
-        })
+        Ok(Self { modules, telemetry })
     }
 
     /// Attach the context-window projector using its default policy.
@@ -548,11 +545,6 @@ impl ProductionModules {
         &self.modules
     }
 
-    /// Capabilities contributed by concrete production providers.
-    pub fn capabilities(&self) -> &[Arc<dyn ToolCapability>] {
-        &self.capabilities
-    }
-
     /// Consume the set into the builder's module registration calls.
     pub fn register_into(
         self,
@@ -561,9 +553,6 @@ impl ProductionModules {
         for module in self.modules {
             builder = builder.with_module(module);
         }
-        for capability in self.capabilities {
-            builder = builder.with_capability(capability);
-        }
         builder
     }
 
@@ -571,7 +560,7 @@ impl ProductionModules {
     pub fn ids(&self) -> Vec<String> {
         self.modules
             .iter()
-            .map(|module| module.manifest().id.clone())
+            .map(|module| module.manifest().id.to_string())
             .collect()
     }
 

@@ -2,62 +2,93 @@
 //!
 //! # One truth, split by question
 //!
-//! [`PluginRegistry`] answers *"which plugins exist and what state is each in"*.
-//! [`CapabilityRegistry`] answers *"who owns this capability id"*.
+//! [`ModuleRegistry`] answers *"which modules exist, in what state, and in what
+//! order were they registered"*. [`CapabilityRegistry`] answers *"who owns this
+//! capability id"*.
 //!
 //! Crucially, [`CapabilityRegistry`] is an **index, not a copy**. It maps
-//! [`CapabilityId`] to the owning [`PluginId`] and stops there; the capability's
+//! [`CapabilityId`] to the owning [`ModuleId`] and stops there; the capability's
 //! declaration continues to live in exactly one place, the owner's manifest. This
 //! is the difference between a derived view and a second source of truth, and it
 //! is the whole reason the registries can be trusted to agree.
 //!
-//! Other registries may be built on top as typed views — "give me every tool",
-//! "give me every provider" — and [`crate::manager::PluginManager`] provides
-//! exactly those. What they may not do is store their own copy of the facts.
+//! Other views may be built on top — "give me every tool", "give me every
+//! module that observes `TurnStart`" — and [`crate::manager::ModuleManager`]
+//! provides exactly those. What they may not do is store their own copy of the
+//! facts.
 //!
 //! Both registries iterate in id order, so boot logs, capability listings, and
-//! test assertions are reproducible.
+//! test assertions are reproducible. Registration order is separately recorded
+//! (see [`ModuleRegistry::seq`]) because start order must respect declared
+//! dependencies while otherwise preserving the order the embedder chose.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use apeireth_core::kernel::{CapabilityId, Lifecycle, PluginId};
+use apeireth_core::kernel::{CapabilityId, Lifecycle, ModuleId};
 
 use crate::capability::{CapabilityDescriptor, CapabilityKind};
-use crate::error::{PluginError, PluginResult};
-use crate::plugin::Plugin;
+use crate::error::{ModuleResult, ModuleSystemError};
+use crate::module::Module;
 
-/// A registered plugin and its current state.
-pub(crate) struct PluginEntry {
-    pub(crate) plugin: Arc<dyn Plugin>,
+/// A module entry borrowed for the duration of a query.
+pub(crate) struct ModuleEntryRef<'a> {
+    pub(crate) module: &'a Arc<dyn Module>,
     pub(crate) state: Lifecycle,
 }
 
-/// Which plugins exist, and what state each is in.
-#[derive(Default)]
-pub struct PluginRegistry {
-    entries: BTreeMap<PluginId, PluginEntry>,
+/// One module's canonical record.
+///
+/// The module, its lifecycle state, and its registration sequence number live
+/// in one struct so they cannot drift apart: there is no removal or replacement
+/// path to desynchronize parallel stores, and adding one later cannot forget a
+/// half of a module's bookkeeping.
+struct ModuleEntry {
+    /// Registration sequence number. Lower means registered earlier.
+    seq: u64,
+    /// The module object itself — the only copy.
+    module: Arc<dyn Module>,
+    /// Current lifecycle state.
+    state: Lifecycle,
 }
 
-impl PluginRegistry {
+/// Which modules exist, and what state each is in.
+///
+/// The canonical ownership source: the `Arc<dyn Module>` objects live here and
+/// nowhere else. One [`BTreeMap`] keyed by [`ModuleId`] holds each module's
+/// entire record; registration order is derived from each entry's `seq` and is
+/// never held in a second structure that could disagree.
+#[derive(Default)]
+pub struct ModuleRegistry {
+    /// The one ownership store.
+    entries: BTreeMap<ModuleId, ModuleEntry>,
+    /// Next sequence number to hand out.
+    next_seq: u64,
+}
+
+impl ModuleRegistry {
     /// An empty registry.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add a plugin in the [`Lifecycle::Registered`] state.
+    /// Add a module in the [`Lifecycle::Registered`] state.
     ///
-    /// Rejects a duplicate id rather than replacing: two plugins under one id
-    /// means the effective behaviour depends on registration order.
-    pub fn register(&mut self, plugin: Arc<dyn Plugin>) -> PluginResult<()> {
-        let id = plugin.manifest().id.clone();
+    /// Rejects a duplicate id rather than replacing: two modules under one id
+    /// means the effective behaviour depends on registration order. Also
+    /// rejects an empty id, which could never be addressed.
+    pub fn register(&mut self, module: Arc<dyn Module>) -> ModuleResult<()> {
+        let id = module.manifest().id.clone();
         if self.entries.contains_key(&id) {
-            return Err(PluginError::DuplicatePlugin(id));
+            return Err(ModuleSystemError::DuplicateModule(id));
         }
+        let seq = self.next_seq;
+        self.next_seq += 1;
         self.entries.insert(
             id,
-            PluginEntry {
-                plugin,
+            ModuleEntry {
+                seq,
+                module,
                 state: Lifecycle::Registered,
             },
         );
@@ -65,42 +96,53 @@ impl PluginRegistry {
     }
 
     /// Whether `id` is registered.
-    pub fn contains(&self, id: &PluginId) -> bool {
+    pub fn contains(&self, id: &ModuleId) -> bool {
         self.entries.contains_key(id)
     }
 
-    /// The plugin registered under `id`.
-    pub fn get(&self, id: &PluginId) -> PluginResult<&Arc<dyn Plugin>> {
-        self.entries
-            .get(id)
-            .map(|e| &e.plugin)
-            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))
+    /// The module registered under `id`.
+    pub fn get(&self, id: &ModuleId) -> ModuleResult<&Arc<dyn Module>> {
+        self.entry_of(id).map(|entry| &entry.module)
     }
 
     /// The lifecycle state of `id`.
-    pub fn state(&self, id: &PluginId) -> PluginResult<Lifecycle> {
-        self.entries
-            .get(id)
-            .map(|e| e.state)
-            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))
+    pub fn state(&self, id: &ModuleId) -> ModuleResult<Lifecycle> {
+        self.entry_of(id).map(|entry| entry.state)
     }
 
     /// Apply a checked lifecycle transition to `id`.
-    pub fn transition(&mut self, id: &PluginId, next: Lifecycle) -> PluginResult<()> {
+    pub fn transition(&mut self, id: &ModuleId, next: Lifecycle) -> ModuleResult<()> {
         let entry = self
             .entries
             .get_mut(id)
-            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))?;
-        entry.state = entry.state.transition_to(id.as_str(), next)?;
+            .ok_or_else(|| ModuleSystemError::UnknownModule(id.clone()))?;
+        let state = entry.state.transition_to(id.as_str(), next)?;
+        entry.state = state;
         Ok(())
     }
 
-    /// Registered plugin ids, in id order.
-    pub fn ids(&self) -> impl Iterator<Item = &PluginId> {
+    /// Registration sequence number of `id`. Lower means registered earlier.
+    ///
+    /// This is what makes a dependency-respecting start order otherwise equal
+    /// to the embedder's registration order.
+    pub fn seq(&self, id: &ModuleId) -> ModuleResult<u64> {
+        self.entry_of(id).map(|entry| entry.seq)
+    }
+
+    /// Every registered module, in registration order.
+    pub fn modules(&self) -> Vec<&Arc<dyn Module>> {
+        self.ordered_entries()
+            .into_iter()
+            .map(|entry| &entry.module)
+            .collect()
+    }
+
+    /// Registered module ids, in id order.
+    pub fn ids(&self) -> impl Iterator<Item = &ModuleId> {
         self.entries.keys()
     }
 
-    /// Number of registered plugins.
+    /// Number of registered modules.
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -110,17 +152,43 @@ impl PluginRegistry {
         self.entries.is_empty()
     }
 
-    pub(crate) fn entry(&self, id: &PluginId) -> Option<&PluginEntry> {
-        self.entries.get(id)
+    fn entry_of(&self, id: &ModuleId) -> ModuleResult<&ModuleEntry> {
+        self.entries
+            .get(id)
+            .ok_or_else(|| ModuleSystemError::UnknownModule(id.clone()))
+    }
+
+    /// Entries in registration order, derived from each `seq`.
+    fn ordered_entries(&self) -> Vec<&ModuleEntry> {
+        let mut ordered: Vec<&ModuleEntry> = self.entries.values().collect();
+        ordered.sort_by_key(|entry| entry.seq);
+        ordered
+    }
+
+    pub(crate) fn entry(&self, id: &ModuleId) -> Option<ModuleEntryRef<'_>> {
+        let entry = self.entries.get(id)?;
+        Some(ModuleEntryRef {
+            module: &entry.module,
+            state: entry.state,
+        })
     }
 }
 
-/// Which plugin owns which capability id.
+impl<'a> IntoIterator for &'a ModuleRegistry {
+    type Item = &'a Arc<dyn Module>;
+    type IntoIter = std::vec::IntoIter<&'a Arc<dyn Module>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.modules().into_iter()
+    }
+}
+
+/// Which module owns which capability id.
 ///
 /// An index over the manifests, never a copy of them.
 #[derive(Debug, Default, Clone)]
 pub struct CapabilityRegistry {
-    owners: BTreeMap<CapabilityId, PluginId>,
+    owners: BTreeMap<CapabilityId, ModuleId>,
 }
 
 impl CapabilityRegistry {
@@ -129,37 +197,48 @@ impl CapabilityRegistry {
         Self::default()
     }
 
-    /// Index every capability a plugin declares.
+    /// Index every capability a module declares.
     ///
-    /// Rejects a capability already claimed by another plugin, naming both
+    /// Rejects a capability already claimed by another module, naming both
     /// claimants. Registration is all-or-nothing: a manifest whose third
     /// capability collides leaves the index exactly as it was, so a rejected
-    /// plugin cannot half-appear in the system.
+    /// module cannot half-appear in the system.
     pub fn index(
         &mut self,
-        owner: &PluginId,
+        owner: &ModuleId,
         declared: &[CapabilityDescriptor],
-    ) -> PluginResult<()> {
-        for descriptor in declared {
-            if let Some(incumbent) = self.owners.get(&descriptor.id) {
-                return Err(PluginError::DuplicateCapability {
-                    capability: descriptor.id.clone(),
+    ) -> ModuleResult<()> {
+        let ids: Vec<CapabilityId> = declared.iter().map(|d| d.id.clone()).collect();
+        self.index_ids(owner, &ids)
+    }
+
+    /// Index capability ids an owner holds, whether or not they are declared in
+    /// a manifest.
+    ///
+    /// A dynamic owner's tools have no manifest declaration, so this is the path
+    /// that makes them dispatchable and listed. Rejects an id already claimed by
+    /// anyone, naming both claimants, and is all-or-nothing.
+    pub fn index_ids(&mut self, owner: &ModuleId, ids: &[CapabilityId]) -> ModuleResult<()> {
+        for id in ids {
+            if let Some(incumbent) = self.owners.get(id) {
+                return Err(ModuleSystemError::DuplicateCapability {
+                    capability: id.clone(),
                     incumbent: incumbent.clone(),
                     challenger: owner.clone(),
                 });
             }
         }
-        for descriptor in declared {
-            self.owners.insert(descriptor.id.clone(), owner.clone());
+        for id in ids {
+            self.owners.insert(id.clone(), owner.clone());
         }
         Ok(())
     }
 
-    /// The plugin that owns `id`.
-    pub fn owner(&self, id: &CapabilityId) -> PluginResult<&PluginId> {
+    /// The module that owns `id`.
+    pub fn owner(&self, id: &CapabilityId) -> ModuleResult<&ModuleId> {
         self.owners
             .get(id)
-            .ok_or_else(|| PluginError::UnknownCapability(id.clone()))
+            .ok_or_else(|| ModuleSystemError::UnknownCapability(id.clone()))
     }
 
     /// Whether `id` is known.
@@ -176,11 +255,18 @@ impl CapabilityRegistry {
     ///
     /// Filters on the id's reserved prefix, which
     /// [`CapabilityDescriptor::new`] has already checked against the declared
-    /// kind, so this cannot disagree with the manifest.
+    /// kind, so this cannot disagree with the manifest. The same convention is
+    /// what lets a dynamically registered capability be classified without a
+    /// manifest declaration.
     pub fn ids_of_kind(&self, kind: CapabilityKind) -> impl Iterator<Item = &CapabilityId> {
         self.owners
             .keys()
             .filter(move |id| id.kind_segment() == kind.id_prefix())
+    }
+
+    /// Drop `id` from the index. Returns whether it was there.
+    pub fn unindex(&mut self, id: &CapabilityId) -> bool {
+        self.owners.remove(id).is_some()
     }
 
     /// Number of indexed capabilities.
@@ -202,8 +288,8 @@ impl CapabilityRegistry {
 pub struct CapabilityRecord<'a> {
     /// The declaration, borrowed from its owner's manifest.
     pub descriptor: &'a CapabilityDescriptor,
-    /// The plugin that declared it.
-    pub owner: &'a PluginId,
+    /// The module that declared it.
+    pub owner: &'a ModuleId,
     /// The owner's current lifecycle state.
     pub state: Lifecycle,
 }
@@ -218,27 +304,20 @@ impl CapabilityRecord<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::manifest::PluginManifest;
-    use crate::plugin::PluginContext;
+    use crate::manifest::ModuleManifest;
     use async_trait::async_trait;
 
-    struct Stub(PluginManifest);
+    struct Stub(ModuleManifest);
 
     #[async_trait]
-    impl Plugin for Stub {
-        fn manifest(&self) -> &PluginManifest {
+    impl crate::module::Module for Stub {
+        fn manifest(&self) -> &ModuleManifest {
             &self.0
-        }
-        async fn initialize(&self, _ctx: &PluginContext) -> PluginResult<()> {
-            Ok(())
-        }
-        async fn shutdown(&self) -> PluginResult<()> {
-            Ok(())
         }
     }
 
-    fn stub(id: &str, caps: &[(&str, CapabilityKind)]) -> Arc<dyn Plugin> {
-        let mut m = PluginManifest::new(PluginId::new(id).unwrap(), "1.0.0", "stub");
+    fn stub(id: &str, caps: &[(&str, CapabilityKind)]) -> Arc<dyn crate::module::Module> {
+        let mut m = ModuleManifest::system(id, "1.0.0", "stub");
         for (cap, kind) in caps {
             m = m
                 .declare_capability(CapabilityId::new(*cap).unwrap(), *kind, "stub capability")
@@ -247,20 +326,20 @@ mod tests {
         Arc::new(Stub(m))
     }
 
-    #[test]
-    fn a_duplicate_plugin_id_is_rejected_rather_than_replacing() {
-        let mut reg = PluginRegistry::new();
+    #[tokio::test]
+    async fn a_duplicate_module_id_is_rejected_rather_than_replacing() {
+        let mut reg = ModuleRegistry::new();
         reg.register(stub("builtin.a", &[])).unwrap();
         let err = reg.register(stub("builtin.a", &[])).unwrap_err();
-        assert!(matches!(err, PluginError::DuplicatePlugin(_)));
+        assert!(matches!(err, ModuleSystemError::DuplicateModule(_)));
         assert_eq!(reg.len(), 1);
     }
 
-    #[test]
-    fn registration_starts_in_registered_and_transitions_are_checked() {
-        let mut reg = PluginRegistry::new();
+    #[tokio::test]
+    async fn registration_starts_in_registered_and_transitions_are_checked() {
+        let mut reg = ModuleRegistry::new();
         reg.register(stub("builtin.a", &[])).unwrap();
-        let id = PluginId::new("builtin.a").unwrap();
+        let id = ModuleId::new("builtin.a").unwrap();
 
         assert_eq!(reg.state(&id).unwrap(), Lifecycle::Registered);
         assert!(
@@ -273,8 +352,30 @@ mod tests {
         assert_eq!(reg.state(&id).unwrap(), Lifecycle::Active);
     }
 
-    #[test]
-    fn two_plugins_cannot_claim_one_capability() {
+    #[tokio::test]
+    async fn registration_order_is_recorded_independently_of_id_order() {
+        let mut reg = ModuleRegistry::new();
+        reg.register(stub("builtin.z", &[])).unwrap();
+        reg.register(stub("builtin.a", &[])).unwrap();
+
+        // ids iterate in id order...
+        let ids: Vec<&str> = reg.ids().map(ModuleId::as_str).collect();
+        assert_eq!(ids, ["builtin.a", "builtin.z"]);
+
+        // ...while modules and sequence numbers keep the embedder's order, which
+        // is what a dependency-respecting start order preserves.
+        assert_eq!(reg.seq(&ModuleId::new("builtin.z").unwrap()).unwrap(), 0);
+        assert_eq!(reg.seq(&ModuleId::new("builtin.a").unwrap()).unwrap(), 1);
+        let order: Vec<&str> = reg
+            .modules()
+            .iter()
+            .map(|m| m.manifest().id.as_str())
+            .collect();
+        assert_eq!(order, ["builtin.z", "builtin.a"]);
+    }
+
+    #[tokio::test]
+    async fn two_modules_cannot_claim_one_capability() {
         let a = stub("builtin.a", &[("tool.shell", CapabilityKind::Tool)]);
         let b = stub("builtin.b", &[("tool.shell", CapabilityKind::Tool)]);
 
@@ -287,7 +388,7 @@ mod tests {
             .unwrap_err();
 
         match err {
-            PluginError::DuplicateCapability {
+            ModuleSystemError::DuplicateCapability {
                 capability,
                 incumbent,
                 challenger,
@@ -300,8 +401,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_rejected_manifest_leaves_the_index_untouched() {
+    #[tokio::test]
+    async fn a_rejected_manifest_leaves_the_index_untouched() {
         let a = stub("builtin.a", &[("tool.shell", CapabilityKind::Tool)]);
         // `b` collides on its *second* capability; the first must not survive.
         let b = stub(
@@ -323,8 +424,8 @@ mod tests {
         assert!(!caps.contains(&CapabilityId::new("tool.unique").unwrap()));
     }
 
-    #[test]
-    fn the_index_answers_ownership_and_filters_by_kind() {
+    #[tokio::test]
+    async fn the_index_answers_ownership_and_filters_by_kind() {
         let p = stub(
             "vendor.acme",
             &[
@@ -352,23 +453,34 @@ mod tests {
         assert_eq!(providers, ["provider.acme"]);
     }
 
-    #[test]
-    fn an_unknown_capability_is_reported_rather_than_defaulted() {
+    #[tokio::test]
+    async fn an_unknown_capability_is_reported_rather_than_defaulted() {
         let caps = CapabilityRegistry::new();
         let err = caps
             .owner(&CapabilityId::new("tool.absent").unwrap())
             .unwrap_err();
-        assert!(matches!(err, PluginError::UnknownCapability(_)));
+        assert!(matches!(err, ModuleSystemError::UnknownCapability(_)));
+    }
+
+    #[tokio::test]
+    async fn a_dynamic_capability_can_be_unindexed() {
+        let mut caps = CapabilityRegistry::new();
+        let id = CapabilityId::new("tool.mcp.late").unwrap();
+        caps.index(
+            &ModuleId::new("module.mcp").unwrap(),
+            &[CapabilityDescriptor::new(id.clone(), CapabilityKind::Tool, "late").unwrap()],
+        )
+        .unwrap();
+        assert!(caps.contains(&id));
+        assert!(caps.unindex(&id));
+        assert!(!caps.contains(&id));
     }
 
     #[test]
-    fn iteration_is_id_ordered_regardless_of_registration_order() {
-        let mut reg = PluginRegistry::new();
-        reg.register(stub("builtin.z", &[])).unwrap();
-        reg.register(stub("builtin.a", &[])).unwrap();
-        reg.register(stub("builtin.m", &[])).unwrap();
-
-        let ids: Vec<&str> = reg.ids().map(PluginId::as_str).collect();
-        assert_eq!(ids, ["builtin.a", "builtin.m", "builtin.z"]);
+    fn a_manifest_only_module_is_a_complete_module() {
+        // The module trait's lifecycle defaults mean a manifest-only stub needs
+        // nothing else: there is no second "behavior-only" trait to implement.
+        let module = stub("builtin.inert", &[]);
+        assert_eq!(module.manifest().id.as_str(), "builtin.inert");
     }
 }

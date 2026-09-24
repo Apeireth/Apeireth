@@ -497,7 +497,7 @@ fn opt_in_registers_exactly_one_organ_module() {
 #[test]
 fn organ_module_exposes_no_tools() {
     let module = OrganModule::new(Arc::new(SystemClock));
-    assert_eq!(module.manifest().id, ORGAN_MODULE_ID);
+    assert_eq!(module.manifest().id.as_str(), ORGAN_MODULE_ID);
 }
 
 // ---------------------------------------------------------------------
