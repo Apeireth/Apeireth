@@ -41,7 +41,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use apeireth_core::kernel::{CapabilityId, Metadata, PluginId, SessionId, TraceId};
+use apeireth_core::kernel::{CapabilityId, Metadata, NodeId, PluginId, SessionId, TraceId};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -145,6 +145,41 @@ impl Action<'_> {
     }
 }
 
+/// Where an action originates: this runtime, or a remote mesh node.
+///
+/// Context for the one canonical decision point, not a second policy axis. A
+/// hook that does not care about remote callers reads the action as always and
+/// is unaffected; a hook that does care can finally distinguish "my model asked
+/// for this" from "another node asked my runtime for this" — the metadata a
+/// mesh must carry to governance instead of growing a private policy engine of
+/// its own.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ActionSource {
+    /// The action originates inside this runtime (the default).
+    #[default]
+    Local,
+    /// The action was requested by a remote mesh node.
+    Remote {
+        /// Identity of the requesting node.
+        node: NodeId,
+    },
+}
+
+impl ActionSource {
+    /// Whether the action originates from a remote node.
+    pub const fn is_remote(&self) -> bool {
+        matches!(self, Self::Remote { .. })
+    }
+
+    /// Stable label for logs and audit records.
+    pub fn label(&self) -> String {
+        match self {
+            Self::Local => "local".to_string(),
+            Self::Remote { node } => format!("remote:{node}"),
+        }
+    }
+}
+
 /// One action, with the context needed to judge it.
 #[derive(Debug, Clone)]
 pub struct GovernanceRequest<'a> {
@@ -165,6 +200,11 @@ pub struct GovernanceRequest<'a> {
     pub action_id: Option<&'a str>,
     /// Trusted turn context, if the caller initialized one before tool use.
     pub security_context: Option<&'a TurnSecurityContext>,
+    /// Whether the action originates here or at a remote mesh node.
+    ///
+    /// Defaults to [`ActionSource::Local`]; mesh execution-side dispatch sets
+    /// [`ActionSource::Remote`]. Policy that does not care ignores it.
+    pub source: ActionSource,
 }
 
 impl<'a> GovernanceRequest<'a> {
@@ -177,7 +217,15 @@ impl<'a> GovernanceRequest<'a> {
             round,
             action_id: None,
             security_context: None,
+            source: ActionSource::Local,
         }
+    }
+
+    /// Declare where the action originates.
+    #[must_use]
+    pub fn with_source(mut self, source: ActionSource) -> Self {
+        self.source = source;
+        self
     }
 
     /// Bind the governance request to the concrete action identity known by

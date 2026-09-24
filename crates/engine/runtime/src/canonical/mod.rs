@@ -40,6 +40,7 @@ pub mod error;
 pub mod events;
 pub mod execute;
 pub mod heartbeat;
+pub mod mesh;
 pub mod module;
 // OrganOrchestrator 类似 v1 AwakeCompanion 真实施 (per R11 spec + 子代理 R12 真实施).
 // **0 装诚实真账 (子代理 R12 独立判断)**:
@@ -78,6 +79,12 @@ pub use events::{
 };
 pub use execute::{ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse};
 pub use heartbeat::{FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource};
+pub use mesh::{
+    mesh_routes_for, runtime_mesh_executor, CallHandle, CallTarget, CapabilityCatalogEntry,
+    CapabilityRoute, InvokeMeta, ManagerExecutor, MeshCapabilityExecutor, MeshError, MeshExecError,
+    MeshInvokeContext, MeshNode, MeshNodeConfig, ModuleLocation, ModuleManagerView,
+    RemoteCapability, RouteSelection, RouteTable,
+};
 pub use module::{
     reject_tool_identity_collisions, AgentModule, BehaviorModule, HookPoint, InvocationContext,
     InvocationOrigin, Module, ModuleContext, ModuleDirective, ModuleError, ModuleExports,

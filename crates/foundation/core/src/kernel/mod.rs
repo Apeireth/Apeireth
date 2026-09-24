@@ -50,7 +50,7 @@ pub use event::{Event, Topic};
 /// logs keep resolving to the same type.
 pub use ids::ModuleId as PluginId;
 pub use ids::{
-    ApprovalId, CapabilityId, ModelId, ModuleId, RequestId, SessionId, TaskId, TraceId,
+    ApprovalId, CapabilityId, ModelId, ModuleId, NodeId, RequestId, SessionId, TaskId, TraceId,
 };
 pub use lifecycle::Lifecycle;
 pub use metadata::Metadata;
