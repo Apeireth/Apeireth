@@ -110,16 +110,37 @@ function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
   }) as Record<string, unknown>;
 }
 
-/** Parse persisted capability toggles; anything unknown/absent = OFF (fail-closed). */
+/** Parse persisted capability toggles; anything unknown/absent = OFF (fail-closed).
+ *  2026-10-10 W2/W3 收官批：新旋钮逐项取 persisted 值；两个「默认开」语义例外——
+ *  shellSandbox 缺省 true（沙箱默认开），typedRecall 缺省 true（类型化召回默认开）。 */
 function parseCapabilityToggles(value: unknown): CapabilityToggles {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
   return {
     shell: raw.shell === true,
+    shellSandbox: raw.shellSandbox !== false,
     fetch: raw.fetch === true,
+    localReadTools: raw.localReadTools === true,
     organs: raw.organs === true,
     preferenceLearning: raw.preferenceLearning === true,
+    proactiveRecall: raw.proactiveRecall === true,
+    memoryInjection: raw.memoryInjection === true,
+    consolidation: raw.consolidation === true,
+    reflexion: raw.reflexion === true,
+    typedRecall: raw.typedRecall !== false,
+    partnerBond: raw.partnerBond === true,
+    morphologyRecall: raw.morphologyRecall === true,
+    morphologyTemperature: num(raw.morphologyTemperature, 1.0),
+    education: raw.education === true,
+    absorptionInsight: raw.absorptionInsight === true,
+    communityTriage: raw.communityTriage === true,
+    oneringLedger: raw.oneringLedger === true,
     judge: raw.judge === true,
     council: raw.council === true,
+    councilAdvisors: num(raw.councilAdvisors, 3),
+    councilTimeoutMs: num(raw.councilTimeoutMs, 30000),
+    onionLayer: raw.onionLayer === true,
+    worktreeSandbox: raw.worktreeSandbox === true,
   };
 }
 
