@@ -108,7 +108,8 @@ pub use subloop::{
 };
 
 pub use tool_route::{
-    LocalToolView, ToolExecutionTarget, ToolRouteEntry, ToolRouteError, ToolRouteTable,
+    resolve_model_route, LocalToolView, ModelRouteResolution, ToolExecutionTarget, ToolRouteEntry,
+    ToolRouteError, ToolRouteTable,
 };
 
 pub use trace::{ExecutionTrace, TraceEntry, TraceEvent};

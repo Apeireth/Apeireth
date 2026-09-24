@@ -48,7 +48,7 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
-use apeireth_mesh::RemoteInvokeContext;
+use apeireth_mesh::{RemoteInvokeContext, RemoteToolRoute};
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{
     NormalizedMessage, NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedUsage,
@@ -68,7 +68,9 @@ use super::module::{
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
 use super::subloop::RuntimeSubLoopSpawner;
-use super::tool_route::{ToolExecutionTarget, ToolRouteError};
+use super::tool_route::{
+    resolve_model_route, ModelRouteResolution, ToolExecutionTarget, ToolRouteError,
+};
 use super::trace::{ExecutionTrace, TraceEvent};
 
 /// M20: 单轮 tool_calls 上限。`max_rounds` 约束的是轮数, 模型单轮塞进的
@@ -944,18 +946,16 @@ impl Runtime {
                 let provider_request =
                     NormalizedRequest::new(continuation.model.clone(), provider_messages);
                 retry_scaffolding.clear();
-                let routed = match &stream_sink {
-                    Some(sink) => {
-                        self.providers
-                            .complete_with_tools_streaming(&provider_request, &tools, sink)
-                            .await
-                    }
-                    None => {
-                        self.providers
-                            .complete_with_tools(&provider_request, &tools)
-                            .await
-                    }
-                };
+                let routed = self
+                    .route_completion(
+                        &provider_request,
+                        &tools,
+                        stream_sink.as_ref(),
+                        session_id,
+                        trace_id,
+                        continuation.round,
+                    )
+                    .await;
 
                 let routed = match routed {
                     Ok(routed) => routed,
@@ -1698,10 +1698,12 @@ impl Runtime {
         messages: &[NormalizedMessage],
         model: &str,
     ) -> Vec<NormalizedMessage> {
-        match self
-            .context_projector
-            .project(messages, self.providers.model_context_tokens(model))
-        {
+        match self.context_projector.project(
+            messages,
+            self.providers
+                .model_context_tokens(model)
+                .or_else(|| self.remote_model_context_tokens(model)),
+        ) {
             Ok(projected) => projected,
             Err(_) => messages.to_vec(),
         }
@@ -1877,6 +1879,128 @@ impl Runtime {
         );
         self.sessions.save(session).await?;
         Ok(())
+    }
+
+    /// Route one provider round to its execution route.
+    ///
+    /// With no remote capability port this is the local router verbatim —
+    /// byte-equivalent behavior. With a port, the model resolves through one
+    /// combined policy (`resolve_model_route`): local-only models keep the
+    /// router's existing selection/fallback untouched; a model served by
+    /// exactly one remote route goes over the mesh's **already-authorized**
+    /// raw primitive (completion governance ran exactly once, in
+    /// `authorize_completion`); contested models fail closed.
+    async fn route_completion(
+        &self,
+        request: &NormalizedRequest,
+        tools: &[NormalizedTool],
+        stream_sink: Option<&Arc<dyn Fn(String) + Send + Sync>>,
+        session_id: SessionId,
+        trace_id: TraceId,
+        round: u32,
+    ) -> RuntimeResult<super::provider::RoutedCompletion> {
+        // No port: exactly the pre-port path.
+        let Some(port) = self.remote_port().clone() else {
+            return match stream_sink {
+                Some(sink) => {
+                    self.providers
+                        .complete_with_tools_streaming(request, tools, sink)
+                        .await
+                }
+                None => self.providers.complete_with_tools(request, tools).await,
+            };
+        };
+
+        let local_supporting = self.providers.providers_supporting(&request.model);
+        let remote = port.remote_providers();
+        match resolve_model_route(&request.model, &local_supporting, &remote) {
+            ModelRouteResolution::LocalGroup { .. } => match stream_sink {
+                Some(sink) => {
+                    self.providers
+                        .complete_with_tools_streaming(request, tools, sink)
+                        .await
+                }
+                None => self.providers.complete_with_tools(request, tools).await,
+            },
+            ModelRouteResolution::Remote(desc) => {
+                // Per-provider tool attachment, same rule as the local router:
+                // declarations travel only where the selected model can.
+                let mut candidate_request = request.clone();
+                candidate_request.tools.clear();
+                let supports_tools = desc.models.iter().any(|model| {
+                    model.id.as_str() == request.model
+                        && model.features.iter().any(|f| f == "tool_calls")
+                });
+                if supports_tools {
+                    candidate_request.tools = tools.to_vec();
+                }
+
+                let route = RemoteToolRoute {
+                    node: desc.node.clone(),
+                    module: desc.module.clone(),
+                    capability: desc.capability.clone(),
+                };
+                let ctx = RemoteInvokeContext {
+                    trace: trace_id,
+                    session: session_id,
+                    round,
+                    deadline_epoch_ms: None,
+                };
+                let response = port
+                    .invoke_provider(route, candidate_request, ctx)
+                    .await
+                    .map_err(map_remote_provider_error)?;
+
+                if let Some(sink) = stream_sink {
+                    // Canonical no-wire-streaming semantics (the same contract
+                    // `ProviderCapability::complete_streaming` offers providers
+                    // without a streaming wire): one final delta with the full
+                    // content, and the same full RoutedCompletion shape.
+                    if !response.content.is_empty() {
+                        sink(response.content.clone());
+                    }
+                }
+                Ok(super::provider::RoutedCompletion {
+                    served_by: desc.capability,
+                    response,
+                    failed_attempts: Vec::new(),
+                })
+            }
+            ModelRouteResolution::Ambiguous { candidates } => {
+                Err(RuntimeError::AmbiguousModelRoute {
+                    model: request.model.clone(),
+                    candidates,
+                })
+            }
+            ModelRouteResolution::None => Err(RuntimeError::NoProvider {
+                model: request.model.clone(),
+                available: self.providers_display(),
+            }),
+        }
+    }
+
+    /// Provider ids available locally, in the router's error-message format.
+    fn providers_display(&self) -> String {
+        let ids = self.providers.provider_ids();
+        if ids.is_empty() {
+            "none".to_string()
+        } else {
+            ids.iter()
+                .map(apeireth_core::kernel::CapabilityId::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    }
+
+    /// Context window for a remote-only model, when its advert carries one.
+    fn remote_model_context_tokens(&self, model: &str) -> Option<u32> {
+        self.remote_port()
+            .as_ref()?
+            .remote_providers()
+            .iter()
+            .flat_map(|desc| desc.models.iter())
+            .find(|m| m.id.as_str() == model || m.display_name.as_deref() == Some(model))
+            .and_then(|m| m.context_window)
     }
 
     /// Ask governance whether this round's completion may proceed.
@@ -2499,5 +2623,26 @@ impl Runtime {
             rounds,
             trace,
         })
+    }
+}
+
+/// Remote provider failures map onto the canonical completion error surface:
+/// governance outcomes stay typed; availability/transport/cancellation collapse
+/// into one legible `Remote` error.
+fn map_remote_provider_error(error: apeireth_mesh::RemoteCapabilityError) -> RuntimeError {
+    use apeireth_mesh::RemoteCapabilityError as E;
+    let reason = error.to_string();
+    match &error {
+        E::Denied(_) => RuntimeError::Denied {
+            hook: "remote_governance".to_string(),
+            reason,
+        },
+        E::ApprovalRequired(_) => RuntimeError::ApprovalRequired {
+            hook: "remote_governance".to_string(),
+            reason,
+            approval: None,
+            session: None,
+        },
+        _ => RuntimeError::Remote { reason },
     }
 }

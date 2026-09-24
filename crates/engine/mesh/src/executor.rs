@@ -128,6 +128,24 @@ pub trait MeshCapabilityExecutor: Send + Sync {
         capability: &CapabilityId,
         arguments: &serde_json::Value,
     ) -> Result<(), MeshExecError>;
+
+    /// Judge and execute one provider request against this runtime's modules,
+    /// through the canonical completion governance (execution side).
+    async fn execute_provider(
+        &self,
+        ctx: &MeshInvokeContext,
+        capability: &CapabilityId,
+        request: &apeireth_protocol::canonical::NormalizedRequest,
+    ) -> Result<apeireth_protocol::canonical::NormalizedResponse, MeshExecError>;
+
+    /// Requester-side authorization for an outbound provider request, through
+    /// the canonical `Action::Completion` governance.
+    async fn authorize_completion(
+        &self,
+        ctx: &MeshInvokeContext,
+        model: &str,
+        message_count: usize,
+    ) -> Result<(), MeshExecError>;
 }
 
 /// Read access to the canonical runtime pieces mesh dispatch needs.
@@ -193,6 +211,44 @@ impl<V: ModuleManagerView> ManagerExecutor<V> {
         Ok(())
     }
 
+    async fn authorize_completion_action(
+        &self,
+        ctx: &MeshInvokeContext,
+        model: &str,
+        message_count: usize,
+    ) -> Result<(), MeshExecError> {
+        let action = Action::Completion {
+            model,
+            message_count,
+        };
+        let verdict = self
+            .view
+            .governance()
+            .evaluate_verbose(
+                &GovernanceRequest::new(action, ctx.session, ctx.trace, ctx.round)
+                    .with_source(ctx.source.clone()),
+            )
+            .await;
+        match verdict.decision {
+            Decision::Allow => Ok(()),
+            Decision::Deny { reason } => Err(MeshExecError::Denied {
+                capability: apeireth_core::kernel::CapabilityId::new(format!(
+                    "provider.{}",
+                    model.replace('.', "-")
+                ))
+                .unwrap_or_else(|_| {
+                    apeireth_core::kernel::CapabilityId::new("provider.remote").expect("valid")
+                }),
+                reason,
+            }),
+            Decision::RequireApproval { reason } => Err(MeshExecError::ApprovalRequired {
+                capability: apeireth_core::kernel::CapabilityId::new("provider.remote")
+                    .expect("valid"),
+                reason,
+            }),
+        }
+    }
+
     async fn authorize_capability(
         &self,
         ctx: &MeshInvokeContext,
@@ -248,6 +304,7 @@ impl<V: ModuleManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
                     owner,
                     description: declaration.description.clone().unwrap_or_default(),
                     declaration: Some(declaration),
+                    models: None,
                     available: true,
                 });
             }
@@ -261,6 +318,19 @@ impl<V: ModuleManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
                 if entries.iter().any(|entry| entry.id == id) {
                     continue;
                 }
+                // A live provider projects its model routing metadata (secrets
+                // stripped); an undispatchable one has none to project.
+                let models = match apeireth_mesh_protocol::MeshCapabilityKind::from_id(&id) {
+                    Some(apeireth_mesh_protocol::MeshCapabilityKind::Provider)
+                        if record.is_available() =>
+                    {
+                        manager
+                            .provider(&id)
+                            .ok()
+                            .map(|provider| to_wire_models(provider.models()))
+                    }
+                    _ => None,
+                };
                 entries.push(CapabilityCatalogEntry {
                     kind: apeireth_mesh_protocol::MeshCapabilityKind::from_id(&id)
                         .unwrap_or(apeireth_mesh_protocol::MeshCapabilityKind::Extension),
@@ -270,6 +340,7 @@ impl<V: ModuleManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
                     // A declared-but-undispatchable tool has no live declaration
                     // to project; it is excluded from model catalogs anyway.
                     declaration: None,
+                    models,
                     available: record.is_available(),
                 });
             }
@@ -326,6 +397,123 @@ impl<V: ModuleManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
     ) -> Result<(), MeshExecError> {
         self.authorize_capability(ctx, capability, arguments).await
     }
+
+    async fn execute_provider(
+        &self,
+        ctx: &MeshInvokeContext,
+        capability: &CapabilityId,
+        request: &apeireth_protocol::canonical::NormalizedRequest,
+    ) -> Result<apeireth_protocol::canonical::NormalizedResponse, MeshExecError> {
+        self.check_preconditions(ctx, capability)?;
+        // Execution-side completion governance, exactly once, with the remote
+        // source context. The canonical action — no mesh-private policy.
+        self.authorize_completion_action(ctx, &request.model, request.messages.len())
+            .await
+            .map_err(|error| rekey(error, capability))?;
+
+        let provider = self
+            .view
+            .with_manager(|manager| manager.provider(capability))
+            .map_err(|error| match error {
+                PluginError::NotActive {
+                    capability,
+                    module,
+                    state,
+                } => MeshExecError::NotAvailable {
+                    capability,
+                    reason: format!("owning module {module} is {state}"),
+                },
+                PluginError::UnknownCapability(capability) => {
+                    MeshExecError::UnknownCapability { capability }
+                }
+                other => MeshExecError::Internal {
+                    capability: capability.clone(),
+                    message: other.to_string(),
+                },
+            })?;
+
+        // Best-effort interruption: a cancelled long inference drops the
+        // provider future (aborting the backend call at the transport layer)
+        // instead of letting it run to completion.
+        let cancelled = wait_cancelled(ctx.cancelled.clone());
+        tokio::select! {
+            result = provider.complete(request) => {
+                result.map_err(|error| MeshExecError::Internal {
+                    capability: capability.clone(),
+                    message: error.to_string(),
+                })
+            }
+            _ = cancelled => Err(MeshExecError::Cancelled {
+                capability: capability.clone(),
+            }),
+        }
+    }
+
+    async fn authorize_completion(
+        &self,
+        ctx: &MeshInvokeContext,
+        model: &str,
+        message_count: usize,
+    ) -> Result<(), MeshExecError> {
+        self.authorize_completion_action(ctx, model, message_count)
+            .await
+    }
+}
+
+/// Re-attribute a completion denial to the capability actually being served.
+fn rekey(error: MeshExecError, capability: &CapabilityId) -> MeshExecError {
+    match error {
+        MeshExecError::Denied { reason, .. } => MeshExecError::Denied {
+            capability: capability.clone(),
+            reason,
+        },
+        MeshExecError::ApprovalRequired { reason, .. } => MeshExecError::ApprovalRequired {
+            capability: capability.clone(),
+            reason,
+        },
+        other => other,
+    }
+}
+
+/// Resolves once cancellation is requested (polled — the flag is a plain
+/// atomic). Used to drop long-running provider futures cooperatively.
+async fn wait_cancelled(flag: crate::executor::CancelFlag) {
+    while !flag.is_cancelled() {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
+/// Canonical descriptors → wire projection: model identity and features only.
+/// The provider-specific `metadata` map is deliberately dropped — an advert
+/// must never carry provider config, credentials, or billing hints.
+fn to_wire_models(
+    models: Vec<apeireth_protocol::canonical::ModelDescriptor>,
+) -> Vec<apeireth_mesh_protocol::WireModelDescriptor> {
+    use apeireth_mesh_protocol::WireModelDescriptor;
+    use apeireth_protocol::canonical::ModelFeature;
+
+    models
+        .into_iter()
+        .map(|model| WireModelDescriptor {
+            id: model.id,
+            provider: model.provider,
+            display_name: model.display_name,
+            context_window: model.context_window,
+            max_output_tokens: model.max_output_tokens,
+            features: model
+                .features
+                .into_iter()
+                .map(|feature| match feature {
+                    ModelFeature::ToolCalls => "tool_calls",
+                    ModelFeature::Streaming => "streaming",
+                    ModelFeature::Vision => "vision",
+                    ModelFeature::SystemPrompt => "system_prompt",
+                    ModelFeature::StructuredOutput => "structured_output",
+                })
+                .map(str::to_string)
+                .collect(),
+        })
+        .collect()
 }
 
 /// Build an advert-ready routing snapshot from an executor's canonical view.
@@ -350,6 +538,7 @@ pub fn catalog_to_modules(
             description: entry.description,
             available: entry.available,
             declaration: entry.declaration,
+            models: entry.models,
         });
     }
     by_module.into_values().collect()

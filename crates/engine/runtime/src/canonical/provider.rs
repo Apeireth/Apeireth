@@ -157,6 +157,21 @@ impl ProviderRouter {
         models
     }
 
+    /// Local provider capabilities that claim `model`, in fallback order.
+    ///
+    /// A read projection of the same matching rule the router executes with
+    /// (`supports_model`); used by model route resolution so local and remote
+    /// candidates are judged by one rule.
+    pub fn providers_supporting(&self, model: &str) -> Vec<CapabilityId> {
+        let mut supporting: Vec<&Arc<dyn ProviderCapability>> = self
+            .providers
+            .iter()
+            .filter(|p| p.supports_model(model))
+            .collect();
+        supporting.sort_by_key(|p| self.rank(p.id()));
+        supporting.iter().map(|p| p.id().clone()).collect()
+    }
+
     /// Context window advertised by the selected model, when known.
     pub fn model_context_tokens(&self, model: &str) -> Option<u32> {
         self.providers

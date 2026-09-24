@@ -31,7 +31,7 @@
 //! cannot appear in front of a model as a random `"search"`.
 
 use apeireth_core::kernel::{CapabilityId, ModuleId, NodeId};
-use apeireth_mesh::{RemoteToolDescriptor, RemoteToolRoute};
+use apeireth_mesh::{RemoteProviderDescriptor, RemoteToolDescriptor, RemoteToolRoute};
 use apeireth_protocol::canonical::NormalizedTool;
 
 /// Where one resolved tool name executes.
@@ -256,6 +256,83 @@ impl ToolRouteTable {
     /// Contested names and their contending targets (diagnostics).
     pub fn ambiguous_names(&self) -> &[(String, Vec<ToolExecutionTarget>)] {
         &self.ambiguous
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Provider (model) routing — the same namespacing rule, resolved by model id.
+// ---------------------------------------------------------------------------
+
+/// How one model resolves to an execution route.
+///
+/// Policy, stated once: **location never becomes a hidden priority.** Local
+/// providers for a model keep the `ProviderRouter`'s existing selection and
+/// fallback policy untouched; remote providers join only where the route is
+/// unambiguous. Anything contested across locations (or between remote nodes)
+/// is [`ModelRouteResolution::Ambiguous`] — never silently shadowed, never
+/// randomly chosen.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ModelRouteResolution {
+    /// At least one local provider supports the model and no remote route
+    /// contests it. The router's existing fallback policy decides among the
+    /// listed candidates.
+    LocalGroup {
+        /// Local provider capabilities supporting the model.
+        candidates: Vec<CapabilityId>,
+    },
+    /// Exactly one remote route serves the model and no local provider does.
+    Remote(RemoteProviderDescriptor),
+    /// Cross-location or remote/remote contest. Automatic routing refuses;
+    /// explicit routes remain callable.
+    Ambiguous {
+        /// The contending routes, for a legible error.
+        candidates: String,
+    },
+    /// Nothing, local or remote, serves the model.
+    None,
+}
+
+/// Resolve a model id against the two read-only views.
+///
+/// `local_supporting` comes from the local router's model matching;
+/// `remote` from the capability port's fresh projection. Distinct
+/// `(node, capability)` owners may coexist for one model id — they simply
+/// cannot be auto-selected.
+pub fn resolve_model_route(
+    model: &str,
+    local_supporting: &[CapabilityId],
+    remote: &[RemoteProviderDescriptor],
+) -> ModelRouteResolution {
+    let mut remote_matches: Vec<&RemoteProviderDescriptor> = remote
+        .iter()
+        .filter(|desc| desc.models.iter().any(|m| m.id.as_str() == model))
+        .collect();
+    remote_matches.sort_by(|a, b| {
+        a.node
+            .as_str()
+            .cmp(b.node.as_str())
+            .then_with(|| a.capability.as_str().cmp(b.capability.as_str()))
+    });
+    remote_matches.dedup_by(|a, b| a.node == b.node && a.capability == b.capability);
+
+    match (local_supporting.is_empty(), remote_matches.len()) {
+        (false, 0) => ModelRouteResolution::LocalGroup {
+            candidates: local_supporting.to_vec(),
+        },
+        (true, 1) => ModelRouteResolution::Remote((*remote_matches[0]).clone()),
+        (true, 0) => ModelRouteResolution::None,
+        _ => {
+            let listed: Vec<String> = local_supporting
+                .iter()
+                .map(|id| format!("local:{id}"))
+                .chain(remote_matches.iter().map(|desc| {
+                    format!("remote:{}/{}/{}", desc.node, desc.module, desc.capability)
+                }))
+                .collect();
+            ModelRouteResolution::Ambiguous {
+                candidates: listed.join(", "),
+            }
+        }
     }
 }
 

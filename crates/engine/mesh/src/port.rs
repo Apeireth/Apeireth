@@ -9,7 +9,9 @@
 //! where a tool runs.
 
 use apeireth_core::kernel::{CapabilityId, ModuleId, NodeId, SessionId, TraceId};
-use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
+use apeireth_protocol::canonical::{
+    NormalizedRequest, NormalizedResponse, NormalizedTool, ToolCall, ToolResult,
+};
 use async_trait::async_trait;
 
 /// One remote tool as a peer projects it: identity and declaration, never an
@@ -24,6 +26,22 @@ pub struct RemoteToolDescriptor {
     pub capability: CapabilityId,
     /// The model-facing declaration, projected from the advert.
     pub declaration: NormalizedTool,
+    /// Whether the owning module reported it dispatchable.
+    pub available: bool,
+}
+
+/// Model routing metadata projected from a remote provider advert: model
+/// identity, features, availability — and no provider config of any kind.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteProviderDescriptor {
+    /// The node whose module owns the provider implementation.
+    pub node: NodeId,
+    /// The owning module id on that node.
+    pub module: ModuleId,
+    /// Provider capability identity, preserved end-to-end.
+    pub capability: CapabilityId,
+    /// The provider's model routing projection (secrets stripped upstream).
+    pub models: Vec<apeireth_mesh_protocol::WireModelDescriptor>,
     /// Whether the owning module reported it dispatchable.
     pub available: bool,
 }
@@ -92,6 +110,10 @@ pub trait RemoteCapabilityPort: Send + Sync {
     /// available, declaration present).
     fn remote_tools(&self) -> Vec<RemoteToolDescriptor>;
 
+    /// Remote provider projections currently routable (peer active, advertised
+    /// available). Fresh derived snapshot every call — no cache.
+    fn remote_providers(&self) -> Vec<RemoteProviderDescriptor>;
+
     /// Execute one remote tool call.
     async fn invoke_tool(
         &self,
@@ -99,6 +121,17 @@ pub trait RemoteCapabilityPort: Send + Sync {
         call: ToolCall,
         ctx: RemoteInvokeContext,
     ) -> Result<ToolResult, RemoteCapabilityError>;
+
+    /// Execute one remote provider request (the already-authorized raw
+    /// primitive, same rule as `invoke_tool`: callers own requester
+    /// governance). The request is the canonical `NormalizedRequest` — the
+    /// mesh never redefines the provider protocol.
+    async fn invoke_provider(
+        &self,
+        route: RemoteToolRoute,
+        request: NormalizedRequest,
+        ctx: RemoteInvokeContext,
+    ) -> Result<NormalizedResponse, RemoteCapabilityError>;
 }
 
 use crate::error::MeshError;
@@ -132,6 +165,25 @@ impl RemoteCapabilityPort for MeshNode {
             .collect()
     }
 
+    fn remote_providers(&self) -> Vec<RemoteProviderDescriptor> {
+        // Same routable rule as tools: peer Active, advertised available.
+        self.remote_capabilities()
+            .into_iter()
+            .filter(|cap| {
+                cap.available
+                    && cap.kind == MeshCapabilityKind::Provider
+                    && self.peer_state(&cap.owner.node) == Some(PeerState::Active)
+            })
+            .map(|cap| RemoteProviderDescriptor {
+                node: cap.owner.node,
+                module: cap.owner.module,
+                capability: cap.id,
+                models: cap.provider_models.unwrap_or_default(),
+                available: cap.available,
+            })
+            .collect()
+    }
+
     async fn invoke_tool(
         &self,
         route: RemoteToolRoute,
@@ -142,23 +194,59 @@ impl RemoteCapabilityPort for MeshNode {
         // to the caller (canonical dispatch or the high-level explicit API),
         // the executing node governs once on its side. Nothing here adds a
         // second requester evaluation.
-        let meta = InvokeMeta {
-            session: ctx.session,
-            trace: ctx.trace,
-            round: ctx.round,
-            deadline_epoch_ms: ctx.deadline_epoch_ms,
-        };
-        self.start_call(
-            &RouteSelection::Remote(route.node),
-            &route.capability,
-            call,
-            meta,
-        )
-        .await
-        .map_err(map_mesh_error)?
-        .tool_result()
-        .await
-        .map_err(map_mesh_error)
+        match self
+            .start_capability_call(
+                &RouteSelection::Remote(route.node),
+                &route.capability,
+                apeireth_mesh_protocol::CapabilityCall::Tool(call),
+                meta_from(ctx),
+            )
+            .await
+            .map_err(map_mesh_error)?
+            .outcome()
+            .await
+            .map_err(map_mesh_error)?
+        {
+            apeireth_mesh_protocol::CapabilityOutcome::Tool(result) => Ok(result),
+            other => Err(RemoteCapabilityError::Failed(format!(
+                "unexpected tool outcome shape: {other:?}"
+            ))),
+        }
+    }
+
+    async fn invoke_provider(
+        &self,
+        route: RemoteToolRoute,
+        request: NormalizedRequest,
+        ctx: RemoteInvokeContext,
+    ) -> Result<NormalizedResponse, RemoteCapabilityError> {
+        match self
+            .start_capability_call(
+                &RouteSelection::Remote(route.node),
+                &route.capability,
+                apeireth_mesh_protocol::CapabilityCall::Provider(request),
+                meta_from(ctx),
+            )
+            .await
+            .map_err(map_mesh_error)?
+            .outcome()
+            .await
+            .map_err(map_mesh_error)?
+        {
+            apeireth_mesh_protocol::CapabilityOutcome::Provider(response) => Ok(response),
+            other => Err(RemoteCapabilityError::Failed(format!(
+                "unexpected provider outcome shape: {other:?}"
+            ))),
+        }
+    }
+}
+
+fn meta_from(ctx: RemoteInvokeContext) -> InvokeMeta {
+    InvokeMeta {
+        session: ctx.session,
+        trace: ctx.trace,
+        round: ctx.round,
+        deadline_epoch_ms: ctx.deadline_epoch_ms,
     }
 }
 

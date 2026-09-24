@@ -31,7 +31,13 @@ use crate::identity::{CapabilityAdvertEntry, MeshCapabilityKind, ModuleAdvert, N
 ///
 /// Handshake requires an exact match: a version mismatch must fail closed
 /// rather than silently downgrade to whatever the peer happens to speak.
-pub const MESH_PROTOCOL_VERSION: u32 = 1;
+///
+/// v2: `CapabilityCall::Provider` / `CapabilityOutcome::Provider` join the
+/// call/outcome enums. Decided as a **bump** rather than a quiet additive
+/// change: a v1 peer cannot decode the new tagged variants at all, and this
+/// protocol's philosophy is to fail closed at the handshake instead of failing
+/// confusingly mid-call in a mixed cluster.
+pub const MESH_PROTOCOL_VERSION: u32 = 2;
 
 /// Failure decoding, encoding, or validating a wire message.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -88,6 +94,8 @@ pub enum MeshProtocolError {
 pub enum CapabilityCall {
     /// One canonical tool call, byte-identical in shape to a local one.
     Tool(ToolCall),
+    /// One canonical provider request, byte-identical in shape to a local one.
+    Provider(apeireth_protocol::canonical::NormalizedRequest),
 }
 
 /// The payload that answers a [`CapabilityCall`].
@@ -98,6 +106,10 @@ pub enum CapabilityOutcome {
     /// One canonical tool result. Tool failures travel here too — a failed
     /// call is a result the caller can react to, not a mesh-level error.
     Tool(ToolResult),
+    /// One canonical provider response — the full `NormalizedResponse`, so
+    /// reasoning metadata, usage, finish reason and tool calls all travel
+    /// unmodified.
+    Provider(apeireth_protocol::canonical::NormalizedResponse),
 }
 
 /// Why a remote invocation could not produce a capability outcome.
@@ -461,12 +473,16 @@ mod tests {
         let decoded = decode_envelope(&text).unwrap();
         match decoded.payload {
             MeshPayload::InvokeCapability(inv) => {
-                // Exhaustive today (Tool is the only call shape in Phase 0);
-                // adding a variant later fails here first, which is the
-                // reminder to give it the same canonical-payload treatment.
-                let CapabilityCall::Tool(call) = inv.call;
-                assert_eq!(call.name, "mesh_echo");
-                assert_eq!(call.arguments["text"], "hi");
+                // Each call shape must carry the *canonical* payload type; a
+                // new variant failing here is the reminder to give it the same
+                // treatment (and a wire-format compatibility review).
+                match inv.call {
+                    CapabilityCall::Tool(call) => {
+                        assert_eq!(call.name, "mesh_echo");
+                        assert_eq!(call.arguments["text"], "hi");
+                    }
+                    CapabilityCall::Provider(_) => panic!("expected a tool call"),
+                }
             }
             other => panic!("expected invoke, got {other:?}"),
         }
@@ -481,10 +497,8 @@ mod tests {
         let err = verify_hello(&local, &Hello { node: remote }).unwrap_err();
         assert!(matches!(
             err,
-            MeshProtocolError::ProtocolVersionMismatch {
-                local: 1,
-                remote: 8
-            }
+            MeshProtocolError::ProtocolVersionMismatch { local, remote: r }
+                if local == MESH_PROTOCOL_VERSION && r == MESH_PROTOCOL_VERSION + 7
         ));
     }
 

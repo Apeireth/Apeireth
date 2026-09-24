@@ -189,6 +189,34 @@ impl NodeDescriptor {
     }
 }
 
+/// Model routing metadata for an advertised provider: the minimum a peer needs
+/// to decide "can this provider serve model X", and nothing else.
+///
+/// Deliberately not `ModelDescriptor`: the canonical descriptor carries a
+/// provider-specific `metadata` map whose contents this crate cannot vouch for
+/// (credentials, endpoints, billing hints). The wire projection drops that map
+/// entirely — an advert is a projection, not a provider-config replication.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WireModelDescriptor {
+    /// Canonical model identity. Unchanged by the network hop — location is
+    /// never part of a model id.
+    pub id: apeireth_core::kernel::ModelId,
+    /// The provider capability that serves it (namespaced by the advert node).
+    pub provider: CapabilityId,
+    /// Human-facing name, when it differs usefully from the id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    /// Total context window in tokens, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u32>,
+    /// Maximum output tokens, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
+    /// Supported request features (tool calls, streaming, ...).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub features: Vec<String>,
+}
+
 /// One advertised capability: identity and availability, never an implementation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CapabilityAdvertEntry {
@@ -210,6 +238,13 @@ pub struct CapabilityAdvertEntry {
     /// field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declaration: Option<apeireth_protocol::canonical::NormalizedTool>,
+    /// Model routing metadata, for provider-kind entries only.
+    ///
+    /// Read-only projection of the owning provider's model list (secrets and
+    /// provider config stripped — see [`WireModelDescriptor`]). Absent for
+    /// non-provider kinds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub models: Option<Vec<WireModelDescriptor>>,
 }
 
 impl CapabilityAdvertEntry {
@@ -226,6 +261,7 @@ impl CapabilityAdvertEntry {
             description: description.into(),
             available,
             declaration: Some(declaration),
+            models: None,
         }
     }
 
@@ -242,6 +278,24 @@ impl CapabilityAdvertEntry {
             description: description.into(),
             available,
             declaration: None,
+            models: None,
+        }
+    }
+
+    /// Advertise a provider entry with its model routing projection.
+    pub fn provider(
+        id: CapabilityId,
+        description: impl Into<String>,
+        available: bool,
+        models: Vec<WireModelDescriptor>,
+    ) -> Self {
+        Self {
+            id,
+            kind: MeshCapabilityKind::Provider,
+            description: description.into(),
+            available,
+            declaration: None,
+            models: Some(models),
         }
     }
 }
