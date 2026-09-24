@@ -15,6 +15,7 @@
 use apeireth_core::kernel::NodeId;
 
 use crate::error::MeshError;
+use crate::identity::KeyFingerprint;
 
 /// How far a known peer is trusted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -26,7 +27,8 @@ pub enum PeerTrust {
     Untrusted,
 }
 
-/// One operator-configured peer: identity, endpoint, and trust.
+/// One operator-configured peer: identity, endpoint, trust, and — for real
+/// transports — the pinned identity key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownPeer {
     /// The peer's canonical node identity.
@@ -35,6 +37,14 @@ pub struct KnownPeer {
     pub endpoint: String,
     /// How far it is trusted.
     pub trust: PeerTrust,
+    /// Pinned public-key fingerprint for this NodeId.
+    ///
+    /// The no-TOFU rule lives here: an unpinned entry is only usable on
+    /// transports with no cryptographic identity claim (the in-memory test
+    /// fabric). Real transports **require** a pin — unknown key, mismatched
+    /// key, and right-key-wrong-node all fail closed. `None` never means
+    /// "accept whatever arrives"; it means "this entry cannot authenticate".
+    pub key_fingerprint: Option<KeyFingerprint>,
 }
 
 /// The set of peers this runtime admits.
@@ -52,13 +62,32 @@ impl TrustPolicy {
         Self::default()
     }
 
-    /// Add or replace a trusted peer.
+    /// Add or replace a trusted peer with a pinned identity key. The form real
+    /// transports require.
+    #[must_use]
+    pub fn with_trusted_pinned(
+        mut self,
+        node: NodeId,
+        endpoint: impl Into<String>,
+        key_fingerprint: KeyFingerprint,
+    ) -> Self {
+        self.upsert(KnownPeer {
+            node,
+            endpoint: endpoint.into(),
+            trust: PeerTrust::Trusted,
+            key_fingerprint: Some(key_fingerprint),
+        });
+        self
+    }
+
+    /// Add or replace a trusted peer without a key pin (legacy in-memory use).
     #[must_use]
     pub fn with_trusted(mut self, node: NodeId, endpoint: impl Into<String>) -> Self {
         self.upsert(KnownPeer {
             node,
             endpoint: endpoint.into(),
             trust: PeerTrust::Trusted,
+            key_fingerprint: None,
         });
         self
     }
@@ -70,8 +99,14 @@ impl TrustPolicy {
             node,
             endpoint: endpoint.into(),
             trust: PeerTrust::Untrusted,
+            key_fingerprint: None,
         });
         self
+    }
+
+    /// The pinned fingerprint for `node`, when one is configured.
+    pub fn pinned_fingerprint(&self, node: &NodeId) -> Option<&KeyFingerprint> {
+        self.known_peer(node)?.key_fingerprint.as_ref()
     }
 
     /// Add or replace a peer entry.
