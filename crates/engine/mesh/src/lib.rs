@@ -55,8 +55,8 @@ pub use node::{
 };
 pub use peer::{Peer, PeerState};
 pub use port::{
-    RemoteCapabilityError, RemoteCapabilityPort, RemoteInvokeContext, RemoteToolDescriptor,
-    RemoteToolRoute,
+    RemoteCapabilityError, RemoteCapabilityPort, RemoteInvokeContext, RemoteProviderDescriptor,
+    RemoteToolDescriptor, RemoteToolRoute,
 };
 pub use route::{
     CapabilityCatalogEntry, CapabilityRoute, RemoteCapability, RouteSelection, RouteTable,
@@ -69,8 +69,9 @@ pub use trust::{KnownPeer, PeerTrust, TrustPolicy};
 
 pub use apeireth_mesh_protocol::NodeId;
 pub use apeireth_mesh_protocol::{
-    Cancel, CapabilityAdvert, CapabilityCall, CapabilityError, CapabilityOutcome, CapabilityResult,
-    Heartbeat, Hello, HelloAck, InvokeCapability, LocatedModuleId, MeshCapabilityKind,
-    MeshEnvelope, MeshErrorCode, MeshPayload, MeshProtocolError, ModuleAdvert, ModuleLocation,
-    NodeDescriptor, MESH_PROTOCOL_VERSION,
+    decode_envelope, encode_envelope, Cancel, CapabilityAdvert, CapabilityAdvertEntry,
+    CapabilityCall, CapabilityError, CapabilityOutcome, CapabilityResult, Heartbeat, Hello,
+    HelloAck, InvokeCapability, LocatedModuleId, MeshCapabilityKind, MeshEnvelope, MeshErrorCode,
+    MeshPayload, MeshProtocolError, ModuleAdvert, ModuleLocation, NodeDescriptor,
+    WireModelDescriptor, MESH_PROTOCOL_VERSION,
 };

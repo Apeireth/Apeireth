@@ -853,6 +853,27 @@ impl MeshCapabilityExecutor for SlowExecutor {
     ) -> Result<(), MeshExecError> {
         Ok(())
     }
+
+    async fn execute_provider(
+        &self,
+        _ctx: &MeshInvokeContext,
+        capability: &CapabilityId,
+        _request: &apeireth_protocol::canonical::NormalizedRequest,
+    ) -> Result<apeireth_protocol::canonical::NormalizedResponse, MeshExecError> {
+        Err(MeshExecError::Internal {
+            capability: capability.clone(),
+            message: "provider execution not used in this test".into(),
+        })
+    }
+
+    async fn authorize_completion(
+        &self,
+        _ctx: &MeshInvokeContext,
+        _model: &str,
+        _message_count: usize,
+    ) -> Result<(), MeshExecError> {
+        Ok(())
+    }
 }
 
 #[tokio::test]
@@ -912,6 +933,7 @@ impl MeshCapabilityExecutor for SlowExecutorWithAdvert {
                 parameters: ToolParameters::new(),
                 strict: false,
             }),
+            models: None,
         }]
     }
 
@@ -931,6 +953,26 @@ impl MeshCapabilityExecutor for SlowExecutorWithAdvert {
         arguments: &serde_json::Value,
     ) -> Result<(), MeshExecError> {
         self.inner.authorize(ctx, capability, arguments).await
+    }
+
+    async fn execute_provider(
+        &self,
+        ctx: &MeshInvokeContext,
+        capability: &CapabilityId,
+        request: &apeireth_protocol::canonical::NormalizedRequest,
+    ) -> Result<apeireth_protocol::canonical::NormalizedResponse, MeshExecError> {
+        self.inner.execute_provider(ctx, capability, request).await
+    }
+
+    async fn authorize_completion(
+        &self,
+        ctx: &MeshInvokeContext,
+        model: &str,
+        message_count: usize,
+    ) -> Result<(), MeshExecError> {
+        self.inner
+            .authorize_completion(ctx, model, message_count)
+            .await
     }
 }
 

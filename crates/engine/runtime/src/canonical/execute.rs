@@ -1613,31 +1613,19 @@ impl Runtime {
                     let provider_request =
                         NormalizedRequest::new(continuation.model.clone(), provider_messages);
                     let attempt = self
-<<<<<<< HEAD
-                        .providers
-                        .complete_for_session_gated(
+                        .route_completion(
+                            &provider_request,
+                            &tools,
+                            stream_sink.as_ref(),
                             session.id,
                             request_id,
-                            &provider_request,
-                            Some(&tools),
-                            stream_sink.as_ref(),
+                            trace_id,
+                            continuation.round,
                             self.task
                                 .as_ref()
                                 .and_then(|task| task.input.request_gate.as_deref()),
                         )
                         .await;
-
-=======
-                        .route_completion(
-                            &provider_request,
-                            &tools,
-                            stream_sink.as_ref(),
-                            session_id,
-                            trace_id,
-                            continuation.round,
-                        )
-                        .await;
->>>>>>> 23850e34d (feat(mesh): route remote providers through canonical runtime)
                     let error = match attempt {
                         Ok(routed) => break Ok(routed),
                         Err(error) => error,
@@ -2998,32 +2986,26 @@ impl Runtime {
         tools: &[NormalizedTool],
         stream_sink: Option<&Arc<dyn Fn(String) + Send + Sync>>,
         session_id: SessionId,
+        request_id: RequestId,
         trace_id: TraceId,
         round: u32,
+        gate: Option<&dyn apeireth_plugin::agents::AgentRequestGate>,
     ) -> RuntimeResult<super::provider::RoutedCompletion> {
         // No port: exactly the pre-port path.
         let Some(port) = self.remote_port().clone() else {
-            return match stream_sink {
-                Some(sink) => {
-                    self.providers
-                        .complete_with_tools_streaming(request, tools, sink)
-                        .await
-                }
-                None => self.providers.complete_with_tools(request, tools).await,
-            };
+            return self
+                .providers
+                .complete_for_session_gated(session_id, request_id, request, Some(tools), stream_sink, gate)
+                .await;
         };
 
         let local_supporting = self.providers.providers_supporting(&request.model);
         let remote = port.remote_providers();
         match resolve_model_route(&request.model, &local_supporting, &remote) {
-            ModelRouteResolution::LocalGroup { .. } => match stream_sink {
-                Some(sink) => {
-                    self.providers
-                        .complete_with_tools_streaming(request, tools, sink)
-                        .await
-                }
-                None => self.providers.complete_with_tools(request, tools).await,
-            },
+            ModelRouteResolution::LocalGroup { .. } => self
+                .providers
+                .complete_for_session_gated(session_id, request_id, request, Some(tools), stream_sink, gate)
+                .await,
             ModelRouteResolution::Remote(desc) => {
                 // Per-provider tool attachment, same rule as the local router:
                 // declarations travel only where the selected model can.

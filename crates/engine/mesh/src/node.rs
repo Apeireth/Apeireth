@@ -564,6 +564,52 @@ impl MeshNode {
             .await
     }
 
+    /// High-level explicit provider invocation (debug, SDK, benchmarks): the
+    /// same governance shape as [`MeshNode::invoke_tool`] — one requester-side
+    /// canonical `Action::Completion` evaluation for remote routes, then the
+    /// raw primitive. Local execution is governed exactly once inside the
+    /// executor.
+    pub async fn invoke_provider(
+        &self,
+        selection: &RouteSelection,
+        capability: &CapabilityId,
+        request: apeireth_protocol::canonical::NormalizedRequest,
+        meta: InvokeMeta,
+    ) -> Result<apeireth_protocol::canonical::NormalizedResponse, MeshError> {
+        if let RouteSelection::Remote(_) = selection {
+            let ctx = MeshInvokeContext {
+                session: meta.session,
+                trace: meta.trace,
+                round: meta.round,
+                source: ActionSource::Local,
+                deadline_epoch_ms: meta.deadline_epoch_ms.or(self.default_deadline_ms),
+                cancelled: CancelFlag::new(),
+            };
+            self.executor
+                .authorize_completion(&ctx, &request.model, request.messages.len())
+                .await
+                .map_err(map_exec_error)?;
+        }
+        match self
+            .start_capability_call(
+                selection,
+                capability,
+                CapabilityCall::Provider(request),
+                meta,
+            )
+            .await?
+            .outcome()
+            .await?
+        {
+            CapabilityOutcome::Provider(response) => Ok(response),
+            other => Err(MeshError::Remote {
+                capability: Some(capability.clone()),
+                code: apeireth_mesh_protocol::MeshErrorCode::Unsupported,
+                message: format!("unexpected provider outcome shape: {other:?}"),
+            }),
+        }
+    }
+
     /// The raw execution primitive: start an invocation and return its handle
     /// (for cancellation or the outcome).
     ///
@@ -582,6 +628,21 @@ impl MeshNode {
         selection: &RouteSelection,
         capability: &CapabilityId,
         call: ToolCall,
+        meta: InvokeMeta,
+    ) -> Result<CallHandle, MeshError> {
+        self.start_capability_call(selection, capability, CapabilityCall::Tool(call), meta)
+            .await
+    }
+
+    /// The generalized raw execution primitive behind both tool and provider
+    /// paths: **no requester-side governance** (callers hold their own
+    /// authorization), identical `message_id` cancellation and correlation
+    /// semantics for every call shape.
+    pub async fn start_capability_call(
+        &self,
+        selection: &RouteSelection,
+        capability: &CapabilityId,
+        call: CapabilityCall,
         meta: InvokeMeta,
     ) -> Result<CallHandle, MeshError> {
         let catalog = self.executor.catalog();
@@ -613,11 +674,22 @@ impl MeshNode {
                 };
                 let capability = capability.clone();
                 tokio::spawn(async move {
-                    let result = executor
-                        .execute_tool(&ctx, &capability, &call)
-                        .await
-                        .map(CapabilityOutcome::Tool)
-                        .map_err(|error| map_exec_error(error));
+                    let result = match &call {
+                        CapabilityCall::Tool(tool_call) => executor
+                            .execute_tool(&ctx, &capability, tool_call)
+                            .await
+                            .map(CapabilityOutcome::Tool),
+                        CapabilityCall::Provider(request) => executor
+                            .execute_provider(&ctx, &capability, request)
+                            .await
+                            .map(CapabilityOutcome::Provider),
+                        // `CapabilityCall` is non-exhaustive across crates.
+                        other => Err(MeshExecError::Internal {
+                            capability: capability.clone(),
+                            message: format!("unsupported invocation shape: {other:?}"),
+                        }),
+                    }
+                    .map_err(map_exec_error);
                     invocations
                         .lock()
                         .expect("mesh invocations poisoned")
@@ -649,7 +721,7 @@ impl MeshNode {
                     payload: MeshPayload::InvokeCapability(InvokeCapability {
                         capability: capability.clone(),
                         kind: kind_of(capability),
-                        call: CapabilityCall::Tool(call),
+                        call,
                         session: meta.session,
                         round: meta.round,
                         deadline_epoch_ms: deadline,
@@ -894,9 +966,9 @@ impl MeshNode {
                 .expect("mesh invocations poisoned")
                 .remove(&message_id);
             let payload = match outcome {
-                Ok((capability, result)) => MeshPayload::CapabilityResult(CapabilityResult {
+                Ok((capability, outcome)) => MeshPayload::CapabilityResult(CapabilityResult {
                     capability,
-                    outcome: CapabilityOutcome::Tool(result),
+                    outcome,
                 }),
                 Err(error) => MeshPayload::CapabilityError(error),
             };
@@ -1055,7 +1127,7 @@ async fn execute_remote(
     trace: TraceId,
     invoke: InvokeCapability,
     flag: CancelFlag,
-) -> Result<(CapabilityId, ToolResult), CapabilityError> {
+) -> Result<(CapabilityId, CapabilityOutcome), CapabilityError> {
     let capability = invoke.capability.clone();
 
     if kind_of(&capability) != invoke.kind {
@@ -1081,7 +1153,12 @@ async fn execute_remote(
         CapabilityCall::Tool(call) => executor
             .execute_tool(&ctx, &capability, &call)
             .await
-            .map(|result| (capability.clone(), result))
+            .map(|result| (capability.clone(), CapabilityOutcome::Tool(result)))
+            .map_err(|error| error.to_capability_error()),
+        CapabilityCall::Provider(request) => executor
+            .execute_provider(&ctx, &capability, &request)
+            .await
+            .map(|response| (capability.clone(), CapabilityOutcome::Provider(response)))
             .map_err(|error| error.to_capability_error()),
         other => Err(CapabilityError {
             capability: Some(capability),
