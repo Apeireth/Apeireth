@@ -1074,6 +1074,72 @@ pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Resul
     Ok(text)
 }
 
+/// **守夜人后台守护** (2026-10-10, 设计闭环最后一块): `nightwatch --watch`
+/// = 显式授权的长跑循环。**只在用户空闲时复盘** (双闸, 纯状态机):
+/// ① 活动闸: 距最近活动 ≥ `idle_secs` —— 活动信号 = 认知库 episode 时间戳
+///    (用户说话 = 新 episode; `--session` 指定观测会话);
+/// ② 冷却闸: 距上次复盘 ≥ `cooldown_secs` (复盘不刷屏)。
+/// 轮询间隔 `interval_secs`; 复盘复用单次审计路径 (同 DB 读 + 报告落盘)。
+/// Ctrl-C 退出 (信号即终止; 报告已落盘, 无中间态)。
+pub async fn dispatch_nightwatch_watch(
+    session: Option<String>,
+    limit: usize,
+    idle_secs: i64,
+    cooldown_secs: i64,
+    interval_secs: u64,
+) -> Result<String, String> {
+    use apeireth_memory::backend::sqlite::SqliteBackend;
+    use apeireth_plugin::memory_backend::MemoryBackend;
+    use apeireth_runtime_assembly::canonical::{IdleGate, NightwatchIdleScheduler};
+    use apeireth_storage::SqliteConnectionPool;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let pool = Arc::new(
+        SqliteConnectionPool::open(cognitive_db_path())
+            .await
+            .map_err(|error| format!("cognitive backend open failed: {error}"))?,
+    );
+    let backend = SqliteBackend::from_arc(Arc::clone(&pool));
+
+    let now_ms = || {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or_default()
+    };
+    let mut scheduler = NightwatchIdleScheduler::new(idle_secs, cooldown_secs, now_ms());
+    let mut runs = 0usize;
+
+    loop {
+        let now = now_ms();
+        // 活动探测: 观测会话最近一条 episode 的时间戳 (epoch 秒 → 毫秒)。
+        if let Some(session_id) = &session {
+            if let Ok(episodes) = backend.recent_episodes(session_id, 1) {
+                if let Some(latest) = episodes.first() {
+                    scheduler.note_activity(latest.timestamp.saturating_mul(1000));
+                }
+            }
+        }
+
+        match scheduler.should_run(now) {
+            IdleGate::IdleOk => {
+                scheduler.mark_ran(now);
+                runs += 1;
+                let summary = dispatch_nightwatch(session.clone(), limit).await?;
+                println!("[nightwatch --watch] 第 {runs} 次空闲复盘:\n{summary}");
+            }
+            IdleGate::ActiveSoon { wait_secs } => {
+                eprintln!("[nightwatch --watch] 用户仍活跃, {wait_secs}s 后再判");
+            }
+            IdleGate::RecentlyRan { wait_secs } => {
+                eprintln!("[nightwatch --watch] 冷却中, {wait_secs}s 后再判");
+            }
+        }
+
+        tokio::time::sleep(std::time::Duration::from_secs(interval_secs.max(1))).await;
+    }
+}
+
 /// Bootstrap and resolve a pending approval on the production session store.
 pub async fn dispatch_canonical_approval(
     session: String,

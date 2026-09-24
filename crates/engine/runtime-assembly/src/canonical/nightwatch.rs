@@ -319,6 +319,85 @@ pub fn write_report(dir: &Path, report: &NightwatchReport) -> Result<PathBuf, st
     Ok(path)
 }
 
+// ============================================================
+// 7. 空闲调度器 (守夜人"只在用户空闲时检查"的闸门)
+// ============================================================
+
+/// 守夜人**空闲调度器** (2026-10-10): 双闸 ——
+/// ① **活动闸**: 距 `last_activity` ≥ `min_idle_secs` (活动信号由调用方注入:
+///    生产 = 认知库 episode 时间戳探测; 用户说话 = 新 episode);
+/// ② **冷却闸**: 距上次复盘 ≥ `cooldown_secs` (复盘不刷屏)。
+///
+/// 纯状态机 (0 IO / 0 LLM): 活动探测与复盘执行由调用方注入 (runner 模式),
+/// 本类型只做门判定。epoch 毫秒口径。
+#[derive(Debug, Clone)]
+pub struct NightwatchIdleScheduler {
+    min_idle_secs: i64,
+    cooldown_secs: i64,
+    /// 最近活动时间 (epoch ms; 构造时 = now, 无信号时按启动计)。
+    last_activity_epoch_ms: i64,
+    /// 上次复盘时间 (None = 本进程未复盘)。
+    last_run_epoch_ms: Option<i64>,
+}
+
+/// 门判定结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdleGate {
+    /// 双闸皆过: 可以复盘。
+    IdleOk,
+    /// 活动闸未过: 用户仍在活动 (剩余秒)。
+    ActiveSoon { wait_secs: i64 },
+    /// 冷却闸未过: 最近才复盘过 (剩余秒)。
+    RecentlyRan { wait_secs: i64 },
+}
+
+impl NightwatchIdleScheduler {
+    /// 构造 (秒口径; `now_ms` = 构造时刻, 无信号时按启动计空闲)。
+    pub fn new(min_idle_secs: i64, cooldown_secs: i64, now_ms: i64) -> Self {
+        Self {
+            min_idle_secs: min_idle_secs.max(1),
+            cooldown_secs: cooldown_secs.max(0),
+            last_activity_epoch_ms: now_ms,
+            last_run_epoch_ms: None,
+        }
+    }
+
+    /// 记录一次活动 (epoch ms)。
+    pub fn note_activity(&mut self, now_ms: i64) {
+        self.last_activity_epoch_ms = now_ms;
+    }
+
+    /// 双闸判定。
+    pub fn should_run(&self, now_ms: i64) -> IdleGate {
+        if let Some(last_run) = self.last_run_epoch_ms {
+            let since_run = (now_ms - last_run) / 1000;
+            if since_run < self.cooldown_secs {
+                return IdleGate::RecentlyRan {
+                    wait_secs: self.cooldown_secs - since_run,
+                };
+            }
+        }
+        let since_activity = (now_ms - self.last_activity_epoch_ms) / 1000;
+        if since_activity < self.min_idle_secs {
+            return IdleGate::ActiveSoon {
+                wait_secs: self.min_idle_secs - since_activity,
+            };
+        }
+        IdleGate::IdleOk
+    }
+
+    /// 记录一次复盘 (epoch ms; 重置冷却闸)。
+    pub fn mark_ran(&mut self, now_ms: i64) {
+        self.last_run_epoch_ms = Some(now_ms);
+        self.last_activity_epoch_ms = now_ms;
+    }
+
+    /// 上次活动时间 (探针对照/测试用)。
+    pub fn last_activity_epoch_ms(&self) -> i64 {
+        self.last_activity_epoch_ms
+    }
+}
+
 fn now_epoch_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -433,5 +512,69 @@ mod nightwatch_tests {
         assert!(path.exists());
         let text = std::fs::read_to_string(&path).expect("read");
         assert!(text.contains("守夜复盘"), "{text}");
+    }
+
+    // ---- 空闲调度器 (双闸) ----
+
+    #[test]
+    fn scheduler_gates_activity_then_cooldown() {
+        let now = 10_000_000i64;
+        let mut scheduler = NightwatchIdleScheduler::new(900, 3600, now);
+
+        // ① 启动即查: 活动闸未过 (距启动 0s < 900s)。
+        assert!(matches!(
+            scheduler.should_run(now),
+            IdleGate::ActiveSoon { .. }
+        ));
+
+        // ② 活动后 899s 仍 ActiveSoon, 900s 过活动闸。
+        scheduler.note_activity(now);
+        assert!(matches!(
+            scheduler.should_run(now + 899_000),
+            IdleGate::ActiveSoon { .. }
+        ));
+        assert_eq!(scheduler.should_run(now + 900_000), IdleGate::IdleOk);
+
+        // ③ 复盘后进冷却 (mark_ran 同时重置活动基准)。
+        scheduler.mark_ran(now + 900_000);
+        assert!(matches!(
+            scheduler.should_run(now + 900_001),
+            IdleGate::RecentlyRan { .. }
+        ));
+        // 冷却 3600s 过后 + 无新活动 → 再放行。
+        assert_eq!(
+            scheduler.should_run(now + 900_000 + 3_600_000),
+            IdleGate::IdleOk
+        );
+    }
+
+    #[test]
+    fn scheduler_activity_resets_idle_window() {
+        let now = 10_000_000i64;
+        let mut scheduler = NightwatchIdleScheduler::new(900, 3600, now);
+        scheduler.note_activity(now);
+        assert_eq!(scheduler.should_run(now + 900_000), IdleGate::IdleOk);
+        // 用户回来继续说: 活动闸复位。
+        scheduler.note_activity(now + 900_000);
+        assert!(matches!(
+            scheduler.should_run(now + 900_000 + 60_000),
+            IdleGate::ActiveSoon { .. }
+        ));
+        assert_eq!(
+            scheduler.should_run(now + 900_000 + 900_000),
+            IdleGate::IdleOk
+        );
+    }
+
+    #[test]
+    fn scheduler_clamps_insane_config() {
+        // 0 装护栏: min_idle < 1 抬到 1 (不允许"永不空闲"的退化配置);
+        // 秒级整除口径: 999ms = 0s 仍闸着, 满 1s 放行。
+        let scheduler = NightwatchIdleScheduler::new(0, 0, 1_000);
+        assert!(matches!(
+            scheduler.should_run(1_000 + 999),
+            IdleGate::ActiveSoon { .. }
+        ));
+        assert_eq!(scheduler.should_run(1_000 + 1_000), IdleGate::IdleOk);
     }
 }

@@ -100,7 +100,8 @@ pub use experiment_field::{
 
 pub use nightwatch::{
     audit as nightwatch_audit, write_report as write_nightwatch_report, AuditSnapshot,
-    EpisodeSnapshot, Finding, FindingArea, NightwatchInputs, NightwatchReport,
+    EpisodeSnapshot, Finding, FindingArea, IdleGate, NightwatchIdleScheduler, NightwatchInputs,
+    NightwatchReport,
 };
 
 pub use cognitive::{

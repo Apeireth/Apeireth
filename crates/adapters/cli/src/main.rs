@@ -428,16 +428,46 @@ mod subagent_parse_tests {
     }
 }
 
-/// `apeireth nightwatch [--session <id>] [--limit N]` 解析 (守夜人 = 显式命令即授权)。
-fn parse_nightwatch(args: &[String]) -> Result<(Option<String>, usize), String> {
-    let mut session = None;
-    let mut limit = 50;
+/// 守夜人命令行选项 (显式命令即授权; `--watch` = 后台守护, 双闸空闲触发)。
+#[derive(Debug, Clone, PartialEq)]
+pub struct NightwatchOptions {
+    /// 观测/审计会话 (None = 无会话素材 = 空审计 + 具名缺口)。
+    pub session: Option<String>,
+    /// 单次审计的 episodes 上限。
+    pub limit: usize,
+    /// 后台守护模式 (循环跑, 只在双闸空闲时复盘)。
+    pub watch: bool,
+    /// 活动闸: 距最近活动 ≥ 该秒数才复盘 (默认 900 = 15 分钟)。
+    pub idle_secs: i64,
+    /// 冷却闸: 距上次复盘 ≥ 该秒数才再复盘 (默认 3600)。
+    pub cooldown_secs: i64,
+    /// 守护循环的轮询间隔 (默认 60s)。
+    pub interval_secs: u64,
+}
+
+impl Default for NightwatchOptions {
+    fn default() -> Self {
+        Self {
+            session: None,
+            limit: 50,
+            watch: false,
+            idle_secs: 900,
+            cooldown_secs: 3600,
+            interval_secs: 60,
+        }
+    }
+}
+
+/// `apeireth nightwatch [--session <id>] [--limit N] [--watch] [--idle S]
+/// [--cooldown S] [--interval S]` 解析 (守夜人 = 显式命令即授权)。
+fn parse_nightwatch(args: &[String]) -> Result<NightwatchOptions, String> {
+    let mut options = NightwatchOptions::default();
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
             "--session" => {
                 index += 1;
-                session = Some(
+                options.session = Some(
                     args.get(index)
                         .ok_or("nightwatch --session requires a value")?
                         .clone(),
@@ -448,18 +478,55 @@ fn parse_nightwatch(args: &[String]) -> Result<(Option<String>, usize), String> 
                 let raw = args
                     .get(index)
                     .ok_or("nightwatch --limit requires a value")?;
-                limit = raw
+                options.limit = raw
                     .parse::<usize>()
                     .map_err(|_| "nightwatch --limit must be a positive integer".to_string())?;
-                if limit == 0 {
+                if options.limit == 0 {
                     return Err("nightwatch --limit must be >= 1".to_string());
+                }
+            }
+            "--watch" => options.watch = true,
+            "--idle" => {
+                index += 1;
+                let raw = args
+                    .get(index)
+                    .ok_or("nightwatch --idle requires a value")?;
+                options.idle_secs = raw
+                    .parse::<i64>()
+                    .map_err(|_| "nightwatch --idle must be an integer (seconds)".to_string())?;
+                if options.idle_secs < 1 {
+                    return Err("nightwatch --idle must be >= 1".to_string());
+                }
+            }
+            "--cooldown" => {
+                index += 1;
+                let raw = args
+                    .get(index)
+                    .ok_or("nightwatch --cooldown requires a value")?;
+                options.cooldown_secs = raw.parse::<i64>().map_err(|_| {
+                    "nightwatch --cooldown must be an integer (seconds)".to_string()
+                })?;
+                if options.cooldown_secs < 0 {
+                    return Err("nightwatch --cooldown must be >= 0".to_string());
+                }
+            }
+            "--interval" => {
+                index += 1;
+                let raw = args
+                    .get(index)
+                    .ok_or("nightwatch --interval requires a value")?;
+                options.interval_secs = raw
+                    .parse::<u64>()
+                    .map_err(|_| "nightwatch --interval must be a positive integer".to_string())?;
+                if options.interval_secs == 0 {
+                    return Err("nightwatch --interval must be >= 1".to_string());
                 }
             }
             other => return Err(format!("nightwatch: unknown argument {other}")),
         }
         index += 1;
     }
-    Ok((session, limit))
+    Ok(options)
 }
 
 fn run_nightwatch(session: Option<String>, limit: usize) -> ExitCode {
@@ -482,6 +549,33 @@ fn run_nightwatch(session: Option<String>, limit: usize) -> ExitCode {
     }
 }
 
+/// 后台守护: 循环轮询, 双闸 (活动闸 + 冷却闸) 空闲时复盘一次。
+fn run_nightwatch_watch(options: NightwatchOptions) -> ExitCode {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("runtime init failed: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(apeireth_cli::dispatch_nightwatch_watch(
+        options.session,
+        options.limit,
+        options.idle_secs,
+        options.cooldown_secs,
+        options.interval_secs,
+    )) {
+        Ok(output) => {
+            println!("{output}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 #[cfg(test)]
 mod nightwatch_parse_tests {
     use super::*;
@@ -492,16 +586,42 @@ mod nightwatch_parse_tests {
 
     #[test]
     fn nightwatch_defaults_are_sessionless_structural_audit() {
-        // 缺省 = 无会话素材 + 50 条上限 (episodes 空 → 干净报告 + 具名缺口)。
-        assert_eq!(parse_nightwatch(&[]).unwrap(), (None, 50));
+        // 缺省 = 无会话素材 + 50 条上限 (episodes 空 → 干净报告 + 具名缺口);
+        // 非 watch 模式 = 单次审计。
+        assert_eq!(parse_nightwatch(&[]).unwrap(), NightwatchOptions::default());
+        assert!(!parse_nightwatch(&[]).unwrap().watch);
     }
 
     #[test]
     fn nightwatch_parses_session_and_limit() {
-        assert_eq!(
-            parse_nightwatch(&s(&["--session", "abc", "--limit", "5"])).unwrap(),
-            (Some("abc".to_string()), 5)
-        );
+        let options = parse_nightwatch(&s(&["--session", "abc", "--limit", "5"])).unwrap();
+        assert_eq!(options.session.as_deref(), Some("abc"));
+        assert_eq!(options.limit, 5);
+    }
+
+    #[test]
+    fn nightwatch_watch_flags_parse_with_defaults() {
+        // --watch = 后台守护; 三闸参数可配, 缺省 900/3600/60。
+        let options = parse_nightwatch(&s(&[
+            "--watch",
+            "--idle",
+            "300",
+            "--cooldown",
+            "0",
+            "--interval",
+            "30",
+        ]))
+        .unwrap();
+        assert!(options.watch);
+        assert_eq!(options.idle_secs, 300);
+        assert_eq!(options.cooldown_secs, 0);
+        assert_eq!(options.interval_secs, 30);
+
+        let minimal = parse_nightwatch(&s(&["--watch"])).unwrap();
+        assert!(minimal.watch);
+        assert_eq!(minimal.idle_secs, 900);
+        assert_eq!(minimal.cooldown_secs, 3600);
+        assert_eq!(minimal.interval_secs, 60);
     }
 
     #[test]
@@ -509,6 +629,10 @@ mod nightwatch_parse_tests {
         assert!(parse_nightwatch(&s(&["--nope"])).is_err());
         assert!(parse_nightwatch(&s(&["--limit", "0"])).is_err());
         assert!(parse_nightwatch(&s(&["--limit", "x"])).is_err());
+        assert!(parse_nightwatch(&s(&["--idle", "0"])).is_err());
+        assert!(parse_nightwatch(&s(&["--cooldown", "-1"])).is_err());
+        assert!(parse_nightwatch(&s(&["--interval", "0"])).is_err());
+        assert!(parse_nightwatch(&s(&["--watch", "--idle"])).is_err());
     }
 }
 
@@ -563,7 +687,8 @@ fn main() -> ExitCode {
             }
         },
         "nightwatch" => match parse_nightwatch(&args[1..]) {
-            Ok((session, limit)) => run_nightwatch(session, limit),
+            Ok(options) if options.watch => run_nightwatch_watch(options),
+            Ok(options) => run_nightwatch(options.session, options.limit),
             Err(error) => {
                 eprintln!("{error}");
                 print_help();
