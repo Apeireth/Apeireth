@@ -27,6 +27,15 @@ pub enum MeshTransportError {
     /// The underlying medium failed.
     #[error("mesh link i/o failure: {0}")]
     Io(String),
+    /// The outbound queue is full (bounded transport backpressure). Retry
+    /// later or shed load — never buffer without limit.
+    #[error("mesh link backpressure: {0}")]
+    Backpressure(String),
+    /// A frame violated the transport contract (oversized, truncated,
+    /// malformed). All network input is untrusted; such input is refused,
+    /// never panicked on.
+    #[error("mesh link protocol violation: {0}")]
+    ProtocolViolation(String),
 }
 
 /// One persistent connection between exactly two nodes.
@@ -48,6 +57,28 @@ pub trait MeshConnection: Send + Sync {
 
     /// Whether this end considers the link closed.
     fn is_closed(&self) -> bool;
+
+    /// Cryptographic identity evidence from the transport handshake, when the
+    /// transport has any (a pinned TLS key fingerprint). The in-memory fabric
+    /// has none and returns `None`.
+    ///
+    /// This is how transport-level proof reaches transport-agnostic policy:
+    /// [`crate::node::MeshNode`] compares it against the trust pin and fails
+    /// closed on any mismatch, so a right-key-wrong-node peer cannot bind.
+    fn peer_fingerprint(&self) -> Option<crate::identity::KeyFingerprint> {
+        None
+    }
+}
+
+/// The server side of a transport: accept inbound links.
+///
+/// Real networking needs bind/listen/accept in addition to connect; connection
+/// semantics stay shared on [`MeshConnection`] while transport mechanics stay
+/// isolated behind these two traits.
+#[async_trait]
+pub trait MeshListener: Send + Sync {
+    /// The next fully connected link, or `None` once the listener is closed.
+    async fn accept(&self) -> Result<Arc<dyn MeshConnection>, MeshTransportError>;
 }
 
 /// How a node obtains persistent links to its peers.

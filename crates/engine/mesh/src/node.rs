@@ -42,6 +42,13 @@ use crate::trust::TrustPolicy;
 /// Default silence after which a peer is considered unreachable.
 pub const DEFAULT_HEARTBEAT_TIMEOUT_MS: u64 = 15_000;
 
+/// Default whole-handshake deadline: a connection that cannot authenticate
+/// promptly is closed rather than left half-open.
+pub const DEFAULT_HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
+
+/// Default cap on in-flight calls per node.
+pub const DEFAULT_MAX_PENDING_CALLS: usize = 256;
+
 /// Identity and policy for one mesh node.
 #[derive(Debug, Clone)]
 pub struct MeshNodeConfig {
@@ -57,6 +64,11 @@ pub struct MeshNodeConfig {
     pub heartbeat_timeout_ms: u64,
     /// Deadline applied to calls that do not set their own.
     pub default_deadline_ms: Option<u64>,
+    /// Whole-handshake deadline (transport established → peer Active). On
+    /// expiry the connection closes and no projection is taken.
+    pub handshake_timeout_ms: u64,
+    /// Cap on in-flight calls per node (bounded transport discipline).
+    pub max_pending_calls: usize,
 }
 
 impl MeshNodeConfig {
@@ -69,6 +81,8 @@ impl MeshNodeConfig {
             trust: TrustPolicy::new(),
             heartbeat_timeout_ms: DEFAULT_HEARTBEAT_TIMEOUT_MS,
             default_deadline_ms: None,
+            handshake_timeout_ms: DEFAULT_HANDSHAKE_TIMEOUT_MS,
+            max_pending_calls: DEFAULT_MAX_PENDING_CALLS,
         }
     }
 
@@ -90,6 +104,20 @@ impl MeshNodeConfig {
     #[must_use]
     pub fn with_default_deadline(mut self, deadline_ms: Option<u64>) -> Self {
         self.default_deadline_ms = deadline_ms;
+        self
+    }
+
+    /// Set the whole-handshake deadline.
+    #[must_use]
+    pub fn with_handshake_timeout(mut self, timeout_ms: u64) -> Self {
+        self.handshake_timeout_ms = timeout_ms;
+        self
+    }
+
+    /// Set the per-node in-flight call cap.
+    #[must_use]
+    pub fn with_max_pending_calls(mut self, max: usize) -> Self {
+        self.max_pending_calls = max;
         self
     }
 
@@ -177,6 +205,10 @@ impl CallHandle {
 struct PeerEntry {
     peer: Peer,
     link: Option<Arc<dyn MeshConnection>>,
+    /// Which node initiated this connection (duplicate-connection policy).
+    initiator: NodeId,
+    /// Connection generation: stale loops cannot clobber newer epochs.
+    generation: u64,
 }
 
 struct PendingCall {
@@ -192,12 +224,16 @@ pub struct MeshNode {
     trust: TrustPolicy,
     heartbeat_timeout_ms: u64,
     default_deadline_ms: Option<u64>,
+    handshake_timeout_ms: u64,
+    max_pending_calls: usize,
     peers: Mutex<BTreeMap<NodeId, PeerEntry>>,
     routes: Mutex<RouteTable>,
     /// Caller-side calls awaiting a remote response.
     calls: Mutex<BTreeMap<RequestId, PendingCall>>,
     /// In-flight executions *in this runtime*, for cooperative cancellation.
     invocations: Arc<Mutex<BTreeMap<RequestId, CancelFlag>>>,
+    /// Monotonic connection generation allocator.
+    generation: std::sync::atomic::AtomicU64,
 }
 
 impl MeshNode {
@@ -215,10 +251,13 @@ impl MeshNode {
             trust: config.trust,
             heartbeat_timeout_ms: config.heartbeat_timeout_ms,
             default_deadline_ms: config.default_deadline_ms,
+            handshake_timeout_ms: config.handshake_timeout_ms,
+            max_pending_calls: config.max_pending_calls,
             peers: Mutex::new(BTreeMap::new()),
             routes: Mutex::new(RouteTable::new()),
             calls: Mutex::new(BTreeMap::new()),
             invocations: Arc::new(Mutex::new(BTreeMap::new())),
+            generation: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -256,13 +295,15 @@ impl MeshNode {
         let now = self.now_ms();
         {
             let mut peers = self.peers.lock().expect("mesh peers poisoned");
-            peers.insert(
-                expected.clone(),
-                PeerEntry {
-                    peer: Peer::connecting(expected.clone(), "", now),
-                    link: Some(Arc::clone(&link)),
-                },
-            );
+            // A handshake placeholder must never overwrite a live entry (the
+            // duplicate-connection case keeps the incumbent until the new
+            // connection is actually activated).
+            peers.entry(expected.clone()).or_insert(PeerEntry {
+                peer: Peer::connecting(expected.clone(), "", now),
+                link: Some(Arc::clone(&link)),
+                initiator: self.node_id().clone(),
+                generation: 0,
+            });
         }
 
         let hello = MeshEnvelope::send(
@@ -278,11 +319,21 @@ impl MeshNode {
             return Err(MeshError::Transport(error.to_string()));
         }
 
-        let ack_env = match link.recv().await {
-            Ok(envelope) => envelope,
-            Err(error) => {
+        let ack_env = match tokio::time::timeout(
+            std::time::Duration::from_millis(self.handshake_timeout_ms),
+            link.recv(),
+        )
+        .await
+        {
+            Ok(Ok(envelope)) => envelope,
+            Ok(Err(error)) => {
                 self.abandon_handshake(&expected);
                 return Err(MeshError::Transport(error.to_string()));
+            }
+            Err(_elapsed) => {
+                link.close();
+                self.abandon_handshake(&expected);
+                return Err(MeshError::Transport("handshake timed out".to_string()));
             }
         };
 
@@ -312,12 +363,23 @@ impl MeshNode {
             self.abandon_handshake(&expected);
             return Err(error);
         }
+        if let Err(error) = self.verify_pinned_identity(&ack.node.id, &link) {
+            link.close();
+            self.abandon_handshake(&expected);
+            return Err(error);
+        }
 
         // `verify_hello_ack` pinned the peer to `expected`, so returning it is
         // returning the handshaken identity.
-        self.activate_peer(ack.node, Arc::clone(&link));
+        let initiator = self.node_id().clone();
+        let Some(generation) = self.activate_peer(ack.node, Arc::clone(&link), initiator) else {
+            self.abandon_handshake(&expected);
+            return Err(MeshError::Superseded {
+                kept: expected.to_string(),
+            });
+        };
         self.send_advert_to(&expected, &link).await;
-        self.spawn_connection_loop(expected.clone(), link);
+        self.spawn_connection_loop(expected.clone(), link, generation);
         Ok(expected)
     }
 
@@ -329,9 +391,18 @@ impl MeshNode {
         self: &Arc<Self>,
         link: Arc<dyn MeshConnection>,
     ) -> Result<NodeId, MeshError> {
-        let hello_env = match link.recv().await {
-            Ok(envelope) => envelope,
-            Err(error) => return Err(MeshError::Transport(error.to_string())),
+        let hello_env = match tokio::time::timeout(
+            std::time::Duration::from_millis(self.handshake_timeout_ms),
+            link.recv(),
+        )
+        .await
+        {
+            Ok(Ok(envelope)) => envelope,
+            Ok(Err(error)) => return Err(MeshError::Transport(error.to_string())),
+            Err(_elapsed) => {
+                link.close();
+                return Err(MeshError::Transport("handshake timed out".to_string()));
+            }
         };
 
         let reject = |reason: String| {
@@ -383,6 +454,10 @@ impl MeshNode {
             reject(error.to_string()).await;
             return Err(error);
         }
+        if let Err(error) = self.verify_pinned_identity(&hello.node.id, &link) {
+            reject(error.to_string()).await;
+            return Err(error);
+        }
 
         let peer_id = hello.node.id.clone();
         let ack = hello_env.reply(MeshPayload::HelloAck(HelloAck {
@@ -394,9 +469,14 @@ impl MeshNode {
             return Err(MeshError::Transport(error.to_string()));
         }
 
-        self.activate_peer(hello.node, Arc::clone(&link));
+        let initiator = peer_id.clone();
+        let Some(generation) = self.activate_peer(hello.node, Arc::clone(&link), initiator) else {
+            return Err(MeshError::Superseded {
+                kept: peer_id.to_string(),
+            });
+        };
         self.send_advert_to(&peer_id, &link).await;
-        self.spawn_connection_loop(peer_id.clone(), link);
+        self.spawn_connection_loop(peer_id.clone(), link, generation);
         Ok(peer_id)
     }
 
@@ -704,6 +784,21 @@ impl MeshNode {
             }
             apeireth_mesh_protocol::ModuleLocation::Remote(node) => {
                 self.ensure_peer_dispatchable(&node)?;
+                {
+                    let pending_for_peer = self
+                        .calls
+                        .lock()
+                        .expect("mesh calls poisoned")
+                        .values()
+                        .filter(|call| call.peer == node)
+                        .count();
+                    if pending_for_peer >= self.max_pending_calls {
+                        return Err(MeshError::Transport(format!(
+                            "backpressure: {node} already has {pending_for_peer} pending calls (cap {})",
+                            self.max_pending_calls
+                        )));
+                    }
+                }
                 self.calls.lock().expect("mesh calls poisoned").insert(
                     message_id,
                     PendingCall {
@@ -788,17 +883,18 @@ impl MeshNode {
     }
 
     async fn send_to_peer(&self, node: &NodeId, envelope: MeshEnvelope) {
-        let link = self
-            .peers
-            .lock()
-            .expect("mesh peers poisoned")
-            .get(node)
-            .and_then(|entry| entry.link.clone());
+        let (link, generation) = {
+            let peers = self.peers.lock().expect("mesh peers poisoned");
+            match peers.get(node) {
+                Some(entry) => (entry.link.clone(), entry.generation),
+                None => (None, 0),
+            }
+        };
         if let Some(link) = link {
             if link.send(envelope).await.is_err() {
                 link.close();
                 self.fail_pending_for_peer(node, "connection lost while sending");
-                self.mark_unreachable(node);
+                self.mark_unreachable(node, generation);
             }
         }
     }
@@ -862,7 +958,12 @@ impl MeshNode {
     // Connection loop and execution side
     // ------------------------------------------------------------------
 
-    fn spawn_connection_loop(self: &Arc<Self>, peer: NodeId, link: Arc<dyn MeshConnection>) {
+    fn spawn_connection_loop(
+        self: &Arc<Self>,
+        peer: NodeId,
+        link: Arc<dyn MeshConnection>,
+        generation: u64,
+    ) {
         let node = Arc::clone(self);
         tokio::spawn(async move {
             loop {
@@ -871,18 +972,43 @@ impl MeshNode {
                         if node.handle_envelope(&peer, envelope, &link).await.is_err() {
                             link.close();
                             node.fail_pending_for_peer(&peer, "connection terminated");
-                            node.mark_closed(&peer);
+                            node.mark_closed(&peer, generation);
                             return;
                         }
                     }
                     Err(_) => {
                         node.fail_pending_for_peer(&peer, "connection lost");
-                        node.mark_unreachable(&peer);
+                        node.mark_unreachable(&peer, generation);
                         return;
                     }
                 }
             }
         });
+    }
+
+    /// Serve inbound connections from a listener until it closes.
+    ///
+    /// The accept loop outlives any single handshake: a connection that cannot
+    /// authenticate promptly is closed by its own handshake deadline without
+    /// disturbing the listener.
+    pub fn serve(
+        self: &Arc<Self>,
+        listener: Arc<dyn crate::transport::MeshListener>,
+    ) -> tokio::task::JoinHandle<()> {
+        let node = Arc::clone(self);
+        tokio::spawn(async move {
+            loop {
+                match listener.accept().await {
+                    Ok(link) => {
+                        let per_connection = Arc::clone(&node);
+                        tokio::spawn(async move {
+                            let _ = per_connection.accept(link).await;
+                        });
+                    }
+                    Err(_) => return,
+                }
+            }
+        })
     }
 
     /// Dispatch one inbound envelope. `Err` terminates the connection.
@@ -1045,8 +1171,81 @@ impl MeshNode {
         Ok(())
     }
 
-    fn activate_peer(&self, node: NodeDescriptor, link: Arc<dyn MeshConnection>) {
+    /// Enforce the trust pin against transport identity evidence.
+    ///
+    /// A pinned peer must present exactly the pinned fingerprint — the right
+    /// key under the wrong NodeId, a wrong key, and a keyless "proof" all fail
+    /// closed. Unpinned entries (the in-memory test fabric has no identity
+    /// claim) are governed by [`TrustPolicy::authorize`] alone.
+    fn verify_pinned_identity(
+        &self,
+        node: &NodeId,
+        link: &Arc<dyn MeshConnection>,
+    ) -> Result<(), MeshError> {
+        let Some(pin) = self.trust.pinned_fingerprint(node).cloned() else {
+            return Ok(());
+        };
+        match link.peer_fingerprint() {
+            Some(presented) if presented == pin => Ok(()),
+            Some(presented) => Err(MeshError::Untrusted {
+                node: node.to_string(),
+                reason: format!("pinned key mismatch: expected {pin}, presented {presented}"),
+            }),
+            None => Err(MeshError::Untrusted {
+                node: node.to_string(),
+                reason: "pinned peer presented no transport identity".to_string(),
+            }),
+        }
+    }
+
+    /// Install an authenticated connection, resolving duplicates
+    /// deterministically. A dead incumbent always yields to the new
+    /// connection (reconnect races); between two *live* connections the one
+    /// initiated by the lexicographically smaller NodeId wins, and both ends
+    /// compute the same winner — simultaneous dials converge on exactly one
+    /// live link. Returns the connection generation when installed, `None`
+    /// when superseded.
+    fn activate_peer(
+        &self,
+        node: NodeDescriptor,
+        link: Arc<dyn MeshConnection>,
+        initiator: NodeId,
+    ) -> Option<u64> {
         let mut peers = self.peers.lock().expect("mesh peers poisoned");
+        if let Some(existing) = peers.get(&node.id) {
+            // `generation == 0` entries are handshake placeholders.
+            //
+            // Duplicate policy, computed identically on both ends so
+            // simultaneous dials converge on the same surviving link:
+            //   - different initiators: the connection initiated by the
+            //     lexicographically smaller NodeId wins;
+            //   - same initiator (a reconnect): the newest wins.
+            // A dead incumbent always yields, and whatever loses is closed
+            // here so the loser's loop tears down symmetrically.
+            let live =
+                existing.generation != 0 && existing.link.as_ref().is_some_and(|l| !l.is_closed());
+            let keep_new = !live
+                || match existing.initiator.cmp(&initiator) {
+                    std::cmp::Ordering::Greater => true,
+                    std::cmp::Ordering::Less => false,
+                    std::cmp::Ordering::Equal => true,
+                };
+            if !keep_new {
+                link.close();
+                return None;
+            }
+            // Close the outgoing *real* connection being replaced — never the
+            // handshake placeholder, whose link is the very one activating.
+            if existing.generation != 0 {
+                if let Some(old_link) = existing.link.clone() {
+                    old_link.close();
+                }
+            }
+        }
+        let generation = self
+            .generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
         let now = self.now_ms();
         peers.insert(
             node.id.clone(),
@@ -1058,8 +1257,11 @@ impl MeshNode {
                     last_seen_ms: now,
                 },
                 link: Some(link),
+                initiator,
+                generation,
             },
         );
+        Some(generation)
     }
 
     fn abandon_handshake(&self, node: &NodeId) {
@@ -1078,9 +1280,14 @@ impl MeshNode {
         }
     }
 
-    fn mark_unreachable(&self, node: &NodeId) {
+    /// Stale-epoch guard: a superseded connection's teardown must not clobber
+    /// the state of the connection that replaced it.
+    fn mark_unreachable(&self, node: &NodeId, generation: u64) {
         let mut peers = self.peers.lock().expect("mesh peers poisoned");
         if let Some(entry) = peers.get_mut(node) {
+            if entry.generation != generation {
+                return;
+            }
             if entry.peer.state != PeerState::Closed {
                 entry.peer.state = PeerState::Unreachable;
             }
@@ -1088,9 +1295,13 @@ impl MeshNode {
         }
     }
 
-    fn mark_closed(&self, node: &NodeId) {
+    /// Stale-epoch guard, as [`MeshNode::mark_unreachable`].
+    fn mark_closed(&self, node: &NodeId, generation: u64) {
         let mut peers = self.peers.lock().expect("mesh peers poisoned");
         if let Some(entry) = peers.get_mut(node) {
+            if entry.generation != generation {
+                return;
+            }
             entry.peer.state = PeerState::Closed;
             entry.link = None;
         }

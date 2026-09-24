@@ -1,0 +1,35 @@
+[package]
+name = "apeireth-mesh-quic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth Mesh Phase 2A: authenticated QUIC transport. The TLS certificate key IS the mesh identity key; peers are pinned by public-key fingerprint. Moves bytes only — ownership, routing and governance stay above the transport boundary."
+
+[dependencies]
+apeireth-core = { path = "../../foundation/core" }
+apeireth-mesh-protocol = { path = "../../foundation/mesh-protocol" }
+apeireth-mesh = { path = "../mesh" }
+quinn = { version = "0.11", default-features = false, features = ["rustls", "runtime-tokio", "ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging"] }
+rcgen = "0.13"
+ring = "0.17"
+tokio = { workspace = true, features = ["full"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+apeireth-plugin = { path = "../../foundation/plugin" }
+apeireth-protocol = { path = "../../foundation/protocol" }
+apeireth-governance = { path = "../../foundation/governance" }
+apeireth-runtime = { path = "../runtime" }
+
+[lib]
+name = "apeireth_mesh_quic"
+path = "src/lib.rs"
+
+[lints]
+workspace = true

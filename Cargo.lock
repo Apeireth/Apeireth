@@ -471,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-mesh"
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.4"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -479,21 +479,44 @@ dependencies = [
  "apeireth-plugin",
  "apeireth-protocol",
  "async-trait",
+ "ring",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 1.0.69",
  "tokio",
 ]
 
 [[package]]
 name = "apeireth-mesh-protocol"
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.4"
 dependencies = [
  "apeireth-core",
  "apeireth-protocol",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "apeireth-mesh-quic"
+version = "2.0.0-rc.4"
+dependencies = [
+ "apeireth-core",
+ "apeireth-governance",
+ "apeireth-mesh",
+ "apeireth-mesh-protocol",
+ "apeireth-plugin",
+ "apeireth-protocol",
+ "apeireth-runtime",
+ "async-trait",
+ "quinn",
+ "rcgen",
+ "ring",
+ "rustls",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
@@ -3134,6 +3157,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
+name = "pem"
+version = "3.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d30c53c26bc5b31a98cd02d20f25a7c8567146caf63ed593a9d87b2775291be"
+dependencies = [
+ "base64",
+ "serde_core",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3902,6 +3935,19 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "rcgen"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75e669e5202259b5314d1ea5397316ad400819437857b90861765f24c4cf80a2"
+dependencies = [
+ "pem",
+ "ring",
+ "rustls-pki-types",
+ "time",
+ "yasna",
 ]
 
 [[package]]
@@ -5659,6 +5705,15 @@ name = "y4m"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5a4b21e1a62b67a2970e6831bc091d7b87e119e7f9791aef9702e3bef04448"
+
+[[package]]
+name = "yasna"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
+dependencies = [
+ "time",
+]
 
 [[package]]
 name = "yoke"
