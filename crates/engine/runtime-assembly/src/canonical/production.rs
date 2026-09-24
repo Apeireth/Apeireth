@@ -156,6 +156,8 @@ pub struct ProductionModulesConfig {
     pub partner_bond: bool,
     /// W2 §4.3 (2026-10-10, 默认关): 查询形态学自适应检索深度 (organ/morphology)。
     pub morphology_recall: bool,
+    /// W3 (2026-10-10, 默认关): community 社区分诊接检索前置 (需 graph 后端)。
+    pub community_triage: bool,
     /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册。
     pub education: bool,
     /// W2 §4.4 (2026-10-10, 默认关): 研究吸收批认知体操 (四算法实验性洞察)。
@@ -185,6 +187,7 @@ impl Default for ProductionModulesConfig {
             reflexion: false,
             partner_bond: false,
             morphology_recall: false,
+            community_triage: false,
             education: false,
             absorption_insight: false,
         }
@@ -387,6 +390,11 @@ impl ProductionModules {
             }
             if config.morphology_recall {
                 module = module.with_morphology_recall();
+            }
+            if config.community_triage {
+                if let Some(graph) = &backends.graph {
+                    module = module.with_community_triage(Arc::clone(graph));
+                }
             }
             modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }

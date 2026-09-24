@@ -690,6 +690,7 @@ async fn build_cognitive_modules_from_env(
         reflexion: reflexion_enabled,
         partner_bond: partner_bond_enabled_from_env(),
         morphology_recall: morphology_recall_enabled_from_env(),
+        community_triage: community_triage_enabled_from_env(),
         education: education_enabled_from_env(),
         absorption_insight: absorption_insight_enabled_from_env(),
         // shell/fetch 旋钮: 只注册工具; 执行许可由治理层 grant+approval 决定.
@@ -1424,6 +1425,14 @@ fn partner_bond_enabled_from_env() -> bool {
 /// (`APEIRETH_ENABLE_MORPHOLOGY_RECALL=1`; 温度另见 `APEIRETH_MORPHOLOGY_TEMPERATURE`)。
 fn morphology_recall_enabled_from_env() -> bool {
     std::env::var("APEIRETH_ENABLE_MORPHOLOGY_RECALL")
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// **W3 旋钮** (2026-10-10, 默认关): community 社区分诊接检索前置
+/// (`APEIRETH_ENABLE_COMMUNITY_TRIAGE=1`; 图谱 `all_facts` 全量读 + 双级路由)。
+fn community_triage_enabled_from_env() -> bool {
+    std::env::var("APEIRETH_ENABLE_COMMUNITY_TRIAGE")
         .ok()
         .is_some_and(|value| value.trim() == "1")
 }

@@ -127,6 +127,15 @@ pub trait KnowledgeGraphStore: Send + Sync {
     /// 从 subject 出发一跳 fact
     fn facts_from(&self, subject_id: &str, limit: u32) -> CapabilityResult<Vec<GraphFact>>;
 
+    /// 全量 fact 列举 (W3 community 消费契约扩展, 2026-10-10): 供社区检测/双级
+    /// 分诊 (`apeireth-memory::community`) 的被动分析。**默认空** —— 不能/不便
+    /// 枚举的 impl 无需改动; sqlite impl 覆写真查询。语义: 最近 limit 条
+    /// (按 valid_from_ms 降序); tombstone 过滤由 impl 自定。
+    fn all_facts(&self, limit: u32) -> CapabilityResult<Vec<GraphFact>> {
+        let _ = limit;
+        Ok(Vec::new())
+    }
+
     /// 从 from 出发一跳 link
     fn links_from(&self, from_id: &str, limit: u32) -> CapabilityResult<Vec<GraphLink>>;
 

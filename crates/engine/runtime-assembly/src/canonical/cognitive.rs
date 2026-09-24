@@ -517,6 +517,91 @@ mod absorption_insight_tests {
 }
 
 #[cfg(test)]
+mod community_triage_tests {
+    use super::*;
+
+    fn plugin_fact(
+        subject: &str,
+        predicate: &str,
+        object: &str,
+    ) -> apeireth_plugin::experience::GraphFact {
+        apeireth_plugin::experience::GraphFact {
+            id: format!("{subject}-{predicate}-{object}"),
+            subject_id: subject.into(),
+            subject_kind: "concept".into(),
+            predicate: predicate.into(),
+            object_id: object.into(),
+            object_kind: "concept".into(),
+            valid_from: 1,
+            valid_until: None,
+            source_episode_id: "ep".into(),
+            confidence: 0.9,
+        }
+    }
+
+    fn community_fact(
+        subject: &str,
+        predicate: &str,
+        object: &str,
+    ) -> apeireth_memory::amem_graph::GraphFact {
+        apeireth_memory::amem_graph::GraphFact {
+            id: format!("{subject}-{predicate}-{object}"),
+            chain: format!("{subject}|{predicate}|{object}"),
+            rev: 0,
+            subject: subject.into(),
+            predicate: predicate.into(),
+            object: object.into(),
+            valid_at: 1,
+            invalid_at: None,
+            importance: 9,
+        }
+    }
+
+    #[test]
+    fn conversion_maps_store_contract_to_community_contract() {
+        // plugin GraphFact (subject_id/object_id) → memory GraphFact (subject/object)。
+        let converted = plugin_facts_to_community_facts(&[plugin_fact("rust", "is", "fast")]);
+        assert_eq!(converted.len(), 1);
+        assert_eq!(converted[0].subject, "rust");
+        assert_eq!(converted[0].object, "fast");
+        assert_eq!(converted[0].predicate, "is");
+        assert_eq!(converted[0].chain, "rust|is|fast");
+    }
+
+    #[test]
+    fn overlay_entity_route_on_substring_hit() {
+        let facts = vec![community_fact("小明", "喜欢", "篮球")];
+        let text = community_overlay_text("小明在干什么", &facts).expect("entity route");
+        assert!(text.contains("命中实体"), "{text}");
+        assert!(text.contains("小明"), "{text}");
+    }
+
+    #[test]
+    fn overlay_broad_route_with_briefs() {
+        let facts = vec![
+            community_fact("a", "r", "b"),
+            community_fact("b", "r", "c"),
+            community_fact("x", "r", "y"),
+        ];
+        let text = community_overlay_text("讲讲图里都有什么", &facts).expect("broad route");
+        assert!(text.contains("社区"), "{text}");
+    }
+
+    #[test]
+    fn overlay_empty_inputs_degrade_to_none() {
+        // 0 装降级: 空 topic / 空 facts → None (不注入空 overlay)。
+        assert!(community_overlay_text("   ", &[community_fact("a", "r", "b")]).is_none());
+        assert!(community_overlay_text("topic", &[]).is_none());
+    }
+
+    #[test]
+    fn config_defaults_to_community_triage_off() {
+        let config = crate::canonical::production::CognitiveModuleConfig::default();
+        assert!(!config.community_triage, "community_triage 必须默认关");
+    }
+}
+
+#[cfg(test)]
 mod morphology_recall_tests {
     use super::morphology_recall_limit;
 
@@ -799,6 +884,89 @@ pub struct MemoryRecallModule {
     proactive_recall: Option<ProactiveRecallService>,
     /// W2 §4.3 (2026-10-10, 默认关): 查询形态学自适应检索深度。
     morphology_recall: bool,
+    /// W3 community 生产消费 (2026-10-10, 默认关): 图谱 store 句柄。
+    community_triage: Option<Arc<dyn apeireth_plugin::experience::KnowledgeGraphStore>>,
+}
+
+/// W3 community 分诊的图谱 fact 读取上限 (社区检测的被动分析输入规模)。
+pub const COMMUNITY_FACT_LIMIT: u32 = 200;
+
+/// 社区摘要 top-N (brief 内实体数)。
+pub const COMMUNITY_SUMMARY_TOP_N: usize = 5;
+
+/// Broad 路由的最大社区数。
+pub const COMMUNITY_MAX_BRIEFS: usize = 3;
+
+/// W3 community: plugin GraphFact (store 契约, subject_id/object_id) →
+/// memory GraphFact (community 分诊契约, subject/object) 的字段映射 (纯函数)。
+fn plugin_facts_to_community_facts(
+    facts: &[apeireth_plugin::experience::GraphFact],
+) -> Vec<apeireth_memory::amem_graph::GraphFact> {
+    facts
+        .iter()
+        .map(|fact| apeireth_memory::amem_graph::GraphFact {
+            id: fact.id.clone(),
+            chain: apeireth_memory::amem_graph::GraphFact::chain_key(
+                &fact.subject_id,
+                &fact.predicate,
+                &fact.object_id,
+            ),
+            rev: 0,
+            subject: fact.subject_id.clone(),
+            predicate: fact.predicate.clone(),
+            object: fact.object_id.clone(),
+            valid_at: fact.valid_from,
+            invalid_at: fact.valid_until,
+            importance: (fact.confidence * 10.0).clamp(0.0, 255.0) as u8,
+        })
+        .collect()
+}
+
+/// W3 community: 社区分诊 overlay 文本 (纯函数, 测试锚点):
+/// Entity 路由 = 命中实体提示 (实体链方向); Broad = 社区摘要 briefs。
+fn community_overlay_text(
+    topic: &str,
+    facts: &[apeireth_memory::amem_graph::GraphFact],
+) -> Option<String> {
+    if topic.trim().is_empty() {
+        return None;
+    }
+    let result = apeireth_memory::community::triage(
+        topic,
+        facts,
+        COMMUNITY_SUMMARY_TOP_N,
+        COMMUNITY_MAX_BRIEFS,
+    );
+    use apeireth_memory::community::Route;
+    match result.route {
+        Route::Entity => Some(format!(
+            "【社区分诊】命中实体: {} (实体链方向)",
+            result.matched_entities.join(", ")
+        )),
+        Route::Broad => {
+            if result.community_briefs.is_empty() {
+                None
+            } else {
+                Some(format!(
+                    "【社区分诊】{}\n{}",
+                    topic,
+                    result.community_briefs.join("\n")
+                ))
+            }
+        }
+    }
+}
+
+impl MemoryRecallModule {
+    /// W3 community 分诊 overlay (读 store → 转换 → 分诊; 0 装降级 = None)。
+    fn community_overlay(&self, topic: &str) -> Option<String> {
+        let store = self.community_triage.as_ref()?;
+        let facts = store.all_facts(COMMUNITY_FACT_LIMIT).ok()?;
+        if facts.is_empty() {
+            return None;
+        }
+        community_overlay_text(topic, &plugin_facts_to_community_facts(&facts))
+    }
 }
 
 /// W2 §4.3: 形态学自适应检索深度 (纯函数, 供 recall 前置与测试)。
@@ -836,6 +1004,7 @@ impl MemoryRecallModule {
             clock: None,
             proactive_recall: None,
             morphology_recall: false,
+            community_triage: None,
         }
     }
 
@@ -843,6 +1012,16 @@ impl MemoryRecallModule {
     #[must_use]
     pub fn with_morphology_recall(mut self) -> Self {
         self.morphology_recall = true;
+        self
+    }
+
+    /// W3 (2026-10-10): 接入社区分诊 (检索前置)。store 供 `all_facts` 全量读。
+    #[must_use]
+    pub fn with_community_triage(
+        mut self,
+        store: Arc<dyn apeireth_plugin::experience::KnowledgeGraphStore>,
+    ) -> Self {
+        self.community_triage = Some(store);
         self
     }
 
@@ -936,7 +1115,7 @@ impl AgentModule for MemoryRecallModule {
             if let Some(coord) = &self.coordinator {
                 let topic = topic_from_messages(ctx.messages);
                 let limit = morphology_recall_limit(&topic, self.limit, self.morphology_recall);
-                let query = MemoryRecallQuery::new(session.clone(), topic)
+                let query = MemoryRecallQuery::new(session.clone(), topic.clone())
                     .with_limit(limit)
                     .with_max_chars(self.max_context_chars);
                 let result = if let Some(proactive) = &self.proactive_recall {
@@ -983,8 +1162,13 @@ impl AgentModule for MemoryRecallModule {
                                 }
                             }
                         }
+                        let mut overlay = selected.overlay.clone();
+                        if let Some(community) = self.community_overlay(&topic) {
+                            overlay.push_str("\n\n");
+                            overlay.push_str(&community);
+                        }
                         ModuleOutcome::continue_()
-                            .with_prompt_overlay(PromptOverlay::system(selected.overlay))
+                            .with_prompt_overlay(PromptOverlay::system(overlay))
                     }
                     Ok(None) => {
                         if let Some(recorder) = &self.access_recorder {
