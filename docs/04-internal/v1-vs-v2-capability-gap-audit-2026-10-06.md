@@ -336,9 +336,25 @@ perception 不做 per-turn module
 | onering (OneRingLedger) | 🔴 → ✅ **[2026-10-10 五审纠错]** 账本本体**早已在 v2**: `memory/src/context_ledger.rs` (`ContextLedger`, 头注明写 "salvage of the companion ledger") = v1 OneRingLedger 完整打捞 (API 同构 + `DEFAULT_MAX_RECORDS=200` + 单调 seq + 计数 prune + 迁移 rekey); 原"仅元数据透传"观测遗漏了该模块。本次补**生产消费** (cli 回合记账, `APEIRETH_ENABLE_ONERING_LEDGER=1` 默认关, 台账 #58) |
 | 真文件/网络隔离 | 🔴 实测 `EnforcementLevel::Unsupported` (`process/linux.rs:62-67`), 仅进程树遏制 |
 | SDK 真实 HTTP/WS | 🔴 → 🟡 **[2026-10-10 W5]** HTTP 真传输已接: `apeireth-sdk` 6 工具 method + `invoke_tool` = 真 reqwest POST 平台 API 契约 (`/v1/tools/{tool}/invoke`, Bearer+JSON+有界超时+audit, 错误面 1:1), wiremock 61 测全绿; **WS (`invoke_stream`) 仍 stub** (`STUB_MODE` 守门, WS 服务端端点 = 后续项)。0 装纪律保持: STUB_MODE=true 只守 WS 层, 不假装 WS 可用 |
-| 三洋葱 L3-L5 | 🔴 未实现 (runtime 仅 L1-L2) |
+| 三洋葱 L3-L5 | 🔴 → ✅ **[2026-10-10 W3]** 三层全落地: 判定模型 (`core/onion_gate.rs`, v1 donor 移植 + r177 Kani 证明平移为 Rust 测试) + 物理执行面 (`OnionLayerHook` 接入生产治理管线末层, `APEIRETH_ENABLE_ONION_LAYER=1` 默认关); 仅真 Ed25519 多签留 v2.1 (0 装占位已载明) |
 
 ### 7.3 对结论的修正
+
+> **[2026-10-10 六审 — 全 Span 收官总表]** W1 沙箱 / W2 接线 / W3 真缺口 / W5 SDK
+> 四线主线全部闭环 (16 批, 台账 #45–#64, 详见 `handoff-w1-w5-closure-2026-10-10.md`):
+>
+> | §7.2 原缺口 | 终局 |
+> |---|---|
+> | community | ✅ 移植 + 生产消费全闭环 (#57/#64) |
+> | onering | ✅ 本体纠错 (context_ledger 打捞件) + CLI 消费 (#58); 多前端 = 剩余项 |
+> | experiment_field | ✅ 机制移植 (#59); 真 VM 后端 0 装留后续 |
+> | 真文件/网络隔离 | ✅ **W1 已反超 v1**: AppContainer 沙箱 + 双探针实证 (#49); v1 只有骨架 |
+> | SDK 真 HTTP/WS | 🟡 HTTP 真传输 (#61); WS 半场等服务端端点 |
+> | 三洋葱 L3-L5 | ✅ 三层全落地 (#55/#56) |
+> | thought_cluster | ✅ 早前已移植 (cluster_store.rs) |
+>
+> **剩余真缺口 = 0**（ HybridCognitiveRouter / ToolSynthesizer 为纯愿景项，v1 亦无）。
+> **剩余工作**均为需外部条件或专门批次的中件，逐项阻塞点见交接报告 §5。
 
 - §3.1 "🔴 0 真实施"应分两级读: **真缺口** (§7.2, 源码确证不存在) 与
   **库级已实现未接线** (§7.1, 占多数) —— 后者距生产化只差"装配 + 测试 + 门禁",
