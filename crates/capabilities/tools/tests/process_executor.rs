@@ -157,6 +157,29 @@ fn stderr_limit_truncates_and_reports() {
 }
 
 #[test]
+fn unbounded_usize_max_output_limits_are_refused() {
+    // L 组 (2026-09-24 审计): usize::MAX 的"近无界"输出上限必须 fail-closed
+    // (读取侧 take(max+1) 会回绕/panic), 调用方必须给真实的大数字。
+    for target in ["stdout", "stderr"] {
+        let mut limits = ProcessLimits::default();
+        if target == "stdout" {
+            limits.max_stdout_bytes = usize::MAX;
+        } else {
+            limits.max_stderr_bytes = usize::MAX;
+        }
+        let request = ProcessRequest::new(helper())
+            .with_args(["print", target, "10"])
+            .with_limits(limits);
+
+        let error = execute(&request).unwrap_err();
+        assert!(
+            matches!(error, ProcessError::InvalidConfiguration(ref m) if m.contains("usize::MAX")),
+            "{target}: expected InvalidConfiguration, got {error:?}"
+        );
+    }
+}
+
+#[test]
 fn large_stdout_and_stderr_do_not_deadlock() {
     let mut limits = ProcessLimits::default();
     limits.max_stdout_bytes = 300_000;
@@ -443,6 +466,39 @@ mod windows_tests {
                 let result = execute(&request).unwrap();
                 assert!(result.success(), "{}", text(&result.stderr));
                 assert_eq!(text(&result.stdout), "TOKEN_RESTRICTED\n");
+            }
+            _ => {
+                let error = execute(&request).unwrap_err();
+                assert!(
+                    matches!(error, ProcessError::IsolationRequirementUnsatisfied { .. }),
+                    "expected IsolationRequirementUnsatisfied, got {error:?}"
+                );
+            }
+        }
+    }
+
+    /// L 组 (2026-09-24 审计): 受限 token 路径不支持 raw_arg 逐字命令列尾。
+    /// 旧实现静默丢弃尾巴 (调用方以为生效实则丢失); 现在必须是明确的配置
+    /// 错误 (平台不支持 PrivilegeReduction 时照旧先报隔离未满足)。
+    #[test]
+    fn raw_arg_on_restricted_token_path_is_a_configuration_error() {
+        let capabilities = current_platform_capabilities();
+        let requirement = IsolationRequirement::new().require(
+            IsolationCapability::PrivilegeReduction,
+            EnforcementLevel::Enforced,
+        );
+        let request = ProcessRequest::new("cmd.exe")
+            .with_raw_arg(r#"/D /S /C "echo hi""#)
+            .with_isolation(requirement)
+            .with_limits(ProcessLimits::default());
+
+        match capabilities.privilege_reduction {
+            EnforcementLevel::Enforced => {
+                let error = execute(&request).unwrap_err();
+                assert!(
+                    matches!(error, ProcessError::InvalidConfiguration(ref m) if m.contains("raw_arg")),
+                    "expected InvalidConfiguration about raw_arg, got {error:?}"
+                );
             }
             _ => {
                 let error = execute(&request).unwrap_err();

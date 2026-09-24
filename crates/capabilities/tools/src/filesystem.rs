@@ -11,6 +11,7 @@
 //! process/filesystem sandbox.
 
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use apeireth_core::kernel::CapabilityId;
@@ -108,6 +109,13 @@ impl FilesystemTool {
             root.join(requested)
         };
 
+        // M13 (2026-09-24 审计): guardrail 前置守门接线 —— 路径解析前先过
+        // 词法层 (相对穿越 / 绝对敏感系统路径) 与绝对路径的 root 包含检查。
+        // 与下方 canonicalize 现实层校验构成双层: 守门拒词法攻击面, 现实层
+        // 拒 symlink 逃逸。
+        crate::guardrail::ToolGuardrail::verify_path_access(&root, &candidate)
+            .map_err(|e| FilesystemError::PermissionDenied(e.to_string()))?;
+
         let canonical = fs::canonicalize(&candidate).map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => {
                 FilesystemError::NotFound(format!("{}", candidate.display()))
@@ -161,26 +169,40 @@ impl FilesystemTool {
             }
             Err(e) => return self.tool_result_for_error(call, FilesystemError::Io(e.to_string())),
         };
+        let _ = metadata;
 
-        if metadata.len() > self.max_file_size {
+        // L 组 (2026-09-24 审计): 不再信任 metadata 预检的大小 —— 检查与使用
+        // 之间文件可能增长 (TOCTOU), read_to_string 会把增长后的整个文件读进
+        // 内存。改为 open + `Read::take(max+1)` 按实读字节判定: 实读 > max
+        // 即超限, 与增长竞态无关。
+        let mut content_bytes = Vec::new();
+        match fs::OpenOptions::new().read(true).open(&canonical) {
+            Ok(file) => {
+                let mut limited = file.take(self.max_file_size.saturating_add(1));
+                if let Err(e) = limited.read_to_end(&mut content_bytes) {
+                    return self.tool_result_for_error(call, FilesystemError::Io(e.to_string()));
+                }
+            }
+            Err(e) => return self.tool_result_for_error(call, FilesystemError::Io(e.to_string())),
+        }
+
+        if content_bytes.len() as u64 > self.max_file_size {
             return self.tool_result_for_error(
                 call,
                 FilesystemError::TooLarge(format!(
-                    "{} is {} bytes (limit {} bytes)",
+                    "{} exceeds the {} byte limit",
                     canonical.display(),
-                    metadata.len(),
                     self.max_file_size
                 )),
             );
         }
 
-        match fs::read_to_string(&canonical) {
+        match String::from_utf8(content_bytes) {
             Ok(content) => ToolResult::ok(&call.id, serde_json::Value::String(content)),
-            Err(e) if e.kind() == std::io::ErrorKind::InvalidData => self.tool_result_for_error(
+            Err(_) => self.tool_result_for_error(
                 call,
                 FilesystemError::NotUtf8(canonical.display().to_string()),
             ),
-            Err(e) => self.tool_result_for_error(call, FilesystemError::Io(e.to_string())),
         }
     }
 
@@ -380,6 +402,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn read_accepts_file_at_exactly_the_limit() {
+        // L 组: take(max+1) 语义 —— 恰好等于上限必须放行 (实读 == max 不截断)。
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("exact.txt"), "0123456789").unwrap();
+        let tool = FilesystemTool::new(dir.path().to_path_buf()).with_max_file_size(10);
+
+        let result = invoke(&tool, "read", "exact.txt").await;
+        assert!(result.is_ok(), "{}", result.render());
+        assert_eq!(result.render(), "0123456789");
+    }
+
+    #[tokio::test]
+    async fn read_rejects_one_byte_over_the_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("over.txt"), "0123456789a").unwrap();
+        let tool = FilesystemTool::new(dir.path().to_path_buf()).with_max_file_size(10);
+
+        let result = invoke(&tool, "read", "over.txt").await;
+        assert!(!result.is_ok());
+        assert!(result.render().contains("too large"), "{}", result.render());
+    }
+
+    #[tokio::test]
+    async fn read_rejects_absolute_path_outside_root() {
+        // M13 接线 + 现实层双重拒绝: root 外的绝对路径一律 permission denied。
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        let outside = base.path().join("outside.txt");
+        fs::create_dir(&root).unwrap();
+        fs::write(&outside, "secret").unwrap();
+
+        let result = invoke(&tool(&root), "read", outside.to_str().unwrap()).await;
+        assert!(!result.is_ok());
+        assert!(
+            result.render().contains("permission denied"),
+            "{}",
+            result.render()
+        );
+    }
+
+    #[tokio::test]
     async fn read_rejects_invalid_utf8() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("bad.bin"), [0xFF, 0xFE, 0x00, 0x01]).unwrap();
@@ -481,11 +544,17 @@ mod tests {
             "id_ed25519",
             "credentials.json",
             "secrets.production",
+            ".npmrc",
+            "token.txt",
         ] {
             fs::write(dir.path().join(path), "protected").unwrap();
         }
         fs::create_dir_all(dir.path().join(".ssh")).unwrap();
         fs::write(dir.path().join(".ssh/config"), "protected").unwrap();
+        fs::create_dir_all(dir.path().join(".kube")).unwrap();
+        fs::write(dir.path().join(".kube/config"), "protected").unwrap();
+        fs::create_dir_all(dir.path().join(".docker")).unwrap();
+        fs::write(dir.path().join(".docker/config.json"), "protected").unwrap();
         fs::create_dir_all(dir.path().join(".config/gcloud")).unwrap();
         fs::write(
             dir.path()
@@ -504,7 +573,11 @@ mod tests {
             "id_ed25519",
             "credentials.json",
             "secrets.production",
+            ".npmrc",
+            "token.txt",
             ".ssh/config",
+            ".kube/config",
+            ".docker/config.json",
             ".config/gcloud/application_default_credentials.json",
         ] {
             let read = invoke(&tool, "read", path).await;

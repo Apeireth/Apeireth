@@ -14,13 +14,15 @@ use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, ExecutionTrace, PendingApprovalView, Runtime,
     RuntimeError, TraceEvent, TurnOutcome, TurnRequest, TurnSecurityContext,
 };
-use axum::extract::{Query, State};
+use axum::extract::{Query, Request, State};
 use axum::http::StatusCode;
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
+use tower_http::cors::AllowOrigin;
 
 use crate::admin::{admin_config_get, admin_config_update, GatewayRuntimeConfig};
 use crate::error_frame::{ErrorCode, ErrorFrame};
@@ -484,6 +486,104 @@ pub fn canonical_router_with_services(runtime: Arc<Runtime>, services: GatewaySe
     canonical_router_with_state(build_gateway_state_with_services(runtime, services))
 }
 
+// ---------------------------------------------------------------------------
+// H1 (2026-09-24 安全审计): 本地来源白名单 + 可选 loopback 令牌门
+// ---------------------------------------------------------------------------
+
+/// H1: CORS 只放行本地桌面件来源 (Tauri WebView 与本机开发服务器)。
+///
+/// gateway 零认证 + `CorsLayer::permissive` 的组合意味着用户浏览器里任意
+/// 网页都能跨源调用本网关 —— 驱动 agent、代替主人批准工具调用
+/// (`/v1/approvals/resolve`)、读取全部会话与记忆 (panel 族路由)、热改
+/// provider base_url (`/v1/admin/config`)。本谓词把可跨源访问本 gateway
+/// 的页面收敛到 Tauri 桌面件与本机回环开发服务器。
+fn is_allowed_local_origin(origin: &axum::http::HeaderValue) -> bool {
+    let Ok(text) = origin.to_str() else {
+        return false;
+    };
+    // Windows WebView2 的 Tauri 源是裸 `tauri://localhost` (无 path 可借)。
+    if text == "tauri://localhost" {
+        return true;
+    }
+    // 其余按 `<scheme>://<host>[:port]` 手工解析 (gateway 无 url 依赖)。
+    let Some((scheme, rest)) = text.split_once("://") else {
+        return false;
+    };
+    if !matches!(scheme, "http" | "https") {
+        return false;
+    }
+    // host 段 = authority 去掉 userinfo / path / query / fragment。
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let authority = authority.rsplit('@').next().unwrap_or(authority);
+    let host = match authority.rsplit_once(':') {
+        // 只把"最后一段是纯数字"当端口剥掉; IPv6 字面量 [::1]:8080 同理。
+        Some((host, port)) if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => host,
+        _ => authority,
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    matches!(host, "tauri.localhost" | "localhost" | "127.0.0.1" | "::1")
+}
+
+/// H1: 可选的 loopback 令牌 (env `APEIRETH_GATEWAY_TOKEN`)。
+///
+/// 设置后, `/v1/admin/config` 与 `/v1/approvals/resolve` 要求
+/// `Authorization: Bearer <token>` (恒定时间比较)。未设置时放过 ——
+/// 浏览器向量已由 CORS 白名单收敛, 令牌门是给 LAN 暴露部署加的保险。
+static GATEWAY_TOKEN: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+fn gateway_token() -> &'static Option<String> {
+    GATEWAY_TOKEN.get_or_init(|| {
+        std::env::var("APEIRETH_GATEWAY_TOKEN")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    })
+}
+
+/// 恒定时间字节比较 (防时序侧信道)。
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (a, b) in left.iter().zip(right.iter()) {
+        diff |= a ^ b;
+    }
+    diff == 0
+}
+
+/// H1: 敏感端点 (admin 配置 / 审批解决) 的令牌门中间件。
+///
+/// 未配置 `APEIRETH_GATEWAY_TOKEN` 时透明放过 (桌面单用户场景); 配置后
+/// 缺失/错误的 Bearer 令牌分别返回 401 `auth_missing_key` / `auth_invalid_key`。
+async fn require_gateway_token(request: Request, next: Next) -> Response {
+    let Some(expected) = gateway_token() else {
+        return next.run(request).await;
+    };
+    let header = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+    let Some(token) = header.and_then(|value| value.strip_prefix("Bearer ")) else {
+        return ErrorFrame::response(
+            StatusCode::UNAUTHORIZED,
+            ErrorCode::AuthMissingKey,
+            "gateway token required for this endpoint",
+        )
+        .into_response();
+    };
+    if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
+        next.run(request).await
+    } else {
+        ErrorFrame::response(
+            StatusCode::UNAUTHORIZED,
+            ErrorCode::AuthInvalidKey,
+            "gateway token invalid",
+        )
+        .into_response()
+    }
+}
+
 /// Build the production router over an explicit [`GatewayState`] (lets tests
 /// keep a handle on the event bus).
 pub fn canonical_router_with_state(state: GatewayState) -> Router {
@@ -496,7 +596,11 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/chat", post(native_chat))
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals", get(list_pending_approvals))
-        .route("/v1/approvals/resolve", post(native_resolve_approval))
+        .route(
+            "/v1/approvals/resolve",
+            // H1: 代替人类批准工具调用的端点, 令牌门保护 (配置 APEIRETH_GATEWAY_TOKEN 时生效)。
+            post(native_resolve_approval).route_layer(middleware::from_fn(require_gateway_token)),
+        )
         .route(
             "/v1/sessions/:session_id/settings",
             get(crate::session_settings::get_session_settings)
@@ -505,20 +609,27 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/apeireth/events", get(events_handler))
         .route(
             "/v1/admin/config",
-            get(admin_config_get).post(admin_config_update),
+            // H1: 可热改 provider base_url / api_key 的端点, 令牌门保护。
+            get(admin_config_get)
+                .post(admin_config_update)
+                .route_layer(middleware::from_fn(require_gateway_token)),
         )
         .merge(panel_routes())
-        // CORS is mandatory, not optional: the desktop WebView is a distinct
-        // origin (tauri://localhost / http://tauri.localhost), and browsers
-        // enforce cross-origin policy even against loopback addresses. Without
-        // this layer every UI fetch fails with "backend unreachable or CORS
-        // refused" while curl probes keep passing — a real-world 2026-09-28
-        // failure that curl-only E2E could not see.
-        //
-        // The gateway binds 127.0.0.1 by default, so permissive CORS does not
-        // widen network exposure. Deployments that intentionally expose the
-        // gateway must replace this with an explicit trusted-origin policy.
-        .layer(tower_http::cors::CorsLayer::permissive())
+        // CORS 白名单 (H1, 2026-09-24 安全审计): 桌面 WebView 是独立源
+        // (tauri://localhost / http://tauri.localhost), 浏览器对回环地址同样
+        // 执行跨源策略 —— 没有这一层每个 UI fetch 都会被拒 (2026-09-28 真机
+        // 故障), 但 **permissive** 会让用户浏览器里任意网页获得同等能力
+        // (驱动 agent / 批准工具 / 读会话与记忆)。收敛为本地来源白名单:
+        // Tauri 源 + 本机回环开发服务器 (任意端口)。LAN 暴露部署
+        // (--bind 0.0.0.0) 需另配 APEIRETH_GATEWAY_TOKEN 令牌门。
+        .layer(
+            tower_http::cors::CorsLayer::new()
+                .allow_origin(AllowOrigin::predicate(|origin, _request_parts| {
+                    is_allowed_local_origin(origin)
+                }))
+                .allow_methods(tower_http::cors::Any)
+                .allow_headers(tower_http::cors::Any),
+        )
         .with_state(state)
 }
 
@@ -585,7 +696,7 @@ async fn list_models(
         let has_key = state
             .hot_config
             .read()
-            .expect("gateway hot config lock poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .api_key
             .is_some();
         let (code, message) = if has_key {
@@ -954,7 +1065,7 @@ fn hot_model_override(state: &GatewayState) -> Option<String> {
     let config = state
         .hot_config
         .read()
-        .expect("gateway hot config lock poisoned");
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     config
         .admin_model_set
         .then(|| config.model.clone())

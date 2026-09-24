@@ -90,6 +90,9 @@ impl LiveKitError {
     ///
     /// LiveKit API Key 格式: 通常 `APIxxxxxxxx` (32 chars, alphanumeric).
     /// 保守检查: 至少 10 chars, 全部 ASCII alphanumeric + `-` + `_`.
+    ///
+    /// **M-7 修复**: 错误消息 **0 回显 api_key 原值** — API Key 是秘密, 进错误串即
+    /// 随日志/面板泄露; 只报字符集规则, 0 带 key 内容.
     pub fn validate_api_key(api_key: &str) -> Result<(), Self> {
         if api_key.is_empty() {
             return Err(Self::ApiKeyMissing);
@@ -105,9 +108,11 @@ impl LiveKitError {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
         {
-            return Err(Self::ApiKeyInvalid(format!(
-                "api key contains invalid chars: `{api_key}` (only alphanumeric, `-`, `_` allowed)"
-            )));
+            // M-7: 只报规则, 0 回显 `{api_key}` 原值
+            return Err(Self::ApiKeyInvalid(
+                "api key contains invalid chars (only alphanumeric, `-`, `_` allowed; key redacted)"
+                    .to_string(),
+            ));
         }
         Ok(())
     }
@@ -195,10 +200,12 @@ mod tests {
     fn k1_validate_api_key_invalid_chars() {
         // 长度够但含非法字符
         let bad = "APIxxxxxxxx!@#$%";
-        assert!(matches!(
-            LiveKitError::validate_api_key(bad),
-            Err(LiveKitError::ApiKeyInvalid(_))
-        ));
+        let err = LiveKitError::validate_api_key(bad).unwrap_err();
+        assert!(matches!(err, LiveKitError::ApiKeyInvalid(_)));
+        // M-7: 错误消息 0 回显 api_key 原值
+        let msg = err.to_string();
+        assert!(!msg.contains(bad), "M-7: 错误消息 0 含 key 原值: {msg}");
+        assert!(msg.contains("redacted"), "M-7: 应标明 key 已脱敏: {msg}");
     }
 
     #[test]

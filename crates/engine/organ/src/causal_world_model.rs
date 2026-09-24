@@ -1086,7 +1086,7 @@ impl CausalWorldModel {
         let mut g = self
             .graph
             .lock()
-            .expect("CausalWorldModel mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *g = graph;
     }
 
@@ -1095,7 +1095,7 @@ impl CausalWorldModel {
         let mut g = self
             .graph
             .lock()
-            .expect("CausalWorldModel mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         g.add_node(node);
     }
 
@@ -1104,7 +1104,7 @@ impl CausalWorldModel {
         let mut g = self
             .graph
             .lock()
-            .expect("CausalWorldModel mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         g.add_edge(edge);
     }
 
@@ -1123,7 +1123,7 @@ impl CausalWorldModel {
         let g = self
             .graph
             .lock()
-            .expect("CausalWorldModel mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         g.clone()
     }
 
@@ -1131,7 +1131,7 @@ impl CausalWorldModel {
     pub fn edge_count(&self) -> usize {
         self.graph
             .lock()
-            .expect("CausalWorldModel mutex poisoned (0 装诚实)")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .len_edges()
     }
 
@@ -1139,7 +1139,7 @@ impl CausalWorldModel {
     pub fn node_count(&self) -> usize {
         self.graph
             .lock()
-            .expect("CausalWorldModel mutex poisoned (0 装诚实)")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .len_nodes()
     }
 

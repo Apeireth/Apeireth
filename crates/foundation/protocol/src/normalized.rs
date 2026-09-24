@@ -451,13 +451,22 @@ pub struct NormalizedUsage {
     pub total_tokens: u32,
 }
 
+/// M11 修复 (2026-09-24 审计): u64 → u32 安全收敛工具。上游 usage 字段返回
+/// > `u32::MAX` 的数值 (恶意/故障 vendor) 时, `as u32` 静默回绕 (配额/成本
+/// 数据被悄悄篡改); 本工具收敛到 `u32::MAX` 保留"溢出"信号。
+pub fn clamp_u32(value: u64) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
 impl NormalizedUsage {
     /// 创建
     pub fn new(prompt: u32, completion: u32) -> Self {
         Self {
             prompt_tokens: prompt,
             completion_tokens: completion,
-            total_tokens: prompt + completion,
+            // M11 修复 (2026-09-24 审计): 裸 `+` 在 debug 构建下
+            // `u32::MAX + x` 直接 panic; release 回绕成 0。
+            total_tokens: prompt.saturating_add(completion),
         }
     }
 }

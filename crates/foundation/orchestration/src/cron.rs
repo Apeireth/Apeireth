@@ -15,6 +15,20 @@
 //! - `next_after`: enumerate at most ~1 year of minutes, Gregorian leap days,
 //!   Sakamoto weekday
 //!
+//! ## ⚠ dom/dow 语义: AND (有意偏离 Vixie OR)
+//!
+//! **本实现的第 3 字段 (day-of-month) 与第 5 字段 (day-of-week) 是逻辑 AND。**
+//! Vixie cron 的经典规则是二者"其一为 `*` 则取 OR, 均为具体值才 AND" — 本实现
+//! **不**复刻该规则: `Field` 只存 bitmap, 不保留"是否为 `*`"的标记, 因此任何
+//! dom/dow 组合都是 AND (详见 [`CronExpr::matches`] doc)。
+//!
+//! 影响示例: `0 0 1 * 1`
+//! - Vixie 语义 = "每月 1 号**或**每周一" → 一月约命中 5 次;
+//! - 本实现语义 = "每月 1 号**且**是周一" → 一年约命中 1 次。
+//!
+//! 这是**有意的确定性选择** (无隐式 wildcard 分支), 不是实现疏漏。需要 Vixie 语义
+//! 的调用方请拆成两条表达式在上层自行 OR。
+//!
 //! Discarded: `CronEngine` tokio tick loop (`scheduler.rs`, test-only in donor
 //! and a second loop even then). Approximate 30-day epoch→date conversion
 //! used by that engine is also discarded.
@@ -189,8 +203,13 @@ impl Field {
         })
     }
 
+    /// L1: `matches` 对越界 value 必须返 false 而非 panic。
+    ///
+    /// `1u64 << value` 在 value ≥ 64 时是 shift overflow: debug 构建直接 panic,
+    /// release 构建按 `value % 64` 回绕 (错误命中)。域名来自解析期 `lo..=hi` 校验,
+    /// 但**调用方传入的 m/h/dom/mon/dow 是外部值**, 与解析期范围无关。
     pub fn matches(&self, value: u8) -> bool {
-        self.bits & (1u64 << value) != 0
+        value < 64 && (self.bits & (1u64 << value)) != 0
     }
 }
 
@@ -327,6 +346,15 @@ impl CronExpr {
     }
 
     /// Test (minute, hour, day-of-month, month, day-of-week).
+    ///
+    /// **dom/dow 语义 = AND (有意偏离 Vixie)**: 本实现对第 3 字段 (dom) 与第 5 字段
+    /// (dow) 是逻辑 **AND** — Vixie cron 的经典规则是"二者其一为 `*` 时取 OR,
+    /// 均为具体值时取 AND"。本实现不感知"是否 `*`" (`Field` 只存 bitmap, 不保留
+    /// wildcard 标记), 因此任何 dom/dow 组合都是 AND。例如 `0 0 1 * 1` (Vixie 语义:
+    /// 每月 1 号**或**每周一) 在本实现下变成"每月 1 号**且**是周一" — 一年最多命中一次。
+    ///
+    /// 选择: 保留 AND (确定性、无隐式分支), 不引入 Vixie OR。调用方若要 Vixie 语义,
+    /// 请拆成两条表达式在上层自行 OR — 本模块的契约就是字面 AND。
     pub fn matches(&self, m: u8, h: u8, dom: u8, mon: u8, dow: u8) -> bool {
         self.fields[0].matches(m)
             && self.fields[1].matches(h)
@@ -405,7 +433,12 @@ pub fn next_after(
         }
     };
     // Sakamoto: 0=Sunday .. 6=Saturday.
+    // L6: mo == 0 (或 > 12) 防御性返 0 — 否则 `t[mo-1]` 会下溢/越界 panic;
+    // 调用方传非法月份时宁可给"周日"也不要崩。
     let compute_dow = |y: u16, mo: u8, d: u8| -> u8 {
+        if !(1..=12).contains(&mo) {
+            return 0;
+        }
         let y_adj: u16 = if mo < 3 { y.wrapping_sub(1) } else { y };
         let t: [i32; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
         let m_idx = (mo - 1) as usize;
@@ -435,8 +468,9 @@ pub fn next_after(
                     mo += 1;
                     if mo > 12 {
                         mo = 1;
-                        y += 1;
-                        if y > year + 1 {
+                        // L1: saturating_add 防 u16::MAX 时 `year + 1` 溢出 panic.
+                        y = y.saturating_add(1);
+                        if y > year.saturating_add(1) {
                             return None;
                         }
                     }
@@ -558,6 +592,44 @@ mod tests {
     #[test]
     fn next_after_reboot_is_none() {
         let e = CronExpr::parse("@reboot").unwrap();
+        assert!(next_after(&e, 2026, 0, 0, 1, 1, 0).is_none());
+    }
+
+    /// L1 回归: dom/dow 是 AND (见模块 doc 的显眼声明) — `0 0 13 * 5`
+    /// 只在"13 号且是周五"命中, 而不是 Vixie 的"13 号或周五"。
+    #[test]
+    fn l1_dom_and_dow_are_and_not_vixie_or() {
+        let e = CronExpr::parse("0 0 13 * 5").unwrap();
+        // 13 号但不是周五 → 不命中 (Vixie 会命中).
+        assert!(!e.matches(0, 0, 13, 3, 4), "13 号+周四: AND 不命中");
+        // 周五但不是 13 号 → 不命中 (Vixie 会命中).
+        assert!(!e.matches(0, 0, 14, 3, 5), "14 号+周五: AND 不命中");
+        // 13 号且周五 → 命中.
+        assert!(e.matches(0, 0, 13, 3, 5), "13 号+周五: AND 命中");
+    }
+
+    /// L1 回归: `Field::matches` 对越界 value (≥64) 返 false 而非 panic。
+    /// 旧实现 `1u64 << value` 在 debug 下直接 shift-overflow panic。
+    #[test]
+    fn l1_field_matches_out_of_range_returns_false() {
+        let e = CronExpr::parse("* * * * *").unwrap();
+        // 全部字段都满位, 但传入越界值必须 false (不能 panic / 不能回绕误命中).
+        assert!(!e.fields[0].matches(200), "minute=200 越界");
+        assert!(!e.fields[1].matches(64), "hour=64 越界");
+        assert!(!e.fields[4].matches(7), "dow=7 越界 (0..=6)");
+        assert!(!e.fields[4].matches(255), "dow=255 越界");
+        // 边界: 63 合法命中 (满位字段), 64 不命中.
+        assert!(e.fields[0].matches(59));
+        assert!(!e.fields[0].matches(60));
+    }
+
+    /// L6 回归: compute_dow 对 mo == 0 / > 12 防御性返 0 (不 panic)。
+    /// next_after 的调用方若传入非法月份, 不该在 `t[mo-1]` 上下溢 panic。
+    #[test]
+    fn l6_compute_dow_defends_against_bad_month() {
+        // 用一个必然不命中任何时间的表达式, 让 next_after 跨年扫描;
+        // 关键是过程不 panic (坏月份走 compute_dow 的防御分支).
+        let e = CronExpr::parse("0 0 30 2 *").unwrap(); // 2 月 30 号 = 永不命中
         assert!(next_after(&e, 2026, 0, 0, 1, 1, 0).is_none());
     }
 

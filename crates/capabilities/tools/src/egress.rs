@@ -213,6 +213,14 @@ impl EgressPolicy {
     ///
     /// `PublicInternetOnly` is conservative: if any resolved address is not
     /// public, the whole destination is denied.
+    ///
+    /// M12 (2026-09-24 审计): `ExplicitAllowList` 不再对解析结果放任——
+    /// allowlisted 主机名在表内, 但其 DNS 可能指向 169.254.169.254 (云元
+    /// 数据) / 内网 / 回环, 而重定向链上每跳只重查主机名不查 IP, 表内主机
+    /// 名即可被打穿。主机名解析出的地址落入 Loopback/LinkLocal/Private/
+    /// Unspecified/Broadcast 一律拒绝。IP 字面量目的地保持"显式入表即
+    /// 信任" (运维显式放行本地/元数据地址的配置语义, `direct_ip_transport_
+    /// works` 锚定)。
     pub fn validate_resolved(
         &self,
         destination: &EgressDestination,
@@ -242,7 +250,30 @@ impl EgressPolicy {
                 }
                 Ok(())
             }
-            Self::ExplicitAllowList(_) => Ok(()),
+            Self::ExplicitAllowList(_) => {
+                // 仅约束主机名目的地; IP 字面量 = 显式入表即信任。
+                if destination.address.is_none() {
+                    for addr in addresses {
+                        if matches!(
+                            classify_ip(addr.ip()),
+                            EgressIpClass::Loopback
+                                | EgressIpClass::LinkLocal
+                                | EgressIpClass::Private
+                                | EgressIpClass::Unspecified
+                                | EgressIpClass::Broadcast
+                        ) {
+                            return Err(EgressError::DestinationDenied {
+                                reason: format!(
+                                    "allow-listed host {} resolved to non-routable address {}",
+                                    destination.host,
+                                    addr.ip()
+                                ),
+                            });
+                        }
+                    }
+                }
+                Ok(())
+            }
             Self::Unrestricted => Ok(()),
         }
     }
@@ -802,12 +833,13 @@ mod tests {
         let resolver = Arc::new(FakeResolver {
             addrs: vec![SocketAddr::new("127.0.0.1".parse().unwrap(), port)],
         });
-        let transport = ControlledEgress::new(EgressPolicy::ExplicitAllowList(allowlist(&[(
-            "pinned.invalid",
-            None,
-        )])))
-        .with_timeout(Duration::from_secs(5))
-        .with_max_response_bytes(1024);
+        // M12 (2026-09-24): ExplicitAllowList 现在校验主机名解析出的 IP
+        // (回环/内网/链路本地拒绝), 本测试的桩 resolver 只能给 loopback 地址,
+        // 故用 Unrestricted 策略测"解析 → 钉扎 → 连接"机制本身 (钉扎逻辑与
+        // 策略无关; allowlist 的 IP 校验由专门的 validate_resolved 用例覆盖)。
+        let transport = ControlledEgress::new(EgressPolicy::Unrestricted)
+            .with_timeout(Duration::from_secs(5))
+            .with_max_response_bytes(1024);
         let transport = ControlledEgress {
             resolver,
             ..transport
@@ -832,8 +864,11 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
 
-        // Server that redirects to 127.0.0.1:<same port>/denied. Because the
-        // policy only allows `allowed.test`, the redirect must be denied.
+        // 首跳 = 入表的 IP 字面量 (M12 语义: 显式入表即信任, 会被真实联系),
+        // 服务器 302 到未入表的主机名 `allowed.test` —— 逐跳重验必须拒绝该
+        // 重定向。(M12 之前首跳是 allowlist 主机名 + 回环解析; 现在首跳即被
+        // IP 校验拒绝、服务器不会被联系, 故改用 IP 字面量首跳以保留对重定向
+        // 链路本身的覆盖。)
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut buf = [0u8; 1024];
@@ -842,7 +877,7 @@ mod tests {
             socket
                 .write_all(
                     format!(
-                        "HTTP/1.1 302 Found\r\nlocation: http://127.0.0.1:{}/denied\r\ncontent-length: 0\r\n\r\n",
+                        "HTTP/1.1 302 Found\r\nlocation: http://allowed.test:{}/denied\r\ncontent-length: 0\r\n\r\n",
                         port
                     )
                     .as_bytes(),
@@ -851,21 +886,14 @@ mod tests {
             .unwrap();
         });
 
-        let resolver = Arc::new(FakeResolver {
-            addrs: vec![SocketAddr::new("127.0.0.1".parse().unwrap(), port)],
-        });
         let transport = ControlledEgress::new(EgressPolicy::ExplicitAllowList(allowlist(&[(
-            "allowed.test",
+            "127.0.0.1",
             None,
         )])))
         .with_timeout(Duration::from_secs(5));
-        let transport = ControlledEgress {
-            resolver,
-            ..transport
-        };
 
         let err = transport
-            .get(&format!("http://allowed.test:{port}/"))
+            .get(&format!("http://127.0.0.1:{port}/"))
             .await
             .unwrap_err();
         assert!(
@@ -900,5 +928,84 @@ mod tests {
             .unwrap();
         assert_eq!(response.body, b"ok");
         server.await.unwrap();
+    }
+
+    // ---- M12 (2026-09-24 审计): allowlist 主机名解析 IP 校验 ----
+
+    #[test]
+    fn allowlist_denies_hostname_resolving_to_link_local_metadata() {
+        // 云元数据端点: 主机名在表内, DNS 指向 169.254.169.254 —— 必须拒。
+        let policy = EgressPolicy::ExplicitAllowList(allowlist(&[("metadata.corp", None)]));
+        let d = dest("http://metadata.corp");
+        let addrs = [SocketAddr::new("169.254.169.254".parse().unwrap(), 80)];
+        assert!(matches!(
+            policy.validate_resolved(&d, &addrs),
+            Err(EgressError::DestinationDenied { .. })
+        ));
+    }
+
+    #[test]
+    fn allowlist_denies_hostname_resolving_to_loopback_and_private() {
+        let policy = EgressPolicy::ExplicitAllowList(allowlist(&[("internal.test", None)]));
+        let d = dest("http://internal.test");
+        for ip in ["127.0.0.1", "10.0.0.1", "192.168.1.10", "0.0.0.0", "::1", "fc00::1"] {
+            let addrs = [SocketAddr::new(ip.parse().unwrap(), 80)];
+            assert!(
+                matches!(
+                    policy.validate_resolved(&d, &addrs),
+                    Err(EgressError::DestinationDenied { .. })
+                ),
+                "allow-listed host resolving to {ip} must be denied"
+            );
+        }
+    }
+
+    #[test]
+    fn allowlist_still_allows_hostname_resolving_to_public() {
+        let policy = EgressPolicy::ExplicitAllowList(allowlist(&[("example.com", None)]));
+        let d = dest("https://example.com");
+        let addrs = [SocketAddr::new("93.184.216.34".parse().unwrap(), 443)];
+        assert!(policy.validate_resolved(&d, &addrs).is_ok());
+    }
+
+    #[test]
+    fn allowlist_ip_literal_is_trusted_even_when_loopback() {
+        // IP 字面量目的地保持"显式入表即信任" (direct_ip_transport_works 的
+        // 语义锚点; 主机名才做解析 IP 校验)。
+        let policy = EgressPolicy::ExplicitAllowList(allowlist(&[("127.0.0.1", None)]));
+        let d = dest("http://127.0.0.1:8080");
+        let addrs = [SocketAddr::new("127.0.0.1".parse().unwrap(), 8080)];
+        assert!(policy.validate_resolved(&d, &addrs).is_ok());
+    }
+
+    #[tokio::test]
+    async fn allowlisted_hostname_pointing_at_loopback_is_denied_before_contact() {
+        // 端到端: allowlist 主机名 + 桩 resolver 指回环 —— 在联系服务器之前
+        // 就被 validate_resolved 拒绝 (M12 纵深)。
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        // 断言服务器永不被联系: 直接丢弃 listener, 若有连接会即刻 RST。
+        drop(listener);
+
+        let resolver = Arc::new(FakeResolver {
+            addrs: vec![SocketAddr::new("127.0.0.1".parse().unwrap(), port)],
+        });
+        let transport = ControlledEgress::new(EgressPolicy::ExplicitAllowList(allowlist(&[(
+            "sneaky.invalid",
+            None,
+        )])))
+        .with_timeout(Duration::from_secs(5));
+        let transport = ControlledEgress {
+            resolver,
+            ..transport
+        };
+        let err = transport
+            .get(&format!("http://sneaky.invalid:{port}/"))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, EgressError::DestinationDenied { .. }),
+            "expected DestinationDenied, got {err:?}"
+        );
     }
 }

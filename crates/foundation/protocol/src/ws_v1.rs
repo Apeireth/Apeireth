@@ -27,6 +27,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::ProtocolError;
+
 /// **WS 协议版本** (编译期 hardcode, 跟蓝图的 `ws_version` 字段对齐).
 ///
 /// **不漂移原则** (主 17:58 不假装): 一旦 bump 必跟 `apeireth-api` 的 WS upgrade 校验同步.
@@ -276,6 +278,75 @@ pub struct ErrorFrame {
     pub message: String,
     /// 是否致命 (true = server 立即 close)
     pub fatal: bool,
+}
+
+// ============================================================================
+// 帧字段上限校验 (M8 修复, 2026-09-24 审计)
+// ============================================================================
+
+/// 单个字符串字段的最大 UTF-8 字节数 (token / chunk / reason / message 等)。
+///
+/// M8 修复 (2026-09-24 审计): 原实现所有帧字段零长度/字符集校验 —— 单帧即可
+/// 携带 GB 级 token/chunk/args (JSON 嵌套深度有 serde_json 128 层默认上限
+/// 兜底, 线性大小无上限) → 单连接内存 DoS。上限在此声明, 由 transport 层
+/// 在解码后调用 [`WsFrame::validate`] 强制执行。
+pub const WS_MAX_FRAME_STRING_BYTES: usize = 1024 * 1024;
+
+/// `args` 序列化后的最大字节数。
+pub const WS_MAX_FRAME_ARGS_BYTES: usize = 1024 * 1024;
+
+fn check_frame_field(name: &str, value: &str) -> Result<(), ProtocolError> {
+    if value.len() > WS_MAX_FRAME_STRING_BYTES {
+        return Err(ProtocolError::invalid(
+            name,
+            format!("exceeds {WS_MAX_FRAME_STRING_BYTES} bytes"),
+        ));
+    }
+    Ok(())
+}
+
+impl WsFrame {
+    /// 帧字段上限校验 (M8)。transport 层解码后必须调用; 超限即拒帧,
+    /// 防止单帧内存 DoS。
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        match self {
+            Self::ToolInvoke(f) => {
+                check_frame_field("tool_invoke.tool", &f.tool)?;
+                check_frame_field("tool_invoke.action", &f.action)?;
+                check_frame_field("tool_invoke.req_id", &f.req_id)?;
+                let size = f.args.to_string().len();
+                if size > WS_MAX_FRAME_ARGS_BYTES {
+                    return Err(ProtocolError::invalid(
+                        "tool_invoke.args",
+                        format!("exceeds {WS_MAX_FRAME_ARGS_BYTES} bytes"),
+                    ));
+                }
+                Ok(())
+            }
+            Self::ToolResult(f) => {
+                check_frame_field("tool_result.req_id", &f.req_id)?;
+                if let Some(error) = &f.error {
+                    check_frame_field("tool_result.error", error)?;
+                }
+                Ok(())
+            }
+            Self::StreamChunk(f) => {
+                check_frame_field("stream_chunk.req_id", &f.req_id)?;
+                check_frame_field("stream_chunk.chunk", &f.chunk)
+            }
+            Self::StreamEnd(f) => check_frame_field("stream_end.req_id", &f.req_id),
+            Self::Ping(_) => Ok(()),
+            Self::Auth(f) => {
+                check_frame_field("auth.token", &f.token)?;
+                check_frame_field("auth.ws_version", &f.ws_version)
+            }
+            Self::Close(f) => check_frame_field("close.reason", &f.reason),
+            Self::Error(f) => {
+                check_frame_field("error.code", &f.code)?;
+                check_frame_field("error.message", &f.message)
+            }
+        }
+    }
 }
 
 // ============================================================================

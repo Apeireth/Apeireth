@@ -198,15 +198,17 @@ pub fn parse_response(
         });
     }
 
+    // M11: usage 读数按 u32 封顶。`as u32` 对 > u32::MAX 的 vendor 值在
+    // debug 构建 panic、release 静默截断 —— 两者都不是可接受的记账语义。
+    // 缺失/非数字字段仍是 0 (usage 从不臆造)。
     let usage = body
         .get("usage")
         .map(|u| NormalizedUsage {
-            prompt_tokens: u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            completion_tokens: u
-                .get("completion_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
-            total_tokens: u.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            prompt_tokens: token_count(u, "prompt_tokens"),
+            completion_tokens: token_count(u, "completion_tokens"),
+            // total 直接读 vendor 自报值 (封顶), 保持与旧实现相同的语义,
+            // 不回绕也不臆造。
+            total_tokens: token_count(u, "total_tokens"),
         })
         .unwrap_or_default();
 
@@ -237,10 +239,24 @@ pub fn parse_response(
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string();
+            // M20 (provider 侧): 模型输出畸形 arguments JSON 时, 旧实现
+            // `.ok()` 静默吞为 `Value::Null` —— 排障困难, 且工具侧会拿到
+            // 一个看起来像"无参数"的调用。这里 fail-loud: 带说明的
+            // BadResponse, 让调用方看到是哪一次 tool call 的参数坏掉。
             let arguments = function
                 .get("arguments")
                 .and_then(|v| v.as_str())
-                .and_then(|s| serde_json::from_str(s).ok())
+                .map(|raw| {
+                    serde_json::from_str(raw).map_err(|error| {
+                        ProviderError::BadResponse {
+                            provider: provider_owned.clone(),
+                            detail: format!(
+                                "tool call {id:?} ({name}) has malformed arguments JSON: {error}"
+                            ),
+                        }
+                    })
+                })
+                .transpose()?
                 .unwrap_or(serde_json::Value::Null);
             tool_calls.push(ToolCall {
                 id,
@@ -263,6 +279,21 @@ pub fn parse_response(
         tool_calls,
         raw_metadata: serde_json::Map::new(),
     })
+}
+
+/// Read one usage counter and clamp it into `u32` (M11).
+///
+/// `as u32` on a vendor-reported count panics in debug builds and silently
+/// truncates in release builds when the value exceeds `u32::MAX`; both are
+/// unacceptable accounting semantics. Clamping to `u32::MAX` keeps an
+/// obviously-overflowing value instead of pretending it is precise. A missing
+/// or non-numeric field stays `0` (usage is never fabricated).
+fn token_count(usage: &serde_json::Value, key: &str) -> u32 {
+    usage
+        .get(key)
+        .and_then(|v| v.as_u64())
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+        .unwrap_or(0)
 }
 
 /// Classify a vendor HTTP outcome into a canonical [`ProviderError`].
@@ -480,6 +511,64 @@ mod tests {
         let resp = parse_response(body, "m", "provider.test").unwrap();
         assert_eq!(resp.usage, NormalizedUsage::default());
         assert_eq!(resp.finish_reason, Some(NormalizedFinishReason::Length));
+    }
+
+    /// M11 回归: > u32::MAX 的 usage 计数不得 `as u32` (debug panic /
+    /// release 静默截断), 封顶为 u32::MAX。
+    #[test]
+    fn parse_response_clamps_overflowing_usage_counters() {
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": u64::from(u32::MAX) + 3,
+                "completion_tokens": u64::from(u32::MAX) + 5,
+                "total_tokens": u64::from(u32::MAX) + 11,
+            }
+        });
+        let resp = parse_response(body, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_tokens, u32::MAX);
+        assert_eq!(resp.usage.completion_tokens, u32::MAX);
+        assert_eq!(resp.usage.total_tokens, u32::MAX);
+    }
+
+    /// M20 (provider 侧) 回归: 畸形 arguments JSON 必须 fail-loud, 不再静默
+    /// 吞为 `Value::Null` (那会让工具侧看到一个"无参数"的假调用)。
+    #[test]
+    fn parse_response_rejects_malformed_tool_arguments() {
+        let body = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "call_bad",
+                        "type": "function",
+                        "function": {"name": "tool.shell", "arguments": "{\"command\": "}
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }]
+        });
+        let err = parse_response(body, "m", "provider.test").expect_err("must fail");
+        assert!(matches!(err, ProviderError::BadResponse { .. }), "{err:?}");
+        let ProviderError::BadResponse { detail, .. } = err else {
+            unreachable!("asserted above");
+        };
+        assert!(detail.contains("call_bad"), "{detail}");
+        assert!(detail.contains("malformed arguments"), "{detail}");
+    }
+
+    /// 合法 arguments 与非字符串 (缺失) 形态保持原语义: 前者解析, 后者 Null。
+    #[test]
+    fn parse_response_absent_tool_arguments_stay_null() {
+        let body = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{"id": "call_ok", "function": {"name": "t"}}]
+                },
+                "finish_reason": "tool_calls"
+            }]
+        });
+        let resp = parse_response(body, "m", "provider.test").unwrap();
+        assert_eq!(resp.tool_calls[0].arguments, serde_json::Value::Null);
     }
 
     #[test]

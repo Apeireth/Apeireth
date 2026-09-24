@@ -470,11 +470,13 @@ impl DurableRun {
 
     fn value_preview(value: &Value) -> String {
         let s = value.to_string();
-        if s.len() <= 128 {
-            s
-        } else {
-            format!("{}…", &s[..128])
+        // 按 char 而非 byte 截断: 多字节 UTF-8 被 `&s[..128]` 切在字符边界上会 panic
+        // (同 crate context_fold/fold.rs:143-158 find_boundary 的同源问题)。
+        let mut preview: String = s.chars().take(128).collect();
+        if s.chars().count() > 128 {
+            preview.push('…');
         }
+        preview
     }
 }
 
@@ -882,5 +884,39 @@ mod tests {
             "first activity replayed, second executed once"
         );
         assert_eq!(resumed.history().len(), 6);
+    }
+
+    /// 回归 (H2): value_preview 曾用 `&s[..128]` 字节切片, 多字节 UTF-8 (中文/emoji)
+    /// 落在非字符边界即 panic; 且 128 字节对 ASCII 恰好是 128 字符但仅约 42 个中文字符。
+    #[test]
+    fn value_preview_truncates_on_char_boundary() {
+        // 短值原样返回, 不加省略号。
+        assert_eq!(DurableRun::value_preview(&json!("短")), "\"短\"");
+
+        // 恰 128 字符 (含 JSON 引号): 无省略号。
+        let exact = "x".repeat(126); // 126 + 2 个引号 = 128
+        let preview = DurableRun::value_preview(&json!(exact));
+        assert_eq!(preview, format!("\"{exact}\""));
+        assert!(!preview.ends_with('…'));
+        assert_eq!(preview.chars().count(), 128);
+
+        // 超长 ASCII: 截到 128 字符 + "…" (总长 129)。
+        let long = "y".repeat(200);
+        let preview = DurableRun::value_preview(&json!(long));
+        assert_eq!(preview.chars().count(), 129);
+        assert!(preview.ends_with('…'));
+
+        // 超长中文: 必须按 char 截断而不是字节 (旧实现会 panic)。
+        let zh = "复".repeat(300);
+        let preview = DurableRun::value_preview(&json!(zh));
+        assert_eq!(preview.chars().count(), 129);
+        assert!(preview.is_char_boundary(preview.len()));
+        assert!(preview.ends_with('…'));
+
+        // emoji (4 字节/char): 同样不能 panic。
+        let emoji = "🎉".repeat(300);
+        let preview = DurableRun::value_preview(&json!(emoji));
+        assert_eq!(preview.chars().count(), 129);
+        assert!(preview.ends_with('…'));
     }
 }

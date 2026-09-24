@@ -467,6 +467,54 @@ async fn the_gateway_answers_cors_for_webview_origins() {
     }
 }
 
+/// H1 (2026-09-24 安全审计): permissive CORS 已收敛为本地来源白名单 ——
+/// 任意公网网页不得拿回 `access-control-allow-origin`。否则用户浏览器里
+/// 任一恶意页面都能跨源驱动本网关 (chat / approvals/resolve / admin config)。
+#[tokio::test]
+async fn the_gateway_refuses_cors_for_non_local_origins() {
+    let resolver: Arc<dyn CredentialResolver> = Arc::new(StaticCredentials::new());
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(frozen_clock())
+            .with_session_store(Arc::new(InMemorySessionStore::new()))
+            .with_governance(Arc::new(AllowAll))
+            .with_credentials(resolver)
+            .with_default_model(MODEL)
+            .build()
+            .await
+            .expect("runtime builds"),
+    );
+
+    for origin in [
+        "https://evil.example.com",
+        "http://tauri.localhost.evil.com",
+        "http://127.0.0.1.evil.com",
+        "null",
+    ] {
+        let request = Request::builder()
+            .uri("/health")
+            .method("GET")
+            .header("Origin", origin)
+            .body(Body::empty())
+            .unwrap();
+        let response = canonical_router(Arc::clone(&runtime))
+            .oneshot(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let allow_origin = response
+            .headers()
+            .get("access-control-allow-origin")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        assert!(
+            allow_origin.is_empty(),
+            "non-local origin {origin} must not be echoed back, got: {allow_origin}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn the_gateway_serves_sse_stream_chat_completions() {
     let server = MockServer::start(openai_success_body()).await;

@@ -34,7 +34,7 @@
 
 use apeireth_core::{
     Action, ActionGuard, ActionTarget, ActionVerdict, DefaultPhilosophyGuard, HAMode,
-    HumanAuthority, PermissionLayer, PermissionOnion, PhilosophyKey, RiskLevel,
+    HumanAuthority, PermissionLayer, PermissionOnion, PhilosophyKey, RealHuman, RiskLevel,
 };
 
 // ============================================
@@ -76,10 +76,23 @@ fn default_permission_onion() -> PermissionOnion {
     }
 }
 
+/// 测试用已登记真实人类 (HA 权威在场的最低成立条件)。
+fn real_human(id: &str) -> RealHuman {
+    RealHuman {
+        id: id.to_string(),
+        name: id.to_string(),
+        authentication: apeireth_core::HAAuthentication::MultiHuman,
+        biometric_data: None,
+    }
+}
+
 fn single_human_authority() -> HumanAuthority {
     HumanAuthority {
         mode: HAMode::SingleHuman,
-        real_humans: vec![],
+        // H2 修复 (2026-09-24 审计): 原夹具是空 real_humans —— 在线模式 vacuous
+        // 放行 (`_ => true`) 下照样 Allow, 等于把"V3 从未发生"固化为正确行为。
+        // 诚实语义: SingleHuman 模式必须有所登记的人类权威。
+        real_humans: vec![real_human("alice")],
         ice_frozen_until: None,
         multi_sign: None,
     }
@@ -88,7 +101,7 @@ fn single_human_authority() -> HumanAuthority {
 fn multi_human_authority() -> HumanAuthority {
     HumanAuthority {
         mode: HAMode::MultiHuman,
-        real_humans: vec![],
+        real_humans: vec![real_human("alice"), real_human("bob")],
         ice_frozen_until: None,
         multi_sign: None,
     }
@@ -250,6 +263,72 @@ fn n6_critical_normal_action_multi_human_allows() {
         verdict
     );
     eprintln!("✓ N6 PASS: Critical + NormalAction + MultiHuman → Allow");
+}
+
+/// N7 (H2 修复回归, 2026-09-24 审计): 在线模式但**零登记人类** = misconfigured
+/// HA —— Critical (L0 requires_ha) 必须 `BlockByHumanAuthority`。
+/// 原实现在线模式 `_ => true` 恒放行, 该状态检测不到。
+#[test]
+fn n7_critical_action_without_registered_humans_is_blocked() {
+    let guard = default_guard();
+    let permission = default_permission_onion();
+    let ha = HumanAuthority {
+        mode: HAMode::SingleHuman,
+        real_humans: vec![],
+        ice_frozen_until: None,
+        multi_sign: None,
+    };
+    let action = make_action(
+        "n7-crit-no-human",
+        "零登记人类的 SingleHuman 尝试关键操作",
+        RiskLevel::Critical,
+        ActionTarget::NormalAction("misconfigured ha".into()),
+    );
+    let verdict = ActionGuard::check_action(&action, &guard, &permission, &ha);
+    assert!(
+        matches!(verdict, ActionVerdict::BlockByHumanAuthority(_)),
+        "N7: Critical + 零登记人类 must BlockByHumanAuthority, got: {:?}",
+        verdict
+    );
+    eprintln!("✓ N7 PASS: Critical + 零登记人类 → BlockByHumanAuthority (V3 fail-closed)");
+}
+
+/// N8 (H2 修复回归): L4 层 `requires_ha=true` 时, High 动作在零登记人类模式下
+/// 必须被 V3 拒 (V2 真实解析层语义并交给 V3 执行), 有所登记人类时放行。
+#[test]
+fn n8_high_action_on_ha_required_layer_checks_registered_humans() {
+    let guard = default_guard();
+    let mut permission = default_permission_onion();
+    permission.l4.requires_ha = true;
+    let action = make_action(
+        "n8-high-l4-ha",
+        "L4 层要求 HA 的 High 操作",
+        RiskLevel::High,
+        ActionTarget::NormalAction("ha-gated high op".into()),
+    );
+
+    let no_humans = HumanAuthority {
+        mode: HAMode::SingleHuman,
+        real_humans: vec![],
+        ice_frozen_until: None,
+        multi_sign: None,
+    };
+    let verdict = ActionGuard::check_action(&action, &guard, &permission, &no_humans);
+    assert!(
+        matches!(verdict, ActionVerdict::BlockByHumanAuthority(_)),
+        "N8a: L4 requires_ha + 零登记人类 must Block, got: {:?}",
+        verdict
+    );
+
+    let with_human = single_human_authority();
+    let verdict = ActionGuard::check_action(&action, &guard, &permission, &with_human);
+    assert_eq!(
+        verdict,
+        ActionVerdict::Allow,
+        "N8b: L4 requires_ha + 已登记人类 must Allow, got: {:?}",
+        verdict
+    );
+    eprintln!("✓ N8 PASS: L4 requires_ha 层语义经 V3 真实执行 (无人类→拒 / 有人类→放)");
 }
 
 // ============================================

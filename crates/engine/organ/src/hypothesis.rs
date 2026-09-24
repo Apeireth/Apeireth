@@ -166,12 +166,21 @@ impl Default for HypothesisConfig {
 /// 假设库 (per v1 `HypothesisStore` 1:1 翻译).
 ///
 /// 0 装 PASS: 无 LLM 依赖. 全部状态可测, 4 态状态机 + 加权证据累积.
+///
+/// ## 有界性 (M7)
+///
+/// `items` 上限 [`MAX_HYPOTHESES`] 条 — 好奇引擎可无限登记可证伪命题,
+/// 无界 map 会让 organ 常驻内存随运行时长单调增长。超限淘汰**最旧**
+/// (按 id 最小, 即 `next_id` 序最老的条目)。
 #[derive(Debug)]
 pub struct HypothesisStore {
     config: HypothesisConfig,
     items: HashMap<u64, Hypothesis>,
     next_id: u64,
 }
+
+/// 假设库上限 (M7: 防无界增长). 超限淘汰最旧 (id 最小).
+pub const MAX_HYPOTHESES: usize = 1_000;
 
 impl HypothesisStore {
     pub fn new(config: HypothesisConfig) -> Self {
@@ -184,6 +193,16 @@ impl HypothesisStore {
 
     /// 登记猜想 (好奇/探索中发现的可证伪命题).
     pub fn conjecture(&mut self, statement: impl Into<String>) -> Hypothesis {
+        // M7: 有界化 — 超上限淘汰最旧 (id 最小, HashMap 无序故显式找 min).
+        while self.items.len() >= MAX_HYPOTHESES {
+            let oldest = self.items.keys().min().copied();
+            match oldest {
+                Some(id) => {
+                    self.items.remove(&id);
+                }
+                None => break,
+            }
+        }
         let h = Hypothesis {
             id: self.next_id,
             statement: statement.into(),
@@ -433,7 +452,7 @@ impl HypothesisOrgan {
         let mut store = self
             .store
             .lock()
-            .expect("HypothesisOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.conjecture(statement)
     }
 
@@ -442,7 +461,7 @@ impl HypothesisOrgan {
         let mut store = self
             .store
             .lock()
-            .expect("HypothesisOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.start_verify(id)
     }
 
@@ -451,7 +470,7 @@ impl HypothesisOrgan {
         let mut store = self
             .store
             .lock()
-            .expect("HypothesisOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.add_evidence(id, ev)
     }
 
@@ -460,7 +479,7 @@ impl HypothesisOrgan {
         let store = self
             .store
             .lock()
-            .expect("HypothesisOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.get(id).cloned()
     }
 
@@ -469,7 +488,7 @@ impl HypothesisOrgan {
         let store = self
             .store
             .lock()
-            .expect("HypothesisOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.list(status).into_iter().cloned().collect()
     }
 
@@ -478,7 +497,7 @@ impl HypothesisOrgan {
         let store = self
             .store
             .lock()
-            .expect("HypothesisOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.len()
     }
 
@@ -491,7 +510,7 @@ impl HypothesisOrgan {
         let planner = self
             .planner
             .lock()
-            .expect("HypothesisOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         planner.plan(h, observable)
     }
 
@@ -502,7 +521,7 @@ impl HypothesisOrgan {
         let mut sink = self
             .sink
             .lock()
-            .expect("HypothesisOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         sink.write_back(h)
     }
 }

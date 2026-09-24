@@ -515,8 +515,12 @@ char *apeireth_sdk_hash_request(const char *method,
 /**
  * **C-ABI fn #3**: `apeireth_sdk_version() -> *const c_char`.
  *
- * **不漂移**: 复用 `apeireth_sdk::version::SDK_VERSION` 公共 API, 0 改 workspace.version 1.2.0 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0).
- * 返 Rust static str, 生命周期 'static, 0 需要 free (1:1 libc `getenv` pattern).
+ * **不漂移**: 复用 `apeireth_sdk::version::SDK_VERSION` 公共 API, 0 改 workspace.version 1.2.0 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0)。
+ * 返 Rust `&'static CStr` 常驻指针, 生命周期 'static, **0 需要 free** (1:1 libc `getenv` pattern)。
+ *
+ * **L 组修复**: 改 `std::sync::OnceLock` 只分配一次 — 修复前每次调用 `CString::into_raw`
+ * 泄漏一个 CString 且头文件暗示免 free (同一 API 两套所有权契约)。统一契约:
+ * version()/compile_info() 返**常驻指针, caller 0 应 free** (per R123 注记原意落地)。
  */
 const char *apeireth_sdk_version(void);
 
@@ -525,14 +529,20 @@ const char *apeireth_sdk_version(void);
  *
  * 返 "rustc X.Y.Z target triple, apeireth-sdk features: `[python,node,c,default]`" 字面量.
  * 0 假装实际 rustc version (编译期 hardcode "unknown" + "cfg(apeireth_sdk)" marker).
+ *
+ * **L 组修复**: 同 fn #3 — `OnceLock` 只分配一次, 返**常驻指针, caller 0 应 free**
+ * (统一所有权契约, 消除每次调用泄漏一个 CString)。
  */
 const char *apeireth_sdk_compile_info(void);
 
 /**
  * **C-ABI fn #5**: `apeireth_sdk_free_string(ptr: *mut c_char)`.
  *
- * 释放 `apeireth_sdk_hash_request` / `apeireth_sdk_version` / `apeireth_sdk_compile_info`
- * 返的 C string. 0 是 malloc 返值调 free() 行为未定义.
+ * 释放 `apeireth_sdk_hash_request` 返的 C string (Rust 堆分配, caller **必须**释放).
+ * **0 是 malloc 返值调 free() 行为未定义.**
+ *
+ * **L 组修复 (统一所有权契约)**: version()/compile_info() 返**常驻静态指针, 0 经本 fn
+ * 释放** (对 `OnceLock` 的 `as_ptr()` 调 `from_raw` 是 UB)。本 fn 只服务 hash_request。
  */
 void apeireth_sdk_free_string(char *ptr);
 

@@ -12,6 +12,16 @@
 
 use std::collections::HashMap;
 
+/// H10 (2026-09-24 审计): 解析期树深上限。畸形/恶意 HTML 可以极浅的每层
+/// 字节数 (<div> 重复) 在 1 MiB body 内造出数十万层嵌套, 渲染期普通递归
+/// 会撑爆 worker 栈 → 进程级 abort (不可 catch)。超出深度的子树整棵丢弃,
+/// 树上置 `truncated` 标记。
+pub const MAX_TREE_DEPTH: usize = 256;
+
+/// H10: 渲染期深度上限 (与解析上限一致的双保险; to_snapshot 可对手工构造的
+/// 病态树调用)。
+pub const MAX_SNAPSHOT_DEPTH: usize = 256;
+
 /// ARIA role subset (full WAI-ARIA has ~80 roles; the common 20 are covered).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NodeRole {
@@ -89,6 +99,9 @@ pub struct AccessibilityTree {
     pub root: usize,
     /// Counter for assigning ref ids.
     pub next_ref_id: usize,
+    /// H10 (2026-09-24 审计): 解析或渲染因深度上限截断过子树 —— 调用方
+    /// (fetch 的 accessibility 视图) 可据此诚实告知"快照不完整"。
+    pub truncated: bool,
 }
 
 impl AccessibilityTree {
@@ -125,6 +138,16 @@ impl AccessibilityTree {
     }
 
     fn render_node(&self, idx: usize, depth: usize, out: &mut String) {
+        // H10: 渲染递归双保险深度上限。解析期已把树深压在 MAX_TREE_DEPTH,
+        // 但 to_snapshot 是公开 API, 手工构造的病态树同样要防爆栈
+        // (栈溢出是进程级 abort, 不可 catch)。超出即截断并标记。
+        if depth > MAX_SNAPSHOT_DEPTH {
+            out.push_str(&format!(
+                "{}- ... (snapshot truncated at depth {MAX_SNAPSHOT_DEPTH})\n",
+                "  ".repeat(MAX_SNAPSHOT_DEPTH)
+            ));
+            return;
+        }
         let indent = "  ".repeat(depth);
         let node = &self.nodes[idx];
         let name_part = if node.name.is_empty() {
@@ -287,6 +310,14 @@ pub fn extract_tree(html: &str) -> AccessibilityTree {
                 } else {
                     None
                 };
+
+                // H10: 栈深 = 当前嵌套深度。超出上限的子树不再入树 (父级
+                // 保留), 从构造侧压住树深, 渲染递归永不会爆栈。
+                if stack.len() > MAX_TREE_DEPTH {
+                    tree.truncated = true;
+                    continue;
+                }
+
                 tree.nodes.push(AccessibilityNode {
                     role,
                     name,
@@ -296,10 +327,10 @@ pub fn extract_tree(html: &str) -> AccessibilityTree {
                     attrs,
                 });
                 let new_idx = tree.nodes.len() - 1;
-                let parent_idx = stack
-                    .last()
-                    .copied()
-                    .expect("synthetic document root always present");
+                // H10: 闭标签多于开标签时合成根已被弹出、栈为空 —— 旧代码
+                // 在此 `.expect` panic (畸形页面即可触发)。空栈时挂到合成
+                // 根, 不崩。
+                let parent_idx = stack.last().copied().unwrap_or(tree.root);
                 tree.nodes[parent_idx].children.push(new_idx);
                 if !is_void(&tag_lower) {
                     stack.push(new_idx);
@@ -598,5 +629,84 @@ mod tests {
             snap.len(),
             html.len()
         );
+    }
+
+    // ---- H10 (2026-09-24 审计): panic 与无界递归 ----
+
+    #[test]
+    fn extra_closing_tags_do_not_panic() {
+        // 闭标签多于开标签: 合成根被弹出后栈为空, 旧代码在下一个开标签处
+        // `.expect("synthetic document root always present")` panic。
+        let html = "<html><body></body></html></p></p><div>x</div>";
+        let tree = extract_tree(html);
+        assert!(!tree.is_empty(), "tree should still contain the div");
+        let snap = tree.to_snapshot();
+        assert!(snap.contains("generic"), "{snap}");
+    }
+
+    #[test]
+    fn deeply_nested_html_is_truncated_not_aborted() {
+        // 1 MiB body 内 ~5 字节/层的嵌套可堆到数十万层, 旧代码渲染期普通
+        // 递归会栈溢出 abort 整个进程 (不可 catch)。深度上限必须截断并标记。
+        let depth = 60_000usize;
+        let mut html = String::with_capacity(depth * 12);
+        for _ in 0..depth {
+            html.push_str("<div>");
+        }
+        html.push_str("deep");
+        for _ in 0..depth {
+            html.push_str("</div>");
+        }
+        let tree = extract_tree(&html);
+        assert!(tree.truncated, "deep nesting must be marked truncated");
+        // 树深有界: 节点数不可能随嵌套深度线性爆炸。
+        assert!(
+            tree.nodes.len() <= MAX_TREE_DEPTH + 64,
+            "tree kept {} nodes — depth cap not enforced",
+            tree.nodes.len()
+        );
+        let snap = tree.to_snapshot();
+        assert!(snap.contains("deep"), "{snap}");
+    }
+
+    #[test]
+    fn to_snapshot_depth_cap_guards_hand_built_trees() {
+        // to_snapshot 是公开 API: 手工构造的病态深树也必须被渲染上限截断,
+        // 而不是爆栈 abort 进程。
+        let mut tree = AccessibilityTree::default();
+        tree.nodes.push(AccessibilityNode {
+            role: NodeRole::Document,
+            name: String::new(),
+            ref_id: None,
+            children: vec![1],
+            tag: "#document".to_string(),
+            attrs: HashMap::new(),
+        });
+        tree.root = 0;
+        let mut parent = 0usize;
+        for i in 1..=5_000usize {
+            tree.nodes.push(AccessibilityNode {
+                role: NodeRole::Generic,
+                name: format!("n{i}"),
+                ref_id: None,
+                children: Vec::new(),
+                tag: "div".to_string(),
+                attrs: HashMap::new(),
+            });
+            let idx = tree.nodes.len() - 1;
+            tree.nodes[parent].children.push(idx);
+            parent = idx;
+        }
+        let snap = tree.to_snapshot();
+        assert!(
+            snap.contains(&format!("truncated at depth {MAX_SNAPSHOT_DEPTH}")),
+            "render must truncate and mark the cut"
+        );
+    }
+
+    #[test]
+    fn shallow_pages_are_not_marked_truncated() {
+        let tree = extract_tree("<html><body><h1>t</h1><p>x</p></body></html>");
+        assert!(!tree.truncated, "normal pages must not be flagged");
     }
 }

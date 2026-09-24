@@ -79,10 +79,14 @@ impl Default for ResourceLimits {
 
 impl ResourceLimits {
     /// 校验所有 5 资源字段是否在合法范围 (K-1 强校验 #1).
+    ///
+    /// **L 组修复**: `cpu_cores: f32` 的 NaN 显式拒绝 — NaN 与任何值的比较皆为 false,
+    /// `< MIN || > MAX` 双比较对 NaN 恒 false, NaN 会静默穿过全部范围校验.
     pub fn validate(&self) -> SandboxResult<()> {
-        if self.cpu_cores < MIN_CPU_CORES || self.cpu_cores > MAX_CPU_CORES {
+        if self.cpu_cores.is_nan() || self.cpu_cores < MIN_CPU_CORES || self.cpu_cores > MAX_CPU_CORES
+        {
             return Err(SandboxError::InvalidConfig(format!(
-                "cpu_cores {} out of range [{}, {}]",
+                "cpu_cores {} out of range [{}, {}] (NaN explicitly rejected)",
                 self.cpu_cores, MIN_CPU_CORES, MAX_CPU_CORES
             )));
         }
@@ -186,6 +190,25 @@ mod tests {
             limits.validate(),
             Err(SandboxError::InvalidConfig(_))
         ));
+    }
+
+    /// L 组: cpu_cores = NaN 显式拒绝 (NaN 比较恒 false, 0 显式检查即穿透).
+    #[test]
+    fn resource_limits_k1_cpu_cores_nan_rejected() {
+        let limits = ResourceLimits {
+            cpu_cores: f32::NAN,
+            ..Default::default()
+        };
+        assert!(matches!(
+            limits.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
+        // 边界值仍放行
+        let ok = ResourceLimits {
+            cpu_cores: MIN_CPU_CORES,
+            ..Default::default()
+        };
+        assert!(ok.validate().is_ok());
     }
 
     /// 内存 = 0 触发 K-1 校验 (K-1 强校验 #1).

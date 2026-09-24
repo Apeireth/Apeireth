@@ -30,11 +30,14 @@ apeireth-protocol = { path = "../../foundation/protocol" }
 # python: PyO3 桥接 (复用 workspace pyo3 0.29, 0 改 workspace 顶层)
 # node:   napi-rs 桥接 (2.x, 任务 2.16, 真实 2.x branch)
 # c:      cbindgen C-ABI 桥接 (5 fn C 签名, apeireth_sdk.h auto-generate)
-# sha2:   R122-8 inline 简版 hash_request (R122-1 1:1 port, retry 跑中 0 依赖)
+# sha2:   M4 修复 (2026-09-24) — 原是 R122-8 optional dep; 现因审计日志 api_key
+#         真单向化 (client.rs short_hash = Sha256(api_key) 前 16 hex) 转为常规依赖,
+#         确保 default build 也有真哈希 (0 退化为明文前缀). node/c feature 不再需要
+#         dep:sha2 显式启用 (常规依赖默认可见).
 pyo3 = { workspace = true, features = ["extension-module"], optional = true }
 napi = { version = "2", optional = true }
 napi-derive = { version = "2", optional = true }
-sha2 = { version = "0.10", optional = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
@@ -55,8 +58,8 @@ cbindgen = { version = "0.29", optional = true } # 0.26 拉 clap 3 → atty (unm
 # R146: 5 SDK -> 1, 4 子 SDK 由 feature 门控
 default = []
 python = ["dep:pyo3"]
-node = ["dep:napi", "dep:napi-derive", "dep:sha2"]
-c = ["dep:cbindgen", "dep:sha2"]
+node = ["dep:napi", "dep:napi-derive"]
+c = ["dep:cbindgen"]
 lark = []
 livekit = []
 sandbox = []

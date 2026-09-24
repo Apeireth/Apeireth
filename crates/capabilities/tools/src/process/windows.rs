@@ -642,10 +642,23 @@ fn probe_restricted_launch(token: HANDLE) -> bool {
 
 /// Spawn the actual requested child with a restricted token, suspended, and
 /// attach it to the Job Object before resume.
+///
+/// L 组 (2026-09-24 审计): 受限 token 路径**不支持** raw_arg 逐字命令列尾
+/// (build_windows_command_line 只拼 executable + args)。静默丢弃会让调用方
+/// (shell 的 `cmd /D /S /C "<script>"`) 以为尾巴生效实则丢失 —— 返回明确
+/// 的配置错误 fail-closed, 由上层改走 AppContainer/std 路径。
 fn spawn_restricted_child(
     request: &ProcessRequest,
     job: JobObject,
 ) -> Result<WindowsRawChild, ProcessError> {
+    if request.raw_arg().is_some() {
+        return Err(ProcessError::InvalidConfiguration(
+            "raw_arg verbatim command-line tail is not supported on the \
+             restricted-token spawn path (would be silently dropped)"
+                .into(),
+        ));
+    }
+
     let token = create_restricted_token()?;
 
     let command_line = build_windows_command_line(&request.executable, &request.args);
@@ -705,12 +718,19 @@ fn spawn_restricted_child(
             });
         }
         CloseHandle(token);
+        // M15 (2026-09-24 审计): 父进程侧的 stdin_read 副本到此使命结束
+        // (stdin_write 已关, 子进程经 STARTF_USESTDHANDLES 持有自己的副本)
+        // —— 不关即每次 spawn 泄漏 1 个内核句柄。
+        CloseHandle(stdin_read);
 
         if let Err(e) = job.assign(pi.hProcess) {
             TerminateProcess(pi.hProcess, 0);
             WaitForSingleObject(pi.hProcess, 5000);
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);
+            // 子进程已终止, 管道读端无人会消费 —— 一并收掉防泄漏。
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
             return Err(e);
         }
 
@@ -719,6 +739,8 @@ fn spawn_restricted_child(
             WaitForSingleObject(pi.hProcess, 5000);
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
             return Err(e);
         }
 
@@ -835,12 +857,19 @@ fn spawn_appcontainered_child(
             });
         }
         drop(attrs);
+        // M15 (2026-09-24 审计): 父进程侧 stdin_read 副本使命结束 (子进程经
+        // STARTF_USESTDHANDLES 持有继承副本) —— 不关即每次沙箱 spawn 泄漏 1
+        // 个内核句柄, 高频 shell 调用下累积至句柄耗尽。
+        CloseHandle(stdin_read);
 
         if let Err(e) = job.assign(pi.hProcess) {
             TerminateProcess(pi.hProcess, 0);
             WaitForSingleObject(pi.hProcess, 5000);
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);
+            // 子进程已终止, 管道读端无人消费 —— 一并收掉防泄漏。
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
             return Err(e);
         }
 
@@ -849,6 +878,8 @@ fn spawn_appcontainered_child(
             WaitForSingleObject(pi.hProcess, 5000);
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
             return Err(e);
         }
 

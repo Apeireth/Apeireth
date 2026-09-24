@@ -65,6 +65,12 @@ use apeireth_plugin::organ::{
 /// 裁决依据 (per v1 `DecisionBasis` 1:1).
 ///
 /// 0 装诚实: 来源标签. v1 哲学 (宪法规 / 智囊团 / 主人) 三层证据强度.
+///
+/// **M5 修正 (2026-09-24 审计)**: 这三个标签描述的是**裁决的 provenance**,
+/// 不是裁决的好坏。`process()` 路径的 decision 来自 runtime 注入的 context hint
+/// (用户陈述 / 上层传话), **不是** council 7 advisor 的真审议结果 — 那种场景必须
+/// 用 `MasterDecision` 标注 (用户陈述类), 不得用 `CouncilDeliberation` (系统裁决类)
+/// 把用户的话伪装成智囊团审议结论 (会污染后续 promote_candidates 的证据强度).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecisionBasis {
     /// 宪法规则直接覆盖.
@@ -111,11 +117,19 @@ pub struct ValueCase {
 /// 价值案例库 (per v1 `ValueCaseStore` 1:1 翻译).
 ///
 /// 0 装 PASS: 无 LLM 依赖. 全部状态可测, 输入输出确定性.
+///
+/// ## 有界性 (M7)
+///
+/// `cases` 上限 [`MAX_VALUE_CASES`] 条, 超出时淘汰**最旧** (队首) — 案例库是
+/// 渐进内化的证据池, 不需要无限历史; 淘汰不改 `next_id`, 已发出的 id 保持唯一。
 #[derive(Debug)]
 pub struct ValueCaseStore {
     cases: Vec<ValueCase>,
     next_id: u64,
 }
+
+/// 案例库上限 (M7: 防无界增长). 超出淘汰最旧 (队首).
+pub const MAX_VALUE_CASES: usize = 1_000;
 
 impl ValueCaseStore {
     pub fn new() -> Self {
@@ -157,6 +171,10 @@ impl ValueCaseStore {
         };
         self.next_id += 1;
         self.cases.push(case.clone());
+        // M7: 有界化 — 超上限淘汰最旧 (队首), 保持案例库在固定内存内.
+        while self.cases.len() > MAX_VALUE_CASES {
+            self.cases.remove(0);
+        }
         case
     }
 
@@ -180,6 +198,12 @@ impl ValueCaseStore {
     /// 0 装诚实: 1:1 翻译 v1 `promote_candidates`. v1 `out.sort()` 在 Rust 中按 tuple
     /// lexicographic Ord 排序, 第一 key `Vec<String>` 排序稳定 (per std `Vec<T: Ord>`).
     /// v2 改用显式 `sort_by(|a, b| a.0.cmp(&b.0))` 等价语义, 不改 API 形状.
+    ///
+    /// ## M5 修正: 组内 decision 冲突 → 显式废弃
+    ///
+    /// 同一 `values` 集合下若出现过**不同 decision** (价值冲突没有收敛),
+    /// 该组整组废弃 (不进候选) — 旧实现静默取 `cases[0].decision` 把
+    /// "一半案例说拒绝、一半说允许"伪造成一条"一致裁决", 是 0 装方向的反面。
     pub fn promote_candidates(&self, threshold: usize) -> Vec<(Vec<String>, String, usize)> {
         let mut groups: std::collections::HashMap<Vec<String>, Vec<&ValueCase>> =
             Default::default();
@@ -191,10 +215,16 @@ impl ValueCaseStore {
         let mut out = Vec::new();
         for (values, cases) in groups {
             let agree: usize = cases.iter().map(|c| c.agree_count).sum();
-            if agree >= threshold {
-                let decision = cases[0].decision.clone();
-                out.push((values, decision, agree));
+            if agree < threshold {
+                continue;
             }
+            // M5: 组内 decision 必须全一致才可提升; 冲突即废弃该组.
+            let first_decision = cases[0].decision.as_str();
+            let conflicted = cases.iter().any(|c| c.decision != first_decision);
+            if conflicted {
+                continue;
+            }
+            out.push((values, first_decision.to_string(), agree));
         }
         out.sort_by(|a, b| a.0.cmp(&b.0));
         out
@@ -293,7 +323,7 @@ impl ValueCasesOrgan {
         let mut store = self
             .store
             .lock()
-            .expect("ValueCasesOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.record(scenario, values, decision, basis)
     }
 
@@ -309,7 +339,7 @@ impl ValueCasesOrgan {
         let mut store = self
             .store
             .lock()
-            .expect("ValueCasesOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.record_at_ms(scenario, values, decision, basis, at_ms)
     }
 
@@ -318,7 +348,7 @@ impl ValueCasesOrgan {
         let mut store = self
             .store
             .lock()
-            .expect("ValueCasesOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.feedback(id, fb)
     }
 
@@ -327,7 +357,7 @@ impl ValueCasesOrgan {
         let store = self
             .store
             .lock()
-            .expect("ValueCasesOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.promote_candidates(threshold)
     }
 
@@ -336,7 +366,7 @@ impl ValueCasesOrgan {
         let store = self
             .store
             .lock()
-            .expect("ValueCasesOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.decision_for(values).cloned()
     }
 
@@ -345,8 +375,17 @@ impl ValueCasesOrgan {
         let store = self
             .store
             .lock()
-            .expect("ValueCasesOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.recall(keyword).into_iter().cloned().collect()
+    }
+
+    /// 取案例 (per v1 `get` API 1:1, 克隆返回)
+    pub fn get(&self, id: u64) -> Option<ValueCase> {
+        let store = self
+            .store
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        store.get(id).cloned()
     }
 
     /// 案例数 (per v1 `len` API 1:1)
@@ -354,7 +393,7 @@ impl ValueCasesOrgan {
         let store = self
             .store
             .lock()
-            .expect("ValueCasesOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.len()
     }
 
@@ -410,12 +449,11 @@ impl OrganTrait for ValueCasesOrgan {
             vec![input.episode.role.clone()]
         };
 
-        let case = self.record(
-            scenario,
-            values,
-            decision,
-            DecisionBasis::CouncilDeliberation,
-        );
+        // M5: decision 来源是调用方注入的 context hint (用户陈述 / 上层传话),
+        // **不是** council 7 advisor 真审议 → basis 用 MasterDecision (用户陈述类),
+        // 不用 CouncilDeliberation (系统裁决类)。旧实现把用户可控字符串标成
+        // CouncilDeliberation 入库, 让 runtime 的一句话借到"智囊团审议"的证据强度。
+        let case = self.record(scenario, values, decision, DecisionBasis::MasterDecision);
 
         // verdict 0 装诚实: 刚登记, 不知主人是否同意 → Pending
         Ok(OrganOutput::Value {
@@ -636,5 +674,95 @@ mod tests {
         let organ = ValueCasesOrgan::new(test_factory(), "minimax-m3");
         assert_eq!(organ.name(), "F6 Value Cases");
         assert_eq!(organ.organ_id(), OrganKind::F6);
+    }
+
+    /// M5 回归: process() 入库的 case 必须标 MasterDecision (用户陈述),
+    /// 不得把运行时注入的 hint 伪造成 council 审议结论.
+    #[tokio::test]
+    async fn m5_process_basis_is_master_decision_not_council() {
+        let organ = ValueCasesOrgan::new(test_factory(), "minimax-m3");
+        let ep = apeireth_core::kernel::memory::Episode {
+            id: "test-ep-m5".into(),
+            session_id: apeireth_core::kernel::SessionId::new().to_string(),
+            role: "user".into(),
+            content: "场景".into(),
+            timestamp: 0,
+        };
+        let input = OrganInput::new(ep, vec!["任意 decision".into(), "v".into()]);
+        organ.process(input).await.expect("process ok");
+        let c = organ.get(0).expect("case 0");
+        assert_eq!(
+            c.basis,
+            DecisionBasis::MasterDecision,
+            "用户可控 decision 不得标 CouncilDeliberation (M5)"
+        );
+    }
+
+    /// M5 回归: 组内 decision 冲突 → 整组废弃, 不进提升候选.
+    #[test]
+    fn m5_conflicting_decisions_discard_group() {
+        let mut store = ValueCaseStore::new();
+        let a = store.record(
+            "场景A",
+            vec!["安全".into(), "自主".into()],
+            "拒绝",
+            DecisionBasis::MasterDecision,
+        );
+        store.feedback(a.id, Feedback::Agree).unwrap();
+        store.feedback(a.id, Feedback::Agree).unwrap();
+        // 同一 values 集合, 相反裁决
+        let b = store.record(
+            "场景B",
+            vec!["安全".into(), "自主".into()],
+            "允许",
+            DecisionBasis::MasterDecision,
+        );
+        store.feedback(b.id, Feedback::Agree).unwrap();
+        store.feedback(b.id, Feedback::Agree).unwrap();
+
+        assert!(
+            store.promote_candidates(1).is_empty(),
+            "组内 decision 冲突 → 不得提炼出'一致裁决' (M5)"
+        );
+
+        // 全组一致 → 正常提升 (未被上面的逻辑误伤).
+        let mut store2 = ValueCaseStore::new();
+        let c = store2.record(
+            "场景C",
+            vec!["健康".into()],
+            "休息",
+            DecisionBasis::MasterDecision,
+        );
+        store2.feedback(c.id, Feedback::Agree).unwrap();
+        let cands = store2.promote_candidates(1);
+        assert_eq!(cands.len(), 1);
+        assert_eq!(cands[0].1, "休息");
+    }
+
+    /// M7 回归: cases 上限 + 最旧淘汰 (id 仍保持唯一递增).
+    #[test]
+    fn m7_cases_capped_oldest_evicted() {
+        let mut store = ValueCaseStore::new();
+        let total = MAX_VALUE_CASES + 25;
+        let mut last = None;
+        for i in 0..total {
+            let c = store.record(
+                format!("场景{i}"),
+                vec![format!("v{i}")],
+                "d",
+                DecisionBasis::ConstitutionRule,
+            );
+            if i == 0 {
+                // 首条 id = 0, 应被淘汰且不可查.
+                assert_eq!(c.id, 0);
+            }
+            last = Some(c.id);
+        }
+        assert_eq!(store.len(), MAX_VALUE_CASES, "上限生效");
+        assert!(store.get(0).is_none(), "最旧条目 (id=0) 被淘汰");
+        assert!(
+            store.get(last.expect("last id")).is_some(),
+            "最新条目在库"
+        );
     }
 }

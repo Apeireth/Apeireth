@@ -12,6 +12,33 @@
 //! - v2 每条 record 存 `[magic || version || index || key_commitment || iv || ciphertext || tag]`
 //! - v1 无 header 的 `[iv || ciphertext || tag]` 仍可读取，写入永远使用 v2
 //!
+//! **H12 修复 (2026-09 安全审计) — 写路径不变量**:
+//! - `write_lock: Mutex<()>` 包住 `next_record_index` + 开文件 + 写帧:
+//!   两个并发写者不再算出**同一个** record index 写入 AAD (那会让按物理
+//!   位置校验的 `read_records` 对**整个 .enc 文件**解密失败), 两次
+//!   `write_all` 也不会交错切错帧 (长度前缀与记录体合为单次写入).
+//! - 写完 `sync_data()`: 崩溃/断电时已 ack 的记录可能未落盘, append-only
+//!   语义被破坏 (明文 FileBackend 每次写都 `sync_all()`).
+//! - 新建文件 0600 (unix): 加密记录同样只应属主可读 (mode 仅在 O_CREAT
+//!   实际创建时生效, 存量文件权限需 OS 侧修正).
+//! - **剩余边界 (诚实声明)**: 进程级互斥不覆盖**多进程**并发写 — 多 writer
+//!   共享同一目录需 `fs2` 文件锁 (v2.1 路线, 同 FileBackend doc).
+//!
+//! **M3/M6 修复 (2026-09 安全审计) — 读路径不变量**:
+//! - `get_episode` 按 framing 顺序逐条解密、**命中即停止**, 不再一次
+//!   get 解密整个文件 (单次 get 曾是 O(全库) AES 解密 + 全文件物化).
+//! - `put_episode` 对重复 id 返回明确错误 (与 FileBackend 对齐,
+//!   `backend/file.rs`), 不再静默追加旧值.
+//! - framing 逐条流式读取: 不再 `std::fs::read` 把整个文件读进内存.
+//!
+//! **防篡改语义 (fail-closed, 保留)**:
+//! - 截断 / framing 篡改 / record 顺序交换 / ciphertext 或 header 篡改 →
+//!   解密或切帧失败即 `Err` 向上传播, 不"跳过坏行继续".
+//! - `get_episode` 命中即停止意味着**命中点之后的尾段不再校验**: 尾部
+//!   整段截除在"位置顺序编号"方案下**不可检测** (前面记录的 AAD 均值
+//!   不变). 要防投弃 (truncation attack) 需 head commitment / 锚定外部
+//!   日志 — v2.1 路线, 此处诚实声明不假装已防.
+//!
 //! **3 阶审查** (O-6 锚 #9):
 //! 1. 总体: 与 RC-1/3/4/8 同样模式 (alpha 写真完整, 0 装诚实标注)
 //! 2. 系统: 复用 aes-gcm (workspace dep) + rand (workspace dep), 0 引入新 dep
@@ -28,8 +55,9 @@
 //!
 //! **v1 compat**: 100+ consumer 0 破 (新增 module, 0 改 FileBackend).
 
+use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -61,6 +89,11 @@ pub struct EncryptedFileBackend {
     dir: PathBuf,
     /// Service name (bound into the v2 AAD envelope)
     service: String,
+    /// H12: 写互斥 — 包住 `next_record_index` + 开文件 + 写帧, 保证
+    /// ① 并发写者算出同一个 record index (AEAD AAD 冲突 → 全文件不可读);
+    /// ② 长度前缀与记录体不错位切帧. 与 FileBackend 的
+    /// `episode_write_lock`/`stream_write_lock` 同一模式 (单 writer 简化).
+    write_lock: Mutex<()>,
 }
 
 impl EncryptedFileBackend {
@@ -95,6 +128,7 @@ impl EncryptedFileBackend {
             key: *master_key,
             dir: root.into(),
             service: service.into(),
+            write_lock: Mutex::new(()),
         }
     }
 
@@ -288,7 +322,22 @@ impl EncryptedFileBackend {
     }
 
     /// 写一条 record 到 file: JSON → seal → bytes → file
+    ///
+    /// **H12**: 全程持 `write_lock` — `next_record_index` (读) 与追加 (写)
+    /// 必须原子, 否则并发写者会算出同一个 index 写进 AAD, 之后
+    /// `read_records` 按物理位置校验时整文件解密失败.
     fn write_record(
+        &self,
+        record_type: &str,
+        record_id: &str,
+        json_bytes: &[u8],
+    ) -> Result<(), MemoryError> {
+        let _guard = self.write_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.write_record_locked(record_type, record_id, json_bytes)
+    }
+
+    /// `write_record` 的锁内实现 (调用方必须已持 `write_lock`).
+    fn write_record_locked(
         &self,
         record_type: &str,
         record_id: &str,
@@ -300,95 +349,148 @@ impl EncryptedFileBackend {
         std::fs::create_dir_all(&self.dir).map_err(MemoryError::from)?;
         // 0 装诚实: 长度前缀 (4 bytes big-endian) 替代 newline 分隔.
         // 原因: 随机 AES-GCM IV + ciphertext 可能含 0x0A (\n) 字节, 假 newline 分隔会切 mid-record
-        use std::io::Write;
-        let mut f = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .map_err(MemoryError::from)?;
+        let mut opts = std::fs::OpenOptions::new();
+        opts.create(true).append(true);
+        #[cfg(unix)]
+        {
+            // H12: 新建 .enc 文件仅属主可读. mode 只在 O_CREAT 真正创建文件时
+            // 生效; 存量文件 (旧版默认 umask 创建) 的权限需 OS 侧修正.
+            opts.mode(0o600);
+        }
+        let mut f = opts.open(&path).map_err(MemoryError::from)?;
         let len = u32::try_from(sealed.len())
             .map_err(|_| MemoryError::Invalid("sealed record is too large".to_string()))?;
-        let len_bytes = len.to_be_bytes();
-        f.write_all(&len_bytes).map_err(MemoryError::from)?;
-        f.write_all(&sealed).map_err(MemoryError::from)?;
+        // H12: 长度前缀 + 记录体**单次** write_all — 旧实现两次独立 write,
+        // 交错时 framing 即错位 (framing_length_tamper_fails 证明 framing 敏感).
+        let mut framed = Vec::with_capacity(4 + sealed.len());
+        framed.extend_from_slice(&len.to_be_bytes());
+        framed.extend_from_slice(&sealed);
+        f.write_all(&framed).map_err(MemoryError::from)?;
+        // H12: 落盘 — 无 sync 时崩溃/断电已 ack 的记录可能丢失, append-only 语义被破坏.
+        f.sync_data().map_err(MemoryError::from)?;
         Ok(())
     }
 
-    /// Determine the next physical record index without decrypting existing records.
-    fn next_record_index(&self, record_type: &str) -> Result<u64, MemoryError> {
+    /// 按 framing 顺序**流式**遍历 sealed record 字节 (M3: 不再 `fs::read`
+    /// 整个文件进内存). `visit` 返回 `true` 表示停止遍历.
+    ///
+    /// fail-closed 语义与原全量实现一致: 长度前缀不完整 / 记录体被截断 /
+    /// 声明的长度越界 → `Err` 向上传播 (不跳过坏帧继续).
+    fn for_each_sealed<F>(&self, record_type: &str, mut visit: F) -> Result<(), MemoryError>
+    where
+        F: FnMut(u64, &[u8]) -> Result<bool, MemoryError>,
+    {
         let path = self.dir.join(format!("{}.enc", record_type));
         if !path.exists() {
-            return Ok(0);
+            return Ok(());
         }
-        let data = std::fs::read(&path).map_err(MemoryError::from)?;
-        let mut pos = 0usize;
-        let mut count = 0u64;
-        while pos < data.len() {
-            if data.len() - pos < 4 {
+        let file = std::fs::File::open(&path).map_err(MemoryError::from)?;
+        let mut reader = BufReader::new(file);
+        let mut len_bytes = [0u8; 4];
+        let mut record_index = 0u64;
+        loop {
+            // 手工累加读长度前缀: 0 字节 = 干净的文件尾; 1..3 字节 = 截断的前缀 (报错).
+            let mut got = 0usize;
+            while got < 4 {
+                match reader.read(&mut len_bytes[got..]) {
+                    Ok(0) => break,
+                    Ok(n) => got += n,
+                    // EINTR: 重试读取 (空 arm = 回到 while 条件, 无需 continue).
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(e) => return Err(MemoryError::from(e)),
+                }
+            }
+            if got == 0 {
+                return Ok(());
+            }
+            if got < 4 {
                 return Err(MemoryError::Invalid(
                     "truncated record length prefix".to_string(),
                 ));
             }
-            let len = u32::from_be_bytes(
-                data[pos..pos + 4]
-                    .try_into()
-                    .map_err(|_| MemoryError::Invalid("invalid record length".to_string()))?,
-            ) as usize;
-            pos += 4;
-            if len == 0 || len > data.len() - pos {
+            let len = u32::from_be_bytes(len_bytes) as usize;
+            if len == 0 {
                 return Err(MemoryError::Invalid(
                     "truncated encrypted record".to_string(),
                 ));
             }
-            pos += len;
+            let mut sealed = vec![0u8; len];
+            reader.read_exact(&mut sealed).map_err(|e| {
+                // 记录体不足: 与旧实现 "truncated encrypted record" 同等 fail-closed.
+                MemoryError::Invalid(format!(
+                    "truncated encrypted record at index {record_index}: {e}"
+                ))
+            })?;
+            let stop = visit(record_index, &sealed)?;
+            record_index = record_index
+                .checked_add(1)
+                .ok_or_else(|| MemoryError::Invalid("too many encrypted records".to_string()))?;
+            if stop {
+                return Ok(());
+            }
+        }
+    }
+
+    /// 按顺序解密文件中的 record; `predicate` 命中即停止 (M3 读放大).
+    fn find_record<F>(&self, record_type: &str, predicate: F) -> Result<Option<Vec<u8>>, MemoryError>
+    where
+        F: Fn(&[u8]) -> bool,
+    {
+        let mut found: Option<Vec<u8>> = None;
+        self.for_each_sealed(record_type, |index, sealed| {
+            let plaintext = if sealed.starts_with(&Self::MAGIC) {
+                self.open_v2_record(sealed, record_type, index)?
+            } else {
+                self.open_legacy_record(sealed, record_type)?
+            };
+            if predicate(&plaintext) {
+                found = Some(plaintext);
+                return Ok(true);
+            }
+            Ok(false)
+        })?;
+        Ok(found)
+    }
+
+    /// Determine the next physical record index without decrypting existing records.
+    ///
+    /// **H12**: 调用方必须已持 `write_lock` — 计数与追加必须原子, 否则并发
+    /// 写者算出同一个 index 写进 AAD (按物理位置校验时整文件不可读).
+    fn next_record_index(&self, record_type: &str) -> Result<u64, MemoryError> {
+        let mut count = 0u64;
+        self.for_each_sealed(record_type, |_index, _sealed| {
             count = count
                 .checked_add(1)
                 .ok_or_else(|| MemoryError::Invalid("too many encrypted records".to_string()))?;
-        }
+            Ok(false)
+        })?;
         Ok(count)
     }
 
     /// 读所有 record 从 file: 按长度前缀切 → open → JSON
     fn read_records(&self, record_type: &str) -> Result<Vec<Vec<u8>>, MemoryError> {
-        let path = self.dir.join(format!("{}.enc", record_type));
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-        let data = std::fs::read(&path).map_err(MemoryError::from)?;
-        let mut out = Vec::new();
-        let mut pos = 0;
-        let mut record_index = 0u64;
-        while pos < data.len() {
-            if data.len() - pos < 4 {
-                return Err(MemoryError::Invalid(
-                    "truncated record length prefix".to_string(),
-                ));
-            }
-            let len = u32::from_be_bytes(
-                data[pos..pos + 4]
-                    .try_into()
-                    .map_err(|_| MemoryError::Invalid("invalid record length".to_string()))?,
-            ) as usize;
-            pos += 4;
-            if len == 0 || len > data.len() - pos {
-                return Err(MemoryError::Invalid(format!(
-                    "truncated file at pos {pos}: expected {len} bytes, got {}",
-                    data.len() - pos
-                )));
-            }
-            let sealed = &data[pos..pos + len];
+        let mut out: Vec<Vec<u8>> = Vec::new();
+        self.for_each_sealed(record_type, |index, sealed| {
             let plaintext = if sealed.starts_with(&Self::MAGIC) {
-                self.open_v2_record(sealed, record_type, record_index)?
+                self.open_v2_record(sealed, record_type, index)?
             } else {
                 self.open_legacy_record(sealed, record_type)?
             };
             out.push(plaintext);
-            pos += len;
-            record_index = record_index
-                .checked_add(1)
-                .ok_or_else(|| MemoryError::Invalid("too many encrypted records".to_string()))?;
-        }
+            Ok(false)
+        })?;
         Ok(out)
+    }
+
+    /// 查重 (M3): 按 id 找 episode, 命中即停止解密 (读放大修复).
+    fn episode_id_exists(&self, record_id: &str) -> Result<bool, MemoryError> {
+        Ok(self
+            .find_record("episodes", |plaintext| {
+                serde_json::from_slice::<Episode>(plaintext)
+                    .map(|ep| ep.id == record_id)
+                    .unwrap_or(false)
+            })?
+            .is_some())
     }
 }
 
@@ -403,7 +505,18 @@ impl MemoryBackend for EncryptedFileBackend {
 
     fn put_episode(&self, ep: &Episode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let json = serde_json::to_vec(ep).map_err(MemoryError::Json)?;
-        self.write_record("episodes", &ep.id, &json)
+        // M3/M6: 与 FileBackend (backend/file.rs) 对齐 — 重复 id 明确拒绝.
+        // 旧实现不查重: 同 id 再写只是追加, get_episode 返回文件中第一条
+        // 匹配 (旧值), "更新"语义静默失效.
+        // 持写锁做查重, 避免与并发写 TOCTOU (H12).
+        let _guard = self.write_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if self.episode_id_exists(&ep.id)? {
+            return Err(Box::new(MemoryError::Invalid(format!(
+                "episode id already exists: {}",
+                ep.id
+            ))));
+        }
+        self.write_record_locked("episodes", &ep.id, &json)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
@@ -411,15 +524,17 @@ impl MemoryBackend for EncryptedFileBackend {
         &self,
         id: &str,
     ) -> Result<Option<Episode>, Box<dyn std::error::Error + Send + Sync>> {
-        let records = self.read_records("episodes")?;
-        for plaintext in records {
-            if let Ok(ep) = serde_json::from_slice::<Episode>(&plaintext) {
-                if ep.id == id {
-                    return Ok(Some(ep));
-                }
-            }
+        // M3: 逐条解密、命中即停止 — 单次 get 不再是 O(全库) AES 解密 +
+        // 全文件物化. 命中点之后的尾段不再解密 (尾部截断不可检测, 见模块 doc
+        // "head commitment" 诚实声明).
+        match self.find_record("episodes", |plaintext| {
+            serde_json::from_slice::<Episode>(plaintext)
+                .map(|ep| ep.id == id)
+                .unwrap_or(false)
+        })? {
+            Some(plaintext) => Ok(Some(serde_json::from_slice::<Episode>(&plaintext)?)),
+            None => Ok(None),
         }
-        Ok(None)
     }
 
     fn recent_episodes(
@@ -722,5 +837,100 @@ mod tests {
     fn encrypted_file_backend_is_send_sync() {
         fn _assert_send_sync<T: Send + Sync>() {}
         _assert_send_sync::<EncryptedFileBackend>();
+    }
+
+    /// M3/M6: 重复 id 必须明确拒绝 (与 FileBackend 对齐), 不再静默追加旧值.
+    #[test]
+    fn duplicate_episode_id_is_rejected() {
+        let (b, _d) = fresh();
+        b.put_episode(&ep("dup", "s")).expect("first put");
+        let err = b
+            .put_episode(&ep("dup", "s"))
+            .expect_err("duplicate id must be rejected");
+        assert!(
+            err.to_string().contains("already exists"),
+            "错误信息必须指明重复 id, got: {err}"
+        );
+        // 旧值未被覆盖: 文件中只有一条 "dup".
+        let all = b.recent_episodes("s", 10).expect("recent");
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].id, "dup");
+    }
+
+    /// M3: `get_episode` 命中即停止解密 — 命中点之后的尾段不再被解密/校验.
+    ///
+    /// 这也是模块 doc 诚实声明的行为面: 尾部篡改/截断对 `get_episode` 不可见
+    /// (需 head commitment 才能防投弃). 但**命中前**的坏记录仍然 fail-closed.
+    #[test]
+    fn get_episode_stops_decrypting_after_hit() {
+        let (b, d) = fresh();
+        b.put_episode(&ep("ep-1", "s")).expect("put first");
+        b.put_episode(&ep("ep-2", "s")).expect("put second");
+
+        // 篡改第二条记录的 ciphertext (第一条之后的帧).
+        let path = d.path().join("episodes.enc");
+        let mut data = std::fs::read(&path).expect("read");
+        let first_len = u32::from_be_bytes(data[..4].try_into().expect("first length")) as usize;
+        // 第二条帧布局: [len(4)][header(45)][iv(12)][ciphertext...]
+        let second_ciphertext = 4 + first_len + 4 + EncryptedFileBackend::HEADER_LEN
+            + EncryptedFileBackend::IV_LEN;
+        data[second_ciphertext] ^= 0xff;
+        std::fs::write(&path, data).expect("write tampered tail");
+
+        // 第一条仍可读 (命中即停止, 不解密尾段).
+        let first = b.get_episode("ep-1").expect("get ep-1").expect("exists");
+        assert_eq!(first.id, "ep-1");
+        // 第二条触达篡改记录 → fail-closed.
+        assert!(
+            b.get_episode("ep-2").is_err(),
+            "命中的坏记录必须 fail-closed, 不跳过"
+        );
+    }
+
+    /// H12: 并发写不得算出同一个 record index (那会让整文件 AEAD 校验失败),
+    /// 也不得把 framing 写错位. 锁内 index+append 原子 → 全部记录可读.
+    #[test]
+    fn concurrent_writes_keep_records_readable() {
+        let (b, _d) = fresh();
+        let backend = std::sync::Arc::new(b);
+        let mut handles = Vec::new();
+        for t in 0..8_u32 {
+            let writer = Arc::clone(&backend);
+            handles.push(std::thread::spawn(move || {
+                for i in 0..10_u32 {
+                    let e = ep(&format!("ep-{t}-{i}"), "sess-concurrent");
+                    writer.put_episode(&e).expect("concurrent put");
+                }
+            }));
+        }
+        for h in handles {
+            h.join().expect("writer thread");
+        }
+        // 全部 80 条可解密可读 — 无锁时并发 index 冲突会让整个文件不可读.
+        for t in 0..8_u32 {
+            for i in 0..10_u32 {
+                let got = backend
+                    .get_episode(&format!("ep-{t}-{i}"))
+                    .expect("get")
+                    .expect("exists");
+                assert_eq!(got.id, format!("ep-{t}-{i}"));
+            }
+        }
+        assert_eq!(backend.recent_episodes("sess-concurrent", 100).unwrap().len(), 80);
+    }
+
+    /// H12: 新建 .enc 文件在 unix 上必须 0600 (加密记录只应属主可读).
+    #[cfg(unix)]
+    #[test]
+    fn encrypted_file_is_created_with_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let (b, d) = fresh();
+        b.put_episode(&ep("perm-1", "s")).expect("put");
+        let mode = std::fs::metadata(d.path().join("episodes.enc"))
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "新建加密文件必须 0600, got {mode:o}");
     }
 }

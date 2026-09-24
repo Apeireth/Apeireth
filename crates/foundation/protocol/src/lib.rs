@@ -83,8 +83,10 @@ pub mod ws_v1;
 // frame-direction enforcement (from apeireth-api::ws_v1 server handler).
 pub mod ws_session;
 
+// C1 修复 (2026-09-24 审计): OnionMeshPacket → MeshPacket (明文报文, 无洋葱/
+// 无加密; 原命名与 `checksum_sha256`/`ephemeral_pubkey_hex` 等同属假安全语义)。
 pub use p2p_mesh::{
-    MemoryRoamingDelta, MeshNodeDescriptor, MeshTransportKind, OnionMeshPacket, P2pMeshController,
+    MemoryRoamingDelta, MeshNodeDescriptor, MeshPacket, MeshTransportKind, P2pMeshController,
 };
 
 pub use adapter::ProtocolAdapter;

@@ -145,12 +145,27 @@ impl Default for AppIdHolder {
 /// App Secret 持有者 (per P0 安全铁律 + apeireth-keyring 模式).
 ///
 /// **当前 skeleton 用 String 包装** (跟 AppIdHolder 同模式). R21 续真接时改成 SecretString.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// **M5 修复**: Debug 手写脱敏 — derive(Debug) 会让一次 `{:?}` / `dbg!` 把 App Secret
+/// 明文落进日志/错误面板, 违反模块头 "0 明文存盘" 铁律. Serialise 保持 (wire 兼容), 只修 Debug 泄露面.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AppSecretHolder {
     /// App Secret (从 keyring get, **绝不存明文**)
     app_secret: Option<String>,
     /// 是否已从 keyring 加载
     loaded_from_keyring: bool,
+}
+
+impl std::fmt::Debug for AppSecretHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppSecretHolder")
+            .field(
+                "app_secret",
+                &self.app_secret.as_ref().map(|_| "[redacted]"),
+            )
+            .field("loaded_from_keyring", &self.loaded_from_keyring)
+            .finish()
+    }
 }
 
 impl AppSecretHolder {
@@ -217,7 +232,9 @@ impl Default for AppSecretHolder {
 /// - 响应: `{ "code": 0, "msg": "ok", "tenant_access_token": "t-xxx", "expire": 7200 }`
 ///
 /// **当前 skeleton 不真调 API** (per R20 阶段 4 估补, R21 续真接 `reqwest` crate).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// **M5 修复**: Debug 手写脱敏 (`token` 是长期访问令牌, derive(Debug) 即泄露面).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TenantAccessToken {
     /// App ID (per token 来源标识)
     pub app_id: String,
@@ -227,6 +244,17 @@ pub struct TenantAccessToken {
     pub expire_at_secs: u64,
     /// 创建时间戳 (秒, UNIX_EPOCH 起, 用于判断是否需要刷新)
     pub created_at_secs: u64,
+}
+
+impl std::fmt::Debug for TenantAccessToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TenantAccessToken")
+            .field("app_id", &self.app_id)
+            .field("token", &"[redacted]")
+            .field("expire_at_secs", &self.expire_at_secs)
+            .field("created_at_secs", &self.created_at_secs)
+            .finish()
+    }
 }
 
 impl TenantAccessToken {
@@ -287,7 +315,9 @@ impl TenantAccessToken {
 /// - TTL 更短 (通常 2h, refresh_token 30d)
 /// - 携带用户身份 (open_id / union_id / user_id)
 /// - 走 OAuth 流程 (`code` → `user_access_token`)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// **M5 修复**: Debug 手写脱敏 (`access_token` / `refresh_token` 是长期秘密, derive(Debug) 即泄露面).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UserAccessToken {
     /// App ID (per token 来源标识)
     pub app_id: String,
@@ -301,6 +331,19 @@ pub struct UserAccessToken {
     pub expire_at_secs: u64,
     /// 创建时间戳 (秒, UNIX_EPOCH 起)
     pub created_at_secs: u64,
+}
+
+impl std::fmt::Debug for UserAccessToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UserAccessToken")
+            .field("app_id", &self.app_id)
+            .field("access_token", &"[redacted]")
+            .field("refresh_token", &"[redacted]")
+            .field("open_id", &self.open_id)
+            .field("expire_at_secs", &self.expire_at_secs)
+            .field("created_at_secs", &self.created_at_secs)
+            .finish()
+    }
 }
 
 impl UserAccessToken {
@@ -355,12 +398,23 @@ impl UserAccessToken {
 /// 飞书 server 在配置事件订阅 URL 时, 发送 `url_verification` 事件包含 `challenge` 字段,
 /// 客户端必须原样返回 `challenge`. 配置完成后, 所有回调都带 `encrypt` + `token` 字段,
 /// 客户端需用 `encrypt_key` 解密 + 校验 `token` 一致.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// **M5 修复**: Debug 手写脱敏 (`token` / `encrypt_key` 是长期共享秘密, derive(Debug) 即泄露面).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct WebhookToken {
     /// Verification token (per 飞书事件订阅配置, 走 keyring 不明文)
     pub token: String,
     /// Encrypt key (per 飞书事件加密, 走 keyring 不明文)
     pub encrypt_key: String,
+}
+
+impl std::fmt::Debug for WebhookToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebhookToken")
+            .field("token", &"[redacted]")
+            .field("encrypt_key", &"[redacted]")
+            .finish()
+    }
 }
 
 impl WebhookToken {
@@ -375,9 +429,23 @@ impl WebhookToken {
         Ok(Self { token, encrypt_key })
     }
 
-    /// 验证 token 一致 (per 飞书回调校验, 简单字符串比较).
+    /// 验证 token 一致 (per 飞书回调校验, **恒定时间比较** per H7).
+    ///
+    /// 先对长度做常数时间填充, 再逐字节 OR 累加: `String == String` 先比长度再逐字节
+    /// 早退, 时序侧信道可逐字节恢复 secret; 本实现 0 早退, 两边都跑满 `max_len` 次.
     pub fn verify(&self, incoming_token: &str) -> bool {
-        self.token == incoming_token
+        let expected = self.token.as_bytes();
+        let incoming = incoming_token.as_bytes();
+        // 长度不一致即置 diff (长度本身不是秘密关注面; 字节内容走填充 + OR 累加)
+        let mut diff = u8::from(expected.len() != incoming.len());
+        let max_len = expected.len().max(incoming.len());
+        for i in 0..max_len {
+            // 常数时间填充: 越界侧填 0, 循环次数只依赖 max_len 不依赖内容
+            let x = if i < expected.len() { expected[i] } else { 0 };
+            let y = if i < incoming.len() { incoming[i] } else { 0 };
+            diff |= x ^ y;
+        }
+        diff == 0
     }
 }
 
@@ -580,6 +648,92 @@ mod tests {
         .expect("valid");
         assert!(wh.verify("verify_token_xxx"));
         assert!(!wh.verify("wrong_token"));
+    }
+
+    /// H7: 恒定时间 verify — 同长度不同内容 / 不同长度 (填充路径) / 空前缀 全拒.
+    #[test]
+    fn webhook_token_verify_constant_time_rejects_variants() {
+        let wh = WebhookToken::new(
+            "verify_token_xxx".to_string(),
+            "encrypt_key_xxx".to_string(),
+        )
+        .expect("valid");
+        // 同长度, 末字节不同 (早退比较会泄漏的信息, 恒定时间比较必须拒)
+        assert!(!wh.verify("verify_token_xxy"));
+        // 更长 (填充路径: 越界侧填 0)
+        assert!(!wh.verify("verify_token_xxx_extra"));
+        // 更短 (前缀匹配但短一截)
+        assert!(!wh.verify("verify_token_xx"));
+        // 空前串
+        assert!(!wh.verify(""));
+    }
+
+    /// M5: WebhookToken Debug 脱敏 (token / encrypt_key 0 现形).
+    #[test]
+    fn webhook_token_debug_is_redacted() {
+        let wh = WebhookToken::new(
+            "verify_token_secret_xxx".to_string(),
+            "encrypt_key_secret_xxx".to_string(),
+        )
+        .expect("valid");
+        let dbg = format!("{wh:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(
+            !dbg.contains("verify_token_secret_xxx"),
+            "Debug 0 泄 token: {dbg}"
+        );
+        assert!(
+            !dbg.contains("encrypt_key_secret_xxx"),
+            "Debug 0 泄 encrypt_key: {dbg}"
+        );
+    }
+
+    /// M5: TenantAccessToken Debug 脱敏.
+    #[test]
+    fn tenant_access_token_debug_is_redacted() {
+        let token = TenantAccessToken::new(
+            "cli_a1b2c3d4e5f6".to_string(),
+            "t-secret-abc123def456".to_string(),
+            7200,
+        )
+        .expect("valid");
+        let dbg = format!("{token:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(!dbg.contains("t-secret-abc123def456"), "Debug 0 泄 token: {dbg}");
+        // 非秘密字段保留 (app_id 是公开标识)
+        assert!(dbg.contains("cli_a1b2c3d4e5f6"), "app_id 应可见: {dbg}");
+    }
+
+    /// M5: UserAccessToken Debug 脱敏 (access + refresh 双 secret).
+    #[test]
+    fn user_access_token_debug_is_redacted() {
+        let token = UserAccessToken::new(
+            "cli_a1b2c3d4e5f6".to_string(),
+            "u-secret-abc123".to_string(),
+            "ur-secret-xyz789".to_string(),
+            "ou_user1234567890abcdef".to_string(),
+            7200,
+        )
+        .expect("valid user token must succeed");
+        let dbg = format!("{token:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(!dbg.contains("u-secret-abc123"), "Debug 0 泄 access_token: {dbg}");
+        assert!(!dbg.contains("ur-secret-xyz789"), "Debug 0 泄 refresh_token: {dbg}");
+    }
+
+    /// M5: AppSecretHolder Debug 脱敏.
+    #[test]
+    fn app_secret_holder_debug_is_redacted() {
+        let mut holder = AppSecretHolder::empty();
+        holder
+            .set("abcdef1234567890abcdef1234567890".to_string())
+            .expect("valid app secret must succeed");
+        let dbg = format!("{holder:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(
+            !dbg.contains("abcdef1234567890abcdef1234567890"),
+            "Debug 0 泄 app_secret: {dbg}"
+        );
     }
 
     #[test]

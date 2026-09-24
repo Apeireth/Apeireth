@@ -203,7 +203,7 @@ impl DedupIndex {
     /// `false` = duplicate inside the window → reject.
     pub fn accept(&self, namespace: &str, fingerprint: &str, now_ms: i64) -> bool {
         let key = (namespace.to_string(), fingerprint.to_string());
-        let mut inner = self.inner.lock().expect("dedup mutex poisoned");
+        let mut inner = self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(&prev_ts) = inner.lru.get(&key) {
             if now_ms.saturating_sub(prev_ts) < self.window_ms {
                 return false;
@@ -231,9 +231,17 @@ impl DedupIndex {
             return Ok(false);
         }
         // LRU accepted. Confirm against sqlite (covers restart / LRU eviction).
+        // V15 (M27) 起 dedup_fingerprints 已由迁移列表创建; 懒建保留作
+        // pre-V15 老库的 self-heal (幂等).
         ensure_dedup_table(store)?;
-        let conn = store.conn()?;
-        let prev: Option<i64> = conn
+        let mut conn = store.conn()?;
+        // M23: SELECT + INSERT/UPSERT 必须在同一个 BEGIN IMMEDIATE 事务内.
+        // 同进程内 `store.conn()` 的 MutexGuard 已串行化, 但**两个进程**同时
+        // 打开同一 DB 时, 事务外的 read-check-write 会让双方都读到无 prev →
+        // 都写 → 窗口内重复条目被双双接受 (去重语义被破坏). IMMEDIATE 一
+        // 开始就拿写锁, 读-判-写原子 (与 migrations.rs M21 同模式).
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let prev: Option<i64> = tx
             .query_row(
                 "SELECT last_seen_ms FROM dedup_fingerprints
                  WHERE namespace = ?1 AND fingerprint = ?2",
@@ -244,24 +252,30 @@ impl DedupIndex {
         if let Some(prev_ts) = prev {
             if now_ms.saturating_sub(prev_ts) < self.window_ms {
                 // Roll back the in-memory accept so LRU matches sqlite.
+                // M22: 回滚必须走 `touch_lru` — 旧实现 `inner.lru.insert(key,
+                // prev_ts)` 只插 lru 不进 `order` 队列, 该 key 永远不被驱逐,
+                // `lru_cap` 形同虚设 (每个 "LRU 未命中但 sqlite 窗口命中" 的
+                // 重复 key 泄漏一个条目, 高流量重复请求下 lru 无限增长).
                 let key = (namespace.to_string(), fingerprint.to_string());
-                let mut inner = self.inner.lock().expect("dedup mutex poisoned");
-                inner.lru.insert(key, prev_ts);
+                drop(tx); // 只读事务, 先回滚再锁 inner (避免持DB事务时锁内存)
+                let mut inner = self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                Self::touch_lru(&mut inner, key, prev_ts);
                 return Ok(false);
             }
         }
-        conn.execute(
+        tx.execute(
             "INSERT INTO dedup_fingerprints (namespace, fingerprint, last_seen_ms)
              VALUES (?1, ?2, ?3)
              ON CONFLICT(namespace, fingerprint) DO UPDATE SET last_seen_ms = excluded.last_seen_ms",
             params![namespace, fingerprint, now_ms],
         )?;
+        tx.commit()?;
         Ok(true)
     }
 
     /// Current in-memory LRU size (debug / tests).
     pub fn len(&self) -> usize {
-        self.inner.lock().expect("dedup mutex poisoned").lru.len()
+        self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).lru.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -290,6 +304,8 @@ impl Default for DedupIndex {
 }
 
 fn ensure_dedup_table(store: &SqliteMemoryStore) -> MemoryResult<()> {
+    // V15 (M27) 起 canonical 定义在 migrations 列表; 这里是 pre-V15 老库的
+    // self-heal 路径 (幂等, 与 V15 DDL 逐字一致).
     let conn = store.conn()?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS dedup_fingerprints (
@@ -419,6 +435,73 @@ mod tests {
         let idx = DedupIndex::new();
         assert!(idx.accept_persisted(&store, " ", "fp", 0).is_err());
         assert!(idx.accept_persisted(&store, "ns", "", 0).is_err());
+    }
+
+    /// M22: sqlite 窗口命中后的 LRU 回滚必须走 `touch_lru` (lru/order 双
+    /// 结构不变式). 旧实现直接 `lru.insert` 不进 order → 该 key 永远不被
+    /// 驱逐, lru_cap 形同虚设 (幽灵条目无限泄漏).
+    #[test]
+    fn persisted_rollback_does_not_leak_lru_entries() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        // 先在 sqlite 侧记录 "a" (窗口内).
+        let first = DedupIndex::with_config(DedupConfig {
+            window_ms: 10_000,
+            lru_cap: 8,
+        });
+        assert!(first.accept_persisted(&store, "ns", "a", 0).unwrap());
+
+        // 新 index (LRU 空, cap=2): b 占一格, 再撞 a 的 sqlite 窗口 → 回滚路径.
+        let second = DedupIndex::with_config(DedupConfig {
+            window_ms: 10_000,
+            lru_cap: 2,
+        });
+        assert!(second.accept_persisted(&store, "ns", "b", 0).unwrap());
+        assert!(
+            !second.accept_persisted(&store, "ns", "a", 1).unwrap(),
+            "sqlite 窗口内必须拒绝 (触发回滚)"
+        );
+
+        // 回滚插入的 "a" 必须可被正常驱逐: 再插两个新 key 把 cap=2 挤爆.
+        assert!(second.accept_persisted(&store, "ns", "c", 2).unwrap());
+        assert!(second.accept_persisted(&store, "ns", "d", 3).unwrap());
+        assert!(
+            second.len() <= 2,
+            "lru_cap 必须生效 (回滚 key 也进 order 队列), got {}",
+            second.len()
+        );
+    }
+
+    /// M23: accept_persisted 的 SELECT + UPSERT 在同一个 BEGIN IMMEDIATE
+    /// 事务内 — 同 identity 跨进程并发都读到无 prev 时, 写锁串行化保证
+    /// 只有一个写入者能插入, 另一个看到 prev 后拒绝 (不双重接受).
+    /// 这里用同一 store 上多个新 index 的顺序写入固化"窗口内单接受"语义
+    /// (回归锚点; 每个新 index 的 LRU 都空, 必须靠 sqlite 行拒绝).
+    #[test]
+    fn persisted_accepts_once_per_window_across_indexes() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        let seed = DedupIndex::with_config(DedupConfig {
+            window_ms: 1_000,
+            lru_cap: 8,
+        });
+        assert!(seed.accept_persisted(&store, "ns", "fp", 0).unwrap());
+        for now in [0_i64, 10, 20, 30] {
+            let idx = DedupIndex::with_config(DedupConfig {
+                window_ms: 1_000,
+                lru_cap: 8,
+            });
+            assert!(
+                !idx.accept_persisted(&store, "ns", "fp", now).unwrap(),
+                "窗口内每个新 index 都必须被 sqlite 拒绝 (now={now})"
+            );
+        }
+        let idx = DedupIndex::with_config(DedupConfig {
+            window_ms: 1_000,
+            lru_cap: 8,
+        });
+        assert!(
+            idx.accept_persisted(&store, "ns", "fp", 1_000).unwrap(),
+            "窗口过期后重新接受"
+        );
     }
 
     #[test]

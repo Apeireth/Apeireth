@@ -271,15 +271,17 @@ impl ProtocolAdapter for GeminiAdapter {
         let usage = raw
             .get("usageMetadata")
             .map(|u| {
-                let p = u
-                    .get("promptTokenCount")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
-                let c = u
-                    .get("candidatesTokenCount")
-                    .or_else(|| u.get("outputTokenCount"))
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
+                let p = crate::normalized::clamp_u32(
+                    u.get("promptTokenCount")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0),
+                );
+                let c = crate::normalized::clamp_u32(
+                    u.get("candidatesTokenCount")
+                        .or_else(|| u.get("outputTokenCount"))
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0),
+                );
                 crate::normalized::NormalizedUsage::new(p, c)
             })
             .unwrap_or_default();
@@ -350,10 +352,15 @@ impl GeminiAdapter {
             .map(|p| match p {
                 ContentPart::Text { text } => json!({"text": text}),
                 ContentPart::ImageUrl { url, .. } => {
-                    if url.starts_with("data:") {
-                        let comma = url.find(',').unwrap_or(url.len());
-                        let meta = &url[5..comma];
-                        let data = &url[comma + 1..];
+                    if let Some(body) = url.strip_prefix("data:") {
+                        // H2 修复 (2026-09-24 审计): 无逗号的畸形 data URL
+                        // (`data:image/png;base64`) 曾令 `&url[comma + 1..]`
+                        // 越界 panic (comma = url.len() 时 comma+1 越界)。
+                        // 现在按"无数据段"处理: meta 取 body, data 为空。
+                        let (meta, data) = match body.find(',') {
+                            Some(comma) => (&body[..comma], &body[comma + 1..]),
+                            None => (body, ""),
+                        };
                         let media_type = meta.split(';').next().unwrap_or("image/png");
                         json!({
                             "inlineData": {

@@ -38,7 +38,12 @@ pub(crate) fn is_sensitive_path(root: &Path, path: &Path) -> bool {
 }
 
 fn is_sensitive_directory(name: &str) -> bool {
-    matches!(name, ".ssh" | ".aws" | ".gnupg" | ".secret" | ".secrets")
+    // L 组 (2026-09-24 审计): .kube/config (集群凭据) 与 .docker/config.json
+    // (registry auth) 补列 —— 常见密钥文件不在表的缺口。
+    matches!(
+        name,
+        ".ssh" | ".aws" | ".gnupg" | ".secret" | ".secrets" | ".kube" | ".docker"
+    )
 }
 
 fn is_sensitive_file_name(name: &str) -> bool {
@@ -61,6 +66,13 @@ fn is_sensitive_file_name(name: &str) -> bool {
         || name.starts_with("secret.")
         || name.starts_with("secrets.")
     {
+        return true;
+    }
+
+    // L 组 (2026-09-24 审计): npm registry token (.npmrc 的 authToken) 与
+    // 常见裸 token 文件补列。输出侧 tripwire 是兜底, 这里先把它们挡在只读
+    // 工具视野之外。
+    if name == ".npmrc" || name == "token.txt" {
         return true;
     }
 
@@ -117,6 +129,8 @@ mod tests {
             ".git-credentials",
             ".netrc",
             "_netrc",
+            ".npmrc",
+            "token.txt",
             "Users31683.git-credentials",
             "GeminiApiKey.txt",
             "apikey-ultra.txt",
@@ -127,6 +141,8 @@ mod tests {
             "secrets.production",
             ".ssh/config",
             ".aws/credentials",
+            ".kube/config",
+            ".docker/config.json",
             ".config/gcloud/application_default_credentials.json",
         ] {
             assert!(

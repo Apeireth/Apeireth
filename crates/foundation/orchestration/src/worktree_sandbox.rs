@@ -75,16 +75,11 @@ impl WorktreeConfig {
         let worktree_name = worktree_name.into();
         let branch_name = branch_name.into();
 
-        if worktree_name.trim().is_empty() {
-            return Err(WorktreeError::InvalidConfig(
-                "worktree name cannot be empty".to_string(),
-            ));
-        }
-        if branch_name.trim().is_empty() {
-            return Err(WorktreeError::InvalidConfig(
-                "branch name cannot be empty".to_string(),
-            ));
-        }
+        // M6: 名称净化 — worktree_name 直接进 `repo_root/.worktrees/<name>`, 调用方
+        // (如 WorktreeSandboxedOrchestrator::dispatch) 传入的是**外部可控的 spec.id**。
+        // 绝对路径 / `..` / 分隔符 / 控制字符必须拒绝, 否则可在任意路径建 worktree。
+        let worktree_name = sanitize_worktree_name(&worktree_name)?;
+        let branch_name = sanitize_branch_name(&branch_name)?;
 
         let worktree_path = repo_root.join(".worktrees").join(&worktree_name);
         Ok(Self {
@@ -115,6 +110,87 @@ impl WorktreeConfig {
             self.worktree_path.to_string_lossy().to_string(),
         ]
     }
+}
+
+/// worktree 目录名净化 (M6): 只保留 ASCII 字母数字与 `-`/`_`/`.`, 限制长度。
+///
+/// **拒绝语义** (0 装诚实): 输入含路径分隔符 (`/` `\`)、`..` 段、盘符/UNC 前缀、
+/// URL 前缀或经净化后为空 → 返回 `Err(InvalidConfig)`, **不静默改写**后继续
+/// (静默改写会让两个不同恶意 id 收敛到同一目录, 制造覆盖面)。
+///
+/// 这是 path 关键面: 该值直接进 `repo_root/.worktrees/<name>`。
+fn sanitize_worktree_name(raw: &str) -> Result<String, WorktreeError> {
+    let invalid = |why: &str| {
+        WorktreeError::InvalidConfig(format!("worktree name rejected ({why}): {raw:?}"))
+    };
+
+    if raw.trim().is_empty() {
+        return Err(invalid("empty"));
+    }
+    if raw.contains('/') || raw.contains('\\') {
+        return Err(invalid("path separator"));
+    }
+    if raw.split('.').any(|seg| seg.is_empty()) {
+        return Err(invalid("empty path segment"));
+    }
+    let lowered = raw.to_ascii_lowercase();
+    if lowered.starts_with("http://") || lowered.starts_with("https://") {
+        return Err(invalid("url-like prefix"));
+    }
+    // Windows 盘符 (`C:...) 写法.
+    if raw.len() >= 2 && raw.as_bytes()[1] == b':' {
+        return Err(invalid("drive-letter prefix"));
+    }
+
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
+        .take(120)
+        .collect();
+    if cleaned.is_empty() {
+        return Err(invalid("no safe characters"));
+    }
+    Ok(cleaned)
+}
+
+/// git branch 名净化 (M6): `/` 是 git ref 的合法分层符 (`feature/x`), 保留;
+/// 但拒绝对空段 / `..` / 盘符 / UNC / URL 前缀 / 控制字符。
+///
+/// branch 不进文件路径 (只作为 argv 元素传给 `git worktree add -b`), 风险低于
+/// worktree_name, 故保留 `/` 白名单而非一刀切拒绝。
+fn sanitize_branch_name(raw: &str) -> Result<String, WorktreeError> {
+    let invalid = |why: &str| {
+        WorktreeError::InvalidConfig(format!("branch name rejected ({why}): {raw:?}"))
+    };
+
+    if raw.trim().is_empty() {
+        return Err(invalid("empty"));
+    }
+    if raw.contains('\\') {
+        return Err(invalid("backslash separator"));
+    }
+    if raw.starts_with('/') || raw.ends_with('/') || raw.contains("//") {
+        return Err(invalid("empty ref segment"));
+    }
+    if raw.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
+        return Err(invalid("dot ref segment"));
+    }
+    let lowered = raw.to_ascii_lowercase();
+    if lowered.starts_with("http://") || lowered.starts_with("https://") {
+        return Err(invalid("url-like prefix"));
+    }
+    if raw.len() >= 2 && raw.as_bytes()[1] == b':' {
+        return Err(invalid("drive-letter prefix"));
+    }
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.' || *c == '/')
+        .take(120)
+        .collect();
+    if cleaned.is_empty() {
+        return Err(invalid("no safe characters"));
+    }
+    Ok(cleaned)
 }
 
 /// State machine coordinating TDD verification and fail-safe rollbacks.
@@ -573,6 +649,81 @@ mod worktree_dispatch_tests {
             out.output["_worktree_cleanup_failed"],
             serde_json::Value::Bool(true),
             "失败须留痕"
+        );
+    }
+
+    /// M6 回归: 合法 id / branch 名原样通过 (不误伤正常 subagent id 与 git ref 分层).
+    #[test]
+    fn m6_worktree_config_accepts_safe_names() {
+        let cfg = WorktreeConfig::new("/repo", "task-001_x.1", "apeireth/worktree-task-001")
+            .expect("合法名应接受");
+        assert_eq!(cfg.worktree_name, "task-001_x.1");
+        assert_eq!(cfg.branch_name, "apeireth/worktree-task-001");
+        let cfg2 =
+            WorktreeConfig::new("/repo", "abc123", "feature/x_patch").expect("合法 branch 名应接受");
+        assert_eq!(cfg2.worktree_name, "abc123");
+        assert_eq!(
+            cfg.worktree_path,
+            std::path::PathBuf::from("/repo/.worktrees/task-001_x.1")
+        );
+    }
+
+    /// M6 回归: 绝对路径 / `..` / 分隔符 / 盘符 / URL 前缀一律拒绝。
+    #[test]
+    fn m6_worktree_config_rejects_traversal_and_absolute() {
+        let bad_names = [
+            "../evil",
+            "..",
+            "../../etc/cron.d/x",
+            "/etc/passwd",
+            "C:\\Windows\\System32",
+            "\\\\server\\share",
+            "sub/dir",
+            "sub\\dir",
+            "https://evil.example/wt",
+            "",
+            "   ",
+        ];
+        for name in bad_names {
+            let r = WorktreeConfig::new("/repo", name, "apeireth-worktree-x");
+            assert!(
+                r.is_err(),
+                "应拒绝 worktree_name={name:?}, 得到 {:?}",
+                r.ok()
+            );
+        }
+        // branch 名同样拒绝.
+        assert!(WorktreeConfig::new("/repo", "ok", "../escape").is_err());
+        // 净化后无可用字符 → 拒绝.
+        assert!(WorktreeConfig::new("/repo", "⋯", "b").is_err());
+    }
+
+    /// M6 回归: dispatch 层对恶意 spec.id fail-closed (不进 inner, 不跑 git)。
+    #[tokio::test]
+    async fn m6_dispatch_rejects_malicious_spec_id() {
+        let inner = FakeOrchestrator {
+            seen: std::sync::Mutex::new(Vec::new()),
+        };
+        let (runner, log) = recording_runner(false);
+        let orch = WorktreeSandboxedOrchestrator::new(inner, "/repo", runner);
+
+        let err = orch
+            .dispatch(spec("../../../../etc/cron.d/evil"))
+            .await
+            .expect_err("恶意 spec.id 必须拒绝");
+        assert!(
+            format!("{err}").contains("worktree"),
+            "错误应指出 worktree 配置问题: {err}"
+        );
+        // 没跑任何 git 命令, 也没进 inner dispatch。
+        assert!(log.lock().unwrap_or_else(|p| p.into_inner()).is_empty());
+        assert!(
+            orch.inner
+                .seen
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .is_empty(),
+            "拒绝后不得进入 inner dispatch"
         );
     }
 }

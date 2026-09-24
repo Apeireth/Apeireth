@@ -136,14 +136,19 @@ impl ActionGuard {
             return ActionVerdict::BlockByPrinciple(key);
         }
 
-        // V2: 权限检查 (L0-L5 + 风险分级)
-        let v2 = Self::check_permission(action, v2_permission);
-        if !v2 {
+        // V2: 权限检查 (风险等级 → 权限洋葱层映射)。
+        //
+        // H2 修复 (2026-09-24 审计): 原实现是 `permission.l4.requires_ha || true`
+        // 与 `permission.l3.requires_ha || true` —— `|| true` 恒为真, 字段被读取后
+        // 立即丢弃, V2 门退化为零约束。现在 V2 真实解析"风险等级 → 层"映射,
+        // 并把层的 `requires_ha` 语义**交给 V3 执行** (见 check_ha)。
+        let (v2_pass, requires_ha) = Self::check_permission(action, v2_permission);
+        if !v2_pass {
             return ActionVerdict::BlockByPermission(format!("风险={:?}", action.risk_level));
         }
 
         // V3: HA 真实人类批准
-        let v3 = Self::check_ha(action, v3_ha);
+        let v3 = Self::check_ha(action, v3_ha, requires_ha);
         if !v3 {
             return ActionVerdict::BlockByHumanAuthority("HA 拒绝或离线".to_string());
         }
@@ -152,29 +157,50 @@ impl ActionGuard {
         ActionVerdict::Allow
     }
 
-    fn check_permission(action: &Action, permission: &PermissionOnion) -> bool {
-        // Critical 必须走物理隔离 + L0 requires_ha（双校验）
+    /// V2: 风险等级 → 权限洋葱层。返回 `(放行?, 该动作是否必须 HA 在场)`。
+    ///
+    /// - Critical: L0 永远要求 HA; 目标是 `ModifyL0HA` 时直接拒 (V1 通常先拦,
+    ///   这里是双保险)。
+    /// - High → L4 / Medium → L3: 放行; 层的 `requires_ha` 决定该动作是否必须
+    ///   HA 在场 —— **交给 V3 执行**, 不再 `|| true` 恒真丢弃。
+    /// - Low / Info: 安全等级不触 HA 门。
+    fn check_permission(action: &Action, permission: &PermissionOnion) -> (bool, bool) {
         match action.risk_level {
             RiskLevel::Critical => {
-                // L0 HA 核心永远需要 HA 真实人类批准
-                if action.target == ActionTarget::ModifyL0HA && !permission.l0.requires_ha {
-                    return false;
+                if action.target == ActionTarget::ModifyL0HA {
+                    return (false, true);
                 }
-                action.target != ActionTarget::ModifyL0HA
+                (true, permission.l0.requires_ha)
             }
-            RiskLevel::High => permission.l4.requires_ha || true, // L4 核心升级可走 HA
-            RiskLevel::Medium => permission.l3.requires_ha || true,
-            RiskLevel::Low => true,
-            RiskLevel::Info => true,
+            RiskLevel::High => (true, permission.l4.requires_ha),
+            RiskLevel::Medium => (true, permission.l3.requires_ha),
+            RiskLevel::Low | RiskLevel::Info => (true, false),
         }
     }
 
-    fn check_ha(action: &Action, ha: &HumanAuthority) -> bool {
-        // L0 HA 永远需要真实人类批准
-        // 离线模式 = 主 AI 只能做"安全"等级 (low/info)
+    /// V3: HA 真实人类批准。`requires_ha` 是 V2 从权限洋葱层解析出的
+    /// "该动作必须 HA 在场"。
+    ///
+    /// H2 修复 (2026-09-24 审计): 原实现在线模式是 `_ => true` (注释自述
+    /// "简化: 实际需要真实人类验证") —— SingleHuman/MultiHuman 全部无条件放行,
+    /// V3 门从未发生。诚实语义:
+    /// - Offline: 主 AI 只做安全等级 (low/info);
+    /// - 不触 HA 门的动作 (requires_ha=false): 直接放行;
+    /// - 触门的动作在在线模式下必须**有所登记的真实人类权威**
+    ///   (SingleHuman ≥1 / MultiHuman ≥ multi_sign.required), 否则 fail-closed。
+    ///
+    /// 逐动作的签名收集由 `HumanAuthority::verify_multisig` 在调用方接线
+    /// (v2.0 0 装: signature 是 hex string, 非真 crypto 校验, 详见 `onion.rs`
+    /// 的 0 装 PASS 注释)。
+    fn check_ha(action: &Action, ha: &HumanAuthority, requires_ha: bool) -> bool {
         match ha.mode {
             HAMode::Offline => matches!(action.risk_level, RiskLevel::Low | RiskLevel::Info),
-            _ => true, // 简化: 实际需要真实人类验证
+            _ if !requires_ha => true,
+            HAMode::SingleHuman => !ha.real_humans.is_empty(),
+            HAMode::MultiHuman => {
+                let required = ha.multi_sign.as_ref().map_or(1, |policy| policy.required);
+                !ha.real_humans.is_empty() && ha.real_humans.len() as u8 >= required
+            }
         }
     }
 }

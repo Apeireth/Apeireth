@@ -77,6 +77,14 @@ pub const DEFAULT_MODELS: &[&str] = &[
 ];
 /// Default per-request timeout.
 pub const DEFAULT_TIMEOUT_MS: u64 = 60_000;
+/// SSE 重组缓冲上限 (1 MiB)。
+///
+/// `buffer` 只在遇到 `\n\n`/`\r\n\r\n` 帧边界时才被消费: 恶意/被攻陷/行为
+/// 异常的端点 (本模块明确支持自托管 Ollama/vLLM/网关) 可持续发送**永远不含
+/// 空行**的字节流, 帧边界永不出现, 缓冲只增不减; 整请求超时是 60s 级, 窗口
+/// 内足以分配数十 GiB → OOM (H11)。超过阈值即返回 `ProviderError::BadResponse`
+/// 终止该流, 而不是继续吞字节。
+const MAX_SSE_BUFFER_BYTES: usize = 1024 * 1024;
 
 /// A handle to the credential resolver, shared between a plugin and its
 /// capability across the registration→initialize timing gap. Holds a resolver
@@ -126,8 +134,7 @@ impl OpenAiCompatibleProviderCapability {
     /// The current live base URL.
     pub fn base_url(&self) -> String {
         self.base_url
-            .read()
-            .expect("openai-compatible base_url lock poisoned")
+            .read().unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
     }
 
@@ -135,8 +142,7 @@ impl OpenAiCompatibleProviderCapability {
     pub fn set_base_url(&self, base_url: impl Into<String>) {
         *self
             .base_url
-            .write()
-            .expect("openai-compatible base_url lock poisoned") = base_url.into();
+            .write().unwrap_or_else(|poisoned| poisoned.into_inner()) = base_url.into();
     }
 
     /// Resolve the API key for this turn, or fail permanently. A missing key
@@ -144,7 +150,7 @@ impl OpenAiCompatibleProviderCapability {
     /// missing key is a misconfiguration, not an anonymous request (§19/§20).
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
         let resolver = {
-            let guard = self.resolver.lock().expect("resolver slot lock poisoned");
+            let guard = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone().ok_or_else(|| ProviderError::AuthFailed {
                 provider: self.id.to_string(),
                 detail: format!(
@@ -348,6 +354,16 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
                 break;
             };
             buffer.extend_from_slice(&chunk);
+            // H11: 无上限吞字节 = 端点驱动的内存耗尽。只有完整帧才会 drain,
+            // 所以这里必须在追加后主动设闸。
+            if buffer.len() > MAX_SSE_BUFFER_BYTES {
+                return Err(ProviderError::BadResponse {
+                    provider: self.id.to_string(),
+                    detail: format!(
+                        "SSE frame buffer exceeded {MAX_SSE_BUFFER_BYTES} bytes without a frame boundary; refusing to buffer further"
+                    ),
+                });
+            }
             while let Some(end) = find_sse_frame_end(&buffer) {
                 let frame: Vec<u8> = buffer.drain(..end).collect();
                 for raw_line in String::from_utf8_lossy(&frame).split('\n') {
@@ -535,11 +551,18 @@ impl OpenAiCompatibleProviderPlugin {
             // Generic provider: no hardcoded model default. The caller must
             // configure models; an empty list is rejected at build_models.
             .unwrap_or_default();
-        let http = reqwest::Client::builder().build().map_err(|e| {
-            PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
-                "reqwest client build failed: {e}"
-            )))
-        })?;
+        // M6: 禁重定向。reqwest 0.12 默认跟随 30x, 且跨 host 只删固定集合的
+        // 敏感头 (Authorization/Cookie/...) —— 自定义 bearer 语义的 vendor
+        // 端点一旦 30x 到另一主机, key 会跟着转发。Chat Completions 从不 30x,
+        // 直接拒绝同时消掉该面 (base_url 可被无认证 admin 端点热改)。
+        let http = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| {
+                PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
+                    "reqwest client build failed: {e}"
+                )))
+            })?;
         Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)
     }
 
@@ -560,7 +583,7 @@ impl OpenAiCompatibleProviderPlugin {
     /// Attach a credential resolver without booting a full runtime (tests).
     #[doc(hidden)]
     pub fn attach_resolver_for_test(&self, resolver: Arc<dyn CredentialResolver>) {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(resolver);
     }
 
@@ -578,13 +601,13 @@ impl Plugin for OpenAiCompatibleProviderPlugin {
     }
 
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(Arc::clone(&ctx.credentials));
         Ok(())
     }
 
     async fn shutdown(&self) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = None;
         Ok(())
     }
@@ -757,6 +780,55 @@ mod tests {
                 total_tokens: 7,
             }
         );
+    }
+
+    /// H11 回归: 端点发送**永远不含帧边界**的字节流时, SSE 重组缓冲必须
+    /// 有上限 —— 超过 1 MiB 即 `BadResponse`, 而不是无上限吃内存到 OOM
+    /// (整请求超时是 60s 级, 窗口内足以分配数十 GiB)。
+    #[tokio::test]
+    async fn streaming_rejects_buffer_overflow_without_frame_boundary() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            let mut buf = [0u8; 4096];
+            let _ = socket.read(&mut buf).await;
+            let head =
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n";
+            let _ = socket.write_all(head.as_bytes()).await;
+            // 无空行分隔符的连续字节流: 帧边界永不出现, 旧实现会一直追加。
+            let payload = vec![b'x'; 3 * MAX_SSE_BUFFER_BYTES];
+            let _ = socket.write_all(&payload).await;
+            let _ = socket.flush().await;
+        });
+
+        let resolver = Arc::new(Mutex::new(Some(Arc::new(
+            apeireth_plugin::StaticCredentials::new().with(OPENAI_COMPATIBLE_API_KEY, "sk-mock"),
+        ) as Arc<dyn CredentialResolver>)));
+        let cap = OpenAiCompatibleProviderCapability::new(
+            format!("http://{addr}"),
+            vec!["gpt-4o-mini".into()],
+            http(),
+            DEFAULT_TIMEOUT_MS,
+            resolver,
+        )
+        .expect("capability builds");
+
+        let error = cap
+            .complete_streaming(&request(), Arc::new(|_: String| {}))
+            .await
+            .expect_err("an unbounded frame-less stream must be refused");
+        assert!(
+            matches!(error, ProviderError::BadResponse { .. }),
+            "{error:?}"
+        );
+        let ProviderError::BadResponse { detail, .. } = error else {
+            unreachable!("asserted above");
+        };
+        assert!(detail.contains("frame buffer exceeded"), "{detail}");
     }
 
     #[test]

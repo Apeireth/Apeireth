@@ -10,6 +10,7 @@
 //! orchestration root that acts on them.
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
+use apeireth_governance::TurnSecurityContext;
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::ToolCall;
 use serde::{Deserialize, Serialize};
@@ -133,6 +134,18 @@ pub struct FrozenTurnContinuation {
     /// cannot reset the turn's side-call budget.
     #[serde(default)]
     pub module_invocations: usize,
+    /// The turn's immutable intent/authorization context, frozen with the
+    /// continuation.
+    ///
+    /// M27: without it the resumed turn ran `advance(..., None, ...)`, so
+    /// every governance evaluation in the resumed round — and the guard's
+    /// intent-alignment layer behind it — saw an *unbound* turn and treated
+    /// it as "no intent", silently downgrading high-risk effects from
+    /// Deny/RequireApproval to Allow (H3). The context is serializable, so
+    /// it is persisted verbatim with the approval; `#[serde(default)]`
+    /// keeps approvals persisted before this field loadable as `None`.
+    #[serde(default)]
+    pub security_context: Option<TurnSecurityContext>,
 }
 
 impl FrozenTurnContinuation {
@@ -153,6 +166,7 @@ impl FrozenTurnContinuation {
             approved_tool_index: None,
             approved_approval_id: None,
             module_invocations: 0,
+            security_context: None,
         }
     }
 }
@@ -445,6 +459,7 @@ fn update_len_prefixed(hasher: &mut Sha256, bytes: &[u8]) {
 mod tests {
     use super::*;
     use apeireth_core::kernel::SessionId;
+    use apeireth_governance::TaskIntentEnvelopeV1;
 
     #[test]
     fn canonical_json_object_key_order_is_irrelevant() {
@@ -657,6 +672,53 @@ mod tests {
         assert_eq!(migrated.command_text, "");
         assert_eq!(migrated.arguments_summary, "");
         assert_eq!(migrated.tool_name, "shell");
+    }
+
+    /// M27 兼容性: `security_context` 字段加入前持久化的 approval (session
+    /// blob) 必须仍可加载 —— 缺失字段是 `None`, 不是反序列化失败。
+    #[test]
+    fn frozen_continuation_without_security_context_still_deserializes() {
+        let mut continuation = FrozenTurnContinuation::start_of_round(
+            RequestId::new(),
+            TraceId::new(),
+            "m",
+            1,
+        );
+        continuation.security_context = None;
+        let json = serde_json::to_value(&continuation).unwrap();
+        let mut object = json.as_object().unwrap().clone();
+        object.remove("security_context");
+
+        let migrated: FrozenTurnContinuation =
+            serde_json::from_value(serde_json::Value::Object(object)).unwrap();
+        assert_eq!(migrated.security_context, None);
+        assert_eq!(migrated.round, 1);
+    }
+
+    /// M27: 冻结的 security context 随 continuation  round-trip (含 intent)。
+    #[test]
+    fn frozen_continuation_round_trips_its_security_context() {
+        let intent = TaskIntentEnvelopeV1::unknown("s", "t");
+        let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
+        let mut continuation = FrozenTurnContinuation::start_of_round(
+            RequestId::new(),
+            TraceId::new(),
+            "m",
+            3,
+        );
+        continuation.security_context = Some(context);
+
+        let restored: FrozenTurnContinuation =
+            serde_json::from_str(&serde_json::to_string(&continuation).unwrap()).unwrap();
+        assert_eq!(
+            restored
+                .security_context
+                .as_ref()
+                .and_then(|c| c.intent.as_ref())
+                .map(|intent| intent.intent_id.clone()),
+            Some(format!("intent:t")),
+            "the frozen intent must survive persistence"
+        );
     }
 
     #[test]

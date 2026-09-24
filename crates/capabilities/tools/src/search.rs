@@ -6,6 +6,7 @@
 //! (path, line, text) order. Known credential and key paths are skipped.
 
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use apeireth_core::kernel::CapabilityId;
@@ -108,6 +109,12 @@ impl SearchTool {
         } else {
             root.join(requested)
         };
+
+        // M13 (2026-09-24 审计): guardrail 前置守门接线 (词法层先行, 现实层
+        // canonicalize 校验随后; 双层拒穿越/symlink 逃逸)。
+        crate::guardrail::ToolGuardrail::verify_path_access(&root, &candidate)
+            .map_err(|e| SearchError::PermissionDenied(e.to_string()))?;
+
         let canonical = fs::canonicalize(&candidate).map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => {
                 SearchError::NotFound(format!("{}", candidate.display()))
@@ -288,14 +295,22 @@ impl SearchTool {
             }
         }
 
-        let Ok(metadata) = fs::metadata(path) else {
-            return;
-        };
-        if metadata.len() > self.max_file_size {
+        // L 组 (2026-09-24 审计): 不再信任 metadata 预检大小 (检查与读取
+        // 之间有增长竞态); open + take(max+1) 按实读字节判定, 超限跳过。
+        let mut content_bytes = Vec::new();
+        match fs::OpenOptions::new().read(true).open(path) {
+            Ok(file) => {
+                let mut limited = file.take(self.max_file_size.saturating_add(1));
+                if limited.read_to_end(&mut content_bytes).is_err() {
+                    return;
+                }
+            }
+            Err(_) => return,
+        }
+        if content_bytes.len() as u64 > self.max_file_size {
             return;
         }
-
-        let Ok(content) = fs::read_to_string(path) else {
+        let Ok(content) = String::from_utf8(content_bytes) else {
             return;
         };
 
@@ -549,6 +564,41 @@ mod tests {
         assert!(result.is_ok());
         let rendered = result.render();
         assert!(rendered.contains("\"count\":0"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn oversize_file_content_is_skipped_by_bounded_read() {
+        // L 组: take(max+1) 实读字节判定 —— 内容超限的文件被跳过, 未超限的
+        // 文件照常命中。
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("large.txt"), "needle".repeat(100)).unwrap();
+        fs::write(dir.path().join("small.txt"), "needle").unwrap();
+        let tool = SearchTool::new(dir.path().to_path_buf()).with_max_file_size(10);
+
+        let result = invoke(&tool, "needle", ".", None).await;
+        assert!(result.is_ok());
+        let rendered = result.render();
+        assert!(rendered.contains("small.txt"), "{rendered}");
+        assert!(!rendered.contains("large.txt"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn search_rejects_absolute_path_outside_root() {
+        // M13 接线: root 外的绝对路径一律 permission denied。
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        let outside = base.path().join("outside");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&outside).unwrap();
+        fs::write(outside.join("secret.txt"), "needle").unwrap();
+
+        let result = invoke(&tool(&root), "needle", outside.to_str().unwrap(), None).await;
+        assert!(!result.is_ok());
+        assert!(
+            result.render().contains("permission denied"),
+            "{}",
+            result.render()
+        );
     }
 
     #[tokio::test]

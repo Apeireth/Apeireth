@@ -197,6 +197,13 @@ impl MemoryBackend for SqliteBackend {
             .write_sync(move |conn| {
                 // Keep this self-healing for older test/embedded schemas that
                 // predate V9; the production migration creates the same table.
+                //
+                // M27 / L 组 (schema 所有权说明): `episode_memory_metadata` 的
+                // canonical 定义在 migrations **V11** (带 `updated_at` 列).
+                // 这里的懒建是 pre-V11 老库 self-heal 路径 — 只会建出 V9 时代的
+                // 两列形态 (无 updated_at); 新库 `updated_at` 始终由 V11 提供.
+                // 读取方不依赖 updated_at, 故两种形态行为一致; 但 schema 快照
+                // 以 V11 为准, 不允许在此新增列定义.
                 conn.execute_batch(
                     "CREATE TABLE IF NOT EXISTS episode_memory_metadata (\
                      episode_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL)",
@@ -268,19 +275,27 @@ impl MemoryBackend for SqliteBackend {
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         self.pool
             .write_sync(move |conn| {
+                // H13: `session_id` / `tombstoned_at` 必须写**列** — 与
+                // `append_only::insert_entry` (HistoryStream trait 路径) 的行
+                // 布局统一. 否则两条写入路径对同一批 6 流表语义分裂: trait
+                // 路径写的行本 backend 的 `list_for_session` 按列过滤查不到;
+                // 本 backend 写的 tombstone 只在 payload, 按列过滤的 trait
+                // 读者 (include_tombstoned=false) 看不见软删除.
                 conn.execute(
                     &format!(
-                        "INSERT OR IGNORE INTO {table} (id, subject_id, subject_rev, created_at, payload, source, tags) \
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+                        "INSERT OR IGNORE INTO {table} (id, subject_id, subject_rev, session_id, created_at, payload, source, tags, tombstoned_at) \
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
                     ),
                     rusqlite::params![
                         entry.id,
                         entry.subject_id,
                         entry.subject_rev,
+                        entry.session_id,
                         entry.created_at,
                         payload_str,
                         entry.source,
                         tags_json,
+                        entry.tombstoned_at,
                     ],
                 )?;
                 Ok(())
@@ -298,29 +313,49 @@ impl MemoryBackend for SqliteBackend {
         let session_id = session_id.to_string();
         self.pool
             .read(|conn| {
+                // H13: 行归属以 `session_id` 列为准, payload '$.session_id' 为
+                // 兼容兜底 (旧版 SqliteBackend 只写 payload 不写列).
+                // - 去掉 `json_extract(...) IS NULL` 全匹配兜底: 它会把其它
+                //   session 的 trait 路径行 (payload 无 $.session_id 键) 也
+                //   返回 — 跨 session 数据泄漏.
+                // - 仅当调用方显式查询无归属条目 (session_id 传空串) 时才匹配
+                //   NULL 归属.
+                // - tombstone 同时查列与 payload: trait 路径的 tombstone 落在
+                //   `tombstoned_at` 列, 旧实现只读 payload → 软删除条目被当
+                //   活条目返回.
                 let mut stmt = conn.prepare_cached(&format!(
-                    "SELECT id, subject_id, subject_rev, created_at, payload, source, tags \
-                         FROM {table} \
-                         WHERE json_extract(payload, '$.session_id') = ?1 \
-                            OR json_extract(payload, '$.session_id') IS NULL \
-                         ORDER BY created_at ASC \
-                         LIMIT ?2"
+                    "SELECT id, subject_id, subject_rev, session_id, created_at, payload, source, tags, tombstoned_at \
+                          FROM {table} \
+                          WHERE ((session_id = ?1 OR (session_id IS NULL AND ?1 = '')) \
+                             OR (json_extract(payload, '$.session_id') = ?1 \
+                                 OR (json_extract(payload, '$.session_id') IS NULL AND ?1 = ''))) \
+                            AND tombstoned_at IS NULL \
+                            AND json_extract(payload, '$.tombstoned_at') IS NULL \
+                          ORDER BY created_at ASC \
+                          LIMIT ?2"
                 ))?;
                 let rows = stmt.query_map(rusqlite::params![session_id, n as i64], |row| {
                     let id: String = row.get(0)?;
                     let subject_id: String = row.get(1)?;
                     let subject_rev: i64 = row.get(2)?;
-                    let created_at: i64 = row.get(3)?;
-                    let payload_str: String = row.get(4)?;
-                    let source: String = row.get(5)?;
-                    let tags_str: String = row.get(6)?;
+                    let created_at: i64 = row.get(4)?;
+                    let payload_str: String = row.get(5)?;
+                    let source: String = row.get(6)?;
+                    let tags_str: String = row.get(7)?;
+                    // 列优先 (H13 统一布局), payload 兜底 (旧版 SqliteBackend 行).
+                    let column_session: Option<String> = row.get(3).ok().flatten();
+                    let column_tombstone: Option<i64> = row.get(8).ok().flatten();
                     let payload: serde_json::Value =
                         serde_json::from_str(&payload_str).unwrap_or(serde_json::Value::Null);
                     let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-                    let session_id = payload
-                        .get("session_id")
-                        .and_then(|v| v.as_str().map(String::from));
-                    let tombstoned_at = payload.get("tombstoned_at").and_then(|v| v.as_i64());
+                    let session_id = column_session.or_else(|| {
+                        payload
+                            .get("session_id")
+                            .and_then(|v| v.as_str().map(String::from))
+                    });
+                    let tombstoned_at = column_tombstone.or_else(|| {
+                        payload.get("tombstoned_at").and_then(|v| v.as_i64())
+                    });
                     let inner_payload = payload
                         .get("payload")
                         .cloned()
@@ -341,6 +376,8 @@ impl MemoryBackend for SqliteBackend {
                 for r in rows {
                     out.push(r?);
                 }
+                // 双保险: SQL 已同时过滤列与 payload 两种来源的 tombstone,
+                // 这里按解码值再兜底一层 (未来 SQL 漏改也不会让软删条目复现).
                 out.retain(|e| e.tombstoned_at.is_none());
                 Ok(out)
             })
@@ -482,30 +519,37 @@ mod tests {
                     id TEXT PRIMARY KEY,
                     subject_id TEXT NOT NULL,
                     subject_rev INTEGER NOT NULL,
+                    session_id TEXT,
                     created_at INTEGER NOT NULL,
                     payload TEXT NOT NULL,
                     source TEXT NOT NULL,
-                    tags TEXT NOT NULL
+                    tags TEXT NOT NULL,
+                    tombstoned_at INTEGER
                 );
                 CREATE TABLE IF NOT EXISTS proposal_stream (
                     id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
-                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                    session_id TEXT, created_at INTEGER NOT NULL, payload TEXT NOT NULL,
+                    source TEXT NOT NULL, tags TEXT NOT NULL, tombstoned_at INTEGER
                 );
                 CREATE TABLE IF NOT EXISTS action_stream (
                     id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
-                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                    session_id TEXT, created_at INTEGER NOT NULL, payload TEXT NOT NULL,
+                    source TEXT NOT NULL, tags TEXT NOT NULL, tombstoned_at INTEGER
                 );
                 CREATE TABLE IF NOT EXISTS relation_stream (
                     id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
-                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                    session_id TEXT, created_at INTEGER NOT NULL, payload TEXT NOT NULL,
+                    source TEXT NOT NULL, tags TEXT NOT NULL, tombstoned_at INTEGER
                 );
                 CREATE TABLE IF NOT EXISTS evolution_stream (
                     id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
-                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                    session_id TEXT, created_at INTEGER NOT NULL, payload TEXT NOT NULL,
+                    source TEXT NOT NULL, tags TEXT NOT NULL, tombstoned_at INTEGER
                 );
                 CREATE TABLE IF NOT EXISTS reflection_stream (
                     id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
-                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                    session_id TEXT, created_at INTEGER NOT NULL, payload TEXT NOT NULL,
+                    source TEXT NOT NULL, tags TEXT NOT NULL, tombstoned_at INTEGER
                 );
             "#)
             .map_err(apeireth_storage::StorageError::from)
@@ -603,6 +647,159 @@ mod tests {
         assert_eq!(listed[1].id, "t-2");
     }
 
+    /// H13: `append_stream` 必须写 `session_id` 列 (与 HistoryStream trait
+    /// 路径的 `append_only::insert_entry` 行布局统一), 且 payload 顶层
+    /// 带 session_id / tombstoned_at.
+    #[tokio::test]
+    async fn append_stream_writes_session_id_column() {
+        let b = fresh().await;
+        let thought = apeireth_core::kernel::StreamKind::Thought;
+        let mut entry = he("col-1", "sess-col");
+        entry.tombstoned_at = Some(1_700_000_999);
+        b.append_stream(thought, entry).unwrap();
+
+        let (column_session, column_tombstone): (Option<String>, Option<i64>) = b
+            .pool()
+            .read(|conn| {
+                Ok(conn.query_row(
+                    "SELECT session_id, tombstoned_at FROM thought_stream WHERE id = 'col-1'",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(column_session.as_deref(), Some("sess-col"));
+        assert_eq!(column_tombstone, Some(1_700_000_999));
+
+        let payload: String = b
+            .pool()
+            .read(|conn| {
+                Ok(conn.query_row(
+                    "SELECT payload FROM thought_stream WHERE id = 'col-1'",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(payload["session_id"], "sess-col");
+        assert_eq!(payload["tombstoned_at"], 1_700_000_999);
+    }
+
+    /// H13: trait 路径 (append_only::insert_entry) 写入的行必须能被本
+    /// backend 的 `list_stream` 看到 (统一布局前: 列空 + payload 无键 → 不可见).
+    #[tokio::test]
+    async fn trait_path_rows_are_visible_to_backend_list_stream() {
+        let b = fresh().await;
+        let thought = apeireth_core::kernel::StreamKind::Thought;
+        b.pool()
+            .read(|conn| {
+                crate::append_only::insert_entry(conn, "thought_stream", &he("trait-1", "sess-a"))
+                    .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))
+            })
+            .unwrap();
+        let listed = b.list_stream(thought, "sess-a", 10).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, "trait-1");
+    }
+
+    /// H13: 本 backend 写的行必须能被 trait 路径的 `list_for_session` 看到
+    /// (统一布局前: session_id 列为 NULL → 按列过滤一条都查不到).
+    #[tokio::test]
+    async fn backend_path_rows_are_visible_to_trait_list_for_session() {
+        let b = fresh().await;
+        let thought = apeireth_core::kernel::StreamKind::Thought;
+        b.append_stream(thought, he("backend-1", "sess-b")).unwrap();
+        let rows = b
+            .pool()
+            .read(|conn| {
+                crate::append_only::list_for_session(conn, "thought_stream", "sess-b", false)
+                    .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))
+            })
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "backend-1");
+    }
+
+    /// H13: 去掉 `IS NULL` 全匹配兜底后, 不得再把其它 session 的行返回
+    /// (旧实现把 trait 路径行 (payload 无 $.session_id) 当"无归属"全匹配).
+    #[tokio::test]
+    async fn list_stream_does_not_leak_other_sessions() {
+        let b = fresh().await;
+        let thought = apeireth_core::kernel::StreamKind::Thought;
+        b.pool()
+            .read(|conn| {
+                crate::append_only::insert_entry(conn, "thought_stream", &he("a-1", "sess-a"))
+                    .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))?;
+                crate::append_only::insert_entry(conn, "thought_stream", &he("b-1", "sess-b"))
+                    .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))
+            })
+            .unwrap();
+        let listed = b.list_stream(thought, "sess-a", 10).unwrap();
+        assert_eq!(listed.len(), 1, "不得泄漏 sess-b 的条目");
+        assert_eq!(listed[0].id, "a-1");
+    }
+
+    /// H13: 无归属 (NULL session_id) 行只有调用方显式查空串时才匹配.
+    #[tokio::test]
+    async fn unowned_rows_require_explicit_empty_session_query() {
+        let b = fresh().await;
+        let thought = apeireth_core::kernel::StreamKind::Thought;
+        b.pool()
+            .read(|conn| {
+                // 模拟旧版 SqliteBackend 写的行: 列 NULL + payload 无 $.session_id 键
+                conn.execute(
+                    "INSERT INTO thought_stream (id, subject_id, subject_rev, session_id, created_at, payload, source, tags, tombstoned_at) \
+                     VALUES ('orphan-1', 'subj', 1, NULL, 100, '{\"kind\":\"orphan\"}', 'test', '[]', NULL)",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        assert!(
+            b.list_stream(thought, "sess-any", 10)
+                .unwrap()
+                .is_empty(),
+            "无归属行不得匹配具名 session 查询"
+        );
+        let unowned = b.list_stream(thought, "", 10).unwrap();
+        assert_eq!(unowned.len(), 1);
+        assert_eq!(unowned[0].id, "orphan-1");
+        assert_eq!(unowned[0].session_id, None);
+    }
+
+    /// H13: trait 路径的 tombstone 在 `tombstoned_at` 列 — list_stream 必须
+    /// 同时查列与 payload, 否则软删除条目被当活条目返回.
+    #[tokio::test]
+    async fn column_tombstone_hides_entry_from_backend_list_stream() {
+        let b = fresh().await;
+        let thought = apeireth_core::kernel::StreamKind::Thought;
+        let mut dead = he("dead-1", "sess-t");
+        dead.tombstoned_at = Some(1_700_000_500);
+        b.pool()
+            .read(|conn| {
+                crate::append_only::insert_entry(conn, "thought_stream", &dead)
+                    .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))?;
+                crate::append_only::insert_entry(conn, "thought_stream", &he("alive-1", "sess-t"))
+                    .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))
+            })
+            .unwrap();
+        let listed = b.list_stream(thought, "sess-t", 10).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, "alive-1");
+    }
+
+    /// H13: backend 路径写出的 tombstone (列 + payload 双写) 同样被过滤.
+    #[tokio::test]
+    async fn backend_tombstone_hides_entry_from_list_stream() {
+        let b = fresh().await;
+        let thought = apeireth_core::kernel::StreamKind::Thought;
+        let mut dead = he("dead-2", "sess-u");
+        dead.tombstoned_at = Some(1_700_000_600);
+        b.append_stream(thought, dead).unwrap();
+        assert!(b.list_stream(thought, "sess-u", 10).unwrap().is_empty());
+    }
+
     #[tokio::test]
     async fn unknown_stream_name_is_compile_error() {
         // typed enum 不可能 unknown (编译期保证)
@@ -628,3 +825,4 @@ mod tests {
         );
     }
 }
+

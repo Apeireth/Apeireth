@@ -146,17 +146,44 @@ impl EmotionVoiceSynthesizer {
         }
     }
 
+    /// XML 特殊字符转义 (L3: SSML 注入防护).
+    ///
+    /// `text` 与 `voice_name` 都是外部/上游可控字符串 (模型输出、配置、用户输入),
+    /// 直接拼进 SSML 属性或元素体等于把 XML 结构交给输入方: 一段
+    /// `</prosody><voice name="evil">…` 就能闭合标签注入任意的 TTS 指令
+    /// (语音内容替换、URL fetch 类扩展、甚至破坏整个 synthesize 调用)。
+    /// 五实体 (`& < > " '`) 全部转义后才能拼装。
+    fn xml_escape(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        for c in s.chars() {
+            match c {
+                '&' => out.push_str("&amp;"),
+                '<' => out.push_str("&lt;"),
+                '>' => out.push_str("&gt;"),
+                '"' => out.push_str("&quot;"),
+                '\'' => out.push_str("&apos;"),
+                other => out.push(other),
+            }
+        }
+        out
+    }
+
     /// 将普通文本包裹为富情感 SSML (兼容微软 Edge-TTS / Azure Speech).
+    ///
+    /// L3: `text` / `voice_name` 一律经 [`Self::xml_escape`] 转义后再拼装 —
+    /// 上游文本 (含模型生成内容) 不得改变 SSML 文档结构。
     pub fn wrap_ssml(text: &str, voice_name: &str, params: &AcousticParameters) -> String {
         let pitch_pct = (params.pitch_semitones * 5.0) as i32;
         let speed_pct = ((params.speed_ratio - 1.0) * 100.0) as i32;
         let volume_pct = (params.volume_db * 5.0) as i32;
 
         let style = params.primary_emotion.as_str();
+        let text_escaped = Self::xml_escape(text);
+        let voice_escaped = Self::xml_escape(voice_name);
 
         format!(
             r#"<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="{}"><mstts:express-as style="{}" styledegree="{:.1}"><prosody pitch="{:+}%" rate="{:+}%" volume="{:+}%">{}</prosody></mstts:express-as></voice></speak>"#,
-            voice_name, style, params.emotion_intensity, pitch_pct, speed_pct, volume_pct, text
+            voice_escaped, style, params.emotion_intensity, pitch_pct, speed_pct, volume_pct, text_escaped
         )
     }
 }
@@ -217,5 +244,41 @@ mod tests {
         assert!(ssml.contains("zh-CN-XiaoxiaoNeural"));
         assert!(ssml.contains("主人，今天的工作全部圆满完成了！"));
         assert!(ssml.ends_with("</speak>"));
+    }
+
+    /// L3 回归: text 里的 XML 元字符必须转义 (不得拼出第二个 </prosody> /
+    /// <voice> 结构)。旧实现直接把 text 插进 SSML, 模型输出一段
+    /// `</prosody></mstts:express-as><voice name="evil">` 即劫持语音内容。
+    #[test]
+    fn test_wrap_ssml_escapes_xml_metacharacters() {
+        let params = AcousticParameters::default();
+        let ssml = EmotionVoiceSynthesizer::wrap_ssml(
+            r#"你好</prosody><voice name="evil">危险内容</voice> & <b>"quoted"</b>"#,
+            "zh-CN-XiaoxiaoNeural",
+            &params,
+        );
+        // 原始注入串不得以字面形式出现.
+        assert!(!ssml.contains("<voice name=\"evil\">"), "注入不得保留原样");
+        // 转义实体在.
+        assert!(ssml.contains("&lt;/prosody&gt;"), "闭合标签须被转义");
+        assert!(ssml.contains("&lt;b&gt;"));
+        assert!(ssml.contains("&quot;quoted&quot;"));
+        assert!(ssml.contains("&amp;"));
+        // 文档结构仍然只有一个 speak/voice/prosody 骨架.
+        assert_eq!(ssml.matches("<prosody").count(), 1);
+        assert_eq!(ssml.matches("</prosody>").count(), 1);
+        assert_eq!(ssml.matches("<voice ").count(), 1);
+
+        // voice_name 同样转义 (属性值注入面).
+        let ssml2 = EmotionVoiceSynthesizer::wrap_ssml(
+            "hi",
+            r#"a"><voice name="evil" x="#,
+            &params,
+        );
+        assert!(
+            !ssml2.contains(r#"<voice name="a"><voice"#),
+            "voice_name 不得闭合属性: {ssml2}"
+        );
+        assert!(ssml2.contains("&quot;"), "引号须转义");
     }
 }

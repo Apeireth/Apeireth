@@ -59,6 +59,12 @@ use apeireth_plugin::organ::{
 ///
 /// **0 装诚实**: 不是密码学安全 uuid v4. 仅保证全局唯一性足够 (per W3 边
 /// id 唯一性需求). 真生产可换 `uuid` crate (1 依赖).
+///
+/// L6 碰撞面说明: `nanos ^ counter` 在**同一进程内**由 COUNTER 原子递增保证
+/// 不重复; 但两个**不同进程** (或编译器把时钟读取提出循环) 可能拿到相同
+/// `nanos`, COUNTER 又各自从 0 开始 → 生成同形 id。由于 `edges` map 以
+/// `(from, to, kind)` 为 key (id 不参与去重), id 碰撞只影响**可读性/可追溯性**
+/// (日志里两条边同一个 id), 不影响图语义。若要跨进程唯一, 换 `uuid` crate。
 mod uuid {
     pub struct Uuid;
     impl Uuid {
@@ -371,11 +377,15 @@ impl CausalEdgeMiner {
                 continue;
             }
             for fj in active.iter().skip(i + 1) {
-                let dt = fj.valid_at - fi.valid_at;
-                if dt > self.config.time_window_secs {
+                // M2 修复: valid_at 是 epoch **毫秒**, time_window_secs 是 **秒** —
+                // 原实现把 ms 直接跟 secs 比较 (窗口大 1000 倍, 相邻秒的事实永不命中,
+                // break 永远不触发 → O(n²) 全表扫描). 与 causal_world_model.rs:323 对齐:
+                // 先除 1000 转成秒再比较.
+                let dt_secs = (fj.valid_at - fi.valid_at) / 1000; // ms → s
+                if dt_secs > self.config.time_window_secs {
                     break; // 已排序, 后续只会更远.
                 }
-                if dt < 0 {
+                if dt_secs < 0 {
                     continue;
                 }
                 if fi.object == fj.subject {
@@ -451,11 +461,13 @@ impl CausalEdgeMiner {
 
     /// 时间衰减 (per v1 任务说明 `decay_weights` API).
     ///
-    /// `dt_ms` 毫秒数 → 按 `decay_rate` 指数衰减所有边权重.
-    /// `weight *= (1 - decay_rate).powf(dt_secs / 1000)` (粗略指数衰减, 1:1 翻译 v1 意图).
+    /// **单位口径 (M2 一并修正)**: 入参 `dt_ms` 是 **毫秒** (与 `FactRecord::valid_at`
+    /// 的 epoch ms 口径一致); 内部先 `dt_ms / 1000` 转成秒, 再按
+    /// `weight *= (1 - decay_rate).powf(dt_secs)` 指数衰减 (decay_rate 是「每秒」比例)。
+    /// 原 doc 写的 `powf(dt_secs / 1000)` 与实际实现不符 (会二次除 1000), 以本注释为准。
     pub fn decay_weights(&mut self, dt_ms: i64) {
         let decay_rate = 0.01_f64; // 默认每秒 1% 衰减 (per v1 doc "时间衰减" 意图)
-        let dt_secs = (dt_ms as f64) / 1000.0;
+        let dt_secs = (dt_ms as f64) / 1000.0; // ms → s (单位口径: 与 valid_at 的 ms 一致)
         let factor = (1.0 - decay_rate).powf(dt_secs);
         for edge in self.edges.values_mut() {
             edge.weight *= factor;
@@ -559,7 +571,7 @@ impl EdgeMinerOrgan {
         let mut miner = self
             .miner
             .lock()
-            .expect("EdgeMinerOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         miner.from_timeline(facts)
     }
 
@@ -568,7 +580,7 @@ impl EdgeMinerOrgan {
         let mut miner = self
             .miner
             .lock()
-            .expect("EdgeMinerOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         miner.observe_event(from, to, kind, weight);
     }
 
@@ -577,7 +589,7 @@ impl EdgeMinerOrgan {
         let miner = self
             .miner
             .lock()
-            .expect("EdgeMinerOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         miner.get_top_edges(k)
     }
 
@@ -586,7 +598,7 @@ impl EdgeMinerOrgan {
         let mut miner = self
             .miner
             .lock()
-            .expect("EdgeMinerOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         miner.decay_weights(dt_ms);
     }
 
@@ -595,7 +607,7 @@ impl EdgeMinerOrgan {
         let miner = self
             .miner
             .lock()
-            .expect("EdgeMinerOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         miner.total_edges()
     }
 
@@ -604,7 +616,7 @@ impl EdgeMinerOrgan {
         let miner = self
             .miner
             .lock()
-            .expect("EdgeMinerOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         miner.edges_for(entity)
     }
 }
@@ -732,6 +744,52 @@ mod tests {
         let (edges, pairs) = miner.from_timeline(&facts);
         assert_eq!(pairs, 3);
         assert!(edges.is_empty(), "3 < 阈值 7, 不应产边");
+    }
+
+    /// M2 回归: 时间窗口单位必须是 **秒** (valid_at 是 epoch 毫秒).
+    ///
+    /// 旧实现把 ms 直接跟 `time_window_secs` 比较 → 窗口实际缩小 1000 倍
+    /// (默认 86400 秒窗口退化成 86.4 秒), 跨分钟/小时的真实相邻事实全部漏挖,
+    /// 且 `break` 永不触发导致全表 O(n²) 扫描。
+    #[test]
+    fn from_timeline_time_window_is_seconds_not_milliseconds() {
+        // 真实 epoch ms 量级 (2026-09-24 附近的毫秒时间戳).
+        let base = 1_768_000_000_000_i64; // ≈ 2026-09-16T00:00:00Z 的 ms
+        let mut miner = CausalEdgeMiner::with_defaults()
+            .with_window(60) // 60 **秒** 窗口
+            .with_min_evidence(1);
+
+        // 30 秒 (30_000 ms) 后的相邻事实 → 应命中 (旧实现: 30000 > 60 → break, 漏挖).
+        let facts = vec![
+            FactRecord::new("主人", "行为", "熬夜", base),
+            FactRecord::new("熬夜", "导致", "效率低", base + 30_000),
+        ];
+        let (edges, pairs) = miner.from_timeline(&facts);
+        assert_eq!(pairs, 1, "30 秒间隔在 60 秒窗口内, 应命中 1 对");
+        assert_eq!(edges.len(), 1, "30 秒间隔应挖出边");
+
+        // 90 秒 (90_000 ms) 后 → 超出 60 秒窗口, 应命中 0 对 (break 生效).
+        let mut miner2 = CausalEdgeMiner::with_defaults()
+            .with_window(60)
+            .with_min_evidence(1);
+        let facts2 = vec![
+            FactRecord::new("主人", "行为", "熬夜", base),
+            FactRecord::new("熬夜", "导致", "效率低", base + 90_000),
+        ];
+        let (edges2, pairs2) = miner2.from_timeline(&facts2);
+        assert_eq!(pairs2, 0, "90 秒间隔超出 60 秒窗口, 不应命中");
+        assert!(edges2.is_empty(), "超出窗口不应挖出边");
+
+        // 亚秒间隔 (500 ms): 除 1000 后为 0 秒, 仍在窗口内 (小数间隔不被抹掉命中).
+        let mut miner3 = CausalEdgeMiner::with_defaults()
+            .with_window(60)
+            .with_min_evidence(1);
+        let facts3 = vec![
+            FactRecord::new("主人", "行为", "熬夜", base),
+            FactRecord::new("熬夜", "导致", "效率低", base + 500),
+        ];
+        let (_, pairs3) = miner3.from_timeline(&facts3);
+        assert_eq!(pairs3, 1, "亚秒间隔应命中");
     }
 
     /// observe_event 路径: 累计权重 + 证据数.

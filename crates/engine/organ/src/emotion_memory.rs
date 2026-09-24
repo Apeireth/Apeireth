@@ -315,7 +315,7 @@ impl EmotionOrgan {
     pub fn engine(&self) -> std::sync::MutexGuard<'_, EmotionMemoryEngine> {
         self.engine
             .lock()
-            .expect("EmotionOrgan mutex poisoned (0 装诚实)")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// 便捷 record (per v1 1:1, 简化外部调用, 时间戳 = now).

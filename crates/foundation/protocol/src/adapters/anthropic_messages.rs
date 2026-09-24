@@ -296,8 +296,12 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
         let usage = raw
             .get("usage")
             .map(|u| {
-                let p = u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                let c = u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                let p = crate::normalized::clamp_u32(
+                    u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                );
+                let c = crate::normalized::clamp_u32(
+                    u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                );
                 crate::normalized::NormalizedUsage::new(p, c)
             })
             .unwrap_or_default();
@@ -338,11 +342,16 @@ impl AnthropicMessagesAdapter {
                 ContentPart::Text { text } => json!({"type": "text", "text": text}),
                 ContentPart::ImageUrl { url, .. } => {
                     // Anthropic image: source.type=url or base64
-                    if url.starts_with("data:") {
+                    if let Some(body) = url.strip_prefix("data:") {
                         // base64 → source.type=base64
-                        let comma = url.find(',').unwrap_or(url.len());
-                        let meta = &url[5..comma]; // "image/png;base64"
-                        let data = &url[comma + 1..];
+                        // H2 修复 (2026-09-24 审计): 无逗号的畸形 data URL
+                        // (`data:image/png;base64`) 曾令 `&url[comma + 1..]`
+                        // 越界 panic (comma = url.len() 时 comma+1 越界)。
+                        // 现在按"无数据段"处理: meta 取 body, data 为空。
+                        let (meta, data) = match body.find(',') {
+                            Some(comma) => (&body[..comma], &body[comma + 1..]),
+                            None => (body, ""),
+                        };
                         let parts: Vec<&str> = meta.split(';').collect();
                         let media_type = parts.first().copied().unwrap_or("image/png");
                         json!({

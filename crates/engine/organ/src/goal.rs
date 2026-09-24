@@ -516,12 +516,24 @@ impl GoalService {
     /// Completed goals may be replaced; unfinished ones may not. Replacing
     /// deletes the previous snapshot file so [`Self::restore_only`] still sees
     /// a single current goal.
+    ///
+    /// L6: 顺序修正 — 旧实现先 `self.current.take()` 再 `store.clear()`:
+    /// 若 clear 失败 (IO 错误), 内存里的 current 已被掏空 (自称"无目标") 而
+    /// 磁盘快照仍在, `restore_only` 会把它读回来 → 内存/磁盘状态分裂,
+    /// 且错误 propagates 时 current 已丢。现在先 clear、成功后才清内存,
+    /// clear 失败则内存态保持原样 (错误可重试)。
     fn ensure_create_allowed(&mut self) -> Result<(), GoalError> {
         match &self.current {
             Some(g) if !g.is_replaceable() => Err(GoalError::AlreadyExists),
             Some(_) => {
-                let prev = self.current.take().expect("just matched Some");
-                self.store.clear(&prev.id)?;
+                let prev_id = self
+                    .current
+                    .as_ref()
+                    .ok_or(GoalError::NoGoal)?
+                    .id
+                    .clone();
+                self.store.clear(&prev_id)?;
+                self.current = None;
                 Ok(())
             }
             None => Ok(()),
@@ -555,17 +567,33 @@ impl GoalService {
 }
 
 /// ASCII alphanumerics plus `-`/`_`, max 120 chars. Empty → `"goal"`.
+///
+/// L6: 非 ASCII 碰撞后缀 — 纯中文/emoji id ("目标一" / "目标二" / "🎯") 净化后
+/// 会**全部**收敛成 `"goal"` (字符被全部剔除 → 空 → 兜底), 两个不同目标互相
+/// 覆盖磁盘快照。对被剥离过字符的 id 追加原始串的 FNV-1a 短哈希后缀,
+/// 保证可区分 (总长仍有界: base ≤ 100 + "-" + 8 hex = 109 < 120)。
 fn sanitize_goal_id(id: &str) -> String {
     let cleaned: String = id
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-        .take(120)
+        .take(100)
         .collect();
-    if cleaned.is_empty() {
+    let base = if cleaned.is_empty() {
         "goal".to_string()
     } else {
         cleaned
+    };
+    if id == base {
+        // 本来就是安全 id, 0 追加 (保持既有文件名兼容)。
+        return base;
     }
+    // L6: 有字符被剥离 (非 ASCII / 标点 / 超长) → 追加原串短哈希区分碰撞。
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in id.as_bytes() {
+        hash ^= u64::from(*b);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{base}-{:08x}", hash & 0xffff_ffff)
 }
 
 fn persist_io(operation: &'static str, path: &Path, err: io::Error) -> GoalPersistError {
@@ -789,9 +817,37 @@ mod tests {
         let mut s = GoalService::new(&dir);
         s.create_with_id("../evil", "obj", 1, 1).unwrap();
         let ids = s.store().list_ids().unwrap();
-        assert_eq!(ids, vec!["evil".to_string()]);
+        // L6: 净化后是 "evil" + 短哈希后缀 (原 id 被剥离过字符 → 追加后缀防
+        // 非 ASCII 碰撞); 关键是**不逃逸**且单条目。
+        assert_eq!(ids.len(), 1, "只应有一个目标: {ids:?}");
+        assert!(
+            ids[0].starts_with("evil"),
+            "../evil 应净化为 evil 前缀, 得到 {ids:?}"
+        );
+        assert!(
+            !ids[0].contains(".."),
+            "不得保留路径穿越段: {ids:?}"
+        );
         // nothing written outside the store root
-        assert!(dir.join("evil.json").is_file());
+        assert!(dir.join(format!("{}.json", ids[0])).is_file());
+        assert!(
+            !dir.parent().unwrap().join("evil.json").is_file(),
+            "store 根外不得落文件"
+        );
+    }
+
+    /// L6: 纯非 ASCII id 不得互相碰撞 ("目标一"/"目标二" 旧实现都收敛到 "goal")。
+    #[test]
+    fn non_ascii_ids_do_not_collide() {
+        let a = sanitize_goal_id("目标一");
+        let b = sanitize_goal_id("目标二");
+        let c = sanitize_goal_id("🎯");
+        assert_ne!(a, b, "不同中文 id 必须可区分");
+        assert_ne!(a, c);
+        assert_ne!(b, c);
+        assert!(a.starts_with("goal"), "剥离后应回落 goal 兜底: {a}");
+        // 安全 id 不追加后缀 (保持既有文件名兼容)。
+        assert_eq!(sanitize_goal_id("goal-x"), "goal-x");
     }
 
     #[test]

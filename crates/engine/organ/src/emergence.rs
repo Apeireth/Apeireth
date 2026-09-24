@@ -293,6 +293,9 @@ impl RhythmEstimate {
 /// **v2 适配**: v1 用 `chrono::DateTime<Utc>` 推 day_key + minutes_of_day; v2 显式
 /// 传 `at_ms: i64` (epoch ms) + 调用方派生 day_key 与 minutes. 此处保留 v1 算法 (直方图
 /// + 按天淘汰) 不变.
+///
+/// **M7 有界性**: 两个维度都有界 — `capacity_days` 约束自然日数,
+/// [`MAX_DAILY_OBSERVATIONS`] 约束单日条目数 (旧实现只有前者).
 #[derive(Debug)]
 pub struct RhythmEstimator {
     /// (day_key "YYYY-MM-DD", minutes_of_day)
@@ -301,6 +304,9 @@ pub struct RhythmEstimator {
     capacity_days: usize,
     bucket_minutes: u32,
 }
+
+/// 单日 observations 条目上限 (M7).
+pub const MAX_DAILY_OBSERVATIONS: usize = 512;
 
 impl RhythmEstimator {
     pub fn new(capacity_days: usize, bucket_minutes: u32) -> Self {
@@ -312,8 +318,22 @@ impl RhythmEstimator {
     }
 
     /// 喂一次观察 (per v1 `observe` 1:1; 调用方负责 day_key + minutes 派生).
+    ///
+    /// M7: 单日 observations 条目加上限 [`MAX_DAILY_OBSERVATIONS`] — 按天淘汰只约束
+    /// "保留几个自然日", 不约束"一天内塞多少条"; 高频 observe 可让单日数组无限增长。
     pub fn observe(&mut self, day_key: impl Into<String>, minutes_of_day: u32) {
         let day = day_key.into();
+        // M7: 单日条目上限 — 超出淘汰该日最早的条目 (队首方向的同 key 旧记录).
+        let same_day = self
+            .observations
+            .iter()
+            .filter(|(d, _)| *d == day)
+            .count();
+        if same_day >= MAX_DAILY_OBSERVATIONS {
+            if let Some(pos) = self.observations.iter().position(|(d, _)| *d == day) {
+                self.observations.remove(pos);
+            }
+        }
         self.observations.push_back((day, minutes_of_day));
         let days: HashSet<&str> = self.observations.iter().map(|(d, _)| d.as_str()).collect();
         if days.len() > self.capacity_days {
@@ -785,7 +805,7 @@ impl EmergenceOrgan {
         let mut engine = self
             .engine
             .lock()
-            .expect("EmergenceOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.observe_interaction(at_ms, day_key, minutes);
     }
 
@@ -794,7 +814,7 @@ impl EmergenceOrgan {
         let mut engine = self
             .engine
             .lock()
-            .expect("EmergenceOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.apply_feedback(feedback, at_ms)
     }
 
@@ -803,7 +823,7 @@ impl EmergenceOrgan {
         let engine = self
             .engine
             .lock()
-            .expect("EmergenceOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.depth()
     }
 
@@ -812,7 +832,7 @@ impl EmergenceOrgan {
         let engine = self
             .engine
             .lock()
-            .expect("EmergenceOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.last_hold()
     }
 
@@ -825,7 +845,7 @@ impl EmergenceOrgan {
         let mut engine = self
             .engine
             .lock()
-            .expect("EmergenceOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.tick(at_ms, day_key, minutes, context_hint)
     }
 

@@ -46,6 +46,13 @@ pub struct SpeechOutputArbiter {
     speaker_turn_count: std::collections::HashMap<String, usize>,
 }
 
+/// 发言队列上限 (M7: 防无界增长 — 插话风暴下旧实现无界 push_back).
+pub const MAX_SPEECH_QUEUE: usize = 64;
+
+/// `ttl_ms == 0` 时的默认存活期 (M7: 旧实现把 0 当"永不过期",
+/// 一条排队请求可以无限期滞留队列; 现在统一吃默认 TTL 上限).
+pub const DEFAULT_SPEECH_TTL_MS: u64 = 60_000;
+
 impl SpeechOutputArbiter {
     pub fn new() -> Self {
         Self {
@@ -53,6 +60,20 @@ impl SpeechOutputArbiter {
             speech_queue: VecDeque::new(),
             speaker_turn_count: std::collections::HashMap::new(),
         }
+    }
+
+    /// 有效 TTL: `ttl_ms == 0` 不再意味着永不过期, 回落默认上限 (M7).
+    fn effective_ttl_ms(ttl_ms: u64) -> u64 {
+        if ttl_ms == 0 {
+            DEFAULT_SPEECH_TTL_MS
+        } else {
+            ttl_ms
+        }
+    }
+
+    /// 请求是否已过期 (M7: saturating_add 防 `created_at_ms + ttl_ms` 溢出回绕).
+    fn is_expired(req: &SpeechRequest, now_ms: u64) -> bool {
+        now_ms > req.created_at_ms.saturating_add(Self::effective_ttl_ms(req.ttl_ms))
     }
 
     /// 仲裁新的发言请求.
@@ -63,7 +84,7 @@ impl SpeechOutputArbiter {
         now_ms: u64,
     ) -> ArbiterDecision {
         // 1. 检查请求自身是否已超时 (TTL 淘汰)
-        if request.ttl_ms > 0 && now_ms > request.created_at_ms + request.ttl_ms {
+        if Self::is_expired(&request, now_ms) {
             return ArbiterDecision::Dropped {
                 reason: "发言请求在入队前已超过 TTL 存活期".to_string(),
             };
@@ -86,6 +107,10 @@ impl SpeechOutputArbiter {
                     ArbiterDecision::GrantedImmediately
                 } else {
                     self.speech_queue.push_back(request);
+                    // M7: 队列有界 — 超限丢最旧 (排队最久者), 防插话风暴无界堆积.
+                    while self.speech_queue.len() > MAX_SPEECH_QUEUE {
+                        self.speech_queue.pop_front();
+                    }
                     ArbiterDecision::Queued {
                         queue_position: self.speech_queue.len(),
                     }
@@ -105,14 +130,9 @@ impl SpeechOutputArbiter {
     pub fn finish_current_speech(&mut self, now_ms: u64) -> Option<SpeechRequest> {
         self.current_speech = None;
 
-        // 清理队列中已超时的请求
-        self.speech_queue.retain(|req| {
-            if req.ttl_ms > 0 {
-                now_ms <= req.created_at_ms + req.ttl_ms
-            } else {
-                true
-            }
-        });
+        // 清理队列中已超时的请求 (M7: saturating_add + 默认 TTL 口径与 arbitrate 一致)
+        self.speech_queue
+            .retain(|req| !Self::is_expired(req, now_ms));
 
         if let Some(next_req) = self.speech_queue.pop_front() {
             self.grant_speech(&next_req, now_ms);
@@ -231,5 +251,82 @@ mod tests {
         // 当前时间是 2000ms，已经过期
         let decision = arbiter.arbitrate(expired_req, SpeechStrategy::Queue, 2000);
         assert!(matches!(decision, ArbiterDecision::Dropped { .. }));
+    }
+
+    /// M7: `ttl_ms == 0` 不再永不过期 (旧实现: ttl=0 → retain 恒真 → 队列里永久滞留).
+    #[test]
+    fn m7_zero_ttl_uses_default_not_immortal() {
+        let mut arbiter = SpeechOutputArbiter::new();
+        let req = SpeechRequest {
+            id: "z".to_string(),
+            speaker_id: "agent_z".to_string(),
+            content: "没有显式 TTL 的请求".to_string(),
+            priority: 1,
+            created_at_ms: 1000,
+            ttl_ms: 0,
+        };
+
+        // 默认 TTL (60s) 内 → 正常排队 (先占住发言权).
+        let holder = SpeechRequest {
+            id: "h".to_string(),
+            speaker_id: "agent_h".to_string(),
+            content: "占麦".to_string(),
+            priority: 1,
+            created_at_ms: 1000,
+            ttl_ms: 0,
+        };
+        arbiter.arbitrate(holder, SpeechStrategy::Queue, 1000);
+        assert!(matches!(
+            arbiter.arbitrate(req.clone(), SpeechStrategy::Queue, 61_000),
+            ArbiterDecision::Queued { .. }
+        ));
+        // 超过默认 TTL → 入队前即被丢弃 (旧实现会永不过期).
+        assert!(matches!(
+            arbiter.arbitrate(req, SpeechStrategy::Queue, 61_001),
+            ArbiterDecision::Dropped { .. }
+        ));
+    }
+
+    /// M7: 队列有界 — 插话风暴超过 MAX_SPEECH_QUEUE 时丢最旧, 不得无界增长.
+    #[test]
+    fn m7_speech_queue_bounded() {
+        let mut arbiter = SpeechOutputArbiter::new();
+        // 先占住发言权, 后续请求才会排队.
+        let holder = SpeechRequest {
+            id: "holder".to_string(),
+            speaker_id: "agent_h".to_string(),
+            content: "长发言".to_string(),
+            priority: 1,
+            created_at_ms: 1000,
+            ttl_ms: 0,
+        };
+        arbiter.arbitrate(holder, SpeechStrategy::Queue, 1000);
+
+        let total = MAX_SPEECH_QUEUE + 20;
+        for i in 0..total {
+            let req = SpeechRequest {
+                id: format!("q{i}"),
+                speaker_id: "agent_q".to_string(),
+                content: "插话".to_string(),
+                priority: 1,
+                created_at_ms: 1000,
+                ttl_ms: 0,
+            };
+            let d = arbiter.arbitrate(req, SpeechStrategy::Queue, 1000);
+            let ArbiterDecision::Queued { queue_position } = d else {
+                panic!("应排队, 得到 {d:?}");
+            };
+            assert!(
+                queue_position <= MAX_SPEECH_QUEUE,
+                "队列长度越界: {queue_position}"
+            );
+        }
+        // 只保留最后 MAX_SPEECH_QUEUE 个: 队首 = q{total - MAX} = q20.
+        let next = arbiter.finish_current_speech(1000).expect("有排队者");
+        assert_eq!(
+            next.id,
+            format!("q{}", total - MAX_SPEECH_QUEUE),
+            "更早的插入应被淘汰"
+        );
     }
 }

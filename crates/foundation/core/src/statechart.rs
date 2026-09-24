@@ -157,9 +157,18 @@ pub struct Machine {
 }
 
 impl Machine {
-    /// `states` keyed by node id; `initial` must exist (not checked).
+    /// `states` keyed by node id; `initial` must exist.
+    ///
+    /// M4 修复 (2026-09-24 审计): 原实现 doc 自述 "`initial` must exist
+    /// (not checked)" —— 给错初始 id 会让机器开局即进入挂起态 (current 永远
+    /// unknown, `send` 永久 NoTransition)。现在构造期即 fail-loud; 需要优雅
+    /// 处理的调用方用 [`Machine::try_new`]。
     pub fn new(states: HashMap<String, StateNode>, initial: impl Into<String>) -> Self {
         let initial = initial.into();
+        assert!(
+            states.contains_key(&initial),
+            "statechart initial state `{initial}` does not exist in the state set"
+        );
         Self {
             states,
             initial: initial.clone(),
@@ -168,6 +177,27 @@ impl Machine {
             event_count: 0,
             transition_count: 0,
         }
+    }
+
+    /// 构造期校验版: `initial` 不存在返回 Err 而非 panic。
+    pub fn try_new(
+        states: HashMap<String, StateNode>,
+        initial: impl Into<String>,
+    ) -> Result<Self, String> {
+        let initial = initial.into();
+        if !states.contains_key(&initial) {
+            return Err(format!(
+                "statechart initial state `{initial}` does not exist in the state set"
+            ));
+        }
+        Ok(Self {
+            states,
+            initial: initial.clone(),
+            current: initial,
+            context: MachineContext::default(),
+            event_count: 0,
+            transition_count: 0,
+        })
     }
 
     /// Current state id.
@@ -210,8 +240,15 @@ impl Machine {
             }
             let target = t.target.clone();
             let from = self.current.clone();
-            self.execute_transition(&target, t.action.clone());
-            return TransitionResult::Transitioned { from, to: target };
+            // M4 修复 (2026-09-24 审计): 原实现无条件把 current 设为 target
+            // (可能是不存在的 id) → 机器进入既非 Final 又永不再响应事件的
+            // 挂起态。未知 target 现在拒绝落状态, 报 NoTransition。
+            if self.execute_transition(&target, t.action.clone()) {
+                return TransitionResult::Transitioned { from, to: target };
+            }
+            return TransitionResult::NoTransition {
+                reason: format!("transition target `{target}` is not a known state"),
+            };
         }
         TransitionResult::NoTransition {
             reason: format!(
@@ -221,7 +258,12 @@ impl Machine {
         }
     }
 
-    fn execute_transition(&mut self, target: &str, action: Option<Action>) {
+    /// Execute the transition; returns `false` when `target` is not a known
+    /// state (in which case the machine stays in its current state).
+    fn execute_transition(&mut self, target: &str, action: Option<Action>) -> bool {
+        if !self.states.contains_key(target) {
+            return false;
+        }
         let old = self.current.clone();
         if let Some(cur) = self.states.get(&old) {
             if let Some(exit) = &cur.on_exit {
@@ -238,6 +280,7 @@ impl Machine {
         }
         self.current = target.to_string();
         self.transition_count += 1;
+        true
     }
 
     /// Return to the initial state and clear context / counters.

@@ -6,7 +6,9 @@
 //! over the `r2d2` pool and should be used for queries only.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc as std_mpsc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use r2d2::ManageConnection;
@@ -158,7 +160,33 @@ impl SqliteConfig {
     }
 }
 
-type WriteTask = Box<dyn FnOnce(&mut Connection) + Send + 'static>;
+type WriteTaskBody = Box<dyn FnOnce(&mut Connection) + Send + 'static>;
+
+/// 单个写任务 + panic 标志.
+///
+/// M8: `body` panic 时, 其捕获的回复端随 unwind 一起被丢弃, 调用方只能看到
+/// "writer task did not return a result" — 无法区分根因是 panic 还是其它.
+/// `panicked` 由 body 内的 [`ReplyGuard`] 在 panic 路径置位 (unwind 时 guard
+/// 先于回复端被 drop, 保证调用方读到标志时它一定已置位), 调用方据此把根因
+/// 报成 `WriteQueue("writer task panicked")`.
+struct WriteTask {
+    body: WriteTaskBody,
+    panicked: Arc<AtomicBool>,
+}
+
+/// body 完成守卫: 只有 panic 路径会留下 `completed == false`.
+struct ReplyGuard {
+    completed: bool,
+    panicked: Arc<AtomicBool>,
+}
+
+impl Drop for ReplyGuard {
+    fn drop(&mut self) {
+        if !self.completed {
+            self.panicked.store(true, Ordering::SeqCst);
+        }
+    }
+}
 
 /// SQLite connection pool with one serialized writer and a reader pool.
 #[derive(Clone)]
@@ -290,18 +318,26 @@ impl SqliteConnectionPool {
         R: Send + 'static,
     {
         let (tx, rx) = std_mpsc::sync_channel(0);
-        let task: WriteTask = Box::new(move |conn: &mut Connection| {
-            let result = f(conn);
-            let _ = tx.send(result);
-        });
-
+        let panicked = Arc::new(AtomicBool::new(false));
+        let panicked_for_guard = Arc::clone(&panicked);
+        let panicked_for_task = Arc::clone(&panicked);
+        let task = WriteTask {
+            body: Box::new(move |conn: &mut Connection| {
+                let mut guard = ReplyGuard {
+                    completed: false,
+                    panicked: panicked_for_guard,
+                };
+                let result = f(conn);
+                guard.completed = true;
+                let _ = tx.send(result);
+            }),
+            panicked: panicked_for_task,
+        };
         self.write_tx
             .blocking_send(task)
             .map_err(|_| StorageError::WriteQueue("writer channel is closed".to_string()))?;
 
-        rx.recv().map_err(|_| {
-            StorageError::WriteQueue("writer task did not return a result".to_string())
-        })?
+        rx.recv().map_err(|_| writer_task_error(&panicked))?
     }
     /// Runs a mutation on the single serialized writer and returns its result.
     ///
@@ -314,19 +350,28 @@ impl SqliteConnectionPool {
         R: Send + 'static,
     {
         let (tx, rx) = oneshot::channel();
-        let task: WriteTask = Box::new(move |conn: &mut Connection| {
-            let result = f(conn);
-            let _ = tx.send(result);
-        });
+        let panicked = Arc::new(AtomicBool::new(false));
+        let panicked_for_guard = Arc::clone(&panicked);
+        let panicked_for_task = Arc::clone(&panicked);
+        let task = WriteTask {
+            body: Box::new(move |conn: &mut Connection| {
+                let mut guard = ReplyGuard {
+                    completed: false,
+                    panicked: panicked_for_guard,
+                };
+                let result = f(conn);
+                guard.completed = true;
+                let _ = tx.send(result);
+            }),
+            panicked: panicked_for_task,
+        };
 
         self.write_tx
             .send(task)
             .await
             .map_err(|_| StorageError::WriteQueue("writer channel is closed".to_string()))?;
 
-        rx.await.map_err(|_| {
-            StorageError::WriteQueue("writer task did not return a result".to_string())
-        })?
+        rx.await.map_err(|_| writer_task_error(&panicked))?
     }
 
     fn from_pool_and_writer(
@@ -335,12 +380,36 @@ impl SqliteConnectionPool {
     ) -> Self {
         let (write_tx, mut write_rx) = mpsc::channel::<WriteTask>(1000);
 
+        // M8: writer 线程不得因任一调用方闭包 panic 而死亡. 旧实现
+        // `task(&mut writer)` 直接调 — 任一 panic → 线程 unwind 死亡 →
+        // write_tx 接收端消失 → 之后所有 write/write_sync 永远返回
+        // "writer channel is closed", 且不自动重启. 现在 catch_unwind
+        // 捕获 panic (panic = "abort" 构建下仍会终止进程, 这是 Rust 的
+        // 固有限制), 向该调用方回 "writer task panicked" 后继续循环.
         std::thread::spawn(move || {
             while let Some(task) = write_rx.blocking_recv() {
-                task(&mut writer);
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    (task.body)(&mut writer);
+                }));
+                if outcome.is_err() {
+                    task.panicked.store(true, Ordering::SeqCst);
+                }
             }
         });
 
         Self { pool, write_tx }
+    }
+}
+
+/// 写任务回复端断开时的根因判定 (M8).
+///
+/// `body` 正常完成时回复一定已通过 channel 送达; 回复端断开只剩两种原因:
+/// writer 线程整体死亡 (channel closed, 由 send 侧报错) 或 `body` panic.
+/// `panicked` 标志位把后者与其它异常区分开, 报出真实根因.
+fn writer_task_error(panicked: &AtomicBool) -> StorageError {
+    if panicked.load(Ordering::SeqCst) {
+        StorageError::WriteQueue("writer task panicked".to_string())
+    } else {
+        StorageError::WriteQueue("writer task did not return a result".to_string())
     }
 }
