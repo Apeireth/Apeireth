@@ -48,6 +48,7 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
+use apeireth_mesh::RemoteInvokeContext;
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{
     NormalizedMessage, NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedUsage,
@@ -67,6 +68,7 @@ use super::module::{
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
 use super::subloop::RuntimeSubLoopSpawner;
+use super::tool_route::{ToolExecutionTarget, ToolRouteError};
 use super::trace::{ExecutionTrace, TraceEvent};
 
 /// M20: 单轮 tool_calls 上限。`max_rounds` 约束的是轮数, 模型单轮塞进的
@@ -1963,6 +1965,46 @@ impl Runtime {
     /// When `preapproved` is true the tool has already passed human approval
     /// and must be dispatched without a second governance evaluation. The
     /// approved dispatch must execute the exact stored frozen invocation.
+    /// The shared "this name does not execute" shape: trace, session record,
+    /// and a correlated permanent tool error. A tool failure is a result the
+    /// model can react to, never a turn failure.
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch_unavailable(
+        trace: &mut ExecutionTrace,
+        session: &mut Session,
+        clock: &dyn apeireth_core::kernel::Clock,
+        request_id: RequestId,
+        trace_id: TraceId,
+        round: u32,
+        tool_name: &str,
+        tool_call_id: &str,
+        reason: String,
+    ) -> RuntimeResult<ToolDispatch> {
+        trace.record(
+            Timestamp::from_clock(clock),
+            TraceEvent::CapabilityUnavailable {
+                requested: tool_name.to_string(),
+                tool_call_id: tool_call_id.to_string(),
+                reason: reason.clone(),
+                round,
+            },
+        );
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::ToolFailed {
+                capability: None,
+                tool_call_id: tool_call_id.to_string(),
+                error: reason.clone(),
+                round,
+            },
+            clock,
+        );
+        Ok(ToolDispatch::Result(
+            ToolResult::permanent_error(tool_call_id, reason).with_name(tool_name),
+        ))
+    }
+
     async fn dispatch_one_tool(
         &self,
         trace: &mut ExecutionTrace,
@@ -1978,52 +2020,88 @@ impl Runtime {
     ) -> RuntimeResult<ToolDispatch> {
         let clock = self.clock.as_ref();
 
-        // One world: every tool, whoever owns it, is reachable through the same
-        // index. A name collision could never be registered in the first place,
-        // so there is no "found in both worlds" case to fail closed on here.
-        let Some(tool) = self.modules.tool_by_name(&call.name) else {
-            let available = self
-                .tool_declarations()
-                .iter()
-                .map(|t| t.name.clone())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let reason = if available.is_empty() {
-                format!("no tool named {:?}; no tools are available", call.name)
-            } else {
-                format!(
-                    "no tool named {:?}; available tools: {available}",
-                    call.name
-                )
-            };
-            trace.record(
-                Timestamp::from_clock(clock),
-                TraceEvent::CapabilityUnavailable {
-                    requested: call.name.clone(),
-                    tool_call_id: call.id.clone(),
-                    reason: reason.clone(),
+        // One world of names: the model sees one catalog, and every name
+        // resolves to exactly one execution target through the derived route
+        // table — local or remote, never fallback ("try local, else remote").
+        let entry = match self.tool_route_table().resolve(&call.name) {
+            Ok(entry) => entry.clone(),
+            Err(ToolRouteError::NotFound { .. }) => {
+                let available = self
+                    .tool_declarations()
+                    .iter()
+                    .map(|t| t.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let reason = if available.is_empty() {
+                    format!("no tool named {:?}; no tools are available", call.name)
+                } else {
+                    format!(
+                        "no tool named {:?}; available tools: {available}",
+                        call.name
+                    )
+                };
+                return Self::dispatch_unavailable(
+                    trace, session, clock, request_id, trace_id, round, &call.name, &call.id,
+                    reason,
+                );
+            }
+            Err(ToolRouteError::Ambiguous { candidates, .. }) => {
+                return Self::dispatch_unavailable(
+                    trace,
+                    session,
+                    clock,
+                    request_id,
+                    trace_id,
                     round,
-                },
-            );
-            session.record(
-                request_id,
-                trace_id,
-                SessionEventKind::ToolFailed {
-                    capability: None,
-                    tool_call_id: call.id.clone(),
-                    error: reason.clone(),
-                    round,
-                },
-                clock,
-            );
-            return Ok(ToolDispatch::Result(
-                ToolResult::permanent_error(&call.id, reason).with_name(&call.name),
-            ));
+                    &call.name,
+                    &call.id,
+                    format!(
+                        "tool name {:?} is ambiguous across routes: {candidates}; call it through an explicit route instead",
+                        call.name
+                    ),
+                );
+            }
         };
 
-        let capability = tool.id().clone();
+        let capability = entry.capability_id.clone();
+        // A local target resolves its live implementation here. A remote target
+        // carries no implementation at all — only the route.
+        let local_tool: Option<Arc<dyn apeireth_plugin::ToolCapability>> = match &entry.target {
+            ToolExecutionTarget::Local { .. } => match self.modules.tool(&capability) {
+                Ok(tool) => Some(tool),
+                Err(error) => {
+                    return Self::dispatch_unavailable(
+                        trace,
+                        session,
+                        clock,
+                        request_id,
+                        trace_id,
+                        round,
+                        &call.name,
+                        &call.id,
+                        error.to_string(),
+                    );
+                }
+            },
+            ToolExecutionTarget::Remote { .. } => None,
+        };
 
         if preapproved {
+            let Some(tool) = local_tool.as_deref() else {
+                // Fail closed: a remote tool has no locally freezable effective
+                // invocation, so it cannot resume a frozen approval yet.
+                return Self::dispatch_unavailable(
+                    trace,
+                    session,
+                    clock,
+                    request_id,
+                    trace_id,
+                    round,
+                    &call.name,
+                    &call.id,
+                    "a remote tool cannot resume a frozen approval in this phase".to_string(),
+                );
+            };
             let Some(approval) = approved_approval else {
                 let reason = "approved dispatch is missing its frozen approval".to_string();
                 session.record(
@@ -2042,8 +2120,7 @@ impl Runtime {
                 ));
             };
 
-            if let Err(reason) = self.verify_frozen_approval_binding(approval, call, tool.as_ref())
-            {
+            if let Err(reason) = self.verify_frozen_approval_binding(approval, call, tool) {
                 // Fail closed: the stored approval does not match the live
                 // capability or its fingerprint. Do not invoke.
                 session.record(
@@ -2154,6 +2231,23 @@ impl Runtime {
                 ));
             }
             Decision::RequireApproval { reason } => {
+                let Some(tool) = local_tool.as_deref() else {
+                    // Remote tools cannot freeze an effective invocation here;
+                    // fail closed instead of minting an unverifiable approval.
+                    return Self::dispatch_unavailable(
+                        trace,
+                        session,
+                        clock,
+                        request_id,
+                        trace_id,
+                        round,
+                        &call.name,
+                        &call.id,
+                        format!(
+                            "refused by governance: {reason} (remote tools cannot require approval in this phase)"
+                        ),
+                    );
+                };
                 let effective_invocation = match tool.freeze_invocation(call) {
                     Ok(frozen) => frozen,
                     Err(result) => {
@@ -2195,7 +2289,56 @@ impl Runtime {
             },
         );
 
-        let result = tool.invoke(call).await;
+        let result = match (&entry.target, local_tool.as_deref()) {
+            (ToolExecutionTarget::Local { .. }, Some(tool)) => tool.invoke(call).await,
+            (ToolExecutionTarget::Remote { .. }, _) => {
+                let Some(route) = entry.target.remote_route() else {
+                    return Self::dispatch_unavailable(
+                        trace,
+                        session,
+                        clock,
+                        request_id,
+                        trace_id,
+                        round,
+                        &call.name,
+                        &call.id,
+                        "remote route vanished".to_string(),
+                    );
+                };
+                // Already-authorized remote execution: governance ran exactly
+                // once above (requester side); the executing node governs its
+                // side exactly once. No port-level requester re-check.
+                let ctx = RemoteInvokeContext {
+                    trace: trace_id,
+                    session: *session_id,
+                    round,
+                    deadline_epoch_ms: None,
+                };
+                let port = self.remote_port().clone();
+                match port.as_ref() {
+                    Some(port) => match port.invoke_tool(route, call.clone(), ctx).await {
+                        Ok(result) => result,
+                        Err(error) => ToolResult::permanent_error(
+                            &call.id,
+                            format!("remote tool {capability} failed: {error}"),
+                        )
+                        .with_name(&call.name),
+                    },
+                    None => ToolResult::permanent_error(
+                        &call.id,
+                        format!("remote tool {capability} has no capability port"),
+                    )
+                    .with_name(&call.name),
+                }
+            }
+            // Defensive: a local implementation vanished after route
+            // resolution. The happy shape is guaranteed by resolution above.
+            (ToolExecutionTarget::Local { .. }, None) => ToolResult::permanent_error(
+                &call.id,
+                format!("tool {capability} vanished before dispatch"),
+            )
+            .with_name(&call.name),
+        };
 
         if !result.is_ok() {
             session.record(

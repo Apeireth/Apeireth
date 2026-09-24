@@ -187,7 +187,8 @@ fn read_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T
 
 /// poison 容错写锁 (L 组): 同上。
 fn write_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
-    lock.write().unwrap_or_else(|poisoned| poisoned.into_inner())
+    lock.write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 impl SessionLocks {
@@ -230,6 +231,13 @@ pub struct Runtime {
     pub(super) session_locks: SessionLocks,
     pub(super) event_sink: RwLock<Arc<dyn RuntimeEventSink>>,
     pub(super) context_projector: Arc<dyn ContextProjector>,
+    /// Remote capability execution/query port (mesh). Absent when this runtime
+    /// stands alone: behavior is then identical to a pre-port runtime.
+    ///
+    /// Behind a lock and settable after build (`set_remote_port`) because the
+    /// port implementation (a mesh node) is itself constructed over this
+    /// runtime — the cycle is broken the same way `set_event_sink` does it.
+    pub(super) remote_port: RwLock<Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>>,
 }
 
 impl Runtime {
@@ -373,6 +381,27 @@ impl Runtime {
         self.modules.hook_index()
     }
 
+    /// Install (or replace) the remote capability port after build.
+    ///
+    /// The port implementation is typically a mesh node constructed over this
+    /// very runtime, so injection happens after assembly; a runtime that never
+    /// calls this stays entirely local.
+    pub fn set_remote_port(&self, port: Arc<dyn apeireth_mesh::RemoteCapabilityPort>) {
+        *self
+            .remote_port
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(port);
+    }
+
+    /// The remote capability port, when one is installed.
+    pub(super) fn remote_port(
+        &self,
+    ) -> std::sync::RwLockReadGuard<'_, Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>> {
+        self.remote_port
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     /// Replace the host event sink without changing the runtime graph.
     ///
     /// This is used by adapters that are assembled after the runtime. Event
@@ -432,8 +461,42 @@ impl Runtime {
     }
 
     /// Model-facing tool declarations for all active tools.
+    ///
+    /// The unified model catalog: local declarations (canonical index) plus
+    /// remote declarations (capability port projection), with contested names
+    /// excluded. With no port installed this is exactly the local list, in the
+    /// same order.
     pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
-        self.modules.tool_declarations()
+        self.tool_route_table().model_catalog()
+    }
+
+    /// Rebuild the ephemeral name → target routing table from the two
+    /// read-only views. Derived per query; nothing is cached.
+    pub(super) fn tool_route_table(&self) -> super::tool_route::ToolRouteTable {
+        use super::tool_route::LocalToolView;
+        // Local candidates in the canonical id order the previous
+        // `tool_declarations` used, so no-mesh output is byte-identical.
+        let local: Vec<LocalToolView> = self
+            .modules
+            .active_tools()
+            .into_iter()
+            .filter_map(|tool| {
+                let owner = self.modules.capabilities().owner(tool.id()).ok()?.clone();
+                Some(LocalToolView {
+                    owner,
+                    capability_id: tool.id().clone(),
+                    declaration: tool.declaration(),
+                })
+            })
+            .collect();
+        let remote = self
+            .remote_port
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+            .map(|port| port.remote_tools())
+            .unwrap_or_default();
+        super::tool_route::ToolRouteTable::derive(local, remote)
     }
 
     /// The configured context projector.
@@ -530,6 +593,7 @@ pub struct RuntimeBuilder {
     context_projector: Arc<dyn ContextProjector>,
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
+    remote_port: Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>,
 }
 
 impl Default for RuntimeBuilder {
@@ -552,6 +616,7 @@ impl RuntimeBuilder {
             context_projector: Arc::new(NoContextProjector),
             fallback_order: None,
             config: RuntimeConfig::default(),
+            remote_port: None,
         }
     }
 
@@ -666,6 +731,15 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Route model tool calls across the mesh through this remote capability
+    /// port. Without it the runtime is entirely local, byte-equivalent to a
+    /// pre-port build.
+    #[must_use]
+    pub fn with_remote_port(mut self, port: Arc<dyn apeireth_mesh::RemoteCapabilityPort>) -> Self {
+        self.remote_port = Some(port);
+        self
+    }
+
     /// Set the per-turn budget for isolated module provider calls.
     #[must_use]
     pub fn with_max_module_invocations(mut self, invocations: usize) -> Self {
@@ -734,6 +808,7 @@ impl RuntimeBuilder {
             session_locks: SessionLocks::default(),
             event_sink: RwLock::new(self.event_sink),
             context_projector: self.context_projector,
+            remote_port: RwLock::new(self.remote_port),
         })
     }
 }

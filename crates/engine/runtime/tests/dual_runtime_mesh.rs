@@ -269,7 +269,17 @@ async fn a_remote_call_keeps_the_canonical_capability_id_end_to_end() {
             .await
             .unwrap(),
     );
-    let runtime_a = Arc::new(Runtime::builder().build().await.unwrap());
+    // A runs its own requester governance (exactly once) before the raw
+    // remote path, so the explicit high-level API is no governance bypass.
+    let mut policy_a = PermissionPolicy::new();
+    policy_a.grant(Permission::ExecuteTool(ECHO_CAP.to_string()));
+    let runtime_a = Arc::new(
+        Runtime::builder()
+            .with_governance(Arc::new(PermissionGovernanceHook::new(policy_a)))
+            .build()
+            .await
+            .unwrap(),
+    );
 
     let node_a_id = NodeId::new("node-a").unwrap();
     let node_b_id = NodeId::new("node-b").unwrap();

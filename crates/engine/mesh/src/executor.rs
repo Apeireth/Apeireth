@@ -240,12 +240,14 @@ impl<V: ModuleManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
             // here — the canonical indexed view is the only network-visible
             // surface.
             for (owner, tool) in manager.tool_entries() {
+                let declaration = tool.declaration();
                 entries.push(CapabilityCatalogEntry {
                     id: tool.id().clone(),
                     kind: apeireth_mesh_protocol::MeshCapabilityKind::from_id(tool.id())
                         .unwrap_or(apeireth_mesh_protocol::MeshCapabilityKind::Extension),
                     owner,
-                    description: tool.declaration().description.unwrap_or_default(),
+                    description: declaration.description.clone().unwrap_or_default(),
+                    declaration: Some(declaration),
                     available: true,
                 });
             }
@@ -265,6 +267,9 @@ impl<V: ModuleManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
                     id,
                     owner: record.owner.clone(),
                     description: record.descriptor.description.clone(),
+                    // A declared-but-undispatchable tool has no live declaration
+                    // to project; it is excluded from model catalogs anyway.
+                    declaration: None,
                     available: record.is_available(),
                 });
             }
@@ -344,6 +349,7 @@ pub fn catalog_to_modules(
             kind: entry.kind,
             description: entry.description,
             available: entry.available,
+            declaration: entry.declaration,
         });
     }
     by_module.into_values().collect()

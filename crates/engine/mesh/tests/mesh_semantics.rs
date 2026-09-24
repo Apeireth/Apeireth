@@ -904,6 +904,12 @@ impl MeshCapabilityExecutor for SlowExecutorWithAdvert {
             owner: ModuleId::new(TEST_MODULE).unwrap(),
             description: "slow".into(),
             available: true,
+            declaration: Some(NormalizedTool {
+                name: "mesh_echo".into(),
+                description: Some("slow".into()),
+                parameters: ToolParameters::new(),
+                strict: false,
+            }),
         }]
     }
 
