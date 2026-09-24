@@ -36,8 +36,10 @@
 
 #![deny(unsafe_code)]
 
+pub mod conformance;
 pub mod error;
 pub mod executor;
+pub mod identity;
 pub mod node;
 pub mod peer;
 pub mod port;
@@ -45,11 +47,13 @@ pub mod route;
 pub mod transport;
 pub mod trust;
 
+pub use conformance::assert_connection_conformance;
 pub use error::{MeshError, MeshExecError};
 pub use executor::{
     catalog_to_modules, CancelFlag, ManagerExecutor, MeshCapabilityExecutor, MeshInvokeContext,
     ModuleManagerView,
 };
+pub use identity::{IdentityError, KeyFingerprint, NodeIdentity};
 pub use node::{
     CallHandle, CallTarget, InvokeMeta, MeshNode, MeshNodeConfig, DEFAULT_HEARTBEAT_TIMEOUT_MS,
 };
@@ -63,7 +67,7 @@ pub use route::{
 };
 pub use transport::{
     linked_pair, InMemoryLink, InMemoryListener, InMemoryMeshNetwork, InMemoryMeshTransport,
-    MeshConnection, MeshTransport, MeshTransportError,
+    MeshConnection, MeshListener, MeshTransport, MeshTransportError,
 };
 pub use trust::{KnownPeer, PeerTrust, TrustPolicy};
 

@@ -13,6 +13,7 @@ members = [
     "crates/engine/perception",
     "crates/engine/runtime-assembly",
     "crates/engine/mesh",
+    "crates/engine/mesh-quic",
     "crates/engine/guard",
     "crates/engine/provider",
     "crates/engine/storage",

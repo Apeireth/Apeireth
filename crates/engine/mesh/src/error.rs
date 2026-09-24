@@ -74,6 +74,14 @@ pub enum MeshError {
         message: String,
     },
 
+    /// A newer connection to the same peer superseded this one (deterministic
+    /// duplicate-connection policy). The surviving connection is named.
+    #[error("connection superseded by a duplicate; kept connection to {kept}")]
+    Superseded {
+        /// The peer whose surviving connection was kept.
+        kept: String,
+    },
+
     /// The call was cancelled before it produced an outcome.
     #[error("mesh call was cancelled")]
     Cancelled,
