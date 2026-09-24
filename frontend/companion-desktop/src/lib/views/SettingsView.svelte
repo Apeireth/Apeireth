@@ -50,6 +50,9 @@
     Timer,
     MessageSquarePlus,
     Archive,
+    Filter,
+    Tag,
+    Copy,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
@@ -217,6 +220,11 @@
     {key: 'localReadTools', icon: FolderSearch, label: '本地只读工具', env: 'APEIRETH_ENABLE_LOCAL_READ_TOOLS', desc: '文件/搜索/仓库读侧工具（file / search / repo）。'},
   ];
 
+  /** Beta 功能（开发者选项页）：默认关、随时可撤，稳定后晋升正式设置页。 */
+  const BETA_DEFS: CapDef[] = [
+    {key: 'reasoningEnabled', icon: Brain, label: '思考模式 (Reasoning)', env: 'APEIRETH_REASONING_ENABLED', desc: '把模型的 reasoning_content 分流展示——思考过程单独渲染，不占正文。'},
+  ];
+
   function isCapOn(def: CapDef): boolean {
     const value = capabilities[def.key];
     return def.invert ? value === false : value === true;
@@ -244,6 +252,14 @@
 
   function setMorphologyTemperature(value: number): void {
     capabilities = {...capabilities, morphologyTemperature: Math.min(2, Math.max(0.1, Math.round(value * 10) / 10))};
+  }
+
+  function setReasoningFilters(value: string): void {
+    capabilities = {...capabilities, reasoningModelFilters: value};
+  }
+
+  function setReasoningTag(value: string): void {
+    capabilities = {...capabilities, reasoningTag: value.trim() || 'think'};
   }
 
   // Model Provider protocol & preset configurations
@@ -800,6 +816,24 @@
       checkingRuntime = false;
     }
   }
+
+  // ---- 开发者选项：客户端配置 JSON 复制 ----
+  let configJsonCopied = $state(false);
+  const configJsonPreview = $derived(
+    JSON.stringify({baseUrl: config.baseUrl, model: providerModel, provider: config.provider, hasApiKey}, null, 2),
+  );
+
+  async function copyConfigJson(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(configJsonPreview);
+      configJsonCopied = true;
+      setTimeout(() => {
+        configJsonCopied = false;
+      }, 1500);
+    } catch {
+      // 剪贴板不可用时静默降级——配置仍可视。
+    }
+  }
 </script>
 
 <section class="settings-view">
@@ -1325,21 +1359,19 @@
             {/each}
           </div>
 
-          <div class="info-card">
-            <strong class="info-title">后台做梦与反思循环 (Dream & Reflection)</strong>
-            <p class="info-text">
-              「做梦」伴随常驻后台安静触发：苏醒后把提炼结果写日记（source=dream），
-              日记失败不伪装成功。命令行亦可显式触发 <code>apeireth dream</code>。
+          <div class="cap-default-card">
+            <span class="cap-default-badge on"><CheckCircle2 size={11} /> 默认能力 · 显式触发</span>
+            <strong class="cap-default-title">做梦与反思 (Dream & Reflection)</strong>
+            <p class="cap-default-text">
+              无需开关、永远可用：命令行 <code>apeireth dream</code> 即授权一次做梦周期，
+              苏醒后把提炼结果写日记（source=dream），日记失败不伪装成功。
             </p>
           </div>
 
-          <div class="info-card">
-            <strong class="info-title">fail-closed 语义</strong>
-            <p class="info-text">
-              关闭（默认）时不注入任何环境变量，后端能力完全不存在；开启只注入 "1"。
-              唯一的例外是沙箱（后端默认开），见「工具与安全」。
-            </p>
-          </div>
+          <p class="cap-footnote">
+            fail-closed 语义：以上旋钮关闭（默认）时不注入任何环境变量，后端能力完全不存在；
+            开启只注入 "1"。唯一的例外是沙箱（后端默认开），见「工具与安全」。
+          </p>
         </div>
 
       {:else if activeSection === 'governance'}
@@ -1459,9 +1491,10 @@
             {/each}
           </div>
 
-          <div class="info-card">
-            <strong class="info-title">议会语义（2026-10-10 改造批）</strong>
-            <p class="info-text">
+          <div class="cap-default-card">
+            <span class="cap-default-badge note"><Info size={11} /> 设计说明 · 非开关</span>
+            <strong class="cap-default-title">议会语义（2026-10-10 改造批）</strong>
+            <p class="cap-default-text">
               议会是决策环节的顾问团，不是每轮评审器：升级/部署批准、高危操作、
               待裁冲突批量裁决时启用，日常对话保持轻量。未配 LLM 时 fail-loud 不造假裁决。
             </p>
@@ -1547,16 +1580,22 @@
             {/each}
           </div>
 
-          <div class="info-card">
-            <strong class="info-title">权限洋葱与即时授权 (On-demand Permission Pack)</strong>
-            <p class="info-text">
-              为保障安全性，Master Token 绝不持久化保存在客户端存储中。当特权工具被拒绝并产生待批授权请求时，主人在「工具管理」页面输入 Token 即时完成时效性签发。
+          <div class="cap-default-card">
+            <span class="cap-default-badge on"><CheckCircle2 size={11} /> 常驻 · 默认运行</span>
+            <strong class="cap-default-title">权限洋葱与即时授权 (On-demand Permission Pack)</strong>
+            <p class="cap-default-text">
+              这是始终在线的安全机制，不是可关的开关：Master Token 绝不持久化保存在客户端存储中；
+              特权工具被拒绝产生待批请求时，在「工具管理」页面输入 Token 即时完成时效性签发。
             </p>
           </div>
 
-          <div class="info-card">
-            <strong class="info-title">宪法评审 (MiniMaxConstitutionLlm)</strong>
-            <p class="info-text">高危工具执行前自动按 E 层进行安全判案，杜绝越权或有害操作。</p>
+          <div class="cap-default-card">
+            <span class="cap-default-badge on"><CheckCircle2 size={11} /> 常驻 · 默认运行</span>
+            <strong class="cap-default-title">宪法评审 (MiniMaxConstitutionLlm)</strong>
+            <p class="cap-default-text">
+              高危工具执行前自动按 E 层进行安全判案——默认运行、不可关闭，
+              杜绝越权或有害操作。
+            </p>
           </div>
         </div>
 
@@ -1627,35 +1666,112 @@
 
       {:else}
         <div class="setting-block">
-          <h3 class="block-title">开发者与协议信息</h3>
-          <p class="block-desc">技术参数与运行时契约规范。</p>
+          <h3 class="block-title">开发者选项</h3>
+          <p class="block-desc">
+            Beta 功能试验场与运行时契约。Beta 件默认关、随时可撤，验证稳定后晋升正式设置页；
+            改动同样走「保存设置」注入侧车环境。
+          </p>
 
-          <div class="info-card">
-            <strong class="info-title">Agent Runtime Contract (§15)</strong>
-            <p class="info-text">
-              UI 仅面对标准事件流 (run-start, text-delta, reasoning-delta, tool-call, tool-result, message-end)，不裸碰底层 HTTP/SSE 协议。
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Sparkles size={13} /> Beta 功能</span>
+              <span class="cap-card-count">{enabledCount(BETA_DEFS)}/{BETA_DEFS.length}</span>
+            </div>
+            {#each BETA_DEFS as def (def.key)}
+              <button
+                class="cap-row"
+                class:dim={capDisabled(def)}
+                onclick={() => toggleCap(def)}
+                role="switch"
+                aria-checked={isCapOn(def)}
+                aria-label={def.label}
+              >
+                <span class="cap-icon"><def.icon size={15} /></span>
+                <span class="cap-text">
+                  <strong>{def.label}<code class="cap-env">{def.env}</code></strong>
+                  <small>{def.desc}</small>
+                </span>
+                <span class="cap-switch" class:on={isCapOn(def)}><span class="cap-knob"></span></span>
+              </button>
+            {/each}
+
+            {#if capabilities.reasoningEnabled}
+              <div class="cap-row cap-row-static">
+                <span class="cap-icon"><Filter size={15} /></span>
+                <span class="cap-text">
+                  <strong>生效模型过滤器<code class="cap-env">APEIRETH_REASONING_MODEL_FILTERS</code></strong>
+                  <small>逗号分隔子串白名单（如 deepseek,o3）；留空 = 全部模型生效。</small>
+                </span>
+                <span class="cap-input-wrap">
+                  <input
+                    type="text"
+                    value={capabilities.reasoningModelFilters}
+                    placeholder="全部模型"
+                    aria-label="思考模式模型过滤器"
+                    oninput={(e) => setReasoningFilters((e.currentTarget as HTMLInputElement).value)}
+                  />
+                </span>
+              </div>
+              <div class="cap-row cap-row-static">
+                <span class="cap-icon"><Tag size={15} /></span>
+                <span class="cap-text">
+                  <strong>reasoning 标签<code class="cap-env">APEIRETH_REASONING_TAG</code></strong>
+                  <small>reasoning_content 的字段标签名，默认 think。</small>
+                </span>
+                <span class="cap-input-wrap">
+                  <input
+                    type="text"
+                    value={capabilities.reasoningTag}
+                    aria-label="reasoning 标签"
+                    oninput={(e) => setReasoningTag((e.currentTarget as HTMLInputElement).value)}
+                  />
+                </span>
+              </div>
+            {/if}
+          </div>
+
+          <div class="cap-default-card">
+            <span class="cap-default-badge note"><Info size={11} /> 契约 · 恒成立</span>
+            <strong class="cap-default-title">Agent Runtime Contract (§15)</strong>
+            <p class="cap-default-text">
+              UI 仅面对标准事件流 (run-start, text-delta, reasoning-delta, tool-call, tool-result,
+              message-end)，不裸碰底层 HTTP/SSE 协议。
             </p>
           </div>
 
           <div class="form-group">
             <label for="raw-config-json">客户端配置 (JSON)</label>
-            <pre class="code-box">{JSON.stringify({baseUrl: config.baseUrl, model: providerModel, provider: config.provider, hasApiKey}, null, 2)}</pre>
+            <div class="code-box-wrap">
+              <button class="quiet-button copy-btn" onclick={() => void copyConfigJson()}>
+                {#if configJsonCopied}
+                  <Check size={12} />
+                  <span>已复制</span>
+                {:else}
+                  <Copy size={12} />
+                  <span>复制</span>
+                {/if}
+              </button>
+              <pre class="code-box">{configJsonPreview}</pre>
+            </div>
           </div>
         </div>
       {/if}
 
       <!-- 2026-09-23 主人指示：保存栏移入内容流末尾（每个分页最下面），
            不再做通栏固定黑带（2549 宽屏上比例失调且不优雅）。
-           保存会重启本地网关以应用配置。 -->
-      <div class="settings-save-bar">
-        <span class="save-bar-hint">
-          {saveSuccess ? '✓ 已保存，本地网关已应用新配置' : '填好配置后点"保存设置"（无重启热应用，不支持时自动重启网关）'}
-        </span>
-        <button class="primary-button save-bar-btn" onclick={handleSaveSettings}>
-          <Check size={14} />
-          <span>{saveSuccess ? '已保存！' : '保存设置'}</span>
-        </button>
-      </div>
+           保存会重启本地网关以应用配置。
+           2026-10-10 主人反馈：纯探测页（运行时诊断）不需要保存栏。 -->
+      {#if activeSection !== 'runtime'}
+        <div class="settings-save-bar">
+          <span class="save-bar-hint">
+            {saveSuccess ? '✓ 已保存，本地网关已应用新配置' : '填好配置后点"保存设置"（无重启热应用，不支持时自动重启网关）'}
+          </span>
+          <button class="primary-button save-bar-btn" onclick={handleSaveSettings}>
+            <Check size={14} />
+            <span>{saveSuccess ? '已保存！' : '保存设置'}</span>
+          </button>
+        </div>
+      {/if}
     </div>
   </div>
 </section>
@@ -2530,6 +2646,88 @@
     font-size: 11.5px;
     line-height: 1.5;
   }
+
+  /* 默认能力卡：常驻/显式触发机制的说明卡——明确「这不是开关」。
+     主人 2026-10-10 反馈：静态 info-card 与可操控开关行同形，易误以为坏了；
+     改为带徽章的说明卡 + 页脚注，与开关卡在视觉上明确分层。 */
+  .cap-default-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 10px;
+    background: transparent;
+  }
+  .cap-default-badge {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--faint);
+  }
+  .cap-default-badge.on {
+    border-color: rgba(61, 122, 92, 0.35);
+    color: var(--green);
+    background: var(--green-wash);
+  }
+  .cap-default-badge.note {
+    border-color: var(--line-strong);
+    color: var(--muted);
+  }
+  .cap-default-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .cap-default-text {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .cap-default-text code {
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .cap-footnote {
+    margin: -6px 2px 0;
+    font-size: 11px;
+    color: var(--faint);
+    line-height: 1.6;
+  }
+
+  .cap-input-wrap input {
+    width: 170px;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: var(--mono);
+    outline: 0;
+  }
+  .cap-input-wrap input:focus {
+    border-color: var(--amber-line);
+  }
+
+  .code-box-wrap {
+    position: relative;
+  }
+  .code-box-wrap .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+  }
   /* 多 Agent 人设卡片 */
   .persona-card {
     padding: 14px;
@@ -2579,12 +2777,6 @@
   .info-title {
     font-size: 13px;
     color: var(--text);
-  }
-  .info-text {
-    margin: 0;
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.6;
   }
   .notice-box {
     display: flex;

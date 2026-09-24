@@ -178,6 +178,10 @@ export interface BackendCapabilityEnv {
   morphology_temperature: number;
   enable_onion_layer: boolean;
   enable_worktree_sandbox: boolean;
+  /** [Beta] 思考模式（reasoning_content 分流展示）；字符串字段空 = 不注入。 */
+  reasoning_enabled: boolean;
+  reasoning_model_filters: string;
+  reasoning_tag: string;
 }
 
 /** Map the config's capability toggles onto the canonical knob names. */
@@ -211,6 +215,9 @@ export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined |
     morphology_temperature: toggles?.morphologyRecall === true && temperature > 0 ? temperature : 0,
     enable_onion_layer: toggles?.onionLayer === true,
     enable_worktree_sandbox: toggles?.worktreeSandbox === true,
+    reasoning_enabled: toggles?.reasoningEnabled === true,
+    reasoning_model_filters: toggles?.reasoningEnabled === true ? (toggles?.reasoningModelFilters ?? '').trim() : '',
+    reasoning_tag: toggles?.reasoningEnabled === true ? (toggles?.reasoningTag ?? 'think').trim() : '',
   };
 }
 

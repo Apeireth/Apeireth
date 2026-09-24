@@ -251,6 +251,11 @@ pub struct BackendCapabilityEnv {
     pub morphology_temperature: f64,
     pub enable_onion_layer: bool,
     pub enable_worktree_sandbox: bool,
+    /// [Beta] 思考模式（reasoning_content 分流展示，对齐 provider
+    /// `ReasoningAdapterConfig::from_env`）；字符串字段空 = 不注入。
+    pub reasoning_enabled: bool,
+    pub reasoning_model_filters: String,
+    pub reasoning_tag: String,
 }
 
 impl BackendCapabilityEnv {
@@ -343,6 +348,17 @@ impl BackendCapabilityEnv {
         }
         if self.enable_worktree_sandbox {
             pairs.push(("APEIRETH_ENABLE_WORKTREE_SANDBOX", "1".to_string()));
+        }
+        if self.reasoning_enabled {
+            pairs.push(("APEIRETH_REASONING_ENABLED", "1".to_string()));
+            let filters = self.reasoning_model_filters.trim();
+            if !filters.is_empty() {
+                pairs.push(("APEIRETH_REASONING_MODEL_FILTERS", filters.to_string()));
+            }
+            let tag = self.reasoning_tag.trim();
+            if !tag.is_empty() {
+                pairs.push(("APEIRETH_REASONING_TAG", tag.to_string()));
+            }
         }
         pairs
     }
@@ -1718,6 +1734,29 @@ mod tests {
         assert_eq!(minimal["APEIRETH_COUNCIL_ADVISORS"], "3");
         assert_eq!(minimal["APEIRETH_MORPHOLOGY_TEMPERATURE"], "2");
         assert_eq!(minimal.len(), 2);
+
+        // [Beta] 思考模式：enabled 才注入，filters/tag 空串不注入；
+        // 关闭时不注入任何 reasoning 变量。
+        let reasoning = BackendCapabilityEnv {
+            reasoning_enabled: true,
+            reasoning_model_filters: "deepseek, o3".into(),
+            reasoning_tag: String::new(),
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = reasoning.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_REASONING_ENABLED"], "1");
+        assert_eq!(map["APEIRETH_REASONING_MODEL_FILTERS"], "deepseek, o3");
+        assert!(!map.contains_key("APEIRETH_REASONING_TAG"), "空 tag 不注入");
+        let reasoning_off = BackendCapabilityEnv {
+            reasoning_enabled: false,
+            reasoning_model_filters: "deepseek".into(),
+            ..Default::default()
+        };
+        let pairs = reasoning_off.env_pairs();
+        assert!(
+            pairs.iter().all(|(k, _)| !k.starts_with("APEIRETH_REASONING")),
+            "关闭时 filters 也不注入: {pairs:?}"
+        );
     }
 
     /// 旧版本持久化的 capability JSON（无 W2/W3 字段）必须仍能反序列化：
