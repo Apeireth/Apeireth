@@ -20,7 +20,7 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 | # | 缺口 | v1 真的做成了吗 | v2 现状 | 工作量 | 建议序 |
 |---|---|---|---|---|---|
 | 5 | `thought_cluster` 思维簇 | ✅ 真做成了，**且 v2 已移植**（= `cluster_store.rs` 改名，悬案闭合） | **库级缺口已闭合**（IMPLEMENTED）；欠生产接线 | S（核查接线即可） | **1** |
-| 1 | `community` 社群识别与分诊 | ✅ 真做成了（图社群检测算法 + 确定性摘要 + 测试） | **✅ 已移植**（`memory/community.rs` 三件，9 测，台账 #57）；生产消费 = 契约扩展接线项 | M | 2 |
+| 1 | `community` 社群识别与分诊 | ✅ 真做成了（图社群检测算法 + 确定性摘要 + 测试） | **✅ 已移植**（`memory/community.rs` 三件，9 测，台账 #57）+ **✅ 生产消费已接线**（all_facts 契约扩展 + 检索前置，台账 #64）——全闭环 | M | 2 |
 | 6 | `onering` 账本 | ✅ 真做成了（318 行 + 8 项测试） | **✅ 本体早已在 v2**（`context_ledger.rs` = companion ledger 打捞，API 同构；考古原判"仅 VCP 注释"系误判——五审纠错）+ 本次补生产消费（cli 记账，台账 #58） | M | 3 |
 | 2 | `experiment_field` 隔离实验场 | 🟡 部分：**机制真实施，执行后端 0 装** | **✅ 机制已移植**（runtime-assembly/experiment_field.rs：状态机+VMRunner 口+Noop 诚实 Err+回滚学习 sink，5 测，台账 #59）；执行后端（真 VM）仍 0 装留后续 | M | 4 |
 | 7 | 真文件/网络沙箱 | ❌ **v1 也只有骨架**（seccomp/JobObject/netns/WFP 全是 TODO/Noop） | v2 进程树遏制**已反超 v1** | L（新造，走 W1 设计） | 5 |
@@ -55,6 +55,12 @@ Status:          🟢 活跃 (W3 排期拍板依据)
 > 是 Memory(Id) 域原语，本模块 = GraphFact 字符串值域共现图（不同输入域）。
 > **0 假装消费边界**：生产图谱契约（`KnowledgeGraphStore`）仅 `facts_from(subject)`
 > 单跳读、无全量列举 → 生产接线（检索前置）= 契约扩展后的接线项。
+
+> **[2026-10-10 消费接线完成]** → `all_facts` 契约扩展（trait 默认空实现=零 impl 翻修，
+> sqlite impl 覆写真查询）+ `MemoryRecallModule.with_community_triage` 检索前置接线
+> （TurnStart overlay：Entity=命中实体提示 / Broad=社区摘要 briefs）+ 旋钮
+> `APEIRETH_ENABLE_COMMUNITY_TRIAGE=1`（默认关，五件门齐）。**§1 community 项自此
+> 全闭环**（移植 + 生产消费）。台账 #64。
 
 ## 2. `experiment_field` 隔离实验场 — 🟡 部分（机制真实施 / 执行后端 0 装）
 
