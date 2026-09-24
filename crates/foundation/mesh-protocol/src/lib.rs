@@ -36,7 +36,7 @@ pub use envelope::{
 };
 pub use identity::{
     CapabilityAdvertEntry, LocatedModuleId, MeshCapabilityKind, ModuleAdvert, ModuleLocation,
-    NodeDescriptor,
+    NodeDescriptor, WireModelDescriptor,
 };
 
 pub use apeireth_core::kernel::NodeId;

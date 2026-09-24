@@ -309,7 +309,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-mesh"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-mesh-protocol"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-protocol",

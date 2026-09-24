@@ -119,6 +119,8 @@ pub struct RemoteCapability {
     pub available: bool,
     /// The model-facing declaration, when the advert carried one (tool kind).
     pub declaration: Option<apeireth_protocol::canonical::NormalizedTool>,
+    /// Model routing projection, when the advert carried one (provider kind).
+    pub provider_models: Option<Vec<apeireth_mesh_protocol::WireModelDescriptor>>,
 }
 
 /// One capability in this runtime's own canonical indexed view.
@@ -140,6 +142,8 @@ pub struct CapabilityCatalogEntry {
     pub available: bool,
     /// The model-facing declaration, for live tool entries.
     pub declaration: Option<apeireth_protocol::canonical::NormalizedTool>,
+    /// Model routing projection, for live provider entries (secrets stripped).
+    pub models: Option<Vec<apeireth_mesh_protocol::WireModelDescriptor>>,
 }
 
 /// Routing metadata for every remote route, namespaced by `(node, capability)`.
@@ -184,6 +188,7 @@ impl RouteTable {
                     description: entry.description.clone(),
                     available: entry.available,
                     declaration: entry.declaration.clone(),
+                    provider_models: entry.models.clone(),
                 },
             );
         }
@@ -308,6 +313,7 @@ mod tests {
             description: "local".into(),
             available: true,
             declaration: None,
+            models: None,
         }]
     }
 

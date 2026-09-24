@@ -150,6 +150,24 @@ pub enum RuntimeError {
         detail: String,
     },
 
+    /// A model is contested across local and remote routes (or between remote
+    /// nodes). Automatic routing fails closed instead of picking a winner;
+    /// explicit routes remain callable.
+    #[error("model {model:?} has ambiguous execution routes: {candidates}")]
+    AmbiguousModelRoute {
+        /// The contested model.
+        model: String,
+        /// The contending routes.
+        candidates: String,
+    },
+
+    /// A remote provider route failed before producing a response.
+    #[error("remote provider failed: {reason}")]
+    Remote {
+        /// What happened (availability, transport, cancellation, ...).
+        reason: String,
+    },
+
     /// The runtime was assembled in an unusable state.
     #[error("runtime misconfigured: {0}")]
     Misconfigured(String),
