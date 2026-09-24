@@ -243,7 +243,10 @@ mod tests {
             "Debug must not carry the key: {printed}"
         );
         // 字段仍存在 (结构未被误删), 只是值被脱敏。
-        assert!(printed.contains("OpenAiCompatibleEmbeddingProvider"), "{printed}");
+        assert!(
+            printed.contains("OpenAiCompatibleEmbeddingProvider"),
+            "{printed}"
+        );
     }
 
     #[test]

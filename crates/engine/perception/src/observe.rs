@@ -167,7 +167,10 @@ impl ObservationQueue {
     /// Time-injected push (tests).
     pub fn push_at(&self, candidate: ObservationCandidate, now_ms: i64) -> bool {
         let key = (candidate.tool.clone(), candidate.args_hash.clone());
-        let mut inner = self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(&prev_ts) = inner.lru.get(&key) {
             if now_ms - prev_ts < self.window_ms {
                 return false;
@@ -204,7 +207,10 @@ impl ObservationQueue {
 
     /// Drain pending candidates (consumer / promote cycle).
     pub fn drain_pending(&self) -> Vec<ObservationCandidate> {
-        let mut inner = self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         std::mem::take(&mut inner.pending)
     }
 }

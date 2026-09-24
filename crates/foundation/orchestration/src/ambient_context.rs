@@ -185,10 +185,7 @@ impl AmbientContextMachine {
     /// 入口先做长度截断, 防 OS 侧超长标题造成无界扫描成本。
     pub fn infer_scene_from_window(window_title: &str) -> UserActivityScene {
         // 截断后再匹配: 分类只需要开头若干字符即可判定, 不需要全文。
-        let bounded: String = window_title
-            .chars()
-            .take(MAX_WINDOW_TITLE_CHARS)
-            .collect();
+        let bounded: String = window_title.chars().take(MAX_WINDOW_TITLE_CHARS).collect();
         let title_lower = bounded.to_lowercase();
 
         if title_lower.contains("game")
@@ -361,8 +358,7 @@ mod tests {
     #[test]
     fn m4_window_title_truncated_to_cap() {
         let long = "x".repeat(5000);
-        let snap = AmbientContextMachine::default()
-            .update_environment(Some(&long), 1000);
+        let snap = AmbientContextMachine::default().update_environment(Some(&long), 1000);
         let title = snap.active_window_title.expect("title present");
         assert_eq!(title.chars().count(), MAX_WINDOW_TITLE_CHARS);
 
@@ -380,10 +376,7 @@ mod tests {
             sanitize_window_title("https://mail.google.com/mail/u/0/#inbox - Gmail"),
             "[url] - Gmail"
         );
-        assert_eq!(
-            sanitize_window_title("www.example.com/page?q=1"),
-            "[url]"
-        );
+        assert_eq!(sanitize_window_title("www.example.com/page?q=1"), "[url]");
         assert_eq!(
             sanitize_window_title("Chat with alice@example.com - Slack"),
             "Chat with [email] - Slack"
@@ -391,7 +384,10 @@ mod tests {
         // @ 后无点 → 不是邮箱, 保留原样.
         assert_eq!(sanitize_window_title("user@localhost"), "user@localhost");
         // 短标题原样 (0 误伤).
-        assert_eq!(sanitize_window_title("main.rs - VSCode"), "main.rs - VSCode");
+        assert_eq!(
+            sanitize_window_title("main.rs - VSCode"),
+            "main.rs - VSCode"
+        );
         // 空标题.
         assert_eq!(sanitize_window_title(""), "");
     }

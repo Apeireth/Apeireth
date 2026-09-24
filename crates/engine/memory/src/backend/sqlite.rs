@@ -495,7 +495,8 @@ mod tests {
         // (per v2.0.0-rc-roadmap.md §3 RC-1: 绕开 SqliteMemoryStore mutex, 但 schema 必须有)
         // 简化: 用 StorageError 路径 inline 创 (避免 MemoryError→StorageError 转换)
         pool.write(|conn| -> Result<(), apeireth_storage::StorageError> {
-            conn.execute_batch(r#"
+            conn.execute_batch(
+                r#"
                 CREATE TABLE IF NOT EXISTS episodes (
                     id TEXT PRIMARY KEY,
                     continuity_id TEXT NOT NULL,
@@ -551,7 +552,8 @@ mod tests {
                     session_id TEXT, created_at INTEGER NOT NULL, payload TEXT NOT NULL,
                     source TEXT NOT NULL, tags TEXT NOT NULL, tombstoned_at INTEGER
                 );
-            "#)
+            "#,
+            )
             .map_err(apeireth_storage::StorageError::from)
         })
         .await
@@ -757,9 +759,7 @@ mod tests {
             })
             .unwrap();
         assert!(
-            b.list_stream(thought, "sess-any", 10)
-                .unwrap()
-                .is_empty(),
+            b.list_stream(thought, "sess-any", 10).unwrap().is_empty(),
             "无归属行不得匹配具名 session 查询"
         );
         let unowned = b.list_stream(thought, "", 10).unwrap();
@@ -825,4 +825,3 @@ mod tests {
         );
     }
 }
-

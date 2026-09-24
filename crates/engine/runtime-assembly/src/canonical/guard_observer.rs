@@ -55,9 +55,7 @@ impl GuardDatasetObserver {
             .approvals
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let position = bindings
-            .iter()
-            .position(|(id, _)| id == approval_id)?;
+        let position = bindings.iter().position(|(id, _)| id == approval_id)?;
         bindings.remove(position).map(|(_, binding)| binding)
     }
 }
@@ -88,10 +86,7 @@ impl RuntimeEventSink for GuardDatasetObserver {
                 if bindings.len() >= MAX_APPROVAL_BINDINGS {
                     bindings.pop_front();
                 }
-                bindings.push_back((
-                    approval.to_string(),
-                    (tool_call_id.clone(), tool_call_id),
-                ));
+                bindings.push_back((approval.to_string(), (tool_call_id.clone(), tool_call_id)));
                 // The request is intentionally not a training label. The
                 // eventual resolution below is the approval event.
             }

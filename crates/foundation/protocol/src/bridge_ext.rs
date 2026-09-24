@@ -19,13 +19,19 @@ pub trait ExtendedBridge {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BridgeExtError {
     InvalidUtf8,
-    QueueFull { capacity: usize },
+    QueueFull {
+        capacity: usize,
+    },
     ZeroCapacity,
     /// L1 修复 (2026-09-24 审计): stream buffer 超过字节上限 (无界缓冲 =
     /// 流式总长度即内存上限)。
-    BufferFull { capacity: usize },
+    BufferFull {
+        capacity: usize,
+    },
     /// L1 修复 (2026-09-24 审计): stream chunk 数超过上限。
-    TooManyChunks { capacity: usize },
+    TooManyChunks {
+        capacity: usize,
+    },
 }
 
 impl fmt::Display for BridgeExtError {
@@ -218,7 +224,9 @@ mod tests {
     fn stream_buffer_and_chunk_count_are_bounded() {
         // L1 回归 (2026-09-24 审计): 原实现无上限。
         let mut byte_full = StreamBridge::new().with_limits(4, 0);
-        byte_full.push_chunk([1, 2, 3, 4]).expect("exactly capacity");
+        byte_full
+            .push_chunk([1, 2, 3, 4])
+            .expect("exactly capacity");
         assert_eq!(
             byte_full.push_chunk([5]),
             Err(BridgeExtError::BufferFull { capacity: 4 })

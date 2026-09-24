@@ -467,8 +467,7 @@ async fn approval_resume_preserves_the_turn_security_context() {
 
     let before_pause = recorder.seen_intents();
     assert!(
-        !before_pause.is_empty()
-            && before_pause.iter().all(Option::is_some),
+        !before_pause.is_empty() && before_pause.iter().all(Option::is_some),
         "every pre-pause evaluation must see the bound intent: {before_pause:?}"
     );
     let bound_intent_id = before_pause[0].clone();
@@ -537,9 +536,9 @@ async fn a_single_round_dispatches_at_most_the_tool_call_limit() {
     let runtime = Runtime::builder()
         .with_clock(fixed_clock())
         .with_session_store(store)
-        .with_governance(Arc::new(GovernancePipeline::new().with(Arc::new(
-            PermissionGovernanceHook::new(policy),
-        ))))
+        .with_governance(Arc::new(
+            GovernancePipeline::new().with(Arc::new(PermissionGovernanceHook::new(policy))),
+        ))
         .with_plugin(counting.clone())
         .with_plugin(ProviderPlugin::new(provider))
         .with_default_model(MODEL)

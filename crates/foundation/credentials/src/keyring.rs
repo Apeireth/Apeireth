@@ -241,10 +241,7 @@ impl CountingAudit {
 
     /// 取所有审计条目 (clone).
     pub fn entries(&self) -> Vec<AuditEntry> {
-        self.inner
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .clone()
+        self.inner.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     /// 审计条目数.
@@ -992,10 +989,7 @@ impl KeyringBackend for EncryptedFileBackend {
             });
         }
         // H5: 进程内写锁串行化 read-modify-write; poison 后取内卫值继续 (数据一致性优先).
-        let _guard = self
-            .write_lock
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let _guard = self.write_lock.lock().unwrap_or_else(|p| p.into_inner());
         // H5: 区分"文件不存在" (load_all → 空表) 与"文件损坏/解密失败" (Err);
         // 后者必须拒绝写入 — 否则一条新凭据会静默覆盖全部旧凭据.
         let mut all = match self.load_all() {
@@ -1024,10 +1018,7 @@ impl KeyringBackend for EncryptedFileBackend {
     fn delete(&self, service: &str) -> Result<()> {
         check_service_name(service)?;
         // H5: 同 set — 写锁串行化 load-modify-save, 加载失败拒绝删除 (防篡改检测被吞).
-        let _guard = self
-            .write_lock
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let _guard = self.write_lock.lock().unwrap_or_else(|p| p.into_inner());
         let mut all = match self.load_all() {
             Ok(all) => all,
             Err(e) => {

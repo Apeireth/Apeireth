@@ -461,7 +461,10 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut guard = store
+                .conn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)
@@ -475,7 +478,10 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut guard = store
+                .conn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)

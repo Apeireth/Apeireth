@@ -550,6 +550,10 @@ fn run_nightwatch(session: Option<String>, limit: usize) -> ExitCode {
 }
 
 /// 后台守护: 循环轮询, 双闸 (活动闸 + 冷却闸) 空闲时复盘一次。
+// TODO(design debt): this long-running lifecycle should eventually be a
+// system Module/service rather than a CLI-owned daemon. And the episode-
+// timestamp idle proxy is per-device: with Mesh, device idle != session idle
+// != continuity/global idle. See docs/design/post-integration-debts.md.
 fn run_nightwatch_watch(options: NightwatchOptions) -> ExitCode {
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,

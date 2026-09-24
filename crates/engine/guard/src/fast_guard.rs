@@ -189,12 +189,8 @@ impl FastGuard {
 /// 只认完整 marker 子串 (不是裸 `read`): `workspace_write` / `ready` /
 /// `already` 这类无关 scope 不得被误判成只读。
 fn is_read_only_scope(scope: &str) -> bool {
-    const READ_ONLY_MARKERS: &[&str] = &[
-        "read_only",
-        "readonly",
-        "workspace_read",
-        "repository_read",
-    ];
+    const READ_ONLY_MARKERS: &[&str] =
+        &["read_only", "readonly", "workspace_read", "repository_read"];
     let scope_lc = scope.to_ascii_lowercase();
     READ_ONLY_MARKERS
         .iter()

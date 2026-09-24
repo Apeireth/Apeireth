@@ -276,11 +276,17 @@ mod tests {
         let durable = pipeline.export_durable_facts();
         assert_eq!(
             durable.last().unwrap().id,
-            format!("m{}", MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY + MAX_EPHEMERAL_QUEUE + 9),
+            format!(
+                "m{}",
+                MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY + MAX_EPHEMERAL_QUEUE + 9
+            ),
             "最新条目应在库"
         );
         // 清理后 ephemeral 归零 (它还有 post_inference_cleanup 的生命周期).
         pipeline.post_inference_cleanup(false);
-        assert_eq!(pipeline.total_messages_count(), MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY);
+        assert_eq!(
+            pipeline.total_messages_count(),
+            MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY
+        );
     }
 }

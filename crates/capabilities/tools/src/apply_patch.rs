@@ -366,14 +366,9 @@ impl TransactionalPatchApplier {
     /// 2. 现实层: root 与目标分别 canonicalize (目标不存在时对最近存在
     ///    祖先 canonicalize 后 join 余量), 要求 `starts_with(root)` ——
     ///    root 内指向外部的 symlink 在此现形。
-    fn resolve_contained_target(
-        root_dir: &Path,
-        path: &Path,
-    ) -> Result<PathBuf, ApplyPatchError> {
+    fn resolve_contained_target(root_dir: &Path, path: &Path) -> Result<PathBuf, ApplyPatchError> {
         if path.as_os_str().is_empty() {
-            return Err(ApplyPatchError::PathViolation(
-                "补丁路径为空".to_string(),
-            ));
+            return Err(ApplyPatchError::PathViolation("补丁路径为空".to_string()));
         }
         if path.is_absolute() {
             return Err(ApplyPatchError::PathViolation(format!(
@@ -811,7 +806,10 @@ replaced
         let patch = "*** Begin Patch\n*** Delete File: ../outside.txt\n*** End Patch";
         let err = TransactionalPatchApplier::apply(&root, patch).unwrap_err();
         assert!(matches!(err, ApplyPatchError::PathViolation(_)), "{err:?}");
-        assert!(outside.exists(), "`..` traversal must never delete outside the root");
+        assert!(
+            outside.exists(),
+            "`..` traversal must never delete outside the root"
+        );
     }
 
     #[cfg(windows)]

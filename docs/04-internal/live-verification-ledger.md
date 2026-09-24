@@ -139,3 +139,8 @@ $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'
 - 新实测过 → 移到 §1 并填"何时/证据/复现命令"；挂账解除 → 从 §2 删行。
 - 只写"当时真跑了"的事实；探针脚本失败/输出存疑 = 不算实测，留在挂账。
 - 涉及 commit 的写 commit 短 hash；涉及测试文件的写 `file::test_name`。
+
+
+## 5. 补正 (addenda)
+
+- **2026-09-24 date/provenance 审计（Mesh Phase 1A 善后批）**：本台账 23 处条目（及源码/文档名一批）使用了 2026-09-25…2026-10-10 的未来日期落款，而全部相关提交的实际时间戳均为 2026-09-24。经审计判定为 work-log 时间戳的系统性前向漂移（与"计划里程碑"读法无法安全区分）。依 append-only 纪律**不改写任何历史行**，在此补正声明：涉及条目的日期读作"工作批注落款"，不作为可验证的实测时刻；可验证时刻以 git commit timestamp 为准。明细见 `docs/design/post-integration-debts.md` §1。

@@ -330,9 +330,7 @@ impl BehaviorChainGuardHook {
         chains.retain(|(s, _), _| s != session_id);
         // LRU 队列与 chains 同源: 一并清理, 否则队列里留下永不命中的幽灵
         // key, 会挤占 MAX_ACTIVE_CHAINS 额度并驱逐活跃链。
-        self.chain_order
-            .lock()
-            .retain(|(s, _)| s != session_id);
+        self.chain_order.lock().retain(|(s, _)| s != session_id);
         self.session_scopes.lock().remove(session_id);
         self.session_risk_history.lock().remove(session_id);
         self.session_behavior_summary.lock().remove(session_id);

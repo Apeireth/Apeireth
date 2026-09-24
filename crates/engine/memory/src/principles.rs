@@ -393,7 +393,10 @@ impl PrincipleStore for InMemoryPrincipleStore {
             updated_at_epoch_ms: now_epoch_ms,
         };
 
-        let mut state = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         state
             .principles
             .insert(principle.id.clone(), principle.clone());
@@ -417,7 +420,10 @@ impl PrincipleStore for InMemoryPrincipleStore {
         let expires_at_epoch_ms = now_epoch_ms
             .checked_add(self.approval_ttl_ms)
             .ok_or_else(|| approval_error("原则批准凭据过期时间溢出"))?;
-        let mut state = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         Self::purge_expired_approvals(&mut state, now_epoch_ms);
         let latest = latest_principle_for(&state, chain_or_id);
 
@@ -450,7 +456,10 @@ impl PrincipleStore for InMemoryPrincipleStore {
         approval: &PrincipleApprovalArtifact,
         now_epoch_ms: i64,
     ) -> Result<DynamicPrinciple, MemoryError> {
-        let mut state = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let Some(issued) = state.issued_approvals.get(&approval.nonce).cloned() else {
             return Err(approval_error("原则批准凭据无效、已使用或已过期"));
         };
@@ -500,7 +509,10 @@ impl PrincipleStore for InMemoryPrincipleStore {
     }
 
     fn record_violation(&self, chain_or_id: &str, now_epoch_ms: i64) -> Result<(), MemoryError> {
-        let mut state = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let latest = latest_principle_for(&state, chain_or_id);
 
         if let Some(p) = latest {
@@ -525,7 +537,10 @@ impl PrincipleStore for InMemoryPrincipleStore {
     }
 
     fn list(&self, status: Option<PrincipleStatus>) -> Result<Vec<DynamicPrinciple>, MemoryError> {
-        let state = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut by_chain: HashMap<String, DynamicPrinciple> = HashMap::new();
 
         for p in state.principles.values() {

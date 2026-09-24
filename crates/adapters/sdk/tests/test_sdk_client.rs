@@ -154,12 +154,18 @@ fn auth_pipeline_debug_redacted() {
     let p = AuthPipeline::new("a-valid-api-key-1234567890").expect("valid api key");
     let dbg = format!("{p:?}");
     assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
-    assert!(!dbg.contains("a-valid-api-key-1234567890"), "Debug 0 泄 key: {dbg}");
+    assert!(
+        !dbg.contains("a-valid-api-key-1234567890"),
+        "Debug 0 泄 key: {dbg}"
+    );
 
     let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
     let dbg = format!("{c:?}");
     assert!(dbg.contains("[redacted]"), "client Debug 应脱敏: {dbg}");
-    assert!(!dbg.contains("a-valid-api-key-1234567890"), "client Debug 0 泄 key: {dbg}");
+    assert!(
+        !dbg.contains("a-valid-api-key-1234567890"),
+        "client Debug 0 泄 key: {dbg}"
+    );
 }
 
 // =====================================================================

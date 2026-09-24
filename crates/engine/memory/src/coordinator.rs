@@ -194,7 +194,10 @@ impl MemoryCoordinator {
 
         // Layer 1: Working Memory
         if query.layers.contains(&MemoryLayerKind::Working) {
-            let working_lock = self.working.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let working_lock = self
+                .working
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if let Some(session_episodes) = working_lock.get(&query.session_id) {
                 for ep in session_episodes
                     .iter()
@@ -739,7 +742,10 @@ impl MemoryCoordinator {
     ) -> Result<(), MemoryError> {
         // 1. Update working memory ring buffer.
         {
-            let mut working_lock = self.working.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut working_lock = self
+                .working
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let ring = working_lock
                 .entry(episode.session_id.clone())
                 .or_insert_with(|| VecDeque::with_capacity(WORKING_RING_BUFFER_CAP));
@@ -879,7 +885,10 @@ impl MemoryCoordinator {
             .governance
             .forget_episode(episode_id, reason, expected_rev)?;
         {
-            let mut working_lock = self.working.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut working_lock = self
+                .working
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             for ring in working_lock.values_mut() {
                 ring.retain(|ep| ep.id != episode_id);
             }

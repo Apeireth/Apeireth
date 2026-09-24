@@ -678,12 +678,8 @@ mod tests {
     /// blob) 必须仍可加载 —— 缺失字段是 `None`, 不是反序列化失败。
     #[test]
     fn frozen_continuation_without_security_context_still_deserializes() {
-        let mut continuation = FrozenTurnContinuation::start_of_round(
-            RequestId::new(),
-            TraceId::new(),
-            "m",
-            1,
-        );
+        let mut continuation =
+            FrozenTurnContinuation::start_of_round(RequestId::new(), TraceId::new(), "m", 1);
         continuation.security_context = None;
         let json = serde_json::to_value(&continuation).unwrap();
         let mut object = json.as_object().unwrap().clone();
@@ -700,12 +696,8 @@ mod tests {
     fn frozen_continuation_round_trips_its_security_context() {
         let intent = TaskIntentEnvelopeV1::unknown("s", "t");
         let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
-        let mut continuation = FrozenTurnContinuation::start_of_round(
-            RequestId::new(),
-            TraceId::new(),
-            "m",
-            3,
-        );
+        let mut continuation =
+            FrozenTurnContinuation::start_of_round(RequestId::new(), TraceId::new(), "m", 3);
         continuation.security_context = Some(context);
 
         let restored: FrozenTurnContinuation =

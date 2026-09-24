@@ -136,7 +136,9 @@ async fn local_read_opt_in_grants_only_filesystem_and_search() {
 #[tokio::test]
 async fn env_wrapper_grants_local_read_tools_by_default_and_honors_disable() {
     // poison 安全: 前一个测试 panic 不应连锁毒化本锁。
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(&[ENABLE_LOCAL_READ_TOOLS_ENV, DISABLE_LOCAL_READ_TOOLS_ENV]);
 
     // Neither knob set: filesystem/search are granted by default (like repo).

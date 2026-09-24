@@ -247,13 +247,11 @@ pub fn parse_response(
                 .get("arguments")
                 .and_then(|v| v.as_str())
                 .map(|raw| {
-                    serde_json::from_str(raw).map_err(|error| {
-                        ProviderError::BadResponse {
-                            provider: provider_owned.clone(),
-                            detail: format!(
-                                "tool call {id:?} ({name}) has malformed arguments JSON: {error}"
-                            ),
-                        }
+                    serde_json::from_str(raw).map_err(|error| ProviderError::BadResponse {
+                        provider: provider_owned.clone(),
+                        detail: format!(
+                            "tool call {id:?} ({name}) has malformed arguments JSON: {error}"
+                        ),
                     })
                 })
                 .transpose()?

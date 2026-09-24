@@ -226,12 +226,18 @@ impl ContinuationStore for InMemoryContinuationStore {
     }
 
     fn exists(&self, id: &str) -> bool {
-        let guard = self.snapshots.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let guard = self
+            .snapshots
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         guard.contains_key(id)
     }
 
     fn list(&self) -> Vec<String> {
-        let guard = self.snapshots.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let guard = self
+            .snapshots
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         guard.keys().cloned().collect()
     }
 }

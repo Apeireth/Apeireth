@@ -440,10 +440,7 @@ struct EventIdentity<'a> {
 /// **确定性语义减弱 (有意取舍, 见 `record_event` doc)**: 重复事件的
 /// ordinal 不再是可枚举的 n-1 序列, 而是随机起点偏移; id 仍逐条唯一,
 /// 仅偏移不可预测.
-fn allocate_event_id(
-    conn: &rusqlite::Connection,
-    identity_json: &str,
-) -> rusqlite::Result<String> {
+fn allocate_event_id(conn: &rusqlite::Connection, identity_json: &str) -> rusqlite::Result<String> {
     let mut ordinal: u64 = 0;
     let mut randomized = false;
     loop {

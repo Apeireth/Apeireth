@@ -155,8 +155,12 @@ impl CliPanelData {
         data_dir: PathBuf,
     ) -> Self {
         let mut panel = Self::new(sessions, memory, policy, enable_local_read_tools, data_dir);
-        let legacy_flags =
-            std::mem::take(&mut *panel.flags.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
+        let legacy_flags = std::mem::take(
+            &mut *panel
+                .flags
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        );
         migrate_legacy_flags(&governance, legacy_flags);
         panel.governance = Some(governance);
         panel.flags_path = PathBuf::new();

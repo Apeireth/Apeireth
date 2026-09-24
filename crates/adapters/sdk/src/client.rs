@@ -329,14 +329,8 @@ impl TokenBucket {
         // L 组修复: Mutex poison `.expect` → `unwrap_or_else(|p| p.into_inner())` —
         // poison 只说明另一线程 panic 时正持锁, 数据仍可用; expect 会把次级 panic
         // 级联到所有后续调用方 (telemetry 热路径).
-        let mut tokens = self
-            .tokens
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
-        let mut last = self
-            .last_update
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let mut tokens = self.tokens.lock().unwrap_or_else(|p| p.into_inner());
+        let mut last = self.last_update.lock().unwrap_or_else(|p| p.into_inner());
         let now = SystemTime::now();
         let elapsed = now
             .duration_since(*last)
@@ -418,19 +412,13 @@ impl AuditLogger {
     /// 追加一条审计 (in-memory, 阶段 6 stub).
     pub fn append(&self, entry: AuditEntry) {
         // L 组修复: poison → into_inner (数据仍可用, 0 级联 panic)
-        let mut e = self
-            .entries
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let mut e = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         e.push(entry);
     }
 
     /// 查审计条数 (测试用).
     pub fn len(&self) -> usize {
-        self.entries
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .len()
+        self.entries.lock().unwrap_or_else(|p| p.into_inner()).len()
     }
 
     /// 是否空.
@@ -1429,10 +1417,7 @@ mod client_tests {
         let h2 = short_hash(key);
         assert_eq!(h1, h2, "同 key 必同 hash (确定性)");
         assert_eq!(h1.len(), 16, "前 8 字节 = 16 hex");
-        assert!(
-            h1.chars().all(|c| c.is_ascii_hexdigit()),
-            "必为 hex: {h1}"
-        );
+        assert!(h1.chars().all(|c| c.is_ascii_hexdigit()), "必为 hex: {h1}");
         // M4: 0 明文前缀 (修复前是 chars().take(16) + "...")
         assert!(
             !h1.contains("a-valid-api-key"),
@@ -1500,7 +1485,13 @@ mod client_tests {
             );
         }
         // 拒绝 (非预期协议终点)
-        for bad in ["ftp://host", "file:///etc/passwd", "ws://host", "not a url", ""] {
+        for bad in [
+            "ftp://host",
+            "file:///etc/passwd",
+            "ws://host",
+            "not a url",
+            "",
+        ] {
             assert!(
                 ApeirethClient::new(bad, "a-valid-api-key-1234567890").is_err(),
                 "base_url '{bad}' 应拒绝"

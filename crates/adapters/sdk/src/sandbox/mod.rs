@@ -994,9 +994,7 @@ mod tests {
         }
         assert!(matches!(
             stub_caller(),
-            Err(SandboxError::NotImplemented(
-                "apeireth_sdk_sandbox_spawn"
-            ))
+            Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_spawn"))
         ));
     }
 }

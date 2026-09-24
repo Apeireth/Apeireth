@@ -73,10 +73,7 @@ async fn missing_intent_escalates_delete_to_approval_but_keeps_read_allowed() {
         .metadata
         .get("guard_reasons")
         .unwrap_or_default();
-    assert!(
-        reasons.contains("turn_intent_unavailable"),
-        "{reasons}"
-    );
+    assert!(reasons.contains("turn_intent_unavailable"), "{reasons}");
 }
 
 /// 回归 (guard L 组): 只读 intent 的规范 scope 是 `workspace_read` (见
@@ -139,7 +136,8 @@ async fn active_chains_are_bounded_and_evicted_in_insertion_order() {
     );
     let oldest = first_trace.expect("the first trace is recorded");
     assert!(
-        hook.chain_for_trace(&session, &oldest.to_string()).is_none(),
+        hook.chain_for_trace(&session, &oldest.to_string())
+            .is_none(),
         "the oldest trace must have been evicted (insertion-order LRU)"
     );
 }

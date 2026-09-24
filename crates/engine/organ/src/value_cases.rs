@@ -760,9 +760,6 @@ mod tests {
         }
         assert_eq!(store.len(), MAX_VALUE_CASES, "上限生效");
         assert!(store.get(0).is_none(), "最旧条目 (id=0) 被淘汰");
-        assert!(
-            store.get(last.expect("last id")).is_some(),
-            "最新条目在库"
-        );
+        assert!(store.get(last.expect("last id")).is_some(), "最新条目在库");
     }
 }

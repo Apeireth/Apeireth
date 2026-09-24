@@ -159,9 +159,8 @@ fn sanitize_worktree_name(raw: &str) -> Result<String, WorktreeError> {
 /// branch 不进文件路径 (只作为 argv 元素传给 `git worktree add -b`), 风险低于
 /// worktree_name, 故保留 `/` 白名单而非一刀切拒绝。
 fn sanitize_branch_name(raw: &str) -> Result<String, WorktreeError> {
-    let invalid = |why: &str| {
-        WorktreeError::InvalidConfig(format!("branch name rejected ({why}): {raw:?}"))
-    };
+    let invalid =
+        |why: &str| WorktreeError::InvalidConfig(format!("branch name rejected ({why}): {raw:?}"));
 
     if raw.trim().is_empty() {
         return Err(invalid("empty"));
@@ -172,7 +171,10 @@ fn sanitize_branch_name(raw: &str) -> Result<String, WorktreeError> {
     if raw.starts_with('/') || raw.ends_with('/') || raw.contains("//") {
         return Err(invalid("empty ref segment"));
     }
-    if raw.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
+    if raw
+        .split('/')
+        .any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    {
         return Err(invalid("dot ref segment"));
     }
     let lowered = raw.to_ascii_lowercase();
@@ -659,8 +661,8 @@ mod worktree_dispatch_tests {
             .expect("合法名应接受");
         assert_eq!(cfg.worktree_name, "task-001_x.1");
         assert_eq!(cfg.branch_name, "apeireth/worktree-task-001");
-        let cfg2 =
-            WorktreeConfig::new("/repo", "abc123", "feature/x_patch").expect("合法 branch 名应接受");
+        let cfg2 = WorktreeConfig::new("/repo", "abc123", "feature/x_patch")
+            .expect("合法 branch 名应接受");
         assert_eq!(cfg2.worktree_name, "abc123");
         assert_eq!(
             cfg.worktree_path,

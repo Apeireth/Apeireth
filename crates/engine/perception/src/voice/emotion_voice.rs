@@ -183,7 +183,13 @@ impl EmotionVoiceSynthesizer {
 
         format!(
             r#"<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="{}"><mstts:express-as style="{}" styledegree="{:.1}"><prosody pitch="{:+}%" rate="{:+}%" volume="{:+}%">{}</prosody></mstts:express-as></voice></speak>"#,
-            voice_escaped, style, params.emotion_intensity, pitch_pct, speed_pct, volume_pct, text_escaped
+            voice_escaped,
+            style,
+            params.emotion_intensity,
+            pitch_pct,
+            speed_pct,
+            volume_pct,
+            text_escaped
         )
     }
 }
@@ -270,11 +276,8 @@ mod tests {
         assert_eq!(ssml.matches("<voice ").count(), 1);
 
         // voice_name 同样转义 (属性值注入面).
-        let ssml2 = EmotionVoiceSynthesizer::wrap_ssml(
-            "hi",
-            r#"a"><voice name="evil" x="#,
-            &params,
-        );
+        let ssml2 =
+            EmotionVoiceSynthesizer::wrap_ssml("hi", r#"a"><voice name="evil" x="#, &params);
         assert!(
             !ssml2.contains(r#"<voice name="a"><voice"#),
             "voice_name 不得闭合属性: {ssml2}"

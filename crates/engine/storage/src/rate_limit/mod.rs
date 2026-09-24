@@ -486,7 +486,10 @@ impl KeyedLimiter {
             // L 组: 达到 max_keys 时最旧键先驱逐, map 不再无界增长.
             states.insert_evicting_oldest(key, state, self.config.max_keys.max(1));
         }
-        let state = states.map.get_mut(key).expect("just inserted or already present");
+        let state = states
+            .map
+            .get_mut(key)
+            .expect("just inserted or already present");
         Ok(f(state))
     }
 

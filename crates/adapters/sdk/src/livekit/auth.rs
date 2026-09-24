@@ -476,7 +476,10 @@ mod tests {
         .expect("valid access token must succeed");
         let dbg = format!("{token:?}");
         assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
-        assert!(!dbg.contains("API12345678secret"), "Debug 0 泄 api_key: {dbg}");
+        assert!(
+            !dbg.contains("API12345678secret"),
+            "Debug 0 泄 api_key: {dbg}"
+        );
         // 非秘密字段保留 (room_name / identity 可见)
         assert!(dbg.contains("my-room-1"), "room_name 应可见: {dbg}");
     }
@@ -488,7 +491,10 @@ mod tests {
         holder.set("APIsecretkey123456".to_string()).expect("valid");
         let dbg = format!("{holder:?}");
         assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
-        assert!(!dbg.contains("APIsecretkey123456"), "Debug 0 泄 api_key: {dbg}");
+        assert!(
+            !dbg.contains("APIsecretkey123456"),
+            "Debug 0 泄 api_key: {dbg}"
+        );
     }
 
     /// M5: ApiSecretHolder Debug 脱敏.

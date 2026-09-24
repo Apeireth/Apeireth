@@ -83,7 +83,9 @@ impl ResourceLimits {
     /// **L 组修复**: `cpu_cores: f32` 的 NaN 显式拒绝 — NaN 与任何值的比较皆为 false,
     /// `< MIN || > MAX` 双比较对 NaN 恒 false, NaN 会静默穿过全部范围校验.
     pub fn validate(&self) -> SandboxResult<()> {
-        if self.cpu_cores.is_nan() || self.cpu_cores < MIN_CPU_CORES || self.cpu_cores > MAX_CPU_CORES
+        if self.cpu_cores.is_nan()
+            || self.cpu_cores < MIN_CPU_CORES
+            || self.cpu_cores > MAX_CPU_CORES
         {
             return Err(SandboxError::InvalidConfig(format!(
                 "cpu_cores {} out of range [{}, {}] (NaN explicitly rejected)",

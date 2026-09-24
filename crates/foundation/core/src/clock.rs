@@ -42,17 +42,26 @@ impl VirtualClock {
 
     /// 快进 `d` (虚拟时间, 不真等待).
     pub fn advance(&self, d: chrono::Duration) {
-        *self.now.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) += d;
+        *self
+            .now
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) += d;
     }
 
     /// 直接设置时刻.
     pub fn set(&self, t: DateTime<Utc>) {
-        *self.now.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = t;
+        *self
+            .now
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = t;
     }
 
     /// 当前虚拟时刻.
     pub fn current(&self) -> DateTime<Utc> {
-        *self.now.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        *self
+            .now
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 

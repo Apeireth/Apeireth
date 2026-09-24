@@ -52,7 +52,8 @@ impl MemoryBackend for InMemoryBackend {
     fn put_episode(&self, ep: &Episode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut map = self
             .episodes_by_id
-            .lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if map.contains_key(&ep.id) {
             return Err(Box::new(crate::MemoryError::Invalid(format!(
                 "episode id already exists: {}",
@@ -69,7 +70,8 @@ impl MemoryBackend for InMemoryBackend {
     ) -> Result<Option<Episode>, Box<dyn std::error::Error + Send + Sync>> {
         let map = self
             .episodes_by_id
-            .lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         Ok(map.get(id).cloned())
     }
 
@@ -80,7 +82,8 @@ impl MemoryBackend for InMemoryBackend {
     ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
         let map = self
             .episodes_by_id
-            .lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut all: Vec<Episode> = map
             .values()
             .filter(|e| e.session_id == session_id)
@@ -100,7 +103,8 @@ impl MemoryBackend for InMemoryBackend {
         metadata: serde_json::Value,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.metadata_by_episode
-            .lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .insert(episode_id.to_string(), metadata);
         Ok(())
     }
@@ -111,7 +115,8 @@ impl MemoryBackend for InMemoryBackend {
     ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(self
             .metadata_by_episode
-            .lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(episode_id)
             .cloned())
     }
@@ -121,7 +126,10 @@ impl MemoryBackend for InMemoryBackend {
         kind: StreamKind,
         entry: HistoryEntry,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut streams = self.streams.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut streams = self
+            .streams
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let key = (kind, entry.session_id.clone().unwrap_or_default());
         let list = streams.entry(key).or_insert_with(Vec::new);
         list.push(entry);
@@ -134,7 +142,10 @@ impl MemoryBackend for InMemoryBackend {
         session_id: &str,
         n: usize,
     ) -> Result<Vec<HistoryEntry>, Box<dyn std::error::Error + Send + Sync>> {
-        let streams = self.streams.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let streams = self
+            .streams
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut alive: Vec<HistoryEntry> = streams
             .iter()
             .filter(|((k, _), _)| *k == kind)
@@ -169,10 +180,12 @@ impl crate::scope::ScopedMemoryBackend for InMemoryBackend {
         }
         let episodes = self
             .episodes_by_id
-            .lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let metadata_map = self
             .metadata_by_episode
-            .lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let mut matched = Vec::new();
         for ep in episodes.values() {
