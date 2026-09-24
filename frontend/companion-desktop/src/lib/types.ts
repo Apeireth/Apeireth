@@ -272,6 +272,12 @@ export interface CapabilityToggles {
   onionLayer: boolean;
   /** 子代理 git worktree 隔离（默认关） */
   worktreeSandbox: boolean;
+  /** [Beta] 思考模式：reasoning_content 单独分流展示（默认关） */
+  reasoningEnabled: boolean;
+  /** [Beta] 思考模式生效的模型过滤器（逗号分隔子串，空 = 全部模型） */
+  reasoningModelFilters: string;
+  /** [Beta] reasoning 标签名（默认 think） */
+  reasoningTag: string;
 }
 
 export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
@@ -299,6 +305,9 @@ export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   councilTimeoutMs: 30000,
   onionLayer: false,
   worktreeSandbox: false,
+  reasoningEnabled: false,
+  reasoningModelFilters: '',
+  reasoningTag: 'think',
 };
 
 export interface ApeirethConfig {

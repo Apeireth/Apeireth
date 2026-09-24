@@ -141,6 +141,9 @@ function parseCapabilityToggles(value: unknown): CapabilityToggles {
     councilTimeoutMs: num(raw.councilTimeoutMs, 30000),
     onionLayer: raw.onionLayer === true,
     worktreeSandbox: raw.worktreeSandbox === true,
+    reasoningEnabled: raw.reasoningEnabled === true,
+    reasoningModelFilters: typeof raw.reasoningModelFilters === 'string' ? raw.reasoningModelFilters : '',
+    reasoningTag: typeof raw.reasoningTag === 'string' && raw.reasoningTag.trim() ? raw.reasoningTag : 'think',
   };
 }
 
