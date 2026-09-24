@@ -311,10 +311,7 @@ mod community_tests {
     /// 分诊 Entity 路由: s/o 子串命中 (长度≥2) → matched_entities 字典序。
     #[test]
     fn triage_entity_route_on_substring_hit() {
-        let facts = vec![
-            fact("小明", "喜欢", "篮球"),
-            fact("小刚", "打", "排球"),
-        ];
+        let facts = vec![fact("小明", "喜欢", "篮球"), fact("小刚", "打", "排球")];
         let result = triage("小明在干什么", &facts, 5, 8);
         assert_eq!(result.route, Route::Entity);
         assert_eq!(result.matched_entities, vec!["小明".to_string()]);
