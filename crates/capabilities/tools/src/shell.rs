@@ -125,6 +125,10 @@ struct ShellFrozenInvocation {
     shell_executable: String,
     shell_args: Vec<String>,
     cwd: String,
+    /// L 组 (2026-09-24 审计): 冻结时固化的规范化 workspace root。执行前
+    /// 用它复核 frozen cwd 的包含性 —— 审批等待期 (分钟级) cwd 可能被换成
+    /// 指向工作区外的 symlink, 冻结时的校验届时已失效 (TOCTOU)。
+    workspace_root: String,
     timeout_ms: u64,
     max_stdout_bytes: usize,
     max_stderr_bytes: usize,
@@ -447,6 +451,19 @@ impl ShellTool {
             .with_name("shell"));
         }
 
+        // M13 (2026-09-24 审计): guardrail 前置守门接线 —— 冻结前 fail-closed
+        // 拦截高危破坏性命令 (`rm -rf /` / `netsh advfirewall set ...` /
+        // `reg add` ...)。守门不是沙箱的替代 (AppContainer 仍是主墙), 但
+        // `APEIRETH_SHELL_SANDBOX=0` 显式裸跑与审批卡之间必须有这一层内容
+        // 过滤; 放在 cwd 解析前, 危险命令不碰文件系统。
+        crate::guardrail::ToolGuardrail::verify_shell_command(&params.command).map_err(|e| {
+            ToolResult::permanent_error(
+                &call.id,
+                format!("shell command rejected by pre-call guard: {e}"),
+            )
+            .with_name("shell")
+        })?;
+
         let cwd = self
             .resolve_cwd_for(&params.cwd)
             .map_err(|e| ToolResult::permanent_error(&call.id, e).with_name("shell"))?;
@@ -484,6 +501,13 @@ impl ShellTool {
             shell_executable,
             shell_args,
             cwd: cwd.to_string_lossy().to_string(),
+            // root 单独 canonicalize 一次 (resolve_cwd_for 内部已解析 cwd,
+            // 这里取其 root 一并固化, 供执行前 TOCTOU 复核)。
+            workspace_root: self
+                .resolve_cwd()
+                .map_err(|e| ToolResult::permanent_error(&call.id, e).with_name("shell"))?
+                .to_string_lossy()
+                .to_string(),
             timeout_ms,
             max_stdout_bytes: self.config.max_stdout_bytes,
             max_stderr_bytes: self.config.max_stderr_bytes,
@@ -520,6 +544,49 @@ impl ShellTool {
     }
 
     async fn execute_frozen(&self, call: &ToolCall, frozen: &ShellFrozenInvocation) -> ToolResult {
+        // L 组 (2026-09-24 审计): freeze→execute TOCTOU 复核。审批等待期可
+        // 达分钟级, 期间 frozen cwd 可能被替换成指向工作区外的 symlink ——
+        // 冻结时 (build_frozen) 的包含校验届时已失效。执行前对 frozen cwd
+        // 再 canonicalize, 以冻结时固化的 workspace_root 复核包含性; root
+        // 自身若被换成 symlink (canonicalize 结果与固化值不一致) 同样拒绝。
+        let frozen_root = Path::new(&frozen.workspace_root);
+        let cwd_canonical = match std::fs::canonicalize(&frozen.cwd) {
+            Ok(p) => p,
+            Err(e) => {
+                return ToolResult::permanent_error(
+                    &call.id,
+                    format!(
+                        "frozen cwd {} is no longer accessible: {e}",
+                        frozen.cwd
+                    ),
+                )
+                .with_name("shell")
+            }
+        };
+        let root_now = match std::fs::canonicalize(frozen_root) {
+            Ok(p) => p,
+            Err(e) => {
+                return ToolResult::permanent_error(
+                    &call.id,
+                    format!(
+                        "frozen workspace root {} is no longer accessible: {e}",
+                        frozen.workspace_root
+                    ),
+                )
+                .with_name("shell")
+            }
+        };
+        if root_now.as_path() != frozen_root || !cwd_canonical.starts_with(frozen_root) {
+            return ToolResult::permanent_error(
+                &call.id,
+                format!(
+                    "frozen cwd {} no longer resolves inside the approved workspace root {}",
+                    frozen.cwd, frozen.workspace_root
+                ),
+            )
+            .with_name("shell");
+        }
+
         let request = match Self::process_request_from_frozen(frozen) {
             Ok(request) => request,
             Err(e) => {
@@ -846,6 +913,87 @@ mod tests {
     }
 
     #[test]
+    fn dangerous_command_is_rejected_by_precall_guard() {
+        // M13 (2026-09-24 审计): guardrail 守门在冻结前 fail-closed 接线。
+        // 沙箱 (AppContainer) 是主墙, 但 APEIRETH_SHELL_SANDBOX=0 裸跑与
+        // 审批卡之间必须有命令内容过滤这一层。
+        let tool = ShellTool::new(TrustedShellConfig::new("."));
+        for command in [
+            "rm -rf / --no-preserve-root",
+            "netsh advfirewall set allprofiles off",
+            "reg add HKLM\\Software\\x /v y",
+        ] {
+            let call = ToolCall {
+                id: "call_1".into(),
+                name: "shell".into(),
+                arguments: json!({ "command": command }),
+            };
+            let frozen = tool.freeze_invocation(&call);
+            assert!(frozen.is_err(), "{command} must be rejected before freezing");
+            let rendered = frozen.unwrap_err().render();
+            assert!(
+                rendered.contains("pre-call guard"),
+                "{command}: {}",
+                rendered
+            );
+        }
+    }
+
+    #[test]
+    fn benign_command_still_freezes_normally() {
+        // 守门接线不得误伤正常命令 (echo/ping/type 类)。
+        let tmp = tempfile::tempdir().unwrap();
+        let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo hi" }),
+        };
+        assert!(tool.freeze_invocation(&call).unwrap().is_some());
+    }
+
+    #[test]
+    fn frozen_cwd_symlink_swap_is_rejected_before_execution() {
+        // L 组 (2026-09-24 审计): freeze→execute TOCTOU。审批等待期内 frozen
+        // cwd 被换成指向工作区外的 symlink, 执行前复核必须拒绝。
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        let work = root.join("work");
+        let outside = base.path().join("outside");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+
+        let tool = ShellTool::new(TrustedShellConfig::new(root.clone()));
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo hi", "cwd": "work" }),
+        };
+        let frozen = tool.freeze_invocation(&call).unwrap().unwrap();
+
+        // 模拟审批等待期攻击: work 目录被替换成指向外部的 symlink。
+        std::fs::remove_dir_all(&work).unwrap();
+        #[cfg(unix)]
+        let swapped = std::os::unix::fs::symlink(&outside, &work).is_ok();
+        #[cfg(windows)]
+        let swapped = std::os::windows::fs::symlink_dir(&outside, &work).is_ok();
+        if !swapped {
+            // Symlink creation often needs extra privileges on Windows.
+            return;
+        }
+
+        let result = tokio_test_invoke_frozen(&tool, call, Some(&frozen));
+        assert!(!result.is_ok(), "swapped cwd must fail closed");
+        assert!(
+            result
+                .render()
+                .contains("no longer resolves inside the approved workspace root"),
+            "{}",
+            result.render()
+        );
+    }
+
+    #[test]
     fn frozen_display_does_not_expose_environment_values() {
         // 反泄露通道测试 (2026-10-10 重写): 真值子串断言结构性脆 (HOMEDRIVE="C:"
         // 撞路径、USERPROFILE 撞 cwd 展示) 且 crate forbid(unsafe_code) 不能突变
@@ -857,6 +1005,7 @@ mod tests {
             shell_executable: "cmd.exe".to_string(),
             shell_args: vec!["/c".to_string(), "echo hi".to_string()],
             cwd: "C:\\work".to_string(),
+            workspace_root: "C:\\work".to_string(),
             timeout_ms: 1_000,
             max_stdout_bytes: 1_024,
             max_stderr_bytes: 1_024,

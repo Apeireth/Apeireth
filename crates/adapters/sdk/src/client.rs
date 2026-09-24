@@ -326,8 +326,17 @@ impl TokenBucket {
 
     /// 尝试取 1 token (非阻塞). 返 `true` 表示可发, `false` 表示超限.
     pub fn try_acquire(&self) -> bool {
-        let mut tokens = self.tokens.lock().expect("token mutex poisoned");
-        let mut last = self.last_update.lock().expect("last_update mutex poisoned");
+        // L 组修复: Mutex poison `.expect` → `unwrap_or_else(|p| p.into_inner())` —
+        // poison 只说明另一线程 panic 时正持锁, 数据仍可用; expect 会把次级 panic
+        // 级联到所有后续调用方 (telemetry 热路径).
+        let mut tokens = self
+            .tokens
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let mut last = self
+            .last_update
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         let now = SystemTime::now();
         let elapsed = now
             .duration_since(*last)
@@ -346,7 +355,7 @@ impl TokenBucket {
 
     /// 计算 retry-after 秒数 (到下一个 token 可用).
     pub fn retry_after_secs(&self) -> u64 {
-        let tokens = self.tokens.lock().expect("token mutex poisoned");
+        let tokens = self.tokens.lock().unwrap_or_else(|p| p.into_inner());
         let deficit = 1.0 - *tokens;
         if deficit <= 0.0 {
             0
@@ -378,7 +387,10 @@ fn tool_invoke_body(tool: &str, action: &str, args: &Value) -> Value {
 pub struct AuditEntry {
     /// timestamp (epoch millis).
     pub ts_ms: i64,
-    /// api_key 哈希 (前 16 字符, 不暴露原文).
+    /// api_key **单向哈希** (SHA-256 前 16 hex, per M4 修复: 真单向化).
+    ///
+    /// 修复前是 `chars().take(16)` 纯明文字节前缀 (字段文档自称 "哈希" 实则零哈希) —
+    /// 落盘审计日志即持久化 16 字符密钥前缀. 现只存不可逆派生值, 0 明文进日志.
     pub api_key_hash: String,
     /// 工具名 (e.g. "web_search").
     pub tool: String,
@@ -405,7 +417,11 @@ impl AuditLogger {
 
     /// 追加一条审计 (in-memory, 阶段 6 stub).
     pub fn append(&self, entry: AuditEntry) {
-        let mut e = self.entries.lock().expect("audit entries mutex poisoned");
+        // L 组修复: poison → into_inner (数据仍可用, 0 级联 panic)
+        let mut e = self
+            .entries
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         e.push(entry);
     }
 
@@ -413,7 +429,7 @@ impl AuditLogger {
     pub fn len(&self) -> usize {
         self.entries
             .lock()
-            .expect("audit entries mutex poisoned")
+            .unwrap_or_else(|p| p.into_inner())
             .len()
     }
 
@@ -421,7 +437,7 @@ impl AuditLogger {
     pub fn is_empty(&self) -> bool {
         self.entries
             .lock()
-            .expect("audit entries mutex poisoned")
+            .unwrap_or_else(|p| p.into_inner())
             .is_empty()
     }
 }
@@ -464,10 +480,13 @@ impl Default for QuotaStub {
 /// **Auth 5 组件容器** (1:1 翻译 `apeireth-api::auth::AuthPipeline`).
 ///
 /// 阶段 6 stub: 5 组件全就位, 但 HTTP 真实调 `apeireth-api` 走 `unimplemented!()` 守门.
-#[derive(Debug, Clone)]
+///
+/// **M5 修复**: ① `api_key` 改私有 + 访问器 (pub 字段让任意 `{:?}`/字段读取泄秘);
+/// ② Debug 手写脱敏 — 一次 `dbg!` / `{:?}` 0 再把 API key 落日志. Serialise 保持 (wire 兼容).
+#[derive(Clone)]
 pub struct AuthPipeline {
-    /// 组件 1: Bearer API key.
-    pub api_key: String,
+    /// 组件 1: Bearer API key (**私有 per M5**, 走 `api_key()` 访问器).
+    api_key: String,
     /// 组件 2: keyring ref.
     pub keyring: Arc<KeyringRef>,
     /// 组件 3: token bucket.
@@ -476,6 +495,18 @@ pub struct AuthPipeline {
     pub audit: Arc<AuditLogger>,
     /// 组件 5: quota stub.
     pub quota: Arc<QuotaStub>,
+}
+
+impl std::fmt::Debug for AuthPipeline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthPipeline")
+            .field("api_key", &"[redacted]")
+            .field("keyring", &self.keyring)
+            .field("bucket", &self.bucket)
+            .field("audit", &self.audit)
+            .field("quota", &self.quota)
+            .finish()
+    }
 }
 
 impl AuthPipeline {
@@ -489,6 +520,14 @@ impl AuthPipeline {
             audit: Arc::new(AuditLogger::new()),
             quota: Arc::new(QuotaStub::new()),
         })
+    }
+
+    /// 读 API key (per M5 访问器, 替代原 pub 字段).
+    ///
+    /// 返 `&str` 供 bearer_auth / auth_header 组装用; 调用方自负保密责任
+    /// (0 进日志 / 0 进错误消息 — 同 livekit/lark holder 的铁律).
+    pub fn api_key(&self) -> &str {
+        &self.api_key
     }
 
     /// 鉴权 5 组件 1 步走 (Bearer verify → token bucket → audit append).
@@ -536,7 +575,9 @@ impl AuthPipeline {
 ///   契约 `/v1/tools/{tool}/invoke`, Bearer + JSON + 有界超时 + audit);
 /// - `invoke_stream` (WS 8 帧): 仍 stub (`STUB_MODE` 守门) —— WS 服务端端点
 ///   接线 = 后续项 (R21 HTTP 半场已落地)。
-#[derive(Debug, Clone)]
+///
+/// **M5 修复**: Debug 手写 (经 `AuthPipeline` 脱敏 Debug 委托, 任一 `{:?}` 0 泄 api_key).
+#[derive(Clone)]
 pub struct ApeirethClient {
     /// base URL (e.g. `https://api.apeireth.io`).
     pub base_url: String,
@@ -544,6 +585,17 @@ pub struct ApeirethClient {
     pub auth: AuthPipeline,
     /// 客户端配置.
     pub config: ClientConfig,
+}
+
+impl std::fmt::Debug for ApeirethClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApeirethClient")
+            .field("base_url", &self.base_url)
+            // auth 走 AuthPipeline 的手写脱敏 Debug (api_key → [redacted])
+            .field("auth", &self.auth)
+            .field("config", &self.config)
+            .finish()
+    }
 }
 
 /// 客户端配置 (per 蓝图 §2.6 + D-04/D-05 决策).
@@ -577,10 +629,14 @@ impl Default for ClientConfig {
 }
 
 impl ApeirethClient {
-    /// 构造 client (验 Bearer → 5 组件就位).
+    /// 构造 client (验 Bearer → 验 base_url scheme → 5 组件就位).
+    ///
+    /// **L 组修复**: base_url scheme 校验 — http/https 之外拒绝 (修复前 `ftp://` /
+    /// `file://` 等任意 scheme 可入, Bearer 密钥可能被发往非预期协议终点).
     ///
     /// **阶段 6 stub**: 走 `AuthPipeline::new()` 5 组件 stub, 真 HTTP 留 R21.
     pub fn new(base_url: &str, token: &str) -> Result<Self, SdkClientError> {
+        validate_base_url_scheme(base_url)?;
         let auth = AuthPipeline::new(token)?;
         Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
@@ -595,6 +651,7 @@ impl ApeirethClient {
         token: &str,
         config: ClientConfig,
     ) -> Result<Self, SdkClientError> {
+        validate_base_url_scheme(base_url)?;
         let auth = AuthPipeline::new(token)?;
         Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
@@ -730,7 +787,7 @@ impl ApeirethClient {
             .map_err(|error| SdkClientError::Network(format!("client build failed: {error}")))?;
         let response = client
             .post(&url)
-            .bearer_auth(&self.auth.api_key)
+            .bearer_auth(self.auth.api_key())
             .json(&tool_invoke_body(tool, action, &args))
             .send()
             .await
@@ -745,14 +802,25 @@ impl ApeirethClient {
                 Ok(value)
             }
             401 | 403 => Err(SdkClientError::AuthFailed(format!("{url} -> {status}"))),
-            429 => Err(SdkClientError::RateLimited(60)),
+            429 => {
+                // L 组修复: 解析服务端 Retry-After 头 (delta-seconds 格式; HTTP-date
+                // 格式极少见, 解析失败或缺头时回退 60s) — 修复前硬编码 60s 忽略服务端指令.
+                let retry_after = response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.trim().parse::<u64>().ok())
+                    .unwrap_or(60);
+                Err(SdkClientError::RateLimited(retry_after))
+            }
             500..=599 => Err(SdkClientError::ServerInternal(format!("{url} -> {status}"))),
             other => Err(SdkClientError::Other(format!("{url} -> {other}"))),
         };
 
         // Auth 组件 4: audit 留痕 (in-memory; 落盘 `~/.apeireth/audit.log` 留后续).
         if self.config.audit_enabled {
-            let api_key_hash: String = self.auth.api_key.chars().take(16).collect();
+            // M4: api_key 真单向化 (SHA-256 前 16 hex), 0 明文前缀进审计
+            let api_key_hash: String = short_hash(&self.auth.api_key());
             self.auth.audit.append(AuditEntry {
                 ts_ms: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -816,7 +884,7 @@ impl ApeirethClient {
 
     /// 构造 HTTP Authorization 头 (1:1 翻译 `apeireth-api::auth`).
     pub fn auth_header(&self) -> String {
-        format!("{} {}", AUTH_SCHEME, self.auth.api_key)
+        format!("{} {}", AUTH_SCHEME, self.auth.api_key())
     }
 
     /// 拼 HTTP 端点 URL.
@@ -945,6 +1013,22 @@ pub fn validate_sdk_method(method: &str) -> Result<(), SdkClientError> {
     Ok(())
 }
 
+/// 校验 base_url scheme (**L 组修复**: http/https 之外拒绝).
+///
+/// 修复前 `ApeirethClient::new("ftp://host", key)` / `"file:///x"` 等原样接受 —
+/// Bearer 密钥可被发往非预期协议终点. 现显式限定 http/https (http 明文传输风险
+/// 属部署层权衡, per M17 网关侧单独处置; 此处至少拦住 scheme 侧).
+fn validate_base_url_scheme(base_url: &str) -> Result<(), SdkClientError> {
+    let parsed = url::Url::parse(base_url)
+        .map_err(|e| SdkClientError::Other(format!("invalid base_url '{base_url}': {e}")))?;
+    match parsed.scheme() {
+        "http" | "https" => Ok(()),
+        other => Err(SdkClientError::Other(format!(
+            "base_url scheme must be http or https, got '{other}' (K-1: 拒非预期协议终点)"
+        ))),
+    }
+}
+
 /// 6 工具名列表 (helper, 给 m3 防御 fixture 用).
 pub fn tool_names() -> &'static [&'static str] {
     TOOL_WHITELIST
@@ -978,11 +1062,19 @@ fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-/// 短哈希 (api_key 头 16 字符, 防审计日志暴露原文).
+/// api_key 单向哈希 (**M4 修复**: 真 SHA-256 前 16 hex, 防审计日志暴露原文).
+///
+/// 修复前 `chars().take(16) + "..."` 是纯明文字节前缀、零哈希 — 审计日志 (规划落盘
+/// `~/.apeireth/audit.log`) 会持久化 16 字符密钥前缀. 真单向化后审计只含不可逆派生值
+/// (跟 foundation credentials `FileAuditSink` 的 name_hash 同规格).
 fn short_hash(api_key: &str) -> String {
-    let chars: Vec<char> = api_key.chars().take(16).collect();
-    let mut s: String = chars.into_iter().collect();
-    s.push_str("...");
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(api_key.as_bytes());
+    // 前 8 字节 → 16 hex 字符 (恒定 16 字符, 0 泄露输入长度)
+    let mut s = String::with_capacity(16);
+    for b in &digest[..8] {
+        s.push_str(&format!("{b:02x}"));
+    }
     s
 }
 
@@ -1327,5 +1419,144 @@ mod client_tests {
         assert_eq!(WS_PROTOCOL_VERSION, "1");
         assert_eq!(WS_TOKEN_DEFAULT_TTL_SECS, 300);
         assert_eq!(WS_PING_INTERVAL_SECS, 30);
+    }
+
+    /// **M4**: short_hash 真单向化 — SHA-256 前 16 hex, 0 明文前缀, 确定性.
+    #[test]
+    fn short_hash_is_deterministic_hex_without_plaintext_prefix() {
+        let key = "a-valid-api-key-1234567890";
+        let h1 = short_hash(key);
+        let h2 = short_hash(key);
+        assert_eq!(h1, h2, "同 key 必同 hash (确定性)");
+        assert_eq!(h1.len(), 16, "前 8 字节 = 16 hex");
+        assert!(
+            h1.chars().all(|c| c.is_ascii_hexdigit()),
+            "必为 hex: {h1}"
+        );
+        // M4: 0 明文前缀 (修复前是 chars().take(16) + "...")
+        assert!(
+            !h1.contains("a-valid-api-key"),
+            "hash 0 含 key 明文前缀: {h1}"
+        );
+        assert!(!h1.contains("..."), "hash 0 是明文前缀哨兵: {h1}");
+        // 不同 key 不同 hash
+        assert_ne!(short_hash("another-valid-key-1234567890"), h1);
+    }
+
+    /// **M4**: preflight 写入的 audit entry 带 SHA-256 派生值, 0 明文.
+    #[test]
+    fn preflight_audit_entry_uses_hashed_key() {
+        let p = AuthPipeline::new("a-valid-api-key-1234567890").unwrap();
+        p.preflight("web_search", "search").expect("ok");
+        // 直接读 AuditLogger 内部不可行 (entries 私有), 经 Debug 全长校验 + len 锚点
+        let dbg = format!("{:?}", p.audit);
+        assert!(
+            !dbg.contains("a-valid-api-key"),
+            "audit Debug 0 含 key 明文: {dbg}"
+        );
+        assert_eq!(p.audit.len(), 1);
+    }
+
+    /// **M5**: AuthPipeline Debug 脱敏 + api_key 访问器.
+    #[test]
+    fn auth_pipeline_debug_is_redacted_and_accessor_works() {
+        let p = AuthPipeline::new("a-valid-api-key-1234567890").unwrap();
+        // 访问器替代原 pub 字段
+        assert_eq!(p.api_key(), "a-valid-api-key-1234567890");
+        // Debug 脱敏
+        let dbg = format!("{p:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(
+            !dbg.contains("a-valid-api-key-1234567890"),
+            "Debug 0 泄 api_key: {dbg}"
+        );
+    }
+
+    /// **M5**: ApeirethClient Debug 脱敏 (经 AuthPipeline 委托).
+    #[test]
+    fn apeireth_client_debug_is_redacted() {
+        let c =
+            ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
+        let dbg = format!("{c:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(
+            !dbg.contains("a-valid-api-key-1234567890"),
+            "Debug 0 泄 api_key: {dbg}"
+        );
+    }
+
+    /// **L 组**: base_url scheme 校验 — http/https 放行, 其它拒绝.
+    #[test]
+    fn base_url_scheme_validated() {
+        // 放行
+        for ok in [
+            "https://api.apeireth.io",
+            "http://localhost:8080",
+            "https://api.apeireth.io/",
+        ] {
+            assert!(
+                ApeirethClient::new(ok, "a-valid-api-key-1234567890").is_ok(),
+                "base_url '{ok}' 应放行"
+            );
+        }
+        // 拒绝 (非预期协议终点)
+        for bad in ["ftp://host", "file:///etc/passwd", "ws://host", "not a url", ""] {
+            assert!(
+                ApeirethClient::new(bad, "a-valid-api-key-1234567890").is_err(),
+                "base_url '{bad}' 应拒绝"
+            );
+        }
+        // with_config 同守门
+        assert!(ApeirethClient::with_config(
+            "ftp://host",
+            "a-valid-api-key-1234567890",
+            ClientConfig::default()
+        )
+        .is_err());
+    }
+
+    /// **L 组**: 429 解析服务端 Retry-After 头 (修复前硬编码 60s).
+    #[tokio::test]
+    async fn client_invoke_tool_429_honors_retry_after_header() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/tools/web_search/invoke"))
+            .respond_with(
+                ResponseTemplate::new(429)
+                    .insert_header("Retry-After", "120")
+                    .set_body_string("Too Many Requests"),
+            )
+            .mount(&server)
+            .await;
+
+        let c = ApeirethClient::new(&server.uri(), "a-valid-api-key-1234567890").unwrap();
+        match c
+            .invoke_tool("web_search", "search", serde_json::json!({}))
+            .await
+        {
+            Err(SdkClientError::RateLimited(secs)) => {
+                assert_eq!(secs, 120, "必解析服务端 Retry-After: 120");
+            }
+            other => panic!("expected RateLimited(120), got {other:?}"),
+        }
+
+        // 缺头时回退 60s
+        let server2 = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/tools/web_search/invoke"))
+            .respond_with(ResponseTemplate::new(429).set_body_string("slow down"))
+            .mount(&server2)
+            .await;
+        let c2 = ApeirethClient::new(&server2.uri(), "a-valid-api-key-1234567890").unwrap();
+        match c2
+            .invoke_tool("web_search", "search", serde_json::json!({}))
+            .await
+        {
+            Err(SdkClientError::RateLimited(secs)) => assert_eq!(secs, 60, "缺头回退 60s"),
+            other => panic!("expected RateLimited(60), got {other:?}"),
+        }
     }
 }

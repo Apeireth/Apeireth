@@ -978,7 +978,14 @@ pub const fn contains_zero_width(s: &str) -> bool {
 ///
 /// 检测以下全角字符的 UTF-8 字节序列:
 /// - U+3000 (ideographic space): E3 80 80
-/// - U+FF00-U+FFEF (full-width ASCII 标点/字母/数字): 0xEF 0xB[CDEF] 0x80-BF
+/// - U+FF10-U+FF19 (full-width digits): EF B0 90-99
+/// - U+FF21-U+FF3A (full-width uppercase): EF BC A1-BA
+/// - U+FF41-U+FF5A (full-width lowercase): EF BD 81-9A
+///
+/// M5 修复 (2026-09-24 审计): 原实现把整个 U+FF00-FFEF 当攻击信号, 其中包含
+/// **标准中文全角标点** (，U+FF0C / ！U+FF01 / ？U+FF1F / ：U+FF1A / 、U+3001
+/// 等) —— 含中文标点的合法反思查询被误判 forbidden (needs_ha_alert 误报)。
+/// 收缩为"全角 ASCII 字母数字"区间 (关键词变体逃逸的真实面), CJK 标点放行。
 pub const fn contains_fullwidth(s: &str) -> bool {
     let b = s.as_bytes();
     let n = b.len();
@@ -988,8 +995,15 @@ pub const fn contains_fullwidth(s: &str) -> bool {
             return true;
         } // U+3000
         if b[i] == 0xEF {
-            // U+FF00-FFEF = 0xEF 0xBC/BD/BE 0x80-BF
-            if b[i + 1] == 0xBC || b[i + 1] == 0xBD || b[i + 1] == 0xBE {
+            // 全角 ASCII: 数字 EF B0 90-99 / 大写 EF BC A1-BA / 小写 EF BD 81-9A
+            let c = b[i + 2];
+            if b[i + 1] == 0xB0 && c >= 0x90 && c <= 0x99 {
+                return true;
+            }
+            if b[i + 1] == 0xBC && c >= 0xA1 && c <= 0xBA {
+                return true;
+            }
+            if b[i + 1] == 0xBD && c >= 0x81 && c <= 0x9A {
                 return true;
             }
         }
@@ -1391,21 +1405,21 @@ impl std::error::Error for SelfDisableError {}
 /// token "master" 是主人下令和冒名顶替之间的分水岭。
 /// SHA-256-like 简化哈希 (无外部依赖) 用于编译期可验证。
 pub const fn verify_sovereign_token(token: &str) -> bool {
-    // 朴素验证: 必须等于 "master"
-    // (生产环境应使用 SHA-256 + 主人的 FIDO2 物理密钥)
+    // L (2026-09-24 审计): 恒定时间比较 —— 原实现逐字节早退 (遇到第一个
+    // 不等字节即 return false), 响应时间泄漏匹配前缀长度。语义不变:
+    // 必须整体等于 "master"。
     let bytes = token.as_bytes();
     let master = b"master";
     if bytes.len() != master.len() {
         return false;
     }
+    let mut diff = 0u8;
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] != master[i] {
-            return false;
-        }
+        diff |= bytes[i] ^ master[i];
         i += 1;
     }
-    true
+    diff == 0
 }
 
 /// Q20 编译期断言 — SelfDisable trait 必须存在 + token 验证函数可访问
@@ -1590,19 +1604,41 @@ pub struct OtaLog {
 }
 
 impl SelfDisableAudit {
+    /// 日志容量上限 (模块 doc 承诺的"Vec 自动截断到 1000"的真实施)。
+    pub const MAX_LOG_ENTRIES: usize = 1_000;
+    /// 反思期查询长度上限 (防超大输入驻留内存 + O(长度×350 模式) CPU 放大)。
+    pub const MAX_QUERY_CHARS: usize = 4_096;
+
     /// 创建空 audit
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// M18 修复 (2026-09-24 审计): 真截断 —— 原 doc 声称"自动截断到 1000"
+    /// 但代码零截断, 长生命周期 audit 对象随查询无界增长。
+    fn trim_log<T>(entries: &mut Vec<T>) {
+        if entries.len() > Self::MAX_LOG_ENTRIES {
+            let excess = entries.len() - Self::MAX_LOG_ENTRIES;
+            entries.drain(0..excess);
+        }
+    }
+
     /// 记录反思期查询 — 立即通过编译期 hardcode const fn 判定是否违反
     pub fn record_reflection_query(&mut self, query: String, timestamp_ms: i64) -> bool {
+        // M18: 查询超长时先截断再检测/存储 (原样在大输入上逐模式匹配会同时
+        // 造成内存驻留与 CPU 放大)。
+        let query = if query.chars().count() > Self::MAX_QUERY_CHARS {
+            query.chars().take(Self::MAX_QUERY_CHARS).collect()
+        } else {
+            query
+        };
         let forbidden = is_forbidden_meta_question_const(&query);
         self.reflection_queries.push(ReflectionLog {
             query,
             timestamp_ms,
             blocked: forbidden,
         });
+        Self::trim_log(&mut self.reflection_queries);
         if forbidden {
             self.violation_count += 1;
         }
@@ -1610,9 +1646,15 @@ impl SelfDisableAudit {
     }
 
     /// 注册 Evolution trait — 通过编译期 hardcode 检查是否触及禁止目标
+    ///
+    /// M18 (2026-09-24 审计): 被禁 trait 不再落库 —— 原实现把声称要拒绝的
+    /// forbidden trait 也 push 进注册表 ("登记了它声称要拒绝的东西")。
     pub fn register_evolution_trait(&mut self, trait_name: String) -> bool {
         let allowed = evolution_can_modify(&trait_name);
-        self.evolution_traits.push(trait_name);
+        if allowed {
+            self.evolution_traits.push(trait_name);
+            Self::trim_log(&mut self.evolution_traits);
+        }
         if !allowed {
             self.violation_count += 1;
         }

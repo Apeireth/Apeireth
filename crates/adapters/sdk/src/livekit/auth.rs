@@ -30,12 +30,24 @@ use crate::livekit::error::LiveKitError;
 /// **当前 skeleton 用 String 包装** (task spec 提到 SecretString, 但 workspace
 /// 无 secrecy crate, 改用 String, 跟 gemini-cli / claude-code 1:1 对齐). R21 续真接时
 /// 改成 `apeireth_keyring::SecretBytes` 或 `secrecy::SecretString`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// **M5 修复**: Debug 手写脱敏 — derive(Debug) 会让一次 `{:?}` / `dbg!` 把 API Key
+/// 明文落进日志/错误面板. Serialise 保持 (wire 兼容), 只修 Debug 泄露面.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ApiKeyHolder {
     /// API Key (从 keyring get, **绝不存明文**)
     api_key: Option<String>,
     /// 是否已从 keyring 加载
     loaded_from_keyring: bool,
+}
+
+impl std::fmt::Debug for ApiKeyHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiKeyHolder")
+            .field("api_key", &self.api_key.as_ref().map(|_| "[redacted]"))
+            .field("loaded_from_keyring", &self.loaded_from_keyring)
+            .finish()
+    }
 }
 
 impl ApiKeyHolder {
@@ -100,12 +112,26 @@ impl Default for ApiKeyHolder {
 /// API Secret 持有者 (per P0 安全铁律 + apeireth-keyring 模式).
 ///
 /// **当前 skeleton 用 String 包装** (跟 ApiKeyHolder 同模式). R21 续真接时改成 SecretString.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// **M5 修复**: Debug 手写脱敏 (api_secret 是 HMAC 签名密钥, derive(Debug) 即泄露面).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ApiSecretHolder {
     /// API Secret (从 keyring get, **绝不存明文**)
     api_secret: Option<String>,
     /// 是否已从 keyring 加载
     loaded_from_keyring: bool,
+}
+
+impl std::fmt::Debug for ApiSecretHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiSecretHolder")
+            .field(
+                "api_secret",
+                &self.api_secret.as_ref().map(|_| "[redacted]"),
+            )
+            .field("loaded_from_keyring", &self.loaded_from_keyring)
+            .finish()
+    }
 }
 
 impl ApiSecretHolder {
@@ -173,7 +199,9 @@ impl Default for ApiSecretHolder {
 /// - 签名: HMAC-SHA256(API Secret, header.payload)
 ///
 /// **当前 skeleton 不真生成 JWT** (per R20 阶段 4 估补, R21 续真接 `jsonwebtoken` crate).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// **M5 修复**: Debug 手写脱敏 (`api_key` 是 `iss` claim = 长期 API Key, derive(Debug) 即泄露面).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AccessToken {
     /// API Key (per `iss` claim)
     pub api_key: String,
@@ -185,6 +213,18 @@ pub struct AccessToken {
     pub ttl_seconds: u64,
     /// 序列化为 JWT 字符串 (placeholder, R21 用 jsonwebtoken crate 真签)
     pub jwt_placeholder: String,
+}
+
+impl std::fmt::Debug for AccessToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AccessToken")
+            .field("api_key", &"[redacted]")
+            .field("room_name", &self.room_name)
+            .field("identity", &self.identity)
+            .field("ttl_seconds", &self.ttl_seconds)
+            .field("jwt_placeholder", &self.jwt_placeholder)
+            .finish()
+    }
 }
 
 impl AccessToken {
@@ -205,9 +245,12 @@ impl AccessToken {
         })
     }
 
-    /// 设置 TTL.
+    /// 设置 TTL (L 组修复: 加上界 `MAX_TOKEN_TTL_SECONDS` = 24h).
+    ///
+    /// 修复前 0 上界校验, `MAX_TOKEN_TTL_SECONDS` 常量形同虚设; 现 clamp 到 24h
+    /// (per livekit-server token 上限, 防长占/永不过期 token).
     pub fn with_ttl(mut self, ttl_seconds: u64) -> Self {
-        self.ttl_seconds = ttl_seconds;
+        self.ttl_seconds = ttl_seconds.min(MAX_TOKEN_TTL_SECONDS);
         self
     }
 }
@@ -398,5 +441,68 @@ mod tests {
         .expect("valid access token must succeed")
         .with_ttl(7200);
         assert_eq!(token.ttl_seconds, 7200);
+    }
+
+    /// L 组: with_ttl 上界 clamp 到 MAX_TOKEN_TTL_SECONDS (24h), 防常量形同虚设.
+    #[test]
+    fn k1_access_token_with_ttl_clamps_to_max() {
+        let token = AccessToken::new(
+            "API12345678".to_string(),
+            "my-room-1".to_string(),
+            "user-1".to_string(),
+        )
+        .expect("valid access token must succeed")
+        .with_ttl(MAX_TOKEN_TTL_SECONDS * 100);
+        assert_eq!(token.ttl_seconds, MAX_TOKEN_TTL_SECONDS);
+        // 边界值本身透传
+        let token = AccessToken::new(
+            "API12345678".to_string(),
+            "my-room-1".to_string(),
+            "user-1".to_string(),
+        )
+        .expect("valid access token must succeed")
+        .with_ttl(MAX_TOKEN_TTL_SECONDS);
+        assert_eq!(token.ttl_seconds, MAX_TOKEN_TTL_SECONDS);
+    }
+
+    /// M5: AccessToken Debug 脱敏 (api_key = iss claim = 长期秘密).
+    #[test]
+    fn k1_access_token_debug_is_redacted() {
+        let token = AccessToken::new(
+            "API12345678secret".to_string(),
+            "my-room-1".to_string(),
+            "user-1".to_string(),
+        )
+        .expect("valid access token must succeed");
+        let dbg = format!("{token:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(!dbg.contains("API12345678secret"), "Debug 0 泄 api_key: {dbg}");
+        // 非秘密字段保留 (room_name / identity 可见)
+        assert!(dbg.contains("my-room-1"), "room_name 应可见: {dbg}");
+    }
+
+    /// M5: ApiKeyHolder Debug 脱敏.
+    #[test]
+    fn k1_api_key_holder_debug_is_redacted() {
+        let mut holder = ApiKeyHolder::empty();
+        holder.set("APIsecretkey123456".to_string()).expect("valid");
+        let dbg = format!("{holder:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(!dbg.contains("APIsecretkey123456"), "Debug 0 泄 api_key: {dbg}");
+    }
+
+    /// M5: ApiSecretHolder Debug 脱敏.
+    #[test]
+    fn k1_api_secret_holder_debug_is_redacted() {
+        let mut holder = ApiSecretHolder::empty();
+        holder
+            .set("abcdef1234567890abcdef1234567890".to_string())
+            .expect("valid API secret must succeed");
+        let dbg = format!("{holder:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(
+            !dbg.contains("abcdef1234567890abcdef1234567890"),
+            "Debug 0 泄 api_secret: {dbg}"
+        );
     }
 }

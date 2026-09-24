@@ -12,6 +12,8 @@
 //! is the durable companion (own `.db` file, same as the donor) and is
 //! default-off — nothing in `hybrid_search` auto-wires it.
 
+use std::cmp::{Ordering, Reverse};
+use std::collections::BinaryHeap;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{params, Connection, OptionalExtension};
@@ -33,6 +35,45 @@ pub struct PersistentVectorHit {
     pub score: f32,
     pub metadata: Option<Value>,
 }
+
+/// KNN 堆条目 (M25): 自带与旧全排序一致的次序 —
+/// `better(a, b)`: score 高者更好 (`total_cmp` 保证 NaN 也有全序),
+/// 并列时 id 小者更好.
+#[derive(Debug, Clone, PartialEq)]
+struct RankedHit {
+    inner: PersistentVectorHit,
+}
+
+impl RankedHit {
+    fn new(inner: PersistentVectorHit) -> Self {
+        Self { inner }
+    }
+
+    fn better(&self, other: &Self) -> Ordering {
+        self.inner
+            .score
+            .total_cmp(&other.inner.score)
+            .then_with(|| other.inner.id.cmp(&self.inner.id))
+    }
+
+    fn into_hit(self) -> PersistentVectorHit {
+        self.inner
+    }
+}
+
+impl PartialOrd for RankedHit {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for RankedHit {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.better(other)
+    }
+}
+
+impl Eq for RankedHit {}
 
 /// SQLite-backed brute-force cosine index.
 pub struct PersistentVectorIndex {
@@ -64,6 +105,7 @@ impl PersistentVectorIndex {
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;
              PRAGMA synchronous=NORMAL;
+             PRAGMA busy_timeout=5000;
              CREATE TABLE IF NOT EXISTS vec_meta (
                  key   TEXT PRIMARY KEY,
                  value TEXT NOT NULL
@@ -182,6 +224,11 @@ impl PersistentVectorIndex {
     /// Cosine top-k. Optional `filter` is applied **after** scoring (donor
     /// metadata is stored but was not used as a KNN predicate; this is the
     /// recovered filter behaviour).
+    ///
+    /// M25: 不再全量物化所有命中再 `truncate(top_k)` — 100 万 × 768 维 ≈ 3GB
+    /// 峰值. 改为单趟流式扫描 + **大小 top_k 的最小堆** (内存 O(top_k)). 行
+    /// 读取/解析错误向上传播 (旧实现 `filter_map(|r| r.ok())` 把坏行静默
+    /// 跳过 → 搜索结果静默缺项); metadata JSON 坏行同样报错, 不吞.
     pub fn search(
         &self,
         query: &[f32],
@@ -199,37 +246,55 @@ impl PersistentVectorIndex {
         let mut stmt = self
             .conn
             .prepare_cached("SELECT id, vec, metadata FROM vec_items WHERE dim = ?1")?;
-        let mut hits: Vec<PersistentVectorHit> = stmt
-            .query_map(params![dim], |row| {
-                let id: String = row.get(0)?;
-                let blob: Vec<u8> = row.get(1)?;
-                let meta_str: Option<String> = row.get(2)?;
-                Ok((id, blob, meta_str))
-            })?
-            .filter_map(|r| r.ok())
-            .filter_map(|(id, blob, meta_str)| {
-                let stored = unpack_vec(&blob);
-                if stored.len() != query.len() {
-                    return None;
-                }
-                let metadata = meta_str
-                    .filter(|s| !s.is_empty())
-                    .and_then(|s| serde_json::from_str(&s).ok());
-                if let Some(filter) = filter {
-                    if !filter.matches(metadata.as_ref()) {
-                        return None;
-                    }
-                }
-                Some(PersistentVectorHit {
-                    id,
-                    score: cosine_similarity(query, &stored),
-                    metadata,
-                })
-            })
-            .collect();
+        let mut rows = stmt.query_map(params![dim], |row| {
+            let id: String = row.get(0)?;
+            let blob: Vec<u8> = row.get(1)?;
+            let meta_str: Option<String> = row.get(2)?;
+            Ok((id, blob, meta_str))
+        })?;
 
-        hits.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.id.cmp(&b.id)));
-        hits.truncate(top_k);
+        // 最小堆 (Reverse): 堆顶 = 当前最差命中, 超过 top_k 即弹出.
+        // 排序语义与旧的全排序一致: score 降序, 并列时 id 升序.
+        let mut heap: BinaryHeap<Reverse<RankedHit>> = BinaryHeap::with_capacity(top_k);
+        while let Some(row) = rows.next() {
+            let (id, blob, meta_str) = row?;
+            let stored = unpack_vec(&blob);
+            if stored.len() != query.len() {
+                continue;
+            }
+            let metadata = match meta_str {
+                Some(s) if !s.is_empty() => {
+                    Some(serde_json::from_str(&s).map_err(MemoryError::Json)?)
+                }
+                _ => None,
+            };
+            if let Some(filter) = filter {
+                if !filter.matches(metadata.as_ref()) {
+                    continue;
+                }
+            }
+            let hit = RankedHit::new(PersistentVectorHit {
+                id,
+                score: cosine_similarity(query, &stored),
+                metadata,
+            });
+            if heap.len() < top_k {
+                heap.push(Reverse(hit));
+            } else if let Some(Reverse(worst)) = heap.peek() {
+                if hit.better(worst) == std::cmp::Ordering::Greater {
+                    heap.pop();
+                    heap.push(Reverse(hit));
+                }
+            }
+        }
+
+        // 弹出顺序 = best-first (into_sorted_vec 对 Reverse<RankedHit> 按
+        // RankedHit 降序 = score 降序, 并列 id 升序 — 与旧 sort + truncate 一致).
+        let hits: Vec<PersistentVectorHit> = heap
+            .into_sorted_vec()
+            .into_iter()
+            .map(|Reverse(hit)| hit.into_hit())
+            .collect();
         Ok(hits)
     }
 
@@ -446,5 +511,74 @@ mod tests {
         let mut idx = PersistentVectorIndex::open_in_memory().unwrap();
         idx.set_dimension(3).unwrap();
         assert!(idx.search(&[1.0, 0.0, 0.0], 5, None).unwrap().is_empty());
+    }
+
+    /// M25: 坏行 (vec 列存了非 BLOB) 必须让查询失败 — 旧实现
+    /// `filter_map(|r| r.ok())` 静默吞行, 搜索结果静默缺项.
+    #[test]
+    fn corrupted_row_error_propagates_instead_of_silent_skip() {
+        let mut idx = PersistentVectorIndex::open_in_memory().unwrap();
+        idx.set_dimension(3).unwrap();
+        idx.upsert("good", &[1.0, 0.0, 0.0], None).unwrap();
+        idx.conn
+            .execute(
+                "INSERT INTO vec_items (id, dim, vec, metadata) \
+                 VALUES ('bad', 3, 'text-not-blob', NULL)",
+                [],
+            )
+            .unwrap();
+        assert!(
+            idx.search(&[1.0, 0.0, 0.0], 5, None).is_err(),
+            "坏行必须向上传播, 而不是 .ok() 静默跳过"
+        );
+    }
+
+    /// M25: metadata JSON 坏行同样报错 (旧实现 `.and_then(... .ok())` 吞掉).
+    #[test]
+    fn corrupted_metadata_error_propagates() {
+        let mut idx = PersistentVectorIndex::open_in_memory().unwrap();
+        idx.set_dimension(2).unwrap();
+        idx.upsert("v", &[1.0, 0.0], None).unwrap();
+        idx.conn
+            .execute(
+                "UPDATE vec_items SET metadata = '{not json' WHERE id = 'v'",
+                [],
+            )
+            .unwrap();
+        assert!(
+            idx.search(&[1.0, 0.0], 5, None).is_err(),
+            "坏 metadata 必须向上传播"
+        );
+    }
+
+    /// M25: 堆化 (内存 O(top_k)) 不改变 top-k 结果语义 — 与旧的全排序 +
+    /// truncate 一致 (score 降序, 并列 id 升序).
+    #[test]
+    fn heap_topk_matches_full_sort_semantics() {
+        let mut idx = PersistentVectorIndex::open_in_memory().unwrap();
+        idx.set_dimension(2).unwrap();
+        // query = [1, 0]; cosine 顺序: a(1.0) > e(~0.994) > b(0.8) > c(0.6) > d(0.0)
+        idx.upsert("a", &[1.0, 0.0], None).unwrap();
+        idx.upsert("b", &[0.8, 0.6], None).unwrap();
+        idx.upsert("c", &[0.6, 0.8], None).unwrap();
+        idx.upsert("d", &[0.0, 1.0], None).unwrap();
+        idx.upsert("e", &[0.9, 0.1], None).unwrap();
+
+        let hits = idx.search(&[1.0, 0.0], 3, None).unwrap();
+        let ids: Vec<&str> = hits.iter().map(|h| h.id.as_str()).collect();
+        assert_eq!(ids, ["a", "e", "b"]);
+        // k 超过语料也不报错, 且返回全部.
+        assert_eq!(idx.search(&[1.0, 0.0], 100, None).unwrap().len(), 5);
+    }
+
+    /// M26: 裸 Connection 也必须带 busy_timeout (与 SqliteConfig::default 同值).
+    #[test]
+    fn busy_timeout_is_configured() {
+        let idx = PersistentVectorIndex::open_in_memory().unwrap();
+        let timeout: i64 = idx
+            .conn
+            .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(timeout, 5000);
     }
 }

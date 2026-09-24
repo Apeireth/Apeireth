@@ -190,9 +190,16 @@ impl SqliteAccessHistoryStore {
     /// Records one V11 event and updates its hourly aggregate atomically.
     ///
     /// Event IDs are UUIDv5 values derived from the canonical event payload.
-    /// Repeated identical events receive deterministic ordinal suffixes rather
-    /// than being silently collapsed, preserving telemetry while avoiding
-    /// random IDs. The writer queue serializes ordinal allocation.
+    /// Repeated identical events receive distinct IDs rather than being
+    /// silently collapsed, preserving telemetry while avoiding random IDs.
+    /// The writer queue serializes ordinal allocation.
+    ///
+    /// **M24 (语义变化, 有意取舍)**: id 分配从"ordinal 顺序枚举"改为
+    /// "ordinal 0 优先 + 随机起点偏移" — 旧实现的第 n 次相同 identity 要做
+    /// n 次 SELECT 探测, 阻塞全局单写线程 (O(n²) 写吞吐). 新语义下:
+    /// fresh DB 首条事件的 id 保持可复现 (reboot 幂等), 重复事件的 id 逐条
+    /// 唯一但偏移不可枚举; INSERT 走 `INSERT OR IGNORE` + 冲突重试一次,
+    /// 仍被吞掉则报错而不是返回未落库的幽灵事件.
     pub async fn record_event(
         &self,
         memory_id: &str,
@@ -253,25 +260,42 @@ impl SqliteAccessHistoryStore {
         let pool = self.pool.clone();
         pool.write(move |conn| {
             let tx = conn.transaction()?;
-            let id = deterministic_event_id(&tx, &identity_json)?;
+            // M24: 随机起点 ordinal + `INSERT OR IGNORE` 冲突重试一次.
+            let mut attempt = 0_u8;
+            let (id, inserted) = loop {
+                let candidate = allocate_event_id(&tx, &identity_json)?;
+                let inserted = tx.execute(
+                    "INSERT OR IGNORE INTO memory_access_events
+                     (id,memory_id,subject_id,session_id,accessed_at_ms,query,access_kind,rank,score,metadata_json)
+                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+                    params![
+                        &candidate,
+                        &event.memory_id,
+                        event.subject_id.as_deref(),
+                        event.session_id.as_deref(),
+                        event.accessed_at_ms,
+                        event.query.as_deref(),
+                        &event.access_kind,
+                        event.rank,
+                        event.score,
+                        &metadata_json
+                    ],
+                )?;
+                if inserted > 0 || attempt >= 1 {
+                    break (candidate, inserted);
+                }
+                attempt += 1;
+            };
+            if inserted == 0 {
+                // 极小概率: 重试后仍与并发写入撞 id. 报错, 不返回未落库的
+                // 幽灵事件 (旧实现顺序枚举时同样会 constraint 失败).
+                return Err(StorageError::Serialization(
+                    "memory_access_events: event id collision after retry; \
+                     refusing to return an unpersisted event"
+                        .to_string(),
+                ));
+            }
             let event = AccessEvent { id, ..event };
-            tx.execute(
-                "INSERT INTO memory_access_events
-                 (id,memory_id,subject_id,session_id,accessed_at_ms,query,access_kind,rank,score,metadata_json)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
-                params![
-                    &event.id,
-                    &event.memory_id,
-                    event.subject_id.as_deref(),
-                    event.session_id.as_deref(),
-                    event.accessed_at_ms,
-                    event.query.as_deref(),
-                    &event.access_kind,
-                    event.rank,
-                    event.score,
-                    &metadata_json
-                ],
-            )?;
             tx.execute(
                 "INSERT INTO memory_access_aggregates
                  (memory_id,bucket_start_ms,access_count,last_accessed_at_ms,cumulative_score,updated_at_ms)
@@ -401,11 +425,28 @@ struct EventIdentity<'a> {
     metadata_json: &'a str,
 }
 
-fn deterministic_event_id(
+/// 分配确定性事件 id (M24).
+///
+/// 契约:
+/// - 同一 identity 的重复事件获得**不同** id (telemetry 不被静默合并);
+/// - 同一事件内容在 fresh DB 上**首条**记录得到可复现 id
+///   (`v5(identity, ordinal 0)`) — reboot 幂等 + 跨进程可复现.
+///
+/// M24: 旧实现从 ordinal 0 起逐条 `SELECT EXISTS` 探测空闲槽位 — 相同
+/// identity 的第 n 次记录要做 n 次探测, 而 `pool.write` 是**全局单写
+/// 线程**, 该循环阻塞所有其他写入 (episodes/streams/commitments 全排队),
+/// 高频重复场景把写吞吐压到 O(n²). 现在: ordinal 0 固定优先 (保持 reboot
+/// 幂等), 冲突后切换到随机 64 位起点继续线性探测 — 期望 O(1).
+/// **确定性语义减弱 (有意取舍, 见 `record_event` doc)**: 重复事件的
+/// ordinal 不再是可枚举的 n-1 序列, 而是随机起点偏移; id 仍逐条唯一,
+/// 仅偏移不可预测.
+fn allocate_event_id(
     conn: &rusqlite::Connection,
     identity_json: &str,
 ) -> rusqlite::Result<String> {
-    for ordinal in 0_u64.. {
+    let mut ordinal: u64 = 0;
+    let mut randomized = false;
+    loop {
         let name = format!("apeireth-memory-access-v11\0{identity_json}\0{ordinal}");
         let id = Uuid::new_v5(&Uuid::NAMESPACE_OID, name.as_bytes())
             .simple()
@@ -418,8 +459,14 @@ fn deterministic_event_id(
         if !exists {
             return Ok(id);
         }
+        if !randomized {
+            // 第 2 次探测起换随机起点, 之后线性 +1 (期望总探测次数 ≈ 1).
+            ordinal = rand::random::<u64>();
+            randomized = true;
+        } else {
+            ordinal = ordinal.wrapping_add(1);
+        }
     }
-    unreachable!("u64 ordinal exhausted")
 }
 
 fn validate_text(value: &str, field: &str) -> Result<(), AccessHistoryError> {
@@ -576,7 +623,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ids_are_deterministic_and_ties_have_stable_order() {
+    async fn ids_are_deterministic_for_first_sighting() {
+        // M24 语义变化 (有意取舍, 见 record_event doc): ordinal 分配从
+        // "顺序枚举"改为 "ordinal 0 优先 + 随机起点偏移". 保持不变式:
+        // fresh DB 首条事件 id 可复现 (reboot 幂等 / 跨 store 一致);
+        // 同一 identity 的重复事件 id 逐条唯一 (telemetry 不合并).
+        // 放弃的不变式: 重复事件的 id 序 Offset 不再可枚举, 不再断言
+        // 跨 store 重复事件 id 相等或 id 之间的大小顺序.
         let first = store(10).await;
         let second = store(10).await;
         let metadata = serde_json::json!({"x": 1});
@@ -624,7 +677,25 @@ mod tests {
         assert_ne!(first_event.id, duplicate.id);
         let events = first.latest_accesses("m", 10).unwrap();
         assert_eq!(events.len(), 2);
-        assert!(events[0].id > events[1].id);
+        assert!(events.iter().any(|e| e.id == first_event.id));
+        assert!(events.iter().any(|e| e.id == duplicate.id));
+    }
+
+    /// M24: 同一 identity 重复记录 N 次 → N 条互不相同的 id 全部落库
+    /// (既不合并, 也不产生未落库的幽灵事件).
+    #[tokio::test]
+    async fn repeated_identical_events_each_get_unique_ids() {
+        let store = store(32).await;
+        let mut ids = std::collections::HashSet::new();
+        for _ in 0..5 {
+            let event = store
+                .record_access("m", 1_000, "s", "search")
+                .await
+                .unwrap();
+            assert!(ids.insert(event.id.clone()), "id 必须逐条唯一");
+        }
+        assert_eq!(ids.len(), 5);
+        assert_eq!(store.latest_accesses("m", 32).unwrap().len(), 5);
     }
 
     #[tokio::test]

@@ -29,6 +29,11 @@
 //! - **平台 keyring 不可用时**才 fallback `EncryptedFileBackend`, 后者依赖 master.key
 //!   文件权限 (unix 0600) 收敛访问 — 这与 [`FileCredentialsStore`] (明文文件) 同
 //!   "靠 OS 权限" 边界, 升级到 OS DPAPI / KMS / HSM 属后续层.
+//! - **master.key 与密文同目录的保护边界 (M2, 如实标注)**: master.key 与数据密文
+//!   `apeireth-keyring.bin` 同目录存放, 目录级整体泄漏 (备份 / 同步 / 容器镜像
+//!   打包) 时两者**一起**落入攻击者手中, AEAD 加密即被消解 (有 key 即有明文)。
+//!   现行收敛手段: unix 0600 属主权限 + 原子写 (临时文件创建即 0600 + fsync +
+//!   rename, 消除 chmod 窗口与崩溃半写损坏); 独立目录 / OS keyring 封存属后续层。
 //! - **审计落档已真实施** (W4②, 2026-10-10, **IMPLEMENTED**): [`FileAuditSink`]
 //!   JSONL 追加写真落档; [`NoopAudit`] 保留为测试/显式禁用 (0 装 PASS 标注).
 //! - **name_hash = SHA-256(service)[:16] hex** — 不可逆 (单向散列) 但同 service
@@ -40,7 +45,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, XChaCha20Poly1305, XNonce};
@@ -149,9 +154,14 @@ pub trait KeyringBackend: Send + Sync {
     fn get(&self, service: &str) -> Result<SecretBuf>;
 
     /// 写入/覆盖服务凭据.
+    ///
+    /// 实现方 (加密文件后端) 在底层存储**已损坏/被篡改**时必须返回错误
+    /// **拒绝写入** (fail-closed), 不得以空表起步静默覆盖全部既有凭据 (H5).
     fn set(&self, service: &str, secret: &SecretBuf) -> Result<()>;
 
     /// 删除服务凭据; 不存在 → `UnknownService`.
+    ///
+    /// 同 [`KeyringBackend::set`]: 底层存储损坏时拒绝删除 (fail-closed, H5).
     fn delete(&self, service: &str) -> Result<()>;
 
     /// 列出已存服务名 (仅名称, 不含明文).
@@ -231,12 +241,15 @@ impl CountingAudit {
 
     /// 取所有审计条目 (clone).
     pub fn entries(&self) -> Vec<AuditEntry> {
-        self.inner.lock().unwrap().clone()
+        self.inner
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
     }
 
     /// 审计条目数.
     pub fn len(&self) -> usize {
-        self.inner.lock().unwrap().len()
+        self.inner.lock().unwrap_or_else(|p| p.into_inner()).len()
     }
 
     /// 是否为空.
@@ -261,12 +274,15 @@ impl CountingAudit {
 impl AuditSink for CountingAudit {
     fn record(&self, event: AuditEvent, service: &str, backend: &'static str, success: bool) {
         let name_hash = name_hash(service).clone();
-        self.inner.lock().unwrap().push(AuditEntry {
-            event,
-            name_hash,
-            backend,
-            success,
-        });
+        self.inner
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .push(AuditEntry {
+                event,
+                name_hash,
+                backend,
+                success,
+            });
     }
 }
 
@@ -711,6 +727,13 @@ impl PlatformKeyring {
 /// - `FileCredentialsStore` 是明文静态存储 (靠 0600);
 /// - `EncryptedFileBackend` 是加密静态存储 (0600 + AEAD), 即使文件泄漏也不出明文.
 /// - 二者并存: 装配侧可任选; 不互替.
+///
+/// **并发与损坏语义 (H5 修复)**:
+/// - `set` / `delete` 的 read-modify-write 由进程内 [`Mutex`] 串行化 (trait 方法
+///   是 `&self`, 调用方无需自行同步); 跨进程并发仍依赖 OS 文件语义.
+/// - `set` / `delete` 中 `load_all` 的错误**不再被静默吞掉**: 数据文件不存在 →
+///   空表起步 (合法首次写); 文件存在但读取失败/解密失败 (AEAD 篡改检测) →
+///   传播 [`KeyringError`] **拒绝写入**, 防"一条新凭据覆盖全部旧凭据".
 pub struct EncryptedFileBackend {
     /// 数据文件路径.
     data_path: PathBuf,
@@ -720,6 +743,11 @@ pub struct EncryptedFileBackend {
     master_key: Key,
     /// 审计 sink.
     audit: Arc<dyn AuditSink>,
+    /// 进程内写锁: 串行化 `set`/`delete` 的 load-modify-save (H5).
+    ///
+    /// 只持锁期间的读-改-写临界区; `get`/`list` 只读不持锁 (save_all 的
+    /// tmp+rename 原子替换保证读者只看到旧或新完整文件).
+    write_lock: Mutex<()>,
 }
 
 impl std::fmt::Debug for EncryptedFileBackend {
@@ -775,6 +803,7 @@ impl EncryptedFileBackend {
             master_key_path,
             master_key,
             audit,
+            write_lock: Mutex::new(()),
         })
     }
 
@@ -877,17 +906,45 @@ impl EncryptedFileBackend {
         out.extend_from_slice(&ct_len.to_le_bytes());
         out.extend_from_slice(&ciphertext);
 
-        // 原子写: 写临时文件 + rename (防半写).
+        // 原子写: 临时文件创建即 0600 (unix) + fsync + rename (防半写/权限窗口, 同 M2).
         let tmp = self.data_path.with_extension("bin.tmp");
-        std::fs::write(&tmp, &out).map_err(|source| KeyringError::Io {
-            service: "<encrypted-file-backend>".into(),
-            source,
-        })?;
+        #[cfg(unix)]
+        {
+            use std::io::Write;
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            let mut f = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&tmp)
+                .map_err(|source| KeyringError::Io {
+                    service: "<encrypted-file-backend>".into(),
+                    source,
+                })?;
+            // tmp 若是 crash 残留旧文件, create 不改其 mode — 显式收敛一次
+            let _ = f.set_permissions(std::fs::Permissions::from_mode(0o600));
+            f.write_all(&out).map_err(|source| KeyringError::Io {
+                service: "<encrypted-file-backend>".into(),
+                source,
+            })?;
+            f.sync_all().map_err(|source| KeyringError::Io {
+                service: "<encrypted-file-backend>".into(),
+                source,
+            })?;
+        }
+        #[cfg(not(unix))]
+        {
+            std::fs::write(&tmp, &out).map_err(|source| KeyringError::Io {
+                service: "<encrypted-file-backend>".into(),
+                source,
+            })?;
+        }
         std::fs::rename(&tmp, &self.data_path).map_err(|source| KeyringError::Io {
             service: "<encrypted-file-backend>".into(),
             source,
         })?;
-        // 0600 收敛 (unix); Windows 走默认 ACL.
+        // 0600 兜底再收敛 (unix; rename 保留 tmp 的 0600, 此处双保险); Windows 走默认 ACL.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -934,7 +991,21 @@ impl KeyringBackend for EncryptedFileBackend {
                 max: MAX_SECRET_LEN,
             });
         }
-        let mut all = self.load_all().unwrap_or_default();
+        // H5: 进程内写锁串行化 read-modify-write; poison 后取内卫值继续 (数据一致性优先).
+        let _guard = self
+            .write_lock
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        // H5: 区分"文件不存在" (load_all → 空表) 与"文件损坏/解密失败" (Err);
+        // 后者必须拒绝写入 — 否则一条新凭据会静默覆盖全部旧凭据.
+        let mut all = match self.load_all() {
+            Ok(all) => all,
+            Err(e) => {
+                self.audit
+                    .record(AuditEvent::Set, service, "encrypted-file", false);
+                return Err(e);
+            }
+        };
         all.insert(service.to_string(), secret.expose().to_vec());
         match self.save_all(&all) {
             Ok(()) => {
@@ -952,7 +1023,19 @@ impl KeyringBackend for EncryptedFileBackend {
 
     fn delete(&self, service: &str) -> Result<()> {
         check_service_name(service)?;
-        let mut all = self.load_all().unwrap_or_default();
+        // H5: 同 set — 写锁串行化 load-modify-save, 加载失败拒绝删除 (防篡改检测被吞).
+        let _guard = self
+            .write_lock
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let mut all = match self.load_all() {
+            Ok(all) => all,
+            Err(e) => {
+                self.audit
+                    .record(AuditEvent::Delete, service, "encrypted-file", false);
+                return Err(e);
+            }
+        };
         if all.remove(service).is_none() {
             self.audit
                 .record(AuditEvent::Delete, service, "encrypted-file", false);
@@ -1013,17 +1096,54 @@ fn load_master_key(path: &Path) -> Result<Key> {
     Ok(Key::from(arr))
 }
 
-/// 写 master key 到文件 (0600 语义).
+/// 写 master key 到文件 (原子写 + 创建即 0600, 无 chmod 窗口 — M2).
+///
+/// - unix: 临时文件以 `mode(0o600)` **创建** (消除"先写后 chmod"的短暂
+///   0644 窗口), `sync_all` 落盘后 `rename` 原子替换 (防崩溃半写 → 密钥损坏);
+///   残留的旧 tmp 会被显式收敛到 0600 后再写 (防预置文件 skid).
+/// - 非 unix: 无 unix mode 语义, 直接写 + rename 原子替换, 权限由 OS 默认
+///   ACL 收敛 (如实标注, 见模块头 0 假装边界).
 fn write_master_key(path: &Path, key: &Key) -> Result<()> {
-    std::fs::write(path, key.as_slice()).map_err(|source| KeyringError::Io {
+    let tmp = PathBuf::from(format!("{}.tmp", path.display()));
+
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)
+            .map_err(|source| KeyringError::Io {
+                service: "<master-key>".into(),
+                source,
+            })?;
+        // tmp 若是 crash 残留的旧文件, create 不会改其 mode — 显式收敛一次
+        let _ = f.set_permissions(std::fs::Permissions::from_mode(0o600));
+        f.write_all(key.as_slice())
+            .map_err(|source| KeyringError::Io {
+                service: "<master-key>".into(),
+                source,
+            })?;
+        f.sync_all().map_err(|source| KeyringError::Io {
+            service: "<master-key>".into(),
+            source,
+        })?;
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::write(&tmp, key.as_slice()).map_err(|source| KeyringError::Io {
+            service: "<master-key>".into(),
+            source,
+        })?;
+    }
+
+    std::fs::rename(&tmp, path).map_err(|source| KeyringError::Io {
         service: "<master-key>".into(),
         source,
     })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
-    }
     Ok(())
 }
 
@@ -1050,7 +1170,10 @@ impl std::fmt::Debug for InMemoryKeyring {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // 不打印 inner (含明文) 与 audit (dyn 不 impl Debug).
         f.debug_struct("InMemoryKeyring")
-            .field("len", &self.inner.lock().unwrap().len())
+            .field(
+                "len",
+                &self.inner.lock().unwrap_or_else(|p| p.into_inner()).len(),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -1068,7 +1191,7 @@ impl InMemoryKeyring {
 impl KeyringBackend for InMemoryKeyring {
     fn get(&self, service: &str) -> Result<SecretBuf> {
         check_service_name(service)?;
-        let guard = self.inner.lock().unwrap();
+        let guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         match guard.get(service) {
             Some(bytes) => {
                 let len = bytes.len();
@@ -1102,7 +1225,7 @@ impl KeyringBackend for InMemoryKeyring {
                 max: MAX_SECRET_LEN,
             });
         }
-        let mut guard = self.inner.lock().unwrap();
+        let mut guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         guard.insert(service.to_string(), secret.expose().to_vec());
         self.audit
             .record(AuditEvent::Set, service, "in-memory", true);
@@ -1111,7 +1234,7 @@ impl KeyringBackend for InMemoryKeyring {
 
     fn delete(&self, service: &str) -> Result<()> {
         check_service_name(service)?;
-        let mut guard = self.inner.lock().unwrap();
+        let mut guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         if guard.remove(service).is_none() {
             self.audit
                 .record(AuditEvent::Delete, service, "in-memory", false);
@@ -1125,7 +1248,7 @@ impl KeyringBackend for InMemoryKeyring {
     }
 
     fn list(&self) -> Result<Vec<String>> {
-        let guard = self.inner.lock().unwrap();
+        let guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         self.audit
             .record(AuditEvent::List, "<all>", "in-memory", true);
         Ok(guard.keys().cloned().collect())
@@ -1388,6 +1511,59 @@ mod tests {
         let audit3 = Arc::new(CountingAudit::new());
         let k3 = EncryptedFileBackend::open(&tmp, audit3.clone()).unwrap();
         assert!(matches!(k3.list().unwrap_err(), KeyringError::Crypto(_)));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    // ----- §9.2b H5: 数据文件损坏时 set/delete 必须拒绝 (fail-closed) -----
+
+    #[test]
+    fn corrupted_data_file_refuses_set_and_delete() {
+        let tmp = std::env::temp_dir().join(format!(
+            "apeireth-keyring-test-{}-{}",
+            std::process::id(),
+            "corrupt-h5"
+        ));
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        let audit = Arc::new(CountingAudit::new());
+        let k = EncryptedFileBackend::open(&tmp, audit.clone()).unwrap();
+        // 先写两条真实凭据, 证明"被覆盖"的损失面
+        k.set("openai", &SecretBuf::from_str("sk-test-encrypted"))
+            .unwrap();
+        k.set("anthropic", &SecretBuf::from_str("sk-test-encrypted-2"))
+            .unwrap();
+        let data_path = k.data_path().to_path_buf();
+        drop(k);
+
+        // 翻转密文最后一个字节 (AEAD tag 区) → 解密必失败; 模拟磁盘损坏/攻击者篡改
+        let mut raw = std::fs::read(&data_path).unwrap();
+        let last = raw.len() - 1;
+        raw[last] ^= 0xFF;
+        std::fs::write(&data_path, &raw).unwrap();
+        let bytes_before = std::fs::read(&data_path).unwrap();
+
+        let audit2 = Arc::new(CountingAudit::new());
+        let k2 = EncryptedFileBackend::open(&tmp, audit2.clone()).unwrap();
+
+        // H5 核心断言: set/delete 都必须返回 Crypto 错误并拒绝写入
+        let set_err = k2.set("new-svc", &SecretBuf::from_str("sk-attacker"));
+        assert!(
+            matches!(set_err, Err(KeyringError::Crypto(_))),
+            "损坏文件上 set 应拒绝: {set_err:?}"
+        );
+        let del_err = k2.delete("openai");
+        assert!(
+            matches!(del_err, Err(KeyringError::Crypto(_))),
+            "损坏文件上 delete 应拒绝: {del_err:?}"
+        );
+
+        // 关键: 文件必须保持被篡改的字节 — 未发生静默覆盖 (旧行为会写成只剩一条的空表+新条)
+        let bytes_after = std::fs::read(&data_path).unwrap();
+        assert_eq!(
+            bytes_before, bytes_after,
+            "损坏/被篡改的数据文件不得被静默覆盖"
+        );
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

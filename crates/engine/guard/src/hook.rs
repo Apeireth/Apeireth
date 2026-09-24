@@ -29,6 +29,9 @@ use crate::session::{SessionBehaviorHistory, TurnBehaviorSummary};
 use crate::snapshot::FeatureSnapshot;
 
 const MAX_RECENT_EVENTS: usize = 200;
+/// 同时驻留的行为链上限 (按 trace 计)。超出后按插入顺序 LRU 驱逐最久
+/// 未命中的链; 正在评估的链由回写阶段重新插回, 不会丢本轮的 action。
+const MAX_ACTIVE_CHAINS: usize = 256;
 
 fn apply_alignment(mut decision: GuardDecision, alignment: &AlignmentAssessment) -> GuardDecision {
     decision.risk_score = decision.risk_score.max(alignment.score);
@@ -112,6 +115,11 @@ pub struct BehaviorChainGuardHook {
     session_history: Mutex<HashMap<SessionId, SessionBehaviorHistory>>,
     turn_intents: Mutex<HashMap<(SessionId, String), TaskIntentEnvelopeV1>>,
     last_snapshots: Mutex<HashMap<(SessionId, String), FeatureSnapshot>>,
+    /// 插入顺序 LRU 队列, 与 `chains` 同源维护: 每次命中把 key 移到队尾,
+    /// 超限时从队首驱逐, 使驱逐语义 (最久未使用) 与注释一致 —— 旧实现
+    /// 直接 `chains.keys().next()` (`HashMap` 任意键序), 注释说的顺序驱逐
+    /// 并未成立。
+    chain_order: Mutex<VecDeque<(SessionId, String)>>,
     dataset_recorder: Option<Arc<DatasetRecorder>>,
     classifier: Arc<dyn ChainRiskClassifier>,
     safety_provider: Arc<dyn CapabilitySafetyMetadataProvider>,
@@ -138,6 +146,7 @@ impl BehaviorChainGuardHook {
             session_history: Mutex::new(HashMap::new()),
             turn_intents: Mutex::new(HashMap::new()),
             last_snapshots: Mutex::new(HashMap::new()),
+            chain_order: Mutex::new(VecDeque::new()),
             dataset_recorder: None,
             classifier: Arc::new(NoClassifier),
             safety_provider: Arc::new(CapabilitySafetyRegistry::canonical()),
@@ -319,6 +328,11 @@ impl BehaviorChainGuardHook {
     pub fn clear_session(&self, session_id: &SessionId) {
         let mut chains = self.chains.lock();
         chains.retain(|(s, _), _| s != session_id);
+        // LRU 队列与 chains 同源: 一并清理, 否则队列里留下永不命中的幽灵
+        // key, 会挤占 MAX_ACTIVE_CHAINS 额度并驱逐活跃链。
+        self.chain_order
+            .lock()
+            .retain(|(s, _)| s != session_id);
         self.session_scopes.lock().remove(session_id);
         self.session_risk_history.lock().remove(session_id);
         self.session_behavior_summary.lock().remove(session_id);
@@ -401,46 +415,66 @@ impl BehaviorChainGuardHook {
     ) -> (GuardDecision, GovernanceVerdict) {
         let trace_id = request.trace.to_string();
         let key = (request.session, trace_id.clone());
-        let mut chains = self.chains.lock();
-        if chains.len() >= 256 {
-            if let Some(oldest_key) = chains.keys().next().cloned() {
-                chains.remove(&oldest_key);
-            }
-        }
-        let intent = request
-            .security_context
-            .and_then(|context| {
-                if context.trace_id.is_empty() || context.trace_id == trace_id {
-                    context.intent.clone().map(|mut intent| {
-                        intent.trace_id = trace_id.clone();
-                        intent.session_id = request.session.to_string();
-                        intent
-                    })
-                } else {
-                    None
-                }
-            })
-            .or_else(|| self.turn_intent(&request.session, &trace_id));
-        if let Some(intent) = intent.clone() {
-            self.turn_intents
-                .lock()
-                .insert((request.session, trace_id.clone()), intent);
-        }
-        let chain = chains.entry(key).or_insert_with(|| {
-            let mut c = BehaviorChain::new(request.session.to_string(), trace_id.clone());
-            if let Some(scope) = self.session_scopes.lock().get(&request.session) {
-                c.set_declared_scope(scope.clone());
-            }
+
+        // 快照阶段 (持锁): 全局 chains 锁内只做"取链 / 建链"与 LRU 记账。
+        // 旧实现在持锁状态下跑完 fast guard、chain guard、fusion 与全部
+        // 记账 —— 锁把不同会话的 guard 评估串行化, 且与 update_action_execution
+        // 等链写者相互阻塞。评估改在锁外对快照进行, 结束后再回写。
+        let mut chain = {
+            let mut chains = self.chains.lock();
+            let intent = request
+                .security_context
+                .and_then(|context| {
+                    if context.trace_id.is_empty() || context.trace_id == trace_id {
+                        context.intent.clone().map(|mut intent| {
+                            intent.trace_id = trace_id.clone();
+                            intent.session_id = request.session.to_string();
+                            intent
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .or_else(|| self.turn_intent(&request.session, &trace_id));
             if let Some(intent) = intent.clone() {
-                c.set_intent(intent);
+                self.turn_intents
+                    .lock()
+                    .insert((request.session, trace_id.clone()), intent);
             }
-            c
-        });
-        if chain.intent.is_none() {
-            if let Some(intent) = intent {
-                chain.set_intent(intent);
+            // 插入顺序 LRU: 命中即移到队尾; 超限从队首驱逐最久未使用的链。
+            // 被驱逐链可能是并发评估中的目标, 回写阶段会重新插回。
+            {
+                let mut order = self.chain_order.lock();
+                if let Some(position) = order.iter().position(|entry| *entry == key) {
+                    order.remove(position);
+                }
+                order.push_back(key.clone());
+                while order.len() > MAX_ACTIVE_CHAINS {
+                    match order.pop_front() {
+                        Some(evicted) => {
+                            chains.remove(&evicted);
+                        }
+                        None => break,
+                    }
+                }
             }
-        }
+            let chain = chains.entry(key.clone()).or_insert_with(|| {
+                let mut c = BehaviorChain::new(request.session.to_string(), trace_id.clone());
+                if let Some(scope) = self.session_scopes.lock().get(&request.session) {
+                    c.set_declared_scope(scope.clone());
+                }
+                if let Some(intent) = intent.clone() {
+                    c.set_intent(intent);
+                }
+                c
+            });
+            if chain.intent.is_none() {
+                if let Some(intent) = intent {
+                    chain.set_intent(intent);
+                }
+            }
+            chain.clone()
+        };
 
         // Calculate retry stats and prior actions
         let actions = chain.actions();
@@ -472,7 +506,7 @@ impl BehaviorChainGuardHook {
         let mut guard_decision = if fast_res.clear {
             GuardDecision::allow_fast()
         } else {
-            self.chain_guard.evaluate(chain, &obs, &fast_res)
+            self.chain_guard.evaluate(&chain, &obs, &fast_res)
         };
         guard_decision = apply_alignment(guard_decision, &alignment);
         let cross_turn = self
@@ -500,7 +534,7 @@ impl BehaviorChainGuardHook {
             );
             guard_decision.stage = crate::decision::GuardStage::ChainGuard;
         }
-        let features = AgentChainFeatureV2::from_chain_with_cross_turn(chain, cross_turn);
+        let features = AgentChainFeatureV2::from_chain_with_cross_turn(&chain, cross_turn);
         let snapshot = FeatureSnapshot::capture(&trace_id, &action_id, features.clone());
         let prediction = self.classifier.classify_v2(&snapshot.features);
         let guard_decision = DecisionFusion::apply(
@@ -535,7 +569,7 @@ impl BehaviorChainGuardHook {
             let mut histories = self.session_history.lock();
             let history = histories.entry(request.session).or_default();
             history.upsert(TurnBehaviorSummary::from_chain(
-                chain,
+                &chain,
                 &obs,
                 guard_decision.risk_score,
                 matches!(guard_decision.decision, Decision::Deny { .. }),
@@ -610,7 +644,7 @@ impl BehaviorChainGuardHook {
             recorder.record_classification(
                 &action_id,
                 &obs,
-                chain,
+                &chain,
                 &fast_res,
                 &guard_decision,
                 &snapshot,
@@ -619,6 +653,20 @@ impl BehaviorChainGuardHook {
         self.last_snapshots
             .lock()
             .insert((request.session, action_id.clone()), snapshot);
+
+        // 回写阶段 (持锁): 把评估后的链快照写回表。评估期间该 trace 若被
+        // 并发驱逐 (> MAX_ACTIVE_CHAINS 个 trace 同时活跃时可能发生), 重新
+        // 插回, 保证本轮的 action/mutation 不丢。同一会话的 turn 由 runtime
+        // 的 per-session 锁串行化, 正常情况下这里是同一条链的顺序更新。
+        {
+            let mut chains = self.chains.lock();
+            match chains.get_mut(&key) {
+                Some(entry) => *entry = chain,
+                None => {
+                    chains.insert(key, chain);
+                }
+            }
+        }
 
         let verdict = guard_decision.to_verdict(self.name());
         (guard_decision, verdict)

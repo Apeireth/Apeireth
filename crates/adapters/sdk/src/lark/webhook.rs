@@ -140,22 +140,22 @@ impl WebhookEvent {
 /// 校验 webhook 事件 (per `verify_webhook` 1:1).
 ///
 /// 4 步骤:
-/// 1. token 校验: `event.token == webhook_token.token`
+/// 1. token 校验: `event.token == webhook_token.token` (恒定时间比较, per H7)
 /// 2. app_id 校验: `event.app_id` 必为配置 app_id (R21 续真接)
 /// 3. timestamp 校验: 误差 < 5 分钟 (防 replay attack, R21 续真接)
-/// 4. URL 校验: 若是 url_verification, 返 challenge; 若是 event_callback, 走事件处理
+/// 4. URL 校验: 若是 url_verification/challenge, 返 challenge; event_callback/unknown
+///    显式返 `NotImplemented` (STUB 期 0 静默放行未解密事件体, per H7)
 ///
-/// **当前 STUB**: 1+2 步实现, 3+4 步返 `NotImplemented` (R21 续真接 AES 解密).
+/// **安全 (per H7 修复)**: token 校验失败的错误消息只含 "mismatch", **0 含期望值/入站值** —
+/// webhook token 是长期共享秘密, 一旦进错误串被日志/回显即泄秘.
 pub fn verify_webhook_event(
     event: &WebhookEvent,
     webhook_token: &WebhookToken,
 ) -> Result<WebhookVerifyResult, LarkError> {
-    // 1. token 校验
+    // 1. token 校验 (恒定时间比较, per auth.rs WebhookToken::verify)
     if !webhook_token.verify(&event.token) {
-        return Err(LarkError::Other(format!(
-            "webhook token mismatch: expected '{}' got '{}'",
-            webhook_token.token, event.token
-        )));
+        // H7: 错误只报 "mismatch" 不含 expected/got — 共享秘密 0 进错误串
+        return Err(LarkError::Other("webhook token mismatch".to_string()));
     }
     // 2. URL 校验
     match event.event_type {
@@ -168,8 +168,10 @@ pub fn verify_webhook_event(
                 ))
             }
         }
-        // 3+4 步 (event callback decrypt + handle) 留 R21+
-        _ => Ok(WebhookVerifyResult::Accepted),
+        // 3+4 步 (event callback decrypt + handle) 留 R21+: 非 URL 校验事件显式
+        // NotImplemented — 未解密事件体被静默 Accepted 比显式 stub 更危险 (per H7)
+        EventType::EventCallback => Err(LarkError::NotImplemented("event_callback_decrypt")),
+        EventType::Unknown => Err(LarkError::NotImplemented("unknown_event")),
     }
 }
 
@@ -178,7 +180,8 @@ pub fn verify_webhook_event(
 pub enum WebhookVerifyResult {
     /// URL 校验通过, 客户端返 challenge 给飞书 server.
     Challenge(String),
-    /// 事件已接受 (待 R21 续真接后处理).
+    /// 事件已接受 (R21 续真接 event_callback AES 解密后才产生; STUB 期不产生 —
+    /// per H7, 未解密事件体现在走 `NotImplemented` 而非静默 Accepted).
     Accepted,
 }
 
@@ -255,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_webhook_token_mismatch() {
+    fn verify_webhook_token_mismatch_does_not_leak_expected_token() {
         let wh_token = WebhookToken::new("token_xxx".to_string(), "encrypt_key_xxx".to_string())
             .expect("valid");
         let event = WebhookEvent {
@@ -268,11 +271,19 @@ mod tests {
             event: HashMap::new(),
         };
         let result = verify_webhook_event(&event, &wh_token);
-        assert!(matches!(result, Err(LarkError::Other(_))));
+        match result {
+            Err(LarkError::Other(msg)) => {
+                assert!(msg.contains("mismatch"), "错误消息应含 mismatch: {msg}");
+                // H7: 错误消息 0 含期望 token / 入站 token (共享秘密 0 进错误串)
+                assert!(!msg.contains("token_xxx"), "H7: 0 含期望 token: {msg}");
+                assert!(!msg.contains("wrong_token"), "H7: 0 含入站 token: {msg}");
+            }
+            other => panic!("expected Other(mismatch), got {other:?}"),
+        }
     }
 
     #[test]
-    fn verify_webhook_event_callback_accepted() {
+    fn verify_webhook_event_callback_not_implemented() {
         let wh_token = WebhookToken::new("token_xxx".to_string(), "encrypt_key_xxx".to_string())
             .expect("valid");
         let mut ev = HashMap::new();
@@ -286,7 +297,26 @@ mod tests {
             1234567890,
             ev,
         );
-        let result = verify_webhook_event(&event, &wh_token).expect("valid");
-        assert!(matches!(result, WebhookVerifyResult::Accepted));
+        // H7: STUB 期非 URL 校验事件显式 NotImplemented, 0 静默 Accepted
+        // (未解密事件体被放行比显式 stub 更危险)
+        let result = verify_webhook_event(&event, &wh_token);
+        assert!(matches!(result, Err(LarkError::NotImplemented(_))));
+    }
+
+    #[test]
+    fn verify_webhook_unknown_event_not_implemented() {
+        let wh_token = WebhookToken::new("token_xxx".to_string(), "encrypt_key_xxx".to_string())
+            .expect("valid");
+        let event = WebhookEvent {
+            event_type: EventType::Unknown,
+            app_id: "cli_a1b2c3d4e5f6".to_string(),
+            token: "token_xxx".to_string(),
+            timestamp_secs: 0,
+            challenge: None,
+            encrypt: Some("encrypted_blob".to_string()),
+            event: HashMap::new(),
+        };
+        let result = verify_webhook_event(&event, &wh_token);
+        assert!(matches!(result, Err(LarkError::NotImplemented(_))));
     }
 }

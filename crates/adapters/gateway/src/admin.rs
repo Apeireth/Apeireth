@@ -147,7 +147,7 @@ pub async fn admin_config_get(State(state): State<GatewayState>) -> Json<ConfigV
     let config = state
         .hot_config
         .read()
-        .expect("gateway hot config lock poisoned");
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     Json(config.view())
 }
 
@@ -184,7 +184,7 @@ pub async fn admin_config_update(
         let mut config = state
             .hot_config
             .write()
-            .expect("gateway hot config lock poisoned");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(provider) = patch.provider.clone() {
             config.provider = provider;
         }
@@ -206,7 +206,7 @@ pub async fn admin_config_update(
     let provider = state
         .hot_config
         .read()
-        .expect("gateway hot config lock poisoned")
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
         .provider
         .clone();
 
@@ -288,24 +288,50 @@ pub(crate) fn valid_provider(provider: &str) -> bool {
     !provider.is_empty() && !provider.chars().any(char::is_whitespace)
 }
 
+/// M17 (2026-09-24 审计): https 强制, `http://` 仅放行环回主机
+/// (本地 Ollama/vLLM 开发场景)。远端明文 HTTP 会把 Bearer API key 裸奔。
 pub(crate) fn valid_base_url(base_url: &str) -> bool {
     let base_url = base_url.trim();
-    let Some(rest) = base_url
-        .strip_prefix("https://")
-        .or_else(|| base_url.strip_prefix("http://"))
-    else {
-        return false;
-    };
-    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
-    !host.is_empty() && !host.chars().any(char::is_whitespace)
+    if let Some(rest) = base_url.strip_prefix("https://") {
+        let host = url_host(rest);
+        return !host.is_empty() && !host.chars().any(char::is_whitespace);
+    }
+    if let Some(rest) = base_url.strip_prefix("http://") {
+        return is_loopback_host(rest);
+    }
+    false
+}
+
+/// 从 `scheme://` 之后的部分取 host 段 (去 userinfo / path / port)。
+fn url_host(after_scheme: &str) -> &str {
+    let authority = after_scheme.split(['/', '?', '#']).next().unwrap_or("");
+    let authority = authority.rsplit('@').next().unwrap_or(authority);
+    match authority.rsplit_once(':') {
+        Some((host, port)) if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => host,
+        _ => authority,
+    }
+}
+
+/// `http://` 是否指向环回主机 (本地开发 LLM 端点)。
+fn is_loopback_host(after_scheme: &str) -> bool {
+    let host = url_host(after_scheme)
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_ascii_lowercase();
+    matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1")
 }
 
 /// Mask an API key as `sk-****c4a` (first 3 + redacted middle + last 3).
+/// M17 (2026-09-24 审计): 按 char 边界切片 —— 旧版字节切片在非 ASCII key
+/// (如多字节 UTF-8) 上会 panic (`byte index is not a char boundary`)。
 pub fn mask_api_key(api_key: &str) -> String {
-    if api_key.len() <= 8 {
+    let chars: Vec<char> = api_key.chars().collect();
+    if chars.len() <= 8 {
         return "****".to_string();
     }
-    format!("{}****{}", &api_key[..3], &api_key[api_key.len() - 3..])
+    let prefix: String = chars[..3].iter().collect();
+    let suffix: String = chars[chars.len() - 3..].iter().collect();
+    format!("{prefix}****{suffix}")
 }
 
 /// A shared handle for the mutable hot config, kept in [`GatewayState`].

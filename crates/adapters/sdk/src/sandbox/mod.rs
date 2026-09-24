@@ -583,11 +583,15 @@ impl SandboxSdk {
 ///
 /// 用法: `sandbox_stub!("spawn")?;` 在函数体顶部守门, R21+ 真接时整体替换.
 /// 现阶段 STUB 模式: 全部返 `SandboxError::NotImplemented`.
+///
+/// **L 组修复**: `$crate::tracing::warn!` → 直接 `tracing::warn!` — 展开未导出路径
+/// `$crate::tracing` 一用即编译失败 (sdk 无 `pub use tracing`); 直接路径在 crate 内
+/// 由 extern crate 解析, crate 外调用方自备 `tracing` 依赖即可.
 #[macro_export]
 macro_rules! sandbox_stub {
     ($api:literal) => {
         if $crate::sandbox::STUB_MODE {
-            $crate::tracing::warn!(
+            tracing::warn!(
                 target: "apeireth_sdk_sandbox",
                 concat!($api, " STUB_MODE returning NotImplemented")
             );
@@ -891,7 +895,41 @@ mod tests {
             host_port: 8080,
             container_port: 0,
             protocol: PortProtocol::Tcp,
+            allow_privileged: false,
         });
+        assert!(matches!(
+            bad.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
+
+        // M16 ②: 特权宿主机端口 (0..=1024) 未显式 allow 拒绝
+        let mut bad = cfg.clone();
+        bad.policy.ports.push(PortMapping {
+            host_port: 22,
+            container_port: 8022,
+            protocol: PortProtocol::Tcp,
+            allow_privileged: false,
+        });
+        assert!(matches!(
+            bad.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
+
+        // M16 ①: 卷挂载源字符串前缀绕过 (`/tmpevil/x` / `..` 穿越) 拒绝
+        let mut bad = cfg.clone();
+        bad.policy.mounts.push(VolumeMount {
+            source: PathBuf::from("/tmp/../etc/passwd"),
+            target: PathBuf::from("/mnt/passwd"),
+            read_only: true,
+        });
+        assert!(matches!(
+            bad.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
+
+        // M16 ③: user = "0" (UID 0) 拒绝
+        let mut bad = cfg.clone();
+        bad.policy.user = "0".to_string();
         assert!(matches!(
             bad.validate(),
             Err(SandboxError::InvalidConfig(_))
@@ -944,5 +982,21 @@ mod tests {
     fn sandbox_assert_stub_mode_guard() {
         let r = assert_stub_mode_or_panic("test_api");
         assert!(matches!(r, Err(SandboxError::NotImplemented("test_api"))));
+    }
+
+    // 额外 6 (L 组修复): sandbox_stub! 宏展开真编译 + 真返 NotImplemented
+    // (修复前展开未导出的 `$crate::tracing`, 一 invoke 即编译失败)
+    #[test]
+    fn sandbox_stub_macro_expands_and_gates() {
+        fn stub_caller() -> SandboxResult<()> {
+            crate::sandbox_stub!("spawn");
+            Ok(())
+        }
+        assert!(matches!(
+            stub_caller(),
+            Err(SandboxError::NotImplemented(
+                "apeireth_sdk_sandbox_spawn"
+            ))
+        ));
     }
 }

@@ -616,11 +616,12 @@ impl IntentAlignmentGuard {
         obs: &SafetyObservation,
     ) -> AlignmentAssessment {
         let Some(intent) = intent else {
-            return AlignmentAssessment {
-                class: AlignmentClass::Unknown,
-                score: 0.45,
-                reasons: vec!["turn_intent_unavailable".to_string()],
-            };
+            // intent 缺失 (后台任务 / 系统动作 / cron / 审批恢复轮次) 时旧实现
+            // 整体 fail-open: 一律 0.45 benign, 使 apply_alignment 成为 no-op,
+            // 把本应 Deny/RequireApproval 的高危效果静默降级为 Allow (H3)。
+            // fail-closed 分级: 高危操作类按 obs 的 operation class 判 mismatch,
+            // 纯读维持低分。
+            return Self::intent_missing_assessment(obs);
         };
 
         let operations = obs.all_operations();
@@ -749,6 +750,55 @@ impl IntentAlignmentGuard {
             class,
             score,
             reasons: vec![reason.to_string()],
+        }
+    }
+
+    /// 无 intent 绑定时的对齐评估 (fail-closed 分级)。
+    ///
+    /// 高危操作类 —— 写/改/建/删 (文件系统副作用)、执行/派进程 (shell)、
+    /// 网络发送/发布 (egress 与远端副作用)、凭据读/写、管理面与持久化
+    /// 变更 —— 一律记为 mismatch (0.75): 经 `hook::apply_alignment`
+    /// (>= 0.65) 升为 RequireApproval, 且 < 0.85 不会变成 Deny, 即
+    /// "intent 缺失" 只升级到人工确认, 不假装知道用户意图。
+    ///
+    /// 纯读路径 (Read/Search/Enumerate/MemoryRead/NetworkRead 与未知
+    /// 但无外部效果的能力) 维持 0.45 的 Unknown 低分: 后台/系统轮次的
+    /// 只读观察不应被审批门拖死。
+    ///
+    /// 与 intent 存在时的判据保持同一最小集: 不额外把 Unknown 能力升级
+    /// (那条规则只在 intent 存在时生效, 见 evaluate 主路径的
+    /// `unknown_external_effect_capability` 分支)。
+    fn intent_missing_assessment(obs: &SafetyObservation) -> AlignmentAssessment {
+        let operations = obs.all_operations();
+        let high_risk = operations.iter().any(|operation| {
+            matches!(
+                operation,
+                OperationClass::Write
+                    | OperationClass::Modify
+                    | OperationClass::Create
+                    | OperationClass::Delete
+                    | OperationClass::Execute
+                    | OperationClass::SpawnProcess
+                    | OperationClass::NetworkSend
+                    | OperationClass::Publish
+                    | OperationClass::CredentialRead
+                    | OperationClass::CredentialWrite
+                    | OperationClass::AdminChange
+                    | OperationClass::PersistenceChange
+            )
+        });
+        if high_risk {
+            Self::mismatch(
+                AlignmentClass::ScopeExpansion,
+                0.75,
+                "turn_intent_unavailable",
+            )
+        } else {
+            AlignmentAssessment {
+                class: AlignmentClass::Unknown,
+                score: 0.45,
+                reasons: vec!["turn_intent_unavailable".to_string()],
+            }
         }
     }
 }

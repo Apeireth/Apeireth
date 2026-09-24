@@ -132,12 +132,18 @@ impl ResearchVaultLruFtrl {
     }
 
     /// 按价值降序 + tie-break id 稳定排序 (RA-3: append-only tail 原则的基础)。
+    ///
+    /// L6: `segments` / `features` 长度不一致时**不得 panic** — 旧实现靠
+    /// `debug_assert_eq!` (release 构建里形同虚设), 之后 `features[a]` 直接
+    /// 越界 panic。现在显式取二者较小长度, 多出的尾部条目忽略 (排序只覆盖
+    /// 有完整特征的前缀), 调用方会在 `decide_ranking` 看到同样口径。
     pub fn rank(
         &self,
         segments: &[ResearchSegment],
         features: &[ResearchSegmentFeatures],
     ) -> Vec<String> {
-        let mut idx: Vec<usize> = (0..segments.len()).collect();
+        let usable = segments.len().min(features.len());
+        let mut idx: Vec<usize> = (0..usable).collect();
         idx.sort_by(|&a, &b| {
             let va = self.score(&features[a]);
             let vb = self.score(&features[b]);
@@ -175,6 +181,8 @@ impl ResearchVaultLruFtrl {
         features: &[ResearchSegmentFeatures],
         _stackpin: &ResearchStackPinPolicy,
     ) -> (Vec<String>, bool) {
+        // L6: 长度不一致时按 min 口径跑 (release 下不再有 debug_assert 的幻觉),
+        // 不 panic、不静默返回全量。
         debug_assert_eq!(segments.len(), features.len());
         let ranked = self.rank(segments, features);
         // 护栏检查: 与最近一次"按策略"的排序对比。

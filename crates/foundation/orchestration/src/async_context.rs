@@ -73,6 +73,13 @@ pub struct AsyncContextPipeline {
     max_hud_items: usize,
 }
 
+/// 即抛队列上限 (M7: 防工具海量输出把即抛层撑爆; 超出丢最旧).
+pub const MAX_EPHEMERAL_QUEUE: usize = 256;
+/// 持久事实历史上限 (M7: 防长跑无界增长; 超出丢最旧, 更早的事实应已落 SQLite).
+pub const MAX_DURABLE_HISTORY: usize = 1_024;
+/// 摘要留存上限 (M7: 同上).
+pub const MAX_SUMMARY_HISTORY: usize = 512;
+
 impl AsyncContextPipeline {
     pub fn new(max_hud_items: usize) -> Self {
         Self {
@@ -85,16 +92,27 @@ impl AsyncContextPipeline {
     }
 
     /// 注入一条异步上下文消息
+    ///
+    /// M7: 四层全部有界 — 超限淘汰**最旧** (HUD 层沿用原有 max_hud_items 口径)。
     pub fn push_message(&mut self, msg: AsyncContextMessage) {
         match msg.kind {
             AsyncArrayKind::EphemeralAsyncUser => {
                 self.ephemeral_queue.push(msg);
+                while self.ephemeral_queue.len() > MAX_EPHEMERAL_QUEUE {
+                    self.ephemeral_queue.remove(0);
+                }
             }
             AsyncArrayKind::DurableSyncUser => {
                 self.durable_history.push(msg);
+                while self.durable_history.len() > MAX_DURABLE_HISTORY {
+                    self.durable_history.remove(0);
+                }
             }
             AsyncArrayKind::SummaryStatusUser => {
                 self.summary_history.push(msg);
+                while self.summary_history.len() > MAX_SUMMARY_HISTORY {
+                    self.summary_history.remove(0);
+                }
             }
             AsyncArrayKind::NotificationHUDUser => {
                 if self.hud_notifications.len() >= self.max_hud_items {
@@ -222,5 +240,47 @@ mod tests {
         // 导出的持久事实仅有 1 条
         assert_eq!(pipeline.export_durable_facts().len(), 1);
         assert_eq!(pipeline.export_durable_facts()[0].id, "m1");
+    }
+
+    /// M7: 三个 Vec (ephemeral / durable / summary) 不得无界增长.
+    #[test]
+    fn m7_async_context_vecs_bounded() {
+        let mut pipeline = AsyncContextPipeline::new(3);
+        for i in 0..(MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY + MAX_EPHEMERAL_QUEUE + 10) {
+            let id = format!("m{i}");
+            pipeline.push_message(AsyncContextMessage::new(
+                id.clone(),
+                AsyncArrayKind::DurableSyncUser,
+                "user",
+                "fact",
+                i as u64,
+            ));
+            pipeline.push_message(AsyncContextMessage::new(
+                id.clone(),
+                AsyncArrayKind::SummaryStatusUser,
+                "system",
+                "sum",
+                i as u64,
+            ));
+            pipeline.push_message(AsyncContextMessage::new(
+                id,
+                AsyncArrayKind::EphemeralAsyncUser,
+                "tool",
+                "eph",
+                i as u64,
+            ));
+        }
+        assert_eq!(pipeline.export_durable_facts().len(), MAX_DURABLE_HISTORY);
+        assert_eq!(pipeline.export_summary_records().len(), MAX_SUMMARY_HISTORY);
+        // 最旧的被淘汰, 最新的保留.
+        let durable = pipeline.export_durable_facts();
+        assert_eq!(
+            durable.last().unwrap().id,
+            format!("m{}", MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY + MAX_EPHEMERAL_QUEUE + 9),
+            "最新条目应在库"
+        );
+        // 清理后 ephemeral 归零 (它还有 post_inference_cleanup 的生命周期).
+        pipeline.post_inference_cleanup(false);
+        assert_eq!(pipeline.total_messages_count(), MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY);
     }
 }

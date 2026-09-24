@@ -130,7 +130,7 @@ impl AnthropicProviderCapability {
     /// is permanent (§40): falling back would mask a misconfiguration.
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
         let resolver = {
-            let guard = self.resolver.lock().expect("resolver slot lock poisoned");
+            let guard = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone().ok_or_else(|| ProviderError::AuthFailed {
                 provider: self.id.to_string(),
                 detail: format!(
@@ -313,12 +313,17 @@ impl AnthropicProviderCapability {
 
         let usage = body
             .get("usage")
-            .map(|u| NormalizedUsage {
-                prompt_tokens: u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                completion_tokens: u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0)
-                    as u32,
-                total_tokens: u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32
-                    + u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            .map(|u| {
+                let input = token_count(u, "input_tokens");
+                let output = token_count(u, "output_tokens");
+                NormalizedUsage {
+                    prompt_tokens: input,
+                    completion_tokens: output,
+                    // M11: total 用 saturating_add —— 两个分量各自已封顶到
+                    // u32::MAX, 再相加不得回绕 (debug panic / release 静默
+                    // 截断都会污染记账)。
+                    total_tokens: input.saturating_add(output),
+                }
             })
             .unwrap_or_default();
 
@@ -491,11 +496,17 @@ impl AnthropicProviderPlugin {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_else(|| DEFAULT_MODELS.iter().map(|s| s.to_string()).collect());
-        let http = reqwest::Client::builder().build().map_err(|e| {
-            PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
-                "reqwest client build failed: {e}"
-            )))
-        })?;
+        // M6: 禁重定向 —— anthropic auth 用自定义 `x-api-key` 头, reqwest
+        // 的跨主机重定向清理只覆盖 Authorization/Cookie 等固定集合,
+        // 不删自定义头; Messages API 从不 30x, 直接拒绝重定向。
+        let http = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| {
+                PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
+                    "reqwest client build failed: {e}"
+                )))
+            })?;
         Ok(Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?)
     }
 
@@ -516,7 +527,7 @@ impl AnthropicProviderPlugin {
     /// Attach a credential resolver without booting a full runtime (tests).
     #[doc(hidden)]
     pub fn attach_resolver_for_test(&self, resolver: Arc<dyn CredentialResolver>) {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(resolver);
     }
 
@@ -534,13 +545,13 @@ impl Plugin for AnthropicProviderPlugin {
     }
 
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(Arc::clone(&ctx.credentials));
         Ok(())
     }
 
     async fn shutdown(&self) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = None;
         Ok(())
     }
@@ -557,6 +568,21 @@ impl std::fmt::Debug for AnthropicProviderPlugin {
             .field("capability", &self.capability)
             .finish_non_exhaustive()
     }
+}
+
+/// Read one usage counter and clamp it into `u32` (M11).
+///
+/// `as u32` on a vendor-reported count panics in debug builds and silently
+/// truncates in release builds when the value exceeds `u32::MAX`; both are
+/// unacceptable accounting semantics. Clamping to `u32::MAX` keeps an
+/// obviously-overflowing value instead of pretending it is precise. A missing
+/// or non-numeric field stays `0` (usage is never fabricated).
+fn token_count(usage: &serde_json::Value, key: &str) -> u32 {
+    usage
+        .get(key)
+        .and_then(|v| v.as_u64())
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+        .unwrap_or(0)
 }
 
 /// Build the provider model list from configured ids, de-duplicating by
@@ -735,6 +761,28 @@ mod tests {
             let resp = cap.adapt_response(body, "m").expect("adapts");
             assert_eq!(resp.finish_reason, Some(expected), "{wire}");
         }
+    }
+
+    #[test]
+    fn adapt_response_clamps_overflowing_usage_counters() {
+        // M11 回归: vendor 回大于 u32::MAX 的 usage 计数时, 旧实现 `as u32`
+        // 在 debug 构建 panic、release 静默截断; 现在封顶且 total 不回绕。
+        let cap = capability(empty_resolver_slot());
+        let body = serde_json::json!({
+            "content": [{"type": "text", "text": "x"}],
+            "usage": {
+                "input_tokens": u64::from(u32::MAX) + 7,
+                "output_tokens": u64::from(u32::MAX) + 9,
+            }
+        });
+        let resp = cap.adapt_response(body, "m").expect("adapts");
+        assert_eq!(resp.usage.prompt_tokens, u32::MAX);
+        assert_eq!(resp.usage.completion_tokens, u32::MAX);
+        assert_eq!(
+            resp.usage.total_tokens,
+            u32::MAX,
+            "total must saturate, not wrap"
+        );
     }
 
     #[test]

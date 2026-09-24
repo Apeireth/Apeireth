@@ -6,6 +6,11 @@ use serde_json::Value;
 use crate::version::SdkVersion;
 
 /// Wire kind (envelope 的 kind 字段).
+///
+/// **L 组修复**: `Other(String)` 加 `#[serde(untagged)]` — 修复前外部标签序列化为
+/// `{"other":"x"}`, 破坏 lib.rs §E 明示的跨语言契约 "kind: **string** in snake_case"
+/// (遵循文档的 Python/Node/Go 客户发未知 kind 时 Rust 反序列化失败). untagged 后:
+/// 已知 kind → `"chat"` 等 snake_case 字符串; 未知 kind → 原样字符串 (per 1:1 wire 契约).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WireKind {
@@ -17,7 +22,8 @@ pub enum WireKind {
     MemoryRead,
     /// 健康检查
     Health,
-    /// 自由扩展 (kind 落在 noneof 时落这里)
+    /// 自由扩展 (kind 落在 noneof 时落这里, untagged: 序列化为裸字符串 per 跨语言契约)
+    #[serde(untagged)]
     Other(String),
 }
 

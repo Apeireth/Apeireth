@@ -29,7 +29,7 @@
 use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::supervisor::{
     ChildSpec, ExitReason, RestartDecision, RestartStrategy, SubSupervisor, SubSupervisorKind,
@@ -49,8 +49,9 @@ pub struct StdSubSupervisor {
     children: Vec<ChildSpec>,
     /// 真 child handle (启动后填, id → Child)
     handles: Arc<Mutex<HashMap<String, Child>>>,
-    /// 重启计数 (id → count, per v1 max_restarts)
-    restart_counts: Arc<Mutex<HashMap<String, u32>>>,
+    /// 重启时间戳 (id → 窗口内各次重启的 Instant, L 组: 带时间窗衰减,
+    /// 不再是无界累加的计数器)
+    restart_stamps: Arc<Mutex<HashMap<String, Vec<Instant>>>>,
     /// 重启窗口 (v1: max_restarts per period = 5 in 60s)
     max_restarts_per_window: u32,
     restart_window: Duration,
@@ -62,7 +63,7 @@ impl StdSubSupervisor {
             kind,
             children,
             handles: Arc::new(Mutex::new(HashMap::new())),
-            restart_counts: Arc::new(Mutex::new(HashMap::new())),
+            restart_stamps: Arc::new(Mutex::new(HashMap::new())),
             // v1 默认: 5 次 / 60 秒
             max_restarts_per_window: 5,
             restart_window: Duration::from_secs(60),
@@ -111,16 +112,22 @@ impl StdSubSupervisor {
         }
     }
 
-    /// 检查是否超过重启窗口限制
+    /// 检查是否超过重启窗口限制 (L 组: 时间窗内的重启次数, 过期 stamps 衰减)
     fn restart_limit_exceeded(&self, child_id: &str) -> bool {
-        let counts = self.restart_counts.lock().expect("restart_counts poisoned");
-        counts.get(child_id).copied().unwrap_or(0) >= self.max_restarts_per_window
+        let mut stamps = self.restart_stamps.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let now = Instant::now();
+        let times = stamps.entry(child_id.to_string()).or_default();
+        times.retain(|at| now.duration_since(*at) < self.restart_window);
+        times.len() as u32 >= self.max_restarts_per_window
     }
 
-    /// 记一次重启
+    /// 记一次重启 (带时间窗衰减)
     fn record_restart(&self, child_id: &str) {
-        let mut counts = self.restart_counts.lock().expect("restart_counts poisoned");
-        *counts.entry(child_id.to_string()).or_insert(0) += 1;
+        let mut stamps = self.restart_stamps.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let now = Instant::now();
+        let times = stamps.entry(child_id.to_string()).or_default();
+        times.retain(|at| now.duration_since(*at) < self.restart_window);
+        times.push(now);
     }
 }
 
@@ -131,8 +138,7 @@ impl SubSupervisor for StdSubSupervisor {
         for spec in &self.children {
             if self
                 .handles
-                .lock()
-                .expect("handles poisoned")
+                .lock().unwrap_or_else(|poisoned| poisoned.into_inner())
                 .contains_key(&spec.id)
             {
                 return Err(SupervisorError::StartFailed(format!(
@@ -142,8 +148,7 @@ impl SubSupervisor for StdSubSupervisor {
             }
             let child = self.spawn_child(spec)?;
             self.handles
-                .lock()
-                .expect("handles poisoned")
+                .lock().unwrap_or_else(|poisoned| poisoned.into_inner())
                 .insert(spec.id.clone(), child);
         }
         Ok(())
@@ -152,7 +157,7 @@ impl SubSupervisor for StdSubSupervisor {
     fn stop(&mut self) -> Result<(), SupervisorError> {
         // 0 装 PASS: 真 kill (per v1 process:stop)
         // 0 装: 这里有 race 条件 (child 已退出 + handle 无效), 用 try_wait + kill fallback
-        let mut handles = self.handles.lock().expect("handles poisoned");
+        let mut handles = self.handles.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         for (id, child) in handles.iter_mut() {
             // 先 try_wait, 如果已退出, 不用 kill
             if let Ok(Some(_)) = child.try_wait() {
@@ -162,6 +167,10 @@ impl SubSupervisor for StdSubSupervisor {
             if let Err(e) = child.kill() {
                 return Err(SupervisorError::Io(format!("kill `{}` failed: {e}", id)));
             }
+            // L 组 (2026-09-24 审计): kill 只是发信号, 不 wait 子进程就变
+            // Unix 僵尸 (defunct) 占着进程表项。这里收尸; wait 失败不阻断
+            // stop 语义 (进程已收到 SIGKILL/TerminateProcess)。
+            let _ = child.wait();
         }
         handles.clear();
         Ok(())
@@ -329,6 +338,32 @@ mod tests {
         // 第 6 次: 超限
         let r = s.on_child_exit("c-1", ExitReason::Abnormal { code: 1 });
         assert!(matches!(r, Err(SupervisorError::RestartLimitExceeded(_))));
+    }
+
+    /// L 组 (2026-09-24 审计) 验收: 重启计数带时间窗衰减 —— 窗口滑过后
+    /// 限额重置 (旧实现是永久累加计数器, 一次抖动即永久锁死该 child)。
+    #[test]
+    fn restart_counters_decay_outside_the_window() {
+        let mut spec = ChildSpec::new("c-1", "/bin/true");
+        spec.restart = RestartStrategy::OneForOne;
+        let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
+        s.restart_window = Duration::from_millis(30);
+        for _ in 0..5 {
+            let _ = s
+                .on_child_exit("c-1", ExitReason::Abnormal { code: 1 })
+                .unwrap();
+        }
+        // 窗口内第 6 次: 超限
+        assert!(matches!(
+            s.on_child_exit("c-1", ExitReason::Abnormal { code: 1 }),
+            Err(SupervisorError::RestartLimitExceeded(_))
+        ));
+        // 滑过窗口: stamps 衰减, 限额重置
+        std::thread::sleep(Duration::from_millis(60));
+        let d = s
+            .on_child_exit("c-1", ExitReason::Abnormal { code: 1 })
+            .unwrap();
+        assert_eq!(d, RestartDecision::RestartNow);
     }
 
     /// RC-8 验收: unknown child → UnknownChild error

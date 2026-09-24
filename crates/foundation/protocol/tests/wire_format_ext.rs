@@ -127,8 +127,8 @@ fn ws_protocol_version_and_ttl_constants() {
 fn stream_bridge_concatenates_chunks() {
     // 推 2 个 chunk, finish 拿拼接结果
     let mut b = StreamBridge::new();
-    b.push_chunk("hello ");
-    b.push_chunk("world");
+    b.push_chunk("hello ").expect("within limits");
+    b.push_chunk("world").expect("within limits");
     assert_eq!(b.chunk_count(), 2);
     let s = b.finish().expect("finish utf8");
     assert_eq!(s, "hello world");
@@ -140,7 +140,8 @@ fn stream_bridge_concatenates_chunks() {
 fn stream_bridge_finish_invalid_utf8_returns_err() {
     // 推非法 UTF-8 字节 → finish 返 Err
     let mut b = StreamBridge::new();
-    b.push_chunk(&[0xFF, 0xFE, 0xFD][..]); // 单独 bytes 非法 UTF-8
+    b.push_chunk(&[0xFF, 0xFE, 0xFD][..])
+        .expect("within limits"); // 单独 bytes 非法 UTF-8
     let r = b.finish();
     assert!(matches!(r, Err(BridgeExtError::InvalidUtf8)), "got: {r:?}");
 }

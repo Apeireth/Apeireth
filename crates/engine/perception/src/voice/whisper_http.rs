@@ -49,6 +49,10 @@ const DEFAULT_MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 /// 进入错误链路).
 const MAX_ERROR_PREVIEW_BYTES: usize = 256;
 
+/// Retry-After 上限 (L2: 1 小时) — provider 可以要求更久, 但把调用方挂
+/// 超过 1 小时不是本模块的职责; 超出即 clamp。
+const MAX_RETRY_AFTER_MS: u64 = 60 * 60 * 1000;
+
 /// 真实 HTTP Whisper backend.
 ///
 /// 调用 OpenAI / MiniMax Whisper-compatible `/audio/transcriptions` 端点,
@@ -66,7 +70,7 @@ const MAX_ERROR_PREVIEW_BYTES: usize = 256;
 ///     StaticCredentials::new()
 ///         .with("provider.whisper.api_key", "sk-your-key-here-1234567890")
 /// );
-/// let backend = WhisperHttpBackend::openai(creds);
+/// let backend = WhisperHttpBackend::openai(creds).expect("client build");
 /// ```
 pub struct WhisperHttpBackend {
     /// HTTP 客户端 (复用连接池)
@@ -152,25 +156,40 @@ struct WhisperResponse {
 
 impl WhisperHttpBackend {
     /// 使用自定义配置构造.
-    pub fn new(config: WhisperHttpConfig, credentials: Arc<dyn CredentialResolver>) -> Self {
+    ///
+    /// L2: 改返 `Result` — `reqwest::Client::builder().build()` 在 TLS 后端不可用 /
+    /// 配置非法时返 `Err`, 旧实现 `.expect(...)` 把可恢复的构造失败升级成进程
+    /// panic (调用方无法处理, 也无法测试)。
+    pub fn new(
+        config: WhisperHttpConfig,
+        credentials: Arc<dyn CredentialResolver>,
+    ) -> Result<Self, PerceptionBackendError> {
         let client = reqwest::Client::builder()
             .timeout(config.timeout)
             .build()
-            .expect("reqwest client build should not fail with default TLS");
-        Self {
+            .map_err(|e| {
+                PerceptionBackendError::BackendUnavailable(format!(
+                    "failed to build HTTP client for whisper backend: {e}"
+                ))
+            })?;
+        Ok(Self {
             client,
             config,
             credentials,
-        }
+        })
     }
 
     /// OpenAI Whisper 快捷构造.
-    pub fn openai(credentials: Arc<dyn CredentialResolver>) -> Self {
+    pub fn openai(
+        credentials: Arc<dyn CredentialResolver>,
+    ) -> Result<Self, PerceptionBackendError> {
         Self::new(WhisperHttpConfig::openai(), credentials)
     }
 
     /// MiniMax Whisper-compatible 快捷构造.
-    pub fn minimax(credentials: Arc<dyn CredentialResolver>) -> Self {
+    pub fn minimax(
+        credentials: Arc<dyn CredentialResolver>,
+    ) -> Result<Self, PerceptionBackendError> {
         Self::new(WhisperHttpConfig::minimax(), credentials)
     }
 
@@ -399,13 +418,16 @@ impl VoiceBackend for WhisperHttpBackend {
         // 7. 检查 HTTP 状态码
         let status = response.status();
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            // 尝试从 Retry-After 头获取重试时间
+            // 尝试从 Retry-After 头获取重试时间 (秒).
+            // L2: `secs * 1000` 在 debug 下溢出 panic / release 回绕成小值 (疯狂重试);
+            // 同时 clamp 到 1 小时 — provider 返回 "86400" (1 天) 是合法的, 但把
+            // 调用方挂 24 小时不是本模块该做的事 (交给上层策略)。
             let retry_after_ms = response
                 .headers()
                 .get("retry-after")
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok())
-                .map(|secs| secs * 1000)
+                .map(|secs| secs.saturating_mul(1000).min(MAX_RETRY_AFTER_MS))
                 .unwrap_or(5000);
             return Err(PerceptionBackendError::RateLimited { retry_after_ms });
         }
@@ -474,7 +496,7 @@ mod tests {
     /// 无 credential → BackendUnavailable (0 装: 不假装能转写)
     #[tokio::test]
     async fn no_credential_returns_backend_unavailable() {
-        let backend = WhisperHttpBackend::openai(Arc::new(NoCredentials));
+        let backend = WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build");
         let result = backend
             .transcribe(AudioBuffer::empty(), LangHint::auto())
             .await;
@@ -498,7 +520,7 @@ mod tests {
     #[tokio::test]
     async fn short_api_key_returns_backend_unavailable() {
         let creds = Arc::new(StaticCredentials::new().with("provider.whisper.api_key", "short"));
-        let backend = WhisperHttpBackend::openai(creds);
+        let backend = WhisperHttpBackend::openai(creds).expect("whisper client build");
         let result = backend
             .transcribe(
                 AudioBuffer {
@@ -523,7 +545,7 @@ mod tests {
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
-        let backend = WhisperHttpBackend::openai(creds);
+        let backend = WhisperHttpBackend::openai(creds).expect("whisper client build");
         let result = backend
             .transcribe(AudioBuffer::empty(), LangHint::auto())
             .await;
@@ -542,7 +564,7 @@ mod tests {
     /// ping 无 credential → BackendUnavailable
     #[tokio::test]
     async fn ping_without_credential_fails() {
-        let backend = WhisperHttpBackend::openai(Arc::new(NoCredentials));
+        let backend = WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build");
         let result = backend.ping().await;
         assert!(result.is_err(), "ping must fail without credential");
     }
@@ -553,7 +575,7 @@ mod tests {
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
-        let backend = WhisperHttpBackend::openai(creds);
+        let backend = WhisperHttpBackend::openai(creds).expect("whisper client build");
         let result = backend.ping().await;
         assert!(result.is_ok(), "ping must succeed with valid credential");
     }
@@ -571,7 +593,7 @@ mod tests {
     /// backend name 验证
     #[test]
     fn backend_name_is_whisper_http() {
-        let backend = WhisperHttpBackend::openai(Arc::new(NoCredentials));
+        let backend = WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build");
         assert_eq!(backend.name(), "whisper_http");
     }
 
@@ -583,7 +605,7 @@ mod tests {
 
         // Arc<dyn VoiceBackend> 注入路径
         let backend: Arc<dyn VoiceBackend> =
-            Arc::new(WhisperHttpBackend::openai(Arc::new(NoCredentials)));
+            Arc::new(WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build"));
         let _clone = backend.clone();
     }
 
@@ -646,7 +668,7 @@ mod tests {
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
-        let backend = WhisperHttpBackend::new(config, creds);
+        let backend = WhisperHttpBackend::new(config, creds).expect("whisper client build");
 
         // 发送转写请求
         let audio = AudioBuffer {
@@ -692,7 +714,7 @@ mod tests {
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
-        let backend = WhisperHttpBackend::new(config, creds);
+        let backend = WhisperHttpBackend::new(config, creds).expect("whisper client build");
         let result = backend
             .transcribe(
                 AudioBuffer {
@@ -766,7 +788,7 @@ mod tests {
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
-        let backend = WhisperHttpBackend::new(config, creds);
+        let backend = WhisperHttpBackend::new(config, creds).expect("whisper client build");
         let audio = AudioBuffer {
             bytes: vec![0u8; 11], // > max_upload_bytes = 10
             duration_ms: 1000,
@@ -812,7 +834,7 @@ mod tests {
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
-        let backend = WhisperHttpBackend::new(config, creds);
+        let backend = WhisperHttpBackend::new(config, creds).expect("whisper client build");
         let audio = AudioBuffer {
             bytes: vec![0u8; 100],
             duration_ms: 1000,
@@ -874,7 +896,7 @@ mod tests {
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
-        let backend = WhisperHttpBackend::new(config, creds);
+        let backend = WhisperHttpBackend::new(config, creds).expect("whisper client build");
         let audio = AudioBuffer {
             bytes: vec![0u8; 100],
             duration_ms: 1000,
@@ -935,7 +957,7 @@ mod tests {
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
-        let backend = WhisperHttpBackend::new(config, creds);
+        let backend = WhisperHttpBackend::new(config, creds).expect("whisper client build");
         let audio = AudioBuffer {
             bytes: vec![0u8; 100],
             duration_ms: 1000,
@@ -1055,7 +1077,7 @@ mod tests {
         let creds = Arc::new(
             StaticCredentials::new().with("provider.whisper.api_key", "sk-test-1234567890abcdef"),
         );
-        let backend = WhisperHttpBackend::new(config, creds);
+        let backend = WhisperHttpBackend::new(config, creds).expect("whisper client build");
         let err = backend
             .transcribe(
                 AudioBuffer {
@@ -1101,7 +1123,7 @@ mod tests {
     async fn short_key_error_does_not_echo_key_value() {
         let creds =
             Arc::new(StaticCredentials::new().with("provider.whisper.api_key", "XYZZY_PLUGH_ZZ"));
-        let backend = WhisperHttpBackend::openai(creds);
+        let backend = WhisperHttpBackend::openai(creds).expect("whisper client build");
         let err = backend
             .transcribe(
                 AudioBuffer {

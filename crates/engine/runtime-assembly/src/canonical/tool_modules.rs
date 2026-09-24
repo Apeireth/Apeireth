@@ -183,7 +183,12 @@ impl McpModule {
     /// Rejects duplicate capability ids and duplicate model-facing names inside
     /// this module. Cross-module collisions are rejected by the runtime.
     pub fn register_tool(&self, tool: Arc<dyn ToolCapability>) -> Result<(), String> {
-        let mut tools = self.tools.write().expect("mcp lock poisoned");
+        // poison 容错 (2026-09-24 修复轮补漏): 锁保护的是可重建的工具注册表,
+        // 持锁线程 panic 不应让后续注册/查询连锁 panic (与 G 组 poison 修复同模式)。
+        let mut tools = self
+            .tools
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         super::module::reject_tool_identity_collisions(&tools, &[Arc::clone(&tool)], "mcp")?;
         tools.push(tool);
         Ok(())
@@ -195,7 +200,7 @@ impl McpModule {
     pub fn unregister_tool(&self, capability_id: &apeireth_core::kernel::CapabilityId) {
         self.tools
             .write()
-            .expect("mcp lock poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .retain(|t| t.id() != capability_id);
     }
 }
@@ -212,7 +217,10 @@ impl CapabilityProvider for McpModule {
     }
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
-        self.tools.read().expect("mcp lock poisoned").clone()
+        self.tools
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 }
 

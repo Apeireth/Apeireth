@@ -7,11 +7,19 @@
 //! **它不是加密保险库**: 文件后端在磁盘上是**明文静态存储** (靠 OS 文件权限收敛访问),
 //! 加密静态存储 (KMS / age / OS keyring) 属**后续层**, 此处如实标注不假装。
 //!
-//! **文件权限 600 语义**: unix 下 `set_permissions(0o600)` 收敛到属主读写;
-//! 非 unix (Windows) 依赖默认 ACL, 语义等价由部署保证, 此处标注。
+//! **文件权限 600 语义**: unix 下临时文件以 `mode(0o600)` **创建**后 `rename`
+//! 原子替换 (unix) — 凭据自落盘起即 0600, 无"先写后 chmod"的短暂暴露窗口;
+//! 非 unix (Windows) 无 unix mode 语义, 保持直接写, 权限依赖默认 ACL,
+//! 语义等价由部署保证, 此处标注 (0 假装边界).
+//!
+//! **原子写 + 进程内串行化 (M1 修复)**: unix 下 `save` 走
+//! 临时文件 0600 + `sync_all` + `rename` (崩溃不留半写, 不丢全表);
+//! `set`/`delete` 的 load-modify-save 由进程内 [`std::sync::Mutex`] 串行化
+//! (trait 方法是 `&self`, 调用方无需自行同步; 跨进程并发仍依赖 OS 文件语义).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use crate::error::{CredentialsError, Result};
 use crate::secret::SecretString;
@@ -60,8 +68,14 @@ pub fn validate_service_name(service: &str) -> Result<()> {
 ///
 /// 单个 JSON 文件承载 `服务名 -> 明文` 映射。**明文静态存储** (0 假装边界见模块头),
 /// 靠文件权限 600 语义收敛访问。加密后端属后续层。
+///
+/// `set`/`delete` 的读-改-写由进程内写锁串行化; 写路径为临时文件 + rename
+/// 原子替换 (unix 创建即 0600, 见 [`FileCredentialsStore::save`])。
 pub struct FileCredentialsStore {
     path: PathBuf,
+    /// 进程内写锁: 串行化 `set`/`delete` 的 load-modify-save (M1②);
+    /// poison 后取守卫值继续 (凭据表状态完整性优先于线程 unwind 传播).
+    write_lock: Mutex<()>,
 }
 
 impl FileCredentialsStore {
@@ -76,7 +90,10 @@ impl FileCredentialsStore {
                 })?;
             }
         }
-        Ok(Self { path })
+        Ok(Self {
+            path,
+            write_lock: Mutex::new(()),
+        })
     }
 
     /// 存储文件路径 (元信息)。
@@ -99,7 +116,53 @@ impl FileCredentialsStore {
         })
     }
 
-    /// 原子写回全表 + 权限 600 语义。
+    /// 原子写回全表 (unix: 临时文件 0600 创建 + fsync + rename; 非 unix: 直接写, 如实标注).
+    ///
+    /// M1①③: unix 下凭据**自落盘起**即 0600 (无"先 write 后 chmod"的 umask
+    /// 0644 暴露窗口), 且 rename 原子替换 — 崩溃不会留下半写 JSON 丢全表.
+    #[cfg(unix)]
+    fn save(&self, map: &BTreeMap<String, String>) -> Result<()> {
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+        let json = serde_json::to_string_pretty(map).map_err(|e| CredentialsError::Format {
+            service: "<store>".into(),
+            message: e.to_string(),
+        })?;
+        let tmp = PathBuf::from(format!("{}.tmp", self.path.display()));
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)
+            .map_err(|source| CredentialsError::Io {
+                service: "<store>".into(),
+                source,
+            })?;
+        // tmp 若是 crash 残留旧文件, create 不改其 mode — 显式收敛一次
+        let _ = f.set_permissions(std::fs::Permissions::from_mode(0o600));
+        f.write_all(json.as_bytes())
+            .map_err(|source| CredentialsError::Io {
+                service: "<store>".into(),
+                source,
+            })?;
+        f.sync_all().map_err(|source| CredentialsError::Io {
+            service: "<store>".into(),
+            source,
+        })?;
+        drop(f);
+        std::fs::rename(&tmp, &self.path).map_err(|source| CredentialsError::Io {
+            service: "<store>".into(),
+            source,
+        })?;
+        self.apply_owner_only_permissions();
+        Ok(())
+    }
+
+    /// 非 unix: 无 unix mode 语义 — 保持直接写 (0 假装, 权限收敛如实标注);
+    /// 进程内写锁串行化仍生效 (M1②), 但无 0600 创建语义, 崩溃半写窗口亦在.
+    #[cfg(not(unix))]
     fn save(&self, map: &BTreeMap<String, String>) -> Result<()> {
         let json = serde_json::to_string_pretty(map).map_err(|e| CredentialsError::Format {
             service: "<store>".into(),
@@ -139,6 +202,11 @@ impl CredentialsStore for FileCredentialsStore {
 
     fn set(&self, service: &str, secret: SecretString) -> Result<()> {
         validate_service_name(service)?;
+        // M1②: 进程内写锁串行化 load-modify-save (防并发丢更新).
+        let _guard = self
+            .write_lock
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         let mut map = self.load()?;
         map.insert(service.to_string(), secret.expose().to_string());
         self.save(&map)
@@ -146,6 +214,11 @@ impl CredentialsStore for FileCredentialsStore {
 
     fn delete(&self, service: &str) -> Result<()> {
         validate_service_name(service)?;
+        // M1②: 同 set — 整个 load-modify-save 在写锁内.
+        let _guard = self
+            .write_lock
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         let mut map = self.load()?;
         if map.remove(service).is_none() {
             return Err(CredentialsError::UnknownService(service.to_string()));
@@ -255,6 +328,48 @@ mod tests {
         assert!(validate_service_name("my-service.v2_prod").is_ok());
         assert!(validate_service_name("").is_err());
         assert!(validate_service_name("a/b").is_err());
+    }
+
+    #[test]
+    fn concurrent_sets_do_not_lose_updates() {
+        // M1② 回归: 多线程并发 set/delete 不得丢更新 (进程内写锁串行化).
+        let s = std::sync::Arc::new(tmp_store("concurrent"));
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let s = s.clone();
+            handles.push(std::thread::spawn(move || {
+                for j in 0..20 {
+                    let name = format!("svc-{i}-{j}");
+                    s.set(&name, SecretString::new("v")).unwrap();
+                }
+            }));
+        }
+        for h in handles {
+            h.join().expect("thread");
+        }
+        // 8 * 20 = 160 条必须全部在 (无锁旧实现会大规模丢更新).
+        assert_eq!(s.list().unwrap().len(), 160, "并发 set 不应丢更新");
+        let _ = std::fs::remove_dir_all(s.path().parent().unwrap());
+    }
+
+    #[test]
+    fn corrupted_file_refuses_set_instead_of_overwriting() {
+        // M1③/H5 同类语义: 文件损坏 (非 JSON) 时 set 必须报错拒绝,
+        // 不得"空表起步"把损坏文件里可能恢复的内容静默清掉.
+        let s = tmp_store("corrupt");
+        std::fs::write(s.path(), "{ this is not json").unwrap();
+        let before = std::fs::read(s.path()).unwrap();
+        let e = s.set("svc", SecretString::new("v"));
+        assert!(
+            matches!(e, Err(CredentialsError::Format { .. })),
+            "损坏文件上 set 应拒绝: {e:?}"
+        );
+        assert_eq!(
+            std::fs::read(s.path()).unwrap(),
+            before,
+            "损坏文件不得被静默覆盖"
+        );
+        let _ = std::fs::remove_dir_all(s.path().parent().unwrap());
     }
 
     #[cfg(unix)]

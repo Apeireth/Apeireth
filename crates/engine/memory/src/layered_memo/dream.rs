@@ -31,13 +31,13 @@ impl DreamSubsystem {
                 count += 1;
             }
         }
-        let mut ops = self.operations.lock().expect("poisoned");
+        let mut ops = self.operations.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *ops += count;
         count
     }
 
     pub fn total_operations(&self) -> usize {
-        *self.operations.lock().expect("poisoned")
+        *self.operations.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 

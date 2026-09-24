@@ -53,6 +53,16 @@ const DEFAULT_RECALL_LIMIT: usize = 5;
 const DEFAULT_MAX_CONTEXT_CHARS: usize = 4_000;
 const MAX_TELEMETRY_EVENTS: usize = 4_096;
 
+/// poison 容错锁 (L 组, cognitive.rs 15+ 处 expect)。
+///
+/// 认知模块的 telemetry / 指标 / 访问记录锁都在模块热路径上: 持锁线程一旦
+/// panic (例如一次 telemetry sink 的 panic), 旧实现的 `.expect(...)` 会把
+/// 之后每一次 hook 调用都变成 panic —— 一个模块的失误升级为整个运行时的
+/// 级联崩溃。锁保护的都是可重建的非权威状态, 取回内部数据继续运行。
+fn lock_or_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Low-cardinality, non-sensitive module telemetry.
 ///
 /// The counters intentionally contain no prompt, response, memory, or
@@ -99,7 +109,7 @@ pub struct CognitiveTelemetry {
 
 impl CognitiveTelemetry {
     pub(crate) fn record(&self, event: CognitiveModuleEvent) {
-        let mut events = self.events.lock().expect("cognitive telemetry mutex");
+        let mut events = lock_or_recover(&self.events);
         if events.len() == MAX_TELEMETRY_EVENTS {
             events.remove(0);
         }
@@ -108,10 +118,7 @@ impl CognitiveTelemetry {
 
     /// Snapshot and clear no state; callers receive a stable copy.
     pub fn events(&self) -> Vec<CognitiveModuleEvent> {
-        self.events
-            .lock()
-            .expect("cognitive telemetry mutex")
-            .clone()
+        lock_or_recover(&self.events).clone()
     }
 }
 
@@ -166,24 +173,17 @@ pub struct MemoryRecallAccessRecorder {
 
 impl MemoryRecallAccessRecorder {
     fn clear(&self, session_id: &str) {
-        self.selected_by_session
-            .lock()
-            .expect("memory access recorder mutex")
-            .remove(session_id);
+        lock_or_recover(&self.selected_by_session).remove(session_id);
     }
 
     fn record_selected(&self, session_id: &str, access: &SelectedMemoryAccess) {
-        self.selected_by_session
-            .lock()
-            .expect("memory access recorder mutex")
+        lock_or_recover(&self.selected_by_session)
             .insert(session_id.to_owned(), access.selected_candidate_ids.clone());
     }
 
     /// Return the selected candidate IDs for the latest recall of a session.
     pub fn selected_candidate_ids(&self, session_id: &str) -> Vec<String> {
-        self.selected_by_session
-            .lock()
-            .expect("memory access recorder mutex")
+        lock_or_recover(&self.selected_by_session)
             .get(session_id)
             .cloned()
             .unwrap_or_default()
@@ -203,7 +203,7 @@ struct ModuleMetrics {
 
 impl ModuleMetrics {
     fn attach_telemetry(&self, telemetry: Arc<CognitiveTelemetry>) {
-        *self.telemetry.lock().expect("cognitive telemetry mutex") = Some(telemetry);
+        *lock_or_recover(&self.telemetry) = Some(telemetry);
     }
 
     fn record(
@@ -218,15 +218,9 @@ impl ModuleMetrics {
         self.side_calls.fetch_add(side_calls, Ordering::Relaxed);
         let duration_ms = started.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.last_duration_ms.store(duration_ms, Ordering::Relaxed);
-        *self.last_hook.lock().expect("module metrics mutex") = Some(format!("{hook:?}"));
-        *self.last_directive.lock().expect("module metrics mutex") =
-            Some(directive_name(directive).to_string());
-        if let Some(telemetry) = self
-            .telemetry
-            .lock()
-            .expect("cognitive telemetry mutex")
-            .as_ref()
-        {
+        *lock_or_recover(&self.last_hook) = Some(format!("{hook:?}"));
+        *lock_or_recover(&self.last_directive) = Some(directive_name(directive).to_string());
+        if let Some(telemetry) = lock_or_recover(&self.telemetry).as_ref() {
             telemetry.record(CognitiveModuleEvent {
                 module_id: module_id.to_string(),
                 hook: format!("{hook:?}"),
@@ -246,12 +240,8 @@ impl ModuleMetrics {
             hook_calls: self.hook_calls.load(Ordering::Relaxed),
             side_calls: self.side_calls.load(Ordering::Relaxed),
             warnings: self.warnings.load(Ordering::Relaxed),
-            last_hook: self.last_hook.lock().expect("module metrics mutex").clone(),
-            last_directive: self
-                .last_directive
-                .lock()
-                .expect("module metrics mutex")
-                .clone(),
+            last_hook: lock_or_recover(&self.last_hook).clone(),
+            last_directive: lock_or_recover(&self.last_directive).clone(),
             last_duration_ms: self.last_duration_ms.load(Ordering::Relaxed),
         }
     }
@@ -1985,10 +1975,7 @@ impl AgentModule for JudgeModule {
     ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
         if hook == HookPoint::TurnStart {
-            self.retries
-                .lock()
-                .expect("judge retries mutex")
-                .remove(ctx.session_id);
+            lock_or_recover(&self.retries).remove(ctx.session_id);
             self.observations.clear(ctx.session_id);
         }
 
@@ -2029,7 +2016,7 @@ impl AgentModule for JudgeModule {
                             ModuleOutcome::stop("AI Judge rejected the candidate")
                         }
                         JudgeVerdict::Retry if judged.score < self.config.retry_below => {
-                            let mut retries = self.retries.lock().expect("judge retries mutex");
+                            let mut retries = lock_or_recover(&self.retries);
                             let retry_count = retries.entry(*ctx.session_id).or_default();
                             if *retry_count < self.config.max_retries {
                                 *retry_count += 1;

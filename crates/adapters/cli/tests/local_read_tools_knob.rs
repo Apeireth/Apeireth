@@ -111,9 +111,10 @@ async fn decision(runtime: &Runtime, capability: &str) -> Decision {
         .decision
 }
 
-async fn assert_allow(runtime: &Runtime, capability: &str) {
+async fn assert_allow(runtime: &Runtime, capability: &str) -> Decision {
     let actual = decision(runtime, capability).await;
     assert!(actual.is_allowed(), "{capability}: {actual}");
+    actual
 }
 
 async fn assert_deny(runtime: &Runtime, capability: &str) {
@@ -124,21 +125,36 @@ async fn assert_deny(runtime: &Runtime, capability: &str) {
     );
 }
 
-/// Assert the local read tools match `allowed`, and `tool.repo` stays granted.
+/// 本地只读工具旋钮 = 工具的**授权** (grant) 维度: revoked = Deny, granted = 非 Deny。
+///
+/// H3 修复 (2026-09-24 审计) 之后语义分层: 本测试在**无 TurnSecurityContext**
+/// 的裸派发上评估治理 —— 对带写语义的能力 (`tool.filesystem` 的 descriptor 是
+/// `[Read, Write]`, 见 guard/semantics.rs:481-492) 现在是 RequireApproval
+/// (intent 缺失 fail-closed), 而非 Allow; 纯读能力 (`tool.search`/`tool.repo`)
+/// 仍 Allow。旋钮只负责"是否授权", 审批维度由 turn 内的 intent 绑定与 guard
+/// 测试套覆盖, 故 granted 的断言是"非 Deny"。
 async fn assert_local_read_tools(runtime: &Runtime, allowed: bool) {
-    for capability in ["tool.filesystem", "tool.search"] {
-        if allowed {
-            assert_allow(runtime, capability).await;
-        } else {
+    if allowed {
+        for capability in ["tool.filesystem", "tool.search"] {
+            let actual = decision(runtime, capability).await;
+            assert!(
+                !matches!(actual, Decision::Deny { .. }),
+                "{capability}: granted 时不得 Deny, got: {actual}"
+            );
+        }
+    } else {
+        for capability in ["tool.filesystem", "tool.search"] {
             assert_deny(runtime, capability).await;
         }
     }
+    // tool.repo 是纯读能力: 无 turn 上下文也不触 H3 升级门, 旋钮外恒 Allow。
     assert_allow(runtime, "tool.repo").await;
 }
 
 #[tokio::test]
 async fn local_read_tools_default_to_granted() {
-    let _lock = ENV_LOCK.lock().unwrap();
+    // poison 安全: 前一个测试 panic 不应让后续测试连锁 PoisonError (掩盖真实失败)。
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(GUARDED_KEYS);
     guard.clear_all();
 
@@ -148,7 +164,8 @@ async fn local_read_tools_default_to_granted() {
 
 #[tokio::test]
 async fn disable_env_rejects_local_read_tools() {
-    let _lock = ENV_LOCK.lock().unwrap();
+    // poison 安全: 前一个测试 panic 不应让后续测试连锁 PoisonError (掩盖真实失败)。
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(GUARDED_KEYS);
     guard.clear_all();
     std::env::set_var(DISABLE_LOCAL_READ_TOOLS_ENV, "1");
@@ -159,7 +176,8 @@ async fn disable_env_rejects_local_read_tools() {
 
 #[tokio::test]
 async fn legacy_enable_env_still_grants_local_read_tools() {
-    let _lock = ENV_LOCK.lock().unwrap();
+    // poison 安全: 前一个测试 panic 不应让后续测试连锁 PoisonError (掩盖真实失败)。
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(GUARDED_KEYS);
     guard.clear_all();
     std::env::set_var(ENABLE_LOCAL_READ_TOOLS_ENV, "1");
@@ -170,7 +188,8 @@ async fn legacy_enable_env_still_grants_local_read_tools() {
 
 #[tokio::test]
 async fn disable_wins_over_enable() {
-    let _lock = ENV_LOCK.lock().unwrap();
+    // poison 安全: 前一个测试 panic 不应让后续测试连锁 PoisonError (掩盖真实失败)。
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(GUARDED_KEYS);
     guard.clear_all();
     std::env::set_var(ENABLE_LOCAL_READ_TOOLS_ENV, "1");

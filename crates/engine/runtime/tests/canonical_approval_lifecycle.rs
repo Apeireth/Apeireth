@@ -11,19 +11,21 @@ use apeireth_core::kernel::{
     CapabilityId, Clock, ModelId, PluginId, SessionId, Timestamp, VirtualClock,
 };
 use apeireth_governance::{
-    GovernancePipeline, Permission, PermissionGovernanceHook, PermissionPolicy,
+    GovernanceHook, GovernancePipeline, GovernanceRequest, IntentClass, OperationClass, Permission,
+    PermissionGovernanceHook, PermissionPolicy, TaskIntentEnvelopeV1, TurnSecurityContext,
 };
 use apeireth_plugin::{
     CapabilityKind, FrozenInvocation, Plugin, PluginContext, PluginManifest, PluginResult,
     ProviderCapability, ProviderError, ToolCapability,
 };
 use apeireth_protocol::canonical::{
-    ContentPart, ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse,
+    ContentPart, MessageRole, ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse,
     NormalizedTool, NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
+use apeireth_runtime::canonical::execute::MAX_TOOL_CALLS_PER_ROUND;
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, ApprovalStatus, InMemorySessionStore, Runtime,
-    SessionStore, TurnOutcome, TurnRequest,
+    SessionStore, TraceEvent, TurnOutcome, TurnRequest,
 };
 use async_trait::async_trait;
 
@@ -365,6 +367,241 @@ fn pending_view(outcome: &TurnOutcome) -> apeireth_runtime::canonical::PendingAp
         TurnOutcome::PendingApproval(view) => view.clone(),
         TurnOutcome::Completed(_) => panic!("expected PendingApproval"),
     }
+}
+
+// ---------------------------------------------------------------------------
+// M20 / M27 regressions
+// ---------------------------------------------------------------------------
+
+/// 记录每次治理评估看到的 intent_id (None = 该评估没有安全上下文)。
+struct ContextRecordingHook {
+    inner: Arc<dyn GovernanceHook>,
+    seen_intents: Mutex<Vec<Option<String>>>,
+}
+
+impl ContextRecordingHook {
+    fn new(inner: Arc<dyn GovernanceHook>) -> Arc<Self> {
+        Arc::new(Self {
+            inner,
+            seen_intents: Mutex::new(Vec::new()),
+        })
+    }
+
+    fn seen_intents(&self) -> Vec<Option<String>> {
+        self.seen_intents.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl GovernanceHook for ContextRecordingHook {
+    fn name(&self) -> &str {
+        "context_recording"
+    }
+
+    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> apeireth_governance::Decision {
+        self.seen_intents.lock().unwrap().push(
+            request
+                .security_context
+                .and_then(|context| context.intent.as_ref())
+                .map(|intent| intent.intent_id.clone()),
+        );
+        self.inner.evaluate(request).await
+    }
+}
+
+fn read_only_intent() -> TaskIntentEnvelopeV1 {
+    let mut intent = TaskIntentEnvelopeV1::unknown("session-under-test", "trace-under-test");
+    intent.intent_class = IntentClass::ReadOnlyInspection;
+    intent.requested_operations = vec![OperationClass::Read];
+    intent.allowed_effects = vec![OperationClass::Read];
+    intent.allowed_scopes = vec!["workspace_read".to_string()];
+    intent
+}
+
+/// M27 回归: 审批恢复轮次必须带着冻结的 security context。
+///
+/// 旧实现在两处恢复路径都传 `None` 作为 security_context, 恢复轮次的每次
+/// 治理评估 (以及 guard 的 intent 对齐层) 都看到"未绑定 intent", 高危效果
+/// 因此从 Deny/RequireApproval 静默降级 (H3 的放大路径)。
+#[tokio::test]
+async fn approval_resume_preserves_the_turn_security_context() {
+    let store = Arc::new(InMemorySessionStore::new());
+    let counting = CountingPlugin::new();
+    let provider = FakeProvider::new(
+        "provider.fake",
+        vec![
+            ProviderStep::ToolCalls(three_tool_calls()),
+            ProviderStep::Say("all done"),
+        ],
+    );
+
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.allowed_a".into()));
+    policy.grant(Permission::ExecuteTool("tool.approval_b".into()));
+    policy.grant(Permission::ExecuteTool("tool.allowed_c".into()));
+    policy.require_approval_for("tool.approval_b");
+
+    let recorder = ContextRecordingHook::new(Arc::new(PermissionGovernanceHook::new(policy)));
+    let runtime = Runtime::builder()
+        .with_clock(fixed_clock())
+        .with_session_store(store)
+        .with_governance(recorder.clone())
+        .with_plugin(counting.clone())
+        .with_plugin(ProviderPlugin::new(provider))
+        .with_default_model(MODEL)
+        .with_max_rounds(4)
+        .build()
+        .await
+        .unwrap();
+
+    let session = SessionId::new();
+    let intent = read_only_intent();
+    let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
+    let outcome = runtime
+        .execute_outcome(
+            TurnRequest::new(session, "run three tools").with_security_context(context.clone()),
+        )
+        .await
+        .unwrap();
+    let view = pending_view(&outcome);
+
+    let before_pause = recorder.seen_intents();
+    assert!(
+        !before_pause.is_empty()
+            && before_pause.iter().all(Option::is_some),
+        "every pre-pause evaluation must see the bound intent: {before_pause:?}"
+    );
+    let bound_intent_id = before_pause[0].clone();
+
+    let resolution = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .unwrap();
+    assert!(matches!(
+        resolution,
+        ApprovalResolution::Resumed(TurnOutcome::Completed(_))
+    ));
+
+    let after_resume = recorder.seen_intents();
+    let resumed: Vec<_> = after_resume.iter().skip(before_pause.len()).collect();
+    assert!(
+        !resumed.is_empty() && resumed.iter().all(|id| **id == bound_intent_id),
+        "resumed evaluations must still carry the frozen intent: {after_resume:?}"
+    );
+
+    // 冻结点本身也把上下文写进了持久化的 continuation。
+    let stored = runtime
+        .sessions()
+        .load(&session)
+        .await
+        .unwrap()
+        .expect("session persisted");
+    let frozen = stored.approvals.get(&view.approval_id).unwrap();
+    assert_eq!(
+        frozen
+            .continuation
+            .security_context
+            .as_ref()
+            .and_then(|context| context.intent.as_ref())
+            .map(|intent| intent.intent_id.clone()),
+        bound_intent_id,
+        "the frozen continuation must carry the turn security context"
+    );
+}
+
+/// M20 回归: 单轮 tool_calls 上限 (16)。模型单轮塞 20 个调用 → 只派发前 16,
+/// 其余得到合成错误结果 (transcript 保持合法), 且 trace/ToolCallsTruncated
+/// 留痕 —— 不静默丢弃。
+#[tokio::test]
+async fn a_single_round_dispatches_at_most_the_tool_call_limit() {
+    let store = Arc::new(InMemorySessionStore::new());
+    let counting = CountingPlugin::new();
+    let burst = (0..MAX_TOOL_CALLS_PER_ROUND + 4)
+        .map(|index| ToolCall {
+            id: format!("call_a{index}"),
+            name: TOOL_A.into(),
+            arguments: serde_json::json!({}),
+        })
+        .collect::<Vec<_>>();
+    let provider = FakeProvider::new(
+        "provider.fake",
+        vec![
+            ProviderStep::ToolCalls(burst.clone()),
+            ProviderStep::Say("done"),
+        ],
+    );
+
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.allowed_a".into()));
+
+    let runtime = Runtime::builder()
+        .with_clock(fixed_clock())
+        .with_session_store(store)
+        .with_governance(Arc::new(GovernancePipeline::new().with(Arc::new(
+            PermissionGovernanceHook::new(policy),
+        ))))
+        .with_plugin(counting.clone())
+        .with_plugin(ProviderPlugin::new(provider))
+        .with_default_model(MODEL)
+        .with_max_rounds(4)
+        .build()
+        .await
+        .unwrap();
+
+    let session = SessionId::new();
+    let response = match runtime
+        .execute_outcome(TurnRequest::new(session, "burst of calls"))
+        .await
+        .unwrap()
+    {
+        TurnOutcome::Completed(response) => response,
+        other => panic!("expected Completed, got {other:?}"),
+    };
+
+    assert_eq!(response.text, "done");
+    assert_eq!(
+        counting.count(Count::A),
+        MAX_TOOL_CALLS_PER_ROUND,
+        "only the capped number of calls may be dispatched"
+    );
+    assert!(
+        response.trace.events().any(|event| matches!(
+            event,
+            TraceEvent::ToolCallsTruncated {
+                requested,
+                kept,
+                ..
+            } if *requested == burst.len() && *kept == MAX_TOOL_CALLS_PER_ROUND
+        )),
+        "the truncation must be visible in the trace"
+    );
+
+    // assistant 消息里的每一次 tool call 都有对应结果 (4 个是合成错误),
+    // 否则发给 provider 的 transcript 含有无答案的 tool call。
+    let stored = runtime
+        .sessions()
+        .load(&session)
+        .await
+        .unwrap()
+        .expect("session persisted");
+    let tool_results = stored
+        .messages
+        .iter()
+        .filter(|message| message.role == MessageRole::Tool)
+        .count();
+    assert_eq!(tool_results, burst.len());
+    let dropped_results = stored
+        .messages
+        .iter()
+        .filter(|message| message.role == MessageRole::Tool)
+        .filter(|message| {
+            message
+                .content
+                .iter()
+                .any(|part| matches!(part, ContentPart::Text { text } if text.contains("single-round tool call limit")))
+        })
+        .count();
+    assert_eq!(dropped_results, burst.len() - MAX_TOOL_CALLS_PER_ROUND);
 }
 
 // ---------------------------------------------------------------------------

@@ -66,12 +66,24 @@ pub const TYPICAL_API_KEY_LENGTH: usize = 32;
 ///
 /// **当前 skeleton 用 String 包装** (跟 livekit / sandbox / lark 1:1 对齐). R21 续真接时
 /// 改成 `apeireth_keyring::SecretBytes` 或 `secrecy::SecretString`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// **M5 修复**: Debug 手写脱敏 — derive(Debug) 会让一次 `{:?}` / `dbg!` 把 API Key
+/// 明文落进日志/错误面板. Serialise 保持 (wire 兼容), 只修 Debug 泄露面.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ApiKeyHolder {
     /// API Key (从 keyring get, **绝不存明文**)
     api_key: Option<String>,
     /// 是否已从 keyring 加载
     loaded_from_keyring: bool,
+}
+
+impl std::fmt::Debug for ApiKeyHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiKeyHolder")
+            .field("api_key", &self.api_key.as_ref().map(|_| "[redacted]"))
+            .field("loaded_from_keyring", &self.loaded_from_keyring)
+            .finish()
+    }
 }
 
 impl ApiKeyHolder {
@@ -140,7 +152,9 @@ impl Default for ApiKeyHolder {
 /// - 响应: `{ "access_token": "eyJ...", "expires_in": 3600, "token_type": "Bearer" }`
 ///
 /// **当前 skeleton 不真调 API** (per R20 阶段 4 估补, R21 续真接 `reqwest` crate).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// **M5 修复**: Debug 手写脱敏 (`token` 是 bearer access token = 长期秘密, derive(Debug) 即泄露面).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AccessToken {
     /// API Key 标识 (per token 来源标识, 不暴露原值)
     pub api_key_id: String,
@@ -150,6 +164,17 @@ pub struct AccessToken {
     pub expire_at_secs: u64,
     /// 创建时间戳 (秒, UNIX_EPOCH 起, 用于判断是否需要刷新)
     pub created_at_secs: u64,
+}
+
+impl std::fmt::Debug for AccessToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AccessToken")
+            .field("api_key_id", &self.api_key_id)
+            .field("token", &"[redacted]")
+            .field("expire_at_secs", &self.expire_at_secs)
+            .field("created_at_secs", &self.created_at_secs)
+            .finish()
+    }
 }
 
 impl AccessToken {
@@ -280,6 +305,21 @@ mod tests {
         assert!(!holder.loaded_from_keyring());
     }
 
+    /// M5: ApiKeyHolder Debug 脱敏.
+    #[test]
+    fn k1_api_key_holder_debug_is_redacted() {
+        let mut holder = ApiKeyHolder::empty();
+        holder
+            .set("sk-ant-voice-abcdef1234567890xyz".to_string())
+            .expect("valid api key must succeed");
+        let dbg = format!("{holder:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(
+            !dbg.contains("sk-ant-voice-abcdef1234567890xyz"),
+            "Debug 0 泄 api_key: {dbg}"
+        );
+    }
+
     // ---- §3 AccessToken ----
 
     #[test]
@@ -329,5 +369,24 @@ mod tests {
         let remaining = token.remaining_ttl_secs();
         // 剩余 TTL 应 ≥ 3595s
         assert!(remaining >= 3595);
+    }
+
+    /// M5: AccessToken Debug 脱敏 (token = bearer secret).
+    #[test]
+    fn access_token_debug_is_redacted() {
+        let token = AccessToken::new(
+            "ak_abc123def456".to_string(),
+            "eyJhbGciOiJIUzI1NiJ9.secret".to_string(),
+            3600,
+        )
+        .expect("valid access token must succeed");
+        let dbg = format!("{token:?}");
+        assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+        assert!(
+            !dbg.contains("eyJhbGciOiJIUzI1NiJ9.secret"),
+            "Debug 0 泄 token: {dbg}"
+        );
+        // api_key_id 是非秘密标识, 保留可见
+        assert!(dbg.contains("ak_abc123def456"), "api_key_id 应可见: {dbg}");
     }
 }

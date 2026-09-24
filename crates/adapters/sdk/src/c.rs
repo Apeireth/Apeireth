@@ -13,6 +13,10 @@
 //! 4. `const char* apeireth_sdk_compile_info(void)` — 返 "rustc X.Y.Z" + features
 //! 5. `void apeireth_sdk_free_string(char* ptr)` — 释放 char* (Rust 分配)
 //!
+//! **所有权契约 (L 组修复后统一)**: fn #2 `hash_request` 返 Rust 堆分配, caller **必须**
+//! 经 fn #5 释放; fn #3/#4 `version` / `compile_info` 返 `OnceLock` **常驻指针**
+//! (process lifetime), caller **0 应 free** — 同一 API 不再有两套所有权契约.
+//!
 //! **0 重复造轮子 (O-2)**: 复用 `apeireth-sdk::version::SDK_VERSION` 公共 API (per lib.rs §A 268-269),
 //! 0 改 24 LOCKED crate 入口签名 (R128 + R148 已降级, 仅保 3 项不可变脊柱) / 0 改 workspace.version (1.2.0 双轴制).
 //!
@@ -147,8 +151,12 @@ pub extern "C" fn apeireth_sdk_hash_request(
 
 /// **C-ABI fn #3**: `apeireth_sdk_version() -> *const c_char`.
 ///
-/// **不漂移**: 复用 `apeireth_sdk::version::SDK_VERSION` 公共 API, 0 改 workspace.version 1.2.0 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0).
-/// 返 Rust static str, 生命周期 'static, 0 需要 free (1:1 libc `getenv` pattern).
+/// **不漂移**: 复用 `apeireth_sdk::version::SDK_VERSION` 公共 API, 0 改 workspace.version 1.2.0 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0)。
+/// 返 Rust `&'static CStr` 常驻指针, 生命周期 'static, **0 需要 free** (1:1 libc `getenv` pattern)。
+///
+/// **L 组修复**: 改 `std::sync::OnceLock` 只分配一次 — 修复前每次调用 `CString::into_raw`
+/// 泄漏一个 CString 且头文件暗示免 free (同一 API 两套所有权契约)。统一契约:
+/// version()/compile_info() 返**常驻指针, caller 0 应 free** (per R123 注记原意落地)。
 #[cfg(feature = "c")]
 #[no_mangle]
 pub extern "C" fn apeireth_sdk_version() -> *const c_char {
@@ -158,61 +166,71 @@ pub extern "C" fn apeireth_sdk_version() -> *const c_char {
     // SDK_VERSION 是 SdkVersion struct, 不是 str. 转 "0.1.0" 字面量 (per R20 阶段 6 stub)
     // 注: SDK_VERSION.major/minor/patch 来自 version.rs:102 LOCKED, 0 重复造轮子.
     // 注: workspace.version 1.2.0 是 workspace 顶层 (双轴制), SDK_VERSION 0.1.0 是 SDK 协议版本 (R20 决策原意)
-    let s = format!(
-        "{}.{}.{}",
-        SDK_VERSION.major, SDK_VERSION.minor, SDK_VERSION.patch
-    );
-    // 内存: 泄漏但可接受 (process lifetime), 跟 Rust static str 等价
-    // R123 切换 static str (0 堆分配)
-    match CString::new(s) {
-        Ok(cs) => cs.into_raw(),
-        Err(_) => std::ptr::null(),
-    }
+    static VERSION_CSTR: std::sync::OnceLock<CString> = std::sync::OnceLock::new();
+    VERSION_CSTR
+        .get_or_init(|| {
+            let s = format!(
+                "{}.{}.{}",
+                SDK_VERSION.major, SDK_VERSION.minor, SDK_VERSION.patch
+            );
+            // semver = 数字 + 小数点, 编译期可证 0 interior nul
+            CString::new(s).expect("semver string contains no interior nul")
+        })
+        .as_ptr()
 }
 
 /// **C-ABI fn #4**: `apeireth_sdk_compile_info() -> *const c_char`.
 ///
 /// 返 "rustc X.Y.Z target triple, apeireth-sdk features: `[python,node,c,default]`" 字面量.
 /// 0 假装实际 rustc version (编译期 hardcode "unknown" + "cfg(apeireth_sdk)" marker).
+///
+/// **L 组修复**: 同 fn #3 — `OnceLock` 只分配一次, 返**常驻指针, caller 0 应 free**
+/// (统一所有权契约, 消除每次调用泄漏一个 CString)。
 #[cfg(feature = "c")]
 #[no_mangle]
 pub extern "C" fn apeireth_sdk_compile_info() -> *const c_char {
-    let features = {
-        let mut f = String::new();
-        #[cfg(feature = "python")]
-        f.push_str("python,");
-        #[cfg(feature = "node")]
-        f.push_str("node,");
-        #[cfg(feature = "c")]
-        f.push_str("c,");
-        if f.is_empty() {
-            f.push_str("default");
-        } else {
-            f.pop(); // remove trailing ','
-        }
-        f
-    };
-    let info = format!(
-        "apeireth-sdk skeleton (rustc unknown, features: [{}], O-5: skeleton 0 假装 100%)",
-        features
-    );
-    match CString::new(info) {
-        Ok(cs) => cs.into_raw(),
-        Err(_) => std::ptr::null(),
-    }
+    static COMPILE_INFO_CSTR: std::sync::OnceLock<CString> = std::sync::OnceLock::new();
+    COMPILE_INFO_CSTR
+        .get_or_init(|| {
+            let features = {
+                let mut f = String::new();
+                #[cfg(feature = "python")]
+                f.push_str("python,");
+                #[cfg(feature = "node")]
+                f.push_str("node,");
+                #[cfg(feature = "c")]
+                f.push_str("c,");
+                if f.is_empty() {
+                    f.push_str("default");
+                } else {
+                    f.pop(); // remove trailing ','
+                }
+                f
+            };
+            let info = format!(
+                "apeireth-sdk skeleton (rustc unknown, features: [{}], O-5: skeleton 0 假装 100%)",
+                features
+            );
+            CString::new(info).expect("compile info contains no interior nul")
+        })
+        .as_ptr()
 }
 
 /// **C-ABI fn #5**: `apeireth_sdk_free_string(ptr: *mut c_char)`.
 ///
-/// 释放 `apeireth_sdk_hash_request` / `apeireth_sdk_version` / `apeireth_sdk_compile_info`
-/// 返的 C string. 0 是 malloc 返值调 free() 行为未定义.
+/// 释放 `apeireth_sdk_hash_request` 返的 C string (Rust 堆分配, caller **必须**释放).
+/// **0 是 malloc 返值调 free() 行为未定义.**
+///
+/// **L 组修复 (统一所有权契约)**: version()/compile_info() 返**常驻静态指针, 0 经本 fn
+/// 释放** (对 `OnceLock` 的 `as_ptr()` 调 `from_raw` 是 UB)。本 fn 只服务 hash_request。
 #[cfg(feature = "c")]
 #[no_mangle]
 pub extern "C" fn apeireth_sdk_free_string(ptr: *mut c_char) {
     if ptr.is_null() {
         return;
     }
-    // SAFETY: caller 保证 ptr 是 CString::into_raw 返值 (per上面 3 fn)
+    // SAFETY: caller 保证 ptr 是 apeireth_sdk_hash_request 的 CString::into_raw 返值
+    // (version/compile_info 是常驻指针, 0 经本 fn 释放)
     unsafe {
         let _ = CString::from_raw(ptr);
     }
@@ -284,6 +302,9 @@ mod c_ffi_tests {
     }
 
     /// **Test #3**: version + compile_info 返回有效 C string.
+    ///
+    /// **L 组修复**: version/compile_info 返 `OnceLock` 常驻指针 — **0 经
+    /// `apeireth_sdk_free_string` 释放** (对静态指针 `from_raw` 是 UB).
     #[test]
     fn c_version_and_compile_info_returns_valid_cstr() {
         let v_ptr = apeireth_sdk_version();
@@ -297,7 +318,9 @@ mod c_ffi_tests {
         // 0 改 SDK_VERSION = 0.1.0 (R20 阶段 6 stub, version.rs:102 LOCKED)
         // version_c 返 SDK_VERSION.as_str() (0.1.0), 跟 workspace.version 1.2.0 解耦
         assert_eq!(v_str, "0.1.0", "version_c 返 SDK_VERSION (0.1.0) 0 改");
-        apeireth_sdk_free_string(v_ptr as *mut _);
+        // 常驻指针: 再次调用返同一指针 (OnceLock 只分配一次, 0 泄漏)
+        let v_ptr2 = apeireth_sdk_version();
+        assert_eq!(v_ptr, v_ptr2, "OnceLock: 常驻指针同一地址");
 
         let info_ptr = apeireth_sdk_compile_info();
         assert!(!info_ptr.is_null());
@@ -307,6 +330,8 @@ mod c_ffi_tests {
         assert!(info_str.contains("apeireth-sdk"));
         #[cfg(feature = "c")]
         assert!(info_str.contains("c"), "compile_info 应含 'c' feature");
-        apeireth_sdk_free_string(info_ptr as *mut _);
+        let info_ptr2 = apeireth_sdk_compile_info();
+        assert_eq!(info_ptr, info_ptr2, "OnceLock: 常驻指针同一地址");
+        // 注意: 0 free — version/compile_info 是常驻指针 (统一所有权契约)
     }
 }

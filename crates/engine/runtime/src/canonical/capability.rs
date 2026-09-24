@@ -12,6 +12,17 @@ use apeireth_protocol::canonical::NormalizedTool;
 
 use super::module::reject_tool_identity_collisions;
 
+/// poison 容错读锁 (L 组): 持锁线程 panic 只标记 poison, 注册表数据本身
+/// 未损坏。直接 expect 会把一次 panic 放大为之后所有读写的级联 panic。
+fn read_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
+    lock.read().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// poison 容错写锁 (L 组): 同上。
+fn write_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
+    lock.write().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// A source of dispatchable capabilities.
 ///
 /// Providers own their concrete capability implementations; the runtime only
@@ -79,7 +90,7 @@ impl CapabilityRegistry {
         capabilities: Vec<Arc<dyn ToolCapability>>,
     ) -> Result<(), String> {
         let owner = owner.into();
-        let mut entries = self.entries.write().expect("capability registry poisoned");
+        let mut entries = write_lock_or_recover(&self.entries);
         let existing = entries
             .iter()
             .map(|entry| Arc::clone(&entry.capability))
@@ -98,7 +109,7 @@ impl CapabilityRegistry {
 
     /// Remove a dynamic capability by stable id.
     pub fn unregister(&self, capability_id: &apeireth_core::kernel::CapabilityId) -> bool {
-        let mut entries = self.entries.write().expect("capability registry poisoned");
+        let mut entries = write_lock_or_recover(&self.entries);
         let before = entries.len();
         entries.retain(|entry| entry.capability.id() != capability_id);
         entries.len() != before
@@ -106,9 +117,7 @@ impl CapabilityRegistry {
 
     /// Current capabilities in deterministic registration order.
     pub fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
-        self.entries
-            .read()
-            .expect("capability registry poisoned")
+        read_lock_or_recover(&self.entries)
             .iter()
             .map(|entry| Arc::clone(&entry.capability))
             .collect()
@@ -116,9 +125,7 @@ impl CapabilityRegistry {
 
     /// Current capabilities together with their source owner.
     pub fn entries(&self) -> Vec<(String, Arc<dyn ToolCapability>)> {
-        self.entries
-            .read()
-            .expect("capability registry poisoned")
+        read_lock_or_recover(&self.entries)
             .iter()
             .map(|entry| (entry.owner.clone(), Arc::clone(&entry.capability)))
             .collect()
@@ -127,12 +134,7 @@ impl CapabilityRegistry {
     /// Find one model-facing tool name, failing closed on ambiguity.
     pub fn find_by_name(&self, name: &str) -> Option<Arc<dyn ToolCapability>> {
         let mut found = None;
-        for entry in self
-            .entries
-            .read()
-            .expect("capability registry poisoned")
-            .iter()
-        {
+        for entry in read_lock_or_recover(&self.entries).iter() {
             if entry.capability.declaration().name == name {
                 if found.is_some() {
                     return None;
@@ -153,10 +155,7 @@ impl CapabilityRegistry {
 
     /// Number of capabilities currently registered.
     pub fn len(&self) -> usize {
-        self.entries
-            .read()
-            .expect("capability registry poisoned")
-            .len()
+        read_lock_or_recover(&self.entries).len()
     }
 
     /// Whether no capabilities are registered.

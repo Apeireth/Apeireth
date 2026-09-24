@@ -222,6 +222,10 @@ impl ProtocolAdapter for OpenAiChatAdapter {
             .to_string();
 
         let mut tool_calls = Vec::new();
+        // L4 修复 (2026-09-24 审计): 原实现把畸形 arguments JSON 静默吞为
+        // `{}` —— 模型输出半个 JSON 时调用方无从得知参数已丢失。现在 arguments
+        // 置 Null, 原文记入 raw_metadata.malformed_tool_arguments 供排障。
+        let mut malformed_tool_arguments: Vec<String> = Vec::new();
         if let Some(arr) = message.get("tool_calls").and_then(|v| v.as_array()) {
             for tc in arr {
                 let id = tc
@@ -240,8 +244,13 @@ impl ProtocolAdapter for OpenAiChatAdapter {
                     .and_then(|f| f.get("arguments"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("{}");
-                let arguments =
-                    serde_json::from_str(args_str).unwrap_or_else(|_| Value::Object(Map::new()));
+                let arguments = match serde_json::from_str(args_str) {
+                    Ok(value) => value,
+                    Err(_) => {
+                        malformed_tool_arguments.push(args_str.to_string());
+                        Value::Null
+                    }
+                };
                 tool_calls.push(ToolCall {
                     id,
                     name,
@@ -258,11 +267,14 @@ impl ProtocolAdapter for OpenAiChatAdapter {
         let usage = raw
             .get("usage")
             .map(|u| {
-                let p = u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                let c = u
-                    .get("completion_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
+                let p = crate::normalized::clamp_u32(
+                    u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                );
+                let c = crate::normalized::clamp_u32(
+                    u.get("completion_tokens")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0),
+                );
                 crate::normalized::NormalizedUsage::new(p, c)
             })
             .unwrap_or_default();
@@ -276,6 +288,12 @@ impl ProtocolAdapter for OpenAiChatAdapter {
         }
         if let Some(obj) = raw.get("created").and_then(|v| v.as_i64()) {
             raw_metadata.insert("created".into(), Value::Number(obj.into()));
+        }
+        if !malformed_tool_arguments.is_empty() {
+            raw_metadata.insert(
+                "malformed_tool_arguments".into(),
+                json!(malformed_tool_arguments),
+            );
         }
 
         Ok(NormalizedResponse {

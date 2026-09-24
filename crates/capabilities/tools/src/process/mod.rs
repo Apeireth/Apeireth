@@ -391,6 +391,11 @@ impl ProcessLimits {
     ///
     /// This is **not** used by canonical builtin tools. It is provided for
     /// callers that must opt out of the safe default with their eyes open.
+    ///
+    /// L 组 (2026-09-24 审计): `max_stdout_bytes`/`max_stderr_bytes` 的
+    /// `usize::MAX` 会被 [`validate_request`] 拒绝 (读取侧的 take(max+1)
+    /// 会回绕/panic), 因此本构造目前**不可直接执行** —— 选择放开上限的
+    /// 调用方必须显式改成一个真实的大数字, 把"我确知后果"变成事实。
     pub fn unrestricted() -> Self {
         Self {
             max_runtime: Duration::MAX,
@@ -782,6 +787,16 @@ fn validate_request(request: &ProcessRequest) -> Result<(), ProcessError> {
             "output limits must be non-zero".into(),
         ));
     }
+    // L 组 (2026-09-24 审计): usize::MAX 的"近无界"输出上限必须显式拒绝
+    // (`ProcessLimits::unrestricted()` 的 take(max+1) 在 debug 构建 panic、
+    // release 回绕为 0)。需要放开上限的调用方必须给一个真实的大数字。
+    if request.limits.max_stdout_bytes == usize::MAX
+        || request.limits.max_stderr_bytes == usize::MAX
+    {
+        return Err(ProcessError::InvalidConfiguration(
+            "output byte limits must not be usize::MAX (near-unbounded reads are refused)".into(),
+        ));
+    }
     if request.limits.max_process_memory_bytes == Some(0) {
         return Err(ProcessError::InvalidConfiguration(
             "max_process_memory_bytes must be non-zero".into(),
@@ -985,7 +1000,14 @@ where
     let (tx, rx) = std::sync::mpsc::channel();
     thread::spawn(move || {
         let mut buffer = Vec::new();
-        let mut limited = pipe.take(max_bytes as u64 + 1);
+        // L 组 (2026-09-24 审计): `max_bytes as u64 + 1` 在 max_bytes ==
+        // usize::MAX 时 debug 构建 panic / release 回绕为 0 (无限流被当成
+        // 0 字节读)。先 try_from 转换再 saturating_add, 不可转换时取 u64::MAX
+        // (读满自然中断); usize::MAX 本身由 validate_request 拒绝。
+        let read_limit = u64::try_from(max_bytes)
+            .map(|limit| limit.saturating_add(1))
+            .unwrap_or(u64::MAX);
+        let mut limited = pipe.take(read_limit);
         match limited.read_to_end(&mut buffer) {
             Ok(_) => {
                 let truncated = buffer.len() > max_bytes;

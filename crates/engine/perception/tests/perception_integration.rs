@@ -32,7 +32,7 @@ async fn perception_voice_and_vision_backends_wire_cleanly() {
         "provider.whisper.api_key",
         "sk-test-fake-key-12345678901234",
     ));
-    let voice: Arc<dyn VoiceBackend> = Arc::new(WhisperHttpBackend::openai(creds));
+    let voice: Arc<dyn VoiceBackend> = Arc::new(WhisperHttpBackend::openai(creds).expect("whisper client build"));
     assert_eq!(voice.name(), "whisper_http");
     assert!(voice.ping().await.is_ok());
 
@@ -57,7 +57,7 @@ async fn perception_voice_fails_on_empty_audio_safely() {
     let creds = Arc::new(
         StaticCredentials::new().with("provider.whisper.api_key", "sk-1234567890abcdef123456"),
     );
-    let voice = WhisperHttpBackend::openai(creds);
+    let voice = WhisperHttpBackend::openai(creds).expect("whisper client build");
     let res = voice
         .transcribe(AudioBuffer::empty(), LangHint::auto())
         .await;

@@ -40,7 +40,11 @@ pub struct IsolationConfig {
     /// cgroup v2 资源 slice (per v0.9.21 商业版 `cgroupSlice`, R21+ 真接时下发).
     #[serde(default)]
     pub cgroup_slice: Option<String>,
-    /// 启用的 Linux capabilities (per v0.9.21 商业版 `capabilities`, 白名单).
+    /// 启用的 Linux capabilities (per v0.9.21 商业版 `capabilities` 字段, 1:1 保留).
+    ///
+    /// **STUB 边界 (per M16)**: 本字段仅保留翻译表面, `validate()` **不做** capabilities
+    /// 白名单校验 — 真校验留 R21+ 接 docker capabilities / firecracker jailer 时实现.
+    /// (修复前注释宣称 "白名单" 但实现从不校验, 注释与实现二选一 — 取诚实注释.)
     #[serde(default)]
     pub capabilities: Vec<String>,
 }

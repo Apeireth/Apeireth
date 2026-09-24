@@ -137,7 +137,8 @@ async fn k1_http_transport_is_real_and_ws_remains_stub() {
 #[test]
 fn auth_pipeline_preflight_walks_5_components() {
     let p = AuthPipeline::new("a-valid-api-key-1234567890").expect("valid api key");
-    assert!(!p.api_key.is_empty());
+    // M5: api_key 改私有, 走访问器 (pub 字段让任意字段读取泄秘)
+    assert!(!p.api_key().is_empty());
     assert_eq!(p.keyring.service, "apeireth-api-key");
     assert!(p.bucket.capacity > 0.0);
     assert!(p.audit.is_empty());
@@ -147,6 +148,20 @@ fn auth_pipeline_preflight_walks_5_components() {
     assert!(!p.audit.is_empty());
     let err = p.check_quota();
     assert!(matches!(err, Err(SdkClientError::QuotaExceeded(_))));
+}
+
+/// M5: AuthPipeline / ApeirethClient Debug 脱秘 (0 打印 api_key 明文).
+#[test]
+fn auth_pipeline_debug_redacted() {
+    let p = AuthPipeline::new("a-valid-api-key-1234567890").expect("valid api key");
+    let dbg = format!("{p:?}");
+    assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+    assert!(!dbg.contains("a-valid-api-key-1234567890"), "Debug 0 泄 key: {dbg}");
+
+    let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
+    let dbg = format!("{c:?}");
+    assert!(dbg.contains("[redacted]"), "client Debug 应脱敏: {dbg}");
+    assert!(!dbg.contains("a-valid-api-key-1234567890"), "client Debug 0 泄 key: {dbg}");
 }
 
 // =====================================================================

@@ -311,7 +311,7 @@ impl MemoryMergerOrgan {
     pub fn merger(&self) -> std::sync::MutexGuard<'_, MemoryMerger> {
         self.merger
             .lock()
-            .expect("MemoryMergerOrgan mutex poisoned (0 装诚实)")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 

@@ -99,8 +99,17 @@ impl HumanAuthority {
                         "single human mode must not have multi_sign policy".into(),
                     );
                 }
-                // 1 个有效签名 = 通过
-                if signatures.iter().any(|s| Self::is_well_formed_sig(s)) {
+                // M6 修复 (2026-09-24 审计): 单人分支补签名者身份校验 ——
+                // 原实现只查"格式良好" (`is_well_formed_sig`: 非空 + 含 `:`),
+                // `"attacker:x"` 这类任意构造签名即 Accepted; 同函数
+                // MultiHuman 分支 (:135) 是校验 signer ∈ real_humans 的。
+                // 单人模式同样要求签名者是已登记的真实人类。
+                let valid_signer = signatures.iter().any(|s| {
+                    Self::is_well_formed_sig(s)
+                        && Self::extract_signer_id(s)
+                            .is_some_and(|id| self.real_humans.iter().any(|h| h.id == id))
+                });
+                if valid_signer {
                     MultiSignResult::Accepted
                 } else {
                     MultiSignResult::Insufficient {
@@ -347,6 +356,25 @@ mod ha_multisign_tests {
         assert_eq!(
             ha.verify_multisig(&[sig("alice")]),
             MultiSignResult::Accepted
+        );
+    }
+
+    #[test]
+    fn single_human_rejects_unregistered_signer() {
+        // M6 回归 (2026-09-24 审计): 单人模式下, "格式良好但签名者不在
+        // real_humans" 的签名必须被拒 —— 原实现下任意 `"anything:x"` 即 Accepted。
+        let ha = HumanAuthority {
+            mode: HAMode::SingleHuman,
+            real_humans: vec![real_human("alice")],
+            ice_frozen_until: None,
+            multi_sign: None,
+        };
+        assert!(
+            matches!(
+                ha.verify_multisig(&[sig("attacker")]),
+                MultiSignResult::Insufficient { .. }
+            ),
+            "unregistered signer must not pass single-human multisig"
         );
     }
 

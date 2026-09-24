@@ -209,7 +209,7 @@ fn sdk_c_ffi_version_returns_semver() {
         apeireth_sdk::SDK_VERSION.patch
     );
     assert_eq!(v_str, sdk_ver, "version_c 返 SDK_VERSION 0 改");
-    apeireth_sdk::c::apeireth_sdk_free_string(ptr as *mut _);
+    // L 组修复: version 返 OnceLock 常驻指针 — 0 free (对静态指针 from_raw 是 UB)
 }
 
 // ============================================================================
@@ -236,7 +236,7 @@ fn sdk_compile_info_includes_features() {
         info_str.contains("O-5") || info_str.contains("skeleton"),
         "compile_info 应含 O-5 / skeleton 标识"
     );
-    apeireth_sdk::c::apeireth_sdk_free_string(ptr as *mut _);
+    // L 组修复: compile_info 返 OnceLock 常驻指针 — 0 free (统一所有权契约)
 }
 
 // ============================================================================

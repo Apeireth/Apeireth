@@ -65,8 +65,15 @@ impl LlmAdvisor {
     }
 
     /// 把 LLM 响应 text 解析成 bounded typed `AdvisorVerdict`.
+    ///
+    /// **输入即不可信**: LLM 响应可以任意长 (真实事故: 上游复述 >2000 字符时
+    /// `AdvisorVerdict::validate` 的 critique 上限让调用点 `.expect` 直接 panic)。
+    /// 入口先 trim + `chars().take(2000)` 截断再构造, 保证 keyword 派生路径
+    /// **永不 panic**。
     fn parse_verdict(text: &str) -> AdvisorVerdict {
-        let lower = text.to_ascii_lowercase();
+        // 先截断再小写化: 多字节 UTF-8 也不会切在 char 边界上 (chars() 而非 bytes)。
+        let bounded: String = text.trim().chars().take(2_000).collect();
+        let lower = bounded.to_ascii_lowercase();
         let (score, verdict) =
             if lower.contains("deny") || lower.contains("veto") || lower.contains("reject") {
                 (0.0, AdvisorDecision::Stop)
@@ -75,7 +82,7 @@ impl LlmAdvisor {
             } else {
                 (1.0, AdvisorDecision::Allow)
             };
-        AdvisorVerdict::new(score, verdict, text.trim(), None)
+        AdvisorVerdict::new(score, verdict, bounded, None)
             .expect("keyword-derived advisor verdict is bounded")
     }
 }
@@ -245,6 +252,25 @@ mod tests {
     fn test_parse_verdict_default_allow() {
         let v = LlmAdvisor::parse_verdict("Looks fine, approve.");
         assert_eq!(v.verdict, AdvisorDecision::Allow);
+    }
+
+    /// 回归 (H1): 超长 LLM 响应曾在 `AdvisorVerdict::validate` 的 2000 字符上限上
+    /// 让调用点 `.expect` panic。现在必须在入口截断且保持有界。
+    #[test]
+    fn test_parse_verdict_oversized_response_truncated_not_panicked() {
+        // deny 放开头: 截断后 (尾部复述被切掉) 仍应判 Stop。
+        let oversized = format!("deny {}", "a".repeat(3_000));
+        let v = LlmAdvisor::parse_verdict(&oversized);
+        assert_eq!(v.verdict, AdvisorDecision::Stop);
+        assert_eq!(v.critique.chars().count(), 2_000);
+        assert!(v.critique.is_char_boundary(v.critique.len()));
+
+        // 纯中文超长: 验证截断按 char 而非 byte (不会 panic / 不会切坏 UTF-8)。
+        let zh_only = "复".repeat(5_000);
+        let v = LlmAdvisor::parse_verdict(&zh_only);
+        assert_eq!(v.critique.chars().count(), 2_000);
+        assert_eq!(v.verdict, AdvisorDecision::Allow);
+        assert!(v.critique.is_char_boundary(v.critique.len()));
     }
 
     #[test]

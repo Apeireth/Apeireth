@@ -9,8 +9,17 @@
 //!
 //! SHA-256 of the raw id is **not** computed here (would add `sha2`). Callers
 //! that already depend on `sha2` (credentials) can hash `MachineIdProbe::raw`.
+//!
+//! **M7 修复 (2026-09 安全审计)**:
+//! - VM/容器未填 SMBIOS 时的标准占位 UUID (全 `F` / 全 `0`) 一律拒绝 —
+//!   否则跨机碰撞 (machine-id 是 credentials 的哈希盐来源) 且厂商后续补上
+//!   真 UUID 时身份漂移. Windows WMI 路径落到 `reg MachineGuid` fallback.
+//! - `probe_machine_id` 结果在进程内 `OnceLock` 缓存 — 避免每次调用都 spawn
+//!   子进程 (挂起的 `wmic` 会挂死调用方, 缓存同时缩小该窗口). 仅缓存成功
+//!   结果: 一次瞬时失败不得把进程身份永久毒化.
 
 use std::process::Command;
+use std::sync::OnceLock;
 
 /// Detected platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -128,7 +137,24 @@ pub const BSD_KENV_VAR: &str = "smbios.system.uuid";
 pub const BSD_HOSTID_PATH: &str = "/etc/hostid";
 
 /// Probe the current machine. Sync; uses `std::process::Command` / `std::fs`.
+///
+/// **M7**: 结果在进程内 `OnceLock` 缓存 (子进程探测昂贵且有挂死风险).
+/// 仅成功结果入缓存; 失败不缓存, 调用方下次可重试.
 pub fn probe_machine_id() -> Result<MachineIdProbe, MachineIdError> {
+    if let Some(cached) = MACHINE_ID_CACHE.get() {
+        return Ok(cached.clone());
+    }
+    let probe = probe_machine_id_uncached()?;
+    // 并发首探可能多跑一次, set 失败静默忽略 (谁先写入谁生效).
+    let _ = MACHINE_ID_CACHE.set(probe.clone());
+    Ok(probe)
+}
+
+/// 进程内 machine-id 缓存 (M7). `OnceLock` 保证最多初始化一次.
+static MACHINE_ID_CACHE: OnceLock<MachineIdProbe> = OnceLock::new();
+
+/// 未缓存的真实探测路径 (每次调用都 spawn 子进程/读文件).
+fn probe_machine_id_uncached() -> Result<MachineIdProbe, MachineIdError> {
     let platform = Platform::detect();
     let (raw, source) = match platform {
         Platform::Windows => {
@@ -192,6 +218,10 @@ pub fn probe_machine_id() -> Result<MachineIdProbe, MachineIdError> {
 
 /// Parse `wmic csproduct get uuid` stdout. Public so tests can exercise the
 /// parser without spawning WMI.
+///
+/// **M7**: 拒绝 VM/容器标准占位 UUID (全 `F` / 全 `0`) — 占位形态没有身份
+/// 语义, 采纳它等于让所有未填充 SMBIOS 的机器共享同一 machine-id.
+/// 拒绝后 `probe_windows` 落到 `reg MachineGuid` fallback.
 pub fn parse_wmi_uuid(stdout: &str) -> Option<String> {
     for line in stdout.lines() {
         let trimmed = line.trim();
@@ -259,8 +289,32 @@ pub fn encode_hostid(bytes: &[u8]) -> Option<String> {
     Some(bytes[..n].iter().map(|b| format!("{b:02x}")).collect())
 }
 
+/// 判断是否为**可用**的 UUID 文本 (M7).
+///
+/// 要求: 36 字符 + 4 连字符 + 全部为 ASCII hex, 且 hex 位**不得全为占位字符**
+/// (`F`/`0`) — `FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF` 与
+/// `00000000-0000-0000-0000-000000000000` 是 VM/容器未填 SMBIOS 的标准占位,
+/// 采纳它们等于跨机共享同一机器身份 (且厂商补填真 UUID 后身份漂移).
+/// 真 UUID 的 32 个 hex 位全落在 {0,F} 的概率约 (2/16)^32, 可忽略.
 fn looks_like_uuid(s: &str) -> bool {
-    s.len() == 36 && s.chars().filter(|c| *c == '-').count() == 4
+    if s.len() != 36 || s.chars().filter(|c| *c == '-').count() != 4 {
+        return false;
+    }
+    let mut hex_seen = false;
+    let mut non_placeholder_seen = false;
+    for ch in s.chars() {
+        if ch == '-' {
+            continue;
+        }
+        if !ch.is_ascii_hexdigit() {
+            return false;
+        }
+        hex_seen = true;
+        if !matches!(ch.to_ascii_uppercase(), 'F' | '0') {
+            non_placeholder_seen = true;
+        }
+    }
+    hex_seen && non_placeholder_seen
 }
 
 #[cfg(windows)]
@@ -415,6 +469,41 @@ mod tests {
         assert_eq!(
             parse_wmi_uuid(stdout).as_deref(),
             Some("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")
+        );
+    }
+
+    /// M7: 占位 UUID (全 F / 全 0) 必须被 looks_like_uuid 拒绝, 让
+    /// probe_windows 落到 reg MachineGuid fallback.
+    #[test]
+    fn parse_wmi_rejects_placeholder_uuid() {
+        assert_eq!(
+            parse_wmi_uuid("UUID\r\nFFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF\r\n").as_deref(),
+            None
+        );
+        assert_eq!(
+            parse_wmi_uuid("UUID\r\n00000000-0000-0000-0000-000000000000\r\n").as_deref(),
+            None
+        );
+        // 混合占位 (前 16 位全 F, 后 16 位全 0) 同样没有身份语义.
+        assert_eq!(
+            parse_wmi_uuid("UUID\r\nFFFFFFFF-FFFF-FFFF-0000-000000000000\r\n").as_deref(),
+            None
+        );
+        // 非 hex 字符的 36 字符串不是 UUID.
+        assert_eq!(
+            parse_wmi_uuid("UUID\r\nZZZZZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZZZZZZZZZ\r\n").as_deref(),
+            None
+        );
+    }
+
+    /// M7: 进程内 OnceLock 缓存 — 重复 probe 返回同一结果 (不重复 spawn).
+    #[test]
+    fn probe_machine_id_is_cached_within_process() {
+        let first = probe_machine_id();
+        let second = probe_machine_id();
+        assert_eq!(
+            first, second,
+            "OnceLock 缓存必须让同一进程内重复探测返回同一结果"
         );
     }
 

@@ -664,11 +664,16 @@ impl Council {
             .iter()
             .filter(|evaluation| evaluation.verdict.verdict == AdvisorDecision::Allow)
             .count();
+        // L4 修复 (2026-09-24 审计): `decisive.is_empty()` 一律 fail-closed。
+        // 旧条件是 `decisive.is_empty() && !failures.is_empty()` — 当**全部 advisor
+        // 都 Abstain 且零 failure** 时落进 `Continue` 分支: 一个"没人表态"的评审
+        // 被当成"通过", 等于 Council 静默 fail-open (调用方把 Continue 读成放行)。
+        // 没有决定性意见时必须交还人类, 而不是默认放行。
         let decision = if stop.is_some() {
             CouncilDecision::Stop
         } else if retries > allows {
             CouncilDecision::Retry
-        } else if decisive.is_empty() && !failures.is_empty() {
+        } else if decisive.is_empty() {
             CouncilDecision::DeferToHuman
         } else {
             CouncilDecision::Continue
@@ -1246,5 +1251,63 @@ mod tests {
             .await;
         assert_eq!(result.decision, CouncilDecision::DeferToHuman);
         assert_eq!(result.failures[0].category, "advisor_timeout");
+    }
+
+    /// L4 回归: 全部 advisor Abstain 且**零 failure** → 必须 DeferToHuman。
+    ///
+    /// 旧实现的条件是 `decisive.is_empty() && !failures.is_empty()` — 全 Abstain
+    /// 无失败时落进 `Continue`, 等于把"没人表态"静默读成"通过" (fail-open)。
+    #[tokio::test]
+    async fn council_all_abstain_without_failures_defers_to_human() {
+        let council = council_with_kinds(&[AdvisorKind::Safety, AdvisorKind::Performance]);
+        let invoker = ScriptedInvoker {
+            decisions: [
+                (AdvisorKind::Safety, Ok(verdict(AdvisorDecision::Abstain, 0.0))),
+                (
+                    AdvisorKind::Performance,
+                    Ok(verdict(AdvisorDecision::Abstain, 0.0)),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            delays: Default::default(),
+        };
+        let result = council
+            .decide_with_invoker(&sample_proposal(), &invoker)
+            .await;
+        assert_eq!(
+            result.decision,
+            CouncilDecision::DeferToHuman,
+            "全 Abstain 不得 fail-open 成 Continue"
+        );
+        assert_eq!(result.aggregate_score, 0.0);
+        assert!(result.failures.is_empty(), "本用例零 failure, 纯 Abstain");
+        assert!(
+            result.supporting_advisors.is_empty(),
+            "Abstain 不是支持性意见"
+        );
+    }
+
+    /// L4 回归: 混合 Abstain + Allow 时 Abstain 不算决定性意见 (仍可 Continue)。
+    #[tokio::test]
+    async fn council_abstain_does_not_count_as_decisive() {
+        let council = council_with_kinds(&[AdvisorKind::Safety, AdvisorKind::Performance]);
+        let invoker = ScriptedInvoker {
+            decisions: [
+                (AdvisorKind::Safety, Ok(verdict(AdvisorDecision::Abstain, 0.0))),
+                (
+                    AdvisorKind::Performance,
+                    Ok(verdict(AdvisorDecision::Allow, 1.0)),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            delays: Default::default(),
+        };
+        let result = council
+            .decide_with_invoker(&sample_proposal(), &invoker)
+            .await;
+        assert_eq!(result.decision, CouncilDecision::Continue);
+        assert!((result.aggregate_score - 1.0).abs() < f64::EPSILON);
     }
 }

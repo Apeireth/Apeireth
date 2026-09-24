@@ -5,7 +5,7 @@
 //!
 //! 命名规范: `V<version>__<short_description>`.
 
-use rusqlite::{params, Connection, Transaction};
+use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 
 use apeireth_storage::{SqliteConnectionPool, StorageError};
 
@@ -265,6 +265,24 @@ CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_persona
         version: 14,
         name: "V14__principal_ownership_and_persona_governance",
         sql: V14_SQL,
+    },
+    // M27 / L 组 (2026-09 安全审计): 把运行时懒建表 `dedup_fingerprints`
+    // (dedup.rs `ensure_dedup_table`) 收编进迁移列表 — schema 快照与迁移
+    // 列表不再漂移. DDL 与 dedup.rs 的懒建版本逐字一致 (幂等, 老库里两边
+    // 谁先跑都得到同一张表). `episode_memory_metadata` 已于 V11 收录.
+    Migration {
+        version: 15,
+        name: "V15__dedup_fingerprints",
+        sql: r#"
+CREATE TABLE IF NOT EXISTS dedup_fingerprints (
+    namespace    TEXT NOT NULL,
+    fingerprint  TEXT NOT NULL,
+    last_seen_ms INTEGER NOT NULL,
+    PRIMARY KEY (namespace, fingerprint)
+);
+CREATE INDEX IF NOT EXISTS idx_dedup_last_seen
+    ON dedup_fingerprints(last_seen_ms);
+"#,
     },
 ];
 
@@ -733,6 +751,13 @@ const APPEND_ONLY_TRIGGERS: &[(&str, &str)] = &[
 ///
 /// 事务保护: 单条 migration 内所有 DDL 在一个事务内执行, 失败回滚.
 pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
+    // 0. M27 (L 组): 迁移前列集校验 — 如果同名表已被**别套 schema 家族**
+    // (如 `apeireth-storage` 的 `episodes(id, data)` 最小 layout) 创建过,
+    // 必须先报清楚的错. 否则 `CREATE TABLE IF NOT EXISTS` 静默 no-op,
+    // 之后 INSERT 才以 "no such column" 这种难懂的错爆炸 (样板:
+    // `commitments.rs` 的 `validate_schema_columns`).
+    validate_owned_schema(conn)?;
+
     // 1. 建表总是先跑一次 (CREATE IF NOT EXISTS) — 后续 migration 再叠加 trigger.
     let tx = conn.transaction()?;
     tx.execute_batch(INIT_SQL)?;
@@ -769,16 +794,91 @@ pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
 
     // 3. 记录已应用的 migration.
     for m in MIGRATIONS {
-        if migration_applied(conn, m.version)? {
+        // M21: 旧实现 `migration_applied` 的 SELECT 在事务外, 随后
+        // `conn.transaction()` 是 BEGIN **DEFERRED** — 两个进程同时启动时,
+        // 后者的延迟事务在执行 INSERT 时才升级写锁, WAL 下报
+        // SQLITE_BUSY_SNAPSHOT, 而 busy_timeout 不重试该错误 → 启动硬失败.
+        // 修复: BEGIN IMMEDIATE 从一开始就拿写锁, 版本重读放在**事务内**
+        // (读-判-写同一把写锁), 与 `storage/migrations.rs:109` 同模式.
+        // SQL 全部幂等 (IF NOT EXISTS), 并发下最坏是 busy_timeout 内等待.
+        let tx: Transaction<'_> =
+            conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if !migration_applied(&tx, m.version)? {
+            tx.execute_batch(m.sql)?;
+            tx.execute(
+                "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?1, ?2, ?3)",
+                params![m.version, m.name, now_unix()],
+            )?;
+        }
+        tx.commit()?;
+    }
+    Ok(())
+}
+
+/// memory schema 家族拥有的核心表 → 必需列 (M27 / L 组).
+///
+/// 与 `apeireth-storage` 的 `episodes(id, data)` / `sessions(id, data)` 等
+/// 最小 layout 同名不同义: 两套迁移先后处理同一 .db 文件时,
+/// `CREATE TABLE IF NOT EXISTS` 会静默 no-op, 之后 INSERT 因缺列报难懂的错.
+const MEMORY_OWNED_TABLES: &[(&str, &[&str])] = &[
+    (
+        "episodes",
+        &[
+            "id",
+            "continuity_id",
+            "session_id",
+            "timestamp",
+            "role",
+            "content",
+        ],
+    ),
+    (
+        "agent_traces",
+        &["span_id", "trace_id", "kind", "actor", "session_id"],
+    ),
+    (
+        "sessions",
+        &["id", "started_at", "last_active_at"],
+    ),
+    ("notes", &["id", "timestamp", "content"]),
+];
+
+/// 迁移前列集校验 (M27 / L 组): 已存在的同名表必须已经是 memory layout.
+///
+/// 借用 `commitments.rs` 的 `validate_schema_columns` 样板: 直接对
+/// `sqlite_master` 查列集, 缺列即拒绝启动并给出可操作的信息 (而不是让
+/// 后续 INSERT 崩一个 "no such column").
+fn validate_owned_schema(conn: &Connection) -> MemoryResult<()> {
+    for (table, required) in MEMORY_OWNED_TABLES {
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+                params![table],
+                |row| row.get(0),
+            )
+            .map_err(MemoryError::from)?;
+        if !exists {
             continue;
         }
-        let tx: Transaction<'_> = conn.transaction()?;
-        tx.execute_batch(m.sql)?;
-        tx.execute(
-            "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?1, ?2, ?3)",
-            params![m.version, m.name, now_unix()],
-        )?;
-        tx.commit()?;
+        // 表名来自本文件静态白名单, 无注入面.
+        let mut statement = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+        let actual = statement
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let missing: Vec<&str> = required
+            .iter()
+            .copied()
+            .filter(|column| !actual.iter().any(|actual| actual == column))
+            .collect();
+        if !missing.is_empty() {
+            return Err(MemoryError::Invalid(format!(
+                "table `{table}` exists with a foreign schema layout (missing memory columns: {}). \
+                 The database file is owned by another schema family (e.g. apeireth-storage's \
+                 minimal (id, data) layout); memory and storage must not share one .db file — \
+                 use separate database paths",
+                missing.join(", ")
+            )));
+        }
     }
     Ok(())
 }
@@ -1043,8 +1143,8 @@ mod tests {
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            10,
-            "V5/V6/V7/V8/V9/V10/V11/V12/V13/V14 各一条"
+            11,
+            "V5/V6/V7/V8/V9/V10/V11/V12/V13/V14/V15 各一条 (V15 = M27 收编 dedup_fingerprints)"
         );
     }
 
@@ -1070,5 +1170,65 @@ mod tests {
             crate::memory_governance::MemoryGovernanceStatus::Active
         );
         assert!(!recent[0].protected);
+    }
+
+    /// M27 (L 组): 别套 schema 家族 (storage 最小 `(id, data)` layout) 占位的
+    /// episodes 表必须在迁移前被拒绝 — 否则 `CREATE TABLE IF NOT EXISTS` 静默
+    /// no-op, 之后 INSERT 才报 "no such column" 难懂的错.
+    #[test]
+    fn foreign_episodes_layout_is_rejected_before_migration() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE episodes (id TEXT PRIMARY KEY, data TEXT)")
+            .unwrap();
+        let err = run_migrations(&mut conn).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("episodes"), "错误必须指名问题表: {msg}");
+        assert!(
+            msg.contains("foreign schema layout"),
+            "错误必须说明是外来 layout: {msg}"
+        );
+    }
+
+    /// M27: memory 自己的 layout 不得被误伤 (fresh DB 全跑完 + 重跑都通过).
+    #[test]
+    fn memory_owned_layout_passes_validation() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        {
+            let conn = store.conn().unwrap();
+            let mut guard = conn;
+            run_migrations(&mut guard).unwrap();
+        }
+    }
+
+    /// M21: 版本重读在 BEGIN IMMEDIATE 事务内 — 已应用的 migration 不再
+    /// 重复执行/重复插行 (幂等), 两进程并发按写锁串行而非 BUSY_SNAPSHOT.
+    #[test]
+    fn migration_version_is_rechecked_inside_immediate_transaction() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        let before = store.applied_migrations().unwrap();
+        {
+            let conn = store.conn().unwrap();
+            let mut guard = conn;
+            run_migrations(&mut guard).unwrap();
+        }
+        let after = store.applied_migrations().unwrap();
+        assert_eq!(before, after, "Immediate 事务内重读版本, 不得重复插入");
+    }
+
+    /// V15 (M27 / L 组): dedup_fingerprints 必须由迁移列表创建 —
+    /// 不再只靠 dedup.rs 的懒建表 (schema 快照与迁移列表一致).
+    #[test]
+    fn v15_creates_dedup_fingerprints() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        assert!(store.applied_migrations().unwrap().contains(&15));
+        let conn = store.conn().unwrap();
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'dedup_fingerprints')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(exists, "V15 必须创建 dedup_fingerprints");
     }
 }

@@ -461,7 +461,7 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().expect("memory store mutex");
+            let mut guard = store.conn.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)
@@ -475,7 +475,7 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().expect("memory store mutex");
+            let mut guard = store.conn.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)
@@ -486,6 +486,10 @@ impl SqliteMemoryStore {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
+        // M26: 补齐 busy_timeout — rusqlite 默认 0, 另一进程持写锁时立即
+        // SQLITE_BUSY 失败且不重试; 与 apeireth-storage `SqliteConfig::default()`
+        // (5s) 对齐, 两条链路行为一致.
+        conn.pragma_update(None, "busy_timeout", 5_000_i64)?;
         Ok(())
     }
 
@@ -590,6 +594,9 @@ impl apeireth_plugin::memory_backend::MemoryBackend for SqliteMemoryStore {
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         let metadata_str = serde_json::to_string(&metadata)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        // M27 / L 组: canonical 定义在 migrations V11 (带 updated_at 列);
+        // 这里仅是 pre-V11 老库 self-heal, 建 V9 时代两列形态. 新库的列集
+        // 以 V11 迁移为准, 懒建路径不得新增列.
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS episode_memory_metadata (episode_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL)",
         )
@@ -640,13 +647,16 @@ impl apeireth_plugin::memory_backend::MemoryBackend for SqliteMemoryStore {
     fn list_stream(
         &self,
         kind: StreamKind,
-        _session_id: &str,
+        session_id: &str,
         n: usize,
     ) -> apeireth_plugin::memory_backend::CapabilityResult<Vec<HistoryEntry>> {
         let conn = self
             .conn()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        append_only::list_recent_entries(&conn, kind.table_name_ext(), n, false)
+        // H13: 旧实现忽略 session_id (`list_recent_entries` 返回**所有**
+        // session 的最近 N 条) — 跨 session 数据泄漏. 改为按 session_id 列
+        // 过滤 + tombstone 过滤, 与 SqliteBackend / trait 路径语义对齐.
+        append_only::list_recent_for_session(&conn, kind.table_name_ext(), session_id, n, false)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
 }

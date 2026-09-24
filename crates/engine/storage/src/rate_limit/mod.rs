@@ -19,10 +19,13 @@ pub use strategies::{
     SlidingWindowPrecision, TokenBucket,
 };
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+/// 每限流器默认跟踪的最大键数 (L 组: 无界积累的 per-key map 是长跑进程 OOM 面).
+pub const DEFAULT_MAX_TRACKED_KEYS: usize = 65_536;
 
 /// Errors produced by the reusable limiter.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -103,6 +106,8 @@ pub struct RateLimiterConfig {
     pub bucket: BucketConfig,
     /// Algorithm selection.
     pub strategy: StrategyConfig,
+    /// 每限流器最多跟踪的 key 数 (L 组). 超过后最旧插入的 key 先被驱逐.
+    pub max_keys: usize,
 }
 
 impl Default for RateLimiterConfig {
@@ -110,11 +115,18 @@ impl Default for RateLimiterConfig {
         Self {
             bucket: BucketConfig::default(),
             strategy: StrategyConfig::default(),
+            max_keys: DEFAULT_MAX_TRACKED_KEYS,
         }
     }
 }
 
 impl RateLimiterConfig {
+    /// 设置每限流器最大跟踪键数 (至少 1; 过小的值会让限流态反复重建).
+    pub fn with_max_keys(mut self, max_keys: usize) -> Self {
+        self.max_keys = max_keys.max(1);
+        self
+    }
+
     fn validate(&self) -> RateLimitResult<()> {
         self.bucket.validate()?;
         if let Some(ws) = self.strategy.window_size {
@@ -176,16 +188,61 @@ impl PerKeyState {
 }
 
 struct InnerState {
-    state: Mutex<HashMap<String, PerKeyState>>,
+    /// per-key 限流态 + 插入顺序 (最旧在前), 单一 Mutex 保证两者一致.
+    state: Mutex<KeyedStates>,
     hits: AtomicU64,
     misses: AtomicU64,
     total_attempts: AtomicU64,
 }
 
+/// per-key 限流态与插入顺序队列 (L 组: 驱逐需要知道"谁最旧").
+struct KeyedStates {
+    map: HashMap<String, PerKeyState>,
+    /// 插入顺序 (最旧在前). `map` 与 `order` 的不变式: 每个 map 键恰好
+    /// 在 order 中出现一次. `reset` / 驱逐时同步移除.
+    order: VecDeque<String>,
+}
+
+impl KeyedStates {
+    fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+        }
+    }
+
+    /// 插入一个新键; 达到 `max_keys` 时从最旧开始驱逐 (FIFO).
+    ///
+    /// 取舍 (诚实标注): 被驱逐 key 的限流态丢失, 下次 acquire 时按新桶重新
+    /// 计数 — 限流约束在驱逐边界被削弱, 但 map 不再随唯一 key 数无界增长
+    /// (旧实现: 每键 map 无界累积, 长跑进程 OOM).
+    fn insert_evicting_oldest(&mut self, key: &str, state: PerKeyState, max_keys: usize) {
+        if !self.map.contains_key(key) {
+            while self.map.len() >= max_keys {
+                match self.order.pop_front() {
+                    Some(oldest) => {
+                        self.map.remove(&oldest);
+                    }
+                    None => break,
+                }
+            }
+        }
+        self.map.insert(key.to_string(), state);
+        if !self.order.iter().any(|existing| existing == key) {
+            self.order.push_back(key.to_string());
+        }
+    }
+
+    fn remove(&mut self, key: &str) {
+        self.map.remove(key);
+        self.order.retain(|existing| existing != key);
+    }
+}
+
 impl InnerState {
     fn new() -> Self {
         Self {
-            state: Mutex::new(HashMap::new()),
+            state: Mutex::new(KeyedStates::new()),
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
             total_attempts: AtomicU64::new(0),
@@ -259,8 +316,8 @@ impl AcquiredPermit {
 impl Drop for AcquiredPermit {
     fn drop(&mut self) {
         if let Some(inner) = self.inner.take() {
-            if let Ok(mut map) = inner.state.lock() {
-                if let Some(state) = map.get_mut(&self.key) {
+            if let Ok(mut states) = inner.state.lock() {
+                if let Some(state) = states.map.get_mut(&self.key) {
                     state.release(self.cost);
                 }
             }
@@ -296,6 +353,12 @@ impl KeyedLimiter {
     /// Current strategy.
     pub fn strategy_kind(&self) -> StrategyKind {
         self.config.strategy.kind
+    }
+
+    /// 覆写每限流器最大跟踪键数 (L 组; 至少 1).
+    pub fn with_max_keys(mut self, max_keys: usize) -> Self {
+        self.config.max_keys = max_keys.max(1);
+        self
     }
 
     /// Non-blocking try using wall `Instant::now()`.
@@ -392,8 +455,8 @@ impl KeyedLimiter {
 
     /// Drop per-key state.
     pub fn reset(&self, key: &str) {
-        if let Ok(mut map) = self.inner.state.lock() {
-            map.remove(key);
+        if let Ok(mut states) = self.inner.state.lock() {
+            states.remove(key);
         }
     }
 
@@ -403,7 +466,7 @@ impl KeyedLimiter {
             total_attempts: self.inner.total_attempts.load(Ordering::Relaxed),
             hits: self.inner.hits.load(Ordering::Relaxed),
             misses: self.inner.misses.load(Ordering::Relaxed),
-            tracked_keys: self.inner.state.lock().map(|m| m.len()).unwrap_or(0),
+            tracked_keys: self.inner.state.lock().map(|s| s.map.len()).unwrap_or(0),
         }
     }
 
@@ -413,15 +476,17 @@ impl KeyedLimiter {
         now: Instant,
         f: impl FnOnce(&mut PerKeyState) -> R,
     ) -> RateLimitResult<R> {
-        let mut map = self
+        let mut states = self
             .inner
             .state
             .lock()
             .map_err(|_| RateLimitError::InvalidParameter("lock poisoned".to_string()))?;
-        if !map.contains_key(key) {
-            map.insert(key.to_string(), self.create_state(now)?);
+        if !states.map.contains_key(key) {
+            let state = self.create_state(now)?;
+            // L 组: 达到 max_keys 时最旧键先驱逐, map 不再无界增长.
+            states.insert_evicting_oldest(key, state, self.config.max_keys.max(1));
         }
-        let state = map.get_mut(key).expect("just inserted or already present");
+        let state = states.map.get_mut(key).expect("just inserted or already present");
         Ok(f(state))
     }
 
@@ -485,6 +550,7 @@ pub fn token_bucket_in_memory(
             kind: StrategyKind::TokenBucket,
             ..Default::default()
         },
+        ..Default::default()
     })
 }
 
@@ -507,6 +573,7 @@ pub fn leaky_bucket_in_memory(
             overflow_policy: Some(overflow),
             ..Default::default()
         },
+        ..Default::default()
     })
 }
 
@@ -530,6 +597,7 @@ pub fn fixed_window_in_memory(
             reset_strategy: Some(FixedWindowReset::OnWindowEnd),
             ..Default::default()
         },
+        ..Default::default()
     })
 }
 
@@ -555,6 +623,7 @@ pub fn sliding_window_in_memory(
             precision: Some(precision),
             ..Default::default()
         },
+        ..Default::default()
     })
 }
 
@@ -600,5 +669,48 @@ mod tests {
     fn keyed_limiter_is_send_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<KeyedLimiter>();
+    }
+
+    /// L 组: 唯一 key 数超过上限时必须驱逐最旧键, map 不得无界增长.
+    #[test]
+    fn tracked_keys_are_capped_with_oldest_evicted() {
+        let l = token_bucket_in_memory(1000.0, 10, None)
+            .unwrap()
+            .with_max_keys(3);
+        for i in 0..10 {
+            assert!(l.try_acquire(&format!("key-{i}"), 1).unwrap());
+        }
+        assert_eq!(
+            l.stats().tracked_keys,
+            3,
+            "per-key map 必须封顶 (最旧键被驱逐)"
+        );
+        // 仍在册的键保持限流语义; 被驱逐的键下次 acquire 时重建桶 (诚实取舍).
+        assert!(l.try_acquire("key-9", 1).unwrap());
+    }
+
+    /// L 组: `reset` 必须同时清 map 与 order, 不变式不漂移.
+    #[test]
+    fn reset_removes_key_from_both_structures() {
+        let l = fixed_window_in_memory(Duration::from_secs(10), 1)
+            .unwrap()
+            .with_max_keys(8);
+        assert!(l.try_acquire("k", 1).unwrap());
+        assert!(!l.try_acquire("k", 1).unwrap());
+        assert_eq!(l.stats().tracked_keys, 1);
+        l.reset("k");
+        assert_eq!(l.stats().tracked_keys, 0);
+        // reset 后同一键按全新窗口计数 (而不是残留的耗尽态).
+        assert!(l.try_acquire("k", 1).unwrap());
+    }
+
+    /// 默认上限存在且为正 —  unprotected 的 map 不再可能无界增长.
+    #[test]
+    fn default_max_tracked_keys_is_sane() {
+        assert!(DEFAULT_MAX_TRACKED_KEYS >= 1);
+        let config = RateLimiterConfig::default();
+        assert_eq!(config.max_keys, DEFAULT_MAX_TRACKED_KEYS);
+        // with_max_keys(0) 被夹到 1, 不会把刚插入的键立刻驱逐.
+        assert_eq!(config.with_max_keys(0).max_keys, 1);
     }
 }

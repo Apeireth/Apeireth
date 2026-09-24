@@ -338,3 +338,96 @@ fn machine_id_parsers_roundtrip_donor_fixtures() {
     );
     assert_eq!(encode_hostid(&[0xaa, 0xbb]).as_deref(), Some("aabb"));
 }
+
+/// M7: VM/容器未填 SMBIOS 的标准占位 UUID (全 F / 全 0) 必须被拒绝,
+/// 否则 machine-id (credentials 的哈希盐来源) 跨机碰撞.
+#[test]
+fn machine_id_rejects_placeholder_uuid() {
+    use apeireth_storage::machine_id::parse_wmi_uuid;
+
+    assert_eq!(
+        parse_wmi_uuid("UUID\r\nFFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF\r\n").as_deref(),
+        None,
+        "all-F placeholder must fall through to the reg MachineGuid fallback"
+    );
+    assert_eq!(
+        parse_wmi_uuid("UUID\r\nffffffff-ffff-ffff-ffff-ffffffffffff\r\n").as_deref(),
+        None,
+        "placeholder rejection is case-insensitive"
+    );
+    assert_eq!(
+        parse_wmi_uuid("UUID\r\n00000000-0000-0000-0000-000000000000\r\n").as_deref(),
+        None,
+        "all-zero placeholder must be rejected"
+    );
+    assert_eq!(
+        parse_wmi_uuid("UUID\r\nFFFFFFFF-FFFF-FFFF-0000-000000000000\r\n").as_deref(),
+        None,
+        "mixed all-F/all-zero is still a placeholder"
+    );
+    assert_eq!(
+        parse_wmi_uuid("UUID\r\n12345678-1234-1234-1234-123456789012\r\n").as_deref(),
+        Some("12345678-1234-1234-1234-123456789012"),
+        "a real uuid must still be accepted"
+    );
+}
+
+/// M8: 写任务 panic 不得报废 writer 线程 — 该调用方收到
+/// `WriteQueue("writer task panicked")`, 后续写入继续正常.
+#[tokio::test]
+async fn writer_thread_survives_a_panicking_task() {
+    let pool = SqliteConnectionPool::in_memory().await.unwrap();
+
+    pool.write(|conn| {
+        conn.execute_batch("CREATE TABLE panic_probe (id INTEGER PRIMARY KEY)")?;
+        Ok(())
+    })
+    .await
+    .unwrap();
+
+    let panicking = pool
+        .write(|_conn| -> Result<(), StorageError> {
+            panic!("deliberate write-task panic for M8 coverage");
+        })
+        .await;
+    match panicking {
+        Err(StorageError::WriteQueue(message)) => {
+            assert_eq!(message, "writer task panicked", "根因必须指向 panic 本身");
+        }
+        other => panic!("expected WriteQueue(panicked), got {other:?}"),
+    }
+
+    // writer 线程必须还活着: 后续写入照常成功.
+    pool.write(|conn| {
+        conn.execute("INSERT INTO panic_probe (id) VALUES (1)", [])?;
+        Ok(())
+    })
+    .await
+    .unwrap();
+
+    let count: i64 = pool
+        .read(|conn| Ok(conn.query_row("SELECT count(*) FROM panic_probe", [], |r| r.get(0))?))
+        .unwrap();
+    assert_eq!(count, 1);
+
+    // write_sync 路径同样受保护.
+    let sync_panicking = pool.write_sync(|_conn| -> Result<(), StorageError> {
+        panic!("deliberate write_sync panic for M8 coverage");
+    });
+    match sync_panicking {
+        Err(StorageError::WriteQueue(message)) => {
+            assert_eq!(message, "writer task panicked");
+        }
+        other => panic!("expected WriteQueue(panicked), got {other:?}"),
+    }
+
+    pool.write_sync(|conn| {
+        conn.execute("INSERT INTO panic_probe (id) VALUES (2)", [])?;
+        Ok(())
+    })
+    .unwrap();
+    let count: i64 = pool
+        .read(|conn| Ok(conn.query_row("SELECT count(*) FROM panic_probe", [], |r| r.get(0))?))
+        .unwrap();
+    assert_eq!(count, 2);
+}

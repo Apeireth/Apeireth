@@ -21,6 +21,11 @@ pub enum BridgeExtError {
     InvalidUtf8,
     QueueFull { capacity: usize },
     ZeroCapacity,
+    /// L1 修复 (2026-09-24 审计): stream buffer 超过字节上限 (无界缓冲 =
+    /// 流式总长度即内存上限)。
+    BufferFull { capacity: usize },
+    /// L1 修复 (2026-09-24 审计): stream chunk 数超过上限。
+    TooManyChunks { capacity: usize },
 }
 
 impl fmt::Display for BridgeExtError {
@@ -33,25 +38,74 @@ impl fmt::Display for BridgeExtError {
             Self::ZeroCapacity => {
                 formatter.write_str("bridge queue capacity must be greater than zero")
             }
+            Self::BufferFull { capacity } => {
+                write!(formatter, "stream buffer is full (capacity={capacity})")
+            }
+            Self::TooManyChunks { capacity } => {
+                write!(formatter, "too many stream chunks (capacity={capacity})")
+            }
         }
     }
 }
 
 impl Error for BridgeExtError {}
 
+/// StreamBridge 默认字节上限 (1 MiB)。
+pub const DEFAULT_MAX_BUFFER_BYTES: usize = 1024 * 1024;
+/// StreamBridge 默认 chunk 数上限。
+pub const DEFAULT_MAX_CHUNKS: usize = 4_096;
+
 #[derive(Debug, Default, Clone)]
 pub struct StreamBridge {
     buffer: Vec<u8>,
     completed_chunks: usize,
+    max_buffer_bytes: usize,
+    max_chunks: usize,
 }
 
 impl StreamBridge {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            buffer: Vec::new(),
+            completed_chunks: 0,
+            max_buffer_bytes: DEFAULT_MAX_BUFFER_BYTES,
+            max_chunks: DEFAULT_MAX_CHUNKS,
+        }
     }
-    pub fn push_chunk(&mut self, chunk: impl AsRef<[u8]>) {
-        self.buffer.extend_from_slice(chunk.as_ref());
+
+    /// 覆盖上限 (0 = 恢复默认)。
+    #[must_use]
+    pub fn with_limits(mut self, max_buffer_bytes: usize, max_chunks: usize) -> Self {
+        self.max_buffer_bytes = if max_buffer_bytes == 0 {
+            DEFAULT_MAX_BUFFER_BYTES
+        } else {
+            max_buffer_bytes
+        };
+        self.max_chunks = if max_chunks == 0 {
+            DEFAULT_MAX_CHUNKS
+        } else {
+            max_chunks
+        };
+        self
+    }
+
+    /// L1 修复 (2026-09-24 审计): push_chunk 现有界 —— 原实现无 chunk 数/
+    /// 字节上限, 流式总长度即内存上限。超限返回错误而不静默吞并。
+    pub fn push_chunk(&mut self, chunk: impl AsRef<[u8]>) -> Result<(), BridgeExtError> {
+        let bytes = chunk.as_ref();
+        if self.buffer.len().saturating_add(bytes.len()) > self.max_buffer_bytes {
+            return Err(BridgeExtError::BufferFull {
+                capacity: self.max_buffer_bytes,
+            });
+        }
+        if self.completed_chunks >= self.max_chunks {
+            return Err(BridgeExtError::TooManyChunks {
+                capacity: self.max_chunks,
+            });
+        }
+        self.buffer.extend_from_slice(bytes);
         self.completed_chunks += 1;
+        Ok(())
     }
     pub fn finish(&mut self) -> Result<String, BridgeExtError> {
         let bytes = std::mem::take(&mut self.buffer);
@@ -139,8 +193,8 @@ mod tests {
     #[test]
     fn stream_assembles_chunks() {
         let mut bridge = StreamBridge::new();
-        bridge.push_chunk("hello ");
-        bridge.push_chunk("world");
+        bridge.push_chunk("hello ").expect("within limits");
+        bridge.push_chunk("world").expect("within limits");
         assert_eq!(bridge.chunk_count(), 2);
         assert_eq!(bridge.finish().unwrap(), "hello world");
         assert_eq!(bridge.pending_items(), 0);
@@ -149,16 +203,34 @@ mod tests {
     fn stream_supports_split_utf8_codepoint() {
         let mut bridge = StreamBridge::new();
         let bytes = "\u{54f2}".as_bytes();
-        bridge.push_chunk(&bytes[..1]);
-        bridge.push_chunk(&bytes[1..]);
+        bridge.push_chunk(&bytes[..1]).expect("within limits");
+        bridge.push_chunk(&bytes[1..]).expect("within limits");
         assert_eq!(bridge.finish().unwrap(), "\u{54f2}");
     }
     #[test]
     fn stream_rejects_invalid_utf8_and_resets() {
         let mut bridge = StreamBridge::new();
-        bridge.push_chunk([0xff]);
+        bridge.push_chunk([0xff]).expect("within limits");
         assert_eq!(bridge.finish(), Err(BridgeExtError::InvalidUtf8));
         assert_eq!(bridge.pending_items(), 0);
+    }
+    #[test]
+    fn stream_buffer_and_chunk_count_are_bounded() {
+        // L1 回归 (2026-09-24 审计): 原实现无上限。
+        let mut byte_full = StreamBridge::new().with_limits(4, 0);
+        byte_full.push_chunk([1, 2, 3, 4]).expect("exactly capacity");
+        assert_eq!(
+            byte_full.push_chunk([5]),
+            Err(BridgeExtError::BufferFull { capacity: 4 })
+        );
+
+        let mut chunk_full = StreamBridge::new().with_limits(0, 2);
+        chunk_full.push_chunk([1]).expect("chunk 1");
+        chunk_full.push_chunk([2]).expect("chunk 2");
+        assert_eq!(
+            chunk_full.push_chunk([3]),
+            Err(BridgeExtError::TooManyChunks { capacity: 2 })
+        );
     }
     #[test]
     fn queue_is_bounded_fifo() {

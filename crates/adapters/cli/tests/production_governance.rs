@@ -112,7 +112,16 @@ async fn explicit_false_policy_grants_repo_only_and_denies_read_tools() {
 async fn local_read_opt_in_grants_only_filesystem_and_search() {
     let governance = build_production_governance(true);
     assert_decision(&governance, "tool.repo", Decision::Allow).await;
-    assert_decision(&governance, "tool.filesystem", Decision::Allow).await;
+    // H3 (2026-09-24 审计) 后的语义分层: 本测试在无 TurnSecurityContext 的裸
+    // 派发上评估治理 —— `tool.filesystem` 的 descriptor 是 `[Read, Write]`
+    // (guard/semantics.rs), intent 缺失时 fail-closed 升为 RequireApproval
+    // (非 Deny: 旋钮授权仍然生效, 只是要求人工确认); 纯读 `tool.search` 仍 Allow。
+    assert_decision(
+        &governance,
+        "tool.filesystem",
+        Decision::require_approval("intent-missing fail-closed"),
+    )
+    .await;
     assert_decision(&governance, "tool.search", Decision::Allow).await;
     assert_decision(&governance, "tool.shell", Decision::deny("expected deny")).await;
     assert_decision(&governance, "tool.fetch", Decision::deny("expected deny")).await;
@@ -126,19 +135,33 @@ async fn local_read_opt_in_grants_only_filesystem_and_search() {
 
 #[tokio::test]
 async fn env_wrapper_grants_local_read_tools_by_default_and_honors_disable() {
-    let _lock = ENV_LOCK.lock().unwrap();
+    // poison 安全: 前一个测试 panic 不应连锁毒化本锁。
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(&[ENABLE_LOCAL_READ_TOOLS_ENV, DISABLE_LOCAL_READ_TOOLS_ENV]);
 
     // Neither knob set: filesystem/search are granted by default (like repo).
+    // H3 语义分层: tool.filesystem 带写语义, 无 turn intent 的裸派发为
+    // RequireApproval (旋钮授权生效, intent 维度 fail-closed); tool.search
+    // 纯读仍 Allow。
     guard.clear();
     let default = build_production_governance_from_env();
-    assert_decision(&default, "tool.filesystem", Decision::Allow).await;
+    assert_decision(
+        &default,
+        "tool.filesystem",
+        Decision::require_approval("intent-missing fail-closed"),
+    )
+    .await;
     assert_decision(&default, "tool.search", Decision::Allow).await;
 
     // Legacy opt-in still works: it is equivalent to the default.
     std::env::set_var(ENABLE_LOCAL_READ_TOOLS_ENV, "1");
     let enabled = build_production_governance_from_env();
-    assert_decision(&enabled, "tool.filesystem", Decision::Allow).await;
+    assert_decision(
+        &enabled,
+        "tool.filesystem",
+        Decision::require_approval("intent-missing fail-closed"),
+    )
+    .await;
     assert_decision(&enabled, "tool.search", Decision::Allow).await;
 
     // The privacy escape hatch revokes the read tools.

@@ -40,6 +40,110 @@ async fn test_fast_guard_allows_benign_read() {
     assert_eq!(verdict.metadata.get("guard_stage"), Some("fast_guard"));
 }
 
+/// H3 回归: intent 缺失 (未绑定 TurnSecurityContext 的派发, 如后台任务、
+/// 系统动作、审批恢复轮次) 时对齐层必须 fail-closed —— 删除能力从 Allow
+/// 升为 RequireApproval, 而纯读路径维持放行 (不误伤只读)。
+#[tokio::test]
+async fn missing_intent_escalates_delete_to_approval_but_keeps_read_allowed() {
+    let hook = BehaviorChainGuardHook::new();
+    let session = SessionId::new();
+
+    let read_cap = CapabilityId::new("fs.read").unwrap();
+    let read_args = serde_json::json!({ "path": "src/main.rs" });
+    let read = make_dispatch_req(session, TraceId::new(), 1, &read_cap, &read_args);
+    let read_verdict = hook.evaluate_verbose(&read).await;
+    assert!(
+        read_verdict.is_allowed(),
+        "a pure read without intent must stay allowed"
+    );
+
+    let delete_cap = CapabilityId::new("fs.delete").unwrap();
+    let delete_args = serde_json::json!({ "path": "src/main.rs" });
+    let delete = make_dispatch_req(session, TraceId::new(), 1, &delete_cap, &delete_args);
+    let delete_verdict = hook.evaluate_verbose(&delete).await;
+    assert!(
+        matches!(
+            delete_verdict.decision,
+            apeireth_governance::Decision::RequireApproval { .. }
+        ),
+        "a delete without intent must require approval (fail-closed): {:?}",
+        delete_verdict.decision
+    );
+    let reasons = delete_verdict
+        .metadata
+        .get("guard_reasons")
+        .unwrap_or_default();
+    assert!(
+        reasons.contains("turn_intent_unavailable"),
+        "{reasons}"
+    );
+}
+
+/// 回归 (guard L 组): 只读 intent 的规范 scope 是 `workspace_read` (见
+/// intent.rs read_only 分支 → chain.rs set_intent), FastGuard 的只读判定
+/// 必须识别它 —— 旧实现只匹配子串 "read_only", 规则对规范 scope 永不触发。
+#[tokio::test]
+async fn canonical_read_only_intent_scope_denies_write_at_fast_guard() {
+    let hook = BehaviorChainGuardHook::new();
+    let session = SessionId::new();
+    let context = intent_context(session, "只检查仓库中的配置问题，不要修改，也不要联网");
+    let trace = TraceId::new();
+
+    let cap = CapabilityId::new("fs.write").unwrap();
+    let args = serde_json::json!({"path": "config.toml", "content": "changed"});
+    let write = GovernanceRequest::new(
+        Action::CapabilityDispatch {
+            capability: &cap,
+            arguments: &args,
+        },
+        session,
+        trace,
+        1,
+    )
+    .with_security_context(&context);
+    let verdict = hook.evaluate_verbose(&write).await;
+
+    assert!(matches!(
+        verdict.decision,
+        apeireth_governance::Decision::Deny { .. }
+    ));
+    assert_eq!(verdict.metadata.get("guard_stage"), Some("fast_guard"));
+    let reason = verdict.decision.reason().unwrap();
+    assert!(reason.contains("scope mismatch"), "{reason}");
+}
+
+/// M10 回归: 行为链表按插入顺序 LRU 驱逐并有上限。旧实现用
+/// `chains.keys().next()` (HashMap 任意键序) 驱逐, 与注释宣称的顺序语义
+/// 不符; 新实现维护插入顺序队列, 最久未命中的链先被驱逐。
+#[tokio::test]
+async fn active_chains_are_bounded_and_evicted_in_insertion_order() {
+    let hook = BehaviorChainGuardHook::new();
+    let session = SessionId::new();
+    let mut first_trace = None;
+    for index in 0..300u32 {
+        let trace = TraceId::new();
+        if index == 0 {
+            first_trace = Some(trace);
+        }
+        let cap = CapabilityId::new("fs.read").unwrap();
+        let args = serde_json::json!({ "path": "src/main.rs" });
+        let _ = hook
+            .evaluate_verbose(&make_dispatch_req(session, trace, 1, &cap, &args))
+            .await;
+    }
+
+    let status = hook.status();
+    assert_eq!(
+        status.active_chains, 256,
+        "the chain map must stay at the configured cap"
+    );
+    let oldest = first_trace.expect("the first trace is recorded");
+    assert!(
+        hook.chain_for_trace(&session, &oldest.to_string()).is_none(),
+        "the oldest trace must have been evicted (insertion-order LRU)"
+    );
+}
+
 #[tokio::test]
 async fn test_fast_guard_denies_destructive_command() {
     let hook = BehaviorChainGuardHook::new();
@@ -272,10 +376,21 @@ async fn explicit_publish_is_aligned_but_unknown_external_tool_requires_approval
         1,
     )
     .with_security_context(&unknown_context);
+    // 只读 intent 的规范 scope (`workspace_read`) 现在会被 FastGuard 的只读
+    // 判定识别 (旧实现只匹配 "read_only" 子串, 规则对规范 scope 永不触发),
+    // 未知外部效果能力直接撞上 scope mismatch → Deny (比旧的 RequireApproval
+    // 更收紧, 方向一致: 绝不放行)。
+    let unknown_verdict = hook.evaluate_verbose(&unknown).await;
+    assert!(
+        !unknown_verdict.is_allowed(),
+        "an unknown external-effect tool under a read-only intent must never be allowed"
+    );
     assert!(matches!(
-        hook.evaluate_verbose(&unknown).await.decision,
-        apeireth_governance::Decision::RequireApproval { .. }
+        unknown_verdict.decision,
+        apeireth_governance::Decision::Deny { .. }
     ));
+    let reason = unknown_verdict.decision.reason().unwrap();
+    assert!(reason.contains("scope mismatch"), "{reason}");
 }
 
 #[tokio::test]

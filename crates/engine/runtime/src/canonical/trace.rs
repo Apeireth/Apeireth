@@ -127,6 +127,17 @@ pub enum TraceEvent {
         /// Which round.
         round: u32,
     },
+    /// The model's single round carried more tool calls than the runtime
+    /// dispatches; the excess was dropped (with synthetic error results, so
+    /// the transcript stays well-formed).
+    ToolCallsTruncated {
+        /// How many calls the provider asked for.
+        requested: usize,
+        /// How many were kept for dispatch.
+        kept: usize,
+        /// Which round.
+        round: u32,
+    },
     /// The turn produced a final answer.
     TurnCompleted {
         /// How many provider round-trips it took.

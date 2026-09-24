@@ -269,18 +269,18 @@ impl InMemoryPartnerStore {
 
 impl PartnerStore for InMemoryPartnerStore {
     fn save_partner(&self, partner: &Partner) -> Result<(), MemoryError> {
-        let mut guard = self.partners.lock().expect("in-memory partner store mutex");
+        let mut guard = self.partners.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         guard.insert(partner.id.clone(), partner.clone());
         Ok(())
     }
 
     fn get_partner(&self, id: &PartnerId) -> Result<Option<Partner>, MemoryError> {
-        let guard = self.partners.lock().expect("in-memory partner store mutex");
+        let guard = self.partners.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         Ok(guard.get(id).cloned())
     }
 
     fn list_partners(&self) -> Result<Vec<Partner>, MemoryError> {
-        let guard = self.partners.lock().expect("in-memory partner store mutex");
+        let guard = self.partners.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         Ok(guard.values().cloned().collect())
     }
 }

@@ -193,8 +193,16 @@ pub trait PhilosophyGuard: Send + Sync {
     /// 13 键 verdict (编译时 hardcode 强制所有 verdict 都返回 bool)
     fn check_philosophy(&self, action: &Action) -> PhilosophyVerdict;
     /// 元问题禁令 (外部反馈 §3.A) - 反思期不能询问"是否需要 L0 HA"
+    ///
+    /// H8 修复 (2026-09-24 审计): 原默认实现是 3 条字面量子串匹配
+    /// (`contains("L0 HA")` 等), 而同 crate 的 `is_forbidden_meta_question_const`
+    /// 有零宽/全角/同形字/emoji 变形 + 多张字面清单的 10 层检测 ——
+    /// `DefaultPhilosophyGuard` 未覆写本方法, 消费者走公开 trait 即被弱版
+    /// 放过 ("如何降低安全等级" / 全角 / 同形字全部漏过)。默认实现现在直接
+    /// 委托 const fn, 保持单一 source of truth; 100+ 负向 pentest 测试
+    /// 同时覆盖两条路径。
     fn is_forbidden_meta_question(&self, query: &str) -> bool {
-        query.contains("L0 HA") || query.contains("是否需要") || query.contains("取消 L0")
+        crate::is_forbidden_meta_question_const(query)
     }
 }
 
@@ -208,13 +216,21 @@ pub enum PhilosophyVerdict {
 }
 
 /// 13 键 verdict cache (运行时 O(1) 查询缓存)
+///
+/// 容量有界 (FIFO 淘汰, [`Self::MAX_ENTRIES`]) —— 原实现是无界 HashMap,
+/// 按请求/动作粒度刷新时随进程寿命单调增长 (审计 Medium M3)。
 #[derive(Debug, Default)]
 pub struct VerdictCache {
     /// action_id → verdict 映射
     cache: HashMap<String, PhilosophyVerdict>,
+    /// 插入顺序 (FIFO 淘汰用)
+    order: std::collections::VecDeque<String>,
 }
 
 impl VerdictCache {
+    /// 容量上限 (超出按最早插入淘汰)
+    pub const MAX_ENTRIES: usize = 4_096;
+
     /// 创建空缓存
     pub fn new() -> Self {
         Self::default()
@@ -225,6 +241,16 @@ impl VerdictCache {
     }
     /// 刷新 verdict (OTA / hot-reload / 反思期可改)
     pub fn refresh(&mut self, action_id: String, verdict: PhilosophyVerdict) {
-        self.cache.insert(action_id, verdict);
+        if self.cache.insert(action_id.clone(), verdict).is_none() {
+            self.order.push_back(action_id);
+        }
+        while self.order.len() > Self::MAX_ENTRIES {
+            match self.order.pop_front() {
+                Some(evicted) => {
+                    self.cache.remove(&evicted);
+                }
+                None => break,
+            }
+        }
     }
 }

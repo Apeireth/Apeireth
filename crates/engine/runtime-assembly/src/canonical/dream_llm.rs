@@ -87,6 +87,14 @@ impl LlmMetaThinker {
 }
 
 impl MetaThinker for LlmMetaThinker {
+    /// 同步思考: 内部 `block_on` 一个**私有 current-thread runtime**。
+    ///
+    /// L 组 (dream_llm.rs:103): 这是 trait 契约里的同步方法, 但 `block_on`
+    /// 不能在多线程 tokio worker 上被调用 (会 panic "Cannot start a runtime
+    /// from within a runtime" 或阻塞 worker)。**调用方必须把 `think()` 包在
+    /// `tokio::task::spawn_blocking` 里**; 取最小改动 —— 改异步需要动
+    /// `MetaThinker` trait 及其全部实现方 (dream/organ 两侧), 超出本条范围,
+    /// 这里以契约注释 + Panics 段落固化调用条件。
     fn think(&self, input: &MetaThinkInput) -> Result<MetaThinkOutput, MetaThinkError> {
         let request = CompletionRequest {
             system_prompt: DREAM_META_SYSTEM_PROMPT.to_string(),

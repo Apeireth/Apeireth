@@ -122,7 +122,7 @@ impl MinimaxProviderCapability {
     /// [`ProviderError::AuthFailed`] stops the router from cascading.
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
         let resolver = {
-            let guard = self.resolver.lock().expect("resolver slot lock poisoned");
+            let guard = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone().ok_or_else(|| ProviderError::AuthFailed {
                 provider: self.id.to_string(),
                 detail: format!(
@@ -333,11 +333,17 @@ impl MinimaxProviderPlugin {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_else(|| DEFAULT_MODELS.iter().map(|s| s.to_string()).collect());
-        let http = reqwest::Client::builder().build().map_err(|e| {
-            PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
-                "reqwest client build failed: {e}"
-            )))
-        })?;
+        // M6: 禁重定向 —— vendor client 不跟随 30x。reqwest 0.12 跨主机
+        // 重定向只删 Authorization/Cookie 等固定集合, 自定义 bearer 语义
+        // 的端点一旦被导向另一主机, key 会跟着转发; 本 API 从不 30x。
+        let http = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| {
+                PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
+                    "reqwest client build failed: {e}"
+                )))
+            })?;
         Ok(Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?)
     }
 
@@ -362,7 +368,7 @@ impl MinimaxProviderPlugin {
     /// capability directly rather than through `Runtime::execute`.
     #[doc(hidden)]
     pub fn attach_resolver_for_test(&self, resolver: Arc<dyn CredentialResolver>) {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(resolver);
     }
 
@@ -385,14 +391,14 @@ impl Plugin for MinimaxProviderPlugin {
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
         // The resolver arrives here, after registration. Fill the shared slot
         // so the capability can resolve credentials on its next turn.
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(Arc::clone(&ctx.credentials));
         Ok(())
     }
 
     async fn shutdown(&self) -> PluginResult<()> {
         // Drop the resolver handle on shutdown; no resources to release beyond it.
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = None;
         Ok(())
     }

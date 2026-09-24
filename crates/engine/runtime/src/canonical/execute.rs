@@ -69,6 +69,11 @@ use super::session::{Session, SessionEventKind};
 use super::subloop::RuntimeSubLoopSpawner;
 use super::trace::{ExecutionTrace, TraceEvent};
 
+/// M20: 单轮 tool_calls 上限。`max_rounds` 约束的是轮数, 模型单轮塞进的
+/// 调用数则完全没界 —— 每多一个调用就是多一次成本与一次副作用面 (shell /
+/// fs / http), 异常或注入诱导的输出可被放大成批处理。超出即截断并留痕。
+pub const MAX_TOOL_CALLS_PER_ROUND: usize = 16;
+
 /// One turn's input.
 #[derive(Debug, Clone)]
 pub struct TurnRequest {
@@ -685,7 +690,12 @@ impl Runtime {
                             .await
                         {
                             Err(error) => Err(error),
-                            Ok(_) => unreachable!("module stop cannot complete a turn"),
+                            // L 组: fail_module_stop 只会返回 Err, 但用 typed
+                            // error 兜底而不是 unreachable!/panic —— 一个 panic
+                            // 会炸掉 worker 任务而不是变成可恢复的 turn 失败。
+                            Ok(_) => Err(RuntimeError::misconfigured(
+                                "module stop cannot complete a turn",
+                            )),
                         };
                     }
                 }
@@ -702,6 +712,9 @@ impl Runtime {
                     },
                 );
 
+                // M27: 把冻结的 security context 取出来再传回 (continuation
+                // 本身随后被 move 进 advance, 不能边借边移)。
+                let resumed_context = continuation.security_context.clone();
                 let outcome = self
                     .advance(
                         session,
@@ -709,7 +722,9 @@ impl Runtime {
                         session_id,
                         approval.request_id,
                         approval.trace_id,
-                        None,
+                        // M27: 传回冻结的安全上下文, 恢复轮次的治理评估
+                        // 才看得到本轮 intent (否则等同未绑定, H3 fail-open)。
+                        resumed_context.as_ref(),
                         tools,
                         continuation,
                         retry_scaffolding,
@@ -773,6 +788,9 @@ impl Runtime {
                     },
                 );
 
+                // M27: 同上 —— 批准恢复必须带着冻结的 security context,
+                // 否则被批准的调用在恢复轮次里失去 intent 绑定 (H3)。
+                let resumed_context = continuation.security_context.clone();
                 let outcome = self
                     .advance(
                         session,
@@ -780,7 +798,7 @@ impl Runtime {
                         session_id,
                         approval.request_id,
                         approval.trace_id,
-                        None,
+                        resumed_context.as_ref(),
                         tools,
                         continuation,
                         Vec::new(),
@@ -975,7 +993,7 @@ impl Runtime {
                     );
                 }
 
-                let response = routed.response;
+                let mut response = routed.response;
                 let served_by = routed.served_by;
                 trace.record(
                     Timestamp::from_clock(clock),
@@ -1130,7 +1148,53 @@ impl Runtime {
                     clock,
                 );
 
-                continuation.tool_calls = response.tool_calls;
+                // M20: 单轮 tool_calls 上限。轮次限制约束的是轮数, 不约束模型
+                // 单轮塞进的调用数 —— N 个调用 = N 倍成本与副作用面 (模型输出
+                // 异常或被 prompt 注入诱导时可被放大)。超出部分截断, 并像模块
+                // 跳过一样补合成 tool 结果: assistant 消息里的每一次 tool call
+                // 都必须有答案, 否则发给 provider 的 transcript 格式非法。
+                let mut round_tool_calls = std::mem::take(&mut response.tool_calls);
+                let dropped_calls = if round_tool_calls.len() > MAX_TOOL_CALLS_PER_ROUND {
+                    let dropped = round_tool_calls.split_off(MAX_TOOL_CALLS_PER_ROUND);
+                    trace.record(
+                        Timestamp::from_clock(clock),
+                        TraceEvent::ToolCallsTruncated {
+                            requested: MAX_TOOL_CALLS_PER_ROUND + dropped.len(),
+                            kept: MAX_TOOL_CALLS_PER_ROUND,
+                            round: continuation.round,
+                        },
+                    );
+                    session.record(
+                        request_id,
+                        trace_id,
+                        SessionEventKind::ToolFailed {
+                            capability: None,
+                            tool_call_id: dropped
+                                .iter()
+                                .map(|call| call.id.clone())
+                                .collect::<Vec<_>>()
+                                .join(","),
+                            error: format!(
+                                "truncated: a single round dispatches at most {MAX_TOOL_CALLS_PER_ROUND} tool calls"
+                            ),
+                            round: continuation.round,
+                        },
+                        clock,
+                    );
+                    dropped
+                } else {
+                    Vec::new()
+                };
+                if !dropped_calls.is_empty() {
+                    Self::append_skipped_tool_results(
+                        &mut session,
+                        &dropped_calls,
+                        0,
+                        "tool call dropped: single-round tool call limit reached",
+                        clock,
+                    );
+                }
+                continuation.tool_calls = round_tool_calls;
                 continuation.next_tool_index = 0;
                 continuation.approved_tool_index = None;
                 continuation.approved_approval_id = None;
@@ -1390,6 +1454,9 @@ impl Runtime {
                             approved_tool_index: None,
                             approved_approval_id: None,
                             module_invocations: module_state.used(),
+                            // M27: 冻结本轮的安全上下文, 恢复轮次的治理评估
+                            // 否则会丢失 intent (H3 的 fail-open 入口)。
+                            security_context: security_context.cloned(),
                         };
                         let command_text = approval_command_text(
                             &tool_name,

@@ -23,6 +23,7 @@
 //! - 非 2xx 一律 `Unavailable`, 带状态码与响应体片段; 不重试 (重试策略归上层)。
 
 use apeireth_memory::{EmbeddingError, EmbeddingProvider};
+use apeireth_plugin::Secret;
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -37,12 +38,21 @@ pub const EMBEDDING_KEY_ENV: &str = "APEIRETH_EMBEDDING_KEY";
 ///
 /// Owns its vendor transport (a `reqwest::Client` and the `POST /embeddings`
 /// request/response shape), mirroring the `canonical_*` provider capabilities.
+///
+/// # Secret handling (H9)
+///
+/// The bearer token is held as `Option<Secret>` exactly like the canonical
+/// providers' resolver path (`credentials.rs`): `Secret`'s `Debug` prints
+/// `Secret(<redacted>)`, so a `debug!`/`{:?}` on this long-lived struct can no
+/// longer write `APEIRETH_EMBEDDING_KEY` into logs or an error panel. The
+/// plain `Option<String>` field this replaces was the only secret-bearing
+/// field in the crate without that protection.
 #[derive(Debug, Clone)]
 pub struct OpenAiCompatibleEmbeddingProvider {
     http: reqwest::Client,
     base_url: String,
     model: String,
-    api_key: Option<String>,
+    api_key: Option<Secret>,
 }
 
 impl OpenAiCompatibleEmbeddingProvider {
@@ -60,14 +70,20 @@ impl OpenAiCompatibleEmbeddingProvider {
         if model.is_empty() {
             return Err(EmbeddingError::Unavailable("empty embedding model".into()));
         }
-        let http = reqwest::Client::builder().build().map_err(|error| {
-            EmbeddingError::Unavailable(format!("reqwest client build failed: {error}"))
-        })?;
+        // M6: 禁重定向 —— vendor embeddings 是一次性 POST, 从不 30x。reqwest
+        // 0.12 跨主机重定向只删 Authorization/Cookie 等固定集合, 带 bearer
+        // token 的端点被导向另一主机时 key 会跟着转发; 直接拒绝重定向。
+        let http = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|error| {
+                EmbeddingError::Unavailable(format!("reqwest client build failed: {error}"))
+            })?;
         Ok(Self {
             http,
             base_url,
             model,
-            api_key,
+            api_key: api_key.map(Secret::new),
         })
     }
 
@@ -96,7 +112,7 @@ impl EmbeddingProvider for OpenAiCompatibleEmbeddingProvider {
             .post(self.embeddings_url())
             .json(&serde_json::json!({ "input": text, "model": self.model }));
         let request = match &self.api_key {
-            Some(key) => request.bearer_auth(key),
+            Some(key) => request.bearer_auth(key.expose()),
             None => request,
         };
         let response = request.send().await.map_err(|error| {
@@ -207,5 +223,35 @@ mod tests {
             .expect("provider builds");
         assert_eq!(provider.embeddings_url(), "http://x/v1/embeddings");
         assert_eq!(provider.model_id(), "emb-model");
+    }
+
+    /// H9 防泄露回归: 长生命周期结构体上的 API key 不得以明文出现在任何
+    /// `Debug` 输出里 (与 credentials.rs `the_resolver_does_not_carry_or_
+    /// print_secrets` 对称)。CLI 组装根构造后以 `Arc<dyn EmbeddingProvider>`
+    /// 长期驻留, 任一上层 `{:?}` 都会经过这里。
+    #[test]
+    fn debug_and_display_never_print_the_embedding_key() {
+        let provider = OpenAiCompatibleEmbeddingProvider::new(
+            "http://x/v1",
+            "emb-model",
+            Some("sk-embedding-super-secret".to_string()),
+        )
+        .expect("provider builds");
+        let printed = format!("{provider:?}");
+        assert!(
+            !printed.contains("sk-embedding-super-secret"),
+            "Debug must not carry the key: {printed}"
+        );
+        // 字段仍存在 (结构未被误删), 只是值被脱敏。
+        assert!(printed.contains("OpenAiCompatibleEmbeddingProvider"), "{printed}");
+    }
+
+    #[test]
+    fn a_missing_key_still_builds_and_bears_no_token() {
+        // 本地/无鉴权端点: key 缺失是合法配置, 构造必须成功且不携带秘密。
+        let provider = OpenAiCompatibleEmbeddingProvider::new("http://x/v1", "m", None)
+            .expect("provider builds without a key");
+        assert!(provider.api_key.is_none());
+        assert!(!format!("{provider:?}").contains("sk-"));
     }
 }

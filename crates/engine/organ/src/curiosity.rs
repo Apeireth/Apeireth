@@ -316,7 +316,7 @@ impl CuriosityOrgan {
         let mut engine = self
             .engine
             .lock()
-            .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.feed_echoes(echoes);
     }
 
@@ -325,7 +325,7 @@ impl CuriosityOrgan {
         let mut engine = self
             .engine
             .lock()
-            .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.feed_surprise(topic, brier);
     }
 
@@ -334,7 +334,7 @@ impl CuriosityOrgan {
         let mut engine = self
             .engine
             .lock()
-            .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.deepen(topic)
     }
 
@@ -343,7 +343,7 @@ impl CuriosityOrgan {
         let engine = self
             .engine
             .lock()
-            .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.budget_left()
     }
 }
@@ -381,7 +381,7 @@ impl OrganTrait for CuriosityOrgan {
                 let engine = self
                     .engine
                     .lock()
-                    .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 engine.should_ask_master(t)
             })
             .cloned()
@@ -505,13 +505,13 @@ mod tests {
         organ.feed_surprise("股市预测", 0.8);
         // 直接拿 engine 锁, 不嵌套调 organ 方法 (避免 std::Mutex 死锁)
         let echo_strong = {
-            let engine = organ.engine.lock().unwrap();
+            let engine = organ.engine.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             engine.echo_of("股市预测")
         };
         assert!((echo_strong - 0.4).abs() < 1e-9);
         organ.feed_surprise("稳定领域", 0.05);
         let echo_weak = {
-            let engine = organ.engine.lock().unwrap();
+            let engine = organ.engine.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             engine.echo_of("稳定领域")
         };
         assert!(echo_weak < 0.1);
@@ -528,7 +528,7 @@ mod tests {
             echo: 0.01,
             est_cost: 100.0,
         };
-        let engine = organ.engine.lock().unwrap();
+        let engine = organ.engine.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         assert!(
             engine.should_ask_master(&costly),
             "成本/回声比高 → 问主人更快"

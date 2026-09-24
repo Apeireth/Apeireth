@@ -228,6 +228,9 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
         // output 是数组,每个 item 有 type + content[0].text
         let mut content = String::new();
         let mut tool_calls: Vec<ToolCall> = Vec::new();
+        // L4 修复 (2026-09-24 审计): 畸形 arguments JSON 不再静默吞为 `{}`,
+        // 置 Null 并把原文记入 raw_metadata.malformed_tool_arguments。
+        let mut malformed_tool_arguments: Vec<String> = Vec::new();
 
         if let Some(output) = raw.get("output").and_then(|v| v.as_array()) {
             for item in output {
@@ -265,8 +268,13 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                             .get("arguments")
                             .map(|v| {
                                 if let Some(s) = v.as_str() {
-                                    serde_json::from_str(s)
-                                        .unwrap_or_else(|_| Value::Object(Map::new()))
+                                    match serde_json::from_str(s) {
+                                        Ok(value) => value,
+                                        Err(_) => {
+                                            malformed_tool_arguments.push(s.to_string());
+                                            Value::Null
+                                        }
+                                    }
                                 } else {
                                     v.clone()
                                 }
@@ -305,8 +313,12 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
         let usage = raw
             .get("usage")
             .map(|u| {
-                let p = u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                let c = u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                let p = crate::normalized::clamp_u32(
+                    u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                );
+                let c = crate::normalized::clamp_u32(
+                    u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                );
                 crate::normalized::NormalizedUsage::new(p, c)
             })
             .unwrap_or_default();
@@ -320,6 +332,12 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
         }
         if let Some(c) = raw.get("created_at").and_then(|v| v.as_i64()) {
             raw_metadata.insert("created_at".into(), Value::Number(c.into()));
+        }
+        if !malformed_tool_arguments.is_empty() {
+            raw_metadata.insert(
+                "malformed_tool_arguments".into(),
+                json!(malformed_tool_arguments),
+            );
         }
 
         Ok(NormalizedResponse {
