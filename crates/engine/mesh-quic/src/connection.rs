@@ -216,4 +216,8 @@ impl MeshConnection for QuicMeshConnection {
     fn peer_fingerprint(&self) -> Option<KeyFingerprint> {
         self.peer_fingerprint.clone()
     }
+
+    fn remote_endpoint_hint(&self) -> Option<String> {
+        Some(self.connection.remote_address().to_string())
+    }
 }

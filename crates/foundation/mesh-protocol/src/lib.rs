@@ -27,6 +27,7 @@
 
 pub mod envelope;
 pub mod identity;
+pub mod pairing;
 
 pub use envelope::{
     decode_envelope, encode_envelope, verify_hello, verify_hello_ack, Cancel, CapabilityAdvert,
@@ -35,8 +36,12 @@ pub use envelope::{
     MESH_PROTOCOL_VERSION,
 };
 pub use identity::{
-    CapabilityAdvertEntry, LocatedModuleId, MeshCapabilityKind, ModuleAdvert, ModuleLocation,
-    NodeDescriptor, WireModelDescriptor,
+    CapabilityAdvertEntry, KeyFingerprint, LocatedModuleId, MeshCapabilityKind, ModuleAdvert,
+    ModuleLocation, NodeDescriptor, WireModelDescriptor,
+};
+pub use pairing::{
+    PairChallenge, PairCodeReady, PairComplete, PairConfirm, PairHello, PairReject, PairingMessage,
+    PAIRING_PROTOCOL_VERSION, PAIRING_SAS_DOMAIN,
 };
 
 pub use apeireth_core::kernel::NodeId;

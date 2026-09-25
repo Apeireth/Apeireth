@@ -68,6 +68,12 @@ pub trait MeshConnection: Send + Sync {
     fn peer_fingerprint(&self) -> Option<crate::identity::KeyFingerprint> {
         None
     }
+
+    /// A transport-provided location hint for the far end (for persistence
+    /// after pairing). Pure metadata; never an identity.
+    fn remote_endpoint_hint(&self) -> Option<String> {
+        None
+    }
 }
 
 /// The server side of a transport: accept inbound links.

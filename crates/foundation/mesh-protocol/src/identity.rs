@@ -18,6 +18,48 @@ use serde::{Deserialize, Serialize};
 
 pub use apeireth_core::kernel::NodeId as CanonicalNodeId;
 
+/// The pinned proof of a node's public key: hex SHA-256 of the raw 32-byte
+/// Ed25519 public key. Comparable, serializable, map-friendly — never a
+/// secret. Wire/identity data lives here so pairing and trust share one
+/// definition with the transport layer.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct KeyFingerprint(String);
+
+impl KeyFingerprint {
+    /// Compute the fingerprint of a raw Ed25519 public key.
+    pub fn of_public_key(public_key: &[u8]) -> Self {
+        use sha2::{Digest, Sha256};
+        let digest = Sha256::digest(public_key);
+        Self(
+            digest
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>(),
+        )
+    }
+
+    /// The hex digest as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Parse a fingerprint from its canonical hex form (64 hex chars). Used
+    /// for discovery hints; the pairing ceremony always recomputes from the
+    /// authenticated channel key rather than trusting this value.
+    pub fn of_hex(text: &str) -> Option<Self> {
+        if text.len() != 64 || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return None;
+        }
+        Some(Self(text.to_ascii_lowercase()))
+    }
+}
+
+impl std::fmt::Display for KeyFingerprint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// Where a module's implementation physically runs.
 ///
 /// The location axis, kept separate from provenance (`ModuleOrigin`) and from
