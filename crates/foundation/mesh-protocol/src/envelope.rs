@@ -278,6 +278,9 @@ pub enum MeshPayload {
     Heartbeat(Heartbeat),
     /// Cancellation of an in-flight invocation.
     Cancel(Cancel),
+    /// A pairing-ceremony message. Only legal on a pairing channel; an
+    /// established mesh connection receiving one is a protocol violation.
+    Pair(crate::pairing::PairingMessage),
 }
 
 /// The one wire envelope.

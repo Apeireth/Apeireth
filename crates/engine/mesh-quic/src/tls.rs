@@ -229,6 +229,19 @@ pub fn server_config(
     Ok(config)
 }
 
+/// Pairing-channel client config: the peer must present **some** authenticated
+/// Ed25519 identity key (possession is proven by TLS) but no pin exists yet —
+/// pinning is exactly what the pairing ceremony produces. The pairing
+/// protocol binds claims to this channel's key; nothing else runs on it.
+pub fn pairing_client_config(identity: &NodeIdentity) -> Result<ClientConfig, String> {
+    testing::accept_any_client_config(identity)
+}
+
+/// Pairing-channel server config: same contract as [`pairing_client_config`].
+pub fn pairing_server_config(identity: &NodeIdentity) -> Result<ServerConfig, String> {
+    testing::accept_any_server_config(identity)
+}
+
 /// **Tests only.** Verifiers that accept any certificate — an encrypted
 /// channel with no identity binding. Never referenced by any production
 /// constructor; existing only so negative tests can reach the node-binding

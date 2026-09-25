@@ -80,6 +80,17 @@ impl QuicMeshTransport {
         Ok(Self { endpoint, config })
     }
 
+    /// Pairing-mode dial: the server must present an authenticated identity
+    /// key but need not be pinned yet — pinning is what pairing produces.
+    pub fn new_for_pairing(
+        bind: SocketAddr,
+        identity: Arc<NodeIdentity>,
+        config: QuicTransportConfig,
+    ) -> Result<Self, MeshTransportError> {
+        let client_tls = tls::pairing_client_config(&identity).map_err(MeshTransportError::Io)?;
+        Self::new_with_tls(bind, client_tls, config)
+    }
+
     /// The local socket actually bound (useful with port 0).
     pub fn local_addr(&self) -> Result<SocketAddr, MeshTransportError> {
         self.endpoint
@@ -163,6 +174,17 @@ impl QuicMeshListener {
         let endpoint = quinn::Endpoint::server(server_config, addr)
             .map_err(|e| MeshTransportError::Io(e.to_string()))?;
         Ok(Self { endpoint, config })
+    }
+
+    /// Pairing-mode listener: clients must present an authenticated identity
+    /// key but need not be pinned — the ceremony produces the pin.
+    pub fn bind_for_pairing(
+        addr: SocketAddr,
+        identity: Arc<NodeIdentity>,
+        config: QuicTransportConfig,
+    ) -> Result<Self, MeshTransportError> {
+        let server_tls = tls::pairing_server_config(&identity).map_err(MeshTransportError::Io)?;
+        Self::bind_with_tls(addr, server_tls, config)
     }
 
     /// The local socket actually bound (useful with port 0).

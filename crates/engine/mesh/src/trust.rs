@@ -18,7 +18,18 @@ use crate::error::MeshError;
 use crate::identity::KeyFingerprint;
 
 /// How far a known peer is trusted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum PeerTrust {
     /// May connect and request capability execution, subject to governance.
     Trusted,
@@ -29,7 +40,7 @@ pub enum PeerTrust {
 
 /// One operator-configured peer: identity, endpoint, trust, and — for real
 /// transports — the pinned identity key.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct KnownPeer {
     /// The peer's canonical node identity.
     pub node: NodeId,

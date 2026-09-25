@@ -41,11 +41,13 @@ pub mod error;
 pub mod executor;
 pub mod identity;
 pub mod node;
+pub mod pairing;
 pub mod peer;
 pub mod port;
 pub mod route;
 pub mod transport;
 pub mod trust;
+pub mod trust_store;
 
 pub use conformance::assert_connection_conformance;
 pub use error::{MeshError, MeshExecError};
@@ -56,6 +58,10 @@ pub use executor::{
 pub use identity::{IdentityError, KeyFingerprint, NodeIdentity};
 pub use node::{
     CallHandle, CallTarget, InvokeMeta, MeshNode, MeshNodeConfig, DEFAULT_HEARTBEAT_TIMEOUT_MS,
+};
+pub use pairing::{
+    pair_inbound, pair_outbound, ConfirmDecision, PairedPeer, PairingError, PairingLimiter,
+    PairingOptions, PairingState, PairingTranscript,
 };
 pub use peer::{Peer, PeerState};
 pub use port::{
@@ -70,6 +76,7 @@ pub use transport::{
     MeshConnection, MeshListener, MeshTransport, MeshTransportError,
 };
 pub use trust::{KnownPeer, PeerTrust, TrustPolicy};
+pub use trust_store::{EndpointUpdate, TrustStore, TrustStoreError};
 
 pub use apeireth_mesh_protocol::NodeId;
 pub use apeireth_mesh_protocol::{
