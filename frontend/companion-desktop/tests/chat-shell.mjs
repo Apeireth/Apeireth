@@ -117,6 +117,82 @@ const localConv = (id, over = {}) => ({
 console.log('✓ mergeSessionLedger / sessionPreview / formatSessionTime 全分支');
 
 // ---------------------------------------------------------------------------
+// 1b. groupHomeSessions / archivedHomeItems — 项目区（工作目录）+ 联系人区（人设）
+//     分组、置顶优先、组间活跃倒序；归档组单独供给（2026-10-11 主人拍板批）
+// ---------------------------------------------------------------------------
+
+import {
+  archivedHomeItems,
+  groupHomeSessions,
+  personaLabel,
+  workspaceLabel,
+} from '../src/lib/chat-shell/session-list.ts';
+
+const mkItem = (id, over = {}) => ({
+  id,
+  title: over.title ?? `会话 ${id}`,
+  lastActiveAt: over.lastActiveAt ?? 0,
+  messageCount: 1,
+  preview: null,
+  origin: over.origin ?? 'local',
+  pendingApproval: false,
+  archived: false,
+  pinned: over.pinned ?? false,
+  workspace: over.workspace ?? null,
+  personaId: over.personaId ?? null,
+  personaName: over.personaName ?? null,
+});
+
+// 项目分组：按 workspace 原串归组，标签取路径末段；未设归「未关联项目」
+{
+  const {projects, contacts} = groupHomeSessions([
+    mkItem('a', {workspace: 'C:\\Users\\me\\Apeireth-rust', lastActiveAt: 100}),
+    mkItem('b', {workspace: 'C:/Users/me/Apeireth-rust', lastActiveAt: 900}),
+    mkItem('c', {workspace: null, lastActiveAt: 500}),
+  ]);
+  assert.equal(projects.length, 3); // 两种写法原串不同 = 诚实各一组；未设再一组
+  assert.equal(workspaceLabel('C:\\Users\\me\\Apeireth-rust'), 'Apeireth-rust');
+  assert.equal(workspaceLabel(null), '未关联项目');
+  assert.equal(workspaceLabel('C:\\'), 'C:');
+  // 组间按最新活跃倒序：b(900) 组在前
+  assert.equal(projects[0].items[0].id, 'b');
+  assert.equal(contacts.length, 1); // 无 persona 全落同一组
+  assert.equal(personaLabel(null), '旧会话');
+  assert.equal(personaLabel('阿佩瑞斯'), '阿佩瑞斯');
+}
+
+// 联系人分组：按 personaId 归组，标签取 personaName；组内置顶优先再活跃倒序
+{
+  const {contacts} = groupHomeSessions([
+    mkItem('x', {personaId: 'p1', personaName: '阿佩瑞斯', lastActiveAt: 100, pinned: true}),
+    mkItem('y', {personaId: 'p1', personaName: '阿佩瑞斯', lastActiveAt: 900}),
+    mkItem('z', {personaId: 'p2', personaName: '凯尔', lastActiveAt: 300}),
+  ]);
+  assert.equal(contacts.length, 2);
+  const g1 = contacts.find((g) => g.key === 'p1');
+  assert.equal(g1.label, '阿佩瑞斯');
+  assert.deepEqual(g1.items.map((i) => i.id), ['x', 'y']); // 置顶 x 在前,尽管 y 更新
+  // 组间：p1 最新 900 > p2 300 → p1 在前
+  assert.equal(contacts[0].key, 'p1');
+}
+
+// 归档组：只收 archived 本地会话，活跃倒序，带待签标记
+{
+  const convs = [
+    {...localConv('n1', {updatedAt: 100})},
+    {...localConv('a1', {updatedAt: 500, archived: true})},
+    {...localConv('a2', {updatedAt: 900, archived: true})},
+  ];
+  const list = archivedHomeItems(convs, new Set(['a2']));
+  assert.deepEqual(list.map((i) => i.id), ['a2', 'a1']);
+  assert.equal(list[0].pendingApproval, true);
+  assert.equal(list[1].pendingApproval, false);
+  assert.equal(archivedHomeItems(convs).length, 2);
+}
+
+console.log('✓ groupHomeSessions / archivedHomeItems / 分组标签 全分支');
+
+// ---------------------------------------------------------------------------
 // 2. parseApprovalEventPayload — SSE approval_required/resolved 帧归一化
 //    （payload 字段逐字核实 crates/adapters/gateway/src/events.rs:134-143,292-299）
 // ---------------------------------------------------------------------------

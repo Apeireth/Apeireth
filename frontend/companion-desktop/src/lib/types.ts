@@ -106,8 +106,11 @@ export interface Conversation {
   scope: ConversationScope;
   projectId?: string;
   model?: string;
-  /** 会话级工作区根目录; 未设时跟随全局默认 (设置页). */
+  /** 会话级工作区根目录; 未设时跟随全局默认 (设置页). 项目分组键. */
   workspace?: string;
+  /** 创建会话时的伙伴人设（联系人分组键；name 冗余存, 人设删了组标签仍在）。 */
+  personaId?: string;
+  personaName?: string;
 }
 
 export interface ModelSetup {

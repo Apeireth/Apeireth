@@ -43,6 +43,14 @@ export interface HomeSessionItem {
   pendingApproval: boolean;
   /** 本地归档标记（后端账本无归档概念）。 */
   archived: boolean;
+  /** 置顶（本地标记，排序用）。 */
+  pinned: boolean;
+  /** 项目分组键：会话级工作区根目录；未设 = null（渲染层归默认组）。 */
+  workspace: string | null;
+  /** 联系人分组键：创建时的人设 id；未设（旧数据）= null。 */
+  personaId: string | null;
+  /** 组标签显示名（人设名冗余）。 */
+  personaName: string | null;
 }
 
 export interface MergeSessionLedgerInput {
@@ -81,6 +89,10 @@ export function mergeSessionLedger(input: MergeSessionLedgerInput): HomeSessionI
       origin: 'local',
       pendingApproval: pending.has(conv.id),
       archived: false,
+      pinned: !!conv.pinned,
+      workspace: conv.workspace ?? null,
+      personaId: conv.personaId ?? null,
+      personaName: conv.personaName ?? null,
     });
   }
 
@@ -107,11 +119,104 @@ export function mergeSessionLedger(input: MergeSessionLedgerInput): HomeSessionI
         origin: 'backend',
         pendingApproval: pending.has(s.id),
         archived: false,
+        pinned: false,
+        workspace: null,
+        personaId: null,
+        personaName: null,
       });
     }
   }
 
   return [...byId.values()].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+}
+
+/** 已归档的本地会话（归档是管理动作，归在主页底部「已归档」折叠组）。 */
+export function archivedHomeItems(
+  local: Conversation[],
+  pendingApprovalSessions?: ReadonlySet<string>,
+): HomeSessionItem[] {
+  const pending = pendingApprovalSessions ?? new Set<string>();
+  return local
+    .filter((c) => c.archived)
+    .map((conv) => ({
+      id: conv.id,
+      title: conv.title || '新对话',
+      lastActiveAt: conv.updatedAt ?? conv.createdAt ?? 0,
+      messageCount: conv.messages.length,
+      preview: sessionPreview(conv),
+      origin: 'local' as const,
+      pendingApproval: pending.has(conv.id),
+      archived: true,
+      pinned: !!conv.pinned,
+      workspace: conv.workspace ?? null,
+      personaId: conv.personaId ?? null,
+      personaName: conv.personaName ?? null,
+    }))
+    .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+}
+
+/** 项目分组键 → 显示名：取路径末段（目录名）；空/根路径回退默认组。 */
+export function workspaceLabel(workspace: string | null): string {
+  if (!workspace) return '未关联项目';
+  const trimmed = workspace.replace(/[\\/]+$/, '');
+  const seg = trimmed.split(/[\\/]/).filter(Boolean).pop();
+  return seg || '未关联项目';
+}
+
+/** 联系人分组键 → 显示名。 */
+export function personaLabel(personaName: string | null): string {
+  return personaName?.trim() || '旧会话';
+}
+
+/** 主页分组（Kimi Desktop 范式，2026-10-11 主人拍板）：
+ *  项目区（按工作目录）+ 联系人区（按伙伴人设），组内置顶优先、活跃倒序，
+ *  组间按最新活跃倒序。组键稳定：项目 = workspace 原串，联系人 = personaId ?? name。 */
+export interface HomeSessionGroup {
+  key: string;
+  label: string;
+  items: HomeSessionItem[];
+}
+
+export interface HomeSessionSections {
+  projects: HomeSessionGroup[];
+  contacts: HomeSessionGroup[];
+}
+
+export function groupHomeSessions(items: HomeSessionItem[]): HomeSessionSections {
+  const byLatest = (list: HomeSessionItem[]) =>
+    [...list].sort(
+      (a, b) =>
+        Number(b.pinned) - Number(a.pinned) || b.lastActiveAt - a.lastActiveAt,
+    );
+  const projectMap = new Map<string, HomeSessionItem[]>();
+  const contactMap = new Map<string, HomeSessionItem[]>();
+  for (const item of items) {
+    const pk = item.workspace ?? '';
+    const ck = item.personaId ?? `name:${item.personaName ?? ''}`;
+    if (!projectMap.has(pk)) projectMap.set(pk, []);
+    if (!contactMap.has(ck)) contactMap.set(ck, []);
+    projectMap.get(pk)!.push(item);
+    contactMap.get(ck)!.push(item);
+  }
+  const toGroups = (
+    map: Map<string, HomeSessionItem[]>,
+    labelOf: (key: string, items: HomeSessionItem[]) => string,
+  ): HomeSessionGroup[] =>
+    [...map.entries()]
+      .map(([key, list]) => ({
+        key,
+        label: labelOf(key, list),
+        items: byLatest(list),
+        latest: Math.max(...list.map((i) => i.lastActiveAt)),
+      }))
+      .sort((a, b) => b.latest - a.latest)
+      .map(({key, label, items: groupItems}) => ({key, label, items: groupItems}));
+  return {
+    projects: toGroups(projectMap, (key) => workspaceLabel(key || null)),
+    contacts: toGroups(contactMap, (key, list) =>
+      personaLabel(list[0]?.personaName ?? null),
+    ),
+  };
 }
 
 /** 微信式相对时间：今天给时刻，昨天给「昨天」，更早给日期。 */

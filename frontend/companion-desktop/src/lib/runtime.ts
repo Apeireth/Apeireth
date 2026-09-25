@@ -2078,6 +2078,9 @@ export function loadConversations(): Conversation[] {
       pinned: !!item.pinned,
       archived: !!item.archived,
       model: typeof item.model === 'string' ? item.model : undefined,
+      personaId: typeof item.personaId === 'string' ? item.personaId : undefined,
+      personaName: typeof item.personaName === 'string' ? item.personaName : undefined,
+      workspace: typeof item.workspace === 'string' ? item.workspace : undefined,
     }));
   } catch {
     return [];

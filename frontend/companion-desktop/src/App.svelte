@@ -882,6 +882,8 @@
       messages: [],
       scope: 'global',
       model: config.model,
+      personaId: activePersona?.id,
+      personaName: activePersona?.name,
     };
     conversations = [conversation, ...conversations];
     activeId = conversation.id;
@@ -1515,6 +1517,8 @@
       messages: [],
       scope: 'global',
       model: config.model,
+      personaId: activePersona?.id,
+      personaName: activePersona?.name,
     };
     conversations = [conversation, ...conversations];
     activeId = conversation.id;
@@ -1603,6 +1607,8 @@
         messages: [],
         scope: 'global',
         model: config.model,
+        personaId: activePersona?.id,
+        personaName: activePersona?.name,
       };
       conversations = [conv, ...conversations];
       persist();
@@ -2454,6 +2460,13 @@
             onOpen={openHomeSession}
             onOpenHim={openHim}
             onNew={newConversation}
+            onRename={(id, title) => updateConversation(id, {title})}
+            onTogglePin={(id) => {
+              const conv = conversations.find((item) => item.id === id);
+              if (conv) updateConversation(id, {pinned: !conv.pinned});
+            }}
+            onToggleArchive={archiveConversation}
+            onDelete={deleteConversation}
           />
         </aside>
         <div class="chat-area">
