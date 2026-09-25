@@ -79,7 +79,7 @@ python scripts/check_doc_caliber.py docs/04-internal/live-verification-ledger.md
 | 真 Ed25519 多签 | v2.1 计划项（`onion.rs` 0 装占位注释已载明）|
 | smol-vm/libkrun VM | 外部依赖；`VMRunner` trait 口已备 |
 | experiment_field CLI 命令面 | 需 orchestrator 触发链设计（机制件已在 assembly）|
-| 审批卡 sandbox 徽标目检 | 主人真机 click-through（`frontend/companion-desktop/docs/first-run-click-through-checklist.md`）|
+| 审批卡 sandbox 徽标目检 | **部分收口（台账 #68，2026-10-11）**：治理卷宗四页徽标已真机目检（审批/授权/守卫/审计）；**卡上青盾 sandbox 徽标仍需真 LLM key 触发一次 shell 审批**（`frontend/companion-desktop/docs/first-run-click-through-checklist.md`）|
 
 ## 6. 防复蹈教训（本 Span 真机咬出的坑）
 
