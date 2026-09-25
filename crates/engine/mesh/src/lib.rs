@@ -37,6 +37,7 @@
 #![deny(unsafe_code)]
 
 pub mod conformance;
+pub mod connector;
 pub mod discovery;
 pub mod error;
 pub mod executor;
@@ -46,12 +47,14 @@ pub mod node;
 pub mod pairing;
 pub mod peer;
 pub mod port;
+pub mod relay;
 pub mod route;
 pub mod transport;
 pub mod trust;
 pub mod trust_store;
 
 pub use conformance::assert_connection_conformance;
+pub use connector::{PeerConnector, Strategy};
 pub use discovery::{
     DiscoveredPeer, DiscoveryBackend, DiscoveryMethod, DiscoverySink, FakeDiscoveryBackend,
     MeshDiscoveryService,
