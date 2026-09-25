@@ -80,6 +80,7 @@ python scripts/check_doc_caliber.py docs/04-internal/live-verification-ledger.md
 | smol-vm/libkrun VM | 外部依赖；`VMRunner` trait 口已备 |
 | experiment_field CLI 命令面 | 需 orchestrator 触发链设计（机制件已在 assembly）|
 | 审批卡 sandbox 徽标目检 | **部分收口（台账 #68，2026-10-11）**：治理卷宗四页徽标已真机目检（审批/授权/守卫/审计）；**卡上青盾 sandbox 徽标仍需真 LLM key 触发一次 shell 审批**（`frontend/companion-desktop/docs/first-run-click-through-checklist.md`）|
+| glib <0.20.0 安全告警（GHSA-wrw7-89jp-8q8g） | 已以 not_used 消除（台账 #69）——tauri GTK 栈 cfg(linux/BSD) 门控、Windows 产物不编译；**解锁条件：上游 tauri 升级 GTK 栈，或首次出 Linux 构建前重新评估** |
 
 ## 6. 防复蹈教训（本 Span 真机咬出的坑）
 
