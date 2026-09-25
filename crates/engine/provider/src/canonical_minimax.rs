@@ -122,7 +122,10 @@ impl MinimaxProviderCapability {
     /// [`ProviderError::AuthFailed`] stops the router from cascading.
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
         let resolver = {
-            let guard = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let guard = self
+                .resolver
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone().ok_or_else(|| ProviderError::AuthFailed {
                 provider: self.id.to_string(),
                 detail: format!(
@@ -368,7 +371,10 @@ impl MinimaxProviderPlugin {
     /// capability directly rather than through `Runtime::execute`.
     #[doc(hidden)]
     pub fn attach_resolver_for_test(&self, resolver: Arc<dyn CredentialResolver>) {
-        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(resolver);
     }
 
@@ -391,14 +397,20 @@ impl Plugin for MinimaxProviderPlugin {
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
         // The resolver arrives here, after registration. Fill the shared slot
         // so the capability can resolve credentials on its next turn.
-        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(Arc::clone(&ctx.credentials));
         Ok(())
     }
 
     async fn shutdown(&self) -> PluginResult<()> {
         // Drop the resolver handle on shutdown; no resources to release beyond it.
-        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = None;
         Ok(())
     }

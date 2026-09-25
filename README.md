@@ -134,11 +134,12 @@ graph TB
 | **Portability & Sync** | Heavy cloud dependencies & non-portable setups | **Portable USB Agent & P2P Mesh**: Relative path `./data/` isolation + Noise_XX end-to-end encrypted BLE/LAN memory roaming |
 | **Memory & Safety** | Python dynamic typing, memory leaks, GIL bottlenecks | **100% Pure Safe Rust**: `#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`, zero unhandled exceptions, zero data races |
 
-> **Attribution & status**: the fluid memory-field dynamics and residual pyramid modules
-> were historically ported from VCP 1.0. As of 2026-10 both implementations have been
-> **fully rewritten as independent implementations based on public mathematical literature**
-> (Gerstner & Kistler, *Spiking Neuron Models*; Golub & Van Loan, *Matrix Computations*);
-> the current code contains no VCP-derived expression. Historical notes:
+> **Attribution & status**: the fluid memory-field dynamics, residual pyramid and related
+> modules were historically ported from VCP 1.0. As of 2026-10 all landed implementations have
+> been **rewritten as independent implementations based on public mathematical literature and
+> standard engineering patterns** (Gerstner & Kistler, *Spiking Neuron Models*; Golub & Van
+> Loan, *Matrix Computations*, etc.); the current code contains no VCP-derived expression.
+> Historical notes:
 > [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
 > and [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md).
 

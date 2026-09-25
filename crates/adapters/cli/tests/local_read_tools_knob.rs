@@ -154,7 +154,9 @@ async fn assert_local_read_tools(runtime: &Runtime, allowed: bool) {
 #[tokio::test]
 async fn local_read_tools_default_to_granted() {
     // poison 安全: 前一个测试 panic 不应让后续测试连锁 PoisonError (掩盖真实失败)。
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(GUARDED_KEYS);
     guard.clear_all();
 
@@ -165,7 +167,9 @@ async fn local_read_tools_default_to_granted() {
 #[tokio::test]
 async fn disable_env_rejects_local_read_tools() {
     // poison 安全: 前一个测试 panic 不应让后续测试连锁 PoisonError (掩盖真实失败)。
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(GUARDED_KEYS);
     guard.clear_all();
     std::env::set_var(DISABLE_LOCAL_READ_TOOLS_ENV, "1");
@@ -177,7 +181,9 @@ async fn disable_env_rejects_local_read_tools() {
 #[tokio::test]
 async fn legacy_enable_env_still_grants_local_read_tools() {
     // poison 安全: 前一个测试 panic 不应让后续测试连锁 PoisonError (掩盖真实失败)。
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(GUARDED_KEYS);
     guard.clear_all();
     std::env::set_var(ENABLE_LOCAL_READ_TOOLS_ENV, "1");
@@ -189,7 +195,9 @@ async fn legacy_enable_env_still_grants_local_read_tools() {
 #[tokio::test]
 async fn disable_wins_over_enable() {
     // poison 安全: 前一个测试 panic 不应让后续测试连锁 PoisonError (掩盖真实失败)。
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let guard = EnvGuard::guard(GUARDED_KEYS);
     guard.clear_all();
     std::env::set_var(ENABLE_LOCAL_READ_TOOLS_ENV, "1");

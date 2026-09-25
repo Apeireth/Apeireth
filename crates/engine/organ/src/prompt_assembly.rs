@@ -1,4 +1,4 @@
-//! Prompt placeholder universe (VCP messageProcessor paradigm, rewritten).
+//! Prompt placeholder universe (消息处理范式（独立实现）).
 //!
 //! Recovered from `legacy/donor/apeireth-companion/src/prompt_assembler.rs`.
 //!

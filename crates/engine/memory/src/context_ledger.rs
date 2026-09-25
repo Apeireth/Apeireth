@@ -8,7 +8,7 @@
 //!   sidecar. Extract / dream / reflection keep reading `episodes`.
 //!
 //! Discarded donor shortcuts:
-//! - VCP fuzzy-diff timeline insertion (explicitly not absorbed).
+//! - fuzzy-diff timeline insertion (explicitly not absorbed).
 //! - Hard DELETE as the only retention (see [`crate::retention`] for the
 //!   policy object; this module still prunes the rolling window because a
 //!   ledger is a recent-window, not an archive).

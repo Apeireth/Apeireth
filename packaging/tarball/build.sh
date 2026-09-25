@@ -58,7 +58,7 @@ APEIRETH_HOME=/var/lib/apeireth
 APEIRETH_CONFIG=/etc/apeireth/config.toml
 APEIRETH_LOG_DIR=/var/log/apeireth
 APEIRETH_API_KEY=
-APEIRETH_BASE_URL=https://api.minimaxi.com/v1
+APEIRETH_API_URL=
 APEIRETH_MODEL=MiniMax-M3
 RUST_LOG=info
 EOF

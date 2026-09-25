@@ -130,7 +130,10 @@ impl AnthropicProviderCapability {
     /// is permanent (§40): falling back would mask a misconfiguration.
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
         let resolver = {
-            let guard = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let guard = self
+                .resolver
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone().ok_or_else(|| ProviderError::AuthFailed {
                 provider: self.id.to_string(),
                 detail: format!(
@@ -527,7 +530,10 @@ impl AnthropicProviderPlugin {
     /// Attach a credential resolver without booting a full runtime (tests).
     #[doc(hidden)]
     pub fn attach_resolver_for_test(&self, resolver: Arc<dyn CredentialResolver>) {
-        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(resolver);
     }
 
@@ -545,13 +551,19 @@ impl Plugin for AnthropicProviderPlugin {
     }
 
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(Arc::clone(&ctx.credentials));
         Ok(())
     }
 
     async fn shutdown(&self) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = None;
         Ok(())
     }

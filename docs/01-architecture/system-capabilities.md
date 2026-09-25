@@ -7,7 +7,7 @@
 
 > **状态标注 (0 装 PASS, 基线 candidate `8b7e3111`)**: 本手册描述各能力域的**库级实现契约 (IMPLEMENTED)**。四个状态层级不可混淆：
 > **IMPLEMENTED（代码存在）** ≠ **PRODUCTION WIRED（接入 canonical 运行时主路径）** ≠ **DEFAULT ENABLED（无需 opt-in 即开启）** ≠ **HARDWARE VALIDATED（真机验证）**。
-> 除特别标注外，模块均为显式 opt-in，**未**接入 canonical 运行时默认路径，**未**默认启用。当前已验证基线：远端 Windows 验证机 `cargo test --workspace --locked` = 2012 通过 / 0 失败（13 ignored）。库级已验证但未接线的 P2 能力（turn-scoped `ModuleInvoker`、`OrganModule`、`PreferenceLearning` 闭环、principle approvals、`topic_predictor`、continuation/reflexion/spill/检索确定性加固）状态详见 `CHANGELOG.md` Unreleased 段。
+> 除特别标注外，模块均为显式 opt-in，**未**接入 canonical 运行时默认路径，**未**默认启用。当前已验证基线：`cargo test --workspace --locked` = 3662 通过 / 0 失败（21 ignored，130 套件；历史口径见 CHANGELOG）。库级已验证但未接线的 P2 能力（turn-scoped `ModuleInvoker`、`OrganModule`、`PreferenceLearning` 闭环、principle approvals、`topic_predictor`、continuation/reflexion/spill/检索确定性加固）状态详见 `CHANGELOG.md` Unreleased 段。
 
 ---
 

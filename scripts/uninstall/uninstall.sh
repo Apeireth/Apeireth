@@ -2,7 +2,7 @@
 # =============================================================================
 # scripts/uninstall/uninstall.sh
 #
-# Apeireth 完整卸载 (per 蓝图 §3.7 5 步 0 残留守门)
+# Apeireth 完整卸载 (按安装规范 5 步 0 残留守门)
 #
 # 蓝图: reports/r19-integration-v2/r20-stage-2-3-prep-2026-08-05.md §3.7
 # §3.5 #6 卸载守门: 卸载 + 0 残留 + 可重装 (devops_engineer 跑, 任何 1 失败 = P0)
@@ -36,7 +36,7 @@
 #   - 0 引新 lib (用 apt/dnf/brew/scoop/docker 等系统命令)
 #
 # 跟 uninstall 相关其他脚本:
-#   - scripts/upgrade/rollback.sh (蓝图 §3.6, 7 天内回滚到 v2.0.0-alpha)
+#   - scripts/upgrade/rollback.sh (内部规范, 7 天内回滚到 v2.0.0-alpha)
 #
 # 用法:
 #   sudo bash scripts/uninstall/uninstall.sh           # 完整卸载

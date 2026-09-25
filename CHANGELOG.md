@@ -1,5 +1,15 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 合规重写全量收官：五大移植模块改独立实现 + 全仓来源措辞/数字口径/必败命令清零 (2026-09-25)
+
+- **许可证风险全面出清**：继 `river_topology.rs` / `residual_pyramid.rs` 之后，`semantic_axis.rs`（加权 PCA 语义主轴）、`async_context.rs`（四层上下文生命周期）、`file_fetcher.rs`（透明文件穿透）**全部重写**为独立实现（依据公开数值线性代数/通用工程模式/RFC 4648+FIPS 180-4）；当前 crates/frontend 不含第三方衍生表达。
+- **来源措辞与标识符中性化**：`context_fold` 对外标记 `vcp_fold:` → `fold:`（预发布格式无兼容负担）、`BORROWED_VCP_FIELDS` → `BORROWED_THIRDPARTY_FIELDS`、合规测试名/断言文案中性化；protocol/sdk/provider/plugin/organ/governance 约 170 处"借鉴 VCP X.js:行号"/`research/source/vcptoolbox` 路径/死文档引用（`蓝图 §x.y`、`D-02 子路径`）改为中性设计参考表述；`router_demo` 打印输出改为中性映射表；`mkdocs.yml`/根 `Cargo.toml` 同步。
+- **文档口径统一（3662 passed / 0 failed / 21 ignored，130 套件）**：76 文件的过期"当前基线"横幅改"当时基线（日期）"+ 指针；ROADMAP/SECURITY/maintenance-guide/system-capabilities/ENGINEER-MANIFESTO/TO-NEW-TEAM 数字对齐；带日期历史真账按约定保留原值。
+- **必败命令与死配置清零**：deployment.md（POSTGRES_PASSWORD 指引改单服务 SQLite）、5-min-quickstart/user-manual/team-handover/migration-v1-to-v2 的交互式宣称与 `session list` 失实步骤改实；packaging/docker+tarball `APEIRETH_BASE_URL` → `APEIRETH_API_URL`、deploy/protocols compose 与 upgrade 脚本标注 v1 口径并去弱口令默认、frontend README 死变量前缀移除、INSTALL example 命令补 `-p`。
+- **仓库格式基线修复**：`cargo fmt --all` 对齐（68 文件既有漂移，含非本轮触碰文件），`fmt --check` 恢复全绿。
+- **回归实证**：全量 **3662 passed / 0 failed（130 套件）** 与清扫前基线完全一致（行为零漂移）；clippy `-D warnings` 0 警告。
+- 豁免记录：`reports/`（工作日志存量）、docs/archive/、legacy/、research/ 不在清扫范围；`reports/vcp-plugin-gap-analysis-2026-08-12.md`（现存报告文件）引用与 `1:1 翻译 apeireth-api::`（自家 v1→v2 移植）为有意保留。
+
 ## [Unreleased] — 合规重写：流体拓扑动力学与残差金字塔改为公开文献独立实现 + 口径/命令对齐 (2026-09-25)
 
 - **许可证风险出清**：`river_topology.rs`（浪潮流体拓扑动力学）与 `residual_pyramid.rs`（MGS 残差金字塔）两块历史移植实现**全部重写**为基于公开数学文献的独立实现（LIF 脉冲模型 = Gerstner & Kistler《Spiking Neuron Models》；MGS 正交化 = Golub & Van Loan《Matrix Computations》）。公开 API 与行为契约（测试）不变；当前代码不含 VCP 衍生表达；README 双语"借鉴与署名"段与 vcp 吸收指南/对比报告同步改为重写声明。

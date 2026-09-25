@@ -402,7 +402,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory \
 9. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
 10. 读 docs/04-internal/TO-NEW-TEAM.md (给新团队的话 + 3 块真实施清单)
 11. 读 docs/01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
-12. 跑 cargo test --workspace --locked (验证 3120 passed / 0 failed / 13 ignored；历史 1739 passed 0 FAILED) + cargo clippy --workspace --all-targets --locked -- -D warnings (验证 0 警告)
+12. 跑 cargo test --workspace --locked (验证 3662 passed / 0 failed / 21 ignored；历史 1739 passed 0 FAILED) + cargo clippy --workspace --all-targets --locked -- -D warnings (验证 0 警告)
 ```
 
 ### 5.5 给新团队的话 (主代理 Mavis 致, 完整版见 `TO-NEW-TEAM.md`)
@@ -478,7 +478,7 @@ Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + OrganO
 8. A 块 O-6 复盘: docs/04-internal/A-block-o6-true-account.md
 
 主代理 Mavis 收盘 rc.1 + 8 spec + A 块完整化 + O-6 复盘 阶段, 你来接.
-有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline (期望 3120 tests / 0 clippy 警告).
+有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline (期望 3662 tests / 0 clippy 警告).
 ```
 
 ---

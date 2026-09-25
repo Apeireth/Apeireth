@@ -1,4 +1,4 @@
-//! `apeireth-protocol::ws_v1` — **WebSocket 8 帧协议** (R20 阶段 2, 蓝图 §2.3)
+//! `apeireth-protocol::ws_v1` — **WebSocket 8 帧协议** (R20 阶段 2, 接口契约)
 //!
 //! **目标**: R20 阶段 2 把 R18 6 类非 LLM API (web_search / file_ops / git_ops /
 //! code_exec / calendar / message) 通过 WebSocket 公开. 8 帧 = 5 业务帧 + 3 控制帧.
@@ -15,7 +15,7 @@
 //! - `Close` (双向) — 任何一方主动关闭, 带 reason + code
 //! - `Error` (s→c) — 服务端返非致命错误 (fatal=false 仅通知, fatal=true server 立即 close)
 //!
-//! **关键设计** (per 蓝图 §2.3):
+//! **关键设计** (按接口契约):
 //! - 8 帧用 `serde(tag = "type")` 内部 tag, 跟现有 `ProviderEvent` 5 变体正交
 //! - 复用 `req_id` 关联 `ToolInvoke` → `ToolResult`/`StreamChunk`/`StreamEnd`/`Error` (5 帧共享)
 //! - **不假装**: `ApiError::NotImplemented` 走错误码, 不假装支持
@@ -34,18 +34,18 @@ use crate::error::ProtocolError;
 /// **不漂移原则** (主 17:58 不假装): 一旦 bump 必跟 `apeireth-api` 的 WS upgrade 校验同步.
 pub const WS_PROTOCOL_VERSION: &str = "1";
 
-/// **WS 鉴权 token 默认 TTL** (5 min, per 蓝图 §2.4 D-03 决策).
+/// **WS 鉴权 token 默认 TTL** (5 min, 按接口契约 D-03 决策).
 ///
 /// **不漂移原则**: 跟 keyring 里 `apeireth-ws-token-{principal}` 凭证的 `expires_at` 字段对齐.
 pub const WS_TOKEN_DEFAULT_TTL_SECS: i64 = 300;
 
-/// **Ping 间隔 (server 发)** — 30s (per 蓝图 §2.3 WS 关键技术点).
+/// **Ping 间隔 (server 发)** — 30s (按接口契约 WS 关键技术点).
 pub const WS_PING_INTERVAL_SECS: u64 = 30;
 
-/// **WS idle timeout** — 5 min (per 蓝图 §2.3).
+/// **WS idle timeout** — 5 min (按接口契约).
 pub const WS_IDLE_TIMEOUT_SECS: u64 = 300;
 
-/// **最大并发 stream chunks per invoke** — 100 (背压上限, per 蓝图 §2.3).
+/// **最大并发 stream chunks per invoke** — 100 (背压上限, 按接口契约).
 pub const WS_MAX_STREAM_CHUNKS: usize = 100;
 
 // ============================================================================
@@ -166,7 +166,7 @@ pub struct ToolResultFrame {
     /// 错误信息 (`ok=false` 时存在)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    /// 元数据 (per 蓝图 §2.2 统一信封 meta 字段, 4 字段: tool / duration_ms / trace_id / api_key_hash)
+    /// 元数据 (按接口契约 统一信封 meta 字段, 4 字段: tool / duration_ms / trace_id / api_key_hash)
     pub meta: serde_json::Value,
 }
 
@@ -228,7 +228,7 @@ pub struct PingFrame {
 /// {"type": "auth", "token": "ws-tok-...", "ws_version": "1"}
 /// ```
 ///
-/// **流程** (per 蓝图 §2.4 D-03):
+/// **流程** (按接口契约 D-03):
 /// 1. 客户端先发 HTTP `POST /v1/auth/ws-token` 拿 5min TTL token
 /// 2. 客户端用 token 升级 WebSocket
 /// 3. 客户端首帧发 `Auth` 帧, server 校验 token → 接受 or close 1008 (`ws_unauthorized`)
@@ -247,7 +247,7 @@ pub struct AuthFrame {
 /// {"type": "close", "reason": "client_done", "code": 1000}
 /// ```
 ///
-/// **code 约定** (per 蓝图 §2.5 WS 错误码):
+/// **code 约定** (按接口契约 WS 错误码):
 /// - 1000 = 正常关闭 (client_done)
 /// - 1008 = 鉴权失败 (ws_unauthorized)
 /// - 1013 = 限流 (ws_too_many_concurrent)
@@ -267,12 +267,12 @@ pub struct CloseFrame {
 /// {"type": "error", "code": "rate_limited", "message": "rate limit exceeded, retry after 30s", "fatal": false}
 /// ```
 ///
-/// **fatal 区分** (per 蓝图 §2.5):
+/// **fatal 区分** (按接口契约):
 /// - `fatal=false` — 仅通知 (e.g. 限流 1 次), client 可继续
 /// - `fatal=true` — server 立即 close connection (e.g. 鉴权失败, quota 超限)
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ErrorFrame {
-    /// 错误码 (machine-readable, per 蓝图 §2.5 12 类 HTTP 状态码 1:1 映射)
+    /// 错误码 (machine-readable, 按接口契约 12 类 HTTP 状态码 1:1 映射)
     pub code: String,
     /// 错误消息 (人类可读)
     pub message: String,
@@ -366,22 +366,22 @@ const _: () = {
     // 5min TTL 锁
     assert!(
         WS_TOKEN_DEFAULT_TTL_SECS == 300,
-        "WS_TOKEN_DEFAULT_TTL_SECS must be 300s (5min per 蓝图 §2.4 D-03)"
+        "WS_TOKEN_DEFAULT_TTL_SECS must be 300s (5min 按接口契约 D-03)"
     );
     // 30s ping 间隔锁
     assert!(
         WS_PING_INTERVAL_SECS >= 10 && WS_PING_INTERVAL_SECS <= 60,
-        "WS_PING_INTERVAL_SECS must be 10..=60s (蓝图 §2.3)"
+        "WS_PING_INTERVAL_SECS must be 10..=60s (接口契约)"
     );
     // 5min idle timeout
     assert!(
         WS_IDLE_TIMEOUT_SECS >= 60,
-        "WS_IDLE_TIMEOUT_SECS must be >= 60s (蓝图 §2.3)"
+        "WS_IDLE_TIMEOUT_SECS must be >= 60s (接口契约)"
     );
     // 背压上限 100 chunk
     assert!(
         WS_MAX_STREAM_CHUNKS >= 16,
-        "WS_MAX_STREAM_CHUNKS must be >= 16 (蓝图 §2.3 背压)"
+        "WS_MAX_STREAM_CHUNKS must be >= 16 (接口契约 背压)"
     );
 };
 
@@ -440,7 +440,7 @@ mod ws_v1_tests {
             let back: WsFrame = serde_json::from_str(&json).expect("deserialize");
             assert_eq!(&back, f, "round-trip mismatch for {}", f.type_str());
         }
-        assert_eq!(frames.len(), 8, "8 帧必须齐发 (per 蓝图 §2.3)");
+        assert_eq!(frames.len(), 8, "8 帧必须齐发 (按接口契约)");
     }
 
     #[test]

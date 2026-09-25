@@ -620,7 +620,13 @@ mod tests {
     #[test]
     fn policy_k1_volume_mount_segment_level_prefix() {
         // 白名单内 (含白名单根本身) 放行
-        for source in ["/tmp", "/tmp/work", "/var/sandbox/a/b", "/data/x", "/workspace"] {
+        for source in [
+            "/tmp",
+            "/tmp/work",
+            "/var/sandbox/a/b",
+            "/data/x",
+            "/workspace",
+        ] {
             let m = VolumeMount {
                 source: PathBuf::from(source),
                 target: PathBuf::from("/mnt/x"),
@@ -653,11 +659,20 @@ mod tests {
     #[test]
     fn policy_lexical_normalize_behavior() {
         use std::path::Path;
-        assert_eq!(lexical_normalize(Path::new("/tmp/./x")), Path::new("/tmp/x"));
-        assert_eq!(lexical_normalize(Path::new("/tmp/a/../x")), Path::new("/tmp/x"));
+        assert_eq!(
+            lexical_normalize(Path::new("/tmp/./x")),
+            Path::new("/tmp/x")
+        );
+        assert_eq!(
+            lexical_normalize(Path::new("/tmp/a/../x")),
+            Path::new("/tmp/x")
+        );
         assert_eq!(lexical_normalize(Path::new("/..")), Path::new("/"));
         assert_eq!(lexical_normalize(Path::new("/tmp/..")), Path::new("/"));
-        assert_eq!(lexical_normalize(Path::new("../tmp/x")), Path::new("../tmp/x"));
+        assert_eq!(
+            lexical_normalize(Path::new("../tmp/x")),
+            Path::new("../tmp/x")
+        );
         assert_eq!(lexical_normalize(Path::new("a/../../x")), Path::new("../x"));
     }
 }

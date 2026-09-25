@@ -699,7 +699,10 @@ mod tests {
         .expect("valid");
         let dbg = format!("{token:?}");
         assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
-        assert!(!dbg.contains("t-secret-abc123def456"), "Debug 0 泄 token: {dbg}");
+        assert!(
+            !dbg.contains("t-secret-abc123def456"),
+            "Debug 0 泄 token: {dbg}"
+        );
         // 非秘密字段保留 (app_id 是公开标识)
         assert!(dbg.contains("cli_a1b2c3d4e5f6"), "app_id 应可见: {dbg}");
     }
@@ -717,8 +720,14 @@ mod tests {
         .expect("valid user token must succeed");
         let dbg = format!("{token:?}");
         assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
-        assert!(!dbg.contains("u-secret-abc123"), "Debug 0 泄 access_token: {dbg}");
-        assert!(!dbg.contains("ur-secret-xyz789"), "Debug 0 泄 refresh_token: {dbg}");
+        assert!(
+            !dbg.contains("u-secret-abc123"),
+            "Debug 0 泄 access_token: {dbg}"
+        );
+        assert!(
+            !dbg.contains("ur-secret-xyz789"),
+            "Debug 0 泄 refresh_token: {dbg}"
+        );
     }
 
     /// M5: AppSecretHolder Debug 脱敏.

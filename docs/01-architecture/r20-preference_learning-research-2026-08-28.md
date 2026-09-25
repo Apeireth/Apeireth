@@ -9,7 +9,7 @@
 - v2 OrganTrait 抽象: `crates/foundation/plugin/src/organ.rs` (497 行, 9 organ variant LOCKED)
 - readiness mapping: `docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md` (182 行, R15 spec 6/6 翻译表 + 5 actionable risk)
 
-> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当时实测基线（2026-09-05）：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1（现行基线见 INSTALL.md）。
 
 ## 1. 真实施 spec (按 readiness mapping 8 步)
 

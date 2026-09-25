@@ -157,9 +157,9 @@ decision_chain_range = "decision-22 ~ decision-58 (37 个决策文件, 完整可
 
 
 [workspace.dependencies]
-# R122-3-retry: 借鉴 VCP finalContextStore.js, 引入 tiktoken-rs 0.7 给 apeireth-pipeline
+# R122-3-retry: 设计参考 finalContextStore.js, 引入 tiktoken-rs 0.7 给 apeireth-pipeline
 # 做精确 BPE token 计数. 5 model (cl100k_base / o200k_base / p50k_base / r50k_base / gpt2)
-# 字段级对齐 VCP finalContextStore 5 model. 失败 fallback chars/4+1 启发式 (per VCP 设计).
+# token 计数 5 模型对齐. 失败 fallback chars/4+1 启发式 (按既有设计).
 tiktoken-rs = "0.7"
 tokio = { version = "1.40", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

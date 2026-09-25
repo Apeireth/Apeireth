@@ -134,7 +134,8 @@ impl OpenAiCompatibleProviderCapability {
     /// The current live base URL.
     pub fn base_url(&self) -> String {
         self.base_url
-            .read().unwrap_or_else(|poisoned| poisoned.into_inner())
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
     }
 
@@ -142,7 +143,8 @@ impl OpenAiCompatibleProviderCapability {
     pub fn set_base_url(&self, base_url: impl Into<String>) {
         *self
             .base_url
-            .write().unwrap_or_else(|poisoned| poisoned.into_inner()) = base_url.into();
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = base_url.into();
     }
 
     /// Resolve the API key for this turn, or fail permanently. A missing key
@@ -150,7 +152,10 @@ impl OpenAiCompatibleProviderCapability {
     /// missing key is a misconfiguration, not an anonymous request (§19/§20).
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
         let resolver = {
-            let guard = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let guard = self
+                .resolver
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone().ok_or_else(|| ProviderError::AuthFailed {
                 provider: self.id.to_string(),
                 detail: format!(
@@ -583,7 +588,10 @@ impl OpenAiCompatibleProviderPlugin {
     /// Attach a credential resolver without booting a full runtime (tests).
     #[doc(hidden)]
     pub fn attach_resolver_for_test(&self, resolver: Arc<dyn CredentialResolver>) {
-        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(resolver);
     }
 
@@ -601,13 +609,19 @@ impl Plugin for OpenAiCompatibleProviderPlugin {
     }
 
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(Arc::clone(&ctx.credentials));
         Ok(())
     }
 
     async fn shutdown(&self) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = None;
         Ok(())
     }

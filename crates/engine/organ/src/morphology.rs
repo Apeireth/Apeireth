@@ -1,4 +1,4 @@
-//! Query morphology softmax — retrieval-depth classifier (N7 / VCP rivermemo_topology_v3).
+//! Query morphology softmax — retrieval-depth classifier (N7).
 //!
 //! Recovered from `legacy/donor/apeireth-companion/src/morphology.rs`.
 //!
@@ -7,7 +7,7 @@
 //! (Shallow / Standard / Deep) → temperature-scaled softmax → argmax mode +
 //! expected CRAWL budget in `[1, 6]`.
 //!
-//! **Honesty**: VCP originally used river-network hop / HHI / forward-flow
+//! **Honesty**: 原参考设计使用 river-network hop / HHI / forward-flow
 //! topology. Apeireth has no river graph, so features are hand-tuned text
 //! heuristics (not learned, not calibrated). Same mechanism (logits + softmax
 //! + bins); different features.
@@ -130,7 +130,7 @@ fn extract(q: &str) -> Features {
     }
 }
 
-/// Three logits `[shallow, standard, deep]` (hand-tuned, VCP-shaped weights).
+/// Three logits `[shallow, standard, deep]` (hand-tuned, 参考设计的 weights).
 fn logits(f: &Features) -> [f64; 3] {
     [
         1.45 * (1.0 - f.length) + 0.9 * f.question - 1.25 * f.depth - 0.65 * f.clauses,

@@ -212,7 +212,7 @@ git rev-list --all --objects | Select-String "kug0t7Jik3" -ErrorAction SilentlyC
 Select-String -Path reports -Pattern "kug0t7Jik3-CLvvPauLHx8IjzwB9ANsnTFI_HXF9c4vhERO7gYqB6KOL4ldK3pdj2esU3EVaN6w4jl3z9fGUOwjLQz1EXzXjPATISo4BFMAbaEHOb8YRsUg" -Recurse
 
 # 6. 验证 cargo test + clippy 仍绿
-cargo test -p apeireth-host -p apeireth-sovereignty -p apeireth-team-lead -p apeireth-arbitration -p apeireth-memory -p apeireth-companion --lib  # （v1 时代旧 crate 名，现 13-crate 清单见根 ARCHITECTURE.md）
+cargo test -p apeireth-host -p apeireth-sovereignty -p apeireth-team-lead -p apeireth-arbitration -p apeireth-memory -p apeireth-companion --lib  # （v1 时代旧 crate 名，crate 清单见根 ARCHITECTURE.md（现行 18-crate））
 cargo clippy --workspace --lib --tests -- -D warnings
 
 # 7. 清理 backup + filter rules

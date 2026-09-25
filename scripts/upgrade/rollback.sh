@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Apeireth 回滚脚本 (per 蓝图 §3.6, 7 天内可回滚到 v2.0.0-alpha)
+# Apeireth 回滚脚本 (按安装规范, 7 天内可回滚到 v2.0.0-alpha)
 # 用法:
 #   sudo ./scripts/upgrade/rollback.sh
 

@@ -24,7 +24,7 @@ Status:          🟢 活跃
 | **HTTP gateway** | `apeireth gateway serve --port 8080` | :8080 | canonical 入口，HTTP/SSE；OpenAI Chat Completions 兼容端点；薄壳适配器，全部委托 `Runtime::execute` |
 | **CLI chat** | `apeireth chat "<prompt>"` | — | 单轮会话，直接走 agent loop（governance → provider → tool dispatch → 回灌续轮）|
 
-`apeireth session` 启动交互会话；`apeireth --help` 看完整命令。`frontend/companion-desktop/` 是独立 Svelte 5 + Tauri 2 前端 workspace，不在根 cargo workspace 内。
+`apeireth session` 是就绪自检（打印运行时就绪信息后退出，非交互）；对话用 `apeireth chat "<prompt>"`（单轮）；`apeireth --help` 看完整命令。`frontend/companion-desktop/` 是独立 Svelte 5 + Tauri 2 前端 workspace，不在根 cargo workspace 内。
 
 ## 2. 她怎么记得你（v2 形态）
 

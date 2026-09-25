@@ -23,7 +23,7 @@ use crate::Decision;
 /// Default high-risk capability prefixes (donor RiskRule).
 pub const DEFAULT_HIGH_RISK_PREFIXES: [&str; 3] = ["system", "network", "file"];
 
-/// Default approval window (VCP `getTimeoutMs` = 5 minutes).
+/// Default approval window (默认 5 分钟).
 pub const APPROVAL_TIMEOUT_MS: u64 = 5 * 60 * 1000;
 
 /// Frequency window (1 minute).
@@ -32,7 +32,7 @@ pub const FREQUENCY_WINDOW_MS: u64 = 60_000;
 /// Frequency threshold (3 calls inside the window, including the current one).
 pub const FREQUENCY_MAX_CALLS: u32 = 3;
 
-/// VCP silent-reject suffix.
+/// 静默拒绝后缀惯例.
 pub const SILENT_REJECT_SUFFIX: &str = "::SilentReject";
 
 /// One historical capability dispatch, used by the frequency helper.

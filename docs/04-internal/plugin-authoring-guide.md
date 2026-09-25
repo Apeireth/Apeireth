@@ -1,6 +1,6 @@
 # Apeireth 社区插件开发规范（v2 工程重构线, 2026-08-27）
 
-> **现状 (2026-08-27)**：本文**重写**为 v2 插件契约（`crates/foundation/plugin`），取代 v1 时代的 `apeireth-companion` Plugin/Tool trait 与 ToolBridge 装配模型（现 `legacy/`）。当前基线：默认分支 `main`、13-crate 工作区、tag `v2.0.0-alpha.1` @ `d6910cf7`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。内核（哲学 8 锚、文档同步自觉、0 装 PASS）不变。
+> **现状 (2026-08-27)**：本文**重写**为 v2 插件契约（`crates/foundation/plugin`），取代 v1 时代的 `apeireth-companion` Plugin/Tool trait 与 ToolBridge 装配模型（现 `legacy/`）。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区、tag `v2.0.0-alpha.1` @ `d6910cf7`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。内核（哲学 8 锚、文档同步自觉、0 装 PASS）不变。
 
 ```
 [Document-Meta]

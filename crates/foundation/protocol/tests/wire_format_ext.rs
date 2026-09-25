@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 
 #[test]
 fn ws_frame_type_str_returns_8_distinct_strings() {
-    // 8 帧 type_str 应返 8 个唯一字符串 (VCP §3.2 设计意图)
+    // 8 帧 type_str 应返 8 个唯一字符串 (协议规范 §3.2 设计意图)
     let frames = [
         WsFrame::ToolInvoke(ToolInvokeFrame {
             req_id: "r1".into(),
@@ -114,7 +114,7 @@ fn ws_frame_stream_chunk_preserves_done_flag() {
 
 #[test]
 fn ws_protocol_version_and_ttl_constants() {
-    // 蓝图 §2.3 / §2.4 D-03 决策
+    // 接口契约 / §2.4 D-03 决策
     assert_eq!(WS_PROTOCOL_VERSION, "1", "WS 协议版本");
     assert_eq!(WS_TOKEN_DEFAULT_TTL_SECS, 300, "WS token 5min TTL");
 }
@@ -176,7 +176,7 @@ fn queue_bridge_zero_capacity_fails_construct() {
 
 #[test]
 fn is_tool_result_error_chinese_prefix() {
-    // 中文错误前缀 (VCP §3.2 多语言支持)
+    // 中文错误前缀 (协议规范 §3.2 多语言支持)
     assert!(is_tool_result_error(&json!("[错误] 数据库连接失败")));
     assert!(is_tool_result_error(&json!("错误：权限不足")));
     assert!(is_tool_result_error(&json!("失败：网络超时")));

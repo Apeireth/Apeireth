@@ -1,6 +1,6 @@
-//! VCP layered_memo compatibility (1 router).
+//! Legacy layered_memo data-format compatibility (1 router).
 //!
-//! `layered_memo` keeps the wire/command spelling from the VCP protocol rather
+//! `layered_memo` keeps the wire/command spelling of the legacy protocol rather
 //! than Rust enum style, so call sites can round-trip the original identifier.
 
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs

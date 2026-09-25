@@ -203,10 +203,7 @@ impl CredentialsStore for FileCredentialsStore {
     fn set(&self, service: &str, secret: SecretString) -> Result<()> {
         validate_service_name(service)?;
         // M1②: 进程内写锁串行化 load-modify-save (防并发丢更新).
-        let _guard = self
-            .write_lock
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let _guard = self.write_lock.lock().unwrap_or_else(|p| p.into_inner());
         let mut map = self.load()?;
         map.insert(service.to_string(), secret.expose().to_string());
         self.save(&map)
@@ -215,10 +212,7 @@ impl CredentialsStore for FileCredentialsStore {
     fn delete(&self, service: &str) -> Result<()> {
         validate_service_name(service)?;
         // M1②: 同 set — 整个 load-modify-save 在写锁内.
-        let _guard = self
-            .write_lock
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let _guard = self.write_lock.lock().unwrap_or_else(|p| p.into_inner());
         let mut map = self.load()?;
         if map.remove(service).is_none() {
             return Err(CredentialsError::UnknownService(service.to_string()));

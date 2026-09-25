@@ -1,7 +1,7 @@
 //! `apeireth-orchestration::context_fold` — lossless context folding primitives.
 //!
-//! Recovered from donor `apeireth-context-fold` (VCP `ContextFoldingV2` / `foldProtocol`
-//! spirit, Rust-native). This is a **library** of compression heuristics. It is
+//! Recovered from donor `apeireth-context-fold` (Rust-native). This is a
+//! **library** of compression heuristics. It is
 //! complementary to [`crate::context_rot`] (rot_score + Retain/Remove/Replace) and
 //! to tools spill (overflow-to-disk). Folding decides *how to collapse a string*;
 //! rot decides *which segments to keep*; spill decides *where oversized tool
@@ -11,7 +11,7 @@
 //! - [`fold`] — [`FoldStrategy`] Truncate / HeadTail / MarkerReplace / Summary
 //! - [`marker`] — placeholder format (`<<FOLDED:N bytes>>` etc.)
 //! - [`semantic`] — relevance-preserving collapse (BigramOverlap / embedder hook)
-//! - [`fold_block`] — `[===vcp_fold:threshold===]` graded reveal
+//! - [`fold_block`] — `[===fold:threshold===]` graded reveal
 //! - [`accumulator`] — honest chars/4 cross-session token tally
 //!
 //! **Honest scope (DEFAULT OFF, not production-wired):**

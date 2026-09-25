@@ -111,8 +111,7 @@ impl RiverDynamicsEngine {
             .get(&target_id)
             .map(|node| node.intrinsic_residual)
             .unwrap_or(1.0);
-        let is_wormhole =
-            raw_conductance * target_residual >= self.tension_threshold;
+        let is_wormhole = raw_conductance * target_residual >= self.tension_threshold;
 
         let edge = RiverEdge {
             source_id,
@@ -413,11 +412,7 @@ impl DualScaledFieldSolver {
             let propagated: f32 = (0..n).map(|j| adjacency_matrix[j][i] * field[j]).sum();
             *slot = (1.0 - alpha) * s0[i] + alpha * propagated;
         }
-        let delta: f32 = next
-            .iter()
-            .zip(field)
-            .map(|(a, b)| (a - b).abs())
-            .sum();
+        let delta: f32 = next.iter().zip(field).map(|(a, b)| (a - b).abs()).sum();
         (next, delta)
     }
 }

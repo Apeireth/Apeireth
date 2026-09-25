@@ -107,7 +107,7 @@ Apeireth v2.0 真实施必读 (主代理亲做 spec + 派 sub-agent 真实施 �
 - 真实施 7 段: 1.0 真账 1:1 翻译 (RotBlock + Segment) + 2.0 真账对接 (v2 cognitive memory 模块) + 融合策略 + 集成测试 + 0 装诚实 + 下一步
 
 ### 2. 5 重守门 baseline 实测 (≤ 30 行)
-- cargo test --workspace --locked (期望 3120+N passed / 0 failed, 含新 rot_score 测试)
+- cargo test --workspace --locked (期望 3662+N passed / 0 failed, 含新 rot_score 测试)
 - cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 warning)
 - cargo check --workspace --locked (期望 0 副作用)
 - git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:46 crates/foundation/core/src/cognitive.rs (期望 0 行, LOCKED 0 触碰)
@@ -181,7 +181,7 @@ Apeireth v2.0 真实施必读 (主代理亲做 spec + 派 sub-agent 真实施 �
    - 当前实测: 0 warning
 2. tests 0 fail:
    - 命令: cargo test --workspace --locked
-   - 期望: 3120+N passed / 0 failed / 13 ignored
+   - 期望: 3662+N passed / 0 failed / 21 ignored
    - 当前实测: 3120 passed / 0 failed / 13 ignored（2026-09-05 实测）
 3. legacy compat path < 100:
    - 命令: grep -r "legacy/" crates/ | wc -l

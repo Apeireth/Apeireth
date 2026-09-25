@@ -1,14 +1,14 @@
 //! `apeireth-sdk::client` — **apeireth 客户 SDK stub** (1.0 release #13 sdk)
 //!
-//! **目标** (per 蓝图 §3.5 12 项 checklist #13 sdk, R20 阶段 6):
+//! **目标** (按接口契约 12 项 checklist #13 sdk, R20 阶段 6):
 //! 给客户 (Python / Node / Go / Rust 跨语言应用) 提供 1 个 1:1 翻译的
 //! apeireth 平台 SDK, 走 HTTP + WebSocket 调 `apeireth-api` 的 6 工具端点
-//! (per 蓝图 §2.2 + D-02 子路径) + 8 帧 WS 协议 (per 蓝图 §2.3) + 鉴权
-//! 5 组件 (per 蓝图 §2.4 + D-04/D-05).
+//! (按接口契约 + 鉴权子路径) + 8 帧 WS 协议 (按接口契约) + 鉴权
+//! 5 组件 (按接口契约 + D-04/D-05).
 //!
 //! **SDK 表面**:
 //! - `ApeirethClient` (HTTP + WS 客户端)
-//! - 6 工具 client method (接口蓝图 §2.2 D-02 子路径):
+//! - 6 工具 client method (接口接口契约 鉴权子路径):
 //!   `web_search` / `file_ops` / `git_ops` / `code_exec` / `calendar` / `message`
 //! - 2 通用调用 method: `invoke_tool` (HTTP) + `invoke_stream` (WS 8 帧)
 //! - Auth 5 组件: Bearer / keyring / token bucket / audit / quota stub
@@ -65,7 +65,7 @@ use tracing::{debug, info, warn};
 // §0 编译期 hardcode (8 项不假装原则 + K-1 强校验 4 条)
 // ============================================================================
 
-/// **6 工具白名单** (per 蓝图 §2.2 + D-02 子路径, 1:1 翻译 `apeireth-api::ws_v1::TOOL_WHITELIST`).
+/// **6 工具白名单** (按接口契约 + 鉴权子路径, 1:1 翻译 `apeireth-api::ws_v1::TOOL_WHITELIST`).
 ///
 /// **6 工具**:
 /// - `web_search` — 网络搜索
@@ -117,7 +117,7 @@ pub const MUST_DO_INVOKE: &str = "apeireth sdk client invoke must-do";
 /// 编译期守门: TOOL_WHITELIST 长度 == 6 (K-1 强校验 #2).
 const _: () = assert!(
     TOOL_WHITELIST.len() == 6,
-    "TOOL_WHITELIST must be 6 (per 蓝图 §2.2 D-02 子路径)"
+    "TOOL_WHITELIST must be 6 (按接口契约 鉴权子路径)"
 );
 
 /// 编译期守门: SDK_TOOL_WHITELIST 长度 == 8 (K-1 强校验 #2).
@@ -149,7 +149,7 @@ const _K1_CLIENT: &str = "client";
 const _K1_INVOKE: &str = "invoke";
 
 // ============================================================================
-// §1 错误类型 (per 蓝图 §2.5 12 类 HTTP 状态码 1:1 映射)
+// §1 错误类型 (按接口契约 12 类 HTTP 状态码 1:1 映射)
 // ============================================================================
 
 /// SDK 客户错误 (10 variant, 覆盖 stub + m3 + 真实错误面).
@@ -221,7 +221,7 @@ pub const CLIENT_BUCKET_REFILL_PER_SEC: f64 = 1000.0;
 /// 审计日志文件名前缀 (client side, 1:1 翻译 `apeireth-api::auth::AUDIT_LOG_FILE_NAME`).
 pub const CLIENT_AUDIT_LOG_PREFIX: &str = "apeireth-sdk-audit.log";
 
-/// 6 工具 D-02 子路径 (per 蓝图 §2.2 HTTP 端点,).
+/// 6 工具 鉴权子路径 (按接口契约 HTTP 端点,).
 pub const TOOL_PATHS: &[(&str, &str)] = &[
     ("web_search", "/v1/tools/web_search/invoke"),
     ("file_ops", "/v1/tools/file_ops/invoke"),
@@ -237,13 +237,13 @@ pub const WS_PATH: &str = "/v1/stream";
 /// 编译期守门: TOOL_PATHS 长度 == 6 (跟 TOOL_WHITELIST 1:1 对齐).
 const _: () = assert!(
     TOOL_PATHS.len() == 6,
-    "TOOL_PATHS must be 6 (接口蓝图 §2.2 6 端点)"
+    "TOOL_PATHS must be 6 (接口接口契约 6 端点)"
 );
 
 // 6 工具 path 顺序检查 (string const 算术尚未稳定, 改 runtime check — 6 fixture 验证).
 
 // ============================================================================
-// §3 Auth 5 组件 (per 蓝图 §2.4 + D-04/D-05)
+// §3 Auth 5 组件 (按接口契约 + D-04/D-05)
 // ============================================================================
 
 /// **Auth 组件 1: Bearer token** (1:1 翻译 `apeireth-api::auth::check_bearer`).
@@ -292,7 +292,7 @@ impl KeyringRef {
     }
 }
 
-/// **Auth 组件 3: token bucket** (per D-04 决策, 1:1 翻译 `apeireth-api::auth::TokenBucket`).
+/// **Auth 组件 3: token bucket** (per 设计决策, 1:1 翻译 `apeireth-api::auth::TokenBucket`).
 ///
 /// 客户端侧限流, 防 SDK 用户超发请求。
 /// 阶段 6 stub 走 in-memory state, 真持久化留 R21。
@@ -329,14 +329,8 @@ impl TokenBucket {
         // L 组修复: Mutex poison `.expect` → `unwrap_or_else(|p| p.into_inner())` —
         // poison 只说明另一线程 panic 时正持锁, 数据仍可用; expect 会把次级 panic
         // 级联到所有后续调用方 (telemetry 热路径).
-        let mut tokens = self
-            .tokens
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
-        let mut last = self
-            .last_update
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let mut tokens = self.tokens.lock().unwrap_or_else(|p| p.into_inner());
+        let mut last = self.last_update.lock().unwrap_or_else(|p| p.into_inner());
         let now = SystemTime::now();
         let elapsed = now
             .duration_since(*last)
@@ -380,7 +374,7 @@ fn tool_invoke_body(tool: &str, action: &str, args: &Value) -> Value {
     })
 }
 
-/// **Auth 组件 4: 审计日志** (per 蓝图 §2.4 组件 4, 1:1 翻译 `apeireth-api::auth::AuditLogger`).
+/// **Auth 组件 4: 审计日志** (按接口契约 组件 4, 1:1 翻译 `apeireth-api::auth::AuditLogger`).
 ///
 /// 阶段 6 stub 走 in-memory Vec 累积, 真写 `~/.apeireth/audit.log` 留 R21.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -418,19 +412,13 @@ impl AuditLogger {
     /// 追加一条审计 (in-memory, 阶段 6 stub).
     pub fn append(&self, entry: AuditEntry) {
         // L 组修复: poison → into_inner (数据仍可用, 0 级联 panic)
-        let mut e = self
-            .entries
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let mut e = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         e.push(entry);
     }
 
     /// 查审计条数 (测试用).
     pub fn len(&self) -> usize {
-        self.entries
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .len()
+        self.entries.lock().unwrap_or_else(|p| p.into_inner()).len()
     }
 
     /// 是否空.
@@ -442,7 +430,7 @@ impl AuditLogger {
     }
 }
 
-/// **Auth 组件 5: quota stub** (per D-05 决策, 1:1 翻译 `apeireth-api::auth::QuotaManager`).
+/// **Auth 组件 5: quota stub** (per 设计决策, 1:1 翻译 `apeireth-api::auth::QuotaManager`).
 ///
 /// 阶段 6 stub 守门: 显式返 501, R21 真接 quota 服务。
 #[derive(Debug)]
@@ -532,7 +520,7 @@ impl AuthPipeline {
 
     /// 鉴权 5 组件 1 步走 (Bearer verify → token bucket → audit append).
     ///
-    /// **不漂移** (per D-05 决策):
+    /// **不漂移** (per 设计决策):
     /// - 阶段 6 stub 不含 quota check (quota 是显式调用 `self.quota.check()`,
     ///   永远返 501; 真接时由 client 显式在 invoke 前调, 不在 preflight 里阻塞).
     /// - Audit 永远追加 (R21 真接时 patch ok + duration).
@@ -558,7 +546,7 @@ impl AuthPipeline {
         Ok(())
     }
 
-    /// 显式 quota check (per D-05 决策, 阶段 6 stub 永远返 501).
+    /// 显式 quota check (per 设计决策, 阶段 6 stub 永远返 501).
     pub fn check_quota(&self) -> Result<(), SdkClientError> {
         self.quota.check()
     }
@@ -598,7 +586,7 @@ impl std::fmt::Debug for ApeirethClient {
     }
 }
 
-/// 客户端配置 (per 蓝图 §2.6 + D-04/D-05 决策).
+/// 客户端配置 (按接口契约 + D-04/设计决策).
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
     /// HTTP 请求 timeout (默认 30s).
@@ -609,7 +597,7 @@ pub struct ClientConfig {
     pub ws_ping_interval_secs: u64,
     /// WS 链接 token TTL (1:1 翻译 `WS_TOKEN_DEFAULT_TTL_SECS`).
     pub ws_token_ttl_secs: i64,
-    /// User-Agent (per 蓝图 §2.6 客户端标识).
+    /// User-Agent (按接口契约 客户端标识).
     pub user_agent: String,
     /// 是否开 audit log (默认 true).
     pub audit_enabled: bool,
@@ -661,7 +649,7 @@ impl ApeirethClient {
     }
 
     // ========================================================================
-    // 6 工具 client method (接口蓝图 §2.2 D-02 子路径)
+    // 6 工具 client method (接口接口契约 鉴权子路径)
     // ========================================================================
 
     /// **工具 1: web_search** (HTTP `POST /v1/tools/web_search/invoke`).
@@ -1039,7 +1027,7 @@ pub fn sdk_method_names() -> &'static [&'static str] {
     SDK_TOOL_WHITELIST
 }
 
-/// 6 工具 D-02 子路径 (helper, 给路由 fixture 用).
+/// 6 工具 鉴权子路径 (helper, 给路由 fixture 用).
 pub fn tool_paths() -> &'static [(&'static str, &'static str)] {
     TOOL_PATHS
 }
@@ -1118,7 +1106,7 @@ mod client_tests {
     #[test]
     fn k1_tool_whitelist_6_names() {
         assert_eq!(TOOL_WHITELIST.len(), 6, "K-1 #3: TOOL_WHITELIST 必为 6");
-        // 6 工具名 (per 蓝图 §2.2).
+        // 6 工具名 (按接口契约).
         assert!(TOOL_WHITELIST.contains(&"web_search"));
         assert!(TOOL_WHITELIST.contains(&"file_ops"));
         assert!(TOOL_WHITELIST.contains(&"git_ops"));
@@ -1393,7 +1381,7 @@ mod client_tests {
     #[test]
     fn m3_defense_six_tools_match_whitelist() {
         // 6 工具 method 内部名 (snake_case 工具名) 必 == TOOL_WHITELIST 6 工具.
-        // 这里用 tool_urls 验证 6 工具 method 各自走对 D-02 子路径.
+        // 这里用 tool_urls 验证 6 工具 method 各自走对 鉴权子路径.
         let c =
             ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
         for tool in TOOL_WHITELIST {
@@ -1429,10 +1417,7 @@ mod client_tests {
         let h2 = short_hash(key);
         assert_eq!(h1, h2, "同 key 必同 hash (确定性)");
         assert_eq!(h1.len(), 16, "前 8 字节 = 16 hex");
-        assert!(
-            h1.chars().all(|c| c.is_ascii_hexdigit()),
-            "必为 hex: {h1}"
-        );
+        assert!(h1.chars().all(|c| c.is_ascii_hexdigit()), "必为 hex: {h1}");
         // M4: 0 明文前缀 (修复前是 chars().take(16) + "...")
         assert!(
             !h1.contains("a-valid-api-key"),
@@ -1500,7 +1485,13 @@ mod client_tests {
             );
         }
         // 拒绝 (非预期协议终点)
-        for bad in ["ftp://host", "file:///etc/passwd", "ws://host", "not a url", ""] {
+        for bad in [
+            "ftp://host",
+            "file:///etc/passwd",
+            "ws://host",
+            "not a url",
+            "",
+        ] {
             assert!(
                 ApeirethClient::new(bad, "a-valid-api-key-1234567890").is_err(),
                 "base_url '{bad}' 应拒绝"

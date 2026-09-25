@@ -58,7 +58,10 @@ impl SleepCycle {
 
     /// Record an activity event (resets quiet timer).
     pub fn record_activity(&self) {
-        *self.last_activity.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = self.clock.now();
+        *self
+            .last_activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = self.clock.now();
     }
 
     /// 覆盖安静期阈值 (运行期可调, daemon 接做梦时用于「夜间」语义).
@@ -68,14 +71,23 @@ impl SleepCycle {
 
     /// Record an item addition.
     pub fn record_item_added(&self) {
-        *self.items_since_last_cycle.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) += 1;
+        *self
+            .items_since_last_cycle
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) += 1;
     }
 
     /// Should we trigger a consolidation cycle now?
     pub fn should_consolidate(&self) -> bool {
-        let last = *self.last_activity.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let last = *self
+            .last_activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let quiet = self.clock.now() - last;
-        let items = *self.items_since_last_cycle.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let items = *self
+            .items_since_last_cycle
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         quiet
             >= chrono::Duration::from_std(self.config.quiet_threshold)
                 .unwrap_or(chrono::Duration::seconds(60))
@@ -84,8 +96,14 @@ impl SleepCycle {
 
     /// Reset state after a cycle runs.
     pub fn reset_after_cycle(&self) {
-        *self.last_activity.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = self.clock.now();
-        *self.items_since_last_cycle.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = 0;
+        *self
+            .last_activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = self.clock.now();
+        *self
+            .items_since_last_cycle
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = 0;
     }
 }
 

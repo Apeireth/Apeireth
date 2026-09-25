@@ -35,7 +35,7 @@ pub mod canonical;
 mod episode;
 mod identity;
 mod migrations;
-// N8: generation 绑定观测缓存 (自包含, VCP MemoRuntime 精神, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
+// N8: generation 绑定观测缓存 (自包含, 通用记忆运行时模式, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
 pub mod gen_cache;
 // R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py)
 pub mod hallways;
@@ -461,7 +461,10 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut guard = store
+                .conn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)
@@ -475,7 +478,10 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut guard = store
+                .conn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)

@@ -14,7 +14,7 @@ Source-of-Truth: CHANGELOG.md + ARCHITECTURE.md + docs/01-architecture/ 系列�
 
 > **本次重写 (2026-08-27)**：顶层 ROADMAP 从 v1.0-post1.0 时代（8/19 版）升级到 **reconstruct_v2 工程重构完成** 的真实状态。
 > 核心定位：**重构版是 1.0 的工程进步**——内核、设计、哲学、愿景 0 变化（见 §13 思想层保留）；
-> 变的是工程形态（86-crate 分裂 → 13-crate 单一工作区）。v1.0 时代详单下沉 `docs/archive/roadmap/`。
+> 变的是工程形态（86-crate 分裂 → 13-crate 单一工作区（其后演进至 18-crate））。v1.0 时代详单下沉 `docs/archive/roadmap/`。
 
 ---
 
@@ -68,7 +68,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 > **2026-10-06 对账追加**：协作者批（PR #15）新增 `crates/engine/guard`（`apeireth-guard`，行为链安全 Guard，已接生产治理管线），workspace 实为 **18 crates（engine 8）**；下表 crate 数按此更新。测试数同日复核已全量重跑：**3418 passed / 0 failed / 19 ignored**（129 suites，`cargo test --workspace`，exit 0；2026-10-06 W2 接线批后实测，当日复核批口径为 3406）；代码量维持 2026-09-05 口径。
 
 > **v2.0.0-preview 定位与说明**:
-> - **建设完全性**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 18 Crates 100% 编译与 3120 项单元/集成测试通过，前端桌面端 Svelte 5 + Tauri 2 打包与类型验证全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
+> - **建设完全性**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 18 Crates 100% 编译与 3662 项单元/集成测试通过，前端桌面端 Svelte 5 + Tauri 2 打包与类型验证全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
 > - **后续发布路线**: 当前转入**协作者生产压测、真机环境与端到端联调交叉验证**阶段。待协作者压测与交叉验证闭环后，由协作者提议发布 2.0 最终正式版 (GA)。
 
 | 项 | 值（实测） |
@@ -77,7 +77,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | Tag | `v1.0.0` / `v1.5.0` / `v2.0.0-alpha.1` / `v2.0.0-preview` / `v2.0.0-rc.1`（→ `854831fc`） |
 | Workspace | **18 crates**（foundation 6 / engine 8 / capabilities 1 / adapters 3；engine 第 7 个 = `crates/engine/runtime-assembly`，第 8 个 = `crates/engine/guard`（2026-10-06 协作者批）） + `frontend/companion-desktop` (Svelte 5 + Tauri 2) |
 | 代码量 | crates/ 内 .rs：src-only **147,732 行**（406 文件）+ tests **25,972 行**（73 文件）（2026-09-05 实测，不含 legacy/）；前端 companion-desktop 61 文件 ~21k 行（不含 node_modules/dist） |
-| 测试 | **3418 passed / 0 failed / 19 ignored**（2026-10-06 W2 批后实测 `cargo test --workspace`，129 suites，exit 0；同日复核批口径 3406、2026-09-05 口径为 3120/13） |
+| 测试 | **3662 passed / 0 failed / 21 ignored**（130 suites，`cargo test --workspace` 全量实测；历史口径：2026-10-06 W2 批 3418/19、2026-09-05 3120/13） |
 | CI / 守门 | 5 重守门全绿 + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告（2026-09-05 亲跑）+ 9 锚 / 13 键 / 3 脊柱 / R11 baseline 0 触碰；workspace.version 已随 RC1 发布推进为 2.0.0-rc.1 |
 | **v2.0 核心建设** | ✅ **100% 落地**：14 大战区（Whisper HTTP + Xcap 截屏多模态、Okapi BM25 + 向量 RRF 混合检索、上下文衰减 3 因子、SpillStore 溢出隔离、7 阶段伙伴羁绊、8 分类里程碑、动态原则洋葱、三层语调合成、断点续行与 O-1 核心段删除防御、叙事日记本与日活动聚合、跨日记图共享词元索引、口头强化反思闭环、微积分换元符号规则检查、Gateway SSE 流式通道及桌面端伙伴）。 |
 | **当前状态与下一步** | **预览版已就绪 (v2.0.0-preview)**，转交协作者开展生产压测与交叉验证，待协作者确认后提议发布 2.0 正式版。 |

@@ -203,7 +203,10 @@ impl DedupIndex {
     /// `false` = duplicate inside the window → reject.
     pub fn accept(&self, namespace: &str, fingerprint: &str, now_ms: i64) -> bool {
         let key = (namespace.to_string(), fingerprint.to_string());
-        let mut inner = self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(&prev_ts) = inner.lru.get(&key) {
             if now_ms.saturating_sub(prev_ts) < self.window_ms {
                 return false;
@@ -258,7 +261,10 @@ impl DedupIndex {
                 // 重复 key 泄漏一个条目, 高流量重复请求下 lru 无限增长).
                 let key = (namespace.to_string(), fingerprint.to_string());
                 drop(tx); // 只读事务, 先回滚再锁 inner (避免持DB事务时锁内存)
-                let mut inner = self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                let mut inner = self
+                    .inner
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 Self::touch_lru(&mut inner, key, prev_ts);
                 return Ok(false);
             }
@@ -275,7 +281,11 @@ impl DedupIndex {
 
     /// Current in-memory LRU size (debug / tests).
     pub fn len(&self) -> usize {
-        self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).lru.len()
+        self.inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .lru
+            .len()
     }
 
     pub fn is_empty(&self) -> bool {

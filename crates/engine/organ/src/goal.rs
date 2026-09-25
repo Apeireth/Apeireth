@@ -526,12 +526,7 @@ impl GoalService {
         match &self.current {
             Some(g) if !g.is_replaceable() => Err(GoalError::AlreadyExists),
             Some(_) => {
-                let prev_id = self
-                    .current
-                    .as_ref()
-                    .ok_or(GoalError::NoGoal)?
-                    .id
-                    .clone();
+                let prev_id = self.current.as_ref().ok_or(GoalError::NoGoal)?.id.clone();
                 self.store.clear(&prev_id)?;
                 self.current = None;
                 Ok(())
@@ -824,10 +819,7 @@ mod tests {
             ids[0].starts_with("evil"),
             "../evil 应净化为 evil 前缀, 得到 {ids:?}"
         );
-        assert!(
-            !ids[0].contains(".."),
-            "不得保留路径穿越段: {ids:?}"
-        );
+        assert!(!ids[0].contains(".."), "不得保留路径穿越段: {ids:?}");
         // nothing written outside the store root
         assert!(dir.join(format!("{}.json", ids[0])).is_file());
         assert!(

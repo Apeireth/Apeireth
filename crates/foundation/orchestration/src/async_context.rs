@@ -1,13 +1,12 @@
 //! async_context: 四层异步上下文生命周期与隔离编排管线
 //!
-//! 吸收自 VCP 1.0 (`Plugin.js` & `WebSocketServer.js`):
-//! 1. 彻底打破单一线性 `messages` 数组对长任务与工具海量输出的污染；
-//! 2. 构建四层异步上下文数组生命周期：
-//!    - EphemeralAsyncUser: 即抛型临时中间态（单轮推理有效，AI 读完即销毁，0 历史污染）；
-//!    - DurableSyncUser: 核心有效事实（永久沉淀进 SQLite 历史会话流）；
+//! 本模块为独立实现，解决的是通用上下文卫生问题——单一线性消息数组会被
+//! 长任务与工具海量输出污染，因此按生命周期把消息分入四个隔离层：
+//!    - EphemeralAsyncUser: 即抛型临时中间态（单轮推理有效，读完即销毁，0 历史污染）；
+//!    - DurableSyncUser: 核心有效事实（永久沉淀进会话历史/SQLite）；
 //!    - SummaryStatusUser: 极简状态与耗时摘要（<10 tokens，保留长程任务脉络）；
-//!    - NotificationHUDUser: 系统警报与实时 IoT 仪表盘（动态挂起直到被感知消费）；
-//! 3. 严格遵循 `#![forbid(unsafe_code)]` 与单向依赖架构。
+//!    - NotificationHUDUser: 系统警报与实时仪表盘事件（挂起直到被感知消费）。
+//! 各层全部有界（超限淘汰最旧），严格遵循 `#![forbid(unsafe_code)]` 与单向依赖架构。
 
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -37,6 +36,9 @@ pub struct AsyncContextMessage {
     pub token_estimate: usize,
 }
 
+/// 粗粒度 token 估算：每 4 个字符折 1 token，保底 1。
+const CHARS_PER_TOKEN: usize = 4;
+
 impl AsyncContextMessage {
     pub fn new(
         id: impl Into<String>,
@@ -46,7 +48,7 @@ impl AsyncContextMessage {
         timestamp_ms: u64,
     ) -> Self {
         let content_str = content.into();
-        let token_estimate = content_str.chars().count() / 4 + 1;
+        let token_estimate = content_str.chars().count() / CHARS_PER_TOKEN + 1;
         Self {
             id: id.into(),
             kind,
@@ -57,6 +59,13 @@ impl AsyncContextMessage {
         }
     }
 }
+
+/// 即抛队列上限 (M7: 防工具海量输出把即抛层撑爆; 超出丢最旧).
+pub const MAX_EPHEMERAL_QUEUE: usize = 256;
+/// 持久事实历史上限 (M7: 防长跑无界增长; 超出丢最旧, 更早的事实应已落 SQLite).
+pub const MAX_DURABLE_HISTORY: usize = 1_024;
+/// 摘要留存上限 (M7: 同上).
+pub const MAX_SUMMARY_HISTORY: usize = 512;
 
 /// 四层异步上下文编排流水线
 #[derive(Debug, Clone, Default)]
@@ -73,13 +82,6 @@ pub struct AsyncContextPipeline {
     max_hud_items: usize,
 }
 
-/// 即抛队列上限 (M7: 防工具海量输出把即抛层撑爆; 超出丢最旧).
-pub const MAX_EPHEMERAL_QUEUE: usize = 256;
-/// 持久事实历史上限 (M7: 防长跑无界增长; 超出丢最旧, 更早的事实应已落 SQLite).
-pub const MAX_DURABLE_HISTORY: usize = 1_024;
-/// 摘要留存上限 (M7: 同上).
-pub const MAX_SUMMARY_HISTORY: usize = 512;
-
 impl AsyncContextPipeline {
     pub fn new(max_hud_items: usize) -> Self {
         Self {
@@ -93,26 +95,17 @@ impl AsyncContextPipeline {
 
     /// 注入一条异步上下文消息
     ///
-    /// M7: 四层全部有界 — 超限淘汰**最旧** (HUD 层沿用原有 max_hud_items 口径)。
+    /// M7: 四层全部有界 — 超限淘汰**最旧** (HUD 层沿用 max_hud_items 口径)。
     pub fn push_message(&mut self, msg: AsyncContextMessage) {
         match msg.kind {
             AsyncArrayKind::EphemeralAsyncUser => {
-                self.ephemeral_queue.push(msg);
-                while self.ephemeral_queue.len() > MAX_EPHEMERAL_QUEUE {
-                    self.ephemeral_queue.remove(0);
-                }
+                push_bounded(&mut self.ephemeral_queue, msg, MAX_EPHEMERAL_QUEUE);
             }
             AsyncArrayKind::DurableSyncUser => {
-                self.durable_history.push(msg);
-                while self.durable_history.len() > MAX_DURABLE_HISTORY {
-                    self.durable_history.remove(0);
-                }
+                push_bounded(&mut self.durable_history, msg, MAX_DURABLE_HISTORY);
             }
             AsyncArrayKind::SummaryStatusUser => {
-                self.summary_history.push(msg);
-                while self.summary_history.len() > MAX_SUMMARY_HISTORY {
-                    self.summary_history.remove(0);
-                }
+                push_bounded(&mut self.summary_history, msg, MAX_SUMMARY_HISTORY);
             }
             AsyncArrayKind::NotificationHUDUser => {
                 if self.hud_notifications.len() >= self.max_hud_items {
@@ -123,32 +116,21 @@ impl AsyncContextPipeline {
         }
     }
 
-    /// 组装当前轮次发给大模型的完整上下文
+    /// 组装当前轮次发给大模型的完整上下文。
+    ///
+    /// 顺序：历史摘要 → 持久事实 → 未消费 HUD 通知 → 即抛中间态。
     pub fn assemble_prompt_context(&self) -> Vec<AsyncContextMessage> {
-        let mut assembled = Vec::new();
-
-        // 1. 先组装历史摘要与事实
-        for item in &self.summary_history {
-            assembled.push(item.clone());
-        }
-        for item in &self.durable_history {
-            assembled.push(item.clone());
-        }
-
-        // 2. 组装当前未消费的 HUD 仪表盘通知
-        for item in &self.hud_notifications {
-            assembled.push(item.clone());
-        }
-
-        // 3. 组装即抛型中间态（如当前正在执行的工具实时输出）
-        for item in &self.ephemeral_queue {
-            assembled.push(item.clone());
-        }
-
-        assembled
+        self.summary_history
+            .iter()
+            .chain(self.durable_history.iter())
+            .chain(self.hud_notifications.iter())
+            .chain(self.ephemeral_queue.iter())
+            .cloned()
+            .collect()
     }
 
-    /// 推理后生命周期结算：销毁全部 Ephemeral，清空已感知的 HUD
+    /// 推理后生命周期结算：销毁全部 Ephemeral，可选清空已感知的 HUD。
+    /// 返回被销毁的即抛消息数。
     pub fn post_inference_cleanup(&mut self, clear_hud: bool) -> usize {
         let cleared_ephemeral = self.ephemeral_queue.len();
         self.ephemeral_queue.clear();
@@ -176,6 +158,14 @@ impl AsyncContextPipeline {
             + self.durable_history.len()
             + self.summary_history.len()
             + self.hud_notifications.len()
+    }
+}
+
+/// 有界追加：入队后超限即从队首（最旧）淘汰。
+fn push_bounded(layer: &mut Vec<AsyncContextMessage>, msg: AsyncContextMessage, cap: usize) {
+    layer.push(msg);
+    while layer.len() > cap {
+        layer.remove(0);
     }
 }
 
@@ -276,11 +266,17 @@ mod tests {
         let durable = pipeline.export_durable_facts();
         assert_eq!(
             durable.last().unwrap().id,
-            format!("m{}", MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY + MAX_EPHEMERAL_QUEUE + 9),
+            format!(
+                "m{}",
+                MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY + MAX_EPHEMERAL_QUEUE + 9
+            ),
             "最新条目应在库"
         );
         // 清理后 ephemeral 归零 (它还有 post_inference_cleanup 的生命周期).
         pipeline.post_inference_cleanup(false);
-        assert_eq!(pipeline.total_messages_count(), MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY);
+        assert_eq!(
+            pipeline.total_messages_count(),
+            MAX_DURABLE_HISTORY + MAX_SUMMARY_HISTORY
+        );
     }
 }

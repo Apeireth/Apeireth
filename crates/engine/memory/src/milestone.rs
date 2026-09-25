@@ -167,7 +167,10 @@ impl InMemoryMilestoneStore {
 
 impl MilestoneStore for InMemoryMilestoneStore {
     fn record(&self, milestone: &Milestone) -> Result<(), MemoryError> {
-        let mut guard = self.items.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut guard = self
+            .items
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let entries = guard.entry(milestone.session_id).or_default();
         entries.push(milestone.clone());
         entries.sort_by_key(|m| m.at_epoch_ms);
@@ -179,7 +182,10 @@ impl MilestoneStore for InMemoryMilestoneStore {
         session_id: &SessionId,
         kind: Option<MilestoneKind>,
     ) -> Result<Vec<Milestone>, MemoryError> {
-        let guard = self.items.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let guard = self
+            .items
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let Some(entries) = guard.get(session_id) else {
             return Ok(Vec::new());
         };

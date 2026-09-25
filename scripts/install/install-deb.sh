@@ -9,7 +9,7 @@
 # 决策: D-06 (主人 2026-08-05 20:53 拍 A: 8 包齐发 + Linux 4 包重点)
 # 兄弟脚本: install-rpm.sh / install-tarball.sh / install-brew.sh / install-scoop.ps1
 #
-# 5 步标准安装流 (per 蓝图 §3.4):
+# 5 步标准安装流 (按安装规范):
 #   1. 检测 .deb 路径 (参数 $1, 默认 target/.../*.deb)
 #   2. 校验 sha256 (如果同目录有 .sha256)
 #   3. apt install ./<deb> (systemd unit + 配置自动部署)
@@ -35,7 +35,7 @@
 
 set -euo pipefail
 
-# === 0. root 守门 (per 蓝图 §3.4 5 守门 non-root image, 安装步骤可逆) ===
+# === 0. root 守门 (按安装规范 5 守门 non-root image, 安装步骤可逆) ===
 if [[ $EUID -ne 0 ]]; then
     echo "❌ 需要 root (apt install / systemctl): sudo $0 $*"
     exit 1
@@ -70,7 +70,7 @@ fi
 echo "=== apeireth deb install v${VERSION} ==="
 echo "    目标: ${DEB_PATH}"
 
-# === 2. sha256 校验 (per 蓝图 §3.4 完整性) ===
+# === 2. sha256 校验 (按安装规范 完整性) ===
 SHA256_PATH="${DEB_PATH}.sha256"
 if [[ -f "${SHA256_PATH}" ]]; then
     echo "[1/5] 校验 sha256..."
@@ -99,7 +99,7 @@ systemctl enable apeireth.service
 systemctl restart apeireth.service
 sleep 2  # 给 Type=notify 一点时间
 
-# === 5. 健康检查 (per 蓝图 §3.4 install #4) ===
+# === 5. 健康检查 (按安装规范 install #4) ===
 echo "[4/5] 健康检查 curl /health (期望 200)..."
 HEALTH=$(curl -fsS -m 5 http://localhost:8080/health || echo "FAILED")
 if [[ "${HEALTH}" == "FAILED" ]]; then

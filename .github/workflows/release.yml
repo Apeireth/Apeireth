@@ -51,7 +51,7 @@ concurrency:
 
 # ============================================================================
 # Job 1/5: build-deb — Debian/Ubuntu .deb (Linux #1 重点)
-# 蓝图 §3.4 + packaging/deb/build-deb.sh + install-deb.sh + uninstall-deb.sh
+# 内部规范 + packaging/deb/build-deb.sh + install-deb.sh + uninstall-deb.sh
 # ============================================================================
 jobs:
   build-deb:
@@ -103,7 +103,7 @@ jobs:
 
   # ==========================================================================
   # Job 2/5: build-rpm — RHEL/Fedora .rpm (Linux #2 重点)
-  # 蓝图 §3.4 + packaging/rpm/build-rpm.sh + install-rpm.sh + uninstall-rpm.sh
+  # 内部规范 + packaging/rpm/build-rpm.sh + install-rpm.sh + uninstall-rpm.sh
   # 8 哲学锚: 不引 NewAPI (用 cargo-rpm) + 编译期 hardcode VERSION
   # ==========================================================================
   build-rpm:
@@ -142,7 +142,7 @@ jobs:
 
   # ==========================================================================
   # Job 3/5: build-tarball — 通用 musl 静态 (Linux #3 重点)
-  # 蓝图 §3.4 + packaging/tarball/build-tarball.sh + install.sh + uninstall.sh
+  # 内部规范 + packaging/tarball/build-tarball.sh + install.sh + uninstall.sh
   # 0 运行时依赖: musl 静态链接, ldd 显示 not a dynamic executable
   # ==========================================================================
   build-tarball:
@@ -194,7 +194,7 @@ jobs:
 
   # ==========================================================================
   # Job 4/5: build-brew — macOS Homebrew formula
-  # 蓝图 §3.4 + packaging/brew/build-brew.sh + install-brew.sh + uninstall-brew.sh
+  # 内部规范 + packaging/brew/build-brew.sh + install-brew.sh + uninstall-brew.sh
   # 注: Formula (apeireth.rb) 不真编译, 走 homebrew-tap 仓库推送; 这里只 build 公式
   # ==========================================================================
   build-brew:
@@ -241,7 +241,7 @@ jobs:
 
   # ==========================================================================
   # Job 5/5: build-scoop — Windows Scoop manifest
-  # 蓝图 §3.4 + packaging/scoop/build-scoop.ps1 + install-scoop.ps1 + uninstall-scoop.ps1
+  # 内部规范 + packaging/scoop/build-scoop.ps1 + install-scoop.ps1 + uninstall-scoop.ps1
   # 注: Scoop manifest (apeireth.json) 不在 runner 上跑 scoop install, 只 build manifest
   # ==========================================================================
   build-scoop:

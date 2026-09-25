@@ -273,7 +273,7 @@ $ManifestObj = [PSCustomObject]@{
         license         = "Apache-2.0"
         notices         = "THIRD-PARTY-NOTICES.md"
         pure_safe_rust  = "#![deny(unsafe_code)]"
-        verified_tests  = "2012+ PASS"
+        verified_tests  = "3662+ PASS"
     }
 }
 

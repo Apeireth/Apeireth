@@ -82,7 +82,7 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl disable apeireth 2>/dev/null || echo "    (服务未启用, 跳过 disable)"
 fi
 
-# === 5. apt remove --purge (per 蓝图 §3.7 step 3) ===
+# === 5. apt remove --purge (按安装规范) ===
 echo "[2/4] apt remove --purge apeireth..."
 apt remove --purge -y apeireth
 apt autoremove -y 2>/dev/null || true  # 清孤包
@@ -103,7 +103,7 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl reset-failed apeireth 2>/dev/null || true
 fi
 
-# === 8. 验证 0 残留 (per 蓝图 §3.7 step 5) ===
+# === 8. 验证 0 残留 (按安装规范) ===
 echo "[4/4] 验证 0 残留..."
 RESIDUE=0
 if dpkg -l apeireth 2>/dev/null | grep -q '^ii'; then

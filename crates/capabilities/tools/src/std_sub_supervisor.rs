@@ -114,7 +114,10 @@ impl StdSubSupervisor {
 
     /// 检查是否超过重启窗口限制 (L 组: 时间窗内的重启次数, 过期 stamps 衰减)
     fn restart_limit_exceeded(&self, child_id: &str) -> bool {
-        let mut stamps = self.restart_stamps.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut stamps = self
+            .restart_stamps
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let now = Instant::now();
         let times = stamps.entry(child_id.to_string()).or_default();
         times.retain(|at| now.duration_since(*at) < self.restart_window);
@@ -123,7 +126,10 @@ impl StdSubSupervisor {
 
     /// 记一次重启 (带时间窗衰减)
     fn record_restart(&self, child_id: &str) {
-        let mut stamps = self.restart_stamps.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut stamps = self
+            .restart_stamps
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let now = Instant::now();
         let times = stamps.entry(child_id.to_string()).or_default();
         times.retain(|at| now.duration_since(*at) < self.restart_window);
@@ -138,7 +144,8 @@ impl SubSupervisor for StdSubSupervisor {
         for spec in &self.children {
             if self
                 .handles
-                .lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .contains_key(&spec.id)
             {
                 return Err(SupervisorError::StartFailed(format!(
@@ -148,7 +155,8 @@ impl SubSupervisor for StdSubSupervisor {
             }
             let child = self.spawn_child(spec)?;
             self.handles
-                .lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .insert(spec.id.clone(), child);
         }
         Ok(())
@@ -157,7 +165,10 @@ impl SubSupervisor for StdSubSupervisor {
     fn stop(&mut self) -> Result<(), SupervisorError> {
         // 0 装 PASS: 真 kill (per v1 process:stop)
         // 0 装: 这里有 race 条件 (child 已退出 + handle 无效), 用 try_wait + kill fallback
-        let mut handles = self.handles.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut handles = self
+            .handles
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         for (id, child) in handles.iter_mut() {
             // 先 try_wait, 如果已退出, 不用 kill
             if let Ok(Some(_)) = child.try_wait() {

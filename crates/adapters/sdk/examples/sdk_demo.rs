@@ -1,6 +1,6 @@
 //! `apeireth-sdk` 客户 SDK 6 工具 demo (R20 阶段 6, per 任务稿 "examples/sdk_demo.rs 估 80-120 行")
 //!
-//! **目标**: 演示 `ApeirethClient` 6 工具 method (per 蓝图 §2.2 D-02 子路径) +
+//! **目标**: 演示 `ApeirethClient` 6 工具 method (按接口契约 鉴权子路径) +
 //! `invoke_tool` / `invoke_stream` 通用 method + Auth 5 组件.
 //!
 //! **阶段 6 stub 守门**:
@@ -33,7 +33,7 @@
 //! [INFO] K-1 强校验 4 条 验证:
 //! [INFO]   K-1 #1: platform name = "apeireth" ✓
 //! [INFO]   K-1 #2: SDK_TOOL_WHITELIST = 8 (6 工具 + 2 invoke) ✓
-//! [INFO]   K-1 #3: TOOL_WHITELIST = 6 (per 蓝图 §2.2) ✓
+//! [INFO]   K-1 #3: TOOL_WHITELIST = 6 (按接口契约) ✓
 //! [INFO]   K-1 #4: 5 字样 (apeireth / sdk / client / invoke / must-do) ✓
 //! [INFO] 5 集成点 0 冲突 (apeireth-protocol::ws_v1 1:1 对齐) ✓
 //! [INFO] 完成 — 6 工具 stub 守门就位, R21 真接

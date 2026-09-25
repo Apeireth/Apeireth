@@ -99,7 +99,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
 - 真实施 7 段 (1.0 → 2.0 真账对接 + 真实施代码 + 真账对接 + 物种化借签 + 集成测试 + 0 装诚实 + 下一步)
 
 ### 2. 5 重守门 baseline 实测 (≤ 30 行)
-- cargo test --workspace --locked (期望 3120+N passed / 0 failed)
+- cargo test --workspace --locked (期望 3662+N passed / 0 failed)
 - cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 warning)
 - cargo check --workspace --locked (期望 0 副作用)
 - git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:46 (期望 0 行, LOCKED 0 触碰)
@@ -173,7 +173,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
    - 当前实测: 0 warning
 2. tests 0 fail:
    - 命令: cargo test --workspace --locked
-   - 期望: 3120+N passed / 0 failed / 13 ignored
+   - 期望: 3662+N passed / 0 failed / 21 ignored
    - 当前实测: 3120 passed / 0 failed / 13 ignored（2026-09-05 实测）
 3. legacy compat path < 100:
    - 命令: grep -r "legacy/" crates/ | wc -l
@@ -267,7 +267,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 ### 2.3 release 流程 (Week 18-20, 1-2 周)
 
 ```
-- 5 重守门 baseline 实测 (test 3120 / clippy 0 / LOCKED 0 / legacy 36 / 9 哲学锚 0 减)
+- 5 重守门 baseline 实测 (test 3662 / clippy 0 / LOCKED 0 / legacy 36 / 9 哲学锚 0 减)
 - ROADMAP §7 + MANIFESTO §14 + ROADMAP §12 check
 - git tag v2.0.0 (per 真账 §6 修订)
 - push v2.0.0 tag + release notes + release announcement
@@ -306,7 +306,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 - 0 引新外部 dep (per 真账 brief 约束)
 
 5 重守门 baseline + LOCKED 0 触碰:
-- cargo test --workspace --locked (期望 3120+N passed / 0 failed)
+- cargo test --workspace --locked (期望 3662+N passed / 0 failed)
 - cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 warning)
 - cargo check --workspace --locked (期望 0 副作用)
 - git diff HEAD -- crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs Cargo.toml:46 crates/foundation/core/src/cognitive.rs (期望 0 行, LOCKED 0 触碰)

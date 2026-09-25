@@ -4,7 +4,7 @@
 > **用途**: 修订 Apeireth 局限视角 (Round 1-10 都画 "AI Agent framework"), 真理解 Apeireth = AI 物种实现, 修订借鉴边界
 > **关系**: 跟 `v2-reference-handbook-2026-08-28.md` + `youyou-list-research-2026-08-28.md` + `round-10-youyou-list-mainagent-verify-2026-08-28.md` 互补
 
-> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当时实测基线（2026-09-05）：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1（现行基线见 INSTALL.md）。
 
 ```
 [Document-Meta]

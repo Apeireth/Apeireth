@@ -324,11 +324,7 @@ impl RhythmEstimator {
     pub fn observe(&mut self, day_key: impl Into<String>, minutes_of_day: u32) {
         let day = day_key.into();
         // M7: 单日条目上限 — 超出淘汰该日最早的条目 (队首方向的同 key 旧记录).
-        let same_day = self
-            .observations
-            .iter()
-            .filter(|(d, _)| *d == day)
-            .count();
+        let same_day = self.observations.iter().filter(|(d, _)| *d == day).count();
         if same_day >= MAX_DAILY_OBSERVATIONS {
             if let Some(pos) = self.observations.iter().position(|(d, _)| *d == day) {
                 self.observations.remove(pos);

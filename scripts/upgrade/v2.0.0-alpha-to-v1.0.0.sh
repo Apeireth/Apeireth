@@ -24,7 +24,7 @@
 #   - apeireth-upgrade = 治理层 / 升级层 (7 阶段 OTA 状态机 + Council + MultiSig)
 #   - 两层正交: apeireth-upgrade 的 Monitor/Smoke 可包装本脚本的 step 8 健康检查
 #
-# 跟 apeireth-migrate 的关系 (蓝图 §3.6 提到, crate 尚未实装):
+# 跟 apeireth-migrate 的关系 (内部规范 提到, crate 尚未实装):
 #   - 本脚本 = 1 次性 shell 骨架 (R20 阶段 3 估时 0.5 周, 1 owner)
 #   - apeireth-migrate = 未来 Rust API (R20 阶段 4-5 整合时实装, 可选包裹本脚本)
 #   - 本脚本不依赖 apeireth-migrate, 不创建新 crate (避免引入新 workspace member)
@@ -68,16 +68,17 @@ NEW_VERSION="1.0.0"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 SCRIPT_NAME="$(basename "$0")"
 
-# 路径配置 (per 蓝图 §3.6 + §1.3 install 守门)
+# ⚠️ 历史脚本（v1 时代升级路径）：POSTGRES/APEIRETH_DB_URL 为 v1 口径，当前基线用 SQLite。
+# 路径配置 (install 守门)
 SQLITE_PATH="${APEIRETH_SQLITE_PATH:-/var/lib/apeireth/data/sessions.db}"
-POSTGRES_URL="${APEIRETH_DB_URL:-postgresql://apeireth:${POSTGRES_PASSWORD:-secret}@localhost:5432/apeireth}"
+POSTGRES_URL="${APEIRETH_DB_URL:-postgresql://apeireth:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (no weak default)}@localhost:5432/apeireth}"
 CONFIG_PATH="${APEIRETH_CONFIG_PATH:-/etc/apeireth/config.toml}"
 BACKUP_DIR="${APEIRETH_BACKUP_DIR:-/var/backups/apeireth/upgrade-${TIMESTAMP}}"
 SERVICE_NAME="${APEIRETH_SERVICE_NAME:-apeireth}"
 HEALTH_URL="${APEIRETH_HEALTH_URL:-http://localhost:8080/health}"
 RETENTION_DAYS="${APEIRETH_RETENTION_DAYS:-30}"
 
-# PostgreSQL schema (per 蓝图 §3.6: apeireth.sessions/identity/audit 简化; 实际 1:1 镜像)
+# PostgreSQL schema (按安装规范: apeireth.sessions/identity/audit 简化; 实际 1:1 镜像)
 PG_SCHEMA="apeireth"
 
 # 临时文件 (脚本退出时清理)
@@ -87,7 +88,7 @@ POSTGRES_DUMP="${TMP_DIR}/postgres_dump.sql"
 VERIFY_REPORT="${TMP_DIR}/verify_report.txt"
 MIGRATION_LOG="${TMP_DIR}/migration.log"
 
-# Dry-run 模式 (per 蓝图 §1.2 准备文档性质, 主人周会议演示用)
+# Dry-run 模式 (按安装规范 准备文档性质, 主人周会议演示用)
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=true
@@ -485,7 +486,7 @@ step7_retain_sqlite_30d() {
   # 写保留标记
   echo "${TIMESTAMP} | ${RETENTION_DAYS} days | created by ${SCRIPT_NAME}" > "${BACKUP_DIR}/.retention-marker"
 
-  # 装清理 cron (per 蓝图 §3.6 30 天自动清理)
+  # 装清理 cron (按安装规范 30 天自动清理)
   local cron_line="0 3 * * * /usr/bin/find ${BACKUP_DIR%/*} -name 'sessions.db.bak.*' -mtime +${RETENTION_DAYS} -exec rm -rf {} + 2>/dev/null; /usr/bin/find ${BACKUP_DIR%/*} -name '.retention-marker' -mtime +${RETENTION_DAYS} -delete 2>/dev/null"
   if ! crontab -l 2>/dev/null | grep -q "apeireth-migrate-cleanup"; then
     (crontab -l 2>/dev/null; echo "# apeireth-migrate-cleanup: ${cron_line}") | crontab -
@@ -524,7 +525,7 @@ step8_health_check() {
 
   if [[ -z "${health_resp}" ]]; then
     log_err "服务未就绪, 健康检查失败"
-    log_err "回滚命令: bash scripts/upgrade/rollback.sh (per 蓝图 §3.6 回滚脚本)"
+    log_err "回滚命令: bash scripts/upgrade/rollback.sh (按安装规范 回滚脚本)"
     exit 1
   fi
 
