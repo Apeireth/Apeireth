@@ -2052,6 +2052,10 @@
       }
       await adoptSupervisorEndpoint();
       void refreshConnection();
+      // 工作区默认回退（2026-10-11 批）：启动即取侧车当前根作主页分组默认值——
+      // 旧会话（未戳工作区）归入当前项目组；此前该值只在工作区选择器打开时加载，
+      // 主页分组回退因此恒为空（真机实证的漏接线）。
+      currentWorkspace = (await getWorkspaceDir()) ?? '';
     })();
 
     // 舰内时刻心跳：无 ?hour= 覆写时每 30s 对齐本地时钟（照明过渡由 CSS/rAF 慢性子承担）
