@@ -28,6 +28,7 @@
 pub mod envelope;
 pub mod identity;
 pub mod pairing;
+pub mod rendezvous;
 
 pub use envelope::{
     decode_envelope, encode_envelope, verify_hello, verify_hello_ack, Cancel, CapabilityAdvert,
@@ -42,6 +43,13 @@ pub use identity::{
 pub use pairing::{
     PairChallenge, PairCodeReady, PairComplete, PairConfirm, PairHello, PairReject, PairingMessage,
     PAIRING_PROTOCOL_VERSION, PAIRING_SAS_DOMAIN,
+};
+pub use rendezvous::{
+    decode_frame, encode_control, encode_relay, Frame, PresenceRecord, RelayCircuitId,
+    RelayControl, RelayFrame, RendezvousError, RendezvousRequest, RendezvousResponse,
+    ED25519_PUBLIC_KEY_BYTES, FRAME_TAG_CONTROL, FRAME_TAG_RELAY, MAX_FRAME_BODY_BYTES,
+    PRESENCE_DEFAULT_TTL_MS, PRESENCE_DOMAIN, PRESENCE_MAX_TTL_MS, PRESENCE_MIN_TTL_MS,
+    PRESENCE_NONCE_BYTES, RELAY_CIRCUIT_ID_BYTES, RENDEZVOUS_PROTOCOL_VERSION,
 };
 
 pub use apeireth_core::kernel::NodeId;
