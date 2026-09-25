@@ -52,9 +52,7 @@ pub enum LiveKitError {
     /// K-1 #4: URL 不是 `wss://` 开头.
     ///
     /// LiveKit 强制要求 wss:// 协议 (WebSocket Secure), 跟普通 WebRTC 信令服务器一致.
-    #[error(
-        "livekit url must start with `wss://` (per LiveKit 协议 强制要求): got `{0}`"
-    )]
+    #[error("livekit url must start with `wss://` (per LiveKit 协议 强制要求): got `{0}`")]
     InvalidUrl(String),
 
     // ===== 通用 LiveKit 失败面 (3 类, per LiveKit 协议) =====
