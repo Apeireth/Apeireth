@@ -23,6 +23,7 @@
     X,
     Search,
     Info,
+    ShieldCheck,
   } from 'lucide-svelte';
   import MessageContent from './lib/MessageContent.svelte';
   import RuntimeModal from './lib/components/RuntimeModal.svelte';
@@ -421,6 +422,29 @@
       )?.id ?? 'standard'
     );
   });
+
+  // ---- 对话栏位常驻控制（2026-10-11 主人反馈批：Kimi Desktop 式输入栏布局）----
+  // 权限档位芯片的短标签（输入栏位空间紧，完整语义进弹层与 title）。
+  const PRESET_SHORT_LABEL: Record<string, string> = {
+    read_only: '只读',
+    standard: '标准·每次',
+    standard_remember: '标准·记住',
+    full: '完全放行',
+  };
+  const activePresetShortLabel = $derived(
+    PRESET_SHORT_LABEL[activeApprovalStrategyId] ?? '标准·每次',
+  );
+  const activePresetFull = $derived(
+    SESSION_PRESETS.find((p) => p.id === activeApprovalStrategyId),
+  );
+  let composerPresetOpen = $state(false);
+  async function pickComposerPreset(id: string): Promise<void> {
+    composerPresetOpen = false;
+    const preset = SESSION_PRESETS.find((p) => p.id === id);
+    if (preset && preset.id !== activeApprovalStrategyId) {
+      await selectSessionPreset(preset);
+    }
+  }
 
   function toEpochMs(value: unknown): number | undefined {
     if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
@@ -2431,25 +2455,8 @@
                      长标题横排单行省略（flex:1 + min-width:0 收缩链） -->
                 <h2 class="chat-title">{activeConversation?.title || '新对话'}</h2>
               </div>
-              <div class="chat-head-actions">
-                <div class="preset-group" role="group" aria-label="会话审批策略">
-                  {#each SESSION_PRESETS as preset (preset.id)}
-                    <button
-                      class="preset-btn"
-                      class:active={activeApprovalStrategyId === preset.id}
-                      onclick={() => void selectSessionPreset(preset)}
-                      title={preset.title}
-                      aria-pressed={activeApprovalStrategyId === preset.id}
-                    >
-                      {preset.label}
-                    </button>
-                  {/each}
-                </div>
-                <button class="quiet-btn" onclick={newConversation}>
-                  <Plus size={13} />
-                  新对话
-                </button>
-              </div>
+              <!-- 权限档位 / 新对话 / 会话模型已移至对话栏位（2026-10-11 主人反馈批：
+                   头部随滚动消失，输入栏位常驻——布局参照 Kimi Desktop） -->
               <!-- 状态行：头部第二行，独占整宽（打回修复②轮） -->
               <div class="statusline">
                 <div class="persona-menu">
@@ -2481,13 +2488,6 @@
                     </div>
                   {/if}
                 </div>
-                <span class="mono-note" style="opacity:.4">·</span>
-                <SessionModelPicker
-                  models={sessionModels}
-                  value={currentSessionModel}
-                  onSelect={(id) => void selectSessionModel(id)}
-                  disabled={busy}
-                />
                 <span class="mono-note" style="opacity:.4">·</span>
                 <button class="mono-note live" onclick={() => (showRuntimeModal = true)}>{hdState}</button>
                 {#if $presenceStore.simulated}
@@ -2608,6 +2608,39 @@
                 <button class="round-btn" title="新对话" onclick={newConversation} aria-label="新对话">
                   <Plus size={16} />
                 </button>
+                <!-- 权限档位芯片（Kimi Desktop 式输入栏左侧常驻；弹层向上翻） -->
+                <div class="composer-preset">
+                  <button
+                    class="composer-preset-trigger"
+                    class:open={composerPresetOpen}
+                    onclick={() => (composerPresetOpen = !composerPresetOpen)}
+                    disabled={busy}
+                    title={`权限档位：${activePresetFull?.title ?? ''}（点击切换）`}
+                    aria-haspopup="menu"
+                    aria-expanded={composerPresetOpen}
+                  >
+                    <ShieldCheck size={13} class="shell-icon-sm" />
+                    <span>{activePresetShortLabel}</span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {#if composerPresetOpen}
+                    <div class="composer-preset-scrim" onclick={() => (composerPresetOpen = false)} aria-hidden="true"></div>
+                    <div class="composer-preset-pop" role="menu" aria-label="权限档位">
+                      {#each SESSION_PRESETS as preset (preset.id)}
+                        <button
+                          class="composer-preset-item"
+                          class:active={activeApprovalStrategyId === preset.id}
+                          role="menuitemcheckbox"
+                          aria-checked={activeApprovalStrategyId === preset.id}
+                          onclick={() => void pickComposerPreset(preset.id)}
+                        >
+                          <span class="composer-preset-label">{preset.label}</span>
+                          <span class="composer-preset-title">{preset.title}</span>
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
                 <textarea
                   bind:value={draft}
                   bind:this={composerTextarea}
@@ -2639,6 +2672,16 @@
             </div>
 
             <div class="composer-side">
+              <!-- 会话模型切换（2026-10-11 从会话头迁入对话栏位；弹层向上翻） -->
+              <div class="composer-session-model">
+                <SessionModelPicker
+                  models={sessionModels}
+                  value={currentSessionModel}
+                  onSelect={(id) => void selectSessionModel(id)}
+                  disabled={busy}
+                  up
+                />
+              </div>
               <div class="composer-caps" aria-label="模型与上下文">
                 <div class="panel" class:show={openPanel === 'ctx'} id="panel-ctx" role="dialog" aria-label="上下文窗口">
                   <h2>上下文窗口</h2>
@@ -2962,39 +3005,98 @@
     color: var(--ap-bone);
   }
 
-  /* ---------- 会话头：模型选择器 + 权限预设（P0-3 / P1-2） ---------- */
-  .chat-head-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  /* ---------- 会话头权限预设已迁至对话栏位（2026-10-11 主人反馈批） ---------- */
+
+  /* ---------- 对话栏位常驻控制（2026-10-11 主人反馈批：Kimi Desktop 式输入栏） ---------- */
+  .composer-preset {
+    position: relative;
     flex: none;
   }
-  .preset-group {
-    display: flex;
+  .composer-preset-trigger {
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px;
-    background: var(--ap-panel);
+    gap: 5px;
+    padding: 5px 9px;
     border: 1px solid var(--ap-line);
     border-radius: 7px;
-  }
-  .preset-btn {
-    border: 0;
-    background: transparent;
-    color: var(--ap-bone-42);
-    font-size: 10.5px;
-    letter-spacing: 0.08em;
-    padding: 3px 8px;
-    border-radius: 5px;
+    background: var(--ap-panel);
+    color: var(--ap-bone-62);
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    transition: color 0.2s, background 0.2s;
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s;
   }
-  .preset-btn:hover {
+  .composer-preset-trigger:hover:not(:disabled),
+  .composer-preset-trigger.open {
+    border-color: var(--amber-line);
     color: var(--ap-bone);
   }
-  .preset-btn.active {
-    color: var(--ap-gold);
-    background: rgba(255, 210, 122, 0.12);
+  .composer-preset-trigger:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .composer-preset-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 210;
+  }
+  .composer-preset-pop {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 0;
+    z-index: 220;
+    min-width: 240px;
+    padding: 5px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .composer-preset-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 7px 10px;
+    border: 0;
+    background: transparent;
+    border-radius: 7px;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+  .composer-preset-item:hover {
+    background: var(--surface-3);
+  }
+  .composer-preset-item.active {
+    box-shadow: inset 2px 0 0 var(--amber);
+  }
+  .composer-preset-label {
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .composer-preset-title {
+    font-size: 11px;
+    color: var(--faint);
+    line-height: 1.5;
+  }
+  .composer-session-model {
+    flex: none;
+  }
+  .composer-session-model :global(.model-picker .trigger) {
+    max-width: 200px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  /* 窄输入栏：会话模型芯片优先，全局字母丸让位（双击状态栏仍可进设置改全局模型） */
+  @media (max-width: 760px) {
+    .composer-session-model :global(.model-picker .trigger) {
+      max-width: 120px;
+    }
   }
 
   /* ---------- 工具生命周期卡（P1-5） ----------
