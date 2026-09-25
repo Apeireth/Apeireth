@@ -533,11 +533,15 @@
 .session-col {
   flex: none;
   width: clamp(260px, 24vw, 320px);
-  margin: 14px 0 14px 14px;
+  /* 2026-10-11 主人反馈批③：Kimi Desktop 式「窗框融进软件」——列表栏取消
+     浮卡（外边距+圆角+描边），四边锚定窗口、只留一道右分界线，栏体即窗框
+     的一部分，不再有「漂在壁纸上的黑盒子」。 */
+  margin: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: 1px solid var(--ap-line);
-  border-radius: 12px;
+  border: 0;
+  border-right: 1px solid var(--ap-line);
+  border-radius: 0;
   background: var(--ap-panel);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);

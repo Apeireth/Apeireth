@@ -46,6 +46,7 @@
     himAttention = false,
     reloadKey = 0,
     activeId = null,
+    defaultWorkspace = null,
     onOpen,
     onOpenHim,
     onNew,
@@ -69,6 +70,8 @@
     reloadKey?: number;
     /** 三栏主从（2026-09-22 主人拍板）：当前选中会话 id，行内金线 active 态。 */
     activeId?: string | null;
+    /** 工作区默认回退：会话未戳工作区（旧数据）时归入的当前项目组（App 传当前工作目录）。 */
+    defaultWorkspace?: string | null;
     onOpen: (item: HomeSessionItem) => void;
     onOpenHim: () => void;
     onNew: () => void;
@@ -83,10 +86,10 @@
   let ledgerLoading = $state(false);
 
   const items = $derived(
-    mergeSessionLedger({local: conversations, backend, pendingApprovalSessions}),
+    mergeSessionLedger({local: conversations, backend, pendingApprovalSessions, defaultWorkspace}),
   );
   const sections = $derived(groupHomeSessions(items));
-  const archived = $derived(archivedHomeItems(conversations, pendingApprovalSessions));
+  const archived = $derived(archivedHomeItems(conversations, pendingApprovalSessions, defaultWorkspace));
 
   // ---- 分组收起态（持久化；键 = 区/组前缀 + 组键） ----
   const COLLAPSE_KEY = 'apeireth-home-collapsed';
@@ -395,7 +398,16 @@
     pointer-events: auto;
   }
   .home-head {
-    margin-bottom: 16px;
+    /* 主人反馈批③：眉题区常驻栏顶——sticky 实底带（同 .chat-head 语言），
+       会话组往下滚动时「谁找我了」留在框里，栏顶与窗框融为一体。
+       负边距抵消 .home-list 内距，实底触到栏体四边（栏体 overflow 裁剪，
+       不出血到右侧聊天区，那里保留壁纸显影）。 */
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin: -20px -14px 16px;
+    padding: 20px 14px 12px;
+    background: var(--ap-panel-solid);
   }
   .eyebrow {
     margin: 0 0 6px;

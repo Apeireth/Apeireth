@@ -2453,6 +2453,7 @@
             {capabilities}
             {pendingApprovalSessions}
             {activeId}
+            defaultWorkspace={currentWorkspace || null}
             himName={activePersona?.name || '他'}
             {himStatus}
             {himAttention}

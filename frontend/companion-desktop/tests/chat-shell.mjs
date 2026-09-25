@@ -190,6 +190,42 @@ const mkItem = (id, over = {}) => ({
   assert.equal(archivedHomeItems(convs).length, 2);
 }
 
+// 工作区默认回退（2026-10-11 批）：未戳工作区的旧会话归入当前项目组；
+// 显式戳了的会话不被覆盖；不传回退仍归「未关联项目」（行为不静默变）
+{
+  const convs = [
+    {...localConv('old1', {updatedAt: 100})}, // 旧数据，无 workspace 戳
+    {...localConv('stamped', {updatedAt: 200}), workspace: 'D:\\other\\proj'},
+  ];
+  const backend = [{id: 'be1', started_at: 300, last_active_at: 300, episode_count: 1}];
+  const merged = mergeSessionLedger({
+    local: convs,
+    backend,
+    defaultWorkspace: 'C:\\Users\\me\\Apeireth-rust',
+  });
+  const byId = new Map(merged.map((i) => [i.id, i]));
+  assert.equal(byId.get('old1').workspace, 'C:\\Users\\me\\Apeireth-rust');
+  assert.equal(byId.get('stamped').workspace, 'D:\\other\\proj'); // 显式戳记优先
+  assert.equal(byId.get('be1').workspace, 'C:\\Users\\me\\Apeireth-rust');
+  // 不传 defaultWorkspace：旧行为保持（null → 未关联项目组）
+  const legacy = mergeSessionLedger({local: convs, backend});
+  const legacyById = new Map(legacy.map((i) => [i.id, i]));
+  assert.equal(legacyById.get('old1').workspace, null);
+  assert.equal(legacyById.get('be1').workspace, null);
+  // 归档组同样吃回退
+  const archived = archivedHomeItems(
+    [{...localConv('a9', {updatedAt: 50, archived: true})}],
+    undefined,
+    'C:\\Users\\me\\Apeireth-rust',
+  );
+  assert.equal(archived[0].workspace, 'C:\\Users\\me\\Apeireth-rust');
+  // 回退归组后标签 = 路径末段
+  const {projects} = groupHomeSessions(merged);
+  const labels = projects.map((g) => g.label);
+  assert.ok(labels.includes('Apeireth-rust'));
+  assert.ok(labels.includes('proj'));
+}
+
 console.log('✓ groupHomeSessions / archivedHomeItems / 分组标签 全分支');
 
 // ---------------------------------------------------------------------------

@@ -60,6 +60,9 @@ export interface MergeSessionLedgerInput {
   backend: BackendLedgerSession[] | null;
   /** 有待签文书的会话 id 集（SSE approval_required − approval_resolved 推导）。 */
   pendingApprovalSessions?: ReadonlySet<string>;
+  /** 工作区默认回退（2026-10-11 批）：会话未戳工作区（旧数据）时归入的
+   *  当前项目组；显式 null/未传 = 归「未关联项目」组。 */
+  defaultWorkspace?: string | null;
 }
 
 /** 最后一条消息的一行预览（空白折叠，截断 80 字）。 */
@@ -76,6 +79,7 @@ export function sessionPreview(conv: Conversation): string | null {
  */
 export function mergeSessionLedger(input: MergeSessionLedgerInput): HomeSessionItem[] {
   const pending = input.pendingApprovalSessions ?? new Set<string>();
+  const fallbackWs = input.defaultWorkspace ?? null;
   const byId = new Map<string, HomeSessionItem>();
 
   for (const conv of input.local) {
@@ -90,7 +94,7 @@ export function mergeSessionLedger(input: MergeSessionLedgerInput): HomeSessionI
       pendingApproval: pending.has(conv.id),
       archived: false,
       pinned: !!conv.pinned,
-      workspace: conv.workspace ?? null,
+      workspace: conv.workspace ?? fallbackWs,
       personaId: conv.personaId ?? null,
       personaName: conv.personaName ?? null,
     });
@@ -120,7 +124,7 @@ export function mergeSessionLedger(input: MergeSessionLedgerInput): HomeSessionI
         pendingApproval: pending.has(s.id),
         archived: false,
         pinned: false,
-        workspace: null,
+        workspace: fallbackWs,
         personaId: null,
         personaName: null,
       });
@@ -134,8 +138,10 @@ export function mergeSessionLedger(input: MergeSessionLedgerInput): HomeSessionI
 export function archivedHomeItems(
   local: Conversation[],
   pendingApprovalSessions?: ReadonlySet<string>,
+  defaultWorkspace?: string | null,
 ): HomeSessionItem[] {
   const pending = pendingApprovalSessions ?? new Set<string>();
+  const fallbackWs = defaultWorkspace ?? null;
   return local
     .filter((c) => c.archived)
     .map((conv) => ({
@@ -148,7 +154,7 @@ export function archivedHomeItems(
       pendingApproval: pending.has(conv.id),
       archived: true,
       pinned: !!conv.pinned,
-      workspace: conv.workspace ?? null,
+      workspace: conv.workspace ?? fallbackWs,
       personaId: conv.personaId ?? null,
       personaName: conv.personaName ?? null,
     }))
