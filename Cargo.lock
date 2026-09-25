@@ -354,6 +354,7 @@ dependencies = [
  "apeireth-mesh-protocol",
  "apeireth-plugin",
  "apeireth-protocol",
+ "apeireth-runtime",
  "async-trait",
  "serde_json",
  "thiserror 1.0.69",
