@@ -1,5 +1,12 @@
 name: Publish GitHub Release
 
+# 触发: 推送 v* tag 即发布。
+# 产物: Windows NSIS 安装包 (Apeireth Companion_<version>_x64-setup.exe) + SHA-256,
+#       由 packaging/desktop/build-desktop-nsis.ps1 在 windows-latest 上构建
+#       (stage-desktop → pnpm build 前端 + stage-sidecar 规范后端 + tauri build --bundles nsis),
+#       构建成功后才创建 Release 并挂资产 —— 不再发布"只有 notes、0 个资产"的空壳 Release。
+# 版本一致性: 发布前跑 scripts/check-release-version.ps1 -Strict, tag 与 22 处版本源不一致即失败。
+
 on:
   push:
     tags:
@@ -9,12 +16,69 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
+  build-windows-installer:
+    name: Build Windows NSIS installer
+    runs-on: windows-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: 'frontend/companion-desktop/pnpm-lock.yaml'
+
+      - name: Cache cargo (root workspace + Tauri shell)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            frontend/companion-desktop/src-tauri
+
+      - name: Verify tag matches version sources
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          ./scripts/check-release-version.ps1 -ExpectedVersion $version -Strict
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Build NSIS installer (stage frontend + sidecar, tauri bundle)
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          ./packaging/desktop/build-desktop-nsis.ps1 -Version $version -Target x86_64-pc-windows-msvc
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-nsis-windows-x64
+          path: target/desktop-nsis/*
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-windows-installer
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Windows installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-nsis-windows-x64
+          path: release-assets
 
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2
@@ -23,10 +87,21 @@ jobs:
           name: "Apeireth ${{ github.ref_name }} — AGI Operating System & Cognitive Microkernel"
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') || contains(github.ref_name, 'preview') }}
+          files: |
+            release-assets/*.exe
+            release-assets/*.sha256
           body: |
             ## 🌟 Apeireth 2.0+ Cognitive Microkernel & AGI Operating System
 
-            > **Pure Safe Rust (`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`), 16 Microkernel Crates, 2012+ Verified Tests.**
+            > **Pure Safe Rust (`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`), 18-Crate Kernel + Assembly, 3400+ Verified Tests.**
+
+            ---
+
+            ### ⬇️ Downloads
+
+            - **Windows 10/11 (x64)**: download `Apeireth Companion_<version>_x64-setup.exe` (version = this tag without the leading `v`), double-click to install. The installer bundles the complete backend (sidecar) — no Rust toolchain or compilation required.
+            - Integrity: the matching `.sha256` asset carries the SHA-256 checksum.
+            - macOS / Linux: no prebuilt installer yet — build from source per [INSTALL.md](INSTALL.md).
 
             ---
 
@@ -36,16 +111,25 @@ jobs:
                - TagMemo V10 continuous field, Vietoris-Rips $\beta_1$ hole curiosity gradient, Kuramoto non-linear phase locking, and MGS orthogonal residual pyramid.
             2. **Cognitive Quota Preemptive Microkernel (多维认知配额抢占式调度器)**:
                - 5-level priority queue with multidimensional quota $\mathcal{Q}=\langle \text{Token}, \text{Step}, \text{Cost}, \text{Depth} \rangle$ & Priority Inheritance Protocol (PIP).
-            3. **Causal World Model Sandbox (因果世界模型与 SAGA 逆向补偿)**:
-               - Copy-On-Write (CoW) hypothesis branching with sub-35µs SAGA LIFO compensating reverse stack rollback.
-            4. **Micro-Luminescent Ember HUD (微光在场感知与主动关怀)**:
-               - 4.0s physiological breathing aura ($I(t)=I_0+A\sin^3(2\pi t/4)$), Kelvin Planckian blackbody shader synthesis & continuous Care Potential Field differential equations.
-            5. **Triple-Onion Zero-Trust Sandbox (零信任三洋葱物理沙箱)**:
+            3. **Micro-Luminescent Ember HUD (微光在场感知)**:
+               - 4.0s physiological breathing aura ($I(t)=I_0+A\sin^3(2\pi t/4)$) & Kelvin Planckian blackbody shader synthesis.
+            4. **Triple-Onion Zero-Trust Sandbox (零信任三洋葱物理沙箱)**:
                - Windows JobObject / Linux cgroups physical containment + Git Worktree isolation + OWASP ASI-01 guardrails.
-            6. **Lineage Spawning Protocol (跨代教养与物种分化协议)**:
+            5. **Lineage Spawning Protocol (跨代教养与物种分化协议)**:
                - Ed25519 constant-time epigenetic inheritance through Shadowing $\to$ DualCoSign $\to$ Emancipation.
-            7. **Portable USB Flash-Drive Agent & P2P Mesh (随身 U 盘生命体与去中心化漫游)**:
-               - Zero-dependency single-binary flash drive launcher with relative `./data/` isolation & Noise_XX encrypted BLE/LAN memory roaming.
+            6. **Portable USB Flash-Drive Agent (随身 U 盘生命体)**:
+               - Zero-dependency single-binary flash drive launcher with relative `./data/` isolation.
+
+            ---
+
+            ### 🗺 On the Roadmap (尚未作为完整产品能力交付)
+
+            The following are designed and partially implemented, but not yet delivered as
+            complete product capabilities. Stages and scope are tracked in [ROADMAP.md](ROADMAP.md):
+
+            - **Causal World Model** (CoW hypothesis branching + SAGA compensating rollback) — mechanism bench-verified, productization in progress
+            - **P2P Mesh** decentralized memory roaming (Noise_XX encrypted BLE/LAN sync)
+            - **Proactive Care Potential Field** (currently delivered: ambient presence HUD)
 
             ---
 
@@ -61,7 +145,7 @@ jobs:
             | **Ember HUD Render Tick** | **0.08 ms** | ✅ PASS |
             | **Microkernel Cold Start** | **4.20 ms** | ✅ PASS |
             | **Runtime Idle Footprint** | **~18.2 MB RAM** | ✅ PASS |
-            | **Full Workspace Test Suite** | **2012 / 2012 PASS** | ✅ 0 FAILED |
+            | **Full Workspace Test Suite** | **3406 / 3406 PASS** (129 suites) | ✅ 0 FAILED |
 
             ---
 

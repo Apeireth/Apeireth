@@ -130,6 +130,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | P-arch-3 (2026-08-28 待做) | RC-7 Perception 真 modality (per §4 P-arch D 块) | 2-3 周估; 需硬件 (Whisper + xcap); 起点 `docs/01-architecture/rc-7-perception-true-modality-spec.md` | 硬件 |
 | **P1 (新)** | **RC-10 metadata-bound APX2 header + RC-11 migration** | 已完成：v2 写入的 AAD 绑定 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length；旧 v1 `[sealed_len:4 BE][sealed:N]` 保持只读兼容，当前格式不落盘 raw `record_id`。`scripts/migrate_v1_to_v2_encrypted.py` 与 7 个 Rust 集成测试完成离线 v1→APX2 重签、截断/超长 ID fail-closed 验证 | RC-10/11 ✅ |
 | **P2 (KV 参考清单, 2026-09-06 登记)** | KV 层逐出/压缩三篇（RA-15 派单包） | 📋 后置：本地推理路线（便携 U 盘 SLM）启动后吸收——arXiv:2607.10582 MemDecay 区域感知逐出 / arXiv:2608.00528 S4R 采样+子空间+稀疏重建 / arXiv:2601.18999 随机化逐出+学习路由。对照见 `docs/03-reference/absorption-2026-09.md` §P2 | 本地推理路线 |
+| **P10 (产品化 P0 批, 2026-09-26 登记)** | 产品化路线（源 `docs/04-internal/pm-review-productization-2026-09-25.md`） | ① NSIS 安装包挂 GitHub Release ✅（`publish-release.yml` 传资产：windows-latest 跑 `packaging/desktop/build-desktop-nsis.ps1` + `check-release-version.ps1 -Strict` 版本门禁，安装包+SHA256 挂 Release；本地全链实证产出 `Apeireth Companion_2.0.0-rc.1_x64-setup.exe`，2026-09-26）；② **宣称口径已拍板：诚实降调**（主人 2026-09-26）——对外文案只写已交付能力，P2P Mesh / 因果世界模型产品化 / 主动关怀移入路线图并标注阶段（`publish-release.yml` 发布说明 body 已按此校准；README 重写轮全量执行）；③ 待做 = 文档必败命令修复 + README 用户视角重写、首启向导人工点击流 + key 钥匙串持久化、核心记忆能力默认开 | 无 |
 
 ---
 
