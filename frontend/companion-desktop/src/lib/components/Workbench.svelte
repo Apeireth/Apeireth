@@ -16,6 +16,7 @@
 
   let open = $state<Record<string, boolean>>({
     goal: true,
+    agent: true,
     tools: true,
     files: true,
     mem: true,
@@ -30,7 +31,10 @@
   const runningTools = $derived(toolCalls.filter((t) => t.status === 'pending' || t.status === 'running'));
   const doneTools = $derived(toolCalls.filter((t) => t.status === 'succeeded'));
   const blockCount = $derived(
-    (conversation ? 1 : 0) + (toolCalls.length ? 1 : 0) + (memories.length ? 1 : 0),
+    (conversation ? 1 : 0) +
+      (toolCalls.length ? 1 : 0) +
+      (doneTools.length || lastAssistant?.toolCalls?.length ? 1 : 0) +
+      (memories.length ? 1 : 0),
   );
 
   function toggle(id: string): void {
@@ -76,22 +80,37 @@
       <div class="blk">
         <button
           class="blk-head"
-          aria-expanded={open.tools}
-          onclick={() => toggle('tools')}
+          aria-expanded={open.agent}
+          onclick={() => toggle('agent')}
         >
-          代理与执行
-          {#if toolCalls.length}
-            <span class="tagn">{runningTools.length ? `${runningTools.length} 运行中` : `${toolCalls.length} 项工具`}</span>
-          {/if}
+          代理
           <ChevronRight size={13} class="shell-icon-sm caret" />
         </button>
-        {#if open.tools}
+        {#if open.agent}
           <div class="blk-body show">
             <button class="agent" type="button">
               <span class="st" class:run={busy}></span>
               主 Agent
               <span class="tag">{busy ? '运行中' : '空闲'}</span>
             </button>
+          </div>
+        {/if}
+      </div>
+
+      <div class="blk">
+        <button
+          class="blk-head"
+          aria-expanded={open.tools}
+          onclick={() => toggle('tools')}
+        >
+          工具轨迹
+          {#if toolCalls.length}
+            <span class="tagn">{runningTools.length ? `${runningTools.length} 运行中` : `${toolCalls.length} 次调用`}</span>
+          {/if}
+          <ChevronRight size={13} class="shell-icon-sm caret" />
+        </button>
+        {#if open.tools}
+          <div class="blk-body show">
             {#if toolCalls.length}
               {#each toolCalls as tool (tool.id)}
                 <button class="agent" type="button">

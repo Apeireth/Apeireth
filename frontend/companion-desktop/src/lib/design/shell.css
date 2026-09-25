@@ -516,7 +516,7 @@
   pointer-events: none;
 }
 .col {
-  width: min(720px, calc(100% - 56px));
+  width: min(640px, calc(100% - 56px));
   margin: 0 auto;
 }
 
@@ -776,6 +776,14 @@ p.lede {
   flex-wrap: wrap;
   padding: 16px 0 12px;
   pointer-events: auto;
+  /* 2026-10-11 主人反馈批：上翻时对话要「收进框架」而非露出软件底色——
+     头部吸附 + 半透明毛玻璃，内容从底下滑过时被柔化收束（Kimi Desktop 式） */
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: color-mix(in srgb, var(--ap-panel) 72%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 .chat-title {
   margin: 0;
@@ -962,9 +970,12 @@ p.lede {
    在半角 ch 下仅 ~15 汉字/行，属令牌口径冲突，建议回写规范 §6.1。 */
 .ai-card .md-body.ap-voice {
   font-family: var(--ap-font-voice);
-  font-size: var(--ap-voice-size);
-  line-height: var(--ap-voice-line-height);
-  letter-spacing: var(--ap-voice-letter-spacing);
+  /* 2026-10-11 主人反馈批：正文字号回落——22px/2.1 行高读作「字太大」；
+     收到 14.5–16.5px / 1.9 行距，衬线嗓音身份保留，阅读密度对齐 Kimi 级。
+     令牌本体（--ap-voice-size）不动：快捷窗等其余面继续用原令牌。 */
+  font-size: clamp(14.5px, 1.05vw, 16.5px);
+  line-height: 1.9;
+  letter-spacing: 0.055em;
   max-width: 35em;
   color: var(--ap-bone);
 }
@@ -991,14 +1002,16 @@ p.lede {
   position: relative;
 }
 .dock-col {
-  width: min(720px, calc(100% - 56px));
+  /* 2026-10-11 主人反馈批：输入栏要比上下文列宽——视觉重心自然落在输入上
+     （Kimi Desktop 式留白：消息列 640 收进框架，对话栏 860 宽台坐镇底部） */
+  width: min(860px, calc(100% - 32px));
   margin: 0 auto;
 }
 .composer-row {
-  --composer-h: 52px;
+  --composer-h: 58px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   height: var(--composer-h);
 }
 .composer-row .composer {
@@ -1041,7 +1054,7 @@ p.lede {
   box-sizing: border-box;
   background: var(--ap-panel);
   border: 1px solid var(--ap-line);
-  border-radius: 9px;
+  border-radius: 12px;
   backdrop-filter: blur(14px);
   padding: 0 4px;
   transition: border-color 0.3s, box-shadow 0.3s;
@@ -1090,9 +1103,9 @@ p.lede {
   height: 100%;
 }
 .composer-send .send {
-  width: var(--composer-h);
-  height: var(--composer-h);
-  border-radius: 9px;
+  width: calc(var(--composer-h) - 10px);
+  height: calc(var(--composer-h) - 10px);
+  border-radius: 10px;
   flex: none;
 }
 .composer-caps .panel {
@@ -1103,7 +1116,7 @@ p.lede {
 .composer {
   background: var(--ap-panel);
   border: 1px solid var(--ap-line);
-  border-radius: 9px;
+  border-radius: 12px;
   backdrop-filter: blur(14px);
   transition: border-color 0.3s, box-shadow 0.3s;
 }
@@ -1140,7 +1153,7 @@ p.lede {
   border: 0;
   outline: 0;
   background: transparent;
-  font: 13.5px / 1.6 var(--ap-font-ui);
+  font: 14px / 1.6 var(--ap-font-ui);
   min-height: 22px;
   max-height: 132px;
   padding: 6px 0;
