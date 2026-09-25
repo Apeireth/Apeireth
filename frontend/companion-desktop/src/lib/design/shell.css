@@ -1622,6 +1622,9 @@ p.lede {
   font-size: 9.5px;
   color: var(--ap-bone-30);
 }
+.agent .tag.bad {
+  color: var(--ap-semantic-danger);
+}
 .file {
   display: flex;
   align-items: center;

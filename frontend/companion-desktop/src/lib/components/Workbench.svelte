@@ -59,8 +59,21 @@
   });
   const provenance = $derived(lastAssistant?.provenance);
   const memories = $derived(provenance?.memories ?? []);
-  const runningTools = $derived(toolCalls.filter((t) => t.status === 'pending' || t.status === 'running'));
+  const liveTools = $derived(
+    toolCalls.filter((t) => t.status === 'pending' || t.status === 'running'),
+  );
   const doneTools = $derived(toolCalls.filter((t) => t.status === 'succeeded'));
+  /** 回合仍在流式进行：pending/running 是真「运行中」；回合已收尾还卡着 =
+   *  修复前持久化的历史数据（当时 completed 事件被前端吞掉），而后端读模型
+   *  不存工具名、无法逐条回溯成败——诚实标「已结束」，不谎称「完成」。 */
+  const turnLive = $derived(lastAssistant?.streaming === true);
+  function displayOf(t: ToolCallDetails): {label: string; run: boolean; bad: boolean} {
+    if (t.status === 'succeeded') return {label: '完成', run: false, bad: false};
+    if (t.status === 'failed') return {label: '失败', run: false, bad: true};
+    if (t.status === 'cancelled') return {label: '已取消', run: false, bad: false};
+    if (turnLive) return {label: '运行中', run: true, bad: false};
+    return {label: '已结束', run: false, bad: false};
+  }
   const blockCount = $derived(
     (conversation ? 1 : 0) +
       (toolCalls.length ? 1 : 0) +
@@ -70,13 +83,6 @@
 
   function toggle(id: string): void {
     open = {...open, [id]: !open[id]};
-  }
-
-  function toolLabel(status: string): string {
-    if (status === 'running' || status === 'pending') return '运行中';
-    if (status === 'succeeded') return '完成';
-    if (status === 'failed') return '失败';
-    return status;
   }
 </script>
 
@@ -136,7 +142,7 @@
         >
           工具轨迹
           {#if toolCalls.length}
-            <span class="tagn">{runningTools.length ? `${runningTools.length} 运行中` : `${toolCalls.length} 次调用`}</span>
+            <span class="tagn">{turnLive && liveTools.length ? `${liveTools.length} 运行中` : `${toolCalls.length} 次调用`}</span>
           {/if}
           <ChevronRight size={13} class="shell-icon-sm caret" />
         </button>
@@ -144,10 +150,11 @@
           <div class="blk-body show">
             {#if toolCalls.length}
               {#each toolCalls as tool (tool.id)}
+                {@const d = displayOf(tool)}
                 <button class="agent" type="button">
-                  <span class="st" class:run={tool.status === 'running' || tool.status === 'pending'}></span>
+                  <span class="st" class:run={d.run}></span>
                   {tool.name}
-                  <span class="tag">{toolLabel(tool.status)}</span>
+                  <span class="tag" class:bad={d.bad}>{d.label}</span>
                 </button>
               {/each}
             {:else}
