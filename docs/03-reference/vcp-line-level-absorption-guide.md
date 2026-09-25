@@ -1,5 +1,12 @@
 # VCP 核心算法行级代码解构与 Apeireth 2.0 吸收升级指南
 
+> **⚠️ 2026-10 状态更新（重写声明）**：本文第 1 节（浪潮流体拓扑动力学）与第 2 节（残差金字塔）
+> 所涉实现已**全部重写**为基于公开数学文献的独立实现（LIF 脉冲模型 = Gerstner & Kistler
+> *Spiking Neuron Models*；MGS 正交化 = Golub & Van Loan *Matrix Computations*），
+> 当前代码（`crates/engine/memory/src/river_topology.rs`、`residual_pyramid.rs`）
+> **不再包含 VCP 衍生表达**；本文保留为历史设计记录。
+> 本文第 5 节对应的文件穿透实现（`crates/adapters/gateway/src/file_fetcher.rs`）尚待同等重写处理。
+
 > **目标**: 将 VCP 1.0/1.1 中最顶尖的流体拓扑动力学、残差正交投影、EPA 认知主轴与超栈透明文件穿透等工程算法，以**纯 Safe Rust 编译期强类型微内核**形式系统性吸收至 Apeireth 2.0。  
 > **基准源码**: `VCPToolBox-main.zip` (`ResidualPyramid.js`, `EPAModule.js`, `RiverMemoEngine.js`, `TagMemoEngine.js`, `TagMemoV10Engine.js`, `Plugin.js`, `FileFetcherServer.js`, `rust-vexus-lite/`)  
 > **安全要求**: `#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`，0 unsafe，0 外部黑盒。

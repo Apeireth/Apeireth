@@ -6,7 +6,7 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-see%20CI-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
+[![Tests](https://img.shields.io/badge/tests-3662%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-18--Crate%20Kernel%20%2B%20Assembly-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
@@ -134,9 +134,13 @@ graph TB
 | **Portability & Sync** | Heavy cloud dependencies & non-portable setups | **Portable USB Agent & P2P Mesh**: Relative path `./data/` isolation + Noise_XX end-to-end encrypted BLE/LAN memory roaming |
 | **Memory & Safety** | Python dynamic typing, memory leaks, GIL bottlenecks | **100% Pure Safe Rust**: `#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`, zero unhandled exceptions, zero data races |
 
-> **借鉴与署名**:记忆场的流体拓扑动力学与残差金字塔为 VCP 1.0 行级借鉴的 Rust 再实现,
-> 原始来源与逐行对照见 [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
-> 与 [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md)。
+> **Attribution & status**: the fluid memory-field dynamics and residual pyramid modules
+> were historically ported from VCP 1.0. As of 2026-10 both implementations have been
+> **fully rewritten as independent implementations based on public mathematical literature**
+> (Gerstner & Kistler, *Spiking Neuron Models*; Golub & Van Loan, *Matrix Computations*);
+> the current code contains no VCP-derived expression. Historical notes:
+> [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
+> and [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md).
 
 ---
 
@@ -385,7 +389,7 @@ The canonical gateway exposes HTTP/SSE endpoints alongside an 8-frame full-duple
 git clone https://github.com/Apeireth/Apeireth.git
 cd Apeireth
 
-# Run all 3418 unit and integration tests across the 18 crates (measured 2026-10-06, post W2-batch)
+# Run all 3662 unit and integration tests across the 18 crates (workspace baseline)
 cargo test --workspace
 
 # Verify pure Safe Rust and zero clippy warnings
@@ -398,17 +402,16 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p apeireth-cli -- gateway serve --port 8080
 ```
 
-### 4. Interactive CLI Session
+### 4. Single-Turn CLI Chat (requires an API key)
 ```bash
-# Start interactive pair-programming session with bitemporal memory
-cargo run -p apeireth-cli -- chat
+# Set your API key first (PowerShell: $env:APEIRETH_API_KEY = "sk-...")
+cargo run -p apeireth-cli -- chat "Hello — do you remember me?"
+# `chat` is a one-shot command, not an interactive REPL.
 ```
 
-### 5. Build Portable USB Flash-Drive Agent
-```bash
-# Synthesize portable single-binary bundle with relative ./data/ isolation
-cargo run -p apeireth-cli -- bundle --output-dir "E:\Apeireth-Portable"
-```
+### 5. Next Steps
+- Packaged desktop app: download `Apeireth Companion_<version>_x64-setup.exe` from Releases.
+- The portable USB bundle command (`apeireth bundle`) has not shipped in v2 yet — see ROADMAP.md.
 
 ---
 

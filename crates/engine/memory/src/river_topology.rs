@@ -1,16 +1,37 @@
 //! river_topology: 浪潮流体拓扑动力学与双标度连续场求解器 (DualScaledField)
 //!
-//! 算法框架参照上游开源研究项目(行级吸收对照见 docs/03-reference/vcp-line-level-absorption-guide.md):
-//! 1. LIF (Leaky Integrate-and-Fire) 神经元脉冲传导模型，具备软非回溯抑制 (`return_flow_penalty = 0.1`)；
-//! 2. 节点内生残差 (Intrinsic Residual) 驱动的非对称张力，张力 >= 0.65 自动激活虫洞跃迁边 (Wormhole, 零动量损耗)；
-//! 3. 双预解算子对偶连续场方程求解器：
-//!    (I - α_L P_L) u_L = (1 - α_L) s_0 (局域聚焦场)
-//!    (I - α_T P_T) u_T = (1 - α_T) s_0 (全域迁移场)
+//! 本模块为独立实现，数学基础均为公开文献中的经典模型：
+//! 1. LIF (Leaky Integrate-and-Fire) 脉冲传导模型
+//!    [Gerstner & Kistler, *Spiking Neuron Models*, Cambridge, 2002]，
+//!    在此之上叠加软回溯抑制（回溯边流量按 `return_flow_penalty` 折减）；
+//! 2. 节点内生残差 (Intrinsic Residual) 驱动的非对称张力判据：
+//!    `tension = conductance × intrinsic_residual`，超过阈值的边升级为
+//!    虫洞跃迁边（零动量损耗、低衰减）；
+//! 3. 双预解算子对偶连续场方程的定点迭代求解：
+//!    (I − α_L P) u_L = (1 − α_L) s₀ (局域聚焦场)
+//!    (I − α_T P) u_T = (1 − α_T) s₀ (全域迁移场)
 //! 4. DTSC (Dual-Scale Topology Closure) 4 维可观测张量与相对几何闭合度重排；
-//! 5. Ω 河网可观测性标量门控三态机 (Collapsed, Sparse, Dense)。
+//! 5. Ω 河网可观测性标量门控三态机 (Collapsed / Sparse / Dense)。
 
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
+
+/// 种子脉冲的初始动量。
+const SEED_MOMENTUM: f32 = 3.0;
+/// 脉冲能量下限：低于此值不再向外传导。
+const ENERGY_FLOOR: f32 = 0.01;
+/// 单边注入电流下限：低于此值不计流量。
+const INJECTION_FLOOR: f32 = 0.005;
+/// 普通边每次跃迁消耗的动量。
+const MOMENTUM_COST: f32 = 1.0;
+/// Ω 三态机阈值：低于此值为 Collapsed。
+const OMEGA_COLLAPSED_AT: f32 = 0.12;
+/// Ω 三态机阈值：达到此值为 Dense。
+const OMEGA_DENSE_AT: f32 = 0.45;
+/// 边展开率标定常数（活跃边数 / (EDGE_SPREAD × 种子数)）。
+const EDGE_SPREAD: f32 = 2.5;
+/// 节点涌现率标定常数（新增节点数 / (EMERGE_SPREAD × 种子数)）。
+const EMERGE_SPREAD: f32 = 2.0;
 
 /// 拓扑图节点（Tag / 概念）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -52,6 +73,16 @@ pub struct RiverDynamicsEngine {
     pub tension_threshold: f32,
 }
 
+/// 一次跃迁的传导结果（内部暂存，随后统一入账）。
+struct Transmission {
+    edge_origin: u64,
+    edge_slot: usize,
+    target: u64,
+    injected: f32,
+    wormhole: bool,
+    next_momentum: f32,
+}
+
 impl Default for RiverDynamicsEngine {
     fn default() -> Self {
         Self::new()
@@ -75,13 +106,13 @@ impl RiverDynamicsEngine {
     }
 
     pub fn add_edge(&mut self, source_id: u64, target_id: u64, raw_conductance: f32) {
-        let target_ir = self
+        let target_residual = self
             .nodes
             .get(&target_id)
-            .map(|n| n.intrinsic_residual)
+            .map(|node| node.intrinsic_residual)
             .unwrap_or(1.0);
-        let tension = raw_conductance * target_ir;
-        let is_wormhole = tension >= self.tension_threshold;
+        let is_wormhole =
+            raw_conductance * target_residual >= self.tension_threshold;
 
         let edge = RiverEdge {
             source_id,
@@ -93,70 +124,100 @@ impl RiverDynamicsEngine {
         self.adjacency.entry(source_id).or_default().push(edge);
     }
 
-    /// 执行 LIF 脉冲非回溯传导与能量扩散
+    /// 执行 LIF 脉冲非回溯传导与能量扩散。
+    ///
+    /// 每一波（hop）分两步：先不可变地算出全部跃迁电流，再统一写入边流量
+    /// 并生成下一波前沿；动量耗尽或能量跌破下限的脉冲自然熄灭。
     pub fn propagate_spikes(&mut self, seeds: &[(u64, f32)], max_hops: usize) -> HashMap<u64, f32> {
-        let mut activated_energies: HashMap<u64, f32> = HashMap::new();
-        let mut queue: VecDeque<SpikeSignal> = VecDeque::new();
+        let mut activation: HashMap<u64, f32> = HashMap::new();
+        let mut frontier: Vec<SpikeSignal> = Vec::new();
 
         for &(seed_id, energy) in seeds {
-            queue.push_back(SpikeSignal {
+            frontier.push(SpikeSignal {
                 node_id: seed_id,
                 energy,
-                momentum: 3.0,
+                momentum: SEED_MOMENTUM,
                 prev_node_id: None,
             });
-            *activated_energies.entry(seed_id).or_default() += energy;
+            *activation.entry(seed_id).or_default() += energy;
         }
 
         for _ in 0..max_hops {
-            let mut next_queue = VecDeque::new();
-            while let Some(spike) = queue.pop_front() {
-                if spike.energy < 0.01 || spike.momentum < 0.0 {
-                    continue;
-                }
-                if let Some(edges) = self.adjacency.get_mut(&spike.node_id) {
-                    for edge in edges.iter_mut() {
-                        let is_return = spike.prev_node_id == Some(edge.target_id);
-                        let flow_factor = if is_return {
-                            self.return_flow_penalty
-                        } else {
-                            1.0
-                        };
-                        let decay = if edge.is_wormhole {
-                            self.wormhole_decay
-                        } else {
-                            self.base_decay
-                        };
-                        let injected = spike.energy * edge.conductance * decay * flow_factor;
-
-                        if injected < 0.005 {
-                            continue;
-                        }
-
-                        edge.accumulated_flow += injected;
-                        *activated_energies.entry(edge.target_id).or_default() += injected;
-
-                        let next_momentum = if edge.is_wormhole {
-                            spike.momentum // 虫洞不消耗动量
-                        } else {
-                            spike.momentum - 1.0
-                        };
-
-                        if next_momentum >= 0.0 || edge.is_wormhole {
-                            next_queue.push_back(SpikeSignal {
-                                node_id: edge.target_id,
-                                energy: injected,
-                                momentum: next_momentum,
-                                prev_node_id: Some(spike.node_id),
-                            });
-                        }
-                    }
-                }
-            }
-            queue = next_queue;
+            let transmissions = self.collect_transmissions(&frontier);
+            frontier = self.settle(transmissions, &mut activation);
         }
 
-        activated_energies
+        activation
+    }
+
+    /// 计算当前波前沿所有脉冲的跃迁电流（纯读取，不改状态）。
+    fn collect_transmissions(&self, frontier: &[SpikeSignal]) -> Vec<Transmission> {
+        let mut out = Vec::new();
+        for spike in frontier {
+            if spike.energy < ENERGY_FLOOR || spike.momentum < 0.0 {
+                continue;
+            }
+            let Some(edges) = self.adjacency.get(&spike.node_id) else {
+                continue;
+            };
+            for (slot, edge) in edges.iter().enumerate() {
+                let backflow = spike.prev_node_id == Some(edge.target_id);
+                let flow_factor = if backflow {
+                    self.return_flow_penalty
+                } else {
+                    1.0
+                };
+                let decay = if edge.is_wormhole {
+                    self.wormhole_decay
+                } else {
+                    self.base_decay
+                };
+                let injected = spike.energy * edge.conductance * decay * flow_factor;
+                if injected < INJECTION_FLOOR {
+                    continue;
+                }
+                let next_momentum = if edge.is_wormhole {
+                    spike.momentum
+                } else {
+                    spike.momentum - MOMENTUM_COST
+                };
+                out.push(Transmission {
+                    edge_origin: spike.node_id,
+                    edge_slot: slot,
+                    target: edge.target_id,
+                    injected,
+                    wormhole: edge.is_wormhole,
+                    next_momentum,
+                });
+            }
+        }
+        out
+    }
+
+    /// 把跃迁电流入账（边流量 + 节点激活），并产出下一波前沿。
+    fn settle(
+        &mut self,
+        transmissions: Vec<Transmission>,
+        activation: &mut HashMap<u64, f32>,
+    ) -> Vec<SpikeSignal> {
+        let mut next_wave = Vec::new();
+        for t in transmissions {
+            if let Some(edges) = self.adjacency.get_mut(&t.edge_origin) {
+                if let Some(edge) = edges.get_mut(t.edge_slot) {
+                    edge.accumulated_flow += t.injected;
+                }
+            }
+            *activation.entry(t.target).or_default() += t.injected;
+            if t.next_momentum >= 0.0 || t.wormhole {
+                next_wave.push(SpikeSignal {
+                    node_id: t.target,
+                    energy: t.injected,
+                    momentum: t.next_momentum,
+                    prev_node_id: Some(t.edge_origin),
+                });
+            }
+        }
+        next_wave
     }
 }
 
@@ -177,19 +238,27 @@ pub struct DtscObservables {
     pub closure: f32,
 }
 
+/// Sparse 态的 4 维混合权重 [direct, structural, thematic, closure]。
+const SPARSE_WEIGHTS: [f32; 4] = [0.70, 0.20, 0.00, 0.10];
+/// Dense 态的 4 维混合权重 [direct, structural, thematic, closure]。
+const DENSE_WEIGHTS: [f32; 4] = [0.35, 0.30, 0.20, 0.15];
+
 impl DtscObservables {
-    /// 综合拓扑重排评分
+    /// 综合拓扑重排评分：按 Ω 门控态选择混合权重。
     pub fn compute_composite_score(&self, omega: f32) -> f32 {
-        if omega < 0.12 {
-            // Collapsed 态：退化为纯向量直接匹配
-            self.direct
-        } else if omega < 0.45 {
-            // Sparse 态：保守拓扑增益
-            self.direct * 0.70 + self.structural * 0.20 + self.closure * 0.10
-        } else {
-            // Dense 态：全拓扑几何重排
-            self.direct * 0.35 + self.structural * 0.30 + self.thematic * 0.20 + self.closure * 0.15
+        match RiverState::classify(omega) {
+            // Collapsed：退化为纯向量直接匹配
+            RiverState::Collapsed => self.direct,
+            RiverState::Sparse => self.blend(&SPARSE_WEIGHTS),
+            RiverState::Dense => self.blend(&DENSE_WEIGHTS),
         }
+    }
+
+    fn blend(&self, weights: &[f32; 4]) -> f32 {
+        weights[0] * self.direct
+            + weights[1] * self.structural
+            + weights[2] * self.thematic
+            + weights[3] * self.closure
     }
 }
 
@@ -201,11 +270,24 @@ pub enum RiverState {
     Dense,     // Ω >= 0.45 (全量几何重排)
 }
 
+impl RiverState {
+    /// 按 Ω 标量归类门控态。
+    pub fn classify(omega: f32) -> Self {
+        if omega < OMEGA_COLLAPSED_AT {
+            RiverState::Collapsed
+        } else if omega < OMEGA_DENSE_AT {
+            RiverState::Sparse
+        } else {
+            RiverState::Dense
+        }
+    }
+}
+
 /// Ω 河网可观测性度量器
 pub struct RiverObservability;
 
 impl RiverObservability {
-    /// 计算河网可观测性标量 Ω ∈ [0, 1]
+    /// 计算河网可观测性标量 Ω ∈ [0, 1]（三分量几何平均）。
     pub fn measure_omega(
         active_edge_count: usize,
         seed_count: usize,
@@ -216,41 +298,39 @@ impl RiverObservability {
             return (0.0, RiverState::Collapsed);
         }
 
-        // 1. 边展开率
-        let omega_edge = (active_edge_count as f32 / (2.5 * seed_count as f32)).clamp(0.0, 1.0);
+        let expansion = Self::edge_expansion(active_edge_count, seed_count);
+        let emergence = Self::node_emergence(reached_node_count, seed_count);
+        let balance = Self::flow_balance(edge_flows, active_edge_count);
 
-        // 2. 节点涌现率
-        let emerged = reached_node_count.saturating_sub(seed_count);
-        let omega_emerge = (emerged as f32 / (2.0 * seed_count as f32)).clamp(0.0, 1.0);
+        let omega = (expansion.max(0.01) * emergence.max(0.01) * balance.max(0.01)).cbrt();
+        (omega, RiverState::classify(omega))
+    }
 
-        // 3. 流量分布香农信息熵
+    /// 1. 边展开率：活跃边数相对种子数的展开程度。
+    fn edge_expansion(active_edges: usize, seeds: usize) -> f32 {
+        (active_edges as f32 / (EDGE_SPREAD * seeds as f32)).clamp(0.0, 1.0)
+    }
+
+    /// 2. 节点涌现率：种子之外新生节点的占比。
+    fn node_emergence(reached: usize, seeds: usize) -> f32 {
+        let emerged = reached.saturating_sub(seeds);
+        (emerged as f32 / (EMERGE_SPREAD * seeds as f32)).clamp(0.0, 1.0)
+    }
+
+    /// 3. 流量分布均衡度：香农信息熵对最大熵的归一化。
+    fn flow_balance(edge_flows: &[f32], active_edges: usize) -> f32 {
         let total_flow: f32 = edge_flows.iter().sum();
-        let omega_flow = if total_flow > 1e-6 && active_edge_count > 1 {
-            let mut entropy = 0.0;
-            for &flow in edge_flows {
-                let p = flow / total_flow;
-                if p > 1e-6 {
-                    entropy -= p * p.ln();
-                }
-            }
-            let max_entropy = (active_edge_count as f32).ln().max(1e-6);
-            (entropy / max_entropy).clamp(0.0, 1.0)
-        } else {
-            0.5
-        };
-
-        // 几何平均
-        let omega = (omega_edge.max(0.01) * omega_emerge.max(0.01) * omega_flow.max(0.01)).cbrt();
-
-        let state = if omega < 0.12 {
-            RiverState::Collapsed
-        } else if omega < 0.45 {
-            RiverState::Sparse
-        } else {
-            RiverState::Dense
-        };
-
-        (omega, state)
+        if total_flow <= 1e-6 || active_edges <= 1 {
+            return 0.5;
+        }
+        let entropy: f32 = edge_flows
+            .iter()
+            .map(|&flow| flow / total_flow)
+            .filter(|&p| p > 1e-6)
+            .map(|p| -p * p.ln())
+            .sum();
+        let max_entropy = (active_edges as f32).ln().max(1e-6);
+        (entropy / max_entropy).clamp(0.0, 1.0)
     }
 }
 
@@ -278,64 +358,67 @@ impl DualScaledFieldSolver {
         }
     }
 
-    /// 求解双对偶连续场分布 (u_local, u_transfer)
+    /// 求解双对偶连续场分布 (u_local, u_transfer)。
+    ///
+    /// 对 (I − α P) u = (1 − α) s₀ 做定点迭代 u ← (1 − α) s₀ + α P u，
+    /// 两场各按自己的阻尼系数松弛，双双 L1 收敛后停机。
     pub fn solve(&self, source: &[f32], adjacency_matrix: &[Vec<f32>]) -> (Vec<f32>, Vec<f32>) {
         let n = source.len();
         if n == 0 || adjacency_matrix.len() != n {
             return (vec![], vec![]);
         }
 
-        // 归一化源项分布
-        let sum_src: f32 = source.iter().sum();
-        let s0: Vec<f32> = if sum_src > 1e-6 {
-            source.iter().map(|&x| x / sum_src).collect()
-        } else {
-            source.to_vec()
-        };
-
+        let s0 = Self::normalize_source(source);
         let mut u_local = s0.clone();
         let mut u_transfer = s0.clone();
 
         for _ in 0..self.max_iterations {
-            let mut next_local = vec![0.0f32; n];
-            let mut next_transfer = vec![0.0f32; n];
-
-            // 矩阵乘法传播: P * u
-            for i in 0..n {
-                let mut prop_l = 0.0f32;
-                let mut prop_t = 0.0f32;
-                for j in 0..n {
-                    let w = adjacency_matrix[j][i]; // 转移概率 P_{j->i}
-                    prop_l += w * u_local[j];
-                    prop_t += w * u_transfer[j];
-                }
-                // (I - α P) u = (1 - α) s0  ==>  u = (1 - α) s0 + α P u
-                next_local[i] = (1.0 - self.alpha_local) * s0[i] + self.alpha_local * prop_l;
-                next_transfer[i] =
-                    (1.0 - self.alpha_transfer) * s0[i] + self.alpha_transfer * prop_t;
-            }
-
-            // 检查 L1 残差收敛
-            let res_l: f32 = next_local
-                .iter()
-                .zip(&u_local)
-                .map(|(a, b)| (a - b).abs())
-                .sum();
-            let res_t: f32 = next_transfer
-                .iter()
-                .zip(&u_transfer)
-                .map(|(a, b)| (a - b).abs())
-                .sum();
+            let (next_local, delta_local) =
+                Self::relax(&u_local, &s0, self.alpha_local, adjacency_matrix);
+            let (next_transfer, delta_transfer) =
+                Self::relax(&u_transfer, &s0, self.alpha_transfer, adjacency_matrix);
 
             u_local = next_local;
             u_transfer = next_transfer;
 
-            if res_l < self.tolerance && res_t < self.tolerance {
+            if delta_local < self.tolerance && delta_transfer < self.tolerance {
                 break;
             }
         }
 
         (u_local, u_transfer)
+    }
+
+    /// 源项归一化为概率分布；全零源保持原样。
+    fn normalize_source(source: &[f32]) -> Vec<f32> {
+        let sum: f32 = source.iter().sum();
+        if sum > 1e-6 {
+            source.iter().map(|&x| x / sum).collect()
+        } else {
+            source.to_vec()
+        }
+    }
+
+    /// 单场单步松弛：u′ = (1 − α) s₀ + α P u，返回新场与 L1 变化量。
+    /// 其中 (P u)_i = Σ_j P_{j→i} u_j（`adjacency_matrix[j][i]` 为 j→i 转移概率）。
+    fn relax(
+        field: &[f32],
+        s0: &[f32],
+        alpha: f32,
+        adjacency_matrix: &[Vec<f32>],
+    ) -> (Vec<f32>, f32) {
+        let n = field.len();
+        let mut next = vec![0.0f32; n];
+        for (i, slot) in next.iter_mut().enumerate() {
+            let propagated: f32 = (0..n).map(|j| adjacency_matrix[j][i] * field[j]).sum();
+            *slot = (1.0 - alpha) * s0[i] + alpha * propagated;
+        }
+        let delta: f32 = next
+            .iter()
+            .zip(field)
+            .map(|(a, b)| (a - b).abs())
+            .sum();
+        (next, delta)
     }
 }
 

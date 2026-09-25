@@ -1,11 +1,13 @@
-# Apeireth R20 阶段 3 — 3 服务 docker-compose (1.0 release)
-# Per blueprint §3.3 (r20-stage-2-3-prep-2026-08-05.md):
-# - 3 服务: apeireth (HTTP/WS + Metrics) + postgres (持久化) + redis (cache/ratelimit)
-# - 0 改 18 老 Dockerfile (deploy/ 保留), 新 compose 是 1.0 release 默认
-# - 8 包之 1 (D-06 拍板), Linux 重点优化 (D-06 主人补充: 搞技术用户主力)
+# Apeireth docker-compose（当前基线 v2.0.0-rc.1）
+#
+# 单服务编排: apeireth canonical gateway（SQLite 持久化 + 数据卷）。
+# - 镜像由根目录 Dockerfile 构建（构建当前工作区 CLI 并以 `apeireth gateway serve` 启动）
+# - 数据落 /var/lib/apeireth（卷挂载），备份 = 复制该卷
+# - 旧版三服务（postgres/redis）编排为 v1 时代遗留，当前代码不读取
+#   POSTGRES_PASSWORD / APEIRETH_DB_URL / APEIRETH_REDIS_URL / APEIRETH_LLM_*，
+#   已随基线对齐移除，见 git 历史
 
 services:
-  # 1. apeireth 主服务 (HTTP API + WebSocket + Prometheus Metrics)
   apeireth:
     build:
       context: .
@@ -14,103 +16,16 @@ services:
     container_name: apeireth
     restart: unless-stopped
     ports:
-      - "8080:8080"   # HTTP API + WebSocket
-      - "9090:9090"   # Prometheus metrics
+      - "8080:8080"   # HTTP API + WebSocket + /health
     environment:
-      APEIRETH_LLM_BACKEND: ${APEIRETH_LLM_BACKEND:-scripted}
-      APEIRETH_LLM_API_URL: ${APEIRETH_LLM_API_URL:-https://api.minimaxi.com}
-      APEIRETH_LLM_MODEL: ${APEIRETH_LLM_MODEL:-MiniMax-M3}
+      # 必填才能真对话（留空走本地 scripted 桩）
       APEIRETH_API_KEY: ${APEIRETH_API_KEY:-}
-      APEIRETH_DATA_DIR: /var/lib/apeireth
-      APEIRETH_DB_URL: postgresql://apeireth:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}@postgres:5432/apeireth
-      APEIRETH_REDIS_URL: redis://redis:6379/0
-      APEIRETH_METRICS_PORT: 9090
-      RUST_LOG: info,apeireth_api=debug
+      # 可选：OpenAI 兼容端点与默认模型
+      APEIRETH_API_URL: ${APEIRETH_API_URL:-}
+      APEIRETH_MODEL: ${APEIRETH_MODEL:-}
+      RUST_LOG: ${RUST_LOG:-info}
     volumes:
       - apeireth-data:/var/lib/apeireth
-      - apeireth-config:/etc/apeireth
-      - apeireth-logs:/var/log/apeireth
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    networks:
-      - apeireth-net
-
-  # 2. PostgreSQL (session + memory + audit 持久化, 不暴露端口)
-  postgres:
-    image: postgres:16-alpine
-    container_name: apeireth-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: apeireth
-      POSTGRES_USER: apeireth
-      # 台账 #47: 强制外部注入, 无默认值 — POSTGRES_PASSWORD 缺省时 `docker compose up`
-      # 立即报错 (variable is not set), 不留 'secret' 弱默认.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U apeireth -d apeireth"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - apeireth-net
-
-  # 3. Redis (rate limit + cache + WebSocket pub-sub)
-  redis:
-    image: redis:7-alpine
-    container_name: apeireth-redis
-    restart: unless-stopped
-    command:
-      - "redis-server"
-      - "--appendonly"
-      - "yes"
-      - "--maxmemory"
-      - "256mb"
-      - "--maxmemory-policy"
-      - "allkeys-lru"
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - apeireth-net
 
 volumes:
   apeireth-data:
-    driver: local
-  apeireth-config:
-    driver: local
-  apeireth-logs:
-    driver: local
-  postgres-data:
-    driver: local
-  redis-data:
-    driver: local
-
-networks:
-  apeireth-net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-
-# 启动前置 (台账 #47): 必须提供 POSTGRES_PASSWORD (无默认值, 缺省直接报错):
-#   export POSTGRES_PASSWORD='<强密码>'   # 或写入 compose 同目录 .env 文件
-# 启动: docker-compose up -d
-# 健康: docker-compose ps  (期望 3/3 healthy)
-# 验证: curl http://localhost:8080/health  (期望 200)
-# 停止: docker-compose down
