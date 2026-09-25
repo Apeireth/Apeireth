@@ -19,6 +19,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 ring = "0.17"
+mdns-sd = "0.13"
 sha2 = { workspace = true }
 async-trait = { workspace = true }
 

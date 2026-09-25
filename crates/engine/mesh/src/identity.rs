@@ -28,39 +28,11 @@ use std::fmt;
 use std::path::Path;
 
 use ring::signature::KeyPair as _;
-use sha2::{Digest, Sha256};
 
-/// The pinned proof of a node's public key: hex SHA-256 of the raw 32-byte
-/// Ed25519 public key. Comparable, serializable, map-friendly — and never a
-/// secret.
-#[derive(
-    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-pub struct KeyFingerprint(String);
-
-impl KeyFingerprint {
-    /// Compute the fingerprint of a raw Ed25519 public key.
-    pub fn of_public_key(public_key: &[u8]) -> Self {
-        let digest = Sha256::digest(public_key);
-        Self(
-            digest
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>(),
-        )
-    }
-
-    /// The hex digest as a string slice.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for KeyFingerprint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
+/// The pinned proof of a node's public key. Wire/identity data shared with
+/// the pairing protocol — defined in `apeireth-mesh-protocol` so foundation
+/// never depends on engine.
+pub use apeireth_mesh_protocol::KeyFingerprint;
 
 /// Failure handling an identity or its key file.
 #[derive(Debug, thiserror::Error)]

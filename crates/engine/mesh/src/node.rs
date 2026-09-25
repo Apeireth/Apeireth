@@ -480,6 +480,18 @@ impl MeshNode {
         Ok(peer_id)
     }
 
+    /// Forget a peer entirely (§18): drop its connection and its capability
+    /// projections so no route survives. Persisted trust removal is the
+    /// [`crate::TrustStore::forget`] half of unpairing; the local node
+    /// identity is never touched — unpairing is about the *other* side.
+    pub fn forget_peer(&self, node: &NodeId) {
+        self.disconnect(node);
+        self.routes
+            .lock()
+            .expect("mesh routes poisoned")
+            .forget_projection(node);
+    }
+
     /// Close the connection to `peer`. Its projection survives as last-known
     /// state; its known-peer identity is never deleted here.
     pub fn disconnect(&self, node: &NodeId) {
@@ -1057,6 +1069,11 @@ impl MeshNode {
                 }
                 Ok(())
             }
+            MeshPayload::Pair(_) => Err(MeshError::Malformed {
+                sender: peer.to_string(),
+                reason: "pairing messages are not allowed on established mesh connections"
+                    .to_string(),
+            }),
             other => Err(MeshError::Malformed {
                 sender: peer.to_string(),
                 reason: format!("unexpected post-handshake message: {other:?}"),
