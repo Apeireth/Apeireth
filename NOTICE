@@ -9,8 +9,8 @@ the Apeireth organization (https://apeireth.example/).
 ## 1. 项目声明
 
 Apeireth (读作 /əˈpaɪərɛθ/, 希腊语 "试一试") 是 Apeireth Team 自 2026 年起
-开发的"长程 AI 成长平台"参考实现。本项目前身为本团队 7 人核心小组在
-2024-2025 年完成的前代产品 v0.9.21 (Apache-2.0),本仓库为其 1:1 Rust 重写 + 增量扩展。
+开发的"长程 AI 成长平台"参考实现。本仓库的历史沿革与组件来源以 git 历史及
+`docs/` 归档记录为准;第三方组件归属见 `THIRD-PARTY-NOTICES.md`。
 
 ## 2. 致谢 (Acknowledgements)
 
