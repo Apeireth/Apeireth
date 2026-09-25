@@ -12,6 +12,8 @@ name = "apeireth"
 path = "src/main.rs"
 
 [dependencies]
+apeireth-mesh = { path = "../../engine/mesh" }
+apeireth-mesh-quic = { path = "../../engine/mesh-quic" }
 apeireth-core = { path = "../../foundation/core" }
 apeireth-credentials = { path = "../../foundation/credentials" }
 apeireth-governance = { path = "../../foundation/governance" }

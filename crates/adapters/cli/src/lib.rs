@@ -22,6 +22,8 @@ pub mod memory_handover_command;
 pub mod memory_migrate_command;
 pub mod memory_shadow_command;
 pub mod memory_verify_command;
+// Mesh 面 (PR31): mesh 节点身份与 mesh 子命令分派；仅在装了 mesh 传输时可用。
+pub mod mesh_cli;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
 pub mod diary_store;
