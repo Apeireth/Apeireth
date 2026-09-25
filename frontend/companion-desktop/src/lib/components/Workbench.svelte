@@ -1,16 +1,20 @@
 <script lang="ts">
   import {ChevronRight, FileText} from 'lucide-svelte';
-  import type {Conversation} from '../types';
+  import type {Conversation, ToolCallDetails, WorkbenchTurn} from '../types';
 
   let {
     conversation = null,
     busy = false,
     closed = false,
+    turn = null,
     onClose,
   }: {
     conversation: Conversation | null;
     busy?: boolean;
     closed?: boolean;
+    /** 后端 /v1/workbench/turn 真值：修复前持久化的 toolCall 卡在「运行中」，
+     *  用后端状态按名称对位翻面，历史会话也能显示真实终态。 */
+    turn?: WorkbenchTurn | null;
     onClose: () => void;
   } = $props();
 
@@ -25,7 +29,34 @@
   const lastAssistant = $derived(
     conversation?.messages.filter((m) => m.role === 'assistant').at(-1) ?? null,
   );
-  const toolCalls = $derived(lastAssistant?.toolCalls ?? []);
+  /** 后端状态词汇 → 本地 ToolCallDetails 状态；认不出的返回 null（保留本地值）。 */
+  function mapBackendStatus(s: string): ToolCallDetails['status'] | null {
+    const v = s.toLowerCase();
+    if (v.includes('fail') || v.includes('error')) return 'failed';
+    if (v.includes('cancel')) return 'cancelled';
+    if (v.includes('complete') || v.includes('success') || v.includes('done')) return 'succeeded';
+    if (v.includes('run')) return 'running';
+    if (v.includes('pend') || v.includes('approv') || v.includes('wait')) return 'pending';
+    return null;
+  }
+  const toolCalls = $derived.by(() => {
+    const local = lastAssistant?.toolCalls ?? [];
+    const backend = turn?.tools;
+    if (!backend?.length || !local.length) return local;
+    // 按名称排队对位（同名工具多次调用按先后次序配对），只翻面、不增删。
+    const queues = new Map<string, (typeof backend)[number][]>();
+    for (const t of backend) {
+      const q = queues.get(t.name) ?? [];
+      q.push(t);
+      queues.set(t.name, q);
+    }
+    return local.map((tc) => {
+      const bt = queues.get(tc.name)?.shift();
+      const st = bt ? mapBackendStatus(bt.status) : null;
+      if (!st || st === tc.status) return tc;
+      return {...tc, status: st, ...(bt?.latency_ms ? {durationMs: bt.latency_ms} : {})};
+    });
+  });
   const provenance = $derived(lastAssistant?.provenance);
   const memories = $derived(provenance?.memories ?? []);
   const runningTools = $derived(toolCalls.filter((t) => t.status === 'pending' || t.status === 'running'));

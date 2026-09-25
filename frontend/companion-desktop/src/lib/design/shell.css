@@ -776,14 +776,15 @@ p.lede {
   flex-wrap: wrap;
   padding: 16px 0 12px;
   pointer-events: auto;
-  /* 2026-10-11 主人反馈批：上翻时对话要「收进框架」而非露出软件底色——
-     头部吸附 + 半透明毛玻璃，内容从底下滑过时被柔化收束（Kimi Desktop 式） */
+  /* 2026-10-11 主人反馈批②：Kimi Desktop 式「窗框融进软件」——头部不做半透明
+     灰板（壁纸透出显脏），而是全实底、左右全出血的一条暗色窗框，对话从下面
+     钻进框里，窗口与内容浑然一体，根本没有「灰盒子」概念。 */
   position: sticky;
   top: 0;
   z-index: 6;
-  background: color-mix(in srgb, var(--ap-panel) 72%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--ap-panel-solid);
+  box-shadow: 0 0 0 100vmax var(--ap-panel-solid);
+  clip-path: inset(0 -100vmax);
 }
 .chat-title {
   margin: 0;

@@ -960,7 +960,7 @@ export interface StreamCallbacks {
   onApprovalRequired?: (pending: CanonicalPendingApproval) => void;
 }
 
-function applyCanonicalEvents(
+export function applyCanonicalEvents(
   events: CanonicalExecutionEvent[] | undefined,
   callbacks: StreamCallbacks,
 ): void {

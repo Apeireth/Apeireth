@@ -94,6 +94,7 @@
     RuntimeHealthReport,
     SessionSettings,
     ToolCallDetails,
+    WorkbenchTurn,
     GuardStatus,
   } from './lib/types';
   import {
@@ -101,6 +102,8 @@
     createAgentRuntime,
     fetchCanonicalApprovals,
     resolveCanonicalApproval,
+    applyCanonicalEvents,
+    fetchWorkbenchTurn,
     ApprovalRequiredError,
     loadConfig,
     loadConversations,
@@ -280,6 +283,7 @@
   let govTabKey = $state(0);
   let drawerSec = $state<DrawerId | null>(initialDrawer);
   let wbOpen = $state(false);
+  let workbenchTurn = $state<WorkbenchTurn | null>(null);
   let openPanel = $state<'model' | 'ctx' | null>(null);
   let availableModels = $state<string[]>([]);
   let modelsLoading = $state(false);
@@ -971,6 +975,40 @@
     persist();
   }
 
+  /** 工具翻面：tool_completed/tool_failed（或审批决议）把对应 toolCall 从
+   *  「运行中/待批」翻成终态。此前 tool-result 事件被吞，工具永远显示「执行中」。 */
+  function finishMessageToolCall(
+    conversationId: string,
+    messageId: string,
+    toolCallId: string,
+    ok: boolean,
+    summary?: string,
+  ): void {
+    conversations = conversations.map((item) => {
+      if (item.id !== conversationId) return item;
+      return {
+        ...item,
+        updatedAt: Date.now(),
+        messages: item.messages.map((m) => {
+          if (m.id !== messageId || !m.toolCalls) return m;
+          const list = m.toolCalls.map((t) =>
+            t.id === toolCallId && (t.status === 'pending' || t.status === 'running')
+              ? {
+                  ...t,
+                  status: (ok ? 'succeeded' : 'failed') as ToolCallDetails['status'],
+                  endTime: Date.now(),
+                  durationMs: t.startTime ? Date.now() - t.startTime : undefined,
+                  resultSummary: summary,
+                }
+              : t,
+          );
+          return {...m, toolCalls: list};
+        }),
+      };
+    });
+    persist();
+  }
+
   /**
    * 他主动开口（legacy `[他说] …` 行，契约 §5.1；initiative/spoke 的完整话术由此送达）：
    * 按规范 §5.3 走与「他的消息」相同的卡片语言进入对话流。
@@ -1176,6 +1214,8 @@
             void triggerAutoScroll();
           } else if (event.type === 'tool-result') {
             isExecutingTool = false;
+            // 状态翻面：completed/failed 事件到达 → 对应工具从「运行中」翻成终态。
+            finishMessageToolCall(conversationId, assistantMessage.id, event.toolCallId, event.ok, event.summary);
             void triggerAutoScroll();
           } else if (event.type === 'approval-required') {
             pendingCanonical = event.pending;
@@ -1186,6 +1226,7 @@
         text: full || '(空响应)',
         streaming: false,
       });
+      void refreshWorkbenchTurn();
     } catch (caught) {
       if (caught instanceof ApprovalRequiredError) {
         pendingCanonical = caught.pending;
@@ -1343,8 +1384,38 @@
           text: result.text || (decision === 'approve' ? '工具执行完成' : '已拒绝该工具调用'),
           streaming: false,
         });
+        // 审批决议携带的 canonical events 此前被整包丢弃 → 工具永远「执行中」。
+        // 现在把它们应用到最近一条助手消息的 toolCalls（started 补录 / completed·failed 翻面）。
+        applyCanonicalEvents(result.events, {
+          onToolCall: (toolCall) => updateMessageToolCall(conversationId, last.id, toolCall),
+          onToolResult: (toolCallId, ok, summary) =>
+            finishMessageToolCall(conversationId, last.id, toolCallId, ok, summary),
+        });
+        // 拒绝且无 events 回包时，诚实标注待批工具为「已取消」，不停在「执行中」。
+        if (decision === 'reject' && !result.events?.length && last.toolCalls?.length) {
+          conversations = conversations.map((item) => {
+            if (item.id !== conversationId) return item;
+            return {
+              ...item,
+              messages: item.messages.map((m) =>
+                m.id !== last.id || !m.toolCalls
+                  ? m
+                  : {
+                      ...m,
+                      toolCalls: m.toolCalls.map((t) =>
+                        t.status === 'pending' || t.status === 'running'
+                          ? {...t, status: 'cancelled' as const, endTime: Date.now()}
+                          : t,
+                      ),
+                    },
+              ),
+            };
+          });
+          persist();
+        }
       }
     }
+    if (wbOpen) void refreshWorkbenchTurn();
   }
 
   /** X / Esc：仅收起待签文书为 slim 金线，不做业务决策（区别于"拒绝"按钮）。
@@ -1476,6 +1547,7 @@
     activeId = id;
     drawerSec = null;
     sessionColOpen = false; // 窄窗覆盖层：选中即收（桌面端无视觉效果）
+    if (wbOpen) void refreshWorkbenchTurn();
     // 会话级工作区随切换生效: 与侧车当前根不同则重根 (supervisor 快速重启).
     const conv = conversations.find((item) => item.id === id);
     if (conv?.workspace) {
@@ -1624,6 +1696,19 @@
 
   function toggleWb(force?: boolean): void {
     wbOpen = force === undefined ? !wbOpen : force;
+    if (wbOpen) void refreshWorkbenchTurn();
+  }
+
+  /** 工作台后端真值（/v1/workbench/turn）：工具终态、代理状态。
+   *  打开工作台/切换会话/回合结束/审批决议后拉取，让本地持久化里
+   *  卡在「运行中」的历史 toolCall 按后端真值翻面。 */
+  async function refreshWorkbenchTurn(): Promise<void> {
+    if (!activeId) {
+      workbenchTurn = null;
+      return;
+    }
+    const result = await fetchWorkbenchTurn(config, activeId).catch(() => null);
+    workbenchTurn = result && 'tools' in result ? result : null;
   }
 
   function closePanels(): void {
@@ -2810,6 +2895,7 @@
       conversation={activeConversation}
       {busy}
       closed={!wbOpen}
+      turn={workbenchTurn}
       onClose={() => toggleWb(false)}
     />
   </div>
