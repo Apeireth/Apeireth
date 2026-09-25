@@ -172,6 +172,8 @@ dependencies = [
  "apeireth-governance",
  "apeireth-guard",
  "apeireth-memory",
+ "apeireth-mesh",
+ "apeireth-mesh-quic",
  "apeireth-orchestration",
  "apeireth-plugin",
  "apeireth-protocol",
