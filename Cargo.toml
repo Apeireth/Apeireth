@@ -14,6 +14,7 @@ members = [
     "crates/engine/runtime-assembly",
     "crates/engine/mesh",
     "crates/engine/mesh-quic",
+    "crates/services/mesh-rendezvous",
     "crates/engine/guard",
     "crates/engine/provider",
     "crates/engine/storage",
