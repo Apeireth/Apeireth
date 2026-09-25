@@ -103,20 +103,14 @@ impl PermissionPresetGovernanceHook {
         }
     }
 
-    fn remembered(
-        &self,
-        session: &SessionId,
-        capability: &CapabilityId,
-        args_hash: &str,
-    ) -> bool {
+    fn remembered(&self, session: &SessionId, capability: &CapabilityId, args_hash: &str) -> bool {
         // poison 容错 (L 组): 审批记忆是一次 telemetry 级状态, 不是安全边界
         // 本身; 持锁线程 panic 后取回数据继续, 不让级联 panic 打死进程。
-        read_lock_or_recover(&self.approval_memory)
-            .contains(&(
-                session.to_string(),
-                capability.as_str().to_string(),
-                args_hash.to_string(),
-            ))
+        read_lock_or_recover(&self.approval_memory).contains(&(
+            session.to_string(),
+            capability.as_str().to_string(),
+            args_hash.to_string(),
+        ))
     }
 }
 
@@ -127,7 +121,8 @@ fn read_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T
 
 /// poison 容错写锁 (L 组): 同上。
 fn write_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
-    lock.write().unwrap_or_else(|poisoned| poisoned.into_inner())
+    lock.write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// 审批记忆键中的参数指纹: 规范化 JSON (对象键排序) 后取 SHA-256 前 16 hex。
@@ -200,7 +195,9 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
     /// denials and `full`-mode approval rewrites are attributed to this hook.
     async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
         let Action::CapabilityDispatch {
-            capability, arguments, ..
+            capability,
+            arguments,
+            ..
         } = &request.action
         else {
             return self.inner.evaluate_verbose(request).await;
@@ -417,17 +414,18 @@ mod tests {
             .evaluate_verbose(&dispatch_request(session, &capability, &dangerous_args))
             .await;
         assert!(
-            matches!(
-                different_args.decision,
-                Decision::RequireApproval { .. }
-            ),
+            matches!(different_args.decision, Decision::RequireApproval { .. }),
             "a different operation of the same capability must ask again, got {:?}",
             different_args.decision
         );
 
         // 其它会话 / 其它能力同样不继承。
         let other_session_verdict = hook
-            .evaluate_verbose(&dispatch_request(other_session, &capability, &approved_args))
+            .evaluate_verbose(&dispatch_request(
+                other_session,
+                &capability,
+                &approved_args,
+            ))
             .await;
         assert!(
             matches!(
@@ -438,7 +436,11 @@ mod tests {
         );
 
         let other_capability_verdict = hook
-            .evaluate_verbose(&dispatch_request(session, &other_capability, &approved_args))
+            .evaluate_verbose(&dispatch_request(
+                session,
+                &other_capability,
+                &approved_args,
+            ))
             .await;
         assert!(
             matches!(

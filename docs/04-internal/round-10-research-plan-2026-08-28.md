@@ -73,7 +73,7 @@ Author:          主代理 Mavis
 
 | 位置 | 用途 |
 |---|---|
-| `legacy/donor/` (~13 v1 仓库) | 12 slot cognitive module + 9 organ 1:1 翻译源 |
+| `legacy/donor/` (~13 v1 仓库) | 12 slot cognitive module + 9 organ 1:1 移植来源 |
 | `research/source/` (~36 真开源借鉴) | tokio / wasmtime / qdrant / sled / hermes-agent-rs / MetaGPT / openclaw / LangGraph / CrewAI / Claude Code 等 |
 | `_research_mem/` (24 子目录) | 子代理调研真账 + Apeireth 旧 fork + wave2-wave7 shots |
 

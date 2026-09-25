@@ -88,7 +88,7 @@ pub mod error;
 mod organ_kani_proofs;
 pub mod version;
 pub mod wire;
-// R20 阶段 6: 1.0 release #13 sdk — 客户 SDK client stub (per 蓝图 §3.5)
+// R20 阶段 6: 1.0 release #13 sdk — 客户 SDK client stub (按接口契约)
 pub mod client;
 
 // R122-8: 多语言 SDK skeleton (PyO3 + napi-rs + cbindgen 桥接)
@@ -227,7 +227,7 @@ const _MODULE_COUNT: usize = {
 // 1. SDK_VERSION major == 1 (workspace lock)
 // 2. WS_PROTOCOL_VERSION == "1" (apeireth-protocol::ws_v1 lock)
 // 3. PLATFORM_NAME == "apeireth" (对齐既有实现)
-// 4. TOOL_WHITELIST.len() == 6 (per 蓝图 §2.2)
+// 4. TOOL_WHITELIST.len() == 6 (按接口契约)
 // 5. SDK_TOOL_WHITELIST.len() == 8 (6 工具 + 2 通用 invoke)
 // 6. STUB_MODE == true (R21 才改 false, 经 8 哲学锚 + 主人审)
 // 7. AUTH_HEADER_NAME == "Authorization" (HTTP 1.1 RFC 7235)
@@ -239,7 +239,7 @@ const _MODULE_COUNT: usize = {
 // - `apeireth-protocol` — **5 集成点直接复用** (1:1 翻译 ws_v1)
 // - `apeireth-keyring` — 阶段 6 不依赖 (留 R21 真接 keyring 时再用)
 // - `apeireth-machine-id` — 阶段 6 不依赖 (留 R21 真接 machine-id 时再用)
-// - `apeireth-tools` — 阶段 6 不依赖 (SDK 是 client 表面, tools 是 server 表面, 接口蓝图 §2.2 D-02 子路径)
+// - `apeireth-tools` — 阶段 6 不依赖 (SDK 是 client 表面, tools 是 server 表面, 接口接口契约 鉴权子路径)
 // - `apeireth-api` — 阶段 6 不直接 dep (R21 真接时 `path = "../apeireth-api"` 即可)
 //
 // **0 改 LOCKED crate** (per 8 项承诺 #3): 本文件不 import 上面任何 crate,

@@ -127,7 +127,7 @@ git fetch origin && git checkout main && git log --oneline -5
 
 # 2. 全量测试
 cargo test --workspace --locked
-#    期望 (2026-09-05 实测): 3120 passed / 0 failed / 13 ignored
+#    期望 (全量实测): 3662 passed / 0 failed / 21 ignored (130 suites)
 #    (历史: A 块前 1726 → A 块后 1739 passed)
 
 # 3. clippy 0 警告

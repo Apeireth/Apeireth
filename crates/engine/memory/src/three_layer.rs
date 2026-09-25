@@ -1,6 +1,6 @@
 //! `apeireth-memory::three_layer` — **R30 U9 claude-mem 3 层记忆 facade**
 //!
-//! **设计哲学** (claude-mem 借鉴, VCP/Apeireth 工程实践):
+//! **设计哲学** (claude-mem 借鉴, 通用工程实践):
 //! - **Working** (工作层): 当前 session 的 in-memory ring buffer, 极快 (无 IO), 给 LLM 喂上下文
 //! - **Short-term** (短程层): 最近 N 小时的 episode (SQLite), 中等 IO, 跨 session 回忆
 //! - **Long-term** (长程层): 永久笔记 + IdentityCard (SQLite), 慢但可压缩检索

@@ -948,7 +948,14 @@ mod tests {
     fn allowlist_denies_hostname_resolving_to_loopback_and_private() {
         let policy = EgressPolicy::ExplicitAllowList(allowlist(&[("internal.test", None)]));
         let d = dest("http://internal.test");
-        for ip in ["127.0.0.1", "10.0.0.1", "192.168.1.10", "0.0.0.0", "::1", "fc00::1"] {
+        for ip in [
+            "127.0.0.1",
+            "10.0.0.1",
+            "192.168.1.10",
+            "0.0.0.0",
+            "::1",
+            "fc00::1",
+        ] {
             let addrs = [SocketAddr::new(ip.parse().unwrap(), 80)];
             assert!(
                 matches!(

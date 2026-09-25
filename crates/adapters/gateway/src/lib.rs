@@ -30,7 +30,7 @@ pub mod barge_in;
 /// 8-frame full-duplex protocol and streaming sentence divider.
 pub mod duplex_gateway;
 
-/// Transparent file fetcher for distributed hyperstack file fetching.
+/// Transparent file fetcher for distributed node file fetching.
 pub mod file_fetcher;
 
 /// Ember HUD 4.0s breath and peripheral vignette glow driver.

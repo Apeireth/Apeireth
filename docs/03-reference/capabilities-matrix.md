@@ -66,7 +66,7 @@
 | **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` + runtime-assembly registration | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
 | **工具 (Capabilities)** | `tool.stealth_crawler`| `apeireth-tools-canonical::stealth_crawler` | `StealthCrawlerEngine::parse_scraped_document()` | 高反爬异步无头浏览器 + 指纹伪装 + 短视频多模态提取 |
 | **适配器 (Adapters)** | `cli.portable_bundle` | `apeireth-cli::portable_bundle` | `PortableBundleSynthesizer::generate_windows_launcher()` | 随身 U 盘生命体便携化打包器 + `./data/` 相对隔离 |
-| **网关 (Gateway)** | `gw.file_fetcher` | `apeireth-gateway::file_fetcher` | `TransparentFileFetcher::fetch_file()` | 超栈追踪 V2 跨节点透明文件穿透 + SHA-256 缓存 |
+| **网关 (Gateway)** | `gw.file_fetcher` | `apeireth-gateway::file_fetcher` | `TransparentFileFetcher::fetch_file()` | 跨节点透明文件穿透 + 内容寻址缓存 |
 | **网关 (Gateway)** | `gw.duplex_ws` | `apeireth-gateway::duplex_gateway` | `DuplexFrame`, `SentenceDivider` | 8 核心帧体系 + 实时分句 + 毫秒级 Barge-in |
 | **网关 (Gateway)** | `gw.ember_hud` | `apeireth-gateway::ember_hud_driver` | `EmberHudDriver::synthesize_uniforms()` | 4.0s 生理呼吸三次正弦波 + 暗角微光 + WGSL 着色器 |
 | **协议 (Protocol)** | `proto.p2p_mesh` | `apeireth-protocol::p2p_mesh` | `P2pMeshController::wrap_onion_packet()` | 去中心化 P2P 蓝牙/LAN Mesh + Noise 密钥交换 + 洋葱路由 + 记忆漫游 |

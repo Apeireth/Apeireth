@@ -32,7 +32,8 @@ async fn perception_voice_and_vision_backends_wire_cleanly() {
         "provider.whisper.api_key",
         "sk-test-fake-key-12345678901234",
     ));
-    let voice: Arc<dyn VoiceBackend> = Arc::new(WhisperHttpBackend::openai(creds).expect("whisper client build"));
+    let voice: Arc<dyn VoiceBackend> =
+        Arc::new(WhisperHttpBackend::openai(creds).expect("whisper client build"));
     assert_eq!(voice.name(), "whisper_http");
     assert!(voice.ping().await.is_ok());
 

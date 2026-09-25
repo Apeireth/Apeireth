@@ -191,7 +191,7 @@ R15 audit 阶段 0 改 `.gitignore`, 0 git rm, 0 git add. **仅 flag + 建议**,
 1. **R14 spec §1.3 "Round 1 已 ignore legacy/" 标错**: 真 = 1857 legacy 文件 tracked. legacy 是 donor 参考, **应 NOT ignore** (破坏 v1 参考链), 但 spec 表述需修正.
 2. **本 audit 发现 3 真漏**: `reconstruction_v2/` (orphan) + `_scripts/` (半漏) + `.gitignore-research` (root 0 装研究文件). 估 +3 行 `.gitignore` 修.
 3. **`.py` 过宽**: R126 Mavis 加的 `*.py` 太宽, 估误伤 Python 测试/examples. 子代理未实测误伤范围, R15+ 主代理拍板.
-4. **`legacy/` donor 参考链**: 是 v1 真接代码 1:1 翻译源 (RC-5 / RC-7 / RC-1 均依赖), 子代理独立判断应**保留 tracked**.
+4. **`legacy/` donor 参考链**: 是 v1 真接代码 1:1 移植来源 (RC-5 / RC-7 / RC-1 均依赖), 子代理独立判断应**保留 tracked**.
 5. **0 触碰 git**: 本 audit 0 `git add`, 0 `git commit`, 0 `git push`, 0 `git rm --cached`. 仅写 doc + flag.
 
 ---

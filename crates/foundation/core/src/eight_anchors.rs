@@ -37,7 +37,7 @@
 /// **原 6 锚 (LOCKED 0 改, per APEIRETH-CONVENTIONS.md §9)**:
 /// - `S-1` 北极星导向 — 服务 ASI 北极星 (per 主人 22:33)
 /// - `S-2` 实事求是 — 基于现状不重写, 核验后写 (per 主人 17:43, R119 主人 8/10 01:14 拍板)
-/// - `O-2` 走在前人经验上 — 借鉴 Hermes / OpenClaw / VCP / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (per 主人 19:33)
+/// - `O-2` 走在前人经验上 — 借鉴 Hermes / OpenClaw / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (per 主人 19:33)
 /// - `O-3` 干到底 — 决策立刻沉淀, 1 commit 总 (per 主人 23:44, 主人 8/9 拍板)
 /// - `O-4` 任何人都能接手 — 4 件套齐全, 顶层瘦 (per 主人 00:56, R119 主人 8/10 拍板)
 /// - `O-5` 不假装 — 12 键编译期 hardcode, 8 项不修改承诺形式撤销后原意保留 (per 主人 17:58, R119)
@@ -109,7 +109,7 @@ impl PhilosophicalAnchor8 {
             Self::S2TruthFromReality => "S-2 实事求是 — 基于现状不重写, 核验后写 (主 17:43)",
             Self::S3QualityEngineering => "S-3 质量工程化 — 代码质量 = 工程信誉, clippy 150 + doc 1077 清 (R123-1 主 16:55)",
             Self::O1SafetyFirst => "O-1 安全优先 — 安全 > 功能 > 性能, 6 重守门 v6 (R125-5 主 16:55)",
-            Self::O2StandingOnShoulders => "O-2 走在前人经验上 — 借鉴 Hermes / OpenClaw / VCP / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (主 19:33)",
+            Self::O2StandingOnShoulders => "O-2 走在前人经验上 — 借鉴 Hermes / OpenClaw / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (主 19:33)",
             Self::O3SeeItThrough => "O-3 干到底 — 决策立刻沉淀, 1 commit 总 (主 23:44)",
             Self::O4AnyoneCanTakeOver => "O-4 任何人都能接手 — 4 件套齐全, 顶层瘦 (主 00:56)",
             Self::O5NoPretend => "O-5 不假装 — 12 键编译期 hardcode (主 17:58)",

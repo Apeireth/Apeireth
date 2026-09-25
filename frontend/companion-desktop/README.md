@@ -76,7 +76,7 @@ cargo check --workspace --all-targets
 
 # 集成 e2e (mock OpenAI SSE, 不需要真 LLM key)
 node tests/mock-openai-sse.mjs &  # mock upstream on :9999
-APEIRETH_LLM_BACKEND=scripted npx tsx tests/e2e-streamChat-test.mts
+npx tsx tests/e2e-streamChat-test.mts
 # 期望: accumulated = "APEIRETH_E2E_OK", PASS: true
 ```
 

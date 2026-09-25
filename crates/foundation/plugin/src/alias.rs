@@ -1,6 +1,6 @@
 //! Alias resolution, LRU lookup cache, and invalidation.
 //!
-//! Recovered from legacy `apeireth-agent` `AgentManager` (VCP `agentManager.js`
+//! Recovered from legacy `apeireth-agent` `AgentManager` (既有实现
 //! alias map + prompt cache) as a **metadata helper**, not as an agent owner.
 //! The canonical plugin and module registries remain the source of truth;
 //! this module only answers "what id does this lookup key refer to" and
@@ -13,7 +13,7 @@
 //! - `resolve` checks the record table by id first, then the alias index.
 //! - Hits are stored in a bounded LRU keyed by the **lookup string**, so
 //!   `id`, `@a1`, and `@a2` are three cache entries.
-//! - Register and unregister clear the whole cache (VCP `promptCache.clear()`
+//! - Register and unregister clear the whole cache (缓存清空惯例
 //!   on `loadMap`).
 //! - A miss does not occupy cache capacity.
 //! - Unregister removes only aliases that still point at the removed id, so a
@@ -29,7 +29,7 @@ use crate::manifest::PluginManifest;
 /// the size it used once the cache became a real LRU.
 pub const DEFAULT_CACHE_SIZE: usize = 64;
 
-/// VCP miss token prefix (`agentManager.js:282` `{{agent:` + alias + `}}`).
+/// miss token 前缀惯例 (`agentManager.js:282` `{{agent:` + alias + `}}`).
 pub const LEGACY_UNRESOLVED_PREFIX: &str = "{{agent:";
 
 /// Format a miss placeholder so a consumer can leave the lookup in the prompt
@@ -592,7 +592,7 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_token_matches_vcp_shape() {
+    fn unresolved_token_matches_expected_shape() {
         assert_eq!(LEGACY_UNRESOLVED_PREFIX, "{{agent:");
         assert_eq!(unresolved_token("agent", "coder"), "{{agent:coder}}");
         assert_eq!(

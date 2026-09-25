@@ -106,7 +106,8 @@ impl MemoryBackend for FileBackend {
         }
         let _guard = self
             .episode_write_lock
-            .lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let line = serde_json::to_string(ep)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let path = self.episodes_path();
@@ -191,7 +192,10 @@ impl MemoryBackend for FileBackend {
         kind: StreamKind,
         entry: HistoryEntry,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let _guard = self.stream_write_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = self
+            .stream_write_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let line = serde_json::to_string(&entry)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let path = self.stream_path(kind);

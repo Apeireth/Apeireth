@@ -255,7 +255,7 @@ EOF
 3. **读 docs/01-architecture/vision.md**（5/30/60 分钟路径起点, docs/archive 体系重构后)
 4. **读 ROADMAP.md**（顶层路线图, 8/19 已反映 v1.0.0 实际）
 5. **读 docs/03-reference/glossary.md**（术语；v2 现状见 docs/01-architecture/architecture.md）
-6. **运行 examples/**（最小 demo, `cargo run --example hello_world` 选具体 example）
+6. **运行示例**（最小 demo: `cargo run -p apeireth-core --example hello_world`；其他 example 在各 crate 的 examples/ 下，虚拟 workspace 需带 `-p <crate>`）
 
 ---
 

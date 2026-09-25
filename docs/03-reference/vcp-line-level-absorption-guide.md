@@ -1,11 +1,17 @@
 # VCP 核心算法行级代码解构与 Apeireth 2.0 吸收升级指南
 
-> **⚠️ 2026-10 状态更新（重写声明）**：本文第 1 节（浪潮流体拓扑动力学）与第 2 节（残差金字塔）
-> 所涉实现已**全部重写**为基于公开数学文献的独立实现（LIF 脉冲模型 = Gerstner & Kistler
-> *Spiking Neuron Models*；MGS 正交化 = Golub & Van Loan *Matrix Computations*），
-> 当前代码（`crates/engine/memory/src/river_topology.rs`、`residual_pyramid.rs`）
-> **不再包含 VCP 衍生表达**；本文保留为历史设计记录。
-> 本文第 5 节对应的文件穿透实现（`crates/adapters/gateway/src/file_fetcher.rs`）尚待同等重写处理。
+> **⚠️ 2026-10 状态更新（全量重写声明）**：本文所涉**全部已落地实现**已重写为独立实现，
+> 当前代码不再包含 VCP 衍生表达，本文保留为历史设计记录：
+> - 第 1 节（浪潮流体拓扑动力学）→ `crates/engine/memory/src/river_topology.rs`
+>   （重写依据：Gerstner & Kistler *Spiking Neuron Models* 等公开文献）；
+> - 第 2 节（残差金字塔）→ `crates/engine/memory/src/residual_pyramid.rs`
+>   （重写依据：Golub & Van Loan *Matrix Computations*）；
+> - 第 3 节（加权中心化 PCA / 语义主轴）→ `crates/engine/memory/src/semantic_axis.rs`
+>   （重写依据：加权 PCA + 幂迭代，公开数值线性代数）；
+> - 第 4 节（四层异步上下文编排）→ `crates/foundation/orchestration/src/async_context.rs`
+>   （重写依据：通用上下文生命周期工程模式；§4.2 三套通知总线未实现）；
+> - 第 5 节（跨节点透明文件穿透）→ `crates/adapters/gateway/src/file_fetcher.rs`
+>   （重写依据：内容寻址缓存 + RFC 4648 / FIPS 180-4 通用工程模式）。
 
 > **目标**: 将 VCP 1.0/1.1 中最顶尖的流体拓扑动力学、残差正交投影、EPA 认知主轴与超栈透明文件穿透等工程算法，以**纯 Safe Rust 编译期强类型微内核**形式系统性吸收至 Apeireth 2.0。  
 > **基准源码**: `VCPToolBox-main.zip` (`ResidualPyramid.js`, `EPAModule.js`, `RiverMemoEngine.js`, `TagMemoEngine.js`, `TagMemoV10Engine.js`, `Plugin.js`, `FileFetcherServer.js`, `rust-vexus-lite/`)  

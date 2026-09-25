@@ -60,7 +60,9 @@ const MAX_TELEMETRY_EVENTS: usize = 4_096;
 /// 之后每一次 hook 调用都变成 panic —— 一个模块的失误升级为整个运行时的
 /// 级联崩溃。锁保护的都是可重建的非权威状态, 取回内部数据继续运行。
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Low-cardinality, non-sensitive module telemetry.

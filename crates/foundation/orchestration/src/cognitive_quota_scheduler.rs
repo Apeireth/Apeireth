@@ -386,13 +386,12 @@ mod tests {
     #[test]
     fn m1_submit_task_rejects_duplicate_task_id() {
         let scheduler = CognitiveQuotaScheduler::new();
-        assert!(scheduler.submit_task(tcb("task_a", CognitivePriority::ActiveSubAgent)).is_ok());
+        assert!(scheduler
+            .submit_task(tcb("task_a", CognitivePriority::ActiveSubAgent))
+            .is_ok());
         let dup = scheduler.submit_task(tcb("task_a", CognitivePriority::IdleMaintenance));
         assert!(dup.is_err(), "重复 task_id 必须 Err, 得到 {dup:?}");
-        assert!(
-            dup.unwrap_err().contains("task_a"),
-            "错误信息应含 task_id"
-        );
+        assert!(dup.unwrap_err().contains("task_a"), "错误信息应含 task_id");
 
         // 拒绝后调度仍只出一次该任务.
         let first = scheduler.schedule_next().expect("task_a");
@@ -419,7 +418,10 @@ mod tests {
             0,
             "终态后 tasks map 必须删除 (旧实现从不删 → 无界增长)"
         );
-        assert!(!scheduler.complete_task("task_done"), "幂等: 二次回收 false");
+        assert!(
+            !scheduler.complete_task("task_done"),
+            "幂等: 二次回收 false"
+        );
 
         // 已回收任务不会重新出队; preempt_active 也返 None.
         assert!(scheduler.schedule_next().is_none());

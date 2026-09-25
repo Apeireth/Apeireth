@@ -496,7 +496,8 @@ mod tests {
     /// 无 credential → BackendUnavailable (0 装: 不假装能转写)
     #[tokio::test]
     async fn no_credential_returns_backend_unavailable() {
-        let backend = WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build");
+        let backend =
+            WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build");
         let result = backend
             .transcribe(AudioBuffer::empty(), LangHint::auto())
             .await;
@@ -564,7 +565,8 @@ mod tests {
     /// ping 无 credential → BackendUnavailable
     #[tokio::test]
     async fn ping_without_credential_fails() {
-        let backend = WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build");
+        let backend =
+            WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build");
         let result = backend.ping().await;
         assert!(result.is_err(), "ping must fail without credential");
     }
@@ -593,7 +595,8 @@ mod tests {
     /// backend name 验证
     #[test]
     fn backend_name_is_whisper_http() {
-        let backend = WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build");
+        let backend =
+            WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build");
         assert_eq!(backend.name(), "whisper_http");
     }
 
@@ -604,8 +607,9 @@ mod tests {
         assert_send_sync::<WhisperHttpBackend>();
 
         // Arc<dyn VoiceBackend> 注入路径
-        let backend: Arc<dyn VoiceBackend> =
-            Arc::new(WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build"));
+        let backend: Arc<dyn VoiceBackend> = Arc::new(
+            WhisperHttpBackend::openai(Arc::new(NoCredentials)).expect("whisper client build"),
+        );
         let _clone = backend.clone();
     }
 

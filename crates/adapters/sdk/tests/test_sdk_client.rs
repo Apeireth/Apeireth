@@ -57,7 +57,7 @@ fn k1_sdk_tool_whitelist_has_8_names() {
 }
 
 // =====================================================================
-// Fixture 3: K-1 #3 — TOOL_WHITELIST 6 工具 (per 蓝图 §2.2)
+// Fixture 3: K-1 #3 — TOOL_WHITELIST 6 工具 (按接口契约)
 // =====================================================================
 
 #[test]
@@ -154,16 +154,22 @@ fn auth_pipeline_debug_redacted() {
     let p = AuthPipeline::new("a-valid-api-key-1234567890").expect("valid api key");
     let dbg = format!("{p:?}");
     assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
-    assert!(!dbg.contains("a-valid-api-key-1234567890"), "Debug 0 泄 key: {dbg}");
+    assert!(
+        !dbg.contains("a-valid-api-key-1234567890"),
+        "Debug 0 泄 key: {dbg}"
+    );
 
     let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
     let dbg = format!("{c:?}");
     assert!(dbg.contains("[redacted]"), "client Debug 应脱敏: {dbg}");
-    assert!(!dbg.contains("a-valid-api-key-1234567890"), "client Debug 0 泄 key: {dbg}");
+    assert!(
+        !dbg.contains("a-valid-api-key-1234567890"),
+        "client Debug 0 泄 key: {dbg}"
+    );
 }
 
 // =====================================================================
-// Fixture 7: 6 工具 method → D-02 子路径
+// Fixture 7: 6 工具 method → 鉴权子路径
 // =====================================================================
 
 #[test]

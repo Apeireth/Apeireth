@@ -253,7 +253,7 @@ c003e078 refactor(runtime): OrganOrchestrator 完整化 stage 1 (A 块)
 cd C:\Users\31683\apeireth-rust
 
 # 1. 5 重守门 baseline (改前)
-cargo test --workspace --locked                    # 期望: 3120 passed / 0 failed / 13 ignored
+cargo test --workspace --locked                    # 期望 3662 passed / 0 failed / 21 ignored
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望: 0 warning / 0 error
 
 # 2. §10 改前必查 LOCKED (改前)
@@ -544,7 +544,7 @@ git config core.hooksPath .githooks
 
 ### 10.5 5 重守门 baseline 严守 (每 commit)
 
-- cargo test --workspace --locked (期望 3120 passed / 0 failed / 13 ignored)
+- cargo test --workspace --locked (期望 3662 passed / 0 failed / 21 ignored)
 - cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 warning)
 - git diff LOCKED 5 项 (期望 0 行)
 - legacy compat path < 100 (期望 < 100, 现 36)

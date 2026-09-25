@@ -332,7 +332,10 @@ impl EncryptedFileBackend {
         record_id: &str,
         json_bytes: &[u8],
     ) -> Result<(), MemoryError> {
-        let _guard = self.write_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = self
+            .write_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         self.write_record_locked(record_type, record_id, json_bytes)
     }
 
@@ -432,7 +435,11 @@ impl EncryptedFileBackend {
     }
 
     /// 按顺序解密文件中的 record; `predicate` 命中即停止 (M3 读放大).
-    fn find_record<F>(&self, record_type: &str, predicate: F) -> Result<Option<Vec<u8>>, MemoryError>
+    fn find_record<F>(
+        &self,
+        record_type: &str,
+        predicate: F,
+    ) -> Result<Option<Vec<u8>>, MemoryError>
     where
         F: Fn(&[u8]) -> bool,
     {
@@ -509,7 +516,10 @@ impl MemoryBackend for EncryptedFileBackend {
         // 旧实现不查重: 同 id 再写只是追加, get_episode 返回文件中第一条
         // 匹配 (旧值), "更新"语义静默失效.
         // 持写锁做查重, 避免与并发写 TOCTOU (H12).
-        let _guard = self.write_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = self
+            .write_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if self.episode_id_exists(&ep.id)? {
             return Err(Box::new(MemoryError::Invalid(format!(
                 "episode id already exists: {}",
@@ -872,8 +882,8 @@ mod tests {
         let mut data = std::fs::read(&path).expect("read");
         let first_len = u32::from_be_bytes(data[..4].try_into().expect("first length")) as usize;
         // 第二条帧布局: [len(4)][header(45)][iv(12)][ciphertext...]
-        let second_ciphertext = 4 + first_len + 4 + EncryptedFileBackend::HEADER_LEN
-            + EncryptedFileBackend::IV_LEN;
+        let second_ciphertext =
+            4 + first_len + 4 + EncryptedFileBackend::HEADER_LEN + EncryptedFileBackend::IV_LEN;
         data[second_ciphertext] ^= 0xff;
         std::fs::write(&path, data).expect("write tampered tail");
 
@@ -916,7 +926,13 @@ mod tests {
                 assert_eq!(got.id, format!("ep-{t}-{i}"));
             }
         }
-        assert_eq!(backend.recent_episodes("sess-concurrent", 100).unwrap().len(), 80);
+        assert_eq!(
+            backend
+                .recent_episodes("sess-concurrent", 100)
+                .unwrap()
+                .len(),
+            80
+        );
     }
 
     /// H12: 新建 .enc 文件在 unix 上必须 0600 (加密记录只应属主可读).

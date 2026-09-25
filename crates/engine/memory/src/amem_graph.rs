@@ -9,7 +9,7 @@
 //! - full-triple chain (`s|p|o`) + inverse-frequency mean specificity (`1/n`)
 //! - A-MEM `link_on_write` (Jaccard ≥ 0.3)
 //! - residual-boosted CRAWL: `weight * (1 + residual_weight * content_residual)`
-//! - character-set content residual (VCP residual-norm text analogue)
+//! - character-set content residual (残差范数文本特征的独立类比)
 //!
 //! Persistence is caller-owned. Default-off; not production-wired.
 

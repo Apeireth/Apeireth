@@ -1262,7 +1262,10 @@ mod tests {
         let council = council_with_kinds(&[AdvisorKind::Safety, AdvisorKind::Performance]);
         let invoker = ScriptedInvoker {
             decisions: [
-                (AdvisorKind::Safety, Ok(verdict(AdvisorDecision::Abstain, 0.0))),
+                (
+                    AdvisorKind::Safety,
+                    Ok(verdict(AdvisorDecision::Abstain, 0.0)),
+                ),
                 (
                     AdvisorKind::Performance,
                     Ok(verdict(AdvisorDecision::Abstain, 0.0)),
@@ -1294,7 +1297,10 @@ mod tests {
         let council = council_with_kinds(&[AdvisorKind::Safety, AdvisorKind::Performance]);
         let invoker = ScriptedInvoker {
             decisions: [
-                (AdvisorKind::Safety, Ok(verdict(AdvisorDecision::Abstain, 0.0))),
+                (
+                    AdvisorKind::Safety,
+                    Ok(verdict(AdvisorDecision::Abstain, 0.0)),
+                ),
                 (
                     AdvisorKind::Performance,
                     Ok(verdict(AdvisorDecision::Allow, 1.0)),

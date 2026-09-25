@@ -9,7 +9,7 @@
 # 决策: D-06 (主人 2026-08-05 20:53 拍 A: 8 包齐发)
 # 兄弟: scripts/uninstall/uninstall.sh (手动指定 --channel)
 #
-# 5 步 0 残留守门 (per 蓝图 §3.7):
+# 5 步 0 残留守门 (按安装规范):
 #   1. 检测当前装了哪 1 个或多个 (8 通道, 互斥)
 #   2. 询问用户确认 (y/N)
 #   3. 调对应通道的 uninstall (apt / dnf / brew / scoop / rm / docker)
@@ -120,7 +120,7 @@ for rm in "${DETECTED[@]}"; do
     fi
 done
 
-# === 4. 公共清理 (per 蓝图 §3.7 step 4-5, 跨通道 0 残留) ===
+# === 4. 公共清理 (按安装规范-5, 跨通道 0 残留) ===
 echo ""
 echo "[=== 公共清理 ===]"
 if [[ "${KEEP_DATA}" != "true" ]]; then

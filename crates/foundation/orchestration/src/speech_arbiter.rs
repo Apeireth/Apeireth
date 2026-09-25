@@ -73,7 +73,10 @@ impl SpeechOutputArbiter {
 
     /// 请求是否已过期 (M7: saturating_add 防 `created_at_ms + ttl_ms` 溢出回绕).
     fn is_expired(req: &SpeechRequest, now_ms: u64) -> bool {
-        now_ms > req.created_at_ms.saturating_add(Self::effective_ttl_ms(req.ttl_ms))
+        now_ms
+            > req
+                .created_at_ms
+                .saturating_add(Self::effective_ttl_ms(req.ttl_ms))
     }
 
     /// 仲裁新的发言请求.

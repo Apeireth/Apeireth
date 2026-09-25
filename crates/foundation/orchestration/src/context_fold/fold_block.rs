@@ -1,7 +1,7 @@
-//! FoldBlock graded reveal (VCP `foldProtocol` spirit, Rust-native).
+//! FoldBlock graded reveal (Rust-native line-marker protocol).
 //!
-//! Documents are split on line markers `[===vcp_fold:threshold===]`
-//! (optional `[===vcp_fold:threshold::desc:description===]`). Render expands a
+//! Documents are split on line markers `[===fold:threshold===]`
+//! (optional `[===fold:threshold::desc:description===]`). Render expands a
 //! block only when `similarity >= threshold`; hidden blocks collapse to a
 //! "还收纳了 N 组" hint.
 //!
@@ -13,12 +13,12 @@
 
 use serde::{Deserialize, Serialize};
 
-/// `[===vcp_fold:threshold===]` line-marker prefix (compared after trim).
+/// `[===fold:threshold===]` line-marker prefix (compared after trim).
 pub const FOLD_MARKER_PREFIX: &str = "[===";
 /// Line-marker suffix.
 pub const FOLD_MARKER_SUFFIX: &str = "===]";
 /// Protocol field prefix inside the marker.
-pub const FOLD_FIELD: &str = "vcp_fold:";
+pub const FOLD_FIELD: &str = "fold:";
 /// Description-field separator.
 pub const FOLD_DESC_SEP: &str = "::desc:";
 
@@ -149,7 +149,7 @@ pub fn render_fold_blocks(blocks: &[FoldBlock], similarity: f32) -> FoldBlockRen
 mod tests {
     use super::*;
 
-    const DOC: &str = "[===vcp_fold:0.0===]\n基础信息 A\n[===vcp_fold: 0.35 ::desc: 中级===]\n进阶内容 B\n[===vcp_fold:0.7===]\n深度内容 C";
+    const DOC: &str = "[===fold:0.0===]\n基础信息 A\n[===fold: 0.35 ::desc: 中级===]\n进阶内容 B\n[===fold:0.7===]\n深度内容 C";
 
     #[test]
     fn parse_three_blocks_with_desc() {
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn preamble_before_first_marker_is_zero_block() {
-        let blocks = parse_fold_blocks("前言内容\n[===vcp_fold:0.5===]\n正文");
+        let blocks = parse_fold_blocks("前言内容\n[===fold:0.5===]\n正文");
         assert_eq!(blocks.len(), 2);
         assert_eq!(blocks[0].threshold, 0.0);
         assert_eq!(blocks[0].content, "前言内容");
@@ -184,9 +184,9 @@ mod tests {
 
     #[test]
     fn invalid_threshold_line_is_content() {
-        let blocks = parse_fold_blocks("[===vcp_fold:abc===]\n内容");
+        let blocks = parse_fold_blocks("[===fold:abc===]\n内容");
         assert_eq!(blocks.len(), 1);
-        assert!(blocks[0].content.contains("[===vcp_fold:abc===]"));
+        assert!(blocks[0].content.contains("[===fold:abc===]"));
     }
 
     #[test]

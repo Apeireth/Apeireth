@@ -130,7 +130,7 @@ Author:          主代理 Mavis
 ```bash
 cd C:\Users\31683\Apeireth-rust
 git log --oneline -5                                    # 期望 HEAD = 7647d2c9 (2026-09-05 对账基线; 历史收盘 6f9c3dee)
-cargo test --workspace --locked                          # 期望: 3120 passed, 0 failed, 13 ignored
+cargo test --workspace --locked                          # 期望: 3662 passed, 0 failed, 21 ignored
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望: 0 警告
 cargo test --workspace --doc --locked                   # 期望: 0 FAILED
 git status                                             # 期望: clean 或仅 .harness-* untracked
@@ -201,7 +201,7 @@ git status                                             # 期望: clean 或仅 .h
 ```
 任务: <明确产出, 不是模糊方向, 例: "派子代理调研 A 块 5 缺口真生产路径, 写报告 docs/04-internal/A-block-5-gaps-research.md">
 必读: <文档 file:line, 例: docs/04-internal/cognitive-module-wiring.md:20-35>
-必跑: <命令 + 期望输出, 例: cargo test --workspace --locked 期望 1726 passed>
+必跑: <命令 + 期望输出, 例: cargo test --workspace --locked 期望 3662 passed>
 必写: <报告结构, 含 0 装诚实真账 + 0 触碰 LOCKED 声明>
 不 commit: <等主代理审 (Q1 C1 policy)>
 ```
@@ -456,7 +456,7 @@ git commit --no-verify -m "..."   # 跳过所有 hook
 ```bash
 cd C:\Users\31683\Apeireth-rust
 git log --oneline -5                                            # 确认 HEAD 与文档一致
-cargo test --workspace --locked                                  # 期望 3120 passed / 0 failed / 13 ignored
+cargo test --workspace --locked                                  # 期望 3662 passed / 0 failed / 21 ignored
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望 0 警告
 cargo test --workspace --doc --locked                           # 期望 0 FAILED
 rustfmt crates/<your_file>.rs                                   # 单文件 fmt (不要 cargo fmt -- file)
@@ -576,7 +576,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 8. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
 9. 读 docs/04-internal/TO-NEW-TEAM.md (给新团队的话 + 3 块真实施清单)
 10. 读 docs/01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
-11. 跑 cargo test --workspace --locked (期望 3120 passed / 0 failed / 13 ignored)
+11. 跑 cargo test --workspace --locked (期望 3662 passed / 0 failed / 21 ignored)
 12. 跑 cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 警告)
 ```
 
@@ -651,7 +651,7 @@ Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + A 块 
 9. 本 reference 手册: docs/04-internal/ENGINEER-MANIFESTO.md (你正在读)
 
 主代理 Mavis 收盘 rc.1 + 8 spec + A 块完整化 + O-6 复盘 阶段, 你来接.
-有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline (期望 3120 tests / 0 clippy 警告).
+有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline (期望 3662 tests / 0 clippy 警告).
 ```
 
 ---

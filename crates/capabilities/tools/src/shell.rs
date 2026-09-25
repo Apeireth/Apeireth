@@ -555,10 +555,7 @@ impl ShellTool {
             Err(e) => {
                 return ToolResult::permanent_error(
                     &call.id,
-                    format!(
-                        "frozen cwd {} is no longer accessible: {e}",
-                        frozen.cwd
-                    ),
+                    format!("frozen cwd {} is no longer accessible: {e}", frozen.cwd),
                 )
                 .with_name("shell")
             }
@@ -929,7 +926,10 @@ mod tests {
                 arguments: json!({ "command": command }),
             };
             let frozen = tool.freeze_invocation(&call);
-            assert!(frozen.is_err(), "{command} must be rejected before freezing");
+            assert!(
+                frozen.is_err(),
+                "{command} must be rejected before freezing"
+            );
             let rendered = frozen.unwrap_err().render();
             assert!(
                 rendered.contains("pre-call guard"),

@@ -1,6 +1,6 @@
 # Apeireth Verification Ladder (L0–L5)
 
-> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本阶梯与当前 CI 部分脱节（缺失 clippy 三档/miri/audit/deny/rustdoc/13 键守门），以 `.github/workflows/*.yml` 为准。
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本阶梯与当前 CI 部分脱节（缺失 clippy 三档/miri/audit/deny/rustdoc/13 键守门），以 `.github/workflows/*.yml` 为准。
 
 > Runtime Decoupling: defines the merge-blocking vs environment-dependent
 > verification rungs. L4 must NOT block ordinary PRs on a real provider secret.

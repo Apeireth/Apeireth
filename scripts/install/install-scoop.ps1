@@ -8,7 +8,7 @@
 # 决策: D-06 (主人 2026-08-05 20:53 拍 A: 8 包齐发)
 # Manifest: packaging/scoop/apeireth.json
 #
-# 5 步标准安装流 (per 蓝图 §3.4):
+# 5 步标准安装流 (按安装规范):
 #   1. 检测 scoop 是否装
 #   2. bucket add apeireth (per packaging/scoop/build.ps1 推送到 scoop-bucket 仓库)
 #   3. scoop install apeireth

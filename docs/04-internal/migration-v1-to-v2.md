@@ -172,8 +172,8 @@ apeireth gateway serve --port 8080
 # 3. v2 启动会自动跑 migrations, 但 v1 schema 已存在, 所以 v2 检测到 v1 schema 直接 reuse
 # (sqlite WAL 检测, 不重写, 不丢数据)
 
-# 4. 验证: v2 CLI 看 episode 数
-apeireth session list
+# 4. 验证: 确认 episode 数（sqlite3 查 episodes 表，或起 gateway 后在记忆视图查看；
+#    注: `apeireth session` 为就绪自检且无 list 子命令，不能用于此步）
 
 # 5. 备份 v2 db
 cp data/memory.db data/memory.v1-migrated.db

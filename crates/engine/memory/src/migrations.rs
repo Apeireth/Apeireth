@@ -801,8 +801,7 @@ pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
         // 修复: BEGIN IMMEDIATE 从一开始就拿写锁, 版本重读放在**事务内**
         // (读-判-写同一把写锁), 与 `storage/migrations.rs:109` 同模式.
         // SQL 全部幂等 (IF NOT EXISTS), 并发下最坏是 busy_timeout 内等待.
-        let tx: Transaction<'_> =
-            conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let tx: Transaction<'_> = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         if !migration_applied(&tx, m.version)? {
             tx.execute_batch(m.sql)?;
             tx.execute(
@@ -836,10 +835,7 @@ const MEMORY_OWNED_TABLES: &[(&str, &[&str])] = &[
         "agent_traces",
         &["span_id", "trace_id", "kind", "actor", "session_id"],
     ),
-    (
-        "sessions",
-        &["id", "started_at", "last_active_at"],
-    ),
+    ("sessions", &["id", "started_at", "last_active_at"]),
     ("notes", &["id", "timestamp", "content"]),
 ];
 

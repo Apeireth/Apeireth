@@ -155,7 +155,7 @@ check_release_checklist() {
     fi
 
     echo "=================================================="
-    echo "  [C] Release 12 项 checklist (per 蓝图 §3.5)"
+    echo "  [C] Release 12 项 checklist (按安装规范)"
     echo "=================================================="
 
     # 跑 dry-run, 捕获输出, 看是否有真 FAIL

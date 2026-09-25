@@ -11,7 +11,7 @@
 1. [项目全貌与 18-Crate 依赖拓扑](#1-项目全貌与-18-crate-依赖拓扑)
 2. [5 项 LOCKED 核心资产与 9 哲学锚守则](#2-5-项-locked-核心资产与-9-哲学锚守则)
 3. [全域系统能力与核心 API 一览表](#3-全域系统能力与核心-api-一览表)
-4. [外部 170+ 标杆与 VCP 行级吸收演进图谱](#4-外部-170-标杆与-vcp-行级吸收演进图谱)
+4. [外部 170+ 标杆与 参考实现吸收演进图谱（历史）](#4-外部-170-标杆与-vcp-行级吸收演进图谱)
 5. [研发纪律、代码规范与“0 假装 PASS”原则](#5-研发纪律代码规范与0-假装-pass原则)
 6. [一键构建、测试、代码检查与常用指令](#6-一键构建测试代码检查与常用指令)
 7. [团队接手常见问题 (FAQ) 与排障指南](#7-团队接手常见问题-faq-与排障指南)
@@ -107,16 +107,16 @@ graph TD
 
 ---
 
-## 4. 外部 170+ 标杆与 VCP 行级吸收演进图谱
+## 4. 外部 170+ 标杆与 参考实现吸收演进图谱（历史）
 
 * **1.0 遗产与 170+ 标杆白皮书**：[`docs/01-architecture/v2-master-lineage-and-upgrade-blueprint.md`](../01-architecture/v2-master-lineage-and-upgrade-blueprint.md)
 * **VCPToolBox 深度对比报告**：[`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](../01-architecture/vcp-vs-apeireth-deep-comparison.md)
-* **VCP 行级吸收指南**：[`docs/03-reference/vcp-line-level-absorption-guide.md`](vcp-line-level-absorption-guide.md)
+* **参考实现吸收指南（历史）**：[`docs/03-reference/vcp-line-level-absorption-guide.md`](vcp-line-level-absorption-guide.md)
 
 ### 核心演进路线图：
 1. **第一批 (已实装)**：OWASP ASI-01 审计、不可信信封包裹、8 类 PII、Pre/Post 工具绊线、事务补丁、MiniMax LIVE 语音、8 帧 Duplex 网关、5D 记忆与双时态图谱。
 2. **第二批 (已实装)**：发言仲裁机、Prompt Cache 稳定器、AI 自驱心跳与 FlowLock 心流锁、失败轨迹自愈修补、活维基知识编译与反熵治理。
-3. **第三批 (规划中)**：浪潮流体动力学（LIF 脉冲传导）、Gram-Schmidt 正交残差金字塔、加权中心化 PCA 语义主轴与跨节点透明超栈文件穿透。
+3. **第三批 (规划中)**：浪潮流体动力学（LIF 脉冲传导）、Gram-Schmidt 正交残差金字塔、加权中心化 PCA 语义主轴与跨节点透明文件穿透。
 
 ---
 
@@ -144,8 +144,8 @@ cargo clippy --workspace --all-targets --offline -- -D warnings
 # 4. 运行特定模块测试 (以 memory 为例)
 cargo test -p apeireth-memory --offline
 
-# 5. 启动 CLI 交互模式
-cargo run -p apeireth-cli --bin apeireth -- chat
+# 5. 单轮 CLI 对话（需 APEIRETH_API_KEY；chat 为单轮命令，非交互模式）
+cargo run -p apeireth-cli --bin apeireth -- chat "Hello — do you remember me?"
 
 # 6. 一键推送到远程仓库
 git push origin main

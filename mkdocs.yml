@@ -11,7 +11,7 @@
 # 整合 #4 commit: abf12243 (2026-08-10 19:41, 46752 file changes, 0 重跑, master HEAD 严守)
 
 site_name: Apeireth 1.0 — AGI 操作系统
-site_description: VCP 全栈 Rust 重写 + 单一定形式可全自关 (Self-Disable) + 双层中架构 + 编译期内保证 (13 键 hardcode) + R-测量 0.92
+site_description: 纯 Safe Rust 全栈实现 + 单一定形式可全自关 (Self-Disable) + 双层中架构 + 编译期内保证 (13 键 hardcode) + R-测量 0.92
 site_author: Apeireth Team
 copyright: Copyright © 2026 Apeireth Team. Licensed under Apache License, Version 2.0.
 

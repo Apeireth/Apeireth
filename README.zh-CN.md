@@ -134,9 +134,9 @@ graph TB
 | **便携化与漫游** | 依赖复杂云环境与中心化服务器 | **随身 U 盘生命体 & P2P Mesh**：`./data/` 相对路径硬隔离（防盘符漂移）+ Noise_XX 端到端加密 BLE/局域网去中心化记忆漫游 |
 | **内存与类型安全** | 动态弱类型、内存泄漏、GIL 性能瓶颈 | **100% 纯 Safe Rust**：`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`，编译期内存安全、零未捕获异常、零数据竞态 |
 
-> **借鉴与署名**：记忆场的流体拓扑动力学与残差金字塔在历史版本中曾移植自 VCP 1.0。
-> 自 2026-10 起，两处实现已**全部重写为基于公开数学文献的独立实现**
-> （Gerstner & Kistler《Spiking Neuron Models》；Golub & Van Loan《Matrix Computations》），
+> **借鉴与署名**：记忆场的流体拓扑动力学、残差金字塔等模块在历史版本中曾移植自 VCP 1.0。
+> 自 2026-10 起，全部已落地实现均已**重写为基于公开数学文献/通用工程模式的独立实现**
+> （Gerstner & Kistler《Spiking Neuron Models》；Golub & Van Loan《Matrix Computations》等），
 > 当前代码不含 VCP 衍生表达。历史对照存档见
 > [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
 > 与 [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md)。

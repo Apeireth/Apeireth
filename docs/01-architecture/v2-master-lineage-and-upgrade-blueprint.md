@@ -1,7 +1,7 @@
 # Apeireth 1.0 全量源码逐行对照、外部前沿代码级深潜与 2.0 终极升级蓝图
 
 > **文档属性**：全景工程调研、代码级机制解构与未来演进蓝图  
-> **编制基准**：Apeireth 1.0（86-crate legacy 源码库）、170+ 外部前沿标杆项目实装代码、Apeireth 2.0 现状（13-crate 纯 Safe Rust 架构）  
+> **编制基准**：Apeireth 1.0（86-crate legacy 源码库）、170+ 外部前沿标杆项目实装代码、Apeireth 2.0 现状（纯 Safe Rust 架构；编制时点 2026-08 为 13-crate，现行 18-crate 见 `ARCHITECTURE.md`）  
 > **核心宗旨**：秉承 8 哲学锚（S-1 北极星、S-2 实事求是、S-3 质量工程化、O-1 安全优先、O-2 前人经验、O-3 干到底、O-4 任何人都能接手、O-5 0 装 PASS、O-6 永远追求最优）与 5 项 LOCKED 不可变资产底线，以代码级深度驱动系统向自主演化、物种化伴侣与 AGI 操作系统跃迁。
 
 ---
@@ -42,7 +42,7 @@
 
 ## 1. 执行摘要与全景视野
 
-Apeireth 2.0 历经深度重构，成功将 1.0 时代 86-crate 的单体巨石收敛为 **13-crate 模块化分层工作区**（`foundation / engine / capabilities / adapters`），并在双洋葱统一体、不可篡改审计链、受控出站沙箱（Controlled Egress）、Okapi BM25+向量混合检索以及前端 Svelte 5 + Tauri 2 桌面伴侣上完成了极高质量的交付（全工作区测试 100% 通过，Clippy 0 警告）。
+Apeireth 2.0 历经深度重构，成功将 1.0 时代 86-crate 的单体巨石收敛为 **13-crate 模块化分层工作区**（`foundation / engine / capabilities / adapters`，其后继续演进为 18-crate），并在双洋葱统一体、不可篡改审计链、受控出站沙箱（Controlled Egress）、Okapi BM25+向量混合检索以及前端 Svelte 5 + Tauri 2 桌面伴侣上完成了极高质量的交付（全工作区测试 100% 通过，Clippy 0 警告）。
 
 通过 7 大专业子代理对 **1.0 遗留代码库（77+ crates）每一行代码的详尽对比**，以及对 **170+ 外部标杆项目工程代码的深度研读**，我们发现：
 1. **1.0 的优秀遗产**：在多签异构验证、7 Advisor 多轮辩论、双时态事实图、工具输出 Spill 溢出、Prompt Cache 稳定化脱敏、OWASP ASI-01 工具描述投毒防御等方面沉淀了大量反直觉的安全防御细节；
@@ -246,6 +246,6 @@ gantt
 
 ### 结语与致敬
 
-从 1.0 的 86-crate 历史探索，到 2.0 的 13-crate 纯粹 Safe Rust 底座，Apeireth 始终坚持**“让产品追赶理念，让理念扎入人心”**。
+从 1.0 的 86-crate 历史探索，到 2.0 的纯 Safe Rust 底座（编制时 13-crate，现行 18-crate），Apeireth 始终坚持**“让产品追赶理念，让理念扎入人心”**。
 
 通过本次全量逐行代码对照与外部 170+ 标杆的深度解构，Apeireth 获得了前所未有的全景视野。未来，随着自进化 Harness、全双工物种化具身、五维时空记忆与微内核操作系统的逐步实装，Apeireth 必将真正兑现它的崇高承诺——**“给你脑子里那个会记得你的智能体一个家”**。

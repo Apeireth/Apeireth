@@ -38,11 +38,11 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 ## Docker
 
 The root `Dockerfile` builds the current root workspace and starts the same
-CLI gateway. Use the compose file only after supplying the required external
-database password:
+CLI gateway. The compose file is a single-service SQLite deployment; supply
+your API key via `.env` (see `.env.example`) and start:
 
 ```bash
-export POSTGRES_PASSWORD='use-a-local-secret'
+# .env: APEIRETH_API_KEY=... (optional: APEIRETH_API_URL / APEIRETH_MODEL)
 docker compose up --build
 ```
 

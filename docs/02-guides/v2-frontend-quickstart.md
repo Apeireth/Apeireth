@@ -35,8 +35,8 @@ cd C:\Users\31683\Apeireth-rust
 cargo run --locked --bin apeireth -- gateway serve --port 8080
 # 期望: HTTP 服务监听 :8080, 路由 /health + /v1/chat + /v1/chat/completions
 
-# 或 Docker (待真生产)
-docker run -p 8080:8080 -e APEIRETH_LLM_BACKEND=minimax apeireth:2.0.0
+# 或 Docker (待真生产; 单服务 SQLite 编排, 环境变量见 .env.example)
+docker run -p 8080:8080 -e APEIRETH_API_KEY=$APEIRETH_API_KEY -e APEIRETH_MODEL=$APEIRETH_MODEL apeireth/apeireth:2.0.0-rc.1
 ```
 
 **验证**:

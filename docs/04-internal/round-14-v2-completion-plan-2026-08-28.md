@@ -94,7 +94,7 @@ Author:          主代理 Mavis
 - ✅ **5 R7 物种化借鉴真账** (N.E.K.O / Open-LLM-VTuber / Firefly / Mio / AIRI) push 成功
 - ✅ **R11 6 gap 真调研真账** (Storage / LongTermMemory / SpeciesCore / SpeciesForm / MetaCognition / CoordinationContext) push 成功
 - ✅ **research/source ~36 真开源借鉴** (tokio / wasmtime / qdrant / sled / hermes-agent-rs / MetaGPT / openclaw / LangGraph / CrewAI / Claude Code 等)
-- ✅ **legacy/donor/~100 modules 1.0 真账** (12 slot + 9 organ 1:1 翻译源)
+- ✅ **legacy/donor/~100 modules 1.0 真账** (12 slot + 9 organ 1:1 移植来源)
 - ✅ **_research_mem/** (apeireth-rust-fork + AgentFlow + sub_agent_reports + wave2-wave7 真账)
 
 **前人肩上路径**:
@@ -289,7 +289,7 @@ Week 7-10: R20 preference_learning (in-progress)
 ### 3.3 release 流程 (Week 18-20, 估时 1-2 周)
 
 ```
-- 5 重守门 baseline 实测 (test 3120 / clippy 0 / LOCKED 0 触碰 / legacy 36 / 9 哲学锚 0 减)
+- 5 重守门 baseline 实测 (test 3662 / clippy 0 / LOCKED 0 触碰 / legacy 36 / 9 哲学锚 0 减)
 - o6-anchor.yml workflow 自动跑 5 重守门
 - ROADMAP §7 总进度 check + MANIFESTO §14 release timeline check
 - ROADMAP §12 release path check
