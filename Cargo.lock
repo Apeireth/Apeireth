@@ -316,6 +316,7 @@ version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-protocol",
+ "ring",
  "serde",
  "serde_json",
  "sha2",
@@ -338,6 +339,22 @@ dependencies = [
  "rcgen",
  "ring",
  "rustls",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "apeireth-mesh-rendezvous"
+version = "2.0.0-rc.1"
+dependencies = [
+ "apeireth-core",
+ "apeireth-governance",
+ "apeireth-mesh",
+ "apeireth-mesh-protocol",
+ "apeireth-plugin",
+ "apeireth-protocol",
+ "async-trait",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",

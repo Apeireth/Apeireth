@@ -19,6 +19,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 sha2 = { workspace = true }
+# Presence signatures (Ed25519) only: a presence record owns its own integrity.
+# No sockets, no async, no modules — still pure, self-validating data.
+ring = "0.17"
 
 [lib]
 name = "apeireth_mesh_protocol"

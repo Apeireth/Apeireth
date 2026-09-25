@@ -1,0 +1,35 @@
+[package]
+name = "apeireth-mesh-rendezvous"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth Mesh Phase 2C1 WAN rendezvous + encrypted relay server. Connectivity infrastructure only: it answers where a node is reachable and forwards opaque end-to-end ciphertext between two trusted nodes. It owns no Module, no Capability, no trust; it can never decrypt Mesh traffic."
+
+[dependencies]
+apeireth-mesh-protocol = { path = "../../foundation/mesh-protocol" }
+tokio = { workspace = true, features = ["full"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+apeireth-core = { path = "../../foundation/core" }
+apeireth-protocol = { path = "../../foundation/protocol" }
+apeireth-plugin = { path = "../../foundation/plugin" }
+apeireth-governance = { path = "../../foundation/governance" }
+apeireth-mesh = { path = "../../engine/mesh" }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+
+[lib]
+name = "apeireth_mesh_rendezvous"
+path = "src/lib.rs"
+
+[[bin]]
+name = "apeireth-mesh-rendezvous"
+path = "src/main.rs"
+
+[lints]
+workspace = true
