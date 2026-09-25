@@ -113,9 +113,6 @@ build-*.txt
 .commit-r20-*.txt
 .commit-raw*.txt
 
-# R23 一次性 wrk trees (其他分支 worktree 留下, 主仓跨 worktree 0 触碰)
-.前代产品-worktrees/
-
 # R23 一次性 backup (升级前/后 snapshot, 留本地)
 .tmp-cargo-lock-*.bak
 .tmp-cargo-toml-*.bak
