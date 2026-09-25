@@ -460,6 +460,7 @@ impl RelayMeshTransport {
             .lookup(target.clone())
             .await?
             .ok_or_else(|| RelayError::Unreachable(target.to_string()))?;
+        let peer_node_id = target.to_string();
         let circuit = self.endpoint.open_circuit(target).await?;
         let circuit_id = circuit.id();
         let channel = handshake(
@@ -468,6 +469,7 @@ impl RelayMeshTransport {
             self.identity.pkcs8_der(),
             self.identity.public_key(),
             self.endpoint.node_id().as_str(),
+            &peer_node_id,
             &circuit_id,
         )
         .await
@@ -564,13 +566,13 @@ impl MeshListener for RelayMeshListener {
                 inbound: tokio::sync::Mutex::new(inbound_rx),
                 closed: AtomicBool::new(false),
             };
-            let _ = source;
             let channel = handshake(
                 Box::new(circuit),
                 HandshakeRole::Responder,
                 self.identity.pkcs8_der(),
                 self.identity.public_key(),
                 self.endpoint.node_id().as_str(),
+                source.as_str(),
                 &circuit_id,
             )
             .await
