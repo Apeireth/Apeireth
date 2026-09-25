@@ -37,9 +37,11 @@
 #![deny(unsafe_code)]
 
 pub mod conformance;
+pub mod discovery;
 pub mod error;
 pub mod executor;
 pub mod identity;
+pub mod mdns;
 pub mod node;
 pub mod pairing;
 pub mod peer;
@@ -50,12 +52,17 @@ pub mod trust;
 pub mod trust_store;
 
 pub use conformance::assert_connection_conformance;
+pub use discovery::{
+    DiscoveredPeer, DiscoveryBackend, DiscoveryMethod, DiscoverySink, FakeDiscoveryBackend,
+    MeshDiscoveryService,
+};
 pub use error::{MeshError, MeshExecError};
 pub use executor::{
     catalog_to_modules, CancelFlag, ManagerExecutor, MeshCapabilityExecutor, MeshInvokeContext,
     ModuleManagerView,
 };
 pub use identity::{IdentityError, KeyFingerprint, NodeIdentity};
+pub use mdns::{AdvertisedPresence, MdnsDiscovery, MESH_SERVICE_TYPE};
 pub use node::{
     CallHandle, CallTarget, InvokeMeta, MeshNode, MeshNodeConfig, DEFAULT_HEARTBEAT_TIMEOUT_MS,
 };

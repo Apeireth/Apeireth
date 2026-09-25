@@ -529,6 +529,31 @@ fn parse_nightwatch(args: &[String]) -> Result<NightwatchOptions, String> {
     Ok(options)
 }
 
+/// `apeireth mesh …` adapter over the pairing/discovery state machines.
+fn run_mesh(args: &[String]) -> ExitCode {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("mesh: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let paths = apeireth_cli::mesh_cli::MeshPaths::default();
+    match runtime.block_on(apeireth_cli::mesh_cli::dispatch_mesh(args, &paths)) {
+        Ok(output) => {
+            println!("{output}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("mesh: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn run_nightwatch(session: Option<String>, limit: usize) -> ExitCode {
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
@@ -655,6 +680,9 @@ fn main() -> ExitCode {
     }
     if args[0] == "session" {
         return run_session();
+    }
+    if args[0] == "mesh" {
+        return run_mesh(&args[1..]);
     }
 
     match args[0].as_str() {

@@ -1020,6 +1020,8 @@ pub async fn dispatch_canonical_chat(
 /// (risk 核词扫描 / eval 行为质量 / no-degrade 复盘 / evidence 断言缺口 /
 /// rubric 平衡 / colang 健康) → 报告落 `<data>/nightwatch/`。
 /// **不阻塞不批准**: approval_policy 留热路径; 审计链/ballot 未持久化 = 具名缺口。
+pub mod mesh_cli;
+
 pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Result<String, String> {
     use apeireth_memory::backend::sqlite::SqliteBackend;
     use apeireth_plugin::memory_backend::MemoryBackend;
