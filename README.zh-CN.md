@@ -6,7 +6,7 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-3418%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
+[![Tests](https://img.shields.io/badge/tests-3662%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-18--Crate%20微内核-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
@@ -70,7 +70,7 @@ Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsa
 | **JobObject 物理沙箱** | Win32 Job Object 边界初始化 + 进程隔离限制 | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **实测通过** |
 | **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **实测通过** |
 | **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **实测通过** |
-| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | **3418 / 3418 通过** | ✅ **0 失败** |
+| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | **3662 / 3662 通过** | ✅ **0 失败** |
 
 > *所有基准数据均在真实硬件（AMD Ryzen 9 / Intel Core i9, 32GB RAM, Windows 11 / Ubuntu 24.04）上核验（详见 [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md)）。*
 
@@ -134,8 +134,11 @@ graph TB
 | **便携化与漫游** | 依赖复杂云环境与中心化服务器 | **随身 U 盘生命体 & P2P Mesh**：`./data/` 相对路径硬隔离（防盘符漂移）+ Noise_XX 端到端加密 BLE/局域网去中心化记忆漫游 |
 | **内存与类型安全** | 动态弱类型、内存泄漏、GIL 性能瓶颈 | **100% 纯 Safe Rust**：`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`，编译期内存安全、零未捕获异常、零数据竞态 |
 
-> **借鉴与署名**：记忆场的流体拓扑动力学与残差金字塔为 VCP 1.0 行级借鉴的 Rust 再实现,
-> 原始来源与逐行对照见 [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
+> **借鉴与署名**：记忆场的流体拓扑动力学与残差金字塔在历史版本中曾移植自 VCP 1.0。
+> 自 2026-10 起，两处实现已**全部重写为基于公开数学文献的独立实现**
+> （Gerstner & Kistler《Spiking Neuron Models》；Golub & Van Loan《Matrix Computations》），
+> 当前代码不含 VCP 衍生表达。历史对照存档见
+> [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
 > 与 [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md)。
 
 ---
@@ -384,7 +387,7 @@ USB 闪存盘 (E:\ 或 /media/usb/)
 git clone https://github.com/Apeireth/Apeireth.git
 cd Apeireth
 
-# 运行全工作区 3418 项单元测试与集成测试（2026-10-06 W2 批后实测；同日复核批口径 3406）
+# 运行全工作区 3662 项单元测试与集成测试（工作区基线口径）
 cargo test --workspace
 
 # 验证纯 Safe Rust 规范与 Clippy 0 警告
@@ -397,17 +400,16 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p apeireth-cli -- gateway serve --port 8080
 ```
 
-### 4. 开启交互式结对编程会话
+### 4. 单轮命令行对话（需 API key）
 ```bash
-# 启动本地命令行交互式伴侣
-cargo run -p apeireth-cli -- chat
+# 先设置 API key（PowerShell: $env:APEIRETH_API_KEY = "sk-..."）
+cargo run -p apeireth-cli -- chat "你好，还记得我吗？"
+# `chat` 是单轮命令，不是交互式 REPL。
 ```
 
-### 5. 一键生成随身 U 盘便携生命体 (Portable USB Agent)
-```bash
-# 打包生成自包含单二进制、./data/ 相对路径隔离与 Windows/POSIX 双启动脚本
-cargo run -p apeireth-cli -- bundle --output-dir "E:\Apeireth-Portable"
-```
+### 5. 下一步
+- 打包桌面端：到 Releases 下载 `Apeireth Companion_<version>_x64-setup.exe`。
+- 随身 U 盘打包命令（`apeireth bundle`）尚未随 v2 发布——见 ROADMAP.md。
 
 ---
 

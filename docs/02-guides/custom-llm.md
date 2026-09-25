@@ -95,7 +95,9 @@ export APEIRETH_API_KEY=sk-cp-xxx       # MiniMax key
 export OPENAI_API_KEY=sk-xxx            # OpenAI key
 export ANTHROPIC_API_KEY=sk-ant-xxx     # Anthropic key
 
-# 启动
+# 启动（⚠️ v1 legacy 示例：apeireth-companion 只存在于 legacy/，当前基线不可用；
+#     当前基线请用 桌面端设置页配置自定义 OpenAI 兼容端点，或
+#     apeireth gateway serve + APEIRETH_API_URL / APEIRETH_API_KEY / APEIRETH_MODEL）
 cargo run -p apeireth-companion --example companion_serve
 ```
 

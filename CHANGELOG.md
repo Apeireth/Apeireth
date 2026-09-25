@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 合规重写：流体拓扑动力学与残差金字塔改为公开文献独立实现 + 口径/命令对齐 (2026-09-25)
+
+- **许可证风险出清**：`river_topology.rs`（浪潮流体拓扑动力学）与 `residual_pyramid.rs`（MGS 残差金字塔）两块历史移植实现**全部重写**为基于公开数学文献的独立实现（LIF 脉冲模型 = Gerstner & Kistler《Spiking Neuron Models》；MGS 正交化 = Golub & Van Loan《Matrix Computations》）。公开 API 与行为契约（测试）不变；当前代码不含 VCP 衍生表达；README 双语"借鉴与署名"段与 vcp 吸收指南/对比报告同步改为重写声明。
+- **数字口径统一**：全量实测 **3662 passed / 0 failed / 21 ignored（130 套件）**；README/INSTALL/发布说明共 8 处口径一次改齐（此前 3418/3406/3120/23,806 四口径并存）。
+- **文档必败命令修复**：README `apeireth bundle`（不存在）改为 Roadmap 说明、`chat` 如实标注单轮命令并补 API key 步骤；INSTALL 的 `apeireth session` 行为描述改实（就绪自检即退）；`custom-llm.md` legacy 命令加 ⚠️ 并给出当前路线；`start_tauri_dev.ps1` 去掉硬编码盘符路径（改 `$PSScriptRoot`）。
+- **docker 路线对齐基线**：`docker-compose.yml` 由 v1 三服务（postgres/redis）改为单服务 SQLite 编排（与 Dockerfile 一致）；`.env.example` 按代码实测 `APEIRETH_*` 变量面重写（原 `APEIRETH_LLM_*` / `POSTGRES_PASSWORD` 均为代码不读的死变量）；Dockerfile 死变量 `APEIRETH_BASE_URL` → `APEIRETH_API_URL`。
+- 验证：全量 3662/0/21、memory lib 785 全绿、clippy `-D warnings` 0 警告、compose YAML 校验通过。
+
 ## [Unreleased] — 修复：网关 CORS 缺失（UI 永远"后端不可达"的真凶）(2026-09-28)
 
 - **真机点击流抓出的最后一块拼图**：网关路由**完全没有 CORS 头**。Tauri WebView 是独立源（tauri://localhost），浏览器对回环地址同样执行同源策略——UI 的每个 fetch 都被拦，表现为"后端不可达或跨域拒绝"，而 curl/Invoke-WebRequest 探针不受 CORS 管，所以此前一切自动化全绿、UI 却永远连不上。原代码注释"回环网关不需要跨域策略"是设计误解（回环只限网络暴露，与 CORS 无关）。

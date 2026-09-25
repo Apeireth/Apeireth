@@ -2,7 +2,7 @@
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **当前基线**: 默认分支 `main`、18-crate 工作区（v2.0.0-rc.1；2026-10-06 对账更新 crate 数，测试基线维持 2026-09-05 口径）；`legacy/` 不参与构建。
+> **当前基线**: 默认分支 `main`、18-crate 工作区（v2.0.0-rc.1；测试基线 **3662 passed / 0 failed / 21 ignored**，130 套件全量实测，历史口径见 CHANGELOG）；`legacy/` 不参与构建。
 
 ---
 
@@ -70,7 +70,7 @@ cargo test --workspace
 
 ```powershell
 cargo run --bin apeireth session
-# 应该看到：欢迎信息 + 启动 session
+# 预期：打印 canonical runtime ready / providers: … 就绪信息后退出（诊断命令）；对话请用 apeireth chat <prompt>（需 APEIRETH_API_KEY）或桌面端
 ```
 
 ---
@@ -115,7 +115,7 @@ cargo test --workspace
 
 ```bash
 cargo run --bin apeireth session
-# 应该看到：欢迎信息 + 启动 session
+# 预期：打印 canonical runtime ready / providers: … 就绪信息后退出（诊断命令）；对话请用 apeireth chat <prompt>（需 APEIRETH_API_KEY）或桌面端
 ```
 
 ---
@@ -174,7 +174,7 @@ cargo run --bin apeireth session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（应该 3418 passed / 0 failed / 19 ignored——2026-10-06 W2 批后实测；同日复核批口径 3406、2026-09-05 口径为 3120/13；v1 时代 86-crate 全量为 23,806，见 CHANGELOG）
+# 2. Test（预期 3662 passed / 0 failed / 21 ignored，130 套件——工作区基线口径，以现场实测为准；历史口径见 CHANGELOG）
 cargo test --workspace
 
 # 3. Clippy（应该 0 warning）
@@ -183,7 +183,7 @@ cargo clippy --workspace -- -D warnings
 # 4. Format（应该 0 diff）
 cargo fmt --check
 
-# 5. Hello World（应该看到欢迎信息）
+# 5. Hello World（运行时就绪自检）
 cargo run --bin apeireth session
 ```
 
