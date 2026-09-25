@@ -290,3 +290,9 @@ frontend/companion-desktop/.pnpm-store/
 # target/release at package time (see packaging/stage-sidecar.ps1). It is a
 # build artifact (~10MB), never a source file.
 frontend/companion-desktop/src-tauri/binaries/
+
+# 2026-09-26 hygiene: 验收截图与本地基线测试日志留本地作证据（docs/04-internal 截图索引引用其路径），
+# 不入库以免 100MB+ 二进制进 git；INDEX.md 等清单文件仍被跟踪。
+artifacts/*.png
+artifacts/*.txt
+frontend/companion-desktop/shot-*.png
