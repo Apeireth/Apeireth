@@ -27,9 +27,7 @@ use apeireth_sdk::{negotiate, Envelope, SdkError, SdkErrorCode, SdkVersion, Wire
 fn k1_platform_name_is_apeireth() {
     assert_eq!(PLATFORM_NAME, "apeireth");
     assert!(PLATFORM_NAME.starts_with("apeireth"));
-    // 不写 "前代产品" / "minimax" / 装饰名.
-    assert!(!PLATFORM_NAME.contains("前代产品"));
-    assert!(!PLATFORM_NAME.contains("minimax"));
+    // 值已由 assert_eq 锁定为 "apeireth", 无第三方装饰名残留空间.
 }
 
 // =====================================================================

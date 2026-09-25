@@ -18,9 +18,9 @@ use crate::voice::error::{VoiceError, VoiceResult};
 // §1 编译期 hardcode 常量 (K-1 强校验 #1 品牌一致)
 // ============================================================================
 
-/// 默认唤醒词 (K-1 强校验 #1 品牌一致: 编译期 hardcode `"apeireth"`, 不写 Hey前代产品).
+/// 默认唤醒词 (K-1 强校验 #1 品牌一致: 编译期 hardcode `"apeireth"`).
 ///
-/// 1:1 翻译 v0.9.21品牌一致 (R20 设计拍板).
+/// 1:1 翻译 v0.9.21 品牌一致 (R20 设计拍板).
 pub const VOICE_DEFAULT_WAKE_WORD: &str = "apeireth";
 
 /// 自定义唤醒词最大长度 (per v0.9.21估 64 char, 防恶意长串).

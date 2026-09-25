@@ -33,7 +33,7 @@
 //! ## 6 哲学锚穿透 (per 蓝图 §1)
 //!
 //! - **S-1 北极星**: 1:1 翻译 v0.9.21 `@larksuiteoapi/node-sdk@1.59` 5 端点 URL
-//!   (per `安装包package.json` line 23), 路径/方法/Content-Type
+//!   (per `package.json` line 23), 路径/方法/Content-Type
 //!   跟 v0.9.21 SDK 默认 Client 1:1 一致. auth_refresh 内部 token 缓存 TTL 跟 v0.9.21 SDK 默认
 //!   `cache-manager` 7200s 一致.
 //! - **S-2 实事求是**: wiremock 0.6 mock server 真起 socket 监听, 走真 HTTP 请求路径

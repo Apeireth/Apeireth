@@ -102,7 +102,7 @@ pub const SDK_TOOL_WHITELIST: &[&str] = &[
 pub const SDK_TOOL_WHITELIST_COUNT: usize = 8;
 
 /// 平台名 (K-1 强校验 #1: 编译期 hardcode `"apeireth"`, 1:1 翻译 v0.9.21,
-/// 不写 "前代产品" / "minimax" / 装饰名).
+/// 不写第三方装饰名).
 pub const PLATFORM_NAME: &str = "apeireth";
 
 /// **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.

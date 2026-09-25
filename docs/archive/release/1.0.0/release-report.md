@@ -222,7 +222,7 @@ crates/apeireth-voice/src/lib.rs                   (30.3KB / 740 行)
 
 ## §5. 71GB 事故根因修复 (per §5 团队可见)
 
-**事故**: 前代产品 0.9.21 商业版 `agent sandbox 影子备份从来不清理` bug, 在 `.minimax-agent-cn\` 留下 91 个 `agent-xxxxxx` 影子目录, 总占 71 GB.
+**事故**: v0.9.21 `agent sandbox 影子备份从来不清理` bug, 在 `.minimax-agent-cn\` 留下 91 个 `agent-xxxxxx` 影子目录, 总占 71 GB.
 
 **根治** (`crates/apeireth-rollback/src/lib.rs` L92-L120 编译期 hardcode 4 重防御, 38.4KB / 1,040 行):
 

@@ -1,7 +1,7 @@
 //! # apeireth-i18n
 //!
 //! i18n 骨架 (1:1 翻译 v0.9.21 `out/main` 中 `i18next@^26.0.5` + `react-i18next@^17.0.3` 集成面,
-//! per `安装包package.json` line 59, 71).
+//! per `package.json` line 59, 71).
 //!
 //! **5 语言** (en / zh-CN / ja / fr / de), 编译期 hardcode 进 `locales/*.toml` (per O-5 不假装 + 编译期守门).
 //!

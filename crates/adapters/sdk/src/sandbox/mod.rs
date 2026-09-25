@@ -3,7 +3,7 @@
 //! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 (baseline 2026-08-19) + 主人审**
 //!
 //! Sandbox SDK skeleton (1:1 翻译 v0.9.21 `@anthropic-ai/sandbox` 进程隔离 / 资源
-//! 限制 / 安全策略 API 表面, per `安装包node_modules/
+//! 限制 / 安全策略 API 表面, per `node_modules/
 //! @anthropic-ai/` 实查). 商业版 bundle 实查 sandbox 仅有 deps 声明, 未实接 (R21+ 估补),
 //! 6 核心 API (spawn / kill / wait / getStatus / streamLogs / cleanup) 1:1 翻译:
 //!

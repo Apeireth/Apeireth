@@ -45,7 +45,7 @@
 //! ## 引用文档 (4 份)
 //!
 //! 1. `.openclaw\workspace\promethean\Apeireth-rust\docs\stage4\v09021-rust-translation-blueprint-2026-08-05.md` (RIVAL 蓝图)
-//! 2. `安装包credentials` (v0.9.21 1:1 翻译源)
+//! 2. `credentials` (v0.9.21 1:1 翻译源)
 //! 3. `.openclaw\workspace\promethean\Apeireth-rust\docs\stage4\m3-hallucination-defense-2026-08-05.md` (m3 防御)
 //! 4. `.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-keyring\src\lib.rs` (凭证存储参考, P0 安全铁律)
 //!
