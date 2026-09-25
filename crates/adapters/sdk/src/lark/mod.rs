@@ -2,14 +2,14 @@
 //!
 //! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 + 主人审**
 //!
-//! 飞书 Lark SDK stub (1:1 翻译 `@larksuiteoapi/lark-sdk` v0.9.21, per
+//! 飞书 Lark SDK stub (对齐 `@larksuiteoapi/lark-sdk`, per
 //! `core/Response.d.ts` + `client/api_im_open.js` + `client/api_calendar_open.js` +
 //! `client/api_contact_open.js` + `client/api_docx_open.js` + `client/api_sheet_open.js` +
 //! `client/api_approval_open.js` + `client/api_event_open.js`).
 //!
-//! 商业版 `@larksuiteoapi/lark-sdk` v0.9.21 是飞书官方 TypeScript SDK, 提供 Open Platform
+//! 上游 `@larksuiteoapi/lark-sdk` 是飞书官方 TypeScript SDK, 提供 Open Platform
 //! 全套 API (IM / Calendar / Contact / Doc / Sheet / Approval / Event). 但 **当前 crate 是
-//! STUB skeleton** — API 表面按 v0.9.21 1:1 翻译, 但所有 8 核心 API 实现都是
+//! STUB skeleton** — API 表面对齐既有实现, 但所有 8 核心 API 实现都是
 //! `Err(LarkError::NotImplemented(api))`. **任何真实 SDK 引用 (reqwest 真接 / 真发飞书 API)
 //! 都禁止**, 留 R20 阶段 4 续真接或 R21 续.
 //!
@@ -20,9 +20,9 @@
 //! 4. 经 8 哲学锚 (RIVAL 蓝图) + 主人审
 //! 跳过任何一条 → 整合时 cargo build 必挂, fixture 必挂.
 //!
-//! ## 8 核心 API (per task spec §3 + v0.9.21 1:1)
+//! ## 8 核心 API (per task spec §3 + 既有实现口径)
 //!
-//! | # | API                          | 1:1 翻译 v0.9.21                       | R20 阶段 4 实现 |
+//! | # | API                          | 对齐既有实现                       | R20 阶段 4 实现 |
 //! |---:|------------------------------|----------------------------------------|----------------|
 //! | 1 | `send_message`               | `Lark.Client.im.message.create`        | NotImplemented |
 //! | 2 | `list_calendar_events`       | `Lark.Client.calendar.event.list`      | NotImplemented |
@@ -33,11 +33,11 @@
 //! | 7 | `get_approval_instance`      | `Lark.Client.approval.instance.get`    | NotImplemented |
 //! | 8 | `verify_webhook`             | `Lark.Client.im.event.verify`          | NotImplemented |
 //!
-//! ## 6 消息类型 (per v0.9.21 `MessageType` enum 1:1)
+//! ## 6 消息类型 (按既有实现 `MessageType` enum 1:1)
 //!
 //! `Text` / `Post` / `Image` / `File` / `Card` / `Interactive` (6 variant, 编译期 hardcode)
 //!
-//! ## 5 鉴权 (per v0.9.21 1:1)
+//! ## 5 鉴权 (按既有实现口径)
 //!
 //! 1. **App ID** (`cli_xxx` 前缀, K-1 #1 强校验)
 //! 2. **App Secret** (≥ 16 chars, K-1 #2 强校验)
@@ -45,7 +45,7 @@
 //! 4. **user_access_token** (走 OAuth `code` → `access_token`)
 //! 5. **webhook_token** (事件订阅 URL 校验)
 //!
-//! ## 4 实体 (per v0.9.21 1:1)
+//! ## 4 实体 (按既有实现口径)
 //!
 //! `Message` / `CalendarEvent` / `User` / `Document` (4 entity, 编译期 hardcode)
 //!
@@ -60,7 +60,7 @@
 //!
 //! ## 8 哲学 anchor 穿透 (baseline 2026-08-19: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
 //!
-//! - **S-1 不漂移**: 1:1 翻译 v0.9.21 IM / Calendar / Contact / Doc / Sheet / Approval
+//! - **S-1 不漂移**: 对齐既有实现 IM / Calendar / Contact / Doc / Sheet / Approval
 //!   / Event API 表面, 0 业务重设计
 //! - **S-2 编译期 hardcode**: `STUB_MODE = true` / `PLATFORM_NAME = "apeireth"` /
 //!   `LARK_SCHEMA_VERSION = "1"` 全部 const, 不允许运行时配置覆盖
@@ -85,13 +85,13 @@
 //!
 //! ## 引用文档 (8 份)
 //!
-//! 1. `@larksuiteoapi/lark-sdk v0.9.21` `core/Response.d.ts` (商业版 Response 1:1 翻译源)
-//! 2. `@larksuiteoapi/lark-sdk v0.9.21` `client/api_im_open.js` (im/v1/messages 1:1 翻译源)
-//! 3. `@larksuiteoapi/lark-sdk v0.9.21` `client/api_calendar_open.js` (calendar/v4 1:1 翻译源)
-//! 4. `@larksuiteoapi/lark-sdk v0.9.21` `client/api_contact_open.js` (contact/v3 1:1 翻译源)
-//! 5. `@larksuiteoapi/lark-sdk v0.9.21` `client/api_docx_open.js` (docx/v1 1:1 翻译源)
-//! 6. `@larksuiteoapi/lark-sdk v0.9.21` `client/api_sheet_open.js` (sheets/v3 1:1 翻译源)
-//! 7. `@larksuiteoapi/lark-sdk v0.9.21` `client/api_approval_open.js` (approval/v4 1:1 翻译源)
+//! 1. `Lark 开放平台 SDK` `core/Response.d.ts` (上游 Response 参考)
+//! 2. `Lark 开放平台 SDK` `client/api_im_open.js` (im/v1/messages 参考)
+//! 3. `Lark 开放平台 SDK` `client/api_calendar_open.js` (calendar/v4 参考)
+//! 4. `Lark 开放平台 SDK` `client/api_contact_open.js` (contact/v3 参考)
+//! 5. `Lark 开放平台 SDK` `client/api_docx_open.js` (docx/v1 参考)
+//! 6. `Lark 开放平台 SDK` `client/api_sheet_open.js` (sheets/v3 参考)
+//! 7. `Lark 开放平台 SDK` `client/api_approval_open.js` (approval/v4 参考)
 //! 8. `docs/stage4/m3-hallucination-defense-2026-08-05.md` §2.4 (TOOL_WHITELIST 模式)
 //!
 //! ## 状态: ⚠️ skeleton (R20 阶段 4 效果, 1 owner × 1 周续真接)
@@ -182,13 +182,13 @@ pub use crate::lark::webhook::{
 
 // ============================================================================
 // §1 m3 hallucination 防御 (per m3-hallucination-defense-2026-08-05.md §2.4 + §2.1)
-// WHITELIST 编译期 hardcode 8 工具 (8 商业版 API), validate_tool_call 在 dispatch 前
+// WHITELIST 编译期 hardcode 8 工具 (8 上游 API), validate_tool_call 在 dispatch 前
 // schema 校验. 防止 minimax m3 模型幻觉调用不存在的 lark 工具.
 // ============================================================================
 
 /// m3 防御: Lark SDK 8 API 工具白名单 (编译期 hardcode, 不可运行时改).
 ///
-/// **8 工具 = 1:1 翻译 v0.9.21 @larksuiteoapi/lark-sdk `Lark.Client.*`**:
+/// **8 工具 = 对齐既有实现 @larksuiteoapi/lark-sdk `Lark.Client.*`**:
 /// - `apeireth_sdk_lark_send_message`          (发消息: im.message.create)
 /// - `apeireth_sdk_lark_list_calendar_events`  (列日历: calendar.event.list)
 /// - `apeireth_sdk_lark_get_user`              (查用户: contact.user.get)
@@ -230,7 +230,7 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> LarkResult<(
 // §2 编译期 hardcode 常量 (per R20 P0 5 crate 风格 + K-1 强校验)
 // ============================================================================
 
-/// Lark API schema version (1:1 翻译 @larksuiteoapi/lark-sdk v0.9.21, K-1 强校验).
+/// Lark API schema version (1:1 翻译 Lark 开放平台 SDK, K-1 强校验).
 ///
 /// 跟 `LARK_SCHEMA_VERSION` (in auth.rs) 同步, 此处 re-export 守门防漂移.
 pub const LARK_API_VERSION: &str = LARK_SCHEMA_VERSION;
@@ -274,13 +274,13 @@ const _: () = assert!(LARK_ERROR_VARIANT_COUNT == 11);
 /// 默认 Lark API base URL.
 pub const DEFAULT_API_BASE: &str = DEFAULT_LARK_API_BASE;
 
-/// 单消息最大文本长度 (per v0.9.21估 4 KiB, 防单消息爆炸).
+/// 单消息最大文本长度 (按既有实现估算 4 KiB, 防单消息爆炸).
 pub const MAX_MESSAGE_TEXT_BYTES: usize = 4096;
 
-/// 单次 list_calendar_events 最大返回数 (per v0.9.21估 1000).
+/// 单次 list_calendar_events 最大返回数 (按既有实现估算 1000).
 pub const MAX_CALENDAR_EVENTS_PER_PAGE: u32 = 1000;
 
-/// 单 webhook 单 chunk 字节上限 (per v0.9.21估 16 KiB, R21 续真接 AES).
+/// 单 webhook 单 chunk 字节上限 (按既有实现估算 16 KiB, R21 续真接 AES).
 pub const MAX_WEBHOOK_CHUNK_BYTES: usize = 16 * 1024;
 
 // ============================================================================
@@ -331,7 +331,7 @@ pub trait LarkClient: Send + Sync {
 
 /// Lark 客户端实现 (per 8 API stub 派发器).
 ///
-/// 字段对应 v0.9.21 `Lark.Client` config:
+/// 字段对应既有实现 `Lark.Client` config:
 /// - `app_id` / `app_secret` (走 AppIdHolder / AppSecretHolder, 0 明文存盘)
 /// - `tenant_access_token` (走 TenantAccessToken, R21 真接飞书 API 后填)
 /// - `user_access_token` (走 UserAccessToken, R21 真接飞书 API 后填)

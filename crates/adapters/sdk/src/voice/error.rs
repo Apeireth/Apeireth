@@ -1,4 +1,4 @@
-//! # Voice error types (per @anthropic-ai/voice v0.9.21, 1:1 翻译)
+//! # Voice error types (per 既有 Voice SDK,)
 //!
 //! **STUB MODE**: 12 错误 variant, 编译期 hardcode. 真接 Anthropic Voice API 时
 //! 把 `NotImplemented` 移除并把 `Network` / `RateLimited` / `PermissionDenied` 等细化.
@@ -21,8 +21,8 @@
 //!
 //! ## 引用文档
 //!
-//! 1. `@anthropic-ai/voice v0.9.21` `core/Response.d.ts` (商业版 Response 1:1 翻译源)
-//! 2. `@anthropic-ai/voice v0.9.21` `client/api_transcribe.js` (transcribe/synthesize 1:1 翻译源)
+//! 1. `既有 Voice SDK` `core/Response.d.ts` (上游 Response 参考)
+//! 2. `既有 Voice SDK` `client/api_transcribe.js` (transcribe/synthesize 参考)
 //! 3. `docs/stage4/m3-hallucination-defense-2026-08-05.md` §2.4 (TOOL_WHITELIST 模式)
 
 use thiserror::Error;
@@ -89,7 +89,7 @@ pub enum VoiceError {
     Network(String),
 
     // === §6 限流 (1 variant) ===
-    /// 限流 (per @anthropic-ai/voice 商业版 `code: 429` "rate limit exceeded").
+    /// 限流 (per @anthropic-ai/voice 上游 `code: 429` "rate limit exceeded").
     #[error("Voice rate limited (Anthropic Voice code=429)")]
     RateLimited,
 
@@ -99,7 +99,7 @@ pub enum VoiceError {
     Other(String),
 }
 
-/// Voice SDK 错误类型别名 (per v0.9.21 1:1, `Result<T, VoiceError>` 的轻量封装).
+/// Voice SDK 错误类型别名 (按既有实现口径, `Result<T, VoiceError>` 的轻量封装).
 pub type VoiceResult<T> = Result<T, VoiceError>;
 
 /// 编译期守门: 12 variant 守门 (per 8 项不修改承诺).
@@ -130,7 +130,7 @@ impl VoiceError {
         Ok(())
     }
 
-    /// **K-1 #2**: 校验 Audio Format (必须是 wav / mp3 / opus / flac 之一, per v0.9.21).
+    /// **K-1 #2**: 校验 Audio Format (必须是 wav / mp3 / opus / flac 之一, 按既有实现).
     ///
     /// 大小写不敏感 (e.g. `WAV` / `Wav` 都接受), 内部统一 lowercase 比较.
     pub fn validate_audio_format(format: &str) -> VoiceResult<()> {
@@ -144,7 +144,7 @@ impl VoiceError {
         }
     }
 
-    /// **K-1 #3**: 校验 Sample Rate (必须是 8000..=48000 Hz, per v0.9.21).
+    /// **K-1 #3**: 校验 Sample Rate (必须是 8000..=48000 Hz, 按既有实现).
     ///
     /// 范围覆盖 8 kHz (电话质量) 到 48 kHz (专业音频).
     pub fn validate_sample_rate(sample_rate: u32) -> VoiceResult<()> {
@@ -154,7 +154,7 @@ impl VoiceError {
         Ok(())
     }
 
-    /// **K-1 #4**: 校验 Bit Depth (必须是 8 / 16 / 24 / 32, per v0.9.21).
+    /// **K-1 #4**: 校验 Bit Depth (必须是 8 / 16 / 24 / 32, 按既有实现).
     pub fn validate_bit_depth(bit_depth: u16) -> VoiceResult<()> {
         if !matches!(bit_depth, 8 | 16 | 24 | 32) {
             return Err(VoiceError::BitDepthInvalid(bit_depth));
@@ -162,7 +162,7 @@ impl VoiceError {
         Ok(())
     }
 
-    /// **K-1 #5**: 校验 Channels (必须是 1 单声道 / 2 立体声, per v0.9.21).
+    /// **K-1 #5**: 校验 Channels (必须是 1 单声道 / 2 立体声, 按既有实现).
     pub fn validate_channels(channels: u8) -> VoiceResult<()> {
         if !matches!(channels, 1 | 2) {
             return Err(VoiceError::ChannelsInvalid(channels));

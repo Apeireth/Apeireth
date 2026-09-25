@@ -8,7 +8,7 @@
 
 import type {MemoryEpisodeItem} from './types';
 
-// ---- 过滤器 chips（前代产品 范式移植：chips 带计数；§4.4 组件 7）----
+// ---- 过滤器 chips（同类产品范式参考：chips 带计数；§4.4 组件 7）----
 
 /** 可选过滤器：全部 / 他说的 / 主人说的 / 已保护——全部对应真实字段。 */
 export type MemoryFilter = 'all' | 'assistant' | 'user' | 'protected';

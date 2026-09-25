@@ -1,14 +1,14 @@
-//! # Lark 审批 (per @larksuiteoapi/lark-sdk v0.9.21 1:1 翻译)
+//! # Lark 审批 (per Lark 开放平台 SDK)
 //!
-//! 飞书审批 `approval/v4/instances` / `approval/v4/tasks` API 翻译源.
+//! 飞书审批 `approval/v4/instances` / `approval/v4/tasks` API 参考.
 //! 4 实体之一: `ApprovalInstance` + `ApprovalTask`.
 //!
-//! **1 核心 API** (per v0.9.21):
+//! **1 核心 API** (按既有实现):
 //! - `get_approval_instance` — 根据 instance_id 查审批实例
 //!
-//! **当前 STUB**: 字段保留 1:1 翻译, 走 `get_approval_instance` 返 `NotImplemented`.
+//! **当前 STUB**: 字段保留, 走 `get_approval_instance` 返 `NotImplemented`.
 //!
-//! ## 5 InstanceStatus 守门 (per v0.9.21)
+//! ## 5 InstanceStatus 守门 (按既有实现)
 //!
 //! - `Pending` — 审批中
 //! - `Approved` — 已通过
@@ -23,23 +23,23 @@ use serde::{Deserialize, Serialize};
 use crate::lark::error::LarkError;
 
 // ============================================================================
-// §1 InstanceStatus (5 variant, 1:1 翻译 v0.9.21)
+// §1 InstanceStatus (5 variant, 对齐既有实现)
 // ============================================================================
 
-/// 审批实例状态 (5 variant, per v0.9.21 `status` 字段).
+/// 审批实例状态 (5 variant, 按既有实现 `status` 字段).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InstanceStatus {
-    /// 审批中 (per v0.9.21 `status: "pending"`).
+    /// 审批中 (按既有实现 `status: "pending"`).
     #[default]
     Pending,
-    /// 已通过 (per v0.9.21 `status: "approved"`).
+    /// 已通过 (按既有实现 `status: "approved"`).
     Approved,
-    /// 已拒绝 (per v0.9.21 `status: "rejected"`).
+    /// 已拒绝 (按既有实现 `status: "rejected"`).
     Rejected,
-    /// 已撤回 (per v0.9.21 `status: "withdrawn"`).
+    /// 已撤回 (按既有实现 `status: "withdrawn"`).
     Withdrawn,
-    /// 已转交 (per v0.9.21 `status: "transferred"`, R21 续真接).
+    /// 已转交 (按既有实现 `status: "transferred"`, R21 续真接).
     Transferred,
 }
 
@@ -66,19 +66,19 @@ impl std::fmt::Display for InstanceStatus {
 }
 
 // ============================================================================
-// §2 TaskStatus (3 variant, 1:1 翻译 v0.9.21)
+// §2 TaskStatus (3 variant, 对齐既有实现)
 // ============================================================================
 
-/// 审批任务状态 (3 variant, per v0.9.21 `status` 字段).
+/// 审批任务状态 (3 variant, 按既有实现 `status` 字段).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
-    /// 待审批 (per v0.9.21 `status: "pending"`).
+    /// 待审批 (按既有实现 `status: "pending"`).
     #[default]
     Pending,
-    /// 已通过 (per v0.9.21 `status: "approved"`).
+    /// 已通过 (按既有实现 `status: "approved"`).
     Approved,
-    /// 已拒绝 (per v0.9.21 `status: "rejected"`).
+    /// 已拒绝 (按既有实现 `status: "rejected"`).
     Rejected,
 }
 
@@ -117,10 +117,10 @@ impl std::fmt::Display for TaskStatus {
 }
 
 // ============================================================================
-// §3 ApprovalInstance (per v0.9.21 1:1)
+// §3 ApprovalInstance (按既有实现口径)
 // ============================================================================
 
-/// 审批实例 (per v0.9.21 `approval/v4/instances/{instance_id}` 1:1).
+/// 审批实例 (按既有实现 `approval/v4/instances/{instance_id}` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApprovalInstance {
     /// 实例 ID (per `instance_id` 字段, R21 真接飞书后才有, STUB 模式 None).
@@ -146,7 +146,7 @@ pub struct ApprovalInstance {
     pub end_time: Option<SystemTime>,
 }
 
-/// 审批表单字段 (per v0.9.21 `form[].{id,type,value}` 1:1).
+/// 审批表单字段 (按既有实现 `form[].{id,type,value}` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApprovalFormField {
     /// 字段 ID (per `id` 字段).
@@ -198,10 +198,10 @@ impl ApprovalInstance {
 }
 
 // ============================================================================
-// §4 ApprovalTask (per v0.9.21 1:1)
+// §4 ApprovalTask (按既有实现口径)
 // ============================================================================
 
-/// 审批任务 (per v0.9.21 `approval/v4/tasks/{task_id}` 1:1).
+/// 审批任务 (按既有实现 `approval/v4/tasks/{task_id}` 1:1).
 ///
 /// 每个审批实例有 1..N 个任务 (多人审批 / 多级审批).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

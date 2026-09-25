@@ -1,6 +1,6 @@
-//! LiveKit 房间事件订阅 (per livekit-client v0.9.21 1:1 翻译)
+//! LiveKit 房间事件订阅 (per LiveKit 协议)
 //!
-//! 1:1 翻译 v0.9.21 `RoomEvent` enum (per livekit-client/dist/src/room/RoomEvent.d.ts):
+//! 对齐既有实现 `RoomEvent` enum (per livekit-client/dist/src/room/RoomEvent.d.ts):
 //! - 8 事件: ParticipantConnected / ParticipantDisconnected / TrackSubscribed / TrackUnsubscribed
 //!   / ActiveSpeakersChanged / ConnectionStateChanged / DataReceived / Reconnected
 //!
@@ -17,12 +17,12 @@ use crate::livekit::room::RoomState;
 use crate::livekit::track::{TrackSid, TrackSource};
 
 // ============================================================================
-// §1 RoomEvent 8 事件 (per v0.9.21 RoomEvent enum 1:1)
+// §1 RoomEvent 8 事件 (按既有实现 RoomEvent enum 1:1)
 // ============================================================================
 
 /// 房间事件 (8 事件, K-1 强校验守门: 编译期 hardcode 8 个 variant).
 ///
-/// 字段对应 v0.9.21 `RoomEvent` enum:
+/// 字段对应既有实现 `RoomEvent` enum:
 /// 1. `ParticipantConnected`
 /// 2. `ParticipantDisconnected`
 /// 3. `TrackSubscribed`
@@ -97,7 +97,7 @@ pub enum RoomEvent {
 impl RoomEvent {
     /// 8 事件 hardcode 常量.
     pub const COUNT: usize = 8;
-    /// 事件类型字符串 (1:1 翻译 livekit-client v0.9.21).
+    /// 事件类型字符串 (1:1 翻译 LiveKit 协议).
     pub fn type_str(&self) -> &'static str {
         match self {
             RoomEvent::ParticipantConnected { .. } => "participant_connected",
@@ -147,17 +147,17 @@ pub const SUPPORTED_ROOM_EVENTS: &[&str] = &[
 const _: () = assert!(SUPPORTED_ROOM_EVENTS.len() == 8);
 
 // ============================================================================
-// §2 EventEmitter (per v0.9.21 Room.on / Room.off 1:1 翻译)
+// §2 EventEmitter (按既有实现 Room.on / Room.off)
 // ============================================================================
 
-/// 事件发射器 (per v0.9.21 `EventEmitter` 1:1 翻译, 用 tokio::broadcast 实现).
+/// 事件发射器 (按既有实现 `EventEmitter`, 用 tokio::broadcast 实现).
 ///
-/// 字段对应 v0.9.21 Room 内部 emitter:
+/// 字段对应既有实现 Room 内部 emitter:
 /// - `tx` (per `tokio::broadcast::Sender<RoomEvent>`, 8 事件共享一个 channel)
 /// - `capacity` (per 100 条 buffer, R21 续可配)
 #[derive(Debug, Clone)]
 pub struct EventEmitter {
-    /// 事件广播 channel sender (per v0.9.21 `RoomEventEmitter`)
+    /// 事件广播 channel sender (按既有实现 `RoomEventEmitter`)
     tx: broadcast::Sender<RoomEvent>,
 }
 
@@ -173,7 +173,7 @@ impl EventEmitter {
         self.tx.subscribe()
     }
 
-    /// 发射事件 (per v0.9.21 `_emit` 内部, R21 续由 signal protocol 调).
+    /// 发射事件 (按既有实现 `_emit` 内部, R21 续由 signal protocol 调).
     ///
     /// **STUB 模式**: 当前仅由测试代码调, 真实场景 R21 续真接 livekit-server 后由 SDK 内部触发.
     pub fn emit(&self, event: RoomEvent) -> Result<usize, broadcast::error::SendError<RoomEvent>> {

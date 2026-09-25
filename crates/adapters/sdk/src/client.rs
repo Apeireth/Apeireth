@@ -8,7 +8,7 @@
 //!
 //! **SDK 表面**:
 //! - `ApeirethClient` (HTTP + WS 客户端)
-//! - 6 工具 client method (1:1 翻译蓝图 §2.2 D-02 子路径):
+//! - 6 工具 client method (接口蓝图 §2.2 D-02 子路径):
 //!   `web_search` / `file_ops` / `git_ops` / `code_exec` / `calendar` / `message`
 //! - 2 通用调用 method: `invoke_tool` (HTTP) + `invoke_stream` (WS 8 帧)
 //! - Auth 5 组件: Bearer / keyring / token bucket / audit / quota stub
@@ -101,7 +101,7 @@ pub const SDK_TOOL_WHITELIST: &[&str] = &[
 /// K-1 强校验: `SDK_TOOL_WHITELIST` 长度 == 8 (6 工具 + 2 通用).
 pub const SDK_TOOL_WHITELIST_COUNT: usize = 8;
 
-/// 平台名 (K-1 强校验 #1: 编译期 hardcode `"apeireth"`, 1:1 翻译 v0.9.21,
+/// 平台名 (K-1 强校验 #1: 编译期 hardcode `"apeireth"`, 对齐既有实现,
 /// 不写第三方装饰名).
 pub const PLATFORM_NAME: &str = "apeireth";
 
@@ -221,7 +221,7 @@ pub const CLIENT_BUCKET_REFILL_PER_SEC: f64 = 1000.0;
 /// 审计日志文件名前缀 (client side, 1:1 翻译 `apeireth-api::auth::AUDIT_LOG_FILE_NAME`).
 pub const CLIENT_AUDIT_LOG_PREFIX: &str = "apeireth-sdk-audit.log";
 
-/// 6 工具 D-02 子路径 (per 蓝图 §2.2 HTTP 端点, 1:1 翻译).
+/// 6 工具 D-02 子路径 (per 蓝图 §2.2 HTTP 端点,).
 pub const TOOL_PATHS: &[(&str, &str)] = &[
     ("web_search", "/v1/tools/web_search/invoke"),
     ("file_ops", "/v1/tools/file_ops/invoke"),
@@ -237,7 +237,7 @@ pub const WS_PATH: &str = "/v1/stream";
 /// 编译期守门: TOOL_PATHS 长度 == 6 (跟 TOOL_WHITELIST 1:1 对齐).
 const _: () = assert!(
     TOOL_PATHS.len() == 6,
-    "TOOL_PATHS must be 6 (1:1 翻译蓝图 §2.2 6 端点)"
+    "TOOL_PATHS must be 6 (接口蓝图 §2.2 6 端点)"
 );
 
 // 6 工具 path 顺序检查 (string const 算术尚未稳定, 改 runtime check — 6 fixture 验证).
@@ -568,7 +568,7 @@ impl AuthPipeline {
 // §4 ApeirethClient (主 SDK client struct)
 // ============================================================================
 
-/// **Apeireth 平台 SDK 客户 client** (1:1 翻译 v0.9.21 client 表面).
+/// **Apeireth 平台 SDK 客户 client** (对齐既有实现 client 表面).
 ///
 /// W5 真传输守门 (2026-10-10):
 /// - 6 工具 client method + `invoke_tool`: **HTTP 真传输** (reqwest → 平台 API
@@ -661,7 +661,7 @@ impl ApeirethClient {
     }
 
     // ========================================================================
-    // 6 工具 client method (1:1 翻译蓝图 §2.2 D-02 子路径)
+    // 6 工具 client method (接口蓝图 §2.2 D-02 子路径)
     // ========================================================================
 
     /// **工具 1: web_search** (HTTP `POST /v1/tools/web_search/invoke`).
@@ -872,7 +872,7 @@ impl ApeirethClient {
         env!("CARGO_PKG_VERSION")
     }
 
-    /// 查平台名 (1:1 翻译 v0.9.21, 编译期 hardcode `"apeireth"`).
+    /// 查平台名 (对齐既有实现, 编译期 hardcode `"apeireth"`).
     pub fn platform(&self) -> &'static str {
         PLATFORM_NAME
     }

@@ -1,4 +1,4 @@
-//! # Sandbox error types (per @anthropic-ai/sandbox v0.9.21, 1:1 翻译)
+//! # Sandbox error types (per 既有 Sandbox SDK,)
 //!
 //! **STUB MODE**: 10 错误 variant, 编译期 hardcode. 真接 docker/firecracker/gvisor 时
 //! 把 `NotImplemented` 移除并把 `Runtime` / `Isolation` / `ResourceExhausted` 等细化.

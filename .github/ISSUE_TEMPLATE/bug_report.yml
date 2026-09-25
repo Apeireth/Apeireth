@@ -136,7 +136,7 @@ body:
       value: |
         ## 6 哲学 anchor 影响 (per `docs/conventions/09-anchor.md`)
 
-        - **S-1** 北极星导向: 跟 1:1 翻译 v0.9.21冲突吗?
+        - **S-1** 北极星导向: 跟既定产品哲学与设计口径冲突吗?
         - **S-2** 实事求是: 实查 5 决策点 (loc / files / deps / hardcode / 0 触碰) 了吗?
         - **O-2** 走在前人肩上: 复用 std / tokio / 业界标准了吗?
         - **O-3** 干到底: cargo check 0 error + cargo test pass 了吗?

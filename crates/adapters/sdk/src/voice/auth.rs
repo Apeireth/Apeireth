@@ -1,6 +1,6 @@
-//! # Voice 鉴权 (per @anthropic-ai/voice v0.9.21 1:1 翻译)
+//! # Voice 鉴权 (per 既有 Voice SDK)
 //!
-//! Voice SDK 鉴权 (per v0.9.21):
+//! Voice SDK 鉴权 (按既有实现):
 //! 1. **API Key** — `@anthropic-ai/voice` 主鉴权 (e.g. `sk-ant-voice-...`)
 //! 2. **Access Token** — OAuth 颁发的 bearer token (R21 续真接时估补)
 //!
@@ -35,13 +35,13 @@ pub const PLATFORM_NAME: &str = "apeireth";
 
 /// Provider 名 (keyring "account" 字段).
 ///
-/// 1:1 翻译 v0.9.21 `@anthropic-ai/voice` config.
+/// 1:1 翻译 既有 Voice SDK config.
 pub const PROVIDER_NAME: &str = "anthropic-voice";
 
-/// Voice SDK schema 版本 (1:1 翻译 @anthropic-ai/voice v0.9.21).
+/// Voice SDK schema 版本 (1:1 翻译 既有 Voice SDK).
 pub const VOICE_SCHEMA_VERSION: &str = "1";
 
-/// 默认 Voice API 基础 URL (per v0.9.21, https:// 强制).
+/// 默认 Voice API 基础 URL (按既有实现, https:// 强制).
 ///
 /// 真实部署时用户应改成自己的 Anthropic Voice endpoint (e.g. 自建代理).
 pub const DEFAULT_VOICE_API_BASE: &str = "https://api.anthropic.com/v1/voice";

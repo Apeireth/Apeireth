@@ -1,15 +1,15 @@
-//! # Lark 通讯录 (per @larksuiteoapi/lark-sdk v0.9.21 1:1 翻译)
+//! # Lark 通讯录 (per Lark 开放平台 SDK)
 //!
-//! 飞书通讯录 `contact/v3/users` / `contact/v3/departments` API 翻译源.
+//! 飞书通讯录 `contact/v3/users` / `contact/v3/departments` API 参考.
 //! 4 实体之一: `User` + `Department`.
 //!
-//! **2 核心 API** (per v0.9.21):
+//! **2 核心 API** (按既有实现):
 //! - `get_user` — 根据 user_id / open_id / email / mobile 查 user
 //! - `get_department` — 根据 department_id 查 department
 //!
-//! **当前 STUB**: 字段保留 1:1 翻译, 走 `get_user` / `get_department` 返 `NotImplemented`.
+//! **当前 STUB**: 字段保留, 走 `get_user` / `get_department` 返 `NotImplemented`.
 //!
-//! ## 4 User ID 类型守门 (per v0.9.21 `user_id_type` 字段)
+//! ## 4 User ID 类型守门 (按既有实现 `user_id_type` 字段)
 //!
 //! - `OpenId` — `ou_xxx` (K-1 #4 强校验)
 //! - `UnionId` — `on_xxx`
@@ -27,10 +27,10 @@ use serde::{Deserialize, Serialize};
 use crate::lark::error::LarkError;
 
 // ============================================================================
-// §1 UserIdType (4 variant, 1:1 翻译 v0.9.21 `user_id_type` enum)
+// §1 UserIdType (4 variant, 对齐既有实现 `user_id_type` enum)
 // ============================================================================
 
-/// 用户 ID 类型 (4 variant, per v0.9.21 `user_id_type` 字段).
+/// 用户 ID 类型 (4 variant, 按既有实现 `user_id_type` 字段).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UserIdType {
@@ -46,7 +46,7 @@ pub enum UserIdType {
 }
 
 impl UserIdType {
-    /// 字符串 (1:1 翻译 v0.9.21 `user_id_type` snake_case).
+    /// 字符串 (对齐既有实现 `user_id_type` snake_case).
     pub fn as_str(&self) -> &'static str {
         match self {
             UserIdType::OpenId => "open_id",
@@ -64,10 +64,10 @@ impl std::fmt::Display for UserIdType {
 }
 
 // ============================================================================
-// §2 User (per v0.9.21 1:1)
+// §2 User (按既有实现口径)
 // ============================================================================
 
-/// 用户 (per v0.9.21 `contact/v3/users/{user_id}` 1:1).
+/// 用户 (按既有实现 `contact/v3/users/{user_id}` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct User {
     /// Open ID (per `open_id` 字段, K-1 #4 强校验 `ou_` 前缀).
@@ -171,7 +171,7 @@ impl User {
 // §3 UserQuery (per get_user 1:1)
 // ============================================================================
 
-/// 用户查询参数 (per v0.9.21 `contact/v3/users/{user_id}?user_id_type=...` 1:1).
+/// 用户查询参数 (按既有实现 `contact/v3/users/{user_id}?user_id_type=...` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserQuery {
     /// 用户 ID (per `user_id` path 参数).
@@ -215,10 +215,10 @@ impl UserQuery {
 }
 
 // ============================================================================
-// §4 Department (per v0.9.21 1:1)
+// §4 Department (按既有实现口径)
 // ============================================================================
 
-/// 部门 (per v0.9.21 `contact/v3/departments/{department_id}` 1:1).
+/// 部门 (按既有实现 `contact/v3/departments/{department_id}` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Department {
     /// 部门 Open ID (per `open_department_id` 字段, K-1 强校验).

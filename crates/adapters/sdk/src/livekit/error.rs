@@ -10,7 +10,7 @@
 
 use thiserror::Error;
 
-/// LiveKit 错误 (1:1 翻译 v0.9.21 livekit-client 失败面 + 4 K-1 强校验).
+/// LiveKit 错误 (对齐既有实现 livekit-client 失败面 + 4 K-1 强校验).
 ///
 /// **STUB 模式说明** (per task spec):
 /// - 6 核心 API 全部返 `NotImplemented(api_name)`, 编译期 hardcode
@@ -53,11 +53,11 @@ pub enum LiveKitError {
     ///
     /// LiveKit 强制要求 wss:// 协议 (WebSocket Secure), 跟普通 WebRTC 信令服务器一致.
     #[error(
-        "livekit url must start with `wss://` (per livekit-client v0.9.21 强制要求): got `{0}`"
+        "livekit url must start with `wss://` (per LiveKit 协议 强制要求): got `{0}`"
     )]
     InvalidUrl(String),
 
-    // ===== 通用 LiveKit 失败面 (3 类, per livekit-client v0.9.21 1:1 翻译) =====
+    // ===== 通用 LiveKit 失败面 (3 类, per LiveKit 协议) =====
     /// 连接失败 (per livekit-client `Room.connect` 异常, R20 阶段 4 续真接时用).
     #[error("livekit connection failed: {0}")]
     ConnectionFailed(String),

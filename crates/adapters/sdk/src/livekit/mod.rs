@@ -2,13 +2,13 @@
 //!
 //! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 + 主人审**
 //!
-//! LiveKit 实时音视频 SDK stub (1:1 翻译 `livekit-client` v0.9.21, per
+//! LiveKit 实时音视频 SDK stub (对齐 `livekit-client`, per
 //! `livekit-client/dist/src/room/Room.d.ts` + `dist/src/room/Participant.d.ts` +
 //! `dist/src/room/track/Track.d.ts`).
 //!
-//! 商业版 LiveKit 客户端 (`@livekit/components-react` + `livekit-client` v0.9.21)
+//! 上游 LiveKit 客户端 (`@livekit/components-react` + `livekit-client` 既有实现)
 //! 提供 WebRTC 实时音视频, 但 **当前 crate 是 STUB skeleton** — API 表面按
-//! v0.9.21 1:1 翻译, 但所有 6 核心 API 实现都是 `Err(LiveKitError::NotImplemented(api_name))`.
+//! 对齐既有实现, 但所有 6 核心 API 实现都是 `Err(LiveKitError::NotImplemented(api_name))`.
 //! **任何真实 SDK 引用 (`livekit-server-sdk` Rust crate / wss:// 真接) 都禁止**,
 //! 留 R20 阶段 4 续真接或 R21 续.
 //!
@@ -19,9 +19,9 @@
 //! 4. 经 8 哲学锚 (RIVAL 蓝图) + 主人审
 //! 跳过任何一条 → 整合时 cargo build 必挂, fixture 5 必挂.
 //!
-//! ## 6 核心 API (per task spec §3 + v0.9.21 Room 1:1)
+//! ## 6 核心 API (per task spec §3 + 既有实现 Room 1:1)
 //!
-//! | # | API                          | 1:1 翻译 v0.9.21          | R20 阶段 4 实现 |
+//! | # | API                          | 对齐既有实现          | R20 阶段 4 实现 |
 //! |---:|------------------------------|---------------------------|----------------|
 //! | 1 | `connect`                    | `Room.connect(url, token)`| NotImplemented |
 //! | 2 | `disconnect`                 | `Room.disconnect()`        | NotImplemented |
@@ -30,11 +30,11 @@
 //! | 5 | `setCameraEnabled`           | `localParticipant.setCameraEnabled(bool)` | NotImplemented |
 //! | 6 | `setMicrophoneEnabled`       | `localParticipant.setMicrophoneEnabled(bool)` | NotImplemented |
 //!
-//! ## 5 RoomState 状态机 (per v0.9.21 ConnectionState enum)
+//! ## 5 RoomState 状态机 (按既有实现 ConnectionState enum)
 //!
-//! `Disconnected` / `Connecting` / `Connected` / `Reconnecting` / `DisconnectedAlt` (5 variant, 1:1 翻译)
+//! `Disconnected` / `Connecting` / `Connected` / `Reconnecting` / `DisconnectedAlt` (5 variant,)
 //!
-//! ## 8 RoomEvent 事件 (per v0.9.21 RoomEvent enum 1:1)
+//! ## 8 RoomEvent 事件 (按既有实现 RoomEvent enum 1:1)
 //!
 //! 1. `ParticipantConnected` 2. `ParticipantDisconnected` 3. `TrackSubscribed` 4. `TrackUnsubscribed`
 //! 5. `ActiveSpeakersChanged` 6. `ConnectionStateChanged` 7. `DataReceived` 8. `Reconnected`
@@ -48,9 +48,9 @@
 //!
 //! ## 5 哲学 anchor 穿透
 //!
-//! - **S-1 北极星导向**: 1:1 翻译 v0.9.21 `Room.d.ts` + `Participant.d.ts` + `Track.d.ts`, 0 业务重设计
+//! - **S-1 北极星导向**: 对齐既有实现 `Room.d.ts` + `Participant.d.ts` + `Track.d.ts`, 0 业务重设计
 //! - **S-2 实事求是**: 估 600 LOC, 当前 skeleton 估 580 LOC (97% 完成, 6 API 全 NotImplemented, 0 假装已接)
-//! - **O-2 走在前人肩上**: v0.9.21 livekit-client Room/Participant/Track 1:1 翻译
+//! - **O-2 走在前人肩上**: 既有实现 livekit-client Room/Participant/Track 1:1 翻译
 //! - **O-3 干到底**: 6 API + 5 RoomState + 8 RoomEvent + 4 K-1 全到位, 0 半成品
 //! - **O-5 不假装**: 所有 6 API 内部 `Err(LiveKitError::NotImplemented)`, 0 假装已调通 LiveKit 服务
 //!
@@ -67,9 +67,9 @@
 //!
 //! ## 引用文档 (5 份)
 //!
-//! 1. `livekit-client v0.9.21` `dist/src/room/Room.d.ts` (商业版 Room class 1:1 翻译源)
-//! 2. `livekit-client v0.9.21` `dist/src/room/Participant.d.ts` (商业版 Participant class 1:1 翻译源)
-//! 3. `livekit-client v0.9.21` `dist/src/room/track/Track.d.ts` (商业版 Track class 1:1 翻译源)
+//! 1. `LiveKit 协议` `dist/src/room/Room.d.ts` (上游 Room class 参考)
+//! 2. `LiveKit 协议` `dist/src/room/Participant.d.ts` (上游 Participant class 参考)
+//! 3. `LiveKit 协议` `dist/src/room/track/Track.d.ts` (上游 Track class 参考)
 //! 4. `crates/apeireth-provider-gemini-cli/` (1:1 镜像蓝本, 5 Provider 第二个, 跟 claude-code 1:1 镜像)
 //! 5. `docs/stage4/m3-hallucination-defense-2026-08-05.md` §2.4 (TOOL_WHITELIST 模式)
 //!
@@ -120,10 +120,10 @@ use tracing::{debug, info, instrument, warn};
 // §1 编译期 hardcode (跟 gemini-cli / claude-code / machine-id 同模式)
 // ============================================================================
 
-/// LiveKit SDK schema version (1:1 翻译 livekit-client v0.9.21, per auth 模块).
+/// LiveKit SDK schema version (1:1 翻译 LiveKit 协议, per auth 模块).
 pub use crate::livekit::auth::LIVEKIT_SCHEMA_VERSION as SCHEMA_VERSION;
 
-/// 6 核心 API 数量常量 (per task spec §3 + v0.9.21 1:1).
+/// 6 核心 API 数量常量 (per task spec §3 + 既有实现口径).
 pub const CORE_API_COUNT: usize = 6;
 
 /// 5 RoomState 数量常量 (per `SUPPORTED_ROOM_STATES.len()`).
@@ -135,7 +135,7 @@ pub const ROOM_EVENT_COUNT: usize = 8;
 /// 4 K-1 强校验 数量常量 (per task spec §3 + K-1 守门).
 pub const K1_STRONG_VALIDATION_COUNT: usize = 4;
 
-/// LiveKit 默认事件 channel 容量 (per v0.9.21 Room 内部, 100 events).
+/// LiveKit 默认事件 channel 容量 (按既有实现 Room 内部, 100 events).
 pub const EVENT_CHANNEL_CAPACITY: usize = 100;
 
 // ============================================================================
@@ -192,7 +192,7 @@ macro_rules! livekit_stub {
 /// m3 防御: LiveKit 6 核心 API + 1 stub_status = 7 工具白名单 (编译期 hardcode).
 ///
 /// 字段对应 6 核心 API + 1 额外 stub 守门:
-/// - 6 核心 API (1:1 翻译 v0.9.21)
+/// - 6 核心 API (对齐既有实现)
 /// - **额外 1**: `apeireth_livekit_stub_status` (查 STUB_MODE 状态, 跟 voice / lark 1:1 镜像)
 pub const TOOL_WHITELIST: &[&str] = &[
     "apeireth_livekit_connect",
@@ -229,29 +229,29 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> Result<(), L
 /// - 阶段 3: 8 RoomEvent SSE / signal protocol 真接 (1-2 天)
 #[async_trait]
 pub trait LiveKitClient: Send + Sync {
-    /// **API 1**: `connect` — 连接 wss:// LiveKit server (per v0.9.21 `Room.connect`).
+    /// **API 1**: `connect` — 连接 wss:// LiveKit server (按既有实现 `Room.connect`).
     ///
     /// 参数: `url: &str` (wss://), `token: &str` (access token JWT).
     /// 返回: 成功 → Ok(()). STUB 模式: 永远返 NotImplemented.
     async fn connect(&self, url: &str, token: &str) -> Result<(), LiveKitError>;
 
-    /// **API 2**: `disconnect` — 断开当前 room (per v0.9.21 `Room.disconnect`).
+    /// **API 2**: `disconnect` — 断开当前 room (按既有实现 `Room.disconnect`).
     async fn disconnect(&self) -> Result<(), LiveKitError>;
 
-    /// **API 3**: `publish_track` — 发布本地 track (per v0.9.21 `localParticipant.publishTrack`).
+    /// **API 3**: `publish_track` — 发布本地 track (按既有实现 `localParticipant.publishTrack`).
     ///
     /// 参数: `track: Track`. 返回: 成功 → Ok(()).
     async fn publish_track(&self, track: &Track) -> Result<(), LiveKitError>;
 
-    /// **API 4**: `subscribe` — 订阅远端 track (per v0.9.21 `Room.switchActiveDevice` 隐式 + 显式 subscribe).
+    /// **API 4**: `subscribe` — 订阅远端 track (按既有实现 `Room.switchActiveDevice` 隐式 + 显式 subscribe).
     ///
     /// 参数: `track_sid: &str` (远端 track SID). 返回: 成功 → Ok(()).
     async fn subscribe(&self, track_sid: &str) -> Result<(), LiveKitError>;
 
-    /// **API 5**: `set_camera_enabled` — 启用 / 禁用摄像头 (per v0.9.21 `localParticipant.setCameraEnabled`).
+    /// **API 5**: `set_camera_enabled` — 启用 / 禁用摄像头 (按既有实现 `localParticipant.setCameraEnabled`).
     async fn set_camera_enabled(&self, enabled: bool) -> Result<(), LiveKitError>;
 
-    /// **API 6**: `set_microphone_enabled` — 启用 / 禁用麦克风 (per v0.9.21 `localParticipant.setMicrophoneEnabled`).
+    /// **API 6**: `set_microphone_enabled` — 启用 / 禁用麦克风 (按既有实现 `localParticipant.setMicrophoneEnabled`).
     async fn set_microphone_enabled(&self, enabled: bool) -> Result<(), LiveKitError>;
 }
 
@@ -569,8 +569,8 @@ pub fn livekit_event_stream(
 // ⏳ R21 续: 真接 livekit-server SDK 时, 这里加:
 //   - livekit-server-sdk (per 5 Provider 集成模式, 跟 gemini-cli 1:1 镜像)
 //   - reqwest wss:// 长连接 (per livekit-server signal protocol over WebSocket)
-//   - audio track 异步 pipeline (per v0.9.21 4 worker thread)
-//   - video track 异步 pipeline (per v0.9.21 H.264/VP8 codec switch)
+//   - audio track 异步 pipeline (按既有实现 4 worker thread)
+//   - video track 异步 pipeline (按既有实现 H.264/VP8 codec switch)
 //   - data channel message router (per 8 RoomEvent 内部 trigger)
 //
 // 当前 STUB 模式: 不引 livekit-server-sdk 任何 crate, 编译期 hardcode 守门 STUB_MODE = true.

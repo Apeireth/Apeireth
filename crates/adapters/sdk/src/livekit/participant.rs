@@ -1,6 +1,6 @@
-//! LiveKit 参与者 (per livekit-client v0.9.21 1:1 翻译)
+//! LiveKit 参与者 (per LiveKit 协议)
 //!
-//! 1:1 翻译 v0.9.21 `Participant` class (per livekit-client/dist/src/room/Participant.d.ts):
+//! 对齐既有实现 `Participant` class (per livekit-client/dist/src/room/Participant.d.ts):
 //! - `Participant` (per 参与者身份 + metadata + permissions)
 //! - `ConnectionQuality` (per 连接质量 4 等级)
 //! - `Permission` (per 5 权限位)
@@ -16,12 +16,12 @@ use crate::livekit::error::LiveKitError;
 use crate::livekit::track::{TrackSid, TrackSource};
 
 // ============================================================================
-// §1 ConnectionQuality 4 等级 (per v0.9.21 ConnectionQuality enum)
+// §1 ConnectionQuality 4 等级 (按既有实现 ConnectionQuality enum)
 // ============================================================================
 
-/// 连接质量 (4 等级, 1:1 翻译 livekit-client v0.9.21 `ConnectionQuality` enum).
+/// 连接质量 (4 等级, 1:1 翻译 LiveKit 协议 `ConnectionQuality` enum).
 ///
-/// 字段对应 livekit-client v0.9.21 ConnectionQuality:
+/// 字段对应 LiveKit 协议 ConnectionQuality:
 /// `Excellent` / `Good` / `Poor` / `Lost`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -40,7 +40,7 @@ pub enum ConnectionQuality {
 }
 
 impl ConnectionQuality {
-    /// 4 等级 + 1 unknown = 5 variant (per livekit-client v0.9.21 实际 5 variant).
+    /// 4 等级 + 1 unknown = 5 variant (per LiveKit 协议 实际 5 variant).
     pub const COUNT: usize = 5;
     /// 字符串 (1:1 翻译 livekit-client).
     pub fn as_str(&self) -> &'static str {
@@ -82,12 +82,12 @@ pub const SUPPORTED_CONNECTION_QUALITIES: &[ConnectionQuality] = &[
 const _: () = assert!(SUPPORTED_CONNECTION_QUALITIES.len() == 5);
 
 // ============================================================================
-// §2 Permission 5 权限位 (per v0.9.21 Permission enum 1:1)
+// §2 Permission 5 权限位 (按既有实现 Permission enum 1:1)
 // ============================================================================
 
-/// 权限位 (5 权限, 1:1 翻译 livekit-client v0.9.21 `Permission` enum).
+/// 权限位 (5 权限, 1:1 翻译 LiveKit 协议 `Permission` enum).
 ///
-/// per v0.9.21:
+/// 按既有实现:
 /// - `CanPublish` (允许发布 tracks)
 /// - `CanSubscribe` (允许订阅 tracks)
 /// - `CanPublishData` (允许发布 data messages)
@@ -145,17 +145,17 @@ pub const SUPPORTED_PERMISSIONS: &[Permission] = &[
 const _: () = assert!(SUPPORTED_PERMISSIONS.len() == 5);
 
 // ============================================================================
-// §3 Participant 主结构 (per v0.9.21 Participant class 1:1)
+// §3 Participant 主结构 (按既有实现 Participant class 1:1)
 // ============================================================================
 
-/// 参与者 SID (per v0.9.21 `Participant.sid`, 服务端分配).
+/// 参与者 SID (按既有实现 `Participant.sid`, 服务端分配).
 ///
 /// STUB 模式: 客户端先用 `identity` 临时占位, R21 续真接时由服务端分配真 sid.
 pub type ParticipantSid = String;
 
-/// 参与者 (per v0.9.21 `Participant` class 1:1 翻译).
+/// 参与者 (按既有实现 `Participant` class).
 ///
-/// 字段对应 v0.9.21 Participant (估 8 fields):
+/// 字段对应既有实现 Participant (估 8 fields):
 /// - `sid` (per ParticipantSid, 服务端分配)
 /// - `identity` (per 客户端 identity 字符串)
 /// - `name` (per 显示名, 可选)
@@ -169,13 +169,13 @@ pub type ParticipantSid = String;
 pub struct Participant {
     /// 参与者 SID (服务端分配, R21 续真接后才有)
     sid: Option<ParticipantSid>,
-    /// 参与者 identity (per v0.9.21 `Participant.identity`)
+    /// 参与者 identity (按既有实现 `Participant.identity`)
     identity: String,
-    /// 显示名 (per v0.9.21 `Participant.name`, 可选)
+    /// 显示名 (按既有实现 `Participant.name`, 可选)
     name: Option<String>,
-    /// 自定义 metadata (per v0.9.21 `Participant.metadata`, 可选)
+    /// 自定义 metadata (按既有实现 `Participant.metadata`, 可选)
     metadata: Option<String>,
-    /// 是否在说话 (per v0.9.21 `Participant.isSpeaking`, 给 `ActiveSpeakersChanged` 用)
+    /// 是否在说话 (按既有实现 `Participant.isSpeaking`, 给 `ActiveSpeakersChanged` 用)
     is_speaking: bool,
     /// 连接质量 (4 + 1 等级, per `ConnectionQuality`)
     connection_quality: ConnectionQuality,

@@ -1,14 +1,14 @@
-//! # Lark 日历 (per @larksuiteoapi/lark-sdk v0.9.21 1:1 翻译)
+//! # Lark 日历 (per Lark 开放平台 SDK)
 //!
-//! 飞书日历 `calendar/v4/calendars/{calendar_id}/events` API 翻译源.
+//! 飞书日历 `calendar/v4/calendars/{calendar_id}/events` API 参考.
 //! 4 实体之一: `CalendarEvent`.
 //!
-//! **3 核心 API** (per v0.9.21):
+//! **3 核心 API** (按既有实现):
 //! - `list_calendar_events` — 列出 calendar_id 下的 events
 //! - `create_calendar_event` — 创建 event (R21 续真接)
 //! - `get_freebusy` — 查询用户忙闲
 //!
-//! **当前 STUB**: 字段保留 1:1 翻译, 走 `list_calendar_events` 返 `NotImplemented`.
+//! **当前 STUB**: 字段保留, 走 `list_calendar_events` 返 `NotImplemented`.
 //!
 //! ## 4 CalendarEvent 字段守门
 //!
@@ -25,23 +25,23 @@ use serde::{Deserialize, Serialize};
 use crate::lark::error::LarkError;
 
 // ============================================================================
-// §1 EventStatus (5 variant, 1:1 翻译 v0.9.21)
+// §1 EventStatus (5 variant, 对齐既有实现)
 // ============================================================================
 
-/// 日历事件状态 (5 variant, per v0.9.21 `status` 字段).
+/// 日历事件状态 (5 variant, 按既有实现 `status` 字段).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventStatus {
-    /// 待处理 (per v0.9.21 `status: "tentative"`).
+    /// 待处理 (按既有实现 `status: "tentative"`).
     #[default]
     Tentative,
-    /// 已确认 (per v0.9.21 `status: "confirmed"`).
+    /// 已确认 (按既有实现 `status: "confirmed"`).
     Confirmed,
-    /// 已取消 (per v0.9.21 `status: "cancelled"`).
+    /// 已取消 (按既有实现 `status: "cancelled"`).
     Cancelled,
-    /// 已完成 (per v0.9.21 `status: "completed"`, R21 续真接).
+    /// 已完成 (按既有实现 `status: "completed"`, R21 续真接).
     Completed,
-    /// 已废弃 (per v0.9.21 `status: "deprecated"`).
+    /// 已废弃 (按既有实现 `status: "deprecated"`).
     Deprecated,
 }
 
@@ -68,10 +68,10 @@ impl std::fmt::Display for EventStatus {
 }
 
 // ============================================================================
-// §2 CalendarEvent (per v0.9.21 calendar event 1:1)
+// §2 CalendarEvent (按既有实现 calendar event 1:1)
 // ============================================================================
 
-/// 日历事件 (per v0.9.21 `calendar/v4/calendars/{calendar_id}/events/[event_id]` 1:1).
+/// 日历事件 (按既有实现 `calendar/v4/calendars/{calendar_id}/events/[event_id]` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CalendarEvent {
     /// 事件 ID (per `event_id` 字段, R21 真接飞书后才有, STUB 模式 None).
@@ -175,7 +175,7 @@ impl CalendarEvent {
 // §3 CalendarEventQuery (per list_calendar_events 1:1)
 // ============================================================================
 
-/// 日历事件查询参数 (per v0.9.21 list events query 1:1).
+/// 日历事件查询参数 (按既有实现 list events query 1:1).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CalendarEventQuery {
     /// 日历 ID (per `calendar_id` 字段).
@@ -221,7 +221,7 @@ impl CalendarEventQuery {
 // §4 FreeBusySlot (per freebusy API 1:1)
 // ============================================================================
 
-/// 忙闲时间槽 (per v0.9.21 freebusy 1:1).
+/// 忙闲时间槽 (按既有实现 freebusy 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FreeBusySlot {
     /// 开始时间 (per `start_time` 字段).

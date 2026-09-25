@@ -1,6 +1,6 @@
-//! # Sandbox isolation (per @anthropic-ai/sandbox v0.9.21, 1:1 翻译)
+//! # Sandbox isolation (per 既有 Sandbox SDK,)
 //!
-//! **STUB MODE**: 进程隔离 trait 表面 1:1 翻译, 实际由 docker/firecracker/gvisor 实现.
+//! **STUB MODE**: 进程隔离 trait 表面, 实际由 docker/firecracker/gvisor 实现.
 //! 现阶段 STUB 模式不引任何底层 SDK, 所有 `isolate()` 调用返 `SandboxError::NotImplemented`.
 //!
 //! 3 隔离级别对应不同底层机制:
@@ -16,31 +16,31 @@ use serde::{Deserialize, Serialize};
 use crate::sandbox::error::{SandboxError, SandboxResult};
 use crate::sandbox::runtime::{IsolationLevel, RuntimeKind};
 
-/// 隔离策略描述符 (1:1 翻译 @anthropic-ai/sandbox 商业版 `isolationConfig` 字段).
+/// 隔离策略描述符 (1:1 翻译 @anthropic-ai/sandbox 上游 `isolationConfig` 字段).
 ///
-/// STUB 模式: 字段保留 1:1 翻译, 但所有实现返 NotImplemented.
+/// STUB 模式: 字段保留, 但所有实现返 NotImplemented.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IsolationConfig {
     /// 隔离级别 (3 选 1, K-1 强校验 #3).
     pub level: IsolationLevel,
     /// 底层运行时 (3 选 1, K-1 强校验 #2).
     pub runtime: RuntimeKind,
-    /// PID namespace 启用 (per v0.9.21 `pidNamespace` 字段).
+    /// PID namespace 启用 (按既有实现 `pidNamespace` 字段).
     #[serde(default = "default_true")]
     pub pid_namespace: bool,
-    /// Network namespace 启用 (per v0.9.21 `networkNamespace` 字段).
+    /// Network namespace 启用 (按既有实现 `networkNamespace` 字段).
     #[serde(default = "default_true")]
     pub network_namespace: bool,
-    /// Mount namespace 启用 (per v0.9.21 `mountNamespace` 字段).
+    /// Mount namespace 启用 (按既有实现 `mountNamespace` 字段).
     #[serde(default = "default_true")]
     pub mount_namespace: bool,
-    /// seccomp 过滤器 (per v0.9.21 `seccompProfile`, R21+ 真接时下发).
+    /// seccomp 过滤器 (按既有实现 `seccompProfile`, R21+ 真接时下发).
     #[serde(default)]
     pub seccomp_profile: Option<String>,
-    /// cgroup v2 资源 slice (per v0.9.21 `cgroupSlice`, R21+ 真接时下发).
+    /// cgroup v2 资源 slice (按既有实现 `cgroupSlice`, R21+ 真接时下发).
     #[serde(default)]
     pub cgroup_slice: Option<String>,
-    /// 启用的 Linux capabilities (per v0.9.21 `capabilities` 字段, 1:1 保留).
+    /// 启用的 Linux capabilities (按既有实现 `capabilities` 字段, 1:1 保留).
     ///
     /// **STUB 边界 (per M16)**: 本字段仅保留翻译表面, `validate()` **不做** capabilities
     /// 白名单校验 — 真校验留 R21+ 接 docker capabilities / firecracker jailer 时实现.
@@ -71,7 +71,7 @@ impl Default for IsolationConfig {
 impl IsolationConfig {
     /// 校验隔离级别和运行时是否兼容 (K-1 强校验 #6).
     ///
-    /// 1:1 翻译 v0.9.21约束:
+    /// 对齐既有实现约束:
     /// - `Vm` 隔离只跟 `Firecracker` 兼容
     /// - `Process` 隔离不跟 `Firecracker` 兼容
     /// - `Container` 隔离不跟 `Firecracker` 兼容

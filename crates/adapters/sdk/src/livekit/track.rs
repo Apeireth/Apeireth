@@ -1,6 +1,6 @@
-//! LiveKit 音视频轨道 (per livekit-client v0.9.21 1:1 翻译)
+//! LiveKit 音视频轨道 (per LiveKit 协议)
 //!
-//! 1:1 翻译 v0.9.21 `Track` / `LocalTrack` / `RemoteTrack` / `TrackPublication` class:
+//! 对齐既有实现 `Track` / `LocalTrack` / `RemoteTrack` / `TrackPublication` class:
 //! - `TrackKind` (2 kind: Audio / Video)
 //! - `TrackSource` (6 source: Camera / Microphone / ScreenShare / ScreenShareAudio / Unknown)
 //! - `TrackSid` (per 服务端分配)
@@ -15,12 +15,12 @@ use serde::{Deserialize, Serialize};
 use crate::livekit::error::LiveKitError;
 
 // ============================================================================
-// §1 TrackKind 2 类型 (per v0.9.21 Track.Kind enum)
+// §1 TrackKind 2 类型 (按既有实现 Track.Kind enum)
 // ============================================================================
 
-/// 轨道类型 (2 类型, 1:1 翻译 livekit-client v0.9.21 `Track.Kind` enum).
+/// 轨道类型 (2 类型, 1:1 翻译 LiveKit 协议 `Track.Kind` enum).
 ///
-/// per v0.9.21: `Video` / `Audio`.
+/// 按既有实现: `Video` / `Audio`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TrackKind {
@@ -62,12 +62,12 @@ pub const SUPPORTED_TRACK_KINDS: &[TrackKind] = &[TrackKind::Video, TrackKind::A
 const _: () = assert!(SUPPORTED_TRACK_KINDS.len() == 2);
 
 // ============================================================================
-// §2 TrackSource 6 来源 (per v0.9.21 Track.Source enum)
+// §2 TrackSource 6 来源 (按既有实现 Track.Source enum)
 // ============================================================================
 
-/// 轨道来源 (6 来源, 1:1 翻译 livekit-client v0.9.21 `Track.Source` enum).
+/// 轨道来源 (6 来源, 1:1 翻译 LiveKit 协议 `Track.Source` enum).
 ///
-/// per v0.9.21:
+/// 按既有实现:
 /// - `Camera` (摄像头)
 /// - `Microphone` (麦克风)
 /// - `ScreenShare` (屏幕共享视频)
@@ -90,7 +90,7 @@ pub enum TrackSource {
 }
 
 impl TrackSource {
-    /// 5 variant (4 known + 1 unknown, per livekit-client v0.9.21).
+    /// 5 variant (4 known + 1 unknown, per LiveKit 协议).
     pub const COUNT: usize = 5;
     /// 字符串.
     pub fn as_str(&self) -> &'static str {
@@ -135,12 +135,12 @@ const _: () = assert!(SUPPORTED_TRACK_SOURCES.len() == 5);
 // §3 TrackSid + TrackDimensions 1:1 翻译
 // ============================================================================
 
-/// 轨道 SID (per v0.9.21 `Track.sid`, 服务端分配).
+/// 轨道 SID (按既有实现 `Track.sid`, 服务端分配).
 ///
 /// STUB 模式: 客户端先用 `local_<uuid>` 临时占位, R21 续真接时由服务端分配真 sid.
 pub type TrackSid = String;
 
-/// 视频轨道尺寸 (per v0.9.21 `TrackDimensions`, 仅 Video kind).
+/// 视频轨道尺寸 (按既有实现 `TrackDimensions`, 仅 Video kind).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TrackDimensions {
     /// 宽度 (像素)
@@ -171,12 +171,12 @@ impl Default for TrackDimensions {
 }
 
 // ============================================================================
-// §4 Track 主结构 (per v0.9.21 Track class 1:1 翻译)
+// §4 Track 主结构 (按既有实现 Track class)
 // ============================================================================
 
-/// 轨道 (per v0.9.21 `Track` class 1:1 翻译).
+/// 轨道 (按既有实现 `Track` class).
 ///
-/// 字段对应 v0.9.21 Track (估 7 fields):
+/// 字段对应既有实现 Track (估 7 fields):
 /// - `sid` (per TrackSid, 服务端分配)
 /// - `kind` (per TrackKind: Video / Audio)
 /// - `source` (per TrackSource: 5 variant)
@@ -193,9 +193,9 @@ pub struct Track {
     kind: TrackKind,
     /// 轨道来源 (5 variant, per `TrackSource`)
     source: TrackSource,
-    /// 轨道显示名 (per v0.9.21 `Track.name`)
+    /// 轨道显示名 (按既有实现 `Track.name`)
     name: Option<String>,
-    /// 是否静音 (per v0.9.21 `Track.isMuted`, 给 `setMicrophoneEnabled` 用)
+    /// 是否静音 (按既有实现 `Track.isMuted`, 给 `setMicrophoneEnabled` 用)
     muted: bool,
     /// 视频尺寸 (per `TrackDimensions`, 仅 Video kind)
     dimensions: Option<TrackDimensions>,
@@ -287,10 +287,10 @@ impl Track {
 }
 
 // ============================================================================
-// §5 LocalTrack / RemoteTrack (per v0.9.21 LocalTrack/RemoteTrack 1:1)
+// §5 LocalTrack / RemoteTrack (按既有实现 LocalTrack/RemoteTrack 1:1)
 // ============================================================================
 
-/// 本地轨道 (per v0.9.21 `LocalTrack` class 1:1).
+/// 本地轨道 (按既有实现 `LocalTrack` class 1:1).
 ///
 /// STUB 模式: 不真发布到 livekit-server, R21 续真接时实现.
 #[derive(Debug, Clone)]
@@ -315,7 +315,7 @@ impl LocalTrack {
     }
 }
 
-/// 远端轨道 (per v0.9.21 `RemoteTrack` class 1:1).
+/// 远端轨道 (按既有实现 `RemoteTrack` class 1:1).
 ///
 /// STUB 模式: 不真订阅 livekit-server, R21 续真接时实现.
 #[derive(Debug, Clone)]

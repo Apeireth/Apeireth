@@ -1,6 +1,6 @@
-//! # Sandbox resource limits (per @anthropic-ai/sandbox v0.9.21, 1:1 翻译)
+//! # Sandbox resource limits (per 既有 Sandbox SDK,)
 //!
-//! **STUB MODE**: 5 资源限制字段保留 1:1 翻译, 实际 cgroup v2 / blockio / net_cls 下发
+//! **STUB MODE**: 5 资源限制字段保留, 实际 cgroup v2 / blockio / net_cls 下发
 //! 留 R21+ 真接 bollard / firecracker-rs / runsc 时实现.
 //!
 //! 5 资源限制 (K-1 强校验 #1):
@@ -18,34 +18,34 @@ use crate::sandbox::error::{SandboxError, SandboxResult};
 // §1 编译期常量 (K-1 强校验 #1: 5 资源限制上下限)
 // ============================================================================
 
-/// 最小 CPU 核数 (per v0.9.21估 0.1, 防止过度限制导致进程无法启动).
+/// 最小 CPU 核数 (按既有实现估算 0.1, 防止过度限制导致进程无法启动).
 pub const MIN_CPU_CORES: f32 = 0.1;
-/// 最大 CPU 核数 (per v0.9.21估 64, 防止独占宿主机).
+/// 最大 CPU 核数 (按既有实现估算 64, 防止独占宿主机).
 pub const MAX_CPU_CORES: f32 = 64.0;
-/// 最小内存 (16 MiB, per v0.9.21估, 防止进程无法启动).
+/// 最小内存 (16 MiB, 按既有实现估算, 防止进程无法启动).
 pub const MIN_MEMORY_BYTES: u64 = 16 * 1024 * 1024;
-/// 最大内存 (256 GiB, per v0.9.21估, 防止 OOM 宿主机).
+/// 最大内存 (256 GiB, 按既有实现估算, 防止 OOM 宿主机).
 pub const MAX_MEMORY_BYTES: u64 = 256 * 1024 * 1024 * 1024;
-/// 最小 IO 带宽 (1 MiB/s, per v0.9.21估).
+/// 最小 IO 带宽 (1 MiB/s, 按既有实现估算).
 pub const MIN_IO_BANDWIDTH_BPS: u64 = 1024 * 1024;
-/// 最大 IO 带宽 (10 GiB/s, per v0.9.21估).
+/// 最大 IO 带宽 (10 GiB/s, 按既有实现估算).
 pub const MAX_IO_BANDWIDTH_BPS: u64 = 10 * 1024 * 1024 * 1024;
-/// 最小网络带宽 (1 MiB/s, per v0.9.21估).
+/// 最小网络带宽 (1 MiB/s, 按既有实现估算).
 pub const MIN_NET_BANDWIDTH_BPS: u64 = 1024 * 1024;
-/// 最大网络带宽 (10 GiB/s, per v0.9.21估).
+/// 最大网络带宽 (10 GiB/s, 按既有实现估算).
 pub const MAX_NET_BANDWIDTH_BPS: u64 = 10 * 1024 * 1024 * 1024;
-/// 最小临时目录大小 (1 MiB, per v0.9.21估).
+/// 最小临时目录大小 (1 MiB, 按既有实现估算).
 pub const MIN_TMP_BYTES: u64 = 1024 * 1024;
-/// 最大临时目录大小 (100 GiB, per v0.9.21估).
+/// 最大临时目录大小 (100 GiB, 按既有实现估算).
 pub const MAX_TMP_BYTES: u64 = 100 * 1024 * 1024 * 1024;
 
 // ============================================================================
-// §2 ResourceLimits (5 字段, 1:1 翻译 v0.9.21)
+// §2 ResourceLimits (5 字段, 对齐既有实现)
 // ============================================================================
 
 /// 沙箱资源限制 (5 字段, K-1 强校验 #1: 编译期 hardcode, 不可运行时增删字段).
 ///
-/// 字段对应 v0.9.21 `resourceLimits` 对象:
+/// 字段对应既有实现 `resourceLimits` 对象:
 /// - `cpuCores`: CPU 核数
 /// - `memoryBytes`: 内存字节
 /// - `ioBandwidthBps`: IO 带宽 (bytes/sec)
@@ -121,12 +121,12 @@ impl ResourceLimits {
         Ok(())
     }
 
-    /// 计算总内存人类可读字符串 (per v0.9.21 `humanReadableMemory`, UI 显示用).
+    /// 计算总内存人类可读字符串 (按既有实现 `humanReadableMemory`, UI 显示用).
     pub fn human_memory(&self) -> String {
         humanize_bytes(self.memory_bytes)
     }
 
-    /// 计算 CPU 核数人类可读字符串 (per v0.9.21 `humanReadableCpu`).
+    /// 计算 CPU 核数人类可读字符串 (按既有实现 `humanReadableCpu`).
     pub fn human_cpu(&self) -> String {
         format!("{:.2} cores", self.cpu_cores)
     }

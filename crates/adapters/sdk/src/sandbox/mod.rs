@@ -2,17 +2,17 @@
 //!
 //! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 (baseline 2026-08-19) + 主人审**
 //!
-//! Sandbox SDK skeleton (1:1 翻译 v0.9.21 `@anthropic-ai/sandbox` 进程隔离 / 资源
+//! Sandbox SDK skeleton (1:1 翻译 既有 Sandbox SDK 进程隔离 / 资源
 //! 限制 / 安全策略 API 表面, per `node_modules/
-//! @anthropic-ai/` 实查). 商业版 bundle 实查 sandbox 仅有 deps 声明, 未实接 (R21+ 估补),
+//! @anthropic-ai/` 实查). 上游 bundle 实查 sandbox 仅有 deps 声明, 未实接 (R21+ 估补),
 //! 6 核心 API (spawn / kill / wait / getStatus / streamLogs / cleanup) 1:1 翻译:
 //!
 //! - **spawn** 创建沙箱 (image + command + user + env + ports + mounts, K-1 强校验 6 字段)
-//! - **kill** 终止运行中沙箱 (per v0.9.21 `kill` 字段)
-//! - **wait** 等待沙箱退出 (per v0.9.21 `wait` 字段, 返 exit code)
+//! - **kill** 终止运行中沙箱 (按既有实现 `kill` 字段)
+//! - **wait** 等待沙箱退出 (按既有实现 `wait` 字段, 返 exit code)
 //! - **getStatus** 查询状态 (6 状态机: pending / creating / running / stopping / stopped / failed)
-//! - **streamLogs** 流式日志 (per v0.9.21 `streamLogs` 字段, async stream)
-//! - **cleanup** 释放资源 (per v0.9.21 `cleanup` 字段, 删 volume / 关 network)
+//! - **streamLogs** 流式日志 (按既有实现 `streamLogs` 字段, async stream)
+//! - **cleanup** 释放资源 (按既有实现 `cleanup` 字段, 删 volume / 关 network)
 //!
 //! 3 运行时 (K-1 强校验 #2): Docker / Firecracker / gVisor.
 //! 3 隔离级别 (K-1 强校验 #3): Process / Container / Vm.
@@ -111,13 +111,13 @@ pub use runtime::{
 
 // ============================================================================
 // §1 m3 hallucination 防御 (per m3-hallucination-defense-2026-08-05.md §2.4 + §2.1)
-// WHITELIST 编译期 hardcode 6 工具 (6 商业版 API), validate_tool_call 在 dispatch 前
+// WHITELIST 编译期 hardcode 6 工具 (6 上游 API), validate_tool_call 在 dispatch 前
 // schema 校验. 防止 minimax m3 模型幻觉调用不存在的 sandbox 工具.
 // ============================================================================
 
 /// m3 防御: Sandbox SDK 6 API 工具白名单 (编译期 hardcode, 不可运行时改).
 ///
-/// **6 工具 = 1:1 翻译 v0.9.21 @anthropic-ai/sandbox `spawn / kill / wait /
+/// **6 工具 = 对齐既有实现 @anthropic-ai/sandbox `spawn / kill / wait /
 /// getStatus / streamLogs / cleanup`**:
 /// - `apeireth_sdk_sandbox_spawn` (创建沙箱)
 /// - `apeireth_sdk_sandbox_kill` (终止沙箱)
@@ -150,10 +150,10 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> SandboxResul
 // §2 编译期 hardcode 常量 (per R20 P0 5 crate 风格 + K-1 强校验)
 // ============================================================================
 
-/// Sandbox API schema version (1:1 翻译 @anthropic-ai/sandbox v0.9.21, K-1 强校验).
+/// Sandbox API schema version (1:1 翻译 既有 Sandbox SDK, K-1 强校验).
 pub const SANDBOX_SCHEMA_VERSION: &str = "1";
 
-/// 平台名 (K-1 强校验 #1: 编译期 hardcode `"apeireth"`, v0.9.21 1:1 翻译, 不写 "前代产品" 等装饰名).
+/// 平台名 (K-1 强校验 #1: 编译期 hardcode `"apeireth"`, 对齐既有实现, 不写装饰名).
 pub const PLATFORM_NAME: &str = "apeireth";
 
 /// **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.
@@ -173,28 +173,28 @@ pub fn is_stub_mode() -> bool {
     STUB_MODE
 }
 
-/// 单沙箱最大存活时间 (秒, 1h, per v0.9.21估, 防恶意沙箱长占资源).
+/// 单沙箱最大存活时间 (秒, 1h, 按既有实现估算, 防恶意沙箱长占资源).
 pub const SANDBOX_MAX_LIFETIME_SECONDS: u64 = 3600;
 
-/// 单次 streamLogs 最大 chunk 数 (per v0.9.21估 10000, 防 stream 爆炸).
+/// 单次 streamLogs 最大 chunk 数 (按既有实现估算 10000, 防 stream 爆炸).
 pub const SANDBOX_MAX_LOG_CHUNKS: u64 = 10_000;
 
-/// 单 chunk 字节上限 (4 KiB, per v0.9.21估, 防单 log line 爆炸).
+/// 单 chunk 字节上限 (4 KiB, 按既有实现估算, 防单 log line 爆炸).
 pub const SANDBOX_MAX_LOG_CHUNK_BYTES: usize = 4096;
 
-/// 默认隔离级别 (per v0.9.21 `isolation: "container"` 默认).
+/// 默认隔离级别 (按既有实现 `isolation: "container"` 默认).
 pub const DEFAULT_ISOLATION_LEVEL: IsolationLevel = IsolationLevel::Container;
 
-/// 默认运行时 (per v0.9.21 `runtime: "docker"` 默认).
+/// 默认运行时 (按既有实现 `runtime: "docker"` 默认).
 pub const DEFAULT_RUNTIME_KIND: RuntimeKind = RuntimeKind::Docker;
 
 // ============================================================================
 // §3 核心类型 (SandboxConfig / SandboxHandle / LogStreamEvent / ExitCode)
 // ============================================================================
 
-/// 沙箱顶层配置 (per @anthropic-ai/sandbox v0.9.21 `SandboxConfig` 1:1 翻译).
+/// 沙箱顶层配置 (per 既有 Sandbox SDK `SandboxConfig`).
 ///
-/// 字段对应 v0.9.21:
+/// 字段对应既有实现:
 /// - `runtime` → `runtime`
 /// - `isolation` → `isolation`
 /// - `policy` → `image` + `command` + `user` + `env` + `ports` + `mounts` (拆 SecurityPolicy)
@@ -216,13 +216,13 @@ pub struct SandboxConfig {
     pub credentials: Option<SandboxCredentials>,
     /// 工作目录 (沙箱内, 默认 "/").
     pub workdir: PathBuf,
-    /// 标签 (k-v, 供 filter / observability 用, per v0.9.21 `labels`).
+    /// 标签 (k-v, 供 filter / observability 用, 按既有实现 `labels`).
     pub labels: HashMap<String, String>,
 }
 
 /// 沙箱凭证 (走 apeireth-keyring, 0 明文).
 ///
-/// 字段对应 v0.9.21 `imagePullCredentials.{registry,username,secret}`:
+/// 字段对应既有实现 `imagePullCredentials.{registry,username,secret}`:
 /// - `registry`: 镜像 registry (e.g. "ghcr.io")
 /// - `username`: 用户名 (明文 OK, 公开信息)
 /// - `secret_ref`: keyring secret ref (e.g. "ghcr-token"), **不存明文**
@@ -265,7 +265,7 @@ impl Default for SandboxConfig {
 }
 
 impl SandboxConfig {
-    /// 创建新沙箱配置 (Builder 风格, 链式调用, 1:1 翻译 v0.9.21 `new SandboxConfig(...)`).
+    /// 创建新沙箱配置 (Builder 风格, 链式调用, 对齐既有实现 `new SandboxConfig(...)`).
     pub fn new(
         runtime: RuntimeKind,
         isolation: IsolationLevel,
@@ -314,9 +314,9 @@ impl SandboxConfig {
     }
 }
 
-/// 沙箱句柄 (per @anthropic-ai/sandbox v0.9.21 `SandboxHandle` 1:1 翻译).
+/// 沙箱句柄 (per 既有 Sandbox SDK `SandboxHandle`).
 ///
-/// 字段对应 v0.9.21:
+/// 字段对应既有实现:
 /// - `id` → `id` (UUID v4)
 /// - `status` → `status` (6 状态机)
 /// - `runtime` → `runtime`
@@ -326,13 +326,13 @@ impl SandboxConfig {
 /// - `exit_code` → `exitCode` (Option, 完成才填)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SandboxHandle {
-    /// 沙箱 ID (UUID v4, 1:1 翻译 v0.9.21 `id`).
+    /// 沙箱 ID (UUID v4, 对齐既有实现 `id`).
     pub id: Uuid,
     /// 沙箱状态 (6 状态机).
     pub status: SandboxStatus,
-    /// 运行时 (记录 spawn 时选定的, 1:1 翻译 v0.9.21 `runtime`).
+    /// 运行时 (记录 spawn 时选定的, 对齐既有实现 `runtime`).
     pub runtime: RuntimeKind,
-    /// 隔离级别 (记录 spawn 时选定的, 1:1 翻译 v0.9.21 `isolation`).
+    /// 隔离级别 (记录 spawn 时选定的, 对齐既有实现 `isolation`).
     pub isolation: IsolationLevel,
     /// 启动时间.
     pub started_at: SystemTime,
@@ -373,14 +373,14 @@ impl SandboxHandle {
     }
 }
 
-/// 日志流 chunk (per @anthropic-ai/sandbox v0.9.21 `streamLogs` 1:1 翻译).
+/// 日志流 chunk (per 既有 Sandbox SDK `streamLogs`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LogStreamEvent {
     /// 沙箱 ID (跟 SandboxHandle.id 对应).
     pub sandbox_id: Uuid,
     /// 流 ID (UUID v4, 区分多个并发 stream).
     pub stream_id: Uuid,
-    /// 流类型 (stdout / stderr, per v0.9.21 `stream`).
+    /// 流类型 (stdout / stderr, 按既有实现 `stream`).
     pub stream: LogStream,
     /// 数据 (字节, 单 chunk ≤ SANDBOX_MAX_LOG_CHUNK_BYTES = 4 KiB).
     pub data: Vec<u8>,
@@ -390,7 +390,7 @@ pub struct LogStreamEvent {
     pub timestamp: SystemTime,
 }
 
-/// 日志流类型 (per v0.9.21 `stream: "stdout" | "stderr"`).
+/// 日志流类型 (按既有实现 `stream: "stdout" | "stderr"`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogStream {
@@ -402,7 +402,7 @@ pub enum LogStream {
 }
 
 impl LogStream {
-    /// 字符串 (1:1 翻译 v0.9.21).
+    /// 字符串 (对齐既有实现).
     pub fn as_str(&self) -> &'static str {
         match self {
             LogStream::Stdout => "stdout",
@@ -417,7 +417,7 @@ impl std::fmt::Display for LogStream {
     }
 }
 
-/// 退出码 (per v0.9.21 `exitCode`).
+/// 退出码 (按既有实现 `exitCode`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExitCode {
@@ -425,16 +425,16 @@ pub enum ExitCode {
     Ok,
     /// 异常退出 (非 0).
     Failed(i32),
-    /// 信号终止 (per v0.9.21估, 128 + signal).
+    /// 信号终止 (按既有实现估算, 128 + signal).
     Signaled(i32),
     /// 沙箱被 kill 调用主动终止.
     Killed,
-    /// OOM 终止 (per v0.9.21估).
+    /// OOM 终止 (按既有实现估算).
     Oom,
 }
 
 impl ExitCode {
-    /// 数值 (per v0.9.21 `exitCode` 字段语义).
+    /// 数值 (按既有实现 `exitCode` 字段语义).
     pub fn value(&self) -> i32 {
         match self {
             ExitCode::Ok => 0,
@@ -452,7 +452,7 @@ impl ExitCode {
 
 /// Sandbox SDK 顶层 facade (6 API dispatcher, STUB 模式全部返 NotImplemented).
 ///
-/// 字段对应 v0.9.21 `SandboxSdk` (估 3 fields):
+/// 字段对应既有实现 `SandboxSdk` (估 3 fields):
 /// - `config` (per `SandboxConfig`)
 /// - `handles` (per `HashMap<Uuid, SandboxHandle>`)
 /// - `runtime` (per `Box<dyn SandboxRuntime>`, 真实 runtime stub)
@@ -507,14 +507,14 @@ impl SandboxSdk {
     }
 
     // ========================================================================
-    // §4.1 6 API stub 工具 (per @anthropic-ai/sandbox v0.9.21)
+    // §4.1 6 API stub 工具 (per 既有 Sandbox SDK)
     // 每个工具返 `SandboxError::NotImplemented(api_name)`, 编译期 hardcode.
     // R21+ 真接 docker/firecracker/gvisor 时, 替换实现 + 改 STUB_MODE = false.
     // ========================================================================
 
     /// 工具 1: `apeireth_sdk_sandbox_spawn` (STUB 返 NotImplemented).
     ///
-    /// 1:1 翻译 v0.9.21 `spawn(image, command, options) -> SandboxHandle`.
+    /// 对齐既有实现 `spawn(image, command, options) -> SandboxHandle`.
     /// R21+ 真接: 调 bollard::Docker::create_container (Docker 路径) /
     /// firecracker::VM::start (Firecracker 路径) / runsc::Runsc::exec (gVisor 路径).
     pub async fn spawn(&mut self, _policy: SecurityPolicy) -> SandboxResult<SandboxHandle> {
@@ -524,7 +524,7 @@ impl SandboxSdk {
 
     /// 工具 2: `apeireth_sdk_sandbox_kill` (STUB 返 NotImplemented).
     ///
-    /// 1:1 翻译 v0.9.21 `kill(handle, signal?) -> void`.
+    /// 对齐既有实现 `kill(handle, signal?) -> void`.
     /// R21+ 真接: 调 bollard::Docker::kill / firecracker::VM::stop / runsc::Runsc::kill.
     pub async fn kill(&mut self, _id: &Uuid, _signal: Option<i32>) -> SandboxResult<()> {
         warn!(target: "apeireth_sdk_sandbox", "kill STUB_MODE returning NotImplemented");
@@ -533,7 +533,7 @@ impl SandboxSdk {
 
     /// 工具 3: `apeireth_sdk_sandbox_wait` (STUB 返 NotImplemented).
     ///
-    /// 1:1 翻译 v0.9.21 `wait(handle, timeout?) -> ExitCode`.
+    /// 对齐既有实现 `wait(handle, timeout?) -> ExitCode`.
     /// R21+ 真接: tokio::select! + container.wait / VM.wait / runsc.wait.
     pub async fn wait(&self, _id: &Uuid, _timeout_secs: Option<u64>) -> SandboxResult<ExitCode> {
         warn!(target: "apeireth_sdk_sandbox", "wait STUB_MODE returning NotImplemented");
@@ -542,7 +542,7 @@ impl SandboxSdk {
 
     /// 工具 4: `apeireth_sdk_sandbox_get_status` (STUB 返 NotImplemented).
     ///
-    /// 1:1 翻译 v0.9.21 `getStatus(handle) -> SandboxStatus`.
+    /// 对齐既有实现 `getStatus(handle) -> SandboxStatus`.
     /// R21+ 真接: 调 bollard::Docker::inspect_container / firecracker::VM::state / runsc.state.
     pub async fn get_status(&self, _id: &Uuid) -> SandboxResult<SandboxStatus> {
         warn!(target: "apeireth_sdk_sandbox", "get_status STUB_MODE returning NotImplemented");
@@ -553,7 +553,7 @@ impl SandboxSdk {
 
     /// 工具 5: `apeireth_sdk_sandbox_stream_logs` (STUB 返 NotImplemented).
     ///
-    /// 1:1 翻译 v0.9.21 `streamLogs(handle) -> AsyncIterator<LogChunk>`.
+    /// 对齐既有实现 `streamLogs(handle) -> AsyncIterator<LogChunk>`.
     /// R21+ 真接: 调 bollard::Docker::logs(stream=true) / firecracker console / runsc logs.
     pub async fn stream_logs(
         &self,
@@ -567,7 +567,7 @@ impl SandboxSdk {
 
     /// 工具 6: `apeireth_sdk_sandbox_cleanup` (STUB 返 NotImplemented).
     ///
-    /// 1:1 翻译 v0.9.21 `cleanup(handle) -> void`.
+    /// 对齐既有实现 `cleanup(handle) -> void`.
     /// R21+ 真接: 调 bollard::Docker::remove_container (含 volume) / firecracker::VM::delete / runsc.delete.
     pub async fn cleanup(&mut self, _id: &Uuid) -> SandboxResult<()> {
         warn!(target: "apeireth_sdk_sandbox", "cleanup STUB_MODE returning NotImplemented");
@@ -579,7 +579,7 @@ impl SandboxSdk {
 // §5 STUB 守门宏 + 工具状态 helper
 // ============================================================================
 
-/// STUB 守门宏: 用于本地 inline STUB 检查 (1:1 翻译 v0.9.21 `throwNotImplemented`).
+/// STUB 守门宏: 用于本地 inline STUB 检查 (对齐既有实现 `throwNotImplemented`).
 ///
 /// 用法: `sandbox_stub!("spawn")?;` 在函数体顶部守门, R21+ 真接时整体替换.
 /// 现阶段 STUB 模式: 全部返 `SandboxError::NotImplemented`.
@@ -619,7 +619,7 @@ pub fn assert_stub_mode_or_panic(api: &'static str) -> SandboxResult<()> {
 
 /// Sandbox spawner async trait (R21+ 真接时不同 runtime 各自实现).
 ///
-/// STUB 模式: trait 表面 1:1 翻译, 默认实现返 NotImplemented, 防止整合时漏防.
+/// STUB 模式: trait 表面, 默认实现返 NotImplemented, 防止整合时漏防.
 #[async_trait]
 pub trait SandboxSpawner: Send + Sync {
     /// 沙箱 spawner 类型 (Docker / Firecracker / Gvisor).
@@ -666,7 +666,7 @@ impl SandboxSpawner for StubSandboxSpawner {
 // §7 编译期守门 + 占位扩展点
 // ============================================================================
 
-// ⏳ R21+ 真接 sandbox 运行时 (per @anthropic-ai/sandbox 商业版) 时, 这里加:
+// ⏳ R21+ 真接 sandbox 运行时 (per @anthropic-ai/sandbox 上游) 时, 这里加:
 //   - BollardDockerSpawner (per `bollard::Docker::create_container`)
 //   - FirecrackerSpawner (per `firecracker::VM::start`)
 //   - GvisorSpawner (per `runsc::Runsc::exec`)
@@ -967,7 +967,7 @@ mod tests {
         assert_eq!(h.exit_code, Some(0));
     }
 
-    // 额外 4: ExitCode 数值映射 (1:1 翻译 v0.9.21 `exitCode` 字段语义)
+    // 额外 4: ExitCode 数值映射 (对齐既有实现 `exitCode` 字段语义)
     #[test]
     fn sandbox_exit_code_value_mapping() {
         assert_eq!(ExitCode::Ok.value(), 0);

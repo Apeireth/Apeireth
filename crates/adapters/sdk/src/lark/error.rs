@@ -1,4 +1,4 @@
-//! # Lark error types (per @larksuiteoapi/lark-sdk v0.9.21, 1:1 翻译)
+//! # Lark error types (per Lark 开放平台 SDK,)
 //!
 //! **STUB MODE**: 11 错误 variant, 编译期 hardcode. 真接飞书 Open Platform 时
 //! 把 `NotImplemented` 移除并把 `Network` / `RateLimited` / `PermissionDenied` 等细化.
@@ -21,8 +21,8 @@
 //!
 //! ## 引用文档
 //!
-//! 1. `@larksuiteoapi/lark-sdk v0.9.21` `core/Response.d.ts` (商业版 Response 1:1 翻译源)
-//! 2. `@larksuiteoapi/lark-sdk v0.9.21` `client/api_im_open.js` (im/v1/messages 1:1 翻译源)
+//! 1. `Lark 开放平台 SDK` `core/Response.d.ts` (上游 Response 参考)
+//! 2. `Lark 开放平台 SDK` `client/api_im_open.js` (im/v1/messages 参考)
 //! 3. `docs/stage4/m3-hallucination-defense-2026-08-05.md` §2.4 (TOOL_WHITELIST 模式)
 
 use thiserror::Error;
@@ -38,7 +38,7 @@ use thiserror::Error;
 ///    (实际只 6 类, 各 1 variant, 命名复用 `*Missing` + `*Invalid`)
 /// 3. **鉴权** (1): `TokenExpired` (tenant_access_token / user_access_token 过期)
 /// 4. **网络** (1): `Network` (HTTP 失败 / DNS 失败 / TLS 失败)
-/// 5. **限流** (1): `RateLimited` (per v0.9.21 `code: 99991400`)
+/// 5. **限流** (1): `RateLimited` (按既有实现 `code: 99991400`)
 /// 6. **业务** (1): `ApiError` (飞书 Open Platform `code != 0` 业务错误)
 /// 7. **其他** (1): `Other` (catch-all, 包含序列化失败等)
 ///
@@ -96,7 +96,7 @@ pub enum LarkError {
     /// 飞书 Open Platform 业务错误 (`code != 0`).
     #[error("Lark API error: code={code}, msg={msg}")]
     ApiError {
-        /// 飞书 Open Platform 业务错误码 (per v0.9.21, e.g. 230001 / 230002).
+        /// 飞书 Open Platform 业务错误码 (按既有实现, e.g. 230001 / 230002).
         code: i32,
         /// 错误信息.
         msg: String,
@@ -156,7 +156,7 @@ impl LarkError {
 
     /// **K-1 #3**: 校验 Chat ID (非空 + 前缀 `oc_` open chat 或 `on_` user chat).
     ///
-    /// 飞书 Chat ID 规范 (per v0.9.21):
+    /// 飞书 Chat ID 规范 (按既有实现):
     /// - `oc_` 前缀: 开放群 / 普通群
     /// - `on_` 前缀: 用户私聊
     pub fn validate_chat_id(chat_id: &str) -> LarkResult<()> {
@@ -172,7 +172,7 @@ impl LarkError {
 
     /// **K-1 #4**: 校验 Open ID (非空 + 前缀 `ou_`, per 飞书 User ID 规范).
     ///
-    /// 飞书 User ID 规范 (per v0.9.21):
+    /// 飞书 User ID 规范 (按既有实现):
     /// - `ou_` 前缀: Open ID (租户内唯一)
     /// - 其它前缀: union_id / user_id (R21 续真接时细化)
     pub fn validate_open_id(open_id: &str) -> LarkResult<()> {

@@ -62,12 +62,12 @@
 #define CORE_API_COUNT 8
 
 /**
- * 6 核心 API 数量常量 (per task spec §3 + v0.9.21 1:1).
+ * 6 核心 API 数量常量 (per task spec §3).
  */
 #define CORE_API_COUNT 6
 
 /**
- * 6 核心 API 数量常量 (per task spec §3 + v0.9.21 1:1).
+ * 6 核心 API 数量常量 (per task spec §3).
  */
 #define CORE_API_COUNT 6
 
@@ -102,17 +102,17 @@
 #define K1_STRONG_VALIDATION_COUNT 6
 
 /**
- * 单消息最大文本长度 (per v0.9.21估 4 KiB, 防单消息爆炸).
+ * 单消息最大文本长度 (按既有实现估算 4 KiB, 防单消息爆炸).
  */
 #define MAX_MESSAGE_TEXT_BYTES 4096
 
 /**
- * 单次 list_calendar_events 最大返回数 (per v0.9.21估 1000).
+ * 单次 list_calendar_events 最大返回数 (按既有实现估算 1000).
  */
 #define MAX_CALENDAR_EVENTS_PER_PAGE 1000
 
 /**
- * 单 webhook 单 chunk 字节上限 (per v0.9.21估 16 KiB, R21 续真接 AES).
+ * 单 webhook 单 chunk 字节上限 (按既有实现估算 16 KiB, R21 续真接 AES).
  */
 #define MAX_WEBHOOK_CHUNK_BYTES (16 * 1024)
 
@@ -205,7 +205,7 @@
 #define ROOM_EVENT_COUNT 8
 
 /**
- * LiveKit 默认事件 channel 容量 (per v0.9.21 Room 内部, 100 events).
+ * LiveKit 默认事件 channel 容量 (按既有实现 Room 内部约定, 100 events).
  */
 #define EVENT_CHANNEL_CAPACITY 100
 
@@ -235,7 +235,7 @@
 #define RoomEvent_COUNT 8
 
 /**
- * 4 等级 + 1 unknown = 5 variant (per livekit-client v0.9.21 实际 5 variant).
+ * 4 等级 + 1 unknown = 5 variant (LiveKit 客户端协议实际 5 variant).
  */
 #define ConnectionQuality_COUNT 5
 
@@ -255,7 +255,7 @@
 #define TrackKind_COUNT 2
 
 /**
- * 5 variant (4 known + 1 unknown, per livekit-client v0.9.21).
+ * 5 variant (4 known + 1 unknown, LiveKit 客户端协议).
  */
 #define TrackSource_COUNT 5
 
@@ -265,17 +265,17 @@
 #define SANDBOX_TOOL_WHITELIST_COUNT 6
 
 /**
- * 单沙箱最大存活时间 (秒, 1h, per v0.9.21估, 防恶意沙箱长占资源).
+ * 单沙箱最大存活时间 (秒, 1h, 按既有实现估算, 防恶意沙箱长占资源).
  */
 #define SANDBOX_MAX_LIFETIME_SECONDS 3600
 
 /**
- * 单次 streamLogs 最大 chunk 数 (per v0.9.21估 10000, 防 stream 爆炸).
+ * 单次 streamLogs 最大 chunk 数 (按既有实现估算 10000, 防 stream 爆炸).
  */
 #define SANDBOX_MAX_LOG_CHUNKS 10000
 
 /**
- * 单 chunk 字节上限 (4 KiB, per v0.9.21估, 防单 log line 爆炸).
+ * 单 chunk 字节上限 (4 KiB, 按既有实现估算, 防单 log line 爆炸).
  */
 #define SANDBOX_MAX_LOG_CHUNK_BYTES 4096
 
@@ -286,72 +286,72 @@
 #define SANDBOX_ERROR_VARIANT_COUNT 10
 
 /**
- * 单沙箱最大 env 变量数 (per v0.9.21估 64, 防 env 爆炸).
+ * 单沙箱最大 env 变量数 (按既有实现估算 64, 防 env 爆炸).
  */
 #define MAX_ENV_VARS 64
 
 /**
- * 单沙箱最大卷挂载数 (per v0.9.21估 32).
+ * 单沙箱最大卷挂载数 (按既有实现估算 32).
  */
 #define MAX_VOLUME_MOUNTS 32
 
 /**
- * 单沙箱最大端口映射数 (per v0.9.21估 16).
+ * 单沙箱最大端口映射数 (按既有实现估算 16).
  */
 #define MAX_PORT_MAPPINGS 16
 
 /**
- * 最小 CPU 核数 (per v0.9.21估 0.1, 防止过度限制导致进程无法启动).
+ * 最小 CPU 核数 (按既有实现估算 0.1, 防止过度限制导致进程无法启动).
  */
 #define MIN_CPU_CORES 0.1
 
 /**
- * 最大 CPU 核数 (per v0.9.21估 64, 防止独占宿主机).
+ * 最大 CPU 核数 (按既有实现估算 64, 防止独占宿主机).
  */
 #define MAX_CPU_CORES 64.0
 
 /**
- * 最小内存 (16 MiB, per v0.9.21估, 防止进程无法启动).
+ * 最小内存 (16 MiB, 按既有实现估算, 防止进程无法启动).
  */
 #define MIN_MEMORY_BYTES ((16 * 1024) * 1024)
 
 /**
- * 最大内存 (256 GiB, per v0.9.21估, 防止 OOM 宿主机).
+ * 最大内存 (256 GiB, 按既有实现估算, 防止 OOM 宿主机).
  */
 #define MAX_MEMORY_BYTES (((256 * 1024) * 1024) * 1024)
 
 /**
- * 最小 IO 带宽 (1 MiB/s, per v0.9.21估).
+ * 最小 IO 带宽 (1 MiB/s, 按既有实现估算).
  */
 #define MIN_IO_BANDWIDTH_BPS (1024 * 1024)
 
 /**
- * 最大 IO 带宽 (10 GiB/s, per v0.9.21估).
+ * 最大 IO 带宽 (10 GiB/s, 按既有实现估算).
  */
 #define MAX_IO_BANDWIDTH_BPS (((10 * 1024) * 1024) * 1024)
 
 /**
- * 最小网络带宽 (1 MiB/s, per v0.9.21估).
+ * 最小网络带宽 (1 MiB/s, 按既有实现估算).
  */
 #define MIN_NET_BANDWIDTH_BPS (1024 * 1024)
 
 /**
- * 最大网络带宽 (10 GiB/s, per v0.9.21估).
+ * 最大网络带宽 (10 GiB/s, 按既有实现估算).
  */
 #define MAX_NET_BANDWIDTH_BPS (((10 * 1024) * 1024) * 1024)
 
 /**
- * 最小临时目录大小 (1 MiB, per v0.9.21估).
+ * 最小临时目录大小 (1 MiB, 按既有实现估算).
  */
 #define MIN_TMP_BYTES (1024 * 1024)
 
 /**
- * 最大临时目录大小 (100 GiB, per v0.9.21估).
+ * 最大临时目录大小 (100 GiB, 按既有实现估算).
  */
 #define MAX_TMP_BYTES (((100 * 1024) * 1024) * 1024)
 
 /**
- * 编译期守门: 5 SandboxStatus 守门 (1:1 翻译 v0.9.21状态机).
+ * 编译期守门: 5 SandboxStatus 守门 (沿用既有状态机设计).
  */
 #define SANDBOX_STATUS_COUNT 6
 
@@ -376,7 +376,7 @@
 #define VAD_ALGORITHM_COUNT 3
 
 /**
- * 默认 audio session 容量 (per v0.9.21估 100 sessions).
+ * 默认 audio session 容量 (按既有实现估算 100 sessions).
  */
 #define SESSION_CHANNEL_CAPACITY 100
 
@@ -396,17 +396,17 @@
 #define VOICE_CONFIG_SECTION_COUNT 5
 
 /**
- * 默认采样率 (16kHz, per Porcupine 官方 + v0.9.21估).
+ * 默认采样率 (16kHz, per Porcupine 官方 + 按既有实现估算).
  */
 #define DEFAULT_AUDIO_SAMPLE_RATE 16000
 
 /**
- * 默认位深 (16-bit, per v0.9.21估).
+ * 默认位深 (16-bit, 按既有实现估算).
  */
 #define DEFAULT_AUDIO_BIT_DEPTH 16
 
 /**
- * 默认通道数 (单声道, per v0.9.21估).
+ * 默认通道数 (单声道, 按既有实现估算).
  */
 #define DEFAULT_AUDIO_CHANNELS 1
 
@@ -432,12 +432,12 @@
 #define VadAlgorithm_COUNT 3
 
 /**
- * 自定义唤醒词最大长度 (per v0.9.21估 64 char, 防恶意长串).
+ * 自定义唤醒词最大长度 (按既有实现估算 64 char, 防恶意长串).
  */
 #define MAX_CUSTOM_WAKE_WORD_LENGTH 64
 
 /**
- * 唤醒词最小长度 (per v0.9.21估 3 char, 防过短误触).
+ * 唤醒词最小长度 (按既有实现估算 3 char, 防过短误触).
  */
 #define MIN_WAKE_WORD_LENGTH 3
 
@@ -447,26 +447,26 @@
 #define WakeWordCategory_COUNT 4
 
 /**
- * 沙箱隔离级别 (3 variant, 1:1 翻译 @anthropic-ai/sandbox v0.9.21).
+ * 沙箱隔离级别 (3 variant, 沿用既有设计).
  *
  * K-1 强校验 #3: 编译期 hardcode, 不允许运行时增删 variant.
  */
 typedef struct IsolationLevel IsolationLevel;
 
 /**
- * 沙箱运行时 (3 variant, 1:1 翻译 @anthropic-ai/sandbox v0.9.21).
+ * 沙箱运行时 (3 variant, 沿用既有设计).
  *
  * K-1 强校验 #2: 编译期 hardcode, 不允许运行时增删 variant.
  */
 typedef struct RuntimeKind RuntimeKind;
 
 /**
- * 审批任务状态 (3 variant, per v0.9.21 `status` 字段).
+ * 审批任务状态 (3 variant, 按既有实现 `status` 字段).
  */
 typedef struct TaskStatus TaskStatus;
 
 /**
- * Lark API schema version (1:1 翻译 @larksuiteoapi/lark-sdk v0.9.21, K-1 强校验).
+ * Lark API schema version (对齐 Lark 开放平台 schema, K-1 强校验).
  *
  * 跟 `LARK_SCHEMA_VERSION` (in auth.rs) 同步, 此处 re-export 守门防漂移.
  */

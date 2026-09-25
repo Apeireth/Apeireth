@@ -1,4 +1,4 @@
-//! # Sandbox security policy (per @anthropic-ai/sandbox v0.9.21, 1:1 翻译)
+//! # Sandbox security policy (per 既有 Sandbox SDK,)
 //!
 //! **STUB MODE**: 6 K-1 强校验字段全部保留, 实际 enforcement 留 R21+ 真接 seccomp / AppArmor
 //! / docker capabilities / firecracker jailer 时实现.
@@ -22,7 +22,7 @@ use crate::sandbox::error::{SandboxError, SandboxResult};
 // §1 编译期常量 (K-1 强校验)
 // ============================================================================
 
-/// 允许的 image registry 白名单 (per v0.9.21估, 防止拉任意恶意镜像).
+/// 允许的 image registry 白名单 (按既有实现估算, 防止拉任意恶意镜像).
 pub const ALLOWED_IMAGE_REGISTRIES: &[&str] = &[
     "docker.io",
     "ghcr.io",
@@ -34,10 +34,10 @@ pub const ALLOWED_IMAGE_REGISTRIES: &[&str] = &[
     "public.ecr.aws",
 ];
 
-/// 禁止的 user (per v0.9.21 K-1 强校验: 沙箱内禁止 root).
+/// 禁止的 user (按既有实现 K-1 强校验: 沙箱内禁止 root).
 pub const FORBIDDEN_USERS: &[&str] = &["root", "admin", "Administrator", "SYSTEM"];
 
-/// 禁止的 env key (per v0.9.21 K-1 强校验: 防 LD_PRELOAD / PATH 注入).
+/// 禁止的 env key (按既有实现 K-1 强校验: 防 LD_PRELOAD / PATH 注入).
 pub const FORBIDDEN_ENV_KEYS: &[&str] = &[
     "LD_PRELOAD",
     "LD_LIBRARY_PATH",
@@ -54,32 +54,32 @@ pub const FORBIDDEN_ENV_KEYS: &[&str] = &[
 /// 特权端口范围 (0-1024, K-1 强校验 #5: 默认禁, 显式 allow 才能用).
 pub const PRIVILEGED_PORT_RANGE: std::ops::RangeInclusive<u16> = 0..=1024;
 
-/// 单沙箱最大 env 变量数 (per v0.9.21估 64, 防 env 爆炸).
+/// 单沙箱最大 env 变量数 (按既有实现估算 64, 防 env 爆炸).
 pub const MAX_ENV_VARS: usize = 64;
 
-/// 单沙箱最大卷挂载数 (per v0.9.21估 32).
+/// 单沙箱最大卷挂载数 (按既有实现估算 32).
 pub const MAX_VOLUME_MOUNTS: usize = 32;
 
-/// 单沙箱最大端口映射数 (per v0.9.21估 16).
+/// 单沙箱最大端口映射数 (按既有实现估算 16).
 pub const MAX_PORT_MAPPINGS: usize = 16;
 
 // ============================================================================
-// §2 VolumeMount (1:1 翻译 v0.9.21 `mounts` 数组元素)
+// §2 VolumeMount (对齐既有实现 `mounts` 数组元素)
 // ============================================================================
 
-/// 卷挂载 (per v0.9.21 `mounts[].{source,target,readOnly}`).
+/// 卷挂载 (按既有实现 `mounts[].{source,target,readOnly}`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VolumeMount {
     /// 宿主机源路径 (必须在 ALLOWED_VOLUME_SOURCES 白名单内).
     pub source: PathBuf,
     /// 沙箱内目标路径 (必须绝对路径).
     pub target: PathBuf,
-    /// 只读挂载 (per v0.9.21 `readOnly` 字段).
+    /// 只读挂载 (按既有实现 `readOnly` 字段).
     #[serde(default)]
     pub read_only: bool,
 }
 
-/// 允许的卷挂载源路径前缀 (per v0.9.21 K-1 强校验 #6, 防越权访问宿主机).
+/// 允许的卷挂载源路径前缀 (按既有实现 K-1 强校验 #6, 防越权访问宿主机).
 pub const ALLOWED_VOLUME_SOURCE_PREFIXES: &[&str] = &[
     "/tmp",
     "/var/sandbox",
@@ -149,17 +149,17 @@ fn lexical_normalize(path: &std::path::Path) -> std::path::PathBuf {
 }
 
 // ============================================================================
-// §3 PortMapping (1:1 翻译 v0.9.21 `portBindings` 数组元素)
+// §3 PortMapping (对齐既有实现 `portBindings` 数组元素)
 // ============================================================================
 
-/// 端口映射 (per v0.9.21 `portBindings[].{hostPort,containerPort,protocol}`).
+/// 端口映射 (按既有实现 `portBindings[].{hostPort,containerPort,protocol}`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PortMapping {
     /// 宿主机端口 (0-65535, 0 = 动态分配; **0..=1024 特权段需显式 `allow_privileged`, per M16**).
     pub host_port: u16,
     /// 容器内端口 (1-65535).
     pub container_port: u16,
-    /// 协议 (per v0.9.21 `protocol`, 估 "tcp" / "udp").
+    /// 协议 (按既有实现 `protocol`, 估 "tcp" / "udp").
     #[serde(default = "default_protocol")]
     pub protocol: PortProtocol,
     /// 显式允许特权宿主机端口 (K-1 强校验 #5: host_port ∈ 0..=1024 时必显式 true, per M16).
@@ -212,7 +212,7 @@ impl PortMapping {
 
 /// 沙箱安全策略 (K-1 强校验: 6 字段全 K-1 校验, 防止恶意/越权配置).
 ///
-/// 字段对应 v0.9.21:
+/// 字段对应既有实现:
 /// - `image` → `image`
 /// - `command` → `command`
 /// - `user` → `user`

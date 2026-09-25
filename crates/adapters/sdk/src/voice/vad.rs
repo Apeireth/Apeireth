@@ -1,15 +1,15 @@
-//! # Voice Activity Detection (per @anthropic-ai/voice v0.9.21 1:1 翻译)
+//! # Voice Activity Detection (per 既有 Voice SDK)
 //!
-//! 3 VAD 算法 (per v0.9.21 + task spec §3):
+//! 3 VAD 算法 (按既有实现 + task spec §3):
 //! 1. **Energy** — 基于能量阈值 (RMS 简易, 离线)
-//! 2. **Silence** — 基于静音时长阈值 (per 商业版 silence detection)
+//! 2. **Silence** — 基于静音时长阈值 (per 上游 silence detection)
 //! 3. **WebRtc** — WebRTC VAD 集成 (per Chromium WebRTC VAD, 离线)
 //!
-//! **STUB**: 3 算法枚举保留 1:1 翻译, 但 detect() 内部返 `VoiceError::NotImplemented`.
+//! **STUB**: 3 算法枚举保留, 但 detect() 内部返 `VoiceError::NotImplemented`.
 //!
 //! ## 引用文档
 //!
-//! 1. `@anthropic-ai/voice v0.9.21` `client/vad_engine.js` (VAD 1:1 翻译源)
+//! 1. `既有 Voice SDK` `client/vad_engine.js` (VAD 参考)
 //! 2. WebRTC VAD 官方文档 (per Google WebRTC project)
 
 use std::time::Duration;
@@ -22,18 +22,18 @@ use crate::voice::error::{VoiceError, VoiceResult};
 // §1 3 VAD 算法 enum (K-1 强校验守门, 编译期 hardcode 3 variant)
 // ============================================================================
 
-/// VAD 算法 (3 variant, 1:1 翻译 @anthropic-ai/voice v0.9.21 `VadAlgorithm` enum).
+/// VAD 算法 (3 variant, 1:1 翻译 既有 Voice SDK `VadAlgorithm` enum).
 ///
-/// 3 算法 snake_case 字符串严格匹配 v0.9.21 API 规范.
+/// 3 算法 snake_case 字符串严格匹配 既有实现 API 规范.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VadAlgorithm {
-    /// **基于能量阈值** (RMS 简易, 离线, per v0.9.21估 1:1).
+    /// **基于能量阈值** (RMS 简易, 离线, 按既有实现估算 1:1).
     #[default]
     Energy,
-    /// **基于静音时长阈值** (silence detection, per v0.9.21估 1:1).
+    /// **基于静音时长阈值** (silence detection, 按既有实现估算 1:1).
     Silence,
-    /// **WebRTC VAD** (Chromium WebRTC VAD 集成, 离线, per v0.9.21估 1:1).
+    /// **WebRTC VAD** (Chromium WebRTC VAD 集成, 离线, 按既有实现估算 1:1).
     WebRtc,
 }
 
@@ -41,7 +41,7 @@ impl VadAlgorithm {
     /// 3 算法 hardcode 常量.
     pub const COUNT: usize = 3;
 
-    /// 字符串 (1:1 翻译 v0.9.21 `algorithm` 字段, snake_case 严格匹配).
+    /// 字符串 (对齐既有实现 `algorithm` 字段, snake_case 严格匹配).
     pub fn as_str(&self) -> &'static str {
         match self {
             VadAlgorithm::Energy => "energy",
@@ -50,7 +50,7 @@ impl VadAlgorithm {
         }
     }
 
-    /// 从字符串解析 (per v0.9.21响应 `algorithm` 字段).
+    /// 从字符串解析 (按既有实现响应 `algorithm` 字段).
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "energy" => Some(VadAlgorithm::Energy),
@@ -99,12 +99,12 @@ pub const SUPPORTED_VAD_ALGORITHMS: &[VadAlgorithm] = &[
 const _: () = assert!(SUPPORTED_VAD_ALGORITHMS.len() == 3);
 
 // ============================================================================
-// §2 VadConfig VAD 配置 (per v0.9.21 1:1 翻译)
+// §2 VadConfig VAD 配置 (per 对齐既有实现)
 // ============================================================================
 
-/// VAD 配置 (per v0.9.21 `vad_config` 字段 1:1 翻译).
+/// VAD 配置 (按既有实现 `vad_config` 字段).
 ///
-/// 字段对应 v0.9.21 `VadConfig` 对象:
+/// 字段对应既有实现 `VadConfig` 对象:
 /// - `algorithm` (per `VadAlgorithm`)
 /// - `energy_threshold` (0.0..=1.0, per Energy 算法)
 /// - `silence_threshold_ms` (静音时长阈值, per Silence 算法)
@@ -211,12 +211,12 @@ impl Default for VadConfig {
 }
 
 // ============================================================================
-// §3 VadResult VAD 检测结果 (per v0.9.21 1:1 翻译)
+// §3 VadResult VAD 检测结果 (per 对齐既有实现)
 // ============================================================================
 
-/// VAD 检测结果 (per v0.9.21 `vad_detect` 响应 1:1 翻译).
+/// VAD 检测结果 (按既有实现 `vad_detect` 响应).
 ///
-/// 字段对应 v0.9.21 `VadResult` 对象:
+/// 字段对应既有实现 `VadResult` 对象:
 /// - `is_speech` (是否语音)
 /// - `algorithm` (per `VadAlgorithm`)
 /// - `confidence` (0.0..=1.0, 置信度)

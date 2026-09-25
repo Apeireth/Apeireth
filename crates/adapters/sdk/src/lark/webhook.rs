@@ -1,18 +1,18 @@
-//! # Lark Webhook (per @larksuiteoapi/lark-sdk v0.9.21 1:1 翻译)
+//! # Lark Webhook (per Lark 开放平台 SDK)
 //!
-//! 飞书事件订阅 Webhook 翻译源.
+//! 飞书事件订阅 Webhook 参考.
 //!
-//! **3 核心概念** (per v0.9.21 1:1):
+//! **3 核心概念** (按既有实现口径):
 //! 1. **url_verification** — 配置事件订阅 URL 时, 飞书 server 发送 `challenge` 字段, 客户端原样返回
 //! 2. **event_callback** — 真实事件回调, 需校验 `token` + 解密 `encrypt` (用 `encrypt_key`)
 //! 3. **verify_webhook** — 一次性 token 校验入口
 //!
-//! **1 核心 API** (per v0.9.21):
+//! **1 核心 API** (按既有实现):
 //! - `verify_webhook` — 校验入站 webhook 事件
 //!
-//! **当前 STUB**: 字段保留 1:1 翻译, 走 `verify_webhook` 返 `NotImplemented` (待 R21+ 续真接 AES 解密).
+//! **当前 STUB**: 字段保留, 走 `verify_webhook` 返 `NotImplemented` (待 R21+ 续真接 AES 解密).
 //!
-//! ## 4 EventType 守门 (per v0.9.21 1:1)
+//! ## 4 EventType 守门 (按既有实现口径)
 //!
 //! - `UrlVerification` — URL 校验事件
 //! - `EventCallback` — 事件回调 (im.message.receive_v1 / contact.user.created_v3 / etc)
@@ -27,18 +27,18 @@ use crate::lark::auth::WebhookToken;
 use crate::lark::error::LarkError;
 
 // ============================================================================
-// §1 EventType (4 variant, 1:1 翻译 v0.9.21)
+// §1 EventType (4 variant, 对齐既有实现)
 // ============================================================================
 
-/// Webhook 事件类型 (4 variant, per v0.9.21 `type` / `header.event_type` 字段).
+/// Webhook 事件类型 (4 variant, 按既有实现 `type` / `header.event_type` 字段).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
-    /// URL 校验事件 (per v0.9.21 `type: "url_verification"`, R21 真接).
+    /// URL 校验事件 (按既有实现 `type: "url_verification"`, R21 真接).
     UrlVerification,
-    /// 事件回调 (per v0.9.21 `header.event_type: "im.message.receive_v1"` 等).
+    /// 事件回调 (按既有实现 `header.event_type: "im.message.receive_v1"` 等).
     EventCallback,
-    /// Challenge 字段 (per v0.9.21 `type: "challenge"`, 兼容老版).
+    /// Challenge 字段 (按既有实现 `type: "challenge"`, 兼容老版).
     Challenge,
     /// 未知事件 (兜底, R21 真接后细化).
     #[default]
@@ -67,10 +67,10 @@ impl std::fmt::Display for EventType {
 }
 
 // ============================================================================
-// §2 WebhookEvent (per v0.9.21 1:1)
+// §2 WebhookEvent (按既有实现口径)
 // ============================================================================
 
-/// Webhook 事件顶层结构 (per v0.9.21 event callback 1:1).
+/// Webhook 事件顶层结构 (按既有实现 event callback 1:1).
 ///
 /// 飞书 server POST 到客户端 URL 的 JSON body, 包含:
 /// - `challenge` — URL 校验时, 客户端原样返回
@@ -175,7 +175,7 @@ pub fn verify_webhook_event(
     }
 }
 
-/// Webhook 校验结果 (per v0.9.21 1:1).
+/// Webhook 校验结果 (按既有实现口径).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WebhookVerifyResult {
     /// URL 校验通过, 客户端返 challenge 给飞书 server.

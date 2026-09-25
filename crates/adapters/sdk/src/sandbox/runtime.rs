@@ -1,4 +1,4 @@
-//! # Sandbox runtime / isolation / status (per @anthropic-ai/sandbox v0.9.21, 1:1 翻译)
+//! # Sandbox runtime / isolation / status (per 既有 Sandbox SDK,)
 //!
 //! **STUB MODE**: 3 RuntimeKind + 3 IsolationLevel + 5 SandboxStatus 编译期 hardcode.
 //! 真接 docker/firecracker/gvisor 时, 字段保持不变, 仅实现由 stub → 真接替换.
@@ -13,23 +13,23 @@ use crate::sandbox::error::{SandboxError, SandboxResult};
 // §1 RuntimeKind (3 variant, K-1 强校验 #2)
 // ============================================================================
 
-/// 沙箱运行时 (3 variant, 1:1 翻译 @anthropic-ai/sandbox v0.9.21).
+/// 沙箱运行时 (3 variant, 1:1 翻译 既有 Sandbox SDK).
 ///
 /// K-1 强校验 #2: 编译期 hardcode, 不允许运行时增删 variant.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeKind {
-    /// **默认**: Docker daemon (per @anthropic-ai/sandbox v0.9.21 `runtime: "docker"`).
+    /// **默认**: Docker daemon (per 既有 Sandbox SDK `runtime: "docker"`).
     #[default]
     Docker,
-    /// Firecracker microVM (per @anthropic-ai/sandbox v0.9.21 `runtime: "firecracker"`).
+    /// Firecracker microVM (per 既有 Sandbox SDK `runtime: "firecracker"`).
     Firecracker,
-    /// gVisor (runsc) 用户态内核 (per @anthropic-ai/sandbox v0.9.21 `runtime: "gvisor"`).
+    /// gVisor (runsc) 用户态内核 (per 既有 Sandbox SDK `runtime: "gvisor"`).
     Gvisor,
 }
 
 impl RuntimeKind {
-    /// 运行时字符串 (1:1 翻译 v0.9.21 `runtime` 字段).
+    /// 运行时字符串 (对齐既有实现 `runtime` 字段).
     pub fn as_str(&self) -> &'static str {
         match self {
             RuntimeKind::Docker => "docker",
@@ -72,23 +72,23 @@ const _: () = assert!(SUPPORTED_RUNTIME_KINDS.len() == 3);
 // §2 IsolationLevel (3 variant, K-1 强校验 #3)
 // ============================================================================
 
-/// 沙箱隔离级别 (3 variant, 1:1 翻译 @anthropic-ai/sandbox v0.9.21).
+/// 沙箱隔离级别 (3 variant, 1:1 翻译 既有 Sandbox SDK).
 ///
 /// K-1 强校验 #3: 编译期 hardcode, 不允许运行时增删 variant.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IsolationLevel {
-    /// **默认**: 进程级隔离 (per v0.9.21 `isolation: "process"` — Linux namespace + seccomp).
+    /// **默认**: 进程级隔离 (按既有实现 `isolation: "process"` — Linux namespace + seccomp).
     #[default]
     Process,
-    /// 容器级隔离 (per v0.9.21 `isolation: "container"` — Docker / gVisor runsc).
+    /// 容器级隔离 (按既有实现 `isolation: "container"` — Docker / gVisor runsc).
     Container,
-    /// 虚拟机级隔离 (per v0.9.21 `isolation: "vm"` — Firecracker microVM).
+    /// 虚拟机级隔离 (按既有实现 `isolation: "vm"` — Firecracker microVM).
     Vm,
 }
 
 impl IsolationLevel {
-    /// 隔离级别字符串 (1:1 翻译 v0.9.21 `isolation` 字段).
+    /// 隔离级别字符串 (对齐既有实现 `isolation` 字段).
     pub fn as_str(&self) -> &'static str {
         match self {
             IsolationLevel::Process => "process",
@@ -131,13 +131,13 @@ const _: () = assert!(SUPPORTED_ISOLATION_LEVELS.len() == 3);
 // §3 SandboxStatus (5 状态机, R21+ 真接 runtime 时用)
 // ============================================================================
 
-/// 沙箱状态机 (5 variant, 1:1 翻译 @anthropic-ai/sandbox v0.9.21 `status` 字段).
+/// 沙箱状态机 (5 variant, 1:1 翻译 既有 Sandbox SDK `status` 字段).
 ///
 /// 状态流转: `Pending → Creating → Running → (Stopping → Stopped) | Failed`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SandboxStatus {
-    /// 已请求, 等待运行时调度 (per v0.9.21 `status: "pending"`).
+    /// 已请求, 等待运行时调度 (按既有实现 `status: "pending"`).
     #[default]
     Pending,
     /// 正在创建 (拉镜像 / 启动 microVM / 启动 runsc).
@@ -153,7 +153,7 @@ pub enum SandboxStatus {
 }
 
 impl SandboxStatus {
-    /// 状态字符串 (1:1 翻译 v0.9.21 `status` 字段).
+    /// 状态字符串 (对齐既有实现 `status` 字段).
     pub fn as_str(&self) -> &'static str {
         match self {
             SandboxStatus::Pending => "pending",
@@ -172,5 +172,5 @@ impl std::fmt::Display for SandboxStatus {
     }
 }
 
-/// 编译期守门: 5 SandboxStatus 守门 (1:1 翻译 v0.9.21状态机).
+/// 编译期守门: 5 SandboxStatus 守门 (对齐既有实现状态机).
 pub const SANDBOX_STATUS_COUNT: usize = 6;

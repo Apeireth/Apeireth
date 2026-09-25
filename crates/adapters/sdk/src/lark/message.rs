@@ -1,14 +1,14 @@
-//! # Lark 消息 (per @larksuiteoapi/lark-sdk v0.9.21 1:1 翻译)
+//! # Lark 消息 (per Lark 开放平台 SDK)
 //!
-//! 飞书 IM `im/v1/messages` API 支持 6 消息类型 (per v0.9.21 `MessageType` enum):
+//! 飞书 IM `im/v1/messages` API 支持 6 消息类型 (按既有实现 `MessageType` enum):
 //! 1. **text** — 纯文本
-//! 2. **post** — 富文本 (per v0.9.21 `post` 消息, 支持 inline @user / link / image)
+//! 2. **post** — 富文本 (按既有实现 `post` 消息, 支持 inline @user / link / image)
 //! 3. **image** — 图片 (image_key, 走 upload_image 上传后获得)
 //! 4. **file** — 文件 (file_key, 走 upload_file 上传后获得)
-//! 5. **card** — 消息卡片 (per v0.9.21 `interactive` 老版)
-//! 6. **interactive** — 消息卡片新版 (per v0.9.21 `card` JSON 模板, 含 button / form / select)
+//! 5. **card** — 消息卡片 (按既有实现 `interactive` 老版)
+//! 6. **interactive** — 消息卡片新版 (按既有实现 `card` JSON 模板, 含 button / form / select)
 //!
-//! **当前 STUB**: 所有 6 类型字段保留 1:1 翻译, 不真发飞书 API, 走 `send_message` 返 `NotImplemented`.
+//! **当前 STUB**: 所有 6 类型字段保留, 不真发飞书 API, 走 `send_message` 返 `NotImplemented`.
 //!
 //! ## 6 消息类型守门常量
 //!
@@ -25,24 +25,24 @@ use crate::lark::error::LarkError;
 // §1 6 消息类型 enum (K-1 强校验守门, 编译期 hardcode 6 variant)
 // ============================================================================
 
-/// 消息类型 (6 variant, 1:1 翻译 @larksuiteoapi/lark-sdk v0.9.21 `MessageType` enum).
+/// 消息类型 (6 variant, 1:1 翻译 Lark 开放平台 SDK `MessageType` enum).
 ///
 /// 6 类型 snake_case 字符串严格匹配飞书 Open API 规范.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageType {
-    /// **纯文本** (per v0.9.21 `msg_type: "text"`).
+    /// **纯文本** (按既有实现 `msg_type: "text"`).
     #[default]
     Text,
-    /// **富文本** (per v0.9.21 `msg_type: "post"`, 支持 inline 元素).
+    /// **富文本** (按既有实现 `msg_type: "post"`, 支持 inline 元素).
     Post,
-    /// **图片** (per v0.9.21 `msg_type: "image"`, 需先 `im/v1/images` 上传).
+    /// **图片** (按既有实现 `msg_type: "image"`, 需先 `im/v1/images` 上传).
     Image,
-    /// **文件** (per v0.9.21 `msg_type: "file"`, 需先 `im/v1/files` 上传).
+    /// **文件** (按既有实现 `msg_type: "file"`, 需先 `im/v1/files` 上传).
     File,
-    /// **消息卡片 (老版)** (per v0.9.21 `msg_type: "card"`, 1.0 之前的 card JSON 模板).
+    /// **消息卡片 (老版)** (按既有实现 `msg_type: "card"`, 1.0 之前的 card JSON 模板).
     Card,
-    /// **消息卡片 (新版)** (per v0.9.21 `msg_type: "interactive"`, 含 button / form / select).
+    /// **消息卡片 (新版)** (按既有实现 `msg_type: "interactive"`, 含 button / form / select).
     Interactive,
 }
 
@@ -50,7 +50,7 @@ impl MessageType {
     /// 6 类型 hardcode 常量.
     pub const COUNT: usize = 6;
 
-    /// 字符串 (1:1 翻译 v0.9.21 `msg_type` 字段, snake_case 严格匹配).
+    /// 字符串 (对齐既有实现 `msg_type` 字段, snake_case 严格匹配).
     pub fn as_str(&self) -> &'static str {
         match self {
             MessageType::Text => "text",
@@ -94,10 +94,10 @@ pub const SUPPORTED_MESSAGE_TYPES: &[MessageType] = &[
 const _: () = assert!(SUPPORTED_MESSAGE_TYPES.len() == 6);
 
 // ============================================================================
-// §2 各类型消息内容结构 (per v0.9.21 `content` JSON 字段 1:1 翻译)
+// §2 各类型消息内容结构 (按既有实现 `content` JSON 字段)
 // ============================================================================
 
-/// 文本消息内容 (per v0.9.21 `content: { "text": "..." }` 1:1).
+/// 文本消息内容 (按既有实现 `content: { "text": "..." }` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextContent {
     /// 文本 (e.g. "Hello, 飞书!")
@@ -125,14 +125,14 @@ impl TextContent {
     }
 }
 
-/// 富文本段落 (per v0.9.21 `post` 消息 paragraph 元素).
+/// 富文本段落 (按既有实现 `post` 消息 paragraph 元素).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostParagraph {
     /// 段落内 inline 元素.
     pub elements: Vec<PostElement>,
 }
 
-/// 富文本 inline 元素 (per v0.9.21 `post` 消息 element 1:1).
+/// 富文本 inline 元素 (按既有实现 `post` 消息 element 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "tag", rename_all = "snake_case")]
 pub enum PostElement {
@@ -160,14 +160,14 @@ pub enum PostElement {
     },
 }
 
-/// 富文本消息内容 (per v0.9.21 `content: { "post": { "zh_cn": { "title": "...", "content": [...] } } }`).
+/// 富文本消息内容 (按既有实现 `content: { "post": { "zh_cn": { "title": "...", "content": [...] } } }`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostContent {
     /// 国际化 locale 字典 (e.g. `{"zh_cn": ..., "en_us": ...}`).
     pub locale: HashMap<String, PostLocale>,
 }
 
-/// 富文本 locale 描述 (per v0.9.21 `post.zh_cn` / `post.en_us` 1:1).
+/// 富文本 locale 描述 (按既有实现 `post.zh_cn` / `post.en_us` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostLocale {
     /// 标题.
@@ -191,21 +191,21 @@ impl PostContent {
     }
 }
 
-/// 图片消息内容 (per v0.9.21 `content: { "image_key": "img_xxx" }` 1:1).
+/// 图片消息内容 (按既有实现 `content: { "image_key": "img_xxx" }` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageContent {
     /// image_key (per `im/v1/images` upload 响应, R21 续真接)
     pub image_key: String,
 }
 
-/// 文件消息内容 (per v0.9.21 `content: { "file_key": "file_xxx" }` 1:1).
+/// 文件消息内容 (按既有实现 `content: { "file_key": "file_xxx" }` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileContent {
     /// file_key (per `im/v1/files` upload 响应, R21 续真接)
     pub file_key: String,
 }
 
-/// 卡片消息内容 (per v0.9.21 `content: { "config": {...}, "header": {...}, "elements": [...] }` 1:1).
+/// 卡片消息内容 (按既有实现 `content: { "config": {...}, "header": {...}, "elements": [...] }` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CardContent {
     /// 卡片配置 (wide_screen_mode / enable_forward 等).
@@ -248,10 +248,10 @@ impl CardContent {
 pub type InteractiveContent = CardContent;
 
 // ============================================================================
-// §3 Message 顶层结构 (per v0.9.21 1:1)
+// §3 Message 顶层结构 (按既有实现口径)
 // ============================================================================
 
-/// 消息接收者 ID 类型 (per v0.9.21 `receive_id_type` 字段).
+/// 消息接收者 ID 类型 (按既有实现 `receive_id_type` 字段).
 ///
 /// 飞书 `im/v1/messages` API 要求 `receive_id_type` 指定 `chat_id` / `open_id` / `user_id` / `email` / `union_id`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -289,7 +289,7 @@ impl std::fmt::Display for ReceiveIdType {
     }
 }
 
-/// 消息顶层结构 (per v0.9.21 `im/v1/messages` POST 请求 body 1:1).
+/// 消息顶层结构 (按既有实现 `im/v1/messages` POST 请求 body 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Message {
     /// 接收者 ID (per `receive_id` 字段).
@@ -298,7 +298,7 @@ pub struct Message {
     pub receive_id_type: ReceiveIdType,
     /// 消息类型 (per `msg_type` 字段, 6 variant hardcode).
     pub msg_type: MessageType,
-    /// 消息内容 (per `content` 字段, JSON 字符串, 1:1 翻译 v0.9.21).
+    /// 消息内容 (per `content` 字段, JSON 字符串, 对齐既有实现).
     pub content: String,
     /// UUID (per `uuid` 字段, 幂等去重用, 可选).
     #[serde(default, skip_serializing_if = "Option::is_none")]

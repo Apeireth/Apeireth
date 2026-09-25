@@ -15,7 +15,7 @@
 //!   - K-1 #1: API Key 格式 (空 / 错 / 真, per `LiveKitError::ApiKeyMissing` / `ApiKeyInvalid`)
 //!   - K-1 #2: API Secret 格式 (空 / 错, per `LiveKitError::ApiSecretMissing` / `ApiSecretInvalid`)
 //!   - K-1 #3: Room Name 1..=256 chars alphanumeric + `-` + `_`
-//!   - K-1 #4: URL 必须 `wss://` 开头 (per livekit-client v0.9.21 强制要求)
+//!   - K-1 #4: URL 必须 `wss://` 开头 (per LiveKit 协议 强制要求)
 
 use serde::{Deserialize, Serialize};
 
@@ -266,10 +266,10 @@ pub const PLATFORM_NAME: &str = "apeireth";
 
 /// Provider 名 (keyring "account" 字段).
 ///
-/// 1:1 翻译 v0.9.21 livekit-client `serviceName = 'livekit'`.
+/// 对齐既有实现 livekit-client `serviceName = 'livekit'`.
 pub const PROVIDER_NAME: &str = "livekit";
 
-/// LiveKit SDK schema 版本 (1:1 翻译 livekit-client v0.9.21).
+/// LiveKit SDK schema 版本 (1:1 翻译 LiveKit 协议).
 pub const LIVEKIT_SCHEMA_VERSION: &str = "1";
 
 /// 默认 LiveKit 服务器 URL (per livekit-cloud 官方, wss:// 强制).

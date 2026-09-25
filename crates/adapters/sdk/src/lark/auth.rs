@@ -1,6 +1,6 @@
-//! # Lark 鉴权 (per @larksuiteoapi/lark-sdk v0.9.21 1:1 翻译)
+//! # Lark 鉴权 (per Lark 开放平台 SDK)
 //!
-//! 飞书开放平台 5 鉴权方式 (per v0.9.21):
+//! 飞书开放平台 5 鉴权方式 (按既有实现):
 //! 1. **App ID** — 应用唯一标识 (e.g. `cli_a1b2c3d4e5f6g7h8`)
 //! 2. **App Secret** — 应用密钥 (e.g. 32 char random, 走 keyring)
 //! 3. **tenant_access_token** — 应用级 access token, TTL 2h, 走 `/auth/v3/tenant_access_token/internal`
@@ -38,10 +38,10 @@ pub const PLATFORM_NAME: &str = "apeireth";
 
 /// Provider 名 (keyring "account" 字段).
 ///
-/// 1:1 翻译 v0.9.21 `Lark.Client.config.serviceName = 'lark'`.
+/// 对齐既有实现 `Lark.Client.config.serviceName = 'lark'`.
 pub const PROVIDER_NAME: &str = "lark";
 
-/// Lark SDK schema 版本 (1:1 翻译 @larksuiteoapi/lark-sdk v0.9.21).
+/// Lark SDK schema 版本 (1:1 翻译 Lark 开放平台 SDK).
 pub const LARK_SCHEMA_VERSION: &str = "1";
 
 /// 默认 Lark 服务器 URL (per 飞书 Open Platform 官方, https:// 强制).

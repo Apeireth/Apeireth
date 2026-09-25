@@ -127,7 +127,7 @@ pub use client::{
 /// **K-1 强校验编译期守门 #1**: 平台名 = "apeireth".
 ///
 /// 跟 client.rs 内部 `PLATFORM_NAME` 守门双向验证 (跨 module 编译期 0 漂移).
-/// 注: 实际值在 client.rs (per 1:1 翻译 v0.9.21), 此处仅 const 断言引用.
+/// 注: 实际值在 client.rs (per 对齐既有实现), 此处仅 const 断言引用.
 #[allow(dead_code)]
 const _K1_LIB_PLATFORM_APEIRETH: &str = "apeireth";
 
@@ -226,7 +226,7 @@ const _MODULE_COUNT: usize = {
 //
 // 1. SDK_VERSION major == 1 (workspace lock)
 // 2. WS_PROTOCOL_VERSION == "1" (apeireth-protocol::ws_v1 lock)
-// 3. PLATFORM_NAME == "apeireth" (跟 v0.9.21 1:1 翻译)
+// 3. PLATFORM_NAME == "apeireth" (对齐既有实现)
 // 4. TOOL_WHITELIST.len() == 6 (per 蓝图 §2.2)
 // 5. SDK_TOOL_WHITELIST.len() == 8 (6 工具 + 2 通用 invoke)
 // 6. STUB_MODE == true (R21 才改 false, 经 8 哲学锚 + 主人审)
@@ -239,7 +239,7 @@ const _MODULE_COUNT: usize = {
 // - `apeireth-protocol` — **5 集成点直接复用** (1:1 翻译 ws_v1)
 // - `apeireth-keyring` — 阶段 6 不依赖 (留 R21 真接 keyring 时再用)
 // - `apeireth-machine-id` — 阶段 6 不依赖 (留 R21 真接 machine-id 时再用)
-// - `apeireth-tools` — 阶段 6 不依赖 (SDK 是 client 表面, tools 是 server 表面, 1:1 翻译蓝图 §2.2 D-02 子路径)
+// - `apeireth-tools` — 阶段 6 不依赖 (SDK 是 client 表面, tools 是 server 表面, 接口蓝图 §2.2 D-02 子路径)
 // - `apeireth-api` — 阶段 6 不直接 dep (R21 真接时 `path = "../apeireth-api"` 即可)
 //
 // **0 改 LOCKED crate** (per 8 项承诺 #3): 本文件不 import 上面任何 crate,
@@ -271,7 +271,7 @@ const _MODULE_COUNT: usize = {
 // R146: 5 SDK -> 1 apeireth-sdk (feature flags)
 // 4 子 SDK 由 feature 门控, 0 装时 0 编译 (per O-5 不假装)
 //
-// 字段级引用 R20 阶段 4 (lark / livekit / sandbox / voice 4 个 stub 1:1 翻译).
+// 字段级引用 R20 阶段 4 (lark / livekit / sandbox / voice 4 个 stub).
 // =============================================================================
 
 #[cfg(feature = "lark")]

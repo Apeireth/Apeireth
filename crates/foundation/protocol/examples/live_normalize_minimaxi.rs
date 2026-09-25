@@ -12,7 +12,7 @@
 //!
 //! **跑法**:
 //! ```bash
-//! $env:APEIRETH_API_KEY = (Get-Content .minimax-agent-cn\projects\apikey.txt)[0].Trim()
+//! $env:APEIRETH_API_KEY = "sk-..."   # 你自己的 API key（勿写入任何文件）
 //! cargo run -p apeireth-protocol --example live_normalize_minimaxi
 //! ```
 

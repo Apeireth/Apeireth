@@ -2,13 +2,13 @@
 //!
 //! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 + 主人审**
 //!
-//! Voice 语音 SDK stub (1:1 翻译 `@anthropic-ai/voice` v0.9.21, per
+//! Voice 语音 SDK stub (对齐 `@anthropic-ai/voice`, per
 //! `client/api_transcribe.js` + `client/api_synthesize.js` +
 //! `client/vad_engine.js` + `core/types.d.ts`).
 //!
-//! 商业版 Voice SDK (`@anthropic-ai/voice` v0.9.21) 提供 STT / TTS / Wake Word /
+//! 上游 Voice SDK (`@anthropic-ai/voice` 既有实现) 提供 STT / TTS / Wake Word /
 //! VAD / Audio Stream, 但 **当前 crate 是 STUB skeleton** — API 表面按
-//! v0.9.21 1:1 翻译, 但所有 6 核心 API 实现都是 `Err(VoiceError::NotImplemented(api_name))`.
+//! 对齐既有实现, 但所有 6 核心 API 实现都是 `Err(VoiceError::NotImplemented(api_name))`.
 //! **任何真实 SDK 引用 (`@anthropic-ai/voice` npm package / Anthropic Voice API
 //! HTTP 客户端) 都禁止**, 留 R20 阶段 4 续真接或 R21 续.
 //!
@@ -19,9 +19,9 @@
 //! 4. 经 8 哲学锚 (RIVAL 蓝图) + 主人审
 //! 跳过任何一条 → 整合时 cargo build 必挂, fixture 5 必挂.
 //!
-//! ## 6 核心 API (per task spec §3 + v0.9.21 1:1)
+//! ## 6 核心 API (per task spec §3 + 既有实现口径)
 //!
-//! | # | API                  | 1:1 翻译 v0.9.21       | R20 阶段 4 实现 |
+//! | # | API                  | 对齐既有实现       | R20 阶段 4 实现 |
 //! |---:|----------------------|-------------------------------|----------------|
 //! | 1 | `transcribe`         | `voice.transcribe(audio, model)` | NotImplemented |
 //! | 2 | `synthesize`         | `voice.synthesize(text, voice)`  | NotImplemented |
@@ -30,19 +30,19 @@
 //! | 5 | `stop_listening`     | `voice.stopListening()`          | NotImplemented |
 //! | 6 | `stream_audio`       | `voice.streamAudio(stream)`      | NotImplemented |
 //!
-//! ## 4 STT 模型 (per v0.9.21 + task spec §3)
+//! ## 4 STT 模型 (按既有实现 + task spec §3)
 //!
 //! `Whisper` / `Wav2Vec` / `Deepgram` / `Google` — 编译期 hardcode 4 variant.
 //!
-//! ## 4 TTS 模型 (per v0.9.21 + task spec §3)
+//! ## 4 TTS 模型 (按既有实现 + task spec §3)
 //!
 //! `ElevenLabs` / `Azure` / `Google` / `OpenAI` — 编译期 hardcode 4 variant.
 //!
-//! ## 4 唤醒词类别 (per v0.9.21 + task spec §3)
+//! ## 4 唤醒词类别 (按既有实现 + task spec §3)
 //!
 //! `Hardcoded` (默认 `"apeireth"`) / `Custom` / `Phonetic` / `Semantic` — 编译期 hardcode 4 variant.
 //!
-//! ## 3 VAD 算法 (per v0.9.21 + task spec §3)
+//! ## 3 VAD 算法 (按既有实现 + task spec §3)
 //!
 //! `Energy` / `Silence` / `WebRtc` — 编译期 hardcode 3 variant.
 //!
@@ -57,10 +57,10 @@
 //!
 //! ## 5 哲学 anchor 穿透
 //!
-//! - **S-1 北极星导向**: 1:1 翻译 v0.9.21 `client/api_transcribe.js` + `client/api_synthesize.js`,
+//! - **S-1 北极星导向**: 对齐既有实现 `client/api_transcribe.js` + `client/api_synthesize.js`,
 //!   0 业务重设计
 //! - **S-2 实事求是**: 估 600 LOC, 当前 skeleton 估 600+ LOC (100% 完成, 6 API 全 NotImplemented, 0 假装已接)
-//! - **O-2 走在前人肩上**: v0.9.21 @anthropic-voice 1:1 翻译, 默认唤醒词 `"apeireth"`
+//! - **O-2 走在前人肩上**: 既有实现 @anthropic-voice, 默认唤醒词 `"apeireth"`
 //! - **O-3 干到底**: 6 API + 4 STT + 4 TTS + 4 唤醒词 + 3 VAD + 6 K-1 全到位, 0 半成品
 //! - **O-5 不假装**: 所有 6 API 内部 `Err(VoiceError::NotImplemented)`, 0 假装已调通 Anthropic Voice
 //!
@@ -77,9 +77,9 @@
 //!
 //! ## 引用文档 (5 份)
 //!
-//! 1. `@anthropic-ai/voice v0.9.21` `client/api_transcribe.js` (商业版 transcribe 1:1 翻译源)
-//! 2. `@anthropic-ai/voice v0.9.21` `client/api_synthesize.js` (商业版 synthesize 1:1 翻译源)
-//! 3. `@anthropic-ai/voice v0.9.21` `client/vad_engine.js` (商业版 VAD 1:1 翻译源)
+//! 1. `既有 Voice SDK` `client/api_transcribe.js` (上游 transcribe 参考)
+//! 2. `既有 Voice SDK` `client/api_synthesize.js` (上游 synthesize 参考)
+//! 3. `既有 Voice SDK` `client/vad_engine.js` (上游 VAD 参考)
 //! 4. `crates/apeireth-sdk-livekit/` (1:1 镜像蓝本, 跟 lark / sandbox 1:1 镜像)
 //! 5. `docs/stage4/m3-hallucination-defense-2026-08-05.md` §2.4 (TOOL_WHITELIST 模式)
 //!
@@ -136,10 +136,10 @@ use tracing::{debug, info, instrument, warn};
 // §1 编译期 hardcode (跟 lark / livekit / sandbox 同模式)
 // ============================================================================
 
-/// Voice SDK schema version (1:1 翻译 @anthropic-ai/voice v0.9.21, per auth 模块).
+/// Voice SDK schema version (1:1 翻译 既有 Voice SDK, per auth 模块).
 pub use crate::voice::auth::VOICE_SCHEMA_VERSION as SCHEMA_VERSION;
 
-/// 6 核心 API 数量常量 (per task spec §3 + v0.9.21 1:1).
+/// 6 核心 API 数量常量 (per task spec §3 + 既有实现口径).
 pub const CORE_API_COUNT: usize = 6;
 
 /// 4 STT 模型 数量常量 (per `SUPPORTED_STT_MODELS.len()`).
@@ -157,7 +157,7 @@ pub const VAD_ALGORITHM_COUNT: usize = 3;
 /// 6 K-1 强校验 数量常量 (per task spec §3 + K-1 守门).
 pub const K1_STRONG_VALIDATION_COUNT: usize = 6;
 
-/// 默认 audio session 容量 (per v0.9.21估 100 sessions).
+/// 默认 audio session 容量 (按既有实现估算 100 sessions).
 pub const SESSION_CHANNEL_CAPACITY: usize = 100;
 
 // ============================================================================
@@ -198,7 +198,7 @@ pub fn is_stub_mode() -> bool {
 /// m3 防御: Voice SDK 7 工具白名单 (编译期 hardcode, 不可运行时改).
 ///
 /// 字段对应 6 核心 API + 1 额外 stub 守门:
-/// - 6 核心 API (1:1 翻译 v0.9.21)
+/// - 6 核心 API (对齐既有实现)
 /// - **额外 1**: `apeireth_voice_stub_status` (查 STUB_MODE 状态, 跟 lark / livekit 1:1 镜像)
 pub const TOOL_WHITELIST: &[&str] = &[
     "apeireth_voice_transcribe",
@@ -235,28 +235,28 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> Result<(), V
 /// - 阶段 3: 4 STT / 4 TTS / 3 VAD 真接 (1-2 天)
 #[async_trait]
 pub trait VoiceClient: Send + Sync {
-    /// **API 1**: `transcribe` — STT 转写 (per v0.9.21 `voice.transcribe`).
+    /// **API 1**: `transcribe` — STT 转写 (按既有实现 `voice.transcribe`).
     ///
     /// 参数: `request: &SttRequest`. 返回: 成功 → `Transcription`. STUB 模式: 永远返 NotImplemented.
     async fn transcribe(&self, request: &SttRequest) -> Result<Transcription, VoiceError>;
 
-    /// **API 2**: `synthesize` — TTS 合成 (per v0.9.21 `voice.synthesize`).
+    /// **API 2**: `synthesize` — TTS 合成 (按既有实现 `voice.synthesize`).
     async fn synthesize(&self, request: &TtsRequest) -> Result<Audio, VoiceError>;
 
-    /// **API 3**: `detect_wake` — 唤醒词检测 (per v0.9.21 `voice.detectWake`).
+    /// **API 3**: `detect_wake` — 唤醒词检测 (按既有实现 `voice.detectWake`).
     ///
     /// 参数: `audio: &[i16]` (16kHz / 16-bit PCM). 返回: 成功 → `WakeWordDetection`.
     async fn detect_wake(&self, audio: &[i16]) -> Result<WakeWordDetection, VoiceError>;
 
-    /// **API 4**: `start_listening` — 开始监听 (per v0.9.21 `voice.startListening`).
+    /// **API 4**: `start_listening` — 开始监听 (按既有实现 `voice.startListening`).
     ///
     /// 进入持续监听模式, 命中唤醒词后触发后续 STT pipeline.
     async fn start_listening(&self) -> Result<(), VoiceError>;
 
-    /// **API 5**: `stop_listening` — 停止监听 (per v0.9.21 `voice.stopListening`).
+    /// **API 5**: `stop_listening` — 停止监听 (按既有实现 `voice.stopListening`).
     async fn stop_listening(&self) -> Result<(), VoiceError>;
 
-    /// **API 6**: `stream_audio` — 流式音频处理 (per v0.9.21 `voice.streamAudio`).
+    /// **API 6**: `stream_audio` — 流式音频处理 (按既有实现 `voice.streamAudio`).
     ///
     /// 参数: VAD 检测结果. 返回: 成功 → `VadResult`.
     async fn stream_audio(&self, vad_result: &VadResult) -> Result<VadResult, VoiceError>;

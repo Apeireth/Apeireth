@@ -1,11 +1,11 @@
-//! LiveKit 房间管理 (per livekit-client v0.9.21 1:1 翻译)
+//! LiveKit 房间管理 (per LiveKit 协议)
 //!
-//! 1:1 翻译 v0.9.21 `Room` class (per livekit-client/dist/src/room/Room.d.ts):
+//! 对齐既有实现 `Room` class (per livekit-client/dist/src/room/Room.d.ts):
 //! - `Room` (per RoomOptions)
 //! - `RoomState` (5 状态机: Disconnected / Connecting / Connected / Reconnecting / Disconnected)
 //! - `RoomEvent` (8 事件: 在 event.rs 详细定义)
 //!
-//! **5 状态机** (per v0.9.21 `ConnectionState` enum):
+//! **5 状态机** (按既有实现 `ConnectionState` enum):
 //!   1. `Disconnected` (初始 / 已断开)
 //!   2. `Connecting` (正在连接 wss:// URL)
 //!   3. `Connected` (已连接, 可 publish/subscribe tracks)
@@ -23,12 +23,12 @@ use serde::{Deserialize, Serialize};
 use crate::livekit::error::LiveKitError;
 
 // ============================================================================
-// §1 RoomState 5 状态机 (per v0.9.21 ConnectionState enum 1:1)
+// §1 RoomState 5 状态机 (按既有实现 ConnectionState enum 1:1)
 // ============================================================================
 
 /// 房间状态 (5 状态机, K-1 强校验守门: 编译期 hardcode 5 个 variant).
 ///
-/// 字段对应 v0.9.21 `ConnectionState` enum:
+/// 字段对应既有实现 `ConnectionState` enum:
 /// `disconnected` / `connecting` / `connected` / `reconnecting` (per livekit-client).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -50,7 +50,7 @@ impl RoomState {
     /// 5 状态机 hardcode 常量.
     pub const COUNT: usize = 5;
 
-    /// 状态字符串 (1:1 翻译 livekit-client v0.9.21 `ConnectionState` snake_case).
+    /// 状态字符串 (1:1 翻译 LiveKit 协议 `ConnectionState` snake_case).
     pub fn as_str(&self) -> &'static str {
         match self {
             RoomState::Disconnected => "disconnected",
@@ -106,12 +106,12 @@ pub const SUPPORTED_ROOM_STATES: &[RoomState] = &[
 const _: () = assert!(SUPPORTED_ROOM_STATES.len() == 5);
 
 // ============================================================================
-// §2 RoomOptions (per v0.9.21 RoomOptions interface 1:1)
+// §2 RoomOptions (按既有实现 RoomOptions interface 1:1)
 // ============================================================================
 
-/// 房间配置 (per v0.9.21 `RoomOptions` interface 1:1).
+/// 房间配置 (按既有实现 `RoomOptions` interface 1:1).
 ///
-/// 字段对应 livekit-client v0.9.21 RoomOptions:
+/// 字段对应 LiveKit 协议 RoomOptions:
 /// - `adaptiveStream` (per AdaptiveStreamSettings)
 /// - `dynacast` (per 启用 dynacast)
 /// - `publishDefaults` (per TrackPublishDefaults)
@@ -174,9 +174,9 @@ impl Default for RoomOptions {
 // §3 Room 主结构 (5 状态机 atomic + 占位, R21 续真接 livekit-server)
 // ============================================================================
 
-/// LiveKit 房间 (per v0.9.21 `Room` class 1:1 翻译).
+/// LiveKit 房间 (按既有实现 `Room` class).
 ///
-/// 字段对应 v0.9.21 Room (估 6 fields):
+/// 字段对应既有实现 Room (估 6 fields):
 /// - `state` (per AtomicU8 模拟 5 状态机)
 /// - `name` (per Room.name 字段)
 /// - `sid` (per Room.sid, 服务端分配, R21 真接才有)
@@ -185,7 +185,7 @@ impl Default for RoomOptions {
 /// - `local_participant` (per local Participant, R21 续)
 #[derive(Debug)]
 pub struct Room {
-    /// 房间名 (per v0.9.21 `Room.name`)
+    /// 房间名 (按既有实现 `Room.name`)
     name: String,
     /// 房间 SID (服务端分配, R21 真接 livekit-server 后填, STUB 模式空)
     sid: Option<String>,
@@ -226,7 +226,7 @@ impl Room {
         })
     }
 
-    /// 房间名 (per v0.9.21 `Room.name`).
+    /// 房间名 (按既有实现 `Room.name`).
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -241,7 +241,7 @@ impl Room {
         self.sid = Some(sid);
     }
 
-    /// 当前状态 (5 状态机, per v0.9.21 `Room.state`).
+    /// 当前状态 (5 状态机, 按既有实现 `Room.state`).
     pub fn state(&self) -> RoomState {
         // 安全的转换: 0..=4 范围内, 否则 fallback Disconnected
         let raw = self.state.load(Ordering::SeqCst);
@@ -255,7 +255,7 @@ impl Room {
         }
     }
 
-    /// 设置状态 (per v0.9.21 `Room.setState` 内部, R21 续由 signal protocol 调).
+    /// 设置状态 (按既有实现 `Room.setState` 内部, R21 续由 signal protocol 调).
     pub fn set_state(&mut self, new_state: RoomState) {
         self.state.store(new_state as u8, Ordering::SeqCst);
         self.last_state_change_secs = SystemTime::now()

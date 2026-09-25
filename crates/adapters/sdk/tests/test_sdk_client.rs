@@ -20,7 +20,7 @@ use apeireth_sdk::client::{
 use apeireth_sdk::{negotiate, Envelope, SdkError, SdkErrorCode, SdkVersion, WireCompat, WireKind};
 
 // =====================================================================
-// Fixture 1: K-1 #1 — platform name = "apeireth" (1:1 翻译 v0.9.21)
+// Fixture 1: K-1 #1 — platform name = "apeireth" (对齐既有实现)
 // =====================================================================
 
 #[test]

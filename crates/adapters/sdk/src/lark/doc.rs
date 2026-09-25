@@ -1,15 +1,15 @@
-//! # Lark 文档 (per @larksuiteoapi/lark-sdk v0.9.21 1:1 翻译)
+//! # Lark 文档 (per Lark 开放平台 SDK)
 //!
-//! 飞书文档 `docx/v1/documents` / `sheets/v3/spreadsheets` / `bitable/v1/apps` API 翻译源.
+//! 飞书文档 `docx/v1/documents` / `sheets/v3/spreadsheets` / `bitable/v1/apps` API 参考.
 //! 4 实体之一: `Document` (含 doc / sheet / bitable 三种类型).
 //!
-//! **2 核心 API** (per v0.9.21):
+//! **2 核心 API** (按既有实现):
 //! - `create_doc` — 创建 docx 文档
 //! - `create_sheet` — 创建 spreadsheet
 //!
-//! **当前 STUB**: 字段保留 1:1 翻译, 走 `create_doc` / `create_sheet` 返 `NotImplemented`.
+//! **当前 STUB**: 字段保留, 走 `create_doc` / `create_sheet` 返 `NotImplemented`.
 //!
-//! ## 3 DocumentType 守门 (per v0.9.21)
+//! ## 3 DocumentType 守门 (按既有实现)
 //!
 //! - `Doc` — docx 文档 (Word 兼容)
 //! - `Sheet` — spreadsheet (Excel 兼容)
@@ -20,19 +20,19 @@ use serde::{Deserialize, Serialize};
 use crate::lark::error::LarkError;
 
 // ============================================================================
-// §1 DocumentType (3 variant, 1:1 翻译 v0.9.21)
+// §1 DocumentType (3 variant, 对齐既有实现)
 // ============================================================================
 
-/// 文档类型 (3 variant, per v0.9.21 `type` 字段).
+/// 文档类型 (3 variant, 按既有实现 `type` 字段).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentType {
-    /// docx 文档 (per v0.9.21 `type: "docx"`).
+    /// docx 文档 (按既有实现 `type: "docx"`).
     #[default]
     Doc,
-    /// spreadsheet (per v0.9.21 `type: "sheet"`).
+    /// spreadsheet (按既有实现 `type: "sheet"`).
     Sheet,
-    /// 多维表格 (per v0.9.21 `type: "bitable"`).
+    /// 多维表格 (按既有实现 `type: "bitable"`).
     Bitable,
 }
 
@@ -57,10 +57,10 @@ impl std::fmt::Display for DocumentType {
 }
 
 // ============================================================================
-// §2 Document (per v0.9.21 1:1)
+// §2 Document (按既有实现口径)
 // ============================================================================
 
-/// 文档顶层结构 (per v0.9.21 docx / sheet / bitable 1:1 翻译).
+/// 文档顶层结构 (按既有实现 docx / sheet / bitable).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Document {
     /// 文档 ID (per `document_id` 字段, R21 真接飞书后才有, STUB 模式 None).
@@ -183,10 +183,10 @@ impl Document {
 }
 
 // ============================================================================
-// §3 SheetMeta (per spreadsheet 1:1 翻译, 跟 Document 配合用)
+// §3 SheetMeta (per spreadsheet, 跟 Document 配合用)
 // ============================================================================
 
-/// Sheet 元数据 (per v0.9.21 `sheets/v3/spreadsheets/{token}/sheets/{sheet_id}` 1:1).
+/// Sheet 元数据 (按既有实现 `sheets/v3/spreadsheets/{token}/sheets/{sheet_id}` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SheetMeta {
     /// Sheet ID (per `sheet_id` 字段).
@@ -221,10 +221,10 @@ impl SheetMeta {
 }
 
 // ============================================================================
-// §4 BitableMeta (per bitable 1:1 翻译, 跟 Document 配合用)
+// §4 BitableMeta (per bitable, 跟 Document 配合用)
 // ============================================================================
 
-/// 多维表格元数据 (per v0.9.21 `bitable/v1/apps/{app_token}/tables` 1:1).
+/// 多维表格元数据 (按既有实现 `bitable/v1/apps/{app_token}/tables` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitableMeta {
     /// Table ID (per `table_id` 字段).
@@ -236,7 +236,7 @@ pub struct BitableMeta {
     pub fields: Vec<BitableField>,
 }
 
-/// 多维表格字段 (per v0.9.21 `bitable/v1/apps/{app_token}/tables/{table_id}/fields` 1:1).
+/// 多维表格字段 (按既有实现 `bitable/v1/apps/{app_token}/tables/{table_id}/fields` 1:1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitableField {
     /// 字段名 (per `field_name` 字段, 非空).

@@ -1,17 +1,17 @@
-//! # Voice Speech-to-Text (per @anthropic-ai/voice v0.9.21 1:1 翻译)
+//! # Voice Speech-to-Text (per 既有 Voice SDK)
 //!
-//! 4 STT 模型 (per v0.9.21 + task spec §3):
+//! 4 STT 模型 (按既有实现 + task spec §3):
 //! 1. **Whisper** — OpenAI Whisper (offline, multi-language)
 //! 2. **Wav2Vec** — Facebook wav2vec 2.0 (offline, self-supervised)
 //! 3. **Deepgram** — Deepgram Nova (online, real-time API)
 //! 4. **Google** — Google Cloud Speech-to-Text (online, multi-language)
 //!
-//! **STUB**: 4 模型枚举保留 1:1 翻译, 但 transcribe() 内部返 `VoiceError::NotImplemented`.
+//! **STUB**: 4 模型枚举保留, 但 transcribe() 内部返 `VoiceError::NotImplemented`.
 //!
 //! ## 引用文档
 //!
-//! 1. `@anthropic-ai/voice v0.9.21` `client/api_transcribe.js` (transcribe 1:1 翻译源)
-//! 2. `@anthropic-ai/voice v0.9.21` `core/types.d.ts` (SttModel 1:1 翻译源)
+//! 1. `既有 Voice SDK` `client/api_transcribe.js` (transcribe 参考)
+//! 2. `既有 Voice SDK` `core/types.d.ts` (SttModel 参考)
 
 use std::time::SystemTime;
 
@@ -23,20 +23,20 @@ use crate::voice::error::{VoiceError, VoiceResult};
 // §1 4 STT 模型 enum (K-1 强校验守门, 编译期 hardcode 4 variant)
 // ============================================================================
 
-/// STT 模型 (4 variant, 1:1 翻译 @anthropic-ai/voice v0.9.21 `SttModel` enum).
+/// STT 模型 (4 variant, 1:1 翻译 既有 Voice SDK `SttModel` enum).
 ///
-/// 4 模型 snake_case 字符串严格匹配 v0.9.21 API 规范.
+/// 4 模型 snake_case 字符串严格匹配 既有实现 API 规范.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SttModel {
-    /// **OpenAI Whisper** (offline, multi-language, per v0.9.21 估 1:1).
+    /// **OpenAI Whisper** (offline, multi-language, 按既有实现 估 1:1).
     #[default]
     Whisper,
-    /// **Facebook wav2vec 2.0** (offline, self-supervised, per v0.9.21估 1:1).
+    /// **Facebook wav2vec 2.0** (offline, self-supervised, 按既有实现估算 1:1).
     Wav2Vec,
-    /// **Deepgram Nova** (online, real-time API, per v0.9.21估 1:1).
+    /// **Deepgram Nova** (online, real-time API, 按既有实现估算 1:1).
     Deepgram,
-    /// **Google Cloud Speech-to-Text** (online, multi-language, per v0.9.21估 1:1).
+    /// **Google Cloud Speech-to-Text** (online, multi-language, 按既有实现估算 1:1).
     Google,
 }
 
@@ -44,7 +44,7 @@ impl SttModel {
     /// 4 模型 hardcode 常量.
     pub const COUNT: usize = 4;
 
-    /// 字符串 (1:1 翻译 v0.9.21 `model` 字段, snake_case 严格匹配).
+    /// 字符串 (对齐既有实现 `model` 字段, snake_case 严格匹配).
     pub fn as_str(&self) -> &'static str {
         match self {
             SttModel::Whisper => "whisper",
@@ -54,7 +54,7 @@ impl SttModel {
         }
     }
 
-    /// 从字符串解析 (per v0.9.21响应 `model` 字段).
+    /// 从字符串解析 (按既有实现响应 `model` 字段).
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "whisper" => Some(SttModel::Whisper),
@@ -75,7 +75,7 @@ impl SttModel {
         !self.is_offline()
     }
 
-    /// 估计最大 audio 长度 (秒, per v0.9.21估).
+    /// 估计最大 audio 长度 (秒, 按既有实现估算).
     /// - Whisper: 默认 30s (per OpenAI API 限制)
     /// - Wav2Vec: 默认 60s (per 模型架构)
     /// - Deepgram: 默认 300s (per Nova API)
@@ -106,12 +106,12 @@ pub const SUPPORTED_STT_MODELS: &[SttModel] = &[
 const _: () = assert!(SUPPORTED_STT_MODELS.len() == 4);
 
 // ============================================================================
-// §2 Transcription STT 结果 (per v0.9.21 1:1 翻译)
+// §2 Transcription STT 结果 (per 对齐既有实现)
 // ============================================================================
 
-/// STT 转写结果 (per v0.9.21 `transcribe` 响应 1:1 翻译).
+/// STT 转写结果 (按既有实现 `transcribe` 响应).
 ///
-/// 字段对应 v0.9.21 `Transcription` 对象:
+/// 字段对应既有实现 `Transcription` 对象:
 /// - `text` (转写后的文本)
 /// - `model` (per `SttModel`)
 /// - `language` (ISO 639-1, e.g. `en` / `zh-CN`)
@@ -165,12 +165,12 @@ impl Transcription {
 }
 
 // ============================================================================
-// §3 SttRequest STT 请求 (per v0.9.21 `transcribe` 入参 1:1)
+// §3 SttRequest STT 请求 (按既有实现 `transcribe` 入参 1:1)
 // ============================================================================
 
-/// STT 请求 (per v0.9.21 `transcribe` 入参 1:1 翻译).
+/// STT 请求 (按既有实现 `transcribe` 入参).
 ///
-/// 字段对应 v0.9.21 `TranscribeRequest` 对象:
+/// 字段对应既有实现 `TranscribeRequest` 对象:
 /// - `audio` (bytes, per audio file)
 /// - `format` (wav/mp3/opus/flac)
 /// - `sample_rate` (8000..=48000)

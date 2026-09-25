@@ -1,12 +1,12 @@
-//! # Voice 唤醒词 (per @anthropic-ai/voice v0.9.21 1:1 翻译)
+//! # Voice 唤醒词 (per 既有 Voice SDK)
 //!
-//! 唤醒词 (per v0.9.21 + R20 设计拍板):
+//! 唤醒词 (按既有实现 + R20 设计拍板):
 //! 1. **Hardcoded** — 编译期 hardcode 唤醒词, 默认 `"apeireth"` (per R20 设计拍板, 1:1 翻译品牌一致)
 //! 2. **Custom** — 用户自定义唤醒词字符串 (R21 续真接时估补)
 //! 3. **Phonetic** — 音标匹配 (e.g. `[əˈpɪərɛθ]` 替代字符串, R21 续)
 //! 4. **Semantic** — 语义匹配 (e.g. `"AI assistant"` 整段语义, R21 续)
 //!
-//! **STUB**: 4 类别 1:1 翻译, 但 detect_wake() 内部返 `VoiceError::NotImplemented`.
+//! **STUB**: 4 类别, 但 detect_wake() 内部返 `VoiceError::NotImplemented`.
 
 use std::time::SystemTime;
 
@@ -20,22 +20,22 @@ use crate::voice::error::{VoiceError, VoiceResult};
 
 /// 默认唤醒词 (K-1 强校验 #1 品牌一致: 编译期 hardcode `"apeireth"`).
 ///
-/// 1:1 翻译 v0.9.21 品牌一致 (R20 设计拍板).
+/// 对齐既有实现 品牌一致 (R20 设计拍板).
 pub const VOICE_DEFAULT_WAKE_WORD: &str = "apeireth";
 
-/// 自定义唤醒词最大长度 (per v0.9.21估 64 char, 防恶意长串).
+/// 自定义唤醒词最大长度 (按既有实现估算 64 char, 防恶意长串).
 pub const MAX_CUSTOM_WAKE_WORD_LENGTH: usize = 64;
 
-/// 唤醒词最小长度 (per v0.9.21估 3 char, 防过短误触).
+/// 唤醒词最小长度 (按既有实现估算 3 char, 防过短误触).
 pub const MIN_WAKE_WORD_LENGTH: usize = 3;
 
 // ============================================================================
-// §2 唤醒词类别 (4 variant, 1:1 翻译 @anthropic-ai/voice v0.9.21)
+// §2 唤醒词类别 (4 variant, 1:1 翻译 既有 Voice SDK)
 // ============================================================================
 
-/// 唤醒词类别 (4 variant, 1:1 翻译 v0.9.21 `WakeWordCategory` enum).
+/// 唤醒词类别 (4 variant, 对齐既有实现 `WakeWordCategory` enum).
 ///
-/// 4 类别 snake_case 字符串严格匹配 v0.9.21 API 规范.
+/// 4 类别 snake_case 字符串严格匹配 既有实现 API 规范.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WakeWordCategory {
@@ -54,7 +54,7 @@ impl WakeWordCategory {
     /// 4 类别 hardcode 常量.
     pub const COUNT: usize = 4;
 
-    /// 字符串 (1:1 翻译 v0.9.21 `category` 字段, snake_case 严格匹配).
+    /// 字符串 (对齐既有实现 `category` 字段, snake_case 严格匹配).
     pub fn as_str(&self) -> &'static str {
         match self {
             WakeWordCategory::Hardcoded => "hardcoded",
@@ -64,7 +64,7 @@ impl WakeWordCategory {
         }
     }
 
-    /// 从字符串解析 (per v0.9.21响应 `category` 字段).
+    /// 从字符串解析 (按既有实现响应 `category` 字段).
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "hardcoded" => Some(WakeWordCategory::Hardcoded),
@@ -100,15 +100,15 @@ pub const SUPPORTED_WAKE_WORD_CATEGORIES: &[WakeWordCategory] = &[
 const _: () = assert!(SUPPORTED_WAKE_WORD_CATEGORIES.len() == 4);
 
 // ============================================================================
-// §3 WakeWord struct (per v0.9.21 `wake_word` 字段 1:1 翻译)
+// §3 WakeWord struct (按既有实现 `wake_word` 字段)
 // ============================================================================
 
-/// 唤醒词配置 (per v0.9.21 `wake_word` 字段 1:1 翻译).
+/// 唤醒词配置 (按既有实现 `wake_word` 字段).
 ///
-/// 字段对应 v0.9.21 `WakeWordConfig` 对象:
+/// 字段对应既有实现 `WakeWordConfig` 对象:
 /// - `category` (4 类别, 编译期 hardcode)
 /// - `keyword` (字符串, 默认 `"apeireth"` per Hardcoded 类别)
-/// - `sensitivity` (0.0..=1.0, per v0.9.21默认 0.5)
+/// - `sensitivity` (0.0..=1.0, 按既有实现默认 0.5)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WakeWord {
     /// 类别 (编译期 hardcode 4 类别)
@@ -159,7 +159,7 @@ impl WakeWord {
         })
     }
 
-    /// 校验唤醒词 (非空 + 长度 3..=64, per v0.9.21估).
+    /// 校验唤醒词 (非空 + 长度 3..=64, 按既有实现估算).
     pub fn validate_keyword(keyword: &str) -> VoiceResult<()> {
         let trimmed = keyword.trim();
         if trimmed.is_empty() {
@@ -205,9 +205,9 @@ impl Default for WakeWord {
 // §4 WakeWordDetection 唤醒词检测结果
 // ============================================================================
 
-/// 唤醒词检测结果 (per v0.9.21 `detect_wake` 响应 1:1 翻译).
+/// 唤醒词检测结果 (按既有实现 `detect_wake` 响应).
 ///
-/// 字段对应 v0.9.21 `WakeWordDetection` 对象:
+/// 字段对应既有实现 `WakeWordDetection` 对象:
 /// - `category` (per `WakeWordCategory`)
 /// - `keyword` (命中的关键词)
 /// - `confidence` (0.0..=1.0, 检测置信度)
