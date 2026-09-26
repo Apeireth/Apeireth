@@ -546,7 +546,8 @@ mod tests {
         fs::write(&target, "old").unwrap();
         let pid = std::process::id();
         let mut occupied = Vec::new();
-        for seq in 0..4096u64 {
+        // 序号进程内单调; 预占 0..512 已远超本测试二进制的全部写调用数, 必中。
+        for seq in 0..512u64 {
             let candidate = dir.join(format!("t.txt.tmp-{pid}-{seq}"));
             if fs::write(&candidate, "occupied").is_ok() {
                 occupied.push(candidate);
@@ -574,7 +575,8 @@ mod tests {
         fs::write(&victim, "untouched").unwrap();
         let pid = std::process::id();
         let mut planted = Vec::new();
-        for seq in 0..4096u64 {
+        // 预占 0..512 必中 (理由同上)。
+        for seq in 0..512u64 {
             let candidate = dir.join(format!("t.txt.tmp-{pid}-{seq}"));
             if std::os::unix::fs::symlink(&victim, &candidate).is_ok() {
                 planted.push(candidate);

@@ -877,7 +877,9 @@ replaced
         let target = dir.path().join("t.txt");
         let pid = std::process::id();
         let mut occupied = Vec::new();
-        for seq in 0..4096u64 {
+        // 预占 0..256 已远超本测试二进制的全部写调用数, 必中; 同名预置只影响
+        // 同目标名 (t.txt) 的写, 不干扰其它用例的并行写。
+        for seq in 0..256u64 {
             let candidate = dir.path().join(format!("t.txt.tmp-{pid}-{seq}"));
             if fs::write(&candidate, "occupied").is_ok() {
                 occupied.push(candidate);
