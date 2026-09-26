@@ -69,6 +69,8 @@ pub mod rubric;
 pub mod sandbox_ladder;
 pub mod sandbox_preset;
 pub mod tool_desc_audit;
+// 单调守卫接口: 守卫只能拒绝不能放行, 监听顺序不可逆 (单调性即安全)。
+pub mod tool_guard;
 pub mod untrusted_mark;
 
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
@@ -86,6 +88,7 @@ pub use rate_limit::{RateLimitConfig, RateLimitGovernanceHook, TrustTier};
 pub use tool_desc_audit::{
     AuditSeverity, ToolDescAuditError, ToolDescAuditResult, ToolDescAuditor,
 };
+pub use tool_guard::{GuardRefusal, MonotonicGuards, ToolGuard, ToolGuardRequest};
 pub use untrusted_mark::{
     UntrustedContentPayload, UntrustedContentWrapper, UNTRUSTED_TAG_CLOSE, UNTRUSTED_TAG_OPEN,
 };

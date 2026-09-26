@@ -11,6 +11,7 @@ use apeireth_plugin::{
 };
 use async_trait::async_trait;
 
+use crate::exec_pipeline::{PipelinedCapability, ToolExecutionPipeline};
 use crate::fetch::{FetchConfig, FetchTool};
 use crate::filesystem::FilesystemTool;
 use crate::repo::RepoTool;
@@ -36,6 +37,10 @@ pub struct BuiltinToolsOptions {
 /// `tool.repo`. When explicitly configured it also provides `tool.shell`.
 ///
 /// The plugin owns the capabilities; the runtime owns dispatch and governance.
+/// Every capability executes through the explicit five-stage chain
+/// (`exec_pipeline`): the default pipeline installs no hooks, no guards, no
+/// deadline, and no correction channel, so dispatch behaviour is exactly what
+/// direct execution produced before the chain was made explicit.
 pub struct BuiltinToolsPlugin {
     manifest: PluginManifest,
     tools: Vec<Arc<dyn ToolCapability>>,
@@ -126,6 +131,16 @@ impl BuiltinToolsPlugin {
                 .unwrap();
             tools.push(Arc::new(FetchTool::new(fetch_config)));
         }
+
+        // 执行链重排为显式阶段: 每个能力的调用都经五段流水线调度。默认流水线
+        // 不挂任何钩子/守卫/超时/纠错/合同, 发出的结果与直接执行逐字节一致。
+        let pipeline = Arc::new(ToolExecutionPipeline::new());
+        let tools: Vec<Arc<dyn ToolCapability>> = tools
+            .into_iter()
+            .map(|tool| -> Arc<dyn ToolCapability> {
+                Arc::new(PipelinedCapability::new(tool, Arc::clone(&pipeline)))
+            })
+            .collect();
 
         Self { manifest, tools }
     }
