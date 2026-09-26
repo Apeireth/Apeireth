@@ -12,8 +12,25 @@
 //! ContextLedger's own rolling DELETE stays inside [`crate::context_ledger`] because a
 //! ledger is a recent-window, not an archive.
 
+use apeireth_orchestration::self_tuning::TunableParam;
+
 use crate::memory_governance::{MemoryGovernanceStatus, MemoryGovernanceStore};
 use crate::{EpisodeQuery, EpisodeStore, MemoryResult, SqliteMemoryStore};
+
+/// 艾宾浩斯半衰期基线 (小时) —— 现状硬编码常量 (24h = 1 天)。
+/// `APEIRETH_TUNE_MEMORY_FADE` 未设/非法 = 衰减倍率 1.0 = 本值 (零变化)。
+pub const BASELINE_HALF_LIFE_HOURS: f64 = 24.0;
+
+/// 当前生效的艾宾浩斯半衰期 (小时):
+/// `BASELINE_HALF_LIFE_HOURS / MemoryFade 倍率`。
+///
+/// - 倍率来自体验旋钮 [`TunableParam::MemoryFade`] (env `APEIRETH_TUNE_MEMORY_FADE`,
+///   非法值回默认 1.0), 自动校准引擎的落地值经进程内 override 生效。
+/// - 倍率 > 1 = 忘得更快 (半衰期缩短), < 1 = 记得更久。
+/// - 未设 = 倍率 1.0 = 现状 24h, 行为零变化。
+pub fn effective_half_life_hours() -> f64 {
+    BASELINE_HALF_LIFE_HOURS / TunableParam::MemoryFade.effective()
+}
 
 /// Ebbinghaus strength at `now_unix` relative to `last_unix` (both epoch seconds).
 ///
@@ -38,7 +55,8 @@ pub struct RetentionPolicy {
     pub max_age_secs: Option<i64>,
     /// Forget when decay strength (half-life hours) falls below this (0, 1].
     pub min_strength: Option<f32>,
-    /// Half-life used when `min_strength` is set. Default 24h.
+    /// Half-life used when `min_strength` is set. Baseline 24h, scaled by the
+    /// experience knob `APEIRETH_TUNE_MEMORY_FADE` (see [`effective_half_life_hours`]).
     pub half_life_hours: f64,
 }
 
@@ -48,7 +66,8 @@ impl Default for RetentionPolicy {
             max_count: None,
             max_age_secs: None,
             min_strength: None,
-            half_life_hours: 24.0,
+            // 艾宾浩斯半衰期 (体验旋钮 MemoryFade): 未设 = 倍率 1.0 = 24h 现状。
+            half_life_hours: effective_half_life_hours(),
         }
     }
 }
@@ -267,6 +286,26 @@ mod tests {
         assert!((decay_strength(0, 0, 24.0) - 1.0).abs() < 1e-6);
         assert!((decay_strength(0, 24 * 3600, 24.0) - 0.5).abs() < 1e-5);
         assert!(decay_strength(0, 48 * 3600, 24.0) < 0.26);
+    }
+
+    /// 旋钮推导锁定: 生效半衰期 = 基线 / MemoryFade 倍率;
+    /// 未设旋钮 (倍率 1.0) = 基线 24h, 行为零变化。
+    #[test]
+    fn memory_fade_knob_scales_half_life_from_baseline() {
+        let fade = TunableParam::MemoryFade.effective();
+        assert!(
+            (effective_half_life_hours() - BASELINE_HALF_LIFE_HOURS / fade).abs() < 1e-9,
+            "生效半衰期必须是 基线/倍率"
+        );
+        assert_eq!(
+            TunableParam::MemoryFade.parse_env_value(None),
+            1.0,
+            "未设旋钮 = 倍率 1.0 = 现状"
+        );
+        assert_eq!(
+            RetentionPolicy::default().half_life_hours,
+            effective_half_life_hours()
+        );
     }
 
     #[test]

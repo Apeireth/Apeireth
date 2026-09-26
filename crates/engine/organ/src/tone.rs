@@ -15,7 +15,17 @@
 
 use std::fmt;
 
+use apeireth_orchestration::self_tuning::TunableParam;
 use serde::{Deserialize, Serialize};
+
+/// 情绪注入 EMA 混合项基线系数 (donor `BondCharacter::apply_emotion` 写死的
+/// resonance 情绪项 0.1) —— 体验旋钮 [`TunableParam::ToneSaturation`] 的接线点:
+/// 生效系数 = 本值 × 饱和倍率 (1.0 = 现行为, 零变化)。
+pub const EMOTION_MIX_RESONANCE: f64 = 0.1;
+
+/// trust 情绪项基线系数 (donor 写死的 0.2; 与 [`EMOTION_MIX_RESONANCE`] 同受
+/// [`TunableParam::ToneSaturation`] 缩放)。
+pub const EMOTION_MIX_TRUST: f64 = 0.2;
 
 /// 关系特征快照 (用于语调基线判定).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -52,6 +62,12 @@ impl BondCharacterSnapshot {
     /// are accepted for API parity and currently unused (donor discarded them
     /// the same way). Does **not** own `memory::partner::Bond` — this is a
     /// tone-layer snapshot helper.
+    ///
+    /// **语气情绪饱和度** (体验旋钮 [`TunableParam::ToneSaturation`], env
+    /// `APEIRETH_TUNE_TONE_SATURATION`): 情绪注入 EMA 混合项的饱和倍率 ——
+    /// 即 donor 写死的情绪项权重 (resonance 情绪项 0.1 / trust 情绪项 0.2) 的
+    /// 缩放系数。1.0 = 现行为 (零变化); 0 = 情绪不入语气表征 (纯关系基线);
+    /// 2 = 双倍情绪浓度。非法值回默认 1.0。
     #[allow(clippy::too_many_arguments)]
     pub fn apply_emotion(
         &mut self,
@@ -64,9 +80,11 @@ impl BondCharacterSnapshot {
         anger: f64,
         anticipation: f64,
     ) {
-        self.resonance =
-            (self.resonance * 0.7 + (joy + trust + anticipation) * 0.1).clamp(0.0, 1.0);
-        self.trust = (self.trust * 0.8 + trust * 0.2).clamp(0.0, 1.0);
+        let saturation = TunableParam::ToneSaturation.effective();
+        self.resonance = (self.resonance * 0.7
+            + (joy + trust + anticipation) * EMOTION_MIX_RESONANCE * saturation)
+            .clamp(0.0, 1.0);
+        self.trust = (self.trust * 0.8 + trust * EMOTION_MIX_TRUST * saturation).clamp(0.0, 1.0);
         let _ = (fear, surprise, sadness, disgust, anger);
     }
 }
@@ -280,5 +298,32 @@ mod tests {
         snap.apply_emotion(1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
         assert_eq!(snap.resonance, 1.0);
         assert_eq!(snap.trust, 1.0);
+    }
+
+    /// 旋钮推导锁定: 生效情绪混合项 = donor 基线系数 × ToneSaturation 倍率
+    /// (未设旋钮 = 倍率 1.0 = 现行为, 零变化)。
+    #[test]
+    fn tone_saturation_knob_scales_emotion_mix() {
+        apeireth_orchestration::self_tuning::clear_effective_overrides();
+        let saturation = TunableParam::ToneSaturation.effective();
+        let mut snap = BondCharacterSnapshot {
+            trust: 0.2,
+            resonance: 0.2,
+            ..Default::default()
+        };
+        snap.apply_emotion(1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+        assert!(
+            (snap.resonance - (0.2 * 0.7 + 3.0 * EMOTION_MIX_RESONANCE * saturation)).abs() < 1e-12,
+            "resonance 情绪项必须按 基线系数×饱和倍率 缩放"
+        );
+        assert!(
+            (snap.trust - (0.2 * 0.8 + 1.0 * EMOTION_MIX_TRUST * saturation)).abs() < 1e-12,
+            "trust 情绪项必须按 基线系数×饱和倍率 缩放"
+        );
+        assert_eq!(
+            TunableParam::ToneSaturation.parse_env_value(None),
+            1.0,
+            "未设旋钮 = 倍率 1.0 = 现状"
+        );
     }
 }

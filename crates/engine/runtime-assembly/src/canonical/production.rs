@@ -242,6 +242,9 @@ pub struct ProductionBackends {
     pub reflexion_store: Option<Arc<dyn apeireth_memory::reflexion::ReflexionStore>>,
     /// W2 §4.2: partner 羁绊存储 (InMemoryPartnerStore 或未来 sqlite 实现)。
     pub partner_store: Option<Arc<dyn apeireth_memory::partner::PartnerStore>>,
+    /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层, 接上后
+    /// MemoryRecallModule 的召回结果作为真接信号喂给引擎。
+    pub self_tuning: Option<Arc<crate::canonical::self_tuning_wire::SelfTuningWire>>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -371,6 +374,9 @@ impl ProductionModules {
             let mut module = MemoryRecallModule::new(memory);
             if let Some(coord) = &shared_coordinator {
                 module = module.with_coordinator(Arc::clone(coord));
+            }
+            if let Some(wire) = &backends.self_tuning {
+                module = module.with_self_tuning(Arc::clone(wire));
             }
             if let (Some(wiki), Some(graph), Some(associations)) =
                 (&backends.wiki, &backends.graph, &backends.associations)

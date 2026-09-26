@@ -134,6 +134,15 @@ fn get_log_directory(logger: State<'_, Arc<DesktopLogger>>) -> Result<String, St
     Ok(logger.log_directory().to_string_lossy().to_string())
 }
 
+/// 只读读取「学习日志」: 自动校准引擎的调整记录 (tuning-log.jsonl, 数据目录,
+/// 与侧车 session db 同落位)。文件缺失 = 空列表; 坏行跳过。
+#[tauri::command]
+async fn read_tuning_log(
+    supervisor: State<'_, Arc<BackendSupervisor>>,
+) -> Result<Vec<backend_supervisor::TuningLogEntry>, String> {
+    supervisor.read_tuning_log().await
+}
+
 #[tauri::command]
 async fn open_log_directory(logger: State<'_, Arc<DesktopLogger>>) -> Result<(), String> {
     let log_dir = logger.log_directory();
@@ -252,6 +261,7 @@ pub fn run() {
             list_workspace_suggestions,
             get_log_directory,
             open_log_directory,
+            read_tuning_log,
             open_settings,
             toggle_quick_window
         ])

@@ -260,12 +260,34 @@ pub struct BackendCapabilityEnv {
     pub reasoning_enabled: bool,
     pub reasoning_model_filters: String,
     pub reasoning_tag: String,
+    /// 「性格养成」第一铲: 遗忘衰减强度倍率 (APEIRETH_TUNE_MEMORY_FADE);
+    /// `None` = 不注入 (后端默认 1.0 = 现行为, 零变化)。
+    pub tune_memory_fade: Option<f64>,
+    /// 好奇强度倍率 (APEIRETH_TUNE_CURIOSITY_STRENGTH); None = 不注入 (后端默认 1.0)。
+    pub tune_curiosity_strength: Option<f64>,
+    /// 语气情绪饱和倍率 (APEIRETH_TUNE_TONE_SATURATION); None = 不注入 (后端默认 1.0)。
+    pub tune_tone_saturation: Option<f64>,
+    /// 整合节奏·每 N 回合 (APEIRETH_TUNE_CONSOLIDATION_CADENCE); None = 不注入 (后端默认 1)。
+    pub tune_consolidation_cadence: Option<f64>,
+    /// 「从使用中学习」自校准开关 (APEIRETH_ENABLE_SELF_TUNING): 默认关,
+    /// 仅 true 时注入 "1" (fail-closed, 缺席 = 关)。
+    pub enable_self_tuning: bool,
 }
 
 /// Explicit on/off value for a default-on CLI knob: the desktop injects both
 /// states because absence means ON on the backend side.
 fn on_off_value(on: bool) -> String {
     if on { "1" } else { "0" }.to_string()
+}
+
+/// Render an experience-knob float for env injection (1 → "1", 0.5 → "0.5"),
+/// mirroring the morphology-temperature rendering.
+fn render_tuning_value(value: f64) -> String {
+    if value.fract() == 0.0 {
+        format!("{value:.0}")
+    } else {
+        value.to_string()
+    }
 }
 
 /// 产品默认，与 frontend `DEFAULT_CAPABILITY_TOGGLES` 对齐：记忆核心族三件
@@ -301,6 +323,12 @@ impl Default for BackendCapabilityEnv {
             reasoning_enabled: false,
             reasoning_model_filters: String::new(),
             reasoning_tag: String::new(),
+            // 体验旋钮: 缺省不注入 (后端默认 = 基线 = 现行为, 零变化)。
+            tune_memory_fade: None,
+            tune_curiosity_strength: None,
+            tune_tone_saturation: None,
+            tune_consolidation_cadence: None,
+            enable_self_tuning: false,
         }
     }
 }
@@ -417,12 +445,88 @@ impl BackendCapabilityEnv {
                 pairs.push(("APEIRETH_REASONING_TAG", tag.to_string()));
             }
         }
+        // 「性格养成」第一铲: 四个体验旋钮 (APEIRETH_TUNE_*) —— 与后端
+        // orchestration::self_tuning 的 env 名严格一致; Some 才注入 (旧持久化
+        // JSON 缺字段 = None = 不注入 = 后端基线现行为)。
+        if let Some(value) = self.tune_memory_fade {
+            pairs.push(("APEIRETH_TUNE_MEMORY_FADE", render_tuning_value(value)));
+        }
+        if let Some(value) = self.tune_curiosity_strength {
+            pairs.push((
+                "APEIRETH_TUNE_CURIOSITY_STRENGTH",
+                render_tuning_value(value),
+            ));
+        }
+        if let Some(value) = self.tune_tone_saturation {
+            pairs.push(("APEIRETH_TUNE_TONE_SATURATION", render_tuning_value(value)));
+        }
+        if let Some(value) = self.tune_consolidation_cadence {
+            pairs.push((
+                "APEIRETH_TUNE_CONSOLIDATION_CADENCE",
+                render_tuning_value(value),
+            ));
+        }
+        if self.enable_self_tuning {
+            pairs.push(("APEIRETH_ENABLE_SELF_TUNING", "1".to_string()));
+        }
         pairs
     }
 
     /// True when nothing would be injected into the sidecar at all.
     pub fn is_empty(&self) -> bool {
         self.env_pairs().is_empty()
+    }
+}
+
+/// 一条学习日志记录 (只读回显), 镜像后端 `self_tuning::TuningRecord` 的
+/// tuning-log.jsonl 行 (snake_case)。`param` ∈ memory_fade / curiosity_strength /
+/// tone_saturation / consolidation_cadence。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TuningLogEntry {
+    /// 单调递增序号 (撤销定位用)。
+    pub seq: u64,
+    /// 被调体验参数 (snake_case)。
+    pub param: String,
+    /// 调整前值。
+    pub previous: f64,
+    /// 调整后值 (被上限挡住时 == previous)。
+    pub next: f64,
+    /// 调整原因 (人可读)。
+    pub reason: String,
+    /// 事件时间戳 (epoch ms)。
+    pub at_epoch_ms: i64,
+}
+
+/// 学习日志文件名 (与后端接线层 `TUNING_LOG_FILE` 一致)。
+pub const TUNING_LOG_FILE: &str = "tuning-log.jsonl";
+
+/// 学习日志读取上限 (16 MiB): 只读命令不为超大文件兜底买单, 超限报错不猜。
+const TUNING_LOG_MAX_BYTES: u64 = 16 * 1024 * 1024;
+
+/// 只读解析 tuning-log.jsonl: 文件缺失 = 空列表 (尚无自动调整);
+/// 坏行跳过 (容忍部分损坏, 只读视图尽力而为)。
+pub fn read_tuning_log_file(path: &Path) -> Result<Vec<TuningLogEntry>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(raw) => {
+            if raw.len() as u64 > TUNING_LOG_MAX_BYTES {
+                return Err(format!(
+                    "tuning log too large ({} bytes > {TUNING_LOG_MAX_BYTES}): {}",
+                    raw.len(),
+                    path.display()
+                ));
+            }
+            Ok(raw
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .filter_map(|line| serde_json::from_str::<TuningLogEntry>(line).ok())
+                .collect())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(format!(
+            "tuning log read failed ({}): {error}",
+            path.display()
+        )),
     }
 }
 
@@ -1187,6 +1291,34 @@ impl BackendSupervisor {
         workspace::workspace_suggestions(last.as_deref())
     }
 
+    /// 学习日志 `tuning-log.jsonl` 落位: 与侧车 session db 同目录 ——
+    /// 显式绝对 `APEIRETH_SESSION_DB` 最高优先 (镜像 spawn_backend 的锚定规则),
+    /// 否则 store 目录 (`resolve_store_dir`: workspace/.apeireth 或 app-data/data),
+    /// 与后端接线层 `runtime-assembly::tuning_log_path` 同落位。
+    pub async fn tuning_log_path(&self) -> PathBuf {
+        if let Some(value) = std::env::var("APEIRETH_SESSION_DB").ok() {
+            let session_db = PathBuf::from(value);
+            if session_db.is_absolute() {
+                if let Some(dir) = session_db.parent() {
+                    return dir.join(TUNING_LOG_FILE);
+                }
+            }
+        }
+        if let Some(data_dir) = self.app_data_dir() {
+            let workspace_dir = self.workspace_dir.read().await.clone();
+            let store_dir = workspace::resolve_store_dir(workspace_dir.as_deref(), Some(&data_dir))
+                .unwrap_or_else(|| data_dir.join("data"));
+            return store_dir.join(TUNING_LOG_FILE);
+        }
+        PathBuf::from(".apeireth").join(TUNING_LOG_FILE)
+    }
+
+    /// 只读读取学习日志 (调参面板「学习日志」数据源)。
+    pub async fn read_tuning_log(&self) -> Result<Vec<TuningLogEntry>, String> {
+        let path = self.tuning_log_path().await;
+        read_tuning_log_file(&path)
+    }
+
     /// Wait until the state machine leaves its transitional states.
     async fn wait_for_settle(&self) {
         for _ in 0..60 {
@@ -1842,6 +1974,68 @@ mod tests {
             pairs.iter().all(|(k, _)| !k.starts_with("APEIRETH_REASONING")),
             "关闭时 filters 也不注入: {pairs:?}"
         );
+    }
+
+    /// 「性格养成」第一铲: 四个体验旋钮 (APEIRETH_TUNE_*) + 自学习开关
+    /// (APEIRETH_ENABLE_SELF_TUNING) 的注入名与后端旋钮严格一致;
+    /// 缺省 (None/false) = 一个都不注入 = 后端基线现行为 (轻默认)。
+    #[test]
+    fn capability_env_pairs_inject_experience_tuning_knobs() {
+        let caps = BackendCapabilityEnv {
+            tune_memory_fade: Some(0.5),
+            tune_curiosity_strength: Some(1.5),
+            tune_tone_saturation: Some(0.8),
+            tune_consolidation_cadence: Some(3.0),
+            enable_self_tuning: true,
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = caps.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_TUNE_MEMORY_FADE"], "0.5");
+        assert_eq!(map["APEIRETH_TUNE_CURIOSITY_STRENGTH"], "1.5");
+        assert_eq!(map["APEIRETH_TUNE_TONE_SATURATION"], "0.8");
+        assert_eq!(
+            map["APEIRETH_TUNE_CONSOLIDATION_CADENCE"], "3",
+            "整数渲染不带小数点"
+        );
+        assert_eq!(map["APEIRETH_ENABLE_SELF_TUNING"], "1");
+
+        let pairs = BackendCapabilityEnv::default().env_pairs();
+        assert!(
+            pairs
+                .iter()
+                .all(|(key, _)| !key.starts_with("APEIRETH_TUNE_")
+                    && *key != "APEIRETH_ENABLE_SELF_TUNING"),
+            "缺省不得注入体验旋钮: {pairs:?}"
+        );
+    }
+
+    /// 学习日志只读解析: JSONL 行回读 (snake_case 契约) + 坏行跳过 + 缺文件 = 空。
+    #[test]
+    fn tuning_log_file_parses_jsonl_skips_bad_lines_and_missing_is_empty() {
+        let dir =
+            std::env::temp_dir().join(format!("apeireth-tuning-log-read-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(TUNING_LOG_FILE);
+        std::fs::write(
+            &path,
+            concat!(
+                "{\"seq\":1,\"param\":\"memory_fade\",\"previous\":1.0,\"next\":0.75,\"reason\":\"检索未命中偏多\",\"at_epoch_ms\":1000}\n",
+                "not-json\n",
+                "{\"seq\":2,\"param\":\"consolidation_cadence\",\"previous\":1.0,\"next\":2.0,\"reason\":\"拉长整合间隔\",\"at_epoch_ms\":2000}\n",
+            ),
+        )
+        .unwrap();
+        let entries = read_tuning_log_file(&path).expect("解析成功");
+        assert_eq!(entries.len(), 2, "坏行跳过");
+        assert_eq!(entries[0].seq, 1);
+        assert_eq!(entries[0].param, "memory_fade");
+        assert_eq!(entries[0].next, 0.75);
+        assert_eq!(entries[1].param, "consolidation_cadence");
+        assert_eq!(entries[1].at_epoch_ms, 2000);
+
+        let missing = read_tuning_log_file(&dir.join("absent.jsonl")).expect("缺文件 = 空列表");
+        assert!(missing.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// 旧版本持久化的 capability JSON（无 W2/W3 字段）必须仍能反序列化：

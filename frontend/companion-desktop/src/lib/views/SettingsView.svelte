@@ -1,3 +1,25 @@
+<script lang="ts" module>
+  // 「性格与记忆」一键预设值表（性格养成第一铲）。module 作用域导出：
+  // 测试（tests/self-tuning-mapping.mjs）从源码正则抽取做镜像校验——.svelte
+  // 无法被 node 直接 import。取值域：memoryFade/curiosityStrength ∈
+  // [0.25, 4]（0.25 步进）、toneSaturation ∈ [0, 2]（0.2 步进）、
+  // consolidationCadence ∈ [1, 10]（整数）。预设只动这 4 个体验参数。
+  export const DISPOSITION_PRESETS = {
+    '省心': {memoryFade: 1.5, curiosityStrength: 0.75, toneSaturation: 0.8, consolidationCadence: 2},
+    '均衡': {memoryFade: 1.0, curiosityStrength: 1.0, toneSaturation: 1.0, consolidationCadence: 1},
+    '深度记忆': {memoryFade: 0.5, curiosityStrength: 1.5, toneSaturation: 1.2, consolidationCadence: 1},
+  } as const;
+
+  /** 「恢复基线」：四旋钮回基线 + 「从使用中学习」关回默认关（fail-closed）。 */
+  export const DISPOSITION_BASELINE_RESET = {
+    memoryFade: 1.0,
+    curiosityStrength: 1.0,
+    toneSaturation: 1.0,
+    consolidationCadence: 1,
+    selfTuning: false,
+  } as const;
+</script>
+
 <script lang="ts">
   import {untrack} from 'svelte';
   import {
@@ -83,6 +105,8 @@
     setWorkspaceDir,
     listWorkspaceSuggestions,
   } from '../tauri-bridge';
+  import type {TuningLogEntry} from '../desktop-bridge';
+  import {isDesktop, readTuningLog} from '../desktop-bridge';
 
   let {
     config,
@@ -99,6 +123,7 @@
     | 'models'
     | 'personality'
     | 'cognition'
+    | 'disposition'
     | 'governance'
     | 'tools'
     | 'runtime'
@@ -275,6 +300,140 @@
     }
     capabilities = next;
     showRecommendedConfirm = false;
+    void handleSaveSettings();
+  }
+
+  // ---- 「性格与记忆」性格养成第一铲（体验层四旋钮 + 自学习开关 + 学习日志） ----
+  // 治理分级：只暴露四个体验层数值旋钮（遗忘衰减/好奇/语气/整合节奏）与一个
+  // 「从使用中学习」开关；治理与内核参数不可调、也不在此出现。取值域与 Rust
+  // 侧 self_tuning.rs / backend_supervisor.rs 镜像一致（tests/self-tuning-mapping.mjs
+  // 做源码级镜像校验）。四个 setter 镜像 setMorphologyTemperature 风格：钳到
+  // [min,max] 并吸附步进，非有限值回基线。
+
+  function setMemoryFade(value: number): void {
+    // [0.25, 4]、0.25 步进；基线 1.0。
+    const snapped = Number.isFinite(value) ? Math.round(value * 4) / 4 : 1.0;
+    capabilities = {...capabilities, memoryFade: Math.min(4, Math.max(0.25, snapped))};
+  }
+
+  function setCuriosityStrength(value: number): void {
+    // [0.25, 4]、0.25 步进；基线 1.0。
+    const snapped = Number.isFinite(value) ? Math.round(value * 4) / 4 : 1.0;
+    capabilities = {...capabilities, curiosityStrength: Math.min(4, Math.max(0.25, snapped))};
+  }
+
+  function setToneSaturation(value: number): void {
+    // [0, 2]、0.2 步进（×5 取整再 /5）；基线 1.0。
+    const snapped = Number.isFinite(value) ? Math.round(value * 5) / 5 : 1.0;
+    capabilities = {...capabilities, toneSaturation: Math.min(2, Math.max(0, snapped))};
+  }
+
+  function setConsolidationCadence(value: number): void {
+    // [1, 10] 整数；基线 1（每回合 = 现行为）。
+    const rounded = Number.isFinite(value) ? Math.round(value) : 1;
+    capabilities = {...capabilities, consolidationCadence: Math.min(10, Math.max(1, rounded))};
+  }
+
+  function setSelfTuning(on: boolean): void {
+    capabilities = {...capabilities, selfTuning: on === true};
+  }
+
+  // 预设/恢复基线：带确认框（同「应用推荐配置」模式），确认后走与「保存设置」
+  // 同一条 apply 路径（onSave → 配置持久化 + env 注入 + 网关热应用/重启）。
+  let dispositionPresetPending = $state<'省心' | '均衡' | '深度记忆' | '恢复基线' | null>(null);
+
+  /** 待确认预设的四旋钮取值（恢复基线 = 基线四值）；null = 无待确认。 */
+  const pendingDispositionValues = $derived(
+    dispositionPresetPending === null
+      ? null
+      : dispositionPresetPending === '恢复基线'
+        ? {memoryFade: 1.0, curiosityStrength: 1.0, toneSaturation: 1.0, consolidationCadence: 1}
+        : DISPOSITION_PRESETS[dispositionPresetPending],
+  );
+
+  function confirmDispositionPreset(): void {
+    const name = dispositionPresetPending;
+    dispositionPresetPending = null;
+    if (name === '恢复基线') {
+      // 恢复基线：四旋钮回基线 + 「从使用中学习」关回默认关（fail-closed）。
+      capabilities = {...capabilities, ...DISPOSITION_BASELINE_RESET};
+    } else if (name !== null) {
+      const preset = DISPOSITION_PRESETS[name];
+      capabilities = {
+        ...capabilities,
+        memoryFade: preset.memoryFade,
+        curiosityStrength: preset.curiosityStrength,
+        toneSaturation: preset.toneSaturation,
+        consolidationCadence: preset.consolidationCadence,
+      };
+    } else {
+      return;
+    }
+    void handleSaveSettings();
+  }
+
+  // ---- 「学习日志」：只读展示后端写入的自动调整记录 ----
+  let tuningLog = $state<TuningLogEntry[] | null>(null);
+  let tuningLogLoading = $state(false);
+
+  async function refreshTuningLog(): Promise<void> {
+    tuningLogLoading = true;
+    try {
+      tuningLog = await readTuningLog();
+    } finally {
+      tuningLogLoading = false;
+    }
+  }
+
+  // 进入「性格与记忆」板块时读一次学习日志（桌面版接口；非桌面环境返回 null）。
+  $effect(() => {
+    if (activeSection === 'disposition') {
+      void refreshTuningLog();
+    }
+  });
+
+  /** 日志按 seq 倒序（最新在前）。 */
+  const tuningLogSorted = $derived([...(tuningLog ?? [])].sort((a, b) => b.seq - a.seq));
+
+  // snake_case 参数名 → 中文标签（与上方滑杆标签一致）。
+  const TUNING_PARAM_LABELS: Record<string, string> = {
+    memory_fade: '遗忘衰减强度',
+    curiosity_strength: '好奇心强度',
+    tone_saturation: '语气情绪饱和度',
+    consolidation_cadence: '整合节奏',
+  };
+
+  function tuningParamLabel(param: string): string {
+    return TUNING_PARAM_LABELS[param] ?? param;
+  }
+
+  function formatTuningTime(epochMs: number): string {
+    const d = new Date(epochMs);
+    return Number.isNaN(d.getTime()) ? String(epochMs) : d.toLocaleString('zh-CN');
+  }
+
+  // 「撤销」语义：把该参数的滑杆值拨回记录里的 previous（经 setter 钳到滑杆
+  // 范围），然后立即走现有保存/应用路径（handleSaveSettings：配置持久化 +
+  // env 注入 + 网关热应用/重启），把值写回去。之所以不另立 revert-request
+  // 文件：现有 apply 路径是既定架构，独立的撤销请求需要后端新增一条摄取通路，
+  // 超出本次「性格养成第一铲」范围。
+  function undoTuningEntry(entry: TuningLogEntry): void {
+    switch (entry.param) {
+      case 'memory_fade':
+        setMemoryFade(entry.previous);
+        break;
+      case 'curiosity_strength':
+        setCuriosityStrength(entry.previous);
+        break;
+      case 'tone_saturation':
+        setToneSaturation(entry.previous);
+        break;
+      case 'consolidation_cadence':
+        setConsolidationCadence(entry.previous);
+        break;
+      default:
+        return;
+    }
     void handleSaveSettings();
   }
 
@@ -502,6 +661,7 @@
     {id: 'models', label: '模型与提供商', icon: Cpu},
     {id: 'personality', label: '伙伴人设与行为', icon: User},
     {id: 'cognition', label: '记忆与认知', icon: Brain},
+    {id: 'disposition', label: '性格与记忆', icon: Sparkles},
     {id: 'governance', label: '决策与治理', icon: Scale},
     {id: 'tools', label: '工具与安全', icon: Wrench},
     {id: 'runtime', label: '运行时与诊断', icon: Activity},
@@ -1408,6 +1568,219 @@
           <p class="cap-footnote">
             fail-closed 语义：以上旋钮关闭（默认）时不注入任何环境变量，后端能力完全不存在；
             开启只注入 "1"。唯一的例外是沙箱（后端默认开），见「工具与安全」。
+          </p>
+        </div>
+
+      {:else if activeSection === 'disposition'}
+        <div class="setting-block">
+          <h3 class="block-title">性格与记忆</h3>
+          <p class="block-desc">
+            4 个体验参数可手动调校（未设 = 基线行为，零变化）；「从使用中学习」默认关。
+            参数只覆盖体验层（记忆遗忘/好奇/语气/整合节奏），治理与内核参数不可调。
+          </p>
+
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><SlidersHorizontal size={13} /> 体验参数 · 手动调校</span>
+              <span class="cap-card-count">未设 = 基线行为</span>
+            </div>
+
+            <div class="cap-row cap-row-static">
+              <span class="cap-icon"><Archive size={15} /></span>
+              <span class="cap-text">
+                <strong>遗忘衰减强度<code class="cap-env">APEIRETH_TUNE_MEMORY_FADE</code></strong>
+                <small>遗忘衰减强度倍率（有效遗忘半衰期 = 24h / 值；1.0 = 现行为）。</small>
+              </span>
+              <span class="cap-slider-wrap">
+                <input
+                  type="range"
+                  min="0.25"
+                  max="4"
+                  step="0.25"
+                  value={capabilities.memoryFade}
+                  aria-label="遗忘衰减强度"
+                  oninput={(e) => setMemoryFade(Number((e.currentTarget as HTMLInputElement).value))}
+                />
+                <span class="preset-hint">基线 1.0</span>
+                <b>×{capabilities.memoryFade.toFixed(2)}</b>
+              </span>
+            </div>
+
+            <div class="cap-row cap-row-static">
+              <span class="cap-icon"><Radar size={15} /></span>
+              <span class="cap-text">
+                <strong>好奇心强度<code class="cap-env">APEIRETH_TUNE_CURIOSITY_STRENGTH</code></strong>
+                <small>好奇强度倍率（好奇日预算 = 2000 × 值）。</small>
+              </span>
+              <span class="cap-slider-wrap">
+                <input
+                  type="range"
+                  min="0.25"
+                  max="4"
+                  step="0.25"
+                  value={capabilities.curiosityStrength}
+                  aria-label="好奇心强度"
+                  oninput={(e) => setCuriosityStrength(Number((e.currentTarget as HTMLInputElement).value))}
+                />
+                <span class="preset-hint">基线 1.0</span>
+                <b>×{capabilities.curiosityStrength.toFixed(2)}</b>
+              </span>
+            </div>
+
+            <div class="cap-row cap-row-static">
+              <span class="cap-icon"><HeartHandshake size={15} /></span>
+              <span class="cap-text">
+                <strong>语气情绪饱和度<code class="cap-env">APEIRETH_TUNE_TONE_SATURATION</code></strong>
+                <small>语气情绪饱和度倍率（情绪注入混合 × 值；0 = 纯关系基线）。</small>
+              </span>
+              <span class="cap-slider-wrap">
+                <input
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.2"
+                  value={capabilities.toneSaturation}
+                  aria-label="语气情绪饱和度"
+                  oninput={(e) => setToneSaturation(Number((e.currentTarget as HTMLInputElement).value))}
+                />
+                <span class="preset-hint">基线 1.0</span>
+                <b>×{capabilities.toneSaturation.toFixed(2)}</b>
+              </span>
+            </div>
+
+            <div class="cap-row cap-row-static">
+              <span class="cap-icon"><Timer size={15} /></span>
+              <span class="cap-text">
+                <strong>整合节奏<code class="cap-env">APEIRETH_TUNE_CONSOLIDATION_CADENCE</code></strong>
+                <small>整合节奏：每 N 回合触发一次记忆整合（1 = 每回合 = 现行为）。</small>
+              </span>
+              <span class="cap-slider-wrap">
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  step="1"
+                  value={capabilities.consolidationCadence}
+                  aria-label="整合节奏"
+                  oninput={(e) => setConsolidationCadence(Number((e.currentTarget as HTMLInputElement).value))}
+                />
+                <span class="preset-hint">基线 1（每回合）</span>
+                <b>每 {capabilities.consolidationCadence} 回合</b>
+              </span>
+            </div>
+          </div>
+
+          <div class="preset-bar">
+            <button class="quiet-button" onclick={() => (dispositionPresetPending = '省心')}>
+              <Sparkles size={14} />
+              <span>省心</span>
+            </button>
+            <button class="quiet-button" onclick={() => (dispositionPresetPending = '均衡')}>
+              <Sparkles size={14} />
+              <span>均衡</span>
+            </button>
+            <button class="quiet-button" onclick={() => (dispositionPresetPending = '深度记忆')}>
+              <Sparkles size={14} />
+              <span>深度记忆</span>
+            </button>
+            <button class="quiet-button" onclick={() => (dispositionPresetPending = '恢复基线')}>
+              <RotateCcw size={14} />
+              <span>恢复基线</span>
+            </button>
+            <span class="preset-hint">预设只动这 4 个体验参数；确认后立即保存并走现有应用流程。</span>
+          </div>
+          {#if dispositionPresetPending && pendingDispositionValues}
+            <div class="notice-box preset-confirm" role="alertdialog" aria-label="应用性格预设确认">
+              <span>
+                {#if dispositionPresetPending === '恢复基线'}
+                  将把 4 个体验参数全部拨回基线（1.0 / 1.0 / 1.0 / 每 1 回合），
+                  并把「从使用中学习」关回默认关。
+                {:else}
+                  将把体验参数调为「{dispositionPresetPending}」档：
+                  遗忘衰减 {pendingDispositionValues.memoryFade} / 好奇 {pendingDispositionValues.curiosityStrength} /
+                  语气 {pendingDispositionValues.toneSaturation} / 整合每 {pendingDispositionValues.consolidationCadence} 回合；
+                  其余开关与「从使用中学习」保持现状。
+                {/if}
+                确认后立即保存并走现有配置应用流程（配置持久化 + 注入侧车环境，配置变化时重启网关）。
+              </span>
+              <span class="preset-actions">
+                <button class="quiet-button" onclick={confirmDispositionPreset}>保存并应用</button>
+                <button class="quiet-button" onclick={() => (dispositionPresetPending = null)}>取消</button>
+              </span>
+            </div>
+          {/if}
+
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Sparkles size={13} /> 从使用中学习</span>
+              <span class="cap-card-count">默认关</span>
+            </div>
+            <button
+              class="cap-row"
+              onclick={() => setSelfTuning(!capabilities.selfTuning)}
+              role="switch"
+              aria-checked={capabilities.selfTuning}
+              aria-label="从使用中学习"
+            >
+              <span class="cap-icon"><Sparkles size={15} /></span>
+              <span class="cap-text">
+                <strong>从使用中学习<code class="cap-env">APEIRETH_ENABLE_SELF_TUNING</code></strong>
+                <small>
+                  打开后引擎按真实使用信号自动微调体验参数（当前真接信号 = 记忆检索命中/未命中）；
+                  每次自动调整可见、可撤销，日志见下方学习日志。默认关。
+                </small>
+              </span>
+              <span class="cap-switch" class:on={capabilities.selfTuning}><span class="cap-knob"></span></span>
+            </button>
+          </div>
+
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Archive size={13} /> 学习日志（自动调整记录）</span>
+              <span class="preset-actions">
+                <button class="quiet-button" onclick={() => void refreshTuningLog()} disabled={tuningLogLoading}>
+                  <RefreshCcw size={13} />
+                  <span>{tuningLogLoading ? '读取中…' : '刷新'}</span>
+                </button>
+              </span>
+            </div>
+            {#if !isDesktop() || tuningLog === null}
+              <div class="notice-box">
+                <Info size={14} />
+                <span>学习日志仅桌面版可读（接口已备）。</span>
+              </div>
+            {:else if tuningLogSorted.length === 0}
+              <div class="notice-box">
+                <Info size={14} />
+                <span>暂无自动调整记录。</span>
+              </div>
+            {:else}
+              {#each tuningLogSorted as entry (entry.seq)}
+                <div class="cap-row cap-row-static">
+                  <span class="cap-icon"><SlidersHorizontal size={15} /></span>
+                  <span class="cap-text">
+                    <strong>
+                      #{entry.seq} {tuningParamLabel(entry.param)}
+                      <code class="cap-env">{entry.param}</code>
+                    </strong>
+                    <small>
+                      {Number(entry.previous).toFixed(2)} → {Number(entry.next).toFixed(2)} ·
+                      {entry.reason} · {formatTuningTime(entry.at_epoch_ms)}
+                    </small>
+                  </span>
+                  <button class="quiet-button" onclick={() => undoTuningEntry(entry)}>撤销</button>
+                </div>
+              {/each}
+              <div class="cap-row cap-row-static">
+                <span class="cap-text">
+                  <small>「撤销」= 把该参数拨回记录原值并立即保存应用（写回值走现有应用路径，不做独立撤销请求）。</small>
+                </span>
+              </div>
+            {/if}
+          </div>
+
+          <p class="cap-footnote">
+            自动调整记录由后端写入数据目录的 tuning-log.jsonl，此处只读；未接的信号不会产生记录（0 装诚实）。
           </p>
         </div>
 

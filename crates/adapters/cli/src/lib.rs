@@ -800,6 +800,12 @@ async fn build_cognitive_modules_from_env(
                 Arc::new(apeireth_memory::partner::InMemoryPartnerStore::new())
             },
         ),
+        // 「性格养成」第一铲: 「从使用中学习」默认关; `APEIRETH_ENABLE_SELF_TUNING=1`
+        // 才接自校准接线层 (真接检索命中/未命中信号, 调整可见/可撤销/记录透明,
+        // 学习日志 tuning-log.jsonl 与 session db 同目录落位)。
+        self_tuning: apeireth_runtime_assembly::SelfTuningWire::from_env(
+            apeireth_runtime_assembly::tuning_log_path(),
+        ),
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)

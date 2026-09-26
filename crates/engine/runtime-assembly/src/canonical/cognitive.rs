@@ -878,6 +878,9 @@ pub struct MemoryRecallModule {
     morphology_recall: bool,
     /// W3 community 生产消费 (2026-10-10, 默认关): 图谱 store 句柄。
     community_triage: Option<Arc<dyn apeireth_plugin::experience::KnowledgeGraphStore>>,
+    /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层 —— 本模块的召回
+    /// 结果是**真接**的检索命中/未命中信号源 (每轮记一次, 凑批由接线层聚合)。
+    self_tuning: Option<Arc<crate::canonical::self_tuning_wire::SelfTuningWire>>,
 }
 
 /// W3 community 分诊的图谱 fact 读取上限 (社区检测的被动分析输入规模)。
@@ -997,6 +1000,36 @@ impl MemoryRecallModule {
             proactive_recall: None,
             morphology_recall: false,
             community_triage: None,
+            self_tuning: None,
+        }
+    }
+
+    /// 「性格养成」第一铲: 接入自校准接线层 (默认无 = 自学习关)。
+    /// 本模块每次召回把命中/未命中喂给接线层 (真接信号)。
+    #[must_use]
+    pub fn with_self_tuning(
+        mut self,
+        wire: Arc<crate::canonical::self_tuning_wire::SelfTuningWire>,
+    ) -> Self {
+        self.self_tuning = Some(wire);
+        self
+    }
+
+    /// 真接信号: 把一轮召回结果 (选中 ≥1 候选 = 命中, 空 = 未命中) 记进
+    /// 自校准接线层; 无接线层 = 自学习关, 什么都不做。
+    fn feed_retrieval_signal(&self, hit: bool) {
+        if let Some(wire) = &self.self_tuning {
+            let at_epoch_ms = self
+                .clock
+                .as_ref()
+                .map(|clock| clock.now().timestamp_millis())
+                .unwrap_or_else(|| {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|duration| duration.as_millis() as i64)
+                        .unwrap_or(0)
+                });
+            wire.record_retrieval_round(hit, at_epoch_ms);
         }
     }
 
@@ -1136,6 +1169,8 @@ impl AgentModule for MemoryRecallModule {
                 };
                 match result {
                     Ok(Some(selected)) => {
+                        // 真接信号: 本轮召回选中了候选 = 命中, 全空 = 未命中。
+                        self.feed_retrieval_signal(!selected.selected_candidate_ids.is_empty());
                         if let Some(recorder) = &self.access_recorder {
                             recorder.record_selected(&session, &selected);
                         }
@@ -1163,19 +1198,26 @@ impl AgentModule for MemoryRecallModule {
                             .with_prompt_overlay(PromptOverlay::system(overlay))
                     }
                     Ok(None) => {
+                        // 真接信号: 无候选可召回 = 未命中轮。
+                        self.feed_retrieval_signal(false);
                         if let Some(recorder) = &self.access_recorder {
                             recorder.clear(&session);
                         }
                         ModuleOutcome::continue_()
                     }
                     Err(_) => {
+                        // 检索失败是故障不是使用证据, 不喂信号 (0 装诚实)。
                         self.metrics.warning();
                         ModuleOutcome::continue_()
                     }
                 }
             } else {
                 let mut context = match self.memory.recent_episodes(&session, self.limit) {
-                    Ok(episodes) => episode_context(&episodes, self.max_context_chars),
+                    Ok(episodes) => {
+                        // 真接信号 (旧路径): 近期记忆非空 = 命中轮。
+                        self.feed_retrieval_signal(!episodes.is_empty());
+                        episode_context(&episodes, self.max_context_chars)
+                    }
                     Err(_) => {
                         self.metrics.warning();
                         String::new()
@@ -1259,6 +1301,9 @@ pub struct MemoryWritebackModule {
     materializer: Arc<dyn MemoryMaterializerPort>,
     typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
     consolidation: bool,
+    /// 「性格养成」第一铲: 整合节奏计数 (每会话回合数)。触发阈值 =
+    /// 体验旋钮 ConsolidationCadence (每 N 回合一次, 1 = 每回合 = 现行为)。
+    consolidation_turns: Mutex<std::collections::BTreeMap<String, u64>>,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
 }
@@ -1276,6 +1321,7 @@ impl MemoryWritebackModule {
             materializer: Arc::new(MemoryMaterializer::default()),
             typed_sink: None,
             consolidation: false,
+            consolidation_turns: Mutex::new(std::collections::BTreeMap::new()),
             clock,
             metrics: ModuleMetrics::default(),
         }
@@ -1342,6 +1388,16 @@ impl MemoryWritebackModule {
     pub fn with_telemetry(self, telemetry: Arc<CognitiveTelemetry>) -> Self {
         self.metrics.attach_telemetry(telemetry);
         self
+    }
+
+    /// 整合节奏判定 (体验旋钮 ConsolidationCadence): 每会话每 N 回合返回 true
+    /// 一次; N = 1 (未设/非法) = 每回合 = 现行为, 零变化。
+    fn consolidation_due(&self, session: &str) -> bool {
+        let cadence = crate::canonical::self_tuning_wire::consolidation_cadence_turns();
+        let mut turns = lock_or_recover(&self.consolidation_turns);
+        let counter = turns.entry(session.to_string()).or_insert(0);
+        *counter = counter.saturating_add(1);
+        *counter % cadence == 0
     }
 }
 
@@ -1508,7 +1564,10 @@ impl AgentModule for MemoryWritebackModule {
                 // 2026-10-06 W2 记忆闭环批: consolidation 触发点 (with_consolidation 开, 默认关).
                 // run_consolidation = 确定性治理视图分析 (0 模型调用); 提炼 insights 以
                 // 稳定 ID 落库 (跨轮幂等), 下一轮召回可见 —— 效果闭环.
-                if self.consolidation {
+                // 「性格养成」第一铲: 触发阈值 = 整合节奏旋钮
+                // (APEIRETH_TUNE_CONSOLIDATION_CADENCE: 每 N 回合一次, 1 = 每回合
+                // = 现行为, 零变化; 非法值回 1)。
+                if self.consolidation && self.consolidation_due(&session) {
                     if let Some(coord) = &self.coordinator {
                         match coord.run_consolidation(&session) {
                             Ok(report) => {

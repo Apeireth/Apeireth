@@ -33,6 +33,7 @@
 
 use std::collections::HashMap;
 
+use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_plugin::llm_factory::LlmFactory;
 use apeireth_plugin::organ::{
     CuriosityDepth, CuriosityTarget, OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
@@ -88,6 +89,7 @@ impl From<Depth> for CuriosityDepth {
 /// 好奇引擎配置 (per v1 `CuriosityConfig` 1:1)
 #[derive(Debug, Clone)]
 pub struct CuriosityConfig {
+    /// 每日好奇预算 (基线 2000, 受体验旋钮 [`TunableParam::CuriosityStrength`] 缩放)。
     pub daily_budget: f64,
     pub shallow_cost: f64,
     pub deep_cost: f64,
@@ -97,10 +99,24 @@ pub struct CuriosityConfig {
     pub seed: u64,
 }
 
+/// 每日好奇预算基线 (= 现状硬编码常量; 未设旋钮 = 本值, 零变化)。
+pub const BASELINE_DAILY_BUDGET: f64 = 2000.0;
+
+/// 当前生效的每日好奇预算: `BASELINE_DAILY_BUDGET × CuriosityStrength 倍率`。
+///
+/// - 倍率来自体验旋钮 [`TunableParam::CuriosityStrength`] (env
+///   `APEIRETH_TUNE_CURIOSITY_STRENGTH`, 非法值回默认 1.0), 自动校准引擎的
+///   落地值经进程内 override 生效。
+/// - 推导 (v1 哲学「浅尝辄止的童年」: 预算即好奇精力): 倍率 > 1 = 好奇更旺盛,
+///   < 1 = 好奇收敛; 未设 = 倍率 1.0 = 2000 现状。
+pub fn effective_daily_budget() -> f64 {
+    BASELINE_DAILY_BUDGET * TunableParam::CuriosityStrength.effective()
+}
+
 impl Default for CuriosityConfig {
     fn default() -> Self {
         Self {
-            daily_budget: 2000.0,
+            daily_budget: effective_daily_budget(),
             shallow_cost: 100.0,
             deep_cost: 500.0,
             deepen_echo_threshold: 0.6,
@@ -641,5 +657,25 @@ mod tests {
         let organ = CuriosityOrgan::new(test_factory(), "minimax-m3");
         assert_eq!(organ.name(), "E4 Curiosity");
         assert_eq!(organ.organ_id(), OrganKind::E4);
+    }
+
+    /// 旋钮推导锁定: 生效好奇预算 = 基线 × CuriosityStrength 倍率;
+    /// 未设旋钮 (倍率 1.0) = 基线 2000, 行为零变化。
+    #[test]
+    fn curiosity_strength_knob_scales_daily_budget() {
+        let strength = TunableParam::CuriosityStrength.effective();
+        assert!(
+            (effective_daily_budget() - BASELINE_DAILY_BUDGET * strength).abs() < 1e-9,
+            "生效预算必须是 基线×倍率"
+        );
+        assert_eq!(
+            CuriosityConfig::default().daily_budget,
+            effective_daily_budget()
+        );
+        assert_eq!(
+            TunableParam::CuriosityStrength.parse_env_value(None),
+            1.0,
+            "未设旋钮 = 倍率 1.0 = 现状"
+        );
     }
 }

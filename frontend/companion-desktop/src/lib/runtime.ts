@@ -114,10 +114,15 @@ function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
  *  2026-10-10 W2/W3 收官批：新旋钮逐项取 persisted 值；「默认开」语义例外——
  *  shellSandbox 缺省 true（沙箱默认开）、typedRecall 缺省 true（类型化召回默认开）、
  *  记忆核心族三件（preferenceLearning / proactiveRecall / memoryInjection）缺省 true
- *  （核心记忆能力默认开，显式存 false 才是关——与 CLI 侧「未设=开、=0=关」对齐）。 */
+ *  （核心记忆能力默认开，显式存 false 才是关——与 CLI 侧「未设=开、=0=关」对齐）。
+ *  性格养成四数值旋钮：非有限值回基线，越界钳到 [min,max]；整合节奏取整 ≥1。
+ *  selfTuning 仅 `=== true` 才开（fail-closed，默认关）。 */
 function parseCapabilityToggles(value: unknown): CapabilityToggles {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+  /** 数值旋钮解析：非有限 → 基线；越界 → 钳到 [min,max]。 */
+  const knob = (v: unknown, baseline: number, min: number, max: number): number =>
+    Math.min(max, Math.max(min, num(v, baseline)));
   return {
     shell: raw.shell === true,
     shellSandbox: raw.shellSandbox !== false,
@@ -146,6 +151,11 @@ function parseCapabilityToggles(value: unknown): CapabilityToggles {
     reasoningEnabled: raw.reasoningEnabled === true,
     reasoningModelFilters: typeof raw.reasoningModelFilters === 'string' ? raw.reasoningModelFilters : '',
     reasoningTag: typeof raw.reasoningTag === 'string' && raw.reasoningTag.trim() ? raw.reasoningTag : 'think',
+    memoryFade: knob(raw.memoryFade, 1.0, 0.25, 4.0),
+    curiosityStrength: knob(raw.curiosityStrength, 1.0, 0.25, 4.0),
+    toneSaturation: knob(raw.toneSaturation, 1.0, 0.0, 2.0),
+    consolidationCadence: Math.round(knob(raw.consolidationCadence, 1, 1, 10)),
+    selfTuning: raw.selfTuning === true,
   };
 }
 

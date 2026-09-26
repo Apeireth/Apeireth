@@ -282,6 +282,16 @@ export interface CapabilityToggles {
   reasoningModelFilters: string;
   /** [Beta] reasoning 标签名（默认 think） */
   reasoningTag: string;
+  /** 遗忘衰减强度倍率（有效遗忘半衰期 = 24h / 值；默认 1.0 = 现行为） */
+  memoryFade: number;
+  /** 好奇心强度倍率（好奇日预算 = 2000 × 值；默认 1.0） */
+  curiosityStrength: number;
+  /** 语气情绪饱和度倍率（情绪注入混合 × 值；0 = 纯关系基线；默认 1.0） */
+  toneSaturation: number;
+  /** 整合节奏·每 N 回合触发一次记忆整合（1 = 每回合 = 现行为；默认 1） */
+  consolidationCadence: number;
+  /** 从使用中学习（自学习自动微调体验参数；默认关） */
+  selfTuning: boolean;
 }
 
 export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
@@ -312,6 +322,11 @@ export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   reasoningEnabled: false,
   reasoningModelFilters: '',
   reasoningTag: 'think',
+  memoryFade: 1.0,
+  curiosityStrength: 1.0,
+  toneSaturation: 1.0,
+  consolidationCadence: 1,
+  selfTuning: false,
 };
 
 /**

@@ -86,6 +86,9 @@ pub mod permission_preset;
 pub mod preference_learning;
 #[path = "canonical/production.rs"]
 pub mod production;
+/// 「性格养成」第一铲: 自校准接线层 (引擎落地 + tuning-log.jsonl 落盘)。
+#[path = "canonical/self_tuning_wire.rs"]
+pub mod self_tuning_wire;
 #[path = "canonical/tool_modules.rs"]
 pub mod tool_modules;
 #[path = "canonical/typed_recall.rs"]
@@ -128,6 +131,10 @@ pub use production::{
     with_memory_context_projection, CognitiveBackends, CognitiveModuleConfig,
     MemoryContextProjector, ProductionBackends, ProductionCognitiveModules, ProductionModules,
     ProductionModulesConfig,
+};
+pub use self_tuning_wire::{
+    consolidation_cadence_turns, tuning_log_path, tuning_log_path_from_session_db, SelfTuningWire,
+    SELF_TUNING_ENABLE_ENV, TUNING_LOG_FILE,
 };
 pub use tool_modules::{
     EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,

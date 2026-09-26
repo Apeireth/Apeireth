@@ -272,6 +272,7 @@ dependencies = [
  "aes-gcm",
  "anyhow",
  "apeireth-core",
+ "apeireth-orchestration",
  "apeireth-plugin",
  "apeireth-protocol",
  "apeireth-storage",

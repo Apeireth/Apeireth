@@ -186,6 +186,15 @@ export interface BackendCapabilityEnv {
   reasoning_enabled: boolean;
   reasoning_model_filters: string;
   reasoning_tag: string;
+  /** 性格养成体验旋钮：恒注入当前值（缺省/非法回基线，越界钳到 [min,max]），
+   *  保持 JS number 由 Rust 侧格式化。 */
+  tune_memory_fade: number;
+  tune_curiosity_strength: number;
+  tune_tone_saturation: number;
+  /** 整合节奏·每 N 回合；≥1 整数（1 = 每回合 = 现行为）。 */
+  tune_consolidation_cadence: number;
+  /** 「从使用中学习」：仅 true 注入 "1"（后端 "1" 才开，默认关，fail-closed）。 */
+  enable_self_tuning: boolean;
 }
 
 /** Map the config's capability toggles onto the canonical knob names.
@@ -195,6 +204,11 @@ export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined |
   const advisors = Math.min(7, Math.max(1, Math.round(toggles?.councilAdvisors ?? 3)));
   const timeout = Math.max(1000, Math.round(toggles?.councilTimeoutMs ?? 30000));
   const temperature = toggles?.morphologyTemperature ?? 1.0;
+  /** 性格养成体验旋钮：缺省/非有限回基线，越界钳到 [min,max]（整数取整在调用侧）。 */
+  const tuneKnob = (v: unknown, baseline: number, min: number, max: number): number => {
+    const n = typeof v === 'number' && Number.isFinite(v) ? v : baseline;
+    return Math.min(max, Math.max(min, n));
+  };
   return {
     enable_shell: toggles?.shell === true,
     // 反向语义：UI 默认开沙箱；显式关沙箱才注入 =0（fail-closed）。
@@ -226,6 +240,12 @@ export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined |
     reasoning_enabled: toggles?.reasoningEnabled === true,
     reasoning_model_filters: toggles?.reasoningEnabled === true ? (toggles?.reasoningModelFilters ?? '').trim() : '',
     reasoning_tag: toggles?.reasoningEnabled === true ? (toggles?.reasoningTag ?? 'think').trim() : '',
+    // 性格养成体验旋钮：四个数值恒发（当前值），「从使用中学习」fail-closed。
+    tune_memory_fade: tuneKnob(toggles?.memoryFade, 1.0, 0.25, 4.0),
+    tune_curiosity_strength: tuneKnob(toggles?.curiosityStrength, 1.0, 0.25, 4.0),
+    tune_tone_saturation: tuneKnob(toggles?.toneSaturation, 1.0, 0.0, 2.0),
+    tune_consolidation_cadence: Math.round(tuneKnob(toggles?.consolidationCadence, 1, 1, 10)),
+    enable_self_tuning: toggles?.selfTuning === true,
   };
 }
 
@@ -245,6 +265,26 @@ export async function applyBackendConfig(
 /** Absolute path of the log directory. */
 export function getLogDirectory(): Promise<string | null> {
   return invokeOptional<string>('get_log_directory');
+}
+
+/**
+ * 「从使用中学习」自动调整记录（只读）：后端写入数据目录的 tuning-log.jsonl，
+ * 此处只读展示。param 取值：memory_fade / curiosity_strength /
+ * tone_saturation / consolidation_cadence。非桌面环境或读取失败返回 null，
+ * 调用侧据此诚实标注「仅桌面版可读」，不伪造空记录。
+ */
+export interface TuningLogEntry {
+  seq: number;
+  param: string;
+  previous: number;
+  next: number;
+  reason: string;
+  at_epoch_ms: number;
+}
+
+/** 读取学习日志（最新在后）；null = 非桌面版 / 读取失败。 */
+export function readTuningLog(): Promise<TuningLogEntry[] | null> {
+  return invokeOptional<TuningLogEntry[]>('read_tuning_log');
 }
 
 /** Reveal the log directory in the platform file manager. */

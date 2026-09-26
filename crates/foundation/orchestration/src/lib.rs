@@ -73,6 +73,8 @@ pub mod durable;
 pub mod lineage_spawning;
 pub mod llm;
 pub mod prompt_stabilizer;
+// 「性格养成」第一铲: 自动校准引擎 (体验参数微调, 可见/可撤销/记录透明)。
+pub mod self_tuning;
 pub mod speech_arbiter;
 /// 生产 Orchestrator: LLM 驱动 subagent 调度 (2026-10-10, worktree 装饰器的主角)。
 pub mod subagent_llm;
@@ -118,6 +120,11 @@ pub use lineage_spawning::{
 pub use prompt_stabilizer::{
     assemble_tiered, EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage,
     StabilizedRole,
+};
+pub use self_tuning::{
+    clear_effective_overrides, effective_override, install_effective_values,
+    RetrievalHitMissSignal, SelfTuningEngine, TunableParam, TuningEvent, TuningRecord,
+    TuningSignal, TuningValues, DAY_MS,
 };
 pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
