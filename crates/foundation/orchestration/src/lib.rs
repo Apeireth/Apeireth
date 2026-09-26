@@ -45,7 +45,9 @@ use serde::{Deserialize, Serialize};
 pub mod ambient_context;
 pub mod async_context;
 pub mod care_potential_field;
+// 上下文工程 · 压缩检查点: 表层替换 + 留档 + 可回放 (纯确定性折叠 + 注入式摘要)。
 pub mod cognitive_quota_scheduler;
+pub mod compaction_checkpoint;
 pub mod context_budget;
 pub mod context_fold;
 // 上下文质感 · 件二: 触发数学 + 溢出自愈决策 (纯函数纯参数)。
@@ -72,6 +74,8 @@ pub mod continuation;
 pub mod council;
 pub mod cron;
 pub mod durable;
+pub mod job_board;
+pub mod job_ring;
 pub mod lineage_spawning;
 pub mod llm;
 pub mod prompt_stabilizer;
@@ -94,6 +98,13 @@ pub use care_potential_field::{CareAction, CarePotentialField};
 pub use cognitive_quota_scheduler::{
     CognitiveContextFrame, CognitiveInterrupt, CognitivePriority, CognitiveQuota,
     CognitiveQuotaScheduler, CognitiveTaskControlBlock,
+};
+pub use compaction_checkpoint::{
+    compaction_due, detect_unclosed_compactions, fold_checkpoints, pair_safe_end,
+    render_transcript, select_compaction_range, validate_summary, CompactionBudget,
+    CompactionCheckpoint, CompactionEngine, CompactionLogEntry, CompactionMessage,
+    CompactionOutcome, CompactionRange, CompactionRole, FoldedView, SummaryError, SummaryGenerator,
+    SummaryRequest, SummarySections, ViewSegment, SUMMARY_SECTION_HEADERS,
 };
 pub use context_budget::{
     omission_marker, retrieval_guide, spill_file_name, split_head_tail, truncate_with_spill,
@@ -129,6 +140,12 @@ pub use durable::{
     ActivityEvent, ActivityEventKind, ActivityExecutor, ActivityState, ActivityStateError,
     ActivityStateMachine, DurableError, DurableHistory, DurableResult, DurableRun, RetryPolicy,
 };
+pub use job_board::{
+    BoardConfig, BoardError, CompletionListener, CompletionWaiter, JobBoard, JobHandle, JobId,
+    JobOutcome, JobStatus, OwnerId, SegmentIndex, SegmentState, SettleReport, WakeDecision,
+    WakeGate,
+};
+pub use job_ring::{Chunk, JobRing, RingSlice, RingStats};
 pub use lineage_spawning::{
     LineageProgenySpec, LineageSpawningOrchestrator, NurturingPhase, ProgenySpecialization,
 };

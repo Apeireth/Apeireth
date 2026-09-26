@@ -48,7 +48,11 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
+use apeireth_orchestration::compaction_checkpoint::{
+    CompactionBudget, CompactionMessage, CompactionOutcome,
+};
 use apeireth_orchestration::context_budget::{ContextAssembler, SpillWriter};
+use apeireth_orchestration::context_fold::approx_tokens;
 use apeireth_orchestration::context_overflow::{
     retry_makes_progress, shrink_budget, MAX_OVERFLOW_RETRIES,
 };
@@ -355,6 +359,22 @@ fn system_identity_text(session_messages: &[NormalizedMessage]) -> String {
 /// Joined visible text of one transient overlay message.
 fn overlay_text(overlay: &PromptOverlay) -> String {
     ContentPart::join_text(&overlay.message().content)
+}
+
+/// Estimated tokens of the transcript that would be sent (the shared
+/// `chars / 4` estimate), used for the compress-checkpoint trigger.
+fn estimated_transcript_tokens(messages: &[NormalizedMessage]) -> u64 {
+    messages
+        .iter()
+        .map(|message| approx_tokens(&ContentPart::join_text(&message.content)) as u64)
+        .sum()
+}
+
+/// Tokens already committed before the transcript grows: the persistent
+/// system block, the tool declarations, and protocol framing.
+fn committed_overhead_tokens(system_text: &str, tools: &[NormalizedTool]) -> u64 {
+    let tool_text = serde_json::to_string(tools).unwrap_or_default();
+    (approx_tokens(system_text) + approx_tokens(&tool_text)) as u64
 }
 
 /// Budget the transient injected-context overlays for one provider request.
@@ -1084,6 +1104,21 @@ impl Runtime {
                     return Err(error);
                 }
 
+                // Compress checkpointing: when a summary generator is installed
+                // and the derived request crosses the shared overflow trigger,
+                // one summary pass surface-replaces the compressible prefix
+                // (summary in view, originals archived, view replayable). Any
+                // failure leaves the session exactly as it was.
+                self.compact_session_if_due(
+                    &mut session,
+                    &continuation.model,
+                    &tools,
+                    request_id,
+                    trace_id,
+                )
+                .await?;
+                let session_view = session.provider_view();
+
                 let mut provider_overlays = request_overlays;
                 provider_overlays.extend(before_model_overlays);
                 // Budget the assembled injected-context blocks (memory /
@@ -1115,7 +1150,7 @@ impl Runtime {
                 let routed = loop {
                     let provider_messages = self.project_provider_messages(
                         &compose_provider_messages(
-                            &session.messages,
+                            &session_view,
                             &retry_scaffolding,
                             &budgeted_overlays,
                         ),
@@ -1941,6 +1976,84 @@ impl Runtime {
             Ok(projected) => projected,
             Err(_) => messages.to_vec(),
         }
+    }
+
+    /// Compress checkpointing: one summary pass over the compressible prefix
+    /// when the derived request crosses the shared overflow trigger.
+    ///
+    /// Gated on an installed summary generator and on a model that advertises
+    /// its context window. Every failure path — no generator, no window, still
+    /// under the trigger, no safe span, summary unavailable, or summary refused
+    /// — leaves the session exactly as it was: this path never deletes or
+    /// rewrites a transcript message. On success the checkpoint is appended
+    /// under its marker pair, with the opening entry persisted first so a crash
+    /// in between leaves a detectable unclosed lock.
+    async fn compact_session_if_due(
+        &self,
+        session: &mut Session,
+        model: &str,
+        tools: &[NormalizedTool],
+        request_id: RequestId,
+        trace_id: TraceId,
+    ) -> RuntimeResult<()> {
+        let Some(engine) = self.compaction.as_ref() else {
+            return Ok(());
+        };
+        let Some(window_tokens) = self.providers.model_context_tokens(model) else {
+            return Ok(());
+        };
+        let overhead_tokens =
+            committed_overhead_tokens(&system_identity_text(&session.messages), tools);
+        let budget = CompactionBudget::new(u64::from(window_tokens), overhead_tokens);
+        if !budget.is_due(estimated_transcript_tokens(&session.provider_view())) {
+            return Ok(());
+        }
+        let shapes: Vec<CompactionMessage> = session
+            .messages
+            .iter()
+            .map(Session::compaction_shape)
+            .collect();
+        let outcome = engine
+            .compact(&shapes, &session.compaction_log(), &budget)
+            .await;
+        let CompactionOutcome::Compacted { checkpoint } = outcome else {
+            // No accepted summary: no compaction, no event, no change.
+            return Ok(());
+        };
+        let clock = self.clock.as_ref();
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::CompactionStarted {
+                marker: checkpoint.marker.clone(),
+            },
+            clock,
+        );
+        // Persist the opening entry before the checkpoint itself: a crash
+        // between the two saves leaves the marker pair unclosed, which replay
+        // detects and refuses to apply.
+        self.sessions.save(session).await?;
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::CompactionCheckpoint {
+                start_seq: checkpoint.start_seq,
+                end_seq: checkpoint.end_seq,
+                summary: checkpoint.summary,
+                marker: checkpoint.marker.clone(),
+            },
+            clock,
+        );
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::CompactionClosed {
+                marker: checkpoint.marker,
+            },
+            clock,
+        );
+        self.sessions.save(session).await?;
+        Ok(())
     }
 
     /// remaining calls from being dispatched. A tool result is required for

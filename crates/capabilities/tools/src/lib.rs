@@ -15,10 +15,15 @@
 pub mod apply_patch;
 pub mod education;
 pub mod egress;
+// 沙箱升级阶梯 · 就地提示面: 边界拒绝消息携带结构化升级引导 (缺什么模式 /
+// 需要什么理由字段), 在决策点引导, 不让用户去翻设置里的永久开关。
+pub mod escalation;
 pub mod fetch;
 pub mod filesystem;
 pub mod guardrail;
 pub mod mcp;
+// 读前观测门禁: 「未读不得覆盖写」会话期护栏 + 版本 CAS 双钥匙 (纯事件门禁)。
+pub mod observed_gate;
 pub mod plugin;
 pub mod process;
 pub mod repo;
@@ -38,12 +43,20 @@ pub use apply_patch::{
 };
 pub use education::{DxCheckTool, DxReport, REPLACED_DIFFS};
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
+pub use escalation::{
+    UpgradeHint, ESCALATION_REQUEST_KEY, GRANT_SCOPE, JUSTIFICATION_FIELD, OUT_OF_WORKSPACE_MODE,
+};
 pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
 pub use guardrail::{LeakedCredentialKind, PreCallGuardError, ToolGuardrail, TripwireScanResult};
 pub use mcp::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, McpClient, McpContent, McpError,
     McpToolDescriptor, McpToolResult, McpTransport,
+};
+pub use observed_gate::{
+    gated_write_atomic, gated_write_atomic_durable, ExclusionList, FileVersion, FsVersionProbe,
+    GateDenial, GatedWriteError, ObservationState, ObservedGate, VersionProbe, WriteIntent,
+    WriteKind, WriteRequest,
 };
 pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
 pub use repo::{RepoError, RepoTool};

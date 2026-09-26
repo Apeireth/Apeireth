@@ -213,6 +213,31 @@ async fn cwd_escape_is_rejected_before_execution() {
     assert!(result.render().contains("escapes"), "{}", result.render());
 }
 
+/// 就地提示: 工作区目录边界的拒绝消息必须携带结构化升级引导 (缺什么模式 /
+/// 需要什么理由字段 / 一次性范围), 在决策点引导一次性目录外授权, 而不是
+/// 让用户去翻设置里的永久开关。
+#[tokio::test]
+async fn cwd_escape_refusal_carries_the_upgrade_hint() {
+    let tmp = tempdir().unwrap();
+    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+    let call = ToolCall {
+        id: "call_shell_hint".into(),
+        name: "shell".into(),
+        arguments: json!({ "command": "echo should_not_run", "cwd": "../" }),
+    };
+    let result = tool.invoke(&call).await;
+    let rendered = result.render();
+    assert!(!result.is_ok());
+    for expected in [
+        "\"missing_mode\":\"relaxed\"",
+        "\"justification_field\":\"justification\"",
+        "\"grant_scope\":\"one_call\"",
+        "\"request_key\":\"sandbox_escalation\"",
+    ] {
+        assert!(rendered.contains(expected), "{expected} in {rendered}");
+    }
+}
+
 #[tokio::test]
 async fn unicode_script_round_trips_without_normalization() {
     let tmp = tempdir().unwrap();

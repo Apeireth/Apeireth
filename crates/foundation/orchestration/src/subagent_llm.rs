@@ -20,6 +20,11 @@ use crate::{Orchestrator, OrchestratorError, SubagentOutcome, SubagentRole, Suba
 pub type HumanApprovalGate = Arc<dyn Fn(&SubagentSpec) -> Result<(), String> + Send + Sync>;
 
 /// 默认 dispatch 超时 (毫秒)。
+///
+/// 分工注记: 任务输出环 + 完成通知 (见 [`crate::job_ring`] / [`crate::job_board`])
+/// 先行落地, 负责长任务过程输出的有界保留、双游标读取与结算即时唤醒; 本硬
+/// 超时**保留为最终兜底中止** —— 兜底杀掉的是卡死的调用, 不承担过程可见与
+/// 结算通知职责, 两者分工不重叠。
 pub const SUBAGENT_DEFAULT_TIMEOUT_MS: u64 = 120_000;
 
 /// LLM 驱动的生产 Orchestrator。

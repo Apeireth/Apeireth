@@ -144,6 +144,10 @@ pub struct SpilledTruncation {
 /// Writes the full originals of truncated long tails under
 /// `<data_dir>/spill/`.
 ///
+/// 分工注记 (与 [`crate::job_ring`] 语义互补不冲突): spill 管"单次超长内容"
+/// —— 单条内容超预算时整篇落盘并给取回指引; 任务输出环管"过程输出流" ——
+/// 任务执行期间的增量输出有界留存、双游标读取。两者互不替代。
+///
 /// File names carry the scope (session), a monotonic sequence number and a
 /// short content hash (`spill-<scope>-<seq>-<hash>.txt`), so concurrent
 /// sessions and repeated spills of identical content cannot collide. Creation

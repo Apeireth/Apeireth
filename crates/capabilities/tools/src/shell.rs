@@ -203,7 +203,12 @@ impl ShellTool {
             .canonicalize()
             .map_err(|e| format!("cwd {relative:?} is not accessible: {e}"))?;
         if !candidate.starts_with(&root) {
-            return Err(format!("cwd {relative:?} escapes the workspace root"));
+            // 就地提示: 拒绝消息直接携带"如何申请本次升级"的结构化引导
+            // (缺什么模式 / 需要什么理由字段), 不让用户去翻设置。
+            return Err(format!(
+                "cwd {relative:?} escapes the workspace root; {}",
+                crate::escalation::UpgradeHint::out_of_workspace_access()
+            ));
         }
         if !candidate.is_dir() {
             return Err(format!("cwd {relative:?} is not a directory"));
@@ -459,7 +464,10 @@ impl ShellTool {
         crate::guardrail::ToolGuardrail::verify_shell_command(&params.command).map_err(|e| {
             ToolResult::permanent_error(
                 &call.id,
-                format!("shell command rejected by pre-call guard: {e}"),
+                format!(
+                    "shell command rejected by pre-call guard: {e}; {}",
+                    crate::escalation::UpgradeHint::content_floor()
+                ),
             )
             .with_name("shell")
         })?;

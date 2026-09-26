@@ -16,7 +16,11 @@ use std::sync::Arc;
 use apeireth_core::kernel::{
     ApprovalId, CapabilityId, Clock, RequestId, SessionId, Timestamp, TraceId,
 };
-use apeireth_protocol::canonical::NormalizedMessage;
+use apeireth_orchestration::compaction_checkpoint::{
+    fold_checkpoints, CompactionCheckpoint, CompactionLogEntry, CompactionMessage, CompactionRole,
+    FoldedView, ViewSegment,
+};
+use apeireth_protocol::canonical::{ContentPart, MessageRole, NormalizedMessage};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -171,10 +175,88 @@ impl Session {
         self.messages.is_empty()
     }
 
+    /// The append-only compaction log, in event order: marker-pair entries and
+    /// the checkpoints they bracket. Deriving provider messages folds this log
+    /// over the transcript.
+    pub fn compaction_log(&self) -> Vec<CompactionLogEntry> {
+        self.events
+            .iter()
+            .filter_map(|event| match &event.event {
+                SessionEventKind::CompactionStarted { marker } => Some(CompactionLogEntry::Start {
+                    marker: marker.clone(),
+                }),
+                SessionEventKind::CompactionCheckpoint {
+                    start_seq,
+                    end_seq,
+                    summary,
+                    marker,
+                } => Some(CompactionLogEntry::Checkpoint(Box::new(
+                    CompactionCheckpoint {
+                        start_seq: *start_seq,
+                        end_seq: *end_seq,
+                        summary: summary.clone(),
+                        marker: marker.clone(),
+                    },
+                ))),
+                SessionEventKind::CompactionClosed { marker } => Some(CompactionLogEntry::End {
+                    marker: marker.clone(),
+                }),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The provider-facing message view: closed compaction checkpoints
+    /// surface-replace their spans with their summaries; every other message
+    /// survives verbatim. The transcript itself is never modified, so this is
+    /// a deterministic replay — folding the same session twice yields the same
+    /// view.
+    pub fn provider_view(&self) -> Vec<NormalizedMessage> {
+        let folded = fold_checkpoints(self.messages.len(), &self.compaction_log());
+        materialize_view(&self.messages, &folded)
+    }
+
+    /// The planner-level shape of one transcript message.
+    pub fn compaction_shape(message: &NormalizedMessage) -> CompactionMessage {
+        CompactionMessage {
+            role: match message.role {
+                MessageRole::System => CompactionRole::System,
+                MessageRole::User => CompactionRole::User,
+                MessageRole::Assistant => CompactionRole::Assistant,
+                MessageRole::Tool => CompactionRole::Tool,
+            },
+            text: ContentPart::join_text(&message.content),
+            tool_call_ids: message
+                .tool_calls
+                .iter()
+                .map(|call| call.id.clone())
+                .collect(),
+            tool_result_id: message.tool_call_id.clone(),
+        }
+    }
+
     fn touch(&mut self, clock: &dyn Clock) {
         self.revision = self.revision.saturating_add(1);
         self.updated_at = Timestamp::from_clock(clock);
     }
+}
+
+/// Materialize one folded view into provider messages: original spans copy
+/// their transcript messages verbatim, summary spans stand in as one message
+/// carrying the checkpoint summary.
+fn materialize_view(messages: &[NormalizedMessage], folded: &FoldedView) -> Vec<NormalizedMessage> {
+    let mut view = Vec::with_capacity(messages.len());
+    for segment in &folded.segments {
+        match segment {
+            ViewSegment::Original { start_seq, end_seq } => {
+                view.extend_from_slice(&messages[*start_seq..*end_seq]);
+            }
+            ViewSegment::Summary { summary, .. } => {
+                view.push(NormalizedMessage::user(summary.clone()));
+            }
+        }
+    }
+    view
 }
 
 /// One persisted execution fact for a session.
@@ -287,6 +369,35 @@ pub enum SessionEventKind {
     TurnCompleted {
         /// Provider round-trips taken.
         rounds: u32,
+    },
+    /// A compaction checkpoint write opened its marker pair.
+    ///
+    /// The pair (`start -> checkpoint -> closed`) is a crash-detectable lock:
+    /// if the closing entry never arrives, the checkpoint is reported as
+    /// unclosed and never folded into any derived view.
+    CompactionStarted {
+        /// Marker identity shared with the checkpoint and the closing entry.
+        marker: String,
+    },
+    /// A compaction checkpoint: the derived provider view surface-replaces the
+    /// messages `[start_seq, end_seq)` with `summary`.
+    ///
+    /// The transcript itself is untouched: the original messages stay in
+    /// `messages` and remain replayable at any later time.
+    CompactionCheckpoint {
+        /// First replaced message index (inclusive).
+        start_seq: usize,
+        /// First unreplaced message index (exclusive).
+        end_seq: usize,
+        /// The summary that replaces the span in the derived view.
+        summary: String,
+        /// Marker identity shared with its bracketing pair.
+        marker: String,
+    },
+    /// The compaction marker pair closed.
+    CompactionClosed {
+        /// Marker identity shared with the opening entry.
+        marker: String,
     },
 }
 

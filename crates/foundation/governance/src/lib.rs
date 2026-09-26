@@ -63,6 +63,10 @@ pub use research_autonomy::{
 };
 pub mod risk;
 pub mod rubric;
+// 沙箱升级阶梯 (单调加宽 + 理由强制 + 一次性授权 + 就地提示): 授权面扩展,
+// 不改变本文件的判定语义; 默认不挂载, 由组合层显式接线。
+pub mod sandbox_ladder;
+pub mod sandbox_preset;
 pub mod tool_desc_audit;
 pub mod untrusted_mark;
 
@@ -110,6 +114,15 @@ pub use rubric::{
     passes_strategy, synthesize, AdvisorDomain, Ballot, HoldDecision, HoldThreshold, HoldTrigger,
     StanceKind, SynthesisReport, VotingStrategy, HOLD_DELIBERATION_TIMEOUT_MS,
     HOLD_STRONG_DISAPPROVE_PERCENT, SUPERMAJORITY_FRACTION,
+};
+pub use sandbox_ladder::{
+    check_mode_transition, AuthorizationLedgerError, CallFingerprint, EscalationHint,
+    EscalationRefusal, EscalationRequest, ModeTransition, OneShotAuthorizationLedger, ReviewStatus,
+    SandboxEscalationGate, SandboxMode, AUDIT_EVENT_APPROVAL_RESOLVED, ESCALATION_ARGUMENT_KEY,
+    GRANT_SCOPE_ONE_CALL, JUSTIFICATION_FIELD, WIDER_MODES,
+};
+pub use sandbox_preset::{
+    derive_preset, preset_binding, ApprovalPolicyName, PresetName, PRESET_BINDINGS,
 };
 
 /// What the runtime is about to do.

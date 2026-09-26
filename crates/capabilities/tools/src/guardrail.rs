@@ -12,6 +12,10 @@ use thiserror::Error;
 pub enum PreCallGuardError {
     #[error("检测到路径穿越或敏感系统路径访问: {0}")]
     PathTraversal(String),
+    /// 目标路径落在工作区目录之外 —— 目录边界拒绝. 与词法攻击面/受保护
+    /// 路径不同, 这类拒绝可经一次性升级 (见 `escalation` 模块) 就地引导.
+    #[error("{0}")]
+    OutsideWorkspace(String),
     #[error("检测到高危破坏性 Shell 注入或命令: {0}")]
     DangerousCommandInjection(String),
 }
@@ -101,7 +105,7 @@ impl ToolGuardrail {
                 (workspace_root.canonicalize(), requested_path.canonicalize())
             {
                 if !canonical_target.starts_with(&canonical_root) {
-                    return Err(PreCallGuardError::PathTraversal(format!(
+                    return Err(PreCallGuardError::OutsideWorkspace(format!(
                         "目标路径超出工作区边界: {}",
                         path_str
                     )));

@@ -41,6 +41,7 @@ use apeireth_core::kernel::{
     system_clock, ApprovalId, CapabilityId, Clock, PluginId, SessionId, Timestamp, TraceId,
 };
 use apeireth_governance::{DenyUnconfigured, GovernanceHook};
+use apeireth_orchestration::compaction_checkpoint::{CompactionEngine, SummaryGenerator};
 use apeireth_orchestration::context_budget::SpillWriter;
 use apeireth_orchestration::repetition_advisory::{
     RepetitionAdvisory, RepetitionDetector, RepetitionPolicy,
@@ -261,6 +262,10 @@ pub struct Runtime {
     /// (`<root>/spill/`). `None` = no sink bound; overflow handling then keeps
     /// full content inline instead of losing it.
     pub(super) context_spill: Option<Arc<SpillWriter>>,
+    /// Compress-checkpoint engine (summary replacement over an append-only
+    /// transcript). `None` = no summary generator installed; the derived view
+    /// then equals the transcript exactly and nothing is ever compacted.
+    pub(super) compaction: Option<Arc<CompactionEngine>>,
 }
 
 impl Runtime {
@@ -586,6 +591,7 @@ pub struct RuntimeBuilder {
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
     invariant_auditor: Option<Arc<InvariantAuditor>>,
+    summary_generator: Option<Arc<dyn SummaryGenerator>>,
 }
 
 impl Default for RuntimeBuilder {
@@ -610,6 +616,7 @@ impl RuntimeBuilder {
             fallback_order: None,
             config: RuntimeConfig::default(),
             invariant_auditor: None,
+            summary_generator: None,
         }
     }
 
@@ -771,6 +778,18 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Install the summary generator behind compress checkpoints.
+    ///
+    /// Without it, no compaction ever runs: the derived provider view equals
+    /// the transcript exactly. With it, a transcript that crosses the shared
+    /// overflow trigger is surface-replaced by one accepted summary — and any
+    /// summary failure leaves the session exactly as it was.
+    #[must_use]
+    pub fn with_summary_generator(mut self, generator: Arc<dyn SummaryGenerator>) -> Self {
+        self.summary_generator = Some(generator);
+        self
+    }
+
     /// Register the plugins, start them in dependency order, and assemble.
     ///
     /// Plugins are started here rather than lazily on first use, so that a
@@ -848,6 +867,9 @@ impl RuntimeBuilder {
             repetition_detectors: Mutex::new(BTreeMap::new()),
             invariant_auditor: self.invariant_auditor,
             context_spill,
+            compaction: self
+                .summary_generator
+                .map(|generator| Arc::new(CompactionEngine::new(generator))),
         })
     }
 }

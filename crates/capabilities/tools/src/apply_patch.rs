@@ -9,15 +9,25 @@
 //! - 行式 hunks (`@@` 注释锚, `-old` / `+new`) 与 SEARCH/REPLACE 格式并存, 自动识别.
 //! - 提交写盘走统一存储基础件的持久档原子写 (同目录独占临时文件 + 落盘 + 替换,
 //!   见 `apeireth_core::storage_atomic`): 崩溃安全替换, 半途中断不留截断目标.
+//! - 提交写盘叠加读前观测门禁 (见 `crate::observed_gate`): 预演阶段读到的
+//!   原始内容即观测事件 (记 (len, mtime) 版本), 提交写携带该版本过版本 CAS
+//!   双钥匙 —— 预演与提交之间的外部改动被拒, Add 走 createIfAbsent 钥匙。
+//!   门禁叠加在既有版本语义 (严格唯一上下文匹配 + 原内容备份) 之上, 不改写它们。
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
 
 use apeireth_core::storage_atomic;
+
+use crate::observed_gate::{
+    gated_write_atomic_durable, FileVersion, FsVersionProbe, GatedWriteError, ObservedGate,
+    VersionProbe, WriteIntent, WriteKind, WriteRequest,
+};
 
 /// Patch 应用错误.
 #[derive(Debug, Error, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -39,6 +49,9 @@ pub enum ApplyPatchError {
     /// 组件 / symlink 逃逸) —— fail-closed, 整个事务在预演阶段即拒绝。
     #[error("补丁路径越出工作区边界: {0}")]
     PathViolation(String),
+    /// 读前观测门禁拒绝 (未读先覆盖 / 版本 CAS 钥匙不符 / createIfAbsent 撞目标)。
+    #[error("读前观测门禁拒绝: {0}")]
+    GateDenied(String),
 }
 
 /// 单个文件操作类型.
@@ -71,6 +84,14 @@ pub struct PatchReport {
     pub files_updated: Vec<String>,
     pub files_deleted: Vec<String>,
     pub total_actions: usize,
+}
+
+/// 提交阶段的暂存写入: 内容 + 门禁意图 + 预演观测版本。
+#[derive(Debug, Clone)]
+struct StagedWrite {
+    content: String,
+    intent: WriteKind,
+    observed: Option<FileVersion>,
 }
 
 /// 事务补丁应用器.
@@ -227,7 +248,23 @@ impl TransactionalPatchApplier {
     }
 
     /// 在指定根目录下原子性应用整个补丁事务.
+    ///
+    /// 使用调用内建的观测门禁 (补丁自读自写自洽)。需要与文件读工具共享
+    /// 会话观测时用 [`Self::apply_with_gate`]。
     pub fn apply(root_dir: &Path, patch_text: &str) -> Result<PatchReport, ApplyPatchError> {
+        Self::apply_with_gate(root_dir, patch_text, &ObservedGate::new())
+    }
+
+    /// 同 [`Self::apply`], 但提交写盘过共享的读前观测门禁.
+    ///
+    /// 叠加语义: 预演读取把 (len, mtime) 版本记入 `gate` (观测事件), 提交写
+    /// 携带该版本走版本 CAS 双钥匙 (Update/Delete 钥匙 = 预演版本, Add 钥匙 =
+    /// createIfAbsent); 事务收尾把写后现状回填为最新观测, 同会话后续写免重读。
+    pub fn apply_with_gate(
+        root_dir: &Path,
+        patch_text: &str,
+        gate: &ObservedGate,
+    ) -> Result<PatchReport, ApplyPatchError> {
         let actions = Self::parse_patch(patch_text)?;
         if actions.is_empty() {
             return Ok(PatchReport {
@@ -239,8 +276,8 @@ impl TransactionalPatchApplier {
         }
 
         // 1. 预演阶段 (Dry-run): 在内存中计算并校验所有更改
-        let mut staged_writes: HashMap<PathBuf, String> = HashMap::new();
-        let mut staged_deletes: Vec<PathBuf> = Vec::new();
+        let mut staged_writes: HashMap<PathBuf, StagedWrite> = HashMap::new();
+        let mut staged_deletes: Vec<(PathBuf, FileVersion)> = Vec::new();
         let mut original_backups: HashMap<PathBuf, Option<String>> = HashMap::new();
 
         let mut files_added = Vec::new();
@@ -258,8 +295,17 @@ impl TransactionalPatchApplier {
                             path.to_string_lossy().to_string(),
                         ));
                     }
+                    // 预演已核对目标缺席 = 「已观测为不存在」观测事件。
+                    gate.observe_missing(&full_path);
                     original_backups.insert(full_path.clone(), None);
-                    staged_writes.insert(full_path, content.clone());
+                    staged_writes.insert(
+                        full_path,
+                        StagedWrite {
+                            content: content.clone(),
+                            intent: WriteKind::Create,
+                            observed: None,
+                        },
+                    );
                     files_added.push(path.to_string_lossy().to_string());
                 }
                 FilePatchAction::Delete { path } => {
@@ -269,10 +315,9 @@ impl TransactionalPatchApplier {
                             path.to_string_lossy().to_string(),
                         ));
                     }
-                    let old_content = fs::read_to_string(&full_path)
-                        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+                    let (old_content, observed) = read_observed(&full_path, gate)?;
                     original_backups.insert(full_path.clone(), Some(old_content));
-                    staged_deletes.push(full_path);
+                    staged_deletes.push((full_path, observed));
                     files_deleted.push(path.to_string_lossy().to_string());
                 }
                 FilePatchAction::Update { path, hunks } => {
@@ -282,8 +327,7 @@ impl TransactionalPatchApplier {
                             path.to_string_lossy().to_string(),
                         ));
                     }
-                    let original = fs::read_to_string(&full_path)
-                        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+                    let (original, observed) = read_observed(&full_path, gate)?;
                     original_backups.insert(full_path.clone(), Some(original.clone()));
 
                     let mut updated = original;
@@ -296,33 +340,70 @@ impl TransactionalPatchApplier {
                             h_idx,
                         )?;
                     }
-                    staged_writes.insert(full_path, updated);
+                    staged_writes.insert(
+                        full_path,
+                        StagedWrite {
+                            content: updated,
+                            intent: WriteKind::Replace,
+                            observed: Some(observed),
+                        },
+                    );
                     files_updated.push(path.to_string_lossy().to_string());
                 }
             }
         }
 
-        // 2. 提交阶段 (Commit): 原子写入磁盘；若有任何 IO 异常则自动回滚已写入的文件
+        // 2. 提交阶段 (Commit): 过门禁的原子写入磁盘；若有任何 IO 异常则自动回滚已写入的文件
         let mut committed_paths = Vec::new();
-        for (path, content) in staged_writes {
+        for (path, staged) in staged_writes {
             if let Some(parent) = path.parent() {
                 if let Err(e) = fs::create_dir_all(parent) {
                     Self::rollback(&committed_paths, &original_backups);
                     return Err(ApplyPatchError::Io(e.to_string()));
                 }
             }
-            if let Err(e) = atomic_write_file(&path, &content) {
+            let request = WriteRequest {
+                path: path.clone(),
+                kind: staged.intent,
+                replace_if_version: staged.observed,
+                create_if_absent: staged.intent == WriteKind::Create,
+            };
+            if let Err(e) = gated_write_atomic_durable(
+                gate,
+                &FsVersionProbe,
+                &request,
+                staged.content.as_bytes(),
+                target_file_mode(&path),
+            ) {
                 Self::rollback(&committed_paths, &original_backups);
-                return Err(e);
+                return Err(match e {
+                    GatedWriteError::Denied(denial) => {
+                        ApplyPatchError::GateDenied(denial.message())
+                    }
+                    GatedWriteError::Io(detail) => ApplyPatchError::Io(detail),
+                });
             }
             committed_paths.push(path);
         }
 
-        for path in staged_deletes {
+        for (path, observed) in staged_deletes {
+            // 删除同属覆盖类: 过同一道门禁 (钥匙 = 预演观测版本)。
+            let intent = WriteIntent {
+                path: &path,
+                kind: WriteKind::Replace,
+                replace_if_version: Some(observed),
+                create_if_absent: false,
+                current: FsVersionProbe.version(&path),
+            };
+            if let Err(denial) = gate.check_write(&intent) {
+                Self::rollback(&committed_paths, &original_backups);
+                return Err(ApplyPatchError::GateDenied(denial.message()));
+            }
             if let Err(e) = fs::remove_file(&path) {
                 Self::rollback(&committed_paths, &original_backups);
                 return Err(ApplyPatchError::Io(e.to_string()));
             }
+            gate.observe_missing(&path);
             committed_paths.push(path);
         }
 
@@ -340,6 +421,10 @@ impl TransactionalPatchApplier {
         // 失败 (如备份写盘时磁盘满), 磁盘可能停留在部分回滚状态。提交阶段
         // 的顺序 (先写后删) 与每文件的 tmp+rename 原子性保证的是"进行中的
         // 损坏不会发生", 而非"回滚必然成功"。调用方需要把 report/err 当权威。
+        //
+        // 回滚恢复的是本次事务刚观测过的原内容, 属内部恢复, 不再过读前观测
+        // 门禁; 回滚后门禁观测可能短暂停在旧版本 —— 偏向"下次写被拒、要求
+        // 重读"的安全方向。
         for path in committed {
             if let Some(backup) = backups.get(path) {
                 match backup {
@@ -499,6 +584,28 @@ fn apply_unique_replace(
         });
     }
     Ok(haystack.replacen(needle, replacement, 1))
+}
+
+/// 预演读取: 读当前内容并把 (len, mtime) 版本记入读前观测门禁.
+///
+/// 版本取自已开句柄的元数据 (fstat, 零额外 IO), 与读到的内容同源; 该版本
+/// 即提交写携带的版本 CAS 钥匙。在既有版本语义 (原内容备份 + 严格唯一
+/// 上下文匹配) 之上叠加观测, 不改写它们。
+fn read_observed(
+    path: &Path,
+    gate: &ObservedGate,
+) -> Result<(String, FileVersion), ApplyPatchError> {
+    let mut file = fs::File::open(path).map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+    let version = FileVersion::from_metadata(
+        &file
+            .metadata()
+            .map_err(|e| ApplyPatchError::Io(e.to_string()))?,
+    );
+    let mut content = String::new();
+    file.read_to_string(&mut content)
+        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+    gate.observe_present(path, version);
+    Ok((content, version))
 }
 
 /// 崩溃安全的文件替换: 委托统一存储基础件的持久档原子写
@@ -894,5 +1001,98 @@ replaced
         for candidate in occupied {
             let _ = fs::remove_file(candidate);
         }
+    }
+
+    // ---- 读前观测门禁叠加 (提交写盘走版本 CAS 双钥匙) ----
+
+    #[test]
+    fn apply_with_gate_records_observations_and_enforces_version_cas() {
+        use crate::observed_gate::{
+            gated_write_atomic, GateDenial, GatedWriteError, WriteKind as GateWriteKind,
+            WriteRequest,
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "hello old world").unwrap();
+        let gate = ObservedGate::new();
+        let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-old\n+NEW\n*** End Patch";
+        TransactionalPatchApplier::apply_with_gate(dir.path(), patch, &gate).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+            "hello NEW world"
+        );
+
+        // 事务收尾回填观测: 同会话后续覆盖写凭回填版本直接过 CAS。
+        let target = dir.path().join("a.txt");
+        let observed = gate
+            .observed_version(&target)
+            .expect("写后必须回填观测版本");
+        assert_eq!(observed.len, fs::metadata(&target).unwrap().len());
+        let request = WriteRequest {
+            path: target.clone(),
+            kind: GateWriteKind::Replace,
+            replace_if_version: Some(observed),
+            create_if_absent: false,
+        };
+        gated_write_atomic(
+            &gate,
+            &FsVersionProbe,
+            &request,
+            b"second",
+            storage_atomic::DEFAULT_FILE_MODE,
+        )
+        .unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "second");
+
+        // 外部改动后, 旧钥匙被版本 CAS 拒绝, 外部内容不被覆盖。
+        fs::write(&target, "external").unwrap();
+        let stale = WriteRequest {
+            path: target.clone(),
+            kind: GateWriteKind::Replace,
+            replace_if_version: Some(observed),
+            create_if_absent: false,
+        };
+        let err = gated_write_atomic(
+            &gate,
+            &FsVersionProbe,
+            &stale,
+            b"third",
+            storage_atomic::DEFAULT_FILE_MODE,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                GatedWriteError::Denied(GateDenial::VersionMismatch { .. })
+            ),
+            "外部改动后旧钥匙必须被拒, got {err:?}"
+        );
+        assert_eq!(fs::read_to_string(&target).unwrap(), "external");
+    }
+
+    #[test]
+    fn apply_with_gate_creates_only_when_target_is_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let gate = ObservedGate::new();
+        let patch = "*** Begin Patch\n*** Add File: new.txt\n+created\n*** End Patch";
+        let report = TransactionalPatchApplier::apply_with_gate(dir.path(), patch, &gate).unwrap();
+        assert_eq!(report.files_added, vec!["new.txt"]);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("new.txt")).unwrap(),
+            "created"
+        );
+
+        // 目标已出现: 创建路径拒绝覆盖 (预演 FileAlreadyExists 与提交
+        // createIfAbsent 钥匙同口径, 任一触发都不落盘)。
+        let again = "*** Begin Patch\n*** Add File: new.txt\n+clobbered\n*** End Patch";
+        let err = TransactionalPatchApplier::apply_with_gate(dir.path(), again, &gate).unwrap_err();
+        assert!(
+            matches!(err, ApplyPatchError::FileAlreadyExists(_)),
+            "创建撞已有文件必须被拒, got {err:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("new.txt")).unwrap(),
+            "created"
+        );
     }
 }
