@@ -85,30 +85,43 @@ impl AppContainerSandbox {
                 .encode_wide()
                 .chain(Some(0))
                 .collect();
-            let mut sid: PSID = std::ptr::null_mut();
-            let hr = CreateAppContainerProfile(
-                name.as_ptr(),
-                display.as_ptr(),
-                display.as_ptr(),
-                std::ptr::null(),
-                0,
-                &mut sid,
-            );
-            if hr >= 0 && !sid.is_null() {
-                return Ok(Self { sid });
-            }
-            if hr as u32 == 0x8007_00B7u32 {
-                let mut derived: PSID = std::ptr::null_mut();
-                let hr2 = DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut derived);
-                if hr2 >= 0 && !derived.is_null() {
-                    return Ok(Self { sid: derived });
+            // 瞬时失败有界重试: 并行负载下 profile 注册可能瞬时抖动
+            // (典型 HRESULT=0x8000ffff); 有界重试两次后再按真实失败上报,
+            // 只在失败路径付出毫秒级等待。
+            let mut last_hr = 0i32;
+            for attempt in 0..3u32 {
+                let mut sid: PSID = std::ptr::null_mut();
+                let hr = CreateAppContainerProfile(
+                    name.as_ptr(),
+                    display.as_ptr(),
+                    display.as_ptr(),
+                    std::ptr::null(),
+                    0,
+                    &mut sid,
+                );
+                if hr >= 0 && !sid.is_null() {
+                    return Ok(Self { sid });
                 }
-                return Err(ProcessError::ContainmentFailed(format!(
-                    "AppContainer profile exists but SID derive failed: HRESULT=0x{hr2:08x}"
-                )));
+                if hr as u32 == 0x8007_00B7u32 {
+                    let mut derived: PSID = std::ptr::null_mut();
+                    let hr2 =
+                        DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut derived);
+                    if hr2 >= 0 && !derived.is_null() {
+                        return Ok(Self { sid: derived });
+                    }
+                    return Err(ProcessError::ContainmentFailed(format!(
+                        "AppContainer profile exists but SID derive failed: HRESULT=0x{hr2:08x}"
+                    )));
+                }
+                last_hr = hr;
+                if attempt < 2 {
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        50 * (u64::from(attempt) + 1),
+                    ));
+                }
             }
             Err(ProcessError::ContainmentFailed(format!(
-                "CreateAppContainerProfile failed: HRESULT=0x{hr:08x}"
+                "CreateAppContainerProfile failed after bounded retries: HRESULT=0x{last_hr:08x}"
             )))
         }
     }
