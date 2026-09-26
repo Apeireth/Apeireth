@@ -112,8 +112,8 @@ pub use amem_graph::{
 };
 pub use dream_consolidation::{pair_merge, select_dream_candidates, DreamSource, DREAM_ID_PREFIX};
 pub use memory_injection::{
-    build_memory_injection, build_preference_injection, EVIDENCE_MAX_CHARS,
-    PREFERENCE_INJECTION_LIMIT,
+    build_l2_retrieval_disclosure, build_memory_injection, build_preference_injection,
+    EVIDENCE_MAX_CHARS, PREFERENCE_INJECTION_LIMIT,
 };
 pub use memory_rank::{
     filter_active_memories, group_bonus, memory_score, parse_importance, rank_memory_entries,

@@ -17,9 +17,9 @@ use apeireth_core::kernel::{
     ApprovalId, CapabilityId, Clock, RequestId, SessionId, Timestamp, TraceId,
 };
 use apeireth_orchestration::compaction_checkpoint::{
-    fold_checkpoints, CompactionCheckpoint, CompactionLogEntry, CompactionMessage, CompactionRole,
-    FoldedView, ViewSegment,
+    CompactionLogEntry, CompactionMessage, CompactionRole,
 };
+use apeireth_orchestration::plan_mode::PlanModeEvent;
 use apeireth_protocol::canonical::{ContentPart, MessageRole, NormalizedMessage};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,10 @@ use tokio::sync::Mutex;
 
 use super::approval::PendingApproval;
 use super::error::{RuntimeError, RuntimeResult};
+use super::event_log::{
+    compaction_entries, fold_surface, fork_placeholder, open_tool_calls, ForkRecord, LogEntry,
+    SurfaceOp, SurfaceView,
+};
 
 /// Session-level permission posture applied to subsequent turns.
 ///
@@ -85,6 +89,7 @@ impl Default for SessionSettings {
 
 /// One conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "SessionRepr")]
 pub struct Session {
     /// Stable identity.
     pub id: SessionId,
@@ -97,10 +102,31 @@ pub struct Session {
     pub settings: SessionSettings,
     /// The transcript, in order. Includes assistant tool-call messages and
     /// tool-result messages, so a resumed session can continue mid-tool-loop.
+    ///
+    /// This is the materialized projection of [`Session::log`], kept in
+    /// lockstep with it by [`Session::append`] / [`Session::extend`]. It is
+    /// never rewritten or truncated: surface changes happen in the derived
+    /// view only, so every original stays replayable here.
     pub messages: Vec<NormalizedMessage>,
     /// Structured execution facts needed to reconstruct denied and failed
     /// turns without polluting the provider transcript.
     pub events: Vec<SessionEvent>,
+    /// The append-only event log: the sole authority over this session's
+    /// surface. Message appends, surface changes, masks, and fork evidence are
+    /// recorded here and never rewritten or deleted — masked and replaced
+    /// originals stay in the log forever. Provider messages are derived from
+    /// it by one pure fold ([`Session::surface_view`]), so the same log always
+    /// replays to the same view.
+    ///
+    /// `#[serde(default)]` is the on-disk migration path: sessions persisted
+    /// before the log existed rebuild it from their transcript and facts on
+    /// load (see [`SessionRepr`]).
+    #[serde(default)]
+    pub log: Vec<LogEntry>,
+    /// For a forked session: how many records of its parent's log it inherited
+    /// — the exact fork cut. `None` for a session that was not forked.
+    #[serde(default)]
+    pub inherited_event_count: Option<usize>,
     /// Every approval this session has produced, keyed by stable [`ApprovalId`].
     /// Terminal approvals are retained for audit and idempotency.
     pub approvals: BTreeMap<ApprovalId, PendingApproval>,
@@ -123,6 +149,8 @@ impl Session {
             id,
             messages: Vec::new(),
             events: Vec::new(),
+            log: Vec::new(),
+            inherited_event_count: None,
             approvals: BTreeMap::new(),
             active_approval_id: None,
             settings: SessionSettings::default(),
@@ -133,8 +161,19 @@ impl Session {
     }
 
     /// Append a message and update the modification time.
+    ///
+    /// The transcript and the event log advance together: the log gains the
+    /// append record that is the authority for this message, so the log is
+    /// complete for every message the session has ever held.
     pub fn append(&mut self, message: NormalizedMessage, clock: &dyn Clock) {
-        self.messages.push(message);
+        let seq = self.messages.len();
+        self.messages.push(message.clone());
+        self.log.push(LogEntry {
+            at: Timestamp::from_clock(clock),
+            request: None,
+            trace: None,
+            event: SessionEventKind::MessageAppended { seq, message },
+        });
         self.touch(clock);
     }
 
@@ -144,11 +183,25 @@ impl Session {
         messages: impl IntoIterator<Item = NormalizedMessage>,
         clock: &dyn Clock,
     ) {
-        self.messages.extend(messages);
+        let at = Timestamp::from_clock(clock);
+        for message in messages {
+            let seq = self.messages.len();
+            self.messages.push(message.clone());
+            self.log.push(LogEntry {
+                at,
+                request: None,
+                trace: None,
+                event: SessionEventKind::MessageAppended { seq, message },
+            });
+        }
         self.touch(clock);
     }
 
     /// Append one structured execution event.
+    ///
+    /// The event is mirrored into the authoritative log with its provenance,
+    /// so the log carries the session's whole event stream — facts and surface
+    /// records alike — in one order. A fork cuts that one stream.
     pub fn record(
         &mut self,
         request: RequestId,
@@ -156,10 +209,17 @@ impl Session {
         event: SessionEventKind,
         clock: &dyn Clock,
     ) {
+        let at = Timestamp::from_clock(clock);
         self.events.push(SessionEvent {
-            at: Timestamp::from_clock(clock),
+            at,
             request,
             trace,
+            event: event.clone(),
+        });
+        self.log.push(LogEntry {
+            at,
+            request: Some(request),
+            trace: Some(trace),
             event,
         });
         self.touch(clock);
@@ -178,42 +238,210 @@ impl Session {
     /// The append-only compaction log, in event order: marker-pair entries and
     /// the checkpoints they bracket. Deriving provider messages folds this log
     /// over the transcript.
+    ///
+    /// The projection comes from the authoritative event log, which carries
+    /// the same compaction records in the same order (with provenance) — one
+    /// mapping serves both this planner-facing read and the derived-view fold.
     pub fn compaction_log(&self) -> Vec<CompactionLogEntry> {
+        compaction_entries(&self.log)
+    }
+
+    /// The append-only plan-mode ledger entries of this session, in event
+    /// order. Folding them rebuilds the session's collaborative plan-mode
+    /// projection (posture, `state_version`, parked switch), so a resumed or
+    /// rebuilt session recovers its mode from the log alone.
+    pub fn plan_mode_log(&self) -> Vec<PlanModeEvent> {
         self.events
             .iter()
             .filter_map(|event| match &event.event {
-                SessionEventKind::CompactionStarted { marker } => Some(CompactionLogEntry::Start {
-                    marker: marker.clone(),
-                }),
-                SessionEventKind::CompactionCheckpoint {
-                    start_seq,
-                    end_seq,
-                    summary,
-                    marker,
-                } => Some(CompactionLogEntry::Checkpoint(Box::new(
-                    CompactionCheckpoint {
-                        start_seq: *start_seq,
-                        end_seq: *end_seq,
-                        summary: summary.clone(),
-                        marker: marker.clone(),
-                    },
-                ))),
-                SessionEventKind::CompactionClosed { marker } => Some(CompactionLogEntry::End {
-                    marker: marker.clone(),
-                }),
+                SessionEventKind::PlanMode { entry } => Some(entry.clone()),
                 _ => None,
             })
             .collect()
     }
 
-    /// The provider-facing message view: closed compaction checkpoints
-    /// surface-replace their spans with their summaries; every other message
-    /// survives verbatim. The transcript itself is never modified, so this is
-    /// a deterministic replay — folding the same session twice yields the same
-    /// view.
+    /// The provider-facing message view, derived from the event log by one
+    /// pure fold: closed compaction checkpoints surface-replace their spans
+    /// with their summaries, explicit surface changes replace their spans with
+    /// new content, and masked messages drop out — nothing else moves. The
+    /// transcript and the log are never modified, so this is a deterministic
+    /// replay: folding the same log twice yields the same view.
     pub fn provider_view(&self) -> Vec<NormalizedMessage> {
-        let folded = fold_checkpoints(self.messages.len(), &self.compaction_log());
-        materialize_view(&self.messages, &folded)
+        self.surface_view().messages()
+    }
+
+    /// The full derived surface behind [`Session::provider_view`]: segments,
+    /// retained originals (masked and replaced ones included), and every log
+    /// record the fold refused.
+    pub fn surface_view(&self) -> SurfaceView {
+        fold_surface(&self.log)
+    }
+
+    /// Mask message `seq` out of every derived view.
+    ///
+    /// Masking hides, it never deletes: the append record and the original
+    /// message stay in the log and the transcript, queryable at any later
+    /// time. The record-time check only validates the sequence number; the
+    /// fold additionally refuses a mask that lands inside a standing
+    /// replacement or on an already masked message.
+    pub fn mask_message(
+        &mut self,
+        seq: usize,
+        reason: impl Into<String>,
+        clock: &dyn Clock,
+    ) -> RuntimeResult<()> {
+        if seq >= self.messages.len() {
+            return Err(RuntimeError::Session {
+                session: self.id,
+                operation: "masked",
+                reason: format!(
+                    "message {seq} is past the transcript ({})",
+                    self.messages.len()
+                ),
+            });
+        }
+        self.log.push(LogEntry {
+            at: Timestamp::from_clock(clock),
+            request: None,
+            trace: None,
+            event: SessionEventKind::Masked {
+                seq,
+                reason: reason.into(),
+            },
+        });
+        self.touch(clock);
+        Ok(())
+    }
+
+    /// Apply the one legal surface change: replace `[start_seq, end_seq)` of
+    /// the derived view with `replacement` — empty truncates the span away,
+    /// new content rewrites it. The replaced originals are kept on record in
+    /// the log and the transcript.
+    pub fn replace_surface(
+        &mut self,
+        op: SurfaceOp,
+        replacement: Vec<NormalizedMessage>,
+        note: impl Into<String>,
+        clock: &dyn Clock,
+    ) -> RuntimeResult<()> {
+        let (start_seq, end_seq) = op.span();
+        if start_seq >= end_seq {
+            return Err(RuntimeError::Session {
+                session: self.id,
+                operation: "replaced",
+                reason: format!("surface change [{start_seq}, {end_seq}) covers an empty span"),
+            });
+        }
+        if end_seq > self.messages.len() {
+            return Err(RuntimeError::Session {
+                session: self.id,
+                operation: "replaced",
+                reason: format!(
+                    "surface change [{start_seq}, {end_seq}) reaches past the transcript ({})",
+                    self.messages.len()
+                ),
+            });
+        }
+        self.log.push(LogEntry {
+            at: Timestamp::from_clock(clock),
+            request: None,
+            trace: None,
+            event: SessionEventKind::SurfaceReplaced {
+                op,
+                replacement,
+                note: note.into(),
+            },
+        });
+        self.touch(clock);
+        Ok(())
+    }
+
+    /// Fork this session at `prefix_end_seq`: the exact prefix of the event
+    /// log becomes a new session, `inherited_event_count` records the cut, and
+    /// no record after the cut is carried over.
+    ///
+    /// Tool calls the inherited prefix leaves open get a placeholder result
+    /// ([`fork_placeholder`]) so the new session's view is complete; this
+    /// session keeps the fork as children evidence ([`Session::children`]).
+    /// Approval state is live turn state and stays with this session.
+    pub fn fork_session(
+        &mut self,
+        prefix_end_seq: usize,
+        clock: &dyn Clock,
+    ) -> RuntimeResult<Session> {
+        if prefix_end_seq > self.log.len() {
+            return Err(RuntimeError::Session {
+                session: self.id,
+                operation: "forked",
+                reason: format!(
+                    "fork point {prefix_end_seq} is past the event log ({})",
+                    self.log.len()
+                ),
+            });
+        }
+        let mut child = Session::new(SessionId::new(), clock);
+        child.settings = self.settings.clone();
+        child.inherited_event_count = Some(prefix_end_seq);
+        child.log = self.log[..prefix_end_seq].to_vec();
+        // The facts of the inherited prefix: the records that carry execution
+        // provenance, exactly as they happened before the cut.
+        child.events = child
+            .log
+            .iter()
+            .filter_map(|entry| {
+                Some(SessionEvent {
+                    at: entry.at,
+                    request: entry.request?,
+                    trace: entry.trace?,
+                    event: entry.event.clone(),
+                })
+            })
+            .collect();
+        // The transcript of the inherited prefix: every appended original in
+        // it, in order — nothing appended after the cut.
+        child.messages = child
+            .log
+            .iter()
+            .filter_map(|entry| match &entry.event {
+                SessionEventKind::MessageAppended { message, .. } => Some(message.clone()),
+                _ => None,
+            })
+            .collect();
+        // Close the tool calls the prefix left open so the child's view is
+        // complete.
+        for call_id in open_tool_calls(&child.messages) {
+            child.append(fork_placeholder(&call_id), clock);
+        }
+        // Children evidence on the parent, appended after the cut so the
+        // child's inherited prefix stays exact.
+        self.log.push(LogEntry {
+            at: Timestamp::from_clock(clock),
+            request: None,
+            trace: None,
+            event: SessionEventKind::SessionForked {
+                child_id: child.id,
+                prefix_end_seq,
+            },
+        });
+        self.touch(clock);
+        Ok(child)
+    }
+
+    /// Fork evidence: every child session forked from this one, in fork order.
+    pub fn children(&self) -> Vec<ForkRecord> {
+        self.log
+            .iter()
+            .filter_map(|entry| match &entry.event {
+                SessionEventKind::SessionForked {
+                    child_id,
+                    prefix_end_seq,
+                } => Some(ForkRecord {
+                    child_id: *child_id,
+                    prefix_end_seq: *prefix_end_seq,
+                }),
+                _ => None,
+            })
+            .collect()
     }
 
     /// The planner-level shape of one transcript message.
@@ -239,24 +467,6 @@ impl Session {
         self.revision = self.revision.saturating_add(1);
         self.updated_at = Timestamp::from_clock(clock);
     }
-}
-
-/// Materialize one folded view into provider messages: original spans copy
-/// their transcript messages verbatim, summary spans stand in as one message
-/// carrying the checkpoint summary.
-fn materialize_view(messages: &[NormalizedMessage], folded: &FoldedView) -> Vec<NormalizedMessage> {
-    let mut view = Vec::with_capacity(messages.len());
-    for segment in &folded.segments {
-        match segment {
-            ViewSegment::Original { start_seq, end_seq } => {
-                view.extend_from_slice(&messages[*start_seq..*end_seq]);
-            }
-            ViewSegment::Summary { summary, .. } => {
-                view.push(NormalizedMessage::user(summary.clone()));
-            }
-        }
-    }
-    view
 }
 
 /// One persisted execution fact for a session.
@@ -399,6 +609,144 @@ pub enum SessionEventKind {
         /// Marker identity shared with the opening entry.
         marker: String,
     },
+    /// One plan-mode collaborative-state ledger entry.
+    ///
+    /// The session's plan-mode posture is a fold over these entries (init /
+    /// apply / state-version); only an `Apply` entry changes the projected
+    /// posture, and one is written exclusively at the pre-step of an accepted
+    /// turn. See [`Session::plan_mode_log`].
+    PlanMode {
+        /// The ledger entry to fold.
+        entry: PlanModeEvent,
+    },
+    /// A message entered the transcript: the append-only record the derived
+    /// views replay from. Written by [`Session::append`] / [`Session::extend`]
+    /// only, so the transcript and this record advance together and the log
+    /// covers every message a session has ever held.
+    MessageAppended {
+        /// Sequence number of the message in the append-only transcript.
+        seq: usize,
+        /// The message exactly as appended.
+        message: NormalizedMessage,
+    },
+    /// A surface change on the derived view.
+    ///
+    /// [`SurfaceOp::Replace`] is the only legal form: truncation, compaction,
+    /// and rewriting all route through it — a rewrite is "replace the span
+    /// with new content" — and the replaced originals are kept on record in
+    /// the log and the transcript. Compaction checkpoints are the same
+    /// operation carrying a summary as replacement content.
+    SurfaceReplaced {
+        /// The replacement interval.
+        op: SurfaceOp,
+        /// New content standing in for the interval; empty truncates it away.
+        replacement: Vec<NormalizedMessage>,
+        /// Why the surface changed.
+        note: String,
+    },
+    /// The message at `seq` is masked out of every derived view.
+    ///
+    /// The append record and the original message are never deleted — they
+    /// stay replayable through the log and the transcript.
+    Masked {
+        /// Sequence number of the masked message.
+        seq: usize,
+        /// Why it was masked.
+        reason: String,
+    },
+    /// A child session was forked from this one at `prefix_end_seq`: children
+    /// evidence kept on the parent (see [`Session::children`]).
+    SessionForked {
+        /// The child session that was created.
+        child_id: SessionId,
+        /// Where the child's inherited prefix ended: it inherited exactly this
+        /// many records of this session's log.
+        prefix_end_seq: usize,
+    },
+}
+
+/// The on-disk shape of a [`Session`], and the migration path into one.
+///
+/// Sessions persisted before the event log existed carry their transcript and
+/// facts without log records. Deserialization rebuilds the log from them once,
+/// at the load boundary, so from then on the log is the complete authority and
+/// every derived view replays exactly. Fields mirror [`Session`] one for one;
+/// when a field is added to [`Session`], add it here too.
+#[derive(Debug, Clone, Deserialize)]
+struct SessionRepr {
+    id: SessionId,
+    #[serde(default)]
+    settings: SessionSettings,
+    messages: Vec<NormalizedMessage>,
+    events: Vec<SessionEvent>,
+    #[serde(default)]
+    log: Vec<LogEntry>,
+    #[serde(default)]
+    inherited_event_count: Option<usize>,
+    approvals: BTreeMap<ApprovalId, PendingApproval>,
+    active_approval_id: Option<ApprovalId>,
+    revision: u64,
+    created_at: Timestamp,
+    updated_at: Timestamp,
+}
+
+impl From<SessionRepr> for Session {
+    fn from(repr: SessionRepr) -> Self {
+        let mut session = Self {
+            id: repr.id,
+            settings: repr.settings,
+            messages: repr.messages,
+            events: repr.events,
+            log: repr.log,
+            inherited_event_count: repr.inherited_event_count,
+            approvals: repr.approvals,
+            active_approval_id: repr.active_approval_id,
+            revision: repr.revision,
+            created_at: repr.created_at,
+            updated_at: repr.updated_at,
+        };
+        if session.log.is_empty() {
+            session.log =
+                rebuilt_event_stream(&session.messages, &session.events, session.created_at);
+        }
+        session
+    }
+}
+
+/// Rebuild the event log of a session persisted before the log existed: every
+/// transcript message stands in as its own append record, then every recorded
+/// fact with its provenance, in record order.
+///
+/// The old shape kept the two apart, and the fold does not depend on how
+/// appends and facts interleave — appends establish the numbering, facts apply
+/// in their own order — so the rebuilt log replays to exactly the view the
+/// session had before its migration.
+fn rebuilt_event_stream(
+    messages: &[NormalizedMessage],
+    events: &[SessionEvent],
+    at: Timestamp,
+) -> Vec<LogEntry> {
+    let mut log = Vec::with_capacity(messages.len() + events.len());
+    for (seq, message) in messages.iter().enumerate() {
+        log.push(LogEntry {
+            at,
+            request: None,
+            trace: None,
+            event: SessionEventKind::MessageAppended {
+                seq,
+                message: message.clone(),
+            },
+        });
+    }
+    for event in events {
+        log.push(LogEntry {
+            at: event.at,
+            request: Some(event.request),
+            trace: Some(event.trace),
+            event: event.event.clone(),
+        });
+    }
+    log
 }
 
 /// Where sessions live.

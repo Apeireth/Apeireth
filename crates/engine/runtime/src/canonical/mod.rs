@@ -38,6 +38,7 @@ pub use research_approval_sm::{
     ResearchSideEffectDescriptor,
 };
 pub mod error;
+pub mod event_log;
 pub mod events;
 pub mod execute;
 pub mod heartbeat;
@@ -73,13 +74,18 @@ pub use approval::{
 pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
 pub use error::{RuntimeError, RuntimeResult};
+pub use event_log::{
+    compaction_entries, fold_surface, fork_placeholder, open_tool_calls, ForkRecord, LogEntry,
+    SurfaceOp, SurfaceSegment, SurfaceSource, SurfaceView,
+};
 pub use events::{
     event_sink, CompositeEventSink, CompositeRuntimeEventSink, NoopRuntimeEventSink, RuntimeEvent,
     RuntimeEventSink,
 };
 pub use execute::{
-    budget_context_blocks, budget_context_blocks_with_spill, ApprovalResolution, ContextBlock,
-    TurnOutcome, TurnRequest, TurnResponse,
+    budget_context_blocks, budget_context_blocks_with_spill, plan_mode_exit_declaration,
+    ApprovalResolution, ContextBlock, TurnOutcome, TurnRequest, TurnResponse,
+    PLAN_MODE_EXIT_TOOL_NAME,
 };
 pub use heartbeat::{FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource};
 pub use module::{

@@ -60,13 +60,16 @@ use apeireth_orchestration::context_budget::{ContextAssembler, SpillWriter};
 use apeireth_orchestration::context_overflow::{
     retry_makes_progress, shrink_budget, MAX_OVERFLOW_RETRIES,
 };
+use apeireth_orchestration::plan_mode::{
+    PlanMode, PlanModeLedger, PlanModePhase, PlanModeRequestOutcome,
+};
 use apeireth_orchestration::repetition_advisory;
 use apeireth_orchestration::runtime_invariants::AuditEvent;
 use apeireth_orchestration::token_meter::TokenMeter;
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{
     ContentPart, MessageRole, NormalizedMessage, NormalizedRequest, NormalizedResponse,
-    NormalizedTool, NormalizedUsage, ToolCall, ToolResult,
+    NormalizedTool, NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
 
 pub use apeireth_orchestration::context_budget::ContextBlock;
@@ -90,6 +93,34 @@ use super::trace::{ExecutionTrace, TraceEvent};
 /// 调用数则完全没界 —— 每多一个调用就是多一次成本与一次副作用面 (shell /
 /// fs / http), 异常或注入诱导的输出可被放大成批处理。超出即截断并留痕。
 pub const MAX_TOOL_CALLS_PER_ROUND: usize = 16;
+
+/// The resident plan-mode exit control's model-facing name.
+///
+/// Resident in *both* plan-mode postures whenever the mechanism is enabled, so
+/// a posture switch alters the prompt projection and never the tool catalog.
+pub const PLAN_MODE_EXIT_TOOL_NAME: &str = "exit_plan_mode";
+
+/// The resident `exit_plan_mode` tool declaration.
+///
+/// The control is answered by the runtime itself: it parks a posture switch
+/// that lands at the pre-step of the next accepted turn. It dispatches no
+/// capability and grants nothing.
+pub fn plan_mode_exit_declaration() -> NormalizedTool {
+    let mut parameters = ToolParameters::new();
+    parameters.insert(
+        "plan".to_string(),
+        serde_json::json!({
+            "type": "string",
+            "description": "确认后的计划全文, 随本次工具调用留在转写里, 仅作记录。",
+        }),
+    );
+    NormalizedTool::new(PLAN_MODE_EXIT_TOOL_NAME)
+        .with_description(
+            "结束计划阶段并进入执行阶段。切换在下一被接受回合开始处落账生效, 本回合的行为约定投影不变; \
+             本工具始终在场, 不改变可用工具清单与审批判定。",
+        )
+        .with_parameters(parameters)
+}
 
 /// One turn's input.
 #[derive(Debug, Clone)]
@@ -648,6 +679,11 @@ impl Runtime {
             });
         }
 
+        // Pre-step of an accepted turn: the one place a parked plan-mode
+        // switch is posted to the ledger. Landing here (and only here) is what
+        // makes a switch impossible in the middle of a running turn.
+        self.land_plan_mode_switch(&mut session, request_id, trace_id)?;
+
         if session.is_empty() {
             if let Some(system) = &request.system {
                 session.append(NormalizedMessage::system(system.clone()), clock);
@@ -741,6 +777,102 @@ impl Runtime {
             stream_sink,
         )
         .await
+    }
+
+    /// Post one parked plan-mode switch at the pre-step of an accepted turn.
+    ///
+    /// The plan-mode posture is a fold over the session's persisted event
+    /// stream ([`Session::plan_mode_log`]); an `Apply` entry is journaled here
+    /// and nowhere else, so the projected posture cannot flip in the middle of
+    /// a turn. With the mechanism disabled nothing is appended at all.
+    fn land_plan_mode_switch(
+        &self,
+        session: &mut Session,
+        request_id: RequestId,
+        trace_id: TraceId,
+    ) -> RuntimeResult<()> {
+        if !self.config.plan_mode_enabled {
+            return Ok(());
+        }
+        let mut ledger = PlanModeLedger::from_events(session.plan_mode_log());
+        let mark = ledger.events().len();
+        // This call site *is* `PlanModePhase::AcceptedPreStep`; a refusal would
+        // mean nothing is appended, which is the safe direction.
+        if ledger
+            .land_pending_switch(PlanModePhase::AcceptedPreStep)
+            .is_err()
+        {
+            return Ok(());
+        }
+        self.record_plan_mode_entries(session, &ledger, mark, request_id, trace_id);
+        Ok(())
+    }
+
+    /// Park a plan-mode switch request in the session ledger.
+    ///
+    /// The request is journaled immediately as intent and posts at the
+    /// pre-step of the next accepted turn — never inside the running turn that
+    /// asked for it.
+    fn queue_plan_mode_switch(
+        &self,
+        session: &mut Session,
+        target: PlanMode,
+        request_id: RequestId,
+        trace_id: TraceId,
+    ) -> PlanModeRequestOutcome {
+        let mut ledger = PlanModeLedger::from_events(session.plan_mode_log());
+        let mark = ledger.events().len();
+        let outcome = ledger.request_switch(target);
+        self.record_plan_mode_entries(session, &ledger, mark, request_id, trace_id);
+        outcome
+    }
+
+    /// Journal the ledger entries appended since `from` as session events.
+    fn record_plan_mode_entries(
+        &self,
+        session: &mut Session,
+        ledger: &PlanModeLedger,
+        from: usize,
+        request_id: RequestId,
+        trace_id: TraceId,
+    ) {
+        for entry in ledger.events().iter().skip(from) {
+            session.record(
+                request_id,
+                trace_id,
+                SessionEventKind::PlanMode {
+                    entry: entry.clone(),
+                },
+                self.clock.as_ref(),
+            );
+        }
+    }
+
+    /// Queue a plan-mode switch for one session (host-side control surface).
+    ///
+    /// Always resident: a host may ask for either posture at any time. The
+    /// request is journaled under the session lock and lands at the pre-step of
+    /// the next accepted turn; the running turn (if any) finishes under the
+    /// posture it started with. This is a state request only — it changes no
+    /// tool, sandbox, or approval decision. A runtime without the mechanism
+    /// enabled refuses rather than silently doing nothing.
+    pub async fn request_plan_mode_switch(
+        &self,
+        session_id: SessionId,
+        target: PlanMode,
+    ) -> RuntimeResult<PlanModeRequestOutcome> {
+        if !self.config.plan_mode_enabled {
+            return Err(RuntimeError::misconfigured(
+                "the plan-mode mechanism is not enabled on this runtime",
+            ));
+        }
+        let lock = self.session_locks.acquire(session_id).await;
+        let _guard = lock.lock().await;
+        let mut session = self.sessions.load_or_create(session_id).await?;
+        let outcome =
+            self.queue_plan_mode_switch(&mut session, target, RequestId::new(), TraceId::new());
+        self.sessions.save(&session).await?;
+        Ok(outcome)
     }
 
     /// Compatibility wrapper: run one turn and return the completed response.
@@ -1243,7 +1375,20 @@ impl Runtime {
                     trace_id,
                 )
                 .await?;
-                let session_view = session.provider_view();
+                let mut session_view = session.provider_view();
+                // Plan mode is a prompt projection and nothing else: the
+                // folded posture's behavior convention is prepended to the
+                // provider-facing view only. The transcript, the tool catalog,
+                // and every approval decision are untouched, and the fold runs
+                // live over the session event log so a rebuild restores it
+                // exactly. Within one turn it cannot change — only a pre-step
+                // posts an `Apply`.
+                if let Some(convention) = PlanModeLedger::from_events(session.plan_mode_log())
+                    .projection()
+                    .prompt_projection()
+                {
+                    session_view.insert(0, NormalizedMessage::system(convention));
+                }
 
                 let mut provider_overlays = request_overlays;
                 provider_overlays.extend(before_model_overlays);
@@ -2482,6 +2627,39 @@ impl Runtime {
         approved_approval: Option<&PendingApproval>,
     ) -> RuntimeResult<ToolAdmission> {
         let clock = self.clock.as_ref();
+
+        // The resident plan-mode exit control is a runtime-owned state request,
+        // not a capability dispatch: it has no side effect and changes no
+        // permission, so there is no capability to look up and no dispatch
+        // verdict to render (a pause here would mint a human approval over a
+        // pure state flip). It only parks a posture switch — which lands at the
+        // next accepted turn's pre-step, so this turn's projection never flips
+        // mid-turn. The parked request is journaled in the session event log.
+        if self.config.plan_mode_enabled && call.name == PLAN_MODE_EXIT_TOOL_NAME {
+            let outcome =
+                self.queue_plan_mode_switch(session, PlanMode::Executing, request_id, trace_id);
+            let (queued, note) = match outcome {
+                PlanModeRequestOutcome::Queued => (
+                    true,
+                    "计划模式切换已排队: 在下一被接受回合开始处落账生效; 本回合的行为约定投影不变",
+                ),
+                PlanModeRequestOutcome::AlreadyQueued => {
+                    (true, "同样的切换已在排队中, 等待下一被接受回合落账")
+                }
+                PlanModeRequestOutcome::NoChange => (false, "当前不在计划模式, 无须切换, 未记账"),
+            };
+            return Ok(ToolAdmission::Resolved(
+                ToolResult::ok(
+                    &call.id,
+                    serde_json::json!({
+                        "queued": queued,
+                        "target_mode": "executing",
+                        "note": note,
+                    }),
+                )
+                .with_name(&call.name),
+            ));
+        }
 
         let module_tool = self.capabilities.find_by_name(&call.name);
         let plugin_tool = self.plugins.tool_by_name(&call.name);

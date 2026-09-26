@@ -77,11 +77,17 @@ pub mod continuation;
 pub mod council;
 pub mod cron;
 pub mod durable;
+// 耐久输入队列 (第三批·裁决件): next-turn / next-step 双队列 + claim 原子批走 + 调度投递接线示范。
+pub mod durable_inbox;
+// 持久调度 (第三批·裁决件): 三型触发 + 补发纪律 (只补最近一次) + 全记录 compare-and-set + 单一 FIFO 写队列。
+pub mod durable_schedule;
 pub mod job_board;
 pub mod job_ring;
 pub mod lineage_spawning;
 pub mod llm;
 pub mod output_retention;
+// 计划模式（协作状态投影）: 事件流折叠 (init/apply/stateVersion) + 切换延迟落账 + 只改提示词投影。
+pub mod plan_mode;
 pub mod prompt_stabilizer;
 // 循环质感 · 件一: 重复调用提醒 (纯劝告通道, 不拦截执行、不进审计判定)。
 pub mod repetition_advisory;
@@ -93,6 +99,10 @@ pub mod speech_arbiter;
 /// 生产 Orchestrator: LLM 驱动 subagent 调度 (2026-10-10, worktree 装饰器的主角)。
 pub mod subagent_llm;
 pub mod token_meter;
+// 跨会话引用封套（不受信任背景 + 按预算披露）: 固定警告头 + 边界标记 + 每源预算 + 省略三态措辞。
+pub mod untrusted_envelope;
+// 工作消耗记账 (第三批·裁决件): 事件日志单趟纯折叠 (取消/中断同答案)。
+pub mod work_consumption;
 pub mod worktree_sandbox;
 
 pub use ambient_context::{

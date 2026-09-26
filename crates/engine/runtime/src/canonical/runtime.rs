@@ -110,6 +110,13 @@ pub struct RuntimeConfig {
     /// Policy for the repeated-identical-call advisory channel: thresholds,
     /// exclusion list, and preview budget. Purely advisory; it never blocks.
     pub repetition_advisory: RepetitionPolicy,
+    /// Enable the plan-mode collaborative-state projection: a session posture
+    /// folded from the session event log whose only effect is the
+    /// prompt/behavior-convention projection. When enabled, the `exit_plan_mode`
+    /// control is resident in the tool catalog in *both* postures, so switching
+    /// postures changes the prompt projection and nothing else. Default `false`:
+    /// a runtime that never engages the mechanism is byte-for-byte unchanged.
+    pub plan_mode_enabled: bool,
 }
 
 /// Secret-free diagnostic projection of the live runtime graph.
@@ -177,6 +184,7 @@ impl Default for RuntimeConfig {
             context_budget_chars: DEFAULT_CONTEXT_BUDGET_CHARS,
             context_spill_root: None,
             repetition_advisory: RepetitionPolicy::default(),
+            plan_mode_enabled: false,
         }
     }
 }
@@ -495,6 +503,10 @@ impl Runtime {
     }
 
     /// Model-facing tool declarations for all active tools.
+    ///
+    /// With the plan-mode mechanism enabled this also carries the resident
+    /// `exit_plan_mode` control — identically in both plan-mode postures, so a
+    /// posture switch never changes the tool catalog.
     pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
         let mut declarations: Vec<apeireth_protocol::canonical::NormalizedTool> = self
             .capabilities
@@ -502,6 +514,9 @@ impl Runtime {
             .into_iter()
             .collect::<Vec<_>>();
         declarations.extend(self.plugins.tool_declarations());
+        if self.config.plan_mode_enabled {
+            declarations.push(super::execute::plan_mode_exit_declaration());
+        }
         declarations
     }
 
@@ -773,6 +788,19 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_repetition_policy(mut self, policy: RepetitionPolicy) -> Self {
         self.config.repetition_advisory = policy;
+        self
+    }
+
+    /// Enable the plan-mode collaborative-state projection.
+    ///
+    /// The mechanism is opt-in so a default runtime is unchanged. Once
+    /// enabled, the `exit_plan_mode` control is resident in the tool catalog
+    /// in both postures and switching postures alters only the prompt /
+    /// behavior-convention projection — never the tool catalog, sandbox
+    /// posture, or approval decisions.
+    #[must_use]
+    pub fn with_plan_mode_enabled(mut self, enabled: bool) -> Self {
+        self.config.plan_mode_enabled = enabled;
         self
     }
 
