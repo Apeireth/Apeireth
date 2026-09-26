@@ -74,7 +74,9 @@ pub use experience_growth::{
     PracticeExperience, EMA_ALPHA, PROMOTE_MIN_SCORE, PROMOTE_MIN_VERIFIES,
 };
 pub use goal::{
-    GoalBlock, GoalError, GoalPersistError, GoalPhase, GoalService, GoalSnapshot, GoalStore,
+    fold_goal_events, GoalBlock, GoalContinuationDrive, GoalError, GoalEvent, GoalFoldError,
+    GoalPersistError, GoalPhase, GoalService, GoalSnapshot, GoalStore, RoundEntry,
+    RoundReservation,
 };
 pub use morphology::{
     classify as classify_query_morphology, crawl_budget, sanitize_temperature, MorphologyVerdict,

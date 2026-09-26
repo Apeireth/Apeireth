@@ -45,6 +45,7 @@ use apeireth_core::kernel::{CapabilityId, Metadata, PluginId, SessionId, TraceId
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+pub mod approval_closure;
 pub mod approval_policy;
 pub mod audit;
 pub mod colang;
@@ -89,6 +90,13 @@ pub use untrusted_mark::{
     UntrustedContentPayload, UntrustedContentWrapper, UNTRUSTED_TAG_CLOSE, UNTRUSTED_TAG_OPEN,
 };
 
+pub use approval_closure::{
+    commit_approval_audit_pair, detect_unclosed_approval_pairs, fold_policy_ask_events,
+    scan_approval_pairs, AllowedOnceGrant, ApprovalAuditPair, ApprovalAuditRecord,
+    ApprovalAuditSink, ApprovalAuditSlot, ApprovalOutcome, ApprovalPairScan, ClosureClass,
+    GrantSpendError, MemoryApprovalAuditSink, PairCommitError, PolicyAskEvent, PolicyAskFold,
+    AUDIT_EVENT_ASKED, AUDIT_EVENT_DECISION,
+};
 pub use approval_policy::{
     best_approval_match, extract_commands, frequency_count, is_high_risk, parse_approval_entry,
     ApprovalPolicyEngine, CallRecord, ParsedApprovalEntry, PolicyMatch, APPROVAL_TIMEOUT_MS,
