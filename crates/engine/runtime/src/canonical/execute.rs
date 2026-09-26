@@ -44,10 +44,15 @@
 //! Two things do abort: governance denying the *completion* itself, and the
 //! round limit. Neither is something the model can recover from by trying again.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
+use apeireth_orchestration::call_scheduler::{
+    CallBatch, CallRunner, CallScheduler, CancelKind, ConcurrencySafety, ScheduledCall, SlotOutcome,
+};
 use apeireth_orchestration::compaction_checkpoint::{
     CompactionBudget, CompactionMessage, CompactionOutcome,
 };
@@ -200,16 +205,129 @@ pub enum ApprovalResolution {
     NotFound,
 }
 
+/// A dispatch that governance paused: everything the human-facing approval
+/// record and the frozen continuation need.
+struct PendingDispatch {
+    capability_id: CapabilityId,
+    tool_name: String,
+    tool_call: ToolCall,
+    effective_invocation: Option<FrozenInvocation>,
+    governance_hook: String,
+    governance_reason: String,
+}
+
 enum ToolDispatch {
     Result(ToolResult),
-    Pending {
-        capability_id: CapabilityId,
-        tool_name: String,
-        tool_call: ToolCall,
-        effective_invocation: Option<FrozenInvocation>,
-        governance_hook: String,
-        governance_reason: String,
+    Pending(PendingDispatch),
+}
+
+/// The verdict of the admission stage of one call: resolve without invoking,
+/// invoke once cleared, or pause for a human decision. Admission is the whole
+/// "should this call run, and under what authority" phase; the invocation
+/// itself is the opaque execution stage the scheduler may overlap.
+enum ToolAdmission {
+    /// Answered without invoking: unknown tool, governance denial, or an
+    /// unusable frozen invocation.
+    Resolved(ToolResult),
+    /// Cleared to invoke.
+    Ready(AdmittedCall),
+    /// Governance requires a human decision.
+    Pending(PendingDispatch),
+}
+
+/// A call that passed admission and is cleared to invoke.
+struct AdmittedCall {
+    capability: CapabilityId,
+    tool: Arc<dyn apeireth_plugin::ToolCapability>,
+    call: ToolCall,
+    preapproved: bool,
+    frozen_invocation: Option<FrozenInvocation>,
+}
+
+/// One admitted call inside a parallel dispatch window.
+#[derive(Clone)]
+struct WindowEntry {
+    call: ToolCall,
+    execution: WindowExecution,
+}
+
+/// How a window slot produces its result: already resolved (no invocation) or
+/// cleared to invoke.
+#[derive(Clone)]
+enum WindowExecution {
+    Resolved(ToolResult),
+    Ready {
+        capability: CapabilityId,
+        tool: Arc<dyn apeireth_plugin::ToolCapability>,
     },
+}
+
+/// Execution stage of one admitted call: the invocation, nothing else.
+async fn run_admitted_call(admitted: &AdmittedCall) -> ToolResult {
+    if admitted.preapproved {
+        admitted
+            .tool
+            .invoke_frozen(&admitted.call, admitted.frozen_invocation.as_ref())
+            .await
+    } else {
+        admitted.tool.invoke(&admitted.call).await
+    }
+}
+
+/// The synthetic result a cancelled call is answered with, so every call in the
+/// assistant message has exactly one result and replay/retry stays complete.
+fn synthetic_cancel_result(call: &ToolCall, kind: CancelKind) -> ToolResult {
+    match kind {
+        // Never started: no side effect happened, so a retry is safe.
+        CancelKind::NotStarted => ToolResult::retryable_error(
+            &call.id,
+            "tool call was not started: the dispatch batch was aborted before it began (safe to retry)",
+        )
+        .with_name(&call.name),
+        // Started and cancelled: side effects may be partially applied, so the
+        // result must not claim a retry is safe.
+        CancelKind::WindDownExpired => ToolResult::permanent_error(
+            &call.id,
+            "tool call was cancelled after start: the wind-down deadline expired before completion (execution may be incomplete)",
+        )
+        .with_name(&call.name),
+    }
+}
+
+/// Batch runner for one dispatch window: slot index to invocation future.
+struct WindowRunner {
+    entries: Vec<WindowEntry>,
+}
+
+impl CallRunner<ToolResult> for WindowRunner {
+    fn start(
+        &self,
+        index: usize,
+        _call: &ScheduledCall,
+    ) -> Pin<Box<dyn Future<Output = ToolResult> + Send>> {
+        match &self.entries[index].execution {
+            WindowExecution::Resolved(result) => Box::pin(std::future::ready(result.clone())),
+            WindowExecution::Ready { tool, .. } => {
+                let tool = Arc::clone(tool);
+                let call = self.entries[index].call.clone();
+                Box::pin(async move { tool.invoke(&call).await })
+            }
+        }
+    }
+}
+
+/// How a parallel dispatch window resolved; the turn loop keeps the policy.
+enum WindowFlow {
+    /// The window fully committed; `next_tool_index` already advanced past it.
+    Advanced,
+    /// A module asked for a round retry after some results; every remaining
+    /// call has been answered.
+    Retry { feedback: String },
+    /// A module stopped the turn after some results; every remaining call has
+    /// been answered.
+    Stop { module_id: String, reason: String },
+    /// Governance paused the turn for a human decision.
+    Paused(TurnOutcome),
 }
 
 /// Deterministic aggregate of one hook's module outcomes.
@@ -1472,6 +1590,61 @@ impl Runtime {
                 let index = continuation.next_tool_index;
                 let call = continuation.tool_calls[index].clone();
                 let is_preapproved = continuation.approved_tool_index == Some(index);
+                // Parallel dispatch window: only a run of consecutive calls the
+                // classifier explicitly allows may overlap (bounded rolling pool,
+                // model-order commit). Everything else — including any
+                // preapproved call — keeps the serial path below untouched.
+                if !is_preapproved {
+                    let window_len = self.plan_parallel_window(&continuation, index);
+                    if window_len > 1 {
+                        let scheduler = self
+                            .call_scheduler
+                            .as_ref()
+                            .expect("window planning only happens with a scheduler installed");
+                        match self
+                            .dispatch_parallel_window(
+                                &mut trace,
+                                &mut session,
+                                &session_id,
+                                request_id,
+                                trace_id,
+                                &continuation,
+                                index,
+                                window_len,
+                                security_context,
+                                &invocation,
+                                &module_state,
+                                current_candidate.as_ref(),
+                                &mut next_overlays,
+                                scheduler,
+                            )
+                            .await?
+                        {
+                            WindowFlow::Advanced => {
+                                continuation.next_tool_index += window_len;
+                                continuation.approved_tool_index = None;
+                                continuation.approved_approval_id = None;
+                                continue;
+                            }
+                            WindowFlow::Retry { feedback } => {
+                                retry_requested = Some(feedback);
+                                break;
+                            }
+                            WindowFlow::Stop { module_id, reason } => {
+                                return self
+                                    .fail_module_stop(
+                                        &mut session,
+                                        request_id,
+                                        trace_id,
+                                        &module_id,
+                                        reason,
+                                    )
+                                    .await;
+                            }
+                            WindowFlow::Paused(outcome) => return Ok(outcome),
+                        }
+                    }
+                }
                 let approved_approval = if is_preapproved {
                     let approval_id = continuation.approved_approval_id.ok_or_else(|| {
                         RuntimeError::misconfigured(
@@ -1702,104 +1875,24 @@ impl Runtime {
                             }
                         }
                     }
-                    ToolDispatch::Pending {
-                        capability_id,
-                        tool_name,
-                        tool_call,
-                        effective_invocation,
-                        governance_hook,
-                        governance_reason,
-                    } => {
-                        let approval_id = ApprovalId::new();
-                        let created_at = Timestamp::from_clock(clock);
-                        let expires_at = Timestamp::from_epoch_millis(
-                            created_at
-                                .epoch_millis()
-                                .saturating_add(self.config.approval_ttl_ms as i64),
-                        )
-                        .unwrap_or(created_at);
-                        let fingerprint = operation_fingerprint_with_invocation(
-                            "capability_dispatch",
-                            &capability_id,
-                            &tool_name,
-                            &tool_call.id,
-                            &tool_call.arguments,
-                            effective_invocation.as_ref().map(|frozen| &frozen.payload),
-                            session_id,
-                            request_id,
-                            continuation.round,
-                        );
-                        let frozen = FrozenTurnContinuation {
-                            request_id,
-                            trace_id,
-                            model: continuation.model.clone(),
-                            round: continuation.round,
-                            tool_calls: continuation.tool_calls.clone(),
-                            next_tool_index: index,
-                            approved_tool_index: None,
-                            approved_approval_id: None,
-                            module_invocations: module_state.used(),
-                            // M27: 冻结本轮的安全上下文, 恢复轮次的治理评估
-                            // 否则会丢失 intent (H3 的 fail-open 入口)。
-                            security_context: security_context.cloned(),
-                        };
-                        let command_text = approval_command_text(
-                            &tool_name,
-                            &tool_call,
-                            effective_invocation.as_ref(),
-                        );
-                        let arguments_summary = approval_arguments_summary(&tool_name, &tool_call);
-                        let pending = PendingApproval {
-                            approval_id,
-                            session_id,
-                            request_id,
-                            trace_id,
-                            round: continuation.round,
-                            capability_id,
-                            tool_name,
-                            tool_call,
-                            effective_invocation,
-                            governance_hook: governance_hook.clone(),
-                            governance_reason,
-                            command_text,
-                            arguments_summary,
-                            operation_fingerprint: fingerprint,
-                            created_at,
-                            expires_at,
-                            status: ApprovalStatus::Pending,
-                            continuation: frozen,
-                            human_reason: None,
-                        };
-
-                        session.record(
-                            request_id,
-                            trace_id,
-                            SessionEventKind::ApprovalRequired {
-                                hook: governance_hook,
-                                action: "capability_dispatch".into(),
-                                reason: pending.governance_reason.clone(),
-                                round: continuation.round,
-                                approval_id,
-                            },
-                            clock,
-                        );
-                        trace.record(
-                            Timestamp::from_clock(clock),
-                            TraceEvent::ApprovalRequested {
-                                approval_id,
-                                capability: pending.capability_id.clone(),
-                                tool_call_id: pending.tool_call.id.clone(),
-                                round: continuation.round,
-                            },
-                        );
-
-                        session.approvals.insert(approval_id, pending.clone());
-                        session.active_approval_id = Some(approval_id);
-                        self.sessions.save(&session).await?;
-
-                        return Ok(TurnOutcome::PendingApproval(PendingApprovalView::from(
-                            &pending,
-                        )));
+                    ToolDispatch::Pending(pending_dispatch) => {
+                        return self
+                            .open_pending_approval(
+                                &mut session,
+                                &mut trace,
+                                session_id,
+                                request_id,
+                                trace_id,
+                                &continuation.model,
+                                continuation.round,
+                                &continuation.tool_calls,
+                                index,
+                                module_state.used(),
+                                security_context,
+                                clock,
+                                pending_dispatch,
+                            )
+                            .await;
                     }
                 }
 
@@ -2367,12 +2460,15 @@ impl Runtime {
         }
     }
 
-    /// Resolve, authorize, and run one tool call.
+    /// Admission stage of one tool call: resolve the tool, authorize the
+    /// dispatch, and record the dispatch boundary. It never invokes anything —
+    /// a [`ToolAdmission::Ready`] verdict hands the invocation to the execution
+    /// stage, which the dispatch surface may overlap for parallel windows.
     ///
     /// When `preapproved` is true the tool has already passed human approval
     /// and must be dispatched without a second governance evaluation. The
     /// approved dispatch must execute the exact stored frozen invocation.
-    async fn dispatch_one_tool(
+    async fn admit_one_tool(
         &self,
         trace: &mut ExecutionTrace,
         session: &mut Session,
@@ -2384,7 +2480,7 @@ impl Runtime {
         security_context: Option<&TurnSecurityContext>,
         preapproved: bool,
         approved_approval: Option<&PendingApproval>,
-    ) -> RuntimeResult<ToolDispatch> {
+    ) -> RuntimeResult<ToolAdmission> {
         let clock = self.clock.as_ref();
 
         let module_tool = self.capabilities.find_by_name(&call.name);
@@ -2428,7 +2524,7 @@ impl Runtime {
                 },
                 clock,
             );
-            return Ok(ToolDispatch::Result(
+            return Ok(ToolAdmission::Resolved(
                 ToolResult::permanent_error(&call.id, reason).with_name(&call.name),
             ));
         };
@@ -2449,7 +2545,7 @@ impl Runtime {
                     },
                     clock,
                 );
-                return Ok(ToolDispatch::Result(
+                return Ok(ToolAdmission::Resolved(
                     ToolResult::permanent_error(&call.id, reason).with_name(&call.name),
                 ));
             };
@@ -2469,7 +2565,7 @@ impl Runtime {
                     },
                     clock,
                 );
-                return Ok(ToolDispatch::Result(
+                return Ok(ToolAdmission::Resolved(
                     ToolResult::permanent_error(&call.id, reason).with_name(&call.name),
                 ));
             }
@@ -2488,35 +2584,13 @@ impl Runtime {
                 },
             );
 
-            let result = tool
-                .invoke_frozen(call, approval.effective_invocation.as_ref())
-                .await;
-
-            if !result.is_ok() {
-                session.record(
-                    request_id,
-                    trace_id,
-                    SessionEventKind::ToolFailed {
-                        capability: Some(capability.clone()),
-                        tool_call_id: call.id.clone(),
-                        error: result.render(),
-                        round,
-                    },
-                    clock,
-                );
-            }
-
-            trace.record(
-                Timestamp::from_clock(clock),
-                TraceEvent::CapabilityCompleted {
-                    capability,
-                    tool_call_id: call.id.clone(),
-                    succeeded: result.is_ok(),
-                    round,
-                },
-            );
-
-            return Ok(ToolDispatch::Result(result));
+            return Ok(ToolAdmission::Ready(AdmittedCall {
+                capability,
+                tool,
+                call: call.clone(),
+                preapproved: true,
+                frozen_invocation: approval.effective_invocation.clone(),
+            }));
         }
 
         let action = Action::CapabilityDispatch {
@@ -2562,7 +2636,7 @@ impl Runtime {
                     },
                     clock,
                 );
-                return Ok(ToolDispatch::Result(
+                return Ok(ToolAdmission::Resolved(
                     ToolResult::permanent_error(
                         &call.id,
                         format!("refused by governance: {reason}"),
@@ -2588,18 +2662,18 @@ impl Runtime {
                             },
                             clock,
                         );
-                        return Ok(ToolDispatch::Result(result));
+                        return Ok(ToolAdmission::Resolved(result));
                     }
                 };
 
-                return Ok(ToolDispatch::Pending {
+                return Ok(ToolAdmission::Pending(PendingDispatch {
                     capability_id: capability,
                     tool_name: call.name.clone(),
                     tool_call: call.clone(),
                     effective_invocation,
                     governance_hook: hook,
                     governance_reason: reason,
-                });
+                }));
             }
         }
 
@@ -2617,8 +2691,81 @@ impl Runtime {
             },
         );
 
-        let result = tool.invoke(call).await;
+        Ok(ToolAdmission::Ready(AdmittedCall {
+            capability,
+            tool,
+            call: call.clone(),
+            preapproved: false,
+            frozen_invocation: None,
+        }))
+    }
 
+    /// Resolve, authorize, and run one tool call along the serial path.
+    ///
+    /// Admission and execution stay separate ([`Self::admit_one_tool`] and the
+    /// invocation) so the parallel window can overlap only the execution stage;
+    /// here the two run back to back, exactly one call at a time.
+    async fn dispatch_one_tool(
+        &self,
+        trace: &mut ExecutionTrace,
+        session: &mut Session,
+        session_id: &SessionId,
+        request_id: RequestId,
+        trace_id: TraceId,
+        call: &ToolCall,
+        round: u32,
+        security_context: Option<&TurnSecurityContext>,
+        preapproved: bool,
+        approved_approval: Option<&PendingApproval>,
+    ) -> RuntimeResult<ToolDispatch> {
+        match self
+            .admit_one_tool(
+                trace,
+                session,
+                session_id,
+                request_id,
+                trace_id,
+                call,
+                round,
+                security_context,
+                preapproved,
+                approved_approval,
+            )
+            .await?
+        {
+            ToolAdmission::Resolved(result) => Ok(ToolDispatch::Result(result)),
+            ToolAdmission::Pending(pending) => Ok(ToolDispatch::Pending(pending)),
+            ToolAdmission::Ready(admitted) => {
+                let result = run_admitted_call(&admitted).await;
+                self.record_call_completed(
+                    session,
+                    trace,
+                    request_id,
+                    trace_id,
+                    round,
+                    &admitted.call,
+                    &admitted.capability,
+                    &result,
+                );
+                Ok(ToolDispatch::Result(result))
+            }
+        }
+    }
+
+    /// Completion records of one invoked call: the failure record (when the
+    /// call failed) and the completion trace entry, in that order.
+    fn record_call_completed(
+        &self,
+        session: &mut Session,
+        trace: &mut ExecutionTrace,
+        request_id: RequestId,
+        trace_id: TraceId,
+        round: u32,
+        call: &ToolCall,
+        capability: &CapabilityId,
+        result: &ToolResult,
+    ) {
+        let clock = self.clock.as_ref();
         if !result.is_ok() {
             session.record(
                 request_id,
@@ -2636,14 +2783,526 @@ impl Runtime {
         trace.record(
             Timestamp::from_clock(clock),
             TraceEvent::CapabilityCompleted {
-                capability,
+                capability: capability.clone(),
                 tool_call_id: call.id.clone(),
                 succeeded: result.is_ok(),
                 round,
             },
         );
+    }
 
-        Ok(ToolDispatch::Result(result))
+    /// Open the human-facing approval for one paused dispatch and freeze the
+    /// continuation the turn resumes from. Shared by the serial path and the
+    /// parallel window so both produce identical approval records.
+    #[allow(clippy::too_many_arguments)]
+    async fn open_pending_approval(
+        &self,
+        session: &mut Session,
+        trace: &mut ExecutionTrace,
+        session_id: SessionId,
+        request_id: RequestId,
+        trace_id: TraceId,
+        model: &str,
+        round: u32,
+        tool_calls: &[ToolCall],
+        next_tool_index: usize,
+        module_invocations: usize,
+        security_context: Option<&TurnSecurityContext>,
+        clock: &dyn apeireth_core::kernel::Clock,
+        pending_dispatch: PendingDispatch,
+    ) -> RuntimeResult<TurnOutcome> {
+        let approval_id = ApprovalId::new();
+        let created_at = Timestamp::from_clock(clock);
+        let expires_at = Timestamp::from_epoch_millis(
+            created_at
+                .epoch_millis()
+                .saturating_add(self.config.approval_ttl_ms as i64),
+        )
+        .unwrap_or(created_at);
+        let fingerprint = operation_fingerprint_with_invocation(
+            "capability_dispatch",
+            &pending_dispatch.capability_id,
+            &pending_dispatch.tool_name,
+            &pending_dispatch.tool_call.id,
+            &pending_dispatch.tool_call.arguments,
+            pending_dispatch
+                .effective_invocation
+                .as_ref()
+                .map(|frozen| &frozen.payload),
+            session_id,
+            request_id,
+            round,
+        );
+        let frozen = FrozenTurnContinuation {
+            request_id,
+            trace_id,
+            model: model.to_string(),
+            round,
+            tool_calls: tool_calls.to_vec(),
+            next_tool_index,
+            approved_tool_index: None,
+            approved_approval_id: None,
+            module_invocations,
+            // M27: 冻结本轮的安全上下文, 恢复轮次的治理评估
+            // 否则会丢失 intent (H3 的 fail-open 入口)。
+            security_context: security_context.cloned(),
+        };
+        let command_text = approval_command_text(
+            &pending_dispatch.tool_name,
+            &pending_dispatch.tool_call,
+            pending_dispatch.effective_invocation.as_ref(),
+        );
+        let arguments_summary =
+            approval_arguments_summary(&pending_dispatch.tool_name, &pending_dispatch.tool_call);
+        let pending = PendingApproval {
+            approval_id,
+            session_id,
+            request_id,
+            trace_id,
+            round,
+            capability_id: pending_dispatch.capability_id,
+            tool_name: pending_dispatch.tool_name,
+            tool_call: pending_dispatch.tool_call,
+            effective_invocation: pending_dispatch.effective_invocation,
+            governance_hook: pending_dispatch.governance_hook.clone(),
+            governance_reason: pending_dispatch.governance_reason,
+            command_text,
+            arguments_summary,
+            operation_fingerprint: fingerprint,
+            created_at,
+            expires_at,
+            status: ApprovalStatus::Pending,
+            continuation: frozen,
+            human_reason: None,
+        };
+
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::ApprovalRequired {
+                hook: pending_dispatch.governance_hook,
+                action: "capability_dispatch".into(),
+                reason: pending.governance_reason.clone(),
+                round,
+                approval_id,
+            },
+            clock,
+        );
+        trace.record(
+            Timestamp::from_clock(clock),
+            TraceEvent::ApprovalRequested {
+                approval_id,
+                capability: pending.capability_id.clone(),
+                tool_call_id: pending.tool_call.id.clone(),
+                round,
+            },
+        );
+
+        session.approvals.insert(approval_id, pending.clone());
+        session.active_approval_id = Some(approval_id);
+        self.sessions.save(session).await?;
+
+        Ok(TurnOutcome::PendingApproval(PendingApprovalView::from(
+            &pending,
+        )))
+    }
+
+    /// How many upcoming calls may dispatch as one parallel window: a run of
+    /// consecutive calls the classifier explicitly allows. A single call — or
+    /// any call the classifier withholds — keeps serial dispatch semantics.
+    fn plan_parallel_window(&self, continuation: &FrozenTurnContinuation, start: usize) -> usize {
+        let Some(scheduler) = self.call_scheduler.as_ref() else {
+            return 1;
+        };
+        let head = &continuation.tool_calls[start];
+        if !scheduler.is_concurrency_safe(&head.name, &head.arguments) {
+            return 1;
+        }
+        let mut len = 1;
+        while start + len < continuation.tool_calls.len() {
+            let call = &continuation.tool_calls[start + len];
+            if continuation.approved_tool_index == Some(start + len) {
+                break;
+            }
+            if !scheduler.is_concurrency_safe(&call.name, &call.arguments) {
+                break;
+            }
+            len += 1;
+        }
+        len
+    }
+
+    /// Dispatch one parallel window: overlap the admitted invocations through
+    /// the classification scheduler and commit results in model order.
+    ///
+    /// Layering: this function owns *which calls run concurrently* (window
+    /// planning, mutual-exclusion barriers, the bounded rolling pool, ordered
+    /// commit, cancel completion). Each call's own lifecycle (before hook,
+    /// admission, invocation, after hook) keeps the exact per-call sequence the
+    /// serial path runs. Within a window, before hooks observe the transcript
+    /// as it stands before the window commits — dispatch overlaps by design —
+    /// while after hooks observe every earlier result in model order.
+    #[allow(clippy::too_many_arguments)]
+    async fn dispatch_parallel_window(
+        &self,
+        trace: &mut ExecutionTrace,
+        session: &mut Session,
+        session_id: &SessionId,
+        request_id: RequestId,
+        trace_id: TraceId,
+        continuation: &FrozenTurnContinuation,
+        window_start: usize,
+        window_len: usize,
+        security_context: Option<&TurnSecurityContext>,
+        invocation: &InvocationContext,
+        module_state: &Arc<ModuleTurnState>,
+        current_candidate: Option<&NormalizedResponse>,
+        next_overlays: &mut Vec<PromptOverlay>,
+        scheduler: &CallScheduler,
+    ) -> RuntimeResult<WindowFlow> {
+        let clock = self.clock.as_ref();
+
+        // Admission walk: per call, before hook then admission, in model order.
+        // The first skipped, paused, or vetoed call ends the window there;
+        // nothing beyond it is admitted, so nothing can run twice on resume.
+        let mut entries: Vec<WindowEntry> = Vec::new();
+        let mut window_end = window_len;
+        let mut pending_dispatch: Option<PendingDispatch> = None;
+        let mut retry_feedback: Option<String> = None;
+        let mut stop_directive: Option<(String, String)> = None;
+
+        for offset in 0..window_len {
+            let call = &continuation.tool_calls[window_start + offset];
+            let before_tool_messages = session.messages.clone();
+            let before_tool = self
+                .run_hook_checked(
+                    HookPoint::BeforeToolCall,
+                    session,
+                    session_id,
+                    invocation,
+                    &continuation.model,
+                    &before_tool_messages,
+                    current_candidate,
+                    Some(call),
+                    None,
+                    None,
+                    request_id,
+                    trace_id,
+                    module_state,
+                )
+                .await;
+            let before_tool = match before_tool {
+                Ok(effects) => effects,
+                Err(error) => {
+                    Self::append_skipped_tool_results(
+                        session,
+                        &continuation.tool_calls,
+                        window_start + offset,
+                        "module hook failed before tool dispatch",
+                        clock,
+                    );
+                    self.sessions.save(session).await?;
+                    return Err(error);
+                }
+            };
+            next_overlays.extend(before_tool.prompt_overlays);
+
+            match before_tool.directive {
+                ModuleDirective::Continue => {}
+                ModuleDirective::Retry { feedback } => {
+                    window_end = offset;
+                    retry_feedback = Some(feedback);
+                    break;
+                }
+                ModuleDirective::Stop { reason } => {
+                    window_end = offset;
+                    stop_directive = Some((
+                        before_tool
+                            .directive_module_id
+                            .unwrap_or_else(|| "unknown".to_string()),
+                        reason,
+                    ));
+                    break;
+                }
+            }
+
+            match self
+                .admit_one_tool(
+                    trace,
+                    session,
+                    session_id,
+                    request_id,
+                    trace_id,
+                    call,
+                    continuation.round,
+                    security_context,
+                    false,
+                    None,
+                )
+                .await?
+            {
+                ToolAdmission::Resolved(result) => entries.push(WindowEntry {
+                    call: call.clone(),
+                    execution: WindowExecution::Resolved(result),
+                }),
+                ToolAdmission::Ready(admitted) => entries.push(WindowEntry {
+                    call: call.clone(),
+                    execution: WindowExecution::Ready {
+                        capability: admitted.capability,
+                        tool: admitted.tool,
+                    },
+                }),
+                ToolAdmission::Pending(pending) => {
+                    window_end = offset;
+                    pending_dispatch = Some(pending);
+                    break;
+                }
+            }
+        }
+
+        // Execution and ordered commit through the classification scheduler.
+        let scheduled = entries
+            .iter()
+            .map(|entry| {
+                ScheduledCall::new(
+                    &entry.call.id,
+                    &entry.call.name,
+                    entry.call.arguments.clone(),
+                )
+            })
+            .collect();
+        let runner = Arc::new(WindowRunner {
+            entries: entries.clone(),
+        });
+        let mut batch = scheduler.start_batch(scheduled, runner);
+        let mut flow: Option<WindowFlow> = None;
+
+        while let Some((slot, outcome)) = batch.next_outcome().await {
+            let entry = &entries[slot];
+            match outcome {
+                SlotOutcome::Completed(result) => {
+                    if let WindowExecution::Ready { capability, .. } = &entry.execution {
+                        self.record_call_completed(
+                            session,
+                            trace,
+                            request_id,
+                            trace_id,
+                            continuation.round,
+                            &entry.call,
+                            capability,
+                            &result,
+                        );
+                    }
+                    // Advisory channel (repeated identical calls): the call
+                    // has already executed, so the reminder only rides along
+                    // with the transported message.
+                    let advisory =
+                        self.note_tool_call(*session_id, &entry.call.name, &entry.call.arguments);
+                    let message = match &advisory {
+                        Some(advisory) => NormalizedMessage::tool_result(
+                            result.tool_call_id.clone(),
+                            result.name.clone(),
+                            repetition_advisory::append_result_context(&result.render(), advisory),
+                        ),
+                        None => result.clone().into_message(),
+                    };
+                    session.append(message, clock);
+
+                    let after_tool_messages = session.messages.clone();
+                    let after_tool = self
+                        .run_hook_checked(
+                            HookPoint::AfterToolResult,
+                            session,
+                            session_id,
+                            invocation,
+                            &continuation.model,
+                            &after_tool_messages,
+                            current_candidate,
+                            Some(&entry.call),
+                            Some(&result),
+                            None,
+                            request_id,
+                            trace_id,
+                            module_state,
+                        )
+                        .await;
+                    let after_tool = match after_tool {
+                        Ok(effects) => effects,
+                        Err(error) => {
+                            batch.abort();
+                            self.drain_window_results(
+                                &mut batch,
+                                &entries,
+                                session,
+                                trace,
+                                request_id,
+                                trace_id,
+                                continuation.round,
+                                clock,
+                            );
+                            Self::append_skipped_tool_results(
+                                session,
+                                &continuation.tool_calls,
+                                window_start + window_end,
+                                "module hook failed after tool result",
+                                clock,
+                            );
+                            self.sessions.save(session).await?;
+                            return Err(error);
+                        }
+                    };
+                    next_overlays.extend(after_tool.prompt_overlays);
+
+                    match after_tool.directive {
+                        ModuleDirective::Continue => {}
+                        ModuleDirective::Retry { feedback } => {
+                            batch.abort();
+                            self.drain_window_results(
+                                &mut batch,
+                                &entries,
+                                session,
+                                trace,
+                                request_id,
+                                trace_id,
+                                continuation.round,
+                                clock,
+                            );
+                            Self::append_skipped_tool_results(
+                                session,
+                                &continuation.tool_calls,
+                                window_start + window_end,
+                                "remaining tool calls skipped by module after result",
+                                clock,
+                            );
+                            flow = Some(WindowFlow::Retry { feedback });
+                            break;
+                        }
+                        ModuleDirective::Stop { reason } => {
+                            batch.abort();
+                            self.drain_window_results(
+                                &mut batch,
+                                &entries,
+                                session,
+                                trace,
+                                request_id,
+                                trace_id,
+                                continuation.round,
+                                clock,
+                            );
+                            Self::append_skipped_tool_results(
+                                session,
+                                &continuation.tool_calls,
+                                window_start + window_end,
+                                "remaining tool calls stopped by module after result",
+                                clock,
+                            );
+                            flow = Some(WindowFlow::Stop {
+                                module_id: after_tool
+                                    .directive_module_id
+                                    .unwrap_or_else(|| "unknown".to_string()),
+                                reason,
+                            });
+                            break;
+                        }
+                    }
+                }
+                SlotOutcome::Cancelled(kind) => {
+                    session.append(
+                        synthetic_cancel_result(&entry.call, kind).into_message(),
+                        clock,
+                    );
+                }
+            }
+        }
+
+        if let Some(flow) = flow {
+            return Ok(flow);
+        }
+        if let Some(feedback) = retry_feedback {
+            Self::append_skipped_tool_results(
+                session,
+                &continuation.tool_calls,
+                window_start + window_end,
+                "tool call skipped by module before dispatch",
+                clock,
+            );
+            return Ok(WindowFlow::Retry { feedback });
+        }
+        if let Some((module_id, reason)) = stop_directive {
+            Self::append_skipped_tool_results(
+                session,
+                &continuation.tool_calls,
+                window_start + window_end,
+                "tool call stopped by module before dispatch",
+                clock,
+            );
+            return Ok(WindowFlow::Stop { module_id, reason });
+        }
+        if let Some(pending_dispatch) = pending_dispatch {
+            let outcome = self
+                .open_pending_approval(
+                    session,
+                    trace,
+                    *session_id,
+                    request_id,
+                    trace_id,
+                    &continuation.model,
+                    continuation.round,
+                    &continuation.tool_calls,
+                    window_start + window_end,
+                    module_state.used(),
+                    security_context,
+                    clock,
+                    pending_dispatch,
+                )
+                .await?;
+            return Ok(WindowFlow::Paused(outcome));
+        }
+        Ok(WindowFlow::Advanced)
+    }
+
+    /// Cancel-completion drain: answer every remaining window slot in model
+    /// order with its real result (one that landed before the wind-down
+    /// expired) or its synthetic cancel result. No lifecycle hooks run here —
+    /// these calls are being wound down, not completing normally — and every
+    /// call still gets exactly one result.
+    async fn drain_window_results(
+        &self,
+        batch: &mut CallBatch<ToolResult>,
+        entries: &[WindowEntry],
+        session: &mut Session,
+        trace: &mut ExecutionTrace,
+        request_id: RequestId,
+        trace_id: TraceId,
+        round: u32,
+        clock: &dyn apeireth_core::kernel::Clock,
+    ) {
+        while let Some((slot, outcome)) = batch.next_outcome().await {
+            let entry = &entries[slot];
+            match outcome {
+                SlotOutcome::Completed(result) => {
+                    if let WindowExecution::Ready { capability, .. } = &entry.execution {
+                        self.record_call_completed(
+                            session,
+                            trace,
+                            request_id,
+                            trace_id,
+                            round,
+                            &entry.call,
+                            capability,
+                            &result,
+                        );
+                    }
+                    session.append(result.into_message(), clock);
+                }
+                SlotOutcome::Cancelled(kind) => {
+                    session.append(
+                        synthetic_cancel_result(&entry.call, kind).into_message(),
+                        clock,
+                    );
+                }
+            }
+        }
     }
 
     /// Recompute the operation fingerprint from the stored approval and verify

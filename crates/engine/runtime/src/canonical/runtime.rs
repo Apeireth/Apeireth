@@ -41,6 +41,7 @@ use apeireth_core::kernel::{
     system_clock, ApprovalId, CapabilityId, Clock, PluginId, SessionId, Timestamp, TraceId,
 };
 use apeireth_governance::{DenyUnconfigured, GovernanceHook};
+use apeireth_orchestration::call_scheduler::CallScheduler;
 use apeireth_orchestration::compaction_checkpoint::{CompactionEngine, SummaryGenerator};
 use apeireth_orchestration::context_budget::SpillWriter;
 use apeireth_orchestration::repetition_advisory::{
@@ -266,6 +267,10 @@ pub struct Runtime {
     /// transcript). `None` = no summary generator installed; the derived view
     /// then equals the transcript exactly and nothing is ever compacted.
     pub(super) compaction: Option<Arc<CompactionEngine>>,
+    /// Parallel-call classification scheduler (mutual-exclusion barriers over a
+    /// bounded rolling pool, model-order result commit). `None` = every tool
+    /// call dispatches strictly serially, one at a time.
+    pub(super) call_scheduler: Option<Arc<CallScheduler>>,
 }
 
 impl Runtime {
@@ -592,6 +597,7 @@ pub struct RuntimeBuilder {
     config: RuntimeConfig,
     invariant_auditor: Option<Arc<InvariantAuditor>>,
     summary_generator: Option<Arc<dyn SummaryGenerator>>,
+    call_scheduler: Option<Arc<CallScheduler>>,
 }
 
 impl Default for RuntimeBuilder {
@@ -617,6 +623,7 @@ impl RuntimeBuilder {
             config: RuntimeConfig::default(),
             invariant_auditor: None,
             summary_generator: None,
+            call_scheduler: None,
         }
     }
 
@@ -790,6 +797,18 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Install the parallel-call classification scheduler.
+    ///
+    /// Without it, every tool call dispatches strictly serially. With it, only
+    /// calls the scheduler's classifier explicitly allows may overlap inside a
+    /// bounded rolling pool; everything else keeps serial dispatch semantics,
+    /// and results always commit in model order.
+    #[must_use]
+    pub fn with_call_scheduler(mut self, scheduler: Arc<CallScheduler>) -> Self {
+        self.call_scheduler = Some(scheduler);
+        self
+    }
+
     /// Register the plugins, start them in dependency order, and assemble.
     ///
     /// Plugins are started here rather than lazily on first use, so that a
@@ -870,6 +889,7 @@ impl RuntimeBuilder {
             compaction: self
                 .summary_generator
                 .map(|generator| Arc::new(CompactionEngine::new(generator))),
+            call_scheduler: self.call_scheduler,
         })
     }
 }
