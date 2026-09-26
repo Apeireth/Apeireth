@@ -367,6 +367,12 @@ impl DualScaledFieldSolver {
             return (vec![], vec![]);
         }
 
+        // 形状契约：转移矩阵必须是 n×n（每行宽度 n）。ragged 输入视为无效——
+        // 返回空结果（panic-freedom 全域证明见 research/verification）。
+        if adjacency_matrix.iter().any(|row| row.len() != n) {
+            return (vec![], vec![]);
+        }
+
         let s0 = Self::normalize_source(source);
         let mut u_local = s0.clone();
         let mut u_transfer = s0.clone();
@@ -458,6 +464,15 @@ mod tests {
         assert!(activated.contains_key(&2));
         assert!(activated.contains_key(&3));
         assert!(*activated.get(&3).unwrap() > 0.0);
+    }
+
+    #[test]
+    fn solve_rejects_ragged_matrix_without_panic() {
+        let solver = DualScaledFieldSolver::new();
+        let source = vec![1.0, 0.0, 0.0];
+        let ragged = vec![vec![0.0, 0.5], vec![0.5, 0.0, 0.5], vec![0.5, 0.5, 0.0]];
+        let (u_local, u_transfer) = solver.solve(&source, &ragged);
+        assert!(u_local.is_empty() && u_transfer.is_empty());
     }
 
     #[test]

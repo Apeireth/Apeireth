@@ -62,7 +62,7 @@
   import WorkspacePickerModal from '../components/WorkspacePickerModal.svelte';
   import ErrorSolutionBanner from '../components/ErrorSolutionBanner.svelte';
   import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile, CapabilityToggles, ModelInfo, AdminConfigPatch} from '../types';
-  import {DEFAULT_CAPABILITY_TOGGLES} from '../types';
+  import {DEFAULT_CAPABILITY_TOGGLES, RECOMMENDED_CAPABILITY_PRESET} from '../types';
   import {
     checkHealthDetailed,
     listModels,
@@ -260,6 +260,22 @@
 
   function setReasoningTag(value: string): void {
     capabilities = {...capabilities, reasoningTag: value.trim() || 'think'};
+  }
+
+  // ---- 「推荐配置」一键预设（能力中心） ----
+  // 开启记忆核心族三件 + 记忆固化/反思沉淀/器官链（RECOMMENDED_CAPABILITY_PRESET），
+  // 绝不包含 shell/fetch 等危险工具；其余开关保持现状。带确认说明，确认后走
+  // 与「保存设置」同一条 apply 路径（onSave → src-tauri env 注入 + 侧车重启/热应用）。
+  let showRecommendedConfirm = $state(false);
+
+  function applyRecommendedPreset(): void {
+    const next: CapabilityToggles = {...capabilities};
+    for (const key of RECOMMENDED_CAPABILITY_PRESET) {
+      next[key] = true;
+    }
+    capabilities = next;
+    showRecommendedConfirm = false;
+    void handleSaveSettings();
   }
 
   // Model Provider protocol & preset configurations
@@ -1257,14 +1273,35 @@
         <div class="setting-block">
           <h3 class="block-title">记忆与认知</h3>
           <p class="block-desc">
-            记忆流运行态 + W2/W3 收官批落地的认知增强件。全部默认关闭、逐项显式开启；
-            保存后注入侧车环境并重启网关（配置没变不会重启）。
+            记忆流运行态 + W2/W3 收官批落地的认知增强件。记忆核心族（记忆注入/前瞻召回/偏好学习）
+            默认开启、可随时关；其余默认关闭、逐项显式开启。保存后注入侧车环境并重启网关（配置没变不会重启）。
           </p>
 
           <div class="cap-summary">
             <Brain size={14} />
             <span>本页已启用 <b>{enabledCount(MEMORY_FLOW_DEFS) + enabledCount(COGNITION_DEFS) + enabledCount(COMMUNITY_DEFS)}</b> / {MEMORY_FLOW_DEFS.length + COGNITION_DEFS.length + COMMUNITY_DEFS.length} 项认知能力</span>
           </div>
+
+          <div class="preset-bar">
+            <button class="quiet-button" onclick={() => (showRecommendedConfirm = true)}>
+              <Sparkles size={14} />
+              <span>应用推荐配置</span>
+            </button>
+            <span class="preset-hint">一键开启记忆核心族 + 记忆固化/反思沉淀/器官链，不含 shell/fetch。</span>
+          </div>
+          {#if showRecommendedConfirm}
+            <div class="notice-box preset-confirm" role="alertdialog" aria-label="应用推荐配置确认">
+              <span>
+                将开启 6 项：前瞻召回、偏好学习、记忆注入、记忆固化、反思沉淀、器官链。
+                <strong>不包含</strong> Shell / 网络读取等危险工具（它们保持现状、仍需逐项开启与审批），其余开关不动。
+                确认后立即保存并走现有配置应用流程（注入侧车环境，配置变化时重启网关）。
+              </span>
+              <span class="preset-actions">
+                <button class="quiet-button" onclick={applyRecommendedPreset}>保存并应用</button>
+                <button class="quiet-button" onclick={() => (showRecommendedConfirm = false)}>取消</button>
+              </span>
+            </div>
+          {/if}
 
           <div class="cap-card">
             <div class="cap-card-head">
@@ -2442,6 +2479,26 @@
     color: var(--amber);
     font-family: var(--mono);
     font-weight: 600;
+  }
+
+  /* 「推荐配置」一键预设：按钮 + 说明 + 确认面板（能力中心）。 */
+  .preset-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .preset-hint {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .preset-confirm {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .preset-actions {
+    display: flex;
+    gap: 8px;
   }
 
   .cap-card {

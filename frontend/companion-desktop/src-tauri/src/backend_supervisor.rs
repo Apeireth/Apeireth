@@ -206,10 +206,13 @@ impl BackendProviderEnv {
 ///
 /// Mirrors the canonical CLI knobs (`APEIRETH_ENABLE_*` + `APEIRETH_COGNITIVE_*`).
 /// Fail-closed by construction: only `true` values emit `"1"`; absent variables
-/// mean OFF in the CLI, so a false toggle injects nothing. The two exceptions
-/// are spelled out explicitly: `shell_sandbox_off = true` emits
+/// mean OFF in the CLI, so a false toggle injects nothing. Three explicit
+/// exceptions are spelled out: `shell_sandbox_off = true` emits
 /// `APEIRETH_SHELL_SANDBOX=0` (the backend default is ON, so opting out needs
-/// an explicit value), and the numeric knobs emit their value only when > 0
+/// an explicit value); the memory-core trio (preference_learning /
+/// proactive_recall / memory_injection) is ON by default in the CLI, so each
+/// emits `"1"`/`"0"` explicitly — an off toggle must not be swallowed by the
+/// CLI default; and the numeric knobs emit their value only when > 0
 /// (0 = "do not inject", letting the backend keep its own default).
 /// Shell/fetch stay behind the runtime's require-approval governance even when
 /// enabled, so the UI toggle alone never grants unrestricted execution.
@@ -218,8 +221,9 @@ impl BackendProviderEnv {
 /// (partner_bond / morphology / education / absorption / community /
 /// onering_ledger / onion_layer / worktree_sandbox + 记忆流四件 + 议会数值)。
 /// `serde(default)` keeps persisted JSON from before this extension loadable;
-/// missing fields default to false/0 = inject nothing = backend defaults hold.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+/// missing fields default to false/0 = inject nothing = backend defaults hold,
+/// except the memory-core trio (see [`BackendCapabilityEnv::default`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "snake_case")]
 pub struct BackendCapabilityEnv {
     pub enable_shell: bool,
@@ -258,9 +262,54 @@ pub struct BackendCapabilityEnv {
     pub reasoning_tag: String,
 }
 
+/// Explicit on/off value for a default-on CLI knob: the desktop injects both
+/// states because absence means ON on the backend side.
+fn on_off_value(on: bool) -> String {
+    if on { "1" } else { "0" }.to_string()
+}
+
+/// 产品默认，与 frontend `DEFAULT_CAPABILITY_TOGGLES` 对齐：记忆核心族三件
+/// 默认开（全新安装 / 旧持久化 JSON 缺字段都按「未设 = 开」注入），其余默认关
+/// fail-closed。显式 false 仍是显式关（注入 "0"）。
+impl Default for BackendCapabilityEnv {
+    fn default() -> Self {
+        Self {
+            enable_shell: false,
+            shell_sandbox_off: false,
+            enable_fetch: false,
+            enable_local_read_tools: true,
+            disable_typed_recall: false,
+            enable_organs: false,
+            enable_preference_learning: true,
+            enable_proactive_recall: true,
+            enable_memory_injection: true,
+            enable_consolidation: false,
+            enable_reflexion: false,
+            enable_partner_bond: false,
+            enable_morphology_recall: false,
+            enable_education: false,
+            enable_absorption_insight: false,
+            enable_community_triage: false,
+            enable_onering_ledger: false,
+            cognitive_judge: false,
+            cognitive_council: false,
+            council_advisors: 0,
+            council_timeout_ms: 0,
+            morphology_temperature: 0.0,
+            enable_onion_layer: false,
+            enable_worktree_sandbox: false,
+            reasoning_enabled: false,
+            reasoning_model_filters: String::new(),
+            reasoning_tag: String::new(),
+        }
+    }
+}
+
 impl BackendCapabilityEnv {
     /// The (variable, value) pairs injected into the sidecar. Only enabled
-    /// capabilities appear; the CLI treats absence as OFF.
+    /// capabilities appear; the CLI treats absence as OFF — except the
+    /// memory-core trio below, which defaults ON in the CLI and therefore
+    /// injects an explicit "1"/"0" in both states.
     pub fn env_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if self.enable_shell {
@@ -276,6 +325,10 @@ impl BackendCapabilityEnv {
         }
         if self.enable_local_read_tools {
             pairs.push(("APEIRETH_ENABLE_LOCAL_READ_TOOLS", "1".to_string()));
+        } else {
+            // 双向显式: 默认开旋钮的「关」必须显式反注入
+            // (CLI 侧 `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 逃生门胜出)。
+            pairs.push(("APEIRETH_DISABLE_LOCAL_READ_TOOLS", "1".to_string()));
         }
         if self.disable_typed_recall {
             pairs.push(("APEIRETH_DISABLE_TYPED_RECALL", "1".to_string()));
@@ -283,15 +336,19 @@ impl BackendCapabilityEnv {
         if self.enable_organs {
             pairs.push(("APEIRETH_ENABLE_ORGANS", "1".to_string()));
         }
-        if self.enable_preference_learning {
-            pairs.push(("APEIRETH_ENABLE_PREFERENCE_LEARNING", "1".to_string()));
-        }
-        if self.enable_proactive_recall {
-            pairs.push(("APEIRETH_ENABLE_PROACTIVE_RECALL", "1".to_string()));
-        }
-        if self.enable_memory_injection {
-            pairs.push(("APEIRETH_ENABLE_MEMORY_INJECTION", "1".to_string()));
-        }
+        // 记忆核心族三件 CLI 默认开: 双向显式注入, 关 = "0" (CLI `=0` = off)。
+        pairs.push((
+            "APEIRETH_ENABLE_PREFERENCE_LEARNING",
+            on_off_value(self.enable_preference_learning),
+        ));
+        pairs.push((
+            "APEIRETH_ENABLE_PROACTIVE_RECALL",
+            on_off_value(self.enable_proactive_recall),
+        ));
+        pairs.push((
+            "APEIRETH_ENABLE_MEMORY_INJECTION",
+            on_off_value(self.enable_memory_injection),
+        ));
         if self.enable_consolidation {
             pairs.push(("APEIRETH_ENABLE_CONSOLIDATION", "1".to_string()));
         }
@@ -363,7 +420,7 @@ impl BackendCapabilityEnv {
         pairs
     }
 
-    /// True when no capability would be enabled.
+    /// True when nothing would be injected into the sidecar at all.
     pub fn is_empty(&self) -> bool {
         self.env_pairs().is_empty()
     }
@@ -1643,17 +1700,21 @@ mod tests {
     }
 
     /// Capability env names must match the canonical CLI knobs, and the
-    /// fail-closed contract holds: only true emits "1", false emits nothing.
-    /// The two explicit exceptions: `shell_sandbox = false` emits
-    /// `APEIRETH_SHELL_SANDBOX=0` (backend default is ON), and numeric knobs
-    /// emit their value only when > 0.
+    /// fail-closed contract holds: only true emits "1", false emits nothing —
+    /// except the default-on knobs (memory-core trio + local read tools, CLI
+    /// default ON), which always inject an explicit "1"/"0". The other explicit
+    /// exceptions: `shell_sandbox = false` emits `APEIRETH_SHELL_SANDBOX=0`
+    /// (backend default is ON), and numeric knobs emit their value only when > 0.
     #[test]
     fn capability_env_pairs_match_canonical_knobs_and_fail_closed() {
         let caps = BackendCapabilityEnv {
             enable_shell: true,
             enable_fetch: false,
             enable_organs: true,
+            enable_local_read_tools: false,
             enable_preference_learning: false,
+            enable_proactive_recall: false,
+            enable_memory_injection: false,
             cognitive_judge: true,
             cognitive_council: false,
             ..Default::default()
@@ -1668,8 +1729,25 @@ mod tests {
         assert_eq!(map["APEIRETH_COGNITIVE_JUDGE"], "1");
         // 沙箱默认开：shell_sandbox_off=false 不注入；只有显式关闭才注入 "0"。
         assert!(!map.contains_key("APEIRETH_SHELL_SANDBOX"));
-        assert_eq!(map.len(), 3, "false toggles must emit nothing: {map:?}");
-        assert!(BackendCapabilityEnv::default().is_empty());
+        // 记忆核心族默认开旋钮：显式关也注入 "0"（否则被 CLI 默认开覆盖）。
+        assert_eq!(map["APEIRETH_ENABLE_PREFERENCE_LEARNING"], "0");
+        assert_eq!(map["APEIRETH_ENABLE_PROACTIVE_RECALL"], "0");
+        assert_eq!(map["APEIRETH_ENABLE_MEMORY_INJECTION"], "0");
+        // 本地只读三件套默认开：显式关走 DISABLE 逃生门（CLI 侧 DISABLE 胜出）。
+        assert_eq!(map["APEIRETH_DISABLE_LOCAL_READ_TOOLS"], "1");
+        assert_eq!(
+            map.len(),
+            7,
+            "false toggles emit nothing except default-on knobs: {map:?}"
+        );
+        // 全默认态: 默认开旋钮显式 "1", 其余一律不注入 (无任何能力被开启)。
+        let default_map: std::collections::HashMap<_, _> =
+            BackendCapabilityEnv::default().env_pairs().into_iter().collect();
+        assert_eq!(default_map.len(), 4, "{default_map:?}");
+        assert_eq!(default_map["APEIRETH_ENABLE_PREFERENCE_LEARNING"], "1");
+        assert_eq!(default_map["APEIRETH_ENABLE_PROACTIVE_RECALL"], "1");
+        assert_eq!(default_map["APEIRETH_ENABLE_MEMORY_INJECTION"], "1");
+        assert_eq!(default_map["APEIRETH_ENABLE_LOCAL_READ_TOOLS"], "1");
     }
 
     /// W2/W3 收官批新旋钮: 每个新 env 名与 canonical CLI 对齐, 数值旋钮
@@ -1722,9 +1800,15 @@ mod tests {
         assert_eq!(map["APEIRETH_MORPHOLOGY_TEMPERATURE"], "1.5");
         assert_eq!(map["APEIRETH_ENABLE_ONION_LAYER"], "1");
         assert_eq!(map["APEIRETH_ENABLE_WORKTREE_SANDBOX"], "1");
-        assert_eq!(map.len(), 19, "exact knob coverage: {map:?}");
+        // 19 个显式开启项 + 记忆核心族缺省开的 preference_learning 显式 "1"。
+        assert_eq!(
+            map["APEIRETH_ENABLE_PREFERENCE_LEARNING"], "1",
+            "default-on trio member must still inject its explicit value"
+        );
+        assert_eq!(map.len(), 20, "exact knob coverage: {map:?}");
 
         // 数值为 0 = 不注入（后端用自带默认）；温度整数渲染不带小数点。
+        // 默认开旋钮（记忆核心族 + 本地只读三件套）缺省开，仍显式注入 "1"。
         let minimal = BackendCapabilityEnv {
             council_advisors: 3,
             morphology_temperature: 2.0,
@@ -1733,7 +1817,8 @@ mod tests {
         let minimal: std::collections::HashMap<_, _> = minimal.env_pairs().into_iter().collect();
         assert_eq!(minimal["APEIRETH_COUNCIL_ADVISORS"], "3");
         assert_eq!(minimal["APEIRETH_MORPHOLOGY_TEMPERATURE"], "2");
-        assert_eq!(minimal.len(), 2);
+        assert_eq!(minimal["APEIRETH_ENABLE_LOCAL_READ_TOOLS"], "1");
+        assert_eq!(minimal.len(), 6, "{minimal:?}");
 
         // [Beta] 思考模式：enabled 才注入，filters/tag 空串不注入；
         // 关闭时不注入任何 reasoning 变量。
@@ -1760,7 +1845,9 @@ mod tests {
     }
 
     /// 旧版本持久化的 capability JSON（无 W2/W3 字段）必须仍能反序列化：
-    /// serde(default) 把缺失字段补成 false/0 = 全部不注入（fail-closed）。
+    /// serde(default) 把缺失字段补成 false/0 = 全部不注入（fail-closed），
+    /// 记忆核心族三件例外：缺失 = 开 = 显式注入 "1"（「未设 = 开」与 CLI 对齐），
+    /// 显式 false = 显式注入 "0"。
     #[test]
     fn capability_env_legacy_persisted_json_still_loads() {
         let legacy = r#"{
@@ -1780,7 +1867,14 @@ mod tests {
             "missing shell_sandbox_off defaults to false = sandbox stays ON"
         );
         assert_eq!(caps.council_advisors, 0, "missing numerics default to 0");
-        assert_eq!(caps.env_pairs().len(), 3);
+        let map: std::collections::HashMap<_, _> = caps.env_pairs().into_iter().collect();
+        // 3 个 "1" (shell/organs/judge) + 显式 false 的 preference_learning "0"
+        // + 缺失字段按默认开补 "1" 的 proactive/memory_injection/local_read_tools。
+        assert_eq!(map["APEIRETH_ENABLE_PREFERENCE_LEARNING"], "0");
+        assert_eq!(map["APEIRETH_ENABLE_PROACTIVE_RECALL"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_MEMORY_INJECTION"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_LOCAL_READ_TOOLS"], "1");
+        assert_eq!(map.len(), 7, "{map:?}");
     }
 
     #[test]

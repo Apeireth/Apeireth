@@ -67,6 +67,13 @@ const ENABLE_PREFERENCE_LEARNING_ENV: &str = "APEIRETH_ENABLE_PREFERENCE_LEARNIN
 // (默认开 + 逃生门)、语义向量阶段 (真实现 + opt-in, 词法回退兜底)。
 const ENABLE_PROACTIVE_RECALL_ENV: &str = "APEIRETH_ENABLE_PROACTIVE_RECALL";
 const TYPED_RECALL_DISABLE_ENV: &str = "APEIRETH_DISABLE_TYPED_RECALL";
+// 记忆核心族三旋钮 (PROACTIVE_RECALL / PREFERENCE_LEARNING / MEMORY_INJECTION):
+// **默认开** (未设 = 开)。显式关走两条路, 与 typed_recall 逃生门同款语义:
+// `APEIRETH_ENABLE_*=0` 或 `APEIRETH_DISABLE_*=1` (DISABLE 优先)。
+// env 变量名不变 (向后兼容), 各配一个 DISABLE 逃生门。
+const DISABLE_PROACTIVE_RECALL_ENV: &str = "APEIRETH_DISABLE_PROACTIVE_RECALL";
+const DISABLE_PREFERENCE_LEARNING_ENV: &str = "APEIRETH_DISABLE_PREFERENCE_LEARNING";
+const DISABLE_MEMORY_INJECTION_ENV: &str = "APEIRETH_DISABLE_MEMORY_INJECTION";
 const PERSONA_ID_ENV: &str = "APEIRETH_PERSONA_ID";
 const SUBJECT_ID_ENV: &str = "APEIRETH_SUBJECT_ID";
 const DEFAULT_PERSONA_ID: &str = "apeireth";
@@ -99,15 +106,31 @@ fn local_read_tools_enabled_from_env() -> bool {
     true
 }
 
-/// Opt-in proactive recall policy (2026-10-06 W2 接线批补缺: 该路径早已接进
-/// `MemoryRecallModule`, 但 `Default = None` 且无任何旋钮可达)。
-///
-/// `APEIRETH_ENABLE_PROACTIVE_RECALL=1` → 确定性默认策略 (enabled, budget 2,
-/// 阈值 0.10); 其余值或缺省 → `None` (默认关, 行为不变)。
-pub fn proactive_recall_policy_from_env() -> Option<apeireth_memory::ProactiveRecallPolicy> {
-    std::env::var(ENABLE_PROACTIVE_RECALL_ENV)
+/// 记忆核心族默认开旋钮的统一语义 (逃生门惯例与
+/// `APEIRETH_DISABLE_LOCAL_READ_TOOLS` / `APEIRETH_DISABLE_TYPED_RECALL` 一致):
+/// `APEIRETH_DISABLE_*=1` → 关 (最高优先); `APEIRETH_ENABLE_*=0` → 关;
+/// 未设 / `=1` / 其余值 → 开。
+fn core_memory_knob_enabled(enable_env: &str, disable_env: &str) -> bool {
+    if std::env::var(disable_env)
         .ok()
         .is_some_and(|value| value.trim() == "1")
+    {
+        return false;
+    }
+    if std::env::var(enable_env)
+        .ok()
+        .is_some_and(|value| value.trim() == "0")
+    {
+        return false;
+    }
+    true
+}
+
+/// Proactive recall policy (记忆核心族, **默认开**): 未设或 `=1` → 确定性默认
+/// 策略 (enabled, budget 2, 阈值 0.10); `APEIRETH_ENABLE_PROACTIVE_RECALL=0`
+/// 或 `APEIRETH_DISABLE_PROACTIVE_RECALL=1` → `None` (DISABLE 优先)。
+pub fn proactive_recall_policy_from_env() -> Option<apeireth_memory::ProactiveRecallPolicy> {
+    core_memory_knob_enabled(ENABLE_PROACTIVE_RECALL_ENV, DISABLE_PROACTIVE_RECALL_ENV)
         .then(|| apeireth_memory::ProactiveRecallPolicy::default().enabled(true))
 }
 
@@ -166,12 +189,21 @@ pub fn embedding_provider_from_env(
     }
 }
 
-/// donor 反幻觉注入格式 (2026-10-06 W2): `APEIRETH_ENABLE_MEMORY_INJECTION=1`
-/// 把记忆 overlay 换成编号证据清单 + 「禁止说『我记得我们以前聊过』」规则; 默认 XML 格式不变。
+/// donor 反幻觉注入格式 (记忆核心族, **默认开**): 开启时记忆 overlay 用编号
+/// 证据清单 + 「禁止说『我记得我们以前聊过』」规则; `APEIRETH_ENABLE_MEMORY_INJECTION=0`
+/// 或 `APEIRETH_DISABLE_MEMORY_INJECTION=1` 关回 XML 封闭世界格式 (DISABLE 优先)。
 pub fn memory_injection_enabled_from_env() -> bool {
-    std::env::var(ENABLE_MEMORY_INJECTION_ENV)
-        .ok()
-        .is_some_and(|value| value.trim() == "1")
+    core_memory_knob_enabled(ENABLE_MEMORY_INJECTION_ENV, DISABLE_MEMORY_INJECTION_ENV)
+}
+
+/// 偏好学习装配旋钮 (记忆核心族, **默认开**): 开启时 `cognitive.preference_learning`
+/// 模块注册 (双索引写回 + 召回三段展开); `APEIRETH_ENABLE_PREFERENCE_LEARNING=0`
+/// 或 `APEIRETH_DISABLE_PREFERENCE_LEARNING=1` = 关 (DISABLE 优先)。
+pub fn preference_learning_enabled_from_env() -> bool {
+    core_memory_knob_enabled(
+        ENABLE_PREFERENCE_LEARNING_ENV,
+        DISABLE_PREFERENCE_LEARNING_ENV,
+    )
 }
 
 /// 每轮记忆整理 (2026-10-06 W2): `APEIRETH_ENABLE_CONSOLIDATION=1` 时 AfterTurn
@@ -665,9 +697,7 @@ async fn build_cognitive_modules_from_env(
     let organs_enabled = std::env::var(ENABLE_ORGANS_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
-    let preference_learning_enabled = std::env::var(ENABLE_PREFERENCE_LEARNING_ENV)
-        .ok()
-        .is_some_and(|value| value.trim() == "1");
+    let preference_learning_enabled = preference_learning_enabled_from_env();
     let shell_enabled = std::env::var(ENABLE_SHELL_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");

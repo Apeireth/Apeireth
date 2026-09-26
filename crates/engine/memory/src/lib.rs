@@ -323,6 +323,7 @@ pub mod extraction;
 pub mod facade;
 pub mod layers;
 pub mod memory_materializer;
+pub mod partner_store_sqlite;
 pub mod persona_store_sqlite;
 pub mod reconciler;
 pub mod retrieval_pipeline;
@@ -339,6 +340,7 @@ pub use commitments::{
     CommitmentStatus, SqliteCommitmentStore,
 };
 pub use facade::MemoryMutationFacade;
+pub use partner_store_sqlite::SqlitePartnerStore;
 pub use persona_store_sqlite::SqlitePersonaProfileStore;
 pub use temporal_graph_store::{
     SqliteTemporalGraphStore, TemporalGraphError, TemporalGraphFact, TemporalGraphQuery,

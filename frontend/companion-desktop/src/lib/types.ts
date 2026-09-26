@@ -223,9 +223,10 @@ export interface PersonaProfile {
   model?: string;
 }
 
-/** 后端高级能力开关（注入侧车环境，默认全关 fail-closed）。
- *  2026-10-10 W2/W3 收官批扩展：补齐 v1→v2 补漏落地的全部认知旋钮，
- *  与 crates/adapters/cli 的 APEIRETH_* env 一一对应。 */
+/** 后端高级能力开关（注入侧车环境）。记忆核心族三件（preferenceLearning /
+ *  proactiveRecall / memoryInjection）默认开，显式关时注入 `APEIRETH_ENABLE_*=0`；
+ *  其余默认关 fail-closed。2026-10-10 W2/W3 收官批扩展：补齐 v1→v2 补漏落地的
+ *  全部认知旋钮，与 crates/adapters/cli 的 APEIRETH_* env 一一对应。 */
 export interface CapabilityToggles {
   /** 工具: shell 命令（开启后每次调用仍走人工审批） */
   shell: boolean;
@@ -287,11 +288,11 @@ export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   shell: false,
   shellSandbox: true,
   fetch: false,
-  localReadTools: false,
+  localReadTools: true,
   organs: false,
-  preferenceLearning: false,
-  proactiveRecall: false,
-  memoryInjection: false,
+  preferenceLearning: true,
+  proactiveRecall: true,
+  memoryInjection: true,
   consolidation: false,
   reflexion: false,
   typedRecall: true,
@@ -312,6 +313,25 @@ export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   reasoningModelFilters: '',
   reasoningTag: 'think',
 };
+
+/**
+ * 「推荐配置」一键预设开启的能力键（与 SettingsView 能力中心按钮共用）。
+ * 记忆核心族三件 + 记忆固化/反思沉淀/器官链；**绝不包含** shell / fetch
+ * （危险能力不进任何预设）。键名到后端 env 的映射见 SettingsView 的
+ * 能力注册表（每行标注 env 芯片），测试镜像校验两侧一致。
+ */
+export type BooleanCapabilityKey = {
+  [K in keyof CapabilityToggles]: CapabilityToggles[K] extends boolean ? K : never;
+}[keyof CapabilityToggles];
+
+export const RECOMMENDED_CAPABILITY_PRESET: ReadonlyArray<BooleanCapabilityKey> = [
+  'proactiveRecall',
+  'preferenceLearning',
+  'memoryInjection',
+  'consolidation',
+  'reflexion',
+  'organs',
+];
 
 export interface ApeirethConfig {
   baseUrl: string;

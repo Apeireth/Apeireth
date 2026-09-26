@@ -67,6 +67,15 @@ impl SemanticAxisBridge {
             return;
         }
 
+        // 形状契约：样本向量长度必须等于 dimension。形状不符视为无效输入——
+        // 空操作返回、不改任何状态（panic-freedom 全域证明见 research/verification）。
+        if centroids
+            .iter()
+            .any(|(vector, _)| vector.len() != self.dimension)
+        {
+            return;
+        }
+
         let total_weight: f32 = centroids.iter().map(|(_, w)| *w).sum();
         if total_weight < EPSILON {
             return;
@@ -303,6 +312,15 @@ fn resonance_bridges(probabilities: &[f32]) -> (f32, Vec<(usize, usize, f32)>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fit_rejects_malformed_sample_shapes_without_panic() {
+        let mut axis = SemanticAxisBridge::new(3);
+        // 短向量样本：形状契约拒绝，空操作且基底保持为空
+        let malformed = vec![(vec![1.0, 0.0], 1.0), (vec![0.0, 1.0, 0.0], 1.0)];
+        axis.fit(&malformed, 2);
+        assert!(axis.basis_vectors.is_empty());
+    }
 
     #[test]
     fn test_semantic_axis_fit_and_projection_logic_depth() {

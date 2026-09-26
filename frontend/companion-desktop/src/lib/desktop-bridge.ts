@@ -145,6 +145,10 @@ export async function applyBackendProviderEnv(env: BackendProviderEnv): Promise<
  * means OFF in the canonical CLI. Numeric knobs use 0 = "do not inject"
  * so the backend keeps its own default.
  *
+ * 记忆核心族三件（preference_learning / proactive_recall / memory_injection）
+ * 例外：CLI 侧默认开，所以开关必须双向显式注入（开 = "1"、关 = "0"），
+ * 否则「关」会被 CLI 的默认开覆盖。缺省（未配）按默认开映射。
+ *
  * 2026-10-10 W2/W3 收官批：补齐补漏落地的全部认知旋钮（partner_bond /
  * morphology / education / absorption / community / onering / onion /
  * worktree + 记忆流四件 + 议会数值旋钮）。
@@ -184,7 +188,9 @@ export interface BackendCapabilityEnv {
   reasoning_tag: string;
 }
 
-/** Map the config's capability toggles onto the canonical knob names. */
+/** Map the config's capability toggles onto the canonical knob names.
+ *  记忆核心族三件缺省 = 开（`!== false`）：未配 capabilities 时不把默认开的
+ *  核心记忆误映射成显式关。 */
 export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined | null): BackendCapabilityEnv {
   const advisors = Math.min(7, Math.max(1, Math.round(toggles?.councilAdvisors ?? 3)));
   const timeout = Math.max(1000, Math.round(toggles?.councilTimeoutMs ?? 30000));
@@ -194,12 +200,14 @@ export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined |
     // 反向语义：UI 默认开沙箱；显式关沙箱才注入 =0（fail-closed）。
     shell_sandbox_off: toggles?.shellSandbox === false,
     enable_fetch: toggles?.fetch === true,
-    enable_local_read_tools: toggles?.localReadTools === true,
+    // 本地只读三件套同默认开语义：缺省 = 开、显式 false = 关（注入侧双向显式）。
+    enable_local_read_tools: toggles?.localReadTools !== false,
     disable_typed_recall: toggles?.typedRecall === false,
     enable_organs: toggles?.organs === true,
-    enable_preference_learning: toggles?.preferenceLearning === true,
-    enable_proactive_recall: toggles?.proactiveRecall === true,
-    enable_memory_injection: toggles?.memoryInjection === true,
+    // 记忆核心族：缺省 = 开、显式 false = 关（注入侧由 Rust 显式发 1/0）。
+    enable_preference_learning: toggles?.preferenceLearning !== false,
+    enable_proactive_recall: toggles?.proactiveRecall !== false,
+    enable_memory_injection: toggles?.memoryInjection !== false,
     enable_consolidation: toggles?.consolidation === true,
     enable_reflexion: toggles?.reflexion === true,
     enable_partner_bond: toggles?.partnerBond === true,

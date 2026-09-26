@@ -85,9 +85,8 @@ fn kani_panic_free_residual_pyramid_analyze() {
 /// 证明: SemanticAxisBridge::{fit, project} 对任意 ≤3 维有限有界样本不 panic,
 /// 投影输出熵/逻辑深度落 [0,1], 主轴数 ≤ 请求分量数; 长度不匹配的查询向量
 /// 走早退分支不 panic。
-/// 边界 (API 形状契约): fit 要求每个样本向量长度 == dimension —— 实现按
-/// 0..dimension 索引 vector[i], 短向量会索引越界 panic (见 README 缺陷记录);
-/// 本 harness 在形状契约内证明。样本权重取非负 (负权重开方产生 NaN 属数值
+/// 形状契约: fit 显式校验样本向量长度 == dimension, 非法形状空操作返回
+/// (全域无 panic 证明见 kani_panic_free_semantic_axis_fit_any_shape)。样本权重取非负 (负权重开方产生 NaN 属数值
 /// 退化而非 panic, 不在本命题内)。unwind 96 覆盖幂迭代 30 轮界内循环。
 #[kani::proof]
 #[kani::unwind(96)]
@@ -150,9 +149,8 @@ fn kani_panic_free_river_measure_omega() {
 
 /// 证明: DualScaledFieldSolver::solve 对任意 ≤3 维有限有界源项与方阵不 panic,
 /// 输出两场长度 == 输入维度。
-/// 边界 (API 形状契约): solve 仅检查 adjacency_matrix.len() == n, 行短于 n 时
-/// relax 内 adjacency_matrix[j][i] 索引越界 panic (见 README 缺陷记录);
-/// 本 harness 在方阵形状契约内证明。求解参数 max_iterations = 2 (有界迭代),
+/// 形状契约: solve 显式校验矩阵为 n×n, ragged 输入返回空结果
+/// (全域无 panic 证明见 kani_panic_free_dual_scaled_field_solve_any_shape)。求解参数 max_iterations = 2 (有界迭代),
 /// unwind 48。
 #[kani::proof]
 #[kani::unwind(48)]
@@ -231,4 +229,59 @@ fn kani_panic_free_async_context_pipeline() {
         pipeline.export_durable_facts().len() + pipeline.export_summary_records().len(),
         "清理后仅剩持久事实层与摘要层"
     );
+}
+
+
+/// 证明: SemanticAxisBridge::fit 对**任意形状**样本集（含长度 != dimension 的
+/// 非法样本）不 panic——形状契约由实现显式校验：出现任一非法形状则空操作返回、
+/// 基底保持为空。边界: dimension <= 3, 样本数 <= 3, 每样本向量长 <= 3, unwind 96。
+#[kani::proof]
+#[kani::unwind(96)]
+fn kani_panic_free_semantic_axis_fit_any_shape() {
+    let dim = 1 + (kani::any::<usize>() % 3);
+    let sample_count = kani::any::<usize>() % 4;
+    let mut centroids: Vec<(Vec<f32>, f32)> = Vec::new();
+    for _ in 0..sample_count {
+        let len = kani::any::<usize>() % 4; // 可能 != dim
+        let v: Vec<f32> = (0..len).map(|_| bounded_f32()).collect();
+        let weight = ((kani::any::<i32>() % 2001) as f32 / 100.0).abs();
+        centroids.push((v, weight));
+    }
+    let mut bridge = SemanticAxisBridge::new(dim);
+    bridge.fit(&centroids, 2);
+    let all_well_formed = centroids.iter().all(|(v, _)| v.len() == dim);
+    if !all_well_formed {
+        assert!(
+            bridge.basis_vectors.is_empty(),
+            "任一非法形状 -> 空操作, 基底为空"
+        );
+    }
+}
+
+/// 证明: DualScaledFieldSolver::solve 对**任意 ragged 矩阵**（含行宽 != n）不
+/// panic——形状契约由实现显式校验：非法输入返回空结果。
+/// 边界: n <= 3, 行数 <= 3, 每行宽 <= 3, max_iterations = 2, unwind 48。
+#[kani::proof]
+#[kani::unwind(48)]
+fn kani_panic_free_dual_scaled_field_solve_any_shape() {
+    let n = kani::any::<usize>() % 4;
+    let source: Vec<f32> = (0..n).map(|_| bounded_f32()).collect();
+    let rows = kani::any::<usize>() % 4;
+    let mut matrix: Vec<Vec<f32>> = Vec::new();
+    for _ in 0..rows {
+        let width = kani::any::<usize>() % 4;
+        matrix.push((0..width).map(|_| bounded_f32()).collect());
+    }
+    let solver = DualScaledFieldSolver {
+        max_iterations: 2,
+        ..DualScaledFieldSolver::new()
+    };
+    let (u_local, u_transfer) = solver.solve(&source, &matrix);
+    let well_formed = n > 0 && rows == n && matrix.iter().all(|r| r.len() == n);
+    if !well_formed {
+        assert!(
+            u_local.is_empty() && u_transfer.is_empty(),
+            "非法形状 -> 空结果"
+        );
+    }
 }

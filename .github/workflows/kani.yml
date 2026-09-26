@@ -85,20 +85,20 @@ jobs:
 
       # ---- Phase 5 审批状态机 (RA-5, 既有 3 harness) ----
       - name: Verify harness 1 (terminal lock, no outgoing from finals)
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_terminal_lock_no_outgoing_transitions
 
       - name: Verify harness 2 (executed monotonic, at-most-once dispatch)
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_executed_monotonic_once
 
       - name: Verify harness 3 (crash recovery -> InvC fail-closed)
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_crash_recovery_invariant_c
 
       # ---- 性质族 1: panic-freedom ----
       - name: "Family 1: panic-freedom (fold/pipeline/quotas-free pure APIs)"
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: |
           set -e
           for h in \
@@ -113,7 +113,7 @@ jobs:
           done
 
       - name: "Family 1: panic-freedom (file_fetcher core + base64)"
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: |
           set -e
           for h in \
@@ -125,7 +125,7 @@ jobs:
 
       # ---- 性质族 2: 记忆守恒 ----
       - name: "Family 2: memory conservation (retract/forget semantics)"
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: |
           set -e
           for h in \
@@ -138,7 +138,7 @@ jobs:
 
       # ---- 性质族 3: 治理单调性 ----
       - name: "Family 3: governance monotonicity (default deny / fail-closed)"
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: |
           set -e
           for h in \
@@ -152,7 +152,7 @@ jobs:
 
       # ---- 性质族 4: 配额与调度安全 ----
       - name: "Family 4: quota ledger + scheduling safety (PIP)"
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: |
           set -e
           for h in \
@@ -165,7 +165,7 @@ jobs:
 
       # ---- 性质族 5: 路径沙箱不逃逸 ----
       - name: "Family 5: path sandbox (traversal/NUL/whitelist/sensitive)"
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: |
           set -e
           for h in \
@@ -180,7 +180,7 @@ jobs:
 
       # ---- 性质族 6: SAGA/CoW 回滚精确性 ----
       - name: "Family 6: SAGA/CoW rollback exactness"
-        continue-on-error: true
+        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
         run: |
           set -e
           for h in \

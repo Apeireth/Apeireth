@@ -262,6 +262,11 @@ EOF
 ## 🎛️ 启用高级能力（用户旋钮，2026-09-08 落地）
 
 > 设计原则：**默认拒绝**。每个旋钮 = 主人的一次显式授权；值为 `1` 才生效。
+> 例外（核心体验默认开）：记忆核心族三件 `APEIRETH_ENABLE_PREFERENCE_LEARNING` /
+> `APEIRETH_ENABLE_PROACTIVE_RECALL` / `APEIRETH_ENABLE_MEMORY_INJECTION`
+> **未设即开**；`=0` 或对应 `APEIRETH_DISABLE_PREFERENCE_LEARNING` /
+> `APEIRETH_DISABLE_PROACTIVE_RECALL` / `APEIRETH_DISABLE_MEMORY_INJECTION`（`=1`）关闭，
+> DISABLE 优先。危险项（shell/fetch）维持默认关不动。
 > 全部旋钮均为 env 变量，在启动 CLI/gateway 前设置。0 装说明：逐 token 流式
 > 仍为缓冲成帧（冻结 seam），无旋钮。
 
@@ -273,10 +278,10 @@ EOF
 | `APEIRETH_COGNITIVE_JUDGE=1` | 每回合 AI 自我评审（低分触发重试/停止） | 每回合 +1 次 LLM 调用 |
 | `APEIRETH_COGNITIVE_COUNCIL=1` | 多视角审议（7 advisor 并行，10s/60s 有界） | 每回合最多 +7 次 LLM 调用 |
 | `APEIRETH_ENABLE_ORGANS=1` | 装配 9 器官模块（W1/W2 等，LLM 重的器官会真调 LLM） | 视器官而定 |
-| `APEIRETH_ENABLE_PREFERENCE_LEARNING=1` | 让 AI 把学到的偏好写回长期记忆 | 写入权交给模型；配 P1-A 准入控制使用更稳 |
-| `APEIRETH_ENABLE_PROACTIVE_RECALL=1` | 记忆主动召回：已存记忆按对话线索主动浮现（每次 ≤2 条、有置信度阈值，确定性选择器） | 低——不额外调 LLM |
+| `APEIRETH_ENABLE_PREFERENCE_LEARNING=1` | 让 AI 把学到的偏好写回长期记忆 | 写入权交给模型；配 P1-A 准入控制使用更稳；**默认开**（`=0` 或 `APEIRETH_DISABLE_PREFERENCE_LEARNING=1` 关） |
+| `APEIRETH_ENABLE_PROACTIVE_RECALL=1` | 记忆主动召回：已存记忆按对话线索主动浮现（每次 ≤2 条、有置信度阈值，确定性选择器） | 低——不额外调 LLM；**默认开**（`=0` 或 `APEIRETH_DISABLE_PROACTIVE_RECALL=1` 关） |
 | `APEIRETH_DISABLE_TYPED_RECALL=1` | 关闭承诺/画像/关系三类记忆的**召回读侧**（写侧不动） | 关掉后这三类记忆不再浮现；默认**开**（写读对称，2026-10-06 修复入库不召回的断链） |
-| `APEIRETH_ENABLE_MEMORY_INJECTION=1` | 记忆 overlay 换 donor 反幻觉格式（编号证据清单 + 「禁止说『我记得我们以前聊过』」） | 低——纯渲染切换；默认关（XML 封闭世界格式不变） |
+| `APEIRETH_ENABLE_MEMORY_INJECTION=1` | 记忆 overlay 用 donor 反幻觉格式（编号证据清单 + 「禁止说『我记得我们以前聊过』」） | 低——纯渲染切换；**默认开**（`=0` 或 `APEIRETH_DISABLE_MEMORY_INJECTION=1` 关回 XML 封闭世界格式） |
 | `APEIRETH_ENABLE_CONSOLIDATION=1` | 每回合后跑确定性记忆整理，提炼洞察落库（稳定 ID 幂等，只从原始证据提炼） | 低——0 模型调用；默认关 |
 | `APEIRETH_ENABLE_REFLEXION=1` | 失败闭环：TurnStart 注入历史教训 + AfterTurn 把 Judge 显式否决沉淀为反思 | 低——需 Judge 开启才有信号源；默认关 |
 

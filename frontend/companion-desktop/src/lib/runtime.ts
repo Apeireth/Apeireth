@@ -111,8 +111,10 @@ function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
 }
 
 /** Parse persisted capability toggles; anything unknown/absent = OFF (fail-closed).
- *  2026-10-10 W2/W3 收官批：新旋钮逐项取 persisted 值；两个「默认开」语义例外——
- *  shellSandbox 缺省 true（沙箱默认开），typedRecall 缺省 true（类型化召回默认开）。 */
+ *  2026-10-10 W2/W3 收官批：新旋钮逐项取 persisted 值；「默认开」语义例外——
+ *  shellSandbox 缺省 true（沙箱默认开）、typedRecall 缺省 true（类型化召回默认开）、
+ *  记忆核心族三件（preferenceLearning / proactiveRecall / memoryInjection）缺省 true
+ *  （核心记忆能力默认开，显式存 false 才是关——与 CLI 侧「未设=开、=0=关」对齐）。 */
 function parseCapabilityToggles(value: unknown): CapabilityToggles {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -120,11 +122,11 @@ function parseCapabilityToggles(value: unknown): CapabilityToggles {
     shell: raw.shell === true,
     shellSandbox: raw.shellSandbox !== false,
     fetch: raw.fetch === true,
-    localReadTools: raw.localReadTools === true,
+    localReadTools: raw.localReadTools !== false,
     organs: raw.organs === true,
-    preferenceLearning: raw.preferenceLearning === true,
-    proactiveRecall: raw.proactiveRecall === true,
-    memoryInjection: raw.memoryInjection === true,
+    preferenceLearning: raw.preferenceLearning !== false,
+    proactiveRecall: raw.proactiveRecall !== false,
+    memoryInjection: raw.memoryInjection !== false,
     consolidation: raw.consolidation === true,
     reflexion: raw.reflexion === true,
     typedRecall: raw.typedRecall !== false,

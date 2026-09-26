@@ -110,13 +110,15 @@ async fn fetch_knob_registers_tool_and_requires_approval() {
     assert!(approval.contains(&"tool.fetch"), "{approval:?}");
 }
 
-/// organs + preference_learning 旋钮: 模块装配进 runtime (默认关闭的对照由
-/// production_slot_order_is_explicit 测试锚定).
+/// organs + preference_learning 旋钮: 模块装配进 runtime (organs 默认关的对照
+/// 由 production_slot_order_is_explicit 测试锚定; preference_learning 属记忆
+/// 核心族默认开, `=1` 显式开等价于默认态)。
 #[tokio::test]
 async fn organs_and_preference_learning_knobs_register_modules() {
     let _lock = ENV_LOCK.lock().unwrap();
     let _g_organs = EnvGuard::set("APEIRETH_ENABLE_ORGANS", Some("1"));
     let _g_pl = EnvGuard::set("APEIRETH_ENABLE_PREFERENCE_LEARNING", Some("1"));
+    let _g_pl_off = EnvGuard::set("APEIRETH_DISABLE_PREFERENCE_LEARNING", None);
     let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("organs")));
     let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("organs-session")));
 
@@ -138,21 +140,83 @@ async fn organs_and_preference_learning_knobs_register_modules() {
 
 // ---- 2026-10-06 W2 接线批旋钮 (engineering-review-handoff-2026-10-06.md §5 W2) ----
 
-/// proactive recall 旋钮: 默认关 (行为不变), `=1` 时给 enabled 策略
-/// (已接线的 `compile_prompt_overlay_with_proactive_access` 路径由此可达)。
+/// proactive recall 旋钮 (记忆核心族, 默认开): 未设=开; `=0` / DISABLE 关
+/// (DISABLE 优先); `=1` 显式开给 enabled 策略 (已接线的
+/// `compile_prompt_overlay_with_proactive_access` 路径由此可达)。
 #[test]
-fn proactive_recall_knob_is_opt_in() {
+fn proactive_recall_knob_defaults_on_with_escape_hatch() {
     let _lock = ENV_LOCK.lock().unwrap();
-    let _g_off = EnvGuard::set("APEIRETH_ENABLE_PROACTIVE_RECALL", None);
+    let _g_enable = EnvGuard::set("APEIRETH_ENABLE_PROACTIVE_RECALL", None);
+    let _g_disable = EnvGuard::set("APEIRETH_DISABLE_PROACTIVE_RECALL", None);
+    let policy = apeireth_cli::proactive_recall_policy_from_env()
+        .expect("default (unset) must be on for the memory-core family");
+    assert!(policy.enabled, "policy must be enabled");
+    assert_eq!(policy.budget, 2, "deterministic default budget");
+
+    let _g_zero = EnvGuard::set("APEIRETH_ENABLE_PROACTIVE_RECALL", Some("0"));
     assert!(
         apeireth_cli::proactive_recall_policy_from_env().is_none(),
-        "default must stay off"
+        "=0 must turn the knob off"
     );
-    let _g_on = EnvGuard::set("APEIRETH_ENABLE_PROACTIVE_RECALL", Some("1"));
+
+    let _g_one = EnvGuard::set("APEIRETH_ENABLE_PROACTIVE_RECALL", Some("1"));
     let policy =
         apeireth_cli::proactive_recall_policy_from_env().expect("knob =1 must produce a policy");
     assert!(policy.enabled, "policy must be enabled");
     assert_eq!(policy.budget, 2, "deterministic default budget");
+
+    let _g_disable_on = EnvGuard::set("APEIRETH_DISABLE_PROACTIVE_RECALL", Some("1"));
+    assert!(
+        apeireth_cli::proactive_recall_policy_from_env().is_none(),
+        "DISABLE must win over ENABLE=1"
+    );
+}
+
+/// 记忆核心族默认语义 (preference_learning / memory_injection): 未设=开、
+/// `=0` 关、`APEIRETH_DISABLE_*=1` 关且优先于 `=1`。
+#[test]
+fn memory_core_knobs_default_on_and_disable_wins() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_pl = EnvGuard::set("APEIRETH_ENABLE_PREFERENCE_LEARNING", None);
+    let _g_pl_off = EnvGuard::set("APEIRETH_DISABLE_PREFERENCE_LEARNING", None);
+    let _g_inj = EnvGuard::set("APEIRETH_ENABLE_MEMORY_INJECTION", None);
+    let _g_inj_off = EnvGuard::set("APEIRETH_DISABLE_MEMORY_INJECTION", None);
+
+    assert!(
+        apeireth_cli::preference_learning_enabled_from_env(),
+        "preference learning defaults on (unset = on)"
+    );
+    assert!(
+        apeireth_cli::memory_injection_enabled_from_env(),
+        "memory injection defaults on (unset = on)"
+    );
+
+    let _g_pl_zero = EnvGuard::set("APEIRETH_ENABLE_PREFERENCE_LEARNING", Some("0"));
+    let _g_inj_zero = EnvGuard::set("APEIRETH_ENABLE_MEMORY_INJECTION", Some("0"));
+    assert!(
+        !apeireth_cli::preference_learning_enabled_from_env(),
+        "=0 off"
+    );
+    assert!(!apeireth_cli::memory_injection_enabled_from_env(), "=0 off");
+
+    let _g_pl_one = EnvGuard::set("APEIRETH_ENABLE_PREFERENCE_LEARNING", Some("1"));
+    let _g_inj_one = EnvGuard::set("APEIRETH_ENABLE_MEMORY_INJECTION", Some("1"));
+    assert!(
+        apeireth_cli::preference_learning_enabled_from_env(),
+        "=1 on"
+    );
+    assert!(apeireth_cli::memory_injection_enabled_from_env(), "=1 on");
+
+    let _g_pl_kill = EnvGuard::set("APEIRETH_DISABLE_PREFERENCE_LEARNING", Some("1"));
+    let _g_inj_kill = EnvGuard::set("APEIRETH_DISABLE_MEMORY_INJECTION", Some("1"));
+    assert!(
+        !apeireth_cli::preference_learning_enabled_from_env(),
+        "DISABLE must win over ENABLE=1"
+    );
+    assert!(
+        !apeireth_cli::memory_injection_enabled_from_env(),
+        "DISABLE must win over ENABLE=1"
+    );
 }
 
 /// typed 写读对称: 读侧默认开 + 逃生门; 身份默认稳定、可覆写、空白值不采纳。
@@ -240,15 +304,18 @@ async fn bootstrap_succeeds_with_typed_recall_killed() {
             .expect("bootstrap with typed recall killed must succeed");
 }
 
-/// W2b 记忆闭环旋钮: 三组默认关; reflexion 开 = `cognitive.reflexion` 模块注册
-/// (效果级证据: assembly 的 consolidation/reflexion 测试 + memory 的注入格式测试)。
+/// W2b 记忆闭环旋钮: memory_injection 属记忆核心族**默认开**;
+/// consolidation / reflexion 默认关 (对照不变), reflexion 开 =
+/// `cognitive.reflexion` 模块注册 (效果级证据: assembly 的 consolidation/reflexion
+/// 测试 + memory 的注入格式测试)。
 #[tokio::test]
 async fn memory_loop_knobs_register_reflexion_module() {
     let _lock = ENV_LOCK.lock().unwrap();
     let _g_inj = EnvGuard::set("APEIRETH_ENABLE_MEMORY_INJECTION", None);
+    let _g_inj_off = EnvGuard::set("APEIRETH_DISABLE_MEMORY_INJECTION", None);
     let _g_con = EnvGuard::set("APEIRETH_ENABLE_CONSOLIDATION", None);
     let _g_ref = EnvGuard::set("APEIRETH_ENABLE_REFLEXION", None);
-    assert!(!apeireth_cli::memory_injection_enabled_from_env());
+    assert!(apeireth_cli::memory_injection_enabled_from_env());
     assert!(!apeireth_cli::consolidation_enabled_from_env());
     assert!(!apeireth_cli::reflexion_enabled_from_env());
 
@@ -271,4 +338,76 @@ async fn memory_loop_knobs_register_reflexion_module() {
         "reflexion module must be wired, got {ids:?}"
     );
     assert!(apeireth_cli::reflexion_enabled_from_env());
+}
+
+/// 「推荐配置」一键预设映射一致: 六个 env 与 frontend types.ts
+/// `RECOMMENDED_CAPABILITY_PRESET` 同名镜像 —— 齐开时三个记忆核心旋钮解析全开
+/// (proactive 策略 / preference_learning / memory_injection) + consolidation /
+/// reflexion 开 + organs / preference_learning / reflexion 模块装配, 且**绝不**
+/// 触及 shell/fetch (危险项不进推荐配置)。
+#[tokio::test]
+async fn recommended_preset_maps_to_core_memory_knobs() {
+    const RECOMMENDED_PRESET_ENVS: &[&str] = &[
+        "APEIRETH_ENABLE_PROACTIVE_RECALL",
+        "APEIRETH_ENABLE_PREFERENCE_LEARNING",
+        "APEIRETH_ENABLE_MEMORY_INJECTION",
+        "APEIRETH_ENABLE_CONSOLIDATION",
+        "APEIRETH_ENABLE_REFLEXION",
+        "APEIRETH_ENABLE_ORGANS",
+    ];
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _guards: Vec<EnvGuard> = RECOMMENDED_PRESET_ENVS
+        .iter()
+        .map(|&key| EnvGuard::set(key, Some("1")))
+        .collect();
+    let _g_pr_off = EnvGuard::set("APEIRETH_DISABLE_PROACTIVE_RECALL", None);
+    let _g_pl_off = EnvGuard::set("APEIRETH_DISABLE_PREFERENCE_LEARNING", None);
+    let _g_inj_off = EnvGuard::set("APEIRETH_DISABLE_MEMORY_INJECTION", None);
+    let _g_shell = EnvGuard::set("APEIRETH_ENABLE_SHELL", None);
+    let _g_fetch = EnvGuard::set("APEIRETH_ENABLE_FETCH", None);
+    let reflex_dir = std::env::temp_dir()
+        .join(format!("apeireth-preset-reflex-{}", std::process::id()))
+        .to_string_lossy()
+        .into_owned();
+    let _g_dir = EnvGuard::set("APEIRETH_REFLEXION_DIR", Some(&reflex_dir));
+    let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("preset")));
+    let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("preset-session")));
+
+    // 三个记忆核心旋钮与预设映射一致 (同一批 env 名驱动同一批解析函数)。
+    assert!(apeireth_cli::proactive_recall_policy_from_env().is_some());
+    assert!(apeireth_cli::preference_learning_enabled_from_env());
+    assert!(apeireth_cli::memory_injection_enabled_from_env());
+    assert!(apeireth_cli::consolidation_enabled_from_env());
+    assert!(apeireth_cli::reflexion_enabled_from_env());
+
+    let (runtime, _sessions, _memory, _policy, _guard_hook) =
+        build_canonical_runtime_with_sessions_from_env()
+            .await
+            .expect("bootstrap with the recommended preset must succeed");
+    let ids = module_ids(&runtime);
+    for expected in [
+        "cognitive.organs",
+        "cognitive.preference_learning",
+        "cognitive.reflexion",
+    ] {
+        assert!(
+            ids.contains(&expected.to_string()),
+            "{expected} must be wired under the recommended preset, got {ids:?}"
+        );
+    }
+
+    // 推荐配置绝不包含 shell/fetch: 旋钮未设则工具不注册。
+    let tool_ids: Vec<String> = runtime
+        .tools()
+        .iter()
+        .map(|t| t.id().as_str().to_string())
+        .collect();
+    assert!(
+        !tool_ids.contains(&"tool.shell".to_string()),
+        "{tool_ids:?}"
+    );
+    assert!(
+        !tool_ids.contains(&"tool.fetch".to_string()),
+        "{tool_ids:?}"
+    );
 }
