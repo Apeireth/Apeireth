@@ -10,6 +10,10 @@
 //! truncate-from-the-back) and to [`crate::context_fold`] (string collapse).
 //! This module is the *selection policy* for named injection blocks.
 //!
+//! Boundary-safe cutting and graded omission wording are shared with the
+//! [`crate::output_retention`] primitive — one implementation, reused here
+//! rather than copied.
+//!
 //! # Long-tail cuts never evaporate content
 //!
 //! A budget cut used to drop the tail outright, and the dropped characters were
@@ -86,7 +90,8 @@ pub struct PreviewSplit {
 /// Split `content` into head and tail previews totalling `keep_chars`
 /// characters (halved; the tail keeps the odd character).
 ///
-/// Counting is per Unicode scalar value, so every cut point lands on a UTF-8
+/// Counting is per Unicode scalar value and the cuts come from the shared
+/// [`crate::output_retention`] helpers, so every cut point lands on a UTF-8
 /// boundary: a surrogate-pair (4-byte) character is never split between a
 /// preview and the omitted middle. `keep_chars >= content length` is a no-op
 /// (whole content as head, nothing omitted).
@@ -102,16 +107,26 @@ pub fn split_head_tail(content: &str, keep_chars: usize) -> PreviewSplit {
     let head_chars = keep_chars / 2;
     let tail_chars = keep_chars - head_chars;
     PreviewSplit {
-        head: content.chars().take(head_chars).collect(),
+        head: crate::output_retention::prefix_within_chars(content, head_chars).to_string(),
         omitted_chars: total - keep_chars,
-        tail: content.chars().skip(total - tail_chars).collect(),
+        tail: crate::output_retention::suffix_within_chars(content, tail_chars).to_string(),
     }
 }
 
 /// The marker line that stands in for the omitted middle of a truncated long
 /// tail.
+///
+/// Wording comes from the shared graded builder
+/// ([`crate::output_retention::omission_note`]): the exact measured character
+/// count, never a number derived from the requested budget.
 pub fn omission_marker(omitted_chars: usize) -> String {
-    format!("…[中间 {omitted_chars} 字符已省略]…")
+    crate::output_retention::omission_note(
+        &crate::output_retention::OmittedHow::Exact {
+            count: omitted_chars,
+        },
+        crate::output_retention::OmittedWhere::Middle,
+        "字符",
+    )
 }
 
 /// The one-line retrieval guide attached to truncated content.
@@ -444,7 +459,7 @@ impl ContextAssembler {
             Some(binding) => {
                 truncate_with_spill(content, keep_chars, &binding.writer, &binding.scope).text
             }
-            None => content.chars().take(keep_chars).collect(),
+            None => crate::output_retention::prefix_within_chars(content, keep_chars).to_string(),
         }
     }
 }

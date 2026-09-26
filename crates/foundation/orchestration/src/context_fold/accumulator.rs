@@ -1,15 +1,17 @@
 //! Cross-session token accumulator.
 //!
-//! Honest: [`approx_tokens`] is `chars / 4` (no tiktoken). The map is a
+//! Honest: [`approx_tokens`] is `chars / 4` via the shared
+//! [`crate::token_meter`] fold (no tokenizer dependency). The map is a
 //! [`BTreeMap`] so snapshots serialize in a stable key order.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// Approximate token count: chars / 4 (no tiktoken dep, per honest scope).
+/// Approximate token count: `chars / 4`, delegated to the single deterministic
+/// fold in [`crate::token_meter`] so every metering entry shares one formula.
 pub fn approx_tokens(s: &str) -> usize {
-    s.chars().count() / 4
+    crate::token_meter::fold_text(s) as usize
 }
 
 /// Point-in-time tally of recorded sessions.

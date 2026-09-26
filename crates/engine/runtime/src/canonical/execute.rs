@@ -52,12 +52,12 @@ use apeireth_orchestration::compaction_checkpoint::{
     CompactionBudget, CompactionMessage, CompactionOutcome,
 };
 use apeireth_orchestration::context_budget::{ContextAssembler, SpillWriter};
-use apeireth_orchestration::context_fold::approx_tokens;
 use apeireth_orchestration::context_overflow::{
     retry_makes_progress, shrink_budget, MAX_OVERFLOW_RETRIES,
 };
 use apeireth_orchestration::repetition_advisory;
 use apeireth_orchestration::runtime_invariants::AuditEvent;
+use apeireth_orchestration::token_meter::TokenMeter;
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{
     ContentPart, MessageRole, NormalizedMessage, NormalizedRequest, NormalizedResponse,
@@ -361,20 +361,28 @@ fn overlay_text(overlay: &PromptOverlay) -> String {
     ContentPart::join_text(&overlay.message().content)
 }
 
-/// Estimated tokens of the transcript that would be sent (the shared
-/// `chars / 4` estimate), used for the compress-checkpoint trigger.
+/// Estimated tokens of the transcript that would be sent, metered through the
+/// unified token metering skeleton (`chars / 4` deterministic fold), used for
+/// the compress-checkpoint trigger. One fold feeds this occupancy view and
+/// every other metering view, so no call site computes its own formula.
 fn estimated_transcript_tokens(messages: &[NormalizedMessage]) -> u64 {
-    messages
-        .iter()
-        .map(|message| approx_tokens(&ContentPart::join_text(&message.content)) as u64)
-        .sum()
+    let mut meter = TokenMeter::new();
+    for message in messages {
+        meter = meter.meter_retained(&ContentPart::join_text(&message.content));
+    }
+    meter.reading().context_occupancy_tokens
 }
 
 /// Tokens already committed before the transcript grows: the persistent
-/// system block, the tool declarations, and protocol framing.
+/// system block, the tool declarations, and protocol framing. Same unified
+/// metering entry as the transcript estimate: one fold, one unit of account.
 fn committed_overhead_tokens(system_text: &str, tools: &[NormalizedTool]) -> u64 {
     let tool_text = serde_json::to_string(tools).unwrap_or_default();
-    (approx_tokens(system_text) + approx_tokens(&tool_text)) as u64
+    TokenMeter::new()
+        .meter_retained(system_text)
+        .meter_retained(&tool_text)
+        .reading()
+        .context_occupancy_tokens
 }
 
 /// Budget the transient injected-context overlays for one provider request.
@@ -2770,5 +2778,51 @@ impl Runtime {
             rounds,
             trace,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Wired behaviour pin: the transcript estimate is exactly the per-message
+    /// `chars / 4` sum the compress-checkpoint trigger has always consumed.
+    /// Routing it through the unified metering entry changed the plumbing, not
+    /// the numbers.
+    #[test]
+    fn transcript_estimate_matches_chars_over_four_per_message() {
+        let messages = vec![
+            NormalizedMessage::system("abcd"),
+            NormalizedMessage::user("你好世界"),
+            NormalizedMessage::assistant("abc"),
+            NormalizedMessage::user("abcdefgh"),
+        ];
+        // Per-message floor: 1 + 1 + 0 + 2.
+        let expected: u64 = messages
+            .iter()
+            .map(|m| (ContentPart::join_text(&m.content).chars().count() / 4) as u64)
+            .sum();
+        assert_eq!(expected, 4);
+        assert_eq!(estimated_transcript_tokens(&messages), expected);
+
+        // Empty transcript: zero, not a floor of one.
+        assert_eq!(estimated_transcript_tokens(&[]), 0);
+    }
+
+    /// Wired behaviour pin: committed overhead is the same `chars / 4` sum of
+    /// system text plus serialized tool declarations it always was.
+    #[test]
+    fn overhead_estimate_matches_chars_over_four_sum() {
+        let system_text = "system identity block";
+        let tools = vec![NormalizedTool::new("tool_a"), NormalizedTool::new("tool_b")];
+        let tool_text = serde_json::to_string(&tools).unwrap();
+        let expected = (system_text.chars().count() / 4 + tool_text.chars().count() / 4) as u64;
+
+        assert_eq!(committed_overhead_tokens(system_text, &tools), expected);
+        // No tools: only the system text counts.
+        assert_eq!(
+            committed_overhead_tokens(system_text, &[]),
+            (system_text.chars().count() / 4) as u64
+        );
     }
 }

@@ -217,17 +217,14 @@ impl ShellTool {
     }
 
     fn resolve_timeout_ms(&self, requested: Option<u64>) -> Result<u64, String> {
-        let timeout_ms = requested.unwrap_or(self.config.default_timeout_ms);
-        if timeout_ms == 0 {
-            return Err("timeout_ms must be non-zero".into());
-        }
-        if timeout_ms > self.config.max_timeout_ms {
-            return Err(format!(
-                "timeout_ms {timeout_ms} exceeds the configured maximum {}",
-                self.config.max_timeout_ms
-            ));
-        }
-        Ok(timeout_ms)
+        // 命令超时取值走统一超时熔合小库的取值闸 (`clamp_timeout`): 0、
+        // "无界"哨兵、超上限一律拒绝, 其余原样放行 (含 120s 等既有取值)。
+        apeireth_core::deadline::clamp_timeout(
+            requested,
+            self.config.default_timeout_ms,
+            self.config.max_timeout_ms,
+        )
+        .map_err(|e| e.to_string())
     }
 
     fn selected_shell(&self) -> PathBuf {
@@ -883,6 +880,33 @@ mod tests {
         let result = tokio_test_invoke(&tool, call);
         assert!(!result.is_ok());
         assert!(result.render().contains("maximum"), "{}", result.render());
+    }
+
+    #[test]
+    fn command_timeout_resolution_keeps_the_120s_semantics() {
+        // 接线验收: 命令超时取值改走统一超时熔合小库后, 120s 语义不变 ——
+        // 120_000ms 照常放行并原样冻进执行载荷; 缺省仍 30s; 越界仍拒绝。
+        let tool = ShellTool::new(TrustedShellConfig::new("."));
+        assert_eq!(tool.resolve_timeout_ms(Some(120_000)).unwrap(), 120_000);
+        assert_eq!(tool.resolve_timeout_ms(None).unwrap(), 30_000);
+
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo hi", "timeout_ms": 120_000 }),
+        };
+        let frozen = tool.freeze_invocation(&call).unwrap().unwrap();
+        assert_eq!(
+            frozen.payload["timeout_ms"],
+            json!(120_000),
+            "冻结载荷保持同一 120s 取值"
+        );
+
+        // 无界哨兵也拒绝: 无边界等待不是合法的命令超时。
+        assert!(tool
+            .resolve_timeout_ms(Some(u64::MAX))
+            .unwrap_err()
+            .contains("sentinel"));
     }
 
     #[test]

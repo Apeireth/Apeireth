@@ -184,12 +184,19 @@ mod tests {
             .build()
             .await
             .unwrap();
+        let presence = crate::presence::PresenceService::new(crate::events::EventBus::default());
+        let presence_stream = Arc::new(
+            presence
+                .keepalive()
+                .expect("fresh presence surface cannot be shut down"),
+        );
         let state = GatewayState {
             runtime: Arc::new(runtime),
             services: crate::panels::GatewayServices::default(),
             events: crate::events::EventBus::default(),
             observations: Arc::new(crate::events::RuntimeObservationSink::new(None, None)),
-            presence: crate::presence::PresenceService::new(crate::events::EventBus::default()),
+            presence,
+            presence_stream,
             hot_config: Arc::new(std::sync::RwLock::new(
                 crate::admin::GatewayRuntimeConfig::from_env(),
             )),

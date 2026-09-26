@@ -37,6 +37,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use apeireth_core::deadline::TimeoutErrorCode;
 use apeireth_core::kernel::SessionId;
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -78,6 +79,7 @@ pub mod job_board;
 pub mod job_ring;
 pub mod lineage_spawning;
 pub mod llm;
+pub mod output_retention;
 pub mod prompt_stabilizer;
 // 循环质感 · 件一: 重复调用提醒 (纯劝告通道, 不拦截执行、不进审计判定)。
 pub mod repetition_advisory;
@@ -88,6 +90,7 @@ pub mod self_tuning;
 pub mod speech_arbiter;
 /// 生产 Orchestrator: LLM 驱动 subagent 调度 (2026-10-10, worktree 装饰器的主角)。
 pub mod subagent_llm;
+pub mod token_meter;
 pub mod worktree_sandbox;
 
 pub use ambient_context::{
@@ -149,6 +152,10 @@ pub use job_ring::{Chunk, JobRing, RingSlice, RingStats};
 pub use lineage_spawning::{
     LineageProgenySpec, LineageSpawningOrchestrator, NurturingPhase, ProgenySpecialization,
 };
+pub use output_retention::{
+    omission_note, prefix_within_bytes, prefix_within_chars, retain_fragment_within_bytes,
+    retain_within_bytes, suffix_within_chars, OmittedHow, OmittedWhere, RetainedOutput,
+};
 pub use prompt_stabilizer::{
     assemble_tiered, EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage,
     StabilizedRole,
@@ -172,6 +179,10 @@ pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
 };
 pub use subagent_llm::{HumanApprovalGate, LlmSubagentOrchestrator};
+pub use token_meter::{
+    envelope_of, fold_chars, fold_text, Calibration, MeterReading, MeteredEnvelope, TokenMeter,
+    UsageAnchor,
+};
 pub use worktree_sandbox::{
     CommandRunner, RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,
     WorktreeSandboxedOrchestrator,
@@ -974,6 +985,15 @@ pub enum OrchestratorError {
     GovernanceDenied(String),
     /// IO 错误
     Io(String),
+    /// 有界等待到期: 超时类独立 code 归属 (`timeout.*`), 带触发到期的边界取值。
+    Timeout {
+        /// 超时类 code (独立错误族)。
+        code: TimeoutErrorCode,
+        /// 触发到期的边界取值 (毫秒)。
+        timeout_ms: u64,
+        /// 哪一段等待到期 (如 "dispatch")。
+        what: String,
+    },
 }
 
 impl std::fmt::Display for OrchestratorError {
@@ -983,6 +1003,11 @@ impl std::fmt::Display for OrchestratorError {
             Self::HumanDenied(msg) => write!(f, "human denied: {msg}"),
             Self::GovernanceDenied(msg) => write!(f, "governance denied: {msg}"),
             Self::Io(msg) => write!(f, "io error: {msg}"),
+            Self::Timeout {
+                code,
+                timeout_ms,
+                what,
+            } => write!(f, "{what} timed out after {timeout_ms}ms ({code})"),
         }
     }
 }

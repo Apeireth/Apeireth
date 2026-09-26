@@ -454,13 +454,20 @@ pub fn build_gateway_state_with_services(
             presence.clone(),
         ]),
     ));
-    crate::presence::spawn_presence_heartbeat(&presence);
+    // 在场帧面 (资源租约示范接线): 装配面持一枚保活 pin —— 首持有者开流
+    // (心跳产出起), 状态回收即末持有者关停 (产出止), 无幽灵心跳。
+    let presence_stream = Arc::new(
+        presence
+            .keepalive()
+            .expect("fresh presence surface cannot be shut down"),
+    );
     GatewayState {
         runtime,
         services,
         events,
         observations,
         presence,
+        presence_stream,
         hot_config: Arc::new(RwLock::new(GatewayRuntimeConfig::from_env())),
     }
 }

@@ -50,7 +50,7 @@ pub use file_fetcher::{
 };
 pub use presence::{
     spawn_presence_heartbeat, InitiativeBudget, PresenceBreath, PresencePad, PresenceService,
-    PresenceSignificance, PresenceSource, PresenceState, PresenceSynthesizer,
+    PresenceSignificance, PresenceSource, PresenceState, PresenceSubscription, PresenceSynthesizer,
     HEARTBEAT_INTERVAL_SECS, INITIATIVE_DAILY_CAP,
 };
 

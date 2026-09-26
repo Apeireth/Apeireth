@@ -48,10 +48,6 @@ pub const BUDGET_SHRINK_NUMERATOR: u64 = 7;
 /// Budget-shrink factor denominator (with [`BUDGET_SHRINK_NUMERATOR`]).
 pub const BUDGET_SHRINK_DENOMINATOR: u64 = 10;
 
-/// Characters per estimated token — the `chars / 4` convention shared with
-/// `context_fold::approx_tokens`.
-const CHARS_PER_TOKEN: u64 = 4;
-
 /// `trigger = floor(min(window * 0.8, window - overhead - reserve))`, in tokens.
 ///
 /// Both bounds matter: `0.8 * window` keeps the request clear of the window
@@ -73,12 +69,12 @@ pub fn trigger_threshold_tokens(
 }
 
 /// [`trigger_threshold_tokens`] over char counts, converted to tokens with the
-/// `chars / 4` estimate (window and overhead arrive as char counts in this
-/// codebase's budget knobs).
+/// shared `chars / 4` fold ([`crate::token_meter`]; window and overhead arrive
+/// as char counts in this codebase's budget knobs).
 pub fn trigger_threshold_chars(window_chars: u64, overhead_chars: u64, reserve_tokens: u64) -> u64 {
     trigger_threshold_tokens(
-        window_chars / CHARS_PER_TOKEN,
-        overhead_chars / CHARS_PER_TOKEN,
+        crate::token_meter::fold_chars(window_chars),
+        crate::token_meter::fold_chars(overhead_chars),
         reserve_tokens,
     )
 }

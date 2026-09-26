@@ -31,6 +31,10 @@ pub struct GatewayState {
     /// Presence synthesizer behind `presence_state` frames (contract §8a); held
     /// here so the service outlives the assembly scope and its heartbeat task.
     pub presence: Arc<crate::presence::PresenceService>,
+    /// Keepalive pin on the presence frame surface (资源租约示范接线): the
+    /// assembly surface is the first holder, so the frame stream (heartbeat
+    /// producer) opens here and closes when the gateway state is gone.
+    pub presence_stream: Arc<apeireth_core::resource_lease::ResourcePin>,
     /// Live runtime config, readable by every request path and patchable through
     /// `/v1/admin/config`.
     pub hot_config: Arc<RwLock<crate::admin::GatewayRuntimeConfig>>,

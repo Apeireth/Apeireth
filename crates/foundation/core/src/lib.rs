@@ -63,6 +63,12 @@ pub mod statechart;
 pub mod storage_atomic;
 /// 存储文档描述符 (`StoredDoc<T>`) + 版本拒开两级容错 + 显式迁移入口。
 pub mod stored_doc;
+// 统一超时熔合 (第三批·裁决件): 到期只通知 + 取值过闸 + 空闲看门狗 + 超时类独立 code。
+/// 统一超时熔合小库 (`Deadline` / `clamp_timeout` / `IdleWatchdog`)。
+pub mod deadline;
+// 资源租约 + 失败即帧 (第三批·裁决件): 引用计数租约 / pin 保活 / 快照即读 / 失败即帧。
+/// 资源租约注册表 (`ResourceRegistry`): 首持有者开流、末持有者关停。
+pub mod resource_lease;
 // P-arch (2026-08-27) + v2.0.0-rc.1 + 哲学锚本体加 O-6 (LOCKED 0 装诚实授权):
 // 哲学锚 9 项 hardcode 锁 (S-1/S-2/S-3/O-1..O-5/O-6), 编译期断言
 // 防止哲学锚本体被改 (per O-6 + O-5 不假装 + 12 键 PHL-07 模式)

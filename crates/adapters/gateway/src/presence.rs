@@ -21,14 +21,26 @@
 //!   capability* whose id mentions `recall`/`memory` (e.g. an MCP recall tool).
 //!   The canonical `MemoryRecallModule` prompt-overlay path does not emit
 //!   `RuntimeEvent`s today, so v0 cannot see it and does not pretend to.
+//!
+//! Frame surface (资源租约示范接线): in addition to the SSE bus, every frame is
+//! published onto a lease-managed [`ResourceRegistry`] surface. The first holder
+//! opens the frame stream (the heartbeat producer starts), the last holder
+//! closes it; a keepalive pin keeps it open for the assembly lifetime. Late
+//! subscribers read the latest frame from the snapshot instead of replaying
+//! missed updates, and producer failures ride beside the last value as a
+//! failure frame that the next successful frame clears.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use serde::Serialize;
+use tokio::sync::watch;
 
 use apeireth_core::kernel::Timestamp;
+use apeireth_core::resource_lease::{
+    ResourceError, ResourceFrame, ResourceHooks, ResourceLease, ResourcePin, ResourceRegistry,
+};
 use apeireth_runtime::canonical::{RuntimeEvent, RuntimeEventSink, TraceEvent};
 
 use crate::ember_hud_driver::{EmberCognitiveStance, EmberHudDriver};
@@ -404,21 +416,170 @@ impl PresenceSynthesizer {
     }
 }
 
+/// Heartbeat producer driver: the "stream" behind the presence frame surface.
+/// Opening the surface starts it; closing the surface stops it — after a stop
+/// the loop task is gone, so no ghost tick can fire.
+struct HeartbeatDriver {
+    interval: Duration,
+    service: Mutex<Option<Weak<PresenceService>>>,
+    task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+}
+
+impl std::fmt::Debug for HeartbeatDriver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HeartbeatDriver")
+            .field("interval", &self.interval)
+            .field("running", &self.is_running())
+            .finish()
+    }
+}
+
+impl HeartbeatDriver {
+    fn new(interval: Duration) -> Self {
+        Self {
+            interval,
+            service: Mutex::new(None),
+            task: Mutex::new(None),
+        }
+    }
+
+    fn bind(&self, service: Weak<PresenceService>) {
+        if let Ok(mut slot) = self.service.lock() {
+            *slot = Some(service);
+        }
+    }
+
+    /// Open hook: start the heartbeat loop (idempotent). Outside an async
+    /// runtime it degrades honestly — no executor, no heartbeat, no panic.
+    fn start(&self) -> Result<(), String> {
+        let mut task = self.task.lock().unwrap_or_else(|p| p.into_inner());
+        if task.is_some() {
+            return Ok(());
+        }
+        let Some(service) = self
+            .service
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+        else {
+            return Err("presence heartbeat driver is not bound to a service".to_string());
+        };
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return Ok(());
+        };
+        let interval = self.interval;
+        *task = Some(handle.spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            ticker.tick().await; // the first tick is immediate; skip it
+            loop {
+                ticker.tick().await;
+                let Some(service) = service.upgrade() else {
+                    break;
+                };
+                service.emit_heartbeat();
+            }
+        }));
+        Ok(())
+    }
+
+    /// Close hook: stop the heartbeat loop. The task is gone from here on, so
+    /// no further tick can reach the service (关停后无幽灵回调).
+    fn stop(&self) {
+        if let Some(handle) = self.task.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            handle.abort();
+        }
+    }
+
+    fn is_running(&self) -> bool {
+        self.task
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .is_some()
+    }
+}
+
+/// One lease on the presence frame surface: while it is held the stream stays
+/// open (the heartbeat producer runs); [`PresenceSubscription::snapshot`]
+/// reads the latest frame without replaying missed ones.
+pub struct PresenceSubscription {
+    _lease: ResourceLease,
+    updates: watch::Receiver<ResourceFrame<PresenceState>>,
+    frames: Arc<ResourceRegistry<PresenceState>>,
+}
+
+impl PresenceSubscription {
+    /// Snapshot-on-read: the last value plus any failure frame beside it.
+    pub fn snapshot(&self) -> ResourceFrame<PresenceState> {
+        self.frames.snapshot()
+    }
+
+    /// Update notifications (watch semantics: changes after subscribing only).
+    pub fn updates(&self) -> watch::Receiver<ResourceFrame<PresenceState>> {
+        self.updates.clone()
+    }
+}
+
 /// Tokio-facing wrapper: owns the synthesizer, observes the runtime event
-/// spine, and publishes `presence_state` frames onto the gateway SSE bus.
+/// spine, and publishes `presence_state` frames onto the gateway SSE bus and
+/// the lease-managed frame surface.
 #[derive(Debug)]
 pub struct PresenceService {
     bus: EventBus,
     synthesizer: Mutex<PresenceSynthesizer>,
+    frames: Arc<ResourceRegistry<PresenceState>>,
+    heartbeat: Arc<HeartbeatDriver>,
 }
 
 impl PresenceService {
-    /// Create the service publishing onto `bus`.
+    /// Create the service publishing onto `bus`, with the contract heartbeat
+    /// cadence ([`HEARTBEAT_INTERVAL_SECS`]).
     pub fn new(bus: EventBus) -> Arc<Self> {
-        Arc::new(Self {
+        Self::with_heartbeat_interval(bus, Duration::from_secs(HEARTBEAT_INTERVAL_SECS))
+    }
+
+    /// Same frame surface with an explicit heartbeat cadence (embedders/tests).
+    pub fn with_heartbeat_interval(bus: EventBus, interval: Duration) -> Arc<Self> {
+        let heartbeat = Arc::new(HeartbeatDriver::new(interval));
+        let open_driver = Arc::clone(&heartbeat);
+        let close_driver = Arc::clone(&heartbeat);
+        let frames = ResourceRegistry::new(
+            "presence_state",
+            ResourceHooks::new(
+                Arc::new(move || open_driver.start()),
+                Arc::new(move || close_driver.stop()),
+            ),
+        );
+        let service = Arc::new(Self {
             bus,
             synthesizer: Mutex::new(PresenceSynthesizer::new()),
+            frames: Arc::clone(&frames),
+            heartbeat: Arc::clone(&heartbeat),
+        });
+        heartbeat.bind(Arc::downgrade(&service));
+        service
+    }
+
+    /// Acquire a lease on the presence frame surface. The first holder opens
+    /// the stream (heartbeat producer starts); the last release closes it.
+    pub fn subscribe_presence(self: &Arc<Self>) -> Result<PresenceSubscription, ResourceError> {
+        let lease = self.frames.acquire()?;
+        Ok(PresenceSubscription {
+            _lease: lease,
+            updates: self.frames.subscribe(),
+            frames: Arc::clone(&self.frames),
         })
+    }
+
+    /// Keepalive pin on the frame surface: counts with leases, and while it is
+    /// held the stream never closes (装配面保活).
+    pub fn keepalive(self: &Arc<Self>) -> Result<ResourcePin, ResourceError> {
+        self.frames.pin()
+    }
+
+    /// Current frame surface snapshot (last value + failure frame beside it).
+    pub fn frame_snapshot(&self) -> ResourceFrame<PresenceState> {
+        self.frames.snapshot()
     }
 
     /// Publish one heartbeat frame. Called by the heartbeat task once per
@@ -426,16 +587,31 @@ impl PresenceService {
     pub fn emit_heartbeat(&self) {
         let now_ms = Timestamp::now().epoch_millis();
         let Ok(mut synth) = self.synthesizer.lock() else {
-            return; // a poisoned estimator must never disturb the runtime
+            // 失败即帧: 估计器锁中毒不再静默吞掉, 作为正式失败帧上报。
+            self.note_source_failure("presence estimator lock poisoned");
+            return;
         };
         let state = synth.heartbeat(now_ms);
         drop(synth);
         self.publish(state);
     }
 
+    /// 失败即帧: a producer failure becomes a formal frame beside the last
+    /// value; the next successful frame clears it.
+    fn note_source_failure(&self, reason: impl Into<String>) {
+        let _ = self.frames.publish_failure(reason);
+    }
+
     fn publish(&self, state: PresenceState) {
-        if let Ok(data) = serde_json::to_value(&state) {
-            self.bus.publish(GatewayEvent::new("presence_state", data));
+        match serde_json::to_value(&state) {
+            Ok(data) => {
+                // 成功帧: 入帧面 (自清失败帧) 并照常上总线。
+                let _ = self.frames.publish(state);
+                self.bus.publish(GatewayEvent::new("presence_state", data));
+            }
+            Err(e) => {
+                self.note_source_failure(format!("presence frame serialization failed: {e}"));
+            }
         }
     }
 }
@@ -443,7 +619,9 @@ impl PresenceService {
 impl RuntimeEventSink for PresenceService {
     fn emit(&self, event: RuntimeEvent) {
         let Ok(mut synth) = self.synthesizer.lock() else {
-            return; // a poisoned estimator must never disturb the runtime
+            // 失败即帧: 估计器锁中毒不再静默吞掉, 作为正式失败帧上报。
+            self.note_source_failure("presence estimator lock poisoned");
+            return;
         };
         let now_ms = Timestamp::now().epoch_millis();
         match event {
@@ -825,5 +1003,121 @@ mod tests {
         assert_eq!(frame.event, "presence_state");
         assert_eq!(frame.data["significance"], "heartbeat");
         assert_eq!(frame.data["stance"], "dreaming_consolidation");
+    }
+
+    // 资源租约示范接线 (帧面)
+
+    #[tokio::test]
+    async fn presence_stream_opens_with_first_subscriber_and_closes_with_last() {
+        let service =
+            PresenceService::with_heartbeat_interval(EventBus::new(16), Duration::from_secs(60));
+        assert!(!service.frames.is_open(), "无持有者时帧面不开");
+
+        let first = service.subscribe_presence().unwrap();
+        assert!(service.frames.is_open(), "首持有者开流");
+        assert!(service.heartbeat.is_running(), "开流即起心跳产出");
+
+        let second = service.subscribe_presence().unwrap();
+        assert_eq!(service.frames.holders(), 2, "租约计数随持有者增长");
+
+        drop(first);
+        assert!(service.frames.is_open(), "仍有持有者, 流不关");
+        drop(second);
+        assert!(!service.frames.is_open(), "末持有者关停");
+        assert!(
+            !service.heartbeat.is_running(),
+            "关停即止心跳产出 (无幽灵回调)"
+        );
+    }
+
+    #[tokio::test]
+    async fn presence_snapshot_is_readable_on_subscribe_without_replay() {
+        let service =
+            PresenceService::with_heartbeat_interval(EventBus::new(16), Duration::from_secs(60));
+        let _lease = service.subscribe_presence().unwrap();
+
+        // 先发一帧回合级 (turn), 再发一帧心跳级 (heartbeat) —— 两帧可区分。
+        let sink: &dyn RuntimeEventSink = service.as_ref();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        sink.emit(RuntimeEvent::TurnStarted {
+            session,
+            request: RequestId::new(),
+            trace,
+        });
+        sink.emit(RuntimeEvent::TurnCompleted {
+            session,
+            request: RequestId::new(),
+            trace,
+            rounds: 1,
+            served_by: CapabilityId::new("provider.fake").unwrap(),
+        });
+        assert_eq!(
+            service.frame_snapshot().value.unwrap().significance,
+            PresenceSignificance::Turn
+        );
+        service.emit_heartbeat();
+
+        // 后订阅者: 快照即读最新 (heartbeat 帧), 错过的 turn 帧不回放。
+        let late = service.subscribe_presence().unwrap();
+        let snapshot = late.snapshot();
+        assert!(snapshot.value.is_some(), "后订阅者靠快照即读最新");
+        assert_eq!(
+            snapshot.value.unwrap().significance,
+            PresenceSignificance::Heartbeat,
+            "快照是最新帧, 不是从头回放"
+        );
+        let mut updates = late.updates();
+        assert!(
+            !updates.has_changed().unwrap(),
+            "错过更新不回放: 订阅通道里没有历史帧排队"
+        );
+    }
+
+    #[tokio::test]
+    async fn presence_failure_frame_rides_beside_the_last_value_and_self_clears() {
+        let service =
+            PresenceService::with_heartbeat_interval(EventBus::new(16), Duration::from_secs(60));
+        let sub = service.subscribe_presence().unwrap();
+
+        service.emit_heartbeat();
+        assert!(sub.snapshot().value.is_some());
+        assert!(!sub.snapshot().has_failure());
+
+        // 失败即帧: 错误作为正式一帧挂在最后值旁。
+        service.note_source_failure("presence producer failed");
+        let frame = sub.snapshot();
+        assert_eq!(frame.failure.as_deref(), Some("presence producer failed"));
+        assert!(frame.value.is_some(), "失败帧不清最后值");
+
+        // 下一成功帧自清。
+        service.emit_heartbeat();
+        assert!(!sub.snapshot().has_failure(), "下一成功帧自清失败帧");
+    }
+
+    #[tokio::test]
+    async fn last_release_stops_the_stream_without_ghost_frames() {
+        let service =
+            PresenceService::with_heartbeat_interval(EventBus::new(16), Duration::from_millis(25));
+        let sub = service.subscribe_presence().unwrap();
+
+        // 流开时心跳帧正常入面。
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        let before = service.frame_snapshot();
+        assert!(before.value.is_some(), "开流期间心跳帧入面");
+
+        drop(sub); // 末持有者关停
+        assert!(!service.heartbeat.is_running(), "心跳产出任务必须止步");
+        let frozen = service.frame_snapshot();
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        assert_eq!(
+            service.frame_snapshot(),
+            frozen,
+            "关停后无幽灵帧、无幽灵回调"
+        );
+
+        // 显式关停后订阅也拿不到新租约。
+        service.frames.shutdown();
+        assert!(service.subscribe_presence().is_err(), "关停后不再发放租约");
     }
 }

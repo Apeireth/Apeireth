@@ -150,19 +150,28 @@ impl Orchestrator for LlmSubagentOrchestrator {
             max_tokens: None,
         };
 
-        // ④ 有界等待 (超时 = 显式失败, 不静默)。
-        let response = tokio::time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            instance.complete(request),
-        )
-        .await
-        .map_err(|_| {
-            OrchestratorError::SubagentFailed(format!(
-                "dispatch timed out after {}ms",
-                self.timeout_ms
-            ))
-        })?
-        .map_err(|e| OrchestratorError::SubagentFailed(format!("completion failed: {e}")))?;
+        // ④ 有界等待 (超时 = 显式失败, 不静默)。统一超时熔合: [`Deadline`] 到期
+        // 只投递通知 token; 终止本次调用由本能力自己负责 (select 落选即收场),
+        // 定时器随 `deadline` 落下自动清理。缺省边界 120s 语义不变。
+        let (deadline, mut notice) =
+            apeireth_core::deadline::Deadline::after(Duration::from_millis(self.timeout_ms))
+                .map_err(|e| OrchestratorError::Timeout {
+                    code: e.code(),
+                    timeout_ms: self.timeout_ms,
+                    what: "dispatch timer".to_string(),
+                })?;
+        let response = tokio::select! {
+            outcome = instance.complete(request) => outcome
+                .map_err(|e| OrchestratorError::SubagentFailed(format!("completion failed: {e}")))?,
+            _token = notice.notified() => {
+                drop(deadline);
+                return Err(OrchestratorError::Timeout {
+                    code: apeireth_core::deadline::TimeoutErrorCode::DeadlineExpired,
+                    timeout_ms: self.timeout_ms,
+                    what: "dispatch".to_string(),
+                });
+            }
+        };
 
         // ⑤ 输出 (JSON 解析成功原样给; 否则 {"raw": ...} 原文透传, 不编造)。
         let content = response.message.content;
@@ -326,5 +335,76 @@ mod subagent_llm_tests {
         let gate: HumanApprovalGate = Arc::new(|_spec| Ok(()));
         let orch = LlmSubagentOrchestrator::new(factory, "default-model").with_approval_gate(gate);
         assert!(orch.dispatch(spec("t5", true)).await.is_ok());
+    }
+
+    /// 永不交付的实例: 用于有界等待到期路径。
+    struct HangingInstance;
+
+    #[async_trait::async_trait]
+    impl LlmInstance for HangingInstance {
+        async fn complete(&self, _req: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            Err(LlmError::Stream("unreachable".to_string()))
+        }
+        fn name(&self) -> &str {
+            "hanging"
+        }
+    }
+
+    struct HangingFactory;
+
+    #[async_trait::async_trait]
+    impl LlmFactory for HangingFactory {
+        async fn spawn(
+            &self,
+            _role: SubagentRole,
+            _model: &str,
+        ) -> Result<Box<dyn LlmInstance>, LlmError> {
+            Ok(Box::new(HangingInstance))
+        }
+        async fn available_models(&self) -> Result<Vec<String>, LlmError> {
+            Ok(vec!["hanging".to_string()])
+        }
+        fn name(&self) -> &str {
+            "hanging-factory"
+        }
+    }
+
+    #[tokio::test]
+    async fn dispatch_bound_defaults_to_120s_and_expires_with_the_timeout_code() {
+        // 接线验收 (行为保持): 缺省 dispatch 有界等待仍是 120s 语义;
+        // 到期只通知, 终止归本能力, 错误归属超时类独立 code。
+        assert_eq!(SUBAGENT_DEFAULT_TIMEOUT_MS, 120_000, "120s 语义不变");
+
+        let orch = LlmSubagentOrchestrator::new(Arc::new(HangingFactory), "default-model")
+            .with_timeout(50);
+        let started = std::time::Instant::now();
+        match orch.dispatch(spec("t6", false)).await {
+            Err(OrchestratorError::Timeout {
+                code,
+                timeout_ms,
+                what,
+            }) => {
+                assert_eq!(
+                    code,
+                    apeireth_core::deadline::TimeoutErrorCode::DeadlineExpired
+                );
+                assert_eq!(timeout_ms, 50);
+                assert_eq!(what, "dispatch");
+            }
+            other => panic!("expected Timeout, got {other:?}"),
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "到期即收场, 不等挂死调用自行结束"
+        );
+
+        // Display 携带超时类 code, 便于日志/界面归类。
+        let err = OrchestratorError::Timeout {
+            code: apeireth_core::deadline::TimeoutErrorCode::DeadlineExpired,
+            timeout_ms: 50,
+            what: "dispatch".to_string(),
+        };
+        assert!(err.to_string().contains("timeout.deadline_expired"));
     }
 }
