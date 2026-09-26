@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 性格养成第一铲：自动校准引擎 + 从使用中学习 + 调参面板 (2026-09-26)
+
+- **SelfTuningEngine**（纯确定性）：4 个体验参数（遗忘衰减/好奇强度/语气饱和/整合节奏）+ 步长/夹紧/日漂移三重上限 + 逐条可撤销的透明日志（`tuning-log.jsonl`）；治理/内核参数类型系统内不存在（编译期治理分级）。
+- **旋钮与开关**：`APEIRETH_TUNE_*` 四参数 + `APEIRETH_ENABLE_SELF_TUNING`（默认关，轻默认）；未设 = 现行为零变化。
+- **信号 0 装诚实**：真接检索命中/未命中（4 轮一批）；ReflexionOutcome / ToneFeedback / ConsolidationOutcome 接口已备待接，如实标注。
+- **前端「性格与记忆」区**：4 滑杆（基线刻度）+ 省心/均衡/深度记忆三档 + 恢复基线 + 自学习开关 + 学习日志（逐条撤销）；self-tuning-mapping 映射一致套件。
+- 实证：workspace 131 套全绿 / clippy 0 / fmt 0 / pnpm check 0-0 / pnpm test 17-17 / src-tauri 34+8。
 ## [Unreleased] — 真缺陷修复批 + P0 #5 记忆默认开 + 核心机制讲解文档 (2026-09-26)
 
 - **四真缺陷修复**：① `SemanticAxisBridge::fit` / `DualScaledFieldSolver::solve` 补形状契约守卫（短向量/ragged 矩阵原会索引越界 panic），回归测试 + Kani 全域证明各 1 条；② `tauri.conf.json` `csp:null` 收紧为生产 CSP（dev 留 HMR 口）；③ partner 持久层 `SqlitePartnerStore`（池化 + 幂等建表 + 3 测试），治愈"重启即散"。
