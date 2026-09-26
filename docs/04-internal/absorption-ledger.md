@@ -74,6 +74,12 @@
 - `scripts/verify-provider-path.ps1` —— 真凭据链路四步验证（凭据读取/真对话/热更生效性/恢复复通）
 - `scripts/check-neutral-terms.ps1` —— 中性表述纪律扫描（新增行+未跟踪全文，自测已过）
 
+## 余量备忘（收卷建议入账）
+
+- reflexion 自研 MutationLock 可换统一文件锁（死锁接管语义更强，可选优化）；
+- `stored_doc` 消费方接线（JSON 配置/记录消费方迁移）列后续批次；
+- `inv_sweep_keeps_protected` 的 cleanup 侧在线发射点待 retention 清理生产接线时补喂。
+
 ## 战况注记（2026-09-26 晚）
 
 - 第一批出现**双份实施**（早期三路被误判未启动后重派，实为六路三战场）。各路已采取
