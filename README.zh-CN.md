@@ -6,7 +6,7 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-3662%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
+[![Tests](https://img.shields.io/badge/tests-3695%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-18--Crate%20微内核-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
@@ -387,7 +387,7 @@ USB 闪存盘 (E:\ 或 /media/usb/)
 git clone https://github.com/Apeireth/Apeireth.git
 cd Apeireth
 
-# 运行全工作区 3662 项单元测试与集成测试（工作区基线口径）
+# 运行全工作区 3695 项单元测试与集成测试（工作区基线口径）
 cargo test --workspace
 
 # 验证纯 Safe Rust 规范与 Clippy 0 警告
@@ -410,6 +410,32 @@ cargo run -p apeireth-cli -- chat "你好，还记得我吗？"
 ### 5. 下一步
 - 打包桌面端：到 Releases 下载 `Apeireth Companion_<version>_x64-setup.exe`。
 - 随身 U 盘打包命令（`apeireth bundle`）尚未随 v2 发布——见 ROADMAP.md。
+
+---
+
+## 🔍 五分钟独立验证
+
+宣传不用信，命令可以信——三条命令复核核心宣称：
+
+```bash
+# 1. 测试是真的：全工作区回归
+cargo test --workspace --locked
+# 预期：全部套件绿、0 失败（精确计数由运行本身打印）
+
+# 2. 工程红线：纯 Safe Rust + 零警告
+cargo clippy --workspace --all-targets --locked -- -D warnings
+
+# 3. LLM 接线是真的（任一支持的服务商 key 即可）
+# PowerShell: $env:APEIRETH_API_KEY = "sk-..."
+cargo run -p apeireth-cli -- chat "你好，还记得我吗？"
+```
+
+更多可审计证据（全部在仓库内）：
+
+- **机器证明的性质**（25 条 Kani 命题 + TLA/TLC 模型检验实跑）：[`research/verification/`](research/verification/)
+- **逐条读码实况盘点**（建了什么、接线没有、默认开没开）：[`reports/code-implementation-audit-2026-09-26.md`](reports/code-implementation-audit-2026-09-26.md)
+- **宣称-证据对照矩阵**（每条对外宣称带状态标）：[`docs/04-internal/claims-evidence-matrix.md`](docs/04-internal/claims-evidence-matrix.md)
+- **基准纪律**：无重跑脚本不发布（基准复现线）
 
 ---
 

@@ -6,7 +6,7 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-3662%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
+[![Tests](https://img.shields.io/badge/tests-3695%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Architecture](https://img.shields.io/badge/architecture-18--Crate%20Kernel%20%2B%20Assembly-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
@@ -390,7 +390,7 @@ The canonical gateway exposes HTTP/SSE endpoints alongside an 8-frame full-duple
 git clone https://github.com/Apeireth/Apeireth.git
 cd Apeireth
 
-# Run all 3662 unit and integration tests across the 18 crates (workspace baseline)
+# Run all 3695 unit and integration tests across the 18 crates (workspace baseline)
 cargo test --workspace
 
 # Verify pure Safe Rust and zero clippy warnings
@@ -413,6 +413,32 @@ cargo run -p apeireth-cli -- chat "Hello — do you remember me?"
 ### 5. Next Steps
 - Packaged desktop app: download `Apeireth Companion_<version>_x64-setup.exe` from Releases.
 - The portable USB bundle command (`apeireth bundle`) has not shipped in v2 yet — see ROADMAP.md.
+
+---
+
+## 🔍 5-Minute Independent Verification
+
+Don't take our word for any claim — verify it yourself:
+
+```bash
+# 1. The tests are real: full workspace regression
+cargo test --workspace --locked
+# Expect: every suite green, 0 failed (the exact count is printed by the run itself)
+
+# 2. Engineering red lines: pure Safe Rust + zero warnings
+cargo clippy --workspace --all-targets --locked -- -D warnings
+
+# 3. The LLM wiring is real (needs one API key from any supported provider)
+# PowerShell: $env:APEIRETH_API_KEY = "sk-..."
+cargo run -p apeireth-cli -- chat "Hello — do you remember me?"
+```
+
+More auditable evidence, all in-repo:
+
+- **Machine-verified properties** (25 Kani harnesses + TLA/TLC model-checker runs): [`research/verification/`](research/verification/)
+- **Line-by-line implementation audit** (what is built, wired, and default-on): [`reports/code-implementation-audit-2026-09-26.md`](reports/code-implementation-audit-2026-09-26.md)
+- **Claims-to-evidence matrix** (every public claim carries a status label): [`docs/04-internal/claims-evidence-matrix.md`](docs/04-internal/claims-evidence-matrix.md)
+- **Benchmark policy**: no number ships without a re-runnable script (the "reproducible-benchmark line")
 
 ---
 
