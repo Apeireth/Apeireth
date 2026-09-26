@@ -91,15 +91,14 @@ impl DesktopLogger {
         // Use Tauri's app data directory convention
         #[cfg(target_os = "windows")]
         {
-            let local_app_data = std::env::var("LOCALAPPDATA")
-                .map_err(|_| "LOCALAPPDATA not set".to_string())?;
+            let local_app_data =
+                std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA not set".to_string())?;
             Ok(PathBuf::from(local_app_data).join("Apeireth").join("logs"))
         }
 
         #[cfg(target_os = "macos")]
         {
-            let home = std::env::var("HOME")
-                .map_err(|_| "HOME not set".to_string())?;
+            let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
             Ok(PathBuf::from(home)
                 .join("Library")
                 .join("Application Support")
@@ -109,8 +108,7 @@ impl DesktopLogger {
 
         #[cfg(target_os = "linux")]
         {
-            let home = std::env::var("HOME")
-                .map_err(|_| "HOME not set".to_string())?;
+            let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
             Ok(PathBuf::from(home)
                 .join(".local")
                 .join("share")
@@ -392,9 +390,18 @@ mod tests {
     #[test]
     fn redacts_canonical_provider_env_values() {
         for (line, secret) in [
-            ("APEIRETH_API_KEY=test-key-mm-live-abcdef123456", "test-key-mm-live-abcdef123456"),
-            ("APEIRETH_ANTHROPIC_KEY=test-key-ant-live-9f8e7d", "test-key-ant-live-9f8e7d"),
-            ("OPENAI_API_KEY=test-key-oai-live-55443322", "test-key-oai-live-55443322"),
+            (
+                "APEIRETH_API_KEY=test-key-mm-live-abcdef123456",
+                "test-key-mm-live-abcdef123456",
+            ),
+            (
+                "APEIRETH_ANTHROPIC_KEY=test-key-ant-live-9f8e7d",
+                "test-key-ant-live-9f8e7d",
+            ),
+            (
+                "OPENAI_API_KEY=test-key-oai-live-55443322",
+                "test-key-oai-live-55443322",
+            ),
         ] {
             let redacted = DesktopLogger::redact_secrets(line);
             assert!(
@@ -412,7 +419,10 @@ mod tests {
     fn redacts_master_token_bearer_header() {
         let line = r#"{"headers":{"Authorization":"Bearer master-tok-7788"},"path":"/v1/chat"}"#;
         let redacted = DesktopLogger::redact_secrets(line);
-        assert!(!redacted.contains("master-tok-7788"), "master token leaked: {redacted}");
+        assert!(
+            !redacted.contains("master-tok-7788"),
+            "master token leaked: {redacted}"
+        );
         assert!(redacted.contains("[REDACTED_TOKEN]"));
         // Surrounding structure must survive so the log stays useful.
         assert!(redacted.contains("/v1/chat"));

@@ -74,9 +74,8 @@ pub fn ensure_writable_dir(dir: &Path) -> Result<(), String> {
         return Err(format!("not a directory: {}", dir.display()));
     }
     let probe = dir.join(format!(".apeireth-write-probe-{}", std::process::id()));
-    std::fs::write(&probe, b"").map_err(|e| {
-        format!("directory is not writable ({}): {e}", dir.display())
-    })?;
+    std::fs::write(&probe, b"")
+        .map_err(|e| format!("directory is not writable ({}): {e}", dir.display()))?;
     let _ = std::fs::remove_file(&probe);
     Ok(())
 }
@@ -143,16 +142,11 @@ mod tests {
 
     #[test]
     fn ensure_writable_dir_rejects_missing_and_files() {
-        let dir = std::env::temp_dir().join(format!(
-            "apeireth-ws-missing-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("apeireth-ws-missing-{}", std::process::id()));
         assert!(ensure_writable_dir(&dir).is_err(), "missing dir must fail");
 
-        let file = std::env::temp_dir().join(format!(
-            "apeireth-ws-file-{}.txt",
-            std::process::id()
-        ));
+        let file =
+            std::env::temp_dir().join(format!("apeireth-ws-file-{}.txt", std::process::id()));
         std::fs::write(&file, b"x").unwrap();
         assert!(ensure_writable_dir(&file).is_err(), "a file must fail");
         let _ = std::fs::remove_file(&file);

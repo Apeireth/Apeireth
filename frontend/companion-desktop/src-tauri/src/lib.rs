@@ -31,7 +31,9 @@ fn ping() -> &'static str {
 }
 
 #[tauri::command]
-async fn get_backend_status(supervisor: State<'_, Arc<BackendSupervisor>>) -> Result<BackendInfo, String> {
+async fn get_backend_status(
+    supervisor: State<'_, Arc<BackendSupervisor>>,
+) -> Result<BackendInfo, String> {
     Ok(supervisor.info().await)
 }
 
@@ -72,7 +74,9 @@ async fn apply_backend_config(
     provider: Option<BackendProviderEnv>,
     capabilities: Option<BackendCapabilityEnv>,
 ) -> Result<BackendInfo, String> {
-    supervisor.apply_backend_config(provider, capabilities).await
+    supervisor
+        .apply_backend_config(provider, capabilities)
+        .await
 }
 
 /// Fetch the gateway's effective config for the settings UI (wave-2 echo-back).
@@ -109,7 +113,9 @@ fn has_provider_key(provider: String) -> bool {
 
 /// The current workspace directory, or an empty string when unset.
 #[tauri::command]
-async fn get_workspace_dir(supervisor: State<'_, Arc<BackendSupervisor>>) -> Result<String, String> {
+async fn get_workspace_dir(
+    supervisor: State<'_, Arc<BackendSupervisor>>,
+) -> Result<String, String> {
     Ok(supervisor.get_workspace_dir().await)
 }
 
@@ -278,11 +284,17 @@ pub fn run() {
                 match supervisor_clone.start().await {
                     Ok(msg) => {
                         eprintln!("Backend auto-start: {}", msg);
-                        logger_clone.log_desktop(LogLevel::Info, &format!("Backend auto-start success: {}", msg));
+                        logger_clone.log_desktop(
+                            LogLevel::Info,
+                            &format!("Backend auto-start success: {}", msg),
+                        );
                     }
                     Err(e) => {
                         eprintln!("Backend auto-start failed: {}", e);
-                        logger_clone.log_desktop(LogLevel::Error, &format!("Backend auto-start failed: {}", e));
+                        logger_clone.log_desktop(
+                            LogLevel::Error,
+                            &format!("Backend auto-start failed: {}", e),
+                        );
                     }
                 }
             });
@@ -290,15 +302,19 @@ pub fn run() {
             // 主窗口由 tauri.conf.json 声明 (app.windows[0] label=main), 这里不再重复创建.
 
             // 快捷窗 (Alt+Space 呼出, 先只建主窗足够; 后续 Phase 2 加 quick window)
-            let _ = WebviewWindowBuilder::new(app, "quick", WebviewUrl::App("index.html?window=quick".into()))
-                .title("Apeireth 快捷")
-                .inner_size(440.0, 390.0)
-                .decorations(false)
-                .transparent(true)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .visible(false)
-                .build();
+            let _ = WebviewWindowBuilder::new(
+                app,
+                "quick",
+                WebviewUrl::App("index.html?window=quick".into()),
+            )
+            .title("Apeireth 快捷")
+            .inner_size(440.0, 390.0)
+            .decorations(false)
+            .transparent(true)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .visible(false)
+            .build();
 
             // 托盘
             let menu = build_menu(&handle)?;

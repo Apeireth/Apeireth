@@ -879,7 +879,10 @@ impl BackendSupervisor {
                 if let Some(stderr) = child.stderr.take() {
                     self.pump_stream(stderr, "stderr");
                 }
-                self.log_desktop(LogLevel::Info, &format!("backend.spawned pid={pid} port={port}"));
+                self.log_desktop(
+                    LogLevel::Info,
+                    &format!("backend.spawned pid={pid} port={port}"),
+                );
                 self.watch_for_exit(pid);
 
                 // Store process handle
@@ -974,7 +977,11 @@ impl BackendSupervisor {
                         &format!("backend.stopped pid={pid:?} exit_code={:?}", status.code()),
                     );
 
-                    Ok(format!("Backend stopped (PID: {:?}, exit: {:?})", pid, status.code()))
+                    Ok(format!(
+                        "Backend stopped (PID: {:?}, exit: {:?})",
+                        pid,
+                        status.code()
+                    ))
                 }
                 Ok(Err(e)) => {
                     let mut info = self.info.write().await;
@@ -1026,10 +1033,7 @@ impl BackendSupervisor {
     /// Compatibility wrapper over [`Self::apply_backend_config`]; the frontend
     /// uses the combined command so a settings save with both provider and
     /// capability changes restarts the backend exactly once.
-    pub async fn apply_provider_env(
-        &self,
-        env: BackendProviderEnv,
-    ) -> Result<BackendInfo, String> {
+    pub async fn apply_provider_env(&self, env: BackendProviderEnv) -> Result<BackendInfo, String> {
         self.apply_backend_config(Some(env), None).await
     }
 
@@ -1237,7 +1241,9 @@ impl BackendSupervisor {
         } else {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            Err(format!("gateway admin config unavailable (HTTP {status}): {body}"))
+            Err(format!(
+                "gateway admin config unavailable (HTTP {status}): {body}"
+            ))
         }
     }
 
@@ -1435,7 +1441,8 @@ impl BackendSupervisor {
         let listener = std::net::TcpListener::bind("127.0.0.1:0")
             .map_err(|e| format!("Failed to bind ephemeral port: {}", e))?;
 
-        let port = listener.local_addr()
+        let port = listener
+            .local_addr()
             .map_err(|e| format!("Failed to get local addr: {}", e))?
             .port();
 
@@ -1505,9 +1512,12 @@ impl BackendSupervisor {
             // boot failure (System32 + relative path = Access Denied).
             let session_env = std::env::var("APEIRETH_SESSION_DB").ok();
             let cognitive_env = std::env::var("APEIRETH_COGNITIVE_DB").ok();
-            let anchor_session = session_env.as_deref().is_none_or(|v| !Path::new(v).is_absolute());
-            let anchor_cognitive =
-                cognitive_env.as_deref().is_none_or(|v| !Path::new(v).is_absolute());
+            let anchor_session = session_env
+                .as_deref()
+                .is_none_or(|v| !Path::new(v).is_absolute());
+            let anchor_cognitive = cognitive_env
+                .as_deref()
+                .is_none_or(|v| !Path::new(v).is_absolute());
 
             // Only create the store dir when we are actually going to anchor
             // paths into it: an explicit absolute env store dir is the user's
@@ -1635,9 +1645,10 @@ impl BackendSupervisor {
             {
                 let info = self.info.read().await;
                 if info.state == BackendState::Failed {
-                    return Err(info.last_error.clone().unwrap_or_else(|| {
-                        "backend failed during startup".to_string()
-                    }));
+                    return Err(info
+                        .last_error
+                        .clone()
+                        .unwrap_or_else(|| "backend failed during startup".to_string()));
                 }
             }
             {
@@ -1784,8 +1795,14 @@ mod tests {
         assert_eq!(stripped.openai_api_key, None);
         assert_eq!(stripped.minimax_api_key, None);
         assert_eq!(stripped.anthropic_api_key, None);
-        assert_eq!(stripped.openai_url.as_deref(), Some("https://api.deepseek.com/v1"));
-        assert_eq!(stripped.anthropic_url.as_deref(), Some("https://api.anthropic.com"));
+        assert_eq!(
+            stripped.openai_url.as_deref(),
+            Some("https://api.deepseek.com/v1")
+        );
+        assert_eq!(
+            stripped.anthropic_url.as_deref(),
+            Some("https://api.anthropic.com")
+        );
     }
 
     /// The serialized shape is what the frontend sends over IPC.
@@ -1796,7 +1813,10 @@ mod tests {
             ..Default::default()
         };
         let json = serde_json::to_string(&env).unwrap();
-        assert!(json.contains("\"openai_models\":\"deepseek-v4-flash\""), "{json}");
+        assert!(
+            json.contains("\"openai_models\":\"deepseek-v4-flash\""),
+            "{json}"
+        );
         let round: BackendProviderEnv = serde_json::from_str(&json).unwrap();
         assert_eq!(round, env);
     }
@@ -1855,7 +1875,10 @@ mod tests {
         };
         let request = AdminConfigRequest::from_env(&provider, &caps);
         assert_eq!(request.provider.as_deref(), Some("openai"));
-        assert_eq!(request.base_url.as_deref(), Some("https://api.deepseek.com/v1"));
+        assert_eq!(
+            request.base_url.as_deref(),
+            Some("https://api.deepseek.com/v1")
+        );
         assert_eq!(request.api_key.as_deref(), Some("sk-oai"));
         assert_eq!(request.model.as_deref(), Some("deepseek-v4-flash"));
         assert!(request.capabilities.enable_shell);
@@ -1909,8 +1932,10 @@ mod tests {
             "false toggles emit nothing except default-on knobs: {map:?}"
         );
         // 全默认态: 默认开旋钮显式 "1", 其余一律不注入 (无任何能力被开启)。
-        let default_map: std::collections::HashMap<_, _> =
-            BackendCapabilityEnv::default().env_pairs().into_iter().collect();
+        let default_map: std::collections::HashMap<_, _> = BackendCapabilityEnv::default()
+            .env_pairs()
+            .into_iter()
+            .collect();
         assert_eq!(default_map.len(), 4, "{default_map:?}");
         assert_eq!(default_map["APEIRETH_ENABLE_PREFERENCE_LEARNING"], "1");
         assert_eq!(default_map["APEIRETH_ENABLE_PROACTIVE_RECALL"], "1");
@@ -2007,7 +2032,9 @@ mod tests {
         };
         let pairs = reasoning_off.env_pairs();
         assert!(
-            pairs.iter().all(|(k, _)| !k.starts_with("APEIRETH_REASONING")),
+            pairs
+                .iter()
+                .all(|(k, _)| !k.starts_with("APEIRETH_REASONING")),
             "关闭时 filters 也不注入: {pairs:?}"
         );
     }
@@ -2254,7 +2281,14 @@ mod tests {
         let info = tokio_block(supervisor.info());
         let json = serde_json::to_string(&info).expect("serialize");
 
-        for forbidden in ["apiKey", "api_key", "Authorization", "Bearer", "sk-", "master_token"] {
+        for forbidden in [
+            "apiKey",
+            "api_key",
+            "Authorization",
+            "Bearer",
+            "sk-",
+            "master_token",
+        ] {
             assert!(
                 !json.contains(forbidden),
                 "diagnostic payload must not carry {forbidden:?}: {json}"

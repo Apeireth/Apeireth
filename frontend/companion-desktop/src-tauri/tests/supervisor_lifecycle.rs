@@ -73,10 +73,7 @@ impl Drop for EnvGuard {
 /// the developer's checkout `.apeireth/` directory, and so tests do not share
 /// the default relative `sessions.sqlite3` path.
 fn isolate_backend_data() {
-    let dir = std::env::temp_dir().join(format!(
-        "apeireth-supervisor-test-{}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("apeireth-supervisor-test-{}", std::process::id()));
     fs_err::create_dir_all(&dir).expect("temp backend data dir");
     std::env::set_var("APEIRETH_SESSION_DB", dir.join("sessions.sqlite3"));
     std::env::set_var("APEIRETH_COGNITIVE_DB", dir.join("cognitive.sqlite3"));
@@ -107,13 +104,18 @@ fn kill_externally(pid: u32) {
     let status = std::process::Command::new("kill")
         .args(["-9", &pid.to_string()])
         .output();
-    assert!(status.is_ok(), "failed to invoke the kill command for pid {pid}");
+    assert!(
+        status.is_ok(),
+        "failed to invoke the kill command for pid {pid}"
+    );
 }
 
 #[test]
 fn spawns_real_backend_and_reaches_ready() {
     if !backend_available() {
-        eprintln!("SKIP: no canonical backend build found; run cargo build --release -p apeireth-cli");
+        eprintln!(
+            "SKIP: no canonical backend build found; run cargo build --release -p apeireth-cli"
+        );
         return;
     }
     let _guard = gateway_lock();
@@ -129,7 +131,10 @@ fn spawns_real_backend_and_reaches_ready() {
         assert_eq!(info.state, BackendState::Ready);
         assert_eq!(info.ownership, BackendOwnership::OwnedByDesktop);
         let pid = info.pid.expect("a Ready backend must report a PID");
-        let endpoint = info.endpoint.clone().expect("a Ready backend must publish an endpoint");
+        let endpoint = info
+            .endpoint
+            .clone()
+            .expect("a Ready backend must publish an endpoint");
         let port = info.port.expect("a Ready backend must report its port");
 
         // Endpoint must be loopback on the allocated port, never the legacy one.
@@ -140,16 +145,26 @@ fn spawns_real_backend_and_reaches_ready() {
         let health = reqwest::get(format!("{endpoint}/health"))
             .await
             .expect("health request should reach the published endpoint");
-        assert!(health.status().is_success(), "health status: {}", health.status());
+        assert!(
+            health.status().is_success(),
+            "health status: {}",
+            health.status()
+        );
         let body = health.text().await.unwrap_or_default();
-        assert!(body.contains("\"status\""), "unexpected health body: {body}");
+        assert!(
+            body.contains("\"status\""),
+            "unexpected health body: {body}"
+        );
 
         // Owned shutdown returns the process to Stopped and clears the endpoint.
         supervisor.stop().await.expect("owned backend should stop");
         let after = supervisor.info().await;
         assert_eq!(after.state, BackendState::Stopped);
         assert!(after.pid.is_none(), "PID must be cleared after stop");
-        assert!(after.endpoint.is_none(), "endpoint must be cleared after stop");
+        assert!(
+            after.endpoint.is_none(),
+            "endpoint must be cleared after stop"
+        );
 
         // The port is genuinely released.
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -357,7 +372,10 @@ fn explicit_env_store_paths_take_priority() {
     let _ = std::fs::remove_dir_all(&app_data);
     let _ = std::fs::remove_dir_all(&custom);
 
-    let custom_session = custom.join("sessions.sqlite3").to_string_lossy().to_string();
+    let custom_session = custom
+        .join("sessions.sqlite3")
+        .to_string_lossy()
+        .to_string();
     let custom_cognitive = custom
         .join("cognitive.sqlite3")
         .to_string_lossy()
@@ -500,10 +518,17 @@ fn concurrent_start_does_not_spawn_two_backends() {
 
         // A second start must be refused while one is already running.
         let second = supervisor.start().await;
-        assert!(second.is_err(), "second start should be refused, got {second:?}");
+        assert!(
+            second.is_err(),
+            "second start should be refused, got {second:?}"
+        );
 
         let info = supervisor.info().await;
-        assert_eq!(info.pid, Some(pid), "the original process must be untouched");
+        assert_eq!(
+            info.pid,
+            Some(pid),
+            "the original process must be untouched"
+        );
         assert_eq!(info.state, BackendState::Ready);
 
         supervisor.stop().await.expect("cleanup stop");

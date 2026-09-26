@@ -124,7 +124,9 @@ mod platform {
                 }
             }
         }
-        String::from_utf8(blob.to_vec()).ok().filter(|s| !s.is_empty())
+        String::from_utf8(blob.to_vec())
+            .ok()
+            .filter(|s| !s.is_empty())
     }
 
     pub fn set(account: &str, key: &str) -> Result<(), String> {
