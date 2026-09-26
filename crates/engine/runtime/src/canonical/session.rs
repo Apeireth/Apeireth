@@ -273,6 +273,16 @@ pub enum SessionEventKind {
         /// Legible failure.
         error: String,
     },
+    /// A runtime invariant observed a violation and recorded it here
+    /// (log-only mode). This is an observation record, never a verdict change.
+    InvariantViolation {
+        /// The invariant that fired.
+        invariant: String,
+        /// Module attribution for follow-up.
+        module: String,
+        /// What was observed.
+        detail: String,
+    },
     /// The turn reached a final assistant response.
     TurnCompleted {
         /// Provider round-trips taken.

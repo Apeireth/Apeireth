@@ -48,6 +48,8 @@ pub mod care_potential_field;
 pub mod cognitive_quota_scheduler;
 pub mod context_budget;
 pub mod context_fold;
+// 上下文质感 · 件二: 触发数学 + 溢出自愈决策 (纯函数纯参数)。
+pub mod context_overflow;
 pub mod context_rot;
 // B3 · Phase 3 (research, 默认关闭): 上下文在线保留决策 (RA-3 StackPin/ShadowLogger).
 pub mod research_context_policy;
@@ -73,6 +75,10 @@ pub mod durable;
 pub mod lineage_spawning;
 pub mod llm;
 pub mod prompt_stabilizer;
+// 循环质感 · 件一: 重复调用提醒 (纯劝告通道, 不拦截执行、不进审计判定)。
+pub mod repetition_advisory;
+// 循环质感 · 件二: 运行时不变量注册表 (离线已证性质的线上守卫, 观察层)。
+pub mod runtime_invariants;
 // 「性格养成」第一铲: 自动校准引擎 (体验参数微调, 可见/可撤销/记录透明)。
 pub mod self_tuning;
 pub mod speech_arbiter;
@@ -89,13 +95,22 @@ pub use cognitive_quota_scheduler::{
     CognitiveContextFrame, CognitiveInterrupt, CognitivePriority, CognitiveQuota,
     CognitiveQuotaScheduler, CognitiveTaskControlBlock,
 };
-pub use context_budget::{CatalogEntry, ContextAssembler, ContextBlock, ProgressiveCatalog};
+pub use context_budget::{
+    omission_marker, retrieval_guide, spill_file_name, split_head_tail, truncate_with_spill,
+    CatalogEntry, ContextAssembler, ContextBlock, PreviewSplit, ProgressiveCatalog, SpillWriter,
+    SpilledTruncation, SPILL_SUBDIR,
+};
 pub use context_fold::{
     approx_tokens, cosine, fold, fold_segments, has_fold_markers, parse_fold_blocks,
     render_fold_blocks, unfold, unfold_semantic, AccumulatorSnapshot, BigramOverlapScorer,
     Embedder, EmbeddingScorer, FoldBlock, FoldBlockRender, FoldError, FoldMarker, FoldResult,
     FoldStrategy, FoldedSegment, MarkerKind, RelevanceScorer, SemanticFoldOptions,
     SemanticFoldOutcome, TokenAccumulator,
+};
+pub use context_overflow::{
+    exceeds_trigger, retain_tail_tokens, retry_makes_progress, shrink_budget,
+    trigger_threshold_chars, trigger_threshold_tokens, BUDGET_SHRINK_DENOMINATOR,
+    BUDGET_SHRINK_NUMERATOR, DEFAULT_RETAIN_TAIL_RATIO, MAX_OVERFLOW_RETRIES, RESERVE_TOKENS,
 };
 pub use context_rot::{
     apply_ops, compact_then_budget, extractive_summary, query_tokens, repetition_factor,
@@ -120,6 +135,16 @@ pub use lineage_spawning::{
 pub use prompt_stabilizer::{
     assemble_tiered, EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage,
     StabilizedRole,
+};
+pub use repetition_advisory::{
+    append_result_context, canonical_arguments, chain_key, params_preview, AdvisoryLevel,
+    RepetitionAdvisory, RepetitionDetector, RepetitionPolicy, RESULT_CONTEXT_MARKER,
+};
+pub use runtime_invariants::{
+    auditor_sink, first_batch_auditor, first_batch_invariants, AuditEvent, AuditEventKind,
+    AuditEventSink, InvariantAuditor, InvariantCheck, InvariantMode, InvariantRegistry,
+    InvariantViolation, RuntimeInvariant, StreamFacts, INV_A_NO_DOUBLE_SIDE_EFFECT,
+    INV_FORGET_CONFINED_TO_TARGET, INV_FORGET_IDEMPOTENT, INV_SWEEP_KEEPS_PROTECTED,
 };
 pub use self_tuning::{
     clear_effective_overrides, effective_override, install_effective_values,

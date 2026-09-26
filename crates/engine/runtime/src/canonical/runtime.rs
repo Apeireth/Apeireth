@@ -30,7 +30,9 @@
 //! to construct the object makes every test that does not need one pay for it.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 
 use tokio::sync::Mutex as TokioMutex;
@@ -39,6 +41,11 @@ use apeireth_core::kernel::{
     system_clock, ApprovalId, CapabilityId, Clock, PluginId, SessionId, Timestamp, TraceId,
 };
 use apeireth_governance::{DenyUnconfigured, GovernanceHook};
+use apeireth_orchestration::context_budget::SpillWriter;
+use apeireth_orchestration::repetition_advisory::{
+    RepetitionAdvisory, RepetitionDetector, RepetitionPolicy,
+};
+use apeireth_orchestration::runtime_invariants::InvariantAuditor;
 use apeireth_plugin::{
     CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
 };
@@ -94,6 +101,13 @@ pub struct RuntimeConfig {
     /// Total character budget for the assembled injected-context blocks (core
     /// blocks are never truncated; see [`DEFAULT_CONTEXT_BUDGET_CHARS`]).
     pub context_budget_chars: usize,
+    /// Data directory whose `spill/` subdirectory receives the full originals
+    /// of truncated injected-context long tails. `None` binds no spill sink;
+    /// long-tail cuts then keep the full content inline rather than lose it.
+    pub context_spill_root: Option<PathBuf>,
+    /// Policy for the repeated-identical-call advisory channel: thresholds,
+    /// exclusion list, and preview budget. Purely advisory; it never blocks.
+    pub repetition_advisory: RepetitionPolicy,
 }
 
 /// Secret-free diagnostic projection of the live runtime graph.
@@ -159,6 +173,8 @@ impl Default for RuntimeConfig {
             approval_ttl_ms: DEFAULT_APPROVAL_TTL_MS,
             max_module_invocations: DEFAULT_MAX_MODULE_INVOCATIONS,
             context_budget_chars: DEFAULT_CONTEXT_BUDGET_CHARS,
+            context_spill_root: None,
+            repetition_advisory: RepetitionPolicy::default(),
         }
     }
 }
@@ -235,6 +251,16 @@ pub struct Runtime {
     pub(super) session_locks: SessionLocks,
     pub(super) event_sink: RwLock<Arc<dyn RuntimeEventSink>>,
     pub(super) context_projector: Arc<dyn ContextProjector>,
+    /// Session-scoped streak state for the repeated-identical-call advisory
+    /// channel. Advisory only: it never blocks and never decides anything.
+    pub(super) repetition_detectors: Mutex<BTreeMap<SessionId, RepetitionDetector>>,
+    /// Optional runtime-invariant consumption point (observation layer). When
+    /// absent, no invariant checking happens at the dispatch boundary.
+    pub(super) invariant_auditor: Option<Arc<InvariantAuditor>>,
+    /// Full-original overflow store for truncated injected-context long tails
+    /// (`<root>/spill/`). `None` = no sink bound; overflow handling then keeps
+    /// full content inline instead of losing it.
+    pub(super) context_spill: Option<Arc<SpillWriter>>,
 }
 
 impl Runtime {
@@ -387,6 +413,56 @@ impl Runtime {
         read_lock_or_recover(&self.event_sink).emit(event);
     }
 
+    /// The repeated-identical-call advisory policy in force.
+    pub fn repetition_policy(&self) -> &RepetitionPolicy {
+        &self.config.repetition_advisory
+    }
+
+    /// A user message entered this session: any repetition streak is cleared.
+    pub(crate) fn note_user_message(&self, session: SessionId) {
+        let mut map = self.lock_repetition_detectors();
+        map.entry(session)
+            .or_insert_with(|| RepetitionDetector::new(self.config.repetition_advisory.clone()))
+            .observe_user_message();
+    }
+
+    /// Observe one executed tool call and return a repetition advisory when
+    /// the consecutive-identical streak crosses a configured threshold.
+    ///
+    /// This is the advisory channel only: the call has already run when this is
+    /// consulted, and the returned text never changes the tool result.
+    pub(crate) fn note_tool_call(
+        &self,
+        session: SessionId,
+        tool_name: &str,
+        arguments: &serde_json::Value,
+    ) -> Option<RepetitionAdvisory> {
+        let mut map = self.lock_repetition_detectors();
+        map.entry(session)
+            .or_insert_with(|| RepetitionDetector::new(self.config.repetition_advisory.clone()))
+            .observe_tool_call(tool_name, arguments)
+    }
+
+    /// Drop a session's repetition state at a turn boundary.
+    pub(crate) fn clear_repetition_state(&self, session: SessionId) {
+        self.lock_repetition_detectors().remove(&session);
+    }
+
+    fn lock_repetition_detectors(
+        &self,
+    ) -> std::sync::MutexGuard<'_, BTreeMap<SessionId, RepetitionDetector>> {
+        self.repetition_detectors
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The runtime-invariant auditor, when one was configured. The auditor is
+    /// the consumption point for audit-event streams; it observes and (in
+    /// fail-fast mode) blocks, but never changes a governance verdict.
+    pub fn invariant_auditor(&self) -> Option<&Arc<InvariantAuditor>> {
+        self.invariant_auditor.as_ref()
+    }
+
     /// Register a dynamic tool on a named module after build.
     ///
     /// The tool is rejected if its capability id or model-facing name collides
@@ -509,6 +585,7 @@ pub struct RuntimeBuilder {
     context_projector: Arc<dyn ContextProjector>,
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
+    invariant_auditor: Option<Arc<InvariantAuditor>>,
 }
 
 impl Default for RuntimeBuilder {
@@ -532,6 +609,7 @@ impl RuntimeBuilder {
             context_projector: Arc::new(NoContextProjector),
             fallback_order: None,
             config: RuntimeConfig::default(),
+            invariant_auditor: None,
         }
     }
 
@@ -663,6 +741,36 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Bind the data directory that keeps the full originals of truncated
+    /// injected-context long tails (under `root/spill/`).
+    ///
+    /// With a sink bound, a long-tail cut becomes a head/tail preview with a
+    /// retrieval guide pointing at the spilled original. Without one, the
+    /// overflow path keeps the full content inline: a successful call is never
+    /// turned into an error, and content is never silently lost.
+    #[must_use]
+    pub fn with_context_spill_root(mut self, root: impl Into<PathBuf>) -> Self {
+        self.config.context_spill_root = Some(root.into());
+        self
+    }
+
+    /// Set the repeated-identical-call advisory policy (thresholds, exclusion
+    /// list, preview budget). The channel is advisory only and never blocks.
+    #[must_use]
+    pub fn with_repetition_policy(mut self, policy: RepetitionPolicy) -> Self {
+        self.config.repetition_advisory = policy;
+        self
+    }
+
+    /// Install the runtime-invariant consumption point.
+    ///
+    /// Without it, no invariant checking happens at the dispatch boundary.
+    #[must_use]
+    pub fn with_invariant_auditor(mut self, auditor: Arc<InvariantAuditor>) -> Self {
+        self.invariant_auditor = Some(auditor);
+        self
+    }
+
     /// Register the plugins, start them in dependency order, and assemble.
     ///
     /// Plugins are started here rather than lazily on first use, so that a
@@ -719,6 +827,12 @@ impl RuntimeBuilder {
             providers = providers.with_fallback_order(order);
         }
 
+        let context_spill = self
+            .config
+            .context_spill_root
+            .clone()
+            .map(|root| Arc::new(SpillWriter::new(root)));
+
         Ok(Runtime {
             plugins: manager,
             providers: Arc::new(providers),
@@ -731,6 +845,9 @@ impl RuntimeBuilder {
             session_locks: SessionLocks::default(),
             event_sink: RwLock::new(self.event_sink),
             context_projector: self.context_projector,
+            repetition_detectors: Mutex::new(BTreeMap::new()),
+            invariant_auditor: self.invariant_auditor,
+            context_spill,
         })
     }
 }

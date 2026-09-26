@@ -48,7 +48,12 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
-use apeireth_orchestration::context_budget::ContextAssembler;
+use apeireth_orchestration::context_budget::{ContextAssembler, SpillWriter};
+use apeireth_orchestration::context_overflow::{
+    retry_makes_progress, shrink_budget, MAX_OVERFLOW_RETRIES,
+};
+use apeireth_orchestration::repetition_advisory;
+use apeireth_orchestration::runtime_invariants::AuditEvent;
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{
     ContentPart, MessageRole, NormalizedMessage, NormalizedRequest, NormalizedResponse,
@@ -284,6 +289,11 @@ const CORE_CONTEXT_BLOCK_NAME: &str = "__system_identity_safety__";
 /// - Over budget, per-block `cap_chars` apply first, then a greedy total-budget
 ///   cut trims the longest non-core blocks first (long-tail-first).
 /// - Core blocks (identity / system-convention / safety) are never truncated.
+///
+/// Cuts here drop the tail outright. The content-preserving production path is
+/// [`budget_context_blocks_with_spill`]: same selection policy, but every cut
+/// keeps a head/tail preview whose full original is spilled to disk with a
+/// retrieval guide line.
 pub fn budget_context_blocks(
     blocks: Vec<ContextBlock>,
     total_budget_chars: usize,
@@ -299,6 +309,31 @@ pub fn budget_context_blocks(
         return blocks;
     }
     let mut assembler = ContextAssembler::new(budget);
+    for block in blocks {
+        assembler = assembler.push(block);
+    }
+    assembler.assemble_budgeted_blocks()
+}
+
+/// Spill-backed variant of [`budget_context_blocks`]: identical selection
+/// policy (caps, greedy long-tail cut, core protection, zero-change below
+/// budget), but every long-tail cut keeps a head/tail preview with an omission
+/// marker and a retrieval guide, and the full original is written to
+/// `spill.root()/` under `scope` (the session). A failed write keeps the full
+/// original inline — prefer too long over lost information, and never turn a
+/// successful call into an error.
+pub fn budget_context_blocks_with_spill(
+    blocks: Vec<ContextBlock>,
+    total_budget_chars: usize,
+    spill: &SpillWriter,
+    scope: &str,
+) -> Vec<ContextBlock> {
+    let budget = total_budget_chars.max(100);
+    let total: usize = blocks.iter().map(|b| b.content.chars().count()).sum();
+    if total <= budget {
+        return blocks;
+    }
+    let mut assembler = ContextAssembler::new(budget).with_spill(spill.clone(), scope);
     for block in blocks {
         assembler = assembler.push(block);
     }
@@ -331,10 +366,18 @@ fn overlay_text(overlay: &PromptOverlay) -> String {
 /// session transcript untouched). Below budget the overlays are returned
 /// byte-for-byte unchanged; over budget the non-core blocks are cut greedily
 /// from the longest first while the core block survives intact.
+///
+/// A long-tail cut needs somewhere to put the full original to stay lossless:
+/// with `spill` bound the cut keeps a head/tail preview with a retrieval guide
+/// and spills the original (a failed write keeps the original inline); without
+/// a sink the budget degrades to advisory and the overlays arrive complete —
+/// a cut with no way back would destroy content, and this path never turns a
+/// successful call into an error.
 fn budget_injected_overlays(
     overlays: &[PromptOverlay],
     session_messages: &[NormalizedMessage],
     total_budget_chars: usize,
+    spill: Option<(&SpillWriter, &str)>,
 ) -> Vec<PromptOverlay> {
     let core_text = system_identity_text(session_messages);
     let total = core_text.chars().count()
@@ -347,6 +390,11 @@ fn budget_injected_overlays(
         // values so the provider request is byte-for-byte unchanged.
         return overlays.to_vec();
     }
+    let Some((spill_writer, scope)) = spill else {
+        // No spill sink: nothing is truncated. Prefer too long over lost
+        // information (宁长勿丢).
+        return overlays.to_vec();
+    };
 
     let mut blocks = Vec::with_capacity(overlays.len() + 1);
     if !core_text.is_empty() {
@@ -355,7 +403,7 @@ fn budget_injected_overlays(
     for overlay in overlays {
         blocks.push(ContextBlock::new("injected", overlay_text(overlay)));
     }
-    budget_context_blocks(blocks, total_budget_chars)
+    budget_context_blocks_with_spill(blocks, total_budget_chars, spill_writer, scope)
         .into_iter()
         .filter(|b| b.name != CORE_CONTEXT_BLOCK_NAME)
         .map(|b| PromptOverlay::system(b.content))
@@ -424,6 +472,12 @@ impl Runtime {
             self.observe_error(&observed_request, state, error).await;
         }
         self.emit_outcome_events(observed_request.session, request_id, trace_id, &result);
+        if matches!(result, Ok(TurnOutcome::Completed(_))) {
+            // Turn-boundary housekeeping for the advisory channel: a streak is
+            // scoped to one open turn and the next turn's user message resets
+            // it anyway, so the state is dropped rather than retained.
+            self.clear_repetition_state(observed_request.session);
+        }
         result
     }
 
@@ -454,6 +508,8 @@ impl Runtime {
             }
         }
         session.append(NormalizedMessage::user(request.input.clone()), clock);
+        // A user message clears any repetition streak (advisory channel).
+        self.note_user_message(request.session);
         session.record(request_id, trace_id, SessionEventKind::TurnStarted, clock);
         self.sessions.save(&session).await?;
 
@@ -1034,34 +1090,94 @@ impl Runtime {
                 // organ / lesson overlays) against the total char budget before
                 // they are composed into the provider request. The persistent
                 // system / identity / safety block is reserved (never cut).
-                let budgeted_overlays = budget_injected_overlays(
+                // Long-tail cuts keep a head/tail preview with a retrieval
+                // guide and spill the full original when a sink is bound.
+                let spill_scope = session_id.to_string();
+                let spill_sink = self
+                    .context_spill
+                    .as_ref()
+                    .map(|writer| (writer.as_ref(), spill_scope.as_str()));
+                let mut injected_budget_chars = self.config.context_budget_chars;
+                let mut budgeted_overlays = budget_injected_overlays(
                     &provider_overlays,
                     &session.messages,
-                    self.config.context_budget_chars,
+                    injected_budget_chars,
+                    spill_sink,
                 );
-                let provider_messages = self.project_provider_messages(
-                    &compose_provider_messages(
+                // Overflow self-healing: when the provider reports the context
+                // window as exceeded, the injected-context budget shrinks and
+                // the request is reassembled and resent — but only while the
+                // retry makes progress (strictly smaller budget producing a
+                // different assembly) and only up to `MAX_OVERFLOW_RETRIES`.
+                // Otherwise the original error stands: never retry without
+                // progress, never retry without end.
+                let mut overflow_attempts: u32 = 0;
+                let routed = loop {
+                    let provider_messages = self.project_provider_messages(
+                        &compose_provider_messages(
+                            &session.messages,
+                            &retry_scaffolding,
+                            &budgeted_overlays,
+                        ),
+                        &continuation.model,
+                    );
+                    let provider_request =
+                        NormalizedRequest::new(continuation.model.clone(), provider_messages);
+                    let attempt = match &stream_sink {
+                        Some(sink) => {
+                            self.providers
+                                .complete_with_tools_streaming(&provider_request, &tools, sink)
+                                .await
+                        }
+                        None => {
+                            self.providers
+                                .complete_with_tools(&provider_request, &tools)
+                                .await
+                        }
+                    };
+                    let error = match attempt {
+                        Ok(routed) => break Ok(routed),
+                        Err(error) => error,
+                    };
+                    if !error.is_context_window_exceeded()
+                        || overflow_attempts >= MAX_OVERFLOW_RETRIES
+                    {
+                        break Err(error);
+                    }
+                    let Some(next_budget) =
+                        shrink_budget(injected_budget_chars as u64).map(|chars| chars as usize)
+                    else {
+                        break Err(error);
+                    };
+                    let next_overlays = budget_injected_overlays(
+                        &provider_overlays,
                         &session.messages,
-                        &retry_scaffolding,
-                        &budgeted_overlays,
-                    ),
-                    &continuation.model,
-                );
-                let provider_request =
-                    NormalizedRequest::new(continuation.model.clone(), provider_messages);
-                retry_scaffolding.clear();
-                let routed = match &stream_sink {
-                    Some(sink) => {
-                        self.providers
-                            .complete_with_tools_streaming(&provider_request, &tools, sink)
-                            .await
+                        next_budget,
+                        spill_sink,
+                    );
+                    if !retry_makes_progress(
+                        injected_budget_chars as u64,
+                        Some(next_budget as u64),
+                        next_overlays != budgeted_overlays,
+                    ) {
+                        break Err(error);
                     }
-                    None => {
-                        self.providers
-                            .complete_with_tools(&provider_request, &tools)
-                            .await
-                    }
+                    overflow_attempts += 1;
+                    // Sanitized log (execution trace): budget sizes and attempt
+                    // counts only, never prompt or result content.
+                    trace.record(
+                        Timestamp::from_clock(clock),
+                        TraceEvent::ContextBudgetShrunk {
+                            round: continuation.round,
+                            attempt: overflow_attempts,
+                            from_budget_chars: injected_budget_chars,
+                            to_budget_chars: next_budget,
+                        },
+                    );
+                    injected_budget_chars = next_budget;
+                    budgeted_overlays = next_overlays;
                 };
+                retry_scaffolding.clear();
 
                 let routed = match routed {
                     Ok(routed) => routed,
@@ -1444,7 +1560,25 @@ impl Runtime {
                     .await?
                 {
                     ToolDispatch::Result(result) => {
-                        session.append(result.clone().into_message(), clock);
+                        // Advisory channel (repeated identical calls): the call
+                        // has already executed. When a consecutive-identical
+                        // streak crosses a threshold, the reminder rides along
+                        // as additional context on the transported message; the
+                        // tool result value itself is untouched and execution
+                        // is never intercepted.
+                        let advisory = self.note_tool_call(session_id, &call.name, &call.arguments);
+                        let message = match &advisory {
+                            Some(advisory) => NormalizedMessage::tool_result(
+                                result.tool_call_id.clone(),
+                                result.name.clone(),
+                                repetition_advisory::append_result_context(
+                                    &result.render(),
+                                    advisory,
+                                ),
+                            ),
+                            None => result.clone().into_message(),
+                        };
+                        session.append(message, clock);
 
                         if let Some(approved_approval_id) = continuation.approved_approval_id {
                             if let Some(approval) = session.approvals.get_mut(&approved_approval_id)
@@ -2062,6 +2196,56 @@ impl Runtime {
         }
     }
 
+    /// Observation-layer hook at the dispatch boundary: emit the side-effect
+    /// audit event for one capability dispatch and run it through the
+    /// registered runtime invariants.
+    ///
+    /// Two modes: log-only records each violation as a session audit event and
+    /// lets the dispatch proceed; fail-fast raises
+    /// [`RuntimeError::InvariantBlocked`] before the invocation runs. Neither
+    /// mode touches a governance verdict — this is an observation layer, not a
+    /// second approval authority.
+    fn observe_side_effect(
+        &self,
+        session: &mut Session,
+        request_id: RequestId,
+        trace_id: TraceId,
+        round: u32,
+        call: &ToolCall,
+        capability: &CapabilityId,
+    ) -> RuntimeResult<()> {
+        let Some(auditor) = self.invariant_auditor() else {
+            return Ok(());
+        };
+        let event = AuditEvent::side_effect(
+            "tool_dispatch",
+            request_id.to_string(),
+            call.id.clone(),
+            format!("capability {capability} round {round}"),
+        );
+        match auditor.observe(std::slice::from_ref(&event)) {
+            Ok(violations) => {
+                for violation in violations {
+                    session.record(
+                        request_id,
+                        trace_id,
+                        SessionEventKind::InvariantViolation {
+                            invariant: violation.invariant,
+                            module: violation.module,
+                            detail: violation.detail,
+                        },
+                        self.clock.as_ref(),
+                    );
+                }
+                Ok(())
+            }
+            Err(violation) => Err(RuntimeError::InvariantBlocked {
+                invariant: violation.invariant,
+                detail: violation.detail,
+            }),
+        }
+    }
+
     /// Resolve, authorize, and run one tool call.
     ///
     /// When `preapproved` is true the tool has already passed human approval
@@ -2168,6 +2352,11 @@ impl Runtime {
                     ToolResult::permanent_error(&call.id, reason).with_name(&call.name),
                 ));
             }
+
+            // Observation layer at the dispatch boundary: the side-effect
+            // audit event is checked before the dispatch is recorded and the
+            // invocation runs.
+            self.observe_side_effect(session, request_id, trace_id, round, call, &capability)?;
 
             trace.record(
                 Timestamp::from_clock(clock),
@@ -2292,6 +2481,11 @@ impl Runtime {
                 });
             }
         }
+
+        // Observation layer at the dispatch boundary: the side-effect audit
+        // event is checked before the dispatch is recorded and the invocation
+        // runs.
+        self.observe_side_effect(session, request_id, trace_id, round, call, &capability)?;
 
         trace.record(
             Timestamp::from_clock(clock),

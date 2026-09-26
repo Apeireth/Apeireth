@@ -136,12 +136,36 @@ pub enum RuntimeError {
         limit: u32,
     },
 
+    /// A runtime invariant raised a violation in fail-fast mode and blocked the
+    /// step it observed.
+    ///
+    /// This is the observation layer speaking: the invariant never changes a
+    /// governance verdict, it only refuses to let its own consumption point
+    /// continue past a proven-property violation when configured to do so.
+    #[error("runtime invariant {invariant} blocked execution: {detail}")]
+    InvariantBlocked {
+        /// The invariant that fired.
+        invariant: String,
+        /// What was observed.
+        detail: String,
+    },
+
     /// The runtime was assembled in an unusable state.
     #[error("runtime misconfigured: {0}")]
     Misconfigured(String),
 }
 
 impl RuntimeError {
+    /// Whether the failure is a provider report that the request exceeded the
+    /// context window — the class budget-shrink recovery can act on.
+    pub fn is_context_window_exceeded(&self) -> bool {
+        match self {
+            Self::Provider(error) => error.is_context_window_exceeded(),
+            Self::ProvidersExhausted { source, .. } => source.is_context_window_exceeded(),
+            _ => false,
+        }
+    }
+
     /// A session could not be loaded.
     pub fn session_load(session: SessionId, reason: impl Into<String>) -> Self {
         Self::Session {
@@ -205,5 +229,33 @@ mod tests {
         };
         assert!(denied.to_string().contains("denied"), "{denied}");
         assert!(approval.to_string().contains("approval"), "{approval}");
+    }
+
+    #[test]
+    fn window_exceeded_is_recognized_only_for_provider_reports() {
+        let over = RuntimeError::Provider(ProviderError::BadResponse {
+            provider: "provider.fake".into(),
+            detail: "vendor returned 400: context length exceeded".into(),
+        });
+        assert!(over.is_context_window_exceeded(), "{over}");
+
+        let exhausted = RuntimeError::ProvidersExhausted {
+            model: "model".into(),
+            source: ProviderError::Refused {
+                provider: "provider.fake".into(),
+                detail: "prompt is too long for this model".into(),
+            },
+        };
+        assert!(exhausted.is_context_window_exceeded(), "{exhausted}");
+
+        let other = RuntimeError::Provider(ProviderError::AuthFailed {
+            provider: "provider.fake".into(),
+            detail: "bad key".into(),
+        });
+        assert!(!other.is_context_window_exceeded(), "{other}");
+        assert!(
+            !RuntimeError::RoundLimitExceeded { limit: 8 }.is_context_window_exceeded(),
+            "非 provider 错误不进溢出自愈"
+        );
     }
 }

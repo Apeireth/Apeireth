@@ -3,6 +3,9 @@
 //! request. Core blocks (identity / system-convention / safety) are never
 //! truncated; per-block caps apply before the total budget; non-core overflow is
 //! cut greedily from the longest block first; below budget nothing changes.
+//! With a bound spill sink a long-tail cut keeps a head/tail preview with a
+//! retrieval guide and spills the full original; without one the overflow path
+//! keeps the full content inline (prefer too long over lost information).
 
 use std::sync::{Arc, Mutex};
 
@@ -252,9 +255,11 @@ fn message_text(message: &apeireth_protocol::canonical::NormalizedMessage) -> St
     ContentPart::join_text(&message.content)
 }
 
-/// The budget is wired into the provider request: with a small budget the
-/// provider receives a truncated long-tail overlay while the core system /
-/// identity block and the shorter overlay survive intact.
+/// The budget is wired into the provider request: with a small budget and a
+/// bound spill sink, the long-tail overlay arrives as a head/tail preview with
+/// an omission marker and a retrieval guide, while the core system / identity
+/// block and the shorter overlay survive intact and the full original lands on
+/// disk at the guided path.
 #[tokio::test]
 async fn provider_request_receives_budgeted_injected_context() {
     let provider = FakeProvider::new();
@@ -262,6 +267,7 @@ async fn provider_request_receives_budgeted_injected_context() {
     let long = "L".repeat(2000);
     let short = "S".repeat(100);
     let budget = 400usize;
+    let spill_root = tempfile::tempdir().unwrap();
 
     let module = InjectOverlays {
         manifest: ModuleManifest::new("cognitive.inject", "inject"),
@@ -274,6 +280,7 @@ async fn provider_request_receives_budgeted_injected_context() {
         .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
         .with_module(Arc::new(module))
         .with_context_budget_chars(budget)
+        .with_context_spill_root(spill_root.path())
         .build()
         .await
         .unwrap();
@@ -298,27 +305,95 @@ async fn provider_request_receives_budgeted_injected_context() {
         "short injected block must survive intact"
     );
 
-    // The long-tail injected block is truncated.
+    // The long-tail injected block arrives as head + marker + tail + guide.
     let long_msg = texts
         .iter()
-        .find(|t| t.starts_with('L') && t.chars().all(|c| c == 'L'))
+        .find(|t| {
+            t.lines()
+                .next()
+                .is_some_and(|line| !line.is_empty() && line.chars().all(|c| c == 'L'))
+        })
         .expect("long injected block present");
+    let lines: Vec<&str> = long_msg.lines().collect();
+    assert_eq!(lines.len(), 4, "头 / 标记行 / 尾 / 取回指引行: {lines:?}");
+    assert!(lines[0].chars().all(|c| c == 'L'), "头预览: {:?}", lines[0]);
+    assert!(lines[2].chars().all(|c| c == 'L'), "尾预览: {:?}", lines[2]);
     assert!(
-        long_msg.chars().count() < 2000,
-        "long-tail block must be truncated, got {}",
-        long_msg.chars().count()
+        lines[1].contains("已省略"),
+        "中间以标记行替代: {:?}",
+        lines[1]
+    );
+    assert!(lines[3].contains("完整内容已存于"), "附取回指引行");
+    assert_eq!(
+        lines[0].chars().count() + lines[2].chars().count(),
+        269,
+        "预览宽度 = 贪心切点宽度 (核心 31 + 短块 100 + 269 = 400)"
     );
 
-    // The injected-context total (core + overlays) is bounded by the budget.
+    // The guide line carries a real path and the file holds the full original.
+    let path_text = lines[3]
+        .strip_prefix("完整内容已存于 ")
+        .and_then(|rest| rest.split('，').next())
+        .expect("指引行含路径");
+    let spilled = std::path::Path::new(path_text);
+    assert!(spilled.is_file(), "指引行路径必须真实存在: {path_text}");
+    assert_eq!(
+        std::fs::read_to_string(spilled).unwrap(),
+        long,
+        "落盘文件保存完整原文"
+    );
+
+    // The preview width respects the budget; the marker and guide lines are
+    // bounded overhead on top of it.
     let injected_total: usize = texts
         .iter()
         .filter(|t| **t == identity || t.starts_with('L') || t.starts_with('S'))
         .map(|t| t.chars().count())
         .sum();
     assert!(
-        injected_total <= budget,
-        "injected context {injected_total} must fit budget {budget}"
+        injected_total <= budget + 300,
+        "injected {injected_total} must fit budget {budget} + bounded overhead"
     );
+}
+
+/// Without a spill sink the overflow path keeps the full injected content
+/// inline: prefer too long over lost information, and a successful call is
+/// never turned into an error.
+#[tokio::test]
+async fn overflow_without_spill_sink_keeps_the_full_injected_content_inline() {
+    let provider = FakeProvider::new();
+    let identity = "system identity safety preamble".to_string();
+    let long = "L".repeat(2000);
+    let short = "S".repeat(100);
+
+    let module = InjectOverlays {
+        manifest: ModuleManifest::new("cognitive.inject", "inject"),
+        overlays: vec![long.clone(), short.clone()],
+    };
+
+    let runtime = Runtime::builder()
+        .with_default_model(MODEL)
+        .with_governance(Arc::new(AllowAll))
+        .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
+        .with_module(Arc::new(module))
+        .with_context_budget_chars(400)
+        .build()
+        .await
+        .unwrap();
+
+    runtime
+        .execute(TurnRequest::new(SessionId::new(), "hi").with_system(identity.clone()))
+        .await
+        .unwrap();
+
+    let request = provider.first_request();
+    let texts: Vec<String> = request.messages.iter().map(message_text).collect();
+    assert!(
+        texts.iter().any(|t| *t == long),
+        "无落盘点时宁长勿丢: 长块完整内联"
+    );
+    assert!(texts.iter().any(|t| *t == short));
+    assert!(texts.iter().any(|t| *t == identity));
 }
 
 /// Below budget the provider request is unchanged: the injected blocks arrive

@@ -78,7 +78,8 @@ pub use events::{
     RuntimeEventSink,
 };
 pub use execute::{
-    budget_context_blocks, ApprovalResolution, ContextBlock, TurnOutcome, TurnRequest, TurnResponse,
+    budget_context_blocks, budget_context_blocks_with_spill, ApprovalResolution, ContextBlock,
+    TurnOutcome, TurnRequest, TurnResponse,
 };
 pub use heartbeat::{FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource};
 pub use module::{

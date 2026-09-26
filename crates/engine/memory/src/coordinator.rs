@@ -13,6 +13,7 @@ use std::sync::Mutex;
 
 use apeireth_core::kernel::memory::Episode;
 use apeireth_core::kernel::SessionId;
+use apeireth_orchestration::runtime_invariants::{AuditEvent, AuditEventSink};
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
@@ -61,6 +62,9 @@ pub struct MemoryCoordinator {
     typed_recall_source: Option<Arc<dyn TypedMemoryRecallSource>>,
     typed_identity: Option<TypedRecallIdentity>,
     injection_format: bool,
+    /// Optional observation-layer feed for memory-governance audit events.
+    /// Emission is after-the-fact and never changes an operation's outcome.
+    audit_events: Option<AuditEventSink>,
 }
 
 impl MemoryCoordinator {
@@ -86,6 +90,22 @@ impl MemoryCoordinator {
             typed_recall_source: None,
             typed_identity: None,
             injection_format: false,
+            audit_events: None,
+        }
+    }
+
+    /// Attach an observation-layer sink for memory-governance audit events
+    /// (forget / state-change / protect / unprotect). Events are emitted after
+    /// the governance operation has completed and never change its outcome.
+    #[must_use]
+    pub fn with_audit_events(mut self, sink: AuditEventSink) -> Self {
+        self.audit_events = Some(sink);
+        self
+    }
+
+    fn emit_audit_event(&self, event: AuditEvent) {
+        if let Some(sink) = &self.audit_events {
+            sink(event);
         }
     }
 
@@ -883,7 +903,37 @@ impl MemoryCoordinator {
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
         let result = self
             .governance
-            .forget_episode(episode_id, reason, expected_rev)?;
+            .forget_episode(episode_id, reason, expected_rev);
+        match &result {
+            Ok(_) => {
+                // Applied forget: one forget event plus the state-change record
+                // the governance revision bump wrote.
+                self.emit_audit_event(AuditEvent::forget(
+                    "memory_governance",
+                    episode_id,
+                    "forget applied",
+                ));
+                self.emit_audit_event(AuditEvent::state_change_for_forget(
+                    "memory_governance",
+                    episode_id,
+                    episode_id,
+                    "governance revision advanced by forget",
+                ));
+            }
+            Err(MemoryGovernanceError::AlreadyForgotten(_)) => {
+                // A repeat forget is observable as a forget event with no new
+                // state-change record: the idempotence contract.
+                self.emit_audit_event(AuditEvent::forget(
+                    "memory_governance",
+                    episode_id,
+                    "forget repeated on an already-forgotten subject",
+                ));
+            }
+            // A refusal (protected, revision conflict, unknown subject) applies
+            // no forget and emits nothing.
+            Err(_) => {}
+        }
+        let result = result?;
         {
             let mut working_lock = self
                 .working
@@ -902,7 +952,21 @@ impl MemoryCoordinator {
         episode_id: &str,
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
-        self.governance.protect_episode(episode_id, expected_rev)
+        let result = self.governance.protect_episode(episode_id, expected_rev);
+        if result.is_ok() {
+            self.emit_audit_event(AuditEvent::protect(
+                "memory_governance",
+                episode_id,
+                "protect marker set",
+            ));
+            self.emit_audit_event(AuditEvent::state_change(
+                "memory_governance",
+                episode_id,
+                "protect",
+                "governance revision advanced by protect",
+            ));
+        }
+        result
     }
 
     /// Unprotect an episode.
@@ -911,7 +975,21 @@ impl MemoryCoordinator {
         episode_id: &str,
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
-        self.governance.unprotect_episode(episode_id, expected_rev)
+        let result = self.governance.unprotect_episode(episode_id, expected_rev);
+        if result.is_ok() {
+            self.emit_audit_event(AuditEvent::unprotect(
+                "memory_governance",
+                episode_id,
+                "protect marker cleared",
+            ));
+            self.emit_audit_event(AuditEvent::state_change(
+                "memory_governance",
+                episode_id,
+                "unprotect",
+                "governance revision advanced by unprotect",
+            ));
+        }
+        result
     }
 
     /// Update an episode's content override.

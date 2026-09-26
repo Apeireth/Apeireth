@@ -67,6 +67,8 @@ pub mod experiment_field;
 pub mod guard_observer;
 #[path = "canonical/harness_patch.rs"]
 pub mod harness_patch;
+#[path = "canonical/invariant_registry.rs"]
+pub mod invariant_registry;
 #[path = "canonical/memory_typed_sink.rs"]
 pub mod memory_typed_sink;
 /// 守夜人 Nightwatch — 离线闲时审计器 (2026-10-10, 主人批准设计)。
@@ -86,6 +88,8 @@ pub mod permission_preset;
 pub mod preference_learning;
 #[path = "canonical/production.rs"]
 pub mod production;
+#[path = "canonical/repetition_advisory.rs"]
+pub mod repetition_advisory;
 /// 「性格养成」第一铲: 自校准接线层 (引擎落地 + tuning-log.jsonl 落盘)。
 #[path = "canonical/self_tuning_wire.rs"]
 pub mod self_tuning_wire;
