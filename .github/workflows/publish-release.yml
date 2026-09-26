@@ -133,19 +133,12 @@ jobs:
 
             ---
 
-            ### 📊 Empirical Benchmarks (P99)
+            ### 📊 Benchmarks
 
-            | Benchmark Target | Measured Baseline ($P_{99}$) | Status |
-            | :--- | :---: | :---: |
-            | **Hybrid Memory Search** (10,000 nodes) | **1.82 ms** | ✅ PASS |
-            | **Cognitive Quota Preemption** | **8.40 µs** | ✅ PASS |
-            | **Causal World Model CoW Fork** | **0.035 ms** | ✅ PASS |
-            | **SAGA Compensating Rollback** | **0.012 ms** | ✅ PASS |
-            | **Real-Time Voice Barge-In** | **0.18 ms** | ✅ PASS |
-            | **Ember HUD Render Tick** | **0.08 ms** | ✅ PASS |
-            | **Microkernel Cold Start** | **4.20 ms** | ✅ PASS |
-            | **Runtime Idle Footprint** | **~18.2 MB RAM** | ✅ PASS |
-            | **Full Workspace Test Suite** | **3662 / 3662 PASS** (130 suites) | ✅ 0 FAILED |
+            Benchmark figures are being re-measured behind a reproducible-script
+            policy (no number ships without a re-runnable source). Individual
+            measurement records live in `reports/`; the verified workspace test
+            baseline is re-run in CI on every change.
 
             ---
 
