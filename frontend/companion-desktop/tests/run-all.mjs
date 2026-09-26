@@ -40,6 +40,7 @@ const SUITES = [
   {file: 'config-persistence.mjs', name: 'config persistence round-trip (accent/customBg/secret purge, real module)', strip: true},
   {file: 'recommended-preset.mjs', name: 'recommended preset ↔ memory-core knob mapping (real module)', strip: true},
   {file: 'self-tuning-mapping.mjs', name: 'self-tuning knob mapping (real module)', strip: true},
+  {file: 'provider-transport.mjs', name: 'provider transport selection (invoke vs fetch, real module)', strip: true},
   {file: 'tier0-parity.mjs', name: 'tier 0 tool/approval/dead-url parity', strip: true},
 ];
 

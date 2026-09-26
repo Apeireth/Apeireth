@@ -190,7 +190,10 @@ impl DesktopLogger {
     ///
     /// Named assignments run first so `OPENAI_API_KEY=sk-…` is redacted as a
     /// configured credential rather than as a loose key fragment.
-    fn redact_secrets(line: &str) -> String {
+    ///
+    /// `pub(crate)` so the provider relay (`provider_proxy`) reuses the same
+    /// passes for its error strings and log lines.
+    pub(crate) fn redact_secrets(line: &str) -> String {
         let stage = Self::redact_named_assignments(line);
         let stage = Self::redact_bearer_tokens(&stage);
         Self::redact_key_prefixes(&stage)

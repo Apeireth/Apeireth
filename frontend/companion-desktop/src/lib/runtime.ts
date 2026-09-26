@@ -40,6 +40,7 @@ import type {
 } from './types';
 import {DEFAULT_CAPABILITY_TOGGLES} from './types.ts';
 import {recordCallLog} from './call-logger.ts';
+import {providerFetch} from './provider-transport.ts';
 
 const STORAGE_KEY = 'apeireth-config';
 const SECRET_CONFIG_KEYS = new Set([
@@ -646,7 +647,9 @@ export async function testProviderConnection(provider: NonNullable<ApeirethConfi
       const headers: Record<string, string> = {};
       if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
       const url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
-      const res = await fetch(url, {
+      // providerFetch: Tauri 下经 Rust 侧 provider_request 代发 (webview 零出网),
+      // 开发浏览器回退 fetch。下同。
+      const res = await providerFetch(url, {
         headers,
         signal: AbortSignal.timeout(5000),
       });
@@ -678,7 +681,7 @@ export async function testProviderConnection(provider: NonNullable<ApeirethConfi
         'anthropic-version': provider.anthropicVersion || '2023-06-01',
       };
       const url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
-      const res = await fetch(url, {
+      const res = await providerFetch(url, {
         headers,
         signal: AbortSignal.timeout(5000),
       });
@@ -861,7 +864,8 @@ export async function listModels(
   apiKey?: string,
 ): Promise<string[] | ModelInfo[]> {
   const baseUrl = typeof baseUrlOrConfig === 'string' ? baseUrlOrConfig : baseUrlOrConfig.baseUrl;
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/models`);
+  // 出网请求经 providerFetch 传输选择 (Tauri → Rust 代发, 浏览器 → fetch)。
+  const response = await providerFetch(`${normalizeBaseUrl(baseUrl)}/v1/models`);
   const data = (await checkJson(response)) as {
     data?: Array<{id?: unknown; owned_by?: unknown; description?: unknown}>;
   };
@@ -1467,7 +1471,7 @@ export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<
       'anthropic-dangerous-direct-browser-access': 'true',
     };
     if (provider.apiKey) headers['x-api-key'] = provider.apiKey.trim();
-    const response = await fetch(url, {
+    const response = await providerFetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -1488,7 +1492,7 @@ export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<
       'Content-Type': 'application/json',
     };
     if (provider.apiKey) headers['Authorization'] = `Bearer ${provider.apiKey.trim()}`;
-    const response = await fetch(url, {
+    const response = await providerFetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({

@@ -11,6 +11,7 @@
 pub mod backend_supervisor;
 mod keychain;
 mod logging;
+mod provider_proxy;
 mod workspace;
 
 use backend_supervisor::{
@@ -262,6 +263,7 @@ pub fn run() {
             get_log_directory,
             open_log_directory,
             read_tuning_log,
+            provider_proxy::provider_request,
             open_settings,
             toggle_quick_window
         ])
