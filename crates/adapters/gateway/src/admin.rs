@@ -256,30 +256,53 @@ pub async fn admin_config_update(
 }
 
 fn provider_registered(state: &GatewayState, provider: &str) -> bool {
+    let normalized = normalize_provider(provider);
     state
         .runtime
         .providers()
         .provider_ids()
         .iter()
-        .any(|id| id.as_str() == provider || id.as_str() == format!("provider.{provider}"))
+        .any(|id| id.as_str() == normalized || id.as_str() == format!("provider.{normalized}"))
 }
 
 fn provider_capability_id(provider: &str) -> Result<CapabilityId, String> {
-    let raw = if provider.starts_with("provider.") {
-        provider.to_string()
+    let normalized = normalize_provider(provider);
+    let raw = if normalized.starts_with("provider.") {
+        normalized
     } else {
-        format!("provider.{provider}")
+        format!("provider.{normalized}")
     };
     CapabilityId::new(raw).map_err(|error| format!("provider 名无法映射到 capability id: {error}"))
+}
+
+/// 归一 provider 家族名到注册时的 canonical 拼写。
+///
+/// 已知别名: admin/UI/钥匙串侧的 `openai` 指向注册的 `openai-compatible`
+/// provider 家族 (capability id `provider.openai-compatible`)。不归一的话,
+/// `{"provider":"openai","api_key":...}` 会把 key 写到
+/// `provider.openai.api_key` 这个无人读取的逻辑名下, 而真正服务请求的
+/// capability 按 `provider.openai-compatible.api_key` 解析 —— 热更永远打不中。
+pub fn normalize_provider(provider: &str) -> String {
+    let raw = provider.trim();
+    let (prefix, family) = match raw.strip_prefix("provider.") {
+        Some(rest) => ("provider.", rest),
+        None => ("", raw),
+    };
+    let family = match family {
+        "openai" => "openai-compatible",
+        other => other,
+    };
+    format!("{prefix}{family}")
 }
 
 /// The backend credential name for a provider's API key, following the
 /// production naming convention in `apeireth-provider::credentials`.
 pub fn credential_name(provider: &str) -> String {
-    if provider.starts_with("provider.") {
-        format!("{provider}.api_key")
+    let normalized = normalize_provider(provider);
+    if normalized.starts_with("provider.") {
+        format!("{normalized}.api_key")
     } else {
-        format!("provider.{provider}.api_key")
+        format!("provider.{normalized}.api_key")
     }
 }
 
@@ -369,6 +392,31 @@ mod tests {
             provider_capability_id("openai-compatible")
                 .unwrap()
                 .as_str(),
+            "provider.openai-compatible"
+        );
+    }
+
+    #[test]
+    fn openai_alias_normalizes_to_the_registered_family() {
+        // admin/UI 侧 "openai" 拼写必须落到注册的 openai-compatible 家族,
+        // 否则 api_key 写到无人读取的逻辑名下, 热更打不中服务请求的 capability。
+        assert_eq!(normalize_provider("openai"), "openai-compatible");
+        assert_eq!(
+            normalize_provider("provider.openai"),
+            "provider.openai-compatible"
+        );
+        assert_eq!(normalize_provider("openai-compatible"), "openai-compatible");
+        assert_eq!(normalize_provider("minimax"), "minimax");
+        assert_eq!(
+            credential_name("openai"),
+            "provider.openai-compatible.api_key"
+        );
+        assert_eq!(
+            credential_name("provider.openai"),
+            "provider.openai-compatible.api_key"
+        );
+        assert_eq!(
+            provider_capability_id("openai").unwrap().as_str(),
             "provider.openai-compatible"
         );
     }

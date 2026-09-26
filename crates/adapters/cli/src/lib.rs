@@ -813,6 +813,12 @@ async fn build_cognitive_modules_from_env(
     Ok((modules, memory))
 }
 
+/// 认知侧 LLM 工厂 (council / orchestrator / dream) 的凭据解析链与主 runtime
+/// 同源: 每次请求现解析, admin 热更凭据后下一请求即生效。
+fn llm_credential_resolver() -> Arc<dyn apeireth_plugin::CredentialResolver> {
+    keyring_bootstrap::build_keyring_resolver()
+}
+
 /// 构造 Council 后端（2026-09-08 用户旋钮批）：优先 OpenAI-compatible
 /// （DeepSeek 等, env 配置时）→ 回退 MiniMax → 最后 Noop（0 装, advisors 会
 /// 显式 NotImplemented 而非静默）。
@@ -825,7 +831,9 @@ fn build_council_from_env() -> apeireth_orchestration::Council {
         .is_some_and(|v| !v.trim().is_empty())
     {
         if let Ok(factory) =
-            apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env()
+            apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env_with_resolver(
+                llm_credential_resolver(),
+            )
         {
             let model = factory
                 .model_ids()
@@ -843,7 +851,11 @@ fn build_council_from_env() -> apeireth_orchestration::Council {
         .ok()
         .is_some_and(|v| !v.trim().is_empty())
     {
-        if let Ok(factory) = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env() {
+        if let Ok(factory) =
+            apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env_with_resolver(
+                llm_credential_resolver(),
+            )
+        {
             let model = factory
                 .model_ids()
                 .into_iter()
@@ -905,46 +917,51 @@ fn build_subagent_orchestrator_from_env(
         CommandRunner, HumanApprovalGate, LlmSubagentOrchestrator, WorktreeSandboxedOrchestrator,
     };
 
-    let (mirror, model): (Arc<dyn MirrorLlmFactoryTrait>, String) =
-        if std::env::var("APEIRETH_OPENAI_MODELS")
-            .ok()
-            .is_some_and(|value| !value.trim().is_empty())
-        {
-            let factory =
-            apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env(
+    let (mirror, model): (Arc<dyn MirrorLlmFactoryTrait>, String) = if std::env::var(
+        "APEIRETH_OPENAI_MODELS",
+    )
+    .ok()
+    .is_some_and(|value| !value.trim().is_empty())
+    {
+        let factory =
+            apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env_with_resolver(
+                llm_credential_resolver(),
             )
             .map_err(|error| format!("OpenAI-compatible 工厂配置无效: {error}"))?;
-            let model = factory
-                .model_ids()
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| "deepseek-v4-flash".to_string());
-            (
-                Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
-                model,
+        let model = factory
+            .model_ids()
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "deepseek-v4-flash".to_string());
+        (
+            Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
+            model,
+        )
+    } else if std::env::var("APEIRETH_API_KEY")
+        .ok()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        let factory =
+            apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env_with_resolver(
+                llm_credential_resolver(),
             )
-        } else if std::env::var("APEIRETH_API_KEY")
-            .ok()
-            .is_some_and(|value| !value.trim().is_empty())
-        {
-            let factory = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env()
-                .map_err(|error| format!("MiniMax 工厂配置无效: {error}"))?;
-            let model = factory
-                .model_ids()
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| "MiniMax-M3".to_string());
-            (
-                Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
-                model,
-            )
-        } else {
-            return Err(
-                "subagent 需要 LLM 工厂: 请设 APEIRETH_OPENAI_MODELS (+URL/KEY) 或 \
+            .map_err(|error| format!("MiniMax 工厂配置无效: {error}"))?;
+        let model = factory
+            .model_ids()
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "MiniMax-M3".to_string());
+        (
+            Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory))),
+            model,
+        )
+    } else {
+        return Err(
+            "subagent 需要 LLM 工厂: 请设 APEIRETH_OPENAI_MODELS (+URL/KEY) 或 \
              APEIRETH_API_KEY (MiniMax)"
-                    .to_string(),
-            );
-        };
+                .to_string(),
+        );
+    };
 
     // 人工审批门: CLI 交互 y/N (plan 步要主人点头; 拒绝 = HumanDenied)。
     let gate: HumanApprovalGate = Arc::new(|spec| {
@@ -1362,9 +1379,9 @@ fn llm_factory_from_env(
         .ok()
         .is_some_and(|v| !v.trim().is_empty())
     {
-        if let Ok(factory) =
-            apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env()
-        {
+        if let Ok(factory) = apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env_with_resolver(
+            llm_credential_resolver(),
+        ) {
             let model = factory
                 .model_ids()
                 .into_iter()
@@ -1380,7 +1397,11 @@ fn llm_factory_from_env(
         .ok()
         .is_some_and(|v| !v.trim().is_empty())
     {
-        if let Ok(factory) = apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env() {
+        if let Ok(factory) =
+            apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env_with_resolver(
+                llm_credential_resolver(),
+            )
+        {
             let model = factory
                 .model_ids()
                 .into_iter()
@@ -1547,8 +1568,10 @@ pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, 
         .with_guard(guard_hook),
     );
     let mut services = crate::gateway_panels::gateway_services(panel);
-    // Wire the hot-reload api_key writer to the same keyring backend the
-    // runtime's credential resolver reads (or None on the env-resolver path).
+    // Wire the hot-reload api_key writer to the shared runtime credential store
+    // the runtime's credential resolver reads per request (真热更: admin 写入后
+    // 下一请求即生效); a configured keyring backend additionally persists the
+    // value across restarts.
     services.credentials = crate::keyring_bootstrap::build_keyring_credential_writer();
     let address = format!("{bind}:{port}");
     let listener = tokio::net::TcpListener::bind(&address)

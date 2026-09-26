@@ -57,6 +57,7 @@
 pub mod error;
 pub mod gate;
 pub mod hook;
+pub mod hot_store;
 pub mod keyring;
 pub mod keyring_resolver;
 pub mod secret;
@@ -78,6 +79,10 @@ pub use store::{validate_service_name, CredentialsStore, FileCredentialsStore};
 /// P-arch (2026-08-27): bridge 到 `apeireth_plugin::CredentialResolver` trait.
 /// runtime 可用此把 keyring / encrypted file 后端注入到 plugin 体系。
 pub use keyring_resolver::KeyringCredentialResolver;
+
+/// 真热更凭据解析层: admin 运行时凭据库 (`HotCredentialStore`) +
+/// 按请求现解析的分层 resolver (`LayeredCredentialResolver`)。
+pub use hot_store::{HotCredentialStore, LayeredCredentialResolver};
 
 /// 外部借鉴字段数 (编译期自审锚, 对照 apeireth-tool-approval 惯例)。
 ///

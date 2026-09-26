@@ -10,6 +10,11 @@
 //! 这样 alpha 用户**无感升级** (没设 env → 走 env resolver, 0 行为变化), 部署 v2.0
 //! 时设 env → 走真 keyring (Linux Secret Service / macOS Keychain / Windows Credential Manager).
 //!
+//! **真热更** (凭据按请求现解析): resolver 主层是进程级 [`hot_credential_store`]
+//! (admin 运行时凭据库), keyring/env 只作启动值次层; `/v1/admin/config` 的写入端口
+//! (`build_keyring_credential_writer`) 与取值端共享同一 store, 一次写入对下一次
+//! 请求的 `resolve` 即刻生效, 凭据值不被任何请求路径对象跨请求持有。
+//!
 //! **3 阶审查** (O-6 锚 #9):
 //! 1. 总体: 与 RC-1 真 SQL 同样模式 (alpha 写真完整, 接 bootstrap 即可)
 //! 2. 系统: bootstrap 选择 resolver, 不引入新 cross-crate 依赖 (KeyringSelector 在 credentials
@@ -25,16 +30,33 @@
 //! **0 触碰 LOCKED**: 9 哲学锚 / 13 键 / 3 项不可变脊柱 / workspace.version / R11 baseline.
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use apeireth_credentials::keyring::{AuditSink, CountingAudit, KeyringBackend, NoopAudit};
 use apeireth_credentials::keyring_resolver::KeyringCredentialResolver;
-use apeireth_credentials::{KeyringSelector, SecretBuf};
+use apeireth_credentials::{
+    HotCredentialStore, KeyringSelector, LayeredCredentialResolver, SecretBuf,
+};
 use apeireth_gateway::CredentialWriter;
 use apeireth_plugin::CredentialResolver;
 
+/// 进程级 admin 运行时凭据库 (真热更主层)。
+///
+/// `/v1/admin/config` 的 api_key 写入端口与 provider 的取值端共享这一实例,
+/// 所以一次写入对**下一次**请求的 `resolve` 即刻生效。它只存脱敏
+/// [`apeireth_plugin::Secret`], 明文不入任何日志。
+pub fn hot_credential_store() -> Arc<HotCredentialStore> {
+    static HOT: OnceLock<Arc<HotCredentialStore>> = OnceLock::new();
+    HOT.get_or_init(|| Arc::new(HotCredentialStore::new()))
+        .clone()
+}
+
 /// CLI/gateway 启动时构造 `Arc<dyn CredentialResolver>`, 优先用 KeyringSelector 真接
 /// OS keyring, 退化到 `EnvCredentialResolver` (alpha 0 装路径).
+///
+/// **分层** (真热更): 返回值 = [`LayeredCredentialResolver`], 主层是共享的
+/// [`hot_credential_store`] (admin 运行时写入), 次层是下述 keyring/env 启动值。
+/// provider 每次请求现解析, 因此 admin 更新凭据后**下一请求**即用新值。
 ///
 /// **优先级** (per v2.0.0-rc-roadmap.md §3 RC-9):
 /// 1. `APEIRETH_KEYRING_BACKEND` env 已设 → `KeyringSelector::select(env, audit, fallback_dir)`
@@ -45,8 +67,8 @@ use apeireth_plugin::CredentialResolver;
 ///
 /// **返回**: Send+Sync `Arc<dyn CredentialResolver>`, runtime 拿它注入.
 pub fn build_keyring_resolver() -> Arc<dyn CredentialResolver> {
-    // 优先 KeyringSelector 真接 (RC-9)
-    match try_build_keyring_resolver() {
+    // 次层: 优先 KeyringSelector 真接 (RC-9)
+    let fallback: Arc<dyn CredentialResolver> = match try_build_keyring_resolver() {
         Ok(resolver) => resolver,
         Err(reason) => {
             // 0 装诚实: 退化时**真**用 EnvCredentialResolver, 不假装"我有 keyring"
@@ -57,7 +79,12 @@ pub fn build_keyring_resolver() -> Arc<dyn CredentialResolver> {
             );
             Arc::new(apeireth_provider::credentials::EnvCredentialResolver::new())
         }
-    }
+    };
+    // 主层: admin 运行时凭据库 (写入端口与本 resolver 共享同一实例)
+    Arc::new(LayeredCredentialResolver::new(
+        hot_credential_store(),
+        fallback,
+    ))
 }
 
 /// 真接 KeyringSelector, 失败返 Err (退化由 caller 处理)
@@ -108,29 +135,63 @@ fn try_build_keyring_backend() -> Result<Arc<dyn KeyringBackend>, String> {
     Ok(selected.backend.into())
 }
 
-/// `/v1/admin/config` 的 api_key 热写端口: 复用 keyring backend 的 `set`。
-/// 未配置 keyring backend (env resolver 路径) 时返 None, gateway 会在 warnings
-/// 里如实说明而非假装写入成功。
+/// `/v1/admin/config` 的 api_key 热写端口。
+///
+/// 写入两层:
+/// 1. [`hot_credential_store`] (主层, 总是成功) —— 与 `build_keyring_resolver`
+///    共享同一实例, 下一次 provider 请求的 `resolve` 即取新值 (真热更);
+/// 2. keyring backend (可选持久层) —— 仅服务进程重启后的存活; 未配置 keyring
+///    backend 时跳过 (热更仍生效, 重启回退启动值)。
+///
+/// 只有持久层写入失败才返 Err (此时热更已生效, 错误文案如实说明)。
 pub fn build_keyring_credential_writer() -> Option<Arc<dyn CredentialWriter>> {
-    match try_build_keyring_backend() {
-        Ok(backend) => Some(Arc::new(KeyringCredentialWriter(backend))),
-        Err(_) => None,
-    }
+    Some(Arc::new(HotCredentialWriter {
+        store: hot_credential_store(),
+        durable: try_build_keyring_backend().ok(),
+    }))
 }
 
-struct KeyringCredentialWriter(Arc<dyn KeyringBackend>);
+struct HotCredentialWriter {
+    store: Arc<HotCredentialStore>,
+    durable: Option<Arc<dyn KeyringBackend>>,
+}
 
-impl CredentialWriter for KeyringCredentialWriter {
+impl CredentialWriter for HotCredentialWriter {
     fn write(&self, name: &str, value: &str) -> Result<(), String> {
-        self.0
-            .set(name, &SecretBuf::from_str(value))
-            .map_err(|error| error.to_string())
+        // 主层先写: 每次请求现解析的 resolver 立即可见。
+        self.store.set(name, value);
+        // 持久层尽力而为: 失败不影响本次热更, 但要如实上报。
+        if let Some(backend) = &self.durable {
+            backend
+                .set(name, &SecretBuf::from_str(value))
+                .map_err(|error| {
+                    format!("已热更生效（下次请求使用），但 keyring 持久化失败: {error}")
+                })?;
+        }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 真热更接线: admin 写入端口 (`build_keyring_credential_writer`) 与 provider
+    /// 取值端 (`build_keyring_resolver`) 共享同一运行时凭据库 —— 写入后**下一次**
+    /// resolve 现取新值 (诱饵实验的最小断言: 热更 key 后下一请求不再用旧 key)。
+    #[test]
+    fn credential_writer_and_resolver_share_the_runtime_store() {
+        let name = "provider.seam-test.api_key";
+        let writer = build_keyring_credential_writer().expect("hot writer is always mounted");
+        writer.write(name, "sk-decoy-seam").expect("hot write");
+        let resolver = build_keyring_resolver();
+        let got = resolver
+            .resolve(name)
+            .expect("hot override visible on the next resolve");
+        assert_eq!(got.expose(), "sk-decoy-seam");
+        // 清理共享 store, 不污染同进程其它测试。
+        hot_credential_store().remove(name);
+    }
 
     /// RC-9 验收: 没设 env → 退化到 EnvCredentialResolver (alpha 路径 0 行为变化)
     #[test]

@@ -63,8 +63,8 @@ pub use canonical_entry::{
 };
 
 pub use admin::{
-    credential_name, CapabilitiesConfig, ConfigPatch, ConfigView, CredentialWriter,
-    GatewayRuntimeConfig,
+    credential_name, normalize_provider, CapabilitiesConfig, ConfigPatch, ConfigView,
+    CredentialWriter, GatewayRuntimeConfig,
 };
 pub use error_frame::{ErrorCode, ErrorEnvelope, ErrorFrame};
 

@@ -188,19 +188,23 @@ impl BackendProviderEnv {
     /// restart when they change.
     ///
     /// The endpoint can hot-apply exactly: the openai-compatible provider's
-    /// `api_key` (keyring write) and `base_url` (capability hot-set) plus the
-    /// default-model injection. Everything else — model lists (the provider's
-    /// model registry is fixed at boot), the minimax/anthropic families, and
-    /// all capability toggles — only reaches the sidecar through its
-    /// environment. Hot-applying those would silently leave the running
-    /// gateway on stale configuration (2026-09-12 real-machine finding).
+    /// `api_key` (runtime credential store, resolved per request) and
+    /// `base_url` (capability hot-set) plus the default-model injection.
+    /// Everything else — model lists (the provider's model registry is fixed at
+    /// boot), the minimax/anthropic families, and all capability toggles — only
+    /// reaches the sidecar through its environment. Hot-applying those would
+    /// silently leave the running gateway on stale configuration (2026-09-12
+    /// real-machine finding).
+    ///
+    /// 2026-09-26 曾把 OPENAI_API_KEY / APEIRETH_OPENAI_URL 一并列为重启相关
+    /// （当时热更 key 实测不生效）。真热更（凭据按请求现解析）落地后该两对
+    /// 恢复为可热更，行为由集成测试锁定（`apeireth-cli` 的
+    /// `admin_hot_key_decoy`: 热更 key 后下一请求出站 Authorization 即新值）。
     pub fn restart_relevant_pairs(&self) -> Vec<(&'static str, &str)> {
-        // 2026-09-26 真机更正：此前列外了 OPENAI_API_KEY / APEIRETH_OPENAI_URL
-        // （假设 key/URL 可经 /v1/admin/config 热生效）。真机验证推翻该假设——
-        // 保存新 key 后热应用虽返回成功，运行中的网关仍用旧 key 发请求，
-        // 只有重启侧车（走 spawn 期环境注入）才生效。故全部 provider 环境对
-        // 一律视为重启相关：变更即重启，宁可多花 3 秒，不冒"保存了没生效"的险。
         self.env_pairs()
+            .into_iter()
+            .filter(|(key, _)| *key != "OPENAI_API_KEY" && *key != "APEIRETH_OPENAI_URL")
+            .collect()
     }
 }
 
@@ -1120,11 +1124,12 @@ impl BackendSupervisor {
 
     /// Apply the current config to a gateway that is already `Ready`.
     ///
-    /// 2026-09-26 起：provider 环境的任何变更（含 key/base_url）都走重启
-    /// （热更新对 key 不生效为真机所证，见 `restart_relevant_pairs` 注释）；
-    /// 仅当 provider 环境与 spawn 期完全一致、且能力开关未变时，才尝试
-    /// `/v1/admin/config` 热应用（此时仅是幂等回写，无实质变更）。A gateway without
-    /// the admin endpoint (old build) always takes the restart path.
+    /// key/base_url 变更走 `/v1/admin/config` 热应用（凭据按请求现解析，
+    /// 下一请求生效）；模型列表 / 能力开关等其余 provider 环境变更仍走重启
+    /// （见 `restart_relevant_pairs`）。
+    /// 仅当 provider 环境与 spawn 期完全一致、且能力开关未变时，热应用才是
+    /// 幂等回写。A gateway without the admin endpoint (old build) always takes
+    /// the restart path.
     async fn apply_to_ready_gateway(&self) -> Result<(), String> {
         let hot_ok = self.hot_apply_sufficient().await;
         if hot_ok {
@@ -1719,6 +1724,35 @@ mod tests {
         assert_eq!(map["APEIRETH_ANTHROPIC_URL"], "https://api.anthropic.com");
         assert_eq!(map["APEIRETH_ANTHROPIC_MODELS"], "claude-sonnet-4-5");
         assert_eq!(map.len(), 9);
+    }
+
+    /// key/base_url 可经 `/v1/admin/config` 热更（凭据按请求现解析，下一请求
+    /// 生效），不列入重启相关对；模型列表等其余注入仍需重启。
+    #[test]
+    fn key_and_base_url_are_hot_applicable_not_restart_relevant() {
+        let env = BackendProviderEnv {
+            openai_api_key: Some("sk-openai".into()),
+            openai_url: Some("https://api.deepseek.com/v1".into()),
+            openai_models: Some("deepseek-v4-flash".into()),
+            ..Default::default()
+        };
+        let restart: std::collections::HashMap<&str, &str> =
+            env.restart_relevant_pairs().into_iter().collect();
+        assert!(!restart.contains_key("OPENAI_API_KEY"), "{restart:?}");
+        assert!(!restart.contains_key("APEIRETH_OPENAI_URL"), "{restart:?}");
+        assert_eq!(restart["APEIRETH_OPENAI_MODELS"], "deepseek-v4-flash");
+
+        // 仅 key/URL 变更 → 重启相关对不变（hot_apply_sufficient 判定走热更）。
+        let changed = BackendProviderEnv {
+            openai_api_key: Some("sk-rotated".into()),
+            openai_url: Some("https://api.deepseek.com/v2".into()),
+            ..env.clone()
+        };
+        assert_eq!(
+            changed.restart_relevant_pairs(),
+            env.restart_relevant_pairs(),
+            "key/base_url 变更必须落在热更通道, 不触发重启"
+        );
     }
 
     #[test]
