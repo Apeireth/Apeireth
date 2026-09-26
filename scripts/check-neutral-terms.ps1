@@ -1,7 +1,7 @@
 ﻿# 中性表述纪律扫描器
 # 用途：本战役所有新改动的表述纪律自动过检——新增行中不得出现任何第三方
 # 产品/项目标识或"移植/借鉴/参照实现"类来源措辞。只扫 git diff 的新增行
-# （'+' 开头），历史存量行不误伤；产物与归档目录不参与。
+# （'+' 开头）与未跟踪新文件全文，历史存量行不误伤；产物与归档目录不参与。
 # 用法：pwsh -File scripts/check-neutral-terms.ps1 （powershell 5.1 需文件带 BOM）
 # 退出码：0 = 干净；1 = 有命中（命中行会打印出来）。
 
@@ -24,6 +24,7 @@ $forbidden = @(
 $changed = @()
 $changed += (cmd /c "git diff --name-only HEAD 2>nul")
 $changed += (cmd /c "git diff --cached --name-only 2>nul")
+$changed += (cmd /c "git ls-files --others --exclude-standard 2>nul")
 $changed = $changed | Where-Object { $_ } | Sort-Object -Unique
 
 $targets = $changed | Where-Object {
@@ -37,10 +38,25 @@ if (-not $targets) {
   exit 0
 }
 
+$untracked = @{}
+foreach ($f in (cmd /c "git ls-files --others --exclude-standard 2>nul")) { if ($f) { $untracked[$f] = $true } }
+
 $hits = 0
 foreach ($file in $targets) {
   if (-not (Test-Path $file)) { continue }
-  $diff = cmd /c "git diff -U0 HEAD -- `"$file`" 2>nul"
+  if ($untracked.ContainsKey($file)) {
+    $allLines = @(Get-Content $file)
+    for ($i = 0; $i -lt $allLines.Count; $i++) {
+      foreach ($pat in $forbidden) {
+        if ($allLines[$i] -match $pat) {
+          Write-Output "HIT   ${file}:$($i+1)  [$pat]  $($allLines[$i].Trim())"
+          $hits++
+        }
+      }
+    }
+    continue
+  }
+  $diff = @(cmd /c "git diff -U0 HEAD -- `"$file`" 2>nul")
   $lineNo = 0
   foreach ($row in $diff) {
     if ($row -match '^@@ -\d+(?:,\d+)? \+(\d+)') { $lineNo = [int]$matches[1]; continue }
