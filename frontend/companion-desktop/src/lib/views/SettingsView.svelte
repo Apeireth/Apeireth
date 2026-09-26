@@ -917,6 +917,14 @@
       saveSuccess = false;
     }, 1500);
 
+    // P0: 密钥随保存写入系统钥匙串——此前只有密钥弹窗会写，服务商区块的
+    // 主保存只进内存（配置落盘会清洗密钥），重启后被钥匙串里的旧值覆盖，
+    // 表现为「保存的 key 不生效/发旧 key」。仅在输入了新密钥时写入，
+    // 空值不覆盖钥匙串。
+    if (providerApiKey.trim()) {
+      await setProviderKey(providerFamily(), providerApiKey.trim());
+    }
+
     // P1-1: 无重启热应用，成功后回显网关生效配置。
     applying = true;
     applyError = null;
@@ -927,6 +935,7 @@
         provider: providerFamily(),
         base_url: normalizeBaseUrl(providerBaseUrl),
         model: providerModel.trim() || DEFAULT_MODEL_ID,
+        ...(providerApiKey.trim() ? {api_key: providerApiKey.trim()} : {}),
       };
       applyResult = await applyAdminConfig(updated, patch);
       effectiveConfig = await getAdminConfig(updated);
