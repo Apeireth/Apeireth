@@ -195,10 +195,12 @@ impl BackendProviderEnv {
     /// environment. Hot-applying those would silently leave the running
     /// gateway on stale configuration (2026-09-12 real-machine finding).
     pub fn restart_relevant_pairs(&self) -> Vec<(&'static str, &str)> {
+        // 2026-09-26 真机更正：此前列外了 OPENAI_API_KEY / APEIRETH_OPENAI_URL
+        // （假设 key/URL 可经 /v1/admin/config 热生效）。真机验证推翻该假设——
+        // 保存新 key 后热应用虽返回成功，运行中的网关仍用旧 key 发请求，
+        // 只有重启侧车（走 spawn 期环境注入）才生效。故全部 provider 环境对
+        // 一律视为重启相关：变更即重启，宁可多花 3 秒，不冒"保存了没生效"的险。
         self.env_pairs()
-            .into_iter()
-            .filter(|(key, _)| *key != "OPENAI_API_KEY" && *key != "APEIRETH_OPENAI_URL")
-            .collect()
     }
 }
 
@@ -1118,10 +1120,10 @@ impl BackendSupervisor {
 
     /// Apply the current config to a gateway that is already `Ready`.
     ///
-    /// Only key/base_url changes are hot-applicable through
-    /// `/v1/admin/config`; anything else (model lists, capability toggles,
-    /// other provider families) only reaches the sidecar through its
-    /// environment, so those changes restart the process. A gateway without
+    /// 2026-09-26 起：provider 环境的任何变更（含 key/base_url）都走重启
+    /// （热更新对 key 不生效为真机所证，见 `restart_relevant_pairs` 注释）；
+    /// 仅当 provider 环境与 spawn 期完全一致、且能力开关未变时，才尝试
+    /// `/v1/admin/config` 热应用（此时仅是幂等回写，无实质变更）。A gateway without
     /// the admin endpoint (old build) always takes the restart path.
     async fn apply_to_ready_gateway(&self) -> Result<(), String> {
         let hot_ok = self.hot_apply_sufficient().await;

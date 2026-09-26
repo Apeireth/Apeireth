@@ -2212,7 +2212,7 @@
       </div>
       <div class="modal-body">
         <p class="modal-desc">
-          这是**模型提供商**的密钥（如 DeepSeek）。密钥存入系统钥匙串，不落盘明文；保存后热更新到本地网关，无需重启。
+          这是**模型提供商**的密钥（如 DeepSeek）。密钥存入系统钥匙串，不落盘明文；保存后自动生效（必要时本地网关会自动重启，无需手动操作）。
         </p>
 
         <div class="keychain-status">
