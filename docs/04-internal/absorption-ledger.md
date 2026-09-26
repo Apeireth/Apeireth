@@ -74,6 +74,16 @@
 - `scripts/verify-provider-path.ps1` —— 真凭据链路四步验证（凭据读取/真对话/热更生效性/恢复复通）
 - `scripts/check-neutral-terms.ps1` —— 中性表述纪律扫描（新增行+未跟踪全文，自测已过）
 
+## 悬案裁决执行记录（2026-09-26，owner「按建议办」）
+
+- **案一 `allows_publish` 跨轴旁路**：✅ 已修——类目兜底收窄为"缺口填补"（操作轴沉默才放行，
+  显式声明优先于类目，与读权限兜底同语义）；2 测试钉死（含"类目不得推翻声明"）。
+- **案二 SDK 孤岛**：✅ 已归档 `legacy/adapters-sdk/`（源码完整保留 + ARCHIVED.md 落款）；
+  主工作区不再含 1.3 万行未接线桩；T1 组织产品线启动时接回。
+- **案三 perception**：✅ 已归档 `legacy/engine-perception/`（同上）；T1 在场感/感知产品线待接原料。
+- **案四 kani 合并门**：✅ 已设分支保护 required check（`kani`；分支锁定/管理员同规/禁强推保持）。
+- **数字口径对齐**：工作区 18→**16 crate**（活口径七处已清：README 双语/INSTALL/发布链/架构文/工程报告）。
+
 ## 余量备忘（收卷建议入账）
 
 - reflexion 自研 MutationLock 可换统一文件锁（死锁接管语义更强，可选优化）；

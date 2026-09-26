@@ -2,7 +2,7 @@
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **当前基线**: 默认分支 `main`、18-crate 工作区（v2.0.0-rc.1；测试基线 **3695 passed / 0 failed / 21 ignored**，131 套件全量实测，历史口径见 CHANGELOG）；`legacy/` 不参与构建。
+> **当前基线**: 默认分支 `main`、16-crate 工作区（v2.0.0-rc.1；测试基线 **3695 passed / 0 failed / 21 ignored**，131 套件全量实测，历史口径见 CHANGELOG）；`legacy/` 不参与构建。
 
 ---
 

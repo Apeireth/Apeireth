@@ -68,9 +68,9 @@ Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny
 | **Real-Time Voice Barge-In** | Stream cancellation + `tokio::Notify` broadcast | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
 | **Ember HUD Render Tick** | Breathing curve + CSS ambient glow | $< 0.5 \text{ ms}$ | ⏳ harness 建设中 |
 | **OS Sandbox Spawn** | JobObject / AppContainer creation + containment | $< 15.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **Microkernel Cold Start** | 18-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **Microkernel Cold Start** | 16-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
 | **Runtime Idle Footprint** | Background daemon memory usage | $< 35.0 \text{ MB}$ | ⏳ harness 建设中 |
-| **Workspace Test Suite** | Full regression pass across the 18-crate workspace | 100% pass | ✅ **CI 实跑**（`cargo test --workspace`） |
+| **Workspace Test Suite** | Full regression pass across the 16-crate workspace | 100% pass | ✅ **CI 实跑**（`cargo test --workspace`） |
 
 > Methodology and partial reproduction notes live in [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md); historical exploratory measurements live in `reports/` and are **not** product claims. Machine-verified correctness properties (Kani/TLA) are documented in [`research/verification/`](research/verification/).
 
@@ -78,7 +78,7 @@ Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny
 
 ## ⚡ What is Apeireth 2.0+?
 
-**Apeireth 2.0+** is a **Pure Safe Rust, 18-crate AGI Operating System with a Runtime Kernel and Runtime Assembly**. The kernel owns the canonical turn protocol and abstract ports; concrete cognition, tools, Organ adapters, and SQLite wiring are installed by `apeireth-runtime-assembly`.
+**Apeireth 2.0+** is a **Pure Safe Rust, 16-crate AGI Operating System with a Runtime Kernel and Runtime Assembly**. The kernel owns the canonical turn protocol and abstract ports; concrete cognition, tools, Organ adapters, and SQLite wiring are installed by `apeireth-runtime-assembly`.
 
 By unifying **Continuous Fluid Topological Memory**, **Cognitive Quota Preemptive Scheduling**, **Causal World Model Fork/Commit**, **Micro-Luminescent Ambient Presence (Ember HUD)**, and **Triple-Onion Zero-Trust Governance**, Apeireth provides a permanent, self-evolving, and cryptographically verified sanctuary for artificial intelligence to co-exist with humans.
 
@@ -175,7 +175,7 @@ When $U_{\text{care}} \ge \Theta_{\text{action}}$ and user flow friction is zero
 
 ---
 
-## 🧱 18-Crate Runtime Kernel + Assembly Breakdown
+## 🧱 16-Crate Runtime Kernel + Assembly Breakdown
 
 The root Cargo workspace strictly enforces an acyclic, single-direction dependency hierarchy across four distinct layers:
 
@@ -193,7 +193,7 @@ crates/
 │   ├── runtime               # Mechanism kernel, registries, events, ports, Main Loop
 │   ├── runtime-assembly      # Concrete cognition, tools, Organ bridge, SQLite wiring
 │   ├── organ                 # 9 Cognitive organs, Persona Synthesizer, Reflection
-│   ├── perception            # Whisper HTTP, MiniMax TTS, Xcap screen vision
+│   ├── (perception 已归档 legacy/ —— 感知管线, T1 待接)
 │   ├── provider              # Anthropic, OpenAI-compatible, Google Gemini, Ollama
 │   ├── storage               # SQLite pools, ACID migrations, Bitemporal facts
 │   └── guard                 # Two-stage behavior-chain safety classifier (production governance hook)
@@ -202,7 +202,7 @@ crates/
 └── adapters/                 # Layer 3: Transport & Interaction Surface
     ├── cli                   # Canonical CLI binary & Portable USB Packager
     ├── gateway               # Axum HTTP/SSE server, Duplex WebSocket, Ember HUD
-    └── sdk                   # Pure Safe Rust SDK client for embedded integration
+    └── (sdk 已归档 legacy/ —— 嵌入式客户端 SDK, T1 待接)
 ```
 
 ### Microkernel Crate Specification Table
@@ -219,14 +219,14 @@ crates/
 | **Engine** | `apeireth-runtime` | Runtime mechanism kernel, Main Loop, registries, events, abstract ports | `Runtime::execute_outcome()`, `BehaviorRegistry`, `CapabilityRegistry`|
 | **Engine** | `apeireth-runtime-assembly` | Production cognitive/tool/Organ composition and SQLite session adapter | `production_runtime()`, `SqliteSessionStore` |
 | **Engine** | `apeireth-organ` | 9 Cognitive organs, self-reflection, persona synth | `OrganRegistry::evaluate()`, `PersonaSynthesizer::blend()` |
-| **Engine** | `apeireth-perception` | Whisper speech, MiniMax 128kbps TTS, Xcap vision | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
+| **Engine** | `apeireth-perception`（已归档 `legacy/engine-perception`，未接线） | Whisper speech, MiniMax TTS, screen vision — T1 感知线待接 | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
 | **Engine** | `apeireth-provider` | Multi-LLM provider abstraction (Anthropic/OpenAI/Gemini)| `ProviderRegistry::dispatch()`, `NormalizedChatCompletions` |
 | **Engine** | `apeireth-storage` | ACID SQLite pools, migrations, bitemporal fact storage | `SqliteConnectionPool::acquire()`, `BitemporalGraph::upsert()`|
 | **Engine** | `apeireth-guard` | Two-stage behavior-chain safety classifier wired into production governance | `ChainGuard`, `BehaviorChainGuardHook`, `DecisionFusion` |
 | **Capabilities**| `apeireth-tools-canonical`| ProcessExecutor (JobObject/cgroups), RepoMap AST, Crawler | `ProcessExecutor::spawn_bounded()`, `RepoMap::generate()` |
 | **Adapters** | `apeireth-cli` | Primary CLI entrypoint, Portable USB bundle synthesizer | `cli::main()`, `PortableBundleSynthesizer::generate()` |
 | **Adapters** | `apeireth-gateway` | Axum HTTP/SSE server, Duplex WebSocket, Ember HUD driver | `GatewayServer::serve()`, `EmberHudDriver::synthesize()` |
-| **Adapters** | `apeireth-sdk` | Embedded client SDK for external Rust applications | `ApeirethClient::connect()`, `SessionHandle::turn()` |
+| **Adapters** | `apeireth-sdk`（已归档 `legacy/adapters-sdk`，未接线） | Embedded client SDK — T1 组织线待接 | `ApeirethClient::connect()`, `SessionHandle::turn()` |
 
 ---
 
@@ -390,7 +390,7 @@ The canonical gateway exposes HTTP/SSE endpoints alongside an 8-frame full-duple
 git clone https://github.com/Apeireth/Apeireth.git
 cd Apeireth
 
-# Run all 3695 unit and integration tests across the 18 crates (workspace baseline)
+# Run all 3695 unit and integration tests across the 16 crates (workspace baseline)
 cargo test --workspace
 
 # Verify pure Safe Rust and zero clippy warnings

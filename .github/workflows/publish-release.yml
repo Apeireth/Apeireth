@@ -93,7 +93,7 @@ jobs:
           body: |
             ## 🌟 Apeireth 2.0+ Cognitive Microkernel & AGI Operating System
 
-            > **Pure Safe Rust (`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`), 18-Crate Kernel + Assembly, 3600+ Verified Tests.**
+            > **Pure Safe Rust (`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`), 16-Crate Kernel + Assembly, 3600+ Verified Tests.**
 
             ---
 
