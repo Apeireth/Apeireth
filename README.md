@@ -57,22 +57,24 @@ That is Apeireth.
 
 ## 📊 Performance Targets & Verification Status
 
-Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)**. Performance figures follow a strict **reproducible-benchmark policy**: a number is published here only when it ships with a re-runnable script and a measured source. Until each row's harness lands, we publish **targets** only — no self-reported measurements.
+Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)**. Performance figures follow a strict **reproducible-benchmark policy**: a number is published here only when it ships with a re-runnable script and a measured source. Every row below now has a one-command harness (`scripts/run-benchmarks.ps1`); the numbers are **measured**, rows that miss their target are marked with the exact gap, and no figure is rounded to look better.
 
-| Benchmark Target | Operation / Subsystem | Target Metric | Verification Status |
-| :--- | :--- | :---: | :---: |
-| **Hybrid Memory Search** | BM25 + Dense Cosine + RRF Fusion (10,000 nodes) | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **Cognitive Quota Preemption** | Priority queue dispatch + PIP context switch | $< 50.0 \ \mu\text{s}$ | ⏳ harness 建设中 |
-| **Causal World Model CoW** | Hypothesis branch fork + snapshot diff | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **SAGA Compensating Rollback** | Reverse stack LIFO compensating execution (in-memory) | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **Real-Time Voice Barge-In** | Stream cancellation + `tokio::Notify` broadcast | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **Ember HUD Render Tick** | Breathing curve + CSS ambient glow | $< 0.5 \text{ ms}$ | ⏳ harness 建设中 |
-| **OS Sandbox Spawn** | JobObject / AppContainer creation + containment | $< 15.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **Microkernel Cold Start** | 18-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **Runtime Idle Footprint** | Background daemon memory usage | $< 35.0 \text{ MB}$ | ⏳ harness 建设中 |
-| **Workspace Test Suite** | Full regression pass across the 18-crate workspace | 100% pass | ✅ **CI 实跑**（`cargo test --workspace`） |
+**How to read the measured column**: `P50 · P99` per operation, from `pwsh -NoProfile -File scripts/run-benchmarks.ps1 -Bench all` (release profile, measured 2026-09-27 on AMD Ryzen 9 9955HX / 32 GB / Windows 11 / rustc 1.97.1). `(Run 1: …)` is the same-day second full run on the same machine, shown as-is to expose run-to-run noise. Verdicts compare **P50** against the target; P99 and sample counts are reported unrounded in [`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md).
 
-> Methodology and partial reproduction notes live in [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md); historical exploratory measurements live in `reports/` and are **not** product claims. Machine-verified correctness properties (Kani/TLA) are documented in [`research/verification/`](research/verification/).
+| Benchmark Target | Operation / Subsystem | Target Metric | Measured P50 · P99 (Run 2) | Verification Status |
+| :--- | :--- | :---: | :---: | :---: |
+| **Hybrid Memory Search** | BM25 + Dense Cosine + RRF Fusion (10,000 nodes) | $< 10.0 \text{ ms}$ | P50 **3.65 ms** · P99 6.36 ms (Run 1: 5.52 / 9.21 ms) | ✅ 附脚本实测 |
+| **Cognitive Quota Preemption** | Priority queue dispatch + PIP context switch | $< 50.0 \ \mu\text{s}$ | P50 **0.81 µs** dispatch · **1.32 µs** preempt+PIP · P99 1.13 / 2.18 µs (Run 1: 0.67 / 1.20 µs) | ✅ 附脚本实测 |
+| **Causal World Model CoW** | Hypothesis branch fork + snapshot diff | $< 1.0 \text{ ms}$ | P50 **42.8 µs** · P99 73.6 µs (Run 1: 61.7 / 89.9 µs) | ✅ 附脚本实测 |
+| **SAGA Compensating Rollback** | Reverse stack LIFO compensating execution (in-memory) | $< 1.0 \text{ ms}$ | P50 **24.8 µs** · P99 41.4 µs (Run 1: 36.2 / 48.4 µs) | ✅ 附脚本实测 |
+| **Real-Time Voice Barge-In** | Stream cancellation + `tokio::Notify` broadcast | $< 1.0 \text{ ms}$ | P50 **32.5 µs** · P99 203.8 µs (Run 1: 62.3 / 293.3 µs) | ✅ 附脚本实测 |
+| **Ember HUD Render Tick** | Breathing curve + CSS ambient glow | $< 0.5 \text{ ms}$ | P50 **0.037 µs** · P99 0.058 µs (Run 1: 0.074 / 0.102 µs) — driver-side uniform synthesis only | ✅ 附脚本实测 |
+| **OS Sandbox Spawn** | JobObject / AppContainer creation + containment | $< 15.0 \text{ ms}$ | P50 **59.58 ms** · P99 84.83 ms (Run 1: 96.46 / 140.65 ms) — incl. child process startup + wait; containment delta ≈ 6.9 ms over an unsandboxed control | ❌ 未达标（差距 4.0 倍）· 附脚本实测 |
+| **Microkernel Cold Start** | 18-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | P50 **61.98 ms** · P99 79.47 ms (Run 1: 63.39 / 105.96 ms) | ❌ 未达标（差距 6.2 倍）· 附脚本实测 |
+| **Runtime Idle Footprint** | Background daemon memory usage | $< 35.0 \text{ MB}$ | **17.47 MiB** working set (Run 1: 24.47 MiB, n=5 readings) | ✅ 附脚本实测 |
+| **Workspace Test Suite** | Full regression pass across the 18-crate workspace | 100% pass | — | ✅ **CI 实跑**（`cargo test --workspace`） |
+
+> **Reproduce** (no number ships without its rerun script): `pwsh -NoProfile -File scripts/run-benchmarks.ps1` runs every row's harness and prints the markdown table; each row also has an independent command, e.g. `cargo run --release --locked -p apeireth-bench-harness -- hybrid-search`. Harness sources: [`benches/`](benches). Environment, per-row methodology, both raw runs, sample counts and honest noise boundaries: [`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md). Historical exploratory numbers in [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md) are **not** product claims. Machine-verified correctness properties (Kani/TLA) are documented in [`research/verification/`](research/verification/).
 
 ---
 

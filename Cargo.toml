@@ -20,6 +20,8 @@ members = [
     "crates/adapters/gateway",
     "crates/adapters/sdk",
     "crates/adapters/cli",
+    # 基准复现 harness (bench-only 包, publish = false; 不计入 18 个产品 crate)
+    "benches",
 ]
 
 # ============================================================================

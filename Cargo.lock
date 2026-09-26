@@ -146,6 +146,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "apeireth-bench-harness"
+version = "2.0.0-rc.1"
+dependencies = [
+ "apeireth-core",
+ "apeireth-gateway",
+ "apeireth-memory",
+ "apeireth-orchestration",
+ "apeireth-plugin",
+ "apeireth-protocol",
+ "apeireth-runtime",
+ "apeireth-runtime-assembly",
+ "apeireth-tools-canonical",
+ "fs-err",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-cli"
 version = "2.0.0-rc.1"
 dependencies = [
@@ -325,6 +342,8 @@ name = "apeireth-perception"
 version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
+ "apeireth-memory",
+ "apeireth-orchestration",
  "apeireth-plugin",
  "async-trait",
  "image",
@@ -433,11 +452,17 @@ dependencies = [
 name = "apeireth-sdk"
 version = "2.0.0-rc.1"
 dependencies = [
+ "aes",
  "anyhow",
+ "apeireth-core",
+ "apeireth-credentials",
+ "apeireth-plugin",
  "apeireth-protocol",
  "async-trait",
+ "base64",
  "cbindgen",
  "chrono",
+ "fs-err",
  "futures",
  "napi",
  "napi-derive",
@@ -1474,6 +1499,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fs-err"
+version = "3.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b91aa448ca50d7e79433bdf3ee8d99215430d2ec02ade5aefab2a073a1822e8a"
+dependencies = [
+ "autocfg",
 ]
 
 [[package]]

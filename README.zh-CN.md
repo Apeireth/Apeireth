@@ -57,22 +57,24 @@
 
 ## 📊 性能目标与验证状态
 
-Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** 构建。性能数字遵循严格的**基准复现线**：只有附带可重跑脚本与实测出处的数字才会发布——在各项目标落出复现 harness 之前，这里只发布**目标值**，不发布自报实测。
+Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** 构建。性能数字遵循严格的**基准复现线**：只有附带可重跑脚本与实测出处的数字才会发布。下表每一行现在都有一键复跑 harness（`scripts/run-benchmarks.ps1`）；数字全部为**实测**，未达标行如实标注差距倍数，不四舍五入美化。
 
-| 测试目标 | 子系统 / 核心操作 | 目标指标 | 验证状态 |
-| :--- | :--- | :---: | :---: |
-| **混合记忆拓扑检索** | BM25 + 密集向量余弦 + RRF 融合 (10,000 节点) | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **认知配额抢占调度** | 优先级队列调度 + PIP 上下文切换 | $< 50.0 \ \mu\text{s}$ | ⏳ harness 建设中 |
-| **因果世界模型分支** | 假说分支推演 (CoW) + 快照差分 | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **SAGA 逆向补偿回滚** | LIFO 逆序算子栈纯内存执行 | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **全双工打断响应 (Barge-in)** | 语音流原子取消 + `tokio::Notify` 广播 | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **Ember HUD 渲染帧** | 4.0s 生理呼吸律动 + CSS 微光 | $< 0.5 \text{ ms}$ | ⏳ harness 建设中 |
-| **OS 物理沙箱** | JobObject / AppContainer 边界初始化 + 进程隔离 | $< 15.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | ⏳ harness 建设中 |
-| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | ✅ **CI 实跑**（`cargo test --workspace`） |
+**实测列读法**：每操作的 `P50 · P99`，来自 `pwsh -NoProfile -File scripts/run-benchmarks.ps1 -Bench all`（release 优化档，2026-09-27 实测于 AMD Ryzen 9 9955HX / 32 GB / Windows 11 / rustc 1.97.1）。`(Run 1: …)` 为同日同机第二轮全量复测，原样呈现以暴露轮间噪声。判定口径 = **P50 对目标**；P99 与样本量在 [`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md) 中不作美化呈现。
 
-> 方法学与部分复现记录见 [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md)；`reports/` 内的历史探索性测量**不是**产品宣称。机器证明的正确性命题（Kani/TLA）见 [`research/verification/`](research/verification/)。
+| 测试目标 | 子系统 / 核心操作 | 目标指标 | 实测 P50 · P99 (Run 2) | 验证状态 |
+| :--- | :--- | :---: | :---: | :---: |
+| **混合记忆拓扑检索** | BM25 + 密集向量余弦 + RRF 融合 (10,000 节点) | $< 10.0 \text{ ms}$ | P50 **3.65 ms** · P99 6.36 ms (Run 1: 5.52 / 9.21 ms) | ✅ 附脚本实测 |
+| **认知配额抢占调度** | 优先级队列调度 + PIP 上下文切换 | $< 50.0 \ \mu\text{s}$ | P50 **0.81 µs** 派发 · **1.32 µs** 抢占+PIP · P99 1.13 / 2.18 µs (Run 1: 0.67 / 1.20 µs) | ✅ 附脚本实测 |
+| **因果世界模型分支** | 假说分支推演 (CoW) + 快照差分 | $< 1.0 \text{ ms}$ | P50 **42.8 µs** · P99 73.6 µs (Run 1: 61.7 / 89.9 µs) | ✅ 附脚本实测 |
+| **SAGA 逆向补偿回滚** | LIFO 逆序算子栈纯内存执行 | $< 1.0 \text{ ms}$ | P50 **24.8 µs** · P99 41.4 µs (Run 1: 36.2 / 48.4 µs) | ✅ 附脚本实测 |
+| **全双工打断响应 (Barge-in)** | 语音流原子取消 + `tokio::Notify` 广播 | $< 1.0 \text{ ms}$ | P50 **32.5 µs** · P99 203.8 µs (Run 1: 62.3 / 293.3 µs) | ✅ 附脚本实测 |
+| **Ember HUD 渲染帧** | 4.0s 生理呼吸律动 + CSS 微光 | $< 0.5 \text{ ms}$ | P50 **0.037 µs** · P99 0.058 µs (Run 1: 0.074 / 0.102 µs) — 仅驱动侧 uniforms 合成 | ✅ 附脚本实测 |
+| **OS 物理沙箱** | JobObject / AppContainer 边界初始化 + 进程隔离 | $< 15.0 \text{ ms}$ | P50 **59.58 ms** · P99 84.83 ms (Run 1: 96.46 / 140.65 ms) — 含子进程启动+等待；受控边界增量 ≈ 6.9 ms（对照无隔离） | ❌ 未达标（差距 4.0 倍）· 附脚本实测 |
+| **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | P50 **61.98 ms** · P99 79.47 ms (Run 1: 63.39 / 105.96 ms) | ❌ 未达标（差距 6.2 倍）· 附脚本实测 |
+| **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | 工作集 **17.47 MiB** (Run 1: 24.47 MiB, n=5 读数) | ✅ 附脚本实测 |
+| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | — | ✅ **CI 实跑**（`cargo test --workspace`） |
+
+> **复跑**（无重跑脚本不发布）：`pwsh -NoProfile -File scripts/run-benchmarks.ps1` 一键跑全部行的 harness 并输出 markdown 表；每行也有独立命令，例如 `cargo run --release --locked -p apeireth-bench-harness -- hybrid-search`。harness 源码：[`benches/`](benches)。环境、逐行方法学、两轮原始数据、样本量与噪声边界：[`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md)。[`reports/benchmark-baseline.md`](reports/benchmark-baseline.md) 中的历史探索性数字**不是**产品宣称。机器证明的正确性命题（Kani/TLA）见 [`research/verification/`](research/verification/)。
 
 ---
 

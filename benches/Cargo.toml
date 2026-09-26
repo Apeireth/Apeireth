@@ -1,0 +1,36 @@
+# ============================================================================
+# apeireth-bench-harness — 性能基准复现 harness (bench-only, publish = false)
+# ----------------------------------------------------------------------------
+# 职责: 为 README 性能目标表与核心子系统提供**可一键复跑**的实测基准;
+#       每个基准 = 一个独立子命令, `all` 一键全跑并输出 markdown 行。
+# 纪律: 零新增第三方依赖 —— 计时用 std::time::Instant, 统计与数据生成纯手写;
+#       仅依赖 workspace 内部 crate + 既有 tokio/fs-err。
+# 说明: 本包不计入 18 个产品 crate (foundation/engine/capabilities/adapters),
+#       也不参与发布; `cargo test --workspace` 与 clippy 门禁照常覆盖它。
+# ============================================================================
+[package]
+name = "apeireth-bench-harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+description = "Reproducible benchmark harness for the workspace performance targets (bench-only package)"
+
+[dependencies]
+apeireth-core = { path = "../crates/foundation/core" }
+apeireth-protocol = { path = "../crates/foundation/protocol" }
+apeireth-plugin = { path = "../crates/foundation/plugin" }
+apeireth-orchestration = { path = "../crates/foundation/orchestration" }
+apeireth-runtime = { path = "../crates/engine/runtime" }
+apeireth-memory = { path = "../crates/engine/memory" }
+apeireth-runtime-assembly = { path = "../crates/engine/runtime-assembly" }
+apeireth-gateway = { path = "../crates/adapters/gateway" }
+apeireth-tools-canonical = { path = "../crates/capabilities/tools" }
+tokio = { workspace = true, features = ["full"] }
+fs-err = { workspace = true }
+
+[lints]
+workspace = true
