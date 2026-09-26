@@ -1,6 +1,7 @@
 <script lang="ts">
   import {Sparkles} from 'lucide-svelte';
   import type {ApeirethConfig, ProviderConfig} from '../types';
+  import {setProviderKey} from '../tauri-bridge';
 
   let {
     onComplete,
@@ -71,7 +72,7 @@
     error = '';
   }
 
-  function finish(): void {
+  async function finish(): Promise<void> {
     const endpoint = baseUrl.trim();
     const modelName = model.trim();
     const key = presetId === 'ollama' ? '' : apiKey.trim();
@@ -88,6 +89,12 @@
       return;
     }
     applying = true;
+    // 密钥入系统钥匙串（不落盘明文）：重启后由 BackendSupervisor 的
+    // keychain 回填自动恢复，无需重输。非桌面环境返回 false，内存路径不变。
+    if (key) {
+      const family = presetId === 'minimax' ? 'minimax' : presetId === 'anthropic' ? 'anthropic' : 'openai';
+      await setProviderKey(family, key);
+    }
     const provider: ProviderConfig = {
       protocol: 'openai',
       preset: presetId,
@@ -112,7 +119,7 @@
       <span class="wizard-icon"><Sparkles size={16} /></span>
       <div>
         <h2>欢迎使用 Apeireth 伙伴</h2>
-        <p>三步开始：选服务商 → 填密钥 → 开聊。配置直接注入本地网关（密钥只进内存与侧车环境，不落盘）。</p>
+        <p>三步开始：选服务商 → 填密钥 → 开聊。配置直接注入本地网关（密钥存入系统钥匙串，不落盘明文；重启后自动恢复，无需重输）。</p>
       </div>
     </header>
 
@@ -140,7 +147,7 @@
     {#if presetId !== 'ollama'}
       <div class="field">
         <label for="wizard-key">API Key</label>
-        <input id="wizard-key" type="password" bind:value={apiKey} placeholder="sk-…（仅内存，不落盘）" />
+        <input id="wizard-key" type="password" bind:value={apiKey} placeholder="sk-…（保存到系统钥匙串，不落盘明文）" />
       </div>
     {/if}
 
