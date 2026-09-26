@@ -89,6 +89,9 @@
 - 案二/案三**归档撤销**：sdk+perception 回迁工作区（18-crate 复位），四路实现大军开工——
   基准复现线 / lark 真实现实 / livekit+voice 真实现 / sandbox 真现实现+perception 接线。
 - 标准：完整协议逻辑+严格错误处理+mock 边界全量测试，零假装；NotImplemented 清零为目标。
+- **完工（2026-09-27）**：四路全交卷——基准复现线（12 harness+实测回填，7 达标/2 诚实标红）、
+  lark 165 测、livekit 155 测、voice 165 测、sandbox 67 测、perception 接线 9 测；
+  桩清零（仅 2 处显式 Unsupported 带理由）；4585 passed 全绿。
 
 ## 余量备忘（收卷建议入账）
 
