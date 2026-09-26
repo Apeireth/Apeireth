@@ -506,6 +506,9 @@ async fn build_canonical_runtime_with_parts(
     // 上下文预算旋钮 (APEIRETH_CONTEXT_BUDGET_CHARS): 注入上下文块的总字符预算,
     // 组装期约束 provider 请求的 token 侧注入量 (核心块永不截断)。
     builder = builder.with_context_budget_chars(context_budget_chars_from_env());
+    // 长尾截断的完整原文落盘根目录 (数据目录, 实际写入 `<data>/spill/`): 有落盘点时
+    // 截断保留头尾预览 + 取回指引行; 落盘失败时回退内联原文 (宁长勿丢, 不失败调用)。
+    builder = builder.with_context_spill_root(default_panel_data_dir());
     if let Some(model) = configured_model.or(first_default_model) {
         builder = builder.with_default_model(model);
     }

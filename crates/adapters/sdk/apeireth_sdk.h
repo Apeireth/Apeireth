@@ -62,12 +62,12 @@
 #define CORE_API_COUNT 8
 
 /**
- * 6 核心 API 数量常量 (per task spec §3).
+ * 6 核心 API 数量常量 (per task spec §3 + 既有实现口径).
  */
 #define CORE_API_COUNT 6
 
 /**
- * 6 核心 API 数量常量 (per task spec §3).
+ * 6 核心 API 数量常量 (per task spec §3 + 既有实现口径).
  */
 #define CORE_API_COUNT 6
 
@@ -205,7 +205,7 @@
 #define ROOM_EVENT_COUNT 8
 
 /**
- * LiveKit 默认事件 channel 容量 (按既有实现 Room 内部约定, 100 events).
+ * LiveKit 默认事件 channel 容量 (按既有实现 Room 内部, 100 events).
  */
 #define EVENT_CHANNEL_CAPACITY 100
 
@@ -235,7 +235,7 @@
 #define RoomEvent_COUNT 8
 
 /**
- * 4 等级 + 1 unknown = 5 variant (LiveKit 客户端协议实际 5 variant).
+ * 4 等级 + 1 unknown = 5 variant (per LiveKit 协议 实际 5 variant).
  */
 #define ConnectionQuality_COUNT 5
 
@@ -255,7 +255,7 @@
 #define TrackKind_COUNT 2
 
 /**
- * 5 variant (4 known + 1 unknown, LiveKit 客户端协议).
+ * 5 variant (4 known + 1 unknown, per LiveKit 协议).
  */
 #define TrackSource_COUNT 5
 
@@ -351,7 +351,7 @@
 #define MAX_TMP_BYTES (((100 * 1024) * 1024) * 1024)
 
 /**
- * 编译期守门: 5 SandboxStatus 守门 (沿用既有状态机设计).
+ * 编译期守门: 5 SandboxStatus 守门 (对齐既有实现状态机).
  */
 #define SANDBOX_STATUS_COUNT 6
 
@@ -396,7 +396,7 @@
 #define VOICE_CONFIG_SECTION_COUNT 5
 
 /**
- * 默认采样率 (16kHz, per Porcupine 官方 + 按既有实现估算).
+ * 默认采样率 (16kHz, per Porcupine 官方 + 既有实现估).
  */
 #define DEFAULT_AUDIO_SAMPLE_RATE 16000
 
@@ -447,14 +447,14 @@
 #define WakeWordCategory_COUNT 4
 
 /**
- * 沙箱隔离级别 (3 variant, 沿用既有设计).
+ * 沙箱隔离级别 (3 variant, 1:1 翻译 既有 Sandbox SDK).
  *
  * K-1 强校验 #3: 编译期 hardcode, 不允许运行时增删 variant.
  */
 typedef struct IsolationLevel IsolationLevel;
 
 /**
- * 沙箱运行时 (3 variant, 沿用既有设计).
+ * 沙箱运行时 (3 variant, 1:1 翻译 既有 Sandbox SDK).
  *
  * K-1 强校验 #2: 编译期 hardcode, 不允许运行时增删 variant.
  */
@@ -466,7 +466,7 @@ typedef struct RuntimeKind RuntimeKind;
 typedef struct TaskStatus TaskStatus;
 
 /**
- * Lark API schema version (对齐 Lark 开放平台 schema, K-1 强校验).
+ * Lark API schema version (1:1 翻译 Lark 开放平台 SDK, K-1 强校验).
  *
  * 跟 `LARK_SCHEMA_VERSION` (in auth.rs) 同步, 此处 re-export 守门防漂移.
  */
