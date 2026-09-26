@@ -12,11 +12,11 @@
 //! 3. 架构: 强类型数据模型，0 unsafe, 0 外部 C 扩展
 
 use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use apeireth_core::storage_atomic;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -542,30 +542,16 @@ impl FileReflexionStore {
     }
 
     fn write_data(&self, data: &ReflexionDataFile) -> Result<(), ReflexionError> {
-        std::fs::create_dir_all(&self.root)?;
         let target_path = self.file_path();
-        let tmp_path = self
-            .root
-            .join(format!("reflexions.tmp-{}", uuid::Uuid::new_v4()));
         let bytes = serde_json::to_vec_pretty(data)?;
-
-        let result = (|| -> Result<(), ReflexionError> {
-            let mut tmp_file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&tmp_path)?;
-            tmp_file.write_all(&bytes)?;
-            tmp_file.sync_all()?;
-            drop(tmp_file);
-            std::fs::rename(&tmp_path, &target_path)?;
-            Ok(())
-        })();
-        if result.is_err() {
-            // Best-effort cleanup only. The original error is more actionable;
-            // a leftover unique temp file cannot affect future reads or claims.
-            let _ = std::fs::remove_file(&tmp_path);
-        }
-        result
+        // 配置/记录主档: 统一原子写持久档 (独占建临时文件 + sync + 替换),
+        // 崩溃后不回退到旧内容, 也永不留下半写 JSON。
+        storage_atomic::write_atomic_durable(
+            &target_path,
+            &bytes,
+            storage_atomic::DEFAULT_FILE_MODE,
+        )?;
+        Ok(())
     }
 
     fn mutate<T>(

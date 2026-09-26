@@ -47,6 +47,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use apeireth_core::storage_atomic::{self, OWNER_ONLY_MODE};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, XChaCha20Poly1305, XNonce};
 use rand::RngCore;
@@ -903,52 +904,14 @@ impl EncryptedFileBackend {
         out.extend_from_slice(&ct_len.to_le_bytes());
         out.extend_from_slice(&ciphertext);
 
-        // 原子写: 临时文件创建即 0600 (unix) + fsync + rename (防半写/权限窗口, 同 M2).
-        let tmp = self.data_path.with_extension("bin.tmp");
-        #[cfg(unix)]
-        {
-            use std::io::Write;
-            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-            let mut f = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&tmp)
-                .map_err(|source| KeyringError::Io {
-                    service: "<encrypted-file-backend>".into(),
-                    source,
-                })?;
-            // tmp 若是 crash 残留旧文件, create 不改其 mode — 显式收敛一次
-            let _ = f.set_permissions(std::fs::Permissions::from_mode(0o600));
-            f.write_all(&out).map_err(|source| KeyringError::Io {
+        // 统一存储基础件持久档原子写: 独占临时文件 0600 (unix) + fsync + rename
+        // (防半写/权限窗口)。非 unix 无 mode 语义, 权限由 OS 默认 ACL 收敛。
+        storage_atomic::write_atomic_durable(&self.data_path, &out, OWNER_ONLY_MODE).map_err(
+            |source| KeyringError::Io {
                 service: "<encrypted-file-backend>".into(),
                 source,
-            })?;
-            f.sync_all().map_err(|source| KeyringError::Io {
-                service: "<encrypted-file-backend>".into(),
-                source,
-            })?;
-        }
-        #[cfg(not(unix))]
-        {
-            std::fs::write(&tmp, &out).map_err(|source| KeyringError::Io {
-                service: "<encrypted-file-backend>".into(),
-                source,
-            })?;
-        }
-        std::fs::rename(&tmp, &self.data_path).map_err(|source| KeyringError::Io {
-            service: "<encrypted-file-backend>".into(),
-            source,
-        })?;
-        // 0600 兜底再收敛 (unix; rename 保留 tmp 的 0600, 此处双保险); Windows 走默认 ACL.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ =
-                std::fs::set_permissions(&self.data_path, std::fs::Permissions::from_mode(0o600));
-        }
-        Ok(())
+            },
+        )
     }
 }
 
@@ -1087,55 +1050,20 @@ fn load_master_key(path: &Path) -> Result<Key> {
     Ok(Key::from(arr))
 }
 
-/// 写 master key 到文件 (原子写 + 创建即 0600, 无 chmod 窗口 — M2).
+/// 写 master key 到文件 (统一存储基础件持久档原子写 + 创建即 0600, 无 chmod 窗口 — M2).
 ///
 /// - unix: 临时文件以 `mode(0o600)` **创建** (消除"先写后 chmod"的短暂
 ///   0644 窗口), `sync_all` 落盘后 `rename` 原子替换 (防崩溃半写 → 密钥损坏);
-///   残留的旧 tmp 会被显式收敛到 0600 后再写 (防预置文件 skid).
-/// - 非 unix: 无 unix mode 语义, 直接写 + rename 原子替换, 权限由 OS 默认
-///   ACL 收敛 (如实标注, 见模块头 0 假装边界).
+///   独占创建拒绝预置同名临时文件 (防 skid)。
+/// - 非 unix: 无 unix mode 语义, 权限由 OS 默认 ACL 收敛 (如实标注, 见模块头
+///   0 假装边界), 原子替换与落盘照常。
 fn write_master_key(path: &Path, key: &Key) -> Result<()> {
-    let tmp = PathBuf::from(format!("{}.tmp", path.display()));
-
-    #[cfg(unix)]
-    {
-        use std::io::Write;
-        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&tmp)
-            .map_err(|source| KeyringError::Io {
-                service: "<master-key>".into(),
-                source,
-            })?;
-        // tmp 若是 crash 残留的旧文件, create 不会改其 mode — 显式收敛一次
-        let _ = f.set_permissions(std::fs::Permissions::from_mode(0o600));
-        f.write_all(key.as_slice())
-            .map_err(|source| KeyringError::Io {
-                service: "<master-key>".into(),
-                source,
-            })?;
-        f.sync_all().map_err(|source| KeyringError::Io {
+    storage_atomic::write_atomic_durable(path, key.as_slice(), OWNER_ONLY_MODE).map_err(|source| {
+        KeyringError::Io {
             service: "<master-key>".into(),
             source,
-        })?;
-    }
-    #[cfg(not(unix))]
-    {
-        std::fs::write(&tmp, key.as_slice()).map_err(|source| KeyringError::Io {
-            service: "<master-key>".into(),
-            source,
-        })?;
-    }
-
-    std::fs::rename(&tmp, path).map_err(|source| KeyringError::Io {
-        service: "<master-key>".into(),
-        source,
-    })?;
-    Ok(())
+        }
+    })
 }
 
 // ============================================================================

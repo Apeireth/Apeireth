@@ -1,25 +1,23 @@
-//! Codex 风格事务级多文件打补丁工具 (`apply_patch`).
+//! 事务级多文件打补丁工具 (`apply_patch`).
 //!
 //! 支持在单次原子事务中对代码库执行多文件新增 (Add)、删除 (Delete) 与按上下文精确替换更新 (Update).
 //! 若任意一个文件的任意一个 Hunk 匹配失败，整个事务立即完全回滚，保证磁盘状态绝对一致.
 //!
-//! Recovered donor semantics (this wave):
+//! 模块语义:
 //! - Update hunks require a **strict unique** match (0 → [`ApplyPatchError::ContextMismatch`],
 //!   >1 → [`ApplyPatchError::AmbiguousMatch`]). Silent first-match replacement is rejected.
-//! - Codex line-based hunks (`@@` comment anchors, `-old` / `+new`) are auto-detected
-//!   beside the existing SEARCH/REPLACE format.
-//! - Commit writes through a same-directory tmp file + `sync_all` + rename (crash-safe
-//!   replacement; Windows falls back to a backup+rename dance because `rename` cannot
-//!   replace an existing file).
+//! - 行式 hunks (`@@` 注释锚, `-old` / `+new`) 与 SEARCH/REPLACE 格式并存, 自动识别.
+//! - 提交写盘走统一存储基础件的持久档原子写 (同目录独占临时文件 + 落盘 + 替换,
+//!   见 `apeireth_core::storage_atomic`): 崩溃安全替换, 半途中断不留截断目标.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
-use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error;
+
+use apeireth_core::storage_atomic;
 
 /// Patch 应用错误.
 #[derive(Debug, Error, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -86,7 +84,7 @@ impl TransactionalPatchApplier {
 
     /// 解析补丁文本指令.
     ///
-    /// 遵循 Codex/Aider 格式:
+    /// 支持如下补丁文本格式:
     /// ```text
     /// *** Begin Patch
     /// *** Add File: src/new_file.rs
@@ -101,7 +99,7 @@ impl TransactionalPatchApplier {
     /// *** End Patch
     /// ```
     ///
-    /// Codex line-based Update hunks are also accepted:
+    /// 行式 Update hunks 同样接受:
     /// ```text
     /// *** Update File: src/main.rs
     /// @@ optional_anchor
@@ -174,7 +172,7 @@ impl TransactionalPatchApplier {
                             search_context: search_lines.join("\n"),
                             replacement_content: replace_lines.join("\n"),
                         });
-                    } else if is_codex_hunk_start(trimmed_line) {
+                    } else if is_line_hunk_start(trimmed_line) {
                         // `@@` is an optional human-readable anchor (comment only).
                         if trimmed_line.starts_with("@@") {
                             i += 1;
@@ -205,7 +203,7 @@ impl TransactionalPatchApplier {
                         }
                         if old_lines.is_empty() {
                             return Err(ApplyPatchError::ParseError(
-                                "Codex hunk missing old lines (- prefix)".to_string(),
+                                "行式 hunk 缺少旧内容行 (- 前缀)".to_string(),
                             ));
                         }
                         hunks.push(PatchHunk {
@@ -441,13 +439,13 @@ impl TransactionalPatchApplier {
     }
 }
 
-/// True when `line` (already trimmed) starts a Codex-style hunk.
-fn is_codex_hunk_start(trimmed_line: &str) -> bool {
+/// True when `line` (already trimmed) starts a line-style hunk.
+fn is_line_hunk_start(trimmed_line: &str) -> bool {
     trimmed_line.starts_with("@@") || trimmed_line.starts_with('-') || trimmed_line.starts_with('+')
 }
 
-/// Add File body: Codex requires a `+` prefix on every line; the v2 SEARCH/REPLACE
-/// dialect uses raw file content. Auto-detect: if every line starts with `+`, strip it.
+/// Add File body: 行式格式要求每行 `+` 前缀; SEARCH/REPLACE 格式则是原始文件内容.
+/// 自动识别: 若所有行都以 `+` 开头, 剥掉此前缀.
 fn decode_add_file_content(content_lines: &[&str]) -> String {
     if !content_lines.is_empty()
         && content_lines
@@ -469,7 +467,7 @@ fn decode_add_file_content(content_lines: &[&str]) -> String {
     }
 }
 
-/// Apply one hunk with donor strict-unique semantics: 0 matches → ContextMismatch,
+/// Apply one hunk with strict-unique semantics: 0 matches → ContextMismatch,
 /// >1 matches → AmbiguousMatch. Never silently replaces the first hit.
 fn apply_unique_replace(
     haystack: &str,
@@ -503,72 +501,32 @@ fn apply_unique_replace(
     Ok(haystack.replacen(needle, replacement, 1))
 }
 
-/// Crash-safer file replacement: write a sibling tmp file, `sync_all`, then rename.
+/// 崩溃安全的文件替换: 委托统一存储基础件的持久档原子写
+/// (同目录 `create_new` 独占临时文件 + `sync_all` + 替换)。
 ///
-/// On Unix, `rename` atomically replaces an existing target. On Windows, `rename`
-/// cannot replace, so the existing target is moved aside to a `.bak` sibling first
-/// and restored if the final rename fails. Either way the new bytes are fully on
-/// disk in the tmp file before the target is touched — a crash mid-`fs::write`
-/// can no longer leave a truncated destination.
-///
-/// H4 (2026-09-24 审计): tmp 名带 pid + 进程内原子计数器, 且以 `create_new`
-/// 独占创建 —— 可预测的固定 tmp 名可被同路径 symlink 预置抢占 (TOCTOU),
-/// 独占创建让抢占者直接失败而不是静默写穿。
+/// 语义: 新字节在临时文件内完整落盘后才替换目标 —— 半途中断不会留下截断的
+/// 目标文件; 独占创建拒绝被预置的同名临时文件/symlink 抢占 (抢占者直接失败,
+/// 不会静默写穿)。目标的 unix 权限在替换中保留; 新文件用
+/// [`storage_atomic::DEFAULT_FILE_MODE`]。
 fn atomic_write_file(path: &Path, content: &str) -> Result<(), ApplyPatchError> {
-    let parent = match path.parent() {
-        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
-        _ => PathBuf::from("."),
-    };
-    let file_name = path.file_name().ok_or_else(|| {
-        ApplyPatchError::Io(format!("invalid patch target path: {}", path.display()))
-    })?;
-    let pid = std::process::id();
-    static PATCH_TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-    let seq = PATCH_TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let stem = file_name.to_string_lossy();
-    let tmp_path = parent.join(format!(".{stem}.apeireth-patch-{pid}-{seq}.tmp"));
+    storage_atomic::write_atomic_durable(path, content.as_bytes(), target_file_mode(path))
+        .map_err(|e| ApplyPatchError::Io(e.to_string()))
+}
 
-    let write_tmp = (|| -> Result<(), ApplyPatchError> {
-        let mut f = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp_path)
-            .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
-        f.write_all(content.as_bytes())
-            .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
-        f.sync_all()
-            .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
-        Ok(())
-    })();
-    if let Err(e) = write_tmp {
-        let _ = fs::remove_file(&tmp_path);
-        return Err(e);
+/// 目标 unix 权限: 更新既有文件时保留原 mode (可执行位等不丢), 新文件用默认 mode。
+fn target_file_mode(path: &Path) -> u32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        match fs::metadata(path) {
+            Ok(meta) => meta.permissions().mode() & 0o7777,
+            Err(_) => storage_atomic::DEFAULT_FILE_MODE,
+        }
     }
-
-    match fs::rename(&tmp_path, path) {
-        Ok(()) => Ok(()),
-        Err(_) if path.exists() => {
-            let bak_path = parent.join(format!(".{stem}.apeireth-patch-{pid}-{seq}.bak"));
-            if let Err(e) = fs::rename(path, &bak_path) {
-                let _ = fs::remove_file(&tmp_path);
-                return Err(ApplyPatchError::Io(e.to_string()));
-            }
-            match fs::rename(&tmp_path, path) {
-                Ok(()) => {
-                    let _ = fs::remove_file(&bak_path);
-                    Ok(())
-                }
-                Err(e) => {
-                    let _ = fs::rename(&bak_path, path);
-                    let _ = fs::remove_file(&tmp_path);
-                    Err(ApplyPatchError::Io(e.to_string()))
-                }
-            }
-        }
-        Err(e) => {
-            let _ = fs::remove_file(&tmp_path);
-            Err(ApplyPatchError::Io(e.to_string()))
-        }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        storage_atomic::DEFAULT_FILE_MODE
     }
 }
 
@@ -658,7 +616,7 @@ replaced
     }
 
     #[test]
-    fn parse_codex_update_hunk() {
+    fn parse_line_style_update_hunk() {
         let patch =
             "*** Begin Patch\n*** Update File: a.txt\n@@ anchor 1\n-old\n+new\n*** End Patch";
         let ops = TransactionalPatchApplier::parse_patch(patch).unwrap();
@@ -675,7 +633,7 @@ replaced
     }
 
     #[test]
-    fn parse_codex_add_file_strips_plus_prefix() {
+    fn parse_add_file_strips_plus_prefix() {
         let patch = "*** Begin Patch\n*** Add File: new.txt\n+hello\n+world\n*** End Patch";
         let ops = TransactionalPatchApplier::parse_patch(patch).unwrap();
         match &ops[0] {
@@ -688,7 +646,7 @@ replaced
     }
 
     #[test]
-    fn apply_codex_update_real_file() {
+    fn apply_line_style_update_real_file() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("a.txt"), "hello old world").unwrap();
         let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-old\n+NEW\n*** End Patch";
@@ -700,7 +658,7 @@ replaced
     }
 
     #[test]
-    fn apply_codex_ambiguous_match_is_rejected() {
+    fn apply_ambiguous_match_is_rejected() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("a.txt"), "x x x").unwrap();
         let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-x\n+Y\n*** End Patch";
@@ -718,7 +676,7 @@ replaced
     }
 
     #[test]
-    fn apply_codex_old_not_found() {
+    fn apply_old_context_not_found() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("a.txt"), "foo").unwrap();
         let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-bar\n+qux\n*** End Patch";
@@ -727,7 +685,7 @@ replaced
     }
 
     #[test]
-    fn parse_codex_hunk_without_old_lines_rejected() {
+    fn parse_line_hunk_without_old_lines_rejected() {
         let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n+only_add\n*** End Patch";
         let err = TransactionalPatchApplier::parse_patch(patch).unwrap_err();
         assert!(matches!(err, ApplyPatchError::ParseError(_)));
@@ -746,7 +704,7 @@ replaced
             .unwrap()
             .flatten()
             .map(|e| e.file_name().to_string_lossy().to_string())
-            .filter(|n| n.contains("apeireth-patch"))
+            .filter(|n| n.contains(".tmp-") || n.ends_with(".bak"))
             .collect();
         assert!(leftovers.is_empty(), "{leftovers:?}");
     }
@@ -911,18 +869,16 @@ replaced
 
     #[test]
     fn atomic_write_uses_exclusive_create() {
-        // create_new 语义: 预置的同名 tmp 必须让写入失败而不是被静默覆盖
-        // (防同路径 symlink 预置抢占, H4)。tmp 名含进程内原子计数器, 并行
-        // 测试下本次调用拿到的 seq 不可预测 —— 预占一段远超本测试模块
-        // atomic_write 调用总数的 seq 区间保证必中, 退出前统一清理。
+        // create_new 语义 (统一存储基础件): 预置的同名 tmp 必须让写入失败而不是
+        // 被静默覆盖 (防同路径 symlink 预置抢占)。tmp 名含 pid + 进程内原子计数器,
+        // 并行测试下本次调用拿到的 seq 不可预测 —— 预占一段远超本测试二进制写调用
+        // 总数的 seq 区间保证必中, 退出前统一清理。
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("t.txt");
         let pid = std::process::id();
         let mut occupied = Vec::new();
-        for seq in 0..256u64 {
-            let candidate = dir
-                .path()
-                .join(format!(".t.txt.apeireth-patch-{pid}-{seq}.tmp"));
+        for seq in 0..4096u64 {
+            let candidate = dir.path().join(format!("t.txt.tmp-{pid}-{seq}"));
             if fs::write(&candidate, "occupied").is_ok() {
                 occupied.push(candidate);
             }

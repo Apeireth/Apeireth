@@ -3,8 +3,8 @@
 //! Recovered from `legacy/donor/apeireth-companion/src/goal.rs` (DSH-style
 //! single-current-goal machine). This is a **mechanism**: one current goal,
 //! guarded phase transitions, revision CAS, `rounds_started` only on
-//! goal-driven turns, tmp+rename persist. It is **not** a round driver, not
-//! a daemon, and not a second agent loop.
+//! goal-driven turns, atomic-file persist (shared atomic durable writer). It is
+//! **not** a round driver, not a daemon, and not a second agent loop.
 //!
 //! Semantics kept from the donor:
 //! - Single current goal. `create` refuses while a non-completed goal exists.
@@ -23,23 +23,20 @@
 //!   persist fails.
 //! - No `uuid` / `chrono` crate deps. Ids are minted from
 //!   [`apeireth_core::kernel::TaskId`]; timestamps are injected (`now_ms`).
-//! - Persist filenames are sanitized (no path escape). tmp names do not embed
-//!   the raw id.
+//! - Persist filenames are sanitized (no path escape). Temp-file names are
+//!   derived by the shared atomic writer from the sanitized target name.
 //!
 //! Production wiring: none. Callers that want a Goal organ later compose this
 //! library behind `OrganTrait`; this module does not register, tick, or speak.
 
 use std::fmt;
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use apeireth_core::kernel::TaskId;
+use apeireth_core::storage_atomic;
 use serde::{Deserialize, Serialize};
-
-/// Monotonic nonce so tmp filenames stay unique without a uuid crate.
-static TMP_NONCE: AtomicU64 = AtomicU64::new(1);
 
 /// Goal phase. One blocked phase — reasons live on the snapshot, not as extra
 /// variants.
@@ -173,7 +170,8 @@ impl From<GoalPersistError> for GoalError {
     }
 }
 
-/// Crash-safe per-goal JSON store (`{sanitized-id}.json` via tmp+rename).
+/// Crash-safe per-goal JSON store (`{sanitized-id}.json` via the shared atomic
+/// durable writer).
 ///
 /// This is a **file helper**, not a second session/transcript owner. One
 /// [`GoalService`] holds at most one current snapshot.
@@ -194,41 +192,16 @@ impl GoalStore {
         self.dir.join(format!("{}.json", sanitize_goal_id(id)))
     }
 
-    /// Atomically persist a snapshot. On POSIX, `rename` replaces. On Windows,
-    /// existing dest is unlinked then renamed (documented crash window: dest
-    /// briefly absent). tmp is removed on any failure after create.
+    /// Atomically persist a snapshot through the shared atomic writer's durable
+    /// tier (goal state must not roll back after a crash): parent dir creation,
+    /// exclusive same-directory temp file, write, `sync_all`, then replace.
     pub fn save(&self, g: &GoalSnapshot) -> Result<(), GoalPersistError> {
-        fs::create_dir_all(&self.dir).map_err(|e| persist_io("create goal dir", &self.dir, e))?;
-        let nonce = TMP_NONCE.fetch_add(1, Ordering::Relaxed);
-        let tmp = self
-            .dir
-            .join(format!("{}.tmp-{nonce}", sanitize_goal_id(&g.id)));
         let bytes = serde_json::to_vec_pretty(g).map_err(|e| GoalPersistError::Serialization {
             reason: e.to_string(),
         })?;
-        let write_result = (|| -> Result<(), GoalPersistError> {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&tmp)
-                .map_err(|e| persist_io("open goal tmp", &tmp, e))?;
-            file.write_all(&bytes)
-                .map_err(|e| persist_io("write goal tmp", &tmp, e))?;
-            file.sync_all()
-                .map_err(|e| persist_io("sync goal tmp", &tmp, e))?;
-            Ok(())
-        })();
-        if let Err(err) = write_result {
-            let _ = fs::remove_file(&tmp);
-            return Err(err);
-        }
         let dest = self.path_for(&g.id);
-        if let Err(err) = atomic_replace(&tmp, &dest) {
-            let _ = fs::remove_file(&tmp);
-            return Err(err);
-        }
-        Ok(())
+        storage_atomic::write_atomic_durable(&dest, &bytes, storage_atomic::DEFAULT_FILE_MODE)
+            .map_err(|e| persist_io("write goal snapshot", &dest, e))
     }
 
     pub fn load(&self, id: &str) -> Result<Option<GoalSnapshot>, GoalPersistError> {
@@ -596,24 +569,6 @@ fn persist_io(operation: &'static str, path: &Path, err: io::Error) -> GoalPersi
         operation,
         path: path.to_path_buf(),
         reason: err.to_string(),
-    }
-}
-
-fn atomic_replace(tmp: &Path, dest: &Path) -> Result<(), GoalPersistError> {
-    match fs::rename(tmp, dest) {
-        Ok(()) => Ok(()),
-        Err(err) => {
-            // Windows cannot rename over an existing file. Unlink dest then
-            // retry. There is a brief window where dest is absent; documented
-            // as a platform limitation, not pretended to be POSIX-atomic.
-            if dest.exists() {
-                fs::remove_file(dest).map_err(|e| persist_io("replace-remove dest", dest, e))?;
-                fs::rename(tmp, dest).map_err(|e| persist_io("replace-rename", dest, e))?;
-                Ok(())
-            } else {
-                Err(persist_io("rename goal snapshot", dest, err))
-            }
-        }
     }
 }
 

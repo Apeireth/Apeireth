@@ -27,6 +27,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use apeireth_core::storage_atomic;
+
 use crate::context_rot::Segment;
 
 /// 挂起的工具调用 (异步等待结果或断点续传时使用).
@@ -242,7 +244,7 @@ impl ContinuationStore for InMemoryContinuationStore {
     }
 }
 
-/// 文件系统原子续行快照存储 (原子 tmp+rename 写入).
+/// 文件系统原子续行快照存储 (统一存储基础件完整性档原子写: 独占临时文件 + 替换).
 ///
 /// [`Self::consume`] first creates `id.json.claim` with filesystem-exclusive
 /// creation in this same directory. That creation is the filesystem-level
@@ -264,9 +266,9 @@ pub struct FileContinuationStore {
 /// 快照文件名安全段: 只保留 ASCII 字母数字与 `-`/`_`, 其余字符一律剔除,
 /// 并限制最大长度. 空 id 回退为 `"snapshot"`.
 ///
-/// **P1 硬化**: 此函数同时用于最终文件名与 tmp 文件名 — 此前 tmp 文件名
-/// 直接拼接原始 `snapshot.id`, 恶意 id (如 `../../evil`) 可使 tmp 写入
-/// 逃逸出 store root. 本地实现而非复用 tools 层 `safe_segment`, 避免
+/// **P1 硬化**: 最终文件名/消费声明名的安全段 — 恶意 id (如 `../../evil`)
+/// 不得使任何落盘写入逃逸出 store root (统一存储基础件的临时文件始终是
+/// 目标文件的同目录兄弟, 文件名主段即本安全段)。本地实现, 避免
 /// foundation → capabilities 依赖倒置.
 fn sanitize_snapshot_id(id: &str) -> String {
     let cleaned: String = id
@@ -352,22 +354,16 @@ impl ContinuationStore for FileContinuationStore {
                 id: snapshot.id.clone(),
             });
         }
-        // P1 硬化: tmp 文件名使用净化后的 id, 与最终文件名同一安全段规则,
-        // 保证 tmp 写入不会逃逸出 store root (无 `..`/分隔符/绝对路径).
-        let tmp = self.dir.join(format!(
-            "{}.tmp-{}",
-            sanitize_snapshot_id(&snapshot.id),
-            Uuid::new_v4()
-        ));
         let bytes = serde_json::to_vec_pretty(snapshot).map_err(|error| {
             ContinuationStoreError::Serialization {
                 reason: error.to_string(),
             }
         })?;
-        std::fs::write(&tmp, bytes)
-            .map_err(|error| ContinuationStoreError::io("写入临时快照", tmp.clone(), error))?;
+        // 统一存储基础件完整性档原子写 (续行快照属临时态): 同目录独占临时文件
+        // + 替换, 读者要么读到旧的完整快照要么读到新的完整快照; 临时文件名由
+        // 基础件生成 (净化后的 id 作为文件名主段), 写入不逃逸出 store root。
         let final_path = self.path_for(&snapshot.id);
-        std::fs::rename(&tmp, &final_path)
+        storage_atomic::write_atomic(&final_path, &bytes, storage_atomic::DEFAULT_FILE_MODE)
             .map_err(|error| ContinuationStoreError::io("原子提交快照", final_path, error))?;
         Ok(())
     }
@@ -948,7 +944,7 @@ mod tests {
                 "id={hostile:?} 的落盘路径 {saved_path:?} 逃逸出 root {root_canonical:?}"
             );
             assert!(saved_path.extension().map_or(false, |e| e == "json"));
-            // tmp 文件已被 rename 消费, root 内不应残留任何 .tmp- 散射文件
+            // 临时文件已被替换消费, root 内不应残留任何 .tmp- 散射文件
             let leftovers: Vec<_> = std::fs::read_dir(tmp.path())
                 .unwrap()
                 .filter_map(|e| e.ok())
