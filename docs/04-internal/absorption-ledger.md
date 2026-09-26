@@ -93,6 +93,17 @@
   lark 165 测、livekit 155 测、voice 165 测、sandbox 67 测、perception 接线 9 测；
   桩清零（仅 2 处显式 Unsupported 带理由）；4585 passed 全绿。
 
+## 尾款清仓记录（2026-09-27，全部完成）
+
+- L2 封套 5 处收口全接（含注入块来源标注收口）+ cleanup 在线守护成真；
+- 订阅面 5 处租约化（4 接 1 诚实不接：duplex 无流可约）；EventBus 丢帧显式省略；
+- stored_doc 消费方 5 族迁移（坏配置 fail-closed 拒开），13 类不迁理由成文；reflexion 锁统一
+  （flake 常客 10/10 稳）；
+- 性能红行：沙箱 spawn 12.8ms **转绿**（根因=全线程枚举→ResumeThread）；冷启动 22ms
+  （差距 2.2× 仍红如实，剩余=真冷文件创建系统开销，不改口径）；
+- src-tauri 陈年 fmt 清零。
+- 全场：147 套件 4638 passed / 0 failed。
+
 ## 余量备忘（收卷建议入账）
 
 - reflexion 自研 MutationLock 可换统一文件锁（死锁接管语义更强，可选优化）；
