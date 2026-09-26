@@ -2,7 +2,7 @@ Apeireth
 Copyright 2026 Apeireth Team
 
 This product includes software developed at
-the Apeireth organization (https://apeireth.example/).
+the Apeireth organization (https://github.com/Apeireth).
 
 ---
 
@@ -51,21 +51,22 @@ Apeireth (读作 /əˈpaɪərɛθ/, 希腊语 "试一试") 是 Apeireth Team 自
 
 按 APEIRETH-CONVENTIONS §10 哲学锚 "S-2 实事求是":
 
-- 1.0 release (v1.0.0) 计划 2026-09-30 tag, 当前 2 P0 fail 阻塞
-  (test + perf, 见 `docs/adr/0024-1.0-release-checklist.md`)
-- 4 个 Provider 客户端 (gemini-cli / codex / copilot / opencode) 1.0 release 时为 stub
-- 6 工具写操作 (calendar/message/contact/task/search/drive 的 create/update/delete)
-  1.0 release 时部分返 501
-- 详细 "不假装" 边界见 `docs/adr/0013-apeireth-rust-1.0.md` §3.2
+- 当前能力与验证状态一律以**状态标台账**为准（宣称挂标制：已验收 / 已验收（默认关）/
+  建设中 / 阶梯未到 / 待复现 / 已降级），见 `docs/04-internal/claims-evidence-matrix.md`
+  与 `reports/code-implementation-audit-2026-09-26.md`（逐条读码实测）。
+- 已知边界（如实列示）：SDK 子包（lark / livekit / sandbox / voice）为显式占位桩
+  （NotImplemented）；P2P 漫游为原型期单跳未加密；感知包已实现未接线；
+  以上均在各自文档标注状态，未作已交付宣称。
+- 历史各版本的"不假装"边界记录保留在 `docs/archive/1.0-release-prep/`（只读存档）。
 
 ## 6. 联系方式 (Contact)
 
-- 仓库: https://github.com/apeireth/apeireth-rust
-- 文档: https://docs.apeireth.example/
-- 邮件: team@apeireth.example
-- Slack: apeireth-team.slack.com
+- 仓库: https://github.com/Apeireth/Apeireth
+- 文档: https://github.com/Apeireth/Apeireth/tree/main/docs
+- 邮件/沟通: 以仓库 Issues 与 Discussions 为准
+- 历史文档: `docs/` 目录（含指南与参考手册）
 
 ---
 
-Last-Modified: 2026-08-05
+Last-Modified: 2026-09-26
 Format: Apache 2.0 standard NOTICE (https://www.apache.org/dev/release-distribution#notice)

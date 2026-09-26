@@ -55,24 +55,24 @@
 
 ---
 
-## 📊 系统性能基准与工程实测数据
+## 📊 性能目标与验证状态
 
-Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** 构建，在高并发与复杂认知负载下保持确定性亚毫秒级执行、极低调度延迟与绝对的内存安全。
+Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** 构建。性能数字遵循严格的**基准复现线**：只有附带可重跑脚本与实测出处的数字才会发布——在各项目标落出复现 harness 之前，这里只发布**目标值**，不发布自报实测。
 
-| 测试目标 | 子系统 / 核心操作 | 目标指标 | 实测基准值 ($P_{99}$) | 验证状态 |
-| :--- | :--- | :---: | :---: | :---: |
-| **混合记忆拓扑检索** | BM25 + 密集向量余弦 + RRF 融合 (10,000 节点) | $< 10.0 \text{ ms}$ | **1.82 ms** | ✅ **实测通过** |
-| **认知配额抢占调度** | 优先级队列调度 + PIP 上下文切换 | $< 50.0 \ \mu\text{s}$ | **8.40** $\mu\text{s}$ | ✅ **实测通过** |
-| **因果世界模型分支** | 假说分支推演 (CoW) + 100 文件快照差分 | $< 1.0 \text{ ms}$ | **0.035 ms** | ✅ **实测通过** |
-| **SAGA 逆向补偿回滚** | LIFO 逆序算子栈纯内存执行 | $< 1.0 \text{ ms}$ | **0.012 ms** | ✅ **实测通过** |
-| **全双工打断响应 (Barge-in)** | 语音流原子取消检索 + `tokio::Notify` 广播 | $< 1.0 \text{ ms}$ | **0.18 ms** | ✅ **实测通过** |
-| **Ember HUD 渲染帧** | 4.0s 生理呼吸律动 + WGSL 着色器 Uniform 合成 | $< 0.5 \text{ ms}$ | **0.08 ms** | ✅ **实测通过** |
-| **JobObject 物理沙箱** | Win32 Job Object 边界初始化 + 进程隔离限制 | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **实测通过** |
-| **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **实测通过** |
-| **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **实测通过** |
-| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | **3662 / 3662 通过** | ✅ **0 失败** |
+| 测试目标 | 子系统 / 核心操作 | 目标指标 | 验证状态 |
+| :--- | :--- | :---: | :---: |
+| **混合记忆拓扑检索** | BM25 + 密集向量余弦 + RRF 融合 (10,000 节点) | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **认知配额抢占调度** | 优先级队列调度 + PIP 上下文切换 | $< 50.0 \ \mu\text{s}$ | ⏳ harness 建设中 |
+| **因果世界模型分支** | 假说分支推演 (CoW) + 快照差分 | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **SAGA 逆向补偿回滚** | LIFO 逆序算子栈纯内存执行 | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **全双工打断响应 (Barge-in)** | 语音流原子取消 + `tokio::Notify` 广播 | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **Ember HUD 渲染帧** | 4.0s 生理呼吸律动 + CSS 微光 | $< 0.5 \text{ ms}$ | ⏳ harness 建设中 |
+| **OS 物理沙箱** | JobObject / AppContainer 边界初始化 + 进程隔离 | $< 15.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | ⏳ harness 建设中 |
+| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | ✅ **CI 实跑**（`cargo test --workspace`） |
 
-> *所有基准数据均在真实硬件（AMD Ryzen 9 / Intel Core i9, 32GB RAM, Windows 11 / Ubuntu 24.04）上核验（详见 [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md)）。*
+> 方法学与部分复现记录见 [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md)；`reports/` 内的历史探索性测量**不是**产品宣称。机器证明的正确性命题（Kani/TLA）见 [`research/verification/`](research/verification/)。
 
 ---
 

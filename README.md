@@ -55,24 +55,24 @@ That is Apeireth.
 
 ---
 
-## 📊 Empirical Performance & System Benchmarks
+## 📊 Performance Targets & Verification Status
 
-Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** to deliver deterministic sub-millisecond execution, ultra-low latency, and rock-solid memory safety under heavy load.
+Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)**. Performance figures follow a strict **reproducible-benchmark policy**: a number is published here only when it ships with a re-runnable script and a measured source. Until each row's harness lands, we publish **targets** only — no self-reported measurements.
 
-| Benchmark Target | Operation / Subsystem | Target Metric | Measured Baseline ($P_{99}$) | Validation Status |
-| :--- | :--- | :---: | :---: | :---: |
-| **Hybrid Memory Search** | BM25 + Dense Cosine + RRF Fusion (10,000 nodes) | $< 10.0 \text{ ms}$ | **1.82 ms** | ✅ **VERIFIED** |
-| **Cognitive Quota Preemption** | Priority queue dispatch + PIP context switch | $< 50.0 \ \mu\text{s}$ | **8.40** $\mu\text{s}$ | ✅ **VERIFIED** |
-| **Causal World Model CoW** | Hypothesis branch fork + 100-file snapshot diff | $< 1.0 \text{ ms}$ | **0.035 ms** | ✅ **VERIFIED** |
-| **SAGA Compensating Rollback** | Reverse stack LIFO compensating execution (in-memory) | $< 1.0 \text{ ms}$ | **0.012 ms** | ✅ **VERIFIED** |
-| **Real-Time Voice Barge-In** | Stream cancellation lookup + `tokio::Notify` broadcast | $< 1.0 \text{ ms}$ | **0.18 ms** | ✅ **VERIFIED** |
-| **Ember HUD Render Tick** | Physiological breathing curve + WGSL uniform synthesis | $< 0.5 \text{ ms}$ | **0.08 ms** | ✅ **VERIFIED** |
-| **JobObject OS Sandbox Spawn** | Win32 Job Object creation + limits + process containment | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **VERIFIED** |
-| **Microkernel Cold Start** | 18-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **VERIFIED** |
-| **Runtime Idle Footprint** | Complete microkernel background daemon memory usage | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **VERIFIED** |
-| **Workspace Test Suite** | Full regression pass across the 18-crate kernel+assembly workspace | 100% Pass | **see CI / local `cargo test --workspace`** | ⏳ **re-measured after assembly split** |
+| Benchmark Target | Operation / Subsystem | Target Metric | Verification Status |
+| :--- | :--- | :---: | :---: |
+| **Hybrid Memory Search** | BM25 + Dense Cosine + RRF Fusion (10,000 nodes) | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **Cognitive Quota Preemption** | Priority queue dispatch + PIP context switch | $< 50.0 \ \mu\text{s}$ | ⏳ harness 建设中 |
+| **Causal World Model CoW** | Hypothesis branch fork + snapshot diff | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **SAGA Compensating Rollback** | Reverse stack LIFO compensating execution (in-memory) | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **Real-Time Voice Barge-In** | Stream cancellation + `tokio::Notify` broadcast | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **Ember HUD Render Tick** | Breathing curve + CSS ambient glow | $< 0.5 \text{ ms}$ | ⏳ harness 建设中 |
+| **OS Sandbox Spawn** | JobObject / AppContainer creation + containment | $< 15.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **Microkernel Cold Start** | 18-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **Runtime Idle Footprint** | Background daemon memory usage | $< 35.0 \text{ MB}$ | ⏳ harness 建设中 |
+| **Workspace Test Suite** | Full regression pass across the 18-crate workspace | 100% pass | ✅ **CI 实跑**（`cargo test --workspace`） |
 
-> *All benchmarks are hardware-verified on AMD Ryzen 9 / Intel Core i9, 32GB RAM, Windows 11 / Ubuntu 24.04 (see [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md) for full reproduction steps).*
+> Methodology and partial reproduction notes live in [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md); historical exploratory measurements live in `reports/` and are **not** product claims. Machine-verified correctness properties (Kani/TLA) are documented in [`research/verification/`](research/verification/).
 
 ---
 
