@@ -251,6 +251,34 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, FileFetchError> {
     Ok(output)
 }
 
+// ===== Kani harness (cfg(kani) 门控: 生产零参与) =====
+// base64_decode 为模块私有函数, harness 必须与被测函数同模块可见,
+// 故此证明段随源文件携带 (与 research_approval_sm.rs 的 kani_proofs 段同构);
+// 其余 file_fetcher 性质族 harness 在 research/verification/kani/src/ 下。
+
+#[cfg(kani)]
+mod kani_base64_proofs {
+    use super::*;
+
+    /// 证明: base64_decode 对任意 ≤8 字节串不 panic —— 非法字符唯一失败模式
+    /// 是 Decode 错误, 合法解码输出长度不超过输入长 (≤3/4 膨胀界)。
+    /// 边界: 输入 8 字节任意值 (含 `=` 提前收尾、\r\n/空白、非法字符),
+    /// unwind 48。
+    #[kani::proof]
+    #[kani::unwind(48)]
+    fn kani_panic_free_base64_decode() {
+        let bytes: [u8; 8] = kani::any();
+        let input = String::from_utf8_lossy(&bytes).into_owned();
+        match base64_decode(&input) {
+            Ok(out) => assert!(out.len() <= input.len(), "解码输出长度 ≤ 输入长"),
+            Err(err) => assert!(
+                matches!(err, FileFetchError::Decode(_)),
+                "唯一失败模式是 Decode 错误"
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

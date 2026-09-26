@@ -56,3 +56,13 @@ jar 下载: https://github.com/tlaplus/tlaplus/releases/download/v1.7.1/tla2tool
    (语义无损, 仅满足枚举要求, 见规格内注释)。
 3. 单/三记录模型检查了 per-record 不变量与 active 恢复; 无限记录数模型的
    归纳泛化未做 (Kani 的 `#[kani::proof]` harness 覆盖了符号级路径, 互补)。
+
+## 新增模型 (2026-09-26): 记忆守恒 + 配额调度
+
+| 模型 | 对应实现 | 命题 |
+|---|---|---|
+| `ProtectForget.tla` (+`ProtectForget3.cfg`) | `memory_governance.rs` forget/protect 转移规则 + `retention.rs` sweep 跳过 | protect 条目不被 forget/retention 遗忘; forget 幂等 (f∘f=f); forgotten 粘滞 |
+| `QuotaSchedule.tla` (+`QuotaSchedule3.cfg`) | `cognitive_quota_scheduler.rs` consume_step / schedule_next / PIP | 记账非负单调、耗尽粘滞; 出队必最高紧急度; PIP 防反转; boost 只降序 |
+
+本机 TLC 实跑结果 (ProtectForget 144/1728 去重态、QuotaSchedule 4995/674460
+去重态, 全部不变量 No error) 与运行指令见 `../README.md` 性质族扩展节。

@@ -1,0 +1,33 @@
+# 本地类型检查 / 冒烟桩 crate (不进 CI, 不进 workspace)。
+#
+# 用途: Kani 只在 ubuntu runner 上可跑 (本机 Windows 无 Kani), 而 harness 代码
+# 全部 #[cfg(kani)] 门控 —— 常规 cargo check 看不见它们。本 crate 用
+# `--cfg kani` 编译 mirror crate 的同一份 harness 源 (#[path] 零复制引入),
+# 并把 `kani` API 换成本地桩:
+#   - `#[kani::proof]` → 剥掉 #[kani::*] 辅助属性后注册为 #[cfg_attr(test, test)];
+#   - `kani::any::<T>()` → T::default();
+#   - `kani::assume` → no-op (harness 的前置条件一律写成早退守卫)。
+# 于是 harness 至少在本地完成 ① 全量类型检查 ② 默认值输入冒烟执行;
+# 真实的符号执行证明仍由 CI 的 cargo kani 完成。
+#
+# 运行:
+#   $env:RUSTFLAGS="--cfg kani"; cargo check --manifest-path research/verification/kani-typecheck/Cargo.toml --tests
+#   $env:RUSTFLAGS="--cfg kani"; cargo test  --manifest-path research/verification/kani-typecheck/Cargo.toml
+[package]
+name = "apeireth-research-kani-typecheck"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# 依赖改名 kani: harness 里的 `kani::any` / `#[kani::proof]` 路径解析
+# 与真实 Kani 注入的 crate 同名。
+kani = { path = "kani-stub", package = "kani-stub" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = { version = "0.10", features = ["force-soft"] }
+thiserror = "1"
+
+# kani 自带 cfg(kani); stable rustc 不认识 —— 声明后不误报。
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

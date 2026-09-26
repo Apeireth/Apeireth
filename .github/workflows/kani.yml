@@ -1,9 +1,13 @@
-name: Kani formal verification (Phase 5 approval SM)
+name: Kani formal verification (approval SM + 6 property families)
 
-# Phase 5 (RA-5) 三不变量机器证明: crates/engine/runtime/src/canonical/research_approval_sm.rs
-# 的 #[cfg(kani)] harness (3 个 #[kani::proof])。
+# 机器证明通道: research/verification/kani mirror crate (#[path] 零复制包含
+# canonical 源文件) 上的 #[cfg(kani)] harness:
+#   - Phase 5 (RA-5) 审批状态机三不变量 (research_approval_sm.rs 内 kani_proofs);
+#   - 性质族 1-6 harness (research/verification/kani/src/harness_*.rs):
+#     panic-freedom / 记忆守恒 / 治理单调性 / 配额与调度安全 / 路径沙箱 / SAGA 回滚;
+#   - file_fetcher.rs 内 kani_base64_proofs (模块私有 base64_decode)。
 # 本机 Windows 无 Kani 支持 (Kani 仅 Linux/macOS), 证明跑在 ubuntu runner 上;
-# 同源不变量另有 TLA+/TLC 本机验证 (research/verification/tla/)。
+# 同源命题另有 TLA+/TLC 本机验证 (research/verification/tla/)。
 #
 # 为什么经 research/verification/kani mirror 跑: workspace 声明 rustc 1.97,
 # Kani 0.67 (crates.io 最新) 自带 nightly 1.93, `cargo kani -p apeireth-runtime`
@@ -16,11 +20,37 @@ on:
     paths:
       - 'crates/engine/runtime/src/canonical/research_approval_sm.rs'
       - 'crates/engine/runtime/src/canonical/**'
+      - 'crates/engine/runtime-assembly/src/canonical/causal_world_model.rs'
+      - 'crates/engine/memory/src/residual_pyramid.rs'
+      - 'crates/engine/memory/src/semantic_axis.rs'
+      - 'crates/engine/memory/src/river_topology.rs'
+      - 'crates/engine/memory/src/bitemporal_graph.rs'
+      - 'crates/foundation/orchestration/src/context_fold/fold_block.rs'
+      - 'crates/foundation/orchestration/src/async_context.rs'
+      - 'crates/foundation/orchestration/src/cognitive_quota_scheduler.rs'
+      - 'crates/foundation/governance/src/risk.rs'
+      - 'crates/foundation/governance/src/intent.rs'
+      - 'crates/adapters/gateway/src/file_fetcher.rs'
+      - 'crates/capabilities/tools/src/sensitive_path.rs'
+      - 'research/verification/kani/**'
       - '.github/workflows/kani.yml'
   pull_request:
     paths:
       - 'crates/engine/runtime/src/canonical/research_approval_sm.rs'
       - 'crates/engine/runtime/src/canonical/**'
+      - 'crates/engine/runtime-assembly/src/canonical/causal_world_model.rs'
+      - 'crates/engine/memory/src/residual_pyramid.rs'
+      - 'crates/engine/memory/src/semantic_axis.rs'
+      - 'crates/engine/memory/src/river_topology.rs'
+      - 'crates/engine/memory/src/bitemporal_graph.rs'
+      - 'crates/foundation/orchestration/src/context_fold/fold_block.rs'
+      - 'crates/foundation/orchestration/src/async_context.rs'
+      - 'crates/foundation/orchestration/src/cognitive_quota_scheduler.rs'
+      - 'crates/foundation/governance/src/risk.rs'
+      - 'crates/foundation/governance/src/intent.rs'
+      - 'crates/adapters/gateway/src/file_fetcher.rs'
+      - 'crates/capabilities/tools/src/sensitive_path.rs'
+      - 'research/verification/kani/**'
       - '.github/workflows/kani.yml'
   workflow_dispatch:
 
@@ -32,7 +62,7 @@ permissions:
 
 jobs:
   kani:
-    name: cargo kani (Phase 5 approval SM, mirror crate)
+    name: cargo kani (approval SM + property families, mirror crate)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +83,7 @@ jobs:
       - name: Kani setup (download CBMC bundle)
         run: cargo kani setup
 
+      # ---- Phase 5 审批状态机 (RA-5, 既有 3 harness) ----
       - name: Verify harness 1 (terminal lock, no outgoing from finals)
         continue-on-error: true
         run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_terminal_lock_no_outgoing_transitions
@@ -64,3 +95,97 @@ jobs:
       - name: Verify harness 3 (crash recovery -> InvC fail-closed)
         continue-on-error: true
         run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_crash_recovery_invariant_c
+
+      # ---- 性质族 1: panic-freedom ----
+      - name: "Family 1: panic-freedom (fold/pipeline/quotas-free pure APIs)"
+        continue-on-error: true
+        run: |
+          set -e
+          for h in \
+            kani_panic_free_fold_block_string_pipeline \
+            kani_panic_free_residual_pyramid_analyze \
+            kani_panic_free_semantic_axis_fit_project \
+            kani_panic_free_river_measure_omega \
+            kani_panic_free_dual_scaled_field_solve \
+            kani_panic_free_async_context_pipeline
+          do
+            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
+          done
+
+      - name: "Family 1: panic-freedom (file_fetcher core + base64)"
+        continue-on-error: true
+        run: |
+          set -e
+          for h in \
+            kani_panic_free_compute_cache_key \
+            kani_panic_free_base64_decode
+          do
+            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
+          done
+
+      # ---- 性质族 2: 记忆守恒 ----
+      - name: "Family 2: memory conservation (retract/forget semantics)"
+        continue-on-error: true
+        run: |
+          set -e
+          for h in \
+            kani_memory_retract_never_loses_versions \
+            kani_memory_forget_idempotent_observational \
+            kani_memory_forget_confined_to_target_key
+          do
+            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
+          done
+
+      # ---- 性质族 3: 治理单调性 ----
+      - name: "Family 3: governance monotonicity (default deny / fail-closed)"
+        continue-on-error: true
+        run: |
+          set -e
+          for h in \
+            kani_governance_deny_axis_never_allows \
+            kani_governance_default_deny_unrequested_ops \
+            kani_governance_no_degrade_never_weakens \
+            kani_governance_fail_closed_no_bypass
+          do
+            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
+          done
+
+      # ---- 性质族 4: 配额与调度安全 ----
+      - name: "Family 4: quota ledger + scheduling safety (PIP)"
+        continue-on-error: true
+        run: |
+          set -e
+          for h in \
+            kani_quota_ledger_monotone_non_negative \
+            kani_quota_highest_priority_dispatched_first \
+            kani_quota_pip_boost_prevents_inversion
+          do
+            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
+          done
+
+      # ---- 性质族 5: 路径沙箱不逃逸 ----
+      - name: "Family 5: path sandbox (traversal/NUL/whitelist/sensitive)"
+        continue-on-error: true
+        run: |
+          set -e
+          for h in \
+            kani_sandbox_validate_rejects_traversal_and_nul \
+            kani_sandbox_whitelist_rejects_outside_root \
+            kani_sandbox_sensitive_dir_blocks_any_child \
+            kani_sandbox_sensitive_suffix_blocks_any_name \
+            kani_sandbox_credential_pattern_blocks_any_affix
+          do
+            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
+          done
+
+      # ---- 性质族 6: SAGA/CoW 回滚精确性 ----
+      - name: "Family 6: SAGA/CoW rollback exactness"
+        continue-on-error: true
+        run: |
+          set -e
+          for h in \
+            kani_saga_rollback_restores_base_lifo \
+            kani_saga_commit_durable_rollback_rejected
+          do
+            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
+          done
