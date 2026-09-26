@@ -182,7 +182,12 @@ mod tests {
     #[test]
     fn credential_writer_and_resolver_share_the_runtime_store() {
         let name = "provider.seam-test.api_key";
-        let writer = build_keyring_credential_writer().expect("hot writer is always mounted");
+        // 测试写入端不挂持久层（durable=None）：断言只关心运行时凭据库的共享语义，
+        // 任何测试数据都不落进真实钥匙串（测试隔离）。
+        let writer = HotCredentialWriter {
+            store: hot_credential_store(),
+            durable: None,
+        };
         writer.write(name, "sk-decoy-seam").expect("hot write");
         let resolver = build_keyring_resolver();
         let got = resolver
