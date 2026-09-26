@@ -297,6 +297,46 @@ pub fn command_observation(
     )
 }
 
+/// Normalize a screen / input activity observation into a canonical event.
+///
+/// The payload carries only the whitelisted activity fields — activity kind
+/// label, application label, optional detail — plus provenance. Callers that
+/// collect from the desktop surface are expected to redact free text before
+/// this point; the pipeline never widens the field set here.
+///
+/// Modality mapping stays inside the frozen five-modality schema: screen
+/// activity is vision-channel material, input activity is an activity-level
+/// signal and lands in the tactile channel.
+pub fn activity_observation(
+    session_id: SessionId,
+    source: SignalSource,
+    kind_label: &str,
+    app: &str,
+    detail: Option<&str>,
+    attention_score: f64,
+    timestamp_ms: i64,
+) -> PerceptionEvent {
+    let modality = if kind_label == "input_activity" {
+        PerceptionModality::Tactile
+    } else {
+        PerceptionModality::Vision
+    };
+    base_event(
+        "activity",
+        modality,
+        session_id,
+        timestamp_ms,
+        json!({
+            "activity_kind": kind_label,
+            "app": app,
+            "detail": detail,
+            "signal_source": source.label(),
+        }),
+        attention_score,
+        vec!["activity".into(), kind_label.to_string()],
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -454,6 +494,44 @@ mod tests {
         );
         assert!(event.tags.contains(&"alpha".to_string()));
         assert!(event.tags.contains(&"beta".to_string()));
+    }
+
+    /// Activity observations normalize into the canonical schema with only the
+    /// whitelisted fields, kind-carried tags, and a clamped score.
+    #[test]
+    fn activity_normalization_carries_whitelisted_fields_only() {
+        let screen = activity_observation(
+            sid(),
+            SignalSource::Internal,
+            "screen_activity",
+            "editor",
+            Some("app_focus"),
+            0.4,
+            1_000,
+        );
+        assert_eq!(screen.source, PerceptionModality::Vision);
+        assert_eq!(screen.payload["activity_kind"], "screen_activity");
+        assert_eq!(screen.payload["app"], "editor");
+        assert_eq!(screen.payload["detail"], "app_focus");
+        assert_eq!(screen.payload["signal_source"], "internal");
+        assert!(screen.tags.contains(&"activity".to_string()));
+        assert!(screen.tags.contains(&"screen_activity".to_string()));
+        // Only the four whitelisted payload fields exist.
+        assert_eq!(screen.payload.as_object().unwrap().len(), 4);
+        assert!((screen.attention_score - 0.4).abs() < 1e-9);
+
+        let input = activity_observation(
+            sid(),
+            SignalSource::Internal,
+            "input_activity",
+            "editor",
+            None,
+            2.0,
+            1_000,
+        );
+        assert_eq!(input.source, PerceptionModality::Tactile);
+        assert!(input.payload["detail"].is_null());
+        assert!((input.attention_score - 1.0).abs() < 1e-9, "score clamps");
     }
 
     #[test]

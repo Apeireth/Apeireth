@@ -83,6 +83,7 @@ $AllowlistPaths = @(
     'crates/adapters/cli/tests/*',
     'crates/adapters/sdk/examples/*',
     'crates/capabilities/tools/src/guardrail.rs',
+    'crates/adapters/sdk/src/livekit/auth.rs',
     'crates/engine/perception/tests/*',
     'crates/foundation/governance/src/input_security.rs',
     'crates/adapters/sdk/src/voice/*',

@@ -10,8 +10,15 @@
 //! (normalization, capture metadata, screen salience, observation capture).
 //! It is **not** an `AgentModule` and does **not** own final response.
 //! [`owner::PerceptionOwner`] is default-off and unwired.
+//!
+//! **Production wiring** ([`memory_link`]): one real chain carries whitelisted
+//! activity observations through sanitize → normalize → disclosure envelope →
+//! episodic memory write. Perception content is untrusted external input and
+//! enters memory only inside the envelope. The chain is off unless
+//! `APEIRETH_ENABLE_PERCEPTION` explicitly enables it.
 
 pub mod capture;
+pub mod memory_link;
 pub mod normalize;
 pub mod observe;
 pub mod owner;
@@ -26,10 +33,16 @@ pub use apeireth_plugin::perception::{
     VoiceInput,
 };
 pub use capture::{capture_metadata, CaptureMetadata};
+pub use memory_link::{
+    chain_over_store, sanitize_activity_text, ActivityCollector, ActivityKind, ActivityObservation,
+    EpisodeSink, PerceptionLinkError, PerceptionMemoryChain, PerceptionSwitch, PumpReport,
+    ALLOWED_COLLECTOR_IDS, DEFAULT_ENVELOPE_BUDGET_CHARS, PERCEPTION_ENABLE_ENV,
+    PERCEPTION_EPISODE_ROLE,
+};
 pub use normalize::{
-    command_observation, default_attention_threshold, default_top_k, pipeline_events,
-    tactile_observation, text_observation, top_k_events, validate_event, vision_observation,
-    voice_observation, SignalSource,
+    activity_observation, command_observation, default_attention_threshold, default_top_k,
+    pipeline_events, tactile_observation, text_observation, top_k_events, validate_event,
+    vision_observation, voice_observation, SignalSource,
 };
 pub use observe::{ObservationCandidate, ObservationOutcome, ObservationQueue};
 pub use owner::PerceptionOwner;

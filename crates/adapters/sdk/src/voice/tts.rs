@@ -6,7 +6,7 @@
 //! 3. **Google** — Google Cloud Text-to-Speech (online, multi-language, WaveNet)
 //! 4. **OpenAI** — OpenAI TTS (online, 6 voice preset)
 //!
-//! **STUB**: 4 模型枚举保留, 但 synthesize() 内部返 `VoiceError::NotImplemented`.
+//! 领域模型 (4 模型枚举 + 合成请求 / 输出); 合成执行面见 [`crate::voice`] 的 `synthesize`.
 //!
 //! ## 引用文档
 //!
@@ -228,10 +228,10 @@ impl TtsRequest {
     ) -> VoiceResult<Self> {
         // 文本非空 + ≤ max_text_length
         if text.trim().is_empty() {
-            return Err(VoiceError::Other("tts text is empty".to_string()));
+            return Err(VoiceError::InvalidArgument("tts text is empty".to_string()));
         }
         if text.len() > model.max_text_length() {
-            return Err(VoiceError::Other(format!(
+            return Err(VoiceError::InvalidArgument(format!(
                 "tts text too long: {} > {}",
                 text.len(),
                 model.max_text_length()
@@ -239,7 +239,7 @@ impl TtsRequest {
         }
         // Voice ID 非空
         if voice.trim().is_empty() {
-            return Err(VoiceError::Other("voice id is empty".to_string()));
+            return Err(VoiceError::InvalidArgument("voice id is empty".to_string()));
         }
         // K-1 #6: Language
         VoiceError::validate_language(&language)?;
@@ -407,7 +407,7 @@ mod tests {
             "mp3".to_string(),
             24000,
         );
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     #[test]
@@ -421,7 +421,7 @@ mod tests {
             "mp3".to_string(),
             24000,
         );
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     #[test]
@@ -434,7 +434,7 @@ mod tests {
             "mp3".to_string(),
             24000,
         );
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     #[test]

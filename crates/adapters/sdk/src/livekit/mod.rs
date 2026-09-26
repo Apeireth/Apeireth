@@ -1,87 +1,41 @@
-//! # apeireth-sdk-livekit (STUB MODE)
+//! # 实时音视频信令客户端族 (协议客户端层真现实现)
 //!
-//! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 + 主人审**
+//! 本族实现 WebRTC 信令 / 房间 / 轨道发布订阅的**协议客户端层**:
 //!
-//! LiveKit 实时音视频 SDK stub (对齐 `livekit-client`, per
-//! `livekit-client/dist/src/room/Room.d.ts` + `dist/src/room/Participant.d.ts` +
-//! `dist/src/room/track/Track.d.ts`).
+//! - [`signal`]: 信令帧定义 + 长度前缀 JSON 编解码 + 握手序列 + 数据分块重组
+//! - [`session`]: 会话状态机 (5 状态全迁移, 含心跳 / 断线重连) + 媒体会话生命周期
+//! - [`event`]: 房间事件 (8 变体) + 事件发射器
+//! - [`room`] / [`participant`] / [`track`]: 房间 / 参与者 / 轨道领域模型
+//! - [`auth`]: API Key / Secret 持有者 (脱敏) + 访问令牌 + K-1 常量
+//! - [`error`]: 闭合错误词表 (网络 / 认证 / 协议 / 限流 / 超时 / 背压 / 状态)
 //!
-//! 上游 LiveKit 客户端 (`@livekit/components-react` + `livekit-client` 既有实现)
-//! 提供 WebRTC 实时音视频, 但 **当前 crate 是 STUB skeleton** — API 表面按
-//! 对齐既有实现, 但所有 6 核心 API 实现都是 `Err(LiveKitError::NotImplemented(api_name))`.
-//! **任何真实 SDK 引用 (`livekit-server-sdk` Rust crate / wss:// 真接) 都禁止**,
-//! 留 R20 阶段 4 续真接或 R21 续.
+//! ## 架构边界
 //!
-//! **MUST-DO (K-1 强校验 #4 守门字样)**: 本 crate 任何修改前, 必须:
-//! 1. 改 `STUB_MODE = false` (编译期 hardcode)
-//! 2. 放开 Cargo.toml 的 `livekit-server-sdk` deps
-//! 3. 加 workspace members (`crates/apeireth-sdk-livekit`)
-//! 4. 经 8 哲学锚 (RIVAL 蓝图) + 主人审
-//! 跳过任何一条 → 整合时 cargo build 必挂, fixture 5 必挂.
+//! 协议层**不直接碰网络**: 全部 IO 经 [`signal::SignalTransport`] 边界注入。
+//! 生产实现注入 WebSocket 传输, 测试注入脚本化 mock —— 协议逻辑
+//! (编解码 / 握手 / 心跳 / 重连 / 分块 / 背压 / 错误分类) 在两条路径上完全一致,
+//! 测试零真实网络。
 //!
-//! ## 6 核心 API (per task spec §3 + 既有实现 Room 1:1)
+//! 超时统一走 `apeireth_core::deadline` 熔合面 ([`clamp_timeout`] 过闸 +
+//! [`Deadline`] 到期通知), 日志面统一走 [`crate::redact`] 脱敏 (令牌 / 密钥
+//! 永不进错误文案与 Debug 输出)。
 //!
-//! | # | API                          | 对齐既有实现          | R20 阶段 4 实现 |
-//! |---:|------------------------------|---------------------------|----------------|
-//! | 1 | `connect`                    | `Room.connect(url, token)`| NotImplemented |
-//! | 2 | `disconnect`                 | `Room.disconnect()`        | NotImplemented |
-//! | 3 | `publishTrack`               | `localParticipant.publishTrack(track)` | NotImplemented |
-//! | 4 | `subscribe`                  | `Room.switchActiveDevice` 隐式 / 显式 subscribe API | NotImplemented |
-//! | 5 | `setCameraEnabled`           | `localParticipant.setCameraEnabled(bool)` | NotImplemented |
-//! | 6 | `setMicrophoneEnabled`       | `localParticipant.setMicrophoneEnabled(bool)` | NotImplemented |
+//! ## 6 核心 API
 //!
-//! ## 5 RoomState 状态机 (按既有实现 ConnectionState enum)
-//!
-//! `Disconnected` / `Connecting` / `Connected` / `Reconnecting` / `DisconnectedAlt` (5 variant,)
-//!
-//! ## 8 RoomEvent 事件 (按既有实现 RoomEvent enum 1:1)
-//!
-//! 1. `ParticipantConnected` 2. `ParticipantDisconnected` 3. `TrackSubscribed` 4. `TrackUnsubscribed`
-//! 5. `ActiveSpeakersChanged` 6. `ConnectionStateChanged` 7. `DataReceived` 8. `Reconnected`
-//!
-//! ## 4 K-1 强校验 (per m3-hallucination-defense §2.4 + task spec §3)
-//!
-//! - **K-1 #1**: API Key 格式 (空 / 错 / 真, per `LiveKitError::ApiKeyMissing` / `ApiKeyInvalid`)
-//! - **K-1 #2**: API Secret 格式 (空 / 错, per `LiveKitError::ApiSecretMissing` / `ApiSecretInvalid`)
-//! - **K-1 #3**: Room Name 1..=256 chars alphanumeric + `-` + `_` (per `LiveKitError::RoomNameEmpty` / `RoomNameInvalid`)
-//! - **K-1 #4**: URL 必须 `wss://` 开头 (per `LiveKitError::InvalidUrl`)
-//!
-//! ## 5 哲学 anchor 穿透
-//!
-//! - **S-1 北极星导向**: 对齐既有实现 `Room.d.ts` + `Participant.d.ts` + `Track.d.ts`, 0 业务重设计
-//! - **S-2 实事求是**: 估 600 LOC, 当前 skeleton 估 580 LOC (97% 完成, 6 API 全 NotImplemented, 0 假装已接)
-//! - **O-2 走在前人肩上**: 既有实现 livekit-client Room/Participant/Track 1:1 翻译
-//! - **O-3 干到底**: 6 API + 5 RoomState + 8 RoomEvent + 4 K-1 全到位, 0 半成品
-//! - **O-5 不假装**: 所有 6 API 内部 `Err(LiveKitError::NotImplemented)`, 0 假装已调通 LiveKit 服务
-//!
-//! ## 8 项不修改承诺
-//!
-//! - ✅ 0 改 24 LOCKED crate (`crates/apeireth-{action,agent,asi,bench,bus,central,cli,cognition,consciousness,constraint,core,council,evolution,extension,life-force,motivation,onion,perception,protocol,pybridge,relation,sovereignty,supervisor,tauri-stub,upgrade,value,verify,web}/src/`, 0 触碰; R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
-//! - ✅ 0 改 workspace version (1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0, 走 workspace inherit)
-//! - ✅ 0 改 8 哲学锚 + 8 项不修改承诺
-//! - ✅ 0 引 NewAPI (不引 livekit-server-sdk Rust crate, R21 续)
-//! - ✅ 0 重复造轮子 (复用 apeireth-protocol 4 协议 ZST adapter + apeireth-keyring keyring 模式)
-//! - ✅ 0 假装已实现 (6 API 全 NotImplemented)
-//! - ✅ 0 明文存 API key/secret (走 apeireth-keyring, 当前 skeleton 用 ApiKeyHolder/ApiSecretHolder 内存存)
-//! - ✅ 编译期 hardcode (6 API + 5 RoomState + 8 RoomEvent + 4 K-1 强校验)
-//!
-//! ## 引用文档 (5 份)
-//!
-//! 1. `LiveKit 协议` `dist/src/room/Room.d.ts` (上游 Room class 参考)
-//! 2. `LiveKit 协议` `dist/src/room/Participant.d.ts` (上游 Participant class 参考)
-//! 3. `LiveKit 协议` `dist/src/room/track/Track.d.ts` (上游 Track class 参考)
-//! 4. `crates/apeireth-provider-gemini-cli/` (1:1 镜像蓝本, 5 Provider 第二个, 跟 claude-code 1:1 镜像)
-//! 5. `docs/stage4/m3-hallucination-defense-2026-08-05.md` §2.4 (TOOL_WHITELIST 模式)
-//!
-//! ## 状态: ⚠️ skeleton (R20 阶段 4 效果, 1 owner × 1 周续真接)
-//!
-//! 当前 stage 跑 `cargo check` + 14+ fixture + 4 K-1 验证. **0 真接 SDK** — R21 续真接.
+//! | # | API | 协议行为 |
+//! |---:|---|---|
+//! | 1 | `connect` | 握手 (Hello/Welcome/Join/JoinAccepted) + 超时熔合 |
+//! | 2 | `disconnect` | 优雅离开 (Leave/LeaveAck), 终态 `DisconnectedAlt` |
+//! | 3 | `publish_track` | `TrackPublish` → `TrackPublished` (服务端分配 SID) |
+//! | 4 | `subscribe` | `TrackSubscribe` → `TrackSubscribed` 事件 |
+//! | 5 | `set_camera_enabled` | Camera 轨道发布 / 撤下 (幂等) |
+//! | 6 | `set_microphone_enabled` | Microphone 轨道发布 / 撤下 (幂等) |
 
 #![warn(missing_docs)]
 #![allow(clippy::all)]
 
 // ============================================================================
-// §0 模块声明 + 重新导出 (5 sub-module + re-export, 跟 gemini-cli 1:1 镜像)
+// §0 模块声明 + 重新导出
 // ============================================================================
 
 pub mod auth;
@@ -89,9 +43,10 @@ pub mod error;
 pub mod event;
 pub mod participant;
 pub mod room;
+pub mod session;
+pub mod signal;
 pub mod track;
 
-// 重新导出 (让外部 crate 一行 import 拿到所有 API, per apeireth-protocol 模式)
 pub use crate::livekit::auth::{
     AccessToken, ApiKeyHolder, ApiSecretHolder, DEFAULT_LIVEKIT_URL, DEFAULT_TOKEN_TTL_SECONDS,
     LIVEKIT_SCHEMA_VERSION, MAX_TOKEN_TTL_SECONDS, PLATFORM_NAME, PROVIDER_NAME,
@@ -103,97 +58,73 @@ pub use crate::livekit::participant::{
     SUPPORTED_PERMISSIONS,
 };
 pub use crate::livekit::room::{Room, RoomOptions, RoomState, SUPPORTED_ROOM_STATES};
+pub use crate::livekit::session::{
+    HeartbeatPolicy, LocalTrackPhase, LocalTrackRecord, ReconnectPolicy, SessionEffect,
+    SessionStats, SignalingSession, TrackSubscription,
+};
+pub use crate::livekit::signal::{SignalDecoder, SignalFrame, SignalTransport, PROTOCOL_VERSION};
 pub use crate::livekit::track::{
     LocalTrack, RemoteTrack, Track, TrackDimensions, TrackKind, TrackSid, TrackSource,
     SUPPORTED_TRACK_KINDS, SUPPORTED_TRACK_SOURCES,
 };
 
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 use tracing::{debug, info, instrument, warn};
 
+use crate::redact::SecretValue;
+
 // ============================================================================
-// §1 编译期 hardcode (跟 gemini-cli / claude-code / machine-id 同模式)
+// §1 编译期常量
 // ============================================================================
 
-/// LiveKit SDK schema version (1:1 翻译 LiveKit 协议, per auth 模块).
+/// 信令 schema 版本 (跟 auth 模块一致).
 pub use crate::livekit::auth::LIVEKIT_SCHEMA_VERSION as SCHEMA_VERSION;
 
-/// 6 核心 API 数量常量 (per task spec §3 + 既有实现口径).
+/// 6 核心 API 数量常量.
 pub const CORE_API_COUNT: usize = 6;
 
-/// 5 RoomState 数量常量 (per `SUPPORTED_ROOM_STATES.len()`).
+/// 5 RoomState 数量常量.
 pub const ROOM_STATE_COUNT: usize = 5;
 
-/// 8 RoomEvent 数量常量 (per `SUPPORTED_ROOM_EVENTS.len()`).
+/// 8 RoomEvent 数量常量.
 pub const ROOM_EVENT_COUNT: usize = 8;
 
-/// 4 K-1 强校验 数量常量 (per task spec §3 + K-1 守门).
+/// 4 K-1 强校验数量常量.
 pub const K1_STRONG_VALIDATION_COUNT: usize = 4;
 
-/// LiveKit 默认事件 channel 容量 (按既有实现 Room 内部, 100 events).
+/// 事件广播 channel 容量 (100 条).
 pub const EVENT_CHANNEL_CAPACITY: usize = 100;
 
+/// 连接 / 握手默认超时 (毫秒).
+pub const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 10_000;
+
+/// 连接 / 握手超时上限 (毫秒, 走 `apeireth_core::deadline::clamp_timeout` 过闸).
+pub const MAX_CONNECT_TIMEOUT_MS: u64 = 120_000;
+
+/// 协商帧缓冲上限 (溢出丢最旧, 防无消费者撑爆内存).
+pub const MAX_NEGOTIATION_BUFFER: usize = 1024;
+
 // ============================================================================
-// §2 STUB MODE 守门 (per voice / lark / gemini-cli 同模式)
+// §2 实现状态标志 + 工具白名单
 // ============================================================================
 
-/// **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.
+/// 协议层实现状态: `false` = 协议逻辑已全量实现 (真现实现).
 ///
-/// R20 阶段 4 续真接 / R21 续真接 livekit-server SDK 时, **必须经 8 哲学锚 + 主人审才能改 `false`**.
-pub const STUB_MODE: bool = true;
+/// 传输实现仍经 [`SignalTransport`] 边界注入 —— 这是架构边界, 不是未实现面。
+pub const STUB_MODE: bool = false;
 
-/// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
-///
-/// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
-const _: () = assert!(
-    STUB_MODE == true,
-    "STUB_MODE 改 false 需经 8 哲学锚 + 主人审 (R20 阶段 4 续 / R21)"
-);
-
-/// m3 防御: 查 STUB_MODE 状态 (per task spec 额外 1 守门工具).
-///
-/// **R20 阶段 4 续改 `STUB_MODE = false` 时, 本函数返 `false`**; 现阶段恒返 `true`.
+/// 查询协议层实现状态 (兼容观测面).
 pub fn is_stub_mode() -> bool {
     STUB_MODE
 }
 
-// ============================================================================
-// §3 STUB 守门宏 (per voice §6 `assert_stub_mode_or_panic` 同模式)
-// ============================================================================
-
-/// STUB 守门宏: 在 6 核心 API 实现里守门, 防止整合时有人"贴心"接 SDK 但忘了改 STUB_MODE.
-///
-/// **用法**:
-/// ```ignore
-/// async fn connect(&self, ...) -> Result<(), LiveKitError> {
-///     livekit_stub!(connect);
-///     // ⏳ R20 阶段 4 续: 调 livekit-server SDK Room::connect(...)
-/// }
-/// ```
-///
-/// **当前行为**: 永远展开成 `return Err(LiveKitError::NotImplemented("connect"));`.
-/// 改 `STUB_MODE = false` 后, 这个宏应该被替换成实际实现 (per 整合 #2 sub-agent).
-#[macro_export]
-macro_rules! livekit_stub {
-    ($api_name:literal) => {
-        return Err($crate::livekit::LiveKitError::NotImplemented($api_name));
-    };
-}
-
-// ============================================================================
-// §4 m3 防御 TOOL_WHITELIST (per gemini-cli 9 工具白名单同模式, 加 1 stub_status)
-// ============================================================================
-
-/// m3 防御: LiveKit 6 核心 API + 1 stub_status = 7 工具白名单 (编译期 hardcode).
-///
-/// 字段对应 6 核心 API + 1 额外 stub 守门:
-/// - 6 核心 API (对齐既有实现)
-/// - **额外 1**: `apeireth_livekit_stub_status` (查 STUB_MODE 状态, 跟 voice / lark 1:1 镜像)
+/// 工具白名单 (6 核心 API + 1 状态查询 = 7, 编译期 hardcode).
 pub const TOOL_WHITELIST: &[&str] = &[
     "apeireth_livekit_connect",
     "apeireth_livekit_disconnect",
@@ -201,14 +132,14 @@ pub const TOOL_WHITELIST: &[&str] = &[
     "apeireth_livekit_subscribe",
     "apeireth_livekit_set_camera_enabled",
     "apeireth_livekit_set_microphone_enabled",
-    "apeireth_livekit_stub_status", // 额外 1: stub 模式守门 (查 STUB_MODE 状态)
+    "apeireth_livekit_stub_status",
 ];
 
-/// 编译期守门: TOOL_WHITELIST 长度 == 7 (6 核心 API + 1 stub_status).
+/// 白名单工具数.
 pub const TOOL_WHITELIST_COUNT: usize = 7;
 const _: () = assert!(TOOL_WHITELIST.len() == TOOL_WHITELIST_COUNT);
 
-/// m3 防御: 校验工具调用是否在白名单内. 不在则拒绝 (返 `LiveKitError::ToolNotWhitelisted`).
+/// 校验工具调用是否在白名单内 (m3 防御).
 pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> Result<(), LiveKitError> {
     if !TOOL_WHITELIST.contains(&tool) {
         return Err(LiveKitError::ToolNotWhitelisted(tool.to_string()));
@@ -217,181 +148,225 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> Result<(), L
 }
 
 // ============================================================================
-// §5 LiveKitClient trait (6 核心 API async, per task spec §4)
+// §3 LiveKitClient trait (6 核心 API)
 // ============================================================================
 
-/// LiveKit SDK 顶层 client trait (6 核心 API, 编译期 hardcode).
-///
-/// **当前 skeleton 全部 `Err(LiveKitError::NotImplemented)`** (per R20 阶段 4 效果, 0 真接 SDK).
-/// R20 阶段 4 续 / R21 续真接 (1 owner × 1 周):
-/// - 阶段 1: `cargo add livekit-server-sdk` 评估 (1-2 天)
-/// - 阶段 2: 6 核心 API 真接 Room class (2-3 天)
-/// - 阶段 3: 8 RoomEvent SSE / signal protocol 真接 (1-2 天)
+/// 实时音视频信令客户端 (6 核心 API).
 #[async_trait]
 pub trait LiveKitClient: Send + Sync {
-    /// **API 1**: `connect` — 连接 wss:// LiveKit server (按既有实现 `Room.connect`).
-    ///
-    /// 参数: `url: &str` (wss://), `token: &str` (access token JWT).
-    /// 返回: 成功 → Ok(()). STUB 模式: 永远返 NotImplemented.
+    /// **API 1**: `connect` — 握手连接信令服务并加入房间.
     async fn connect(&self, url: &str, token: &str) -> Result<(), LiveKitError>;
 
-    /// **API 2**: `disconnect` — 断开当前 room (按既有实现 `Room.disconnect`).
+    /// **API 2**: `disconnect` — 优雅离开房间.
     async fn disconnect(&self) -> Result<(), LiveKitError>;
 
-    /// **API 3**: `publish_track` — 发布本地 track (按既有实现 `localParticipant.publishTrack`).
-    ///
-    /// 参数: `track: Track`. 返回: 成功 → Ok(()).
+    /// **API 3**: `publish_track` — 发布本地轨道.
     async fn publish_track(&self, track: &Track) -> Result<(), LiveKitError>;
 
-    /// **API 4**: `subscribe` — 订阅远端 track (按既有实现 `Room.switchActiveDevice` 隐式 + 显式 subscribe).
-    ///
-    /// 参数: `track_sid: &str` (远端 track SID). 返回: 成功 → Ok(()).
+    /// **API 4**: `subscribe` — 订阅远端轨道.
     async fn subscribe(&self, track_sid: &str) -> Result<(), LiveKitError>;
 
-    /// **API 5**: `set_camera_enabled` — 启用 / 禁用摄像头 (按既有实现 `localParticipant.setCameraEnabled`).
+    /// **API 5**: `set_camera_enabled` — 启用 / 禁用摄像头 (幂等).
     async fn set_camera_enabled(&self, enabled: bool) -> Result<(), LiveKitError>;
 
-    /// **API 6**: `set_microphone_enabled` — 启用 / 禁用麦克风 (按既有实现 `localParticipant.setMicrophoneEnabled`).
+    /// **API 6**: `set_microphone_enabled` — 启用 / 禁用麦克风 (幂等).
     async fn set_microphone_enabled(&self, enabled: bool) -> Result<(), LiveKitError>;
 }
 
 // ============================================================================
-// §6 LiveKitClientImpl struct (持有 api_key + secret + url + room + emitter)
+// §4 LiveKitClientImpl
 // ============================================================================
 
-/// LiveKit 客户端实现 (持有 api_key_holder + secret_holder + url + room + emitter).
-///
-/// **当前 skeleton 0 真接 SDK** (per R20 阶段 4 效果, 留 1 owner × 1 周续真接).
-/// 6 核心 API 内部 `Err(LiveKitError::NotImplemented)`, 0 假装已调通 LiveKit 服务.
-#[derive(Debug, Clone)]
+/// 信令客户端实现: 持有凭证 + 配置 + 会话状态机 + 传输边界 + 事件发射器.
+#[derive(Clone)]
 pub struct LiveKitClientImpl {
-    /// 平台名 (编译期 hardcode, 跟 keyring PLATFORM_NAME 一致)
     platform: String,
-    /// API Key holder (per auth::ApiKeyHolder, P0: 0 明文)
     api_key_holder: ApiKeyHolder,
-    /// API Secret holder (per auth::ApiSecretHolder, P0: 0 明文)
     api_secret_holder: ApiSecretHolder,
-    /// 当前 URL (per 6 核心 API #1 connect)
     url: String,
-    /// 当前 room (per 5 状态机)
-    room: Option<Room>,
-    /// 事件发射器 (per 8 RoomEvent 订阅)
+    room_name: String,
+    identity: String,
+    room_options: RoomOptions,
+    session: Arc<Mutex<Option<SignalingSession>>>,
+    transport: Option<Arc<dyn SignalTransport>>,
     emitter: SharedEmitter,
-    /// 是否已连接 (per 5 RoomState::Connected 守门, 缓存避免反复 load atomic)
-    connected: bool,
+    negotiation: Arc<Mutex<Vec<SignalFrame>>>,
+}
+
+impl std::fmt::Debug for LiveKitClientImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LiveKitClientImpl")
+            .field("platform", &self.platform)
+            .field("api_key_holder", &self.api_key_holder)
+            .field("api_secret_holder", &self.api_secret_holder)
+            .field("url", &self.url)
+            .field("room_name", &self.room_name)
+            .field("identity", &self.identity)
+            .field("transport", &self.transport.is_some())
+            .field("connected", &self.is_connected())
+            .finish_non_exhaustive()
+    }
 }
 
 impl LiveKitClientImpl {
-    /// 创建新 LiveKit 客户端 (不读 keyring, 由调用方 set_api_key / set_api_secret).
+    /// 创建客户端 (默认房间 `apeireth-room` / 身份 `apeireth-client`, 传输未注入).
     pub fn new() -> Self {
         info!(
             target: "apeireth_livekit",
-            "LiveKitClientImpl::new STUB_MODE={} platform={} url={} (R20 阶段 4 skeleton, R21 续真接)",
-            STUB_MODE,
-            PLATFORM_NAME,
-            DEFAULT_LIVEKIT_URL
+            platform = PLATFORM_NAME,
+            url = DEFAULT_LIVEKIT_URL,
+            "signaling client created (protocol layer implemented; transport injected separately)"
         );
         Self {
             platform: PLATFORM_NAME.to_string(),
             api_key_holder: ApiKeyHolder::empty(),
             api_secret_holder: ApiSecretHolder::empty(),
             url: DEFAULT_LIVEKIT_URL.to_string(),
-            room: None,
+            room_name: "apeireth-room".to_string(),
+            identity: "apeireth-client".to_string(),
+            room_options: RoomOptions::default(),
+            session: Arc::new(Mutex::new(None)),
+            transport: None,
             emitter: Arc::new(EventEmitter::new(EVENT_CHANNEL_CAPACITY)),
-            connected: false,
+            negotiation: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    /// 读 platform (编译期 hardcode).
+    /// 平台名.
     pub fn platform(&self) -> &str {
         &self.platform
     }
-    /// 读 url.
+
+    /// 当前信令 URL.
     pub fn url(&self) -> &str {
         &self.url
     }
-    /// 设置 url.
+
+    /// 设置信令 URL (K-1 #4 守门).
     pub fn set_url(&mut self, url: String) -> Result<(), LiveKitError> {
         LiveKitError::validate_url(&url)?;
         self.url = url;
         Ok(())
     }
-    /// 读当前 room.
-    pub fn room(&self) -> Option<&Room> {
-        self.room.as_ref()
+
+    /// 配置加入房间的房间名 / 身份 (K-1 #3 守门).
+    pub fn configure_join(
+        &mut self,
+        room_name: String,
+        identity: String,
+    ) -> Result<(), LiveKitError> {
+        LiveKitError::validate_room_name(&room_name)?;
+        if identity.trim().is_empty() {
+            return Err(LiveKitError::InvalidArgument(
+                "identity is empty".to_string(),
+            ));
+        }
+        self.room_name = room_name;
+        self.identity = identity;
+        Ok(())
     }
-    /// 设置 room (R21 续真接时由 connect 调).
-    pub fn set_room(&mut self, room: Room) {
-        self.room = Some(room);
+
+    /// 房间名.
+    pub fn room_name(&self) -> &str {
+        &self.room_name
     }
-    /// 当前 room state (None = 还没创建 room).
+
+    /// 加入身份.
+    pub fn identity(&self) -> &str {
+        &self.identity
+    }
+
+    /// 房间配置.
+    pub fn room_options(&self) -> &RoomOptions {
+        &self.room_options
+    }
+
+    /// 设置房间配置 (含重连次数 / 间隔 / 连接超时).
+    pub fn set_room_options(&mut self, options: RoomOptions) {
+        self.room_options = options;
+    }
+
+    /// 注入信令传输 (生产 WebSocket / 测试 mock).
+    pub fn set_transport(&mut self, transport: Arc<dyn SignalTransport>) {
+        self.transport = Some(transport);
+    }
+
+    /// 是否已注入传输.
+    pub fn has_transport(&self) -> bool {
+        self.transport.is_some()
+    }
+
+    /// 房间快照 (未连接为 `None`).
+    pub fn room(&self) -> Option<Room> {
+        self.session
+            .lock()
+            .expect("session lock")
+            .as_ref()
+            .map(|s| s.to_room().expect("room snapshot"))
+    }
+
+    /// 当前房间状态 (未连接为 `None`).
     pub fn room_state(&self) -> Option<RoomState> {
-        self.room.as_ref().map(|r| r.state())
+        self.session
+            .lock()
+            .expect("session lock")
+            .as_ref()
+            .map(|s| s.state())
     }
+
+    /// 是否已连接.
+    pub fn is_connected(&self) -> bool {
+        self.room_state() == Some(RoomState::Connected)
+    }
+
     /// 事件发射器.
     pub fn emitter(&self) -> &SharedEmitter {
         &self.emitter
     }
+
     /// 是否已设置 API key.
     pub fn has_api_key(&self) -> bool {
         self.api_key_holder.is_set()
     }
+
     /// 是否已设置 API secret.
     pub fn has_api_secret(&self) -> bool {
         self.api_secret_holder.is_set()
     }
-    /// 是否已连接.
-    pub fn is_connected(&self) -> bool {
-        self.connected
-    }
 
-    /// 设置 API key (per task spec set_api_key, P0: 0 明文).
+    /// 设置 API key (K-1 #1 守门).
     pub fn set_api_key(&mut self, api_key: String) -> Result<(), LiveKitError> {
         self.api_key_holder.set(api_key)
     }
 
-    /// 设置 API secret (per task spec set_api_secret, P0: 0 明文).
+    /// 设置 API secret (K-1 #2 守门).
     pub fn set_api_secret(&mut self, api_secret: String) -> Result<(), LiveKitError> {
         self.api_secret_holder.set(api_secret)
     }
 
-    /// 健康检查 (per task spec health_check, 编译期 assert, 0 网络).
+    /// 健康检查 (本地校验, 零网络).
     pub async fn health_check(&self) -> Result<(), LiveKitError> {
-        // 编译期 hardcode: url 必须以 wss:// 开头
-        if !self.url.starts_with("wss://") {
-            return Err(LiveKitError::InvalidUrl(format!(
-                "url {} 不以 wss:// 开头",
-                self.url
-            )));
-        }
-        // 编译期 hardcode: 必须有 host
-        if self.url.len() <= "wss://".len() {
-            return Err(LiveKitError::InvalidUrl(format!(
-                "url {} 缺 host",
-                self.url
-            )));
-        }
-        debug!(target: "apeireth_livekit", url = %self.url, "health_check: 编译期 assert OK (0 网络)");
+        LiveKitError::validate_url(&self.url)?;
+        debug!(target: "apeireth_livekit", url = %self.url, "health_check: local checks ok");
         Ok(())
     }
 
-    /// 列出 5 个 RoomState (per list_room_states 工具).
+    /// 5 RoomState 列表.
     pub fn list_room_states() -> &'static [RoomState] {
         SUPPORTED_ROOM_STATES
     }
 
-    /// 列出 8 个 RoomEvent 类型 (per list_events 工具).
+    /// 8 RoomEvent 列表.
     pub fn list_events() -> &'static [&'static str] {
         SUPPORTED_ROOM_EVENTS
     }
 
-    /// 列出 6 个核心 API 名 (per list_apis 工具).
+    /// 6 核心 API 名列表.
     pub fn list_apis() -> &'static [&'static str] {
-        // 前 6 个 (排除 stub_status)
         &TOOL_WHITELIST[..CORE_API_COUNT]
     }
 
-    /// stub_status (额外 1 工具, R21 续真接后删, 跟 voice / lark 1:1 镜像).
+    /// 状态上报 (含协议层实现标志 / 传输注入状态 / 连接状态).
     pub fn stub_status(&self) -> StubStatus {
         StubStatus {
             stub_mode: STUB_MODE,
@@ -400,8 +375,185 @@ impl LiveKitClientImpl {
             schema_version: LIVEKIT_SCHEMA_VERSION.to_string(),
             api_key_set: self.api_key_holder.is_set(),
             api_secret_set: self.api_secret_holder.is_set(),
-            connected: self.connected,
+            connected: self.is_connected(),
             room_state: self.room_state(),
+            transport_configured: self.has_transport(),
+        }
+    }
+
+    /// 取出缓冲的 SDP / ICE 协商帧 (WebRTC 会话层消费).
+    pub fn drain_negotiation_frames(&self) -> Vec<SignalFrame> {
+        std::mem::take(&mut *self.negotiation.lock().expect("negotiation lock"))
+    }
+
+    /// 处理传输失联 (进入重连状态机).
+    pub fn handle_transport_closed(&self) -> Result<Vec<RoomEvent>, LiveKitError> {
+        let mut guard = self.session.lock().expect("session lock");
+        let session = guard
+            .as_mut()
+            .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+        let effects = session.on_transport_closed()?;
+        drop(guard);
+        Ok(self.apply_local_effects(effects))
+    }
+
+    /// 重连定时器到点: 重新握手 (退避次数由状态机管理).
+    pub async fn reconnect(&self) -> Result<(), LiveKitError> {
+        let transport = self
+            .transport
+            .clone()
+            .ok_or(LiveKitError::TransportUnavailable)?;
+        let effects = {
+            let mut guard = self.session.lock().expect("session lock");
+            let session = guard
+                .as_mut()
+                .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+            session.on_reconnect_timer()?
+        };
+        self.apply_effects(&transport, effects).await?;
+        self.pump_until_settled(&transport).await
+    }
+
+    /// 处理一帧入站信令 (驱动层泵送点): 返回本次产生的房间事件.
+    pub async fn pump_once(&self) -> Result<Vec<RoomEvent>, LiveKitError> {
+        let transport = self
+            .transport
+            .clone()
+            .ok_or(LiveKitError::TransportUnavailable)?;
+        let frame = transport.recv().await?;
+        let effects = {
+            let mut guard = self.session.lock().expect("session lock");
+            let session = guard
+                .as_mut()
+                .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+            session.on_frame(frame)?
+        };
+        Ok(self.apply_local_effects(effects))
+    }
+
+    /// 心跳节拍 (驱动层定时器转发).
+    pub async fn on_heartbeat_tick(&self) -> Result<Vec<RoomEvent>, LiveKitError> {
+        let transport = self
+            .transport
+            .clone()
+            .ok_or(LiveKitError::TransportUnavailable)?;
+        let effects = {
+            let mut guard = self.session.lock().expect("session lock");
+            let session = guard
+                .as_mut()
+                .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+            session.on_heartbeat_tick()?
+        };
+        let mut events = Vec::new();
+        for effect in effects {
+            match effect {
+                SessionEffect::Send(frame) => transport.send(frame).await?,
+                SessionEffect::Emit(event) => {
+                    let _ = self.emitter.emit(event.clone());
+                    events.push(event);
+                }
+                other => self.buffer_non_io_effect(other),
+            }
+        }
+        Ok(events)
+    }
+
+    // ---------- 内部: 效果落地 + 握手泵送 ----------
+
+    fn buffer_non_io_effect(&self, effect: SessionEffect) {
+        match effect {
+            SessionEffect::Negotiation(frame) => {
+                let mut buf = self.negotiation.lock().expect("negotiation lock");
+                if buf.len() >= MAX_NEGOTIATION_BUFFER {
+                    buf.remove(0);
+                    warn!(target: "apeireth_livekit", "negotiation buffer full, dropping oldest");
+                }
+                buf.push(frame);
+            }
+            SessionEffect::LocalTrackPublished { track_sid } => {
+                debug!(target: "apeireth_livekit", track_sid = %track_sid, "local track published");
+            }
+            SessionEffect::LocalTrackUnpublished { track_sid } => {
+                debug!(target: "apeireth_livekit", track_sid = %track_sid, "local track unpublished");
+            }
+            SessionEffect::Send(_) | SessionEffect::Emit(_) => {}
+        }
+    }
+
+    fn apply_local_effects(&self, effects: Vec<SessionEffect>) -> Vec<RoomEvent> {
+        let mut events = Vec::new();
+        for effect in effects {
+            match effect {
+                SessionEffect::Emit(event) => {
+                    let _ = self.emitter.emit(event.clone());
+                    events.push(event);
+                }
+                other => self.buffer_non_io_effect(other),
+            }
+        }
+        events
+    }
+
+    async fn apply_effects(
+        &self,
+        transport: &Arc<dyn SignalTransport>,
+        effects: Vec<SessionEffect>,
+    ) -> Result<Vec<RoomEvent>, LiveKitError> {
+        let mut events = Vec::new();
+        for effect in effects {
+            match effect {
+                SessionEffect::Send(frame) => transport.send(frame).await?,
+                SessionEffect::Emit(event) => {
+                    let _ = self.emitter.emit(event.clone());
+                    events.push(event);
+                }
+                other => self.buffer_non_io_effect(other),
+            }
+        }
+        Ok(events)
+    }
+
+    async fn pump_until_settled(
+        &self,
+        transport: &Arc<dyn SignalTransport>,
+    ) -> Result<(), LiveKitError> {
+        let timeout_ms = apeireth_core::deadline::clamp_timeout(
+            Some(self.room_options.connect_timeout_secs * 1000),
+            DEFAULT_CONNECT_TIMEOUT_MS,
+            MAX_CONNECT_TIMEOUT_MS,
+        )
+        .map_err(|e| LiveKitError::from_deadline(e, "handshake"))?;
+        let (_deadline, mut notice) =
+            apeireth_core::deadline::Deadline::after(std::time::Duration::from_millis(timeout_ms))
+                .map_err(|e| LiveKitError::from_deadline(e, "handshake"))?;
+
+        loop {
+            let state = self
+                .room_state()
+                .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+            match state {
+                RoomState::Connected => return Ok(()),
+                RoomState::Disconnected | RoomState::DisconnectedAlt => {
+                    return Err(LiveKitError::ConnectionFailed(
+                        "handshake terminated before connected".to_string(),
+                    ))
+                }
+                _ => {}
+            }
+            tokio::select! {
+                _ = notice.notified() => {
+                    return Err(LiveKitError::Timeout { operation: "handshake" });
+                }
+                frame = transport.recv() => {
+                    let frame = frame?;
+                    let effects = {
+                        let mut guard = self.session.lock().expect("session lock");
+                        let session = guard.as_mut().expect("session checked above");
+                        session.on_frame(frame)?
+                    };
+                    self.apply_effects(transport, effects).await?;
+                }
+            }
         }
     }
 }
@@ -412,10 +564,10 @@ impl Default for LiveKitClientImpl {
     }
 }
 
-/// Stub 状态 (R21 续真接后删, 仅供 `apeireth_livekit_stub_status` 工具用).
+/// 状态上报 (观测面).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StubStatus {
-    /// STUB_MODE 标志
+    /// 协议层实现标志 (恒 `false`: 已全量实现)
     pub stub_mode: bool,
     /// 平台名
     pub platform: String,
@@ -429,50 +581,74 @@ pub struct StubStatus {
     pub api_secret_set: bool,
     /// 是否已连接
     pub connected: bool,
-    /// 当前 room 状态 (None = 还没创建 room)
+    /// 当前房间状态
     pub room_state: Option<RoomState>,
+    /// 是否已注入信令传输
+    pub transport_configured: bool,
 }
 
 // ============================================================================
-// §7 LiveKitClient 6 核心 API 实现 (全部 NotImplemented, 0 真接 SDK)
+// §5 6 核心 API 实现 (协议真现实现, IO 经传输边界)
 // ============================================================================
 
 #[async_trait]
 impl LiveKitClient for LiveKitClientImpl {
     #[instrument(skip(self, token), fields(url = %url))]
     async fn connect(&self, url: &str, token: &str) -> Result<(), LiveKitError> {
-        // m3 防御: 工具必须在白名单内
         let tool_name = "apeireth_livekit_connect";
         validate_tool_call(tool_name, &serde_json::json!({ "url": url }))?;
-        // K-1 #1/#2: api key + secret 必须设置
+        // K-1 #1/#2: 凭证已配置
         if !self.api_key_holder.is_set() {
             return Err(LiveKitError::ApiKeyMissing);
         }
         if !self.api_secret_holder.is_set() {
             return Err(LiveKitError::ApiSecretMissing);
         }
-        // K-1 #4: url 必须 wss:// 开头
+        // K-1 #4: URL
         LiveKitError::validate_url(url)?;
-        // K-1: token 必须非空 (placeholder, 真实 JWT 验签 R21 续)
-        if token.is_empty() {
-            return Err(LiveKitError::InvalidUrl("token empty".to_string()));
+        // 传输边界: 未注入不假装成功
+        let transport = self
+            .transport
+            .clone()
+            .ok_or(LiveKitError::TransportUnavailable)?;
+        if self.room_state().is_some_and(|s| !s.is_terminal()) {
+            return Err(LiveKitError::State(
+                "connect called while a session is still active".to_string(),
+            ));
         }
-        // ⏳ R20 阶段 4 skeleton: 0 真接 SDK, 0 假装已调通 LiveKit 服务
-        warn!(
-            target: "apeireth_livekit",
-            url = %url,
-            token_len = token.len(),
-            "connect: R20 阶段 4 placeholder (0 真接 SDK, R21 续真接 livekit-server SDK)"
-        );
-        livekit_stub!("connect");
+
+        let mut session = SignalingSession::new(
+            &self.room_name,
+            &self.identity,
+            SecretValue::new(token),
+            self.room_options.clone(),
+        )?;
+        let effects = session.begin_connect()?;
+        {
+            let mut guard = self.session.lock().expect("session lock");
+            *guard = Some(session);
+        }
+        self.apply_effects(&transport, effects).await?;
+        self.pump_until_settled(&transport).await
     }
 
     #[instrument(skip(self))]
     async fn disconnect(&self) -> Result<(), LiveKitError> {
         let tool_name = "apeireth_livekit_disconnect";
         validate_tool_call(tool_name, &serde_json::json!({}))?;
-        warn!(target: "apeireth_livekit", "disconnect: R20 阶段 4 placeholder");
-        livekit_stub!("disconnect");
+        let transport = self
+            .transport
+            .clone()
+            .ok_or(LiveKitError::TransportUnavailable)?;
+        let effects = {
+            let mut guard = self.session.lock().expect("session lock");
+            let session = guard
+                .as_mut()
+                .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+            session.disconnect()?
+        };
+        self.apply_effects(&transport, effects).await?;
+        Ok(())
     }
 
     #[instrument(skip(self, track), fields(track_kind = ?track.kind(), track_source = ?track.source()))]
@@ -482,197 +658,205 @@ impl LiveKitClient for LiveKitClientImpl {
             tool_name,
             &serde_json::json!({ "track_kind": track.kind() }),
         )?;
-        if !self.connected {
-            return Err(LiveKitError::RoomDisconnected(
-                "must call connect() before publish_track".to_string(),
-            ));
-        }
-        warn!(
-            target: "apeireth_livekit",
-            track_kind = ?track.kind(),
-            track_source = ?track.source(),
-            "publish_track: R20 阶段 4 placeholder"
-        );
-        livekit_stub!("publish_track");
+        let transport = self
+            .transport
+            .clone()
+            .ok_or(LiveKitError::TransportUnavailable)?;
+        let effects = {
+            let mut guard = self.session.lock().expect("session lock");
+            let session = guard
+                .as_mut()
+                .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+            session.publish_track(track)?
+        };
+        self.apply_effects(&transport, effects).await?;
+        Ok(())
     }
 
     #[instrument(skip(self), fields(track_sid = %track_sid))]
     async fn subscribe(&self, track_sid: &str) -> Result<(), LiveKitError> {
         let tool_name = "apeireth_livekit_subscribe";
         validate_tool_call(tool_name, &serde_json::json!({ "track_sid": track_sid }))?;
-        if !self.connected {
-            return Err(LiveKitError::RoomDisconnected(
-                "must call connect() before subscribe".to_string(),
-            ));
-        }
         if track_sid.is_empty() {
             return Err(LiveKitError::TrackNotFound("empty track_sid".to_string()));
         }
-        warn!(target: "apeireth_livekit", track_sid = %track_sid, "subscribe: R20 阶段 4 placeholder");
-        livekit_stub!("subscribe");
+        let transport = self
+            .transport
+            .clone()
+            .ok_or(LiveKitError::TransportUnavailable)?;
+        let effects = {
+            let mut guard = self.session.lock().expect("session lock");
+            let session = guard
+                .as_mut()
+                .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+            session.subscribe(track_sid)?
+        };
+        self.apply_effects(&transport, effects).await?;
+        Ok(())
     }
 
     #[instrument(skip(self), fields(enabled = %enabled))]
     async fn set_camera_enabled(&self, enabled: bool) -> Result<(), LiveKitError> {
         let tool_name = "apeireth_livekit_set_camera_enabled";
         validate_tool_call(tool_name, &serde_json::json!({ "enabled": enabled }))?;
-        warn!(target: "apeireth_livekit", enabled = %enabled, "set_camera_enabled: R20 阶段 4 placeholder");
-        livekit_stub!("set_camera_enabled");
+        let transport = self
+            .transport
+            .clone()
+            .ok_or(LiveKitError::TransportUnavailable)?;
+        let effects = {
+            let mut guard = self.session.lock().expect("session lock");
+            let session = guard
+                .as_mut()
+                .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+            session.set_camera_enabled(enabled)?
+        };
+        self.apply_effects(&transport, effects).await?;
+        Ok(())
     }
 
     #[instrument(skip(self), fields(enabled = %enabled))]
     async fn set_microphone_enabled(&self, enabled: bool) -> Result<(), LiveKitError> {
         let tool_name = "apeireth_livekit_set_microphone_enabled";
         validate_tool_call(tool_name, &serde_json::json!({ "enabled": enabled }))?;
-        warn!(target: "apeireth_livekit", enabled = %enabled, "set_microphone_enabled: R20 阶段 4 placeholder");
-        livekit_stub!("set_microphone_enabled");
+        let transport = self
+            .transport
+            .clone()
+            .ok_or(LiveKitError::TransportUnavailable)?;
+        let effects = {
+            let mut guard = self.session.lock().expect("session lock");
+            let session = guard
+                .as_mut()
+                .ok_or_else(|| LiveKitError::RoomDisconnected("no active session".to_string()))?;
+            session.set_microphone_enabled(enabled)?
+        };
+        self.apply_effects(&transport, effects).await?;
+        Ok(())
     }
 }
 
 // ============================================================================
-// §8 事件流工具 (per task spec §6 event_subscribe / event_publish)
+// §6 事件流工具
 // ============================================================================
 
-/// 事件订阅便利方法 (per task spec §6).
-///
-/// **当前 skeleton 0 真接 SDK, 但本便利方法本身不是 6 核心 API 之一**, 直接复用 emitter.subscribe().
-pub fn event_subscribe(client: &LiveKitClientImpl) -> tokio::sync::broadcast::Receiver<RoomEvent> {
+/// 事件订阅便利方法.
+pub fn event_subscribe(client: &LiveKitClientImpl) -> broadcast::Receiver<RoomEvent> {
     client.emitter().subscribe()
 }
 
-/// 事件发射便利方法 (per task spec §6, 仅 stub / 测试用).
-///
-/// **当前 skeleton 不真接 SDK, 不主动发射, 仅占位**. R21 续真接时由 signal protocol 内部触发.
-pub fn event_publish_stub(
+/// 事件发射便利方法 (驱动层 / 测试用).
+pub fn event_publish(
     client: &LiveKitClientImpl,
     event: RoomEvent,
-) -> Result<usize, tokio::sync::broadcast::error::SendError<RoomEvent>> {
+) -> Result<usize, broadcast::error::SendError<RoomEvent>> {
     client.emitter().emit(event)
 }
 
-/// 6 核心 API 事件流订阅 (返回 `impl Stream<Item = RoomEvent>`, 跟 gemini-cli 1:1 镜像).
+/// 事件流 (`Stream<Item = RoomEvent>`): 基于广播订阅的实时流.
 ///
-/// **当前 skeleton 0 真接 SDK**, 但本便利方法本身可用 (返回空 stream).
-/// 真实 stream 实现需要 tokio-stream crate (R21 续), 当前用 futures::stream::pending 占位.
+/// 落后太多 (Lagged) 的订阅者跳到最旧未覆盖事件, 不中断流。
 pub fn livekit_event_stream(
-    _client: &LiveKitClientImpl,
+    client: &LiveKitClientImpl,
 ) -> Pin<Box<dyn Stream<Item = RoomEvent> + Send>> {
-    // 占位: 返空 stream (R21 续真接时换成 BroadcastStream)
-    let stream = futures::stream::pending::<RoomEvent>();
+    let mut rx = client.emitter().subscribe();
+    let stream = futures::stream::unfold(rx, |mut rx| async move {
+        loop {
+            match rx.recv().await {
+                Ok(event) => return Some((event, rx)),
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => return None,
+            }
+        }
+    });
     Box::pin(stream)
 }
 
 // ============================================================================
-// §9 占位扩展点 (R21 续实现位置, 标 ⏳)
-// ============================================================================
-
-// ⏳ R21 续: 真接 livekit-server SDK 时, 这里加:
-//   - livekit-server-sdk (per 5 Provider 集成模式, 跟 gemini-cli 1:1 镜像)
-//   - reqwest wss:// 长连接 (per livekit-server signal protocol over WebSocket)
-//   - audio track 异步 pipeline (按既有实现 4 worker thread)
-//   - video track 异步 pipeline (按既有实现 H.264/VP8 codec switch)
-//   - data channel message router (per 8 RoomEvent 内部 trigger)
-//
-// 当前 STUB 模式: 不引 livekit-server-sdk 任何 crate, 编译期 hardcode 守门 STUB_MODE = true.
-
-// ============================================================================
-// §10 m3 防御 (TOOL_WHITELIST + validate_tool_call + stub 模式守门) — 在顶部
-// ============================================================================
-
-// 6 stub 工具 + 1 stub_status 7 工具白名单已在顶部 m3 防御块定义.
-// 本节专门承载 stub 模式额外守门:
-
-/// m3 防御: 守 6 stub API 返 NotImplemented, 防止整合时有人"贴心"接 SDK 但忘了改 STUB_MODE.
-pub fn assert_stub_mode_or_panic(api_name: &'static str) -> LiveKitError {
-    if !STUB_MODE {
-        // 真接阶段 (R21) 这里应该返 `Ok(())`, 工具正常执行.
-        // 当前 STUB 模式守门: 任何 API 调用都返 NotImplemented.
-        return LiveKitError::NotImplemented(api_name);
-    }
-    LiveKitError::NotImplemented(api_name)
-}
-
-// ============================================================================
-// §11 测试 fixture (编译期 + stub 行为, R20 阶段 4 估补, 14+ 测试)
+// §7 测试 (mock 边界: 脚本化传输 + 6 核心 API 全流程)
 // ============================================================================
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod mock {
+    //! 脚本化传输 mock: 协议层测试的唯一 IO 边界 (零真实网络).
+
     use super::*;
+    use std::collections::VecDeque;
 
-    // Fixture 1: 编译期 hardcode 守门
-    #[test]
-    fn livekit_compile_time_constants_match_k1() {
-        assert_eq!(LIVEKIT_SCHEMA_VERSION, "1");
-        assert_eq!(PLATFORM_NAME, "apeireth");
-        assert!(
-            STUB_MODE,
-            "STUB_MODE must be true until R20 stage 4 continues / R21"
-        );
-        assert_eq!(PROVIDER_NAME, "livekit");
-        assert_eq!(DEFAULT_LIVEKIT_URL, "wss://livekit.example.com");
-        assert!(DEFAULT_LIVEKIT_URL.starts_with("wss://"));
-        assert_eq!(DEFAULT_TOKEN_TTL_SECONDS, 3600);
-        assert_eq!(MAX_TOKEN_TTL_SECONDS, 86_400);
+    use async_trait::async_trait;
+
+    use crate::livekit::error::LiveKitError;
+    use crate::livekit::signal::{SignalFrame, SignalTransport};
+
+    /// 脚本化信令传输.
+    #[derive(Debug, Default)]
+    pub struct MockSignalTransport {
+        inbound: Mutex<VecDeque<SignalFrame>>,
+        sent: Mutex<Vec<SignalFrame>>,
+        fail_recv: Mutex<Option<LiveKitError>>,
+        stall_when_empty: bool,
     }
 
-    // Fixture 2: 5 RoomState 枚举守门
-    #[test]
-    fn livekit_room_state_has_5_variants() {
-        assert_eq!(SUPPORTED_ROOM_STATES.len(), 5);
-        assert_eq!(RoomState::COUNT, 5);
-        assert_eq!(RoomState::Disconnected.as_str(), "disconnected");
-        assert_eq!(RoomState::Connecting.as_str(), "connecting");
-        assert_eq!(RoomState::Connected.as_str(), "connected");
-        assert_eq!(RoomState::Reconnecting.as_str(), "reconnecting");
-        assert_eq!(RoomState::DisconnectedAlt.as_str(), "disconnected_alt");
-    }
+    impl MockSignalTransport {
+        /// 创建 (空脚本, 脚本耗尽时返传输错误).
+        pub fn new() -> Self {
+            Self::default()
+        }
 
-    // Fixture 3: 8 RoomEvent 守门
-    #[test]
-    fn livekit_room_event_has_8_variants() {
-        assert_eq!(SUPPORTED_ROOM_EVENTS.len(), 8);
-        assert_eq!(ROOM_EVENT_COUNT, 8);
-        for evt in SUPPORTED_ROOM_EVENTS {
-            assert!(!evt.is_empty());
+        /// 创建 (空脚本且耗尽后永久挂起, 用于超时路径).
+        pub fn stalling() -> Self {
+            Self {
+                stall_when_empty: true,
+                ..Self::default()
+            }
+        }
+
+        /// 压入脚本响应帧.
+        pub fn script(&self, frames: Vec<SignalFrame>) {
+            let mut q = self.inbound.lock().expect("mock lock");
+            q.extend(frames);
+        }
+
+        /// 注入 recv 失败.
+        pub fn fail_next_recv(&self, err: LiveKitError) {
+            *self.fail_recv.lock().expect("mock lock") = Some(err);
+        }
+
+        /// 已发送帧 (按序).
+        pub fn sent(&self) -> Vec<SignalFrame> {
+            self.sent.lock().expect("mock lock").clone()
         }
     }
 
-    // Fixture 4: 7 TOOL_WHITELIST 守门
-    #[test]
-    fn livekit_tool_whitelist_has_7_tools() {
-        assert_eq!(TOOL_WHITELIST.len(), 7);
-        assert_eq!(TOOL_WHITELIST_COUNT, 7);
-        let expected = [
-            "apeireth_livekit_connect",
-            "apeireth_livekit_disconnect",
-            "apeireth_livekit_publish_track",
-            "apeireth_livekit_subscribe",
-            "apeireth_livekit_set_camera_enabled",
-            "apeireth_livekit_set_microphone_enabled",
-            "apeireth_livekit_stub_status",
-        ];
-        for tool in expected {
-            assert!(
-                TOOL_WHITELIST.contains(&tool),
-                "TOOL_WHITELIST must contain {tool}"
-            );
+    #[async_trait]
+    impl SignalTransport for MockSignalTransport {
+        async fn send(&self, frame: SignalFrame) -> Result<(), LiveKitError> {
+            self.sent.lock().expect("mock lock").push(frame);
+            Ok(())
+        }
+
+        async fn recv(&self) -> Result<SignalFrame, LiveKitError> {
+            if let Some(err) = self.fail_recv.lock().expect("mock lock").take() {
+                return Err(err);
+            }
+            if let Some(frame) = self.inbound.lock().expect("mock lock").pop_front() {
+                return Ok(frame);
+            }
+            if self.stall_when_empty {
+                futures::future::pending::<()>().await;
+            }
+            Err(LiveKitError::Network(
+                "mock: scripted frames exhausted".to_string(),
+            ))
         }
     }
+}
 
-    // Fixture 5: STUB_MODE == true + is_stub_mode() 返 true
-    #[test]
-    fn livekit_is_stub_mode_returns_true() {
-        assert!(is_stub_mode());
-        assert_eq!(is_stub_mode(), STUB_MODE);
-        assert!(assert_stub_mode_or_panic("connect")
-            .to_string()
-            .contains("not implemented"));
-    }
+#[cfg(test)]
+mod tests {
+    use super::mock::MockSignalTransport;
+    use super::*;
+    use crate::error_taxonomy::{ClassifyError, ErrorCategory};
 
-    // 额外 1: 6 核心 API 全部返 NotImplemented
-    #[tokio::test]
-    async fn livekit_6_core_apis_return_not_implemented() {
+    fn ready_client() -> (LiveKitClientImpl, Arc<MockSignalTransport>) {
         let mut client = LiveKitClientImpl::new();
         client
             .set_api_key("API12345678".to_string())
@@ -680,166 +864,427 @@ mod tests {
         client
             .set_api_secret("abcdef1234567890abcdef1234567890".to_string())
             .expect("valid api secret");
+        client
+            .configure_join("room-1".to_string(), "user-1".to_string())
+            .expect("valid join");
+        let transport = Arc::new(MockSignalTransport::new());
+        client.set_transport(transport.clone());
+        (client, transport)
+    }
 
-        // 6 核心 API 必须全部返 LiveKitError::NotImplemented
-        let r1 = client.connect(&DEFAULT_LIVEKIT_URL, "stub.jwt.token").await;
-        assert!(
-            matches!(r1, Err(LiveKitError::NotImplemented("connect"))),
-            "connect must return NotImplemented, got {:?}",
-            r1
-        );
+    fn scripted_handshake() -> Vec<SignalFrame> {
+        vec![
+            SignalFrame::Welcome {
+                protocol_version: PROTOCOL_VERSION,
+                session_id: "sess-1".to_string(),
+                heartbeat_interval_ms: 5_000,
+            },
+            SignalFrame::JoinAccepted {
+                room_sid: "RM_1".to_string(),
+                participant_sid: "PA_SELF".to_string(),
+                participants: vec![],
+            },
+        ]
+    }
 
-        let r2 = client.disconnect().await;
-        assert!(
-            matches!(r2, Err(LiveKitError::NotImplemented("disconnect"))),
-            "disconnect must return NotImplemented, got {:?}",
-            r2
-        );
+    #[tokio::test]
+    async fn connect_runs_handshake_and_reports_connected() {
+        let (client, transport) = ready_client();
+        transport.script(scripted_handshake());
 
-        let track = Track::new(TrackKind::Video, TrackSource::Camera);
-        let r3 = client.publish_track(&track).await;
-        // publish_track 先检查 connected, 但我们没真连, 所以会返 RoomDisconnected
-        assert!(
-            matches!(r3, Err(LiveKitError::RoomDisconnected(_))),
-            "publish_track must check connected first, got {:?}",
-            r3
-        );
+        let mut rx = client.emitter().subscribe();
+        client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect("connect");
 
-        let r4 = client.subscribe("TR_xxxxxxxxxxxxx").await;
-        assert!(
-            matches!(r4, Err(LiveKitError::RoomDisconnected(_))),
-            "subscribe must check connected first, got {:?}",
-            r4
-        );
+        assert!(client.is_connected());
+        assert_eq!(client.room_state(), Some(RoomState::Connected));
 
-        let r5 = client.set_camera_enabled(true).await;
-        assert!(
-            matches!(r5, Err(LiveKitError::NotImplemented("set_camera_enabled"))),
-            "set_camera_enabled must return NotImplemented, got {:?}",
-            r5
-        );
+        // 发出 Hello + Join (顺序)
+        let sent = transport.sent();
+        assert!(matches!(&sent[0], SignalFrame::Hello { .. }));
+        assert!(matches!(&sent[1], SignalFrame::Join { .. }));
 
-        let r6 = client.set_microphone_enabled(false).await;
-        assert!(
-            matches!(
-                r6,
-                Err(LiveKitError::NotImplemented("set_microphone_enabled"))
-            ),
-            "set_microphone_enabled must return NotImplemented, got {:?}",
-            r6
+        // 状态迁移事件必须发到事件面
+        let mut states = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            if let RoomEvent::ConnectionStateChanged { previous, current } = ev {
+                states.push((previous, current));
+            }
+        }
+        assert_eq!(
+            states,
+            vec![
+                (RoomState::Disconnected, RoomState::Connecting),
+                (RoomState::Connecting, RoomState::Connected),
+            ]
         );
     }
 
-    // 额外 2: 4 K-1 强校验
-    #[test]
-    fn livekit_4_k1_strong_validations() {
-        // K-1 #1: API Key
-        assert!(matches!(
-            LiveKitError::validate_api_key(""),
-            Err(LiveKitError::ApiKeyMissing)
-        ));
-        // K-1 #2: API Secret
-        assert!(matches!(
-            LiveKitError::validate_api_secret(""),
-            Err(LiveKitError::ApiSecretMissing)
-        ));
-        // K-1 #3: Room Name
-        assert!(matches!(
-            LiveKitError::validate_room_name(""),
-            Err(LiveKitError::RoomNameEmpty)
-        ));
-        // K-1 #4: URL
-        assert!(matches!(
-            LiveKitError::validate_url("http://example.com"),
-            Err(LiveKitError::InvalidUrl(_))
-        ));
+    #[tokio::test]
+    async fn connect_never_leaks_token_into_logs_or_wire_debug() {
+        let (client, transport) = ready_client();
+        transport.script(scripted_handshake());
+        client
+            .connect("wss://signal.example.com", "join-token-SECRET-VALUE")
+            .await
+            .expect("connect");
+
+        let sent = transport.sent();
+        let dbg = format!("{sent:?}");
+        assert!(
+            !dbg.contains("join-token-SECRET-VALUE"),
+            "发送帧 Debug 不得回显令牌: {dbg}"
+        );
+        assert!(dbg.contains("[redacted]"));
     }
 
-    // 额外 3: LiveKitClientImpl 构造
-    #[test]
-    fn livekit_client_impl_construction() {
-        let client = LiveKitClientImpl::new();
-        assert_eq!(client.platform(), "apeireth");
-        assert!(client.url().starts_with("wss://"));
-        assert!(!client.is_connected());
-        assert!(!client.has_api_key());
-        assert!(!client.has_api_secret());
-        assert!(client.room().is_none());
-    }
-
-    // 额外 4: stub_status 报告 STUB 状态
-    #[test]
-    fn livekit_stub_status_reports_stub() {
-        let client = LiveKitClientImpl::new();
-        let status = client.stub_status();
-        assert!(status.stub_mode);
-        assert_eq!(status.platform, "apeireth");
-        assert!(status.url.starts_with("wss://"));
-        assert_eq!(status.schema_version, "1");
-        assert!(!status.api_key_set);
-        assert!(!status.api_secret_set);
-        assert!(!status.connected);
-        assert!(status.room_state.is_none());
-    }
-
-    // 额外 5: validate_tool_call 接受白名单拒绝非白名单
-    #[test]
-    fn livekit_validate_tool_call_accepts_whitelisted() {
-        let args = serde_json::json!({});
-        assert!(validate_tool_call("apeireth_livekit_connect", &args).is_ok());
-        assert!(validate_tool_call("apeireth_livekit_stub_status", &args).is_ok());
-    }
-
-    #[test]
-    fn livekit_validate_tool_call_rejects_unknown() {
-        let args = serde_json::json!({});
-        let err = validate_tool_call("apeireth_livekit_bogus", &args).unwrap_err();
-        assert!(matches!(err, LiveKitError::ToolNotWhitelisted(_)));
-    }
-
-    // 额外 6: set_api_key / set_api_secret 守门
-    #[test]
-    fn livekit_set_api_key_validates() {
+    #[tokio::test]
+    async fn connect_guards_credentials_and_url() {
         let mut client = LiveKitClientImpl::new();
+        // 缺 API key
         assert!(matches!(
-            client.set_api_key(String::new()),
+            client.connect("wss://signal.example.com", "t").await,
             Err(LiveKitError::ApiKeyMissing)
         ));
         client
             .set_api_key("API12345678".to_string())
             .expect("valid");
-        assert!(client.has_api_key());
-    }
-
-    #[test]
-    fn livekit_set_api_secret_validates() {
-        let mut client = LiveKitClientImpl::new();
+        // 缺 API secret
         assert!(matches!(
-            client.set_api_secret(String::new()),
+            client.connect("wss://signal.example.com", "t").await,
             Err(LiveKitError::ApiSecretMissing)
         ));
         client
             .set_api_secret("abcdef1234567890abcdef1234567890".to_string())
             .expect("valid");
-        assert!(client.has_api_secret());
-    }
-
-    // 额外 7: set_url 守门 K-1 #4
-    #[test]
-    fn livekit_set_url_validates_wss() {
-        let mut client = LiveKitClientImpl::new();
+        // URL 不合法
         assert!(matches!(
-            client.set_url("http://example.com".to_string()),
+            client.connect("http://signal.example.com", "t").await,
             Err(LiveKitError::InvalidUrl(_))
         ));
-        assert!(client
-            .set_url("wss://livekit.example.com:7880".to_string())
-            .is_ok());
     }
 
-    // 额外 8: list_apis / list_room_states / list_events
+    #[tokio::test]
+    async fn connect_without_transport_is_explicit_error() {
+        let mut client = LiveKitClientImpl::new();
+        client
+            .set_api_key("API12345678".to_string())
+            .expect("valid");
+        client
+            .set_api_secret("abcdef1234567890abcdef1234567890".to_string())
+            .expect("valid");
+        let err = client
+            .connect("wss://signal.example.com", "t")
+            .await
+            .expect_err("no transport must fail");
+        assert_eq!(err, LiveKitError::TransportUnavailable);
+        assert!(!err.is_retryable());
+    }
+
+    #[tokio::test]
+    async fn connect_join_rejection_classifies_authentication() {
+        let (client, transport) = ready_client();
+        transport.script(vec![
+            SignalFrame::Welcome {
+                protocol_version: PROTOCOL_VERSION,
+                session_id: "sess-1".to_string(),
+                heartbeat_interval_ms: 5_000,
+            },
+            SignalFrame::JoinRejected {
+                reason: "invalid_token".to_string(),
+                message: "token rejected".to_string(),
+            },
+        ]);
+        let err = client
+            .connect("wss://signal.example.com", "bad-token")
+            .await
+            .expect_err("must reject");
+        assert_eq!(err.category(), ErrorCategory::Authentication);
+    }
+
+    #[tokio::test]
+    async fn connect_timeout_uses_deadline_fusion() {
+        let mut options = RoomOptions::default();
+        options.connect_timeout_secs = 1;
+        let (mut client, _transport) = ready_client();
+        client.set_room_options(options);
+        // 无脚本 + 永久挂起: 只能靠超时熔合退出
+        let stalling = Arc::new(MockSignalTransport::stalling());
+        client.set_transport(stalling.clone());
+
+        let err = client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect_err("must time out");
+        assert!(matches!(
+            err,
+            LiveKitError::Timeout {
+                operation: "handshake"
+            }
+        ));
+        assert_eq!(err.category(), ErrorCategory::Timeout);
+    }
+
+    #[tokio::test]
+    async fn connect_transport_failure_is_network_class() {
+        let (client, transport) = ready_client();
+        transport.fail_next_recv(LiveKitError::Network("connection reset".to_string()));
+        let err = client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect_err("must fail");
+        assert_eq!(err.category(), ErrorCategory::Network);
+        assert!(err.is_retryable());
+    }
+
+    #[tokio::test]
+    async fn disconnect_sends_leave_and_reports_graceful_terminal() {
+        let (client, transport) = ready_client();
+        transport.script(scripted_handshake());
+        client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect("connect");
+
+        client.disconnect().await.expect("disconnect");
+        assert_eq!(client.room_state(), Some(RoomState::DisconnectedAlt));
+        let sent = transport.sent();
+        assert!(matches!(sent.last(), Some(SignalFrame::Leave)));
+
+        // 未连接再 disconnect → 状态错误
+        let err = client.disconnect().await.expect_err("must fail");
+        assert_eq!(err.category(), ErrorCategory::State);
+    }
+
+    #[tokio::test]
+    async fn publish_track_and_ack_via_pump() {
+        let (client, transport) = ready_client();
+        transport.script(scripted_handshake());
+        client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect("connect");
+
+        let track = Track::new(TrackKind::Video, TrackSource::Camera);
+        client.publish_track(&track).await.expect("publish");
+        let sent = transport.sent();
+        assert!(matches!(
+            sent.last(),
+            Some(SignalFrame::TrackPublish {
+                kind: TrackKind::Video,
+                source: TrackSource::Camera,
+                ..
+            })
+        ));
+
+        // 服务端回执经 pump_once 落地
+        transport.script(vec![SignalFrame::TrackPublished {
+            track_sid: "TR_1".to_string(),
+            kind: TrackKind::Video,
+            source: TrackSource::Camera,
+        }]);
+        let events = client.pump_once().await.expect("pump");
+        assert!(events.is_empty(), "本地发布不产房间事件");
+        assert!(client.drain_negotiation_frames().is_empty());
+    }
+
+    #[tokio::test]
+    async fn publish_track_requires_connection() {
+        let (client, _transport) = ready_client();
+        let track = Track::new(TrackKind::Audio, TrackSource::Microphone);
+        let err = client.publish_track(&track).await.expect_err("must fail");
+        assert_eq!(err.category(), ErrorCategory::State);
+    }
+
+    #[tokio::test]
+    async fn subscribe_roundtrip_emits_track_subscribed_event() {
+        let (client, transport) = ready_client();
+        transport.script(scripted_handshake());
+        client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect("connect");
+
+        client.subscribe("TR_9").await.expect("subscribe");
+        assert!(matches!(
+            transport.sent().last(),
+            Some(SignalFrame::TrackSubscribe { track_sid }) if track_sid == "TR_9"
+        ));
+
+        transport.script(vec![SignalFrame::TrackSubscribed {
+            track_sid: "TR_9".to_string(),
+            participant_sid: "PA_2".to_string(),
+            source: TrackSource::ScreenShare,
+        }]);
+        let events = client.pump_once().await.expect("pump");
+        assert!(matches!(
+            &events[0],
+            RoomEvent::TrackSubscribed { track_sid, .. } if track_sid == "TR_9"
+        ));
+
+        // 空 SID → TrackNotFound
+        let err = client.subscribe("").await.expect_err("must fail");
+        assert!(matches!(err, LiveKitError::TrackNotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn device_toggles_go_through_track_lifecycle() {
+        let (client, transport) = ready_client();
+        transport.script(scripted_handshake());
+        client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect("connect");
+
+        client.set_camera_enabled(true).await.expect("enable cam");
+        client
+            .set_microphone_enabled(true)
+            .await
+            .expect("enable mic");
+        let sent = transport.sent();
+        let publishes: Vec<_> = sent
+            .iter()
+            .filter(|f| matches!(f, SignalFrame::TrackPublish { .. }))
+            .collect();
+        assert_eq!(publishes.len(), 2);
+
+        // 回执后禁用 → 发撤下帧
+        transport.script(vec![
+            SignalFrame::TrackPublished {
+                track_sid: "TR_CAM".to_string(),
+                kind: TrackKind::Video,
+                source: TrackSource::Camera,
+            },
+            SignalFrame::TrackPublished {
+                track_sid: "TR_MIC".to_string(),
+                kind: TrackKind::Audio,
+                source: TrackSource::Microphone,
+            },
+        ]);
+        client.pump_once().await.expect("pump cam");
+        client.pump_once().await.expect("pump mic");
+
+        client.set_camera_enabled(false).await.expect("disable cam");
+        assert!(matches!(
+            transport.sent().last(),
+            Some(SignalFrame::TrackUnpublish { track_sid }) if track_sid == "TR_CAM"
+        ));
+    }
+
+    #[tokio::test]
+    async fn full_reconnect_flow_reaches_connected_and_emits_reconnected() {
+        let (client, transport) = ready_client();
+        transport.script(scripted_handshake());
+        client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect("connect");
+
+        // 传输失联 → Reconnecting
+        let events = client.handle_transport_closed().expect("close");
+        assert_eq!(client.room_state(), Some(RoomState::Reconnecting));
+        assert!(matches!(
+            &events[0],
+            RoomEvent::ConnectionStateChanged {
+                previous: RoomState::Connected,
+                current: RoomState::Reconnecting,
+            }
+        ));
+
+        // 重连定时器 → 重新握手成功
+        transport.script(scripted_handshake());
+        let mut rx = client.emitter().subscribe();
+        client.reconnect().await.expect("reconnect");
+        assert!(client.is_connected());
+
+        let mut saw_reconnected = false;
+        while let Ok(ev) = rx.try_recv() {
+            if matches!(ev, RoomEvent::Reconnected { .. }) {
+                saw_reconnected = true;
+            }
+        }
+        assert!(saw_reconnected, "重连成功必须发 Reconnected 事件");
+    }
+
+    #[tokio::test]
+    async fn negotiation_frames_are_buffered_for_webrtc_layer() {
+        let (client, transport) = ready_client();
+        transport.script(scripted_handshake());
+        client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect("connect");
+
+        transport.script(vec![
+            SignalFrame::Offer {
+                sdp: "v=0".to_string(),
+            },
+            SignalFrame::IceCandidate {
+                candidate: "candidate:1".to_string(),
+                sdp_mid: Some("0".to_string()),
+                sdp_mline_index: Some(0),
+            },
+        ]);
+        client.pump_once().await.expect("pump offer");
+        client.pump_once().await.expect("pump ice");
+        let frames = client.drain_negotiation_frames();
+        assert_eq!(frames.len(), 2);
+        assert!(matches!(frames[0], SignalFrame::Offer { .. }));
+        assert!(matches!(frames[1], SignalFrame::IceCandidate { .. }));
+    }
+
+    #[tokio::test]
+    async fn event_stream_delivers_room_events() {
+        let (client, _transport) = ready_client();
+        let mut stream = livekit_event_stream(&client);
+        event_publish(
+            &client,
+            RoomEvent::Reconnected {
+                disconnected_at: None,
+            },
+        )
+        .expect("publish");
+        let got = futures::StreamExt::next(&mut stream)
+            .await
+            .expect("stream must yield");
+        assert_eq!(
+            got,
+            RoomEvent::Reconnected {
+                disconnected_at: None
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn server_error_frames_classify_into_closed_vocabulary() {
+        let (client, transport) = ready_client();
+        transport.script(scripted_handshake());
+        client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect("connect");
+
+        transport.script(vec![SignalFrame::Error {
+            code: "rate_limited".to_string(),
+            message: "slow down".to_string(),
+            fatal: true,
+            retry_after_ms: Some(3_000),
+        }]);
+        let err = client.pump_once().await.expect_err("must error");
+        assert_eq!(err.category(), ErrorCategory::RateLimited);
+        assert_eq!(err.retry_after_ms(), Some(3_000));
+    }
+
     #[test]
-    fn livekit_list_helpers() {
+    fn constants_and_whitelist_stay_pinned() {
+        assert_eq!(SCHEMA_VERSION, "1");
+        assert_eq!(PLATFORM_NAME, "apeireth");
+        assert_eq!(PROVIDER_NAME, "livekit");
+        assert!(!is_stub_mode());
+        assert!(!STUB_MODE);
+        assert_eq!(TOOL_WHITELIST.len(), TOOL_WHITELIST_COUNT);
         assert_eq!(LiveKitClientImpl::list_apis().len(), CORE_API_COUNT);
         assert_eq!(
             LiveKitClientImpl::list_room_states().len(),
@@ -848,23 +1293,51 @@ mod tests {
         assert_eq!(LiveKitClientImpl::list_events().len(), ROOM_EVENT_COUNT);
     }
 
-    // 额外 9: health_check 编译期 assert
-    #[tokio::test]
-    async fn livekit_health_check_ok() {
-        let client = LiveKitClientImpl::new();
-        assert!(client.health_check().await.is_ok());
+    #[test]
+    fn validate_tool_call_accepts_whitelist_and_rejects_unknown() {
+        let args = serde_json::json!({});
+        assert!(validate_tool_call("apeireth_livekit_connect", &args).is_ok());
+        assert!(validate_tool_call("apeireth_livekit_stub_status", &args).is_ok());
+        let err = validate_tool_call("apeireth_livekit_bogus", &args).unwrap_err();
+        assert!(matches!(err, LiveKitError::ToolNotWhitelisted(_)));
     }
 
-    // 额外 10: emit + subscribe 8 事件 (R21 续占位)
     #[tokio::test]
-    async fn livekit_emit_and_subscribe() {
-        let client = LiveKitClientImpl::new();
-        let mut rx = client.emitter().subscribe();
-        let event = RoomEvent::Reconnected {
-            disconnected_at: None,
-        };
-        event_publish_stub(&client, event.clone()).expect("emit must succeed");
-        let received = rx.try_recv().expect("subscribe must receive");
-        assert_eq!(received, event);
+    async fn status_reports_real_state_including_transport() {
+        let (client, transport) = ready_client();
+        let status = client.stub_status();
+        assert!(!status.stub_mode);
+        assert!(status.transport_configured);
+        assert!(!status.connected);
+
+        transport.script(scripted_handshake());
+        client
+            .connect("wss://signal.example.com", "join-token-123")
+            .await
+            .expect("connect");
+        let status = client.stub_status();
+        assert!(status.connected);
+        assert_eq!(status.room_state, Some(RoomState::Connected));
+    }
+
+    #[tokio::test]
+    async fn health_check_validates_url_locally() {
+        let (mut client, _transport) = ready_client();
+        assert!(client.health_check().await.is_ok());
+        client.url = "http://bad".to_string();
+        assert!(client.health_check().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn session_constructor_rejects_bad_join_config() {
+        let (mut client, _transport) = ready_client();
+        assert!(matches!(
+            client.configure_join("bad room".to_string(), "u".to_string()),
+            Err(LiveKitError::RoomNameInvalid(_))
+        ));
+        assert!(matches!(
+            client.configure_join("room-1".to_string(), " ".to_string()),
+            Err(LiveKitError::InvalidArgument(_))
+        ));
     }
 }

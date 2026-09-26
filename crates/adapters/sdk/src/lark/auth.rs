@@ -1,134 +1,138 @@
-//! # Lark 鉴权 (per Lark 开放平台 SDK)
+//! # lark 鉴权 (凭证持有 + token 生命周期 + 持久化 token 缓存)
 //!
-//! 飞书开放平台 5 鉴权方式 (按既有实现):
-//! 1. **App ID** — 应用唯一标识 (e.g. `cli_a1b2c3d4e5f6g7h8`)
-//! 2. **App Secret** — 应用密钥 (e.g. 32 char random, 走 keyring)
-//! 3. **tenant_access_token** — 应用级 access token, TTL 2h, 走 `/auth/v3/tenant_access_token/internal`
-//! 4. **user_access_token** — 用户级 access token, 走 OAuth `code` → `user_access_token`
-//! 5. **webhook_token** — 事件订阅校验 token (per `im/v1/event` 回调)
+//! 平台开放 API 的 5 个鉴权要素:
+//! 1. **App ID** — 应用唯一标识 (`cli_` 前缀, K-1 #1 强校验)
+//! 2. **App Secret** — 应用密钥 (≥ 16 字符, K-1 #2 强校验)
+//! 3. **tenant_access_token** — 应用级访问令牌 (TTL 通常 2h,
+//!    走 `/auth/v3/tenant_access_token/internal` 颁发)
+//! 4. **user_access_token** — 用户级访问令牌 (授权码换发, 携带用户身份)
+//! 5. **webhook_token** — 事件订阅校验 token + 加密密钥
 //!
-//! **P0 安全铁律** (主人 19:50 拍板): App ID + App Secret + 3 token 0 明文存盘.
-//! - Windows: 走 Credential Manager
-//! - macOS:   走 Keychain
-//! - Linux:   走 Secret Service (libsecret)
-//! - BSD:     走 BSD Keychain
+//! ## 安全铁律
 //!
-//! **fallback** (per OWASP 2023 + apeireth-keyring §2.4.1):
-//! - AES-256-GCM 加密
-//! - PBKDF2 600_000 迭代派生 key
-//! - 走 `apeireth_keyring::KeyringStore::set` / `get`
+//! - App ID / App Secret / 3 类 token **不以明文落盘**; 调试输出一律脱敏
+//!   (`[redacted]`), 任何 `{:?}` / 日志不会带出秘密值。
+//! - token 持久化缓存 ([`TokenCache`]) 是唯一落盘的秘密面: 走
+//!   `storage_atomic` 原子写 + 文件锁 + `0600` 属主可读写权限。
+//! - 【显式不支持】`from_credential_store`: 系统凭据库 (操作系统凭据设施)
+//!   的接入依赖部署环境, 本客户端不自带 —— 返回
+//!   `Err(LarkError::Unsupported("credential_store"))`, 由部署方在外围注入
+//!   凭证后调用 `set_*`。
 //!
-//! **6 K-1 强校验** (per task spec): app_id / app_secret / chat_id / open_id / email / mobile.
-//! chat_id / open_id / email / mobile 在 error.rs 校验, app_id / app_secret 在本模块校验.
+//! ## token 过期口径
+//!
+//! `is_expired()` 按绝对过期戳判定; 传输层刷新用 `is_expired_with_skew()`
+//! (提前 [`TOKEN_REFRESH_SKEW_SECS`] 秒视为需刷新), 避免临期 token 在飞行中过期。
 
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::lark::error::LarkError;
+use crate::lark::error::{LarkError, LarkResult};
 
 // ============================================================================
-// §1 编译期 hardcode 常量 (per R20 P0 5 crate 风格 + K-1 强校验)
+// §1 编译期常量
 // ============================================================================
 
-/// 平台名 (keyring "service" 字段 / protocol 平台标识).
-///
-/// 跟 livekit / sandbox PLATFORM_NAME 1:1, 锁 "apeireth" 避免跟其他 app 冲突.
+/// 平台名 (持久化文件命名空间 / 协议平台标识)。
 pub const PLATFORM_NAME: &str = "apeireth";
 
-/// Provider 名 (keyring "account" 字段).
-///
-/// 对齐既有实现 `Lark.Client.config.serviceName = 'lark'`.
+/// Provider 名 (协议面标识)。
 pub const PROVIDER_NAME: &str = "lark";
 
-/// Lark SDK schema 版本 (1:1 翻译 Lark 开放平台 SDK).
+/// lark 协议 schema 版本 (wire 契约版本)。
 pub const LARK_SCHEMA_VERSION: &str = "1";
 
-/// 默认 Lark 服务器 URL (per 飞书 Open Platform 官方, https:// 强制).
+/// 默认平台开放 API base URL。
 ///
-/// 真实部署时用户应改成自己的飞书自建应用 URL (e.g. `https://open.feishu.cn`).
-pub const DEFAULT_LARK_API_BASE: &str = "https://open.feishu.cn/open-apis";
+/// **这是中性占位默认值** —— 部署时必须用 [`crate::lark::LarkClientImpl`]
+/// 的配置覆盖为组织协作平台的实际开放端点 (https 强制)。
+pub const DEFAULT_LARK_API_BASE: &str = "https://open.lark.example.com/open-apis";
 
-/// 默认 tenant_access_token TTL (2h = 7200s, per 飞书 Open Platform 文档).
+/// 默认 tenant_access_token TTL (2h = 7200s)。
 pub const DEFAULT_TENANT_TOKEN_TTL_SECONDS: u64 = 7200;
 
-/// 默认 user_access_token TTL (2h = 7200s, per 飞书 Open Platform OAuth 文档).
+/// 默认 user_access_token TTL (2h = 7200s)。
 pub const DEFAULT_USER_TOKEN_TTL_SECONDS: u64 = 7200;
 
-/// Token 最大 TTL (24h, per 飞书 Open Platform 上限, 防长占).
+/// token 最大 TTL (24h, 防长占)。
 pub const MAX_TOKEN_TTL_SECONDS: u64 = 86_400;
 
-/// App ID 最小长度 (cli_ + 8 char = 12, per 飞书规范).
+/// token 刷新提前量 (秒): 剩余 TTL 低于此值即视为需刷新。
+pub const TOKEN_REFRESH_SKEW_SECS: u64 = 60;
+
+/// App ID 最小长度 (`cli_` + 8 字符 = 12)。
 pub const MIN_APP_ID_LENGTH: usize = 12;
 
-/// App Secret 最小长度 (per 飞书规范, 16 char).
+/// App Secret 最小长度 (16 字符)。
 pub const MIN_APP_SECRET_LENGTH: usize = 16;
 
-/// App Secret 典型长度 (32 char, per 飞书默认).
+/// App Secret 典型长度 (32 字符)。
 pub const TYPICAL_APP_SECRET_LENGTH: usize = 32;
 
+/// 编译期守门: 最小长度常量与 K-1 校验口径一致。
+const _: () = assert!(MIN_APP_ID_LENGTH == 12);
+const _: () = assert!(MIN_APP_SECRET_LENGTH == 16);
+
 // ============================================================================
-// §2 AppIdHolder (per P0 安全铁律 + apeireth-keyring 模式)
+// §2 AppIdHolder (内存持有, 0 明文落盘)
 // ============================================================================
 
-/// App ID 持有者 (per P0 安全铁律 + apeireth-keyring 模式).
-///
-/// **当前 skeleton 用 String 包装** (跟 livekit / sandbox 1:1 对齐). R21 续真接时
-/// 改成 `apeireth_keyring::SecretBytes` 或 `secrecy::SecretString`.
+/// App ID 持有者 (内存持有; 调试输出不带出秘密)。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppIdHolder {
-    /// App ID (从 keyring get, **绝不存明文**)
+    /// App ID 值 (仅内存)。
     app_id: Option<String>,
-    /// 是否已从 keyring 加载
-    loaded_from_keyring: bool,
+    /// 是否由外部凭据库加载 (当前恒 false —— 见 `from_credential_store`)。
+    loaded_from_store: bool,
 }
 
 impl AppIdHolder {
-    /// 创建空 holder.
+    /// 创建空 holder。
     pub fn empty() -> Self {
         Self {
             app_id: None,
-            loaded_from_keyring: false,
+            loaded_from_store: false,
         }
     }
 
-    /// 从 keyring 加载 App ID.
+    /// 从部署方系统凭据库加载 App ID。
     ///
-    /// **R21 续真接时** 调 `apeireth_keyring::KeyringStore::get(PLATFORM_NAME, "lark-app-id")`.
-    /// 当前 skeleton 返 None (per 0 假装已调通 keyring).
-    pub fn from_keyring(_account: &str) -> Self {
-        // ⏳ R20 阶段 4 skeleton: 不真接 keyring, 仅 holder
-        // R21 续真接: apeireth_keyring::KeyringStore::get(PLATFORM_NAME, "lark-app-id")
-        Self::empty()
+    /// 【显式不支持】操作系统凭据库接入依赖部署环境 (凭据设施 / 权限策略),
+    /// 客户端库不自带; 返回 `Err(LarkError::Unsupported("credential_store"))`
+    /// 而不是静默给空值。需要该能力的部署方在外围取到凭证后调用 [`Self::set`]。
+    pub fn from_credential_store(_account: &str) -> LarkResult<Self> {
+        Err(LarkError::Unsupported("credential_store"))
     }
 
-    /// 设置 App ID (per K-1 #1 强校验).
-    pub fn set(&mut self, app_id: String) -> Result<(), LarkError> {
+    /// 设置 App ID (K-1 #1 强校验)。
+    pub fn set(&mut self, app_id: String) -> LarkResult<()> {
         LarkError::validate_app_id(&app_id)?;
         self.app_id = Some(app_id);
-        self.loaded_from_keyring = false;
+        self.loaded_from_store = false;
         Ok(())
     }
 
-    /// 读 App ID (cloned, 不暴露 &str 防止意外日志).
+    /// 读 App ID (cloned; 不暴露 &str, 防止意外进日志)。
     pub fn get(&self) -> Option<String> {
         self.app_id.clone()
     }
 
-    /// 检查是否已设置.
+    /// 是否已设置。
     pub fn is_set(&self) -> bool {
         self.app_id.is_some()
     }
 
-    /// 是否从 keyring 加载.
-    pub fn loaded_from_keyring(&self) -> bool {
-        self.loaded_from_keyring
+    /// 是否由外部凭据库加载。
+    pub fn loaded_from_store(&self) -> bool {
+        self.loaded_from_store
     }
 
-    /// 清空.
+    /// 清空。
     pub fn clear(&mut self) {
         self.app_id = None;
-        self.loaded_from_keyring = false;
+        self.loaded_from_store = false;
     }
 }
 
@@ -139,21 +143,20 @@ impl Default for AppIdHolder {
 }
 
 // ============================================================================
-// §3 AppSecretHolder (per P0 安全铁律)
+// §3 AppSecretHolder (内存持有, Debug 脱敏)
 // ============================================================================
 
-/// App Secret 持有者 (per P0 安全铁律 + apeireth-keyring 模式).
+/// App Secret 持有者 (内存持有)。
 ///
-/// **当前 skeleton 用 String 包装** (跟 AppIdHolder 同模式). R21 续真接时改成 SecretString.
-///
-/// **M5 修复**: Debug 手写脱敏 — derive(Debug) 会让一次 `{:?}` / `dbg!` 把 App Secret
-/// 明文落进日志/错误面板, 违反模块头 "0 明文存盘" 铁律. Serialise 保持 (wire 兼容), 只修 Debug 泄露面.
+/// **Debug 手写脱敏**: derive(Debug) 会让一次 `{:?}` / `dbg!` 把 App Secret
+/// 明文落进日志/错误面板, 违反「0 明文落盘/落日志」铁律。Serialize 保留
+/// (内存态结构自身可序列化), 只修 Debug 泄露面。
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AppSecretHolder {
-    /// App Secret (从 keyring get, **绝不存明文**)
+    /// App Secret 值 (仅内存)。
     app_secret: Option<String>,
-    /// 是否已从 keyring 加载
-    loaded_from_keyring: bool,
+    /// 是否由外部凭据库加载 (当前恒 false)。
+    loaded_from_store: bool,
 }
 
 impl std::fmt::Debug for AppSecretHolder {
@@ -163,54 +166,55 @@ impl std::fmt::Debug for AppSecretHolder {
                 "app_secret",
                 &self.app_secret.as_ref().map(|_| "[redacted]"),
             )
-            .field("loaded_from_keyring", &self.loaded_from_keyring)
+            .field("loaded_from_store", &self.loaded_from_store)
             .finish()
     }
 }
 
 impl AppSecretHolder {
-    /// 创建空 holder.
+    /// 创建空 holder。
     pub fn empty() -> Self {
         Self {
             app_secret: None,
-            loaded_from_keyring: false,
+            loaded_from_store: false,
         }
     }
 
-    /// 从 keyring 加载 App Secret.
+    /// 从部署方系统凭据库加载 App Secret。
     ///
-    /// **R21 续真接时** 调 `apeireth_keyring::KeyringStore::get(PLATFORM_NAME, "lark-app-secret")`.
-    pub fn from_keyring(_account: &str) -> Self {
-        Self::empty()
+    /// 【显式不支持】同 [`AppIdHolder::from_credential_store`]:
+    /// `Err(LarkError::Unsupported("credential_store"))`。
+    pub fn from_credential_store(_account: &str) -> LarkResult<Self> {
+        Err(LarkError::Unsupported("credential_store"))
     }
 
-    /// 设置 App Secret (per K-1 #2 强校验).
-    pub fn set(&mut self, app_secret: String) -> Result<(), LarkError> {
+    /// 设置 App Secret (K-1 #2 强校验)。
+    pub fn set(&mut self, app_secret: String) -> LarkResult<()> {
         LarkError::validate_app_secret(&app_secret)?;
         self.app_secret = Some(app_secret);
-        self.loaded_from_keyring = false;
+        self.loaded_from_store = false;
         Ok(())
     }
 
-    /// 读 App Secret (cloned, 不暴露 &str).
+    /// 读 App Secret (cloned; 不暴露 &str)。
     pub fn get(&self) -> Option<String> {
         self.app_secret.clone()
     }
 
-    /// 检查是否已设置.
+    /// 是否已设置。
     pub fn is_set(&self) -> bool {
         self.app_secret.is_some()
     }
 
-    /// 是否从 keyring 加载.
-    pub fn loaded_from_keyring(&self) -> bool {
-        self.loaded_from_keyring
+    /// 是否由外部凭据库加载。
+    pub fn loaded_from_store(&self) -> bool {
+        self.loaded_from_store
     }
 
-    /// 清空.
+    /// 清空。
     pub fn clear(&mut self) {
         self.app_secret = None;
-        self.loaded_from_keyring = false;
+        self.loaded_from_store = false;
     }
 }
 
@@ -221,28 +225,33 @@ impl Default for AppSecretHolder {
 }
 
 // ============================================================================
-// §4 TenantAccessToken (per 飞书 Open Platform /auth/v3/tenant_access_token/internal)
+// §4 TenantAccessToken (应用级访问令牌)
 // ============================================================================
 
-/// tenant_access_token (per 飞书 Open Platform 文档).
+fn unix_now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// tenant_access_token (应用级访问令牌)。
 ///
-/// 飞书 server 验证时要求 client 发 `Authorization: Bearer <tenant_access_token>`,
-/// 包含:
-/// - `app_id` + `app_secret` POST 到 `/auth/v3/tenant_access_token/internal`
-/// - 响应: `{ "code": 0, "msg": "ok", "tenant_access_token": "t-xxx", "expire": 7200 }`
+/// 颁发协议: `POST /auth/v3/tenant_access_token/internal`
+/// body `{"app_id": "...", "app_secret": "..."}`,
+/// 响应 `{"code": 0, "msg": "ok", "tenant_access_token": "t-...", "expire": 7200}`。
+/// 调用 API 时携带 `Authorization: Bearer <token>`。
 ///
-/// **当前 skeleton 不真调 API** (per R20 阶段 4 估补, R21 续真接 `reqwest` crate).
-///
-/// **M5 修复**: Debug 手写脱敏 (`token` 是长期访问令牌, derive(Debug) 即泄露面).
+/// **Debug 手写脱敏** (`token` 是长期访问令牌)。
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TenantAccessToken {
-    /// App ID (per token 来源标识)
+    /// App ID (token 来源标识)。
     pub app_id: String,
-    /// Token 值 (per `tenant_access_token` 字段, 走 keyring 不明文)
+    /// token 值 (仅内存 / TokenCache 落盘, 不进日志)。
     pub token: String,
-    /// 过期时间戳 (秒, UNIX_EPOCH 起, per `expire` 字段)
+    /// 绝对过期时间戳 (秒, UNIX_EPOCH 起)。
     pub expire_at_secs: u64,
-    /// 创建时间戳 (秒, UNIX_EPOCH 起, 用于判断是否需要刷新)
+    /// 创建时间戳 (秒, UNIX_EPOCH 起)。
     pub created_at_secs: u64,
 }
 
@@ -258,8 +267,8 @@ impl std::fmt::Debug for TenantAccessToken {
 }
 
 impl TenantAccessToken {
-    /// 创建新 tenant_access token (STUB 模式不真调飞书 API).
-    pub fn new(app_id: String, token: String, ttl_seconds: u64) -> Result<Self, LarkError> {
+    /// 创建 token (TTL 秒数, 上限 [`MAX_TOKEN_TTL_SECONDS`])。
+    pub fn new(app_id: String, token: String, ttl_seconds: u64) -> LarkResult<Self> {
         LarkError::validate_app_id(&app_id)?;
         if token.is_empty() {
             return Err(LarkError::TokenExpired);
@@ -269,10 +278,7 @@ impl TenantAccessToken {
                 "invalid ttl: {ttl_seconds} (1..=MAX_TOKEN_TTL_SECONDS={MAX_TOKEN_TTL_SECONDS})"
             )));
         }
-        let now_secs = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now_secs = unix_now_secs();
         Ok(Self {
             app_id,
             token,
@@ -281,55 +287,65 @@ impl TenantAccessToken {
         })
     }
 
-    /// 默认 TTL 创建.
-    pub fn with_default_ttl(app_id: String, token: String) -> Result<Self, LarkError> {
+    /// 用颁发响应里的 `expire` 值构造 (协议口径: 相对 TTL 秒)。
+    pub fn from_issue_response(
+        app_id: String,
+        token: String,
+        expire_seconds: u64,
+    ) -> LarkResult<Self> {
+        let ttl = if expire_seconds == 0 {
+            DEFAULT_TENANT_TOKEN_TTL_SECONDS
+        } else {
+            expire_seconds.min(MAX_TOKEN_TTL_SECONDS)
+        };
+        Self::new(app_id, token, ttl)
+    }
+
+    /// 默认 TTL 构造。
+    pub fn with_default_ttl(app_id: String, token: String) -> LarkResult<Self> {
         Self::new(app_id, token, DEFAULT_TENANT_TOKEN_TTL_SECONDS)
     }
 
-    /// 是否已过期.
+    /// 是否已过期 (绝对口径)。
     pub fn is_expired(&self) -> bool {
-        let now_secs = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        now_secs >= self.expire_at_secs
+        unix_now_secs() >= self.expire_at_secs
     }
 
-    /// 剩余 TTL (秒).
+    /// 是否需刷新 (提前 [`TOKEN_REFRESH_SKEW_SECS`] 秒判定)。
+    pub fn is_expired_with_skew(&self) -> bool {
+        self.remaining_ttl_secs() <= TOKEN_REFRESH_SKEW_SECS
+    }
+
+    /// 剩余 TTL (秒)。
     pub fn remaining_ttl_secs(&self) -> u64 {
-        let now_secs = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        self.expire_at_secs.saturating_sub(now_secs)
+        self.expire_at_secs.saturating_sub(unix_now_secs())
     }
 }
 
 // ============================================================================
-// §5 UserAccessToken (per 飞书 OAuth 流程)
+// §5 UserAccessToken (用户级访问令牌)
 // ============================================================================
 
-/// user_access_token (per 飞书 OAuth 文档).
+/// user_access_token (用户级访问令牌)。
 ///
-/// 跟 tenant_access_token 类似, 但:
-/// - TTL 更短 (通常 2h, refresh_token 30d)
-/// - 携带用户身份 (open_id / union_id / user_id)
-/// - 走 OAuth 流程 (`code` → `user_access_token`)
+/// 跟 tenant token 的差别: 携带用户身份 (open_id), 附带 refresh_token。
+/// 授权码换发 (`code` → `user_access_token`) 需要交互式授权面,
+/// 本客户端只管理已颁发令牌的生命周期。
 ///
-/// **M5 修复**: Debug 手写脱敏 (`access_token` / `refresh_token` 是长期秘密, derive(Debug) 即泄露面).
+/// **Debug 手写脱敏** (`access_token` / `refresh_token` 均为长期秘密)。
 #[derive(Clone, Serialize, Deserialize)]
 pub struct UserAccessToken {
-    /// App ID (per token 来源标识)
+    /// App ID (token 来源标识)。
     pub app_id: String,
-    /// Token 值 (per `access_token` 字段, 走 keyring 不明文)
+    /// access token 值 (仅内存)。
     pub access_token: String,
-    /// refresh_token (per OAuth, 30d, 走 keyring 不明文)
+    /// refresh token 值 (仅内存)。
     pub refresh_token: String,
-    /// 用户 Open ID (per 飞书 Open Platform 响应)
+    /// 用户 Open ID。
     pub open_id: String,
-    /// 过期时间戳 (秒, UNIX_EPOCH 起, per `expires_in` 字段)
+    /// 绝对过期时间戳 (秒, UNIX_EPOCH 起)。
     pub expire_at_secs: u64,
-    /// 创建时间戳 (秒, UNIX_EPOCH 起)
+    /// 创建时间戳 (秒, UNIX_EPOCH 起)。
     pub created_at_secs: u64,
 }
 
@@ -347,14 +363,14 @@ impl std::fmt::Debug for UserAccessToken {
 }
 
 impl UserAccessToken {
-    /// 创建新 user_access token (STUB 模式不真调飞书 OAuth).
+    /// 创建 token (K-1 #1 app_id + K-1 #4 open_id 强校验)。
     pub fn new(
         app_id: String,
         access_token: String,
         refresh_token: String,
         open_id: String,
         ttl_seconds: u64,
-    ) -> Result<Self, LarkError> {
+    ) -> LarkResult<Self> {
         LarkError::validate_app_id(&app_id)?;
         LarkError::validate_open_id(&open_id)?;
         if access_token.is_empty() {
@@ -365,10 +381,7 @@ impl UserAccessToken {
                 "invalid ttl: {ttl_seconds} (1..=MAX_TOKEN_TTL_SECONDS={MAX_TOKEN_TTL_SECONDS})"
             )));
         }
-        let now_secs = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now_secs = unix_now_secs();
         Ok(Self {
             app_id,
             access_token,
@@ -379,32 +392,30 @@ impl UserAccessToken {
         })
     }
 
-    /// 是否已过期.
+    /// 是否已过期 (绝对口径)。
     pub fn is_expired(&self) -> bool {
-        let now_secs = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        now_secs >= self.expire_at_secs
+        unix_now_secs() >= self.expire_at_secs
+    }
+
+    /// 是否需刷新 (提前 [`TOKEN_REFRESH_SKEW_SECS`] 秒判定)。
+    pub fn is_expired_with_skew(&self) -> bool {
+        let now_secs = unix_now_secs();
+        self.expire_at_secs.saturating_sub(now_secs) <= TOKEN_REFRESH_SKEW_SECS
     }
 }
 
 // ============================================================================
-// §6 WebhookToken (per 飞书事件订阅 URL 校验)
+// §6 WebhookToken (事件订阅校验 token + 加密密钥)
 // ============================================================================
 
-/// Webhook verification token (per 飞书事件订阅 URL 校验).
+/// Webhook 校验 token + 事件加密密钥 (成对配置的共享秘密)。
 ///
-/// 飞书 server 在配置事件订阅 URL 时, 发送 `url_verification` 事件包含 `challenge` 字段,
-/// 客户端必须原样返回 `challenge`. 配置完成后, 所有回调都带 `encrypt` + `token` 字段,
-/// 客户端需用 `encrypt_key` 解密 + 校验 `token` 一致.
-///
-/// **M5 修复**: Debug 手写脱敏 (`token` / `encrypt_key` 是长期共享秘密, derive(Debug) 即泄露面).
+/// **Debug 手写脱敏** (`token` / `encrypt_key` 均为长期共享秘密)。
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WebhookToken {
-    /// Verification token (per 飞书事件订阅配置, 走 keyring 不明文)
+    /// 校验 token (入站回调必须携带一致的 token)。
     pub token: String,
-    /// Encrypt key (per 飞书事件加密, 走 keyring 不明文)
+    /// 事件加密密钥 (入站加密事件体用其派生 AES 密钥解密)。
     pub encrypt_key: String,
 }
 
@@ -418,8 +429,8 @@ impl std::fmt::Debug for WebhookToken {
 }
 
 impl WebhookToken {
-    /// 创建新 webhook token (STUB 模式不真调飞书 API).
-    pub fn new(token: String, encrypt_key: String) -> Result<Self, LarkError> {
+    /// 创建 webhook token (两侧均非空)。
+    pub fn new(token: String, encrypt_key: String) -> LarkResult<Self> {
         if token.is_empty() {
             return Err(LarkError::Other("webhook token is empty".to_string()));
         }
@@ -429,18 +440,18 @@ impl WebhookToken {
         Ok(Self { token, encrypt_key })
     }
 
-    /// 验证 token 一致 (per 飞书回调校验, **恒定时间比较** per H7).
+    /// 校验入站 token 一致 (**恒定时间比较**)。
     ///
-    /// 先对长度做常数时间填充, 再逐字节 OR 累加: `String == String` 先比长度再逐字节
-    /// 早退, 时序侧信道可逐字节恢复 secret; 本实现 0 早退, 两边都跑满 `max_len` 次.
+    /// `String == String` 先比长度再逐字节早退, 时序侧信道可逐字节恢复共享秘密;
+    /// 本实现 0 早退: 先按长度差置位, 再对 `max_len` 次循环做填充 OR 累加。
     pub fn verify(&self, incoming_token: &str) -> bool {
         let expected = self.token.as_bytes();
         let incoming = incoming_token.as_bytes();
-        // 长度不一致即置 diff (长度本身不是秘密关注面; 字节内容走填充 + OR 累加)
+        // 长度不一致即置 diff (长度本身不作为秘密处理; 字节内容走填充 + OR 累加)
         let mut diff = u8::from(expected.len() != incoming.len());
         let max_len = expected.len().max(incoming.len());
         for i in 0..max_len {
-            // 常数时间填充: 越界侧填 0, 循环次数只依赖 max_len 不依赖内容
+            // 恒定时间填充: 越界侧填 0, 循环次数只依赖 max_len 不依赖内容
             let x = if i < expected.len() { expected[i] } else { 0 };
             let y = if i < incoming.len() { incoming[i] } else { 0 };
             diff |= x ^ y;
@@ -450,17 +461,129 @@ impl WebhookToken {
 }
 
 // ============================================================================
-// §7 单元测试
+// §7 TokenCache (持久化 tenant token 缓存, storage_atomic 原子写)
+// ============================================================================
+
+/// tenant token 持久化缓存。
+///
+/// 唯一允许落盘的秘密面, 安全口径:
+/// - 写入走 `storage_atomic::write_atomic_durable` (原子替换 + fsync 前置),
+///   权限 `OWNER_ONLY_MODE` (0600, 属主可读写);
+/// - 读改写在 `storage_atomic::with_file_lock` 文件锁下串行化 (跨线程/跨进程同序);
+/// - 读到损坏/不匹配的缓存按「无缓存」处理 (容忍, 不阻断调用)。
+#[derive(Debug, Clone)]
+pub struct TokenCache {
+    /// 缓存文件路径。
+    path: PathBuf,
+}
+
+/// 缓存文件的序列化形态 (稳定字段名)。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TokenCacheRecord {
+    /// schema 版本 (向前兼容锚点)。
+    schema_version: String,
+    /// 缓存的 token。
+    token: TenantAccessToken,
+}
+
+impl TokenCache {
+    /// 创建缓存 (指定文件路径)。
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        Self { path: path.into() }
+    }
+
+    /// 缓存文件路径。
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// 加载缓存 token (app_id 不匹配 / 文件缺失 / 内容损坏 → `Ok(None)`)。
+    pub fn load(&self, app_id: &str) -> LarkResult<Option<TenantAccessToken>> {
+        let lock_path = apeireth_core::storage_atomic::lock_path_for(&self.path);
+        let read =
+            apeireth_core::storage_atomic::with_file_lock(&lock_path, || {
+                match fs_err::read(&self.path) {
+                    Ok(bytes) => Some(bytes),
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+                    Err(err) => {
+                        tracing::warn!(
+                            target: "apeireth_sdk_lark",
+                            "token cache read failed (treated as empty): {}", err
+                        );
+                        None
+                    }
+                }
+            })
+            .map_err(|e| LarkError::Other(format!("token cache lock failed: {e}")))?;
+        let Some(bytes) = read else {
+            return Ok(None);
+        };
+        match serde_json::from_slice::<TokenCacheRecord>(&bytes) {
+            Ok(record)
+                if record.schema_version == LARK_SCHEMA_VERSION
+                    && record.token.app_id == app_id =>
+            {
+                Ok(Some(record.token))
+            }
+            Ok(_) => Ok(None),
+            Err(err) => {
+                // 容忍损坏缓存: 记录后按无缓存处理, 下次 store 会原子覆盖
+                tracing::warn!(
+                    target: "apeireth_sdk_lark",
+                    "token cache corrupt (treated as empty): {}", err
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    /// 落盘 token (原子写 + 0600)。
+    pub fn store(&self, token: &TenantAccessToken) -> LarkResult<()> {
+        let record = TokenCacheRecord {
+            schema_version: LARK_SCHEMA_VERSION.to_string(),
+            token: token.clone(),
+        };
+        let json = serde_json::to_vec(&record)
+            .map_err(|e| LarkError::Other(format!("token cache serialize failed: {e}")))?;
+        let lock_path = apeireth_core::storage_atomic::lock_path_for(&self.path);
+        apeireth_core::storage_atomic::with_file_lock(&lock_path, || {
+            apeireth_core::storage_atomic::write_atomic_durable(
+                &self.path,
+                &json,
+                apeireth_core::storage_atomic::OWNER_ONLY_MODE,
+            )
+        })
+        .map_err(|e| LarkError::Other(format!("token cache lock failed: {e}")))?
+        .map_err(|e| LarkError::Other(format!("token cache write failed: {e}")))
+    }
+
+    /// 清空缓存 (文件不存在视为成功)。
+    pub fn clear(&self) -> LarkResult<()> {
+        let lock_path = apeireth_core::storage_atomic::lock_path_for(&self.path);
+        apeireth_core::storage_atomic::with_file_lock(&lock_path, || {
+            match fs_err::remove_file(&self.path) {
+                Ok(()) => Ok(()),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(err) => Err(err),
+            }
+        })
+        .map_err(|e| LarkError::Other(format!("token cache lock failed: {e}")))?
+        .map_err(|e| LarkError::Other(format!("token cache remove failed: {e}")))
+    }
+}
+
+// ============================================================================
+// §8 单元测试
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // ---- §1 编译期 hardcode ----
+    // ---- §1 常量 ----
 
     #[test]
-    fn k1_platform_name_is_apeireth() {
+    fn constants_are_stable() {
         assert_eq!(PLATFORM_NAME, "apeireth");
         assert_eq!(PROVIDER_NAME, "lark");
         assert_eq!(LARK_SCHEMA_VERSION, "1");
@@ -468,6 +591,7 @@ mod tests {
         assert_eq!(DEFAULT_TENANT_TOKEN_TTL_SECONDS, 7200);
         assert_eq!(DEFAULT_USER_TOKEN_TTL_SECONDS, 7200);
         assert_eq!(MAX_TOKEN_TTL_SECONDS, 86_400);
+        assert_eq!(TOKEN_REFRESH_SKEW_SECS, 60);
         assert_eq!(MIN_APP_ID_LENGTH, 12);
         assert_eq!(MIN_APP_SECRET_LENGTH, 16);
         assert_eq!(TYPICAL_APP_SECRET_LENGTH, 32);
@@ -476,143 +600,156 @@ mod tests {
     // ---- §2 AppIdHolder ----
 
     #[test]
-    fn k1_app_id_holder_empty() {
-        let holder = AppIdHolder::empty();
-        assert!(!holder.is_set());
-        assert!(holder.get().is_none());
-        assert!(!holder.loaded_from_keyring());
-    }
-
-    #[test]
-    fn k1_app_id_holder_set_valid() {
+    fn app_id_holder_set_get_clear() {
         let mut holder = AppIdHolder::empty();
+        assert!(!holder.is_set());
         holder
             .set("cli_a1b2c3d4e5f6".to_string())
-            .expect("valid app id must succeed");
+            .expect("valid app id");
         assert!(holder.is_set());
         assert_eq!(holder.get().as_deref(), Some("cli_a1b2c3d4e5f6"));
-    }
-
-    #[test]
-    fn k1_app_id_holder_set_rejects_empty() {
-        let mut holder = AppIdHolder::empty();
-        let result = holder.set(String::new());
-        assert!(matches!(result, Err(LarkError::AppIdMissing)));
-    }
-
-    #[test]
-    fn k1_app_id_holder_set_rejects_invalid_prefix() {
-        let mut holder = AppIdHolder::empty();
-        let result = holder.set("app_a1b2c3d4".to_string());
-        assert!(matches!(result, Err(LarkError::AppIdInvalid(_))));
-    }
-
-    #[test]
-    fn k1_app_id_holder_clear() {
-        let mut holder = AppIdHolder::empty();
-        holder
-            .set("cli_a1b2c3d4e5f6".to_string())
-            .expect("valid app id must succeed");
-        assert!(holder.is_set());
+        assert!(!holder.loaded_from_store());
         holder.clear();
         assert!(!holder.is_set());
-        assert!(!holder.loaded_from_keyring());
     }
 
     #[test]
-    fn k1_app_id_holder_from_keyring_returns_empty() {
-        let holder = AppIdHolder::from_keyring("lark-app-id");
-        assert!(!holder.is_set());
-        assert!(!holder.loaded_from_keyring());
+    fn app_id_holder_set_rejects_invalid() {
+        let mut holder = AppIdHolder::empty();
+        assert!(matches!(
+            holder.set(String::new()),
+            Err(LarkError::AppIdMissing)
+        ));
+        assert!(matches!(
+            holder.set("app_a1b2c3d4".to_string()),
+            Err(LarkError::AppIdInvalid(_))
+        ));
+    }
+
+    #[test]
+    fn app_id_holder_credential_store_is_explicitly_unsupported() {
+        // 显式不支持: 返回带稳定标识的 Err, 不静默给空值
+        let result = AppIdHolder::from_credential_store("lark-app-id");
+        match result {
+            Err(LarkError::Unsupported("credential_store")) => {}
+            other => panic!("expected Unsupported(credential_store), got {other:?}"),
+        }
     }
 
     // ---- §3 AppSecretHolder ----
 
     #[test]
-    fn k1_app_secret_holder_empty() {
-        let holder = AppSecretHolder::empty();
-        assert!(!holder.is_set());
-        assert!(holder.get().is_none());
-    }
-
-    #[test]
-    fn k1_app_secret_holder_set_valid() {
+    fn app_secret_holder_set_get_clear() {
         let mut holder = AppSecretHolder::empty();
         holder
             .set("abcdef1234567890abcdef1234567890".to_string())
-            .expect("valid app secret must succeed");
+            .expect("valid app secret");
         assert!(holder.is_set());
+        holder.clear();
+        assert!(!holder.is_set());
     }
 
     #[test]
-    fn k1_app_secret_holder_set_rejects_empty() {
+    fn app_secret_holder_set_rejects_invalid() {
         let mut holder = AppSecretHolder::empty();
-        let result = holder.set(String::new());
-        assert!(matches!(result, Err(LarkError::AppSecretMissing)));
+        assert!(matches!(
+            holder.set(String::new()),
+            Err(LarkError::AppSecretMissing)
+        ));
+        assert!(matches!(
+            holder.set("short".to_string()),
+            Err(LarkError::AppSecretInvalid(5))
+        ));
     }
 
     #[test]
-    fn k1_app_secret_holder_set_rejects_too_short() {
-        let mut holder = AppSecretHolder::empty();
-        let result = holder.set("short".to_string());
-        assert!(matches!(result, Err(LarkError::AppSecretInvalid(5))));
+    fn app_secret_holder_credential_store_is_explicitly_unsupported() {
+        let result = AppSecretHolder::from_credential_store("lark-app-secret");
+        assert!(matches!(
+            result,
+            Err(LarkError::Unsupported("credential_store"))
+        ));
     }
 
     // ---- §4 TenantAccessToken ----
 
     #[test]
-    fn tenant_token_creation_valid() {
+    fn tenant_token_lifecycle() {
         let token = TenantAccessToken::new(
             "cli_a1b2c3d4e5f6".to_string(),
             "t-abc123def456".to_string(),
             7200,
         )
-        .expect("valid tenant token must succeed");
+        .expect("valid tenant token");
         assert_eq!(token.app_id, "cli_a1b2c3d4e5f6");
-        assert_eq!(token.token, "t-abc123def456");
-        assert!(token.expire_at_secs > token.created_at_secs);
         assert!(!token.is_expired());
+        assert!(!token.is_expired_with_skew());
+        assert!(token.remaining_ttl_secs() > 7000);
     }
 
     #[test]
-    fn tenant_token_rejects_empty_token() {
-        let result = TenantAccessToken::new("cli_a1b2c3d4e5f6".to_string(), String::new(), 7200);
-        assert!(matches!(result, Err(LarkError::TokenExpired)));
+    fn tenant_token_rejects_invalid_inputs() {
+        assert!(matches!(
+            TenantAccessToken::new("cli_a1b2c3d4e5f6".to_string(), String::new(), 7200),
+            Err(LarkError::TokenExpired)
+        ));
+        assert!(matches!(
+            TenantAccessToken::new("invalid".to_string(), "t-abc".to_string(), 7200),
+            Err(LarkError::AppIdInvalid(_))
+        ));
+        assert!(matches!(
+            TenantAccessToken::new("cli_a1b2c3d4e5f6".to_string(), "t-abc".to_string(), 0),
+            Err(LarkError::Other(_))
+        ));
+        assert!(matches!(
+            TenantAccessToken::new(
+                "cli_a1b2c3d4e5f6".to_string(),
+                "t-abc".to_string(),
+                MAX_TOKEN_TTL_SECONDS + 1
+            ),
+            Err(LarkError::Other(_))
+        ));
     }
 
     #[test]
-    fn tenant_token_rejects_invalid_app_id() {
-        let result =
-            TenantAccessToken::new("invalid".to_string(), "t-abc123def456".to_string(), 7200);
-        assert!(matches!(result, Err(LarkError::AppIdInvalid(_))));
-    }
-
-    #[test]
-    fn tenant_token_rejects_invalid_ttl() {
-        let result = TenantAccessToken::new(
+    fn tenant_token_from_issue_response_clamps_ttl() {
+        // expire = 0 → 默认 TTL; 超上限 → 钳到上限
+        let t = TenantAccessToken::from_issue_response(
             "cli_a1b2c3d4e5f6".to_string(),
-            "t-abc123def456".to_string(),
+            "t-abc123".to_string(),
             0,
-        );
-        assert!(matches!(result, Err(LarkError::Other(_))));
-    }
-
-    #[test]
-    fn tenant_token_with_default_ttl() {
-        let token = TenantAccessToken::with_default_ttl(
-            "cli_a1b2c3d4e5f6".to_string(),
-            "t-abc123def456".to_string(),
         )
         .expect("valid");
-        // TTL 应 ≈ 7200s (差 < 5s 允许)
-        let ttl = token.expire_at_secs - token.created_at_secs;
-        assert!(ttl >= 7195 && ttl <= 7200);
+        let ttl = t.expire_at_secs - t.created_at_secs;
+        assert_eq!(ttl, DEFAULT_TENANT_TOKEN_TTL_SECONDS);
+
+        let t = TenantAccessToken::from_issue_response(
+            "cli_a1b2c3d4e5f6".to_string(),
+            "t-abc123".to_string(),
+            MAX_TOKEN_TTL_SECONDS * 2,
+        )
+        .expect("valid");
+        let ttl = t.expire_at_secs - t.created_at_secs;
+        assert_eq!(ttl, MAX_TOKEN_TTL_SECONDS);
+    }
+
+    #[test]
+    fn tenant_token_skew_flags_near_expiry() {
+        // TTL 30s < 60s 刷新提前量 → is_expired_with_skew 为 true, is_expired 为 false
+        let token = TenantAccessToken::new(
+            "cli_a1b2c3d4e5f6".to_string(),
+            "t-abc123".to_string(),
+            TOKEN_REFRESH_SKEW_SECS / 2,
+        )
+        .expect("valid");
+        assert!(!token.is_expired());
+        assert!(token.is_expired_with_skew());
     }
 
     // ---- §5 UserAccessToken ----
 
     #[test]
-    fn user_token_creation_valid() {
+    fn user_token_lifecycle_and_validation() {
         let token = UserAccessToken::new(
             "cli_a1b2c3d4e5f6".to_string(),
             "u-abc123".to_string(),
@@ -620,37 +757,23 @@ mod tests {
             "ou_user1234567890abcdef".to_string(),
             7200,
         )
-        .expect("valid user token must succeed");
+        .expect("valid user token");
         assert_eq!(token.open_id, "ou_user1234567890abcdef");
         assert!(!token.is_expired());
-    }
+        assert!(!token.is_expired_with_skew());
 
-    #[test]
-    fn user_token_rejects_invalid_open_id() {
-        let result = UserAccessToken::new(
+        let bad = UserAccessToken::new(
             "cli_a1b2c3d4e5f6".to_string(),
             "u-abc123".to_string(),
             "ur-xyz789".to_string(),
             "cli_invalid".to_string(),
             7200,
         );
-        assert!(matches!(result, Err(LarkError::OpenIdInvalid(_))));
+        assert!(matches!(bad, Err(LarkError::OpenIdInvalid(_))));
     }
 
     // ---- §6 WebhookToken ----
 
-    #[test]
-    fn webhook_token_creation_valid() {
-        let wh = WebhookToken::new(
-            "verify_token_xxx".to_string(),
-            "encrypt_key_xxx".to_string(),
-        )
-        .expect("valid");
-        assert!(wh.verify("verify_token_xxx"));
-        assert!(!wh.verify("wrong_token"));
-    }
-
-    /// H7: 恒定时间 verify — 同长度不同内容 / 不同长度 (填充路径) / 空前缀 全拒.
     #[test]
     fn webhook_token_verify_constant_time_rejects_variants() {
         let wh = WebhookToken::new(
@@ -658,6 +781,7 @@ mod tests {
             "encrypt_key_xxx".to_string(),
         )
         .expect("valid");
+        assert!(wh.verify("verify_token_xxx"));
         // 同长度, 末字节不同 (早退比较会泄漏的信息, 恒定时间比较必须拒)
         assert!(!wh.verify("verify_token_xxy"));
         // 更长 (填充路径: 越界侧填 0)
@@ -668,7 +792,20 @@ mod tests {
         assert!(!wh.verify(""));
     }
 
-    /// M5: WebhookToken Debug 脱敏 (token / encrypt_key 0 现形).
+    #[test]
+    fn webhook_token_rejects_empty() {
+        assert!(matches!(
+            WebhookToken::new(String::new(), "encrypt_key".to_string()),
+            Err(LarkError::Other(_))
+        ));
+        assert!(matches!(
+            WebhookToken::new("token".to_string(), String::new()),
+            Err(LarkError::Other(_))
+        ));
+    }
+
+    // ---- M5: Debug 脱敏 (4 个秘密持有面) ----
+
     #[test]
     fn webhook_token_debug_is_redacted() {
         let wh = WebhookToken::new(
@@ -688,7 +825,6 @@ mod tests {
         );
     }
 
-    /// M5: TenantAccessToken Debug 脱敏.
     #[test]
     fn tenant_access_token_debug_is_redacted() {
         let token = TenantAccessToken::new(
@@ -703,11 +839,9 @@ mod tests {
             !dbg.contains("t-secret-abc123def456"),
             "Debug 0 泄 token: {dbg}"
         );
-        // 非秘密字段保留 (app_id 是公开标识)
-        assert!(dbg.contains("cli_a1b2c3d4e5f6"), "app_id 应可见: {dbg}");
+        assert!(dbg.contains("cli_a1b2c3d4e5f6"), "app_id 可见: {dbg}");
     }
 
-    /// M5: UserAccessToken Debug 脱敏 (access + refresh 双 secret).
     #[test]
     fn user_access_token_debug_is_redacted() {
         let token = UserAccessToken::new(
@@ -717,7 +851,7 @@ mod tests {
             "ou_user1234567890abcdef".to_string(),
             7200,
         )
-        .expect("valid user token must succeed");
+        .expect("valid");
         let dbg = format!("{token:?}");
         assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
         assert!(
@@ -730,13 +864,12 @@ mod tests {
         );
     }
 
-    /// M5: AppSecretHolder Debug 脱敏.
     #[test]
     fn app_secret_holder_debug_is_redacted() {
         let mut holder = AppSecretHolder::empty();
         holder
             .set("abcdef1234567890abcdef1234567890".to_string())
-            .expect("valid app secret must succeed");
+            .expect("valid");
         let dbg = format!("{holder:?}");
         assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
         assert!(
@@ -745,11 +878,63 @@ mod tests {
         );
     }
 
+    // ---- §7 TokenCache (storage_atomic 持久化) ----
+
     #[test]
-    fn webhook_token_rejects_empty() {
-        let result = WebhookToken::new(String::new(), "encrypt_key".to_string());
-        assert!(matches!(result, Err(LarkError::Other(_))));
-        let result = WebhookToken::new("token".to_string(), String::new());
-        assert!(matches!(result, Err(LarkError::Other(_))));
+    fn token_cache_store_load_roundtrip() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cache = TokenCache::new(dir.path().join("tenant-token.json"));
+        let token = TenantAccessToken::new(
+            "cli_a1b2c3d4e5f6".to_string(),
+            "t-cached-abc123".to_string(),
+            7200,
+        )
+        .expect("valid");
+        cache.store(&token).expect("store");
+        let loaded = cache
+            .load("cli_a1b2c3d4e5f6")
+            .expect("load")
+            .expect("cache hit");
+        assert_eq!(loaded.token, "t-cached-abc123");
+        assert_eq!(loaded.expire_at_secs, token.expire_at_secs);
+    }
+
+    #[test]
+    fn token_cache_miss_on_absent_or_mismatch_or_corrupt() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cache = TokenCache::new(dir.path().join("tenant-token.json"));
+        // 缺失 → None
+        assert!(cache.load("cli_a1b2c3d4e5f6").expect("load").is_none());
+
+        // app_id 不匹配 → None (防串用其它应用的缓存)
+        let token = TenantAccessToken::new(
+            "cli_a1b2c3d4e5f6".to_string(),
+            "t-cached-abc123".to_string(),
+            7200,
+        )
+        .expect("valid");
+        cache.store(&token).expect("store");
+        assert!(cache.load("cli_other00000000").expect("load").is_none());
+
+        // 内容损坏 → None (容忍, 不阻断)
+        fs_err::write(cache.path(), b"{not json").expect("corrupt write");
+        assert!(cache.load("cli_a1b2c3d4e5f6").expect("load").is_none());
+    }
+
+    #[test]
+    fn token_cache_clear_removes_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cache = TokenCache::new(dir.path().join("tenant-token.json"));
+        let token = TenantAccessToken::new(
+            "cli_a1b2c3d4e5f6".to_string(),
+            "t-cached-abc123".to_string(),
+            7200,
+        )
+        .expect("valid");
+        cache.store(&token).expect("store");
+        cache.clear().expect("clear");
+        assert!(cache.load("cli_a1b2c3d4e5f6").expect("load").is_none());
+        // 幂等: 再 clear 一次仍成功
+        cache.clear().expect("clear again");
     }
 }

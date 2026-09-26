@@ -24,6 +24,16 @@ url = "2"
 chrono = { workspace = true }
 uuid = { workspace = true }
 apeireth-protocol = { path = "../../foundation/protocol" }
+# lark webhook 面: 加密事件体 AES-256-CBC 解密 (契约: key = SHA-256(encrypt_key)) + base64
+aes = "0.8"
+base64 = "0.22"
+# 仓库统一文件 IO 约定 (clippy.toml: std::fs → fs_err)
+fs-err = { workspace = true }
+# sandbox 客户端协议层复用: 原子落盘 (配额记账) + deadline 超时 + 脱敏原语 (日志红线)
+apeireth-core = { path = "../../foundation/core" }
+apeireth-credentials = { path = "../../foundation/credentials" }
+# voice 族感知后端契约对齐: perception_backend trait 面 (字段对齐桥接 + 钉死单测)
+apeireth-plugin = { path = "../../foundation/plugin" }
 
 # R122-8 (Multi-Lang SDK skeleton, 2026-08-10)
 # cfg-gated optional deps, default features = [] (0 装, O-5 实质守门 per R25)
@@ -56,7 +66,9 @@ cbindgen = { version = "0.29", optional = true } # 0.26 拉 clap 3 → atty (unm
 # (R119 8 项形式撤销后 R122 路线图新决策, R123 可拆独立 crate 切换)
 [features]
 # R146: 5 SDK -> 1, 4 子 SDK 由 feature 门控
-default = []
+# livekit / voice / lark 三族已真现实现 (协议逻辑 + 严格错误面 + mock 边界测试),
+# 随默认 build 编译并进入默认测试面; sandbox 仍按需启用。
+default = ["lark", "livekit", "voice"]
 python = ["dep:pyo3"]
 node = ["dep:napi", "dep:napi-derive"]
 c = ["dep:cbindgen"]

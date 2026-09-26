@@ -1,50 +1,54 @@
-//! # Sandbox isolation (per 既有 Sandbox SDK,)
+//! # Sandbox isolation — 隔离配置校验与落点计划
 //!
-//! **STUB MODE**: 进程隔离 trait 表面, 实际由 docker/firecracker/gvisor 实现.
-//! 现阶段 STUB 模式不引任何底层 SDK, 所有 `isolate()` 调用返 `SandboxError::NotImplemented`.
+//! 3 隔离级别对应编排服务侧不同强制执行机制 (进程级 / 容器级 / 虚拟机级)。
+//! 本层的职责是**校验 + 计划**:
 //!
-//! 3 隔离级别对应不同底层机制:
-//! - `Process`: Linux namespace (PID/Network/Mount) + seccomp + cgroup v2
-//! - `Container`: Docker / gVisor runsc
-//! - `Vm`: Firecracker microVM (KVM)
+//! - [`IsolationConfig::validate`] — 级别/运行时兼容矩阵 + capability 白名单校验;
+//! - [`IsolationPlan::plan`] — 把通过校验的隔离配置投影成下发计划
+//!   (随创建请求发给编排服务, 强制执行点在服务侧)。
 //!
-//! R21+ 真接时, 每个级别换对应底层 client (bollard / runsc / firecracker-rs).
+//! 本层不做"假装已隔离": 隔离的强制执行属于编排服务的职责, 客户端只保证
+//! 下发的计划合法且能力面收敛在白名单内。
 
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::sandbox::error::{SandboxError, SandboxResult};
 use crate::sandbox::runtime::{IsolationLevel, RuntimeKind};
 
-/// 隔离策略描述符 (1:1 翻译 @anthropic-ai/sandbox 上游 `isolationConfig` 字段).
-///
-/// STUB 模式: 字段保留, 但所有实现返 NotImplemented.
+/// capability 白名单 (编译期 hardcode)。白名单外 / 通配符 / 全量声明一律拒绝:
+/// 能力面只允许显式列出的最小集合, 不允许"顺手多给"。
+pub const ALLOWED_CAPABILITIES: &[&str] = &[
+    "CAP_NET_BIND_SERVICE",
+    "CAP_CHOWN",
+    "CAP_FOWNER",
+    "CAP_KILL",
+    "CAP_SETUID",
+    "CAP_SETGID",
+];
+
+/// 隔离策略描述符 (随创建请求下发)。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IsolationConfig {
-    /// 隔离级别 (3 选 1, K-1 强校验 #3).
+    /// 隔离级别 (3 选 1)。
     pub level: IsolationLevel,
-    /// 底层运行时 (3 选 1, K-1 强校验 #2).
+    /// 底层运行时 (3 选 1)。
     pub runtime: RuntimeKind,
-    /// PID namespace 启用 (按既有实现 `pidNamespace` 字段).
+    /// PID namespace 启用。
     #[serde(default = "default_true")]
     pub pid_namespace: bool,
-    /// Network namespace 启用 (按既有实现 `networkNamespace` 字段).
+    /// Network namespace 启用。
     #[serde(default = "default_true")]
     pub network_namespace: bool,
-    /// Mount namespace 启用 (按既有实现 `mountNamespace` 字段).
+    /// Mount namespace 启用。
     #[serde(default = "default_true")]
     pub mount_namespace: bool,
-    /// seccomp 过滤器 (按既有实现 `seccompProfile`, R21+ 真接时下发).
+    /// seccomp 过滤器名 (由编排服务侧解析)。
     #[serde(default)]
     pub seccomp_profile: Option<String>,
-    /// cgroup v2 资源 slice (按既有实现 `cgroupSlice`, R21+ 真接时下发).
+    /// cgroup v2 资源 slice (由编排服务侧挂载)。
     #[serde(default)]
     pub cgroup_slice: Option<String>,
-    /// 启用的 Linux capabilities (按既有实现 `capabilities` 字段, 1:1 保留).
-    ///
-    /// **STUB 边界 (per M16)**: 本字段仅保留翻译表面, `validate()` **不做** capabilities
-    /// 白名单校验 — 真校验留 R21+ 接 docker capabilities / firecracker jailer 时实现.
-    /// (修复前注释宣称 "白名单" 但实现从不校验, 注释与实现二选一 — 取诚实注释.)
+    /// 申请的 Linux capabilities (白名单校验, 见 [`ALLOWED_CAPABILITIES`])。
     #[serde(default)]
     pub capabilities: Vec<String>,
 }
@@ -69,122 +73,160 @@ impl Default for IsolationConfig {
 }
 
 impl IsolationConfig {
-    /// 校验隔离级别和运行时是否兼容 (K-1 强校验 #6).
+    /// 校验隔离级别/运行时兼容矩阵 + capability 白名单。
     ///
-    /// 对齐既有实现约束:
-    /// - `Vm` 隔离只跟 `Firecracker` 兼容
-    /// - `Process` 隔离不跟 `Firecracker` 兼容
-    /// - `Container` 隔离不跟 `Firecracker` 兼容
+    /// 兼容矩阵:
+    /// - `Vm` 隔离只与 `Firecracker` 运行时兼容
+    /// - `Process` / `Container` 隔离与 `Docker` / `Gvisor` 运行时兼容
+    ///
+    /// capability 校验: 每一项必须精确命中 [`ALLOWED_CAPABILITIES`];
+    /// 白名单外、含通配语义 (`*` / `ALL`)、空串一律拒绝。
     pub fn validate(&self) -> SandboxResult<()> {
         match (self.level, self.runtime) {
-            (IsolationLevel::Vm, RuntimeKind::Firecracker) => Ok(()),
-            (IsolationLevel::Process, RuntimeKind::Docker | RuntimeKind::Gvisor) => Ok(()),
-            (IsolationLevel::Container, RuntimeKind::Docker | RuntimeKind::Gvisor) => Ok(()),
-            (level, runtime) => Err(SandboxError::Isolation { runtime, level }),
+            (IsolationLevel::Vm, RuntimeKind::Firecracker) => {}
+            (IsolationLevel::Process, RuntimeKind::Docker | RuntimeKind::Gvisor) => {}
+            (IsolationLevel::Container, RuntimeKind::Docker | RuntimeKind::Gvisor) => {}
+            (level, runtime) => {
+                return Err(SandboxError::Isolation { runtime, level });
+            }
         }
+        for capability in &self.capabilities {
+            let trimmed = capability.trim();
+            if trimmed.is_empty() || trimmed.contains('*') {
+                return Err(SandboxError::InvalidConfig(format!(
+                    "capability must be a concrete name: {capability:?}"
+                )));
+            }
+            if !ALLOWED_CAPABILITIES.contains(&trimmed) {
+                return Err(SandboxError::InvalidConfig(format!(
+                    "capability not in whitelist: {trimmed}"
+                )));
+            }
+        }
+        Ok(())
     }
 }
 
-/// Sandbox runtime async trait (R21+ 真接 docker/firecracker/gvisor 时实现).
+/// 隔离落点计划: 通过校验的隔离配置 + 收敛后的能力面。
 ///
-/// STUB 模式: 默认实现返 `SandboxError::NotImplemented`, 防止整合时漏防.
-#[async_trait]
-pub trait SandboxRuntime: Send + Sync {
-    /// 沙箱运行时类型 (Docker / Firecracker / Gvisor).
-    fn kind(&self) -> RuntimeKind;
-    /// 隔离级别 (Process / Container / Vm).
-    fn isolation_level(&self) -> IsolationLevel;
-    /// 应用隔离策略 (STUB 返 NotImplemented).
-    async fn apply_isolation(&self, _config: &IsolationConfig) -> SandboxResult<()> {
-        Err(SandboxError::NotImplemented("apply_isolation"))
-    }
-    /// 撤销隔离策略 (R21+ 真接时清理 namespace / cgroup / microVM).
-    async fn teardown_isolation(&self) -> SandboxResult<()> {
-        Err(SandboxError::NotImplemented("teardown_isolation"))
-    }
+/// 计划随创建请求下发; 编排服务按计划强制执行。客户端不假装自己能强制隔离。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IsolationPlan {
+    /// 通过校验的隔离配置。
+    pub config: IsolationConfig,
+    /// 收敛后的能力面 (与白名单求交, 保持输入顺序, 去重)。
+    pub granted_capabilities: Vec<String>,
 }
 
-/// STUB 默认 runtime (R20 阶段 4 skeleton 阶段, 编译期守 STUB_MODE).
-#[derive(Debug, Default)]
-pub struct StubSandboxRuntime {
-    kind: RuntimeKind,
-    level: IsolationLevel,
-}
-
-impl StubSandboxRuntime {
-    /// 创建 STUB runtime (编译期守门 STUB_MODE 必为 true, R21+ 真接时改返真 client).
-    pub fn new(kind: RuntimeKind, level: IsolationLevel) -> Self {
-        Self { kind, level }
+impl IsolationPlan {
+    /// 校验并投影成计划。非法配置直接收口成对应闭合错误。
+    pub fn plan(config: &IsolationConfig) -> SandboxResult<Self> {
+        config.validate()?;
+        let mut granted: Vec<String> = Vec::new();
+        for capability in &config.capabilities {
+            let trimmed = capability.trim().to_string();
+            if !granted.contains(&trimmed) {
+                granted.push(trimmed);
+            }
+        }
+        Ok(Self {
+            config: config.clone(),
+            granted_capabilities: granted,
+        })
     }
-}
-
-#[async_trait]
-impl SandboxRuntime for StubSandboxRuntime {
-    fn kind(&self) -> RuntimeKind {
-        self.kind
-    }
-    fn isolation_level(&self) -> IsolationLevel {
-        self.level
-    }
-    // apply_isolation / teardown_isolation 走 trait 默认实现, 返 NotImplemented.
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// IsolationConfig validate: Vm + Firecracker 兼容.
-    #[test]
-    fn isolation_validate_vm_firecracker_ok() {
-        let cfg = IsolationConfig {
-            level: IsolationLevel::Vm,
-            runtime: RuntimeKind::Firecracker,
+    fn cfg(level: IsolationLevel, runtime: RuntimeKind) -> IsolationConfig {
+        IsolationConfig {
+            level,
+            runtime,
             ..Default::default()
-        };
-        assert!(cfg.validate().is_ok());
+        }
     }
 
-    /// IsolationConfig validate: Vm + Docker 不兼容.
+    /// 兼容矩阵: Vm + Firecracker 兼容。
+    #[test]
+    fn isolation_validate_vm_firecracker_ok() {
+        assert!(cfg(IsolationLevel::Vm, RuntimeKind::Firecracker)
+            .validate()
+            .is_ok());
+    }
+
+    /// 兼容矩阵: Vm + Docker 不兼容。
     #[test]
     fn isolation_validate_vm_docker_rejected() {
-        let cfg = IsolationConfig {
-            level: IsolationLevel::Vm,
-            runtime: RuntimeKind::Docker,
-            ..Default::default()
-        };
         assert!(matches!(
-            cfg.validate(),
+            cfg(IsolationLevel::Vm, RuntimeKind::Docker).validate(),
             Err(SandboxError::Isolation { .. })
         ));
     }
 
-    /// IsolationConfig validate: Container + Docker 兼容.
+    /// 兼容矩阵: Container + Docker 兼容。
     #[test]
     fn isolation_validate_container_docker_ok() {
-        let cfg = IsolationConfig {
-            level: IsolationLevel::Container,
-            runtime: RuntimeKind::Docker,
-            ..Default::default()
-        };
-        assert!(cfg.validate().is_ok());
+        assert!(cfg(IsolationLevel::Container, RuntimeKind::Docker)
+            .validate()
+            .is_ok());
     }
 
-    /// IsolationConfig validate: Process + Gvisor 兼容.
+    /// 兼容矩阵: Process + Gvisor 兼容。
     #[test]
     fn isolation_validate_process_gvisor_ok() {
-        let cfg = IsolationConfig {
-            level: IsolationLevel::Process,
-            runtime: RuntimeKind::Gvisor,
-            ..Default::default()
-        };
-        assert!(cfg.validate().is_ok());
+        assert!(cfg(IsolationLevel::Process, RuntimeKind::Gvisor)
+            .validate()
+            .is_ok());
     }
 
-    /// StubSandboxRuntime 返 kind / level 字段 (1:1 翻译 trait 表面).
+    /// capability 白名单: 白名单内放行, 白名单外 / 通配 / 空串拒绝。
     #[test]
-    fn stub_runtime_returns_kind_and_level() {
-        let rt = StubSandboxRuntime::new(RuntimeKind::Gvisor, IsolationLevel::Container);
-        assert_eq!(rt.kind(), RuntimeKind::Gvisor);
-        assert_eq!(rt.isolation_level(), IsolationLevel::Container);
+    fn capability_whitelist_is_enforced() {
+        let mut ok = cfg(IsolationLevel::Container, RuntimeKind::Docker);
+        ok.capabilities = vec!["CAP_NET_BIND_SERVICE".into(), "CAP_KILL".into()];
+        assert!(ok.validate().is_ok());
+
+        let mut wild = cfg(IsolationLevel::Container, RuntimeKind::Docker);
+        wild.capabilities = vec!["CAP_SYS_ADMIN".into()];
+        assert!(matches!(
+            wild.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
+
+        let mut star = cfg(IsolationLevel::Container, RuntimeKind::Docker);
+        star.capabilities = vec!["CAP_*".into()];
+        assert!(matches!(
+            star.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
+
+        let mut empty = cfg(IsolationLevel::Container, RuntimeKind::Docker);
+        empty.capabilities = vec!["".into()];
+        assert!(matches!(
+            empty.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
+    }
+
+    /// 落点计划: 校验 + 能力面去重收敛。
+    #[test]
+    fn isolation_plan_projects_and_dedups_capabilities() {
+        let mut config = cfg(IsolationLevel::Container, RuntimeKind::Gvisor);
+        config.capabilities = vec!["CAP_KILL".into(), "CAP_KILL".into(), "CAP_CHOWN".into()];
+        let plan = IsolationPlan::plan(&config).expect("plan");
+        assert_eq!(
+            plan.granted_capabilities,
+            vec!["CAP_KILL".to_string(), "CAP_CHOWN".to_string()]
+        );
+        assert_eq!(plan.config, config);
+
+        let mut bad = config;
+        bad.capabilities = vec!["CAP_SYS_MODULE".into()];
+        assert!(matches!(
+            IsolationPlan::plan(&bad),
+            Err(SandboxError::InvalidConfig(_))
+        ));
     }
 }

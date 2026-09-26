@@ -187,7 +187,7 @@ impl AccessToken {
             return Err(VoiceError::TokenExpired);
         }
         if ttl_seconds == 0 || ttl_seconds > MAX_TOKEN_TTL_SECONDS {
-            return Err(VoiceError::Other(format!(
+            return Err(VoiceError::InvalidArgument(format!(
                 "invalid ttl: {ttl_seconds} (1..=MAX_TOKEN_TTL_SECONDS={MAX_TOKEN_TTL_SECONDS})"
             )));
         }
@@ -350,7 +350,7 @@ mod tests {
     #[test]
     fn access_token_rejects_invalid_ttl() {
         let result = AccessToken::new("ak_abc123".to_string(), "eyJ.test".to_string(), 0);
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     #[test]

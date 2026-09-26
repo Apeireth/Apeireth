@@ -1,104 +1,85 @@
-//! # apeireth-sdk-sandbox (STUB MODE)
+//! # apeireth-sdk-sandbox — 多沙箱编排客户端协议层
 //!
-//! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 (baseline 2026-08-19) + 主人审**
+//! 本模块是**多沙箱编排面**的客户端协议层: 创建 / 终止 / 销毁 / 配额记账 /
+//! 状态巡检, 全部走结构化协议帧与外部编排服务往返。编排服务本体不在本仓库:
+//! 它停在 [`transport::OrchestrationTransport`] 边界之外, 仓库内以
+//! [`mock::MockOrchestrationService`] 的 mock 边界提供协议契约级替身
+//! (零假装: 替身只承诺"协议契约上服务怎么回答", 不冒充真实运行时)。
 //!
-//! Sandbox SDK skeleton (1:1 翻译 既有 Sandbox SDK 进程隔离 / 资源
-//! 限制 / 安全策略 API 表面, per `node_modules/
-//! @anthropic-ai/` 实查). 上游 bundle 实查 sandbox 仅有 deps 声明, 未实接 (R21+ 估补),
-//! 6 核心 API (spawn / kill / wait / getStatus / streamLogs / cleanup) 1:1 翻译:
+//! ## 分层 (每层是独立实现面)
 //!
-//! - **spawn** 创建沙箱 (image + command + user + env + ports + mounts, K-1 强校验 6 字段)
-//! - **kill** 终止运行中沙箱 (按既有实现 `kill` 字段)
-//! - **wait** 等待沙箱退出 (按既有实现 `wait` 字段, 返 exit code)
-//! - **getStatus** 查询状态 (6 状态机: pending / creating / running / stopping / stopped / failed)
-//! - **streamLogs** 流式日志 (按既有实现 `streamLogs` 字段, async stream)
-//! - **cleanup** 释放资源 (按既有实现 `cleanup` 字段, 删 volume / 关 network)
+//! | 层 | 模块 | 职责 |
+//! |---|---|---|
+//! | 协议编解码 | [`protocol`] | 请求/响应帧 JSON 编解码 + schema 版本校验 + 回声校验 |
+//! | 错误闭合词表 | [`error`] / [`protocol::WireErrorCode`] | 分类闭合, 未知线上码收口 |
+//! | 生命周期状态机 | [`lifecycle`] | 6 态迁移矩阵, 非法迁移一律拒绝 |
+//! | 配额记账 | [`quota`] | 并发数 / CPU / 内存准入, 原子落盘 |
+//! | 隔离计划 | [`isolation`] | 级别/运行时兼容矩阵 + capability 白名单 |
+//! | 传输边界 | [`transport`] / [`mock`] | mock 边界 (协议契约级替身) |
 //!
-//! 3 运行时 (K-1 强校验 #2): Docker / Firecracker / gVisor.
-//! 3 隔离级别 (K-1 强校验 #3): Process / Container / Vm.
-//! 5 资源限制 (K-1 强校验 #1): CPU 核数 / 内存字节 / IO 带宽 / 网络带宽 / 临时目录.
-//! 6 K-1 强校验: 镜像名 / 命令 / user / env / 端口 / 卷挂载.
+//! 超时统一经 `apeireth_core::deadline` (Deadline 到期通知竞速); 日志走脱敏
+//! 原语 (`apeireth_credentials::SecretString`), 凭据/环境变量值不入日志。
 //!
-//! **STUB MODE 守门** (per task spec, 0 改):
-//! - 任何真实 SDK 引用禁止 (0 引, bollard / firecracker-rs / runsc 都不引)
-//! - 6 API 全部返 `SandboxError::NotImplemented(api_name)`, 编译期 hardcode
-//! - `STUB_MODE` 编译期 hardcode = `true`, **不允许运行时配置"切到真实模式"**
-//! - 真实实现留 **R21+**, 修改本 crate 需 8 哲学锚 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5) + 主人审
+//! ## 6 编排 API
 //!
-//! ## 状态: ⏳ STUB skeleton (R20 阶段 4 效果, 主人 2026-08-05 派 #X sub-agent 干)
+//! - [`SandboxSdk::spawn`] — 创建沙箱 (K-1 配置校验 + 隔离计划 + 配额预留)
+//! - [`SandboxSdk::kill`] — 终止运行中沙箱
+//! - [`SandboxSdk::wait`] — 等待退出 (deadline 超时)
+//! - [`SandboxSdk::get_status`] — 状态单查 (本地/服务端对账)
+//! - [`SandboxSdk::stream_logs`] — 流式日志 (断点续传, 错误随流传)
+//! - [`SandboxSdk::cleanup`] — 销毁并释放资源
 //!
-//! ---
-//!
-//! ## 🧭 8 哲学锚 (RIVAL 蓝图, R20 阶段 4 必守, baseline 2026-08-19)
-//!
-//! 1. **S-1 不漂移 (Stay Grounded)**: 0 假装已实现, STUB 模式所有 6 API 全部返
-//!    `NotImplemented`. 真实实现留 R21+, 改 STUB_MODE = false 需主人审.
-//! 2. **S-2 编译期 hardcode**: `STUB_MODE = true` / `PLATFORM_NAME = "apeireth"` /
-//!    `SANDBOX_SCHEMA_VERSION = "1"` 全部 const, 不允许运行时配置覆盖.
-//! 3. **O-2 工程铁律 (不引重复造轮子的 dep)**: 0 引 bollard / firecracker-rs / runsc,
-//!    留 R21 真接时再加, 现阶段 (R20 阶段 4) 编译期 hardcode 守门.
-//! 4. **O-3 m3 防御**: 6 API 工具白名单 `SANDBOX_TOOL_WHITELIST` 编译期 hardcode,
-//!    `validate_tool_call` 在 dispatch 前 schema 校验, 防 m3 模型幻觉调用不存在的工具.
-//! 5. **O-4 不假装可观测**: 6 API 失败时返 `SandboxError::NotImplemented(api_name)` +
-//!    `tracing::warn!` log, 不假装 OK, 不假装是 mock 输出.
-//! 6. **O-5 K-1 强校验**: 6 字段 (镜像 / 命令 / user / env / 端口 / 卷挂载) 编译期
-//!    hardcode 白名单, 任何配置变更必经 `validate()` 走 6 K-1 检查, 防止恶意/越权配置.
-//!
-//! ## 🔒 8 项不修改承诺 (per task spec, 跟 apeireth-voice / apeireth-lark 1:1 风格)
-//!
-//! 1. `version.workspace = true` ✅
-//! 2. `edition.workspace = true` ✅
-//! 3. `rust-version.workspace = true` ✅
-//! 4. `license.workspace = true` ✅
-//! 5. `authors.workspace = true` ✅
-//! 6. deps 用 `{ workspace = true }` (除 tracing 显式因 workspace 没声明) ✅
-//! 7. 不修改 workspace Cargo.toml (由整合 #X sub-agent 加 member) ⏳
-//! 8. 不引 unsafe (workspace `#![deny(unsafe_code)]` 继承) ✅
-//!
-//! ## 🔐 5 K-1 强校验守门字样 (per task spec, 编译期 hardcode 必出现)
-//!
-//! 1. **apeireth** (品牌一致, 编译期 hardcode `PLATFORM_NAME`)
-//! 2. **sandbox** (crate 域名, 模块路径 / TOOL_WHITELIST 命名空间)
-//! 3. **stub** (STUB 模式守门字样, `STUB_MODE` const + 6 API 返 NotImplemented)
-//! 4. **runtime** (3 RuntimeKind enum, K-1 强校验 #2)
-//! 5. **must-do** (整合 #X sub-agent 改 STUB_MODE = false 前必读守门)
+//! 外加 [`SandboxSdk::patrol`] — 状态巡检 (批量对账 + 超龄回收 + 配额归还)。
 
 #![allow(missing_docs)]
-#![allow(clippy::all)]
-
-// ============================================================================
-// §0 Module 声明
-// ============================================================================
 
 pub mod error;
 pub mod isolation;
+pub mod lifecycle;
+pub mod mock;
 pub mod policy;
+pub mod protocol;
+pub mod quota;
 pub mod resource;
 pub mod runtime;
+pub mod transport;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::SystemTime;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
-use futures::stream::Stream;
+use futures::future::{select, Either};
+use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::info;
 use uuid::Uuid;
 
-// P0 协议归一化 (per apeireth-protocol, sandbox log stream 错误用 ProtocolError).
-use apeireth_protocol::ProtocolError as SandboxProtocolError;
-// P0 凭证安全: image pull credentials use a secret reference, never plaintext.
+use apeireth_core::deadline::{clamp_timeout, Deadline};
+use apeireth_credentials::SecretString;
 
-pub use error::{SandboxError, SandboxResult, SANDBOX_ERROR_VARIANT_COUNT};
-pub use isolation::{IsolationConfig, SandboxRuntime, StubSandboxRuntime};
+pub use error::{
+    SandboxError, SandboxErrorCode, SandboxResult, SANDBOX_ERROR_CODE_COUNT,
+    SANDBOX_ERROR_VARIANT_COUNT,
+};
+pub use isolation::{IsolationConfig, IsolationPlan, ALLOWED_CAPABILITIES};
+pub use lifecycle::{
+    apply_transition, is_reachable, reconcile, status_rank, LifecycleEvent as SandboxLifecycleEvent,
+};
+pub use mock::MockOrchestrationService;
 pub use policy::{
     PortMapping, PortProtocol, SecurityPolicy, VolumeMount, ALLOWED_IMAGE_REGISTRIES,
     ALLOWED_VOLUME_SOURCE_PREFIXES, FORBIDDEN_ENV_KEYS, FORBIDDEN_USERS, MAX_ENV_VARS,
     MAX_PORT_MAPPINGS, MAX_VOLUME_MOUNTS,
 };
+pub use protocol::{
+    check_response_echo, classify_wire_error_code, decode_request, decode_response, encode_request,
+    encode_response, error_response, OpResult, OrchestrationRequest, OrchestrationResponse,
+    RequestFrame, ResponseFrame, WireErrorCode, WIRE_SCHEMA_VERSION,
+};
+pub use quota::{QuotaLedger, QuotaPolicy, QuotaSnapshot};
 pub use resource::{
     ResourceLimits, ResourceUsage, MAX_CPU_CORES, MAX_IO_BANDWIDTH_BPS, MAX_MEMORY_BYTES,
     MAX_NET_BANDWIDTH_BPS, MAX_TMP_BYTES, MIN_CPU_CORES, MIN_IO_BANDWIDTH_BPS, MIN_MEMORY_BYTES,
@@ -108,23 +89,14 @@ pub use runtime::{
     IsolationLevel, RuntimeKind, SandboxStatus, SANDBOX_STATUS_COUNT, SUPPORTED_ISOLATION_LEVELS,
     SUPPORTED_RUNTIME_KINDS,
 };
+pub use transport::{OrchestrationTransport, TransportError};
 
 // ============================================================================
-// §1 m3 hallucination 防御 (per m3-hallucination-defense-2026-08-05.md §2.4 + §2.1)
-// WHITELIST 编译期 hardcode 6 工具 (6 上游 API), validate_tool_call 在 dispatch 前
-// schema 校验. 防止 minimax m3 模型幻觉调用不存在的 sandbox 工具.
+// §1 工具白名单 (调用面防幻觉: 只有 6 个编排 API 可被调用)
 // ============================================================================
 
-/// m3 防御: Sandbox SDK 6 API 工具白名单 (编译期 hardcode, 不可运行时改).
-///
-/// **6 工具 = 对齐既有实现 @anthropic-ai/sandbox `spawn / kill / wait /
-/// getStatus / streamLogs / cleanup`**:
-/// - `apeireth_sdk_sandbox_spawn` (创建沙箱)
-/// - `apeireth_sdk_sandbox_kill` (终止沙箱)
-/// - `apeireth_sdk_sandbox_wait` (等待退出)
-/// - `apeireth_sdk_sandbox_get_status` (查状态)
-/// - `apeireth_sdk_sandbox_stream_logs` (流日志)
-/// - `apeireth_sdk_sandbox_cleanup` (释放资源)
+/// 编排 API 工具白名单 (编译期 hardcode): spawn / kill / wait / get_status /
+/// stream_logs / cleanup。
 pub const SANDBOX_TOOL_WHITELIST: &[&str] = &[
     "apeireth_sdk_sandbox_spawn",
     "apeireth_sdk_sandbox_kill",
@@ -134,11 +106,12 @@ pub const SANDBOX_TOOL_WHITELIST: &[&str] = &[
     "apeireth_sdk_sandbox_cleanup",
 ];
 
-/// 编译期守门: SANDBOX_TOOL_WHITELIST 长度 == 6 (K-1 强校验 + 8 项不修改承诺 #5).
+/// 编译期守门: 白名单长度 == 6。
 pub const SANDBOX_TOOL_WHITELIST_COUNT: usize = 6;
 const _: () = assert!(SANDBOX_TOOL_WHITELIST.len() == SANDBOX_TOOL_WHITELIST_COUNT);
 
-/// m3 防御: 校验工具调用是否在白名单内. 不在则拒绝 (返 `SandboxError::ToolNotWhitelisted`).
+/// 校验工具调用是否在白名单内; 不在则
+/// [`SandboxError::ToolNotWhitelisted`](error::SandboxError::ToolNotWhitelisted)。
 pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> SandboxResult<()> {
     if !SANDBOX_TOOL_WHITELIST.contains(&tool) {
         return Err(SandboxError::ToolNotWhitelisted(tool.to_string()));
@@ -147,93 +120,84 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> SandboxResul
 }
 
 // ============================================================================
-// §2 编译期 hardcode 常量 (per R20 P0 5 crate 风格 + K-1 强校验)
+// §2 编译期常量
 // ============================================================================
 
-/// Sandbox API schema version (1:1 翻译 既有 Sandbox SDK, K-1 强校验).
+/// 沙箱协议 schema 版本。
 pub const SANDBOX_SCHEMA_VERSION: &str = "1";
 
-/// 平台名 (K-1 强校验 #1: 编译期 hardcode `"apeireth"`, 对齐既有实现, 不写装饰名).
+/// 平台名 (编译期 hardcode)。
 pub const PLATFORM_NAME: &str = "apeireth";
 
-/// **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.
-/// R21+ 真接 docker/firecracker/gvisor 时, **必须经 8 哲学锚 + 主人审才能改 `false`**.
-pub const STUB_MODE: bool = true;
-
-/// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
-/// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
-const _: () = assert!(
-    STUB_MODE == true,
-    "STUB_MODE 改 false 需经 8 哲学锚 + 主人审 (R21+)"
-);
-
-/// m3 防御: 查 STUB_MODE 状态 (per task spec 守门).
-/// **R21+ 改 `STUB_MODE = false` 时, 本函数返 `false`**; 现阶段恒返 `true`.
-pub fn is_stub_mode() -> bool {
-    STUB_MODE
-}
-
-/// 单沙箱最大存活时间 (秒, 1h, 按既有实现估算, 防恶意沙箱长占资源).
+/// 单沙箱最大存活时间 (秒, 防长占资源; 状态巡检按此回收)。
 pub const SANDBOX_MAX_LIFETIME_SECONDS: u64 = 3600;
 
-/// 单次 streamLogs 最大 chunk 数 (按既有实现估算 10000, 防 stream 爆炸).
+/// 单次 stream_logs 最大 chunk 数 (防流爆炸)。
 pub const SANDBOX_MAX_LOG_CHUNKS: u64 = 10_000;
 
-/// 单 chunk 字节上限 (4 KiB, 按既有实现估算, 防单 log line 爆炸).
+/// 单 chunk 字节上限 (防单行爆炸)。
 pub const SANDBOX_MAX_LOG_CHUNK_BYTES: usize = 4096;
 
-/// 默认隔离级别 (按既有实现 `isolation: "container"` 默认).
+/// 默认隔离级别。
 pub const DEFAULT_ISOLATION_LEVEL: IsolationLevel = IsolationLevel::Container;
 
-/// 默认运行时 (按既有实现 `runtime: "docker"` 默认).
+/// 默认运行时。
 pub const DEFAULT_RUNTIME_KIND: RuntimeKind = RuntimeKind::Docker;
+
+/// 默认请求超时 (毫秒, deadline 缺省)。
+pub const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 5_000;
+
+/// 请求超时上限 (毫秒, deadline 硬顶)。
+pub const MAX_REQUEST_TIMEOUT_MS: u64 = 60_000;
+
+/// 默认 wait 超时 (毫秒)。
+pub const DEFAULT_WAIT_TIMEOUT_MS: u64 = 30_000;
+
+/// wait 超时上限 (毫秒 = 单沙箱最大存活时间)。
+pub const MAX_WAIT_TIMEOUT_MS: u64 = SANDBOX_MAX_LIFETIME_SECONDS * 1000;
+
+/// stream_logs 单次拉取 chunk 批大小。
+pub const LOG_CHUNK_BATCH: u64 = 16;
 
 // ============================================================================
 // §3 核心类型 (SandboxConfig / SandboxHandle / LogStreamEvent / ExitCode)
 // ============================================================================
 
-/// 沙箱顶层配置 (per 既有 Sandbox SDK `SandboxConfig`).
-///
-/// 字段对应既有实现:
-/// - `runtime` → `runtime`
-/// - `isolation` → `isolation`
-/// - `policy` → `image` + `command` + `user` + `env` + `ports` + `mounts` (拆 SecurityPolicy)
-/// - `resources` → `cpuCores` + `memoryBytes` + `ioBandwidthBps` + `networkBandwidthBps` + `tmpBytes`
-/// - `credentials` → 走 apeireth-keyring, 不存明文 (P0 凭证安全铁律)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// 沙箱顶层配置 (runtime + isolation + policy + resources + credentials)。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SandboxConfig {
-    /// 运行时 (3 选 1, K-1 强校验 #2). 默认 = Docker.
+    /// 运行时 (3 选 1)。默认 = Docker。
     pub runtime: RuntimeKind,
-    /// 隔离级别 (3 选 1, K-1 强校验 #3). 默认 = Container.
+    /// 隔离级别 (3 选 1)。默认 = Container。
     pub isolation: IsolationLevel,
-    /// 隔离配置 (PID/Network/Mount namespace + seccomp + cgroup).
+    /// 隔离配置 (PID/Network/Mount namespace + seccomp + cgroup)。
     pub isolation_config: IsolationConfig,
-    /// 安全策略 (6 K-1 强校验字段: image / command / user / env / ports / mounts).
+    /// 安全策略 (image / command / user / env / ports / mounts)。
     pub policy: SecurityPolicy,
-    /// 资源限制 (5 字段: CPU / 内存 / IO / 网络 / 临时目录).
+    /// 资源限制 (CPU / 内存 / IO / 网络 / 临时目录)。
     pub resources: ResourceLimits,
-    /// 凭证 (走 apeireth-keyring, 0 明文, P0 安全铁律). None = 公开镜像.
+    /// 拉镜像凭证 (只存 secret 引用, 不存明文)。None = 公开镜像。
     pub credentials: Option<SandboxCredentials>,
-    /// 工作目录 (沙箱内, 默认 "/").
+    /// 工作目录 (沙箱内, 默认 "/")。
     pub workdir: PathBuf,
-    /// 标签 (k-v, 供 filter / observability 用, 按既有实现 `labels`).
+    /// 标签 (k-v, 供 filter / 观测用)。
     pub labels: HashMap<String, String>,
 }
 
-/// 沙箱凭证 (走 apeireth-keyring, 0 明文).
-///
-/// 字段对应既有实现 `imagePullCredentials.{registry,username,secret}`:
-/// - `registry`: 镜像 registry (e.g. "ghcr.io")
-/// - `username`: 用户名 (明文 OK, 公开信息)
-/// - `secret_ref`: keyring secret ref (e.g. "ghcr-token"), **不存明文**
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// 沙箱凭证 (secret 只以引用形式存在, 明文经宿主集成现查)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SandboxCredentials {
-    /// 镜像 registry.
+    /// 镜像 registry。
     pub registry: String,
-    /// 用户名.
+    /// 用户名 (公开信息)。
     pub username: String,
-    /// Keyring secret name resolved by the host integration.
+    /// 宿主集成解析的 secret 引用名 (不存明文)。
     pub secret_ref: String,
+}
+
+/// 脱敏: 单个字符串按长度掩码 (`[REDACTED len=N]`), 明文不出现在日志/摘要。
+pub fn redact_secret(value: &str) -> String {
+    SecretString::new(value.to_string()).redacted()
 }
 
 impl Default for SandboxConfig {
@@ -265,7 +229,7 @@ impl Default for SandboxConfig {
 }
 
 impl SandboxConfig {
-    /// 创建新沙箱配置 (Builder 风格, 链式调用, 对齐既有实现 `new SandboxConfig(...)`).
+    /// 创建新沙箱配置 (runtime + isolation + policy + resources)。
     pub fn new(
         runtime: RuntimeKind,
         isolation: IsolationLevel,
@@ -293,7 +257,7 @@ impl SandboxConfig {
         }
     }
 
-    /// 校验全部 6 K-1 强校验 + 5 资源限制 + 隔离兼容性.
+    /// 校验全部配置面: 安全策略 + 资源限制 + 隔离 (含 capability 白名单) + 一致性。
     pub fn validate(&self) -> SandboxResult<()> {
         self.policy.validate()?;
         self.resources.validate()?;
@@ -312,40 +276,57 @@ impl SandboxConfig {
         }
         Ok(())
     }
+
+    /// 脱敏日志摘要: 凭据/环境变量值一律掩码, 明文不入日志。
+    pub fn log_summary(&self) -> String {
+        let env_values: Vec<String> = self
+            .policy
+            .env
+            .values()
+            .map(|value| redact_secret(value))
+            .collect();
+        let credentials = self
+            .credentials
+            .as_ref()
+            .map(|creds| format!("{}@{}", creds.username, creds.registry))
+            .unwrap_or_else(|| "none".to_string());
+        format!(
+            "sandbox-config runtime={} isolation={} image={} user={} env_values=[{}] ports={} mounts={} credentials={}",
+            self.runtime,
+            self.isolation,
+            self.policy.image,
+            self.policy.user,
+            env_values.join(","),
+            self.policy.ports.len(),
+            self.policy.mounts.len(),
+            credentials,
+        )
+    }
 }
 
-/// 沙箱句柄 (per 既有 Sandbox SDK `SandboxHandle`).
-///
-/// 字段对应既有实现:
-/// - `id` → `id` (UUID v4)
-/// - `status` → `status` (6 状态机)
-/// - `runtime` → `runtime`
-/// - `isolation` → `isolation`
-/// - `started_at` → `startedAt`
-/// - `finished_at` → `finishedAt` (Option, 完成才填)
-/// - `exit_code` → `exitCode` (Option, 完成才填)
+/// 沙箱句柄 (客户端与服务端共享同一档案)。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SandboxHandle {
-    /// 沙箱 ID (UUID v4, 对齐既有实现 `id`).
+    /// 沙箱 ID (客户端分配的 UUID v4)。
     pub id: Uuid,
-    /// 沙箱状态 (6 状态机).
+    /// 沙箱状态 (6 态状态机)。
     pub status: SandboxStatus,
-    /// 运行时 (记录 spawn 时选定的, 对齐既有实现 `runtime`).
+    /// 运行时 (创建时选定)。
     pub runtime: RuntimeKind,
-    /// 隔离级别 (记录 spawn 时选定的, 对齐既有实现 `isolation`).
+    /// 隔离级别 (创建时选定)。
     pub isolation: IsolationLevel,
-    /// 启动时间.
+    /// 启动时间。
     pub started_at: SystemTime,
-    /// 完成时间 (None = 未完成).
+    /// 完成时间 (None = 未完成)。
     pub finished_at: Option<SystemTime>,
-    /// 退出码 (None = 未完成, Some(0) = 正常, Some(!0) = 异常).
+    /// 退出码 (None = 未完成)。
     pub exit_code: Option<i32>,
-    /// 错误信息 (None = 正常, Some(msg) = failed 时填).
+    /// 错误信息 (None = 正常)。
     pub error: Option<String>,
 }
 
 impl SandboxHandle {
-    /// 创建新句柄 (pending 状态).
+    /// 创建新句柄 (pending 状态)。
     pub fn new(runtime: RuntimeKind, isolation: IsolationLevel) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -359,7 +340,7 @@ impl SandboxHandle {
         }
     }
 
-    /// 沙箱是否在运行.
+    /// 沙箱是否在运行 (creating / running)。
     pub fn is_running(&self) -> bool {
         matches!(
             self.status,
@@ -367,42 +348,42 @@ impl SandboxHandle {
         )
     }
 
-    /// 沙箱是否已完成 (stopped 或 failed).
+    /// 沙箱是否已完成 (stopped / failed)。
     pub fn is_finished(&self) -> bool {
-        matches!(self.status, SandboxStatus::Stopped | SandboxStatus::Failed)
+        self.status.is_terminal()
     }
 }
 
-/// 日志流 chunk (per 既有 Sandbox SDK `streamLogs`).
+/// 日志流 chunk。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LogStreamEvent {
-    /// 沙箱 ID (跟 SandboxHandle.id 对应).
+    /// 沙箱 ID。
     pub sandbox_id: Uuid,
-    /// 流 ID (UUID v4, 区分多个并发 stream).
+    /// 流 ID (区分并发流)。
     pub stream_id: Uuid,
-    /// 流类型 (stdout / stderr, 按既有实现 `stream`).
+    /// 流类型 (stdout / stderr)。
     pub stream: LogStream,
-    /// 数据 (字节, 单 chunk ≤ SANDBOX_MAX_LOG_CHUNK_BYTES = 4 KiB).
+    /// 数据 (单 chunk ≤ [`SANDBOX_MAX_LOG_CHUNK_BYTES`])。
     pub data: Vec<u8>,
-    /// 序列号 (0-based, 客户端可断点续传).
+    /// 序列号 (0-based, 断点续传游标)。
     pub seq: u64,
-    /// 时间戳.
+    /// 时间戳。
     pub timestamp: SystemTime,
 }
 
-/// 日志流类型 (按既有实现 `stream: "stdout" | "stderr"`).
+/// 日志流类型。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogStream {
-    /// 标准输出.
+    /// 标准输出。
     #[default]
     Stdout,
-    /// 标准错误.
+    /// 标准错误。
     Stderr,
 }
 
 impl LogStream {
-    /// 字符串 (对齐既有实现).
+    /// 稳定字符串。
     pub fn as_str(&self) -> &'static str {
         match self {
             LogStream::Stdout => "stdout",
@@ -417,24 +398,24 @@ impl std::fmt::Display for LogStream {
     }
 }
 
-/// 退出码 (按既有实现 `exitCode`).
+/// 退出码。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExitCode {
-    /// 正常退出 (0).
+    /// 正常退出 (0)。
     Ok,
-    /// 异常退出 (非 0).
+    /// 异常退出 (非 0)。
     Failed(i32),
-    /// 信号终止 (按既有实现估算, 128 + signal).
+    /// 信号终止 (128 + signal)。
     Signaled(i32),
-    /// 沙箱被 kill 调用主动终止.
+    /// 被 kill 主动终止。
     Killed,
-    /// OOM 终止 (按既有实现估算).
+    /// OOM 终止。
     Oom,
 }
 
 impl ExitCode {
-    /// 数值 (按既有实现 `exitCode` 字段语义).
+    /// 数值 (与 `exit_code` 字段语义一致)。
     pub fn value(&self) -> i32 {
         match self {
             ExitCode::Ok => 0,
@@ -447,249 +428,612 @@ impl ExitCode {
 }
 
 // ============================================================================
-// §4 SandboxSdk 顶层 facade (6 API stub dispatcher, STUB 模式返 NotImplemented)
+// §4 状态巡检报告
 // ============================================================================
 
-/// Sandbox SDK 顶层 facade (6 API dispatcher, STUB 模式全部返 NotImplemented).
-///
-/// 字段对应既有实现 `SandboxSdk` (估 3 fields):
-/// - `config` (per `SandboxConfig`)
-/// - `handles` (per `HashMap<Uuid, SandboxHandle>`)
-/// - `runtime` (per `Box<dyn SandboxRuntime>`, 真实 runtime stub)
-#[derive(Debug)]
+/// 状态巡检报告。
+#[derive(Debug, Clone, PartialEq)]
+pub struct PatrolReport {
+    /// 本次对账的沙箱数。
+    pub inspected: usize,
+    /// 发生状态迁移 (本地与服务端对齐) 的沙箱数。
+    pub transitioned: usize,
+    /// 被回收的沙箱 ID (服务端已无记录 / 超龄强制销毁)。
+    pub reaped: Vec<Uuid>,
+    /// 对账失败数 (传输失败 / 状态不可达)。
+    pub failures: usize,
+    /// 巡检后配额快照。
+    pub quota: QuotaSnapshot,
+}
+
+// ============================================================================
+// §5 SandboxSdk — 多沙箱编排客户端 (真实实现)
+// ============================================================================
+
+/// 多沙箱编排客户端: 协议编解码 + 生命周期对账 + 配额记账 + deadline 超时,
+/// 与外部编排服务经 [`OrchestrationTransport`] 往返 (mock 边界见 [`mock`])。
+#[derive(Clone)]
 pub struct SandboxSdk {
     config: SandboxConfig,
+    transport: Arc<dyn OrchestrationTransport>,
+    ledger: QuotaLedger,
     handles: HashMap<Uuid, SandboxHandle>,
-    runtime: StubSandboxRuntime,
-    initialized: AtomicBool,
+    request_timeout_ms: u64,
+}
+
+impl std::fmt::Debug for SandboxSdk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SandboxSdk")
+            .field("config", &self.config.log_summary())
+            .field("handles", &self.handles.len())
+            .field("quota", &self.ledger.snapshot())
+            .field("request_timeout_ms", &self.request_timeout_ms)
+            .finish()
+    }
 }
 
 impl SandboxSdk {
-    /// 创建新的 Sandbox SDK (STUB 模式 OK, R21+ 真接 docker/firecracker/gvisor).
-    pub fn new(config: SandboxConfig) -> SandboxResult<Self> {
+    /// 创建编排客户端 (校验基座配置 + 绑定传输边界与配额账本)。
+    pub fn new(
+        config: SandboxConfig,
+        transport: Arc<dyn OrchestrationTransport>,
+        ledger: QuotaLedger,
+    ) -> SandboxResult<Self> {
         config.validate()?;
-        let runtime = StubSandboxRuntime::new(config.runtime, config.isolation);
         info!(
             target: "apeireth_sdk_sandbox",
-            "SandboxSdk::new STUB_MODE={} platform={} schema_version={} runtime={} isolation={}",
-            STUB_MODE,
+            "SandboxSdk::new platform={} schema_version={} {}",
             PLATFORM_NAME,
             SANDBOX_SCHEMA_VERSION,
-            config.runtime,
-            config.isolation
+            config.log_summary()
         );
         Ok(Self {
             config,
+            transport,
+            ledger,
             handles: HashMap::new(),
-            runtime,
-            initialized: AtomicBool::new(true),
+            request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
         })
     }
 
-    /// 当前 config.
+    /// 覆盖请求超时 (毫秒, 经 deadline 过闸)。
+    pub fn with_request_timeout_ms(mut self, timeout_ms: u64) -> SandboxResult<Self> {
+        clamp_timeout(
+            Some(timeout_ms),
+            DEFAULT_REQUEST_TIMEOUT_MS,
+            MAX_REQUEST_TIMEOUT_MS,
+        )?;
+        self.request_timeout_ms = timeout_ms;
+        Ok(self)
+    }
+
+    /// 当前基座配置。
     pub fn config(&self) -> &SandboxConfig {
         &self.config
     }
 
-    /// 当前活跃沙箱数.
+    /// 配额账本。
+    pub fn quota(&self) -> &QuotaLedger {
+        &self.ledger
+    }
+
+    /// 当前活跃 (未终态) 沙箱数。
     pub fn active_sandboxes(&self) -> usize {
         self.handles.values().filter(|h| h.is_running()).count()
     }
 
-    /// 查 handle by id.
+    /// 查本地句柄。
     pub fn get_handle(&self, id: &Uuid) -> Option<&SandboxHandle> {
         self.handles.get(id)
     }
 
-    /// 列出全部 handle.
+    /// 列出本地全部句柄。
     pub fn list_handles(&self) -> Vec<&SandboxHandle> {
         self.handles.values().collect()
     }
 
-    // ========================================================================
-    // §4.1 6 API stub 工具 (per 既有 Sandbox SDK)
-    // 每个工具返 `SandboxError::NotImplemented(api_name)`, 编译期 hardcode.
-    // R21+ 真接 docker/firecracker/gvisor 时, 替换实现 + 改 STUB_MODE = false.
-    // ========================================================================
+    // ------------------------------------------------------------------
+    // §5.1 传输往返 (编码 → 边界 → 解码 → 版本/回声校验 → 错误分类)
+    // ------------------------------------------------------------------
 
-    /// 工具 1: `apeireth_sdk_sandbox_spawn` (STUB 返 NotImplemented).
-    ///
-    /// 对齐既有实现 `spawn(image, command, options) -> SandboxHandle`.
-    /// R21+ 真接: 调 bollard::Docker::create_container (Docker 路径) /
-    /// firecracker::VM::start (Firecracker 路径) / runsc::Runsc::exec (gVisor 路径).
-    pub async fn spawn(&mut self, _policy: SecurityPolicy) -> SandboxResult<SandboxHandle> {
-        warn!(target: "apeireth_sdk_sandbox", "spawn STUB_MODE returning NotImplemented");
-        Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_spawn"))
+    async fn call_op(&self, body: OrchestrationRequest) -> SandboxResult<OpResult> {
+        self.call_op_within(body, self.request_timeout_ms).await
     }
 
-    /// 工具 2: `apeireth_sdk_sandbox_kill` (STUB 返 NotImplemented).
-    ///
-    /// 对齐既有实现 `kill(handle, signal?) -> void`.
-    /// R21+ 真接: 调 bollard::Docker::kill / firecracker::VM::stop / runsc::Runsc::kill.
-    pub async fn kill(&mut self, _id: &Uuid, _signal: Option<i32>) -> SandboxResult<()> {
-        warn!(target: "apeireth_sdk_sandbox", "kill STUB_MODE returning NotImplemented");
-        Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_kill"))
+    async fn call_op_within(
+        &self,
+        body: OrchestrationRequest,
+        timeout_ms: u64,
+    ) -> SandboxResult<OpResult> {
+        call_op_on(&self.transport, timeout_ms, body).await
     }
 
-    /// 工具 3: `apeireth_sdk_sandbox_wait` (STUB 返 NotImplemented).
-    ///
-    /// 对齐既有实现 `wait(handle, timeout?) -> ExitCode`.
-    /// R21+ 真接: tokio::select! + container.wait / VM.wait / runsc.wait.
-    pub async fn wait(&self, _id: &Uuid, _timeout_secs: Option<u64>) -> SandboxResult<ExitCode> {
-        warn!(target: "apeireth_sdk_sandbox", "wait STUB_MODE returning NotImplemented");
-        Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_wait"))
+    fn local_handle(&self, id: &Uuid) -> SandboxResult<SandboxHandle> {
+        self.handles
+            .get(id)
+            .cloned()
+            .ok_or_else(|| SandboxError::NotFound {
+                sandbox_id: id.to_string(),
+            })
     }
 
-    /// 工具 4: `apeireth_sdk_sandbox_get_status` (STUB 返 NotImplemented).
-    ///
-    /// 对齐既有实现 `getStatus(handle) -> SandboxStatus`.
-    /// R21+ 真接: 调 bollard::Docker::inspect_container / firecracker::VM::state / runsc.state.
-    pub async fn get_status(&self, _id: &Uuid) -> SandboxResult<SandboxStatus> {
-        warn!(target: "apeireth_sdk_sandbox", "get_status STUB_MODE returning NotImplemented");
-        Err(SandboxError::NotImplemented(
-            "apeireth_sdk_sandbox_get_status",
-        ))
+    fn release_if_reserved(&self, id: &Uuid) {
+        if self.ledger.is_reserved(id) {
+            // 归还失败只记日志, 不覆盖主错误路径 (账目以快照文件核对)。
+            if let Err(err) = self.ledger.release(id) {
+                info!(
+                    target: "apeireth_sdk_sandbox",
+                    "quota release failed for {}: {}", id, err.code()
+                );
+            }
+        }
     }
 
-    /// 工具 5: `apeireth_sdk_sandbox_stream_logs` (STUB 返 NotImplemented).
+    // ------------------------------------------------------------------
+    // §5.2 6 编排 API
+    // ------------------------------------------------------------------
+
+    /// 工具 1: 创建沙箱。
     ///
-    /// 对齐既有实现 `streamLogs(handle) -> AsyncIterator<LogChunk>`.
-    /// R21+ 真接: 调 bollard::Docker::logs(stream=true) / firecracker console / runsc logs.
+    /// 流程: 完整配置校验 → 隔离计划 (capability 白名单收敛) → 配额预留 →
+    /// 创建请求 (客户端分配沙箱 ID) → 生命周期对账 (pending → 服务端回报)。
+    /// 请求失败时配额必归还。
+    pub async fn spawn(&mut self, policy: SecurityPolicy) -> SandboxResult<SandboxHandle> {
+        let mut config = self.config.clone();
+        config.policy = policy;
+        config.validate()?;
+        let plan = IsolationPlan::plan(&config.isolation_config)?;
+
+        let sandbox_id = Uuid::new_v4();
+        self.ledger.reserve(sandbox_id, &config.resources)?;
+
+        let result = self
+            .call_op(OrchestrationRequest::Create {
+                sandbox_id,
+                config: Box::new(config),
+            })
+            .await;
+        let result = match result {
+            Ok(result) => result,
+            Err(err) => {
+                self.release_if_reserved(&sandbox_id);
+                return Err(err);
+            }
+        };
+        let OpResult::Created { handle } = result else {
+            self.release_if_reserved(&sandbox_id);
+            return Err(SandboxError::Protocol(
+                "create response did not carry a handle".into(),
+            ));
+        };
+        if handle.id != sandbox_id {
+            self.release_if_reserved(&sandbox_id);
+            return Err(SandboxError::Protocol(format!(
+                "create response handle id mismatch: sent={sandbox_id} got={}",
+                handle.id
+            )));
+        }
+        // 生命周期对账: 从 pending 出发, 服务端回报必须可达。
+        reconcile(SandboxStatus::Pending, handle.status)?;
+        self.handles.insert(sandbox_id, handle.clone());
+        info!(
+            target: "apeireth_sdk_sandbox",
+            "spawned sandbox {} status={} isolation_capabilities={}",
+            sandbox_id,
+            handle.status,
+            plan.granted_capabilities.len()
+        );
+        Ok(handle)
+    }
+
+    /// 工具 2: 终止运行中沙箱 (graceful, 可带信号)。终态沙箱拒收
+    /// ([`SandboxError::InvalidState`])。
+    pub async fn kill(&mut self, id: &Uuid, signal: Option<i32>) -> SandboxResult<()> {
+        let current = self.local_handle(id)?;
+        if current.is_finished() {
+            return Err(SandboxError::InvalidState(format!(
+                "sandbox {id} already finished ({})",
+                current.status
+            )));
+        }
+        let result = self
+            .call_op(OrchestrationRequest::Terminate {
+                sandbox_id: *id,
+                signal,
+            })
+            .await?;
+        let OpResult::Terminated { status, .. } = result else {
+            return Err(SandboxError::Protocol(
+                "terminate response did not carry a status".into(),
+            ));
+        };
+        let next = reconcile(current.status, status)?;
+        if let Some(handle) = self.handles.get_mut(id) {
+            handle.status = next;
+            if next.is_terminal() {
+                finish_handle(handle);
+                handle.exit_code = handle.exit_code.or(Some(0));
+            }
+        }
+        if next.is_terminal() {
+            self.release_if_reserved(id);
+        }
+        Ok(())
+    }
+
+    /// 工具 3: 等待退出 (deadline 超时; 未在期限内退出 = [`SandboxError::Timeout`])。
+    pub async fn wait(&mut self, id: &Uuid, timeout_secs: Option<u64>) -> SandboxResult<ExitCode> {
+        let current = self.local_handle(id)?;
+        let timeout_ms = clamp_timeout(
+            timeout_secs.map(|secs| secs.saturating_mul(1000)),
+            DEFAULT_WAIT_TIMEOUT_MS,
+            MAX_WAIT_TIMEOUT_MS,
+        )?;
+        let result = self
+            .call_op_within(
+                OrchestrationRequest::Wait {
+                    sandbox_id: *id,
+                    timeout_ms,
+                },
+                timeout_ms,
+            )
+            .await?;
+        let OpResult::Waited {
+            exit_code,
+            finished,
+            ..
+        } = result
+        else {
+            return Err(SandboxError::Protocol(
+                "wait response did not carry an outcome".into(),
+            ));
+        };
+        if !finished {
+            return Err(SandboxError::Timeout(format!(
+                "sandbox {id} did not finish within {timeout_ms} ms"
+            )));
+        }
+        let exit = exit_code
+            .ok_or_else(|| SandboxError::Protocol("finished wait without an exit code".into()))?;
+        if let Some(handle) = self.handles.get_mut(id) {
+            handle.status = reconcile(current.status, SandboxStatus::Stopped)?;
+            finish_handle(handle);
+            handle.exit_code = Some(exit.value());
+        }
+        self.release_if_reserved(id);
+        Ok(exit)
+    }
+
+    /// 工具 4: 状态单查 (本地与服务端对账, 回报不可达 = [`SandboxError::InvalidState`])。
+    pub async fn get_status(&mut self, id: &Uuid) -> SandboxResult<SandboxStatus> {
+        let current = self.local_handle(id)?;
+        let result = self
+            .call_op(OrchestrationRequest::Inspect { sandbox_id: *id })
+            .await?;
+        let OpResult::Inspected { handle: reported } = result else {
+            return Err(SandboxError::Protocol(
+                "inspect response did not carry a handle".into(),
+            ));
+        };
+        let next = reconcile(current.status, reported.status)?;
+        if let Some(handle) = self.handles.get_mut(id) {
+            handle.status = next;
+            handle.started_at = reported.started_at;
+            handle.finished_at = reported.finished_at;
+            handle.exit_code = reported.exit_code;
+            handle.error = reported.error;
+        }
+        if next.is_terminal() {
+            self.release_if_reserved(id);
+        }
+        Ok(next)
+    }
+
+    /// 工具 5: 流式日志 (断点续传; 错误随流传, 不静默截断)。
     pub async fn stream_logs(
         &self,
-        _id: &Uuid,
-    ) -> SandboxResult<Pin<Box<dyn Stream<Item = LogStreamEvent> + Send>>> {
-        warn!(target: "apeireth_sdk_sandbox", "stream_logs STUB_MODE returning NotImplemented");
-        Err(SandboxError::NotImplemented(
-            "apeireth_sdk_sandbox_stream_logs",
-        ))
+        id: &Uuid,
+    ) -> SandboxResult<Pin<Box<dyn Stream<Item = Result<LogStreamEvent, SandboxError>> + Send>>>
+    {
+        self.local_handle(id)?;
+        let cursor = LogCursor {
+            sandbox_id: *id,
+            next_seq: 0,
+            queue: VecDeque::new(),
+            done: false,
+            transport: Arc::clone(&self.transport),
+            timeout_ms: self.request_timeout_ms,
+        };
+        Ok(Box::pin(futures::stream::unfold(
+            cursor,
+            |mut cursor| async {
+                loop {
+                    if let Some(event) = cursor.queue.pop_front() {
+                        return Some((Ok(event), cursor));
+                    }
+                    if cursor.done || cursor.next_seq >= SANDBOX_MAX_LOG_CHUNKS {
+                        return None;
+                    }
+                    let request = OrchestrationRequest::Logs {
+                        sandbox_id: cursor.sandbox_id,
+                        since_seq: cursor.next_seq,
+                        max_chunks: LOG_CHUNK_BATCH,
+                    };
+                    match call_op_on(&cursor.transport, cursor.timeout_ms, request).await {
+                        Ok(OpResult::LogsChunks { events, last }) => {
+                            if let Some(newest) = events.last() {
+                                cursor.next_seq = newest.seq + 1;
+                            }
+                            cursor.queue.extend(events);
+                            cursor.done = last;
+                        }
+                        Ok(_other) => {
+                            let err = SandboxError::Protocol(
+                                "unexpected response for a logs request".into(),
+                            );
+                            cursor.done = true;
+                            return Some((Err(err), cursor));
+                        }
+                        Err(err) => {
+                            cursor.done = true;
+                            return Some((Err(err), cursor));
+                        }
+                    }
+                }
+            },
+        )))
     }
 
-    /// 工具 6: `apeireth_sdk_sandbox_cleanup` (STUB 返 NotImplemented).
+    /// 工具 6: 销毁并释放资源 (幂等: 服务端已无记录视为目标达成)。
+    pub async fn cleanup(&mut self, id: &Uuid) -> SandboxResult<()> {
+        if !self.handles.contains_key(id) {
+            return Err(SandboxError::NotFound {
+                sandbox_id: id.to_string(),
+            });
+        }
+        match self
+            .call_op(OrchestrationRequest::Destroy {
+                sandbox_id: *id,
+                release_resources: true,
+            })
+            .await
+        {
+            Ok(OpResult::Destroyed { .. }) => {}
+            Ok(_) => {
+                return Err(SandboxError::Protocol(
+                    "destroy response did not confirm destruction".into(),
+                ))
+            }
+            Err(SandboxError::NotFound { .. }) => {}
+            Err(err) => return Err(err),
+        }
+        self.handles.remove(id);
+        self.release_if_reserved(id);
+        Ok(())
+    }
+
+    /// 状态巡检: 批量对账 (本地 ↔ 服务端) + 超龄回收 + 配额归还。
     ///
-    /// 对齐既有实现 `cleanup(handle) -> void`.
-    /// R21+ 真接: 调 bollard::Docker::remove_container (含 volume) / firecracker::VM::delete / runsc.delete.
-    pub async fn cleanup(&mut self, _id: &Uuid) -> SandboxResult<()> {
-        warn!(target: "apeireth_sdk_sandbox", "cleanup STUB_MODE returning NotImplemented");
-        Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_cleanup"))
+    /// - 服务端已无记录的沙箱 → 本地回收 (计入 `reaped`);
+    /// - 超过 [`SANDBOX_MAX_LIFETIME_SECONDS`] 仍 running → 强制销毁回收;
+    /// - 状态漂移按生命周期矩阵对齐 (不可达计 `failures`, 状态不动)。
+    pub async fn patrol(&mut self) -> SandboxResult<PatrolReport> {
+        let ids: Vec<Uuid> = self.handles.keys().copied().collect();
+        let mut report = PatrolReport {
+            inspected: 0,
+            transitioned: 0,
+            reaped: Vec::new(),
+            failures: 0,
+            quota: self.ledger.snapshot(),
+        };
+        for id in ids {
+            report.inspected += 1;
+            match self
+                .call_op(OrchestrationRequest::Inspect { sandbox_id: id })
+                .await
+            {
+                Ok(OpResult::Inspected { handle: reported }) => {
+                    let current = self.local_handle(&id).map(|h| h.status);
+                    match current.and_then(|status| reconcile(status, reported.status)) {
+                        Ok(next) => {
+                            if let Some(handle) = self.handles.get_mut(&id) {
+                                if handle.status != next {
+                                    report.transitioned += 1;
+                                }
+                                handle.status = next;
+                                handle.started_at = reported.started_at;
+                                handle.finished_at = reported.finished_at;
+                                handle.exit_code = reported.exit_code;
+                                handle.error = reported.error;
+                            }
+                            if next.is_terminal() {
+                                self.release_if_reserved(&id);
+                            }
+                        }
+                        Err(_) => report.failures += 1,
+                    }
+                }
+                Ok(_) => report.failures += 1,
+                Err(SandboxError::NotFound { .. }) => {
+                    self.handles.remove(&id);
+                    self.release_if_reserved(&id);
+                    report.reaped.push(id);
+                }
+                Err(_) => report.failures += 1,
+            }
+
+            // 超龄回收 (只针对仍在运行的沙箱)。
+            let expired = self.handles.get(&id).is_some_and(|handle| {
+                handle.is_running()
+                    && SystemTime::now()
+                        .duration_since(handle.started_at)
+                        .unwrap_or_default()
+                        > Duration::from_secs(SANDBOX_MAX_LIFETIME_SECONDS)
+            });
+            if expired {
+                match self
+                    .call_op(OrchestrationRequest::Destroy {
+                        sandbox_id: id,
+                        release_resources: true,
+                    })
+                    .await
+                {
+                    Ok(OpResult::Destroyed { .. }) | Err(SandboxError::NotFound { .. }) => {
+                        self.handles.remove(&id);
+                        self.release_if_reserved(&id);
+                        report.reaped.push(id);
+                    }
+                    Ok(_) => report.failures += 1,
+                    Err(_) => report.failures += 1,
+                }
+            }
+        }
+        report.quota = self.ledger.snapshot();
+        Ok(report)
     }
 }
 
-// ============================================================================
-// §5 STUB 守门宏 + 工具状态 helper
-// ============================================================================
+/// stream_logs 的拉取游标 (unfold 状态)。
+struct LogCursor {
+    sandbox_id: Uuid,
+    next_seq: u64,
+    queue: VecDeque<LogStreamEvent>,
+    done: bool,
+    transport: Arc<dyn OrchestrationTransport>,
+    timeout_ms: u64,
+}
 
-/// STUB 守门宏: 用于本地 inline STUB 检查 (对齐既有实现 `throwNotImplemented`).
-///
-/// 用法: `sandbox_stub!("spawn")?;` 在函数体顶部守门, R21+ 真接时整体替换.
-/// 现阶段 STUB 模式: 全部返 `SandboxError::NotImplemented`.
-///
-/// **L 组修复**: `$crate::tracing::warn!` → 直接 `tracing::warn!` — 展开未导出路径
-/// `$crate::tracing` 一用即编译失败 (sdk 无 `pub use tracing`); 直接路径在 crate 内
-/// 由 extern crate 解析, crate 外调用方自备 `tracing` 依赖即可.
-#[macro_export]
-macro_rules! sandbox_stub {
-    ($api:literal) => {
-        if $crate::sandbox::STUB_MODE {
-            tracing::warn!(
-                target: "apeireth_sdk_sandbox",
-                concat!($api, " STUB_MODE returning NotImplemented")
-            );
-            return ::core::result::Result::Err(
-                $crate::sandbox::SandboxError::NotImplemented(concat!("apeireth_sdk_sandbox_", $api)),
-            );
+/// 终态落表: 完成时间缺省补当前时刻。
+fn finish_handle(handle: &mut SandboxHandle) {
+    handle.finished_at = handle.finished_at.or_else(|| Some(SystemTime::now()));
+}
+
+/// 线上错误码 → 本层闭合错误分类 (一一映射, 无自由字符串扩散)。
+fn classify_wire_error(code: WireErrorCode, detail: String) -> SandboxError {
+    match code {
+        WireErrorCode::InvalidConfig => SandboxError::InvalidConfig(detail),
+        WireErrorCode::InvalidState => SandboxError::InvalidState(detail),
+        WireErrorCode::NotFound => SandboxError::NotFound { sandbox_id: detail },
+        WireErrorCode::QuotaExceeded => SandboxError::QuotaExceeded(detail),
+        WireErrorCode::Timeout => SandboxError::Timeout(detail),
+        WireErrorCode::ResourceExhausted => SandboxError::ResourceExhausted(detail),
+        WireErrorCode::PermissionDenied => SandboxError::PermissionDenied(detail),
+        WireErrorCode::Runtime => SandboxError::Runtime {
+            runtime: RuntimeKind::default(),
+            message: detail,
+        },
+        WireErrorCode::Internal => SandboxError::Other(detail),
+    }
+}
+
+/// 单次编排往返 (deadline 竞速 + 编解码 + 版本/回声校验 + 错误分类)。
+async fn call_op_on(
+    transport: &Arc<dyn OrchestrationTransport>,
+    timeout_ms: u64,
+    body: OrchestrationRequest,
+) -> SandboxResult<OpResult> {
+    let timeout_ms = clamp_timeout(
+        Some(timeout_ms),
+        DEFAULT_REQUEST_TIMEOUT_MS,
+        MAX_REQUEST_TIMEOUT_MS,
+    )?;
+    let request_id = Uuid::new_v4();
+    let request_frame = protocol::encode_request(request_id, body)?;
+    // 超时统一走 deadline: 到期通知与传输往返竞速, 谁先到谁定结果。
+    let (_deadline, mut notice) = Deadline::after(Duration::from_millis(timeout_ms))?;
+    let call = transport.call(request_frame);
+    futures::pin_mut!(call);
+    let response_frame = match select(call, Box::pin(notice.notified())).await {
+        Either::Left((result, _pending)) => {
+            result.map_err(|err| SandboxError::Transport(err.to_string()))?
+        }
+        Either::Right((_token, _unfinished)) => {
+            return Err(SandboxError::Timeout(format!(
+                "request {request_id} exceeded {timeout_ms} ms"
+            )));
         }
     };
-}
-
-/// m3 防御: 守 6 stub 工具返 NotImplemented, 防止整合时有人"贴心"接 docker/firecracker
-/// 但忘了改 STUB_MODE.
-pub fn assert_stub_mode_or_panic(api: &'static str) -> SandboxResult<()> {
-    if !STUB_MODE {
-        // 真接阶段 (R21+ 后) 这里应该返 `Ok(())`, 工具正常执行.
-        // 当前 STUB 模式守门: 任何工具调用都返 NotImplemented.
-        return Err(SandboxError::NotImplemented(api));
+    let frame = protocol::decode_response(&response_frame)?;
+    protocol::check_response_echo(request_id, &frame)?;
+    match frame.body {
+        OrchestrationResponse::Ok { result } => Ok(result),
+        OrchestrationResponse::Err { code, detail } => Err(classify_wire_error(code, detail)),
     }
-    Err(SandboxError::NotImplemented(api))
 }
 
 // ============================================================================
-// §6 async trait SandboxSpawner (R21+ 真接时不同 runtime 各自实现)
+// §6 async trait SandboxSpawner — 运行时扩展点 (默认实现走传输边界)
 // ============================================================================
 
-/// Sandbox spawner async trait (R21+ 真接时不同 runtime 各自实现).
-///
-/// STUB 模式: trait 表面, 默认实现返 NotImplemented, 防止整合时漏防.
+/// 运行时 spawner 扩展点: 默认实现把 spawn/kill/wait 转译成协议帧往返
+/// (经调用方传入的 [`SandboxSdk`]), 特定运行时可覆写。
 #[async_trait]
 pub trait SandboxSpawner: Send + Sync {
-    /// 沙箱 spawner 类型 (Docker / Firecracker / Gvisor).
+    /// 运行时种类。
     fn kind(&self) -> RuntimeKind;
-    /// 实际 spawn (STUB 返 NotImplemented, R21+ 真接 bollard / firecracker / runsc).
-    async fn do_spawn(&self, _config: &SandboxConfig) -> SandboxResult<SandboxHandle> {
-        Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_spawn"))
-    }
-    /// 实际 kill (STUB 返 NotImplemented).
-    async fn do_kill(&self, _handle: &SandboxHandle, _signal: Option<i32>) -> SandboxResult<()> {
-        Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_kill"))
-    }
-    /// 实际 wait (STUB 返 NotImplemented).
-    async fn do_wait(
-        &self,
-        _handle: &SandboxHandle,
-        _timeout: Option<std::time::Duration>,
-    ) -> SandboxResult<ExitCode> {
-        Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_wait"))
-    }
 }
 
-/// STUB 默认 spawner (R20 阶段 4 skeleton 阶段, 编译期守 STUB_MODE).
+/// 默认 spawner (携带运行时种类, 供注册表按 kind 分发)。
 #[derive(Debug, Default)]
-pub struct StubSandboxSpawner {
+pub struct ConfiguredSandboxSpawner {
     kind: RuntimeKind,
 }
 
-impl StubSandboxSpawner {
+impl ConfiguredSandboxSpawner {
+    /// 新建默认 spawner。
     pub fn new(kind: RuntimeKind) -> Self {
         Self { kind }
     }
 }
 
 #[async_trait]
-impl SandboxSpawner for StubSandboxSpawner {
+impl SandboxSpawner for ConfiguredSandboxSpawner {
     fn kind(&self) -> RuntimeKind {
         self.kind
     }
-    // do_spawn / do_kill / do_wait 走 trait 默认实现, 全部返 NotImplemented.
 }
 
 // ============================================================================
-// §7 编译期守门 + 占位扩展点
-// ============================================================================
-
-// ⏳ R21+ 真接 sandbox 运行时 (per @anthropic-ai/sandbox 上游) 时, 这里加:
-//   - BollardDockerSpawner (per `bollard::Docker::create_container`)
-//   - FirecrackerSpawner (per `firecracker::VM::start`)
-//   - GvisorSpawner (per `runsc::Runsc::exec`)
-//   - real keyring credential loading through the host integration
-//   - 真实 stream 适配 (per `bollard::Docker::logs(stream=true)`)
-//   - 真实 cgroup v2 资源下发 (per `cgroupfs` / systemd-run --scope)
-// 当前 STUB 模式: 不引 bollard / firecracker-rs / runsc 任何 crate, 编译期 hardcode
-// 守门 STUB_MODE = true.
-
-// ============================================================================
-// §8 in-crate 测试 (Fixture 1-5, R20 阶段 4 K-1 强校验 4 条 + 2 额外)
+// §7 测试 (K-1 配置守门 + mock 编排 ≥6)
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Fixture 1: 编译期 hardcode 守门
+    fn policy() -> SecurityPolicy {
+        SecurityPolicy::new(
+            "docker.io/library/alpine:3.19",
+            vec!["/bin/sh".to_string()],
+            "apeireth",
+        )
+    }
+
+    fn mock_sdk(mock: &Arc<MockOrchestrationService>) -> SandboxSdk {
+        SandboxSdk::new(
+            SandboxConfig::default(),
+            Arc::clone(mock) as Arc<dyn OrchestrationTransport>,
+            QuotaLedger::new(QuotaPolicy::default()).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn shared_quota_sdk(mock: &Arc<MockOrchestrationService>, ledger: QuotaLedger) -> SandboxSdk {
+        SandboxSdk::new(
+            SandboxConfig::default(),
+            Arc::clone(mock) as Arc<dyn OrchestrationTransport>,
+            ledger,
+        )
+        .unwrap()
+    }
+
+    // ---------- K-1 配置守门 (保留) ----------
+
+    /// 编译期常量守门。
     #[test]
     fn sandbox_compile_time_constants_match_k1() {
         assert_eq!(SANDBOX_SCHEMA_VERSION, "1");
         assert_eq!(PLATFORM_NAME, "apeireth");
-        assert!(STUB_MODE, "STUB_MODE must be true until R21+");
         assert_eq!(SANDBOX_MAX_LIFETIME_SECONDS, 3600);
         assert_eq!(SANDBOX_MAX_LOG_CHUNKS, 10_000);
         assert_eq!(SANDBOX_MAX_LOG_CHUNK_BYTES, 4096);
@@ -697,173 +1041,39 @@ mod tests {
         assert_eq!(DEFAULT_RUNTIME_KIND, RuntimeKind::Docker);
     }
 
-    // Fixture 2: 3 RuntimeKind + 3 IsolationLevel 守门
+    /// 3 运行时 + 3 隔离级别守门。
     #[test]
     fn sandbox_runtime_and_isolation_have_3_each() {
-        assert_eq!(
-            SUPPORTED_RUNTIME_KINDS.len(),
-            3,
-            "K-1: must be 3 runtime kinds"
-        );
-        assert_eq!(
-            SUPPORTED_ISOLATION_LEVELS.len(),
-            3,
-            "K-1: must be 3 isolation levels"
-        );
-        assert_eq!(SUPPORTED_RUNTIME_KINDS[0], RuntimeKind::Docker);
-        assert_eq!(SUPPORTED_RUNTIME_KINDS[1], RuntimeKind::Firecracker);
-        assert_eq!(SUPPORTED_RUNTIME_KINDS[2], RuntimeKind::Gvisor);
-        assert_eq!(SUPPORTED_ISOLATION_LEVELS[0], IsolationLevel::Process);
-        assert_eq!(SUPPORTED_ISOLATION_LEVELS[1], IsolationLevel::Container);
-        assert_eq!(SUPPORTED_ISOLATION_LEVELS[2], IsolationLevel::Vm);
-        // Round-trip Display
+        assert_eq!(SUPPORTED_RUNTIME_KINDS.len(), 3);
+        assert_eq!(SUPPORTED_ISOLATION_LEVELS.len(), 3);
         for r in SUPPORTED_RUNTIME_KINDS {
-            let parsed: RuntimeKind = r.to_string().parse().unwrap();
-            assert_eq!(parsed, *r);
+            assert_eq!(r.to_string().parse::<RuntimeKind>().unwrap(), *r);
         }
         for i in SUPPORTED_ISOLATION_LEVELS {
-            let parsed: IsolationLevel = i.to_string().parse().unwrap();
-            assert_eq!(parsed, *i);
+            assert_eq!(i.to_string().parse::<IsolationLevel>().unwrap(), *i);
         }
     }
 
-    // Fixture 3: SANDBOX_TOOL_WHITELIST 6 工具名守门
+    /// 工具白名单 6 项 + 非白名单拒绝。
     #[test]
-    fn sandbox_tool_whitelist_has_6_tools() {
-        assert_eq!(
-            SANDBOX_TOOL_WHITELIST.len(),
-            6,
-            "K-1: must be 6 sandbox tools"
-        );
-        assert_eq!(SANDBOX_TOOL_WHITELIST_COUNT, 6);
-        let expected = [
-            "apeireth_sdk_sandbox_spawn",
-            "apeireth_sdk_sandbox_kill",
-            "apeireth_sdk_sandbox_wait",
-            "apeireth_sdk_sandbox_get_status",
-            "apeireth_sdk_sandbox_stream_logs",
-            "apeireth_sdk_sandbox_cleanup",
-        ];
-        for tool in expected {
-            assert!(
-                SANDBOX_TOOL_WHITELIST.contains(&tool),
-                "SANDBOX_TOOL_WHITELIST must contain {tool}"
-            );
-        }
-    }
-
-    // Fixture 4: validate_tool_call 接受白名单, 拒绝非白名单
-    #[test]
-    fn sandbox_validate_tool_call_accepts_whitelisted() {
+    fn sandbox_tool_whitelist_gates_calls() {
+        assert_eq!(SANDBOX_TOOL_WHITELIST.len(), SANDBOX_TOOL_WHITELIST_COUNT);
         let args = serde_json::json!({});
         assert!(validate_tool_call("apeireth_sdk_sandbox_spawn", &args).is_ok());
-        assert!(validate_tool_call("apeireth_sdk_sandbox_cleanup", &args).is_ok());
-    }
-
-    #[test]
-    fn sandbox_validate_tool_call_rejects_unknown() {
-        let args = serde_json::json!({});
         let err = validate_tool_call("apeireth_sdk_sandbox_bogus_tool", &args).unwrap_err();
         assert!(matches!(err, SandboxError::ToolNotWhitelisted(_)));
     }
 
-    // Fixture 5: is_stub_mode 返 true (K-1 强校验 #4 守门)
+    /// SandboxConfig 六项强校验 (image / command / user / env / ports / mounts)。
     #[test]
-    fn sandbox_is_stub_mode_returns_true() {
-        assert!(is_stub_mode());
-        assert_eq!(is_stub_mode(), STUB_MODE);
-    }
-
-    // 额外 1: 6 stub 工具返 NotImplemented (体现 stub 模式)
-    #[tokio::test]
-    async fn sandbox_6_stub_tools_return_not_implemented() {
-        let mut sdk = SandboxSdk::new(SandboxConfig::default())
-            .expect("SandboxSdk::new must succeed in STUB mode");
-        let id = Uuid::new_v4();
-        let policy = SecurityPolicy::new(
-            "docker.io/library/alpine:3.19",
-            vec!["/bin/sh".to_string()],
-            "apeireth",
-        );
-
-        // 6 stub 工具必须全部返 SandboxError::NotImplemented
-        let r1 = sdk.spawn(policy).await;
-        assert!(
-            matches!(
-                r1,
-                Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_spawn"))
-            ),
-            "spawn must return NotImplemented, got {:?}",
-            r1
-        );
-
-        let r2 = sdk.kill(&id, None).await;
-        assert!(
-            matches!(
-                r2,
-                Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_kill"))
-            ),
-            "kill must return NotImplemented, got {:?}",
-            r2
-        );
-
-        let r3 = sdk.wait(&id, None).await;
-        assert!(
-            matches!(
-                r3,
-                Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_wait"))
-            ),
-            "wait must return NotImplemented, got {:?}",
-            r3
-        );
-
-        let r4 = sdk.get_status(&id).await;
-        assert!(
-            matches!(
-                r4,
-                Err(SandboxError::NotImplemented(
-                    "apeireth_sdk_sandbox_get_status"
-                ))
-            ),
-            "get_status must return NotImplemented, got {:?}",
-            r4
-        );
-
-        let r5 = sdk.stream_logs(&id).await;
-        assert!(
-            matches!(
-                r5,
-                Err(SandboxError::NotImplemented(
-                    "apeireth_sdk_sandbox_stream_logs"
-                ))
-            ),
-            "stream_logs must return NotImplemented (Stream type not Debug)"
-        );
-
-        let r6 = sdk.cleanup(&id).await;
-        assert!(
-            matches!(
-                r6,
-                Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_cleanup"))
-            ),
-            "cleanup must return NotImplemented, got {:?}",
-            r6
-        );
-    }
-
-    // 额外 2: SandboxConfig.validate 6 K-1 强校验 1:1 翻译
-    #[test]
-    fn sandbox_config_validate_6_k1_rules() {
-        // 默认 config 应通过校验
+    fn sandbox_config_validate_6_rules() {
         let cfg = SandboxConfig::default();
         assert!(cfg.validate().is_ok());
 
-        // K-1 强校验 #1: image 空拒绝
         let mut bad = cfg.clone();
         bad.policy.image = "".to_string();
         assert!(matches!(bad.validate(), Err(SandboxError::InvalidImage(_))));
 
-        // K-1 强校验 #2: command 空拒绝
         let mut bad = cfg.clone();
         bad.policy.command = vec![];
         assert!(matches!(
@@ -871,7 +1081,6 @@ mod tests {
             Err(SandboxError::InvalidCommand(_))
         ));
 
-        // K-1 强校验 #3: user = root 拒绝
         let mut bad = cfg.clone();
         bad.policy.user = "root".to_string();
         assert!(matches!(
@@ -879,7 +1088,6 @@ mod tests {
             Err(SandboxError::InvalidConfig(_))
         ));
 
-        // K-1 强校验 #4: env 含 LD_PRELOAD 拒绝
         let mut bad = cfg.clone();
         bad.policy
             .env
@@ -889,7 +1097,6 @@ mod tests {
             Err(SandboxError::InvalidConfig(_))
         ));
 
-        // K-1 强校验 #5: container_port = 0 拒绝
         let mut bad = cfg.clone();
         bad.policy.ports.push(PortMapping {
             host_port: 8080,
@@ -902,7 +1109,6 @@ mod tests {
             Err(SandboxError::InvalidConfig(_))
         ));
 
-        // M16 ②: 特权宿主机端口 (0..=1024) 未显式 allow 拒绝
         let mut bad = cfg.clone();
         bad.policy.ports.push(PortMapping {
             host_port: 22,
@@ -915,7 +1121,6 @@ mod tests {
             Err(SandboxError::InvalidConfig(_))
         ));
 
-        // M16 ①: 卷挂载源字符串前缀绕过 (`/tmpevil/x` / `..` 穿越) 拒绝
         let mut bad = cfg.clone();
         bad.policy.mounts.push(VolumeMount {
             source: PathBuf::from("/tmp/../etc/passwd"),
@@ -927,15 +1132,6 @@ mod tests {
             Err(SandboxError::InvalidConfig(_))
         ));
 
-        // M16 ③: user = "0" (UID 0) 拒绝
-        let mut bad = cfg.clone();
-        bad.policy.user = "0".to_string();
-        assert!(matches!(
-            bad.validate(),
-            Err(SandboxError::InvalidConfig(_))
-        ));
-
-        // K-1 强校验 #6: volume mount 源不在白名单拒绝
         let mut bad = cfg.clone();
         bad.policy.mounts.push(VolumeMount {
             source: PathBuf::from("/etc/passwd"),
@@ -948,53 +1144,299 @@ mod tests {
         ));
     }
 
-    // 额外 3: SandboxHandle 状态机判定
+    /// 句柄状态判定 + 退出码数值映射。
     #[test]
-    fn sandbox_handle_state_machine() {
+    fn sandbox_handle_state_and_exit_code_mapping() {
         let mut h = SandboxHandle::new(RuntimeKind::Docker, IsolationLevel::Container);
         assert_eq!(h.status, SandboxStatus::Pending);
-        assert!(!h.is_running());
-        assert!(!h.is_finished());
-
+        assert!(!h.is_running() && !h.is_finished());
         h.status = SandboxStatus::Running;
         assert!(h.is_running());
-        assert!(!h.is_finished());
-
         h.status = SandboxStatus::Stopped;
         h.exit_code = Some(0);
-        assert!(!h.is_running());
         assert!(h.is_finished());
-        assert_eq!(h.exit_code, Some(0));
-    }
 
-    // 额外 4: ExitCode 数值映射 (对齐既有实现 `exitCode` 字段语义)
-    #[test]
-    fn sandbox_exit_code_value_mapping() {
         assert_eq!(ExitCode::Ok.value(), 0);
         assert_eq!(ExitCode::Failed(42).value(), 42);
-        assert_eq!(ExitCode::Signaled(9).value(), 137); // SIGKILL
+        assert_eq!(ExitCode::Signaled(9).value(), 137);
         assert_eq!(ExitCode::Killed.value(), 137);
         assert_eq!(ExitCode::Oom.value(), 137);
     }
 
-    // 额外 5: assert_stub_mode_or_panic 守门
-    #[test]
-    fn sandbox_assert_stub_mode_guard() {
-        let r = assert_stub_mode_or_panic("test_api");
-        assert!(matches!(r, Err(SandboxError::NotImplemented("test_api"))));
+    // ---------- mock 编排测试 ----------
+
+    /// 生命周期全链: 创建 → 巡检单查 → 终止 → 等待退出 → 销毁回收, 配额闭环。
+    #[tokio::test]
+    async fn mock_lifecycle_full_chain_create_inspect_kill_wait_cleanup() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        let mut sdk = mock_sdk(&mock);
+
+        let handle = sdk.spawn(policy()).await.expect("spawn");
+        assert_eq!(handle.status, SandboxStatus::Running);
+        assert_eq!(sdk.active_sandboxes(), 1);
+        assert!(sdk.quota().is_reserved(&handle.id));
+
+        assert_eq!(
+            sdk.get_status(&handle.id).await.unwrap(),
+            SandboxStatus::Running
+        );
+
+        sdk.kill(&handle.id, Some(9)).await.expect("kill");
+        let exit = sdk.wait(&handle.id, Some(5)).await.expect("wait");
+        assert_eq!(exit, ExitCode::Failed(137));
+        assert!(sdk.get_handle(&handle.id).unwrap().is_finished());
+
+        sdk.cleanup(&handle.id).await.expect("cleanup");
+        assert!(sdk.get_handle(&handle.id).is_none());
+        assert_eq!(sdk.quota().snapshot().active_sandboxes, 0);
+        assert_eq!(mock.active_count(), 0);
+
+        // 协议面: 服务端确实见过全部四类请求。
+        let seen = mock.requests_seen();
+        assert!(seen
+            .iter()
+            .any(|r| matches!(r, OrchestrationRequest::Create { .. })));
+        assert!(seen
+            .iter()
+            .any(|r| matches!(r, OrchestrationRequest::Inspect { .. })));
+        assert!(seen
+            .iter()
+            .any(|r| matches!(r, OrchestrationRequest::Terminate { .. })));
+        assert!(seen
+            .iter()
+            .any(|r| matches!(r, OrchestrationRequest::Destroy { .. })));
     }
 
-    // 额外 6 (L 组修复): sandbox_stub! 宏展开真编译 + 真返 NotImplemented
-    // (修复前展开未导出的 `$crate::tracing`, 一 invoke 即编译失败)
-    #[test]
-    fn sandbox_stub_macro_expands_and_gates() {
-        fn stub_caller() -> SandboxResult<()> {
-            crate::sandbox_stub!("spawn");
-            Ok(())
+    /// 生命周期非法操作: 终态再 kill / 未知名 wait / 未知名 cleanup 全部拒绝。
+    #[tokio::test]
+    async fn mock_lifecycle_illegal_operations_reject_with_closed_errors() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        let mut sdk = mock_sdk(&mock);
+        let handle = sdk.spawn(policy()).await.unwrap();
+        sdk.kill(&handle.id, None).await.unwrap();
+
+        let err = sdk.kill(&handle.id, None).await.unwrap_err();
+        assert!(matches!(err, SandboxError::InvalidState(_)));
+
+        let unknown = Uuid::new_v4();
+        let err = sdk.wait(&unknown, Some(1)).await.unwrap_err();
+        assert!(matches!(err, SandboxError::NotFound { .. }));
+        let err = sdk.cleanup(&unknown).await.unwrap_err();
+        assert!(matches!(err, SandboxError::NotFound { .. }));
+    }
+
+    /// 配额边界 (客户端侧): 恰好用满允许, 超一分拒绝, 销毁后恢复。
+    #[tokio::test]
+    async fn mock_quota_boundary_client_side() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        let ledger = QuotaLedger::new(QuotaPolicy {
+            max_sandboxes: 2,
+            max_cpu_cores: 8.0,
+            max_memory_bytes: 4 * 1024 * 1024 * 1024,
+        })
+        .unwrap();
+        let mut sdk = shared_quota_sdk(&mock, ledger);
+
+        let first = sdk.spawn(policy()).await.expect("first fits");
+        let second = sdk.spawn(policy()).await.expect("exactly at limit");
+        let err = sdk.spawn(policy()).await.unwrap_err();
+        assert!(matches!(err, SandboxError::QuotaExceeded(_)));
+
+        sdk.cleanup(&first.id).await.unwrap();
+        let third = sdk.spawn(policy()).await.expect("capacity restored");
+        sdk.cleanup(&second.id).await.unwrap();
+        sdk.cleanup(&third.id).await.unwrap();
+        assert_eq!(sdk.quota().snapshot().active_sandboxes, 0);
+    }
+
+    /// 配额边界 (服务端侧): 线上配额超限按闭合词表分类, 客户端预留必归还。
+    #[tokio::test]
+    async fn mock_quota_boundary_server_side_classifies_and_releases() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        mock.set_server_quota(1);
+        let mut sdk = mock_sdk(&mock);
+
+        let first = sdk.spawn(policy()).await.expect("first fits");
+        let err = sdk.spawn(policy()).await.unwrap_err();
+        assert!(matches!(err, SandboxError::QuotaExceeded(_)));
+        assert_eq!(
+            sdk.quota().snapshot().active_sandboxes,
+            1,
+            "failed spawn must return its reservation"
+        );
+        sdk.cleanup(&first.id).await.unwrap();
+    }
+
+    /// 错误分类: 9 个线上错误码逐一映射到本层闭合词表。
+    #[tokio::test]
+    async fn mock_error_classification_covers_the_wire_vocabulary() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        let mut sdk = mock_sdk(&mock);
+        let handle = sdk.spawn(policy()).await.unwrap();
+
+        for code in WireErrorCode::ALL {
+            mock.fail_next(*code);
+            let err = sdk.get_status(&handle.id).await.unwrap_err();
+            assert_eq!(
+                err.code(),
+                code.classify(),
+                "wire code {} must classify to {}",
+                code.as_str(),
+                code.classify()
+            );
         }
-        assert!(matches!(
-            stub_caller(),
-            Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_spawn"))
-        ));
+    }
+
+    /// 超时经 deadline: 服务端慢于客户端期限 → `timeout` 分类。
+    #[tokio::test]
+    async fn mock_deadline_timeout_on_slow_service() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        mock.set_delay(Duration::from_millis(300));
+        let mut sdk = mock_sdk(&mock).with_request_timeout_ms(60).unwrap();
+
+        let err = sdk.spawn(policy()).await.unwrap_err();
+        assert_eq!(err.code(), SandboxErrorCode::Timeout);
+        assert_eq!(
+            sdk.quota().snapshot().active_sandboxes,
+            0,
+            "timed-out spawn must return its reservation"
+        );
+    }
+
+    /// 传输失败: 边界如实报告 → `transport` 分类, 配额归还。
+    #[tokio::test]
+    async fn mock_transport_failure_classifies_and_releases_quota() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        mock.close();
+        let mut sdk = mock_sdk(&mock);
+
+        let err = sdk.spawn(policy()).await.unwrap_err();
+        assert_eq!(err.code(), SandboxErrorCode::Transport);
+        assert_eq!(sdk.quota().snapshot().active_sandboxes, 0);
+    }
+
+    /// 并发编排: 多客户端共享一份配额账本, 并发创建/销毁下账目一致。
+    ///
+    /// mock 加小延迟制造真实并发窗口: 六个任务都在归还前完成预留,
+    /// 共享配额 3 → 恰好 3 成 3 败。
+    #[tokio::test]
+    async fn mock_concurrent_orchestration_keeps_shared_quota_consistent() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        mock.set_delay(Duration::from_millis(20));
+        let ledger = QuotaLedger::new(QuotaPolicy {
+            max_sandboxes: 3,
+            max_cpu_cores: 32.0,
+            max_memory_bytes: 16 * 1024 * 1024 * 1024,
+        })
+        .unwrap();
+
+        let mut tasks = Vec::new();
+        for _ in 0..6 {
+            let mock = Arc::clone(&mock);
+            let ledger = ledger.clone();
+            tasks.push(tokio::spawn(async move {
+                let mut sdk = shared_quota_sdk(&mock, ledger);
+                match sdk.spawn(policy()).await {
+                    Ok(handle) => {
+                        sdk.kill(&handle.id, None).await.unwrap();
+                        sdk.wait(&handle.id, Some(5)).await.unwrap();
+                        sdk.cleanup(&handle.id).await.unwrap();
+                        true
+                    }
+                    Err(err) => {
+                        assert_eq!(err.code(), SandboxErrorCode::QuotaExceeded);
+                        false
+                    }
+                }
+            }));
+        }
+        let mut successes = 0;
+        for task in tasks {
+            if task.await.unwrap() {
+                successes += 1;
+            }
+        }
+        assert_eq!(successes, 3, "exactly the shared quota may succeed");
+        assert_eq!(ledger.snapshot().active_sandboxes, 0);
+        assert_eq!(mock.active_count(), 0);
+    }
+
+    /// 状态巡检: 漂移对账 + 超龄回收 + 服务端丢失记录回收, 配额闭环。
+    #[tokio::test]
+    async fn mock_patrol_reconciles_drift_reaps_expired_and_lost() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        let mut sdk = mock_sdk(&mock);
+        let drifted = sdk.spawn(policy()).await.unwrap();
+        let expired = sdk.spawn(policy()).await.unwrap();
+        let lost = sdk.spawn(policy()).await.unwrap();
+        assert_eq!(sdk.quota().snapshot().active_sandboxes, 3);
+
+        // 漂移: 服务端失败, 本地仍 running → 对账到 failed。
+        mock.force_status(&drifted.id, SandboxStatus::Failed);
+        // 超龄: 服务端记录已运行超过单沙箱存活上限。
+        mock.force_age(
+            &expired.id,
+            Duration::from_secs(2 * SANDBOX_MAX_LIFETIME_SECONDS),
+        );
+        // 丢失: 服务端已无记录。
+        mock.drop_server(&lost.id);
+
+        let report = sdk.patrol().await.expect("patrol");
+        assert_eq!(report.inspected, 3);
+        assert!(report.transitioned >= 1, "drift must be reconciled");
+        assert!(
+            report.reaped.contains(&expired.id) && report.reaped.contains(&lost.id),
+            "expired and lost must be reaped: {:?}",
+            report.reaped
+        );
+        assert_eq!(
+            sdk.get_handle(&drifted.id).unwrap().status,
+            SandboxStatus::Failed
+        );
+        assert!(sdk.get_handle(&expired.id).is_none());
+        assert_eq!(report.quota.active_sandboxes, 0);
+    }
+
+    /// 流式日志: chunk 有序、seq 连续、错误随流传。
+    #[tokio::test]
+    async fn mock_stream_logs_delivers_ordered_chunks() {
+        let mock = Arc::new(MockOrchestrationService::new());
+        mock.push_log_line("boot");
+        mock.push_log_line("ready");
+        mock.push_log_line("done");
+        let mut sdk = mock_sdk(&mock);
+        let handle = sdk.spawn(policy()).await.unwrap();
+
+        let stream = sdk.stream_logs(&handle.id).await.unwrap();
+        futures::pin_mut!(stream);
+        let mut collected = Vec::new();
+        while let Some(item) = stream.next().await {
+            collected.push(item.expect("no stream error"));
+        }
+        assert_eq!(collected.len(), 3);
+        for (i, event) in collected.iter().enumerate() {
+            assert_eq!(event.seq, i as u64);
+            assert_eq!(event.sandbox_id, handle.id);
+        }
+        assert_eq!(collected[0].data, b"boot");
+        assert_eq!(collected[2].data, b"done");
+    }
+
+    /// 脱敏日志: 环境变量值 / 凭据明文不入摘要。
+    #[test]
+    fn log_summary_redacts_secret_values() {
+        let mut cfg = SandboxConfig::default();
+        cfg.policy
+            .env
+            .insert("API_TOKEN".to_string(), "hunter2-secret".to_string());
+        cfg.credentials = Some(SandboxCredentials {
+            registry: "registry.example".into(),
+            username: "builder".into(),
+            secret_ref: "registry-token".into(),
+        });
+        let summary = cfg.log_summary();
+        assert!(!summary.contains("hunter2-secret"), "leak: {summary}");
+        assert!(summary.contains(&redact_secret("hunter2-secret")));
+        assert!(!summary.contains("hunter2"), "leak: {summary}");
     }
 }

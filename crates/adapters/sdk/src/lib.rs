@@ -85,7 +85,11 @@
 pub mod abi;
 // R177: organ invariants (5 tests + 2 Kani)
 pub mod error;
+// 协议族共用基础设施: 错误闭合词表 / 长度前缀帧编解码 / 日志脱敏
+pub mod error_taxonomy;
+pub mod frame_codec;
 mod organ_kani_proofs;
+pub mod redact;
 pub mod version;
 pub mod wire;
 // R20 阶段 6: 1.0 release #13 sdk — 客户 SDK client stub (按接口契约)
@@ -278,7 +282,10 @@ const _MODULE_COUNT: usize = {
 pub mod lark;
 #[cfg(feature = "livekit")]
 pub mod livekit;
-#[cfg(feature = "sandbox")]
+// sandbox 客户端协议层: 下游按 feature `sandbox` 启用; test 构建恒编译,
+// 保证编排面单测 (生命周期/配额/错误分类/并发/超时) 在标准
+// `cargo test --workspace` 验证里真实运行。
+#[cfg(any(feature = "sandbox", test))]
 pub mod sandbox;
 #[cfg(feature = "voice")]
 pub mod voice;

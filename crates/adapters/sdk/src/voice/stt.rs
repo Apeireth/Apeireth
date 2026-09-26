@@ -6,7 +6,7 @@
 //! 3. **Deepgram** — Deepgram Nova (online, real-time API)
 //! 4. **Google** — Google Cloud Speech-to-Text (online, multi-language)
 //!
-//! **STUB**: 4 模型枚举保留, 但 transcribe() 内部返 `VoiceError::NotImplemented`.
+//! 领域模型 (4 模型枚举 + 转写请求 / 结果); 转写执行面见 [`crate::voice`] 的 `transcribe`.
 //!
 //! ## 引用文档
 //!

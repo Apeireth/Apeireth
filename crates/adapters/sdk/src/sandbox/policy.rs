@@ -355,12 +355,13 @@ impl SecurityPolicy {
         }
         // 1. UID 解析: `user[:group]` 取用户段, 纯数字 = UID (per docker --user 语义)
         let name = user.split(':').next().unwrap_or(user);
-        if !name.is_empty() && name.bytes().all(|b| b.is_ascii_digit()) {
-            if name.parse::<u32>() == Ok(0) {
-                return Err(SandboxError::InvalidConfig(format!(
-                    "user '{user}' resolves to UID 0 (root forbidden, K-1 strong validation #3)"
-                )));
-            }
+        if !name.is_empty()
+            && name.bytes().all(|b| b.is_ascii_digit())
+            && name.parse::<u32>() == Ok(0)
+        {
+            return Err(SandboxError::InvalidConfig(format!(
+                "user '{user}' resolves to UID 0 (root forbidden, K-1 strong validation #3)"
+            )));
         }
         // 2. 字面量比对 (小写化): Root/ROOT/root:wheel 的用户段归一为 root 后拒
         let name_lower = name.to_lowercase();

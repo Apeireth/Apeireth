@@ -98,6 +98,16 @@ impl AudioConfig {
             language,
         })
     }
+
+    /// 全量 K-1 校验 (格式 / 采样率 / 位深 / 通道 / 语言, 5 项).
+    pub fn validate(&self) -> VoiceResult<()> {
+        VoiceError::validate_audio_format(&self.format)?;
+        VoiceError::validate_sample_rate(self.sample_rate)?;
+        VoiceError::validate_bit_depth(self.bit_depth)?;
+        VoiceError::validate_channels(self.channels)?;
+        VoiceError::validate_language(&self.language)?;
+        Ok(())
+    }
 }
 
 impl Default for AudioConfig {
@@ -148,12 +158,12 @@ impl VoiceConfig {
     pub fn validate(&self) -> VoiceResult<()> {
         // wake.keyword 必须非空
         if self.wake.keyword.trim().is_empty() {
-            return Err(VoiceError::Other("wake.keyword is empty".to_string()));
+            return Err(VoiceError::InvalidArgument(
+                "wake.keyword is empty".to_string(),
+            ));
         }
-        // 交叉: audio.sample_rate 必须匹配 stt/tts 模型范围
-        VoiceError::validate_sample_rate(self.audio.sample_rate)?;
-        // 交叉: audio.language 必合法
-        VoiceError::validate_language(&self.audio.language)?;
+        // audio 段全量 K-1 校验 (格式 / 采样率 / 位深 / 通道 / 语言)
+        self.audio.validate()?;
         Ok(())
     }
 
@@ -286,6 +296,9 @@ mod tests {
     fn k1_voice_config_validate_rejects_empty_wake() {
         let mut config = VoiceConfig::default_apeireth();
         config.wake.keyword = String::new();
-        assert!(matches!(config.validate(), Err(VoiceError::Other(_))));
+        assert!(matches!(
+            config.validate(),
+            Err(VoiceError::InvalidArgument(_))
+        ));
     }
 }

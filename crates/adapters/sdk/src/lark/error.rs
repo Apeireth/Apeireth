@@ -1,132 +1,267 @@
-//! # Lark error types (per Lark 开放平台 SDK,)
+//! # lark 错误类型 (闭合分类词表 + K-1 强校验)
 //!
-//! **STUB MODE**: 11 错误 variant, 编译期 hardcode. 真接飞书 Open Platform 时
-//! 把 `NotImplemented` 移除并把 `Network` / `RateLimited` / `PermissionDenied` 等细化.
+//! 本模块定义 `lark` 子模块的完整错误面:
 //!
-//! ## 6 K-1 强校验方法 (per task spec §3)
+//! 1. **错误分类闭合词表** [`ErrorClass`] (3 类, 不可扩):
+//!    `Retryable` (可重试) / `Permanent` (永久) / `AuthFailed` (认证失败)。
+//!    任何错误都必须落到且只落到一类, 分类由 [`LarkError::class`] 单点给出。
+//! 2. **错误事实** [`LarkError`] (14 variant): 保留错误的具体事实
+//!    (字段校验失败 / 传输失败 / 限流 / 业务码 / 显式不支持), 便于调用方精确处理。
+//! 3. **6 K-1 字段强校验** (per 任务规范 §3):
+//!    `validate_app_id` / `validate_app_secret` / `validate_chat_id` /
+//!    `validate_open_id` / `validate_email` / `validate_mobile`。
+//! 4. **平台业务码 → 分类** 闭合映射表 ([`LarkError::from_platform_code`]),
+//!    限流码 / token 失效码为编译期常量, 未知业务码一律归 `ApiError` → `Permanent`。
 //!
-//! | K-1 | 方法 | 守门 | 失败时返 |
-//! |---:|---|---|---|
-//! | #1 | `validate_app_id` | 非空 + `cli_` 前缀 (飞书 App ID 固定前缀) | `AppIdMissing` / `AppIdInvalid` |
-//! | #2 | `validate_app_secret` | 非空 + 长度 ≥ 16 | `AppSecretMissing` / `AppSecretInvalid` |
-//! | #3 | `validate_chat_id` | 非空 + 前缀 `oc_` (open chat) 或 `on_` (user chat) | `ChatIdInvalid` |
-//! | #4 | `validate_open_id` | 非空 + 前缀 `ou_` | `OpenIdInvalid` |
-//! | #5 | `validate_email` | 非空 + RFC 5322 邮箱 | `EmailInvalid` |
-//! | #6 | `validate_mobile` | 非空 + E.164 (国际格式 `+` + 7-15 位) | `MobileInvalid` |
+//! ## 分类规则 (闭合词表)
 //!
-//! ## 守门宏: `lark_stub!`
+//! | 事实 | 分类 |
+//! |---|---|
+//! | `Network` / `RateLimited` | `Retryable` |
+//! | `TokenExpired` (含平台 token 失效/过期业务码) | `AuthFailed` |
+//! | `ApiError` (业务码命中认证闭合表) | `AuthFailed` |
+//! | `ApiError` (其它业务码) | `Permanent` |
+//! | 6 K-1 字段校验失败 | `Permanent` |
+//! | `Unsupported` (协议面需外部配置 / 客户端不覆盖) | `Permanent` |
+//! | `Other` (序列化 / 协议体畸形等) | `Permanent` |
 //!
-//! 6 API stub 全部 `Err(LarkError::NotImplemented(api))`, 用 `lark_stub!("send_message")`
-//! 一行 log + return, 防漏改.
+//! ## 安全 (脱敏)
 //!
-//! ## 引用文档
-//!
-//! 1. `Lark 开放平台 SDK` `core/Response.d.ts` (上游 Response 参考)
-//! 2. `Lark 开放平台 SDK` `client/api_im_open.js` (im/v1/messages 参考)
-//! 3. `docs/stage4/m3-hallucination-defense-2026-08-05.md` §2.4 (TOOL_WHITELIST 模式)
+//! 所有错误消息 **不得** 含 App Secret / token / encrypt key 明文;
+//! webhook 校验类错误只报事实类别, 不回显任何共享秘密。
 
 use thiserror::Error;
 
 // ============================================================================
-// §1 LarkError (11 variant, K-1 强校验 6 + STUB 1 + 飞书 4)
+// §1 ErrorClass — 错误分类闭合词表 (3 类)
 // ============================================================================
 
-/// Lark SDK 错误 (11 variant, 6 大类).
+/// 错误分类闭合词表 (3 类, 编译期 hardcode, 不可扩).
 ///
-/// 1. **STUB** (1): `NotImplemented(api)` — 8 API stub 全部返
-/// 2. **K-1 强校验** (6): `AppIdMissing` / `AppIdInvalid` / `AppSecretMissing` / `AppSecretInvalid` / `ChatIdInvalid` / `OpenIdInvalid` / `EmailInvalid` / `MobileInvalid`
-///    (实际只 6 类, 各 1 variant, 命名复用 `*Missing` + `*Invalid`)
-/// 3. **鉴权** (1): `TokenExpired` (tenant_access_token / user_access_token 过期)
-/// 4. **网络** (1): `Network` (HTTP 失败 / DNS 失败 / TLS 失败)
-/// 5. **限流** (1): `RateLimited` (按既有实现 `code: 99991400`)
-/// 6. **业务** (1): `ApiError` (飞书 Open Platform `code != 0` 业务错误)
-/// 7. **其他** (1): `Other` (catch-all, 包含序列化失败等)
+/// 调用方的重试策略只允许依赖本词表, 不允许解析错误字符串。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ErrorClass {
+    /// **可重试**: 传输抖动 / 超时 / 限流。退避后允许重试。
+    Retryable,
+    /// **永久**: 字段校验失败 / 请求畸形 / 业务规则拒绝 / 显式不支持。重试无意义。
+    Permanent,
+    /// **认证失败**: token 失效 / 过期 / 无效。需重新取 token 或修正凭证后才能成功。
+    AuthFailed,
+}
+
+impl ErrorClass {
+    /// 闭合词表大小 (3)。
+    pub const COUNT: usize = 3;
+
+    /// 闭合词表字符串值 (`"retryable"` / `"permanent"` / `"auth_failed"`)。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ErrorClass::Retryable => "retryable",
+            ErrorClass::Permanent => "permanent",
+            ErrorClass::AuthFailed => "auth_failed",
+        }
+    }
+
+    /// 闭合词表全集 (供遍历/守门测试)。
+    pub const ALL: [ErrorClass; ErrorClass::COUNT] = [
+        ErrorClass::Retryable,
+        ErrorClass::Permanent,
+        ErrorClass::AuthFailed,
+    ];
+}
+
+impl std::fmt::Display for ErrorClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+// ============================================================================
+// §2 平台业务码闭合表 (限流 / 认证失败)
+// ============================================================================
+
+/// 平台限流业务码 (命中即 [`ErrorClass::Retryable`], 退避后可重试)。
+pub const PLATFORM_CODE_RATE_LIMITED: i32 = 99991400;
+
+/// 平台 access token 无效业务码 (命中即 [`ErrorClass::AuthFailed`])。
+pub const PLATFORM_CODE_TOKEN_INVALID: i32 = 99991663;
+
+/// 平台 access token 过期业务码 (命中即 [`ErrorClass::AuthFailed`])。
+pub const PLATFORM_CODE_TOKEN_EXPIRED: i32 = 99991668;
+
+/// 认证失败业务码闭合表。
+pub const PLATFORM_AUTH_FAILURE_CODES: &[i32] =
+    &[PLATFORM_CODE_TOKEN_INVALID, PLATFORM_CODE_TOKEN_EXPIRED];
+
+// ============================================================================
+// §3 LarkError (14 variant, 事实保留 + 闭合分类)
+// ============================================================================
+
+/// lark 客户端错误 (14 variant).
 ///
-/// 11 = 1 STUB + 6 K-1 (AppId/ChatId/OpenId/Email/Mobile/AppSecret 合并 Missing+Invalid 共 6 类) + 4 飞书特有 (TokenExpired/Network/RateLimited/ApiError) + 1 Other
+/// 变体只承载**事实**; 重试决策请用 [`LarkError::class`] 的闭合词表。
 #[derive(Debug, Error)]
 pub enum LarkError {
-    // === §1 STUB (1 variant) ===
-    /// **STUB 模式**: API 未实现, R21 续真接 @larksuiteoapi/lark-sdk 后删.
-    /// 8 API 全部返本 variant.
-    #[error("STUB MODE: API not implemented: {0} (R21 will wire @larksuiteoapi/lark-sdk)")]
-    NotImplemented(&'static str),
+    // === §1 显式不支持 (1 variant) ===
+    /// **显式不支持**: 该协议面需要外部配置 (如部署方的系统凭据库),
+    /// 或入站数据形状不在本客户端覆盖范围内。**不是**占位桩 —— 调用点
+    /// 明确返回本变体并逐处附带原因标识, 调用方可据此降级或报配置缺失。
+    #[error("unsupported lark protocol surface: {0} (requires external configuration or out of client coverage)")]
+    Unsupported(&'static str),
 
-    // === §2 K-1 强校验 (6 类, K-1 #1..#6 各 1 variant, Missing+Invalid 复用) ===
-    /// **K-1 #1**: App ID 缺失 (空 / 全空白).
-    #[error("Lark app id is missing (K-1 #1, expected non-empty)")]
+    // === §2 K-1 强校验 (8 variant, 6 类, Missing+Invalid 分列) ===
+    /// **K-1 #1**: App ID 缺失 (空 / 全空白)。
+    #[error("lark app id is missing (K-1 #1, expected non-empty)")]
     AppIdMissing,
-    /// **K-1 #1**: App ID 格式错误 (非 `cli_` 前缀).
-    #[error("Lark app id is invalid: {0} (K-1 #1, expected prefix 'cli_')")]
+    /// **K-1 #1**: App ID 格式错误 (非 `cli_` 前缀 / 长度不足)。
+    #[error("lark app id is invalid: {0} (K-1 #1, expected prefix 'cli_' + >=8 alphanumerics)")]
     AppIdInvalid(String),
-    /// **K-1 #2**: App Secret 缺失 (空 / 全空白).
-    #[error("Lark app secret is missing (K-1 #2, expected non-empty)")]
+    /// **K-1 #2**: App Secret 缺失 (空 / 全空白)。
+    #[error("lark app secret is missing (K-1 #2, expected non-empty)")]
     AppSecretMissing,
-    /// **K-1 #2**: App Secret 格式错误 (长度 < 16).
-    #[error("Lark app secret is invalid: length={0} < 16 (K-1 #2)")]
+    /// **K-1 #2**: App Secret 格式错误 (长度 < 16)。
+    #[error("lark app secret is invalid: length={0} < 16 (K-1 #2)")]
     AppSecretInvalid(usize),
-    /// **K-1 #3**: Chat ID 格式错误 (非 `oc_` / `on_` 前缀).
-    #[error("Lark chat id is invalid: {0} (K-1 #3, expected prefix 'oc_' or 'on_')")]
+    /// **K-1 #3**: Chat ID 格式错误 (非 `oc_` / `on_` 前缀)。
+    #[error("lark chat id is invalid: {0} (K-1 #3, expected prefix 'oc_' or 'on_')")]
     ChatIdInvalid(String),
-    /// **K-1 #4**: Open ID 格式错误 (非 `ou_` 前缀).
-    #[error("Lark open id is invalid: {0} (K-1 #4, expected prefix 'ou_')")]
+    /// **K-1 #4**: Open ID 格式错误 (非 `ou_` 前缀)。
+    #[error("lark open id is invalid: {0} (K-1 #4, expected prefix 'ou_')")]
     OpenIdInvalid(String),
-    /// **K-1 #5**: Email 格式错误 (非 RFC 5322).
-    #[error("Lark email is invalid: {0} (K-1 #5, expected RFC 5322)")]
+    /// **K-1 #5**: Email 格式错误 (非 RFC 5322 简化语法)。
+    #[error("lark email is invalid: {0} (K-1 #5, expected RFC 5322 syntax)")]
     EmailInvalid(String),
-    /// **K-1 #6**: Mobile 格式错误 (非 E.164 `+` + 7-15 位).
-    #[error("Lark mobile is invalid: {0} (K-1 #6, expected E.164 like +8613800138000)")]
+    /// **K-1 #6**: Mobile 格式错误 (非 E.164 `+` + 7-15 位数字)。
+    #[error("lark mobile is invalid: {0} (K-1 #6, expected E.164 like +8613800138000)")]
     MobileInvalid(String),
 
     // === §3 鉴权 (1 variant) ===
-    /// Access token 过期 (tenant_access_token / user_access_token 2h 默认, R21 续真接时刷).
-    #[error("Lark access token expired (refresh needed)")]
+    /// access token 失效 / 过期 (tenant / user token)。分类 `AuthFailed`。
+    #[error("lark access token expired or invalid (re-acquire token required)")]
     TokenExpired,
 
-    // === §4 网络 (1 variant) ===
-    /// 网络错误 (HTTP / DNS / TLS, R21+ 真接 reqwest 时细化).
-    #[error("Lark network error: {0}")]
+    // === §4 传输 (1 variant) ===
+    /// 传输错误 (连接 / DNS / TLS / 超时)。分类 `Retryable`。
+    #[error("lark network error: {0}")]
     Network(String),
 
     // === §5 限流 (1 variant) ===
-    /// 限流 (per 飞书 Open Platform `code: 99991400` "rate limit exceeded").
-    #[error("Lark rate limited (飞书 Open Platform code=99991400)")]
-    RateLimited,
+    /// 限流 (HTTP 429 或平台限流业务码)。`retry_after_secs == 0` 表示服务端
+    /// 未给出 Retry-After, 调用方按自身退避策略处理。分类 `Retryable`。
+    #[error("lark rate limited (retry_after_secs={retry_after_secs}, 0 = not provided)")]
+    RateLimited {
+        /// 服务端建议的重试等待秒数 (0 = 未提供)。
+        retry_after_secs: u64,
+    },
 
     // === §6 业务 (1 variant) ===
-    /// 飞书 Open Platform 业务错误 (`code != 0`).
-    #[error("Lark API error: code={code}, msg={msg}")]
+    /// 平台业务错误 (`code != 0`)。业务码命中认证闭合表时会先被
+    /// [`LarkError::from_platform_code`] 转成 [`LarkError::TokenExpired`],
+    /// 因此本变体默认分类 `Permanent`, 保留原始 `code` / `msg` 供排查。
+    #[error("lark api error: code={code}, msg={msg}")]
     ApiError {
-        /// 飞书 Open Platform 业务错误码 (按既有实现, e.g. 230001 / 230002).
+        /// 平台业务错误码。
         code: i32,
-        /// 错误信息.
+        /// 平台错误信息 (不含共享秘密)。
         msg: String,
     },
 
     // === §7 其他 (1 variant) ===
-    /// 其他错误 (序列化 / 内部错误).
-    #[error("Lark other error: {0}")]
+    /// 其他错误 (响应体畸形 / 序列化失败 / 内部错误)。分类 `Permanent`。
+    #[error("lark other error: {0}")]
     Other(String),
 }
 
+/// lark 结果别名。
 pub type LarkResult<T> = Result<T, LarkError>;
 
-/// 编译期守门: 11 variant 守门 (per 8 项不修改承诺).
-/// 新增 variant 必须同步改本 const, 强行提醒 reviewer.
-pub const LARK_ERROR_VARIANT_COUNT: usize = 11;
-const _: () = assert!(
-    true, // 编译期 hardcode 守门 (实际计数在测试中验证)
-    "LarkError 新增 variant 必须经 8 哲学锚 + 主人审 (R20 阶段 4)"
-);
+/// 编译期守门: `LarkError` variant 数 (14)。新增 variant 必须同步改本常量。
+pub const LARK_ERROR_VARIANT_COUNT: usize = 14;
+
+impl LarkError {
+    /// 错误分类 (闭合词表, 单点)。
+    pub fn class(&self) -> ErrorClass {
+        match self {
+            LarkError::Network(_) | LarkError::RateLimited { .. } => ErrorClass::Retryable,
+            LarkError::TokenExpired => ErrorClass::AuthFailed,
+            LarkError::ApiError { code, .. } => {
+                if PLATFORM_AUTH_FAILURE_CODES.contains(code) {
+                    ErrorClass::AuthFailed
+                } else if *code == PLATFORM_CODE_RATE_LIMITED {
+                    ErrorClass::Retryable
+                } else {
+                    ErrorClass::Permanent
+                }
+            }
+            LarkError::Unsupported(_)
+            | LarkError::AppIdMissing
+            | LarkError::AppIdInvalid(_)
+            | LarkError::AppSecretMissing
+            | LarkError::AppSecretInvalid(_)
+            | LarkError::ChatIdInvalid(_)
+            | LarkError::OpenIdInvalid(_)
+            | LarkError::EmailInvalid(_)
+            | LarkError::MobileInvalid(_)
+            | LarkError::Other(_) => ErrorClass::Permanent,
+        }
+    }
+
+    /// 是否可重试 (分类 == `Retryable`)。
+    pub fn is_retryable(&self) -> bool {
+        self.class() == ErrorClass::Retryable
+    }
+
+    /// 是否认证失败 (分类 == `AuthFailed`)。
+    pub fn is_auth_failure(&self) -> bool {
+        self.class() == ErrorClass::AuthFailed
+    }
+
+    /// 平台业务码 → 错误事实 (闭合映射):
+    /// - 限流码 → [`LarkError::RateLimited`] (`retry_after_secs = 0`, 服务端未给时)
+    /// - 认证失败码 → [`LarkError::TokenExpired`]
+    /// - 其它 → [`LarkError::ApiError`] 保留原始 `code` / `msg`
+    pub fn from_platform_code(code: i32, msg: &str) -> LarkError {
+        if code == PLATFORM_CODE_RATE_LIMITED {
+            LarkError::RateLimited {
+                retry_after_secs: parse_retry_after_from_msg(msg).unwrap_or(0),
+            }
+        } else if PLATFORM_AUTH_FAILURE_CODES.contains(&code) {
+            LarkError::TokenExpired
+        } else {
+            LarkError::ApiError {
+                code,
+                msg: msg.to_string(),
+            }
+        }
+    }
+}
+
+/// 从平台限流错误消息中解析建议等待秒数 (消息形如 `"... retry after 30 s"` /
+/// `"retry_after=30"` 时取整数; 解析不到返回 `None`, 调用方走自身策略默认值)。
+fn parse_retry_after_from_msg(msg: &str) -> Option<u64> {
+    let bytes = msg.as_bytes();
+    let mut idx = 0;
+    while idx < bytes.len() {
+        if bytes[idx].is_ascii_digit() {
+            let start = idx;
+            while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+                idx += 1;
+            }
+            let value: u64 = msg[start..idx].parse().ok()?;
+            // 上限 1 天, 防畸形消息里的巨大数字把调用方挂死
+            return Some(value.min(86_400));
+        }
+        idx += 1;
+    }
+    None
+}
 
 // ============================================================================
-// §2 K-1 强校验方法 (6 个, 编译期 hardcode 守门字样)
+// §4 K-1 强校验方法 (6 个)
 // ============================================================================
 
 impl LarkError {
-    /// **K-1 #1**: 校验 App ID (非空 + `cli_` 前缀, per 飞书 App ID 规范).
-    ///
-    /// 飞书开放平台 App ID 固定 `cli_` 前缀 + 16 位 alphanumeric (e.g. `cli_a1b2c3d4e5f6g7h8`).
-    /// 前缀错直接拒绝, 防止 m3 幻觉传"test" / "123" / 空串.
+    /// **K-1 #1**: 校验 App ID (非空 + `cli_` 前缀 + 至少 8 位字母数字)。
     pub fn validate_app_id(app_id: &str) -> LarkResult<()> {
         let trimmed = app_id.trim();
         if trimmed.is_empty() {
@@ -136,13 +271,13 @@ impl LarkError {
             return Err(LarkError::AppIdInvalid(trimmed.to_string()));
         }
         // 长度校验: `cli_` (4) + 至少 8 个 alphanumeric
-        if trimmed.len() < 12 {
+        if trimmed.len() < 12 || !trimmed[4..].chars().all(|c| c.is_ascii_alphanumeric()) {
             return Err(LarkError::AppIdInvalid(trimmed.to_string()));
         }
         Ok(())
     }
 
-    /// **K-1 #2**: 校验 App Secret (非空 + 长度 ≥ 16, per 飞书 App Secret 规范).
+    /// **K-1 #2**: 校验 App Secret (非空 + 长度 ≥ 16)。
     pub fn validate_app_secret(app_secret: &str) -> LarkResult<()> {
         let trimmed = app_secret.trim();
         if trimmed.is_empty() {
@@ -154,11 +289,7 @@ impl LarkError {
         Ok(())
     }
 
-    /// **K-1 #3**: 校验 Chat ID (非空 + 前缀 `oc_` open chat 或 `on_` user chat).
-    ///
-    /// 飞书 Chat ID 规范 (按既有实现):
-    /// - `oc_` 前缀: 开放群 / 普通群
-    /// - `on_` 前缀: 用户私聊
+    /// **K-1 #3**: 校验 Chat ID (非空 + `oc_` 开放群 / `on_` 用户会话前缀)。
     pub fn validate_chat_id(chat_id: &str) -> LarkResult<()> {
         let trimmed = chat_id.trim();
         if trimmed.is_empty() {
@@ -170,11 +301,7 @@ impl LarkError {
         Ok(())
     }
 
-    /// **K-1 #4**: 校验 Open ID (非空 + 前缀 `ou_`, per 飞书 User ID 规范).
-    ///
-    /// 飞书 User ID 规范 (按既有实现):
-    /// - `ou_` 前缀: Open ID (租户内唯一)
-    /// - 其它前缀: union_id / user_id (R21 续真接时细化)
+    /// **K-1 #4**: 校验 Open ID (非空 + `ou_` 前缀)。
     pub fn validate_open_id(open_id: &str) -> LarkResult<()> {
         let trimmed = open_id.trim();
         if trimmed.is_empty() {
@@ -186,21 +313,20 @@ impl LarkError {
         Ok(())
     }
 
-    /// **K-1 #5**: 校验 Email (RFC 5322 简化版, 非空 + 含 `@` + 域名段).
+    /// **K-1 #5**: 校验 Email (RFC 5322 简化语法: `local@domain.tld`)。
     ///
-    /// 完整 RFC 5322 需要完整 regex, 简化版用启发式: `local@domain.tld`,
-    /// `local` ≥ 1 char, `domain.tld` ≥ 3 chars, `@` 只能 1 个.
+    /// 完整 RFC 5322 需要完整语法器, 此处用保守启发式:
+    /// `local` 1..=64 字符 (字母数字 + `. _ % + -`), 恰好 1 个 `@`,
+    /// `domain` 至少 2 段且末段 ≥ 2 字符。
     pub fn validate_email(email: &str) -> LarkResult<()> {
         let trimmed = email.trim();
         if trimmed.is_empty() {
             return Err(LarkError::EmailInvalid(trimmed.to_string()));
         }
         // 必须含且仅含 1 个 @
-        let at_count = trimmed.matches('@').count();
-        if at_count != 1 {
+        if trimmed.matches('@').count() != 1 {
             return Err(LarkError::EmailInvalid(trimmed.to_string()));
         }
-        // local + @ + domain.tld
         let parts: Vec<&str> = trimmed.split('@').collect();
         if parts.len() != 2 {
             return Err(LarkError::EmailInvalid(trimmed.to_string()));
@@ -211,35 +337,23 @@ impl LarkError {
             return Err(LarkError::EmailInvalid(trimmed.to_string()));
         }
         // domain 必须含 `.`, 且 `.tld` ≥ 2 chars
-        if !domain.contains('.') {
-            return Err(LarkError::EmailInvalid(trimmed.to_string()));
-        }
         let domain_parts: Vec<&str> = domain.split('.').collect();
         if domain_parts.len() < 2 {
             return Err(LarkError::EmailInvalid(trimmed.to_string()));
         }
-        // tld 至少 2 chars
         if domain_parts[domain_parts.len() - 1].len() < 2 {
             return Err(LarkError::EmailInvalid(trimmed.to_string()));
         }
         // local 段字符校验: 字母数字 + . _ % + -
         for c in local.chars() {
-            if !c.is_ascii_alphanumeric()
-                && c != '.'
-                && c != '_'
-                && c != '%'
-                && c != '+'
-                && c != '-'
-            {
+            if !c.is_ascii_alphanumeric() && !matches!(c, '.' | '_' | '%' | '+' | '-') {
                 return Err(LarkError::EmailInvalid(trimmed.to_string()));
             }
         }
         Ok(())
     }
 
-    /// **K-1 #6**: 校验 Mobile (E.164 国际格式, `+` + 7-15 位数字).
-    ///
-    /// 飞书 mobile 字段规范: E.164 (e.g. `+8613800138000` 中国大陆 / `+14155552671` 美国).
+    /// **K-1 #6**: 校验 Mobile (E.164: `+` + 7-15 位数字)。
     pub fn validate_mobile(mobile: &str) -> LarkResult<()> {
         let trimmed = mobile.trim();
         if trimmed.is_empty() {
@@ -248,74 +362,31 @@ impl LarkError {
         if !trimmed.starts_with('+') {
             return Err(LarkError::MobileInvalid(trimmed.to_string()));
         }
-        // `+` 后必须 7-15 位数字 (E.164 规范)
+        // `+` 后必须 7-15 位数字 (E.164)
         let digits = &trimmed[1..];
         if digits.len() < 7 || digits.len() > 15 {
             return Err(LarkError::MobileInvalid(trimmed.to_string()));
         }
-        for c in digits.chars() {
-            if !c.is_ascii_digit() {
-                return Err(LarkError::MobileInvalid(trimmed.to_string()));
-            }
+        if !digits.chars().all(|c| c.is_ascii_digit()) {
+            return Err(LarkError::MobileInvalid(trimmed.to_string()));
         }
         Ok(())
     }
 }
 
 // ============================================================================
-// §3 STUB 守门宏 (per task spec §4 "STUB 守门宏: lark_stub!")
-// ============================================================================
-
-/// STUB 守门宏: 6 API stub 内部统一返 `LarkError::NotImplemented(api)` + tracing log.
-///
-/// 用法:
-/// ```ignore
-/// pub async fn send_message(&self, ...) -> LarkResult<Message> {
-///     return Err(lark_stub!("send_message"));
-/// }
-/// ```
-///
-/// 或者更简洁:
-/// ```ignore
-/// pub async fn send_message(&self, ...) -> LarkResult<Message> {
-///     lark_stub!(@return send_message, LarkResult<Message>)
-/// }
-/// ```
-///
-/// 整合 R21 真接时, 删本宏直接换实现.
-#[macro_export]
-macro_rules! lark_stub {
-    // 通用版: 接受类型 + API 名, 编译期类型校验 + tracing log + return Err
-    ($api:expr, $ret:ty) => {{
-        $crate::lark::error::tracing_warn_stub($api);
-        let e: $crate::lark::error::LarkError =
-            $crate::lark::error::LarkError::NotImplemented($api);
-        return Err::<_, _>(e);
-    }};
-}
-
-/// tracing log helper (per lark_stub! 守门宏, 让 log + return 一气呵成).
-pub fn tracing_warn_stub(api: &'static str) {
-    tracing::warn!(
-        "apeireth-sdk-lark STUB MODE: api={} not implemented (R21 will wire @larksuiteoapi/lark-sdk)",
-        api
-    );
-}
-
-// ============================================================================
-// §4 单元测试 (K-1 6 强校验 + 守门)
+// §5 单元测试 (K-1 6 强校验 + 闭合分类词表)
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// K-1 #1: App ID 校验
+    // ---- K-1 #1 App ID ----
+
     #[test]
     fn k1_app_id_valid() {
-        // 12 char: cli_ + 8 alphanumeric
         assert!(LarkError::validate_app_id("cli_a1b2c3d4").is_ok());
-        // 20 char (典型飞书 app id)
         assert!(LarkError::validate_app_id("cli_a1b2c3d4e5f6g7h8").is_ok());
     }
 
@@ -343,12 +414,24 @@ mod tests {
         ));
     }
 
-    /// K-1 #2: App Secret 校验
+    #[test]
+    fn k1_app_id_invalid_charset() {
+        // 前缀对但主体含非法字符 / 长度不足
+        assert!(matches!(
+            LarkError::validate_app_id("cli_abcd!efgh"),
+            Err(LarkError::AppIdInvalid(_))
+        ));
+        assert!(matches!(
+            LarkError::validate_app_id("cli_abc"),
+            Err(LarkError::AppIdInvalid(_))
+        ));
+    }
+
+    // ---- K-1 #2 App Secret ----
+
     #[test]
     fn k1_app_secret_valid() {
-        // 16 chars minimum
         assert!(LarkError::validate_app_secret("1234567890abcdef").is_ok());
-        // 32 chars (典型飞书 app secret)
         assert!(LarkError::validate_app_secret("abcdef1234567890abcdef1234567890").is_ok());
     }
 
@@ -368,14 +451,11 @@ mod tests {
         ));
     }
 
-    /// K-1 #3: Chat ID 校验 (oc_ / on_ 前缀)
-    #[test]
-    fn k1_chat_id_valid_oc() {
-        assert!(LarkError::validate_chat_id("oc_a1b2c3d4e5f6").is_ok());
-    }
+    // ---- K-1 #3 Chat ID ----
 
     #[test]
-    fn k1_chat_id_valid_on() {
+    fn k1_chat_id_valid() {
+        assert!(LarkError::validate_chat_id("oc_a1b2c3d4e5f6").is_ok());
         assert!(LarkError::validate_chat_id("on_a1b2c3d4e5f6").is_ok());
     }
 
@@ -389,9 +469,14 @@ mod tests {
             LarkError::validate_chat_id("xx_a1b2c3d4"),
             Err(LarkError::ChatIdInvalid(_))
         ));
+        assert!(matches!(
+            LarkError::validate_chat_id(""),
+            Err(LarkError::ChatIdInvalid(_))
+        ));
     }
 
-    /// K-1 #4: Open ID 校验 (ou_ 前缀)
+    // ---- K-1 #4 Open ID ----
+
     #[test]
     fn k1_open_id_valid() {
         assert!(LarkError::validate_open_id("ou_a1b2c3d4e5f6g7h8").is_ok());
@@ -409,7 +494,8 @@ mod tests {
         ));
     }
 
-    /// K-1 #5: Email 校验 (RFC 5322 简化)
+    // ---- K-1 #5 Email ----
+
     #[test]
     fn k1_email_valid() {
         assert!(LarkError::validate_email("user@example.com").is_ok());
@@ -436,7 +522,8 @@ mod tests {
         ));
     }
 
-    /// K-1 #6: Mobile 校验 (E.164)
+    // ---- K-1 #6 Mobile ----
+
     #[test]
     fn k1_mobile_valid() {
         assert!(LarkError::validate_mobile("+8613800138000").is_ok());
@@ -459,10 +546,101 @@ mod tests {
         )); // < 7 位
     }
 
-    /// NotImplemented variant 守 STUB_MODE 必为 true
+    // ---- 闭合分类词表 ----
+
     #[test]
-    fn stub_mode_guard_not_implemented() {
-        let err: LarkError = LarkError::NotImplemented("send_message");
-        assert!(matches!(err, LarkError::NotImplemented("send_message")));
+    fn error_class_closed_vocabulary() {
+        assert_eq!(ErrorClass::COUNT, 3);
+        assert_eq!(ErrorClass::ALL.len(), 3);
+        assert_eq!(ErrorClass::Retryable.as_str(), "retryable");
+        assert_eq!(ErrorClass::Permanent.as_str(), "permanent");
+        assert_eq!(ErrorClass::AuthFailed.as_str(), "auth_failed");
+    }
+
+    #[test]
+    fn error_class_retryable() {
+        assert_eq!(
+            LarkError::Network("boom".into()).class(),
+            ErrorClass::Retryable
+        );
+        assert_eq!(
+            LarkError::RateLimited {
+                retry_after_secs: 5
+            }
+            .class(),
+            ErrorClass::Retryable
+        );
+        assert!(LarkError::Network("boom".into()).is_retryable());
+    }
+
+    #[test]
+    fn error_class_auth_failed() {
+        assert_eq!(LarkError::TokenExpired.class(), ErrorClass::AuthFailed);
+        assert!(LarkError::TokenExpired.is_auth_failure());
+        let api = LarkError::ApiError {
+            code: PLATFORM_CODE_TOKEN_INVALID,
+            msg: "token invalid".into(),
+        };
+        assert_eq!(api.class(), ErrorClass::AuthFailed);
+    }
+
+    #[test]
+    fn error_class_permanent() {
+        assert_eq!(LarkError::Other("x".into()).class(), ErrorClass::Permanent);
+        assert_eq!(
+            LarkError::Unsupported("credential_store").class(),
+            ErrorClass::Permanent
+        );
+        assert_eq!(LarkError::AppIdMissing.class(), ErrorClass::Permanent);
+        let api = LarkError::ApiError {
+            code: 230001,
+            msg: "bad request".into(),
+        };
+        assert_eq!(api.class(), ErrorClass::Permanent);
+    }
+
+    #[test]
+    fn platform_code_mapping_closed_table() {
+        // 限流码 → RateLimited
+        assert!(matches!(
+            LarkError::from_platform_code(PLATFORM_CODE_RATE_LIMITED, "rate limit"),
+            LarkError::RateLimited { .. }
+        ));
+        // 认证码 → TokenExpired
+        assert!(matches!(
+            LarkError::from_platform_code(PLATFORM_CODE_TOKEN_INVALID, "invalid"),
+            LarkError::TokenExpired
+        ));
+        assert!(matches!(
+            LarkError::from_platform_code(PLATFORM_CODE_TOKEN_EXPIRED, "expired"),
+            LarkError::TokenExpired
+        ));
+        // 其它 → ApiError 保留 code/msg
+        match LarkError::from_platform_code(230002, "not found") {
+            LarkError::ApiError { code, msg } => {
+                assert_eq!(code, 230002);
+                assert_eq!(msg, "not found");
+            }
+            other => panic!("expected ApiError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn retry_after_parse_from_msg_is_bounded() {
+        assert_eq!(parse_retry_after_from_msg("retry after 30 s"), Some(30));
+        assert_eq!(parse_retry_after_from_msg("no digits here"), None);
+        assert_eq!(
+            parse_retry_after_from_msg("retry after 999999999 s"),
+            Some(86_400),
+            "畸形巨大数字必须被上限钳制"
+        );
+    }
+
+    #[test]
+    fn unsupported_variant_replaces_stub_surface() {
+        // 显式不支持是永久错误, 且带稳定原因标识 (供调用方降级/报配置缺失)
+        let err = LarkError::Unsupported("credential_store");
+        assert_eq!(err.class(), ErrorClass::Permanent);
+        assert!(format!("{err}").contains("credential_store"));
     }
 }
