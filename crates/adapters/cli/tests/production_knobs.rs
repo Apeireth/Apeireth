@@ -411,3 +411,48 @@ async fn recommended_preset_maps_to_core_memory_knobs() {
         "{tool_ids:?}"
     );
 }
+
+// ---- 上下文预算旋钮 (APEIRETH_CONTEXT_BUDGET_CHARS) ----
+
+/// 上下文预算旋钮: `APEIRETH_CONTEXT_BUDGET_CHARS` 设小值可触发注入上下文截断
+/// (核心块身份/系统约定/安全指令永不截断, 非核心长尾先砍); 未设 = 合理默认。
+#[test]
+fn context_budget_knob_triggers_truncation_when_small() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g = EnvGuard::set("APEIRETH_CONTEXT_BUDGET_CHARS", Some("300"));
+
+    let budget = apeireth_cli::context_budget_chars_from_env();
+    assert_eq!(budget, 300, "knob must resolve the env value");
+
+    // A small budget truncates the long-tail block while the core survives.
+    let core =
+        apeireth_runtime::canonical::ContextBlock::new("identity", "I".repeat(80)).core(true);
+    let mem = apeireth_runtime::canonical::ContextBlock::new("memory", "M".repeat(400));
+    let out = apeireth_runtime::canonical::budget_context_blocks(vec![core.clone(), mem], budget);
+
+    let out_core = out.iter().find(|b| b.name == "identity").unwrap();
+    assert_eq!(out_core.content, core.content, "core never truncated");
+    let out_mem = out.iter().find(|b| b.name == "memory").unwrap();
+    assert!(
+        out_mem.content.chars().count() < 400,
+        "long-tail block must be truncated by the small budget"
+    );
+}
+
+/// 上下文预算旋钮: 未设 / 非法值 = 合理默认 (`DEFAULT_CONTEXT_BUDGET_CHARS`)。
+#[test]
+fn context_budget_knob_defaults_when_unset() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g = EnvGuard::set("APEIRETH_CONTEXT_BUDGET_CHARS", None);
+    assert_eq!(
+        apeireth_cli::context_budget_chars_from_env(),
+        apeireth_runtime::canonical::DEFAULT_CONTEXT_BUDGET_CHARS
+    );
+
+    let _g_bad = EnvGuard::set("APEIRETH_CONTEXT_BUDGET_CHARS", Some("not-a-number"));
+    assert_eq!(
+        apeireth_cli::context_budget_chars_from_env(),
+        apeireth_runtime::canonical::DEFAULT_CONTEXT_BUDGET_CHARS,
+        "invalid values fall back to the default"
+    );
+}

@@ -83,6 +83,7 @@ const ENABLE_MEMORY_INJECTION_ENV: &str = "APEIRETH_ENABLE_MEMORY_INJECTION";
 const ENABLE_CONSOLIDATION_ENV: &str = "APEIRETH_ENABLE_CONSOLIDATION";
 const ENABLE_REFLEXION_ENV: &str = "APEIRETH_ENABLE_REFLEXION";
 const REFLEXION_DIR_ENV: &str = "APEIRETH_REFLEXION_DIR";
+const CONTEXT_BUDGET_CHARS_ENV: &str = "APEIRETH_CONTEXT_BUDGET_CHARS";
 
 /// Resolve the local read-tools switch from the process environment.
 ///
@@ -230,6 +231,19 @@ pub fn reflexion_store_root_from_env() -> PathBuf {
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| default_panel_data_dir().join("reflexion"))
+}
+
+/// 上下文预算旋钮 (接线批): `APEIRETH_CONTEXT_BUDGET_CHARS=N` = 组装期注入上下文块
+/// (记忆注入 / 器官产物 / 教训等) 的**总字符预算**。核心块 (身份 / 系统约定 /
+/// 安全指令) 永不截断; 逐块上限先于总预算生效, 超出按长尾先砍贪心截断; 低于预算
+/// 逐字节不变。未设 / 非法值 = 默认 `DEFAULT_CONTEXT_BUDGET_CHARS` (24000 字符
+/// ≈ 6k token 量级, 推导见 runtime `DEFAULT_CONTEXT_BUDGET_CHARS`)。
+pub fn context_budget_chars_from_env() -> usize {
+    std::env::var(CONTEXT_BUDGET_CHARS_ENV)
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .filter(|&chars| chars > 0)
+        .unwrap_or(apeireth_runtime::DEFAULT_CONTEXT_BUDGET_CHARS)
 }
 
 /// Build the production governance policy from an explicit local-read choice.
@@ -489,6 +503,9 @@ async fn build_canonical_runtime_with_parts(
     }
 
     builder = builder.with_fallback_order(fallback_order);
+    // 上下文预算旋钮 (APEIRETH_CONTEXT_BUDGET_CHARS): 注入上下文块的总字符预算,
+    // 组装期约束 provider 请求的 token 侧注入量 (核心块永不截断)。
+    builder = builder.with_context_budget_chars(context_budget_chars_from_env());
     if let Some(model) = configured_model.or(first_default_model) {
         builder = builder.with_default_model(model);
     }

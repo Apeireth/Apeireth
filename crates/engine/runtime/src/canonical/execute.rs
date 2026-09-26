@@ -48,11 +48,14 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
+use apeireth_orchestration::context_budget::ContextAssembler;
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{
-    NormalizedMessage, NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedUsage,
-    ToolCall, ToolResult,
+    ContentPart, MessageRole, NormalizedMessage, NormalizedRequest, NormalizedResponse,
+    NormalizedTool, NormalizedUsage, ToolCall, ToolResult,
 };
+
+pub use apeireth_orchestration::context_budget::ContextBlock;
 
 use super::approval::{
     approval_arguments_summary, approval_command_text, operation_fingerprint_with_invocation,
@@ -261,6 +264,102 @@ fn compose_provider_messages(
     messages.extend_from_slice(session_messages);
     messages.extend_from_slice(retry_scaffolding);
     messages
+}
+
+/// Reserved block name for the persistent system / identity / safety block
+/// while it is accounted for in the injected-context budget. The block itself
+/// lives in the session transcript and is never truncated, so it is carried
+/// through the budget as a *core* block (counted against the total, never cut)
+/// and then dropped from the returned overlay stream.
+const CORE_CONTEXT_BLOCK_NAME: &str = "__system_identity_safety__";
+
+/// Apply the total injected-context budget to a set of named blocks.
+///
+/// Production entry point over
+/// [`apeireth_orchestration::context_budget::ContextAssembler`], reused rather
+/// than copied. Semantics:
+///
+/// - Below the total budget the blocks are returned unchanged (zero-change
+///   guarantee for small contexts: nothing is truncated).
+/// - Over budget, per-block `cap_chars` apply first, then a greedy total-budget
+///   cut trims the longest non-core blocks first (long-tail-first).
+/// - Core blocks (identity / system-convention / safety) are never truncated.
+pub fn budget_context_blocks(
+    blocks: Vec<ContextBlock>,
+    total_budget_chars: usize,
+) -> Vec<ContextBlock> {
+    // Match the assembler's usable floor (a core block always keeps a workable
+    // minimum) so the below-budget check and the assembler agree even for
+    // degenerate tiny budgets.
+    let budget = total_budget_chars.max(100);
+    let total: usize = blocks.iter().map(|b| b.content.chars().count()).sum();
+    if total <= budget {
+        // Small context: below budget there is nothing to cut, so pass the
+        // blocks through untouched (byte-for-byte identical to the caller).
+        return blocks;
+    }
+    let mut assembler = ContextAssembler::new(budget);
+    for block in blocks {
+        assembler = assembler.push(block);
+    }
+    assembler.assemble_budgeted_blocks()
+}
+
+/// Concatenated text of every System-role message in the transcript: the
+/// identity / system-convention / safety instruction seeded by the caller.
+/// This is the *core* block — counted against the budget, never truncated.
+fn system_identity_text(session_messages: &[NormalizedMessage]) -> String {
+    session_messages
+        .iter()
+        .filter(|m| m.role == MessageRole::System)
+        .map(|m| ContentPart::join_text(&m.content))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Joined visible text of one transient overlay message.
+fn overlay_text(overlay: &PromptOverlay) -> String {
+    ContentPart::join_text(&overlay.message().content)
+}
+
+/// Budget the transient injected-context overlays for one provider request.
+///
+/// The assembled context content is the injected blocks carried by `overlays`
+/// (memory-injection evidence, organ products, reflexion lessons, ...). The
+/// persistent system / identity / safety instruction is modelled as a core
+/// block: counted against the total budget but never truncated (it stays in the
+/// session transcript untouched). Below budget the overlays are returned
+/// byte-for-byte unchanged; over budget the non-core blocks are cut greedily
+/// from the longest first while the core block survives intact.
+fn budget_injected_overlays(
+    overlays: &[PromptOverlay],
+    session_messages: &[NormalizedMessage],
+    total_budget_chars: usize,
+) -> Vec<PromptOverlay> {
+    let core_text = system_identity_text(session_messages);
+    let total = core_text.chars().count()
+        + overlays
+            .iter()
+            .map(|o| overlay_text(o).chars().count())
+            .sum::<usize>();
+    if total <= total_budget_chars {
+        // Small context: below budget nothing is cut. Return the exact overlay
+        // values so the provider request is byte-for-byte unchanged.
+        return overlays.to_vec();
+    }
+
+    let mut blocks = Vec::with_capacity(overlays.len() + 1);
+    if !core_text.is_empty() {
+        blocks.push(ContextBlock::new(CORE_CONTEXT_BLOCK_NAME, core_text).core(true));
+    }
+    for overlay in overlays {
+        blocks.push(ContextBlock::new("injected", overlay_text(overlay)));
+    }
+    budget_context_blocks(blocks, total_budget_chars)
+        .into_iter()
+        .filter(|b| b.name != CORE_CONTEXT_BLOCK_NAME)
+        .map(|b| PromptOverlay::system(b.content))
+        .collect()
 }
 
 impl Runtime {
@@ -931,11 +1030,20 @@ impl Runtime {
 
                 let mut provider_overlays = request_overlays;
                 provider_overlays.extend(before_model_overlays);
+                // Budget the assembled injected-context blocks (memory /
+                // organ / lesson overlays) against the total char budget before
+                // they are composed into the provider request. The persistent
+                // system / identity / safety block is reserved (never cut).
+                let budgeted_overlays = budget_injected_overlays(
+                    &provider_overlays,
+                    &session.messages,
+                    self.config.context_budget_chars,
+                );
                 let provider_messages = self.project_provider_messages(
                     &compose_provider_messages(
                         &session.messages,
                         &retry_scaffolding,
-                        &provider_overlays,
+                        &budgeted_overlays,
                     ),
                     &continuation.model,
                 );

@@ -66,6 +66,20 @@ pub const DEFAULT_MAX_ROUNDS: u32 = 8;
 /// Default lifetime of a pending approval before it expires.
 pub const DEFAULT_APPROVAL_TTL_MS: u64 = 5 * 60 * 1000;
 
+/// Default total character budget for the assembled injected-context blocks.
+///
+/// The injected context (memory-injection evidence, organ products, reflexion
+/// lessons and the like) is assembled as named blocks under one total budget:
+/// core blocks (identity / system-convention / safety) are never truncated,
+/// per-block caps apply before the total, and non-core overflow is cut greedily
+/// from the longest block first. 24 000 characters is a deliberate ~6 k-token
+/// ceiling at a conservative ~4 characters/token for mixed prose (CJK packs
+/// fewer characters per token, so this stays on the safe side), leaving ample
+/// head-room in a typical context window for the conversation transcript and
+/// the reply. It is a soft guard on injected context only — not a substitute
+/// for a model's context-window limit, which the context projector owns.
+pub const DEFAULT_CONTEXT_BUDGET_CHARS: usize = 24_000;
+
 /// Runtime-wide settings.
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
@@ -77,6 +91,9 @@ pub struct RuntimeConfig {
     pub approval_ttl_ms: u64,
     /// Maximum isolated module provider calls in one top-level turn.
     pub max_module_invocations: usize,
+    /// Total character budget for the assembled injected-context blocks (core
+    /// blocks are never truncated; see [`DEFAULT_CONTEXT_BUDGET_CHARS`]).
+    pub context_budget_chars: usize,
 }
 
 /// Secret-free diagnostic projection of the live runtime graph.
@@ -141,6 +158,7 @@ impl Default for RuntimeConfig {
             max_rounds: DEFAULT_MAX_ROUNDS,
             approval_ttl_ms: DEFAULT_APPROVAL_TTL_MS,
             max_module_invocations: DEFAULT_MAX_MODULE_INVOCATIONS,
+            context_budget_chars: DEFAULT_CONTEXT_BUDGET_CHARS,
         }
     }
 }
@@ -631,6 +649,17 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_max_module_invocations(mut self, invocations: usize) -> Self {
         self.config.max_module_invocations = invocations;
+        self
+    }
+
+    /// Set the total character budget for the assembled injected-context blocks.
+    ///
+    /// Small values force aggressive trimming of non-core injected context
+    /// (memory / organ / lesson blocks) while core identity / system / safety
+    /// blocks are never truncated. See [`DEFAULT_CONTEXT_BUDGET_CHARS`].
+    #[must_use]
+    pub fn with_context_budget_chars(mut self, chars: usize) -> Self {
+        self.config.context_budget_chars = chars;
         self
     }
 

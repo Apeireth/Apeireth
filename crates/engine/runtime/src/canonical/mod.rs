@@ -77,7 +77,9 @@ pub use events::{
     event_sink, CompositeEventSink, CompositeRuntimeEventSink, NoopRuntimeEventSink, RuntimeEvent,
     RuntimeEventSink,
 };
-pub use execute::{ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse};
+pub use execute::{
+    budget_context_blocks, ApprovalResolution, ContextBlock, TurnOutcome, TurnRequest, TurnResponse,
+};
 pub use heartbeat::{FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource};
 pub use module::{
     AgentModule, BehaviorModule, HookPoint, InvocationContext, InvocationOrigin, Module,
@@ -89,7 +91,7 @@ pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{
     plugin_ids, Runtime, RuntimeBuilder, RuntimeCapabilitySnapshot, RuntimeConfig,
     RuntimeHealthSnapshot, RuntimeModelSnapshot, RuntimeModuleSnapshot, RuntimeProviderSnapshot,
-    RuntimeSnapshot, DEFAULT_MAX_ROUNDS,
+    RuntimeSnapshot, DEFAULT_CONTEXT_BUDGET_CHARS, DEFAULT_MAX_ROUNDS,
 };
 pub use session::{
     InMemorySessionStore, PermissionPreset, Session, SessionEvent, SessionEventKind,
