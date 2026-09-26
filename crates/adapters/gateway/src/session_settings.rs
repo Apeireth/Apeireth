@@ -190,11 +190,25 @@ mod tests {
                 .keepalive()
                 .expect("fresh presence surface cannot be shut down"),
         );
+        let events = crate::events::EventBus::default();
+        let events_stream = Arc::new(
+            events
+                .keepalive()
+                .expect("fresh events surface cannot be shut down"),
+        );
+        let observations = Arc::new(crate::events::RuntimeObservationSink::new(None, None));
+        let observations_stream = Arc::new(
+            observations
+                .keepalive()
+                .expect("fresh flush surface cannot be shut down"),
+        );
         let state = GatewayState {
             runtime: Arc::new(runtime),
             services: crate::panels::GatewayServices::default(),
-            events: crate::events::EventBus::default(),
-            observations: Arc::new(crate::events::RuntimeObservationSink::new(None, None)),
+            events,
+            events_stream,
+            observations,
+            observations_stream,
             presence,
             presence_stream,
             hot_config: Arc::new(std::sync::RwLock::new(

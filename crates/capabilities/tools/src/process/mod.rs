@@ -57,6 +57,8 @@ pub mod windows;
 const POST_KILL_WAIT: Duration = Duration::from_secs(5);
 /// Poll interval used while supervising a running child.
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
+/// Fine-grained fallback poll slice for platforms without an event-style wait.
+const WAIT_POLL_SLICE: Duration = Duration::from_millis(1);
 /// Maximum time to wait for a reader thread to deliver output after the child
 /// has exited. If a descendant inherited a pipe and keeps it open on a
 /// non-Windows platform, the executor does not hang forever.
@@ -926,6 +928,30 @@ pub(crate) trait ManagedChild {
     fn terminate(&mut self) -> Result<(), ProcessError>;
     fn take_stdout(&mut self) -> Option<Box<dyn Read + Send>>;
     fn take_stderr(&mut self) -> Option<Box<dyn Read + Send>>;
+
+    /// Block until the child exits or `timeout` elapses, whichever comes first.
+    ///
+    /// Returns `Some(status)` on exit and `None` on timeout. Backends with an
+    /// event-style process wait override this to wake exactly at child exit;
+    /// the default implementation falls back to fine-grained polling so a
+    /// short-lived child is not held up by the coarse supervision tick.
+    fn wait_timeout(&mut self, timeout: Duration) -> Result<Option<ChildStatus>, ProcessError> {
+        let deadline = Instant::now() + timeout;
+        let mut slice = WAIT_POLL_SLICE;
+        loop {
+            if let Some(status) = self.try_wait()? {
+                return Ok(Some(status));
+            }
+            let now = Instant::now();
+            if now >= deadline {
+                return Ok(None);
+            }
+            thread::sleep(slice.min(deadline - now));
+            // Back off toward the coarse tick so long-running children settle
+            // at the same polling cost as before, while short ones exit fast.
+            slice = (slice * 2).min(POLL_INTERVAL);
+        }
+    }
 }
 
 pub(crate) fn supervise<C: ManagedChild>(
@@ -951,7 +977,8 @@ pub(crate) fn supervise<C: ManagedChild>(
             break 'supervise status;
         }
 
-        if start.elapsed() >= request.limits.max_runtime {
+        let elapsed = start.elapsed();
+        if elapsed >= request.limits.max_runtime {
             timed_out = true;
             child.terminate()?;
 
@@ -969,7 +996,12 @@ pub(crate) fn supervise<C: ManagedChild>(
             }
         }
 
-        thread::sleep(POLL_INTERVAL);
+        // Wake at child exit (event-style wait where the platform offers one)
+        // instead of ticking at the coarse supervision poll interval; the
+        // timeout boundary above is checked again on every wake-up.
+        if let Some(status) = child.wait_timeout(request.limits.max_runtime - elapsed)? {
+            break 'supervise status;
+        }
     };
 
     let termination = if timed_out {

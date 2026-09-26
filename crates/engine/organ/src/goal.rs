@@ -48,6 +48,7 @@ use std::path::{Path, PathBuf};
 
 use apeireth_core::kernel::TaskId;
 use apeireth_core::storage_atomic;
+use apeireth_core::stored_doc;
 use serde::{Deserialize, Serialize};
 
 /// Goal phase. One blocked phase — reasons live on the snapshot, not as extra
@@ -313,8 +314,41 @@ impl From<GoalPersistError> for GoalError {
     }
 }
 
-/// Crash-safe per-goal JSON store (`{sanitized-id}.json` via the shared atomic
-/// durable writer).
+/// goal 快照存储文档身份 (存储文档信封)。
+pub const GOAL_SNAPSHOT_DOC_NAME: &str = "goal-snapshot";
+/// goal 快照存储格式版本。
+pub const GOAL_SNAPSHOT_DOC_VERSION: u32 = 1;
+
+/// goal 快照的读端版本契约 (信封)。
+fn goal_doc_compat() -> stored_doc::DocCompat {
+    stored_doc::DocCompat::exact(GOAL_SNAPSHOT_DOC_NAME, GOAL_SNAPSHOT_DOC_VERSION)
+}
+
+/// 存储文档错误 → 持久化错误 (IO 归 IO, 其余一律拒开为损坏)。
+fn doc_error(
+    operation: &'static str,
+    id: &str,
+    error: stored_doc::StoredDocError,
+) -> GoalPersistError {
+    match error {
+        stored_doc::StoredDocError::Io { path, source } => persist_io(operation, &path, source),
+        other => GoalPersistError::Corrupt {
+            id: id.to_string(),
+            reason: other.to_string(),
+        },
+    }
+}
+
+/// Crash-safe per-goal stored-document store (`{sanitized-id}.json` via the
+/// shared atomic durable writer).
+///
+/// Each snapshot is a [`stored_doc::StoredDoc`] envelope (identity + version
+/// stamp + body). Opening is **strict**: malformed / identity-mismatched /
+/// unversioned-future files are rejected as [`GoalPersistError::Corrupt`] —
+/// never silently replaced with a default. Pre-envelope bare files stay
+/// readable read-only (they are not rewritten on open); upgrading one is an
+/// explicit [`GoalStore::migrate_legacy_snapshot`] call that leaves an audit
+/// line.
 ///
 /// This is a **file helper**, not a second session/transcript owner. One
 /// [`GoalService`] holds at most one current snapshot.
@@ -335,32 +369,55 @@ impl GoalStore {
         self.dir.join(format!("{}.json", sanitize_goal_id(id)))
     }
 
-    /// Atomically persist a snapshot through the shared atomic writer's durable
-    /// tier (goal state must not roll back after a crash): parent dir creation,
-    /// exclusive same-directory temp file, write, `sync_all`, then replace.
+    /// Atomically persist a snapshot as a stored document through the shared
+    /// atomic writer's durable tier (goal state must not roll back after a
+    /// crash): parent dir creation, exclusive same-directory temp file, write,
+    /// `sync_all`, then replace.
     pub fn save(&self, g: &GoalSnapshot) -> Result<(), GoalPersistError> {
-        let bytes = serde_json::to_vec_pretty(g).map_err(|e| GoalPersistError::Serialization {
-            reason: e.to_string(),
-        })?;
         let dest = self.path_for(&g.id);
-        storage_atomic::write_atomic_durable(&dest, &bytes, storage_atomic::DEFAULT_FILE_MODE)
-            .map_err(|e| persist_io("write goal snapshot", &dest, e))
+        stored_doc::save_single(
+            &dest,
+            &goal_doc_compat(),
+            g.clone(),
+            storage_atomic::DEFAULT_FILE_MODE,
+        )
+        .map_err(|e| doc_error("write goal snapshot", &g.id, e))?;
+        Ok(())
     }
 
+    /// Load one snapshot. Missing file = `None` (the caller decides whether a
+    /// missing snapshot is legal); a present-but-invalid file is **rejected**
+    /// as [`GoalPersistError::Corrupt`] — no default fallback, no silent
+    /// migration.
     pub fn load(&self, id: &str) -> Result<Option<GoalSnapshot>, GoalPersistError> {
         let path = self.path_for(id);
-        match fs::read(&path) {
-            Ok(bytes) => {
-                let snap =
-                    serde_json::from_slice(&bytes).map_err(|e| GoalPersistError::Corrupt {
-                        id: id.to_string(),
-                        reason: e.to_string(),
-                    })?;
-                Ok(Some(snap))
+        match stored_doc::open_single_compat::<GoalSnapshot>(&path, &goal_doc_compat()) {
+            Ok(opened) => Ok(Some(opened.into_body())),
+            Err(stored_doc::StoredDocError::Io { source, .. })
+                if source.kind() == io::ErrorKind::NotFound =>
+            {
+                Ok(None)
             }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(persist_io("read goal snapshot", &path, e)),
+            Err(e) => Err(doc_error("read goal snapshot", id, e)),
         }
+    }
+
+    /// Explicit migration of one snapshot file into the current stored-document
+    /// format (pre-envelope bare body → envelope), rewriting the file and
+    /// appending a `<file>.migrate-audit.jsonl` audit line. Callers opt in;
+    /// [`GoalStore::load`] never migrates on its own.
+    pub fn migrate_legacy_snapshot(
+        &self,
+        id: &str,
+    ) -> Result<stored_doc::MigrationAudit, GoalPersistError> {
+        let path = self.path_for(id);
+        stored_doc::migrate_file_from_legacy::<GoalSnapshot, GoalSnapshot, _>(
+            &path,
+            &goal_doc_compat(),
+            storage_atomic::DEFAULT_FILE_MODE,
+            Ok,
+        )
+        .map_err(|e| doc_error("migrate goal snapshot", id, e))
     }
 
     pub fn clear(&self, id: &str) -> Result<(), GoalPersistError> {
@@ -1467,5 +1524,96 @@ mod tests {
             }
         );
         assert_eq!(s.current().unwrap().rounds_started, 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // stored_doc 消费方接线: 信封拒开 + 好数据零回归 + 旧文件兼容 + 显式迁移
+    // -----------------------------------------------------------------------
+
+    /// 好数据路径零回归: 信封 body 与旧裸体写端输出逐字节等价。
+    #[test]
+    fn goal_store_good_data_payload_stays_byte_equivalent() {
+        let dir = tmp("stored-doc-equiv");
+        fs::create_dir_all(&dir).unwrap();
+        let store = GoalStore::new(&dir);
+        let g = snap("goal-a", 3, GoalPhase::Blocked);
+        store.save(&g).unwrap();
+
+        let raw = fs::read(dir.join("goal-a.json")).unwrap();
+        let doc: stored_doc::StoredDoc<GoalSnapshot> =
+            serde_json::from_slice(&raw).expect("落盘是存储文档信封");
+        assert_eq!(doc.name, GOAL_SNAPSHOT_DOC_NAME);
+        assert_eq!(doc.version, GOAL_SNAPSHOT_DOC_VERSION);
+        assert_eq!(
+            serde_json::to_vec_pretty(&doc.body).unwrap(),
+            serde_json::to_vec_pretty(&g).unwrap(),
+            "好数据 body 必须与旧裸体写端输出逐字节等价"
+        );
+        assert_eq!(store.load("goal-a").unwrap().unwrap(), g);
+    }
+
+    /// 旧文件兼容: 前信封裸体快照迁移前后都可读; 默认打开不静默迁移。
+    #[test]
+    fn goal_store_reads_legacy_bare_snapshot_before_and_after_explicit_migration() {
+        let dir = tmp("stored-doc-legacy");
+        fs::create_dir_all(&dir).unwrap();
+        let g = snap("goal-x", 2, GoalPhase::Paused);
+        let legacy_bytes = serde_json::to_vec_pretty(&g).unwrap();
+        fs::write(dir.join("goal-x.json"), &legacy_bytes).unwrap();
+
+        let store = GoalStore::new(&dir);
+        // 迁移前可读 (旧裸体只读兼容), 且文件字节不被改写。
+        assert_eq!(store.load("goal-x").unwrap().unwrap(), g);
+        assert_eq!(
+            fs::read(dir.join("goal-x.json")).unwrap(),
+            legacy_bytes,
+            "默认打开路径不得静默迁移"
+        );
+
+        // 显式迁移留审计。
+        let audit = store.migrate_legacy_snapshot("goal-x").unwrap();
+        assert_eq!(audit.from_version, stored_doc::LEGACY_DOC_VERSION);
+        assert_eq!(audit.to_version, GOAL_SNAPSHOT_DOC_VERSION);
+        assert!(audit.audit_logged, "显式迁移必须留审计");
+
+        // 迁移后仍可读, 内容不变。
+        assert_eq!(store.load("goal-x").unwrap().unwrap(), g);
+        let audit_text = fs::read_to_string(dir.join("goal-x.json.migrate-audit.jsonl")).unwrap();
+        assert_eq!(
+            audit_text.lines().count(),
+            1,
+            "审计文件应恰一行: {audit_text}"
+        );
+    }
+
+    /// 拒开生效: 坏快照/串档信封不再「读坏用默认」, 如实报 Corrupt。
+    #[test]
+    fn goal_store_rejects_corrupt_snapshot_without_default_fallback() {
+        let dir = tmp("stored-doc-reject");
+        fs::create_dir_all(&dir).unwrap();
+        let store = GoalStore::new(&dir);
+
+        fs::write(dir.join("goal-x.json"), b"{ this is not json").unwrap();
+        assert!(
+            matches!(
+                store.load("goal-x").unwrap_err(),
+                GoalPersistError::Corrupt { .. }
+            ),
+            "坏 JSON 必须拒开"
+        );
+
+        // 信封形状但串档: 同样拒开, 不回退默认值。
+        fs::write(
+            dir.join("goal-x.json"),
+            br#"{"name":"other-doc","version":1,"compatible_versions":[1],"body":{}}"#,
+        )
+        .unwrap();
+        assert!(
+            matches!(
+                store.load("goal-x").unwrap_err(),
+                GoalPersistError::Corrupt { .. }
+            ),
+            "串档信封必须拒开"
+        );
     }
 }

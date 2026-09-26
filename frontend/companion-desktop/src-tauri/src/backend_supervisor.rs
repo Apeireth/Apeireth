@@ -15,7 +15,9 @@
 
 use crate::keychain;
 use crate::logging::{DesktopLogger, LogLevel};
+use crate::stored_config;
 use crate::workspace;
+use apeireth_core::stored_doc::{self, DocCompat};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -510,30 +512,48 @@ pub const TUNING_LOG_FILE: &str = "tuning-log.jsonl";
 /// 学习日志读取上限 (16 MiB): 只读命令不为超大文件兜底买单, 超限报错不猜。
 const TUNING_LOG_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
-/// 只读解析 tuning-log.jsonl: 文件缺失 = 空列表 (尚无自动调整);
-/// 坏行跳过 (容忍部分损坏, 只读视图尽力而为)。
-pub fn read_tuning_log_file(path: &Path) -> Result<Vec<TuningLogEntry>, String> {
-    match std::fs::read_to_string(path) {
-        Ok(raw) => {
-            if raw.len() as u64 > TUNING_LOG_MAX_BYTES {
-                return Err(format!(
-                    "tuning log too large ({} bytes > {TUNING_LOG_MAX_BYTES}): {}",
-                    raw.len(),
-                    path.display()
-                ));
-            }
-            Ok(raw
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .filter_map(|line| serde_json::from_str::<TuningLogEntry>(line).ok())
-                .collect())
+/// 学习日志读取结果: 好记录 + 被跳过的坏行计数 (坏行读作不存在, 不静默丢)。
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TuningLogRead {
+    /// 解析成功且版本契约相符的记录 (保持文件顺序)。
+    pub entries: Vec<TuningLogEntry>,
+    /// 被跳过的行数 (坏 JSON / 信封畸形 / 身份不符 / 版本戳不符)。
+    pub skipped: usize,
+}
+
+/// 只读解析 tuning-log.jsonl (逐记录类, 走存储文档 `scan_records` 语义):
+/// 文件缺失 = 空列表 (尚无自动调整); 单条坏行**读作不存在** —— 跳过并计数,
+/// 不砖化整个日志; 前信封旧裸体行只读兼容 (不静默迁移)。
+pub fn read_tuning_log_file(path: &Path) -> Result<TuningLogRead, String> {
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.len() > TUNING_LOG_MAX_BYTES => {
+            return Err(format!(
+                "tuning log too large ({} bytes > {TUNING_LOG_MAX_BYTES}): {}",
+                meta.len(),
+                path.display()
+            ));
         }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(error) => Err(format!(
-            "tuning log read failed ({}): {error}",
-            path.display()
-        )),
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(TuningLogRead::default());
+        }
+        Err(error) => {
+            return Err(format!(
+                "tuning log read failed ({}): {error}",
+                path.display()
+            ));
+        }
     }
+    let scan = stored_doc::scan_records_compat::<TuningLogEntry>(path, &tuning_log_doc_compat())
+        .map_err(|error| format!("tuning log read failed ({}): {error}", path.display()))?;
+    Ok(TuningLogRead {
+        entries: scan
+            .records
+            .into_iter()
+            .map(|record| record.into_body())
+            .collect(),
+        skipped: scan.skipped,
+    })
 }
 
 /// Body for the gateway's hot-config endpoint (`POST /v1/admin/config`).
@@ -650,29 +670,60 @@ pub struct BackendSupervisor {
     spawned_capability_env: RwLock<BackendCapabilityEnv>,
 }
 
+/// 存储文档身份: 后端 provider 环境配置 (非密字段)。
+pub const PROVIDER_ENV_DOC_NAME: &str = "companion-backend-provider-env";
+/// provider 环境配置存储格式版本。
+pub const PROVIDER_ENV_DOC_VERSION: u32 = 1;
+
+/// 存储文档身份: 后端能力开关配置。
+pub const CAPABILITY_ENV_DOC_NAME: &str = "companion-backend-capability-env";
+/// 能力开关配置存储格式版本。
+pub const CAPABILITY_ENV_DOC_VERSION: u32 = 1;
+
+/// 学习日志逐记录信封身份 (与写端 `self_tuning_wire` 落盘信封一致)。
+pub const TUNING_LOG_DOC_NAME: &str = "tuning-log-record";
+/// 学习日志记录格式版本。
+pub const TUNING_LOG_DOC_VERSION: u32 = 1;
+
+fn provider_env_doc_compat() -> DocCompat {
+    DocCompat::exact(PROVIDER_ENV_DOC_NAME, PROVIDER_ENV_DOC_VERSION)
+}
+
+fn capability_env_doc_compat() -> DocCompat {
+    DocCompat::exact(CAPABILITY_ENV_DOC_NAME, CAPABILITY_ENV_DOC_VERSION)
+}
+
+fn tuning_log_doc_compat() -> DocCompat {
+    DocCompat::exact(TUNING_LOG_DOC_NAME, TUNING_LOG_DOC_VERSION)
+}
+
 impl BackendSupervisor {
     /// Base constructor. Production always attaches a logger via
     /// [`Self::with_logger`]; tests use `build(None)` when no log file is wanted.
-    fn build(logger: Option<Arc<DesktopLogger>>) -> Self {
+    ///
+    /// Config restore is **strict**: a present-but-broken config file is
+    /// rejected (`Err`) instead of silently falling back to defaults; a missing
+    /// file legitimately means "no config yet".
+    fn build(logger: Option<Arc<DesktopLogger>>) -> Result<Self, String> {
         // Restore the persisted non-secret provider config (endpoints/models),
         // capability toggles, and workspace dir so the very first spawn already
         // reflects the user's last settings. Keys are deliberately NOT persisted
         // to the app-data config; they live in memory for the session and are
         // otherwise restored from the OS keychain at spawn (env > keychain).
-        let persisted_provider = logger
-            .as_ref()
-            .and_then(|l| Self::load_persisted_provider_env(l))
-            .unwrap_or_default()
-            .without_secrets();
-        let persisted_capabilities = logger
-            .as_ref()
-            .and_then(|l| Self::load_persisted_capability_env(l))
-            .unwrap_or_default();
-        let persisted_workspace = logger
-            .as_ref()
-            .map(|l| Self::logger_app_data_dir(l))
-            .and_then(|dir| workspace::load_workspace_dir(&dir));
-        Self {
+        let (persisted_provider, persisted_capabilities, persisted_workspace) =
+            match logger.as_ref() {
+                Some(attached) => (
+                    Self::load_persisted_provider_env(attached)?.unwrap_or_default(),
+                    Self::load_persisted_capability_env(attached)?.unwrap_or_default(),
+                    workspace::load_workspace_dir(&Self::logger_app_data_dir(attached))?,
+                ),
+                None => (
+                    BackendProviderEnv::default(),
+                    BackendCapabilityEnv::default(),
+                    None,
+                ),
+            };
+        Ok(Self {
             info: Arc::new(RwLock::new(BackendInfo::default())),
             process: Arc::new(RwLock::new(None)),
             logger,
@@ -681,7 +732,7 @@ impl BackendSupervisor {
             workspace_dir: RwLock::new(persisted_workspace),
             spawned_provider_env: RwLock::new(persisted_provider),
             spawned_capability_env: RwLock::new(persisted_capabilities),
-        }
+        })
     }
 
     /// App-data directory that owns the logs (e.g. `%LOCALAPPDATA%\Apeireth`).
@@ -718,19 +769,22 @@ impl BackendSupervisor {
             .unwrap_or_else(|| logger.log_directory().join("backend-capability-env.json"))
     }
 
-    fn load_persisted_provider_env(logger: &DesktopLogger) -> Option<BackendProviderEnv> {
+    fn load_persisted_provider_env(
+        logger: &DesktopLogger,
+    ) -> Result<Option<BackendProviderEnv>, String> {
         let path = Self::provider_env_path(logger);
-        let raw = std::fs::read_to_string(path).ok()?;
-        serde_json::from_str::<BackendProviderEnv>(&raw)
-            .ok()
+        let loaded: Option<BackendProviderEnv> =
+            stored_config::load_config(&path, &provider_env_doc_compat())?;
+        Ok(loaded
             .map(BackendProviderEnv::sanitized)
-            .map(|env| env.without_secrets())
+            .map(|env| env.without_secrets()))
     }
 
-    fn load_persisted_capability_env(logger: &DesktopLogger) -> Option<BackendCapabilityEnv> {
+    fn load_persisted_capability_env(
+        logger: &DesktopLogger,
+    ) -> Result<Option<BackendCapabilityEnv>, String> {
         let path = Self::capability_env_path(logger);
-        let raw = std::fs::read_to_string(path).ok()?;
-        serde_json::from_str::<BackendCapabilityEnv>(&raw).ok()
+        stored_config::load_config(&path, &capability_env_doc_compat())
     }
 
     /// Persist only the non-secret part of the provider environment so the
@@ -740,13 +794,17 @@ impl BackendSupervisor {
             return;
         };
         let path = Self::provider_env_path(logger);
-        let Ok(json) = serde_json::to_string_pretty(&env.without_secrets()) else {
-            return;
-        };
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let _ = std::fs::write(path, json);
+        if let Err(error) =
+            stored_config::save_config(&path, &provider_env_doc_compat(), &env.without_secrets())
+        {
+            self.log_desktop(
+                LogLevel::Error,
+                &format!("provider env persist failed: {error}"),
+            );
+        }
     }
 
     /// Persist capability toggles (no secrets) for the next launch.
@@ -755,28 +813,62 @@ impl BackendSupervisor {
             return;
         };
         let path = Self::capability_env_path(logger);
-        let Ok(json) = serde_json::to_string_pretty(env) else {
-            return;
-        };
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let _ = std::fs::write(path, json);
+        if let Err(error) = stored_config::save_config(&path, &capability_env_doc_compat(), env) {
+            self.log_desktop(
+                LogLevel::Error,
+                &format!("capability env persist failed: {error}"),
+            );
+        }
+    }
+
+    /// Explicit migration of the persisted provider env into the current
+    /// stored-document format (rewrites + audit line). The default open path
+    /// never migrates on its own.
+    pub fn migrate_legacy_provider_env_config(logger: &DesktopLogger) -> Result<(), String> {
+        let path = Self::provider_env_path(logger);
+        if !path.exists() {
+            return Ok(());
+        }
+        stored_config::migrate_legacy_config::<BackendProviderEnv>(
+            &path,
+            &provider_env_doc_compat(),
+        )
+        .map(|_| ())
+    }
+
+    /// Explicit migration of the persisted capability toggles into the current
+    /// stored-document format (rewrites + audit line).
+    pub fn migrate_legacy_capability_env_config(logger: &DesktopLogger) -> Result<(), String> {
+        let path = Self::capability_env_path(logger);
+        if !path.exists() {
+            return Ok(());
+        }
+        stored_config::migrate_legacy_config::<BackendCapabilityEnv>(
+            &path,
+            &capability_env_doc_compat(),
+        )
+        .map(|_| ())
     }
 
     /// Attach a persistent logger so backend stdout/stderr reaches
     /// `apeireth-backend.log` and lifecycle events reach the desktop log.
-    pub fn with_logger(logger: Arc<DesktopLogger>) -> Self {
+    ///
+    /// Fails (instead of defaulting) when a persisted config file exists but is
+    /// malformed / foreign / version-unsupported.
+    pub fn with_logger(logger: Arc<DesktopLogger>) -> Result<Self, String> {
         Self::build(Some(logger))
     }
 
     /// A logger-less supervisor for integration tests.
     ///
     /// Tests drive the real lifecycle but must not append to the user's actual
-    /// log files, so no logger is attached.
+    /// log files, so no logger is attached (and no config file is read).
     #[doc(hidden)]
     pub fn new_for_test() -> Self {
-        Self::build(None)
+        Self::build(None).expect("logger-less supervisor reads no config files")
     }
 
     /// Test-only production-shaped supervisor whose logs and app-data anchors
@@ -786,7 +878,7 @@ impl BackendSupervisor {
     #[doc(hidden)]
     pub fn with_logger_in_dir(dir: PathBuf) -> Result<Self, String> {
         let logger = DesktopLogger::new_in_dir(dir.join("logs"))?;
-        Ok(Self::with_logger(Arc::new(logger)))
+        Self::with_logger(Arc::new(logger))
     }
 
     /// Expose dev-build resolution so an integration test can report a missing
@@ -1327,9 +1419,23 @@ impl BackendSupervisor {
     }
 
     /// 只读读取学习日志 (调参面板「学习日志」数据源)。
+    ///
+    /// 好记录照读 (旧裸体行只读兼容); 坏行读作不存在并计数, 计数非零时如实
+    /// 落桌面日志 (不静默丢行)。UI 契约仍是记录列表, 跳过计数走日志可观测。
     pub async fn read_tuning_log(&self) -> Result<Vec<TuningLogEntry>, String> {
         let path = self.tuning_log_path().await;
-        read_tuning_log_file(&path)
+        let read = read_tuning_log_file(&path)?;
+        if read.skipped > 0 {
+            self.log_desktop(
+                LogLevel::Warn,
+                &format!(
+                    "tuning log: {} bad line(s) skipped (read as nonexistent): {}",
+                    read.skipped,
+                    path.display()
+                ),
+            );
+        }
+        Ok(read.entries)
     }
 
     /// Wait until the state machine leaves its transitional states.
@@ -2072,7 +2178,7 @@ mod tests {
         );
     }
 
-    /// 学习日志只读解析: JSONL 行回读 (snake_case 契约) + 坏行跳过 + 缺文件 = 空。
+    /// 学习日志只读解析 (逐记录类): 旧裸体行照读 + 坏行跳过并计数 + 缺文件 = 空。
     #[test]
     fn tuning_log_file_parses_jsonl_skips_bad_lines_and_missing_is_empty() {
         let dir =
@@ -2088,16 +2194,45 @@ mod tests {
             ),
         )
         .unwrap();
-        let entries = read_tuning_log_file(&path).expect("解析成功");
-        assert_eq!(entries.len(), 2, "坏行跳过");
-        assert_eq!(entries[0].seq, 1);
-        assert_eq!(entries[0].param, "memory_fade");
-        assert_eq!(entries[0].next, 0.75);
-        assert_eq!(entries[1].param, "consolidation_cadence");
-        assert_eq!(entries[1].at_epoch_ms, 2000);
+        let read = read_tuning_log_file(&path).expect("解析成功");
+        assert_eq!(read.entries.len(), 2, "好行照读");
+        assert_eq!(read.skipped, 1, "坏行必须跳过并计数");
+        assert_eq!(read.entries[0].seq, 1);
+        assert_eq!(read.entries[0].param, "memory_fade");
+        assert_eq!(read.entries[0].next, 0.75);
+        assert_eq!(read.entries[1].param, "consolidation_cadence");
+        assert_eq!(read.entries[1].at_epoch_ms, 2000);
 
         let missing = read_tuning_log_file(&dir.join("absent.jsonl")).expect("缺文件 = 空列表");
-        assert!(missing.is_empty());
+        assert!(missing.entries.is_empty());
+        assert_eq!(missing.skipped, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 逐记录信封行照读, 与旧裸体行共存 (每行独立版本戳, 逐行裁决)。
+    #[test]
+    fn tuning_log_file_reads_envelope_rows_and_legacy_rows_side_by_side() {
+        let dir =
+            std::env::temp_dir().join(format!("apeireth-tuning-log-env-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(TUNING_LOG_FILE);
+        let legacy_line =
+            "{\"seq\":1,\"param\":\"memory_fade\",\"previous\":1.0,\"next\":0.75,\"reason\":\"旧裸体行\",\"at_epoch_ms\":1000}";
+        let envelope_line = format!(
+            r#"{{"name":"{TUNING_LOG_DOC_NAME}","version":{TUNING_LOG_DOC_VERSION},"compatible_versions":[{TUNING_LOG_DOC_VERSION}],"body":{{"seq":2,"param":"tone_saturation","previous":0.2,"next":0.21,"reason":"信封行","at_epoch_ms":2000}}}}"#
+        );
+        std::fs::write(&path, format!("{legacy_line}\n{envelope_line}\n")).unwrap();
+
+        let read = read_tuning_log_file(&path).expect("解析成功");
+        assert_eq!(read.entries.len(), 2, "信封行与旧裸体行共存照读");
+        assert_eq!(read.skipped, 0, "好行不计跳过");
+        // 好数据路径逐字节等价: 旧裸体行恢复出的条目序列化 == 原行字节。
+        assert_eq!(
+            serde_json::to_string(&read.entries[0]).unwrap(),
+            legacy_line,
+            "旧裸体好行必须逐字节等价恢复"
+        );
+        assert_eq!(read.entries[1].param, "tone_saturation");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2146,7 +2281,7 @@ mod tests {
 
     #[test]
     fn fresh_supervisor_is_stopped_and_unowned() {
-        let supervisor = BackendSupervisor::build(None);
+        let supervisor = BackendSupervisor::build(None).unwrap();
         let info = tokio_block(supervisor.info());
         assert_eq!(info.state, BackendState::Stopped);
         assert_eq!(info.ownership, BackendOwnership::External);
@@ -2159,7 +2294,7 @@ mod tests {
     /// supervisor owns nothing, so stop() has to refuse.
     #[test]
     fn stop_refuses_to_touch_external_backend() {
-        let supervisor = BackendSupervisor::build(None);
+        let supervisor = BackendSupervisor::build(None).unwrap();
         let result = tokio_block(supervisor.stop());
         assert!(result.is_err(), "expected refusal, got {result:?}");
         assert!(
@@ -2170,7 +2305,7 @@ mod tests {
 
     #[test]
     fn ephemeral_port_selection_yields_a_bindable_port() {
-        let supervisor = BackendSupervisor::build(None);
+        let supervisor = BackendSupervisor::build(None).unwrap();
         let port = tokio_block(supervisor.select_free_port()).expect("port");
         assert_ne!(port, 0);
         assert_ne!(port, 8090, "must never select the legacy companion port");
@@ -2184,7 +2319,7 @@ mod tests {
         let dead_port = listener.local_addr().expect("addr").port();
         drop(listener); // Nothing is listening now.
 
-        let supervisor = BackendSupervisor::build(None);
+        let supervisor = BackendSupervisor::build(None).unwrap();
         let result = tokio_block(async {
             tokio::time::timeout(
                 Duration::from_secs(20),
@@ -2204,7 +2339,7 @@ mod tests {
         let dead_port = listener.local_addr().expect("addr").port();
         drop(listener);
 
-        let supervisor = BackendSupervisor::build(None);
+        let supervisor = BackendSupervisor::build(None).unwrap();
         tokio_block(async {
             {
                 let mut info = supervisor.info.write().await;
@@ -2224,7 +2359,7 @@ mod tests {
 
     #[test]
     fn readiness_fails_fast_when_owned_child_already_exited() {
-        let supervisor = BackendSupervisor::build(None);
+        let supervisor = BackendSupervisor::build(None).unwrap();
         let elapsed = tokio_block(async {
             let mut child = {
                 #[cfg(windows)]
@@ -2277,7 +2412,7 @@ mod tests {
 
     #[test]
     fn backend_info_serializes_without_secrets() {
-        let supervisor = BackendSupervisor::build(None);
+        let supervisor = BackendSupervisor::build(None).unwrap();
         let info = tokio_block(supervisor.info());
         let json = serde_json::to_string(&info).expect("serialize");
 
@@ -2321,5 +2456,139 @@ mod tests {
             .build()
             .expect("runtime")
             .block_on(future)
+    }
+
+    // -----------------------------------------------------------------------
+    // stored_doc 消费方接线: 配置拒开 + 好数据零回归 + 旧文件兼容 + 显式迁移
+    // -----------------------------------------------------------------------
+
+    fn config_scratch(tag: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("apeireth-env-config-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// 拒开生效 (坏配置不再回退默认): 坏 provider 配置必须报错拒开,
+    /// 启动构造同样失败, 不带着默认配置继续跑。
+    #[test]
+    fn provider_env_config_rejects_corrupt_file_without_default_fallback() {
+        let dir = config_scratch("reject");
+        let logger = DesktopLogger::new_in_dir(dir.join("logs")).expect("logger");
+        std::fs::write(dir.join("backend-provider-env.json"), b"{ this is not json").unwrap();
+
+        assert!(
+            BackendSupervisor::load_persisted_provider_env(&logger).is_err(),
+            "坏配置必须拒开, 不得回退默认值"
+        );
+        assert!(
+            BackendSupervisor::with_logger_in_dir(dir.clone()).is_err(),
+            "启动构造必须拒开坏配置"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 好数据路径零回归: 恢复出的配置与旧裸体写端输出逐字节等价。
+    #[test]
+    fn provider_env_good_data_payload_stays_byte_equivalent() {
+        let dir = config_scratch("equiv");
+        let logger = Arc::new(DesktopLogger::new_in_dir(dir.join("logs")).expect("logger"));
+        let supervisor = BackendSupervisor::with_logger(Arc::clone(&logger)).expect("构造成功");
+        let env = BackendProviderEnv {
+            openai_url: Some("https://api.example.test/v1".into()),
+            openai_models: Some("model-a,model-b".into()),
+            ..Default::default()
+        };
+        supervisor.persist_provider_env(&env);
+
+        let raw = std::fs::read(dir.join("backend-provider-env.json")).unwrap();
+        let doc: stored_doc::StoredDoc<BackendProviderEnv> =
+            serde_json::from_slice(&raw).expect("落盘是存储文档信封");
+        assert_eq!(doc.name, PROVIDER_ENV_DOC_NAME);
+        assert_eq!(
+            serde_json::to_string_pretty(&doc.body).unwrap(),
+            serde_json::to_string_pretty(&env.without_secrets()).unwrap(),
+            "好数据 body 必须与旧裸体写端输出逐字节等价"
+        );
+        // 恢复行为零回归。
+        let restored = BackendSupervisor::load_persisted_provider_env(&logger)
+            .expect("好配置可读")
+            .expect("配置存在");
+        assert_eq!(restored, env.without_secrets());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 旧文件兼容: 前信封裸体配置迁移前后都可读; 默认打开不静默迁移; 迁移留审计。
+    #[test]
+    fn provider_env_legacy_file_is_readable_before_and_after_explicit_migration() {
+        let dir = config_scratch("legacy");
+        let logger = Arc::new(DesktopLogger::new_in_dir(dir.join("logs")).expect("logger"));
+        let env = BackendProviderEnv {
+            anthropic_url: Some("https://api.example.test/v2".into()),
+            anthropic_models: Some("model-c".into()),
+            ..Default::default()
+        };
+        let legacy_bytes = serde_json::to_vec_pretty(&env.without_secrets()).unwrap();
+        let path = dir.join("backend-provider-env.json");
+        std::fs::write(&path, &legacy_bytes).unwrap();
+
+        // 迁移前可读 (旧裸体只读兼容), 文件字节不被改写。
+        let before = BackendSupervisor::load_persisted_provider_env(&logger)
+            .expect("旧裸体配置必须可读")
+            .expect("配置存在");
+        assert_eq!(before, env);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            legacy_bytes,
+            "默认打开路径不得静默迁移"
+        );
+
+        // 显式迁移留审计。
+        BackendSupervisor::migrate_legacy_provider_env_config(&logger).expect("显式迁移必须成功");
+        let audit =
+            std::fs::read_to_string(dir.join("backend-provider-env.json.migrate-audit.jsonl"))
+                .expect("显式迁移必须留审计");
+        assert_eq!(audit.lines().count(), 1, "审计文件应恰一行: {audit}");
+
+        // 迁移后仍可读, 内容不变。
+        let after = BackendSupervisor::load_persisted_provider_env(&logger)
+            .expect("迁移后必须可读")
+            .expect("配置存在");
+        assert_eq!(after, before);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 能力开关配置走同一套语义: 旧裸体兼容 + 显式迁移留审计。
+    #[test]
+    fn capability_env_legacy_file_is_readable_before_and_after_explicit_migration() {
+        let dir = config_scratch("caps-legacy");
+        let logger = Arc::new(DesktopLogger::new_in_dir(dir.join("logs")).expect("logger"));
+        let legacy_bytes = serde_json::to_vec_pretty(&BackendCapabilityEnv::default()).unwrap();
+        let path = dir.join("backend-capability-env.json");
+        std::fs::write(&path, &legacy_bytes).unwrap();
+
+        let before = BackendSupervisor::load_persisted_capability_env(&logger)
+            .expect("旧裸体配置必须可读")
+            .expect("配置存在");
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            legacy_bytes,
+            "默认打开路径不得静默迁移"
+        );
+
+        BackendSupervisor::migrate_legacy_capability_env_config(&logger).expect("显式迁移必须成功");
+        let audit =
+            std::fs::read_to_string(dir.join("backend-capability-env.json.migrate-audit.jsonl"))
+                .expect("显式迁移必须留审计");
+        assert_eq!(audit.lines().count(), 1, "审计文件应恰一行: {audit}");
+        let after = BackendSupervisor::load_persisted_capability_env(&logger)
+            .expect("迁移后必须可读")
+            .expect("配置存在");
+        assert_eq!(
+            serde_json::to_value(&after).unwrap(),
+            serde_json::to_value(&before).unwrap()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

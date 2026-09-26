@@ -749,7 +749,9 @@ const APPEND_ONLY_TRIGGERS: &[(&str, &str)] = &[
 
 /// 应用全部未执行的 migrations.
 ///
-/// 事务保护: 单条 migration 内所有 DDL 在一个事务内执行, 失败回滚.
+/// 事务保护: 基表 + 触发器 + 未执行 migration + 版本簿记在**一个** IMMEDIATE
+/// 事务内执行, 失败整体回滚 (migration SQL 本身保持逐条幂等, 见 `MIGRATIONS`
+/// 注释; 启动期只提交一次, 少一次 WAL 往返)。
 pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
     // 0. M27 (L 组): 迁移前列集校验 — 如果同名表已被**别套 schema 家族**
     // (如 `apeireth-storage` 的 `episodes(id, data)` 最小 layout) 创建过,
@@ -758,50 +760,41 @@ pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
     // `commitments.rs` 的 `validate_schema_columns`).
     validate_owned_schema(conn)?;
 
-    // 1. 建表总是先跑一次 (CREATE IF NOT EXISTS) — 后续 migration 再叠加 trigger.
-    let tx = conn.transaction()?;
-    tx.execute_batch(INIT_SQL)?;
-    tx.commit()?;
-
-    // 2. 注册 6 流 append-only triggers (幂等).
+    // 1..3. 建表 (CREATE IF NOT EXISTS) + 6 流 append-only 触发器注册 (幂等)
+    //     + 4. 记录已应用的 migration.
     // 规则: 禁止任何原地修改; 唯一例外是 "软删除" (tombstoned_at 从 NULL 变为非 NULL).
-    // 软删除也是不可逆的 (OLD.tombstoned_at 必须是 NULL). Keep registration in one
-    // transaction so a partially-installed trigger set cannot escape a failed bootstrap.
-    {
-        let tx = conn.transaction()?;
-        for (table, reason) in APPEND_ONLY_TRIGGERS {
-            let update_trigger = format!(
-                "CREATE TRIGGER IF NOT EXISTS {table}_no_inplace_update
-                 BEFORE UPDATE ON {table}
-                 FOR EACH ROW
-                 WHEN NOT (NEW.tombstoned_at IS NOT NULL AND OLD.tombstoned_at IS NULL)
-                 BEGIN
-                     SELECT RAISE(ABORT, '{reason}');
-                 END;"
-            );
-            let delete_trigger = format!(
-                "CREATE TRIGGER IF NOT EXISTS {table}_no_delete
-                 BEFORE DELETE ON {table}
-                 BEGIN
-                     SELECT RAISE(ABORT, '{reason}');
-                 END;"
-            );
-            tx.execute_batch(&update_trigger)?;
-            tx.execute_batch(&delete_trigger)?;
-        }
-        tx.commit()?;
+    // 软删除也是不可逆的 (OLD.tombstoned_at 必须是 NULL).
+    //
+    // M21: 用 BEGIN IMMEDIATE 从一开始就拿写锁, 版本重读放在**事务内**
+    // (读-判-写同一把写锁), 与 `storage/migrations.rs:109` 同模式 —— 两个
+    // 进程同时启动时按写锁串行而非 BUSY_SNAPSHOT. SQL 全部幂等
+    // (IF NOT EXISTS), 并发下最坏是 busy_timeout 内等待.
+    let tx: Transaction<'_> = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+
+    tx.execute_batch(INIT_SQL)?;
+
+    for (table, reason) in APPEND_ONLY_TRIGGERS {
+        let update_trigger = format!(
+            "CREATE TRIGGER IF NOT EXISTS {table}_no_inplace_update
+             BEFORE UPDATE ON {table}
+             FOR EACH ROW
+             WHEN NOT (NEW.tombstoned_at IS NOT NULL AND OLD.tombstoned_at IS NULL)
+             BEGIN
+                 SELECT RAISE(ABORT, '{reason}');
+             END;"
+        );
+        let delete_trigger = format!(
+            "CREATE TRIGGER IF NOT EXISTS {table}_no_delete
+             BEFORE DELETE ON {table}
+             BEGIN
+                 SELECT RAISE(ABORT, '{reason}');
+             END;"
+        );
+        tx.execute_batch(&update_trigger)?;
+        tx.execute_batch(&delete_trigger)?;
     }
 
-    // 3. 记录已应用的 migration.
     for m in MIGRATIONS {
-        // M21: 旧实现 `migration_applied` 的 SELECT 在事务外, 随后
-        // `conn.transaction()` 是 BEGIN **DEFERRED** — 两个进程同时启动时,
-        // 后者的延迟事务在执行 INSERT 时才升级写锁, WAL 下报
-        // SQLITE_BUSY_SNAPSHOT, 而 busy_timeout 不重试该错误 → 启动硬失败.
-        // 修复: BEGIN IMMEDIATE 从一开始就拿写锁, 版本重读放在**事务内**
-        // (读-判-写同一把写锁), 与 `storage/migrations.rs:109` 同模式.
-        // SQL 全部幂等 (IF NOT EXISTS), 并发下最坏是 busy_timeout 内等待.
-        let tx: Transaction<'_> = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         if !migration_applied(&tx, m.version)? {
             tx.execute_batch(m.sql)?;
             tx.execute(
@@ -809,8 +802,8 @@ pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
                 params![m.version, m.name, now_unix()],
             )?;
         }
-        tx.commit()?;
     }
+    tx.commit()?;
     Ok(())
 }
 

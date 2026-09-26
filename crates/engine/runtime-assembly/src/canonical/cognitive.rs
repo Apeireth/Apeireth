@@ -1194,8 +1194,12 @@ impl AgentModule for MemoryRecallModule {
                             overlay.push_str("\n\n");
                             overlay.push_str(&community);
                         }
-                        ModuleOutcome::continue_()
-                            .with_prompt_overlay(PromptOverlay::system(overlay))
+                        // Recalled memory content is cross-source input: the
+                        // provider-request funnel discloses it through the
+                        // untrusted reference envelope.
+                        ModuleOutcome::continue_().with_prompt_overlay(
+                            PromptOverlay::system_cross_source("memory_recall", overlay),
+                        )
                     }
                     Ok(None) => {
                         // 真接信号: 无候选可召回 = 未命中轮。
@@ -1278,7 +1282,12 @@ impl AgentModule for MemoryRecallModule {
                         "<governed_memory source=\"legacy_recall\">{}</governed_memory>",
                         bounded(&context, self.max_context_chars)
                     );
-                    ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(overlay))
+                    // Recalled memory content is cross-source input: the
+                    // provider-request funnel discloses it through the
+                    // untrusted reference envelope.
+                    ModuleOutcome::continue_().with_prompt_overlay(
+                        PromptOverlay::system_cross_source("memory_recall", overlay),
+                    )
                 }
             }
         } else {

@@ -12,7 +12,8 @@ pub mod backend_supervisor;
 mod keychain;
 mod logging;
 mod provider_proxy;
-mod workspace;
+mod stored_config;
+pub mod workspace;
 
 use backend_supervisor::{
     BackendCapabilityEnv, BackendInfo, BackendProviderEnv, BackendSupervisor,
@@ -231,8 +232,21 @@ pub fn run() {
     );
 
     // Initialize backend supervisor with the persistent logger attached, so
-    // backend stdout/stderr lands in apeireth-backend.log.
-    let supervisor = Arc::new(BackendSupervisor::with_logger(logger.clone()));
+    // backend stdout/stderr lands in apeireth-backend.log. A persisted config
+    // file that is malformed / foreign / version-unsupported is **rejected**
+    // here (no silent fallback to defaults): refuse to start with a typed error
+    // that names the offending file.
+    let supervisor = match BackendSupervisor::with_logger(logger.clone()) {
+        Ok(supervisor) => Arc::new(supervisor),
+        Err(error) => {
+            logger.log_desktop(
+                LogLevel::Error,
+                &format!("desktop.config rejected, refusing to start: {error}"),
+            );
+            eprintln!("Persisted config rejected: {error}");
+            std::process::exit(1);
+        }
+    };
 
     tauri::Builder::default()
         // 单实例: 二次启动聚焦已有主窗而不是再开一个 (尽量靠前注册).

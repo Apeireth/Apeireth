@@ -19,6 +19,10 @@
 // store 标记 simulated=true, current 回落本机中性默认值 (PAD 0/0/0),
 // 绝不编造情绪.
 //
+// 快照即读纪律 (资源租约语义): EventSource 每次连接/重连先取
+// GET /v1/apeireth/presence 快照 (当前帧 + 挂着的失败帧), 立即落位,
+// 不等下一条实时帧、不回放断线期历史; 失败帧是显式事实, 不猜不补.
+//
 // 考古注记 (2026-09-22 改订): legacy 四事件 (emotion / initiative / dream /
 // memory_recall) 的生产点已归入 legacy/donor/apeireth-companion/, canonical
 // 总线上不存在; 旧类型定义随本次改订删除, 考古见 git 历史与
@@ -101,6 +105,11 @@ export function parsePresenceStateFrame(data: string): PresenceStateFrame | null
   } catch {
     return null;
   }
+  return parsePresenceStateObject(parsed);
+}
+
+/** parsePresenceStateFrame 的对象入口 (快照口复用同一套校验口径)。 */
+function parsePresenceStateObject(parsed: unknown): PresenceStateFrame | null {
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
   const f = parsed as Record<string, unknown>;
   if (f.type !== 'presence_state') return null;
@@ -137,6 +146,48 @@ export function parsePresenceStateFrame(data: string): PresenceStateFrame | null
       confidence: clamp01(asFiniteNumber(sourceRaw.confidence) ?? 0),
     },
   };
+}
+
+// ============================================================
+// 快照口 — GET /v1/apeireth/presence (快照即读 + 失败即帧)
+// ============================================================
+
+/** 快照响应体: 当前帧 + 挂在它旁的失败帧 (不回放历史)。 */
+export interface PresenceSnapshot {
+  /** 当前 presence_state 帧; 从未出帧或形状非法时为 null (不猜)。 */
+  frame: PresenceStateFrame | null;
+  /** 显式失败事实 (失败即帧); 无失败时为 null。 */
+  failure: string | null;
+}
+
+/**
+ * 解析 GET /v1/apeireth/presence 的响应体。帧走与实时帧完全相同的校验
+ * (缺主键宁可丢弃不猜); failure 是显式事实, 原样携带, 不猜不补。
+ */
+export function parsePresenceSnapshot(data: string): PresenceSnapshot | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const body = parsed as Record<string, unknown>;
+  if (body.type !== 'presence_snapshot') return null;
+  const failure = typeof body.failure === 'string' && body.failure ? body.failure : null;
+  let frame: PresenceStateFrame | null = null;
+  if (body.frame !== null && body.frame !== undefined) {
+    frame = parsePresenceStateObject(body.frame);
+  }
+  return {frame, failure};
+}
+
+/**
+ * 把快照读入 store (快照即读): 有帧立即落位, 无需等下一条实时帧; 只有
+ * 失败帧时不编造任何数据 —— 降级表现交给断连计时器的 SIM 纪律。
+ */
+export function applyPresenceSnapshot(store: PresenceStore, snapshot: PresenceSnapshot): void {
+  if (snapshot.frame) store.ingest(snapshot.frame);
 }
 
 // ============================================================
@@ -529,22 +580,29 @@ const RETRY_MAX_MS = 30000;
 export interface SubscribePresenceOptions {
   /** 测试/特殊场景注入自定义 store; 默认全局 presenceStore */
   store?: PresenceStore;
+  /** 测试注入的快照取数; 默认 fetch GET /v1/apeireth/presence, 返回响应文本或 null */
+  fetchSnapshot?: () => Promise<string | null>;
 }
 
 /**
  * 订阅 GET /v1/apeireth/events 上的 presence_state 具名帧并驱动 presenceStore。
  * - 具名帧必须 addEventListener('presence_state', …) —— onmessage 收不到;
+ * - 快照即读: 每次连接/重连都先取 GET /v1/apeireth/presence 快照 (当前帧
+ *   + 挂着的失败帧) 立即落位, 断线期事件不回放、不等待下一条实时帧;
  * - 自动重连: 出错即关闭并自建指数退避 (2s ×1.5, 封顶 30s, 连通后复位),
  *   取代 EventSource 内置的固定间隔重试;
  * - 页面 hidden 不断线 — 只停插值 rAF, 不关闭连接;
  * - 断连持续 >30s → store.setSimulated(true) (SIM 纪律);
  * - 低频契约 (回合级 + 60s 心跳): 本订阅不发明任何高频动画源。
- * 注意: 服务端 broadcast 容量 256、落后即断连 — 重连后不假设能补到断线期事件.
+ * 注意: 服务端 broadcast 容量 256、落后跳帧会送显式 frames_omitted 事实 —
+ * 重连后靠快照补当前态, 不假设能补到断线期每一帧.
  * 返回取消订阅函数.
  */
 export function subscribePresence(baseUrl: string, options: SubscribePresenceOptions = {}): () => void {
   const store = options.store ?? presenceStore;
-  const url = `${baseUrl.replace(/\/+$/, '')}/v1/apeireth/events`;
+  const root = baseUrl.replace(/\/+$/, '');
+  const url = `${root}/v1/apeireth/events`;
+  const snapshotUrl = `${root}/v1/apeireth/presence`;
   // Caller must capability-gate (activity.sse).
 
   let active = true;
@@ -572,8 +630,30 @@ export function subscribePresence(baseUrl: string, options: SubscribePresenceOpt
     }, SIM_AFTER_MS);
   }
 
+  /** 快照即读: 读当前帧落位 (失败帧显式携带但不编造数据); 取不到即静默降级。 */
+  function refreshSnapshot(): void {
+    if (!active) return;
+    const fetcher =
+      options.fetchSnapshot ??
+      (() =>
+        typeof fetch === 'function'
+          ? fetch(snapshotUrl)
+              .then((r) => (r.ok ? r.text() : null))
+              .catch(() => null)
+          : Promise.resolve(null));
+    fetcher()
+      .then((text) => {
+        if (!active || typeof text !== 'string' || !text) return;
+        const snapshot = parsePresenceSnapshot(text);
+        if (snapshot) applyPresenceSnapshot(store, snapshot);
+      })
+      .catch(() => {});
+  }
+
   function connect(): void {
     if (!active) return;
+    // 重连先取快照: 快照请求先于实时通道发出 (快照即读, 不回放断线期历史)。
+    refreshSnapshot();
     const es = new EventSource(url);
     source = es;
 

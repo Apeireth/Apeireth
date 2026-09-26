@@ -137,8 +137,9 @@ pub use production::{
     ProductionModulesConfig,
 };
 pub use self_tuning_wire::{
-    consolidation_cadence_turns, tuning_log_path, tuning_log_path_from_session_db, SelfTuningWire,
-    SELF_TUNING_ENABLE_ENV, TUNING_LOG_FILE,
+    consolidation_cadence_turns, migrate_legacy_tuning_log_file, tuning_log_path,
+    tuning_log_path_from_session_db, SelfTuningWire, SELF_TUNING_ENABLE_ENV, TUNING_LOG_DOC_NAME,
+    TUNING_LOG_DOC_VERSION, TUNING_LOG_FILE,
 };
 pub use tool_modules::{
     EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,

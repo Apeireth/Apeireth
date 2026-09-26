@@ -3,12 +3,30 @@
 //! The workspace directory is where the sidecar's session/cognitive SQLite
 //! stores live once the user has explicitly chosen one. The directory path is
 //! not secret, so it is persisted as plain JSON under the app-data directory
-//! (`companion-config.json`).
+//! (`companion-config.json`) — as a stored-document envelope (identity +
+//! version stamp + body) opened strictly through the shared storage
+//! primitives: malformed / foreign / version-unsupported files are **rejected**
+//! with a typed error instead of silently falling back to defaults. Pre-envelope
+//! files stay readable read-only; upgrading one is an explicit
+//! [`migrate_legacy_workspace_config`] call that leaves an audit line.
 
 use std::path::{Path, PathBuf};
 
+use apeireth_core::stored_doc::DocCompat;
+
+use crate::stored_config;
+
 /// App-data config file that holds the workspace directory (non-secret).
 pub const WORKSPACE_CONFIG_FILE: &str = "companion-config.json";
+
+/// 存储文档身份: 工作区配置。
+pub const WORKSPACE_DOC_NAME: &str = "companion-workspace-config";
+/// 工作区配置存储格式版本。
+pub const WORKSPACE_DOC_VERSION: u32 = 1;
+
+fn doc_compat() -> DocCompat {
+    DocCompat::exact(WORKSPACE_DOC_NAME, WORKSPACE_DOC_VERSION)
+}
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct CompanionConfig {
@@ -16,11 +34,17 @@ pub struct CompanionConfig {
 }
 
 /// Read the persisted workspace dir, returning it only if it still exists.
-pub fn load_workspace_dir(app_data_dir: &Path) -> Option<PathBuf> {
-    let raw = std::fs::read_to_string(app_data_dir.join(WORKSPACE_CONFIG_FILE)).ok()?;
-    let config: CompanionConfig = serde_json::from_str(&raw).ok()?;
-    let path = PathBuf::from(config.workspace_dir?);
-    path.is_dir().then_some(path)
+///
+/// - 未配置/文件缺失 → `Ok(None)` (调用方决定默认落位);
+/// - 配置存在但畸形/串档/版本不符 → `Err` **拒开**, 不回退默认值;
+/// - 前信封旧裸体文件只读兼容 (不静默迁移)。
+pub fn load_workspace_dir(app_data_dir: &Path) -> Result<Option<PathBuf>, String> {
+    let path = app_data_dir.join(WORKSPACE_CONFIG_FILE);
+    let config: Option<CompanionConfig> = stored_config::load_config(&path, &doc_compat())?;
+    Ok(config
+        .and_then(|config| config.workspace_dir)
+        .map(PathBuf::from)
+        .filter(|path| path.is_dir()))
 }
 
 /// Persist the workspace dir (non-secret) to the app-data config.
@@ -30,10 +54,22 @@ pub fn persist_workspace_dir(app_data_dir: &Path, dir: &Path) -> Result<(), Stri
     let config = CompanionConfig {
         workspace_dir: Some(dir.to_string_lossy().to_string()),
     };
-    let json = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("failed to serialize workspace config: {e}"))?;
-    std::fs::write(app_data_dir.join(WORKSPACE_CONFIG_FILE), json)
-        .map_err(|e| format!("failed to write workspace config: {e}"))
+    stored_config::save_config(
+        &app_data_dir.join(WORKSPACE_CONFIG_FILE),
+        &doc_compat(),
+        &config,
+    )
+}
+
+/// Explicit migration of a pre-envelope workspace config into the current
+/// stored-document format (rewrites the file + appends an audit line). The
+/// default open path ([`load_workspace_dir`]) never migrates on its own.
+pub fn migrate_legacy_workspace_config(app_data_dir: &Path) -> Result<(), String> {
+    let path = app_data_dir.join(WORKSPACE_CONFIG_FILE);
+    if !path.exists() {
+        return Ok(());
+    }
+    stored_config::migrate_legacy_config::<CompanionConfig>(&path, &doc_compat()).map(|_| ())
 }
 
 /// Resolve the directory that owns the sidecar's SQLite stores.
@@ -177,5 +213,103 @@ mod tests {
             v
         };
         assert_eq!(sorted, deduped);
+    }
+
+    // -----------------------------------------------------------------------
+    // stored_doc 消费方接线: 配置拒开 + 好数据零回归 + 旧文件兼容 + 显式迁移
+    // -----------------------------------------------------------------------
+
+    fn scratch_dir(tag: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("apeireth-ws-stored-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// 拒开生效: 坏配置不再「读坏用默认」, 显式报错。
+    #[test]
+    fn workspace_config_rejects_corrupt_file_without_default_fallback() {
+        let app_data = scratch_dir("reject");
+        let target = app_data.join("real-workspace");
+        std::fs::create_dir_all(&target).unwrap();
+        let path = app_data.join(WORKSPACE_CONFIG_FILE);
+
+        std::fs::write(&path, b"{ this is not json").unwrap();
+        assert!(
+            load_workspace_dir(&app_data).is_err(),
+            "坏 JSON 必须拒开而不是回退默认落位"
+        );
+
+        // 信封形状但串档: 同样拒开。
+        std::fs::write(
+            &path,
+            format!(
+                r#"{{"name":"other-doc","version":1,"compatible_versions":[1],"body":{{"workspace_dir":"{}"}}}}"#,
+                target.display()
+            ),
+        )
+        .unwrap();
+        assert!(load_workspace_dir(&app_data).is_err(), "串档信封必须拒开");
+        let _ = std::fs::remove_dir_all(&app_data);
+    }
+
+    /// 好数据路径零回归: 恢复出的配置与旧裸体写端输出逐字节等价。
+    #[test]
+    fn workspace_config_good_data_payload_stays_byte_equivalent() {
+        let app_data = scratch_dir("equiv");
+        let target = app_data.join("real-workspace");
+        std::fs::create_dir_all(&target).unwrap();
+        persist_workspace_dir(&app_data, &target).unwrap();
+
+        let raw = std::fs::read(app_data.join(WORKSPACE_CONFIG_FILE)).unwrap();
+        let doc: apeireth_core::stored_doc::StoredDoc<CompanionConfig> =
+            serde_json::from_slice(&raw).expect("落盘是存储文档信封");
+        let legacy_bare = serde_json::to_string_pretty(&doc.body).unwrap();
+        assert_eq!(
+            legacy_bare,
+            serde_json::to_string_pretty(&CompanionConfig {
+                workspace_dir: Some(target.to_string_lossy().to_string()),
+            })
+            .unwrap(),
+            "好数据 body 必须与旧裸体写端输出逐字节等价"
+        );
+        assert_eq!(
+            load_workspace_dir(&app_data).unwrap(),
+            Some(target.clone()),
+            "好数据恢复行为零回归"
+        );
+        let _ = std::fs::remove_dir_all(&app_data);
+    }
+
+    /// 旧文件兼容: 前信封裸体配置迁移前后都可读; 默认打开不静默迁移; 迁移留审计。
+    #[test]
+    fn workspace_config_legacy_file_is_readable_before_and_after_explicit_migration() {
+        let app_data = scratch_dir("legacy");
+        let target = app_data.join("real-workspace");
+        std::fs::create_dir_all(&target).unwrap();
+        let legacy_bytes = serde_json::to_vec_pretty(&CompanionConfig {
+            workspace_dir: Some(target.to_string_lossy().to_string()),
+        })
+        .unwrap();
+        std::fs::write(app_data.join(WORKSPACE_CONFIG_FILE), &legacy_bytes).unwrap();
+
+        // 迁移前可读 (旧裸体只读兼容), 文件字节不被改写。
+        assert_eq!(load_workspace_dir(&app_data).unwrap(), Some(target.clone()));
+        assert_eq!(
+            std::fs::read(app_data.join(WORKSPACE_CONFIG_FILE)).unwrap(),
+            legacy_bytes,
+            "默认打开路径不得静默迁移"
+        );
+
+        // 显式迁移留审计。
+        migrate_legacy_workspace_config(&app_data).expect("显式迁移必须成功");
+        let audit_path = app_data.join(format!("{WORKSPACE_CONFIG_FILE}.migrate-audit.jsonl"));
+        let audit = std::fs::read_to_string(&audit_path).expect("显式迁移必须留审计");
+        assert_eq!(audit.lines().count(), 1, "审计文件应恰一行: {audit}");
+
+        // 迁移后仍可读, 内容不变。
+        assert_eq!(load_workspace_dir(&app_data).unwrap(), Some(target));
+        let _ = std::fs::remove_dir_all(&app_data);
     }
 }

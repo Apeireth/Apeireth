@@ -59,7 +59,7 @@
 
 Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** 构建。性能数字遵循严格的**基准复现线**：只有附带可重跑脚本与实测出处的数字才会发布。下表每一行现在都有一键复跑 harness（`scripts/run-benchmarks.ps1`）；数字全部为**实测**，未达标行如实标注差距倍数，不四舍五入美化。
 
-**实测列读法**：每操作的 `P50 · P99`，来自 `pwsh -NoProfile -File scripts/run-benchmarks.ps1 -Bench all`（release 优化档，2026-09-27 实测于 AMD Ryzen 9 9955HX / 32 GB / Windows 11 / rustc 1.97.1）。`(Run 1: …)` 为同日同机第二轮全量复测，原样呈现以暴露轮间噪声。判定口径 = **P50 对目标**；P99 与样本量在 [`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md) 中不作美化呈现。
+**实测列读法**：每操作的 `P50 · P99`，来自 `pwsh -NoProfile -File scripts/run-benchmarks.ps1 -Bench all`（release 优化档，2026-09-27 实测于 AMD Ryzen 9 9955HX / 32 GB / Windows 11 / rustc 1.97.1）。`(Run 1: …)` 为同日同机第二轮全量复测，原样呈现以暴露轮间噪声。**OS 物理沙箱**与**微内核冷启动**两行为分段剖析驱动的优化后复测（2026-09-27，空闲机逐行独立命令）；优化前后全部轮次——含并发负载窗口读数——逐条列于 [`reports/perf-profile-coldstart-sandbox-2026-09-27.md`](reports/perf-profile-coldstart-sandbox-2026-09-27.md)。判定口径 = **P50 对目标**；P99 与样本量在 [`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md) 中不作美化呈现。
 
 | 测试目标 | 子系统 / 核心操作 | 目标指标 | 实测 P50 · P99 (Run 2) | 验证状态 |
 | :--- | :--- | :---: | :---: | :---: |
@@ -69,8 +69,8 @@ Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsa
 | **SAGA 逆向补偿回滚** | LIFO 逆序算子栈纯内存执行 | $< 1.0 \text{ ms}$ | P50 **24.8 µs** · P99 41.4 µs (Run 1: 36.2 / 48.4 µs) | ✅ 附脚本实测 |
 | **全双工打断响应 (Barge-in)** | 语音流原子取消 + `tokio::Notify` 广播 | $< 1.0 \text{ ms}$ | P50 **32.5 µs** · P99 203.8 µs (Run 1: 62.3 / 293.3 µs) | ✅ 附脚本实测 |
 | **Ember HUD 渲染帧** | 4.0s 生理呼吸律动 + CSS 微光 | $< 0.5 \text{ ms}$ | P50 **0.037 µs** · P99 0.058 µs (Run 1: 0.074 / 0.102 µs) — 仅驱动侧 uniforms 合成 | ✅ 附脚本实测 |
-| **OS 物理沙箱** | JobObject / AppContainer 边界初始化 + 进程隔离 | $< 15.0 \text{ ms}$ | P50 **59.58 ms** · P99 84.83 ms (Run 1: 96.46 / 140.65 ms) — 含子进程启动+等待；受控边界增量 ≈ 6.9 ms（对照无隔离） | ❌ 未达标（差距 4.0 倍）· 附脚本实测 |
-| **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | P50 **61.98 ms** · P99 79.47 ms (Run 1: 63.39 / 105.96 ms) | ❌ 未达标（差距 6.2 倍）· 附脚本实测 |
+| **OS 物理沙箱** | JobObject / AppContainer 边界初始化 + 进程隔离 | $< 15.0 \text{ ms}$ | P50 **12.60 ms** · P99 15.22 ms (Run 1: 12.81 / 15.10 ms) — 含子进程启动+等待；受控边界增量 ≈ 5.1 ms（对照无隔离） | ✅ 附脚本实测（P99 15.22 ms 略超目标线，如实标注） |
+| **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | P50 **22.04 ms** · P99 26.55 ms (Run 1: 22.57 / 25.98 ms) — 残余为真冷口径（每轮全新数据目录）的新库文件创建 + schema DDL | ❌ 未达标（差距 2.2 倍）· 附脚本实测 |
 | **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | 工作集 **17.47 MiB** (Run 1: 24.47 MiB, n=5 读数) | ✅ 附脚本实测 |
 | **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | — | ✅ **CI 实跑**（`cargo test --workspace`） |
 

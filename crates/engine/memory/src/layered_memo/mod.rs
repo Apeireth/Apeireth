@@ -60,7 +60,7 @@ pub use enhanced::EnhancedLayeredMemo;
 pub use librarian::{Category, Librarian};
 pub use manager::{MemoryError, MemoryItem, MemoryManager};
 pub use mcp::{LayeredMemoMcp, LayeredMemoTool};
-pub use pipe::{FusionStrategy, SearchPipe};
+pub use pipe::{disclose_fused_hits, FusionStrategy, SearchPipe};
 pub use progression::{Layer, LayerProgression};
 pub use search::{SearchHit, SearchMode, SearchPipeline};
 pub use sleep_cycle::{SleepConfig, SleepCycle};

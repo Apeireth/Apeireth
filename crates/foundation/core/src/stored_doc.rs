@@ -483,6 +483,254 @@ fn epoch_ms() -> u64 {
 /// 默认文档权限 (调用方未指定时)。
 pub const DEFAULT_DOC_MODE: u32 = DEFAULT_FILE_MODE;
 
+// ---------------------------------------------------------------------------
+// 旧裸体格式兼容 (叠加入口): 默认打开只读兼容, 迁移必须显式且留审计
+// ---------------------------------------------------------------------------
+//
+// 前信封时代, body 直接落盘 (无 name/version/compatible_versions 字段)。存量
+// 文件必须保持可读, 但**默认打开路径不得静默迁移** (不回写、不升级版本戳):
+// 读取兼容以 [`OpenedDoc::LegacyBare`] 如实回报格式, 升级一律走
+// [`migrate_file_from_legacy`] / [`migrate_records_from_legacy`] 显式迁移并留审计。
+
+/// 前信封裸体格式的版本号 (body 直接落盘, 无信封字段)。
+pub const LEGACY_DOC_VERSION: u32 = 0;
+
+/// 兼容打开结果: 标准信封文档, 或旧裸体 body (只读兼容, 不回写)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenedDoc<T> {
+    /// 信封文档 (身份 / 自洽性 / 版本契约已全部校验通过)。
+    Envelope(StoredDoc<T>),
+    /// 前信封裸体 body (无版本戳; 只读兼容, 升级需显式迁移)。
+    LegacyBare(T),
+}
+
+impl<T> OpenedDoc<T> {
+    /// 文档主体 (信封或旧裸体)。
+    pub fn body(&self) -> &T {
+        match self {
+            Self::Envelope(doc) => &doc.body,
+            Self::LegacyBare(body) => body,
+        }
+    }
+
+    /// 取出文档主体。
+    pub fn into_body(self) -> T {
+        match self {
+            Self::Envelope(doc) => doc.body,
+            Self::LegacyBare(body) => body,
+        }
+    }
+
+    /// 是否为旧裸体格式 (提示调用方可显式迁移)。
+    pub fn is_legacy(&self) -> bool {
+        matches!(self, Self::LegacyBare(_))
+    }
+}
+
+/// 逐记录扫描结果 (旧裸体行兼容版): 见 [`scan_records_compat`]。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordScanCompat<T> {
+    /// 解析成功的记录 (信封记录已校验, 旧裸体行读作无戳记录), 保持文件顺序。
+    pub records: Vec<OpenedDoc<T>>,
+    /// 被跳过的行数 (坏 JSON / 信封畸形 / 身份不符 / 自洽性失败 / 版本不符)。
+    pub skipped: usize,
+}
+
+/// 信封形状判定: 同时含 `name`/`version`/`body` 键即视为信封。
+///
+/// 判定只看键的存在 (不看类型), 因此「信封字段写坏」的文件按信封走严格校验并
+/// **拒开**, 不会退化成旧裸体解析而静默取默认值。
+fn looks_like_envelope(value: &serde_json::Value) -> bool {
+    value.as_object().is_some_and(|obj| {
+        obj.contains_key("name") && obj.contains_key("version") && obj.contains_key("body")
+    })
+}
+
+/// 兼容打开单文档: 信封文件严格校验 (不符拒开); 旧裸体 body 只读兼容
+/// (不回写、不迁移); 两者皆不可解析 → 拒开 (不回退默认)。
+pub fn open_single_compat<T: DeserializeOwned>(
+    path: &Path,
+    compat: &DocCompat,
+) -> Result<OpenedDoc<T>, StoredDocError> {
+    let bytes = std::fs::read(path).map_err(|e| StoredDocError::io(path, e))?;
+    let value: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|e| StoredDocError::Malformed {
+            name: compat.name.clone(),
+            reason: format!("JSON 解析失败: {e}"),
+        })?;
+    if looks_like_envelope(&value) {
+        let doc: StoredDoc<T> =
+            serde_json::from_value(value).map_err(|e| StoredDocError::Malformed {
+                name: compat.name.clone(),
+                reason: format!("信封结构或 body 解析失败: {e}"),
+            })?;
+        validate_doc(&doc, compat)?;
+        return Ok(OpenedDoc::Envelope(doc));
+    }
+    let body: T = serde_json::from_value(value).map_err(|e| StoredDocError::Malformed {
+        name: compat.name.clone(),
+        reason: format!("旧裸体 JSON 解析失败: {e}"),
+    })?;
+    Ok(OpenedDoc::LegacyBare(body))
+}
+
+/// 显式迁移「前信封裸体」旧文件 → 当前信封格式: 读裸体 → 转换 → 持久写回新
+/// 版本戳 → 追加审计行。文件已是信封格式时**拒绝** (版本迁移请用 [`migrate_file`])。
+///
+/// 失败语义与 [`migrate_file`] 一致: 转换失败/写回失败均不落盘; 审计行写入
+/// 失败时 `audit_logged = false` 如实回报。
+pub fn migrate_file_from_legacy<T, U, F>(
+    path: &Path,
+    target: &DocCompat,
+    mode: u32,
+    transform: F,
+) -> Result<MigrationAudit, StoredDocError>
+where
+    T: DeserializeOwned,
+    U: Serialize,
+    F: FnOnce(T) -> Result<U, String>,
+{
+    let bytes = std::fs::read(path).map_err(|e| StoredDocError::io(path, e))?;
+    let value: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|e| StoredDocError::Malformed {
+            name: target.name.clone(),
+            reason: format!("JSON 解析失败: {e}"),
+        })?;
+    if looks_like_envelope(&value) {
+        return Err(StoredDocError::MigrationFailed {
+            name: target.name.clone(),
+            from_version: LEGACY_DOC_VERSION,
+            reason: "文件已是信封格式: 版本迁移请用 migrate_file".to_string(),
+        });
+    }
+    let legacy: T = serde_json::from_value(value).map_err(|e| StoredDocError::Malformed {
+        name: target.name.clone(),
+        reason: format!("旧裸体 JSON 解析失败: {e}"),
+    })?;
+    let body = transform(legacy).map_err(|reason| StoredDocError::MigrationFailed {
+        name: target.name.clone(),
+        from_version: LEGACY_DOC_VERSION,
+        reason,
+    })?;
+    let doc = StoredDoc::new(
+        target.name.clone(),
+        target.current_version,
+        vec![target.current_version],
+        body,
+    );
+    write_doc(path, &doc, mode)?;
+
+    let mut audit = MigrationAudit {
+        name: target.name.clone(),
+        from_version: LEGACY_DOC_VERSION,
+        to_version: target.current_version,
+        path: path.to_path_buf(),
+        at_epoch_ms: epoch_ms(),
+        audit_logged: false,
+    };
+    audit.audit_logged = append_audit_line(path, &audit).is_ok();
+    Ok(audit)
+}
+
+/// 兼容扫描逐记录文件 (jsonl): 信封记录严格校验; 旧裸体行读作无戳记录
+/// (只读兼容); 真正坏行/版本不符行跳过并计入 `skipped`。不回写、不迁移。
+pub fn scan_records_compat<T: DeserializeOwned>(
+    path: &Path,
+    compat: &DocCompat,
+) -> Result<RecordScanCompat<T>, StoredDocError> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(RecordScanCompat {
+                records: Vec::new(),
+                skipped: 0,
+            });
+        }
+        Err(e) => return Err(StoredDocError::io(path, e)),
+    };
+    let mut records = Vec::new();
+    let mut skipped = 0usize;
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = match serde_json::from_str(line) {
+            Ok(value) => value,
+            Err(_) => {
+                skipped += 1;
+                continue;
+            }
+        };
+        if looks_like_envelope(&value) {
+            match serde_json::from_value::<StoredDoc<T>>(value) {
+                Ok(doc) if validate_doc(&doc, compat).is_ok() => {
+                    records.push(OpenedDoc::Envelope(doc))
+                }
+                _ => skipped += 1,
+            }
+        } else {
+            match serde_json::from_value::<T>(value) {
+                Ok(body) => records.push(OpenedDoc::LegacyBare(body)),
+                Err(_) => skipped += 1,
+            }
+        }
+    }
+    Ok(RecordScanCompat { records, skipped })
+}
+
+/// 显式迁移逐记录文件 (jsonl): 旧裸体行 → 当前版本信封行; 信封行与不可解析行
+/// **原样保留** (逐记录版本戳由读端裁决, 迁移不代行裁决也不丢行), 整档原子写回
+/// + 追加审计行。文件全为信封行时同样重写并留审计 (幂等可重入)。
+pub fn migrate_records_from_legacy<T>(
+    path: &Path,
+    target: &DocCompat,
+    mode: u32,
+) -> Result<MigrationAudit, StoredDocError>
+where
+    T: Serialize + DeserializeOwned,
+{
+    let text = std::fs::read_to_string(path).map_err(|e| StoredDocError::io(path, e))?;
+    let mut out = String::new();
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let wrapped = match serde_json::from_str::<serde_json::Value>(line) {
+            Ok(value) if !looks_like_envelope(&value) => match serde_json::from_value::<T>(value) {
+                Ok(body) => {
+                    let doc = StoredDoc::new(
+                        target.name.clone(),
+                        target.current_version,
+                        vec![target.current_version],
+                        body,
+                    );
+                    serde_json::to_string(&doc).map_err(|e| StoredDocError::Malformed {
+                        name: target.name.clone(),
+                        reason: format!("JSON 序列化失败: {e}"),
+                    })?
+                }
+                Err(_) => line.to_string(),
+            },
+            _ => line.to_string(),
+        };
+        out.push_str(&wrapped);
+        out.push('\n');
+    }
+    storage_atomic::write_atomic_durable(path, out.as_bytes(), mode)
+        .map_err(|e| StoredDocError::io(path, e))?;
+
+    let mut audit = MigrationAudit {
+        name: target.name.clone(),
+        from_version: LEGACY_DOC_VERSION,
+        to_version: target.current_version,
+        path: path.to_path_buf(),
+        at_epoch_ms: epoch_ms(),
+        audit_logged: false,
+    };
+    audit.audit_logged = append_audit_line(path, &audit).is_ok();
+    Ok(audit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -796,6 +1044,261 @@ mod tests {
             !dir.join("config.json.migrate-audit.jsonl").exists(),
             "失败迁移不得留审计"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // -----------------------------------------------------------------------
+    // 旧裸体格式兼容: 只读兼容 + 显式迁移留审计
+    // -----------------------------------------------------------------------
+
+    fn legacy_bare_bytes() -> Vec<u8> {
+        serde_json::to_vec_pretty(&Config {
+            label: "keep".into(),
+            retries: 7,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn compat_open_reads_legacy_bare_without_touching_the_file() {
+        // 好数据路径零回归: 旧裸体 body 逐字节等价读出, 且默认打开不静默迁移
+        // (文件字节原样)。
+        let dir = test_dir("compat-open");
+        let path = dir.join("config.json");
+        let original = legacy_bare_bytes();
+        std::fs::write(&path, &original).unwrap();
+
+        let opened = open_single_compat::<Config>(&path, &compat_v2_readable_1_2()).unwrap();
+        assert!(opened.is_legacy(), "旧裸体必须如实标记为 legacy");
+        assert_eq!(opened.body().retries, 7);
+        // body 再序列化与旧写端输出逐字节等价。
+        assert_eq!(
+            serde_json::to_vec_pretty(opened.body()).unwrap(),
+            original,
+            "好数据路径必须逐字节等价"
+        );
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            original,
+            "默认打开路径不得改写旧文件 (不静默迁移)"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn compat_open_rejects_envelope_shaped_garbage_without_default_fallback() {
+        // 信封形状但 body 写坏: 必须拒开报结构化错误, 不得退化成旧裸体解析而
+        // 「读坏用默认」。
+        let dir = test_dir("compat-reject");
+        let path = dir.join("config.json");
+        std::fs::write(
+            &path,
+            br#"{"name":"demo-config","version":2,"compatible_versions":[2],"body":{"retries":"not-a-number"}}"#,
+        )
+        .unwrap();
+        let err = open_single_compat::<Config>(&path, &compat_v2_readable_1_2()).unwrap_err();
+        assert!(matches!(err, StoredDocError::Malformed { .. }), "{err:?}");
+        // 旧裸体也解析不了 → 同样拒开。
+        std::fs::write(&path, b"{ not json").unwrap();
+        let err = open_single_compat::<Config>(&path, &compat_v2_readable_1_2()).unwrap_err();
+        assert!(matches!(err, StoredDocError::Malformed { .. }), "{err:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn compat_open_still_enforces_identity_and_version_contract() {
+        // 兼容打开不放松信封校验: 串档 / 未知未来版本照旧拒开。
+        let dir = test_dir("compat-contract");
+        let path = dir.join("config.json");
+        let wrong_name = StoredDoc::new(
+            "other-doc",
+            2,
+            vec![2],
+            Config {
+                label: "x".into(),
+                retries: 0,
+            },
+        );
+        std::fs::write(&path, serde_json::to_vec_pretty(&wrong_name).unwrap()).unwrap();
+        let err = open_single_compat::<Config>(&path, &compat_v2_readable_1_2()).unwrap_err();
+        assert!(
+            matches!(err, StoredDocError::NameMismatch { .. }),
+            "{err:?}"
+        );
+
+        let future = StoredDoc::new(
+            "demo-config",
+            99,
+            vec![99],
+            Config {
+                label: "x".into(),
+                retries: 0,
+            },
+        );
+        std::fs::write(&path, serde_json::to_vec_pretty(&future).unwrap()).unwrap();
+        let err = open_single_compat::<Config>(&path, &compat_v2_readable_1_2()).unwrap_err();
+        assert!(
+            matches!(err, StoredDocError::FutureVersion { .. }),
+            "{err:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn explicit_legacy_migration_wraps_envelope_and_logs_audit() {
+        // 显式迁移: 旧裸体 → 信封; 迁移前后都可读, 迁移留审计。
+        let dir = test_dir("legacy-migrate");
+        let path = dir.join("config.json");
+        let original = legacy_bare_bytes();
+        std::fs::write(&path, &original).unwrap();
+
+        // 迁移前可读 (旧裸体兼容)。
+        let before = open_single_compat::<Config>(&path, &compat_v2_readable_1_2()).unwrap();
+        assert_eq!(before.body().retries, 7);
+
+        let audit = migrate_file_from_legacy::<Config, Config, _>(
+            &path,
+            &compat_v2_readable_1_2(),
+            DEFAULT_DOC_MODE,
+            Ok,
+        )
+        .unwrap();
+        assert_eq!(audit.from_version, LEGACY_DOC_VERSION);
+        assert_eq!(audit.to_version, 2);
+        assert!(audit.audit_logged, "显式迁移必须留审计");
+
+        // 迁移后可读 (信封)。
+        let after = open_single_compat::<Config>(&path, &compat_v2_readable_1_2()).unwrap();
+        assert!(!after.is_legacy(), "迁移后必须是信封格式");
+        assert_eq!(after.body().retries, 7, "迁移不得改变好数据内容");
+        // 审计文件恰一行。
+        let text = std::fs::read_to_string(dir.join("config.json.migrate-audit.jsonl")).unwrap();
+        assert_eq!(text.lines().count(), 1, "审计文件应恰一行: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_migration_refuses_envelopes_and_failed_transform_keeps_file() {
+        let dir = test_dir("legacy-migrate-guard");
+        let path = dir.join("config.json");
+        // 已是信封 → 拒绝 (版本迁移归 migrate_file)。
+        save_single(
+            &path,
+            &compat_v2_readable_1_2(),
+            Config {
+                label: "a".into(),
+                retries: 1,
+            },
+            DEFAULT_DOC_MODE,
+        )
+        .unwrap();
+        let err = migrate_file_from_legacy::<Config, Config, _>(
+            &path,
+            &compat_v2_readable_1_2(),
+            DEFAULT_DOC_MODE,
+            Ok,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, StoredDocError::MigrationFailed { .. }),
+            "{err:?}"
+        );
+
+        // 转换失败 → 旧裸体文件原样保留, 无审计。
+        let original = legacy_bare_bytes();
+        std::fs::write(&path, &original).unwrap();
+        let err = migrate_file_from_legacy::<Config, Config, _>(
+            &path,
+            &compat_v2_readable_1_2(),
+            DEFAULT_DOC_MODE,
+            |_| Err("转换规则拒绝".to_string()),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, StoredDocError::MigrationFailed { .. }),
+            "{err:?}"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), original, "失败迁移不得落盘");
+        assert!(!dir.join("config.json.migrate-audit.jsonl").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn compat_record_scan_keeps_legacy_rows_and_counts_bad_lines() {
+        // 逐记录类: 旧裸体行只读兼容照读, 坏行跳过并计数。
+        let dir = test_dir("compat-scan");
+        let path = dir.join("records.jsonl");
+        let legacy = serde_json::to_string(&Config {
+            label: "legacy".into(),
+            retries: 1,
+        })
+        .unwrap();
+        let envelope = serde_json::to_string(&StoredDoc::new(
+            "demo-config",
+            2,
+            vec![2],
+            Config {
+                label: "v2".into(),
+                retries: 2,
+            },
+        ))
+        .unwrap();
+        std::fs::write(&path, format!("{legacy}\n{{ not json\n{envelope}\n")).unwrap();
+
+        let scan = scan_records_compat::<Config>(&path, &compat_v2_readable_1_2()).unwrap();
+        assert_eq!(scan.records.len(), 2, "{:#?}", scan.records);
+        assert_eq!(scan.skipped, 1, "坏行必须跳过并计数");
+        assert!(scan.records[0].is_legacy(), "旧裸体行必须如实标记");
+        assert!(!scan.records[1].is_legacy());
+        assert_eq!(scan.records[0].body().label, "legacy");
+        assert_eq!(scan.records[1].body().label, "v2");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn explicit_record_migration_wraps_legacy_rows_and_keeps_others_verbatim() {
+        // 逐记录显式迁移: 旧裸体行包信封, 信封行/坏行原样保留 + 审计留痕。
+        let dir = test_dir("records-migrate");
+        let path = dir.join("records.jsonl");
+        let legacy = serde_json::to_string(&Config {
+            label: "legacy".into(),
+            retries: 1,
+        })
+        .unwrap();
+        let envelope = serde_json::to_string(&StoredDoc::new(
+            "demo-config",
+            2,
+            vec![2],
+            Config {
+                label: "v2".into(),
+                retries: 2,
+            },
+        ))
+        .unwrap();
+        let bad = "{ not json".to_string();
+        std::fs::write(&path, format!("{legacy}\n{envelope}\n{bad}\n")).unwrap();
+
+        let audit = migrate_records_from_legacy::<Config>(
+            &path,
+            &compat_v2_readable_1_2(),
+            DEFAULT_DOC_MODE,
+        )
+        .unwrap();
+        assert_eq!(audit.from_version, LEGACY_DOC_VERSION);
+        assert!(audit.audit_logged, "逐记录迁移必须留审计");
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 3, "迁移不得丢行: {text}");
+        assert_eq!(lines[1], envelope, "信封行必须原样保留");
+        assert_eq!(lines[2], bad, "坏行必须原样保留 (不代行裁决)");
+        assert_ne!(lines[0], legacy, "旧裸体行必须被包进信封");
+
+        // 迁移后扫描: 3 行中 2 条可读 (1 跳过), 且旧裸体标记消失。
+        let scan = scan_records_compat::<Config>(&path, &compat_v2_readable_1_2()).unwrap();
+        assert_eq!(scan.records.len(), 2);
+        assert_eq!(scan.skipped, 1);
+        assert!(scan.records.iter().all(|r| !r.is_legacy()));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -235,4 +235,17 @@ mod tests {
             "over budget truncates with the graded note: {s}"
         );
     }
+
+    /// 零回归 (现有注入行为): the pre-existing injection renderer is
+    /// byte-stable — the envelope wiring changes none of its output.
+    #[test]
+    fn the_existing_injection_renderer_is_byte_stable() {
+        let s = build_memory_injection(&["主人明天要交线代作业".to_string()]);
+        assert_eq!(
+            s,
+            "[记忆证据 — 你只知道以下条目, 不要声称记得列表之外的任何对话]\n\
+             1. 主人明天要交线代作业\n\
+             规则: 说话只能基于以上编号条目; 不确定就说「我猜」; 禁止说「我记得我们以前聊过」— 那是编造。"
+        );
+    }
 }

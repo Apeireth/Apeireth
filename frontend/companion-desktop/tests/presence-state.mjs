@@ -9,6 +9,9 @@ import assert from 'node:assert/strict';
 
 import {
   parsePresenceStateFrame,
+  parsePresenceSnapshot,
+  applyPresenceSnapshot,
+  subscribePresence,
   derivePresenceMode,
   approachExponential,
   derivePresenceGlow,
@@ -335,5 +338,128 @@ assert.equal(store.get().current.mode, 'quiet');
 }
 
 console.log('✓ presenceStore: 显影分级 (心跳只动余烬点) / 去重 / SIM 纪律 / subscribe 契约');
+
+// ---------------------------------------------------------------------------
+// 快照口 (GET /v1/apeireth/presence): 快照即读 / 失败即帧 / 重连先取快照
+// ---------------------------------------------------------------------------
+
+const SNAPSHOT_JSON = JSON.stringify({
+  type: 'presence_snapshot',
+  frame: makeFrame(),
+  failure: null,
+});
+
+// ① 快照解析: 帧走与实时帧同一套校验; failure 显式携带, 不猜不补
+{
+  const s = parsePresenceSnapshot(SNAPSHOT_JSON);
+  assert.ok(s, '合法快照必须解析成功');
+  assert.equal(s.frame.type, 'presence_state');
+  assert.equal(s.frame.at, 1755820200000);
+  assert.equal(s.failure, null, '无失败不伪造失败帧');
+
+  const withFailure = parsePresenceSnapshot(
+    JSON.stringify({type: 'presence_snapshot', frame: null, failure: 'producer crashed'}),
+  );
+  assert.equal(withFailure.frame, null);
+  assert.equal(withFailure.failure, 'producer crashed', '失败即帧: 显式事实原样携带');
+}
+
+// ② 坏形状 → null / 非法帧丢弃不猜 (宁可丢弃不猜)
+{
+  assert.equal(parsePresenceSnapshot('{"type":"presence_snapshot",broken'), null);
+  assert.equal(parsePresenceSnapshot('{"type":"other"}'), null);
+  assert.equal(parsePresenceSnapshot('[]'), null);
+  assert.equal(parsePresenceSnapshot('42'), null);
+  const badFrame = parsePresenceSnapshot(
+    JSON.stringify({type: 'presence_snapshot', frame: {type: 'presence_state'}, failure: null}),
+  );
+  assert.equal(badFrame.frame, null, '帧缺主键宁可丢弃不猜');
+}
+
+// ③ 快照即读: applyPresenceSnapshot 立即落位, 无需等下一条实时帧
+{
+  const local = createPresenceStore(() => 42);
+  applyPresenceSnapshot(local, parsePresenceSnapshot(SNAPSHOT_JSON));
+  const s = local.get();
+  assert.notEqual(s.current, null, '快照即读立即落位');
+  assert.equal(s.current.p, 0.2);
+  assert.equal(s.connected, true, '快照到达 = 频道有活性');
+  // 只有失败帧: 不编造任何数据 (降级表现交给 SIM 纪律)
+  const empty = createPresenceStore(() => 42);
+  applyPresenceSnapshot(empty, {frame: null, failure: 'gap'});
+  assert.equal(empty.get().current, null, '失败帧不伪造数据');
+}
+
+// ④ 重连先取快照: 首连与每次重连都先取快照落位, 断线期事件不回放
+{
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  const realEventSource = globalThis.EventSource;
+  const timers = [];
+  globalThis.setTimeout = (fn, ms) => {
+    const timer = {fn, ms, cleared: false};
+    timers.push(timer);
+    return timer;
+  };
+  globalThis.clearTimeout = (timer) => {
+    if (timer && typeof timer === 'object') timer.cleared = true;
+  };
+
+  class FakeEventSource {
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+      this.closed = false;
+      FakeEventSource.instances.push(this);
+    }
+    addEventListener(name, fn) {
+      this.listeners.set(name, fn);
+    }
+    close() {
+      this.closed = true;
+    }
+  }
+  FakeEventSource.instances = [];
+  globalThis.EventSource = FakeEventSource;
+
+  const settle = () => new Promise((resolve) => realSetTimeout(resolve, 0));
+  const local = createPresenceStore(() => 7);
+  let snapshotCalls = 0;
+  const cancel = subscribePresence('http://gateway.test/', {
+    store: local,
+    fetchSnapshot: async () => {
+      snapshotCalls += 1;
+      return SNAPSHOT_JSON;
+    },
+  });
+
+  await settle();
+  assert.equal(snapshotCalls, 1, '首次连接先取快照');
+  assert.equal(FakeEventSource.instances.length, 1);
+  assert.notEqual(local.get().current, null, '快照即读: 不等实时帧即落位');
+  assert.equal(local.get().current.p, 0.2);
+
+  // 断线 → 指数退避重连: 重连同样先取快照
+  FakeEventSource.instances[0].onerror();
+  assert.equal(FakeEventSource.instances[0].closed, true);
+  const retry = timers.find((t) => !t.cleared && t.ms === 2000);
+  assert.ok(retry, '指数退避重连计时器已挂');
+  retry.fn();
+  await settle();
+  assert.equal(snapshotCalls, 2, '重连再取快照');
+  assert.equal(FakeEventSource.instances.length, 2, '重连重建连接');
+  assert.notEqual(local.get().current, null, '重连后立即读到当前帧');
+
+  cancel();
+  globalThis.setTimeout = realSetTimeout;
+  globalThis.clearTimeout = realClearTimeout;
+  if (realEventSource === undefined) {
+    delete globalThis.EventSource;
+  } else {
+    globalThis.EventSource = realEventSource;
+  }
+}
+
+console.log('✓ 快照口: 快照即读 / 失败即帧 / 重连先取快照 (GET /v1/apeireth/presence)');
 
 console.log('--- presence_state Contract Check PASSED ---');

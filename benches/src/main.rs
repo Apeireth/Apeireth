@@ -8,6 +8,10 @@
 //! ```
 //! 环境变量: `BENCH_SCALE` 缩放样本量; `BENCH_QUICK=1` 冒烟 (0.1 倍);
 //! `BENCH_RAW=1` 输出逐样本原始值。一键封装见 `scripts/run-benchmarks.ps1`。
+//!
+//! 诊断子命令 (不计入 `all`, 无 README 目标行, 仅供剖析归因):
+//! `profile-cold-start` (冷启动分段计时) / `profile-sandbox` (沙箱 spawn 分解),
+//! 见 [`profile_startup`] 模块文档。
 
 mod assembly;
 mod atomic_write;
@@ -19,6 +23,7 @@ mod fold_surface;
 mod hybrid_search;
 mod idle_footprint;
 mod os_sandbox;
+mod profile_startup;
 mod quota_scheduler;
 mod saga_rollback;
 mod spill_truncate;
@@ -88,6 +93,9 @@ fn run_one(name: &str, cfg: &BenchConfig) -> Option<Vec<Outcome>> {
         "os-sandbox" => Some(os_sandbox::run(cfg)),
         "cold-start" => Some(cold_start::run(cfg)),
         "idle-footprint" => Some(idle_footprint::run(cfg)),
+        // 诊断子命令: 不在 BENCH_NAMES (不入 all), 按需显式跑。
+        "profile-cold-start" => Some(profile_startup::run_cold_start(cfg)),
+        "profile-sandbox" => Some(profile_startup::run_sandbox(cfg)),
         _ => None,
     }
 }

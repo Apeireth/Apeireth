@@ -37,6 +37,10 @@ use std::time::Duration;
 use serde::Serialize;
 use tokio::sync::watch;
 
+use axum::extract::State;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
+
 use apeireth_core::kernel::Timestamp;
 use apeireth_core::resource_lease::{
     ResourceError, ResourceFrame, ResourceHooks, ResourceLease, ResourcePin, ResourceRegistry,
@@ -654,6 +658,43 @@ impl RuntimeEventSink for PresenceService {
     }
 }
 
+/// Wire body of `GET /v1/apeireth/presence`: the presence frame surface read
+/// as it is — the current frame plus any failure frame mounted beside it.
+/// A reconnecting client fetches this first (快照即读) instead of waiting for
+/// the next live `presence_state` frame; history is never replayed.
+#[derive(Debug, Clone, Serialize)]
+pub struct PresenceSnapshotBody {
+    /// Wire discriminator.
+    #[serde(rename = "type")]
+    pub event_type: &'static str,
+    /// The current presence frame (never a replay of earlier frames).
+    pub frame: Option<PresenceState>,
+    /// Failure frame riding beside the last value, if any (失败即帧).
+    pub failure: Option<String>,
+}
+
+impl PresenceSnapshotBody {
+    /// Project the surface frame (last value + mounted failure) onto the wire.
+    pub fn from_frame(frame: &ResourceFrame<PresenceState>) -> Self {
+        Self {
+            event_type: "presence_snapshot",
+            frame: frame.value.clone(),
+            failure: frame.failure.clone(),
+        }
+    }
+}
+
+/// `GET /v1/apeireth/presence` — snapshot-on-read of the presence frame
+/// surface, the read-side companion of the `presence_state` SSE channel.
+pub async fn presence_snapshot_handler(
+    State(state): State<crate::panels::GatewayState>,
+) -> Response {
+    Json(PresenceSnapshotBody::from_frame(
+        &state.presence.frame_snapshot(),
+    ))
+    .into_response()
+}
+
 /// Spawn the 60 s heartbeat task. It holds the service weakly: once the
 /// gateway state (and with it the runtime's sink fan-out) is dropped, the task
 /// exits instead of leaking. Outside a tokio runtime it degrades honestly to
@@ -1119,5 +1160,71 @@ mod tests {
         // 显式关停后订阅也拿不到新租约。
         service.frames.shutdown();
         assert!(service.subscribe_presence().is_err(), "关停后不再发放租约");
+    }
+
+    // 快照口 (GET /v1/apeireth/presence): 快照即读 + 失败即帧
+
+    #[tokio::test]
+    async fn presence_snapshot_body_reads_the_current_frame_without_replay() {
+        let service =
+            PresenceService::with_heartbeat_interval(EventBus::new(16), Duration::from_secs(60));
+        let _sub = service.subscribe_presence().unwrap();
+
+        let sink: &dyn RuntimeEventSink = service.as_ref();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        sink.emit(RuntimeEvent::TurnStarted {
+            session,
+            request: RequestId::new(),
+            trace,
+        });
+        sink.emit(RuntimeEvent::TurnCompleted {
+            session,
+            request: RequestId::new(),
+            trace,
+            rounds: 1,
+            served_by: CapabilityId::new("provider.fake").unwrap(),
+        });
+        service.emit_heartbeat();
+
+        // 快照即读最新帧 (heartbeat), 不回放 turn 帧。
+        let body = PresenceSnapshotBody::from_frame(&service.frame_snapshot());
+        assert_eq!(body.event_type, "presence_snapshot");
+        let frame = body.frame.expect("current frame");
+        assert_eq!(frame.significance, PresenceSignificance::Heartbeat);
+        assert!(body.failure.is_none());
+    }
+
+    #[tokio::test]
+    async fn crashed_estimator_becomes_an_explicit_failure_frame_in_the_snapshot() {
+        let service =
+            PresenceService::with_heartbeat_interval(EventBus::new(16), Duration::from_secs(60));
+        let _sub = service.subscribe_presence().unwrap();
+
+        // 估计器写者崩溃: 锁中毒 —— 崩溃证据即帧, 不静默吞掉。
+        let poisoning = {
+            let service = Arc::clone(&service);
+            std::thread::spawn(move || {
+                let _guard = service.synthesizer.lock().unwrap();
+                panic!("estimator writer crashed");
+            })
+        };
+        assert!(poisoning.join().is_err());
+
+        service.emit_heartbeat();
+        let snapshot = service.frame_snapshot();
+        assert!(
+            snapshot
+                .failure
+                .as_deref()
+                .unwrap_or_default()
+                .contains("poisoned"),
+            "崩溃必须成为显式失败帧, got {:?}",
+            snapshot.failure
+        );
+
+        // 快照口如实携带失败帧 (挂在最后值旁, 不伪造数据)。
+        let body = PresenceSnapshotBody::from_frame(&snapshot);
+        assert!(body.failure.unwrap().contains("poisoned"));
     }
 }

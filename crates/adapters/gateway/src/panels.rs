@@ -27,7 +27,14 @@ pub struct GatewayState {
     pub runtime: Arc<Runtime>,
     pub services: GatewayServices,
     pub events: crate::events::EventBus,
+    /// Keepalive pin on the SSE delivery frame surface (逐连接租约的装配面):
+    /// the assembly keeps the delivery stream open, so frame retention spans
+    /// connection gaps and every new connection reads a current snapshot.
+    pub events_stream: Arc<apeireth_core::resource_lease::ResourcePin>,
     pub observations: Arc<crate::events::RuntimeObservationSink>,
+    /// Keepalive pin on the observation flush surface (攒批面租约的装配面):
+    /// the flush loop runs for the assembly lifetime and stops with it.
+    pub observations_stream: Arc<apeireth_core::resource_lease::ResourcePin>,
     /// Presence synthesizer behind `presence_state` frames (contract §8a); held
     /// here so the service outlives the assembly scope and its heartbeat task.
     pub presence: Arc<crate::presence::PresenceService>,

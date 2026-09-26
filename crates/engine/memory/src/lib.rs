@@ -304,7 +304,10 @@ pub use context_ledger::{
 };
 // Salvage 02: combined retention sweep (count cap + TTL + decay) via governance sidecar.
 pub mod retention;
-pub use retention::{decay_strength, sweep_session, RetentionPolicy, RetentionSweepReport};
+pub use retention::{
+    decay_strength, sweep_session, sweep_session_with_audit, RetentionCleanup, RetentionPolicy,
+    RetentionSweepReport, CLEANUP_AUDIT_MODULE,
+};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,

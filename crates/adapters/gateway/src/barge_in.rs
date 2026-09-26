@@ -10,15 +10,28 @@
 //! - 纯 Safe Rust 实现 (`#![deny(unsafe_code)]`)，0 未定义行为；
 //! - 基于原子布尔量 (`AtomicBool`) 与异步信号灯 (`tokio::sync::Notify`) 实现无锁/极轻并发通知；
 //! - 会话隔离，每个 `session_id` 独享生命周期上下文，自动防止资源泄漏。
+//!
+//! ## 打断流租约面 (资源租约语义推广)
+//! 打断通知流是一等订阅面 ([`BargeInController::open_interrupt_stream`]):
+//! 首订阅者开流、末订阅者关停, pin 保活; 后订阅者靠快照即读最新打断帧
+//! (不回放历史), 打空 (无活跃会话) 成为挂帧的失败帧 (失败即帧),
+//! 面关停后无幽灵回调。
 
 #![deny(unsafe_code)]
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+
+use apeireth_core::resource_lease::{
+    ResourceError, ResourceFrame, ResourceHooks, ResourceLease, ResourceRegistry,
+};
+
+/// Surface name of the interrupt notice frame stream.
+const INTERRUPT_SURFACE: &str = "barge_in_interrupts";
 
 /// 打断原因分类.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,16 +97,130 @@ impl StreamHandle {
 }
 
 /// 全双工打断控制器.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct BargeInController {
     sessions: Arc<Mutex<HashMap<String, StreamHandle>>>,
+    interrupt_frames: Arc<ResourceRegistry<InterruptNotice>>,
+    interrupt_stream: Arc<InterruptStreamDriver>,
+}
+
+impl Default for BargeInController {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 一帧打断事实: 谁、为何、何时被打断 (打断流的帧面值).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct InterruptNotice {
+    /// 被打断的流会话.
+    pub session_id: String,
+    /// 打断原因.
+    pub reason: InterruptReason,
+    /// Epoch milliseconds.
+    pub at_ms: i64,
+}
+
+/// 打断流生命周期记录: 首订阅者开流、末订阅者关停。打断帧由 `interrupt()`
+/// 推送 (无独立产出循环), 故钩子记录交付生命周期, 供接线与测试观察。
+#[derive(Debug, Default)]
+struct InterruptStreamDriver {
+    streaming: AtomicBool,
+    opens: AtomicUsize,
+    closes: AtomicUsize,
+}
+
+impl InterruptStreamDriver {
+    fn on_open(&self) -> Result<(), String> {
+        self.streaming.store(true, Ordering::SeqCst);
+        self.opens.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn on_close(&self) {
+        self.streaming.store(false, Ordering::SeqCst);
+        self.closes.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// 打断流上的一枚订阅租约: 持有期间打断流开启, 全部释放即关停。
+pub struct InterruptStreamSubscription {
+    _lease: ResourceLease,
+    frames: Arc<ResourceRegistry<InterruptNotice>>,
+}
+
+impl std::fmt::Debug for InterruptStreamSubscription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InterruptStreamSubscription")
+            .field("surface", &self.frames)
+            .finish()
+    }
+}
+
+impl InterruptStreamSubscription {
+    /// 快照即读: 最新打断帧 + 挂着的失败帧, 不回放历史。
+    pub fn snapshot(&self) -> ResourceFrame<InterruptNotice> {
+        self.frames.snapshot()
+    }
+}
+
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 impl BargeInController {
     pub fn new() -> Self {
+        let stream = Arc::new(InterruptStreamDriver::default());
+        let open_driver = Arc::clone(&stream);
+        let close_driver = Arc::clone(&stream);
+        let interrupt_frames = ResourceRegistry::new(
+            INTERRUPT_SURFACE,
+            ResourceHooks::new(
+                Arc::new(move || open_driver.on_open()),
+                Arc::new(move || close_driver.on_close()),
+            ),
+        );
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
+            interrupt_frames,
+            interrupt_stream: stream,
         }
+    }
+
+    /// 订阅打断流: 首订阅者开流, 末订阅者 (租约或 pin 全体) 关停。
+    pub fn open_interrupt_stream(&self) -> Result<InterruptStreamSubscription, ResourceError> {
+        let lease = self.interrupt_frames.acquire()?;
+        Ok(InterruptStreamSubscription {
+            _lease: lease,
+            frames: Arc::clone(&self.interrupt_frames),
+        })
+    }
+
+    /// 快照即读: 打断流当前帧 (最新打断 + 挂着的失败帧), 不回放历史。
+    pub fn interrupt_snapshot(&self) -> ResourceFrame<InterruptNotice> {
+        self.interrupt_frames.snapshot()
+    }
+
+    /// 打断流是否开启。
+    pub fn is_interrupt_stream_open(&self) -> bool {
+        self.interrupt_frames.is_open()
+    }
+
+    /// 打断流生命周期计数 (开/关钩子触发次数)。
+    pub fn interrupt_stream_lifecycle_counts(&self) -> (usize, usize) {
+        (
+            self.interrupt_stream.opens.load(Ordering::SeqCst),
+            self.interrupt_stream.closes.load(Ordering::SeqCst),
+        )
+    }
+
+    /// 关停打断流: 不再发租约、不再收帧, 事后释放的租约不补调关停钩子
+    /// (关停后无幽灵回调)。
+    pub fn shutdown_interrupt_stream(&self) {
+        self.interrupt_frames.shutdown();
     }
 
     /// 注册一个活跃流会话并获取监听句柄.
@@ -125,16 +252,33 @@ impl BargeInController {
 
     /// 触发指定会话的插话打断.
     /// 返回 true 表示成功命中并打断活跃流；false 表示该会话不存在或已结束.
+    ///
+    /// 帧面语义 (失败即帧): 命中即把打断事实入帧面 (后订阅者快照即读最新);
+    /// 打空不再只是 false —— 它成为挂在最后值旁的显式失败帧, 下一命中自清。
     pub fn interrupt(&self, session_id: &str, reason: InterruptReason) -> bool {
-        let lock = self.sessions.lock().unwrap();
-        if let Some(handle) = lock.get(session_id) {
-            handle.is_interrupted.store(true, Ordering::SeqCst);
-            *handle.reason.lock().unwrap() = Some(reason);
-            handle.notify.notify_waiters();
-            true
+        let hit = {
+            let lock = self.sessions.lock().unwrap();
+            if let Some(handle) = lock.get(session_id) {
+                handle.is_interrupted.store(true, Ordering::SeqCst);
+                *handle.reason.lock().unwrap() = Some(reason);
+                handle.notify.notify_waiters();
+                true
+            } else {
+                false
+            }
+        };
+        if hit {
+            let _ = self.interrupt_frames.publish(InterruptNotice {
+                session_id: session_id.to_string(),
+                reason,
+                at_ms: now_ms(),
+            });
         } else {
-            false
+            let _ = self
+                .interrupt_frames
+                .publish_failure(format!("no active stream for session {session_id}"));
         }
+        hit
     }
 
     /// 检查指定会话是否已被打断.
@@ -249,5 +393,106 @@ mod tests {
         assert!(sse.contains("\"reason\":\"voice_barge_in\""));
         assert!(sse.contains("\"char_offset\":42"));
         assert!(sse.ends_with("\n\n"));
+    }
+
+    // 打断流租约面 (首开末关 / 快照即读 / 失败即帧 / 无幽灵)
+
+    #[test]
+    fn interrupt_stream_opens_with_the_first_subscriber_and_closes_with_the_last() {
+        let controller = BargeInController::new();
+        assert!(
+            !controller.is_interrupt_stream_open(),
+            "无订阅者时打断流不开"
+        );
+
+        let first = controller.open_interrupt_stream().expect("subscription");
+        assert!(controller.is_interrupt_stream_open(), "首订阅者开流");
+        assert_eq!(controller.interrupt_stream_lifecycle_counts(), (1, 0));
+
+        let second = controller.open_interrupt_stream().expect("subscription");
+        assert_eq!(
+            controller.interrupt_stream_lifecycle_counts(),
+            (1, 0),
+            "共享不重复开流"
+        );
+
+        drop(first);
+        assert!(controller.is_interrupt_stream_open(), "仍有订阅者, 流不关");
+        assert_eq!(controller.interrupt_stream_lifecycle_counts(), (1, 0));
+
+        drop(second);
+        assert!(!controller.is_interrupt_stream_open(), "末订阅者关停");
+        assert_eq!(
+            controller.interrupt_stream_lifecycle_counts(),
+            (1, 1),
+            "关停恰好一次"
+        );
+    }
+
+    #[test]
+    fn late_subscriber_reads_the_latest_interrupt_from_the_snapshot_without_replay() {
+        let controller = BargeInController::new();
+        let _first = controller.open_interrupt_stream().expect("subscription");
+        controller.register_stream("sess_a");
+        controller.register_stream("sess_b");
+
+        assert!(controller.interrupt("sess_a", InterruptReason::UserManualCancel));
+        assert!(controller.interrupt("sess_b", InterruptReason::VoiceBargeIn));
+
+        // 后订阅者: 快照即读最新打断帧, 不回放 sess_a 的历史帧。
+        let late = controller.open_interrupt_stream().expect("subscription");
+        let frame = late.snapshot();
+        let notice = frame.value.as_ref().expect("latest interrupt");
+        assert_eq!(notice.session_id, "sess_b");
+        assert_eq!(notice.reason, InterruptReason::VoiceBargeIn);
+        assert!(!frame.has_failure());
+    }
+
+    #[test]
+    fn interrupt_miss_becomes_a_failure_frame_and_the_next_hit_clears_it() {
+        let controller = BargeInController::new();
+        let _sub = controller.open_interrupt_stream().expect("subscription");
+        controller.register_stream("sess_live");
+
+        // 打空 = 显式失败帧 (不静默), 且不清最后事实。
+        assert!(!controller.interrupt("sess_ghost", InterruptReason::Timeout));
+        let frame = controller.interrupt_snapshot();
+        assert_eq!(
+            frame.failure.as_deref(),
+            Some("no active stream for session sess_ghost")
+        );
+
+        // 下一命中自清失败帧, 打断事实照常入面。
+        assert!(controller.interrupt("sess_live", InterruptReason::NewTurnPreempt));
+        let frame = controller.interrupt_snapshot();
+        assert!(!frame.has_failure(), "下一成功帧自清失败帧");
+        assert_eq!(frame.value.expect("notice").session_id, "sess_live");
+    }
+
+    #[test]
+    fn shut_down_interrupt_stream_fires_no_ghost_callbacks() {
+        let controller = BargeInController::new();
+        let sub = controller.open_interrupt_stream().expect("subscription");
+        controller.register_stream("sess_x");
+        assert!(controller.interrupt("sess_x", InterruptReason::VoiceBargeIn));
+        let frozen = controller.interrupt_snapshot();
+
+        controller.shutdown_interrupt_stream();
+        assert!(!controller.is_interrupt_stream_open(), "关停即关流");
+        let counts = controller.interrupt_stream_lifecycle_counts();
+
+        // 幽灵检查: 事后释放的订阅不得再触发关停钩子, 帧面不得再更新。
+        drop(sub);
+        assert_eq!(
+            controller.interrupt_stream_lifecycle_counts(),
+            counts,
+            "关停后无幽灵回调"
+        );
+        assert!(
+            controller.open_interrupt_stream().is_err(),
+            "关停后不再发放租约"
+        );
+        assert!(controller.interrupt("sess_x", InterruptReason::Timeout));
+        assert_eq!(controller.interrupt_snapshot(), frozen, "关停后无幽灵帧");
     }
 }

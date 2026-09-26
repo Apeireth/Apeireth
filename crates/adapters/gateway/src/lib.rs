@@ -42,16 +42,20 @@ pub mod presence;
 /// Session-scoped model + permission settings (`/v1/sessions/{id}/settings`).
 pub mod session_settings;
 
-pub use barge_in::{format_sse_interrupt_event, BargeInController, InterruptReason, StreamHandle};
+pub use barge_in::{
+    format_sse_interrupt_event, BargeInController, InterruptNotice, InterruptReason,
+    InterruptStreamSubscription, StreamHandle,
+};
 pub use duplex_gateway::{DuplexFrame, DuplexSessionController, SentenceDivider};
 pub use ember_hud_driver::{EmberCognitiveStance, EmberHudDriver, EmberShaderUniforms};
 pub use file_fetcher::{
     FetchedFile, FileFetchError, InternalFileRequest, InternalFileResponse, TransparentFileFetcher,
 };
 pub use presence::{
-    spawn_presence_heartbeat, InitiativeBudget, PresenceBreath, PresencePad, PresenceService,
-    PresenceSignificance, PresenceSource, PresenceState, PresenceSubscription, PresenceSynthesizer,
-    HEARTBEAT_INTERVAL_SECS, INITIATIVE_DAILY_CAP,
+    presence_snapshot_handler, spawn_presence_heartbeat, InitiativeBudget, PresenceBreath,
+    PresencePad, PresenceService, PresenceSignificance, PresenceSnapshotBody, PresenceSource,
+    PresenceState, PresenceSubscription, PresenceSynthesizer, HEARTBEAT_INTERVAL_SECS,
+    INITIATIVE_DAILY_CAP,
 };
 
 pub use canonical_entry::{
@@ -68,7 +72,10 @@ pub use admin::{
 };
 pub use error_frame::{ErrorCode, ErrorEnvelope, ErrorFrame};
 
-pub use events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
+pub use events::{
+    events_handler, EventBus, EventsSubscription, FlushReport, GatewayEvent,
+    ObservationFlushSubscription, RuntimeObservationSink, FLUSH_PASS_INTERVAL_SECS,
+};
 
 pub use panels::{
     AuditCommand, AuditDto, AuditQuery, EpisodeDto, EpisodeMutationDto, GatewayServices,

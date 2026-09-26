@@ -11,10 +11,8 @@
 //! 2. 系统: 位于 `engine/memory`，提供抽象的 `ReflexionStore` Trait 与内存/文件实现
 //! 3. 架构: 强类型数据模型，0 unsafe, 0 外部 C 扩展
 
-use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
 
 use apeireth_core::storage_atomic;
 use serde::{Deserialize, Serialize};
@@ -362,18 +360,22 @@ pub const DEFAULT_FILE_HISTORY_CAP: usize = 256;
 
 /// 文件系统持久化 Reflexion 存储。
 ///
-/// 所有变更操作先通过同一根目录中的 `reflexions.lock` 执行原子文件创建
-/// 来取得跨线程/进程的排他所有权，再进行读取、修改和原子替换写入。因此，
-/// 同一根目录的两个 [`FileReflexionStore`] 实例不会静默丢失彼此的更新。
+/// 所有变更操作在共享文件锁 [`storage_atomic::with_file_lock`] 保护下执行
+/// 「读取 → 修改 → 原子替换写入」, 锁文件为同一根目录中的 [`REFLEXION_LOCK_FILE`]
+/// (内容记录持有者 PID)。因此, 同一根目录的两个 [`FileReflexionStore`] 实例
+/// (含跨进程) 不会静默丢失彼此的更新。
 ///
-/// **崩溃语义：** 锁文件在正常返回（包括错误返回）时由 RAII 清理。若进程
-/// 在持锁期间异常终止，锁文件可能保留；后续写入会在有限等待后返回
-/// [`ReflexionError::StoreBusy`]，而不会猜测性删除可能仍属于活跃写入者的锁。
-/// 运维人员确认没有活跃写入者后可以显式移除该锁文件。
+/// **崩溃语义：** 锁文件在正常返回（包括错误返回）与 panic 展开时由守卫清理。
+/// 若进程在持锁期间异常终止, 锁文件可能保留；后续变更会探测到锁记录的持有者
+/// PID 已不存在并**接管**残留锁（不会永久砖化）。持有者进程仍存活时, 后续变更
+/// 在有限等待后返回 [`ReflexionError::StoreBusy`], 不抢活跃写入者的锁。
 pub struct FileReflexionStore {
     root: PathBuf,
     max_history: usize,
 }
+
+/// 变更互斥锁文件名 (与 [`storage_atomic::with_file_lock`] 的锁协议共用)。
+pub const REFLEXION_LOCK_FILE: &str = "reflexions.lock";
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct ReflexionDataFile {
@@ -435,50 +437,6 @@ impl ReflexionDataFile {
             .checked_add(1)
             .ok_or(ReflexionError::SequenceExhausted)?;
         Ok(seq)
-    }
-}
-
-/// A filesystem-level exclusive mutation claim.
-///
-/// `create_new(true)` is an atomic create operation on the target filesystem,
-/// so this is intentionally not a process-local mutex. Holding a path rather
-/// than an open descriptor also lets the guard delete it portably on Windows.
-struct MutationLock {
-    path: PathBuf,
-}
-
-impl MutationLock {
-    const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
-    const RETRY_DELAY: Duration = Duration::from_millis(1);
-
-    fn acquire(root: &Path) -> Result<Self, ReflexionError> {
-        std::fs::create_dir_all(root)?;
-        let path = root.join("reflexions.lock");
-        let deadline = Instant::now() + Self::WAIT_TIMEOUT;
-
-        loop {
-            match OpenOptions::new().write(true).create_new(true).open(&path) {
-                Ok(_) => return Ok(Self { path }),
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    if Instant::now() >= deadline {
-                        return Err(ReflexionError::StoreBusy { path });
-                    }
-                    // Bounded backoff avoids a hot spin while allowing a concurrent
-                    // writer to finish. Tests synchronize with barriers/channels,
-                    // not arbitrary sleeps.
-                    std::thread::sleep(Self::RETRY_DELAY);
-                }
-                Err(error) => return Err(ReflexionError::Io(error)),
-            }
-        }
-    }
-}
-
-impl Drop for MutationLock {
-    fn drop(&mut self) {
-        // This must not replace the original operation's result. A leftover lock
-        // remains fail-closed and is surfaced as StoreBusy on the next mutation.
-        let _ = std::fs::remove_file(&self.path);
     }
 }
 
@@ -558,15 +516,25 @@ impl FileReflexionStore {
         &self,
         operation: impl FnOnce(&mut ReflexionDataFile) -> Result<T, ReflexionError>,
     ) -> Result<T, ReflexionError> {
-        let _lock = MutationLock::acquire(&self.root)?;
-        let mut data = self.read_data()?;
-        // An old, oversized file is bounded before any new mutation observes it.
-        self.trim_history(&mut data);
-        let result = operation(&mut data)?;
-        self.trim_history(&mut data);
-        data.validate_and_normalize()?;
-        self.write_data(&data)?;
-        Ok(result)
+        let lock_path = self.root.join(REFLEXION_LOCK_FILE);
+        let held = storage_atomic::with_file_lock(&lock_path, || -> Result<T, ReflexionError> {
+            let mut data = self.read_data()?;
+            // An old, oversized file is bounded before any new mutation observes it.
+            self.trim_history(&mut data);
+            let result = operation(&mut data)?;
+            self.trim_history(&mut data);
+            data.validate_and_normalize()?;
+            self.write_data(&data)?;
+            Ok(result)
+        });
+        match held {
+            Ok(outcome) => outcome,
+            // 等待超时 = 锁记录的持有者进程仍存活: 如实报占用, 不抢活跃写入者。
+            Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
+                Err(ReflexionError::StoreBusy { path: lock_path })
+            }
+            Err(error) => Err(ReflexionError::Io(error)),
+        }
     }
 }
 
@@ -946,5 +914,63 @@ mod tests {
             FileReflexionStore::with_history_cap(tmp.path(), 0),
             Err(ReflexionError::InvalidHistoryCap)
         ));
+    }
+
+    /// 统一文件锁的死锁接管: 持有者进程已不存在的残留锁必须可接管,
+    /// 不永久砖化后续变更 (接管后变更正常完成, 锁不留残)。
+    #[test]
+    fn file_store_takes_over_stale_lock_left_by_a_dead_holder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lock = tmp.path().join(REFLEXION_LOCK_FILE);
+        // 从不分配给真实进程的 PID: 大于任何平台的 PID 上限, 探测恒为「不存在」。
+        const NEVER_ALIVE_PID: u32 = u32::MAX - 7;
+        std::fs::write(&lock, format!("{NEVER_ALIVE_PID}\n")).unwrap();
+        let store = FileReflexionStore::new(tmp.path());
+
+        let record = store
+            .record_failure(
+                FailureKind::ValidationFailed,
+                "deploy",
+                "接管残留锁后写入",
+                1000,
+            )
+            .expect("持有者已死的残留锁必须可接管");
+        assert_eq!(record.seq, 1);
+        assert!(!lock.exists(), "接管变更完成后锁必须归还");
+    }
+
+    /// 活跃持有者 (锁记录 = 本进程 PID) 的锁不得被抢: 有限等待后如实报
+    /// [`ReflexionError::StoreBusy`], 锁文件保持原样。
+    #[test]
+    fn file_store_reports_store_busy_without_stealing_a_live_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lock = tmp.path().join(REFLEXION_LOCK_FILE);
+        std::fs::write(&lock, std::process::id().to_string()).unwrap();
+        let store = FileReflexionStore::new(tmp.path());
+
+        let err = store
+            .record_failure(FailureKind::ValidationFailed, "deploy", "不该写入", 1000)
+            .unwrap_err();
+        assert!(matches!(err, ReflexionError::StoreBusy { .. }), "{err:?}");
+        assert!(lock.exists(), "活跃写入者的锁不得被抢或删除");
+    }
+
+    /// 变更与共享文件锁协议互通: 变更完成后锁文件即归还, 外部持有者可立即
+    /// 取得同一把锁 (证明本存储确实挂在同一把文件锁上)。
+    #[test]
+    fn file_store_mutations_hand_the_shared_lock_back_cleanly() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = FileReflexionStore::new(tmp.path());
+        store
+            .record_failure(FailureKind::ValidationFailed, "deploy", "写入", 1000)
+            .unwrap();
+        store.process_unreflected(&RuleCritic, 2000).unwrap();
+
+        let lock = tmp.path().join(REFLEXION_LOCK_FILE);
+        assert!(!lock.exists(), "变更完成后共享锁必须归还");
+        let out =
+            storage_atomic::with_file_lock(&lock, || "ok").expect("锁已归还, 外部持有者应立即可取");
+        assert_eq!(out, "ok");
+        assert!(!lock.exists(), "外部持有者释放后锁不得残留");
     }
 }

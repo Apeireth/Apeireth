@@ -461,11 +461,27 @@ pub fn build_gateway_state_with_services(
             .keepalive()
             .expect("fresh presence surface cannot be shut down"),
     );
+    // SSE 交付面 (逐连接租约): 装配 pin 保活, 帧留存跨连接空窗, 每次连接
+    // 都能即读当前快照帧。
+    let events_stream = Arc::new(
+        events
+            .keepalive()
+            .expect("fresh events surface cannot be shut down"),
+    );
+    // 观测攒批面 (flush 循环租约): 装配 pin 保活 —— flush 循环随装配存活,
+    // 装配回收即循环止, 无幽灵 pass。
+    let observations_stream = Arc::new(
+        observations
+            .keepalive()
+            .expect("fresh flush surface cannot be shut down"),
+    );
     GatewayState {
         runtime,
         services,
         events,
+        events_stream,
         observations,
+        observations_stream,
         presence,
         presence_stream,
         hot_config: Arc::new(RwLock::new(GatewayRuntimeConfig::from_env())),
@@ -614,6 +630,10 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
                 .patch(crate::session_settings::patch_session_settings),
         )
         .route("/v1/apeireth/events", get(events_handler))
+        .route(
+            "/v1/apeireth/presence",
+            get(crate::presence::presence_snapshot_handler),
+        )
         .route(
             "/v1/admin/config",
             // H1: 可热改 provider base_url / api_key 的端点, 令牌门保护。

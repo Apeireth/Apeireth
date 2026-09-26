@@ -235,8 +235,12 @@ impl SqliteConnectionPool {
             message: e.to_string(),
         })?;
 
+        // 启动期只建立 1 条空闲读连接, 其余按需补充 (r2d2 默认在 build 时
+        // 建满 max_size 条 —— 每条都是一次文件打开 + PRAGMA 初始化, 是启动期
+        // 重复 I/O)。max_size 上限与并发语义不变, 首次高并发才补到满。
         let pool = r2d2::Pool::builder()
             .max_size(config.max_connections)
+            .min_idle(Some(1))
             .build(manager)
             .map_err(|e| StorageError::Open {
                 path: path.clone(),
@@ -263,8 +267,10 @@ impl SqliteConnectionPool {
             message: e.to_string(),
         })?;
 
+        // 同文件池: 启动期只建 1 条空闲读连接, 其余按需补充 (见 open_with_config)。
         let pool = r2d2::Pool::builder()
             .max_size(config.max_connections)
+            .min_idle(Some(1))
             .build(manager)
             .map_err(|e| StorageError::Open {
                 path: PathBuf::from(":memory:"),

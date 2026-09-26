@@ -12,10 +12,15 @@
 //! ContextLedger's own rolling DELETE stays inside [`crate::context_ledger`] because a
 //! ledger is a recent-window, not an archive.
 
+use apeireth_orchestration::runtime_invariants::{AuditEvent, AuditEventSink};
 use apeireth_orchestration::self_tuning::TunableParam;
 
 use crate::memory_governance::{MemoryGovernanceStatus, MemoryGovernanceStore};
 use crate::{EpisodeQuery, EpisodeStore, MemoryResult, SqliteMemoryStore};
+
+/// Module attribution of the cleanup audit events (matches the module the
+/// `inv_sweep_keeps_protected` invariant is registered under).
+pub const CLEANUP_AUDIT_MODULE: &str = "retention";
 
 /// 艾宾浩斯半衰期基线 (小时) —— 现状硬编码常量 (24h = 1 天)。
 /// `APEIRETH_TUNE_MEMORY_FADE` 未设/非法 = 衰减倍率 1.0 = 本值 (零变化)。
@@ -106,11 +111,52 @@ pub struct RetentionSweepReport {
 /// Sweep `session_id` under `policy` at `now_unix` (epoch seconds).
 ///
 /// Empty session_id is rejected. Inactive policy is a no-op (scanned = 0).
+/// No audit feed (unchanged behavior); use [`sweep_session_with_audit`] or the
+/// [`RetentionCleanup`] entry when the cleanup stream must be observable.
 pub fn sweep_session(
     store: &SqliteMemoryStore,
     session_id: &str,
     policy: &RetentionPolicy,
     now_unix: i64,
+) -> MemoryResult<RetentionSweepReport> {
+    sweep_session_inner(store, session_id, policy, now_unix, None)
+}
+
+/// Sweep `session_id` under `policy` at `now_unix`, feeding the cleanup
+/// execution point into the runtime audit stream.
+///
+/// Every subject the sweep commits to cleaning emits one
+/// [`AuditEvent::cleanup`] into `audit` — the same [`AuditEventSink`] the
+/// memory-governance surface feeds forget/protect/unprotect events into — so
+/// `inv_sweep_keeps_protected` becomes an online guard over live cleanup
+/// traffic: a cleanup event on a subject that carries a live protect marker is
+/// exactly the mutual exclusion it flags.
+///
+/// Protected subjects are skipped before the cleanup executes and therefore
+/// never enter the cleanup stream (a normal pass emits nothing for them).
+pub fn sweep_session_with_audit(
+    store: &SqliteMemoryStore,
+    session_id: &str,
+    policy: &RetentionPolicy,
+    now_unix: i64,
+    audit: Option<&AuditEventSink>,
+) -> MemoryResult<RetentionSweepReport> {
+    sweep_session_inner(store, session_id, policy, now_unix, audit)
+}
+
+/// Feed one subject entering the cleanup stream at the cleanup execution point.
+fn feed_cleanup_event(audit: Option<&AuditEventSink>, subject: &str, cause: &str) {
+    if let Some(sink) = audit {
+        sink(AuditEvent::cleanup(CLEANUP_AUDIT_MODULE, subject, cause));
+    }
+}
+
+fn sweep_session_inner(
+    store: &SqliteMemoryStore,
+    session_id: &str,
+    policy: &RetentionPolicy,
+    now_unix: i64,
+    audit: Option<&AuditEventSink>,
 ) -> MemoryResult<RetentionSweepReport> {
     if session_id.trim().is_empty() {
         return Err(crate::MemoryError::Invalid(
@@ -160,6 +206,10 @@ pub fn sweep_session(
             }
         }
         if drop_it {
+            // The subject enters the cleanup stream here: the sweep committed
+            // to cleaning it. The feed precedes the execution so the guard sees
+            // even the attempts the store turns back.
+            feed_cleanup_event(audit, &ep.id, "retention-sweep");
             match store.forget_episode(&ep.id, Some("retention-sweep"), governed.revision) {
                 Ok(_) => report.forgotten += 1,
                 Err(crate::memory_governance::MemoryGovernanceError::Protected(_)) => {
@@ -186,6 +236,7 @@ pub fn sweep_session(
                 .map(|(id, _, rev)| (id.clone(), *rev))
                 .collect();
             for (id, rev) in victims {
+                feed_cleanup_event(audit, &id, "retention-count-cap");
                 match store.forget_episode(&id, Some("retention-count-cap"), rev) {
                     Ok(_) => report.forgotten += 1,
                     Err(crate::memory_governance::MemoryGovernanceError::Protected(_)) => {
@@ -201,6 +252,39 @@ pub fn sweep_session(
     }
 
     Ok(report)
+}
+
+/// Minimal online cleanup entry: one retention sweep wired to the runtime audit
+/// stream.
+///
+/// The retention sweep had no production caller, so the cleanup side never
+/// reached the audit stream. This entry is the minimal cleanup surface a
+/// scheduler or operator can invoke: it runs [`sweep_session_with_audit`] and
+/// feeds every subject entering the cleanup stream into the attached
+/// [`AuditEventSink`] — the same consumption point the governance events use —
+/// making `inv_sweep_keeps_protected` an online guard over real cleanup runs.
+#[derive(Clone, Default)]
+pub struct RetentionCleanup {
+    audit: Option<AuditEventSink>,
+}
+
+impl RetentionCleanup {
+    /// A cleanup entry with (or without) an audit feed. `None` keeps the sweep
+    /// silent; `Some(sink)` feeds cleanup events into the shared stream.
+    pub fn new(audit: Option<AuditEventSink>) -> Self {
+        Self { audit }
+    }
+
+    /// Run one cleanup pass over `session_id` at `now_unix` (epoch seconds).
+    pub fn run(
+        &self,
+        store: &SqliteMemoryStore,
+        session_id: &str,
+        policy: &RetentionPolicy,
+        now_unix: i64,
+    ) -> MemoryResult<RetentionSweepReport> {
+        sweep_session_with_audit(store, session_id, policy, now_unix, self.audit.as_ref())
+    }
 }
 
 #[cfg(test)]

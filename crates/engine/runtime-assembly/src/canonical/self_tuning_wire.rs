@@ -3,7 +3,8 @@
 //! **职责** (引擎本身保持纯确定性、无 IO):
 //! - 持有 [`SelfTuningEngine`], 把真实使用信号 ([`TuningSignal`]) 喂给引擎;
 //! - 引擎每产生一条 [`TuningRecord`] → **追加写 `tuning-log.jsonl`** (数据目录,
-//!   落位与 session db 同目录, 见 [`tuning_log_path`]); 这是「记录透明」的载体;
+//!   落位与 session db 同目录, 见 [`tuning_log_path`]; 每行一个逐记录信封,
+//!   版本戳随记录走, 读端逐行裁决); 这是「记录透明」的载体;
 //! - 把引擎的 [`TuningValues`] 装进进程内 override, 让四个体验常量的使用点
 //!   (经 [`TunableParam::effective`]) 实时吃到自动调整 —— 调整真生效, 不装学习。
 //!
@@ -17,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use apeireth_core::stored_doc::{self, DocCompat};
 use apeireth_orchestration::self_tuning::{
     install_effective_values, RetrievalHitMissSignal, SelfTuningEngine, TunableParam, TuningEvent,
     TuningRecord, TuningSignal, TuningValues,
@@ -24,6 +26,28 @@ use apeireth_orchestration::self_tuning::{
 
 /// 学习日志文件名 (数据目录, 与 session db 同目录落位)。
 pub const TUNING_LOG_FILE: &str = "tuning-log.jsonl";
+
+/// 学习日志逐记录信封身份 (与读取端的版本契约一致)。
+pub const TUNING_LOG_DOC_NAME: &str = "tuning-log-record";
+/// 学习日志记录格式版本。
+pub const TUNING_LOG_DOC_VERSION: u32 = 1;
+
+/// 学习日志的逐记录版本契约 (信封)。
+fn tuning_log_doc_compat() -> DocCompat {
+    DocCompat::exact(TUNING_LOG_DOC_NAME, TUNING_LOG_DOC_VERSION)
+}
+
+/// 显式迁移旧裸体学习日志行 → 逐记录信封 (信封行与坏行原样保留, 不丢行)
+/// + 追加审计行。默认读取路径不静默迁移。
+pub fn migrate_legacy_tuning_log_file(
+    path: &Path,
+) -> Result<stored_doc::MigrationAudit, stored_doc::StoredDocError> {
+    stored_doc::migrate_records_from_legacy::<TuningRecord>(
+        path,
+        &tuning_log_doc_compat(),
+        stored_doc::DEFAULT_DOC_MODE,
+    )
+}
 
 /// 自学习开关 env (默认关, 仅 `1` 开)。
 pub const SELF_TUNING_ENABLE_ENV: &str = "APEIRETH_ENABLE_SELF_TUNING";
@@ -122,9 +146,16 @@ impl SelfTuningWire {
         self.log_failures.load(Ordering::Relaxed)
     }
 
-    /// 落日志 (JSONL 追加) + 落地生效值 (进程内 override)。
+    /// 落日志 (JSONL 追加, 每行一个逐记录信封 [`stored_doc::StoredDoc`])
+    /// + 落地生效值 (进程内 override)。
     fn persist_and_apply(&self, record: &TuningRecord) {
-        match serde_json::to_string(record) {
+        let doc = stored_doc::StoredDoc::new(
+            TUNING_LOG_DOC_NAME,
+            TUNING_LOG_DOC_VERSION,
+            vec![TUNING_LOG_DOC_VERSION],
+            record,
+        );
+        match serde_json::to_string(&doc) {
             Ok(line) => {
                 use std::io::Write;
                 let appended = std::fs::OpenOptions::new()
@@ -221,7 +252,11 @@ mod tests {
         );
         assert_eq!(wire.log_failures(), 0, "日志追加应成功");
         let line = std::fs::read_to_string(&log_path).expect("tuning-log.jsonl 已写");
-        let record: TuningRecord = serde_json::from_str(line.trim()).expect("JSONL 行可反序列化");
+        let doc: stored_doc::StoredDoc<TuningRecord> =
+            serde_json::from_str(line.trim()).expect("JSONL 行是逐记录信封");
+        assert_eq!(doc.name, TUNING_LOG_DOC_NAME);
+        assert_eq!(doc.version, TUNING_LOG_DOC_VERSION);
+        let record = doc.body;
         assert_eq!(record.param, TunableParam::MemoryFade);
         assert_eq!(record.seq, 1);
         // 生效值 override 落地: 各常量使用点取到引擎值。
@@ -230,6 +265,123 @@ mod tests {
             values.memory_fade,
             "调整必须即时生效 (override 落地)"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 逐记录类消费方: 坏行跳过并计数; 旧裸体行只读兼容照读 (好数据逐字节等价)。
+    #[test]
+    fn tuning_log_scan_counts_bad_lines_and_keeps_legacy_rows() {
+        let dir = std::env::temp_dir().join(format!("apeireth-tuning-scan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let log_path = dir.join(TUNING_LOG_FILE);
+
+        let legacy = TuningRecord {
+            seq: 1,
+            param: TunableParam::MemoryFade,
+            previous: 0.5,
+            next: 0.55,
+            reason: "legacy row".into(),
+            at_epoch_ms: 1_000,
+        };
+        let legacy_line = serde_json::to_string(&legacy).unwrap();
+        let envelope_line = serde_json::to_string(&stored_doc::StoredDoc::new(
+            TUNING_LOG_DOC_NAME,
+            TUNING_LOG_DOC_VERSION,
+            vec![TUNING_LOG_DOC_VERSION],
+            TuningRecord {
+                seq: 2,
+                param: TunableParam::CuriosityStrength,
+                previous: 0.4,
+                next: 0.42,
+                reason: "envelope row".into(),
+                at_epoch_ms: 2_000,
+            },
+        ))
+        .unwrap();
+        std::fs::write(
+            &log_path,
+            format!("{legacy_line}\n{{ not json\n{envelope_line}\n"),
+        )
+        .unwrap();
+
+        let compat = tuning_log_doc_compat();
+        let scan =
+            stored_doc::scan_records_compat::<TuningRecord>(&log_path, &compat).expect("扫描成功");
+        assert_eq!(scan.records.len(), 2, "好行照读: {:#?}", scan.records);
+        assert_eq!(scan.skipped, 1, "坏行必须跳过并计数");
+        assert!(scan.records[0].is_legacy(), "旧裸体行必须照读并如实标记");
+        assert!(!scan.records[1].is_legacy());
+        // 好数据路径逐字节等价: 旧裸体行恢复出的 body 序列化 == 原行字节。
+        assert_eq!(
+            serde_json::to_string(scan.records[0].body()).unwrap(),
+            legacy_line,
+            "旧裸体好行必须逐字节等价恢复"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 显式迁移: 旧裸体行包信封 (信封行/坏行原样保留) + 追加审计行。
+    #[test]
+    fn explicit_tuning_log_migration_wraps_legacy_rows_and_logs_audit() {
+        let dir =
+            std::env::temp_dir().join(format!("apeireth-tuning-migrate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let log_path = dir.join(TUNING_LOG_FILE);
+
+        let legacy = TuningRecord {
+            seq: 1,
+            param: TunableParam::ToneSaturation,
+            previous: 0.3,
+            next: 0.31,
+            reason: "legacy row".into(),
+            at_epoch_ms: 1_000,
+        };
+        let legacy_line = serde_json::to_string(&legacy).unwrap();
+        let envelope_line = serde_json::to_string(&stored_doc::StoredDoc::new(
+            TUNING_LOG_DOC_NAME,
+            TUNING_LOG_DOC_VERSION,
+            vec![TUNING_LOG_DOC_VERSION],
+            TuningRecord {
+                seq: 2,
+                param: TunableParam::MemoryFade,
+                previous: 0.5,
+                next: 0.51,
+                reason: "envelope row".into(),
+                at_epoch_ms: 2_000,
+            },
+        ))
+        .unwrap();
+        let bad = "{ not json".to_string();
+        std::fs::write(
+            &log_path,
+            format!("{legacy_line}\n{envelope_line}\n{bad}\n"),
+        )
+        .unwrap();
+
+        let audit = migrate_legacy_tuning_log_file(&log_path).expect("显式迁移必须成功");
+        assert_eq!(audit.from_version, stored_doc::LEGACY_DOC_VERSION);
+        assert_eq!(audit.to_version, TUNING_LOG_DOC_VERSION);
+        assert!(audit.audit_logged, "逐记录迁移必须留审计");
+
+        let text = std::fs::read_to_string(&log_path).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 3, "迁移不得丢行: {text}");
+        assert_eq!(lines[1], envelope_line, "信封行必须原样保留");
+        assert_eq!(lines[2], bad, "坏行必须原样保留 (不代行裁决)");
+        assert_ne!(lines[0], legacy_line, "旧裸体行必须被包进信封");
+
+        let compat = tuning_log_doc_compat();
+        let scan =
+            stored_doc::scan_records_compat::<TuningRecord>(&log_path, &compat).expect("扫描成功");
+        assert_eq!(scan.records.len(), 2);
+        assert_eq!(scan.skipped, 1);
+        assert!(scan.records.iter().all(|record| !record.is_legacy()));
+        let audit_text =
+            std::fs::read_to_string(format!("{}.migrate-audit.jsonl", log_path.display()))
+                .expect("审计文件必须存在");
+        assert_eq!(audit_text.lines().count(), 1, "审计文件应恰一行");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
