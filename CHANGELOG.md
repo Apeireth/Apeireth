@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 真缺陷修复批 + P0 #5 记忆默认开 + 核心机制讲解文档 (2026-09-26)
+
+- **四真缺陷修复**：① `SemanticAxisBridge::fit` / `DualScaledFieldSolver::solve` 补形状契约守卫（短向量/ragged 矩阵原会索引越界 panic），回归测试 + Kani 全域证明各 1 条；② `tauri.conf.json` `csp:null` 收紧为生产 CSP（dev 留 HMR 口）；③ partner 持久层 `SqlitePartnerStore`（池化 + 幂等建表 + 3 测试），治愈"重启即散"。
+- **P0 #5 记忆核心默认开**（owner 拍板）：三记忆核心（主动召回/偏好学习/记忆注入）默认开（未设=开、`=0` 或 `APEIRETH_DISABLE_*=1` 关、DISABLE 优先、env 名不变）；「应用推荐配置」按钮（恰六件，绝不含 shell/fetch）；四层映射一致测试。
+- **注入契约升级**（如实报备的行为变更）：默认开旋钮由"false=不注入"改为双向显式 1/0——否则 UI 显示关、侧车实际开；老用户持久化显式 false 仍被尊重。同款修复 `localReadTools` 先存错位（UI 默认 false+不注入+CLI 默认开 = UI 永远说谎）。
+- **验证门与口径立法**：kani.yml 10 处 `continue-on-error` 翻 false；标尺 §7 立测试口径定义（对外只引运行时通过数）。
+- **文档**：新增 `docs/02-guides/core-mechanisms-explained.md`（核心机制实现原理讲解，面向项目指导者）；founding-design-v2 §6 默认分层表同步落地态。
+- 实证：src-tauri 32+8、前端 16/16、svelte-check 0/0、clippy 0 警告、fmt 双零；全量 3667 passed（新增 5 测试）。已知环境抖动：AppContainer 探针在并行全量跑时偶发 `CreateAppContainerProfile=0x8000ffff`（隔离复跑全绿，今第 2 次，列入硬化清单）。
 ## [Unreleased] — 合规重写全量收官：五大移植模块改独立实现 + 全仓来源措辞/数字口径/必败命令清零 (2026-09-25)
 
 - **许可证风险全面出清**：继 `river_topology.rs` / `residual_pyramid.rs` 之后，`semantic_axis.rs`（加权 PCA 语义主轴）、`async_context.rs`（四层上下文生命周期）、`file_fetcher.rs`（透明文件穿透）**全部重写**为独立实现（依据公开数值线性代数/通用工程模式/RFC 4648+FIPS 180-4）；当前 crates/frontend 不含第三方衍生表达。
