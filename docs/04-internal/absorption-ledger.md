@@ -84,6 +84,12 @@
 - **案四 kani 合并门**：✅ 已设分支保护 required check（`kani`；分支锁定/管理员同规/禁强推保持）。
 - **数字口径对齐**：工作区 18→**16 crate**（活口径七处已清：README 双语/INSTALL/发布链/架构文/工程报告）。
 
+## 悬案翻案（2026-09-26 晚，owner：「没实现的都实现了」）
+
+- 案二/案三**归档撤销**：sdk+perception 回迁工作区（18-crate 复位），四路实现大军开工——
+  基准复现线 / lark 真实现实 / livekit+voice 真实现 / sandbox 真现实现+perception 接线。
+- 标准：完整协议逻辑+严格错误处理+mock 边界全量测试，零假装；NotImplemented 清零为目标。
+
 ## 余量备忘（收卷建议入账）
 
 - reflexion 自研 MutationLock 可换统一文件锁（死锁接管语义更强，可选优化）；

@@ -9,6 +9,7 @@ members = [
     "crates/foundation/credentials",
     "crates/foundation/orchestration",
     "crates/engine/runtime",
+    "crates/engine/perception",
     "crates/engine/runtime-assembly",
     "crates/engine/guard",
     "crates/engine/provider",
@@ -17,6 +18,7 @@ members = [
     "crates/engine/organ",
     "crates/capabilities/tools",
     "crates/adapters/gateway",
+    "crates/adapters/sdk",
     "crates/adapters/cli",
 ]
 

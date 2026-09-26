@@ -68,7 +68,7 @@ Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsa
 | **全双工打断响应 (Barge-in)** | 语音流原子取消 + `tokio::Notify` 广播 | $< 1.0 \text{ ms}$ | ⏳ harness 建设中 |
 | **Ember HUD 渲染帧** | 4.0s 生理呼吸律动 + CSS 微光 | $< 0.5 \text{ ms}$ | ⏳ harness 建设中 |
 | **OS 物理沙箱** | JobObject / AppContainer 边界初始化 + 进程隔离 | $< 15.0 \text{ ms}$ | ⏳ harness 建设中 |
-| **微内核冷启动耗时** | 16-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
+| **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | ⏳ harness 建设中 |
 | **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | ⏳ harness 建设中 |
 | **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | ✅ **CI 实跑**（`cargo test --workspace`） |
 
