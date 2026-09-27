@@ -129,6 +129,7 @@
   import {presenceStore, subscribePresence, derivePresenceGlow} from './lib/presence';
   import {
     applyBackendConfig,
+    applyBackendConfigOrThrow,
     backendProviderEnvFromConfig,
     capabilityEnvFromConfig,
     isDesktop,
@@ -716,7 +717,8 @@
     agentRuntime = createAgentRuntime(config);
     localStorage.setItem(FIRST_RUN_DONE_KEY, '1');
     showFirstRun = false;
-    void pushProviderEnvAndRefresh(config);
+    // 首启推送失败不打断向导收尾（连接态由健康探测如实呈现）。
+    void pushProviderEnvAndRefresh(config).catch(() => {});
   }
 
   function skipFirstRun(): void {
@@ -1986,6 +1988,9 @@
    * backend exactly once when anything changed, which allocates a fresh
    * port — so after applying we re-adopt the endpoint before probing.
    * No-op in web mode.
+   *
+   * Rejects when the IPC apply fails: the settings capability toggles apply
+   * on click and roll back on failure, so the error must reach the caller.
    */
   async function pushProviderEnvAndRefresh(cfg: ApeirethConfig): Promise<void> {
     if (!isDesktop()) {
@@ -1993,12 +1998,10 @@
       return;
     }
     const provider = backendProviderEnvFromConfig(cfg);
-    if (!provider) {
-      void refreshConnection();
-      return;
-    }
     const capabilities = capabilityEnvFromConfig(cfg.capabilities);
-    const endpoint = await applyBackendConfig(provider, capabilities);
+    // Provider may be absent (nothing configured yet) while capability
+    // toggles still need to reach the sidecar — either part is optional.
+    const endpoint = await applyBackendConfigOrThrow(provider, capabilities);
     if (endpoint && endpoint !== cfg.baseUrl) {
       config = {...cfg, baseUrl: endpoint};
       agentRuntime = createAgentRuntime(config);
@@ -2348,7 +2351,7 @@
         {:else if drawerSec === 'settings'}
           <SettingsView
             {config}
-            onSave={(newCfg) => {
+            onSave={async (newCfg) => {
               const customBgToggled = (newCfg.customBg ?? false) !== (config.customBg ?? false);
               config = newCfg;
               saveConfig(newCfg);
@@ -2361,8 +2364,9 @@
               if (customBgToggled) void syncCustomBg(newCfg.customBg === true);
               // Provider changes must reach the sidecar environment; the
               // push re-adopts the endpoint (a restart allocates a new port)
-              // and then re-probes.
-              void pushProviderEnvAndRefresh(newCfg);
+              // and then re-probes. Awaited so an apply failure can roll an
+              // apply-on-click capability toggle back (and surface the error).
+              await pushProviderEnvAndRefresh(newCfg);
             }}
             onClearLocalData={() => {
               conversations = [];

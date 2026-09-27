@@ -107,6 +107,8 @@
   } from '../tauri-bridge';
   import type {TuningLogEntry} from '../desktop-bridge';
   import {isDesktop, readTuningLog} from '../desktop-bridge';
+  import {configWithCapabilities, toggledCapability} from '../capability-apply';
+  import type {CapabilityToggleKey} from '../capability-apply';
 
   let {
     config,
@@ -114,7 +116,8 @@
     onClearLocalData,
   }: {
     config: ApeirethConfig;
-    onSave: (newConfig: ApeirethConfig) => void;
+    /** 返回 apply 的 Promise：推送失败时拒绝，供开关即点即生效做失败回滚。 */
+    onSave: (newConfig: ApeirethConfig) => void | Promise<void>;
     onClearLocalData?: () => void;
   } = $props();
 
@@ -178,11 +181,53 @@
     // custom: 用户手动改 judge/council，保持现状。
   }
 
-  function handleCapabilityToggle(key: keyof CapabilityToggles, checked: boolean): void {
-    capabilities = {...capabilities, [key]: checked};
+  // ---- 开关即点即生效（P0：能力开关不生效的修复） ----
+  // 设置页是「拨动即生效」的视觉语言：用户不会想到还要点远处的保存按钮。
+  // 拨动后立即走与「保存设置」同一条 apply 路径（onSave → 配置持久化 +
+  // env 注入 + 侧车重启/热应用）：乐观更新 UI + 本行 pending 态；推送失败
+  // 把该开关拨回原值并亮错误横幅。保存按钮保留——批量项（数值旋钮、认知
+  // 深度档位、推荐配置/性格预设）仍走它。
+  let liveApplyPendingKey = $state<CapabilityToggleKey | null>(null);
+  let liveApplyError = $state<{code?: string; message: string; solution?: string} | null>(null);
+  // 拨动序号：失败回滚只对「最后一次在途拨动」生效，后拨的开关不被先拨的
+  // 失败回滚覆盖。
+  let liveApplySeq = 0;
+
+  async function applyCapabilityNow(
+    previous: CapabilityToggles,
+    key: CapabilityToggleKey,
+    attempted: CapabilityToggles,
+  ): Promise<void> {
+    liveApplySeq += 1;
+    const seq = liveApplySeq;
+    liveApplyPendingKey = key;
+    liveApplyError = null;
+    try {
+      await onSave(configWithCapabilities(config, attempted));
+    } catch (err) {
+      if (seq !== liveApplySeq) return;
+      // 失败回滚：只把本次拨动的开关拨回原值，不覆盖其它并发编辑。
+      capabilities = {...capabilities, [key]: previous[key]};
+      if (key === 'judge' || key === 'council') {
+        cognitiveDepth = deriveCognitiveDepth({
+          ...DEFAULT_CAPABILITY_TOGGLES,
+          ...(config.capabilities ?? {}),
+        });
+      }
+      liveApplyError = errorBannerFrom(err);
+    } finally {
+      if (seq === liveApplySeq) liveApplyPendingKey = null;
+    }
+  }
+
+  function handleCapabilityToggle(key: CapabilityToggleKey, checked: boolean): void {
+    const previous = capabilities;
+    const next = toggledCapability(previous, key, checked);
+    capabilities = next;
     if (key === 'judge' || key === 'council') {
       cognitiveDepth = 'custom';
     }
+    void applyCapabilityNow(previous, key, next);
   }
 
   // ---- 能力中心（2026-10-10 W2/W3 收官批）：分组卡片式旋钮注册表 ----
@@ -190,7 +235,7 @@
   // 每个旋钮如实标注后端 env 名（工程诚实），env 芯片用等宽弱色，不抢视觉。
 
   type CapDef = {
-    key: keyof CapabilityToggles;
+    key: CapabilityToggleKey;
     icon: typeof Network;
     label: string;
     desc: string;
@@ -335,7 +380,8 @@
   }
 
   function setSelfTuning(on: boolean): void {
-    capabilities = {...capabilities, selfTuning: on === true};
+    // 「从使用中学习」也是能力开关：同走开关即点即生效语义。
+    handleCapabilityToggle('selfTuning', on === true);
   }
 
   // 预设/恢复基线：带确认框（同「应用推荐配置」模式），确认后走与「保存设置」
@@ -831,7 +877,7 @@
         ? {...config.openaiConfig, apiKey: ''}
         : config.openaiConfig,
     };
-    onSave(updated);
+    void Promise.resolve(onSave(updated)).catch((err) => (applyError = errorBannerFrom(err)));
   }
 
   async function loadWorkspace() {
@@ -911,26 +957,29 @@
       activePersonaId,
     };
 
-    onSave(updated);
-    saveSuccess = true;
-    setTimeout(() => {
-      saveSuccess = false;
-    }, 1500);
-
-    // P0: 密钥随保存写入系统钥匙串——此前只有密钥弹窗会写，服务商区块的
-    // 主保存只进内存（配置落盘会清洗密钥），重启后被钥匙串里的旧值覆盖，
-    // 表现为「保存的 key 不生效/发旧 key」。仅在输入了新密钥时写入，
-    // 空值不覆盖钥匙串。
-    if (providerApiKey.trim()) {
-      await setProviderKey(providerFamily(), providerApiKey.trim());
-    }
-
-    // P1-1: 无重启热应用，成功后回显网关生效配置。
+    // 保存即应用：onSave 返回同一条 apply 路径的 Promise（配置持久化 +
+    // env 注入 + 侧车重启/热应用），失败统一进 applyError 横幅，不产生
+    // 未处理拒绝。
     applying = true;
     applyError = null;
     applyResult = null;
     effectiveConfig = null;
     try {
+      await onSave(updated);
+      saveSuccess = true;
+      setTimeout(() => {
+        saveSuccess = false;
+      }, 1500);
+
+      // P0: 密钥随保存写入系统钥匙串——此前只有密钥弹窗会写，服务商区块的
+      // 主保存只进内存（配置落盘会清洗密钥），重启后被钥匙串里的旧值覆盖，
+      // 表现为「保存的 key 不生效/发旧 key」。仅在输入了新密钥时写入，
+      // 空值不覆盖钥匙串。
+      if (providerApiKey.trim()) {
+        await setProviderKey(providerFamily(), providerApiKey.trim());
+      }
+
+      // P1-1: 无重启热应用，成功后回显网关生效配置。
       const patch: AdminConfigPatch = {
         provider: providerFamily(),
         base_url: normalizeBaseUrl(providerBaseUrl),
@@ -984,7 +1033,7 @@
         ? {...config.openaiConfig, apiKey: key}
         : config.openaiConfig,
     };
-    onSave(updated);
+    void Promise.resolve(onSave(updated)).catch((err) => (applyError = errorBannerFrom(err)));
     providerApiKey = key;
     storedKeyExists = true;
     storedKeyMasked = maskApiKey(key);
@@ -1053,11 +1102,27 @@
 
     <!-- Right Settings Panel -->
     <div class="settings-content">
+      <!-- 开关即点即生效：pending 态 + 失败横幅（回滚后告知用户）。 -->
+      {#if liveApplyPendingKey}
+        <div class="apply-status"><RotateCcw size={13} class="spin" /><span>正在把开关应用到运行时…</span></div>
+      {/if}
+      {#if liveApplyError}
+        <ErrorSolutionBanner
+          code={liveApplyError.code}
+          message={liveApplyError.message}
+          solution={liveApplyError.solution}
+          onClose={() => (liveApplyError = null)}
+        />
+      {/if}
       {#if activeSection === 'appearance'}
         <div class="setting-block">
           <h3 class="block-title">外观与主题</h3>
           <p class="block-desc">选择界面照明档位与背景风格，立即生效并写入本地配置。</p>
-          <ThemeSettingsPanel {config} {onSave} />
+          <ThemeSettingsPanel
+            {config}
+            onSave={(cfg) =>
+              void Promise.resolve(onSave(cfg)).catch((err) => (liveApplyError = errorBannerFrom(err)))}
+          />
         </div>
 
       {:else if activeSection === 'models'}
@@ -1481,7 +1546,9 @@
               <button
                 class="cap-row"
                 class:dim={capDisabled(def)}
+                class:pending={liveApplyPendingKey === def.key}
                 onclick={() => toggleCap(def)}
+                disabled={liveApplyPendingKey !== null}
                 role="switch"
                 aria-checked={isCapOn(def)}
                 aria-label={def.label}
@@ -1505,7 +1572,9 @@
               <button
                 class="cap-row"
                 class:dim={capDisabled(def)}
+                class:pending={liveApplyPendingKey === def.key}
                 onclick={() => toggleCap(def)}
+                disabled={liveApplyPendingKey !== null}
                 role="switch"
                 aria-checked={isCapOn(def)}
                 aria-label={def.label}
@@ -1550,7 +1619,9 @@
               <button
                 class="cap-row"
                 class:dim={capDisabled(def)}
+                class:pending={liveApplyPendingKey === def.key}
                 onclick={() => toggleCap(def)}
+                disabled={liveApplyPendingKey !== null}
                 role="switch"
                 aria-checked={isCapOn(def)}
                 aria-label={def.label}
@@ -1726,7 +1797,9 @@
             </div>
             <button
               class="cap-row"
+              class:pending={liveApplyPendingKey === 'selfTuning'}
               onclick={() => setSelfTuning(!capabilities.selfTuning)}
+              disabled={liveApplyPendingKey !== null}
               role="switch"
               aria-checked={capabilities.selfTuning}
               aria-label="从使用中学习"
@@ -1832,7 +1905,9 @@
               <button
                 class="cap-row"
                 class:dim={capDisabled(def)}
+                class:pending={liveApplyPendingKey === def.key}
                 onclick={() => toggleCap(def)}
+                disabled={liveApplyPendingKey !== null}
                 role="switch"
                 aria-checked={isCapOn(def)}
                 aria-label={def.label}
@@ -1895,7 +1970,9 @@
               <button
                 class="cap-row"
                 class:dim={capDisabled(def)}
+                class:pending={liveApplyPendingKey === def.key}
                 onclick={() => toggleCap(def)}
+                disabled={liveApplyPendingKey !== null}
                 role="switch"
                 aria-checked={isCapOn(def)}
                 aria-label={def.label}
@@ -1951,7 +2028,9 @@
               <button
                 class="cap-row"
                 class:dim={capDisabled(def)}
+                class:pending={liveApplyPendingKey === def.key}
                 onclick={() => toggleCap(def)}
+                disabled={liveApplyPendingKey !== null}
                 role="switch"
                 aria-checked={isCapOn(def)}
                 aria-label={def.label}
@@ -1968,7 +2047,9 @@
                 <button
                   class="cap-row cap-row-nested"
                   class:sandbox-off={!capabilities.shellSandbox}
+                  class:pending={liveApplyPendingKey === 'shellSandbox'}
                   onclick={() => handleCapabilityToggle('shellSandbox', !capabilities.shellSandbox)}
+                  disabled={liveApplyPendingKey !== null}
                   role="switch"
                   aria-checked={capabilities.shellSandbox}
                   aria-label="AppContainer 沙箱执行"
@@ -2100,7 +2181,9 @@
               <button
                 class="cap-row"
                 class:dim={capDisabled(def)}
+                class:pending={liveApplyPendingKey === def.key}
                 onclick={() => toggleCap(def)}
+                disabled={liveApplyPendingKey !== null}
                 role="switch"
                 aria-checked={isCapOn(def)}
                 aria-label={def.label}
@@ -2936,6 +3019,23 @@
   .cap-row.dim {
     opacity: 0.45;
     cursor: not-allowed;
+  }
+  /* 即点即生效 pending：目标行开关脉动、行禁用防连点；失败回滚后由横幅收场。 */
+  .cap-row:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  .cap-row.pending .cap-switch {
+    animation: cap-pending 0.9s ease-in-out infinite;
+  }
+  @keyframes cap-pending {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
   }
   .cap-row-nested {
     padding-left: 40px;

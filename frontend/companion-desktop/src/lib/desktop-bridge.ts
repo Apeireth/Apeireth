@@ -262,6 +262,23 @@ export async function applyBackendConfig(
   return info?.endpoint ?? null;
 }
 
+/**
+ * Same contract as {@link applyBackendConfig}, but an IPC failure rejects
+ * instead of collapsing to null. Callers doing optimistic UI updates (the
+ * settings capability toggles apply on click) need to know the push failed so
+ * they can roll the control back and surface the error. Web mode still
+ * resolves null: there is nothing to push.
+ */
+export async function applyBackendConfigOrThrow(
+  provider: BackendProviderEnv | null,
+  capabilities: BackendCapabilityEnv | null,
+): Promise<string | null> {
+  if (!isDesktop()) return null;
+  const {invoke} = await import('@tauri-apps/api/core');
+  const info = await invoke<BackendStatus>('apply_backend_config', {provider, capabilities});
+  return info?.endpoint ?? null;
+}
+
 /** Absolute path of the log directory. */
 export function getLogDirectory(): Promise<string | null> {
   return invokeOptional<string>('get_log_directory');

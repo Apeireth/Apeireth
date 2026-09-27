@@ -190,14 +190,77 @@ fn open_settings(app: tauri::AppHandle) {
     }
 }
 
+/// 快捷窗开关的纯决策（可单测）。
+///
+/// 关闭 = 真正销毁窗口，而不是 hide：隐藏透明窗在部分桌面环境会残留一层
+/// 点不掉的透明残影（幽灵窗）。销毁后两条关闭路径（窗内 × / 托盘切换）与
+/// 「托盘再点 = 新开/唤起」的状态完全一致，不存在隐藏中的透明窗口。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QuickWindowAction {
+    /// 窗口可见：关闭（销毁）。
+    Close,
+    /// 窗口存在但不可见：唤起。
+    Show,
+    /// 窗口不存在（已销毁）：新开。
+    Create,
+}
+
+fn quick_window_action(exists: bool, visible: bool) -> QuickWindowAction {
+    match (exists, visible) {
+        (true, true) => QuickWindowAction::Close,
+        (true, false) => QuickWindowAction::Show,
+        (false, _) => QuickWindowAction::Create,
+    }
+}
+
+/// 快捷窗统一构建入口（启动预建 + 托盘唤起共用同一组窗口参数）。
+fn build_quick_window(
+    app: &tauri::AppHandle,
+    visible: bool,
+) -> tauri::Result<tauri::WebviewWindow> {
+    WebviewWindowBuilder::new(
+        app,
+        "quick",
+        WebviewUrl::App("index.html?window=quick".into()),
+    )
+    .title("Apeireth 快捷")
+    .inner_size(440.0, 390.0)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .visible(visible)
+    .build()
+}
+
 #[tauri::command]
 fn toggle_quick_window(app: tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("quick") {
-        if window.is_visible().unwrap_or(false) {
-            let _ = window.hide();
-        } else {
-            let _ = window.show();
-            let _ = window.set_focus();
+    let existing = app.get_webview_window("quick");
+    let visible = existing
+        .as_ref()
+        .map(|window| window.is_visible().unwrap_or(false))
+        .unwrap_or(false);
+    match quick_window_action(existing.is_some(), visible) {
+        QuickWindowAction::Close => {
+            // 真正关闭（销毁）：不留透明残影/不可点的幽灵层。
+            if let Some(window) = existing {
+                let _ = window.close();
+            }
+        }
+        QuickWindowAction::Show => {
+            if let Some(window) = existing {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }
+        QuickWindowAction::Create => {
+            // 销毁后的快捷窗在此新开；与「唤起」同一入口，状态一致。
+            if let Err(error) = build_quick_window(&app, true) {
+                eprintln!("quick window create failed: {error}");
+            }
+            if let Some(window) = app.get_webview_window("quick") {
+                let _ = window.set_focus();
+            }
         }
     }
 }
@@ -315,20 +378,8 @@ pub fn run() {
 
             // 主窗口由 tauri.conf.json 声明 (app.windows[0] label=main), 这里不再重复创建.
 
-            // 快捷窗 (Alt+Space 呼出, 先只建主窗足够; 后续 Phase 2 加 quick window)
-            let _ = WebviewWindowBuilder::new(
-                app,
-                "quick",
-                WebviewUrl::App("index.html?window=quick".into()),
-            )
-            .title("Apeireth 快捷")
-            .inner_size(440.0, 390.0)
-            .decorations(false)
-            .transparent(true)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .visible(false)
-            .build();
+            // 快捷窗 (启动预建、初始隐藏; 托盘「快捷窗口」新开/唤起/关闭)
+            let _ = build_quick_window(app.handle(), false);
 
             // 托盘
             let menu = build_menu(&handle)?;
@@ -388,4 +439,47 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{quick_window_action, QuickWindowAction};
+
+    /// 快捷窗生命周期决策表：可见 = 销毁关闭、存在不可见 = 唤起、不存在 = 新开。
+    #[test]
+    fn quick_window_toggle_decision_table() {
+        assert_eq!(quick_window_action(true, true), QuickWindowAction::Close);
+        assert_eq!(quick_window_action(true, false), QuickWindowAction::Show);
+        assert_eq!(quick_window_action(false, false), QuickWindowAction::Create);
+    }
+
+    /// 开→关→开→关 与 开→托盘关→托盘开 两条路径走同一状态机：关闭即销毁，
+    /// 任何时刻都不存在「隐藏中的透明窗」可残留成关不掉的幽灵窗。
+    #[test]
+    fn quick_window_open_close_cycles_leave_no_hidden_window() {
+        let mut exists = false;
+        let mut visible = false;
+        let mut trace = Vec::new();
+        for _ in 0..4 {
+            match quick_window_action(exists, visible) {
+                QuickWindowAction::Create => {
+                    exists = true;
+                    visible = true;
+                    trace.push("create");
+                }
+                QuickWindowAction::Show => {
+                    visible = true;
+                    trace.push("show");
+                }
+                QuickWindowAction::Close => {
+                    // 关闭 = 销毁：窗口对象不复存在，隐藏态无从残留。
+                    exists = false;
+                    visible = false;
+                    trace.push("close");
+                }
+            }
+        }
+        assert_eq!(trace, ["create", "close", "create", "close"]);
+        assert!(!exists);
+    }
 }
