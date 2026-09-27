@@ -28,7 +28,7 @@ Source-of-Truth: CHANGELOG.md + ARCHITECTURE.md + docs/01-architecture/ 系列�
   - **agent loop 真实现**——旧审计结论"任何地方都没有 agent loop"已被 `crates/engine/runtime/src/canonical/execute.rs` 推翻；
   - 3 家 provider 插件化（MiniMax/Anthropic/OpenAI-compatible）、5 内置工具（3 只读默认可用；shell/fetch 默认关）、三 OS 进程封装（Windows Job Object 完整 / Linux·macOS 进程组部分）；
   - CI 全绿：cargo-nextest ~1476、clippy 3 档、fmt、audit、deny、miri、rustdoc、coverage、13 键测试契约、M2B/M2C/M3A 三 OS 验证。
-- **已知缺口（诚实）**：13 键 verdict cache 已拍板降级为哲学标准（`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注，详见 `docs/04-internal/v2-unabsorbed-features.md` §A4 与 `docs/04-internal/scene-d-v2-plan.md` §3.4），不接 runtime 强制机制；`apeireth-credentials` 已接线（RC-9, 2026-09-05 对账注）；M1B 记忆/向量/图未移植；MCP、companion 器官、voice/screen 未移植。
+- **已知缺口（诚实）**【2026-09-27 对账翻新】：13 键 verdict cache 已拍板降级为哲学标准（`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注，详见 `docs/04-internal/v2-unabsorbed-features.md` §A4 与 `docs/04-internal/scene-d-v2-plan.md` §3.4），不接 runtime 强制机制；`apeireth-credentials` 已接线（真热更凭据链）；M1B 记忆/向量/图**已实装**（`engine/memory` 图/语义轴/混合检索）；companion 器官**已全实装**（9 器官）、voice **已真现实现**（SDK voice 族）、screen/perception **已接线**（默认关，白名单+封套入记忆）。**当前唯一未接线：MCP**（如实标注）。治理生产接线见下条。
 - **v2.0.0-alpha.1 = 骨架 + 主链的 alpha**：governance P0 已 ✅ 接线（upstream `873d2857`），13 键降级决策 P0 已 ✅ 拍板完成，场景 D 路线见 `docs/04-internal/scene-d-v2-plan.md`。
 - **O-6 重构批次 (2026-08-27 启动, 哲学锚 #9 登记后立刻做)**：v2.0.0-rc.1 前的架构最优整理批次, 详见 `docs/04-internal/v2-arch-refactor-batch.md` (5 项 trait 搬 crate + 12 consumer use 行迁移). 工作量约 1-2 天, "不重做" = 默认接受次优, 这是 O-6 锚的第一次兑现.
 
@@ -77,7 +77,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | Tag | `v1.0.0` / `v1.5.0` / `v2.0.0-alpha.1` / `v2.0.0-preview` / `v2.0.0-rc.1`（→ `854831fc`） |
 | Workspace | **18 crates**（foundation 6 / engine 8 / capabilities 1 / adapters 3；engine 第 7 个 = `crates/engine/runtime-assembly`，第 8 个 = `crates/engine/guard`（2026-10-06 协作者批）） + `frontend/companion-desktop` (Svelte 5 + Tauri 2) |
 | 代码量 | crates/ 内 .rs：src-only **147,732 行**（406 文件）+ tests **25,972 行**（73 文件）（2026-09-05 实测，不含 legacy/）；前端 companion-desktop 61 文件 ~21k 行（不含 node_modules/dist） |
-| 测试 | **3662 passed / 0 failed / 21 ignored**（130 suites，`cargo test --workspace` 全量实测；历史口径：2026-10-06 W2 批 3418/19、2026-09-05 3120/13） |
+| 测试 | **4638 passed / 0 failed / 21 ignored**（147 suites，`cargo test --workspace` 全量实测 2026-09-27；历史口径：2026-09-27 清零批 4585、尾款批前 3907、2026-09-26 3662/130、2026-10-06 W2 批 3418/19、2026-09-05 3120/13） |
 | CI / 守门 | 5 重守门全绿 + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告（2026-09-05 亲跑）+ 9 锚 / 13 键 / 3 脊柱 / R11 baseline 0 触碰；workspace.version 已随 RC1 发布推进为 2.0.0-rc.1 |
 | **v2.0 核心建设** | ✅ **100% 落地**：14 大战区（Whisper HTTP + Xcap 截屏多模态、Okapi BM25 + 向量 RRF 混合检索、上下文衰减 3 因子、SpillStore 溢出隔离、7 阶段伙伴羁绊、8 分类里程碑、动态原则洋葱、三层语调合成、断点续行与 O-1 核心段删除防御、叙事日记本与日活动聚合、跨日记图共享词元索引、口头强化反思闭环、微积分换元符号规则检查、Gateway SSE 流式通道及桌面端伙伴）。 |
 | **当前状态与下一步** | **预览版已就绪 (v2.0.0-preview)**，转交协作者开展生产压测与交叉验证，待协作者确认后提议发布 2.0 正式版。 |

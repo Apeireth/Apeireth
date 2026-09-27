@@ -502,6 +502,18 @@
 
 ### 已知缺口（诚实，见 ROADMAP §4）
 
+> **2026-09-27 销账补记**（历史条目保留不删，逐条对账现状）：
+> ① "生产 bootstrap 未装 governance pipeline（默认 AllowAll）"——**已修复**。现生产装配走
+> `build_production_governance_parts_from_env`（白名单 `PermissionPolicy` 授权制 +
+> `BehaviorChainGuardHook` 行为链守卫 + `PermissionPresetGovernanceHook` 预设治理钩子，
+> 实装于 `crates/adapters/cli/src/lib.rs` 生产装配处）；`AllowAll` 仅存在于测试 mock
+> （`MockCouncilDecision`），生产代码零出现。
+> ② "13 键 verdict cache 未接执行路径"——**已拍板降级为哲学标准**（`philosophy.rs::RUNTIME_ENFORCED=false`
+> 显式标注，不再作为运行时强制机制宣传）。
+> ③ "`apeireth-credentials` 未接线 / 记忆图 / 器官 / voice / screen 未移植"——**已全部兑现**：
+> credentials 已接线（真热更凭据链）、记忆图/语义轴在 `engine/memory`、9 器官全实装、
+> voice 族真现实现、screen/perception 已接线（默认关）；仍未接线的仅 **MCP** 一件（如实标注）。
+
 - 生产 bootstrap 尚未安装 governance pipeline（默认 AllowAll）——P0
 - 13 键 verdict cache 只在 core 内测试、未接 canonical 执行路径——P0 拍板去留
 - `apeireth-credentials` 未接线（孤儿 crate）；M1B 记忆/向量/图未全量移植；MCP、companion 器官、voice/screen 未移植（留 legacy）
