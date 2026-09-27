@@ -233,6 +233,17 @@ fn build_quick_window(
     .build()
 }
 
+/// 快捷窗外部处决命令：× 绝不自毁——webview 调用自身 destroy() 会自毁挂死
+/// （表现为 Windows 鬼影窗：透明带框、点不掉、托盘再点才消）。改为 JS 发命令、
+/// Rust 从外部「先隐身影、再销毁」，确定性拆除、残影无源。
+#[tauri::command]
+fn close_quick_window(app: tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("quick") {
+        let _ = window.hide();
+        let _ = window.destroy();
+    }
+}
+
 #[tauri::command]
 fn toggle_quick_window(app: tauri::AppHandle) {
     let existing = app.get_webview_window("quick");
@@ -331,6 +342,7 @@ pub fn run() {
         .manage(logger.clone())
         .invoke_handler(tauri::generate_handler![
             ping,
+            close_quick_window,
             get_backend_status,
             start_backend,
             stop_backend,

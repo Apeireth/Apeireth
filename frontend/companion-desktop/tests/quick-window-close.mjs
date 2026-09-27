@@ -26,12 +26,10 @@ console.log('--- Starting Quick Window Close/Destroy Lifecycle Check ---');
   const closeRegion = /async function handleClose[\s\S]*?\n  \}/.exec(quickSrc);
   assert.ok(closeRegion, 'QuickWindowView 必须有 handleClose');
   assert.ok(
-    closeRegion[0].includes('.destroy()'),
+    closeRegion[0].includes('close_quick_window'),
     '× 必须真正关闭（销毁窗）',
   );
-  const hideIdx = closeRegion[0].indexOf('.hide()');
-const destroyIdx = closeRegion[0].indexOf('.destroy()');
-assert.ok(hideIdx === -1 || hideIdx < destroyIdx, 'hide 仅允许作为销毁前清影（必须先于 destroy）');
+  assert.ok(quickSrc.includes('close_quick_window'), '× 必须走外部处决命令');
   console.log('  -> PASS: × = hide 清影 + destroy 销毁（残影无源）');
 }
 
@@ -51,6 +49,9 @@ assert.ok(hideIdx === -1 || hideIdx < destroyIdx, 'hide 仅允许作为销毁前
   }
 
   const toggleRegion = /fn toggle_quick_window[\s\S]*?\n\}/.exec(rustSrc);
+  const cmdRegion = /fn close_quick_window[\s\S]*?\n\}/.exec(rustSrc);
+  assert.ok(cmdRegion, 'Rust 必须提供 close_quick_window 外部处决命令');
+  assert.ok(cmdRegion[0].includes('window.hide()') && cmdRegion[0].includes('window.destroy()'), 'close_quick_window 必须先隐身后销毁');
   assert.ok(toggleRegion, 'src-tauri 必须有 toggle_quick_window');
   assert.ok(
     toggleRegion[0].includes('let _ = window.destroy();'),

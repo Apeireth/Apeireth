@@ -60,14 +60,19 @@
 
   async function handleClose(): Promise<void> {
     try {
-      const {getCurrentWebviewWindow} = await import('@tauri-apps/api/webviewWindow');
-      // × = 真正关闭（销毁窗）：透明无边框窗直接销毁在部分环境会留透明残影——
-      // 先隐身后销毁（视觉层先撤再拆），残影无源；托盘再点=新开，路径状态一致。
-      const w = getCurrentWebviewWindow();
-      await w.hide().catch(() => undefined);
-      await w.destroy();
+      // × 不自毁：webview 调用自身 destroy() 会自毁挂死（Windows 鬼影窗）。
+      // 发命令请 Rust 从外部「先隐身影、再销毁」，确定性拆除。
+      const {invoke} = await import('@tauri-apps/api/core');
+      await invoke('close_quick_window');
     } catch {
-      window.close();
+      try {
+        const {getCurrentWebviewWindow} = await import('@tauri-apps/api/webviewWindow');
+        const w = getCurrentWebviewWindow();
+        await w.hide().catch(() => undefined);
+        await w.destroy();
+      } catch {
+        window.close();
+      }
     }
   }
 
