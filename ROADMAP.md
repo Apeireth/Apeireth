@@ -28,7 +28,7 @@ Source-of-Truth: CHANGELOG.md + ARCHITECTURE.md + docs/01-architecture/ 系列�
   - **agent loop 真实现**——旧审计结论"任何地方都没有 agent loop"已被 `crates/engine/runtime/src/canonical/execute.rs` 推翻；
   - 3 家 provider 插件化（MiniMax/Anthropic/OpenAI-compatible）、5 内置工具（3 只读默认可用；shell/fetch 默认关）、三 OS 进程封装（Windows Job Object 完整 / Linux·macOS 进程组部分）；
   - CI 全绿：cargo-nextest ~1476、clippy 3 档、fmt、audit、deny、miri、rustdoc、coverage、13 键测试契约、M2B/M2C/M3A 三 OS 验证。
-- **已知缺口（诚实）**【2026-09-27 对账翻新】：13 键 verdict cache 已拍板降级为哲学标准（`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注，详见 `docs/04-internal/v2-unabsorbed-features.md` §A4 与 `docs/04-internal/scene-d-v2-plan.md` §3.4），不接 runtime 强制机制；`apeireth-credentials` 已接线（真热更凭据链）；M1B 记忆/向量/图**已实装**（`engine/memory` 图/语义轴/混合检索）；companion 器官**已全实装**（9 器官）、voice **已真现实现**（SDK voice 族）、screen/perception **已接线**（默认关，白名单+封套入记忆）。**当前唯一未接线：MCP**（如实标注）。治理生产接线见下条。
+- **已知缺口（诚实）**【2026-09-27 对账翻新】：13 键 verdict cache 已拍板降级为哲学标准（`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注，详见 `docs/04-internal/v2-unabsorbed-features.md` §A4 与 `docs/04-internal/scene-d-v2-plan.md` §3.4），不接 runtime 强制机制；`apeireth-credentials` 已接线（真热更凭据链）；M1B 记忆/向量/图**已实装**（`engine/memory` 图/语义轴/混合检索）；companion 器官**已全实装**（9 器官）、voice **已真现实现**（SDK voice 族）、screen/perception **已接线**（默认关，白名单+封套入记忆）。**MCP 已接线**（2026-09-27：配置面+工具桥+治理映射+32 e2e，外部工具穿五段流水线默认审批级）。治理生产接线见下条。
 - **v2.0.0-alpha.1 = 骨架 + 主链的 alpha**：governance P0 已 ✅ 接线（upstream `873d2857`），13 键降级决策 P0 已 ✅ 拍板完成，场景 D 路线见 `docs/04-internal/scene-d-v2-plan.md`。
 - **O-6 重构批次 (2026-08-27 启动, 哲学锚 #9 登记后立刻做)**：v2.0.0-rc.1 前的架构最优整理批次, 详见 `docs/04-internal/v2-arch-refactor-batch.md` (5 项 trait 搬 crate + 12 consumer use 行迁移). 工作量约 1-2 天, "不重做" = 默认接受次优, 这是 O-6 锚的第一次兑现.
 
