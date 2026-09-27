@@ -26,11 +26,13 @@ console.log('--- Starting Quick Window Close/Destroy Lifecycle Check ---');
   const closeRegion = /async function handleClose[\s\S]*?\n  \}/.exec(quickSrc);
   assert.ok(closeRegion, 'QuickWindowView 必须有 handleClose');
   assert.ok(
-    closeRegion[0].includes('getCurrentWebviewWindow().close()'),
+    closeRegion[0].includes('.destroy()'),
     '× 必须真正关闭（销毁窗）',
   );
-  assert.ok(!closeRegion[0].includes('.hide()'), '× 不允许 hide（会残留透明幽灵窗）');
-  console.log('  -> PASS: × = 真正关闭（销毁窗），无 hide 残影路径');
+  const hideIdx = closeRegion[0].indexOf('.hide()');
+const destroyIdx = closeRegion[0].indexOf('.destroy()');
+assert.ok(hideIdx === -1 || hideIdx < destroyIdx, 'hide 仅允许作为销毁前清影（必须先于 destroy）');
+  console.log('  -> PASS: × = hide 清影 + destroy 销毁（残影无源）');
 }
 
 // ---------------------------------------------------------------------------
@@ -51,17 +53,16 @@ console.log('--- Starting Quick Window Close/Destroy Lifecycle Check ---');
   const toggleRegion = /fn toggle_quick_window[\s\S]*?\n\}/.exec(rustSrc);
   assert.ok(toggleRegion, 'src-tauri 必须有 toggle_quick_window');
   assert.ok(
-    toggleRegion[0].includes('let _ = window.close();'),
-    '托盘关闭快捷窗必须销毁窗口',
+    toggleRegion[0].includes('let _ = window.destroy();'),
+    '托盘关闭快捷窗必须销毁窗口（hide 清影 + destroy）',
   );
   assert.ok(
     toggleRegion[0].includes('build_quick_window(&app, true)'),
     '窗口不存在时必须新开（托盘再点 = 新开/唤起）',
   );
-  assert.ok(
-    !toggleRegion[0].includes('window.hide()'),
-    '快捷窗生命周期不允许 hide（隐藏透明窗会残留幽灵窗）',
-  );
+  const tHide = toggleRegion[0].indexOf('window.hide()');
+  const tDestroy = toggleRegion[0].indexOf('window.destroy()');
+  assert.ok(tHide === -1 || tHide < tDestroy, 'hide 仅允许作销毁前清影（必须先于 destroy）');
   console.log('  -> PASS: 托盘路径 = 销毁关闭 / 唤起 / 新开，无隐藏残留态');
 }
 

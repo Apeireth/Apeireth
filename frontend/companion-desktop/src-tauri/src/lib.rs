@@ -242,9 +242,11 @@ fn toggle_quick_window(app: tauri::AppHandle) {
         .unwrap_or(false);
     match quick_window_action(existing.is_some(), visible) {
         QuickWindowAction::Close => {
-            // 真正关闭（销毁）：不留透明残影/不可点的幽灵层。
+            // 真正关闭（销毁）：透明无边框窗直接销毁会在部分 Windows/WebView2
+            // 组合上残留透明残影——先隐身后销毁（视觉层先撤再拆），残影无源。
             if let Some(window) = existing {
-                let _ = window.close();
+                let _ = window.hide();
+                let _ = window.destroy();
             }
         }
         QuickWindowAction::Show => {

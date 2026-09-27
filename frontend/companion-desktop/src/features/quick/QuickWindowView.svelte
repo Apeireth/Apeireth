@@ -61,9 +61,11 @@
   async function handleClose(): Promise<void> {
     try {
       const {getCurrentWebviewWindow} = await import('@tauri-apps/api/webviewWindow');
-      // × = 真正关闭（销毁窗）：隐藏透明窗会残留一层点不掉的透明残影。
-      // 销毁后托盘再点「快捷助手」= 新开，两条路径状态一致、无幽灵窗。
-      await getCurrentWebviewWindow().close();
+      // × = 真正关闭（销毁窗）：透明无边框窗直接销毁在部分环境会留透明残影——
+      // 先隐身后销毁（视觉层先撤再拆），残影无源；托盘再点=新开，路径状态一致。
+      const w = getCurrentWebviewWindow();
+      await w.hide().catch(() => undefined);
+      await w.destroy();
     } catch {
       window.close();
     }
