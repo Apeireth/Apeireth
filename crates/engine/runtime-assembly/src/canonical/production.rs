@@ -22,6 +22,7 @@ use apeireth_plugin::self_assessment::SelfAssessmentStore;
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::NormalizedMessage;
 use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
+use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig, McpToolBridge};
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
 
 use super::capability::CapabilityProvider;
@@ -132,8 +133,17 @@ pub struct ProductionModulesConfig {
     pub shell: Option<TrustedShellConfig>,
     /// Register fetch tool module when config is supplied.
     pub fetch: Option<FetchConfig>,
-    /// Register MCP capability module.
+    /// Register the external tool bridge (MCP) module.
+    ///
+    /// When enabled, the server list is loaded at assembly time from
+    /// `APEIRETH_MCP_SERVERS` (primary entry) or the data directory's
+    /// `mcp-servers.json` (secondary entry, stored-document fail-closed
+    /// semantics): a defective configuration is a boot error, never a
+    /// silent fallback. Off by default.
     pub mcp: bool,
+    /// Data directory whose `mcp-servers.json` is the secondary config entry
+    /// for the external tool bridge (see [`Self::mcp`]).
+    pub mcp_data_dir: Option<PathBuf>,
     /// Register deterministic preference learning (AfterTurn, explicit
     /// evidence only). Requires the preference backend when enabled.
     pub preference_learning: bool,
@@ -180,6 +190,7 @@ impl Default for ProductionModulesConfig {
             shell: None,
             fetch: None,
             mcp: false,
+            mcp_data_dir: None,
             preference_learning: false,
             organs: false,
             memory_injection: false,
@@ -254,6 +265,8 @@ pub struct ProductionModules {
     modules: Vec<Arc<dyn Module>>,
     capabilities: Vec<Arc<dyn ToolCapability>>,
     telemetry: Arc<CognitiveTelemetry>,
+    mcp_bridge: Option<Arc<McpToolBridge>>,
+    mcp_module: Option<Arc<McpModule>>,
 }
 
 /// Compatibility alias for [`ProductionModules`].
@@ -323,9 +336,28 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
+        // External tool bridge (MCP): the slot is opt-in, and enabling it
+        // loads the server list at assembly time (env primary, data-directory
+        // stored document secondary) with fail-closed semantics. Connections
+        // are established asynchronously after build; the module bag is the
+        // registration target for the dynamic tools discovery produces.
+        let mut mcp_bridge = None;
+        let mut mcp_module = None;
         if config.mcp {
-            let provider = McpModule::new();
-            capabilities.extend(provider.capabilities());
+            let server_config =
+                McpServerConfig::load(config.mcp_data_dir.as_deref()).map_err(|error| {
+                    RuntimeError::misconfigured(format!(
+                        "mcp server configuration refused to load: {error}"
+                    ))
+                })?;
+            let options = McpBridgeOptions::from_env();
+            let bridge = McpToolBridge::new(server_config, options).map_err(|error| {
+                RuntimeError::misconfigured(format!("mcp tool bridge refused to assemble: {error}"))
+            })?;
+            let module = Arc::new(McpModule::new());
+            capabilities.extend(module.capabilities());
+            mcp_bridge = Some(Arc::new(bridge));
+            mcp_module = Some(module);
         }
 
         // Unified Memory 2.0 coordinator wiring
@@ -538,6 +570,8 @@ impl ProductionModules {
             modules,
             capabilities,
             telemetry,
+            mcp_bridge,
+            mcp_module,
         })
     }
 
@@ -584,6 +618,19 @@ impl ProductionModules {
     /// Shared non-sensitive hook telemetry for the registered modules.
     pub fn telemetry(&self) -> Arc<CognitiveTelemetry> {
         Arc::clone(&self.telemetry)
+    }
+
+    /// The external tool bridge assembled for the MCP slot, when enabled.
+    ///
+    /// Adapters keep this handle to run the asynchronous connect/discovery
+    /// pass and to emit the redacted startup log.
+    pub fn mcp_bridge(&self) -> Option<&Arc<McpToolBridge>> {
+        self.mcp_bridge.as_ref()
+    }
+
+    /// The MCP dynamic tool module bag, when the MCP slot is enabled.
+    pub fn mcp_module(&self) -> Option<&Arc<McpModule>> {
+        self.mcp_module.as_ref()
     }
 }
 

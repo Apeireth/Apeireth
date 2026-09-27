@@ -238,6 +238,26 @@ pub(crate) fn capabilities() -> IsolationCapabilities {
     caps
 }
 
+/// Process-wide spawn gate: serializes the child-creation critical section.
+///
+/// `CreateProcessW(..., bInheritHandles = TRUE, ...)` hands the new child
+/// **every** inheritable handle open in this process. Each spawn's
+/// stdout/stderr pipe write-ends are inheritable from `create_pipe` until the
+/// parent closes its own copies right after creation, so two overlapping
+/// spawns could cross-adopt those write-ends — and an adopted copy keeps the
+/// other spawn's output reader from ever seeing end-of-stream (its join then
+/// times out on output that already exists). One gate held across
+/// pipe creation → child creation → parent-side closes makes every child
+/// inherit only its own standard handles.
+static SPAWN_GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Acquire the spawn gate, tolerating a poisoned holder.
+fn lock_spawn_gate() -> std::sync::MutexGuard<'static, ()> {
+    SPAWN_GATE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 pub(crate) fn spawn_and_supervise(
     request: &ProcessRequest,
     enforcement: PlatformEnforcement,
@@ -255,20 +275,27 @@ pub(crate) fn spawn_and_supervise(
             .requires(IsolationCapability::NetworkIsolation)
             .is_some();
 
-    let child: WindowsChild = if sandbox_required {
-        WindowsChild::Raw(spawn_appcontainered_child(request, job)?)
-    } else if request
-        .isolation()
-        .requires(IsolationCapability::PrivilegeReduction)
-        .is_some()
-    {
-        WindowsChild::Raw(spawn_restricted_child(request, job)?)
-    } else if plain_raw_spawn_supported(request) {
-        WindowsChild::Raw(spawn_plain_raw_child(request, job)?)
-    } else {
-        // Legacy std-spawn classes (batch scripts, verbatim-prefixed paths)
-        // keep their original creation path verbatim.
-        WindowsChild::Std(spawn_std_child(request, job)?)
+    let child: WindowsChild = {
+        // Creation runs under the process-wide spawn gate (see SPAWN_GATE):
+        // no second creation may interleave between our pipe creation and the
+        // parent-side close of the pipe write-ends. Supervision and I/O run
+        // after the gate is released, so long-lived children never hold it.
+        let _gate = lock_spawn_gate();
+        if sandbox_required {
+            WindowsChild::Raw(spawn_appcontainered_child(request, job)?)
+        } else if request
+            .isolation()
+            .requires(IsolationCapability::PrivilegeReduction)
+            .is_some()
+        {
+            WindowsChild::Raw(spawn_restricted_child(request, job)?)
+        } else if plain_raw_spawn_supported(request) {
+            WindowsChild::Raw(spawn_plain_raw_child(request, job)?)
+        } else {
+            // Legacy std-spawn classes (batch scripts, verbatim-prefixed paths)
+            // keep their original creation path verbatim.
+            WindowsChild::Std(spawn_std_child(request, job)?)
+        }
     };
 
     supervise(child, request, enforcement)

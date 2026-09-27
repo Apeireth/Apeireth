@@ -60,6 +60,9 @@ pub const DISABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_DISABLE_LOCAL_READ_TOOL
 // organs / preference_learning 为认知模块装配旋钮。
 const ENABLE_SHELL_ENV: &str = "APEIRETH_ENABLE_SHELL";
 const ENABLE_FETCH_ENV: &str = "APEIRETH_ENABLE_FETCH";
+// MCP 外部工具桥旋钮 (轻默认, 默认关): `APEIRETH_ENABLE_MCP=1` 时装配外部工具桥,
+// 服务器列表走 `APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json` (拒开语义)。
+const ENABLE_MCP_ENV: &str = "APEIRETH_ENABLE_MCP";
 const ENABLE_ORGANS_ENV: &str = "APEIRETH_ENABLE_ORGANS";
 const ENABLE_PREFERENCE_LEARNING_ENV: &str = "APEIRETH_ENABLE_PREFERENCE_LEARNING";
 // 2026-10-06 W2 接线批 (engineering-review-handoff-2026-10-06.md §5 W2):
@@ -724,6 +727,9 @@ async fn build_cognitive_modules_from_env(
     let fetch_enabled = std::env::var(ENABLE_FETCH_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
+    let mcp_enabled = std::env::var(ENABLE_MCP_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
     let reflexion_enabled = reflexion_enabled_from_env();
     let workspace_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let config = CognitiveModuleConfig {
@@ -751,6 +757,10 @@ async fn build_cognitive_modules_from_env(
                 .with_sandbox(shell_sandbox_enabled_from_env())
         }),
         fetch: fetch_enabled.then(FetchConfig::public_internet_only),
+        // MCP 外部工具桥: 装配时加载服务器列表 (env 主入口 / 数据目录次入口,
+        // 坏配置拒开), 数据目录与面板其余持久档同位。
+        mcp: mcp_enabled,
+        mcp_data_dir: mcp_enabled.then(default_panel_data_dir),
         ..CognitiveModuleConfig::default()
     };
     let sqlite_backend = Arc::new(SqliteBackend::from_arc(Arc::clone(&pool)));

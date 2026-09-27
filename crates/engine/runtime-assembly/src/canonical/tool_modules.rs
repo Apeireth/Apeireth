@@ -224,6 +224,19 @@ impl CapabilityProvider for McpModule {
     }
 }
 
+/// The module bag is the registration target for the external tool bridge:
+/// discovered dynamic tools land here, and identity collisions are refused by
+/// the same reject-on-collision check the module already enforces.
+impl apeireth_tools_canonical::mcp_bridge::McpToolRegistry for McpModule {
+    fn register_tool(&self, tool: Arc<dyn ToolCapability>) -> Result<(), String> {
+        McpModule::register_tool(self, tool)
+    }
+
+    fn unregister_tool(&self, capability_id: &apeireth_core::kernel::CapabilityId) {
+        McpModule::unregister_tool(self, capability_id);
+    }
+}
+
 /// Module providing education Dx-Check substitution verification (`tool.education`).
 ///
 /// W2 §4.3 (2026-10-10): 包装 `DxCheckTool` 纯确定性换元检查 (微分标记一致性 /

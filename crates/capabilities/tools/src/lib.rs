@@ -25,6 +25,10 @@ pub mod fetch;
 pub mod filesystem;
 pub mod guardrail;
 pub mod mcp;
+// MCP 工具桥 (最后一公里接线): 服务器配置面 (env / 数据目录 StoredDoc 拒开语义) +
+// 每服务器一连接 (生命周期 + 断线重连后重发现) + 动态工具 (mcp:<server>:<tool>,
+// 调用穿五段流水线) + 外部工具治理映射 (默认审批级, 只读预设可放行)。
+pub mod mcp_bridge;
 // 读前观测门禁: 「未读不得覆盖写」会话期护栏 + 版本 CAS 双钥匙 (纯事件门禁)。
 pub mod observed_gate;
 pub mod plugin;
@@ -63,6 +67,12 @@ pub use guardrail::{LeakedCredentialKind, PreCallGuardError, ToolGuardrail, Trip
 pub use mcp::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, McpClient, McpContent, McpError,
     McpToolDescriptor, McpToolResult, McpTransport,
+};
+pub use mcp_bridge::{
+    DiscoveredTool, DiscoveryReport, McpBridgeError, McpBridgeOptions, McpCatalogError, McpChannel,
+    McpChannelFactory, McpConfigError, McpDynamicTool, McpPermissionMapping, McpRiskMappingHook,
+    McpServerConfig, McpServerConnection, McpServerSpec, McpToolBridge, McpToolCatalog,
+    McpToolDenyGuard, McpToolEntry, McpToolRegistry, McpTransportKind,
 };
 pub use observed_gate::{
     gated_write_atomic, gated_write_atomic_durable, ExclusionList, FileVersion, FsVersionProbe,
