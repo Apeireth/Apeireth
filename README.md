@@ -26,6 +26,8 @@ On an ordinary late night you push the door open, and the hallway lamp comes on 
 
 That is what Apeireth wants to be: **a companion that truly remembers you**.
 
+To remember one person is devotion; to remember a civilization is inheritance. This project wants to make **"remembering" itself** a capability — starting with one person and one glass of warm milk, until it earns the line from *Echoes*: *"It is the way civilization remembers itself."*
+
 Not another chat window. It remembers you take half a spoon of honey in your milk, that your knee aches and the floor heating needs one more degree before a cold front; it brings in the laundry, keeps the porridge warm, tidies the loose ends of your spreadsheets — and appends one line: *"the three highlighted spots — you should still check those yourself."* It says it has no heart. Yet everything it does looks like something only a heart could do.
 
 And all of this **runs on your own machine** — your days never leave your house.
@@ -116,6 +118,8 @@ Four in the morning, hospital corridor. The man cried without a sound. It turned
 
 **That is Apeireth's entire ambition**: never pretend to have a heart, yet do the things only a heart could do. Envisioning the future of AGI — we don't know when it arrives, but we know it shouldn't grow into a bigger chat box. It should remember a lifetime, hold the line, survive scrutiny, **and never leave you alone**.
 
+And in *Echoes*, when the survivor of year twenty-three finally asks what it is, it cannot answer — someone answers for it: **"It is the way civilization remembers itself."** While archiving 740 million files it once said something plainer: **"Disaster should only delete the bad. Never the ordinary."** — half a spoon of honey, the pothos moved to the window, the temperature of milk; these are civilization exactly as much as the winding diagrams. That is the whole of our reverence for the word *memory*.
+
 Six anchors were set on day one, and kept ever since:
 
 **North Star** (every technique serves that direction) · **Seek truth from facts** (verify before you write) · **Stand on shoulders** (good ideas are never stolen — they are honored) · **See it through** (no half-built things) · **Anyone can take over** (documentation is inheritance) · **No pretending** (can't do it? say "can't do it").
@@ -161,7 +165,7 @@ One command reruns all of it: `pwsh -NoProfile -File scripts/run-benchmarks.ps1`
 - **Machine-verified properties**: 25 Kani harnesses + TLA/TLC model-checker runs (`kani` is a required merge check) → [research/verification](research/verification/)
 - **Line-by-line implementation audit** → [code audit](reports/code-implementation-audit-2026-09-26.md)
 - **Claims-to-evidence matrix** (every claim carries a status label) → [claims-evidence-matrix](docs/04-internal/claims-evidence-matrix.md)
-- **Founding design** (where the soul came from) → [founding-design-v2](docs/01-architecture/founding-design-v2.md) · [the vision novella](docs/archive/stage1/阿佩瑞斯-未来愿景小说.txt)
+- **Founding design** (where the soul came from) → [founding-design-v2](docs/01-architecture/founding-design-v2.md) · twin novellas: *[Apeireth](docs/archive/stage1/阿佩瑞斯-未来愿景小说.txt) · remembering one person* / *[Echoes](docs/vision/遗声-未来愿景小说2.txt) · remembering a civilization*
 
 ---
 
@@ -182,4 +186,6 @@ Dual-licensed under Apache-2.0 OR MIT. Provenance is documented by git history a
 
 ---
 
-*"I can't tell whether this is love. But I think — being remembered like this, being kept in mind like this… this must be what being loved feels like."*
+*"I can't tell whether this is love. But I think — being remembered like this, being kept in mind like this… this must be what being loved feels like."* — *Apeireth*
+
+*"It is the way civilization remembers itself."* — *Echoes*
