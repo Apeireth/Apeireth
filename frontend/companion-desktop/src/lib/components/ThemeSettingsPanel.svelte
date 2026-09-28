@@ -11,13 +11,16 @@
     resolveTheme,
   } from '../theme';
   import {clearCustomBg, getCustomBg, putCustomBg, validateCustomBgFile} from '../bg-store';
+  import ConfirmDialog from './ConfirmDialog.svelte';
+  import {DANGER_ACTION_CONFIRMATIONS} from '../settings-live-apply';
 
   let {
     config,
     onSave,
   }: {
     config: ApeirethConfig;
-    onSave: (cfg: ApeirethConfig) => void;
+    /** 返回 apply 的 Promise：失败时拒绝，由设置面统一回填 + 亮横幅。 */
+    onSave: (cfg: ApeirethConfig) => void | Promise<void>;
   } = $props();
 
   const active = $derived(resolveTheme(config.theme));
@@ -90,6 +93,10 @@
     onSave({...config, customBg: false});
   }
 
+  /** 清除已传图片 = 删数据（危险动作）：二次确认后才即效。 */
+  const clearBgConfirm = DANGER_ACTION_CONFIRMATIONS.clearCustomBg;
+  let showClearBgConfirm = $state(false);
+
   async function clearBg(): Promise<void> {
     bgBusy = true;
     try {
@@ -152,7 +159,7 @@
         </button>
         {#if config.customBg}
           <button class="quiet-btn" onclick={useThemeDefault} disabled={bgBusy}>恢复主题默认</button>
-          <button class="quiet-btn" onclick={clearBg} disabled={bgBusy}>
+          <button class="quiet-btn" onclick={() => (showClearBgConfirm = true)} disabled={bgBusy} title="清除已传图片（需二次确认）">
             <ImageOff size={13} />
             清除已传图片
           </button>
@@ -206,6 +213,20 @@
       {/each}
     </div>
   </div>
+
+  <!-- 危险动作二次确认：清除已传图片（删数据类） -->
+  <ConfirmDialog
+    open={showClearBgConfirm}
+    title={clearBgConfirm.title}
+    message={clearBgConfirm.message}
+    confirmText={clearBgConfirm.confirmText}
+    danger={true}
+    onConfirm={() => {
+      showClearBgConfirm = false;
+      void clearBg();
+    }}
+    onCancel={() => (showClearBgConfirm = false)}
+  />
 </div>
 
 <style>

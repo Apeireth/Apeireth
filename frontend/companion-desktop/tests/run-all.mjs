@@ -40,6 +40,8 @@ const SUITES = [
   {file: 'config-persistence.mjs', name: 'config persistence round-trip (accent/customBg/secret purge, real module)', strip: true},
   {file: 'recommended-preset.mjs', name: 'recommended preset ↔ memory-core knob mapping (real module)', strip: true},
   {file: 'capability-toggle-apply.mjs', name: 'capability toggle apply-on-click mapping (real module)', strip: true},
+  {file: 'settings-live-apply.mjs', name: 'settings three-tier live apply (real module)', strip: true},
+  {file: 'settings-save-buttons-removed.mjs', name: 'save-button removal source mirror'},
   {file: 'quick-window-close.mjs', name: 'quick window close/destroy lifecycle (mirrored)'},
   {file: 'self-tuning-mapping.mjs', name: 'self-tuning knob mapping (real module)', strip: true},
   {file: 'provider-transport.mjs', name: 'provider transport selection (invoke vs fetch, real module)', strip: true},

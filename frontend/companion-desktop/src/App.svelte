@@ -428,7 +428,7 @@
     );
   });
 
-  // ---- 对话栏位常驻控制（2026-10-11 主人反馈批：Kimi Desktop 式输入栏布局）----
+  // ---- 对话栏位常驻控制（2026-10-11 主人反馈批：常驻输入栏布局）----
   // 权限档位芯片的短标签（输入栏位空间紧，完整语义进弹层与 title）。
   const PRESET_SHORT_LABEL: Record<string, string> = {
     read_only: '只读',
@@ -792,7 +792,7 @@
   // 星尘条（规范 §5.3：memory_recall → 对话流中的「他想起了 N 段记忆」，脱敏，不含原文）。
   // 会话内瞬态：不持久化——星尘是「此刻」的痕迹，刷新即散。按会话 id 分桶。
   // 蛰伏断点（0 装，00-PHILOSOPHY §9 / 契约 §8a）：现役 canonical 总线没有
-  // memory_recall 事件（v1 legacy donor 才有；MemoryRecallModule 的 prompt-overlay
+  // memory_recall 事件（仅 v1 legacy 伴随体有；MemoryRecallModule 的 prompt-overlay
   // 召回路径不上 RuntimeEvent 总线）——卡片只接真实 presence 信号，无信号即蛰伏，
   // 禁止假数据演示。presence_state 已落地（§8a）但不含召回计数，不构成此卡数据源。
   interface Stardust {
@@ -2352,6 +2352,8 @@
           <SettingsView
             {config}
             onSave={async (newCfg) => {
+              const previousCfg = config;
+              const previousTheme = activeTheme;
               const customBgToggled = (newCfg.customBg ?? false) !== (config.customBg ?? false);
               config = newCfg;
               saveConfig(newCfg);
@@ -2365,8 +2367,23 @@
               // Provider changes must reach the sidecar environment; the
               // push re-adopts the endpoint (a restart allocates a new port)
               // and then re-probes. Awaited so an apply failure can roll an
-              // apply-on-click capability toggle back (and surface the error).
-              await pushProviderEnvAndRefresh(newCfg);
+              // apply-on-click control back (and surface the error).
+              try {
+                await pushProviderEnvAndRefresh(newCfg);
+              } catch (err) {
+                // 推送失败 = 运行时没接住这次改动：本地配置与文档主题一并
+                // 回退到改动前，与控件级回填保持同一条真相线（不留下
+                // 「本地已改、运行时没改」的半截状态），错误继续向上抛给
+                // 控件层亮横幅。
+                config = previousCfg;
+                saveConfig(previousCfg);
+                agentRuntime = createAgentRuntime(previousCfg);
+                activeTheme = previousTheme;
+                applyDocumentTheme(previousTheme);
+                applyDocumentAccent(resolveAccent(previousCfg.accent));
+                if (customBgToggled) void syncCustomBg(previousCfg.customBg === true);
+                throw err;
+              }
             }}
             onClearLocalData={() => {
               conversations = [];
@@ -2563,7 +2580,7 @@
                 <h2 class="chat-title">{activeConversation?.title || '新对话'}</h2>
               </div>
               <!-- 权限档位 / 新对话 / 会话模型已移至对话栏位（2026-10-11 主人反馈批：
-                   头部随滚动消失，输入栏位常驻——布局参照 Kimi Desktop） -->
+                   头部随滚动消失，输入栏位常驻——布局对齐桌面聊天窗常驻输入栏范式） -->
               <!-- 状态行：头部第二行，独占整宽（打回修复②轮） -->
               <div class="statusline">
                 <div class="persona-menu">
@@ -2715,7 +2732,7 @@
                 <button class="round-btn" title="新对话" onclick={newConversation} aria-label="新对话">
                   <Plus size={16} />
                 </button>
-                <!-- 权限档位芯片（Kimi Desktop 式输入栏左侧常驻；弹层向上翻） -->
+                <!-- 权限档位芯片（输入栏左侧常驻；弹层向上翻） -->
                 <div class="composer-preset">
                   <button
                     class="composer-preset-trigger"
@@ -3115,7 +3132,7 @@
 
   /* ---------- 会话头权限预设已迁至对话栏位（2026-10-11 主人反馈批） ---------- */
 
-  /* ---------- 对话栏位常驻控制（2026-10-11 主人反馈批：Kimi Desktop 式输入栏） ---------- */
+  /* ---------- 对话栏位常驻控制（2026-10-11 主人反馈批：常驻输入栏） ---------- */
   .composer-preset {
     position: relative;
     flex: none;

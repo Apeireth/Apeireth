@@ -109,6 +109,19 @@
   import {isDesktop, readTuningLog} from '../desktop-bridge';
   import {configWithCapabilities, toggledCapability} from '../capability-apply';
   import type {CapabilityToggleKey} from '../capability-apply';
+  import {
+    DANGER_ACTION_CONFIRMATIONS,
+    configWithGatewayUrl,
+    configWithPersonas,
+    configWithProviderGroup,
+    focusLeavesGroup,
+    isSameAsCommitted,
+    isTextCommitKey,
+    personasSnapshot,
+    providerGroupSnapshot,
+    textCommitFlag,
+  } from '../settings-live-apply';
+  import type {DangerActionKey, ProviderGroupDraft, TextCommitFlag} from '../settings-live-apply';
 
   let {
     config,
@@ -137,11 +150,11 @@
 
   // Gateway backend fields
   let editBaseUrl = $state('');
-  let saveSuccess = $state(false);
   let showAdvancedGateway = $state(false);
 
-  // Backend advanced-capability toggles (fail-closed defaults, applied on save)
-  // 草稿语义：只取 config 初值快照（保存时才回写），untrack 显式声明不跟踪。
+  // Backend advanced-capability toggles (fail-closed defaults, applied live)
+  // 草稿语义：只取 config 初值快照，untrack 显式声明不跟踪；改动即点/失焦
+  // 即走 apply 路径回写，没有「稍后一起提交」的隐藏草稿。
   let capabilities = $state<CapabilityToggles>(
     untrack(() => ({
       ...DEFAULT_CAPABILITY_TOGGLES,
@@ -171,27 +184,63 @@
   });
 
   function applyCognitiveDepth(): void {
+    let next = capabilities;
     if (cognitiveDepth === 'balanced') {
-      capabilities = {...capabilities, judge: true, council: false};
+      next = {...capabilities, judge: true, council: false};
     } else if (cognitiveDepth === 'deep') {
-      capabilities = {...capabilities, judge: true, council: true};
+      next = {...capabilities, judge: true, council: true};
     } else if (cognitiveDepth === 'light') {
-      capabilities = {...capabilities, judge: false, council: false};
+      next = {...capabilities, judge: false, council: false};
+    } else {
+      // custom: 用户手动改 judge/council，保持现状。
+      return;
     }
-    // custom: 用户手动改 judge/council，保持现状。
+    capabilities = next;
+    // 档位即预设（第 1 级）：点选即生效，失败回填 judge/council 旧值 + 横幅。
+    void applyKnobNow(['judge', 'council'], next);
   }
 
-  // ---- 开关即点即生效（P0：能力开关不生效的修复） ----
-  // 设置页是「拨动即生效」的视觉语言：用户不会想到还要点远处的保存按钮。
-  // 拨动后立即走与「保存设置」同一条 apply 路径（onSave → 配置持久化 +
-  // env 注入 + 侧车重启/热应用）：乐观更新 UI + 本行 pending 态；推送失败
-  // 把该开关拨回原值并亮错误横幅。保存按钮保留——批量项（数值旋钮、认知
-  // 深度档位、推荐配置/性格预设）仍走它。
-  let liveApplyPendingKey = $state<CapabilityToggleKey | null>(null);
+  // ---- 三级即效语义：改动即点/失焦即生效，页面没有「保存」按钮 ----
+  // 设置页是「即点即生效」的视觉语言：用户不会想到还要点远处的确认按钮。
+  // 每类控件只有一条生效时机，全部走同一条 apply 路径（onSave → 配置持久化
+  // + env 注入 + 侧车重启/热应用）：
+  //   1. 开关 / 滑杆 / 预设：点（或松手）即生效；
+  //   2. 文本输入：失焦或回车提交（服务商组整组提交，避免半截配置）；
+  //   3. 危险动作：即点 + 二次确认弹层，确认后即效。
+  // 乐观更新 UI + 本项 pending 态（侧车重启时行内「正在应用到运行时…」）；
+  // 推送失败把该项拨回原值并亮错误横幅。
+  let liveApplyPendingKey = $state<string | null>(null);
   let liveApplyError = $state<{code?: string; message: string; solution?: string} | null>(null);
-  // 拨动序号：失败回滚只对「最后一次在途拨动」生效，后拨的开关不被先拨的
+  // 改动序号：失败回滚只对「最后一次在途改动」生效，后改的项不被先改的
   // 失败回滚覆盖。
   let liveApplySeq = 0;
+  // 上次成功应用的能力集快照：滑杆/预设失败回填的旧值来源。
+  let appliedCapabilities = $state<CapabilityToggles>(
+    untrack(() => ({
+      ...DEFAULT_CAPABILITY_TOGGLES,
+      ...(config.capabilities ?? {}),
+    })),
+  );
+
+  /** 即效 apply 的统一外壳：pending 转圈 + 失败回填 + 错误横幅 + 序号守卫。 */
+  async function runLiveApply(key: string, push: () => Promise<void>, rollback: () => void): Promise<void> {
+    liveApplySeq += 1;
+    const seq = liveApplySeq;
+    liveApplyPendingKey = key;
+    liveApplyError = null;
+    try {
+      await push();
+    } catch (err) {
+      if (seq !== liveApplySeq) return;
+      rollback();
+      liveApplyError = errorBannerFrom(err);
+    } finally {
+      if (seq === liveApplySeq) liveApplyPendingKey = null;
+    }
+  }
+
+  /** 能力集里可即效提交的键：布尔开关 + 数值/文本旋钮（都进 env 注入面）。 */
+  type CapabilityDraftKey = keyof CapabilityToggles;
 
   async function applyCapabilityNow(
     previous: CapabilityToggles,
@@ -204,6 +253,7 @@
     liveApplyError = null;
     try {
       await onSave(configWithCapabilities(config, attempted));
+      if (seq === liveApplySeq) appliedCapabilities = attempted;
     } catch (err) {
       if (seq !== liveApplySeq) return;
       // 失败回滚：只把本次拨动的开关拨回原值，不覆盖其它并发编辑。
@@ -228,6 +278,57 @@
       cognitiveDepth = 'custom';
     }
     void applyCapabilityNow(previous, key, next);
+  }
+
+  /** 旋钮（滑杆/数值/文本）松手或提交即生效：失败逐键回填旧值 + 横幅。 */
+  async function applyKnobNow(keys: CapabilityDraftKey[], attempted: CapabilityToggles): Promise<void> {
+    const previous = appliedCapabilities;
+    await runLiveApply(
+      keys.join('+'),
+      async () => {
+        await onSave(configWithCapabilities(config, attempted));
+        appliedCapabilities = attempted;
+      },
+      () => {
+        // 失败回填：只把本次改动的键拨回上次已应用的值。
+        let restored = capabilities;
+        for (const key of keys) restored = {...restored, [key]: previous[key]};
+        capabilities = restored;
+        cognitiveDepth = deriveCognitiveDepth({
+          ...DEFAULT_CAPABILITY_TOGGLES,
+          ...(config.capabilities ?? {}),
+        });
+      },
+    );
+  }
+
+  /** 能力旋钮里的文本项（第 2 级）：失焦/回车提交，失败逐键回填旧值 + 横幅。 */
+  const COUNCIL_TEXT_KEYS = ['council.timeoutMs'];
+  const REASONING_TEXT_KEYS = ['reasoning.filters', 'reasoning.tag'];
+  let reasoningGroupEl = $state<HTMLDivElement | undefined>();
+
+  async function submitCapabilityText(keys: CapabilityDraftKey[], flagKeys: string[]): Promise<void> {
+    const attempted = capabilities;
+    const previous = appliedCapabilities;
+    if (keys.every((key) => attempted[key] === previous[key])) {
+      // 空提交：值没变——只清「未保存」标记，不打扰运行时。
+      clearTextDirty(flagKeys);
+      return;
+    }
+    await runLiveApply(
+      keys.join('+'),
+      async () => {
+        await onSave(configWithCapabilities(config, attempted));
+        appliedCapabilities = attempted;
+        ackTextKeys(flagKeys);
+      },
+      () => {
+        let restored = capabilities;
+        for (const key of keys) restored = {...restored, [key]: previous[key]};
+        capabilities = restored;
+        clearTextDirty(flagKeys);
+      },
+    );
   }
 
   // ---- 能力中心（2026-10-10 W2/W3 收官批）：分组卡片式旋钮注册表 ----
@@ -265,7 +366,7 @@
     {key: 'absorptionInsight', icon: Dumbbell, label: '认知体操', env: 'APEIRETH_ENABLE_ABSORPTION_INSIGHT', desc: '四算法洞察注入（betti/残差金字塔/river/kuramoto，实验性，W2 §4.4）。'},
   ];
 
-  /** 社区与账本：W3 移植批的检索路由与可溯源记账。 */
+  /** 社区与账本：W3 批次落地的检索路由与可溯源记账。 */
   const COMMUNITY_DEFS: CapDef[] = [
     {key: 'communityTriage', icon: GitBranch, label: '图社区分诊', env: 'APEIRETH_ENABLE_COMMUNITY_TRIAGE', desc: '检索前置双路路由：命中实体走实体链，否则给社区摘要（W3 §1）。'},
     {key: 'oneringLedger', icon: Landmark, label: 'onering 账本', env: 'APEIRETH_ENABLE_ONERING_LEDGER', desc: '每回合 user/assistant 留痕入 context_ledger，全程可溯源（W3）。'},
@@ -334,18 +435,16 @@
 
   // ---- 「推荐配置」一键预设（能力中心） ----
   // 开启记忆核心族三件 + 记忆固化/反思沉淀/器官链（RECOMMENDED_CAPABILITY_PRESET），
-  // 绝不包含 shell/fetch 等危险工具；其余开关保持现状。带确认说明，确认后走
-  // 与「保存设置」同一条 apply 路径（onSave → src-tauri env 注入 + 侧车重启/热应用）。
-  let showRecommendedConfirm = $state(false);
-
+  // 绝不包含 shell/fetch 等危险工具；其余开关保持现状。预设 = 第 1 级即效：
+  // 点击立即走同一条 apply 路径（onSave → src-tauri env 注入 + 侧车重启/热应用），
+  // 失败整组回填旧值 + 错误横幅。
   function applyRecommendedPreset(): void {
     const next: CapabilityToggles = {...capabilities};
     for (const key of RECOMMENDED_CAPABILITY_PRESET) {
       next[key] = true;
     }
     capabilities = next;
-    showRecommendedConfirm = false;
-    void handleSaveSettings();
+    void applyKnobNow([...RECOMMENDED_CAPABILITY_PRESET], next);
   }
 
   // ---- 「性格与记忆」性格养成第一铲（体验层四旋钮 + 自学习开关 + 学习日志） ----
@@ -384,38 +483,28 @@
     handleCapabilityToggle('selfTuning', on === true);
   }
 
-  // 预设/恢复基线：带确认框（同「应用推荐配置」模式），确认后走与「保存设置」
-  // 同一条 apply 路径（onSave → 配置持久化 + env 注入 + 网关热应用/重启）。
-  let dispositionPresetPending = $state<'省心' | '均衡' | '深度记忆' | '恢复基线' | null>(null);
-
-  /** 待确认预设的四旋钮取值（恢复基线 = 基线四值）；null = 无待确认。 */
-  const pendingDispositionValues = $derived(
-    dispositionPresetPending === null
-      ? null
-      : dispositionPresetPending === '恢复基线'
-        ? {memoryFade: 1.0, curiosityStrength: 1.0, toneSaturation: 1.0, consolidationCadence: 1}
-        : DISPOSITION_PRESETS[dispositionPresetPending],
-  );
-
-  function confirmDispositionPreset(): void {
-    const name = dispositionPresetPending;
-    dispositionPresetPending = null;
+  // 预设/恢复基线（第 1 级）：点击即生效——立即走同一条 apply 路径（onSave →
+  // 配置持久化 + env 注入 + 网关热应用/重启），失败把拨过的键回填旧值 + 横幅。
+  function applyDispositionPreset(name: '省心' | '均衡' | '深度记忆' | '恢复基线'): void {
+    let next: CapabilityToggles;
+    let keys: CapabilityDraftKey[];
     if (name === '恢复基线') {
       // 恢复基线：四旋钮回基线 + 「从使用中学习」关回默认关（fail-closed）。
-      capabilities = {...capabilities, ...DISPOSITION_BASELINE_RESET};
-    } else if (name !== null) {
+      next = {...capabilities, ...DISPOSITION_BASELINE_RESET};
+      keys = ['memoryFade', 'curiosityStrength', 'toneSaturation', 'consolidationCadence', 'selfTuning'];
+    } else {
       const preset = DISPOSITION_PRESETS[name];
-      capabilities = {
+      next = {
         ...capabilities,
         memoryFade: preset.memoryFade,
         curiosityStrength: preset.curiosityStrength,
         toneSaturation: preset.toneSaturation,
         consolidationCadence: preset.consolidationCadence,
       };
-    } else {
-      return;
+      keys = ['memoryFade', 'curiosityStrength', 'toneSaturation', 'consolidationCadence'];
     }
-    void handleSaveSettings();
+    capabilities = next;
+    void applyKnobNow(keys, next);
   }
 
   // ---- 「学习日志」：只读展示后端写入的自动调整记录 ----
@@ -459,28 +548,33 @@
   }
 
   // 「撤销」语义：把该参数的滑杆值拨回记录里的 previous（经 setter 钳到滑杆
-  // 范围），然后立即走现有保存/应用路径（handleSaveSettings：配置持久化 +
-  // env 注入 + 网关热应用/重启），把值写回去。之所以不另立 revert-request
-  // 文件：现有 apply 路径是既定架构，独立的撤销请求需要后端新增一条摄取通路，
-  // 超出本次「性格养成第一铲」范围。
+  // 范围），然后立即生效（第 1 级）——写回值走同一条 apply 路径（onSave：
+  // 配置持久化 + env 注入 + 网关热应用/重启），失败回填旧值 + 横幅。之所以
+  // 不另立 revert-request 文件：现有 apply 路径是既定架构，独立的撤销请求
+  // 需要后端新增一条摄取通路，超出本次「性格养成第一铲」范围。
   function undoTuningEntry(entry: TuningLogEntry): void {
+    let key: CapabilityDraftKey;
     switch (entry.param) {
       case 'memory_fade':
+        key = 'memoryFade';
         setMemoryFade(entry.previous);
         break;
       case 'curiosity_strength':
+        key = 'curiosityStrength';
         setCuriosityStrength(entry.previous);
         break;
       case 'tone_saturation':
+        key = 'toneSaturation';
         setToneSaturation(entry.previous);
         break;
       case 'consolidation_cadence':
+        key = 'consolidationCadence';
         setConsolidationCadence(entry.previous);
         break;
       default:
         return;
     }
-    void handleSaveSettings();
+    void applyKnobNow([key], capabilities);
   }
 
   // Model Provider protocol & preset configurations
@@ -579,63 +673,290 @@
     models?: string[];
   } | null>(null);
 
-  // ---- 多 Agent 人设 (数据驱动, 本地编辑, 保存设置后生效) ----
+  // ---- 文本输入（第 2 级）：失焦或回车提交，字段旁 ✓ / 「未保存」微提示 ----
+  let textDirty = $state<Record<string, boolean>>({});
+  let textAck = $state<Record<string, boolean>>({});
+  const textAckTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function textFlag(key: string): TextCommitFlag {
+    return textCommitFlag(textDirty[key] === true, textAck[key] === true);
+  }
+
+  /** 输入即标「未提交」（旁注「未保存」），提交成功后清掉并闪 ✓。 */
+  function markTextDirty(key: string): void {
+    textDirty = {...textDirty, [key]: true};
+  }
+
+  /** 提交成功：清「未保存」标记 + 闪 ✓（1.6s 后收起）。 */
+  function ackTextKeys(keys: string[]): void {
+    const nextDirty = {...textDirty};
+    const nextAck = {...textAck};
+    for (const key of keys) {
+      nextDirty[key] = false;
+      nextAck[key] = true;
+      const timer = textAckTimers.get(key);
+      if (timer !== undefined) clearTimeout(timer);
+      textAckTimers.set(
+        key,
+        setTimeout(() => {
+          textAck = {...textAck, [key]: false};
+          textAckTimers.delete(key);
+        }, 1600),
+      );
+    }
+    textDirty = nextDirty;
+    textAck = nextAck;
+  }
+
+  /** 字段回到与已提交一致（提交成功或回填旧值后）：只清「未保存」标记。 */
+  function clearTextDirty(keys: string[]): void {
+    const nextDirty = {...textDirty};
+    for (const key of keys) nextDirty[key] = false;
+    textDirty = nextDirty;
+  }
+
+  /** 整组失焦提交：焦点移出整组才提交，组内移动焦点（Tab/点组内按钮）不提交。 */
+  function groupFocusOut(e: FocusEvent, groupEl: HTMLElement | undefined, submit: () => void): void {
+    const next = e.relatedTarget as Node | null;
+    if (!focusLeavesGroup(next !== null && groupEl !== undefined && groupEl.contains(next))) return;
+    submit();
+  }
+
+  /** 整组回车提交：只认单行输入框（textarea 回车 = 换行，走失焦提交）。 */
+  function groupKeydown(e: KeyboardEvent, submit: () => void): void {
+    const target = e.target as HTMLElement | null;
+    if (target?.tagName !== 'INPUT' || !isTextCommitKey(e.key)) return;
+    e.preventDefault();
+    submit();
+  }
+
+  // ---- 服务商组（端点 + 模型 + 密钥 + 协议头）整组失焦/回车提交 ----
+  // 整组一个提交原子，避免半截配置：端点/模型/密钥任一改动都等整组提交，
+  // 失败整组回填旧值 + 横幅。
+  let providerGroupEl = $state<HTMLDivElement | undefined>();
+  let providerCommitted: ProviderGroupDraft | null = null;
+
+  const PROVIDER_TEXT_KEYS = [
+    'provider.baseUrl',
+    'provider.model',
+    'provider.apiKey',
+    'provider.anthropicVersion',
+  ];
+
+  function providerGroupDraft(): ProviderGroupDraft {
+    return {
+      protocol: activeProtocol,
+      preset: activePreset,
+      baseUrl: providerBaseUrl,
+      apiKey: providerApiKey,
+      model: providerModel,
+      anthropicVersion,
+    };
+  }
+
+  function loadProviderGroup(draft: ProviderGroupDraft): void {
+    activeProtocol = draft.protocol;
+    activePreset = draft.preset;
+    providerBaseUrl = draft.baseUrl;
+    providerApiKey = draft.apiKey;
+    providerModel = draft.model;
+    anthropicVersion = draft.anthropicVersion;
+  }
+
+  /** 组内改动（含点选类）都标「未提交」：整组失焦/回车时一次性提交。 */
+  function markProviderDirty(keys: string[] = PROVIDER_TEXT_KEYS): void {
+    for (const key of keys) markTextDirty(key);
+  }
+
+  function providerGroupDirty(): boolean {
+    if (providerCommitted === null) return true;
+    return !isSameAsCommitted(
+      providerGroupSnapshot(providerGroupDraft()),
+      providerGroupSnapshot(providerCommitted),
+    );
+  }
+
+  async function submitProviderGroup(): Promise<void> {
+    const draft = providerGroupDraft();
+    if (!providerGroupDirty()) {
+      // 空提交：值没变——只清「未保存」标记，不打扰运行时。
+      clearTextDirty(PROVIDER_TEXT_KEYS);
+      return;
+    }
+    await runLiveApply(
+      'provider-group',
+      async () => {
+        await handleSaveSettings();
+        providerCommitted = {...draft};
+        ackTextKeys(PROVIDER_TEXT_KEYS);
+      },
+      () => {
+        // 失败整组回填旧值（半截配置不留运行时），横幅由外壳统一亮起。
+        if (providerCommitted !== null) loadProviderGroup(providerCommitted);
+        clearTextDirty(PROVIDER_TEXT_KEYS);
+      },
+    );
+  }
+
+  // ---- 多 Agent 人设 (数据驱动, 整组失焦/回车提交, 点选类动作即点即生效) ----
   let personas = $state<PersonaProfile[]>([]);
   let activePersonaId = $state<string>('');
-  $effect(() => {
-    const source = config.personas && config.personas.length > 0 ? config.personas : DEFAULT_PERSONAS;
-    personas = source.map((p) => ({...p}));
-    activePersonaId = config.activePersonaId || personas[0]?.id || '';
-  });
+  let personasGroupEl = $state<HTMLDivElement | undefined>();
+  let personasCommitted: {personas: PersonaProfile[]; activePersonaId: string} | null = null;
+
+  function personaTextKeys(): string[] {
+    return personas.flatMap((p) => [`persona.name:${p.id}`, `persona.model:${p.id}`, `persona.text:${p.id}`]);
+  }
+
+  function personasDirty(): boolean {
+    if (personasCommitted === null) return true;
+    return !isSameAsCommitted(
+      personasSnapshot(personas, activePersonaId),
+      personasSnapshot(personasCommitted.personas, personasCommitted.activePersonaId),
+    );
+  }
+
+  /** 人设整组提交：人设列表 + 当前伙伴 id 一次落位，失败整组回填旧值。 */
+  async function submitPersonas(): Promise<void> {
+    const attempted = personas;
+    const attemptedActive = activePersonaId;
+    if (!personasDirty()) {
+      clearTextDirty(personaTextKeys());
+      return;
+    }
+    await runLiveApply(
+      'personas',
+      async () => {
+        await onSave(configWithPersonas(config, attempted, attemptedActive));
+        personasCommitted = {
+          personas: attempted.map((p) => ({...p})),
+          activePersonaId: attemptedActive,
+        };
+        ackTextKeys(personaTextKeys());
+      },
+      () => {
+        if (personasCommitted !== null) {
+          personas = personasCommitted.personas.map((p) => ({...p}));
+          activePersonaId = personasCommitted.activePersonaId;
+        }
+        clearTextDirty(personaTextKeys());
+      },
+    );
+  }
 
   function addPersona(): void {
     personas = [...personas, {id: crypto.randomUUID(), name: '新伙伴', persona: ''}];
+    // 新增 = 即点即生效（第 1 级），失败回填旧列表 + 横幅。
+    void submitPersonas();
   }
 
   function removePersona(id: string): void {
     if (personas.length <= 1) return;
     personas = personas.filter((p) => p.id !== id);
     if (activePersonaId === id) activePersonaId = personas[0]?.id || '';
+    void submitPersonas();
   }
 
-  // Sync initial config from props
+  // Sync config from props（只跟外部 config 变化同步；本地草稿一律 untrack
+  // 读取，有未提交文本时不覆盖在途编辑）
   $effect(() => {
-    editBaseUrl = config.baseUrl;
+    const nextBaseUrl = config.baseUrl;
+    const nextOpenai = config.openaiConfig;
+    const nextAnthropic = config.anthropicConfig;
+    const nextProvider = config.provider;
+    const nextModel = config.model;
+    untrack(() => {
+      if (!textFlagDirty(GATEWAY_TEXT_KEYS)) {
+        editBaseUrl = nextBaseUrl;
+        gatewayCommitted = nextBaseUrl;
+      }
 
-    if (config.openaiConfig) {
-      openaiBuffer = {
-        preset: config.openaiConfig.preset || 'openai',
-        baseUrl: config.openaiConfig.baseUrl || 'https://api.openai.com/v1',
-        apiKey: config.openaiConfig.apiKey || '',
-        model: config.openaiConfig.model || 'gpt-4o',
-      };
-    }
+      if (nextOpenai) {
+        openaiBuffer = {
+          preset: nextOpenai.preset || 'openai',
+          baseUrl: nextOpenai.baseUrl || 'https://api.openai.com/v1',
+          apiKey: nextOpenai.apiKey || '',
+          model: nextOpenai.model || 'gpt-4o',
+        };
+      }
 
-    if (config.anthropicConfig) {
-      anthropicBuffer = {
-        preset: config.anthropicConfig.preset || 'anthropic',
-        baseUrl: config.anthropicConfig.baseUrl || 'https://api.anthropic.com',
-        apiKey: config.anthropicConfig.apiKey || '',
-        model: config.anthropicConfig.model || 'claude-3-7-sonnet-20250219',
-        anthropicVersion: config.anthropicConfig.anthropicVersion || '2023-06-01',
-      };
-    }
+      if (nextAnthropic) {
+        anthropicBuffer = {
+          preset: nextAnthropic.preset || 'anthropic',
+          baseUrl: nextAnthropic.baseUrl || 'https://api.anthropic.com',
+          apiKey: nextAnthropic.apiKey || '',
+          model: nextAnthropic.model || 'claude-3-7-sonnet-20250219',
+          anthropicVersion: nextAnthropic.anthropicVersion || '2023-06-01',
+        };
+      }
 
-    if (config.provider) {
-      activeProtocol = config.provider.protocol;
-      activePreset = config.provider.preset || 'openai';
-      providerBaseUrl = config.provider.baseUrl;
-      providerApiKey = config.provider.apiKey || '';
-      providerModel = config.provider.model || config.model;
-      anthropicVersion = config.provider.anthropicVersion || '2023-06-01';
-    } else {
-      activeProtocol = 'openai';
-      activePreset = 'openai';
-      providerBaseUrl = 'https://api.openai.com/v1';
-      providerApiKey = '';
-      providerModel = config.model || 'gpt-4o';
-    }
+      if (!textFlagDirty(PROVIDER_TEXT_KEYS)) {
+        if (nextProvider) {
+          activeProtocol = nextProvider.protocol;
+          activePreset = nextProvider.preset || 'openai';
+          providerBaseUrl = nextProvider.baseUrl;
+          providerApiKey = nextProvider.apiKey || '';
+          providerModel = nextProvider.model || nextModel;
+          anthropicVersion = nextProvider.anthropicVersion || '2023-06-01';
+        } else {
+          activeProtocol = 'openai';
+          activePreset = 'openai';
+          providerBaseUrl = 'https://api.openai.com/v1';
+          providerApiKey = '';
+          providerModel = nextModel || 'gpt-4o';
+        }
+        providerCommitted = providerGroupDraft();
+      }
+    });
   });
+
+  $effect(() => {
+    const source = config.personas && config.personas.length > 0 ? config.personas : DEFAULT_PERSONAS;
+    const nextActive = config.activePersonaId || source[0]?.id || '';
+    untrack(() => {
+      if (personaTextDirty()) return;
+      personas = source.map((p) => ({...p}));
+      activePersonaId = nextActive;
+      personasCommitted = {
+        personas: personas.map((p) => ({...p})),
+        activePersonaId: nextActive,
+      };
+    });
+  });
+
+  /** 这些字段有在途编辑（未提交）时不许被外部同步冲掉。 */
+  function textFlagDirty(keys: string[]): boolean {
+    return keys.some((key) => textDirty[key] === true);
+  }
+
+  /** 人设字段按前缀判定：同步效果里不读 personas 草稿，避免自触发。 */
+  function personaTextDirty(): boolean {
+    return Object.keys(textDirty).some((key) => key.startsWith('persona.') && textDirty[key] === true);
+  }
+
+  // ---- 网关服务地址（第 2 级）：失焦/回车提交，失败回填旧值 ----
+  const GATEWAY_TEXT_KEYS = ['gateway.baseUrl'];
+  let gatewayCommitted = '';
+
+  async function submitGatewayUrl(): Promise<void> {
+    const attempted = editBaseUrl;
+    if (isSameAsCommitted(attempted.trim(), gatewayCommitted.trim())) {
+      clearTextDirty(GATEWAY_TEXT_KEYS);
+      return;
+    }
+    await runLiveApply(
+      'gateway-url',
+      async () => {
+        await onSave(configWithGatewayUrl(config, attempted));
+        gatewayCommitted = attempted;
+        ackTextKeys(GATEWAY_TEXT_KEYS);
+      },
+      () => {
+        editBaseUrl = gatewayCommitted;
+        clearTextDirty(GATEWAY_TEXT_KEYS);
+      },
+    );
+  }
 
   // Api key update modal for Gateway
   let showApiKeyModal = $state(false);
@@ -651,9 +972,7 @@
   let keychainDeleting = $state(false);
   let keychainActionError = $state('');
 
-  // P1-1: 无重启热应用状态
-  let applying = $state(false);
-  let applyError = $state<{code?: string; message: string; solution?: string} | null>(null);
+  // P1-1: 无重启热应用回显（失败横幅统一走顶部 liveApplyError，pending 走行内态）
   let applyResult = $state<{ok: boolean; warnings: string[]} | null>(null);
   let effectiveConfig = $state<{provider?: string; base_url?: string; api_key?: string; model?: string} | null>(null);
 
@@ -664,7 +983,7 @@
   let modelsError = $state('');
 
   // P1-2: 全局权限预设默认值。admin config 契约无 permission_preset 字段
-  // (它是会话级 session settings)，这里仅作 UI 状态 + 本地记录，不进入保存 patch。
+  // (它是会话级 session settings)，这里仅作 UI 状态 + 本地记录，不进配置 patch。
   const PERMISSION_PRESET_KEY = 'apeireth-permission-preset-default';
   let permissionPreset = $state<'read_only' | 'standard' | 'full'>(initialPermissionPreset());
 
@@ -676,8 +995,41 @@
   let showWorkspacePicker = $state(false);
   let workspaceSuggestions = $state<string[]>([]);
 
-  // Clear data confirmation modal
-  let showClearConfirm = $state(false);
+  // ---- 危险动作（第 3 级）：即点 + 二次确认弹层，确认后即效 ----
+  // 删数据 / 清记忆 / 断开连接类动作一律先开确认弹层；确认文案来自
+  // DANGER_ACTION_CONFIRMATIONS（唯一文案源，测试镜像校验覆盖面）。
+  let dangerPending = $state<DangerActionKey | null>(null);
+  let dangerPayload = $state('');
+
+  const dangerConfirm = $derived(dangerPending === null ? null : DANGER_ACTION_CONFIRMATIONS[dangerPending]);
+
+  function requestDanger(action: DangerActionKey, payload = ''): void {
+    dangerPending = action;
+    dangerPayload = payload;
+  }
+
+  async function runDangerAction(): Promise<void> {
+    const action = dangerPending;
+    const payload = dangerPayload;
+    dangerPending = null;
+    dangerPayload = '';
+    if (action === null) return;
+    switch (action) {
+      case 'clearLocalData':
+        if (onClearLocalData) onClearLocalData();
+        break;
+      case 'deleteStoredKey':
+        // 删除即效（第 3 级确认后）：钥匙串删除 + 组清空提交，自身走即效外壳。
+        await deleteStoredKey();
+        break;
+      case 'removePersona':
+        removePersona(payload);
+        break;
+      case 'clearCustomBg':
+        // 背景图清理由主题面板自己收口（图本体在浏览器数据库里）。
+        break;
+    }
+  }
 
   // Runtime report
   let runtimeReport = $state<RuntimeHealthReport | null>(null);
@@ -854,7 +1206,8 @@
     keychainLoading = false;
   }
 
-  async function deleteStoredKey() {
+  /** 危险动作（断开连接）：二次确认后立即删钥匙串密钥并清空组内密钥。 */
+  async function deleteStoredKey(): Promise<void> {
     keychainDeleting = true;
     keychainActionError = '';
     const removed = await deleteProviderKey(providerFamily());
@@ -867,17 +1220,24 @@
     storedKeyMasked = '';
     keychainDeleting = false;
 
-    // 同步清掉内存中的 provider 密钥，避免删除后测试连接仍带上旧 key。
+    // 同步清掉组内密钥，避免删除后测试连接仍带上旧 key；清空后整组立即提交。
     providerApiKey = '';
-    const updated: ApeirethConfig = {
-      ...config,
-      apiKey: '',
-      provider: config.provider ? {...config.provider, apiKey: ''} : config.provider,
-      openaiConfig: config.openaiConfig
-        ? {...config.openaiConfig, apiKey: ''}
-        : config.openaiConfig,
-    };
-    void Promise.resolve(onSave(updated)).catch((err) => (applyError = errorBannerFrom(err)));
+    await runLiveApply(
+      'delete-key',
+      async () => {
+        await onSave({
+          ...configWithProviderGroup(config, providerGroupDraft(), DEFAULT_MODEL_ID),
+          apiKey: '',
+        });
+        providerCommitted = {...providerGroupDraft()};
+        ackTextKeys(PROVIDER_TEXT_KEYS);
+      },
+      () => {
+        // 密钥已从钥匙串删除：不回填旧密钥（它指向的钥匙已不存在），
+        // 只把组快照对齐当前值，横幅由外壳统一亮起。
+        providerCommitted = {...providerGroupDraft()};
+      },
+    );
   }
 
   async function loadWorkspace() {
@@ -885,6 +1245,7 @@
     workspaceError = '';
     const dir = await getWorkspaceDir();
     workspaceDir = dir ?? '';
+    workspaceCommitted = workspaceDir;
     workspaceLoading = false;
   }
 
@@ -900,10 +1261,38 @@
     const applied = await setWorkspaceDir(dir);
     if (applied !== null) {
       workspaceDir = applied;
+      workspaceCommitted = applied;
+      ackTextKeys(WORKSPACE_TEXT_KEYS);
     } else {
       workspaceError = '设置工作区目录失败，请检查路径权限后重试。';
     }
     showWorkspacePicker = false;
+  }
+
+  // ---- 工作区路径（第 2 级）：失焦/回车提交，失败回填旧值 + 横幅 ----
+  const WORKSPACE_TEXT_KEYS = ['workspace.dir'];
+  let workspaceCommitted = '';
+
+  async function submitWorkspaceDir(): Promise<void> {
+    const attempted = workspaceDir;
+    if (isSameAsCommitted(attempted.trim(), workspaceCommitted.trim())) {
+      clearTextDirty(WORKSPACE_TEXT_KEYS);
+      return;
+    }
+    await runLiveApply(
+      'workspace',
+      async () => {
+        const applied = await setWorkspaceDir(attempted);
+        if (applied === null) throw new Error('设置工作区目录失败，请检查路径权限后重试。');
+        workspaceDir = applied;
+        workspaceCommitted = applied;
+        ackTextKeys(WORKSPACE_TEXT_KEYS);
+      },
+      () => {
+        workspaceDir = workspaceCommitted;
+        clearTextDirty(WORKSPACE_TEXT_KEYS);
+      },
+    );
   }
 
   // 首次挂载即拉取模型列表与工作区目录。
@@ -927,59 +1316,31 @@
     }
   });
 
-  async function handleSaveSettings() {
-    const currentProvider: ProviderConfig = {
-      protocol: activeProtocol,
-      preset: activePreset,
-      baseUrl: providerBaseUrl.trim(),
-      apiKey: providerApiKey.trim(),
-      model: providerModel.trim(),
-      anthropicVersion: activeProtocol === 'anthropic' ? anthropicVersion.trim() : undefined,
-    };
-
-    const currentOpenai = activeProtocol === 'openai'
-      ? { preset: activePreset, baseUrl: providerBaseUrl.trim(), apiKey: providerApiKey.trim(), model: providerModel.trim() }
-      : openaiBuffer;
-
-    const currentAnthropic = activeProtocol === 'anthropic'
-      ? { preset: activePreset, baseUrl: providerBaseUrl.trim(), apiKey: providerApiKey.trim(), model: providerModel.trim(), anthropicVersion: anthropicVersion.trim() }
-      : anthropicBuffer;
-
-    const updated: ApeirethConfig = {
-      ...config,
-      baseUrl: editBaseUrl.trim(),
-      model: providerModel.trim() || DEFAULT_MODEL_ID,
-      provider: currentProvider,
-      openaiConfig: currentOpenai,
-      anthropicConfig: currentAnthropic,
-      capabilities,
-      personas: personas.length > 0 ? personas : config.personas,
-      activePersonaId,
-    };
-
-    // 保存即应用：onSave 返回同一条 apply 路径的 Promise（配置持久化 +
-    // env 注入 + 侧车重启/热应用），失败统一进 applyError 横幅，不产生
-    // 未处理拒绝。
-    applying = true;
-    applyError = null;
+  /** 服务商组的 apply 缝：端点/模型/密钥整组写回 + 密钥入钥匙串 + 网关热应用
+   *  回显。页面「保存」按钮已删除——本缝由服务商组失焦/回车提交与密钥动作复用，
+   *  一次只提交一个切面（叠加不覆盖其余字段）；失败向上抛，由调用侧回填 + 横幅。 */
+  async function handleSaveSettings(): Promise<void> {
+    const updated = configWithProviderGroup(config, providerGroupDraft(), DEFAULT_MODEL_ID);
     applyResult = null;
     effectiveConfig = null;
-    try {
-      await onSave(updated);
-      saveSuccess = true;
-      setTimeout(() => {
-        saveSuccess = false;
-      }, 1500);
 
-      // P0: 密钥随保存写入系统钥匙串——此前只有密钥弹窗会写，服务商区块的
-      // 主保存只进内存（配置落盘会清洗密钥），重启后被钥匙串里的旧值覆盖，
-      // 表现为「保存的 key 不生效/发旧 key」。仅在输入了新密钥时写入，
-      // 空值不覆盖钥匙串。
-      if (providerApiKey.trim()) {
-        await setProviderKey(providerFamily(), providerApiKey.trim());
+    // 主 apply 路径：onSave = 配置持久化 + env 注入 + 侧车重启/热应用。
+    await onSave(updated);
+
+    // 密钥随改动写入系统钥匙串（不落盘明文）——配置落盘会清洗密钥，钥匙串
+    // 是密钥唯一真源：只进内存的 key 重启后会被旧值覆盖（表现为「发旧 key」）。
+    // 仅在输入了新密钥时写入，空值不覆盖钥匙串；写入失败记警告。
+    const warnings: string[] = [];
+    if (providerApiKey.trim()) {
+      const stored = await setProviderKey(providerFamily(), providerApiKey.trim());
+      if (!stored) {
+        warnings.push('系统钥匙串写入未成功：密钥只在本次运行生效，重启后可能回退旧值。');
       }
+    }
 
-      // P1-1: 无重启热应用，成功后回显网关生效配置。
+    // P1-1: 无重启热应用 + 生效配置回显。这是尽力而为的加速路径：失败只记
+    // 警告，主 apply 已生效（配置变化时侧车会带着新环境重启）。
+    try {
       const patch: AdminConfigPatch = {
         provider: providerFamily(),
         base_url: normalizeBaseUrl(providerBaseUrl),
@@ -989,9 +1350,13 @@
       applyResult = await applyAdminConfig(updated, patch);
       effectiveConfig = await getAdminConfig(updated);
     } catch (err) {
-      applyError = errorBannerFrom(err);
-    } finally {
-      applying = false;
+      warnings.push(`网关热应用未确认（${describeCaught(err)}）：配置已注入侧车，网关重启后自动拾取。`);
+    }
+    if (warnings.length > 0) {
+      applyResult = {
+        ok: applyResult?.ok ?? true,
+        warnings: [...warnings, ...(applyResult?.warnings ?? [])],
+      };
     }
   }
 
@@ -1017,24 +1382,19 @@
     try {
       await applyAdminConfig(config, {api_key: key});
     } catch (err) {
-      applyError = errorBannerFrom(err);
+      liveApplyError = errorBannerFrom(err);
     }
 
-    // 2026-09-28 real-world trap: this modal used to set only the vestigial
-    // gateway `apiKey` field, which never reaches the sidecar — users filled
-    // it, saved, and chat still failed with "missing API key". The key must
-    // ALSO land in the provider config, because that is what the desktop
-    // pushes into the sidecar environment via apply_backend_config.
-    const updated: ApeirethConfig = {
-      ...config,
-      apiKey: key,
-      provider: config.provider ? {...config.provider, apiKey: key} : config.provider,
-      openaiConfig: config.openaiConfig
-        ? {...config.openaiConfig, apiKey: key}
-        : config.openaiConfig,
-    };
-    void Promise.resolve(onSave(updated)).catch((err) => (applyError = errorBannerFrom(err)));
+    // 密钥必须落到 provider 组配置（与组提交同一条 apply 路径）：只进网关
+    // apiKey 字段根本到不了侧车——填完仍会以 "missing API key" 失败。
     providerApiKey = key;
+    const updated: ApeirethConfig = {
+      ...configWithProviderGroup(config, providerGroupDraft(), DEFAULT_MODEL_ID),
+      apiKey: key,
+    };
+    void Promise.resolve(onSave(updated)).catch((err) => (liveApplyError = errorBannerFrom(err)));
+    providerCommitted = {...providerGroupDraft()};
+    ackTextKeys(PROVIDER_TEXT_KEYS);
     storedKeyExists = true;
     storedKeyMasked = maskApiKey(key);
     tempApiKey = '';
@@ -1074,13 +1434,8 @@
   <PageHeader
     eyebrow="首选项"
     title="系统设置"
-    subtitle="配置模型提供商、记忆与认知、决策治理、工具安全与数据存储。"
-  >
-    <button class="primary-button" onclick={handleSaveSettings}>
-      <Check size={14} />
-      <span>{saveSuccess ? '已保存！' : '保存设置'}</span>
-    </button>
-  </PageHeader>
+    subtitle="配置模型提供商、记忆与认知、决策治理、工具安全与数据存储。改动即点/失焦即生效。"
+  />
 
   <div class="settings-layout">
     <!-- Left Navigation -->
@@ -1102,9 +1457,17 @@
 
     <!-- Right Settings Panel -->
     <div class="settings-content">
-      <!-- 开关即点即生效：pending 态 + 失败横幅（回滚后告知用户）。 -->
+      <!-- 三级即效语义：pending 行内态（侧车重启/热应用期间）+ 失败横幅
+           （回填旧值后告知用户）。全程行内提示，不弹模态。 -->
+      {#snippet fieldFlag(key: string)}
+        {#if textFlag(key) === 'dirty'}
+          <span class="field-flag field-dirty" title="改动尚未提交：失焦或回车即提交">未保存</span>
+        {:else if textFlag(key) === 'ack'}
+          <span class="field-flag field-ack" title="已提交并生效"><Check size={12} /></span>
+        {/if}
+      {/snippet}
       {#if liveApplyPendingKey}
-        <div class="apply-status"><RotateCcw size={13} class="spin" /><span>正在把开关应用到运行时…</span></div>
+        <div class="apply-status"><RotateCcw size={13} class="spin" /><span>正在应用到运行时…</span></div>
       {/if}
       {#if liveApplyError}
         <ErrorSolutionBanner
@@ -1121,7 +1484,16 @@
           <ThemeSettingsPanel
             {config}
             onSave={(cfg) =>
-              void Promise.resolve(onSave(cfg)).catch((err) => (liveApplyError = errorBannerFrom(err)))}
+              runLiveApply(
+                'appearance',
+                async () => {
+                  await onSave(cfg);
+                },
+                () => {
+                  /* 主题/强调色/背景的回退由 App 的 apply 缝统一收口（回退
+                     config + 重新套用改动前的文档主题），这里只负责行内态 */
+                },
+              )}
           />
         </div>
 
@@ -1143,19 +1515,6 @@
               <span class="summary-url">{providerBaseUrl || '—'}</span>
             </div>
           </div>
-
-          {#if applying}
-            <div class="apply-status"><RotateCcw size={13} class="spin" /><span>正在应用配置…</span></div>
-          {/if}
-
-          {#if applyError}
-            <ErrorSolutionBanner
-              code={applyError.code}
-              message={applyError.message}
-              solution={applyError.solution}
-              onClose={() => (applyError = null)}
-            />
-          {/if}
 
           {#if applyResult && applyResult.warnings.length > 0}
             <div class="warnings-box">
@@ -1180,6 +1539,16 @@
             </div>
           {/if}
 
+          <!-- 服务商组（端点 + 模型 + 密钥 + 协议头）：整组失焦/回车提交 -->
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <div
+            class="text-group"
+            role="group"
+            aria-label="服务商端点、密钥与模型"
+            bind:this={providerGroupEl}
+            onfocusout={(e) => groupFocusOut(e, providerGroupEl, () => void submitProviderGroup())}
+            onkeydown={(e) => groupKeydown(e, () => void submitProviderGroup())}
+          >
           <div class="config-step">
             <span class="step-num">1</span>
             <div class="step-body">
@@ -1188,7 +1557,10 @@
                 <button
                   class="protocol-tab"
                   class:selected={activeProtocol === 'openai'}
-                  onclick={() => switchProtocol('openai')}
+                  onclick={() => {
+                    switchProtocol('openai');
+                    markProviderDirty();
+                  }}
                 >
                   <Globe size={15} />
                   <div class="proto-text">
@@ -1199,7 +1571,10 @@
                 <button
                   class="protocol-tab"
                   class:selected={activeProtocol === 'anthropic'}
-                  onclick={() => switchProtocol('anthropic')}
+                  onclick={() => {
+                    switchProtocol('anthropic');
+                    markProviderDirty();
+                  }}
                 >
                   <Sparkles size={15} />
                   <div class="proto-text">
@@ -1220,7 +1595,10 @@
                   <button
                     class="preset-chip"
                     class:selected={activePreset === p.id}
-                    onclick={() => selectPreset(p.id)}
+                    onclick={() => {
+                      selectPreset(p.id);
+                      markProviderDirty(['provider.baseUrl', 'provider.model']);
+                    }}
                   >
                     <span>{p.name}</span>
                   </button>
@@ -1236,20 +1614,22 @@
 
               <div class="form-row-2">
                 <div class="form-group">
-                  <label for="provider-url-input">API 端点 (Base URL)</label>
+                  <label for="provider-url-input">API 端点 (Base URL) {@render fieldFlag('provider.baseUrl')}</label>
                   <input
                     id="provider-url-input"
                     type="text"
                     bind:value={providerBaseUrl}
+                    oninput={() => markTextDirty('provider.baseUrl')}
                     placeholder={activeProtocol === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'}
                   />
                 </div>
                 <div class="form-group">
-                  <label for="provider-model-input">活动模型 ID</label>
+                  <label for="provider-model-input">活动模型 ID {@render fieldFlag('provider.model')}</label>
                   <input
                     id="provider-model-input"
                     type="text"
                     bind:value={providerModel}
+                    oninput={() => markTextDirty('provider.model')}
                     placeholder={activeProtocol === 'openai' ? 'gpt-4o' : 'claude-3-7-sonnet-20250219'}
                   />
                 </div>
@@ -1261,7 +1641,10 @@
                   <SessionModelPicker
                     models={discoveredModels.map((m) => ({id: m.id, ownedBy: m.ownedBy}))}
                     value={providerModel || DEFAULT_MODEL_ID}
-                    onSelect={(id) => (providerModel = id)}
+                    onSelect={(id) => {
+                      providerModel = id;
+                      markTextDirty('provider.model');
+                    }}
                     disabled={modelsLoading}
                   />
                   <button
@@ -1282,12 +1665,14 @@
               <div class="form-group">
                 <label for="provider-key-input">
                   {activeProtocol === 'openai' ? 'API Key (Bearer)' : 'API Key (x-api-key)'}
+                  {@render fieldFlag('provider.apiKey')}
                 </label>
                 <div class="key-input-wrapper">
                   <input
                     id="provider-key-input"
                     type={showApiKey ? 'text' : 'password'}
                     bind:value={providerApiKey}
+                    oninput={() => markTextDirty('provider.apiKey')}
                     placeholder={activeProtocol === 'openai' ? 'sk-...' : 'sk-ant-...'}
                     autocomplete="off"
                   />
@@ -1308,8 +1693,14 @@
 
               {#if activeProtocol === 'anthropic'}
                 <div class="form-group">
-                  <label for="anthropic-ver-input">anthropic-version</label>
-                  <input id="anthropic-ver-input" type="text" bind:value={anthropicVersion} placeholder="2023-06-01" />
+                  <label for="anthropic-ver-input">anthropic-version {@render fieldFlag('provider.anthropicVersion')}</label>
+                  <input
+                    id="anthropic-ver-input"
+                    type="text"
+                    bind:value={anthropicVersion}
+                    oninput={() => markTextDirty('provider.anthropicVersion')}
+                    placeholder="2023-06-01"
+                  />
                 </div>
               {/if}
 
@@ -1328,7 +1719,10 @@
                     <button
                       class="model-chip"
                       class:selected={providerModel === m}
-                      onclick={() => (providerModel = m)}
+                      onclick={() => {
+                        providerModel = m;
+                        markTextDirty('provider.model');
+                      }}
                     >
                       {m}
                     </button>
@@ -1367,7 +1761,10 @@
                       <button
                         class="catalog-item"
                         class:selected={providerModel === dm}
-                        onclick={() => (providerModel = dm)}
+                        onclick={() => {
+                          providerModel = dm;
+                          markTextDirty('provider.model');
+                        }}
                       >
                         <span class="catalog-name">{dm}</span>
                         {#if providerModel === dm}
@@ -1385,6 +1782,7 @@
               {/if}
             </div>
           {/if}
+          </div>
 
           <!-- Collapsible Gateway/Daemon Section -->
           <div class="advanced-box">
@@ -1406,14 +1804,22 @@
             {#if showAdvancedGateway}
               <div class="advanced-body">
                 <div class="form-group">
-                  <label for="endpoint-input">网关服务地址 (Gateway URL)</label>
+                  <label for="endpoint-input">网关服务地址 (Gateway URL) {@render fieldFlag('gateway.baseUrl')}</label>
                   <input
                     id="endpoint-input"
                     type="text"
                     bind:value={editBaseUrl}
+                    oninput={() => markTextDirty('gateway.baseUrl')}
+                    onfocusout={() => void submitGatewayUrl()}
+                    onkeydown={(e) => {
+                      if (isTextCommitKey(e.key)) {
+                        e.preventDefault();
+                        void submitGatewayUrl();
+                      }
+                    }}
                     placeholder="http://127.0.0.1:8080"
                   />
-                  <small class="field-hint">默认为 Apeireth 核心网关端口 (:8080)。</small>
+                  <small class="field-hint">默认为 Apeireth 核心网关端口 (:8080)；失焦或回车提交，失败回填旧值。</small>
                 </div>
 
                 <div class="form-group">
@@ -1440,9 +1846,20 @@
         <div class="setting-block">
           <h3 class="block-title">伙伴人设与行为 (Persona)</h3>
           <p class="block-desc">
-            数据驱动的多 Agent 身份：可随时增删改，点「保存设置」后立即生效（人设作为 system 消息注入每次对话），无需重编译。
+            数据驱动的多 Agent 身份：可随时增删改。文本改动失焦或回车整组提交（避免半截配置）；
+            「设为当前 / 新增伙伴」即点即生效，删除需二次确认（人设作为 system 消息注入每次对话），无需重编译。
           </p>
 
+          <!-- 人设组：整组失焦/回车提交（人设列表 + 当前伙伴 id 一次落位） -->
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <div
+            class="text-group"
+            role="group"
+            aria-label="伙伴人设"
+            bind:this={personasGroupEl}
+            onfocusout={(e) => groupFocusOut(e, personasGroupEl, () => void submitPersonas())}
+            onkeydown={(e) => groupKeydown(e, () => void submitPersonas())}
+          >
           {#each personas as p, i (p.id)}
             <div class="persona-card">
               <div class="persona-card-head">
@@ -1451,46 +1868,60 @@
                   <button
                     class="quiet-button"
                     class:selected={activePersonaId === p.id}
-                    onclick={() => (activePersonaId = p.id)}
+                    onclick={() => {
+                      activePersonaId = p.id;
+                      void submitPersonas();
+                    }}
                     title="设为当前伙伴"
                   >
                     {activePersonaId === p.id ? '✓ 当前伙伴' : '设为当前'}
                   </button>
                   <button
                     class="quiet-button danger-text"
-                    onclick={() => removePersona(p.id)}
+                    onclick={() => requestDanger('removePersona', p.id)}
                     disabled={personas.length <= 1}
-                    title="删除该伙伴"
+                    title="删除该伙伴（需二次确认）"
                   >
                     <Trash2 size={13} />
                   </button>
                 </div>
               </div>
               <div class="form-group">
-                <label for="persona-name-{p.id}">名称</label>
-                <input id="persona-name-{p.id}" type="text" bind:value={p.name} placeholder="伙伴名称" />
+                <label for="persona-name-{p.id}">名称 {@render fieldFlag(`persona.name:${p.id}`)}</label>
+                <input
+                  id="persona-name-{p.id}"
+                  type="text"
+                  bind:value={p.name}
+                  oninput={() => markTextDirty(`persona.name:${p.id}`)}
+                  placeholder="伙伴名称"
+                />
               </div>
               <div class="form-group">
-                <label for="persona-model-{p.id}">固定模型（可选，留空跟随全局设置）</label>
+                <label for="persona-model-{p.id}">固定模型（可选，留空跟随全局设置） {@render fieldFlag(`persona.model:${p.id}`)}</label>
                 <input
                   id="persona-model-{p.id}"
                   type="text"
                   value={p.model || ''}
-                  oninput={(e) => (p.model = (e.currentTarget as HTMLInputElement).value.trim() || undefined)}
+                  oninput={(e) => {
+                    p.model = (e.currentTarget as HTMLInputElement).value.trim() || undefined;
+                    markTextDirty(`persona.model:${p.id}`);
+                  }}
                   placeholder={config.model || 'deepseek-chat'}
                 />
               </div>
               <div class="form-group">
-                <label for="persona-text-{p.id}">人设文本（system 消息；留空 = 该伙伴不注入人设）</label>
+                <label for="persona-text-{p.id}">人设文本（system 消息；留空 = 该伙伴不注入人设） {@render fieldFlag(`persona.text:${p.id}`)}</label>
                 <textarea
                   id="persona-text-{p.id}"
                   rows={5}
                   bind:value={p.persona}
+                  oninput={() => markTextDirty(`persona.text:${p.id}`)}
                   placeholder="你是「阿佩瑞斯」——Apeireth 基地的主管…"
                 ></textarea>
               </div>
             </div>
           {/each}
+          </div>
 
           <button class="quiet-button" onclick={addPersona}>
             <Plus size={14} />
@@ -1499,7 +1930,7 @@
 
           <div class="notice-box">
             <StatusBadge label="实时生效" variant="green" size="small" />
-            <span>人设由客户端作为 system 消息注入每次请求；「保存设置」后立即生效，重启应用仍保留（不含任何密钥）。</span>
+            <span>人设由客户端作为 system 消息注入每次请求；失焦或回车提交后立即生效，重启应用仍保留（不含任何密钥）。</span>
           </div>
         </div>
 
@@ -1508,7 +1939,7 @@
           <h3 class="block-title">记忆与认知</h3>
           <p class="block-desc">
             记忆流运行态 + W2/W3 收官批落地的认知增强件。记忆核心族（记忆注入/前瞻召回/偏好学习）
-            默认开启、可随时关；其余默认关闭、逐项显式开启。保存后注入侧车环境并重启网关（配置没变不会重启）。
+            默认开启、可随时关；其余默认关闭、逐项显式开启。拨动即注入侧车环境并生效（配置没变不会重启网关）。
           </p>
 
           <div class="cap-summary">
@@ -1517,25 +1948,18 @@
           </div>
 
           <div class="preset-bar">
-            <button class="quiet-button" onclick={() => (showRecommendedConfirm = true)}>
+            <button class="quiet-button" onclick={applyRecommendedPreset}>
               <Sparkles size={14} />
               <span>应用推荐配置</span>
             </button>
-            <span class="preset-hint">一键开启记忆核心族 + 记忆固化/反思沉淀/器官链，不含 shell/fetch。</span>
+            <span class="preset-hint">一键开启记忆核心族 + 记忆固化/反思沉淀/器官链，不含 shell/fetch；点击即生效（失败回填 + 横幅）。</span>
           </div>
-          {#if showRecommendedConfirm}
-            <div class="notice-box preset-confirm" role="alertdialog" aria-label="应用推荐配置确认">
-              <span>
-                将开启 6 项：前瞻召回、偏好学习、记忆注入、记忆固化、反思沉淀、器官链。
-                <strong>不包含</strong> Shell / 网络读取等危险工具（它们保持现状、仍需逐项开启与审批），其余开关不动。
-                确认后立即保存并走现有配置应用流程（注入侧车环境，配置变化时重启网关）。
-              </span>
-              <span class="preset-actions">
-                <button class="quiet-button" onclick={applyRecommendedPreset}>保存并应用</button>
-                <button class="quiet-button" onclick={() => (showRecommendedConfirm = false)}>取消</button>
-              </span>
-            </div>
-          {/if}
+          <div class="notice-box">
+            <span>
+              将开启 6 项：前瞻召回、偏好学习、记忆注入、记忆固化、反思沉淀、器官链。
+              <strong>不包含</strong> Shell / 网络读取等危险工具（它们保持现状、仍需逐项开启与审批），其余开关不动。
+            </span>
+          </div>
 
           <div class="cap-card">
             <div class="cap-card-head">
@@ -1602,6 +2026,7 @@
                       value={capabilities.morphologyTemperature}
                       aria-label="检索温度"
                       oninput={(e) => setMorphologyTemperature(Number((e.currentTarget as HTMLInputElement).value))}
+                      onchange={() => applyKnobNow(['morphologyTemperature'], capabilities)}
                     />
                     <b>{capabilities.morphologyTemperature.toFixed(1)}</b>
                   </span>
@@ -1612,7 +2037,7 @@
 
           <div class="cap-card">
             <div class="cap-card-head">
-              <span class="cap-card-title"><GitBranch size={13} /> 社区与账本 · W3 移植批</span>
+              <span class="cap-card-title"><GitBranch size={13} /> 社区与账本 · W3 落地批</span>
               <span class="cap-card-count">{enabledCount(COMMUNITY_DEFS)}/{COMMUNITY_DEFS.length}</span>
             </div>
             {#each COMMUNITY_DEFS as def (def.key)}
@@ -1680,6 +2105,7 @@
                   value={capabilities.memoryFade}
                   aria-label="遗忘衰减强度"
                   oninput={(e) => setMemoryFade(Number((e.currentTarget as HTMLInputElement).value))}
+                  onchange={() => applyKnobNow(['memoryFade'], capabilities)}
                 />
                 <span class="preset-hint">基线 1.0</span>
                 <b>×{capabilities.memoryFade.toFixed(2)}</b>
@@ -1701,6 +2127,7 @@
                   value={capabilities.curiosityStrength}
                   aria-label="好奇心强度"
                   oninput={(e) => setCuriosityStrength(Number((e.currentTarget as HTMLInputElement).value))}
+                  onchange={() => applyKnobNow(['curiosityStrength'], capabilities)}
                 />
                 <span class="preset-hint">基线 1.0</span>
                 <b>×{capabilities.curiosityStrength.toFixed(2)}</b>
@@ -1722,6 +2149,7 @@
                   value={capabilities.toneSaturation}
                   aria-label="语气情绪饱和度"
                   oninput={(e) => setToneSaturation(Number((e.currentTarget as HTMLInputElement).value))}
+                  onchange={() => applyKnobNow(['toneSaturation'], capabilities)}
                 />
                 <span class="preset-hint">基线 1.0</span>
                 <b>×{capabilities.toneSaturation.toFixed(2)}</b>
@@ -1743,6 +2171,7 @@
                   value={capabilities.consolidationCadence}
                   aria-label="整合节奏"
                   oninput={(e) => setConsolidationCadence(Number((e.currentTarget as HTMLInputElement).value))}
+                  onchange={() => applyKnobNow(['consolidationCadence'], capabilities)}
                 />
                 <span class="preset-hint">基线 1（每回合）</span>
                 <b>每 {capabilities.consolidationCadence} 回合</b>
@@ -1751,44 +2180,24 @@
           </div>
 
           <div class="preset-bar">
-            <button class="quiet-button" onclick={() => (dispositionPresetPending = '省心')}>
+            <button class="quiet-button" onclick={() => applyDispositionPreset('省心')}>
               <Sparkles size={14} />
               <span>省心</span>
             </button>
-            <button class="quiet-button" onclick={() => (dispositionPresetPending = '均衡')}>
+            <button class="quiet-button" onclick={() => applyDispositionPreset('均衡')}>
               <Sparkles size={14} />
               <span>均衡</span>
             </button>
-            <button class="quiet-button" onclick={() => (dispositionPresetPending = '深度记忆')}>
+            <button class="quiet-button" onclick={() => applyDispositionPreset('深度记忆')}>
               <Sparkles size={14} />
               <span>深度记忆</span>
             </button>
-            <button class="quiet-button" onclick={() => (dispositionPresetPending = '恢复基线')}>
+            <button class="quiet-button" onclick={() => applyDispositionPreset('恢复基线')}>
               <RotateCcw size={14} />
               <span>恢复基线</span>
             </button>
-            <span class="preset-hint">预设只动这 4 个体验参数；确认后立即保存并走现有应用流程。</span>
+            <span class="preset-hint">预设只动这 4 个体验参数（「恢复基线」另把「从使用中学习」关回默认关），点击即生效；失败回填旧值 + 横幅。</span>
           </div>
-          {#if dispositionPresetPending && pendingDispositionValues}
-            <div class="notice-box preset-confirm" role="alertdialog" aria-label="应用性格预设确认">
-              <span>
-                {#if dispositionPresetPending === '恢复基线'}
-                  将把 4 个体验参数全部拨回基线（1.0 / 1.0 / 1.0 / 每 1 回合），
-                  并把「从使用中学习」关回默认关。
-                {:else}
-                  将把体验参数调为「{dispositionPresetPending}」档：
-                  遗忘衰减 {pendingDispositionValues.memoryFade} / 好奇 {pendingDispositionValues.curiosityStrength} /
-                  语气 {pendingDispositionValues.toneSaturation} / 整合每 {pendingDispositionValues.consolidationCadence} 回合；
-                  其余开关与「从使用中学习」保持现状。
-                {/if}
-                确认后立即保存并走现有配置应用流程（配置持久化 + 注入侧车环境，配置变化时重启网关）。
-              </span>
-              <span class="preset-actions">
-                <button class="quiet-button" onclick={confirmDispositionPreset}>保存并应用</button>
-                <button class="quiet-button" onclick={() => (dispositionPresetPending = null)}>取消</button>
-              </span>
-            </div>
-          {/if}
 
           <div class="cap-card">
             <div class="cap-card-head">
@@ -1855,7 +2264,7 @@
               {/each}
               <div class="cap-row cap-row-static">
                 <span class="cap-text">
-                  <small>「撤销」= 把该参数拨回记录原值并立即保存应用（写回值走现有应用路径，不做独立撤销请求）。</small>
+                  <small>「撤销」= 把该参数拨回记录原值并立即生效（写回值走同一条 apply 路径，不做独立撤销请求）。</small>
                 </span>
               </div>
             {/if}
@@ -1937,6 +2346,7 @@
                     value={capabilities.councilAdvisors}
                     aria-label="顾问数量"
                     oninput={(e) => setCouncilAdvisors(Number((e.currentTarget as HTMLInputElement).value))}
+                    onchange={() => applyKnobNow(['councilAdvisors'], capabilities)}
                   />
                   <b>{capabilities.councilAdvisors}</b>
                 </span>
@@ -1944,8 +2354,8 @@
               <div class="cap-row cap-row-static">
                 <span class="cap-icon"><Timer size={15} /></span>
                 <span class="cap-text">
-                  <strong>单顾问超时 (ms)<code class="cap-env">APEIRETH_COUNCIL_TIMEOUT_MS</code></strong>
-                  <small>默认 30000；思考型模型延迟高时可放宽。</small>
+                  <strong>单顾问超时 (ms)<code class="cap-env">APEIRETH_COUNCIL_TIMEOUT_MS</code> {@render fieldFlag('council.timeoutMs')}</strong>
+                  <small>默认 30000；思考型模型延迟高时可放宽。失焦或回车提交，失败回填旧值。</small>
                 </span>
                 <span class="cap-slider-wrap">
                   <input
@@ -1954,7 +2364,17 @@
                     step="5000"
                     value={capabilities.councilTimeoutMs}
                     aria-label="单顾问超时毫秒"
-                    oninput={(e) => setCouncilTimeout(Number((e.currentTarget as HTMLInputElement).value))}
+                    oninput={(e) => {
+                      setCouncilTimeout(Number((e.currentTarget as HTMLInputElement).value));
+                      markTextDirty('council.timeoutMs');
+                    }}
+                    onfocusout={() => void submitCapabilityText(['councilTimeoutMs'], COUNCIL_TEXT_KEYS)}
+                    onkeydown={(e) => {
+                      if (isTextCommitKey(e.key)) {
+                        e.preventDefault();
+                        void submitCapabilityText(['councilTimeoutMs'], COUNCIL_TEXT_KEYS);
+                      }
+                    }}
                   />
                 </span>
               </div>
@@ -2137,9 +2557,23 @@
           <p class="block-desc">管理客户端本地存储的会话与配置缓存。</p>
 
           <div class="info-card">
-            <strong class="info-title">工作区目录</strong>
+            <strong class="info-title">工作区目录 {@render fieldFlag('workspace.dir')}</strong>
             <div class="workspace-row">
-              <code class="workspace-path">{workspaceDir || '默认 (应用数据目录)'}</code>
+              <input
+                class="workspace-path workspace-input"
+                type="text"
+                bind:value={workspaceDir}
+                oninput={() => markTextDirty('workspace.dir')}
+                onfocusout={() => void submitWorkspaceDir()}
+                onkeydown={(e) => {
+                  if (isTextCommitKey(e.key)) {
+                    e.preventDefault();
+                    void submitWorkspaceDir();
+                  }
+                }}
+                placeholder="默认 (应用数据目录)"
+                aria-label="工作区目录"
+              />
               <button class="quiet-button" onclick={() => void openWorkspacePicker()} disabled={workspaceLoading}>
                 <Folder size={13} />
                 <span>更改</span>
@@ -2148,7 +2582,7 @@
             {#if workspaceError}
               <p class="field-hint error-hint">{workspaceError}</p>
             {/if}
-            <p class="field-hint">新路径在下次启动 sidecar 时生效。</p>
+            <p class="field-hint">路径可直接编辑，失焦或回车提交（失败回填旧值）；新路径在下次启动 sidecar 时生效。</p>
           </div>
 
           <div class="danger-zone-box">
@@ -2157,7 +2591,7 @@
               <strong>危险区域 (Danger Zone)</strong>
             </div>
             <p class="danger-desc">清空本地数据将删除浏览器/客户端中存储的会话历史。后端数据库中的长期记忆不会受影响。</p>
-            <button class="danger-button" onclick={() => showClearConfirm = true}>
+            <button class="danger-button" onclick={() => requestDanger('clearLocalData')}>
               <Trash2 size={13} />
               <span>清空本地会话数据</span>
             </button>
@@ -2169,7 +2603,7 @@
           <h3 class="block-title">开发者选项</h3>
           <p class="block-desc">
             Beta 功能试验场与运行时契约。Beta 件默认关、随时可撤，验证稳定后晋升正式设置页；
-            改动同样走「保存设置」注入侧车环境。
+            改动即点/失焦即注入侧车环境生效。
           </p>
 
           <div class="cap-card">
@@ -2198,10 +2632,24 @@
             {/each}
 
             {#if capabilities.reasoningEnabled}
+              <!-- 思考模式文本旋钮：整组失焦/回车提交 -->
+              <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+              <div
+                class="text-group"
+                role="group"
+                aria-label="思考模式文本旋钮"
+                bind:this={reasoningGroupEl}
+                onfocusout={(e) =>
+                  groupFocusOut(e, reasoningGroupEl, () =>
+                    void submitCapabilityText(['reasoningModelFilters', 'reasoningTag'], REASONING_TEXT_KEYS))}
+                onkeydown={(e) =>
+                  groupKeydown(e, () =>
+                    void submitCapabilityText(['reasoningModelFilters', 'reasoningTag'], REASONING_TEXT_KEYS))}
+              >
               <div class="cap-row cap-row-static">
                 <span class="cap-icon"><Filter size={15} /></span>
                 <span class="cap-text">
-                  <strong>生效模型过滤器<code class="cap-env">APEIRETH_REASONING_MODEL_FILTERS</code></strong>
+                  <strong>生效模型过滤器<code class="cap-env">APEIRETH_REASONING_MODEL_FILTERS</code> {@render fieldFlag('reasoning.filters')}</strong>
                   <small>逗号分隔子串白名单（如 deepseek,o3）；留空 = 全部模型生效。</small>
                 </span>
                 <span class="cap-input-wrap">
@@ -2210,14 +2658,17 @@
                     value={capabilities.reasoningModelFilters}
                     placeholder="全部模型"
                     aria-label="思考模式模型过滤器"
-                    oninput={(e) => setReasoningFilters((e.currentTarget as HTMLInputElement).value)}
+                    oninput={(e) => {
+                      setReasoningFilters((e.currentTarget as HTMLInputElement).value);
+                      markTextDirty('reasoning.filters');
+                    }}
                   />
                 </span>
               </div>
               <div class="cap-row cap-row-static">
                 <span class="cap-icon"><Tag size={15} /></span>
                 <span class="cap-text">
-                  <strong>reasoning 标签<code class="cap-env">APEIRETH_REASONING_TAG</code></strong>
+                  <strong>reasoning 标签<code class="cap-env">APEIRETH_REASONING_TAG</code> {@render fieldFlag('reasoning.tag')}</strong>
                   <small>reasoning_content 的字段标签名，默认 think。</small>
                 </span>
                 <span class="cap-input-wrap">
@@ -2225,9 +2676,13 @@
                     type="text"
                     value={capabilities.reasoningTag}
                     aria-label="reasoning 标签"
-                    oninput={(e) => setReasoningTag((e.currentTarget as HTMLInputElement).value)}
+                    oninput={(e) => {
+                      setReasoningTag((e.currentTarget as HTMLInputElement).value);
+                      markTextDirty('reasoning.tag');
+                    }}
                   />
                 </span>
+              </div>
               </div>
             {/if}
           </div>
@@ -2259,21 +2714,6 @@
         </div>
       {/if}
 
-      <!-- 2026-09-23 主人指示：保存栏移入内容流末尾（每个分页最下面），
-           不再做通栏固定黑带（2549 宽屏上比例失调且不优雅）。
-           保存会重启本地网关以应用配置。
-           2026-10-10 主人反馈：纯探测页（运行时诊断）不需要保存栏。 -->
-      {#if activeSection !== 'runtime'}
-        <div class="settings-save-bar">
-          <span class="save-bar-hint">
-            {saveSuccess ? '✓ 已保存，本地网关已应用新配置' : '填好配置后点"保存设置"（无重启热应用，不支持时自动重启网关）'}
-          </span>
-          <button class="primary-button save-bar-btn" onclick={handleSaveSettings}>
-            <Check size={14} />
-            <span>{saveSuccess ? '已保存！' : '保存设置'}</span>
-          </button>
-        </div>
-      {/if}
     </div>
   </div>
 </section>
@@ -2295,7 +2735,7 @@
       </div>
       <div class="modal-body">
         <p class="modal-desc">
-          这是**模型提供商**的密钥（如 DeepSeek）。密钥存入系统钥匙串，不落盘明文；保存后热更新，无需重启。
+          这是**模型提供商**的密钥（如 DeepSeek）。密钥存入系统钥匙串，不落盘明文；写入后热更新，无需重启。
         </p>
 
         <div class="keychain-status">
@@ -2325,8 +2765,9 @@
         {#if storedKeyExists}
           <button
             class="quiet-button danger-text delete-key-btn"
-            onclick={deleteStoredKey}
+            onclick={() => requestDanger('deleteStoredKey')}
             disabled={keychainDeleting}
+            title="删除已存密钥（需二次确认）"
           >
             <Trash2 size={13} />
             <span>{keychainDeleting ? '删除中…' : '删除已存密钥'}</span>
@@ -2334,7 +2775,7 @@
         {/if}
         <button class="quiet-button" onclick={() => showApiKeyModal = false}>取消</button>
         <button class="primary-button" onclick={saveNewApiKey} disabled={keychainSaving}>
-          {keychainSaving ? '保存中…' : '保存并应用'}
+          {keychainSaving ? '写入中…' : '写入并应用'}
         </button>
       </div>
     </div>
@@ -2350,45 +2791,23 @@
   onCancel={() => (showWorkspacePicker = false)}
 />
 
-<!-- Clear Data Confirmation -->
-<ConfirmDialog
-  open={showClearConfirm}
-  title="清空本地所有会话"
-  message="确定要清空本地保存的所有会话记录吗？此操作无法撤销。"
-  confirmText="确认清空"
-  danger={true}
-  onConfirm={() => {
-    showClearConfirm = false;
-    if (onClearLocalData) onClearLocalData();
-  }}
-  onCancel={() => showClearConfirm = false}
-/>
+<!-- 危险动作二次确认（第 3 级）：确认后即效（弹层文案来自登记表） -->
+{#if dangerConfirm}
+  <ConfirmDialog
+    open={dangerPending !== null}
+    title={dangerConfirm.title}
+    message={dangerConfirm.message}
+    confirmText={dangerConfirm.confirmText}
+    danger={true}
+    onConfirm={() => void runDangerAction()}
+    onCancel={() => {
+      dangerPending = null;
+      dangerPayload = '';
+    }}
+  />
+{/if}
 
 <style>
-  .settings-save-bar {
-    /* 2026-09-23 主人指示：从 .settings-layout 通栏带改为内容流末尾的保存卡片
-       （每个分页最下面）。不再跨 grid 列，比例随 900px 内容列收敛。 */
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    margin-top: 28px;
-    padding: 12px 18px;
-    border: 1px solid var(--line, #2a323c);
-    border-radius: 10px;
-    /* --surface-2：根（深）/essence（浅）双模式都有定义——曾用 --surface-1
-       （无任何主题定义），浅色模式下跌回深色硬编码，浅页面上出现深色保存栏（主人
-       2026-09-23 真机指出「浅色模式 + 深色保存设置很违和」）。 */
-    background: var(--surface-2, #1b1a20);
-  }
-  .save-bar-hint {
-    font-size: 12px;
-    color: var(--faint, #8b97a5);
-  }
-  .save-bar-btn {
-    font-weight: 600;
-  }
-
   .settings-view {
     flex: 1;
     display: flex;
@@ -2946,7 +3365,7 @@
     font-weight: 600;
   }
 
-  /* 「推荐配置」一键预设：按钮 + 说明 + 确认面板（能力中心）。 */
+  /* 「推荐配置」一键预设：按钮 + 说明（能力中心）。 */
   .preset-bar {
     display: flex;
     align-items: center;
@@ -2956,14 +3375,50 @@
     font-size: 12px;
     color: var(--muted);
   }
-  .preset-confirm {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
   .preset-actions {
     display: flex;
     gap: 8px;
+  }
+
+  /* 文本提交组（第 2 级）：整组失焦/回车提交的容器。display:contents
+     不改既有排版，只负责承载组事件与组语义。 */
+  .text-group {
+    display: contents;
+  }
+
+  /* 字段旁即效确认：未提交显「未保存」，提交成功闪 ✓。 */
+  .field-flag {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .field-dirty {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--amber-wash);
+    color: var(--amber);
+  }
+  .field-ack {
+    color: #2ecc71;
+  }
+
+  .workspace-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: 0;
+  }
+  .workspace-input:focus {
+    border-color: var(--amber-line);
   }
 
   .cap-card {
