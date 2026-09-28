@@ -113,7 +113,7 @@
 | # | 项 | 原因 | 若要做时的路径 |
 |---|---|---|---|
 | 1 | **MiniMax provider 真机** | 无 MiniMax key（用户侧无预算） | `#[ignore]` 测试齐备：`minimax_llm_factory::real_llm_call_smoke` 等，有 key 后 `cargo test -p apeireth-provider --test minimax_llm_factory -- --ignored` + env `MINIMAX_API_KEY` |
-| 2 | **桌面 UI 点击流人工实测** | 🟡 核心链路已人工走通（2026-09-28 用户实测：装机→启动→设置填 key→保存→网关重启→真实流式对话出字，全程抓出 5 个真 bug：CWD 启动失败 / CORS 缺失 / 密钥弹窗不推侧车 / 保存按钮不可见 / 错误帧被吞）；**剩余人工步骤**：① 工具面板 shell 审批闭环（开 shell 旋钮→触发→批准，现审批卡已显示命令文本）② 图形卸载勾选"删除应用程序数据"验证数据目录真删 ③ 设置页钥匙串保存→重启后 key 仍在（P0-1 GUI 路径）④ 会话模型/预设选择器 + 斜杠菜单的点击流 | 清单：`frontend/companion-desktop/docs/first-run-click-through-checklist.md`；观察日志 `%LOCALAPPDATA%…/logs/apeireth-backend.log` |
+| 2 | **桌面 UI 点击流人工实测** | ✅ **核心 10 步全绿（2026-09-28 用户真机签署）**：向导/流式出字/运行时诊断快照（功能+布局）/Shell 开关即效（开→可执行、关→工具消失，双向实证）/审批闭环（提议冻结→批准→真执行）/托盘恢复/退出回收/重启免重输（钥匙串）/快捷助手开关无幽灵窗/设置面即效化（开关·滑杆·危险动作·文本失焦）。全程抓出 6 个真 bug 全修：CWD 启动 / CSP 误拦 / key 不持久 / 发旧 key / 热更假生效 / 幽灵窗（自毁挂死）。**残余 2 小项**：① 图形卸载勾"删除应用程序数据"的真删验证 ② 斜杠菜单点击流 | 清单：`frontend/companion-desktop/docs/first-run-click-through-checklist.md`；本批证据链见会话台账 |
 | 3 | `/v1/apeireth/events` 订阅端到端（桌面 UI 里收事件） | 端点已确认是活流（探针连接保持），UI 消费未人工验证 | presence 订阅代码在 `presence.ts`；UI 验证并入 #2 |
 | 4 | approvals 的 HTTP 完整闭环 | 完整闭环在 CLI 实测过（#3）；HTTP 路由只验了参数校验响应 | HTTP 闭环可并入 #2（工具触发 → 面板审批按钮） |
 | 5 | macOS / Linux 打包与装机 | 仅 Windows NSIS 装机实测 | Tauri bundle 命令已有，缺真机验证环境 |

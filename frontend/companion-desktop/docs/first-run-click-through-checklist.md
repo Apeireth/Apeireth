@@ -1,10 +1,5 @@
 # 桌面 UI 点击流人工实测清单（做一次即可）
 
-> 台账挂账 #2（`docs/04-internal/live-verification-ledger.md`）。各链路段全部有自动化验证
-> （install-e2e / supervisor_lifecycle / 前端套件 / 真机流式探针），但**真窗口里的端到端
-> 点击流从未人工点过**——这是唯一建议后人做一次的测试。做完后把结果写回台账挂账 #2
-> 并删掉本清单头部这句话。
-
 ## 前置
 
 1. 装最新 NSIS 包（`target\desktop-nsis\Apeireth Companion_*_x64-setup.exe` /S），
