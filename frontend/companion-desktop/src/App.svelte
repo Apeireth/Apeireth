@@ -49,7 +49,6 @@
     saveRecentIds,
     type CommandItem,
   } from './lib/commands/registry';
-  import SessionModelPicker from './lib/components/SessionModelPicker.svelte';
   import WorkspacePickerModal from './lib/components/WorkspacePickerModal.svelte';
   import {
     getWorkspaceDir,
@@ -2796,16 +2795,6 @@
             </div>
 
             <div class="composer-side">
-              <!-- 会话模型切换（2026-10-11 从会话头迁入对话栏位；弹层向上翻） -->
-              <div class="composer-session-model">
-                <SessionModelPicker
-                  models={sessionModels}
-                  value={currentSessionModel}
-                  onSelect={(id) => void selectSessionModel(id)}
-                  disabled={busy}
-                  up
-                />
-              </div>
               <div class="composer-caps" aria-label="模型与上下文">
                 <div class="panel" class:show={openPanel === 'ctx'} id="panel-ctx" role="dialog" aria-label="上下文窗口">
                   <h2>上下文窗口</h2>
@@ -3209,20 +3198,7 @@
     color: var(--faint);
     line-height: 1.5;
   }
-  .composer-session-model {
-    flex: none;
-  }
-  .composer-session-model :global(.model-picker .trigger) {
-    max-width: 200px;
-    padding: 6px 10px;
-    font-size: 12px;
-  }
   /* 窄输入栏：会话模型芯片优先，全局字母丸让位（双击状态栏仍可进设置改全局模型） */
-  @media (max-width: 760px) {
-    .composer-session-model :global(.model-picker .trigger) {
-      max-width: 120px;
-    }
-  }
 
   /* ---------- 工具生命周期卡（P1-5） ----------
      旧 ToolCallCard 由 MessageContent 内部渲染；此处用新卡接管展示，
