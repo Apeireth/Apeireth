@@ -8,7 +8,7 @@
 # Usage:
 #   $env:OPENAI_API_KEY='sk-...'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'
 #   pwsh scripts/install-e2e.ps1
-#   pwsh scripts/install-e2e.ps1 -SetupPath '...\Apeireth Companion_2.0.0-rc.1_x64-setup.exe'
+#   pwsh scripts/install-e2e.ps1 -SetupPath '...\Apeireth Companion_2.0.0-rc.2_x64-setup.exe'
 #
 # Requires: a built NSIS setup (pnpm tauri build --bundles nsis), the
 # DeepSeek-compatible env above, and a user session that can elevate

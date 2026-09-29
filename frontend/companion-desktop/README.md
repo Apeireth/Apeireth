@@ -99,7 +99,7 @@ pnpm tauri build --target aarch64-unknown-linux-gnu
 
 ```powershell
 # 静默安装（perMachine，装到 C:\Program Files\Apeireth Companion）
-.\Apeireth Companion_2.0.0-rc.1_x64-setup.exe /S
+.\Apeireth Companion_2.0.0-rc.2_x64-setup.exe /S
 
 # 静默卸载：uninstall.exe /S
 # 语义（installer.nsh hook，2026-09-08 修复）：卸载前先杀主程序再杀侧车
