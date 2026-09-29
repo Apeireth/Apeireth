@@ -50,6 +50,7 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
+use apeireth_mesh::RemoteInvokeContext;
 use apeireth_orchestration::call_scheduler::{
     CallBatch, CallRunner, CallScheduler, CancelKind, ConcurrencySafety, ScheduledCall, SlotOutcome,
 };
@@ -90,6 +91,7 @@ use super::module::{
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
 use super::subloop::RuntimeSubLoopSpawner;
+use super::tool_route::ToolRouteError;
 use super::trace::{ExecutionTrace, TraceEvent};
 
 /// M20: 单轮 tool_calls 上限。`max_rounds` 约束的是轮数, 模型单轮塞进的
@@ -269,10 +271,19 @@ enum ToolAdmission {
     Pending(PendingDispatch),
 }
 
+/// How an admitted call executes: a live local implementation, or a remote
+/// route the capability port carries the call over. A remote target holds no
+/// implementation — only where the implementation lives.
+#[derive(Clone)]
+enum AdmittedTarget {
+    Local(Arc<dyn apeireth_plugin::ToolCapability>),
+    Remote(apeireth_mesh::RemoteToolRoute),
+}
+
 /// A call that passed admission and is cleared to invoke.
 struct AdmittedCall {
     capability: CapabilityId,
-    tool: Arc<dyn apeireth_plugin::ToolCapability>,
+    target: AdmittedTarget,
     call: ToolCall,
     preapproved: bool,
     frozen_invocation: Option<FrozenInvocation>,
@@ -292,19 +303,66 @@ enum WindowExecution {
     Resolved(ToolResult),
     Ready {
         capability: CapabilityId,
-        tool: Arc<dyn apeireth_plugin::ToolCapability>,
+        target: AdmittedTarget,
     },
 }
 
+/// The invocation half of the execution stage: run the local implementation,
+/// or carry the call over the capability port to the remote owner. Neither
+/// path re-checks governance — admission already did that, exactly once.
+async fn invoke_admitted_target(
+    target: &AdmittedTarget,
+    call: &ToolCall,
+    capability: &CapabilityId,
+    remote_port: Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>,
+    remote_ctx: &apeireth_mesh::RemoteInvokeContext,
+) -> ToolResult {
+    match target {
+        AdmittedTarget::Local(tool) => tool.invoke(call).await,
+        AdmittedTarget::Remote(route) => {
+            let Some(port) = remote_port else {
+                return ToolResult::permanent_error(
+                    &call.id,
+                    format!("remote tool {capability} has no capability port"),
+                )
+                .with_name(&call.name);
+            };
+            match port
+                .invoke_tool(route.clone(), call.clone(), remote_ctx.clone())
+                .await
+            {
+                Ok(result) => result,
+                Err(error) => ToolResult::permanent_error(
+                    &call.id,
+                    format!("remote tool {capability} failed: {error}"),
+                )
+                .with_name(&call.name),
+            }
+        }
+    }
+}
+
 /// Execution stage of one admitted call: the invocation, nothing else.
-async fn run_admitted_call(admitted: &AdmittedCall) -> ToolResult {
-    if admitted.preapproved {
-        admitted
-            .tool
-            .invoke_frozen(&admitted.call, admitted.frozen_invocation.as_ref())
+async fn run_admitted_call(
+    admitted: &AdmittedCall,
+    remote_port: Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>,
+    remote_ctx: &apeireth_mesh::RemoteInvokeContext,
+) -> ToolResult {
+    match &admitted.target {
+        AdmittedTarget::Local(tool) if admitted.preapproved => {
+            tool.invoke_frozen(&admitted.call, admitted.frozen_invocation.as_ref())
+                .await
+        }
+        target => {
+            invoke_admitted_target(
+                target,
+                &admitted.call,
+                &admitted.capability,
+                remote_port,
+                remote_ctx,
+            )
             .await
-    } else {
-        admitted.tool.invoke(&admitted.call).await
+        }
     }
 }
 
@@ -331,6 +389,10 @@ fn synthetic_cancel_result(call: &ToolCall, kind: CancelKind) -> ToolResult {
 /// Batch runner for one dispatch window: slot index to invocation future.
 struct WindowRunner {
     entries: Vec<WindowEntry>,
+    /// The capability port, captured per window: remote slots in the same
+    /// window execute through exactly the runtime view admission saw.
+    remote_port: Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>,
+    remote_ctx: apeireth_mesh::RemoteInvokeContext,
 }
 
 impl CallRunner<ToolResult> for WindowRunner {
@@ -341,10 +403,16 @@ impl CallRunner<ToolResult> for WindowRunner {
     ) -> Pin<Box<dyn Future<Output = ToolResult> + Send>> {
         match &self.entries[index].execution {
             WindowExecution::Resolved(result) => Box::pin(std::future::ready(result.clone())),
-            WindowExecution::Ready { tool, .. } => {
-                let tool = Arc::clone(tool);
+            WindowExecution::Ready { capability, target } => {
+                let capability = capability.clone();
+                let target = target.clone();
                 let call = self.entries[index].call.clone();
-                Box::pin(async move { tool.invoke(&call).await })
+                let remote_port = self.remote_port.clone();
+                let remote_ctx = self.remote_ctx.clone();
+                Box::pin(async move {
+                    invoke_admitted_target(&target, &call, &capability, remote_port, &remote_ctx)
+                        .await
+                })
             }
         }
     }
@@ -2652,6 +2720,61 @@ impl Runtime {
         }
     }
 
+    /// The shared "this name does not execute" shape: trace, session record,
+    /// and a correlated permanent tool error. A tool failure is a result the
+    /// model can react to, never a turn failure.
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch_unavailable(
+        trace: &mut ExecutionTrace,
+        session: &mut Session,
+        clock: &dyn apeireth_core::kernel::Clock,
+        request_id: RequestId,
+        trace_id: TraceId,
+        round: u32,
+        tool_name: &str,
+        tool_call_id: &str,
+        reason: String,
+    ) -> ToolAdmission {
+        trace.record(
+            Timestamp::from_clock(clock),
+            TraceEvent::CapabilityUnavailable {
+                requested: tool_name.to_string(),
+                tool_call_id: tool_call_id.to_string(),
+                reason: reason.clone(),
+                round,
+            },
+        );
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::ToolFailed {
+                capability: None,
+                tool_call_id: tool_call_id.to_string(),
+                error: reason.clone(),
+                round,
+            },
+            clock,
+        );
+        ToolAdmission::Resolved(
+            ToolResult::permanent_error(tool_call_id, reason).with_name(tool_name),
+        )
+    }
+
+    /// The live local implementation for `capability`, across both of this
+    /// runtime's own tool surfaces — the plugin index first, then the dynamic
+    /// registry. `None` means no local implementation can dispatch it.
+    fn local_dispatch_tool(
+        &self,
+        capability: &CapabilityId,
+    ) -> Option<Arc<dyn apeireth_plugin::ToolCapability>> {
+        self.plugins.tool(capability).ok().or_else(|| {
+            self.capabilities
+                .capabilities()
+                .into_iter()
+                .find(|tool| tool.id() == capability)
+        })
+    }
+
     /// Admission stage of one tool call: resolve the tool, authorize the
     /// dispatch, and record the dispatch boundary. It never invokes anything —
     /// a [`ToolAdmission::Ready`] verdict hands the invocation to the execution
@@ -2708,55 +2831,115 @@ impl Runtime {
             ));
         }
 
-        let module_tool = self.capabilities.find_by_name(&call.name);
-        let plugin_tool = self.plugins.tool_by_name(&call.name);
-        let Some(tool) = (match (module_tool, plugin_tool) {
-            (Some(tool), None) | (None, Some(tool)) => Some(tool),
-            (None, None) => None,
-            (Some(_), Some(_)) => None,
-        }) else {
-            let available = self
-                .tool_declarations()
-                .iter()
-                .map(|t| t.name.clone())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let reason = if available.is_empty() {
-                format!("no tool named {:?}; no tools are available", call.name)
-            } else {
-                format!(
-                    "no tool named {:?}; available tools: {available}",
-                    call.name
-                )
-            };
-            trace.record(
-                Timestamp::from_clock(clock),
-                TraceEvent::CapabilityUnavailable {
-                    requested: call.name.clone(),
-                    tool_call_id: call.id.clone(),
-                    reason: reason.clone(),
+        // One world of names: the model sees one catalog, and every name
+        // resolves to exactly one route through the derived route table —
+        // local or remote, never fallback ("try local, else remote"). The route
+        // table answers where the name is *offered*; which implementation runs
+        // is decided below, local-first.
+        let entry = match self.tool_route_table().resolve(&call.name) {
+            Ok(entry) => entry.clone(),
+            Err(ToolRouteError::NotFound { .. }) => {
+                let available = self
+                    .tool_declarations()
+                    .iter()
+                    .map(|t| t.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let reason = if available.is_empty() {
+                    format!("no tool named {:?}; no tools are available", call.name)
+                } else {
+                    format!(
+                        "no tool named {:?}; available tools: {available}",
+                        call.name
+                    )
+                };
+                return Ok(Self::dispatch_unavailable(
+                    trace, session, clock, request_id, trace_id, round, &call.name, &call.id,
+                    reason,
+                ));
+            }
+            Err(ToolRouteError::Ambiguous { candidates, .. }) => {
+                return Ok(Self::dispatch_unavailable(
+                    trace,
+                    session,
+                    clock,
+                    request_id,
+                    trace_id,
                     round,
+                    &call.name,
+                    &call.id,
+                    format!(
+                        "tool name {:?} is ambiguous across routes: {candidates}; call it through an explicit route instead",
+                        call.name
+                    ),
+                ));
+            }
+        };
+        let capability = entry.capability_id.clone();
+
+        // The invocation decision, made at call time: local-first, then the
+        // lifecycle gate, then the remote route. A remote advert never shadows
+        // a dispatchable local implementation, and a locally owned capability
+        // whose owner cannot dispatch right now is refused outright — never
+        // silently rerouted to a peer. Only a capability with no local owner at
+        // all may be served by its remote route.
+        let target = match self.local_dispatch_tool(&capability) {
+            Some(tool) => AdmittedTarget::Local(tool),
+            None => match self.plugins.record(&capability) {
+                Ok(record) => {
+                    return Ok(Self::dispatch_unavailable(
+                        trace,
+                        session,
+                        clock,
+                        request_id,
+                        trace_id,
+                        round,
+                        &call.name,
+                        &call.id,
+                        format!(
+                            "locally owned capability {capability} is not dispatchable: owning plugin {} is {}; it is never silently rerouted to a peer",
+                            record.owner, record.state,
+                        ),
+                    ));
+                }
+                Err(_) => match entry.target.remote_route() {
+                    Some(route) => AdmittedTarget::Remote(route),
+                    None => {
+                        return Ok(Self::dispatch_unavailable(
+                            trace,
+                            session,
+                            clock,
+                            request_id,
+                            trace_id,
+                            round,
+                            &call.name,
+                            &call.id,
+                            format!("tool {capability} vanished before dispatch"),
+                        ));
+                    }
                 },
-            );
-            session.record(
-                request_id,
-                trace_id,
-                SessionEventKind::ToolFailed {
-                    capability: None,
-                    tool_call_id: call.id.clone(),
-                    error: reason.clone(),
-                    round,
-                },
-                clock,
-            );
-            return Ok(ToolAdmission::Resolved(
-                ToolResult::permanent_error(&call.id, reason).with_name(&call.name),
-            ));
+            },
         };
 
-        let capability = tool.id().clone();
-
         if preapproved {
+            let Some(tool) = (match &target {
+                AdmittedTarget::Local(tool) => Some(tool),
+                AdmittedTarget::Remote(_) => None,
+            }) else {
+                // Fail closed: a remote tool has no locally freezable effective
+                // invocation, so it cannot resume a frozen approval yet.
+                return Ok(Self::dispatch_unavailable(
+                    trace,
+                    session,
+                    clock,
+                    request_id,
+                    trace_id,
+                    round,
+                    &call.name,
+                    &call.id,
+                    "a remote tool cannot resume a frozen approval in this phase".to_string(),
+                ));
+            };
             let Some(approval) = approved_approval else {
                 let reason = "approved dispatch is missing its frozen approval".to_string();
                 session.record(
@@ -2811,7 +2994,7 @@ impl Runtime {
 
             return Ok(ToolAdmission::Ready(AdmittedCall {
                 capability,
-                tool,
+                target,
                 call: call.clone(),
                 preapproved: true,
                 frozen_invocation: approval.effective_invocation.clone(),
@@ -2870,6 +3053,23 @@ impl Runtime {
                 ));
             }
             Decision::RequireApproval { reason } => {
+                let AdmittedTarget::Local(tool) = &target else {
+                    // Remote tools cannot freeze an effective invocation here;
+                    // fail closed instead of minting an unverifiable approval.
+                    return Ok(Self::dispatch_unavailable(
+                        trace,
+                        session,
+                        clock,
+                        request_id,
+                        trace_id,
+                        round,
+                        &call.name,
+                        &call.id,
+                        format!(
+                            "refused by governance: {reason} (remote tools cannot require approval in this phase)"
+                        ),
+                    ));
+                };
                 let effective_invocation = match tool.freeze_invocation(call) {
                     Ok(frozen) => frozen,
                     Err(result) => {
@@ -2902,9 +3102,9 @@ impl Runtime {
             }
         }
 
-        // Observation layer at the dispatch boundary: the side-effect audit
-        // event is checked before the dispatch is recorded and the invocation
-        // runs.
+        // Observation layer at the dispatch boundary: the side-effect
+        // audit event is checked before the dispatch is recorded and the
+        // invocation runs.
         self.observe_side_effect(session, request_id, trace_id, round, call, &capability)?;
 
         trace.record(
@@ -2918,7 +3118,7 @@ impl Runtime {
 
         Ok(ToolAdmission::Ready(AdmittedCall {
             capability,
-            tool,
+            target,
             call: call.clone(),
             preapproved: false,
             frozen_invocation: None,
@@ -2961,7 +3161,14 @@ impl Runtime {
             ToolAdmission::Resolved(result) => Ok(ToolDispatch::Result(result)),
             ToolAdmission::Pending(pending) => Ok(ToolDispatch::Pending(pending)),
             ToolAdmission::Ready(admitted) => {
-                let result = run_admitted_call(&admitted).await;
+                let remote_port = self.remote_port().clone();
+                let remote_ctx = apeireth_mesh::RemoteInvokeContext {
+                    trace: trace_id,
+                    session: *session_id,
+                    round,
+                    deadline_epoch_ms: None,
+                };
+                let result = run_admitted_call(&admitted, remote_port, &remote_ctx).await;
                 self.record_call_completed(
                     session,
                     trace,
@@ -3274,7 +3481,7 @@ impl Runtime {
                     call: call.clone(),
                     execution: WindowExecution::Ready {
                         capability: admitted.capability,
-                        tool: admitted.tool,
+                        target: admitted.target,
                     },
                 }),
                 ToolAdmission::Pending(pending) => {
@@ -3298,6 +3505,13 @@ impl Runtime {
             .collect();
         let runner = Arc::new(WindowRunner {
             entries: entries.clone(),
+            remote_port: self.remote_port().clone(),
+            remote_ctx: apeireth_mesh::RemoteInvokeContext {
+                trace: trace_id,
+                session: *session_id,
+                round: continuation.round,
+                deadline_epoch_ms: None,
+            },
         });
         let mut batch = scheduler.start_batch(scheduled, runner);
         let mut flow: Option<WindowFlow> = None;

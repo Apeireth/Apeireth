@@ -61,6 +61,7 @@ pub mod provider;
 pub mod runtime;
 pub mod session;
 pub mod subloop;
+pub mod tool_route;
 pub mod trace;
 // L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
 // **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
@@ -114,4 +115,9 @@ pub use session::{
 pub use subloop::{
     RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
 };
+
+pub use tool_route::{
+    LocalToolView, ToolExecutionTarget, ToolRouteEntry, ToolRouteError, ToolRouteTable,
+};
+
 pub use trace::{ExecutionTrace, TraceEntry, TraceEvent};
