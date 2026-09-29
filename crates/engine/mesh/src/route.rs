@@ -101,10 +101,11 @@ impl std::fmt::Display for RouteSelection {
 
 /// One capability as advertised by a remote node.
 ///
-/// A projection entry — identity and availability only. It is not, and cannot
-/// become, an implementation: remote execution always travels back to the
-/// owner node's `PluginManager`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A projection entry — identity, availability, and (for tools) the
+/// model-facing declaration the owner projected. It is not, and cannot become,
+/// an implementation: remote execution always travels back to the owner node's
+/// `PluginManager`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct RemoteCapability {
     /// Capability identity, unchanged by the network hop.
     pub id: CapabilityId,
@@ -116,6 +117,8 @@ pub struct RemoteCapability {
     pub description: String,
     /// Whether the owning module reported it dispatchable in the latest advert.
     pub available: bool,
+    /// The model-facing declaration, when the advert carried one (tool kind).
+    pub declaration: Option<apeireth_protocol::canonical::NormalizedTool>,
 }
 
 /// One capability in this runtime's own canonical indexed view.
@@ -123,7 +126,7 @@ pub struct RemoteCapability {
 /// Produced by the executor's `catalog()` — i.e. straight from the
 /// `PluginManager`'s derived views — and never stored anywhere; routing reads
 /// it through at query time.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CapabilityCatalogEntry {
     /// Capability identity.
     pub id: CapabilityId,
@@ -135,6 +138,8 @@ pub struct CapabilityCatalogEntry {
     pub description: String,
     /// Whether the owning module can currently dispatch it.
     pub available: bool,
+    /// The model-facing declaration, for live tool entries.
+    pub declaration: Option<apeireth_protocol::canonical::NormalizedTool>,
 }
 
 /// Routing metadata for every remote route, namespaced by `(node, capability)`.
@@ -178,6 +183,7 @@ impl RouteTable {
                     owner: LocatedModuleId::new(node.clone(), module.clone()),
                     description: entry.description.clone(),
                     available: entry.available,
+                    declaration: entry.declaration.clone(),
                 },
             );
         }
@@ -301,6 +307,7 @@ mod tests {
             owner: module(owner),
             description: "local".into(),
             available: true,
+            declaration: None,
         }]
     }
 
@@ -308,12 +315,17 @@ mod tests {
         CapabilityAdvert {
             modules: vec![ModuleAdvert {
                 module: module("builtin.mesh-test"),
-                capabilities: vec![CapabilityAdvertEntry {
-                    id: cap(id),
-                    kind: MeshCapabilityKind::Tool,
-                    description: "remote".into(),
-                    available: true,
-                }],
+                capabilities: vec![CapabilityAdvertEntry::tool(
+                    cap(id),
+                    "remote",
+                    true,
+                    apeireth_protocol::canonical::NormalizedTool {
+                        name: "mesh_echo".into(),
+                        description: Some("remote".into()),
+                        parameters: apeireth_protocol::canonical::ToolParameters::new(),
+                        strict: false,
+                    },
+                )],
             }],
         }
     }

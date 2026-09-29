@@ -232,22 +232,49 @@ impl<V: ModuleManagerView> ManagerExecutor<V> {
 impl<V: ModuleManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<V> {
     fn catalog(&self) -> Vec<CapabilityCatalogEntry> {
         // The canonical derived view only: one entry per declared capability,
-        // owned by a real PluginId, with availability from the owner's state.
-        // No mesh-private tool bag — the PluginManager's derived index is the
-        // single source of who owns what locally.
+        // owned by a real PluginId, with availability from the owner's current
+        // dispatchability. No mesh-private tool bag — the PluginManager's
+        // derived index is the single source of who owns what locally.
         self.view.with_manager(|manager| {
             manager
                 .records()
                 .into_iter()
-                .map(|record| CapabilityCatalogEntry {
-                    id: record.descriptor.id.clone(),
-                    kind: apeireth_mesh_protocol::MeshCapabilityKind::from_id(
-                        &record.descriptor.id,
-                    )
-                    .unwrap_or(apeireth_mesh_protocol::MeshCapabilityKind::Extension),
-                    owner: record.owner.clone(),
-                    description: record.descriptor.description.clone(),
-                    available: record.is_available(),
+                .filter_map(|record| {
+                    let id = record.descriptor.id.clone();
+                    let kind = apeireth_mesh_protocol::MeshCapabilityKind::from_id(&id)
+                        .unwrap_or(apeireth_mesh_protocol::MeshCapabilityKind::Extension);
+                    // The model-facing declaration is projected from a real
+                    // tool object — schema is implementation metadata and is
+                    // never guessed. A tool whose owner cannot dispatch right
+                    // now still projects the schema its owner exports, as
+                    // unavailable; a tool-kind capability with no object left to
+                    // speak for it cannot form a well-formed advert entry and is
+                    // left out entirely.
+                    let declaration = manager.plugins().get(record.owner).ok().and_then(|plugin| {
+                        plugin
+                            .tools()
+                            .into_iter()
+                            .find(|tool| tool.id() == &id)
+                            .map(|tool| tool.declaration())
+                    });
+                    if declaration.is_none()
+                        && kind == apeireth_mesh_protocol::MeshCapabilityKind::Tool
+                    {
+                        return None;
+                    }
+                    let available = manager.tool(&id).is_ok() || manager.provider(&id).is_ok();
+                    let description = declaration
+                        .as_ref()
+                        .and_then(|declaration| declaration.description.clone())
+                        .unwrap_or_else(|| record.descriptor.description.clone());
+                    Some(CapabilityCatalogEntry {
+                        id,
+                        kind,
+                        owner: record.owner.clone(),
+                        description,
+                        declaration,
+                        available,
+                    })
                 })
                 .collect()
         })
@@ -324,6 +351,7 @@ pub fn catalog_to_modules(
             kind: entry.kind,
             description: entry.description,
             available: entry.available,
+            declaration: entry.declaration,
         });
     }
     by_module.into_values().collect()
