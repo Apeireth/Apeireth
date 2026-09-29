@@ -147,7 +147,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "apeireth-bench-harness"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-gateway",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-cli"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-credentials",
@@ -193,7 +193,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-core"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-credentials"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-gateway"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-governance"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "async-trait",
@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-guard"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -284,7 +284,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-memory"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -309,7 +309,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-orchestration"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-plugin",
@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-organ"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-orchestration",
@@ -339,7 +339,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-perception"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-memory",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-plugin"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-orchestration",
@@ -371,7 +371,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-protocol"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "async-trait",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-provider"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-memory",
@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-runtime"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -422,7 +422,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-runtime-assembly"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -450,7 +450,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-sdk"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "aes",
  "anyhow",
@@ -482,7 +482,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-storage"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "r2d2",
  "r2d2_sqlite",
@@ -493,7 +493,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-tools-canonical"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
