@@ -529,6 +529,14 @@ impl MeshNode {
 
     /// Invoke a capability under an explicit route selection and await the
     /// canonical tool result.
+    ///
+    /// The high-level explicit API (debug, SDK, orchestration): it performs
+    /// requester-side governance exactly once for remote routes before
+    /// delegating to the raw primitive. Local execution is governed exactly
+    /// once inside the executor. Callers that already hold their own
+    /// authorization — the canonical runtime dispatch path — use
+    /// [`MeshNode::start_call`] (or the `RemoteCapabilityPort`) instead, so no
+    /// node ever evaluates requester governance twice.
     pub async fn invoke_tool(
         &self,
         selection: &RouteSelection,
@@ -536,15 +544,35 @@ impl MeshNode {
         call: ToolCall,
         meta: InvokeMeta,
     ) -> Result<ToolResult, MeshError> {
+        if let RouteSelection::Remote(_) = selection {
+            let ctx = MeshInvokeContext {
+                session: meta.session,
+                trace: meta.trace,
+                round: meta.round,
+                source: ActionSource::Local,
+                deadline_epoch_ms: meta.deadline_epoch_ms.or(self.default_deadline_ms),
+                cancelled: CancelFlag::new(),
+            };
+            self.executor
+                .authorize(&ctx, capability, &call.arguments)
+                .await
+                .map_err(map_exec_error)?;
+        }
         self.start_call(selection, capability, call, meta)
             .await?
             .tool_result()
             .await
     }
 
-    /// Start an invocation and return its handle (for cancellation or the raw
-    /// outcome). Local and remote calls get identical semantics: same
-    /// `message_id` cancellation, same canonical result shape.
+    /// The raw execution primitive: start an invocation and return its handle
+    /// (for cancellation or the outcome).
+    ///
+    /// Performs **no requester-side governance** — callers must have completed
+    /// their own authorization (this is the path the canonical runtime
+    /// dispatch takes after its single governance evaluation, and the path
+    /// [`MeshNode::invoke_tool`] delegates to after its own). Local and remote
+    /// calls get identical semantics: same `message_id` cancellation, same
+    /// canonical result shape.
     ///
     /// Async because the remote request is placed on the wire before the
     /// handle is returned: a `Cancel` sent immediately afterwards therefore

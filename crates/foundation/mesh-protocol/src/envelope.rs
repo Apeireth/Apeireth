@@ -162,7 +162,7 @@ pub struct HelloAck {
 /// Full-snapshot semantics: whatever is absent from the latest advert is gone
 /// from the peer's projection. No credentials, no internal module state, no
 /// memory contents, no raw private metadata — identity and availability only.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CapabilityAdvert {
     /// Every module the advertising node currently exposes to the mesh.
     pub modules: Vec<ModuleAdvert>,
@@ -541,12 +541,17 @@ mod tests {
         let advert = CapabilityAdvert {
             modules: vec![ModuleAdvert {
                 module: PluginId::new("builtin.mesh-test").unwrap(),
-                capabilities: vec![CapabilityAdvertEntry {
-                    id: CapabilityId::new("tool.mesh.echo").unwrap(),
-                    kind: MeshCapabilityKind::Tool,
-                    description: "echo".into(),
-                    available: true,
-                }],
+                capabilities: vec![CapabilityAdvertEntry::tool(
+                    CapabilityId::new("tool.mesh.echo").unwrap(),
+                    "echo",
+                    true,
+                    apeireth_protocol::canonical::NormalizedTool {
+                        name: "mesh_echo".into(),
+                        description: Some("echo".into()),
+                        parameters: apeireth_protocol::canonical::ToolParameters::new(),
+                        strict: false,
+                    },
+                )],
             }],
         };
         assert!(advert.is_well_formed());
@@ -559,7 +564,7 @@ mod tests {
         // Structural guard: an advert must not smuggle implementation objects.
         for forbidden in [
             "Arc",
-            "dyn Module",
+            "dyn Plugin",
             "dyn ToolCapability",
             "credential",
             "secret",

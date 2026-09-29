@@ -322,6 +322,14 @@ pub struct Runtime {
     /// With no observer installed, completion bookkeeping is exactly its
     /// historical two records — no extra lock, no domain state.
     pub(super) tool_completion_observer: Option<Arc<dyn ToolCompletionObserver>>,
+    /// Remote capability execution/query port (mesh). Absent when this runtime
+    /// stands alone: behavior is then identical to a pre-port runtime.
+    ///
+    /// Behind a lock and settable after build (`set_remote_port`) because the
+    /// port implementation (a mesh node) is itself constructed over this
+    /// runtime — the cycle is broken by late injection, the same way the
+    /// event sink is injected after assembly.
+    pub(super) remote_port: RwLock<Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>>,
 }
 
 impl Runtime {
@@ -447,6 +455,27 @@ impl Runtime {
         &self.capabilities
     }
 
+    /// Install (or replace) the remote capability port after build.
+    ///
+    /// The port implementation is typically a mesh node constructed over this
+    /// very runtime, so injection happens after assembly; a runtime that never
+    /// calls this stays entirely local.
+    pub fn set_remote_port(&self, port: Arc<dyn apeireth_mesh::RemoteCapabilityPort>) {
+        *self
+            .remote_port
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(port);
+    }
+
+    /// The remote capability port, when one is installed.
+    pub(super) fn remote_port(
+        &self,
+    ) -> std::sync::RwLockReadGuard<'_, Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>> {
+        self.remote_port
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     /// Add an observer while preserving sinks installed by another
     /// composition root. Gateway setup uses this so dataset/audit observers
     /// attached during runtime bootstrap are not silently discarded.
@@ -535,9 +564,17 @@ impl Runtime {
 
     /// Model-facing tool declarations for all active tools.
     ///
-    /// With the plan-mode mechanism enabled this also carries the resident
-    /// `exit_plan_mode` control — identically in both plan-mode postures, so a
-    /// posture switch never changes the tool catalog.
+    /// The unified model catalog: every local tool in the order the
+    /// registry-driven list has always been built in, then the control
+    /// declarations, then the remote declarations projected through the
+    /// capability port, with contested names excluded. With no port installed
+    /// this is byte-identical to the local list, in the same order.
+    ///
+    /// The resident `exit_plan_mode` control arrives through the control
+    /// declarations: the runtime registers it under exactly the same
+    /// plan-mode posture rule it always used (registered only when the
+    /// plan-mode mechanism is on), so this merge does not change the
+    /// catalog in either posture.
     pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
         let mut declarations: Vec<apeireth_protocol::canonical::NormalizedTool> = self
             .capabilities
@@ -546,7 +583,46 @@ impl Runtime {
             .collect::<Vec<_>>();
         // Control declarations are part of the one registry-driven catalog.
         declarations.extend(self.capabilities.control_declarations());
+        // Remote declarations are projected through the capability port. A
+        // name contested between a local surface and a peer (or between two
+        // peers) never reaches the model: the derived route table drops it.
+        declarations.extend(self.tool_route_table().remote_model_catalog());
         declarations
+    }
+
+    /// Rebuild the ephemeral name -> target routing table from the two
+    /// read-only views. Derived per query; nothing is cached.
+    ///
+    /// Local candidates come from the capability registry, which already holds
+    /// every active plugin tool (the runtime merges the plugin index into
+    /// that registry at build time), so the local leg is the model-facing
+    /// local surface exactly once - the plugin index is not walked a second
+    /// time, which would list every plugin tool twice. Remote candidates
+    /// come from the capability port. The resident `exit_plan_mode` control
+    /// is deliberately not routed here: it is a runtime-owned state request
+    /// intercepted before dispatch.
+    pub(super) fn tool_route_table(&self) -> super::tool_route::ToolRouteTable {
+        use super::tool_route::LocalToolView;
+        let mut local: Vec<LocalToolView> = self
+            .capabilities
+            .entries()
+            .into_iter()
+            .filter_map(|(owner, tool)| {
+                Some(LocalToolView {
+                    owner: PluginId::new(owner.as_str()).ok()?,
+                    capability_id: tool.id().clone(),
+                    declaration: tool.declaration(),
+                })
+            })
+            .collect();
+        let remote = self
+            .remote_port
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+            .map(|port| port.remote_tools())
+            .unwrap_or_default();
+        super::tool_route::ToolRouteTable::derive(local, remote)
     }
 
     /// The configured context projector.
@@ -675,6 +751,8 @@ pub struct RuntimeBuilder {
     system_one: Option<Arc<super::system_one::SystemOneGate>>,
     pub(super) agent_factory: Option<Arc<dyn apeireth_plugin::agents::ModuleAgentFactory>>,
     pub(super) v1_protocol: bool,
+    /// Remote capability port (mesh). Absent = this runtime stays local.
+    remote_port: Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>,
 }
 
 impl Default for RuntimeBuilder {
@@ -709,6 +787,7 @@ impl RuntimeBuilder {
             system_one: None,
             agent_factory: None,
             v1_protocol: false,
+            remote_port: None,
         }
     }
 
@@ -918,6 +997,15 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_approval_ttl(mut self, ttl_ms: u64) -> Self {
         self.config.approval_ttl_ms = ttl_ms;
+        self
+    }
+
+    /// Route model tool calls across the mesh through this remote capability
+    /// port. Without it the runtime is entirely local, byte-equivalent to a
+    /// pre-port build.
+    #[must_use]
+    pub fn with_remote_port(mut self, port: Arc<dyn apeireth_mesh::RemoteCapabilityPort>) -> Self {
+        self.remote_port = Some(port);
         self
     }
 
@@ -1215,6 +1303,7 @@ impl RuntimeBuilder {
             call_scheduler: self.call_scheduler,
             metrics,
             tool_completion_observer: self.tool_completion_observer,
+            remote_port: RwLock::new(self.remote_port),
         })
     }
 }

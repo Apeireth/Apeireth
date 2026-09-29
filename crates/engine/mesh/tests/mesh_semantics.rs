@@ -906,6 +906,12 @@ impl MeshCapabilityExecutor for SlowExecutorWithAdvert {
             owner: PluginId::new(TEST_MODULE).unwrap(),
             description: "slow".into(),
             available: true,
+            declaration: Some(NormalizedTool {
+                name: "mesh_echo".into(),
+                description: Some("slow".into()),
+                parameters: ToolParameters::new(),
+                strict: false,
+            }),
         }]
     }
 
@@ -1017,8 +1023,8 @@ async fn test_17_reconnect_restores_the_capability_projection() {
 }
 
 // ---------------------------------------------------------------------------
-// 18 + 19. A dynamic (MCP-style) capability is advertised, and its removal
-// disappears from the projection — with no bag bypass.
+// 18 + 19. A remote capability is visible as a projection without ever
+// becoming a local implementation owner: remote visibility != local ownership.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

@@ -40,6 +40,7 @@ pub mod error;
 pub mod executor;
 pub mod node;
 pub mod peer;
+pub mod port;
 pub mod route;
 pub mod transport;
 pub mod trust;
@@ -53,6 +54,10 @@ pub use node::{
     CallHandle, CallTarget, InvokeMeta, MeshNode, MeshNodeConfig, DEFAULT_HEARTBEAT_TIMEOUT_MS,
 };
 pub use peer::{Peer, PeerState};
+pub use port::{
+    RemoteCapabilityError, RemoteCapabilityPort, RemoteInvokeContext, RemoteToolDescriptor,
+    RemoteToolRoute,
+};
 pub use route::{
     CapabilityCatalogEntry, CapabilityRoute, RemoteCapability, RouteSelection, RouteTable,
 };

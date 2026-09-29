@@ -190,7 +190,7 @@ impl NodeDescriptor {
 }
 
 /// One advertised capability: identity and availability, never an implementation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CapabilityAdvertEntry {
     /// Capability identity, e.g. `tool.mesh.echo`.
     pub id: CapabilityId,
@@ -201,14 +201,57 @@ pub struct CapabilityAdvertEntry {
     pub description: String,
     /// Whether the owning module can currently dispatch it.
     pub available: bool,
+    /// The model-facing declaration, for tool-kind entries only.
+    ///
+    /// A read-only projection of the owning tool's canonical `NormalizedTool`
+    /// — enough for a peer to surface the tool in its own model catalog, and
+    /// still not an implementation: nothing here can be executed. Absent for
+    /// non-tool kinds and for adverts from protocol builds that predate this
+    /// field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declaration: Option<apeireth_protocol::canonical::NormalizedTool>,
+}
+
+impl CapabilityAdvertEntry {
+    /// Advertise a tool entry with its model-facing declaration.
+    pub fn tool(
+        id: CapabilityId,
+        description: impl Into<String>,
+        available: bool,
+        declaration: apeireth_protocol::canonical::NormalizedTool,
+    ) -> Self {
+        Self {
+            id,
+            kind: MeshCapabilityKind::Tool,
+            description: description.into(),
+            available,
+            declaration: Some(declaration),
+        }
+    }
+
+    /// Advertise a non-tool entry (no model-facing declaration).
+    pub fn non_tool(
+        id: CapabilityId,
+        kind: MeshCapabilityKind,
+        description: impl Into<String>,
+        available: bool,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            description: description.into(),
+            available,
+            declaration: None,
+        }
+    }
 }
 
 /// One advertised module and the capabilities it currently exports.
 ///
 /// A read-only projection of the origin node's canonical indexed view — the
-/// origin node's `ModuleRegistry` remains the only owner of the implementation,
+/// origin node's `PluginRegistry` remains the only owner of the implementation,
 /// and nothing here can be executed locally.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModuleAdvert {
     /// The owning module id (namespaced by the advertising node).
     pub module: PluginId,
@@ -217,14 +260,17 @@ pub struct ModuleAdvert {
 }
 
 impl ModuleAdvert {
-    /// Whether a declaration and its id prefix agree about the kind.
+    /// Whether a declaration and its id prefix agree about the kind, and tool
+    /// entries carry their model-facing declaration.
     ///
-    /// The same invariant `CapabilityDescriptor::new` enforces locally; an
-    /// advert that violates it is malformed and is refused on ingest.
+    /// The kind invariant is the same one `CapabilityDescriptor::new` enforces
+    /// locally; an advert that violates either rule is malformed and is refused
+    /// on ingest.
     pub fn entries_are_well_formed(&self) -> bool {
-        self.capabilities
-            .iter()
-            .all(|entry| MeshCapabilityKind::from_id(&entry.id) == Some(entry.kind))
+        self.capabilities.iter().all(|entry| {
+            MeshCapabilityKind::from_id(&entry.id) == Some(entry.kind)
+                && (entry.kind != MeshCapabilityKind::Tool || entry.declaration.is_some())
+        })
     }
 }
 
@@ -269,12 +315,17 @@ mod tests {
     fn advert_entries_are_checked_against_their_id_prefix() {
         let good = ModuleAdvert {
             module: PluginId::new("builtin.mesh-test").unwrap(),
-            capabilities: vec![CapabilityAdvertEntry {
-                id: CapabilityId::new("tool.mesh.echo").unwrap(),
-                kind: MeshCapabilityKind::Tool,
-                description: "echo".into(),
-                available: true,
-            }],
+            capabilities: vec![CapabilityAdvertEntry::tool(
+                CapabilityId::new("tool.mesh.echo").unwrap(),
+                "echo",
+                true,
+                apeireth_protocol::canonical::NormalizedTool {
+                    name: "mesh_echo".into(),
+                    description: Some("echo".into()),
+                    parameters: apeireth_protocol::canonical::ToolParameters::new(),
+                    strict: false,
+                },
+            )],
         };
         assert!(good.entries_are_well_formed());
 
