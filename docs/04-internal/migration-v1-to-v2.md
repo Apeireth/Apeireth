@@ -103,10 +103,10 @@ v1 和 v2 跑同一台机没问题，端口不同即可：
 **当前（2026-08-27 v2.0.0-alpha.1）不建议做路径 C**：
 - v2 0 装 trait 多（MemoryBackend / Experience / Orchestrator / Council / Perception / SubSupervisor），实际 backend 走 env var 走 SQLite
 - LLM harness 0 装（v2.0.0-rc 才接）
-- 长程任务依赖 companion 器官 (W1/W2/W3/E4/F4/F1/F6/E7) 这些器官**未移植**到 v2（排期 P6 之后）
+- 长程任务依赖 companion 器官 (W1/W2/W3/E4/F4/F1/F6/E7) 这些器官**尚未在 v2 实现**（排期 P6 之后）
 
 **完整切 v2 的最低先决条件**：
-1. v2.0.0-rc 发布（真实 backend + LLM harness + 至少 1 器官移植）
+1. v2.0.0-rc 发布（真实 backend + LLM harness + 至少 1 器官实现）
 2. 业务对 v1 器官依赖的评估（如果你的生产只用 OpenAI Chat 兼容接口，rc 就够；如果依赖 9 organ / 5 原型 / 长程任务，**等 v2.0.0**）
 3. 数据迁移脚本（v1 `data/companion.db` → v2 `data/memory.db`，schema 兼容，但字段需映射——见 §6）
 
@@ -158,7 +158,7 @@ export OPENAI_API_KEY=sk-...
 
 ### 4.4 数据迁移
 
-v1 companion.db 6 张流表（thought_stream / proposal_stream / action_stream / relation_stream / evolution_stream / reflection_stream）+ episodes 表 + identity_cards + audit_log → v2 同 schema（`crates/engine/memory/src/migrations.rs` 现有 migrations 兼容 donor v1 schema）。
+v1 companion.db 6 张流表（thought_stream / proposal_stream / action_stream / relation_stream / evolution_stream / reflection_stream）+ episodes 表 + identity_cards + audit_log → v2 同 schema（`crates/engine/memory/src/migrations.rs` 现有 migrations 兼容 v1 schema）。
 
 **v1 → v2 数据迁移步骤**：
 
@@ -180,7 +180,7 @@ cp data/memory.db data/memory.v1-migrated.db
 ```
 
 **风险**：
-- v1 schema 与 v2 schema 在 v2 alpha + rc 阶段**应当兼容**（per migrations.rs 注释："donor v1 schema kept for on-disk compatibility"）
+- v1 schema 与 v2 schema 在 v2 alpha + rc 阶段**应当兼容**（per migrations.rs 注释："v1 schema kept for on-disk compatibility"）
 - 如果 v2.0 引入新表 / 新列, 跑 migrations 即可（`SchemaMigration::run_migrations` 是幂等的）
 
 ---
@@ -258,7 +258,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 2. 路径 `/v1/apeireth/*` → 删除（governance 内部流）；业务逻辑通过 `/v1/chat` 标准 OpenAI 兼容端点
 3. 工具调用从 marker 解析 → provider 原生 `tool_calls` schema
 4. 工具默认关闭（`shell`/`fetch` opt-in），v1 工具权限包 → v2 governance 策略
-5. **v1 长程任务（W1/W2/W3/E4/F4/F1/F6/E7 器官）** → v2 没移植（排期 v2.0.0-rc 之后 P6）；如需这些能力继续用 v1
+5. **v1 长程任务（W1/W2/W3/E4/F4/F1/F6/E7 器官）** → v2 未实现（排期 v2.0.0-rc 之后 P6）；如需这些能力继续用 v1
 
 ---
 
@@ -350,7 +350,7 @@ cargo run --bin companion_serve  # v1 入口
 ## 8. FAQ
 
 **Q: v2 alpha 能跑我的 v1 companion_serve 客户端代码吗？**
-A: 调 OpenAI Chat Completions 兼容的代码能（curl / Python openai / LangChain / LiteLLM）。调 `/v1/apeireth/*` 专属端点的代码**不能**——v2 没这端点。如有依赖，需改用治理闸（runtime 内自动转 Deny/RequireApproval 决策，或发 approval 请求给前端）。
+A: 调 OpenAI Chat Completions 兼容的代码能（curl / Python openai / 同类 LLM 框架与网关客户端）。调 `/v1/apeireth/*` 专属端点的代码**不能**——v2 没这端点。如有依赖，需改用治理闸（runtime 内自动转 Deny/RequireApproval 决策，或发 approval 请求给前端）。
 
 **Q: 我用了 v1 的 TUI，能继续用吗？**
 A: v2 alpha 没 TUI。`apeireth-tui` 在 `legacy/donor/` 还在但 v2 workspace exclude。rc 之后（或 v2.0.0）有计划重做 TUI 走 v2 PluginManager。当前建议：CLI + companion-desktop GUI 都够用。
@@ -392,7 +392,7 @@ A: 6 张流表 indexes + 单 writer + reader pool + WAL 模式 = 与 v1 相当�
                      │
                      └─ 完整 v2 生产切换
                          ↓
-                         等 v2.0.0-rc (2026-12) 真实 backend + 至少 1 器官移植完成
+                         等 v2.0.0-rc (2026-12) 真实 backend + 至少 1 器官实现完成
 ```
 
 ---
@@ -409,4 +409,4 @@ A: 6 张流表 indexes + 单 writer + reader pool + WAL 模式 = 与 v1 相当�
 
 ---
 
-_本指南 v1 首发 (2026-08-27)：v2.0.0-alpha.1 阶段 (`bad99fd4` / 远端 `9080cc93`) 已发布, ROADMAP §4 P1-P6 + P-arch 全部 trait 边界 + 0 装占位完成. 迁移路径假设生产对 v1 器官依赖中等; 如果你的生产重度依赖 9 organ + 长程任务, 继续 v1 (`archive/v1.0-master`) 是正确选择, v2 等到 v2.0.0-rc.1 + 至少 1 器官移植完成再切. 设计/哲学/规范 0 改, 变更全在工程形态. v2.0.0-rc 预计 2026-12 月, v2.0.0 预计 2027-02-04 月._
+_本指南 v1 首发 (2026-08-27)：v2.0.0-alpha.1 阶段 (`bad99fd4` / 远端 `9080cc93`) 已发布, ROADMAP §4 P1-P6 + P-arch 全部 trait 边界 + 0 装占位完成. 迁移路径假设生产对 v1 器官依赖中等; 如果你的生产重度依赖 9 organ + 长程任务, 继续 v1 (`archive/v1.0-master`) 是正确选择, v2 等到 v2.0.0-rc.1 + 至少 1 器官实现完成再切. 设计/哲学/规范 0 改, 变更全在工程形态. v2.0.0-rc 预计 2026-12 月, v2.0.0 预计 2027-02-04 月._

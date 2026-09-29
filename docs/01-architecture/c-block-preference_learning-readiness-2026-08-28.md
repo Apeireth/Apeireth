@@ -32,7 +32,7 @@
 
 **哲学纪律**: 主动预载 (W4) vs 被动检索 (N7 morphology) 在 ContextAssembler 6000 chars 总预算相遇; 主动块 `core=false` 默认 cap 1500; **0 改 ContextAssembler 既有 API** (L24, L856-901 测试严守向后兼容).
 
-## 2. v2 真实施 mapping (1:1 翻译表)
+## 2. v2 真实施 mapping (语义对齐表)
 
 | v1 类型/方法 | v2 对应 | 翻译纪律 |
 |---|---|---|
@@ -40,9 +40,9 @@
 | `TopicCue` | `PreferenceLearningInput` (或 `OrganInput` 复用) | 字段 1:1; `now: NaiveDateTime` → `at_ms: i64` 显式 (per F6 同模式) |
 | `TopicHint { topic: &'static str, confidence: f32 }` | `Topic { key: String, confidence: f32 }` | serde rename, 0 静态字符串; 1:1 字段 |
 | `TopicPrediction { hints }` | `Vec<Topic>` | 0 装 wrapper struct |
-| `TOPIC_KEYWORDS` / `TIME_ANCHORS` / `MOOD_ANCHORS` const | 同 3 表 (Vec<(String,String)>) | 1:1 翻译, 内置默认 + 允许 override |
+| `TOPIC_KEYWORDS` / `TIME_ANCHORS` / `MOOD_ANCHORS` const | 同 3 表 (Vec<(String,String)>) | 语义对齐, 内置默认 + 允许 override |
 | `predict_topic(&TopicCue) -> TopicPrediction` | `TopicPredictor::predict_topics(&PreferenceLearningInput)` | 算法骨架 1:1 (BTreeMap merge + sort_by + max-not-sum), 0 LLM |
-| `TopicPrediction::top_topics(k) / primary()` | `Vec<Topic>::top_topics(k) / primary()` | 1:1 翻译 |
+| `TopicPrediction::top_topics(k) / primary()` | `Vec<Topic>::top_topics(k) / primary()` | 语义对齐 |
 | `MemoryCandidate { content, timestamp, importance }` | **复用 R11 `Episode`** 主路径核心类型 | 1:1 字段映射 (content→content/text, timestamp→created_at, importance→importance) |
 | `PreloadChannel` trait | `PreloadChannel` trait (同模式) | `fetch(topics: &[String], episodes: &[Episode], top_k) -> Vec<Episode>` |
 | `KeywordChannel` | `KeywordChannel` | substring 命中 1:1; 反查 keywords_for_topic |
@@ -56,11 +56,11 @@
 
 ## 3. R15 spec 跟 v1 一致性 verify
 
-R15 spec §1.2 1:1 翻译表 (L73-80) 跟 v1 真实现核验:
+R15 spec §1.2 语义对齐表 (L73-80) 跟 v1 真实现核验:
 
 | R15 spec 翻译条目 | v1 真实现 | 一致性 |
 |---|---|---|
-| `predict_topic` → `predict_topics` | L225 `pub fn predict_topic` | ✅ 函数名 1:1 翻译 (复数因返 Vec) |
+| `predict_topic` → `predict_topics` | L225 `pub fn predict_topic` | ✅ 函数名 语义对齐 (复数因返 Vec) |
 | `TopicHint { topic, confidence }` → `Topic { key, confidence }` | L57-63 | ✅ 字段 rename 1:1 |
 | `PreloadChannel` trait + 4 impl 1:1 | L273 / 285 / 341 / 365 / 394 | ✅ 4 impl 全列 (含 CompositeChannel) |
 | `MemoryCandidate` → `Episode` | L266-270 vs R11 Episode | ✅ 字段映射合理, 需 R20 核 R11 Episode 字段名 (content/text + created_at + importance) |
@@ -76,7 +76,7 @@ R15 spec §1.2 1:1 翻译表 (L73-80) 跟 v1 真实现核验:
 **文件清单**:
 - `Cargo.toml` — apeireth-plugin, apeireth-core, serde, serde_json, tokio, async-trait, chrono (workspace 已有, **0 新外部 dep**)
 - `src/lib.rs` — pub use 7 项
-- `src/topic_predictor.rs` — TopicPredictor + 3 const 表 1:1 翻译
+- `src/topic_predictor.rs` — TopicPredictor + 3 const 表 语义对齐
 - `src/preload_channel.rs` — trait + 4 impl
 - `src/preference_learning_organ.rs` — OrganTrait::process (per `crates/foundation/plugin/src/organ.rs`)
 - `src/render.rs` — render_preference_evidence
@@ -149,7 +149,7 @@ R15 spec 估 2 周 (10 工作日, 1 人). 真实施拆账:
 | 步骤 | 内容 | 估时 |
 |---|---|---|
 | 1 | 新建 crate + Cargo.toml + workspace member + lib.rs | 1 天 |
-| 2 | TopicPredictor 1:1 翻译 (含 30+ 关键词表 + 3 时间锚 + 5 情绪锚) | 2 天 |
+| 2 | TopicPredictor 语义对齐 (含 30+ 关键词表 + 3 时间锚 + 5 情绪锚) | 2 天 |
 | 3 | PreloadChannel trait + 4 impl + CompositeChannel + 默认 | 2 天 |
 | 4 | PreferenceLearningOrgan::process (OrganTrait) + R10 variant 加 (若 R10 已决) | 1 天 |
 | 5 | render_preference_evidence + recommend_cap | 0.5 天 |
@@ -159,7 +159,7 @@ R15 spec 估 2 周 (10 工作日, 1 人). 真实施拆账:
 | **合计** | | **10 工作日 (2 周)** ✅ 跟 spec 一致 |
 
 **派谁**:
-- **推荐派 R20** (sub-agent) — R15 spec 路径明确, 1:1 翻译 0 模糊, sub-agent 真做风险可控; 主代理核验 5 项 LOCKED.
+- **推荐派 R20** (sub-agent) — R15 spec 路径明确, 语义对齐 0 模糊, sub-agent 真做风险可控; 主代理核验 5 项 LOCKED.
 - **不推荐主代理亲做** — 主代理应保留给 frontend 对接 + OrganOrchestrator 真实施 (R12 跑中, 1-3 周) + R10 OrganKind 新 variant 决策; preference_learning 是低风险子任务, 适合 sub-agent.
 - **前置**: R12 OrganOrchestrator 真实施 优先 (R20 可与 R12 部分并行, 新 crate 0 改 cognitive.rs); R10 OrganKind 决策可在 R20 实施第 4 步前到位即可.
 
@@ -171,7 +171,7 @@ R15 spec 估 2 周 (10 工作日, 1 人). 真实施拆账:
 
 **R3 (接力, 中)**: R10 OrganKind 新 variant 决策未出 (R15 spec §3.2 决策 1 留 R10). 若 R10 延期, R20 第 4 步阻塞. **缓解**: R20 前 3 步可与 R10 并行 (TopicPredictor + PreloadChannel + render 不依赖 OrganKind); 第 4 步等 R10 决后 1 天接上.
 
-**R4 (主代理手动 vs sub-agent, 低)**: sub-agent 真实施偏好类功能风险低 (1:1 翻译, 0 LLM, 0 新外部 dep), 主代理监督即可; 但 commit message 必含 "1:1 翻译 v1, 0 LLM, 0 触碰 LOCKED, 0 装诱导 prevention" 4 项标 — R20 模板化 commit msg 防漏.
+**R4 (主代理手动 vs sub-agent, 低)**: sub-agent 真实施偏好类功能风险低 (语义对齐, 0 LLM, 0 新外部 dep), 主代理监督即可; 但 commit message 必含 "语义对齐 v1, 0 LLM, 0 触碰 LOCKED, 0 装诱导 prevention" 4 项标 — R20 模板化 commit msg 防漏.
 
 **R5 (ledger doc sync, 低)**: R15 spec §7.2 标 "0 改 ledger", 但真实施时 L30 状态 DEFERRED→WIRED 是必改. 这是 spec 描述不严, **R20 实施前主代理或 R20 自己在 spec §7.2 加 1 行标 "L30 状态标必改 (1 行 doc sync)"**.
 

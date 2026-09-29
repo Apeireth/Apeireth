@@ -23,7 +23,7 @@ use serde_json::Value;
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 
 /// Attribute keys treated as secrets (case-insensitive substring match).
-/// Salvaged from companion `agent_trace::SENSITIVE_KEY_MARKERS`.
+/// Same markers as companion `agent_trace::SENSITIVE_KEY_MARKERS`.
 const SENSITIVE_KEY_MARKERS: &[&str] = &[
     "api_key",
     "apikey",

@@ -1,4 +1,4 @@
-//! Deterministic transport tests for the migrated openai-compatible provider.
+//! Deterministic transport tests for the openai-compatible provider.
 //!
 //! These prove the canonical [`OpenAiCompatibleProviderCapability`] against a
 //! local mock HTTP server — no Internet, no real API key — covering the §42

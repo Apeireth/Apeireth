@@ -43,7 +43,7 @@ Document:    docs/04-internal/pm-review-productization-2026-09-25.md
 
 **② 上手文档「照做必败」。** README 五步上手里 `bundle` 命令不存在（`crates/adapters/cli/src/main.rs` 无此派发，已实测）、`chat` 不是「交互式会话」是单轮命令、缺 API key 步骤；hello-world 三处指引两处路径过期；`custom-llm.md` 还在教跑 legacy/ 里的 v1 命令。**小白按文档走完的成功率接近于零。**
 
-**③ 宣称与实现脱节——信任债务。** README 卖点「P2P Mesh/Noise_XX 加密漫游」，`crates/foundation/protocol/src/p2p_mesh.rs` 模块头自述是**明文 stub**；「因果世界模型/主动关怀」的实现在 legacy/ 未移植（`docs/02-guides/user-manual.md:73`）；SDK 导出函数走 `unimplemented!()`。讽刺的是这个产品自己的哲学锚写着「S-2 实事求是、O-5 不假装」——对一个品牌即信任的伴侣产品，这是最贵的债。
+**③ 宣称与实现脱节——信任债务。** README 卖点「P2P Mesh/Noise_XX 加密漫游」，`crates/foundation/protocol/src/p2p_mesh.rs` 模块头自述是**明文 stub**；「因果世界模型/主动关怀」的实现在 legacy/ 未接入 v2（`docs/02-guides/user-manual.md:73`）；SDK 导出函数走 `unimplemented!()`。讽刺的是这个产品自己的哲学锚写着「S-2 实事求是、O-5 不假装」——对一个品牌即信任的伴侣产品，这是最贵的债。
 
 **④ 「省心三件套」全缺**：备份/导出无入口；侧车崩溃后 UI 停在 Failed 不自愈、无 crash report（崩了只能翻日志文件）；无更新检查 + 发版停滞（`RC1_HANDOFF.md:293` 承认 brew/scoop 的 SHA256 是占位符）+ NSIS 同版本静默安装不覆盖。
 

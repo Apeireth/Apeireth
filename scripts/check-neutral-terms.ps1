@@ -21,6 +21,12 @@ $forbidden = @(
   'donor'
 )
 
+# 结构性豁免：命中若仅来自这些**真实字符串**（真实路径/真实文件名/本表自身）
+# 则按"路径保持准确"规则保留、不计违规；豁免计数随输出给出便于审计。
+$exemptRe = 'legacy/donor/|donor/apeireth-|donor/\.\.\.|governance-donor-primitives\.md'
+$exemptFiles = @('scripts/check-neutral-terms.ps1')
+$exempted = 0
+
 $changed = @()
 $changed += (cmd /c "git diff --name-only HEAD 2>nul")
 $changed += (cmd /c "git diff --cached --name-only 2>nul")
@@ -45,10 +51,12 @@ $hits = 0
 foreach ($file in $targets) {
   if (-not (Test-Path $file)) { continue }
   if ($untracked.ContainsKey($file)) {
+    if ($exemptFiles -contains $file) { continue }
     $allLines = @(Get-Content $file)
     for ($i = 0; $i -lt $allLines.Count; $i++) {
       foreach ($pat in $forbidden) {
         if ($allLines[$i] -match $pat) {
+          if ($allLines[$i] -match $exemptRe) { $exempted++; continue }
           Write-Output "HIT   ${file}:$($i+1)  [$pat]  $($allLines[$i].Trim())"
           $hits++
         }
@@ -63,6 +71,7 @@ foreach ($file in $targets) {
     if ($row.StartsWith('+') -and -not $row.StartsWith('+++')) {
       foreach ($pat in $forbidden) {
         if ($row -match $pat) {
+          if ($row -match $exemptRe) { $exempted++; continue }
           Write-Output "HIT   ${file}:$lineNo  [$pat]  $($row.Substring(1).Trim())"
           $hits++
         }
@@ -70,6 +79,10 @@ foreach ($file in $targets) {
       $lineNo++
     }
   }
+}
+
+if ($exempted -gt 0) {
+  Write-Output "EXEMPT  $exempted structural hit(s) skipped (real path/name strings, see `$exemptRe)"
 }
 
 if ($hits -eq 0) {

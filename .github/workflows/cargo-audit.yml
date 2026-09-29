@@ -3,7 +3,7 @@ name: Cargo audit (RUSTSEC advisories)
 # R61 B0 续: cargo audit 每周 + workflow_dispatch (跟 cargo-deny.yml 平行)
 # 借 RustSec advisory-db 自动; install 1 次 cargo-audit 然后 cargo audit --json
 #
-# 借鉴来源 (mirror cargo-deny.yml R19 第 0 阶段):
+# 结构对齐 (mirror cargo-deny.yml R19 第 0 阶段):
 # - wasmtime .github/workflows/main.yml [cargo_audit] job
 # - qdrant-spark 的 audit workflow
 #
@@ -69,10 +69,10 @@ jobs:
             > audit-report.json || echo "audit non-zero exit captured in report"
 
       - name: Convert JSON report to SARIF (R66)
-        # 借鉴 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
+        # 语义对齐 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
         # 0 引新 dep; 走 python3 (GitHub Actions ubuntu-latest 默认带).
         # CI fix 2026-09: cargo-audit 0.22 的 JSON 里 vulnerabilities.found 是布尔值
-        # (true/false), 漏洞条目在 vulnerabilities.list。原实现迭代 `found` 并用 `or []`
+        # (true/false), 漏洞条目在 vulnerabilities.list。修复前迭代 `found` 并用 `or []`
         # 兜底 —— `or []` 只兜 falsy, 兜不住 true, 所以 0 漏洞时正常、一旦真有漏洞就
         # TypeError: 'bool' object is not iterable (2026-09-23 首次真实漏洞暴露:
         # run 35835024572 步骤 "Convert JSON report to SARIF" 失败)。

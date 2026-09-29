@@ -1,6 +1,6 @@
-//! Closed-world memory injection (donor `apeireth-companion::memory_injection`).
+//! Closed-world memory injection (`apeireth-companion::memory_injection`).
 //!
-//! LLM retrieval easily fabricates "I remember we talked about…". The donor
+//! LLM retrieval easily fabricates "I remember we talked about…". The baseline
 //! template treats retrieved items as a **closed world of numbered evidence**:
 //! numbered list + source truncation + an explicit anti-hallucination rule
 //! forbidding claims outside the list.
@@ -13,16 +13,13 @@
 //! through the shared reference envelope (fixed warning + explicit boundaries
 //! + per-source budget) instead of being pasted into the prompt bare.
 //!
-//! Recovered from:
-//! - `legacy/donor/apeireth-companion/src/memory_injection.rs`
-//! - preference portrait rendering in `memory_extractor.rs::preference_injection`
 
 use apeireth_orchestration::untrusted_envelope::{EnvelopeBudget, UntrustedEnvelope};
 
-/// Maximum visible characters per evidence line (donor truncation).
+/// Maximum visible characters per evidence line (baseline truncation).
 pub const EVIDENCE_MAX_CHARS: usize = 120;
 
-/// Maximum preference portrait lines (donor `take(8)`).
+/// Maximum preference portrait lines (baseline `take(8)`).
 pub const PREFERENCE_INJECTION_LIMIT: usize = 8;
 
 /// Closed-world evidence block: numbered list + anti-hallucination rules.

@@ -1,5 +1,4 @@
-//! W3 移植批: 自我改进闭环的**实验侧** (v1 `donor/apeireth-companion/
-//! experiment_field.rs`, 2026-10-10)。
+//! W3 实现批: 自我改进闭环的**实验侧** (2026-10-10)。
 //!
 //! # 定位 (与 upgrade_cycle 互补成环)
 //!

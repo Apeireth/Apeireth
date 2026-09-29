@@ -1,10 +1,10 @@
 //! Motivation / value scoring formula (library, default-off).
 //!
-//! Recovered from `legacy/donor/apeireth-motivation/src/lib.rs` §13
-//! `motivation_score`. Pure f64 math: three named components, proposed
+//! `motivation_score` (§13).
+//! Pure f64 math: three named components, proposed
 //! weights `(0.35, 0.35, 0.30)`, hard threshold `0.85`.
 //!
-//! **Not recovered** (ownership / architecture):
+//! **Not included** (ownership / architecture):
 //! - `SGI` write-flow + C-SGI-1..7 as a second goal owner (v2 Goal SM is
 //!   [`crate::goal::GoalService`]; SGI uniqueness is a policy vocabulary, not
 //!   a second store).
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 /// Proposed §13 weights (autonomy, value-stability, intrinsic). Not frozen.
 pub const MOTIVATION_WEIGHTS: (f64, f64, f64) = (0.35, 0.35, 0.30);
 
-/// Hard threshold the donor used (`MIN_EVIDENCE_SCORE` = 0.85).
+/// Hard threshold the baseline used (`MIN_EVIDENCE_SCORE` = 0.85).
 pub const MIN_MOTIVATION_THRESHOLD: f64 = 0.85;
 
 /// Alias kept for salvage-07 re-exports (`MOTIVATION_THRESHOLD`).

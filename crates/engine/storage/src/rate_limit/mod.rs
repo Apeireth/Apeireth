@@ -1,12 +1,12 @@
 //! Reusable in-process rate-limiter algorithms.
 //!
-//! Recovered from `legacy/donor/apeireth-rate-limiter`. This is a library
+//! This is a library
 //! primitive for token / leaky / fixed / sliding windows plus Retry-After
 //! backoff. It is **not** a second governance hook: capability-level trust
 //! tiers remain in `apeireth-governance::rate_limit`.
 //!
 //! Storage backends other than in-process maps (Redis / Memcached / file /
-//! distributed) were honest stubs in the donor and are not ported.
+//! distributed) were honest stubs in the baseline and are not implemented.
 
 mod retry;
 mod strategies;

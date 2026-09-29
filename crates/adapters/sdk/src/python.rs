@@ -5,7 +5,7 @@
 //! **O-5 实质守门**: 仅 `--features python` 启用时编译, 默认 build 0 装 pyo3.
 //! **R122-8 决策**: cfg-gated features 隔离 (per lib.rs §A R122-8 段 + Cargo.toml `[features]`).
 //! **R122-3 协作**: R122-3 tiktoken_counter retry 跑中, R122-8 inline 简版 count_tokens
-//!   (R32-1 `apeireth-asi::tokenizer::count_tokens` 1:1 port, 0 dep 24 LOCKED apeireth-asi; LOCKED 入口签名 R128 + R148 已降级, 仅保 3 项不可变脊柱).
+//!   (R32-1 `apeireth-asi::tokenizer::count_tokens` 同构实现, 0 dep 24 LOCKED apeireth-asi; LOCKED 入口签名 R128 + R148 已降级, 仅保 3 项不可变脊柱).
 //!   R122-3 retry 完成后 R123 切换到正式 fn.
 //!
 //! **PyO3 version**: workspace 0.29 (per workspace Cargo.toml [workspace.dependencies]),
@@ -30,10 +30,10 @@
 use pyo3::prelude::*;
 
 // ============================================================================
-// R32-1 1:1 port: count_tokens 启发式 (CJK + ASCII word + symbol/3 ceil)
+// R32-1 count_tokens 启发式 (CJK + ASCII word + symbol/3 ceil)
 // ============================================================================
 
-/// **R32-1 启发式** (1:1 翻译 `apeireth-asi::tokenizer::count_tokens`):
+/// **R32-1 启发式** (语义对齐 `apeireth-asi::tokenizer::count_tokens`):
 /// - ASCII word (字母数字 + 下划线) = 1 token
 /// - CJK char = 1 token
 /// - 其他 char (空格/标点/emoji) = ceil(1/3) = 1 token
@@ -67,7 +67,7 @@ fn count_tokens_heuristic(text: &str) -> u32 {
     tokens
 }
 
-/// 6 unicode block (CJK 跟 CJK Extension 一致, 1:1 apeireth-asi::tokenizer::is_cjk)
+/// 6 unicode block (CJK 跟 CJK Extension 一致, 对齐 apeireth-asi::tokenizer::is_cjk)
 fn is_cjk(c: char) -> bool {
     matches!(c,
         '\u{4E00}'..='\u{9FFF}' |
@@ -81,7 +81,7 @@ fn is_cjk(c: char) -> bool {
 }
 
 // ============================================================================
-// PyO3 桥接 (1 pymodule + 1 fn, R122-8 skeleton 1:1)
+// PyO3 桥接 (1 pymodule + 1 fn, R122-8 skeleton)
 // ============================================================================
 
 /// **PyO3 module 入口**: 编译后 Python 用 `import apeireth_sdk_py` 加载.
@@ -99,12 +99,12 @@ pub fn apeireth_sdk_py(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 /// - `model: str` — 模型名 (e.g. "cl100k_base", "gpt-4o", 0 实际使用, 仅签名占位)
 /// - 返 token 数 (u32 → Python int)
 ///
-/// **不假装**: 0 用 model 参数, 0 调 tiktoken. 启发式算法 1:1 R32-1.
+/// **不假装**: 0 用 model 参数, 0 调 tiktoken. 启发式算法对齐 R32-1.
 ///
 /// **pub**: 让 multilang_ffi 集成测试能 import 验证
 #[pyfunction]
 pub fn py_count_tokens(text: &str, model: &str) -> PyResult<u32> {
-    // model 参数 0 使用 (签名占位, 跨语言 1:1 一致性优先)
+    // model 参数 0 使用 (签名占位, 跨语言一致性优先)
     let _ = model;
     Ok(count_tokens_heuristic(text))
 }

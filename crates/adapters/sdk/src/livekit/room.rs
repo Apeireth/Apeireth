@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::livekit::error::LiveKitError;
 
 // ============================================================================
-// §1 RoomState 5 状态机 (按既有实现 ConnectionState enum 1:1)
+// §1 RoomState 5 状态机 (按既有实现 ConnectionState enum)
 // ============================================================================
 
 /// 房间状态 (5 状态机, K-1 强校验守门: 编译期 hardcode 5 个 variant).
@@ -50,7 +50,7 @@ impl RoomState {
     /// 5 状态机 hardcode 常量.
     pub const COUNT: usize = 5;
 
-    /// 状态字符串 (1:1 翻译 LiveKit 协议 `ConnectionState` snake_case).
+    /// 状态字符串 (语义对齐 LiveKit 协议 `ConnectionState` snake_case).
     pub fn as_str(&self) -> &'static str {
         match self {
             RoomState::Disconnected => "disconnected",
@@ -106,10 +106,10 @@ pub const SUPPORTED_ROOM_STATES: &[RoomState] = &[
 const _: () = assert!(SUPPORTED_ROOM_STATES.len() == 5);
 
 // ============================================================================
-// §2 RoomOptions (按既有实现 RoomOptions interface 1:1)
+// §2 RoomOptions (按既有实现 RoomOptions interface)
 // ============================================================================
 
-/// 房间配置 (按既有实现 `RoomOptions` interface 1:1).
+/// 房间配置 (按既有实现 `RoomOptions` interface).
 ///
 /// 字段对应 LiveKit 协议 RoomOptions:
 /// - `adaptiveStream` (per AdaptiveStreamSettings)

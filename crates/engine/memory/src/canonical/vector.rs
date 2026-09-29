@@ -4,8 +4,8 @@
 //! infrastructure. It accepts caller-provided `Vec<f32>` vectors only; it
 //! knows nothing about embedding models, providers, API keys, or endpoints.
 //!
-//! The donor implementation (`origin/master:.../storage/src/vector.rs`) is
-//! in-memory only, so this index makes no persistence promise.
+//! The baseline implementation is in-memory only, so this index makes no
+//! persistence promise.
 
 use std::collections::HashMap;
 
@@ -184,7 +184,7 @@ impl VectorIndex {
     /// ascending. `top_k = 0` returns an empty result.
     ///
     /// Zero vectors are handled explicitly: a zero query vector or a zero
-    /// stored vector yields a similarity of `0.0` (the donor behaviour) rather
+    /// stored vector yields a similarity of `0.0` (the baseline behaviour) rather
     /// than `NaN`.
     pub fn query(&self, query: &[f32], top_k: usize) -> Result<Vec<VectorHit>, MemoryError> {
         self.validate_vector(query)?;

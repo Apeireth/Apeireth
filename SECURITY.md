@@ -39,7 +39,7 @@ Apeireth 团队承诺漏洞披露过程透明，通过以下渠道公告：
 - `apeireth-tools-canonical`（`crates/capabilities/tools`）— 进程执行唯一边界（Job Object/进程组）、egress 策略、受控 fetch（DNS 钉扎）
 - `apeireth-gateway` / `apeireth-cli`（`crates/adapters/`）— 传输与入口面，不拥有业务逻辑
 
-v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`apeireth-bus`、`apeireth-api`、`apeireth-memory/vector` 等）现整体位于 `legacy/`（参考代码，不参与构建），其实现的安全语义将在 ROADMAP §4 对应阶段移植回主链；移植完成前，其漏洞按 v1 政策处理（安全边界仍视为有效）。
+v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`apeireth-bus`、`apeireth-api`、`apeireth-memory/vector` 等）现整体位于 `legacy/`（参考代码，不参与构建），其实现的安全语义将在 ROADMAP §4 对应阶段迁回主链；迁回完成前，其漏洞按 v1 政策处理（安全边界仍视为有效）。
 
 **不在范围**: 业务逻辑 bug (非安全), 性能问题, doc typo, 等等. 这些走普通 GitHub Issue.
 

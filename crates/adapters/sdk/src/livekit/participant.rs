@@ -19,7 +19,7 @@ use crate::livekit::track::{TrackSid, TrackSource};
 // §1 ConnectionQuality 4 等级 (按既有实现 ConnectionQuality enum)
 // ============================================================================
 
-/// 连接质量 (4 等级, 1:1 翻译 LiveKit 协议 `ConnectionQuality` enum).
+/// 连接质量 (4 等级, 语义对齐 LiveKit 协议 `ConnectionQuality` enum).
 ///
 /// 字段对应 LiveKit 协议 ConnectionQuality:
 /// `Excellent` / `Good` / `Poor` / `Lost`.
@@ -42,7 +42,7 @@ pub enum ConnectionQuality {
 impl ConnectionQuality {
     /// 4 等级 + 1 unknown = 5 variant (per LiveKit 协议 实际 5 variant).
     pub const COUNT: usize = 5;
-    /// 字符串 (1:1 翻译 livekit-client).
+    /// 字符串 (语义对齐 livekit-client).
     pub fn as_str(&self) -> &'static str {
         match self {
             ConnectionQuality::Excellent => "excellent",
@@ -82,10 +82,10 @@ pub const SUPPORTED_CONNECTION_QUALITIES: &[ConnectionQuality] = &[
 const _: () = assert!(SUPPORTED_CONNECTION_QUALITIES.len() == 5);
 
 // ============================================================================
-// §2 Permission 5 权限位 (按既有实现 Permission enum 1:1)
+// §2 Permission 5 权限位 (按既有实现 Permission enum)
 // ============================================================================
 
-/// 权限位 (5 权限, 1:1 翻译 LiveKit 协议 `Permission` enum).
+/// 权限位 (5 权限, 语义对齐 LiveKit 协议 `Permission` enum).
 ///
 /// 按既有实现:
 /// - `CanPublish` (允许发布 tracks)
@@ -145,7 +145,7 @@ pub const SUPPORTED_PERMISSIONS: &[Permission] = &[
 const _: () = assert!(SUPPORTED_PERMISSIONS.len() == 5);
 
 // ============================================================================
-// §3 Participant 主结构 (按既有实现 Participant class 1:1)
+// §3 Participant 主结构 (按既有实现 Participant class)
 // ============================================================================
 
 /// 参与者 SID (按既有实现 `Participant.sid`, 服务端分配).

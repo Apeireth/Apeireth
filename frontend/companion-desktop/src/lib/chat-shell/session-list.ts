@@ -174,7 +174,7 @@ export function personaLabel(personaName: string | null): string {
   return personaName?.trim() || '旧会话';
 }
 
-/** 主页分组（Kimi Desktop 范式，2026-10-11 主人拍板）：
+/** 主页分组（同类桌面工具范式，2026-10-11 主人拍板）：
  *  项目区（按工作目录）+ 联系人区（按伙伴人设），组内置顶优先、活跃倒序，
  *  组间按最新活跃倒序。组键稳定：项目 = workspace 原串，联系人 = personaId ?? name。 */
 export interface HomeSessionGroup {
@@ -225,7 +225,7 @@ export function groupHomeSessions(items: HomeSessionItem[]): HomeSessionSections
   };
 }
 
-/** 微信式相对时间：今天给时刻，昨天给「昨天」，更早给日期。 */
+/** 相对时间文案：今天给时刻，昨天给「昨天」，更早给日期。 */
 export function formatSessionTime(ts: number, now: number = Date.now()): string {
   if (!ts || !Number.isFinite(ts)) return '';
   const d = new Date(ts);

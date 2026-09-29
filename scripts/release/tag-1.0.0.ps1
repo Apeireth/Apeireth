@@ -187,16 +187,16 @@ Apeireth 1.0.0 release
   C3 升 6 重 v6 → v7
   0 主动 push 严守 (Mavis 0 主动, 主人手跑)
 
-借鉴 11/11 状态 clear:
-  ✅ 10 真实施 (clap / hyper / servers / PyO3 / kani / langgraph / superpowers / LiteLLM + 2 限流 retry done)
+吸收 11/11 状态 clear:
+  ✅ 10 真实施 (clap / hyper / servers / PyO3 / kani / 同类工程 3 项 + 2 限流 retry done)
   ⏳ 0 限流
-  ❌ 1 跳过 (OpenCog AGPL-3.0)
+  ❌ 1 跳过 (AGPL-3.0 许可工程)
 
 Release notes: 根目录 RELEASE_NOTES.md (P7-3 retry 21:27 写, 36.8KB)
 CHANGELOG: 根目录 CHANGELOG.md (P7-1 21:23 写 v1.0.0, 42.8KB)
 ROADMAP: 根目录 ROADMAP.md (P7-2 21:25 写, 28.7KB)
 LICENSE: Apache-2.0 (P13-1 写, 175 行 verbatim)
-OSS_NOTICE: 根目录 OSS_NOTICE.md (P13-1 写, 346 行, 借鉴 8/11 致谢)
+OSS_NOTICE: 根目录 OSS_NOTICE.md (P13-1 写, 346 行, 吸收 8/11 致谢)
 
 Refs: decision-22, #33, #41, #42, #47, #48, #55, #56, #57, #58, #61, #62
 Tests: 4100+ tests pass (per R125-16 + P12-1 verify)

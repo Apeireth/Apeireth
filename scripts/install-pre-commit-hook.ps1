@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 # install-pre-commit-hook.ps1 — 安装 pre-commit secret 扫描 hook
 #
-# 借鉴 gitleaks pre-commit pattern, 简化版: 用本地 PowerShell 扫描器
+# 对齐 gitleaks pre-commit pattern, 简化版: 用本地 PowerShell 扫描器
 # (gitleaks binary 当前装不上, 见 docs/04-internal/secret-management-policy.md)
 #
 # 用法:
@@ -69,7 +69,7 @@ $scriptPath = Join-Path $repoRoot "scripts/secret-scan.ps1"
 $hookContent = @"
 #!/bin/sh
 # Pre-commit secret scan (R215 防御层, 见 docs/04-internal/secret-management-policy.md)
-# 借鉴 gitleaks pre-commit pattern, 简化: 用 PowerShell 扫描器扫 staged files.
+# 对齐 gitleaks pre-commit pattern, 简化: 用 PowerShell 扫描器扫 staged files.
 # 不打印 / 不读凭证内容, 仅 0/1 退出码.
 set -e
 if command -v pwsh >/dev/null 2>&1; then

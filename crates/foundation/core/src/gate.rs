@@ -138,7 +138,7 @@ impl ActionGuard {
 
         // V2: 权限检查 (风险等级 → 权限洋葱层映射)。
         //
-        // H2 修复 (2026-09-24 审计): 原实现是 `permission.l4.requires_ha || true`
+        // H2 修复 (2026-09-24 审计): 修复前是 `permission.l4.requires_ha || true`
         // 与 `permission.l3.requires_ha || true` —— `|| true` 恒为真, 字段被读取后
         // 立即丢弃, V2 门退化为零约束。现在 V2 真实解析"风险等级 → 层"映射,
         // 并把层的 `requires_ha` 语义**交给 V3 执行** (见 check_ha)。
@@ -181,7 +181,7 @@ impl ActionGuard {
     /// V3: HA 真实人类批准。`requires_ha` 是 V2 从权限洋葱层解析出的
     /// "该动作必须 HA 在场"。
     ///
-    /// H2 修复 (2026-09-24 审计): 原实现在线模式是 `_ => true` (注释自述
+    /// H2 修复 (2026-09-24 审计): 修复前在线模式是 `_ => true` (注释自述
     /// "简化: 实际需要真实人类验证") —— SingleHuman/MultiHuman 全部无条件放行,
     /// V3 门从未发生。诚实语义:
     /// - Offline: 主 AI 只做安全等级 (low/info);

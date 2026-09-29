@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 
 /// 归一化消息角色。
 ///
-/// **借鉴** 既有实现 `normalizeMessageRole`:
+/// **对齐** 既有实现 `normalizeMessageRole`:
 /// - `developer` → `System` (OpenAI Responses API 引入了 developer role 跟 system 等价)
 /// - `system` / `user` / `assistant` / `tool` → 原样
 /// - 其他 (e.g. `function`) → `Tool` (按 既有实现语义降级)
@@ -39,7 +39,7 @@ pub enum MessageRole {
 }
 
 impl MessageRole {
-    /// 从字符串归一化 (借鉴 `protocolBridge.js:47-52`)
+    /// 从字符串归一化
     pub fn from_legacy_value(s: &str) -> Self {
         match s {
             "system" | "developer" => Self::System,
@@ -57,7 +57,7 @@ impl MessageRole {
 
 /// 多模态内容部分。
 ///
-/// **借鉴** 既有实现 `normalizeTextContent`:
+/// **对齐** 既有实现 `normalizeTextContent`:
 /// - `text` (OpenAI Chat / Anthropic text)
 /// - `input_text` (OpenAI Responses)
 /// - `output_text` (OpenAI Responses assistant 角色)
@@ -81,7 +81,7 @@ pub enum ContentPart {
 }
 
 impl ContentPart {
-    /// 提取纯文本 (借鉴 `normalizeTextContent`)
+    /// 提取纯文本 (对齐 `normalizeTextContent`)
     pub fn text_only(s: impl Into<String>) -> Self {
         Self::Text { text: s.into() }
     }
@@ -256,7 +256,7 @@ pub type ToolParameters = serde_json::Map<String, serde_json::Value>;
 
 /// 归一化工具 (复刻 既有实现 归一化结果)。
 ///
-/// **借鉴** 既有实现 `toOpenAiChatTool`:
+/// **对齐** 既有实现 `toOpenAiChatTool`:
 /// - 优先 `tool.type === 'function' && tool.function.name` (OpenAI Chat 风格)
 /// - 退化 `tool.name` (Anthropic / Gemini 风格, 无 function 包装)
 /// - `parameters` 从 `function.parameters` / `function.input_schema` / `parameters` /
@@ -477,7 +477,7 @@ impl NormalizedUsage {
 
 /// 归一化请求 (4 协议入参统一形态)。
 ///
-/// **借鉴** 既有实现 `extractProtectedTools`:
+/// **对齐** 既有实现 `extractProtectedTools`:
 /// 工具字段是**受保护**的 (不进 messages / RAG),只在请求转发前附加。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NormalizedRequest {

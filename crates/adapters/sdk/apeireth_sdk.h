@@ -52,7 +52,7 @@
 #define API_KEY_MIN_LENGTH 16
 
 /**
- * API key 最大长度 (4 KB, 跟 `apeireth-keyring::TOKEN_MAX_LENGTH` 1:1).
+ * API key 最大长度 (4 KB, 跟 `apeireth-keyring::TOKEN_MAX_LENGTH` 一致).
  */
 #define API_KEY_MAX_LENGTH 4096
 
@@ -671,14 +671,14 @@ typedef struct ErrorCategory ErrorCategory;
 typedef struct ErrorClass ErrorClass;
 
 /**
- * 沙箱隔离级别 (3 variant, 1:1 翻译 既有 Sandbox SDK).
+ * 沙箱隔离级别 (3 variant, 语义对齐 既有 Sandbox SDK).
  *
  * K-1 强校验 #3: 编译期 hardcode, 不允许运行时增删 variant.
  */
 typedef struct IsolationLevel IsolationLevel;
 
 /**
- * 沙箱运行时 (3 variant, 1:1 翻译 既有 Sandbox SDK).
+ * 沙箱运行时 (3 variant, 语义对齐 既有 Sandbox SDK).
  *
  * K-1 强校验 #2: 编译期 hardcode, 不允许运行时增删 variant.
  */
@@ -728,7 +728,7 @@ int32_t apeireth_sdk_last_error(uint8_t *_buf, uintptr_t _len);
  * **C-ABI fn #1**: `apeireth_sdk_count_tokens(text: *const c_char) -> c_uint`.
  *
  * 安全性: caller 须保证 `text` 指向有效 UTF-8 + null-terminated C string.
- * Null / invalid ptr 返 0 (fail-soft, 1:1 abi.rs stub pattern).
+ * Null / invalid ptr 返 0 (fail-soft, 与 abi.rs stub pattern 一致).
  */
 unsigned int apeireth_sdk_count_tokens(const char *text);
 
@@ -747,7 +747,7 @@ char *apeireth_sdk_hash_request(const char *method,
  * **C-ABI fn #3**: `apeireth_sdk_version() -> *const c_char`.
  *
  * **不漂移**: 复用 `apeireth_sdk::version::SDK_VERSION` 公共 API, 0 改 workspace.version 1.2.0 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0)。
- * 返 Rust `&'static CStr` 常驻指针, 生命周期 'static, **0 需要 free** (1:1 libc `getenv` pattern)。
+ * 返 Rust `&'static CStr` 常驻指针, 生命周期 'static, **0 需要 free** (与 libc `getenv` pattern 一致)。
  *
  * **L 组修复**: 改 `std::sync::OnceLock` 只分配一次 — 修复前每次调用 `CString::into_raw`
  * 泄漏一个 CString 且头文件暗示免 free (同一 API 两套所有权契约)。统一契约:

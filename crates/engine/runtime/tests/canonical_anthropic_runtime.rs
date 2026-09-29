@@ -1,4 +1,4 @@
-//! Deterministic proof that the canonical runtime executes the migrated
+//! Deterministic proof that the canonical runtime executes the
 //! anthropic provider **without** the LegacyLlmCapability bridge and **without**
 //! any OpenAI conversion.
 //!
@@ -136,7 +136,7 @@ async fn the_runtime_serves_a_turn_through_the_anthropic_provider() {
         .await
         .expect("the turn completes");
 
-    // The migrated canonical anthropic capability served the turn.
+    // The canonical anthropic capability served the turn.
     assert_eq!(outcome.served_by.as_str(), "provider.anthropic");
     assert_eq!(outcome.text, "hello from anthropic");
     assert_eq!(outcome.rounds, 1, "no tools, so one provider round");

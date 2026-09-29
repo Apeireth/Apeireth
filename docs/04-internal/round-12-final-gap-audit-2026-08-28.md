@@ -2,7 +2,7 @@
 
 > **作者**: 主代理 Mavis (写于 Round 12, 用户原话 "现在研究下所有调研和 1.0 功能的现状, 告诉我 Apeireth 还缺什么. 调研完了吗" 触发)
 > **用途**: 综合审计 Round 9-11 全部调研真账 + 1.0 vs 2.0 功能全集对比 + v2 真实施现状, 给 v2.0 release 路径最终必补清单 + 调研完成度
-> **关系**: 综合 `round-10-research-plan-2026-08-28.md` + `youyou-list-research-2026-08-28.md` + `round-10-youyou-list-mainagent-verify-2026-08-28.md` + `apeireth-true-understanding-2026-08-28.md` + `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` + 5 R7 真调研 (N.E.K.O / Open-LLM-VTuber / Firefly / Mio / AIRI) + 6 R11 gap 真调研 (Storage / LongTermMemory / SpeciesCore / SpeciesForm / MetaCognition / CoordinationContext) + `master-functionality-port-audit.md` (v0.5 真实施清单)
+> **关系**: 综合 `round-10-research-plan-2026-08-28.md` + `youyou-list-research-2026-08-28.md` + `round-10-youyou-list-mainagent-verify-2026-08-28.md` + `apeireth-true-understanding-2026-08-28.md` + `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` + 5 R7 真调研 (同类陪伴工程 5 项) + 6 R11 gap 真调研 (Storage / LongTermMemory / SpeciesCore / SpeciesForm / MetaCognition / CoordinationContext) + `master-functionality-port-audit.md` (v0.5 真实施清单)
 
 ```
 [Document-Meta]
@@ -20,7 +20,7 @@ Author:          主代理 Mavis
 **用户原话**: "你现在研究下所有调研和 1.0 功能的现状, 告诉我 Apeireth 还缺什么. 调研完了吗"
 
 **主代理综合审计真账 (per O-5 + S-2 实事求是)**:
-1. **所有调研**: Round 9 (真理解 + 真账 + handbook) + Round 10 (1 你you 调研 + 1 主代理预判 + 1 主代理亲验 + 5 R7 物种化借鉴) + Round 11 (1.0 vs 2.0 gap + 6 R11 gap 真调研) = 19 真账 doc, ~5400 行
+1. **所有调研**: Round 9 (真理解 + 真账 + handbook) + Round 10 (1 你you 调研 + 1 主代理预判 + 1 主代理亲验 + 5 R7 物种化参考) + Round 11 (1.0 vs 2.0 gap + 6 R11 gap 真调研) = 19 真账 doc, ~5400 行
 2. **1.0 功能全集**: `legacy/donor/apeireth-companion/src/` 100+ modules + `master-functionality-port-audit.md` 1.0 真账 + `apeireth-true-understanding-2026-08-28.md` 物种化框架
 3. **Apeireth v2 release 必补清单**: 综合审计 ~25 项 P0 必补 (per Round 11.0 vs 2.0 gap 真账) + 新发现 (per R11 + 1.0 真账 100+ modules)
 4. **调研完成度**: 主代理亲验 + 修订 + 综合, 主代理亲答用户问题
@@ -43,12 +43,12 @@ Author:          主代理 Mavis
 | 1 你you 真账 (170 项目) | `youyou-list-research-2026-08-28.md` | 156 | ✅ push |
 | Round 10 plan (主代理预判) | `round-10-research-plan-2026-08-28.md` | 310 | ✅ push |
 | Round 10 mainagent verify | `round-10-youyou-list-mainagent-verify-2026-08-28.md` | 204 | ✅ push |
-| **Round 10 R7 物种化借鉴 (5 sub-agent 真调研)** | | | |
-| R7-N.E.K.O | `r7-neko-species-research-2026-08-28.md` | 318 | ✅ push |
-| R7-Open-LLM-VTuber | `r7-open-llm-vtuber-species-research-2026-08-28.md` | 309 | ✅ push |
-| R7-Firefly | `r7-firefly-species-research-2026-08-28.md` | 180 | ✅ push |
-| R7-Mio | `r7-mio-species-research-2026-08-28.md` | 239 | ✅ push |
-| R7-AIRI | `r7-airi-species-research-2026-08-28.md` | 224 | ✅ push |
+| **Round 10 R7 物种化参考 (5 sub-agent 真调研)** | | | |
+| R7 陪伴工程 1 | `r7-neko-species-research-2026-08-28.md` | 318 | ✅ push |
+| R7 陪伴工程 2 | `r7-open-llm-vtuber-species-research-2026-08-28.md` | 309 | ✅ push |
+| R7 陪伴工程 3 | `r7-firefly-species-research-2026-08-28.md` | 180 | ✅ push |
+| R7 陪伴工程 4 | `r7-mio-species-research-2026-08-28.md` | 239 | ✅ push |
+| R7 陪伴工程 5 | `r7-airi-species-research-2026-08-28.md` | 224 | ✅ push |
 | **Round 11 1.0 vs 2.0 gap** | | | |
 | 主代理真账 (361 行) | `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` | 361 | ✅ push |
 | **Round 11 R11 gap 真调研 (6 sub-agent)** | | | |
@@ -64,12 +64,12 @@ Author:          主代理 Mavis
 | 维度 | 调研覆盖度 | 真账 |
 |---|---|---|
 | Apeireth 真理解 (物种化) | ✅ 100% | 真理解 doc + vision.md L29-49 |
-| 9 organ 1:1 翻译现状 | ✅ 100% | 真理解 §1.3 + handbook §1.3 |
+| 9 organ 语义对齐现状 | ✅ 100% | 真理解 §1.3 + handbook §1.3 |
 | 12 cognitive slot 现状 | ✅ 100% | 真理解 §1.3 + handbook §1.3 + ledger L22-35 |
 | 5 LOCKED 项 0 触碰 | ✅ 100% | 真账持续 verify (每 commit 跑 git diff) |
 | 1.0 vs 2.0 功能全集 (~100 modules) | ✅ ~95% (master audit L197-771 + 真账 §1 全层) | `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` §1.1-1.9 |
 | 6 R11 gap 真调研 (按真账 brief) | ✅ 100% | 6 R11 真调研真账 |
-| 5 R7 物种化借鉴 | ✅ 100% | 5 R7 真调研真账 |
+| 5 R7 物种化参考 | ✅ 100% | 5 R7 真调研真账 |
 | 1 youyou-list 真调研 (170 项目) | ✅ 100% | 真账 + mainagent verify |
 | Round 8 verify (CI/wiring) | ✅ 100% | round-8-verifications + 8 真账 |
 | **0 装诚实标 全调研 0 实测** | ✅ 100% flag | 全部 sub-agent + 主代理真账 |
@@ -123,7 +123,7 @@ v2 release 阻断项 = 0:
 | Browser tool | `apeireth-tools/src/builtin/browser.rs` | ⚠️ (借 Playwright MCP) | 调研待派 |
 | Learning tool + SystemMonitor | `apeireth-tools/src/builtin/{learning.rs,system_monitor.rs}` | ⚠️ DEFER P3 | 调研待派 |
 | WorktreeSandbox + ToolSynthesizer | `apeireth-tools/src/{worktree.rs,synthesis.rs}` | ⚠️ DEFER P2 + P3 | 调研待派 |
-| MCP protocol/client/server | `apeireth-tools/src/mcp/*` | ⚠️ ADAPT P1 | Open-LLM-VTuber R7 真调研 + Round 12 P1 派单 |
+| MCP protocol/client/server | `apeireth-tools/src/mcp/*` | ⚠️ ADAPT P1 | R7 陪伴工程真调研 + Round 12 P1 派单 |
 | SovereignControl | `apeireth-governance/src/sovereignty.rs` | ⚠️ ADAPT P2 | 调研待派 |
 | EventBusBackbone + Scheduler + Telemetry | `apeireth-runtime/src/{event_bus_backbone.rs,scheduler.rs,telemetry.rs}` | ⚠️ ADAPT P2 + DEFER | R11-CoordinationContext 真账 §3 派单 |
 | WsFrame / voice VAD | `apeireth-protocol/src/{ws.rs,voice.rs}` | ⚠️ ADAPT P2 (CoTDelta 违反 raw CoT) | 调研待派 |
@@ -131,7 +131,7 @@ v2 release 阻断项 = 0:
 | DreamEngine + EpistemicHealer + PromptAssembler | `apeireth-companion/src/{dream.rs,epistemic.rs,prompt_assembler.rs}` | ⚠️ ADAPT P2 (W2/W3 STUB + raw CoT strip) | R11-MetaCognition 真账 |
 | TopicPredictor + PreloadChannel | `apeireth-companion/src/proactive_memory.rs` | 🟡 R20 真实施中 (per Round 9 真账) | R20 真调研 |
 | memory_extractor + memory_graph | `apeireth-companion/src/{memory_extractor.rs,memory_graph.rs}` | ⚠️ ADAPT | R11-LongTermMemory 真账 |
-| presence | `apeireth-companion/src/presence.rs` | ⚠️ (transports-only, 跟 companion-desktop 集成) | R7-Mio 真账 |
+| presence | `apeireth-companion/src/presence.rs` | ⚠️ (transports-only, 跟 companion-desktop 集成) | R7 陪伴工程真账 |
 | streaming_chat + voice_session | `apeireth-companion/src/{streaming_chat.rs,voice_session.rs}` | ⚠️ (跟 B 块 + R14 真实施) | R7 真调研 |
 
 ### 2.4 🔴 缺 真账 (~25 项, v2 0 真实施, **P0 必补**)
@@ -161,18 +161,18 @@ v2 release 阻断项 = 0:
 **D. 物种化塑形维度 (per vision.md 真理解, 3 项)**:
 17. **timeline** — 1.0 `timeline.rs` (REAL, 79). v2 0 (per R11 真调研, 时间维度物种化塑形)
 18. **tone** — 1.0 `tone.rs` (REAL, 374, A3 人格化). v2 0 (per R11, 语言维度)
-19. **morphology** — 1.0 `morphology.rs` (REAL, 284, N7 VCP 借鉴). v2 0 (per R11, frontend 维度)
+19. **morphology** — 1.0 `morphology.rs` (REAL, 284, N7 同类工程参考). v2 0 (per R11, frontend 维度)
 
-**E. 反思+元认知 (6 项, ~3000 行 1:1 可移植)**:
+**E. 反思+元认知 (6 项, ~3000 行 逐项可实现)**:
 20. **meta_thinking** — 1.0 (REAL, 643 行). v2 0 (per R11-MetaCognition)
 21. **thought_cluster** — 1.0 (REAL, 522 行). v2 0
 22. **intent_brier** — 1.0 (REAL, 817 行, 31 单测全绿). v2 0
-23. **confidence** — 1.0 (REAL, 177 行). v2 organ::world_model::CalibrationStrength 本地简化版 in-place (L159-160 显式 "0 装诚实"), 但 v1 BetaBinomial trait 0 移植
+23. **confidence** — 1.0 (REAL, 177 行). v2 organ::world_model::CalibrationStrength 本地简化版 in-place (L159-160 显式 "0 装诚实"), 但 v1 BetaBinomial trait 0 实现
 24. **HybridCognitiveRouter** — 1.0 `hybrid.rs` (PARTIAL, rule-based fast path with hardcoded templates). v2 0
 
 **F. 协调+上下文 (9 项, per R11-CoordinationContext 真账)**:
 25. **onering** — 1.0 (REAL). v2 0
-26. **oracle / oracle_adapters** — 1.0 (REAL). v2 ⚠️ partial (organ trait 1:1 移植, adapter 层 0)
+26. **oracle / oracle_adapters** — 1.0 (REAL). v2 ⚠️ partial (organ trait 语义对齐, adapter 层 0)
 27. **context / context_rot** — 1.0 (REAL). v2 0. **⚠️ v1 重复实现 rot_score** (context.rs L141-451 + context_rot.rs L140-174)
 28. **continuation / continuity / spill** — 1.0 (REAL). v2 ⚠️ partial (IdentityCard/FrozenTurnContinuation 已就位, ContinuationSnapshot 跨进程崩溃恢复+spill 缺)
 29. **assemble / hello** — 1.0 (REAL). v2 0. **⚠️ hello.rs 概念 collision**: Windows Hello NGC 探测 (主代理真账标"启动/装配"错)

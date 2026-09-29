@@ -17,7 +17,7 @@ use crate::livekit::room::RoomState;
 use crate::livekit::track::{TrackSid, TrackSource};
 
 // ============================================================================
-// §1 RoomEvent 8 事件 (按既有实现 RoomEvent enum 1:1)
+// §1 RoomEvent 8 事件 (按既有实现 RoomEvent enum)
 // ============================================================================
 
 /// 房间事件 (8 事件, K-1 强校验守门: 编译期 hardcode 8 个 variant).
@@ -97,7 +97,7 @@ pub enum RoomEvent {
 impl RoomEvent {
     /// 8 事件 hardcode 常量.
     pub const COUNT: usize = 8;
-    /// 事件类型字符串 (1:1 翻译 LiveKit 协议).
+    /// 事件类型字符串 (语义对齐 LiveKit 协议).
     pub fn type_str(&self) -> &'static str {
         match self {
             RoomEvent::ParticipantConnected { .. } => "participant_connected",
@@ -168,7 +168,7 @@ impl EventEmitter {
         Self { tx }
     }
 
-    /// 订阅事件 (返 `broadcast::Receiver<RoomEvent>`, 跟 LiveKit `Room.on` 1:1).
+    /// 订阅事件 (返 `broadcast::Receiver<RoomEvent>`, 跟 LiveKit `Room.on` 一致).
     pub fn subscribe(&self) -> broadcast::Receiver<RoomEvent> {
         self.tx.subscribe()
     }

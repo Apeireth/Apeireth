@@ -13,7 +13,7 @@ use crate::sandbox::error::{SandboxError, SandboxResult};
 // §1 RuntimeKind (3 variant, K-1 强校验 #2)
 // ============================================================================
 
-/// 沙箱运行时 (3 variant, 1:1 翻译 既有 Sandbox SDK).
+/// 沙箱运行时 (3 variant, 语义对齐 既有 Sandbox SDK).
 ///
 /// K-1 强校验 #2: 编译期 hardcode, 不允许运行时增删 variant.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -72,7 +72,7 @@ const _: () = assert!(SUPPORTED_RUNTIME_KINDS.len() == 3);
 // §2 IsolationLevel (3 variant, K-1 强校验 #3)
 // ============================================================================
 
-/// 沙箱隔离级别 (3 variant, 1:1 翻译 既有 Sandbox SDK).
+/// 沙箱隔离级别 (3 variant, 语义对齐 既有 Sandbox SDK).
 ///
 /// K-1 强校验 #3: 编译期 hardcode, 不允许运行时增删 variant.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -131,7 +131,7 @@ const _: () = assert!(SUPPORTED_ISOLATION_LEVELS.len() == 3);
 // §3 SandboxStatus (5 状态机, R21+ 真接 runtime 时用)
 // ============================================================================
 
-/// 沙箱状态机 (5 variant, 1:1 翻译 既有 Sandbox SDK `status` 字段).
+/// 沙箱状态机 (5 variant, 语义对齐 既有 Sandbox SDK `status` 字段).
 ///
 /// 状态流转: `Pending → Creating → Running → (Stopping → Stopped) | Failed`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

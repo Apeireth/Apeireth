@@ -2,7 +2,7 @@
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **当前基线**: 默认分支 `main`、16-crate 工作区（v2.0.0-rc.1；测试基线 **3695 passed / 0 failed / 21 ignored**，131 套件全量实测，历史口径见 CHANGELOG）；`legacy/` 不参与构建。
+> **当前基线**: 默认分支 `main`、18-crate 工作区（v2.0.0-rc.1；测试基线 **3695 passed / 0 failed / 21 ignored**，131 套件全量实测，历史口径见 CHANGELOG）；`legacy/` 不参与构建。
 
 ---
 
@@ -281,7 +281,7 @@ EOF
 | `APEIRETH_ENABLE_PREFERENCE_LEARNING=1` | 让 AI 把学到的偏好写回长期记忆 | 写入权交给模型；配 P1-A 准入控制使用更稳；**默认开**（`=0` 或 `APEIRETH_DISABLE_PREFERENCE_LEARNING=1` 关） |
 | `APEIRETH_ENABLE_PROACTIVE_RECALL=1` | 记忆主动召回：已存记忆按对话线索主动浮现（每次 ≤2 条、有置信度阈值，确定性选择器） | 低——不额外调 LLM；**默认开**（`=0` 或 `APEIRETH_DISABLE_PROACTIVE_RECALL=1` 关） |
 | `APEIRETH_DISABLE_TYPED_RECALL=1` | 关闭承诺/画像/关系三类记忆的**召回读侧**（写侧不动） | 关掉后这三类记忆不再浮现；默认**开**（写读对称，2026-10-06 修复入库不召回的断链） |
-| `APEIRETH_ENABLE_MEMORY_INJECTION=1` | 记忆 overlay 用 donor 反幻觉格式（编号证据清单 + 「禁止说『我记得我们以前聊过』」） | 低——纯渲染切换；**默认开**（`=0` 或 `APEIRETH_DISABLE_MEMORY_INJECTION=1` 关回 XML 封闭世界格式） |
+| `APEIRETH_ENABLE_MEMORY_INJECTION=1` | 记忆 overlay 用反幻觉格式（编号证据清单 + 「禁止说『我记得我们以前聊过』」） | 低——纯渲染切换；**默认开**（`=0` 或 `APEIRETH_DISABLE_MEMORY_INJECTION=1` 关回 XML 封闭世界格式） |
 | `APEIRETH_ENABLE_CONSOLIDATION=1` | 每回合后跑确定性记忆整理，提炼洞察落库（稳定 ID 幂等，只从原始证据提炼） | 低——0 模型调用；默认关 |
 | `APEIRETH_ENABLE_REFLEXION=1` | 失败闭环：TurnStart 注入历史教训 + AfterTurn 把 Judge 显式否决沉淀为反思 | 低——需 Judge 开启才有信号源；默认关 |
 

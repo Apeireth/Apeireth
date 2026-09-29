@@ -2,10 +2,10 @@
 
 > **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
 
-> 主人指示: 记忆/上下文是 AI 界钻研很久的领域, 调研 VCP 实现 + 其他优秀记忆项目,
+> 主人指示: 记忆/上下文是 AI 界钻研很久的领域, 调研同类工具箱实现 + 其他优秀记忆项目,
 > 为记忆系统升级提供参考。**原则: 吸收机制设计, 不照抄代码。**
 
-## 一、VCP 记忆体系（本地源码逐模块调研）
+## 一、同类工具箱记忆体系（本地源码逐模块调研）
 
 ### 1. 日记本中心（RAGDiaryPlugin, 23 万字节主插件）
 - 所有记忆以**日记/文档**结构化存储, 时间天然有序 — 记忆 = 时间线
@@ -15,7 +15,7 @@
 - **推理式召回**: 五步框架 (解构意图 → 多维探针网络 → 时间感知扫描 → 跨时空关联综合 → 剪枝聚焦)
 - 输出 = 结构化证据综合 (保留关键细节/引用, 不是模糊概括)
 - 我们的对照: recall_memory = 关键词匹配 (v1) + deep_recall = LLM 重排 (暗示词触发, v2)
-  → **差距: 我们的推理召回是"有条件触发", VCP 是"每次对话都推理"** (成本/限流权衡, 见 §三)
+  → **差距: 我们的推理召回是"有条件触发", 该工具箱是"每次对话都推理"** (成本/限流权衡, 见 §三)
 
 ### 3. LightMemo（BM25 + 分级记忆）
 - jieba 分词 + BM25 检索 (k1=1.5, b=0.75) + 分级存储
@@ -24,8 +24,8 @@
 ### 4. ContextFoldingV2（语义折叠 — 关键差异点）
 - 对正文中**远距离、低相关性**的 AI 输出做摘要折叠 (相关性阈值 0.5, 语义判定)
 - 异步并发摘要 (maxConcurrent 5) + 折叠标记 `[VCP上下文语义折叠-本层摘要:...]`
-- 我们的对照: 滚动摘要 = **全量折叠** (窗口外全摘要) → **差距: VCP 是选择性折叠** (只折叠低相关)
-  我们的窗口裁剪更简单但可能丢掉仍相关的内容; VCP 方式更省 token 更精准
+- 我们的对照: 滚动摘要 = **全量折叠** (窗口外全摘要) → **差距: 该工具箱是选择性折叠** (只折叠低相关)
+  我们的窗口裁剪更简单但可能丢掉仍相关的内容; 该工具箱方式更省 token 更精准
 
 ### 5. SemanticGroupManager（语义分组）
 - 记忆按主题聚类 (向量缓存 + 分组), 查询命中分组 → 上下文注入
@@ -37,7 +37,7 @@
 
 ### 7. FoldingStore（折叠存储）
 - SQLite, maxEntries 200 + 淘汰策略 (evict 20) — 上下文折叠的持久化
-- 我们的对照: 滚动摘要是内存态 (每次请求重新摘要) → VCP 持久化折叠结果 ✅ 值得吸收
+- 我们的对照: 滚动摘要是内存态 (每次请求重新摘要) → 该工具箱持久化折叠结果 ✅ 值得吸收
 
 ### 8. associativeDiscovery（跨日记联想）
 - TagMemo 算法 + 向量库, 跨日记本语义联想 (发现隐藏关联)
@@ -80,10 +80,10 @@
 
 | 设计 | 来源 | 我们的差距 | 吸收成本 |
 |---|---|---|---|
-| 推理式召回 (每次对话 LLM 综合) | VCP AIMemoHandler | deep_recall 仅暗示词触发 | 中 (限流环境下需节流) |
-| 选择性语义折叠 | VCP ContextFoldingV2 | 滚动摘要全量折叠 | 中 (需语义相关度判定) |
-| 折叠结果持久化 | VCP FoldingStore | 滚动摘要是内存态 | 低 (存 store) |
-| 记忆主题分组 | VCP SemanticGroupManager | 无 | 中 |
+| 推理式召回 (每次对话 LLM 综合) | 该工具箱 AIMemoHandler | deep_recall 仅暗示词触发 | 中 (限流环境下需节流) |
+| 选择性语义折叠 | 该工具箱 ContextFoldingV2 | 滚动摘要全量折叠 | 中 (需语义相关度判定) |
+| 折叠结果持久化 | 该工具箱 FoldingStore | 滚动摘要是内存态 | 低 (存 store) |
+| 记忆主题分组 | 该工具箱 SemanticGroupManager | 无 | 中 |
 | importance 捕获打分 + last-access 衰减 | Generative Agents | 提炼器无 salience/access 字段 | 低 (提炼器加字段) |
 | 累计 importance 触发反思 (非纯周期) | Generative Agents | 反思纯周期 | 低 (配合模块 5) |
 | 提炼器对账 (ADD/UPDATE/DELETE) | Mem0 | 单向捕获, append-only 重复/矛盾并存 | 中 (最大升级点) |
@@ -110,7 +110,7 @@
 
 ## 五、Backlog 补齐记录（2026-08-16）
 
-当初调研标注未落地 (docs/research/mempalace-vs-apeireth-memory.md 时序三元组借鉴/R179 P2/R186),
+当初调研标注未落地 (docs/research/mempalace-vs-apeireth-memory.md 时序三元组对齐/R179 P2/R186),
 今日全部补齐:
 
 - **Zep 时序知识图谱** (memory_graph.rs): 提炼器输出 graph 三元组 (LLM 抽取) →

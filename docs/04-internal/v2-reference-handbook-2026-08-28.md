@@ -25,7 +25,7 @@ Apeireth v2.0.0-rc.1 在 `origin/main @ 70281cc6` (Round 9 完; **2026-09-05 对
 
 ### 1.1 工程总进度
 
-| 项 | 值 | 来源 |
+| 项 | 值 | 依据 |
 |---|---|---|
 | HEAD (origin/main) | `70281cc6`（2026-09-05 对账：现 `7647d2c9`） | Round 9 7 doc batch commit |
 | Workspace | **17 crates** | foundation 6 / engine 7 / capabilities 1 / adapters 3（写作时 16；2026-09-04 `0e542d03` 抽出 runtime-assembly 后为 17；**2026-10-06 对账：协作者批新增 `crates/engine/guard` 后为 18 / engine 8**） |
@@ -58,7 +58,7 @@ O-2 前人肩上 | O-3 干到底 | O-4 任何人都能接手 | O-5 不假装 (0 
 | `cognitive.self_assessment` | WIRED, Judge-backed |
 | `cognitive.memory_writeback` | WIRED |
 | **`cognitive.preference_learning`** | **WIRED, OFF by default（`canonical_preference_learning` 14 测试；`topic_predictor` 仍未接线进 recall；2026-09-05 对账注）** |
-| `cognitive.critic` | DEFERRED INTO JUDGE → R21 派单 (1 周, critic.rs 1:1 翻译) |
+| `cognitive.critic` | DEFERRED INTO JUDGE → R21 派单 (1 周, critic.rs 语义对齐) |
 | `cognitive.reflection` | DEFERRED INTO SELF-ASSESSMENT → R22 派单 (1 周) |
 | `cognitive.planner` | NOT AN AGENT MODULE → R23 派单 (3 周, LLM Adapter 新设计) |
 | `cognitive.orchestrator` | NOT AN AGENT MODULE → R24 派单 (3 周, 严格分界 R12) |
@@ -74,7 +74,7 @@ O-2 前人肩上 | O-3 干到底 | O-4 任何人都能接手 | O-5 不假装 (0 
 | 13 键 | `crates/foundation/core/src/philosophy.rs:142` `RUNTIME_ENFORCED = false` | 已拍板降级, 不接回 runtime 强制 |
 | 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` (Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义) | 同 9 哲学锚 |
 | workspace.version | `Cargo.toml:46` `"2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210；旧 1.2.0 双轴制终结） | 随 release 推进, 主代理/release authority 拍板 |
-| R11 baseline 3 值 | legacy reference (`legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` `R11_V1141_BASELINE: f64 = 0.8682` / `R11_V1131_BASELINE: f64 = 0.8532` / `R11_V1136_BASELINE: f64 = 0.9063`) — **active workspace 无 const source**, 等 R12 spec 重新审定后移植 | R11 数字更新需 R12 spec 重新审定 + active workspace 移植, 主代理拍板 |
+| R11 baseline 3 值 | legacy reference (`legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` `R11_V1141_BASELINE: f64 = 0.8682` / `R11_V1131_BASELINE: f64 = 0.8532` / `R11_V1136_BASELINE: f64 = 0.9063`) — **active workspace 无 const source**, 等 R12 spec 重新审定后落地 | R11 数字更新需 R12 spec 重新审定 + active workspace 落地, 主代理拍板 |
 
 ### 1.5 A 块完成真账 (Round 1-2 实施, Round 3 amend + 复盘, Round 4 author 修)
 
@@ -122,7 +122,7 @@ c003e078 refactor(runtime): OrganOrchestrator 完整化 stage 1 (A 块)
 
 > Everything serves the ASI north star (五原型).
 
-**工程兑现**: 9 organ 真移植 (Round 1-3) + OrganOrchestrator 完整化 (Round 1-2) + 12 slot cognitive module integration (Round 9 调研就位).
+**工程兑现**: 9 organ 真实现 (Round 1-3) + OrganOrchestrator 完整化 (Round 1-2) + 12 slot cognitive module integration (Round 9 调研就位).
 
 **改前自问**: "这个改动指向 ASI 北极星吗? 不是的话, 是不是走错路了?"
 
@@ -152,11 +152,11 @@ c003e078 refactor(runtime): OrganOrchestrator 完整化 stage 1 (A 块)
 
 ### 2.5 O-2 前人肩上
 
-> Borrow, attribute, adapt (上游标杆项目 + 标准协议), 借 + 标注 + 改。
+> Borrow, attribute, adapt (业界标杆项目 + 标准协议), 借 + 标注 + 改。
 
-**工程兑现**: A 块 5 stage 1:1 翻译 v1 (`legacy/donor/apeireth-companion/src/`) + R20 preference_learning 1:1 翻译 v1 TopicPredictor + PreloadChannel + R21 critic 1:1 翻译 v1 critic.rs + R22 reflection 1:1 翻译 v1 reflection.rs.
+**工程兑现**: A 块 5 stage 语义对齐 v1 + R20 preference_learning 语义对齐 v1 TopicPredictor + PreloadChannel + R21 critic 语义对齐 v1 critic.rs + R22 reflection 语义对齐 v1 reflection.rs.
 
-**改前自问**: "这方案借鉴了谁的? 标注来源了吗?"
+**改前自问**: "这方案参考了谁的公开设计? 标注引用了吗?"
 
 ### 2.6 O-3 干到底
 
@@ -302,7 +302,7 @@ grep -r "legacy/" crates/ | wc -l                  # 期望: < 100 (现 36)
   - path1: <行数 diff> <描述>
   - path2: <行数 diff> <描述>
 - 同步关系 (0 文档 0 数字漂移):
-  - [改前的数字 / 改后数字 / 来源 / 真账实测]
+  - [改前的数字 / 改后数字 / 依据 / 真账实测]
 - 下一步 (留 backlog / 派单 / 等等):
   - [下一步 action items]
 ```
@@ -537,7 +537,7 @@ git config core.hooksPath .githooks
 ### 10.4 派 sub-agent 真实施 R20 preference_learning (per §8.1)
 
 - brief: `r20-preference_learning-research-2026-08-28.md`
-- 1:1 翻译 v1 TopicPredictor + PreloadChannel
+- 语义对齐 v1 TopicPredictor + PreloadChannel
 - 含 ledger L30 DEFERRED→WIRED 1 行 doc sync (R15 §7.2 措辞修)
 - 必含 §3.1 brief 模板 5 段
 - 主代理亲验 + commit + push

@@ -23,7 +23,7 @@
 //!
 //! **承接**:
 //! - 子代理 Q 报告 #3 "Council 真接 LLM" 已就位 (`LlmFactory` 注入), E7 共享同 trait 边界
-//! - 子代理 R1 (F1) / R2 (F4) / R3 (F6) / R4 (W1) / R6 (W3) / R8 (Memory) 已并行完成, E7 同步 1:1 翻译
+//! - 子代理 R1 (F1) / R2 (F4) / R3 (F6) / R4 (W1) / R6 (W3) / R8 (Memory) 已并行完成, E7 同步语义对齐
 
 use apeireth_core::kernel::memory::Episode;
 use apeireth_core::kernel::SessionId;

@@ -222,7 +222,7 @@ impl ProtocolAdapter for OpenAiChatAdapter {
             .to_string();
 
         let mut tool_calls = Vec::new();
-        // L4 修复 (2026-09-24 审计): 原实现把畸形 arguments JSON 静默吞为
+        // L4 修复 (2026-09-24 审计): 修复前把畸形 arguments JSON 静默吞为
         // `{}` —— 模型输出半个 JSON 时调用方无从得知参数已丢失。现在 arguments
         // 置 Null, 原文记入 raw_metadata.malformed_tool_arguments 供排障。
         let mut malformed_tool_arguments: Vec<String> = Vec::new();

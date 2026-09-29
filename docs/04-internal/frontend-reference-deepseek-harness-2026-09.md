@@ -1,16 +1,16 @@
-# DeepSeek Harness 前端参考研究（2026-09，供 companion-desktop 借鉴）
+# 同类 Agent Harness 工程前端参考研究（2026-09，供 companion-desktop 参考）
 
-> 素材：本机 dsh-web-app@0.1.0-rc.8 实装（pnpm 库内全部包）+ GitHub deepseek-ai/deepseek-harness
+> 素材：本机同类 Agent Harness 工程 web 实装 0.1.0-rc.8（pnpm 库内全部包）+ 其开源仓库
 > 文档（README / architecture.md / docs/user/guide/index.md + providers.md / packages/web README）。
 > 三个子代理并行解剖 UI 交互层 / 会话编排层 / 安全治理工具层，本文件汇总其报告并映射到
 > Apeireth 桌面前端的采纳建议。
 
-## 1. DSH 总览（事实）
+## 1. 同类工程总览（事实）
 
-- **一切皆插件**（Cordis 组合框架）：模型适配器、工具注册表、会话日志、agent loop 本身都是
+- **一切皆插件**（插件组合框架）：模型适配器、工具注册表、会话日志、agent loop 本身都是
   可替换插件；profile = 有序 bundle 层的命名组合；web profile 支持**热补丁重载**。
 - **Web UI** 默认 `http://127.0.0.1:3080`；**桌面版（Electron）不监听任何回环端口**——用
-  `dsh-app://` 安全协议 + 版本匹配的 framed byte pipes 通信（对比：我们侧车监听回环 HTTP）。
+  私有 scheme 安全协议 + 版本匹配的 framed byte pipes 通信（对比：我们侧车监听回环 HTTP）。
 - **配置即生效**：模型/设置改动**下一次请求生效，不重启服务**（web 与桌面皆然）。
 - **会话日志即真相**：`session/event` 是 append-only 事实日志；"**模型可见即已入日志**"是不变量；
   UI 从日志渲染，流式增量走 `agent/assistant-stream` 实时事件。UI 扩展 = 注册
@@ -18,19 +18,19 @@
 - 回合模型：**step** = 一次模型请求 + 其工具调用；**turn** = 0..n step。会话事件耐久、agent 事件
   实时，两者分域。
 
-## 2. 已确认的借鉴点（本代理直接取证）
+## 2. 已确认的参考点（本代理直接取证）
 
-1. **设置免重启**：DSH 明确"Model changes take effect on the next request without restarting
+1. **设置免重启**：同类工程明确"Model changes take effect on the next request without restarting
    the server"。我们现状：Settings 保存 → 重启侧车（端口变更 → 前端重解析）。建议：P0 级改造
    方向——provider 配置走运行时可重载的配置读取（env 为启动参数是当前约束，需要加配置层）。
-2. **密钥写保护 + 持久引用**：DSH key 只写不读（保存后回显脱敏描述符），存
-   `$DSH_HOME/.credentials.yaml`，settings 只存引用——**重启后 key 仍在**。我们现状：key 不落盘
+2. **密钥写保护 + 持久引用**：同类工程 key 只写不读（保存后回显脱敏描述符），存
+   凭据文件 `.credentials.yaml`，settings 只存引用——**重启后 key 仍在**。我们现状：key 不落盘
    → 每次启动重填（今晚已实锤为摩擦点）。建议：复用既有 keyring 机制
    （`APEIRETH_KEYRING_BACKEND`）把 provider key 存 OS 钥匙串，supervisor 启动时解析。
-3. **模型发现选择器**：DSH 自定义 provider 表单有"Fetch available models"→ 可搜索多选 picker。
+3. **模型发现选择器**：同类工程自定义 provider 表单有"Fetch available models"→ 可搜索多选 picker。
    我们已有 `/v1/models`，但设置页模型列表是硬编码预设。建议：设置页接 gateway `/v1/models`
    做可搜索多选。
-4. **表单刻意做小**：DSH Models 页只有"路由存在所需"的字段；高级字段（reasoning 档位、图片输入、
+4. **表单刻意做小**：同类工程 Models 页只有"路由存在所需"的字段；高级字段（reasoning 档位、图片输入、
    兼容开关）放 `settings.yaml`，页面提供"Open configuration file"直达。我们 SettingsView 的
    高级能力/密钥弹窗分裂问题可参考此分层哲学。
 5. **兼容开关（compat）**：`supportsDeveloperRole` / `maxTokensField` / `thinkingFormat`
@@ -42,14 +42,14 @@
    需要一个用户可见的"工作区"概念。
 7. **会话保留所选模型**：切换模型只影响新会话；已发过请求的会话记自己日志里的模型。我们的
    config.model 是全局单值——建议按会话记 model。
-8. **Web 工具家族**：web_search + web_fetch 可互换后端（Exa / Perplexity / DeepSeek 原生），
+8. **Web 工具家族**：web_search + web_fetch 可互换后端（多家搜索 API 供应商，含模型厂商原生搜索），
    模型侧工具行为一致。我们只有 GET-only fetch——搜索能力是明确的下一代补位。
 
 ## 3. UI/交互层调研（子代理报告摘要）
 
-**技术底座**：React 18 + Vite，Cordis 插件按 **slot** 组装（`conversation.chat.node`、
+**技术底座**：React 18 + Vite，插件按 **slot** 组装（`conversation.chat.node`、
 `tool.call.toolview`、`conversation.input.dock` 等）；三栏 AppFrame（sidebar/conversation/
-details 可拖拽）；`dsh-client-locale` 双语；富文本 = MarkdownText 原语（GFM + KaTeX + Shiki
+details 可拖拽）；双语 locale 资源；富文本 = MarkdownText 原语（GFM + KaTeX + Shiki
 语法高亮）。
 
 **特性清单**：①三栏框架（侧栏可收 56px、details 零宽自动关）②侧栏会话浏览（标题即时搜索 +
@@ -127,7 +127,7 @@ Like/Dislike + note ⑬主题 light/dark/system 启动前注入防闪白 ⑭HMR�
 
 ## 6. 采纳优先级（定稿）
 
-| 级 | 借鉴项 | DSH 做法（事实） | 我们现状 | 建议动作 |
+| 级 | 参考项 | 同类工程做法（事实） | 我们现状 | 建议动作 |
 |---|---|---|---|---|
 | P0 | key 持久化 | 写保护密钥存 `.credentials.yaml`，settings 只存引用，重启仍在 | key 每次启动重填（已实锤为摩擦） | 复用 `APEIRETH_KEYRING_BACKEND` 存 OS 钥匙串，supervisor 启动解析 |
 | P0 | 模型选择接真值 | Models 页 catalog + "Fetch available models" 可搜索多选 picker | 设置页硬编码预设；gateway `/v1/models` 已存在 | 设置页接 `/v1/models` 做可搜索选择；预设降级为快捷模板 |
@@ -145,4 +145,4 @@ Like/Dislike + note ⑬主题 light/dark/system 启动前注入防闪白 ⑭HMR�
 | P2 | 消息反馈 | Like/Dislike + note 弹窗 | 无（有 preference_learning 后端） | 反馈事件接入偏好学习写回 |
 | P2 | 附件/图片 | 64px 缩略图 rail、拖拽、lightbox；vision 模型声明制 | 无附件；provider Vision 未声明 | 远期（先 provider 声明 Vision） |
 | P2 | 子代理/后台任务/工作流 UI | subagent 卡片 + 后台完成通知 + jobs 徽章 + workflow 进度 | 后端有 OrganOrchestrator 等，无对应 UI | 远期（配合后端能力路线） |
-| P2 | 桌面端不走回环端口 | Electron `dsh-app://` + framed pipes，零端口暴露 | 侧车回环 HTTP + CORS（已闭合） | 架构级改造，暂不做 |
+| P2 | 桌面端不走回环端口 | Electron 私有 scheme + framed pipes，零端口暴露 | 侧车回环 HTTP + CORS（已闭合） | 架构级改造，暂不做 |

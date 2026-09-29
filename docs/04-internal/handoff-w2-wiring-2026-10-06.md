@@ -67,7 +67,7 @@
 |---|---|---|---|
 | consolidation 触发点 | `APEIRETH_ENABLE_CONSOLIDATION=1` | writeback AfterTurn 跑 `coord.run_consolidation` (确定性, 0 模型调用), 洞察**稳定 ID** 落库 (跨轮幂等), 下轮召回可见 | `runtime-assembly/canonical/cognitive.rs` (MemoryWritebackModule) |
 | reflexion 失败闭环 | `APEIRETH_ENABLE_REFLEXION=1` + `APEIRETH_REFLEXION_DIR` (默认 `<data>/reflexion`) | 新模块 `cognitive.reflexion`: TurnStart 按任务标签注入历史教训 (字符预算内, 0 LLM) + AfterTurn 消费 `JudgeObservations` 的**显式**非 Pass 判定 → 沉淀 `FailureKind::DecisionRejected` + `RuleCritic` 即时蒸馏。**信号边界**: Judge 未开 = 无信号 = 不记录, 绝不从文本猜"失败" | `cognitive.rs` (ReflexionModule), `memory/src/reflexion.rs` |
-| memory_injection 反幻觉格式 | `APEIRETH_ENABLE_MEMORY_INJECTION=1` | overlay 渲染切换 donor 封闭世界格式: 编号证据清单 + 「禁止说『我记得我们以前聊过』」反幻觉规则 (默认 XML 格式不变) | `memory/src/context_compiler.rs`, `memory/src/coordinator.rs` (`injection_format` 分支), `memory/src/memory_injection.rs` |
+| memory_injection 反幻觉格式 | `APEIRETH_ENABLE_MEMORY_INJECTION=1` | overlay 渲染切换基线封闭世界格式: 编号证据清单 + 「禁止说『我记得我们以前聊过』」反幻觉规则 (默认 XML 格式不变) | `memory/src/context_compiler.rs`, `memory/src/coordinator.rs` (`injection_format` 分支), `memory/src/memory_injection.rs` |
 
 ### 2.4 过程中咬出的 3 个真缺陷 (全部修复, 各有回归测试)
 
@@ -84,7 +84,7 @@
 | 项 | 结果 |
 |---|---|
 | legacy 名称级扫描 → **源码级核验** (9 子系统逐个读实现体) | 见 §2.6 翻案表 |
-| `thought_cluster` 没查清 | ✅ = v2 `cluster_store` **完整改名移植** (API 五件套同构) —— **从真缺口移出** |
+| `thought_cluster` 没查清 | ✅ = v2 `cluster_store` **完整改名归并** (API 五件套同构) —— **从真缺口移出** |
 | Option 默认关配置全量排查 | ✅ 47+65 字段全过筛: 行为开关类**全部有旋钮** (本线四补后闭合); 4 个可达性观察项记表 (§3.4) |
 | shell 可达实测重放 | ✅ 探针 `capabilities/tools/tests/shell_reach_probe.rs` (`#[ignore]`): `cmd /C type %SystemRoot%\win.ini` exit=0 全文可见 = **全盘可达零拦截实锤**。**它同时是 W1 沙箱的回归锚点** —— 沙箱落地后断言必须反转 |
 | `jimmy` 死指针 | ✅ 删前复验 (Repository not found) 后删除 |
@@ -96,11 +96,11 @@
 
 | 子系统 | v1 实况 | 定性修正 |
 |---|---|---|
-| community | ✅ 真 (`companion/community.rs` + `triage()`) | 真缺口成立 (v1→v2 未移植) |
+| community | ✅ 真 (`companion/community.rs` + `triage()`) | 真缺口成立 (v1→v2 未实现) |
 | experiment_field | ✅ 真框架 (`ExperimentField` + VMRunner 注入边界 + 提案→部署→回滚) | 真缺口成立 (框架可回收) |
 | **HybridCognitiveRouter** | ❌ **v1 也没有** | **纯愿景项** (原"v1 有真实现"是错的) |
 | **ToolSynthesizer** | ❌ **v1 也没有** | **纯愿景项** |
-| thought_cluster | ✅ 真 (`ThoughtClusterManager` + Reader + search) | **已移植** (= `cluster_store`), 移出缺口 |
+| thought_cluster | ✅ 真 (`ThoughtClusterManager` + Reader + search) | **已实现** (= `cluster_store`), 移出缺口 |
 | onering | ✅ 真 (`OneRingLedger` 统一账本 + 溯源强制 + 五前端时间线) | 真缺口成立 |
 | 真文件/网络沙箱 | ✅ 真 (`frozen/apeireth-sandbox/real.rs` **真接 Docker daemon API**) | 真缺口成立, **v1 Docker 方案整 crate 可回收** |
 | SDK 真 HTTP/WS | ✅ 大量真 (http-client / api ws_v1 / bus l4 / lark / voice / update) | 真缺口成立, **客户端群可回收** |
@@ -113,7 +113,7 @@
 > **✅ 本工作线已宣告完成 (2026-10-10)**。§4.1-4.5 全部处置完毕 (dreaming 批 /
 > partner+principles / morphology+education+worktree_sandbox / 吸收批 4 算法 / 杂项双核销),
 > 差距审计 §7.1 处置列已录终局复核 (五审)。剩余路线转常规队列: 生产 `Orchestrator`
-> 实现 (worktree 装饰器的主角) → 三洋葱 L3-L5 / 守夜人 / community·onering 移植 / W5 SDK。
+> 实现 (worktree 装饰器的主角) → 三洋葱 L3-L5 / 守夜人 / community·onering 实现 / W5 SDK。
 
 ### 3.1 接线矩阵 (四级口径; 手册 = INSTALL.md 旋钮区)
 

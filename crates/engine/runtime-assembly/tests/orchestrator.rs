@@ -1,7 +1,7 @@
 //! P-arch (2026-08-28): OrganOrchestrator 类似 AwakeCompanion 集成测试 (子代理 R12 真实施).
 //!
 //! 3 测试 (per 子代理 R12 任务说明):
-//! 1. `orchestrator_tick_9_organ_process_serial` — 9 organ process 串联, 1:1 翻译 v1
+//! 1. `orchestrator_tick_9_organ_process_serial` — 9 organ process 串联, 语义对齐 v1
 //! 2. `orchestrator_8_gates_real` — 8 重 gate 真实存在, 13 种 InitiativeGate 全列
 //! 3. `orchestrator_5_state_machine_transitions` — Idle → Draft → Proposed → Ratified → Active
 //!

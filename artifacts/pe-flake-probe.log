@@ -1,0 +1,33 @@
+   Compiling apeireth-tools-canonical v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\capabilities\tools)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.61s
+     Running tests\process_executor.rs (target\debug\deps\process_executor-4dee438013e265dc.exe)
+
+running 25 tests
+test unbounded_usize_max_output_limits_are_refused ... ok
+test unsupported_network_requirement_fails_closed_before_child_starts ... ok
+test windows_tests::cpu_time_limit_is_advertised_enforced ... ok
+test unsupported_optional_limit_fails_before_child_starts ... ok
+test windows_tests::privilege_reduction_requirement_is_enforced_or_fails_closed ... ok
+test windows_tests::raw_arg_on_restricted_token_path_is_a_configuration_error ... ok
+test spawn_failure_is_an_executor_error ... ok
+test windows_tests::kill_on_job_close_terminates_a_running_child ... ok
+test environment_explicit_mode_sets_only_requested_vars ... ok
+test windows_tests::timeout_terminates_the_whole_job_tree ... ok
+test large_stdout_and_stderr_do_not_deadlock ... ok
+test result_enforcement_reports_platform_capabilities ... ok
+test environment_clearing_denies_ambient_secrets ... ok
+test structured_args_are_preserved_with_unicode_and_spaces ... ok
+test windows_tests::process_memory_limit_rejects_oversized_allocation ... ok
+test nonzero_exit_is_a_result_not_an_executor_error ... ok
+test timeout_terminates_the_child ... ok
+test successful_child_execution_captures_stdout ... ok
+test windows_tests::active_process_limit_blocks_extra_child_creation ... ok
+test stderr_is_captured_separately ... ok
+test windows_tests::process_executor_attaches_child_to_a_real_job_object ... ok
+test stdout_limit_truncates_and_reports ... ok
+test stderr_limit_truncates_and_reports ... ok
+test windows_tests::cpu_time_limit_terminates_a_cpu_bound_child ... ok
+test working_directory_is_explicit_not_ambient ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.28s
+

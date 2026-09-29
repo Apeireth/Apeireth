@@ -1,4 +1,4 @@
-//! Lazy TTL entries. Eager background scanning is not ported (needs a runtime).
+//! Lazy TTL entries. Eager background scanning is not implemented (needs a runtime).
 
 use std::time::{Duration, Instant};
 

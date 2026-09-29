@@ -1,10 +1,10 @@
-# Pattern Reference Parity Matrix (Phase 9)
+# 参考工程对齐矩阵 (Phase 9)
 
 > **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
 
-本报告详细记录 Apeireth Unified Desktop 对 Pattern 原有产品功能的吸收与对齐状态。
+本报告详细记录 Apeireth Unified Desktop 对参考工程原有产品功能的复用与对齐状态。
 
-| 模块 (Module) | Pattern 原有能力 (Pattern Reference) | Apeireth 统一桌面实现 (Apeireth Unified) | 对齐评级 (Status) | 说明 (Notes) |
+| 模块 (Module) | 参考工程原有能力 (Reference) | Apeireth 统一桌面实现 (Apeireth Unified) | 对齐评级 (Status) | 说明 (Notes) |
 |---|---|---|---|---|
 | **流式对话渲染** | 基础 Markdown / KaTeX 流式输出 | 增量 Markdown/KaTeX 防跳动渲染 + 打字机光标 | **BETTER** | 完全保留并优化了平滑体验与错误重试机制 |
 | **推理过程展示** | `<think>` 标签直接剥除或纯文本 | 折叠展开式思考卡片 (`reasoning-box`)，计时与流式动效 | **BETTER** | 支持深度思考过程实时解析与用时统计 |
@@ -16,6 +16,6 @@
 | **自成长与反思** | 无真实自成长 | 自成长反思日志流 (直连 `ExperienceStore` & `reflect-*`) | **BETTER** | 完整呈现 CompanionDaemon 周期深度反思与提炼成果 |
 | **活动中心** | TasksView 混杂所有任务 | 统一活动中心 (`Goals` / `Runs` / `Workflows` / `Scheduled`) | **BETTER** | 严格保持 Apeireth 原生领域语义划分，不造假层 |
 | **伴随体表现层** | CompanionWidget 悬浮窗口 | `CompanionWidget` 7 种表现态 (idle/thinking/working/reflecting 等) | **BETTER** | 表现态 100% 由后端信号推导，支持 SSE 主动涌现问候 |
-| **快捷呼出窗口** | QuickWindow 简易浮窗 | `QuickWindowView` (Spotlight 式快捷提问、常用指令与全键盘支持) | **EQUIVALENT** | Alt+Space / index.html?window=quick 快捷激活 |
+| **快捷呼出窗口** | QuickWindow 简易浮窗 | `QuickWindowView` (全局快捷提问、常用指令与全键盘支持) | **EQUIVALENT** | Alt+Space / index.html?window=quick 快捷激活 |
 | **设置与自检** | SettingsView 多页面 | `SettingsView` (分区配置、Master Token 隔离、端点延迟自测) | **BETTER** | 结构清晰，提供实时连通性与延迟测速 |
 | **Computer Use** | agentos.exe / enigo / xcap | 明确暂缓 (DEFERRED) | **DEFERRED** | 按规范不反向侵入旧架构，后续专项独立演进 |

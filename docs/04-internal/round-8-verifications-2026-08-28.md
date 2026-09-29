@@ -96,7 +96,7 @@ Round 7 batch fix (commit `155a9450`) 修了 L4 + L506 共 2 处, 漏修 L258/44
 | `cognitive.council` | WIRED, OFF by default | runtime cognitive adapter / `AfterModelResponse` |
 | `cognitive.self_assessment` | WIRED, Judge-backed | runtime cognitive adapter / `AfterTurn` |
 | `cognitive.memory_writeback` | WIRED | runtime cognitive adapter / `AfterTurn` |
-| **`cognitive.preference_learning`** | **DEFERRED, no owner yet** | R15 spec 写 1:1 翻译 v1 TopicPredictor + PreloadChannel, 估 2 周真实施 (新建 crate) |
+| **`cognitive.preference_learning`** | **DEFERRED, no owner yet** | R15 spec 写语义对齐 v1 TopicPredictor + PreloadChannel, 估 2 周真实施 (新建 crate) |
 | `cognitive.critic` | DEFERRED INTO JUDGE | Judge 包含 bounded critique, no duplicate |
 | `cognitive.reflection` | DEFERRED INTO SELF-ASSESSMENT | 当前是 current-turn assessment, long-term reflection pipeline 留 future work |
 | `cognitive.planner` | NOT AN AGENT MODULE | orchestration service, 未来 adapter 仍需是 adapter |
@@ -107,7 +107,7 @@ Round 7 batch fix (commit `155a9450`) 修了 L4 + L506 共 2 处, 漏修 L258/44
 - `cognitive-module-wiring.md` L30: "`cognitive.preference_learning` | deferred, no owner yet | — | DEFERRED | no evidence-extraction side-call or implicit preference mutation"
 - `deferred-slot-activation-preference_learning-spec.md` R15 §1.1: "**关键现状**: 当前 `cognitive.preference_recall` 已 WIRED ... **`cognitive.preference_learning` 是写入侧**: learning 表从 episode 抽偏好 → 写 PreferenceStore. 当前**没有任何** 抽偏好逻辑 — 写入靠主代理 / R3 / R4 手动记, 0 自动"
 - R15 spec 跟 ledger 一致 ✓
-- v1 真实现: `legacy/donor/apeireth-companion/src/proactive_memory.rs` (`TopicPredictor` + `PreloadChannel`) 是 1:1 翻译目标 ✓
+- v1 真实现: `legacy/donor/apeireth-companion/src/proactive_memory.rs` (`TopicPredictor` + `PreloadChannel`) 是语义对齐目标 ✓
 
 ### 3.3 wiring ledger 0 触碰 LOCKED (per §10)
 - wiring ledger 是**当前 active** ledger, 跟 R11 baseline / 9 哲学锚 / 13 键 LOCKED 5 项**无冲突**
@@ -120,7 +120,7 @@ Round 7 batch fix (commit `155a9450`) 修了 L4 + L506 共 2 处, 漏修 L258/44
 ## 4. verify #4: preference_learning 真实施 mapping (派 sub-agent 调研)
 
 ### 4.1 派活 brief
-- 任务: 读 v1 `legacy/donor/apeireth-companion/src/proactive_memory.rs` (TopicPredictor + PreloadChannel 4 impl), 写 C 块 preference_learning 真实施 1:1 翻译 mapping
+- 任务: 读 v1 `legacy/donor/apeireth-companion/src/proactive_memory.rs` (TopicPredictor + PreloadChannel 4 impl), 写 C 块 preference_learning 真实施语义对齐 mapping
 - 输出: `docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md` (新 doc, 182 行)
 - 主代理亲验: per §6 派子代理 workflow, 子代理报告主代理必亲验
 
@@ -128,7 +128,7 @@ Round 7 batch fix (commit `155a9450`) 修了 L4 + L506 共 2 处, 漏修 L258/44
 
 | Sub-agent 说 | 主代理亲验 | 判定 |
 |---|---|---|
-| R15 spec §1.2 翻译表 6/6 行 1:1 准确 | ✓ TopicPredictor + 4 PreloadChannel impl + Episode + 0 LLM 都核 | PASS |
+| R15 spec §1.2 翻译表 6/6 行 逐项准确 | ✓ TopicPredictor + 4 PreloadChannel impl + Episode + 0 LLM 都核 | PASS |
 | 1 处措辞微差 (Utc 显式性) | ⚠ **是真** — v1 L191 `time_topic(now)` 已接 NaiveDateTime, spec 误标"v1 Utc::now 隐式" (per R15 §1.2 row 6) | PASS (微差 flag 准) |
 | 2 周估时合理, 10 工作日 8 步 | ✓ 拆账合理 (新 crate 1 天 + TopicPredictor 2 天 + PreloadChannel 2 天 + organ 1 天 + render 0.5 天 + cognitive 集成 1 天 + 测试 1.5 天 + LOCKED 核验 1 天 = 10 工作日) | PASS |
 | 0 新外部 dep, 0 触碰 LOCKED 5 项 | ✓ 拆账列了 LOCKED 5 项 + 9 organ trait 加新 variant 不改现有 | PASS |
@@ -139,14 +139,14 @@ Round 7 batch fix (commit `155a9450`) 修了 L4 + L506 共 2 处, 漏修 L258/44
 
 ### 4.3 主代理决策建议 (sub-agent §8 + 主代理加注)
 
-1. **派 R20 真实施** (not 主代理亲做) — R15 spec 路径明确, 1:1 翻译 0 模糊, sub-agent 真做风险可控
+1. **派 R20 真实施** (not 主代理亲做) — R15 spec 路径明确, 语义对齐 0 模糊, sub-agent 真做风险可控
 2. **R20 任务 brief 必含 5 项**:
    - 5 项 LOCKED 0 触碰
    - ledger L30 doc sync 例外 (R15 §7.2 措辞修)
    - R11 Episode 字段预读 (content/text, timestamp/created_at, importance 字段)
-   - commit msg 4 项标: "1:1 翻译 v1, 0 LLM, 0 触碰 LOCKED, 0 装诱导 prevention"
+   - commit msg 4 项标: "语义对齐 v1, 0 LLM, 0 触碰 LOCKED, 0 装诱导 prevention"
    - R10 OrganKind 决策就位后第 4 步接上 (前 3 步不依赖)
-3. **不预先派 R21-R24** — R16-R19 spec 还未写, 派单顺序 R21 (critic) → R22 (reflection) → R23 (planner LLM 重建非 1:1) → R24 (orchestrator 区分 R12)
+3. **不预先派 R21-R24** — R16-R19 spec 还未写, 派单顺序 R21 (critic) → R22 (reflection) → R23 (planner LLM 重建非逐项照搬) → R24 (orchestrator 区分 R12)
 4. **依赖时序**:
    - 硬阻塞: 无
    - 软依赖: R10 OrganKind 决策 (1 周内) + R12 OrganOrchestrator (并行)

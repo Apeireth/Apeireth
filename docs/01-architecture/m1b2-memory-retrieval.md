@@ -6,7 +6,7 @@
 
 Implemented on `reconstruct_v2`. No schema change in this phase.
 
-## Donor source
+## Source
 
 - `origin/master:reconstruction_v2/crates/apeireth-storage/src/memory_v2.rs`
   (`calculate_act_r_activation`, `MemoryStore::query`)
@@ -16,15 +16,15 @@ Implemented on `reconstruct_v2`. No schema change in this phase.
 - ACT-R-inspired activation formula:
   `sum = Σ max(current_time - t_j, 1)^(-decay)`, `activation = ln(sum) + beta`
   when `sum > 0`, otherwise `beta`.
-- Donor query score: `activation + importance * 2.0`.
-- Donor default parameters: `decay = 0.5`, `beta = 0.0`, importance weight `2.0`.
+- Baseline query score: `activation + importance * 2.0`.
+- Default parameters: `decay = 0.5`, `beta = 0.0`, importance weight `2.0`.
 - Future access timestamps clipped to a one-second difference.
 
 ## Adapted
 
 - The retrieval entry point is a pure function `retrieve` over the canonical
   `MemoryRepository` rather than a method on a combined store.
-- `QueryMode` was not ported as a public enum; temporal eligibility is the
+- `QueryMode` was not adopted as a public enum; temporal eligibility is the
   repository's `MemoryFilter` (`as_of`), and tombstone inclusion is explicit.
 - Access metadata is not mutated by retrieval. Reads are pure; access tracking
   remains an explicit repository-level operation for a later phase.

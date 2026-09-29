@@ -133,7 +133,7 @@ fn empty_input() -> OrganInput {
 // ============================================
 
 /// **0 装诚实**: `add_entity` / `add_edge` 是确定性方法, 不调 LLM. 这条路径对应 v1
-/// `CausalWorldModel::add_entity / add_edge`, 1:1 翻译.
+/// `CausalWorldModel::add_entity / add_edge`, 语义对齐.
 ///
 /// 测试目的:
 /// - 验 trait 边界 (`CausalWorldModelOrgan::new` 构造 + `inner().add_entity / add_edge`)

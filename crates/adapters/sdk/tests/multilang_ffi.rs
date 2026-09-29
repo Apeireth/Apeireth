@@ -11,10 +11,10 @@
 //! 5. `sdk_compile_info_includes_features` (cfg feature c)
 //!
 //! **跨语言一致性**: multilang_ffi.rs 内部 inline 同样的 R32-1 启发式 + R122-1 SHA-256 hex,
-//! 验证 C-ABI 跟"参考 Rust 实现"输出 1:1 一致. 0 依赖 c.rs 内部 fn (internal 不 export).
+//! 验证 C-ABI 跟 Rust 基准实现输出一致. 0 依赖 c.rs 内部 fn (internal 不 export).
 
 // ============================================================================
-// 内部参考实现 (R32-1 + R122-1 1:1 port, 跨语言 1:1 一致性验证用)
+// 内部基准实现 (R32-1 + R122-1 同构, 跨语言一致性验证用)
 // ============================================================================
 
 fn ref_count_tokens_heuristic(text: &str) -> u32 {
@@ -41,7 +41,7 @@ fn ref_count_tokens_heuristic(text: &str) -> u32 {
 }
 
 fn ref_hash_request_sha256(_method: &str, _url: &str, _body: &[u8]) -> String {
-    // 跨 features 工作: 优先用 cfg c 的 sha2 (已 optional dep), 否则 Python 1:1 内联 hex
+    // 跨 features 工作: 优先用 cfg c 的 sha2 (已 optional dep), 否则 Python 内联 hex
     #[cfg(any(feature = "c", feature = "node"))]
     {
         use sha2::{Digest, Sha256};
@@ -74,7 +74,7 @@ fn ref_hash_request_sha256(_method: &str, _url: &str, _body: &[u8]) -> String {
 #[test]
 fn sdk_python_ffi_count_tokens_works() {
     use apeireth_sdk::python::py_count_tokens;
-    // 1 fn per language, 1:1 R32-1 算法
+    // 1 fn per language, R32-1 算法
     assert_eq!(
         py_count_tokens("hello", "cl100k_base").expect("py_count_tokens ok"),
         1
@@ -91,7 +91,7 @@ fn sdk_python_ffi_count_tokens_works() {
         py_count_tokens("", "cl100k_base").expect("py_count_tokens ok"),
         0
     );
-    // 1:1 跟 ref_count_tokens_heuristic 行为 (R32-1 1:1 port)
+    // 跟 ref_count_tokens_heuristic 行为一致 (R32-1 同构)
     assert_eq!(
         py_count_tokens("hello 世界", "cl100k_base").expect("ok"),
         ref_count_tokens_heuristic("hello 世界")
@@ -106,7 +106,7 @@ fn sdk_python_ffi_count_tokens_works() {
 #[test]
 fn sdk_node_ffi_count_tokens_works() {
     use apeireth_sdk::node::count_tokens;
-    // 1:1 跟 python.rs py_count_tokens
+    // 跟 python.rs py_count_tokens 同算法
     assert_eq!(
         count_tokens("hello".to_string(), "cl100k_base".to_string()),
         1
@@ -124,7 +124,7 @@ fn sdk_node_ffi_count_tokens_works() {
         ref_count_tokens_heuristic("hello 世界")
     );
 
-    // hash_request 确定性测试 (1:1 跨语言)
+    // hash_request 确定性测试 (跨语言一致)
     use apeireth_sdk::node::hash_request;
     // napi 2.16 Buffer (bindgen_prelude) 实现 From<Vec<u8>> + AsRef<[u8]>
     use napi::bindgen_prelude::Buffer;
@@ -152,7 +152,7 @@ fn sdk_node_ffi_count_tokens_works() {
 }
 
 // ============================================================================
-// Test #3: C 桥接 hash_request (cfg feature c) — C-ABI 跟 ref 1:1 一致
+// Test #3: C 桥接 hash_request (cfg feature c) — C-ABI 跟 ref 一致
 // ============================================================================
 
 #[cfg(feature = "c")]
@@ -179,7 +179,7 @@ fn sdk_c_ffi_hash_request_returns_same_value_as_rust() {
     };
     apeireth_sdk_free_string(ptr1);
 
-    // 跟 ref_hash_request_sha256 直接调用结果一致 (跨 2 语言 1:1 一致性)
+    // 跟 ref_hash_request_sha256 直接调用结果一致 (跨 2 语言一致性)
     let hash_ref = ref_hash_request_sha256("POST", "/v1/tools/web_search/invoke", b"{}");
     assert_eq!(hash_c, hash_ref, "C-ABI hash 跟 ref SHA-256 一致");
     assert_eq!(hash_c.len(), 64, "SHA-256 hex 长度 = 64");

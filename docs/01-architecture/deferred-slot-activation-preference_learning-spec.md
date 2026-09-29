@@ -1,4 +1,4 @@
-# 6 DEFERRED slot 激活示范 spec: preference_learning 1:1 翻译 v1 (R15, 2026-08-28)
+# 6 DEFERRED slot 激活示范 spec: preference_learning 语义对齐 v1 (R15, 2026-08-28)
 
 > **本文档定位**: 12 slot ledger (`docs/04-internal/cognitive-module-wiring.md`) 中 6 个
 > DEFERRED slot 激活路径的**第 1 个示范 spec**. 仅示范 `preference_learning` 一个 slot 的
@@ -11,9 +11,9 @@
 > **关系文档**:
 > - `cognitive-module-wiring.md` (12 slot ledger, 6 WIRED + 1 SLOT READY + 6 DEFERRED)
 > - `v2.0.0-release-path-integration.md` (R9 + R10 + R11 + R12-R14 整合文档, §1.3 真生产前阻塞)
-> - `crates/foundation/plugin/src/organ.rs` (9 organ trait 抽象边界, v2 1:1 翻译 v1 真实现)
+> - `crates/foundation/plugin/src/organ.rs` (9 organ trait 抽象边界, v2 语义对齐 v1 真实现)
 > - `legacy/donor/apeireth-companion/src/proactive_memory.rs` (v1 TopicPredictor + PreloadChannel)
-> - `legacy/donor/apeireth-companion/src/value_cases.rs` (v1 ValueCaseStore 真实现, F6 1:1 翻译 v1 已完)
+> - `legacy/donor/apeireth-companion/src/value_cases.rs` (v1 ValueCaseStore 真实现, F6 语义对齐 v1 已完)
 
 ```
 [Document-Meta]
@@ -28,13 +28,13 @@ Author:          子代理 R15 (Apeireth v2.0.0-rc.1)
 
 ## §0. TL;DR
 
-**本 spec 写 1 个 6 DEFERRED slot 激活示范 (preference_learning 1:1 翻译 v1 `TopicPredictor`
+**本 spec 写 1 个 6 DEFERRED slot 激活示范 (preference_learning 语义对齐 v1 `TopicPredictor`
 + `PreloadChannel`), 估 30-45 分钟报告**:
 
 - ✅ **本 R15 spec 写完** (估 30-45 分钟)
-- ✅ **`preference_learning` slot 设计 + v1 1:1 翻译路径** (本章 6 节, 含 OrganTrait 对齐)
+- ✅ **`preference_learning` slot 设计 + v1 语义对齐路径** (本章 6 节, 含 OrganTrait 对齐)
 - ✅ **其余 5 DEFERRED slot 同模式 spec 接力路径** (R16-R19 + R14, 估 6-10 周真实施)
-- 🔄 **真实施**: 估 2 周 (新建 crate + 1:1 翻译 + 集成 + 测试), **本 R15 不真做** (0 装诱导 prevention 标)
+- 🔄 **真实施**: 估 2 周 (新建 crate + 语义对齐 + 集成 + 测试), **本 R15 不真做** (0 装诱导 prevention 标)
 - 🔄 **0 触碰 LOCKED** (5 项, 0 装诚实真账)
 
 **0 装诚实真账** (R15 独立判断):
@@ -46,7 +46,7 @@ Author:          子代理 R15 (Apeireth v2.0.0-rc.1)
 
 ---
 
-## §1. 概述: `preference_learning` 1:1 翻译 v1 真实现
+## §1. 概述: `preference_learning` 语义对齐 v1 真实现
 
 ### 1.1 任务来源
 
@@ -64,19 +64,19 @@ per `cognitive-module-wiring.md:30`:
 - 当前**没有任何** 抽偏好逻辑 — 写入靠主代理 / R3 / R4 手动记, 0 自动
 
 **v1 时代真实现**: `legacy/donor/apeireth-companion/src/proactive_memory.rs`
-(`TopicPredictor` + `PreloadChannel`) 是 v1 主动预载路径, 是 1:1 翻译目标.
+(`TopicPredictor` + `PreloadChannel`) 是 v1 主动预载路径, 是 语义对齐目标.
 
-### 1.2 v1 → v2 1:1 翻译纪律 (R15 独立判断)
+### 1.2 v1 → v2 语义对齐纪律 (R15 独立判断)
 
 | v1 (companion-era) | v2 (apeireth v2.0.0-rc.1) | 翻译纪律 |
 |---|---|---|
-| `TopicPredictor::predict_topic(cue)` 纯函数 | `PreferenceLearningOrgan::predict_topics(input)` | 1:1 翻译算法骨架 |
+| `TopicPredictor::predict_topic(cue)` 纯函数 | `PreferenceLearningOrgan::predict_topics(input)` | 语义对齐算法骨架 |
 | `TopicHint { topic, confidence }` | `Topic { key, confidence }` (serde rename) | 1:1 字段映射 |
-| `PreloadChannel` trait + 4 impl | `PreloadChannel` trait + 4 impl (同模式) | 1:1 翻译 |
-| `KeywordChannel` / `TimeChannel` / `ImportanceChannel` / `CompositeChannel` | 同 4 impl | 1:1 翻译 |
+| `PreloadChannel` trait + 4 impl | `PreloadChannel` trait + 4 impl (同模式) | 语义对齐 |
+| `KeywordChannel` / `TimeChannel` / `ImportanceChannel` / `CompositeChannel` | 同 4 impl | 语义对齐 |
 | `MemoryCandidate { content, timestamp, importance }` | `Episode` (R11 主路径核心类型) | 用 Episode, 1:1 字段映射 |
 | v1 `chrono::Utc::now()` 隐式 | v2 `at_ms: i64` 显式注入 (per F6 同模式) | 显式时间戳 |
-| 0 LLM 依赖 (v1 文档明示) | `llm_factory()` 返 `None` | 1:1 翻译, 0 装 |
+| 0 LLM 依赖 (v1 文档明示) | `llm_factory()` 返 `None` | 语义对齐, 0 装 |
 
 ### 1.3 估时 + 估日期
 
@@ -84,7 +84,7 @@ per `cognitive-module-wiring.md:30`:
 - **估日期**: 2026-10 月 - 2026-12 月 (估 v2.0.0 release 前)
 - **前置依赖**:
   - ✅ 9 organ trait 抽象 (`apeireth-plugin::organ`, per `crates/foundation/plugin/src/organ.rs`)
-  - ✅ F6 value_cases 1:1 翻译 v1 已完 (per `crates/engine/organ/src/value_cases.rs`)
+  - ✅ F6 value_cases 语义对齐 v1 已完 (per `crates/engine/organ/src/value_cases.rs`)
   - ✅ PreferenceStore trait 已就位 (per `crates/foundation/plugin/src/preference.rs`, F6 真实现路径)
   - 🔄 OrganOrchestrator 真实施 (R12 跑中, 1-3 周待)
 - **后续依赖**:
@@ -93,7 +93,7 @@ per `cognitive-module-wiring.md:30`:
 
 ---
 
-## §2. 1:1 翻译 v1 真实现路径
+## §2. 语义对齐 v1 真实现路径
 
 ### 2.1 v1 真实现源文件
 
@@ -118,34 +118,34 @@ per `cognitive-module-wiring.md:30`:
 4. **`CompositeChannel::fetch`** (`proactive_memory.rs:398-419`)
    - 多道并行拉 → 按 content 去重 → 截 top_k
 
-### 2.2 v1 → v2 1:1 翻译路径
+### 2.2 v1 → v2 语义对齐路径
 
 ```text
 v1 proactive_memory.rs (legacy/donor/)
-    ↓ 1:1 翻译 (0 算法改造, 0 LLM 添加)
+    ↓ 语义对齐 (0 算法改造, 0 LLM 添加)
     ↓
 v2 apeireth-preference-learning crate (新 crate, workspace member)
-    ├─ src/topic_predictor.rs    (TopicPredictor 纯函数 1:1 翻译)
-    ├─ src/preload_channel.rs    (PreloadChannel trait + 4 impl 1:1 翻译)
-    ├─ src/preference_learning_organ.rs  (OrganTrait::process 1:1 翻译)
+    ├─ src/topic_predictor.rs    (TopicPredictor 纯函数 语义对齐)
+    ├─ src/preload_channel.rs    (PreloadChannel trait + 4 impl 语义对齐)
+    ├─ src/preference_learning_organ.rs  (OrganTrait::process 语义对齐)
     └─ src/lib.rs                (pub use + 单元测试 1:1)
 ```
 
 **0 装 PASS**:
-- v1 算法骨架 (BTreeMap merge + sort_by + substring hit) 1:1 翻译, 不加 LLM
+- v1 算法骨架 (BTreeMap merge + sort_by + substring hit) 语义对齐, 不加 LLM
 - v1 `chrono::Utc::now()` → v2 `at_ms: i64` 显式 (per F6 value_cases 同模式)
 - v1 `MemoryCandidate { content, timestamp, importance }` → v2 用 R11 `Episode` 主路径核心类型
 - `llm_factory()` 返 `None` (per v1 0 LLM 真相, 1:1)
 
 ### 2.3 v1 `TopicHint::topic: &'static str` → v2 `Topic::key: String`
 
-**字段 1:1 翻译**:
+**字段 语义对齐**:
 - `v1 topic: &'static str` (静态字符串键) → `v2 key: String` (serde rename, 0 静态)
 - `v1 confidence: f32` → `v2 confidence: f32` (1:1)
 - v1 `TopicPrediction` → v2 `Vec<Topic>` (无 wrapper struct, 0 装)
 
 **0 装诱导 prevention 标**:
-- 不假装"v2 用 LLM 推断 topic" (v1 确定性, v2 1:1 翻译, 0 LLM)
+- 不假装"v2 用 LLM 推断 topic" (v1 确定性, v2 语义对齐, 0 LLM)
 - 不假装"v2 提升为 13 键哲学锚" (Topic 是事实记录, 13 键是哲学决策 cache, 职责分)
 
 ---
@@ -170,7 +170,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
-chrono = { workspace = true }  # 仅 NaiveDateTime 用, 不带 Utc::now() (1:1 翻译 v1 显式时间)
+chrono = { workspace = true }  # 仅 NaiveDateTime 用, 不带 Utc::now() (语义对齐 v1 显式时间)
 ```
 
 **0 装 PASS**:
@@ -201,9 +201,9 @@ impl OrganTrait for PreferenceLearningOrgan {
     fn organ_id(&self) -> OrganKind { OrganKind::W1 }  // TODO: 需 1 新 OrganKind variant, 待 R10 spec 决定
 
     async fn process(&self, input: OrganInput) -> Result<OrganOutput, OrganError> {
-        // 1. predict_topics (1:1 翻译 v1 predict_topic)
+        // 1. predict_topics (语义对齐 v1 predict_topic)
         let topics = self.topic_predictor.predict_topics(&input)?;
-        // 2. preload (1:1 翻译 v1 PreloadChannel::fetch)
+        // 2. preload (语义对齐 v1 PreloadChannel::fetch)
         let preloaded = self.preload_channels.preload(&topics, &input)?;
         Ok(OrganOutput::PreferenceLearning { topics, preloaded })
     }
@@ -226,7 +226,7 @@ impl OrganTrait for PreferenceLearningOrgan {
    - cognitive module 拿到结果, 调 `PreferenceStore::record(UserPreference { stance, evidence_refs, confidence })`
    - 防止 "organ 自己偷偷写 preference" 的 0 装诱导 (per `cognitive-module-wiring.md:30` "no implicit preference mutation")
 
-### 3.3 `TopicPredictor` 1:1 翻译
+### 3.3 `TopicPredictor` 语义对齐
 
 ```rust
 // crates/engine/preference_learning/src/topic_predictor.rs
@@ -239,7 +239,7 @@ pub struct TopicPredictor {
 
 impl TopicPredictor {
     pub fn predict_topics(&self, input: &OrganInput) -> Result<Vec<Topic>, OrganError> {
-        // 1:1 翻译 v1 predict_topic (per legacy/donor/apeireth-companion/src/proactive_memory.rs:225-258)
+        // 语义对齐 v1 predict_topic (per legacy/donor/apeireth-companion/src/proactive_memory.rs:225-258)
         // 0 LLM, 0 装 PASS
         todo!("R20 真实施")
     }
@@ -247,12 +247,12 @@ impl TopicPredictor {
 ```
 
 **0 装 PASS**:
-- v1 算法骨架 (BTreeMap merge + sort_by confidence desc + topic name asc) 1:1 翻译
-- v1 30+ 关键词表 (TOPIC_KEYWORDS) 1:1 翻译 (e.g. "考试" → "exam_prep")
-- v1 时间锚 (早晨 6-9 / 晚间 21-24 / 深夜 0-6) 1:1 翻译
-- v1 情绪锚 (low/sad/tired → companion; high/excited → study) 1:1 翻译
+- v1 算法骨架 (BTreeMap merge + sort_by confidence desc + topic name asc) 语义对齐
+- v1 30+ 关键词表 (TOPIC_KEYWORDS) 语义对齐 (e.g. "考试" → "exam_prep")
+- v1 时间锚 (早晨 6-9 / 晚间 21-24 / 深夜 0-6) 语义对齐
+- v1 情绪锚 (low/sad/tired → companion; high/excited → study) 语义对齐
 
-### 3.4 `PreloadChannel` trait + 4 impl 1:1 翻译
+### 3.4 `PreloadChannel` trait + 4 impl 语义对齐
 
 ```rust
 // crates/engine/preference_learning/src/preload_channel.rs
@@ -293,12 +293,12 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 
 **0 装 PASS**: 不引 LLM SDK / 不引新外部 dep / `Cargo.lock` 0 行 diff.
 
-### 4.2 步骤 2: 1:1 翻译 v1 `TopicPredictor` + `PreloadChannel` (估 5 天)
+### 4.2 步骤 2: 语义对齐 v1 `TopicPredictor` + `PreloadChannel` (估 5 天)
 
 - 复制 `legacy/donor/apeireth-companion/src/proactive_memory.rs:1-419` 算法骨架
-- `TopicPredictor::predict_topics` (per §3.3) — 1:1 翻译
-- `PreloadChannel` trait + 4 impl (per §3.4) — 1:1 翻译
-- v1 30+ 关键词表 + 3 时间锚 + 5 情绪锚 1:1 翻译
+- `TopicPredictor::predict_topics` (per §3.3) — 语义对齐
+- `PreloadChannel` trait + 4 impl (per §3.4) — 语义对齐
+- v1 30+ 关键词表 + 3 时间锚 + 5 情绪锚 语义对齐
 - `chrono::NaiveDateTime` 替换 v1 `Utc::now()` (显式时间戳, per F6 同模式)
 
 **0 装 PASS**:
@@ -343,7 +343,7 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 
 ### 4.6 步骤 6: 0 装诱导 prevention 标 (估 1 天)
 
-- commit message 必写明 "1:1 翻译 v1, 0 LLM, 0 新外部 dep, 0 触碰 LOCKED"
+- commit message 必写明 "语义对齐 v1, 0 LLM, 0 新外部 dep, 0 触碰 LOCKED"
 - 不写 "已完成 preference_learning 完整闭环" (R15 独立判断)
 - 写明 "本 R20 实施估 2 周, 实际完成 = 真核验 + 标"
 - 标 "不假装 '全做完'" (per 整合文档 §1.3 + 子代理 Z 独立审计触发)
@@ -360,9 +360,9 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 
 | Slot | v1 module | R20-R24 真实施估时 | 子代理接力 | 同模式 spec 必含 |
 |---|---|---|---|---|
-| `preference_learning` | `proactive_memory.rs` | **2 周** | **R15 (本 spec)** ✅ | v1 1:1 翻译 + OrganTrait + 0 LLM |
-| `cognitive.critic` | `judge.rs` | 1 周 | R16 待派 | v1 1:1 翻译 (Judge v1) |
-| `cognitive.reflection` | `reflection.rs` (v2 设计) | 1 周 | R17 待派 | v1 1:1 翻译 (Reflection v1) |
+| `preference_learning` | `proactive_memory.rs` | **2 周** | **R15 (本 spec)** ✅ | v1 语义对齐 + OrganTrait + 0 LLM |
+| `cognitive.critic` | `judge.rs` | 1 周 | R16 待派 | v1 语义对齐 (Judge v1) |
+| `cognitive.reflection` | `reflection.rs` (v2 设计) | 1 周 | R17 待派 | v1 语义对齐 (Reflection v1) |
 | `cognitive.planner` | (v1 0 实现) | 3 周 | R18 待派 | **LLM 重新建** (不走 1:1, 走 LLM Adapter 模式) |
 | `cognitive.orchestrator` | (v1 0 实现) | 3 周 | R19 待派 | **LLM 重类似 AwakeCompanion** (与 R12 OrganOrchestrator **区分**) |
 | `cognitive.perception` | `perception.rs` | 2-3 周 | R14 RC-7 spec 写中 | 硬件依赖 (Whisper + xcap 真接) |
@@ -377,9 +377,9 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 每 1 个 DEFERRED slot 接力 spec 必含 6 节, 同本 spec §1-§6 模式:
 
 1. **§1 概述**: v1 真实现路径 + v2 slot 现状 + 估时 + 估日期 + 前置依赖
-2. **§2 1:1 翻译 v1 真实现**: v1 source file:line + 算法骨架 + 字段 1:1 映射表
+2. **§2 语义对齐 v1 真实现**: v1 source file:line + 算法骨架 + 字段 1:1 映射表
 3. **§3 v2 organ 设计**: 新 crate + OrganTrait::process + llm_factory (None / Some)
-4. **§4 真实施路径**: 6 步骤 (新建 crate / 1:1 翻译 / 集成 / 测试 / 核验 / 0 装诱导 prevention 标)
+4. **§4 真实施路径**: 6 步骤 (新建 crate / 语义对齐 / 集成 / 测试 / 核验 / 0 装诱导 prevention 标)
 5. **§5 其他 5 DEFERRED slot 同模式 spec 接力路径** (本 spec 已含 R16-R19 接力计划)
 6. **§6 0 装诚实真账** (R15-R19 独立判断: spec 30-45 分钟/每, 不真做 1-3 周真实施)
 
@@ -427,7 +427,7 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 
 **R15 实际完成**:
 - ✅ 写 `docs/01-architecture/deferred-slot-activation-preference_learning-spec.md` (估 30-45 分钟报告, 实际 ~10 节)
-- ✅ 含 v1 1:1 翻译路径 (per `legacy/donor/apeireth-companion/src/proactive_memory.rs:225-419`)
+- ✅ 含 v1 语义对齐路径 (per `legacy/donor/apeireth-companion/src/proactive_memory.rs:225-419`)
 - ✅ 含 v2 `PreferenceLearningOrgan` 设计 (per §3, 类型签名 + OrganTrait)
 - ✅ 含其余 5 DEFERRED slot 接力 spec 路径 (per §5, R16-R19 + R14)
 - ✅ 含 5 项 LOCKED 严守 (per §7)
@@ -435,7 +435,7 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 
 **R15 不真做**:
 - ❌ 不新建 `apeireth-preference-learning` crate (估 1 天, 0 装诚实真账)
-- ❌ 不 1:1 翻译 v1 30+ 关键词表 + 3 时间锚 + 5 情绪锚 (估 5 天, 0 装诚实真账)
+- ❌ 不 语义对齐 v1 30+ 关键词表 + 3 时间锚 + 5 情绪锚 (估 5 天, 0 装诚实真账)
 - ❌ 不集成 cognitive 12 slot (估 1 天, 0 装诚实真账)
 - ❌ 不写 7-10 单元 + 1 集成测试 (估 2 天, 0 装诚实真账)
 - ❌ 不 0 触碰 LOCKED 核验 (估 1 天, 0 装诚实真账)
@@ -450,7 +450,7 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
    - R16-R19 + R14 待派, 接力同模式 spec
    - R20-R24 真实施估 6-10 周 (主代理后续派)
 2. **不假装"全做完"** (R15 spec 阶段, 不真做 2 周真实施)
-3. **不假装"preference_learning 用 LLM 推断 topic"** (v1 TopicPredictor 确定性, v2 1:1 翻译, 0 LLM)
+3. **不假装"preference_learning 用 LLM 推断 topic"** (v1 TopicPredictor 确定性, v2 语义对齐, 0 LLM)
 4. **不假装"organ 自己写 PreferenceStore"** (organ 返 topics + preloaded, 写入路径交 cognitive module AfterTurn hook — 0 装 PASS, per `cognitive-module-wiring.md:30` "no implicit preference mutation")
 
 ### 6.3 0 装诚实真账 (子代理 Z 独立判断)
@@ -478,9 +478,9 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 
 **R15 没看到 (留给 R16-R19 + R14 接力)**:
 
-1. cognitive.critic 1:1 翻译 v1 Judge v1 — R16 spec 必含 (R15 仅占位, 估 1 周)
-2. cognitive.reflection 1:1 翻译 v1 Reflection v1 — R17 spec 必含 (R15 仅占位, 估 1 周)
-3. cognitive.planner LLM 重新建 — R18 spec 必含 (不走 1:1 翻译, 走 LLM Adapter 模式, 估 3 周)
+1. cognitive.critic 语义对齐 v1 Judge v1 — R16 spec 必含 (R15 仅占位, 估 1 周)
+2. cognitive.reflection 语义对齐 v1 Reflection v1 — R17 spec 必含 (R15 仅占位, 估 1 周)
+3. cognitive.planner LLM 重新建 — R18 spec 必含 (不走 语义对齐, 走 LLM Adapter 模式, 估 3 周)
 4. cognitive.orchestrator LLM 重类似 AwakeCompanion — R19 spec 必含 (与 R12 OrganOrchestrator **区分**, 估 3 周)
 5. cognitive.perception 硬件依赖 (Whisper + xcap 真接) — R14 RC-7 spec 写中 (估 2-3 周)
 
@@ -503,8 +503,8 @@ pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1
 | 文件 | 状态 | R15 0 触碰 |
 |---|---|---|
 | `crates/foundation/plugin/src/preference.rs` | F6 value_cases 真实现已就位 | ✅ 0 改 |
-| `crates/engine/organ/src/value_cases.rs` | F6 1:1 翻译 v1 已完 | ✅ 0 改 |
-| `crates/engine/organ/src/memory.rs` | Memory merger 1:1 翻译 v1 已完 (R8 独立判断) | ✅ 0 改 |
+| `crates/engine/organ/src/value_cases.rs` | F6 语义对齐 v1 已完 | ✅ 0 改 |
+| `crates/engine/organ/src/memory.rs` | Memory merger 语义对齐 v1 已完 (R8 独立判断) | ✅ 0 改 |
 | `crates/foundation/plugin/src/organ.rs` | 9 organ trait 抽象 LOCKED (per R11) | ✅ 0 改 (本 spec 不动现有 9 variant, R10 spec 决策新 variant) |
 | `crates/foundation/plugin/src/memory_backend.rs` | MemoryBackend trait 已就位 | ✅ 0 改 |
 | `docs/04-internal/cognitive-module-wiring.md` | 12 slot ledger 已就位 | ✅ 0 改 (本 spec 仅新建 1 新 doc, 不改 ledger) |
@@ -538,7 +538,7 @@ per 整合文档 §6 + 子代理 Z 独立审计触发:
 
 | # | 阻塞 | 状态 | R15 spec 接力 |
 |---|---|---|---|
-| #1 | 9 organ 真移植全 done | ✅ | (R15 0 改) |
+| #1 | 9 organ 真实现全 done | ✅ | (R15 0 改) |
 | #2 | frontend 对接 (R9 + R13 spec 写中) | ⏳ 4-6 周真实施待 | (R15 0 改) |
 | #3 | OrganOrchestrator 真实施 (R12 跑中) | ⏳ 1-3 周真实施待 | (R15 0 改) |
 | #4 | RC-7 Perception 真 modality (R14 spec 写中) | ⏳ 2-3 周硬件依赖真实施待 | (R15 0 改) |
@@ -568,7 +568,7 @@ per 整合文档 §1.3 + 子代理 Z 独立审计触发: **不假装 "spec 完�
 
 ### 9.1 5/5 done (per 整合文档 §5)
 
-- ✅ #1 RC-5/6/7 + 9 organ 真移植全 done (整合 #2 commit `bbf70293`)
+- ✅ #1 RC-5/6/7 + 9 organ 真实现全 done (整合 #2 commit `bbf70293`)
 - ✅ #2 哲学锚 ledger 待核 (子代理 K)
 - ✅ #3 12 consumer 弃用迁移 (子代理 H)
 - ✅ #4 RC-10 line header AAD + APX2 envelope
@@ -601,7 +601,7 @@ per 整合文档 §1.3 + 子代理 Z 独立审计触发: **不假装 "spec 完�
 ### 9.5 R15 spec 完整收尾
 
 - ✅ §1 概述 + 估时 + 估日期 (估 2 周, 2026-10 - 2026-12 月)
-- ✅ §2 1:1 翻译 v1 真实现 (TopicPredictor + PreloadChannel, file:line)
+- ✅ §2 语义对齐 v1 真实现 (TopicPredictor + PreloadChannel, file:line)
 - ✅ §3 v2 PreferenceLearning 器官设计 (新 crate + OrganTrait, file:line)
 - ✅ §4 真实施路径 (估 2 周, 6 步骤)
 - ✅ §5 其他 5 DEFERRED slot 同模式 spec 接力路径 (R16-R19 + R14, 估 6-10 周, file:line)
@@ -617,11 +617,11 @@ per 整合文档 §1.3 + 子代理 Z 独立审计触发: **不假装 "spec 完�
 ### 10.1 R15 是第 36 个视角
 
 **前 35 sub-agent (A-R14 + Z) + 主代理 Mavis**:
-- A-N: 9 organ 真移植 (R1-R8) + 集成 (R9-R11) + 接力 (R12-R14) + 主代理亲做 (Mavis)
+- A-N: 9 organ 真实现 (R1-R8) + 集成 (R9-R11) + 接力 (R12-R14) + 主代理亲做 (Mavis)
 - Z: 独立审计, 找到 5 条假装标 (4 已修 + 1 未修)
 
 **R15 第 36 视角**:
-- 写 1 个 6 DEFERRED slot 激活示范 spec (preference_learning 1:1 翻译 v1)
+- 写 1 个 6 DEFERRED slot 激活示范 spec (preference_learning 语义对齐 v1)
 - 接力 R10 cognitive 9 organ 集成 spec (R10 写中)
 - 接力 R11 OrganOrchestrator spec (R11 已完)
 - 接力 R12 OrganOrchestrator 真实施 (R12 跑中)
@@ -645,9 +645,9 @@ per 整合文档 §1.3 + 子代理 Z 独立审计触发: **不假装 "spec 完�
 
 ### 10.3 R15 没看 / 没标 (留给 R16-R19 + R14)
 
-1. **cognitive.critic 1:1 翻译 v1 Judge v1**: R16 spec 必含 (R15 仅占位 §5.1, 估 1 周)
-2. **cognitive.reflection 1:1 翻译 v1 Reflection v1**: R17 spec 必含 (R15 仅占位 §5.1, 估 1 周)
-3. **cognitive.planner LLM 重新建**: R18 spec 必含 (R15 仅占位 §5.1, 不走 1:1 翻译, 估 3 周)
+1. **cognitive.critic 语义对齐 v1 Judge v1**: R16 spec 必含 (R15 仅占位 §5.1, 估 1 周)
+2. **cognitive.reflection 语义对齐 v1 Reflection v1**: R17 spec 必含 (R15 仅占位 §5.1, 估 1 周)
+3. **cognitive.planner LLM 重新建**: R18 spec 必含 (R15 仅占位 §5.1, 不走 语义对齐, 估 3 周)
 4. **cognitive.orchestrator LLM 重类似 AwakeCompanion**: R19 spec 必含 (R15 仅占位 §5.1, 与 R12 OrganOrchestrator 区分, 估 3 周)
 5. **cognitive.perception 硬件依赖**: R14 RC-7 spec 写中 (R15 仅占位 §5.1, 估 2-3 周)
 
@@ -724,11 +724,11 @@ git diff HEAD~1..HEAD --stat | Select-Object -First 10
 - R15 spec 模板明确 (§5.2), R16-R19 接力降低风险
 - 主代理后续派 R16 + R17 + R14 并行 (估 4 周), R18 + R19 并行 (估 6 周)
 
-### 12.4 风险 4: cognitive.planner / cognitive.orchestrator 不是 1:1 翻译 v1
+### 12.4 风险 4: cognitive.planner / cognitive.orchestrator 不是 语义对齐 v1
 
 **风险描述**:
 - v1 era `apeireth-companion` 没有 planner / orchestrator 真实现
-- cognitive.planner / cognitive.orchestrator **不走 1:1 翻译**, 走 LLM 重新建 / LLM 重类似 AwakeCompanion
+- cognitive.planner / cognitive.orchestrator **不走 语义对齐**, 走 LLM 重新建 / LLM 重类似 AwakeCompanion
 - R18 + R19 spec 必含"新设计, 0 装诚实"标 (per F6 / Memory 同模式, 子代理 R3 / R8 独立判断)
 
 **R15 应对**:
@@ -743,7 +743,7 @@ git diff HEAD~1..HEAD --stat | Select-Object -First 10
 
 **理由**:
 - R15 spec 已写完 (§1-§13, 估 30-45 分钟报告)
-- v1 1:1 翻译路径明确 (per `legacy/donor/apeireth-companion/src/proactive_memory.rs:225-419`)
+- v1 语义对齐路径明确 (per `legacy/donor/apeireth-companion/src/proactive_memory.rs:225-419`)
 - v2 PreferenceLearningOrgan 设计明确 (per §3)
 - 真实施路径 6 步骤明确 (per §4)
 
@@ -761,8 +761,8 @@ git diff HEAD~1..HEAD --stat | Select-Object -First 10
 - 6 DEFERRED slot 激活估 6-10 周真实施, 部分并行可压缩估时
 
 **派单细节**:
-- R16 (cognitive.critic, 估 1 周, 1:1 翻译 v1 Judge v1)
-- R17 (cognitive.reflection, 估 1 周, 1:1 翻译 v1 Reflection v1)
+- R16 (cognitive.critic, 估 1 周, 语义对齐 v1 Judge v1)
+- R17 (cognitive.reflection, 估 1 周, 语义对齐 v1 Reflection v1)
 - R18 (cognitive.planner, 估 3 周, LLM 重新建, 0 1:1)
 - R19 (cognitive.orchestrator, 估 3 周, LLM 重类似 AwakeCompanion, 与 R12 区分)
 - R14 (cognitive.perception, 估 2-3 周, 硬件依赖 Whisper + xcap, R14 写中)
@@ -786,7 +786,7 @@ git diff HEAD~1..HEAD --stat | Select-Object -First 10
 **R15 spec 写完**:
 
 - ✅ §1 概述 (估 2 周, 2026-10 月 - 2026-12 月, 1 人)
-- ✅ §2 1:1 翻译 v1 真实现 (TopicPredictor + PreloadChannel, file:line)
+- ✅ §2 语义对齐 v1 真实现 (TopicPredictor + PreloadChannel, file:line)
 - ✅ §3 v2 PreferenceLearning 器官设计 (新 crate + OrganTrait, file:line)
 - ✅ §4 真实施路径 (估 2 周, 6 步骤)
 - ✅ §5 其他 5 DEFERRED slot 同模式 spec 接力路径 (R16-R19 + R14, 估 6-10 周, file:line)
@@ -819,4 +819,4 @@ git diff HEAD~1..HEAD --stat | Select-Object -First 10
 - 主代理后续派 R16-R19 + R14 接力同模式 spec (估 6-10 周总, 部分并行)
 - 主代理后续派 R10 接力 OrganKind 新 variant 决策
 
-**R15 spec 收尾**: **6 DEFERRED slot 激活示范 spec (preference_learning 1:1 翻译 v1) 写完, 真实施待主代理后续派 R20 + R16-R19 + R14**. 估 6-10 周真实施 (部分并行), 不假装"全做完" (R15 spec 30-45 分钟/本, 0 装诱导 prevention 标).
+**R15 spec 收尾**: **6 DEFERRED slot 激活示范 spec (preference_learning 语义对齐 v1) 写完, 真实施待主代理后续派 R20 + R16-R19 + R14**. 估 6-10 周真实施 (部分并行), 不假装"全做完" (R15 spec 30-45 分钟/本, 0 装诱导 prevention 标).

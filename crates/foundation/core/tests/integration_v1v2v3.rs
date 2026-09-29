@@ -267,7 +267,7 @@ fn n6_critical_normal_action_multi_human_allows() {
 
 /// N7 (H2 修复回归, 2026-09-24 审计): 在线模式但**零登记人类** = misconfigured
 /// HA —— Critical (L0 requires_ha) 必须 `BlockByHumanAuthority`。
-/// 原实现在线模式 `_ => true` 恒放行, 该状态检测不到。
+/// 修复前在线模式 `_ => true` 恒放行, 该状态检测不到。
 #[test]
 fn n7_critical_action_without_registered_humans_is_blocked() {
     let guard = default_guard();

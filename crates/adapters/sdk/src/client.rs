@@ -1,7 +1,7 @@
 //! `apeireth-sdk::client` — **apeireth 客户 SDK stub** (1.0 release #13 sdk)
 //!
 //! **目标** (按接口契约 12 项 checklist #13 sdk, R20 阶段 6):
-//! 给客户 (Python / Node / Go / Rust 跨语言应用) 提供 1 个 1:1 翻译的
+//! 给客户 (Python / Node / Go / Rust 跨语言应用) 提供 1 个 语义对齐的
 //! apeireth 平台 SDK, 走 HTTP + WebSocket 调 `apeireth-api` 的 6 工具端点
 //! (按接口契约 + 鉴权子路径) + 8 帧 WS 协议 (按接口契约) + 鉴权
 //! 5 组件 (按接口契约 + D-04/D-05).
@@ -12,9 +12,9 @@
 //!   `web_search` / `file_ops` / `git_ops` / `code_exec` / `calendar` / `message`
 //! - 2 通用调用 method: `invoke_tool` (HTTP) + `invoke_stream` (WS 8 帧)
 //! - Auth 5 组件: Bearer / keyring / token bucket / audit / quota stub
-//!   (1:1 翻译 `apeireth-api::auth::AuthPipeline` 5 组件)
+//!   (语义对齐 `apeireth-api::auth::AuthPipeline` 5 组件)
 //!
-//! **集成点** (5 处, 跟 `apeireth-protocol` 1:1 对齐):
+//! **集成点** (5 处, 跟 `apeireth-protocol` 语义对齐):
 //! 1. `apeireth-protocol::ws_v1::WsFrame` — WS 8 帧 (LOCKED, R20 阶段 2)
 //! 2. `apeireth-protocol::ws_v1::ToolInvokeFrame` — 工具调用 frame
 //! 3. `apeireth-protocol::ws_v1::WS_PROTOCOL_VERSION` — WS 版本 "1"
@@ -65,7 +65,7 @@ use tracing::{debug, info, warn};
 // §0 编译期 hardcode (8 项不假装原则 + K-1 强校验 4 条)
 // ============================================================================
 
-/// **6 工具白名单** (按接口契约 + 鉴权子路径, 1:1 翻译 `apeireth-api::ws_v1::TOOL_WHITELIST`).
+/// **6 工具白名单** (按接口契约 + 鉴权子路径, 语义对齐 `apeireth-api::ws_v1::TOOL_WHITELIST`).
 ///
 /// **6 工具**:
 /// - `web_search` — 网络搜索
@@ -200,16 +200,16 @@ pub enum SdkClientError {
 // §2 编译期 hardcode (5 组件常量 + 6 工具 method path)
 // ============================================================================
 
-/// HTTP Authorization 头名 (1:1 翻译 `apeireth-api::auth::AUTH_HEADER_NAME`).
+/// HTTP Authorization 头名 (语义对齐 `apeireth-api::auth::AUTH_HEADER_NAME`).
 pub const AUTH_HEADER_NAME: &str = "Authorization";
 
-/// Bearer scheme (1:1 翻译 `apeireth-api::auth::AUTH_SCHEME`).
+/// Bearer scheme (语义对齐 `apeireth-api::auth::AUTH_SCHEME`).
 pub const AUTH_SCHEME: &str = "Bearer";
 
 /// API key 最小长度 (16, 防过短 key 误匹配).
 pub const API_KEY_MIN_LENGTH: usize = 16;
 
-/// API key 最大长度 (4 KB, 跟 `apeireth-keyring::TOKEN_MAX_LENGTH` 1:1).
+/// API key 最大长度 (4 KB, 跟 `apeireth-keyring::TOKEN_MAX_LENGTH` 一致).
 pub const API_KEY_MAX_LENGTH: usize = 4096;
 
 /// 客户端 token bucket 容量 (P0 端点 1000 req/s, 普通 100 req/s, per D-04).
@@ -218,7 +218,7 @@ pub const CLIENT_BUCKET_CAPACITY: f64 = 1000.0;
 /// 客户端 token bucket 填充速率 (1000 token/s, 即 1000 req/s).
 pub const CLIENT_BUCKET_REFILL_PER_SEC: f64 = 1000.0;
 
-/// 审计日志文件名前缀 (client side, 1:1 翻译 `apeireth-api::auth::AUDIT_LOG_FILE_NAME`).
+/// 审计日志文件名前缀 (client side, 语义对齐 `apeireth-api::auth::AUDIT_LOG_FILE_NAME`).
 pub const CLIENT_AUDIT_LOG_PREFIX: &str = "apeireth-sdk-audit.log";
 
 /// 6 工具 鉴权子路径 (按接口契约 HTTP 端点,).
@@ -231,10 +231,10 @@ pub const TOOL_PATHS: &[(&str, &str)] = &[
     ("message", "/v1/tools/message/invoke"),
 ];
 
-/// WS 端点路径 (1:1 翻译 `apeireth-api::ws_v1::WS_PATH`).
+/// WS 端点路径 (语义对齐 `apeireth-api::ws_v1::WS_PATH`).
 pub const WS_PATH: &str = "/v1/stream";
 
-/// 编译期守门: TOOL_PATHS 长度 == 6 (跟 TOOL_WHITELIST 1:1 对齐).
+/// 编译期守门: TOOL_PATHS 长度 == 6 (跟 TOOL_WHITELIST 一一对应).
 const _: () = assert!(
     TOOL_PATHS.len() == 6,
     "TOOL_PATHS must be 6 (接口接口契约 6 端点)"
@@ -246,7 +246,7 @@ const _: () = assert!(
 // §3 Auth 5 组件 (按接口契约 + D-04/D-05)
 // ============================================================================
 
-/// **Auth 组件 1: Bearer token** (1:1 翻译 `apeireth-api::auth::check_bearer`).
+/// **Auth 组件 1: Bearer token** (语义对齐 `apeireth-api::auth::check_bearer`).
 ///
 /// 阶段 6 stub 守门: 验证 API key 长度 (16-4096 字符), 不打 keyring.
 pub fn check_bearer(api_key: &str) -> Result<(), SdkClientError> {
@@ -270,13 +270,13 @@ pub fn check_bearer(api_key: &str) -> Result<(), SdkClientError> {
     Ok(())
 }
 
-/// **Auth 组件 2: keyring 查 token** (1:1 翻译 `apeireth-api::auth::KeyringStore`).
+/// **Auth 组件 2: keyring 查 token** (语义对齐 `apeireth-api::auth::KeyringStore`).
 ///
 /// 阶段 6 stub 守门: 走 `Arc<KeyringStore>` 占位, 真接 keyring 留 R21。
 /// 当前仅保留 service 名 + account 名结构, 不真查 OS keyring。
 #[derive(Debug, Clone)]
 pub struct KeyringRef {
-    /// service 名 (1:1 翻译 `apeireth-api::auth::API_KEY_SERVICE`).
+    /// service 名 (语义对齐 `apeireth-api::auth::API_KEY_SERVICE`).
     pub service: String,
     /// account 名 (e.g. "default" / "user@apeireth.io").
     pub account: String,
@@ -292,7 +292,7 @@ impl KeyringRef {
     }
 }
 
-/// **Auth 组件 3: token bucket** (per 设计决策, 1:1 翻译 `apeireth-api::auth::TokenBucket`).
+/// **Auth 组件 3: token bucket** (per 设计决策, 语义对齐 `apeireth-api::auth::TokenBucket`).
 ///
 /// 客户端侧限流, 防 SDK 用户超发请求。
 /// 阶段 6 stub 走 in-memory state, 真持久化留 R21。
@@ -374,7 +374,7 @@ fn tool_invoke_body(tool: &str, action: &str, args: &Value) -> Value {
     })
 }
 
-/// **Auth 组件 4: 审计日志** (按接口契约 组件 4, 1:1 翻译 `apeireth-api::auth::AuditLogger`).
+/// **Auth 组件 4: 审计日志** (按接口契约 组件 4, 语义对齐 `apeireth-api::auth::AuditLogger`).
 ///
 /// 阶段 6 stub 走 in-memory Vec 累积, 真写 `~/.apeireth/audit.log` 留 R21.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -430,7 +430,7 @@ impl AuditLogger {
     }
 }
 
-/// **Auth 组件 5: quota stub** (per 设计决策, 1:1 翻译 `apeireth-api::auth::QuotaManager`).
+/// **Auth 组件 5: quota stub** (per 设计决策, 语义对齐 `apeireth-api::auth::QuotaManager`).
 ///
 /// 阶段 6 stub 守门: 显式返 501, R21 真接 quota 服务。
 #[derive(Debug)]
@@ -465,7 +465,7 @@ impl Default for QuotaStub {
     }
 }
 
-/// **Auth 5 组件容器** (1:1 翻译 `apeireth-api::auth::AuthPipeline`).
+/// **Auth 5 组件容器** (语义对齐 `apeireth-api::auth::AuthPipeline`).
 ///
 /// 阶段 6 stub: 5 组件全就位, 但 HTTP 真实调 `apeireth-api` 走 `unimplemented!()` 守门.
 ///
@@ -593,9 +593,9 @@ pub struct ClientConfig {
     pub http_timeout_secs: u64,
     /// WS 连接 timeout (默认 10s).
     pub ws_connect_timeout_secs: u64,
-    /// WS ping 间隔 (1:1 翻译 `WS_PING_INTERVAL_SECS`).
+    /// WS ping 间隔 (语义对齐 `WS_PING_INTERVAL_SECS`).
     pub ws_ping_interval_secs: u64,
-    /// WS 链接 token TTL (1:1 翻译 `WS_TOKEN_DEFAULT_TTL_SECS`).
+    /// WS 链接 token TTL (语义对齐 `WS_TOKEN_DEFAULT_TTL_SECS`).
     pub ws_token_ttl_secs: i64,
     /// User-Agent (按接口契约 客户端标识).
     pub user_agent: String,
@@ -838,7 +838,7 @@ impl ApeirethClient {
     ) -> Result<WsStream, SdkClientError> {
         // m3 防御: 白名单校验.
         validate_tool_call(tool, &args)?;
-        // 构造 ToolInvoke frame (1:1 翻译 `apeireth-protocol::ws_v1::ToolInvokeFrame`).
+        // 构造 ToolInvoke frame (语义对齐 `apeireth-protocol::ws_v1::ToolInvokeFrame`).
         let _frame = WsFrame::ToolInvoke(ToolInvokeFrame {
             tool: tool.to_string(),
             action: action.to_string(),
@@ -870,7 +870,7 @@ impl ApeirethClient {
         STUB_MODE
     }
 
-    /// 构造 HTTP Authorization 头 (1:1 翻译 `apeireth-api::auth`).
+    /// 构造 HTTP Authorization 头 (语义对齐 `apeireth-api::auth`).
     pub fn auth_header(&self) -> String {
         format!("{} {}", AUTH_SCHEME, self.auth.api_key())
     }
@@ -1301,7 +1301,7 @@ mod client_tests {
         assert_eq!(c.auth.audit.len(), 2, "preflight + 结果各一条");
     }
 
-    /// **错误面 1:1**: 401 → AuthFailed; 500 → ServerInternal; 429 → RateLimited。
+    /// **错误面一一对应**: 401 → AuthFailed; 500 → ServerInternal; 429 → RateLimited。
     #[tokio::test]
     async fn client_invoke_tool_maps_http_errors() {
         use wiremock::matchers::{method, path};
@@ -1392,7 +1392,7 @@ mod client_tests {
         }
     }
 
-    /// **编译期守门**: 5 集成点 0 冲突 (跟 `apeireth-protocol::ws_v1` 1:1 对齐).
+    /// **编译期守门**: 5 集成点 0 冲突 (跟 `apeireth-protocol::ws_v1` 语义对齐).
     #[test]
     fn five_integration_points_align() {
         // 集成点 1-2: WsFrame 跟 ToolInvokeFrame 类型.

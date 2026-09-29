@@ -1,7 +1,7 @@
 //! # Voice 唤醒词 (per 既有 Voice SDK)
 //!
 //! 唤醒词 (按既有实现 + R20 设计拍板):
-//! 1. **Hardcoded** — 编译期 hardcode 唤醒词, 默认 `"apeireth"` (per R20 设计拍板, 1:1 翻译品牌一致)
+//! 1. **Hardcoded** — 编译期 hardcode 唤醒词, 默认 `"apeireth"` (per R20 设计拍板, 品牌一致)
 //! 2. **Custom** — 用户自定义唤醒词字符串 (R21 续真接时估补)
 //! 3. **Phonetic** — 音标匹配 (e.g. `[əˈpɪərɛθ]` 替代字符串, R21 续)
 //! 4. **Semantic** — 语义匹配 (e.g. `"AI assistant"` 整段语义, R21 续)
@@ -30,7 +30,7 @@ pub const MAX_CUSTOM_WAKE_WORD_LENGTH: usize = 64;
 pub const MIN_WAKE_WORD_LENGTH: usize = 3;
 
 // ============================================================================
-// §2 唤醒词类别 (4 variant, 1:1 翻译 既有 Voice SDK)
+// §2 唤醒词类别 (4 variant, 语义对齐 既有 Voice SDK)
 // ============================================================================
 
 /// 唤醒词类别 (4 variant, 对齐既有实现 `WakeWordCategory` enum).

@@ -22,18 +22,18 @@ use crate::voice::error::{VoiceError, VoiceResult};
 // §1 3 VAD 算法 enum (K-1 强校验守门, 编译期 hardcode 3 variant)
 // ============================================================================
 
-/// VAD 算法 (3 variant, 1:1 翻译 既有 Voice SDK `VadAlgorithm` enum).
+/// VAD 算法 (3 variant, 语义对齐 既有 Voice SDK `VadAlgorithm` enum).
 ///
 /// 3 算法 snake_case 字符串严格匹配 既有实现 API 规范.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VadAlgorithm {
-    /// **基于能量阈值** (RMS 简易, 离线, 按既有实现估算 1:1).
+    /// **基于能量阈值** (RMS 简易, 离线, 按既有实现估算).
     #[default]
     Energy,
-    /// **基于静音时长阈值** (silence detection, 按既有实现估算 1:1).
+    /// **基于静音时长阈值** (silence detection, 按既有实现估算).
     Silence,
-    /// **WebRTC VAD** (Chromium WebRTC VAD 集成, 离线, 按既有实现估算 1:1).
+    /// **WebRTC VAD** (Chromium WebRTC VAD 集成, 离线, 按既有实现估算).
     WebRtc,
 }
 

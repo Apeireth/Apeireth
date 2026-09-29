@@ -4,7 +4,7 @@
 //! config.env.example; 任务锚点: team-work-doc §8.3/§8.4, backlog N12):
 //!
 //! 多家 LLM API 的推理内容字段名各不相同 (DeepSeek `reasoning_content` /
-//! Claude `thinking` / Kimi `reasoning` ...). 本模块:
+//! Anthropic `thinking` / Kimi `reasoning` ...). 本模块:
 //!
 //! 1. **入向归一化**: 从响应对象按 12 个别名 (REASONING_ALIASES, 与 公开接口字段表
 //!    1:1) 提取推理文本 (支持嵌套对象/数组递归), 去重合并为内部 think 块

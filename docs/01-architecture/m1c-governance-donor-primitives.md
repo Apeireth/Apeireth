@@ -1,19 +1,19 @@
-# M1C — Canonical Governance Donor Primitives
+# M1C — Canonical Governance Baseline Primitives
 
 > **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
 
 Status: complete
 Branch: `reconstruct_v2`
 Starting HEAD: `af49988fd36be5a2e132a634acdabcaf4d29e7f8`
-Donor: `origin/master:reconstruction_v2/crates/apeireth-governance/src/`
+Source: `origin/master:reconstruction_v2/crates/apeireth-governance/src/`
 
-This migration took algorithms and primitives from the master donor
+This migration took algorithms and primitives from the master
 implementation and adapted them to the frozen canonical governance contract in
-`apeireth-governance`. It did **not** port the donor architecture.
+`apeireth-governance`. It did **not** adopt the prior architecture.
 
-## Donor source
+## Source
 
-| Donor module | Maturity | Ported? | Strategy |
+| Source module | Maturity | Adopted? | Strategy |
 | --- | --- | --- | --- |
 | `guard.rs` (`PiiDetector`) | REAL | yes | ADAPT |
 | `audit.rs` (`AuditHashChain`) | REAL | yes | ADAPT |
@@ -23,22 +23,22 @@ implementation and adapted them to the frozen canonical governance contract in
 | `gates.rs` (five-gate `GovernancePipeline`) | PARTIAL | no | DROP |
 | `sovereignty.rs` | REAL | no | DEFER |
 
-## Ported
+## Adopted
 
 ### `input_security` (M1C-A)
 
-Donor `guard.rs` used a single `PiiDetector` struct for three concerns: PII
+Baseline `guard.rs` used a single `PiiDetector` struct for three concerns: PII
 scrubbing, prompt-injection blocking, and implicit security classification.
 M1C-A separated them:
 
 - `PiiDetector::findings` -> structured `PiiFinding { kind, start, end }`.
-  Kinds: `Email`, `Phone` (mainland-China mobile shape from donor), and
+  Kinds: `Email`, `Phone` (mainland-China mobile shape from the baseline), and
   `CredentialKey` (`sk-...`, `AKIA...`, and a `Bearer` token shape).
   Offsets are **byte offsets**.
 - `PiiDetector::redact` -> stable placeholders (`[REDACTED_EMAIL]`,
   `[REDACTED_PHONE]`, `[REDACTED_CREDENTIAL]`).
 - `PromptInjectionHeuristic::signals` -> structured
-  `PromptInjectionSignal { kind, start, end }` from the donor's five patterns,
+  `PromptInjectionSignal { kind, start, end }` from the five baseline patterns,
   matched case-insensitively with compiled static regexes.
 - `PromptInjectionHook` and `CredentialDisclosureHook` -> canonical
   `GovernanceHook` implementations. They inspect capability-dispatch arguments
@@ -47,7 +47,7 @@ M1C-A separated them:
 
 ### `audit` (M1C-B)
 
-Donor `audit.rs` was a real append-only hash chain, but appended with
+Baseline `audit.rs` was a real append-only hash chain, but appended with
 `chrono::Utc::now()` and hashed a `:`-separated `format!` string. M1C-B:
 
 - `append` takes an explicit `apeireth_core::kernel::Timestamp` (no wall clock
@@ -62,8 +62,8 @@ Donor `audit.rs` was a real append-only hash chain, but appended with
 
 ### `permission` (M1C-C)
 
-Donor `onion.rs` had a deterministic `Permission` / `PermissionPack` core plus
-philosophy-coded `PrincipleOnion` and an ad-hoc `DslOnion`. M1C-C ported only
+Baseline `onion.rs` had a deterministic `Permission` / `PermissionPack` core plus
+philosophy-coded `PrincipleOnion` and an ad-hoc `DslOnion`. M1C-C adopted only
 the deterministic core:
 
 - `Permission` enum (`ReadMemory`, `WriteMemory`, `ExecuteTool(String)`,
@@ -78,16 +78,16 @@ the deterministic core:
 
 ## Rejected
 
-- **Donor five-gate `GovernancePipeline`** (`gates.rs`): a second pipeline with
+- **Baseline five-gate `GovernancePipeline`** (`gates.rs`): a second pipeline with
   philosophy keys and council voting. The canonical `GovernancePipeline` already
-  composes hooks. Not ported.
+  composes hooks. Not adopted.
 - **`PrincipleOnion` and `DslOnion`**: facade layering and hardcoded product
-  philosophy; no new canonical semantics. Not ported.
-- **Donor `standard_agent` permission pack**: hardcoded vendor egress
-  (`api.minimax.chat`) and product-specific tool grants. Not ported.
+  philosophy; no new canonical semantics. Not adopted.
+- **Baseline `standard_agent` permission pack**: hardcoded vendor egress
+  (`api.minimax.chat`) and product-specific tool grants. Not adopted.
 - **`SelfDisableGuard`**: duplicates existing `apeireth-core` self-disable
-  baseline. Not ported in M1C.
-- **`LifecycleHandle`** (donor runtime facade): not ported.
+  baseline. Not adopted in M1C.
+- **`LifecycleHandle`** (baseline runtime facade): not adopted.
 - **`SovereignControl`**: real but role/pause-resume policy with hashed token;
   outside the M1C scope. Deferred.
 

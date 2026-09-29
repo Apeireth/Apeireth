@@ -1,4 +1,4 @@
-//! Deterministic transport tests for the migrated minimax provider.
+//! Deterministic transport tests for the minimax provider.
 //!
 //! These prove the canonical [`MinimaxProviderCapability`] against a local mock
 //! HTTP server — no Internet, no real API key. They cover the §49 matrix:
@@ -413,7 +413,7 @@ async fn timeout_maps_to_timeout_retryable() {
 
 #[tokio::test]
 async fn does_not_go_through_the_legacy_bridge() {
-    // The migrated capability is a direct ProviderCapability, not a
+    // The capability is a direct ProviderCapability, not a
     // LegacyLlmCapability. Constructing it and calling complete() never touches
     // the bridge or the LlmProvider trait. This is a structural guard: the
     // canonical type is what the runtime routes to.

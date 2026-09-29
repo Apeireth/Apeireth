@@ -1,6 +1,6 @@
 //! 5-field cron parse / match / next-after (library, default-off).
 //!
-//! Recovered from `legacy/donor/apeireth-cron/src/lib.rs`. This is a **parser
+//! This is a **parser
 //! and matcher**, not a scheduler. There is no tokio interval, no job table,
 //! no daemon. Callers that already own a heartbeat (v2
 //! `runtime::canonical::heartbeat::HeartbeatScheduler`) may ask `matches` /
@@ -29,7 +29,7 @@
 //! 这是**有意的确定性选择** (无隐式 wildcard 分支), 不是实现疏漏。需要 Vixie 语义
 //! 的调用方请拆成两条表达式在上层自行 OR。
 //!
-//! Discarded: `CronEngine` tokio tick loop (`scheduler.rs`, test-only in donor
+//! Discarded: `CronEngine` tokio tick loop (`scheduler.rs`, test-only in the baseline
 //! and a second loop even then). Approximate 30-day epoch→date conversion
 //! used by that engine is also discarded.
 

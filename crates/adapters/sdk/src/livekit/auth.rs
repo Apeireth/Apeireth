@@ -28,7 +28,7 @@ use crate::livekit::error::LiveKitError;
 /// API Key 持有者 (per P0 安全铁律 + apeireth-keyring 模式).
 ///
 /// **当前 skeleton 用 String 包装** (task spec 提到 SecretString, 但 workspace
-/// 无 secrecy crate, 改用 String, 跟 gemini-cli / claude-code 1:1 对齐). R21 续真接时
+/// 无 secrecy crate, 改用 String, 与同类工程做法一致). R21 续真接时
 /// 改成 `apeireth_keyring::SecretBytes` 或 `secrecy::SecretString`.
 ///
 /// **M5 修复**: Debug 手写脱敏 — derive(Debug) 会让一次 `{:?}` / `dbg!` 把 API Key
@@ -394,7 +394,7 @@ fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
 
 /// 平台名 (keyring "service" 字段 / protocol 平台标识).
 ///
-/// 跟 gemini-cli PLATFORM_NAME 1:1, 锁 "apeireth" 避免跟其他 app 冲突.
+/// 与同类工程 PLATFORM_NAME 惯例一致, 锁 "apeireth" 避免跟其他 app 冲突.
 pub const PLATFORM_NAME: &str = "apeireth";
 
 /// Provider 名 (keyring "account" 字段).
@@ -402,7 +402,7 @@ pub const PLATFORM_NAME: &str = "apeireth";
 /// 对齐既有实现 livekit-client `serviceName = 'livekit'`.
 pub const PROVIDER_NAME: &str = "livekit";
 
-/// LiveKit SDK schema 版本 (1:1 翻译 LiveKit 协议).
+/// LiveKit SDK schema 版本 (语义对齐 LiveKit 协议).
 pub const LIVEKIT_SCHEMA_VERSION: &str = "1";
 
 /// 默认 LiveKit 服务器 URL (per livekit-cloud 官方, wss:// 强制).

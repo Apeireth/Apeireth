@@ -101,7 +101,7 @@ impl P2pMeshController {
     /// Registers a newly discovered peer node on BLE/LAN.
     ///
     /// 有界: 超过 [`MAX_DISCOVERED_PEERS`] 时按注册顺序淘汰最旧对端
-    /// (2026-09-24 审计 L2: 原实现纯 insert 无上限无老化)。
+    /// (2026-09-24 审计 L2: 修复前纯 insert 无上限无老化)。
     pub fn register_peer(&mut self, peer: MeshNodeDescriptor) {
         if !self.discovered_peers.contains_key(&peer.node_id) {
             while self.discovered_peers.len() >= MAX_DISCOVERED_PEERS {

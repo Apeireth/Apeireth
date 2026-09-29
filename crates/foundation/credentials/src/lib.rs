@@ -84,14 +84,14 @@ pub use keyring_resolver::KeyringCredentialResolver;
 /// 按请求现解析的分层 resolver (`LayeredCredentialResolver`)。
 pub use hot_store::{HotCredentialStore, LayeredCredentialResolver};
 
-/// 外部借鉴字段数 (编译期自审锚, 对照 apeireth-tool-approval 惯例)。
+/// 外部引入字段数 (编译期自审锚, 对照 apeireth-tool-approval 惯例)。
 ///
-/// 本 crate 为原生新增, 无外部借鉴字段 — 值为 0, 显式标注非遗漏。
+/// 本 crate 为原生新增, 无外部引入字段 — 值为 0, 显式标注非遗漏。
 pub const BORROWED_THIRDPARTY_FIELDS: usize = 0;
 
 const _: () = assert!(
     BORROWED_THIRDPARTY_FIELDS == 0,
-    "原生 crate, 借鉴字段应为 0"
+    "原生 crate, 外来字段应为 0"
 );
 
 #[cfg(test)]

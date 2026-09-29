@@ -1,7 +1,7 @@
-# VCP 核心算法行级代码解构与 Apeireth 2.0 吸收升级指南
+# 基线工程核心算法行级代码解构与 Apeireth 2.0 升级指南
 
 > **⚠️ 2026-10 状态更新（全量重写声明）**：本文所涉**全部已落地实现**已重写为独立实现，
-> 当前代码不再包含 VCP 衍生表达，本文保留为历史设计记录：
+> 当前代码不再包含基线工程衍生表达，本文保留为历史设计记录：
 > - 第 1 节（浪潮流体拓扑动力学）→ `crates/engine/memory/src/river_topology.rs`
 >   （重写依据：Gerstner & Kistler *Spiking Neuron Models* 等公开文献）；
 > - 第 2 节（残差金字塔）→ `crates/engine/memory/src/residual_pyramid.rs`
@@ -13,14 +13,14 @@
 > - 第 5 节（跨节点透明文件穿透）→ `crates/adapters/gateway/src/file_fetcher.rs`
 >   （重写依据：内容寻址缓存 + RFC 4648 / FIPS 180-4 通用工程模式）。
 
-> **目标**: 将 VCP 1.0/1.1 中最顶尖的流体拓扑动力学、残差正交投影、EPA 认知主轴与超栈透明文件穿透等工程算法，以**纯 Safe Rust 编译期强类型微内核**形式系统性吸收至 Apeireth 2.0。  
-> **基准源码**: `VCPToolBox-main.zip` (`ResidualPyramid.js`, `EPAModule.js`, `RiverMemoEngine.js`, `TagMemoEngine.js`, `TagMemoV10Engine.js`, `Plugin.js`, `FileFetcherServer.js`, `rust-vexus-lite/`)  
+> **目标**: 将基线工程 1.0/1.1 的流体拓扑动力学、残差正交投影、EPA 认知主轴与超栈透明文件穿透等工程算法，以**纯 Safe Rust 编译期强类型微内核**形式系统性实现在 Apeireth 2.0。  
+> **基准源码**: 基线工程源码包 (`ResidualPyramid.js`, `EPAModule.js`, `RiverMemoEngine.js`, `TagMemoEngine.js`, `TagMemoV10Engine.js`, `Plugin.js`, `FileFetcherServer.js`, `rust-vexus-lite/`)  
 > **安全要求**: `#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`，0 unsafe，0 外部黑盒。
 
 ---
 
 ## 目录
-1. [浪潮流体拓扑动力学与 LIF 神经元传导吸收方案](#1-浪潮流体拓扑动力学与-lif-神经元传导吸收方案)
+1. [浪潮流体拓扑动力学与 LIF 神经元传导实现方案](#1-浪潮流体拓扑动力学与-lif-神经元传导实现方案)
 2. [修正 Gram-Schmidt 残差金字塔多层正交投影](#2-修正-gram-schmidt-残差金字塔多层正交投影)
 3. [EPA 加权中心化 PCA 与语义跨域共振桥](#3-epa-加权中心化-pca-与语义跨域共振桥)
 4. [四层异步上下文数组编排与三套隔离通知总线](#4-四层异步上下文数组编排与三套隔离通知总线)
@@ -29,9 +29,9 @@
 
 ---
 
-## 1. 浪潮流体拓扑动力学与 LIF 神经元传导吸收方案
+## 1. 浪潮流体拓扑动力学与 LIF 神经元传导实现方案
 
-### 1.1 VCP 行级算法解构 (`TagMemoEngine.js` 行 700–850)
+### 1.1 基线工程行级算法解构 (`TagMemoEngine.js` 行 700–850)
 * **LIF 神经元脉冲衰减**：
   $$I_{\text{inj}}(u \to v) = E(u) \cdot W_{\text{cooc}}(u, v) \cdot D_{\text{decay}} \cdot \Phi_{\text{return}}(u, v, \text{prev})$$
   - 非回溯因子：$\Phi_{\text{return}} = 0.1$（当 $v = \text{prev}(u)$ 时回流抑制，防止在两个标签间死循环）。
@@ -40,7 +40,7 @@
   $$\text{Tension}(u \to v) = W_{\text{raw}}(u, v) \cdot \left(1 - \frac{\|P_{\text{other}}(v_v)\|^2}{\|v_v\|^2}\right)$$
   - 当 $\text{Tension} \ge 0.65$ 时自动激活为**虫洞跃迁边（Wormhole Edge）**，享受零动量损耗与 $0.95$ 超低衰减。
 
-### 1.2 Apeireth 2.0 Rust 强类型结构设计与吸收方案
+### 1.2 Apeireth 2.0 Rust 强类型结构设计与实现方案
 在 `crates/engine/memory/src/river_topology.rs` 中设计原生 Safe Rust 引擎：
 
 ```rust
@@ -154,7 +154,7 @@ impl RiverDynamicsEngine {
 
 ### 1.3 TagMemo V10 连续双重拓扑场与 DTSC 闭合度可观测量 (`modules/tagmemoV10/`)
 
-VCP 1.0 的重大突破是将浪潮从 **V8 离散脉冲传导** 演进为 **V10 连续拓扑双重场解析解与河网几何积分**：
+基线工程 1.0 的重大演进是将浪潮从 **V8 离散脉冲传导** 演进为 **V10 连续拓扑双重场解析解与河网几何积分**：
 
 #### 1. 双预解算子对偶场求解器 (`scaledFieldSolver.js:L212-286`)
 将离散 hop 遍历升级为稳态偏微分场方程解析解：
@@ -214,7 +214,7 @@ impl DualScaledFieldSolver {
 
 ## 2. 修正 Gram-Schmidt 残差金字塔多层正交投影
 
-### 2.1 VCP 行级算法解构 (`ResidualPyramid.js` 行 25–120)
+### 2.1 基线工程行级算法解构 (`ResidualPyramid.js` 行 25–120)
 * 传统向量检索仅算单一相似度，而残差金字塔将 Query 投影至已知标签张成的子空间中：
   $$v = P_1 + R_1 = (P_1 + P_2) + R_2 = \dots$$
   - 第一层捕捉 60% 主导语义；
@@ -352,7 +352,7 @@ impl OrthogonalResidualPyramid {
 
 ## 3. EPA 加权中心化 PCA 与语义跨域共振桥
 
-### 3.1 VCP 行级算法解构 (`EPAModule.js` 行 80–220)
+### 3.1 基线工程行级算法解构 (`EPAModule.js` 行 80–220)
 1. **加权中心化（Weighted Centering）**：
    对 Tag 向量聚类质心减去全局均值 $\mu$，消除公共背景偏置。
 2. **幂迭代带重正交化提取语义主轴**：
@@ -377,8 +377,8 @@ impl OrthogonalResidualPyramid {
 
 ### 4.2 三套物理隔离广播总线 (`gateway/src/notification_bus.rs`)
 1. **AI Notification Channel**：对人类完全静默，专供 Agent 状态机消费；
-2. **VCPLog Bus (Admin Audit)**：具备**离线重放断点续传（Replay Manager）**，管理端重连时补发全部工具审批记录；
-3. **VCPInfo Bus (Shared Progress)**：人机共享的富媒体与流式进度广播（例如渲染帧率、搜索进度条）。
+2. **审计日志 Bus (Admin Audit)**：具备**离线重放断点续传（Replay Manager）**，管理端重连时补发全部工具审批记录；
+3. **共享进度 Bus (Shared Progress)**：人机共享的富媒体与流式进度广播（例如渲染帧率、搜索进度条）。
 
 ---
 
@@ -396,7 +396,7 @@ impl OrthogonalResidualPyramid {
 
 ## 6. Apeireth 2.0 落地 Crate 规划与接口契约设计
 
-| 吸收模块 | 目标落地 Crate | 核心暴露结构与 API | 收益与代际跃升 |
+| 落地模块 | 目标落地 Crate | 核心暴露结构与 API | 收益与代际跃升 |
 |---|---|---|---|
 | **RiverDynamicsEngine** | `crates/engine/memory` | `RiverDynamicsEngine::propagate_spikes()` | 摆脱单一 KNN，实现河网流体拓扑与虫洞非线性联想 |
 | **OrthogonalResidualPyramid** | `crates/engine/memory` | `OrthogonalResidualPyramid::analyze()` | Gram-Schmidt 多层正交投影，捕获 5% 被掩盖的微弱信号 |
@@ -407,4 +407,4 @@ impl OrthogonalResidualPyramid {
 ---
 
 > **结论与行动项**：  
-> 本指南提供了 VCP 最核心四大系统的公式、数据结构与完整 Rust 移植方案。团队接手后可直接依此契约进行下一阶段的特性增强与模块挂载。
+> 本指南提供了基线工程最核心四大系统的公式、数据结构与完整 Rust 实现方案。团队接手后可直接依此契约进行下一阶段的特性增强与模块挂载。

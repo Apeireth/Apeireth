@@ -209,7 +209,7 @@
 | 6 | **W2** Causal World Model | `crates/engine/organ/src/causal_world_model.rs` (子代理 R5 真实现) | ✅ 真实现, **真接 LLM MCTS** | **LLM** (MCTS 分支点) | L2 提案的因果分支生成 |
 | 7 | **W3** Edge Mining | `crates/engine/organ/src/causal_world_model_edges.rs` (子代理 R6 真实现) | ✅ 真实现 | **0 LLM** (deterministic) | 从记忆时间线统计挖掘因果边 — L2 提案前的边累计权重 |
 | 8 | **E7** Emergence | `crates/engine/organ/src/emergence.rs` (子代理 R7 真实现) | ✅ 真实现 | **0 LLM** (deterministic) | 5 状态机 + 8 重门控 + 主动开口 — L4 闸的留痕与 `spoke=true/false` 决定 |
-| 9 | **Memory** Merger | `crates/engine/organ/src/memory.rs` (子代理 R8 真实现) | ✅ 真实现 | **0 LLM** (deterministic) | 跨 8 organ 记忆合并 (借鉴 v1 `MemoryExtractionService` 1:1 翻译 dedup/weight/persist) |
+| 9 | **Memory** Merger | `crates/engine/organ/src/memory.rs` (子代理 R8 真实现) | ✅ 真实现 | **0 LLM** (deterministic) | 跨 8 organ 记忆合并 (语义对齐 v1 `MemoryExtractionService` 的 dedup/weight/persist) |
 
 ### 3.3 串联顺序的 0 装诚实标
 
@@ -221,7 +221,7 @@
 - **E7 emergence 决策路径严格确定性**: `should_speak()` 严格走 v1 8 重门控 (per
   `crates/engine/organ/src/emergence.rs:570-573`), 不假装"E7 always speak".
 - **Memory merger 子代理 R8 独立判断**: v1 `runtime_brain.rs` 没有 `MemoryMerger` 模块;
-  v2 是新抽象, 借鉴 v1 `MemoryExtractionService` 算法骨架 1:1 翻译. 不假装"v1 有这模块".
+  v2 是新抽象, 语义对齐 v1 `MemoryExtractionService` 算法骨架. 不假装"v1 有这模块".
 
 ### 3.4 OrganTrait 边界严守
 
@@ -483,7 +483,7 @@ AfterTurn:          self_assessment -> memory_writeback
   side-call or implicit preference mutation").
 - **激活路径**:
   1. v1 era `apeireth-companion::preference` 找对应模块 (待核验, 子代理 R10 估存在)
-  2. 1:1 翻译 v1 真实现到 v2 OrganTrait / AgentModule 边界
+  2. 语义对齐 v1 真实现到 v2 OrganTrait / AgentModule 边界
   3. 挂 `AfterTurn` hook, 紧跟 `self_assessment` 后
   4. 调 `SelfAssessmentStore::recent_for_task(task_id, 5)` 作为 evidence 喂入
 - **真实施估时**: 2 周.
@@ -523,7 +523,7 @@ AfterTurn:          self_assessment -> memory_writeback
 
 - **现状**: 0 实现 (per `cognitive-module-wiring.md:34` "long-running Planner → Implementer
   → Reviewer service; never called from the canonical turn").
-- **激活路径**: 1:1 翻译 v1 `apeireth-companion::AwakeCompanion` → v2 OrganOrchestrator (per §5).
+- **激活路径**: 语义对齐 v1 `apeireth-companion::AwakeCompanion` → v2 OrganOrchestrator (per §5).
 - **真实施估时**: 3 周, 类似 AwakeCompanion.
 - **风险**: 见 §5 真账 (R7 风险 #1).
 
@@ -693,7 +693,7 @@ LlmFactory 真接 (v2.1) → 真渲染 Initiative.action.label() → 自然话�
 |---|---|
 | 加 1 capability trait | 1-2 周 |
 | 改 LLM provider | 1 周 (per LlmFactory trait, 子代理 M 已写真 impl) |
-| 加 1 organ 真移植 | 4-6 周 (per 子代理 L 估, E4 curiosity 最易) |
+| 加 1 organ 真实现 | 4-6 周 (per 子代理 L 估, E4 curiosity 最易) |
 | 认知模块新 slot | 2-3 周 (12 slot ledger 当前 6 WIRED, 6 DEFERRED) |
 | 改 Triple onion L3-L5 真实现 | 4-6 周 |
 | **总估计每次自升级** | **1-6 周** (取决于升级类型) |
@@ -759,7 +759,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 - **0 装诚实标 #5**: E7 emergence 决策路径严格确定性, 不假装"E7 always speak".
   8 重门控 + Rate-Limit + Idle 抑制 = 严格沉默抑制.
 - **0 装诚实标 #6**: Memory Merger 子代理 R8 独立判断 "v1 无 MemoryMerger 模块; v2 是
-  新抽象, 借鉴 v1 MemoryExtractionService 算法骨架 1:1 翻译". 子代理 R10 同意 R8 独立
+  新抽象, 语义对齐 v1 MemoryExtractionService 算法骨架". 子代理 R10 同意 R8 独立
   判断, 不假装"v1 有 MemoryMerger".
 
 ### 10.4 风险 vs 0 装诱导
@@ -855,7 +855,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 
 ### 13.1 5/5 done (v2.0-rc.1 已就位)
 
-- ✅ **#1 RC-5/6/7 + 9 organ 真移植全 done** (整合 #2 commit `bbf70293`)
+- ✅ **#1 RC-5/6/7 + 9 organ 真实现全 done** (整合 #2 commit `bbf70293`)
 - ✅ **#2 哲学锚 ledger 待核** (子代理 K + 主代理亲做 0 装诚实修正, 9 锚 LOCKED + 13 键降级)
 - ✅ **#3 12 consumer 弃用迁移** (子代理 H 独立判断 + 子代理 I 真写 RC-11 migration script)
 - ✅ **#4 RC-10 line header AAD + APX2 envelope** (子代理 E 审查 + 主代理 O-6 #23 commit)
@@ -998,7 +998,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 - `crates/engine/organ/src/lib.rs` (9 organ impl 入口)
 - `crates/engine/organ/src/emergence.rs` (E7 + 8 重门控 + 5 状态机)
 - `legacy/donor/apeireth-companion/examples/awake_greeting.rs` (v1 AwakeCompanion + 真 LLM 渲染)
-- `bbf70293` 整合 #2 commit (9 organ 真移植 v2 全部完成)
+- `bbf70293` 整合 #2 commit (9 organ v2 全部真实现)
 - `b9026186` v2.0.0-rc.1 release tag 拍板 (本 spec HEAD)
 
 ---

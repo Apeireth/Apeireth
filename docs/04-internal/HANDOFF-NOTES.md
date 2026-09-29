@@ -9,9 +9,9 @@
 > **2026-10-06 协作者批整合 + 真机修复批次（现状以此为准，详 `engineering-log-2026-10-06.md`）**：协作者 56 提交（记忆 v2.2 收口 + 行为链安全 Guard `apeireth-guard` 接生产治理管线 + 认知 vnext）快进整合全绿；随后主人桌面实测抓出 11 个真机问题并全部修复（评审机制三处降级化、resolve 鲁棒性、notice/error 分离、GBK、shell raw_arg 引号、敏感名单补漏、新错误码 `review_rejected`/`turn_not_converged`、会话级工作区）。**确立元层原则：评审类机制只降级不枪毙主任务**。遗留: shell 非沙箱（设计 `docs/01-architecture/shell-sandbox-lite-design-2026-10-06.md` 待拍板）、会话转录重载 API、信任分级 (RC-13)。**workspace 因此由 17 → 18 crates（engine 8，新增 `crates/engine/guard`；`docs/03-reference/crates.md` / `ARCHITECTURE.md` / `docs/04-internal/maintenance-guide.md` 已同步）。**
 > **2026-09-10 追加**：桌面开箱即用已落地（Settings 是唯一 provider 配置源，经 IPC 注入侧车环境，key 不落盘；commit `1a265600`）；**token 级真流式已打通**（provider SSE → runtime sink → gateway 逐帧直通，live 实测 210 帧增量；首启向导 `FirstRunWizard.svelte`；点击流人工实测清单 `frontend/companion-desktop/docs/first-run-click-through-checklist.md`）。**"什么测过、什么没测"以 `docs/04-internal/live-verification-ledger.md` 为权威——写文档/注释/commit 前先查它，别重测已绿的，别把挂账的当已验的。**
 > **2026-10-06 晚 v1↔v2 能力差距审计（现状以此为准，主文 `v1-vs-v2-capability-gap-audit-2026-10-06.md`）**：四方并行审计（v1 源码 105 crate / v2 现役 18 crate 逐能力 / 历史差距文档 8 份 / ROADMAP 愿景对账）+ 一轮 v2 源码独立复核。**结论两级化**：§7.1 **库级已实现但未接生产装配**（partner/principles/diary/consolidation/dreaming/memory_injection/meta_thinking/intent_brier/reflexion/topic_predictor/morphology/education/worktree_sandbox + BM25 混合检索 + 吸收批，在 `runtime-assembly`/`cli` 中引用数 **0**）与 §7.2 **真缺口**（community / experiment_field / HybridCognitiveRouter / ToolSynthesizer / thought_cluster / onering / 真文件网络沙箱 / SDK HTTP·WS / 三洋葱 L3-L5）。§8 附录 A 是 **v2 现役 18 crate 的逐 crate + 逐域能力源码清单**（三档：真实现/部分/stub·0 装，带行号）——接手当年表用。**读法（0 装纪律的双向性）**：不许把"已实现未接线"说成 0 装，也不许把 0 装说成已接线；`cargo test` 默认**不跑任何真模型用例**（92 个测试文件里的 `#[ignore]` 全部是需要真 key / 真硬件的 E2E），"是否真机验过"一律查 `live-verification-ledger.md`（新增 #39）。同批更正了 `plugin/src/organ.rs` 里"8 organ 0 装"的陈旧表（engine 侧 9/9 真实现为权威）。
-> **2026-10-06 夜 W2 接线批 + 挂账核销收官（现状以此为准，台账 #41-#44）**：① **W2 两批接线**（旋钮全默认关，手册见 INSTALL）：typed 写读对称修复（`typed_recall` 读侧 + 身份 + 逃生门）、语义向量阶段**真实现**（`OpenAiCompatibleEmbeddingProvider`，`APEIRETH_EMBEDDING_URL/MODEL/KEY`，半配 fail-loud）、`proactive_recall` 补旋钮、consolidation 触发点、reflexion 失败闭环（新模块 `cognitive.reflexion`）、memory_injection 反幻觉格式；② **效果测试咬出 3 个真缺陷全修**：FakeMemory 半真 fake、consolidation 洞察自我增殖、**council_live 假绿**（降级出口冒充 live 通过，已探针化封堵——live 测试必须先证通道活着）；③ **挂账核销 6/8**：legacy 九项源码级翻案（**HybridCognitiveRouter/ToolSynthesizer 纯愿景**——v1 亦无；**thought_cluster = `cluster_store` 完整改名移植，从缺口移出**；v1 真货含整 crate 双洋葱+Kani 证明、Docker 容器沙箱、HTTP/WS 客户端群——差距审计 §7.2 四审表）、Option 配置全量排查、shell 可达探针实锤（全盘可达零拦截，`tools/tests/shell_reach_probe.rs` = W1 回归锚）、`jimmy` 死指针已删；④ **⚠️ 主人行动项：DeepSeek key 尾号 3d17 已被官方撤销（vendor 401）——桌面真聊天同样 401；换新 key 后按台账挂账 #9 补跑 live E2E**；⑤ **并行作业约定**（两 AI 同树协作期）：W2 接线线动 `crates/` 引擎/cli + `docs/04-internal` 的台账/差距审计/`engineering-review-handoff`/本文件 + INSTALL 旋钮区；W8 文档治理批（主账批注/R11 横幅/机器守门，commit `5e894182`）、user-manual、deps 归另一线——**动共享区前先 `git status` 侦察、显式路径暂存、不跑全仓 `cargo fmt`**。**W2 线自足交接文档: `handoff-w2-wiring-2026-10-06.md`（接续该线必读，含全工作系统总结/接线矩阵/后续路线/方法论 9 条）**。
+> **2026-10-06 夜 W2 接线批 + 挂账核销收官（现状以此为准，台账 #41-#44）**：① **W2 两批接线**（旋钮全默认关，手册见 INSTALL）：typed 写读对称修复（`typed_recall` 读侧 + 身份 + 逃生门）、语义向量阶段**真实现**（`OpenAiCompatibleEmbeddingProvider`，`APEIRETH_EMBEDDING_URL/MODEL/KEY`，半配 fail-loud）、`proactive_recall` 补旋钮、consolidation 触发点、reflexion 失败闭环（新模块 `cognitive.reflexion`）、memory_injection 反幻觉格式；② **效果测试咬出 3 个真缺陷全修**：FakeMemory 半真 fake、consolidation 洞察自我增殖、**council_live 假绿**（降级出口冒充 live 通过，已探针化封堵——live 测试必须先证通道活着）；③ **挂账核销 6/8**：legacy 九项源码级翻案（**HybridCognitiveRouter/ToolSynthesizer 纯愿景**——v1 亦无；**thought_cluster = `cluster_store` 完整改名归并，从缺口移出**；v1 真货含整 crate 双洋葱+Kani 证明、Docker 容器沙箱、HTTP/WS 客户端群——差距审计 §7.2 四审表）、Option 配置全量排查、shell 可达探针实锤（全盘可达零拦截，`tools/tests/shell_reach_probe.rs` = W1 回归锚）、`jimmy` 死指针已删；④ **⚠️ 主人行动项：DeepSeek key 尾号 3d17 已被官方撤销（vendor 401）——桌面真聊天同样 401；换新 key 后按台账挂账 #9 补跑 live E2E**；⑤ **并行作业约定**（两 AI 同树协作期）：W2 接线线动 `crates/` 引擎/cli + `docs/04-internal` 的台账/差距审计/`engineering-review-handoff`/本文件 + INSTALL 旋钮区；W8 文档治理批（主账批注/R11 横幅/机器守门，commit `5e894182`）、user-manual、deps 归另一线——**动共享区前先 `git status` 侦察、显式路径暂存、不跑全仓 `cargo fmt`**。**W2 线自足交接文档: `handoff-w2-wiring-2026-10-06.md`（接续该线必读，含全工作系统总结/接线矩阵/后续路线/方法论 9 条）**。
 > **2026-10-06 晚 独立审核交接包（`engineering-review-handoff-2026-10-06.md`）**：为"由另一 AI/新接手人独立复核本批结论并推进后续"而写——§2 是**结论复核矩阵**（每条带命令+预期输出+判定栏）、§3 可复制复核脚本（含生产接线计数脚本）、**§4 明确列出我未验证的 8 项**（未跑真机点击流 / 未跑 `--ignored` E2E / `legacy/` 只做名称级扫描 / 主账未修订 / `thought_cluster` 未查清 / 未系统排查全部 `Option<...>` 默认关配置 / shell 可达范围未实测重放 / `jimmy` 死指针未删）、§5 八个带验收门的工作包（W1 shell 沙箱 / W2 库级模块接线 / W3 真缺口 / W4 治理凭据 / W5 SDK / W6 全双工语音 / W7 多签三洋葱 / W8 文档治理）、§6 方法论要求、§7 待主人拍板 5 项。基线实测：`cargo test --workspace` **129 suite / 3418 passed / 0 failed / 19 ignored**（cargo 1.97.1；2026-10-06 W2 接线批首批后刷新，见台账 #41/#42）。
-> **2026-09-23 K3 前端产品化批次收官（现状以此为准，详 `handoff-k3-frontend-2026-09-23.md`）**：`presence_state` 契约全线贯通（gateway `presence.rs` heuristic_v0 → SSE → 前端 `presence.ts` 显影分级）；前端落地微信式三栏聊天壳（heritage-void 静态默认背景 + 个性化上传/accent 配色）、治理卷宗四 tab、记忆卷宗主从化（Archive 纸面调首次实拍）+ 日记纸面空态、Ctrl+K 命令面板 + 打断、底部状态条。批次 30 支 commit（索引见 `engineering-log-2026-09-22.md`），验收台账 #29/#30，质量门全绿。待主人拍板：B-12 提案值、点亮「他说」主动开口链、挂账 #2/#4 真机闭环。下一梯队：桌宠 → 会话设置抽屉 → 会话分支。
+> **2026-09-23 K3 前端产品化批次收官（现状以此为准，详 `handoff-k3-frontend-2026-09-23.md`）**：`presence_state` 契约全线贯通（gateway `presence.rs` heuristic_v0 → SSE → 前端 `presence.ts` 显影分级）；前端落地主流 IM 式三栏聊天壳（heritage-void 静态默认背景 + 个性化上传/accent 配色）、治理卷宗四 tab、记忆卷宗主从化（Archive 纸面调首次实拍）+ 日记纸面空态、Ctrl+K 命令面板 + 打断、底部状态条。批次 30 支 commit（索引见 `engineering-log-2026-09-22.md`），验收台账 #29/#30，质量门全绿。待主人拍板：B-12 提案值、点亮「他说」主动开口链、挂账 #2/#4 真机闭环。下一梯队：桌宠 → 会话设置抽屉 → 会话分支。
 
 ```yaml
 [Document-Meta]
@@ -90,7 +90,7 @@ crates/
 │   ├── storage/        (SQLite WAL + reader pool + migrations)
 │   ├── memory/         (M1B 记忆 primitive + Research* 模块, trait 边界已锁)
 │   ├── perception/     (Voice/Vision backend 真实现, 默认不接线)
-│   ├── organ/          (9 organ 真移植: E4/F1/F4/F6/W1/W2/W3/E7/Memory)
+│   ├── organ/          (9 organ 真实现: E4/F1/F4/F6/W1/W2/W3/E7/Memory)
 │   └── guard/          (行为链安全 Guard: 两阶段行为链分类器 + BehaviorChainGuardHook 接生产治理管线, 2026-10-06 协作者批)
 ├── capabilities/       (1)
 │   └── tools/          (5 内置工具: filesystem/search/repo 只读默认注册且执行许可默认放行; shell/fetch opt-in 每次审批)
@@ -135,7 +135,7 @@ crates/
 | # | 风险 | 严重度 | 谁能解决 | 接手人该做 |
 |---|---|---|---|---|
 | **R-B1** | RC-5 provider E2E、Orchestrator harness、RC-7 perception 仍受外部条件或范围限制 | 高 | 主代理 + 需 LLM API key + 硬件 | RC-6 bounded adapter 已落地；后续只补真实 provider E2E、Orchestrator harness 与 perception，不回退到第二 loop. |
-| **R-B2** | 9 器官 (W1/W2/W3/E4/F4/F1/F6/E7) 全部在 `legacy/donor/apeireth-companion`, 未移植 v2 主链 | 高 | 主代理 + 6-8 周工作量 (ROADMAP §4 P6) | **不要**在 rc 阶段硬塞 — 长程任务继续走 v1 branch (`archive/v1.0-master`). v2 rc 阶段走标准 OpenAI Chat 兼容. |
+| **R-B2** | 9 器官 (W1/W2/W3/E4/F4/F1/F6/E7) 全部在 `legacy/donor/apeireth-companion`, 未迁入 v2 主链 | 高 | 主代理 + 6-8 周工作量 (ROADMAP §4 P6) | **不要**在 rc 阶段硬塞 — 长程任务继续走 v1 branch (`archive/v1.0-master`). v2 rc 阶段走标准 OpenAI Chat 兼容. |
 | **R-B3** | LLM 调用成本 (主对话 + 每 N turn 自评 + 偏好 recall) | 中 | 优化 `LlmFactory` 默认 model (cheap model) | 接 RC-5 时按 `v2.0.0-rc-roadmap.md` §5 风险行缓解: PerSpec 缓存 + advisor 可降 5→3. |
 | **R-B4** | v1 → v2 数据 schema 兼容 (rc 阶段假设兼容, v2.0.0+ 引入新表) | 中 | migrations 走幂等 `IF NOT EXISTS` (per `crates/engine/storage/src/migrations.rs`) | 数据迁移按 `migration-v1-to-v2.md` §4.4 步骤走, **先备份 v1 db**. |
 | **R-B5** | Cognitive module 集成 (`a699c5f5`/`1d227d6a`/`64e64f46`) 与现有 runtime 边界不清 | 中 | 其他 dev 推, 主代理 review | 接 RC-5 时查 `crates/engine/runtime/src/canonical/module.rs` (cognitive ABI 入口), 不与 orchestrator 重复设计. |
@@ -146,7 +146,7 @@ crates/
 
 1. **RC-5/7 与 provider E2E** — RC-5 MiniMax adapter 与 RC-6 bounded Council 已落地；下一步是凭证条件下的 provider E2E、Orchestrator harness，以及硬件相关的 Whisper / xcap.
 2. **Cognitive module 集成 review** (其他 dev 推, 接手人看 3 commit) — `a699c5f5` ABI / `1d227d6a` integration / `64e64f46` lifecycle. 重点看 `crates/engine/runtime/src/canonical/module.rs` 与 `execute.rs` 边界.
-3. **v1.0 parity 完成 (ROADMAP §4 P3-P6)** — 子代理 B 估 14-19 周: M1B 记忆移植 (P3) → perception trait (P4) → tool-runtime + supervisor + SelfAssessment (P5) → council + team-lead + cognition (P6).
+3. **v1.0 parity 完成 (ROADMAP §4 P3-P6)** — 子代理 B 估 14-19 周: M1B 记忆实现 (P3) → perception trait (P4) → tool-runtime + supervisor + SelfAssessment (P5) → council + team-lead + cognition (P6).
 4. **13 键永久降级后** 仍有 3 用法 (hook deny reason / CapabilityDescriptor risk 分级 / ROADMAP §5 语义定义) — 不接回 runtime 强制.
 5. **前端 companion-desktop 对接 v2 gateway** — ✅ 已落地（2026-09-08 装机 E2E）：2.0.0-rc.1 以 bundled-backend 方式 spawn `apeireth gateway serve`（`frontend/companion-desktop/src-tauri/src/backend_supervisor.rs`），装机后聊天探针 / gateway health / 桌面端存活实测全过；token 级真流式 + 首启向导已落地（2026-09-10）。遗留 = UI 点击流人工实测（清单见 desktop docs）。
 
@@ -280,7 +280,7 @@ git remote -v
 
 **v2.0.0-alpha.1 = 骨架 + 主链 + governance P0 + 13 键降级** (15 crate / 全 workspace 测试通过 / 0 clippy 警告).
 **v2.0.0-rc.1 = 接真 backend** (RC-1/2/3/4/5/6/8/9/10/11 已有实现或适配；provider E2E、Orchestrator、RC-7 perception 与长程 cognition 仍延期).
-**v2.0.0 = 完整功能 + frontend** (rc 后 ~6-8 周, 含至少 1 器官移植).
+**v2.0.0 = 完整功能 + frontend** (rc 后 ~6-8 周, 含至少 1 器官实现).
 
 设计哲学 / 8+1 锚 / 13 键 / 三洋葱 / L0 HA / 0 装 PASS 跨 v2 三个阶段 **0 改**. O-6 永远是守门人 — 你也是.
 

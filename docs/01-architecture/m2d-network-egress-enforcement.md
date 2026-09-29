@@ -26,11 +26,11 @@ They are different APIs and different security guarantees. A safe HTTP client
 does not restrict `curl` inside a child process. A Job Object / process group
 does not make an HTTP destination policy safe.
 
-## 2. Donor audit
+## 2. Baseline audit
 
 Source: `origin/master:reconstruction_v2/`.
 
-| Donor primitive | Classification | Notes |
+| Baseline primitive | Classification | Notes |
 | --- | --- | --- |
 | `apeireth-http-client/src/egress.rs` | STUB | `check_outbound` always `Ok`; no policy. |
 | `apeireth-http-client/src/lib.rs` | STUB | `get`/`post` return fabricated responses. |

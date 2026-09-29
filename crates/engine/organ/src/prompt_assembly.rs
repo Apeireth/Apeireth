@@ -1,6 +1,5 @@
 //! Prompt placeholder universe (消息处理范式（独立实现）).
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/prompt_assembler.rs`.
 //!
 //! - Typed variable sources: identity / state / goals / memory / time / custom.
 //! - Privileged expansion: `agent:` / `toolbox:` only expand in system (or
@@ -10,7 +9,7 @@
 //! - Cycle detection + depth cap: honest error marker, original placeholder
 //!   preserved on depth overflow.
 //!
-//! **Not ported**: `TimeSource` (chrono weekday formatting). Inject a
+//! **Not included**: `TimeSource` (chrono weekday formatting). Inject a
 //! `StaticSource(SourceKind::Time)` if a caller needs `{{time:date}}`.
 //! **Not a persona owner**: this expands placeholders; identity text is a
 //! registered source, not a second persona module.

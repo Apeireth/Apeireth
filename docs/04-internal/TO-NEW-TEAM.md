@@ -36,7 +36,7 @@ Author:          主代理 Mavis
 | 测试 (A 块前) | **1726 passed, 0 FAILED** (主代理 2026-08-28 亲跑 `cargo test --workspace --locked` 当时; **A 块后 1739 passed**) |
 | clippy | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |
 | 7 capability trait | MemoryBackend / Experience / Perception / PreferenceStore / SelfAssessmentStore / LlmFactory / SubSupervisor 全真接 |
-| 9 organ | **9/9 真移植** (E4/F1/F4/F6/W1/W2/W3/E7/Memory, 整合 #2 commit `bbf70293`) |
+| 9 organ | **9/9 真实现** (E4/F1/F4/F6/W1/W2/W3/E7/Memory, 整合 #2 commit `bbf70293`) |
 | **OrganOrchestrator** | **A 块完整化真实施已落** (`crates/engine/runtime/src/canonical/orchestrator.rs` + `upgrade_cycle.rs`, 13 重 gate + 5 状态机 + 9 organ 顺序 process + tick 6 步 (主权闸 → 9 organ + 8 gate → F1 emotion → Council 60s → 演化闸 → governance) + L0-L5 UpgradeCycle 6 步; 5 stage 真实施 + O-6 三阶审查 amend 后 commits `c003e078` / `087ab2ac` / `50ba2e57` / `29e5ce66` / `0afa733f`; 详 `docs/01-architecture/organ-orchestrator-completion-plan.md` + `docs/04-internal/A-block-o6-true-account.md`) |
 | 认知模块 12 slot | **6 WIRED + 6 DEFERRED** (judge/council 为 WIRED, OFF by default) |
 | 10 RC | **9/10 真实现**, RC-7 (Whisper + 屏幕感知) 待硬件, spec 已完 (R14) |
@@ -225,7 +225,7 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
 | 13 键 | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` |
 | 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` | Self-Disable / L0 HA / 13 键 verdict cache |
 | workspace.version | `Cargo.toml` | `"2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210；旧 "1.2.0 双轴制" 已终结） |
-| R11 baseline 3 值 | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (active workspace 无 const source) | 0.8682 / 0.8532 / 0.9063 (数字严守, R12 spec 重新审定后移植) |
+| R11 baseline 3 值 | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (active workspace 无 const source) | 0.8682 / 0.8532 / 0.9063 (数字严守, R12 spec 重新审定后迁回) |
 
 > 例外: 主人明确授权 (例: 2026-08-27 授权加 O-6). 其余情况 0 触碰.
 

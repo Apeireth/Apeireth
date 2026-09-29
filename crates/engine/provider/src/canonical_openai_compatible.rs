@@ -22,7 +22,7 @@
 //!
 //! # Faithful to the legacy implementation
 //!
-//! Ported from `apeireth_api::llm::providers::openai_compat::OpenAiCompatibleProvider`
+//! Semantically aligned with `apeireth_api::llm::providers::openai_compat::OpenAiCompatibleProvider`
 //! (an `LlmProvider`), but not wrapped around it. Bearer auth; `POST
 //! {base_url}/chat/completions`; `choices[0].message.content`; `usage`;
 //! `finish_reason` → [`NormalizedFinishReason::from_openai`]. The legacy

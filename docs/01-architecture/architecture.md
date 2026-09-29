@@ -1,8 +1,8 @@
 # Apeireth Architecture
 
 > 当前基线：默认分支 `main`，tag `v2.0.0-rc.1`（测试基线见 `research/baselines/`）。
-> 根 Cargo workspace（16 个 crate）+ 独立的
-> `frontend/companion-desktop` workspace。历史 donor 不属于生产依赖。
+> 根 Cargo workspace（18 个 crate）+ 独立的
+> `frontend/companion-desktop` workspace。历史遗留实现不属于生产依赖。
 
 ## Layer view
 

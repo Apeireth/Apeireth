@@ -1,8 +1,8 @@
-//! Small deterministic permission primitives, adapted from the donor's onion
+//! Small deterministic permission primitives, aligned with the onion
 //! permission layer.
 //!
-//! The donor's `PrincipleOnion` (hardcoded philosophical prose) and `DslOnion`
-//! (ad-hoc expression parsing) were **not** ported. What remains is the useful
+//! The earlier `PrincipleOnion` (hardcoded philosophical prose) and `DslOnion`
+//! (ad-hoc expression parsing) were **not** implemented here. What remains is the useful
 //! deterministic core: a [`Permission`] set and a [`PermissionPolicy`] that maps
 //! capability dispatch to the canonical [`Decision`] semantics.
 //!
@@ -34,7 +34,7 @@ pub enum Permission {
     NetworkEgress(String),
     /// Modify identity or self-model state.
     ModifyIdentity,
-    /// Administrative override. Kept from the donor as an explicit grant; a
+    /// Administrative override. Kept as an explicit grant; a
     /// policy that does not want override semantics simply never grants it.
     AdminOverride,
 }

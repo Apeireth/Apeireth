@@ -18,7 +18,7 @@
 
 ## 2. 能力对账 (按域)
 
-> 定性列: ✅已移植 / 🟡部分 / ⛔明确延期 / 🔴0 装 / 🔒LOCKED / 🖥️待硬件。
+> 定性列: ✅已实现 / 🟡部分 / ⛔明确延期 / 🔴0 装 / 🔒LOCKED / 🖥️待硬件。
 > 证据以文档行号或源码路径给出, 详见各子审计报告。
 
 ### 2.1 Storage / 记忆
@@ -27,7 +27,7 @@
 |---|---|---|---|
 | SQLite pool + write channel / migrations | REAL | 已就位 | ✅ |
 | MemoryStore v2 (ACT-R/temporal/tombstone) | REAL | WIRED | ✅ |
-| VectorIndex (cosine + BM25 hybrid) | REAL | cosine 已 1:1; **BM25 缺** | 🟡 |
+| VectorIndex (cosine + BM25 hybrid) | REAL | cosine 已语义对齐; **BM25 缺** | 🟡 |
 | Graph primitives / causal engine | PARTIAL | graph ✅; **causal engine 缺** | 🟡 |
 | consolidation_writeback / daily_summary / diary / cross_diary / memory_injection | REAL | **0 真实施** | 🔴 |
 | memory_extractor / memory_graph | REAL | ADAPT | 🟡 |
@@ -62,9 +62,9 @@
 | judge / council 评审 | v1 critic | WIRED, 默认关, 四级降级已加固 (2026-10-06) | ✅ |
 | HybridCognitiveRouter | PARTIAL | **0 真实施** | 🔴 |
 | meta_thinking (643 行) | REAL | **0** | 🔴 |
-| reflexion / thought_cluster / intent_brier | REAL | donor 已入库, **active 0 移植** | 🔴 |
+| reflexion / thought_cluster / intent_brier | REAL | 已入库 legacy/, **active 0 实现** | 🔴 |
 | reflection 4 阶段周期 | REAL | DEFERRED → 并入 self_assessment (R22) | ⛔ |
-| confidence (BetaBinomial) | REAL | world_model 本地简化 ✅; trait 0 移植 | 🟡 |
+| confidence (BetaBinomial) | REAL | world_model 本地简化 ✅; trait 0 实现 | 🟡 |
 
 ### 2.5 物种 / 关系 / 教养 (v1 愿景核心, v2 最大缺口)
 
@@ -104,7 +104,7 @@
 | EventBus core / backbone | REAL | core ✅ / backbone ADAPT P2 | 🟡 |
 | Scheduler / Telemetry | PARTIAL | DEFER P2 | ⛔ |
 | SDK (HTTP/WS 客户端) | REAL | **stub** (`unimplemented!()`, 待 R21) | 🔴 |
-| Voice 交付通道 (lark/telegram 等) | REAL | archived stub | ⛔ |
+| Voice 交付通道 (同类 IM 通道等) | REAL | archived stub | ⛔ |
 
 ### 2.8 形式化验证 / 质量
 
@@ -116,7 +116,7 @@
 
 ## 3. 未实现的愿景 (分组清单)
 
-### 3.1 🔴 0 真实施 (v1 有真实现, v2 未移植)
+### 3.1 🔴 0 真实施 (v1 有真实现, v2 未实现)
 
 **记忆塑形**: consolidation_writeback / daily_summary / diary / cross_diary /
 memory_injection / BM25 hybrid / causal engine
@@ -155,8 +155,8 @@ perception 不做 per-turn module
 
 | # | 矛盾 | 裁决 |
 |---|---|---|
-| 1 | oracle/oracle_adapters: FG 标 🔴 vs CC 标 🟡 | **采纳 CC**: world_model trait 已 1:1, oracle_adapters 全套 0 |
-| 2 | proactive/E7: FG:156 标 🔴 但 FG:119 自标 ✅ | **采纳 ✅**: E7 emergence 已 1:1 移植; FG 内部矛盾 |
+| 1 | oracle/oracle_adapters: FG 标 🔴 vs CC 标 🟡 | **采纳 CC**: world_model trait 已语义对齐, oracle_adapters 全套 0 |
+| 2 | proactive/E7: FG:156 标 🔴 但 FG:119 自标 ✅ | **采纳 ✅**: E7 emergence 已 语义对齐; FG 内部矛盾 |
 | 3 | Kani proofs: FG 🔴 vs CC 🟡 | **采纳 CC**: organ_kani 已装 6 crate, bridge_kani 0 |
 | 4 | confidence: FG 🔴 vs MC 🟡 | **采纳 MC**: world_model 本地简化 ✅, v1 trait 0 |
 | 5 | VectorIndex/Graph: FG 内部 🔴/🟡 自相矛盾 | **采纳 FG §5 修订**: 均 🟡 partial |
@@ -175,11 +175,11 @@ perception 不做 per-turn module
 2. **未达成的愿景集中在四块**: 物种与关系 (education/partner/community/principles)、
    记忆塑形 (diary/cross_diary/consolidation)、元认知 (meta_thinking/reflexion/
    thought_cluster/intent_brier)、协调上下文 (onering/context/assemble)。
-   v1 的实现都在 `legacy/` 里躺着, 属"可移植的既成资产", 不是从零研发。
+   v1 的实现都在 `legacy/` 里躺着, 属"可复用的既成资产", 不是从零研发。
 3. **诚实的完成度**: 文档自标 ✅ 的项目多数停在 IMPLEMENTED; 达到
    PRODUCTION WIRED/DEFAULT ENABLED/HARDWARE VALIDATED 的是少数 (主链路 + 治理 3 hook
    + 桌面全链 + 记忆 v2.2)。感知/语音/视觉三块全部待硬件。
-4. **建议的恢复序** (与 ROADMAP P 序一致, 未变更): P3 记忆移植 (M1B) → P6 companion
+4. **建议的恢复序** (与 ROADMAP P 序一致, 未变更): P3 记忆落地 (M1B) → P6 companion
    器官 (含物种/关系/元认知四块) → P7 连续感知 (硬件到位后) → P5 沙箱强化
    (可提前: `shell-sandbox-lite-design-2026-10-06.md`)。
 
@@ -187,41 +187,41 @@ perception 不做 per-turn module
 
 > 既有差距文档 `apeireth-1-0-vs-2-0-functional-gap` 只覆盖 v1 的一部分子系统。
 > v1 源码清单 (105 crate) 显示 v1 的实际广度远超该文档, 以下为**文档未列**的
-> v1 子系统及其 v2 状态 (均未移植, 除非注明):
+> v1 子系统及其 v2 状态 (均未实现, 除非注明):
 
 | v1 子系统 | 内容 | v2 状态 |
 |---|---|---|
-| 终端沙箱 6 后端 | Local / Docker / SSH / Daytona / Modal / Singularity (`apeireth-environment`) | ⛔ 未移植 (v2 仅 ProcessExecutor + JobObject) |
+| 终端沙箱 6 后端 | Local / Docker / SSH / Daytona / Modal / Singularity (`apeireth-environment`) | ⛔ 未实现 (v2 仅 ProcessExecutor + JobObject) |
 | Docker 沙箱真接 | `frozen/apeireth-sandbox` (bollard REST v1.43) | ⛔ 冻结参考 |
-| microVM (libkrun FFI) | companion `vm_sandbox.rs` / `sandbox_ffi_libkrun.rs` (feature 默认关) | 🖥️ 未移植 |
+| microVM (libkrun FFI) | companion `vm_sandbox.rs` / `sandbox_ffi_libkrun.rs` (feature 默认关) | 🖥️ 未实现 |
 | 网络隔离 | netns / cgroup / WFP (`sandbox_net.rs`) | ⛔ 0 装 stub |
 | 受限 token + AppContainer | companion `restricted_token.rs` / `app_container.rs` | ⛔ (本审计 §3.1; 轻量档设计将以此实现) |
-| Leptos Web 前端 | `apeireth-web` (SSR+WASM, council/memory/asi 页) | ⛔ 未移植 (v2 走 Tauri 桌面) |
-| TUI 5 页 | `apeireth-tui` (ratatui + 9 器官视图) | ⛔ 未移植 |
-| PyO3 Python 桥 | `apeireth-pybridge` (含 `reflection_self_loop.rs`) | ⛔ 未移植 (v2 纯 Rust deny(unsafe)) |
-| 图编排 / 工作流引擎 | `apeireth-graph` (LangGraph 式) / `apeireth-workflow` (Temporal 式) | ⛔ 未移植 (v2 单 agent loop) |
+| Leptos Web 前端 | `apeireth-web` (SSR+WASM, council/memory/asi 页) | ⛔ 未实现 (v2 走 Tauri 桌面) |
+| TUI 5 页 | `apeireth-tui` (ratatui + 9 器官视图) | ⛔ 未实现 |
+| PyO3 Python 桥 | `apeireth-pybridge` (含 `reflection_self_loop.rs`) | ⛔ 未实现 (v2 纯 Rust deny(unsafe)) |
+| 图编排 / 工作流引擎 | `apeireth-graph` (状态图编排式) / `apeireth-workflow` (长事务工作流式) | ⛔ 未实现 (v2 单 agent loop) |
 | 主 chat 管线 (独立 crate) | `apeireth-pipeline` (token 预算三层 + 165 单测 + wiremock e2e) | 🟡 概念并入 runtime |
-| 5 阶段 pipeline + 熔断 | `apeireth-pipeline-g5` (circuit_breaker + bounded_reliability) | ⛔ 未移植 |
+| 5 阶段 pipeline + 熔断 | `apeireth-pipeline-g5` (circuit_breaker + bounded_reliability) | ⛔ 未实现 |
 | L0-L4 五层总线 | `apeireth-bus` | 🟡 v2 仅 EventBus core |
-| MEWG 五重治理 + 物理多签 | `apeireth-sovereignty` (mewg/physical_multisig/multi_human/multi_ai) | ⛔ 未移植 |
-| HASH-SQL 仲裁 | `apeireth-arbitration` (唯一事实时间线) | ⛔ 未移植 |
+| MEWG 五重治理 + 物理多签 | `apeireth-sovereignty` (mewg/physical_multisig/multi_human/multi_ai) | ⛔ 未实现 |
+| HASH-SQL 仲裁 | `apeireth-arbitration` (唯一事实时间线) | ⛔ 未实现 |
 | 13 键 FourGates 实现 | `apeireth-constraint` (+ SelfModifyGuard) | 🔒 v2 永久降级 (RUNTIME_ENFORCED=false) |
 | 三洋葱 trait 抽象 | `apeireth-onion` (原则 5 层 + 权限 6 层) | 🟡 v2 仅 3 项脊柱 + hooks |
-| 7 种记忆 provider | `apeireth-memory-extensions` (in_memory/redis/sqlite/postgres/s3/disk_lru/hybrid) | ⛔ 未移植 (v2 仅 SQLite) |
-| 跨 session token 折叠 | `apeireth-context-fold` (FoldStrategy/FoldMarker) | ⛔ 未移植 |
+| 7 种记忆 provider | `apeireth-memory-extensions` (in_memory/redis/sqlite/postgres/s3/disk_lru/hybrid) | ⛔ 未实现 (v2 仅 SQLite) |
+| 跨 session token 折叠 | `apeireth-context-fold` (FoldStrategy/FoldMarker) | ⛔ 未实现 |
 | 7 强制 Advisor 智囊团 (独立 crate) | `apeireth-council` (含 mock LLM 默认 + multi_model_backend) | 🟡 v2 有 Council (WIRED, 默认关) |
 | 工具注册/运行时/审批 三 crate | `tool-registry` (5 轴正交 + 热加载) / `tool-runtime` / `tool-approval` (5 规则 + 5 分钟窗口) | 🟡 v2 简化为 plugin+capability 注册 + 审批生命周期 |
-| 9 工具子 crate | browser(Playwright a11y) / codesearch(Aho-Corasick) / image-gen / image-process / tool-shell(seccomp+SSH+多签) / tool-fetch(search+deep+Bilibili) | ⛔ 未移植 (v2 仅 5 内置工具) |
-| 进程 supervisor (PID1) | `apeireth-supervisor` (5 sub-supervisor + 3 restart 策略 + actor mailbox) | ⛔ 未移植 (ROADMAP P5 "不在 17-crate 工作区") |
-| CentralAI + 11 Skill | `apeireth-central` (含 Skill 注册 + semver) | ⛔ 未移植 |
-| Agent 管理 + subagent | `apeireth-agent` (alias/LRU/notify 热加载/subagent) | ⛔ 未移植 |
+| 9 工具子 crate | browser(Playwright a11y) / codesearch(Aho-Corasick) / image-gen / image-process / tool-shell(seccomp+SSH+多签) / tool-fetch(search+deep+Bilibili) | ⛔ 未实现 (v2 仅 5 内置工具) |
+| 进程 supervisor (PID1) | `apeireth-supervisor` (5 sub-supervisor + 3 restart 策略 + actor mailbox) | ⛔ 未实现 (ROADMAP P5 "不在 17-crate 工作区") |
+| CentralAI + 11 Skill | `apeireth-central` (含 Skill 注册 + semver) | ⛔ 未实现 |
+| Agent 管理 + subagent | `apeireth-agent` (alias/LRU/notify 热加载/subagent) | ⛔ 未实现 |
 | Team Lead Orchestrator | `apeireth-team-lead` (approval_bridge + lease) | 🟡 v2 有 orchestration crate (Council) |
-| 节律 / cron | `apeireth-cron` + companion `emergence` (RhythmEstimator) | 🟡 v2 E7 emergence 已 1:1; cron 未移植 |
-| 遥测栈 3 crate | telemetry / observability / metrics / tracing (frozen) | ⛔ 未移植 (v2 仅 session event + trace) |
+| 节律 / cron | `apeireth-cron` + companion `emergence` (RhythmEstimator) | 🟡 v2 E7 emergence 已语义对齐; cron 未实现 |
+| 遥测栈 3 crate | telemetry / observability / metrics / tracing (frozen) | ⛔ 未实现 (v2 仅 session event + trace) |
 | 形式化验证 | `archived/apeireth-formal` (Kani/TLA+ harnesses) | 🟡 v2 organ_kani 已装 6 crate |
-| 交付通道 | Lark / LiveKit / ACP / Web / TUI / companion_serve(OpenAI 兼容) | ⛔ 未移植 (v2 仅 gateway HTTP + 桌面) |
+| 交付通道 | IM / LiveKit / ACP / Web / TUI / companion_serve(OpenAI 兼容) | ⛔ 未实现 (v2 仅 gateway HTTP + 桌面) |
 | SDK (HTTP/WS 客户端) | v1 REAL | 🔴 v2 stub (`unimplemented!()`, 待 R21) |
-| 配置/状态/i18n/扩展/限流 等基建 | config / state(9 organ state) / i18n / extension / rate-limiter / http-client(LIFO 池) | ⛔ 未移植 |
+| 配置/状态/i18n/扩展/限流 等基建 | config / state(9 organ state) / i18n / extension / rate-limiter / http-client(LIFO 池) | ⛔ 未实现 |
 
 **补充判断**:
 - v1 的**治理与工具链其实最实** (13 键/MEWG/三洋葱/工具注册运行时审批/9 工具),
@@ -236,7 +236,7 @@ perception 不做 per-turn module
 ## 7. 更正与源码复核 (2026-10-06 晚, 重要)
 
 > **主账 `apeireth-1-0-vs-2-0-functional-gap` (2026-08-28) 的 🔴 清单已大面积过时** ——
-> 其后多波 (R12-SpeciesCore-1 / memory v2.2 / R30 claude-mem 三层 / 研究吸收批)
+> 其后多波 (R12-SpeciesCore-1 / memory v2.2 / R30 记忆三层 / 研究吸收批)
 > 已把其中许多做成**库级实现**。本节以源码实证更正 §2/§3 的对应条目。
 
 ### 7.1 已存在但**未接生产路径** (IMPLEMENTED, NOT PRODUCTION WIRED)
@@ -288,7 +288,7 @@ perception 不做 per-turn module
 > | `diary` / `dreaming` / `meta_thinking` | 0 引用→未接 | crate 内部互调 (`cross_diary→diary`, `dreaming→meta_thinking`), 但**闭环根** (dreaming/consolidation 触发点) 仍未接 | consolidation 触发点 **W2b 已接** ✅; dreaming (6 状态机 + MetaThinker 生产注入) 归 dreaming 批 |
 > | `typed_recall` 读侧 (commitment/persona/relation 召回) | 未列 | **写读不对称 bug**: 写侧 `typed_sink` 在生产落库, 读侧 `typed_recall: None` (`cli/src/lib.rs:576` 改前) —— **数据入库永不召回**; `SqliteTypedMemoryRecallSource` 适配器+测试全在, 只差组装根一行 | **本批修复** (默认开 + `APEIRETH_DISABLE_TYPED_RECALL=1` 逃生门) |
 > | 语义向量阶段 (`embedding_provider`) | 未列 | **实现缺失**: `ProductionBackends.embedding_provider` 恒 `None`, 全仓库只有 `NoEmbeddingProvider`+测试 fake; coordinator 的向量阶段 (`recall_async`) 从未激活, 恒 `used_lexical_fallback=true` | **本批补真实现** `OpenAiCompatibleEmbeddingProvider` + `APEIRETH_EMBEDDING_URL/MODEL/KEY` 旋钮 (fail-loud 半配) |
-> | ~~reflexion / memory_injection~~ (原列本行) | 0 引用→未接 | **W2b 本批已接**: reflexion = 新模块 `cognitive.reflexion` (TurnStart 教训注入 + AfterTurn 消费 Judge 显式判定沉淀 + RuleCritic 蒸馏, `APEIRETH_ENABLE_REFLEXION=1`); memory_injection = donor 反幻觉注入格式 (`APEIRETH_ENABLE_MEMORY_INJECTION=1`) ✅ | partner/principles/intent_brier/吸收批 4 个等: 确证未接 (crate 内部互调亦零命中), 维持按序接线 |
+> | ~~reflexion / memory_injection~~ (原列本行) | 0 引用→未接 | **W2b 本批已接**: reflexion = 新模块 `cognitive.reflexion` (TurnStart 教训注入 + AfterTurn 消费 Judge 显式判定沉淀 + RuleCritic 蒸馏, `APEIRETH_ENABLE_REFLEXION=1`); memory_injection = v1 反幻觉注入格式 (`APEIRETH_ENABLE_MEMORY_INJECTION=1`) ✅ | partner/principles/intent_brier/吸收批 4 个等: 确证未接 (crate 内部互调亦零命中), 维持按序接线 |
 
 > **[2026-10-10 W2 线收口终局复核 (五审)]** W2 接线工作线全批完成后的 §7.1 处置列终局
 > (每项均过五件验收门: 默认关旋钮 / 默认关不变测试 / 效果可见测试 / 四级口径行 / 台账条目):
@@ -316,12 +316,12 @@ perception 不做 per-turn module
 >
 > | # | 项 | v1 legacy 实况 (文件+证据) | 修正定性 |
 > |---|---|---|---|
-> | 1 | community | ✅ 真: `donor/apeireth-companion/community.rs` (`Community` + `triage()` + 测试; `memory_graph.rs:429` 消费 `TriageResult`) | 真缺口成立 (v1→v2 未移植) |
+> | 1 | community | ✅ 真: `donor/apeireth-companion/community.rs` (`Community` + `triage()` + 测试; `memory_graph.rs:429` 消费 `TriageResult`) | 真缺口成立 (v1→v2 未实现) |
 > | 2 | experiment_field | ✅ 真框架: `donor/.../experiment_field.rs` (`ExperimentField` + `VMRunner` 注入边界 + 提案→实验→批准→部署→回滚学习) | 真缺口成立 (框架可回收) |
 > | 3 | HybridCognitiveRouter | ❌ **v1 也无** (legacy 全文 0 命中) | **改判: 纯愿景项** (非"v1 有 v2 无") |
 > | 4 | ToolSynthesizer | ❌ **v1 也无** (`synthes*` 命中全是 TTS/报告合成语义) | **改判: 纯愿景项** |
-> | 5 | thought_cluster | ✅ 真: `donor/.../thought_cluster.rs` (`ThoughtClusterManager` + `ThoughtClusterReader` + search + 链注册表) | **从缺口移出**: v2 `cluster_store.rs` 是完整改名移植 (API 五件套 + trait 同构, 还多了路径穿越防御) |
-> | 6 | onering | ✅ 真: `donor/.../onering.rs` (`OneRingLedger` 统一上下文账本, 溯源强制, SSE/Lark/Telegram/Web/CLI 五前端同一锚点时间线, 8 测试) | 真缺口成立 (原"仅元数据透传"观测的是 v2 侧) |
+> | 5 | thought_cluster | ✅ 真: `donor/.../thought_cluster.rs` (`ThoughtClusterManager` + `ThoughtClusterReader` + search + 链注册表) | **从缺口移出**: v2 `cluster_store.rs` 是完整改名实现 (API 五件套 + trait 同构, 还多了路径穿越防御) |
+> | 6 | onering | ✅ 真: `donor/.../onering.rs` (`OneRingLedger` 统一上下文账本, 溯源强制, SSE/同类 IM 2 项/Web/CLI 五前端同一锚点时间线, 8 测试) | 真缺口成立 (原"仅元数据透传"观测的是 v2 侧) |
 > | 7 | 真文件/网络沙箱 | ✅ 真: `frozen/apeireth-sandbox/real.rs` (**真接 Docker daemon HTTP API**, `HttpDaemonClient` 6 API + wiremock 测试) + `companion/{sandbox,vm_sandbox}.rs` 5 层门 | 真缺口成立且 **v1 有 Docker 容器方案整 crate 可回收** |
 > | 8 | SDK 真 HTTP/WS | ✅ 大量真: `donor/apeireth-http-client` (reqwest + LIFO 池) / `apeireth-api/ws_v1` (axum WS 8 帧 handler) / `apeireth-bus/l4` (tokio-tungstenite 真双端) / `voice/{real,minimax_live}` / `lark/real` / `update` (真下载 + minisign 验签) / `memory-extensions/provider_s3` | 真缺口成立且 v1 真 HTTP/WS 客户端**群**可回收 |
 > | 9 | 三洋葱 L3-L5 | ✅ **整 crate 真**: `donor/apeireth-onion` (双洋葱统一体: 原则洋葱 E/S/A/M/O + 权限洋葱 L0..L5 **全六层** + L0 HA + `unify_check` 三段门 + `arbitrate`) + `archived/apeireth-formal` **Kani 形式化证明** (`double_onion_sample`: L0 requires HA) + `constraint` V2 门 + `companion/security.rs` 洋葱门接线 + `bench/self_disable_bench` 5 攻击类别 guards | 真缺口成立且比原估计更广: v2 `core::onion` 只有数据模型 (多签 hex 占位), v1 有统一门 + 形式化证明 |
@@ -329,14 +329,14 @@ perception 不做 per-turn module
 | 项 | 状态 |
 |---|---|
 | community (社群识别与分诊) | 🔴 v2 crates 内 0 命中 |
-| experiment_field (隔离实验场) | 🔴 → ✅ **[2026-10-10 五审]** 机制已移植: `runtime-assembly/src/canonical/experiment_field.rs` (ExperimentStatus 状态机 + VMRunner 口 + NoopVMRunner 诚实 Err + FailureLearningSink 回滚学习 → WikiEntry, 与部署侧 upgrade_cycle 互补成环; 真 VM 执行后端仍 0 装 = 后续 smol-vm/libkrun 项) |
+| experiment_field (隔离实验场) | 🔴 → ✅ **[2026-10-10 五审]** 机制已实现: `runtime-assembly/src/canonical/experiment_field.rs` (ExperimentStatus 状态机 + VMRunner 口 + NoopVMRunner 诚实 Err + FailureLearningSink 回滚学习 → WikiEntry, 与部署侧 upgrade_cycle 互补成环; 真 VM 执行后端仍 0 装 = 后续 smol-vm/libkrun 项) |
 | HybridCognitiveRouter | 🔴 0 命中 (**v1 亦无 —— 纯愿景项**, 四审表 #3) |
 | ToolSynthesizer | 🔴 0 命中 (**v1 亦无 —— 纯愿景项**, 四审表 #4) |
-| thought_cluster | ✅ **已移植** —— v2 `cluster_store.rs` = v1 `thought_cluster` 完整改名移植 (四审表 #5, 从缺口清单移出) |
+| thought_cluster | ✅ **已实现** —— v2 `cluster_store.rs` = v1 `thought_cluster` 完整改名实现 (四审表 #5, 从缺口清单移出) |
 | onering (OneRingLedger) | 🔴 → ✅ **[2026-10-10 五审纠错]** 账本本体**早已在 v2**: `memory/src/context_ledger.rs` (`ContextLedger`, 头注明写 "salvage of the companion ledger") = v1 OneRingLedger 完整打捞 (API 同构 + `DEFAULT_MAX_RECORDS=200` + 单调 seq + 计数 prune + 迁移 rekey); 原"仅元数据透传"观测遗漏了该模块。本次补**生产消费** (cli 回合记账, `APEIRETH_ENABLE_ONERING_LEDGER=1` 默认关, 台账 #58) |
 | 真文件/网络隔离 | 🔴 实测 `EnforcementLevel::Unsupported` (`process/linux.rs:62-67`), 仅进程树遏制 |
-| SDK 真实 HTTP/WS | 🔴 → 🟡 **[2026-10-10 W5]** HTTP 真传输已接: `apeireth-sdk` 6 工具 method + `invoke_tool` = 真 reqwest POST 平台 API 契约 (`/v1/tools/{tool}/invoke`, Bearer+JSON+有界超时+audit, 错误面 1:1), wiremock 61 测全绿; **WS (`invoke_stream`) 仍 stub** (`STUB_MODE` 守门, WS 服务端端点 = 后续项)。0 装纪律保持: STUB_MODE=true 只守 WS 层, 不假装 WS 可用 |
-| 三洋葱 L3-L5 | 🔴 → ✅ **[2026-10-10 W3]** 三层全落地: 判定模型 (`core/onion_gate.rs`, v1 donor 移植 + r177 Kani 证明平移为 Rust 测试) + 物理执行面 (`OnionLayerHook` 接入生产治理管线末层, `APEIRETH_ENABLE_ONION_LAYER=1` 默认关); 仅真 Ed25519 多签留 v2.1 (0 装占位已载明) |
+| SDK 真实 HTTP/WS | 🔴 → 🟡 **[2026-10-10 W5]** HTTP 真传输已接: `apeireth-sdk` 6 工具 method + `invoke_tool` = 真 reqwest POST 平台 API 契约 (`/v1/tools/{tool}/invoke`, Bearer+JSON+有界超时+audit, 错误面逐项一致), wiremock 61 测全绿; **WS (`invoke_stream`) 仍 stub** (`STUB_MODE` 守门, WS 服务端端点 = 后续项)。0 装纪律保持: STUB_MODE=true 只守 WS 层, 不假装 WS 可用 |
+| 三洋葱 L3-L5 | 🔴 → ✅ **[2026-10-10 W3]** 三层全落地: 判定模型 (`core/onion_gate.rs`, v1 实现 + r177 Kani 证明平移为 Rust 测试) + 物理执行面 (`OnionLayerHook` 接入生产治理管线末层, `APEIRETH_ENABLE_ONION_LAYER=1` 默认关); 仅真 Ed25519 多签留 v2.1 (0 装占位已载明) |
 
 ### 7.3 对结论的修正
 
@@ -345,13 +345,13 @@ perception 不做 per-turn module
 >
 > | §7.2 原缺口 | 终局 |
 > |---|---|
-> | community | ✅ 移植 + 生产消费全闭环 (#57/#64) |
+> | community | ✅ 实现 + 生产消费全闭环 (#57/#64) |
 > | onering | ✅ 本体纠错 (context_ledger 打捞件) + CLI 消费 (#58); 多前端 = 剩余项 |
-> | experiment_field | ✅ 机制移植 (#59); 真 VM 后端 0 装留后续 |
+> | experiment_field | ✅ 机制实现 (#59); 真 VM 后端 0 装留后续 |
 > | 真文件/网络隔离 | ✅ **W1 已反超 v1**: AppContainer 沙箱 + 双探针实证 (#49); v1 只有骨架 |
 > | SDK 真 HTTP/WS | 🟡 HTTP 真传输 (#61); WS 半场等服务端端点 |
 > | 三洋葱 L3-L5 | ✅ 三层全落地 (#55/#56) |
-> | thought_cluster | ✅ 早前已移植 (cluster_store.rs) |
+> | thought_cluster | ✅ 早前已实现 (cluster_store.rs) |
 >
 > **剩余真缺口 = 0**（ HybridCognitiveRouter / ToolSynthesizer 为纯愿景项，v1 亦无）。
 > **剩余工作**均为需外部条件或专门批次的中件，逐项阻塞点见交接报告 §5。
@@ -385,7 +385,7 @@ perception 不做 per-turn module
 | `credentials` (F) | 统一凭据存取 + keyring + 加密文件后端 + 脱敏 | `trait CredentialsStore`, `FileCredentialsStore`, `InMemoryKeyring`, `EncryptedFileBackend`, `NoopAudit/CountingAudit`, `SecretBuf/SecretString`, `KeyringCredentialResolver`, `trait CredentialResolver` |
 | `guard` (E) | 两阶段行为链安全分类器 (runtime 治理) | `ChainGuard`, `FastGuard/FastGuardResult`, `DecisionFusion`, `BehaviorChain`, `ScenarioOracle`, `CommandEffectAnalyzer`, `SessionBehaviorHistory`, `EnforcementDirective`, `GuardDryRunRequest/Response` |
 | `memory` (E) | canonical 记忆: SQLite 持久化 + ACT-R 检索 + 图 + BM25/向量混合索引 | `SqliteMemoryStore`, `MemoryMutationFacade`, `MemoryCoordinator`, `HybridSearchEngine`, `PersistentVectorIndex`, `BitemporalGraph`, `UniversalForgetFacade`, `layered_memo::*` (L1-L4), `dailynote::*`, `Episode/Note/SessionStore` |
-| `organ` (E) | 9 organ 真移植 (v1 companion 1:1 → `OrganTrait`) | `Curiosity/Hypothesis/ValueCases/Emotion/WorldModel/CausalWorldModel/EdgeMiner/Emergence/MemoryMerger` 9 impl + `NoopOrgan`; `morphology/motivation/tone/context_assembly/prompt_assembly/goal/experience_growth` |
+| `organ` (E) | 9 organ 真实现 (v1 companion 语义对齐 → `OrganTrait`) | `Curiosity/Hypothesis/ValueCases/Emotion/WorldModel/CausalWorldModel/EdgeMiner/Emergence/MemoryMerger` 9 impl + `NoopOrgan`; `morphology/motivation/tone/context_assembly/prompt_assembly/goal/experience_growth` |
 | `perception` (E) | 感知层 5 modality (v2.0 仅 Text 真) | `PerceptionEvent/Input/Modality`, `normalize/observe/capture/screen/owner/vision/voice`, `NoopScreenSource`, `XcapVisionBackend`, `WhisperHttpBackend`, `EnergyVadStream` |
 | `runtime` (E) | runtime 机制内核 (session/路由/agent loop/审批), `#![deny(unsafe_code)]` | `Runtime/Builder/Config`, `SessionManager/SessionStore`, `ProviderRouter/RoutedCompletion`, `ModuleRegistry/Module/AgentModule/ModuleInvoker`, `PendingApproval/ApprovalDecision/TurnOutcome`, `RuntimeEvent`, `ExecutionTrace`, `ContextProjector` |
 | `runtime-assembly` (E) | **生产装配** (concrete Memory/Organ/Tool/SQLite wiring) | `ProductionBackends/Modules/CognitiveModules`, `Council/Judge/Organ/MemoryRecall/MemoryWriteback/PreferenceLearning/SelfAssessment` Module, `Fetch/Filesystem/Repo/Search/Shell/Mcp` Module, `InvokerLlmFactory`, `SqliteSessionStore`, `PermissionPresetGovernanceHook`, `DEFERRED_COGNITIVE_SLOTS` |
@@ -445,7 +445,7 @@ continuation/cron/speech_arbiter/worktree_sandbox/lineage 真实现。
 `panels.rs:690,1168-1234` `memory.update` → `not_implemented`,
 `voice.duplex`/`subagents.orchestration` → `not_assembled`;
 `presence.rs:68-72,111-122` 固定 `heuristic_v0` + 置信 0.5, `Ritual` 永不发射;
-`plugin/mcp/sse.rs:6` SseTransport deferred; `plugin/mcp/reconnect.rs:15` donor 重连原本就是 stub。
+`plugin/mcp/sse.rs:6` SseTransport deferred; `plugin/mcp/reconnect.rs:15` v1 重连原本就是 stub。
 
 **持久化/可观测域** — SQLite pool/migrations/cache/限流/quota/machine_id 真;
 SSE 事件总线 + trace/audit 落档真; 统一错误帧 + 错误码目录真; 认知/成本遥测真。

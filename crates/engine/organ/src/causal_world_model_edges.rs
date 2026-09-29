@@ -1,7 +1,7 @@
-//! P-arch (2026-08-28): W3 Causal World Model Edges 器官真移植 v2
+//! P-arch (2026-08-28): W3 Causal World Model Edges 器官真实现 v2
 //! (被动路径, 确定性无 LLM).
 //!
-//! 1:1 翻译 v1 `apeireth-companion::causal_world_model` 中 **W3 边挖掘** 部分
+//! 语义对齐 v1 `apeireth-companion::causal_world_model` 中 **W3 边挖掘** 部分
 //! (v1 `MineCausalEdges`, per `legacy/donor/apeireth-companion/src/causal_world_model.rs:170-274`).
 //!
 //! ## 与 W2 (causal_world_model 主动 MCTS LLM) 严格区分
@@ -35,14 +35,14 @@
 //! ## 复用 (per task brief, 全部复用既有零件)
 //!
 //! - `apeireth_plugin::organ::{OrganTrait, OrganInput, OrganOutput, OrganKind,
-//!   OrganError, CausalEdge}` — 统一 trait 边界 (1:1 schema 翻译, plugin 层
+//!   OrganError, CausalEdge}` — 统一 trait 边界 (schema 对齐, plugin 层
 //!   `CausalEdge` 是 4 字段简化版, 本模块内部 `MinedEdge` 保留 v1 完整 8 字段
 //!   schema, 输出层映射到 plugin schema).
 //! - `apeireth_plugin::llm_factory::LlmFactory` — 仅 trait 边界, 0 装路径.
 //!
 //! ## 3 阶审查 (O-6 锚 9)
 //!
-//! 1. 总体: 1:1 翻译 v1 `MineCausalEdges` 统计边挖掘, trait 边界对齐 E4/F4/F1/F6 模式
+//! 1. 总体: 语义对齐 v1 `MineCausalEdges` 统计边挖掘, trait 边界对齐 E4/F4/F1/F6 模式
 //!    (engine 实现 + foundation trait + 0 装诚实).
 //! 2. 系统: `apeireth-organ` → `apeireth-plugin` → `apeireth-core` 单向依赖.
 //! 3. 架构: `Arc<dyn OrganTrait>` 注入 runtime, W3 走 `EdgeMinerOrgan::process`
@@ -83,25 +83,25 @@ mod uuid {
 }
 
 // ============================================================
-// 常量 (per v1 DEFAULT_* 1:1)
+// 常量 (per v1 DEFAULT_*)
 // ============================================================
 
 /// 时间窗口 (秒): 同一窗口内的两条事实视为"时间邻近", 可能存在因果关系.
-/// 1:1 翻译 v1 `DEFAULT_TIME_WINDOW_SECS = 86_400` (1 天).
+/// 语义对齐 v1 `DEFAULT_TIME_WINDOW_SECS = 86_400` (1 天).
 pub const DEFAULT_TIME_WINDOW_SECS: i64 = 86_400;
 
 /// 共现证据阈值: 统计边成立的最小共现次数.
-/// 1:1 翻译 v1 `DEFAULT_MIN_EVIDENCE = 7` (主人 2026-08-18 拍板).
+/// 语义对齐 v1 `DEFAULT_MIN_EVIDENCE = 7` (主人 2026-08-18 拍板).
 pub const DEFAULT_MIN_EVIDENCE: u32 = 7;
 
 // ============================================================
-// 内部数据结构 (v1 GraphFact 简化版, 1:1 翻译核心 s/p/o + timestamp)
+// 内部数据结构 (v1 GraphFact 简化版, 对齐核心 s/p/o + timestamp)
 // ============================================================
 
 /// 事实记录: v1 `GraphFact` 的核心 4 字段 (s/p/o + 时间).
 ///
 /// v1 `GraphFact` 含 id/chain/rev/importance/invalid_at (元数据); 本模块仅取
-/// 边挖掘必需的 subject/predicate/object/valid_at, 1:1 翻译算法语义.
+/// 边挖掘必需的 subject/predicate/object/valid_at, 对齐算法语义.
 ///
 /// `chain = "{subject}|{predicate}|{object}"` (派生, 与 v1 一致).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -133,7 +133,7 @@ impl FactRecord {
     }
 }
 
-/// 边来源 (per v1 `EdgeSource` 1:1).
+/// 边来源 (per v1 `EdgeSource`).
 ///
 /// W3 主路径 = Statistical (统计挖掘). LlmProposed / Hybrid 是 v1 文档列出的
 /// 补充路径, 但本模块 0 装 (那是 v1 W3 的 LLM 提议路径, W3 主路径 = 统计).
@@ -149,7 +149,7 @@ pub enum EdgeSource {
     Hybrid,
 }
 
-/// 挖掘出的因果边 (v1 `CausalEdge` 1:1 翻译, 内部完整 8 字段).
+/// 挖掘出的因果边 (v1 `CausalEdge` 语义对齐, 内部完整 8 字段).
 ///
 /// **0 装诚实**: 这是 W3 模块的**内部**数据结构. trait 输出 (`OrganOutput`)
 /// 走 plugin 层简化 `CausalEdge` schema (`{cause, effect, conf, source}`).
@@ -173,7 +173,7 @@ pub struct MinedEdge {
     pub source: EdgeSource,
 }
 
-/// 边统计 (query API 返回值, 1:1 翻译 v1 `EdgeStats` 任务说明 schema).
+/// 边统计 (query API 返回值, 语义对齐 v1 `EdgeStats` 任务说明 schema).
 #[derive(Debug, Clone)]
 pub struct EdgeStats {
     pub from: String,
@@ -196,7 +196,7 @@ pub enum EdgeKind {
     Correlates,
 }
 
-/// 因果图 (1:1 翻译 v1 `CausalGraph`, 简化版 — 仅边集 + 邻接索引).
+/// 因果图 (语义对齐 v1 `CausalGraph`, 简化版 — 仅边集 + 邻接索引).
 ///
 /// v1 `CausalGraph` 含 nodes + edges + outgoing/incoming. 本模块 W3 主路径
 /// 只需边集 (节点 = FactRecord, 由调用方持有). 邻接索引仅 `outgoing` (出边),
@@ -238,7 +238,7 @@ impl CausalGraph {
         self.edges.is_empty()
     }
 
-    /// 出邻接边迭代器 (per v1 `CausalGraph::outgoing_edges` 1:1).
+    /// 出邻接边迭代器 (per v1 `CausalGraph::outgoing_edges`).
     pub fn outgoing_edges(&self, from: &str) -> impl Iterator<Item = &MinedEdge> {
         self.outgoing
             .get(from)
@@ -249,10 +249,10 @@ impl CausalGraph {
 }
 
 // ============================================================
-// 边挖掘器 (1:1 翻译 v1 MineCausalEdges, 确定性无 LLM)
+// 边挖掘器 (语义对齐 v1 MineCausalEdges, 确定性无 LLM)
 // ============================================================
 
-/// 边挖掘器配置 (1:1 翻译 v1 `MineCausalEdges` 字段).
+/// 边挖掘器配置 (语义对齐 v1 `MineCausalEdges` 字段).
 #[derive(Debug, Clone)]
 pub struct EdgeMinerConfig {
     /// 时间窗口 (秒).
@@ -282,9 +282,9 @@ impl EdgeMinerConfig {
     }
 }
 
-/// 因果边挖掘器 (per v1 `MineCausalEdges` 1:1 翻译).
+/// 因果边挖掘器 (per v1 `MineCausalEdges` 语义对齐).
 ///
-/// ## 机制 (per v1 doc 第 173-177 行, 1:1 翻译)
+/// ## 机制 (per v1 doc 第 173-177 行, 语义对齐)
 ///
 /// 1. 按时间排序所有事实.
 /// 2. 对每对 (f_i, f_j), 若 `f_i.object == f_j.subject` 且时间差 ≤ 时间窗口 →
@@ -314,7 +314,7 @@ impl CausalEdgeMiner {
         }
     }
 
-    /// 从默认配置构造 (1:1 翻译 v1 `MineCausalEdges::default`).
+    /// 从默认配置构造 (语义对齐 v1 `MineCausalEdges::default`).
     pub fn with_defaults() -> Self {
         Self::new(EdgeMinerConfig::default())
     }
@@ -333,7 +333,7 @@ impl CausalEdgeMiner {
 
     /// 观察一条边并累计权重 (per v1 `observe_event` API 任务说明 schema).
     ///
-    /// **1:1 翻译 v1 累计语义**: 同一 (from, to, kind) 多次观察 → 权重累加,
+    /// **语义对齐 v1 累计语义**: 同一 (from, to, kind) 多次观察 → 权重累加,
     /// 证据数 +1. 达到 `min_evidence` 后, 该边进入 `edges` 索引供 `get_top_edges` 查询.
     pub fn observe_event(&mut self, from: &str, to: &str, kind: EdgeKind, weight: f32) {
         let key = (from.to_string(), to.to_string(), kind);
@@ -350,14 +350,14 @@ impl CausalEdgeMiner {
         entry.evidence_count += 1;
     }
 
-    /// 时间线挖掘 (per v1 `MineCausalEdges::from_timeline` 1:1 翻译).
+    /// 时间线挖掘 (per v1 `MineCausalEdges::from_timeline` 语义对齐).
     ///
     /// 输入: 一组 `FactRecord` 时间线. 输出: `(Vec<MinedEdge>, usize)` = (确认边, 候选对数).
     ///
-    /// ## 机制 (1:1 翻译 v1)
+    /// ## 机制 (语义对齐 v1)
     ///
     /// 1. 按 `valid_at` 排序所有事实 (v1 仅看有效: `invalid_at == None`; 本模块
-    ///    FactRecord 无 invalid_at 字段, 全部视为有效, 1:1 翻译简化).
+    ///    FactRecord 无 invalid_at 字段, 全部视为有效, 对齐 v1 简化).
     /// 2. 对每个 `fi`, 在时间窗口内找**首个**匹配的 `fj` (object_i == subject_j,
     ///    0 < dt ≤ window) → 计 1 对.
     /// 3. 权重 = 匹配次数 / 该源节点匹配总数 (条件概率近似, clamp 到 [0, 1]).
@@ -378,7 +378,7 @@ impl CausalEdgeMiner {
             }
             for fj in active.iter().skip(i + 1) {
                 // M2 修复: valid_at 是 epoch **毫秒**, time_window_secs 是 **秒** —
-                // 原实现把 ms 直接跟 secs 比较 (窗口大 1000 倍, 相邻秒的事实永不命中,
+                // 修复前把 ms 直接跟 secs 比较 (窗口大 1000 倍, 相邻秒的事实永不命中,
                 // break 永远不触发 → O(n²) 全表扫描). 与 causal_world_model.rs:323 对齐:
                 // 先除 1000 转成秒再比较.
                 let dt_secs = (fj.valid_at - fi.valid_at) / 1000; // ms → s
@@ -515,7 +515,7 @@ impl CausalEdgeMiner {
 // W3 EdgeMinerOrgan (v2 trait 真实现)
 // ============================================================
 
-/// W3 因果边挖掘器官 (per v2 OrganTrait 1:1 翻译 v1 MineCausalEdges).
+/// W3 因果边挖掘器官 (per v2 OrganTrait 语义对齐 v1 MineCausalEdges).
 ///
 /// ## 0 装诚实
 ///
@@ -530,7 +530,7 @@ impl CausalEdgeMiner {
 /// - `observe_fact(s, p, o, ts)`: 暴露给 Runtime 喂时间线事实 (per v1 GraphFact 输入).
 /// - `observe_event(from, to, kind, weight)`: 暴露给 Runtime 直接观察一条边
 ///   (per v1 任务说明 `observe_event` API).
-/// - `process(input)`: trait 边界入口, 走 1:1 翻译 v1 `from_timeline` 路径.
+/// - `process(input)`: trait 边界入口, 走 语义对齐 v1 `from_timeline` 路径.
 pub struct EdgeMinerOrgan {
     miner: std::sync::Mutex<CausalEdgeMiner>,
     /// 保留 LLM factory 字段 (未来扩展, 当前**不用** — 0 装诚实)
@@ -566,7 +566,7 @@ impl EdgeMinerOrgan {
 
     /// 喂时间线事实 (per v1 `MineCausalEdges::from_timeline` 输入 API).
     ///
-    /// 返回 (确认边, 候选对数), 1:1 翻译 v1 from_timeline 返回 tuple.
+    /// 返回 (确认边, 候选对数), 语义对齐 v1 from_timeline 返回 tuple.
     pub fn feed_timeline(&self, facts: &[FactRecord]) -> (Vec<MinedEdge>, usize) {
         let mut miner = self
             .miner
@@ -632,14 +632,14 @@ impl OrganTrait for EdgeMinerOrgan {
     }
 
     async fn process(&self, _input: OrganInput) -> Result<OrganOutput, OrganError> {
-        // 1:1 翻译 v1 W3 路径:
+        // 语义对齐 v1 W3 路径:
         // - W3 是**被动观察** + **累计权重**, 0 反事实推演 (那是 W2 主动 MCTS 的活).
         // - process() 不主动挖掘; 仅 snapshot 当前累积的 top 边, 输出 WorldModel schema.
         // - 真正喂数据走 `feed_timeline` / `observe_event` (Runtime 调).
         // - dry_run 模式: 不写状态, 仅 snapshot (当前 API 都是 read, dry_run 不影响).
         //
         // 输出: OrganOutput::WorldModel { edges, counterfactual }
-        // - edges: 当前累积的 top 边 (1:1 翻译 plugin 层 CausalEdge 4 字段 schema).
+        // - edges: 当前累积的 top 边 (语义对齐 plugin 层 CausalEdge 4 字段 schema).
         // - counterfactual: 空 (W3 不做反事实推演, 0 装诚实).
 
         let top = {
@@ -673,7 +673,7 @@ impl OrganTrait for EdgeMinerOrgan {
 }
 
 // ============================================================
-// 单元测试 (1:1 翻译 v1 causal_world_model.rs 第 909-955 行测试)
+// 单元测试 (语义对齐 v1 causal_world_model.rs 第 909-955 行测试)
 // ============================================================
 
 #[cfg(test)]
@@ -697,7 +697,7 @@ mod tests {
         OrganInput::new(ep, vec![])
     }
 
-    /// 1:1 翻译 v1 `mine_causal_edges_statistical` 测试:
+    /// 语义对齐 v1 `mine_causal_edges_statistical` 测试:
     /// 7 对 (熬夜 → 效率低) 时间窗口内 → 挖出 1 条统计边.
     #[test]
     fn from_timeline_mines_statistical_edges() {
@@ -730,7 +730,7 @@ mod tests {
         assert!(edge.predicate.contains("行为") && edge.predicate.contains("导致"));
     }
 
-    /// 1:1 翻译 v1 `mine_causal_edges_below_threshold_no_edge` 测试:
+    /// 语义对齐 v1 `mine_causal_edges_below_threshold_no_edge` 测试:
     /// 阈值 7 但只有 3 对共现 → 应无边.
     #[test]
     fn from_timeline_below_threshold_no_edge() {
@@ -915,7 +915,7 @@ mod tests {
                     counterfactual.is_empty(),
                     "W3 被动路径 0 反事实 (那是 W2 的活)"
                 );
-                // 验证 schema 1:1 翻译 plugin CausalEdge.
+                // 验证 schema 语义对齐 plugin CausalEdge.
                 assert!(out_edges.iter().all(|e| !e.cause.is_empty()));
                 assert!(out_edges.iter().all(|e| !e.effect.is_empty()));
                 assert!(out_edges.iter().all(|e| e.conf > 0.0 && e.conf <= 1.0));

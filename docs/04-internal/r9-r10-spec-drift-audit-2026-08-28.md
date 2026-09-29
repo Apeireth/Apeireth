@@ -25,7 +25,7 @@ R9 spec 文件: `docs/02-guides/v2-gateway-frontend-integration-spec.md` (569 �
 | § | 章节 | R9 spec 标的 | 真账 (主代理亲验) | drift? |
 |---|---|---|---|---|
 | §0 | TL;DR §21 | "v2 canonical gateway 真接 LLM call 1.16s" | ✅ `canonical_entry.rs:168-174` 3 路由 + L99 `runtime.execute(turn)` 真接 | ❌ 0 drift |
-| §0 | §23 | "9 organ 全部真移植 (E4/F4/F6/F1/W1/W2/W3/E7/Memory)" | ✅ `crates/engine/organ/src/lib.rs:11-32` | ❌ 0 drift |
+| §0 | §23 | "9 organ 全部真实现 (E4/F4/F6/F1/W1/W2/W3/E7/Memory)" | ✅ `crates/engine/organ/src/lib.rs:11-32` | ❌ 0 drift |
 | §0 | §25 | "6/12 slot WIRED" + "6 WIRED + 6 DEFERRED" | ✅ L25 与 ledger 一致 (`memory_recall` / `preference_recall` / `judge` / `council` / `self_assessment` / `memory_writeback`) | ❌ 0 drift (R13 review §1.1 标的旧账已修) |
 | §0 | §27 | "frontend 0 触碰 v2 gateway" + "完整迁移 = 4-6 周" | ✅ `runtime.ts:1-1411` 仍指 :8090 / :3000 (B 块 §2 测过); `canonical_entry.rs` 3 路由已就位 | ❌ 0 drift |
 | §1.1 | §42 | "v2 :8080 3 条主路由" | ✅ `canonical_entry.rs:168-174` = `/health` + `/v1/chat` + `/v1/chat/completions` | ❌ 0 drift |

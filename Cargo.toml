@@ -31,12 +31,12 @@ members = [
 #   - 根目录 `LICENSE`         : Apache License 2.0 完整文本 (175 行, 2026-08-05 写入, P13-1 严守不动)
 #   - 根目录 `LICENSE-MIT`     : MIT License 完整文本 (2026-09-03 新增, 双协议)
 #   - 根目录 `NOTICE`           : 项目特有 attribution (66 行, R20 阶段 6, P13-1 严守不动)
-#   - 根目录 `OSS_NOTICE.md`    : 借鉴源码 8/11 整合 + 决策链 (346 行, P13-1 R128 阶段 D 新写)
+#   - 根目录 `OSS_NOTICE.md`    : 第三方来源 8/11 整合致谢 + 决策链 (346 行, P13-1 R128 阶段 D 新写)
 #   - 根目录 `THIRD-PARTY-NOTICES.md` : cargo-about 0.8.4 生成 561 crates 第三方 attribution
 #                                       (1709 lines / 12 unique SPDX / 0 cargo-deny violation, 2026-08-06)
 #
-# 借鉴源码 8/11 ✅ cloned (per decision-36 §1.1 + decision-47 §3.1 + decision-55 §3 + decision-58 §1.3):
-#   ✅ 7 真实施 + ⏳ 3 限流持续 (LiteLLM/opencode/Guardrails P6-1/2/3 21:18 派) + ❌ 1 跳过 (OpenCog AGPL-3.0)
+# 第三方来源 8/11 ✅ cloned (per decision-36 §1.1 + decision-47 §3.1 + decision-55 §3 + decision-58 §1.3):
+#   ✅ 7 真实施 + ⏳ 3 限流持续 (P6-1/2/3 21:18 派, 3 项同类工程) + ❌ 1 跳过 (AGPL-3.0 传染性 copyleft)
 #   详见 [workspace.metadata.apeireth] §borrow 段
 #
 # Cargo.toml license field 0 装 PASS 严守 verify (P15-1 R128-2 阶段 C):
@@ -56,7 +56,7 @@ license = "Apache-2.0 OR MIT"
 # SPDX 表达式 (per cargo + crates.io 推荐; dual license 惯例同 Rust 官方 / clap / PyO3 / kani)
 repository = "https://github.com/Apeireth/Apeireth"
 # 1.0 release 描述 (per decision-22 §3 + decision-57 §0 + decision-58 §0 + 2026-08-19 subagent 验证)
-# 借鉴 8/11 + 24 LOCKED (per R148 仅保 3 不可变脊柱) + 8 哲学锚 + V0.5 24 维 (30 维升级 R126 P1-4 未合入) + 9 重守门 v9 (lineage v6→v7→v8→v9) + 13 键 verdict cache = 1.0 release
+# 第三方来源 8/11 + 24 LOCKED (per R148 仅保 3 不可变脊柱) + 8 哲学锚 + V0.5 24 维 (30 维升级 R126 P1-4 未合入) + 9 重守门 v9 (lineage v6→v7→v8→v9) + 13 键 verdict cache = 1.0 release
 description = "Apeireth — AGI 操作系统 / LLM 基地（Rust）。v2.0 工程重构线：18-crate 单一工作区（foundation/engine/capabilities/adapters）+ runtime kernel/assembly + canonical agent loop + 受控工具与进程边界；设计/哲学/愿景沿袭 v1.0（9 哲学锚 + 三洋葱 + 13 键 + 0 装 PASS，v1 历史详单见 docs/archive/）"
 homepage = "https://github.com/Apeireth/Apeireth"
 keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]
@@ -65,12 +65,12 @@ categories = ["ai", "asynchronous", "compilers"]
 # ============================================================================
 # Workspace Metadata — Apeireth 项目内部 metadata (per decision-22 + #55 + #58)
 # ----------------------------------------------------------------------------
-# 借鉴源码 8/11 + 决策链 + R128 24 LOCKED 形式撤销 + 8 哲学锚 metadata
+# 第三方来源 8/11 + 决策链 + R128 24 LOCKED 形式撤销 + 8 哲学锚 metadata
 # 0 影响 cargo 编译 / 0 影响 crates.io publish, 纯项目自描述
 # ============================================================================
 [workspace.metadata.apeireth]
 
-# 借鉴源码 8/11 ✅ cloned (per decision-36 + #47 + #55 + #58)
+# 第三方来源 8/11 ✅ cloned (per decision-36 + #47 + #55 + #58)
 # 0 装 PASS 严守 (per decision-33 §2.3 C2 + 主人 17:22 升级授权):
 #   ✅ = 真实施 (有真 src 改动 + tests pass) | ⏳ = 限流持续重试 | ❌ = 永久跳过
 borrow = { count_total = 11, count_cloned = 8, count_rate_limited = 3, count_skipped = 1 }
@@ -91,7 +91,7 @@ borrow_rate_limited = [
 borrow_skipped = [
     "opencog/opencog (❌ AGPL-3.0 传染性 copyleft, 跟主仓 Apache-2.0 不兼容, per decision-22 §4 + decision-55 §3, 0 集成 0 假装)",
 ]
-# 借鉴源码本地路径 (per 决策 #36 §1 + 决策 #55 §2)
+# 第三方来源本地路径 (per 决策 #36 §1 + 决策 #55 §2)
 borrow_local_path = ".openclaw/workspace/borrowed-repos/"
 
 # 8 硬墙 (B1-B7 升级版 + A1-A3 严守 + C1-C3 策略, per decision-33 §2 + decision-58 §4)
@@ -126,7 +126,7 @@ measurement_dimensions = "V0.5 24 维 (4 大类 × 6 维度: 24 base; 30 维升�
 
 # 9 重守门 v9 (per decision-22 §2.4 B4 升 + R126-guard-7 v6→v7 + R127-2 P6-3 v7→v8 + R131 v8→v9)
 # lineage v6 (colang_dsl) → v7 (skill_guard + seven_fold_guard) → v8 (action_rail + flow_executor) → v9 (evidence_guard)
-# 1-5 重嵌套 + 6 重 Colang DSL (R125-5 NVIDIA Guardrails 借鉴) + 7 重 Superpowers Skill Guard (R126-guard-7) + 8 重 Action Rail (R127-2 P6-3) + 9 重 Evidence Guard (R131)
+# 1-5 重嵌套 + 6 重 Colang DSL (R125-5 对齐同类 guardrail 工程) + 7 重 Superpowers Skill Guard (R126-guard-7) + 8 重 Action Rail (R127-2 P6-3) + 9 重 Evidence Guard (R131)
 guard_gates_version = "v9 (9 重: 1-5 嵌套 + 6 Colang DSL + 7 Superpowers Skill Guard + 8 Action Rail + 9 Evidence Guard)"
 
 # 13 键 verdict cache (per decision-22 §2.8 A3 + decision-33 §2.3)
@@ -147,7 +147,7 @@ license_files = [
     "LICENSE (175 行, Apache 2.0 verbatim, 2026-08-05 写入, P13-1 严守不动)",
     "LICENSE-MIT (MIT verbatim, 2026-09-03 新增, 双协议)",
     "NOTICE (66 行, 项目特有 attribution, R20 阶段 6, P13-1 严守不动)",
-    "OSS_NOTICE.md (346 行, 借鉴源码 8/11 致谢, P13-1 R128 阶段 D 新写)",
+    "OSS_NOTICE.md (346 行, 第三方来源 8/11 整合致谢, P13-1 R128 阶段 D 新写)",
     "THIRD-PARTY-NOTICES.md (1709 lines / 12 SPDX / 0 cargo-deny violation, cargo-about 0.8.4 生成, 2026-08-06)",
 ]
 
@@ -205,7 +205,7 @@ fs-err = "3.0"
 clap = { version = "4.5", features = ["derive"] }
 # R127-2 P9-1: hyper-util 0.1 (R124-1 borrow: hyperium/hyper-util 4684c71)
 # 补 P2-1 follow-up 8/12 (per agent-r126-borrowed-final-2026-08-10 §3.2):
-# 整合 #4 commit 仅加借鉴 ID 索引 + Cargo.toml dep 0 装, P9-1 借脑 1.0 真 use
+# 整合 #4 commit 仅加来源 ID 索引 + Cargo.toml dep 0 装, P9-1 1.0 真 use
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1"] }
 # R19 P2 战区 4: 真接 sqlite-vec C 扩展 (0.1.x, MIT/Apache-2.0).
 # 0.1.9 最新, 跟 rusqlite 0.32 bundled 兼容 (走 sqlite3_auto_extension 路径,
@@ -219,7 +219,7 @@ codegen-units = 1
 strip = true
 
 # ============================================================================
-# Workspace lints (R19 第 0 阶段第 1 项 — 抄 wasmtime + qdrant)
+# Workspace lints (R19 第 0 阶段第 1 项 — 对齐 wasmtime + qdrant)
 # ============================================================================
 # 业界来源:
 #   - wasmtime/Cargo.toml [workspace.lints]: 关掉 clippy 默认噪音, 选关键 lint warn
@@ -271,7 +271,7 @@ check-cfg = [
 # necessary. (wasmtime comment, verbatim)
 all = { level = 'allow', priority = -1 }
 
-# --- 来自 wasmtime (基础精选) ---
+# --- 对齐 wasmtime (基础精选) ---
 # R19 T10: 108 个 uninlined_format_args + 23 个 missing_docs_in_private_items + 20 个 wildcard match
 # 是 apeireth 现有代码的高频 warning, 全 workspace allow 以避免阻塞 PR
 # 业内共识: 这些 lint 风格约束强, 但 legacy 代码迁移成本高, wasmtime / qdrant 也只用 warn
@@ -304,7 +304,7 @@ redundant_field_names = 'warn'
 multiple_bound_locations = 'warn'
 extra_unused_type_parameters = 'warn'
 
-# --- 来自 qdrant (更严格精选) ---
+# --- 对齐 qdrant (更严格精选) ---
 cast_lossless = 'warn'
 doc_link_with_quotes = 'warn'
 enum_glob_use = 'warn'

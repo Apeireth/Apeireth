@@ -1,6 +1,6 @@
 //! Concrete production modules, kept outside the runtime kernel.
 
-// Kernel ports are re-exported as submodules because the migrated concrete
+// Kernel ports are re-exported as submodules because the concrete
 // implementations use the same `super::module` paths they used before. This
 // keeps the move source-compatible without making the kernel depend upward.
 pub mod approval {
@@ -60,7 +60,7 @@ pub mod cognitive;
 pub mod cost_telemetry;
 #[path = "canonical/dream_llm.rs"]
 pub mod dream_llm;
-/// W3 移植批: 自我改进闭环实验侧 (v1 donor experiment_field, 2026-10-10)。
+/// W3 实现批: 自我改进闭环实验侧 (2026-10-10)。
 #[path = "canonical/experiment_field.rs"]
 pub mod experiment_field;
 #[path = "canonical/guard_observer.rs"]

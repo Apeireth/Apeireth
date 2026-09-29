@@ -46,14 +46,14 @@ cd frontend/companion-desktop && pnpm dev --port 5199 --strictPort
 - **后端联调**（2026-08-22，本轮）：见下节。
 - **2026-10-11 批（2.0 差距补齐后的主人逐批复验收批，台账 #66–#75，细节以台账为准）**：
   - **能力中心设置页三页重构**（SettingsView）：记忆与认知 / 决策与治理 / 工具与安全
-    分组卡片 + 微信式圆钮开关；静态卡「默认能力」说明卡化（虚线框 + 常驻/默认能力徽章，
+    分组卡片 + 圆钮开关；静态卡「默认能力」说明卡化（虚线框 + 常驻/默认能力徽章，
     明确「这不是开关」）；运行时诊断页去保存栏；**开发者选项 = Beta 功能试验场**
     （首个入驻 = 思考模式 reasoning 三 env 链路透传，关闭时一个变量都不注入）。
   - **对话栏位常驻控件**：权限档位芯片 + 会话模型切换从会话头迁入输入栏
-    （头部随滚动消失 = 违反「随时可及」，Kimi Desktop 式布局）；语义不变
+    （头部随滚动消失 = 违反「随时可及」，滚动隐藏头部式布局）；语义不变
     （sessionSettings.model ?? config.model 回退链）。
   - **会话分组主页**（SessionListHome + session-list.ts 纯函数）：项目区（按会话级
-    工作目录）+ 联系人区（按创建时伙伴人设），Kimi 范式折叠区（收起态持久化
+    工作目录）+ 联系人区（按创建时伙伴人设），同类产品范式折叠区（收起态持久化
     `apeireth-home-collapsed`）；行 hover「···」菜单 = 置顶/重命名/归档/删除（红两步确认）；
     **工作区默认回退**：未戳工作区的旧会话归当前项目组（`defaultWorkspace` 透传，
     App onMount 启动即取侧车根——只在选择器打开时加载会恒空，漏接线教训）。
@@ -149,7 +149,7 @@ cd frontend/companion-desktop && pnpm dev --port 5199 --strictPort
    定位祖先会把 PlanetLayer 的 screen 混合隔离成黑箱盖死黑洞。IntroLayer 等新层不得破坏。
 2. **服务器纪律**：先 `netstat -ano | grep ':5199' | grep LISTENING` 查占用；
    杀服 `taskkill //F //T //PID <pid>` 精确杀进程树，**绝不碰其他 node/esbuild 进程**
-   （会误杀 Kimi 预览服务器）。截完图必杀前端 dev 服；后端 :8090 可留。
+   （会误杀其他预览服务器）。截完图必杀前端 dev 服；后端 :8090 可留。
 3. **0 装 PASS**：任何视觉改动必须 Edge 无头截图 + ReadMediaFile 亲审才可交付——
    `"/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --headless
    --window-size=1600,900 --screenshot=<abs> --virtual-time-budget=4000 "<url>"`，

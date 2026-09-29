@@ -18,11 +18,11 @@
 //!   独立判断: 避免 organ→organ cyclic dep; 真生产由 cognitive module 集成时调度)
 //!
 //! **R8 独立判断** (与 R7 同模式):
-//! - 任务 spec "1:1 翻译 v1 MemoryMerger" — **v1 没有此模块** (核查
+//! - 任务 spec "语义对齐 v1 MemoryMerger" — **v1 没有此模块** (核查
 //!   `legacy/donor/apeireth-companion/src/runtime_brain.rs` 242 行无 MemoryMerger;
 //!   相关散落 3 处: memory_extractor + proactive_memory + runtime_brain).
-//! - v2 MemoryMerger 是**新设计**, 借鉴 v1 `MemoryExtractionService` (dedup-by-content
-//!   + weight + persist schema) **算法骨架** 1:1 翻译.
+//! - v2 MemoryMerger 是**新设计**, 对齐 v1 `MemoryExtractionService` (dedup-by-content
+//!   + weight + persist schema) **算法骨架** 语义对齐.
 //! - trait schema `OrganOutput::Memory { notes_added, notes_merged }` 锁定
 //!   (per `apeireth-plugin::organ:184-185`).
 
@@ -49,7 +49,7 @@ fn make_input(hints: Vec<String>, content: &str) -> OrganInput {
 #[tokio::test]
 async fn memory_merger_organ_merge_deduplicates_similar_content() {
     // 0 装诚实: 直接用 MemoryMerger 引擎 (无 LLM, 跨 organ 合并是确定性).
-    // 验 merge 路径 1:1 v1 MemoryExtractionService::apply 算法骨架.
+    // 验 merge 路径 对齐 v1 MemoryExtractionService::apply 算法骨架.
     let mut merger = MemoryMerger::new(MemoryConfig::default());
     assert_eq!(merger.len(), 0, "初始空 merger");
 
@@ -230,7 +230,7 @@ async fn memory_merger_organ_weight_increases_total() {
 
 #[tokio::test]
 async fn memory_merger_organ_query_finds_by_keyword() {
-    // 0 装诚实: 用 MemoryMerger (无 LLM) 验 query 路径 1:1 v1 dedup-by-keyword.
+    // 0 装诚实: 用 MemoryMerger (无 LLM) 验 query 路径 对齐 v1 dedup-by-keyword.
     let mut merger = MemoryMerger::new(MemoryConfig::default());
 
     merger.merge(OrganKind::E4, "主人明天要考线代", 0.9, 1_700_000_000_000);

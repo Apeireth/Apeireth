@@ -273,7 +273,7 @@ Apeireth 1.0 release 配套 GitHub Pages 文档站:
 3. api.md (API) - API 文档 (13 键 + 30 维 + 6 重 v7 + 24 LOCKED)
 4. roadmap.md (Roadmap) - 1.0→2.0 路线图
 5. changelog.md (Changelog) - v1.0.0 changelog
-6. borrowed-repos.md (Borrowed Repos) - 借鉴 11/11 致谢
+6. borrowed-repos.md (Borrowed Repos) - 11/11 致谢
 7. architecture.md (Architecture) - 8 哲学锚 + 24 LOCKED + 决策链
 
 0 主动 push 严守: Mavis 0 主动 push, 主人手跑 git push origin gh-pages
@@ -338,7 +338,7 @@ Write-Host '    3. API (api.md) - API 文档' -ForegroundColor White
 Write-Host '    4. Roadmap (roadmap.md) - 1.0→2.0 路线图' -ForegroundColor White
 Write-Host '    5. Architecture (architecture.md) - 8 哲学锚 + 24 LOCKED' -ForegroundColor White
 Write-Host '    6. Changelog (changelog.md) - v1.0.0 changelog' -ForegroundColor White
-Write-Host '    7. Borrowed Repos (borrowed-repos.md) - 借鉴 11/11 致谢' -ForegroundColor White
+Write-Host '    7. Borrowed Repos (borrowed-repos.md) - 11/11 致谢' -ForegroundColor White
 Write-Host ''
 
 # === Step 5: 切换回 master 避免影响其他工作 ===
@@ -358,7 +358,7 @@ Write-Host ''
 Write-Host '  下一步:' -ForegroundColor Cyan
 Write-Host '    1. 主人浏览器配 GitHub Pages 设置 (Settings → Pages → gh-pages branch)' -ForegroundColor White
 Write-Host "    2. 主人 verify https://$EXPECTED_USER.github.io/$EXPECTED_REPO/" -ForegroundColor White
-Write-Host '    3. 主人发 release announcement (微信群 / Twitter / 邮件)' -ForegroundColor White
+Write-Host '    3. 主人发 release announcement (社群渠道 / 邮件)' -ForegroundColor White
 Write-Host '    4. 整合 #6+ commit 时机由 Mavis 拍板 (per decision-64 §2.2)' -ForegroundColor White
 Write-Host ''
 Write-Host '  0 主动 push 严守 100% — GitHub Pages 部署流程 0 主动, 主人手跑 + 配设置' -ForegroundColor Magenta

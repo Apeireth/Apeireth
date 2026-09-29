@@ -319,7 +319,7 @@ fn quota_lru_evicts_oldest_to_fit_total() {
 }
 
 #[test]
-fn machine_id_parsers_roundtrip_donor_fixtures() {
+fn machine_id_parsers_roundtrip_baseline_fixtures() {
     use apeireth_storage::machine_id::{
         encode_hostid, parse_ioreg_uuid, parse_registry_machine_guid, parse_wmi_uuid,
     };

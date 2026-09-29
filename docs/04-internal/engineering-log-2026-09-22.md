@@ -31,7 +31,7 @@
 | `crates/adapters/gateway/src/presence.rs` (821 行): 状态合成模块 + 事件上现有 SSE 总线; 60s 心跳 + 无交互衰减 baseline + initiative 预算 ≤3 次/天 + `heuristic_v0` 诚实标注; 12 单测覆盖 shape/分级/频率 | `fa011d07` |
 | 台账 #29 登记 (主会话 live 探针: `curl -sN -m 70 /v1/apeireth/events` 实收 2 帧, 空闲态 `dreaming_consolidation` + baseline PAD) | `20a99703` |
 
-## 2. ② T0 聊天壳 (00-PHILOSOPHY §3, 微信式长寿骨骼)
+## 2. ② T0 聊天壳 (00-PHILOSOPHY §3, 主流 IM 式长寿骨骼)
 
 按施工时序:
 

@@ -1,4 +1,4 @@
-//! P-arch (2026-08-28): 9-organ 真移植 (v2 形态, per `v2-unabsorbed-features.md` 9-organ).
+//! P-arch (2026-08-28): 9-organ 真实现 (v2 形态, per `v2-unabsorbed-features.md` 9-organ).
 //!
 //! v1 `apeireth-companion` 9 organ 散落在 `lib.rs` 顶层 mod (curiosity / emotion_memory /
 //! hypothesis / value_cases / world_model / causal_world_model / emergence / 等), 内部
@@ -8,16 +8,16 @@
 //! - impl 在本 crate (`apeireth-organ`) — engine 层真接
 //! - 单向依赖: `apeireth-organ` → `apeireth-plugin` → `apeireth-core` (与 plugin 体系一致)
 //!
-//! **v2.0-rc.1 真实现进度** (per 任务"真生产前阻塞 #1: 9 organ 至少 1 真移植"):
-//! - ✅ **E4 Curiosity** (`curiosity::CuriosityOrgan`) — 1:1 翻译 v1 真实现 (子代理 Q1)
-//! - ✅ **F4 Hypothesis** (`hypothesis::HypothesisOrgan`) — 1:1 翻译 v1 真实现 (子代理 R2, 2026-08-28)
-//! - ✅ **F6 Value Cases** (`value_cases::ValueCasesOrgan`) — 1:1 翻译 v1 真实现 (子代理 R3, 2026-08-28)
-//! - ✅ **F1 Emotion Memory** (`emotion_memory::EmotionOrgan`) — 1:1 翻译 v1 真实现 (子代理 R1, 2026-08-28)
-//! - ✅ **W1 World Model** (`world_model::WorldModelOrgan`) — 1:1 翻译 v1 真实现, **真接 LLM** (子代理 R4, 2026-08-28)
-//! - ✅ **W2 Causal World Model** (`causal_world_model::CausalWorldModelOrgan`) — 1:1 翻译 v1 真实现, **真接 LLM MCTS** (子代理 R5, 2026-08-28)
+//! **v2.0-rc.1 真实现进度** (per 任务"真生产前阻塞 #1: 9 organ 至少 1 真实现"):
+//! - ✅ **E4 Curiosity** (`curiosity::CuriosityOrgan`) — 语义对齐 v1 真实现 (子代理 Q1)
+//! - ✅ **F4 Hypothesis** (`hypothesis::HypothesisOrgan`) — 语义对齐 v1 真实现 (子代理 R2, 2026-08-28)
+//! - ✅ **F6 Value Cases** (`value_cases::ValueCasesOrgan`) — 语义对齐 v1 真实现 (子代理 R3, 2026-08-28)
+//! - ✅ **F1 Emotion Memory** (`emotion_memory::EmotionOrgan`) — 语义对齐 v1 真实现 (子代理 R1, 2026-08-28)
+//! - ✅ **W1 World Model** (`world_model::WorldModelOrgan`) — 语义对齐 v1 真实现, **真接 LLM** (子代理 R4, 2026-08-28)
+//! - ✅ **W2 Causal World Model** (`causal_world_model::CausalWorldModelOrgan`) — 语义对齐 v1 真实现, **真接 LLM MCTS** (子代理 R5, 2026-08-28)
 //! - ✅ **W3 Causal Edge Mining** (`causal_world_model_edges::EdgeMinerOrgan`)
-//!   — 1:1 翻译 v1 `MineCausalEdges` 被动路径, 确定性无 LLM (子代理 R6, 2026-08-28)
-//! - ✅ **E7 Emergence** (`emergence::EmergenceOrgan`) — 1:1 翻译 v1 `EmergenceLoop`
+//!   — 语义对齐 v1 `MineCausalEdges` 被动路径, 确定性无 LLM (子代理 R6, 2026-08-28)
+//! - ✅ **E7 Emergence** (`emergence::EmergenceOrgan`) — 语义对齐 v1 `EmergenceLoop`
 //!   rhythm+boundary 8 重门控真实现; **子代理 R7 独立判断**: 任务说明里的"5 状态机
 //!   Idle/Draft/Proposed/Ratified/Active"实际来自 v1 `apeireth-evolution::state`, **不**是
 //!   `apeireth-companion::emergence` 内部状态机. 本模块**不发明**v1 没有的状态机;
@@ -25,7 +25,7 @@
 //!   `llm_factory()` 返 None, 决策路径严格确定性, **不假装"E7 always speak"** (子代理 R7, 2026-08-28)
 //! - ✅ **Memory Merger** (`memory::MemoryMergerOrgan`) — 跨 8 organ 记忆合并抽象
 //!   (子代理 R8, 2026-08-28). **0 装诚实标**: v1 `runtime_brain.rs` 没有 `MemoryMerger`
-//!   模块; v2 是新抽象, 借鉴 v1 `MemoryExtractionService` dedup/weight/persist 算法骨架 1:1 翻译.
+//!   模块; v2 是新抽象, 对齐 v1 `MemoryExtractionService` dedup/weight/persist 算法骨架.
 //!
 //! **0 装 PASS (per task + 子代理 R 同步)**:
 //! - 本 crate E4 / F4 / F6 / F1 / W1 / **W2** / W3 / E7 / Memory 真实现; **9 organ 全实装**.

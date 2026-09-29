@@ -1,9 +1,9 @@
 //! F4 Hypothesis 器官 集成测试 (per 任务 §3, 子代理 R2).
 //!
 //! 3 测试:
-//! 1. `hypothesis_organ_add_and_list_pending` (add → list_pending 路径, 1:1 v1)
+//! 1. `hypothesis_organ_add_and_list_pending` (add → list_pending 路径, 对齐 v1)
 //! 2. `hypothesis_organ_evidence_aggregates_to_confirm` (累积 evidence 触发 confirm_threshold)
-//! 3. `hypothesis_organ_search_finds_by_text` (search 路径, 1:1 v1 — 子代理 R2 扩展:
+//! 3. `hypothesis_organ_search_finds_by_text` (search 路径, 对齐 v1 — 子代理 R2 扩展:
 //!    v1 `list(status)` 已够用, v2 暴露 list(Some(Conjecture)) 等价 v1 `list_pending`)
 //!
 //! **0 装诚实** (per 任务 §3 + 子代理 R 同款):
@@ -28,7 +28,7 @@ use apeireth_plugin::llm_factory::{LlmFactory, NoopLlmFactory};
 use std::sync::Arc;
 
 // ============================================
-// Test 1: add → list_pending 路径 (1:1 v1 hypothesis::list(Conjecture))
+// Test 1: add → list_pending 路径 (对齐 v1 hypothesis::list(Conjecture))
 // ============================================
 
 fn empty_input_with_hints(hints: Vec<String>) -> OrganInput {
@@ -216,7 +216,7 @@ async fn hypothesis_organ_search_finds_by_text() {
     organ.conjecture("雨天 → 主人心情差");
     organ.conjecture("主人喜欢用 Rust 写代码");
 
-    // 2) 简单 substring search (v2 扩展, 1:1 v1 list 路径 + filter)
+    // 2) 简单 substring search (v2 扩展, 对齐 v1 list 路径 + filter)
     let all = organ.list(None);
     assert_eq!(all.len(), 3);
 

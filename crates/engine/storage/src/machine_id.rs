@@ -1,7 +1,6 @@
-//! Cross-platform machine fingerprint recovered from
-//! `legacy/archived/apeireth-machine-id`.
+//! Cross-platform machine fingerprint.
 //!
-//! Probe chains (donor 1:1):
+//! Probe chains (1:1 with the baseline):
 //! - Windows: `wmic csproduct get uuid` then `reg query … MachineGuid`
 //! - macOS: `ioreg -rd1 -c IOPlatformExpertDevice` → `IOPlatformUUID`
 //! - Linux: DMI product_uuid → D-Bus machine-id → `/etc/machine-id`
@@ -252,7 +251,7 @@ pub fn parse_registry_machine_guid(stdout: &str) -> Option<String> {
 
 /// Extract the quoted value from an ioreg `IOPlatformUUID` line.
 ///
-/// Donor format: `"IOPlatformUUID" = "AAAAAAAA-BBBB-..."` — the UUID is the
+/// Format: `"IOPlatformUUID" = "AAAAAAAA-BBBB-..."` — the UUID is the
 /// **second** quoted token, not the key.
 pub fn extract_quoted_value(line: &str) -> Option<&str> {
     let first = line.find('"')?;

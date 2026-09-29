@@ -1,19 +1,19 @@
-//! P-arch (2026-08-28): Memory 器官真移植 v2 (跨 8 organ 记忆合并抽象).
+//! P-arch (2026-08-28): Memory 器官真实现 v2 (跨 8 organ 记忆合并抽象).
 //!
 //! **v1 → v2 翻译路线 (子代理 R8 独立判断)**:
 //!
-//! - **任务 spec 描述**: "v1 `MemoryMerger` 1:1 翻译 (跨 8 organ 记忆合并)".
+//! - **任务 spec 描述**: "v1 `MemoryMerger` 语义对齐 (跨 8 organ 记忆合并)".
 //! - **v1 真实现核查**: `legacy/donor/apeireth-companion/src/runtime_brain.rs` **没有
 //!   `MemoryMerger` 模块**. v1 era "记忆合并" 是**散落 3 处**:
 //!   - `runtime_brain.rs` (聚合 curiosity + emotion + hypothesis + catalog, L88 tick)
 //!   - `memory_extractor.rs` (`MemoryExtractionService::apply` 写入 SQLite, 5 维度提炼)
 //!   - `proactive_memory.rs` (`TopicPredictor` + `PreloadChannel` 主动预载)
 //! - **0 装诚实**: v1 没有统一的"跨 8 organ 记忆合并抽象". v2 `MemoryMerger` 是
-//!   **新设计** (按任务 spec), 不是 1:1 翻译. 真翻译纪律要求标: v2 是新抽象, 借鉴 v1
-//!   `MemoryExtractionService` (dedup-by-content + weight + persist schema) 1:1 翻译其
+//!   **新设计** (按任务 spec), 不是逐行照搬. 纪律要求标: v2 是新抽象, 对齐 v1
+//!   `MemoryExtractionService` (dedup-by-content + weight + persist schema) 的
 //!   **算法骨架**.
 //!
-//! **v1 借鉴算法 (per `memory_extractor.rs:236-284` `MemoryExtractionService::apply`)**:
+//! **v1 对齐算法 (per `memory_extractor.rs:236-284` `MemoryExtractionService::apply`)**:
 //! - **Dedup**: 同 source 重复内容 → 不重写 (per v1 put_with_meta 用 uuid v4 唯一 id;
 //!   这里改成显式 content hash 去重).
 //! - **Weight**: 初始 weight = 1.0 (per v1 importance 1-10 字段; 这里统一 f32 0.0-1.0).
@@ -49,17 +49,17 @@ use std::sync::Mutex;
 use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
 
 // ============================================
-// v1 数据结构 1:1 翻译 (per memory_extractor.rs schema)
+// v1 数据结构 语义对齐 (per memory_extractor.rs schema)
 // ============================================
 
-/// 合并后记忆条目 (per v1 `MemoryItem` + `MemoryEntry` schema 借鉴).
+/// 合并后记忆条目 (per v1 `MemoryItem` + `MemoryEntry` schema 对齐).
 ///
 /// **字段说明**:
-/// - `id`: uuid 形式 (per v1 `mem-ex-<uuid>` / `pref-<uuid>` 1:1 翻译 → `mrg-<uuid>`).
+/// - `id`: uuid 形式 (per v1 `mem-ex-<uuid>` / `pref-<uuid>` 语义对齐 → `mrg-<uuid>`).
 /// - `content`: 自由文本 (per v1 通用 content).
 /// - `source_organ`: OrganKind 标识来源 (W1/W2/W3/E4/F4/F1/F6/E7 — 跨 8 organ 抽象).
 /// - `weight`: 重要性 ∈ [0.0, 1.0] (per v1 importance 1-10 归一化).
-/// - `at_ms`: epoch ms (per v1 created_ms 1:1).
+/// - `at_ms`: epoch ms (per v1 created_ms).
 /// - `content_hash`: 用于去重的指纹 (per v1 dedup-by-content 同模式, FNV-1a hash).
 #[derive(Debug, Clone)]
 pub struct MergedMemory {
@@ -127,10 +127,10 @@ impl Default for MemoryConfig {
 }
 
 // ============================================
-// v1 MemoryExtractionService 借鉴算法骨架 (确定性, 无 LLM)
+// v1 MemoryExtractionService 算法骨架 (确定性, 无 LLM)
 // ============================================
 
-/// 跨 organ 记忆合并器 (per 任务 spec + v1 algorithm skeleton 借鉴).
+/// 跨 organ 记忆合并器 (per 任务 spec + v1 algorithm skeleton).
 ///
 /// **v1 真实现是 `MemoryExtractionService::apply` (per `memory_extractor.rs:236-284`)**:
 /// - 接收 `ExtractedMemory { facts, preferences, commitments, emotional, graph }`.
@@ -285,7 +285,7 @@ impl MemoryMerger {
 // v2 MemoryMergerOrgan (v2 trait 真实现)
 // ============================================
 
-/// Memory 器官 (per v2 OrganTrait 1:1 翻译 v1 MemoryExtractionService 算法骨架).
+/// Memory 器官 (per v2 OrganTrait 语义对齐 v1 MemoryExtractionService 算法骨架).
 ///
 /// **0 装诚实**:
 /// - `llm_factory()` 返 None — 跨 organ 合并是确定性无 LLM 抽象.
@@ -376,7 +376,7 @@ impl OrganTrait for MemoryMergerOrgan {
     }
 
     async fn process(&self, input: OrganInput) -> Result<OrganOutput, OrganError> {
-        // 1:1 翻译任务 spec §1 process 路径:
+        // 对齐任务 spec §1 process 路径:
         // - 解析 input → (source_organ, content, weight, at_ms)
         // - merge(...)
         // - 翻译成 v2 trait schema (OrganOutput::Memory { notes_added, notes_merged })
@@ -397,7 +397,7 @@ impl OrganTrait for MemoryMergerOrgan {
         let at_ms = if parsed_at_ms != 0 {
             parsed_at_ms
         } else {
-            // episode.timestamp (秒) → 转毫秒 (per v1 created_ms = ts*1000 1:1)
+            // episode.timestamp (秒) → 转毫秒 (per v1 created_ms = ts*1000)
             input.episode.timestamp.saturating_mul(1000)
         };
 
@@ -432,7 +432,7 @@ impl OrganTrait for MemoryMergerOrgan {
 // 内部 helpers
 // ============================================
 
-/// FNV-1a 64-bit hash (per v1 dedup-by-content 借鉴, 0 外部依赖).
+/// FNV-1a 64-bit hash (per v1 dedup-by-content, 0 外部依赖).
 ///
 /// **0 装诚实**: 不假装密码学安全, 仅作快速指纹. 真生产可换 SipHash.
 fn fnv1a_hash(bytes: &[u8]) -> u64 {
@@ -444,7 +444,7 @@ fn fnv1a_hash(bytes: &[u8]) -> u64 {
     h
 }
 
-/// uuid 4 生成 (per v1 `mem-ex-{}` 1:1 翻译 → `mrg-{}`).
+/// uuid 4 生成 (per v1 `mem-ex-{}` 语义对齐 → `mrg-{}`).
 ///
 /// 内部用 `apeireth-organ` Cargo.toml 已依赖的 `uuid` (实际未在依赖里 → 手动实现
 /// 简易 v4 生成以保 0 新外部依赖).
@@ -471,7 +471,7 @@ mod uuid {
 }
 
 // ============================================
-// 单元测试 (1:1 翻译任务 spec §3)
+// 单元测试 (对齐任务 spec §3)
 // ============================================
 
 #[cfg(test)]

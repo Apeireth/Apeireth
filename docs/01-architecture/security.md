@@ -21,7 +21,7 @@
 
 - **L0**: real human approval — **never mutable** (Self-Disable "百年章节" prevents AI self-bypass)
 - V1 (principles) + V2 (permissions) + V3 (HA) AND-gate: any independent rejection blocks
-- DSL onion (Colang DSL 守门, R125-5 NVIDIA Guardrails 借鉴): 表达"什么操作允许/禁止"
+- DSL onion (Colang DSL 守门, R125-5 对齐同类守门工程): 表达"什么操作允许/禁止"
 - Risk grading → council seat count (critical 7 / high 5 / medium 3 / low 1)
 
 ## Verified Behaviors

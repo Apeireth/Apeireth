@@ -23,20 +23,20 @@ use crate::voice::error::{VoiceError, VoiceResult};
 // §1 4 STT 模型 enum (K-1 强校验守门, 编译期 hardcode 4 variant)
 // ============================================================================
 
-/// STT 模型 (4 variant, 1:1 翻译 既有 Voice SDK `SttModel` enum).
+/// STT 模型 (4 variant, 语义对齐 既有 Voice SDK `SttModel` enum).
 ///
 /// 4 模型 snake_case 字符串严格匹配 既有实现 API 规范.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SttModel {
-    /// **OpenAI Whisper** (offline, multi-language, 按既有实现 估 1:1).
+    /// **OpenAI Whisper** (offline, multi-language, 按既有实现估算).
     #[default]
     Whisper,
-    /// **Facebook wav2vec 2.0** (offline, self-supervised, 按既有实现估算 1:1).
+    /// **Facebook wav2vec 2.0** (offline, self-supervised, 按既有实现估算).
     Wav2Vec,
-    /// **Deepgram Nova** (online, real-time API, 按既有实现估算 1:1).
+    /// **Deepgram Nova** (online, real-time API, 按既有实现估算).
     Deepgram,
-    /// **Google Cloud Speech-to-Text** (online, multi-language, 按既有实现估算 1:1).
+    /// **Google Cloud Speech-to-Text** (online, multi-language, 按既有实现估算).
     Google,
 }
 
@@ -165,7 +165,7 @@ impl Transcription {
 }
 
 // ============================================================================
-// §3 SttRequest STT 请求 (按既有实现 `transcribe` 入参 1:1)
+// §3 SttRequest STT 请求 (按既有实现 `transcribe` 入参)
 // ============================================================================
 
 /// STT 请求 (按既有实现 `transcribe` 入参).

@@ -1,7 +1,7 @@
 //! 诱饵实验 → 集成测试 (真热更验收): `/v1/admin/config` 热更 api_key 后,
 //! **下一次**模型请求的出站 `Authorization` 必须是新 key。
 //!
-//! 复现序列 (与真机诱饵实验 1:1):
+//! 复现序列 (与真机诱饵实验一致):
 //! 1. env 注入启动值 (`OPENAI_API_KEY=sk-real-old-key...`), 未设
 //!    `APEIRETH_KEYRING_BACKEND` (即 "KeyringSelector 退化到 EnvCredentialResolver"
 //!    的退化环境), 网关 serve, `/v1/chat/completions` 走 mock provider 一次成功;

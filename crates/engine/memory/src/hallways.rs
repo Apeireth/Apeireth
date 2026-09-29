@@ -1,12 +1,12 @@
-//! R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py).
+//! R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (对齐同类记忆工程公开设计).
 //!
 //! ## 模型
-//! - **wing**: 项目 / 主题 (类似 mempalace 的 wing, 不是 apeireth 的 wing 机构术语)
+//! - **wing**: 项目 / 主题 (同类记忆工程亦用 wing 术语, 不是 apeireth 的 wing 机构术语)
 //! - **drawer**: 一条 Note (含 tags / content / source_episode_ids)
 //! - **entity**: 一个 tag (例外 wing 自己)
 //! - **hallway**: wing 内两个 entity 的连接, 共现次数 >= min_count
 //!
-//! ## 算法 (借鉴 mempalace compute_hallways_for_wing)
+//! ## 算法 (compute_hallways_for_wing)
 //! 1. 拉所有 Note (filter by min_confidence)
 //! 2. 按 wing 分组: note.tags[0] = wing (约定)
 //!    — 允许 caller 自定义 wing_of(note) (默认用 tags[0])
@@ -18,11 +18,11 @@
 //! ## apeireth 适配
 //! - 存到 SQLite `hallways` 表 (V2 migration)
 //! - 不加 append-only trigger (计算后 UPSERT 保留 L7 dynamics)
-//! - id = sha256(wing::a::b)[..12], 对称 (与 mempalace 一致)
+//! - id = sha256(wing::a::b)[..12], 对称 (与公开设计一致)
 //! - dynamics: strength / stability / last_activated / access_count
-//!   recompute 时保留旧值 (与 mempalace "preserve L7" 一致)
+//!   recompute 时保留旧值 (与公开设计 "preserve L7" 一致)
 //! - 访问一个 hallway → access_count + 1, last_activated = now
-//!   (同 mempalace dynamics layer 语义, 但限于 in-memory mutate;
+//!   (同公开设计 dynamics layer 语义, 但限于 in-memory mutate;
 //!    走 persistence 在 caller 调 `touch_hallway` 时同步落盘)
 //!
 //! ## 用法
@@ -48,7 +48,7 @@ use crate::session_note::{NoteRecord, NoteStore};
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 
 /// Default minimum co-occurrence count required to materialize a hallway
-/// (matches mempalace `min_count=2`).
+/// (matches the reference design `min_count=2`).
 pub fn default_min_count() -> usize {
     2
 }
@@ -102,7 +102,7 @@ impl Hallway {
         format!("hallway_{wing}_{a}_{b}_{hex}")
     }
 
-    /// Human-readable label (mempalace style).
+    /// Human-readable label.
     pub fn label(&self) -> String {
         format!(
             "{} ↔ {} (co-occur in {} note{} under wing `{}`)",
@@ -263,7 +263,7 @@ pub fn compute_hallways(
 }
 
 /// Recompute hallways for one wing, preserving existing L7 dynamics
-/// (matches mempalace "preserve L7 dynamics" semantics).
+/// (matches the reference design "preserve L7 dynamics" semantics).
 pub fn compute_hallways_for_wing(
     store: &SqliteMemoryStore,
     wing: &str,
@@ -290,7 +290,7 @@ pub fn compute_hallways_for_wing_with(
     let computed = compute_hallways(&notes, wing, min_count, wing_of);
     let now = crate::append_only::now_unix();
 
-    // 保留旧 dynamics (与 mempalace PR #1578 一致)
+    // 保留旧 dynamics (与同类工程 PR #1578 一致)
     let existing = list_hallways_for_wing_internal(&*store.conn()?, wing)?;
     let mut existing_dyn: HashMap<(String, String), (f64, f64, Option<i64>, i64)> = HashMap::new();
     for h in &existing {
@@ -484,7 +484,7 @@ pub fn delete_hallway(store: &SqliteMemoryStore, id: &str) -> MemoryResult<bool>
 }
 
 /// 访问一个 hallway: access_count + 1, last_activated = now
-/// (同 mempalace dynamics 语义).
+/// (同公开设计 dynamics 语义).
 pub fn touch_hallway(store: &SqliteMemoryStore, id: &str) -> MemoryResult<()> {
     let conn = &*store.conn()?;
     let now = crate::append_only::now_unix();
@@ -637,7 +637,7 @@ mod tests {
         assert_eq!(all.len(), 1);
     }
 
-    /// 9. compute_hallways_for_wing: 保留 dynamics (同 mempalace PR #1578)
+    /// 9. compute_hallways_for_wing: 保留 dynamics (与同类工程 PR #1578 一致)
     #[test]
     fn compute_preserves_dynamics() {
         let store = fresh_store();

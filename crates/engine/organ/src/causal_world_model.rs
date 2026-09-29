@@ -1,7 +1,7 @@
-//! P-arch (2026-08-28): W2 Causal World Model + W3 Causal Edge Mining 器官真移植 v2 (LLM 重).
+//! P-arch (2026-08-28): W2 Causal World Model + W3 Causal Edge Mining 器官真实现 v2 (LLM 重).
 //!
-//! v1 `apeireth-companion::causal_world_model::CausalWorldModel` 1:1 翻译 (`legacy/donor/apeireth-companion/src/causal_world_model.rs`,
-//! 1061 行, TP32 / W2 + W3).
+//! v1 `apeireth-companion::causal_world_model::CausalWorldModel` 语义对齐
+//! (1061 行, TP32 / W2 + W3).
 //!
 //! **与 E4/F1/F4/F6 不同**: v1 W2 是 **LLM 重** (per v1 doc: "LLM 推理: 因果图反事实推演").
 //! v2 W2 真实现**真接 `LlmFactory`** 调 LLM MCTS 反事实推演, 不假装确定性.
@@ -38,7 +38,7 @@
 //!
 //! **3 阶审查** (O-6 锚 9):
 //!
-//! 1. 总体: 1:1 翻译 v1 `CausalWorldModel` + W3 边挖掘, W2 trait process() 真接 LLM MCTS
+//! 1. 总体: 语义对齐 v1 `CausalWorldModel` + W3 边挖掘, W2 trait process() 真接 LLM MCTS
 //! 2. 系统: impl 在 engine (`apeireth-organ`), trait 在 foundation (`apeireth-plugin`)
 //! 3. 架构: `Arc<dyn OrganTrait>` 注入 runtime, W2 trait process() 调 `CausalSimulator` + LLM
 
@@ -108,7 +108,7 @@ pub enum EdgeSource {
 
 /// 因果边: 从一个事实到另一个事实的因果关系.
 ///
-/// v1 `CausalEdge` schema 1:1 (id / from / to / predicate / weight / evidence_count / source).
+/// v1 `CausalEdge` schema (id / from / to / predicate / weight / evidence_count / source).
 /// v2 plugin 层 `CausalEdge { cause, effect, conf, source }` 是另一套 (per
 /// `apeireth-plugin::organ::CausalEdge`), 这里保留 v1 完整 schema (含 predicate / evidence_count),
 /// 转 plugin `OrganOutput::WorldModel { edges }` 时再做 schema 映射 (字段对子集).
@@ -154,7 +154,7 @@ impl CausalEdge {
 
 /// 因果图: 节点集 + 边集 + 邻接索引 (W2 推演的搜索空间).
 ///
-/// v1 `CausalGraph` 1:1 (per `causal_world_model.rs:90-158`).
+/// v1 `CausalGraph` (per `causal_world_model.rs:90-158`).
 #[derive(Debug, Clone, Default)]
 pub struct CausalGraph {
     nodes: HashMap<String, CausalNode>,
@@ -265,7 +265,7 @@ pub struct TimelineFact {
 
 /// 边挖掘器: 从时间线按"对象-主体直连"统计挖掘因果边.
 ///
-/// v1 `MineCausalEdges` 1:1 (per `causal_world_model.rs:180-274`).
+/// v1 `MineCausalEdges` (per `causal_world_model.rs:180-274`).
 ///
 /// **机制**:
 /// 1. 按时间排序所有事实.
@@ -303,7 +303,7 @@ impl MineCausalEdges {
 
     /// 从时间线挖掘统计边. 返回 (边, 总候选对数).
     ///
-    /// v1 `MineCausalEdges::from_timeline` 1:1 翻译.
+    /// v1 `MineCausalEdges::from_timeline` 语义对齐.
     pub fn from_timeline(&self, facts: &[TimelineFact]) -> (Vec<CausalEdge>, usize) {
         // 1. 仅看有效事实 (invalid_at 为 None), 按时间排序.
         let mut active: Vec<&TimelineFact> =
@@ -406,7 +406,7 @@ struct ProposedEdgeJson {
 
 /// 边提议器: 用 LLM 提议因果边 (EvoCause 式补充路径).
 ///
-/// v1 `ProposeCausalEdges` 1:1 翻译 (`causal_world_model.rs:345-367`).
+/// v1 `ProposeCausalEdges` 语义对齐 (`causal_world_model.rs:345-367`).
 ///
 /// **0 装诚实**: 真接 LLM (per 任务 §3: "W2 必须 llm_factory() 返 Some"). W3 LLM
 /// 提议路径同样真接 LLM (与 W2 主路径共享 LlmFactory).
@@ -540,7 +540,7 @@ fn parse_proposed_edges_json(content: &str, max: usize) -> Vec<CausalEdge> {
 
 /// 推演链一步: 走过一条因果边, LLM 给叙事 + 状态快照.
 ///
-/// v1 `CausalStep` 1:1.
+/// v1 `CausalStep`.
 #[derive(Debug, Clone)]
 pub struct CausalStep {
     /// tick 编号.
@@ -559,7 +559,7 @@ pub struct CausalStep {
 
 /// 一条完整因果推演链.
 ///
-/// v1 `CausalChain` 1:1.
+/// v1 `CausalChain`.
 #[derive(Debug, Clone)]
 pub struct CausalChain {
     /// 反事实假设.
@@ -596,7 +596,7 @@ impl CausalChain {
     }
 }
 
-/// 推演请求: 给 LLM 反事实推演用 (1:1 翻译 v1 `CounterfactualQuery`).
+/// 推演请求: 给 LLM 反事实推演用 (语义对齐 v1 `CounterfactualQuery`).
 #[derive(Debug, Clone)]
 pub struct CounterfactualQuery {
     /// 反事实假设 (e.g. "如果主人今晚熬夜...").
@@ -627,7 +627,7 @@ pub struct MCTSNode {
 // LLM 抽象 (W2/W3 共享): 因果图 LLM trait (替代 v1 `CausalLlm`)
 // ============================================================
 
-/// 因果图 LLM trait (per v1 `CausalLlm` 1:1).
+/// 因果图 LLM trait (per v1 `CausalLlm`).
 ///
 /// 真生产路径: 由 `CausalWorldModelOrgan` 内置的 `Arc<dyn LlmFactory>` 实现 (走
 /// `LlmFactory::spawn` → `LlmInstance::complete`), 不直接 import 这个 trait.
@@ -648,7 +648,7 @@ pub trait CausalLlm: Send + Sync {
 
 /// 分支点上下文: 当前状态 + 候选边 (LLM 选择/评估时用).
 ///
-/// v1 `CausalBranchContext` 1:1.
+/// v1 `CausalBranchContext`.
 #[derive(Debug, Clone)]
 pub struct CausalBranchContext {
     /// 当前节点 chain.
@@ -665,7 +665,7 @@ pub struct CausalBranchContext {
 
 /// 分支点判断: LLM 对每条候选边打分 + 给叙事.
 ///
-/// v1 `CausalBranchJudgment` 1:1.
+/// v1 `CausalBranchJudgment`.
 #[derive(Debug, Clone)]
 pub struct CausalBranchJudgment {
     /// 每条候选边的评估 (按候选顺序对应).
@@ -686,7 +686,7 @@ pub struct EdgeJudgment {
 
 /// Mock LLM: 分支点硬编码接受首条候选 + 给叙事.
 ///
-/// v1 `MockCausalLlm` 1:1 (`causal_world_model.rs:730-793`).
+/// v1 `MockCausalLlm` (`causal_world_model.rs:730-793`).
 pub struct MockCausalLlm {
     /// judge_branch 时: 总是 take=true 首条候选 (其他 take=false).
     pub take_first: bool,
@@ -903,7 +903,7 @@ impl CausalLlm for LlmFactoryCausalLlm {
 
 /// 因果模拟器: 沿因果图展开推演链. 与 v1 `TextualSimulator` 同构 (W1), 仅搜索空间换成因果图.
 ///
-/// v1 `CausalSimulator` 1:1 (`causal_world_model.rs:432-606`).
+/// v1 `CausalSimulator` (`causal_world_model.rs:432-606`).
 pub struct CausalSimulator {
     pub graph: CausalGraph,
     pub llm: Arc<dyn CausalLlm>,
@@ -1200,7 +1200,7 @@ impl CausalWorldModel {
     ///
     /// 简化形态: 走 `simulate_counterfactual` + 在结果图上扩展 N 步作为 children 节点.
     /// 真生产路径可换 v1 `CausalMctsPlanner` (复用 cognition::planning), 此处保留
-    /// 任务 brief 提到的 `MCTSNode` 结构, 但搜索逻辑保持 1:1 翻译 v1 思路.
+    /// 任务 brief 提到的 `MCTSNode` 结构, 但搜索逻辑保持 语义对齐 v1 思路.
     pub async fn mcts_search(
         &self,
         query: CounterfactualQuery,
@@ -1278,7 +1278,7 @@ impl CausalWorldModel {
 // CausalWorldModelOrgan: W2 trait 真实现 (v2 OrganTrait)
 // ============================================================
 
-/// W2 Causal World Model 器官 (per v2 OrganTrait 1:1 翻译 v1 CausalWorldModel).
+/// W2 Causal World Model 器官 (per v2 OrganTrait 语义对齐 v1 CausalWorldModel).
 ///
 /// **0 装诚实**:
 /// - `llm_factory()` 返 `Some` — W2 是 LLM 重, 真接 LLM (与 E4/F4/F6/F1 确定性器官不同).
@@ -1513,7 +1513,7 @@ fn llm_error_to_organ(e: LlmError) -> OrganError {
 }
 
 // ============================================================
-// 单元测试 (1:1 翻译 v1 causal_world_model.rs 测试)
+// 单元测试 (语义对齐 v1 causal_world_model.rs 测试)
 // ============================================================
 
 #[cfg(test)]
@@ -1564,7 +1564,7 @@ mod tests {
         g
     }
 
-    /// v1 1:1: MockCausalLlm 沿因果链展开 (确定性).
+    /// 对齐 v1: MockCausalLlm 沿因果链展开 (确定性).
     #[tokio::test]
     async fn causal_chain_expand_from_root() {
         let graph = build_chain_graph();
@@ -1595,7 +1595,7 @@ mod tests {
         );
     }
 
-    /// v1 1:1: W3 主路径 - 从时间线统计挖掘边
+    /// 对齐 v1: W3 主路径 - 从时间线统计挖掘边
     #[test]
     fn mine_causal_edges_statistical() {
         let mut facts = Vec::new();
@@ -1628,7 +1628,7 @@ mod tests {
         assert!(edge.predicate.contains("行为") && edge.predicate.contains("导致"));
     }
 
-    /// v1 1:1: 阈值 7, 但只有 3 对共现 → 应无边.
+    /// 对齐 v1: 阈值 7, 但只有 3 对共现 → 应无边.
     #[test]
     fn mine_causal_edges_below_threshold_no_edge() {
         let mut facts = Vec::new();
@@ -1643,7 +1643,7 @@ mod tests {
         assert!(edges.is_empty(), "3 < 阈值 7, 不应产边");
     }
 
-    /// v1 1:1: Mock LLM 提议边 (W3 补充路径)
+    /// 对齐 v1: Mock LLM 提议边 (W3 补充路径)
     #[tokio::test]
     async fn propose_causal_edges_mock() {
         let facts = vec![
@@ -1676,7 +1676,7 @@ mod tests {
         assert_eq!(proposals[0].to, "熬夜|导致|效率低");
     }
 
-    /// v1 1:1: 推演结果与事实对账 (Brier 校准)
+    /// 对齐 v1: 推演结果与事实对账 (Brier 校准)
     #[tokio::test]
     async fn causal_chain_reconcile_with_fact() {
         let graph = build_chain_graph();

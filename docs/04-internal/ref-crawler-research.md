@@ -7,7 +7,7 @@
 | 项目 | 要点 |
 |---|---|
 | [spider-rs/spider](https://github.com/spider-rs/spider) | Rust 爬虫标杆（「for AI agents and LLMs」）：异步并发 + 网站适配器 + 重试/限速/代理/去重全套 |
-| [Liohtml/RUSTScrapling](https://github.com/Liohtml/RUSTScrapling) | Scrapling 的 Rust 移植：CSS selectors + async HTTP + spider 爬取 |
+| [Liohtml/RUSTScrapling](https://github.com/Liohtml/RUSTScrapling) | Scrapling 的 Rust 版实现：CSS selectors + async HTTP + spider 爬取 |
 | [recluse-rs/recluse](https://github.com/recluse-rs/recluse) | Rust 爬虫框架 |
 | [capsolver: Rust Web Scraping Architecture](https://dev.capsolver.com/blog/web-scraping/rust-web-scraping) | 反爬对抗层：验证码/指纹/代理轮换 |
 | [decodo: Rust Web Scraping](https://decodo.com/blog/rust-web-scraping) | 实操教程 |

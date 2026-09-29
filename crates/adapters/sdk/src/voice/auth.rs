@@ -30,15 +30,15 @@ use crate::voice::error::{VoiceError, VoiceResult};
 
 /// 平台名 (keyring "service" 字段 / protocol 平台标识).
 ///
-/// 跟 livekit / sandbox / lark PLATFORM_NAME 1:1, 锁 "apeireth" 避免跟其他 app 冲突.
+/// 跟 livekit / sandbox / lark PLATFORM_NAME 惯例一致, 锁 "apeireth" 避免跟其他 app 冲突.
 pub const PLATFORM_NAME: &str = "apeireth";
 
 /// Provider 名 (keyring "account" 字段).
 ///
-/// 1:1 翻译 既有 Voice SDK config.
+/// 语义对齐 既有 Voice SDK config.
 pub const PROVIDER_NAME: &str = "anthropic-voice";
 
-/// Voice SDK schema 版本 (1:1 翻译 既有 Voice SDK).
+/// Voice SDK schema 版本 (语义对齐 既有 Voice SDK).
 pub const VOICE_SCHEMA_VERSION: &str = "1";
 
 /// 默认 Voice API 基础 URL (按既有实现, https:// 强制).
@@ -64,7 +64,7 @@ pub const TYPICAL_API_KEY_LENGTH: usize = 32;
 
 /// API Key 持有者 (per P0 安全铁律 + apeireth-keyring 模式).
 ///
-/// **当前 skeleton 用 String 包装** (跟 livekit / sandbox / lark 1:1 对齐). R21 续真接时
+/// **当前 skeleton 用 String 包装** (跟 livekit / sandbox / lark 惯例一致). R21 续真接时
 /// 改成 `apeireth_keyring::SecretBytes` 或 `secrecy::SecretString`.
 ///
 /// **M5 修复**: Debug 手写脱敏 — derive(Debug) 会让一次 `{:?}` / `dbg!` 把 API Key

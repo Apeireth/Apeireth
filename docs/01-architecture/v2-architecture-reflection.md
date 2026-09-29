@@ -148,7 +148,7 @@ runtime 调能力, 不直接 import impl.
 - **ProviderCapability + LlmFactory 双层抽象** (per 子代理 M 独立视角) — 我之前认为重复, 实是设计意图: ProviderCapability 给路由 / LlmFactory 给多 instance 隔离
 
 #### 缺的:
-- **9 organ 核心能力 0 真移植** = 1.0 全部功能没达成 (用户 v2.0 完成定义的标准)
+- **9 organ 核心能力 0 真实现** = 1.0 全部功能没达成 (用户 v2.0 完成定义的标准)
 - **认知模块是其他 dev 推** (5 commit), 我**没拍板架构决定权** — 子代理 J 已核验 0 触碰 LOCKED, 但 **谁来维护 / 何时扩展**没明示
 - **Plugin registry 缺失** — ROADMAP §4 P4 "MCP 动态能力注册" 还在 future
 - **Triple onion 描述在 `philosophy.md`**, 但 runtime 真实现只到 L1-L2 (approval + sandbox), **L3-L5 0 装**
@@ -185,7 +185,7 @@ runtime 调能力, 不直接 import impl.
 
 **新架构优** = 7 capability trait + 认知模块 + 9 哲学锚 + 5 重守门 + 单向依赖 + LlmFactory 多 instance 隔离 + ProviderCapability 路由
 
-**新架构缺** = 9 organ 0 真移植 + 认知模块架构决定权没拍板 + Triple onion L3-L5 0 装真 + PluginCapabilities index trait 缺失 + Perception 6 modality 0 装 + Organ trait 边界没设计
+**新架构缺** = 9 organ 0 真实现 + 认知模块架构决定权没拍板 + Triple onion L3-L5 0 装真 + PluginCapabilities index trait 缺失 + Perception 6 modality 0 装 + Organ trait 边界没设计
 
 ### 5.2 v2.0 完成距离
 
@@ -210,7 +210,7 @@ runtime 调能力, 不直接 import impl.
 新架构完成后 (估 2027-01-08 至 2027-03 月 v2.0.0 release 后):
 - **17-crate + 7 capability trait** 就位
 - **认知模块 6 WIRED** 就位 (memory_recall / preference_recall / judge / self_assessment / memory_writeback + council slot ready)
-- **9 organ 至少 1 真移植** (估 E4 curiosity 4 周, 子代理 L 估)
+- **9 organ 至少 1 真实现** (估 E4 curiosity 4 周, 子代理 L 估)
 - **9 哲学锚 LOCKED + 13 键降级 + 5 重守门** 就位
 
 ### 6.2 自我升级机制 (Self-Improvement Loop, SIL)
@@ -238,7 +238,7 @@ runtime 调能力, 不直接 import impl.
                 ↓ Council verdict
  ┌─────────────────────────────────┐
   │ L3: 验证 (testing sandbox)       │
-  │ - E4 curiosity 移植              │
+  │ - E4 curiosity 实现              │
   │ - sandbox 跑 regression           │
   │ - clippy 0 / tests 0 / 5 重守门 │
   └─────────────────────────────────┘
@@ -298,7 +298,7 @@ runtime 调能力, 不直接 import impl.
 
 - **加 1 capability trait** = 1-2 周 (估)
 - **改 LLM provider** = 1 周 (per LlmFactory trait, 子代理 M 已写真 impl)
-- **加 1 organ 真移植** = 4-6 周 (per 子代理 L 估, E4 curiosity 最易)
+- **加 1 organ 真实现** = 4-6 周 (per 子代理 L 估, E4 curiosity 最易)
 - **认知模块新 slot** = 2-3 周 (12 slot ledger 当前 6 WIRED, 6 DEFERRED)
 - **改 Triple onion L3-L5 真实现** = 4-6 周
 
@@ -356,7 +356,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
   ↓
 2026-10-16 v2.0.0-rc.1 release (RC-5/6/7 真写 + 集成测试)
   ↓
-2026-11-13 至少 1 organ 真移植 (估 E4 curiosity, 子代理 L 估 4 周)
+2026-11-13 至少 1 organ 真实现 (估 E4 curiosity, 子代理 L 估 4 周)
   ↓
 2027-01-08 v2.0.0 release (估 frontend 对接 4-6 周 + buffer 1 月)
   ↓
@@ -420,8 +420,8 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 
 | 子代理 | 任务 | 产出 | 是否值得 |
 |---|---|---|---|
-| Q1/R1/R2/R3 | E4/F1/F4/F6 organ 真移植 (确定性 4 件) | commit `4aa54a0a` / `23e48900` / `02f9d537` | ✅ 4 organ 真兑现 |
-| R4/R5/R6/R7/R8 | W1/W2/W3/E7/Memory organ 真移植 (LLM 重 + 状态机) | 整合 #2 commit `bbf70293` | ✅ 5 organ 真兑现 |
+| Q1/R1/R2/R3 | E4/F1/F4/F6 organ 真实现 (确定性 4 件) | commit `4aa54a0a` / `23e48900` / `02f9d537` | ✅ 4 organ 真兑现 |
+| R4/R5/R6/R7/R8 | W1/W2/W3/E7/Memory organ 真实现 (LLM 重 + 状态机) | 整合 #2 commit `bbf70293` | ✅ 5 organ 真兑现 |
 | R9 | frontend 对接 spec + quickstart | 565 + 224 行 | ✅ 但 task brief 估错 12 slot 数字 (R13 纠) |
 | R10 | cognitive 9 organ 集成 spec | 1001 行 | ✅ 但 ledger 数字错 (R13 纠) |
 | R11 | OrganOrchestrator spec | 500 行 15 节 | ✅ |

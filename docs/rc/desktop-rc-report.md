@@ -35,7 +35,7 @@
 | **记忆与知识图谱** | `/v1/panel/memory/episodes` & `/v1/panel/graph` | **PASS** | 记忆条目与 `factg-*`/`link-*` 实体三元组探索 |
 | **活动中心** | 4 领域分别呈现 | **PASS** | 保持 Goals / Runs (ActionStream) / Workflows / Scheduled 原生划分 |
 | **伴随体状态与眼动** | 后端状态信号推导 | **PASS** | 金色眼球 7 种表现态动效 + 主动涌现气泡正常 |
-| **桌面原生外壳** | Tauri 2 窗口/托盘/快捷窗 | **PASS** | Spotlight 式快捷窗口、关闭最小化托盘正常 |
+| **桌面原生外壳** | Tauri 2 窗口/托盘/快捷窗 | **PASS** | 全局快捷窗口、关闭最小化托盘正常 |
 
 ---
 

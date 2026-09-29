@@ -37,11 +37,11 @@ mod identity;
 mod migrations;
 // N8: generation 绑定观测缓存 (自包含, 通用记忆运行时模式, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
 pub mod gen_cache;
-// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py)
+// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (对齐同类记忆工程公开设计)
 pub mod hallways;
 mod session_note;
 mod streams;
-mod three_layer; // R30 U9: claude-mem 3 层 facade
+mod three_layer; // R30 U9: 3 层记忆 facade
 
 pub use append_only::{AppendOnlyError, HistoryEntry, HistoryStream, Tombstone};
 // R22 ST-A2.4 — 6 历史流深度公共 API (query / insert / count)
@@ -51,7 +51,7 @@ pub mod arbitration;
 pub mod betti_hole_detector;
 pub mod bitemporal_graph;
 pub mod chronicle_crystallizer;
-/// 图社区分层聚合 + 双级检索分诊 (W3 移植批, v1 donor community, 2026-10-10)。
+/// 图社区分层聚合 + 双级检索分诊 (W3 实现批, v1 community, 2026-10-10)。
 pub mod community;
 pub mod continuity_link;
 pub use continuity_link::{

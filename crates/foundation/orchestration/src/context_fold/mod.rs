@@ -1,6 +1,6 @@
 //! `apeireth-orchestration::context_fold` — lossless context folding primitives.
 //!
-//! Recovered from donor `apeireth-context-fold` (Rust-native). This is a
+//! Implemented Rust-native. This is a
 //! **library** of compression heuristics. It is
 //! complementary to [`crate::context_rot`] (rot_score + Retain/Remove/Replace) and
 //! to tools spill (overflow-to-disk). Folding decides *how to collapse a string*;

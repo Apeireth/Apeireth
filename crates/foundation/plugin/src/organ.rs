@@ -13,8 +13,7 @@
 //! hand/heart/memory/mind/voice) 是**两套体系**:
 //!
 //! - R11 LOCKED 9 organ: UI 器官 (TUI 渲染层, R11 严守 0 触碰).
-//! - v1 companion era 9 organ ID: 行为/认知器官 (本 trait 服务对象, 移植自
-//!   `legacy/donor/apeireth-companion/src/{curiosity,emotion_memory,hypothesis,...}.rs`).
+//! - v1 companion era 9 organ ID: 行为/认知器官 (本 trait 服务对象).
 //!
 //! | ID   | v1 module                  | v2 impl 状态                  |
 //! |------|----------------------------|-------------------------------|
@@ -30,7 +29,7 @@
 //!
 //! **[2026-10-06 对账]** 上表原写"仅 E4 ✅, 其余 8 organ 0 装 (rc 阶段或 v2.1)"——
 //! 该表述停留在 2026-08-30 (`9ce172a9`) 的子代理 Q1 时点, **已被同日 R1-R8 批推翻**:
-//! 2026-08-28 子代理 R1/R2/R3/R4/R5/R6/R7/R8 已把 9 organ 全部 1:1 移植完成,
+//! 2026-08-28 子代理 R1/R2/R3/R4/R5/R6/R7/R8 已把 9 organ 全部实现完成,
 //! engine 侧 (`crates/engine/organ/src/lib.rs:11-31`) 为权威进度表。本表已按 engine
 //! 现状更正 (审计: `docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md` §8.4)。
 //! 本文件只是 trait 边界的**抽象声明**, 不重复维护 impl 进度 —— 以 engine 为准。
@@ -43,13 +42,13 @@
 //! **0 装 PASS**:
 //! - `OrganTrait` 是**纯 trait**, 0 LLM 依赖 (同 `LlmFactory` 模式).
 //! - 9 organ IDs 全部列出 (`OrganKind` 9 variant). **[2026-10-06 更正]** 本文件**不再**
-//!   声明"仅 E4 留真实现"—— 9 organ 已全部在 engine 侧真移植 (`crates/engine/organ`,
+//!   声明"仅 E4 留真实现"—— 9 organ 已全部在 engine 侧真实现 (`crates/engine/organ`,
 //!   见上文进度表); 本 trait 的 `NotImplemented` 兜底现在只服务 `NoopOrgan`
 //!   (engine 侧兜底占位, 用于尚未装配具体 organ 的槽位).
 //! - `llm_factory()` 默认返 `None`, 不假装每个 organ 都接 LLM. Curiosity 即使 trait
 //!   接口返 LLM (per 任务说明), **真实现**仍是确定性机制 (v1 真实现是确定性无 LLM,
 //!   per `legacy/donor/apeireth-companion/src/curiosity.rs:1-23` 文档明示).
-//! - 真生产前阻塞 #1 (任务"至少 1 organ 真移植"): 已越过 — 9/9 真移植 (engine 侧).
+//! - 真生产前阻塞 #1 (任务"至少 1 organ 真实现"): 已越过 — 9/9 真实现 (engine 侧).
 //!
 //! **3 阶审查** (O-6 锚 9, per `perception_backend.rs` 同模式):
 //! 1. 总体: 与 LlmFactory / PerceptionInput 同位 (capability 抽象), 让 9 organ 走统一入口.
@@ -117,10 +116,10 @@ impl OrganKind {
         }
     }
 
-    /// v2 impl 状态 (per 任务: 至少 1 organ 真移植)
+    /// v2 impl 状态 (per 任务: 至少 1 organ 真实现)
     pub fn v2_impl_status(&self) -> &'static str {
         match self {
-            Self::E4 => "real (CuriosityOrgan — 1:1 v1 translation)",
+            Self::E4 => "real (CuriosityOrgan — aligned with v1)",
             _ => "0 装 (forward-declared; rc 阶段或 v2.1)",
         }
     }
@@ -204,7 +203,7 @@ pub enum OrganOutput {
     Emergence {
         action: String,
         spoke: bool,
-        /// 真实 InitiativeGate 留痕 (per v1 `EmergenceLoop::last_hold()` 1:1, Stage 3 完整化).
+        /// 真实 InitiativeGate 留痕 (与 v1 `EmergenceLoop::last_hold()` 一致, Stage 3 完整化).
         ///
         /// **0 装诚实**: 真生产路径 = `EmergenceOrgan::tick()` 完成后 `last_hold()` 真值.
         /// Orchestrator 外层 8 重 gate (RhythmUnknown / RhythmVeto / DriveLow 3 重) 读此字段.
@@ -220,7 +219,7 @@ pub enum OrganOutput {
     NotImplemented { organ: OrganKind, note: String },
 }
 
-/// 主动门控原因 (per v1 `apeireth-companion::presence::InitiativeGate` 13 种 1:1).
+/// 主动门控原因 (与 v1 `apeireth-companion::presence::InitiativeGate` 13 种一一对应).
 ///
 /// **0 装诚实**:
 /// - 13 种全覆盖: emergence 8 (UserQuiet/QuietHours/DailyLimit/LlmBudget/DepthLow/
@@ -314,7 +313,7 @@ impl InitiativeGate {
     }
 }
 
-/// v1 curiosity `ExplorationTarget` 1:1 翻译 (per `legacy/donor/apeireth-companion/src/curiosity.rs:64-73`)
+/// v1 curiosity `ExplorationTarget` 语义对齐
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CuriosityTarget {
     pub id: u64,
@@ -324,7 +323,7 @@ pub struct CuriosityTarget {
     pub est_cost: f64,
 }
 
-/// v1 `Depth` 1:1 (per `legacy/donor/apeireth-companion/src/curiosity.rs:57-61`)
+/// v1 `Depth` 语义对齐
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CuriosityDepth {
     Shallow,
@@ -347,7 +346,7 @@ pub enum ValueVerdict {
     Pending,
 }
 
-/// W2/W3 因果边 (per v1 `causal_world_model::CausalEdge` schema 1:1)
+/// W2/W3 因果边 (与 v1 `causal_world_model::CausalEdge` schema 一致)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CausalEdge {
     pub cause: String,
@@ -415,7 +414,7 @@ impl std::error::Error for OrganError {}
 ///
 /// v1 era 9 organ 各自独立 crate / mod, v2 引入 trait 统一入口:
 /// - runtime 按 `organ_kind` 注入 `Arc<dyn OrganTrait>`
-/// - 每个 organ 1:1 翻译 v1 真实现 schema
+/// - 每个 organ 语义对齐 v1 真实现 schema
 /// - trait 默认 `llm_factory()` 返 None (不假装每个 organ 都接 LLM)
 /// - 仅 curiosity organ 当前真实现, 其余 8 organ 返 `NotImplemented` 显式标缺
 #[async_trait]

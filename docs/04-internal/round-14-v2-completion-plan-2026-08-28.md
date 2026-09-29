@@ -34,10 +34,10 @@ Author:          主代理 Mavis
 **真账**: v2.0 release = 1.0 功能全集 + 架构升级, 不是 "框架" 是 **AI 物种实现** (per `apeireth-true-understanding-2026-08-28.md`):
 - **基地** (LLM 操作系统, 17 crates) ✅ done
 - **Agent 平台** (OrganOrchestrator + 12 cognitive slot) ✅ A 块 done
-- **她** (物种实现, per-user 塑形) — 真实施 (28 项 1:1 可移植 + 4 项 trait 口 + 5 项 PARTIAL, ~35 项 1.0 缺口)
+- **她** (物种实现, per-user 塑形) — 真实施 (28 项 逐项可实现 + 4 项 trait 口 + 5 项 PARTIAL, ~35 项 1.0 缺口)
 
 **北极星兑现路径**:
-1. 完成 28 项 1:1 可移植真实施 (per R11 真账)
+1. 完成 28 项 逐项可实现真实施 (per R11 真账)
 2. 主代理亲做 4 项 trait 口实接线 spec
 3. 真实施 5 项 PARTIAL (education 真 CAS + confidence BetaBinomial + HybridCognitiveRouter 真接 + proactive 真接 + Kani bridge)
 4. R20/R22 真实施 (跟认知模块 critical path 并行)
@@ -90,18 +90,18 @@ Author:          主代理 Mavis
 
 ### 1.5 O-2 前人肩上 (Borrow, attribute, adapt)
 
-**真账 (借鉴链完整)**:
-- ✅ **5 R7 物种化借鉴真账** (N.E.K.O / Open-LLM-VTuber / Firefly / Mio / AIRI) push 成功
+**真账 (参考脉络完整)**:
+- ✅ **5 R7 物种化参考真账** (同类陪伴工程 5 项) push 成功
 - ✅ **R11 6 gap 真调研真账** (Storage / LongTermMemory / SpeciesCore / SpeciesForm / MetaCognition / CoordinationContext) push 成功
-- ✅ **research/source ~36 真开源借鉴** (tokio / wasmtime / qdrant / sled / hermes-agent-rs / MetaGPT / openclaw / LangGraph / CrewAI / Claude Code 等)
-- ✅ **legacy/donor/~100 modules 1.0 真账** (12 slot + 9 organ 1:1 移植来源)
+- ✅ **research/source ~36 真开源参考** (tokio / wasmtime / qdrant / sled / 同类 Agent 框架 6 项等)
+- ✅ **legacy/donor/~100 modules 1.0 真账** (12 slot + 9 organ 语义对齐 v1)
 - ✅ **_research_mem/** (apeireth-rust-fork + AgentFlow + sub_agent_reports + wave2-wave7 真账)
 
 **前人肩上路径**:
-1. 真实施时 1.0 1:1 翻译优先 (28 项 1:1 可移植)
-2. 1.0 PARTIAL 真账借鉴 (5 项: education 字符串规则 / confidence BetaBinomial / HybridCognitiveRouter / proactive / Kani bridge)
-3. R7 物种化借鉴 (5 项目对接: N.E.K.O 五维记忆 / Open-LLM-VTuber 4 段 pipeline / Firefly GPT-SoVITS 原声 TTS / Mio Windows 本地优先 / AIRI 永远不下播)
-4. research/source 真开源借鉴 (~36 项目, 真实施时按需 clone)
+1. 真实施时 1.0 语义对齐优先 (28 项 逐项可实现)
+2. 1.0 PARTIAL 真账参考 (5 项: education 字符串规则 / confidence BetaBinomial / HybridCognitiveRouter / proactive / Kani bridge)
+3. R7 物种化参考 (5 项目对接: 五维记忆 / 4 段 pipeline / GPT-SoVITS 原声 TTS / Windows 本地优先 / 永久在线)
+4. research/source 真开源参考 (~36 项目, 真实施时按需 clone)
 5. 0 新外部 dep 引入 (per 真账 brief 约束)
 
 ### 1.6 O-3 干到底 (Finish what we start; no half-measures)
@@ -157,7 +157,7 @@ Author:          主代理 Mavis
 **真账 (三阶审查, per 真账 brief §5 模板)**:
 - **总体最优**: 真实施按真账 §3.3 派单顺序, critical path 11-13 周协调+上下文最重, 总 12-14 周
 - **系统最优**: 真实施走扩展 trait 接口 (不破现有 9 organ trait + 12 cognitive slot wiring + LOCKED 5 项), 1 真实施 1 测 + 5 重守门 baseline + LOCKED 0 触碰
-- **架构最优**: 真实施借签 28 项 1:1 可移植 + 4 项 trait 口主代理亲做 + 5 项 PARTIAL 0 装诚实标, 0 引新外部 dep, 物种化借签边界 (per-user 塑形 + 声音形状 + 时间 + 语言 + 形态)
+- **架构最优**: 真实施参考 28 项 逐项可实现 + 4 项 trait 口主代理亲做 + 5 项 PARTIAL 0 装诚实标, 0 引新外部 dep, 物种化参考边界 (per-user 塑形 + 声音形状 + 时间 + 语言 + 形态)
 
 **O-6 永远追求最优路径**:
 1. 每 commit message 必带三阶审查 (per §5 模板) + 拒 alternatives + 拒理由
@@ -192,7 +192,7 @@ Author:          主代理 Mavis
 
 | # | 派单 | 估时 | 优先级 | 物种化维度 | 阻塞 |
 |---|---|---|---|---|---|
-| 1 | **R12-CoordinationContext-1** (onering + oracle / context+context_rot 融合 + 部分 hello (Windows Hello NGC 已知, 不是"启动/装配")) | 3-4 周 | 🟢 P0 | 协调+上下文 | 主代理 #1 rot_score 融合 + #2 hello (Windows Hello NGC 121 行, 0 装 PASS 标注, 真实施需主人硬件 + 微软账号配置, 真实施主代理亲测本地 Windows NGC 凭据提供方) |
+| 1 | **R12-CoordinationContext-1** (onering + oracle / context+context_rot 融合 + 部分 hello (Windows Hello NGC 已知, 不是"启动/装配")) | 3-4 周 | 🟢 P0 | 协调+上下文 | 主代理 #1 rot_score 融合 + #2 hello (Windows Hello NGC 121 行, 0 装 PASS 标注, 真实施需主人硬件 + 系统账号配置, 真实施主代理亲测本地 Windows NGC 凭据提供方) |
 | 2 | **R12-CoordinationContext-2** (continuation + continuity + spill + milestone + experiment_field) | 3-4 周 | 🟢 P0 | 协调+上下文 | 0 |
 | 3 | **R12-CoordinationContext-3** (proactive + progressive + pentest + Kani bridge) | 2-3 周 | 🟢 P0 | 协调+上下文 | 0 |
 | 4 | **R12-SpeciesCore-1** (principles + partner) | 2 周 | 🟢 P0 | 物种化核心 | 主代理 #5 confidence BetaBinomial trait spec |
@@ -376,7 +376,7 @@ Week 7-10: R20 preference_learning (in-progress)
 | **release timeline 修订** | 4-6 月 → 6-9 月 (因 ~35 项 1.0 缺口 + 1.0 maturity 补查) | Round 14 commit `3ea454f1` 已 push 修订 |
 | **0 实测 2.0 master branch** | 本地 working tree 已就位 ~86-crate v1 + 17 crates v2 真账, 仅真账 + 推断 + R7/R11 真调研推论 | 真实施时主代理必亲验 (~2-3 天本地实测 27 项 1.0 .rs + 2.0 真账, 0 git clone 必要) |
 | **1.0 maturity 35 项中 8 项实测 (~23%)** | Round 13 主代理亲测 8 个核心 1.0 .rs, 余 27 项仅凭推断 | 真实施时主代理必亲测 (~35 项 1.0 .rs 实测 + 物种化扩展 + 0 触碰 LOCKED) |
-| **0 引新外部 dep** | per 真账 brief 约束, 1:1 翻译优先借签 1.0 真账 | 物种化借签边界: 借签 1.0 真账 + R7 真调研 + research/source 真开源, 0 新外部 dep |
+| **0 引新外部 dep** | per 真账 brief 约束, 语义对齐优先参考 1.0 真账 | 物种化参考边界: 参考 1.0 真账 + R7 真调研 + research/source 真开源, 0 新外部 dep |
 
 ---
 

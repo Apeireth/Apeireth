@@ -11,7 +11,7 @@
 1. [项目全貌与 18-Crate 依赖拓扑](#1-项目全貌与-18-crate-依赖拓扑)
 2. [5 项 LOCKED 核心资产与 9 哲学锚守则](#2-5-项-locked-核心资产与-9-哲学锚守则)
 3. [全域系统能力与核心 API 一览表](#3-全域系统能力与核心-api-一览表)
-4. [外部 170+ 标杆与 参考实现吸收演进图谱（历史）](#4-外部-170-标杆与-vcp-行级吸收演进图谱)
+4. [外部 170+ 标杆与同类工程演进图谱（历史）](#4-外部-170-标杆与同类工程演进图谱)
 5. [研发纪律、代码规范与“0 假装 PASS”原则](#5-研发纪律代码规范与0-假装-pass原则)
 6. [一键构建、测试、代码检查与常用指令](#6-一键构建测试代码检查与常用指令)
 7. [团队接手常见问题 (FAQ) 与排障指南](#7-团队接手常见问题-faq-与排障指南)
@@ -78,7 +78,7 @@ graph TD
 2. **S-2 实事求是 (Truth from Facts)**：杜绝空中楼阁，全部代码真实可跑。
 3. **S-3 质量工程化 (Quality Engineering)**：强类型建模、Serde 支持、完备单测。
 4. **O-1 安全优先 (Security First)**：Fail-Closed 默认拒绝、进程硬隔离、内存物理清零。
-5. **O-2 站在前人肩膀上 (Standing on Shoulders)**：全面吸收业界前沿经验与标杆。
+5. **O-2 站在前人肩膀上 (Standing on Shoulders)**：对齐业界前沿经验与同类工程做法。
 6. **O-3 干到底 (Follow Through)**：不留烂尾，模块完成从定义、实现到重导出与测试的完整闭环。
 7. **O-4 任何人都能接手 (Maintainability)**：详尽文档、标准 `///` 注释与清晰架构。
 8. **O-5 0 装 PASS (Zero Fake Pass)**：代码库中绝对零 `todo!`、零 `unimplemented!`、零伪装 mock。
@@ -101,17 +101,17 @@ graph TD
 * **昼夜梦境引擎**：`DreamEngine::advance_cycle()`（6 阶段认知循环）
 * **活维基知识编译**：`WikiFsEngine::run_lint()`（双链拓扑 + 死链/孤岛反熵 Lint）
 * **AI 自驱心跳与心流锁**：`HeartbeatScheduler::acquire_flow_lock()`（抢占式二叉堆）
-* **Harness 失败自进化修补**：`HarnessPatchEngine::synthesize_patches()`（DeepSeek R1 范式）
+* **Harness 失败自进化修补**：`HarnessPatchEngine::synthesize_patches()`（失败轨迹强化学习范式）
 * **事务级多文件补丁**：`TransactionalPatchApplier::apply_patch()`（两阶段提交 + 自动原子回滚）
 * **8 帧全双工 WebSocket**：`SentenceDivider` 标点流式分句（TTFAB < 300ms）
 
 ---
 
-## 4. 外部 170+ 标杆与 参考实现吸收演进图谱（历史）
+## 4. 外部 170+ 标杆与同类工程演进图谱（历史）
 
 * **1.0 遗产与 170+ 标杆白皮书**：[`docs/01-architecture/v2-master-lineage-and-upgrade-blueprint.md`](../01-architecture/v2-master-lineage-and-upgrade-blueprint.md)
-* **VCPToolBox 深度对比报告**：[`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](../01-architecture/vcp-vs-apeireth-deep-comparison.md)
-* **参考实现吸收指南（历史）**：[`docs/03-reference/vcp-line-level-absorption-guide.md`](vcp-line-level-absorption-guide.md)
+* **基线工程深度对比报告**：[`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](../01-architecture/vcp-vs-apeireth-deep-comparison.md)
+* **基线工程实现指南（历史）**：[`docs/03-reference/vcp-line-level-absorption-guide.md`](vcp-line-level-absorption-guide.md)
 
 ### 核心演进路线图：
 1. **第一批 (已实装)**：OWASP ASI-01 审计、不可信信封包裹、8 类 PII、Pre/Post 工具绊线、事务补丁、MiniMax LIVE 语音、8 帧 Duplex 网关、5D 记忆与双时态图谱。

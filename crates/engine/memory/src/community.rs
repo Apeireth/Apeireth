@@ -1,7 +1,6 @@
-//! `apeireth-memory::community` — 图社区分层聚合 + 双级检索分诊 (W3 移植批)。
+//! `apeireth-memory::community` — 图社区分层聚合 + 双级检索分诊 (W3 实现批)。
 //!
-//! **移植来源**: v1 `legacy/donor/apeireth-companion/src/community.rs` (台账 M2,
-//! LightRAG/GraphRAG 精神, 记忆调研批)。**0 装纪律原样移植**: 轻量确定性实现 ——
+//! 批次上下文 (台账 M2, 记忆调研批)。**0 装纪律语义对齐**: 轻量确定性实现 ——
 //! 不上 Leiden/外部图库; 全部排序规则显式, 复测必同; 不改 CRAWL 本体评分。
 //!
 //! # 三件
@@ -25,7 +24,7 @@
 //!
 //! 生产图谱契约 (`apeireth_plugin::experience::KnowledgeGraphStore`) 只有
 //! `facts_from(subject, limit)` **单跳读**, 无全量列举 —— 社区检测需要全集,
-//! 故本批 = **移植 + 测试 (IMPLEMENTED)**; 生产消费 (接检索前置) = 契约扩展
+//! 故本批 = **实现 + 测试 (IMPLEMENTED)**; 生产消费 (接检索前置) = 契约扩展
 //! (`all_facts`/subject 枚举) 之后的接线项, 已记台账 #57。
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};

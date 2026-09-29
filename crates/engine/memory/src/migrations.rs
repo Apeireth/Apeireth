@@ -33,7 +33,7 @@ pub const MIGRATIONS: &[Migration] = &[
     },
     // R179 P1-10: Hallway 表 (wing 内 entity-pair co-occurrence)
     // 跟 6 历史流不一样: 不加 append-only trigger, 允许 recompute 时 UPSERT
-    // (mempalace "preserve L7 dynamics" — strength/stability 必须跨 recompute 保留).
+    // (公开设计 "preserve L7 dynamics" — strength/stability 必须跨 recompute 保留).
     Migration {
         version: 2,
         name: "V2__hallways_for_wings",

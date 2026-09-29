@@ -1,6 +1,6 @@
 //! HTML → accessibility-tree extraction (Playwright-style ARIA snapshot).
 //!
-//! Ported from legacy `apeireth-tool-browser::accessibility` (R139). A
+//! Semantics aligned with legacy `apeireth-tool-browser::accessibility` (R139). A
 //! hand-rolled tokenizer (no `scraper`/`html5ever` dependency) that handles
 //! the common case: standard tags + ARIA roles/names + semantic HTML
 //! (`<button>`, `<a>`, `<input>`, headings, landmarks). Not a full HTML5

@@ -13,7 +13,7 @@
   // - 无未读 badge（后端无此概念）；唯一的状态标记是「待签」（金，因为
   //   他停下了，§7 金色纪律），由 SSE approval_required 真实信号驱动。
   //
-  // 2026-10-11 主人拍板批（Kimi Desktop 范式）：
+  // 2026-10-11 主人拍板批（同类桌面工具范式）：
   // - 分组：项目区（按会话级工作目录）+ 联系人区（按创建时的伙伴人设），
   //   组可下拉收起，收起态持久化 localStorage。
   // - 行操作：hover「···」菜单 = 置顶 / 重命名 / 归档（已归档组内为还原）/ 删除
@@ -220,7 +220,7 @@
     <span class="him-status" class:gold={himAttention}>{himStatus}</span>
   </button>
 
-  <!-- ======== 项目区（按工作目录收纳，Kimi 范式） ======== -->
+  <!-- ======== 项目区（按工作目录收纳，同类工具范式） ======== -->
   {#if sections.projects.length}
     <div class="sec">
       <button class="sec-head" onclick={() => toggleCollapse('sec:projects')} aria-expanded={!isCollapsed('sec:projects')}>
@@ -509,7 +509,7 @@
     color: var(--ap-gold);
   }
 
-  /* ---------- 分区（项目/联系人/已归档）与组（Kimi 范式） ---------- */
+  /* ---------- 分区（项目/联系人/已归档）与组（同类工具范式） ---------- */
   .sec {
     margin-top: 14px;
   }
@@ -697,7 +697,7 @@
     gap: 3px;
     transition: opacity 0.15s ease;
   }
-  /* hover 时右侧时间/条数让位给「···」操作钮（Kimi 行内菜单范式） */
+  /* hover 时右侧时间/条数让位给「···」操作钮（行内菜单范式） */
   .row-wrap:hover .session-side {
     opacity: 0;
   }

@@ -100,7 +100,7 @@ impl HumanAuthority {
                     );
                 }
                 // M6 修复 (2026-09-24 审计): 单人分支补签名者身份校验 ——
-                // 原实现只查"格式良好" (`is_well_formed_sig`: 非空 + 含 `:`),
+                // 修复前只查"格式良好" (`is_well_formed_sig`: 非空 + 含 `:`),
                 // `"attacker:x"` 这类任意构造签名即 Accepted; 同函数
                 // MultiHuman 分支 (:135) 是校验 signer ∈ real_humans 的。
                 // 单人模式同样要求签名者是已登记的真实人类。
@@ -362,7 +362,7 @@ mod ha_multisign_tests {
     #[test]
     fn single_human_rejects_unregistered_signer() {
         // M6 回归 (2026-09-24 审计): 单人模式下, "格式良好但签名者不在
-        // real_humans" 的签名必须被拒 —— 原实现下任意 `"anything:x"` 即 Accepted。
+        // real_humans" 的签名必须被拒 —— 修复前任意 `"anything:x"` 即 Accepted。
         let ha = HumanAuthority {
             mode: HAMode::SingleHuman,
             real_humans: vec![real_human("alice")],

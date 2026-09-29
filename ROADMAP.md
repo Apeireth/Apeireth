@@ -48,8 +48,8 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | 里程碑 | 成果 | 证据 |
 |---|---|---|
 | M1A 存储地基 | 单写者+读池、SQLite WAL、`PRAGMA user_version` 迁移 → `crates/engine/storage` | `docs/01-architecture/m1a-canonical-storage-foundation.md` |
-| M1B 记忆 | vector/graph/检索契约 primitive → `crates/engine/memory`（ACT-R 全量移植未做） | `docs/01-architecture/m1b1..m1b3` |
-| M1C 治理移植 | Allow/Deny/RequireApproval + PII/注入检测 + 审计哈希链 → `crates/foundation/governance` | `docs/01-architecture/m1c-governance-donor-primitives.md` |
+| M1B 记忆 | vector/graph/检索契约 primitive → `crates/engine/memory`（ACT-R 全量迁入未做） | `docs/01-architecture/m1b1..m1b3` |
+| M1C 治理迁回 | Allow/Deny/RequireApproval + PII/注入检测 + 审计哈希链 → `crates/foundation/governance` | `docs/01-architecture/m1c-governance-donor-primitives.md` |
 | M2A 简单工具 | filesystem/search/repo 三个只读工具 → `crates/capabilities/tools` | `docs/01-architecture/m2a-simple-tool-ports.md` |
 | M2B 进程封装 | 每 OS ProcessExecutor：Windows Job Object + CREATE_SUSPENDED 完整，Linux/macOS 进程组部分 | `docs/01-architecture/m2b*.md` |
 | M2C 审批/Shell | approval 生命周期（冻结调用/恢复）+ opt-in trusted shell（默认关） | `docs/01-architecture/m2c*.md` |
@@ -104,7 +104,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | **v1.0.0** | ✅ 已发布（历史） | `v1.0.0` → `993e9107` | 86-crate + 23k tests + 9 organ 完整 + companion_serve | 2026-08-18 已发 | — |
 | **v2.0.0-alpha.1** | ✅ 已发布 | `v2.0.0-alpha.1` → `d6910cf7` | 15-crate 工程重构 + governance P0 + 13 键降级 + ROADMAP §4 P1-P6 trait 边界 | 2026-08-27 已发 | — |
 | **v2.0.0-rc.1** | ✅ 已打 tag（`854831fc`，2026-08-30）；release authority 关闭（`a0417f55`） | `v2.0.0-rc.1` → `854831fc` | alpha 7 trait 接真 backend（8/10 RC 已完成或适配）+ RC-5 harness / RC-7 modality 仍需补齐 | 2026-08-30 | **装机 E2E / 远端 Windows 验证证据仍待补（per RC1_HANDOFF）**；剩余重点 = RC-5 Orchestrator harness、RC-7 perception、provider E2E 与长程 cognition |
-| **v2.0.0** | 远期 | `v2.0.0`（待发） | rc 全绿 + 至少 1 器官移植（W1/W2/E4/F1/F6 选 1） + frontend companion-desktop 接入 v2 gateway | 2027-02-04 月 | rc 后约 6-8 周 |
+| **v2.0.0** | 远期 | `v2.0.0`（待发） | rc 全绿 + 至少 1 器官迁回（W1/W2/E4/F1/F6 选 1） + frontend companion-desktop 接入 v2 gateway | 2027-02-04 月 | rc 后约 6-8 周 |
 | **v2.x (商业化)** | 远期 | — | 多用户 / 跨载体 / 租赁 / marketplace | 2027-Q3+ | — |
 | v1 (legacy) | 维护 | `v1.0.0` / `archive/v1.0-master` | 86-crate 完整功能 + 9 organ + companion；v2 rc 后只修严重 bug | 永久 | — |
 
@@ -117,10 +117,10 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | **P0** | ✅ 完成（upstream `873d2857`）：`build_canonical_runtime_from_env` 装 `GovernancePipeline(PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)` | — |
 | **P1** | **文档对账**（2026-09-05 批执行中） | ROADMAP/CHANGELOG/交接手册/审计数字统一到 17-crate 实测值（17 crates / 3120 tests / workspace.version 2.0.0-rc.1） | 无 |
 | P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 | 🟡 credentials 已接线（RC-9, `crates/adapters/cli/src/keyring_bootstrap.rs`, 2026-09-05 实测）；core 脊椎去留仍待 |
-| P3 | M1B 记忆移植 | ACT-R 记忆、检索、向量/图全量移植进 `crates/engine/memory` | P2 |
+| P3 | M1B 记忆迁回 | ACT-R 记忆、检索、向量/图全量迁入 `crates/engine/memory` | P2 |
 | P4 | MCP 动态能力注册 | ✅ done：`canonical::tool_modules::McpModule`（`CapabilityProvider`，动态 register/unregister + 身份冲突拒绝）已进生产装配（`production.rs`）；MCP 协议客户端栈在 `apeireth-plugin::mcp`（jsonrpc/schema/subscribe/resource/prompt/lifecycle/reconnect/sse）。遗留 = 协议客户端会话 ↔ McpModule 的 transport 桥 | P2 |
 | P5 | ProcessSupervisor + 沙箱强化 | 🟡 半完成：RC-8 `StdSubSupervisor` 真 impl（5 sub-supervisor 真实 spawn + RestartStrategy，`std_sub_supervisor.rs`）。遗留 = 进程树快照、Linux cgroup、macOS 强隔离、文件/网络隔离（沙箱强化层） | P0 |
-| P6 | companion 器官移植 | 世界模型 W1/W2/W3、好奇心 E4、假设检验 F4、情感记忆 F1、价值内化 F6 从 legacy 移植回主链 | P3 |
+| P6 | companion 器官迁回 | 世界模型 W1/W2/W3、好奇心 E4、假设检验 F4、情感记忆 F1、价值内化 F6 从 legacy 迁回主链 | P3 |
 | P7 | 连续感知 | voice/screen（v1 的"连续感知①②"从未落地 main，实现留 legacy） | P6 |
 | P8 | 前端产品化 | ✅ 对接 + token 级真流式（2026-09-10）：companion-desktop 以 bundled-backend 方式 spawn `apeireth gateway serve`（装机 E2E 实证）；真流式增量链路打通（provider SSE → runtime sink → gateway 直通 → 前端逐 delta 渲染；live 实测 210 帧增量，旧"整段后分帧"作废）。遗留 = UI 点击流人工实测（清单已备）+ macOS/Linux 未验 | P0 |
 | P9 | 桌面功能面接全（能力旋钮 UI + 内省视图） | ✅ done（2026-09-10）：① Settings 新增"高级能力"开关区（shell/fetch/organs/preference_learning/judge/council → `APEIRETH_ENABLE_*`/`APEIRETH_COGNITIVE_*` 注入侧车，与 provider 配置合并为单次 apply/单次重启，默认全关 fail-closed；lifecycle 真后端测试：注入后 `/v1/tools/list` 出现 shell 且 permission=granted，重复 apply 不重启）；② 器官/模块前端视图**按用户要求不做**（器官内省是后台机制，无需主人看板；`/v1/organs`/`/v1/modules` 保持后端路由、零消费方是有意状态）；③ `/v1/runtime/snapshot` 挂运行时诊断弹窗（providers/modules 全量内省）。DeepSeek 预设默认模型修正为实测可用的 `deepseek-v4-flash`。遗留 = 真实流式 + UI 点击流人工实测 | 管道已建（commit `1a265600`） |

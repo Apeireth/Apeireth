@@ -10,7 +10,7 @@
 //! - `silence_threshold_ms` (end of utterance)
 //! - frame sizes 10 / 20 / 30 ms (WebRTC VAD geometry)
 //!
-//! WebRtc (Chromium) is **not** ported — it would need a new C/FFI dep.
+//! WebRtc (Chromium) is **not** included — it would need a new C/FFI dep.
 //! Silence-only mode is the Energy detector with threshold 0 plus the
 //! silence-duration rule.
 //!
@@ -60,10 +60,10 @@ impl fmt::Display for VadError {
 
 impl std::error::Error for VadError {}
 
-/// Energy VAD configuration (donor `VadConfig` Energy defaults).
+/// Energy VAD configuration (baseline `VadConfig` Energy defaults).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EnergyVadConfig {
-    /// RMS threshold in `[0.0, 1.0]`. Donor Energy default = 0.05.
+    /// RMS threshold in `[0.0, 1.0]`. Baseline Energy default = 0.05.
     pub energy_threshold: f32,
     /// Trailing silence that ends an utterance (ms). 0 = no hangover.
     pub silence_threshold_ms: u32,
@@ -74,7 +74,7 @@ pub struct EnergyVadConfig {
 }
 
 impl EnergyVadConfig {
-    /// Donor `VadConfig::default_energy`.
+    /// Baseline `VadConfig::default_energy`.
     pub fn default_energy() -> Self {
         Self {
             energy_threshold: 0.05,
@@ -84,7 +84,7 @@ impl EnergyVadConfig {
         }
     }
 
-    /// Donor `VadConfig::default_silence` (threshold 0, 500 ms hangover).
+    /// Baseline `VadConfig::default_silence` (threshold 0, 500 ms hangover).
     pub fn default_silence() -> Self {
         Self {
             energy_threshold: 0.0,
@@ -94,7 +94,7 @@ impl EnergyVadConfig {
         }
     }
 
-    /// Validated constructor (donor `VadConfig::custom` Energy path).
+    /// Validated constructor (baseline `VadConfig::custom` Energy path).
     pub fn custom(
         energy_threshold: f32,
         silence_threshold_ms: u32,
@@ -133,7 +133,7 @@ impl Default for EnergyVadConfig {
     }
 }
 
-/// One Energy-VAD result (donor `VadResult` fields that the Energy path can fill).
+/// One Energy-VAD result (baseline `VadResult` fields that the Energy path can fill).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EnergyVadResult {
     /// True when a speech segment meeting `min_speech_duration_ms` was found.

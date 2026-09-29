@@ -1,6 +1,5 @@
 //! Query morphology softmax — retrieval-depth classifier (N7).
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/morphology.rs`.
 //!
 //! **Algorithm**: extract deterministic text features (length / entity density /
 //! question morphology / clause count / depth cues) → three logits

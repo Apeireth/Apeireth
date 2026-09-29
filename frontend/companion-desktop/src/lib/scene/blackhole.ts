@@ -1,7 +1,7 @@
 /**
  * blackhole.ts — 黑洞场景纯渲染引擎（框架无关 TS 模块，零依赖）
  *
- * 移植自 frontend/design-preview/index.html v0.2（已验收原型），渲染数值与原型逐行一致：
+ * 语义对齐 frontend/design-preview/index.html v0.2（已验收原型），渲染数值与原型逐行一致：
  *   - WebGL2 shader：吸积盘 / 透镜弧 / 光子环 / 三层视差星野 / 银河带
  *   - Canvas 2D 降级（WebGL2 不可用时自动切换，不黑屏）
  *   - 时间线照明四 uniform：uAmbStr / uEclipse / uTlBright / uTlGold（曲线见 ./timeline.ts）

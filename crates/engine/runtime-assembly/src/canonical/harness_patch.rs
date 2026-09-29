@@ -1,6 +1,6 @@
-//! DeepSeek Harness / Harness-R1 风格自进化修补引擎 (HarnessPatchEngine).
+//! 自进化策略修补引擎 (HarnessPatchEngine).
 //!
-//! “不微调大模型权重，而是基于执行失败轨迹自动微调 Agent 的运行策略与上下文构造 (Harness)”.
+//! “不微调大模型权重，而是基于执行失败轨迹自动微调 Agent 的运行策略与上下文构造”.
 //! 收集工具失败、审批拒绝、无限递归等异常轨迹，自动生成可执行的策略修补方案并在沙箱中评估.
 
 use serde::{Deserialize, Serialize};
@@ -56,7 +56,7 @@ pub struct HarnessPatch {
     pub is_active: bool,
 }
 
-/// Harness 自修复引擎.
+/// 策略自修复引擎.
 #[derive(Debug, Clone, Default)]
 pub struct HarnessPatchEngine {
     trajectories: Vec<FailureTrajectory>,
@@ -120,7 +120,7 @@ impl HarnessPatchEngine {
         new_patches
     }
 
-    /// 获取当前所有生效中的 Harness 策略补丁.
+    /// 获取当前所有生效中的策略补丁.
     pub fn get_active_patches(&self) -> &[HarnessPatch] {
         &self.active_patches
     }

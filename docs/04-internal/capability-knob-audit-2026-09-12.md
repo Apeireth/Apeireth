@@ -26,8 +26,8 @@
 | 设置页"全局默认预设" | **未接会话创建** (仅 localStorage, settings 代理自报偏差) | — | ✅ 下拉 (无实效) | 无文档 | ⚠️ UI 有旋钮但后端不生效 |
 | trust tier 信任分级 | **缺失** (v1 有, v2 PermissionPolicy 未实现, RC-13 排期) | — | ❌ | v2-unabsorbed-features L198-206; system-capabilities:103-107 (Low/Standard/High/Trusted 限流档设计已写) | ⚠️ 文档设计了但未实现 |
 | 审批频率限制 / 免审批黑名单 | **缺失** (同上 RC-13) | — | ❌ | v2-unabsorbed-features | ⚠️ 同上 |
-| 审批策略档 (每次审批/会话内记住/完全放行) | **无** — shell/fetch 写死每次审批 | 每次审批 | ❌ | DSH 参考 P1 "permission-presets 单一选择器" (frontend-reference-deepseek-harness L104-105) | ⚠️ 参考文档建议了但未实现 |
-| 会话创建时快照冻结旋钮 | **无** — 旋钮全局即时生效 | — | ❌ | DSH 参考 P1 "预设于会话创建时冻结" (同 L138) | ⚠️ 同上 |
+| 审批策略档 (每次审批/会话内记住/完全放行) | **无** — shell/fetch 写死每次审批 | 每次审批 | ❌ | 同类工程参考 P1 "permission-presets 单一选择器" (frontend-reference-deepseek-harness L104-105) | ⚠️ 参考文档建议了但未实现 |
+| 会话创建时快照冻结旋钮 | **无** — 旋钮全局即时生效 | — | ❌ | 同类工程参考 P1 "预设于会话创建时冻结" (同 L138) | ⚠️ 同上 |
 
 ## 2. 后端到底实现了什么 (组合根事实)
 

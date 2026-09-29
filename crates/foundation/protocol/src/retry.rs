@@ -1,8 +1,8 @@
 //! Status-aware retry semantics: retryable-status classification, backoff
 //! policies, and jittered sleep computation.
 //!
-//! Recovered from the legacy `apeireth-api::retry` module (R120/R121/R122):
-//! a field-faithful translation of the OpenAI/Anthropic SDK retry patterns:
+//! Semantic surface of the legacy `apeireth-api::retry` module (R120/R121/R122),
+//! field-aligned with the OpenAI/Anthropic SDK retry patterns:
 //! - **Status classification**: 4xx never retried except the whitelist
 //!   `[408, 425, 429]`; 5xx always retried; `0` (network error, no status)
 //!   always retried; 2xx/3xx never.
@@ -11,14 +11,14 @@
 //!   default, "reliable over fast"), `Custom`.
 //! - **Jitter modes** (AWS SDK patterns): None / Full / Equal / Decorrelated.
 //!
-//! Differences from the donor, by design:
-//! - The donor wrapped jitter in a `WithJitter(Box<BackoffPolicy>, JitterMode>)`
+//! Differences from the baseline, by design:
+//! - The baseline wrapped jitter in a `WithJitter(Box<BackoffPolicy>, JitterMode>)`
 //!   variant purely to keep 1.0 call sites pattern-matchable. v2 has no such
 //!   compatibility surface, so jitter is a plain field on [`RetryPolicy`].
-//! - The donor's metrics came from `apeireth_telemetry::Counter`; here
+//! - The baseline's metrics came from `apeireth_telemetry::Counter`; here
 //!   [`RetryCounters`] is a dependency-free atomic counter triple with the
 //!   same three observables (attempts / exhausted / success_after).
-//! - The donor drew randomness from a thread-local xorshift; here
+//! - The baseline drew randomness from a thread-local xorshift; here
 //!   [`XorShift64`] is a seedable, injectable PRNG (same xorshift64
 //!   constants), so jitter is deterministic under test and carries no
 //!   hidden global state.
@@ -38,7 +38,7 @@ pub const RETRYABLE_4XX: [u16; 3] = [408, 425, 429];
 
 /// Classify an HTTP status as retryable.
 ///
-/// Legacy 1:1 (`apeireth-api::retry::should_retry_status`):
+/// Legacy (`apeireth-api::retry::should_retry_status`):
 /// - `0` = network error (send / read-body failed; no status available) → retry
 /// - `5xx` → retry
 /// - `4xx` → retry only when in [`RETRYABLE_4XX`]
@@ -60,15 +60,15 @@ pub fn should_retry_status(status: u16) -> bool {
 
 /// Backoff tier schedules (compile-time hardcoded durations).
 ///
-/// Legacy 1:1 translation of the OpenAI Python SDK (`Default`) and Anthropic
+/// Legacy shape aligned with the OpenAI Python SDK (`Default`) and Anthropic
 /// TypeScript SDK (`Patient`) retry schedules.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BackoffPolicy {
     /// 1s / 3s / 10s (3 tiers; the legacy 1.0 behavior).
     Aggressive,
-    /// 1s / 3s / 10s / 30s (4 tiers; OpenAI Python SDK 1:1).
+    /// 1s / 3s / 10s / 30s (4 tiers; matches the OpenAI Python SDK).
     Default,
-    /// 1s / 3s / 10s / 30s / 2m / 10m (6 tiers; Anthropic TS SDK 1:1;
+    /// 1s / 3s / 10s / 30s / 2m / 10m (6 tiers; matches the Anthropic TS SDK;
     /// the legacy default — reliable over fast).
     Patient,
     /// Caller-provided tiers (critical paths tune their own schedule).
@@ -115,7 +115,7 @@ impl Default for BackoffPolicy {
     }
 }
 
-/// Jitter mode applied to each tier's sleep (AWS SDK retry patterns, 1:1).
+/// Jitter mode applied to each tier's sleep (AWS SDK retry patterns).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum JitterMode {
     /// No jitter — sleep exactly the tier duration (legacy 1.0 behavior).
@@ -143,8 +143,8 @@ impl JitterMode {
 
 /// Seedable xorshift64 PRNG (legacy `fastrand_u64` without the thread-local).
 ///
-/// Same shift constants as the donor (13 / 7 / 17). Not
-/// cryptographically secure — jitter only, exactly as in the donor.
+/// Same shift constants as the baseline (13 / 7 / 17). Not
+/// cryptographically secure — jitter only, exactly as in the baseline.
 #[derive(Debug, Clone)]
 pub struct XorShift64 {
     state: u64,
@@ -152,7 +152,7 @@ pub struct XorShift64 {
 
 impl XorShift64 {
     /// Create from a nonzero seed (`0` is remapped to a fixed nonzero constant,
-    /// mirroring the donor's initialization guard).
+    /// mirroring the baseline initialization guard).
     pub fn new(seed: u64) -> Self {
         let state = if seed == 0 {
             0x9e37_79b9_7f4a_7c15
@@ -184,7 +184,7 @@ impl XorShift64 {
 
 /// Compute one jittered sleep duration.
 ///
-/// Legacy 1:1 (`apeireth-api::retry::jittered_sleep`) with randomness injected
+/// Legacy (`apeireth-api::retry::jittered_sleep`) with randomness injected
 /// via `rng` instead of a thread-local:
 /// - `None`: `base` unchanged
 /// - `Full`: `random(0, base)`
@@ -234,7 +234,7 @@ pub fn jittered_sleep(
 
 /// A backoff schedule plus the jitter mode to apply to it.
 ///
-/// Legacy shape minus the compatibility shim: the donor modeled this as a
+/// Legacy shape minus the compatibility shim: the baseline modeled this as a
 /// `WithJitter(Box<BackoffPolicy>, JitterMode)` enum variant; v2 has no legacy
 /// match sites, so this is a plain pair.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -246,7 +246,7 @@ pub struct RetryPolicy {
 }
 
 impl RetryPolicy {
-    /// A policy with no jitter (legacy 1.0 behavior 1:1).
+    /// A policy with no jitter (legacy 1.0 behavior).
     pub fn new(backoff: BackoffPolicy) -> Self {
         Self {
             backoff,
@@ -254,7 +254,7 @@ impl RetryPolicy {
         }
     }
 
-    /// Attach a jitter mode (builder style, mirroring the donor's
+    /// Attach a jitter mode (builder style, mirroring the baseline
     /// `BackoffPolicy::with_jitter` call shape).
     pub fn with_jitter(mut self, jitter: JitterMode) -> Self {
         self.jitter = jitter;
@@ -262,7 +262,7 @@ impl RetryPolicy {
     }
 
     /// Tier durations (delegates to the inner [`BackoffPolicy`]; jitter never
-    /// changes the tier count, mirroring the donor's `WithJitter` semantics).
+    /// changes the tier count, mirroring the baseline `WithJitter` semantics).
     pub fn to_durations(&self) -> Vec<Duration> {
         self.backoff.to_durations()
     }
@@ -348,7 +348,7 @@ impl RetryCounters {
 mod tests {
     use super::*;
 
-    // ---------- should_retry_status (ported 1:1 from donor) ----------
+    // ---------- should_retry_status ----------
 
     #[test]
     fn should_retry_4xx_default_no() {
@@ -406,7 +406,7 @@ mod tests {
         }
     }
 
-    // ---------- BackoffPolicy (ported 1:1) ----------
+    // ---------- BackoffPolicy ----------
 
     #[test]
     fn backoff_aggressive_3_tiers() {

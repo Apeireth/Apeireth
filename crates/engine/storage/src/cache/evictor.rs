@@ -1,7 +1,7 @@
-//! Five eviction policies recovered from frozen apeireth-cache.
+//! Five eviction policies aligned with frozen apeireth-cache.
 //!
 //! ARC and TinyLFU are honest approximations (dual-list + 3-bit frequency),
-//! not IBM ARC / Caffeine TinyLFU.
+//! not the canonical ARC / TinyLFU implementations.
 
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
@@ -281,7 +281,7 @@ where
 }
 
 /// Simplified ARC: T1 (recent) + T2 (frequent). Ghost lists are recorded but
-/// `p` is not adapted — donor already labelled this as not IBM ARC.
+/// `p` is not adapted — the baseline already labelled this as not IBM ARC.
 struct ArcEvictor<K: Hash + Eq + Clone> {
     t1: VecDeque<K>,
     t2: VecDeque<K>,

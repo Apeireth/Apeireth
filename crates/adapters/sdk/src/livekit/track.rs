@@ -18,7 +18,7 @@ use crate::livekit::error::LiveKitError;
 // §1 TrackKind 2 类型 (按既有实现 Track.Kind enum)
 // ============================================================================
 
-/// 轨道类型 (2 类型, 1:1 翻译 LiveKit 协议 `Track.Kind` enum).
+/// 轨道类型 (2 类型, 语义对齐 LiveKit 协议 `Track.Kind` enum).
 ///
 /// 按既有实现: `Video` / `Audio`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -34,7 +34,7 @@ pub enum TrackKind {
 impl TrackKind {
     /// 2 类型 hardcode.
     pub const COUNT: usize = 2;
-    /// 字符串 (1:1 翻译 livekit-client).
+    /// 字符串 (语义对齐 livekit-client).
     pub fn as_str(&self) -> &'static str {
         match self {
             TrackKind::Video => "video",
@@ -65,7 +65,7 @@ const _: () = assert!(SUPPORTED_TRACK_KINDS.len() == 2);
 // §2 TrackSource 6 来源 (按既有实现 Track.Source enum)
 // ============================================================================
 
-/// 轨道来源 (6 来源, 1:1 翻译 LiveKit 协议 `Track.Source` enum).
+/// 轨道来源 (6 来源, 语义对齐 LiveKit 协议 `Track.Source` enum).
 ///
 /// 按既有实现:
 /// - `Camera` (摄像头)
@@ -132,7 +132,7 @@ pub const SUPPORTED_TRACK_SOURCES: &[TrackSource] = &[
 const _: () = assert!(SUPPORTED_TRACK_SOURCES.len() == 5);
 
 // ============================================================================
-// §3 TrackSid + TrackDimensions 1:1 翻译
+// §3 TrackSid + TrackDimensions 语义对齐
 // ============================================================================
 
 /// 轨道 SID (按既有实现 `Track.sid`, 服务端分配).
@@ -287,10 +287,10 @@ impl Track {
 }
 
 // ============================================================================
-// §5 LocalTrack / RemoteTrack (按既有实现 LocalTrack/RemoteTrack 1:1)
+// §5 LocalTrack / RemoteTrack (按既有实现 LocalTrack/RemoteTrack)
 // ============================================================================
 
-/// 本地轨道 (按既有实现 `LocalTrack` class 1:1).
+/// 本地轨道 (按既有实现 `LocalTrack` class).
 ///
 /// STUB 模式: 不真发布到 livekit-server, R21 续真接时实现.
 #[derive(Debug, Clone)]
@@ -315,7 +315,7 @@ impl LocalTrack {
     }
 }
 
-/// 远端轨道 (按既有实现 `RemoteTrack` class 1:1).
+/// 远端轨道 (按既有实现 `RemoteTrack` class).
 ///
 /// STUB 模式: 不真订阅 livekit-server, R21 续真接时实现.
 #[derive(Debug, Clone)]

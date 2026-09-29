@@ -1,6 +1,6 @@
 # apeireth-graph — 多阶段 Dockerfile (V2 战役 3 P0)
 #
-# 战区 3: Multi-Agent — 图编排 (LangGraph 风格) + checkpoint 持久化
+# 战区 3: Multi-Agent — 图编排 (同类图编排风格) + checkpoint 持久化
 # 提供 Graph / Node trait / executor / checkpoint 持久化 (SQLite)
 #
 # 参照: deploy/Dockerfile (多阶段 builder + runtime)

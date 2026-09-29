@@ -1,6 +1,6 @@
-//! F1 EmotionMemory 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/emotion_memory.rs`).
+//! F1 EmotionMemory 器官真实现（v2）。
 //!
-//! **v1 → v2 1:1 翻译纪律**:
+//! **v1 → v2 语义对齐纪律**:
 //! - v1 真实现是**确定性无 LLM** (per `legacy/donor/apeireth-companion/src/emotion_memory.rs:11-17`
 //!   文档明示: "## 机制 (确定性, 无 LLM)") — v2 trait 保留 `llm_factory()` 接口但**真实现不用**.
 //! - v1 数据模型: `MoodRecord { valence [-1,1], arousal [0,1], source, note, at_ms }` +
@@ -16,7 +16,7 @@
 //! - 边界 (0 装 PASS): **不是"她的情感"** (LLM 无情感, 模拟即假装) — 是**主人的情绪
 //!   作为数据维度**: 记录/检索/趋势, 供她"算怎么让你好过".
 //!
-//! **v1 机制 1:1 翻译**:
+//! **v1 机制 语义对齐**:
 //! - `MoodRecord`: 主人情绪时间线 (valence/arousal + 来源 + 备注 + 时间戳).
 //! - `current_mood`: 最近记录按时间衰减加权 (半衰期 4h).
 //! - `mood_trend`: 窗口内首尾 valence 差 (趋势斜率 — "她注意到你在好转").
@@ -38,7 +38,7 @@
 //!   `llm_factory()` 返 None (0 装诚实).
 //!
 //! **3 阶审查** (O-6 锚 9):
-//! 1. 总体: 1:1 翻译 v1 `EmotionMemory`, trait 边界 + v2 schema 适配
+//! 1. 总体: 语义对齐 v1 `EmotionMemory`, trait 边界 + v2 schema 适配
 //!   (valence→pleasure, dominance 显式标缺 0.0)
 //! 2. 系统: impl 在 engine (`apeireth-organ`), trait 在 foundation (`apeireth-plugin`)
 //! 3. 架构: `Arc<dyn OrganTrait>` 注入 runtime, F1 trait process() 调 EmotionMemoryEngine
@@ -50,10 +50,10 @@ use apeireth_plugin::organ::{
 };
 
 // ============================================
-// v1 数据结构 1:1 翻译 (确定性, 无 LLM)
+// v1 数据结构 语义对齐 (确定性, 无 LLM)
 // ============================================
 
-/// 情绪来源 (per v1 `MoodSource` 1:1)
+/// 情绪来源 (per v1 `MoodSource`)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoodSource {
     /// 文本信号 (对话内容 → 情绪推断, 输入侧).
@@ -64,7 +64,7 @@ pub enum MoodSource {
     ExplicitFeedback,
 }
 
-/// 一条主人情绪记录 (per v1 `MoodRecord` 1:1).
+/// 一条主人情绪记录 (per v1 `MoodRecord`).
 ///
 /// **0 装诚实**: v1 字段是 `valence ∈ [-1.0, 1.0]` + `arousal ∈ [0.0, 1.0]` (2D).
 /// v2 trait `OrganOutput::Emotion` 是 3D PAD {pleasure, arousal, dominance}; v1 没有
@@ -113,7 +113,7 @@ impl MoodRecord {
     }
 }
 
-/// 当前情绪快照 (per v1 `MoodSnapshot` 1:1).
+/// 当前情绪快照 (per v1 `MoodSnapshot`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MoodSnapshot {
     pub valence: f64,
@@ -134,7 +134,7 @@ impl MoodSnapshot {
     };
 }
 
-/// 情感记忆配置 (per v1 `EmotionMemory` 公共字段 1:1).
+/// 情感记忆配置 (per v1 `EmotionMemory` 公共字段).
 #[derive(Debug, Clone, Copy)]
 pub struct EmotionConfig {
     /// 最近记录半衰期 (ms): 越近权重越高. 默认 4h (per v1).
@@ -153,10 +153,10 @@ impl Default for EmotionConfig {
 }
 
 // ============================================
-// v1 EmotionMemory 1:1 翻译 (确定性, 无 LLM)
+// v1 EmotionMemory 语义对齐 (确定性, 无 LLM)
 // ============================================
 
-/// 情感记忆引擎 (per v1 `EmotionMemory` 1:1 翻译, 保留确定性算法).
+/// 情感记忆引擎 (per v1 `EmotionMemory` 语义对齐, 保留确定性算法).
 ///
 /// **0 装 PASS**: 无 LLM 依赖. 全部状态可测. 时间戳由调用方注入 (per 子代理 R2 约定).
 #[derive(Debug, Default)]
@@ -173,12 +173,12 @@ impl EmotionMemoryEngine {
         }
     }
 
-    /// 记录一条主人情绪 (per v1 `EmotionMemory::record` 1:1)
+    /// 记录一条主人情绪 (per v1 `EmotionMemory::record`)
     pub fn record(&mut self, r: MoodRecord) {
         self.records.push(r);
     }
 
-    /// 当前情绪: 最近记录按时间衰减加权 (半衰期 `decay_half_life_ms`) (per v1 1:1).
+    /// 当前情绪: 最近记录按时间衰减加权 (半衰期 `decay_half_life_ms`) (per v1).
     ///
     /// v1 实现细节: 取最近 50 条 (`.rev().take(50)`), 时间戳衰减加权 (半衰期).
     /// **now**: 由调用方注入 — 当前 emotion 是基于 caller-supplied now 计算的
@@ -216,7 +216,7 @@ impl EmotionMemoryEngine {
         self.current_mood_at(system_time_ms())
     }
 
-    /// 情绪趋势: 窗口内首尾 valence 差 (正值 = 在变好) (per v1 1:1).
+    /// 情绪趋势: 窗口内首尾 valence 差 (正值 = 在变好) (per v1).
     ///
     /// 数据不足 (< 2 条) 返回 None.
     pub fn mood_trend_at(&self, now_ms: i64, window_ms: i64) -> Option<f64> {
@@ -235,7 +235,7 @@ impl EmotionMemoryEngine {
         self.mood_trend_at(system_time_ms(), window_ms)
     }
 
-    /// 情绪上下文检索: 找与目标情绪相似的记录 (valence 差 ≤ tolerance) (per v1 1:1).
+    /// 情绪上下文检索: 找与目标情绪相似的记录 (valence 差 ≤ tolerance) (per v1).
     ///
     /// "记得你上次烦的时候" — 伙伴行为的机制, 非拟人.
     ///
@@ -268,7 +268,7 @@ impl EmotionMemoryEngine {
         self.recall_by_mood_at(system_time_ms(), target_valence, tolerance, max)
     }
 
-    /// 记录数 (per v1 `len` 1:1).
+    /// 记录数 (per v1 `len`).
     pub fn len(&self) -> usize {
         self.records.len()
     }
@@ -283,7 +283,7 @@ impl EmotionMemoryEngine {
 // EmotionOrgan (v2 trait 真实现)
 // ============================================
 
-/// F1 情感记忆器官 (per v2 OrganTrait 1:1 翻译 v1 EmotionMemory).
+/// F1 情感记忆器官 (per v2 OrganTrait 语义对齐 v1 EmotionMemory).
 ///
 /// **0 装诚实**:
 /// - v1 emotion_memory 是确定性无 LLM (per v1 doc 11-17 行).
@@ -308,9 +308,9 @@ impl EmotionOrgan {
         }
     }
 
-    /// 暴露底层 engine (per v1 API 1:1, 外部可直接调 record / current_mood / mood_trend).
+    /// 暴露底层 engine (per v1 API, 外部可直接调 record / current_mood / mood_trend).
     ///
-    /// **为何**: 1:1 翻译 v1 公开 API (record / current_mood / mood_trend / recall_by_mood),
+    /// **为何**: 语义对齐 v1 公开 API (record / current_mood / mood_trend / recall_by_mood),
     /// runtime 集成层可能要直接调 (e.g. 喂入 mood_floor 门控). trait `process()` 是聚合入口.
     pub fn engine(&self) -> std::sync::MutexGuard<'_, EmotionMemoryEngine> {
         self.engine
@@ -318,7 +318,7 @@ impl EmotionOrgan {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// 便捷 record (per v1 1:1, 简化外部调用, 时间戳 = now).
+    /// 便捷 record (per v1, 简化外部调用, 时间戳 = now).
     pub fn record(&self, valence: f64, arousal: f64, source: MoodSource, note: impl Into<String>) {
         self.engine().record(MoodRecord::with_timestamp(
             valence,
@@ -418,7 +418,7 @@ impl OrganTrait for EmotionOrgan {
     }
 
     async fn process(&self, input: OrganInput) -> Result<OrganOutput, OrganError> {
-        // 1:1 翻译 v1 emotion_memory 路径:
+        // 语义对齐 v1 emotion_memory 路径:
         // 1) 解析 input → 构造 MoodRecord (valence/arousal from hints, source from hint,
         //    note from episode content)
         // 2) 记录一条 MoodRecord (per v1 `record`)
@@ -426,8 +426,8 @@ impl OrganTrait for EmotionOrgan {
         // 4) 翻译成 v2 trait schema (OrganOutput::Emotion { pleasure, arousal, dominance, trend })
         //
         // **0 装诚实 schema 适配**:
-        // - `pleasure` ← `valence` (v1 真有, 1:1 翻译)
-        // - `arousal` ← `arousal` (v1 真有, 1:1 翻译)
+        // - `pleasure` ← `valence` (v1 真有, 语义对齐)
+        // - `arousal` ← `arousal` (v1 真有, 语义对齐)
         // - `dominance` ← `0.0` (v1 **无此概念**, 显式标缺; R1.4 inspired 提案字段)
         // - `trend` ← `mood_trend` 转 enum (v1 真有 trend 概念, 仅翻译为 enum)
         //
@@ -477,7 +477,7 @@ impl OrganTrait for EmotionOrgan {
 // 时间戳 helper (无 chrono 依赖, 0 装诚实)
 // ============================================
 
-/// 当前 epoch 毫秒 (per v1 `chrono::Utc::now().timestamp_millis()` 1:1 行为,
+/// 当前 epoch 毫秒 (per v1 `chrono::Utc::now().timestamp_millis()` 行为,
 /// 用 std `SystemTime` 实现避免引入 chrono 依赖).
 fn system_time_ms() -> i64 {
     SystemTime::now()
@@ -487,7 +487,7 @@ fn system_time_ms() -> i64 {
 }
 
 // ============================================
-// 单元测试 (1:1 翻译 v1 emotion_memory.rs 测试)
+// 单元测试 (语义对齐 v1 emotion_memory.rs 测试)
 // ============================================
 
 #[cfg(test)]
@@ -505,7 +505,7 @@ mod tests {
         }
     }
 
-    /// v1 1:1: record + current_mood 加权 (最近记录主导).
+    /// 对齐 v1: record + current_mood 加权 (最近记录主导).
     #[test]
     fn record_and_current_mood_weighted() {
         let mut mem = EmotionMemoryEngine::new(EmotionConfig::default());
@@ -529,7 +529,7 @@ mod tests {
         assert!(mood.sample_count >= 2);
     }
 
-    /// v1 1:1: 趋势检测 (val - val > 0 → 在变好).
+    /// 对齐 v1: 趋势检测 (val - val > 0 → 在变好).
     #[test]
     fn trend_improving_detected() {
         let mut mem = EmotionMemoryEngine::new(EmotionConfig::default());
@@ -553,7 +553,7 @@ mod tests {
         assert!(mem.mood_trend_at(now, 60 * 1000).is_none());
     }
 
-    /// v1 1:1: recall_by_mood 找相似情绪时段.
+    /// 对齐 v1: recall_by_mood 找相似情绪时段.
     #[test]
     fn recall_by_mood_finds_similar_periods() {
         let mut mem = EmotionMemoryEngine::new(EmotionConfig::default());
@@ -589,7 +589,7 @@ mod tests {
         assert_eq!(low2.len(), 1, "90 天前记录应被窗口排除");
     }
 
-    /// v1 1:1: valence / arousal clamp.
+    /// 对齐 v1: valence / arousal clamp.
     #[test]
     fn valence_clamped() {
         let r = MoodRecord::new(5.0, 2.0, MoodSource::TimeOfDay, "clamp");
@@ -609,7 +609,7 @@ mod tests {
         );
     }
 
-    /// v2 新增: EmotionOrgan 便捷 record (per v1 `record` 1:1 暴露).
+    /// v2 新增: EmotionOrgan 便捷 record (per v1 `record` 暴露).
     #[test]
     fn emotion_organ_record_via_convenience_method() {
         let organ = EmotionOrgan::new();

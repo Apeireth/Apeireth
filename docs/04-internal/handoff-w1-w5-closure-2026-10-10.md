@@ -22,11 +22,11 @@
 | 52 | W2 §4.4 吸收批四算法（认知体操）| W2 |
 | 53 | worktree_sandbox 装饰器 + **W2 全线收口宣告** | W2 |
 | 54 | 生产 Orchestrator（`LlmSubagentOrchestrator` + `apeireth subagent`）| 子代理 |
-| 55 | 三洋葱判定模型（`onion_gate`，v1 donor 移植 + r177 证明平移）| W3 |
+| 55 | 三洋葱判定模型（`onion_gate`，语义对齐 v1 + r177 证明平移）| W3 |
 | 56 | 三洋葱物理执行面（`OnionLayerHook` 接入生产治理管线）| W3 |
-| 57 | community 移植（三件 + 9 测）| W3 |
+| 57 | community 实现（三件 + 9 测）| W3 |
 | 58 | **onering 考古纠错**（本体=context_ledger 打捞件，误判修正）+ CLI 消费 | W3 |
-| 59 | experiment_field 机制移植（状态机 + VMRunner 0 装 + 学习 sink）| W3 |
+| 59 | experiment_field 机制实现（状态机 + VMRunner 0 装 + 学习 sink）| W3 |
 | 60 | 守夜人 Nightwatch（五件组合审计器 + `apeireth nightwatch`）| 守夜人 |
 | 61 | W5 SDK HTTP 真传输（invoke_tool 换 reqwest，R21 半场）| W5 |
 | 62 | 小件：审批卡 sandbox 徽标前端渲染 | W1 §2.4 |
@@ -89,7 +89,7 @@ python scripts/check_doc_caliber.py docs/04-internal/live-verification-ledger.md
 3. **`\\?\` 前缀 cwd 掉 %WINDIR%** → lpCurrentDirectory 剥前缀。
 4. **win.ini 自带 AAP (I)(RX)**：系统文件自我放行，墙边界 = 用户空间（零 AAP ACE）。
 5. **thinking 模型 max_tokens 预算**（真缺陷 #4）：reasoning_content 吃光预算 → 留空 content；omit max_tokens 或 ≥2048。
-6. **考古纠错 ×2**：v1 沙箱（real.rs 是真 Docker）/ onering（context_ledger 早是打捞件）——"未移植"判定必须全量扫模块，不能凭印象。
+6. **考古纠错 ×2**：v1 沙箱（real.rs 是真 Docker）/ onering（context_ledger 早是打捞件）——"未实现"判定必须全量扫模块，不能凭印象。
 7. **evidence 推断语义**：Inference + confidence<0.7 是**合法通过**（PassInferred），不是失败。
 8. **`forbid(unsafe_code)` crate 里 `std::env::set_var` 违禁** → 测试用纯函数/唯一标记值。
 9. **wiremock 测试翻面**：stub→真传输时，旧断言（NotImplemented）必须翻，别留自相矛盾。

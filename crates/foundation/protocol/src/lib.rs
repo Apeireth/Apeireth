@@ -20,7 +20,7 @@
 //! - 工具结果错误检测: `modules/chatCompletionHandler.js:286-323` `isToolResultError`
 //!   5 字段判断 (success / ok / status / code / httpStatus)
 //! - Keep-Alive 5 字段: `modules/chatCompletionHandler.js:22-28` `agentOptions`
-//!   (战役 1-2 借鉴进 `apeireth-http-client`, 本 crate 只在编译期 hardcode 注释里标注)
+//!   (战役 1-2 并入 `apeireth-http-client`, 本 crate 只在编译期 hardcode 注释里标注)
 //!
 //! **不假装** (战役 0 主哲学锚 #1 不漂移):
 //! - ✅ 4 协议都真实现, 不只 OpenAI (R17 战役 0 已直连)
@@ -157,7 +157,7 @@ pub const GEMINI_PATH_TEMPLATE: &str = "/v1beta/models/{model}:generateContent";
 /// 设计参考 Keep-Alive 5 字段 (战役 1-2 在 `apeireth-http-client` 落地)
 /// 当前仅在编译期 hardcode, 战役 1-2 真用 (公开接口规范)
 ///
-/// **借鉴来源**: `chatCompletionHandler.js:22-28` `agentOptions = { keepAlive: true, keepAliveMsecs: 1000, freeSocketTimeout: 8000, scheduling: 'lifo', maxSockets: 10000 }`
+/// **设计依据**: `agentOptions = { keepAlive: true, keepAliveMsecs: 1000, freeSocketTimeout: 8000, scheduling: 'lifo', maxSockets: 10000 }`
 pub const KEEP_ALIVE_KEEP_ALIVE: bool = true;
 /// 既有实现 `keepAliveMsecs: 1000` (TCP 探针 1s)
 pub const KEEP_ALIVE_KEEP_ALIVE_MSECS: u64 = 1000;

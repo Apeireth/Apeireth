@@ -36,7 +36,7 @@ Author:          主代理 Mavis
 背景:
 - v2.0 真账缺 ~35 项 1.0 真实施 (per Round 11-12 1.0 vs 2.0 gap 真账)
 - 本次派单是真实施 critical path 12-14 周的一部分
-- 物种化借签边界 (per Round 10 5 R7 真调研 + Round 13 1.0 maturity 补查)
+- 物种化参考边界 (per Round 10 5 R7 真调研 + Round 13 1.0 maturity 补查)
 
 承接:
 - 主代理亲做 spec 已决策冻结 (~7 项, per Round 14 真实施完成计划 §2.1)
@@ -63,7 +63,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
    - docs/04-internal/v2-reference-handbook-2026-08-28.md (§3.1 brief 模板 + §4 改前必跑 + §5 commit msg 模板 + §7 工程规范 + §8.5 hook, 613 行)
    - docs/04-internal/ENGINEER-MANIFESTO.md (§13 12 真实陷阱 + §10 LOCKED 5 项)
 
-3. 物种化借签 (Round 10 5 真调研):
+3. 物种化参考 (Round 10 5 真调研):
    - docs/01-architecture/r7-neko-species-research-2026-08-28.md (五维记忆)
    - docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md (4 段 pipeline + ASR/TTS)
    - docs/01-architecture/r7-firefly-species-research-2026-08-28.md (GPT-SoVITS 原声 TTS)
@@ -80,7 +80,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
 
 6. 子代理 brief (本派单项):
    - legacy/donor/apeireth-companion/src/[具体 1.0 模块].rs (~100-1500 行 1.0 真账)
-   - crates/[具体 2.0 真账 path] (物种化借签边界真账)
+   - crates/[具体 2.0 真账 path] (物种化参考边界真账)
 
 7. 真账 brief 模板 (本文件):
    - docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md (本文件, 派单统一模板)
@@ -96,7 +96,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
 ### 1. 真实施摘要 (≤ 50 行)
 - 1.0 真账实测 (legacy/donor/apeireth-companion/src/[具体].rs 行数 + maturity + 0 装 PASS 标注)
 - 2.0 真账实测 (crates/[具体] 真账 + LOCKED 0 触碰 verify)
-- 真实施 7 段 (1.0 → 2.0 真账对接 + 真实施代码 + 真账对接 + 物种化借签 + 集成测试 + 0 装诚实 + 下一步)
+- 真实施 7 段 (1.0 → 2.0 真账对接 + 真实施代码 + 真账对接 + 物种化参考 + 集成测试 + 0 装诚实 + 下一步)
 
 ### 2. 5 重守门 baseline 实测 (≤ 30 行)
 - cargo test --workspace --locked (期望 3662+N passed / 0 failed)
@@ -113,20 +113,20 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
 - R11 baseline 3 值 (legacy reference): 0 触碰
 - 9 哲学锚表头 (eight_anchors.rs enum): 0 减
 
-### 4. 真账对接 + 物种化借签 (≤ 50 行)
-- 1:1 翻译 v1 真账 (per maturity REAL 1:1 可移植)
-- 1:1 + trait 口主代理亲做 spec (per maturity REAL with 注, 4 项)
-- 物种化借签边界 (per-user 塑形 + 声音形状 + 时间 + 语言 + 形态, per vision.md L29-49)
+### 4. 真账对接 + 物种化参考 (≤ 50 行)
+- 语义对齐 v1 真账 (per maturity REAL 逐项可实现)
+- 语义对齐 + trait 口主代理亲做 spec (per maturity REAL with 注, 4 项)
+- 物种化参考边界 (per-user 塑形 + 声音形状 + 时间 + 语言 + 形态, per vision.md L29-49)
 - 0 装诚实: 0 装诱导 prevention (不假装 OK, 0 LLM 真接, 0 装 PASS 标注)
-- 0 引新外部 dep (per 真账 brief 约束, 1:1 翻译优先借签 1.0 真账)
+- 0 引新外部 dep (per 真账 brief 约束, 语义对齐优先参考 1.0 真账)
 
 ### 5. 真账对接 + 集成测试 (≤ 30 行)
-- 真实施代码 (per 1.0 真账 1:1 翻译 + 2.0 真账对接)
+- 真实施代码 (per 1.0 真账 语义对齐 + 2.0 真账对接)
 - 集成测试 (cargo test + 真账对接 + species 塑形边界)
-- 物种化借签 (per R7 5 真调研: per-user memory / preference / personality 塑形)
+- 物种化参考 (per R7 5 真调研: per-user memory / preference / personality 塑形)
 
 ### 6. 主代理决策建议 (≤ 30 行)
-- 1.0 真账可移植度 (REAL / PARTIAL / 0 装 PASS)
+- 1.0 真账可实现度 (REAL / PARTIAL / 0 装 PASS)
 - 2.0 真账对接路径 (走扩展 trait 接口)
 - 真实施 critical path 估时 (per 真账 brief brief)
 - 下一步 (跟其他派单对接 / 真账 brief / 真实施主代理亲测)
@@ -136,7 +136,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
 - 真账 brief 模板必含 (本文件 §1.1-1.7)
 - LOCKED 5 项 0 触碰 verify (本节 §3)
 - 5 重守门 baseline verify (本节 §2)
-- 物种化借签边界 (本节 §4)
+- 物种化参考边界 (本节 §4)
 - 真账 brief 模板必含 (§1.3 + §2 + §3 + §4)
 ```
 
@@ -149,7 +149,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
 - 真实施时主代理必亲测 (~2-3 天本地实测, 0 git clone 必要, per Round 15 用户 catch 修订)
 
 真账 brief 必含 (per O-6 永远追求最优):
-- 物种化借签边界 (per vision.md + apeireth-true-understanding-2026-08-28.md)
+- 物种化参考边界 (per vision.md + apeireth-true-understanding-2026-08-28.md)
 - 0 装 PASS 标注 (1.0 真账 self-flag, ~10 项 trait 口待主代理亲做 spec)
 - 真账 brief 模板 (本文件 §1.3 + §2 真实施流程 + §3 5 重守门 + §4 LOCKED 0 触碰)
 
@@ -288,13 +288,13 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 - docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md (9 项调研真账, 283 行)
 - docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md (1.0 真账 maturity 补查, 8 .rs 实测)
 - legacy/donor/apeireth-companion/src/{onering.rs,oracle.rs,oracle_adapters.rs,context.rs,context_rot.rs,continuation.rs,continuity.rs,spill.rs,assemble.rs,hello.rs,milestone.rs,experiment_field.rs,proactive.rs,progressive.rs,pentest.rs,bridge_kani_proofs.rs,organ_kani_proofs.rs} (~1500+ 行 1.0 真账, REAL/PARTIAL)
-- crates/engine/memory/src/canonical/{vector.rs,graph.rs} (v2 Storage 抽象层, VectorIndex + MemoryGraph 已 1:1 翻译)
-- crates/engine/runtime/src/canonical/{orchestrator.rs,organ_kani_proofs.rs} (A 块 Stage 5 L0-L5 UpgradeCycle + organ_kani_proofs 已 1:1 翻译)
+- crates/engine/memory/src/canonical/{vector.rs,graph.rs} (v2 Storage 抽象层, VectorIndex + MemoryGraph 已 语义对齐)
+- crates/engine/runtime/src/canonical/{orchestrator.rs,organ_kani_proofs.rs} (A 块 Stage 5 L0-L5 UpgradeCycle + organ_kani_proofs 已 语义对齐)
 
 必输出:
 - 写真账 to: docs/04-internal/r12-coordination-context-1-implementation-2026-08-28.md (≤ 300 行, 必含 §1.3 7 段)
 - 7 段: 真实施摘要 + 5 重守门 baseline + LOCKED 0 触碰 + 真账对接 + 真账对接 + 集成测试 + 主代理决策建议 + 0 装诚实标
-- 真实施代码: 1.0 真账 1:1 翻译 (onering + oracle + context+context_rot 融合 + assemble+hello 部分)
+- 真实施代码: 1.0 真账 语义对齐 (onering + oracle + context+context_rot 融合 + assemble+hello 部分)
 - 集成测试: cargo test + 真账对接 + species 塑形边界
 
 0 装诚实标:
@@ -327,12 +327,12 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 必读:
 - docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md (本文件)
 - legacy/donor/apeireth-companion/src/{continuation.rs,continuity.rs,spill.rs,milestone.rs,experiment_field.rs} (~300+ 行 1.0 真账)
-- crates/engine/runtime/src/canonical/orchestrator.rs (A 块 Stage 5 L0-L5 UpgradeCycle 已 1:1 翻译)
+- crates/engine/runtime/src/canonical/orchestrator.rs (A 块 Stage 5 L0-L5 UpgradeCycle 已 语义对齐)
 - crates/foundation/core/src/onion.rs (3 项不可变脊柱 LOCKED, 真实施走扩展 trait 接口)
 
 必输出:
 - 写真账 to: docs/04-internal/r12-coordination-context-2-implementation-2026-08-28.md (≤ 300 行)
-- 真实施代码: 1.0 真账 1:1 翻译 + 2.0 L0-L5 UpgradeCycle 对接
+- 真实施代码: 1.0 真账 语义对齐 + 2.0 L0-L5 UpgradeCycle 对接
 - 0 引新外部 dep
 
 5 重守门 baseline + LOCKED 0 触碰:
@@ -351,11 +351,11 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必读:
 - legacy/donor/apeireth-companion/src/{proactive.rs,progressive.rs,pentest.rs,bridge_kani_proofs.rs,organ_kani_proofs.rs} (~600+ 行 1.0 真账)
-- crates/engine/organ/src/emergence.rs (E7 emergence organ ✅ 1:1 翻译, organ_kani_proofs 6 crate 已装 per R177)
+- crates/engine/organ/src/emergence.rs (E7 emergence organ ✅ 语义对齐, organ_kani_proofs 6 crate 已装 per R177)
 
 必输出:
 - 写真账 to: docs/04-internal/r12-coordination-context-3-implementation-2026-08-28.md (≤ 300 行)
-- 真实施代码: 1.0 真账 1:1 翻译 + 2.0 E7 emergence 对接
+- 真实施代码: 1.0 真账 语义对齐 + 2.0 E7 emergence 对接
 - Kani bridge 0 → 1 (R177 organ_kani_proofs 6 crate 已装, bridge_kani_proofs 仍 0)
 
 0 装诚实标:
@@ -371,23 +371,23 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必读:
 - legacy/donor/apeireth-companion/src/{principles.rs (478 行), partner.rs (141 行), value_cases.rs, bond.rs} (1.0 真账)
-- crates/engine/organ/src/value_cases.rs (F6 value_cases organ ✅ 1:1 翻译)
+- crates/engine/organ/src/value_cases.rs (F6 value_cases organ ✅ 语义对齐)
 - docs/01-architecture/apeireth-true-understanding-2026-08-28.md (物种化真理解, §2 vision.md L49 跨墙的信任)
 
 必输出:
 - 写真账 to: docs/04-internal/r12-species-core-1-implementation-2026-08-28.md (≤ 300 行)
-- 真实施代码: 1.0 真账 1:1 翻译 (principles 478 行 + partner 141 行 + bond 借签)
+- 真实施代码: 1.0 真账 语义对齐 (principles 478 行 + partner 141 行 + bond 参考)
 - 2.0 F6 value_cases organ 对接
-- 物种化借签 (per vision.md L47 "记忆/偏好/好奇形状被共同生活塑形")
+- 物种化参考 (per vision.md L47 "记忆/偏好/好奇形状被共同生活塑形")
 
 5 重守门 + LOCKED 0 触碰:
 - cargo test + clippy + check (期望 0 副作用)
 - 0 触碰 LOCKED 5 项
 
 0 装诚实标:
-- principles 是 F6 价值内化层基础 (跟 F6 organ 借签边界)
+- principles 是 F6 价值内化层基础 (跟 F6 organ 参考边界)
 - partner 是物种化核心 (vision L49 跨墙的信任)
-- 主代理亲做 #6 confidence BetaBinomial trait spec (~1 周, 跟 partner 借签)
+- 主代理亲做 #6 confidence BetaBinomial trait spec (~1 周, 跟 partner 参考)
 ```
 
 ### 3.5 R12-SpeciesCore-2 (community + education, 2 周)
@@ -402,13 +402,13 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必输出:
 - 写真账 to: docs/04-internal/r12-species-core-2-implementation-2026-08-28.md (≤ 300 行)
-- 真实施代码: 1.0 真账 1:1 翻译 (community 360 行 + education 402 行)
-- 真 CAS 借签 (主代理亲做 #5 education 真 CAS spec, 1.0 字符串规则 → 2.0 sympy 真 CAS)
-- 物种化借签 (per vision.md L47 物种化社区 + L48 教育升级)
+- 真实施代码: 1.0 真账 语义对齐 (community 360 行 + education 402 行)
+- 真 CAS 参考 (主代理亲做 #5 education 真 CAS spec, 1.0 字符串规则 → 2.0 sympy 真 CAS)
+- 物种化参考 (per vision.md L47 物种化社区 + L48 教育升级)
 
 0 装诚实标:
-- education 字符串规则不是真 CAS, 主代理亲做真 CAS spec (sympy 借签)
-- community 物种化社区 (借签 vision L47)
+- education 字符串规则不是真 CAS, 主代理亲做真 CAS spec (sympy 参考)
+- community 物种化社区 (参考 vision L47)
 - 1.0 真账 ~760 行 2 .rs maturity (REAL)
 ```
 
@@ -425,7 +425,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必输出:
 - 写真账 to: docs/04-internal/r12-longterm-memory-implementation-2026-08-28.md (≤ 300 行)
-- 真实施代码: 1.0 真账 1:1 翻译 (6 .rs ~2000 行) + 2.0 cognitive module consolidation_writeback_pipeline + reflection_writeback_pipeline trait 对接
+- 真实施代码: 1.0 真账 语义对齐 (6 .rs ~2000 行) + 2.0 cognitive module consolidation_writeback_pipeline + reflection_writeback_pipeline trait 对接
 - reflexion 3 trait 口实接线 (主代理 #7 spec)
 - cognitive module spec (主代理 #3 spec)
 
@@ -434,10 +434,10 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 - 0 触碰 LOCKED 5 项
 
 0 装诚实标:
-- 1.0 真账 ~2000 行 6 .rs maturity (REAL, 1:1 可移植)
+- 1.0 真账 ~2000 行 6 .rs maturity (REAL, 逐项可实现)
 - reflexion 3 trait 口 主代理亲做 spec (LLM CRITIC + 失败事件实接线 + 注入块消费侧)
 - cognitive module consolidation_writeback_pipeline + reflection_writeback_pipeline 主代理亲做 spec
-- 物种化借签 (per vision L47 + LongTermMemory 真账 §3.2)
+- 物种化参考 (per vision L47 + LongTermMemory 真账 §3.2)
 - 0 引新外部 dep
 ```
 
@@ -447,7 +447,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 任务: VectorIndex BM25 hybrid + Graph causal engine 真账对接 + 真实施
 
 必读:
-- crates/engine/memory/src/canonical/{vector.rs,graph.rs} (v2 VectorIndex + MemoryGraph 已 1:1 翻译 cosine)
+- crates/engine/memory/src/canonical/{vector.rs,graph.rs} (v2 VectorIndex + MemoryGraph 已 语义对齐 cosine)
 - _research_mem/apeireth-rust-fork/crates/apeireth-vector/ (1.0 真账 sqlite-vec + Qdrant + traits, ~400+ 行)
 - _research_mem/apeireth-rust-fork/crates/apeireth-graph-primitive/ (1.0 真账 BFS + predicate query, ~500+ 行)
 - docs/04-internal/r11-storage-gap-research-2026-08-28.md (303 行, R11-Storage 真账)
@@ -455,8 +455,8 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必输出:
 - 写真账 to: docs/04-internal/r12-storage-implementation-2026-08-28.md (≤ 300 行)
-- 真实施代码: VectorIndex BM25 hybrid 补 + Graph causal engine 补 (跟 v2 canonical 已 1:1 翻译的 cosine VectorIndex + MemoryGraph BFS/shortest_path 借签)
-- 1.0 真账 1:1 翻译 (BM25 hybrid + causal engine)
+- 真实施代码: VectorIndex BM25 hybrid 补 + Graph causal engine 补 (跟 v2 canonical 已 语义对齐的 cosine VectorIndex + MemoryGraph BFS/shortest_path 参考)
+- 1.0 真账 语义对齐 (BM25 hybrid + causal engine)
 
 5 重守门 + LOCKED 0 触碰:
 - cargo test + clippy + check (期望 0 副作用)
@@ -465,8 +465,8 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 0 装诚实标:
 - 1.0 真账 BM25 hybrid 在 SqliteVecBackend + QdrantClient (~400+ 行)
 - 1.0 真账 causal engine 在 graph_primitive (~500+ 行, BFS + predicate query)
-- v2 canonical/vector.rs 已 1:1 翻译 cosine VectorIndex (差 BM25 hybrid)
-- v2 canonical/graph.rs 已 1:1 翻译 MemoryGraph BFS + shortest_path (差 causal engine)
+- v2 canonical/vector.rs 已 语义对齐 cosine VectorIndex (差 BM25 hybrid)
+- v2 canonical/graph.rs 已 语义对齐 MemoryGraph BFS + shortest_path (差 causal engine)
 - 0 引新外部 dep (SqliteVecBackend 是 sqlite-vec 真接, QdrantClient 是 REST API 真接, 都在 1.0 真账已有)
 ```
 
@@ -477,20 +477,20 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必读:
 - legacy/donor/apeireth-companion/src/{timeline.rs (79 行 REAL), tone.rs (374 行 REAL), morphology.rs (284 行 REAL)}
-- docs/01-architecture/r7-mio-species-research-2026-08-28.md (物种化塑形维度借签边界, Mio §2 timeline 真账)
-- docs/01-architecture/r7-firefly-species-research-2026-08-28.md (物种化塑形语言维度, Firefly §2 tone 真账)
+- docs/01-architecture/r7-mio-species-research-2026-08-28.md (物种化塑形维度参考边界, r7 调研 §2 timeline 真账)
+- docs/01-architecture/r7-firefly-species-research-2026-08-28.md (物种化塑形语言维度, r7 调研 §2 tone 真账)
 
 必输出:
 - 写真账 to: docs/04-internal/r13-species-form-implementation-2026-08-28.md (≤ 300 行)
-- 真实施代码: 1.0 真账 1:1 翻译 (timeline 79 + tone 374 + morphology 284 = 737 行)
-- 物种化借签 (per vision.md L47 + R7 真账 species 塑形边界)
+- 真实施代码: 1.0 真账 语义对齐 (timeline 79 + tone 374 + morphology 284 = 737 行)
+- 物种化参考 (per vision.md L47 + R7 真账 species 塑形边界)
 
 5 重守门 + LOCKED 0 触碰:
 - cargo test + clippy + check (期望 0 副作用)
 - 0 触碰 LOCKED 5 项
 
 0 装诚实标:
-- 1.0 真账 ~737 行 3 .rs maturity (REAL, 1:1 可移植)
+- 1.0 真账 ~737 行 3 .rs maturity (REAL, 逐项可实现)
 - timeline + tone + morphology 物种化塑形维度 (时间 + 语言 + 形态)
 - 0 引新外部 dep
 ```
@@ -507,7 +507,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必输出:
 - 写真账 to: docs/04-internal/r13-meta-cognition-implementation-2026-08-28.md (≤ 300 行)
-- 真实施代码: 1.0 真账 1:1 翻译 (meta_thinking 643 + thought_cluster 522 + intent_brier 817 + confidence 177 + HybridCognitiveRouter 真实施)
+- 真实施代码: 1.0 真账 语义对齐 (meta_thinking 643 + thought_cluster 522 + intent_brier 817 + confidence 177 + HybridCognitiveRouter 真实施)
 - v2 organ::world_model::CalibrationStrength 补 BetaBinomial trait (主代理 #6 confidence spec)
 - cognitive.council + judge 对接 (confidence trait)
 
@@ -516,10 +516,10 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 - 0 触碰 LOCKED 5 项
 
 0 装诚实标:
-- 1.0 真账 ~2200 行 5 .rs maturity (REAL, 1:1 可移植)
+- 1.0 真账 ~2200 行 5 .rs maturity (REAL, 逐项可实现)
 - confidence BetaBinomial trait 主代理亲做 spec (~1 周)
-- HybridCognitiveRouter 1.0 rule-based fast path with hardcoded templates (master PARTIAL, 不推荐 1:1 翻译)
-- 物种化借签 (per R7 真账 species + R11 真账 meta-cognition)
+- HybridCognitiveRouter 1.0 rule-based fast path with hardcoded templates (master PARTIAL, 不推荐 语义对齐)
+- 物种化参考 (per R7 真账 species + R11 真账 meta-cognition)
 - 0 引新外部 dep
 ```
 
@@ -537,7 +537,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 必输出:
 - 写真账 to: docs/04-internal/r13-tools-security-implementation-2026-08-28.md (≤ 300 行)
 - 真实施代码: ToolSynthesizer sandbox 修复 (security critical) + Invest + Browser 真接 (Playwright MCP) + Vision Windows 真接 (GDI capture + 窗口枚举 + SendInput) + Voice whisper 真接 (R14 真 modality backend)
-- 1.0 真账 1:1 翻译 (~2000+ 行 30+ .rs)
+- 1.0 真账 语义对齐 (~2000+ 行 30+ .rs)
 
 5 重守门 + LOCKED 0 触碰:
 - cargo test + clippy + check (期望 0 副作用)
@@ -559,26 +559,26 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必读:
 - legacy/donor/apeireth-companion/src/proactive_memory.rs (919 行 REAL, TopicPredictor + PreloadChannel, 0 LLM)
-- docs/01-architecture/deferred-slot-activation-preference_learning-spec.md (R15 spec, 617 行, 1:1 翻译 v1)
+- docs/01-architecture/deferred-slot-activation-preference_learning-spec.md (R15 spec, 617 行, 语义对齐 v1)
 - docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md (R20 真账 ready, 318 行)
 - docs/01-architecture/r20-preference_learning-research-2026-08-28.md (R20 真调研 257 行)
 - cognitive-module-wiring.md L30 DEFERRED → WIRED 状态标 (主代理亲做 spec, 真实施时改 1 行)
 
 必输出:
 - 写真账 to: docs/04-internal/r20-preference-learning-implementation-2026-08-28.md (≤ 300 行)
-- 真实施代码: 1.0 真账 1:1 翻译 (TopicPredictor + PreloadChannel + PreloadChannel trait + 4 impl + CompositeChannel default_composite_channel, ~700 行)
+- 真实施代码: 1.0 真账 语义对齐 (TopicPredictor + PreloadChannel + PreloadChannel trait + 4 impl + CompositeChannel default_composite_channel, ~700 行)
 - cognitive module 加 consolidation_writeback_pipeline + reflection_writeback_pipeline trait spec (主代理 #3 spec)
 
 5 重守门 + LOCKED 0 触碰:
 - cargo test + clippy + check (期望 0 副作用)
 - 0 触碰 LOCKED 5 项
-- 0 引新外部 dep (per 真账 brief 约束, 0 LLM 1:1 翻译)
+- 0 引新外部 dep (per 真账 brief 约束, 0 LLM 语义对齐)
 
 0 装诚实标:
-- 1.0 真账 919 行 1.0 真账 proactive_memory.rs (TopicPredictor + PreloadChannel 1:1 可移植)
-- 0 LLM 1:1 翻译 (heuristic-based, 跟 Round 10 真账 brief 0 LLM 一致)
+- 1.0 真账 919 行 1.0 真账 proactive_memory.rs (TopicPredictor + PreloadChannel 逐项可实现)
+- 0 LLM 语义对齐 (heuristic-based, 跟 Round 10 真账 brief 0 LLM 一致)
 - cognitive-module-wiring.md L30 1 行 doc sync (R20 真实施时改 DEFERRED → WIRED)
-- R10 OrganKind 决策 1.0 真账 919 行 1:1 翻译 (借签现有 9 organ trait)
+- R10 OrganKind 决策 1.0 真账 919 行 语义对齐 (参考现有 9 organ trait)
 ```
 
 ---
@@ -591,8 +591,8 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 - ✅ 真账 brief 必含 LOCKED 5 项 0 触碰 verify (per 真账 §1.5)
 - ✅ 真账 brief 必含 0 装诚实标 (per 真账 §1.4)
 - ✅ 真账 brief 必含 真实施流程 (per 真账 §2 + §1.6)
-- ✅ 真账 brief 必含 物种化借签边界 (per 真账 §1.1 vision.md + Round 10 5 R7)
-- ✅ 0 引新外部 dep (per 真账 brief 约束, 1:1 翻译优先借签 1.0 真账)
+- ✅ 真账 brief 必含 物种化参考边界 (per 真账 §1.1 vision.md + Round 10 5 R7)
+- ✅ 0 引新外部 dep (per 真账 brief 约束, 语义对齐优先参考 1.0 真账)
 
 ### 4.2 真实施时主代理必亲测 (per Round 15 用户 catch 修订)
 

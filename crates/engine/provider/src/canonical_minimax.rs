@@ -9,7 +9,7 @@
 //!
 //! # What moved where
 //!
-//! Ported from the legacy `apeireth_api::llm::providers::apeireth_api::ApeirethApiProvider`
+//! Semantically aligned with the legacy `apeireth_api::llm::providers::apeireth_api::ApeirethApiProvider`
 //! (an `LlmProvider`), but not wrapped around it:
 //!
 //! - **Request/response translation** is owned here, against the canonical

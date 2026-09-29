@@ -1,0 +1,21 @@
+crates/engine/organ/src/causal_world_model_edges.rs:381:                // 原实现把 ms 直接跟 secs 比较 (窗口大 1000 倍, 相邻秒的事实永不命中,
+crates/engine/provider/src/llm_factory_adapters.rs:19:/// **字段映射** (与 minimax factory 原实现一致):
+crates/foundation/core/src/gate.rs:141:        // H2 修复 (2026-09-24 审计): 原实现是 `permission.l4.requires_ha || true`
+crates/foundation/core/src/gate.rs:184:    /// H2 修复 (2026-09-24 审计): 原实现在线模式是 `_ => true` (注释自述
+crates/foundation/core/src/lib.rs:996:/// M5 修复 (2026-09-24 审计): 原实现把整个 U+FF00-FFEF 当攻击信号, 其中包含
+crates/foundation/core/src/lib.rs:1419:    // L (2026-09-24 审计): 恒定时间比较 —— 原实现逐字节早退 (遇到第一个
+crates/foundation/core/src/lib.rs:1661:    /// M18 (2026-09-24 审计): 被禁 trait 不再落库 —— 原实现把声称要拒绝的
+crates/foundation/core/src/onion.rs:103:                // 原实现只查"格式良好" (`is_well_formed_sig`: 非空 + 含 `:`),
+crates/foundation/core/src/onion.rs:365:        // real_humans" 的签名必须被拒 —— 原实现下任意 `"anything:x"` 即 Accepted。
+crates/foundation/core/src/philosophy.rs:220:/// 容量有界 (FIFO 淘汰, [`Self::MAX_ENTRIES`]) —— 原实现是无界 HashMap,
+crates/foundation/core/src/statechart.rs:162:    /// M4 修复 (2026-09-24 审计): 原实现 doc 自述 "`initial` must exist
+crates/foundation/core/src/statechart.rs:243:            // M4 修复 (2026-09-24 审计): 原实现无条件把 current 设为 target
+crates/foundation/core/tests/integration_v1v2v3.rs:270:/// 原实现在线模式 `_ => true` 恒放行, 该状态检测不到。
+crates/foundation/protocol/src/adapters/openai_chat.rs:225:        // L4 修复 (2026-09-24 审计): 原实现把畸形 arguments JSON 静默吞为
+crates/foundation/protocol/src/bridge_ext.rs:98:    /// L1 修复 (2026-09-24 审计): push_chunk 现有界 —— 原实现无 chunk 数/
+crates/foundation/protocol/src/bridge_ext.rs:225:        // L1 回归 (2026-09-24 审计): 原实现无上限。
+crates/foundation/protocol/src/p2p_mesh.rs:104:    /// (2026-09-24 审计 L2: 原实现纯 insert 无上限无老化)。
+crates/foundation/protocol/src/ws_v1.rs:289:/// M8 修复 (2026-09-24 审计): 原实现所有帧字段零长度/字符集校验 —— 单帧即可
+docs/core-capability-expansion.md:231:- **list_recent_traces 死锁**: 原实现在 conn guard 持有期间调用 `self.list_trace_spans()` (再次 `self.conn()?` 锁同一 `Mutex<Connection>`, 不可重入 → 死锁, 测试挂起 >60s). 修复: 全部在同一 conn 内用窗口查询完成, 不重入. (回归测试: trace_list_recent_traces 0.07s 通过.)
+frontend/companion-desktop/src/lib/views/governance/GovManifestPending.svelte:5:  // 拉取（App.svelte refreshConnection）——网关离线则永为 null，原实现四 tab
+scripts/check-neutral-terms.ps1:19:  '原实现',

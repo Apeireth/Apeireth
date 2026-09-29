@@ -189,7 +189,7 @@ async fn w3_process_outputs_world_model_with_empty_counterfactual() {
                 counterfactual.is_empty(),
                 "W3 被动路径 0 反事实推演 (那是 W2 主动 MCTS 的活, 0 装诚实)"
             );
-            // 验证 plugin CausalEdge schema 1:1 翻译.
+            // 验证 plugin CausalEdge schema 语义对齐.
             for e in &edges {
                 assert!(!e.cause.is_empty());
                 assert!(!e.effect.is_empty());

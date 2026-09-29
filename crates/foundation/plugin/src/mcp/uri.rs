@@ -1,9 +1,7 @@
 //! `file://` URI parsing and directory containment.
 //!
-//! Donor: `legacy/donor/apeireth-mcp/src/resource_servers.rs`
-//! (`extract_path` / `resolve_safe` / `percent_decode` / `guess_mime`).
 //!
-//! Recovered as **pure functions**. The donor `FileResourceServer` also
+//! Implemented as **pure functions**. The earlier `FileResourceServer` also
 //! walked the filesystem and depended on `apeireth-tools` conventions;
 //! that host is deferred (it would become a second I/O owner next to
 //! `apeireth-tools::filesystem`). A later host can call these helpers
@@ -124,7 +122,7 @@ pub fn resolve_contained(base: &Path, rel: &Path) -> Result<PathBuf, UriError> {
     Ok(canonical)
 }
 
-/// Extension → MIME guess (donor table, common text types only).
+/// Extension → MIME guess (baseline table, common text types only).
 pub fn guess_mime(path: &Path) -> &'static str {
     match path.extension().and_then(|s| s.to_str()) {
         Some("rs") => "text/x-rust",

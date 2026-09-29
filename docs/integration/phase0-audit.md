@@ -4,8 +4,8 @@
 
 > **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
 
-> 状态：**Phase 0 只读审计完成**。本文件是对最新 upstream 与 Pattern 资产的纯审计记录，不含任何代码改动。
-> 目标：重新理解最新 Apeireth 架构，再把 Pattern 仍然有价值的能力以符合当前架构的方式重新集成。
+> 状态：**Phase 0 只读审计完成**。本文件是对最新 upstream 与参考工程资产的纯审计记录，不含任何代码改动。
+> 目标：重新理解最新 Apeireth 架构，再把参考工程仍然有价值的能力以符合当前架构的方式重新集成。
 
 ---
 
@@ -18,7 +18,7 @@
 | 本地工作树 | `apeireth-rust/`（detached HEAD @ `993e9107`） |
 | 本地 origin | `https://github.com/YintaTriss/apeireth-rust.git`（**≠ 目标远程**） |
 | 关系 | `993e9107` 是 `7b5528ed` 的祖先；本地集成线全部已在 Jimmy master 历史中 |
-| Pattern 参考 | `Pattern/` @ main `1a12d97`（`Jimmyxiao2009/Pattern.git`） |
+| 参考工程基线 | `Pattern/` @ main `1a12d97`（`Jimmyxiao2009/Pattern.git`） |
 | Toolchain | `rust-toolchain.toml`: channel = "1.97.1"，components = rustfmt/clippy/rust-src |
 | Workspace | resolver = "2"，~83 crate（82 顶层 + memory/extensions 嵌套） |
 | Workspace 版本 | 1.2.0（crate 轴）· 产品轴 v1.0.0 正式版（双轴制） |
@@ -38,7 +38,7 @@
 - **apeireth-web** — Leptos 0.7 SSR + WASM（Council advisor 面板，非对话 UI）
 - **apeireth-tools / tool-*** — 工具注册表 + 9 工具子 crate + 工具运行时
 - **apeireth-provider / llm-iface / pipeline / protocol / bus / config / credentials / telemetry** 等支撑层
-- **apeireth-gateway / environment** — OpenClaw-mode 常驻 gateway + 6 terminal backends
+- **apeireth-gateway / environment** — 常驻 gateway + 6 terminal backends
 
 ### 2.2 Frontend（Apeireth 侧现状）
 
@@ -48,7 +48,7 @@
 | `crates/apeireth-web` | 活跃 | Leptos SSR，Council 面板，非对话 UI |
 | `crates/apeireth-tui` | 活跃 | 当前 dev 主线 |
 
-**决定性事实**：Apeireth 当前**没有任何可运行的对话桌面前端**。官方文档（`docs/frontend-guide.md` 2026-08-16）明确路线 A：**「主人不会写前端 → 接现成开源 Chat 前端（LobeChat/NextChat）对接 OpenAI 兼容端点」**。
+**决定性事实**：Apeireth 当前**没有任何可运行的对话桌面前端**。官方文档（`docs/frontend-guide.md` 2026-08-16）明确路线 A：**「主人不会写前端 → 接现成开源 Chat 前端对接 OpenAI 兼容端点」**。
 
 ### 2.3 Runtime / 对话链路
 
@@ -66,7 +66,7 @@ memory 注入 + 今日摘要 + 工具桥 (ToolBridge) + 宪法评审 + 做梦/�
 
 `packaging/` 有 brew/deb/docker/msi/rpm/scoop/tarball/zip。桌面打包是 `tauri-prototype` 冻结后遗留。
 
-## 3. Pattern 资产（0.3.0，参考 @ `1a12d97`）
+## 3. 参考工程资产（0.3.0，参考 @ `1a12d97`）
 
 ### 3.1 Desktop（apps/desktop）
 
@@ -88,23 +88,23 @@ memory 注入 + 今日摘要 + 工具桥 (ToolBridge) + 宪法评审 + 做梦/�
 - **protocol**：wire types（ClientMessage/ServerMessage/AgentSlot/TaskRecord/GoalState/SessionPlan...）— 前端 ↔ sidecar WS 契约
 - **relay**：WebDAV 信封 + 游标 + E2E 密钥 + 设备配对
 - **core**：路由（companion/executor 双槽）、安全评估、工具名归一
-- **memory**：SQLite + FTS5 + Pattern Engine（candidate→active→weakening→contradicted→archived）
+- **memory**：SQLite + FTS5 + 参考工程记忆引擎（candidate→active→weakening→contradicted→archived）
 - **proactive**：主动性引擎（深夜/电量/健康/文件监视）
 - **channels**：Telegram/SMTP/IMAP 适配器 + 插件发现
 - **agent**：LLM provider 封装（resolveModel/streamChat/generate/buildTools）
 
 ### 3.4 Sidecar（sidecar/，TypeScript/Node）
 
-自研 agent loop（`index.ts`）：WS server + MemoryEngine + ProactiveEngine + RelayClient + 工具调度 + slash 命令 + goals/session plan + Pattern Engine 管线 + Presence。
+自研 agent loop（`index.ts`）：WS server + MemoryEngine + ProactiveEngine + RelayClient + 工具调度 + slash 命令 + goals/session plan + 参考工程记忆引擎管线 + Presence。
 
-**这是 Pattern 的「第二套 AI runtime」——按 §12 核心原则，DO NOT PORT。**
+**这是参考工程的「第二套 AI runtime」——按 §12 核心原则，DO NOT PORT。**
 
-## 4. Pattern → Apeireth Mapping
+## 4. 参考工程 → Apeireth Mapping
 
-| Pattern 资产 | Apeireth 等价物 | 动作 |
+| 参考工程资产 | Apeireth 等价物 | 动作 |
 |---|---|---|
-| **Tauri 2 + Svelte 5 桌面 shell** | 无（tauri-prototype 冻结空壳） | **reuse** — 移植 shell 骨架 |
-| **对话 UI 组件**（chat/conversations/message content/markdown） | 无 | **reuse** — 移植 |
+| **Tauri 2 + Svelte 5 桌面 shell** | 无（tauri-prototype 冻结空壳） | **reuse** — 复用 shell 骨架 |
+| **对话 UI 组件**（chat/conversations/message content/markdown） | 无 | **reuse** — 复用 |
 | **设置/任务/目标/主动/通道/技能/MCP/记忆 UI** | 无 | **adapt** — 数据源换 Apeireth |
 | **Oobe / QuickWindow / tray / 通知 / 快捷键** | 无 | **adapt** — shell 能力保留 |
 | **packages/protocol**（wire types） | 无 | **rewrite** — 改为对接 Apeireth 端点 |
@@ -112,7 +112,7 @@ memory 注入 + 今日摘要 + 工具桥 (ToolBridge) + 宪法评审 + 做梦/�
 | **sidecar（TS agent loop）** | `apeireth-companion` + `apeireth-runtime` + `companion_serve` | **drop** — 绝不引入第二套 runtime |
 | **enigo/xcap 键鼠/截屏 bridge** | 无（上游无对应） | **drop** — DO NOT PORT |
 | **recovery/AgentOS/review window** | 无 | **drop** — DO NOT PORT |
-| **Packages/memory（Pattern Engine）** | `apeireth-memory` | **drop** — 用 Apeireth 记忆 |
+| **Packages/memory（参考工程记忆引擎）** | `apeireth-memory` | **drop** — 用 Apeireth 记忆 |
 | **packages/agent（LLM provider）** | `apeireth-api` `apeireth-provider` | **drop** |
 | **packages/channels** | `apeireth-lark`（飞书/TG sink 已有） | **rewrite** — 按 Apeireth 通道语义 |
 
@@ -120,28 +120,28 @@ memory 注入 + 今日摘要 + 工具桥 (ToolBridge) + 宪法评审 + 做梦/�
 
 ### 方案 A：独立 apps（apps/desktop + apps/mobile 作为独立 Tauri 工程）
 
-- **优点**：复用 Pattern 完整 shell，改动最小，最快出可运行桌面
+- **优点**：复用参考工程完整 shell，改动最小，最快出可运行桌面
 - **缺点**：与 Apeireth workspace（纯 Rust，无 pnpm workspace）割裂；独立 package.json/pnpm 生态；前端如何对接 companion_serve（HTTP）要重写 runtime.ts；mobile 的中继依赖 sidecar（已 drop）需重构
 - **复杂度**：新增一个独立 pnpm workspace + 一个 Rust Tauri crate，与现有 83 crate workspace 平行
 
 ### 方案 B：UI 嵌入现有 frontend（扩展 apeireth-web 或重建 frontend/）
 
 - **优点**：统一前端载体；不新增 workspace complexity；SSR/WASM 与 Rust 同仓
-- **缺点**：apeireth-web 是 Leptos，Pattern 是 Svelte，两套框架不可混；重建对话 UI 等于全部重写
+- **缺点**：apeireth-web 是 Leptos，参考工程是 Svelte，两套框架不可混；重建对话 UI 等于全部重写
 - **复杂度**：Leptos 生态弱于 Svelte/React，对话 UI 开发慢
 
-### 方案 C：Hybrid（推荐）— Pattern shell 做「薄壳 + 对话 UI」，对接 Apeireth HTTP 端点
+### 方案 C：Hybrid（推荐）— 参考工程 shell 做「薄壳 + 对话 UI」，对接 Apeireth HTTP 端点
 
 ```
 frontend/
-  companion-desktop/     ← Svelte 5 + Vite + Tauri 2（从 Pattern apps/desktop 移植 UI 组件）
+  companion-desktop/     ← Svelte 5 + Vite + Tauri 2（复用参考工程 apps/desktop 的 UI 组件）
     src/                 ← 对话/记忆/设置/任务 UI
     src-tauri/           ← 薄 Tauri shell（窗口/托盘/快捷键/通知/单实例）
 crates/apeireth-companion  ← 已有后端（companion_serve :8090 OpenAI 兼容）
 ```
 
-- **优点**：桌面 UI 直接复用 Pattern；后端完全用 Apeireth（companion_serve），符合 §12「UI → Apeireth Runtime Contract → Runtime/Provider/Tools」；不引入第二套 AI runtime；mobile 视成本决定
-- **缺点**：需要把 Pattern 的 `runtime.ts`（WS 连 sidecar）重写为 HTTP 对接 Apeireth；新增一个独立前端 workspace
+- **优点**：桌面 UI 直接复用参考工程；后端完全用 Apeireth（companion_serve），符合 §12「UI → Apeireth Runtime Contract → Runtime/Provider/Tools」；不引入第二套 AI runtime；mobile 视成本决定
+- **缺点**：需要把参考工程的 `runtime.ts`（WS 连 sidecar）重写为 HTTP 对接 Apeireth；新增一个独立前端 workspace
 - **复杂度**：中等。前端独立 workspace + 后端零改动
 
 ## 6. 推荐
@@ -149,10 +149,10 @@ crates/apeireth-companion  ← 已有后端（companion_serve :8090 OpenAI 兼�
 **方案 C（Hybrid）**。
 
 理由：
-1. **Apeireth 没有任何现成对话桌面前端**（tauri-prototype 冻结），Pattern 的 Svelte 对话 UI 是目前唯一完整现成的 —— 直接复用价值最高
-2. **后端必须用 Apeireth**：companion_serve / apeireth-api 已提供 OpenAI 兼容端点 + 记忆 + 工具桥 + 宪法，Pattern 的 sidecar（TS 第二 runtime）必须 drop，符合 §12
+1. **Apeireth 没有任何现成对话桌面前端**（tauri-prototype 冻结），参考工程的 Svelte 对话 UI 是目前唯一完整现成的 —— 直接复用价值最高
+2. **后端必须用 Apeireth**：companion_serve / apeireth-api 已提供 OpenAI 兼容端点 + 记忆 + 工具桥 + 宪法，参考工程的 sidecar（TS 第二 runtime）必须 drop，符合 §12
 3. **最少重复**：后端 0 改动，前端纯增量
-4. **符合 upstream 文档**：Apeireth 官方路线就是「接前端到 OpenAI 兼容端点」，方案 C 是把官方路线从「接 LobeChat」升级为「接自家 Svelte shell」
+4. **符合 upstream 文档**：Apeireth 官方路线就是「接前端到 OpenAI 兼容端点」，方案 C 是把官方路线从「接现成开源前端」升级为「接自家 Svelte shell」
 5. 不为旧 `apps/` 目录结构服务（§7 允许重新设计），也不强制 mobile（§8 mobile 低成本才加入）
 
 ## 7. 重定义 Phase 计划
@@ -160,9 +160,9 @@ crates/apeireth-companion  ← 已有后端（companion_serve :8090 OpenAI 兼�
 | Phase | 内容 | 验收 |
 |---|---|---|
 | **1a** | Fresh 分支建立 + workspace 骨架（`frontend/companion-desktop/` 最小 Tauri+Svelte 工程） | cargo check + pnpm build 通过 |
-| **1b** | 移植 Pattern 桌面 shell（窗口/托盘/快捷键/通知/单实例 + 最小对话页） | Tauri 壳可运行 |
-| **1c** | 移植对话 UI 核心（chat/conversations/message content/markdown/settings） | UI 可显示，HTTP 对接 companion_serve |
-| **2a** | 移植任务/目标/记忆/主动/通道等辅助 UI（数据源改 Apeireth） | 各视图可用 |
+| **1b** | 复用参考工程桌面 shell（窗口/托盘/快捷键/通知/单实例 + 最小对话页） | Tauri 壳可运行 |
+| **1c** | 复用对话 UI 核心（chat/conversations/message content/markdown/settings） | UI 可显示，HTTP 对接 companion_serve |
+| **2a** | 复用任务/目标/记忆/主动/通道等辅助 UI（数据源改 Apeireth） | 各视图可用 |
 | **2b** | native 集成（Oobe/QuickWindow/tray 深度） | 体验完整 |
 | **3** | Legacy audit（grep enigo/xcap/review/recovery/agentos/sidecar） | 0 残留 |
 | **4** | Runtime bridge（AgentRunRequest/RuntimeEvent 契约，预留 Commander/Worker） | 契约类型可编译 |
@@ -172,11 +172,11 @@ crates/apeireth-companion  ← 已有后端（companion_serve :8090 OpenAI 兼�
 | 风险 | 等级 | 缓解 |
 |---|---|---|
 | **YintaTriss 与 Jimmy 两个远程** — 提交目标需确认 | 高 | 明确只用 Jimmy master；本地重建 worktree |
-| **Pattern 前端深度耦合 sidecar**（runtime.ts WS 协议、slash、goals、session plan） | 高 | 重写 runtime 层为 HTTP；UI 组件逐步解耦 |
+| **参考工程前端深度耦合 sidecar**（runtime.ts WS 协议、slash、goals、session plan） | 高 | 重写 runtime 层为 HTTP；UI 组件逐步解耦 |
 | **Svelte UI 与 Leptos 前端并存**（apeireth-web 仍在） | 中 | 方案 C 明确对话走 Svelte 壳，不碰 apeireth-web |
 | **pnpm/Node 工具链进入纯 Rust 仓库** | 中 | 前端独立 workspace，不进 Cargo.toml |
 | **mobile 依赖 WebDAV 中继 + sidecar** | 中 | Phase 1 先不做 mobile；后续按 Apeireth 通道重写 |
-| **上游文档「不自研 UI 接 LobeChat」与自研 shell 路线冲突** | 低 | 文档是建议非硬约束；自研 shell 能力更强，属路线升级 |
+| **上游文档「不自研 UI 接现成开源前端」与自研 shell 路线冲突** | 低 | 文档是建议非硬约束；自研 shell 能力更强，属路线升级 |
 
 ---
 

@@ -2,7 +2,7 @@
   // 治理卷宗共享门：capabilities === null（运行时能力清单未到）时的诚实等待态。
   //
   // 背景（0 装 + 走查修复 2026-09-23）：capabilities 仅在 /health 通时由 App
-  // 拉取（App.svelte refreshConnection）——网关离线则永为 null，原实现四 tab
+  // 拉取（App.svelte refreshConnection）——网关离线则永为 null，修复前四 tab
   // 各自无限转「正在读取运行时能力清单…」，无超时、无说明。
   // 本组件：12s 内转圈（正常启动节拍），超时后给出诚实说明——不是「不支持」
   // （GovUnsupported 语义），是「还没到」。健康轮询每 15s 自动重试，

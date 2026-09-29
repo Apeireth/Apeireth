@@ -1,7 +1,8 @@
 #!/usr/bin/env pwsh
 # secret-scan.ps1 — PowerShell 实现的 secret scanner (per R215 教训, 防御 in-depth)
 #
-# 借鉴自 gitleaks v8.30.1 的核心 pattern 表 (https://github.com/gitleaks/gitleaks)
+# 版权致谢 (法律保留, 勿删): 核心 pattern 表衍生自 gitleaks v8.30.1 (MIT
+# 许可, https://github.com/gitleaks/gitleaks)
 # 但本地 PowerShell 零依赖实现, 不需要下载 binary, 不需要 Go 运行时, 跨平台一致.
 #
 # **Why PowerShell + 不下 gitleaks binary**:
@@ -37,7 +38,7 @@ param(
 )
 
 # ============================================================================
-# 借鉴自 gitleaks v8.30.1 rules/ 目录的 pattern 子集
+# pattern 子集对应 gitleaks v8.30.1 rules/ 目录 (出处见文件头致谢)
 # (per https://github.com/gitleaks/gitleaks/tree/master/config/gitleaks.toml)
 # 简化版, 覆盖最高频的 20+ secret 类型
 # ============================================================================
@@ -74,7 +75,7 @@ $SecretPatterns = @(
 )
 
 # ============================================================================
-# 借鉴自 .gitignore 的 "允许" 文件 (placeholder / 测试数据, false positive)
+# 对齐 .gitignore 的 "允许" 文件 (placeholder / 测试数据, false positive)
 # ============================================================================
 $AllowlistPaths = @(
     'legacy/*',
@@ -98,7 +99,7 @@ $AllowlistPaths = @(
 )
 
 # ============================================================================
-# 借鉴自 gitleaks .toml allowlist 机制
+# 对齐 .gitleaks.toml allowlist 机制
 # 加载 .gitleaks.toml 里的 [allowlist] 段 (本脚本支持的最小子集: paths + regexes)
 # ============================================================================
 function Get-GitleaksAllowlist {
@@ -136,7 +137,7 @@ function Get-GitleaksAllowlist {
 }
 
 # ============================================================================
-# 借鉴自 gitleaks scan semantics
+# 对齐 gitleaks scan semantics
 # 1. 收集待扫文件 (按 Mode)
 # 2. 每文件每行检查 pattern
 # 3. Allowlist path + regex 双层过滤

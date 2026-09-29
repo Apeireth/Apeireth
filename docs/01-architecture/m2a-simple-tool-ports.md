@@ -1,60 +1,60 @@
-# M2A — Canonical Simple Tool Capability Ports
+# M2A — Canonical Simple Tool Capability Implementations
 
 > **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
 
 Status: complete
 Branch: `reconstruct_v2`
 Starting HEAD: `d9796345`
-Donor: `origin/master:reconstruction_v2/crates/apeireth-tools/src/builtin/`
+Source: `origin/master:reconstruction_v2/crates/apeireth-tools/src/builtin/`
 
-M2A took three low-risk tool implementations from the master donor and adapted
+M2A took three low-risk tool implementations from the master implementation and adapted
 them to the frozen canonical `ToolCapability` / `Plugin` / `CapabilityRegistry`
-architecture. It did **not** port the donor `Tool` trait, `ToolRegistry`, or
+architecture. It did **not** adopt the baseline `Tool` trait, `ToolRegistry`, or
 runtime tool wiring.
 
-## Tools ported
+## Tools adopted
 
-| Tool | Donor path | Strategy | Canonical implementation | Risk metadata | Status |
+| Tool | Source path | Strategy | Canonical implementation | Risk metadata | Status |
 | --- | --- | --- | --- | --- | --- |
-| Filesystem | `builtin/filesystem.rs` | ADAPT | `apeireth-tools-canonical::filesystem` | `medium` | Read/list/stat ported; write/delete deferred |
-| Search | `builtin/search.rs` | ADAPT | `apeireth-tools-canonical::search` | `low` | Local deterministic substring search ported |
-| Repo | `builtin/repo_tools.rs` | REIMPLEMENT | `apeireth-tools-canonical::repo` | `low` | Fixed read-only git operations ported |
+| Filesystem | `builtin/filesystem.rs` | ADAPT | `apeireth-tools-canonical::filesystem` | `medium` | Read/list/stat adopted; write/delete deferred |
+| Search | `builtin/search.rs` | ADAPT | `apeireth-tools-canonical::search` | `low` | Local deterministic substring search adopted |
+| Repo | `builtin/repo_tools.rs` | REIMPLEMENT | `apeireth-tools-canonical::repo` | `low` | Fixed read-only git operations adopted |
 
-## Donor provenance
+## Source provenance
 
 ### Filesystem
 
-- Donor path: `reconstruction_v2/crates/apeireth-tools/src/builtin/filesystem.rs`
+- Source path: `reconstruction_v2/crates/apeireth-tools/src/builtin/filesystem.rs`
 - Reused: operation model (`read`/`list`), configurable root concept, test
   structure.
 - Adapted: read-only subset (`read`, `list`, `stat`), canonicalized path
   containment instead of a string `..` check, explicit file-size limit,
   structured UTF-8 errors, deterministic directory ordering, JSON results.
-- Rejected: donor `write`/`delete` operations in M2A.
+- Rejected: baseline `write`/`delete` operations in M2A.
 - Deferred: write/delete/rename/copy until M2B sandbox enforcement exists.
 
 ### Search
 
-- Donor path: `reconstruction_v2/crates/apeireth-tools/src/builtin/search.rs`
+- Source path: `reconstruction_v2/crates/apeireth-tools/src/builtin/search.rs`
 - Reused: literal case-insensitive substring semantics, default/max result
   counts, 500KB per-file content limit, depth bound, hidden/target/node_modules
   skipping.
 - Adapted: root-confined search path with canonicalization, deterministic
   (path, line, text) ordering, explicit `truncated` flag, `.git` also skipped,
   binary files skipped without fatal error.
-- Rejected: none; donor search had no tests, so tests were newly written.
+- Rejected: none; baseline search had no tests, so tests were newly written.
 - Deferred: regex search, ignore-file support, and structured binary detection
   are not in M2A.
 
 ### Repo
 
-- Donor path: `reconstruction_v2/crates/apeireth-tools/src/builtin/repo_tools.rs`
+- Source path: `reconstruction_v2/crates/apeireth-tools/src/builtin/repo_tools.rs`
 - Reused: fixed read-only git command set (`status`, `diff`, `log`, `branch`,
   `summary`).
 - Adapted: explicit repository root (`git -C`), no arbitrary `args` field,
   fixed argument construction only, bounded output with explicit truncation,
   structured errors for non-git directory and git failures.
-- Rejected: donor `args: Option<Vec<String>>` arbitrary-argument path.
+- Rejected: baseline `args: Option<Vec<String>>` arbitrary-argument path.
 - Deferred: any mutation operation, arbitrary revision/path selection, timeout
   and process containment (M2B).
 
@@ -67,5 +67,5 @@ runtime tool wiring.
 - Repo runs fixed read-only `git` subprocesses. It is not a shell tool and
   accepts no arbitrary git arguments, but there is no process timeout or OS
   containment yet.
-- Shell, browser, fetch/network, and MCP tools are not ported.
+- Shell, browser, fetch/network, and MCP tools are not adopted.
 - No real sandbox is claimed.

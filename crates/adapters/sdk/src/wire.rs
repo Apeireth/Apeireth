@@ -10,7 +10,7 @@ use crate::version::SdkVersion;
 /// **L 组修复**: `Other(String)` 加 `#[serde(untagged)]` — 修复前外部标签序列化为
 /// `{"other":"x"}`, 破坏 lib.rs §E 明示的跨语言契约 "kind: **string** in snake_case"
 /// (遵循文档的 Python/Node/Go 客户发未知 kind 时 Rust 反序列化失败). untagged 后:
-/// 已知 kind → `"chat"` 等 snake_case 字符串; 未知 kind → 原样字符串 (per 1:1 wire 契约).
+/// 已知 kind → `"chat"` 等 snake_case 字符串; 未知 kind → 原样字符串 (per wire 契约).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WireKind {

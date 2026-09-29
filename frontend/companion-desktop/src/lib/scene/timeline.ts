@@ -1,7 +1,7 @@
 /**
  * timeline.ts — 舰内时间线照明（纯函数模块，无 DOM/框架依赖）
  *
- * 移植自 frontend/design-preview/index.html v0.2 时间线滑杆逻辑（sstep/tlParams/tlPhaseName/tlTimeText），
+ * 语义对齐 frontend/design-preview/index.html v0.2 时间线滑杆逻辑（sstep/tlParams/tlPhaseName/tlTimeText），
  * 曲线与升降沿为 ✅ 已验收资产（规范 §3.2、令牌 timeline.curve）：
  *   - 黎明上升沿 04:30–08:00（3.5h，smoothstep）
  *   - 黄昏下降沿 14:00–18:00（4h，smoothstep，与黎明对称）

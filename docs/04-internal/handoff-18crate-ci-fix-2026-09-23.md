@@ -249,7 +249,7 @@ _本文由本会话主代理撰写，事实均有命令支撑；不确定处已�
 
 **基线复核（本批亲跑）**：`cargo test --workspace` → **129 suites / 3406 passed / 0 failed / 19 ignored，exit 0**，与并行交接包 §3.1 记录逐字一致。
 
-**并行交接包 §2 矩阵**（详见 `engineering-review-handoff-2026-10-06.md` §2.7）：17 项中 14 ✅、2 ⚠️（C4 侧枚举漏 `APEIRETH_REASONING_ENABLED/MODEL_FILTERS/TAG`；D1 "0 命中"差 1 条 VCP 注释）、1 项子结论 ❌（B1 "真宏调用 7 处"实为 **0 处真调用**：8 处文本命中全是文档注释——workspace 比原表述更干净）。
+**并行交接包 §2 矩阵**（详见 `engineering-review-handoff-2026-10-06.md` §2.7）：17 项中 14 ✅、2 ⚠️（C4 侧枚举漏 `APEIRETH_REASONING_ENABLED/MODEL_FILTERS/TAG`；D1 "0 命中"差 1 条同类工具箱注释）、1 项子结论 ❌（B1 "真宏调用 7 处"实为 **0 处真调用**：8 处文本命中全是文档注释——workspace 比原表述更干净）。
 
 **§4 待办推进**：
 - §4.4 ✅ 本批完成：`deny.toml` 10 条 / `audit.toml` 20 条 / `cargo-audit.yml` 21 条过期 ignore 全部 unmatched（实证：不带 ignore 全量审计 0 unmaintained 命中 + deny 报 advisory-not-detected），按 0-ignore austere 模式清空，三处同步为空；"收敛单一来源"的重构仍留待后续。

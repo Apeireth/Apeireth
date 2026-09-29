@@ -23,7 +23,7 @@ Status:          🟢 活跃 (v2 18-crate)
 能力 (capability)  = 任何 runtime 可调用的统一抽象（tool / provider / memory / 等）
 ├─ Tool          = 模型可调用的副作用工具（filesystem/search/repo/shell/fetch）
 ├─ Provider      = LLM 供应商适配器（minimax/anthropic/openai-compatible）
-├─ Memory        = 持久化记忆后端（M1B 移植中）
+├─ Memory        = 持久化记忆后端（M1B 实现中）
 载体: Plugin        = 能力的载体（静态 in-process，提供 1+ capability）
    └─ PluginManager = 唯一事实源（两个 registry：PluginRegistry + CapabilityRegistry）
 治理: GovernanceHook = runtime 调能力前的决策闸（Allow/Deny/RequireApproval）
@@ -85,7 +85,7 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 | `apeireth-storage` | SQLite pool + WAL + `PRAGMA user_version` 迁移 | `SqlitePool::open` + `Migrations` |
 | `apeireth-memory` | 域原语 + BM25/向量 RRF 混合检索 + preference/approval/reflexion + Research* 模块（默认关闭） | `Episode` / `Session` / `TopicPredictor`（**仍未接线进 PreferenceRecallModule**）/ `ResearchRoamingMemory` / `research_check_non_interference` |
 | `apeireth-perception` | Voice/Vision 真后端：`WhisperHttpBackend`（OpenAI/MiniMax）、`XcapVisionBackend`（仅 Windows 硬件验证）；**默认不接线，opt-in 构造** | `WhisperHttpBackend::openai(creds)` / `XcapVisionBackend::default_monitor()` |
-| `apeireth-organ` | 9 organ 真移植（E4/F1/F4/F6/W1/W2/W3/E7/Memory） | `curiosity.rs` / `emotion_memory.rs` / `hypothesis.rs` / `value_cases.rs` / `world_model.rs` / `causal_world_model.rs` / `emergence.rs` / `memory.rs` |
+| `apeireth-organ` | 9 organ 真实现（E4/F1/F4/F6/W1/W2/W3/E7/Memory） | `curiosity.rs` / `emotion_memory.rs` / `hypothesis.rs` / `value_cases.rs` / `world_model.rs` / `causal_world_model.rs` / `emergence.rs` / `memory.rs` |
 | `apeireth-guard` | **行为链安全 Guard**（2026-10-06 协作者批）：两阶段行为链分类（`FastGuard` 快判 → `DecisionFusion` 融合）、命令效果分析、会话行为历史、数据集录制与 oracle 评估；经 `BehaviorChainGuardHook` 接生产治理管线（旋钮 `APEIRETH_GUARD_DATASET_ENABLED/PATH`、`APEIRETH_GUARD_ML_MODE/MODEL`）。**名字历史**：v1 legacy/donor 的 `apeireth-guard` 是 PII 隐私护栏（不同物），PII 脱敏在 v2 位于 `apeireth-governance::input_security` | `ChainGuard` / `BehaviorChainGuardHook` / `DecisionFusion` / `FastGuard` / `ActionOracleLabel` |
 
 ### 2.3 Capabilities（1 crate, 唯一 ProcessExecutor 边界）
@@ -288,4 +288,4 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 
 ---
 
-_本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17、2026-10-06 对账更新为 18（新增 `crates/engine/guard`）：取代 v1 `apeireth-companion` 维护手册（`crates/apeireth-companion` 模块地图 → 现 18-crate foundation|engine|capabilities|adapters 分组）；v2 维护的 = PluginManager 唯一注册点 + 8 哲学锚穿透 + 3 不漂移承诺。v2 下一步（governance 接线 / core drain / 记忆移植）见根 ROADMAP §4。_
+_本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17、2026-10-06 对账更新为 18（新增 `crates/engine/guard`）：取代 v1 `apeireth-companion` 维护手册（`crates/apeireth-companion` 模块地图 → 现 18-crate foundation|engine|capabilities|adapters 分组）；v2 维护的 = PluginManager 唯一注册点 + 8 哲学锚穿透 + 3 不漂移承诺。v2 下一步（governance 接线 / core drain / 记忆实现）见根 ROADMAP §4。_

@@ -1,4 +1,4 @@
-//! XState-subset statechart recovered from `legacy/donor/apeireth-state`.
+//! XState-subset statechart.
 //!
 //! Covered: atomic / compound / final nodes, event transitions, guards,
 //! actions, on_entry / on_exit. Hierarchical child execution is **not**
@@ -159,7 +159,7 @@ pub struct Machine {
 impl Machine {
     /// `states` keyed by node id; `initial` must exist.
     ///
-    /// M4 修复 (2026-09-24 审计): 原实现 doc 自述 "`initial` must exist
+    /// M4 修复 (2026-09-24 审计): 修复前 doc 自述 "`initial` must exist
     /// (not checked)" —— 给错初始 id 会让机器开局即进入挂起态 (current 永远
     /// unknown, `send` 永久 NoTransition)。现在构造期即 fail-loud; 需要优雅
     /// 处理的调用方用 [`Machine::try_new`]。
@@ -240,7 +240,7 @@ impl Machine {
             }
             let target = t.target.clone();
             let from = self.current.clone();
-            // M4 修复 (2026-09-24 审计): 原实现无条件把 current 设为 target
+            // M4 修复 (2026-09-24 审计): 修复前无条件把 current 设为 target
             // (可能是不存在的 id) → 机器进入既非 Final 又永不再响应事件的
             // 挂起态。未知 target 现在拒绝落状态, 报 NoTransition。
             if self.execute_transition(&target, t.action.clone()) {

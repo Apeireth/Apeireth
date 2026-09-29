@@ -23,8 +23,8 @@
 //!
 //! - 复用 `apeireth-protocol::ws_v1` 5 集成点 (WsFrame / ToolInvokeFrame / 3 个 WS 编译期常量)
 //! - 复用 workspace 共享 deps (reqwest 0.12 / tokio 1.40 / serde 1.0 / thiserror 1.0)
-//! - 1:1 翻译 `apeireth-api::auth` 5 组件 (Bearer / keyring / token bucket / audit / quota)
-//! - 1:1 翻译 `apeireth-api::auth` 5 组件 (Bearer / keyring / token bucket / audit / quota)
+//! - 语义对齐 `apeireth-api::auth` 5 组件 (Bearer / keyring / token bucket / audit / quota)
+//! - 语义对齐 `apeireth-api::auth` 5 组件 (Bearer / keyring / token bucket / audit / quota)
 //! - **W5 真传输 (2026-10-10)**: 6 工具 method + `invoke_tool` = 真 HTTP
 //!   (reqwest → `/v1/tools/{tool}/invoke`); WS 8 帧 (`invoke_stream`) 仍 stub
 //!   (`STUB_MODE` 守门, WS 服务端端点 = 后续项)
@@ -217,7 +217,7 @@ const _MODULE_COUNT: usize = {
 // - `body` 字段: **object** (任意 JSON, 4 语言用各自的 `Value`/`dict`/`map`/`interface{}`)
 //
 // **不漂移**: WireFormat schema 变更要走 RFC 流程, 不能单方面改 sdk.
-// R21 真接 apeireth-api 时, server 必跟 SDK 这套 schema 1:1 对齐.
+// R21 真接 apeireth-api 时, server 必跟 SDK 这套 schema 一致.
 //
 // **C-ABI 跨语言表面** (per abi.rs extern "C" 入口):
 // - `apeireth_sdk_init() -> i32` — 初始化 (返 0 = OK, -1 = 失败)
@@ -240,14 +240,14 @@ const _MODULE_COUNT: usize = {
 // # ========================== 跟 LOCKED crate 的边界 ==========================
 //
 // 24 LOCKED crate (5 P0 + 9 skeleton + 1 observability + 8 原有; R128 + R148 已降级, 入口签名仅保 3 项不可变脊柱):
-// - `apeireth-protocol` — **5 集成点直接复用** (1:1 翻译 ws_v1)
+// - `apeireth-protocol` — **5 集成点直接复用** (语义对齐 ws_v1)
 // - `apeireth-keyring` — 阶段 6 不依赖 (留 R21 真接 keyring 时再用)
 // - `apeireth-machine-id` — 阶段 6 不依赖 (留 R21 真接 machine-id 时再用)
 // - `apeireth-tools` — 阶段 6 不依赖 (SDK 是 client 表面, tools 是 server 表面, 接口接口契约 鉴权子路径)
 // - `apeireth-api` — 阶段 6 不直接 dep (R21 真接时 `path = "../apeireth-api"` 即可)
 //
 // **0 改 LOCKED crate** (per 8 项承诺 #3): 本文件不 import 上面任何 crate,
-// 仅在 client.rs 里 1:1 翻译 apeireth-protocol 的 5 集成点 (类型 / 常量).
+// 仅在 client.rs 里 语义对齐 apeireth-protocol 的 5 集成点 (类型 / 常量).
 //
 // # ========================== 错误码双向往返测试用例 ==========================
 //

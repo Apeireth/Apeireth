@@ -2,7 +2,7 @@
 //!
 //! This is the Phase 2 protocol-diversity proof: a provider whose wire shape
 //! (Anthropic Messages API) differs deliberately from the OpenAI Chat
-//! Completions shape Phase 1 migrated, yet which reaches the runtime through
+//! Completions shape Phase 1 implemented, yet which reaches the runtime through
 //! the **same** `ProviderCapability` / `ProviderRouter` / `CredentialResolver`
 //! plumbing. The runtime names no vendor and knows no Anthropic protocol
 //! detail; every difference is contained in this module.
@@ -19,7 +19,7 @@
 //! | `stop_reason` → `NormalizedFinishReason::from_anthropic` | `adapt_response` |
 //! | `usage.input_tokens`/`output_tokens` → `NormalizedUsage` | `adapt_response` |
 //!
-//! Ported faithfully from the repository's existing
+//! Semantically aligned with the repository's existing
 //! `apeireth_api::llm::providers::anthropic_compat::AnthropicCompatibleProvider`
 //! (an `LlmProvider`), but **not** wrapped around it: translation, the HTTP
 //! client, and credential resolution are owned here against the canonical

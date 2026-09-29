@@ -2,9 +2,9 @@
 
 The current workspace is the canonical product boundary. The entries below
 record functionality intentionally left behind when legacy dependencies were
-removed. A donor location is a source of reference, not a production dependency.
+removed. A historical location is a source of reference, not a production dependency.
 
-| Feature | Donor location | Missing canonical behavior | Target owner | Disposition |
+| Feature | Historical location | Missing canonical behavior | Target owner | Disposition |
 | --- | --- | --- | --- | --- |
 | Living-day orchestration and background heartbeat | `legacy/donor/apeireth-supervisor`, `legacy/donor/apeireth-workflow`, `legacy/donor/apeireth-bus` | No autonomous scheduler, workflow worker, or event bus in the canonical runtime | `apeireth-runtime` | REASSESS — canonical turns and session lifecycle are the current contract |
 | Provider facade and multi-vendor HTTP dispatcher | `legacy/donor/apeireth-acp`, `legacy/donor/apeireth-llm-iface`, `legacy/donor/apeireth-http-client` | No facade-level status API or shared dispatcher; canonical providers own wire translation | `apeireth-provider` | DROP — superseded by `ProviderCapability` plugins and normalized protocol |
@@ -17,5 +17,5 @@ removed. A donor location is a source of reference, not a production dependency.
 | Companion module | `legacy/donor/apeireth-companion` | No canonical companion feature module in the current workspace | 一个未来 canonical plugin/module（归入 `crates/` 四组之一，无 `crates/modules/` 层） | PORT — reintroduce only as a canonical plugin/module with no donor dependency |
 
 This backlog is deliberately explicit about gaps. It is not permission for
-current crates to import donor code, and it does not claim that donor behavior
+current crates to import legacy code, and it does not claim that legacy behavior
 is preserved by the canonical APIs.

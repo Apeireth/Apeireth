@@ -1,6 +1,6 @@
 //! Retention policy + sweep (salvage of context-ledger prune, layered-memo decay, governance protect).
 //!
-//! Combines three donor / v2 primitives that previously lived in isolation:
+//! Combines three baseline / v2 primitives that previously lived in isolation:
 //! - **Count cap** (Context ledger `max_records` per subject) — keep the newest N.
 //! - **Age TTL** — forget episodes older than `max_age_secs`.
 //! - **Decay threshold** — forget when Ebbinghaus strength drops below `min_strength`.
@@ -40,7 +40,7 @@ pub fn effective_half_life_hours() -> f64 {
 /// Ebbinghaus strength at `now_unix` relative to `last_unix` (both epoch seconds).
 ///
 /// `strength = 0.5 ^ (elapsed_hours / half_life_hours)`. Computed against the
-/// sweep clock so tests (and scheduled jobs) are deterministic — donor
+/// sweep clock so tests (and scheduled jobs) are deterministic — the baseline
 /// `DecayEngine::strength` always reads `SystemClock::now()`, which would make
 /// a sweep at a caller-supplied `now_unix` wall-clock-dependent.
 pub fn decay_strength(last_unix: i64, now_unix: i64, half_life_hours: f64) -> f32 {

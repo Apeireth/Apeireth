@@ -217,7 +217,7 @@ pub enum PhilosophyVerdict {
 
 /// 13 键 verdict cache (运行时 O(1) 查询缓存)
 ///
-/// 容量有界 (FIFO 淘汰, [`Self::MAX_ENTRIES`]) —— 原实现是无界 HashMap,
+/// 容量有界 (FIFO 淘汰, [`Self::MAX_ENTRIES`]) —— 修复前是无界 HashMap,
 /// 按请求/动作粒度刷新时随进程寿命单调增长 (审计 Medium M3)。
 #[derive(Debug, Default)]
 pub struct VerdictCache {

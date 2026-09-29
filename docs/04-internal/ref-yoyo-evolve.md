@@ -9,7 +9,7 @@
 
 **executor 可替换 + 状态独立于 executor**（GASP）：
 - `yoyo-evolve` = 代码（executor，可被 AI 自己重写，可丢弃）
-- `yoyo-gasp` = 自我（identity/skills/memory/state/events.jsonl，append-only 可审计，可移植）
+- `yoyo-gasp` = 自我（identity/skills/memory/state/events.jsonl，append-only 可审计，可迁移）
 - 「演化循环保持鲁莽，持久的自我保持可审计」——**这正是我们「自升级必须在沙盒/门内做」的工程答案**：把「AI 改自己代码」和「AI 的自我身份」分离
 
 ## 二、演化循环真身（✅ 真实现，最可吸收）
@@ -45,7 +45,7 @@ evolve.yml(3h cron) → evolve.sh → A1 评估 → A2 规划(task_*.md)
 
 1. **验证闸门流水线 + 回滚骨架**（能力演化回路后半段的蓝图）：
    任务≤3 文件/30 分钟、safety commit、innocence check、no-progress 停循环、预算门 fail-open 保留绿态、unverified receipt
-2. **双层 eval + 命名 checklist 覆盖合同**：机械闸 + LLM 判官 4 维 checklist，FAIL 覆盖 PASS，降级不 fail-closed——**宪法评审可借鉴**（我们当前评审失败=保守拒绝，这里提供「降级但留痕」的另一面）
+2. **双层 eval + 命名 checklist 覆盖合同**：机械闸 + LLM 判官 4 维 checklist，FAIL 覆盖 PASS，降级不 fail-closed——**宪法评审可对齐**（我们当前评审失败=保守拒绝，这里提供「降级但留痕」的另一面）
 3. **revert 即学习信号**：revert receipt → 下一轮 planner 输入（我们能力回滚也应回写学习）
 4. **audit.jsonl 单写者 schema**：{ts, tool, args, duration_ms, success}——我们 RecordStore 可对齐
 5. **GASP 事件词汇**：Goal/Run/Task/Patch/Eval/Decision 六类事件——我们 SessionLog 可扩展因果链（yoyo-gasp 的 events.jsonl 带 causation_id）
@@ -69,7 +69,7 @@ yoyo 是「AI 改自己代码」的**实证先锋**（126 天真实演化），�
 - 自演化走 piped 模式：`auto_approve = config.auto_approve || !is_interactive`（main.rs:754-755）——**非交互即全自动批准，无沙盒无逐条批准**，靠事后闸门 + git 回滚兜底（设计选择，但「安全」边界要清楚）
 - 交互侧才有 26+ 条 bash 危险启发式 + 权限 glob + 目录限制
 
-### 双层 eval（宪法评审可借鉴）
+### 双层 eval（宪法评审可对齐）
 - 机械层（build/test/clippy + innocence check + fix loop）+ LLM 判官层（只判 diff，**命名 checklist 覆盖合同**：intent_alignment/forgotten_touchpoints/doc_sync/product_surface，任一 FAIL 覆盖 PASS）
 - 判官基础设施故障 → **fail-open**（跳过 eval 保留绿态 + 记录），不因判官迟到回滚好代码
 

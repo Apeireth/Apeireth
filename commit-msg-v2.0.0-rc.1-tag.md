@@ -22,12 +22,12 @@ P-arch (2026-08-28) v2.0.0-rc.1 release 路径 (per FINAL-HANDOFF §5.3 + 9-orga
 - 与 v1 哲学 + 0 装诚实 + 0 装诱导预防 (14 sub-agent 报告全采纳) 对齐
 
 ### 架构最优
-- v1 → v2 1:1 翻译纪律 (R1/R2/R3 + E4 严守):
-  - 4 organ 1:1 翻译 v1 真 API, 0 发明新 API
-  - 5 organ 借鉴 v1 算法骨架 1:1 翻译 (R4 oracle 子集, R5 MCTS 因果图, R6 MineCausalEdges, R7 rhythm+8 重门控, R8 MemoryExtractionService.apply)
+- v1 → v2 语义对齐纪律 (R1/R2/R3 + E4 严守):
+  - 4 organ 语义对齐 v1 真 API, 0 发明新 API
+  - 5 organ 对齐 v1 算法骨架语义 (R4 oracle 子集, R5 MCTS 因果图, R6 MineCausalEdges, R7 rhythm+8 重门控, R8 MemoryExtractionService.apply)
   - R3 修 v1 `out.sort()` on `Vec<String>` key 不稳定 bug
-  - R7 独立判断 "任务 brief 5 状态机错位, v1 emergence 0 状态机, 严守 1:1 翻译 v1 rhythm+boundary loop"
-  - R8 独立判断 "v1 没有 MemoryMerger 模块, v2 是新设计借鉴 v1 算法骨架 1:1 翻译"
+  - R7 独立判断 "任务 brief 5 状态机错位, v1 emergence 0 状态机, 严守语义对齐 v1 rhythm+boundary loop"
+  - R8 独立判断 "v1 没有 MemoryMerger 模块, v2 是新设计对齐 v1 算法骨架语义"
 - 0 装诱导预防: 8 organ NoopOrgan 占位 (Q1 pattern) + forward-declared
 
 ## 0 装诚实真账 (子代理 Z 独立审计触发主代理亲做修正)
@@ -64,7 +64,7 @@ P-arch (2026-08-28) v2.0.0-rc.1 release 路径 (per FINAL-HANDOFF §5.3 + 9-orga
 
 | 阻塞 | 状态 |
 |---|---|
-| 1. 至少 1 organ 真移植 (9 organ) | ✅ **9/9 全 done** (整合 #2 commit `bbf70293`) |
+| 1. 至少 1 organ 真实现 (9 organ) | ✅ **9/9 全 done** (整合 #2 commit `bbf70293`) |
 | 2. frontend companion-desktop 对接 | ⏳ 暂缓 (4-6 周, 估 2027-Q1 启动) |
 | 3. RC-7 Perception backend trait 架构 | ✅ R 真做 (`6e918c12`) |
 | 4. RC-11 migration script + APX2 envelope | ✅ (子代理 I + 别人 commit) |
@@ -73,7 +73,7 @@ P-arch (2026-08-28) v2.0.0-rc.1 release 路径 (per FINAL-HANDOFF §5.3 + 9-orga
 
 ## 接手人 5 actionable 状态 (per 子代理 D handoff) — **5/5 done**
 
-- ✅ #1 RC-5/6/7 + 9 organ 真移植全 done (本 release tag 拍板完成)
+- ✅ #1 RC-5/6/7 + 9 organ 真实现全 done (本 release tag 拍板完成)
 - ✅ #2 哲学锚 ledger 待核 (子代理 K, 0 装诱导修)
 - ✅ #3 12 consumer 弃用迁移 (0 装诚实 0 hit, 子代理 H)
 - ✅ #4 RC-10 line header AAD + APX2 envelope

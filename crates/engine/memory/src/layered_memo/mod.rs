@@ -1,6 +1,6 @@
 //! `apeireth-memory-layered_memo` - R142 layered_memo memory system.
 //!
-//! Rust port of AgentMemory v2.1.0 (4-layer closed-loop memory):
+//! Rust-native implementation of AgentMemory v2.1.0 (4-layer closed-loop memory):
 //! - L1: file persistence (rusqlite + blob storage)
 //! - L2: vector store (in-memory cosine similarity)
 //! - L3: tag store (inverted index)
@@ -13,7 +13,7 @@
 //! - MultiPipeSearch (BM25 + vector + tag fusion)
 //!
 //! Per `reports/vcp-plugin-gap-analysis-2026-08-12.md` §9.4 Decision 5,
-//! borrows AgentMemory v2.1.0 design (own prior open-source work, MIT licensed).
+//! aligns with AgentMemory v2.1.0 design (own prior open-source work, MIT licensed).
 //! Rust-native re-implementation; not FFI Python.
 //!
 //! **Honest scope** (per O-5 不假装):
@@ -22,7 +22,7 @@
 //! - Decay engine is real (configurable half-life)
 //! - Dream subsystem is hook-only (user provides consolidation callback)
 //! - Multi-pipe search fuses 3 sources (BM25-lite + cosine + tag)
-//! - 28-module port is 真实覆盖 ~12 核心 modules + stubs for余下 (per v2 plan §9.5)
+//! - 28-module coverage: 真实覆盖 ~12 核心 modules + stubs for余下 (per v2 plan §9.5)
 
 #![warn(missing_docs)]
 

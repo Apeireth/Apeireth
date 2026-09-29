@@ -1,6 +1,6 @@
 name: Cargo deny
 
-# R19 第 0 阶段第 2 项: 抄 wasmtime main.yml [cargo_deny] job
+# R19 第 0 阶段第 2 项: 对齐 wasmtime main.yml [cargo_deny] job
 # https://github.com/bytecodealliance/wasmtime/blob/main/.github/workflows/main.yml
 # 跑全部 4 类 check: bans / licenses / sources / advisories
 #

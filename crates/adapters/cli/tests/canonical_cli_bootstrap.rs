@@ -1,4 +1,4 @@
-//! Deterministic proof that the rewired CLI bootstrap reaches the migrated
+//! Deterministic proof that the rewired CLI bootstrap reaches the
 //! canonical provider.
 //!
 //! `build_canonical_runtime_from_env` is the real production bootstrap used by

@@ -37,7 +37,7 @@ pub mod clock;
 // `pub use lifecycle::*` etc. below would shadow primitives with same-named
 // historical types (`Session`, `Lifecycle`). Canonical code addresses these as
 // `apeireth_core::kernel::...`, which keeps the two vocabularies distinguishable
-// while the legacy content is migrated out. See `ARCHITECTURE.md`.
+// while the legacy content is moved out. See `ARCHITECTURE.md`.
 pub mod kernel;
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
@@ -52,11 +52,11 @@ pub use crate::kernel::memory::{Episode, IdentityCard, Migration, Note, Session}
 pub mod gate;
 pub mod lifecycle;
 pub mod onion;
-/// 双洋葱统一体判定层 (W3 三洋葱 L3-L5 判定模型移植, 2026-10-10)。
+/// 双洋葱统一体判定层 (W3 三洋葱 L3-L5 判定模型实现, 2026-10-10)。
 pub mod onion_gate;
 pub mod philosophy;
 /// XState-subset statechart (atomic / compound / final + guard / action).
-/// Recovered from `legacy/donor/apeireth-state`; not a second runtime loop.
+/// Not a second runtime loop.
 pub mod statechart;
 // 存储基础件 (统一存储质感): 两档原子写 + 文件锁; 文档版本拒开两级容错 + 显式迁移。
 /// 统一原子文件写入 (两档: 完整性档/持久档) + 文件锁 (PID 存活探测 + 死锁接管)。
@@ -993,7 +993,7 @@ pub const fn contains_zero_width(s: &str) -> bool {
 /// - U+FF21-U+FF3A (full-width uppercase): EF BC A1-BA
 /// - U+FF41-U+FF5A (full-width lowercase): EF BD 81-9A
 ///
-/// M5 修复 (2026-09-24 审计): 原实现把整个 U+FF00-FFEF 当攻击信号, 其中包含
+/// M5 修复 (2026-09-24 审计): 修复前把整个 U+FF00-FFEF 当攻击信号, 其中包含
 /// **标准中文全角标点** (，U+FF0C / ！U+FF01 / ？U+FF1F / ：U+FF1A / 、U+3001
 /// 等) —— 含中文标点的合法反思查询被误判 forbidden (needs_ha_alert 误报)。
 /// 收缩为"全角 ASCII 字母数字"区间 (关键词变体逃逸的真实面), CJK 标点放行。
@@ -1416,7 +1416,7 @@ impl std::error::Error for SelfDisableError {}
 /// token "master" 是主人下令和冒名顶替之间的分水岭。
 /// SHA-256-like 简化哈希 (无外部依赖) 用于编译期可验证。
 pub const fn verify_sovereign_token(token: &str) -> bool {
-    // L (2026-09-24 审计): 恒定时间比较 —— 原实现逐字节早退 (遇到第一个
+    // L (2026-09-24 审计): 恒定时间比较 —— 修复前逐字节早退 (遇到第一个
     // 不等字节即 return false), 响应时间泄漏匹配前缀长度。语义不变:
     // 必须整体等于 "master"。
     let bytes = token.as_bytes();
@@ -1658,7 +1658,7 @@ impl SelfDisableAudit {
 
     /// 注册 Evolution trait — 通过编译期 hardcode 检查是否触及禁止目标
     ///
-    /// M18 (2026-09-24 审计): 被禁 trait 不再落库 —— 原实现把声称要拒绝的
+    /// M18 (2026-09-24 审计): 被禁 trait 不再落库 —— 修复前把声称要拒绝的
     /// forbidden trait 也 push 进注册表 ("登记了它声称要拒绝的东西")。
     pub fn register_evolution_trait(&mut self, trait_name: String) -> bool {
         let allowed = evolution_can_modify(&trait_name);
@@ -2431,8 +2431,8 @@ mod release_manifest_tests {
     }
 
     #[test]
-    fn test_borrowed_source_file_count_is_19() {
-        // R17 参考实现来源 19 个文件 (字段级引用, 不靠猜)
+    fn test_referenced_source_file_count_is_19() {
+        // R17 字段级引用 19 个外部文件 (不靠猜)
         // 详见 `docs/archive/stage3-blueprints/borrowed-from-projects.md` §6.2
         assert_eq!(
             BORROWED_LEGACY_FILE_COUNT, 19,

@@ -105,7 +105,7 @@ crates/engine/preference_learning/tests/topic_predictor.rs
 
 | 目录 / 文件 | 状态 | R14 spec 标 | 真账 | 建议 |
 |---|---|---|---|---|
-| `legacy/` (1857 tracked files) | ❌ **未 ignore** | "Round 1 已 ignore" | **1857 文件仍 tracked** (`git ls-files legacy/ \| wc -l = 1857`) | ⚠️ **特殊 — donor 历史, 应 NOT ignore** (v1 参考), **R14 spec 标错需修正** |
+| `legacy/` (1857 tracked files) | ❌ **未 ignore** | "Round 1 已 ignore" | **1857 文件仍 tracked** (`git ls-files legacy/ \| wc -l = 1857`) | ⚠️ **特殊 — v1 历史, 应 NOT ignore** (v1 参考), **R14 spec 标错需修正** |
 | `reconstruction_v2/` | ❌ **未 ignore** | (未提及) | 0 tracked (空或仅子目录) | 🟡 **真漏** — 加 `reconstruction_v2/` (orphan dir) |
 | `_scripts/` | ⚠️ 部分 ignore | (未提及) | 0 tracked, `*.py` 命中 `_scripts/_*.py` 但其他扩展不命中 | 🟡 **半漏** — 加 `_scripts/` 整目录 OR 加 `_scripts/*` |
 | `.gitignore-research` (root) | ❌ **tracked, 未 ignore** | (未提及) | tracked (子代理 git ls-files 确认) | 🟡 **真漏** — 历史 research 文件, 应 ignore (`.gitignore-research`) OR git rm |
@@ -131,7 +131,7 @@ crates/engine/preference_learning/tests/topic_predictor.rs
 
 | 目录 | 状态 | 估 |
 |---|---|---|
-| `legacy/` (1857 files) | tracked, **应 NOT ignore** (v1 donor 参考) | 子代理独立判断 — R14 spec 标 "Round 1 已 ignore" **错**, 但 ignore 也错 (破坏 v1 参考链). **保留 tracked + 加 doc 标**. |
+| `legacy/` (1857 files) | tracked, **应 NOT ignore** (v1 参考) | 子代理独立判断 — R14 spec 标 "Round 1 已 ignore" **错**, 但 ignore 也错 (破坏 v1 参考链). **保留 tracked + 加 doc 标**. |
 | `research/` (top-level) | 子代理未实测 tracked 数, 但 `.gitignore` 有 `research/source/` (子目录 ignore) | 估 `research/` 其他子目录是合法 tracked research data. |
 | `examples/` | tracked 2 files, 应保留 (cargo examples) | ✅ |
 | `library/` | tracked 48 files, 应保留 (workspace 内 library code) | ✅ |
@@ -176,7 +176,7 @@ _scripts/
 
 ### 4.3 `legacy/` 不加 ignore (子代理独立判断)
 
-**理由**: `legacy/donor/apeireth-voice/src/real.rs` 是 v1 STT 真接代码, RC-7 真实施时**直接 1:1 翻译参考** (per R14 spec §3.3 + 本文 §1.1). 同样 `legacy/donor/apeireth-companion/src/screen_perception.rs` 是 v1 屏幕"感知"参考 (虽不截屏, 但 foreground window 轮询可借鉴).
+**理由**: `legacy/donor/apeireth-voice/src/real.rs` 是 v1 STT 真接代码, RC-7 真实施时**直接语义对齐参考** (per R14 spec §3.3 + 本文 §1.1). 同样 `legacy/donor/apeireth-companion/src/screen_perception.rs` 是 v1 屏幕"感知"参考 (虽不截屏, 但 foreground window 轮询可参考).
 
 **R14 spec §1.3 标错** ("Round 1 已 ignore legacy/"), 需在本文标 "0 装诱导 prevention: 真 = 1857 tracked, ignore 是错".
 
@@ -188,10 +188,10 @@ R15 audit 阶段 0 改 `.gitignore`, 0 git rm, 0 git add. **仅 flag + 建议**,
 
 ## §5. 0 装诚实真账 (R15 独立判断)
 
-1. **R14 spec §1.3 "Round 1 已 ignore legacy/" 标错**: 真 = 1857 legacy 文件 tracked. legacy 是 donor 参考, **应 NOT ignore** (破坏 v1 参考链), 但 spec 表述需修正.
+1. **R14 spec §1.3 "Round 1 已 ignore legacy/" 标错**: 真 = 1857 legacy 文件 tracked. legacy 是 v1 参考, **应 NOT ignore** (破坏 v1 参考链), 但 spec 表述需修正.
 2. **本 audit 发现 3 真漏**: `reconstruction_v2/` (orphan) + `_scripts/` (半漏) + `.gitignore-research` (root 0 装研究文件). 估 +3 行 `.gitignore` 修.
 3. **`.py` 过宽**: R126 Mavis 加的 `*.py` 太宽, 估误伤 Python 测试/examples. 子代理未实测误伤范围, R15+ 主代理拍板.
-4. **`legacy/` donor 参考链**: 是 v1 真接代码 1:1 移植来源 (RC-5 / RC-7 / RC-1 均依赖), 子代理独立判断应**保留 tracked**.
+4. **`legacy/` v1 参考链**: 是 v1 真接代码语义对齐来源 (RC-5 / RC-7 / RC-1 均依赖), 子代理独立判断应**保留 tracked**.
 5. **0 触碰 git**: 本 audit 0 `git add`, 0 `git commit`, 0 `git push`, 0 `git rm --cached`. 仅写 doc + flag.
 
 ---
@@ -205,7 +205,7 @@ R15 audit 阶段 0 改 `.gitignore`, 0 git rm, 0 git add. **仅 flag + 建议**,
 | 真生效 ✅ | 34 |
 | 真漏 ❌ | 3 (`reconstruction_v2/`, `_scripts/`, `.gitignore-research`) |
 | 过宽 ⚠️ | 1 (`.py`) |
-| 历史特殊 (应 NOT ignore) | 1 (`legacy/` — donor 链) |
+| 历史特殊 (应 NOT ignore) | 1 (`legacy/` — v1 链) |
 | Untracked 但应 add | 8 (R14+ preference_learning crate) |
 | **本 audit 0 触碰 git** | ✅ |
 

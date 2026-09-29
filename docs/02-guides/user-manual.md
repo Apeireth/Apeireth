@@ -35,13 +35,13 @@ v2 真实在 13-crate 工作区里运行的：
 - **Continuous session**通过 `SessionId` 跨 CLI/gateway 同一会话；前端切换不影响 trace 重建
 - **数据落本地**：默认 SQLite WAL + `PRAGMA user_version` 版本化迁移（`crates/engine/storage`）
 
-记忆 v2 的"对话打分 / 对账 / 排名注入"等流水线**功能等价物**将在 P3 阶段从 `legacy/donor/apeireth-companion` 移植回 `crates/engine/memory`，详见 ROADMAP §4 P3/P6。当前 v2 状态下记忆引擎已能接上 plugin / session / SQLite，**但"打字 → 评分 → 写库 → 检索注入"的端到端管线不在 13-crate 工作区里**——这是一个明确的可观察缺口，不是文档不诚实。
+记忆 v2 的"对话打分 / 对账 / 排名注入"等流水线**功能等价物**将在 P3 阶段在 `crates/engine/memory` 重实现，详见 ROADMAP §4 P3/P6。当前 v2 状态下记忆引擎已能接上 plugin / session / SQLite，**但"打字 → 评分 → 写库 → 检索注入"的端到端管线不在 13-crate 工作区里**——这是一个明确的可观察缺口，不是文档不诚实。
 
 ## 3. 主动能力（v2 状态）
 
 - **agent loop 单一入口**（`crates/engine/runtime/src/canonical/execute.rs`）：一次 turn = governance（completion）→ provider → 工具调用则 capability lookup + 插件分发 → 工具结果回灌 transcript → 继续；approval 是 outcome 不是 error；tool 失败不终止回合。
 - **模型选择**：`apeireth chat --model MiniMax-M3` 或 gateway request body 显式；fallback 顺序：minimax → anthropic → openai-compatible（已启用时），按环境变量配置
-- **当前不会主动找你**——v1 的"涌现循环 / 开口策略 / 安静窗 / 主动送达"机制**整体留在 legacy/**，未移植；ROADMAP §4 P6-P7 排期
+- **当前不会主动找你**——v1 的"涌现循环 / 开口策略 / 安静窗 / 主动送达"机制**整体留在 legacy/**，v2 尚未实现；ROADMAP §4 P6-P7 排期
 
 ## 4. 工具（v2 形态）
 
@@ -70,7 +70,7 @@ v2 砍掉了"全套器官"复杂度，保留了**可执行机制**和**可插拔
 - **可执行**：`crates/engine/runtime::canonical::execute` 的 single-shot agent loop（governance + provider + tool dispatch + trace）
 - **可插拔**：`ProviderCapability` trait（`crates/foundation/plugin`）+ 3 家 canonical provider（minimax/anthropic/openai-compatible）
 
-v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / 自我诊断"等**实现全部在 `legacy/donor/apeireth-companion`**，未移植；详见 ROADMAP §4 P6。
+v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / 自我诊断"等**实现全部在 `legacy/donor/apeireth-companion`**，v2 尚未实现；详见 ROADMAP §4 P6。
 
 ## 6. 治理与安全（v2 现状 + 0 装 PASS 标注）
 
@@ -112,10 +112,10 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | **敏感 workspace 路径保护**（`.env` / `.ssh` / `.aws` / `.gnupg` / `.secret` 等）| ✅ 已做（upstream `ac5cbf5a`）：`tool.filesystem` + `tool.search` 通过 `crates/capabilities/tools/src/sensitive_path.rs` 屏蔽（普通项目元数据如 `.gitignore` / `.cargo/config.toml` 仍可读）|
 | **13 键 verdict cache 接线** | ✅ 降级完成（2026-08-27）：`crates/foundation/core/src/philosophy.rs::RUNTIME_ENFORCED = false` 显式标注"非 runtime 强制"；`VERDICT_KEYS_BY_PRINCIPLE` 映射到 5 原则洋葱（E 存在 / S 价值 / A 经验 / M 方法论）。13 键 v2 角色 = 哲学标准 / 判别词汇表（hook deny reason 引用 + CapabilityDescriptor risk 分级）。**v2 取代 13 键强制机制 = external hook 闸**（已装 3 个）。 |
 | **`apeireth-credentials` 接线** | ⚠️ P2：env resolver 在 provider，生产足够；keyring 等后端未挂 |
-| **M1B 记忆全量移植（ACT-R / 完整管线）** | ⏳ P3：当前 memory crate 有 primitive；端到端管线待 P3 |
+| **M1B 记忆全量实现（ACT-R / 完整管线）** | ⏳ P3：当前 memory crate 有 primitive；端到端管线待 P3 |
 | **MCP 动态能力注册** | ⏳ P4 |
 | **ProcessSupervisor + 进程树** | ⏳ P5 |
-| **companion 器官移植（W1/W2/W3 / E4 / F4 / F1 / F6 / E7）** | ⏳ P6 |
+| **companion 器官实现（W1/W2/W3 / E4 / F4 / F1 / F6 / E7）** | ⏳ P6 |
 | **连续感知（voice/screen）** | ⏳ P7 |
 | **前端产品化对接（companion-desktop ↔ gateway）** | ⏳ P8 |
 | Docker 多架构构建 | ✅ 已修（commit 4596357, $TARGETARCH, linux/amd64 + linux/arm64）|

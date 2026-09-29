@@ -95,7 +95,7 @@ pub enum WsFrame {
 }
 
 impl WsFrame {
-    /// 帧类型字符串 (跟 `serde(rename = ...)` 1:1 对齐).
+    /// 帧类型字符串 (与 `serde(rename = ...)` 一致).
     ///
     /// 用于 router 分发 + 审计日志, 避免 match 8 帧调用方都需要手写字符串.
     #[must_use]
@@ -286,7 +286,7 @@ pub struct ErrorFrame {
 
 /// 单个字符串字段的最大 UTF-8 字节数 (token / chunk / reason / message 等)。
 ///
-/// M8 修复 (2026-09-24 审计): 原实现所有帧字段零长度/字符集校验 —— 单帧即可
+/// M8 修复 (2026-09-24 审计): 修复前所有帧字段零长度/字符集校验 —— 单帧即可
 /// 携带 GB 级 token/chunk/args (JSON 嵌套深度有 serde_json 128 层默认上限
 /// 兜底, 线性大小无上限) → 单连接内存 DoS。上限在此声明, 由 transport 层
 /// 在解码后调用 [`WsFrame::validate`] 强制执行。

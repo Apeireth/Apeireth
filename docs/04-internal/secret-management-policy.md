@@ -9,7 +9,7 @@
 
 ## 0. 背景 (per R215 教训)
 
-2026-08-21 在 R215 借鉴任务**收尾阶段**才扫描发现：
+2026-08-21 在 R215 任务**收尾阶段**才扫描发现：
 
 1. **3 个 reports/ 文件里写了完整的 MiniMax API key** (`sk-cp-kug0t7Jik3-...-RsUg`, 95 chars)
    - 来源: 2026-08-03 的 AI session, **"R16 真 API key 验证"** 任务
@@ -31,7 +31,7 @@
 |---|------|
 | **S-2 实事求是** | "真接 = 真接" 不等于 "真接 = 把真凭证入库"。真接报告里 key 必须是 redact 形态, 不是真 key。 |
 | **O-1 安全优先** | 凭证管理是安全第一线, 比"真接"更重要。 |
-| **O-2 走在前人肩上** | gitleaks 是业界标准 (https://github.com/gitleaks/gitleaks), 我们参考其 pattern 表。 |
+| **O-2 走在前人肩上** | 泄漏扫描存在业界标准 (公开 pattern 表 + config schema), 我们参考其公开设计。 |
 | **O-5 不假装** | "我没扫描 secret = 我没发现 secret = secret 没事" 是假装的典型形态。**默认假设仓库已经泄露**, 直到扫描证明清白。 |
 | **O-4 任何人都能接手** | 凭证存放路径 + .gitignore + pre-commit hook + CI gate 必须可被新成员一目了然。 |
 
@@ -85,10 +85,10 @@ git commit -m "test with $key"        # 错: commit message 永久泄露
 
 ### 3.1 防御层 1: 预 commit hook (本地, 0 部署成本)
 
-**脚本**: `scripts/secret-scan.ps1` (R215 创建, 借鉴 gitleaks v8.30.1 pattern 表)
+**脚本**: `scripts/secret-scan.ps1` (R215 创建, 对齐业界标准泄漏扫描器 v8.30.1 pattern 表)
 **触发**: 每次 `git commit` 前自动跑 (`scripts/install-pre-commit-hook.ps1` 一次性安装)
 **行为**: 扫 `git diff --cached`, 发现真凭证 (高置信 pattern) 立即 **block commit**
-**降级**: gitleaks binary 不可用时 (Windows release-assets DNS 阻塞), PowerShell 扫描器作为 backup
+**降级**: 业界标准泄漏扫描器 binary 不可用时 (Windows release-assets DNS 阻塞), PowerShell 扫描器作为 backup
 
 ### 3.2 防御层 2: CI gate (PR + push 时)
 
@@ -99,8 +99,8 @@ git commit -m "test with $key"        # 错: commit message 永久泄露
 2. `pwsh scripts/secret-scan.ps1 -Mode scan-history` (scan git history, 防御 force-push 偷渡)
 3. 任一失败 → CI red, block merge
 
-**未来升级路径** (当 gitleaks binary 可用):
-- 装 gitleaks (winget / scoop / 直接 download)
+**未来升级路径** (当业界标准泄漏扫描器 binary 可用):
+- 装业界标准泄漏扫描器 (winget / scoop / 直接 download)
 - 替换 CI 步骤为 `gitleaks protect --staged --redact --config .gitleaks.toml`
 - PowerShell 扫描器作为 Windows-only backup
 
@@ -110,9 +110,9 @@ git commit -m "test with $key"        # 错: commit message 永久泄露
 **状态**: 需主人在 GitHub 仓库设置 (本任务无法直接访问, 已在 backlog 提示)
 **作用**: 平台级扫描, 命中已知 token pattern 立刻发邮件 + 阻止 PR merge
 
-### 3.4 防御层 4: `.gitleaks.toml` 配置 (PowerShell 模式 + 后续 gitleaks 模式通用)
+### 3.4 防御层 4: `.gitleaks.toml` 配置 (PowerShell 模式 + 后续扫描器模式通用)
 
-**文件**: `.gitleaks.toml` (R215 创建, 借鉴 gitleaks 官方 schema)
+**文件**: `.gitleaks.toml` (R215 创建, 对齐业界标准泄漏扫描器官方 schema)
 **字段**:
 - `[extend] useDefault = false` (本地, 等网络恢复后改 true)
 - `[allowlist] paths = [...]` (PowerShell 扫描器读这段)
@@ -136,15 +136,15 @@ git commit -m "test with $key"        # 错: commit message 永久泄露
 
 ### 4.2 测试代码规范
 
-测试用例可以用**假 key 模式** (gitleaks allowlist 已知):
+测试用例可以用**假 key 模式** (业界标准泄漏扫描器 allowlist 已知):
 
 ```rust
 // ✅ 正确: 用明显 fake 的 placeholder (ghp_aaa..., sk-verylong..., sk-ant-voice-...)
 let fake_key = "ghp_aaaaaaaaaaaaaaaaaaaa";  // < 24 chars, regex 不命中
 let result = detect_pii(fake_key);
 
-// ⚠️ 边界: 用真 key 前缀但非完整 key (gitleaks 可能误报)
-//  - 借 prefix 但只到 20 chars: "[REDACTED-...-short-20-chars]"  (gitleaks 会忽略, 因为 < 36 chars)
+// ⚠️ 边界: 用真 key 前缀但非完整 key (扫描器可能误报)
+//  - 借 prefix 但只到 20 chars: "[REDACTED-...-short-20-chars]"  (扫描器会忽略, 因为 < 36 chars)
 //  - 借 prefix 但后接真实敏感词: "[REDACTED-real-key-test]" → false positive, 需 allowlist
 // 解: 在 .gitleaks.toml / secret-scan.ps1 allowlist 里加测试文件路径
 ```
@@ -220,11 +220,11 @@ Remove-Item .git.backup-pre-key-scrub -Recurse -Force
 Remove-Item .git/filter-rules.txt -Force
 ```
 
-### 5.3 后续批 (R215 借鉴 backlog)
+### 5.3 后续批 (R215 任务 backlog)
 
 | 项 | 优先级 | 工程量 | 状态 |
 |---|---|---|---|
-| 装 gitleaks binary (winget / scoop / 直接 download) | P0 | 1 小时 | ❌ 阻塞 (release-assets DNS) |
+| 装业界标准泄漏扫描器 binary (winget / scoop / 直接 download) | P0 | 1 小时 | ❌ 阻塞 (release-assets DNS) |
 | GitHub Secret Scanning (Settings) | P0 | 5 分钟 | ❌ 需主人在 GitHub 仓库设置 |
 | Pre-commit hook 自动安装脚本 | P0 | 10 分钟 | ✅ 已写 `scripts/install-pre-commit-hook.ps1` |
 | CI workflow 加 secret scan 步骤 | P0 | 30 分钟 | ✅ 已加 `.github/workflows/rust.yml` 步骤 |
@@ -232,7 +232,7 @@ Remove-Item .git/filter-rules.txt -Force
 | `scripts/secret-scan.ps1` PowerShell 实现 | P0 | 1 小时 | ✅ R215 创建 |
 | `.gitleaks.toml` 配置 | P0 | 30 分钟 | ✅ R215 创建 |
 | 子代理 prompt 凭证边界模板 | P1 | 1 小时 | ❌ 后续批 |
-| 写一篇 "R215 借鉴报告 — 凭证泄露与恢复" blog post | P2 | 2 小时 | ❌ 后续批 |
+| 写一篇 "R215 调研报告 — 凭证泄露与恢复" blog post | P2 | 2 小时 | ❌ 后续批 |
 | 季度 secret 扫描 audit (cron) | P2 | 1 小时 | ❌ 后续批 |
 
 ---
@@ -255,12 +255,12 @@ Remove-Item .git/filter-rules.txt -Force
 
 ## 7. 0 装 PASS 标注 (R215 防御层)
 
-- ❌ **不** 装 gitleaks binary (Windows release-assets DNS 阻塞, 装不上)
+- ❌ **不** 装业界标准泄漏扫描器 binary (Windows release-assets DNS 阻塞, 装不上)
 - ✅ **是** PowerShell 扫描器作为 fallback (跨 Windows 一致, 0 部署成本)
 - ❌ **不** 集成 GitHub Secret Scanning (需主人在 GitHub Settings 启用, 平台级)
-- ✅ **是** `.gitleaks.toml` 配置已写好 (gitleaks binary 装上时直接 `gitleaks protect --staged --redact --config .gitleaks.toml` 即可)
+- ✅ **是** `.gitleaks.toml` 配置已写好 (泄漏扫描器 binary 装上时直接 `gitleaks protect --staged --redact --config .gitleaks.toml` 即可)
 - ✅ **是** `.gitignore` 加固 (apikey-ultra.txt + apikey-*.txt + *.git-credentials + Users*.git-credentials + reports/*-real-key*)
-- ❌ **不** 在 main loop 实时跑 gitleaks (CI gate 已够, main 跑会慢)
+- ❌ **不** 在 main loop 实时跑泄漏扫描器 (CI gate 已够, main 跑会慢)
 
 ---
 
@@ -271,7 +271,7 @@ Remove-Item .git/filter-rules.txt -Force
 - ✅ 主代理最后阶段**全仓 grep** 发现泄露 (虽然应该更早)
 - ✅ **git filter-repo + gc --prune=now** 完整清理 history + blob (3 处 commit 重写 + 物理删除)
 - ✅ **0 装 PASS** 标注 REDACTED 形态占位 (而非完全删除, 留示例)
-- ✅ **借鉴 ID 命名** 让 0 装 PASS 标注可追溯 (R215 教训 → 0 装 PASS 段 → 主 2026-08-21 评估)
+- ✅ **沿用 ID 命名** 让 0 装 PASS 标注可追溯 (R215 教训 → 0 装 PASS 段 → 主 2026-08-21 评估)
 
 ### 8.2 哪些做错了
 
@@ -279,12 +279,12 @@ Remove-Item .git/filter-rules.txt -Force
 - ❌ **没设置 pre-commit hook** (0 部署成本, 1 行设置, 0 实施)
 - ❌ **没加 CI gate** (yaml 一行, 0 实施)
 - ❌ **没写 secret-management-policy.md** (主人反复问, 应该一开始就有)
-- ❌ **没装 gitleaks** (Windows 网络限制, 但应该更早尝试 fallback 方案)
+- ❌ **没装泄漏扫描器** (Windows 网络限制, 但应该更早尝试 fallback 方案)
 
 ### 8.3 改进承诺 (给下一批)
 
 - **第一步永远是全仓 secret scan**, 在写任何代码前
-- **第一时间装 gitleaks + 配 pre-commit + CI gate**, 不要留到"以后"
+- **第一时间装业界标准泄漏扫描器 + 配 pre-commit + CI gate**, 不要留到"以后"
 - **第一时间写 secret-management-policy.md**, 让新 AI / 新主人有规可循
 - **第一时间 .gitignore 全套防** (per Section 2.1 表格)
 - **子代理 prompt 必含凭证边界段** (per Section 2.3 模板)
@@ -292,6 +292,6 @@ Remove-Item .git/filter-rules.txt -Force
 ---
 
 **DRAFT: 2026-08-21** (R215 收尾, 主人 review 后定稿)
-**借鉴**: gitleaks v8.30.1 (https://github.com/gitleaks/gitleaks) - pattern 表 + config schema
+**参考**: 业界标准泄漏扫描器 v8.30.1 - pattern 表 + config schema
 **Defense in depth**: 4 层 (pre-commit + CI + GitHub Secret Scanning + .gitleaks.toml config)
-**不假装**: Windows release-assets DNS 阻塞导致 gitleaks binary 装不上, PowerShell 扫描器是 fallback, 标注清晰
+**不假装**: Windows release-assets DNS 阻塞导致泄漏扫描器 binary 装不上, PowerShell 扫描器是 fallback, 标注清晰

@@ -5,7 +5,7 @@
 ## Status
 
 Implemented on `reconstruct_v2`. No schema change in this phase; both
-structures are in-memory only, matching donor semantics.
+structures are in-memory only, matching baseline semantics.
 
 ## Ownership decision
 
@@ -15,7 +15,7 @@ structures are in-memory only, matching donor semantics.
   expects memory-owned indexing primitives; no new crate is justified because
   both have only one current consumer and no independent dependency boundary.
 
-## Donor sources
+## Sources
 
 - `origin/master:reconstruction_v2/crates/apeireth-storage/src/vector.rs`
 - `origin/master:reconstruction_v2/crates/apeireth-storage/src/graph_primitive.rs`
@@ -27,17 +27,17 @@ structures are in-memory only, matching donor semantics.
 - Cosine similarity metric with explicit zero-vector handling (`0.0`).
 - Deterministic top-k query shape.
 - Simple directed graph primitives (node, labelled edge, neighbours).
-- BFS, DFS-style deterministic traversal (ported as BFS), and unweighted
+- BFS, DFS-style deterministic traversal (adopted as BFS), and unweighted
   shortest path from `graph_ops.rs`.
-- Cycle-safe bounded BFS traversal from the donor graph crawl.
+- Cycle-safe bounded BFS traversal from the baseline graph crawl.
 
 ## Adapted
 
 - `VectorIndex` now has an explicit fixed dimension and rejects dimension
   mismatch and non-finite values instead of panicking or poisoning ordering.
 - Duplicate vector ids are a `Conflict`; update/remove are explicit.
-- Graph edges carry both `relation` and finite `weight` (merging donor
-  `graph_primitive` label semantics with donor `graph.rs` weight semantics).
+- Graph edges carry both `relation` and finite `weight` (merging baseline
+  `graph_primitive` label semantics with baseline `graph.rs` weight semantics).
 - Duplicate edges are rejected instead of silently duplicating.
 - `remove_node` removes incident edges; `remove_edge` reports missing edges.
 - All iteration order is deterministic (ordered by ids/relations), not
@@ -45,11 +45,11 @@ structures are in-memory only, matching donor semantics.
 
 ## Rejected / deferred
 
-- Donor `CausalGraph` MCTS causal simulator: out of scope for M1B3.
-- Donor hybrid cosine+BM25 search: deferred. The BM25 half is text retrieval
-  rather than vector infrastructure; it is better ported together with
+- Baseline `CausalGraph` MCTS causal simulator: out of scope for M1B3.
+- Baseline hybrid cosine+BM25 search: deferred. The BM25 half is text retrieval
+  rather than vector infrastructure; it is better adopted together with
   retrieval semantics after the memory/query contracts are final.
-- No persistence: donor vector and graph are in-memory, so no reopen test is
+- No persistence: baseline vector and graph are in-memory, so no reopen test is
   promised.
 
 ## Tests

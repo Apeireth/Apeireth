@@ -40,10 +40,10 @@ use std::os::raw::{c_char, c_uint};
 use sha2::{Digest, Sha256};
 
 // ============================================================================
-// 内部实现 (跟 python.rs / node.rs 1:1 一致, 跨语言 3 语言一致性)
+// 内部实现 (跟 python.rs / node.rs 一致, 跨语言 3 语言一致性)
 // ============================================================================
 
-/// **R32-1 启发式**: 1:1 翻译 python.rs / node.rs.
+/// **R32-1 启发式**: 语义对齐 python.rs / node.rs.
 /// 仅 c feature 启用时编 (per fn-level cfg), 0 重复造轮子 (per O-2).
 #[cfg(feature = "c")]
 fn count_tokens_heuristic(text: &str) -> u32 {
@@ -69,7 +69,7 @@ fn count_tokens_heuristic(text: &str) -> u32 {
     tokens
 }
 
-/// **SHA-256 hex hash**: 1:1 翻译 node.rs `hash_request_impl`.
+/// **SHA-256 hex hash**: 语义对齐 node.rs `hash_request_impl`.
 #[cfg(feature = "c")]
 fn hash_request_impl(method: &str, url: &str, body: &[u8]) -> String {
     let mut hasher = Sha256::new();
@@ -100,7 +100,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 /// **C-ABI fn #1**: `apeireth_sdk_count_tokens(text: *const c_char) -> c_uint`.
 ///
 /// 安全性: caller 须保证 `text` 指向有效 UTF-8 + null-terminated C string.
-/// Null / invalid ptr 返 0 (fail-soft, 1:1 abi.rs stub pattern).
+/// Null / invalid ptr 返 0 (fail-soft, 与 abi.rs stub pattern 一致).
 #[cfg(feature = "c")]
 #[no_mangle]
 pub extern "C" fn apeireth_sdk_count_tokens(text: *const c_char) -> c_uint {
@@ -152,7 +152,7 @@ pub extern "C" fn apeireth_sdk_hash_request(
 /// **C-ABI fn #3**: `apeireth_sdk_version() -> *const c_char`.
 ///
 /// **不漂移**: 复用 `apeireth_sdk::version::SDK_VERSION` 公共 API, 0 改 workspace.version 1.2.0 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0)。
-/// 返 Rust `&'static CStr` 常驻指针, 生命周期 'static, **0 需要 free** (1:1 libc `getenv` pattern)。
+/// 返 Rust `&'static CStr` 常驻指针, 生命周期 'static, **0 需要 free** (与 libc `getenv` pattern 一致)。
 ///
 /// **L 组修复**: 改 `std::sync::OnceLock` 只分配一次 — 修复前每次调用 `CString::into_raw`
 /// 泄漏一个 CString 且头文件暗示免 free (同一 API 两套所有权契约)。统一契约:

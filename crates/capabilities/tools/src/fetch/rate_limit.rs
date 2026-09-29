@@ -1,6 +1,6 @@
 //! Per-host sliding-window rate limiting for controlled fetch.
 //!
-//! Ported semantics from legacy `apeireth-tool-fetch::rate_limit` (R231):
+//! Semantics aligned with legacy `apeireth-tool-fetch::rate_limit` (R231):
 //! each host has an independent window of request timestamps; a request is
 //! allowed only while fewer than `max_requests` timestamps fall inside
 //! `window`. `wait_time` reports how long until the oldest recorded request
@@ -13,9 +13,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
-/// Default limit: 60 requests per 60 seconds (donor default).
+/// Default limit: 60 requests per 60 seconds.
 pub const DEFAULT_MAX_REQUESTS: usize = 60;
-/// Default window: 60 seconds (donor default).
+/// Default window: 60 seconds.
 pub const DEFAULT_WINDOW: Duration = Duration::from_secs(60);
 
 /// Per-host sliding-window rate limiter.

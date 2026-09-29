@@ -153,7 +153,7 @@ pub struct ProductionModulesConfig {
     /// side-calls, and this is the explicit rollout boundary for the first
     /// production organ integration.
     pub organs: bool,
-    /// Render prompt overlays in the donor closed-world injection format
+    /// Render prompt overlays in the closed-world injection format
     /// (numbered evidence + anti-hallucination rules). Off by default.
     pub memory_injection: bool,
     /// Run the deterministic consolidation report after each turn and persist

@@ -56,10 +56,10 @@
     },
     "ui": {
       "_status": "proposal",
-      "_note": "面板/卡片层级为终末地配方（reference/endfield-ui, endfield-chat 验证）的本地化提案，数值待主人确认",
+      "_note": "面板/卡片层级为参考配方（reference/endfield-ui, endfield-chat 验证）的本地化提案，数值待主人确认",
       "panel":      { "hex": "#0b0d12", "alpha": 0.82, "role": "页面层面板底（近黑，浮于虚化场景上）" },
       "panelSolid": { "hex": "#0b0d12", "alpha": 1.0,  "role": "不透明近黑（设置页等需要专注的场景）" },
-      "card":       { "hex": "#ece7da", "role": "哑白卡片（内容卡/消息卡，终末地配方）" },
+      "card":       { "hex": "#ece7da", "role": "哑白卡片（内容卡/消息卡，参考配方）" },
       "cardDark":   { "hex": "#15181f", "role": "深灰卡片（列表项/次要容器）" },
       "line":       { "hex": "#e8e0cc", "alpha": 0.14, "role": "1px 细分隔线/描边" },
       "accentTab":  { "hex": "#ffd27a", "role": "激活 tab/进度/高亮——复用存在金，同金色纪律" },
@@ -103,7 +103,7 @@
           { "signal": "dream 事件（做梦整合完成）", "effect": "夜间档确认/加深", "source": "presence.rs:213-222 (DreamPayload)" },
           { "signal": "emotion.pad（ daemon_loop 心跳推送）", "effect": "档内微调金色占比与光强", "source": "presence.rs:165-182 (EmotionPayload)" }
         ],
-        "_honesty": "v2 更正（2026-09-22）：backendState 半边驱动当前断线——presence 四类事件属 legacy donor（companion_serve.rs，见 presence.channel.wireStatusNote），现役 canonical gateway 无此频道；时间线照明目前仅 localClock 半边生效，backendState 信号应按权重 0.5 缺席处理（前端不得假装驱动存在）。原 v1 记录：presence 四类事件已接入 SSE 广播管道（companion_serve.rs:1786-1845 daemon_loop 每 60s tick + :1891-1899 主人消息经 interactions 通道触发 + :1320-1328 工具桥 memory_recall；v5 文档段 :16-37）。当前为每 60s tick + 事件触发的低频率，前端对档内微调做平滑插值。"
+        "_honesty": "v2 更正（2026-09-22）：backendState 半边驱动当前断线——presence 四类事件属 v1 遗存（companion_serve.rs，见 presence.channel.wireStatusNote），现役 canonical gateway 无此频道；时间线照明目前仅 localClock 半边生效，backendState 信号应按权重 0.5 缺席处理（前端不得假装驱动存在）。原 v1 记录：presence 四类事件已接入 SSE 广播管道（companion_serve.rs:1786-1845 daemon_loop 每 60s tick + :1891-1899 主人消息经 interactions 通道触发 + :1320-1328 工具桥 memory_recall；v5 文档段 :16-37）。当前为每 60s tick + 事件触发的低频率，前端对档内微调做平滑插值。"
       }
     },
     "modes": {
@@ -249,7 +249,7 @@
       "knownLimits": [
         "emotion 事件只能由 daemon_loop 异步推（每 tick 心跳 + 主人消息到达后经 interactions 通道），chat handler 同步路径拿不到 PAD——daemon 内部 RefCell 跨 await 非 Send（presence.rs:21-23；companion_serve.rs:29-32）",
         "build_injection 记忆注入路径的召回数锁在 assemble.rs::inject_memory 局部变量不外露，memory_recall 只接 recall_memory 工具桥路径（presence.rs:24-25；companion_serve.rs:33-34）",
-        "presence 事件只进 SSE 广播，不进 Lark/Telegram 离线 sink（presence.rs:26；companion_serve.rs:35）"
+        "presence 事件只进 SSE 广播，不进同类 IM 离线 sink（presence.rs:26；companion_serve.rs:35）"
       ]
     },
     "events": {

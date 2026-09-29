@@ -1,6 +1,6 @@
 name: Miri (unsafe 检查)
 
-# R18 第 3 阶段: 抄 wasmtime main.yml [miri] job
+# R18 第 3 阶段: 对齐 wasmtime main.yml [miri] job
 # https://github.com/bytecodealliance/wasmtime/blob/main/.github/workflows/main.yml
 # 跑 unsafe 集中的 crate, nightly 工具链
 # Apeireth 关注: apeireth-sovereignty + apeireth-core (双洋葱 + L0 HA 硬编码核心)

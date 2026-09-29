@@ -22,7 +22,7 @@ Author:          子代理 R11 (独立判断, 0 装诚实真账)
 
 **v1 AwakeCompanion** (`legacy/donor/apeireth-companion/src/organs.rs:34`) 是真实现: 8 重门控 (emergence.rs:460-503) + 5 状态机 (apeireth-evolution::EvolutionState, Idle/Draft/Proposed/Ratified/Active/Retired) + 9 organ 串联 (E4/F1/F4/F6/W1/W2/W3/E7/Council) + emotion/council/onion 三层合成.
 
-**v2 缺 OrganOrchestrator**: 9 organ 已全部真移植 (`crates/engine/organ/src/{curiosity,emotion_memory,hypothesis,value_cases,world_model,causal_world_model,causal_world_model_edges,emergence,memory}.rs`, 1:1 翻译), 但 **缺串联它们的上层 orchestrator** — runtime 拿 `Arc<dyn OrganTrait>`, 没有 9 organ 之间的 process 串联路径 + 8 重 gate 统一入口 + 5 状态机 transition driver.
+**v2 缺 OrganOrchestrator**: 9 organ 已全部真实现 (`crates/engine/organ/src/{curiosity,emotion_memory,hypothesis,value_cases,world_model,causal_world_model,causal_world_model_edges,emergence,memory}.rs`, 语义对齐), 但 **缺串联它们的上层 orchestrator** — runtime 拿 `Arc<dyn OrganTrait>`, 没有 9 organ 之间的 process 串联路径 + 8 重 gate 统一入口 + 5 状态机 transition driver.
 
 **估 1-3 周真实施** (per 子代理 L 估 + 子代理 R7 独立判断 + 本文 §8 0 装诚实真账), 真生产前必做.
 
@@ -55,7 +55,7 @@ v1 AwakeCompanion 不仅是 E7 emergence 的"上层封装",而是**唯一串起 
 ### 1.3 真生产前阻塞位置
 
 per `FINAL-HANDOFF-V2.0.0-RC.1.md` §10 接手人 actionable #6:
-- ✅ #1 RC-5/6/7 + 9 organ 真移植全 done
+- ✅ #1 RC-5/6/7 + 9 organ 真实现全 done
 - ✅ #2 哲学锚 ledger 待核
 - ✅ #3 12 consumer 弃用迁移
 - ✅ #4 RC-10 line header AAD + APX2 envelope
@@ -64,7 +64,7 @@ per `FINAL-HANDOFF-V2.0.0-RC.1.md` §10 接手人 actionable #6:
 
 ---
 
-## §2. v1 AwakeCompanion 真实现 (1:1 翻译)
+## §2. v1 AwakeCompanion 真实现 (语义对齐)
 
 ### 2.1 struct 字段 (organs.rs:34-49)
 
@@ -97,7 +97,7 @@ pub struct AwakeCompanion {
 | `ratify_fresh_policy()` (private) | `organs.rs:73-84` | ⏳ 待实施 (本 spec) | 5 状态机 Idle→Draft→Proposed→Ratified→Active 全链 |
 | `last_deliberation()` | `organs.rs:172-174` | ⏳ 待实施 (本 spec) | 审议回声读取 |
 | `last_decision()` | `organs.rs:177-180` | ⏳ 待实施 (本 spec) | 决策留痕读取 |
-| E7 8 重门控 | `emergence.rs:460-503` | ✅ `crates/engine/organ/src/emergence.rs` 1:1 翻译 | 见 §5 |
+| E7 8 重门控 | `emergence.rs:460-503` | ✅ `crates/engine/organ/src/emergence.rs` 语义对齐 | 见 §5 |
 | EvolutionState 6 状态 | `apeireth-evolution/src/state.rs:26` | ⏳ PolicyStage 前向声明 (`emergence.rs:465`) | 6 state - Retired = 5 (本 spec) |
 | InitiativeGate 13 真实门控 | `presence.rs:53` + `presence.rs:410-423` | ⏳ 待实施 (本 spec) | emergence 8 + organs 5 = 13 |
 
@@ -187,7 +187,7 @@ per `v2-architecture-reflection.md` §6 (子代理 R11 整合 v1 AwakeCompanion 
 | 项 | 说明 |
 |---|---|
 | **位置** | `crates/engine/organ/` (per §4 9 organ process 串联顺序) |
-| **真实现** | ✅ 9 organ 全 done (per `organ/src/lib.rs:11-28` 子代理 R1-R8 真移植) |
+| **真实现** | ✅ 9 organ 全 done (per `organ/src/lib.rs:11-28` 子代理 R1-R8 真实现) |
 | **v1 AwakeCompanion 串接** | `organs.rs:96-106` `self.loop_.tick()` = E7 emergence 8 门控 + 调 9 organ (注: v1 AwakeCompanion 不显式串联 9 organ, 只调 EmergenceLoop 单 process, 9 organ 各自独立接受 `context_hint`) |
 | **v2 OrganOrchestrator 待做** | ⏳ 实施时 OrganOrchestrator.tick() 按 §4 顺序串 9 organ process, 各 organ output 喂下一 organ |
 | **5 重守门** | per §10 (cargo test 0 FAILED + cargo clippy 0 warnings + 13 键 LOCKED + workspace.version + R11 baseline) |
@@ -213,7 +213,7 @@ per `v2-architecture-reflection.md` §6 (子代理 R11 整合 v1 AwakeCompanion 
 
 ## §4. 9 organ process 串联顺序
 
-per `cognitive-module-wiring.md` §Active slot ledger + 9 organ 真移植 (E4/F4/F6/F1/W1/W2/W3/E7/Memory, per `crates/engine/organ/src/lib.rs:11-28`):
+per `cognitive-module-wiring.md` §Active slot ledger + 9 organ 真实现 (E4/F4/F6/F1/W1/W2/W3/E7/Memory, per `crates/engine/organ/src/lib.rs:11-28`):
 
 ### 4.1 9 organ 串联顺序
 
@@ -240,11 +240,11 @@ per `cognitive-module-wiring.md` §Active slot ledger + 9 organ 真移植 (E4/F4
 | **5 状态机驱动** | `self.evolution.current.is_active()` (organs.rs:138) | OrganOrchestrator 显式 transition driver (per §6) |
 | **Memory 合并** | 无 (v1 runtime_brain.rs:18-32 仅 3 organ: curiosity + emotion + hypotheses) | OrganOrchestrator 调 Memory organ 末尾合并 8 organ 输出 |
 
-**0 装诚实**: v2 OrganOrchestrator **不是**"v1 AwakeCompanion 1:1 翻译" — 因为 v2 加了 W1/W2/W3/Memory 4 organ (v1 AwakeCompanion 不显式串联, 只调 E7 emergence 单入口). 真实施时按 §4.1 顺序 + `OrganInput` 链式传递.
+**0 装诚实**: v2 OrganOrchestrator **不是**"v1 AwakeCompanion 语义对齐" — 因为 v2 加了 W1/W2/W3/Memory 4 organ (v1 AwakeCompanion 不显式串联, 只调 E7 emergence 单入口). 真实施时按 §4.1 顺序 + `OrganInput` 链式传递.
 
 ---
 
-## §5. 8 重 gate 实施路径 (per E7 rhythm+boundary loop 1:1 翻译)
+## §5. 8 重 gate 实施路径 (per E7 rhythm+boundary loop 语义对齐)
 
 per `legacy/donor/apeireth-companion/src/emergence.rs:460-503` + `presence.rs:410-423` (13 InitiativeGate):
 
@@ -261,7 +261,7 @@ per `legacy/donor/apeireth-companion/src/emergence.rs:460-503` + `presence.rs:41
 
 **v1 AwakeCompanion 串接 (organs.rs:96-106)**: 8 重 gate 全部在 `self.loop_.tick()` 内部处理, return `None` 时调 `self.loop_.last_hold()` 拿 `InitiativeGate` 留痕.
 
-**v2 OrganOrchestrator 待做**: 把 8 重 gate 提到 OrganOrchestrator.tick() 上层统一入口, 各 gate `if` 分支独立留痕 `InitiativeGate` + 返 `None`. E7 emergence.rs 内部 if-else 仍保留 (per §4.1 1:1 翻译), OrganOrchestrator 是"外层 8 重 gate 统一入口" (类似 v1 `AwakeCompanion::tick` 第 2 步 `self.loop_.tick()` 包装).
+**v2 OrganOrchestrator 待做**: 把 8 重 gate 提到 OrganOrchestrator.tick() 上层统一入口, 各 gate `if` 分支独立留痕 `InitiativeGate` + 返 `None`. E7 emergence.rs 内部 if-else 仍保留 (per §4.1 语义对齐), OrganOrchestrator 是"外层 8 重 gate 统一入口" (类似 v1 `AwakeCompanion::tick` 第 2 步 `self.loop_.tick()` 包装).
 
 **注**: v1 `InitiativeGate` 共 13 种 (emergence 8 + organs 5: emotion_low/council_veto/policy_inactive/gate_block/sovereignty_frozen, per `presence.rs:410-423`). v2 OrganOrchestrator 待做应保留 13 种, 不简化.
 
@@ -355,7 +355,7 @@ per 主代理 Mavis 设计 (子代理 R11 整合 v1 AwakeCompanion 真路径):
 | **v1 AwakeCompanion 真实现** | ✅ 已 done (per R7 风险 #1 标) | `legacy/donor/apeireth-companion/src/organs.rs:34-275` (391 行) |
 | **v1 8 重 gate 真实现** | ✅ 已 done | `legacy/donor/apeireth-companion/src/emergence.rs:460-503` + `presence.rs:410-423` (13 种 InitiativeGate) |
 | **v1 5 状态机真实现** | ✅ 已 done | `legacy/donor/apeireth-evolution/src/state.rs:26-197` (6 状态含 Retired) |
-| **v2 9 organ 真移植** | ✅ 全 done (per `organ/src/lib.rs:11-28`) | 子代理 R1-R8 1:1 翻译 |
+| **v2 9 organ 真实现** | ✅ 全 done (per `organ/src/lib.rs:11-28`) | 子代理 R1-R8 语义对齐 |
 | **v2 12 slot ledger** | ✅ done (per `cognitive-module-wiring.md`) | 6 WIRED + 1 SLOT READY + 6 DEFERRED |
 | **v2 OrganOrchestrator 类似 AwakeCompanion** | ❌ **缺** (9 organ 是 9 个独立 trait impl) | 本 spec 完成后真实施 1-3 周待 |
 
@@ -413,7 +413,7 @@ per `FINAL-HANDOFF-V2.0.0-RC.1.md` §10 接手人 actionable:
 
 | # | 项 | 状态 | 备注 |
 |---|---|---|---|
-| #1 | RC-5/6/7 + 9 organ 真移植 | ✅ done | 子代理 R1-R8 + M/N 真写 |
+| #1 | RC-5/6/7 + 9 organ 真实现 | ✅ done | 子代理 R1-R8 + M/N 真写 |
 | #2 | 哲学锚 ledger 待核 | ✅ done | 子代理 K |
 | #3 | 12 consumer 弃用迁移 | ✅ done | 子代理 I Python script |
 | #4 | RC-10 line header AAD + APX2 envelope | ✅ done | 子代理 E |
@@ -489,7 +489,7 @@ $ git diff HEAD~1..HEAD --stat 2>$null | head -10
 
 **看到 R7 + R9 + R10 没看的事** (子代理 R11 独立视角, 前 28 sub-agent A-Z 都没写 OrganOrchestrator spec, 我是第 31 个视角):
 
-1. **v1 AwakeCompanion::tick 串联顺序 ≠ v2 9 organ process 串联顺序**: v1 AwakeCompanion 只显式调 E7 emergence 单 organ 入口 (`organs.rs:96`), v2 OrganOrchestrator 应按 §4.1 顺序串 9 organ. **0 装诚实**: 实施时不要"v1 1:1 翻译" — 因为 v2 加了 W1/W2/W3/Memory 4 organ (v1 没有).
+1. **v1 AwakeCompanion::tick 串联顺序 ≠ v2 9 organ process 串联顺序**: v1 AwakeCompanion 只显式调 E7 emergence 单 organ 入口 (`organs.rs:96`), v2 OrganOrchestrator 应按 §4.1 顺序串 9 organ. **0 装诚实**: 实施时不要"v1 语义对齐" — 因为 v2 加了 W1/W2/W3/Memory 4 organ (v1 没有).
 2. **5 状态机不在 E7 emergence.rs 内部**: 真相在 v1 `apeireth-evolution::EvolutionState` (6 状态含 Retired, per `state.rs:26-44`). 任务说明把"5 状态机"挂 E7 头上是误导 (子代理 R7 已独立判断). v2 `PolicyStage` 是前向声明 (`emergence.rs:465`), 真实施时需 import `apeireth-evolution::EvolutionState` (或在新 `crates/foundation/policy/` 抽象).
 3. **13 种 InitiativeGate 真实门控**: emergence 8 + organs 5 = 13 种 (`presence.rs:410-423`). v2 OrganOrchestrator 实施时应保留全部 13 种, 0 装简化.
 4. **L0 人类审批不可变**: 即使 OrganOrchestrator 实施, L0 哲学锚拦截 (per `organs.rs:152-157`) 仍走 `SovereigntyGate::report_violation` 物理隔离. OrganOrchestrator 不是"绕过 L0 的捷径", 是"在 L0 锚定下的 L1-L5 升级能力".

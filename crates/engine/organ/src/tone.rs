@@ -18,12 +18,12 @@ use std::fmt;
 use apeireth_orchestration::self_tuning::TunableParam;
 use serde::{Deserialize, Serialize};
 
-/// 情绪注入 EMA 混合项基线系数 (donor `BondCharacter::apply_emotion` 写死的
+/// 情绪注入 EMA 混合项基线系数 (基线 `BondCharacter::apply_emotion` 写死的
 /// resonance 情绪项 0.1) —— 体验旋钮 [`TunableParam::ToneSaturation`] 的接线点:
 /// 生效系数 = 本值 × 饱和倍率 (1.0 = 现行为, 零变化)。
 pub const EMOTION_MIX_RESONANCE: f64 = 0.1;
 
-/// trust 情绪项基线系数 (donor 写死的 0.2; 与 [`EMOTION_MIX_RESONANCE`] 同受
+/// trust 情绪项基线系数 (基线写死的 0.2; 与 [`EMOTION_MIX_RESONANCE`] 同受
 /// [`TunableParam::ToneSaturation`] 缩放)。
 pub const EMOTION_MIX_TRUST: f64 = 0.2;
 
@@ -55,17 +55,17 @@ impl Default for BondCharacterSnapshot {
 }
 
 impl BondCharacterSnapshot {
-    /// Plutchik-style emotion injection into relational character (donor `BondCharacter::apply_emotion`).
+    /// Plutchik-style emotion injection into relational character (baseline `BondCharacter::apply_emotion`).
     ///
     /// Joy / trust / anticipation raise resonance (EMA 0.7 / 0.1 mix). Trust
     /// itself is EMA 0.8 / 0.2. Fear / surprise / sadness / disgust / anger
-    /// are accepted for API parity and currently unused (donor discarded them
+    /// are accepted for API parity and currently unused (baseline discarded them
     /// the same way). Does **not** own `memory::partner::Bond` — this is a
     /// tone-layer snapshot helper.
     ///
     /// **语气情绪饱和度** (体验旋钮 [`TunableParam::ToneSaturation`], env
     /// `APEIRETH_TUNE_TONE_SATURATION`): 情绪注入 EMA 混合项的饱和倍率 ——
-    /// 即 donor 写死的情绪项权重 (resonance 情绪项 0.1 / trust 情绪项 0.2) 的
+    /// 即基线写死的情绪项权重 (resonance 情绪项 0.1 / trust 情绪项 0.2) 的
     /// 缩放系数。1.0 = 现行为 (零变化); 0 = 情绪不入语气表征 (纯关系基线);
     /// 2 = 双倍情绪浓度。非法值回默认 1.0。
     #[allow(clippy::too_many_arguments)]
@@ -300,7 +300,7 @@ mod tests {
         assert_eq!(snap.trust, 1.0);
     }
 
-    /// 旋钮推导锁定: 生效情绪混合项 = donor 基线系数 × ToneSaturation 倍率
+    /// 旋钮推导锁定: 生效情绪混合项 = 基线系数 × ToneSaturation 倍率
     /// (未设旋钮 = 倍率 1.0 = 现行为, 零变化)。
     #[test]
     fn tone_saturation_knob_scales_emotion_mix() {

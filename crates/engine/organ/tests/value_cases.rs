@@ -3,11 +3,11 @@
 //! 3 测试 + 1 #[ignore] smoke + 1 trait shape (per R2 同模式):
 //!
 //! 1. `value_cases_organ_record_and_promote_candidates` (record → feedback → promote_candidates
-//!    路径, 1:1 v1)
+//!    路径, 对齐 v1)
 //! 2. `value_cases_organ_decision_for_matches_value_set` (decision_for 集合乱序匹配,
-//!    1:1 v1)
+//!    对齐 v1)
 //! 3. `value_cases_organ_recall_by_keyword_and_disagree_blocks` (recall 路径 +
-//!    disagree 阻提升, 1:1 v1)
+//!    disagree 阻提升, 对齐 v1)
 //!
 //! **0 装诚实 (per 任务 §3 + 子代理 R 同款)**:
 //!
@@ -38,7 +38,7 @@ use apeireth_plugin::llm_factory::{LlmFactory, NoopLlmFactory};
 use std::sync::Arc;
 
 // ============================================
-// Test 1: record → feedback → promote_candidates 路径 (1:1 v1)
+// Test 1: record → feedback → promote_candidates 路径 (对齐 v1)
 // ============================================
 
 fn empty_input_with_hints(hints: Vec<String>) -> OrganInput {
@@ -137,7 +137,7 @@ async fn value_cases_organ_record_and_promote_candidates() {
 }
 
 // ============================================
-// Test 2: decision_for 集合乱序匹配 (1:1 v1)
+// Test 2: decision_for 集合乱序匹配 (对齐 v1)
 // ============================================
 
 #[tokio::test]
@@ -165,7 +165,7 @@ async fn value_cases_organ_decision_for_matches_value_set() {
         DecisionBasis::MasterDecision,
     );
 
-    // 2) decision_for 乱序传入 → 排序后匹配 (per v1 decision_for 1:1)
+    // 2) decision_for 乱序传入 → 排序后匹配 (per v1 decision_for)
     let d1 = organ
         .decision_for(&["速度".into(), "安全".into()])
         .expect("乱序也匹配");
@@ -187,7 +187,7 @@ async fn value_cases_organ_decision_for_matches_value_set() {
     assert!(organ.decision_for(&["速度".into()]).is_none());
     assert!(organ.decision_for(&["未知".into()]).is_none());
 
-    // 4) values 排序 + 去重 (per v1 1:1, 防御性测试)
+    // 4) values 排序 + 去重 (per v1, 防御性测试)
     let mut s = ValueCaseStore::new();
     let c = s.record(
         "排序测试",
@@ -207,7 +207,7 @@ async fn value_cases_organ_decision_for_matches_value_set() {
 }
 
 // ============================================
-// Test 3: recall 关键词 + disagree 阻提升 (1:1 v1)
+// Test 3: recall 关键词 + disagree 阻提升 (对齐 v1)
 // ============================================
 
 #[tokio::test]
@@ -229,7 +229,7 @@ async fn value_cases_organ_recall_by_keyword_and_disagree_blocks() {
         DecisionBasis::ConstitutionRule,
     );
 
-    // 2) feedback Disagree → 不被提升 (per v1 disagree_blocks_promotion 1:1)
+    // 2) feedback Disagree → 不被提升 (per v1 disagree_blocks_promotion)
     organ.feedback(c_disagree.id, Feedback::Disagree).unwrap();
     let cands_after_disagree = organ.promote_candidates(1);
     assert!(
@@ -237,7 +237,7 @@ async fn value_cases_organ_recall_by_keyword_and_disagree_blocks() {
         "主人不同意 → 不提升 (per v1 1:1)"
     );
 
-    // 3) recall 关键词检索 (per v1 recall API 1:1)
+    // 3) recall 关键词检索 (per v1 recall API)
     let hits = organ.recall("高风险");
     assert_eq!(hits.len(), 1, "高风险匹配 1 条");
     assert!(hits[0].decision.contains("拒绝"));
@@ -329,7 +329,7 @@ async fn value_cases_organ_trait_shape_complete() {
     // dry-run 不真登记
     assert!(organ.is_empty());
 
-    // ValueCase 字段 (per v1 1:1)
+    // ValueCase 字段 (per v1)
     let mut store = ValueCaseStore::new();
     let c = store.record(
         "字段测试",

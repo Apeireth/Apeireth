@@ -6,7 +6,7 @@
 //!
 //! **v1 compat**: `apeireth_perception::*` 仍可访问 (re-export), 5 个内部测试 0 破坏.
 //!
-//! **Salvage (agent 08)**: this crate owns recovered perception *algorithms*
+//! **Salvage (agent 08)**: this crate owns the perception *algorithms*
 //! (normalization, capture metadata, screen salience, observation capture).
 //! It is **not** an `AgentModule` and does **not** own final response.
 //! [`owner::PerceptionOwner`] is default-off and unwired.

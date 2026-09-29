@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide describes the current repository, not the historical donor
+This guide describes the current repository, not the historical
 workspaces. Start with [`repository-layout.md`](../development/repository-layout.md)
 for ownership and dependency boundaries.
 

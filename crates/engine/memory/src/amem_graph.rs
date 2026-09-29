@@ -1,11 +1,11 @@
-//! A-MEM / Zep graph algorithms recovered from companion `memory_graph.rs`.
+//! A-MEM graph algorithms.
 //!
 //! v2 already owns:
 //! - [`crate::bitemporal_graph::BitemporalGraph`] — subject+predicate version chain +
 //!   `1/(1+ln1p(count-1))` specificity
 //! - [`crate::canonical::graph::MemoryGraph`] — node/edge BFS, unweighted shortest path
 //!
-//! This module recovers the **missing** donor algorithms without a second store:
+//! This module recovers the **missing** baseline algorithms without a second store:
 //! - full-triple chain (`s|p|o`) + inverse-frequency mean specificity (`1/n`)
 //! - A-MEM `link_on_write` (Jaccard ≥ 0.3)
 //! - residual-boosted CRAWL: `weight * (1 + residual_weight * content_residual)`
@@ -17,10 +17,10 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-/// Jaccard overlap threshold for A-MEM auto-link (donor `>= 0.3`).
+/// Jaccard overlap threshold for A-MEM auto-link (baseline `>= 0.3`).
 pub const LINK_OVERLAP_THRESHOLD: f64 = 0.3;
 
-/// Default injection-block cap (donor `take(10)`).
+/// Default injection-block cap (baseline `take(10)`).
 pub const GRAPH_INJECTION_LIMIT: usize = 10;
 
 /// Temporal graph fact (full-triple chain).
@@ -73,7 +73,7 @@ impl Default for GraphRankConfig {
 }
 
 /// In-memory A-MEM graph. Not a [`crate::SqliteMemoryStore`] and does not write
-/// `factg-*` / `link-*` episodes (donor persistence was episode pollution).
+/// `factg-*` / `link-*` episodes (baseline persistence was episode pollution).
 #[derive(Debug, Clone)]
 pub struct AmemGraph {
     facts: Vec<GraphFact>,
@@ -258,7 +258,7 @@ impl AmemGraph {
     }
 
     /// Auto-link `new_id` against registered contents with Jaccard ≥ threshold.
-    /// Skips self, `link-*`, and `tomb-*` ids (donor skip list).
+    /// Skips self, `link-*`, and `tomb-*` ids (baseline skip list).
     pub fn link_on_write(&mut self, new_id: &str, new_content: &str) {
         self.put_content(new_id, new_content);
         let existing: Vec<(String, String)> = self

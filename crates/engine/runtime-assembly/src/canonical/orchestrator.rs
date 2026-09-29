@@ -1,8 +1,5 @@
 //! P-arch (2026-08-28): OrganOrchestrator 类似 `AwakeCompanion` 真实施 v2.
 //!
-//! 1:1 翻译 v1 `legacy/donor/apeireth-companion/src/runtime_brain.rs` +
-//! `legacy/donor/apeireth-companion/src/organs.rs`:
-//!
 //! - 9 organ process 串联 (per R11 spec §4.1: E4 → F1 → F4 → F6 → W1 → W2 → W3 → E7 → Memory)
 //! - 8 重 gate (per v1 `AwakeCompanion::tick` 第 2 步 + `emergence.rs:460-503` 1:1:
 //!   user_quiet / quiet_hours / daily_limit / llm_budget / min_depth /
@@ -19,14 +16,14 @@
 //!   (curiosity / emotion_memory / hypothesis / ...), runtime_brain.rs 显式串联 E4+F1+F4
 //!   3 organ (per v1 runtime_brain.rs:18-32 + lib.rs).
 //! - v2 `OrganOrchestrator` 按 R11 spec §4.1 显式串联 9 organ process (v1 AwakeCompanion
-//!   **不**如此 — 0 装诱导 prevention: 不假装"1:1 翻译 v1 AwakeCompanion" 即"v1 也串 9 organ").
+//!   **不**如此 — 0 装诱导 prevention: 不假装"语义对齐 v1 AwakeCompanion" 即"v1 也串 9 organ").
 //! - 5 状态机在 evolution crate (前向声明, 不挂 E7): per 子代理 R7 独立判断 + R11 独立判断.
 //!   Orchestrator 本地 `PolicyStage` 是 forward-declared, `current()` 默认返 `Active`
 //!   (per `emergence.rs:856` policy_stage() 占位同等纪律).
 //! - **8 重 gate 真实路径**: Orchestrator 是**外层**串联入口, 8 重 gate 的**算法真相**
-//!   在 `apeireth_organ::emergence::EmergenceLoop::tick` (1:1 翻译 v1 emergence.rs:460-503).
+//!   在 `apeireth_organ::emergence::EmergenceLoop::tick` (语义对齐 v1 emergence.rs:460-503).
 //!   Orchestrator 通过 `Arc<dyn OrganTrait>` (E7 trait handle) 拿 `EmergenceGate` 留痕
-//!   (per v1 `last_hold` 1:1 翻译).
+//!   (与 v1 `last_hold` 语义对齐).
 //! - 本地 `Boundaries` + `LoopConfig` + 8 重 gate enum: **是**外层统一入口的**前端声明**,
 //!   真实决策由 E7 organ 给出 (per R11 spec §5 注: "8 重 gate 提到 OrganOrchestrator.tick()
 //!   上层统一入口, 各 gate if 分支独立留痕 InitiativeGate + 返 None").
@@ -67,11 +64,11 @@ use apeireth_plugin::organ::{
 use chrono::TimeZone;
 
 // ============================================
-// 8 重 gate (per E7 rhythm+boundary loop 1:1 翻译 v1 `emergence.rs:460-503`)
+// 8 重 gate (per E7 rhythm+boundary loop 语义对齐 v1 `emergence.rs:460-503`)
 // ============================================
 
 /// 主动门控原因 (per v1 `InitiativeGate` 13 种 `presence.rs:410-423` + `emergence.rs` 8 种
-/// 1:1 翻译).
+/// 语义对齐).
 ///
 /// **0 装诚实** (Stage 3 重构, 2026-08-28):
 /// - canonical 13-variant 在 `apeireth_plugin::organ::InitiativeGate` (foundation 层).
@@ -88,7 +85,7 @@ pub use apeireth_plugin::organ::InitiativeGate as OrganOrchestratorGate;
 // ============================================
 
 /// 主动策略 5 状态机 (per v1 `apeireth-evolution::EvolutionStateMachine` 6 状态含 Retired
-/// - Retired = 5, `state.rs:26-44` 1:1 翻译).
+/// - Retired = 5, `state.rs:26-44` 语义对齐).
 ///
 /// **0 装诚实** (子代理 R7 独立判断):
 /// - v1 真状态机在 `apeireth-evolution` crate (`legacy/donor/` workspace exclude),
@@ -167,10 +164,10 @@ pub enum PolicyTransitionReason {
 }
 
 // ============================================
-// Orchestrator 边界 (per v1 `Boundaries` + `LoopConfig` 1:1 翻译)
+// Orchestrator 边界 (per v1 `Boundaries` + `LoopConfig` 语义对齐)
 // ============================================
 
-/// 边界门禁 (per v1 `Boundaries` 1:1 翻译).
+/// 边界门禁 (per v1 `Boundaries` 语义对齐).
 ///
 /// **0 装诚实**: 本地 `Boundaries` 是**外层统一入口** (per R11 spec §5 注), 真实路径
 /// 调 E7 organ 走完整算法. 本地 schema 与 v1 完全对齐.
@@ -230,7 +227,7 @@ impl OrchestratorBoundaries {
     }
 }
 
-/// 涌现循环配置 (per v1 `LoopConfig` 1:1 翻译, 8 重 gate 真实存在).
+/// 涌现循环配置 (per v1 `LoopConfig` 语义对齐, 8 重 gate 真实存在).
 ///
 /// **0 装诚实**: Orchestrator 本地保留 `LoopConfig` 8 重 gate 入口, 真实算法 (深度/
 /// 节奏/驱动) 由 E7 organ `EmergenceLoop::tick` 给. Orchestrator 调用 E7 organ 后,
@@ -431,7 +428,7 @@ impl OrganChainOutputs {
             && self.memory.is_some()
     }
 
-    /// organ kind → 输出 ref (测试用, file:line 1:1 翻译)
+    /// organ kind → 输出 ref (测试用, file:line 语义对齐)
     pub fn get(&self, kind: OrganKind) -> Option<&OrganOutput> {
         match kind {
             OrganKind::E4 => self.e4.as_ref(),
@@ -487,7 +484,7 @@ pub enum OrchestratorDecision {
 
 /// OrganOrchestrator 类似 v1 `AwakeCompanion`.
 ///
-/// **字段 1:1 翻译 v1 `AwakeCompanion` (organs.rs:34-49)**:
+/// **字段 语义对齐 v1 `AwakeCompanion` (organs.rs:34-49)**:
 /// - 9 organ handle (`Arc<dyn OrganTrait>` × 9, per R11 spec §4.1)
 /// - 5 状态机本地 driver (`PolicyStage`, forward-declared)
 /// - 主权闸 (`Arc<dyn SovereigntyGate>`)

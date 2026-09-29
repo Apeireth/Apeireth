@@ -141,7 +141,7 @@ frozen 13), v2 是 18 个 crate 的重构形态。**"v1 有真实现、v2 有没
 | C2 | ✅ 证实 | context_rot=3、proactive_recall=13 逐字吻合 |
 | C3 | ✅ 证实 | `production.rs:113` Option / `:151` None / `:347-348` if-let |
 | C4 | ⚠️ 部分正确 | 核心结论"无 proactive recall 开关"证实。但"能力类旋钮只有…"漏 `APEIRETH_REASONING_ENABLED` / `APEIRETH_REASONING_MODEL_FILTERS` / `APEIRETH_REASONING_TAG`（reasoning_adapter 真开关）；另 KEYRING_*/DATA_DIR/SESSION_DB/COGNITIVE_DB/MODEL/CONTINUITY_ID/M2B_TEST_ENV 配置类亦未列 |
-| D1 | ⚠️ 部分正确 | 实质证实（无实现）；"0 命中"差 1 条——`foundation/protocol:498` 注释提及 VCP `__oneRingMeta`（非实现） |
+| D1 | ⚠️ 部分正确 | 实质证实（无实现）；"0 命中"差 1 条——`foundation/protocol:498` 注释提及同类工具箱 `__oneRingMeta`（非实现） |
 | D2 | ✅ 证实 | thought_cluster=0、cluster_store=4；关系仍未查清（原文已诚实标注） |
 | D3 | ✅ 证实 | Filesystem/NetworkIsolation → Unsupported、PrivilegeReduction → Partial、FileSizeLimit + FailClosedPreExecutionContainment → Enforced |
 | D4 | ✅ 证实 | `JobObject|CREATE_SUSPENDED` 32 命中 |
@@ -208,7 +208,7 @@ pwsh frontend\companion-desktop\scripts\install-e2e.ps1     # 除"真聊天"外�
 ## 4. 我**没有**验证的东西 (审核方请勿假设我已验)
 
 > **[2026-10-06 夜挂账核销批状态]** 8 项中 **6 项本批核销**，剩 2 项卡客观条件（非欠账，如实挂账）：
-> **#3** legacy 源码级核验完成（差距审计 §7.2 四审表）；**#5** `thought_cluster` 查清（= `cluster_store` 完整改名移植，从缺口移出）；**#6** Option 默认关配置全量排查完成（行为开关类全有旋钮 + 4 个可达性观察项记表）；**#7** shell 可达实测重放完成（探针 `shell_reach_probe.rs` 实锤全盘可达，落地为 W1 回归锚）；**#8** `jimmy` 死指针已删。仍欠：**#1** 真机点击流（需主人人工）；**#2** `--ignored` E2E —— 三支已实跑：council 假绿洞**发现并封堵**（降级出口冒充 live，探针化后诚实红），provider/organ 因 **key 尾号 3d17 被 DeepSeek 撤销**（401）无法核销，换新 key 后重跑（台账挂账 #9）。
+> **#3** legacy 源码级核验完成（差距审计 §7.2 四审表）；**#5** `thought_cluster` 查清（= `cluster_store` 完整改名归并，从缺口移出）；**#6** Option 默认关配置全量排查完成（行为开关类全有旋钮 + 4 个可达性观察项记表）；**#7** shell 可达实测重放完成（探针 `shell_reach_probe.rs` 实锤全盘可达，落地为 W1 回归锚）；**#8** `jimmy` 死指针已删。仍欠：**#1** 真机点击流（需主人人工）；**#2** `--ignored` E2E —— 三支已实跑：council 假绿洞**发现并封堵**（降级出口冒充 live，探针化后诚实红），provider/organ 因 **key 尾号 3d17 被 DeepSeek 撤销**（401）无法核销，换新 key 后重跑（台账挂账 #9）。
 
 1. **没有跑真机点击流**: 本批全部结论来自源码与库级测试; 桌面 UI 的人工点击流验收在台账 §2 挂账 #2。
 2. **没有真机跑 `--ignored` 的 E2E**: organ live LLM (35 处 ignore)、provider live (7 处) 本批一次都没跑。

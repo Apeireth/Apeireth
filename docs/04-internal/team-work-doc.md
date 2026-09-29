@@ -26,7 +26,7 @@
 | **机制而非补丁** | 缺能力就设计机制模块；不往已有代码里塞特例 | 加 if 判断绕过一个缺失的机制 |
 | **集成而非分立** | 新需求优先挂进已有机制（trait 口/扩展点）；不另立平行系统 | 为一个小功能新建一套并行的 store/调度器 |
 | **0 装 PASS** | 做不到的事如实说做不到；留口要标注"未接"；不假装"已接好" | 返回 Ok 假装成功；文档写"已支持"实际没有 |
-| **调研先行** | 高价值/基础工具先调研成熟实现（上游标杆项目等），吸收先进写法，实战验证后才提交 | 闭门造车重造轮子 |
+| **调研先行** | 高价值/基础工具先调研成熟实现（同类标杆工程等），吸收先进写法，实战验证后才提交 | 闭门造车重造轮子 |
 | **工程有更新，文档就同步** | 改代码必改文档；调研未落地必进 docs/backlog.md | 改完代码忘了文档，调研完忘了台账 |
 | **诚实审计留痕** | 每个机制标注"做了什么/没做什么"；错误信息明确可行动 | 静默吞错、模糊报错 |
 | **测试是证据** | 正常路径 + 失败路径 + 非法输入都测；机制件加虚拟时间模拟 | 只测 happy path |
@@ -133,11 +133,11 @@
 > 分层原则见 §1.3。**官方 5 个整件**；社区按 §5.6 规范开发细件。
 
 ### 5.1 官方模块扩展：记忆域深化包（核心，进 companion lib）
-- 语义折叠（只折叠低相关段，上游选择性折叠精神）
-- 记忆主题分组（上游语义分组精神）→ 注入"主题索引"块 ✅ Rust 落点: companion topic_groups.rs (提交 17483af0; assemble.rs memory_block 挂接, 任务 a227fc3f 终验通过)
-- 元思考递归链（上游元思考精神）→ 思考→再思考 ✅ Rust 落点: companion meta_thinking.rs (提交 6fcd36c2; reflection 接线待 backlog N15)
-- 跨日记联想（上游关联发现精神）→ memory_graph 已有底层 ✅ Rust 落点: companion cross_diary.rs (提交 8e015af0; 确定性共享token建链+双向查询, 注入 trait 口 CrossDiaryInjector 统一接线延后, 0 装 PASS)
-- 日记本中心（上游日记插件精神）→ 按日归档 + 检索 + 注入 ✅ Rust 落点: companion diary.rs (提交 f2e50f46; 按日归档+确定性检索+recent_injection 注入块, DiaryInjector trait 口)
+- 语义折叠（只折叠低相关段，同类工程选择性折叠设计）
+- 记忆主题分组（同类工程语义分组设计）→ 注入"主题索引"块 ✅ Rust 落点: companion topic_groups.rs (提交 17483af0; assemble.rs memory_block 挂接, 任务 a227fc3f 终验通过)
+- 元思考递归链（同类工程元思考设计）→ 思考→再思考 ✅ Rust 落点: companion meta_thinking.rs (提交 6fcd36c2; reflection 接线待 backlog N15)
+- 跨日记联想（同类工程关联发现设计）→ memory_graph 已有底层 ✅ Rust 落点: companion cross_diary.rs (提交 8e015af0; 确定性共享token建链+双向查询, 注入 trait 口 CrossDiaryInjector 统一接线延后, 0 装 PASS)
+- 日记本中心（同类工程日记插件设计）→ 按日归档 + 检索 + 注入 ✅ Rust 落点: companion diary.rs (提交 f2e50f46; 按日归档+确定性检索+recent_injection 注入块, DiaryInjector trait 口)
 - **验收**：每个机制 = lib 模块 + trait 口 + 单测 + 注入链可见 + 0 装 PASS 标注
 - **§5.1 收官** ✅ 注入链统一接线完成 (任务 68caf9cb, 提交 cb12b810): assemble.rs unified_memory_block 四源合并 (主题索引+日记摘要+跨日记关联+记忆证据块), 各源独立预算互不侵占, 砍序 关联→日记→主题→记忆证据块(反幻觉基石最后砍), 空源不注半残块; 五机制至此全闭环
 
@@ -213,11 +213,11 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 
 ---
 
-## 8. 附：VCP 新版调研（2026-08-16）
+## 8. 附：同类工具箱新版调研（2026-08-16）
 
-> **现状 (2026-08-27) — v1 时代调研快照**：本附是 v1 era 的 VCP 调研吸收记录（89 插件扫描 + Rust 记忆层 + 核心 modules 深读 + 可吸收清单）。v2 工程重构**已收敛 14-crate 为 13-crate**，且 SDK 走 normalized protocol 抽象（v1 的 vendor-wire 翻译散落问题已治），故本附的"建议吸收清单"（§8.4）**大部分已被 v2 架构选择覆盖**。**R**把 VCP 调研结论当 v1 历史证据，新调研需求见 [next-team-handbook.md](next-team-handbook.md)（已冻结）。
+> **现状 (2026-08-27) — v1 时代调研快照**：本附是 v1 era 的同类工具箱调研吸收记录（89 插件扫描 + Rust 记忆层 + 核心 modules 深读 + 可吸收清单）。v2 工程重构**已收敛 14-crate 为 13-crate**，且 SDK 走 normalized protocol 抽象（v1 的 vendor-wire 翻译散落问题已治），故本附的"建议吸收清单"（§8.4）**大部分已被 v2 架构选择覆盖**。**R**把同类工具箱调研结论当 v1 历史证据，新调研需求见 [next-team-handbook.md](next-team-handbook.md)（已冻结）。
 
-> 新版 VCPToolBox（源码 research/source/vcptoolbox，从 Downloads 迁入工作区供团队只读，git 排除）：
+> 新版同类工具箱（源码 research/source/vcptoolbox，从 Downloads 迁入工作区供团队只读，git 排除）：
 > Node.js 核心（server.js/Plugin.js/WebSocketServer.js/KnowledgeBaseManager.js + 20+ modules）+ **Rust N-API 记忆层（rust-vexus-lite：RiverMemo Topology V3）** + **84 插件**。
 > 本章节由 subagent 深挖后补充完整（Rust 记忆层机制 / 84 插件分类表 / 核心模块对照）。
 
@@ -239,7 +239,7 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 
 ### 8.2 深挖报告一：Rust 记忆层（rust-vexus-lite, RiverMemo Topology V3）
 
-> 来源: subagent 深挖（6 个 Rust 文件 ~11,300 行）。VCP 把整条"Tag 记忆查询链路"下沉 Rust N-API：SQLite 事实层 → 图资产编译器 → MemoRuntime（Arc 快照 + 观测缓存）→ 查询管线（EPA→金字塔→门控→Spike→融合→双场）。
+> 来源: subagent 深挖（6 个 Rust 文件 ~11,300 行）。该工具箱把整条"Tag 记忆查询链路"下沉 Rust N-API：SQLite 事实层 → 图资产编译器 → MemoRuntime（Arc 快照 + 观测缓存）→ 查询管线（EPA→金字塔→门控→Spike→融合→双场）。
 
 **核心机制**：
 | 机制 | 是什么 | 行号 |
@@ -263,51 +263,51 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
   3. 查询形态学 softmax（纯函数，驱动 CRAWL 深度/检索模式切换）
   4. generation 绑定请求观测缓存（查询管线中间产物复用 + 防跨代脏读）
 - **P1 中价值**：Residual Pyramid（30 行数学去冗余召回）/ Spike 感应（查询联想唤醒 + 做梦期巩固复用）/ 双场传播（当前会话场 vs 长期记忆场）/ Topology V3 图对齐（升级 CRAWL 排序）/ DTSC 连续性评分 / 成对相似度预计算
-- **不吸收**：bincode/hashbrown 死依赖（别学）；VCP 自己标注反模式的进程全局缓存
+- **不吸收**：bincode/hashbrown 死依赖（别学）；该工具箱自己标注反模式的进程全局缓存
 
 ### 8.3 深挖报告二：89 插件扫描 + 核心 modules 深读（subagent 全量核实）
 
 > **数据修正**: Plugin/ 下实测 **89 个插件**（69 启用 + 20 禁用；pluginType: synchronous 42 / hybridservice 21 / static 14 / service 6 / messagePreprocessor 4 / asynchronous 2）。分类统计: 生图 11 / 工具 11 / 搜索 10 / 记忆 10 / 其他 21 / Agent 6 / 桥接 6 / 日程 4 / 学术 4 / 社区 4 / 视频 2。完整 89 行分类表在 subagent 报告（可随时取用），此处只录分类与关键插件。
 
-**A. 生图/媒体（13 → 社区）**：AgnesGen/AgnesVideoGen/DMXDoubaoGen/DoubaoGen/FluxGen/GeminiImageGen/GPTImageGen/NanoBananaGen2/QwenImageGen/ZImageGen2/ZImageTurboGen/VideoGenerator/ComfyUIGen — 厂商 API 差异，社区化；**MediaRenderer（HTML/SVG 渲染）** 对文档套件 §5.5 有启示。
+**A. 生图/媒体（13 → 社区）**：生图/视频生成类插件 13 项（各厂商 API 差异，社区化）；**MediaRenderer（HTML/SVG 渲染）** 对文档套件 §5.5 有启示。
 
-**B. 搜索/信息获取（10 → 官方套件 §5.3 强化 + 社区）**：AnySearch（垂直+并行+正文提取）/VSearch（多后端语义搜索）/TavilySearch/FlashDeepSearch（深度研究：主题→多维关键词扩展→研究报告）/BrowserSearch/UrlFetch/DeepWikiVCP/BilibiliFetch/AnimeFinder — AnySearch+FlashDeepSearch 官方整合；其余社区。
+**B. 搜索/信息获取（10 → 官方套件 §5.3 强化 + 社区）**：搜索/信息获取类插件 10 项（垂直+并行+正文提取、多后端语义搜索、深度研究、网页抓取、知识检索等）— 垂直搜索 + 深度研究两件官方整合；其余社区。
 
-**C. 学术（4 → 社区）**：ArxivDailyPapers/CrossRefDailyPapers/PaperReader（Rust 递归阅读器, 禁用态）/NCBIDatasets。
+**C. 学术（4 → 社区）**：学术类插件 4 项（每日论文推送、文献检索、递归阅读器（禁用态）、生物数据集）。
 
-**D. 记忆/日记/上下文（10 → 官方模块，核心）**：RAGDiaryPlugin（向量检索注入日记）/LightMemo（TagMemo V9 + Topology V3 + KNN 多构型）/DailyNote 三件套/SemanticGroupEditor（LLM 自维护同义词组）/**OneRing（统一上下文账本, N2）**/**ThoughtClusterManager（AI 思维链 = 元自学习, N4）**/ContextFoldingV2/VCPTimeLine（按月时间线+一句话摘要, 两级记忆带宽）。
+**D. 记忆/日记/上下文（10 → 官方模块，核心）**：记忆/日记/上下文类插件 10 项（向量检索日记注入、多构型记忆、按日笔记三件套、LLM 自维护同义词组、**统一上下文账本（N2）**、**AI 思维链=元自学习（N4）**、语义折叠、按月时间线+一句话摘要两级记忆带宽等）。
 
-**E. 日程/任务/通讯（5 → 官方套件 §5.4）**：ScheduleManager/ScheduleBriefing（每小时清过期+提取下一日程）/TimedTaskQuery（定时任务, 文件即消息）/VCPTaskAssistant（任务派发中心）/AgentAssistant（"未来电话"定时发送）→ 并入日程通讯套件；**VCPClawMail**（邮箱轮询+收发+新邮件唤醒 Agent）社区。
+**E. 日程/任务/通讯（5 → 官方套件 §5.4）**：日程/任务/通讯类插件 5 项（每小时清过期+提取下一日程、定时任务文件即消息、任务派发中心、"未来电话"定时发送）→ 并入日程通讯套件；**邮箱轮询收发+新邮件唤醒 Agent** 一件社区。
 
-**F. 工具/执行（11 → 官方参考 + 社区）**：FileOperator（19 命令+PDF/Word 提取）/PowerShellExecutor/LinuxShellExecutor/SciCalculator（AST 白名单+sympy→社区）/VCPEverything（毫秒级全盘搜索）/CodeSearcher/DailyNoteSearcher（Rust 高性能搜索）/SSHManagerService（UDS 连接池）/LinuxLogMonitor/ArtistMatcher/EmojiListGenerator。
+**F. 工具/执行（11 → 官方参考 + 社区）**：工具/执行类插件 11 项（文件操作 19 命令+PDF/Word 提取、PowerShell/Linux shell 执行、AST 白名单计算器、毫秒级全盘搜索、代码/笔记高速搜索、SSH 连接池、日志监控、表情清单生成等）。
 
-**G. Agent/智能体（6 → 参考）**：MagiAgent（三贤人会议=多视角审议）/AICodeWorker（报告锚点: 读取文件清单+执行结果摘要）/AgentMessage（WS 格式化消息=主动送达）/OpenHerPersona（人格观测: 向量轴测认知/情感/驱动力）/AgentDream（梦系统+写操作审批门→我们做梦机制的增强点）/DeepWikiVCP。
+**G. Agent/智能体（6 → 参考）**：Agent/智能体类插件 6 项（多视角审议会议、报告锚点=读取文件清单+执行结果摘要、WS 格式化消息主动送达、人格向量观测、梦系统+写操作审批门→我们做梦机制的增强点、wiki 知识检索）。
 
-**H. 桥接/平台（6 → 参考）**：VCPToolBridge（工具导出外部）/VCPBridgeServer（透明代理拦截 CLI 注入 System Prompt）/ChromeBridge（操作 Chrome）/DynamicToolBridge/SkillBridge（SKILL.md 目录索引）/SnowBridge。
+**H. 桥接/平台（6 → 参考）**：桥接/平台类插件 6 项（工具导出外部、透明代理拦截 CLI 注入 System Prompt、浏览器操作、动态工具桥、SKILL.md 目录索引等）。
 
-**I. 其他/平台件（21）**：PluginManager/PluginSourceViewer/PlaceholderExplorer（占位符扫描）/VCPLog（WS 日志+离线补发）/UserAuth（6 位认证码, 混淆级→不做）/ToolCallRecordQuery（审计）/VCPTavern（SillyTavern 式可视化注入→Web 面板灵感）/WeatherReporter（7 源并行+stale 降级）/ImageProcessor/CapturePreprocessor/MediaRenderer/ImageFileServer/DailyHot/FileListGenerator/FileTreeGenerator/EmojiListGenerator/PlaceholderExplorerCommand/VCPForum 系/TarotDivination。
+**I. 其他/平台件（21）**：平台件类插件 21 项（插件管理/源码查看、占位符扫描、WS 日志+离线补发、6 位认证码（混淆级→不做）、调用审计、可视化注入 Web 面板、7 源并行天气+stale 降级、图片处理/预处理/渲染/文件服务、热榜、文件清单/树生成、表情生成、论坛系、占卜等）。
 
 **J. 核心 modules 深读（关键机制与启示）**：
 
 | 模块 | 机制 | 对 Apeireth 的启示 |
 |---|---|---|
 | chatCompletionHandler | **23 步编排**：回放缓存幂等/断联级联中止/模型重定向/占位符扫描/语义路由/变量替换/媒体/预处理器链/OneRing 冻结/重试+模型回退合一"尝试序列"/工具循环深度上限 5 | 管线显式编号阶段; CancellationToken+timeout; 尝试序列模式 |
-| vcpLoop 三件套 | TOOL_REQUEST 文本协议（`<<<[TOOL_REQUEST]>>>` 始末语法+ESCAPE+archery 异步分离+思考块剥离防潜藏调用）; toolExecutor 含 vref 语义引用（对话压缩加权向量+零额外 API 检索注入）; 模糊标记匹配 | **宽松语法解析层移植**（tool-runtime 增强）; vref 零成本旁路增强 |
+| 宽松工具协议三件套 | TOOL_REQUEST 文本协议（`<<<[TOOL_REQUEST]>>>` 始末语法+ESCAPE+archery 异步分离+思考块剥离防潜藏调用）; toolExecutor 含 vref 语义引用（对话压缩加权向量+零额外 API 检索注入）; 模糊标记匹配 | **宽松语法解析层实现**（tool-runtime 增强）; vref 零成本旁路增强 |
 | dynamicToolRegistry | 事件驱动同步（sha256 判变, 下线=状态翻转）; **分类四级降级**（自定义→小模型→RAG→关键词）; **注入预算化**（light list + 仅相关展开, 16000 字符上限） | tool-registry 补"分类责任链 + 注入注意力预算" |
 | toolApprovalManager | 决策器/审批通道解耦（纯函数返回 ApprovalDecision）; 命令级粒度（tool:command）; **静默拒绝**; 结构化拒绝 `{rejected_by_user, error_type}` | tool-approval 补命令级+静默拒绝+结构化拒绝 |
 | toolResultPrivacyGuard | 递归脱敏: 敏感键名/env 赋值行/高置信 token 模式（sk-/ghp_/AKIA）; data:image base64 白名单换出; 首尾保留 4 字符 | ✅ env 行级+sk- 模式已落地 apeireth-guard (任务 ae12d9eb, pii.rs SecretToken+EnvSecret; 报告 reports/ae12d9eb-...-security_reviewer2-report.md); tool-runtime 递归版已有 (禁改) |
-| foldProtocol | **同文档分级显隐**: `[===vcp_fold:阈值===]` 行标记, 语义相似度≥阈值才展开, 未展开提示"还隐藏收纳了 N 组" | context-fold 补 FoldBlock 分级显隐（VCP 原创） |
-| messageProcessor | **占位符变量宇宙**: 分型变量源/特权角色（agent/toolbox 只在 system 展开）/AgentGuard 单次展开/ToolboxGuard 每种一次/循环依赖检测/动态折叠加权平均向量 | **提示词装配引擎**——Rust 无对应物, VCP 最强架构级原创, 最高优先 |
+| foldProtocol | **同文档分级显隐**: `[===vcp_fold:阈值===]` 行标记, 语义相似度≥阈值才展开, 未展开提示"还隐藏收纳了 N 组" | context-fold 补 FoldBlock 分级显隐（该工具箱原创） |
+| messageProcessor | **占位符变量宇宙**: 分型变量源/特权角色（agent/toolbox 只在 system 展开）/AgentGuard 单次展开/ToolboxGuard 每种一次/循环依赖检测/动态折叠加权平均向量 | **提示词装配引擎**——Rust 无对应物, 是该工具箱最强架构级原创, 最高优先 |
 | semanticModelRouter + reasoningContentAdapter | 虚拟模型名+意图嵌入选模型+容灾链（命中→default→fallback）; 13 个别名推理字段归一为 think 块 | 网关层两块适配件（provider/gateway 补） |
 | finalContextStore/contextManager | 5 组滑窗快照+token 估算; 必须保留集合裁剪 | telemetry 小增强 |
-| sensitiveEnv/vcpLogReplayManager | 子进程剥离 IPC 凭据; 离线通知补发（审批请求豁免） | 小工程模式 |
+| sensitiveEnv/日志重放管理器 | 子进程剥离 IPC 凭据; 离线通知补发（审批请求豁免） | 小工程模式 |
 
-### 8.4 可吸收清单（VCP 新版 → Apeireth 任务映射）
+### 8.4 可吸收清单（同类工具箱新版 → Apeireth 任务映射）
 
 | 来源 | 吸收为 | 优先级 |
 |---|---|---|
 | **messageProcessor 占位符装配引擎** | 新官方模块：提示词装配（特权角色+单次展开+环检测+分型变量源）——Apeireth 空白区最高价值 | **P0** |
-| **vcpLoop 宽松工具协议层** | tool-runtime 增强：始末语法+ESCAPE+模糊标记+批量后缀+archery+思考块剥离 | **P0** |
+| **宽松工具协议层** | tool-runtime 增强：始末语法+ESCAPE+模糊标记+批量后缀+archery+思考块剥离 | **P0** |
 | OneRing 统一上下文 | A2 升级：跨前端统一时间线账本（SSE/Lark/Telegram/Web 归入同一 Agent 时间线） | P0 |
 | ThoughtClusterManager | 记忆域深化包新增：AI 思维链文件 + 元自学习（反思/涌现消费） | P0 |
 | artifact_sig 内容寻址 | semantic/图资产"内容签名→跳过重算"门禁 | P0 |
@@ -321,9 +321,9 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 | dynamicToolRegistry 预算化 | tool-registry 补注入注意力预算+分类链 ✅ (提交 8b6a825d, backlog N15) | P1 |
 | DigitalOracle 金融源 | 预测机套件旗舰数据源（含预测市场） | P1 |
 | AgentDream 审批门 | 做梦机制补写操作审批门 | P2 |
-| AICodeWorker 报告锚点 | 工具输出规范借鉴（读取清单+结果摘要锚点） | P2 |
+| 报告锚点 | 工具输出规范对齐（读取清单+结果摘要锚点） | P2 |
 | Residual Pyramid / Spike / 双场 / 图对齐 / DTSC | 记忆检索增强（随记忆域深化包推进） | P1 |
-| SkillBridge / PlaceholderExplorer / VCPLog | 社区插件规范借鉴 | P2 |
+| SKILL.md 目录索引 / 占位符扫描 / WS 日志补发 | 社区插件规范对齐 | P2 |
 | **不做** | captchaDecoder（混淆级安全）; LinuxShellExecutor 八层字符串过滤（我们走真 seccomp）; 进程化插件架构 | — |
 
 ---
@@ -378,10 +378,10 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 | TP2 | **工具装配 9 crate**（N17） | Tool trait + ToolRegistry.register + ToolBridge | **禁止合并大 crate**；**禁止自写调用方式**；每 crate 提供 register 函数统一注册；白名单 + CapabilityCatalog | 9 工具全注册 + 各自测试全绿 + 卸载真清理 |
 | TP3 | **apeireth-credentials**（N21） | 新 crate；衔接权限洋葱 master token | 不存明文到日志；按服务名读写；0 假装"安全存储"边界如实标注 | 读写/未知名报错/脱敏测试 |
 | TP4 | **ShellPreset**（N22） | tool-shell 内 | 预设名展开为完整命令模板；白名单预设；参数走模板防注入 | 预设展开/非法预设拒绝/注入测试 |
-| TP5 | **提示词装配引擎**（N9） | 新 lib 模块（VCP messageProcessor 范式） | 特权角色+单次展开+环检测+分型变量源；挂 CompanionApp 注入链 | 装配/防重复展开/环检测测试 |
+| TP5 | **提示词装配引擎**（N9） | 新 lib 模块（同类工具箱 messageProcessor 范式） | 特权角色+单次展开+环检测+分型变量源；挂 CompanionApp 注入链 | 装配/防重复展开/环检测测试 |
 | TP6 | **ContextLedger 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本；SQLite 内容寻址 + fuzzy diff 对账 | 多前端同一叙事/来源标记测试 |
 | TP7 | **金融数据源**（N3） | oracle 预测机 | DigitalOracle 精神：宏观/利率/股票/加密/预测市场；mock 先行；可证伪预测自动登记 | mock 全测 + 预测 resolve 闭环 |
-| TP8 | **观测缓存**（N8） | 查询管线中间产物 | generation 绑定 + TTL + 防跨代脏读（VCP MemoRuntime 模式） | 缓存命中/代际失效测试 |
+| TP8 | **观测缓存**（N8） | 查询管线中间产物 | generation 绑定 + TTL + 防跨代脏读（MemoRuntime 模式） | 缓存命中/代际失效测试 |
 | TP9 | **消费方规范落地**（N18） | maintenance-guide + 孤儿体检脚本 | 新 crate 必须登记消费方；`scripts/audit/orphan-scan.ps1` 入库为定期检查 | 规范写入 + 扫描脚本可跑 |
 | TP10 | **ClusterStore 元自学习**（N4） | 记忆域深化 | AI 思维链文件 + 反思/涌现消费；versioned chain | 创建/编辑/消费链测试 |
 

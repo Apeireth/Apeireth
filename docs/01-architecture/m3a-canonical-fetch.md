@@ -1,4 +1,4 @@
-# M3A — Canonical Controlled Fetch Capability Port
+# M3A — Canonical Controlled Fetch Capability Implementation
 
 > **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
 
@@ -16,18 +16,18 @@ Fetch functionality; M3A proves it can enter the frozen
 Plugin / Governance / Tool / Egress / Runtime boundaries without importing
 master architecture.
 
-## 2. Master donor audit
+## 2. Baseline audit
 
-Master donor SHA: `7f515aab37d1a9e58f1eedb0a92691cfe496f4d6`
+Baseline SHA: `7f515aab37d1a9e58f1eedb0a92691cfe496f4d6`
 
-| Donor component | Actual maturity | Useful behavior | Security gap | Strategy |
+| Baseline component | Actual maturity | Useful behavior | Security gap | Strategy |
 | --- | --- | --- | --- | --- |
 | `reconstruction_v2/crates/apeireth-tools/src/builtin/fetch.rs` | BROKEN | Schema idea (`url`, optional `method`), status-as-result idea, medium risk label | Validates DNS then calls a plain `reqwest::Client`; second DNS lookup after validation; opaque redirects; no DNS pinning; no `no_proxy()`; supports POST; no body bound until after full `text()` read; `text()` returns empty on invalid UTF-8 instead of an error | DROP implementation; ADAPT narrow schema idea and status-as-result semantics |
 | `reconstruction_v2/crates/apeireth-tool-fetch/src/http_fetch.rs` | BROKEN for SSRF | Error UX idea (`TooLarge`, `Http`), content-type capture, `final_url` metadata idea | Uses `apeireth-http-client` with opaque redirect following and no per-hop destination revalidation; POST/body support; HTML extraction and retry/cache/metrics are out of scope for M3A | DROP implementation; ADAPT `TooLarge`-style bounded-failure wording |
 | `reconstruction_v2/crates/apeireth-tool-fetch/src/config.rs` | PARTIAL | Timeout/UA/body-limit config shape | Retries, cache, redirect toggle; no egress policy | DROP; canonical `FetchConfig` owns an `Arc<ControlledEgress>` and a fixed optional User-Agent |
-| `crates/apeireth-tool-fetch` (legacy current-branch copy) | BROKEN for SSRF | None beyond donor above | Same as donor; duplicate HTTP stack and registry | DROP |
+| `crates/apeireth-tool-fetch` (legacy current-branch copy) | BROKEN for SSRF | None beyond baseline above | Same as baseline; duplicate HTTP stack and registry | DROP |
 
-The donor's central SSRF gap is confirmed: destination validation is performed
+The baseline's central SSRF gap is confirmed: destination validation is performed
 by the tool, then a different, opaque HTTP client performs a fresh DNS lookup
 and follows redirects without revalidation. Canonical Fetch must not do that.
 

@@ -1,6 +1,6 @@
-//! `apeireth-memory::three_layer` — **R30 U9 claude-mem 3 层记忆 facade**
+//! `apeireth-memory::three_layer` — **R30 U9 3 层记忆 facade**
 //!
-//! **设计哲学** (claude-mem 借鉴, 通用工程实践):
+//! **设计哲学** (通用工程实践):
 //! - **Working** (工作层): 当前 session 的 in-memory ring buffer, 极快 (无 IO), 给 LLM 喂上下文
 //! - **Short-term** (短程层): 最近 N 小时的 episode (SQLite), 中等 IO, 跨 session 回忆
 //! - **Long-term** (长程层): 永久笔记 + IdentityCard (SQLite), 慢但可压缩检索
@@ -10,7 +10,7 @@
 //! - recall(query, depth) → 按 depth 选层: depth=0 working, depth=1 short, depth=2 long
 //! - promote(working→short) → 后台任务, working 满了就 promote 到 short
 //!
-//! **Apeireth 扩展** (claude-mem 没有):
+//! **Apeireth 扩展** (同类工程没有):
 //! - depth 参数: 让 caller 选"速度/范围"权衡, 不要全查
 //! - compress 钩子: 主人按需压缩 (不是自动后台, 避免后台跑 LLM 烧钱)
 
@@ -158,9 +158,9 @@ impl ThreeLayerMemory {
         }
     }
 
-    /// R33-2 (mem0 借鉴): promote working → long-term notes (自动 fact extraction)
+    /// R33-2: promote working → long-term notes (自动 fact extraction)
     ///
-    /// **mem0 思想** (开源 long-term memory, Apache 2.0):
+    /// **同类长期记忆工程做法** (开源 long-term memory, Apache 2.0):
     /// - `add("I love Rust", user_id=...)` 自动抽 fact
     /// - 走 LLM 抽 fact (我们不用, 烧钱)
     ///
@@ -202,7 +202,7 @@ impl ThreeLayerMemory {
     }
 }
 
-/// R33-2 (mem0 借鉴): 5 启发式 fact extraction rule
+/// R33-2: 5 启发式 fact extraction rule
 ///
 /// **不调 LLM** (R19 离线优先, 零成本). 用简单模式匹配 + 关键句.
 fn extract_facts(text: &str) -> Vec<String> {
@@ -453,7 +453,7 @@ mod tests {
         assert!(r.is_err(), "depth=99 应报错, got: {:?}", r);
     }
 
-    // R33-2 (mem0 借鉴) 测试
+    // R33-2 测试
     #[test]
     fn r33_promote_with_summarize_extracts_digit_fact() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open"));

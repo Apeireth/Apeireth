@@ -71,7 +71,7 @@ Status:          📊 历史进展快照；当前状态见覆盖说明
 
 ### 2.5 阶段 5: cognitive module + RC-2 写真 + 子代理 E/F 建议续
 
-| Commit | 内容 | 来源 |
+| Commit | 内容 | 依据 |
 |---|---|---|
 | `4e4fba89` | **RC-2 Experience trait 真 SQLite** + RC-8 改名 (子代理 C 反馈修正) | 我 + 子代理 C |
 | `0ec9ccae` | docs: 接手人交付 (5 doc + HANDOFF-NOTES) | 子代理 D 写手册 |
@@ -92,7 +92,7 @@ Status:          📊 历史进展快照；当前状态见覆盖说明
 
 ### 2.7 阶段 7: 接手人交付 + 子代理审查修 (本会话)
 
-| Commit | 内容 | 来源 |
+| Commit | 内容 | 依据 |
 |---|---|---|
 | `0ec9ccae` | docs: 接手人交付 (5 doc + HANDOFF-NOTES) | 子代理 D 写手册 |
 | `38cc1039` | RC-10 line header AAD tamper 保护 | O-6 #23, 子代理 C 建议 #5 |
@@ -382,7 +382,7 @@ _本文档 v2 续 (2026-08-28): HEAD `ecb78db4` 82 commit 进展快照. 0 装诚
 
 ### 18. 接手人 5 actionable + 4 新加 (per 子代理 D handoff)
 
-- ✅ #1 RC-5/6/7 + 9 organ 真移植全 done
+- ✅ #1 RC-5/6/7 + 9 organ 真实现全 done
 - ✅ #2 哲学锚 ledger 待核
 - ✅ #3 12 consumer 弃用迁移
 - ✅ #4 RC-10 line header AAD + APX2 envelope

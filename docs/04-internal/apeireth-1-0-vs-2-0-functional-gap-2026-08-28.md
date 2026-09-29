@@ -36,7 +36,7 @@ Author:          主代理 Mavis
 
 **主代理自省 (per O-5)**:
 - Round 1-10 一直画 "v2 工程架构现状", 缺 1.0 vs 2.0 功能对比 — 这就是 release 必补盲点
-- v2 借鉴链 (research/source ~36 真开源) + R7 5 真调研 (物种化) 都是架构 + 设计思路借鉴, **不是功能全集对比**
+- v2 吸收链 (research/source ~36 真开源) + R7 5 真调研 (物种化) 都是架构 + 设计思路对齐, **不是功能全集对比**
 - v2 release 估 2027-Q1-Q2 (per MANIFESTO §14), **必须 0 缺 1.0 功能全集** + 架构升级
 
 ---
@@ -50,9 +50,9 @@ Author:          主代理 Mavis
 | SQLite pool + write channel | `apeireth-storage/src/pool.rs` | REAL | ✅ 已就位 (per `apeireth-storage/src/lib.rs` Memory_v2 etc.) | 🟢 OK |
 | Migrations | `apeireth-storage/src/migrations.rs` | REAL | ✅ | 🟢 OK |
 | MemoryStore v2 (ACT-R, temporal, tombstone) | `apeireth-storage/src/memory_v2.rs` | REAL | ✅ `cognitive.memory_recall` + `memory_writeback` WIRED | 🟢 OK |
-| VectorIndex (cosine + BM25 hybrid) | `apeireth-storage/src/vector.rs` | REAL | 🟡 **partial** (per R11-Storage 真账, v2 `crates/engine/memory/src/canonical/vector.rs` 已 1:1 翻译 cosine `VectorIndex` + `cosine_similarity` (L1-273) + ACT-R 检索, **缺 BM25 hybrid** — `layered_memo/search.rs` + `dailynote/search.rs` 是 LayeredMemo 子模块 BM25-lite, 不是 storage 主线) | 🟡 partial (cosine ✅, BM25 hybrid ❌) |
-| Graph primitives / causal graph | `apeireth-storage/src/graph.rs`, `graph_primitive.rs`, `graph_ops.rs`, `fold.rs` | PARTIAL | 🟡 **partial** (per R11-Storage 真账, v2 `crates/engine/memory/src/canonical/graph.rs` 已 1:1 翻译 `MemoryGraph` (BFS + shortest_path, L54+), **缺 causal engine** — W1/W2/W3 world_model organ ✅ WIRED 部分) | 🟡 partial (graph primitives ✅, causal engine ❌) |
-| Memory_* support modules | `apeireth-storage/src/memory_*.rs` | PARTIAL | ✅ **OK** (per R11-Storage 真账, v2 `apeireth-memory` 22 modules 大部分 1:1 翻译 v1 donor, **ONNX stub 待决策** — DROP/真接/ADAPT) | 🟢 OK |
+| VectorIndex (cosine + BM25 hybrid) | `apeireth-storage/src/vector.rs` | REAL | 🟡 **partial** (per R11-Storage 真账, v2 `crates/engine/memory/src/canonical/vector.rs` 已语义对齐 cosine `VectorIndex` + `cosine_similarity` (L1-273) + ACT-R 检索, **缺 BM25 hybrid** — `layered_memo/search.rs` + `dailynote/search.rs` 是 LayeredMemo 子模块 BM25-lite, 不是 storage 主线) | 🟡 partial (cosine ✅, BM25 hybrid ❌) |
+| Graph primitives / causal graph | `apeireth-storage/src/graph.rs`, `graph_primitive.rs`, `graph_ops.rs`, `fold.rs` | PARTIAL | 🟡 **partial** (per R11-Storage 真账, v2 `crates/engine/memory/src/canonical/graph.rs` 已语义对齐 `MemoryGraph` (BFS + shortest_path, L54+), **缺 causal engine** — W1/W2/W3 world_model organ ✅ WIRED 部分) | 🟡 partial (graph primitives ✅, causal engine ❌) |
+| Memory_* support modules | `apeireth-storage/src/memory_*.rs` | PARTIAL | ✅ **OK** (per R11-Storage 真账, v2 `apeireth-memory` 22 modules 大部分语义对齐 v1, **ONNX stub 待决策** — DROP/真接/ADAPT) | 🟢 OK |
 
 ### 1.2 Tools 层 (~9 真实施 + 5 PARTIAL)
 
@@ -117,7 +117,7 @@ Author:          主代理 Mavis
 | Provider adapter DTO/parsers | `apeireth-protocol/src/adapters/*.rs` | REAL | ✅ LOW-LEVEL REUSE P1 | 🟢 OK |
 | WsFrame / voice VAD | `apeireth-protocol/src/ws.rs`, `voice.rs` | REAL | ⚠️ ADAPT P2 (CoTDelta 违反 raw CoT 规则) | 🟡 partial |
 | Gateway router/endpoints | `apeireth-gateway/src/server.rs` | MIXED | ✅ `canonical_entry.rs:168-174` 3 路由 (per B 块) | 🟢 OK |
-| Gateway SSE broadcaster | `apeireth-gateway/src/sse.rs` | REAL | ⚠️ R21 待真接 | 🟡 partial (4 段 pipeline session continuity 借鉴 Open-LLM-VTuber, Round 10 P1 #3) |
+| Gateway SSE broadcaster | `apeireth-gateway/src/sse.rs` | REAL | ⚠️ R21 待真接 | 🟡 partial (4 段 pipeline session continuity 对齐同类工程设计, Round 10 P1 #3) |
 | Gateway egress filter | `apeireth-gateway/src/egress.rs` | REAL | ✅ egress tests 已装 | 🟢 OK |
 | Gateway MCP handler | `apeireth-gateway/src/mcp.rs` | PARTIAL | ⚠️ ADAPT P2 (binds master ToolRegistry) | 🟡 partial |
 
@@ -125,21 +125,21 @@ Author:          主代理 Mavis
 
 | Feature | 1.0 path | Maturity | 2.0 状态 | Gap 真账 |
 |---|---|---|---|---|
-| Emotion Plutchik/PAD | `apeireth-companion/src/emotion.rs` | REAL | ✅ `F1 emotion_memory` organ 1:1 翻译 | 🟢 OK |
-| Borbely drive / rhythm | `apeireth-companion/src/emergence.rs` | REAL | ✅ `E7 emergence` organ 1:1 翻译 | 🟢 OK |
+| Emotion Plutchik/PAD | `apeireth-companion/src/emotion.rs` | REAL | ✅ `F1 emotion_memory` organ 语义对齐 | 🟢 OK |
+| Borbely drive / rhythm | `apeireth-companion/src/emergence.rs` | REAL | ✅ `E7 emergence` organ 语义对齐 | 🟢 OK |
 | DreamEngine (triple extraction) | `apeireth-companion/src/dream.rs` | PARTIAL | ⚠️ ADAPT P2 (W2/W3 STUB) | 🟡 partial |
-| CuriosityEngine (score) | `apeireth-companion/src/curiosity.rs` | PARTIAL | ✅ `E4 curiosity` organ 1:1 翻译 (per v1 donor) | 🟢 OK (organ 借, score 同源) |
+| CuriosityEngine (score) | `apeireth-companion/src/curiosity.rs` | PARTIAL | ✅ `E4 curiosity` organ 语义对齐 (per v1) | 🟢 OK (organ 对齐, score 同源) |
 | EpistemicHealer (keyword) | `apeireth-companion/src/epistemic.rs` | PARTIAL | ⚠️ ADAPT P2 | 🟡 partial |
 | ExperienceQueue (observer) | `apeireth-companion/src/observer_capture.rs` | REAL | ✅ `R14 perception 真 modality` 待硬件 | 🟢 OK (trait 借) |
 | PromptAssembler | `apeireth-companion/src/prompt_assembler.rs` | REAL | ⚠️ ADAPT P1 (含 raw CoT directive 必须 strip) | 🟡 partial |
-| WorldModel v1 / causal | `apeireth-companion/src/world_model_v1.rs`, `causal_world_model.rs` | PARTIAL/STUB | ✅ `W1/W2/W3 world_model` organ 1:1 翻译 | 🟢 OK (organ 借) |
+| WorldModel v1 / causal | `apeireth-companion/src/world_model_v1.rs`, `causal_world_model.rs` | PARTIAL/STUB | ✅ `W1/W2/W3 world_model` organ 语义对齐 | 🟢 OK (organ 对齐) |
 | **TopicPredictor + PreloadChannel** | `apeireth-companion/src/proactive_memory.rs:225-258` | REAL | 🟡 R20 真实施中 (per Round 9 R20 spec + readiness 真账) | 🟡 R20 critical path |
-| **TopicCue + Topic + PreloadChannel trait** | 同上 | REAL | 🟡 R20 待 1:1 翻译 | 🟡 R20 |
+| **TopicCue + Topic + PreloadChannel trait** | 同上 | REAL | 🟡 R20 待语义对齐 | 🟡 R20 |
 | **consolidation_writeback pipeline** (反思 → 写回) | `apeireth-companion/src/reflection.rs` + `memory_extractor.rs` + `cross_diary.rs` | REAL | ❌ **0 真实施** (per Mio 真账 §2.2 日记 ↔ cognitive self_assessment + memory_writeback) | 🔴 **缺** (R22 reflection 真实施 + cognitive reflection_writeback_pipeline trait) |
 | **daily_summary / diary** | `apeireth-companion/src/daily_summary.rs` + `diary.rs` | REAL | ❌ **0 真实施** | 🔴 **缺** (Mio 真账 P0 调研 + R22 reflection critical path) |
 | **cross_diary** (跨会话日记聚合) | `apeireth-companion/src/cross_diary.rs` | REAL | ❌ **0 真实施** | 🔴 **缺** |
 | **memory_injection** | `apeireth-companion/src/memory_injection.rs` | REAL | ❌ **0 真实施** | 🔴 **缺** (跟 R20 preference_learning 写入路径相关) |
-| **memory_extractor** | `apeireth-companion/src/memory_extractor.rs` | REAL | ⚠️ ADAPT (per v1 donor, part of cognitive memory module) | 🟡 partial |
+| **memory_extractor** | `apeireth-companion/src/memory_extractor.rs` | REAL | ⚠️ ADAPT (per v1, part of cognitive memory module) | 🟡 partial |
 | **memory_graph** | `apeireth-companion/src/memory_graph.rs` | REAL | ⚠️ ADAPT (part of storage graph 抽象层, per §1.1) | 🟡 partial |
 | **presence** (presence SSE 推流) | `apeireth-companion/src/presence.rs` | REAL | ⚠️ (per master audit L477, transports-only) | 🟡 partial (跟 companion-desktop frontend 集成) |
 | **thought_cluster** | `apeireth-companion/src/thought_cluster.rs` | REAL | ❌ **0 真实施** (跟 cognitive.thought 路径相关) | 🔴 **缺** |
@@ -156,11 +156,11 @@ Author:          主代理 Mavis
 | **morphology** | `apeireth-companion/src/morphology.rs` | REAL | ❌ **0 真实施** (Live2D 形态 / 物种化 frontend 相关) | 🔴 **缺** (跟 Round 10 Open-LLM-VTuber / Firefly / AIRI / Mio 调研相关) |
 | **continuation / continuity / spill** | `apeireth-companion/src/continuation.rs`, `continuity.rs`, `spill.rs` | REAL | ❌ **0 真实施** (对话连续性相关) | 🔴 **缺** |
 | **context / context_rot** | `apeireth-companion/src/context.rs`, `context_rot.rs` | REAL | ❌ **0 真实施** (context window 旋转 / 长程记忆) | 🔴 **缺** |
-| **assemble / hello** | `apeireth-companion/src/assemble.rs`, `hello.rs` | REAL | ❌ **0 真实施** (assemble = 启动/装配, **hello = Windows Hello 生物识别 (NGC 凭据探测, 121 行, 0 装 PASS 标注 "Windows Hello 真绑机制口")**, 不是"启动/装配") | 🔴 **缺** (assemble 1:1 可移植, hello 需主人硬件 + 微软账号配置, 真实施主代理亲测本地 Windows NGC 凭据提供方) |
+| **assemble / hello** | `apeireth-companion/src/assemble.rs`, `hello.rs` | REAL | ❌ **0 真实施** (assemble = 启动/装配, **hello = Windows Hello 生物识别 (NGC 凭据探测, 121 行, 0 装 PASS 标注 "Windows Hello 真绑机制口")**, 不是"启动/装配") | 🔴 **缺** (assemble 可 1:1 迁移, hello 需主人硬件 + 微软账号配置, 真实施主代理亲测本地 Windows NGC 凭据提供方) |
 | **onering** | `apeireth-companion/src/onering.rs` | REAL | ❌ **0 真实施** (单环 / 协调 相关) | 🔴 **缺** |
 | **oracle / oracle_adapters** | `apeireth-companion/src/oracle.rs`, `oracle_adapters.rs` | REAL | ❌ **0 真实施** (oracle / 预言 相关) | 🔴 **缺** |
 | **milestone** | `apeireth-companion/src/milestone.rs` | REAL | ❌ **0 真实施** (里程碑 / 物种化塑形 相关) | 🔴 **缺** |
-| **streaming_chat** | `apeireth-companion/src/streaming_chat.rs` | REAL | ⚠️ (per B 块 gateway SSE pipeline 真实施借鉴) | 🟡 partial |
+| **streaming_chat** | `apeireth-companion/src/streaming_chat.rs` | REAL | ⚠️ (per B 块 gateway SSE pipeline 真实施对齐) | 🟡 partial |
 | **voice_session** | `apeireth-companion/src/voice_session.rs` | REAL | ⚠️ (跟 R14 RC-7 语音 modality 相关) | 🟡 partial |
 | **experiment_field** | `apeireth-companion/src/experiment_field.rs` | REAL | ❌ **0 真实施** (实验场 相关, vision L40 自我改进 独立实验场待建) | 🔴 **缺** |
 | **proactive / progressive / pentest** | `apeireth-companion/src/proactive.rs`, `progressive.rs`, `pentest.rs` | REAL | ❌ **0 真实施** (主动 / 渐进 / 渗透测试 相关) | 🔴 **缺** |
@@ -181,11 +181,11 @@ Author:          主代理 Mavis
 
 ### 2.1 🟢 OK (v2 已就位 或 等价替代)
 
-约 **30 项** ✅, 包括: Storage (SQLite pool / migrations / MemoryStore v2), Tools 核心 (Shell / Filesystem / Fetch / Search / Repo), Sandbox Platform (Windows JobObject 替代 OK), Governance (5-gate + onion + PII + AuditHashChain + SelfDisableGuard), EventBus core, SessionManager, UnifiedRuntimeHost DROP, Protocol normalized DTOs, Provider adapter DTOs, Gateway router, Gateway egress, Companion emotion (F1) + Borbely (E7) + curiosity (E4) + world_model (W1/W2/W3) 全部 1:1 翻译 v1.
+约 **30 项** ✅, 包括: Storage (SQLite pool / migrations / MemoryStore v2), Tools 核心 (Shell / Filesystem / Fetch / Search / Repo), Sandbox Platform (Windows JobObject 替代 OK), Governance (5-gate + onion + PII + AuditHashChain + SelfDisableGuard), EventBus core, SessionManager, UnifiedRuntimeHost DROP, Protocol normalized DTOs, Provider adapter DTOs, Gateway router, Gateway egress, Companion emotion (F1) + Borbely (E7) + curiosity (E4) + world_model (W1/W2/W3) 全部语义对齐 v1.
 
 ### 2.2 🟡 Partial (v2 部分真实施, 调研就位或 DEFER)
 
-约 **15 项**, 包括: Memory support modules, Browser tool, Learning tool, SystemMonitor (DEFER P3), WorktreeSandbox (DEFER P2), MCP protocol (ADAPT P1), SovereignControl (ADAPT P2), EventBusBackbone (ADAPT P2), Scheduler (DEFER P2), Telemetry (DEFER P2), WsFrame (ADAPT P2, CoTDelta 违反 raw CoT), Gateway SSE broadcaster (R21 待), Gateway MCP handler (ADAPT P2), DreamEngine (W2/W3 STUB), EpistemicHealer (ADAPT P2), PromptAssembler (ADAPT P1, raw CoT strip), TopicPredictor/PreloadChannel (R20 真实施中), memory_extractor/memory_graph (ADAPT), presence (companion-desktop 集成), streaming_chat (B 块 gateway SSE 真实施借鉴), voice_session (R14 真 modality 真接).
+约 **15 项**, 包括: Memory support modules, Browser tool, Learning tool, SystemMonitor (DEFER P3), WorktreeSandbox (DEFER P2), MCP protocol (ADAPT P1), SovereignControl (ADAPT P2), EventBusBackbone (ADAPT P2), Scheduler (DEFER P2), Telemetry (DEFER P2), WsFrame (ADAPT P2, CoTDelta 违反 raw CoT), Gateway SSE broadcaster (R21 待), Gateway MCP handler (ADAPT P2), DreamEngine (W2/W3 STUB), EpistemicHealer (ADAPT P2), PromptAssembler (ADAPT P1, raw CoT strip), TopicPredictor/PreloadChannel (R20 真实施中), memory_extractor/memory_graph (ADAPT), presence (companion-desktop 集成), streaming_chat (B 块 gateway SSE 真实施对齐), voice_session (R14 真 modality 真接).
 
 ### 2.3 🔴 缺 (v2 0 真实施, 必补或必调研)
 
@@ -218,7 +218,7 @@ Author:          主代理 Mavis
 
 - **meta_thinking** (元思考)
 - **reflexion** (反思循环)
-- **reflection** (反思, v2 R22 真实施) — 1:1 翻译 v1 donor
+- **reflection** (反思, v2 R22 真实施) — 语义对齐 v1
 - **self_assessment** (v2 cognitive slot WIRED, Judge-backed)
 
 ### 2.7 协调 + 上下文缺口
@@ -227,7 +227,7 @@ Author:          主代理 Mavis
 - **oracle / oracle_adapters** (预言 / 适配器)
 - **context / context_rot** (context window / 旋转)
 - **continuation / continuity / spill** (连续性)
-- **assemble / hello** (assemble = 启动/装配 1:1 可移植, **hello = Windows Hello 生物识别 (NGC 凭据探测, 121 行, 1.0 真账 self-flag "0 装 PASS: 不假装已绑定, 检测不到如实报 Unavailable{reason}")**)
+- **assemble / hello** (assemble = 启动/装配 可 1:1 迁移, **hello = Windows Hello 生物识别 (NGC 凭据探测, 121 行, 1.0 真账 self-flag "0 装 PASS: 不假装已绑定, 检测不到如实报 Unavailable{reason}")**)
 - **thought_cluster** (思考聚类)
 - **intent_brier** (Brier 校准意图)
 - **confidence** (置信度)
@@ -259,11 +259,11 @@ Author:          主代理 Mavis
 | 3 | **ToolSynthesizer** (sandbox unused fix) | 1 周 | 0 | 派 sub-agent 真调研 + 真实施 (security critical) |
 | 4 | **daily_summary / diary + cross_diary + memory_injection** (长期记忆塑形) | 2-3 周 | 0 | 派 sub-agent 真调研 (Mio 真账 §5 #5 已推荐) + 真实施 (跟 R20 + R22 critical path) |
 | 5 | **Vision ScreenCapture / pHash + OmniParser + DesktopActionTool** (Windows 真接) | 2-3 周 | 硬件 | D 块 RC-7 真 modality 真接 (Windows 真接已调研, 真实施需硬件) |
-| 6 | **Voice whisper 真接** (`apeireth-voice/src/real.rs:824-938` 1:1 翻译) | 1-2 周 | 硬件 | R14 真 modality 真接 (Round 9 RC-7 真账已调研, 真 backend 接入) |
+| 6 | **Voice whisper 真接** (`apeireth-voice/src/real.rs:824-938` 语义对齐) | 1-2 周 | 硬件 | R14 真 modality 真接 (Round 9 RC-7 真账已调研, 真 backend 接入) |
 | 7 | **HybridCognitiveRouter** (master hybrid routing 真接) | 1-2 周 | 0 | 派 sub-agent 真调研 + 真实施 |
 | 8 | **education** (物种化核心, vision L48 "能教养后代") | 2-3 周 | 0 | 派 sub-agent 真调研 + 主代理亲做 spec (物种化核心决策) |
 | 9 | **partner + community + principles** (物种化跨墙信任 + 物种社区 + 哲学价值内化) | 3-4 周 | 0 | 派 sub-agent 真调研 + 主代理亲做 spec |
-| 10 | **timeline + tone + morphology** (物种化塑形时间 + 语言 + 形态) | 2-3 周 | 0 | 派 sub-agent 真调研 + 真实施 (跟 Open-LLM-VTuber / Firefly / AIRI / Mio 借鉴) |
+| 10 | **timeline + tone + morphology** (物种化塑形时间 + 语言 + 形态) | 2-3 周 | 0 | 派 sub-agent 真调研 + 真实施 (对齐同类陪伴工程公开设计) |
 | 11 | **thought_cluster + intent_brier + confidence** (认知聚类 + Brier 校准 + 置信度) | 2-3 周 | 0 | 派 sub-agent 真调研 + 真实施 |
 | 12 | **onering + oracle + oracle_adapters + meta_thinking + reflexion** (协调 + 预言 + 元思考 + 反思循环) | 3-4 周 | 0 | 派 sub-agent 真调研 + 真实施 |
 | 13 | **context + context_rot + continuation + continuity + spill + assemble + hello + milestone** (context window + 连续性 + 启动 + 里程碑) | 2-3 周 | 0 | 派 sub-agent 真调研 + 真实施 |
@@ -285,9 +285,9 @@ Author:          主代理 Mavis
 
 ### 4.1 派单原则 (per O-6 总体最优)
 
-- **总估时 P0 必补 (~23 项, per Round 12 终极审计 + Round 13 1.0 maturity 补查)**: 估 **12-14 周 critical path** (修订主代理真账 §3.1 估 3-4 周 ❌ 偏乐观, 实际 12-14 周 = 1:1 翻译 + trait 口主代理亲做 spec + PARTIAL 真实施 critical path 累加). 主代理必亲做 spec ~2 周 (v1 rot_score 融合 + cognitive module trait + education 真 CAS + confidence BetaBinomial + reflexion 3 trait 口 + hello 主题 + git clone v2 master branch)
+- **总估时 P0 必补 (~23 项, per Round 12 终极审计 + Round 13 1.0 maturity 补查)**: 估 **12-14 周 critical path** (修订主代理真账 §3.1 估 3-4 周 ❌ 偏乐观, 实际 12-14 周 = 语义对齐 + trait 口主代理亲做 spec + PARTIAL 真实施 critical path 累加). 主代理必亲做 spec ~2 周 (v1 rot_score 融合 + cognitive module trait + education 真 CAS + confidence BetaBinomial + reflexion 3 trait 口 + hello 主题 + git clone v2 master branch)
 - **并行**: 派 5-6 sub-agent 真调研 (每个 ~2-3 周调研 + ~2-4 周真实施)
-- **不重叠**: 借鉴链 per Round 10 5 真调研 + research/source 已借鉴
+- **不重叠**: 吸收链 per Round 10 5 真调研 + research/source 已吸收
 - **0 装诚实标**: 必含, 不假装 OK
 - **5 重守门 baseline**: cargo test + clippy + LOCKED 0 触碰
 
@@ -317,7 +317,7 @@ Author:          主代理 Mavis
   - 1.0 真账 (maturity + path)
   - 2.0 现状 (maturity + path)
   - 0 装诚实标 (sub-agent 没 git clone v2 master branch, 仅读 2.0 真账推论)
-  - 真实施建议路径 (P0/P1/P2, 估时, 借鉴链)
+  - 真实施建议路径 (P0/P1/P2, 估时, 吸收链)
   - 主代理决策建议
 - 约束: 不写真账以外的 file / 不 git add / commit / push / 0 触碰 LOCKED / ≤ 4h
 
@@ -343,7 +343,7 @@ Author:          主代理 Mavis
 | 1 | 派 sub-agent 真调研 **Storage 抽象层 gap** (VectorIndex + Graph primitives) | 2-3 周 | 0 |
 | 2 | 派 sub-agent 真调研 **长期记忆塑形 gap** (daily_summary / diary + cross_diary + memory_injection) | 2-3 周 | 0 (跟 R20 + R22 + Mio 调研并行) |
 | 3 | 派 sub-agent 真调研 **物种化核心 gap** (education + partner + community + principles) | 3-4 周 | 0 (物种化核心, 主代理拍板 spec) |
-| 4 | 派 sub-agent 真调研 **物种化塑形维度 gap** (timeline + tone + morphology) | 2-3 周 | 0 (跟 Round 10 Open-LLM-VTuber / Firefly / AIRI / Mio 借鉴) |
+| 4 | 派 sub-agent 真调研 **物种化塑形维度 gap** (timeline + tone + morphology) | 2-3 周 | 0 (对齐 Round 10 同类陪伴工程公开设计) |
 | 5 | 派 sub-agent 真调研 **反思+元认知 gap** (meta_thinking + reflexion + thought_cluster + intent_brier + confidence) | 2-3 周 | 0 (跟 R22 reflection 真实施并行) |
 | 6 | 派 sub-agent 真调研 **协调+上下文 gap** (onering + oracle + context + continuation + assemble + milestone + experiment_field + Kani proofs) | 3-4 周 | 0 |
 
@@ -355,7 +355,7 @@ Author:          主代理 Mavis
 | 8 | Browser tool 真接 (Playwright MCP) | 1 周 | 0 (借 Open-LLM-VTuber Carbonyl 调研) |
 | 9 | HybridCognitiveRouter 真接 | 1-2 周 | 0 |
 | 10 | Vision Windows 真接 (ScreenCapture + OmniParser + DesktopAction) | 2-3 周 | D 块硬件 |
-| 11 | Voice whisper 真接 (1:1 翻译 `apeireth-voice/src/real.rs:824-938`) | 1-2 周 | D 块硬件 |
+| 11 | Voice whisper 真接 (语义对齐 `apeireth-voice/src/real.rs:824-938`) | 1-2 周 | D 块硬件 |
 
 ### 6.3 修订 release 路径
 

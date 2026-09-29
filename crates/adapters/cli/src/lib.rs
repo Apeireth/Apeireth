@@ -81,7 +81,7 @@ const PERSONA_ID_ENV: &str = "APEIRETH_PERSONA_ID";
 const SUBJECT_ID_ENV: &str = "APEIRETH_SUBJECT_ID";
 const DEFAULT_PERSONA_ID: &str = "apeireth";
 const DEFAULT_SUBJECT_ID: &str = "local-user";
-// 2026-10-06 W2 记忆闭环批: donor 反幻觉注入格式 / 每轮记忆整理 / 失败闭环。
+// 2026-10-06 W2 记忆闭环批: 反幻觉注入格式 / 每轮记忆整理 / 失败闭环。
 const ENABLE_MEMORY_INJECTION_ENV: &str = "APEIRETH_ENABLE_MEMORY_INJECTION";
 const ENABLE_CONSOLIDATION_ENV: &str = "APEIRETH_ENABLE_CONSOLIDATION";
 const ENABLE_REFLEXION_ENV: &str = "APEIRETH_ENABLE_REFLEXION";
@@ -193,7 +193,7 @@ pub fn embedding_provider_from_env(
     }
 }
 
-/// donor 反幻觉注入格式 (记忆核心族, **默认开**): 开启时记忆 overlay 用编号
+/// 反幻觉注入格式 (记忆核心族, **默认开**): 开启时记忆 overlay 用编号
 /// 证据清单 + 「禁止说『我记得我们以前聊过』」规则; `APEIRETH_ENABLE_MEMORY_INJECTION=0`
 /// 或 `APEIRETH_DISABLE_MEMORY_INJECTION=1` 关回 XML 封闭世界格式 (DISABLE 优先)。
 pub fn memory_injection_enabled_from_env() -> bool {

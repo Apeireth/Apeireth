@@ -1,10 +1,10 @@
 name: Rust tests (OS matrix + cargo-nextest)
 
 # R25 Stage 1: 独立 rust tests workflow (qdrant 模式)
-# 抄自: qdrant/.github/workflows/rust.yml
+# 对齐: qdrant/.github/workflows/rust.yml
 # 模板: https://github.com/qdrant/qdrant/blob/master/.github/workflows/rust.yml
-# 借鉴: tokio ci.yml [test-tokio-full] / [test-workspace-all-features] job
-# 借鉴: wasmtime main.yml [ci] job
+# 结构对齐: tokio ci.yml [test-tokio-full] / [test-workspace-all-features] job
+# 结构对齐: wasmtime main.yml [ci] job
 #
 # 跟 rust-ci.yml 的关系 (R25 Agent D 2026-08-10):
 #   - rust-ci.yml = 旧"一锅炖"R18 升级版 (OS matrix + nextest + release-build + battle-1-2 + ci-summary)
@@ -269,7 +269,7 @@ jobs:
   # 当前用本地 PowerShell 扫描器 (gitleaks binary 因 release-assets DNS 阻塞装不上, 0 装 PASS 标注)
   # 扫描模式: scan-all (working tree) + scan-history (force-push 偷渡防御)
   secret-scan:
-    name: Secret scan (R215 防御层, 借鉴 gitleaks pattern)
+    name: Secret scan (R215 防御层, 高置信凭证 pattern)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

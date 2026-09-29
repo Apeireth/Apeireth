@@ -1,7 +1,7 @@
 //! WS v1 session contract: the state machine that gates [`WsFrame`] traffic on
 //! a single WebSocket connection.
 //!
-//! Recovered from the legacy `apeireth-api::ws_v1` server handler (R20 阶段 2),
+//! Following the legacy `apeireth-api::ws_v1` server handler (R20 阶段 2),
 //! which enforced the blueprint's connection rules inline in an axum task. The
 //! rules are protocol semantics, not transport semantics, so they are
 //! expressed here as a frame-level decision function that any transport
@@ -9,14 +9,14 @@
 //!
 //! 1. **Auth-first gate** — the first frame on a connection MUST be
 //!    [`WsFrame::Auth`]; anything else is closed with `1008 ws_unauthorized`
-//!    (legacy 1:1).
+//!    (legacy parity).
 //! 2. **Version negotiation** — an [`AuthFrame`] whose `ws_version` differs
 //!    from [`WS_PROTOCOL_VERSION`] is closed with `1008 ws_version_mismatch`.
 //!    This is the negotiation hook the blueprint promised ("一旦 bump 必跟
 //!    upgrade 校验同步").
 //! 3. **Direction enforcement** — server-only frames (`ToolResult`,
 //!    `StreamChunk`, `StreamEnd`, `Error`) sent by a client are answered with a
-//!    non-fatal `invalid_direction` [`ErrorFrame`] (legacy 1:1).
+//!    non-fatal `invalid_direction` [`ErrorFrame`] (legacy parity).
 //! 4. **Close-code taxonomy** — `1000` normal, `1008` auth/version failure,
 //!    `1013` concurrency limit, `4xxx` business errors (blueprint §2.5).
 //!
@@ -95,7 +95,7 @@ impl WsSessionGuard {
                     self.admit_auth(auth)
                 } else {
                     // Anything else pre-auth — including an early Close — is
-                    // refused with 1008 (legacy 1:1: close ws_unauthorized).
+                    // refused with 1008 (legacy parity: close ws_unauthorized).
                     WsFrameDecision::Close(CloseFrame {
                         reason: "ws_unauthorized".into(),
                         code: WS_CLOSE_UNAUTHORIZED,
@@ -125,7 +125,7 @@ impl WsSessionGuard {
     /// Version-negotiating auth admission (shared by both states).
     fn admit_auth(&mut self, auth: &AuthFrame) -> WsFrameDecision {
         if auth.ws_version != WS_PROTOCOL_VERSION {
-            // Version negotiation failure: close 1008 (legacy 1:1 with the
+            // Version negotiation failure: close 1008 (legacy parity with the
             // blueprint's "mismatch → close 1008" rule).
             return WsFrameDecision::Close(CloseFrame {
                 reason: "ws_version_mismatch".into(),
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn auth_first_gate_closes_1008() {
-        // Legacy 1:1: non-auth frame before auth → close 1008 ws_unauthorized.
+        // Legacy parity: non-auth frame before auth → close 1008 ws_unauthorized.
         let mut guard = WsSessionGuard::new();
         let d = guard.admit(&invoke());
         match d {
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn server_only_frames_from_client_are_non_fatal_errors() {
-        // Legacy 1:1: ToolResult/StreamChunk/StreamEnd/Error from a client →
+        // Legacy parity: ToolResult/StreamChunk/StreamEnd/Error from a client →
         // invalid_direction error frame, connection continues.
         let mut guard = WsSessionGuard::new();
         guard.admit(&auth(WS_PROTOCOL_VERSION));

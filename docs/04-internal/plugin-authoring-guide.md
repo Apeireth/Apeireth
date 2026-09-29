@@ -314,7 +314,7 @@ pub struct PluginContext {
 }
 ```
 
-**0 装 PASS 红线**：禁止 `std::env::var("OPENAI_API_KEY")`、禁止 `std::fs::read("apikey.txt")`、禁止 `Utc::now()`。这些在 v1 是常见的"简化"模式，v2 **强制**走 ctx——这是为了可移植 (virtual clock) + 安全 (secret 不落 struct) + 可可观测 (trace 相关性)。
+**0 装 PASS 红线**：禁止 `std::env::var("OPENAI_API_KEY")`、禁止 `std::fs::read("apikey.txt")`、禁止 `Utc::now()`。这些在 v1 是常见的"简化"模式，v2 **强制**走 ctx——这是为了跨环境可迁移 (virtual clock) + 安全 (secret 不落 struct) + 可可观测 (trace 相关性)。
 
 ### 5.2 凭据解析（怎么取 API key）
 

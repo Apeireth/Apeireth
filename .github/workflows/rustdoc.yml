@@ -1,6 +1,6 @@
 name: rustdoc (nightly)
 
-# R18 第 3 阶段: 抄 wasmtime main.yml [doc] job
+# R18 第 3 阶段: 对齐 wasmtime main.yml [doc] job
 # https://github.com/bytecodealliance/wasmtime/blob/main/.github/workflows/main.yml
 # nightly cargo doc, RUSTDOCFLAGS = "-Dwarnings" 拦截坏 doc 链接
 # docs.rs 配置用 --cfg docsrs

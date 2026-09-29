@@ -16,7 +16,7 @@ use apeireth_protocol::canonical::{
 
 /// `CompletionRequest` (factory 边界) → `NormalizedRequest` (provider 边界)。
 ///
-/// **字段映射** (与 minimax factory 原实现一致):
+/// **字段映射** (与 minimax factory 既有实现一致):
 /// - `system_prompt` → 头部 `NormalizedMessage::system(...)`
 /// - `messages` (factory 风格 role/content 字符串) → `NormalizedMessage` (枚举 role + 多模 content)
 /// - `temperature` (f64) → `temperature` (Option<f32>)

@@ -1,8 +1,8 @@
 # Task DAG Lease Mechanism — 设计文档 (B 项) — 2026-08-21
 
 > **状态**: 设计 + 实现 + 测试一次性落地 (P0)
-> **借鉴 ID**: `BORROW-Jimmyxiao2009/AgentFlow-task-dag-lease-2026-08-21`
-> **License**: AgentFlow 无 LICENSE (默认 all-rights-reserved); 本文档**仅借鉴设计思想, 0 行代码复制**, 全 Rust 重写.
+> **吸收 ID**: `BORROW-Jimmyxiao2009/AgentFlow-task-dag-lease-2026-08-21`
+> **License**: AgentFlow 无 LICENSE (默认 all-rights-reserved); 本文档**仅对齐设计思想, 0 行代码复制**, 全 Rust 重写.
 > **哲学锚穿透**: O-1 安全优先 / O-2 走在前人肩上 / O-5 不假装
 
 ---
@@ -19,7 +19,7 @@ R215 audit 已识别此缺陷 (`team-lead/lib.rs:505-506` 的 `let _ = timeout_m
 
 ## 2. 设计目标 (per AgentFlow 教训)
 
-借鉴 AgentFlow 的 `TaskState` + lease 概念, 把"task 生命周期"显式建模:
+对齐来源工程的 `TaskState` + lease 概念, 把"task 生命周期"显式建模:
 
 1. **租约 (Lease)** — task 分配时同时发放一份带 timeout 的租约给 owner agent
 2. **到期回收 (Reap)** — Scheduler 每分钟主动循环 `reap_expired(now)`, 把到期未释放的 task 强制标记为 `Failed` (不是 `Ready`!)
@@ -128,7 +128,7 @@ impl Drop for LeaseGuard {
 - 后续如有跨 crate 需求, `pub use lease::LeaseManager` 即可暴露 — 零迁移成本
 - 新独立 crate 会强制 apeireth-team-lead → apeireth-lease 的反向依赖, 加 depth 无价值
 
-**借鉴 ID**: `BORROW-Jimmyxiao2009/AgentFlow-task-dag-lease-2026-08-21`
+**吸收 ID**: `BORROW-Jimmyxiao2009/AgentFlow-task-dag-lease-2026-08-21`
 
 ## 5. 测试矩阵 (8 项)
 
@@ -163,20 +163,20 @@ impl Drop for LeaseGuard {
 - `wait_agent_idle` 的 timeout (现占位 `let _ = timeout_ms;` per audit) 可作为 reap 触发器 — 每 timeout_ms 检查一次 `reap_expired(now)`
 - Scheduler 后台循环 (per audit 缺) 可用 `parking_lot::Mutex<InMemoryLeaseManager>` 实例, 每分钟调一次 `reap_expired`
 
-## 8. 借鉴合规
+## 8. 吸收合规
 
 | 项 | 值 |
 |----|----|
-| 借鉴仓库 | Jimmyxiao2009/AgentFlow |
+| 吸收来源仓库 | Jimmyxiao2009/AgentFlow |
 | License | ⚠️ 无 LICENSE (默认 all-rights-reserved) |
-| 借鉴方式 | **设计思想 + 字段级 API 形状** (TaskState 6 状态 / 状态机不变量 / lease+timeout+generation 三件套) |
+| 吸收方式 | **设计思想 + 字段级 API 形状** (TaskState 6 状态 / 状态机不变量 / lease+timeout+generation 三件套) |
 | 代码复制 | **0 行** — 全部 Rust 重写, 用 std::sync + parking_lot (而非 AgentFlow 用的第三方 lock lib) |
-| 借鉴 ID | `BORROW-Jimmyxiao2009/AgentFlow-task-dag-lease-2026-08-21` |
-| 字段级移植对应 | AgentFlow `TaskState.{Pending,Rented,Running,Failed,Canceled,Done}` → Rust `TaskState.{Ready,Leased,Running,Failed,Cancelled,Completed}` (改名仅取更标准术语, 字段含义 1:1) |
+| 吸收 ID | `BORROW-Jimmyxiao2009/AgentFlow-task-dag-lease-2026-08-21` |
+| 字段级对齐对应 | AgentFlow `TaskState.{Pending,Rented,Running,Failed,Canceled,Done}` → Rust `TaskState.{Ready,Leased,Running,Failed,Cancelled,Completed}` (改名仅取更标准术语, 字段含义 1:1) |
 
 ## 9. 参考文献
 
 - `crates/apeireth-team-lead/src/lib.rs` — Team Lead 主模块 (anchor for lease integration)
-- `docs/04-internal/borrow-from-jimmyxiao2009.md` — 借鉴合规总册
+- `docs/04-internal/borrow-from-jimmyxiao2009.md` — 吸收合规总册
 - R215 audit — `team-lead/lib.rs:505-506 let _ = timeout_ms; // 占位` (本次落地点之一)
-- `_research_mem/AgentFlow-analysis.md` — AgentFlow 分析报告 (65 KB, 借鉴源头)
+- `_research_mem/AgentFlow-analysis.md` — AgentFlow 分析报告 (65 KB, 吸收源头)

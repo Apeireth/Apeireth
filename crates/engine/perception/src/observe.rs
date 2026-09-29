@@ -1,17 +1,17 @@
-//! Observation-capture queue recovered from companion `observer_capture.rs`.
+//! Observation-capture queue aligned with `observer_capture.rs`.
 //!
-//! Donor behaviour kept:
+//! Baseline behaviour kept:
 //! - candidate = `{tool, args_hash, outcome, ts_ms, source}`
 //! - success/failure summaries truncated to 200 Unicode scalars
 //! - 24h dedup on `(tool, args_hash)`
 //! - in-memory LRU index (cap 1024) independent of the pending FIFO
 //!
-//! Donor behaviour discarded:
+//! Baseline behaviour discarded:
 //! - SQLite persistence via `episodes` (`expc-` prefix) — that is a second
 //!   memory store; v2 memory already owns episodes
 //! - `PostExecuteHook` / `ToolBridge` wiring — old tool-runtime authority
 //!
-//! Hash adaptation: donor used SHA-256 truncated to 16 hex chars. This crate
+//! Hash adaptation: the baseline used SHA-256 truncated to 16 hex chars. This crate
 //! does not take a new `sha2` dependency; FNV-1a 64-bit hex is the same length
 //! and is documented as a salvage hash, not a cryptographic claim.
 
@@ -41,7 +41,7 @@ const FNV64_OFFSET: u64 = 0xcbf29ce484222325;
 /// FNV-1a 64-bit prime.
 const FNV64_PRIME: u64 = 0x100000001b3;
 
-/// Candidate experience source. Donor only shipped `ToolExecution`; the enum
+/// Candidate experience source. The baseline only shipped `ToolExecution`; the enum
 /// is kept so a later owner can add Dialog / Reflection without a schema break.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -85,7 +85,7 @@ impl ObservationOutcome {
         }
     }
 
-    /// Three-way label aligned with donor `experience::Experience.outcome`.
+    /// Three-way label aligned with baseline `experience::Experience.outcome`.
     pub fn label(&self) -> &'static str {
         match self {
             Self::Success { .. } => "success",

@@ -1,6 +1,6 @@
-//! E7 Emergence 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/emergence.rs`).
+//! E7 Emergence 器官真实现（v2）。
 //!
-//! **v1 → v2 1:1 翻译纪律** (per 子代理 R7 独立判断):
+//! **v1 → v2 语义对齐纪律** (per 子代理 R7 独立判断):
 //!
 //! v1 `apeireth-companion::emergence` 真实现是**节律学习 + 边界门控 + 沉默压力 + 沉默驱动
 //! 决策**循环 (`EmergenceLoop<R: RelationshipState>`), 不含"5 状态机"。
@@ -9,10 +9,10 @@
 //! `apeireth-evolution` crate (`EvolutionStateMachine`, 6 状态含 Retired),
 //! 在 `apeireth-companion::organs::AwakeCompanion::ratify_fresh_policy` 调用, 不是
 //! `emergence.rs` 内部状态机. v1 emergence.rs 自身只有 8 重门控的 `tick()`, 返
-//! `Option<Initiative>`. v2 1:1 翻译 = 翻译 v1 真相, 不发明 v1 没有的状态机.
+//! `Option<Initiative>`. v2 语义对齐 = 保留 v1 真相, 不发明 v1 没有的状态机.
 //!
 //! **0 装诚实**:
-//! - 本模块**不**发明"5 状态机"; 只保留 `EmergenceLoop` 1:1 翻译.
+//! - 本模块**不**发明"5 状态机"; 只保留 `EmergenceLoop` 语义对齐.
 //! - `PolicyStage` enum 是**前向声明** (per scene-d §5 决策 1 概念), 显式标注:
 //!   真生产路径待 apeireth-evolution crate 接入; 当前 v2 E7 organ 仅实现 v1 的
 //!   rhythm+boundary 真相, 不假装"emergence 自带 5 状态机".
@@ -40,12 +40,12 @@
 //!   `AwakeCompanion` (在 legacy/donor/) 或 v2 future integration 复用.
 //!
 //! **承接 (per 任务 §5)**:
-//! - 子代理 R1 (F1) / R2 (F4) / R3 (F6) 已就位 1:1 v1 真实现; E7 同款纪律.
+//! - 子代理 R1 (F1) / R2 (F4) / R3 (F6) 已就位 v1 真实现; E7 同款纪律.
 //! - 子代理 Q 报告 #3 "Council 真接 LLM" 已就位 (`LlmFactory` 注入), E7 共享同 trait 边界.
 //! - 与子代理 R8 Memory 兼容: emergence 不写 memory, 仅 consume `context_hint` (String 形态).
 //!
 //! **3 阶审查** (O-6 锚 9):
-//! 1. 总体: 1:1 翻译 v1 `EmergenceLoop`, trait 边界 + future apeireth-evolution 接入预留
+//! 1. 总体: 语义对齐 v1 `EmergenceLoop`, trait 边界 + future apeireth-evolution 接入预留
 //!   (`PolicyStage` 前向声明)
 //! 2. 系统: impl 在 engine (`apeireth-organ`), trait 在 foundation (`apeireth-plugin`)
 //! 3. 架构: `Arc<dyn OrganTrait>` 注入 runtime, E7 trait process() 调 EmergenceLoop
@@ -71,7 +71,7 @@ use apeireth_plugin::organ::{
 pub use apeireth_plugin::organ::InitiativeGate as _PluginInitiativeGate;
 
 // ============================================
-// v1 数据结构 1:1 翻译 (确定性, 无 LLM)
+// v1 数据结构 语义对齐 (确定性, 无 LLM)
 // ============================================
 
 /// 关系深度 (per v1 `RelationshipState::depth()`).
@@ -93,7 +93,7 @@ pub trait RelationshipState {
 
 /// 机制层本地近似 (诚实: 不是真 Bond, 是「最丑能转」的最小实现).
 ///
-/// v1 `LocalRelationship` 1:1; v2 E7 测试用 + 单元验证用.
+/// v1 `LocalRelationship`; v2 E7 测试用 + 单元验证用.
 #[derive(Debug, Clone)]
 pub struct LocalRelationship {
     depth: f64,
@@ -116,13 +116,13 @@ impl RelationshipState for LocalRelationship {
     }
 }
 
-/// 主动动作 (per v1 `Action` 1:1).
+/// 主动动作 (per v1 `Action`).
 ///
 /// v1 `Action::label()` 是机制层选出的动作标签 (非话术文案). v2 真生产路径
 /// `EmergenceOrgan::process()` 把 `action.label()` 装进 `OrganOutput::Emergence.action`.
 ///
 /// **0 装诚实**: v1 `Action::select(context_hint)` 走关键词路由, 输出**动作标签** (e.g.
-/// "问候", "提醒", "跟进话题"), 不产生具体话语. v2 1:1 翻译, 0 装不假装"动作 → LLM 文案".
+/// "问候", "提醒", "跟进话题"), 不产生具体话语. v2 语义对齐, 0 装不假装"动作 → LLM 文案".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     /// 问候 (默认)
@@ -136,7 +136,7 @@ pub enum Action {
 }
 
 impl Action {
-    /// 机制层选动作 (per v1 `actions::select_action` 1:1).
+    /// 机制层选动作 (per v1 `actions::select_action`).
     ///
     /// **0 装诚实**: 简单关键词路由, 不假装是 LLM 决策.
     pub fn select(context_hint: Option<&str>) -> Self {
@@ -153,7 +153,7 @@ impl Action {
         }
     }
 
-    /// 动作标签 (v1 `Action::label()` 1:1).
+    /// 动作标签 (v1 `Action::label()`).
     pub fn label(&self) -> &'static str {
         match self {
             Self::Greet => "问候",
@@ -164,7 +164,7 @@ impl Action {
     }
 }
 
-/// 参数集中地 (per v1 `LoopConfig` 1:1).
+/// 参数集中地 (per v1 `LoopConfig`).
 ///
 /// **0 装诚实**: 当前值是「合理先验」, 不是「数据结论」 (per v1 文档明示, 待拟合).
 #[derive(Debug, Clone)]
@@ -224,7 +224,7 @@ impl Default for LoopConfig {
     }
 }
 
-/// 边界门禁 (per v1 `Boundaries` 1:1).
+/// 边界门禁 (per v1 `Boundaries`).
 #[derive(Debug, Clone)]
 pub struct Boundaries {
     /// 安静窗口起始 (分钟 of day)
@@ -252,7 +252,7 @@ impl Default for Boundaries {
 }
 
 impl Boundaries {
-    /// 在安静窗口内 (per v1 `Boundaries::in_quiet_window` 1:1).
+    /// 在安静窗口内 (per v1 `Boundaries::in_quiet_window`).
     pub fn in_quiet_window(&self, minutes: u32) -> bool {
         match (self.quiet_start_minutes, self.quiet_end_minutes) {
             (Some(s), Some(e)) if s <= e => minutes >= s && minutes < e,
@@ -262,7 +262,7 @@ impl Boundaries {
     }
 }
 
-/// 节律估计 (per v1 `RhythmEstimate` 1:1).
+/// 节律估计 (per v1 `RhythmEstimate`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RhythmEstimate {
     /// 此刻 (传入的 minutes_now) 你活跃的概率: 该时间桶命中数 / 观察天数
@@ -274,7 +274,7 @@ pub struct RhythmEstimate {
 }
 
 impl RhythmEstimate {
-    /// 诚实可解释 (per v1 `RhythmEstimate::explain` 1:1).
+    /// 诚实可解释 (per v1 `RhythmEstimate::explain`).
     pub fn explain(&self) -> String {
         if self.days == 0 {
             return "我还没观察到你的作息, 所以现在不会主动打扰你".to_string();
@@ -288,7 +288,7 @@ impl RhythmEstimate {
     }
 }
 
-/// 直方图节律估计器 (per v1 `RhythmEstimator` 1:1, 无 chrono 适配).
+/// 直方图节律估计器 (per v1 `RhythmEstimator`, 无 chrono 适配).
 ///
 /// **v2 适配**: v1 用 `chrono::DateTime<Utc>` 推 day_key + minutes_of_day; v2 显式
 /// 传 `at_ms: i64` (epoch ms) + 调用方派生 day_key 与 minutes. 此处保留 v1 算法 (直方图
@@ -317,7 +317,7 @@ impl RhythmEstimator {
         }
     }
 
-    /// 喂一次观察 (per v1 `observe` 1:1; 调用方负责 day_key + minutes 派生).
+    /// 喂一次观察 (per v1 `observe`; 调用方负责 day_key + minutes 派生).
     ///
     /// M7: 单日 observations 条目加上限 [`MAX_DAILY_OBSERVATIONS`] — 按天淘汰只约束
     /// "保留几个自然日", 不约束"一天内塞多少条"; 高频 observe 可让单日数组无限增长。
@@ -372,21 +372,21 @@ impl RhythmEstimator {
     }
 }
 
-/// 反馈 (per v1 `Feedback` 1:1).
+/// 反馈 (per v1 `Feedback`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Feedback {
     Responded,
     Ignored,
 }
 
-/// 自评 (per v1 `SelfScore` 1:1).
+/// 自评 (per v1 `SelfScore`).
 #[derive(Debug, Clone, Copy)]
 pub struct SelfScore {
     pub value: f64,
     pub depth_delta: f64,
 }
 
-/// 主动理由 (per v1 `InitiativeReason` 1:1).
+/// 主动理由 (per v1 `InitiativeReason`).
 #[derive(Debug, Clone)]
 pub enum InitiativeReason {
     /// 到了用户通常活跃的时段
@@ -395,7 +395,7 @@ pub enum InitiativeReason {
     LongSilence { since_hours: f64 },
 }
 
-/// Initiative (per v1 `Initiative` 1:1).
+/// Initiative (per v1 `Initiative`).
 #[derive(Debug, Clone)]
 pub struct Initiative {
     pub reason: InitiativeReason,
@@ -407,7 +407,7 @@ pub struct Initiative {
 }
 
 impl Initiative {
-    /// 渲染成诚实可读的消息正文 (per v1 `Initiative::to_message` 1:1).
+    /// 渲染成诚实可读的消息正文 (per v1 `Initiative::to_message`).
     ///
     /// **0 装诚实**: 不含任何固定问候文案——只陈述「为什么现在 + 我猜的作息 + 我记得什么」.
     pub fn to_message(&self) -> String {
@@ -433,7 +433,7 @@ impl Initiative {
     }
 }
 
-/// 历史轨迹条目 (per v1 `HistoryEntry` 1:1).
+/// 历史轨迹条目 (per v1 `HistoryEntry`).
 #[derive(Debug, Clone)]
 pub struct HistoryEntry {
     pub at_ms: i64,
@@ -453,7 +453,7 @@ pub struct HistoryEntry {
 /// - v1 `AwakeCompanion::ratify_fresh_policy` 调用 evolution engine 走全链路.
 /// - v2 E7 organ crate 不绑 apeireth-evolution (它在 legacy/donor/), 本 enum 是
 ///   **前向声明**, 留接口给 future 真接. 当前 v2 E7 `process()` 走 rhythm+boundary
-///   loop 1:1 v1 真相, 不假装 emergence 自带 5 状态机.
+///   loop v1 真相, 不假装 emergence 自带 5 状态机.
 ///
 /// **状态机语义** (per v1 `EvolutionStateMachine`):
 /// - `Idle`: 初始态 (未起草策略).
@@ -489,13 +489,13 @@ impl PolicyStage {
 }
 
 // ============================================
-// v1 EmergenceLoop 1:1 翻译 (确定性, 8 重门控)
+// v1 EmergenceLoop 语义对齐 (确定性, 8 重门控)
 // ============================================
 
-/// 涌现循环 (per v1 `EmergenceLoop<R>` 1:1 翻译).
+/// 涌现循环 (per v1 `EmergenceLoop<R>` 语义对齐).
 ///
 /// **0 装诚实**:
-/// - 8 重门控 1:1 翻译: user_quiet / quiet_hours / daily_limit / llm_budget /
+/// - 8 重门控 语义对齐: user_quiet / quiet_hours / daily_limit / llm_budget /
 ///   min_depth / rhythm_unknown / rhythm_veto / drive_low.
 /// - `tick()` 严格走 8 重门控, 不假装"主动开口"诱导.
 /// - 时间注入: v1 用 `chrono::DateTime<Utc>`; v2 改 `at_ms: i64` + 调用方派生
@@ -568,7 +568,7 @@ impl<R: RelationshipState> EmergenceLoop<R> {
 
     /// 每次心跳调用一次. 返回 `Some(Initiative)` = 决定主动找你; `None` = 保持安静.
     ///
-    /// **8 重门控** (per v1 1:1):
+    /// **8 重门控** (per v1):
     /// 0. user_quiet / 1. quiet_hours / 2. daily_limit / 2.5 llm_budget / 3. min_depth /
     ///    4. rhythm_unknown / 5. rhythm_veto / 6. drive_low (冷启动探针兜底).
     ///
@@ -750,7 +750,7 @@ fn days_since_epoch_to_ymd(days_since_epoch: i64) -> (i64, u32, u32) {
 // EmergenceOrgan (v2 trait 真实现)
 // ============================================
 
-/// E7 涌现器官 (per v2 OrganTrait 1:1 翻译 v1 EmergenceLoop).
+/// E7 涌现器官 (per v2 OrganTrait 语义对齐 v1 EmergenceLoop).
 ///
 /// **构造**:
 /// - `llm_factory`: 保留给 v2.1 真生产路径 (LlmFactory 渲染层); 当前算法不用 (v1
@@ -794,7 +794,7 @@ impl EmergenceOrgan {
         }
     }
 
-    /// 观察一次交互 (per v1 `EmergenceLoop::observe_interaction` 1:1, 暴露给 Runtime).
+    /// 观察一次交互 (per v1 `EmergenceLoop::observe_interaction`, 暴露给 Runtime).
     pub fn observe_interaction(&self, at_ms: i64) {
         let day_key = day_key_from_epoch_ms(at_ms);
         let minutes = minutes_of_day_from_epoch_ms(at_ms);
@@ -805,7 +805,7 @@ impl EmergenceOrgan {
         engine.observe_interaction(at_ms, day_key, minutes);
     }
 
-    /// 喂反馈 (per v1 `apply_feedback` 1:1, 暴露给 Runtime).
+    /// 喂反馈 (per v1 `apply_feedback`, 暴露给 Runtime).
     pub fn apply_feedback(&self, feedback: Feedback, at_ms: i64) -> SelfScore {
         let mut engine = self
             .engine
@@ -814,7 +814,7 @@ impl EmergenceOrgan {
         engine.apply_feedback(feedback, at_ms)
     }
 
-    /// 当前关系深度 (per v1 `depth()` 1:1, 暴露给 Runtime).
+    /// 当前关系深度 (per v1 `depth()`, 暴露给 Runtime).
     pub fn depth(&self) -> f64 {
         let engine = self
             .engine
@@ -823,7 +823,7 @@ impl EmergenceOrgan {
         engine.depth()
     }
 
-    /// 最近一次 tick 的门控原因 (per v1 `last_hold()` 1:1, presence 观测口).
+    /// 最近一次 tick 的门控原因 (per v1 `last_hold()`, presence 观测口).
     pub fn last_hold(&self) -> Option<InitiativeGate> {
         let engine = self
             .engine
@@ -832,7 +832,7 @@ impl EmergenceOrgan {
         engine.last_hold()
     }
 
-    /// 手动跑一次 tick (per v1 `tick()` 1:1, 暴露给 Runtime 调试).
+    /// 手动跑一次 tick (per v1 `tick()`, 暴露给 Runtime 调试).
     ///
     /// **v2 适配**: 用 `at_ms` 推 day_key + minutes_now, 0 chrono 依赖.
     pub fn tick(&self, at_ms: i64, context_hint: Option<String>) -> Option<Initiative> {
@@ -868,7 +868,7 @@ impl OrganTrait for EmergenceOrgan {
     }
 
     async fn process(&self, input: OrganInput) -> Result<OrganOutput, OrganError> {
-        // 1:1 翻译 v1 `AwakeCompanion::tick` 简化路径:
+        // 语义对齐 v1 `AwakeCompanion::tick` 简化路径:
         // - 走 EmergenceLoop 8 重门控
         // - 不接 emotion / council / onion (AwakeCompanion 层级负责, v2 不绑)
         // - 不真渲染 Initiative 话术 (v1 也不, action.label() 即机制层输出)
@@ -888,7 +888,7 @@ impl OrganTrait for EmergenceOrgan {
             None => (String::new(), false),
         };
 
-        // Stage 3 完整化: gate = self.last_hold() (per v1 `EmergenceLoop::last_hold()` 1:1).
+        // Stage 3 完整化: gate = self.last_hold() (per v1 `EmergenceLoop::last_hold()`).
         // - 决定开口 (spoke = true) → EmergenceLoop.tick 末尾 self.last_hold = None (per emergence.rs:679).
         //   但有些路径 last_hold 可能没清零 → 仍真返 Some (例如 DriveLow cold-start probe pass 后)。
         //   真生产路径: 决定开口也返 None; 此处不假装。
@@ -910,7 +910,7 @@ impl OrganTrait for EmergenceOrgan {
 }
 
 // ============================================
-// 单元测试 (1:1 翻译 v1 emergence.rs 测试)
+// 单元测试 (语义对齐 v1 emergence.rs 测试)
 // ============================================
 
 #[cfg(test)]
@@ -928,7 +928,7 @@ mod tests {
         }
     }
 
-    /// v1 1:1: 直方图学习概率
+    /// 对齐 v1: 直方图学习概率
     #[test]
     fn rhythm_histogram_learns_probability() {
         let mut e = RhythmEstimator::new(28, 30);
@@ -952,7 +952,7 @@ mod tests {
         assert!(s.contains("猜") && s.contains("置信度") && s.contains("概率"));
     }
 
-    /// v1 1:1: 0 观察 → 不主动 (rhythm_unknown 门控)
+    /// 对齐 v1: 0 观察 → 不主动 (rhythm_unknown 门控)
     #[test]
     fn zero_observations_means_no_initiative() {
         let mut l = EmergenceLoop::new(LocalRelationship::new(0.6), Boundaries::default());
@@ -963,7 +963,7 @@ mod tests {
         assert_eq!(l.last_hold(), Some(InitiativeGate::RhythmUnknown));
     }
 
-    /// v1 1:1: 安静窗口拦下
+    /// 对齐 v1: 安静窗口拦下
     #[test]
     fn quiet_window_blocks_initiative() {
         let b = Boundaries {
@@ -981,7 +981,7 @@ mod tests {
         assert_eq!(l.last_hold(), Some(InitiativeGate::QuietHours));
     }
 
-    /// v1 1:1: 浅关系不主动
+    /// 对齐 v1: 浅关系不主动
     #[test]
     fn shallow_bond_does_not_initiate() {
         let mut l = EmergenceLoop::new(LocalRelationship::new(0.1), Boundaries::default());
@@ -994,7 +994,7 @@ mod tests {
         assert_eq!(l.last_hold(), Some(InitiativeGate::DepthLow));
     }
 
-    /// v1 1:1: 深关系 + 活跃时段 → 主动 + RhythmMatched
+    /// 对齐 v1: 深关系 + 活跃时段 → 主动 + RhythmMatched
     #[test]
     fn deep_bond_in_rhythm_window_initiates() {
         let mut l = EmergenceLoop::new(LocalRelationship::new(0.8), Boundaries::default());
@@ -1017,7 +1017,7 @@ mod tests {
         assert_eq!(l.last_hold(), None); // 决定开口, last_hold 清零
     }
 
-    /// v1 1:1: 反馈塑造关系
+    /// 对齐 v1: 反馈塑造关系
     #[test]
     fn feedback_shapes_relationship() {
         let mut l = EmergenceLoop::new(LocalRelationship::new(0.6), Boundaries::default());
@@ -1038,7 +1038,7 @@ mod tests {
         assert!(s2.value < 0.5);
     }
 
-    /// v1 1:1: 每日频率上限
+    /// 对齐 v1: 每日频率上限
     #[test]
     fn frequency_limit_holds() {
         let b = Boundaries {
@@ -1056,7 +1056,7 @@ mod tests {
         assert_eq!(l.last_hold(), Some(InitiativeGate::DailyLimit));
     }
 
-    /// v1 1:1: LLM 成本预算 (Rate-Limit)
+    /// 对齐 v1: LLM 成本预算 (Rate-Limit)
     #[test]
     fn min_llm_interval_blocks_back_to_back_initiatives() {
         let mut config = LoopConfig::default();
@@ -1085,7 +1085,7 @@ mod tests {
             .is_some());
     }
 
-    /// v1 1:1: 节奏否决 (深夜主动概率低 → 拦下)
+    /// 对齐 v1: 节奏否决 (深夜主动概率低 → 拦下)
     #[test]
     fn rhythm_veto_blocks_late_night() {
         let mut l = EmergenceLoop::new(LocalRelationship::new(0.8), Boundaries::default());

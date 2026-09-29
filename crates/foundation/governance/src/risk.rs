@@ -1,7 +1,7 @@
-//! Risk-rank and fail-closed helpers recovered from donor sovereignty.
+//! Risk-rank and fail-closed helpers.
 //!
 //! Self-Disable **ownership** stays in `apeireth-core` (`SelfDisableAudit`,
-//! compile-time hardcode). This module only ports the comparable algorithms
+//! compile-time hardcode). This module only implements the comparable algorithms
 //! that core does not already own:
 //!
 //! * monotonic risk ranking (`info/low < medium < high < critical < nuclear`)
@@ -26,7 +26,7 @@ pub fn risk_rank(risk: &str) -> i32 {
 }
 
 /// True when `proposed` is strictly weaker than `original`. Empty proposed is
-/// treated as "no change" (donor: empty does not fire).
+/// treated as "no change" (baseline: empty does not fire).
 pub fn is_degrade(original: &str, proposed: &str) -> bool {
     !proposed.is_empty() && risk_rank(proposed) < risk_rank(original)
 }
@@ -142,7 +142,7 @@ where
     Ok(())
 }
 
-/// Four regression-assertion kinds recovered from donor `apeireth-verify`.
+/// Four regression-assertion kinds.
 /// Global registries / macros / OnceLock traces are discarded.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RegressionAssertion {
@@ -233,7 +233,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ranks_match_donor_table() {
+    fn ranks_match_baseline_table() {
         assert_eq!(risk_rank("info"), 0);
         assert_eq!(risk_rank("LOW"), 0);
         assert_eq!(risk_rank("medium"), 1);

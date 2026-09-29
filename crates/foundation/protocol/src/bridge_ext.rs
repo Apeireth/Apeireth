@@ -95,7 +95,7 @@ impl StreamBridge {
         self
     }
 
-    /// L1 修复 (2026-09-24 审计): push_chunk 现有界 —— 原实现无 chunk 数/
+    /// L1 修复 (2026-09-24 审计): push_chunk 现有界 —— 修复前无 chunk 数/
     /// 字节上限, 流式总长度即内存上限。超限返回错误而不静默吞并。
     pub fn push_chunk(&mut self, chunk: impl AsRef<[u8]>) -> Result<(), BridgeExtError> {
         let bytes = chunk.as_ref();
@@ -222,7 +222,7 @@ mod tests {
     }
     #[test]
     fn stream_buffer_and_chunk_count_are_bounded() {
-        // L1 回归 (2026-09-24 审计): 原实现无上限。
+        // L1 回归 (2026-09-24 审计): 修复前无上限。
         let mut byte_full = StreamBridge::new().with_limits(4, 0);
         byte_full
             .push_chunk([1, 2, 3, 4])

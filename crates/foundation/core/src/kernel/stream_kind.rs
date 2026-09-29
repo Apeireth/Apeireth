@@ -38,7 +38,7 @@ pub enum StreamKind {
 }
 
 impl StreamKind {
-    /// 6 变体的字符串名 (LOCKED, 与 SQLite 表名 1:1)
+    /// 6 变体的字符串名 (LOCKED, 与 SQLite 表名一一对应)
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Thought => "thought",

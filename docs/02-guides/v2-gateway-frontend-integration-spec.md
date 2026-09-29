@@ -20,7 +20,7 @@ Author:          子代理 R9
 
 **v2 canonical gateway** (`crates/adapters/gateway/src/lib.rs:1-15`) 已实现 OpenAI Chat 兼容入口 + axum HTTP router (`canonical_entry.rs:168-174`), 真接 LLM call 1.16s (RC-5 MiniMax adapter 拍板, 子代理 D 验证).
 
-**9 organ** 全部真移植 (`crates/engine/organ/src/lib.rs:11-32`): E4/F4/F6/F1/W1/W2/W3/E7/Memory 9 organ trait 抽象 + 1:1 v1 翻译.
+**9 organ** 全部真实现 (`crates/engine/organ/src/lib.rs:11-32`): E4/F4/F6/F1/W1/W2/W3/E7/Memory 9 organ trait 抽象 + 语义对齐 v1.
 
 **认知模块** 6/12 slot WIRED (`docs/04-internal/cognitive-module-wiring.md:20-35`): **6 WIRED + 6 DEFERRED** (`memory_recall` / `preference_recall` / `judge` / `council` / `self_assessment` / `memory_writeback`; judge/council 为 WIRED, OFF by default).
 
@@ -226,9 +226,9 @@ per `crates/engine/organ/src/lib.rs:11-32` 9 organ 全 done, 真生产路径通�
 | W2 | `causal_world_model` | ✅ `CausalWorldModelOrgan` (R5) | 真接 LLM MCTS |
 | W3 | `causal_world_model` 边挖 | ✅ `EdgeMinerOrgan` (R6) | 确定性无 LLM |
 | E4 | `curiosity` | ✅ `CuriosityOrgan` (Q1) | 确定性无 LLM |
-| F4 | `hypothesis` | ✅ `HypothesisOrgan` (R2) | 1:1 翻译 v1 |
-| F1 | `emotion_memory` | ✅ `EmotionOrgan` (R1) | 1:1 翻译 v1 |
-| F6 | `value_cases` | ✅ `ValueCasesOrgan` (R3) | 1:1 翻译 v1 |
+| F4 | `hypothesis` | ✅ `HypothesisOrgan` (R2) | 语义对齐 v1 |
+| F1 | `emotion_memory` | ✅ `EmotionOrgan` (R1) | 语义对齐 v1 |
+| F6 | `value_cases` | ✅ `ValueCasesOrgan` (R3) | 语义对齐 v1 |
 | E7 | `emergence` | ✅ `EmergenceOrgan` (R7) | 确定性无 LLM |
 | Memory | memory_extractor | ✅ `MemoryMergerOrgan` (R8) | 跨 8 organ dedup/weight/persist |
 
@@ -431,7 +431,7 @@ per `docs/04-internal/v2.0.0-release-path.md:30-36`:
 
 | # | 阻塞项 | 状态 | 估时 |
 |---|---|---|---|
-| **#1** | 9 organ 真移植全 done | ✅ DONE (整合 #2 commit `bbf70293`, 9/9) | — |
+| **#1** | 9 organ 真实现全 done | ✅ DONE (整合 #2 commit `bbf70293`, 9/9) | — |
 | **#2** | frontend companion-desktop 对接 | ⏳ **本 spec 完成 + 真实施 = 估 4-6 周** | 2027-Q1 启动 |
 | **#3** | RC-7 Perception backend trait 架构 | ✅ DONE (子代理 R, commit `6e918c12`) | 真生产估 2-3 周 |
 | **#4** | RC-11 migration script + APX2 envelope | ✅ DONE (子代理 I + 别人, commits `926465c8` + `483fb4cd` + `615121bd`) | 真生产前必跑 |
@@ -484,7 +484,7 @@ cargo test -p apeireth-migration --locked                                # Rust 
 
 per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` + 子代理 D handoff + R13 接力审:
 
-- ✅ **#1 RC-5/6/7 + 9 organ 真移植全 done** (HEAD `b9026186` 当时拍板, 9 organ 真兑现; 当前 HEAD `7d990297` Round 6 完)
+- ✅ **#1 RC-5/6/7 + 9 organ 真实现全 done** (HEAD `b9026186` 当时拍板, 9 organ 真兑现; 当前 HEAD `7d990297` Round 6 完)
 - ✅ **#2 哲学锚 ledger 待核** (9 锚 LOCKED 0 改, O-6 新加, `eight_anchors.rs:58-79` 编译期 hardcode)
 - ✅ **#3 12 consumer 弃用迁移** (100+ consumer 0 破, v1 `apeireth-companion` 在 `legacy/donor/`)
 - ✅ **#4 RC-10 line header AAD + APX2 envelope** (`canonical_entry.rs` runtime 通过 RC-10 真接)

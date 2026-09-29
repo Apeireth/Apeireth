@@ -157,7 +157,7 @@ impl MemoryCoordinator {
         self
     }
 
-    /// Switch the prompt overlay renderer to the donor closed-world injection
+    /// Switch the prompt overlay renderer to the closed-world injection
     /// format (2026-10-06 W2: `memory_injection` 反幻觉证据清单; 默认 XML 格式不变).
     #[must_use]
     pub fn with_memory_injection_format(mut self) -> Self {
@@ -806,7 +806,7 @@ impl MemoryCoordinator {
     }
 
     /// Render one selected overlay with the configured format (XML closed-world
-    /// by default; donor injection format behind `with_memory_injection_format`).
+    /// by default; injection format behind `with_memory_injection_format`).
     fn compile_selected(
         &self,
         recalled: &crate::layers::MemoryRecallResult,

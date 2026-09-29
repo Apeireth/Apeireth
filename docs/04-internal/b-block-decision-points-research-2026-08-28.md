@@ -87,14 +87,14 @@ fix(docs): R9/R10/R9-quickstart spec 12 slot 数字 + OrganOrchestrator + 9 acti
 
 **候选**: **A** 默认不暴露 (UI 0) / **B** 暴露全部 9 (估 +1-2 周 UI, 主观性 +) / **C** subset 4 (E4+E7+Memory+W1) / **D** dry_run 模式 opt-in.
 
-**行业惯例**: VSCode Continue/Cursor 默认折叠 reasoning chain; ChatGPT o1/o3 不暴露 CoT; Claude extended thinking opt-in toggle; AutoGen/CrewAI 暴露 agent 间 message 流但不暴露 agent 内部 state. **模式**: 默认 0 暴露, 用户 opt-in 才开 debug 视图.
+**行业惯例**: 主流编码助手默认折叠 reasoning chain; 主流推理对话产品不暴露 CoT; 有的产品 extended thinking 为 opt-in toggle; 同类 Agent 框架暴露 agent 间 message 流但不暴露 agent 内部 state. **模式**: 默认 0 暴露, 用户 opt-in 才开 debug 视图.
 
 **v1 companion 暴露历史**: v1 `RuntimeModal.svelte` 暴露 6 子系统状态 (api/companion/memory/tools/events/sessions) — **0 暴露 organ**. v1 `audit.html`/`approvals.html`/`memory.html`/`sessions.html`/`graph.html` 0 organ mention. v1 9 organ **0 UI 暴露**, 仅 8 重门控留痕 + 主代理审 (`organs.rs:48` `last_decision` + `emergence.rs:460-503` 8 重 gate). v1 `approvals.html` 暴露"批准请求"列表 (主人审批 modal 历史模式).
 
 **推荐 + 理由**: **候选 A 默认不暴露 + 候选 D dry_run 模式 opt-in**. 理由:
 1. **O-5 哲学锚 (不假装)**: 9 organ SSE schema (R9 §4.3) 是 proposal 未真生产, 默认 0 暴露 = 0 装诱导预防.
 2. **v1 历史一致**: v1 0 暴露 organ, UI 6 子系统状态已成熟.
-3. **行业惯例**: ChatGPT/Cursor/VSCode Continue 默认折叠 reasoning.
+3. **行业惯例**: 主流对话/编码产品默认折叠 reasoning.
 4. **E7 emergence 8 重门控严守** (R7 独立判断): frontend 不能为 UI 跳过门控, 默认不暴露 = 0 跳过风险.
 5. **dry_run = escape hatch**: 高级用户/调试可主动 opt-in, 估 +2-3 天 UI (vs 候选 B +1-2 周).
 
@@ -112,7 +112,7 @@ fix(docs): R9/R10/R9-quickstart spec 12 slot 数字 + OrganOrchestrator + 9 acti
 
 **候选**: **A** 409 ApprovalRequired 弹 modal (spec 路径, v1 一致, 需 runtime.ts 改 classifyHttpError) / **B** every tool call 前 modal (friction 极高, 不可用) / **C** dry_run 模式用户主动触发 preview (主人失去实时控制).
 
-**行业惯例**: VSCode Continue modal + "auto-approve this session" toggle; Cursor terminal 类弹 modal, file edit 直接执行; Claude tool_use 透明执行不 modal; Copilot 0 modal diff 视图. **模式**: 默认 0 modal, 危险 tool (terminal/delete/exec) 弹 modal + auto-approve toggle.
+**行业惯例**: 同类编码助手在 terminal 类操作弹 modal + "auto-approve this session" toggle, file edit 直接执行; 有的产品 tool_use 透明执行不 modal; 也有产品 0 modal diff 视图. **模式**: 默认 0 modal, 危险 tool (terminal/delete/exec) 弹 modal + auto-approve toggle.
 
 **推荐 + 理由**: **候选 A (409 ApprovalRequired 弹 modal) + "session auto-approve" toggle (类似 VSCode Continue)**. 理由:
 1. **R9 spec 明确路径**: HTTP 透传 409 → 弹 modal 是 spec 写的.

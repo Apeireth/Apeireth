@@ -4,7 +4,7 @@
 
 > **作者**: sub-agent R11-SpeciesCore (派单 per 主代理 `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` §4.2 #3)
 > **任务**: 真调研物种化核心 4 gap (education + partner + community + principles), 给主代理 Mavis 决策参考
-> **关系**: 跟 `vision.md` L29-49 (物种而非个体 + 教后代 + 跨墙信任 + 三远合一) + `apeireth-true-understanding-2026-08-28.md` §2 (物种 vs 个体) + §3.2 (物种化借鉴边界) + 主代理真账 §2.4 (物种化核心缺口) + `v2-reference-handbook-2026-08-28.md` §1.2-1.3 (五原型 + 12 slot) + F6 organ 集成
+> **关系**: 跟 `vision.md` L29-49 (物种而非个体 + 教后代 + 跨墙信任 + 三远合一) + `apeireth-true-understanding-2026-08-28.md` §2 (物种 vs 个体) + §3.2 (物种化参考边界) + 主代理真账 §2.4 (物种化核心缺口) + `v2-reference-handbook-2026-08-28.md` §1.2-1.3 (五原型 + 12 slot) + F6 organ 集成
 
 ```
 [Document-Meta]
@@ -26,7 +26,7 @@ Author:          sub-agent R11-SpeciesCore
 - **输出**: 本真账 (≤ 300 行)
 - **约束**: 不写真账以外的 file / 不 git add / commit / push / 5 重守门 + LOCKED 0 触碰 / 0 装诚实标 / 物种化维度
 
-**R11 真调研范围**: 物种化核心 = vision L47-49 三大支柱真实施缺口, 不是功能 1:1 翻译, 是 **物种化哲学层落地** ("教'如何成为自己', 而非复制自己").
+**R11 真调研范围**: 物种化核心 = vision L47-49 三大支柱真实施缺口, 不是功能 语义对齐, 是 **物种化哲学层落地** ("教'如何成为自己', 而非复制自己").
 
 ---
 
@@ -49,22 +49,22 @@ Author:          sub-agent R11-SpeciesCore
 
 - **grep 全 crates**: `education` 0 命中 (`crates/` 全搜, 仅 `apeireth-organ` `curiosity` 锚定器官相关, 无 education.rs / 无 education organ / 无 cognitive.slot)
 - **v2 真账**: `vision.md` L48 "能教养后代" 真实施 0 — vision L48 物种化核心 **失守**
-- **1:1 翻译缺**: 教育套件插件模式 0 移植 (per 真账 §2.4 #8: "vision L48 '能教养后代' = species 核心, per Apeireth 真理解")
+- **语义对齐缺**: 教育套件插件模式 0 实现 (per 真账 §2.4 #8: "vision L48 '能教养后代' = species 核心, per Apeireth 真理解")
 
-### 1.3 真实施路径 (物种化核心, 不是功能 1:1)
+### 1.3 真实施路径 (物种化核心, 不是功能逐项照搬)
 
-**物种化借鉴边界** (per apeireth-true-understanding §3.2 修订):
-- **不只功能 1:1 翻译** — 1.0 是技能教学, v2 必须物种化哲学层落地
-- **借鉴 N.E.K.O / AIRI / Open-LLM-VTuber / Firefly / Mio** (Round 10 5 真调研已就位) 的"教/学/塑形"思路
+**物种化参考边界** (per apeireth-true-understanding §3.2 修订):
+- **不只功能 语义对齐** — 1.0 是技能教学, v2 必须物种化哲学层落地
+- **同类陪伴工程 5 项** (Round 10 5 真调研已就位) 的"教/学/塑形"思路
 - **真实施**:
   - **Phase 1 (1 周, 真调研)**: 物种化教育 spec — "如何成为自己" 的工程表达 = per-user personality/profile 导出 + 教学候选生成 (不是技能题)
   - **Phase 2 (2 周, 真实施)**: `apeireth-organ::education` (新 organ) — 提案 "自己如何长大" 的描述 + 主人批准机制 (复用 F6 value_cases approve_principle master token 模式) + LLM Adapter 提炼
   - **Phase 3 (1 周, 集成 + 测试)**: WIRED 到 `OrganOrchestrator` + 12 slot (新 slot `cognitive.education` 或合并到 preference_learning)
 - **估时**: 调研 1 周 + 真实施 3 周 = **4 周 critical path** (主代理估时 §3.1 #8 = 2-3 周偏乐观, 真实施需 4 周)
 - **阻塞**: 0 (无硬件, 无 LOCKED 触碰)
-- **借鉴链**: N.E.K.O 角色塑造 + AIRI Live2D 行为模板 + 1.0 `EducationDxPlugin` 装配模式 + F6 value_cases approve 模式
+- **参考脉络**: 角色塑造设计 + Live2D 行为模板 + 1.0 `EducationDxPlugin` 装配模式 + F6 value_cases approve 模式
 
-### 1.4 物种化借鉴边界 (R11 修订)
+### 1.4 物种化参考边界 (R11 修订)
 
 - **L48 真意 = "知道自己如何长大的存在, 才有资格教养新的存在"**: v2 education = 教"她如何成为她" (per-user profile 导出), 不是教"数学" / "代码" / "工具"
 - **物种 vs 个体核心**: education 不是 1.0 技能层, 而是 **物种传承层** (per vision L51 "三远合一 记忆/物种/传承")
@@ -72,13 +72,13 @@ Author:          sub-agent R11-SpeciesCore
 
 ---
 
-## 2. partner — 1.0 vs 2.0 + 物种化借鉴
+## 2. partner — 1.0 vs 2.0 + 物种化参考
 
 ### 2.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/partner.rs`, 141 行)
 
 **1.0 真实施**:
 - **`Partner`** struct: 用户作为伙伴 (per stage1 2026-08-14 清晰版: 用户在关系里, 是 AI 的伙伴)
-- **`PartnerPreferences`**: 称呼 / 表达风格 / 关心话题 / 雷区 / 隐私边界 (`PrivacyBoundary` per opencode-vibeguard 模式)
+- **`PartnerPreferences`**: 称呼 / 表达风格 / 关心话题 / 雷区 / 隐私边界 (`PrivacyBoundary` per 同类敏感信息脱敏模式)
 - **`Bond`** (per `bond.rs`): 关系阶段 (`BondStage::Initial` 等) — bond 是关系演进状态机
 - **真机制**: `Partner::new` / `touch()` (last_seen 更新) / `update_preferences()` — 简单 CRUD + bond 阶段
 
@@ -91,7 +91,7 @@ Author:          sub-agent R11-SpeciesCore
 
 - **grep 全 crates**: `partner` 0 命中 (`crates/` 全搜, 仅 `apeireth-credentials/src/gate.rs:5` 注释 reference principles)
 - **v2 真账**: 0 真实施 — partner struct / bond / privacy / 跨用户协作 全部 0
-- **1:1 翻译缺**: 主代理真账 §1.8 #partner 🔴 **缺** (跟 `cognitive.perception` + relationship 路径相关)
+- **语义对齐缺**: 主代理真账 §1.8 #partner 🔴 **缺** (跟 `cognitive.perception` + relationship 路径相关)
 
 ### 2.3 真实施路径
 
@@ -101,11 +101,11 @@ Author:          sub-agent R11-SpeciesCore
   - **Phase 3 (1 周)**: WIRED 到 `OrganOrchestrator` + 5 重守门 baseline
 - **估时**: **4 周** (1.0 简单复刻 1 周 + 跨用户协作 2 周 + 集成 1 周)
 - **阻塞**: 0
-- **借鉴链**: 1.0 partner.rs 真账 + Round 10 N.E.K.O 角色关系 + bond 阶段机设计 (Open-LLM-VTuber / AIRI 调研已就位)
+- **参考脉络**: 1.0 partner.rs 真账 + Round 10 角色关系设计 + bond 阶段机设计 (同类陪伴工程 2 项调研已就位)
 
 ---
 
-## 3. community — 1.0 vs 2.0 + 物种化社区借鉴
+## 3. community — 1.0 vs 2.0 + 物种化社区参考
 
 ### 3.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/community.rs`, 360 行)
 
@@ -124,19 +124,19 @@ Author:          sub-agent R11-SpeciesCore
 
 ### 3.2 2.0 现状
 
-- **grep 全 crates**: `community` 0 命中 (community.rs 不存在, `detect_communities` 0 移植)
+- **grep 全 crates**: `community` 0 命中 (community.rs 不存在, `detect_communities` 0 实现)
 - **v2 真账**: 0 真实施 — community detection / 双级检索 / 物种化社区 全部 0
-- **1:1 翻译缺**: 主代理真账 §1.8 #community 🔴 **缺** (物种化 + 跨用户社区相关)
+- **语义对齐缺**: 主代理真账 §1.8 #community 🔴 **缺** (物种化 + 跨用户社区相关)
 
 ### 3.3 真实施路径
 
 - **真实施**:
-  - **Phase 1 (1 周)**: 物种化 community spec — 1.0 community.rs 1:1 翻译 (detect_communities + triage + Summarizer trait) + 加 species 维度 (per-user 社区 ID + cross-user 桥接)
+  - **Phase 1 (1 周)**: 物种化 community spec — 1.0 community.rs 语义对齐 (detect_communities + triage + Summarizer trait) + 加 species 维度 (per-user 社区 ID + cross-user 桥接)
   - **Phase 2 (2 周)**: `apeireth-storage::community` 模块 (per §1.1 VectorIndex + Graph primitives 缺, community 是 Graph primitives 的应用层) + `apeireth-organ::community` (新 organ) OR `cognitive` slot (新 `cognitive.community_recall`)
   - **Phase 3 (1 周)**: WIRED 到 `OrganOrchestrator` + 5 重守门 + 跟 memory_graph 集成
-- **估时**: **4 周** (1:1 翻译 1 周 + species 维度 2 周 + 集成 1 周)
+- **估时**: **4 周** (语义对齐 1 周 + species 维度 2 周 + 集成 1 周)
 - **阻塞**: 0 (但跟 §1.1 Graph primitives 缺 关联, Graph primitives 真实施是 community 的前置, 主代理 §3.1 #2 已派单)
-- **借鉴链**: 1.0 community.rs 真账 (360 行 deterministic) + LightRAG/GraphRAG 精神 + N.E.K.O 社区机制
+- **参考脉络**: 1.0 community.rs 真账 (360 行 deterministic) + LightRAG/GraphRAG 精神 + 社区机制设计
 
 ---
 
@@ -160,19 +160,19 @@ Author:          sub-agent R11-SpeciesCore
 ### 4.2 2.0 现状 (F6 value_cases ✅ WIRED, 但 principles 0)
 
 - **grep 全 crates**: `principles` 仅 1 命中 (`apeireth-credentials/src/gate.rs:5` 注释 reference), `PrincipleStore` / `DynamicPrinciple` / `propose_principle` / `approve_principle` 全部 0 真实施
-- **v2 F6 organ 真账** (per `crates/engine/organ/src/value_cases.rs` + `lib.rs:14,61`): ✅ **1:1 翻译 v1 value_cases 真实现 (子代理 R3, 2026-08-28)** + WIRED 到 `OrganOrchestrator` (per `crates/engine/runtime/src/canonical/orchestrator.rs:46,406,511,796,1283`)
-- **1:1 翻译缺**: principles 0 真实施 (per 主代理真账 §1.8 #principles 🔴 **缺**)
+- **v2 F6 organ 真账** (per `crates/engine/organ/src/value_cases.rs` + `lib.rs:14,61`): ✅ **语义对齐 v1 value_cases 真实现 (子代理 R3, 2026-08-28)** + WIRED 到 `OrganOrchestrator` (per `crates/engine/runtime/src/canonical/orchestrator.rs:46,406,511,796,1283`)
+- **语义对齐缺**: principles 0 真实施 (per 主代理真账 §1.8 #principles 🔴 **缺**)
 - **v2 F6 organ 跟 1.0 principles 集成 0**: F6 value_cases 已 WIRED, 但 `promote_candidates` → `PrincipleStore::propose` 路径未建
 
 ### 4.3 真实施路径 (跟 F6 value_cases organ 集成)
 
 - **真实施**:
-  - **Phase 1 (1 周)**: 物种化 principles spec — 1.0 principles.rs 1:1 翻译 (DynamicPrinciple + PrincipleStore + master token + constant-time) + 跟 F6 organ 集成 (`promote_candidates` → `PrincipleStore::propose` 自动流)
+  - **Phase 1 (1 周)**: 物种化 principles spec — 1.0 principles.rs 语义对齐 (DynamicPrinciple + PrincipleStore + master token + constant-time) + 跟 F6 organ 集成 (`promote_candidates` → `PrincipleStore::propose` 自动流)
   - **Phase 2 (2 周)**: `apeireth-organ::principles` (新 organ, 跟 F6 同 crate) OR `apeireth-companion::principles` 模块 + 跟 `APEIRETH_MASTER_TOKEN` 集成 + 5 重守门 + onion 晋级候选
   - **Phase 3 (1 周)**: WIRED 到 `OrganOrchestrator` (新 organ 锚 + cognitive slot) + 5 重守门 baseline + tests
-- **估时**: **4 周** (1:1 翻译 1 周 + F6 集成 2 周 + 测试 1 周)
+- **估时**: **4 周** (语义对齐 1 周 + F6 集成 2 周 + 测试 1 周)
 - **阻塞**: 0 (F6 organ 已 WIRED, 集成 ready)
-- **借鉴链**: 1.0 principles.rs 真账 (478 行, 完整 safety model) + F6 organ WIRED + 9 哲学锚 LOCKED + 13 键洋葱
+- **参考脉络**: 1.0 principles.rs 真账 (478 行, 完整 safety model) + F6 organ WIRED + 9 哲学锚 LOCKED + 13 键洋葱
 
 ---
 
@@ -198,9 +198,9 @@ Author:          sub-agent R11-SpeciesCore
 
 ### 5.3 真实施顺序的 5 重守门 + LOCKED 0 触碰验证
 
-- **principles**: 跟 F6 organ WIRED 集成, 0 LOCKED 触碰 (F6 organ 已 1:1 翻译 v1, 不改 traits)
+- **principles**: 跟 F6 organ WIRED 集成, 0 LOCKED 触碰 (F6 organ 已 语义对齐 v1, 不改 traits)
 - **partner**: 新 struct / bond 阶段机, 0 LOCKED 触碰
-- **community**: Graph primitives 缺是真实施前置 (per 主代理 §3.1 #2), 但 community.rs 1:1 翻译独立
+- **community**: Graph primitives 缺是真实施前置 (per 主代理 §3.1 #2), 但 community.rs 语义对齐独立
 - **education**: 完全新 organ, 0 LOCKED 触碰, 但 Phase 1 spec 必须主代理亲做 (物种化核心决策)
 - **5 重守门 baseline** (per 真账 §6): clippy 0 warning / tests 0 fail (1739 baseline) / legacy compat path < 100 (36) / LOCKED 5 项 0 触碰 / 9 哲学锚 0 减
 
@@ -225,13 +225,13 @@ Author:          sub-agent R11-SpeciesCore
 - **P0 #1 principles 真调研**: 派 sub-agent 真读 `legacy/donor/apeireth-companion/src/principles.rs` (478 行) + `value_cases.rs` (F6 WIRED) + 真账
 - **P0 #2 partner 真调研**: 派 sub-agent 真读 `legacy/donor/apeireth-companion/src/partner.rs` (141 行) + `bond.rs` + 真账
 - **P0 #3 community 真调研**: 派 sub-agent 真读 `legacy/donor/apeireth-companion/src/community.rs` (360 行) + Graph primitives 真账 + 真账
-- **P0 #4 education 真调研**: 派 sub-agent 真读 vision L48 + 5 真调研借鉴 + 主代理亲做 spec (物种化核心决策) + 真账
+- **P0 #4 education 真调研**: 派 sub-agent 真读 vision L48 + 5 真调研参考 + 主代理亲做 spec (物种化核心决策) + 真账
 
 ### 6.3 物种化核心 vs Round 10 5 真调研 互补不重叠
 
-- **Round 10 5 真调研** (N.E.K.O / AIRI / Open-LLM-VTuber / Firefly / Mio): **物种化前端 + 物种化架构借鉴** (per apeireth-true-understanding §3.2)
-- **R11 物种化核心 4 gap** (education / partner / community / principles): **物种化哲学层落地** (vision L48 "教'如何成为自己'") = 5 真调研借鉴的 **承接 + 真实施**
-- **互补**: 5 真调研 给借鉴点, R11 4 gap 真实施承接借鉴 → 物种化从"调研"到"工程"的 critical path 闭环
+- **Round 10 5 真调研** (同类陪伴工程 5 项): **物种化前端 + 物种化架构参考** (per apeireth-true-understanding §3.2)
+- **R11 物种化核心 4 gap** (education / partner / community / principles): **物种化哲学层落地** (vision L48 "教'如何成为自己'") = 5 真调研参考的 **承接 + 真实施**
+- **互补**: 5 真调研 给参考点, R11 4 gap 真实施承接参考 → 物种化从"调研"到"工程"的 critical path 闭环
 
 ### 6.4 0 装诚实标 (per O-5)
 

@@ -176,7 +176,7 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
   `ritual`(仪式级,月频罕见,允许全屏金脉冲)。**显影必须稀缺才有效**;
   v0 没有诚实的 ritual 触发器,**永不产出 `ritual`**。
 - `source.kind` 恒为 `heuristic_v0`,`confidence` 反映启发式的不确定度(当前固定 0.5):
-  v0 不承诺精度,只承诺语义方向真实;未来器官/情感引擎移植后换 `source.kind` 即可平滑升级,
+  v0 不承诺精度,只承诺语义方向真实;未来器官/情感引擎落地后换 `source.kind` 即可平滑升级,
   契约形状不变。
 
 **生产时机(heuristic_v0)**:回合结束(轮次时长/工具调用数/审批频率 → PAD 粗估值;

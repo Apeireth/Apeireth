@@ -2,7 +2,7 @@
 
 **作者**: Sub-Agent R20 (主代理 Mavis 派)
 **状态**: 调研 + 真账 spec (per 主代理 + 用户 plan 变更: token 紧, **不真写代码**, 改调研 + 写真账)
-**用途**: 给主代理 Mavis 真实施 C 块 preference_learning 时的 spec 文档 (1:1 翻译 v1 + 测试 spec + LOCKED 验证 + commit msg + R21+ 集成占位)
+**用途**: 给主代理 Mavis 真实施 C 块 preference_learning 时的 spec 文档 (语义对齐 v1 + 测试 spec + LOCKED 验证 + commit msg + R21+ 集成占位)
 **基础调研**:
 - v1 真实现: `legacy/donor/apeireth-companion/src/proactive_memory.rs` (919 行, 0 LLM, 启发式)
 - v2 R11 Episode 定义: `crates/foundation/core/src/kernel/memory.rs:17-28`
@@ -24,7 +24,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth preference_learning 1:1 翻译 ..."
+description = "Apeireth preference_learning 语义对齐 ..."
 
 [dependencies]
 apeireth-core = { path = "../../foundation/core" }
@@ -56,18 +56,18 @@ workspace = true
 **职责**: pub use 7 项 + 模块 0 装诚实标 + 3 阶审查 (O-6 锚 9).
 **pub use**: `PreferenceLearningOrgan`, `PreferenceLearningOutput`, `CompositeChannel`, `ImportanceChannel`, `KeywordChannel`, `PreloadChannel`, `PreferenceCandidate`, `TimeChannel`, `default_composite_channel`, `render_preference_evidence`, `recommend_preference_cap`, `PreferenceLearningInput`, `Topic`, `TopicPredictor`, `TOPIC_KEYWORDS`, `predict_topics`.
 
-### 1.3 src/topic_predictor.rs (估 ~245 行) — 1:1 翻译 v1 L99-258
+### 1.3 src/topic_predictor.rs (估 ~245 行) — 语义对齐 v1 L99-258
 
-**输入类型**: `PreferenceLearningInput { recent_user_messages: Vec<String>, recent_assistant_messages: Vec<String>, now: Option<NaiveDateTime>, user_mood: Option<String> }` (1:1 翻译 v1 `TopicCue`; `now` 显式, 0 chrono::Utc::now).
+**输入类型**: `PreferenceLearningInput { recent_user_messages: Vec<String>, recent_assistant_messages: Vec<String>, now: Option<NaiveDateTime>, user_mood: Option<String> }` (语义对齐 v1 `TopicCue`; `now` 显式, 0 chrono::Utc::now).
 
-**输出类型**: `Topic { key: String, confidence: f32 }` (1:1 翻译 v1 `TopicHint`; serde derive, 0 静态字符串).
+**输出类型**: `Topic { key: String, confidence: f32 }` (语义对齐 v1 `TopicHint`; serde derive, 0 静态字符串).
 
-**3 const 表** (1:1 翻译 v1 L99-152):
+**3 const 表** (语义对齐 v1 L99-152):
 - `TOPIC_KEYWORDS: &[(&str, &str)]` 30+ 条 (考试/线代/高数 → exam_prep; 作业/课题 → study; 项目/bug/代码 → project; 累/烦/抱抱 → companion; 计划/明天 → plan; 股票/基金 → invest; 日记/反思 → reflection)
 - `TIME_ANCHORS: &[(u32, u32, &str)]` 3 条 ((6,9,morning_briefing), (21,24,evening_recap), (0,6,late_night_checkin))
 - `MOOD_ANCHORS: &[(&str, &str)]` 5 条 (low/sad/tired → companion 0.4; high/excited → study 0.4)
 
-**算法骨架** (1:1 翻译 v1 L154-222):
+**算法骨架** (语义对齐 v1 L154-222):
 - `keyword_hits(text)`: substring 命中, `(n × 0.35).min(0.6)` 累积
 - `aggregate_topic_confidence(hits)`: BTreeMap merge, 同 topic 取 max (不 sum), sort by confidence desc + topic 名字典序
 - `time_topic(now)`: hour ∈ [start, end) 触发, 周末 morning_briefing 加权 0.35 vs weekday 0.25
@@ -77,13 +77,13 @@ workspace = true
 
 **辅助**: `top_topics(&[Topic], k) -> Vec<String>` + `primary_topic(&[Topic]) -> Option<String>` (per v1 `TopicPrediction::top_topics/primary` 1:1).
 
-### 1.4 src/preload_channel.rs (估 ~270 行) — 1:1 翻译 v1 L273-441
+### 1.4 src/preload_channel.rs (估 ~270 行) — 语义对齐 v1 L273-441
 
 **候选类型**: `PreferenceCandidate { id: String, content: String, timestamp: i64, importance: u8 }` (per v1 `MemoryCandidate` 1:1 字段映射; 加 `id` 字段 per R11 `Episode::id` schema, 用于 CompositeChannel 去重键).
 
 **trait**: `PreloadChannel: Send + Sync`, 方法 `fetch(topics: &[String], candidates: &[PreferenceCandidate], top_k: usize) -> Vec<PreferenceCandidate>` (per v1 L276-282 1:1; `&[String]` 而非 `&[&str]` 跟 v2 `String` 生态一致).
 
-**4 impl** (1:1 翻译):
+**4 impl** (语义对齐):
 - `KeywordChannel`: substring 命中, `keywords_for_topic(topic)` 反查 `TOPIC_KEYWORDS`; 排序 (hit 数 desc → importance desc); 空映射时 fallback 用话题键当关键词.
 - `TimeChannel { within_secs: i64 }`: timestamp desc 排序截 top_k; `within_secs` 仅记录 (无 anchor 时间窗).
 - `ImportanceChannel { threshold: u8 }`: `importance >= threshold` 过滤, 排序 (importance desc → timestamp desc).
@@ -103,7 +103,7 @@ workspace = true
 - `organ_id()` → `OrganKind::Memory` (closest semantics 占位; **不**加新 variant, LOCKED 严守)
 - `llm_factory()` → `None` (0 LLM)
 
-### 1.6 src/render.rs (估 ~70 行) — 1:1 翻译 v1 L471-531
+### 1.6 src/render.rs (估 ~70 行) — 语义对齐 v1 L471-531
 
 - `render_preference_evidence(entries: &[PreferenceCandidate], max_chars: usize) -> String`: 编号列表 `[偏好证据 — ...]` 头部 + 行 `{i}. {truncate(content, 120)}` + 反幻觉尾注 `规则: 仅当用户提到上述话题时引用; 不主动说「我记得」— 那是编造。`; `max_chars < 80` 返空; 内容已满断点 → 仅留尾注.
 - `recommend_preference_cap(total_budget_chars: usize) -> usize`: `total / 4` 钳位 `[400, 2000]`; `< 400` 返 0.
@@ -137,12 +137,12 @@ workspace = true
 - **R1 (技术, 中)**: R11 `Episode` 字段名实查结果 = `id/timestamp/role/content/session_id`, **无 importance 字段**. 真实施需独立 `PreferenceCandidate` adapter (本 spec 已加 `id` 字段供 CompositeChannel 去重键).
 - **R2 (估时, 低)**: R15 spec 估 2 周乐观, 真实施 6h (调研估) + R21+ 3-4 天 = 1 周内, 留 30% buffer.
 - **R3 (接力, 中)**: R10 OrganKind 新 variant 决策未出. **真实施缓解**: stub 用 `OrganKind::Memory` 占位 (不破 LOCKED 9 variant), R21+ 等 R10 决后换归类或加新 variant.
-- **R4 (主代理手动 vs sub-agent, 低)**: sub-agent 真实施 1:1 翻译低风险 (0 LLM, 0 新外部 dep), commit msg 模板化 (见 §4) 防漏.
+- **R4 (主代理手动 vs sub-agent, 低)**: sub-agent 真实施 语义对齐低风险 (0 LLM, 0 新外部 dep), commit msg 模板化 (见 §4) 防漏.
 - **R5 (ledger doc sync, 低)**: R15 spec §7.2 措辞跟真实施 "L30 DEFERRED → WIRED" 矛盾. **真实施缓解**: stub 形态不挂 cognitive module, ledger L30 保留 `DEFERRED` 0 改 (R21+ 真接时 1 行 doc sync).
 
 ## 2. 测试 spec (不写 test code, 写 input/expected/output 给主代理实施参考)
 
-### 2.1 tests/topic_predictor.rs (3 类 ≥ 12 测试, 1:1 翻译 v1 L546-663)
+### 2.1 tests/topic_predictor.rs (3 类 ≥ 12 测试, 语义对齐 v1 L546-663)
 
 **测试 1: 关键词触发 + 多信号聚合**
 - Input: `PreferenceLearningInput { recent_user_messages: ["明天要考线代, 我还没复习"], now: 2026-08-18 20:00 }`
@@ -188,13 +188,13 @@ workspace = true
 **测试 11: primary_topic v1 BTreeMap last-iter 行为锁定**
 - Input: `recent_user_messages = ["明天考试"]` (同时触发 plan + exam_prep, conf 相同)
 - Expected: `primary_topic` 返 `Some("plan")` (BTreeMap 字母序, "plan" 后到 = last max); **不**返 `exam_prep`
-- 0 装诚实: 本测试锁定 v1 行为, 不破坏 1:1 翻译
+- 0 装诚实: 本测试锁定 v1 行为, 不破坏 语义对齐
 
 **测试 12: TIME_ANCHORS 表锁定**
 - Input: 无
 - Expected: `TIME_ANCHORS.len() == 3`
 
-### 2.2 tests/preload_channel.rs (4 类 ≥ 7 测试, 1:1 翻译 v1 L665-774)
+### 2.2 tests/preload_channel.rs (4 类 ≥ 7 测试, 语义对齐 v1 L665-774)
 
 **测试 1: KeywordChannel 命中 + top_k 截断**
 - Input: 5 个 candidates (含 3 个 exam_prep 关键词: 明天要考线代 / 高数作业还没写 / 考试必过 + 2 个无关); topics=["exam_prep"], top_k=2
@@ -281,9 +281,9 @@ $ git diff --stat -- Cargo.lock
 ## 4. commit message 模板 (主代理 commit 时填)
 
 ```
-feat(preference_learning): 1:1 翻译 v1 TopicPredictor + PreloadChannel
+feat(preference_learning): 语义对齐 v1 TopicPredictor + PreloadChannel
 
-1:1 翻译 v1 apeireth-companion::proactive_memory (legacy/donor/apeireth-companion/
+语义对齐 v1 apeireth-companion::proactive_memory (legacy/donor/apeireth-companion/
 src/proactive_memory.rs:99-531) → 新 crate crates/engine/preference_learning/ (8 文件,
 workspace member).
 
@@ -336,7 +336,7 @@ Refs: docs/01-architecture/deferred-slot-activation-preference_learning-spec.md
 ### 5.2 R21+ 接力给主代理必含 4 项标 (per readiness mapping §8 R4)
 
 commit message 必含:
-1. "1:1 翻译 v1 TopicPredictor + PreloadChannel"
+1. "语义对齐 v1 TopicPredictor + PreloadChannel"
 2. "0 LLM"
 3. "0 触碰 LOCKED 5 项" (R20 brief 列 5 项; R21+ 接力**不**再触碰 LOCKED)
 4. "0 装诱导 prevention"

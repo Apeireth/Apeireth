@@ -1,6 +1,6 @@
 # v1 → v2 未吸收功能研究（2026-08-27）
 
-> **现状 (2026-08-27)**：本文盘点 v1 legacy 86 crate 中**v2 工作区（15 active crate）未吸收或仅部分吸收**的功能，按不可或缺性分级（A/B/C/D = S1 关键 / S2 重要 / S3 一般 / S4 边缘），并给出每个的 v2 移植方案。**这不是 v1 形态平移**——按用户要求"重构版为了架构优化，不做 v1 一样的"。
+> **现状 (2026-08-27)**：本文盘点 v1 legacy 86 crate 中**v2 工作区（15 active crate）未吸收或仅部分吸收**的功能，按不可或缺性分级（A/B/C/D = S1 关键 / S2 重要 / S3 一般 / S4 边缘），并给出每个的 v2 落地方案。**这不是 v1 形态平移**——按用户要求"重构版为了架构优化，不做 v1 一样的"。
 
 ```
 [Document-Meta]
@@ -11,7 +11,7 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 ```
 
 > 给谁看：架构决策者 + ROADMAP 维护者 + v2 实现者。
-> 读法：先读 §0 范围 + §1 分级原则 → §2 A 类（S1 关键）逐项细看 → §3 B/C/D 类按优先级扫 → §4 移植路线图 → §5 待决策。
+> 读法：先读 §0 范围 + §1 分级原则 → §2 A 类（S1 关键）逐项细看 → §3 B/C/D 类按优先级扫 → §4 落地路线图 → §5 待决策。
 > 与 `scene-d-v2-plan.md` 关系：场景 D 已规划 3 例（主人偏好/自我诊断/多 agent 互审），本文**不重复**场景 D 范围；场景 D 例 3（多 agent 互审）直接消费本文 A1/A2 的 council + team-lead 实现。
 
 ---
@@ -20,7 +20,7 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 
 - **盘点对象**：`legacy/donor/` 77 crate + `legacy/archived/` 15 + `legacy/frozen/` 13
 - **对照对象**：v2 工作区 `crates/{foundation/{core,protocol,plugin,governance,credentials}, engine/{runtime,provider,storage,memory}, capabilities/tools, adapters/{gateway,cli,sdk}}`
-- **跳过**：已被 ROADMAP §4 P0/P1/P2/P3 覆盖的（governance 接线、credentials 接线、core drain、M1B 记忆移植）；纯 v1 内部工具（v1 集成测试、verify crate 等）
+- **跳过**：已被 ROADMAP §4 P0/P1/P2/P3 覆盖的（governance 接线、credentials 接线、core drain、M1B 记忆落地）；纯 v1 内部工具（v1 集成测试、verify crate 等）
 - **逐项核实**：本批对每个 S1/S2 项都读过 `legacy/donor/<crate>/src/lib.rs` 顶部 doc comment + 关键模块声明，引用附文件路径
 
 ---
@@ -32,7 +32,7 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 | **A = S1 关键** | v1 哲学/愿景明文提到；v2 不吸收**长程任务跑不通**或**核心哲学层落地不了** | 必须进 v2 roadmap（具体 P 号见 §4） |
 | **B = S2 重要** | 功能性组件；缺了 v2 能力下降但能跑 | 评估后进 roadmap |
 | **C = S3 一般** | 实用工具；缺了 v2 用户体验下降但不影响核心 | 排到 P-arch 之后或独立 minor 版本 |
-| **D = S4 边缘** | 特定场景才用；可推迟 | 文档保留指针，不移植 |
+| **D = S4 边缘** | 特定场景才用；可推迟 | 文档保留指针，不实现 |
 
 **核心判定问题**：
 1. v1 哲学层（8 锚 + 13 键 + 三洋葱 + L0 HA + Self-Disable）落地是否依赖此功能？
@@ -41,7 +41,7 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 
 ---
 
-## §2 A 类（关键）— 必须移植
+## §2 A 类（关键）— 必须实现
 
 ### A1. apeireth-council — 7 强制 Advisor + 按住机制 + 多意见加权 synthesis
 
@@ -99,7 +99,7 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 - 8 调度工具的 v2 等价物：直接用 `Orchestrator::dispatch(SubagentSpec)` trait 调用，不暴露 14 个独立 tool（v1 把 orchestrator 当 tool 暴露给主 agent，v2 当 runtime 内部子系统）
 - worktree 工具 **砍**（v2 不依赖 worktree 概念——单进程 gateway + adapter；v1 worktree 是为了多 reviewer 并行写代码）
 - 感知工具 **移** 到 `crates/engine/memory`（list/get/search sessions 是 memory 的标准接口）
-- Orchestrator trait 7 类状态 + 5 类错误 1:1 移植（这部分 v1 设计清晰）
+- Orchestrator trait 7 类状态 + 5 类错误 语义对齐（这部分 v1 设计清晰）
 - SUPERVISOR_PROMPT 砍——v2 prompt 由 orchestrator 动态构造（按 spec 拼装），不编译期嵌入
 
 **架构选择**：
@@ -291,7 +291,7 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 
 | crate | 职责 | v2 处理 |
 |---|---|---|
-| `apeireth-acp` | Agent Communication Protocol（Agent 间 IPC） | 场景 D 例 3 的 JSON 协议覆盖，不单独移植 |
+| `apeireth-acp` | Agent Communication Protocol（Agent 间 IPC） | 场景 D 例 3 的 JSON 协议覆盖，不单独实现 |
 | `apeireth-tool-filesystem` / `tool-shell` / `tool-search` / `tool-fetch` / `tool-codesearch` / `tool-browser` / `tool-image-gen` / `tool-image-process` | v1 分散工具 crate | v2 已合并到 `crates/capabilities/tools`，shell/fetch opt-in（已做） |
 | `apeireth-eval` | 见 B7 | P-arch |
 | `apeireth-wiki` | Markdown 知识库 | 独立 minor 版本 |
@@ -316,13 +316,13 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 | `apeireth-perception` Tactile/Vision | v2 alpha 不实现 | A3 trait 已留口 |
 | `apeireth-bench` | 性能基准 | CI 内置，独立 minor |
 | `apeireth-tool-image-gen` / `tool-image-process` | 图像处理 | 进 `tools` opt-in |
-| `apeireth-pybridge` | PyO3 桥 | 0 装 PASS：v2 纯 Rust 不移植 |
+| `apeireth-pybridge` | PyO3 桥 | 0 装 PASS：v2 纯 Rust 不实现 |
 | `apeireth-rate-limiter` | 限流 | 进 governance，B6 信任等级扩展时顺带做 |
 | `apeireth-config` | 配置管理 | 进 `crates/engine/storage` 或单独 small crate |
 | `apeireth-integration-e2e` | e2e 测试 | 进 tests/ |
 | `apeireth-arbitration` | HASH-SQL 仲裁 | 关键功能！进 `crates/engine/memory/src/arbitration.rs`（与 audit hash chain 一致） |
 | `apeireth-consciousness` | Cognitive-Dream 6 状态机 | 升级为 scene-d 例 2 SelfAssessmentCache 触发 |
-| `apeireth-naming-v05` | 命名 V0.5 | 不移植——v2 走 kernel::ids |
+| `apeireth-naming-v05` | 命名 V0.5 | 不实现——v2 走 kernel::ids |
 | `apeireth-version` / `verify` / `upgrade` / `release-tools` | 版本/构建工具 | 独立工具链 |
 | `apeireth-experience` | 经验沉淀 | 见 B1 |
 | `apeireth-apeiron-lifecycle` 等 | 进化循环 | 见 B3 |
@@ -330,7 +330,7 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 
 ---
 
-## §5 移植路线图（与 ROADMAP §4 对齐）
+## §5 落地路线图（与 ROADMAP §4 对齐）
 
 | 优先级 | 项 | 工作量 | 路线 |
 |---|---|---|---|
@@ -352,7 +352,7 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 | **P6** | A1 council + A2 team-lead + B3 cognition + scene-d 例 3 (orchestrator + 多 agent 互审) | 6-8 周 | 进 `crates/foundation/orchestration`（新 crate）|
 | **P-arch 后** | B6 action / B7 eval / D 类 arbitration 等独立评估 | — | 独立 minor 版本 |
 
-**总 v2 移植工作量**：15-23 周（约 4-6 个月一人），与 ROADMAP §4 P1-P6 整体时间线对齐。
+**总 v2 实现工作量**：15-23 周（约 4-6 个月一人），与 ROADMAP §4 P1-P6 整体时间线对齐。
 
 ---
 
@@ -374,7 +374,7 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 | 1 | A4 MemoryBackend trait 形态 | (a) trait + SQLite impl（向后兼容）/ (b) enum-dispatch 静态分发 | (a) — trait 更利于 v2 plugin 架构 |
 | 2 | A3 perception alpha 实现深度 | (a) 仅 Text + 4 trait forward-declared / (b) Text + 简单 Voice (audio file 解析) | (a) — P4 不阻塞 alpha；Voice 等 P7 |
 | 3 | A1 council Advisor 是否每个独立 LLM 调用 | (a) 是（严格隔离）/ (b) 多 instance 复用（同 provider 不同 model/temperature） | (b) — 成本可控 + 隔离足够 |
-| 4 | A2 team-lead worktree 工具 | (a) 完全砍 / (b) 砍但留 trait 扩展位 / (c) 全移植 | (b) — v2 alpha 不需要，但未来 P-arch 评估 |
+| 4 | A2 team-lead worktree 工具 | (a) 完全砍 / (b) 砍但留 trait 扩展位 / (c) 全实现 | (b) — v2 alpha 不需要，但未来 P-arch 评估 |
 | 5 | A6 frequency limit 触发粒度 | (a) 进程级 / (b) 用户级 / (c) Capability 级 | (c) — 粒度最细，避免误伤合法用例 |
 | 6 | A1 council 决策与 governance Decision 关系 | (a) council 输出新 GovernanceDecision 4 态扩展 / (b) council 输出 Allow/Deny，runtime 转 4 态 | (a) — 清晰分层 |
 | 7 | A4 File impl 加密 | (a) keyring + AES-GCM / (b) 纯 AES-GCM（keyring 是可选密钥源）/ (c) 不加密（文件系统权限） | (a) — 与 credentials 接线同路径 |

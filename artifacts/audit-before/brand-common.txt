@@ -1,0 +1,559 @@
+crates/adapters/gateway/src/admin.rs:315:/// (本地 Ollama/vLLM 开发场景)。远端明文 HTTP 会把 Bearer API key 裸奔。
+crates/adapters/sdk/src/livekit/auth.rs:31:/// 无 secrecy crate, 改用 String, 跟 gemini-cli / claude-code 1:1 对齐). R21 续真接时
+crates/adapters/sdk/src/livekit/auth.rs:397:/// 跟 gemini-cli PLATFORM_NAME 1:1, 锁 "apeireth" 避免跟其他 app 冲突.
+crates/adapters/sdk/src/sandbox/mod.rs:739:        let cursor = LogCursor {
+crates/adapters/sdk/src/sandbox/mod.rs:748:            cursor,
+crates/adapters/sdk/src/sandbox/mod.rs:749:            |mut cursor| async {
+crates/adapters/sdk/src/sandbox/mod.rs:751:                    if let Some(event) = cursor.queue.pop_front() {
+crates/adapters/sdk/src/sandbox/mod.rs:752:                        return Some((Ok(event), cursor));
+crates/adapters/sdk/src/sandbox/mod.rs:754:                    if cursor.done || cursor.next_seq >= SANDBOX_MAX_LOG_CHUNKS {
+crates/adapters/sdk/src/sandbox/mod.rs:758:                        sandbox_id: cursor.sandbox_id,
+crates/adapters/sdk/src/sandbox/mod.rs:759:                        since_seq: cursor.next_seq,
+crates/adapters/sdk/src/sandbox/mod.rs:762:                    match call_op_on(&cursor.transport, cursor.timeout_ms, request).await {
+crates/adapters/sdk/src/sandbox/mod.rs:765:                                cursor.next_seq = newest.seq + 1;
+crates/adapters/sdk/src/sandbox/mod.rs:767:                            cursor.queue.extend(events);
+crates/adapters/sdk/src/sandbox/mod.rs:768:                            cursor.done = last;
+crates/adapters/sdk/src/sandbox/mod.rs:774:                            cursor.done = true;
+crates/adapters/sdk/src/sandbox/mod.rs:775:                            return Some((Err(err), cursor));
+crates/adapters/sdk/src/sandbox/mod.rs:778:                            cursor.done = true;
+crates/adapters/sdk/src/sandbox/mod.rs:779:                            return Some((Err(err), cursor));
+crates/adapters/sdk/src/sandbox/mod.rs:897:struct LogCursor {
+crates/capabilities/tools/src/guardrail.rs:31:    SlackToken,
+crates/capabilities/tools/src/guardrail.rs:233:        // 5. Slack Token 扫描 (xox[baprs]-...)
+crates/capabilities/tools/src/guardrail.rs:234:        let slack_prefixes = ["xoxb-", "xoxp-", "xoxa-", "xoxr-", "xoxs-"];
+crates/capabilities/tools/src/guardrail.rs:235:        for prefix in &slack_prefixes {
+crates/capabilities/tools/src/guardrail.rs:243:                    leaked_kinds.push(LeakedCredentialKind::SlackToken);
+crates/capabilities/tools/src/guardrail.rs:244:                    sanitized = sanitized.replace(token, "[REDACTED_SLACK_TOKEN]");
+crates/engine/memory/src/graph_algo.rs:15://! This is **not** a second graph store and **not** a LangGraph runtime.
+crates/engine/memory/src/graph_algo.rs:179:            let mut cursor = to.clone();
+crates/engine/memory/src/graph_algo.rs:180:            while let Some(p) = parent.get(&cursor) {
+crates/engine/memory/src/graph_algo.rs:182:                cursor = p.clone();
+crates/engine/memory/src/layered_memo/mod.rs:15://! Per `reports/vcp-plugin-gap-analysis-2026-08-12.md` §9.4 Decision 5,
+crates/engine/memory/src/reflexion.rs:107:    #[error("reflexion 存储状态损坏: reflected_until ({cursor}) 超过失败记录总数 ({len})")]
+crates/engine/memory/src/reflexion.rs:108:    CorruptedCursor { cursor: usize, len: usize },
+crates/engine/memory/src/reflexion.rs:398:            return Err(ReflexionError::CorruptedCursor {
+crates/engine/memory/src/reflexion.rs:399:                cursor: self.reflected_until,
+crates/engine/memory/src/reflexion.rs:574:                return Err(ReflexionError::CorruptedCursor {
+crates/engine/memory/src/reflexion.rs:575:                    cursor: data.reflected_until,
+crates/engine/memory/src/reflexion.rs:704:    /// 不 panic, 不静默修复, 且错误中可观测 cursor/len.
+crates/engine/memory/src/reflexion.rs:706:    fn file_store_corrupt_cursor_is_rejected_without_panic() {
+crates/engine/memory/src/reflexion.rs:718:            ReflexionError::CorruptedCursor { cursor, len } => {
+crates/engine/memory/src/reflexion.rs:719:                assert_eq!(cursor, 10);
+crates/engine/memory/src/reflexion.rs:722:            other => panic!("expected CorruptedCursor, got {other:?}"),
+crates/engine/memory/src/reflexion.rs:724:        // 损坏状态保持原样 (不做静默修复): 再次读取仍是损坏的 cursor
+crates/engine/memory/src/reflexion.rs:726:        assert!(matches!(err_again, ReflexionError::CorruptedCursor { .. }));
+crates/engine/memory/src/reflexion.rs:731:    fn file_store_cursor_at_len_is_valid_empty_work() {
+crates/engine/memory/src/reflexion.rs:746:    fn file_store_cursor_below_len_processes_remaining() {
+crates/engine/memory/src/reflexion.rs:769:    fn file_store_history_cap_keeps_cursor_and_reflections_consistent() {
+crates/engine/memory/src/reflexion.rs:787:        // The deterministic policy retains the newest two failures. Its cursor
+crates/engine/memory/src/reflexion.rs:810:        // The persisted next-sequence cursor is independent from the retained
+crates/engine/perception/src/vision/xcap_backend.rs:30:use std::io::Cursor;
+crates/engine/perception/src/vision/xcap_backend.rs:381:    let mut encoded = Cursor::new(Vec::new());
+crates/engine/provider/README.md:3:> apeireth-provider — R35: 6 Provider (claude-code/codex/copilot/gemini-cli/opencode/minimax) + R176: LlmFacade + http_dispatch
+crates/engine/provider/src/canonical_openai_compatible.rs:7://! endpoint (OpenAI, a proxy, a self-hosted gateway, Ollama, Together, vLLM).
+crates/engine/provider/src/canonical_openai_compatible.rs:74:    "qwen-turbo",
+crates/engine/provider/src/canonical_openai_compatible.rs:75:    "qwen-plus",
+crates/engine/provider/src/canonical_openai_compatible.rs:76:    "qwen-max",
+crates/engine/provider/src/canonical_openai_compatible.rs:83:/// 异常的端点 (本模块明确支持自托管 Ollama/vLLM/网关) 可持续发送**永远不含
+crates/engine/provider/src/canonical_openai_compatible.rs:893:            vec!["Qwen/Qwen3-32B".into()],
+crates/engine/provider/src/canonical_openai_compatible.rs:901:        assert_eq!(cap.models()[0].id.as_str(), "qwen-qwen3-32b");
+crates/engine/provider/src/canonical_openai_compatible.rs:904:            Some("Qwen/Qwen3-32B")
+crates/engine/provider/src/canonical_openai_compatible.rs:906:        let req = NormalizedRequest::new("qwen-qwen3-32b", vec![NormalizedMessage::user("hi")]);
+crates/engine/provider/src/canonical_openai_compatible.rs:909:            body["model"], "Qwen/Qwen3-32B",
+crates/engine/provider/src/provider_model.rs:52:        // vendor model like `Qwen/Qwen3-32B` becomes the canonical id
+crates/engine/provider/src/provider_model.rs:53:        // `qwen-qwen3-32b` while its wire name stays `Qwen/Qwen3-32B`. This keeps
+crates/engine/provider/tests/canonical_openai_compatible.rs:269:            "id": "x", "model": "Qwen/Qwen3-32B",
+crates/engine/provider/tests/canonical_openai_compatible.rs:280:            vec!["Qwen/Qwen3-32B".into()],
+crates/engine/provider/tests/canonical_openai_compatible.rs:290:    let req = NormalizedRequest::new("qwen-qwen3-32b", vec![NormalizedMessage::user("hi")]);
+crates/engine/provider/tests/canonical_openai_compatible.rs:294:        recorded.body["model"], "Qwen/Qwen3-32B",
+crates/engine/runtime-assembly/src/canonical/harness_patch.rs:1://! DeepSeek Harness / Harness-R1 风格自进化修补引擎 (HarnessPatchEngine).
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:3:> **任务**: R125-12 OpenCode 子代理
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:264:## 6. PHL-07 与 OpenCode 借鉴的协同 (per 借鉴 ID 索引 §6)
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:266:PHL-07 + OpenCode 借鉴 = 双重 verify "0 假装":
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:268:| 维度 | OpenCode 借鉴 (per REFACTOR-PLAN §3) | PHL-07 强制 (本 spec §1) |
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:276:1. OpenCode 借鉴 ID 索引 verify 9 organ 内部 fn = 真实读 atomics (1:1 借鉴)
+crates/foundation/core/src/eight_anchors.rs:40:/// - `O-2` 走在前人经验上 — 借鉴 Hermes / OpenClaw / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (per 主人 19:33)
+crates/foundation/core/src/eight_anchors.rs:112:            Self::O2StandingOnShoulders => "O-2 走在前人经验上 — 借鉴 Hermes / OpenClaw / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (主 19:33)",
+crates/foundation/orchestration/src/ambient_context.rs:215:            || title_lower.contains("notion")
+crates/foundation/orchestration/src/ambient_context.rs:381:            sanitize_window_title("Chat with alice@example.com - Slack"),
+crates/foundation/orchestration/src/ambient_context.rs:382:            "Chat with [email] - Slack"
+crates/foundation/orchestration/src/call_scheduler.rs:344:    commit_cursor: usize,
+crates/foundation/orchestration/src/call_scheduler.rs:370:            commit_cursor: 0,
+crates/foundation/orchestration/src/call_scheduler.rs:406:            if self.commit_cursor >= self.slots.len() {
+crates/foundation/orchestration/src/call_scheduler.rs:409:            let index = self.commit_cursor;
+crates/foundation/orchestration/src/call_scheduler.rs:412:                    self.commit_cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:48:    cursor: usize,
+crates/foundation/orchestration/src/durable/replay.rs:67:            cursor: 1,
+crates/foundation/orchestration/src/durable/replay.rs:95:            cursor: 1,
+crates/foundation/orchestration/src/durable/replay.rs:131:        if self.cursor < self.history.len() {
+crates/foundation/orchestration/src/durable/replay.rs:143:        if self.cursor < self.history.len() {
+crates/foundation/orchestration/src/durable/replay.rs:144:            let ev = &self.history.events()[self.cursor];
+crates/foundation/orchestration/src/durable/replay.rs:147:                    self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:172:            self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:184:        if self.cursor < self.history.len() {
+crates/foundation/orchestration/src/durable/replay.rs:185:            let ev = &self.history.events()[self.cursor];
+crates/foundation/orchestration/src/durable/replay.rs:188:                    self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:213:            self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:228:            reason: "replay cursor past end".into(),
+crates/foundation/orchestration/src/durable/replay.rs:276:            self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:301:                    self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:305:                    self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:407:            self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:439:        self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:452:        self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:456:        self.history.events().get(self.cursor)
+crates/foundation/orchestration/src/job_ring.rs:10://! - **消费游标** ([`JobRing::consumer_cursor`]): 模型消费侧的读取进度, 只由
+crates/foundation/orchestration/src/job_ring.rs:100:    pub consumer_cursor: u64,
+crates/foundation/orchestration/src/job_ring.rs:121:    consumer_cursor: u64,
+crates/foundation/orchestration/src/job_ring.rs:135:            consumer_cursor: 0,
+crates/foundation/orchestration/src/job_ring.rs:171:        let slice = self.slice_from(self.consumer_cursor, max_bytes);
+crates/foundation/orchestration/src/job_ring.rs:172:        self.consumer_cursor = slice.start + slice.bytes.len() as u64;
+crates/foundation/orchestration/src/job_ring.rs:177:    pub fn consumer_cursor(&self) -> u64 {
+crates/foundation/orchestration/src/job_ring.rs:178:        self.consumer_cursor
+crates/foundation/orchestration/src/job_ring.rs:223:            consumer_cursor: self.consumer_cursor,
+crates/foundation/orchestration/tests/job_output_ring.rs:77:fn read_at_never_advances_the_consumer_cursor() {
+crates/foundation/orchestration/tests/job_output_ring.rs:80:    assert_eq!(ring.consumer_cursor(), 0);
+crates/foundation/orchestration/tests/job_output_ring.rs:83:    assert_eq!(ring.consumer_cursor(), 0, "read_at 绝不推进消费游标");
+crates/foundation/orchestration/tests/job_output_ring.rs:86:    assert_eq!(ring.consumer_cursor(), 0);
+crates/foundation/orchestration/tests/job_output_ring.rs:88:    assert_eq!(ring.consumer_cursor(), 3);
+crates/foundation/orchestration/tests/job_output_ring.rs:90:    assert_eq!(ring.consumer_cursor(), 3, "观察读取不动已有消费进度");
+crates/foundation/orchestration/tests/job_output_ring.rs:94:fn dual_cursors_advance_independently() {
+crates/foundation/orchestration/tests/job_output_ring.rs:101:    assert_eq!(ring.consumer_cursor(), 3);
+crates/foundation/orchestration/tests/job_output_ring.rs:107:    assert_eq!(ring.consumer_cursor(), 10);
+crates/foundation/orchestration/tests/job_output_ring.rs:408:    assert_eq!(stats.consumer_cursor, expected.len() as u64);
+crates/foundation/plugin/src/mcp/reconnect.rs:53:/// Mutable reconnect cursor.
+crates/foundation/protocol/src/usage.rs:4://! + `CostTracker` semantics (field-level translation of LiteLLM's public
+crates/foundation/protocol/src/usage.rs:73:/// (LiteLLM public `Usage` + `CostBreakdown` field translation). `success =
+crates/foundation/protocol/src/usage.rs:147:/// Legacy 1:1: `apeireth-pipeline::provider_registry::CostTracker` (LiteLLM
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:128:- 借鉴边界: Agent 框架借鉴 (LangGraph / CrewAI / DeepSeek Harness / Cua / Serena)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:135:  - **基地借鉴**: Agent 框架 (LangGraph / CrewAI / Cua / Serena) + 工具集成 (Composio / Serena MCP)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:151:| AI Agent 框架 (LangGraph / CrewAI / DeepSeek Harness / Cua / Serena) | HIGH (Agent 框架借鉴) | **HIGH (基地 + Agent 平台借鉴)** | 视角细化为"基地" + "Agent 平台" |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:154:| 资源汇总 (Ant Design / Taipy / Obsidian LLM / OpenMythos) | LOW | **LOW-MED** (Obsidian LLM = 长期记忆架构借鉴, OpenMythos = 知识库架构) | 借鉴维度调整 |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:183:- **Vaultwarden + opencode-vibeguard** → v2 O-1 安全优先 (1-2 天)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:189:- Obsidian LLM (长期记忆架构) + OpenMythos (知识库架构) 调研
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:223:| 5 | 借鉴 Vaultwarden + opencode-vibeguard → v2 O-1 安全优先 | 1-2 天 | §10 LOCKED 0 触碰约束 |
+docs/01-architecture/founding-design-v2.md:174:- **T1**：Noise_XX 加密漫游、Ed25519 真多签、监督树雏形、L1/L2 总线、备份三件套、本地推理 provider（Ollama 级）。
+docs/01-architecture/master-functionality-port-audit.md:258:| Bridge clients | `crates/apeireth-bridge/src/*` | PARTIAL | bridge/application | DEFER | P3 | reqwest/jsonwebtoken | bridge tests | Discord/Telegram/OneBot/Lark/LiveKit/Stock have real HTTP/JWT pieces; web/game are stubs |
+docs/01-architecture/master-functionality-port-audit.md:503:- **Bridge**: social bridges (Discord webhook, Telegram bot API, OneBot) are small
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:162:**Open-LLM-VTuber 真实施**: 摄像头帧 / 屏幕帧 → 视觉 LLM (Qwen-VL / GPT-4V / LLaVA) → LLM context.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:166:**借鉴点**: **HIGH** — Open-LLM-VTuber 视觉 backend 列表 (Qwen-VL / GPT-4V / LLaVA) + 帧采样策略 + 视觉 context 注入 prompt 模板, v2 RC-7 vision 真 backend 接入直接对位.
+docs/01-architecture/system-capabilities.md:178:* **Post-Call Tripwire**：扫描并脱敏 OpenAI Key (`sk-`), AWS Access Key (`AKIA`), GitHub PAT (`ghp_`), PEM 私钥头与 Slack Token。
+docs/01-architecture/v2-master-lineage-and-upgrade-blueprint.md:23:   - 4.1 DeepSeek Harness 与 Harness-R1 失败轨迹强化学习自修复
+docs/01-architecture/v2-master-lineage-and-upgrade-blueprint.md:38:   - 6.4 VCPToolbox 全系统总线级 HASH-SQL 事实时间线
+docs/01-architecture/v2-master-lineage-and-upgrade-blueprint.md:49:2. **外部前沿的代际跃迁**：业界正从“单次提示词工程”向**“失败轨迹驱动自修复（Harness-R1）”**、**“知识编译胜于检索（LLM-Wiki）”**、**“全双工流式插话与 Live2D 拟真具身（Open-LLM/NEKO）”**、**“操作系统级抢占调度与页表置换（MemGPT/AIOS）”** 全速演进。
+docs/01-architecture/v2-master-lineage-and-upgrade-blueprint.md:141:### 4.1 DeepSeek Harness 与 Harness-R1 失败轨迹自修复
+docs/01-architecture/v2-master-lineage-and-upgrade-blueprint.md:143:- **Harness-R1 强化学习闭环**：
+docs/01-architecture/v2-master-lineage-and-upgrade-blueprint.md:208:4. **VCPToolbox**：
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:1:# Apeireth 2.0 vs VCPToolBox 深度架构对比与优劣势洞察报告
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:5:> **全部重写**为基于公开数学文献与通用工程模式的独立实现，当前代码不含 VCP 衍生表达。
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:7:> **分析对象**: VCPToolBox (VCP 1.0 / 1.1 正式版全栈工程) vs Apeireth 2.0 (现代纯 Safe Rust 微内核工作区)  
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:24:│     VCPToolBox (VCP 1.0/1.1)     │                                 │          Apeireth 2.0           │
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:39:* **VCPToolBox 现状**：
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:47:* **VCPToolBox 现状**：
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:58:* **VCPToolBox 现状**：
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:72:## 三、 VCPToolBox 的显著长处与 Apeireth 2.0 的差距 (Where VCP Excels)
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:75:* **VCP 闪光点**：
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:84:* **VCP 闪光点**：
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:86:  * 深度集成了 B站（搜索/字幕/弹幕/评论/截图）、YouTube、智能家居 IoT、天气节气生物钟、音乐播放器独占硬解码以及 VCP-SOM 桌面自然语言语义操控。
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:92:* **VCP 闪光点**：
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:98:### 4. 开箱即用的便携式一键安装器 (VCP-Installer)
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:99:* **VCP 闪光点**：
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:108:| 维度 | VCPToolBox (VCP 1.1) | Apeireth 2.0 | 评价与结论 |
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:112:| **记忆体系数学深度** | **RiverMemo 拓扑动力学 (河网/脉冲/虫洞)** | 5D 时空分层 + Zep 双时态 + 残差特异性 | VCP 在私有语义坐标校准上极具前瞻性，Apeireth 可吸收其神经动力学 |
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:114:| **伴侣与生活化生态** | **B站/YouTube/IoT/桌面语义操控极丰富** | 会话/代码演化/语音感知/自驱心跳 | VCP 社区生活属性更浓，Apeireth 底座更坚固且具主权性 |
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:115:| **可视化与易用性** | **Vue3 60+卡片面板 + Rust 便携安装器** | Svelte 5 / Tauri 桌面端 + 统一 CLI | VCP 开箱工具链完备，Apeireth 可进一步丰富前端可视化 |
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:118:Apeireth 2.0 在**底层工程质量、纯 Safe Rust 内存安全性、工业级安全沙箱治理、密码学唯一事实链与 Prompt Cache 优化**上已经建立了坚不可摧的代际优势；而在**流体神经记忆动力学、桌面生活化交互生态与前端可视化面板**上，VCPToolBox 提供了极佳的工业标杆与前沿灵感，两者的理念正在顶峰相会。
+docs/02-guides/core-mechanisms-explained.md:48:**对比市面**：ChatGPT/Claude 的记忆本质是"事实清单 + 向量召回"一层皮；我们是**词法+语义+时间心理物理**的混合场。
+docs/02-guides/core-mechanisms-explained.md:57:对比：ChatGPT memory 到条数上限硬砍最旧；向量库按相似度阈值截断（无时间物理）——前者残忍，后者无记忆规律。
+docs/02-guides/core-mechanisms-explained.md:107:- **对比市面**：LangChain/AutoGPT 时代靠 `while True` 撞运气；我们是带会计的调度器。
+docs/02-guides/core-mechanisms-explained.md:150:市面产品通常在一根轴上卷（ChatGPT 卷模型、Rewind 卷记录量、Character.AI 卷人设）；
+docs/02-guides/custom-llm.md:57:# ---------- 4: 本地 vLLM / Ollama (OpenAI 兼容) ----------
+docs/02-guides/custom-llm.md:62:models = ["meta-llama/Llama-3-70B"]
+docs/02-guides/custom-llm.md:83:| `openai-compatible` | OpenAI Chat Completions | OpenAI / vLLM / Ollama / Gemini OpenAI 模式 |
+docs/02-guides/frontend-data-contract.md:689:- presence 事件**只进 SSE 广播，不进 Lark/Telegram 离线 sink**（sink 只收渲染文本）（`presence.rs:26`、`companion_serve.rs:35`）。
+docs/02-guides/smol-vm-config.md:101:    vcpus: 2, memory_mb: 1024, rootfs: Some(PathBuf::from("/var/lib/apeireth/vm/rootfs.ext4")),
+docs/02-guides/smol-vm-config.md:169:| krun_set_vm_config 失败 (rc=...) | KVM 不可用 / vCPU 超过 32 | 检 /dev/kvm 在 + 调小 vcpus |
+docs/03-reference/team-handover-reference.md:14:4. [外部 170+ 标杆与 参考实现吸收演进图谱（历史）](#4-外部-170-标杆与-vcp-行级吸收演进图谱)
+docs/03-reference/team-handover-reference.md:113:* **VCPToolBox 深度对比报告**：[`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](../01-architecture/vcp-vs-apeireth-deep-comparison.md)
+docs/03-reference/team-handover-reference.md:114:* **参考实现吸收指南（历史）**：[`docs/03-reference/vcp-line-level-absorption-guide.md`](vcp-line-level-absorption-guide.md)
+docs/03-reference/vcp-line-level-absorption-guide.md:1:# VCP 核心算法行级代码解构与 Apeireth 2.0 吸收升级指南
+docs/03-reference/vcp-line-level-absorption-guide.md:4:> 当前代码不再包含 VCP 衍生表达，本文保留为历史设计记录：
+docs/03-reference/vcp-line-level-absorption-guide.md:16:> **目标**: 将 VCP 1.0/1.1 中最顶尖的流体拓扑动力学、残差正交投影、EPA 认知主轴与超栈透明文件穿透等工程算法，以**纯 Safe Rust 编译期强类型微内核**形式系统性吸收至 Apeireth 2.0。  
+docs/03-reference/vcp-line-level-absorption-guide.md:17:> **基准源码**: `VCPToolBox-main.zip` (`ResidualPyramid.js`, `EPAModule.js`, `RiverMemoEngine.js`, `TagMemoEngine.js`, `TagMemoV10Engine.js`, `Plugin.js`, `FileFetcherServer.js`, `rust-vexus-lite/`)  
+docs/03-reference/vcp-line-level-absorption-guide.md:34:### 1.1 VCP 行级算法解构 (`TagMemoEngine.js` 行 700–850)
+docs/03-reference/vcp-line-level-absorption-guide.md:157:VCP 1.0 的重大突破是将浪潮从 **V8 离散脉冲传导** 演进为 **V10 连续拓扑双重场解析解与河网几何积分**：
+docs/03-reference/vcp-line-level-absorption-guide.md:217:### 2.1 VCP 行级算法解构 (`ResidualPyramid.js` 行 25–120)
+docs/03-reference/vcp-line-level-absorption-guide.md:355:### 3.1 VCP 行级算法解构 (`EPAModule.js` 行 80–220)
+docs/03-reference/vcp-line-level-absorption-guide.md:380:2. **VCPLog Bus (Admin Audit)**：具备**离线重放断点续传（Replay Manager）**，管理端重连时补发全部工具审批记录；
+docs/03-reference/vcp-line-level-absorption-guide.md:381:3. **VCPInfo Bus (Shared Progress)**：人机共享的富媒体与流式进度广播（例如渲染帧率、搜索进度条）。
+docs/03-reference/vcp-line-level-absorption-guide.md:410:> 本指南提供了 VCP 最核心四大系统的公式、数据结构与完整 Rust 移植方案。团队接手后可直接依此契约进行下一阶段的特性增强与模块挂载。
+docs/04-internal/HANDOFF-NOTES.md:14:> **2026-09-23 K3 前端产品化批次收官（现状以此为准，详 `handoff-k3-frontend-2026-09-23.md`）**：`presence_state` 契约全线贯通（gateway `presence.rs` heuristic_v0 → SSE → 前端 `presence.ts` 显影分级）；前端落地微信式三栏聊天壳（heritage-void 静态默认背景 + 个性化上传/accent 配色）、治理卷宗四 tab、记忆卷宗主从化（Archive 纸面调首次实拍）+ 日记纸面空态、Ctrl+K 命令面板 + 打断、底部状态条。批次 30 支 commit（索引见 `engineering-log-2026-09-22.md`），验收台账 #29/#30，质量门全绿。待主人拍板：B-12 提案值、点亮「他说」主动开口链、挂账 #2/#4 真机闭环。下一梯队：桌宠 → 会话设置抽屉 → 会话分支。
+docs/04-internal/b-block-decision-points-research-2026-08-28.md:90:**行业惯例**: VSCode Continue/Cursor 默认折叠 reasoning chain; ChatGPT o1/o3 不暴露 CoT; Claude extended thinking opt-in toggle; AutoGen/CrewAI 暴露 agent 间 message 流但不暴露 agent 内部 state. **模式**: 默认 0 暴露, 用户 opt-in 才开 debug 视图.
+docs/04-internal/b-block-decision-points-research-2026-08-28.md:97:3. **行业惯例**: ChatGPT/Cursor/VSCode Continue 默认折叠 reasoning.
+docs/04-internal/b-block-decision-points-research-2026-08-28.md:115:**行业惯例**: VSCode Continue modal + "auto-approve this session" toggle; Cursor terminal 类弹 modal, file edit 直接执行; Claude tool_use 透明执行不 modal; Copilot 0 modal diff 视图. **模式**: 默认 0 modal, 危险 tool (terminal/delete/exec) 弹 modal + auto-approve toggle.
+docs/04-internal/backlog.md:152:| 11 | Telegram 送达 | A2 (Sink 扩展) | 第三 Sink, LarkSink 模式复制 | ✅ 提交 3e0ab1a6: TelegramSink (from_env/from_env_with, 真 HTTP, APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID) + companion_serve 接线; 5 测试 |
+docs/04-internal/backlog.md:347:| 11 | Telegram 送达 | A2 (Sink 扩展) | 第三 Sink, LarkSink 模式复制 | ✅ 提交 3e0ab1a6: TelegramSink (from_env/from_env_with, 真 HTTP, APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID) + companion_serve 接线; 5 测试 |
+docs/04-internal/borrow-from-jimmyxiao2009.md:140:- batch 4: 装 gitleaks binary (网络恢复后) + 替换 PowerShell fallback
+docs/04-internal/borrow-from-jimmyxiao2009.md:161:3. **没有 secret 扫描自动化**: 没装 gitleaks, 没配 pre-commit hook, 没加 CI gate, 没 .gitleaks.toml 配置。
+docs/04-internal/borrow-from-jimmyxiao2009.md:167:- **第一时间装 gitleaks (或 fallback PowerShell 扫描器) + 配 pre-commit + CI gate + .gitleaks.toml**
+docs/04-internal/borrow-from-jimmyxiao2009.md:179:| 3 | **`.gitleaks.toml` config** (gitleaks binary 装上时直接用) | ✅ 已写 | `.gitleaks.toml` |
+docs/04-internal/borrow-from-jimmyxiao2009.md:180:| 4 | **PowerShell 扫描器** (gitleaks binary 装不上时的 fallback) | ✅ 已实现 + 4 mode 全绿 | `scripts/secret-scan.ps1` |
+docs/04-internal/borrow-from-jimmyxiao2009.md:186:- ❌ **不** 装 gitleaks binary (Windows release-assets DNS 阻塞, 装不上)
+docs/04-internal/engineering-log-2026-09-22.md:34:## 2. ② T0 聊天壳 (00-PHILOSOPHY §3, 微信式长寿骨骼)
+docs/04-internal/engineering-review-handoff-2026-10-06.md:144:| D1 | ⚠️ 部分正确 | 实质证实（无实现）；"0 命中"差 1 条——`foundation/protocol:498` 注释提及 VCP `__oneRingMeta`（非实现） |
+docs/04-internal/gitignore-hygiene-audit-2026-08-28.md:41:| 61-66 | Leaked / 反编译源码 (research/source/, claude-code-leaked/) | ✅ 生效 |
+docs/04-internal/handoff-18crate-ci-fix-2026-09-23.md:252:**并行交接包 §2 矩阵**（详见 `engineering-review-handoff-2026-10-06.md` §2.7）：17 项中 14 ✅、2 ⚠️（C4 侧枚举漏 `APEIRETH_REASONING_ENABLED/MODEL_FILTERS/TAG`；D1 "0 命中"差 1 条 VCP 注释）、1 项子结论 ❌（B1 "真宏调用 7 处"实为 **0 处真调用**：8 处文本命中全是文档注释——workspace 比原表述更干净）。
+docs/04-internal/handoff-k3-frontend-2026-09-23.md:29:**一句话**：把前端从原型推进到产品化壳——微信式三栏聊天壳 + 治理/记忆两卷宗 + presence 数据契约全线贯通，七项任务全绿。
+docs/04-internal/handoff-w1-w5-closure-2026-10-10.md:77:| onering Web/SSE 前端 | 需 GatewayState 管线改造（runtime 的 store 句柄不透出）；Lark/Telegram = 新 adapter crate |
+docs/04-internal/live-verification-ledger.md:75:| 42 | **审核方复核结论整合 + B1 自纠 + 当期基线刷新**（独立复核批在交接包 §2.7 落 17 项判定：14 ✅ / 2 ⚠️ / 1 子结论 ❌）：① **❌ 推翻我的 B1**——"unimplemented!() 真宏调用 7 处（全在 SDK）"不成立：过滤注释行后**真宏调用 = 0**，8 处文本命中全是文档注释提及（7 在 `sdk/client.rs`、1 在 `plugin/perception.rs:23`）；已逐行亲验确认（教训第四条：**数数也要对源码**——注释里的宏名不是调用；0 装纪律双向性的又一实例）；② ⚠️×2 记录在案：C4 旋钮枚举漏 `APEIRETH_REASONING_ENABLED/MODEL_FILTERS/TAG`（真实开关）、D1 差 1 条 VCP 注释提及（`protocol:498` 的 `__oneRingMeta`，非实现）；③ 当期态基线全量刷新 3406→**3418**（README×2、README.zh-CN×3、INSTALL、ROADMAP×2、SECURITY、maintenance-guide、HANDOFF 共 8 文件 11 处；**带日期的真账行按约定保留原值**）；④ 记文档债：测试数在多份文档硬编码会随每批失真，W8 文档治理时统一改为"以台账为准"指针式 | 2026-10-06 逐行亲验（`client.rs` 30/37/457/528/602/693/713 全为 `//!`/`///`）+ 全仓库过滤非注释行实证 0 真调用；与复核批独立结论一致 | 复现：`Select-String -Path (Get-ChildItem crates -Recurse -Filter *.rs).FullName -Pattern 'unimplemented!\(\|todo!\('` 后逐行滤注释 |
+docs/04-internal/live-verification-ledger.md:92:| 58 | **onering 考古纠错 + 生产消费接线**（五审纠错案：本体不是缺口）。① **纠错**：v1 `OneRingLedger` 的 v2 打捞件**早已存在** = `memory/src/context_ledger.rs` `ContextLedger`（头注 "salvage of the companion ledger"；API 同构 record/record_as/recent/len、同 `DEFAULT_MAX_RECORDS=200`、单调 seq、计数 prune、`continuity_link` 迁移 rekey）——考古包"v2 仅一条 VCP 注释"与差距审计"账本本体 0"均系**漏扫该模块的误判**（§9 沙箱纠错案后第二起）；两份文档已同步修正。② **真缺口 = 生产消费**（无人记账）：本次接上——cli `dispatch_canonical_chat` 完成回合后把 user/assistant 留痕入账（旋钮 `APEIRETH_ENABLE_ONERING_LEDGER=1` 默认关；账本实例与治理同源同 DB 无第二连接池；**best-effort 旁路**：账本失败只降级不翻转回合；挂起待批回合不记）。账本既有守门（空 continuity/role/frontend/content 显式拒绝=溯源强制）由消费侧直接继承，不重复校验。③ 测试 3（条目构造纯函数 + 真库回路 record→recent 原样读回 + 账本拒空 fail-loud 实证） | 2026-10-10 亲跑：apeireth-cli **64 passed / 0 failed**（含 onering 3 测）；clippy `-D warnings` 0 警告 | `cargo test -p apeireth-cli onering`；旋钮复现：`APEIRETH_ENABLE_ONERING_LEDGER=1` 跑 chat 后查 cognitive.sqlite3 的 `context_ledger_messages` 表见 cli 留痕 |
+docs/04-internal/live-verification-ledger.md:102:| 66 | **能力中心前端批：W2/W3 全部认知旋钮进设置页 + env 注入链路扩展**。① **设置页重构**（`SettingsView.svelte`，微信/QQ 式分组卡片设计语言）：旧「高级能力」单列表升级为三页——**记忆与认知**（记忆流 5 旋钮：注入/固化/反思/前瞻召回/类型化召回 + 认知增强 6 件：器官链/偏好学习/伙伴羁绊/检索深度自适应(+温度滑杆)/教育/认知体操 + 社区与账本 2 件：图社区分诊/onering 账本）、**决策与治理**（认知深度档位 + 评审/议会 + 议会顾问数 1-7 滑杆 + 单顾问超时 ms + 三洋葱治理层 + 子代理 worktree 隔离）、**工具与安全**（权限预设 + 工具授予卡：shell/fetch/本地只读 + **沙箱主开关嵌套行**：关沙箱红标警告「完整用户权限裸跑」）。行语义 = 图标块 + 标题 + env 名等宽芯片（工程诚实）+ 右侧微信式圆钮开关；组头显示已启用计数。**CapDef 数据驱动注册表**（invert 反向旋钮 / requires 前置依赖语义）。② **env 注入链路全通**：`CapabilityToggles` 22 字段（`types.ts`）→ `capabilityEnvFromConfig`（`desktop-bridge.ts`，数值钳制 1-7/≥1000/0.1-2.0）→ Tauri `BackendCapabilityEnv` 23 字段（`backend_supervisor.rs`，`env_pairs` 改 `Vec<(&'static str, String)>` 支持数值；**`serde(default)` 保证旧持久化 JSON 可载**——`shell_sandbox_off` 命名避免「缺省 false=关沙箱」回归，沙箱仍默认开；`morphology_temperature: f64` 对齐后端 `env_temperature` 解析）。③ **持久化解析**（`runtime.ts::parseCapabilityToggles`）逐项容错，两个默认开语义（shellSandbox/typedRecall）缺省 true。**fail-closed 全链保持**：false 不注入任何变量，唯一例外 = 沙箱关才显式注入 `APEIRETH_SHELL_SANDBOX=0` | 2026-10-10 亲跑：svelte-check **0 errors/0 warnings**；前端测试 **15/15 套件**；Tauri `cargo test --lib backend_supervisor` **21 passed / 0 failed**（含新 W2/W3 旋钮覆盖 19 env 名逐一断言 + 旧 JSON 兼容载 + fail-closed）；clippy 0 警告；CDP 连拍 6 张目检（默认全关/开三件/议会滑杆/沙箱关红标警告） | `pnpm -C frontend/companion-desktop check && pnpm -C frontend/companion-desktop test`；`cargo test --manifest-path frontend/companion-desktop/src-tauri/Cargo.toml --lib backend_supervisor`；目检：`?drawer=settings` → 记忆与认知/决策与治理/工具与安全 三页 |
+docs/04-internal/memory-research.md:5:> 主人指示: 记忆/上下文是 AI 界钻研很久的领域, 调研 VCP 实现 + 其他优秀记忆项目,
+docs/04-internal/memory-research.md:8:## 一、VCP 记忆体系（本地源码逐模块调研）
+docs/04-internal/memory-research.md:18:  → **差距: 我们的推理召回是"有条件触发", VCP 是"每次对话都推理"** (成本/限流权衡, 见 §三)
+docs/04-internal/memory-research.md:26:- 异步并发摘要 (maxConcurrent 5) + 折叠标记 `[VCP上下文语义折叠-本层摘要:...]`
+docs/04-internal/memory-research.md:27:- 我们的对照: 滚动摘要 = **全量折叠** (窗口外全摘要) → **差距: VCP 是选择性折叠** (只折叠低相关)
+docs/04-internal/memory-research.md:28:  我们的窗口裁剪更简单但可能丢掉仍相关的内容; VCP 方式更省 token 更精准
+docs/04-internal/memory-research.md:40:- 我们的对照: 滚动摘要是内存态 (每次请求重新摘要) → VCP 持久化折叠结果 ✅ 值得吸收
+docs/04-internal/memory-research.md:83:| 推理式召回 (每次对话 LLM 综合) | VCP AIMemoHandler | deep_recall 仅暗示词触发 | 中 (限流环境下需节流) |
+docs/04-internal/memory-research.md:84:| 选择性语义折叠 | VCP ContextFoldingV2 | 滚动摘要全量折叠 | 中 (需语义相关度判定) |
+docs/04-internal/memory-research.md:85:| 折叠结果持久化 | VCP FoldingStore | 滚动摘要是内存态 | 低 (存 store) |
+docs/04-internal/memory-research.md:86:| 记忆主题分组 | VCP SemanticGroupManager | 无 | 中 |
+docs/04-internal/migration-v1-to-v2.md:353:A: 调 OpenAI Chat Completions 兼容的代码能（curl / Python openai / LangChain / LiteLLM）。调 `/v1/apeireth/*` 专属端点的代码**不能**——v2 没这端点。如有依赖，需改用治理闸（runtime 内自动转 Deny/RequireApproval 决策，或发 approval 请求给前端）。
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:26:- **职责**: **OneRing 统一上下文账本** — 跨前端 (SSE/Web/Lark/Telegram/CLI/proactive) **同一 Agent 唯一时间线**, 每条发言留痕 `(seq, continuity_id, role, sender, frontend, content, ts)`, seq 单调自增确定性排序, 账本只保留最近 N 条 (默认 200, 可配).
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:27:- **VCP OneRing 对照吸收** (per `team-work-doc §8.4`): `messages(agentName, role, senderName, frontendSource, content, timestamp)` → `onering_messages(continuity_id, role, sender, frontend, content, ts)` (agentName→continuity 锚点); `pruneAgentMessages(maxRecords=100)` → prune 200. **不吸收**: VCP fuzzy diff / RawClientTimeline / 系统提示词占位符触发 (0 假装: 前端上下文回放走记忆注入管线).
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:219:| P0-3 | onering 路径 A | 2 | 0 | VCP OneRing 借鉴, 复用 v2 IdentityCard |
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:243:| **P0** | onering (2 周) | 2 | 物种化"同一个她"跨前端 | VCP OneRing + v2 IdentityCard |
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:89:| **VCP 对照** | VCP diary 关联走嵌入相似度; 我们走确定性 token 交集 (可审计, 同输入必同输出) | per cross_diary.rs:13-15 |
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:105:2. **确定性 token 交集** (vs VCP 嵌入相似度) ↔ Apeireth 0 装诚实标同源 (可审计, 同输入必同输出)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:276:7. **VCP RAGDiaryPlugin** (per diary.rs:1 + cross_diary.rs:1) — diary 精神吸收 (0 装诚实改造, 走确定性 token 交集)
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:32:**REAL**: `MetaThinkingChain` (L176) 阶段化递归 (上一段产出 → 下一段输入, VCP MetaThinkingManager.js 吸收); `DEFAULT_MAX_DEPTH=10`; `CycleDetected` 熔断; `EmptyThought` 降级; `ThinkerHalted` 错误熔断; `MetaThinker` trait (L78); `ReflectionMetaThinker` (L335) + `ChainReflectionThinker` (L341); `MetaChainResult::to_markdown()` (L145); `save_to_cluster()` (L323). **0 装 PASS (L22-25 显式)**: reflection.rs 接线未做, 真 LLM MetaThinker 留部署层. **8 单测全绿**.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:39:借鉴 v1 `apeireth-companion/src/meta_thinking.rs:1-643` + VCP MetaThinkingManager.js. 新 crate `crates/engine/reflection/` (per `r21-r24-r12-research-2026-08-28.md` L94) + MetaThinkingChain 1:1 翻译 L176-330 (zero LLM) + `ReflectionMetaThinker` + `ChainReflectionThinker` 1:1 翻译 + 复用 thought_cluster `ThoughtClusterReader` trait + OrganKind::Reflection variant (加不破 9 现有) + 单测 1:1 翻译 v1 8 测试 + 集成 `cognitive.reflection` slot + 5 重守门 baseline.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:79:**REAL**: 思维簇管理 + 元自学习读取口 (backlog N4, L1-2) — AI 思维链文件按主题聚簇落盘; `ThoughtClusterManager` (L79) create_file / list_clusters / read_cluster / register_chain / read_chain / edit_file / search; 簇 = root 下以「簇」结尾的目录, 条目 = `{YYYY-MM-DD}-{seq:03}.md`; 链 = `meta_thinking_chains.json` `{"chains": {链名: [簇, ...]}}` (VCP 格式一致); `ThoughtClusterReader` trait (L69) 反思/做梦消费思维簇的统一 trait 口 (reflection.rs `with_thought_reader` / dream.rs `with_thought_reader` 注入). **0 装 PASS (L17-19 显式)**: 写入侧需 LLM 在部署层经工具调用驱动. **8 测试全绿**.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:85:借鉴 v1 `apeireth-companion/src/thought_cluster.rs:1-522` + VCP ThoughtClusterManager. 新 crate `crates/engine/thought_cluster/` + ThoughtClusterManager 1:1 翻译 L79-292 (zero LLM) + ThoughtClusterReader trait 1:1 翻译 L69-76 (消费侧) + 集成 R22 reflection with_thought_reader 注入 (per v1 reflection L65-72) + meta_thinking save_to_cluster (per v1 meta_thinking L323) + 单测 1:1 翻译 8 测试 + 5 重守门 + LOCKED 0 触碰.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:159:| 2 | **meta_thinking** | 1 周 (含 R22 同期) | `apeireth-companion/src/meta_thinking.rs:1-643` + VCP MetaThinkingManager.js | R22 | 跟 R22 + thought_cluster 并行 |
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:160:| 3 | **thought_cluster** | 1 周 (含 R22 同期) | `apeireth-companion/src/thought_cluster.rs:1-522` + VCP ThoughtClusterManager | R22 | 跟 R22 + meta_thinking 并行 |
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:168:**借鉴链汇总**: v1 donor `legacy/donor/apeireth-companion/src/{6 modules}` (6 REAL 模块 1:1 翻译) + VCP MetaThinkingManager + ThoughtClusterManager + Generative Agents importance 触发 + Reflexion 论文 + hydra genome 置信度数学 + oracle.rs Brier 公式 + N.E.K.O reflective 维 (per `r7-neko-species-research-2026-08-28.md` L70) + Mio 日记反思部分 (per `r7-mio-species-research-2026-08-28.md` L75).
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:81:- **`PartnerPreferences`**: 称呼 / 表达风格 / 关心话题 / 雷区 / 隐私边界 (`PrivacyBoundary` per opencode-vibeguard 模式)
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:153:**结构** (N7 VCP rust-vexus-lite rivermemo_topology_v3:1784-2011 吸收, 2026-08-16):
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:159:- `logits` — 3 档手调系数 (仿 VCP 加权结构, 0 装 PASS: "未学习/未调参验证")
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:166:**核心 0 装诚实登记**: "VCP 原版用河网 hop 分布/HHI/前向流占比等图拓扑特征; **Apeireth 无河网数据结构, 改用文本形态特征** — 机制同构 (logits+softmax+档位), 特征为手调启发式常量 (0 装 PASS: 未学习/未调参验证)"
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:189:**真账**: 1.0 morphology.rs 284 行 + 10 测试 + 0 装诚实登记 (VCP 借鉴 vs 手调常量, 未学习/未调参验证) — 是 v2 release 必补"物种化塑形 frontend 维度"具体形态之一.
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:180:- **P1 (1 周)**: **主代理亲做 spec** — ONNX stub 决策 (DROP / 真接 onnxruntime / ADAPT llamacpp)
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:203:4. **未借鉴候选**: pgvector + LanceDB + llamacpp
+docs/04-internal/round-10-research-plan-2026-08-28.md:77:| `research/source/` (~36 真开源借鉴) | tokio / wasmtime / qdrant / sled / hermes-agent-rs / MetaGPT / openclaw / LangGraph / CrewAI / Claude Code 等 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:88:| 🤖 AI Agent 框架与 Harness | ~37 | DeepSeek Harness / LangGraph / CrewAI / Hermes Agent / Pydantic AI / CopilotKit / Cua / Serena / Computer Use 等 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:89:| 🛠️ 开发工具与 CLI 增强 | ~38 | Crawl4AI / Playwright / Serena / OpenObserve / Carbonyl / codebase-memory-mcp / exo-explore / LangChain OpenWiki 等 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:93:| 🔐 安全与隐私 | ~14 | Vaultwarden / Bitwarden / Sherlock / Maigret / Sandboxie / VulnClaw / DeepSec / opencode-vibeguard 等 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:94:| 📋 资源汇总 | ~14 | free-for-dev / Ant Design / Taipy / AirLLM / CL4R1T4S / Ponytail / old-coder / PUA / live_coding / OpenMythos / Obsidian LLM 等 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:96:| 💬 即时通讯/机器人 | 2 | NapCatQQ / Ollama |
+docs/04-internal/round-10-research-plan-2026-08-28.md:113:- **真开源 + Apeireth v2 边界内**: LangGraph / CrewAI / LangChain OpenWiki / Pydantic AI / CopilotKit / Cua / Computer Use / Serena / Hermes Agent / DeepSeek Harness / LoopX / OpenClaw (我们已有)
+docs/04-internal/round-10-research-plan-2026-08-28.md:116:  - **LangGraph** (状态多 Agent 应用框架) — 我们的 cognitive module wiring 跟 LangGraph state machine 模式对比
+docs/04-internal/round-10-research-plan-2026-08-28.md:117:  - **CrewAI** (多 Agent 编排框架) — 我们的 OrganOrchestrator 跟 CrewAI crew/task 对比
+docs/04-internal/round-10-research-plan-2026-08-28.md:155:  - **opencode-vibeguard** (敏感信息脱敏插件) — 我们的 governance hook 脱敏借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:165:  - **Obsidian LLM** (Obsidian 作为 AI 第二大脑) — 长期记忆架构借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:178:- **Ollama** (本地 LLM 运行环境) — 我们 v2 已用 3 家 provider (MiniMax / Anthropic / OpenAI-compatible), Ollama 可加第 4 家 (本地 LLM)
+docs/04-internal/round-10-research-plan-2026-08-28.md:249:- **TOP 5 HIGH 借鉴** (sub-agent 写真账确认后): DeepSeek Harness / LangGraph / CrewAI / Cua / Serena
+docs/04-internal/round-10-research-plan-2026-08-28.md:258:- **资源汇总** (6 个直接相关): free-for-dev / Ant Design / Taipy / AirLLM / Obsidian LLM / OpenMythos
+docs/04-internal/round-10-research-plan-2026-08-28.md:265:- **NapCatQQ + Ollama**: interface 扩展 + 第 4 家 provider, P2
+docs/04-internal/round-10-research-plan-2026-08-28.md:300:| 2 | **TOP 5 HIGH 借鉴** (DeepSeek Harness / LangGraph / CrewAI / Cua / Serena) — 派 5 sub-agent 真调研 | 1-2 周 | 0 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:306:| 8 | **NapCatQQ + Ollama** (interface + 第 4 家 provider) P2 | 1-2 周 | 0 |
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:49:| 2 | LangGraph | Agent 框架 | 状态多 Agent 应用框架 ↔ v2 cognitive module wiring state machine |
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:50:| 3 | CrewAI | Agent 框架 | 多 Agent 编排框架 ↔ v2 OrganOrchestrator |
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:58:- **主代理预判 TOP 5 全是 Agent 框架类** (DeepSeek Harness / LangGraph / CrewAI / Cua / Serena)
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:72:1. **已借鉴 (0 调研需要)** — `research/source/` 里 Agent 框架 (LangGraph / CrewAI / DeepSeek Harness / Cua / Serena / MetaGPT / openclaw / hermes-agent-rs 等 ~36 真开源)
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:137:#### 2.2.3 借鉴 Vaultwarden + opencode-vibeguard → v2 O-1 安全优先
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:140:- opencode-vibeguard (敏感信息脱敏) ↔ v2 P0 governance credential disclosure hook
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:196:| 5 | 借鉴 Vaultwarden + opencode-vibeguard → v2 O-1 安全优先 | 1-2 天 | §10 LOCKED 0 触碰约束 |
+docs/04-internal/round-12-final-gap-audit-2026-08-28.md:164:19. **morphology** — 1.0 `morphology.rs` (REAL, 284, N7 VCP 借鉴). v2 0 (per R11, frontend 维度)
+docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md:168:| `apeireth-companion/src/morphology.rs` | 284 行 | **REAL** ✅ 1:1 可移植 (N7 VCP 借鉴, softmax + 三档 Shallow/Standard/Deep + budget 控制, per R11-SpeciesForm sub-agent 报告) | (物种化塑形 frontend 维度, L167 env APEIRETH_MORPHOLOGY_TEMPERATURE) | ❌ v2 0 真实施 |
+docs/04-internal/round-14-v2-completion-plan-2026-08-28.md:96:- ✅ **research/source ~36 真开源借鉴** (tokio / wasmtime / qdrant / sled / hermes-agent-rs / MetaGPT / openclaw / LangGraph / CrewAI / Claude Code 等)
+docs/04-internal/secret-management-policy.md:34:| **O-2 走在前人肩上** | gitleaks 是业界标准 (https://github.com/gitleaks/gitleaks), 我们参考其 pattern 表。 |
+docs/04-internal/secret-management-policy.md:88:**脚本**: `scripts/secret-scan.ps1` (R215 创建, 借鉴 gitleaks v8.30.1 pattern 表)
+docs/04-internal/secret-management-policy.md:91:**降级**: gitleaks binary 不可用时 (Windows release-assets DNS 阻塞), PowerShell 扫描器作为 backup
+docs/04-internal/secret-management-policy.md:102:**未来升级路径** (当 gitleaks binary 可用):
+docs/04-internal/secret-management-policy.md:103:- 装 gitleaks (winget / scoop / 直接 download)
+docs/04-internal/secret-management-policy.md:104:- 替换 CI 步骤为 `gitleaks protect --staged --redact --config .gitleaks.toml`
+docs/04-internal/secret-management-policy.md:113:### 3.4 防御层 4: `.gitleaks.toml` 配置 (PowerShell 模式 + 后续 gitleaks 模式通用)
+docs/04-internal/secret-management-policy.md:115:**文件**: `.gitleaks.toml` (R215 创建, 借鉴 gitleaks 官方 schema)
+docs/04-internal/secret-management-policy.md:139:测试用例可以用**假 key 模式** (gitleaks allowlist 已知):
+docs/04-internal/secret-management-policy.md:146:// ⚠️ 边界: 用真 key 前缀但非完整 key (gitleaks 可能误报)
+docs/04-internal/secret-management-policy.md:147://  - 借 prefix 但只到 20 chars: "[REDACTED-...-short-20-chars]"  (gitleaks 会忽略, 因为 < 36 chars)
+docs/04-internal/secret-management-policy.md:149:// 解: 在 .gitleaks.toml / secret-scan.ps1 allowlist 里加测试文件路径
+docs/04-internal/secret-management-policy.md:227:| 装 gitleaks binary (winget / scoop / 直接 download) | P0 | 1 小时 | ❌ 阻塞 (release-assets DNS) |
+docs/04-internal/secret-management-policy.md:233:| `.gitleaks.toml` 配置 | P0 | 30 分钟 | ✅ R215 创建 |
+docs/04-internal/secret-management-policy.md:258:- ❌ **不** 装 gitleaks binary (Windows release-assets DNS 阻塞, 装不上)
+docs/04-internal/secret-management-policy.md:261:- ✅ **是** `.gitleaks.toml` 配置已写好 (gitleaks binary 装上时直接 `gitleaks protect --staged --redact --config .gitleaks.toml` 即可)
+docs/04-internal/secret-management-policy.md:263:- ❌ **不** 在 main loop 实时跑 gitleaks (CI gate 已够, main 跑会慢)
+docs/04-internal/secret-management-policy.md:282:- ❌ **没装 gitleaks** (Windows 网络限制, 但应该更早尝试 fallback 方案)
+docs/04-internal/secret-management-policy.md:287:- **第一时间装 gitleaks + 配 pre-commit + CI gate**, 不要留到"以后"
+docs/04-internal/secret-management-policy.md:295:**借鉴**: gitleaks v8.30.1 (https://github.com/gitleaks/gitleaks) - pattern 表 + config schema
+docs/04-internal/secret-management-policy.md:296:**Defense in depth**: 4 层 (pre-commit + CI + GitHub Secret Scanning + .gitleaks.toml config)
+docs/04-internal/secret-management-policy.md:297:**不假装**: Windows release-assets DNS 阻塞导致 gitleaks binary 装不上, PowerShell 扫描器是 fallback, 标注清晰
+docs/04-internal/stage123-gap-matrix.md:11:> **措辞约定**：stage3 借鉴清单中的外部项目一律称"参考项目"（Erlang/OTP、Hermes、VCP ToolBox 等）。
+docs/04-internal/stage123-gap-matrix.md:49:| B6a 8+ LLM providers — OpenAI/Anthropic/本地 + SemanticModelRouter | review §2.3-6；stage2-decisions-llm-integration.md §1-§2 | 3 家 canonical provider（Anthropic / MiniMax / OpenAI-compatible）+ 协议适配层（Gemini / OpenAI Responses / Anthropic Messages adapters）+ embeddings provider；OpenAI-compatible 口可承载 DeepSeek 等。本地管家（Ollama/LlamaCpp/VLLM）无实现；fallback chain（主→次→本地→拒绝）由 ProviderRouter 健康选择部分承担，无"本地兜底"层 | 🟡 部分实现 | `crates/engine/provider/src/canonical_anthropic.rs`、`canonical_minimax.rs`、`canonical_openai_compatible.rs`；`crates/foundation/protocol/src/adapters/gemini.rs`、`openai_responses.rs`；`crates/engine/runtime/tests/canonical_multi_provider.rs` | 数量口径 3-4 家 vs 8+；"本地推理管家"整块缺位（城堡底线的本地 fallback 能力空缺）。经 openai-compatible 兼容口可扩展是事实，但标尺点名的 Google/DeepSeek/Mistral/Ollama/LlamaCpp/VLLM 独立 provider 未逐一实现 |
+docs/04-internal/stage123-gap-matrix.md:141:10. **本地推理管家缺位**（B6a）：Ollama/LlamaCpp/VLLM 本地 provider 与"主→次→本地→拒绝" fallback 链的最后一环不存在，模型自主性与离线兜底不成立。
+docs/04-internal/team-work-doc.md:152:- 共享底座：轮询调度 + MultiSink 送达（SSE/Lark/Telegram 已有）
+docs/04-internal/team-work-doc.md:216:## 8. 附：VCP 新版调研（2026-08-16）
+docs/04-internal/team-work-doc.md:218:> **现状 (2026-08-27) — v1 时代调研快照**：本附是 v1 era 的 VCP 调研吸收记录（89 插件扫描 + Rust 记忆层 + 核心 modules 深读 + 可吸收清单）。v2 工程重构**已收敛 14-crate 为 13-crate**，且 SDK 走 normalized protocol 抽象（v1 的 vendor-wire 翻译散落问题已治），故本附的"建议吸收清单"（§8.4）**大部分已被 v2 架构选择覆盖**。**R**把 VCP 调研结论当 v1 历史证据，新调研需求见 [next-team-handbook.md](next-team-handbook.md)（已冻结）。
+docs/04-internal/team-work-doc.md:220:> 新版 VCPToolBox（源码 research/source/vcptoolbox，从 Downloads 迁入工作区供团队只读，git 排除）：
+docs/04-internal/team-work-doc.md:231:- **对 Apeireth 的启示**：A2（continuity 锚点）可升级为"统一上下文账本"——把多前端（SSE/Lark/Telegram/Web）的会话归入同一 Agent 时间线（X-Apeireth-Continuity 已有雏形）
+docs/04-internal/team-work-doc.md:242:> 来源: subagent 深挖（6 个 Rust 文件 ~11,300 行）。VCP 把整条"Tag 记忆查询链路"下沉 Rust N-API：SQLite 事实层 → 图资产编译器 → MemoRuntime（Arc 快照 + 观测缓存）→ 查询管线（EPA→金字塔→门控→Spike→融合→双场）。
+docs/04-internal/team-work-doc.md:266:- **不吸收**：bincode/hashbrown 死依赖（别学）；VCP 自己标注反模式的进程全局缓存
+docs/04-internal/team-work-doc.md:272:**A. 生图/媒体（13 → 社区）**：AgnesGen/AgnesVideoGen/DMXDoubaoGen/DoubaoGen/FluxGen/GeminiImageGen/GPTImageGen/NanoBananaGen2/QwenImageGen/ZImageGen2/ZImageTurboGen/VideoGenerator/ComfyUIGen — 厂商 API 差异，社区化；**MediaRenderer（HTML/SVG 渲染）** 对文档套件 §5.5 有启示。
+docs/04-internal/team-work-doc.md:274:**B. 搜索/信息获取（10 → 官方套件 §5.3 强化 + 社区）**：AnySearch（垂直+并行+正文提取）/VSearch（多后端语义搜索）/TavilySearch/FlashDeepSearch（深度研究：主题→多维关键词扩展→研究报告）/BrowserSearch/UrlFetch/DeepWikiVCP/BilibiliFetch/AnimeFinder — AnySearch+FlashDeepSearch 官方整合；其余社区。
+docs/04-internal/team-work-doc.md:278:**D. 记忆/日记/上下文（10 → 官方模块，核心）**：RAGDiaryPlugin（向量检索注入日记）/LightMemo（TagMemo V9 + Topology V3 + KNN 多构型）/DailyNote 三件套/SemanticGroupEditor（LLM 自维护同义词组）/**OneRing（统一上下文账本, N2）**/**ThoughtClusterManager（AI 思维链 = 元自学习, N4）**/ContextFoldingV2/VCPTimeLine（按月时间线+一句话摘要, 两级记忆带宽）。
+docs/04-internal/team-work-doc.md:280:**E. 日程/任务/通讯（5 → 官方套件 §5.4）**：ScheduleManager/ScheduleBriefing（每小时清过期+提取下一日程）/TimedTaskQuery（定时任务, 文件即消息）/VCPTaskAssistant（任务派发中心）/AgentAssistant（"未来电话"定时发送）→ 并入日程通讯套件；**VCPClawMail**（邮箱轮询+收发+新邮件唤醒 Agent）社区。
+docs/04-internal/team-work-doc.md:282:**F. 工具/执行（11 → 官方参考 + 社区）**：FileOperator（19 命令+PDF/Word 提取）/PowerShellExecutor/LinuxShellExecutor/SciCalculator（AST 白名单+sympy→社区）/VCPEverything（毫秒级全盘搜索）/CodeSearcher/DailyNoteSearcher（Rust 高性能搜索）/SSHManagerService（UDS 连接池）/LinuxLogMonitor/ArtistMatcher/EmojiListGenerator。
+docs/04-internal/team-work-doc.md:284:**G. Agent/智能体（6 → 参考）**：MagiAgent（三贤人会议=多视角审议）/AICodeWorker（报告锚点: 读取文件清单+执行结果摘要）/AgentMessage（WS 格式化消息=主动送达）/OpenHerPersona（人格观测: 向量轴测认知/情感/驱动力）/AgentDream（梦系统+写操作审批门→我们做梦机制的增强点）/DeepWikiVCP。
+docs/04-internal/team-work-doc.md:286:**H. 桥接/平台（6 → 参考）**：VCPToolBridge（工具导出外部）/VCPBridgeServer（透明代理拦截 CLI 注入 System Prompt）/ChromeBridge（操作 Chrome）/DynamicToolBridge/SkillBridge（SKILL.md 目录索引）/SnowBridge。
+docs/04-internal/team-work-doc.md:288:**I. 其他/平台件（21）**：PluginManager/PluginSourceViewer/PlaceholderExplorer（占位符扫描）/VCPLog（WS 日志+离线补发）/UserAuth（6 位认证码, 混淆级→不做）/ToolCallRecordQuery（审计）/VCPTavern（SillyTavern 式可视化注入→Web 面板灵感）/WeatherReporter（7 源并行+stale 降级）/ImageProcessor/CapturePreprocessor/MediaRenderer/ImageFileServer/DailyHot/FileListGenerator/FileTreeGenerator/EmojiListGenerator/PlaceholderExplorerCommand/VCPForum 系/TarotDivination。
+docs/04-internal/team-work-doc.md:295:| vcpLoop 三件套 | TOOL_REQUEST 文本协议（`<<<[TOOL_REQUEST]>>>` 始末语法+ESCAPE+archery 异步分离+思考块剥离防潜藏调用）; toolExecutor 含 vref 语义引用（对话压缩加权向量+零额外 API 检索注入）; 模糊标记匹配 | **宽松语法解析层移植**（tool-runtime 增强）; vref 零成本旁路增强 |
+docs/04-internal/team-work-doc.md:299:| foldProtocol | **同文档分级显隐**: `[===vcp_fold:阈值===]` 行标记, 语义相似度≥阈值才展开, 未展开提示"还隐藏收纳了 N 组" | context-fold 补 FoldBlock 分级显隐（VCP 原创） |
+docs/04-internal/team-work-doc.md:300:| messageProcessor | **占位符变量宇宙**: 分型变量源/特权角色（agent/toolbox 只在 system 展开）/AgentGuard 单次展开/ToolboxGuard 每种一次/循环依赖检测/动态折叠加权平均向量 | **提示词装配引擎**——Rust 无对应物, VCP 最强架构级原创, 最高优先 |
+docs/04-internal/team-work-doc.md:303:| sensitiveEnv/vcpLogReplayManager | 子进程剥离 IPC 凭据; 离线通知补发（审批请求豁免） | 小工程模式 |
+docs/04-internal/team-work-doc.md:305:### 8.4 可吸收清单（VCP 新版 → Apeireth 任务映射）
+docs/04-internal/team-work-doc.md:310:| **vcpLoop 宽松工具协议层** | tool-runtime 增强：始末语法+ESCAPE+模糊标记+批量后缀+archery+思考块剥离 | **P0** |
+docs/04-internal/team-work-doc.md:311:| OneRing 统一上下文 | A2 升级：跨前端统一时间线账本（SSE/Lark/Telegram/Web 归入同一 Agent 时间线） | P0 |
+docs/04-internal/team-work-doc.md:326:| SkillBridge / PlaceholderExplorer / VCPLog | 社区插件规范借鉴 | P2 |
+docs/04-internal/team-work-doc.md:381:| TP5 | **提示词装配引擎**（N9） | 新 lib 模块（VCP messageProcessor 范式） | 特权角色+单次展开+环检测+分型变量源；挂 CompanionApp 注入链 | 装配/防重复展开/环检测测试 |
+docs/04-internal/team-work-doc.md:382:| TP6 | **ContextLedger 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本；SQLite 内容寻址 + fuzzy diff 对账 | 多前端同一叙事/来源标记测试 |
+docs/04-internal/team-work-doc.md:384:| TP8 | **观测缓存**（N8） | 查询管线中间产物 | generation 绑定 + TTL + 防跨代脏读（VCP MemoRuntime 模式） | 缓存命中/代际失效测试 |
+docs/04-internal/team-work-doc.md:413:| TP15 | **ContextLedger 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本; SQLite 内容寻址 + fuzzy diff 对账; 来源标记 | 多前端同一叙事/来源标记测试 |
+docs/04-internal/upgrade-research-pack.md:26:3. **Future-as-Label + 自动出题结算**：proper scoring rule 做 RL 奖励（Qwen3-32B Brier -27%、校准误差减半）；自动题库 96% 可验证/95% 结算准确——oracle 校准从"记账"升级"闭环"（落 CalibratedResolver + oracle_adapters）
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:107:| Voice 交付通道 (lark/telegram 等) | REAL | archived stub | ⛔ |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:202:| 图编排 / 工作流引擎 | `apeireth-graph` (LangGraph 式) / `apeireth-workflow` (Temporal 式) | ⛔ 未移植 (v2 单 agent loop) |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:324:> | 6 | onering | ✅ 真: `donor/.../onering.rs` (`OneRingLedger` 统一上下文账本, 溯源强制, SSE/Lark/Telegram/Web/CLI 五前端同一锚点时间线, 8 测试) | 真缺口成立 (原"仅元数据透传"观测的是 v2 侧) |
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:24:| 6 | `onering` 账本 | ✅ 真做成了（318 行 + 8 项测试） | **✅ 本体早已在 v2**（`context_ledger.rs` = companion ledger 打捞，API 同构；考古原判"仅 VCP 注释"系误判——五审纠错）+ 本次补生产消费（cli 记账，台账 #58） | M | 3 |
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:111:  - `onering.rs:59` `pub struct OneRingLedger` + `:69` impl——跨前端（SSE/Web/Lark/Telegram/CLI）统一时间线账本；
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:115:- **v2 现状**: 零移植（`crates/foundation/protocol:498` 仅一条注释提及 VCP `__oneRingMeta`，非实现）。
+docs/04-internal/youyou-list-research-2026-08-28.md:25:| 1 | AI Agent 框架与 Harness | 40 | LLM harness / multi-agent | **HIGH** (15-20 直接可借鉴) | v2 已借鉴 Hermes/OpenClaw/LangGraph/CrewAI/MCP 等; 调研不重叠 |
+docs/04-internal/youyou-list-research-2026-08-28.md:34:| 10 | 资源汇总 | 14 | awesome / wiki / skill | **LOW** | 趋势合集, 仅 1-2 个 (Obsidian LLM / Karpathy skills) 参考 |
+docs/04-internal/youyou-list-research-2026-08-28.md:73:- **安全**: Vaultwarden (Rust 写, Bitwarden 兼容) / BitChat (蓝牙 Mesh) / opencode-vibeguard (敏感信息脱敏, 跟 v2 P0 governance credential disclosure 相关)
+docs/04-internal/youyou-list-research-2026-08-28.md:74:- **AI Agent 框架 (调研不重叠)**: CrewAI / LangGraph / Pydantic AI / Hermes Agent / pi-mono / Mission Control / LoopX / PenguinHarness / OpenViking / Kimi Code / AstrBot / Panniantong/Agent-Reach — **v2 已借鉴或与 research/source 重叠**, 不重复
+docs/04-internal/youyou-list-research-2026-08-28.md:81:**LOW (≤1 行 each)**: N.E.K.O 同类 (OpenClaw x2 / Hermes Agent / LoopX / PenguinHarness / Kimi Code / Mission Control / AstrBot / CLI-Anything / Agent-Reach / pi-computer-use / Cua / OpenLovable / AutoResearch / OmegaWiki / llm_wiki / OpenCodex / codex-plugin-cc / CrewAI / LangGraph / Pydantic AI / CopilotKit / Omnigent / SwarmVault / graph-engineer / DeepSeek Harness / OpenOPC / DeerFlow / Harness-R1 / J-Space 报告 / DataFlow / DataFlow-WebUI / RAGFlow / Serena / OpenCodeReview / Page Agent / OpenWorker / OpenClaw / MCP servers) / NapCatQQ / Ollama / BitChat / Session / Briar / Sandboxie / VulnClaw / DeepSec / opencode-vibeguard / KeePassXC / Passbolt / Bitwarden / Vaultwarden / Sherlock / Maigret / HunyuanOCR / TradingAgents / Lean / vnpy / Bigcapital / Akaunting / ERPNext / InvoicePlane / Odoo / AiToEarn / Openhuman / Dexter / QuantDinger / Kronos / FinSight-AI / Vibe-Trading / OpenStock / OpenAlice / TickFlow / TradingAgents-Astock / Gloomberb / Odysseus / FinanceDatabase / Awesome-finance-skills / pi-mono / Tavily / Playwright-MCP / Self-Improving / Agent-S / camofox-browser / graphify / anthropics/financial-services / Composio / Carbonyl / Colly / Playwright / Starship / Pake / ScriptCat / doc7 / OpenDataLoader-PDF / BrowserAct Skills / dbx / Markdown Online Editor / Turbovec / archify / sub2api / OpenSquilla / claude-mem / exo-explore / project-nomad / T3MP3ST / Unlimited OCR / Anysearch / wechat-article-exporter / BilldDesk Pro / Scrapling / andrej-karpathy-skills / m_flow / alibaba/zvec / feynman / pixel2motion / deeptutor / ChineseIndependentDeveloper / langchain-ai/openwiki / openscience / opengist / obsidian-llm / free-for-dev / Ant Design / Taipy / AirLLM / English Level Up / Flint Chart / CL4R1T4S / Ponytail / old-coder / PUA / live_coding / Mythos 架构 / GeoLibre
+docs/04-internal/youyou-list-research-2026-08-28.md:133:5. **借鉴 Vaultwarden (Rust 写 Bitwarden 兼容)** + opencode-vibeguard → v2 O-1 安全优先 (per §10 LOCKED 0 触碰约束, 改仅 3 hook 之外)
+docs/04-internal/youyou-list-research-2026-08-28.md:140:9. **资源汇总 (Ant Design / free-for-dev / Obsidian LLM 等)**: 趋势合集, 主代理阅后归档
+docs/README.md:30:| [01-architecture/vcp-vs-apeireth-deep-comparison.md](01-architecture/vcp-vs-apeireth-deep-comparison.md) | Apeireth 2.0 vs VCPToolBox 深度架构对比与优劣势洞察报告 |
+docs/README.md:38:| [03-reference/vcp-line-level-absorption-guide.md](03-reference/vcp-line-level-absorption-guide.md) | VCP 核心算法行级代码解构与 2.0 吸收升级指南 |
+docs/design/00-PHILOSOPHY.md:25:- **契约长寿，表现可插拔** ✅。微信活三十年因为它的骨骼（文字+气泡+列表）轻到任何设备都带得动；黑洞场景是华服。把长寿的做薄，把易逝的做可替换。
+docs/design/00-PHILOSOPHY.md:29:## 3. 往来层：微信范式是长寿骨骼 ✅
+docs/design/00-PHILOSOPHY.md:31:产品骨骼 = 微信式聊天壳 + 卷宗面板，零 WebGL 依赖（T0 可用）。借鉴的是被十亿用户验证的三件事：
+docs/design/00-PHILOSOPHY.md:34:2. **动作收敛为卡片**。微信把转账/服务通知收敛成对话内卡片，从不跳出对话完成动作。我们的治理面照此办理：**审批 = 对话内浮起的"待签文书"卡**（in-context 判断，在发生处完成）；治理中心降级为事后卷宗。工具执行卡（灰）、守卫通报卡（琥珀）、星尘记忆卡同理。**落地顺序（2026-09-22 侦察增补，Amadeus 实践）**：系统事件（目标达成/任务完成）默认先以**普通聊天条目**进消息流，卡片是交互复杂度配得上时的升级形态——比"一切卡片化"更轻，低价值事件不打扰排版。
+docs/design/00-PHILOSOPHY.md:35:3. **"对方正在输入…"是流式的原生隐喻**——配合光环呼吸，恰好是微信范式没覆盖、而我们的真流式强项的那块。
+docs/design/01-DESIGN-SYSTEM.md:130:**仍然成立的诚实断点**（0 装）：① emotion 只能由 daemon_loop 异步推——chat handler 同步路径拿不到 PAD（daemon 内部 RefCell 跨 await 非 Send，`presence.rs:21-23`、`companion_serve.rs:29-32`），主人消息触发的快照经 interactions 通道异步送达，handler 内 0 假装；② `build_injection` 记忆注入路径的召回数锁在 `assemble.rs::inject_memory` 局部变量不外露，memory_recall 只接工具桥路径（`presence.rs:24-25`）；③ presence 事件只进 SSE，不进 Lark/Telegram 离线 sink（`presence.rs:26`）。另注：`docs/02-guides/frontend-data-contract.md` §8.1 仍标「接线中」，已滞后于代码，应以 `companion_serve.rs` 为准并回写契约文档。
+docs/design/frontend-handoff.md:49:    分组卡片 + 微信式圆钮开关；静态卡「默认能力」说明卡化（虚线框 + 常驻/默认能力徽章，
+docs/gateway-api-contract.md:21:- 分页:列表端点统一 `limit`(默认 50,最大 500)+ 按时间倒序;需要更多分页时再引入 cursor
+docs/integration/phase0-audit.md:93:- **channels**：Telegram/SMTP/IMAP 适配器 + 插件发现
+frontend/companion-desktop/src/App.svelte:1578:  /** 回到会话列表主页（微信范式：消息列表是主页，会话可返回）。 */
+frontend/companion-desktop/src/App.svelte:2469:      <!-- 三栏主从骨架（2026-09-22 主人拍板，微信电脑版/QQ 桌面范式）：
+frontend/companion-desktop/src/App.svelte:3066:    cursor: pointer;
+frontend/companion-desktop/src/App.svelte:3140:    cursor: pointer;
+frontend/companion-desktop/src/App.svelte:3151:    cursor: default;
+frontend/companion-desktop/src/App.svelte:3184:    cursor: pointer;
+frontend/companion-desktop/src/App.svelte:3239:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:467:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:519:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:540:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:592:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:643:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:707:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:608:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:626:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:666:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:673:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/MemoryView.svelte:686:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:690:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/MemoryView.svelte:754:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:909:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:1023:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:1030:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/MemoryView.svelte:1059:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:1063:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/MessageContent.svelte:274:    cursor: pointer;
+frontend/companion-desktop/src/lib/MessageContent.svelte:337:    cursor: pointer;
+frontend/companion-desktop/src/lib/MessageContent.svelte:364:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/GuardNoticeCard.svelte:95:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/PendingDocumentDock.svelte:111:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:457:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:524:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:551:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:614:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:630:    cursor: default;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:729:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:765:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:787:    cursor: default;
+frontend/companion-desktop/src/lib/chat-shell/session-list.ts:228:/** 微信式相对时间：今天给时刻，昨天给「昨天」，更早给日期。 */
+frontend/companion-desktop/src/lib/components/ApprovalRequestCard.svelte:197:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ApprovalRequestCard.svelte:270:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ApprovalRequestCard.svelte:310:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ApprovalRequestCard.svelte:337:    cursor: default;
+frontend/companion-desktop/src/lib/components/CommandPalette.svelte:217:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/CommandPalette.svelte:226:    cursor: default;
+frontend/companion-desktop/src/lib/components/ComposerMenu.svelte:161:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ConfirmDialog.svelte:124:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ConfirmDialog.svelte:154:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ConfirmDialog.svelte:168:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ConfirmDialog.svelte:181:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ErrorSolutionBanner.svelte:126:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ErrorSolutionBanner.svelte:158:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ErrorSolutionBanner.svelte:172:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ErrorState.svelte:72:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:43:      id: 'ollama',
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:44:      name: 'Ollama 本地',
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:46:      model: 'llama3.3',
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:78:    const key = presetId === 'ollama' ? '' : apiKey.trim();
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:87:    if (presetId !== 'ollama' && !key) {
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:88:      error = '请填写 API Key（Ollama 本地可留空）';
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:147:    {#if presetId !== 'ollama'}
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:226:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:269:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:285:    cursor: default;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:267:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:271:    cursor: default;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:345:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:525:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:532:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/components/SessionModelPicker.svelte:128:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/SessionModelPicker.svelte:138:    cursor: default;
+frontend/companion-desktop/src/lib/components/SessionModelPicker.svelte:210:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/StatusBar.svelte:89:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ThemeSettingsPanel.svelte:261:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ThemeSettingsPanel.svelte:387:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ToolCallCard.svelte:127:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ToolCallCard.svelte:258:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ToolCallLifecycleCard.svelte:124:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ToolCallLifecycleCard.svelte:197:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/WorkspacePickerModal.svelte:177:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/WorkspacePickerModal.svelte:224:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/WorkspacePickerModal.svelte:274:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/WorkspacePickerModal.svelte:288:    cursor: pointer;
+frontend/companion-desktop/src/lib/design/base.css:173:button { cursor: pointer; }
+frontend/companion-desktop/src/lib/design/base.css:340:  cursor: grab;
+frontend/companion-desktop/src/lib/design/base.css:354:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/base.css:406:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:134:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:305:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:325:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:343:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:358:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:501:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:523:/* ── 三栏主从骨架（2026-09-22 主人拍板：微信电脑版/QQ 桌面范式）──────────
+frontend/companion-desktop/src/lib/design/shell.css:619:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:713:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:768:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:824:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1081:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1149:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1190:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1271:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1278:  cursor: default;
+frontend/companion-desktop/src/lib/design/shell.css:1430:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1452:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1522:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1691:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1768:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1801:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1834:  cursor: pointer;
+frontend/companion-desktop/src/lib/desktop-bridge.ts:97: * APEIRETH_API_*; everything else (OpenAI / DeepSeek / Ollama / custom) →
+frontend/companion-desktop/src/lib/intro/IntroLayer.svelte:69:    cursor: pointer;
+frontend/companion-desktop/src/lib/scene/blackhole.ts:715:    this.canvas.style.cursor = dx * dx + dy * dy <= rr * rr ? 'pointer' : '';
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:884:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:993:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1224:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1242:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1295:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1316:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1415:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1511:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1548:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/GovernanceView.svelte:112:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:335:  // 设计语言：电脑版微信/QQ 设置页——图标 + 标题 + 副文案 + 右侧开关的分组列表。
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:604:      id: 'ollama',
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:605:      name: 'Ollama 本地',
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:607:      defaultModel: 'llama3.3',
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:608:      models: ['llama3.3', 'qwen2.5-coder', 'deepseek-r1'],
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:1568:                    <span class="proto-sub">OpenAI · DeepSeek · MiniMax · Ollama · vLLM</span>
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:2844:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3054:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3089:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3136:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3199:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3234:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3320:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3350:  /* ===== 能力中心 · 微信/QQ 式分组卡片（2026-10-10 W2/W3 收官批）===== */
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3453:  /* 行：图标 + 标题/副文案 + 右侧控制。整行可点（微信设置项语义）。 */
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3464:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3476:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3480:    cursor: default;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3503:    cursor: default;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3558:  /* 开关（微信式圆钮） */
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3858:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:631:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:662:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:722:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:778:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:824:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:834:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:866:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:963:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:967:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:1007:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:457:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:509:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:517:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:625:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:649:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:671:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/AuditTab.svelte:359:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/AuditTab.svelte:389:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/AuditTab.svelte:397:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/AuditTab.svelte:426:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:235:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:243:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:302:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:312:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:348:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:361:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:372:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:369:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:377:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:490:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:500:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:533:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:633:    cursor: pointer;
+scripts/install-pre-commit-hook.ps1:4:# 借鉴 gitleaks pre-commit pattern, 简化版: 用本地 PowerShell 扫描器
+scripts/install-pre-commit-hook.ps1:5:# (gitleaks binary 当前装不上, 见 docs/04-internal/secret-management-policy.md)
+scripts/install-pre-commit-hook.ps1:72:# 借鉴 gitleaks pre-commit pattern, 简化: 用 PowerShell 扫描器扫 staged files.
+scripts/release/README.md:212:| ✅ 真实施 (10/11) | clap / hyper / servers / PyO3 / kani / langgraph / superpowers / LiteLLM (P6-1 retry 21:38) + opencode (P6-2 retry 22:20) + Guardrails (P6-3 retry 21:58) | 整合 #5 5.1 commit (src/ 真实施) |
+scripts/release/README.md:214:| ❌ 跳过 (1/11) | OpenCog AGPL-3.0 (商用不行) | 0 集成 |
+scripts/release/README.md:216:**0 装 PASS 严守**: ✅ cloned = 真实施 (有真 src 改动 + tests pass), ⏳ 限流 = 准备 (诚实标 "准备", 0 装"已实施"), ❌ 跳过 (OpenCog = 0 集成, 0 假装 "已实施")
+scripts/release/deploy-github-pages.ps1:361:Write-Host '    3. 主人发 release announcement (微信群 / Twitter / 邮件)' -ForegroundColor White
+scripts/release/deploy-github-pages.sh:334:echo "    3. 主人发 release announcement (微信群 / Twitter / 邮件)"
+scripts/release/git-push-1.0.ps1:164:- langchain-ai/langgraph d56666f (R125-13) - StateGraph
+scripts/release/git-push-1.0.ps1:166:- LiteLLM (P6-1 retry 21:38) - 公开设计 1:1 翻译
+scripts/release/git-push-1.0.sh:163:- langchain-ai/langgraph d56666f (R125-13) - StateGraph
+scripts/release/git-push-1.0.sh:165:- LiteLLM (P6-1 retry 21:38) - 公开设计 1:1 翻译
+scripts/release/tag-1.0.0.ps1:191:  ✅ 10 真实施 (clap / hyper / servers / PyO3 / kani / langgraph / superpowers / LiteLLM + 2 限流 retry done)
+scripts/release/tag-1.0.0.ps1:193:  ❌ 1 跳过 (OpenCog AGPL-3.0)
+scripts/release/tag-1.0.0.sh:183:  ✅ 10 真实施 (clap / hyper / servers / PyO3 / kani / langgraph / superpowers / LiteLLM + 2 限流 retry done)
+scripts/release/tag-1.0.0.sh:185:  ❌ 1 跳过 (OpenCog AGPL-3.0)
+scripts/secret-scan.ps1:4:# 借鉴自 gitleaks v8.30.1 的核心 pattern 表 (https://github.com/gitleaks/gitleaks)
+scripts/secret-scan.ps1:7:# **Why PowerShell + 不下 gitleaks binary**:
+scripts/secret-scan.ps1:8:# - gitleaks release-assets DNS 阻塞 (per R215 教训, 主人网络限制)
+scripts/secret-scan.ps1:12:# - 核心 pattern 表是 gitleaks v8.30.1 的 subset (20+ 高置信 pattern), 覆盖 90% 真实场景
+scripts/secret-scan.ps1:15:# - 主人网络恢复后: 装 gitleaks binary, 用 gitleaks.toml 配置 + `gitleaks protect --staged --redact`
+scripts/secret-scan.ps1:22:#   pwsh scripts/secret-scan.ps1 -Mode allowlist-test # 验证 .gitleaks.toml allowlist
+scripts/secret-scan.ps1:36:    [string]$ConfigFile = '.gitleaks.toml'
+scripts/secret-scan.ps1:40:# 借鉴自 gitleaks v8.30.1 rules/ 目录的 pattern 子集
+scripts/secret-scan.ps1:41:# (per https://github.com/gitleaks/gitleaks/tree/master/config/gitleaks.toml)
+scripts/secret-scan.ps1:65:    # Slack
+scripts/secret-scan.ps1:66:    @{ Name = 'Slack Bot Token (xoxb-)'; Pattern = 'xox[baprs]-[0-9]{10,12}-[0-9]{10,12}-[A-Za-z0-9]{20,255}'; Tags = @('slack', 'token') },
+scripts/secret-scan.ps1:72:    # Slack webhook
+scripts/secret-scan.ps1:73:    @{ Name = 'Slack Webhook URL'; Pattern = 'https://hooks\.slack\.com/services/T[A-Z0-9]{8,}/B[A-Z0-9]{8,}/[A-Za-z0-9]{20,255}'; Tags = @('slack', 'webhook') }
+scripts/secret-scan.ps1:91:    '.gitleaks.toml',
+scripts/secret-scan.ps1:101:# 借鉴自 gitleaks .toml allowlist 机制
+scripts/secret-scan.ps1:102:# 加载 .gitleaks.toml 里的 [allowlist] 段 (本脚本支持的最小子集: paths + regexes)
+scripts/secret-scan.ps1:104:function Get-GitleaksAllowlist {
+scripts/secret-scan.ps1:139:# 借鉴自 gitleaks scan semantics
+scripts/secret-scan.ps1:242:$allowlist = Get-GitleaksAllowlist -Path $configPath

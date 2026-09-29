@@ -1,10 +1,10 @@
 //! TTL-bounded response cache for controlled fetch.
 //!
-//! Ported semantics from legacy `apeireth-tool-fetch::cache` (R265): a TTL
+//! Semantics aligned with legacy `apeireth-tool-fetch::cache` (R265): a TTL
 //! map with hit/miss/eviction statistics. Expired entries are evicted on
-//! access; `invalidate`/`clear` give callers explicit control. The donor used
-//! a `parking_lot` RwLock; this port uses `std::sync::RwLock` so the crate
-//! gains no new dependency.
+//! access; `invalidate`/`clear` give callers explicit control. The prior
+//! implementation used a `parking_lot` RwLock; this implementation uses
+//! `std::sync::RwLock` so the crate gains no new dependency.
 //!
 //! M14 (2026-09-24 审计): 缓存有界化 —— 无上限的 map 会随唯一 URL 数单调
 //! 增长 (模型循环拉取大量不同 URL → 长跑进程 OOM)。现有 `max_entries`

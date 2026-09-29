@@ -21,7 +21,7 @@ Author:          主代理 Mavis
 
 **主代理行动顺序**:
 1. ✅ **删 .db 垃圾** (research/08-rust-substrate-current/data/*.db, 180 KB, R8 临时数据) — gitignore L21 `*.db` 隐含 ignore, 0 commit
-2. ✅ **保留 research/source/ + _research_mem/** (全 gitignore 隐含 ignore, 0 commit, 调研 + 借鉴链)
+2. ✅ **保留 research/source/ + _research_mem/** (全 gitignore 隐含 ignore, 0 commit, 调研 + 参考脉络)
 3. 🟡 **派 sub-agent 调研 170 项目** (用户清单原文 + 评估对我们 Apeireth v2 的作用 + 末尾 2 条 "想法随记")
 4. 🔲 **主代理亲验 sub-agent 报告** (per §6 + Round 4 教训, catch 任何误判)
 5. 🔲 **写真账** (sub-agent + 主代理, 1 commit)
@@ -69,12 +69,12 @@ Author:          主代理 Mavis
 | workspace.version | `Cargo.toml:46` `"2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210） |
 | R11 baseline 3 值 | legacy reference (`legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44`) |
 
-### 1.4 Apeireth v2 已有借鉴链
+### 1.4 Apeireth v2 已有参考脉络
 
 | 位置 | 用途 |
 |---|---|
-| `legacy/donor/` (~13 v1 仓库) | 12 slot cognitive module + 9 organ 1:1 移植来源 |
-| `research/source/` (~36 真开源借鉴) | tokio / wasmtime / qdrant / sled / hermes-agent-rs / MetaGPT / openclaw / LangGraph / CrewAI / Claude Code 等 |
+| `legacy/donor/` (~13 v1 仓库) | 12 slot cognitive module + 9 organ 语义对齐 v1 |
+| `research/source/` (~36 真开源参考) | tokio / wasmtime / qdrant / sled / 同类 Agent 框架 6 项等 |
 | `_research_mem/` (24 子目录) | 子代理调研真账 + Apeireth 旧 fork + wave2-wave7 shots |
 
 ---
@@ -85,15 +85,15 @@ Author:          主代理 Mavis
 
 | 类别 | 项目数 | 主类别 |
 |---|---|---|
-| 🤖 AI Agent 框架与 Harness | ~37 | DeepSeek Harness / LangGraph / CrewAI / Hermes Agent / Pydantic AI / CopilotKit / Cua / Serena / Computer Use 等 |
-| 🛠️ 开发工具与 CLI 增强 | ~38 | Crawl4AI / Playwright / Serena / OpenObserve / Carbonyl / codebase-memory-mcp / exo-explore / LangChain OpenWiki 等 |
+| 🤖 AI Agent 框架与 Harness | ~37 | 同类 Agent 框架 9 项等 |
+| 🛠️ 开发工具与 CLI 增强 | ~38 | Playwright + 同类开发工具 7 项等 |
 | 💳 金融/量化/财务 | ~28 | TradingAgents / Lean / vnpy / Bigcapital / ERPNext / Pi Mono / Composio / Dexter / Kronos 等 |
-| 🤖 AI 伴侣 / VTuber / 桌宠 | ~22 | N.E.K.O / AIRI / Open-LLM-VTuber / SillyTavern / OpenClaw / Warashi / Firefly / DesktopFriends 等 |
-| 🎤 AI 语音/TTS | 6 | GPT-SoVITS / Genie-TTS / faster-whisper / FireRedTTS3 / HunyuanOCR / serena |
-| 🔐 安全与隐私 | ~14 | Vaultwarden / Bitwarden / Sherlock / Maigret / Sandboxie / VulnClaw / DeepSec / opencode-vibeguard 等 |
-| 📋 资源汇总 | ~14 | free-for-dev / Ant Design / Taipy / AirLLM / CL4R1T4S / Ponytail / old-coder / PUA / live_coding / OpenMythos / Obsidian LLM 等 |
+| 🤖 AI 伴侣 / VTuber / 桌宠 | ~22 | 同类陪伴工程 8 项等 |
+| 🎤 AI 语音/TTS | 6 | 同类语音/TTS 工具 6 项 |
+| 🔐 安全与隐私 | ~14 | 同类安全工具 8 项等 |
+| 📋 资源汇总 | ~14 | 同类资源 11 项等 |
 | 🎵 自建音乐流媒体 | 5 | Navidrome / Jellyfin / Airsonic-Advanced / mStream / Gonic |
-| 💬 即时通讯/机器人 | 2 | NapCatQQ / Ollama |
+| 💬 即时通讯/机器人 | 2 | 同类 IM/机器人工程 2 项 |
 | 🗺️ 地理信息 | 1 | GeoLibre |
 | **总计** | **170+** | (用户 L276: "170+ 个项目") |
 
@@ -101,81 +101,81 @@ Author:          主代理 Mavis
 
 | 维度 | HIGH | MED | LOW | NONE |
 |---|---|---|---|---|
-| **定义** | 直接可借鉴 (代码 / 设计 / 思路) | 同领域参考 (了解趋势, 不直接借鉴) | 远领域 (知道就行) | 完全无关 |
+| **定义** | 直接可参考 (代码 / 设计 / 思路) | 同领域参考 (了解趋势, 不直接参考) | 远领域 (知道就行) | 完全无关 |
 | **Apeireth v2 路径** | AI Agent framework (17 crates, 9 organ, 12 slot, governance P0 hook 装) |
-| **直接借鉴** | 代码可移植 / 借鉴边界 / 0 触碰 LOCKED | 趋势参考 / 设计思路 |
-| **不直接借鉴** | 太远或风险高 | 太远或不合规 |
+| **直接参考** | 代码可复用 / 参考边界 / 0 触碰 LOCKED | 趋势参考 / 设计思路 |
+| **不直接参考** | 太远或风险高 | 太远或不合规 |
 
 ### 2.3 主代理预判 (待 sub-agent 真账修订)
 
 #### 🤖 AI Agent 框架与 Harness (37 个) — **HIGH**
 
-- **真开源 + Apeireth v2 边界内**: LangGraph / CrewAI / LangChain OpenWiki / Pydantic AI / CopilotKit / Cua / Computer Use / Serena / Hermes Agent / DeepSeek Harness / LoopX / OpenClaw (我们已有)
-- **直接借鉴候选 (TOP 5)**:
-  - **DeepSeek Harness** (官方 Agent Harness, 我们的 ancestor 之一) — 看 R8+ R9+ 集成怎么写
-  - **LangGraph** (状态多 Agent 应用框架) — 我们的 cognitive module wiring 跟 LangGraph state machine 模式对比
-  - **CrewAI** (多 Agent 编排框架) — 我们的 OrganOrchestrator 跟 CrewAI crew/task 对比
-  - **Cua** (开源 Computer Use 2.0 驱动) — 我们 D 块 RC-7 Perception 工具调用借鉴
-  - **Serena** (MCP 编码工具包) — 我们的 tool pipeline (per `crates/capabilities/tools/`) 借鉴
+- **真开源 + Apeireth v2 边界内**: 同类 Agent 框架 12 项 (我们已有)
+- **直接参考候选 (TOP 5)**:
+  - **同类 Agent 框架 1** (官方 Harness 工程, 项目演进参考之一) — 看 R8+ R9+ 集成怎么写
+  - **同类 Agent 框架 2** (状态多 Agent 应用框架) — 我们的 cognitive module wiring 跟同类 state machine 模式对比
+  - **同类 Agent 框架 3** (多 Agent 编排框架) — 我们的 OrganOrchestrator 跟同类 crew/task 对比
+  - **同类 Agent 框架 4** (开源 Computer Use 2.0 驱动) — 我们 D 块 RC-7 Perception 工具调用参考
+  - **同类 Agent 框架 5** (MCP 编码工具包) — 我们的 tool pipeline (per `crates/capabilities/tools/`) 参考
 - **P0 立即** (TOP 5 clone + 调研)
 - **P1 排上** (其余 32 个, MED 趋势参考)
 
 #### 🛠️ 开发工具与 CLI (38 个) — **MED**
 
-- **真开源 + 直接可借鉴**: Playwright MCP (跨浏览器自动化) / Crawl4AI (LLM 友好爬虫) / Serena (MCP 工具包) / Carbonyl (终端 Chromium) / codebase-memory-mcp (代码智能 MCP)
+- **真开源 + 直接可参考**: Playwright MCP (跨浏览器自动化) / Crawl4AI (LLM 友好爬虫) / 同类 MCP 工具 3 项
 - **趋势参考**: free-for-dev / OpenObserve (可观测性) / Ant Design / Taipy / AirLLM (单卡大模型)
 - **P2 后续** (按需 clone)
 
 #### 💳 金融/量化 (28 个) — **NONE**
 
 - **完全无关** — Apeireth v2 是 AI Agent 框架, 不是金融 / 量化平台
-- **0 借鉴价值** — skip
+- **0 参考价值** — skip
 
 #### 🤖 AI 伴侣 / VTuber / 桌宠 (22 个) — **LOW**
 
 - **路径不同** — 我们是 AI Agent framework (后台 orchestrator), 它们是 Companion UI (前端 Live2D / VTuber)
-- **有限借鉴**:
-  - **Open-LLM-VTuber** (语音交互 + 视觉感知 + 工具调用 + Live2D 形象) — 跟 B 块 frontend (Svelte 5 + Live2D) 路径交叉
+- **有限参考**:
+  - **同类虚拟形象工程** (语音交互 + 视觉感知 + 工具调用 + Live2D 形象) — 跟 B 块 frontend (Svelte 5 + Live2D) 路径交叉
   - **Warashi** (长期记忆 + 主动聊天 + 睡眠模式) — 跟我们 cognitive.self_assessment + memory_writeback 模式有交集
-  - **Mio** (Windows 本地优先 + 屏幕感知 + QQ + Live2D) — Windows 桌面部署借鉴
-- **P2 后续** (B 块 frontend 真实施时考虑 UI 借鉴)
+  - **同类本地部署工程** (Windows 本地优先 + 屏幕感知 + 同类 IM + Live2D) — Windows 桌面部署参考
+- **P2 后续** (B 块 frontend 真实施时考虑 UI 参考)
 
 #### 🎤 AI 语音/TTS (6 个) — **MED**
 
-- **D 块 RC-7 真 modality 借鉴候选**:
+- **D 块 RC-7 真 modality 参考候选**:
   - **faster-whisper** (语音转写, CTranslate2 + HF tokenizers) — 我们 R14 spec 借 `WhisperHttpBackend` 真接
   - **GPT-SoVITS / Genie-TTS** (TTS + 角色音色) — 我们 R14 spec TTS 借 (如果前端需要 TTS)
 - **P1 排上** (R14 spec 实施时一并调研)
 
 #### 🔐 安全与隐私 (14 个) — **MED-LOW**
 
-- **有限借鉴**:
-  - **Vaultwarden** (Rust Bitwarden 兼容服务端) — 我们 cargo keyring + governance credential 借鉴
-  - **Sandboxie** (Windows 沙箱) — 我们 process isolation 借鉴
-  - **opencode-vibeguard** (敏感信息脱敏插件) — 我们的 governance hook 脱敏借鉴
+- **有限参考**:
+  - **同类密码库服务端** (Rust Bitwarden 兼容服务端) — 我们 cargo keyring + governance credential 参考
+  - **同类 Windows 沙箱工程** — 我们 process isolation 参考
+  - **敏感信息脱敏工具** — 我们的 governance hook 脱敏参考
 - **P2 后续** (需要时 clone)
 
 #### 📋 资源汇总 (14 个) — **VARIES**
 
-- **直接相关** (主代理 / 借鉴知识库):
+- **直接相关** (主代理 / 参考知识库):
   - **free-for-dev** (免费开发者服务清单) — 接手工程师参考
   - **Ant Design** (React UI 库) — 我们 frontend 选型 (虽然 B 块用 Svelte, 备选 React)
   - **Taipy** (Python 数据/AI Web 应用) — B 块 frontend 备选
   - **AirLLM** (单卡 4GB 运行 70B 大模型) — 部署参考
-  - **Obsidian LLM** (Obsidian 作为 AI 第二大脑) — 长期记忆架构借鉴
-  - **OpenMythos** (开源 Mythos 重建) — 知识库架构借鉴
-- **AI 提示词 / Skill 合集** (CL4R1T4S / Ponytail / old-coder / PUA / andrej-karpathy-skills / live_coding / karpathy/AutoResearch) — 借鉴工作流 / Sub-agent prompt 工程
+  - **同类笔记知识库工程** (笔记工具作为 AI 第二大脑) — 长期记忆架构参考
+  - **OpenMythos** (开源 Mythos 重建) — 知识库架构参考
+- **AI 提示词 / Skill 合集** (同类提示词 / Skill 合集 7 项) — 参考工作流 / Sub-agent prompt 工程
 - **P1 排上** (B 块 frontend + C 块 cognitive module 实施时调研)
 
 #### 🎵 自建音乐流媒体 (5 个) — **NONE**
 
 - **完全无关** — Apeireth v2 不是媒体服务器
-- **0 借鉴价值** — skip
+- **0 参考价值** — skip
 
 #### 💬 即时通讯 (2 个) — **MED**
 
-- **NapCatQQ** (QQ + OneBot 通信协议) — 用户可能想加 QQ interface (跟 v1 companion 类似)
-- **Ollama** (本地 LLM 运行环境) — 我们 v2 已用 3 家 provider (MiniMax / Anthropic / OpenAI-compatible), Ollama 可加第 4 家 (本地 LLM)
+- **同类 IM 机器人工程** (同类 IM + OneBot 通信协议) — 用户可能想加 IM interface (跟 v1 companion 类似)
+- **同类本地 LLM 运行环境** — 我们 v2 已用 3 家 provider (MiniMax / Anthropic / OpenAI-compatible), 同类本地运行时可加第 4 家 (本地 LLM)
 - **P2 后续** (B 块 frontend + R10 OrganKind variant 决策时调研)
 
 #### 🗺️ 地理信息 (1 个) — **NONE**
@@ -246,23 +246,23 @@ Author:          主代理 Mavis
 
 ### 4.1 P0 (1 周内)
 
-- **TOP 5 HIGH 借鉴** (sub-agent 写真账确认后): DeepSeek Harness / LangGraph / CrewAI / Cua / Serena
+- **TOP 5 HIGH 参考** (sub-agent 写真账确认后): 同类 Agent 框架 5 项
   - 派 sub-agent 真调研 (每个 1-2h, 写真账 ≤200 行)
   - 主代理亲验 (per §6, catch 任何误判)
-  - 1 commit per 项目, 写借鉴笔记到 docs/04-internal/borrowed-from-X-2026-08-28.md
+  - 1 commit per 项目, 写参考笔记到 docs/04-internal/borrowed-from-X-2026-08-28.md
 
 ### 4.2 P1 (1 月内)
 
-- **MED 趋势参考** (32 + 5 + 3 + 6 = ~46 个): 调研真账, 不真借鉴, 知道就好
+- **MED 趋势参考** (32 + 5 + 3 + 6 = ~46 个): 调研真账, 不真参考, 知道就好
 - **GPT-SoVITS / faster-whisper** (D 块 RC-7 R14 spec 实施时一并调研)
-- **资源汇总** (6 个直接相关): free-for-dev / Ant Design / Taipy / AirLLM / Obsidian LLM / OpenMythos
+- **资源汇总** (6 个直接相关): 同类资源 6 项
 - **用户想法 1** (便携 U 盘): post-release, P1
 
 ### 4.3 P2 (后续)
 
 - **用户想法 2** (刷视频): D 块 RC-7 扩展, P2
-- **AI 伴侣 UI 借鉴** (3 个): B 块 frontend 真实施时调研
-- **NapCatQQ + Ollama**: interface 扩展 + 第 4 家 provider, P2
+- **AI 伴侣 UI 参考** (3 个): B 块 frontend 真实施时调研
+- **同类 IM 工程 + 本地 LLM 运行时**: interface 扩展 + 第 4 家 provider, P2
 - **金融/量化 + 音乐流媒体 + 地理信息** (35 个): skip
 
 ---
@@ -271,14 +271,14 @@ Author:          主代理 Mavis
 
 ### 5.1 Brief
 
-- 任务: 逐类分析 170 项目对我们项目 (Apeireth v2) 的实际作用 + 可借鉴度
+- 任务: 逐类分析 170 项目对我们项目 (Apeireth v2) 的实际作用 + 可参考度
 - 必读: `C:\Users\31683\Desktop\Youyou\重要参考项目，产品方向前辈同行，想法随记.txt` (284 行) + `docs/04-internal/v2-reference-handbook-2026-08-28.md` (613 行) + Round 9 调研 6 真账 doc
 - 输出: `docs/04-internal/youyou-list-research-2026-08-28.md` (≤ 250 行)
 
 ### 5.2 sub-agent 调研 6 段结构
 
 1. 分类总览 (10 类 + 相关度)
-2. 高价值项目 TOP 10 (HIGH, 借鉴点 + 优先级)
+2. 高价值项目 TOP 10 (HIGH, 参考点 + 优先级)
 3. 同领域项目 (MED, 趋势参考)
 4. 低价值项目 (LOW + NONE, 列名)
 5. 用户末尾 2 条 "想法随记" 评估
@@ -297,13 +297,13 @@ Author:          主代理 Mavis
 | # | 项 | 估时 | 阻塞 |
 |---|---|---|---|
 | 1 | sub-agent 报告回来 → 主代理亲验 → 写真账真账 → commit → push | 1h | sub-agent 4h |
-| 2 | **TOP 5 HIGH 借鉴** (DeepSeek Harness / LangGraph / CrewAI / Cua / Serena) — 派 5 sub-agent 真调研 | 1-2 周 | 0 |
+| 2 | **TOP 5 HIGH 参考** (同类 Agent 框架 5 项) — 派 5 sub-agent 真调研 | 1-2 周 | 0 |
 | 3 | **D 块 RC-7 真 modality 真实施** (per R14 spec) | 2-3 周 | 硬件 + 真实施启动 |
 | 4 | **B 块 frontend 真实施** (派 sub-agent A) | 1-2 周 | §8.2 决策冻结 |
 | 5 | **C 块 preference_learning 真实施** (派 sub-agent R20) | 2-3 周 | R10 OrganKind 决策 |
 | 6 | **用户想法 1** (U 盘便携) P1 | 1 周 | post-release |
 | 7 | **用户想法 2** (刷视频) P2 | 2-4 周 | D 块 RC-7 之后 |
-| 8 | **NapCatQQ + Ollama** (interface + 第 4 家 provider) P2 | 1-2 周 | 0 |
+| 8 | **同类 IM 工程 + 本地 LLM 运行时** (interface + 第 4 家 provider) P2 | 1-2 周 | 0 |
 
 ---
 

@@ -1756,7 +1756,7 @@ impl AgentModule for PreferenceRecallModule {
 /// Reflexion module ID (2026-10-06 W2 记忆闭环批).
 pub const REFLEXION_MODULE_ID: &str = "cognitive.reflexion";
 
-/// 失败闭环模块 (donor `apeireth-companion` 口头强化反思, 2026-10-06 W2 接线).
+/// 失败闭环模块 (`apeireth-companion` 口头强化反思, 2026-10-06 W2 接线).
 ///
 /// - `TurnStart`: 按任务标签召回历史教训, 字符预算内注入 (确定性, 0 LLM 调用).
 /// - `AfterTurn`: 消费 [`JudgeObservations`] 的**显式**非 Pass 判定, 沉淀
@@ -3078,7 +3078,7 @@ mod tests {
         assert_eq!(store.list_failures().unwrap().len(), 1);
         assert_eq!(store.list_reflections().unwrap().len(), 1);
 
-        // TurnStart 注入教训块 (donor 反刍格式).
+        // TurnStart 注入教训块 (反刍格式).
         let injected = module
             .on_hook(
                 HookPoint::TurnStart,

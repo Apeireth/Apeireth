@@ -1,6 +1,6 @@
-//! F4 Hypothesis 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/hypothesis.rs`).
+//! F4 Hypothesis 器官真实现（v2）。
 //!
-//! **v1 → v2 1:1 翻译纪律**:
+//! **v1 → v2 语义对齐纪律**:
 //!
 //! - v1 真实现是**确定性机制** (HypothesisStore + VerifyPlanner + ReconcileSink 三件套,
 //!   全部可测, 无 LLM 依赖, per `legacy/donor/apeireth-companion/src/hypothesis.rs:11-17`
@@ -19,8 +19,8 @@
 //! 2. **GraphReconcileSink 简化**: v1 的 `GraphReconcileSink` 依赖 `apeireth_memory::SqliteMemoryStore`
 //!    + `crate::memory_graph::MemoryGraph` (老 path); v2 当前**不实装** (0 装 PASS), 仅
 //!    保留 `ReconcileSink` trait + `NoopSink` 默认 impl. W2/W3 真接时再注入真 sink.
-//! 3. **id 类型**: v1 用 `u64`, 任务示例给 `String`; **1:1 用 u64** (v1 真值).
-//! 4. **状态机 4 态**: 任务示例 3 态 (Pending/Confirmed/Refuted); **1:1 用 v1 4 态**
+//! 3. **id 类型**: v1 用 `u64`, 任务示例给 `String`; **沿用 u64** (v1 真值).
+//! 4. **状态机 4 态**: 任务示例 3 态 (Pending/Confirmed/Refuted); **沿用 v1 4 态**
 //!    (Conjecture/Verifying/Confirmed/Refuted). 区别语义: Conjecture=待验证设计,
 //!    Verifying=证据累积中. Verifying 是过程态, OrganOutput 不暴露 (内部状态机).
 //!
@@ -45,7 +45,7 @@
 //!
 //! **3 阶审查** (O-6 锚 9):
 //!
-//! 1. 总体: 1:1 翻译 v1 HypothesisStore + VerifyPlanner + ReconcileSink 三件套
+//! 1. 总体: 语义对齐 v1 HypothesisStore + VerifyPlanner + ReconcileSink 三件套
 //! 2. 系统: impl 在 engine (`apeireth-organ`), trait 在 foundation (`apeireth-plugin`)
 //! 3. 架构: `Arc<dyn OrganTrait>` 注入 runtime, F4 trait process() 调 HypothesisStore
 
@@ -55,13 +55,13 @@ use apeireth_plugin::llm_factory::LlmFactory;
 use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
 
 // ============================================
-// v1 数据结构 1:1 翻译 (HypothesisStore + Evidence + Status)
+// v1 数据结构 语义对齐 (HypothesisStore + Evidence + Status)
 // ============================================
 
-/// 假设状态 (per v1 `HypothesisStatus` 1:1, 4 态).
+/// 假设状态 (per v1 `HypothesisStatus`, 4 态).
 ///
 /// 0 装诚实: 区别于任务示例 3 态. v1 4 态含过程态 `Verifying` (证据累积但未达阈值),
-/// `Conjecture` 是"已设计待开始". v2 1:1 保留语义.
+/// `Conjecture` 是"已设计待开始". v2 保留语义.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HypothesisStatus {
     /// 已提出猜想 (待开始验证设计).
@@ -74,7 +74,7 @@ pub enum HypothesisStatus {
     Refuted,
 }
 
-/// 证据来源 (per v1 `EvidenceSource` 1:1).
+/// 证据来源 (per v1 `EvidenceSource`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvidenceSource {
     /// 低成本观察 (本机事件/数据).
@@ -85,7 +85,7 @@ pub enum EvidenceSource {
     OracleResolve,
 }
 
-/// 一条证据 (per v1 `Evidence` 1:1).
+/// 一条证据 (per v1 `Evidence`).
 ///
 /// 正 weight = 支持假设, 负 weight = 反驳假设. `at_ms` 由调用方注入 (v2 organ
 /// crate 无 chrono 依赖, 不隐式取时间).
@@ -125,7 +125,7 @@ impl Evidence {
     }
 }
 
-/// 一条假设 (per v1 `Hypothesis` 1:1).
+/// 一条假设 (per v1 `Hypothesis`).
 #[derive(Debug, Clone)]
 pub struct Hypothesis {
     pub id: u64,
@@ -138,7 +138,7 @@ pub struct Hypothesis {
     pub updated_ms: i64,
 }
 
-/// 假设库配置 (per v1 `HypothesisConfig` 1:1).
+/// 假设库配置 (per v1 `HypothesisConfig`).
 #[derive(Debug, Clone)]
 pub struct HypothesisConfig {
     /// 确认阈值: score ≥ 此值 → Confirmed.
@@ -160,10 +160,10 @@ impl Default for HypothesisConfig {
 }
 
 // ============================================
-// v1 HypothesisStore 1:1 翻译 (确定性, 无 LLM)
+// v1 HypothesisStore 语义对齐 (确定性, 无 LLM)
 // ============================================
 
-/// 假设库 (per v1 `HypothesisStore` 1:1 翻译).
+/// 假设库 (per v1 `HypothesisStore` 语义对齐).
 ///
 /// 0 装 PASS: 无 LLM 依赖. 全部状态可测, 4 态状态机 + 加权证据累积.
 ///
@@ -296,10 +296,10 @@ fn now_ms_v2() -> i64 {
 }
 
 // ============================================
-// v1 VerifyPlanner 1:1 翻译 (确定性, 无 LLM)
+// v1 VerifyPlanner 语义对齐 (确定性, 无 LLM)
 // ============================================
 
-/// 验证计划 (per v1 `VerifyPlan` 1:1).
+/// 验证计划 (per v1 `VerifyPlan`).
 ///
 /// 0 装诚实: 是**计划**而非执行. Runtime 拿到 plan 后自己决定如何执行
 /// (观察窗 / 问主人 / oracle 喂奇), organ 不假装 plan 已执行.
@@ -313,7 +313,7 @@ pub enum VerifyPlan {
     OracleResolve { deadline_ms: i64 },
 }
 
-/// 验证计划配置 (per v1 `PlannerConfig` 1:1).
+/// 验证计划配置 (per v1 `PlannerConfig`).
 #[derive(Debug, Clone)]
 pub struct PlannerConfig {
     /// 观察窗成本 (token 量级).
@@ -334,7 +334,7 @@ impl Default for PlannerConfig {
     }
 }
 
-/// 验证调度器 (per v1 `VerifyPlanner` 1:1 翻译).
+/// 验证调度器 (per v1 `VerifyPlanner` 语义对齐).
 ///
 /// 确定性: 成本最低的验证方式优先, 主人可答且观察不可行的才问.
 #[derive(Debug)]
@@ -363,7 +363,7 @@ impl VerifyPlanner {
 }
 
 // ============================================
-// v1 ReconcileSink 1:1 翻译 (trait 口, 默认 NoopSink)
+// v1 ReconcileSink 语义对齐 (trait 口, 默认 NoopSink)
 // ============================================
 
 /// 对账 sink: 定论结果写回记忆图 (W2 因果边) — trait 口, 默认 no-op.
@@ -390,7 +390,7 @@ impl ReconcileSink for NoopSink {
 // F4 HypothesisOrgan (v2 trait 真实现)
 // ============================================
 
-/// F4 假设器官 (per v2 OrganTrait 1:1 翻译 v1 HypothesisStore + VerifyPlanner).
+/// F4 假设器官 (per v2 OrganTrait 语义对齐 v1 HypothesisStore + VerifyPlanner).
 ///
 /// **构造**:
 /// - `llm_factory`: 保留给未来 v2.1 LLM 命题抽取路径. 当前算法**不用** LLM
@@ -447,7 +447,7 @@ impl HypothesisOrgan {
         }
     }
 
-    /// 登记猜想 (per v1 API 1:1, 暴露给外部以便 Runtime 喂好奇产出)
+    /// 登记猜想 (per v1 API, 暴露给外部以便 Runtime 喂好奇产出)
     pub fn conjecture(&self, statement: impl Into<String>) -> Hypothesis {
         let mut store = self
             .store
@@ -456,7 +456,7 @@ impl HypothesisOrgan {
         store.conjecture(statement)
     }
 
-    /// 开始验证 (per v1 API 1:1)
+    /// 开始验证 (per v1 API)
     pub fn start_verify(&self, id: u64) -> Result<(), String> {
         let mut store = self
             .store
@@ -465,7 +465,7 @@ impl HypothesisOrgan {
         store.start_verify(id)
     }
 
-    /// 加证据 (per v1 API 1:1)
+    /// 加证据 (per v1 API)
     pub fn add_evidence(&self, id: u64, ev: Evidence) -> Result<HypothesisStatus, String> {
         let mut store = self
             .store
@@ -474,7 +474,7 @@ impl HypothesisOrgan {
         store.add_evidence(id, ev)
     }
 
-    /// 取假设 (per v1 API 1:1)
+    /// 取假设 (per v1 API)
     pub fn get(&self, id: u64) -> Option<Hypothesis> {
         let store = self
             .store
@@ -483,7 +483,7 @@ impl HypothesisOrgan {
         store.get(id).cloned()
     }
 
-    /// 列假设 (per v1 API 1:1)
+    /// 列假设 (per v1 API)
     pub fn list(&self, status: Option<HypothesisStatus>) -> Vec<Hypothesis> {
         let store = self
             .store
@@ -492,7 +492,7 @@ impl HypothesisOrgan {
         store.list(status).into_iter().cloned().collect()
     }
 
-    /// 假设数 (per v1 API 1:1)
+    /// 假设数 (per v1 API)
     pub fn len(&self) -> usize {
         let store = self
             .store
@@ -505,7 +505,7 @@ impl HypothesisOrgan {
         self.len() == 0
     }
 
-    /// 制定验证计划 (per v1 VerifyPlanner 1:1)
+    /// 制定验证计划 (per v1 VerifyPlanner)
     pub fn plan_verify(&self, h: &Hypothesis, observable: bool) -> VerifyPlan {
         let planner = self
             .planner
@@ -514,7 +514,7 @@ impl HypothesisOrgan {
         planner.plan(h, observable)
     }
 
-    /// 对账: Confirmed/Refuted 假设写回 sink (per v1 ReconcileSink 1:1).
+    /// 对账: Confirmed/Refuted 假设写回 sink (per v1 ReconcileSink).
     ///
     /// 0 装 PASS: 默认 sink 是 NoopSink, 不假装已对账. 真 sink 由调用方注入.
     pub fn reconcile(&self, h: &Hypothesis) -> Result<(), String> {
@@ -537,7 +537,7 @@ impl OrganTrait for HypothesisOrgan {
     }
 
     async fn process(&self, input: OrganInput) -> Result<OrganOutput, OrganError> {
-        // 1:1 翻译 v1 hypothesis.process 路径:
+        // 语义对齐 v1 hypothesis.process 路径:
         // - episode 上下文 → 如果 context_hints 非空, 把第 1 个 hint 当猜想 statement
         //   登记 (v1 好奇产出可作为 hypothesis, per `legacy/.../hypothesis.rs:19-22`)
         // - dry_run 模式不真登记 (per curiosity 同模式)
@@ -589,7 +589,7 @@ impl OrganTrait for HypothesisOrgan {
 }
 
 // ============================================
-// 单元测试 (1:1 翻译 v1 hypothesis.rs 测试)
+// 单元测试 (语义对齐 v1 hypothesis.rs 测试)
 // ============================================
 
 #[cfg(test)]
@@ -627,7 +627,7 @@ mod tests {
         OrganInput::new(ep, hints)
     }
 
-    /// v1 1:1: conjecture → start_verify → 累积证据 → confirmed
+    /// 对齐 v1: conjecture → start_verify → 累积证据 → confirmed
     #[test]
     fn conjecture_to_verify_to_confirm() {
         let organ = HypothesisOrgan::new(test_factory(), "minimax-m3");
@@ -659,7 +659,7 @@ mod tests {
         assert_eq!(organ.get(h.id).unwrap().status, HypothesisStatus::Confirmed);
     }
 
-    /// v1 1:1: 反驳证据主导 → Refuted
+    /// 对齐 v1: 反驳证据主导 → Refuted
     #[test]
     fn refuting_evidence_outweighs() {
         let organ = HypothesisOrgan::new(test_factory(), "minimax-m3");
@@ -680,7 +680,7 @@ mod tests {
         assert_eq!(organ.get(h.id).unwrap().status, HypothesisStatus::Refuted);
     }
 
-    /// v1 1:1: 已定论假设不再接受证据
+    /// 对齐 v1: 已定论假设不再接受证据
     #[test]
     fn settled_hypothesis_rejects_evidence() {
         let organ = HypothesisOrgan::new(test_factory(), "minimax-m3");
@@ -710,7 +710,7 @@ mod tests {
         );
     }
 
-    /// v1 1:1: 单条大权重不能拍板 (min_evidence_to_settle 防)
+    /// 对齐 v1: 单条大权重不能拍板 (min_evidence_to_settle 防)
     #[test]
     fn min_evidence_prevents_single_big_weight_settlement() {
         let organ = HypothesisOrgan::new(test_factory(), "minimax-m3");
@@ -726,7 +726,7 @@ mod tests {
         assert_ne!(organ.get(h.id).unwrap().status, HypothesisStatus::Confirmed);
     }
 
-    /// v1 1:1: VerifyPlanner 优先低成本观察窗
+    /// 对齐 v1: VerifyPlanner 优先低成本观察窗
     #[test]
     fn planner_prefers_low_cost_observation() {
         let organ = HypothesisOrgan::new(test_factory(), "minimax-m3");
@@ -738,7 +738,7 @@ mod tests {
         assert!(matches!(plan2, VerifyPlan::AskMaster { .. }));
     }
 
-    /// v1 1:1: NoopSink 诚实 no-op
+    /// 对齐 v1: NoopSink 诚实 no-op
     #[test]
     fn noop_sink_is_honest_noop() {
         let organ = HypothesisOrgan::new(test_factory(), "minimax-m3");

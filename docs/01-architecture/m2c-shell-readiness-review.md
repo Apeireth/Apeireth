@@ -760,7 +760,7 @@ shell branch, no second registry, no special tool manager.
 
 Shell risk metadata should be the highest existing meaningful category used by
 canonical tools: **`"high"`** (current canonical tool metadata uses `"low"` /
-`"medium"`; donor Shell used `High`). Risk metadata alone does **not** enforce
+`"medium"`; baseline Shell used `High`). Risk metadata alone does **not** enforce
 approval; `PermissionPolicy.require_approval_for("tool.shell")` does.
 
 ---
@@ -1304,12 +1304,12 @@ traced. Not part of v1.
 
 ## 78. SovereignControl
 
-M1C donor audit deferred SovereignControl. Do not introduce it simply for
+M1C baseline audit deferred SovereignControl. Do not introduce it simply for
 Shell. Canonical Governance is sufficient unless an actual gap is proven.
 
 ---
 
-## 79. Donor Audit
+## 79. Baseline Audit
 
 Source:
 `origin/master:reconstruction_v2/crates/apeireth-tools/src/builtin/shell.rs`
@@ -1327,11 +1327,11 @@ and `origin/master:reconstruction_v2/crates/apeireth-tools/src/sandbox.rs`.
 | No cwd | DROP (require explicit cwd) |
 | Inherited ambient env | DROP (require Clear/Explicit) |
 | No governance/approval integration | DROP (must be governed) |
-| Description claims "sandbox restrictions" | Security mistake; not ported |
-| `PlatformSandbox` never assigned to shell child | Security mistake; not ported |
+| Description claims "sandbox restrictions" | Security mistake; not adopted |
+| `PlatformSandbox` never assigned to shell child | Security mistake; not adopted |
 | Tests: echo dynamic command, echo preset, destructive rejection | ADAPT tests into harmless ProcessExecutor-based E2E; reject blacklist test concept |
 
-Donor conclusion: the master ShellTool was **not** sandboxed despite its
+Baseline conclusion: the master ShellTool was **not** sandboxed despite its
 description. Its safety was a blacklist over destructive strings plus an
 unattached `PlatformSandbox`. That architecture is explicitly rejected.
 
@@ -1339,12 +1339,12 @@ unattached `PlatformSandbox`. That architecture is explicitly rejected.
 
 ## 80. Master Security Claim
 
-Confirmed: donor `ShellTool::definition()` describes itself as
+Confirmed: baseline `ShellTool::definition()` describes itself as
 "Executes shell commands safely across Windows, Linux, and macOS with sandbox
 restrictions", while `ShellTool::execute` spawns via `tokio::process::Command`
 and never calls `PlatformSandbox::assign_process`. The sandbox field was
 effectively decoration. This is recorded as an architecture mistake and
-reinforces what must not be ported.
+reinforces what must not be adopted.
 
 ---
 

@@ -1,5 +1,5 @@
 //! Deterministic proof that the real HTTP gateway entry reaches canonical
-//! execution through the **migrated** openai-compatible provider.
+//! execution through the **canonical** openai-compatible provider.
 //!
 //! Mirrors `canonical_anthropic_entry.rs` but wires the real
 //! `OpenAiCompatibleProviderPlugin` (a canonical `ProviderCapability`, not

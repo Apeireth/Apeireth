@@ -5,11 +5,11 @@
 Status: complete
 Branch: `reconstruct_v2`
 Starting HEAD: `3ec66cd2c714178a0ce42e3218d28afdb247b22e`
-Donor: `origin/master:reconstruction_v2/crates/apeireth-tools/src/sandbox.rs` and siblings
+Source: `origin/master:reconstruction_v2/crates/apeireth-tools/src/sandbox.rs` and siblings
 
-## 1. Donor reality audit
+## 1. Baseline reality audit
 
-Donor sources inspected:
+Baseline sources inspected:
 
 - `origin/master:reconstruction_v2/crates/apeireth-tools/src/sandbox.rs`
 - `origin/master:reconstruction_v2/crates/apeireth-tools/src/builtin/shell.rs`
@@ -18,26 +18,26 @@ Donor sources inspected:
 - `origin/master:reconstruction_v2/crates/apeireth-tools/src/worktree.rs`
 - `origin/master:reconstruction_v2/crates/apeireth-runtime/src/host.rs`
 
-| Feature | Donor status | Canonical strategy | Final status | Evidence |
+| Feature | Baseline status | Canonical strategy | Final status | Evidence |
 | --- | --- | --- | --- | --- |
 | Job Object creation | REAL | REIMPLEMENT low-level primitive | ENFORCED | `process/windows.rs::JobObject::create` uses `CreateJobObjectW` + `SetInformationJobObject` |
 | Child attachment | BROKEN / NOT INTEGRATED | REIMPLEMENT fail-closed spawn | ENFORCED | `process_executor::process_executor_attaches_child_to_a_real_job_object`; child's first instruction sees `IN_JOB` |
 | Assignment timing | spawn-then-(never)-assign | CREATE_SUSPENDED → assign → ResumeThread | ENFORCED (fail-closed) | `process/windows.rs` `spawn_and_supervise` |
-| Descendants in job | PARTIAL (Job Object semantics support it; donor never attached) | ADAPT Job Object tree semantics | ENFORCED | `windows_tests::timeout_terminates_the_whole_job_tree` |
-| Kill-on-close | REAL (flag set on donor job) but never tested | REIMPLEMENT + real test | ENFORCED | `windows_tests::kill_on_job_close_terminates_a_running_child` |
-| Memory limit | DOC-ONLY / PARTIAL (donor set 256MB but no child was ever assigned) | REIMPLEMENT opt-in | ENFORCED (opt-in) | `windows_tests::process_memory_limit_rejects_oversized_allocation` |
-| Active process count | DONOR DID NOT SET | REIMPLEMENT opt-in | ENFORCED (opt-in) | `windows_tests::active_process_limit_blocks_extra_child_creation` |
-| RestrictedToken creation | PARTIAL (created if `OpenProcessToken` succeeded) | DEFERRED | DEFERRED | Donor `sandbox.rs` calls `CreateRestrictedToken`; no launch path uses it |
-| Restricted-token launch | NOT ENFORCED | DEFERRED | DEFERRED | Donor spawns via `std::process::Command` / `tokio::process::Command`; `restricted_token` is never used |
+| Descendants in job | PARTIAL (Job Object semantics support it; baseline never attached) | ADAPT Job Object tree semantics | ENFORCED | `windows_tests::timeout_terminates_the_whole_job_tree` |
+| Kill-on-close | REAL (flag set on baseline job) but never tested | REIMPLEMENT + real test | ENFORCED | `windows_tests::kill_on_job_close_terminates_a_running_child` |
+| Memory limit | DOC-ONLY / PARTIAL (baseline set 256MB but no child was ever assigned) | REIMPLEMENT opt-in | ENFORCED (opt-in) | `windows_tests::process_memory_limit_rejects_oversized_allocation` |
+| Active process count | BASELINE DID NOT SET | REIMPLEMENT opt-in | ENFORCED (opt-in) | `windows_tests::active_process_limit_blocks_extra_child_creation` |
+| RestrictedToken creation | PARTIAL (created if `OpenProcessToken` succeeded) | DEFERRED | DEFERRED | Baseline `sandbox.rs` calls `CreateRestrictedToken`; no launch path uses it |
+| Restricted-token launch | NOT ENFORCED | DEFERRED | DEFERRED | Baseline spawns via `std::process::Command` / `tokio::process::Command`; `restricted_token` is never used |
 | Timeout | PARTIAL (only `ToolSynthesizer` used `tokio::time::timeout` on `cmd.output()`) | REIMPLEMENT deterministic supervision loop | ENFORCED | `timeout_terminates_the_child`; `timeout_terminates_the_whole_job_tree` |
 | stdout/stderr bound | PARTIAL (synthesis truncated after full read) | REIMPLEMENT read-time bound + explicit truncation flags | ENFORCED | `stdout_limit_truncates_and_reports`, `stderr_limit_truncates_and_reports` |
 | Worktree sandbox | REAL but workspace isolation only; not OS containment | DEFER (future workspace isolation primitive) | DEFERRED | `origin/master:.../worktree.rs` |
-| ToolSynthesizer integration | BROKEN (stored `Arc<PlatformSandbox>` but never attached child) | DROP / not ported | NOT PORTED | `origin/master:.../synthesis.rs`; `sandbox` field is `#[allow(dead_code)]` |
+| ToolSynthesizer integration | BROKEN (stored `Arc<PlatformSandbox>` but never attached child) | DROP / not adopted | NOT ADOPTED | `origin/master:.../synthesis.rs`; `sandbox` field is `#[allow(dead_code)]` |
 
-Donor conclusion: `master` had a real Job Object and a restricted-token handle, but
+Baseline conclusion: `master` had a real Job Object and a restricted-token handle, but
 the spawned shell/repo/synthesis child processes never called
 `assign_process`, so the sandbox was decoration, not enforcement. M2B therefore
-did **not** direct-port `PlatformSandbox`; it reused only the correct low-level
+did **not** directly adopt `PlatformSandbox`; it reused only the correct low-level
 Windows primitives and built a fail-closed canonical executor.
 
 ## 2. Canonical owner

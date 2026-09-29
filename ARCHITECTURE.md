@@ -1,7 +1,7 @@
 # Apeireth Architecture
 
 This document describes the current product baseline in the root repository.
-Historical design proposals and donor implementations live under `docs/archive/`,
+Historical design proposals and archived implementations live under `docs/archive/`,
 `legacy/`, and `reports/`; they are not part of the built product workspace.
 
 ## Current structure
@@ -18,7 +18,7 @@ apeireth/
 ├── deploy/                # deployment-specific artifacts retained separately
 ├── packaging/             # package build metadata and installers
 ├── docs/                  # current guides, architecture, reference, and archive
-├── legacy/                # donor/reference code; excluded from the root workspace
+├── legacy/                # archived/reference code; excluded from the root workspace
 ├── reports/               # durable audit and validation evidence
 └── previews/              # design/reference assets
 ```

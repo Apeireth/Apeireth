@@ -1,4 +1,4 @@
-//! Deterministic proof that the canonical runtime executes the migrated
+//! Deterministic proof that the canonical runtime executes the
 //! openai-compatible provider **without** the LegacyLlmCapability bridge and
 //! without going through the minimax or anthropic providers.
 //!

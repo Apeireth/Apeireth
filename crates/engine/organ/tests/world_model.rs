@@ -4,8 +4,8 @@
 //! 1. `world_model_organ_returns_state_after_simulate` (mock LlmFactory 返固定响应,
 //!    验 state 解析 + trait 边界) — **子代理 R4 独立判断**: v1 world_model 没有 "返固定响应"
 //!    路径 (v1 仅 MockTimelineLlm 在 unit test), v2 trait shape 验 LlmFactory 注入不破.
-//!    这里用 NoopLlmFactory 验 trait 边界 (v1 1:1 路径 + 真接 LLM 接口验证)
-//! 2. `world_model_organ_state_diff_compares_two_states` (确定性 diff 路径, 1:1 v1)
+//!    这里用 NoopLlmFactory 验 trait 边界 (v1 路径 + 真接 LLM 接口验证)
+//! 2. `world_model_organ_state_diff_compares_two_states` (确定性 diff 路径, 对齐 v1)
 //! 3. `world_model_organ_no_llm_returns_error` (NoopLlmFactory → 透 LlmError 失败,
 //!    0 装诚实: 真接 LLM 真失败透传, 不假装"成功")
 //! 4. `world_model_organ_real_llm_smoke` (#[ignore], manual 跑验真接 LLM)
@@ -38,7 +38,7 @@ use apeireth_plugin::llm_factory::{LlmFactory, NoopLlmFactory};
 // Test 1: world_model_organ_returns_state_after_simulate
 // ============================================
 
-/// Mock LLM (per v1 MockTimelineLlm 1:1) — 测试用硬编码推演脚本.
+/// Mock LLM (per v1 MockTimelineLlm) — 测试用硬编码推演脚本.
 /// 3 步推演 + 终点概率 0.7.
 fn mock_timeline_llm() -> Arc<dyn TimelineLlm> {
     let scripts: Vec<TimelineStep> = (0..3)
@@ -120,7 +120,7 @@ async fn world_model_organ_returns_state_after_simulate() {
         "W1 必须 llm_factory() 返 Some (真接 LLM, 与 E4/F1/F4/F6 关键区别)"
     );
 
-    // 3) WorldModel facade state_diff 路径 (确定性, 1:1 v1)
+    // 3) WorldModel facade state_diff 路径 (确定性, 对齐 v1)
     let before = WorldState {
         entities: vec![Entity {
             id: "master".into(),
@@ -143,7 +143,7 @@ async fn world_model_organ_returns_state_after_simulate() {
     assert!(diff.removed.is_empty());
     assert!(diff.changed.contains(&"master.进度".to_string()));
 
-    // 4) TextualSimulator + MockTimelineLlm 推演链 1:1 v1 验证 (mock LLM, 不走 LlmFactory)
+    // 4) TextualSimulator + MockTimelineLlm 推演链 对齐 v1 验证 (mock LLM, 不走 LlmFactory)
     let llm = mock_timeline_llm();
     let sim = TextualSimulator::new(llm);
     let start_state = WorldState {
@@ -281,7 +281,7 @@ async fn world_model_organ_real_llm_smoke() {
 // ============================================
 
 /// **子代理 R4 独立判断 #3**: 验 facade API 完整 (per 任务示例 simulate / counterfactual /
-/// state_diff + CounterfactualQuery schema 1:1 翻译 v1 `CounterfactualChain` 入参).
+/// state_diff + CounterfactualQuery schema 语义对齐 v1 `CounterfactualChain` 入参).
 #[tokio::test]
 async fn world_model_facade_api_complete() {
     let factory: Arc<dyn LlmFactory> = Arc::new(NoopLlmFactory);
@@ -310,7 +310,7 @@ async fn world_model_facade_api_complete() {
     assert!(diff.changed.is_empty());
 }
 
-/// **0 装诚实**: Forecast resolve Brier 数值正确 (per v1 1:1)
+/// **0 装诚实**: Forecast resolve Brier 数值正确 (per v1)
 #[test]
 fn forecast_resolve_brier_deterministic() {
     let mut f = Forecast::new("明天交作业", 0.7, 0);

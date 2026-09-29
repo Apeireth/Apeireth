@@ -19,7 +19,7 @@ Author:          主代理 Mavis (反思 session)
 
 ## 0. TL;DR (1 段总结)
 
-**Apeireth v2.0.0-rc.1 = 新架构完成 (17-crate[对账注：写作时 16-crate] + 7 capability trait + 认知模块 + 9 哲学锚 + 5 重守门) + 9/10 RC 真实现 + 9 organ 全部真移植 + OrganOrchestrator 串联层真实施落地 (R12) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 + 哲学锚本体 LOCKED 真加 O-6 + 自我升级 cycle 设计完成 + 真 LLM call 1.16s 跑通 (RC-5 MiniMax adapter)**.
+**Apeireth v2.0.0-rc.1 = 新架构完成 (17-crate[对账注：写作时 16-crate] + 7 capability trait + 认知模块 + 9 哲学锚 + 5 重守门) + 9/10 RC 真实现 + 9 organ 全部真实现 + OrganOrchestrator 串联层真实施落地 (R12) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 + 哲学锚本体 LOCKED 真加 O-6 + 自我升级 cycle 设计完成 + 真 LLM call 1.16s 跑通 (RC-5 MiniMax adapter)**.
 
 **总进度 ≈ 80%** (v2.0.0 release 估 4-6 月, 2027-01-08 至 2027-02 月, 因 A 块 OrganOrchestrator 完整化提前完成). 距离 v1.0 parity = frontend 对接 + 6 DEFERRED slot 激活 + RC-7 真 modality + RC-11 真生产验证 = **3 块真实施** (A 块已 ✅), 估 1-3 月 (2027-Q1 启动).
 
@@ -41,7 +41,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings   # 期望: 0 警
 **主代理 + 用户原话归纳**:
 
 1. **"新架构 + 1.0 全部功能" = v2.0.0 release 定义**
-   - 真完成 = 9 organ 真移植 + 其他 77 crates 功能 + 7 capability trait 全真写
+   - 真完成 = 9 organ 真实现 + 其他 77 crates 功能 + 7 capability trait 全真写
 2. **"做完的时候我看结果"** — push commit 不询问, 0 风险立刻做
 3. **"干完把架构按最优干完我们就准备补模块了"** — 不假装 "已完成", 真写完
 4. **"继续做, 继续推进就行, 每做完一个小阶段, 就让子代理检查你做过的东西"** — 每小段派子代理审查
@@ -69,7 +69,7 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 ### 1.3 真生产前必做 (主代理判断)
 
 按 O-6 + 13 键降级决策 + 5 重守门自动验证:
-- **9 organ 真移植至少 1** (ROADMAP §4 P6 "至少 1 器官移植" 是 v2.0 release 最低门槛)
+- **9 organ 真实现至少 1** (ROADMAP §4 P6 "至少 1 器官落地" 是 v2.0 release 最低门槛)
 - **frontend companion-desktop 对接** (ROADMAP §4 P8)
 - **RC-11 migration script 真生产前验证** (1-2 天, 有 key 但没 v1 db 验证)
 
@@ -83,7 +83,7 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 |---|---|---|
 | **新架构** | 100% | 17-crate（写作时 16-crate, 2026-09-05 对账注） + 7 capability trait + 认知模块 12 slot + 9 哲学锚 + 5 重守门 |
 | **RC 真实现** | 90% (9/10) | RC-1/2/3/4/5/6/8/9/10/11 真写, RC-7 真 modality spec 已完 (R14) 待硬件 |
-| **9 organ 真移植** | 100% (9/9) | 整合 #2 commit `bbf70293` 一次性拍板, 9 organ trait 抽象 + 1:1 v1 翻译 |
+| **9 organ 真实现** | 100% (9/9) | 整合 #2 commit `bbf70293` 一次性拍板, 9 organ trait 抽象 + 语义对齐 v1 |
 | **OrganOrchestrator 串联层** | ✅ **R12 + A 块完整化已落** | 13 gate + 5 状态机 + 9 organ 顺序 process (R12 commit `2550b99d`) + 5 stage A 块完整化 (amend 后 commits `c003e078` / `087ab2ac` / `50ba2e57` / `29e5ce66` / `0afa733f`, 详 `organ-orchestrator-completion-plan.md`) + O-6 三阶审查 amend (commit `bbbfb75b`, 详 `A-block-o6-true-account.md`); 缺口 D ratify_fresh_policy 5 状态链 / B F1 PAD mood / A check_8_gates + E7 last_hold / C Council decide_with_invoker / E L0-L5 UpgradeCycle driver 全部真实施 |
 | **认知模块** | 50% (6/12 slot WIRED) | 6 WIRED + 6 DEFERRED (judge/council 为 WIRED, OFF by default) |
 | **8 spec 收齐** | 100% | R9/R10/R11/R13/R14/R15 + Z 审计 + 本报告 |
@@ -161,7 +161,7 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 |---|---|---|
 | 真 RC 实现 | 11 commit (rc.1 批) | ~2300 行 (engine/memory + provider + orchestration) |
 | 哲学锚 9 项 | 9 commit (rc.1 批, 5 Refactor + #2 + #18+#19+#23 + O-6 加) | ~1500 行 |
-| 9 organ 真移植 | 9 sub-agent (Q1 + R1-R8) | 整合 #2 commit `bbf70293` 一次性拍板 |
+| 9 organ 真实现 | 9 sub-agent (Q1 + R1-R8) | 整合 #2 commit `bbf70293` 一次性拍板 |
 | **R12 OrganOrchestrator 真实施** | `2550b99d` | **1933 行** (orchestrator.rs + 3 integration tests) |
 | 文档交付 + 8 spec + 错账修正 | rc.1 批 + 收盘批 | 8 spec ~4000 行 + R13 接力审 497 行 |
 | RC-11 migration | 1 commit | 700 行 (Python + Rust) |
@@ -200,7 +200,7 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
 
 | 子代理 | 任务 | 关键产出 |
 |---|---|---|
-| Q1 + R1-R8 | 9 organ 真移植 (E4/F1/F4/F6/W1/W2/W3/E7/Memory) | 整合 #2 commit `bbf70293` |
+| Q1 + R1-R8 | 9 organ 真实现 (E4/F1/F4/F6/W1/W2/W3/E7/Memory) | 整合 #2 commit `bbf70293` |
 | R9 | frontend 对接 spec + quickstart | 565 + 224 行 (12 slot 数字错, R13 纠) |
 | R10 | cognitive 9 organ 集成 spec | 1001 行 (ledger 数字错, R13 纠) |
 | R11 | OrganOrchestrator spec | 500 行 15 节 |
@@ -350,7 +350,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory \
 
 ### 4.5 真实数字账
 
-| 项 | 真数字 | 来源 |
+| 项 | 真数字 | 依据 |
 |---|---|---|
 | **v1.0.0 Rust 代码** | **551,208 行** (.rs) | 实测 `git ls-tree -r v1.0.0` + `git show` (2026-08-28) |
 | **v1.0.0 总 tracked LOC** | **1,154,516 行** | 实测同上 |
@@ -407,7 +407,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory \
 
 ### 5.5 给新团队的话 (主代理 Mavis 致, 完整版见 `TO-NEW-TEAM.md`)
 
-> Apeireth v2.0.0-rc.1 = **新架构 + 工程形态收敛 + 9 organ 真移植 + OrganOrchestrator 串联层落地** 的真实完成. v2.0.0 release 的最后门槛 = 4 块真实施: **frontend 对接 (4-6 周, R9+R13 spec done) + 6 DEFERRED slot 激活 (6-10 周, R10+R15 spec done) + OrganOrchestrator 完整化 (1-3 周, R12 已落) + RC-7 真 modality (2-3 周, R14 spec done, 需硬件)** — 估 2027-Q1 启动, v2.0.0 release 估 2027-01-08 至 2027-03 月.
+> Apeireth v2.0.0-rc.1 = **新架构 + 工程形态收敛 + 9 organ 真实现 + OrganOrchestrator 串联层落地** 的真实完成. v2.0.0 release 的最后门槛 = 4 块真实施: **frontend 对接 (4-6 周, R9+R13 spec done) + 6 DEFERRED slot 激活 (6-10 周, R10+R15 spec done) + OrganOrchestrator 完整化 (1-3 周, R12 已落) + RC-7 真 modality (2-3 周, R14 spec done, 需硬件)** — 估 2027-Q1 启动, v2.0.0 release 估 2027-01-08 至 2027-03 月.
 >
 > 别忘了三件旧账: **RC-11 migration script 真生产验证** (加密文件格式 v1 → v2 不可读, 真生产前必跑); **整合 #2 commit `bbf70293` message 标 "无新外部 dep" 是错的** (真 = 5 新 dep, AES-256-GCM 系, 无法改 commit, 真账在各文档); **12 slot 真账 = 6 WIRED + 6 DEFERRED** (judge/council 是 WIRED OFF by default, 不是 "SLOT READY", R13 接力审纠).
 >
@@ -465,7 +465,7 @@ f2cfaa76 refactor(plugin): O-6 Refactor-2+3 - Experience + Perception traits 搬
 ## 7. 给新团队最后一段话 (v2.0 release 后 6 个月内)
 
 ```
-Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + OrganOrchestrator 完整化 (A 块) ✅ + frontend 对接 + 自我升级 cycle.
+Apeireth v2.0 = 9 organ 真实现 ✅ + OrganOrchestrator 串联层 ✅ + OrganOrchestrator 完整化 (A 块) ✅ + frontend 对接 + 自我升级 cycle.
 
 新团队:
 1. 接手 **3 个**真生产前阻塞 (per §5.3, A 块已 ✅): frontend + 6 DEFERRED + RC-7
@@ -483,4 +483,4 @@ Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + OrganO
 
 ---
 
-_本文档 Final-1.0 首发 (2026-08-28, 主代理 Mavis 写于 rc.1 收盘 session, 当时 HEAD = `395fe0f0`, 19 commit; **当前 HEAD (Round 6 完) = `7d990297`**). Final-2.0 更新 (2026-08-28): 9 organ 真移植 100% + R12 OrganOrchestrator 真实施落地 (`2550b99d`) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 (`ccf29c57`) + 1726 tests 0 FAILED + 85 commit 实测 + 16 crates. 0 触碰 LOCKED, 真 LLM call 1.16s 跑通. 接手人按 §5.4 10 步读 + §5.3 4 阻塞真做, v2.0.0 release 估 2027-01-08 至 2027-03 月. **Final-2.1 更新 (2026-08-28)**: A 块 OrganOrchestrator 完整化 5 stage 真实施 (amend 后 commits `c003e078` ~ `0afa733f`) + O-6 三阶审查 amend 复盘 (commit `bbbfb75b`); 1739 tests 0 FAILED (1726 baseline + 13 new A 块); 剩 **3 块**真实施 (frontend / 6 DEFERRED / RC-7); v2.0.0 release 估 **2027-01-08 至 2027-02 月, 4-6 月** (因 A 块提前完成, 从 5-7 月缩短为 4-6 月). **Final-3.0 更新 (2026-09-05 对账批)**: 实测基线 17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1 (6b81c210) / v2.0.0-rc.1 tag 已打 (854831fc) + release authority 关闭 (a0417f55); 装机 E2E 与远端 Windows 验证证据仍待补 (per RC1_HANDOFF); release 估时按 Round 12-13 真调研修订为 2027-Q3. 历史数字 (16 crates / 1739 tests / 1.2.0) 属实于写作时点, 不追溯改写._
+_本文档 Final-1.0 首发 (2026-08-28, 主代理 Mavis 写于 rc.1 收盘 session, 当时 HEAD = `395fe0f0`, 19 commit; **当前 HEAD (Round 6 完) = `7d990297`**). Final-2.0 更新 (2026-08-28): 9 organ 真实现 100% + R12 OrganOrchestrator 真实施落地 (`2550b99d`) + 8 spec 收齐 (R9-R15 + Z) + 6 处错账修正 (`ccf29c57`) + 1726 tests 0 FAILED + 85 commit 实测 + 16 crates. 0 触碰 LOCKED, 真 LLM call 1.16s 跑通. 接手人按 §5.4 10 步读 + §5.3 4 阻塞真做, v2.0.0 release 估 2027-01-08 至 2027-03 月. **Final-2.1 更新 (2026-08-28)**: A 块 OrganOrchestrator 完整化 5 stage 真实施 (amend 后 commits `c003e078` ~ `0afa733f`) + O-6 三阶审查 amend 复盘 (commit `bbbfb75b`); 1739 tests 0 FAILED (1726 baseline + 13 new A 块); 剩 **3 块**真实施 (frontend / 6 DEFERRED / RC-7); v2.0.0 release 估 **2027-01-08 至 2027-02 月, 4-6 月** (因 A 块提前完成, 从 5-7 月缩短为 4-6 月). **Final-3.0 更新 (2026-09-05 对账批)**: 实测基线 17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1 (6b81c210) / v2.0.0-rc.1 tag 已打 (854831fc) + release authority 关闭 (a0417f55); 装机 E2E 与远端 Windows 验证证据仍待补 (per RC1_HANDOFF); release 估时按 Round 12-13 真调研修订为 2027-Q3. 历史数字 (16 crates / 1739 tests / 1.2.0) 属实于写作时点, 不追溯改写._

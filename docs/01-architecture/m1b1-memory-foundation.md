@@ -12,15 +12,15 @@ Implemented on `reconstruct_v2`. Migration version after this phase: `2`.
 - Storage owner: `apeireth-storage` (SQLite pool + migrations)
 - Runtime integration: none
 
-## Donor source
+## Source
 
 - `origin/master:reconstruction_v2/crates/apeireth-storage/src/memory_v2.rs`
 
 ## Semantic classification
 
-| Donor concept | Classification | Disposition |
+| Baseline concept | Classification | Disposition |
 | --- | --- | --- |
-| `MemoryItem` fields (`id`, `data`, `importance`, `access_count`, `access_times`, `created_at`, `valid_from`, `valid_until`, `is_tombstone`, `artifact_sig`) | DOMAIN | Ported as `canonical::MemoryItem` with core `Timestamp` time fields and a typed `MemoryId` |
+| `MemoryItem` fields (`id`, `data`, `importance`, `access_count`, `access_times`, `created_at`, `valid_from`, `valid_until`, `is_tombstone`, `artifact_sig`) | DOMAIN | Adopted as `canonical::MemoryItem` with core `Timestamp` time fields and a typed `MemoryId` |
 | `MemoryOperation` | DOMAIN operation | Adapted into explicit repository methods (`insert`, `update`, `tombstone`) instead of a catch-all apply op |
 | `QueryMode` | RETRIEVAL | Deferred to M1B2 (temporal filtering is available as `MemoryFilter`; no ranking) |
 | ACT-R activation | RETRIEVAL | Deferred to M1B2 |

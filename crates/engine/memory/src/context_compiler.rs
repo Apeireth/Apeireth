@@ -123,13 +123,13 @@ impl ClosedWorldContextCompiler {
         })
     }
 
-    /// Compile an overlay in the donor closed-world **injection** format
+    /// Compile an overlay in the closed-world **injection** format
     /// (2026-10-06 W2 接线批: `memory_injection` 渲染器接线, 与 XML 格式互斥可选).
     ///
     /// 渲染走 [`crate::memory_injection::build_memory_injection`]: 编号证据清单 +
-    /// 显式反幻觉规则 ("禁止说「我记得我们以前聊过」"). 预算语义: 每条证据按 donor
+    /// 显式反幻觉规则 ("禁止说「我记得我们以前聊过」"). 预算语义: 每条证据按既有
     /// 口径截 120 字, 渲染整体超出 `max_chars` 时从尾部弹条目 (0 装: 截断而非放行);
-    /// 预算容不下任何条目或空召回时返回 `None` (donor 渲染器空输入出空串, 空 overlay 无意义).
+    /// 预算容不下任何条目或空召回时返回 `None` (既有渲染器空输入出空串, 空 overlay 无意义).
     pub fn compile_injection_with_selected_access(
         &self,
         recalled: &MemoryRecallResult,

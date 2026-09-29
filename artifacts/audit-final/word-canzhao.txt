@@ -1,0 +1,2 @@
+scripts/check-neutral-terms.ps1:3:# 产品/项目标识或"移植/借鉴/参照实现"类来源措辞。只扫 git diff 的新增行
+scripts/check-neutral-terms.ps1:18:  '参照实现',

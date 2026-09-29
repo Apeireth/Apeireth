@@ -1,6 +1,6 @@
-//! `apeireth-core::onion_gate` — 双洋葱统一体**判定层** (W3 三洋葱 L3-L5 判定模型移植)。
+//! `apeireth-core::onion_gate` — 双洋葱统一体**判定层** (W3 三洋葱 L3-L5 判定模型实现)。
 //!
-//! **移植来源** (防重造轮子 diff 记录, 2026-10-10): v1 `legacy/donor/apeireth-onion`
+//! **实现基线** (防重造轮子 diff 记录, 2026-10-10): v1
 //! (trait 抽象层 + `DefaultDoubleOnion::unify_check` 三段门 + 11 节点电子环 +
 //! `organ_kani_proofs.rs` r177 证明组)。v1 架构 = "比喻 (双洋葱) → trait 抽象层 →
 //! `apeireth-core` 数据结构"; v2 的**数据结构层已先在** (`onion.rs`: `PrincipleOnion`
@@ -16,7 +16,7 @@
 //! - 真 Ed25519 多签仍留 v2.1 (`HumanAuthority::verify_multisig` 0 装占位不动) ——
 //!   本层只做**结构与权威来源判定**, 不做密码学判定。
 //!
-//! **判定语义 (v1 `unify_check` 三段门, 原样移植)**:
+//! **判定语义 (v1 `unify_check` 三段门, 语义原样保留)**:
 //! 1. **HA 离线模式 = 物理隔离拒绝**: 动作触及的权限层 `requires_ha` → `BlockByHumanAuthority`;
 //! 2. **触及 L5 = E 层兜底拒绝** (核武器级动作由存在层直接拒);
 //! 3. 否则 `Allow { cleared_layers }` = 11 环全节点 (5 原则 + 6 权限)。
@@ -399,7 +399,7 @@ impl DoubleOnionGate {
         &self.human_authority
     }
 
-    /// **判定 (v1 `unify_check` 三段门原样移植)**:
+    /// **判定 (v1 `unify_check` 三段门, 语义原样保留)**:
     /// 1. HA 离线 + 触及需 HA 层 → 物理隔离拒绝;
     /// 2. 触及 L5 → E 层兜底拒绝;
     /// 3. 否则 → 11 环全节点放行。
