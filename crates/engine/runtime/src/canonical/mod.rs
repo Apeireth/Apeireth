@@ -56,6 +56,7 @@ pub mod events;
 pub mod execute;
 pub mod heartbeat;
 pub mod instances;
+pub mod mesh;
 mod message_execution;
 pub mod metrics;
 pub mod module;
@@ -125,6 +126,12 @@ pub use heartbeat::{
 pub use metrics::{
     DistributionSummary, MetricsRegistry, MetricsSnapshot, SessionAggregate, TurnMetrics,
     TurnOutcomeKind, WindowAggregate, DEFAULT_METRICS_WINDOW_TURNS, MAX_TRACKED_SESSIONS,
+};
+pub use mesh::{
+    mesh_routes_for, runtime_mesh_executor, CallHandle, CallTarget, CapabilityCatalogEntry,
+    CapabilityRoute, InvokeMeta, ManagerExecutor, MeshCapabilityExecutor, MeshError, MeshExecError,
+    MeshInvokeContext, MeshNode, MeshNodeConfig, ModuleLocation, ModuleManagerView,
+    RemoteCapability, RouteSelection, RouteTable,
 };
 pub use module::{
     BehaviorModule, BehaviorRegistry, HookPoint, InvocationContext, InvocationOrigin, Module,

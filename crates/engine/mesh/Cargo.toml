@@ -1,0 +1,28 @@
+[package]
+name = "apeireth-mesh"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth Mesh Phase 0: peer connections, trust, capability routing, and remote capability invocation over the canonical Module/Capability model. Execution still happens in the origin node's ModuleManager — the network only changes where."
+
+[dependencies]
+apeireth-core = { path = "../../foundation/core" }
+apeireth-protocol = { path = "../../foundation/protocol" }
+apeireth-mesh-protocol = { path = "../../foundation/mesh-protocol" }
+apeireth-plugin = { path = "../../foundation/plugin" }
+apeireth-governance = { path = "../../foundation/governance" }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+[lib]
+name = "apeireth_mesh"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
