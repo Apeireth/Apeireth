@@ -1,0 +1,27 @@
+[package]
+name = "apeireth-mesh-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth Mesh Phase 0 wire contract: node identity, envelope, and capability-advert projection types. Pure data — no sockets, no async runtime."
+
+[dependencies]
+# Permitted direction: core <- protocol <- mesh-protocol. This crate is the wire
+# vocabulary only; it must never know about sockets, tokio, modules, or the
+# runtime. Canonical tool payloads (`ToolCall`/`ToolResult`) are wrapped as-is
+# rather than mirrored into a second request/response vocabulary.
+apeireth-core = { path = "../core" }
+apeireth-protocol = { path = "../protocol" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+name = "apeireth_mesh_protocol"
+path = "src/lib.rs"
+
+[lints]
+workspace = true

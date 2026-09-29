@@ -254,6 +254,28 @@ stable_id! {
     ModelId
 }
 
+stable_id! {
+    /// Identifies one Apeireth runtime instance across the mesh, e.g. `node.workstation-a`.
+    ///
+    /// The canonical node identity: stable across restarts, usable as a map key,
+    /// and deliberately separate from any display name, hostname, IP address, or
+    /// device name — those all change or collide, and none of them is an
+    /// identity. Phase 0 mints a random id at first boot and persists it
+    /// ([`NodeId::generate`]); a future key-based identity can replace the
+    /// generator without touching any of its uses.
+    NodeId
+}
+
+impl NodeId {
+    /// Mint a fresh, random node identity, e.g. `node-9f2c4e01…`.
+    ///
+    /// The caller persists the result; a node that regenerates its id on every
+    /// boot is a node its peers cannot recognise.
+    pub fn generate() -> Self {
+        Self(format!("node-{}", Uuid::new_v4().simple()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

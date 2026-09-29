@@ -308,6 +308,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-mesh"
+version = "2.0.0-rc.1"
+dependencies = [
+ "apeireth-core",
+ "apeireth-governance",
+ "apeireth-mesh-protocol",
+ "apeireth-plugin",
+ "apeireth-protocol",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "apeireth-mesh-protocol"
+version = "2.0.0-rc.1"
+dependencies = [
+ "apeireth-core",
+ "apeireth-protocol",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "apeireth-orchestration"
 version = "2.0.0-rc.1"
 dependencies = [
@@ -404,6 +431,7 @@ version = "2.0.0-rc.1"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
+ "apeireth-mesh",
  "apeireth-orchestration",
  "apeireth-plugin",
  "apeireth-protocol",
