@@ -14,6 +14,8 @@
 [![Kani](https://img.shields.io/badge/proof-Kani%20%2B%20TLA%2B%20required%20check-blueviolet.svg)](research/verification)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
+> Taxonomy note: **18 product crates** (foundation 6 / engine 8 / capabilities / adapters / sdk / perception) + 1 bench-only package excluded by convention (cargo metadata lists 19 workspace members).
+
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
 </div>

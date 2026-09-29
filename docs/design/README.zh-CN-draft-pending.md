@@ -14,6 +14,8 @@
 [![Kani](https://img.shields.io/badge/proof-Kani%20%2B%20TLA%2B%20required%20check-blueviolet.svg)](research/verification)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
+> 口径注记：**18 个产品 crate**（foundation 6 / engine 8 / capabilities / adapters / sdk / perception）+ 1 个 bench 专用包按口径不计（cargo metadata 计 19 个 workspace 成员）。
+
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
 </div>

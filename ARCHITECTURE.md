@@ -8,6 +8,8 @@ Historical design proposals and archived implementations live under `docs/archiv
 
 ```text
 apeireth/
+> Workspace taxonomy: **18 product crates** (foundation 6 / engine 8 / capabilities / adapters / sdk / perception) + 1 bench-only package excluded from the count by convention (cargo metadata lists 19 members).
+
 ├── crates/
 │   ├── foundation/       # stable domain types, protocol, plugins, policy, credentials
 │   ├── engine/            # runtime kernel, assembly, providers, storage, memory
