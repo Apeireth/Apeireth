@@ -227,6 +227,11 @@
         <button class="home-search-clear" onclick={() => (searchQuery = '')} aria-label="清除搜索">✕</button>
       {/if}
     </div>
+    <!-- ⊕ 新会话（内测反馈批）：列表头正座 = 圈定位置的快捷入口 -->
+    <button class="home-new-btn" onclick={onNew} title="新会话——新开一段并聚焦输入框">
+      <Plus size={14} />
+      <span>新会话</span>
+    </button>
     {#if ledgerNote}
       <p class="ledger-note" role="status">{ledgerNote}</p>
     {:else if capabilities === null || (ledgerLoading && !backend)}
@@ -425,6 +430,22 @@
 {/snippet}
 
 <style>
+  .home-new-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 10px 0 2px;
+    padding: 9px 18px;
+    border-radius: 12px;
+    border: 1px solid var(--ap-line, rgba(232,224,204,.16));
+    background: var(--ap-panel, rgba(11,13,18,.82));
+    color: var(--ap-bone, #e8e0cc);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .18s ease, border-color .18s ease;
+  }
+  .home-new-btn:hover { background: var(--ap-card, #ece7da); border-color: var(--ap-gold, #c9a24a); }
+
   .home-list {
     /* 三栏主从（2026-09-22 主人拍板）：本组件常驻 ~300px 列表栏，
        栏体面板承托由外层 .session-col 承担，此处只留内距。 */

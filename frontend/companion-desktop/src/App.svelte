@@ -2521,7 +2521,7 @@
             reloadKey={homeReloadKey}
             onOpen={openHomeSession}
             onOpenHim={openHim}
-            onNew={newConversation}
+            onNew={startNewSession}
             onRename={(id, title) => updateConversation(id, {title})}
             onTogglePin={(id) => {
               const conv = conversations.find((item) => item.id === id);
