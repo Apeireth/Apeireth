@@ -1,5 +1,14 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 内测二批：P0 挂起修复·缓存组装·自省通道·IM 接入·驾驶舱 P1·星舰主题 (2026-09-30)
+
+- **P0 审批挂起修复**（内测 422 病根）：冻结即收束（保留已生成文本+真实轮耗）、防重入台账（同操作重复提议直接收束、一审批一动作）、收束优先级（待批>轮上限）、预算显式（`APEIRETH_MAX_TURN_ROUNDS`/`APEIRETH_MAX_TOOL_CALLS`）+ 错误帧真实数字。
+- **缓存友好组装**：消息拼装前缀冻结（史→叠→重试），`APEIRETH_CACHE_TRACE=1` 诊断简报；命中率论证入档（会话越长越高）。
+- **自省通道**：`self_status` 结构化自述工具 + 敏感面治理（凭据 fail-closed、密钥字段脱敏）。
+- **IM 快捷接入**：三类 IM 渠道 + 双向消息桥 + **审批卡片到手机**（四态闭合、审计配对原子）。
+- **终端驾驶舱 P1**：`apeireth-tui`（纯 Rust 全屏 HUD、状态条/会话管理/两段退出）。
+- **星舰主题**：深空 HUD 档（发光数据/扫描线/reduced-motion），默认主题零回归。
+- 实证：**161 套件 4829 passed / 0 failed**；clippy 0 / fmt 0 / pnpm 24/24 / 扫描 0。
 ## [Unreleased] — MCP 外部工具服务器接线（最后一公里） (2026-09-27)
 
 - **接入配置面**：`APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json`（信封拒开语义，坏配置 fail-closed）；默认关（轻默认）。
