@@ -381,8 +381,13 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
+        // 文件写入总闸 (宪法级, 内测整改): `file_write` 是**唯一写总闸** ——
+        // 组装根把同一开关值注入 shell 配置, shell 写命令 (重定向/删除类/写
+        // 命令面) 与 apply_patch 同受此闸, 开关名与权力相符。关 = 写意图拒绝
+        // 即帧 (`pipeline.pre_deny`); 开 = shell 行为不变 (审批链照旧走既有
+        // 风险映射)。
         if let Some(shell_config) = config.shell {
-            let provider = ShellModule::new(shell_config);
+            let provider = ShellModule::new(shell_config.with_file_write(config.file_write));
             capabilities.extend(provider.capabilities());
         }
 

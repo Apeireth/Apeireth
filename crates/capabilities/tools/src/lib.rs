@@ -51,6 +51,8 @@ pub mod stealth_crawler;
 // v2.0.0-rc.1 RC-8: 加 std_sub_supervisor 模块 (真 impl, std::process::Command 同步启进程).
 pub mod std_sub_supervisor;
 pub mod supervisor;
+// 文件写入总闸的 shell 侧写意图词法扫描 (内测整改): 命中且总闸未开 → 拒绝即帧。
+pub mod write_intent;
 
 pub use apply_patch::{
     ApplyPatchError, FilePatchAction, PatchHunk, PatchReport, TransactionalPatchApplier,
@@ -107,3 +109,4 @@ pub use self_status::{
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};
 pub use stealth_crawler::{ExtractedMediaItem, StealthBrowserConfig, StealthCrawlerEngine};
+pub use write_intent::{scan_shell_write_intent, WriteIntentHit};

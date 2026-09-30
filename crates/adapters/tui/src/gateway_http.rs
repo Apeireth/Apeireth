@@ -14,6 +14,10 @@ use crate::backend::{
     BackendError, BackendResult, CockpitBackend, FinishKind, ModelInfo, SessionMeta, ToolEvent,
     ToolEventKind, TurnDelta, TurnOutcome, TurnRequest, UsageSnapshot,
 };
+use crate::telemetry::{GovVerdict, GovernanceEvent, TelemetrySnapshot, LAMP_SLOTS};
+
+/// 记忆件数计数窗口 (既有契约列表上限 500; 页满 = 窗口饱和, 不冒充总数)。
+const EPISODE_COUNT_WINDOW: usize = 500;
 
 /// 网关 HTTP 后端。
 #[derive(Debug)]
@@ -266,6 +270,177 @@ impl CockpitBackend for HttpGatewayBackend {
             hint: "既有网关暂无会话压缩端点; 端点就绪后 /compact 直接走该链路".to_string(),
         })
     }
+
+    fn fetch_telemetry(&mut self) -> BackendResult<TelemetrySnapshot> {
+        let mut snapshot = TelemetrySnapshot::default();
+        let mut any_response = false;
+        let mut unreachable: Option<BackendError> = None;
+
+        // 会话计数: 会话账本全量列表 (计数端点) → 真实总数。
+        match self.get("/v1/panel/sessions") {
+            Ok(body) => {
+                any_response = true;
+                match parse_json(&body) {
+                    Ok(value) => match value.get("sessions").and_then(Value::as_array) {
+                        Some(items) => snapshot.ledger.sessions = Some(items.len() as u64),
+                        None => snapshot
+                            .notes
+                            .push("会话计数: 响应缺 sessions[] → 显式留空".to_string()),
+                    },
+                    Err(error) => snapshot.notes.push(format!("会话计数: {error}")),
+                }
+            }
+            Err(error) => {
+                note_section(&mut snapshot.notes, "会话计数", &error, &mut unreachable);
+            }
+        }
+
+        // 记忆/保护计数: 记忆件列表窗口 (既有契约无总数端点) —— 窗口未饱和
+        // = 页面全量 = 真实总数; 窗口饱和一律显式留空, 不冒充总数。
+        match self.get(&format!(
+            "/v1/panel/memory/episodes?limit={EPISODE_COUNT_WINDOW}"
+        )) {
+            Ok(body) => {
+                any_response = true;
+                match parse_json(&body) {
+                    Ok(value) => match value.get("episodes").and_then(Value::as_array) {
+                        Some(items) => {
+                            let (memories, protected, notes) =
+                                ledger_from_episodes(items, EPISODE_COUNT_WINDOW);
+                            snapshot.ledger.memories = memories;
+                            snapshot.ledger.protected = protected;
+                            snapshot.notes.extend(notes);
+                        }
+                        None => snapshot
+                            .notes
+                            .push("记忆计数: 响应缺 episodes[] → 显式留空".to_string()),
+                    },
+                    Err(error) => snapshot.notes.push(format!("记忆计数: {error}")),
+                }
+            }
+            Err(error) => {
+                note_section(&mut snapshot.notes, "记忆计数", &error, &mut unreachable);
+            }
+        }
+
+        // 教训计数: 自述探测口未上 HTTP 契约 → 显式「未接线」, 不编数。
+        snapshot
+            .notes
+            .push("教训计数: 未接线 (自述探测口未上 HTTP 契约)".to_string());
+
+        // 治理灯阵: 安全护栏最近事件 (绿=放行/琥珀=审批/红=拒绝)。
+        match self.get(&format!("/v1/panel/safety/guard/events?limit={LAMP_SLOTS}")) {
+            Ok(body) => {
+                any_response = true;
+                match parse_json(&body) {
+                    Ok(value) => match value.get("events").and_then(Value::as_array) {
+                        Some(items) => {
+                            let (events, unknown) = governance_from_events(items);
+                            snapshot.governance = events;
+                            if unknown > 0 {
+                                snapshot
+                                    .notes
+                                    .push(format!("治理灯阵: {unknown} 个未知判定不上灯 (不猜色)"));
+                            }
+                        }
+                        None => snapshot
+                            .notes
+                            .push("治理灯阵: 响应缺 events[] → 暗格".to_string()),
+                    },
+                    Err(error) => snapshot.notes.push(format!("治理灯阵: {error}")),
+                }
+            }
+            Err(error) => {
+                note_section(&mut snapshot.notes, "治理灯阵", &error, &mut unreachable);
+            }
+        }
+
+        // 整体连不上 (一节都没回) 才报错; 否则逐节诚实回灌。
+        if !any_response {
+            if let Some(error) = unreachable {
+                return Err(error);
+            }
+        }
+        Ok(snapshot)
+    }
+}
+
+/// 单节拉取失败的诚实记录: 备注 + 首个「连不上」错误留作整体错误。
+fn note_section(
+    notes: &mut Vec<String>,
+    what: &str,
+    error: &BackendError,
+    unreachable: &mut Option<BackendError>,
+) {
+    notes.push(format!("{what}: {error}"));
+    if matches!(error, BackendError::Unreachable { .. }) && unreachable.is_none() {
+        *unreachable = Some(error.clone());
+    }
+}
+
+/// 记忆件列表 → 记忆/保护计数 (窗口未饱和 = 页面全量 = 真实总数)。
+fn ledger_from_episodes(items: &[Value], window: usize) -> (Option<u64>, Option<u64>, Vec<String>) {
+    if items.len() >= window {
+        return (
+            None,
+            None,
+            vec![format!(
+                "记忆/保护计数: 记忆页窗口饱和 (≥{window}), 既有契约无总数端点 → 显式留空"
+            )],
+        );
+    }
+    let memories = Some(items.len() as u64);
+    let protected_flagged = items
+        .iter()
+        .filter(|item| {
+            item.get("protected")
+                .map(Value::is_boolean)
+                .unwrap_or(false)
+        })
+        .count();
+    if protected_flagged == items.len() {
+        let protected = items
+            .iter()
+            .filter(|item| item.get("protected") == Some(&Value::Bool(true)))
+            .count() as u64;
+        (memories, Some(protected), Vec::new())
+    } else {
+        (
+            memories,
+            None,
+            vec!["保护计数: 记忆页缺保护标记字段 → 显式留空".to_string()],
+        )
+    }
+}
+
+/// 治理事件流 → 灯阵事件 (未知判定不猜色不上灯, 返回未上灯数)。
+fn governance_from_events(items: &[Value]) -> (Vec<GovernanceEvent>, usize) {
+    let mut events = Vec::new();
+    let mut unknown = 0usize;
+    for item in items {
+        let Some(verdict) = item
+            .get("decision")
+            .and_then(Value::as_str)
+            .and_then(GovVerdict::parse)
+        else {
+            unknown += 1;
+            continue;
+        };
+        events.push(GovernanceEvent {
+            at_ms: item
+                .get("timestamp_ms")
+                .and_then(Value::as_i64)
+                .unwrap_or(0),
+            capability: item
+                .get("capability_id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            verdict,
+        });
+    }
+    events.sort_by_key(|event| event.at_ms);
+    (events, unknown)
 }
 
 fn parse_tool_event(event: &Value) -> Option<ToolEvent> {
@@ -423,5 +598,59 @@ mod tests {
         .expect("failed");
         assert_eq!(failed.kind, ToolEventKind::Completed { ok: false });
         assert!(parse_tool_event(&json!({ "event": "presence_state" })).is_none());
+    }
+
+    /// 记忆件计数: 窗口未饱和 = 页面全量 = 真实总数; 饱和/缺字段显式留空。
+    #[test]
+    fn episode_counts_are_exact_only_inside_a_complete_window() {
+        let items = vec![
+            json!({"id": "e1", "protected": true}),
+            json!({"id": "e2", "protected": false}),
+            json!({"id": "e3", "protected": true}),
+        ];
+        let (memories, protected, notes) = ledger_from_episodes(&items, 500);
+        assert_eq!(memories, Some(3));
+        assert_eq!(protected, Some(2), "保护计数只数显式 true");
+        assert!(notes.is_empty());
+
+        // 窗口饱和: 不冒充总数, 两行都显式留空 + 备注。
+        let full_window = vec![json!({"protected": false}); 500];
+        let (memories, protected, notes) = ledger_from_episodes(&full_window, 500);
+        assert_eq!(memories, None);
+        assert_eq!(protected, None);
+        assert!(notes[0].contains("窗口饱和"), "{notes:?}");
+
+        // 保护标记缺失: 记忆计数照给, 保护计数留空 (不猜)。
+        let mixed = vec![json!({"id": "e1", "protected": true}), json!({"id": "e2"})];
+        let (memories, protected, notes) = ledger_from_episodes(&mixed, 500);
+        assert_eq!(memories, Some(2));
+        assert_eq!(protected, None);
+        assert!(notes[0].contains("保护标记"), "{notes:?}");
+    }
+
+    /// 治理事件映射: 三色判定各有归宿, 未知判定不上灯 (不猜色)。
+    #[test]
+    fn guard_events_map_to_lamp_verdicts_without_guessing() {
+        let items = vec![
+            json!({"timestamp_ms": 300, "capability_id": "tool.c", "decision": "deny"}),
+            json!({"timestamp_ms": 100, "capability_id": "tool.a", "decision": "allow"}),
+            json!({"timestamp_ms": 200, "capability_id": "tool.b", "decision": "require_approval"}),
+            json!({"timestamp_ms": 400, "capability_id": "tool.d", "decision": "maybe"}),
+        ];
+        let (events, unknown) = governance_from_events(&items);
+        assert_eq!(unknown, 1, "未知判定不猜色不上灯");
+        let order: Vec<(i64, GovVerdict)> = events
+            .iter()
+            .map(|event| (event.at_ms, event.verdict))
+            .collect();
+        assert_eq!(
+            order,
+            vec![
+                (100, GovVerdict::Allow),
+                (200, GovVerdict::Approve),
+                (300, GovVerdict::Reject),
+            ],
+            "灯阵事件按时间序回灌"
+        );
     }
 }

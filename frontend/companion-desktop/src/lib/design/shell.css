@@ -512,7 +512,11 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scroll-behavior: smooth;
+  /* 瞬时落底（内测整改①）：这里不再无条件声明平滑滚动——否则任何 scrollTop
+     赋值都被动画成中间滚动帧，打开/切换会话会看见"从顶滚到底"的过程。显式
+     scrollTo({behavior:'smooth'}) 的「回到底部」按钮跳转不受影响（显式行为
+     优先于本声明，平滑能力保留）。 */
+  scroll-behavior: auto;
   pointer-events: none;
 }
 .col {
@@ -825,6 +829,25 @@ p.lede {
 }
 .mono-note.live {
   color: var(--ap-gold);
+}
+/* 对话遥测条（内测整改③）：状态行尾的等宽小字四项（本轮 token / 提示缓存命中 /
+   回合耗时 / 模型），同 .mono-note 的 10px 等宽口径；非交互项不给手型光标，
+   详情走 hover（title）。 */
+.turn-telemetry {
+  font-family: var(--ap-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ap-bone-42);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: default;
+}
+.turn-telemetry .tele-sep {
+  opacity: 0.4;
 }
 .sim-badge {
   font-family: var(--ap-font-mono);

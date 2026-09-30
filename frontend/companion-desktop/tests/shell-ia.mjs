@@ -57,7 +57,7 @@ check('删除链：后端陈账行乐观排除 + 列表刷新', () => {
 check('滚动：打开/切换会话滚底，追加不拽回', () => {
   assert.ok(app.includes('scrollOnOpen(kind)'), '打开/切换走 scrollOnOpen（恒落底）');
   assert.ok(app.includes('scrollOnAppend(isNearBottom)'), '流式追加按贴底判定跟随/保持');
-  assert.ok(app.includes('void tick().then(() => scrollToBottom(false))'), '渲染后落底');
+  assert.ok(app.includes('landAtBottom(container)'), '打开/切换落底走同步落底（首帧即贴底）');
 });
 
 // ---- ③ 新会话按钮 + 人名下拉让位 ----

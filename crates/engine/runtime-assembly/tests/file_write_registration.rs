@@ -13,7 +13,7 @@ use apeireth_runtime_assembly::{
     roster_from_config, ProductionBackends, ProductionModules, ProductionModulesConfig,
 };
 use apeireth_tools_canonical::{
-    APPLY_PATCH_CAPABILITY_ID, APPLY_PATCH_TOOL_NAME, GIT_WRITE_BOUNDARY_NOTE,
+    TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID, APPLY_PATCH_TOOL_NAME, GIT_WRITE_BOUNDARY_NOTE,
 };
 
 fn clock() -> Arc<dyn Clock> {
@@ -162,4 +162,54 @@ fn roster_projection_is_stable_for_the_file_write_rows() {
         file_write,
         vec![("file_write", false), ("file_write_auto_pass", false)]
     );
+}
+
+/// 文件写入总闸接线 (宪法级, 内测整改): `file_write` 是**唯一写总闸** ——
+/// 组装根把同一开关值注入 shell 配置, shell 写命令与 apply_patch 同受此闸。
+/// 关 = 写命令拒绝即帧 (`pipeline.pre_deny`, 文案明示同受一闸); 开 = 写命令
+/// 照常冻结 (行为不变, 审批链照旧走 shell 既有风险映射)。
+#[test]
+fn production_wires_the_file_write_gate_into_the_shell_tool() {
+    let write_call = ToolCall {
+        id: "call_gate".into(),
+        name: "shell".into(),
+        arguments: serde_json::json!({ "command": "echo xxx > file.txt" }),
+    };
+    let shell_of = |modules: &ProductionModules| {
+        modules
+            .capabilities()
+            .iter()
+            .find(|capability| capability.id().as_str() == "tool.shell")
+            .cloned()
+            .expect("tool.shell must be registered")
+    };
+    let backends = || ProductionBackends {
+        workspace_root: Some(PathBuf::from(".")),
+        ..ProductionBackends::default()
+    };
+
+    // 总闸关 (默认, fail-closed): shell 写命令拒绝即帧。
+    let mut off = base_config();
+    off.shell = Some(TrustedShellConfig::new("."));
+    assert!(!off.file_write, "默认必须 fail-closed");
+    let modules = ProductionModules::build(off, backends(), clock()).expect("assembly builds");
+    let rendered = match shell_of(&modules).freeze_invocation(&write_call) {
+        Err(result) => result.render(),
+        Ok(_) => panic!("file_write 关时 shell 写命令必须拒绝即帧"),
+    };
+    assert!(rendered.contains("pipeline.pre_deny"), "{rendered}");
+    assert!(
+        rendered.contains("文件写入开关未开——shell 写命令受同一总闸管辖"),
+        "{rendered}"
+    );
+
+    // 总闸开: 同一写命令照常冻结 (行为不变, 审批链照旧)。
+    let mut on = base_config();
+    on.file_write = true;
+    on.shell = Some(TrustedShellConfig::new("."));
+    let modules = ProductionModules::build(on, backends(), clock()).expect("assembly builds");
+    let frozen = shell_of(&modules)
+        .freeze_invocation(&write_call)
+        .expect("总闸开时写命令冻结必须放行 (行为不变)");
+    assert!(frozen.is_some(), "总闸开时写命令冻结必须有载荷");
 }

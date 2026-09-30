@@ -63,6 +63,9 @@ const ENABLE_FETCH_ENV: &str = "APEIRETH_ENABLE_FETCH";
 // 受控文件写入旋钮 (`tool.apply_patch`, 第七件生产工具): 注册 + 策略 grant +
 // 风险档位。默认关 (fail-closed); `APEIRETH_ENABLE_FILE_WRITE=1` = 注册工具 +
 // grant + require_approval —— 每次写入都要人批 (本地审批面板 + IM 审批卡同链)。
+// **文件写入总闸：apply_patch 与 shell 写命令同受此闸** (内测整改, 宪法级):
+// 关 = shell 写意图 (重定向/删除类/写命令面) 拒绝即帧 (pipeline.pre_deny);
+// 开 = shell 写命令行为不变 (照旧走审批链与既有风险映射)。
 pub const ENABLE_FILE_WRITE_ENV: &str = "APEIRETH_ENABLE_FILE_WRITE";
 // 「自动放行已读文件的修改」子档 (依赖主开关, 同 shellSandbox 嵌套依赖模式):
 // `APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS=1` 时仅**修改类**补丁免逐次审批;
@@ -317,6 +320,8 @@ pub fn file_write_risk_level_from_env() -> FileWriteRiskLevel {
 }
 
 /// 受控文件写入主开关: `APEIRETH_ENABLE_FILE_WRITE=1` (默认关, fail-closed)。
+/// **文件写入总闸：apply_patch 与 shell 写命令同受此闸** —— 唯一写总闸,
+/// 开关名与权力相符 (内测整改)。
 pub fn file_write_enabled_from_env() -> bool {
     std::env::var(ENABLE_FILE_WRITE_ENV)
         .ok()

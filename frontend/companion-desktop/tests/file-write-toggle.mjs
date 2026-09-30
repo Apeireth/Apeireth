@@ -195,7 +195,7 @@ console.log('--- Starting Controlled File-Write Toggle Mapping Check ---');
     /key: 'fileWrite'[^}]*env: 'APEIRETH_ENABLE_FILE_WRITE'/.test(settingsSrc),
     '文件写入主行必须在能力注册表（env 芯片 APEIRETH_ENABLE_FILE_WRITE）',
   );
-  assert.ok(settingsSrc.includes('文件写入（apply_patch）'), '主行标题文案在案');
+  assert.ok(settingsSrc.includes('文件写入（apply_patch · shell 写命令）'), '主行标题文案在案（受闸两面都进标题：apply_patch 与 shell 写命令）');
   for (const phrase of ['创建/修改/删除须在补丁里声明', '工作区外路径与凭据/密钥面拒绝', 'git 提交等写操作不提供工具（设计边界）']) {
     assert.ok(settingsSrc.includes(phrase), `主行警告/帮助行必须写明「${phrase}」`);
   }

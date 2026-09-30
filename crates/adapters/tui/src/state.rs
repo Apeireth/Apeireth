@@ -12,7 +12,8 @@ use crate::backend::{
 };
 use crate::command::{self, Command};
 use crate::keys::{self, Action, KeyMode};
-use crate::theme::{DigitTicker, MotionMode};
+use crate::telemetry::{TelemetryModel, TelemetrySnapshot};
+use crate::theme::{CockpitTheme, DigitTicker, MotionMode};
 
 /// 面板 5 时间倒带的接口桩文案 (显式「未接线」)。
 pub const REWIND_STUB_NOTE: &str =
@@ -326,6 +327,8 @@ pub enum Input {
         /// 错误文案。
         message: String,
     },
+    /// 遥测快照已取回 (记忆账本 / 缓存命中 / 治理事件流)。
+    TelemetryLoaded(TelemetrySnapshot),
     /// 动效帧。
     Tick,
 }
@@ -371,6 +374,8 @@ pub enum Effect {
     },
     /// 重新探活。
     Reconnect,
+    /// 拉取遥测快照 (数据轮询, 不是动画)。
+    RefreshTelemetry,
 }
 
 /// 驾驶舱应用状态。
@@ -406,6 +411,8 @@ pub struct App {
     pub ticker: DigitTicker,
     /// 帧计数。
     pub frame: u64,
+    /// 遥测面板组 (P2: 记忆账本 / 缓存大数字 / 上下文波形 / 治理灯阵)。
+    pub telemetry: TelemetryModel,
 }
 
 impl App {
@@ -427,6 +434,7 @@ impl App {
             next_session_no: 1,
             ticker: DigitTicker::default(),
             frame: 0,
+            telemetry: TelemetryModel::default(),
         }
     }
 
@@ -442,7 +450,8 @@ impl App {
             Input::ConnectionOk => {
                 self.status.connection = ConnectionState::Connected;
                 self.note(NoteLevel::Info, format!("后端已连接: {}", self.endpoint));
-                Vec::new()
+                // 连上即拉遥测 (数据轮询, 不是动画)。
+                vec![Effect::RefreshTelemetry]
             }
             Input::ConnectionFailed { detail } => {
                 // 连接失败即帧: 状态与错误注记在第一次渲染前就绪, 不白屏。
@@ -523,9 +532,16 @@ impl App {
                 self.note(NoteLevel::Error, format!("{what} 失败: {message}"));
                 Vec::new()
             }
+            Input::TelemetryLoaded(snapshot) => {
+                self.telemetry.absorb(snapshot, self.frame);
+                Vec::new()
+            }
             Input::Tick => {
                 self.frame = self.frame.wrapping_add(1);
                 self.ticker.advance();
+                // 动画帧: 波形走纸等逐帧效果推进 (reduced 档无动画帧, 静止)。
+                let motion = CockpitTheme::new(self.motion).motion;
+                self.telemetry.on_tick(&motion);
                 Vec::new()
             }
         }
@@ -863,6 +879,9 @@ impl App {
             TurnDelta::Usage(usage) => {
                 assistant.usage = Some(usage);
                 self.status.usage = Some(usage);
+                // 遥测采样: 缓存命中率大数字 + 上下文用量波形 (真实读数)。
+                self.telemetry
+                    .observe_usage(usage.cache_hit_rate, usage.total_tokens, self.frame);
             }
         }
     }
@@ -884,6 +903,11 @@ impl App {
         self.status.activity = ActivityState::Idle;
         self.status.usage = Some(outcome.usage);
         self.status.turn_latency_ms = Some(outcome.latency_ms);
+        self.telemetry.observe_usage(
+            outcome.usage.cache_hit_rate,
+            outcome.usage.total_tokens,
+            self.frame,
+        );
         if outcome.finish == FinishKind::ApprovalRequired {
             self.note(
                 NoteLevel::Warn,

@@ -4,6 +4,8 @@
 //! 需要什么」的最小端口 (与桌面端共用同一后端, 0 重复实现)。测试用
 //! [`MockBackend`] 把命令链路全程记录下来。
 
+use crate::telemetry::TelemetrySnapshot;
+
 /// token 计量快照。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct UsageSnapshot {
@@ -190,6 +192,12 @@ pub trait CockpitBackend: Send {
 
     /// 压缩会话上下文。
     fn compact_session(&mut self, session: &str) -> BackendResult<CompactReport>;
+
+    /// 遥测快照 (伙伴的内在遥测: 记忆账本计数 / 缓存命中率 / 治理事件流)。
+    ///
+    /// 诚实纪律: 能探到的节给真数; 探不到的节显式 None + 备注 (未接线 /
+    /// 窗口饱和 / 端点失败), 不编数; 只有整体连不上才报 Err。
+    fn fetch_telemetry(&mut self) -> BackendResult<TelemetrySnapshot>;
 }
 
 /// 链路调用记录 (mock 后端的证据链)。
@@ -222,6 +230,8 @@ pub enum BackendCall {
         /// 会话 id。
         session: String,
     },
+    /// 拉取遥测快照。
+    FetchTelemetry,
 }
 
 /// 脚本化 mock 后端: 记录全部调用, 回放预置增量。
@@ -253,6 +263,10 @@ pub struct MockBackend {
     pub fail_turn: Option<String>,
     /// 列表失败原因。
     pub fail_list: Option<String>,
+    /// 预置遥测快照。
+    pub telemetry: TelemetrySnapshot,
+    /// 遥测拉取失败原因 (None = 成功)。
+    pub fail_telemetry: Option<String>,
 }
 
 impl MockBackend {
@@ -354,6 +368,14 @@ impl CockpitBackend for MockBackend {
             before_messages: 0,
             after_messages: 0,
         }))
+    }
+
+    fn fetch_telemetry(&mut self) -> BackendResult<TelemetrySnapshot> {
+        self.calls.push(BackendCall::FetchTelemetry);
+        match &self.fail_telemetry {
+            Some(detail) => Err(BackendError::Protocol(detail.clone())),
+            None => Ok(self.telemetry.clone()),
+        }
     }
 }
 

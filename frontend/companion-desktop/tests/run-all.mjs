@@ -54,6 +54,11 @@ const SUITES = [
   {file: 'file-write-toggle.mjs', name: 'controlled file-write toggle mapping (real module)', strip: true},
   {file: 'provider-transport.mjs', name: 'provider transport selection (invoke vs fetch, real module)', strip: true},
   {file: 'tier0-parity.mjs', name: 'tier 0 tool/approval/dead-url parity', strip: true},
+  {file: 'scroll-instant.mjs', name: 'chat scroll instant landing (no intermediate scroll frame, real module)', strip: true},
+  {file: 'turn-telemetry.mjs', name: 'chat turn telemetry (usage wiring / honest dash placeholder, real module)', strip: true},
+  {file: 'theme-bubble-contrast.mjs', name: 'user bubble contrast sentinel (starship fix / default zero-regression, source mirror)'},
+  {file: 'switch-scope-copy.mjs', name: 'file-write gate full-scope copy (capdef desc / env note / user manual, source mirror)'},
+  {file: 'switch-power-audit.mjs', name: 'capability switch power audit table (filed rows / dispositions, source mirror)'},
 ];
 
 function run({file, strip}) {

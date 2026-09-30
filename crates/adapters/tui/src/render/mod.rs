@@ -2,13 +2,15 @@
 //!
 //! 布局 (自上而下):
 //! 1. 多会话页签行 (面板 1 的会话切换);
-//! 2. 面板 1 主对话区 (左/中) + 面板 3 内部过程频道 (右窄栏, 本批接口桩);
+//! 2. 面板 1 主对话区 (左/中) + 右栏遥测面板组 (P2: 记忆账本点阵 / 缓存大数字 /
+//!    上下文波形 / 治理灯阵) + 面板 3 内部过程频道桩 (右栏底部, 本批接口桩);
 //! 3. 输入行 (命令补全浮层叠在其上方);
 //! 4. 面板 2 实时状态条。
 //!
 //! 面板 5 时间倒带走双 Esc / `/rewind` (接口桩, 见 [`crate::state`])。
 
 pub mod statusbar;
+pub mod telemetry;
 
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
@@ -40,9 +42,16 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     .split(area);
 
     render_tabs(frame, app, &theme, root[0]);
-    let body = Layout::horizontal([Constraint::Min(30), Constraint::Length(32)]).split(root[1]);
+    let body = Layout::horizontal([Constraint::Min(30), Constraint::Length(38)]).split(root[1]);
     render_conversation(frame, app, &theme, body[0]);
-    render_channel(frame, app, &theme, body[1]);
+    // 右栏: 遥测面板组 (P2) 包裹 P1 频道桩 (桩继续保留下批接)。
+    let rail = Layout::vertical([
+        Constraint::Length(telemetry::GROUP_HEIGHT),
+        Constraint::Min(5),
+    ])
+    .split(body[1]);
+    telemetry::draw_group(frame, app, &theme, rail[0]);
+    render_channel(frame, app, &theme, rail[1]);
     render_composer(frame, app, &theme, root[2]);
     frame.render_widget(
         Paragraph::new(statusbar::status_line(app, &theme))

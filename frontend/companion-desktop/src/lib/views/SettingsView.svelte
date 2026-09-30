@@ -411,10 +411,10 @@
 
   /** 工具：四类可授予的工具权限（文件写入带依赖子开关，见 TOOL_SUB_DEFS）。 */
   const TOOL_DEFS: CapDef[] = [
-    {key: 'shell', icon: Terminal, label: 'Shell 命令工具', env: 'APEIRETH_ENABLE_SHELL', desc: '模型可提议本地命令——每次执行前仍需你在审批卡点头。'},
+    {key: 'shell', icon: Terminal, label: 'Shell 命令工具', env: 'APEIRETH_ENABLE_SHELL', desc: '模型可提议本地命令——每次执行前仍需你在审批卡点头；写命令（重定向/删除类）另受文件写入总闸管辖。'},
     {key: 'fetch', icon: Globe, label: '网络读取工具', env: 'APEIRETH_ENABLE_FETCH', desc: '公网 GET 只读请求，无凭据转发。'},
-    {key: 'localReadTools', icon: FolderSearch, label: '本地只读工具', env: 'APEIRETH_ENABLE_LOCAL_READ_TOOLS', desc: '文件/搜索/仓库读侧工具（file / search / repo）。'},
-    {key: 'fileWrite', icon: FilePenLine, label: '文件写入（apply_patch）', env: 'APEIRETH_ENABLE_FILE_WRITE', desc: '补丁式受控写文件（创建/修改/删除须在补丁里声明），每次写入默认要人工审批；工作区外路径与凭据/密钥面拒绝；git 提交等写操作不提供工具（设计边界）。'},
+    {key: 'localReadTools', icon: FolderSearch, label: '本地只读工具', env: 'APEIRETH_ENABLE_LOCAL_READ_TOOLS', desc: '文件/搜索读侧工具随开关（file / search）；仓库只读探查（repo）恒授、无开关（名实相符对齐，见开关权力审计表）。'},
+    {key: 'fileWrite', icon: FilePenLine, label: '文件写入（apply_patch · shell 写命令）', env: 'APEIRETH_ENABLE_FILE_WRITE', desc: '文件写入总闸：apply_patch 与 shell 写命令同受此闸——补丁式受控写文件（创建/修改/删除须在补丁里声明）+ shell 重定向/删除类写命令（关闸即拒绝即帧），每次写入默认要人工审批；工作区外路径与凭据/密钥面拒绝；git 提交等写操作不提供工具（设计边界）。'},
   ];
 
   /** 工具子开关：依赖 fileWrite 主开关（requires/capDisabled 语义，同沙箱嵌套行），

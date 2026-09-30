@@ -168,6 +168,122 @@ pub struct MotionTokens {
     pub spinner_frames: &'static [&'static str],
     /// 扫描线行距 (行); 0 = 关。
     pub scanline_stride: u16,
+    /// 动画帧预算间隔 (毫秒): full 档 250ms (4fps, ≤5fps 红线), 0 = 无动画帧
+    /// (reduced 档: 一切动画退化静态, 只在数据变化时重绘)。
+    pub anim_tick_ms: u64,
+    /// 面板组呼吸辉光周期 (毫秒, 3.8s 正弦循环); 0 = 描边恒定 (reduced 档)。
+    pub glow_period_ms: u64,
+    /// 大数字变化闪烁: 新值到达亮度脉冲一帧 (reduced 档恒定亮度)。
+    pub digit_flash_enabled: bool,
+    /// 治理灯渐入帧数 (新事件灯从暗到亮); 0 = 瞬时点亮 (reduced 档)。
+    pub lamp_fade_frames: u64,
+}
+
+impl MotionTokens {
+    /// 是否有逐帧动画 (reduced 档无动画帧: 只在数据变化时重绘)。
+    pub fn animations_enabled(self) -> bool {
+        self.anim_tick_ms > 0
+    }
+
+    /// 面板组呼吸辉光亮度 (0-15): full 档按 3.8s 正弦循环, reduced 档恒定。
+    pub fn breath_level(self, frame: u64) -> u8 {
+        if !self.animations_enabled() || self.glow_period_ms == 0 {
+            return 12;
+        }
+        let period_ticks = (self.glow_period_ms / self.anim_tick_ms).max(2);
+        let phase = frame % period_ticks;
+        let angle = (phase as f64) * std::f64::consts::TAU / (period_ticks as f64);
+        let level = 8.0 + 7.0 * angle.sin();
+        level.round().clamp(1.0, 15.0) as u8
+    }
+
+    /// 面板描边色: 基色 → 发光色按呼吸亮度混合 (reduced 档恒定基色)。
+    pub fn breath_border(self, edge: Color, accent: Color, frame: u64) -> Color {
+        if !self.animations_enabled() || self.glow_period_ms == 0 {
+            return edge;
+        }
+        blend(edge, accent, self.breath_level(frame))
+    }
+
+    /// 治理灯渐入亮度 (0-15): 新灯从暗到亮逐帧渐入; 0 帧渐入 = 瞬时全亮。
+    pub fn lamp_level(self, age_frames: u64) -> u8 {
+        if self.lamp_fade_frames == 0 {
+            return 15;
+        }
+        let lit = (age_frames.min(self.lamp_fade_frames) as u32 + 1) * 15
+            / (self.lamp_fade_frames as u32 + 1);
+        lit.min(15) as u8
+    }
+}
+
+/// 颜色按亮度档混合 (0=全 `from`, 15=全 `to`); 非 RGB 色按中点二选一。
+pub fn blend(from: Color, to: Color, level: u8) -> Color {
+    let level = level.min(15);
+    match (from, to) {
+        (Color::Rgb(fr, fg, fb), Color::Rgb(tr, tg, tb)) => {
+            let mix = |a: u8, b: u8| -> u8 {
+                let a = u32::from(a);
+                let b = u32::from(b);
+                let level = u32::from(level);
+                ((a * (15 - level) + b * level) / 15) as u8
+            };
+            Color::Rgb(mix(fr, tr), mix(fg, tg), mix(fb, tb))
+        }
+        _ => {
+            if level >= 8 {
+                to
+            } else {
+                from
+            }
+        }
+    }
+}
+
+/// 动画帧预算调度: 只在到点时产出动画帧 (full 档 ≥200ms/帧, ≤5fps 红线;
+/// reduced 档 0 帧 —— 静态呈现, 重绘只由数据变化触发)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnimClock {
+    /// 动画帧间隔 (毫秒); 0 = 无动画帧。
+    interval_ms: u64,
+    /// 下一个动画帧到点时刻 (毫秒)。
+    next_due_ms: u64,
+}
+
+impl AnimClock {
+    /// 按动效档构建调度 (起点 0: 首帧立即到点)。
+    pub fn new(motion: &MotionTokens) -> Self {
+        Self {
+            interval_ms: motion.anim_tick_ms,
+            next_due_ms: 0,
+        }
+    }
+
+    /// 动画帧间隔 (毫秒); 0 = 无动画帧。
+    pub fn interval_ms(&self) -> u64 {
+        self.interval_ms
+    }
+
+    /// 当前时刻是否到动画帧; 到点则顺延下一帧 (跳时不补帧, 防帧风暴)。
+    pub fn due(&mut self, now_ms: u64) -> bool {
+        if self.interval_ms == 0 {
+            return false;
+        }
+        if now_ms >= self.next_due_ms {
+            self.next_due_ms = now_ms + self.interval_ms;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 距下一个动画帧的毫秒数; None = 永不到点 (reduced 档)。
+    pub fn next_due_in(&self, now_ms: u64) -> Option<u64> {
+        if self.interval_ms == 0 {
+            None
+        } else {
+            Some(self.next_due_ms.saturating_sub(now_ms))
+        }
+    }
 }
 
 /// 驾驶舱主题 = 调色 + 动效档。
@@ -192,6 +308,10 @@ impl CockpitTheme {
                 spinner_enabled: true,
                 spinner_frames: &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
                 scanline_stride: 3,
+                anim_tick_ms: 250,
+                glow_period_ms: 3_800,
+                digit_flash_enabled: true,
+                lamp_fade_frames: 4,
             },
             MotionMode::Reduced => MotionTokens {
                 scanline_enabled: false,
@@ -200,6 +320,10 @@ impl CockpitTheme {
                 spinner_enabled: false,
                 spinner_frames: &["◆"],
                 scanline_stride: 0,
+                anim_tick_ms: 0,
+                glow_period_ms: 0,
+                digit_flash_enabled: false,
+                lamp_fade_frames: 0,
             },
         };
         Self {
@@ -346,5 +470,109 @@ mod tests {
         }
         assert!(levels.len() > 1);
         assert_eq!(ticker.pulse_level(&reduced), 12);
+    }
+
+    /// 动画帧预算: full 档帧间隔落在 200-500ms 且 ≤5fps; reduced 档 0 帧。
+    #[test]
+    fn animation_tick_budget_caps_frames_at_five_fps() {
+        let full = CockpitTheme::new(MotionMode::Full).motion;
+        let mut clock = AnimClock::new(&full);
+        let interval = clock.interval_ms();
+        assert!(
+            (200..=500).contains(&interval),
+            "动画帧间隔须落在 200-500ms (波形推进/呼吸节奏), 实际 {interval}ms"
+        );
+
+        // 一秒窗口内 ≤5 帧 (≤5fps 红线)。
+        let mut frames = 0u32;
+        for now in (0..=1_000).step_by(10) {
+            if clock.due(now as u64) {
+                frames += 1;
+            }
+        }
+        assert!(frames <= 5, "一秒内动画帧 {frames} 超出 5fps 预算");
+
+        // 十秒窗口同样 ≤5fps (跳时不补帧)。
+        let mut clock = AnimClock::new(&full);
+        let mut frames = 0u32;
+        for now in (0..=10_000).step_by(100) {
+            if clock.due(now as u64) {
+                frames += 1;
+            }
+        }
+        assert!(frames <= 50, "十秒内动画帧 {frames} 超出 5fps 预算");
+
+        // reduced 档: 无动画帧, 调度永不到点。
+        let reduced = CockpitTheme::new(MotionMode::Reduced).motion;
+        let mut frozen = AnimClock::new(&reduced);
+        assert_eq!(frozen.interval_ms(), 0);
+        for now in (0..=10_000).step_by(100) {
+            assert!(!frozen.due(now as u64), "reduced 档不得产出动画帧");
+        }
+        assert_eq!(frozen.next_due_in(0), None);
+    }
+
+    /// 呼吸辉光帧循环: full 档按 3.8s 正弦起伏并回到起点, reduced 档恒定静止。
+    #[test]
+    fn breathing_glow_cycles_over_period_and_freezes_in_reduced() {
+        let full = CockpitTheme::new(MotionMode::Full).motion;
+        assert_eq!(full.glow_period_ms, 3_800);
+        let period_ticks = full.glow_period_ms / full.anim_tick_ms;
+        let mut levels = Vec::new();
+        for frame in 0..period_ticks {
+            levels.push(full.breath_level(frame));
+        }
+        let distinct: std::collections::HashSet<u8> = levels.iter().copied().collect();
+        assert!(distinct.len() >= 3, "呼吸辉光应有起伏: {levels:?}");
+        // 帧循环闭合: 一个周期后回到起点。
+        assert_eq!(full.breath_level(period_ticks), full.breath_level(0));
+        for level in &levels {
+            assert!(*level <= 15, "亮度档越界: {levels:?}");
+        }
+
+        let reduced = CockpitTheme::new(MotionMode::Reduced).motion;
+        let steady = reduced.breath_level(0);
+        for frame in 0..period_ticks {
+            assert_eq!(
+                reduced.breath_level(frame),
+                steady,
+                "reduced 档呼吸光须静止"
+            );
+        }
+
+        // 描边混合: full 档随帧变色, reduced 档恒定基色。
+        let edge = Color::Rgb(38, 58, 92);
+        let accent = Color::Rgb(64, 224, 255);
+        let colors: std::collections::HashSet<Color> = (0..period_ticks)
+            .map(|frame| full.breath_border(edge, accent, frame))
+            .collect();
+        assert!(colors.len() >= 3, "呼吸描边应随帧变色");
+        for frame in 0..period_ticks {
+            assert_eq!(reduced.breath_border(edge, accent, frame), edge);
+        }
+    }
+
+    /// 治理灯渐入: full 档新灯从暗到亮逐帧渐入, reduced 档瞬时全亮。
+    #[test]
+    fn lamp_fade_ramps_in_full_and_is_instant_in_reduced() {
+        let full = CockpitTheme::new(MotionMode::Full).motion;
+        assert!(full.lamp_fade_frames > 0);
+        let mut ramp = Vec::new();
+        for age in 0..full.lamp_fade_frames {
+            ramp.push(full.lamp_level(age));
+        }
+        ramp.push(full.lamp_level(full.lamp_fade_frames));
+        assert!(
+            ramp[0] < *ramp.last().expect("渐入尾帧"),
+            "新灯须从暗渐入: {ramp:?}"
+        );
+        for pair in ramp.windows(2) {
+            assert!(pair[0] <= pair[1], "渐入须单调不减: {ramp:?}");
+        }
+        assert_eq!(*ramp.last().expect("渐入尾帧"), 15);
+
+        let reduced = CockpitTheme::new(MotionMode::Reduced).motion;
+        assert_eq!(reduced.lamp_level(0), 15);
+        assert_eq!(reduced.lamp_level(3), 15);
     }
 }

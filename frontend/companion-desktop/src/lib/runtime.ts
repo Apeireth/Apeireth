@@ -41,6 +41,7 @@ import type {
 import {DEFAULT_CAPABILITY_TOGGLES} from './types.ts';
 import {recordCallLog} from './call-logger.ts';
 import {providerFetch} from './provider-transport.ts';
+import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
 
 const STORAGE_KEY = 'apeireth-config';
 const SECRET_CONFIG_KEYS = new Set([
@@ -251,6 +252,7 @@ export type RuntimeEvent =
   | {type: 'reasoning-delta'; requestId: string; text: string}
   | {type: 'tool-call'; requestId: string; toolCall: ToolCallDetails}
   | {type: 'tool-result'; requestId: string; toolCallId: string; ok: boolean; summary?: string; full?: string; error?: string}
+  | {type: 'usage'; requestId: string; usage: TurnUsage}
   | {type: 'approval-required'; requestId: string; pending: CanonicalPendingApproval}
   | {type: 'message-end'; requestId: string; messageId: string; fullText: string}
   | {type: 'run-error'; requestId: string; error: RuntimeError}
@@ -980,6 +982,8 @@ export interface StreamCallbacks {
   onToolCall?: (toolCall: ToolCallDetails) => void;
   onToolResult?: (id: string, ok: boolean, summary?: string) => void;
   onApprovalRequired?: (pending: CanonicalPendingApproval) => void;
+  /** 流块随包回传用量时上报（本回合遥测：输入/输出 token、缓存命中、回包模型）。 */
+  onUsage?: (usage: TurnUsage) => void;
 }
 
 export function applyCanonicalEvents(
@@ -1204,6 +1208,10 @@ export async function streamChat(
               if (json.type === 'content_block_delta' && json.delta?.text) {
                 feedCot(json.delta.text);
               }
+
+              // 直连协议 A：块里随包回传用量/回包模型 → 上报本回合遥测。
+              const usage = parseUsageChunk(json);
+              if (usage) callbacks.onUsage?.(usage);
             } catch {}
           }
         }
@@ -1289,6 +1297,10 @@ export async function streamChat(
               if (delta?.reasoning_content) {
                 emitReasoning(delta.reasoning_content);
               }
+
+              // 直连协议 B：块里随包回传用量/回包模型 → 上报本回合遥测。
+              const usage = parseUsageChunk(json);
+              if (usage) callbacks.onUsage?.(usage);
             } catch {}
           }
         }
@@ -1392,6 +1404,11 @@ export async function streamChat(
             if (delta?.reasoning_content) {
               emitReasoning(delta.reasoning_content);
             }
+
+            // 本地网关：usage 在流末块的 usage 对象（也兼容缓存命中类字段）→
+            // 上报本回合遥测。
+            const usage = parseUsageChunk(json);
+            if (usage) callbacks.onUsage?.(usage);
 
             // Streaming contract (2026-09-10): a pending approval terminates
             // the SSE stream with an explicit approval_required frame; the
@@ -1571,6 +1588,7 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
             onToolCall: (toolCall) => onEvent({type: 'tool-call', requestId, toolCall}),
             onToolResult: (toolCallId, ok, summary) =>
               onEvent({type: 'tool-result', requestId, toolCallId, ok, summary}),
+            onUsage: (usage) => onEvent({type: 'usage', requestId, usage}),
             onApprovalRequired: (pending) =>
               onEvent({type: 'approval-required', requestId, pending}),
           },

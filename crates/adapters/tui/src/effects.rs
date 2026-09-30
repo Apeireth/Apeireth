@@ -90,5 +90,12 @@ pub fn run(effect: Effect, backend: &mut dyn CockpitBackend, sink: &mut dyn FnMu
                 detail: error.to_string(),
             }),
         },
+        Effect::RefreshTelemetry => match backend.fetch_telemetry() {
+            Ok(snapshot) => sink(Input::TelemetryLoaded(snapshot)),
+            Err(error) => sink(Input::BackendFailed {
+                what: "遥测刷新".to_string(),
+                message: error.to_string(),
+            }),
+        },
     }
 }

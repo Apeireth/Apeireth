@@ -67,6 +67,12 @@
     scrollOnOpen,
     showJumpButton,
   } from './lib/chat-shell/scroll-policy';
+  import {landAtBottom, needsReland} from './lib/chat-shell/scroll-landing';
+  import {
+    formatTurnTelemetry,
+    mergeUsage,
+    type TurnUsage,
+  } from './lib/chat-shell/turn-telemetry';
   import {
     applyApprovalEventToPending,
     classifyGovernanceNotice,
@@ -1032,7 +1038,7 @@
         behavior: 'smooth',
       });
     } else {
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      landAtBottom(messagesContainer);
     }
     isNearBottom = true;
     showScrollBottomBtn = false;
@@ -1058,7 +1064,19 @@
       return conv && conv.messages.length > 0 ? 'switch' : 'new';
     });
     if (scrollOnOpen(kind) !== 'bottom') return;
-    void tick().then(() => scrollToBottom(false));
+    const container = messagesContainer;
+    if (!container) return;
+    // 瞬时落底（内测整改①）：同一渲染帧内同步一次赋值到位（landAtBottom 无
+    // await），首帧即贴底——不再渲染后排队异步定位（那会先见顶部再滚下来）。
+    const landedTop = landAtBottom(container);
+    isNearBottom = true;
+    showScrollBottomBtn = false;
+    // 首帧后同步复核一次：内容（图片/公式/长文）在首帧后长高时仍贴底；
+    // 仅当滚动位置没被用户动过才复核（上翻不拽回）。
+    requestAnimationFrame(() => {
+      if (messagesContainer !== container) return;
+      if (needsReland(container, landedTop)) landAtBottom(container);
+    });
   });
 
   async function refreshConnection(): Promise<void> {
@@ -1151,6 +1169,10 @@
   async function send(customText?: string): Promise<void> {
     const text = (customText ?? draft).trim();
     if (!text || busy) return;
+    // 回合遥测起点（真实测量）：回合结束（含错误/中断）时落一条。
+    const turnStartedAtMs = performance.now();
+    const turnUsageBox: {current: TurnUsage | null} = {current: null};
+    turnTelemetry = null;
     const conversation = ensureConversation();
     const conversationId = conversation.id;
     const history = conversation.messages
@@ -1223,6 +1245,9 @@
             // 状态翻面：completed/failed 事件到达 → 对应工具从「运行中」翻成终态。
             finishMessageToolCall(conversationId, assistantMessage.id, event.toolCallId, event.ok, event.summary);
             void triggerAutoScroll();
+          } else if (event.type === 'usage') {
+            // 流块随包回传的用量（逐字段后到非空者胜）攒成本回合快照。
+            turnUsageBox.current = mergeUsage(turnUsageBox.current, event.usage);
           } else if (event.type === 'approval-required') {
             pendingCanonical = event.pending;
           }
@@ -1291,6 +1316,13 @@
         }
       }
     } finally {
+      // 回合结束（成功/错误/中断皆收束于此）：落一条真实测量的回合遥测——
+      // 用量只攒真实回包字段，模型名优先回包 model、缺省回落配置模型。
+      turnTelemetry = {
+        usage: turnUsageBox.current,
+        durationMs: Math.round(performance.now() - turnStartedAtMs),
+        model: turnUsageBox.current?.model || config.model || null,
+      };
       busy = false;
       isReasoning = false;
       isExecutingTool = false;
@@ -1708,6 +1740,14 @@
   const modelLetter = $derived(
     (config.model.match(/[A-Za-z]/)?.[0] ?? 'M').toUpperCase(),
   );
+  // 本回合遥测（内测整改③）：回合结束落一条真实测量；显示串/详情串由
+  // chat-shell/turn-telemetry.ts 纯函数产出，无数据位诚实「—」，不编数。
+  let turnTelemetry = $state<{
+    usage: TurnUsage | null;
+    durationMs: number | null;
+    model: string | null;
+  } | null>(null);
+  const turnTelemetryView = $derived(formatTurnTelemetry(turnTelemetry ?? {}));
   const hdState = $derived(
     busy
       ? '正在输出'
@@ -2634,6 +2674,19 @@
                 {#if $presenceStore.simulated}
                   <span class="sim-badge" title="presence 频道断连：当前为本机中性默认值">SIM</span>
                 {/if}
+                <!-- 对话遥测条（内测整改③）：本轮 token（输入/输出）· 提示缓存命中 ·
+                     回合耗时 · 模型名；等宽小字 + hover 详情（title）。无数据位诚实
+                     「—」占位——绝不编数（连 0 都只在流里真报 0 时显示 0）。 -->
+                <span class="mono-note" style="opacity:.4">·</span>
+                <span class="turn-telemetry" title={turnTelemetryView.hover}>
+                  <span>{turnTelemetryView.tokens}</span>
+                  <span class="tele-sep">·</span>
+                  <span>{turnTelemetryView.cache}</span>
+                  <span class="tele-sep">·</span>
+                  <span>{turnTelemetryView.duration}</span>
+                  <span class="tele-sep">·</span>
+                  <span>{turnTelemetryView.model}</span>
+                </span>
               </div>
             </div>
             <div class="thread">

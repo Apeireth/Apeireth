@@ -240,7 +240,9 @@ pub struct BackendCapabilityEnv {
     pub enable_fetch: bool,
     pub enable_local_read_tools: bool,
     /// 受控文件写入 (APEIRETH_ENABLE_FILE_WRITE, apply_patch 补丁式写入):
-    /// 默认关, 仅 true 注入 "1" (fail-closed, false 不注入 "0")。
+    /// **文件写入总闸：apply_patch 与 shell 写命令同受此闸** (唯一写总闸,
+    /// 关 = shell 写意图拒绝即帧)。默认关, 仅 true 注入 "1" (fail-closed,
+    /// false 不注入 "0")。
     pub enable_file_write: bool,
     /// 子开关「自动放行已读文件修改」(APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS):
     /// 仅 true 注入 "1"; 依赖主开关的语义在映射层收口 (主开关关时恒 false)。

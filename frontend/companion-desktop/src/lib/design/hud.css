@@ -92,6 +92,14 @@ html[data-theme='starship'] .ap-voice {
   text-shadow: none;
 }
 
+/* ── 用户气泡子树的行内代码/代码块墨色（内测实锤修复②）：prose 层这两片叶子
+   自带浅底墨值（深色字面量），在深空卡面上同样黑字不可读——星舰档整体换
+   冷白墨，颜色仍只经令牌取值；浅色主题的原值不动（默认零回归）。 ── */
+html[data-theme='starship'] .user-md .md-code,
+html[data-theme='starship'] .user-md .md-inline {
+  color: var(--ap-hud-title-ink);
+}
+
 /* ── 场景层 / presence：静态背景主题同隐藏（与既有静态主题纪律一致） ── */
 html[data-theme='starship'] .scene-underlay,
 html[data-theme='starship'] #presence {

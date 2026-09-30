@@ -2,20 +2,23 @@
 //!
 //! 终端生命周期: 进入备用屏 + 原始模式, 退出时无条件还原。回合在工作线程
 //! 执行 (UI 线程零阻塞), 增量经消息通道回流主循环逐帧渲染。
+//!
+//! 重绘纪律 (P2): 重绘只在数据变化 (脏帧) 或动画帧到点时发生; 动画帧预算
+//! ≤5fps ([`AnimClock`]), `--motion reduced` 档无动画帧 —— 空闲近乎零 CPU。
 
 #![forbid(unsafe_code)]
 
 use std::io::{self, Stdout};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use apeireth_tui::backend::CockpitBackend;
 use apeireth_tui::effects;
 use apeireth_tui::gateway_http::HttpGatewayBackend;
 use apeireth_tui::render;
-use apeireth_tui::state::{App, Effect, ExitStage, Input};
-use apeireth_tui::theme::MotionMode;
+use apeireth_tui::state::{App, ConnectionState, Effect, ExitStage, Input};
+use apeireth_tui::theme::{AnimClock, CockpitTheme, MotionMode};
 use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -26,6 +29,13 @@ use ratatui::Terminal;
 
 /// 缺省端点 (与既有 gateway/CLI 后端的本机回环地址一致)。
 const DEFAULT_ENDPOINT: &str = "http://127.0.0.1:8080";
+
+/// 遥测数据轮询间隔 (毫秒): 数据拉取节奏, 不是动画节奏。
+const TELEMETRY_POLL_MS: u64 = 5_000;
+
+/// 输入/通道轮询上限 (毫秒): 唤醒检查不等于重绘 —— 没有事件就没有重绘,
+/// 空闲 CPU 近乎为零; 上限只为工作线程增量的回流延迟兜底。
+const INPUT_POLL_CAP_MS: u64 = 200;
 
 /// 用法文本。
 const USAGE: &str = "apeireth-tui — 终端驾驶舱\n\n用法:\n  apeireth-tui [--endpoint URL] [--motion full|reduced]\n\n环境变量:\n  APEIRETH_GATEWAY_URL   后端端点 (缺省 http://127.0.0.1:8080)\n  APEIRETH_TUI_MOTION    动效档 (full / reduced)\n\n键位: / 命令  ? 帮助  Ctrl+C 两段式退出  Esc Esc 时间倒带(接口桩)";
@@ -95,11 +105,12 @@ fn main() {
     };
 
     // 启动即探活: 连接失败 → 错误帧第一帧上屏。
+    let mut startup_effects = Vec::new();
     {
         let mut guard = lock_backend(&backend);
         match guard.health() {
             Ok(()) => {
-                app.feed(Input::ConnectionOk);
+                startup_effects = app.feed(Input::ConnectionOk);
             }
             Err(error) => {
                 app.feed(Input::ConnectionFailed {
@@ -109,7 +120,7 @@ fn main() {
         }
     }
 
-    if let Err(error) = run(backend, &mut app) {
+    if let Err(error) = run(backend, &mut app, startup_effects) {
         eprintln!("终端驾驶舱异常退出: {error}");
         std::process::exit(1);
     }
@@ -123,13 +134,13 @@ fn lock_backend(backend: &BackendHandle) -> std::sync::MutexGuard<'_, Box<dyn Co
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn run(backend: BackendHandle, app: &mut App) -> io::Result<()> {
+fn run(backend: BackendHandle, app: &mut App, startup_effects: Vec<Effect>) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
     let (tx, rx) = mpsc::channel::<Input>();
-    let result = event_loop(&mut terminal, app, &backend, &tx, &rx);
+    let result = event_loop(&mut terminal, app, &backend, &tx, &rx, startup_effects);
     // 无条件还原终端。
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -143,21 +154,55 @@ fn event_loop(
     backend: &BackendHandle,
     tx: &Sender<Input>,
     rx: &Receiver<Input>,
+    startup_effects: Vec<Effect>,
 ) -> io::Result<()> {
+    let started = Instant::now();
+    let now_ms = || started.elapsed().as_millis() as u64;
+    // 动画帧预算调度: full 档 ≥200ms/帧 (≤5fps), reduced 档无动画帧。
+    let mut anim = AnimClock::new(&CockpitTheme::new(app.motion).motion);
+    let mut dirty = true;
+    let mut next_telemetry_ms = 0u64;
+    dispatch(startup_effects, backend, tx);
     loop {
-        terminal.draw(|frame| render::draw(frame, app))?;
+        let now = now_ms();
 
-        if event::poll(Duration::from_millis(33))? {
+        // 动画帧到点才推进动效 (呼吸/波形/跳动数字); 数据轮询是另一条节奏。
+        if anim.due(now) {
+            let effects = app.feed(Input::Tick);
+            dispatch(effects, backend, tx);
+            dirty = true;
+        }
+        // 重绘只在数据变化 (脏帧) 或动画帧需要时发生。
+        if dirty {
+            terminal.draw(|frame| render::draw(frame, app))?;
+            dirty = false;
+        }
+        // 遥测数据轮询 (不是动画): 定期把真实读数回灌面板组。
+        if now >= next_telemetry_ms {
+            next_telemetry_ms = now + TELEMETRY_POLL_MS;
+            if matches!(app.status.connection, ConnectionState::Connected) {
+                dispatch(vec![Effect::RefreshTelemetry], backend, tx);
+            }
+        }
+
+        // 空闲等待: 下一个动画帧 / 数据轮询到点 / 轮询上限兜底 (唤醒 ≠ 重绘)。
+        let mut wait_ms = next_telemetry_ms.saturating_sub(now).min(INPUT_POLL_CAP_MS);
+        if let Some(next_anim) = anim.next_due_in(now) {
+            wait_ms = wait_ms.min(next_anim);
+        }
+        if event::poll(Duration::from_millis(wait_ms))? {
             if let Event::Key(key) = event::read()? {
                 if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
                     let effects = app.handle_key(key);
                     dispatch(effects, backend, tx);
+                    dirty = true;
                 }
             }
         }
         while let Ok(input) = rx.try_recv() {
             let effects = app.feed(input);
             dispatch(effects, backend, tx);
+            dirty = true;
         }
 
         if app.exit == ExitStage::Exiting {
