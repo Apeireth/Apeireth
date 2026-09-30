@@ -777,6 +777,13 @@ pub trait SessionStore: Send + Sync {
     /// Panel/introspection surface (`GET /v1/panel/sessions`). Ordering is part
     /// of the contract: the frontend renders the newest conversation first.
     async fn list(&self) -> RuntimeResult<Vec<Session>>;
+
+    /// Remove the stored session record.
+    ///
+    /// Returns `Ok(true)` when a record was removed, `Ok(false)` when the id
+    /// was not present. This deletes the durable transcript record — callers
+    /// own the retention decision.
+    async fn delete(&self, id: &SessionId) -> RuntimeResult<bool>;
 }
 
 /// A session store held in process memory.
@@ -828,6 +835,10 @@ impl SessionStore for InMemorySessionStore {
         });
         Ok(all)
     }
+
+    async fn delete(&self, id: &SessionId) -> RuntimeResult<bool> {
+        Ok(self.sessions.lock().await.remove(id).is_some())
+    }
 }
 
 /// Loads, creates, and persists sessions against a [`SessionStore`].
@@ -869,6 +880,18 @@ impl SessionManager {
             .save(session)
             .await
             .map_err(|e| RuntimeError::session_save(session.id, e.to_string()))
+    }
+
+    /// Remove `id` from the store, returning whether a record was removed.
+    pub async fn delete(&self, id: &SessionId) -> RuntimeResult<bool> {
+        self.store
+            .delete(id)
+            .await
+            .map_err(|e| RuntimeError::Session {
+                session: *id,
+                operation: "deleted",
+                reason: e.to_string(),
+            })
     }
 
     /// The clock this manager stamps sessions with.
@@ -1074,5 +1097,27 @@ mod tests {
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].id, newer.id, "newest updated first");
         assert_eq!(listed[1].id, older.id);
+    }
+
+    #[tokio::test]
+    async fn delete_removes_the_stored_session_and_reports_it() {
+        let store = InMemorySessionStore::new();
+        let id = SessionId::new();
+        store
+            .save(&Session::new(id, clock().as_ref()))
+            .await
+            .unwrap();
+        assert_eq!(store.len().await, 1);
+
+        assert!(store.delete(&id).await.unwrap(), "record was present");
+        assert_eq!(store.len().await, 0);
+        assert!(store.load(&id).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn deleting_an_unknown_session_reports_nothing_removed() {
+        let store = InMemorySessionStore::new();
+
+        assert!(!store.delete(&SessionId::new()).await.unwrap());
     }
 }

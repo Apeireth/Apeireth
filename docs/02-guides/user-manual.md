@@ -57,6 +57,10 @@ v2 唯一进程执行边界 = **`crates/capabilities/tools/src/process/`**（`Pr
 
 **`tool.shell` 与 `tool.fetch` 默认关闭**，需 `BuiltinToolsOptions { shell: Some(TrustedShellConfig), fetch: Some(FetchConfig) }` 显式开启（opt-in，非默认）。这与 v1 companion_serve `APEIRETH_GRANT=...` 的临时放行模型不同——v2 的批准模型是**编译时 / bootstrap 时**的显式配置 + **运行时** governance pipeline（见 §6）。
 
+**`tool.apply_patch`（受控文件写入，opt-in，第七件生产工具）**：`APEIRETH_ENABLE_FILE_WRITE=1` 开启（注册 + 授权同源）。补丁式受控写文件——创建（`*** Add File`）/ 修改（`*** Update File`）/ 删除（`*** Delete File`）必须在补丁里显式声明，多文件补丁全有或全无（任一 hunk 失败整笔回滚）；工作区外路径（绝对路径 / `..` 组件 / symlink 逃逸）拒绝（fail-closed 即帧），凭据与密钥面（`.env` 族 / 密钥材料 / 凭据存储件）拒绝；沿用读前观测门禁——**未读不得覆盖写**（先用文件读工具读过，才能修改或删除）。风险档位默认 **RequireApproval 级：每次写入都要人批**（本地审批面板 + IM 审批卡同一条审批链，四态闭合同源）；`APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS=1`（子档，依赖主开关）开「自动放行已读文件的修改」——仅**修改类**补丁免逐次审批，**删除/新建永不自动放行**（仍进人工审批），未读文件的修改仍被读前门禁直接拒绝。
+
+**git 写边界（设计边界，显式声明防模型幻觉）**：git 提交等写操作**不提供工具**——commit / push / 分支变更 / 历史改写等仓库写操作没有任何工具，`tool.repo` 维持只读合同（status / commit / diff / log 探查）。不要请求 git 写工具，它不存在。
+
 CLI 隐私逃生门：`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 关闭 filesystem/search 执行许可；旧 `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` 保留兼容（等同默认）；两者同设时 DISABLE 赢（fail-closed）。敏感路径保护恒开。
 
 **会话级审批策略（2026-09-12）**：`SessionSettings` 支持 `permission_preset`（`read_only` 拒写/执行 / `standard` 沿用审批 / `full` 免审批留日志）+ `approval_remember`（`standard` 下"会话内记住"：某工具批准一次后该会话内同工具后续调用跳过审批；进程内记忆、重启清零；inner 的 `Deny` 永不绕过）。桌面端会话头提供 4 档选择器：只读 / 标准·每次审批 / 标准·会话内记住 / 完全放行。

@@ -159,6 +159,11 @@ export interface BackendCapabilityEnv {
   shell_sandbox_off: boolean;
   enable_fetch: boolean;
   enable_local_read_tools: boolean;
+  /** 受控文件写入（apply_patch 补丁式写入）：仅 true 注入 "1"（默认关，fail-closed）。 */
+  enable_file_write: boolean;
+  /** 子开关「自动放行已读文件修改」：依赖主开关——fileWrite 关时恒 false 不注入
+   *  （依赖语义），主开关 + 子开关都开才注入 "1"。 */
+  enable_file_write_auto_pass: boolean;
   disable_typed_recall: boolean;
   enable_organs: boolean;
   enable_preference_learning: boolean;
@@ -216,6 +221,9 @@ export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined |
     enable_fetch: toggles?.fetch === true,
     // 本地只读三件套同默认开语义：缺省 = 开、显式 false = 关（注入侧双向显式）。
     enable_local_read_tools: toggles?.localReadTools !== false,
+    // 受控文件写入两件 fail-closed：子开关依赖主开关——主开关关时绝不注入。
+    enable_file_write: toggles?.fileWrite === true,
+    enable_file_write_auto_pass: toggles?.fileWrite === true && toggles?.fileWriteAutoPass === true,
     disable_typed_recall: toggles?.typedRecall === false,
     enable_organs: toggles?.organs === true,
     // 记忆核心族：缺省 = 开、显式 false = 关（注入侧由 Rust 显式发 1/0）。

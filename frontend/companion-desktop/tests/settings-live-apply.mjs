@@ -75,6 +75,31 @@ console.log('--- Starting Settings Live-Apply (three-tier) Check ---');
     '沙箱子开关必须同走开关即效路径',
   );
 
+  // 受控文件写入（主行 + 依赖子行）同走开关即效路径：注册表行 → toggleCap，
+  // 子行声明依赖 fileWrite（requires/capDisabled），主开关关时子行禁用。
+  assert.ok(
+    /key: 'fileWrite'[^}]*env: 'APEIRETH_ENABLE_FILE_WRITE'/.test(settingsSrc),
+    '文件写入主行必须在能力注册表（env 芯片 APEIRETH_ENABLE_FILE_WRITE）',
+  );
+  assert.ok(
+    /key: 'fileWriteAutoPass'[\s\S]{0,400}requires: 'fileWrite'/.test(settingsSrc),
+    '「自动放行已读文件修改」子行必须声明依赖 fileWrite（requires）',
+  );
+  assert.ok(
+    settingsSrc.includes('onclick={() => toggleCap(subDef)}'),
+    '文件写入子行必须拨动即生效（toggleCap → handleCapabilityToggle）',
+  );
+  assert.ok(
+    settingsSrc.includes('disabled={capDisabled(subDef) || liveApplyPendingKey !== null}'),
+    'fileWrite 关闭时子行必须禁用（capDisabled 依赖语义）',
+  );
+  const dependent = capabilityEnvFromConfig({...DEFAULT_CAPABILITY_TOGGLES, fileWriteAutoPass: true});
+  assert.equal(
+    dependent.enable_file_write_auto_pass,
+    false,
+    '主开关关时子开关不得注入（依赖语义，apply 推送面收口）',
+  );
+
   // 纯映射：拨动后待推送配置携带新值，其余字段不被覆盖。
   const toggled = toggledCapability(DEFAULT_CAPABILITY_TOGGLES, 'memoryInjection', false);
   const cfg = configWithCapabilities({baseUrl: 'http://127.0.0.1:1', model: 'm'}, toggled);

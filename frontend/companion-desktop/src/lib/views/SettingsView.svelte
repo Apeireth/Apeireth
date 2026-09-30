@@ -65,6 +65,8 @@
     ShieldCheck,
     ShieldOff,
     FolderSearch,
+    FilePenLine,
+    FileCheck2,
     Terminal,
     RefreshCcw,
     Radar,
@@ -83,7 +85,8 @@
   import SessionModelPicker from '../components/SessionModelPicker.svelte';
   import WorkspacePickerModal from '../components/WorkspacePickerModal.svelte';
   import ErrorSolutionBanner from '../components/ErrorSolutionBanner.svelte';
-  import type {ApeirethConfig, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile, CapabilityToggles, ModelInfo, AdminConfigPatch} from '../types';
+  import GovernanceView, {type GovernanceTabId} from './GovernanceView.svelte';
+  import type {ApeirethConfig, CapabilityManifest, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile, CapabilityToggles, ModelInfo, AdminConfigPatch} from '../types';
   import {DEFAULT_CAPABILITY_TOGGLES, RECOMMENDED_CAPABILITY_PRESET} from '../types';
   import {
     checkHealthDetailed,
@@ -127,11 +130,26 @@
     config,
     onSave,
     onClearLocalData,
+    capabilityManifest = null,
+    initialSection = 'appearance',
+    initialGovernanceTab = 'approvals',
+    governanceKey = 0,
+    onGovernanceOpenChat,
   }: {
     config: ApeirethConfig;
     /** 返回 apply 的 Promise：推送失败时拒绝，供开关即点即生效做失败回滚。 */
     onSave: (newConfig: ApeirethConfig) => void | Promise<void>;
     onClearLocalData?: () => void;
+    /** 运行时能力清单（「安全与治理」面板取数门用；治理面板原样搬入，不重写）。 */
+    capabilityManifest?: CapabilityManifest | null;
+    /** 壳层落区：命令面板 / 旧深链重定向指定的初始分区。 */
+    initialSection?: SettingsSection;
+    /** 「安全与治理」初始 tab（状态条守卫计数入口指令式落 tab）。 */
+    initialGovernanceTab?: GovernanceTabId;
+    /** 治理面板重挂载钥匙：外部指令式换 tab 时递增。 */
+    governanceKey?: number;
+    /** 治理空态引导卡的「回到对话」动作。 */
+    onGovernanceOpenChat?: () => void;
   } = $props();
 
   type SettingsSection =
@@ -141,12 +159,19 @@
     | 'cognition'
     | 'disposition'
     | 'governance'
+    | 'security'
     | 'tools'
     | 'runtime'
     | 'data'
     | 'developer';
 
   let activeSection = $state<SettingsSection>('appearance');
+
+  // 壳层导航落区（侧栏收纳批）：外部改 initialSection 即换区（不猜、不静默）。
+  $effect(() => {
+    const next = initialSection;
+    if (next) activeSection = next;
+  });
 
   // Gateway backend fields
   let editBaseUrl = $state('');
@@ -384,11 +409,25 @@
     {key: 'worktreeSandbox', icon: Workflow, label: '子代理 worktree 隔离', env: 'APEIRETH_ENABLE_WORKTREE_SANDBOX', desc: '子代理在独立 git worktree 里干活，物理目录级隔离，收束后清理。'},
   ];
 
-  /** 工具：三类可授予的工具权限。 */
+  /** 工具：四类可授予的工具权限（文件写入带依赖子开关，见 TOOL_SUB_DEFS）。 */
   const TOOL_DEFS: CapDef[] = [
     {key: 'shell', icon: Terminal, label: 'Shell 命令工具', env: 'APEIRETH_ENABLE_SHELL', desc: '模型可提议本地命令——每次执行前仍需你在审批卡点头。'},
     {key: 'fetch', icon: Globe, label: '网络读取工具', env: 'APEIRETH_ENABLE_FETCH', desc: '公网 GET 只读请求，无凭据转发。'},
     {key: 'localReadTools', icon: FolderSearch, label: '本地只读工具', env: 'APEIRETH_ENABLE_LOCAL_READ_TOOLS', desc: '文件/搜索/仓库读侧工具（file / search / repo）。'},
+    {key: 'fileWrite', icon: FilePenLine, label: '文件写入（apply_patch）', env: 'APEIRETH_ENABLE_FILE_WRITE', desc: '补丁式受控写文件（创建/修改/删除须在补丁里声明），每次写入默认要人工审批；工作区外路径与凭据/密钥面拒绝；git 提交等写操作不提供工具（设计边界）。'},
+  ];
+
+  /** 工具子开关：依赖 fileWrite 主开关（requires/capDisabled 语义，同沙箱嵌套行），
+   *  嵌套展示、不计入工具类数。 */
+  const TOOL_SUB_DEFS: CapDef[] = [
+    {
+      key: 'fileWriteAutoPass',
+      icon: FileCheck2,
+      label: '自动放行已读文件修改',
+      env: 'APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS',
+      requires: 'fileWrite',
+      desc: '仅修改类补丁免审批；未读文件仍被读前门禁拒绝（先读后写）；删除/新建永不自动放行（仍走人工审批）。',
+    },
   ];
 
   /** Beta 功能（开发者选项页）：默认关、随时可撤，稳定后晋升正式设置页。 */
@@ -1061,6 +1100,7 @@
     {id: 'cognition', label: '记忆与认知', icon: Brain},
     {id: 'disposition', label: '性格与记忆', icon: Sparkles},
     {id: 'governance', label: '决策与治理', icon: Scale},
+    {id: 'security', label: '安全与治理', icon: ShieldCheck},
     {id: 'tools', label: '工具与安全', icon: Wrench},
     {id: 'runtime', label: '运行时与诊断', icon: Activity},
     {id: 'data', label: '数据与存储', icon: Trash2},
@@ -2417,6 +2457,23 @@
           </div>
         </div>
 
+      {:else if activeSection === 'security'}
+        <!-- 「安全与治理」（侧栏收纳批）：原治理卷宗面板原样搬入，不重写 -->
+        <div class="setting-block">
+          <h3 class="block-title">安全与治理</h3>
+          <p class="block-desc">
+            审批的账、授权的账、守卫的账、执行的账——对话内完成的判断，在这里成卷。
+          </p>
+          {#key governanceKey}
+            <GovernanceView
+              config={config}
+              capabilities={capabilityManifest}
+              initialTab={initialGovernanceTab}
+              onOpenChat={() => onGovernanceOpenChat?.()}
+            />
+          {/key}
+        </div>
+
       {:else if activeSection === 'tools'}
         <div class="setting-block">
           <h3 class="block-title">工具与安全</h3>
@@ -2496,6 +2553,28 @@
                     <span>沙箱已关闭：shell 命令将以你的完整用户权限裸跑，请确认你信任正在运行的任务。</span>
                   </div>
                 {/if}
+              {/if}
+
+              {#if def.key === 'fileWrite'}
+                {#each TOOL_SUB_DEFS as subDef (subDef.key)}
+                  <button
+                    class="cap-row cap-row-nested"
+                    class:dim={capDisabled(subDef)}
+                    class:pending={liveApplyPendingKey === subDef.key}
+                    onclick={() => toggleCap(subDef)}
+                    disabled={capDisabled(subDef) || liveApplyPendingKey !== null}
+                    role="switch"
+                    aria-checked={isCapOn(subDef)}
+                    aria-label={subDef.label}
+                  >
+                    <span class="cap-icon"><subDef.icon size={15} /></span>
+                    <span class="cap-text">
+                      <strong>{subDef.label}<code class="cap-env">{subDef.env}</code></strong>
+                      <small>{subDef.desc}</small>
+                    </span>
+                    <span class="cap-switch" class:on={isCapOn(subDef)}><span class="cap-knob"></span></span>
+                  </button>
+                {/each}
               {/if}
             {/each}
           </div>

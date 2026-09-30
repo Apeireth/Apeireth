@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 
 import {
   mergeSessionLedger,
+  sessionMatchesQuery,
   sessionPreview,
   formatSessionTime,
 } from '../src/lib/chat-shell/session-list.ts';
@@ -308,5 +309,36 @@ console.log('✓ parseApprovalEventPayload / applyApprovalEventToPending 全分�
 }
 
 console.log('✓ classifyGovernanceNotice：review_rejected 唯一真实信号，其余不冒充');
+
+// ---------------------------------------------------------------------------
+// 4. sessionMatchesQuery — 搜索即历史（历史入口撤除后找旧会话的唯一入口）
+// ---------------------------------------------------------------------------
+
+{
+  const item = {
+    id: 'a',
+    title: '周报讨论',
+    lastActiveAt: 1,
+    messageCount: 2,
+    preview: '下周把发布窗口挪到周四',
+    origin: 'local',
+    pendingApproval: false,
+    archived: false,
+    pinned: false,
+    workspace: 'C:\\work\\release-tool',
+    personaId: 'p1',
+    personaName: '阿佩瑞斯',
+  };
+  assert.equal(sessionMatchesQuery(item, ''), true, '空查询 = 全量');
+  assert.equal(sessionMatchesQuery(item, '   '), true, '纯空白查询 = 全量');
+  assert.equal(sessionMatchesQuery(item, '周报'), true, '标题命中');
+  assert.equal(sessionMatchesQuery(item, '发布窗口'), true, '预览（消息内容）命中');
+  assert.equal(sessionMatchesQuery(item, '阿佩'), true, '联系人名命中');
+  assert.equal(sessionMatchesQuery(item, 'release-tool'), true, '项目名命中');
+  assert.equal(sessionMatchesQuery(item, '不存在的词'), false, '未命中如实返回 false（不猜）');
+  assert.equal(sessionMatchesQuery({...item, preview: null}, '发布'), false, '无预览不伪造命中');
+}
+
+console.log('✓ sessionMatchesQuery：标题/预览/联系人/项目任一命中（搜索即历史）');
 
 console.log('--- T0 Chat Shell Logic Check: ALL PASS ---');

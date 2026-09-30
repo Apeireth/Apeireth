@@ -237,6 +237,10 @@ export interface CapabilityToggles {
   fetch: boolean;
   /** 工具: 本地只读工具（file/search/repo 不经审批的读侧） */
   localReadTools: boolean;
+  /** 工具: 受控文件写入（apply_patch 补丁式写入；创建/修改/删除须在补丁里声明） */
+  fileWrite: boolean;
+  /** 工具子开关「自动放行已读文件修改」（依赖 fileWrite 主开关，同 shellSandbox 嵌套行模式） */
+  fileWriteAutoPass: boolean;
   /** AfterTurn 器官链（9 organs） */
   organs: boolean;
   /** 偏好学习双索引写回 */
@@ -300,6 +304,8 @@ export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   shellSandbox: true,
   fetch: false,
   localReadTools: true,
+  fileWrite: false,
+  fileWriteAutoPass: false,
   organs: false,
   preferenceLearning: true,
   proactiveRecall: true,

@@ -18,7 +18,7 @@
   //   组可下拉收起，收起态持久化 localStorage。
   // - 行操作：hover「···」菜单 = 置顶 / 重命名 / 归档（已归档组内为还原）/ 删除
   //   （两步确认）。backend-only 行无本地副本，不出菜单（归档/删除只动本地账）。
-  import {ChevronDown, FolderOpen, MoreHorizontal, Pin, Plus, UserRound} from 'lucide-svelte';
+  import {ChevronDown, FolderOpen, MoreHorizontal, Pin, Plus, Search, UserRound} from 'lucide-svelte';
   import type {ApeirethConfig, CapabilityManifest, Conversation} from '../types';
   import {presenceStore, deriveEmberBreath} from '../presence';
   import {
@@ -32,6 +32,7 @@
     formatSessionTime,
     groupHomeSessions,
     mergeSessionLedger,
+    sessionMatchesQuery,
     type BackendLedgerSession,
     type HomeSessionItem,
   } from './session-list';
@@ -47,6 +48,7 @@
     reloadKey = 0,
     activeId = null,
     defaultWorkspace = null,
+    deletedSessions = null,
     onOpen,
     onOpenHim,
     onNew,
@@ -72,6 +74,8 @@
     activeId?: string | null;
     /** 工作区默认回退：会话未戳工作区（旧数据）时归入的当前项目组（App 传当前工作目录）。 */
     defaultWorkspace?: string | null;
+    /** 已确认删除的会话 id（乐观排除）：后端陈账重拉间隙不允许"删了又回来"。 */
+    deletedSessions?: ReadonlySet<string> | null;
     onOpen: (item: HomeSessionItem) => void;
     onOpenHim: () => void;
     onNew: () => void;
@@ -85,11 +89,21 @@
   let ledgerNote = $state<string | null>(null);
   let ledgerLoading = $state(false);
 
-  const items = $derived(
-    mergeSessionLedger({local: conversations, backend, pendingApprovalSessions, defaultWorkspace}),
+  const mergedItems = $derived(
+    mergeSessionLedger({
+      local: conversations,
+      backend,
+      pendingApprovalSessions,
+      defaultWorkspace,
+      exclude: deletedSessions ?? undefined,
+    }),
   );
+  /** 搜索即历史（侧栏收纳批）：标题 / 预览 / 联系人 / 项目任一命中即留。 */
+  let searchQuery = $state('');
+  const items = $derived(mergedItems.filter((item) => sessionMatchesQuery(item, searchQuery)));
   const sections = $derived(groupHomeSessions(items));
-  const archived = $derived(archivedHomeItems(conversations, pendingApprovalSessions, defaultWorkspace));
+  const mergedArchived = $derived(archivedHomeItems(conversations, pendingApprovalSessions, defaultWorkspace));
+  const archived = $derived(mergedArchived.filter((item) => sessionMatchesQuery(item, searchQuery)));
 
   // ---- 分组收起态（持久化；键 = 区/组前缀 + 组键） ----
   const COLLAPSE_KEY = 'apeireth-home-collapsed';
@@ -200,6 +214,19 @@
   <header class="home-head">
     <p class="eyebrow">往来</p>
     <h1 class="home-title">谁找我了</h1>
+    <!-- 搜索即历史（侧栏收纳批）：历史入口撤除后，找旧会话 = 列表 + 这个搜索框 -->
+    <div class="home-search">
+      <Search size={12} class="home-search-ico" />
+      <input
+        class="home-search-input"
+        placeholder="搜索会话标题或内容…"
+        aria-label="搜索会话"
+        bind:value={searchQuery}
+      />
+      {#if searchQuery}
+        <button class="home-search-clear" onclick={() => (searchQuery = '')} aria-label="清除搜索">✕</button>
+      {/if}
+    </div>
     {#if ledgerNote}
       <p class="ledger-note" role="status">{ledgerNote}</p>
     {:else if capabilities === null || (ledgerLoading && !backend)}
@@ -298,7 +325,14 @@
     </div>
   {/if}
 
-  {#if !items.length && !archived.length && !ledgerLoading}
+  {#if searchQuery.trim() && !items.length && !archived.length}
+    <!-- 搜索空态：如实说"没搜到"，不冒充"没有会话" -->
+    <div class="empty-contract">
+      <p class="empty-line">未搜索到匹配的会话。</p>
+      <p class="empty-promise">换个关键词，或清除搜索——这里只搜列表与他的账本里真实存在的会话。</p>
+      <button class="quiet-btn" onclick={() => (searchQuery = '')}>清除搜索</button>
+    </div>
+  {:else if !items.length && !archived.length && !ledgerLoading}
     <!-- 空态即契约（00-PHILOSOPHY 原则 5）：不写"暂无数据"。
          走查修复：原门槛要求 capabilities !== null——网关离线时清单恒 null，
          全新用户看到整栏空白、无任何入口；CTA 本身本地可用（发送时离线
@@ -439,6 +473,48 @@
     letter-spacing: 0.08em;
     line-height: 1.7;
     color: var(--ap-bone-42);
+  }
+
+  /* ---------- 搜索框（搜索即历史，侧栏收纳批） ---------- */
+  .home-search {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 10px 0 0;
+    padding: 6px 10px;
+    border: 1px solid var(--ap-line);
+    border-radius: 8px;
+    background: var(--ap-panel-solid);
+    color: var(--ap-bone-30);
+  }
+  :global(.home-search-ico) {
+    flex: none;
+    color: var(--ap-bone-42);
+  }
+  .home-search-input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    color: var(--ap-bone);
+  }
+  .home-search-input::placeholder {
+    color: var(--ap-bone-30);
+  }
+  .home-search-clear {
+    flex: none;
+    border: 0;
+    background: transparent;
+    color: var(--ap-bone-42);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .home-search-clear:hover {
+    color: var(--ap-bone);
   }
 
   /* ---------- 置顶行：他 ---------- */

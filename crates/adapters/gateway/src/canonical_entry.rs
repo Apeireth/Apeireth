@@ -640,6 +640,10 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
             get(crate::session_settings::get_session_settings)
                 .patch(crate::session_settings::patch_session_settings),
         )
+        .route(
+            "/v1/sessions/:session_id",
+            axum::routing::delete(crate::session_settings::delete_session),
+        )
         .route("/v1/apeireth/events", get(events_handler))
         .route(
             "/v1/apeireth/presence",

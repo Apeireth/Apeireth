@@ -239,6 +239,12 @@ pub struct BackendCapabilityEnv {
     pub shell_sandbox_off: bool,
     pub enable_fetch: bool,
     pub enable_local_read_tools: bool,
+    /// 受控文件写入 (APEIRETH_ENABLE_FILE_WRITE, apply_patch 补丁式写入):
+    /// 默认关, 仅 true 注入 "1" (fail-closed, false 不注入 "0")。
+    pub enable_file_write: bool,
+    /// 子开关「自动放行已读文件修改」(APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS):
+    /// 仅 true 注入 "1"; 依赖主开关的语义在映射层收口 (主开关关时恒 false)。
+    pub enable_file_write_auto_pass: bool,
     pub disable_typed_recall: bool,
     pub enable_organs: bool,
     pub enable_preference_learning: bool,
@@ -308,6 +314,8 @@ impl Default for BackendCapabilityEnv {
             shell_sandbox_off: false,
             enable_fetch: false,
             enable_local_read_tools: true,
+            enable_file_write: false,
+            enable_file_write_auto_pass: false,
             disable_typed_recall: false,
             enable_organs: false,
             enable_preference_learning: true,
@@ -365,6 +373,15 @@ impl BackendCapabilityEnv {
             // 双向显式: 默认开旋钮的「关」必须显式反注入
             // (CLI 侧 `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 逃生门胜出)。
             pairs.push(("APEIRETH_DISABLE_LOCAL_READ_TOOLS", "1".to_string()));
+        }
+        // 受控文件写入两件 (apply_patch 补丁式写入): 与 enable_shell/enable_fetch
+        // 同契约 —— fail-closed, 仅 true 注入 "1", false 不注入 "0";
+        // 子开关依赖主开关的语义在映射层收口 (主开关关时恒 false 不注入)。
+        if self.enable_file_write {
+            pairs.push(("APEIRETH_ENABLE_FILE_WRITE", "1".to_string()));
+        }
+        if self.enable_file_write_auto_pass {
+            pairs.push(("APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS", "1".to_string()));
         }
         if self.disable_typed_recall {
             pairs.push(("APEIRETH_DISABLE_TYPED_RECALL", "1".to_string()));
@@ -2176,6 +2193,43 @@ mod tests {
                     && *key != "APEIRETH_ENABLE_SELF_TUNING"),
             "缺省不得注入体验旋钮: {pairs:?}"
         );
+    }
+
+    /// 受控文件写入两件 (APEIRETH_ENABLE_FILE_WRITE / APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS):
+    /// 默认关 fail-closed —— false 一个变量都不注入 (不注入 "0"), true 才注入 "1"。
+    /// 子开关「自动放行已读文件修改」依赖主开关的语义在前端映射层收口
+    /// (capabilityEnvFromConfig: 主开关关时 enable_file_write_auto_pass 恒 false)。
+    #[test]
+    fn capability_env_pairs_gate_file_write_tool_fail_closed() {
+        // 默认态: 两个文件写入变量都不注入。
+        for (key, _) in BackendCapabilityEnv::default().env_pairs() {
+            assert!(
+                !key.starts_with("APEIRETH_ENABLE_FILE_WRITE"),
+                "默认态不得注入文件写入变量: {key}"
+            );
+        }
+
+        // 仅主开关: 只注入主变量, 子开关变量缺席。
+        let main_only = BackendCapabilityEnv {
+            enable_file_write: true,
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = main_only.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_ENABLE_FILE_WRITE"], "1");
+        assert!(
+            !map.contains_key("APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS"),
+            "子开关未开不注入: {map:?}"
+        );
+
+        // 主开关 + 子开关: 两个都注入 "1"。
+        let both = BackendCapabilityEnv {
+            enable_file_write: true,
+            enable_file_write_auto_pass: true,
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = both.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_ENABLE_FILE_WRITE"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS"], "1");
     }
 
     /// 学习日志只读解析 (逐记录类): 旧裸体行照读 + 坏行跳过并计数 + 缺文件 = 空。

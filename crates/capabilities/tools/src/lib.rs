@@ -13,6 +13,9 @@
 #![deny(unsafe_code)]
 
 pub mod apply_patch;
+// 受控文件写入生产工具面 (`tool.apply_patch`): 事务补丁原语 + 读前观测门禁
+// 接线 + 写入风险映射 (require-approval 档) + 单调边界 Guard + 五段流水线。
+pub mod apply_patch_tool;
 pub mod education;
 pub mod egress;
 // 工具执行五段流水线: pre-execute 瀑布 → 单调 Guard → around(超时/重试) →
@@ -51,6 +54,14 @@ pub mod supervisor;
 
 pub use apply_patch::{
     ApplyPatchError, FilePatchAction, PatchHunk, PatchReport, TransactionalPatchApplier,
+};
+pub use apply_patch_tool::{
+    apply_patch_capability, apply_patch_pipeline, authorized_file_write_policy,
+    write_release_class_for_arguments, write_release_class_for_patch, ApplyPatchParams,
+    ApplyPatchRiskMappingHook, ApplyPatchTool, ApplyPatchWriteApprovalHook,
+    ApplyPatchWriteBoundaryGuard, WriteReleaseClass, APPLY_PATCH_CAPABILITY_ID,
+    APPLY_PATCH_TIMEOUT_MS, APPLY_PATCH_TOOL_DESCRIPTION, APPLY_PATCH_TOOL_NAME,
+    GIT_WRITE_BOUNDARY_NOTE,
 };
 pub use education::{DxCheckTool, DxReport, REPLACED_DIFFS};
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};

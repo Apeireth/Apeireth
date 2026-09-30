@@ -1,7 +1,8 @@
 //! Session-scoped settings surface.
 //!
 //! `GET /v1/sessions/{session_id}/settings` reads the durable session settings;
-//! `PATCH /v1/sessions/{session_id}/settings` applies a partial update.
+//! `PATCH /v1/sessions/{session_id}/settings` applies a partial update;
+//! `DELETE /v1/sessions/{session_id}` removes the stored session record.
 //!
 //! These endpoints go through the runtime's own [`SessionManager`], so they act
 //! on exactly the same durable session the agent loop reads at the start of a
@@ -102,6 +103,19 @@ fn invalid_request(message: String) -> SettingsError {
     )
 }
 
+fn delete_failed(message: String) -> SettingsError {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ErrorBody {
+            error: ErrorDetail {
+                message,
+                code: "session_delete_failed".into(),
+                solution: "retry; if it persists check the gateway storage log".into(),
+            },
+        }),
+    )
+}
+
 pub(crate) async fn get_session_settings(
     State(state): State<GatewayState>,
     Path(session_id): Path<String>,
@@ -166,6 +180,25 @@ pub(crate) async fn patch_session_settings(
     .into_response())
 }
 
+pub(crate) async fn delete_session(
+    State(state): State<GatewayState>,
+    Path(session_id): Path<String>,
+) -> Result<Response, SettingsError> {
+    let session_id = SessionId::from_str(&session_id)
+        .map_err(|_| invalid_request(format!("invalid session id {session_id:?}")))?;
+    let deleted = state
+        .runtime
+        .sessions()
+        .delete(&session_id)
+        .await
+        .map_err(|error| delete_failed(error.to_string()))?;
+    if !deleted {
+        return Err(session_not_found(&session_id.to_string()));
+    }
+
+    Ok(Json(serde_json::json!({ "deleted": true })).into_response())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,7 +206,7 @@ mod tests {
     use apeireth_runtime::canonical::{InMemorySessionStore, Runtime, Session, SessionStore};
     use axum::body::Body;
     use axum::http::Request;
-    use axum::routing::{get, patch};
+    use axum::routing::{delete, get, patch};
     use axum::Router;
     use std::sync::Arc;
     use tower::ServiceExt;
@@ -220,6 +253,7 @@ mod tests {
                 "/v1/sessions/:session_id/settings",
                 get(get_session_settings).patch(patch_session_settings),
             )
+            .route("/v1/sessions/:session_id", delete(delete_session))
             .with_state(state)
     }
 
@@ -400,6 +434,73 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/sessions/not-a-uuid/settings")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = json_body(response).await;
+        assert_eq!(body["error"]["code"], "invalid_request");
+    }
+
+    #[tokio::test]
+    async fn delete_removes_an_existing_session_and_reports_deletion() {
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let sid = SessionId::new();
+        save_session(&store, sid).await;
+        let app = test_router(store.clone()).await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/v1/sessions/{sid}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = json_body(response).await;
+        assert_eq!(body["deleted"], true);
+        assert!(
+            store.load(&sid).await.unwrap().is_none(),
+            "the store must no longer hold the deleted session"
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_unknown_session_returns_session_not_found_error_frame() {
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let app = test_router(store).await;
+        let sid = SessionId::new();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/v1/sessions/{sid}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = json_body(response).await;
+        assert_eq!(body["error"]["code"], "session_not_found");
+    }
+
+    #[tokio::test]
+    async fn delete_malformed_session_id_returns_invalid_request_error_frame() {
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let app = test_router(store).await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/v1/sessions/not-a-uuid")
                     .body(Body::empty())
                     .unwrap(),
             )

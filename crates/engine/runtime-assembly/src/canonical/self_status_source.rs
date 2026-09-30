@@ -219,6 +219,14 @@ pub fn roster_from_config(
         CapabilitySwitch::new("repo", config.repo && workspace_root_present),
         CapabilitySwitch::new("shell", config.shell.is_some()),
         CapabilitySwitch::new("fetch", config.fetch.is_some()),
+        // 受控文件写入 (`tool.apply_patch`): 主开关按实际注册条件取值 (配置开启
+        // 且工作区根已注入才算生效); 自动放行子档依赖主开关 —— 主开关没注册成,
+        // 子档无处生效, 名册照实说 false。
+        CapabilitySwitch::new("file_write", config.file_write && workspace_root_present),
+        CapabilitySwitch::new(
+            "file_write_auto_pass",
+            config.file_write_auto_pass && config.file_write && workspace_root_present,
+        ),
         CapabilitySwitch::new("mcp", config.mcp),
         CapabilitySwitch::new("education", config.education),
         CapabilitySwitch::new("memory_recall", config.memory_recall),

@@ -147,6 +147,7 @@ pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
     "guard.policy.write",
     "tool.filesystem",
     "tool.search",
+    "tool.apply_patch",
     "tool.self_status",
 ];
 
@@ -484,6 +485,24 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             vec![OperationClass::Read, OperationClass::Write],
             vec![ResourceClass::FilesystemWorkspace],
             vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::WorkspaceFile],
+            false,
+            false,
+            true,
+            false,
+            "workspace",
+        ),
+        // 受控文件写入 (`tool.apply_patch`): 工作区文件的补丁式写面。
+        //
+        // 静态描述符只覆盖**写面**本身 (Write/Modify); 补丁内逐动作的
+        // 创建/删除分类由写入风险映射逐次判定 (创建/删除停人工审批,
+        // 「删除/新建永不自动放行」), 不进静态描述符 —— 否则纯修改类补丁
+        // 也会被 intent 的 destructive 门当成未请求删除误伤。
+        describe(
+            "tool.apply_patch",
+            vec![OperationClass::Write, OperationClass::Modify],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::UserPrompt],
             vec![SinkClass::WorkspaceFile],
             false,
             false,

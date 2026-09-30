@@ -24,7 +24,7 @@ use apeireth_protocol::canonical::NormalizedMessage;
 use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
 use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig, McpToolBridge};
 use apeireth_tools_canonical::{
-    CapabilitySwitch, FetchConfig, MemoryLedgerStats, StatusProbe, TrustedShellConfig,
+    CapabilitySwitch, FetchConfig, MemoryLedgerStats, ObservedGate, StatusProbe, TrustedShellConfig,
 };
 
 use super::capability::CapabilityProvider;
@@ -40,8 +40,8 @@ use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{roster_from_config, ProductionSelfStatusSource};
 use super::tool_modules::{
-    EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,
-    SelfStatusModule, ShellModule,
+    ApplyPatchModule, EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule,
+    SearchModule, SelfStatusModule, ShellModule,
 };
 
 /// Adapter that exposes memory's context-window implementation through the
@@ -180,6 +180,15 @@ pub struct ProductionModulesConfig {
     /// 只读档、默认可用、零审批: 模型可实测自身状态再发言。缺 data 系探测口
     /// 时对应字段显式 null + 原因, 不影响注册与其余字段。
     pub self_status: bool,
+    /// Register the controlled file-write tool (`tool.apply_patch`, 第七件).
+    ///
+    /// 补丁式受控写文件 (创建/修改/删除显式声明), 沿用读前观测门禁。写入风险
+    /// 档位默认 require-approval 级 (每次写入都要人批, 与本地审批面板 / IM 审批
+    /// 卡同链); 授权层由组装根按同一开关接线。默认关 (opt-in)。
+    pub file_write: bool,
+    /// 「自动放行已读文件的修改」子档 (依赖 [`Self::file_write`]): 仅修改类
+    /// 补丁免逐次审批; 删除/新建永不自动放行 (仍走人工审批)。默认关。
+    pub file_write_auto_pass: bool,
 }
 
 impl Default for ProductionModulesConfig {
@@ -210,6 +219,8 @@ impl Default for ProductionModulesConfig {
             education: false,
             absorption_insight: false,
             self_status: true,
+            file_write: false,
+            file_write_auto_pass: false,
         }
     }
 }
@@ -328,9 +339,13 @@ impl ProductionModules {
         }
 
         // Register tool capabilities independently of behavior modules.
+        // 读前观测门禁一张表共享: 读工具记录的观测就是写入端「已读」的证据
+        // (跨工具同一会话观测, 未读不得覆盖写)。
+        let observed_gate = Arc::new(ObservedGate::new());
         if config.filesystem {
             if let Some(root) = &backends.workspace_root {
-                let provider = FilesystemModule::new(root.clone());
+                let provider =
+                    FilesystemModule::new_with_gate(root.clone(), Arc::clone(&observed_gate));
                 capabilities.extend(provider.capabilities());
             }
         }
@@ -345,6 +360,17 @@ impl ProductionModules {
         if config.repo {
             if let Some(root) = &backends.workspace_root {
                 let provider = RepoModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // 受控文件写入 (`tool.apply_patch`, 第七件生产工具, opt-in): 补丁式
+        // 创建/修改/删除显式声明 + 读前观测门禁; 写入风险档位默认 require-approval
+        // 级 (每次写入都要人批), 授权层按同一开关接线。git 写边界: git 提交等
+        // 写操作不提供工具 (属设计边界, 仓库工具维持只读合同)。
+        if config.file_write {
+            if let Some(root) = &backends.workspace_root {
+                let provider = ApplyPatchModule::new(root.clone(), Arc::clone(&observed_gate));
                 capabilities.extend(provider.capabilities());
             }
         }

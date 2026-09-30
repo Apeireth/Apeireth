@@ -654,7 +654,20 @@ export function subscribePresence(baseUrl: string, options: SubscribePresenceOpt
     if (!active) return;
     // 重连先取快照: 快照请求先于实时通道发出 (快照即读, 不回放断线期历史)。
     refreshSnapshot();
-    const es = new EventSource(url);
+    // 构造 EventSource 可能同步抛（非法 URL / 环境不支持）——不接住会让整个
+    // 重试链静默死亡（徽章永远停在未连接且再无重试）。接住即按同一退避续排
+    // 下一次尝试，链路只在取消订阅时才停。
+    let es: EventSource;
+    try {
+      es = new EventSource(url);
+    } catch {
+      if (!active) return;
+      store.setConnected(false);
+      armSimTimer();
+      retryTimer = setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 1.5, RETRY_MAX_MS);
+      return;
+    }
     source = es;
 
     es.onopen = () => {

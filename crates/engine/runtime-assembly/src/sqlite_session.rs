@@ -42,6 +42,11 @@ impl SqliteSessionStore {
     ) -> RuntimeError {
         match operation {
             "load" => RuntimeError::session_load(session, error.to_string()),
+            "delete" => RuntimeError::Session {
+                session,
+                operation: "deleted",
+                reason: error.to_string(),
+            },
             _ => RuntimeError::session_save(session, error.to_string()),
         }
     }
@@ -108,6 +113,20 @@ impl SessionStore for SqliteSessionStore {
         });
         Ok(sessions)
     }
+
+    async fn delete(&self, id: &SessionId) -> RuntimeResult<bool> {
+        let id = *id;
+        self.pool
+            .write(move |connection| {
+                let affected = connection.execute(
+                    "DELETE FROM sessions WHERE id = ?1",
+                    rusqlite::params![id.to_string()],
+                )?;
+                Ok(affected > 0)
+            })
+            .await
+            .map_err(|error| Self::storage_error(id, "delete", error))
+    }
 }
 
 /// Convenience conversion for assembly callers.
@@ -172,5 +191,25 @@ mod tests {
             "transcript must survive migration"
         );
         assert_eq!(ContentPart::join_text(&loaded.messages[0].content), "hello");
+    }
+
+    #[tokio::test]
+    async fn delete_removes_the_row_and_reports_whether_it_existed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sessions.sqlite3");
+        let store = SqliteSessionStore::open(&path).await.unwrap();
+        let clock = system_clock();
+        let mut session = Session::new(SessionId::new(), clock.as_ref());
+        session.append(NormalizedMessage::user("hello"), clock.as_ref());
+        let session_id = session.id;
+        store.save(&session).await.unwrap();
+
+        assert!(store.delete(&session_id).await.unwrap());
+        assert!(store.load(&session_id).await.unwrap().is_none());
+        assert!(store.list().await.unwrap().is_empty());
+        assert!(
+            !store.delete(&session_id).await.unwrap(),
+            "a second delete must report no removal"
+        );
     }
 }

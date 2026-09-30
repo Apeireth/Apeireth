@@ -117,7 +117,9 @@ function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
  *  记忆核心族三件（preferenceLearning / proactiveRecall / memoryInjection）缺省 true
  *  （核心记忆能力默认开，显式存 false 才是关——与 CLI 侧「未设=开、=0=关」对齐）。
  *  性格养成四数值旋钮：非有限值回基线，越界钳到 [min,max]；整合节奏取整 ≥1。
- *  selfTuning 仅 `=== true` 才开（fail-closed，默认关）。 */
+ *  selfTuning 仅 `=== true` 才开（fail-closed，默认关）。
+ *  受控文件写入两件（fileWrite / fileWriteAutoPass）同语义：仅 `=== true` 才开
+ *  （fail-closed，默认关）。 */
 function parseCapabilityToggles(value: unknown): CapabilityToggles {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -129,6 +131,8 @@ function parseCapabilityToggles(value: unknown): CapabilityToggles {
     shellSandbox: raw.shellSandbox !== false,
     fetch: raw.fetch === true,
     localReadTools: raw.localReadTools !== false,
+    fileWrite: raw.fileWrite === true,
+    fileWriteAutoPass: raw.fileWriteAutoPass === true,
     organs: raw.organs === true,
     preferenceLearning: raw.preferenceLearning !== false,
     proactiveRecall: raw.proactiveRecall !== false,
@@ -1800,6 +1804,32 @@ export async function fetchBackendSessions(config: ApeirethConfig): Promise<Arra
     last_active_at: s.updated_at ?? 0,
     episode_count: s.message_count ?? 0,
   }));
+}
+
+/**
+ * DELETE /v1/sessions/{sessionId} — 后端真删会话（删除链的"重启不复活"根因面）。
+ *
+ * 诚实口径：
+ *   - 200 = 真删成功；
+ *   - 404 `session_not_found` = 他的账本里本就没有这条（纯本机草稿），算成功；
+ *   - 400 `invalid_request` = 该 id 不可能是后端会话 id（后端主键是规范会话 id），
+ *     后端无记录可删，也算成功；
+ *   - 其余任何失败（网络断、5xx、路由不存在的裸 404）一律抛 HttpError，
+ *     由调用方回滚整个删除——不悄悄"删了个本地副本"。
+ */
+export async function deleteBackendSession(config: ApeirethConfig, sessionId: string): Promise<void> {
+  const res = await fetch(
+    `${normalizeBaseUrl(config.baseUrl)}/v1/sessions/${encodeURIComponent(sessionId)}`,
+    {
+      method: 'DELETE',
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    },
+  );
+  if (res.ok) return;
+  const text = await res.text().catch(() => '');
+  const err = httpErrorFromText(res.status, text, `HTTP ${res.status} `);
+  if (err.code === 'session_not_found' || err.code === 'invalid_request') return;
+  throw err;
 }
 
 /** 搜索记忆条目 */

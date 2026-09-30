@@ -32,7 +32,7 @@ use apeireth_runtime::canonical::{
     TurnRequest, TurnResponse,
 };
 use apeireth_runtime_assembly::SqliteSessionStore;
-use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
+use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
 
 /// One persistent SQLite database is shared by the cognitive backends.
 /// `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
@@ -60,6 +60,15 @@ pub const DISABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_DISABLE_LOCAL_READ_TOOL
 // organs / preference_learning 为认知模块装配旋钮。
 const ENABLE_SHELL_ENV: &str = "APEIRETH_ENABLE_SHELL";
 const ENABLE_FETCH_ENV: &str = "APEIRETH_ENABLE_FETCH";
+// 受控文件写入旋钮 (`tool.apply_patch`, 第七件生产工具): 注册 + 策略 grant +
+// 风险档位。默认关 (fail-closed); `APEIRETH_ENABLE_FILE_WRITE=1` = 注册工具 +
+// grant + require_approval —— 每次写入都要人批 (本地审批面板 + IM 审批卡同链)。
+pub const ENABLE_FILE_WRITE_ENV: &str = "APEIRETH_ENABLE_FILE_WRITE";
+// 「自动放行已读文件的修改」子档 (依赖主开关, 同 shellSandbox 嵌套依赖模式):
+// `APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS=1` 时仅**修改类**补丁免逐次审批;
+// 创建/删除永不自动放行 (仍进人工审批四态闭合 / IM 审批卡)。未读文件的修改
+// 由读前观测门禁直接拒绝 (先读后写)。
+pub const ENABLE_FILE_WRITE_AUTO_PASS_ENV: &str = "APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS";
 // MCP 外部工具桥旋钮 (轻默认, 默认关): `APEIRETH_ENABLE_MCP=1` 时装配外部工具桥,
 // 服务器列表走 `APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json` (拒开语义)。
 const ENABLE_MCP_ENV: &str = "APEIRETH_ENABLE_MCP";
@@ -279,6 +288,50 @@ pub fn build_production_governance(enable_local_read_tools: bool) -> GovernanceP
     build_production_governance_parts(enable_local_read_tools).0
 }
 
+/// 文件写入 (`tool.apply_patch`) 的治理风险档位 (件一风险映射)。
+///
+/// 三档与设置开关一一对应; 未授权的能力永不因内容风险被抬进审批
+/// (授权仍是第一钩子)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileWriteRiskLevel {
+    /// 未开主开关: 不 grant (写入工具不在授权面)。
+    Disabled,
+    /// 默认档: grant + require_approval 标记 —— **每次写入**都停在人工审批
+    /// (本地审批面板 + IM 审批卡同链)。
+    RequireApprovalEveryWrite,
+    /// 自动放行档: grant + 写入风险钩子 —— 修改类补丁放行; 创建/删除
+    /// **永不自动放行**, 停在人工审批 (同一审批链)。
+    AutoPassReadFileEdits,
+}
+
+/// 从环境变量解析写入风险档位 (子档依赖主开关, fail-closed)。
+pub fn file_write_risk_level_from_env() -> FileWriteRiskLevel {
+    if !file_write_enabled_from_env() {
+        return FileWriteRiskLevel::Disabled;
+    }
+    if file_write_auto_pass_enabled_from_env() {
+        FileWriteRiskLevel::AutoPassReadFileEdits
+    } else {
+        FileWriteRiskLevel::RequireApprovalEveryWrite
+    }
+}
+
+/// 受控文件写入主开关: `APEIRETH_ENABLE_FILE_WRITE=1` (默认关, fail-closed)。
+pub fn file_write_enabled_from_env() -> bool {
+    std::env::var(ENABLE_FILE_WRITE_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 「自动放行已读文件的修改」子档: 主开关开且 `APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS=1`
+/// 才生效 (依赖主开关; 单独设子档 = 无效果)。
+pub fn file_write_auto_pass_enabled_from_env() -> bool {
+    file_write_enabled_from_env()
+        && std::env::var(ENABLE_FILE_WRITE_AUTO_PASS_ENV)
+            .ok()
+            .is_some_and(|value| value.trim() == "1")
+}
+
 use apeireth_guard::BehaviorChainGuardHook;
 
 /// Build the production pipeline and return the shared policy handle alongside
@@ -291,12 +344,17 @@ pub fn build_production_governance_parts(
     Arc<std::sync::Mutex<PermissionPolicy>>,
     Arc<BehaviorChainGuardHook>,
 ) {
-    build_production_governance_parts_with_dataset(enable_local_read_tools, None)
+    build_production_governance_parts_with_dataset(
+        enable_local_read_tools,
+        None,
+        FileWriteRiskLevel::Disabled,
+    )
 }
 
 fn build_production_governance_parts_with_dataset(
     enable_local_read_tools: bool,
     dataset: Option<Arc<DatasetRecorder>>,
+    file_write: FileWriteRiskLevel,
 ) -> (
     GovernancePipeline,
     Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -311,6 +369,24 @@ fn build_production_governance_parts_with_dataset(
         policy.grant(Permission::ExecuteTool("tool.filesystem".to_string()));
         policy.grant(Permission::ExecuteTool("tool.search".to_string()));
     }
+    // 件一风险映射: 受控文件写入 (`tool.apply_patch`) 的三档授权。
+    // 默认档 grant + require_approval 标记 = 每次写入都停在人工审批 (本地
+    // 审批面板 + IM 审批卡同链); 自动放行档只 grant, 放行规则交给写入风险
+    // 钩子 (修改类补丁放行, 创建/删除永不自动放行)。Disabled = 不 grant。
+    match file_write {
+        FileWriteRiskLevel::Disabled => {}
+        FileWriteRiskLevel::RequireApprovalEveryWrite => {
+            policy.grant(Permission::ExecuteTool(
+                APPLY_PATCH_CAPABILITY_ID.to_string(),
+            ));
+            policy.require_approval_for(APPLY_PATCH_CAPABILITY_ID);
+        }
+        FileWriteRiskLevel::AutoPassReadFileEdits => {
+            policy.grant(Permission::ExecuteTool(
+                APPLY_PATCH_CAPABILITY_ID.to_string(),
+            ));
+        }
+    }
     let policy = Arc::new(std::sync::Mutex::new(policy));
     let mut guard = BehaviorChainGuardHook::new();
     if let Some(dataset) = dataset {
@@ -319,10 +395,18 @@ fn build_production_governance_parts_with_dataset(
     guard = configure_guard_classifier(guard);
     let guard_hook = Arc::new(guard);
 
-    let mut pipeline = GovernancePipeline::new()
-        .with(Arc::new(PermissionGovernanceHook::new_shared(
-            policy.clone(),
-        )))
+    let mut pipeline = GovernancePipeline::new().with(Arc::new(
+        PermissionGovernanceHook::new_shared(policy.clone()),
+    ));
+    // 自动放行档的放行规则 (授权之后、内容风险之前): 修改类补丁放行;
+    // 创建/删除停在 Decision::RequireApproval —— 与默认档同一条人工审批链
+    // (审批四态闭合 / IM 审批卡), 「删除/新建永不自动放行」单调生效。
+    if matches!(file_write, FileWriteRiskLevel::AutoPassReadFileEdits) {
+        pipeline = pipeline.with(Arc::new(
+            apeireth_tools_canonical::ApplyPatchWriteApprovalHook::new(),
+        ));
+    }
+    let mut pipeline = pipeline
         .with(Arc::new(CredentialDisclosureHook::new()))
         .with(Arc::new(PromptInjectionHook::new()))
         .with(guard_hook.clone());
@@ -400,6 +484,7 @@ fn build_production_governance_parts_from_env() -> (
     let (pipeline, policy, guard_hook) = build_production_governance_parts_with_dataset(
         enable_local_read_tools,
         production_guard_dataset_recorder(),
+        file_write_risk_level_from_env(),
     );
 
     // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
@@ -785,6 +870,10 @@ async fn build_cognitive_modules_from_env(
                 .with_sandbox(shell_sandbox_enabled_from_env())
         }),
         fetch: fetch_enabled.then(FetchConfig::public_internet_only),
+        // 受控文件写入旋钮 (`tool.apply_patch`): 注册工具 + 风险档位同源
+        // (治理层 grant/approval 用同一 env 解析, 即效一致)。子档依赖主开关。
+        file_write: file_write_enabled_from_env(),
+        file_write_auto_pass: file_write_auto_pass_enabled_from_env(),
         // MCP 外部工具桥: 装配时加载服务器列表 (env 主入口 / 数据目录次入口,
         // 坏配置拒开), 数据目录与面板其余持久档同位。
         mcp: mcp_enabled,
