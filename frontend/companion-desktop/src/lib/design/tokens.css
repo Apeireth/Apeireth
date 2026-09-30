@@ -257,6 +257,8 @@ html[data-theme='forest'] {
    引用，令牌值只在本块出现。存在金家族（--ap-gold*）整组不染——金色是他的
    存在色，青蓝/琥珀只走数据光令牌：发光的是数据，正文保持可读性优先。 */
 html[data-theme='starship'] {
+  /* 深空卡面上的墨字改冷白：--ap-ink 是浅底墨色，星舰卡面深空不覆盖会隐形 */
+  --ap-ink: #e8f1f8;
   --ap-space-void: #04070d;
   --ap-space-horizon: #010204;
   --ap-space-blue-base: #071322;
