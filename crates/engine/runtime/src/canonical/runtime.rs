@@ -72,6 +72,45 @@ use super::session::{InMemorySessionStore, SessionManager, SessionStore};
 /// a model or module stuck in a loop fails fast. Module retries consume a slot.
 pub const DEFAULT_MAX_ROUNDS: u32 = 8;
 
+/// Smallest per-turn round limit a configuration value is clamped to.
+pub const MIN_TURN_ROUNDS: u32 = 1;
+
+/// Largest per-turn round limit a configuration value is clamped to.
+pub const MAX_TURN_ROUNDS: u32 = 64;
+
+/// Smallest per-round tool-call limit a configuration value is clamped to.
+pub const MIN_TOOL_CALL_LIMIT: usize = 1;
+
+/// Largest per-round tool-call limit a configuration value is clamped to.
+pub const MAX_TOOL_CALL_LIMIT: usize = 64;
+
+/// Resolve the per-turn round limit from a raw configuration value.
+///
+/// Budget knobs are explicit: an out-of-range integer is clamped into
+/// `MIN_TURN_ROUNDS..=MAX_TURN_ROUNDS`, while an absent, empty, or
+/// unparseable value falls back to [`DEFAULT_MAX_ROUNDS`]. Nothing else is
+/// invented.
+pub fn parse_turn_round_limit(raw: Option<&str>) -> u32 {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.parse::<i64>().ok())
+        .map(|value| value.clamp(i64::from(MIN_TURN_ROUNDS), i64::from(MAX_TURN_ROUNDS)) as u32)
+        .unwrap_or(DEFAULT_MAX_ROUNDS)
+}
+
+/// Resolve the per-round tool-call limit from a raw configuration value.
+///
+/// Same explicit-budget contract as [`parse_turn_round_limit`]: out-of-range
+/// values clamp into `MIN_TOOL_CALL_LIMIT..=MAX_TOOL_CALL_LIMIT`, absent or
+/// unparseable values fall back to the default of 16.
+pub fn parse_tool_call_limit(raw: Option<&str>) -> usize {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.parse::<i64>().ok())
+        .map(|value| value.clamp(MIN_TOOL_CALL_LIMIT as i64, MAX_TOOL_CALL_LIMIT as i64) as usize)
+        .unwrap_or(super::execute::MAX_TOOL_CALLS_PER_ROUND)
+}
+
 /// Default lifetime of a pending approval before it expires.
 pub const DEFAULT_APPROVAL_TTL_MS: u64 = 5 * 60 * 1000;
 
@@ -96,6 +135,11 @@ pub struct RuntimeConfig {
     pub default_model: Option<String>,
     /// Logical round limit for one turn, including module retry attempts.
     pub max_rounds: u32,
+    /// Maximum tool calls one round may dispatch. Calls beyond the limit in a
+    /// single round are truncated with a recorded trace entry and answered
+    /// with synthetic results, so every call in the assistant message still
+    /// has exactly one answer.
+    pub max_tool_calls_per_round: usize,
     /// How long a pending approval stays resumable, in milliseconds.
     pub approval_ttl_ms: u64,
     /// Maximum isolated module provider calls in one top-level turn.
@@ -179,6 +223,7 @@ impl Default for RuntimeConfig {
         Self {
             default_model: None,
             max_rounds: DEFAULT_MAX_ROUNDS,
+            max_tool_calls_per_round: super::execute::MAX_TOOL_CALLS_PER_ROUND,
             approval_ttl_ms: DEFAULT_APPROVAL_TTL_MS,
             max_module_invocations: DEFAULT_MAX_MODULE_INVOCATIONS,
             context_budget_chars: DEFAULT_CONTEXT_BUDGET_CHARS,
@@ -742,6 +787,13 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_max_rounds(mut self, rounds: u32) -> Self {
         self.config.max_rounds = rounds;
+        self
+    }
+
+    /// Cap the tool calls one round may dispatch (clamped to at least 1).
+    #[must_use]
+    pub fn with_max_tool_calls_per_round(mut self, calls: usize) -> Self {
+        self.config.max_tool_calls_per_round = calls;
         self
     }
 

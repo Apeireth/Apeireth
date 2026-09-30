@@ -147,6 +147,7 @@ pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
     "guard.policy.write",
     "tool.filesystem",
     "tool.search",
+    "tool.self_status",
 ];
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -501,6 +502,26 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             false,
             "workspace",
+        ),
+        // 结构化自述面 (自省通道): 只读运行时自身状态 (开关生效值 / 记忆账本
+        // 计数 / 调参 / 预算 / 工作区事实)。无写、无执行、无外联、无凭据值 ——
+        // 凭据只回存在性布尔, 故 `may_access_credentials = false`。
+        //
+        // 来源分类: 闭合词表没有"运行时自身状态元数据"这一类; 记忆账本只回
+        // **聚合计数**而非记忆正文, 标 `PrivateMemory` 会把计数误标为记忆
+        // 正文读取 (并触发人工确认门), 与本工具的只读零审批档矛盾, 故按
+        // `Unknown` 如实标注词表缺口 (效应标志全 false, 无静默降级)。
+        describe(
+            "tool.self_status",
+            vec![OperationClass::Read],
+            vec![ResourceClass::MemoryEpisodic],
+            vec![SourceClass::Unknown],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "self_status",
         ),
         describe(
             "guard.policy.write",

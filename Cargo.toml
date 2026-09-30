@@ -20,6 +20,8 @@ members = [
     "crates/adapters/gateway",
     "crates/adapters/sdk",
     "crates/adapters/cli",
+    # 终端驾驶舱 (全屏 TUI 客户端, P1)
+    "crates/adapters/tui",
     # 基准复现 harness (bench-only 包, publish = false; 不计入 18 个产品 crate)
     "benches",
 ]

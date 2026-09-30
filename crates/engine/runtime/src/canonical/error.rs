@@ -130,10 +130,23 @@ pub enum RuntimeError {
     ///
     /// Distinct from a governance denial: this is the runtime's own structural
     /// guard, and it fires even when no policy is configured at all.
-    #[error("turn did not converge within {limit} rounds")]
+    ///
+    /// The error reports the real budget numbers — the configured limit and
+    /// the round slots the turn had consumed — plus the approval-frozen tool
+    /// the turn was last waiting on, when one existed, so a limit frame is
+    /// diagnosable without a second lookup.
+    #[error(
+        "turn did not converge within {limit} rounds (consumed {rounds} rounds{})",
+        .pending_tool.as_ref().map(|tool| format!("; pending approval: {tool}")).unwrap_or_default()
+    )]
     RoundLimitExceeded {
         /// The configured limit.
         limit: u32,
+        /// Round slots the turn had consumed when the limit fired.
+        rounds: u32,
+        /// Model-facing tool name of the approval-frozen operation the turn
+        /// was waiting on at limit time, when one existed.
+        pending_tool: Option<String>,
     },
 
     /// A runtime invariant raised a violation in fail-fast mode and blocked the
@@ -254,7 +267,12 @@ mod tests {
         });
         assert!(!other.is_context_window_exceeded(), "{other}");
         assert!(
-            !RuntimeError::RoundLimitExceeded { limit: 8 }.is_context_window_exceeded(),
+            !RuntimeError::RoundLimitExceeded {
+                limit: 8,
+                rounds: 8,
+                pending_tool: None,
+            }
+            .is_context_window_exceeded(),
             "非 provider 错误不进溢出自愈"
         );
     }

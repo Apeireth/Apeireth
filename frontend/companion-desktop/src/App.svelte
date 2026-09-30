@@ -1233,9 +1233,14 @@
     } catch (caught) {
       if (caught instanceof ApprovalRequiredError) {
         pendingCanonical = caught.pending;
+        // 保留已生成文本 + "等待批准：<工具>": 不再整段覆盖模型已说的话。
+        const streamedText =
+          conversations
+            .find((item) => item.id === conversationId)
+            ?.messages.find((m) => m.id === assistantMessage.id)?.text ?? '';
         updateMessage(conversationId, assistantMessage.id, {
           streaming: false,
-          text: `等待批准：${caught.pending.tool_name}`,
+          text: withPendingMarker(streamedText || caught.pending.generated_text || '', caught.pending.tool_name),
         });
         return;
       }
@@ -1296,6 +1301,15 @@
       await tick();
       void triggerAutoScroll();
     }
+  }
+
+  /** 保留已生成文本 + "等待批准：<工具>"（待批准收束的 UI 口径）：
+   *  剥掉上一版等待标记再挂新标记，让标记始终指向当前待批的工具，
+   *  模型已经说过的话不被整段覆盖。 */
+  function withPendingMarker(text: string, toolName: string | undefined): string {
+    const kept = (text || '').replace(/\n*\s*等待批准：[^\n]*\s*$/u, '').trimEnd();
+    const marker = `等待批准：${toolName || '工具'}`;
+    return kept ? `${kept}\n\n${marker}` : marker;
   }
 
   async function resolvePending(decision: 'approve' | 'reject'): Promise<void> {
@@ -1365,13 +1379,16 @@
   ): Promise<void> {
     if (result.kind === 'pending') {
       pendingCanonical = result.pending;
-      // 同步消息文案, 让"等待批准"始终指向当前待批的工具。
+      // 同步消息文案, 让"等待批准"始终指向当前待批的工具; 保留已生成文本。
       if (conversationId) {
         const conversation = conversations.find((item) => item.id === conversationId);
         const last = conversation?.messages.filter((m) => m.role === 'assistant').at(-1);
         if (last) {
           updateMessage(conversationId, last.id, {
-            text: `等待批准：${result.pending.tool_name ?? '工具'}`,
+            text: withPendingMarker(
+              last.text || result.pending.generated_text || '',
+              result.pending.tool_name,
+            ),
             streaming: false,
           });
         }
@@ -1780,6 +1797,7 @@
     paper: 'zhimian',
     ocean: 'shenhai',
     forest: 'linhai',
+    starship: 'xingjian',
   };
 
   interface PaletteCommand extends CommandItem {

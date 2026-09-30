@@ -4,7 +4,8 @@ export type ViewId = 'chat' | 'conversations' | 'activity' | 'tools' | 'memory' 
 // 2026-09-23 主人指示「最后我们都是要做的」：day/ocean/forest/paper 四主题
 // 当日曾作为空心项删除（无实现点了无反应），现在真实现补全（令牌+背景见
 // tokens.css/base.css/shell.css），从空心回归现役。
-export type Theme = 'heritage-void' | 'essence' | 'night' | 'day' | 'ocean' | 'forest' | 'paper';
+// starship = 科幻 HUD 档（深空黑底 + 发光数据，纯主题层切换，见 design/hud.css）。
+export type Theme = 'heritage-void' | 'essence' | 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'starship';
 
 /** UI 配色方案 id（规范 §8 增补⑤）：只染 UI 高亮，不占存在金 */
 export type Accent = 'presence-gold' | 'deep-space' | 'sage' | 'bone';

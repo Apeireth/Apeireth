@@ -26,6 +26,7 @@
 //! there is no second orchestration driver or legacy runtime dependency.
 
 pub mod approval;
+pub mod cache_trace;
 pub mod capability;
 pub mod context;
 // B6 · Phase 5 (research, 默认关闭): 审批状态机形式化 (RA-5 规格, 模型级验证).
@@ -67,9 +68,9 @@ pub mod trace;
 
 pub use apeireth_governance::TurnSecurityContext;
 pub use approval::{
-    approval_arguments_summary, approval_command_text, operation_fingerprint,
-    operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus, PendingApproval,
-    PendingApprovalView,
+    approval_arguments_summary, approval_command_text, operation_arguments_fingerprint,
+    operation_fingerprint, operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus,
+    FrozenOperationRecord, FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
@@ -96,9 +97,10 @@ pub use module::{
 };
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{
-    plugin_ids, Runtime, RuntimeBuilder, RuntimeCapabilitySnapshot, RuntimeConfig,
-    RuntimeHealthSnapshot, RuntimeModelSnapshot, RuntimeModuleSnapshot, RuntimeProviderSnapshot,
-    RuntimeSnapshot, DEFAULT_CONTEXT_BUDGET_CHARS, DEFAULT_MAX_ROUNDS,
+    parse_tool_call_limit, parse_turn_round_limit, plugin_ids, Runtime, RuntimeBuilder,
+    RuntimeCapabilitySnapshot, RuntimeConfig, RuntimeHealthSnapshot, RuntimeModelSnapshot,
+    RuntimeModuleSnapshot, RuntimeProviderSnapshot, RuntimeSnapshot, DEFAULT_CONTEXT_BUDGET_CHARS,
+    DEFAULT_MAX_ROUNDS, MAX_TOOL_CALL_LIMIT, MAX_TURN_ROUNDS, MIN_TOOL_CALL_LIMIT, MIN_TURN_ROUNDS,
 };
 pub use session::{
     InMemorySessionStore, PermissionPreset, Session, SessionEvent, SessionEventKind,

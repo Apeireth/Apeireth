@@ -82,11 +82,17 @@ impl ErrorCode {
 }
 
 /// One error frame: human message + machine code + actionable hint.
+///
+/// `details` carries the real budget numbers of a round-limit failure (limit,
+/// consumed rounds, and the approval-frozen tool name when one existed), so a
+/// `turn_not_converged` frame is diagnosable without a second lookup.
 #[derive(Debug, Clone, Serialize)]
 pub struct ErrorFrame {
     pub message: String,
     pub code: ErrorCode,
     pub solution: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
 }
 
 impl ErrorFrame {
@@ -96,7 +102,15 @@ impl ErrorFrame {
             message: message.into(),
             code,
             solution: code.solution().to_string(),
+            details: None,
         }
+    }
+
+    /// Attach structured diagnostics to the frame.
+    #[must_use]
+    pub fn with_details(mut self, details: serde_json::Value) -> Self {
+        self.details = Some(details);
+        self
     }
 
     /// Build a complete HTTP error response (`{"error": {...}}`).

@@ -9,7 +9,9 @@ use std::sync::Arc;
 use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::education::EducationTool;
 use apeireth_tools_canonical::{
-    FetchConfig, FetchTool, FilesystemTool, RepoTool, SearchTool, ShellTool, TrustedShellConfig,
+    AroundPolicy, FetchConfig, FetchTool, FilesystemTool, PipelinedCapability, RepoTool,
+    SearchTool, SelfStatusSource, SelfStatusTool, ShellTool, ToolExecutionPipeline,
+    TrustedShellConfig, DEFAULT_MAX_TIMEOUT_MS,
 };
 
 use super::capability::CapabilityProvider;
@@ -272,5 +274,45 @@ impl CapabilityProvider for EducationModule {
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         vec![self.tool.clone()]
+    }
+}
+
+/// 自述工具的执行时限 (毫秒): 自述是进程内只读采集, 到期即归 `timeout.*` 帧。
+pub const SELF_STATUS_TIMEOUT_MS: u64 = 2_000;
+
+/// Module providing the structured self-report tool (`tool.self_status`).
+///
+/// 自省通道: 只读结构化自述面, 与既有 5 内置工具同列注册。执行走五段流水线:
+/// 输出归一合同 (`SelfStatusTool::output_schema`) 冻结自述形状, 超时归既有
+/// `timeout.*` code 族, 失败即帧。
+pub struct SelfStatusModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl SelfStatusModule {
+    /// Create the self-status module bound to a self-report source.
+    pub fn new(source: Arc<dyn SelfStatusSource>) -> Self {
+        let inner: Arc<dyn ToolCapability> = Arc::new(SelfStatusTool::new(source));
+        let pipeline = Arc::new(
+            ToolExecutionPipeline::new()
+                .with_around(
+                    AroundPolicy::new()
+                        .with_timeout(SELF_STATUS_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
+                )
+                .with_output_schema(SelfStatusTool::output_schema()),
+        );
+        Self {
+            tool: Arc::new(PipelinedCapability::new(inner, pipeline)),
+        }
+    }
+}
+
+impl CapabilityProvider for SelfStatusModule {
+    fn id(&self) -> &str {
+        "module.tool.self_status"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
     }
 }

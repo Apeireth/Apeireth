@@ -157,6 +157,31 @@ html[data-theme='forest'] {
   --bg-input: rgba(16, 26, 20, 0.88);
 }
 
+/* 星舰 starship（科幻 HUD 档）：嵌入视图消费的旧 Pattern 令牌随深空底反色，
+   取值对齐 :root 深底浅字族 + 青蓝色相（细线/焦点色），同令牌层纪律。 */
+html[data-theme='starship'] {
+  --bg: transparent;
+  --surface: #081120;
+  --surface-2: #0c1a2b;
+  --surface-3: #122334;
+  --line: rgba(87, 214, 255, 0.12);
+  --line-strong: rgba(87, 214, 255, 0.22);
+  --text: #dfe9f2;
+  --muted: #8fa6b8;
+  --faint: #56728a;
+  --amber: #ffb454;
+  --amber-hi: #ffd08a;
+  --amber-wash: rgba(255, 180, 84, 0.12);
+  --amber-line: rgba(255, 180, 84, 0.34);
+  --green: #4db380;
+  --green-wash: rgba(77, 179, 128, 0.13);
+  --blue: #57d6ff;
+  --blue-wash: rgba(87, 214, 255, 0.13);
+  --danger: #e0685c;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  --bg-input: rgba(8, 17, 32, 0.88);
+}
+
 /* ---------- 基础重置（原压缩块开头，全部元素级，全局生效） ---------- */
 * { box-sizing: border-box; }
 html, body { height: 100%; }

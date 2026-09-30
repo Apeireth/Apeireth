@@ -1,9 +1,9 @@
 import type {Accent, Theme} from './types';
 
-export const VALID_THEMES: Theme[] = ['heritage-void', 'essence', 'night', 'day', 'ocean', 'forest', 'paper'];
+export const VALID_THEMES: Theme[] = ['heritage-void', 'essence', 'night', 'day', 'ocean', 'forest', 'paper', 'starship'];
 
 /** 静态背景主题（无 WebGL 场景层）：场景层隐藏并暂停渲染循环。 */
-export const STATIC_BG_THEMES: readonly Theme[] = ['heritage-void', 'essence', 'day', 'ocean', 'forest', 'paper'];
+export const STATIC_BG_THEMES: readonly Theme[] = ['heritage-void', 'essence', 'day', 'ocean', 'forest', 'paper', 'starship'];
 
 export type ThemeOption = {
   id: Theme;
@@ -35,6 +35,14 @@ export const THEME_CATALOG: ThemeOption[] = [
     // 黑洞 + 金色吸积环的存在金预览（该主题实景即含金，预览合法）
     swatch:
       'radial-gradient(circle at 62% 55%, rgba(255, 210, 122, 0.85) 0%, rgba(255, 210, 122, 0.25) 7%, rgba(255, 210, 122, 0) 13%), radial-gradient(circle at 62% 55%, #000000 0%, #000000 10%, rgba(0, 0, 0, 0) 11%), radial-gradient(ellipse at 50% 30%, #1a1520 0%, #07070c 70%)',
+  },
+  {
+    id: 'starship',
+    label: '星舰',
+    desc: '科幻 HUD 档 · 深空黑底 · 发光数据',
+    // 网格 + 青蓝辉光的 HUD 预览（网格/辉光即该主题的识别特征）
+    swatch:
+      'radial-gradient(ellipse 90% 60% at 50% 118%, rgba(24, 84, 128, 0.5) 0%, rgba(4, 7, 13, 0) 62%), repeating-linear-gradient(0deg, rgba(87, 214, 255, 0.12) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(87, 214, 255, 0.12) 0 1px, transparent 1px 14px), linear-gradient(180deg, #060d18 0%, #02060c 100%)',
   },
   {
     id: 'day',

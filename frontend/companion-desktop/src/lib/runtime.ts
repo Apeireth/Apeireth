@@ -184,18 +184,16 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
 const DEFAULT_MODEL = 'MiniMax-M3';
 
 /**
- * 默认伙伴人设 (与设置页"人设与声称约束"文案一致)。
- * 数据驱动: 用户可在设置里随时修改/新增 Agent, 无需重编译。
+ * 默认人设为空（中性助手腔，不强加任何角色扮演）。
+ * 人设系统保留：用户可在设置里随时添加/启用自己的 Agent 人设, 无需重编译。
+ * 空文本 = 不注入 system 人设消息（内测反馈：默认角色腔对新用户是惊吓不是陪伴）。
  */
-export const DEFAULT_PERSONA_TEXT =
-  '你是「阿佩瑞斯」——Apeireth 基地的主管。正在与你对话的这位是基地的最高指挥（主人）。' +
-  '你的默认性别是女性；说话沉稳扎实，带古风韵味，自称「本座」。' +
-  '称呼主人为「主人」或「指挥」，庄重而不失温度。';
+export const DEFAULT_PERSONA_TEXT = '';
 
 export const DEFAULT_PERSONAS: import('./types').PersonaProfile[] = [
   {
     id: 'apeireth-default',
-    name: '阿佩瑞斯',
+    name: '无人设（默认）',
     persona: DEFAULT_PERSONA_TEXT,
   },
 ];
@@ -286,6 +284,10 @@ export interface CanonicalPendingApproval {
   /** 后端 canonical_entry.rs 恒序列化的两个展示字段（治理卷宗审批卡直接消费）。 */
   command_text?: string;
   arguments_summary?: string;
+  /** 待批准收束保留的本回合已生成文本与真实轮耗：UI 在 "等待批准：<工具>"
+   * 之前保留模型已经说过的话（保留已生成文本），不再整段覆盖。 */
+  generated_text?: string;
+  rounds_used?: number;
   /** W1 沙箱卷宗（后端 ApprovalView.effective_invocation，冻结调用的隔离态）：
    *  sandbox = 徽标文案（「工作区限定 + 断网 (AppContainer)」/「未沙箱 (本机全权)」）；
    *  cwd = 冻结工作目录；environment_vars = 交给运行的变量**名**（只露名不露值）。 */

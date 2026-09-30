@@ -94,6 +94,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 - `crates/adapters/cli/src/lib.rs::build_canonical_runtime_from_env` **挂载 `GovernancePipeline`** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`（3 个）；配置来源 `build_production_governance_from_env()` 按环境变量 `APEIRETH_GOVERNANCE_*` 装配
 - runtime 每个 turn 的 `CapabilityDispatch` **都**先经 governance pipeline 评估，**不再**默认 `AllowAll`
 - `MaxRounds` 是**结构性**约束（runtime.rs 内部），`AuditHashChain` 按部署需要挂
+- **回合预算显式化**：单回合轮数上限默认 8（`DEFAULT_MAX_ROUNDS`）、单轮工具调用上限默认 16（`MAX_TOOL_CALLS_PER_ROUND`），可用 env `APEIRETH_MAX_TURN_ROUNDS` / `APEIRETH_MAX_TOOL_CALLS` 覆写（越界钳制到 1..=64，未设 / 非法值回默认；CLI `turn_round_limit_from_env` / `tool_call_limit_from_env` 装配）。轮上限失败的 `turn_not_converged` 错误帧带真实数字：`limit`、已耗轮数 `rounds`、当时待批工具名 `pending_tool`（若有）；回合内审批冻结即收束为待批准态（不烧剩余轮预算），同回合重复提议同一待批准项直接收束、不重走冻结循环
 - 工具层兜底：`shell` / `fetch` 默认 opt-in 关闭；`ProcessExecutor` 是 Windows Job Object 完整 / Linux·macOS 进程组部分隔离（参见 [architecture.md](../01-architecture/architecture.md) Process ownership 表）
 - `credentials` 走 **`EnvCredentialResolver`**（`crates/engine/provider/src/credentials.rs`）：逻辑名→环境变量映射（`provider.minimax.api_key` → `APEIRETH_API_KEY`、`provider.anthropic.api_key` → `APEIRETH_ANTHROPIC_KEY`、`provider.openai-compatible.api_key` → `OPENAI_API_KEY`），无 secret 留 struct、secret 走 `Secret<T>`（debug redact）
 - **`apeireth-credentials` crate（keyring / encrypted file / KMS backend）代码存在但未接线**——本批运行时用的是 `EnvCredentialResolver`；legacy OS keyring 集成排期见 ROADMAP §4 P2

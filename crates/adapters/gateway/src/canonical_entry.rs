@@ -166,12 +166,20 @@ pub struct CanonicalPendingApproval {
     pub approval_id: ApprovalId,
     pub request: String,
     pub trace_id: String,
+    /// Runtime round that produced the pending operation (audit pairing key).
+    pub round: u32,
     pub capability_id: String,
     pub tool_name: String,
     pub governance_hook: String,
     pub governance_reason: String,
     pub command_text: String,
     pub arguments_summary: String,
+    /// The turn's generated text so far, preserved by the pending close so the
+    /// UI can keep what the model already said alongside "waiting for
+    /// approval: <tool>".
+    pub generated_text: String,
+    /// Round slots the turn had consumed when it paused for this approval.
+    pub rounds_used: u32,
     pub created_at: Timestamp,
     pub expires_at: Timestamp,
 }
@@ -183,12 +191,15 @@ impl From<PendingApprovalView> for CanonicalPendingApproval {
             approval_id: view.approval_id,
             request: view.request_id.to_string(),
             trace_id: view.trace_id.to_string(),
+            round: view.round,
             capability_id: view.capability_id.to_string(),
             tool_name: view.tool_name,
             governance_hook: view.governance_hook,
             governance_reason: view.governance_reason,
             command_text: view.command_text,
             arguments_summary: view.arguments_summary,
+            generated_text: view.generated_text,
+            rounds_used: view.rounds_used,
             created_at: view.created_at,
             expires_at: view.expires_at,
         }
@@ -1057,12 +1068,12 @@ async fn openai_chat_streaming(
                 }
             }
             Err(error) => {
-                let (_, code) = classify_runtime_error(&error);
-                let frame = serde_json::json!({
-                    "error": ErrorFrame::new(code, error.to_string()),
+                let frame = runtime_error_frame(&error);
+                let body = serde_json::json!({
+                    "error": frame,
                     "session_id": session.to_string(),
                 });
-                if let Ok(json) = serde_json::to_string(&frame) {
+                if let Ok(json) = serde_json::to_string(&body) {
                     let _ = tx.send(format!("data: {json}\n\ndata: [DONE]\n\n")).await;
                 }
             }
@@ -1101,13 +1112,39 @@ fn hot_model_override(state: &GatewayState) -> Option<String> {
 
 fn http_error(error: CanonicalEntryError, session: Option<SessionId>) -> HttpError {
     let (status, code) = classify_entry_error(&error);
+    let frame = match &error {
+        CanonicalEntryError::Runtime(runtime) => runtime_error_frame(runtime),
+        CanonicalEntryError::InvalidRequest(_) => ErrorFrame::new(code, error.to_string()),
+    };
     (
         status,
         Json(ErrorBody {
-            error: ErrorFrame::new(code, error.to_string()),
+            error: frame,
             session_id: session.map(|id| id.to_string()),
         }),
     )
+}
+
+/// The error frame for one runtime failure.
+///
+/// A round-limit failure carries its real budget numbers (configured limit,
+/// consumed rounds, and the approval-frozen tool name when one existed) as
+/// structured `details`, so the frame is diagnosable without a second lookup.
+fn runtime_error_frame(error: &RuntimeError) -> ErrorFrame {
+    let (_, code) = classify_runtime_error(error);
+    let frame = ErrorFrame::new(code, error.to_string());
+    match error {
+        RuntimeError::RoundLimitExceeded {
+            limit,
+            rounds,
+            pending_tool,
+        } => frame.with_details(serde_json::json!({
+            "limit": limit,
+            "rounds": rounds,
+            "pending_tool": pending_tool,
+        })),
+        _ => frame,
+    }
 }
 
 fn classify_entry_error(error: &CanonicalEntryError) -> (StatusCode, ErrorCode) {

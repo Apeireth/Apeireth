@@ -87,6 +87,8 @@ const ENABLE_CONSOLIDATION_ENV: &str = "APEIRETH_ENABLE_CONSOLIDATION";
 const ENABLE_REFLEXION_ENV: &str = "APEIRETH_ENABLE_REFLEXION";
 const REFLEXION_DIR_ENV: &str = "APEIRETH_REFLEXION_DIR";
 const CONTEXT_BUDGET_CHARS_ENV: &str = "APEIRETH_CONTEXT_BUDGET_CHARS";
+const TURN_ROUNDS_ENV: &str = "APEIRETH_MAX_TURN_ROUNDS";
+const TOOL_CALLS_ENV: &str = "APEIRETH_MAX_TOOL_CALLS";
 
 /// Resolve the local read-tools switch from the process environment.
 ///
@@ -249,6 +251,24 @@ pub fn context_budget_chars_from_env() -> usize {
         .unwrap_or(apeireth_runtime::DEFAULT_CONTEXT_BUDGET_CHARS)
 }
 
+/// 回合轮数预算旋钮 (预算显式化): `APEIRETH_MAX_TURN_ROUNDS=N` = 单回合逻辑
+/// 轮数上限 (含模块重试占位)。越界值钳制到 `MIN_TURN_ROUNDS..=MAX_TURN_ROUNDS`,
+/// 未设 / 空 / 非法值 = 默认 `DEFAULT_MAX_ROUNDS` (8)。
+pub fn turn_round_limit_from_env() -> u32 {
+    apeireth_runtime::canonical::parse_turn_round_limit(
+        std::env::var(TURN_ROUNDS_ENV).ok().as_deref(),
+    )
+}
+
+/// 单轮工具调用预算旋钮 (预算显式化): `APEIRETH_MAX_TOOL_CALLS=N` = 单轮最多
+/// 派发多少个 tool call (超出部分截断并补合成结果)。越界值钳制到
+/// `MIN_TOOL_CALL_LIMIT..=MAX_TOOL_CALL_LIMIT`, 未设 / 空 / 非法值 = 默认 16。
+pub fn tool_call_limit_from_env() -> usize {
+    apeireth_runtime::canonical::parse_tool_call_limit(
+        std::env::var(TOOL_CALLS_ENV).ok().as_deref(),
+    )
+}
+
 /// Build the production governance policy from an explicit local-read choice.
 ///
 /// The explicit boolean keeps the policy deterministic and easy to test. The
@@ -284,6 +304,9 @@ fn build_production_governance_parts_with_dataset(
 ) {
     let mut policy = PermissionPolicy::new();
     policy.grant(Permission::ExecuteTool("tool.repo".to_string()));
+    // 自省通道: `tool.self_status` 只读档 —— 默认可用、零审批 (无
+    // require_approval)。模型可实测自身状态再发言, 不靠翻文件撞见自己。
+    policy.grant(Permission::ExecuteTool("tool.self_status".to_string()));
     if enable_local_read_tools {
         policy.grant(Permission::ExecuteTool("tool.filesystem".to_string()));
         policy.grant(Permission::ExecuteTool("tool.search".to_string()));
@@ -509,6 +532,11 @@ async fn build_canonical_runtime_with_parts(
     // 上下文预算旋钮 (APEIRETH_CONTEXT_BUDGET_CHARS): 注入上下文块的总字符预算,
     // 组装期约束 provider 请求的 token 侧注入量 (核心块永不截断)。
     builder = builder.with_context_budget_chars(context_budget_chars_from_env());
+    // 轮数 / 单轮工具调用预算旋钮 (APEIRETH_MAX_TURN_ROUNDS /
+    // APEIRETH_MAX_TOOL_CALLS): 显式预算, 越界钳制、非法值回默认。
+    builder = builder
+        .with_max_rounds(turn_round_limit_from_env())
+        .with_max_tool_calls_per_round(tool_call_limit_from_env());
     // 长尾截断的完整原文落盘根目录 (数据目录, 实际写入 `<data>/spill/`): 有落盘点时
     // 截断保留头尾预览 + 取回指引行; 落盘失败时回退内联原文 (宁长勿丢, 不失败调用)。
     builder = builder.with_context_spill_root(default_panel_data_dir());
@@ -819,6 +847,22 @@ async fn build_cognitive_modules_from_env(
         self_tuning: apeireth_runtime_assembly::SelfTuningWire::from_env(
             apeireth_runtime_assembly::tuning_log_path(),
         ),
+        // 自省通道: 记忆账本 / 凭据存在性探测口 + 授权层旋钮的名册行。
+        self_status_ledger: Some(self_status_ledger_probe(
+            path.clone(),
+            reflexion_store_root_from_env(),
+        )),
+        self_status_credentials: Some(self_status_credentials_probe(default_panel_data_dir())),
+        self_status_extras: vec![apeireth_tools_canonical::CapabilitySwitch::new(
+            "local_read_tools",
+            local_read_tools_enabled_from_env(),
+        )],
+        // 预算一节与运行时装配同源: 同一条可配置旋钮解析路径的取值
+        // (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS, 未设取默认)。
+        self_status_budget: Some(apeireth_runtime_assembly::budget_status_from_configured(
+            u64::from(turn_round_limit_from_env()),
+            tool_call_limit_from_env() as u64,
+        )),
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)
@@ -1030,6 +1074,66 @@ fn cognitive_db_path() -> PathBuf {
         .filter(|value| !value.trim().is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(".apeireth/cognitive.sqlite3"))
+}
+
+/// 自省通道: 记忆账本计数探测口 —— 会话/记忆/保护计数取自认知库可查元数据
+/// ([`apeireth_memory::SqliteMemoryStore::ledger_counts`]), 教训计数取自反思
+/// 教训存储; **只回计数, 不回内容原文**。每次自述现探测; 失败给字段级
+/// `null` + 原因, 不让整帧失败。
+fn self_status_ledger_probe(
+    cognitive_db: PathBuf,
+    lessons_root: PathBuf,
+) -> apeireth_tools_canonical::StatusProbe<apeireth_tools_canonical::MemoryLedgerStats> {
+    use apeireth_memory::reflexion::ReflexionStore as _;
+    Arc::new(move || {
+        let store = apeireth_memory::SqliteMemoryStore::open(&cognitive_db)
+            .map_err(|error| format!("memory store open failed: {error}"))?;
+        let counts = store
+            .ledger_counts()
+            .map_err(|error| format!("memory ledger query failed: {error}"))?;
+        let reflexion = apeireth_memory::reflexion::FileReflexionStore::new(lessons_root.clone());
+        let (lessons, reason) = match reflexion.list_reflections() {
+            Ok(reflections) => (Some(reflections.len() as u64), None),
+            Err(error) => (None, Some(format!("lesson store read failed: {error}"))),
+        };
+        Ok(apeireth_tools_canonical::MemoryLedgerStats {
+            sessions: Some(counts.sessions),
+            memories: Some(counts.memories),
+            protected: Some(counts.protected),
+            lessons,
+            reason,
+        })
+    })
+}
+
+/// 自省通道: 凭据存在性探测口 —— **只回布尔, 不回显凭据本体**。
+///
+/// 判定口径: provider 凭据 env 启动值非空 / 运行时凭据库非空 / 数据目录存在
+/// 凭据存储件 (`creds.json` / 钥匙串导出物)。存在与否是自省事实, 值不是。
+fn self_status_credentials_probe(data_dir: PathBuf) -> apeireth_tools_canonical::StatusProbe<bool> {
+    Arc::new(move || {
+        const PROVIDER_KEY_ENVS: &[&str] = &[
+            "APEIRETH_API_KEY",
+            "APEIRETH_ANTHROPIC_KEY",
+            "APEIRETH_OPENAI_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+        ];
+        let env_present = PROVIDER_KEY_ENVS.iter().any(|key| {
+            std::env::var(key)
+                .ok()
+                .is_some_and(|value| !value.trim().is_empty())
+        });
+        let hot_present = !keyring_bootstrap::hot_credential_store().is_empty();
+        let file_present = [
+            "creds.json",
+            "apeireth-keyring.bin",
+            "apeireth-keyring.master.key",
+        ]
+        .iter()
+        .any(|name| data_dir.join(name).is_file());
+        Ok(env_present || hot_present || file_present)
+    })
 }
 
 /// Execute one CLI turn directly through [`Runtime::execute_outcome`].

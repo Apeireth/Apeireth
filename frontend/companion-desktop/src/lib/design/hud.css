@@ -1,0 +1,159 @@
+/* ============================================================================
+   星舰主题氛围层（科幻 HUD 档）
+   纯主题层叠加：每条规则以 html[data-theme='starship'] 为域，不改组件结构、
+   不碰任何既有规则；颜色/光晕一律经 --ap-hud-* / --ap-* 令牌引用（令牌值只
+   在 tokens.css / base.css 的星舰块出现，本层零色值——机器断言见
+   tests/theme-hud-tokens.mjs）。
+   氛围即功能：发光的是数据（状态条/遥测数字/面板标题），正文保持可读性优先。
+   动效只做呼吸与扫描线缓动，且仅在 prefers-reduced-motion: no-preference 下启用。
+   ============================================================================ */
+
+/* ── 深空底：网格 + 舱顶冷光 + 底部数据辉光（整条背景走令牌） ── */
+html[data-theme='starship'] .static-bg {
+  opacity: 1;
+  background: var(--ap-hud-sky) center / cover no-repeat;
+}
+html[data-theme='starship'] .static-bg::after {
+  opacity: 1;
+  background: var(--ap-hud-veil);
+}
+
+/* ── 扫描线：单线光缓慢掠过（常态停在下方做静态高光；允许动效时缓动巡游） ── */
+html[data-theme='starship'] .static-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--ap-hud-scan) 0 18vh / 100% 30vh no-repeat;
+}
+
+/* ── 面板标题栏发光 + 细线分割（inset 阴影画线，不占布局） ── */
+html[data-theme='starship'] .page-head h1,
+html[data-theme='starship'] .drawer-head h2,
+html[data-theme='starship'] .wb-head h2,
+html[data-theme='starship'] .blk-head,
+html[data-theme='starship'] .panel h2,
+html[data-theme='starship'] .bar-head,
+html[data-theme='starship'] .chat-title {
+  color: var(--ap-hud-title-ink);
+  text-shadow: var(--ap-hud-title-glow);
+}
+html[data-theme='starship'] .drawer-head,
+html[data-theme='starship'] .wb-head,
+html[data-theme='starship'] .bar-head {
+  box-shadow: inset 0 -1px 0 var(--ap-hud-rule);
+}
+
+/* ── 角标记：对角括号线换青辉（HUD 角语法，复用既有 .panel / .ap-bracket 伪元素） ── */
+html[data-theme='starship'] .panel::before,
+html[data-theme='starship'] .panel::after,
+html[data-theme='starship'] .ap-bracket::before,
+html[data-theme='starship'] .ap-bracket::after {
+  border-color: var(--ap-hud-corner);
+  filter: drop-shadow(0 0 3px var(--ap-hud-cyan-soft));
+}
+
+/* ── 数据发光：状态条 / 遥测等宽数字（语义色阶不动，只加光晕） ── */
+html[data-theme='starship'] .status-bar {
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme='starship'] .sb-item {
+  text-shadow: var(--ap-hud-data-glow);
+}
+html[data-theme='starship'] .sb-item.tone-warn {
+  text-shadow: var(--ap-hud-amber-glow);
+}
+html[data-theme='starship'] .sb-item.tone-danger {
+  text-shadow: var(--ap-hud-danger-glow);
+}
+html[data-theme='starship'] .mono-note,
+html[data-theme='starship'] .persona-item-model {
+  font-family: var(--ap-font-mono);
+  font-variant-numeric: tabular-nums;
+  text-shadow: var(--ap-hud-data-glow);
+}
+html[data-theme='starship'] .mono-note.live {
+  color: var(--ap-hud-amber);
+  text-shadow: var(--ap-hud-amber-glow);
+}
+
+/* ── 数据条：遥测进度发光（琥珀→青蓝热端） ── */
+html[data-theme='starship'] .bar {
+  background: var(--ap-hud-track);
+}
+html[data-theme='starship'] .bar i {
+  background: var(--ap-hud-bar-fill);
+  box-shadow: 0 0 8px var(--ap-hud-cyan-soft);
+}
+
+/* ── 正文可读性优先：正文/消息体明确不带光晕 ── */
+html[data-theme='starship'] .md-body,
+html[data-theme='starship'] .ap-voice {
+  text-shadow: none;
+}
+
+/* ── 场景层 / presence：静态背景主题同隐藏（与既有静态主题纪律一致） ── */
+html[data-theme='starship'] .scene-underlay,
+html[data-theme='starship'] #presence {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* ── 动效（发光呼吸 / 扫描线巡游）：仅允许动效时启用；reduce 时由令牌层
+      全局降级（animation: none）兜底，界面保持静态可读。 ── */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-theme='starship'] .static-bg::before {
+    animation: ap-hud-scan 11s linear infinite;
+  }
+  @keyframes ap-hud-scan {
+    from {
+      background-position: 0 -30vh;
+    }
+    to {
+      background-position: 0 130vh;
+    }
+  }
+
+  html[data-theme='starship'] .panel h2,
+  html[data-theme='starship'] .bar-head {
+    animation: ap-hud-title-breathe 4.6s ease-in-out infinite;
+  }
+  @keyframes ap-hud-title-breathe {
+    0%,
+    100% {
+      text-shadow: var(--ap-hud-title-glow);
+    }
+    50% {
+      text-shadow: var(--ap-hud-title-glow-hi);
+    }
+  }
+
+  html[data-theme='starship'] .panel::before,
+  html[data-theme='starship'] .panel::after,
+  html[data-theme='starship'] .ap-bracket::before,
+  html[data-theme='starship'] .ap-bracket::after {
+    animation: ap-hud-corner-breathe 4.6s ease-in-out infinite;
+  }
+  @keyframes ap-hud-corner-breathe {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  html[data-theme='starship'] .mono-note.live {
+    animation: ap-hud-telemetry 3.8s ease-in-out infinite;
+  }
+  @keyframes ap-hud-telemetry {
+    0%,
+    100% {
+      text-shadow: var(--ap-hud-amber-glow);
+    }
+    50% {
+      text-shadow: var(--ap-hud-amber-glow-hi);
+    }
+  }
+}

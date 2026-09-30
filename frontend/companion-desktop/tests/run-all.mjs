@@ -36,6 +36,8 @@ const SUITES = [
   {file: 'statusbar.mjs', name: 'status bar indicators (sse / turn / guard / memory)', strip: true},
   {file: 'memory-ledger.mjs', name: 'memory ledger (filters / revision lock / graph links)', strip: true},
   {file: 'theme-system.mjs', name: 'theme system (default/catalog/static-bg, real module)', strip: true},
+  {file: 'theme-hud-switch.mjs', name: 'sci-fi HUD theme tier (instant switch / persistence / zero-regression, real module)', strip: true},
+  {file: 'theme-hud-tokens.mjs', name: 'sci-fi HUD theme layer (token coverage / no hardcoded color / reduced-motion, source mirror)'},
   {file: 'personalization-bg.mjs', name: 'custom background upload validation (real module)', strip: true},
   {file: 'config-persistence.mjs', name: 'config persistence round-trip (accent/customBg/secret purge, real module)', strip: true},
   {file: 'recommended-preset.mjs', name: 'recommended preset ↔ memory-core knob mapping (real module)', strip: true},

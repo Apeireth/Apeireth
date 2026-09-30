@@ -527,6 +527,42 @@ impl SqliteMemoryStore {
         let conn = self.conn()?;
         append_only::export_all_streams(&conn)
     }
+
+    /// 记忆账本计数 (自省通道的元数据面): 会话数 / 记忆件数 / 保护件数.
+    ///
+    /// **只回计数, 不回内容原文** —— 自述面只暴露"有多少", 永不暴露"是什么"。
+    /// 计数全部走本 store 可查的元数据 (episodes 流 + 治理 sidecar 表)。
+    pub fn ledger_counts(&self) -> MemoryResult<MemoryLedgerCounts> {
+        let conn = self.conn()?;
+        let sessions: i64 = conn.query_row(
+            "SELECT COUNT(DISTINCT session_id) FROM episodes",
+            [],
+            |row| row.get(0),
+        )?;
+        let memories: i64 =
+            conn.query_row("SELECT COUNT(*) FROM episodes", [], |row| row.get(0))?;
+        let protected: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM episode_governance WHERE protected = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(MemoryLedgerCounts {
+            sessions: sessions.max(0) as u64,
+            memories: memories.max(0) as u64,
+            protected: protected.max(0) as u64,
+        })
+    }
+}
+
+/// 记忆账本计数 (纯元数据, 自省通道消费).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MemoryLedgerCounts {
+    /// 会话数 (episodes 流里的不同 `session_id` 计数).
+    pub sessions: u64,
+    /// 记忆件数 (episodes 流总行数).
+    pub memories: u64,
+    /// 保护件数 (治理 sidecar 中 `protected = 1` 的行数).
+    pub protected: u64,
 }
 
 fn map_poisoned(e: std::sync::PoisonError<std::sync::MutexGuard<'_, Connection>>) -> MemoryError {

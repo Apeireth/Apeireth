@@ -23,18 +23,25 @@ apeireth-core = { path = "../../foundation/core" }
 apeireth-protocol = { path = "../../foundation/protocol" }
 apeireth-runtime = { path = "../../engine/runtime" }
 apeireth-guard = { path = "../../engine/guard" }
+# IM 快捷接入: 审批闭合四态词表 + 原子审计配对 (approval_closure)
+apeireth-governance = { path = "../../foundation/governance" }
+# IM 快捷接入: 渠道 wire 面 (kind / 入站解码 / 出站信封 / 审批卡片 / 分段 / 传输)
+apeireth-sdk = { path = "../sdk" }
+# 仓库统一文件 IO 约定 (clippy.toml: std::fs → fs_err)
+fs-err = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 async-trait = { workspace = true }
 uuid = { workspace = true }
-apeireth-governance = { path = "../../foundation/governance" }
 apeireth-plugin = { path = "../../foundation/plugin" }
 apeireth-provider = { path = "../../engine/provider" }
 reqwest = { workspace = true }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
+# IM 快捷接入测试: mock IM 端点 (0 真实网络)
+wiremock = "0.6"
 
 [lib]
 name = "apeireth_gateway"

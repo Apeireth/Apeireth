@@ -36,6 +36,10 @@ pub mod process;
 pub mod repo;
 pub mod repo_map;
 pub mod search;
+// 结构化自述面 (自省通道): `tool.self_status` 只读工具 —— 身份 / 能力名册 /
+// 记忆账本计数 / 调参状态 / 预算 / 工作区事实, 全部取真实生效值; 缺失字段
+// 显式 null + 原因, 不整帧失败。
+pub mod self_status;
 mod sensitive_path;
 pub mod shell;
 pub mod spill;
@@ -59,7 +63,7 @@ pub use exec_pipeline::{
     PipelinedCapability, PostDecision, PostExecuteHook, PostExecuteRequest, PostExecuteWaterfall,
     PostVerdict, PreDecision, PreExecuteHook, PreExecuteRequest, PreExecuteWaterfall, PreVerdict,
     RetryPolicy, RiskLevelGateHook, SchemaField, SchemaKind, StageEntry, SupersededResult,
-    ToolExecutionPipeline, ToolGuard, ToolGuardRequest, ToolOutcome,
+    ToolExecutionPipeline, ToolGuard, ToolGuardRequest, ToolOutcome, DEFAULT_MAX_TIMEOUT_MS,
 };
 pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
@@ -82,6 +86,13 @@ pub use observed_gate::{
 pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
 pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
+pub use self_status::{
+    capability_roster, derive_tuning_preset, render_snapshot, BudgetStatus, CapabilitySwitch,
+    MemoryLedgerStats, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SelfStatusTool,
+    StatusProbe, TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
+    DISPOSITION_PRESETS, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS,
+    PRODUCT_NAME, RUNTIME_ROLE_GATEWAY_SIDECAR,
+};
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};
 pub use stealth_crawler::{ExtractedMediaItem, StealthBrowserConfig, StealthCrawlerEngine};

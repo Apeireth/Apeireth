@@ -540,6 +540,20 @@ pub enum SessionEventKind {
         /// Optional human reason recorded at resolution time.
         human_reason: Option<String>,
     },
+    /// The model repeated, in the same turn, a proposal that governance had
+    /// already frozen for human approval. The repeat is folded onto the same
+    /// approval item ("视为同一待批准项"): no second approval is minted, and
+    /// the turn collapses directly instead of re-entering the freeze loop.
+    ApprovalReentryCollapsed {
+        /// Model-facing tool name of the repeated proposal.
+        tool_name: String,
+        /// The approval item the repeat was folded into.
+        approval_id: ApprovalId,
+        /// Status that item had reached when the repeat arrived.
+        prior_status: String,
+        /// Round of the repeated proposal.
+        round: u32,
+    },
     /// Provider routing could not serve a round.
     ProviderFailed {
         /// Legible terminal routing/provider error.

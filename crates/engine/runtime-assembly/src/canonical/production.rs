@@ -23,7 +23,9 @@ use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::NormalizedMessage;
 use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
 use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig, McpToolBridge};
-use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
+use apeireth_tools_canonical::{
+    CapabilitySwitch, FetchConfig, MemoryLedgerStats, StatusProbe, TrustedShellConfig,
+};
 
 use super::capability::CapabilityProvider;
 use super::cognitive::{
@@ -36,9 +38,10 @@ use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
+use super::self_status_source::{roster_from_config, ProductionSelfStatusSource};
 use super::tool_modules::{
     EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,
-    ShellModule,
+    SelfStatusModule, ShellModule,
 };
 
 /// Adapter that exposes memory's context-window implementation through the
@@ -172,6 +175,11 @@ pub struct ProductionModulesConfig {
     pub education: bool,
     /// W2 §4.4 (2026-10-10, 默认关): 研究吸收批认知体操 (四算法实验性洞察)。
     pub absorption_insight: bool,
+    /// Register the structured self-report tool (`tool.self_status`, 自省通道).
+    ///
+    /// 只读档、默认可用、零审批: 模型可实测自身状态再发言。缺 data 系探测口
+    /// 时对应字段显式 null + 原因, 不影响注册与其余字段。
+    pub self_status: bool,
 }
 
 impl Default for ProductionModulesConfig {
@@ -201,6 +209,7 @@ impl Default for ProductionModulesConfig {
             community_triage: false,
             education: false,
             absorption_insight: false,
+            self_status: true,
         }
     }
 }
@@ -256,6 +265,14 @@ pub struct ProductionBackends {
     /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层, 接上后
     /// MemoryRecallModule 的召回结果作为真接信号喂给引擎。
     pub self_tuning: Option<Arc<crate::canonical::self_tuning_wire::SelfTuningWire>>,
+    /// 自省通道: 记忆账本计数探测口 (会话/记忆/保护/教训计数, 只回计数)。
+    pub self_status_ledger: Option<StatusProbe<MemoryLedgerStats>>,
+    /// 自省通道: 凭据存在性探测口 (只回布尔, 不回显凭据本体)。
+    pub self_status_credentials: Option<StatusProbe<bool>>,
+    /// 自省通道: 组装根补充的能力名册行 (例如授权层的 `local_read_tools` 旋钮)。
+    pub self_status_extras: Vec<CapabilitySwitch>,
+    /// 自省通道: 生效中的预算一节 (可配置旋钮取值; 缺位回退编译期常量)。
+    pub self_status_budget: Option<apeireth_tools_canonical::BudgetStatus>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -283,6 +300,18 @@ impl ProductionModules {
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
+
+        // 自省通道: 能力名册在任何字段移动之前投影 —— 名册即**实际用于装配的**
+        // config 生效值 (读真实生效值, 不是配置文本的复述)。
+        let self_status_roster = config.self_status.then(|| {
+            roster_from_config(
+                &config,
+                backends.workspace_root.is_some(),
+                backends.self_tuning.is_some(),
+                backends.typed_recall.is_some(),
+                &backends.self_status_extras,
+            )
+        });
 
         let experience_count = [
             backends.wiki.is_some(),
@@ -333,6 +362,28 @@ impl ProductionModules {
 
         if let Some(fetch_config) = config.fetch {
             let provider = FetchModule::new(fetch_config);
+            capabilities.extend(provider.capabilities());
+        }
+
+        // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
+        // 只读档、默认可用、零审批; data 系探测口缺位时对应字段显式 null +
+        // 原因, 注册与其余字段不受影响。
+        if let Some(roster) = self_status_roster {
+            let mut source = ProductionSelfStatusSource::new(
+                roster,
+                backends.self_tuning.is_some(),
+                backends.workspace_root.clone(),
+            );
+            if let Some(probe) = &backends.self_status_ledger {
+                source = source.with_ledger_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_credentials {
+                source = source.with_credentials_probe(Arc::clone(probe));
+            }
+            if let Some(budget) = &backends.self_status_budget {
+                source = source.with_budget(budget.clone());
+            }
+            let provider = SelfStatusModule::new(Arc::new(source));
             capabilities.extend(provider.capabilities());
         }
 

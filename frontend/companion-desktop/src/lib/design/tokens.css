@@ -251,6 +251,83 @@ html[data-theme='forest'] {
   --ap-semantic-success: #6fae86;
 }
 
+/* ---------- 星舰 starship（科幻 HUD 档 · 深空黑底 + 发光数据）----------
+   纪律：本块只做变量层切换（值不出块），组件结构与既有规则零改动；
+   HUD 氛围（网格/扫描线/发光/角标记）在 hud.css，颜色一律经 --ap-hud-* 令牌
+   引用，令牌值只在本块出现。存在金家族（--ap-gold*）整组不染——金色是他的
+   存在色，青蓝/琥珀只走数据光令牌：发光的是数据，正文保持可读性优先。 */
+html[data-theme='starship'] {
+  --ap-space-void: #04070d;
+  --ap-space-horizon: #010204;
+  --ap-space-blue-base: #071322;
+  --ap-space-blue-dark: #040b16;
+  --ap-space-blue-light: #17324c;
+  --ap-space-blue-floor: #0c1826;
+  --ap-bone: #e4edf5;
+  --ap-bone-68: rgba(228, 237, 245, 0.72);
+  --ap-bone-42: rgba(228, 237, 245, 0.5);
+  --ap-bone-30: rgba(228, 237, 245, 0.34);
+  --ap-ink: #0a1220;
+  --ap-panel: rgba(8, 17, 28, 0.88);
+  --ap-panel-solid: #08121e;
+  --ap-shell-chip: rgba(10, 24, 38, 0.58);
+  --ap-shell-elevated: rgba(6, 14, 24, 0.97);
+  --ap-card: #0c1a2b;
+  --ap-card-dark: #10202f;
+  --ap-line: rgba(87, 214, 255, 0.16);
+  --ap-stamp: #bfe6f7;
+  --ap-semantic-success: #4db380;
+  --ap-semantic-warning: #e8b25a;
+  --ap-semantic-danger: #e0685c;
+  --ap-semantic-info: #57d6ff;
+
+  /* 档案调随深色族反色（取值对齐深色主题组，幽灵编号/图标换青辉） */
+  --ap-register-archive-paper: #0b1626;
+  --ap-register-archive-paper-lo: #07111d;
+  --ap-register-archive-paper-hi: #122334;
+  --ap-register-archive-ink: #e4edf5;
+  --ap-register-archive-ink-60: rgba(228, 237, 245, 0.62);
+  --ap-register-archive-ink-55: rgba(228, 237, 245, 0.57);
+  --ap-register-archive-ink-40: rgba(228, 237, 245, 0.42);
+  --ap-register-archive-ink-35: rgba(228, 237, 245, 0.37);
+  --ap-register-archive-ink-26: rgba(228, 237, 245, 0.28);
+  --ap-register-archive-ink-14: rgba(228, 237, 245, 0.16);
+  --ap-register-archive-ghost-number: #1c3450;
+  --ap-register-archive-icon-gray: #4e6b84;
+  --ap-register-archive-card-dark: #16283c;
+  --ap-register-archive-card-deep: #24405c;
+  --ap-register-archive-ink-gold: #ecc271;   /* 文字级强调沿用亮金（金色纪律） */
+  --ap-register-archive-surface-2: #12212f;
+  --ap-register-archive-surface-3: #182b3c;
+
+  /* ---------- HUD 数据光令牌（只在本主题定义与消费） ---------- */
+  --ap-hud-cyan: #57d6ff;
+  --ap-hud-cyan-soft: rgba(87, 214, 255, 0.45);
+  --ap-hud-cyan-line: rgba(87, 214, 255, 0.24);
+  --ap-hud-amber: #ffb454;
+  --ap-hud-amber-soft: rgba(255, 180, 84, 0.5);
+  --ap-hud-title-ink: #d7ecf9;
+  --ap-hud-title-glow: 0 0 14px rgba(87, 214, 255, 0.38);
+  --ap-hud-title-glow-hi: 0 0 22px rgba(87, 214, 255, 0.6);
+  --ap-hud-data-glow: 0 0 8px rgba(87, 214, 255, 0.35);
+  --ap-hud-amber-glow: 0 0 8px rgba(255, 180, 84, 0.35);
+  --ap-hud-amber-glow-hi: 0 0 15px rgba(255, 180, 84, 0.62);
+  --ap-hud-danger-glow: 0 0 8px rgba(224, 104, 92, 0.4);
+  --ap-hud-corner: rgba(87, 214, 255, 0.85);
+  --ap-hud-rule: rgba(87, 214, 255, 0.22);
+  --ap-hud-track: rgba(87, 214, 255, 0.1);
+  --ap-hud-bar-fill: linear-gradient(90deg, rgba(255, 180, 84, 0.95), rgba(87, 214, 255, 0.95));
+  /* 深空底：网格 + 舱顶冷光 + 底部数据辉光（整条背景值走令牌） */
+  --ap-hud-sky:
+    repeating-linear-gradient(0deg, rgba(87, 214, 255, 0.055) 0 1px, transparent 1px 46px),
+    repeating-linear-gradient(90deg, rgba(87, 214, 255, 0.055) 0 1px, transparent 1px 46px),
+    radial-gradient(ellipse 90% 60% at 50% 118%, rgba(24, 84, 128, 0.5) 0%, rgba(4, 7, 13, 0) 62%),
+    radial-gradient(ellipse 120% 80% at 50% -12%, rgba(23, 68, 104, 0.55) 0%, rgba(4, 7, 13, 0) 58%),
+    linear-gradient(180deg, #060d18 0%, #02060c 100%);
+  --ap-hud-veil: radial-gradient(ellipse 130% 95% at 50% 0%, rgba(2, 6, 12, 0) 40%, rgba(2, 5, 10, 0.7) 100%);
+  --ap-hud-scan: linear-gradient(180deg, rgba(87, 214, 255, 0) 0%, rgba(87, 214, 255, 0.16) 50%, rgba(87, 214, 255, 0) 100%);
+}
+
 /* ---------- 档案调·深舱反色（2026-09-23 主人真机反馈：深色主题里记忆/日记
    一块白纸违和，「纸面恒纸面」拍板收窄为浅色语境）----------
    深色主题（深空舰桥/遗产星空/深海/林海）下 Archive 档案转石墨深底 + 骨白墨；
