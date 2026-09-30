@@ -297,6 +297,14 @@ export interface CapabilityToggles {
   consolidationCadence: number;
   /** 从使用中学习（自学习自动微调体验参数；默认关） */
   selfTuning: boolean;
+  /** 单回合轮数上限（APEIRETH_MAX_TURN_ROUNDS 同源；null = 未配置 = 后端默认 8，
+   *  越界钳制 1..=64、非法回默认的解析语义保留在后端 CLI） */
+  maxTurnRounds: number | null;
+  /** 单轮工具调用上限（APEIRETH_MAX_TOOL_CALLS 同源；null = 未配置 = 后端默认 16） */
+  maxToolCalls: number | null;
+  /** 上下文注入总字符预算（APEIRETH_CONTEXT_BUDGET_CHARS 同源；null = 未配置 = 后端
+   *  默认 24000；正整数直通、越界/非法回默认） */
+  contextBudgetChars: number | null;
 }
 
 export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
@@ -334,6 +342,9 @@ export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   toneSaturation: 1.0,
   consolidationCadence: 1,
   selfTuning: false,
+  maxTurnRounds: null,
+  maxToolCalls: null,
+  contextBudgetChars: null,
 };
 
 /**

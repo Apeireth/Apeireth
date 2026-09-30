@@ -46,6 +46,11 @@ export interface TurnTelemetryInput {
   usage?: TurnUsage | null;
   durationMs?: number | null;
   model?: string | null;
+  /**
+   * 预算余量一行（hover 详情小补）：有值才追加「预算余量 …」一行，
+   * 无值不加行（既有四项 hover 不变）。
+   */
+  budgetRemaining?: string | null;
 }
 
 function num(value: unknown): number | undefined {
@@ -160,7 +165,115 @@ export function formatTurnTelemetry(input: TurnTelemetryInput): TurnTelemetryVie
       : `提示缓存命中 ${fmtInt(hit)} token（命中率 ${rate}，即省下 ${fmtInt(hit)} 个输入 token 的重复处理）`,
     `回合耗时 ${duration}`,
     `模型 ${model}`,
+    // 预算余量一行（小补）：调用方给了余量摘要才出现，否则 hover 保持四项。
+    ...(input.budgetRemaining ? [`预算余量 ${input.budgetRemaining}`] : []),
   ].join(' · ');
 
   return {tokens, cache, duration, model, hover};
+}
+
+// ============================================================
+// 会话级累计器（预算仪表数据面）：App 记 running totals，按会话分账。
+// 诚实纪律与回合遥测同款：从未上报过的位保持「未知」（null → 显示「—」），
+// 不拿 0 顶数；真实 0（流里真报 0 / 真的零工具调用）照记 0。
+// ============================================================
+
+/** 一个回合的消耗输入（回合收束时喂给累计器）。 */
+export interface TurnConsumption {
+  usage?: TurnUsage | null;
+  /** 本回合实测耗时（毫秒；null/非法 = 未测得，不并入累计也不编 0）。 */
+  durationMs?: number | null;
+  /** 本回合工具调用数（事件计数；null = 未知）。 */
+  toolCalls?: number | null;
+}
+
+/** 会话累计消耗（running totals；null = 该位从未测得 → 显示「—」）。 */
+export interface SessionUsageTotals {
+  /** 回合数（每次收束 +1；0 是真实值）。 */
+  turns: number;
+  /** 输入 token 累计；null = 从未上报。 */
+  promptTokens: number | null;
+  /** 输出 token 累计；null = 从未上报。 */
+  completionTokens: number | null;
+  /** 提示缓存命中 token 累计；null = 从未上报。 */
+  cacheHitTokens: number | null;
+  /** 累计耗时（毫秒）；null = 从未测得。 */
+  durationMs: number | null;
+  /** 工具调用累计（事件计数）。 */
+  toolCalls: number;
+  /** 最近一回合的工具调用数（对单轮上限求余量用）；null = 未知。 */
+  lastTurnToolCalls: number | null;
+}
+
+/** 空累计器（本会话还没跑过任何回合）。 */
+export function emptySessionTotals(): SessionUsageTotals {
+  return {
+    turns: 0,
+    promptTokens: null,
+    completionTokens: null,
+    cacheHitTokens: null,
+    durationMs: null,
+    toolCalls: 0,
+    lastTurnToolCalls: null,
+  };
+}
+
+/** 累加一个已测得的数：未测得（null/非法）不动旧账（不加 0 不编数）。 */
+function accumulate(prev: number | null, value: number | null | undefined): number | null {
+  const measured = num(value ?? undefined);
+  if (measured === undefined || measured < 0) return prev;
+  return (prev ?? 0) + measured;
+}
+
+/**
+ * 会话累计器（纯函数，不可变更新）：回合数 +1；token/缓存命中/耗时只在
+ * 真上报时并入累计（未上报的位保持未知）；工具调用按事件计数累加并记录
+ * 最近一回合作为单轮余量求差基数。
+ */
+export function accumulateTurnUsage(
+  totals: SessionUsageTotals,
+  turn: TurnConsumption,
+): SessionUsageTotals {
+  const usage = turn.usage ?? null;
+  const calls = num(turn.toolCalls ?? undefined);
+  return {
+    turns: totals.turns + 1,
+    promptTokens: accumulate(totals.promptTokens, usage?.promptTokens),
+    completionTokens: accumulate(totals.completionTokens, usage?.completionTokens),
+    cacheHitTokens: accumulate(totals.cacheHitTokens, usage?.cacheHitTokens),
+    durationMs: accumulate(totals.durationMs, turn.durationMs),
+    toolCalls: totals.toolCalls + (calls !== undefined && calls >= 0 ? calls : 0),
+    lastTurnToolCalls: calls !== undefined && calls >= 0 ? calls : null,
+  };
+}
+
+/** 会话消耗卡显示串（无数据位一律「—」，真实 0 照显 0）。 */
+export interface SessionTotalsView {
+  /** 「入 1,234 / 出 56」；两位都未知=「—」。 */
+  tokens: string;
+  /** 「命中 890 · 72%」（率 = 命中累计 / 输入累计；输入未知或 0 → 率位「—」）。 */
+  cache: string;
+  /** 回合数（真实计数，0 照显）。 */
+  turns: string;
+  /** 累计耗时；未知=「—」。 */
+  duration: string;
+  /** 工具调用累计（真实计数）。 */
+  toolCalls: string;
+}
+
+/** 会话消耗卡显示串：真值渲染，未知位诚实「—」。 */
+export function formatSessionTotals(totals: SessionUsageTotals): SessionTotalsView {
+  const prompt = fmtInt(totals.promptTokens ?? undefined);
+  const completion = fmtInt(totals.completionTokens ?? undefined);
+  const tokens = prompt === DASH && completion === DASH ? DASH : `入 ${prompt} / 出 ${completion}`;
+  const hit = totals.cacheHitTokens ?? undefined;
+  const rate = cacheRate(hit, totals.promptTokens ?? undefined);
+  const cache = hit === undefined ? DASH : `命中 ${fmtInt(hit)} · ${rate}`;
+  return {
+    tokens,
+    cache,
+    turns: String(totals.turns),
+    duration: formatDuration(totals.durationMs),
+    toolCalls: String(totals.toolCalls),
+  };
 }

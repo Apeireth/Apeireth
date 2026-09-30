@@ -69,10 +69,18 @@
   } from './lib/chat-shell/scroll-policy';
   import {landAtBottom, needsReland} from './lib/chat-shell/scroll-landing';
   import {
+    accumulateTurnUsage,
+    emptySessionTotals,
     formatTurnTelemetry,
     mergeUsage,
+    type SessionUsageTotals,
     type TurnUsage,
   } from './lib/chat-shell/turn-telemetry';
+  import {
+    budgetRemainingRows,
+    budgetRemainingSummary,
+    effectiveBudget,
+  } from './lib/budget';
   import {
     applyApprovalEventToPending,
     classifyGovernanceNotice,
@@ -1172,6 +1180,8 @@
     // 回合遥测起点（真实测量）：回合结束（含错误/中断）时落一条。
     const turnStartedAtMs = performance.now();
     const turnUsageBox: {current: TurnUsage | null} = {current: null};
+    // 本回合工具调用计数（事件计数，真值）：会话累计器与单轮余量求差基数。
+    let turnToolCalls = 0;
     turnTelemetry = null;
     const conversation = ensureConversation();
     const conversationId = conversation.id;
@@ -1238,6 +1248,7 @@
             appendReasoningDelta(conversationId, assistantMessage.id, event.text);
           } else if (event.type === 'tool-call') {
             isExecutingTool = true;
+            turnToolCalls += 1;
             updateMessageToolCall(conversationId, assistantMessage.id, event.toolCall);
             void triggerAutoScroll();
           } else if (event.type === 'tool-result') {
@@ -1318,10 +1329,20 @@
     } finally {
       // 回合结束（成功/错误/中断皆收束于此）：落一条真实测量的回合遥测——
       // 用量只攒真实回包字段，模型名优先回包 model、缺省回落配置模型。
+      const turnDurationMs = Math.round(performance.now() - turnStartedAtMs);
       turnTelemetry = {
         usage: turnUsageBox.current,
-        durationMs: Math.round(performance.now() - turnStartedAtMs),
+        durationMs: turnDurationMs,
         model: turnUsageBox.current?.model || config.model || null,
+      };
+      // 会话级累计器（预算仪表）：本回合收束即并入当前会话 running totals
+      // （真值累加，未上报的位保持未知）。
+      sessionUsageByConv = {
+        ...sessionUsageByConv,
+        [conversationId]: accumulateTurnUsage(
+          sessionUsageByConv[conversationId] ?? emptySessionTotals(),
+          {usage: turnUsageBox.current, durationMs: turnDurationMs, toolCalls: turnToolCalls},
+        ),
       };
       busy = false;
       isReasoning = false;
@@ -1747,7 +1768,18 @@
     durationMs: number | null;
     model: string | null;
   } | null>(null);
-  const turnTelemetryView = $derived(formatTurnTelemetry(turnTelemetry ?? {}));
+  // 会话级累计器（预算仪表）：按会话记 running totals，切换会话互不串账；
+  // 从未上报过的位保持未知（显示「—」），不拿 0 顶数。
+  let sessionUsageByConv = $state<Record<string, SessionUsageTotals>>({});
+  const sessionUsage = $derived(sessionUsageByConv[activeId ?? ''] ?? emptySessionTotals());
+  // 预算余量摘要（对生效上限求余量；无上限维度显「—」）：hover 详情补一行，
+  // 与设置页「预算与配额」仪表同一份纯函数取数。
+  const budgetSummary = $derived(
+    budgetRemainingSummary(budgetRemainingRows(sessionUsage, effectiveBudget(config.capabilities))),
+  );
+  const turnTelemetryView = $derived(
+    formatTurnTelemetry({...turnTelemetry, budgetRemaining: budgetSummary}),
+  );
   const hdState = $derived(
     busy
       ? '正在输出'
@@ -2417,6 +2449,7 @@
             initialSection={settingsSection}
             initialGovernanceTab={govInitialTab}
             governanceKey={govTabKey}
+            sessionUsage={sessionUsage}
             onGovernanceOpenChat={() => {
               closeDrawer();
               backToList();

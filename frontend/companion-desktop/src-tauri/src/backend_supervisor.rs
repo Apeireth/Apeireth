@@ -288,6 +288,15 @@ pub struct BackendCapabilityEnv {
     /// 「从使用中学习」自校准开关 (APEIRETH_ENABLE_SELF_TUNING): 默认关,
     /// 仅 true 时注入 "1" (fail-closed, 缺席 = 关)。
     pub enable_self_tuning: bool,
+    /// 单回合轮数上限 (APEIRETH_MAX_TURN_ROUNDS); `None` = 不注入 (后端默认 8)。
+    /// 取值裁决在后端解析: 越界钳制 1..=64、非法回默认 —— 注入侧只做同源透传。
+    pub turn_round_limit: Option<u32>,
+    /// 单轮工具调用上限 (APEIRETH_MAX_TOOL_CALLS); `None` = 不注入 (后端默认 16)。
+    /// 同 [`Self::turn_round_limit`] 的钳制/回默认语义。
+    pub tool_call_limit: Option<u32>,
+    /// 上下文注入总字符预算 (APEIRETH_CONTEXT_BUDGET_CHARS); `None` = 不注入
+    /// (后端默认 24000)。后端语义: 正整数直通、越界/非法回默认 (无上界钳制)。
+    pub context_budget_chars: Option<u64>,
 }
 
 /// Explicit on/off value for a default-on CLI knob: the desktop injects both
@@ -347,6 +356,10 @@ impl Default for BackendCapabilityEnv {
             tune_tone_saturation: None,
             tune_consolidation_cadence: None,
             enable_self_tuning: false,
+            // 预算旋钮: 缺省不注入 (后端默认 8 / 16 / 24000 = 现行为)。
+            turn_round_limit: None,
+            tool_call_limit: None,
+            context_budget_chars: None,
         }
     }
 }
@@ -495,6 +508,19 @@ impl BackendCapabilityEnv {
         }
         if self.enable_self_tuning {
             pairs.push(("APEIRETH_ENABLE_SELF_TUNING", "1".to_string()));
+        }
+        // 预算旋钮 (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS /
+        // APEIRETH_CONTEXT_BUDGET_CHARS): Some 才注入 (旧持久化 JSON 缺字段 =
+        // None = 不注入 = 后端默认现行为)。取值裁决在后端解析 (越界钳制
+        // 1..=64、非法回默认 / 正整数直通), 注入侧只做同源透传。
+        if let Some(rounds) = self.turn_round_limit {
+            pairs.push(("APEIRETH_MAX_TURN_ROUNDS", rounds.to_string()));
+        }
+        if let Some(calls) = self.tool_call_limit {
+            pairs.push(("APEIRETH_MAX_TOOL_CALLS", calls.to_string()));
+        }
+        if let Some(chars) = self.context_budget_chars {
+            pairs.push(("APEIRETH_CONTEXT_BUDGET_CHARS", chars.to_string()));
         }
         pairs
     }
@@ -2194,6 +2220,47 @@ mod tests {
                 .all(|(key, _)| !key.starts_with("APEIRETH_TUNE_")
                     && *key != "APEIRETH_ENABLE_SELF_TUNING"),
             "缺省不得注入体验旋钮: {pairs:?}"
+        );
+    }
+
+    /// 预算旋钮 (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS /
+    /// APEIRETH_CONTEXT_BUDGET_CHARS): Some 同源透传成 env 对, `None` 一个都不
+    /// 注入 (后端默认 8 / 16 / 24000 现行为)。取值裁决 (越界钳制 1..=64、非法
+    /// 回默认) 在后端解析, 已由 CLI 侧测试锁定, 这里只锁注入面。
+    #[test]
+    fn capability_env_pairs_inject_budget_knobs() {
+        let caps = BackendCapabilityEnv {
+            turn_round_limit: Some(4),
+            tool_call_limit: Some(8),
+            context_budget_chars: Some(12_000),
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = caps.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_MAX_TURN_ROUNDS"], "4");
+        assert_eq!(map["APEIRETH_MAX_TOOL_CALLS"], "8");
+        assert_eq!(map["APEIRETH_CONTEXT_BUDGET_CHARS"], "12000");
+
+        // 缺省 (None) = 一个预算变量都不注入 = 后端默认现行为。
+        for (key, _) in BackendCapabilityEnv::default().env_pairs() {
+            assert!(
+                key != "APEIRETH_MAX_TURN_ROUNDS"
+                    && key != "APEIRETH_MAX_TOOL_CALLS"
+                    && key != "APEIRETH_CONTEXT_BUDGET_CHARS",
+                "缺省不得注入预算变量: {key}"
+            );
+        }
+
+        // 部分配置: 只注入配了的那枚, 其余照旧缺席。
+        let partial = BackendCapabilityEnv {
+            turn_round_limit: Some(2),
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = partial.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_MAX_TURN_ROUNDS"], "2");
+        assert!(!map.contains_key("APEIRETH_MAX_TOOL_CALLS"), "{map:?}");
+        assert!(
+            !map.contains_key("APEIRETH_CONTEXT_BUDGET_CHARS"),
+            "{map:?}"
         );
     }
 

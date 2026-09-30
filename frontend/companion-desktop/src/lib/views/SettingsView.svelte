@@ -77,6 +77,7 @@
     Filter,
     Tag,
     Copy,
+    Gauge,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
@@ -125,6 +126,18 @@
     textCommitFlag,
   } from '../settings-live-apply';
   import type {DangerActionKey, ProviderGroupDraft, TextCommitFlag} from '../settings-live-apply';
+  import {
+    BUDGET_EXHAUSTION,
+    BUDGET_KNOB_SPECS,
+    QUOTA_DIMENSIONS,
+    QUOTA_DIMENSION_STATUS_LABEL,
+    budgetRemainingRows,
+    effectiveBudget,
+    resolveBudgetLimitInput,
+  } from '../budget';
+  import type {BudgetKnobKey} from '../budget';
+  import {emptySessionTotals, formatSessionTotals} from '../chat-shell/turn-telemetry';
+  import type {SessionUsageTotals} from '../chat-shell/turn-telemetry';
 
   let {
     config,
@@ -135,6 +148,7 @@
     initialGovernanceTab = 'approvals',
     governanceKey = 0,
     onGovernanceOpenChat,
+    sessionUsage = null,
   }: {
     config: ApeirethConfig;
     /** 返回 apply 的 Promise：推送失败时拒绝，供开关即点即生效做失败回滚。 */
@@ -150,6 +164,8 @@
     governanceKey?: number;
     /** 治理空态引导卡的「回到对话」动作。 */
     onGovernanceOpenChat?: () => void;
+    /** 会话累计消耗（App 的 running totals；预算仪表取数面）。 */
+    sessionUsage?: SessionUsageTotals | null;
   } = $props();
 
   type SettingsSection =
@@ -161,6 +177,7 @@
     | 'governance'
     | 'security'
     | 'tools'
+    | 'budget'
     | 'runtime'
     | 'data'
     | 'developer';
@@ -545,6 +562,102 @@
     capabilities = next;
     void applyKnobNow(keys, next);
   }
+
+  // ---- 「预算与配额」：回合预算/上下文预算旋钮 + 会话消耗仪表 ----
+  // 数字旋钮 = 失焦/回车提交（三级即效第 2 级），走同一条 apply 缝（onSave →
+  // 配置持久化 + env 注入 + 侧车重启/热应用）。越界钳制 1..=64、非法回默认的
+  // 语义与后端解析同源（budget.ts 单一来源）；提交后旁注人话反馈，旋钮旁挂
+  // 实际生效值徽标（source=configured/constant，自述预算节同款诚实语法）。
+
+  /** 旋钮行注册表（标签/env 芯片/取值域随 spec 走，不在模板里手抄第二份）。 */
+  const BUDGET_KNOB_ROWS: ReadonlyArray<{key: BudgetKnobKey; icon: typeof Gauge; hint: string}> = [
+    {key: 'maxTurnRounds', icon: Timer, hint: '1..=64；越界钳制，非法回默认 8。'},
+    {key: 'maxToolCalls', icon: Wrench, hint: '1..=64；越界钳制，非法回默认 16。'},
+    {key: 'contextBudgetChars', icon: Layers3, hint: '正整数（字符）；越界/非法回默认 24000。'},
+  ];
+
+  /** 旋钮草稿文本（number 输入的原始字面量；'' = 未配置 = 回默认）。 */
+  let budgetDraft = $state<Record<BudgetKnobKey, string>>({
+    maxTurnRounds: '',
+    maxToolCalls: '',
+    contextBudgetChars: '',
+  });
+  /** 提交反馈（钳制/非法回默认的人话提示；空 = 无）。 */
+  let budgetFeedback = $state<Record<BudgetKnobKey, string>>({
+    maxTurnRounds: '',
+    maxToolCalls: '',
+    contextBudgetChars: '',
+  });
+
+  const BUDGET_FLAG_KEYS: Record<BudgetKnobKey, string> = {
+    maxTurnRounds: 'budget.maxTurnRounds',
+    maxToolCalls: 'budget.maxToolCalls',
+    contextBudgetChars: 'budget.contextBudgetChars',
+  };
+
+  function budgetDraftFromConfig(cfg: ApeirethConfig): Record<BudgetKnobKey, string> {
+    const knobs: CapabilityToggles | undefined = cfg.capabilities;
+    return {
+      maxTurnRounds: knobs?.maxTurnRounds == null ? '' : String(knobs.maxTurnRounds),
+      maxToolCalls: knobs?.maxToolCalls == null ? '' : String(knobs.maxToolCalls),
+      contextBudgetChars: knobs?.contextBudgetChars == null ? '' : String(knobs.contextBudgetChars),
+    };
+  }
+
+  // 外部 config 变化时对齐草稿（只跟踪 config，不跟踪页内草稿，打字不被回写）。
+  $effect(() => {
+    const draft = budgetDraftFromConfig(config);
+    untrack(() => {
+      budgetDraft = draft;
+    });
+  });
+
+  /** 数字旋钮提交（失焦/回车，第 2 级即效）：先亮越界/非法反馈，归一值经
+   *  同一条 apply 缝即效写 config→env 注入；失败回填旧值 + 横幅。 */
+  async function submitBudgetKnob(key: BudgetKnobKey): Promise<void> {
+    const spec = BUDGET_KNOB_SPECS[key];
+    const resolution = resolveBudgetLimitInput(budgetDraft[key], spec);
+    budgetFeedback = {...budgetFeedback, [key]: resolution.feedback};
+    budgetDraft = {
+      ...budgetDraft,
+      [key]: resolution.value === null ? '' : String(resolution.value),
+    };
+    const previous = appliedCapabilities;
+    const attempted = {...capabilities, [key]: resolution.value};
+    if (attempted[key] === previous[key]) {
+      // 空提交：值没变——只清「未保存」标记，不打扰运行时。
+      clearTextDirty([BUDGET_FLAG_KEYS[key]]);
+      return;
+    }
+    capabilities = attempted;
+    await runLiveApply(
+      key,
+      async () => {
+        await onSave(configWithCapabilities(config, attempted));
+        appliedCapabilities = attempted;
+        ackTextKeys([BUDGET_FLAG_KEYS[key]]);
+      },
+      () => {
+        // 失败回填：只把本次改动的键拨回上次已应用的值。
+        const restore = previous[key];
+        capabilities = {...capabilities, [key]: restore};
+        budgetDraft = {
+          ...budgetDraft,
+          [key]: restore == null ? '' : String(restore),
+        };
+        clearTextDirty([BUDGET_FLAG_KEYS[key]]);
+      },
+    );
+  }
+
+  /** 三枚旋钮的实际生效值徽标（source=configured/constant + 口径注记）。 */
+  const budgetBadges = $derived(effectiveBudget(capabilities));
+
+  /** 会话消耗卡 + 预算余量条（真值渲染，无数据位诚实「—」）。 */
+  const sessionTotalsView = $derived(formatSessionTotals(sessionUsage ?? emptySessionTotals()));
+  const budgetRemaining = $derived(
+    budgetRemainingRows(sessionUsage ?? emptySessionTotals(), budgetBadges),
+  );
 
   // ---- 「学习日志」：只读展示后端写入的自动调整记录 ----
   let tuningLog = $state<TuningLogEntry[] | null>(null);
@@ -1102,6 +1215,7 @@
     {id: 'governance', label: '决策与治理', icon: Scale},
     {id: 'security', label: '安全与治理', icon: ShieldCheck},
     {id: 'tools', label: '工具与安全', icon: Wrench},
+    {id: 'budget', label: '预算与配额', icon: Gauge},
     {id: 'runtime', label: '运行时与诊断', icon: Activity},
     {id: 'data', label: '数据与存储', icon: Trash2},
     {id: 'developer', label: '开发者选项', icon: Code},
@@ -2595,6 +2709,146 @@
               高危工具执行前自动按 E 层进行安全判案——默认运行、不可关闭，
               杜绝越权或有害操作。
             </p>
+          </div>
+        </div>
+
+      {:else if activeSection === 'budget'}
+        <div class="setting-block">
+          <h3 class="block-title">预算与配额</h3>
+          <p class="block-desc">
+            预算旋钮面 + 会话消耗仪表。数字旋钮失焦或回车提交，即效写配置并注入运行时环境；
+            越界钳制到 1..=64，非法值回默认。多维配额没接口的维度如实标注「暂无接口」，不造假旋钮。
+          </p>
+
+          <!-- 会话消耗卡（预算仪表）：真值渲染，无数据位诚实「—」 -->
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Activity size={13} /> 会话消耗（当前对话）</span>
+              <span class="cap-card-count">回合 {sessionTotalsView.turns}</span>
+            </div>
+            <div class="meter-grid">
+              <div class="meter-cell">
+                <small>本会话 token（入 / 出）</small>
+                <b>{sessionTotalsView.tokens}</b>
+              </div>
+              <div class="meter-cell">
+                <small>提示缓存命中（数 · 率）</small>
+                <b>{sessionTotalsView.cache}</b>
+              </div>
+              <div class="meter-cell">
+                <small>回合数</small>
+                <b>{sessionTotalsView.turns}</b>
+              </div>
+              <div class="meter-cell">
+                <small>累计耗时</small>
+                <b>{sessionTotalsView.duration}</b>
+              </div>
+            </div>
+            <div class="budget-remaining">
+              <div class="remaining-title">预算余量（对生效上限求余量；无上限维度显「—」）</div>
+              {#each budgetRemaining as row (row.key)}
+                <div class="remaining-row">
+                  <span class="remaining-label">{row.label}<small>{row.scope}</small></span>
+                  <span class="remaining-num">上限 {row.cap}</span>
+                  <span class="remaining-num">已耗 {row.used}</span>
+                  <span class="remaining-num remaining-strong">余 {row.remaining}</span>
+                  {#if row.ratio !== null}
+                    <span class="remaining-bar" aria-hidden="true">
+                      <span class="remaining-fill" style="width: {Math.round(row.ratio * 100)}%"></span>
+                    </span>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+
+          <!-- 预算旋钮（数字步进器）：回合预算两枚 + 上下文预算一枚，同一条即效缝 -->
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Timer size={13} /> 预算旋钮</span>
+              <span class="cap-card-count">失焦 / 回车即生效</span>
+            </div>
+            {#each BUDGET_KNOB_ROWS as row (row.key)}
+              {@const spec = BUDGET_KNOB_SPECS[row.key]}
+              {@const badgeView = budgetBadges[row.key]}
+              <div class="cap-row cap-row-static" class:pending={liveApplyPendingKey === row.key}>
+                <span class="cap-icon"><row.icon size={15} /></span>
+                <span class="cap-text">
+                  <strong>
+                    {spec.label}<code class="cap-env">{spec.env}</code>
+                    {@render fieldFlag(BUDGET_FLAG_KEYS[row.key])}
+                    <span
+                      class="cap-default-badge budget-badge"
+                      class:on={badgeView.source === 'configured'}
+                      class:note={badgeView.source === 'constant'}
+                      title={badgeView.note}>{badgeView.label}</span>
+                  </strong>
+                  <small>{spec.desc} {row.hint}</small>
+                </span>
+                <span class="cap-slider-wrap">
+                  <input
+                    type="number"
+                    min={spec.min}
+                    max={spec.max ?? undefined}
+                    step="1"
+                    value={budgetDraft[row.key]}
+                    aria-label={spec.label}
+                    oninput={(e) => {
+                      budgetDraft = {
+                        ...budgetDraft,
+                        [row.key]: (e.currentTarget as HTMLInputElement).value,
+                      };
+                      markTextDirty(BUDGET_FLAG_KEYS[row.key]);
+                    }}
+                    onfocusout={() => void submitBudgetKnob(row.key)}
+                    onkeydown={(e) => {
+                      if (isTextCommitKey(e.key)) {
+                        e.preventDefault();
+                        void submitBudgetKnob(row.key);
+                      }
+                    }}
+                  />
+                </span>
+              </div>
+              {#if budgetFeedback[row.key]}
+                <div class="budget-feedback">
+                  <Info size={12} />
+                  <span>{budgetFeedback[row.key]}</span>
+                </div>
+              {/if}
+            {/each}
+          </div>
+
+          <!-- 多维配额真实可配面（读码结论）：没接口的维度如实「暂无接口」 -->
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><SlidersHorizontal size={13} /> 多维配额（Token / 步数 / 花费 / 深度）</span>
+              <span class="cap-card-count">0/4 可配</span>
+            </div>
+            {#each QUOTA_DIMENSIONS as dim (dim.key)}
+              <div class="cap-row cap-row-static">
+                <span class="cap-icon"><Gauge size={15} /></span>
+                <span class="cap-text">
+                  <strong>{dim.label}</strong>
+                  <small>{dim.reason}</small>
+                </span>
+                <span class="quota-none" title={dim.evidence}>{QUOTA_DIMENSION_STATUS_LABEL}</span>
+              </div>
+            {/each}
+          </div>
+
+          <!-- 预算耗尽行为：后端无可配置语义 → 如实不出选择器，只出固定语义说明 -->
+          <div class="cap-default-card">
+            <span class="cap-default-badge note"><Info size={11} /> 固定语义 · 无选择器</span>
+            <strong class="cap-default-title">预算耗尽行为</strong>
+            <p class="cap-default-text">
+              后端没有可配置的耗尽行为语义，这里不出选择器；实际行为是固定语义：
+            </p>
+            <ul class="budget-behaviors">
+              {#each BUDGET_EXHAUSTION.behaviors as behavior}
+                <li>{behavior}</li>
+              {/each}
+            </ul>
           </div>
         </div>
 
@@ -4112,5 +4366,113 @@
   }
   .form-group select:focus {
     border-color: var(--amber-line);
+  }
+
+  /* ---- 「预算与配额」：会话消耗卡 / 预算余量条 / 旋钮反馈 / 「暂无接口」徽标 ---- */
+  .meter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .meter-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .meter-cell small {
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .meter-cell b {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .budget-remaining {
+    padding: 12px 14px;
+  }
+  .remaining-title {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .remaining-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 5px 0;
+  }
+  .remaining-label {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .remaining-label small {
+    font-size: 10px;
+    color: var(--faint);
+  }
+  .remaining-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .remaining-strong {
+    color: var(--text);
+  }
+  .remaining-bar {
+    flex: none;
+    width: 96px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .remaining-fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--amber);
+  }
+  .budget-badge {
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .budget-feedback {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px 10px 40px;
+    font-size: 11px;
+    color: var(--amber);
+  }
+  .quota-none {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px dashed var(--line-strong);
+    color: var(--faint);
+  }
+  .budget-behaviors {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .budget-behaviors li {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--muted);
   }
 </style>

@@ -12,6 +12,7 @@
 // a dynamic import that is only reached when the Tauri global is present.
 
 import type {CapabilityToggles} from './types';
+import {BUDGET_KNOB_SPECS, resolveBudgetLimitInput} from './budget.ts';
 
 /** Backend lifecycle states, mirroring the Rust `BackendState` enum. */
 export type BackendState = 'Stopped' | 'Starting' | 'Ready' | 'Failed' | 'Stopping';
@@ -200,6 +201,14 @@ export interface BackendCapabilityEnv {
   tune_consolidation_cadence: number;
   /** 「从使用中学习」：仅 true 注入 "1"（后端 "1" 才开，默认关，fail-closed）。 */
   enable_self_tuning: boolean;
+  /** 单回合轮数上限（APEIRETH_MAX_TURN_ROUNDS）；缺省 = 不注入（后端默认 8）。
+   *  取值裁决在后端解析：越界钳制 1..=64、非法回默认。 */
+  turn_round_limit?: number;
+  /** 单轮工具调用上限（APEIRETH_MAX_TOOL_CALLS）；缺省 = 不注入（后端默认 16）。 */
+  tool_call_limit?: number;
+  /** 上下文注入总字符预算（APEIRETH_CONTEXT_BUDGET_CHARS）；缺省 = 不注入
+   *  （后端默认 24000；正整数直通、越界/非法回默认）。 */
+  context_budget_chars?: number;
 }
 
 /** Map the config's capability toggles onto the canonical knob names.
@@ -213,6 +222,15 @@ export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined |
   const tuneKnob = (v: unknown, baseline: number, min: number, max: number): number => {
     const n = typeof v === 'number' && Number.isFinite(v) ? v : baseline;
     return Math.min(max, Math.max(min, n));
+  };
+  /** 预算旋钮（回合预算 + 上下文字符预算）：配置有值才注入（缺省 = 不注入 =
+   *  后端默认现行为）；归一走与后端解析同一条语义（budget.ts 单一来源），
+   *  非法值回默认落点 = 不注入。 */
+  const budgetValue = (
+    key: 'maxTurnRounds' | 'maxToolCalls' | 'contextBudgetChars',
+  ): number | undefined => {
+    const resolution = resolveBudgetLimitInput(toggles?.[key] ?? null, BUDGET_KNOB_SPECS[key]);
+    return resolution.value ?? undefined;
   };
   return {
     enable_shell: toggles?.shell === true,
@@ -254,6 +272,9 @@ export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined |
     tune_tone_saturation: tuneKnob(toggles?.toneSaturation, 1.0, 0.0, 2.0),
     tune_consolidation_cadence: Math.round(tuneKnob(toggles?.consolidationCadence, 1, 1, 10)),
     enable_self_tuning: toggles?.selfTuning === true,
+    turn_round_limit: budgetValue('maxTurnRounds'),
+    tool_call_limit: budgetValue('maxToolCalls'),
+    context_budget_chars: budgetValue('contextBudgetChars'),
   };
 }
 

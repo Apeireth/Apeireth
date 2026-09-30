@@ -127,6 +127,15 @@ function parseCapabilityToggles(value: unknown): CapabilityToggles {
   /** 数值旋钮解析：非有限 → 基线；越界 → 钳到 [min,max]。 */
   const knob = (v: unknown, baseline: number, min: number, max: number): number =>
     Math.min(max, Math.max(min, num(v, baseline)));
+  /** 预算旋钮持久化归一（与后端解析同源）：整数越界钳制 1..=64；
+   *  非法/非整数 → 未配置（null = 回默认，constant 口径）。 */
+  const budgetLimit = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v)
+      ? Math.min(64, Math.max(1, v))
+      : null;
+  /** 上下文字符预算归一（同源）：正整数直通；越界/非法 → 未配置（回默认）。 */
+  const contextBudget = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v) && v >= 1 ? v : null;
   return {
     shell: raw.shell === true,
     shellSandbox: raw.shellSandbox !== false,
@@ -162,6 +171,9 @@ function parseCapabilityToggles(value: unknown): CapabilityToggles {
     toneSaturation: knob(raw.toneSaturation, 1.0, 0.0, 2.0),
     consolidationCadence: Math.round(knob(raw.consolidationCadence, 1, 1, 10)),
     selfTuning: raw.selfTuning === true,
+    maxTurnRounds: budgetLimit(raw.maxTurnRounds),
+    maxToolCalls: budgetLimit(raw.maxToolCalls),
+    contextBudgetChars: contextBudget(raw.contextBudgetChars),
   };
 }
 
