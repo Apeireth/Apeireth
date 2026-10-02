@@ -394,6 +394,9 @@ struct OpenAiStreamChunk {
     choices: Vec<OpenAiStreamChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     apeireth: Option<OpenAiExecutionMetadata>,
+    /// OpenAI-conventional top-level usage (final chunk only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    usage: Option<NormalizedUsage>,
 }
 
 #[derive(Debug, Serialize)]
@@ -987,6 +990,7 @@ async fn openai_chat_streaming(
                 finish_reason: None,
             }],
             apeireth: None,
+            usage: None,
         };
         if let Ok(json) = serde_json::to_string(&chunk) {
             // try_send: a vanished reader must never block the canonical loop.
@@ -1019,6 +1023,7 @@ async fn openai_chat_streaming(
                 finish_reason: None,
             }],
             apeireth: None,
+            usage: None,
         };
         if let Ok(json) = serde_json::to_string(&role_chunk) {
             let _ = tx.send(format!("data: {json}\n\n")).await;
@@ -1050,8 +1055,9 @@ async fn openai_chat_streaming(
                         served_by: response.served_by.to_string(),
                         rounds: response.rounds,
                         events: events_from_trace(&response.trace),
-                        usage: Some(response.usage),
+                        usage: Some(response.usage.clone()),
                     }),
+                    usage: Some(response.usage),
                 };
                 if let Ok(json) = serde_json::to_string(&final_chunk) {
                     let _ = tx.send(format!("data: {json}\n\ndata: [DONE]\n\n")).await;

@@ -96,6 +96,7 @@ export function parseUsageChunk(json: unknown): TurnUsage | null {
   if (!isRecord(json)) return null;
   const sources: Record<string, unknown>[] = [json];
   if (isRecord(json.usage)) sources.push(json.usage);
+  if (isRecord(json.apeireth) && isRecord(json.apeireth.usage)) sources.push(json.apeireth.usage);
   if (isRecord(json.message)) {
     sources.push(json.message);
     if (isRecord(json.message.usage)) sources.push(json.message.usage);
