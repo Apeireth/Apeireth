@@ -125,6 +125,7 @@
     providerGroupSnapshot,
     textCommitFlag,
   } from '../settings-live-apply';
+  import { SETTINGS_NAV_GROUPS } from '../settings-nav-groups';
   import type {DangerActionKey, ProviderGroupDraft, TextCommitFlag} from '../settings-live-apply';
   import {
     BUDGET_EXHAUSTION,
@@ -1221,6 +1222,14 @@
     {id: 'developer', label: '开发者选项', icon: Code},
   ] as const;
 
+  // 五组归类（导航壳层）：分区渲染体零迁移，只把导航目录分组呈现。
+  const navGroups = SETTINGS_NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.sectionIds
+      .map((id) => sections.find((sec) => sec.id === id))
+      .filter((sec): sec is (typeof sections)[number] => Boolean(sec)),
+  }));
+
   function switchProtocol(protocol: ProviderProtocol) {
     if (activeProtocol === protocol) return;
 
@@ -1594,18 +1603,24 @@
   <div class="settings-layout">
     <!-- Left Navigation -->
     <aside class="settings-subnav">
-      {#each sections as sec}
-        <button
-          class="subnav-btn"
-          class:active={activeSection === sec.id}
-          onclick={() => {
-            activeSection = sec.id as SettingsSection;
-            if (sec.id === 'runtime' && !runtimeReport) void checkDiagnostics();
-          }}
-        >
-          <sec.icon size={15} />
-          <span>{sec.label}</span>
-        </button>
+      {#each navGroups as group (group.id)}
+        <div class="subnav-group">
+          <p class="subnav-group-title">{group.title}</p>
+          <p class="subnav-group-blurb">{group.blurb}</p>
+          {#each group.items as sec (sec.id)}
+            <button
+              class="subnav-btn"
+              class:active={activeSection === sec.id}
+              onclick={() => {
+                activeSection = sec.id as SettingsSection;
+                if (sec.id === 'runtime' && !runtimeReport) void checkDiagnostics();
+              }}
+            >
+              <sec.icon size={15} />
+              <span>{sec.label}</span>
+            </button>
+          {/each}
+        </div>
       {/each}
     </aside>
 
@@ -4489,4 +4504,9 @@
     line-height: 1.6;
     color: var(--muted);
   }
-</style>
+  .subnav-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; }
+  .subnav-group-title { margin: 0 0 2px; padding: 0 10px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ap-muted, #96919c); }
+  .subnav-group-blurb { display: none; }
+  @media (min-width: 1280px) {
+    .subnav-group-blurb { display: block; margin: 0 0 6px; padding: 0 10px; font-size: 11px; line-height: 1.5; color: var(--ap-muted, #96919c); opacity: .8; }
+  }</style>
