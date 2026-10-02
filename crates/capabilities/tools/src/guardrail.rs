@@ -117,6 +117,16 @@ impl ToolGuardrail {
     }
 
     /// 前置 Shell 命令防注入与破坏性检查.
+    ///
+    /// 删除族同权口径 (本层不改判, 理由在此写明): 破坏面是**窄词面灾难清单**
+    /// (灾难形态字面量 + 系统配置写动词), 不做删除族全量拦截 —— 普通删除族
+    /// (`del` / `Remove-Item` / `[System.IO.File]::Delete` 等静态调用面) 一律
+    /// 同档放行, 经写意图总闸 + shell 审批链统一兜住; 两条删除 API 路径在本层
+    /// 判定逐一相同 (同为放行档), 对称性由 tests/delete_path_parity.rs 锁定。
+    /// 灾难字面量不扩面到 cmdlet / 静态调用形态的理由: 词面清单无法可靠判定
+    /// 灾难作用域, 单边扩面会造成两条删除路径的审批档判定不一致 —— 恰是删除
+    /// 同权要消除的权力差; 守门不是沙箱的替代, 灾难级作用域由总闸 + 人工审批
+    /// + 沙箱三层兜住。
     pub fn verify_shell_command(command_line: &str) -> Result<(), PreCallGuardError> {
         let trimmed = command_line.trim();
         let lower = trimmed.to_lowercase();

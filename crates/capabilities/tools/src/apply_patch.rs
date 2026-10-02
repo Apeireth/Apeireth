@@ -127,6 +127,18 @@ impl TransactionalPatchApplier {
     /// -old line
     /// +new line
     /// ```
+    ///
+    /// # 解析即合同 (内测整改): 解析不了就报错, 不许静默吞行
+    ///
+    /// 旧解析把认不出的行整段静默跳过, 空动作集照常返回 `Ok(vec![])` ——
+    /// 畸形补丁 (指令拼写错 / 换行被转义成字面量 / 只有标记没有动作) 因此
+    /// 得到「成功但零动作」的谎帧。现口径: **解析失败即 [`ApplyPatchError::ParseError`]**
+    /// (错误帧), 覆盖四类:
+    /// 1. 空补丁 (标记之间没有任何动作声明);
+    /// 2. 认不出的补丁行 (含指令拼写错、整份补丁无真换行的转义形态);
+    /// 3. `*** Update File` 没有任何可解析 hunk (零 hunk);
+    /// 4. 指令路径为空。
+    /// 只有空行 (以及 hunk 块内的上下文/注释行) 允许被忽略。
     pub fn parse_patch(patch_text: &str) -> Result<Vec<FilePatchAction>, ApplyPatchError> {
         let trimmed = patch_text.trim();
         if !trimmed.starts_with("*** Begin Patch") || !trimmed.ends_with("*** End Patch") {
@@ -142,8 +154,12 @@ impl TransactionalPatchApplier {
 
         while i < lines.len() {
             let line = lines[i].trim();
+            if line.is_empty() {
+                i += 1;
+                continue;
+            }
             if let Some(stripped) = line.strip_prefix("*** Add File:") {
-                let file_path = PathBuf::from(stripped.trim());
+                let file_path = patch_action_path(stripped)?;
                 i += 1;
                 let mut content_lines = Vec::new();
                 while i < lines.len() && !lines[i].trim().starts_with("***") {
@@ -155,11 +171,11 @@ impl TransactionalPatchApplier {
                     content: decode_add_file_content(&content_lines),
                 });
             } else if let Some(stripped) = line.strip_prefix("*** Delete File:") {
-                let file_path = PathBuf::from(stripped.trim());
+                let file_path = patch_action_path(stripped)?;
                 i += 1;
                 actions.push(FilePatchAction::Delete { path: file_path });
             } else if let Some(stripped) = line.strip_prefix("*** Update File:") {
-                let file_path = PathBuf::from(stripped.trim());
+                let file_path = patch_action_path(stripped)?;
                 i += 1;
                 let mut hunks = Vec::new();
 
@@ -231,17 +247,37 @@ impl TransactionalPatchApplier {
                             search_context: old_lines.join("\n"),
                             replacement_content: new_lines.join("\n"),
                         });
-                    } else {
+                    } else if trimmed_line.is_empty() {
+                        // 块内空行可忽略 (hunk 之间留白)。
                         i += 1;
+                    } else {
+                        return Err(ApplyPatchError::ParseError(format!(
+                            "无法解析的补丁行 (Update 块内): {trimmed_line}"
+                        )));
                     }
+                }
+                if hunks.is_empty() {
+                    return Err(ApplyPatchError::ParseError(format!(
+                        "*** Update File: {} 没有任何可解析 hunk (零 hunk 补丁拒绝)",
+                        file_path.display()
+                    )));
                 }
                 actions.push(FilePatchAction::Update {
                     path: file_path,
                     hunks,
                 });
             } else {
-                i += 1;
+                return Err(ApplyPatchError::ParseError(format!(
+                    "无法解析的补丁行: {line}"
+                )));
             }
+        }
+
+        if actions.is_empty() {
+            return Err(ApplyPatchError::ParseError(
+                "补丁未声明任何动作 (*** Add File / *** Update File / *** Delete File 均缺席)"
+                    .to_string(),
+            ));
         }
 
         Ok(actions)
@@ -267,12 +303,11 @@ impl TransactionalPatchApplier {
     ) -> Result<PatchReport, ApplyPatchError> {
         let actions = Self::parse_patch(patch_text)?;
         if actions.is_empty() {
-            return Ok(PatchReport {
-                files_added: vec![],
-                files_updated: vec![],
-                files_deleted: vec![],
-                total_actions: 0,
-            });
+            // 防御性双保险: 解析合同已保证空动作集报错, 这里绝不返回
+            // 「成功但零动作」的谎帧 (内测病灶: `applied` + `total_actions: 0`)。
+            return Err(ApplyPatchError::ParseError(
+                "补丁未声明任何动作, 拒绝空补丁".to_string(),
+            ));
         }
 
         // 1. 预演阶段 (Dry-run): 在内存中计算并校验所有更改
@@ -527,6 +562,18 @@ impl TransactionalPatchApplier {
 /// True when `line` (already trimmed) starts a line-style hunk.
 fn is_line_hunk_start(trimmed_line: &str) -> bool {
     trimmed_line.starts_with("@@") || trimmed_line.starts_with('-') || trimmed_line.starts_with('+')
+}
+
+/// 指令行路径解析: 路径为空的指令直接按解析错误拒绝 (错误帧),
+/// 不让空路径动作混进动作集。
+fn patch_action_path(raw: &str) -> Result<PathBuf, ApplyPatchError> {
+    let path = PathBuf::from(raw.trim());
+    if path.as_os_str().is_empty() {
+        return Err(ApplyPatchError::ParseError(
+            "补丁指令缺少目标路径".to_string(),
+        ));
+    }
+    Ok(path)
 }
 
 /// Add File body: 行式格式要求每行 `+` 前缀; SEARCH/REPLACE 格式则是原始文件内容.

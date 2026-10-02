@@ -382,9 +382,16 @@
   // 全局权限预设（设置页 tools 区写入 localStorage）接入新会话创建：
   // 新建会话/分支时读入 pendingPreset[conversationId]，首次 send 完成后静默 PATCH 到后端。
   const GLOBAL_PRESET_KEY = 'apeireth-permission-preset-default';
-  let pendingPreset = $state<Record<string, 'read_only' | 'standard' | 'full'>>({});
-  // getSessionSettings 成功过的会话 id —— pendingPreset 不覆盖已有后端 settings。
-  let sessionsWithSettings = $state<Record<string, boolean>>({});
+  /** 未投递的初始权限档：新会话在后端记录出现前先记下"该继承哪一档"。 */
+  type PendingPreset = {
+    permission_preset: SessionSettings['permission_preset'];
+    approval_remember?: boolean;
+  };
+  // 未投递的初始权限档（新会话继承全局默认 + 会话创建前的显式选档暂存）。
+  // 清除只发生在"投递成功"或"用户显式选档 PATCH 成功"——会话 settings 拉取成功
+  // 不能清：后端会在回合开始时按默认档自动建会话，"能读回 settings"不代表用户
+  // 设置过；拉取时清会在长回合的心跳重拉里把全局默认档冲掉（继承静默失效）。
+  let pendingPreset = $state<Record<string, PendingPreset>>({});
 
   // 斜杠菜单（输入框聚焦且首字符 "/" 时显示）。
   let composerFocused = $state(false);
@@ -418,9 +425,11 @@
 
   const currentSessionModel = $derived(sessionSettings?.model ?? config.model);
   // 会话头策略 active 态：permission_preset + approval_remember 共同决定。
+  // 后端 settings 未就绪（新会话首回合之前）时回落到未投递的初始档，选档芯片不撒谎。
   const activeApprovalStrategyId = $derived.by(() => {
-    const preset = sessionSettings?.permission_preset ?? 'standard';
-    const remember = sessionSettings?.approval_remember ?? false;
+    const pending = activeId ? pendingPreset[activeId] : undefined;
+    const preset = sessionSettings?.permission_preset ?? pending?.permission_preset ?? 'standard';
+    const remember = sessionSettings?.approval_remember ?? pending?.approval_remember ?? false;
     return (
       SESSION_PRESETS.find(
         (p) => p.permission_preset === preset && p.approval_remember === remember,
@@ -484,7 +493,7 @@
   function markPendingPreset(conversationId: string): void {
     const preset = readGlobalPreset();
     if (preset) {
-      pendingPreset = {...pendingPreset, [conversationId]: preset};
+      pendingPreset = {...pendingPreset, [conversationId]: {permission_preset: preset}};
     }
   }
 
@@ -496,25 +505,25 @@
   }
 
   /**
-   * 全局权限预设接入会话创建：在 send() 完成后（成功/失败，只要 backend 会话已创建）
-   * 静默 PATCH 一次。时机选在 finally 而非会话创建处，是因为 backend 在首个 chat 请求
-   * 之前未必有该会话记录（GET/PATCH settings 会 404），创建处就打补丁会空耗一次失败。
+   * 未投递初始档的落库缝：在 send() 完成后（成功/失败，只要 backend 会话已创建）
+   * 静默 PATCH 一次，走既有会话 settings 面。时机选在 finally 而非会话创建处，是因为
+   * backend 在首个 chat 请求之前未必有该会话记录（GET/PATCH settings 会 404），
+   * 创建处就打补丁会空耗一次失败。pendingPreset 只在投递成功或用户显式选档成功后
+   * 清除；读回 settings 不算数（那是后端自动建会话的默认档，不是用户设置）。
    */
   async function applyPendingPreset(conversationId: string): Promise<void> {
     const preset = pendingPreset[conversationId];
     if (!preset) return;
-    // 会话已有 settings（getSessionSettings 成功过）时不覆盖，避免冲掉后端真值。
-    if (sessionsWithSettings[conversationId]) {
-      clearPendingPreset(conversationId);
-      return;
-    }
     try {
-      const updated = await patchSessionSettings(config, conversationId, {
-        permission_preset: preset,
-      });
+      const patch: Partial<SessionSettings> = {
+        permission_preset: preset.permission_preset,
+      };
+      if (preset.approval_remember !== undefined) {
+        patch.approval_remember = preset.approval_remember;
+      }
+      const updated = await patchSessionSettings(config, conversationId, patch);
       // 成功一次后清除，避免后续 send 重复打补丁。
       clearPendingPreset(conversationId);
-      sessionsWithSettings = {...sessionsWithSettings, [conversationId]: true};
       if (activeId === conversationId) sessionSettings = updated;
     } catch {
       // 404 / 网络失败静默忽略；保留 pendingPreset，下次 send 后再试。
@@ -536,9 +545,8 @@
       const settings = await getSessionSettings(config, sessionId);
       if (activeId === sessionId) {
         sessionSettings = settings;
-        sessionsWithSettings = {...sessionsWithSettings, [sessionId]: true};
-        // 后端已有 settings，不再用全局预设覆盖。
-        clearPendingPreset(sessionId);
+        // 拉取只做按会话恢复展示，不撤销未投递的初始档：能读回 settings 只说明
+        // 后端会话已存在（回合开始会按默认档自动建），不代表用户设置过真值。
       }
     } catch {
       // 拉取失败静默降级：picker 回落到全局模型。
@@ -585,8 +593,21 @@
           notice = `该会话还有 ${inbox.length} 个此前产生的未决审批——策略变更不追溯，请先批准或拒绝；之后的请求即按「${strategy.label}」执行。`;
         }
       }
-    } catch {
-      if (activeId === sessionId) sessionSettings = prev;
+    } catch (caught) {
+      // 显式选档不得丢：后端会话还没建（首个回合之前 PATCH 必 404）时，这次选择
+      // 暂存为待投递初始档，会话一创建即按它落库，并保留乐观显示；其它失败（网络等）
+      // 保持回滚 + 暂存，下次 send 后由投递缝重试。
+      const sessionNotCreatedYet =
+        (caught as {status?: number})?.status === 404 ||
+        (caught as {code?: string})?.code === 'session_not_found';
+      pendingPreset = {
+        ...pendingPreset,
+        [sessionId]: {
+          permission_preset: strategy.permission_preset,
+          approval_remember: strategy.approval_remember,
+        },
+      };
+      if (!sessionNotCreatedYet && activeId === sessionId) sessionSettings = prev;
     }
   }
 
@@ -1697,7 +1718,8 @@
       if (item.origin === 'backend' && item.messageCount > 0) {
         ledgerHint = {id: item.id, episodeCount: item.messageCount};
       }
-      markPendingPreset(conv.id);
+      // 重开既有后端会话不 mark 初始档：它已有自己的持久档（按会话恢复即真值），
+      // 全局默认档只属于新建会话，不得覆盖这里读回的档。
     } else {
       ledgerHint = null;
     }

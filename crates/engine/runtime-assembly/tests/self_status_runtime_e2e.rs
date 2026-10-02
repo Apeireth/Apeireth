@@ -154,12 +154,17 @@ async fn capability_roster_matches_the_effective_assembly_switches() {
     let roster = report["capabilities"].as_object().expect("roster object");
     assert_eq!(roster["organs"], true);
     assert_eq!(roster["education"], true);
-    assert_eq!(roster["consolidation"], true);
+    // 按实际注册条件取值 (开关生效链审计续): consolidation 挂在记忆写入模块
+    // (本用例写入模块未注册) —— 配置开了但注册没成, 名册照实 false。
+    // 旧行为: 照抄 config 报 true (配置文本, 非生效值)。
+    assert_eq!(roster["consolidation"], false);
     assert_eq!(roster["filesystem"], false);
     assert_eq!(roster["search"], false);
     assert_eq!(roster["shell"], false);
     assert_eq!(roster["fetch"], false);
-    assert_eq!(roster["self_tuning"], true);
+    // 同口径: 自学习接线挂在记忆召回模块 (本用例召回模块未注册) ——
+    // 接线存在但无处生效, 名册照实 false。旧行为: 报接线存在 = true。
+    assert_eq!(roster["self_tuning"], false);
     assert_eq!(roster["typed_recall"], false);
     assert_eq!(roster["local_read_tools"], true);
     // 名册全表: 每个开关一行, 值为布尔。
@@ -324,7 +329,11 @@ async fn credential_presence_is_boolean_and_never_echoes_the_credential() {
 
 #[tokio::test]
 async fn tuning_section_reports_sliders_preset_and_self_learning_switch() {
-    // 自学习接线在场 = 开关生效为 true; 取值为生效值 (未设旋钮 = 全基线)。
+    // 自学习生效 = 接线 AND 记忆召回 (信号链挂记忆召回模块, 按实际注册条件
+    // 取值); 取值为生效值 (未设旋钮 = 全基线)。
+    let dir = tempfile::tempdir().expect("temp dir");
+    let store =
+        Arc::new(SqliteMemoryStore::open(dir.path().join("cognitive.sqlite3")).expect("store"));
     let wire = Arc::new(SelfTuningWire::new(
         std::env::temp_dir().join(format!(
             "apeireth-self-status-tuning-{}-2.jsonl",
@@ -332,11 +341,15 @@ async fn tuning_section_reports_sliders_preset_and_self_learning_switch() {
         )),
         TuningValues::baseline(),
     ));
+    let mut config = base_config();
+    config.memory_recall = true;
     let backends = ProductionBackends {
+        memory: Some(store.clone()),
+        memory_governance: Some(store),
         self_tuning: Some(wire),
         ..ProductionBackends::default()
     };
-    let (_, tool) = build(base_config(), backends);
+    let (_, tool) = build(config, backends);
     let report = invoke(&tool).await;
     let tuning = &report["tuning"];
     assert_eq!(tuning["self_learning"], true);
@@ -354,6 +367,22 @@ async fn tuning_section_reports_sliders_preset_and_self_learning_switch() {
         "{}",
         budget["note"]
     );
+
+    // 召回缺席 = 信号链无处生效, 照实 false (旧行为: 报"接线在场" = true)。
+    let wire = Arc::new(SelfTuningWire::new(
+        std::env::temp_dir().join(format!(
+            "apeireth-self-status-tuning-{}-3.jsonl",
+            std::process::id()
+        )),
+        TuningValues::baseline(),
+    ));
+    let backends = ProductionBackends {
+        self_tuning: Some(wire),
+        ..ProductionBackends::default()
+    };
+    let (_, tool) = build(base_config(), backends);
+    let report = invoke(&tool).await;
+    assert_eq!(report["tuning"]["self_learning"], false);
 }
 
 #[tokio::test]

@@ -48,3 +48,59 @@
 | shell / fetch / mcp / localReadTools | `crates/adapters/cli/tests/production_knobs.rs`、`crates/engine/runtime-assembly/tests/canonical_shell_approval_e2e.rs`、`canonical_fetch_e2e.rs`、`mcp_bridge_runtime_e2e.rs` |
 | 全责文案三落点 | `frontend/companion-desktop/tests/switch-scope-copy.mjs` |
 | 本表入档（结构 + 行覆盖） | `frontend/companion-desktop/tests/switch-power-audit.mjs` |
+
+## 五、开关生效链审计（续篇）——六环逐开关核查
+
+> 核查命题：**开关开 = 真生效 = 自报如实**。逐开关走完六环：
+> 设置开关行（`SettingsView.svelte` 的 `env:` 标注）→ 前端桥（`desktop-bridge.ts` 映射）→
+> 桌面 env 注入（`backend_supervisor.rs` 的 `env_pairs`）→ Rust env 解析
+> （`crates/adapters/cli/src/lib.rs` 的 `*_enabled_from_env()`）→ 装配消费
+> （`crates/engine/runtime-assembly/src/canonical/production.rs`）→ 自报读值
+> （`self_status_source.rs` 的名册投影）。
+> 六环实测结论：**前三环（设置行 → 注入名 → 解析名）一字不差、无 env 名不一致类断点**
+> （`crates/adapters/cli/tests/self_status_e2e.rs` 端到端佐证：env=1 → 名册=true）；
+> 本批断点集中在后三环：装配消费缺一截（council 数值旋钮）、治理授权没跟上（education）、
+> 自报照抄配置文本而非实际注册条件（挂槽开关族）、以及无开关面（MCP）。
+
+### 5.1 逐开关生效链表
+
+| 开关 | env / 配置接线 | 装配消费 | 运行时生效 | 自报读值 | 断点结论 / 修法 |
+|---|---|---|---|---|---|
+| council（议会，`APEIRETH_COGNITIVE_COUNCIL`） | 全链一字不差（设置行 `council` → 注入 `APEIRETH_COGNITIVE_COUNCIL=1` → `COGNITIVE_COUNCIL_ENV` 解析 → `config.council`） | `production.rs` 消费 `config.council` 注册 `CouncilModule`（缺 council 后端即拒开，不静默） | 模块真注册（`cognitive.council`，决策环节） | roster `council` = 装配条件，如实 | **附带断点（装配消费缺一截）**：数值旋钮 `APEIRETH_COUNCIL_ADVISORS` / `APEIRETH_COUNCIL_TIMEOUT_MS` 桌面注入了，但生产装配 `build_council_from_env()` 原先不消费（仅显式咨询命令消费）→ 顾问数/超时"注入了但没人读"。**已修**：生产 council 同源 `.with_config(council_config_from_env())`（三条构造路径同改）。开关主链六环无断点 |
+| judge（评审，`APEIRETH_COGNITIVE_JUDGE`） | 全链一字不差（`judge` → `cognitive_judge` → `COGNITIVE_JUDGE_ENV` → `config.judge.enabled`） | 消费 `JudgeConfig.enabled` 注册 `JudgeModule` | 模块真注册（`cognitive.judge`，每回复最多一次 side-call） | roster `judge` = `config.judge.enabled`，如实 | 无断点（全链通） |
+| education（教育工具，`APEIRETH_ENABLE_EDUCATION`） | 全链一字不差（`education` → `enable_education` → `ENABLE_EDUCATION_ENV` → `config.education`） | 消费注册 `tool.education`（`EducationModule`，纯确定性自查） | **断**：治理授权面没跟上——`tool.education` 注册了但无 grant，模型调用即拒 = "开关开了权力没到手"（上表"挂账"行同源） | roster `education` = 注册条件 | **已整改**：同一开关同源 grant（`education_enabled_from_env()` → 授权 `tool.education`，只读计算档零审批，与 `tool.repo` / `tool.self_status` 同档）；会话权限预设（read_only 等）读能力白名单语义不动；原"挂账"处置就此落账 |
+| organs（器官链，`APEIRETH_ENABLE_ORGANS`） | 全链一字不差（`organs` → `enable_organs` → `ENABLE_ORGANS_ENV` → `config.organs`） | 消费注册 `OrganModule` | 模块真注册（`cognitive.organs`，AfterTurn 不阻塞回复） | roster `organs` = `config.organs`，如实 | 无断点（全链通） |
+| partner_bond（伙伴羁绊，`APEIRETH_ENABLE_PARTNER_BOND`） | 全链一字不差（`partnerBond` → `enable_partner_bond` → `ENABLE_PARTNER_BOND_ENV` → `config.partner_bond`） | 消费注册 `PartnerBondModule` + 同源注入 `partner_store`（缺 store 即拒开，不静默） | 模块真注册（`cognitive.partner_bond`，TurnStart 注入 + AfterTurn 演化） | roster `partner_bond` = 装配条件，如实 | 无断点（存储现为进程内实现、重启即散属实现现状，非开关断层） |
+| reflexion（反思沉淀，`APEIRETH_ENABLE_REFLEXION`） | 全链一字不差（`reflexion` → `enable_reflexion` → `ENABLE_REFLEXION_ENV` → `config.reflexion`） | 消费注册 `ReflexionModule` + 同源注入 `reflexion_store`（`FileReflexionStore`，根目录 `APEIRETH_REFLEXION_DIR`） | 模块真注册（`cognitive.reflexion`，TurnStart 教训 + AfterTurn 沉淀） | roster `reflexion` = 装配条件，如实 | 无断点（全链通） |
+| self_tuning（自我调校，`APEIRETH_ENABLE_SELF_TUNING`） | 全链一字不差（`selfTuning` → `enable_self_tuning` → `SELF_TUNING_ENABLE_ENV` → `SelfTuningWire::from_env`） | 消费：`backends.self_tuning` → `MemoryRecallModule.with_self_tuning`（真接检索信号） | 接线在场但**挂在记忆召回模块上**：记忆召回关闭时信号链无处生效 | **断（消费了但自报没读对）**：名册原报"接线存在 = true"，静默失效也照报 | **已修**：名册与调参节 `self_learning` 按实际注册条件取值（接线 AND 记忆召回）；设置页该行 desc 补挂靠说明 |
+| mcp（外部工具桥，`APEIRETH_ENABLE_MCP`） | **开关没接线（无开关面）**：桌面设置页原无行、`desktop-bridge.ts` / `backend_supervisor.rs` 无注入字段 —— 桌面面无此开关，CLI 旋钮 | `config.mcp` → `McpServerConfig::load`（坏配置拒开）→ `McpToolBridge` + `McpModule` | **需另行配置**服务器列表（`APEIRETH_MCP_SERVERS` 或数据目录 `mcp-servers.json`）才真正有外部工具 | **断**：已启用但无服务器配置照报 `mcp=true` | **不硬造开关**（无配置面、真生效需另行配置服务器列表）：设置页工具卡加**无开关说明行**，desc 明示"需另行配置"；自报语义改如实（`mcp` 行 = 桥已装配**且**有可用服务器；已启用但无服务器配置 = 无外部工具） |
+| morphology_recall（检索深度自适应，`APEIRETH_ENABLE_MORPHOLOGY_RECALL`；温度 `APEIRETH_MORPHOLOGY_TEMPERATURE` 由消费点现读） | 全链一字不差（`morphologyRecall` → `enable_morphology_recall` → `morphology_recall_enabled_from_env()` → `config.morphology_recall`） | 消费：`MemoryRecallModule.with_morphology_recall()` | 挂在记忆召回模块上：记忆召回关闭时静默失效 | **断**：静默失效照抄 config 报 true | **已修**：名册按实际注册条件取值（AND 记忆召回）；desc 补挂靠说明 |
+| absorption_insight（认知体操，`APEIRETH_ENABLE_ABSORPTION_INSIGHT`） | 全链一字不差（`absorptionInsight` → `enable_absorption_insight` → 解析 → `config.absorption_insight`） | 消费注册 `AbsorptionInsightModule`（无槽依赖） | 模块真注册（`cognitive.absorption_insight`） | roster = `config.absorption_insight`，如实 | 无断点（全链通） |
+| community_triage（图社区分诊，`APEIRETH_ENABLE_COMMUNITY_TRIAGE`） | 全链一字不差（`communityTriage` → `enable_community_triage` → 解析 → `config.community_triage`） | 消费：`MemoryRecallModule.with_community_triage(graph)`（需图谱槽，缺席静默跳过） | 挂在记忆召回模块 + 图谱后端双条件上 | **断**：静默跳过照抄 config 报 true | **已修**：名册按实际注册条件取值（AND 记忆召回 AND 图谱槽）；desc 补"需图谱后端" |
+| consolidation（记忆固化，`APEIRETH_ENABLE_CONSOLIDATION`） | 全链一字不差（`consolidation` → `enable_consolidation` → 解析 → `config.consolidation`） | 消费：`MemoryWritebackModule.with_consolidation()` | 挂在记忆写入模块上：记忆写入关闭时静默失效 | **断**：静默失效照抄 config 报 true（旧测试钉了错误语义） | **已修**：名册按实际注册条件取值（AND 记忆写入）；desc 补挂靠说明；旧行为 → 新行为记入测试注释 |
+
+### 5.2 同型附注与口径
+
+1. **同型附注（未点名行，同口径顺手修正）**：`proactive_recall`（挂记忆召回）、`memory_injection`
+   （挂记忆协调器 = 记忆召回或记忆写入在场）、`typed_recall`（同左）原样照抄配置/接线值，
+   同属"消费了但自报没读对"；已按实际注册条件取值，`self_status_source.rs` 单测锁定。
+2. **名册口径（自报读值总则）**：名册行按**实际注册条件**取值，不复述"配置说开"而注册没成的
+   事实（沿用 file_write 行先例）；`tool.self_status` 的"缺位显式 null + 原因"既有口径保留不变。
+3. **council 数值旋钮**（`APEIRETH_COUNCIL_ADVISORS` / `APEIRETH_COUNCIL_TIMEOUT_MS`）：
+   修法为生产装配与显式咨询命令同一条 `council_config_from_env()` 解析（同源注入口径）。
+4. **education 授权面**：修法为开关同源 grant（开关名与权力相符口径），只读计算档零审批；
+   上表"挂账"行的处置就此落账（保留原行留痕）。
+5. **MCP 不造开关**：桌面面无此开关（CLI 旋钮 `APEIRETH_ENABLE_MCP`）；如未来补桌面注入，
+   注入名必须与 CLI 一字不差。
+
+### 5.3 续篇行级锁定测试指针
+
+| 生效链审计行 | 锁定测试 |
+|---|---|
+| council / organs / reflexion（点名三链：开关开 → 装配真生效 → 自报如实） | `crates/engine/runtime-assembly/tests/capability_switch_chains.rs`（`council_switch_registers_the_module_and_reports_itself_honestly` / `organ_switch_registers_the_after_turn_module_and_reports_itself_honestly` / `reflexion_switch_registers_with_its_store_and_reports_itself_honestly`） |
+| council 数值旋钮消费 | `crates/adapters/cli/src/lib.rs` 内 `production_council_consumes_the_advisor_count_knob` |
+| education 同源 grant | `crates/adapters/cli/src/lib.rs` 内 `education_grant_follows_the_registration_switch` |
+| judge / partner_bond / absorption_insight / education 注册链 | `capability_switch_chains.rs`（`remaining_switches_register_and_report_on_the_same_chain`） |
+| consolidation / 检索深度自适应 / 图社区分诊 / self_tuning 名册按注册条件取值 | `capability_switch_chains.rs`（`consolidation_reports_the_memory_writeback_registration_condition` / `recall_dependent_switches_report_the_memory_recall_registration_condition` / `community_triage_reports_false_without_the_graph_slot`）+ `self_status_source.rs` 单测 `roster_reports_silent_dependency_switches_by_registration_condition` |
+| mcp 自报语义（已启用但无服务器配置 = 无外部工具） | `capability_switch_chains.rs`（`mcp_row_reports_external_tools_only_when_the_bridge_serves`） |
+| 本续篇入档（表结构 + 行覆盖） | `frontend/companion-desktop/tests/switch-power-audit.mjs` |

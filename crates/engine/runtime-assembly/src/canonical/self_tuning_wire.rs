@@ -220,6 +220,18 @@ pub fn consolidation_cadence_turns() -> u64 {
 mod tests {
     use super::*;
 
+    /// 生效值 override 是**进程级全局槽** ([`install_effective_values`] /
+    /// [`clear_effective_overrides`]): 同一测试进程里凡触碰该槽的用例必须串行,
+    /// 否则「装上 override→断言即时生效」的窗口会被并行用例的清理/重装打断
+    /// (实测 flake: 断言读到别人清掉/换掉的槽值)。测试隔离用锁, 不改产品语义。
+    static TUNING_GLOBAL_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock_tuning_global() -> std::sync::MutexGuard<'static, ()> {
+        TUNING_GLOBAL_GUARD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     #[test]
     fn tuning_log_lands_beside_session_db() {
         assert_eq!(
@@ -234,6 +246,7 @@ mod tests {
 
     #[test]
     fn wire_appends_jsonl_and_installs_effective_values() {
+        let _global = lock_tuning_global();
         let dir = std::env::temp_dir().join(format!("apeireth-tuning-wire-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let log_path = dir.join(TUNING_LOG_FILE);
@@ -265,6 +278,8 @@ mod tests {
             values.memory_fade,
             "调整必须即时生效 (override 落地)"
         );
+        // 收尾还原全局槽: 本用例装的 override 不外泄给同进程其它读值用例。
+        apeireth_orchestration::self_tuning::clear_effective_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -387,6 +402,7 @@ mod tests {
 
     #[test]
     fn cadence_knob_defaults_to_every_turn() {
+        let _global = lock_tuning_global();
         apeireth_orchestration::self_tuning::clear_effective_overrides();
         let cadence = TunableParam::ConsolidationCadence.parse_env_value(None);
         assert_eq!(cadence, 1.0, "未设旋钮 = 每回合 = 现行为");

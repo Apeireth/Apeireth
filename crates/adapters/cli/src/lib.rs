@@ -514,6 +514,18 @@ fn build_production_governance_parts_from_env() -> (
             guard.require_approval_for("tool.fetch");
         }
     }
+    // education Dx-Check 工具 (`tool.education`, 纯确定性自查, 0 副作用):
+    // **开关开 = 注册 + 授权同源** (开关名与权力相符, 与 shell/fetch 同款
+    // 整改口径) —— 同一开关值 (`education_enabled_from_env`) 同时决定装配侧
+    // 注册与本授权面, 不再出现"注册了但权力没到手"。只读计算档不设
+    // require_approval (与 tool.repo / tool.self_status 同档); 会话权限预设
+    // (read_only 等) 的读能力白名单语义不受影响。
+    if education_enabled_from_env() {
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool("tool.education".to_string()));
+    }
     (pipeline, policy, guard_hook)
 }
 
@@ -973,6 +985,11 @@ fn llm_credential_resolver() -> Arc<dyn apeireth_plugin::CredentialResolver> {
 /// 构造 Council 后端（2026-09-08 用户旋钮批）：优先 OpenAI-compatible
 /// （DeepSeek 等, env 配置时）→ 回退 MiniMax → 最后 Noop（0 装, advisors 会
 /// 显式 NotImplemented 而非静默）。
+///
+/// **数值旋钮同源接入**（开关生效链审计续）：顾问数 / 单顾问超时
+/// （`APEIRETH_COUNCIL_ADVISORS` / `APEIRETH_COUNCIL_TIMEOUT_MS`）与显式
+/// `council` 命令走同一条 [`council_config_from_env`] 解析——生产装配的
+/// council 也吃这两个旋钮，不再只有显式咨询路径生效。
 fn build_council_from_env() -> apeireth_orchestration::Council {
     use apeireth_orchestration::Council;
     use apeireth_plugin::llm_factory::LlmFactory as PluginLlmFactory;
@@ -993,7 +1010,7 @@ fn build_council_from_env() -> apeireth_orchestration::Council {
                 .unwrap_or_else(|| "deepseek-v4-flash".to_string());
             let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
                 Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory)));
-            return Council::with_factory(mirror, model);
+            return Council::with_factory(mirror, model).with_config(council_config_from_env());
         }
     }
     // MiniMax 回退仅在显式配了 MiniMax key 时成立 (0 装: 不凭空造一个会在
@@ -1014,10 +1031,10 @@ fn build_council_from_env() -> apeireth_orchestration::Council {
                 .unwrap_or_else(|| "MiniMax-M3".to_string());
             let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
                 Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory)));
-            return Council::with_factory(mirror, model);
+            return Council::with_factory(mirror, model).with_config(council_config_from_env());
         }
     }
-    Council::default_llm()
+    Council::default_llm().with_config(council_config_from_env())
 }
 
 /// **生产 subagent 长程任务** (2026-10-10): `plan → impl → review` 三步链
@@ -1895,5 +1912,144 @@ mod onering_ledger_tests {
         assert!(ledger
             .record("system", Some("x"), "cli", "内容", 1)
             .is_err());
+    }
+}
+
+/// 开关生效链审计续 (治理 grant 同源 / council 数值旋钮消费): env 是进程全局,
+/// 用例串在一把锁后, 逐键保存-恢复。
+#[cfg(test)]
+mod capability_switch_chain_tests {
+    use super::*;
+    use apeireth_orchestration::{
+        Advisor, AdvisorDecision, AdvisorVerdict, CouncilCallError, CouncilInvoker, Proposal,
+    };
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    const TOUCHED_KEYS: &[&str] = &[
+        "APEIRETH_ENABLE_EDUCATION",
+        "APEIRETH_COUNCIL_ADVISORS",
+        "APEIRETH_COUNCIL_TIMEOUT_MS",
+        "APEIRETH_OPENAI_MODELS",
+        "APEIRETH_API_KEY",
+    ];
+
+    /// 清空本组用例涉及的 env (工厂 env 一并清: council 走 0 装 Noop 路径)。
+    fn clear_env() -> Vec<(&'static str, Option<String>)> {
+        let previous: Vec<(&'static str, Option<String>)> = TOUCHED_KEYS
+            .iter()
+            .map(|key| (*key, std::env::var(key).ok()))
+            .collect();
+        for key in TOUCHED_KEYS {
+            std::env::remove_var(key);
+        }
+        previous
+    }
+
+    fn restore_env(previous: Vec<(&'static str, Option<String>)>) {
+        for (key, value) in previous {
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
+
+    /// education 开关同源接线: 开关开 = 注册 + 授权同侧生效 (零审批只读档),
+    /// 开关关 = 未授权 (fail-closed, 调用被拒)。
+    #[test]
+    fn education_grant_follows_the_registration_switch() {
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let previous = clear_env();
+
+        std::env::set_var("APEIRETH_ENABLE_EDUCATION", "1");
+        let (_, policy, _) = build_production_governance_parts_from_env();
+        let policy = policy.lock().expect("policy lock");
+        assert!(
+            policy.has(&Permission::ExecuteTool("tool.education".to_string())),
+            "开关开必须同源 grant tool.education"
+        );
+        assert!(
+            policy
+                .decision_for_capability("tool.education")
+                .is_allowed(),
+            "只读计算档应放行且零审批"
+        );
+        drop(policy);
+
+        std::env::remove_var("APEIRETH_ENABLE_EDUCATION");
+        let (_, policy, _) = build_production_governance_parts_from_env();
+        let policy = policy.lock().expect("policy lock");
+        assert!(
+            !policy.has(&Permission::ExecuteTool("tool.education".to_string())),
+            "开关关不得授权 (fail-closed)"
+        );
+        assert!(
+            !policy
+                .decision_for_capability("tool.education")
+                .is_allowed(),
+            "未授权能力必须拒绝"
+        );
+
+        restore_env(previous);
+    }
+
+    /// 桩 side-call 适配器: 计数可见即 max_advisors 可见。
+    struct CountingInvoker;
+
+    #[async_trait::async_trait]
+    impl CouncilInvoker for CountingInvoker {
+        async fn invoke(
+            &self,
+            _advisor: Arc<dyn Advisor>,
+            _proposal: &Proposal,
+        ) -> Result<AdvisorVerdict, CouncilCallError> {
+            AdvisorVerdict::new(1.0, AdvisorDecision::Allow, "", Some(1.0))
+                .map_err(CouncilCallError::Provider)
+        }
+    }
+
+    /// council 数值旋钮同源消费: 生产装配的 council 吃
+    /// `APEIRETH_COUNCIL_ADVISORS` (裁决顾问数上限即批次上限, 越界钳制 1..=7)。
+    #[tokio::test]
+    async fn production_council_consumes_the_advisor_count_knob() {
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let previous = clear_env();
+
+        let proposal = Proposal {
+            id: "council-knob".into(),
+            proposer: "test".into(),
+            payload: serde_json::json!({}),
+            submitted_at: 0,
+            session_id: apeireth_core::kernel::SessionId::new(),
+        };
+
+        std::env::set_var("APEIRETH_COUNCIL_ADVISORS", "2");
+        let council = build_council_from_env();
+        let result = council
+            .decide_with_invoker(&proposal, &CountingInvoker)
+            .await;
+        assert_eq!(
+            result.side_call_count, 2,
+            "APEIRETH_COUNCIL_ADVISORS=2 必须被生产 council 消费: {:?}",
+            result.evaluations
+        );
+
+        std::env::set_var("APEIRETH_COUNCIL_ADVISORS", "1");
+        let council = build_council_from_env();
+        let result = council
+            .decide_with_invoker(&proposal, &CountingInvoker)
+            .await;
+        assert_eq!(result.side_call_count, 1, "顾问数上限逐档生效");
+
+        std::env::set_var("APEIRETH_COUNCIL_ADVISORS", "99");
+        let council = build_council_from_env();
+        let result = council
+            .decide_with_invoker(&proposal, &CountingInvoker)
+            .await;
+        assert_eq!(result.side_call_count, 7, "越界钳制到 7 个规范顾问位");
+
+        restore_env(previous);
     }
 }

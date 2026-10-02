@@ -205,7 +205,17 @@ impl SelfStatusSource for ProductionSelfStatusSource {
 /// (例如授权层的 `local_read_tools` 旋钮)。
 ///
 /// 本地文件工具行按**实际注册条件**取值 (配置开启且工作区根已注入才算生效),
-/// 名册不复述"配置说开"而注册没成的事实。
+/// 名册不复述"配置说开"而注册没成的事实。同一口径延伸到挂在别的槽上的
+/// 开关 (开关生效链审计续): 记忆固化挂在记忆写入模块、检索深度自适应与
+/// 图社区分诊挂在记忆召回模块、前瞻召回挂在记忆召回模块、记忆注入挂在
+/// 记忆协调器 —— 上游槽缺席时下游开关静默失效, 名册一律照实报 false。
+/// `self_tuning` / `typed_recall` 两个注入槽参数为接线事实, 本函数再 AND
+/// 上游槽 (自学习挂记忆召回, 类型化召回挂记忆协调器), 与配置行同口径。
+///
+/// MCP 外部工具桥一行的自报语义 (如实): 桥已装配**且**有可用服务器配置
+/// 才算外部工具面生效 —— 已启用但无服务器配置 = 无外部工具 (照实 false);
+/// 服务器配置的折叠由组装根在 [`super::production::ProductionModules::build`]
+/// 完成 (配置坏 = 拒开, 语义不变)。
 pub fn roster_from_config(
     config: &ProductionModulesConfig,
     workspace_root_present: bool,
@@ -231,22 +241,48 @@ pub fn roster_from_config(
         CapabilitySwitch::new("education", config.education),
         CapabilitySwitch::new("memory_recall", config.memory_recall),
         CapabilitySwitch::new("memory_writeback", config.memory_writeback),
-        CapabilitySwitch::new("memory_injection", config.memory_injection),
-        CapabilitySwitch::new("proactive_recall", config.proactive_recall.is_some()),
-        CapabilitySwitch::new("typed_recall", typed_recall),
+        CapabilitySwitch::new(
+            "memory_injection",
+            config.memory_injection && (config.memory_recall || config.memory_writeback),
+        ),
+        CapabilitySwitch::new(
+            "proactive_recall",
+            config.proactive_recall.is_some() && config.memory_recall,
+        ),
+        // 类型化召回候选只走记忆协调器 (记忆召回或记忆写入在场), 同口径。
+        CapabilitySwitch::new(
+            "typed_recall",
+            typed_recall && (config.memory_recall || config.memory_writeback),
+        ),
         CapabilitySwitch::new("preference_recall", config.preference_recall),
         CapabilitySwitch::new("preference_learning", config.preference_learning),
-        CapabilitySwitch::new("consolidation", config.consolidation),
+        // 记忆固化挂在记忆写入模块 (`with_consolidation`): 写入模块缺席时
+        // 静默失效, 名册照实 false (按实际注册条件取值)。
+        CapabilitySwitch::new(
+            "consolidation",
+            config.consolidation && config.memory_writeback,
+        ),
         CapabilitySwitch::new("reflexion", config.reflexion),
         CapabilitySwitch::new("self_assessment", config.self_assessment),
         CapabilitySwitch::new("judge", config.judge.enabled),
         CapabilitySwitch::new("council", config.council),
         CapabilitySwitch::new("organs", config.organs),
         CapabilitySwitch::new("partner_bond", config.partner_bond),
-        CapabilitySwitch::new("morphology_recall", config.morphology_recall),
-        CapabilitySwitch::new("community_triage", config.community_triage),
+        // 检索深度自适应挂在记忆召回模块 (`with_morphology_recall`), 同口径。
+        CapabilitySwitch::new(
+            "morphology_recall",
+            config.morphology_recall && config.memory_recall,
+        ),
+        // 图社区分诊挂在记忆召回模块 (`with_community_triage`), 同口径
+        // (图谱槽在否由组装根折进生效视图)。
+        CapabilitySwitch::new(
+            "community_triage",
+            config.community_triage && config.memory_recall,
+        ),
         CapabilitySwitch::new("absorption_insight", config.absorption_insight),
-        CapabilitySwitch::new("self_tuning", self_tuning),
+        // 自学习信号只走记忆召回模块 (`with_self_tuning`): 召回缺席时接线
+        // 无处生效, 名册照实 false (接线事实 AND 上游槽)。
+        CapabilitySwitch::new("self_tuning", self_tuning && config.memory_recall),
     ];
     roster.extend(extras.iter().cloned());
     roster.sort_by(|a, b| a.name.cmp(&b.name));
@@ -305,6 +341,45 @@ mod tests {
         assert_eq!(by_name["filesystem"], false);
         assert_eq!(by_name["search"], false);
         assert_eq!(by_name["repo"], false);
+    }
+
+    #[test]
+    fn roster_reports_silent_dependency_switches_by_registration_condition() {
+        // 挂在别的槽上的开关: 上游槽缺席 = 静默失效, 名册照实 false;
+        // 上游槽在场且开关开 = 真生效, 照实 true。
+        let mut config = ProductionModulesConfig::default();
+        config.memory_recall = false;
+        config.memory_writeback = false;
+        config.consolidation = true;
+        config.morphology_recall = true;
+        config.community_triage = true;
+        config.memory_injection = true;
+        config.proactive_recall = Some(apeireth_memory::ProactiveRecallPolicy::default());
+        let roster = roster_from_config(&config, true, true, true, &[]);
+        let by_name: std::collections::HashMap<&str, bool> = roster
+            .iter()
+            .map(|row| (row.name.as_str(), row.enabled))
+            .collect();
+        assert_eq!(by_name["consolidation"], false, "记忆写入缺席");
+        assert_eq!(by_name["morphology_recall"], false, "记忆召回缺席");
+        assert_eq!(by_name["community_triage"], false, "记忆召回缺席");
+        assert_eq!(by_name["self_tuning"], false, "记忆召回缺席");
+        assert_eq!(by_name["proactive_recall"], false, "记忆召回缺席");
+        assert_eq!(by_name["memory_injection"], false, "记忆协调器缺席");
+
+        config.memory_recall = true;
+        config.memory_writeback = true;
+        let roster = roster_from_config(&config, true, true, true, &[]);
+        let by_name: std::collections::HashMap<&str, bool> = roster
+            .iter()
+            .map(|row| (row.name.as_str(), row.enabled))
+            .collect();
+        assert_eq!(by_name["consolidation"], true);
+        assert_eq!(by_name["morphology_recall"], true);
+        assert_eq!(by_name["community_triage"], true);
+        assert_eq!(by_name["self_tuning"], true);
+        assert_eq!(by_name["proactive_recall"], true);
+        assert_eq!(by_name["memory_injection"], true);
     }
 
     #[test]

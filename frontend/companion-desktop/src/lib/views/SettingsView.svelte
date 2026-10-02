@@ -392,7 +392,7 @@
   /** 记忆流：六历史流体系的运行态开关。 */
   const MEMORY_FLOW_DEFS: CapDef[] = [
     {key: 'memoryInjection', icon: MessageSquarePlus, label: '记忆注入', env: 'APEIRETH_ENABLE_MEMORY_INJECTION', desc: '把召回的相关记忆注进每轮上下文，越聊越懂你。'},
-    {key: 'consolidation', icon: Archive, label: '记忆固化', env: 'APEIRETH_ENABLE_CONSOLIDATION', desc: '后台把散碎对话提炼成长期记忆（consolidation）。'},
+    {key: 'consolidation', icon: Archive, label: '记忆固化', env: 'APEIRETH_ENABLE_CONSOLIDATION', desc: '后台把散碎对话提炼成长期记忆（consolidation）。挂在记忆写入模块上：记忆写入关闭时此项不生效（自报照实）。'},
     {key: 'reflexion', icon: RefreshCcw, label: '反思沉淀', env: 'APEIRETH_ENABLE_REFLEXION', desc: 'reflexion 文件回流：从错误与复盘里沉淀经验。'},
     {key: 'proactiveRecall', icon: Radar, label: '前瞻召回', env: 'APEIRETH_ENABLE_PROACTIVE_RECALL', desc: '闲置时主动浮现可能相关的记忆，不打断但在场。'},
     {key: 'typedRecall', icon: Layers3, label: '类型化召回', env: 'APEIRETH_DISABLE_TYPED_RECALL', invert: true, desc: '按事件/偏好/事实等类型分别召回（默认开）。'},
@@ -403,14 +403,14 @@
     {key: 'organs', icon: Network, label: '器官链（9 organs）', env: 'APEIRETH_ENABLE_ORGANS', desc: '回合后跑反事实推演/好奇心/情绪记忆等（AfterTurn，不阻塞回复）。'},
     {key: 'preferenceLearning', icon: HeartHandshake, label: '偏好学习', env: 'APEIRETH_ENABLE_PREFERENCE_LEARNING', desc: '把主人偏好写成双索引记忆，后续召回按主题展开。'},
     {key: 'partnerBond', icon: Users, label: '伙伴羁绊', env: 'APEIRETH_ENABLE_PARTNER_BOND', desc: '关系阶段/深度注入语气校准，回合后确定性演化（W2 §4.2）。'},
-    {key: 'morphologyRecall', icon: SlidersHorizontal, label: '检索深度自适应', env: 'APEIRETH_ENABLE_MORPHOLOGY_RECALL', desc: '按形态学读数收紧检索条数——只收紧不放大（W2 §4.3）。'},
+    {key: 'morphologyRecall', icon: SlidersHorizontal, label: '检索深度自适应', env: 'APEIRETH_ENABLE_MORPHOLOGY_RECALL', desc: '按形态学读数收紧检索条数——只收紧不放大（W2 §4.3）。挂在记忆召回模块上：记忆召回关闭时此项不生效（自报照实）。'},
     {key: 'education', icon: BookOpen, label: 'Dx-Check 教育工具', env: 'APEIRETH_ENABLE_EDUCATION', desc: '模型可调用自查式教学工具，回答前先自检（W2 §4.3）。'},
     {key: 'absorptionInsight', icon: Dumbbell, label: '认知体操', env: 'APEIRETH_ENABLE_ABSORPTION_INSIGHT', desc: '四算法洞察注入（betti/残差金字塔/river/kuramoto，实验性，W2 §4.4）。'},
   ];
 
   /** 社区与账本：W3 批次落地的检索路由与可溯源记账。 */
   const COMMUNITY_DEFS: CapDef[] = [
-    {key: 'communityTriage', icon: GitBranch, label: '图社区分诊', env: 'APEIRETH_ENABLE_COMMUNITY_TRIAGE', desc: '检索前置双路路由：命中实体走实体链，否则给社区摘要（W3 §1）。'},
+    {key: 'communityTriage', icon: GitBranch, label: '图社区分诊', env: 'APEIRETH_ENABLE_COMMUNITY_TRIAGE', desc: '检索前置双路路由：命中实体走实体链，否则给社区摘要（W3 §1）。需记忆召回模块与图谱后端同时在场才生效（自报照实）。'},
     {key: 'oneringLedger', icon: Landmark, label: 'onering 账本', env: 'APEIRETH_ENABLE_ONERING_LEDGER', desc: '每回合 user/assistant 留痕入 context_ledger，全程可溯源（W3）。'},
   ];
 
@@ -2373,6 +2373,7 @@
                 <small>
                   打开后引擎按真实使用信号自动微调体验参数（当前真接信号 = 记忆检索命中/未命中）；
                   每次自动调整可见、可撤销，日志见下方学习日志。默认关。
+                  挂在记忆检索信号链上：记忆召回关闭时此项不生效（自报照实）。
                 </small>
               </span>
               <span class="cap-switch" class:on={capabilities.selfTuning}><span class="cap-knob"></span></span>
@@ -2691,6 +2692,19 @@
                 {/each}
               {/if}
             {/each}
+            <!-- 外部工具桥: 无开关（需另行配置服务器列表才真正生效）——不硬造开关,
+                 如实登记本页无此开关面, 服务端 CLI 旋钮见 env 芯片。 -->
+            <div class="cap-row cap-row-static">
+              <span class="cap-icon"><Server size={15} /></span>
+              <span class="cap-text">
+                <strong>外部工具桥（MCP）<code class="cap-env">APEIRETH_ENABLE_MCP</code></strong>
+                <small>
+                  无开关（本页不设开关，服务端 CLI 旋钮）——需另行配置服务器列表
+                  （APEIRETH_MCP_SERVERS 或数据目录 mcp-servers.json）才真正有外部工具；
+                  已启用但无服务器配置 = 无外部工具（自报照实）。
+                </small>
+              </span>
+            </div>
           </div>
 
           <div class="cap-default-card">

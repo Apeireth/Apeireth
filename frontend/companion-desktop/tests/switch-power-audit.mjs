@@ -69,4 +69,53 @@ console.log('--- Starting Switch Power Audit Table Check ---');
   console.log('  -> PASS: 关键行结论/处置/病灶留痕到位');
 }
 
+// ---- 4. 开关生效链审计（续篇）：六列表 + 逐开关行覆盖 + 断点处置到位 ----
+{
+  assert.ok(
+    audit.includes('开关生效链审计（续篇）'),
+    '审计表必须有「开关生效链审计（续篇）」节',
+  );
+  const chainHeader = audit
+    .split('\n')
+    .find((line) => line.startsWith('| 开关 |') && line.includes('断点结论'));
+  assert.ok(chainHeader, '续篇表必须有「开关 → env/配置接线 → 装配消费 → 运行时生效 → 自报读值 → 断点结论/修法」表头');
+  for (const column of ['env / 配置接线', '装配消费', '运行时生效', '自报读值', '断点结论 / 修法']) {
+    assert.ok(chainHeader.includes(column), `续篇表列缺「${column}」：${chainHeader}`);
+  }
+
+  // 逐开关一行（点名的 12 个开关全部入表）。
+  const chainSection = audit.slice(audit.indexOf('开关生效链审计（续篇）'));
+  for (const switchName of [
+    'APEIRETH_COGNITIVE_COUNCIL',
+    'APEIRETH_COGNITIVE_JUDGE',
+    'APEIRETH_ENABLE_EDUCATION',
+    'APEIRETH_ENABLE_ORGANS',
+    'APEIRETH_ENABLE_PARTNER_BOND',
+    'APEIRETH_ENABLE_REFLEXION',
+    'APEIRETH_ENABLE_SELF_TUNING',
+    'APEIRETH_ENABLE_MCP',
+    'APEIRETH_ENABLE_MORPHOLOGY_RECALL',
+    'APEIRETH_ENABLE_ABSORPTION_INSIGHT',
+    'APEIRETH_ENABLE_COMMUNITY_TRIAGE',
+    'APEIRETH_ENABLE_CONSOLIDATION',
+  ]) {
+    const row = chainSection
+      .split('\n')
+      .find((line) => line.startsWith('| ') && line.includes(switchName));
+    assert.ok(row, `续篇表缺开关行：${switchName}`);
+  }
+
+  // 断点处置口径逐条在档（不许静默略过）。
+  assert.ok(chainSection.includes('按实际注册条件取值'), '自报读值断点必须写明按实际注册条件取值');
+  assert.ok(chainSection.includes('同源'), 'council 数值旋钮 / education 授权修法必须写明同源口径');
+  assert.ok(chainSection.includes('不硬造开关'), 'MCP 无开关面必须写明不硬造开关');
+  assert.ok(chainSection.includes('需另行配置'), 'MCP 行必须写明「需另行配置」');
+  assert.ok(
+    chainSection.includes('已启用但无服务器配置 = 无外部工具'),
+    'MCP 自报语义必须如实入档',
+  );
+  assert.ok(chainSection.includes('桌面面无此开关，CLI 旋钮'), 'MCP 必须明示桌面无此开关面');
+  console.log('  -> PASS: 开关生效链审计（续篇）六列结构 + 12 开关行 + 断点处置到位');
+}
+
 console.log('--- All Switch Power Audit Table Checks PASSED! ---');

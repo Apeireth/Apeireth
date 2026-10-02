@@ -77,4 +77,38 @@ console.log('--- Starting Switch Scope Copy Check ---');
   console.log('  -> PASS: 拒绝帧文案与 code 锁定');
 }
 
+// ---- 5. 开关生效链审计（续篇）新增文案落点（设置页行 desc）----
+{
+  // MCP 无开关说明行: desc 必须写明「需另行配置」与如实自报语义（不硬造开关）。
+  const mcpRow = /外部工具桥（MCP）[\s\S]{0,600}?<\/div>/.exec(settingsSrc)?.[0] ?? '';
+  assert.ok(mcpRow, '设置页必须有外部工具桥（MCP）说明行');
+  assert.ok(mcpRow.includes('需另行配置'), 'MCP 说明行 desc 必须写明「需另行配置」');
+  assert.ok(
+    mcpRow.includes('已启用但无服务器配置 = 无外部工具'),
+    'MCP 说明行必须写明如实自报语义',
+  );
+  assert.ok(mcpRow.includes('无开关'), 'MCP 说明行必须明示无开关（不硬造开关）');
+
+  // 挂槽开关的 desc 必须明示挂靠关系（开关名与权力相符: 记忆固化/检索深度自适应/
+  // 图社区分诊/从使用中学习）。
+  const dependencyRows = [
+    [/key: 'consolidation'[\s\S]{0,600}?\},/, '记忆固化', '挂在记忆写入模块上'],
+    [/key: 'morphologyRecall'[\s\S]{0,600}?\},/, '检索深度自适应', '挂在记忆召回模块上'],
+    [/key: 'communityTriage'[\s\S]{0,600}?\},/, '图社区分诊', '需记忆召回模块与图谱后端'],
+    [
+      /从使用中学习<code class="cap-env">[\s\S]{0,600}?<\/small>/,
+      '从使用中学习',
+      '挂在记忆检索信号链上',
+    ],
+  ];
+  for (const [pattern, rowName, needle] of dependencyRows) {
+    const entry = pattern.exec(settingsSrc)?.[0] ?? '';
+    assert.ok(
+      entry.includes(needle),
+      `${rowName} 行 desc 必须明示挂靠关系「${needle}」：${entry.slice(0, 120)}`,
+    );
+  }
+  console.log('  -> PASS: 续篇开关文案落点锁定（MCP 说明行 + 挂槽开关 desc）');
+}
+
 console.log('--- All Switch Scope Copy Checks PASSED! ---');

@@ -143,6 +143,11 @@ pub struct ProductionModulesConfig {
     /// `mcp-servers.json` (secondary entry, stored-document fail-closed
     /// semantics): a defective configuration is a boot error, never a
     /// silent fallback. Off by default.
+    ///
+    /// Self-report semantics (honest): the `mcp` roster row reads the
+    /// registration condition — the bridge assembled **and** at least one
+    /// enabled server entry. Enabled with no server configuration means no
+    /// external tools, and the roster says so.
     pub mcp: bool,
     /// Data directory whose `mcp-servers.json` is the secondary config entry
     /// for the external tool bridge (see [`Self::mcp`]).
@@ -160,7 +165,9 @@ pub struct ProductionModulesConfig {
     /// (numbered evidence + anti-hallucination rules). Off by default.
     pub memory_injection: bool,
     /// Run the deterministic consolidation report after each turn and persist
-    /// its extracted insights. Off by default.
+    /// its extracted insights. Off by default. Hangs off the memory-writeback
+    /// module (`with_consolidation`): inert when [`Self::memory_writeback`] is
+    /// off, and the roster reports that registration condition.
     pub consolidation: bool,
     /// Register the reflexion failure-feedback module (TurnStart lessons +
     /// AfterTurn judge-failure sedimentation). Off by default.
@@ -168,8 +175,12 @@ pub struct ProductionModulesConfig {
     /// W2 §4.2 partner 羁绊 (2026-10-10, 默认关): TurnStart 关系注入 + AfterTurn 羁绊演化。
     pub partner_bond: bool,
     /// W2 §4.3 (2026-10-10, 默认关): 查询形态学自适应检索深度 (organ/morphology)。
+    /// 挂在记忆召回模块 (`with_morphology_recall`): [`Self::memory_recall`] 关
+    /// 时静默失效, 名册按实际注册条件取值。
     pub morphology_recall: bool,
     /// W3 (2026-10-10, 默认关): community 社区分诊接检索前置 (需 graph 后端)。
+    /// 挂在记忆召回模块 (`with_community_triage`): [`Self::memory_recall`] 关
+    /// 或图谱槽缺席时静默失效, 名册按实际注册条件取值。
     pub community_triage: bool,
     /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册。
     pub education: bool,
@@ -312,14 +323,43 @@ impl ProductionModules {
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
 
+        // External tool bridge (MCP) server list is loaded BEFORE the roster
+        // projection: the self-report must read the same facts the
+        // registration uses (已启用但无服务器配置 = 无外部工具). Fail-closed
+        // semantics unchanged: a defective configuration is a boot error,
+        // never a silent fallback.
+        let mcp_server_config = if config.mcp {
+            Some(
+                McpServerConfig::load(config.mcp_data_dir.as_deref()).map_err(|error| {
+                    RuntimeError::misconfigured(format!(
+                        "mcp server configuration refused to load: {error}"
+                    ))
+                })?,
+            )
+        } else {
+            None
+        };
+
         // 自省通道: 能力名册在任何字段移动之前投影 —— 名册即**实际用于装配的**
-        // config 生效值 (读真实生效值, 不是配置文本的复述)。
+        // config 生效值 (读真实生效值, 不是配置文本的复述)。注入槽级的注册
+        // 条件 (图谱槽 / 外部工具服务器面) 先折进生效视图, 名册不复述
+        // "配置说开"而注册没成的事实。
+        let mut roster_config = config.clone();
+        roster_config.community_triage = config.community_triage && backends.graph.is_some();
+        roster_config.mcp = mcp_server_config
+            .as_ref()
+            .is_some_and(|servers| servers.enabled_servers().next().is_some());
+        // 自学习 / 类型化召回的生效值 = 接线事实 AND 上游槽 (自学习信号只走
+        // 记忆召回模块, 类型化召回候选只走记忆协调器)。
+        let self_tuning_effective = backends.self_tuning.is_some() && config.memory_recall;
+        let typed_recall_effective =
+            backends.typed_recall.is_some() && (config.memory_recall || config.memory_writeback);
         let self_status_roster = config.self_status.then(|| {
             roster_from_config(
-                &config,
+                &roster_config,
                 backends.workspace_root.is_some(),
-                backends.self_tuning.is_some(),
-                backends.typed_recall.is_some(),
+                self_tuning_effective,
+                typed_recall_effective,
                 &backends.self_status_extras,
             )
         });
@@ -402,7 +442,7 @@ impl ProductionModules {
         if let Some(roster) = self_status_roster {
             let mut source = ProductionSelfStatusSource::new(
                 roster,
-                backends.self_tuning.is_some(),
+                self_tuning_effective,
                 backends.workspace_root.clone(),
             );
             if let Some(probe) = &backends.self_status_ledger {
@@ -422,16 +462,13 @@ impl ProductionModules {
         // loads the server list at assembly time (env primary, data-directory
         // stored document secondary) with fail-closed semantics. Connections
         // are established asynchronously after build; the module bag is the
-        // registration target for the dynamic tools discovery produces.
+        // registration target for the dynamic tools discovery produces. The
+        // server list was loaded above (before the roster projection) — a
+        // server list with no enabled entry assembles an inert bridge (no
+        // external tools), and the roster reports that honestly.
         let mut mcp_bridge = None;
         let mut mcp_module = None;
-        if config.mcp {
-            let server_config =
-                McpServerConfig::load(config.mcp_data_dir.as_deref()).map_err(|error| {
-                    RuntimeError::misconfigured(format!(
-                        "mcp server configuration refused to load: {error}"
-                    ))
-                })?;
+        if let Some(server_config) = mcp_server_config {
             let options = McpBridgeOptions::from_env();
             let bridge = McpToolBridge::new(server_config, options).map_err(|error| {
                 RuntimeError::misconfigured(format!("mcp tool bridge refused to assemble: {error}"))

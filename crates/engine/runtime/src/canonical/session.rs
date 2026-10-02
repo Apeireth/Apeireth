@@ -1076,6 +1076,40 @@ mod tests {
         assert_eq!(migrated.permission_preset, PermissionPreset::Full);
     }
 
+    #[test]
+    fn session_settings_survive_json_roundtrip_for_each_preset() {
+        // Select a tier → serialize → deserialize: a populated session (with a
+        // transcript and a recorded fact) must read its settings back as the
+        // same tier, with the model override and the remember flag untouched —
+        // for every tier and every switch between tiers.
+        let clock = clock();
+        let mut session = Session::new(SessionId::new(), clock.as_ref());
+        session.append(NormalizedMessage::user("hello"), clock.as_ref());
+        session.record(
+            RequestId::new(),
+            TraceId::new(),
+            SessionEventKind::TurnStarted,
+            clock.as_ref(),
+        );
+        session.settings.model = Some("some/model".into());
+
+        for (preset, remember) in [
+            (PermissionPreset::ReadOnly, true),
+            (PermissionPreset::Standard, false),
+            (PermissionPreset::Full, true),
+        ] {
+            session.settings.permission_preset = preset;
+            session.settings.approval_remember = remember;
+
+            let json = serde_json::to_string(&session).unwrap();
+            let reloaded: Session = serde_json::from_str(&json).unwrap();
+
+            assert_eq!(reloaded.settings.permission_preset, preset);
+            assert_eq!(reloaded.settings.approval_remember, remember);
+            assert_eq!(reloaded.settings.model.as_deref(), Some("some/model"));
+        }
+    }
+
     #[tokio::test]
     async fn list_returns_sessions_most_recently_updated_first() {
         let virtual_clock = VirtualClock::new(

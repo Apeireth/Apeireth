@@ -68,7 +68,9 @@ pub const APPLY_PATCH_TOOL_DESCRIPTION: &str = "Apply one transactional multi-fi
  *** Add File creates a file, *** Update File edits one with strict-unique \
  search/replace hunks (zero or multiple matches refuse the hunk), and *** Delete \
  File removes one. The patch is all-or-nothing: any failing hunk rolls every file in \
- the patch back. Paths must be workspace-relative; absolute paths, drive or UNC \
+ the patch back. Empty patch text, unparseable patch lines, and an update section \
+ with no hunk are refused as error frames — a success report only ever follows \
+ real actions landing. Paths must be workspace-relative; absolute paths, drive or UNC \
  prefixes and `..` components are refused, and symlink escapes are refused at commit \
  time. Credential and secret surfaces (.env family, key material, credential stores) \
  are refused. The read-before-overwrite observation gate applies: a file must have \
@@ -94,7 +96,7 @@ pub enum WriteReleaseClass {
     ModificationOnly,
     /// 含 Add / Delete 动作 (创建/删除永不自动放行)。
     ContainsCreateOrDelete,
-    /// 补丁文本无法解析为声明动作 (fail-closed 向人工审批)。
+    /// 补丁文本无法解析为声明动作, 或解析后动作集为空 (fail-closed 向人工审批)。
     Unparseable,
 }
 
@@ -108,11 +110,18 @@ pub fn write_release_class_for_arguments(arguments: &serde_json::Value) -> Write
 }
 
 /// 从补丁文本判定放行类别。
+///
+/// 空动作集**不是**「纯修改」: 旧判 `actions.iter().all(is_modification)` 对
+/// 空集合空真, 空/畸形补丁因此被误判 [`WriteReleaseClass::ModificationOnly`]
+/// 免审通过 —— 内测病灶 (空补丁零动作谎帧还跳过审批卡)。现口径: 解析失败
+/// 与空动作集一律归 [`WriteReleaseClass::Unparseable`] (fail-closed 向人工审批)。
 pub fn write_release_class_for_patch(patch: &str) -> WriteReleaseClass {
     match TransactionalPatchApplier::parse_patch(patch) {
-        Ok(actions) if actions.iter().all(is_modification) => WriteReleaseClass::ModificationOnly,
-        Ok(_) => WriteReleaseClass::ContainsCreateOrDelete,
-        Err(_) => WriteReleaseClass::Unparseable,
+        Ok(actions) if !actions.is_empty() && actions.iter().all(is_modification) => {
+            WriteReleaseClass::ModificationOnly
+        }
+        Ok(actions) if !actions.is_empty() => WriteReleaseClass::ContainsCreateOrDelete,
+        _ => WriteReleaseClass::Unparseable,
     }
 }
 

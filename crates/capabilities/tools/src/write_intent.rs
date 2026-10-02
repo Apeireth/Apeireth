@@ -7,10 +7,14 @@
 //! 总闸开 → shell 行为不变（仍走既有 guardrail / 审批链 / 风险映射）。
 //!
 //! 扫描口径：**保守优先，宁可误拒不漏放**。
-//! 命中面三族：
+//! 命中面四族：
 //! 1. 重定向面：`>` / `>>` / `N>` / `&>` / `<>` 一律视为落盘意图；
 //! 2. 命令面：删除 / 移动 / 复制 / 改名 / 建目录族与文件写入族（逐词命中）；
-//! 3. 脚本引擎等值命令面：与上述操作等值的命令面（大小写不敏感）。
+//! 3. 脚本引擎等值命令面：与上述操作等值的命令面（大小写不敏感）；
+//! 4. 脚本引擎静态调用面：`::变更成员` / `.变更成员(` 形态（`Delete` / `Write*` /
+//!    `Create*` / `Move*` / `Copy*` / `Append*` / `Replace` / `Set*` 等变更成员），
+//!    与命令面族词**同族同权**——`[System.IO.File]::Delete` 与 `Remove-Item` /
+//!    `del` 判入同一删除族，同一总闸、同一命中族名、同一审批档。
 //!
 //! 边界（白名单与误拒口径逐条写在 [`mask_handle_duplication`] 的注释里，
 //! 写意图扫描矩阵测试锁住该注释与两侧边界）。
@@ -22,7 +26,8 @@ pub struct WriteIntentHit {
     pub surface: String,
 }
 
-/// 删除族：删文件/删目录（cmd 内建与类比命令面）。
+/// 删除族：删文件/删目录（cmd 内建与类比命令面；静态调用面 `Delete*` 成员
+/// 同族，见 [`STATIC_CALL_MEMBER_PREFIXES`]）。
 const DELETE_FAMILY: &[&str] = &[
     "del",
     "erase",
@@ -75,12 +80,36 @@ const WRITE_CONTENT_FAMILY: &[&str] = &[
     "Start-Transcript",
 ];
 
-/// 各族的面名（拒绝帧里的人读标签）。
+/// 各族的面名（拒绝帧里的人读标签）。静态调用面判族复用同一组标签，
+/// 两条删除路径的命中面族名逐字相同（同族同权）。
+const LABEL_DELETE: &str = "删除族命令";
+const LABEL_MOVE_COPY: &str = "移动/复制/改名族命令";
+const LABEL_CREATE: &str = "建目录/建文件族命令";
+const LABEL_WRITE_CONTENT: &str = "文件写入族命令";
+
 const FAMILY_LABELS: [(&str, &[&str]); 4] = [
-    ("删除族命令", DELETE_FAMILY),
-    ("移动/复制/改名族命令", MOVE_COPY_FAMILY),
-    ("建目录/建文件族命令", CREATE_FAMILY),
-    ("文件写入族命令", WRITE_CONTENT_FAMILY),
+    (LABEL_DELETE, DELETE_FAMILY),
+    (LABEL_MOVE_COPY, MOVE_COPY_FAMILY),
+    (LABEL_CREATE, CREATE_FAMILY),
+    (LABEL_WRITE_CONTENT, WRITE_CONTENT_FAMILY),
+];
+
+/// 脚本引擎静态调用面的变更成员词头（大小写不敏感前缀命中）→ 命中面族名。
+/// 覆盖 `::成员`（静态调用 / 方法组）与 `.成员(`（实例调用）两种形态；
+/// `Delete*` / `Write*` / `Create*` / `Move*` / `Copy*` / `Append*` / `Replace*`
+/// / `Set*` 等变更成员命中，只读成员（`Read*` / `Get*` / `Exists` 等）不命中。
+const STATIC_CALL_MEMBER_PREFIXES: &[(&str, &str)] = &[
+    ("delete", LABEL_DELETE),
+    ("move", LABEL_MOVE_COPY),
+    ("copy", LABEL_MOVE_COPY),
+    ("rename", LABEL_MOVE_COPY),
+    ("create", LABEL_CREATE),
+    ("write", LABEL_WRITE_CONTENT),
+    ("append", LABEL_WRITE_CONTENT),
+    ("replace", LABEL_WRITE_CONTENT),
+    ("set", LABEL_WRITE_CONTENT),
+    ("encrypt", LABEL_WRITE_CONTENT),
+    ("decrypt", LABEL_WRITE_CONTENT),
 ];
 
 /// 段分隔符：管道 / 条件链 / 顺序链 / 分组括号 / 换行 —— 逐段扫描的切点。
@@ -93,6 +122,9 @@ pub fn scan_shell_write_intent(command: &str) -> Option<WriteIntentHit> {
     if let Some(surface) = scan_redirections(&masked) {
         return Some(WriteIntentHit { surface });
     }
+    if let Some(hit) = scan_static_member_calls(&masked) {
+        return Some(hit);
+    }
     scan_segments_for_write_commands(&masked)
 }
 
@@ -104,12 +136,20 @@ pub fn scan_shell_write_intent(command: &str) -> Option<WriteIntentHit> {
 /// * **不收带空格的变体**（`2>& 1`）：词法面不解析 shell 变体，命中即拒——
 ///   宁可误拒不漏放；
 /// * **`N>&M` 之外的 `>` 一律命中**：`cmd > f 2>&1` 的 `> f` 照样拒；
+/// * **脚本引擎静态调用面同族同权**：`::变更成员` / `.变更成员(`（如
+///   `[System.IO.File]::Delete` / `[System.IO.Directory]::Delete` /
+///   `([System.IO.FileInfo]'x').Delete()`）与命令面族词判入同一族（命中面
+///   族名逐字相同），`Delete*`/`Write*`/`Create*`/`Move*`/`Copy*`/`Append*`/
+///   `Replace*`/`Set*` 等变更成员词头命中，只读成员（`Read*`/`Get*`/`Exists`
+///   等）不命中 —— 两条删除路径同受一闸、同一审批档；
 /// * **已知误拒边界**（词法面不解析引号/上下文，宁可误拒不漏放）：
-///   引号内的 `>`（`echo "a > b"`）与"只提到命令词"（`echo del is a word`）
-///   都会被拒 —— 提到与执行无法词法区分，属明示的误拒面；
+///   引号内的 `>`（`echo "a > b"`）、"只提到命令词"（`echo del is a word`）
+///   与"只提到调用形态文本"（`findstr "::Delete" notes.md`）都会被拒 ——
+///   提到与执行无法词法区分，属明示的误拒面；
 /// * **已知漏放边界**（不在这层词法面内，由 shell 审批链 + 沙箱兑底）：
 ///   解释器内任意写入（脚本/语言运行时自写文件）、编码负载
-///   （如 `-EncodedCommand` 形态）、解包类工具的写盘。
+///   （如 `-EncodedCommand` 形态）、解包类工具的写盘、动态成员名/反射调用
+///   （成员名经字符串拼接或变量拼出、`GetMethod(...).Invoke(...)` 形态）。
 fn mask_handle_duplication(command: &str) -> String {
     let bytes = command.as_bytes();
     let mut masked = command.to_string().into_bytes();
@@ -145,6 +185,81 @@ fn scan_redirections(command: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// 脚本引擎静态调用面：`::变更成员`（静态调用 / 方法组）与 `.变更成员(`
+/// （实例调用）两种形态，按 [`STATIC_CALL_MEMBER_PREFIXES`] 词头判族，
+/// 与命令面族词同族同权（`[System.IO.File]::Delete` ≡ `Remove-Item`）。
+/// 成员名大小写不敏感；`::` 后允许空白（宁可误拒不漏放），`.成员` 后要求
+/// 调用括号（文件名带点的 `.txt` / `.md` 等不误命中）。成员调用形态可跨
+/// 段分隔符（`(` `)` 本身就是切段符），故整条命令面整体扫描。
+fn scan_static_member_calls(command: &str) -> Option<WriteIntentHit> {
+    let chars: Vec<char> = command.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == ':' && chars.get(i + 1) == Some(&':') {
+            let mut j = i + 2;
+            while j < chars.len() && chars[j].is_whitespace() {
+                j += 1;
+            }
+            if let Some(member) = member_name_at(&chars, j) {
+                if let Some(label) = static_call_member_family(&member) {
+                    let call = format!("::{member}");
+                    return Some(WriteIntentHit {
+                        surface: format!("{label} {call:?}"),
+                    });
+                }
+            }
+            i += 2;
+            continue;
+        }
+        if chars[i] == '.' {
+            if let Some(member) = member_name_at(&chars, i + 1) {
+                let mut k = i + 1 + member.chars().count();
+                while k < chars.len() && chars[k].is_whitespace() {
+                    k += 1;
+                }
+                if chars.get(k) == Some(&'(') {
+                    if let Some(label) = static_call_member_family(&member) {
+                        let call = format!(".{member}()");
+                        return Some(WriteIntentHit {
+                            surface: format!("{label} {call:?}"),
+                        });
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// 从 `start` 起提一个成员名：字母/下划线开头、字母数字/下划线续。
+/// 非标识符开头（如 `::30` 的数字、`::(` 等）返回 `None`。
+fn member_name_at(chars: &[char], start: usize) -> Option<String> {
+    let first = *chars.get(start)?;
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return None;
+    }
+    let mut end = start + 1;
+    while let Some(&ch) = chars.get(end) {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            end += 1;
+        } else {
+            break;
+        }
+    }
+    Some(chars[start..end].iter().collect())
+}
+
+/// 变更成员词头 → 命中面族名；只读成员（`Read*` / `Get*` / `Exists` 等）
+/// 不在表内，返回 `None`（读命令零误伤的词法前提）。
+fn static_call_member_family(member: &str) -> Option<&'static str> {
+    let lower = member.to_ascii_lowercase();
+    STATIC_CALL_MEMBER_PREFIXES
+        .iter()
+        .find(|(prefix, _)| lower.starts_with(prefix))
+        .map(|(_, label)| *label)
 }
 
 /// 逐段扫描命令面：切段 → 提词 → 族词命中即拒；外加两条原地改写特判。
@@ -223,7 +338,7 @@ mod tests {
         }
     }
 
-    /// ② 删除/移动/复制/改名/建目录族 + 脚本引擎等值命令面矩阵。
+    /// ② 删除/移动/复制/改名/建目录族 + 脚本引擎等值命令面 + 静态调用面矩阵。
     #[test]
     fn deletion_move_and_script_engine_families_are_write_intent() {
         for command in [
@@ -254,10 +369,153 @@ mod tests {
             "tee file.txt",
             "sed -i s/a/b/ file.txt",
             "tar -xzf bundle.tgz",
+            // 脚本引擎静态调用面（删除族/写入族同权）。
+            "[System.IO.File]::Delete('file.txt')",
+            "[System.IO.Directory]::Delete('old_dir')",
+            "([System.IO.FileInfo]'file.txt').Delete()",
+            "[System.IO.File]::WriteAllText('file.txt','hello')",
+            "[System.IO.File]::AppendAllText('file.txt','hello')",
+            "[System.IO.Directory]::Create('new_dir')",
+            "[System.IO.File]::Move('a.txt','b.txt')",
+            "[System.IO.File]::Copy('a.txt','b.txt')",
         ] {
             let hit = scan_shell_write_intent(command)
                 .unwrap_or_else(|| panic!("{command} 必须判写意图"));
             assert!(!hit.surface.is_empty(), "{command} 命中面不能为空");
+        }
+    }
+
+    /// 命中面族名（命中面文案 = `族名 空格 引号命中词`，族名不含空格）。
+    fn family_label(surface: &str) -> &str {
+        surface.split(' ').next().unwrap_or(surface)
+    }
+
+    /// ②附1 删除对称性：两条删除路径（命令面族词与静态调用面成员调用）命中
+    /// 同一族名；写入/建/移动族同理 —— 同族同权的词法前提。
+    #[test]
+    fn static_call_member_forms_join_the_same_family_as_their_command_forms() {
+        for (baseline, variant, expected) in [
+            (
+                "Remove-Item file.txt",
+                "[System.IO.File]::Delete('file.txt')",
+                "删除族命令",
+            ),
+            (
+                "del file.txt",
+                "[System.IO.Directory]::Delete('file.txt')",
+                "删除族命令",
+            ),
+            (
+                "rd old_dir",
+                "([System.IO.FileInfo]'file.txt').Delete()",
+                "删除族命令",
+            ),
+            (
+                "rm file.txt",
+                "[System.IO.FileInfo]::new('file.txt').Delete()",
+                "删除族命令",
+            ),
+            (
+                "Set-Content file.txt hello",
+                "[System.IO.File]::WriteAllText('file.txt','hello')",
+                "文件写入族命令",
+            ),
+            (
+                "Add-Content file.txt hello",
+                "[System.IO.File]::AppendAllText('file.txt','hello')",
+                "文件写入族命令",
+            ),
+            (
+                "Out-File file.txt",
+                "[System.IO.File]::Replace('a.txt','b.txt','c.txt')",
+                "文件写入族命令",
+            ),
+            (
+                "Clear-Content file.txt",
+                "[System.IO.File]::SetAttributes('file.txt','Hidden')",
+                "文件写入族命令",
+            ),
+            (
+                "mkdir new_dir",
+                "[System.IO.Directory]::Create('new_dir')",
+                "建目录/建文件族命令",
+            ),
+            (
+                "New-Item file.txt",
+                "[System.IO.File]::Create('file.txt')",
+                "建目录/建文件族命令",
+            ),
+            (
+                "Move-Item a.txt b.txt",
+                "[System.IO.File]::Move('a.txt','b.txt')",
+                "移动/复制/改名族命令",
+            ),
+            (
+                "Copy-Item a.txt b.txt",
+                "[System.IO.File]::Copy('a.txt','b.txt')",
+                "移动/复制/改名族命令",
+            ),
+        ] {
+            let base = scan_shell_write_intent(baseline)
+                .unwrap_or_else(|| panic!("{baseline} 必须判写意图"));
+            let variant_hit = scan_shell_write_intent(variant)
+                .unwrap_or_else(|| panic!("{variant} 必须判写意图"));
+            assert_eq!(
+                family_label(&base.surface),
+                expected,
+                "{baseline}: {}",
+                base.surface
+            );
+            assert_eq!(
+                family_label(&variant_hit.surface),
+                expected,
+                "{variant}: {}",
+                variant_hit.surface
+            );
+        }
+    }
+
+    /// ②附2 删除族静态调用面形态矩阵：大小写 / 空白 / 实例构造 / 成员词头
+    /// 变体一律判入删除族（保守优先，宁可误拒不漏放）。
+    #[test]
+    fn delete_member_call_variants_all_join_the_delete_family() {
+        for variant in [
+            "[System.IO.File]::Delete('file.txt')",
+            "[system.io.file]::delete('file.txt')",
+            "[System.IO.File]::  Delete('file.txt')",
+            "[System.IO.Directory]::Delete('old_dir', $true)",
+            "([System.IO.FileInfo]'file.txt').Delete()",
+            "([System.IO.FileInfo]'file.txt').Delete ()",
+            "[System.IO.FileInfo]::new('file.txt').Delete()",
+            "$fs.DeleteFile('file.txt')",
+            "$dir.DeleteFolder('old_dir')",
+        ] {
+            let hit = scan_shell_write_intent(variant)
+                .unwrap_or_else(|| panic!("{variant} 必须判删除族写意图"));
+            assert_eq!(
+                family_label(&hit.surface),
+                "删除族命令",
+                "{variant}: {}",
+                hit.surface
+            );
+        }
+    }
+
+    /// ②附3 只读成员调用零误伤：`Read*`/`Get*`/`Exists`/`OpenText` 等不判写意图。
+    #[test]
+    fn read_only_member_calls_are_not_write_intent() {
+        for command in [
+            "[System.IO.File]::ReadAllText('file.txt')",
+            "[System.IO.File]::Exists('file.txt')",
+            "[System.IO.Directory]::GetFiles('new_dir')",
+            "([System.IO.FileInfo]'file.txt').OpenText()",
+            "$fs.get_Length()",
+        ] {
+            assert_eq!(
+                scan_shell_write_intent(command),
+                None,
+                "{command} 只读成员调用不得判写意图"
+            );
         }
     }
 
@@ -329,6 +587,20 @@ mod tests {
         assert!(
             source.contains("已知漏放边界"),
             "write_intent.rs 必须有注释行解释漏放边界（兑底层）"
+        );
+        // 静态调用面口径（同族同权 + 误拒/漏放边界）同样逐条有注释行，
+        // 改口径必改注释+测试（本测试即锁）。
+        assert!(
+            source.contains("脚本引擎静态调用面同族同权"),
+            "write_intent.rs 必须有注释行解释静态调用面同族同权口径"
+        );
+        assert!(
+            source.contains("只提到调用形态文本"),
+            "write_intent.rs 必须有注释行解释静态调用面的误拒边界"
+        );
+        assert!(
+            source.contains("动态成员名/反射调用"),
+            "write_intent.rs 必须有注释行解释静态调用面的漏放边界"
         );
     }
 

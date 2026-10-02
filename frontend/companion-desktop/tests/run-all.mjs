@@ -61,6 +61,8 @@ const SUITES = [
   {file: 'theme-bubble-contrast.mjs', name: 'user bubble contrast sentinel (starship fix / default zero-regression, source mirror)'},
   {file: 'switch-scope-copy.mjs', name: 'file-write gate full-scope copy (capdef desc / env note / user manual, source mirror)'},
   {file: 'switch-power-audit.mjs', name: 'capability switch power audit table (filed rows / dispositions, source mirror)'},
+  {file: 'pending-approval-marker.mjs', name: 'pending approval card marker chain (tool-generic 等待批准 frame, source mirror)'},
+  {file: 'session-preset-persistence.mjs', name: 'session approval tier persistence (select→persist→read back / reopen restore / new-session default, source mirror)'},
 ];
 
 function run({file, strip}) {
