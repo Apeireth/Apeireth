@@ -568,6 +568,23 @@ export function loadConfig(): ApeirethConfig {
         modified = true;
       }
       let model = typeof parsed.model === 'string' ? parsed.model : DEFAULT_MODEL;
+      // Migrate the retired shipped-default persona: an older release shipped a
+      // character voice as the default; when persisted configs saved their
+      // persona list it was copied in as user data. Recognize it by shipped
+      // identity + original text prefix and restore the neutral default;
+      // user-authored personas are never touched.
+      if (Array.isArray((parsed as Record<string, unknown>).personas)) {
+        const list = (parsed as Record<string, unknown>).personas as Array<Record<string, unknown>>;
+        const migratedPersonas = list.map((entry) => {
+          const text = typeof entry?.persona === 'string' ? (entry.persona as string) : '';
+          if (entry?.id === 'apeireth-default' && text.startsWith('你是「阿佩瑞斯」')) {
+            modified = true;
+            return { ...entry, name: '无人设（默认）', persona: '' };
+          }
+          return entry;
+        });
+        (parsed as Record<string, unknown>).personas = migratedPersonas;
+      }
       // Migrate the retired v1 default. No canonical provider matches
       // 'MiniMax-Text-01', so a config carrying it would fail every turn.
       if (model === 'MiniMax-Text-01') {
