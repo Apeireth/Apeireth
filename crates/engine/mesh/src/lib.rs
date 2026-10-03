@@ -42,6 +42,7 @@ pub mod discovery;
 pub mod error;
 pub mod executor;
 pub mod identity;
+mod kinds;
 pub mod mdns;
 pub mod node;
 pub mod pairing;
