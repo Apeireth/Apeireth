@@ -318,8 +318,8 @@ console.log('--- Starting Settings Live-Apply (three-tier) Check ---');
   const keys = Object.keys(DANGER_ACTION_CONFIRMATIONS).sort();
   assert.deepEqual(
     keys,
-    ['clearCustomBg', 'clearLocalData', 'deleteStoredKey', 'removePersona'].sort(),
-    '危险动作登记表必须恰为 删数据/清记忆/断开连接 类四项',
+    ['clearAllSessionData', 'clearCustomBg', 'clearRecentConversations', 'deleteStoredKey', 'removePersona'].sort(),
+    '危险动作登记表必须恰为 会话清理双档/删数据/清记忆/断开连接 类五项',
   );
   for (const key of keys) {
     const entry = DANGER_ACTION_CONFIRMATIONS[key];
@@ -328,7 +328,8 @@ console.log('--- Starting Settings Live-Apply (three-tier) Check ---');
   }
 
   // 源码镜像：按钮只 requestDanger（不直接执行），确认后 runDangerAction 即效。
-  assert.ok(settingsSrc.includes("onclick={() => requestDanger('clearLocalData')}"), '清空本地数据必须二次确认');
+  assert.ok(settingsSrc.includes("onclick={() => requestDanger('clearRecentConversations')}"), '清除近期对话记录必须二次确认');
+  assert.ok(settingsSrc.includes("onclick={() => requestDanger('clearAllSessionData')}"), '清除全部会话数据必须二次确认');
   assert.ok(settingsSrc.includes("onclick={() => requestDanger('removePersona', p.id)}"), '删除伙伴必须二次确认');
   assert.ok(settingsSrc.includes("onclick={() => requestDanger('deleteStoredKey')}"), '删除已存密钥必须二次确认');
   assert.ok(!/onclick=\{deleteStoredKey\}/.test(settingsSrc), '删除密钥不允许点开即删');
@@ -337,7 +338,8 @@ console.log('--- Starting Settings Live-Apply (three-tier) Check ---');
     /onConfirm=\{\(\) => void runDangerAction\(\)\}/.test(settingsSrc),
     '确认弹层确认后才执行（即效）',
   );
-  assert.ok(/async function runDangerAction[\s\S]*?case 'clearLocalData'/.test(settingsSrc), 'runDangerAction 收口全部危险动作');
+  assert.ok(/async function runDangerAction[\s\S]*?case 'clearRecentConversations'/.test(settingsSrc), 'runDangerAction 收口全部危险动作');
+  assert.ok(/async function runDangerAction[\s\S]*?case 'clearAllSessionData'/.test(settingsSrc), 'runDangerAction 收口清理双档两档');
 
   // 自定义背景清除（删数据类）同样二次确认。
   assert.ok(themePanelSrc.includes('showClearBgConfirm'), '清除已传图片必须二次确认');
