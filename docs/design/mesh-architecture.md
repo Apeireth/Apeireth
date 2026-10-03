@@ -106,8 +106,29 @@ persisted only after both users confirm; any failure leaves nothing behind.
 dialled. `PairingOptions::with_limiter` applies admission control to inbound
 ceremonies.
 
-## Rendezvous server
+## Endpoint observation (the first half of NAT traversal)
 
+A node behind a NAT cannot learn its own public UDP address by reasoning — only
+someone outside can look and tell it. `apeireth-mesh-protocol::observe` is that
+question: one fixed-size 64-byte probe, one fixed-size 64-byte reply carrying
+the source address the observer actually saw. Both directions are the same
+size, so an observer is not a usable reflector, and a malformed datagram is
+never answered.
+
+The answer is a **hint, never a grant**. It cannot add, remove or alter a pin,
+and it grants no trust: the address it names still has to survive the pinned
+QUIC handshake before a link exists. The rendezvous server offers it only when
+configured (`ServerConfig::with_observe_addr`), and a node that never observes
+anything still works over the direct and relayed paths — observation is an
+optimization, never a prerequisite.
+
+Observation runs over UDP on its own socket. The control channel is TCP, and a
+TCP-mapped address says nothing about the UDP mapping a QUIC endpoint will use,
+so a candidate is only meaningful if it was observed from the socket that will
+do the dialing. Closing that gap — dialing from the very port that was observed
+— is what turns a list of candidates into a hole punch.
+
+## Rendezvous server
 - First key wins while a lease lives; refreshes must advance the expiry.
 - Leases are capped at the protocol maximum; expired presence is pruned.
 - A connection holds one registration. Withdraw, circuit open/accept/close and
@@ -124,11 +145,18 @@ ceremonies.
   in the runtime's own `CapabilityRegistry` (module-id strings), not in
   `PluginManager`, so the mesh cannot see them. Exposing them would first need
   an ownership story for them.
-- **NAT traversal is not implemented.** Peers behind NAT reach each other
-  directly only when one side is reachable, and otherwise through the relay.
-  The seam exists (`PeerConnector` strategies); a hole-punching strategy needs
-  endpoint observation and candidate exchange in the rendezvous protocol, and a
-  shared-socket QUIC endpoint.
+- **NAT traversal is not implemented end to end.** Peers behind NAT reach each
+  other directly only when one side is reachable, and otherwise through the
+  relay. The seam exists (`PeerConnector` strategies), and the first piece is
+  now in place: `apeireth-mesh-protocol::observe` defines the server-reflexive
+  observation datagram and the rendezvous server answers it on a UDP socket
+  (`ServerConfig::with_observe_addr`), so a node can learn the public UDP
+  address it should advertise. Still missing: carrying that candidate inside the
+  signed presence record, a shared-socket QUIC endpoint (dial from the very port
+  that was observed), simultaneous dial over a candidate list, and the
+  node-level wiring that picks among candidates. **Loopback tests prove the
+  plumbing only — they do not prove a real NAT is traversed**, and nothing here
+  may be called "NAT traversal supported" until it is measured against one.
 - **The rendezvous control channel is plain TCP.** An on-path attacker can drop
   or delay traffic and race a captured registration. Confidentiality and peer
   identity are unaffected (end-to-end), availability is.

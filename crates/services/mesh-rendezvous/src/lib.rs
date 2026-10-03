@@ -55,13 +55,14 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use apeireth_mesh_protocol::observe::{decode_probe, encode_reply, OBSERVE_DATAGRAM_BYTES};
 use apeireth_mesh_protocol::rendezvous::{
     decode_frame, encode_control, encode_relay, Frame, PresenceRecord, RelayCircuitId,
     RelayControl, RelayFrame, RendezvousRequest, RendezvousResponse, PRESENCE_MAX_TTL_MS,
 };
 use apeireth_mesh_protocol::NodeId;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::sync::Mutex as AsyncMutex;
 
 /// Server configuration. Every limit is explicit — a self-hosted deployment
@@ -70,6 +71,12 @@ use tokio::sync::Mutex as AsyncMutex;
 pub struct ServerConfig {
     /// The address to bind (`127.0.0.1:0` picks a free port in tests).
     pub listen: SocketAddr,
+    /// Optional UDP address to answer endpoint-observation probes on.
+    ///
+    /// `None` disables observation; the server is still a complete rendezvous
+    /// and relay. `127.0.0.1:0` picks a free port in tests. The probe answer is
+    /// a reachability *hint* only — see [`apeireth_mesh_protocol::observe`].
+    pub observe_addr: Option<SocketAddr>,
     /// The public audience / URL this server answers for. Presence records are
     /// signed *for* this audience; a mismatch is refused (defeats cross-server
     /// replay).
@@ -100,10 +107,22 @@ pub struct ServerConfig {
 }
 
 impl ServerConfig {
+    /// Also answer endpoint-observation probes on `addr`.
+    ///
+    /// This is what lets a node behind a NAT learn the public UDP address it
+    /// should advertise as a hole-punching candidate. It is a separate UDP
+    /// socket because the control channel is TCP and TCP's observed source
+    /// says nothing about the UDP mapping a QUIC endpoint will use.
+    pub fn with_observe_addr(mut self, addr: SocketAddr) -> Self {
+        self.observe_addr = Some(addr);
+        self
+    }
+
     /// A config for `audience` binding on a given listen address.
     pub fn new(listen: SocketAddr, audience: impl Into<String>) -> Self {
         Self {
             listen,
+            observe_addr: None,
             audience: audience.into(),
             presence_ttl_ms: apeireth_mesh_protocol::rendezvous::PRESENCE_DEFAULT_TTL_MS,
             max_nodes: 1024,
@@ -286,6 +305,7 @@ impl Drop for ConnectionSlot {
 /// The rendezvous + relay server.
 pub struct RendezvousRelayServer {
     listener: TcpListener,
+    observer: Option<Arc<UdpSocket>>,
     state: Arc<State>,
     local: SocketAddr,
 }
@@ -299,8 +319,17 @@ impl RendezvousRelayServer {
         let local = listener
             .local_addr()
             .map_err(|e| ServerError::Io(e.to_string()))?;
+        let observer = match config.observe_addr {
+            Some(addr) => {
+                Some(Arc::new(UdpSocket::bind(addr).await.map_err(|e| {
+                    ServerError::Io(format!("bind udp {addr}: {e}"))
+                })?))
+            }
+            None => None,
+        };
         Ok(Self {
             listener,
+            observer,
             state: Arc::new(State {
                 config,
                 nodes: Mutex::new(BTreeMap::new()),
@@ -317,9 +346,20 @@ impl RendezvousRelayServer {
         self.local
     }
 
+    /// The bound endpoint-observation UDP address, when observation is enabled.
+    pub async fn local_observe_addr(&self) -> Option<SocketAddr> {
+        match &self.observer {
+            Some(socket) => socket.local_addr().ok(),
+            None => None,
+        }
+    }
+
     /// Run the accept loop until the listener is closed. Each connection is
     /// handled on its own task.
     pub async fn run(self: Arc<Self>) -> Result<(), ServerError> {
+        if let Some(observer) = self.observer.clone() {
+            tokio::spawn(async move { observe_loop(observer).await });
+        }
         loop {
             let (stream, peer) = self
                 .listener
@@ -337,6 +377,49 @@ impl RendezvousRelayServer {
                 drop(slot);
             });
         }
+    }
+}
+
+/// Answer endpoint-observation probes until the socket fails repeatedly.
+///
+/// Deliberately dumb and stateless: no identity, no registration, no memory
+/// between datagrams. It echoes the *observed* source address back to whoever
+/// sent a well-formed probe — exactly the "what address does the outside world
+/// see me at?" question a node behind a NAT must answer before it can advertise
+/// a dialable candidate.
+///
+/// What a client learns here is a hint and nothing more. It never grants trust,
+/// and it cannot add, remove or alter a pin: the address still has to be proven
+/// by the pinned QUIC handshake before a link exists.
+///
+/// Malformed datagrams are never answered, and a reply is never larger than the
+/// probe that provoked it, so the socket is not a usable reflector.
+async fn observe_loop(socket: Arc<UdpSocket>) {
+    let mut buf = [0u8; OBSERVE_DATAGRAM_BYTES];
+    let mut consecutive_errors = 0u32;
+    loop {
+        let (n, from) = match socket.recv_from(&mut buf).await {
+            Ok(pair) => {
+                consecutive_errors = 0;
+                pair
+            }
+            // A failing socket must not become a hot loop, but one transient
+            // error must not end observation for the whole server either.
+            Err(_) => {
+                consecutive_errors += 1;
+                if consecutive_errors >= 32 {
+                    return;
+                }
+                tokio::task::yield_now().await;
+                continue;
+            }
+        };
+        let Some(nonce) = decode_probe(&buf[..n]) else {
+            continue;
+        };
+        let reply = encode_reply(&nonce, from);
+        // Best effort: a dropped reply is the sender's problem, not the loop's.
+        let _ = socket.send_to(&reply, from).await;
     }
 }
 
