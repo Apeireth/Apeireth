@@ -70,6 +70,9 @@ struct TrustStoreFile {
 pub struct TrustStore {
     path: PathBuf,
     peers: std::sync::Mutex<BTreeMap<NodeId, KnownPeer>>,
+    /// Serializes file replacement so concurrent saves cannot interleave on
+    /// the shared temp file.
+    io_lock: std::sync::Mutex<()>,
 }
 
 impl TrustStore {
@@ -97,6 +100,7 @@ impl TrustStore {
         Ok(Self {
             path,
             peers: std::sync::Mutex::new(peers),
+            io_lock: std::sync::Mutex::new(()),
         })
     }
 
@@ -123,25 +127,46 @@ impl TrustStore {
     ///
     /// The pairing ceremony — bilateral user confirmation over an
     /// authenticated channel — is the only way a peer reaches this method.
+    ///
+    /// An existing pin for the same NodeId is never replaced by a different
+    /// key: that is [`TrustStoreError::KeyMismatch`], and recovery is an
+    /// explicit [`TrustStore::forget`] followed by a fresh ceremony. If the
+    /// file cannot be written, the in-memory state is rolled back so memory
+    /// never claims trust that disk does not hold.
     pub fn record_paired(
         &self,
         node: NodeId,
         endpoint: impl Into<String>,
         key_fingerprint: KeyFingerprint,
     ) -> Result<(), TrustStoreError> {
-        {
+        let previous = {
             let mut peers = self.peers.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(pinned) = peers.get(&node).and_then(|p| p.key_fingerprint.as_ref()) {
+                if *pinned != key_fingerprint {
+                    return Err(TrustStoreError::KeyMismatch {
+                        node,
+                        expected: pinned.to_string(),
+                        presented: key_fingerprint.to_string(),
+                    });
+                }
+            }
             peers.insert(
                 node.clone(),
                 KnownPeer {
-                    node,
+                    node: node.clone(),
                     endpoint: endpoint.into(),
                     trust: PeerTrust::Trusted,
                     key_fingerprint: Some(key_fingerprint),
                 },
-            );
-        }
-        self.save()
+            )
+        };
+        self.save().inspect_err(|_| {
+            let mut peers = self.peers.lock().unwrap_or_else(|p| p.into_inner());
+            match previous.clone() {
+                Some(old) => peers.insert(node.clone(), old),
+                None => peers.remove(&node),
+            };
+        })
     }
 
     /// Reconcile a discovery observation against pinned trust.
@@ -185,14 +210,21 @@ impl TrustStore {
     /// Forget a peer: remove its persisted trust. The local node identity is
     /// never touched — unpairing is about the *other* side.
     pub fn forget(&self, node: &NodeId) -> Result<bool, TrustStoreError> {
-        let removed = {
-            let mut peers = self.peers.lock().unwrap_or_else(|p| p.into_inner());
-            peers.remove(node).is_some()
+        let removed = self
+            .peers
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(node);
+        let Some(removed) = removed else {
+            return Ok(false);
         };
-        if removed {
-            self.save()?;
-        }
-        Ok(removed)
+        self.save().inspect_err(|_| {
+            self.peers
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .insert(node.clone(), removed.clone());
+        })?;
+        Ok(true)
     }
 
     /// Atomic replace: temp file in the same directory, then rename.
@@ -209,14 +241,28 @@ impl TrustStore {
         };
         let text = serde_json::to_string_pretty(&file)
             .map_err(|e| TrustStoreError::Invalid(e.to_string()))?;
+        let _io = self.io_lock.lock().unwrap_or_else(|p| p.into_inner());
         let tmp = self.path.with_extension("tmp");
-        std::fs::write(&tmp, text).map_err(|e| TrustStoreError::Io(e.to_string()))?;
+        let io = |e: std::io::Error| TrustStoreError::Io(e.to_string());
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
         }
-        std::fs::rename(&tmp, &self.path).map_err(|e| TrustStoreError::Io(e.to_string()))
+        let write = || -> Result<(), TrustStoreError> {
+            use std::io::Write;
+            let mut file = options.open(&tmp).map_err(io)?;
+            file.write_all(text.as_bytes()).map_err(io)?;
+            // Data must be durable before the rename publishes it.
+            file.sync_all().map_err(io)?;
+            drop(file);
+            std::fs::rename(&tmp, &self.path).map_err(io)
+        };
+        write().inspect_err(|_| {
+            let _ = std::fs::remove_file(&tmp);
+        })
     }
 }
 
@@ -271,6 +317,40 @@ mod tests {
         assert_eq!(store.get(&node).unwrap().endpoint, "192.168.1.42:7000");
         assert_eq!(store.get(&node).unwrap().key_fingerprint, Some(fp(1)));
         std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn re_pairing_never_replaces_a_pinned_key() {
+        let path = temp_path("repair");
+        let store = TrustStore::load_or_new(&path).unwrap();
+        let node = NodeId::new("node-b").unwrap();
+        store.record_paired(node.clone(), "old:1", fp(1)).unwrap();
+
+        let err = store
+            .record_paired(node.clone(), "new:1", fp(2))
+            .unwrap_err();
+        assert!(matches!(err, TrustStoreError::KeyMismatch { .. }));
+        let kept = store.get(&node).unwrap();
+        assert_eq!(kept.key_fingerprint, Some(fp(1)));
+        assert_eq!(kept.endpoint, "old:1");
+
+        // The same key may re-pair (endpoint refresh); a changed key must
+        // go through forget first.
+        store.record_paired(node.clone(), "new:1", fp(1)).unwrap();
+        assert_eq!(store.get(&node).unwrap().endpoint, "new:1");
+        store.forget(&node).unwrap();
+        store.record_paired(node.clone(), "new:1", fp(2)).unwrap();
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn a_failed_save_leaves_no_phantom_trust() {
+        let dir =
+            std::env::temp_dir().join(format!("apeireth-trust-nosuch-{}", std::process::id()));
+        let store = TrustStore::load_or_new(dir.join("missing-dir").join("peers.json")).unwrap();
+        let node = NodeId::new("node-b").unwrap();
+        assert!(store.record_paired(node.clone(), "e", fp(1)).is_err());
+        assert!(store.get(&node).is_none());
     }
 
     #[test]
