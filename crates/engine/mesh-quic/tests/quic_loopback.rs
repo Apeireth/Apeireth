@@ -18,7 +18,7 @@ use apeireth_core::kernel::{
 use apeireth_mesh::identity::NodeIdentity;
 use apeireth_mesh::{
     assert_connection_conformance, InvokeMeta, ManagerExecutor, MeshConnection, MeshListener,
-    MeshNode, MeshNodeConfig, ModuleManagerView, RemoteCapabilityPort, RouteSelection, TrustPolicy,
+    MeshNode, MeshNodeConfig, PluginManagerView, RemoteCapabilityPort, RouteSelection, TrustPolicy,
 };
 use apeireth_mesh_quic::{QuicMeshListener, QuicMeshTransport, QuicTransportConfig};
 use apeireth_plugin::{
@@ -56,7 +56,7 @@ struct Holder {
     clock: Arc<dyn apeireth_core::kernel::Clock>,
 }
 
-impl ModuleManagerView for Holder {
+impl PluginManagerView for Holder {
     fn with_manager<R>(&self, f: impl FnOnce(&PluginManager) -> R) -> R {
         f(&self.manager.lock().unwrap())
     }

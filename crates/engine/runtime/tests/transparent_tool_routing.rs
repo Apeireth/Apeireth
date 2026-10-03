@@ -16,7 +16,7 @@ use apeireth_core::kernel::{
 use apeireth_governance::{Action, ActionSource, Decision, GovernanceHook, GovernanceRequest};
 use apeireth_mesh::{
     linked_pair, InvokeMeta, ManagerExecutor, MeshConnection, MeshEnvelope, MeshNode,
-    MeshNodeConfig, MeshPayload, ModuleManagerView, RemoteCapabilityPort, RemoteToolDescriptor,
+    MeshNodeConfig, MeshPayload, PluginManagerView, RemoteCapabilityPort, RemoteToolDescriptor,
     TrustPolicy,
 };
 use apeireth_plugin::{
@@ -190,7 +190,7 @@ struct Holder {
     clock: Arc<dyn apeireth_core::kernel::Clock>,
 }
 
-impl ModuleManagerView for Holder {
+impl PluginManagerView for Holder {
     fn with_manager<R>(&self, f: impl FnOnce(&PluginManager) -> R) -> R {
         f(&self.manager.read().unwrap())
     }

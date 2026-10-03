@@ -748,7 +748,7 @@ impl MeshNode {
         let (tx, rx) = oneshot::channel();
 
         match route.location {
-            apeireth_mesh_protocol::ModuleLocation::Local => {
+            apeireth_mesh_protocol::PluginLocation::Local => {
                 let flag = CancelFlag::new();
                 self.invocations
                     .lock()
@@ -794,7 +794,7 @@ impl MeshNode {
                     rx,
                 })
             }
-            apeireth_mesh_protocol::ModuleLocation::Remote(node) => {
+            apeireth_mesh_protocol::PluginLocation::Remote(node) => {
                 self.ensure_peer_dispatchable(&node)?;
                 {
                     let pending_for_peer = self

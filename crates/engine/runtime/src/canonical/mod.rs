@@ -131,7 +131,7 @@ pub use metrics::{
 pub use mesh::{
     mesh_routes_for, runtime_mesh_executor, CallHandle, CallTarget, CapabilityCatalogEntry,
     CapabilityRoute, InvokeMeta, ManagerExecutor, MeshCapabilityExecutor, MeshError, MeshExecError,
-    MeshInvokeContext, MeshNode, MeshNodeConfig, ModuleLocation, ModuleManagerView,
+    MeshInvokeContext, MeshNode, MeshNodeConfig, PluginLocation, PluginManagerView,
     RemoteCapability, RouteSelection, RouteTable,
 };
 pub use module::{

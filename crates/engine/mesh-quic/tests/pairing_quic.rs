@@ -9,7 +9,7 @@ use apeireth_governance::{Action, ActionSource, Decision, GovernanceHook, Govern
 use apeireth_mesh::identity::NodeIdentity;
 use apeireth_mesh::{
     pair_inbound, pair_outbound, ConfirmDecision, ManagerExecutor, MeshConnection, MeshListener,
-    MeshNode, MeshNodeConfig, ModuleManagerView, PairedPeer, PairingError, PairingOptions,
+    MeshNode, MeshNodeConfig, PairedPeer, PairingError, PairingOptions, PluginManagerView,
     RouteSelection, TrustPolicy, TrustStore,
 };
 use apeireth_mesh_quic::{QuicMeshListener, QuicMeshTransport, QuicTransportConfig};
@@ -36,7 +36,7 @@ struct Holder {
     clock: Arc<dyn apeireth_core::kernel::Clock>,
 }
 
-impl ModuleManagerView for Holder {
+impl PluginManagerView for Holder {
     fn with_manager<R>(&self, f: impl FnOnce(&PluginManager) -> R) -> R {
         f(&self.manager.lock().unwrap())
     }

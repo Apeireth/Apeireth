@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 
 use apeireth_core::kernel::{CapabilityId, PluginId};
 use apeireth_mesh_protocol::{
-    CapabilityAdvert, LocatedModuleId, MeshCapabilityKind, ModuleLocation,
+    CapabilityAdvert, LocatedPluginId, MeshCapabilityKind, PluginLocation,
 };
 
 use crate::error::MeshError;
@@ -32,15 +32,14 @@ use crate::error::MeshError;
 /// Where one capability executes: its logical owner plus its physical location.
 ///
 /// Identity stays where it belongs — [`PluginId`] for the module,
-/// [`CapabilityId`] for the capability — and [`ModuleLocation`] is pure routing
-/// metadata. `ModuleOrigin::System` on `ModuleLocation::Remote(node)` is a
-/// perfectly ordinary combination: provenance and placement are orthogonal.
+/// [`CapabilityId`] for the capability — and [`PluginLocation`] is pure routing
+/// metadata, and a remote route never implies local ownership.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CapabilityRoute {
     /// The module that owns the implementation (its `PluginId`).
     pub owner: PluginId,
     /// Where that module's runtime sits.
-    pub location: ModuleLocation,
+    pub location: PluginLocation,
 }
 
 impl CapabilityRoute {
@@ -48,28 +47,28 @@ impl CapabilityRoute {
     pub fn local(owner: PluginId) -> Self {
         Self {
             owner,
-            location: ModuleLocation::Local,
+            location: PluginLocation::Local,
         }
     }
 
     /// A route to another runtime.
-    pub fn remote(owner: LocatedModuleId) -> Self {
+    pub fn remote(owner: LocatedPluginId) -> Self {
         Self {
             owner: owner.module,
-            location: ModuleLocation::Remote(owner.node),
+            location: PluginLocation::Remote(owner.node),
         }
     }
 
     /// Compose from a module id and a location.
-    pub fn from_parts(owner: PluginId, location: ModuleLocation) -> Self {
+    pub fn from_parts(owner: PluginId, location: PluginLocation) -> Self {
         Self { owner, location }
     }
 
     /// The network-layer owner identity, for remote routes.
-    pub fn located_owner(&self) -> Option<LocatedModuleId> {
+    pub fn located_owner(&self) -> Option<LocatedPluginId> {
         match &self.location {
-            ModuleLocation::Local => None,
-            ModuleLocation::Remote(node) => Some(LocatedModuleId {
+            PluginLocation::Local => None,
+            PluginLocation::Remote(node) => Some(LocatedPluginId {
                 node: node.clone(),
                 module: self.owner.clone(),
             }),
@@ -112,7 +111,7 @@ pub struct RemoteCapability {
     /// Category, validated against the id's reserved prefix on ingest.
     pub kind: MeshCapabilityKind,
     /// Network-layer owner: which module on which node.
-    pub owner: LocatedModuleId,
+    pub owner: LocatedPluginId,
     /// What it does, in one line, when the advert carried one.
     pub description: String,
     /// Whether the owning module reported it dispatchable in the latest advert.
@@ -184,7 +183,7 @@ impl RouteTable {
                 RemoteCapability {
                     id: entry.id.clone(),
                     kind: entry.kind,
-                    owner: LocatedModuleId::new(node.clone(), module.clone()),
+                    owner: LocatedPluginId::new(node.clone(), module.clone()),
                     description: entry.description.clone(),
                     available: entry.available,
                     declaration: entry.declaration.clone(),
@@ -230,14 +229,14 @@ impl RouteTable {
         if let Some(entry) = local_view.iter().find(|entry| &entry.id == capability) {
             routes.push(CapabilityRoute::from_parts(
                 entry.owner.clone(),
-                ModuleLocation::Local,
+                PluginLocation::Local,
             ));
         }
         for ((node, id), remote) in &self.remote {
             if id == capability {
                 routes.push(CapabilityRoute::from_parts(
                     remote.owner.module.clone(),
-                    ModuleLocation::Remote(node.clone()),
+                    PluginLocation::Remote(node.clone()),
                 ));
             }
         }
@@ -260,7 +259,7 @@ impl RouteTable {
                 .iter()
                 .find(|entry| &entry.id == capability)
                 .map(|entry| {
-                    CapabilityRoute::from_parts(entry.owner.clone(), ModuleLocation::Local)
+                    CapabilityRoute::from_parts(entry.owner.clone(), PluginLocation::Local)
                 })
                 .ok_or_else(|| MeshError::RouteUnavailable {
                     capability: capability.clone(),
@@ -275,7 +274,7 @@ impl RouteTable {
                 .map(|remote| {
                     CapabilityRoute::from_parts(
                         remote.owner.module.clone(),
-                        ModuleLocation::Remote(node.clone()),
+                        PluginLocation::Remote(node.clone()),
                     )
                 })
                 .ok_or_else(|| MeshError::RouteUnavailable {
@@ -291,7 +290,7 @@ impl RouteTable {
 mod tests {
     use super::*;
     use apeireth_core::kernel::NodeId;
-    use apeireth_mesh_protocol::{CapabilityAdvertEntry, ModuleAdvert};
+    use apeireth_mesh_protocol::{CapabilityAdvertEntry, PluginAdvert};
 
     fn node(id: &str) -> apeireth_core::kernel::NodeId {
         NodeId::new(id).unwrap()
@@ -319,7 +318,7 @@ mod tests {
 
     fn advert(id: &str) -> CapabilityAdvert {
         CapabilityAdvert {
-            modules: vec![ModuleAdvert {
+            modules: vec![PluginAdvert {
                 module: module("builtin.mesh-test"),
                 capabilities: vec![CapabilityAdvertEntry::tool(
                     cap(id),
@@ -358,7 +357,7 @@ mod tests {
                 &local_view("tool.mesh.echo", "builtin.local"),
             )
             .unwrap();
-        assert_eq!(resolved.location, ModuleLocation::Local);
+        assert_eq!(resolved.location, PluginLocation::Local);
         assert_eq!(resolved.owner, module("builtin.local"));
     }
 

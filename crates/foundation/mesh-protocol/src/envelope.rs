@@ -25,7 +25,7 @@ use apeireth_core::kernel::{CapabilityId, RequestId, SessionId, TraceId};
 use apeireth_protocol::canonical::{ToolCall, ToolResult};
 use serde::{Deserialize, Serialize};
 
-use crate::identity::{CapabilityAdvertEntry, MeshCapabilityKind, ModuleAdvert, NodeDescriptor};
+use crate::identity::{CapabilityAdvertEntry, MeshCapabilityKind, NodeDescriptor, PluginAdvert};
 
 /// The mesh wire protocol version this build speaks.
 ///
@@ -177,7 +177,7 @@ pub struct HelloAck {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CapabilityAdvert {
     /// Every module the advertising node currently exposes to the mesh.
-    pub modules: Vec<ModuleAdvert>,
+    pub modules: Vec<PluginAdvert>,
 }
 
 impl CapabilityAdvert {
@@ -197,7 +197,7 @@ impl CapabilityAdvert {
     pub fn is_well_formed(&self) -> bool {
         self.modules
             .iter()
-            .all(ModuleAdvert::entries_are_well_formed)
+            .all(PluginAdvert::entries_are_well_formed)
     }
 }
 
@@ -402,7 +402,7 @@ pub fn verify_hello_ack(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::identity::LocatedModuleId;
+    use crate::identity::LocatedPluginId;
     use apeireth_core::kernel::{NodeId, PluginId};
 
     fn node(id: &str) -> NodeId {
@@ -556,7 +556,7 @@ mod tests {
     #[test]
     fn an_advert_carries_identity_and_availability_and_never_implementations() {
         let advert = CapabilityAdvert {
-            modules: vec![ModuleAdvert {
+            modules: vec![PluginAdvert {
                 module: PluginId::new("builtin.mesh-test").unwrap(),
                 capabilities: vec![CapabilityAdvertEntry::tool(
                     CapabilityId::new("tool.mesh.echo").unwrap(),
@@ -574,8 +574,8 @@ mod tests {
         assert!(advert.is_well_formed());
         let owner = PluginId::new("builtin.mesh-test").unwrap();
         assert_eq!(
-            LocatedModuleId::new(node("node-b"), owner.clone()),
-            LocatedModuleId::new(node("node-b"), owner)
+            LocatedPluginId::new(node("node-b"), owner.clone()),
+            LocatedPluginId::new(node("node-b"), owner)
         );
         let text = serde_json::to_string(&advert).unwrap();
         // Structural guard: an advert must not smuggle implementation objects.

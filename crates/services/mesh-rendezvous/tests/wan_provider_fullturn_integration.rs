@@ -26,7 +26,7 @@ use apeireth_governance::{Decision, GovernanceHook, GovernanceRequest};
 use apeireth_mesh::identity::NodeIdentity;
 use apeireth_mesh::relay::{signed_presence, RelayEndpoint, RelayMeshListener, RelayMeshTransport};
 use apeireth_mesh::{
-    InvokeMeta, ManagerExecutor, MeshListener, MeshNode, MeshNodeConfig, ModuleManagerView,
+    InvokeMeta, ManagerExecutor, MeshListener, MeshNode, MeshNodeConfig, PluginManagerView,
     RemoteCapabilityPort, RouteSelection, TrustPolicy,
 };
 use apeireth_mesh_protocol::KeyFingerprint;
@@ -66,7 +66,7 @@ struct Holder {
     clock: Arc<dyn Clock>,
 }
 
-impl ModuleManagerView for Holder {
+impl PluginManagerView for Holder {
     fn with_manager<R>(&self, f: impl FnOnce(&PluginManager) -> R) -> R {
         f(&self.manager.lock().unwrap())
     }

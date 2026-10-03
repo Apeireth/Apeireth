@@ -37,8 +37,8 @@ pub use envelope::{
     MESH_PROTOCOL_VERSION,
 };
 pub use identity::{
-    CapabilityAdvertEntry, KeyFingerprint, LocatedModuleId, MeshCapabilityKind, ModuleAdvert,
-    ModuleLocation, NodeDescriptor, WireModelDescriptor,
+    CapabilityAdvertEntry, KeyFingerprint, LocatedPluginId, MeshCapabilityKind, NodeDescriptor,
+    PluginAdvert, PluginLocation, WireModelDescriptor,
 };
 pub use pairing::{
     PairChallenge, PairCodeReady, PairComplete, PairConfirm, PairHello, PairReject, PairingMessage,

@@ -17,8 +17,8 @@ use apeireth_governance::{Action, ActionSource, Decision, GovernanceHook, Govern
 use apeireth_mesh::{
     linked_pair, CapabilityCatalogEntry, Hello, HelloAck, InvokeMeta, ManagerExecutor,
     MeshCapabilityExecutor, MeshConnection, MeshEnvelope, MeshError, MeshErrorCode, MeshExecError,
-    MeshInvokeContext, MeshNode, MeshNodeConfig, MeshPayload, ModuleManagerView, NodeDescriptor,
-    PeerState, RouteSelection, TrustPolicy, MESH_PROTOCOL_VERSION,
+    MeshInvokeContext, MeshNode, MeshNodeConfig, MeshPayload, NodeDescriptor, PeerState,
+    PluginManagerView, RouteSelection, TrustPolicy, MESH_PROTOCOL_VERSION,
 };
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManager, PluginManifest, ToolCapability,
@@ -157,7 +157,7 @@ struct Holder {
     recorder: Arc<ExecRecorder>,
 }
 
-impl ModuleManagerView for Holder {
+impl PluginManagerView for Holder {
     fn with_manager<R>(&self, f: impl FnOnce(&PluginManager) -> R) -> R {
         f(&self.manager.read().unwrap())
     }

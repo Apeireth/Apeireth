@@ -4,7 +4,7 @@
 //! This is deliberately the entire integration surface. The mesh crate owns
 //! every semantic (handshake, trust, routing, projection, cancellation); the
 //! runtime owns every fact (modules, capabilities, lifecycle, policy). The two
-//! meet only through [`ModuleManagerView`], so neither can grow a second view
+//! meet only through [`PluginManagerView`], so neither can grow a second view
 //! of the other's world — a remote invocation lands in the same
 //! governance-then-`PluginManager` path a local one takes, and the network
 //! still only changes *where execution happens*.
@@ -18,12 +18,12 @@ use apeireth_plugin::PluginManager;
 pub use apeireth_mesh::{
     CallHandle, CallTarget, CapabilityCatalogEntry, CapabilityRoute, InvokeMeta, ManagerExecutor,
     MeshCapabilityExecutor, MeshError, MeshExecError, MeshInvokeContext, MeshNode, MeshNodeConfig,
-    ModuleLocation, ModuleManagerView, RemoteCapability, RouteSelection, RouteTable,
+    PluginLocation, PluginManagerView, RemoteCapability, RouteSelection, RouteTable,
 };
 
 use super::runtime::Runtime;
 
-impl ModuleManagerView for Runtime {
+impl PluginManagerView for Runtime {
     fn with_manager<R>(&self, f: impl FnOnce(&PluginManager) -> R) -> R {
         f(self.plugins())
     }
