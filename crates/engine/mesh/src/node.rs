@@ -20,7 +20,7 @@
 //! identity — reconnect restores everything.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use apeireth_core::kernel::{CapabilityId, Clock, NodeId, RequestId, SessionId, TraceId};
 use apeireth_governance::ActionSource;
@@ -37,7 +37,7 @@ use crate::executor::{catalog_to_modules, CancelFlag, MeshCapabilityExecutor, Me
 use crate::peer::{Peer, PeerState};
 use crate::route::{RemoteCapability, RouteSelection, RouteTable};
 use crate::transport::MeshConnection;
-use crate::trust::TrustPolicy;
+use crate::trust::{KnownPeer, PeerTrust, TrustPolicy};
 
 /// Default silence after which a peer is considered unreachable.
 pub const DEFAULT_HEARTBEAT_TIMEOUT_MS: u64 = 15_000;
@@ -48,6 +48,10 @@ pub const DEFAULT_HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
 
 /// Default cap on in-flight calls per node.
 pub const DEFAULT_MAX_PENDING_CALLS: usize = 256;
+
+/// Most inbound handshakes in flight at once; further connections are shed
+/// instead of queued, so a flood of unauthenticated sockets cannot pile up.
+pub const MAX_CONCURRENT_HANDSHAKES: usize = 64;
 
 /// Default cap on concurrently executing invocations accepted from one peer.
 pub const DEFAULT_MAX_INBOUND_PER_PEER: usize = 64;
@@ -286,7 +290,7 @@ pub struct MeshNode {
     descriptor: NodeDescriptor,
     clock: Arc<dyn Clock>,
     executor: Arc<dyn MeshCapabilityExecutor>,
-    trust: TrustPolicy,
+    trust: RwLock<TrustPolicy>,
     heartbeat_timeout_ms: u64,
     default_deadline_ms: Option<u64>,
     handshake_timeout_ms: u64,
@@ -301,6 +305,8 @@ pub struct MeshNode {
     invocations: Invocations,
     /// Monotonic connection generation allocator.
     generation: std::sync::atomic::AtomicU64,
+    /// Flips to `true` once on [`MeshNode::shutdown`]; background loops watch it.
+    shutdown: tokio::sync::watch::Sender<bool>,
 }
 
 impl MeshNode {
@@ -315,7 +321,7 @@ impl MeshNode {
             descriptor: config.descriptor(),
             clock,
             executor,
-            trust: config.trust,
+            trust: RwLock::new(config.trust),
             heartbeat_timeout_ms: config.heartbeat_timeout_ms,
             default_deadline_ms: config.default_deadline_ms,
             handshake_timeout_ms: config.handshake_timeout_ms,
@@ -327,6 +333,7 @@ impl MeshNode {
             calls: Arc::new(Mutex::new(BTreeMap::new())),
             invocations: Arc::new(Mutex::new(BTreeMap::new())),
             generation: std::sync::atomic::AtomicU64::new(0),
+            shutdown: tokio::sync::watch::channel(false).0,
         })
     }
 
@@ -338,6 +345,92 @@ impl MeshNode {
     /// This node's handshake descriptor.
     pub fn descriptor(&self) -> &NodeDescriptor {
         &self.descriptor
+    }
+
+    fn authorize(&self, node: &NodeId) -> Result<(), MeshError> {
+        self.trust
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .authorize(node)
+    }
+
+    fn pinned(&self, node: &NodeId) -> Option<crate::identity::KeyFingerprint> {
+        self.trust
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .pinned_fingerprint(node)
+            .cloned()
+    }
+
+    /// Admit (or update) a peer in the live trust policy, e.g. right after a
+    /// pairing ceremony persisted it. Takes effect for the next handshake.
+    pub fn admit_peer(&self, peer: KnownPeer) {
+        self.trust
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .upsert(peer);
+    }
+
+    /// Withdraw trust from `node` *now*: the live policy marks it untrusted
+    /// and drops its pin (so no key can reconnect under that id), its
+    /// connection closes, pending calls fail, and its projected capabilities
+    /// disappear. Persisted removal is [`crate::TrustStore::forget`].
+    pub fn revoke_peer(&self, node: &NodeId) {
+        {
+            let mut trust = self
+                .trust
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let endpoint = trust
+                .known_peer(node)
+                .map(|peer| peer.endpoint.clone())
+                .unwrap_or_default();
+            trust.upsert(KnownPeer {
+                node: node.clone(),
+                endpoint,
+                trust: PeerTrust::Untrusted,
+                key_fingerprint: None,
+            });
+        }
+        self.forget_peer(node);
+    }
+
+    /// Whether [`MeshNode::shutdown`] has been called.
+    pub fn is_shutdown(&self) -> bool {
+        *self.shutdown.borrow()
+    }
+
+    /// Stop the node: refuse new connections, close every link, fail every
+    /// pending call, cancel every inbound execution, and let `serve` and
+    /// heartbeat loops return. Idempotent.
+    pub fn shutdown(&self) {
+        self.shutdown.send_replace(true);
+        let links: Vec<_> = {
+            let mut peers = self.peers.lock().expect("mesh peers poisoned");
+            peers
+                .values_mut()
+                .filter_map(|entry| {
+                    entry.peer.state = PeerState::Closed;
+                    entry.link.take()
+                })
+                .collect()
+        };
+        for link in links {
+            link.close();
+        }
+        for (_, pending) in std::mem::take(&mut *self.calls.lock().expect("mesh calls poisoned")) {
+            let _ = pending
+                .tx
+                .send(Err(MeshError::Transport("node shut down".to_string())));
+        }
+        for flag in self
+            .invocations
+            .lock()
+            .expect("mesh invocations poisoned")
+            .values()
+        {
+            flag.cancel();
+        }
     }
 
     fn now_ms(&self) -> u64 {
@@ -360,7 +453,11 @@ impl MeshNode {
         link: Arc<dyn MeshConnection>,
         expected: NodeId,
     ) -> Result<NodeId, MeshError> {
-        self.trust.authorize(&expected)?;
+        if self.is_shutdown() {
+            link.close();
+            return Err(MeshError::Transport("node is shut down".to_string()));
+        }
+        self.authorize(&expected)?;
         let now = self.now_ms();
         {
             let mut peers = self.peers.lock().expect("mesh peers poisoned");
@@ -428,7 +525,7 @@ impl MeshNode {
             self.abandon_handshake(&expected);
             return Err(error.into());
         }
-        if let Err(error) = self.trust.authorize(&ack.node.id) {
+        if let Err(error) = self.authorize(&ack.node.id) {
             self.abandon_handshake(&expected);
             return Err(error);
         }
@@ -460,6 +557,10 @@ impl MeshNode {
         self: &Arc<Self>,
         link: Arc<dyn MeshConnection>,
     ) -> Result<NodeId, MeshError> {
+        if self.is_shutdown() {
+            link.close();
+            return Err(MeshError::Transport("node is shut down".to_string()));
+        }
         let hello_env = match tokio::time::timeout(
             std::time::Duration::from_millis(self.handshake_timeout_ms),
             link.recv(),
@@ -519,7 +620,7 @@ impl MeshNode {
             reject(error.to_string()).await;
             return Err(error.into());
         }
-        if let Err(error) = self.trust.authorize(&hello.node.id) {
+        if let Err(error) = self.authorize(&hello.node.id) {
             reject(error.to_string()).await;
             return Err(error);
         }
@@ -1035,8 +1136,12 @@ impl MeshNode {
         let node = Arc::clone(self);
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(std::time::Duration::from_millis(interval_ms));
+            let mut stop = node.shutdown.subscribe();
             loop {
-                ticker.tick().await;
+                tokio::select! {
+                    _ = ticker.tick() => {}
+                    _ = stop.wait_for(|closed| *closed) => return,
+                }
                 node.heartbeat_once().await;
                 node.sweep_heartbeats(node.now_ms());
             }
@@ -1085,13 +1190,24 @@ impl MeshNode {
         listener: Arc<dyn crate::transport::MeshListener>,
     ) -> tokio::task::JoinHandle<()> {
         let node = Arc::clone(self);
+        let handshakes = Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_HANDSHAKES));
         tokio::spawn(async move {
+            let mut stop = node.shutdown.subscribe();
             loop {
-                match listener.accept().await {
+                let accepted = tokio::select! {
+                    accepted = listener.accept() => accepted,
+                    _ = stop.wait_for(|closed| *closed) => return,
+                };
+                match accepted {
                     Ok(link) => {
+                        let Ok(permit) = Arc::clone(&handshakes).try_acquire_owned() else {
+                            link.close();
+                            continue;
+                        };
                         let per_connection = Arc::clone(&node);
                         tokio::spawn(async move {
                             let _ = per_connection.accept(link).await;
+                            drop(permit);
                         });
                     }
                     Err(_) => return,
@@ -1108,6 +1224,8 @@ impl MeshNode {
         link: &Arc<dyn MeshConnection>,
     ) -> Result<(), MeshError> {
         self.check_inbound_envelope(&envelope, peer)?;
+        // Trust can be withdrawn while a connection is up.
+        self.authorize(peer)?;
         self.note_seen(peer);
 
         // Match on a clone of the payload so the envelope itself survives whole
@@ -1313,7 +1431,7 @@ impl MeshNode {
         node: &NodeId,
         link: &Arc<dyn MeshConnection>,
     ) -> Result<(), MeshError> {
-        let Some(pin) = self.trust.pinned_fingerprint(node).cloned() else {
+        let Some(pin) = self.pinned(node) else {
             return match link.peer_fingerprint() {
                 None => Ok(()),
                 Some(presented) => Err(MeshError::Untrusted {
