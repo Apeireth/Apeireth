@@ -1,6 +1,7 @@
 use std::env;
 use std::process::ExitCode;
 
+use apeireth_cli::onboarding::UserTier;
 use apeireth_cli::{
     build_canonical_runtime_from_env, dispatch_canonical_approval, dispatch_canonical_chat,
     dispatch_gateway_serve_on, CanonicalCliTurn,
@@ -9,7 +10,7 @@ use apeireth_runtime::ApprovalDecision;
 
 fn print_help() {
     println!(
-        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
+        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
     );
 }
 
@@ -636,6 +637,199 @@ mod nightwatch_parse_tests {
     }
 }
 
+/// `apeireth onboard` 子动作（引导 = 显式命令即授权）。
+#[derive(Debug, Clone, PartialEq)]
+pub enum OnboardAction {
+    /// 交互式引导（可预选用户分流）。
+    Wizard { tier: Option<UserTier> },
+    /// 显示当前引导档案。
+    Show,
+    /// 清除引导档案。
+    Reset,
+}
+
+/// `apeireth onboard [--tier casual|pro] [--show | --reset]` 解析。
+fn parse_onboard(args: &[String]) -> Result<OnboardAction, String> {
+    let mut tier: Option<UserTier> = None;
+    let mut show = false;
+    let mut reset = false;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--show" => show = true,
+            "--reset" => reset = true,
+            "--tier" => {
+                index += 1;
+                let raw = args.get(index).ok_or("onboard --tier requires a value")?;
+                tier = Some(
+                    UserTier::parse_answer(raw)
+                        .ok_or_else(|| format!("onboard --tier 无效（casual/pro）: {raw}"))?,
+                );
+            }
+            other => return Err(format!("onboard: unknown argument {other}")),
+        }
+        index += 1;
+    }
+    if show && reset {
+        return Err("onboard: --show 与 --reset 不能同用".to_string());
+    }
+    if (show || reset) && tier.is_some() {
+        return Err("onboard: --tier 不能与 --show/--reset 同用".to_string());
+    }
+    if show {
+        return Ok(OnboardAction::Show);
+    }
+    if reset {
+        return Ok(OnboardAction::Reset);
+    }
+    Ok(OnboardAction::Wizard { tier })
+}
+
+fn run_onboard(action: OnboardAction) -> ExitCode {
+    use apeireth_cli::onboarding::{self, OnboardingPaths, WizardOptions};
+
+    let paths = OnboardingPaths::discover();
+    match action {
+        OnboardAction::Show => match onboarding::try_load_profile_at(&paths) {
+            Ok(Some(profile)) => {
+                println!("引导档案: {}", paths.profile.display());
+                println!("  用户类型: {}", profile.tier.as_str());
+                println!(
+                    "  服务商: {}（通道 {}）",
+                    profile.provider_id,
+                    profile.channel.as_str()
+                );
+                println!("  端点: {}", profile.api_url);
+                println!(
+                    "  模型: {}（默认 {}）",
+                    profile.models.join(", "),
+                    profile.default_model
+                );
+                println!("  自我描述词: {}", profile.self_description);
+                println!(
+                    "  身份: persona={} subject={}",
+                    profile.persona_id, profile.subject_id
+                );
+                println!(
+                    "  自动调参: {}",
+                    if profile.auto_tune { "开" } else { "关" }
+                );
+                println!(
+                    "  预算预设: 上下文 {} 字符 / 回合轮数 {} / 单轮工具调用 {}",
+                    profile.preset.context_budget_chars,
+                    profile.preset.max_turn_rounds,
+                    profile.preset.max_tool_calls
+                );
+                println!(
+                    "  密钥: {}",
+                    if profile.key_stored {
+                        "已存系统钥匙串（此处永不显示）"
+                    } else {
+                        "未存（用环境变量配置）"
+                    }
+                );
+                if let Some(state) = onboarding::load_tuning_state_at(&paths) {
+                    println!(
+                        "  调参状态: 累计 {} 回合 / 最近输入 {} 字符 / 最近 {} 轮 / 最近输出 {} token",
+                        state.turns, state.last_prompt_chars, state.last_rounds, state.last_output_tokens
+                    );
+                }
+                ExitCode::SUCCESS
+            }
+            Ok(None) => {
+                println!("尚未运行引导（开始: apeireth onboard）");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                ExitCode::FAILURE
+            }
+        },
+        OnboardAction::Reset => match onboarding::reset_at(&paths) {
+            Ok(true) => {
+                println!("引导档案已清除: {}", paths.profile.display());
+                ExitCode::SUCCESS
+            }
+            Ok(false) => {
+                println!("没有引导档案可清除");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                ExitCode::FAILURE
+            }
+        },
+        OnboardAction::Wizard { tier } => {
+            let stdin = std::io::stdin();
+            let mut reader = stdin.lock();
+            let stdout = std::io::stdout();
+            let mut out = stdout.lock();
+            let options = WizardOptions {
+                paths,
+                tier_override: tier,
+                store_keys: true,
+            };
+            match onboarding::run_wizard(&mut reader, &mut out, &options) {
+                Ok(summary) => {
+                    println!("{summary}");
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("引导中断: {error}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod onboard_parse_tests {
+    use super::*;
+
+    fn s(items: &[&str]) -> Vec<String> {
+        items.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn onboard_defaults_to_interactive_wizard() {
+        assert_eq!(
+            parse_onboard(&[]).unwrap(),
+            OnboardAction::Wizard { tier: None }
+        );
+    }
+
+    #[test]
+    fn onboard_parses_tier_show_reset() {
+        assert_eq!(
+            parse_onboard(&s(&["--tier", "casual"])).unwrap(),
+            OnboardAction::Wizard {
+                tier: Some(UserTier::Casual)
+            }
+        );
+        assert_eq!(
+            parse_onboard(&s(&["--tier", "专业"])).unwrap(),
+            OnboardAction::Wizard {
+                tier: Some(UserTier::Pro)
+            }
+        );
+        assert_eq!(parse_onboard(&s(&["--show"])).unwrap(), OnboardAction::Show);
+        assert_eq!(
+            parse_onboard(&s(&["--reset"])).unwrap(),
+            OnboardAction::Reset
+        );
+    }
+
+    #[test]
+    fn onboard_rejects_bad_combinations_and_unknown_args() {
+        assert!(parse_onboard(&s(&["--tier"])).is_err());
+        assert!(parse_onboard(&s(&["--tier", "vip"])).is_err());
+        assert!(parse_onboard(&s(&["--show", "--reset"])).is_err());
+        assert!(parse_onboard(&s(&["--tier", "pro", "--show"])).is_err());
+        assert!(parse_onboard(&s(&["--nope"])).is_err());
+    }
+}
+
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() {
@@ -656,6 +850,14 @@ fn main() -> ExitCode {
     match args[0].as_str() {
         "chat" => match parse_chat(&args[1..]) {
             Ok((prompt, model, session)) => run_chat(prompt, model, session),
+            Err(error) => {
+                eprintln!("{error}");
+                print_help();
+                ExitCode::FAILURE
+            }
+        },
+        "onboard" => match parse_onboard(&args[1..]) {
+            Ok(action) => run_onboard(action),
             Err(error) => {
                 eprintln!("{error}");
                 print_help();

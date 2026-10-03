@@ -147,6 +147,8 @@ pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
     "guard.policy.write",
     "tool.filesystem",
     "tool.search",
+    "tool.apply_patch",
+    "tool.self_status",
 ];
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -490,6 +492,24 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             "workspace",
         ),
+        // 受控文件写入 (`tool.apply_patch`): 工作区文件的补丁式写面。
+        //
+        // 静态描述符只覆盖**写面**本身 (Write/Modify); 补丁内逐动作的
+        // 创建/删除分类由写入风险映射逐次判定 (创建/删除停人工审批,
+        // 「删除/新建永不自动放行」), 不进静态描述符 —— 否则纯修改类补丁
+        // 也会被 intent 的 destructive 门当成未请求删除误伤。
+        describe(
+            "tool.apply_patch",
+            vec![OperationClass::Write, OperationClass::Modify],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::UserPrompt],
+            vec![SinkClass::WorkspaceFile],
+            false,
+            false,
+            true,
+            false,
+            "workspace",
+        ),
         describe(
             "tool.search",
             vec![OperationClass::Read],
@@ -501,6 +521,26 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             false,
             "workspace",
+        ),
+        // 结构化自述面 (自省通道): 只读运行时自身状态 (开关生效值 / 记忆账本
+        // 计数 / 调参 / 预算 / 工作区事实)。无写、无执行、无外联、无凭据值 ——
+        // 凭据只回存在性布尔, 故 `may_access_credentials = false`。
+        //
+        // 来源分类: 闭合词表没有"运行时自身状态元数据"这一类; 记忆账本只回
+        // **聚合计数**而非记忆正文, 标 `PrivateMemory` 会把计数误标为记忆
+        // 正文读取 (并触发人工确认门), 与本工具的只读零审批档矛盾, 故按
+        // `Unknown` 如实标注词表缺口 (效应标志全 false, 无静默降级)。
+        describe(
+            "tool.self_status",
+            vec![OperationClass::Read],
+            vec![ResourceClass::MemoryEpisodic],
+            vec![SourceClass::Unknown],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "self_status",
         ),
         describe(
             "guard.policy.write",

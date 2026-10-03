@@ -1,7 +1,8 @@
 //! Session-scoped settings surface.
 //!
 //! `GET /v1/sessions/{session_id}/settings` reads the durable session settings;
-//! `PATCH /v1/sessions/{session_id}/settings` applies a partial update.
+//! `PATCH /v1/sessions/{session_id}/settings` applies a partial update;
+//! `DELETE /v1/sessions/{session_id}` removes the stored session record.
 //!
 //! These endpoints go through the runtime's own [`SessionManager`], so they act
 //! on exactly the same durable session the agent loop reads at the start of a
@@ -102,6 +103,19 @@ fn invalid_request(message: String) -> SettingsError {
     )
 }
 
+fn delete_failed(message: String) -> SettingsError {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ErrorBody {
+            error: ErrorDetail {
+                message,
+                code: "session_delete_failed".into(),
+                solution: "retry; if it persists check the gateway storage log".into(),
+            },
+        }),
+    )
+}
+
 pub(crate) async fn get_session_settings(
     State(state): State<GatewayState>,
     Path(session_id): Path<String>,
@@ -166,6 +180,25 @@ pub(crate) async fn patch_session_settings(
     .into_response())
 }
 
+pub(crate) async fn delete_session(
+    State(state): State<GatewayState>,
+    Path(session_id): Path<String>,
+) -> Result<Response, SettingsError> {
+    let session_id = SessionId::from_str(&session_id)
+        .map_err(|_| invalid_request(format!("invalid session id {session_id:?}")))?;
+    let deleted = state
+        .runtime
+        .sessions()
+        .delete(&session_id)
+        .await
+        .map_err(|error| delete_failed(error.to_string()))?;
+    if !deleted {
+        return Err(session_not_found(&session_id.to_string()));
+    }
+
+    Ok(Json(serde_json::json!({ "deleted": true })).into_response())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,7 +206,7 @@ mod tests {
     use apeireth_runtime::canonical::{InMemorySessionStore, Runtime, Session, SessionStore};
     use axum::body::Body;
     use axum::http::Request;
-    use axum::routing::{get, patch};
+    use axum::routing::{delete, get, patch};
     use axum::Router;
     use std::sync::Arc;
     use tower::ServiceExt;
@@ -220,6 +253,7 @@ mod tests {
                 "/v1/sessions/:session_id/settings",
                 get(get_session_settings).patch(patch_session_settings),
             )
+            .route("/v1/sessions/:session_id", delete(delete_session))
             .with_state(state)
     }
 
@@ -408,5 +442,160 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = json_body(response).await;
         assert_eq!(body["error"]["code"], "invalid_request");
+    }
+
+    #[tokio::test]
+    async fn delete_removes_an_existing_session_and_reports_deletion() {
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let sid = SessionId::new();
+        save_session(&store, sid).await;
+        let app = test_router(store.clone()).await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/v1/sessions/{sid}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = json_body(response).await;
+        assert_eq!(body["deleted"], true);
+        assert!(
+            store.load(&sid).await.unwrap().is_none(),
+            "the store must no longer hold the deleted session"
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_unknown_session_returns_session_not_found_error_frame() {
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let app = test_router(store).await;
+        let sid = SessionId::new();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/v1/sessions/{sid}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = json_body(response).await;
+        assert_eq!(body["error"]["code"], "session_not_found");
+    }
+
+    #[tokio::test]
+    async fn delete_malformed_session_id_returns_invalid_request_error_frame() {
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let app = test_router(store).await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/v1/sessions/not-a-uuid")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = json_body(response).await;
+        assert_eq!(body["error"]["code"], "invalid_request");
+    }
+
+    /// One settings PATCH against the HTTP surface, then the read-back GET.
+    async fn patch_then_get(
+        app: &Router,
+        sid: SessionId,
+        patch: &str,
+    ) -> (serde_json::Value, serde_json::Value) {
+        let patched = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(format!("/v1/sessions/{sid}/settings"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(patch.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(patched.status(), StatusCode::OK);
+        let read_back = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/v1/sessions/{sid}/settings"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(read_back.status(), StatusCode::OK);
+        (json_body(patched).await, json_body(read_back).await)
+    }
+
+    #[tokio::test]
+    async fn patch_permission_preset_roundtrips_each_tier_through_read_back() {
+        // Select a tier, persist it, read the same tier back — for every tier and
+        // through every transition (read_only → standard → full), so a changed
+        // tier must never round-trip distorted.
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let sid = SessionId::new();
+        save_session(&store, sid).await;
+        let app = test_router(store).await;
+
+        for tier in ["read_only", "standard", "full"] {
+            let body = format!(r#"{{"permission_preset":"{tier}"}}"#);
+            let (patched, read_back) = patch_then_get(&app, sid, &body).await;
+            assert_eq!(patched["permission_preset"], tier);
+            assert_eq!(
+                read_back["permission_preset"], tier,
+                "tier {tier} must read back unchanged after being persisted"
+            );
+            assert_eq!(read_back["session_id"], sid.to_string());
+        }
+    }
+
+    #[tokio::test]
+    async fn permission_preset_survives_router_rebuild_over_the_same_store() {
+        // A gateway restart rebuilds every HTTP surface from scratch while the
+        // durable store keeps the rows. The stored tier must come back as itself,
+        // not fall back to the default tier.
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let sid = SessionId::new();
+        save_session(&store, sid).await;
+
+        let (patched, _) = patch_then_get(
+            &test_router(store.clone()).await,
+            sid,
+            r#"{"permission_preset":"full","approval_remember":true}"#,
+        )
+        .await;
+        assert_eq!(patched["permission_preset"], "full");
+
+        let restarted = test_router(store).await;
+        let response = restarted
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/v1/sessions/{sid}/settings"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = json_body(response).await;
+        assert_eq!(body["permission_preset"], "full");
+        assert_eq!(body["approval_remember"], true);
     }
 }

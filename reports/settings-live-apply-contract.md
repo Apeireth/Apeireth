@@ -57,7 +57,8 @@ apply 路径 = `onSave`（App 侧：配置持久化 + env 注入 + 侧车重启/
 | 运行时与诊断 | 立即执行深度诊断 | 动作按钮（探测） | `checkHealthDetailed` | — |
 | 数据与存储 | 工作区路径（可直接编辑） | 2 失焦或回车提交 | `setWorkspaceDir` | 回填旧值 + 横幅 |
 | 数据与存储 | 更改（工作区选择器） | 动作按钮；弹窗「选择」= 即效 | `setWorkspaceDir` | 弹窗内错误 |
-| 数据与存储 | 清空本地会话数据 | 3 二次确认→即效 | `onClearLocalData` | — |
+| 数据与存储 | 清除近期对话记录（保留长期记忆） | 3 二次确认→即效 | `onClearSessionData('recent')` → `purgeSessions` 双档真删链 | 横幅（部分失败列 id） |
+| 数据与存储 | 清除全部会话数据（保留长期记忆） | 3 二次确认→即效 | `onClearSessionData('all')` → `purgeSessions` 双档真删链 | 横幅（部分失败列 id） |
 | 开发者选项 | 思考模式开关 | 1 拨动即效 | `handleCapabilityToggle` | 回填 + 横幅 |
 | 开发者选项 | 生效模型过滤器 / reasoning 标签 | 2 失焦或回车整组提交 | `submitCapabilityText` | 该键回填 + 横幅 |
 | 开发者选项 | 复制配置 JSON | 动作按钮 | clipboard | — |
@@ -103,3 +104,13 @@ self-tuning-mapping.mjs 的滑杆取值域/预设表、recommended-preset.mjs �
 压测）丢 1 次更新（99/100）；该测试单独重跑 3/3 通过、整批复跑全绿（161/161），
 属既有并发压测在 Windows 并行负载下的偶发（本次改动只动前端 TS/Svelte，未触任何
 Rust 路径）。
+
+## 修订记录
+
+- **会话清理双档**（按 `docs/01-architecture/session-cleanup-options-spec.md` P0）：
+  「数据与存储」的 `清空本地会话数据 / onClearLocalData`（只清本地正文、后端账本行
+  经归并复活）改为双档真删链 `onClearSessionData('recent'|'all') → purgeSessions`
+  （`src/lib/chat-shell/session-cleanup.ts`）；危险登记表 4 件 → 5 件；两档文案均含
+  「长期记忆不受影响」句，③ 记忆遗忘入口灰显「尚未接线」。验证：`pnpm test`
+  41/41 套件（新增 `tests/session-cleanup.mjs` 七组断言）、`pnpm check` 0/0。
+  上表「测试证据」段的 22/22 为当时基线，不改写；当前基线以本次修订为准。

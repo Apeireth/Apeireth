@@ -943,7 +943,7 @@ async fn a_turn_that_never_converges_hits_the_round_limit() {
         .unwrap_err();
 
     match err {
-        RuntimeError::RoundLimitExceeded { limit } => assert_eq!(limit, 3),
+        RuntimeError::RoundLimitExceeded { limit, .. } => assert_eq!(limit, 3),
         other => panic!("expected RoundLimitExceeded, got {other}"),
     }
     assert_eq!(

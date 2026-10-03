@@ -1,0 +1,41 @@
+# ============================================================================
+# apeireth-tui — 终端驾驶舱 (P1)
+# ----------------------------------------------------------------------------
+# 纯 Rust 全屏 TUI 客户端 (重度用户操控台), 连既有 gateway/CLI 后端。
+# 职责边界: 会话/治理/执行语义全部留在后端 (HTTP 契约投影), 本包只做呈现与
+# 转发 —— 与桌面端共用同一后端, 0 重复实现。
+# ============================================================================
+[package]
+name = "apeireth-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 终端驾驶舱: 全屏 TUI 客户端 (重度用户操控台), 连既有 gateway 后端"
+
+[lib]
+name = "apeireth_tui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "apeireth-tui"
+path = "src/main.rs"
+
+[dependencies]
+# 终端全屏渲染层 (ratatui) + 终端事件/控制层 (crossterm) —— 纯 Rust TUI 生态
+ratatui = "0.29"
+crossterm = "0.28"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# 网关 HTTP/SSE 客户端 (blocking 通道, UI 线程零阻塞: 回合在工作线程执行)
+reqwest = { workspace = true, features = ["blocking"] }
+# 文件写入统一走 fs_err (clippy.toml disallowed-methods 约束)
+fs-err = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

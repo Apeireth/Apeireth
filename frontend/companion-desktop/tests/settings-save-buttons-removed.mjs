@@ -100,7 +100,8 @@ function buttonTags(src) {
     ['深度诊断', 'checkDiagnostics'],
     ['应用推荐配置', 'applyRecommendedPreset'],
     ['恢复基线', "applyDispositionPreset('恢复基线')"],
-    ['清空本地会话数据', "requestDanger('clearLocalData')"],
+    ['清除近期对话记录（保留长期记忆）', "requestDanger('clearRecentConversations')"],
+    ['清除全部会话数据（保留长期记忆）', "requestDanger('clearAllSessionData')"],
     ['学习日志刷新', 'refreshTuningLog()'],
     ['工作区选择器', 'openWorkspacePicker()'],
   ];

@@ -362,7 +362,7 @@ jobs:
       # === Release authority check (workspace.package.version) ===
       - name: Verify workspace version matches release tag
         env:
-          APEIRETH_VERSION: '2.0.0-rc.2'
+          APEIRETH_VERSION: '2.0.0-rc.3'
         run: |
           ACTUAL="$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep '^version = ' | head -1 | cut -d'"' -f2)"
           if [[ "${ACTUAL}" != "${APEIRETH_VERSION}" ]]; then

@@ -24,7 +24,7 @@ $forbidden = @(
 # 结构性豁免：命中若仅来自这些**真实字符串**（真实路径/真实文件名/本表自身）
 # 则按"路径保持准确"规则保留、不计违规；豁免计数随输出给出便于审计。
 $exemptRe = 'legacy/donor/|donor/apeireth-|donor/\.\.\.|governance-donor-primitives\.md'
-$exemptFiles = @('scripts/check-neutral-terms.ps1')
+$exemptFiles = @('scripts/check-neutral-terms.ps1', 'docs/design/tui-power-design-research.md')  # 设计调研文档=事实引注特权（研究的天职是引注，同真实路径豁免原则）
 $exempted = 0
 
 $changed = @()

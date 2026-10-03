@@ -49,27 +49,30 @@ export function sseSourceOf(input: SseSourceInput): SseSource {
 }
 
 export function sseIndicator(source: SseSource): StatusIndicator {
+  // 徽章三态（内测反馈批）：已连接 / 连接中 / 未连接——按连接事实如实显示；
+  // 能力缺席另计「不可用」（安静标注，不是连接态）。文案不再用「断连」这种
+  // 半诊断词：未连接就是未连接，重连是否在进行写在 title 里。
   switch (source) {
     case 'live':
       return {
         text: 'SSE 已连接',
         tone: 'quiet',
-        title: '事件总线 /v1/apeireth/events 连接中。点击手动重连健康检查。',
+        title: '事件总线 /v1/apeireth/events 已连接。点击立即重连（重建事件订阅）。',
         clickable: true,
       };
     case 'retrying':
       return {
-        text: 'SSE 重连中',
+        text: 'SSE 连接中',
         tone: 'warn',
-        title: '连接断开，指数退避重连中（2s 起，封顶 30s）。点击立即重连。',
+        title: '尚未连上事件总线，指数退避重连中（2s 起，封顶 30s）。点击立即重连（重建事件订阅）。',
         clickable: true,
       };
     case 'lost':
       return {
-        text: 'SSE 断连',
+        text: 'SSE 未连接',
         tone: 'danger',
         sim: true,
-        title: '真实来源缺失超过 30s——presence 显示为本机中性默认（SIM 纪律 §5.4）。点击立即重连。',
+        title: '未连接已超过 30s——presence 显示为本机中性默认（SIM 纪律 §5.4）。点击立即重连（重建事件订阅）。',
         clickable: true,
       };
     case 'unsupported':
@@ -126,7 +129,7 @@ export function guardIndicator(input: GuardIndicatorInput): StatusIndicator {
     return {
       text: '守卫 读取失败',
       tone: 'warn',
-      title: '事件列表拉取失败——计数缺失而非为零。点击打开治理卷宗守卫 tab 自查。',
+      title: '事件列表拉取失败——计数缺失而非为零。点击打开设置 › 安全与治理的守卫 tab 自查。',
       clickable: true,
     };
   }
@@ -136,7 +139,7 @@ export function guardIndicator(input: GuardIndicatorInput): StatusIndicator {
     tone: input.hasNew ? 'warn' : 'quiet',
     title: `口径：最近 ${input.limit} 条事件窗口内的计数（端点不供总数）。` +
       (input.hasNew ? '有未读新事件。' : '') +
-      '点击打开治理卷宗守卫 tab。',
+      '点击打开设置 › 安全与治理的守卫 tab。',
     clickable: true,
   };
 }
@@ -162,7 +165,7 @@ export function memoryIndicator(input: MemoryIndicatorInput): StatusIndicator {
     return {
       text: '记忆 读取失败',
       tone: 'warn',
-      title: 'episode 列表拉取失败——计数缺失而非为零。点击打开记忆视图自查。',
+      title: 'episode 列表拉取失败——计数缺失而非为零。点击打开工作台 › 记忆卷宗自查。',
       clickable: true,
     };
   }
@@ -170,7 +173,7 @@ export function memoryIndicator(input: MemoryIndicatorInput): StatusIndicator {
   return {
     text: full ? `记忆 ${input.limit}+` : `记忆 ${input.count}`,
     tone: 'quiet', // 计数大小不是异常，永远不挣色
-    title: `口径：最近 ${input.limit} 条窗口内的 episode 数（端点不供总数）。点击打开记忆视图。`,
+    title: `口径：最近 ${input.limit} 条窗口内的 episode 数（端点不供总数）。点击打开工作台 › 记忆卷宗。`,
     clickable: true,
   };
 }

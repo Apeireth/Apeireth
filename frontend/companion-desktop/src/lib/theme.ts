@@ -1,9 +1,9 @@
 import type {Accent, Theme} from './types';
 
-export const VALID_THEMES: Theme[] = ['heritage-void', 'essence', 'night', 'day', 'ocean', 'forest', 'paper'];
+export const VALID_THEMES: Theme[] = ['origin', 'noir', 'heritage-void', 'essence', 'night', 'day', 'ocean', 'forest', 'paper', 'starship'];
 
 /** 静态背景主题（无 WebGL 场景层）：场景层隐藏并暂停渲染循环。 */
-export const STATIC_BG_THEMES: readonly Theme[] = ['heritage-void', 'essence', 'day', 'ocean', 'forest', 'paper'];
+export const STATIC_BG_THEMES: readonly Theme[] = ['origin', 'noir', 'heritage-void', 'essence', 'day', 'ocean', 'forest', 'paper', 'starship'];
 
 export type ThemeOption = {
   id: Theme;
@@ -15,9 +15,25 @@ export type ThemeOption = {
 
 export const THEME_CATALOG: ThemeOption[] = [
   {
+    id: 'origin',
+    label: '原初',
+    // 2026-10-03 主人拍板：新增"最初的主题"并设为默认（DeepSeek 原生界面风，
+    // 白底/品牌蓝/零动画纯色层；不改组件结构、功能按钮与配置）。
+    desc: '默认 · DeepSeek 原生界面风 · 白底蓝标 · 零动画简洁高效',
+    swatch:
+      'radial-gradient(circle at 78% 22%, rgba(77, 107, 254, 0.9) 0%, rgba(77, 107, 254, 0) 34%), linear-gradient(180deg, #ffffff 0%, #f2f3f5 100%)',
+  },
+  {
+    id: 'noir',
+    label: '纯黑',
+    // 2026-10-03 主人拍板「再加一个黑色的」：真黑 AMOLED 档，零装饰零动画。
+    desc: '纯黑底 · 零装饰 · 高对比简洁',
+    swatch: 'radial-gradient(ellipse 120% 90% at 50% -10%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 55%), #000000',
+  },
+  {
     id: 'heritage-void',
     label: '遗产星空',
-    desc: '默认 · 静态星空山脉（旧前端遗图，主人供）',
+    desc: '静态星空山脉（旧前端遗图，主人供）',
     swatch: 'url(/assets/themes/heritage-void-bg.png) center/cover',
   },
   {
@@ -35,6 +51,14 @@ export const THEME_CATALOG: ThemeOption[] = [
     // 黑洞 + 金色吸积环的存在金预览（该主题实景即含金，预览合法）
     swatch:
       'radial-gradient(circle at 62% 55%, rgba(255, 210, 122, 0.85) 0%, rgba(255, 210, 122, 0.25) 7%, rgba(255, 210, 122, 0) 13%), radial-gradient(circle at 62% 55%, #000000 0%, #000000 10%, rgba(0, 0, 0, 0) 11%), radial-gradient(ellipse at 50% 30%, #1a1520 0%, #07070c 70%)',
+  },
+  {
+    id: 'starship',
+    label: '星舰',
+    desc: '科幻 HUD 档 · 深空黑底 · 发光数据',
+    // 网格 + 青蓝辉光的 HUD 预览（网格/辉光即该主题的识别特征）
+    swatch:
+      'radial-gradient(ellipse 90% 60% at 50% 118%, rgba(24, 84, 128, 0.5) 0%, rgba(4, 7, 13, 0) 62%), repeating-linear-gradient(0deg, rgba(87, 214, 255, 0.12) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(87, 214, 255, 0.12) 0 1px, transparent 1px 14px), linear-gradient(180deg, #060d18 0%, #02060c 100%)',
   },
   {
     id: 'day',
@@ -73,9 +97,10 @@ export const THEME_CATALOG: ThemeOption[] = [
 export function resolveTheme(configTheme?: Theme, query?: string | null): Theme {
   if (query && VALID_THEMES.includes(query as Theme)) return query as Theme;
   if (configTheme && VALID_THEMES.includes(configTheme)) return configTheme;
-  // 2026-09-22 主人拍板（规范 §8 增补）：默认背景 = 静态星空山脉图，
-  // 黑洞实时场景降级为可选主题（night）。
-  return 'heritage-void';
+  // 2026-10-03 主人拍板：默认主题 = 原初（origin，DeepSeek 原生界面风）——
+  // 取代 2026-09-22 的 heritage-void 默认（该主题保留在目录，随时可选）。
+  // 只影响未显式配置主题的用户；已保存的主题选择原样保留（不改现有配置）。
+  return 'origin';
 }
 
 export function applyDocumentTheme(theme: Theme): void {

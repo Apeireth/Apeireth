@@ -68,6 +68,9 @@
 ] }
 ```
 
+- `DELETE /v1/sessions/{session_id}` → 硬删除该会话的持久化记录,成功返回 `{"deleted": true}`;
+  会话不存在返回 404 `session_not_found`,id 格式非法返回 400 `invalid_request`。
+
 ## §5 记忆
 
 | capability | 端点 | 方法 |
