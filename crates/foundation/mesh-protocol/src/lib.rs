@@ -27,6 +27,7 @@
 
 pub mod envelope;
 pub mod identity;
+pub mod observe;
 pub mod pairing;
 pub mod rendezvous;
 
@@ -39,6 +40,10 @@ pub use envelope::{
 pub use identity::{
     CapabilityAdvertEntry, KeyFingerprint, LocatedPluginId, MeshCapabilityKind, NodeDescriptor,
     PluginAdvert, PluginLocation, WireModelDescriptor,
+};
+pub use observe::{
+    decode_probe, decode_reply, encode_probe, encode_reply, OBSERVE_DATAGRAM_BYTES, OBSERVE_MAGIC,
+    OBSERVE_NONCE_BYTES, OBSERVE_VERSION,
 };
 pub use pairing::{
     PairChallenge, PairCodeReady, PairComplete, PairConfirm, PairHello, PairReject, PairReveal,
