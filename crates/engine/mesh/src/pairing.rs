@@ -332,7 +332,8 @@ async fn recv_pair(
         other => {
             link.close();
             Err(PairingError::Violation(format!(
-                "non-pairing payload on a pairing channel: {other:?}"
+                "non-pairing payload on a pairing channel: {}",
+                crate::kinds::payload_kind(&other)
             )))
         }
     }
@@ -394,7 +395,8 @@ where
         other => {
             link.close();
             return Err(PairingError::Violation(format!(
-                "expected PairChallenge, got {other:?}"
+                "expected PairChallenge, got {}",
+                crate::kinds::pairing_kind(&other)
             )));
         }
     };
@@ -450,7 +452,8 @@ where
         other => {
             link.close();
             return Err(PairingError::Violation(format!(
-                "expected PairCodeReady, got {other:?}"
+                "expected PairCodeReady, got {}",
+                crate::kinds::pairing_kind(&other)
             )));
         }
     };
@@ -514,7 +517,8 @@ where
                 other => {
                     link.close();
                     Err(PairingError::Violation(format!(
-                        "expected PairConfirm, got {other:?}"
+                        "expected PairConfirm, got {}",
+                        crate::kinds::pairing_kind(&other)
                     )))
                 }
             }
@@ -541,7 +545,8 @@ where
         other => {
             link.close();
             return Err(PairingError::Violation(format!(
-                "expected PairHello, got {other:?}"
+                "expected PairHello, got {}",
+                crate::kinds::pairing_kind(&other)
             )));
         }
     };
@@ -580,7 +585,8 @@ where
         other => {
             link.close();
             return Err(PairingError::Violation(format!(
-                "expected PairReveal, got {other:?}"
+                "expected PairReveal, got {}",
+                crate::kinds::pairing_kind(&other)
             )));
         }
     };
@@ -608,7 +614,8 @@ where
         other => {
             link.close();
             return Err(PairingError::Violation(format!(
-                "expected PairCodeReady, got {other:?}"
+                "expected PairCodeReady, got {}",
+                crate::kinds::pairing_kind(&other)
             )));
         }
     };
@@ -679,7 +686,8 @@ where
                 other => {
                     link.close();
                     Err(PairingError::Violation(format!(
-                        "expected PairConfirm, got {other:?}"
+                        "expected PairConfirm, got {}",
+                        crate::kinds::pairing_kind(&other)
                     )))
                 }
             }

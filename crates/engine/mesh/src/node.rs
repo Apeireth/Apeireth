@@ -257,7 +257,10 @@ impl CallHandle {
             other => Err(MeshError::Remote {
                 capability: None,
                 code: MeshErrorCode::Unsupported,
-                message: format!("unexpected capability outcome shape: {other:?}"),
+                message: format!(
+                    "unexpected capability outcome shape: {}",
+                    crate::kinds::outcome_kind(&other)
+                ),
             }),
         }
     }
@@ -612,7 +615,7 @@ impl MeshNode {
                 reject("expected Hello".to_string()).await;
                 return Err(MeshError::Malformed {
                     sender: hello_env.source_node.to_string(),
-                    reason: format!("expected Hello, got {other:?}"),
+                    reason: format!("expected Hello, got {}", crate::kinds::payload_kind(other)),
                 });
             }
         };
@@ -872,7 +875,10 @@ impl MeshNode {
             other => Err(MeshError::Remote {
                 capability: Some(capability.clone()),
                 code: apeireth_mesh_protocol::MeshErrorCode::Unsupported,
-                message: format!("unexpected provider outcome shape: {other:?}"),
+                message: format!(
+                    "unexpected provider outcome shape: {}",
+                    crate::kinds::outcome_kind(&other)
+                ),
             }),
         }
     }
@@ -953,7 +959,10 @@ impl MeshNode {
                         // `CapabilityCall` is non-exhaustive across crates.
                         other => Err(MeshExecError::Internal {
                             capability: capability.clone(),
-                            message: format!("unsupported invocation shape: {other:?}"),
+                            message: format!(
+                                "unsupported invocation shape: {}",
+                                crate::kinds::call_kind(&other)
+                            ),
                         }),
                     }
                     .map_err(map_exec_error);
@@ -1272,7 +1281,10 @@ impl MeshNode {
             }),
             other => Err(MeshError::Malformed {
                 sender: peer.to_string(),
-                reason: format!("unexpected post-handshake message: {other:?}"),
+                reason: format!(
+                    "unexpected post-handshake message: {}",
+                    crate::kinds::payload_kind(&other)
+                ),
             }),
         }
     }
@@ -1639,7 +1651,10 @@ async fn execute_remote(
         other => Err(CapabilityError {
             capability: Some(capability),
             code: MeshErrorCode::Unsupported,
-            message: format!("unsupported invocation shape: {other:?}"),
+            message: format!(
+                "unsupported invocation shape: {}",
+                crate::kinds::call_kind(&other)
+            ),
         }),
     }
 }

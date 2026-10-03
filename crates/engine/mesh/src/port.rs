@@ -209,7 +209,8 @@ impl RemoteCapabilityPort for MeshNode {
         {
             apeireth_mesh_protocol::CapabilityOutcome::Tool(result) => Ok(result),
             other => Err(RemoteCapabilityError::Failed(format!(
-                "unexpected tool outcome shape: {other:?}"
+                "unexpected tool outcome shape: {}",
+                crate::kinds::outcome_kind(&other)
             ))),
         }
     }
@@ -235,7 +236,8 @@ impl RemoteCapabilityPort for MeshNode {
         {
             apeireth_mesh_protocol::CapabilityOutcome::Provider(response) => Ok(response),
             other => Err(RemoteCapabilityError::Failed(format!(
-                "unexpected provider outcome shape: {other:?}"
+                "unexpected provider outcome shape: {}",
+                crate::kinds::outcome_kind(&other)
             ))),
         }
     }
