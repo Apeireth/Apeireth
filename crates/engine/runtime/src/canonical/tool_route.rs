@@ -13,7 +13,7 @@
 //! # Catalog merge is not ownership merge
 //!
 //! Nothing here is stored: entries are rebuilt per query, contain no
-//! implementations, and remote declarations never enter `ModuleManager` or
+//! implementations, and remote declarations never enter `PluginManager` or
 //! `CapabilityRegistry`. Local and remote names share one namespace *for
 //! resolution*, and collisions are ambiguous rather than resolved by
 //! precedence — see [`ToolRouteTable::derive`].

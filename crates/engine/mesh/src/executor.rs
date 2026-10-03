@@ -9,7 +9,7 @@
 //! whether it has been cancelled.
 //!
 //! [`MeshCapabilityExecutor`] is that port. [`ManagerExecutor`] is its canonical
-//! implementation over a [`ModuleManagerView`] (the runtime itself, or any
+//! implementation over a [`PluginManagerView`] (the runtime itself, or any
 //! holder of a manager plus governance). Keeping the port trait-based is what
 //! lets `apeireth-mesh` sit beside the runtime without depending on it, and
 //! what keeps `PluginManager` ignorant of sockets.
@@ -155,7 +155,7 @@ pub trait MeshCapabilityExecutor: Send + Sync {
 /// manager plus governance) implements this one trait and [`ManagerExecutor`]
 /// does the rest. Access to the manager is scoped through a closure so a
 /// holder is free to guard it with a lock.
-pub trait ModuleManagerView: Send + Sync {
+pub trait PluginManagerView: Send + Sync {
     /// Run `f` against the one canonical module/capability world.
     fn with_manager<R>(&self, f: impl FnOnce(&PluginManager) -> R) -> R;
 
@@ -166,7 +166,7 @@ pub trait ModuleManagerView: Send + Sync {
     fn clock(&self) -> &Arc<dyn Clock>;
 }
 
-/// The canonical [`MeshCapabilityExecutor`] over a [`ModuleManagerView`].
+/// The canonical [`MeshCapabilityExecutor`] over a [`PluginManagerView`].
 ///
 /// This is what makes "remote execution is an extension of the Plugin/Capability
 /// system" true rather than aspirational: dispatch resolves through the
@@ -176,7 +176,7 @@ pub struct ManagerExecutor<V> {
     view: Arc<V>,
 }
 
-impl<V: ModuleManagerView> ManagerExecutor<V> {
+impl<V: PluginManagerView> ManagerExecutor<V> {
     /// An executor over the given runtime view.
     pub fn new(view: Arc<V>) -> Self {
         Self { view }
@@ -285,7 +285,7 @@ impl<V: ModuleManagerView> ManagerExecutor<V> {
 }
 
 #[async_trait]
-impl<V: ModuleManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<V> {
+impl<V: PluginManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<V> {
     fn catalog(&self) -> Vec<CapabilityCatalogEntry> {
         // The canonical derived view only: one entry per declared capability,
         // owned by a real PluginId, with availability from the owner's current
@@ -515,16 +515,16 @@ fn to_wire_models(
 /// Build an advert-ready routing snapshot from an executor's canonical view.
 pub fn catalog_to_modules(
     catalog: Vec<CapabilityCatalogEntry>,
-) -> Vec<apeireth_mesh_protocol::ModuleAdvert> {
+) -> Vec<apeireth_mesh_protocol::PluginAdvert> {
     use std::collections::BTreeMap;
 
-    use apeireth_mesh_protocol::{CapabilityAdvertEntry, ModuleAdvert};
+    use apeireth_mesh_protocol::{CapabilityAdvertEntry, PluginAdvert};
 
-    let mut by_module: BTreeMap<PluginId, ModuleAdvert> = BTreeMap::new();
+    let mut by_module: BTreeMap<PluginId, PluginAdvert> = BTreeMap::new();
     for entry in catalog {
         let advert = by_module
             .entry(entry.owner.clone())
-            .or_insert_with(|| ModuleAdvert {
+            .or_insert_with(|| PluginAdvert {
                 module: entry.owner.clone(),
                 capabilities: Vec::new(),
             });

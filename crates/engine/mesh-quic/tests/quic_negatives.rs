@@ -83,7 +83,7 @@ async fn empty_holder() -> Arc<Holder> {
     })
 }
 
-impl apeireth_mesh::ModuleManagerView for Holder {
+impl apeireth_mesh::PluginManagerView for Holder {
     fn with_manager<R>(&self, f: impl FnOnce(&PluginManager) -> R) -> R {
         f(&self.manager.lock().unwrap())
     }

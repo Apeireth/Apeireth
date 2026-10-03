@@ -8,7 +8,7 @@
 //! `tool.mesh.echo` means the same thing whether it resolves to
 //! [`route::CapabilityRoute::local`] or to a remote node — and `origin`
 //! (system / installed / development / MCP) stays a different axis from
-//! `location` ([`ModuleLocation::Local`] / [`ModuleLocation::Remote`]).
+//! `location` ([`PluginLocation::Local`] / [`PluginLocation::Remote`]).
 //!
 //! # What Phase 0 contains
 //!
@@ -62,7 +62,7 @@ pub use discovery::{
 pub use error::{MeshError, MeshExecError};
 pub use executor::{
     catalog_to_modules, CancelFlag, ManagerExecutor, MeshCapabilityExecutor, MeshInvokeContext,
-    ModuleManagerView,
+    PluginManagerView,
 };
 pub use identity::{IdentityError, KeyFingerprint, NodeIdentity};
 pub use mdns::{AdvertisedPresence, MdnsDiscovery, MESH_SERVICE_TYPE};
@@ -92,7 +92,7 @@ pub use apeireth_mesh_protocol::NodeId;
 pub use apeireth_mesh_protocol::{
     decode_envelope, encode_envelope, Cancel, CapabilityAdvert, CapabilityAdvertEntry,
     CapabilityCall, CapabilityError, CapabilityOutcome, CapabilityResult, Heartbeat, Hello,
-    HelloAck, InvokeCapability, LocatedModuleId, MeshCapabilityKind, MeshEnvelope, MeshErrorCode,
-    MeshPayload, MeshProtocolError, ModuleAdvert, ModuleLocation, NodeDescriptor,
+    HelloAck, InvokeCapability, LocatedPluginId, MeshCapabilityKind, MeshEnvelope, MeshErrorCode,
+    MeshPayload, MeshProtocolError, NodeDescriptor, PluginAdvert, PluginLocation,
     WireModelDescriptor, MESH_PROTOCOL_VERSION,
 };

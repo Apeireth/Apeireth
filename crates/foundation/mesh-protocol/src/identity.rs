@@ -4,14 +4,14 @@
 //!
 //! - [`NodeId`] — *which runtime* (re-exported from `apeireth-core`, the one
 //!   canonical node identity);
-//! - [`LocatedModuleId`] — *which module on which node*, the network-layer owner
+//! - [`LocatedPluginId`] — *which plugin on which node*, the network-layer owner
 //!   identity, because two nodes may each own a `builtin.tools` and neither is
 //!   wrong;
 //! - [`apeireth_core::kernel::CapabilityId`] — *what can be done*, unchanged.
 //!
-//! Physical placement is [`ModuleLocation`]: routing metadata, never identity.
-//! `ModuleOrigin` (system / installed / development) answers a different
-//! question — how a module arrived — and the two axes never mix.
+//! Physical placement is [`PluginLocation`]: routing metadata, never identity.
+//! Local ownership is answered only by the runtime's `PluginManager`; nothing
+//! here can assert it.
 
 use apeireth_core::kernel::{CapabilityId, NodeId, PluginId};
 use serde::{Deserialize, Serialize};
@@ -60,22 +60,20 @@ impl std::fmt::Display for KeyFingerprint {
     }
 }
 
-/// Where a module's implementation physically runs.
+/// Where a plugin's implementation physically runs.
 ///
-/// The location axis, kept separate from provenance (`ModuleOrigin`) and from
-/// identity (`PluginId`). It is routing metadata only: `System`-origin modules
-/// may live on a remote node and installed modules may live here, and neither
-/// combination changes anything about how a capability behaves.
+/// The location axis, kept separate from identity (`PluginId`). It is routing
+/// metadata only: it never changes how a capability behaves.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ModuleLocation {
+pub enum PluginLocation {
     /// The implementation runs in this runtime.
     Local,
     /// The implementation runs in another runtime.
     Remote(NodeId),
 }
 
-impl ModuleLocation {
+impl PluginLocation {
     /// Whether the implementation runs in this runtime.
     pub const fn is_local(&self) -> bool {
         matches!(self, Self::Local)
@@ -90,7 +88,7 @@ impl ModuleLocation {
     }
 }
 
-impl std::fmt::Display for ModuleLocation {
+impl std::fmt::Display for PluginLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Local => f.write_str("local"),
@@ -106,26 +104,26 @@ impl std::fmt::Display for ModuleLocation {
 /// globally unique across nodes. It is a network-layer owner identity, not a
 /// replacement for [`PluginId`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct LocatedModuleId {
+pub struct LocatedPluginId {
     /// The runtime whose registry owns the module implementation.
     pub node: NodeId,
     /// The module id inside that runtime's registry.
     pub module: PluginId,
 }
 
-impl LocatedModuleId {
+impl LocatedPluginId {
     /// Compose the network-layer owner identity.
     pub fn new(node: NodeId, module: PluginId) -> Self {
         Self { node, module }
     }
 
-    /// This owner, expressed as a [`ModuleLocation`] pair for routing.
-    pub fn location(&self) -> ModuleLocation {
-        ModuleLocation::Remote(self.node.clone())
+    /// This owner, expressed as a [`PluginLocation`] pair for routing.
+    pub fn location(&self) -> PluginLocation {
+        PluginLocation::Remote(self.node.clone())
     }
 }
 
-impl std::fmt::Display for LocatedModuleId {
+impl std::fmt::Display for LocatedPluginId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}/{}", self.node, self.module)
     }
@@ -348,14 +346,14 @@ impl CapabilityAdvertEntry {
 /// origin node's `PluginRegistry` remains the only owner of the implementation,
 /// and nothing here can be executed locally.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ModuleAdvert {
+pub struct PluginAdvert {
     /// The owning module id (namespaced by the advertising node).
     pub module: PluginId,
     /// Capabilities this module currently exports.
     pub capabilities: Vec<CapabilityAdvertEntry>,
 }
 
-impl ModuleAdvert {
+impl PluginAdvert {
     /// Whether a declaration and its id prefix agree about the kind, and tool
     /// entries carry their model-facing declaration.
     ///
@@ -382,8 +380,8 @@ mod tests {
     fn a_located_module_distinguishes_same_named_modules_on_two_nodes() {
         // Two nodes may each own `builtin.tools`; `(node, module)` keeps them
         // apart where bare `PluginId` cannot.
-        let a = LocatedModuleId::new(node("node-a"), PluginId::new("builtin.tools").unwrap());
-        let b = LocatedModuleId::new(node("node-b"), PluginId::new("builtin.tools").unwrap());
+        let a = LocatedPluginId::new(node("node-a"), PluginId::new("builtin.tools").unwrap());
+        let b = LocatedPluginId::new(node("node-b"), PluginId::new("builtin.tools").unwrap());
         assert_ne!(a, b);
         assert_eq!(a.module, b.module);
         assert_eq!(a.to_string(), "node-a/builtin.tools");
@@ -391,8 +389,8 @@ mod tests {
 
     #[test]
     fn location_is_metadata_and_never_identity() {
-        let local = ModuleLocation::Local;
-        let remote = ModuleLocation::Remote(node("node-b"));
+        let local = PluginLocation::Local;
+        let remote = PluginLocation::Remote(node("node-b"));
         assert!(local.is_local());
         assert!(!remote.is_local());
         assert_eq!(remote.remote_node().unwrap().as_str(), "node-b");
@@ -409,7 +407,7 @@ mod tests {
 
     #[test]
     fn advert_entries_are_checked_against_their_id_prefix() {
-        let good = ModuleAdvert {
+        let good = PluginAdvert {
             module: PluginId::new("builtin.mesh-test").unwrap(),
             capabilities: vec![CapabilityAdvertEntry::tool(
                 CapabilityId::new("tool.mesh.echo").unwrap(),

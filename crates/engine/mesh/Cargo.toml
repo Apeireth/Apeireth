@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth Mesh Phase 0: peer connections, trust, capability routing, and remote capability invocation over the canonical Module/Capability model. Execution still happens in the origin node's ModuleManager — the network only changes where."
+description = "Apeireth Mesh Phase 0: peer connections, trust, capability routing, and remote capability invocation over the canonical Plugin/Capability model. Execution still happens in the origin node's PluginManager — the network only changes where."
 
 [dependencies]
 apeireth-core = { path = "../../foundation/core" }

@@ -57,7 +57,7 @@ As a new `MeshTransport` / `MeshListener` pair (`RelayMeshTransport` /
 `RelayMeshListener`) returning a `RelayMeshConnection` (a `MeshConnection`).
 `MeshNode::connect/accept` run over it **unchanged**. A composite
 `PeerConnector` (Direct → Relay) is also just a `MeshTransport`. Nothing in
-`execute.rs`, `ProviderRouter`, `ToolRouteTable`, or `ModuleManager` learns
+`execute.rs`, `ProviderRouter`, `ToolRouteTable`, or `PluginManager` learns
 whether a peer is direct or relayed.
 
 ## E. What must remain end-to-end authenticated
