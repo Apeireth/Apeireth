@@ -41,8 +41,8 @@ pub use identity::{
     PluginAdvert, PluginLocation, WireModelDescriptor,
 };
 pub use pairing::{
-    PairChallenge, PairCodeReady, PairComplete, PairConfirm, PairHello, PairReject, PairingMessage,
-    PAIRING_PROTOCOL_VERSION, PAIRING_SAS_DOMAIN,
+    PairChallenge, PairCodeReady, PairComplete, PairConfirm, PairHello, PairReject, PairReveal,
+    PairingMessage, PAIRING_COMMIT_DOMAIN, PAIRING_PROTOCOL_VERSION, PAIRING_SAS_DOMAIN,
 };
 pub use rendezvous::{
     decode_frame, encode_control, encode_relay, Frame, PresenceRecord, RelayCircuitId,

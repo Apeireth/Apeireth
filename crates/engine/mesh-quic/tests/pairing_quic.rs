@@ -135,7 +135,10 @@ async fn pair_over_quic(
     let client_link = client_link.unwrap();
     let server_link = server_link.unwrap();
 
-    let opts = PairingOptions { timeout_ms: 5_000 };
+    let opts = PairingOptions {
+        timeout_ms: 5_000,
+        ..Default::default()
+    };
     let node_a = NodeId::new("node-a").unwrap();
     let node_b = NodeId::new("node-b").unwrap();
     let (a, b) = tokio::join!(
@@ -343,7 +346,10 @@ async fn test_36_pair_timeout_over_quic_persists_nothing() {
     let client_link = client_link.unwrap();
     let server_link = server_link.unwrap();
 
-    let opts = PairingOptions { timeout_ms: 500 };
+    let opts = PairingOptions {
+        timeout_ms: 500,
+        ..Default::default()
+    };
     let node_a = NodeId::new("node-a").unwrap();
     let (result, _) = tokio::join!(
         pair_outbound(
