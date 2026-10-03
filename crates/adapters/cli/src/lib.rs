@@ -9,6 +9,7 @@
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
 pub mod gateway_panels;
 pub mod keyring_bootstrap;
+pub mod onboarding;
 pub mod portable_bundle;
 
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
@@ -1046,6 +1047,8 @@ pub async fn dispatch_subagent(
 ) -> Result<String, String> {
     use apeireth_orchestration::Orchestrator as _;
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let payload: serde_json::Value = match payload_json {
         Some(raw) => {
             serde_json::from_str(&raw).map_err(|error| format!("payload 不是合法 JSON: {error}"))?
@@ -1264,6 +1267,11 @@ pub async fn execute_canonical_cli_turn(
     });
     let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
     let mut request = TurnRequest::new(session, prompt).with_security_context(context);
+    // 引导档案的自我描述词（`apeireth onboard` 写入）: 无档案 / 逃生门开启 =
+    // None, 既有对话逐字节不变。
+    if let Some(identity) = crate::onboarding::identity_system_block() {
+        request = request.with_system(identity);
+    }
     if let Some(model) = model {
         request = request.with_model(model);
     }
@@ -1296,6 +1304,9 @@ pub async fn dispatch_canonical_chat(
     model: Option<String>,
     session: Option<String>,
 ) -> Result<CanonicalCliTurn, String> {
+    // 引导档案激活（普通用户预设值 + 自动调参补位; 只补未设 env, 显式 env 最高,
+    // 无档案 = 0 行为变化）。gateway / 桌面侧车路径不激活, 互不干扰。
+    crate::onboarding::activate_for_process();
     let prompt = prompt.into();
     let session = session
         .map(|id| id.parse::<SessionId>().map_err(|error| error.to_string()))
@@ -1303,6 +1314,11 @@ pub async fn dispatch_canonical_chat(
     let (runtime, observer) = build_canonical_runtime_from_env_with_observability().await?;
     let result = execute_canonical_cli_turn(&runtime, prompt.as_str(), model, session).await;
     observer.flush().await;
+    // 普通用户自动调参: 回合一结束回写用量（best-effort, 不影响回合结果;
+    // 无档案 / 非普通用户 / 调参关 = no-op）。
+    if let Ok(CanonicalCliTurn::Completed(response)) = &result {
+        crate::onboarding::record_turn_usage(prompt.chars().count(), response);
+    }
     // W3 onering 消费 (2026-10-10, 默认关): 完成的回合留痕到跨前端统一账本
     // (best-effort 旁路, 不影响回合结果; 挂起待审批的回合不记 —— 回合未完成)。
     if onering_ledger_enabled_from_env() {
@@ -1324,6 +1340,8 @@ pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Resul
     use apeireth_runtime_assembly::canonical::nightwatch::{EpisodeSnapshot, NightwatchInputs};
     use apeireth_storage::SqliteConnectionPool;
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let pool = Arc::new(
         SqliteConnectionPool::open(cognitive_db_path())
             .await
@@ -1393,6 +1411,8 @@ pub async fn dispatch_nightwatch_watch(
     use apeireth_storage::SqliteConnectionPool;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let pool = Arc::new(
         SqliteConnectionPool::open(cognitive_db_path())
             .await
@@ -1541,6 +1561,8 @@ pub async fn dispatch_dream(
     use apeireth_runtime_assembly::canonical::{FallbackMetaThinker, LlmMetaThinker};
     use apeireth_storage::SqliteConnectionPool;
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let path = cognitive_db_path();
     let pool = Arc::new(
         SqliteConnectionPool::open(&path)
@@ -1678,6 +1700,8 @@ pub async fn dispatch_council(topic: String) -> Result<String, String> {
     use apeireth_core::kernel::SessionId;
     use apeireth_orchestration::{Council, CouncilVerdict, Proposal};
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let (factory, model) = llm_factory_from_env()?;
     let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
         Arc::new(apeireth_plugin::MirrorLlmFactory::new(factory));
@@ -1826,7 +1850,7 @@ pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, 
 
 /// Data directory for panel archives. `APEIRETH_DATA_DIR` overrides; the
 /// default is `~/.apeireth` (same place as the keyring and session dbs).
-fn default_panel_data_dir() -> PathBuf {
+pub(crate) fn default_panel_data_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("APEIRETH_DATA_DIR") {
         if !dir.trim().is_empty() {
             return PathBuf::from(dir);
