@@ -44,6 +44,9 @@ pub enum IdentityError {
     /// The key file could not be read or written.
     #[error("node identity file i/o failed: {0}")]
     Io(String),
+    /// The identity file appeared while it was being created.
+    #[error("node identity file already exists")]
+    AlreadyExists,
     /// The platform key provider refused the operation.
     #[error("node identity key operation failed: {0}")]
     Key(String),
@@ -103,30 +106,76 @@ impl NodeIdentity {
 
     /// Load from `path`, generating and persisting a fresh identity when the
     /// file does not exist yet.
+    ///
+    /// Only a *missing* file creates an identity. An unreadable or corrupt
+    /// file is an error: silently minting a new key would change the node's
+    /// identity and orphan every peer that pinned the old one. A concurrent
+    /// first start loses the creation race cleanly and adopts the winner's key.
     pub fn load_or_generate(path: impl AsRef<Path>) -> Result<Self, IdentityError> {
-        match Self::load(path.as_ref()) {
-            Ok(identity) => Ok(identity),
-            Err(IdentityError::Io(_)) => {
-                let identity = Self::generate()?;
-                identity.save(path.as_ref())?;
-                Ok(identity)
-            }
+        let path = path.as_ref();
+        match std::fs::symlink_metadata(path) {
+            Ok(_) => return Self::load(path),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(IdentityError::Io(error.to_string())),
+        }
+        let identity = Self::generate()?;
+        match identity.write_file(path, false) {
+            Ok(()) => Ok(identity),
+            Err(IdentityError::AlreadyExists) => Self::load(path),
             Err(error) => Err(error),
         }
     }
 
-    /// Persist this identity to `path`.
+    /// Persist this identity to `path`, replacing any existing file.
     ///
     /// Permission-restricted plain file (`0600` on Unix). Not an OS keyring.
+    /// The key never exists on disk with wider permissions or half written:
+    /// it is created restricted, flushed, then moved into place.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), IdentityError> {
-        std::fs::write(path.as_ref(), self.to_file_text())
-            .map_err(|error| IdentityError::Io(error.to_string()))?;
+        self.write_file(path.as_ref(), true)
+    }
+
+    fn write_file(&self, path: &Path, replace: bool) -> Result<(), IdentityError> {
+        use std::io::Write;
+        let io = |error: std::io::Error| IdentityError::Io(error.to_string());
+        let mut tmp_name = path.as_os_str().to_owned();
+        static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        tmp_name.push(format!(
+            ".{}.{}.tmp",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let tmp = std::path::PathBuf::from(tmp_name);
+
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(path.as_ref(), std::fs::Permissions::from_mode(0o600));
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
         }
-        Ok(())
+        let result = (|| {
+            let mut file = options.open(&tmp).map_err(io)?;
+            file.write_all(self.to_file_text().as_bytes()).map_err(io)?;
+            file.sync_all().map_err(io)?;
+            drop(file);
+            if replace {
+                std::fs::rename(&tmp, path).map_err(io)
+            } else {
+                // Atomic no-clobber publish.
+                match std::fs::hard_link(&tmp, path) {
+                    Ok(()) => Ok(()),
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                        Err(IdentityError::AlreadyExists)
+                    }
+                    Err(error) => Err(io(error)),
+                }
+            }
+        })();
+        if !replace || result.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        result
     }
 
     /// Raw Ed25519 public key bytes.
@@ -248,6 +297,44 @@ mod tests {
         assert_eq!(a.fingerprint().as_str().len(), 64, "sha-256 hex");
     }
 
+    #[test]
+    fn a_corrupt_identity_file_is_an_error_not_a_new_identity() {
+        let path = std::env::temp_dir().join(format!("apeireth-id-corrupt-{}", std::process::id()));
+        std::fs::write(&path, "not an identity").unwrap();
+        let error = NodeIdentity::load_or_generate(&path).unwrap_err();
+        assert!(matches!(error, IdentityError::Invalid(_)), "{error}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "not an identity");
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn an_unreadable_path_is_an_error_not_a_new_identity() {
+        // A directory where the file should be: exists, cannot be read as a key.
+        let dir = std::env::temp_dir().join(format!("apeireth-id-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(NodeIdentity::load_or_generate(&dir).is_err());
+        std::fs::remove_dir(&dir).ok();
+    }
+
+    #[test]
+    fn racing_first_starts_converge_on_one_identity() {
+        let path = std::env::temp_dir().join(format!("apeireth-id-race-{}", std::process::id()));
+        std::fs::remove_file(&path).ok();
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    NodeIdentity::load_or_generate(&path)
+                        .unwrap()
+                        .fingerprint()
+                        .clone()
+                })
+            })
+            .collect();
+        let fingerprints: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        assert!(fingerprints.windows(2).all(|pair| pair[0] == pair[1]));
+        std::fs::remove_file(&path).ok();
+    }
     #[test]
     fn load_or_generate_persists_and_reuses() {
         let dir =
