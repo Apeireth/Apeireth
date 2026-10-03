@@ -5,7 +5,8 @@
 //   ① 即点即效：applyDocumentTheme 同步改写 html[data-theme]；设置面板 pick()
 //      先落 DOM 再走 onSave apply 缝（不等任何保存按钮）；
 //   ② 持久化恢复：config.theme 经 localStorage 往返后可直接还原主题档；
-//   ③ 默认零回归：新增档位不改默认回落（heritage-void）与既有主题行为
+//   ③ 默认零回归：新增档位不改既有主题行为；默认位 = origin（2026-10-03
+//      主人拍板，取代旧 heritage-void 默认位锁定）
 //      （night 仍移除 data-theme、静态背景判定不变）。
 // localStorage / document 内存 shim 先于任何真实调用就位（模块导入无副作用）。
 import assert from 'node:assert/strict';
@@ -79,18 +80,20 @@ console.log('--- Starting Theme HUD-Tier Switch Check ---');
 
   // 脏数据守卫：非法持久化值回落默认，不半路换档
   // @ts-expect-error 故意传非法值
-  assert.equal(theme.resolveTheme('bogus', null), 'heritage-void', '非法持久化主题回落默认档');
+  assert.equal(theme.resolveTheme('bogus', null), 'origin', '非法持久化主题回落默认档');
   console.log('  -> PASS: 持久化恢复（localStorage 往返 + 脏值回落）');
 }
 
 // ---------------------------------------------------------------------------
 // 3. 默认零回归：默认回落 / 目录首项 / 既有主题行为一律不动
+//    （2026-10-03 主人拍板：origin 原初取默认位——推翻"新档不许插队"对默认
+//    位的旧锁定；其后新增档位仍不得插队，既有主题行为一律不动。）
 // ---------------------------------------------------------------------------
 {
-  assert.equal(theme.resolveTheme(undefined, null), 'heritage-void', '默认主题必须仍是 heritage-void');
+  assert.equal(theme.resolveTheme(undefined, null), 'origin', '默认主题 = origin（2026-10-03 拍板）');
   assert.equal(theme.resolveTheme(undefined, 'starship'), 'starship', '?theme= 覆写纪律对新档同样成立');
-  assert.equal(theme.THEME_CATALOG[0].id, 'heritage-void', '目录首项仍是默认主题（新档不许插队）');
-  assert.equal(theme.VALID_THEMES[0], 'heritage-void', '合法主题表首项不动');
+  assert.equal(theme.THEME_CATALOG[0].id, 'origin', '目录首项 = 默认主题 origin');
+  assert.equal(theme.VALID_THEMES[0], 'origin', '合法主题表首项 = 默认主题');
   assert.equal(theme.isStaticBgTheme('night'), false, '既有实时场景主题判定不变');
   assert.equal(theme.isStaticBgTheme('heritage-void'), true);
   // 新档自身完整性

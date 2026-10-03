@@ -7,7 +7,9 @@
 //   ① 星舰档用户气泡 fg/bg 对比度 ≥ 4.5:1（含子树叶子墨色，背景按叠底合成）；
 //   ② 同名令牌后置覆盖即失败（星舰块 --ap-ink 只许声明一次）；
 //   ③ 默认主题气泡零回归（默认令牌对与叶子墨色字节不动，且同样 ≥ 4.5:1）；
-//   ④ 全主题矩阵：每个档位解析出的（--ap-ink, --ap-card）对都 ≥ 4.5:1。
+//   ④ 全主题矩阵：每个档位解析出的（--ap-ink, --ap-card）对都 ≥ 4.5:1；
+//   ⑤ origin 蓝框对比度（2026-10-03 主人反馈"白底蓝框不明显"）：--amber-line
+//      叠白后的有效色对白底必须 ≥ 3:1（WCAG 非文本对比）。
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
@@ -131,7 +133,7 @@ const rootBlock = ruleBodies(tokens, ':root')[0];
 assert.ok(rootBlock, 'tokens.css 仍有 :root 基准块');
 const rootTokens = effectiveTokens([rootBlock]);
 
-const THEME_NAMES = ['essence', 'day', 'paper', 'ocean', 'forest', 'starship'];
+const THEME_NAMES = ['origin', 'noir', 'essence', 'day', 'paper', 'ocean', 'forest', 'starship'];
 const themeTokens = new Map([['(default)', rootTokens]]);
 for (const name of THEME_NAMES) {
   const blocks = ruleBodies(tokens, `html[data-theme='${name}']`);
@@ -246,6 +248,23 @@ for (const name of THEME_NAMES) {
     console.log(`  -> ${name}: ${ratio.toFixed(2)}:1`);
   }
   console.log(`  -> PASS: 全主题用户气泡对比度矩阵 ≥ 4.5:1（${themeTokens.size} 档）`);
+}
+
+// --------------------------- ⑤ origin 蓝框对比度 ---------------------------
+{
+  const baseCss = readFileSync(join(designDir, 'base.css'), 'utf8');
+  const originBlocks = ruleBodies(stripComments(baseCss), "html[data-theme='origin']");
+  assert.ok(originBlocks.length >= 1, 'base.css 有 origin 主题块');
+  const originTokens = effectiveTokens(originBlocks);
+  const line = originTokens.get('--amber-line');
+  assert.ok(line, 'origin 必须声明 --amber-line（蓝框令牌）');
+  const effective = composite(parseColor(line), parseColor('#ffffff'));
+  const ratio = contrastRatio(effective, [255, 255, 255]);
+  assert.ok(
+    ratio >= 3,
+    `origin 蓝框在白底对比度不足: --amber-line ${line} 叠白 = ${ratio.toFixed(2)}:1（要求 ≥ 3:1，WCAG 非文本）`,
+  );
+  console.log(`  -> PASS: origin 蓝框对比度 ${ratio.toFixed(2)}:1（叠白有效色 #${effective.map((c) => c.toString(16).padStart(2, '0')).join('')}）`);
 }
 
 console.log('--- All Theme Bubble Contrast Sentinel Checks PASSED! ---');

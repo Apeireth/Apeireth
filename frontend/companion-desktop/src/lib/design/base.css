@@ -111,6 +111,71 @@ html[data-theme='paper'] {
   --bg-input: rgba(250, 249, 246, 0.88);
 }
 
+/* 原初 origin（默认 · DeepSeek 原生界面风，2026-10-03 主人拍板）：
+   嵌入视图消费的旧 Pattern 令牌——白底蓝标浅色调（同 essence 模式族）。
+   注：旧 --amber 在本主题映射为 DeepSeek 品牌蓝——它是 UI 高亮位
+   （导航激活/开关等 chrome），非存在金色；存在金（--ap-gold*）不染。 */
+html[data-theme='origin'] {
+  --bg: transparent;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-2: rgba(255, 255, 255, 0.8);
+  --surface-3: #f2f3f5;
+  --line: rgba(31, 35, 41, 0.1);
+  --line-strong: rgba(31, 35, 41, 0.16);
+  --text: #1f2329;
+  --muted: #5c6270;
+  --faint: #8b91a0;
+  --amber: #4d6bfe;
+  --amber-hi: #4257e0;
+  --amber-wash: rgba(77, 107, 254, 0.1);
+  /* 蓝框对比度（2026-10-03 主人反馈）：0.3 在白底≈1.6:1 太淡——提到 0.8
+     （白底有效色 #7088fe ≈ 3.2:1，达 WCAG 非文本对比 3:1）。 */
+  --amber-line: rgba(77, 107, 254, 0.8);
+  --green: #2e7d5b;
+  --green-wash: rgba(46, 125, 91, 0.12);
+  --blue: #4d6bfe;
+  --blue-wash: rgba(77, 107, 254, 0.1);
+  --danger: #a84840;
+  --shadow: 0 16px 48px rgba(31, 35, 41, 0.1);
+  --bg-input: rgba(255, 255, 255, 0.9);
+}
+
+html[data-theme='origin'] body {
+  background: transparent;
+  color: var(--text);
+}
+
+/* 纯黑 noir（2026-10-03 主人拍板「再加一个黑色的」）：真黑底 + 近白字 +
+   发丝线，零装饰零动画（纯色层）。嵌入视图旧 Pattern 令牌 = :root 深底族
+   取值对齐，仅把底压到真黑、线压到发丝级。 */
+html[data-theme='noir'] {
+  --bg: transparent;
+  --surface: #101012;
+  --surface-2: #161618;
+  --surface-3: #1d1d20;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #e9e9ec;
+  --muted: #9a9aa2;
+  --faint: #65656c;
+  --amber: #e7a23b;
+  --amber-hi: #f1b95d;
+  --amber-wash: rgba(231, 162, 59, 0.12);
+  --amber-line: rgba(231, 162, 59, 0.36);
+  --green: #4db380;
+  --green-wash: rgba(77, 179, 128, 0.13);
+  --blue: #70a3dc;
+  --blue-wash: rgba(112, 163, 220, 0.13);
+  --danger: #e05b50;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  --bg-input: rgba(16, 16, 18, 0.9);
+}
+
+html[data-theme='noir'] body {
+  background: transparent;
+  color: var(--text);
+}
+
 html[data-theme='ocean'] {
   --bg: transparent;
   --surface: #0e1924;

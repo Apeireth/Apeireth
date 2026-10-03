@@ -50,6 +50,14 @@
   --ap-accent-ui-ink: #1b1409;
   --ap-stamp: #ece7da;                /* 图章/编号文字（括号角标内，等宽，§6.3） */
 
+  /* ---------- 滚动条（显白病灶修复）----------
+     深底主题（night/heritage-void/ocean/forest）继承本组骨白低透；
+     浅底主题（essence/day/paper）在各自块覆写为墨色低透，星舰覆写冷白。
+     纪律：任何主题下禁止默认白滚动条/发白滑块（shell.css 全局规则消费本组）。 */
+  --ap-scrollbar-thumb: rgba(232, 224, 204, 0.18);
+  --ap-scrollbar-thumb-hover: rgba(232, 224, 204, 0.32);
+  --ap-scrollbar-track: transparent;
+
   /* ---------- 语义色 🟡 待确认（规范 §2.4 / 附录 B-5；纪律已确认，数值提案） ----------
      克制使用：仅警示/否定/成功/中性信息，禁止装饰；info 取深空蓝系不抢金色。 */
   --ap-semantic-success: #7fb894;
@@ -164,6 +172,9 @@ html[data-theme='essence'] {
   --ap-semantic-warning: #96691f;
   --ap-semantic-danger: #a84840;
   --ap-semantic-info: #4a6278;
+  /* 浅底滚动条 = 墨色低透（骨白滑块在浅底上发白 = 显白病灶） */
+  --ap-scrollbar-thumb: rgba(28, 27, 31, 0.22);
+  --ap-scrollbar-thumb-hover: rgba(28, 27, 31, 0.38);
 }
 
 /* ---------- 日光 day（浅·暖档案调；2026-09-23 四主题补全）----------
@@ -194,6 +205,9 @@ html[data-theme='day'] {
   --ap-semantic-warning: #96691f;
   --ap-semantic-danger: #a84840;
   --ap-semantic-info: #4a6278;
+  /* 浅底滚动条 = 墨色低透 */
+  --ap-scrollbar-thumb: rgba(28, 27, 31, 0.22);
+  --ap-scrollbar-thumb-hover: rgba(28, 27, 31, 0.38);
 }
 
 /* ---------- 纸面 paper（浅·注册表低饱和；四主题补全）----------
@@ -224,6 +238,65 @@ html[data-theme='paper'] {
   --ap-semantic-warning: #8a6420;
   --ap-semantic-danger: #a04a42;
   --ap-semantic-info: #4a5f74;
+  /* 浅底滚动条 = 墨色低透 */
+  --ap-scrollbar-thumb: rgba(31, 30, 34, 0.22);
+  --ap-scrollbar-thumb-hover: rgba(31, 30, 34, 0.38);
+}
+
+/* ---------- 原初 origin（默认 · DeepSeek 原生界面风）----------
+   2026-10-03 主人拍板：新增"最初的主题"并设为默认——参考 DeepSeek 原生
+   操作界面：白底 / 品牌蓝 #4D6BFE / 灰阶卡片 / 零动画（纯色层，不改组件
+   结构、功能按钮与配置）。纪律：存在金家族不染——金色是他的存在色（沿用
+   essence 浅底校准值），品牌蓝只走 UI 高亮（--ap-accent-tab/--ap-accent-ui）。 */
+html[data-theme='origin'] {
+  --ap-space-void: #ffffff;
+  --ap-gold: #a08050;
+  --ap-gold-white-hot: #bd9a68;
+  --ap-gold-amber: #84663f;
+  --ap-gold-ui: #6b5238;
+  --ap-gold-platinum: #c9b898;
+  --ap-bone: #1f2329;
+  --ap-bone-68: rgba(31, 35, 41, 0.78);
+  --ap-bone-42: rgba(31, 35, 41, 0.56);
+  --ap-bone-30: rgba(31, 35, 41, 0.42);
+  --ap-ink: #1f2329;
+  --ap-panel: rgba(255, 255, 255, 0.92);
+  --ap-panel-solid: #ffffff;
+  --ap-shell-chip: rgba(242, 243, 245, 0.9);
+  --ap-shell-elevated: rgba(255, 255, 255, 0.98);
+  --ap-card: #eef3ff;
+  --ap-card-dark: #f2f3f5;
+  --ap-line: rgba(31, 35, 41, 0.12);
+  --ap-accent-tab: #4d6bfe;
+  --ap-accent-ui: #4d6bfe;
+  --ap-accent-ui-ink: #ffffff;
+  --ap-semantic-success: #2e7d5b;
+  --ap-semantic-warning: #96691f;
+  --ap-semantic-danger: #a84840;
+  --ap-semantic-info: #4d6bfe;
+  /* 浅底滚动条 = 墨色低透（显白病灶纪律） */
+  --ap-scrollbar-thumb: rgba(31, 35, 41, 0.22);
+  --ap-scrollbar-thumb-hover: rgba(31, 35, 41, 0.38);
+}
+
+/* ---------- 纯黑 noir（纯黑档 · 零装饰高对比）----------
+   2026-10-03 主人拍板「再加一个黑色的」：真黑底 #000、近白字、发丝线，
+   零装饰零动画（纯色层，同 origin 纪律）。存在金家族不染（默认金即他），
+   滚动条继承 :root 骨白低透（深底族）。 */
+html[data-theme='noir'] {
+  --ap-space-void: #000000;
+  --ap-bone: #e9e9ec;
+  --ap-bone-68: rgba(233, 233, 236, 0.68);
+  --ap-bone-42: rgba(233, 233, 236, 0.42);
+  --ap-bone-30: rgba(233, 233, 236, 0.3);
+  --ap-ink: #ececef;
+  --ap-panel: rgba(16, 16, 18, 0.9);
+  --ap-panel-solid: #0a0a0b;
+  --ap-shell-chip: rgba(22, 22, 24, 0.6);
+  --ap-shell-elevated: rgba(12, 12, 14, 0.97);
+  --ap-card: #17171a;
+  --ap-card-dark: #121214;
+  --ap-line: rgba(233, 233, 236, 0.12);
 }
 
 /* ---------- 深海 ocean（深·舱蓝工程调；四主题补全）----------
@@ -329,6 +402,9 @@ html[data-theme='starship'] {
     linear-gradient(180deg, #060d18 0%, #02060c 100%);
   --ap-hud-veil: radial-gradient(ellipse 130% 95% at 50% 0%, rgba(2, 6, 12, 0) 40%, rgba(2, 5, 10, 0.7) 100%);
   --ap-hud-scan: linear-gradient(180deg, rgba(87, 214, 255, 0) 0%, rgba(87, 214, 255, 0.16) 50%, rgba(87, 214, 255, 0) 100%);
+  /* 滚动条走本主题冷白骨色（--ap-bone #e4edf5 同族），不与 HUD 青蓝争色相 */
+  --ap-scrollbar-thumb: rgba(228, 237, 245, 0.18);
+  --ap-scrollbar-thumb-hover: rgba(228, 237, 245, 0.32);
 }
 
 /* ---------- 档案调·深舱反色（2026-09-23 主人真机反馈：深色主题里记忆/日记

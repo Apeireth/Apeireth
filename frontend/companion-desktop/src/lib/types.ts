@@ -5,7 +5,9 @@ export type ViewId = 'chat' | 'conversations' | 'activity' | 'tools' | 'memory' 
 // 当日曾作为空心项删除（无实现点了无反应），现在真实现补全（令牌+背景见
 // tokens.css/base.css/shell.css），从空心回归现役。
 // starship = 科幻 HUD 档（深空黑底 + 发光数据，纯主题层切换，见 design/hud.css）。
-export type Theme = 'heritage-void' | 'essence' | 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'starship';
+// origin = 原初（默认档，DeepSeek 原生界面风：白底/品牌蓝/零动画纯色层，2026-10-03 拍板）。
+// noir = 纯黑（真黑 AMOLED 档，零装饰高对比，2026-10-03 拍板）。
+export type Theme = 'origin' | 'noir' | 'heritage-void' | 'essence' | 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'starship';
 
 /** UI 配色方案 id（规范 §8 增补⑤）：只染 UI 高亮，不占存在金 */
 export type Accent = 'presence-gold' | 'deep-space' | 'sage' | 'bone';
