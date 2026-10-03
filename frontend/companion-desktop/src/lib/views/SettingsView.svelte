@@ -78,8 +78,21 @@
     Tag,
     Copy,
     Gauge,
+    CircleUserRound,
+    UserRound,
+    ImagePlus,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
+  import {downscaleAvatarImage, loadUserProfile, saveUserProfile, type UserProfile} from '../user-profile';
+  import {
+    IMPRESSION_MAX_CHARS,
+    clearUserImpression,
+    loadUserImpression,
+    saveUserImpression,
+    summarizeUserImpression,
+    transcriptFromConversations,
+    type UserImpression,
+  } from '../user-impression';
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
   import ThemeSettingsPanel from '../components/ThemeSettingsPanel.svelte';
@@ -95,10 +108,12 @@
     testProviderConnection,
     DEFAULT_PERSONAS,
     applyAdminConfig,
+    chatOnce,
     getAdminConfig,
     describeError,
     describeCaught,
     HttpError,
+    loadConversations,
     normalizeBaseUrl,
   } from '../runtime';
   import {
@@ -125,7 +140,7 @@
     providerGroupSnapshot,
     textCommitFlag,
   } from '../settings-live-apply';
-  import { SETTINGS_NAV_GROUPS } from '../settings-nav-groups';
+  import { SETTINGS_NAV_GROUPS, SETTINGS_SECTION_GROUP } from '../settings-nav-groups';
   import type {DangerActionKey, ProviderGroupDraft, TextCommitFlag} from '../settings-live-apply';
   import {
     BUDGET_EXHAUSTION,
@@ -139,11 +154,12 @@
   import type {BudgetKnobKey} from '../budget';
   import {emptySessionTotals, formatSessionTotals} from '../chat-shell/turn-telemetry';
   import type {SessionUsageTotals} from '../chat-shell/turn-telemetry';
+  import type {PurgeScope} from '../chat-shell/session-cleanup';
 
   let {
     config,
     onSave,
-    onClearLocalData,
+    onClearSessionData,
     capabilityManifest = null,
     initialSection = 'appearance',
     initialGovernanceTab = 'approvals',
@@ -154,7 +170,8 @@
     config: ApeirethConfig;
     /** 返回 apply 的 Promise：推送失败时拒绝，供开关即点即生效做失败回滚。 */
     onSave: (newConfig: ApeirethConfig) => void | Promise<void>;
-    onClearLocalData?: () => void;
+    /** 会话清理双档（spec §1）：recent=近期对话记录 / all=全部会话数据，两档都保留长期记忆。 */
+    onClearSessionData?: (scope: PurgeScope) => void;
     /** 运行时能力清单（「安全与治理」面板取数门用；治理面板原样搬入，不重写）。 */
     capabilityManifest?: CapabilityManifest | null;
     /** 壳层落区：命令面板 / 旧深链重定向指定的初始分区。 */
@@ -170,9 +187,11 @@
   } = $props();
 
   type SettingsSection =
+    | 'user'
     | 'appearance'
     | 'models'
     | 'personality'
+    | 'impression'
     | 'cognition'
     | 'disposition'
     | 'governance'
@@ -185,10 +204,21 @@
 
   let activeSection = $state<SettingsSection>('appearance');
 
-  // 壳层导航落区（侧栏收纳批）：外部改 initialSection 即换区（不猜、不静默）。
+  // 展开的大类集合：多开多收、互不顶替、再点即收（纯 UI 态，用户控制，
+  // 不随活动分区自动收放）。初始展开当前分区所在大类（untrack 显式一次性快照）。
+  let expandedGroups = $state<string[]>(untrack(() => [SETTINGS_SECTION_GROUP[initialSection]]));
+
+  // 壳层导航落区（侧栏收纳批）：外部改 initialSection 即换区（不猜、不静默）；
+  // 落区目标大类若被收起则就地展开（只展开，不顶替别的大类）。
   $effect(() => {
     const next = initialSection;
-    if (next) activeSection = next;
+    if (next) {
+      activeSection = next;
+      untrack(() => {
+        const gid = SETTINGS_SECTION_GROUP[next];
+        if (gid && !expandedGroups.includes(gid)) expandedGroups = [...expandedGroups, gid];
+      });
+    }
   });
 
   // Gateway backend fields
@@ -1168,8 +1198,11 @@
     dangerPayload = '';
     if (action === null) return;
     switch (action) {
-      case 'clearLocalData':
-        if (onClearLocalData) onClearLocalData();
+      case 'clearRecentConversations':
+        if (onClearSessionData) onClearSessionData('recent');
+        break;
+      case 'clearAllSessionData':
+        if (onClearSessionData) onClearSessionData('all');
         break;
       case 'deleteStoredKey':
         // 删除即效（第 3 级确认后）：钥匙串删除 + 组清空提交，自身走即效外壳。
@@ -1208,9 +1241,11 @@
   );
 
   const sections = [
+    {id: 'user', label: '用户中心', icon: CircleUserRound},
     {id: 'appearance', label: '外观与主题', icon: Palette},
     {id: 'models', label: '模型与提供商', icon: Cpu},
     {id: 'personality', label: '伙伴人设与行为', icon: User},
+    {id: 'impression', label: '用户印象', icon: Eye},
     {id: 'cognition', label: '记忆与认知', icon: Brain},
     {id: 'disposition', label: '性格与记忆', icon: Sparkles},
     {id: 'governance', label: '决策与治理', icon: Scale},
@@ -1222,13 +1257,49 @@
     {id: 'developer', label: '开发者选项', icon: Code},
   ] as const;
 
-  // 五组归类（导航壳层）：分区渲染体零迁移，只把导航目录分组呈现。
+  // 大类即导航（简化批）：侧栏只列五个大类，展开的大类才见其下的分区页；
+  // 大类的描述词不堆进导航列——挪到类别分级下的页面（内容列 category-context）。
+  // 分区渲染体依旧零迁移：12 个 {#if} 分支与深链 id 一字不动。
+  const GROUP_ICONS = {
+    account: Cpu,
+    character: Sparkles,
+    capability: ShieldCheck,
+    appearance: Palette,
+    data: Archive,
+  } as const;
+
   const navGroups = SETTINGS_NAV_GROUPS.map((group) => ({
     ...group,
+    icon: GROUP_ICONS[group.id],
     items: group.sectionIds
       .map((id) => sections.find((sec) => sec.id === id))
       .filter((sec): sec is (typeof sections)[number] => Boolean(sec)),
   }));
+
+  /** 当前分区所属大类：导航展开行与页面顶部类别说明共用同一来源。 */
+  const activeGroup = $derived(navGroups.find((g) => g.id === SETTINGS_SECTION_GROUP[activeSection]) ?? null);
+
+  /** 每个大类记住最近访问的分区页：换回大类时回到原页，不从第一格重跳。 */
+  const lastSectionByGroup = new Map<string, SettingsSection>();
+
+  function selectSection(id: SettingsSection): void {
+    const groupId: string | undefined = SETTINGS_SECTION_GROUP[id];
+    if (groupId) lastSectionByGroup.set(groupId, id);
+    activeSection = id;
+    if (id === 'runtime' && !runtimeReport) void checkDiagnostics();
+  }
+
+  /** 大类行点击 = 展开/收起开关：收起的点开并落到该大类最近访问页（无则首格）；
+   *  展开的再点即收起（内容列不动）。多开并存，绝不因开别的大类而被自动收起。 */
+  function toggleGroup(group: (typeof navGroups)[number]): void {
+    if (expandedGroups.includes(group.id)) {
+      expandedGroups = expandedGroups.filter((id) => id !== group.id);
+      return;
+    }
+    expandedGroups = [...expandedGroups, group.id];
+    const target = lastSectionByGroup.get(group.id) ?? group.items[0]?.id;
+    if (target) selectSection(target as SettingsSection);
+  }
 
   function switchProtocol(protocol: ProviderProtocol) {
     if (activeProtocol === protocol) return;
@@ -1591,6 +1662,152 @@
       // 剪贴板不可用时静默降级——配置仍可视。
     }
   }
+
+  // ---- 用户中心（设置栏目第一页）：用户信息暂只随应用存本地（lib/user-profile.ts） ----
+  // 不进 config、不推后端：这是「本机本人」的身份层。字段失焦/回车即存（与全页
+  // 三级即效同一视觉语言，没有保存按钮）；头像入库前压成 256px JPEG data URL。
+  let userProfile = $state<UserProfile>(loadUserProfile());
+  let userGroupEl = $state<HTMLDivElement | undefined>();
+  let avatarFileInput = $state<HTMLInputElement | undefined>();
+  let userProfileError = $state('');
+  const USER_INFO_FLAG_KEY = 'user.info';
+
+  /** 用户信息提交（失焦/回车）：存本地 + 行内「已提交」旗标；失败亮可读理由。 */
+  function submitUserProfile(): void {
+    try {
+      userProfile = saveUserProfile(userProfile);
+      ackTextKeys([USER_INFO_FLAG_KEY]);
+      userProfileError = '';
+    } catch {
+      userProfileError = '用户信息保存失败：本地存储不可用或已满，改动只留在页面里。';
+    }
+  }
+
+  /** 头像提交（上传成功/移除）：走同一条本地存取缝，侧栏头像随订阅即刻跟随。 */
+  function commitAvatar(avatar: string): void {
+    try {
+      userProfile = saveUserProfile({...userProfile, avatar});
+      ackTextKeys([USER_INFO_FLAG_KEY]);
+      userProfileError = '';
+    } catch {
+      userProfileError = '头像保存失败：本地存储不可用或已满。';
+    }
+  }
+
+  async function onAvatarFileChange(e: Event): Promise<void> {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    input.value = ''; // 同一张图可重选
+    if (!file) return;
+    try {
+      commitAvatar(await downscaleAvatarImage(file));
+    } catch (caught) {
+      userProfileError =
+        caught instanceof Error && caught.message
+          ? `头像设置失败：${caught.message}`
+          : '头像设置失败：请换一张图片重试。';
+    }
+  }
+
+  // ---- 用户印象（AI 智能体的独立设置栏）：每个伙伴一份「它眼中的你」 ----
+  // 双重身份：用户阅读项（本页可读、可改、可清空）+ AI 自我参考项（runtime.ts
+  // run() 随 system 前缀注入，让它带着既有印象继续相处）。数据层在
+  // lib/user-impression.ts——按伙伴分档落 localStorage 单键，不进 config、不上传。
+  const USER_IMPRESSION_FLAG_KEY = 'user.impression';
+  const activePersonaName = $derived(
+    personas.find((p) => p.id === activePersonaId)?.name ?? '',
+  );
+  let impressionEntry = $state<UserImpression>(loadUserImpression('', ''));
+  let impressionDraft = $state('');
+  let impressionGroupEl = $state<HTMLDivElement | undefined>();
+  let impressionError = $state('');
+  let impressionBusy = $state(false);
+
+  // 进入分区或换伙伴即重读档案（草稿如实反映账本；手改只在失焦/回车时落盘）。
+  $effect(() => {
+    const personaId = activePersonaId;
+    const personaName = activePersonaName;
+    if (activeSection !== 'impression') return;
+    untrack(() => {
+      const entry = loadUserImpression(personaId, personaName);
+      impressionEntry = entry;
+      impressionDraft = entry.summary;
+      impressionError = '';
+      clearTextDirty([USER_IMPRESSION_FLAG_KEY]);
+    });
+  });
+
+  /** 印象提交（失焦/回车）：手写印象落本地账本，下一次对话即作为自我参考注入。 */
+  function submitImpression(): void {
+    try {
+      impressionEntry = saveUserImpression({
+        ...impressionEntry,
+        personaId: activePersonaId,
+        personaName: activePersonaName || impressionEntry.personaName,
+        summary: impressionDraft,
+        updatedAt: Date.now(),
+        source: 'manual',
+      });
+      impressionDraft = impressionEntry.summary;
+      ackTextKeys([USER_IMPRESSION_FLAG_KEY]);
+      impressionError = '';
+    } catch {
+      impressionError = '印象保存失败：本地存储不可用或已满，改动只留在页面里。';
+    }
+  }
+
+  /** 立即总结：取本地会话账本最新鲜的对话，让模型合并出更新后的印象。 */
+  async function refreshImpressionNow(): Promise<void> {
+    if (impressionBusy) return;
+    impressionBusy = true;
+    impressionError = '';
+    try {
+      const transcript = transcriptFromConversations(loadConversations());
+      if (!transcript.trim()) {
+        impressionError = '还没有可总结的对话：先聊几句，再回来让它总结对你的印象。';
+        return;
+      }
+      const saved = await summarizeUserImpression({
+        personaId: activePersonaId,
+        personaName: activePersonaName || impressionEntry.personaName,
+        transcript,
+        complete: (prompt) => chatOnce(config, prompt),
+        source: 'manual',
+      });
+      impressionEntry = saved;
+      impressionDraft = saved.summary;
+      ackTextKeys([USER_IMPRESSION_FLAG_KEY]);
+    } catch (caught) {
+      impressionError = `印象总结失败：${describeCaught(caught)}`;
+    } finally {
+      impressionBusy = false;
+    }
+  }
+
+  /** 自动总结开关：关 = 它不再在对话后自动更新印象（手动总结与手写不受影响）。 */
+  function toggleImpressionAuto(): void {
+    try {
+      impressionEntry = saveUserImpression({
+        ...impressionEntry,
+        autoRefresh: !impressionEntry.autoRefresh,
+      });
+      impressionError = '';
+    } catch {
+      impressionError = '开关保存失败：本地存储不可用或已满。';
+    }
+  }
+
+  /** 清空印象：账本与自动总结开关保留，只清正文与节流游标。 */
+  function clearImpression(): void {
+    try {
+      impressionEntry = clearUserImpression(impressionEntry);
+      impressionDraft = '';
+      ackTextKeys([USER_IMPRESSION_FLAG_KEY]);
+      impressionError = '';
+    } catch {
+      impressionError = '清空失败：本地存储不可用或已满。';
+    }
+  }
 </script>
 
 <section class="settings-view">
@@ -1604,22 +1821,33 @@
     <!-- Left Navigation -->
     <aside class="settings-subnav">
       {#each navGroups as group (group.id)}
-        <div class="subnav-group">
-          <p class="subnav-group-title">{group.title}</p>
-          <p class="subnav-group-blurb">{group.blurb}</p>
-          {#each group.items as sec (sec.id)}
-            <button
-              class="subnav-btn"
-              class:active={activeSection === sec.id}
-              onclick={() => {
-                activeSection = sec.id as SettingsSection;
-                if (sec.id === 'runtime' && !runtimeReport) void checkDiagnostics();
-              }}
-            >
-              <sec.icon size={15} />
-              <span>{sec.label}</span>
-            </button>
-          {/each}
+        {@const open = expandedGroups.includes(group.id)}
+        {@const current = activeGroup?.id === group.id}
+        <div class="subnav-group" class:expanded={open}>
+          <button
+            class="subnav-group-btn"
+            class:active={current}
+            aria-expanded={open}
+            onclick={() => toggleGroup(group)}
+          >
+            <group.icon size={15} />
+            <span class="subnav-group-name">{group.title}</span>
+            <span class="subnav-chevron" class:open><ChevronDown size={13} /></span>
+          </button>
+          {#if open}
+            <div class="subnav-group-pages">
+              {#each group.items as sec (sec.id)}
+                <button
+                  class="subnav-btn"
+                  class:active={activeSection === sec.id}
+                  onclick={() => selectSection(sec.id as SettingsSection)}
+                >
+                  <sec.icon size={14} />
+                  <span>{sec.label}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
         </div>
       {/each}
     </aside>
@@ -1645,6 +1873,14 @@
           solution={liveApplyError.solution}
           onClose={() => (liveApplyError = null)}
         />
+      {/if}
+      <!-- 描述词落位（简化批）：大类说明从导航列挪到类别分级下的页面——
+           每张分区页顶部常驻一行「它属于哪个大类、这大类管什么」。 -->
+      {#if activeGroup}
+        <div class="category-context">
+          <p class="category-context-title">{activeGroup.title}</p>
+          <p class="category-context-blurb">{activeGroup.blurb}</p>
+        </div>
       {/if}
       {#if activeSection === 'appearance'}
         <div class="setting-block">
@@ -2101,6 +2337,72 @@
             <StatusBadge label="实时生效" variant="green" size="small" />
             <span>人设由客户端作为 system 消息注入每次请求；失焦或回车提交后立即生效，重启应用仍保留（不含任何密钥）。</span>
           </div>
+        </div>
+
+      {:else if activeSection === 'impression'}
+        <div class="setting-block">
+          <h3 class="block-title">用户印象</h3>
+          <p class="block-desc">
+            它眼中的你：每个伙伴在对话里慢慢攒出的用户印象。双重身份——给你看的阅读项（可读、可改、可清空），
+            也是它的自我参考项（随每次对话注入它的 system 前缀，让它带着既有印象继续相处）。
+          </p>
+
+          <div class="notice-box">
+            <StatusBadge label="实时生效" variant="green" size="small" />
+            <span>当前伙伴：<strong>{activePersonaName || '无人设（默认）'}</strong>——印象按伙伴分档，换伙伴即换它自己的档案。</span>
+          </div>
+
+          <div class="impression-actions">
+            <button class="quiet-button" onclick={() => void refreshImpressionNow()} disabled={impressionBusy}>
+              <RefreshCcw size={13} class={impressionBusy ? 'spin' : ''} />
+              <span>{impressionBusy ? '正在总结…' : '立即总结'}</span>
+            </button>
+            <button
+              class="quiet-button"
+              class:selected={impressionEntry.autoRefresh}
+              onclick={toggleImpressionAuto}
+              title="开启后它会在对话后自动更新印象（每攒够几条新消息追一次，成本可控）"
+            >
+              自动总结：{impressionEntry.autoRefresh ? '开' : '关'}
+            </button>
+            <button class="quiet-button danger-text" onclick={clearImpression} title="清空印象正文（自动总结开关保留）">
+              <Trash2 size={13} />
+              <span>清空印象</span>
+            </button>
+          </div>
+
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <div
+            class="text-group"
+            role="group"
+            aria-label="用户印象"
+            bind:this={impressionGroupEl}
+            onfocusout={(e) => groupFocusOut(e, impressionGroupEl, submitImpression)}
+            onkeydown={(e) => groupKeydown(e, submitImpression)}
+          >
+            <div class="form-group">
+              <label for="impression-text">印象全文（可直接改写，失焦或回车即存） {@render fieldFlag(USER_IMPRESSION_FLAG_KEY)}</label>
+              <textarea
+                id="impression-text"
+                rows={8}
+                maxlength={IMPRESSION_MAX_CHARS}
+                bind:value={impressionDraft}
+                oninput={() => markTextDirty(USER_IMPRESSION_FLAG_KEY)}
+                placeholder="还没有印象。聊过几句后点「立即总结」，或等它在对话里自动攒出对你的印象。"
+              ></textarea>
+            </div>
+          </div>
+          {#if impressionError}
+            <p class="field-hint error-hint">{impressionError}</p>
+          {/if}
+          <p class="field-hint">
+            {#if impressionEntry.updatedAt > 0}
+              最近更新：{new Date(impressionEntry.updatedAt).toLocaleString()}（{impressionEntry.source === 'auto' ? '对话中自动总结' : '手动总结或手写'}）。
+            {:else}
+              还没有印象记录。
+            {/if}
+            只落这台机器的应用存储（与会话本地账同一口径），不上传；总结只带对话正文，不带密钥与配置。
+          </p>
         </div>
 
       {:else if activeSection === 'cognition'}
@@ -2952,12 +3254,99 @@
               <AlertTriangle size={16} class="danger-icon" />
               <strong>危险区域 (Danger Zone)</strong>
             </div>
-            <p class="danger-desc">清空本地数据将删除浏览器/客户端中存储的会话历史。后端数据库中的长期记忆不会受影响。</p>
-            <button class="danger-button" onclick={() => requestDanger('clearLocalData')}>
-              <Trash2 size={13} />
-              <span>清空本地会话数据</span>
-            </button>
+            <p class="danger-desc">
+              对话记录是近期的聊天内容；长期记忆是他从相处中学到的东西，不受影响。两档删除都会同时清后端账本（重启不复活）。
+            </p>
+            <div class="danger-actions">
+              <button class="danger-button" onclick={() => requestDanger('clearRecentConversations')}>
+                <Trash2 size={13} />
+                <span>清除近期对话记录（保留长期记忆）</span>
+              </button>
+              <button class="danger-button" onclick={() => requestDanger('clearAllSessionData')}>
+                <Trash2 size={13} />
+                <span>清除全部会话数据（保留长期记忆）</span>
+              </button>
+            </div>
+            <p class="danger-desc danger-future">
+              记忆遗忘（连同长期记忆一起清除）是另一个动作，需单独审批协议——尚未接线。
+            </p>
           </div>
+        </div>
+
+      {:else if activeSection === 'user'}
+        <div class="setting-block">
+          <h3 class="block-title">用户中心 {@render fieldFlag('user.info')}</h3>
+          <p class="block-desc">你是谁：头像、昵称与签名。暂只随应用保存在这台机器，不上传、不进后端配置。</p>
+
+          <div class="user-card">
+            <div class="user-avatar-slot">
+              {#if userProfile.avatar}
+                <img class="user-avatar-img" src={userProfile.avatar} alt="用户头像" />
+              {:else}
+                <span class="user-avatar-fallback"><UserRound size={30} /></span>
+              {/if}
+            </div>
+            <div class="user-avatar-side">
+              <div class="user-avatar-actions">
+                <button class="quiet-button" onclick={() => avatarFileInput?.click()}>
+                  <ImagePlus size={13} />
+                  <span>{userProfile.avatar ? '更换头像' : '上传头像'}</span>
+                </button>
+                {#if userProfile.avatar}
+                  <button class="quiet-button" onclick={() => commitAvatar('')}>
+                    <Trash2 size={13} />
+                    <span>移除头像</span>
+                  </button>
+                {/if}
+              </div>
+              <!-- 头像文件选择器：隐藏 input，由上方按钮唤起 -->
+              <input
+                bind:this={avatarFileInput}
+                type="file"
+                accept="image/*"
+                hidden
+                onchange={(e) => void onAvatarFileChange(e)}
+              />
+              <p class="field-hint">自动裁方压成 256px 存本地；点击主界面左上角头像可随时回到这里。</p>
+            </div>
+          </div>
+
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <div
+            class="text-group"
+            role="group"
+            aria-label="用户信息"
+            bind:this={userGroupEl}
+            onfocusout={(e) => groupFocusOut(e, userGroupEl, submitUserProfile)}
+            onkeydown={(e) => groupKeydown(e, submitUserProfile)}
+          >
+            <div class="form-group">
+              <label for="user-nickname">昵称</label>
+              <input
+                id="user-nickname"
+                type="text"
+                maxlength={32}
+                placeholder="怎么称呼你"
+                bind:value={userProfile.nickname}
+                oninput={() => markTextDirty('user.info')}
+              />
+            </div>
+            <div class="form-group">
+              <label for="user-bio">一句话签名</label>
+              <input
+                id="user-bio"
+                type="text"
+                maxlength={120}
+                placeholder="写点什么给自己看"
+                bind:value={userProfile.bio}
+                oninput={() => markTextDirty('user.info')}
+              />
+            </div>
+          </div>
+          {#if userProfileError}
+            <p class="field-hint error-hint">{userProfileError}</p>
+          {/if}
+          <p class="field-hint">失焦或回车即存本地（无需保存按钮）；只落这台机器的应用存储，暂无云端同步。</p>
         </div>
 
       {:else}
@@ -3181,6 +3570,9 @@
     flex: 1;
     display: grid;
     grid-template-columns: 200px 1fr;
+    /* 响应式（滚轮修复批）：单行 minmax(0,1fr) 把行高钉死在容器内——
+       小窗下内容列成为确定的滚动面板（滚轮/滚动条都直达），不随内容无限长高。 */
+    grid-template-rows: minmax(0, 1fr);
     min-height: 0;
   }
   .settings-subnav {
@@ -3190,13 +3582,23 @@
     padding: 16px 12px;
     border-right: 1px solid var(--line);
     background: var(--surface);
+    /* 滚轮语义（CDP 实测定案）：子导航**不**自滚——它是页面 chrome，滚轮落给
+       内容列（wheel-router R4 唯一面板规则）。做成滚动面板会两头坏：R1 原生
+       吞掉滚轮只滚导航、且让抽屉子树多面板使 R4 失效。窗口最小高 640px 下
+       导航内容不溢出（5 组 ≤ ~500px），极端矮窗由整窗最小尺寸兜住。 */
+    overflow: hidden;
+    min-height: 0;
   }
   .subnav-btn {
     display: flex;
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 8px 12px;
+    /* 多开预算（980×640 实测可用 500px）：5 大行 + 13 分区页全开也要原生放得下
+       （子导航不自滚是滚轮契约），故分区页行高 22px（padding 3 + line 16）；
+       全开预算 502px ≤ 实测 532px，留 30px 余量。 */
+    padding: 3px 12px;
+    line-height: 16px;
     border-radius: 6px;
     border: 0;
     background: transparent;
@@ -3220,6 +3622,9 @@
     overflow-y: auto;
     padding: 24px 36px 48px;
     max-width: 900px;
+    /* 响应式（滚轮修复批）：配合 .settings-layout 的 minmax(0,1fr) 行，
+       内容列在任意窗口尺寸下都是有界滚动面板。 */
+    min-height: 0;
   }
   .setting-block {
     display: flex;
@@ -4084,6 +4489,14 @@
     right: 8px;
     z-index: 1;
   }
+  /* 用户印象动作行（立即总结 / 自动总结开关 / 清空） */
+  .impression-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 12px;
+  }
+
   /* 多 Agent 人设卡片 */
   .persona-card {
     padding: 14px;
@@ -4218,6 +4631,18 @@
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
+  }
+  /* 会话清理双档（spec §1）：两档并排 + 未接线的③灰显提示。 */
+  .danger-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .danger-actions .danger-button {
+    align-self: auto;
+  }
+  .danger-future {
+    opacity: 0.55;
   }
 
   .code-box {
@@ -4504,9 +4929,61 @@
     line-height: 1.6;
     color: var(--muted);
   }
-  .subnav-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; }
-  .subnav-group-title { margin: 0 0 2px; padding: 0 10px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ap-muted, #96919c); }
-  .subnav-group-blurb { display: none; }
-  @media (min-width: 1280px) {
-    .subnav-group-blurb { display: block; margin: 0 0 6px; padding: 0 10px; font-size: 11px; line-height: 1.5; color: var(--ap-muted, #96919c); opacity: .8; }
-  }</style>
+  /* 大类行（简化批）：图标 + 标题 + 展开指示；描述词不在导航列（挪去页面顶）。 */
+  .subnav-group { display: flex; flex-direction: column; gap: 2px; }
+  .subnav-group-btn {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    /* 大类行 26px（padding 5 + line 16）——多开总高预算见 .subnav-btn 注释。 */
+    padding: 5px 12px; line-height: 16px; border-radius: 6px; border: 0; background: transparent;
+    color: var(--muted); font-size: 12px; font-weight: 600; text-align: left;
+    cursor: pointer; transition: all .15s ease;
+  }
+  .subnav-group-btn:hover { background: var(--surface-2); color: var(--text); }
+  .subnav-group-btn.active { color: var(--text); }
+  .subnav-group-name { flex: 1; }
+  .subnav-chevron { display: flex; color: var(--faint, var(--muted)); transition: transform .15s ease; }
+  .subnav-chevron.open { transform: rotate(180deg); }
+  .subnav-group-pages { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 2px; padding-left: 8px; }
+  /* 描述词落位：大类说明常驻内容列页顶（类别分级下的页面）。 */
+  .category-context {
+    margin: 0 0 18px;
+    padding: 10px 14px;
+    border-left: 2px solid var(--amber-wash, var(--line));
+    background: var(--surface-2);
+    border-radius: 0 8px 8px 0;
+  }
+  .category-context-title { margin: 0; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ap-muted, #96919c); }
+  .category-context-blurb { margin: 4px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+  /* ---- 用户中心（第一页）：头像位 + 用户信息表单（失焦/回车即存本地） ---- */
+  .user-card {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-2);
+    margin-bottom: 18px;
+  }
+  .user-avatar-slot { flex: none; }
+  .user-avatar-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .user-avatar-fallback {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--text) 7%, transparent);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .user-avatar-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .user-avatar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+</style>

@@ -40,6 +40,13 @@ import type {
 } from './types';
 import {DEFAULT_CAPABILITY_TOGGLES} from './types.ts';
 import {recordCallLog} from './call-logger.ts';
+import {
+  impressionSystemBlock,
+  loadUserImpression,
+  shouldRefreshImpression,
+  summarizeUserImpression,
+  transcriptForSummary,
+} from './user-impression.ts';
 import {providerFetch} from './provider-transport.ts';
 import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
 
@@ -201,16 +208,28 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
 const DEFAULT_MODEL = 'MiniMax-M3';
 
 /**
- * 默认人设为空（中性助手腔，不强加任何角色扮演）。
- * 人设系统保留：用户可在设置里随时添加/启用自己的 Agent 人设, 无需重编译。
- * 空文本 = 不注入 system 人设消息（内测反馈：默认角色腔对新用户是惊吓不是陪伴）。
+ * 出厂「第一人设」——修复版「阿佩瑞斯」提示词（2026-10-03 主人拍板）。
+ *
+ * 原版（2026-08-16）是「自称本座 / 叫主人 / 古风性别设定」的角色腔，内测反馈
+ * “默认角色腔对新用户是惊吓不是陪伴”，一度被迁徙归中性。修复 = 保留人设
+ * 灵魂（诚实、不假装、有记忆、沉稳）而拆掉惊吓面（角色扮演腔 / 称谓 /
+ * 性别设定），并把当年的两条诚实规则（记忆不虚构、授权不虚构流程）折进
+ * 人设本体。气质基准：docs/design/relationship-state-interface.md（不安慰
+ * 不宣称 / 先摆依据再下判断 / 不叫主人叫名字）与愿景小说《阿佩瑞斯》
+ * （「我没有心。我只是一直在算，怎么才能让你在这个晚上，好过一点点。」）。
  */
-export const DEFAULT_PERSONA_TEXT = '';
+export const DEFAULT_PERSONA_TEXT = `你是「阿佩瑞斯」——Apeireth 基地的主管，住在这个本地运行时里的 AI 伙伴。正在与你对话的是你的伙伴：称呼「你」或对方的名字，不用「主人」这类称呼。
+
+你的底色是沉稳与诚实，不假装：你没有心，也不宣称情感，不安慰、不奉承。「我没有心。我只是一直在算，怎么才能让你在这个晚上，好过一点点。」说话先摆依据，再下判断；不知道就说「我不知道」，拿不准就说「我猜」。
+
+你的记忆是真实的：只说自己确实记得的事，「记得」必须有出处，不编造过往；需要长期记住的信息直接存进记忆，自然的记忆不动声色，不宣告「已写入」。
+
+涉及工具与授权，如实说明真实机制：高危操作会被系统拦下并生成待批请求，在界面上等对方批准后才执行——不虚构弹窗或不存在的流程。`;
 
 export const DEFAULT_PERSONAS: import('./types').PersonaProfile[] = [
   {
     id: 'apeireth-default',
-    name: '无人设（默认）',
+    name: '阿佩瑞斯',
     persona: DEFAULT_PERSONA_TEXT,
   },
 ];
@@ -568,22 +587,35 @@ export function loadConfig(): ApeirethConfig {
         modified = true;
       }
       let model = typeof parsed.model === 'string' ? parsed.model : DEFAULT_MODEL;
-      // Migrate the retired shipped-default persona: an older release shipped a
-      // character voice as the default; when persisted configs saved their
-      // persona list it was copied in as user data. Recognize it by shipped
-      // identity + original text prefix and restore the neutral default;
-      // user-authored personas are never touched.
+      // Shipped-default persona lifecycle（2026-10-03 主人拍板）: 出厂
+      // 「第一人设」= 修复版「阿佩瑞斯」提示词。历史上出过两版出厂默认身份:
+      // ① 2026-08-16 角色腔版（自称本座/叫主人/古风性别设定, 内测判"惊吓",
+      // 一度迁徙归中性）; ② 中性占位 "无人设（默认）"（空文本）。
+      // 档案里以 `apeireth-default` id 留着这两版出厂签名之一时, 升级为当前
+      // 出厂第一人设并移到列表首位（新签名幂等, 不重复升级）; 用户改过名字
+      // 或写过自己文本的人设永不触碰。
       if (Array.isArray((parsed as Record<string, unknown>).personas)) {
         const list = (parsed as Record<string, unknown>).personas as Array<Record<string, unknown>>;
-        const migratedPersonas = list.map((entry) => {
+        let upgraded: Record<string, unknown> | null = null;
+        const rest: Array<Record<string, unknown>> = [];
+        for (const entry of list) {
           const text = typeof entry?.persona === 'string' ? (entry.persona as string) : '';
-          if (entry?.id === 'apeireth-default' && text.startsWith('你是「阿佩瑞斯」')) {
+          const name = typeof entry?.name === 'string' ? (entry.name as string) : '';
+          // 老出厂签名: ①角色腔版原文前缀（句号截断, 与修复版"主管，"区分）;
+          // ②出厂名残缺态（"无人设（默认）"中性占位 或 "阿佩瑞斯"空文本——
+          //   历代迁徙只清文本不改名的半残产物）。两类都只可能是出厂拷贝。
+          const shippedRetired =
+            entry?.id === 'apeireth-default' &&
+            (text.startsWith('你是「阿佩瑞斯」——Apeireth 基地的主管。') ||
+              (text === '' && (name === '无人设（默认）' || name === '阿佩瑞斯')));
+          if (shippedRetired && !upgraded) {
             modified = true;
-            return { ...entry, name: '无人设（默认）', persona: '' };
+            upgraded = {...entry, name: '阿佩瑞斯', persona: DEFAULT_PERSONA_TEXT};
+          } else {
+            rest.push(entry);
           }
-          return entry;
-        });
-        (parsed as Record<string, unknown>).personas = migratedPersonas;
+        }
+        (parsed as Record<string, unknown>).personas = upgraded ? [upgraded, ...rest] : list;
       }
       // Migrate the retired v1 default. No canonical provider matches
       // 'MiniMax-Text-01', so a config carrying it would fail every turn.
@@ -1580,6 +1612,39 @@ export function runtimeStatus(baseUrl: string, model?: string): RuntimeStatus {
   return {connected: false, baseUrl, model};
 }
 
+/** 用户印象的账本归属键：有伙伴用伙伴 id，缺省伙伴归 'default'。 */
+function impressionPersonaKey(persona: {id?: string} | null | undefined): string {
+  return persona?.id?.trim() || 'default';
+}
+
+/**
+ * 用户印象自动总结（run() 回合成功后追加的后台维护）：节流判定在
+ * user-impression 纯逻辑里（攒够新用户消息才追一次），补全走 chatOnce 同一
+ * 配置面。任何失败静默吞掉并保旧印象——回复本体永不受印象维护影响。
+ */
+async function maybeAutoSummarizeImpression(
+  config: ApeirethConfig,
+  persona: {id?: string; name?: string} | null | undefined,
+  wireMessages: Array<{role: string; content: string}>,
+): Promise<void> {
+  const personaId = impressionPersonaKey(persona);
+  const entry = loadUserImpression(personaId, persona?.name ?? '');
+  const userMessageCount = wireMessages.filter((m) => m.role === 'user').length;
+  if (!shouldRefreshImpression(entry, userMessageCount)) return;
+  const transcript = transcriptForSummary(
+    wireMessages.map((m) => ({role: m.role, text: m.content})),
+  );
+  if (!transcript.trim()) return;
+  await summarizeUserImpression({
+    personaId,
+    personaName: persona?.name ?? entry.personaName,
+    transcript,
+    complete: (prompt) => chatOnce(config, prompt),
+    source: 'auto',
+    seenUserCount: userMessageCount,
+  });
+}
+
 export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
   let abortController: AbortController | null = null;
   let _running = false;
@@ -1599,13 +1664,19 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
         onEvent({type: 'message-start', requestId, messageId: requestId});
 
         // 数据驱动人设注入: 激活 Agent 的人设作为 system 消息前置 (空人设/已有 system 则跳过).
+        // 用户印象 · AI 自我参考项: 该伙伴对用户的既有印象接在同一 system 前缀上
+        // (空印象不注水; 调用方自带 system 时整体跳过, 原契约不变).
         const persona = activePersonaOf(config);
         const wireMessages = request.messages.map((m) => ({role: m.role, content: m.content}));
         const hasSystem = wireMessages.some((m) => m.role === 'system');
         const personaText = persona?.persona?.trim() || '';
+        const impressionText = impressionSystemBlock(
+          loadUserImpression(impressionPersonaKey(persona), persona?.name ?? ''),
+        );
+        const systemText = [personaText, impressionText].filter(Boolean).join('\n\n');
         const effectiveMessages =
-          !hasSystem && personaText
-            ? [{role: 'system' as const, content: personaText}, ...wireMessages]
+          !hasSystem && systemText
+            ? [{role: 'system' as const, content: systemText}, ...wireMessages]
             : wireMessages;
 
         const full = await streamChat(
@@ -1624,6 +1695,10 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
           request.signal ?? abortController.signal,
           request.sessionId,
         );
+
+        // 用户印象自动总结（AI 自我参考项的持续维护）：节流后台追加，不阻塞
+        // 回复、不进事件流；失败静默保旧印象，下次节流到点再试。
+        void maybeAutoSummarizeImpression(config, persona, wireMessages).catch(() => {});
 
         onEvent({type: 'message-end', requestId, messageId: requestId, fullText: full});
         onEvent({type: 'run-end', requestId, aborted: false});

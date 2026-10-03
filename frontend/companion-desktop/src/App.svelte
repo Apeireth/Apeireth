@@ -19,6 +19,7 @@
     Search,
     Info,
     ShieldCheck,
+    CircleUserRound,
   } from 'lucide-svelte';
   import MessageContent from './lib/MessageContent.svelte';
   import RuntimeModal from './lib/components/RuntimeModal.svelte';
@@ -61,6 +62,9 @@
   import GuardNoticeCard from './lib/chat-shell/GuardNoticeCard.svelte';
   import type {HomeSessionItem} from './lib/chat-shell/session-list';
   import {deleteSession} from './lib/chat-shell/session-delete';
+  import {markSessionsCleared, purgeSessions, type PurgeScope} from './lib/chat-shell/session-cleanup';
+  import {initWheelRouter} from './lib/wheel-scroll';
+  import {clearCallLogs, clearCallLogsFor} from './lib/call-logger';
   import {
     isNearBottom as nearBottomNow,
     scrollOnAppend,
@@ -100,6 +104,7 @@
   } from './lib/shell-nav';
   import {applyDocumentAccent, applyDocumentTheme, isStaticBgTheme, resolveAccent, resolveTheme, themeLabel, THEME_CATALOG} from './lib/theme';
   import {getCustomBg} from './lib/bg-store';
+  import {loadUserProfile, subscribeUserProfile, type UserProfile} from './lib/user-profile';
   import type {Theme} from './lib/types';
 
   import type {
@@ -120,6 +125,7 @@
     checkHealthDetailed,
     createAgentRuntime,
     deleteBackendSession,
+    fetchBackendSessions,
     fetchCanonicalApprovals,
     resolveCanonicalApproval,
     applyCanonicalEvents,
@@ -286,8 +292,18 @@
   let workbenchTurn = $state<WorkbenchTurn | null>(null);
   // 工作台分区（侧栏收纳批）：turn=回合视图（默认）/ memory=记忆卷宗 / diary=他的日记。
   let wbSection = $state<WorkbenchSection>(initialWbSection);
-  // 设置页落区：安全与治理 = 治理面板搬入处（侧栏收纳批）。
-  let settingsSection = $state<'appearance' | typeof SETTINGS_SECURITY_SECTION>(initialSettingsSection);
+  // 设置页落区：安全与治理 = 治理面板搬入处（侧栏收纳批）；'user' = 头像入口。
+  let settingsSection = $state<'appearance' | 'user' | typeof SETTINGS_SECURITY_SECTION>(
+    initialSettingsSection,
+  );
+  // 用户资料（设置 › 用户中心第一页）：暂只随应用存本地；侧栏头像实时跟随写入。
+  let profile = $state<UserProfile>(loadUserProfile());
+  $effect(() => {
+    const unsubscribe = subscribeUserProfile((next) => {
+      profile = next;
+    });
+    return unsubscribe;
+  });
   let openPanel = $state<'model' | 'ctx' | null>(null);
   let availableModels = $state<string[]>([]);
   let modelsLoading = $state(false);
@@ -1756,6 +1772,7 @@
     });
     if (outcome.ok) {
       // 列表刷新：对齐一次他的账本（重拉后陈账行自然消失）。
+      markSessionsCleared([id]); // 会话已清除登记（MemoryView 悬空引用占位）
       homeReloadKey += 1;
       return;
     }
@@ -1764,6 +1781,59 @@
     restored.delete(id);
     deletedSessionIds = restored;
     if (wasActive) activeId = id;
+  }
+
+  // ---- 会话清理双档（session-cleanup-options-spec §1）：① 近期 / ② 全部 ----
+  // 两档都真删后端账本行（防复活）、都保留长期记忆；失败如实亮帧不谎报清空。
+  async function purgeConversations(scope: PurgeScope): Promise<void> {
+    // 后端账本先拉后清：拉不到 = 整体取消（清理链不接受"跳过后端只清本地"）。
+    let backend: Awaited<ReturnType<typeof fetchBackendSessions>> | null = null;
+    try {
+      backend = await fetchBackendSessions(config);
+    } catch (caught) {
+      const frame = describeError(caught);
+      actionError = {
+        message: describeCaughtSafe(caught),
+        title: frame.title,
+        solution: frame.solution,
+      };
+      return;
+    }
+    const outcome = await purgeSessions(scope, {
+      list: () => conversations,
+      setList: (next) => {
+        conversations = next;
+      },
+      persist,
+      backend: () => backend,
+      deleteRemote: (sid) => deleteBackendSession(config, sid),
+      clearCallLogs: (target) => {
+        if (target === 'all') clearCallLogs();
+        else clearCallLogsFor(target);
+      },
+      onError: (caught) => {
+        const frame = describeError(caught);
+        actionError = {
+          message: describeCaughtSafe(caught),
+          title: frame.title,
+          solution: frame.solution,
+        };
+      },
+    });
+    if (outcome.deletedIds.length > 0) {
+      // 真删成的登记（含部分失败档）：乐观排除陈账行 + MemoryView 占位。
+      deletedSessionIds = new Set([...deletedSessionIds, ...outcome.deletedIds]);
+      markSessionsCleared(outcome.deletedIds);
+      if (activeId && outcome.deletedIds.includes(activeId)) activeId = null;
+      homeReloadKey += 1; // 列表刷新：对齐一次他的账本
+    }
+    if (outcome.ok) {
+      notice =
+        outcome.deletedIds.length > 0
+          ? `已清除 ${outcome.deletedIds.length} 个会话的对话记录${scope === 'all' ? '（含调用日志）' : ''}。长期记忆不受影响。`
+          : '没有需要清除的会话。';
+    }
+    // 失败档：清理链已还原失败项并经 onError 亮帧——不另发"成功"通知，不谎报。
   }
 
   function applyQuickPrompt(promptText: string) {
@@ -1840,6 +1910,17 @@
 
   function closeDrawer(): void {
     drawerSec = null;
+  }
+
+  /** 侧栏左上头像 = 用户中心入口：无条件落设置 › 用户中心（第一页）。 */
+  async function openUserCenter(): Promise<void> {
+    settingsSection = 'user';
+    if (drawerSec === 'settings') {
+      // 设置已开着、内部可能翻到了别的分区：重挂载抽屉，保证落区快照生效。
+      drawerSec = null;
+      await tick();
+    }
+    openDrawer('settings');
   }
 
   /** 壳层统一导航：命令面板 nav.* 与旧深链重定向共用一张目标表（lib/shell-nav.ts）。 */
@@ -1948,6 +2029,8 @@
   }
 
   const THEME_PINYIN: Record<Theme, string> = {
+    origin: 'yuanchu',
+    noir: 'chunhei',
     'heritage-void': 'yichan',
     essence: 'essence',
     night: 'shenkong',
@@ -2223,6 +2306,9 @@
   });
 
   onMount(() => {
+    // 全局滚轮路由（lib/wheel-scroll.ts）：死区滚轮直达滚动面板——小窗模式下
+    // 设置子导航列/聊天区留白等处滚轮失效的修复（CDP 实测见 scripts/wheel-scroll-probe.mjs）。
+    const disposeWheelRouter = initWheelRouter();
     applyDocumentTheme(activeTheme);
     applyDocumentAccent(resolveAccent(config.accent));
     // 自定义背景（§8 增补④）：开关开着就从 IndexedDB 取图；取不到 = 诚实回落关开关
@@ -2318,6 +2404,7 @@
     }, 15000);
 
     return () => {
+      disposeWheelRouter();
       window.clearInterval(timer);
       if (hourTimer !== null) window.clearInterval(hourTimer);
       unsubscribeEvents();
@@ -2337,6 +2424,8 @@
   class:theme-paper={activeTheme === 'paper'}
   class:theme-ocean={activeTheme === 'ocean'}
   class:theme-forest={activeTheme === 'forest'}
+  class:theme-origin={activeTheme === 'origin'}
+  class:theme-noir={activeTheme === 'noir'}
   class:custom-bg={customBgUrl !== null}
   class:mode-focus={mode === 'focus'}
   class:mode-engineering={mode === 'engineering'}
@@ -2376,7 +2465,18 @@
     <!-- 侧栏四件（内测反馈批）：对话/工具/状态/设置。历史撤除（往来列表即历史）、
          记忆/日记入工作台、治理入设置 › 安全与治理、日志并入状态——见 lib/shell-nav.ts -->
     <nav class="rail" aria-label="主导航">
-      <div class="rail-brand" title="Apeireth">燧</div>
+      <!-- 左上角 = 用户头像（单字品牌位让位）：点击落设置 › 用户中心 -->
+      <button
+        class="rail-brand rail-avatar"
+        title={profile.nickname ? `${profile.nickname} · 用户中心` : '用户中心（设置头像与用户信息）'}
+        onclick={() => void openUserCenter()}
+      >
+        {#if profile.avatar}
+          <img class="rail-avatar-img" src={profile.avatar} alt="用户头像" />
+        {:else}
+          <CircleUserRound size={21} />
+        {/if}
+      </button>
       <div class="rail-nav">
         <button
           class="rail-btn"
@@ -2510,11 +2610,7 @@
                 throw err;
               }
             }}
-            onClearLocalData={() => {
-              conversations = [];
-              activeId = null;
-              persist();
-            }}
+            onClearSessionData={(scope) => void purgeConversations(scope)}
           />
         {:else if drawerSec === 'status'}
           <div class="stats">
