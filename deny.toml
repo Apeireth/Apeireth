@@ -177,4 +177,14 @@ ignore = [
     #   no crate matched。按上方 0-ignore austere 模式回归留空。
     #   同批清空 audit.toml 20 条与 cargo-audit.yml 21 条过期 ignore (三处口径本就
     #   漂移: 20/10/21), 此后三处同步为空; 新增 ignore 须三处同步并写理由。
+    #
+    # 2026-10-03: 首次破 0-ignore (非 false-positive, 是 transitive 未修复面):
+    # apeireth-tui (驾驶舱) → ratatui 0.29 → paste / lru 0.12。三条根治同一路径 ——
+    # ratatui 0.29 → 0.30 迁移 (0.30 去 paste、lru 脱离 0.12 线; 仓内 e2e 已用 0.30,
+    # 见上方 lru skip 理由), TUI 迁移属模块重组级大改, 单列计划执行; 迁移前在此
+    # 短接 —— 不宣称风险为零, 只是当前无修复版可用。三处同步: audit.toml /
+    # cargo-audit.yml --ignore。
+    "RUSTSEC-2024-0436",  # paste 1.0.15 unmaintained (停维护, 非漏洞) - ratatui 0.29 proc-macro 链, 1.x 已归档无修复
+    "RUSTSEC-2026-0002",  # lru 0.12.5 unsound (IterMut Stacked Borrows) - ratatui 0.29 固定 0.12 线, 该线无修复版
+    "RUSTSEC-2026-0253",  # lru 0.12.5 unsound (pop() panic-safety UAF) - 同上, 同根治路径
 ]

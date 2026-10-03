@@ -11,4 +11,10 @@
 
 [advisories]
 ignore = [
+    # 2026-10-03: 与 deny.toml [advisories].ignore 三处同步 (含 cargo-audit.yml
+    # --ignore)。apeireth-tui → ratatui 0.29 → paste / lru 0.12 transitive 未修复
+    # 面; 根治 = ratatui 0.30 迁移 (单列计划), 迁移前短接, 理由全文见 deny.toml。
+    "RUSTSEC-2024-0436",  # paste 1.0.15 unmaintained (停维护, 非漏洞) - ratatui 0.29 proc-macro 链
+    "RUSTSEC-2026-0002",  # lru 0.12.5 unsound (IterMut) - ratatui 0.29 固定 0.12 线无修复
+    "RUSTSEC-2026-0253",  # lru 0.12.5 unsound (pop UAF) - 同上
 ]
