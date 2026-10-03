@@ -12,8 +12,8 @@
 //! # What this is not
 //!
 //! Not a peer, not a trust authority, not an execution host. It holds no
-//! [`NodeId`](apeireth_mesh_protocol::NodeId)-scoped module, no capability, no
-//! `ModuleRegistry`, no `KnownPeer` trust. Nodes A and B trust *each other*;
+//! [`NodeId`](apeireth_mesh_protocol::NodeId)-scoped plugin, no capability, no
+//! plugin ownership, no `KnownPeer` trust. Nodes A and B trust *each other*;
 //! neither trusts this server. It can lie about presence, drop traffic, or
 //! reorder frames — but without a node's private key it cannot impersonate a
 //! peer, and because traffic is end-to-end encrypted by the nodes, it cannot
@@ -26,15 +26,38 @@
 //! opaque ciphertext. It is trusted only for *availability* — a malicious
 //! server can deny service, never forge trust or decrypt payloads. Every
 //! presence record is signature-checked; every relay circuit is bounded.
+//!
+//! # Defending the server's own availability
+//!
+//! A node id is not derived from a key, so the server cannot know who *should*
+//! hold an id. It enforces the next best thing:
+//!
+//! - **First key wins while the lease lives.** A live registration can be
+//!   refreshed or replaced only by the same public key; another key is refused
+//!   until the lease lapses.
+//! - **Leases are monotonic and bounded.** A refresh must carry a later expiry
+//!   than the one it replaces (a replayed record cannot rebind a node to the
+//!   replayer's connection), and no lease may exceed the protocol maximum.
+//! - **Everything is bound to the registered connection.** Withdraw, circuit
+//!   open/accept/close and frame injection must come from the connection that
+//!   holds the registration (or the circuit's own endpoints).
+//! - **Everything is bounded and timed.** Connections (total and per IP),
+//!   pre-registration time, idle time, write time, pending-circuit lifetime
+//!   and per-node circuits all have explicit limits.
+//!
+//! The control channel is plain TCP: an on-path attacker can drop or delay
+//! traffic and race a captured registration. It still cannot read relayed
+//! traffic or impersonate a peer, because the nodes authenticate each other
+//! end to end. A TLS control channel is future work.
 
 use std::collections::{BTreeMap, HashMap};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use apeireth_mesh_protocol::rendezvous::{
     decode_frame, encode_control, encode_relay, Frame, PresenceRecord, RelayCircuitId,
-    RelayControl, RelayFrame, RendezvousRequest, RendezvousResponse,
+    RelayControl, RelayFrame, RendezvousRequest, RendezvousResponse, PRESENCE_MAX_TTL_MS,
 };
 use apeireth_mesh_protocol::NodeId;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -61,6 +84,19 @@ pub struct ServerConfig {
     pub max_circuits_per_node: usize,
     /// Maximum single frame body (bytes). Oversized frames are refused.
     pub max_frame_bytes: usize,
+    /// Maximum simultaneous TCP connections.
+    pub max_connections: usize,
+    /// Maximum simultaneous TCP connections from one IP address.
+    pub max_connections_per_ip: usize,
+    /// How long a new connection may stay silent/unregistered before it is
+    /// dropped.
+    pub registration_timeout_ms: u64,
+    /// How long a registered connection may stay silent.
+    pub idle_timeout_ms: u64,
+    /// How long a single write to a peer may take before that peer is dropped.
+    pub write_timeout_ms: u64,
+    /// How long an opened circuit may wait for its target to accept.
+    pub pending_circuit_ttl_ms: u64,
 }
 
 impl ServerConfig {
@@ -74,6 +110,12 @@ impl ServerConfig {
             max_circuits: 4096,
             max_circuits_per_node: 64,
             max_frame_bytes: apeireth_mesh_protocol::rendezvous::MAX_FRAME_BODY_BYTES,
+            max_connections: 4096,
+            max_connections_per_ip: 32,
+            registration_timeout_ms: 10_000,
+            idle_timeout_ms: 300_000,
+            write_timeout_ms: 5_000,
+            pending_circuit_ttl_ms: 30_000,
         }
     }
 }
@@ -99,26 +141,38 @@ fn now_ms() -> u64 {
 struct Conn {
     write: AsyncMutex<tokio::net::tcp::OwnedWriteHalf>,
     node_id: Mutex<Option<NodeId>>,
+    write_timeout: Duration,
+    /// Set when a write stalled or failed; the read loop then drops the link.
+    dead: tokio::sync::watch::Sender<bool>,
 }
 
 impl Conn {
+    async fn write_all(&self, bytes: &[u8]) {
+        let mut write = self.write.lock().await;
+        let written = tokio::time::timeout(self.write_timeout, write.write_all(bytes)).await;
+        if !matches!(written, Ok(Ok(()))) {
+            self.dead.send_replace(true);
+        }
+    }
+
     async fn send_control(&self, response: &RendezvousResponse) {
         if let Ok(json) = serde_json::to_vec(response) {
-            let mut w = self.write.lock().await;
-            let _ = w.write_all(&encode_control(&json)).await;
+            self.write_all(&encode_control(&json)).await;
         }
     }
 
     async fn send_relay_control(&self, control: &RelayControl) {
         if let Ok(json) = serde_json::to_vec(control) {
-            let mut w = self.write.lock().await;
-            let _ = w.write_all(&encode_control(&json)).await;
+            self.write_all(&encode_control(&json)).await;
         }
     }
 
     async fn send_relay_data(&self, frame: &RelayFrame) {
-        let mut w = self.write.lock().await;
-        let _ = w.write_all(&encode_relay(frame)).await;
+        self.write_all(&encode_relay(frame)).await;
+    }
+
+    fn registered_as(&self) -> Option<NodeId> {
+        self.node_id.lock().unwrap().clone()
     }
 }
 
@@ -126,6 +180,14 @@ impl Conn {
 struct Circuit {
     a: Arc<Conn>,
     b: Arc<Conn>,
+    /// The node that opened it, for per-node accounting.
+    opener: NodeId,
+}
+
+impl Circuit {
+    fn has_endpoint(&self, conn: &Arc<Conn>) -> bool {
+        Arc::ptr_eq(&self.a, conn) || Arc::ptr_eq(&self.b, conn)
+    }
 }
 
 /// An open circuit awaiting the target's acceptance.
@@ -134,6 +196,7 @@ struct PendingCircuit {
     target: Arc<Conn>,
     source: NodeId,
     target_node: NodeId,
+    opened_at: Instant,
 }
 
 /// Shared server state.
@@ -145,13 +208,78 @@ struct State {
     circuits: Mutex<HashMap<RelayCircuitId, Circuit>>,
     /// Circuits opened but not yet accepted.
     pending: Mutex<HashMap<RelayCircuitId, PendingCircuit>>,
-    /// Per-node live circuit count (for the per-node limit).
-    node_circuits: Mutex<HashMap<NodeId, usize>>,
+    /// Open TCP connections per remote IP.
+    connections: Mutex<HashMap<IpAddr, usize>>,
 }
 
 impl State {
     fn circuit_count(&self) -> usize {
         self.circuits.lock().unwrap().len() + self.pending.lock().unwrap().len()
+    }
+
+    /// Circuits (live or pending) attributable to `node`. Derived from the
+    /// circuit tables themselves, so it can never drift from reality.
+    fn circuits_of(&self, node: &NodeId) -> usize {
+        let live = self
+            .circuits
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|circuit| &circuit.opener == node)
+            .count();
+        let pending = self
+            .pending
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|circuit| &circuit.source == node)
+            .count();
+        live + pending
+    }
+
+    fn prune_expired(&self, now: u64) {
+        self.nodes
+            .lock()
+            .unwrap()
+            .retain(|_, (_, presence)| presence.expires_at_ms > now);
+        let ttl = Duration::from_millis(self.config.pending_circuit_ttl_ms);
+        self.pending
+            .lock()
+            .unwrap()
+            .retain(|_, pending| pending.opened_at.elapsed() < ttl);
+    }
+
+    /// Admit one more connection from `ip`, or refuse.
+    fn admit(self: &Arc<Self>, ip: IpAddr) -> Option<ConnectionSlot> {
+        let mut connections = self.connections.lock().unwrap();
+        let total: usize = connections.values().sum();
+        let from_ip = connections.get(&ip).copied().unwrap_or(0);
+        if total >= self.config.max_connections || from_ip >= self.config.max_connections_per_ip {
+            return None;
+        }
+        *connections.entry(ip).or_insert(0) += 1;
+        Some(ConnectionSlot {
+            state: Arc::clone(self),
+            ip,
+        })
+    }
+}
+
+/// Releases a connection's admission when it ends.
+struct ConnectionSlot {
+    state: Arc<State>,
+    ip: IpAddr,
+}
+
+impl Drop for ConnectionSlot {
+    fn drop(&mut self) {
+        let mut connections = self.state.connections.lock().unwrap();
+        if let Some(count) = connections.get_mut(&self.ip) {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                connections.remove(&self.ip);
+            }
+        }
     }
 }
 
@@ -178,7 +306,7 @@ impl RendezvousRelayServer {
                 nodes: Mutex::new(BTreeMap::new()),
                 circuits: Mutex::new(HashMap::new()),
                 pending: Mutex::new(HashMap::new()),
-                node_circuits: Mutex::new(HashMap::new()),
+                connections: Mutex::new(HashMap::new()),
             }),
             local,
         })
@@ -193,50 +321,62 @@ impl RendezvousRelayServer {
     /// handled on its own task.
     pub async fn run(self: Arc<Self>) -> Result<(), ServerError> {
         loop {
-            let (stream, _peer) = self
+            let (stream, peer) = self
                 .listener
                 .accept()
                 .await
                 .map_err(|e| ServerError::Io(format!("accept: {e}")))?;
+            let Some(slot) = self.state.admit(peer.ip()) else {
+                // Over a connection limit: shed rather than queue.
+                drop(stream);
+                continue;
+            };
             let state = Arc::clone(&self.state);
             tokio::spawn(async move {
                 let _ = handle_conn(stream, state).await;
+                drop(slot);
             });
         }
     }
 }
 
 async fn handle_conn(stream: TcpStream, state: Arc<State>) -> Result<(), ServerError> {
-    let (read, write) = stream.into_split();
+    let (mut read, write) = stream.into_split();
     let conn = Arc::new(Conn {
         write: AsyncMutex::new(write),
         node_id: Mutex::new(None),
+        write_timeout: Duration::from_millis(state.config.write_timeout_ms),
+        dead: tokio::sync::watch::channel(false).0,
     });
-    let mut read = read;
+    let mut dead = conn.dead.subscribe();
     let mut buf: Vec<u8> = Vec::new();
     let mut chunk = vec![0u8; 8192];
-    loop {
-        let n = read
-            .read(&mut chunk)
-            .await
-            .map_err(|e| ServerError::Io(format!("read: {e}")))?;
-        if n == 0 {
-            break; // connection closed; cleanup below.
-        }
+    'connection: loop {
+        // A connection that never registers gets a short leash; a registered
+        // one a longer idle window.
+        let window = if conn.registered_as().is_some() {
+            state.config.idle_timeout_ms
+        } else {
+            state.config.registration_timeout_ms
+        };
+        let read_result = tokio::select! {
+            result = tokio::time::timeout(Duration::from_millis(window), read.read(&mut chunk)) => result,
+            _ = dead.wait_for(|dead| *dead) => break 'connection,
+        };
+        let n = match read_result {
+            Ok(Ok(0) | Err(_)) | Err(_) => break 'connection,
+            Ok(Ok(n)) => n,
+        };
         buf.extend_from_slice(&chunk[..n]);
         loop {
             match decode_frame(&buf) {
                 Ok(Some((frame, used))) => {
                     buf.drain(..used);
-                    if let Some(max) = Some(state.config.max_frame_bytes) {
-                        if used > max + 5 {
-                            // Oversized already rejected in decode; belt+braces.
-                        }
-                    }
                     handle_frame(&state, &conn, frame).await;
                 }
                 Ok(None) => break,
-                Err(_) => return Ok(()), // malformed: drop the connection.
+                // Malformed or oversized: drop the connection (and clean up).
+                Err(_) => break 'connection,
             }
         }
     }
@@ -246,7 +386,7 @@ async fn handle_conn(stream: TcpStream, state: Arc<State>) -> Result<(), ServerE
 
 fn cleanup(state: &State, conn: &Arc<Conn>) {
     // Drop any presence this connection registered.
-    let node = conn.node_id.lock().unwrap().clone();
+    let node = conn.registered_as();
     if let Some(node) = node {
         let mut nodes = state.nodes.lock().unwrap();
         if let Some((existing, _)) = nodes.get(&node) {
@@ -256,31 +396,16 @@ fn cleanup(state: &State, conn: &Arc<Conn>) {
         }
     }
     // Close circuits this connection was part of.
-    let mut circuits = state.circuits.lock().unwrap();
-    let mut dropped: Vec<RelayCircuitId> = Vec::new();
-    circuits.retain(|id, c| {
-        if Arc::ptr_eq(&c.a, conn) || Arc::ptr_eq(&c.b, conn) {
-            dropped.push(*id);
-            false
-        } else {
-            true
-        }
-    });
-    drop(circuits);
-    for id in dropped {
-        decrement_node_circuits(state, &id);
-    }
-    let mut pending = state.pending.lock().unwrap();
-    pending.retain(|_, p| !Arc::ptr_eq(&p.opener, conn) && !Arc::ptr_eq(&p.target, conn));
-}
-
-fn decrement_node_circuits(state: &State, _id: &RelayCircuitId) {
-    // Node-circuit accounting is refreshed on next open; keep the map bounded.
-    let mut map = state.node_circuits.lock().unwrap();
-    map.retain(|_, count| {
-        *count = count.saturating_sub(0);
-        *count > 0
-    });
+    state
+        .circuits
+        .lock()
+        .unwrap()
+        .retain(|_, circuit| !circuit.has_endpoint(conn));
+    state
+        .pending
+        .lock()
+        .unwrap()
+        .retain(|_, p| !Arc::ptr_eq(&p.opener, conn) && !Arc::ptr_eq(&p.target, conn));
 }
 
 async fn handle_frame(state: &Arc<State>, conn: &Arc<Conn>, frame: Frame) {
@@ -298,34 +423,64 @@ async fn handle_frame(state: &Arc<State>, conn: &Arc<Conn>, frame: Frame) {
     }
 }
 
+/// Decide whether `presence` may be installed for `conn`. Pure policy over the
+/// current table, so every refusal reason is testable and explicit.
+fn admit_presence(
+    state: &State,
+    conn: &Arc<Conn>,
+    presence: &PresenceRecord,
+    now: u64,
+) -> Result<u64, String> {
+    if presence.verify_for(now, &state.config.audience).is_err() {
+        return Err("invalid presence signature or audience".into());
+    }
+    if presence.expires_at_ms > now + PRESENCE_MAX_TTL_MS {
+        return Err("presence lease is longer than the protocol maximum".into());
+    }
+    if let Some(bound) = conn.registered_as() {
+        if bound != presence.node_id {
+            return Err("this connection is already registered as another node".into());
+        }
+    }
+    let mut nodes = state.nodes.lock().unwrap();
+    nodes.retain(|_, (_, existing)| existing.expires_at_ms > now);
+    match nodes.get(&presence.node_id) {
+        Some((holder, existing)) => {
+            if existing.public_key != presence.public_key {
+                return Err("node id is held by a different key".into());
+            }
+            let same_connection = Arc::ptr_eq(holder, conn);
+            let advances = if same_connection {
+                presence.expires_at_ms >= existing.expires_at_ms
+            } else {
+                presence.expires_at_ms > existing.expires_at_ms
+            };
+            if !advances {
+                return Err("stale or replayed presence".into());
+            }
+        }
+        None if nodes.len() >= state.config.max_nodes => {
+            return Err("server node limit reached".into());
+        }
+        None => {}
+    }
+    let expires = presence
+        .expires_at_ms
+        .min(now + state.config.presence_ttl_ms);
+    nodes.insert(
+        presence.node_id.clone(),
+        (Arc::clone(conn), presence.clone()),
+    );
+    drop(nodes);
+    *conn.node_id.lock().unwrap() = Some(presence.node_id.clone());
+    Ok(expires)
+}
+
 async fn handle_rendezvous(state: &Arc<State>, conn: &Arc<Conn>, request: RendezvousRequest) {
     let now = now_ms();
     match request {
         RendezvousRequest::Register { presence } | RendezvousRequest::Heartbeat { presence } => {
-            // Signature + audience + freshness. Never a bare "I am node X".
-            if presence.verify_for(now, &state.config.audience).is_err() {
-                conn.send_control(&RendezvousResponse::Rejected {
-                    reason: "invalid presence signature or audience".into(),
-                })
-                .await;
-                return;
-            }
-            // Mutate under the lock; the guard is dropped before the reply await.
-            let outcome = {
-                let mut nodes = state.nodes.lock().unwrap();
-                if !nodes.contains_key(&presence.node_id) && nodes.len() >= state.config.max_nodes {
-                    Err(String::from("server node limit reached"))
-                } else {
-                    let node_id = presence.node_id.clone();
-                    let expires = presence
-                        .expires_at_ms
-                        .min(now + state.config.presence_ttl_ms);
-                    nodes.insert(node_id.clone(), (Arc::clone(conn), presence));
-                    *conn.node_id.lock().unwrap() = Some(node_id);
-                    Ok(expires)
-                }
-            };
-            match outcome {
+            match admit_presence(state, conn, &presence, now) {
                 Ok(expires) => {
                     conn.send_control(&RendezvousResponse::Registered {
                         expires_at_ms: expires,
@@ -340,14 +495,9 @@ async fn handle_rendezvous(state: &Arc<State>, conn: &Arc<Conn>, request: Rendez
         }
         RendezvousRequest::Lookup { target, .. } => {
             let presence = {
-                let nodes = state.nodes.lock().unwrap();
-                nodes.get(&target).and_then(|(_, p)| {
-                    if p.expires_at_ms > now {
-                        Some(p.clone())
-                    } else {
-                        None
-                    }
-                })
+                let mut nodes = state.nodes.lock().unwrap();
+                nodes.retain(|_, (_, existing)| existing.expires_at_ms > now);
+                nodes.get(&target).map(|(_, p)| p.clone())
             };
             conn.send_control(&RendezvousResponse::Presence { presence })
                 .await;
@@ -358,11 +508,12 @@ async fn handle_rendezvous(state: &Arc<State>, conn: &Arc<Conn>, request: Rendez
         } => {
             {
                 let mut nodes = state.nodes.lock().unwrap();
-                let should = nodes
+                // Only the connection that holds the registration may end it.
+                let owned = nodes
                     .get(&node_id)
-                    .map(|(_, p)| p.session_id == session_id)
+                    .map(|(holder, p)| Arc::ptr_eq(holder, conn) && p.session_id == session_id)
                     .unwrap_or(false);
-                if should {
+                if owned {
                     nodes.remove(&node_id);
                 }
             }
@@ -372,7 +523,27 @@ async fn handle_rendezvous(state: &Arc<State>, conn: &Arc<Conn>, request: Rendez
     }
 }
 
+/// The presence `node` currently holds on this server, if live.
+fn registered_presence(state: &State, node: &NodeId, now: u64) -> Option<PresenceRecord> {
+    state
+        .nodes
+        .lock()
+        .unwrap()
+        .get(node)
+        .filter(|(_, presence)| presence.expires_at_ms > now)
+        .map(|(_, presence)| presence.clone())
+}
+
+async fn refuse(conn: &Arc<Conn>, circuit_id: RelayCircuitId, reason: &str) {
+    conn.send_relay_control(&RelayControl::Refused {
+        circuit_id: Some(circuit_id),
+        reason: reason.into(),
+    })
+    .await;
+}
+
 async fn handle_relay_control(state: &Arc<State>, conn: &Arc<Conn>, control: RelayControl) {
+    let now = now_ms();
     match control {
         RelayControl::Open {
             circuit_id,
@@ -380,108 +551,132 @@ async fn handle_relay_control(state: &Arc<State>, conn: &Arc<Conn>, control: Rel
             target,
             source_proof,
         } => {
-            // Abuse gate: opener must prove key possession. Trust is NOT decided
-            // here — the two nodes authenticate each other end-to-end.
-            if source_proof.verify(now_ms()).is_err() {
-                conn.send_relay_control(&RelayControl::Refused {
-                    circuit_id: Some(circuit_id),
-                    reason: "invalid source proof".into(),
-                })
+            // Abuse gate: the opener proves key possession *as the node this
+            // connection is registered as*. Trust is NOT decided here — the two
+            // nodes authenticate each other end-to-end.
+            if source_proof.node_id != source
+                || source_proof
+                    .verify_for(now, &state.config.audience)
+                    .is_err()
+            {
+                refuse(conn, circuit_id, "invalid source proof").await;
+                return;
+            }
+            let registered = registered_presence(state, &source, now);
+            let bound = conn.registered_as().as_ref() == Some(&source);
+            if !bound || registered.is_none_or(|p| p.public_key != source_proof.public_key) {
+                refuse(
+                    conn,
+                    circuit_id,
+                    "source is not registered on this connection",
+                )
                 .await;
                 return;
             }
-            // Resource bounds + target lookup under locks; guard dropped before
-            // the reply awaits below.
-            let decision = {
-                let mut per_node = state.node_circuits.lock().unwrap();
-                let count = per_node.entry(source.clone()).or_insert(0);
-                if *count >= state.config.max_circuits_per_node {
-                    Err(String::from("per-node circuit limit"))
-                } else if state.circuit_count() >= state.config.max_circuits {
-                    Err(String::from("server circuit limit"))
-                } else {
-                    *count += 1;
-                    match state.nodes.lock().unwrap().get(&target) {
-                        Some((c, _)) => Ok(Arc::clone(c)),
-                        None => Err(format!("target {target} is offline")),
-                    }
-                }
-            };
-            let target_conn = match decision {
-                Ok(conn) => conn,
-                Err(reason) => {
-                    conn.send_relay_control(&RelayControl::Refused {
-                        circuit_id: Some(circuit_id),
-                        reason,
-                    })
-                    .await;
-                    return;
-                }
-            };
-            let forward_source = source.clone();
-            let forward_target = target.clone();
-            {
-                let mut pending = state.pending.lock().unwrap();
-                pending.insert(
-                    circuit_id,
-                    PendingCircuit {
-                        opener: Arc::clone(conn),
-                        target: Arc::clone(&target_conn),
-                        source,
-                        target_node: target,
-                    },
-                );
+            if source == target {
+                refuse(conn, circuit_id, "a node cannot open a circuit to itself").await;
+                return;
             }
+            state.prune_expired(now);
+            if state.circuits_of(&source) >= state.config.max_circuits_per_node {
+                refuse(conn, circuit_id, "per-node circuit limit").await;
+                return;
+            }
+            if state.circuit_count() >= state.config.max_circuits {
+                refuse(conn, circuit_id, "server circuit limit").await;
+                return;
+            }
+            if state.circuits.lock().unwrap().contains_key(&circuit_id)
+                || state.pending.lock().unwrap().contains_key(&circuit_id)
+            {
+                refuse(conn, circuit_id, "circuit id already in use").await;
+                return;
+            }
+            let target_conn = state
+                .nodes
+                .lock()
+                .unwrap()
+                .get(&target)
+                .map(|(c, _)| Arc::clone(c));
+            let Some(target_conn) = target_conn else {
+                refuse(conn, circuit_id, &format!("target {target} is offline")).await;
+                return;
+            };
+            state.pending.lock().unwrap().insert(
+                circuit_id,
+                PendingCircuit {
+                    opener: Arc::clone(conn),
+                    target: Arc::clone(&target_conn),
+                    source: source.clone(),
+                    target_node: target.clone(),
+                    opened_at: Instant::now(),
+                },
+            );
             target_conn
                 .send_relay_control(&RelayControl::Open {
                     circuit_id,
-                    source: forward_source,
-                    target: forward_target,
+                    source,
+                    target,
                     source_proof,
                 })
                 .await;
         }
         RelayControl::Accept {
             circuit_id,
-            target_proof: _,
+            target_proof,
         } => {
-            let pending = state.pending.lock().unwrap().remove(&circuit_id);
+            let pending = {
+                let mut pending = state.pending.lock().unwrap();
+                match pending.get(&circuit_id) {
+                    // Only the addressed target may accept.
+                    Some(candidate) if Arc::ptr_eq(&candidate.target, conn) => {
+                        pending.remove(&circuit_id)
+                    }
+                    _ => None,
+                }
+            };
             let Some(pending) = pending else {
-                conn.send_relay_control(&RelayControl::Refused {
-                    circuit_id: Some(circuit_id),
-                    reason: "no such pending circuit".into(),
-                })
-                .await;
+                refuse(conn, circuit_id, "no such pending circuit").await;
                 return;
             };
-            {
-                let mut circuits = state.circuits.lock().unwrap();
-                circuits.insert(
-                    circuit_id,
-                    Circuit {
-                        a: Arc::clone(&pending.opener),
-                        b: Arc::clone(&pending.target),
-                    },
-                );
+            let proven = target_proof.node_id == pending.target_node
+                && target_proof.verify_for(now, &state.config.audience).is_ok()
+                && registered_presence(state, &pending.target_node, now)
+                    .is_some_and(|p| p.public_key == target_proof.public_key);
+            if !proven {
+                refuse(conn, circuit_id, "invalid target proof").await;
+                refuse(&pending.opener, circuit_id, "target proof was invalid").await;
+                return;
             }
+            state.circuits.lock().unwrap().insert(
+                circuit_id,
+                Circuit {
+                    a: Arc::clone(&pending.opener),
+                    b: Arc::clone(&pending.target),
+                    opener: pending.source.clone(),
+                },
+            );
             pending
                 .opener
                 .send_relay_control(&RelayControl::Accept {
                     circuit_id,
-                    target_proof: PresenceRecord::unsigned(
-                        pending.target_node.clone(),
-                        vec![0u8; 32],
-                        0,
-                        now_ms() + 60_000,
-                        state.config.audience.clone(),
-                        true,
-                        vec![0u8; 16],
-                    ),
+                    target_proof,
                 })
                 .await;
         }
         RelayControl::Close { circuit_id, .. } => {
-            let circuit = state.circuits.lock().unwrap().remove(&circuit_id);
+            let circuit = {
+                let mut circuits = state.circuits.lock().unwrap();
+                // Only an endpoint may close its own circuit.
+                if circuits
+                    .get(&circuit_id)
+                    .is_some_and(|c| c.has_endpoint(conn))
+                {
+                    circuits.remove(&circuit_id)
+                } else {
+                    None
+                }
+            };
             if let Some(circuit) = circuit {
                 let other = if Arc::ptr_eq(&circuit.a, conn) {
                     &circuit.b
@@ -494,22 +689,54 @@ async fn handle_relay_control(state: &Arc<State>, conn: &Arc<Conn>, control: Rel
                         reason: "peer closed".into(),
                     })
                     .await;
-                decrement_node_circuits(state, &circuit_id);
+                return;
+            }
+            let mut pending = state.pending.lock().unwrap();
+            if pending
+                .get(&circuit_id)
+                .is_some_and(|p| Arc::ptr_eq(&p.opener, conn) || Arc::ptr_eq(&p.target, conn))
+            {
+                pending.remove(&circuit_id);
             }
         }
-        RelayControl::Refused { .. } => {}
+        RelayControl::Refused { circuit_id, .. } => {
+            // The addressed target declining a pending circuit.
+            if let Some(circuit_id) = circuit_id {
+                let declined = {
+                    let mut pending = state.pending.lock().unwrap();
+                    if pending
+                        .get(&circuit_id)
+                        .is_some_and(|p| Arc::ptr_eq(&p.target, conn))
+                    {
+                        pending.remove(&circuit_id)
+                    } else {
+                        None
+                    }
+                };
+                if let Some(declined) = declined {
+                    refuse(&declined.opener, circuit_id, "target declined").await;
+                }
+            }
+        }
     }
 }
 
 async fn forward_data(state: &Arc<State>, conn: &Arc<Conn>, frame: RelayFrame) {
-    let circuit = state
-        .circuits
-        .lock()
-        .unwrap()
-        .get(&frame.circuit_id)
-        .map(|c| (Arc::clone(&c.a), Arc::clone(&c.b)));
-    let Some((a, b)) = circuit else { return };
-    // Forward to the end that did NOT send this frame. Opaque — never inspected.
-    let dest = if Arc::ptr_eq(&a, conn) { b } else { a };
-    dest.send_relay_data(&frame).await;
+    let destination = {
+        let circuits = state.circuits.lock().unwrap();
+        circuits.get(&frame.circuit_id).and_then(|circuit| {
+            // Only the circuit's own endpoints may put frames on it. Forward to
+            // the end that did NOT send this frame; opaque, never inspected.
+            if Arc::ptr_eq(&circuit.a, conn) {
+                Some(Arc::clone(&circuit.b))
+            } else if Arc::ptr_eq(&circuit.b, conn) {
+                Some(Arc::clone(&circuit.a))
+            } else {
+                None
+            }
+        })
+    };
+    if let Some(destination) = destination {
+        destination.send_relay_data(&frame).await;
+    }
 }

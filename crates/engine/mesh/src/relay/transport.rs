@@ -59,6 +59,9 @@ impl From<MeshTransportError> for RelayError {
     }
 }
 
+/// How long a rendezvous request may wait for the server's answer.
+const RPC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// Shared state across a node's single server connection.
 struct EndpointShared {
     write: tokio::sync::Mutex<OwnedWriteHalf>,
@@ -261,9 +264,23 @@ impl RelayEndpoint {
             }
             *slot = Some(tx);
         }
-        self.shared.send_control(&request).await?;
-        rx.await
-            .map_err(|_| RelayError::Transport("control response channel closed".to_string()))
+        let clear = |shared: &EndpointShared| {
+            shared.pending_rpc.lock().unwrap().take();
+        };
+        if let Err(error) = self.shared.send_control(&request).await {
+            clear(&self.shared);
+            return Err(error.into());
+        }
+        match tokio::time::timeout(RPC_TIMEOUT, rx).await {
+            Ok(response) => response
+                .map_err(|_| RelayError::Transport("control response channel closed".to_string())),
+            Err(_elapsed) => {
+                clear(&self.shared);
+                Err(RelayError::Transport(
+                    "rendezvous server did not answer in time".to_string(),
+                ))
+            }
+        }
     }
 }
 
@@ -455,11 +472,25 @@ impl RelayMeshTransport {
     /// Dial `target` over the relay and complete the E2E handshake as initiator.
     pub async fn dial_node(&self, target: NodeId) -> Result<Arc<dyn MeshConnection>, RelayError> {
         // Presence first: the relay is only useful if the target is reachable.
-        let _ = self
+        let presence = self
             .endpoint
             .lookup(target.clone())
             .await?
             .ok_or_else(|| RelayError::Unreachable(target.to_string()))?;
+        // The server is untrusted: a presence it hands back must be the
+        // target's own, signed for this audience, and willing to relay. (Which
+        // *key* is acceptable is the trust pin's decision, taken after the
+        // end-to-end handshake.)
+        if presence.node_id != target
+            || !presence.relay_capable
+            || presence
+                .verify_for(now_ms(), &self.endpoint.audience)
+                .is_err()
+        {
+            return Err(RelayError::Unreachable(format!(
+                "{target}: the rendezvous server returned an unusable presence"
+            )));
+        }
         let peer_node_id = target.to_string();
         let circuit = self.endpoint.open_circuit(target).await?;
         let circuit_id = circuit.id();
@@ -534,7 +565,11 @@ impl MeshListener for RelayMeshListener {
             };
             // Abuse gate: the opener must prove key possession. Real trust (the
             // pinned fingerprint) is checked by the mesh after the E2E handshake.
-            if source_proof.verify(now_ms()).is_err() {
+            if source_proof.node_id != source
+                || source_proof
+                    .verify_for(now_ms(), &self.endpoint.audience)
+                    .is_err()
+            {
                 let _ = self
                     .endpoint
                     .shared

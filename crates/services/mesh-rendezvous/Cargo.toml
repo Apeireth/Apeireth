@@ -22,6 +22,7 @@ apeireth-governance = { path = "../../foundation/governance" }
 apeireth-mesh = { path = "../../engine/mesh" }
 apeireth-runtime = { path = "../../engine/runtime" }
 async-trait = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 
 [lib]
