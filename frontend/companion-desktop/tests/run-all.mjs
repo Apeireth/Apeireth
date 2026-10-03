@@ -36,6 +36,9 @@ const SUITES = [
   {file: 'statusbar.mjs', name: 'status bar indicators (sse / turn / guard / memory)', strip: true},
   {file: 'sse-badge.mjs', name: 'sse badge three-state display (connected / connecting / offline, real module)', strip: true},
   {file: 'session-delete.mjs', name: 'session delete chain (optimistic remove / remote delete / rollback, real modules)', strip: true},
+  {file: 'session-cleanup.mjs', name: 'session cleanup dual-scope purge (recent/all true-delete / partial-failure / copy red lines, real modules)', strip: true},
+  {file: 'wheel-scroll.mjs', name: 'wheel router (dead-zone scroll routing / boundary chain / responsive settings, real module)', strip: true},
+  {file: 'scrollbar-theme.mjs', name: 'scrollbar theme tokens (white-block fix / per-theme coverage / zero hardcode, source mirror)'},
   {file: 'scroll-policy.mjs', name: 'chat scroll policy (open-to-bottom / no yank back, real module)', strip: true},
   {file: 'shell-nav.mjs', name: 'sidebar consolidation targets (deep-link redirects / palette sync, real module)', strip: true},
   {file: 'shell-ia.mjs', name: 'shell wiring source mirrors (delete / new-session / rail four / workbench / settings security / sse reconnect)'},
@@ -45,6 +48,8 @@ const SUITES = [
   {file: 'theme-hud-tokens.mjs', name: 'sci-fi HUD theme layer (token coverage / no hardcoded color / reduced-motion, source mirror)'},
   {file: 'personalization-bg.mjs', name: 'custom background upload validation (real module)', strip: true},
   {file: 'config-persistence.mjs', name: 'config persistence round-trip (accent/customBg/secret purge, real module)', strip: true},
+  {file: 'first-run-onboarding.mjs', name: 'first-run onboarding wizard (tier split / casual presets / self-description, real module)', strip: true},
+  {file: 'user-profile.mjs', name: 'user profile local persistence (normalize / round-trip / subscribe / honest write failure, real module)', strip: true},
   {file: 'recommended-preset.mjs', name: 'recommended preset ↔ memory-core knob mapping (real module)', strip: true},
   {file: 'capability-toggle-apply.mjs', name: 'capability toggle apply-on-click mapping (real module)', strip: true},
   {file: 'settings-live-apply.mjs', name: 'settings three-tier live apply (real module)', strip: true},
@@ -64,6 +69,7 @@ const SUITES = [
   {file: 'switch-power-audit.mjs', name: 'capability switch power audit table (filed rows / dispositions, source mirror)'},
   {file: 'pending-approval-marker.mjs', name: 'pending approval card marker chain (tool-generic 等待批准 frame, source mirror)'},
   {file: 'session-preset-persistence.mjs', name: 'session approval tier persistence (select→persist→read back / reopen restore / new-session default, source mirror)'},
+  {file: 'user-impression.mjs', name: 'user impression agent settings column (per-persona ledger / self-reference block / summarize seam, real module)', strip: true},
 ];
 
 function run({file, strip}) {
