@@ -84,7 +84,10 @@ async fn run_ceremony(
         fingerprint: identity_a.fingerprint().clone(),
     });
 
-    let opts = PairingOptions { timeout_ms: 2_000 };
+    let opts = PairingOptions {
+        timeout_ms: 2_000,
+        ..Default::default()
+    };
     let (result_a, result_b) = tokio::join!(
         pair_outbound(
             link_a,
@@ -170,7 +173,10 @@ async fn test_36_a_silent_side_times_out_with_zero_persistence() {
         fingerprint: identity_a.fingerprint().clone(),
     });
 
-    let opts = PairingOptions { timeout_ms: 300 };
+    let opts = PairingOptions {
+        timeout_ms: 300,
+        ..Default::default()
+    };
     let (result_a, result_b) = tokio::join!(
         pair_outbound(
             link_a,
@@ -249,7 +255,10 @@ async fn test_11_pairing_channel_rejects_capability_traffic() {
         "memory://node-a".to_string(),
         &store,
         |_| ConfirmDecision::Confirm,
-        PairingOptions { timeout_ms: 2_000 },
+        PairingOptions {
+            timeout_ms: 2_000,
+            ..Default::default()
+        },
     )
     .await;
     attacker.await.unwrap();
@@ -277,7 +286,7 @@ async fn test_10_established_channels_reject_pairing_messages() {
         reason: "probe".into(),
     });
     assert!(matches!(message, PairingMessage::Reject(_)));
-    assert_eq!(PAIRING_PROTOCOL_VERSION, 1);
+    assert_eq!(PAIRING_PROTOCOL_VERSION, 2);
 }
 
 #[tokio::test]
@@ -330,5 +339,193 @@ async fn test_40_forget_removes_trust_and_lets_future_connections_fail() {
     // Without a KnownPeer the trust policy refuses the peer outright.
     let policy = apeireth_mesh::TrustPolicy::new();
     assert!(policy.authorize(&node).is_err());
+    std::fs::remove_file(path).ok();
+}
+
+// ---------------------------------------------------------------------------
+// Hostile-peer behaviour
+// ---------------------------------------------------------------------------
+
+use apeireth_mesh_protocol::{PairChallenge, PairHello, PairReveal, PAIRING_COMMIT_DOMAIN};
+use sha2::{Digest, Sha256};
+
+fn commitment(initiator: &NodeId, nonce: &[u8; 16]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(PAIRING_COMMIT_DOMAIN.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(initiator.as_str().as_bytes());
+    hasher.update([0u8]);
+    hasher.update(nonce);
+    hasher.finalize().into()
+}
+
+fn pair_message(from: &str, to: &str, message: PairingMessage) -> MeshEnvelope {
+    MeshEnvelope::send(
+        NodeId::new(from).unwrap(),
+        NodeId::new(to).unwrap(),
+        apeireth_core::kernel::TraceId::new(),
+        MeshPayload::Pair(message),
+    )
+}
+
+fn raw_hello(identity: &NodeIdentity, nonce: &[u8; 16]) -> MeshEnvelope {
+    let node = NodeId::new("node-a").unwrap();
+    pair_message(
+        "node-a",
+        "node-b",
+        PairingMessage::Hello(PairHello {
+            pairing_version: PAIRING_PROTOCOL_VERSION,
+            node_id: node.clone(),
+            fingerprint: identity.fingerprint().clone(),
+            nonce_commitment: commitment(&node, nonce),
+        }),
+    )
+}
+
+#[tokio::test]
+async fn an_initiator_that_opens_a_different_nonce_than_it_committed_is_refused() {
+    let initiator = NodeIdentity::generate().unwrap();
+    let responder = NodeIdentity::generate().unwrap();
+    let (raw, far) = linked_pair();
+    let raw: Arc<dyn MeshConnection> = Arc::new(raw);
+    let far: Arc<dyn MeshConnection> = Arc::new(AuthenticatedLink {
+        inner: Arc::new(far),
+        fingerprint: initiator.fingerprint().clone(),
+    });
+    let (store, path) = temp_store("commit-mismatch");
+
+    let attacker = tokio::spawn(async move {
+        raw.send(raw_hello(&initiator, &[1u8; 16])).await.unwrap();
+        let _challenge = raw.recv().await.unwrap();
+        // Reveal a nonce chosen after seeing the challenge — the grinding move.
+        raw.send(pair_message(
+            "node-a",
+            "node-b",
+            PairingMessage::Reveal(PairReveal { nonce: [2u8; 16] }),
+        ))
+        .await
+        .unwrap();
+        raw
+    });
+    let outcome = pair_inbound(
+        far,
+        &responder,
+        &NodeId::new("node-b").unwrap(),
+        "memory://node-a".to_string(),
+        &store,
+        |_| ConfirmDecision::Confirm,
+        PairingOptions {
+            timeout_ms: 2_000,
+            ..Default::default()
+        },
+    )
+    .await;
+    let _keep = attacker.await.unwrap();
+    assert!(
+        matches!(outcome, Err(PairingError::CommitmentMismatch)),
+        "{outcome:?}"
+    );
+    assert!(store.known_peers().is_empty());
+    std::fs::remove_file(path).ok();
+}
+
+#[tokio::test]
+async fn a_responder_that_is_not_the_dialled_node_is_refused() {
+    let initiator = NodeIdentity::generate().unwrap();
+    let impostor = NodeIdentity::generate().unwrap();
+    let (near, raw) = linked_pair();
+    let near: Arc<dyn MeshConnection> = Arc::new(AuthenticatedLink {
+        inner: Arc::new(near),
+        fingerprint: impostor.fingerprint().clone(),
+    });
+    let raw: Arc<dyn MeshConnection> = Arc::new(raw);
+    let (store, path) = temp_store("wrong-node");
+
+    let responder_fp = impostor.fingerprint().clone();
+    let impostor_task = tokio::spawn(async move {
+        let _hello = raw.recv().await.unwrap();
+        raw.send(pair_message(
+            "node-b",
+            "node-a",
+            PairingMessage::Challenge(PairChallenge {
+                pairing_version: PAIRING_PROTOCOL_VERSION,
+                // Proves its channel key honestly but names another node.
+                node_id: NodeId::new("node-evil").unwrap(),
+                fingerprint: responder_fp,
+                nonce: [9u8; 16],
+            }),
+        ))
+        .await
+        .unwrap();
+        raw
+    });
+    let outcome = pair_outbound(
+        near,
+        &initiator,
+        &NodeId::new("node-a").unwrap(),
+        NodeId::new("node-b").unwrap(),
+        "memory://node-b".to_string(),
+        &store,
+        |_| ConfirmDecision::Confirm,
+        PairingOptions {
+            timeout_ms: 2_000,
+            ..Default::default()
+        },
+    )
+    .await;
+    let _keep = impostor_task.await.unwrap();
+    assert!(
+        matches!(outcome, Err(PairingError::Violation(_))),
+        "{outcome:?}"
+    );
+    assert!(store.known_peers().is_empty());
+    std::fs::remove_file(path).ok();
+}
+
+#[tokio::test]
+async fn the_limiter_cools_a_source_down_between_inbound_ceremonies() {
+    let responder = NodeIdentity::generate().unwrap();
+    let limiter = apeireth_mesh::PairingLimiter::new(4, 60_000);
+    let (store, path) = temp_store("limiter");
+
+    let mut outcomes = Vec::new();
+    for round in 0u8..2 {
+        let initiator = NodeIdentity::generate().unwrap();
+        let (raw, far) = linked_pair();
+        let raw: Arc<dyn MeshConnection> = Arc::new(raw);
+        let far: Arc<dyn MeshConnection> = Arc::new(AuthenticatedLink {
+            inner: Arc::new(far),
+            fingerprint: initiator.fingerprint().clone(),
+        });
+        raw.send(raw_hello(&initiator, &[round; 16])).await.unwrap();
+        outcomes.push(
+            pair_inbound(
+                far,
+                &responder,
+                &NodeId::new("node-b").unwrap(),
+                "memory://node-a".to_string(),
+                &store,
+                |_| ConfirmDecision::Confirm,
+                PairingOptions {
+                    timeout_ms: 100,
+                    ..Default::default()
+                }
+                .with_limiter(Arc::clone(&limiter), "203.0.113.9"),
+            )
+            .await,
+        );
+    }
+    // The first ceremony ran (and timed out waiting for the reveal); the
+    // second from the same source never started.
+    assert!(
+        matches!(outcomes[0], Err(PairingError::Timeout)),
+        "{:?}",
+        outcomes[0]
+    );
+    assert!(
+        matches!(outcomes[1], Err(PairingError::Rejected(_))),
+        "{:?}",
+        outcomes[1]
+    );
     std::fs::remove_file(path).ok();
 }

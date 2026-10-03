@@ -18,6 +18,12 @@
 //! devices display different codes; the human comparing them is the detector.
 //! The code changes for every ceremony: it is never `hash(fingerprint)`.
 //!
+//! Nonces are exchanged commit-then-reveal: the initiator sends only a hash of
+//! its nonce, the responder answers with its own, and only then does the
+//! initiator open the commitment. Whoever revealed last could otherwise grind
+//! its nonce until the codes of two separate sessions match, which would
+//! reduce the human comparison to a 20-bit search.
+//!
 //! # Minimal authority
 //!
 //! The pairing channel carries only [`PairingMessage`]s. Any capability
@@ -31,8 +37,8 @@ use apeireth_core::kernel::NodeId;
 use apeireth_core::kernel::TraceId;
 use apeireth_mesh_protocol::{
     KeyFingerprint, MeshEnvelope, MeshPayload, PairChallenge, PairCodeReady, PairComplete,
-    PairConfirm, PairHello, PairReject, PairingMessage, PAIRING_PROTOCOL_VERSION,
-    PAIRING_SAS_DOMAIN,
+    PairConfirm, PairHello, PairReject, PairReveal, PairingMessage, PAIRING_COMMIT_DOMAIN,
+    PAIRING_PROTOCOL_VERSION, PAIRING_SAS_DOMAIN,
 };
 use sha2::{Digest, Sha256};
 
@@ -76,11 +82,26 @@ pub enum ConfirmDecision {
 pub struct PairingOptions {
     /// Whole-ceremony deadline. On expiry: fail, persist nothing.
     pub timeout_ms: u64,
+    /// Admission control for inbound ceremonies: the limiter and the source
+    /// key (typically the remote address) the attempt is charged to.
+    pub limiter: Option<(Arc<PairingLimiter>, String)>,
 }
 
 impl Default for PairingOptions {
     fn default() -> Self {
-        Self { timeout_ms: 60_000 }
+        Self {
+            timeout_ms: 60_000,
+            limiter: None,
+        }
+    }
+}
+
+impl PairingOptions {
+    /// Charge inbound ceremonies to `source` against `limiter`.
+    #[must_use]
+    pub fn with_limiter(mut self, limiter: Arc<PairingLimiter>, source: impl Into<String>) -> Self {
+        self.limiter = Some((limiter, source.into()));
+        self
     }
 }
 
@@ -107,6 +128,9 @@ pub enum PairingError {
     /// One side's user rejected the ceremony.
     #[error("pairing rejected: {0}")]
     Rejected(String),
+    /// The peer's opened nonce does not match its commitment.
+    #[error("pairing nonce does not match its commitment")]
+    CommitmentMismatch,
     /// The ceremony exceeded its deadline.
     #[error("pairing timed out")]
     Timeout,
@@ -184,6 +208,9 @@ impl PairingTranscript {
     }
 }
 
+/// Most distinct sources remembered at once; beyond it new sources are refused.
+const MAX_TRACKED_SOURCES: usize = 4096;
+
 /// Bounds on concurrent ceremonies (a LAN abuser must not spawn unbounded
 /// pending pairing state).
 #[derive(Debug)]
@@ -220,12 +247,18 @@ impl PairingLimiter {
     /// Try to begin a ceremony for `source`. Fails closed on abuse.
     pub fn try_begin(&self, source: &str, now_ms: u64) -> Result<PairingSlot, PairingError> {
         let mut last = self.last_attempt.lock().unwrap_or_else(|p| p.into_inner());
-        if let Some(previous) = last.get(source) {
-            if now_ms.saturating_sub(*previous) < self.cooldown_ms {
-                return Err(PairingError::Rejected(
-                    "pairing cooldown active for this source".to_string(),
-                ));
-            }
+        // Entries past their cooldown carry no information; dropping them
+        // keeps the table bounded by the attempt rate, not by uptime.
+        last.retain(|_, previous| now_ms.saturating_sub(*previous) < self.cooldown_ms);
+        if last.contains_key(source) {
+            return Err(PairingError::Rejected(
+                "pairing cooldown active for this source".to_string(),
+            ));
+        }
+        if last.len() >= MAX_TRACKED_SOURCES {
+            return Err(PairingError::Rejected(
+                "too many recent pairing sources".to_string(),
+            ));
         }
         last.insert(source.to_string(), now_ms);
         drop(last);
@@ -245,16 +278,33 @@ impl PairingLimiter {
     }
 }
 
-fn fresh_nonce() -> [u8; 16] {
+/// A predictable nonce would break the SAS, so an RNG failure aborts the
+/// ceremony instead of degrading.
+fn fresh_nonce() -> Result<[u8; 16], PairingError> {
     use ring::rand::{SecureRandom, SystemRandom};
     let mut nonce = [0u8; 16];
-    let rng = SystemRandom::new();
-    if rng.fill(&mut nonce).is_err() {
-        // The system RNG failing is fatal for pairing: never a predictable
-        // nonce. Callers see a transport-shaped failure and persist nothing.
-        return [0u8; 16];
-    }
-    nonce
+    SystemRandom::new()
+        .fill(&mut nonce)
+        .map_err(|_| PairingError::Transport("system random source unavailable".to_string()))?;
+    Ok(nonce)
+}
+
+/// The initiator's commitment to its nonce, bound to its node id.
+fn nonce_commitment(initiator: &NodeId, nonce: &[u8; 16]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(PAIRING_COMMIT_DOMAIN.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(initiator.as_str().as_bytes());
+    hasher.update([0u8]);
+    hasher.update(nonce);
+    hasher.finalize().into()
+}
+
+fn wall_clock_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Message envelope helper for the pairing channel.
@@ -322,7 +372,7 @@ pub async fn pair_outbound<F>(
 where
     F: FnOnce(&str) -> ConfirmDecision,
 {
-    let nonce_a = fresh_nonce();
+    let nonce_a = fresh_nonce()?;
     link.send(pair_envelope(
         my_node,
         &claimed_peer,
@@ -330,7 +380,7 @@ where
             pairing_version: PAIRING_PROTOCOL_VERSION,
             node_id: my_node.clone(),
             fingerprint: identity.fingerprint().clone(),
-            nonce: nonce_a,
+            nonce_commitment: nonce_commitment(my_node, &nonce_a),
         }),
     ))
     .await
@@ -355,6 +405,22 @@ where
         });
     }
     bind_claim(&challenge.fingerprint, link.peer_fingerprint())?;
+    if challenge.node_id != claimed_peer {
+        link.close();
+        return Err(PairingError::Violation(format!(
+            "dialled {claimed_peer} but the peer identifies as {}",
+            challenge.node_id
+        )));
+    }
+
+    // Only now, with the responder's nonce on the table, open the commitment.
+    link.send(pair_envelope(
+        my_node,
+        &challenge.node_id,
+        PairingMessage::Reveal(PairReveal { nonce: nonce_a }),
+    ))
+    .await
+    .map_err(|e| PairingError::Transport(e.to_string()))?;
 
     let transcript = PairingTranscript {
         initiator: my_node.clone(),
@@ -487,7 +553,12 @@ where
     }
     bind_claim(&hello.fingerprint, link.peer_fingerprint())?;
 
-    let nonce_b = fresh_nonce();
+    let _slot = match &options.limiter {
+        Some((limiter, source)) => Some(limiter.try_begin(source, wall_clock_ms())?),
+        None => None,
+    };
+
+    let nonce_b = fresh_nonce()?;
     link.send(pair_envelope(
         my_node,
         &hello.node_id,
@@ -501,12 +572,29 @@ where
     .await
     .map_err(|e| PairingError::Transport(e.to_string()))?;
 
+    let initiator_nonce = match recv_pair(&link, options.timeout_ms).await? {
+        PairingMessage::Reveal(reveal) => reveal.nonce,
+        PairingMessage::Reject(reject) => {
+            return Err(PairingError::Rejected(reject.reason));
+        }
+        other => {
+            link.close();
+            return Err(PairingError::Violation(format!(
+                "expected PairReveal, got {other:?}"
+            )));
+        }
+    };
+    if nonce_commitment(&hello.node_id, &initiator_nonce) != hello.nonce_commitment {
+        link.close();
+        return Err(PairingError::CommitmentMismatch);
+    }
+
     let transcript = PairingTranscript {
         initiator: hello.node_id.clone(),
         responder: my_node.clone(),
         initiator_fingerprint: hello.fingerprint.clone(),
         responder_fingerprint: identity.fingerprint().clone(),
-        initiator_nonce: hello.nonce,
+        initiator_nonce,
         responder_nonce: nonce_b,
         version: PAIRING_PROTOCOL_VERSION,
     };

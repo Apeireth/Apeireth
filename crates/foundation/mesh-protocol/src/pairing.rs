@@ -22,13 +22,23 @@ use apeireth_core::kernel::NodeId;
 use crate::identity::KeyFingerprint;
 
 /// Pairing ceremony protocol version. Exact match or fail closed.
-pub const PAIRING_PROTOCOL_VERSION: u32 = 1;
+pub const PAIRING_PROTOCOL_VERSION: u32 = 2;
+
+/// Domain separation for the initiator's nonce commitment.
+pub const PAIRING_COMMIT_DOMAIN: &str = "APEIRETH-MESH-PAIRING-COMMIT-V2";
 
 /// Domain separation for the short authentication string. Never hash a bare
 /// fingerprint: the code must change for every ceremony.
 pub const PAIRING_SAS_DOMAIN: &str = "APEIRETH-MESH-PAIRING-V1";
 
-/// One side's opening of the ceremony: identity claim plus a fresh nonce.
+/// The initiator's opening of the ceremony: identity claim plus a *commitment*
+/// to a fresh nonce.
+///
+/// The nonce itself is revealed only after the responder has chosen its own
+/// ([`PairReveal`]). Without the commitment, whoever sends its nonce last can
+/// grind it until the 6-digit codes of two separate sessions collide, which
+/// would defeat the human comparison. With it, neither side can pick its
+/// nonce after seeing the other's.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PairHello {
     /// Pairing protocol version.
@@ -37,7 +47,15 @@ pub struct PairHello {
     pub node_id: NodeId,
     /// Fingerprint of the identity key terminating this channel.
     pub fingerprint: KeyFingerprint,
-    /// Fresh random nonce; part of the SAS input and the replay defence.
+    /// SHA-256 commitment to the initiator's nonce (see
+    /// [`PAIRING_COMMIT_DOMAIN`]); opened by [`PairReveal`].
+    pub nonce_commitment: [u8; 32],
+}
+
+/// The initiator opens its commitment after receiving the responder's nonce.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairReveal {
+    /// The committed nonce; the responder verifies it against the commitment.
     pub nonce: [u8; 16],
 }
 
@@ -95,6 +113,8 @@ pub enum PairingMessage {
     Hello(PairHello),
     /// Responder answer.
     Challenge(PairChallenge),
+    /// Initiator opens its nonce commitment.
+    Reveal(PairReveal),
     /// Both sides can now derive the code.
     CodeReady(PairCodeReady),
     /// One side's user confirmed.
@@ -115,7 +135,7 @@ mod tests {
             pairing_version: PAIRING_PROTOCOL_VERSION,
             node_id: NodeId::new("node-a").unwrap(),
             fingerprint: KeyFingerprint::of_public_key(&[7u8; 32]),
-            nonce: [1u8; 16],
+            nonce_commitment: [1u8; 32],
         });
         let json = serde_json::to_string(&message).unwrap();
         let back: PairingMessage = serde_json::from_str(&json).unwrap();
