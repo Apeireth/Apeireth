@@ -177,3 +177,24 @@ Both fail on a clean upstream checkout of the same base:
 - `apeireth-core` `release_manifest_tests::test_release_version_is_2_0_0_rc_1`
   pins `rc.1` while the workspace is `rc.2`.
 - `apeireth-tools-canonical` `apply_patch::tests::apply_with_gate_records_observations_and_enforces_version_cas`.
+
+
+## Running the full workspace suite
+
+A full cargo test --workspace with cargo's default job count dies silently
+part-way through linking on a 16 GB / 12-core machine. Each link.exe for a test
+binary peaks around 1-2 GB, and fanned out across every core the memory pressure
+kills linkers with no error text at all - which reads as an unexplained
+"link.exe ... exit code 1". The same pressure grows H:\pagefile.sys, and that is
+what fills H:, not the target directory on its own. Bound the job count and keep
+the target dir off H::
+
+    CARGO_TARGET_DIR=E:\apeireth-mesh-verify-target
+    cargo test --workspace --no-fail-fast -j 4
+
+With -j 4 the run completes: 172 suites, 4865 passed, 2 failed, 21 ignored. The
+two failures are exactly the pre-existing pair listed above, and they were
+verified as pre-existing rather than assumed: at baseline origin/main the
+workspace already reported 2.0.0-rc.2 while crates/foundation/core/src/lib.rs
+already asserted 2.0.0-rc.1, no replay commit ever changed a version line, and
+no replay commit touched crates/capabilities/tools at all.
