@@ -71,6 +71,67 @@ pub mod bitemporal_graph;
 #[path = "../../../../crates/adapters/gateway/src/file_fetcher.rs"]
 pub mod file_fetcher;
 
+// ===== 编译面 shim (证明面外, 2026-10-03) =====
+// sensitive_path.rs 的两个 crate 内外围引用面:
+//   - crate::mcp_bridge::config::is_secret_key
+//   - crate::exec_pipeline::PipelineFailure::PreDenied (+ code()/message())
+// 真模块链 (mcp_bridge / exec_pipeline) 依赖 apeireth-{core,plugin,protocol,
+// governance} 整链 —— #[path] 整模块纳入会把 CBMC 翻译面扩大到与命题无关的
+// 大片代码 (与 sha2 force-soft 同一理由)。harness 只引用 is_sensitive_path,
+// 下列 shim 只为 canonical 文件编译通过, 不在任何 harness 的证明面上。
+// 漂移防线: 生产侧测试锁死真值 (sensitive_path.rs::
+// credential_surface_refusal_is_a_pre_deny_frame / mcp_bridge::config tests);
+// 改真值时同步此处。若 sensitive_path.rs 未来扩大 crate 内依赖面,
+// 优先零复制纳入真模块, 不扩 shim。
+pub mod mcp_bridge {
+    pub mod config {
+        /// 与 crates/capabilities/tools/src/mcp_bridge/config.rs::is_secret_key 同义。
+        pub fn is_secret_key(key: &str) -> bool {
+            let lowered = key.trim_start_matches('-').to_ascii_lowercase();
+            const SECRET_FRAGMENTS: &[&str] = &[
+                "token",
+                "secret",
+                "key",
+                "password",
+                "passwd",
+                "pwd",
+                "auth",
+                "credential",
+                "signature",
+                "bearer",
+            ];
+            SECRET_FRAGMENTS
+                .iter()
+                .any(|fragment| lowered.contains(fragment))
+        }
+    }
+}
+
+pub mod exec_pipeline {
+    /// 与 crates/capabilities/tools/src/exec_pipeline/mod.rs::PipelineFailure 同义;
+    /// 只声明 sensitive_path.rs 实际构造的 PreDenied 变体。
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum PipelineFailure {
+        PreDenied { source: String, reason: String },
+    }
+
+    impl PipelineFailure {
+        pub const fn code(&self) -> &'static str {
+            match self {
+                Self::PreDenied { .. } => "pipeline.pre_deny",
+            }
+        }
+
+        pub fn message(&self) -> String {
+            match self {
+                Self::PreDenied { source, reason } => {
+                    format!("pre-execute deny from {source}: {reason}")
+                }
+            }
+        }
+    }
+}
+
 #[path = "../../../../crates/capabilities/tools/src/sensitive_path.rs"]
 pub mod sensitive_path;
 
