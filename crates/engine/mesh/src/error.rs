@@ -74,6 +74,17 @@ pub enum MeshError {
         message: String,
     },
 
+    /// Too many calls are already in flight to this peer. Nothing was sent.
+    #[error("peer {node} is saturated: {in_flight} calls in flight (cap {cap})")]
+    Backpressure {
+        /// Which peer.
+        node: String,
+        /// Calls currently pending against it.
+        in_flight: usize,
+        /// The configured cap.
+        cap: usize,
+    },
+
     /// A newer connection to the same peer superseded this one (deterministic
     /// duplicate-connection policy). The surviving connection is named.
     #[error("connection superseded by a duplicate; kept connection to {kept}")]

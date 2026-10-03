@@ -144,6 +144,8 @@ pub enum MeshErrorCode {
     Internal,
     /// The requested invocation shape is not supported by this protocol build.
     Unsupported,
+    /// The executing node is at its concurrency limit for this peer; retry later.
+    Backpressure,
 }
 
 /// Handshake message: who I am and what I speak.
