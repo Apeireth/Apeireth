@@ -256,6 +256,7 @@ fn map_mesh_error(error: MeshError) -> RemoteCapabilityError {
         MeshError::DeadlineExceeded => RemoteCapabilityError::DeadlineExceeded,
         MeshError::PeerUnavailable { .. }
         | MeshError::RouteUnavailable { .. }
+        | MeshError::Backpressure { .. }
         | MeshError::Transport(_) => RemoteCapabilityError::Unavailable(error.to_string()),
         MeshError::Remote {
             code: apeireth_mesh_protocol::MeshErrorCode::Denied,

@@ -49,6 +49,13 @@ pub const DEFAULT_HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
 /// Default cap on in-flight calls per node.
 pub const DEFAULT_MAX_PENDING_CALLS: usize = 256;
 
+/// Default cap on concurrently executing invocations accepted from one peer.
+pub const DEFAULT_MAX_INBOUND_PER_PEER: usize = 64;
+
+/// Default caller-side bound on waiting for a remote outcome. A live peer that
+/// never answers must not pin a pending-call entry forever.
+pub const DEFAULT_CALL_TIMEOUT_MS: u64 = 300_000;
+
 /// Identity and policy for one mesh node.
 #[derive(Debug, Clone)]
 pub struct MeshNodeConfig {
@@ -69,6 +76,10 @@ pub struct MeshNodeConfig {
     pub handshake_timeout_ms: u64,
     /// Cap on in-flight calls per node (bounded transport discipline).
     pub max_pending_calls: usize,
+    /// Cap on invocations this node executes concurrently for one peer.
+    pub max_inbound_per_peer: usize,
+    /// How long a caller waits for a remote outcome before giving up.
+    pub call_timeout_ms: Option<u64>,
 }
 
 impl MeshNodeConfig {
@@ -83,6 +94,8 @@ impl MeshNodeConfig {
             default_deadline_ms: None,
             handshake_timeout_ms: DEFAULT_HANDSHAKE_TIMEOUT_MS,
             max_pending_calls: DEFAULT_MAX_PENDING_CALLS,
+            max_inbound_per_peer: DEFAULT_MAX_INBOUND_PER_PEER,
+            call_timeout_ms: Some(DEFAULT_CALL_TIMEOUT_MS),
         }
     }
 
@@ -118,6 +131,20 @@ impl MeshNodeConfig {
     #[must_use]
     pub fn with_max_pending_calls(mut self, max: usize) -> Self {
         self.max_pending_calls = max;
+        self
+    }
+
+    /// Set the per-peer inbound execution cap.
+    #[must_use]
+    pub fn with_max_inbound_per_peer(mut self, max: usize) -> Self {
+        self.max_inbound_per_peer = max;
+        self
+    }
+
+    /// Set the caller-side wait bound (`None` waits indefinitely).
+    #[must_use]
+    pub fn with_call_timeout(mut self, timeout_ms: Option<u64>) -> Self {
+        self.call_timeout_ms = timeout_ms;
         self
     }
 
@@ -179,14 +206,44 @@ pub struct CallHandle {
     /// Where the call executes.
     pub target: CallTarget,
     rx: oneshot::Receiver<Result<CapabilityOutcome, MeshError>>,
+    timeout: Option<std::time::Duration>,
+    _pending: Option<PendingGuard>,
+}
+
+/// Removes a call's pending entry when its handle goes away, so an abandoned
+/// or timed-out call cannot leak a slot against the per-peer cap.
+struct PendingGuard {
+    calls: PendingCalls,
+    id: RequestId,
+}
+
+impl Drop for PendingGuard {
+    fn drop(&mut self) {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.remove(&self.id);
+        }
+    }
 }
 
 impl CallHandle {
     /// Await the raw capability outcome.
+    ///
+    /// Bounded by the node's call timeout: expiry yields
+    /// [`MeshError::DeadlineExceeded`] and frees the pending slot.
     pub async fn outcome(self) -> Result<CapabilityOutcome, MeshError> {
-        self.rx
-            .await
-            .map_err(|_| MeshError::Transport("call completed without an outcome".into()))?
+        let Self {
+            rx,
+            timeout,
+            _pending,
+            ..
+        } = self;
+        let received = match timeout {
+            Some(limit) => tokio::time::timeout(limit, rx)
+                .await
+                .map_err(|_elapsed| MeshError::DeadlineExceeded)?,
+            None => rx.await,
+        };
+        received.map_err(|_| MeshError::Transport("call completed without an outcome".into()))?
     }
 
     /// Await the canonical tool result of a tool invocation.
@@ -216,6 +273,14 @@ struct PendingCall {
     tx: oneshot::Sender<Result<CapabilityOutcome, MeshError>>,
 }
 
+type PendingCalls = Arc<Mutex<BTreeMap<RequestId, PendingCall>>>;
+
+/// `(origin, message id)`: `None` is a call started by this node; `Some(peer)`
+/// is an execution a peer asked for. Keyed by origin so one peer can neither
+/// cancel nor collide with another peer's (or a local) invocation.
+type InvocationKey = (Option<NodeId>, RequestId);
+type Invocations = Arc<Mutex<BTreeMap<InvocationKey, CancelFlag>>>;
+
 /// One runtime's mesh presence.
 pub struct MeshNode {
     descriptor: NodeDescriptor,
@@ -226,12 +291,14 @@ pub struct MeshNode {
     default_deadline_ms: Option<u64>,
     handshake_timeout_ms: u64,
     max_pending_calls: usize,
+    max_inbound_per_peer: usize,
+    call_timeout: Option<std::time::Duration>,
     peers: Mutex<BTreeMap<NodeId, PeerEntry>>,
     routes: Mutex<RouteTable>,
     /// Caller-side calls awaiting a remote response.
-    calls: Mutex<BTreeMap<RequestId, PendingCall>>,
+    calls: PendingCalls,
     /// In-flight executions *in this runtime*, for cooperative cancellation.
-    invocations: Arc<Mutex<BTreeMap<RequestId, CancelFlag>>>,
+    invocations: Invocations,
     /// Monotonic connection generation allocator.
     generation: std::sync::atomic::AtomicU64,
 }
@@ -253,9 +320,11 @@ impl MeshNode {
             default_deadline_ms: config.default_deadline_ms,
             handshake_timeout_ms: config.handshake_timeout_ms,
             max_pending_calls: config.max_pending_calls,
+            max_inbound_per_peer: config.max_inbound_per_peer,
+            call_timeout: config.call_timeout_ms.map(std::time::Duration::from_millis),
             peers: Mutex::new(BTreeMap::new()),
             routes: Mutex::new(RouteTable::new()),
-            calls: Mutex::new(BTreeMap::new()),
+            calls: Arc::new(Mutex::new(BTreeMap::new())),
             invocations: Arc::new(Mutex::new(BTreeMap::new())),
             generation: std::sync::atomic::AtomicU64::new(0),
         })
@@ -753,7 +822,7 @@ impl MeshNode {
                 self.invocations
                     .lock()
                     .expect("mesh invocations poisoned")
-                    .insert(message_id, flag.clone());
+                    .insert((None, message_id), flag.clone());
                 let executor = Arc::clone(&self.executor);
                 let invocations = Arc::clone(&self.invocations);
                 let ctx = MeshInvokeContext {
@@ -785,13 +854,15 @@ impl MeshNode {
                     invocations
                         .lock()
                         .expect("mesh invocations poisoned")
-                        .remove(&message_id);
+                        .remove(&(None, message_id));
                     let _ = tx.send(result);
                 });
                 Ok(CallHandle {
                     message_id,
                     target: CallTarget::Local,
                     rx,
+                    timeout: None,
+                    _pending: None,
                 })
             }
             apeireth_mesh_protocol::PluginLocation::Remote(node) => {
@@ -805,10 +876,11 @@ impl MeshNode {
                         .filter(|call| call.peer == node)
                         .count();
                     if pending_for_peer >= self.max_pending_calls {
-                        return Err(MeshError::Transport(format!(
-                            "backpressure: {node} already has {pending_for_peer} pending calls (cap {})",
-                            self.max_pending_calls
-                        )));
+                        return Err(MeshError::Backpressure {
+                            node: node.to_string(),
+                            in_flight: pending_for_peer,
+                            cap: self.max_pending_calls,
+                        });
                     }
                 }
                 self.calls.lock().expect("mesh calls poisoned").insert(
@@ -841,6 +913,11 @@ impl MeshNode {
                     message_id,
                     target: CallTarget::Remote(node),
                     rx,
+                    timeout: self.call_timeout,
+                    _pending: Some(PendingGuard {
+                        calls: Arc::clone(&self.calls),
+                        id: message_id,
+                    }),
                 })
             }
         }
@@ -857,7 +934,7 @@ impl MeshNode {
             .invocations
             .lock()
             .expect("mesh invocations poisoned")
-            .get(&message_id)
+            .get(&(None, message_id))
         {
             flag.cancel();
         }
@@ -1043,27 +1120,23 @@ impl MeshNode {
                 .expect("mesh routes poisoned")
                 .ingest_advert(peer, &advert),
             MeshPayload::InvokeCapability(invoke) => {
-                self.spawn_invocation(peer.clone(), envelope, invoke, Arc::clone(link));
-                Ok(())
+                self.spawn_invocation(peer.clone(), envelope, invoke, Arc::clone(link))
             }
             MeshPayload::CapabilityResult(result) => {
-                self.complete_call(envelope.in_reply_to, Ok(result.outcome));
-                Ok(())
+                self.complete_call(peer, envelope.in_reply_to, Ok(result.outcome))
             }
-            MeshPayload::CapabilityError(error) => {
-                self.complete_call(
-                    envelope.in_reply_to,
-                    Err(MeshError::from_capability_error(error)),
-                );
-                Ok(())
-            }
+            MeshPayload::CapabilityError(error) => self.complete_call(
+                peer,
+                envelope.in_reply_to,
+                Err(MeshError::from_capability_error(error)),
+            ),
             MeshPayload::Heartbeat(_) => Ok(()),
             MeshPayload::Cancel(cancel) => {
                 if let Some(flag) = self
                     .invocations
                     .lock()
                     .expect("mesh invocations poisoned")
-                    .get(&cancel.target)
+                    .get(&(Some(peer.clone()), cancel.target))
                 {
                     flag.cancel();
                 }
@@ -1087,17 +1160,45 @@ impl MeshNode {
         envelope: MeshEnvelope,
         invoke: InvokeCapability,
         link: Arc<dyn MeshConnection>,
-    ) {
+    ) -> Result<(), MeshError> {
+        let key: InvocationKey = (Some(peer.clone()), envelope.message_id);
         let flag = CancelFlag::new();
-        self.invocations
-            .lock()
-            .expect("mesh invocations poisoned")
-            .insert(envelope.message_id, flag.clone());
+        let saturated = {
+            let mut invocations = self.invocations.lock().expect("mesh invocations poisoned");
+            if invocations.contains_key(&key) {
+                return Err(MeshError::Malformed {
+                    sender: peer.to_string(),
+                    reason: format!("message id {} is already executing", envelope.message_id),
+                });
+            }
+            let running = invocations
+                .keys()
+                .filter(|(origin, _)| origin.as_ref() == Some(&peer))
+                .count();
+            if running >= self.max_inbound_per_peer {
+                true
+            } else {
+                invocations.insert(key.clone(), flag.clone());
+                false
+            }
+        };
+        if saturated {
+            let capability = invoke.capability.clone();
+            let cap = self.max_inbound_per_peer;
+            tokio::spawn(async move {
+                let refusal = MeshPayload::CapabilityError(CapabilityError {
+                    capability: Some(capability),
+                    code: MeshErrorCode::Backpressure,
+                    message: format!("peer already has {cap} invocations executing here"),
+                });
+                let _ = link.send(envelope.reply(refusal)).await;
+            });
+            return Ok(());
+        }
 
         let executor = Arc::clone(&self.executor);
         let invocations = Arc::clone(&self.invocations);
         tokio::spawn(async move {
-            let message_id = envelope.message_id;
             let trace = envelope.trace_id;
             // `reply` reuses the request envelope: same trace, reversed
             // direction, `in_reply_to` correlation — trace propagation by
@@ -1107,7 +1208,7 @@ impl MeshNode {
             invocations
                 .lock()
                 .expect("mesh invocations poisoned")
-                .remove(&message_id);
+                .remove(&key);
             let payload = match outcome {
                 Ok((capability, outcome)) => MeshPayload::CapabilityResult(CapabilityResult {
                     capability,
@@ -1117,23 +1218,35 @@ impl MeshNode {
             };
             let _ = link.send(reply_template.reply(payload)).await;
         });
+        Ok(())
     }
 
+    /// Complete a pending call from a reply. A reply is honoured only from the
+    /// peer the call was sent to: another connected peer that guesses or
+    /// observes a message id must not be able to answer for it. A reply to an
+    /// unknown id is ignored (late reply after a timeout or cancel).
     fn complete_call(
         &self,
+        peer: &NodeId,
         in_reply_to: Option<RequestId>,
         result: Result<CapabilityOutcome, MeshError>,
-    ) {
+    ) -> Result<(), MeshError> {
         let Some(message_id) = in_reply_to else {
-            return;
+            return Ok(());
         };
-        let pending = self
-            .calls
-            .lock()
-            .expect("mesh calls poisoned")
-            .remove(&message_id);
-        if let Some(pending) = pending {
-            let _ = pending.tx.send(result);
+        let mut calls = self.calls.lock().expect("mesh calls poisoned");
+        match calls.get(&message_id) {
+            Some(pending) if &pending.peer != peer => Err(MeshError::Malformed {
+                sender: peer.to_string(),
+                reason: format!("reply to {message_id}, a call that was not sent to this peer"),
+            }),
+            Some(_) => {
+                if let Some(pending) = calls.remove(&message_id) {
+                    let _ = pending.tx.send(result);
+                }
+                Ok(())
+            }
+            None => Ok(()),
         }
     }
 
@@ -1192,15 +1305,22 @@ impl MeshNode {
     ///
     /// A pinned peer must present exactly the pinned fingerprint — the right
     /// key under the wrong NodeId, a wrong key, and a keyless "proof" all fail
-    /// closed. Unpinned entries (the in-memory test fabric has no identity
-    /// claim) are governed by [`TrustPolicy::authorize`] alone.
+    /// closed. An unpinned entry is only usable on a link that makes no
+    /// identity claim (the in-memory test fabric): a link that *does* present
+    /// a key for an unpinned node is refused, never trusted on first use.
     fn verify_pinned_identity(
         &self,
         node: &NodeId,
         link: &Arc<dyn MeshConnection>,
     ) -> Result<(), MeshError> {
         let Some(pin) = self.trust.pinned_fingerprint(node).cloned() else {
-            return Ok(());
+            return match link.peer_fingerprint() {
+                None => Ok(()),
+                Some(presented) => Err(MeshError::Untrusted {
+                    node: node.to_string(),
+                    reason: format!("no key is pinned for this node; presented {presented}"),
+                }),
+            };
         };
         match link.peer_fingerprint() {
             Some(presented) if presented == pin => Ok(()),
@@ -1281,8 +1401,13 @@ impl MeshNode {
         Some(generation)
     }
 
+    /// Drop a failed handshake's placeholder. A live entry (generation > 0) is
+    /// never touched: a failed second dial must not evict the working link.
     fn abandon_handshake(&self, node: &NodeId) {
-        self.peers.lock().expect("mesh peers poisoned").remove(node);
+        let mut peers = self.peers.lock().expect("mesh peers poisoned");
+        if peers.get(node).is_some_and(|entry| entry.generation == 0) {
+            peers.remove(node);
+        }
     }
 
     fn note_seen(&self, node: &NodeId) {
