@@ -536,6 +536,7 @@
 > ③ "`apeireth-credentials` 未接线 / 记忆图 / 器官 / voice / screen 未移植"——**已全部兑现**：
 > credentials 已接线（真热更凭据链）、记忆图/语义轴在 `engine/memory`、9 器官全实装、
 > voice 族真现实现、screen/perception 已接线（默认关）；仍未接线的仅 **MCP** 一件（如实标注）。
+> （四级口径: 本条"已接线/实装"= PRODUCTION WIRED / IMPLEMENTED 级, 非 HARDWARE VALIDATED。）
 
 - 生产 bootstrap 尚未安装 governance pipeline（默认 AllowAll）——P0
 - 13 键 verdict cache 只在 core 内测试、未接 canonical 执行路径——P0 拍板去留
