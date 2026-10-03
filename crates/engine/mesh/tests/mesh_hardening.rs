@@ -460,3 +460,103 @@ async fn a_trusted_peer_without_a_pin_is_refused_on_a_keyed_transport() {
     assert!(matches!(error, MeshError::Untrusted { .. }), "{error}");
     assert_eq!(b.peer_state(&id("node-c")), None);
 }
+
+#[tokio::test]
+async fn revoking_a_peer_drops_its_link_calls_routes_and_future_handshakes() {
+    let released = Arc::new(AtomicBool::new(false));
+    let a = gate_node("node-a", trusting(&["node-b"]), &released, |c| c);
+    let b = gate_node("node-b", trusting(&["node-a"]), &released, |c| c);
+    connect_pair(&a, &b).await;
+    assert!(!a.projection(&id("node-b")).is_empty());
+
+    let handle = a
+        .start_call(
+            &RouteSelection::Remote(id("node-b")),
+            &CapabilityId::new(ECHO_CAP).unwrap(),
+            echo(),
+            meta(),
+        )
+        .await
+        .unwrap();
+
+    a.revoke_peer(&id("node-b"));
+
+    assert!(matches!(
+        handle.outcome().await,
+        Err(MeshError::Transport(_))
+    ));
+    assert_eq!(a.peer_state(&id("node-b")), Some(PeerState::Closed));
+    assert!(a.projection(&id("node-b")).is_empty());
+
+    // The revoked node cannot come back under the same id.
+    let (link_b, link_a) = linked_pair();
+    let link_b: Arc<dyn MeshConnection> = Arc::new(link_b);
+    let link_a: Arc<dyn MeshConnection> = Arc::new(link_a);
+    let (dialled, accepted) = tokio::join!(b.connect(link_b, id("node-a")), a.accept(link_a));
+    assert!(
+        matches!(accepted, Err(MeshError::Untrusted { .. })),
+        "{accepted:?}"
+    );
+    assert!(dialled.is_err());
+    released.store(true, Ordering::SeqCst);
+}
+
+#[tokio::test]
+async fn admitting_a_peer_makes_it_connectable_without_a_restart() {
+    let released = Arc::new(AtomicBool::new(false));
+    let a = gate_node("node-a", TrustPolicy::new(), &released, |c| c);
+    let b = gate_node("node-b", trusting(&["node-a"]), &released, |c| c);
+
+    let (link_a, link_b) = linked_pair();
+    let (refused, _) = tokio::join!(
+        a.connect(Arc::new(link_a), id("node-b")),
+        b.accept(Arc::new(link_b))
+    );
+    assert!(matches!(refused, Err(MeshError::Untrusted { .. })));
+
+    a.admit_peer(apeireth_mesh::KnownPeer {
+        node: id("node-b"),
+        endpoint: "memory://node-b".into(),
+        trust: apeireth_mesh::PeerTrust::Trusted,
+        key_fingerprint: None,
+    });
+    connect_pair(&a, &b).await;
+    assert_eq!(a.peer_state(&id("node-b")), Some(PeerState::Active));
+}
+
+#[tokio::test]
+async fn shutdown_fails_pending_calls_closes_links_and_stops_loops() {
+    let released = Arc::new(AtomicBool::new(false));
+    let a = gate_node("node-a", trusting(&["node-b"]), &released, |c| c);
+    let b = gate_node("node-b", trusting(&["node-a"]), &released, |c| c);
+    connect_pair(&a, &b).await;
+    let heartbeat = a.spawn_heartbeat(10);
+
+    let handle = a
+        .start_call(
+            &RouteSelection::Remote(id("node-b")),
+            &CapabilityId::new(ECHO_CAP).unwrap(),
+            echo(),
+            meta(),
+        )
+        .await
+        .unwrap();
+
+    a.shutdown();
+    a.shutdown();
+
+    assert!(a.is_shutdown());
+    assert!(matches!(
+        handle.outcome().await,
+        Err(MeshError::Transport(_))
+    ));
+    assert_eq!(a.peer_state(&id("node-b")), Some(PeerState::Closed));
+    tokio::time::timeout(Duration::from_secs(2), heartbeat)
+        .await
+        .expect("the heartbeat loop must stop on shutdown")
+        .unwrap();
+
+    let (link_a, _link_b) = linked_pair();
+    assert!(a.connect(Arc::new(link_a), id("node-b")).await.is_err());
+    released.store(true, Ordering::SeqCst);
+}
