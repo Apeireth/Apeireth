@@ -362,6 +362,11 @@ impl MeshNode {
             .cloned()
     }
 
+    /// Whether this peer is currently trusted by the live policy.
+    pub fn is_trusted(&self, peer: &NodeId) -> bool {
+        self.authorize(peer).is_ok()
+    }
+
     /// Admit (or update) a peer in the live trust policy, e.g. right after a
     /// pairing ceremony persisted it. Takes effect for the next handshake.
     pub fn admit_peer(&self, peer: KnownPeer) {

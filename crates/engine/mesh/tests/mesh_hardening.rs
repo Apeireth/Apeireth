@@ -560,3 +560,109 @@ async fn shutdown_fails_pending_calls_closes_links_and_stops_loops() {
     assert!(a.connect(Arc::new(link_a), id("node-b")).await.is_err());
     released.store(true, Ordering::SeqCst);
 }
+
+/// Dials by wiring a fresh in-memory pair to `target.accept`; fails the first
+/// `failures` dials.
+struct LoopbackTransport {
+    target: Arc<MeshNode>,
+    failures: std::sync::atomic::AtomicUsize,
+    dials: std::sync::atomic::AtomicUsize,
+}
+
+#[async_trait]
+impl apeireth_mesh::MeshTransport for LoopbackTransport {
+    async fn dial(&self, _endpoint: &str) -> Result<Arc<dyn MeshConnection>, MeshTransportError> {
+        self.dials.fetch_add(1, Ordering::SeqCst);
+        let remaining = self.failures.load(Ordering::SeqCst);
+        if remaining > 0 {
+            self.failures.store(remaining - 1, Ordering::SeqCst);
+            return Err(MeshTransportError::Io("simulated outage".into()));
+        }
+        let (mine, theirs) = linked_pair();
+        let target = Arc::clone(&self.target);
+        tokio::spawn(async move {
+            let _ = target.accept(Arc::new(theirs)).await;
+        });
+        Ok(Arc::new(mine))
+    }
+}
+
+fn quick_policy() -> apeireth_mesh::ReconnectPolicy {
+    apeireth_mesh::ReconnectPolicy {
+        initial_backoff: Duration::from_millis(10),
+        max_backoff: Duration::from_millis(40),
+        jitter: 0.0,
+        check_interval: Duration::from_millis(10),
+    }
+}
+
+async fn wait_for(mut condition: impl FnMut() -> bool) -> bool {
+    for _ in 0..200 {
+        if condition() {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    false
+}
+
+#[tokio::test]
+async fn a_maintained_connection_survives_outages_and_link_loss() {
+    let released = Arc::new(AtomicBool::new(false));
+    let a = gate_node("node-a", trusting(&["node-b"]), &released, |c| c);
+    let b = gate_node("node-b", trusting(&["node-a"]), &released, |c| c);
+    let transport = Arc::new(LoopbackTransport {
+        target: Arc::clone(&b),
+        failures: std::sync::atomic::AtomicUsize::new(2),
+        dials: std::sync::atomic::AtomicUsize::new(0),
+    });
+    let task = a.maintain_connection(
+        id("node-b"),
+        "memory://node-b".into(),
+        transport.clone(),
+        quick_policy(),
+    );
+
+    // Two failed dials, then a connection.
+    assert!(wait_for(|| a.peer_state(&id("node-b")) == Some(PeerState::Active)).await);
+    assert_eq!(transport.dials.load(Ordering::SeqCst), 3);
+
+    // The far end drops the link; the maintainer redials.
+    b.disconnect(&id("node-a"));
+    assert!(wait_for(|| transport.dials.load(Ordering::SeqCst) >= 4).await);
+    assert!(wait_for(|| a.peer_state(&id("node-b")) == Some(PeerState::Active)).await);
+
+    // Revocation ends the loop and no further dial happens.
+    a.revoke_peer(&id("node-b"));
+    tokio::time::timeout(Duration::from_secs(2), task)
+        .await
+        .expect("the maintainer must stop once the peer is untrusted")
+        .unwrap();
+    let dials = transport.dials.load(Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(transport.dials.load(Ordering::SeqCst), dials);
+}
+
+#[tokio::test]
+async fn a_maintained_connection_stops_on_shutdown() {
+    let released = Arc::new(AtomicBool::new(false));
+    let a = gate_node("node-a", trusting(&["node-b"]), &released, |c| c);
+    let b = gate_node("node-b", trusting(&["node-a"]), &released, |c| c);
+    let transport = Arc::new(LoopbackTransport {
+        target: b,
+        failures: std::sync::atomic::AtomicUsize::new(usize::MAX),
+        dials: std::sync::atomic::AtomicUsize::new(0),
+    });
+    let task = a.maintain_connection(
+        id("node-b"),
+        "memory://node-b".into(),
+        transport,
+        quick_policy(),
+    );
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    a.shutdown();
+    tokio::time::timeout(Duration::from_secs(2), task)
+        .await
+        .expect("the maintainer must stop on shutdown")
+        .unwrap();
+}
