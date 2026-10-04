@@ -35,7 +35,7 @@ pub mod transport;
 
 pub use connection::RelayMeshConnection;
 pub use e2e::{handshake, HandshakeRole, OpaqueTunnel, SecureChannel, E2E_HANDSHAKE_DOMAIN};
-pub use presence::{now_ms, signed_presence};
+pub use presence::{now_ms, signed_presence, signed_presence_with_candidates};
 pub use transport::{
     RelayCircuit, RelayEndpoint, RelayError, RelayMeshListener, RelayMeshTransport,
 };

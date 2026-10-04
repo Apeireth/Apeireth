@@ -93,6 +93,37 @@ pub trait MeshTransport: Send + Sync {
     /// Dial `endpoint` and return a connected link. The caller handshakes over
     /// it; the transport never interprets envelopes.
     async fn dial(&self, endpoint: &str) -> Result<Arc<dyn MeshConnection>, MeshTransportError>;
+
+    /// Dial the first candidate that accepts, in the order given.
+    ///
+    /// The default is **sequential with a per-attempt deadline**, so one dead
+    /// address cannot stall the whole attempt. A transport able to try several
+    /// addresses at once (simultaneous open) overrides this.
+    ///
+    /// Candidates are *where* to dial. *Who* answers is still proved above
+    /// this boundary: the caller handshakes over the returned link and fails
+    /// closed on an identity that does not match its pin.
+    async fn dial_candidates(
+        &self,
+        candidates: &[String],
+        per_attempt_timeout: std::time::Duration,
+    ) -> Result<Arc<dyn MeshConnection>, MeshTransportError> {
+        let mut last: Option<MeshTransportError> = None;
+        for candidate in candidates {
+            match tokio::time::timeout(per_attempt_timeout, self.dial(candidate)).await {
+                Ok(Ok(link)) => return Ok(link),
+                Ok(Err(error)) => last = Some(error),
+                Err(_) => {
+                    last = Some(MeshTransportError::Io(
+                        "candidate attempt timed out".to_string(),
+                    ))
+                }
+            }
+        }
+        Err(last.unwrap_or_else(|| {
+            MeshTransportError::Io("no candidate endpoints supplied".to_string())
+        }))
+    }
 }
 
 /// One end of an in-memory link pair.
