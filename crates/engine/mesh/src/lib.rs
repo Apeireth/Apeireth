@@ -39,6 +39,7 @@
 pub mod candidates;
 pub mod conformance;
 pub mod connector;
+pub mod convergence;
 pub mod discovery;
 pub mod error;
 pub mod executor;
@@ -59,6 +60,7 @@ pub mod trust_store;
 pub use candidates::dial_plan;
 pub use conformance::assert_connection_conformance;
 pub use connector::{PeerConnector, Strategy};
+pub use convergence::{keeps_connection, new_connection_survives, Direction};
 pub use discovery::{
     DiscoveredPeer, DiscoveryBackend, DiscoveryMethod, DiscoverySink, FakeDiscoveryBackend,
     MeshDiscoveryService,
