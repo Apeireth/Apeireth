@@ -17,7 +17,7 @@ use crate::config::QuicTransportConfig;
 use crate::connection::QuicMeshConnection;
 use crate::tls;
 
-fn transport_config(config: &QuicTransportConfig) -> quinn::TransportConfig {
+pub(crate) fn transport_config(config: &QuicTransportConfig) -> quinn::TransportConfig {
     let mut transport = quinn::TransportConfig::default();
     transport.max_idle_timeout(Some(
         std::time::Duration::from_millis(config.idle_timeout_ms)
@@ -32,7 +32,7 @@ fn transport_config(config: &QuicTransportConfig) -> quinn::TransportConfig {
 
 /// The peer's identity fingerprint, read from the connection's own
 /// certificate chain — per-connection evidence, never a shared recorder.
-fn peer_fingerprint(connection: &quinn::Connection) -> Option<KeyFingerprint> {
+pub(crate) fn peer_fingerprint(connection: &quinn::Connection) -> Option<KeyFingerprint> {
     let identity = connection.peer_identity()?;
     let chain = identity.downcast_ref::<Vec<rustls::pki_types::CertificateDer<'static>>>()?;
     chain
