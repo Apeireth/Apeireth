@@ -1496,12 +1496,11 @@ impl MeshNode {
             // here so the loser's loop tears down symmetrically.
             let live =
                 existing.generation != 0 && existing.link.as_ref().is_some_and(|l| !l.is_closed());
+            // Stated once, in `crate::convergence`, so the rule that both
+            // ends evaluate is a single tested function rather than an inline
+            // comparison each side could drift away from.
             let keep_new = !live
-                || match existing.initiator.cmp(&initiator) {
-                    std::cmp::Ordering::Greater => true,
-                    std::cmp::Ordering::Less => false,
-                    std::cmp::Ordering::Equal => true,
-                };
+                || crate::convergence::new_connection_survives(&existing.initiator, &initiator);
             if !keep_new {
                 link.close();
                 return None;
