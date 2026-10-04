@@ -5,21 +5,18 @@
 //! a candidate is *where* to dial, and it must never be reachable from an
 //! unverified or unsigned source.
 
-use apeireth_mesh_protocol::rendezvous::PresenceRecord;
+use apeireth_mesh_protocol::rendezvous::VerifiedPresence;
 
 /// The endpoints to try for a peer, in dial order (host first).
 ///
-/// **The caller must have verified `record`** — [`PresenceRecord::verify`] or
-/// [`PresenceRecord::verify_for`] — before calling this. This function
-/// deliberately does not verify: it is pure translation, and the point of the
-/// separation is that verification happens once, at the boundary where the
-/// record arrives, and the dial path below it can never see an unverified
-/// address.
+/// Takes [`VerifiedPresence`], not a raw record, so the dial path cannot be
+/// reached with an unverified address: verification happens once, where the
+/// record arrives, and the type carries that fact forward.
 ///
 /// Duplicates cannot appear: `PresenceRecord::verify` requires canonical order,
 /// which rejects them upstream.
-pub fn dial_plan(record: &PresenceRecord) -> Vec<String> {
-    record
+pub fn dial_plan(presence: &VerifiedPresence) -> Vec<String> {
+    presence
         .dialable_candidates()
         .into_iter()
         .map(|(_kind, addr)| addr.to_string())

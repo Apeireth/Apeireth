@@ -15,7 +15,7 @@ use apeireth_mesh::{
     Strategy,
 };
 use apeireth_mesh_protocol::rendezvous::{
-    canonicalize_candidates, EndpointCandidate, EndpointCandidateKind,
+    canonicalize_candidates, EndpointCandidate, EndpointCandidateKind, VerifiedPresence,
 };
 use apeireth_mesh_protocol::NodeId;
 use async_trait::async_trait;
@@ -160,10 +160,10 @@ fn the_dial_plan_is_host_first_and_deduplicated() {
         candidates,
     )
     .unwrap();
-    assert!(record.verify(now_ms()).is_ok());
+    let verified = VerifiedPresence::verify(record, now_ms(), "relay.example").unwrap();
 
     assert_eq!(
-        dial_plan(&record),
+        dial_plan(&verified),
         vec![
             "192.168.1.9:51820".to_string(),
             "203.0.113.5:51820".to_string()

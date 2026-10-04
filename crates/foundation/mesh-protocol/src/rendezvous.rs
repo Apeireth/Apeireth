@@ -488,6 +488,87 @@ impl PresenceRecord {
 /// Requests a node sends to a rendezvous server. Every one is cheap and
 /// idempotent where it can be, and every registration carries proof of key
 /// possession (a signed [`PresenceRecord`]) — never a bare "I am node X".
+/// A [`PresenceRecord`] that has passed signature, audience, expiry and
+/// candidate validation.
+///
+/// The only constructor is [`VerifiedPresence::verify`], so "verify before you
+/// use it" is a property of the type instead of a convention a later caller can
+/// forget. Routing and dialing take this type, never a raw record.
+///
+/// Verification is **not** trust. It proves the record was minted by the holder
+/// of the key it names, for this audience, and has not expired. Whether that
+/// key is *pinned* for this `NodeId` is a separate, later decision owned by the
+/// trust store: a verified record for an unknown key is still an unknown peer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedPresence {
+    record: PresenceRecord,
+}
+
+impl VerifiedPresence {
+    /// Verify `record` for `audience` at `now_ms`, consuming it.
+    ///
+    /// Covers every check a caller must not be able to skip: audience binding,
+    /// the Ed25519 signature over the canonical payload (which includes the
+    /// candidates), lease expiry, candidate validity, and canonical candidate
+    /// order.
+    pub fn verify(
+        record: PresenceRecord,
+        now_ms: u64,
+        audience: &str,
+    ) -> Result<Self, RendezvousError> {
+        record.verify_for(now_ms, audience)?;
+        Ok(Self { record })
+    }
+
+    /// The verified record.
+    pub fn record(&self) -> &PresenceRecord {
+        &self.record
+    }
+
+    /// Who claims to be reachable. A name, not an identity: compare
+    /// [`VerifiedPresence::fingerprint`] against the pin before trusting it.
+    pub fn node_id(&self) -> &NodeId {
+        &self.record.node_id
+    }
+
+    /// The presence incarnation this verification is bound to.
+    pub fn session_id(&self) -> u64 {
+        self.record.session_id
+    }
+
+    /// Absolute expiry of the lease this was verified against.
+    pub fn expires_at_ms(&self) -> u64 {
+        self.record.expires_at_ms
+    }
+
+    /// Whether this record is the incarnation `session_id`.
+    ///
+    /// Every fact derived from a presence — a route, a dial plan, a punch — is
+    /// valid only for its own incarnation. A different `session_id` replaces
+    /// that state; it never merges with it.
+    pub fn is_incarnation(&self, session_id: u64) -> bool {
+        self.record.session_id == session_id
+    }
+
+    /// SHA-256 of the signing key, in the form the trust store pins. The
+    /// signature proves *a* key signed this; only the pin comparison proves it
+    /// is the key this node expects.
+    pub fn fingerprint(&self) -> String {
+        self.record.fingerprint()
+    }
+
+    /// Whether the node says it will terminate relay circuits. A reachability
+    /// hint, never authority.
+    pub fn relay_capable(&self) -> bool {
+        self.record.relay_capable
+    }
+
+    /// Advertised candidates, in dial order. Already validated.
+    pub fn dialable_candidates(&self) -> Vec<(EndpointCandidateKind, SocketAddr)> {
+        self.record.dialable_candidates()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RendezvousRequest {
@@ -942,6 +1023,71 @@ mod tests {
         let mut forged = record;
         forged.signature = pair.sign(&v1_payload).as_ref().to_vec();
         assert_eq!(forged.verify(now), Err(RendezvousError::BadSignature));
+    }
+
+    #[test]
+    fn a_valid_record_yields_verified_presence() {
+        let now = 1_000u64;
+        let signed = signed_with_candidates(now);
+        let verified = VerifiedPresence::verify(signed, now, "relay.example").unwrap();
+        assert_eq!(verified.node_id().as_str(), "node-b");
+        assert_eq!(verified.session_id(), 7);
+        assert_eq!(verified.dialable_candidates().len(), 2);
+        assert!(verified.is_incarnation(7));
+        assert!(!verified.is_incarnation(8));
+    }
+
+    #[test]
+    fn a_bad_signature_yields_no_verified_presence() {
+        let now = 1_000u64;
+        let mut signed = signed_with_candidates(now);
+        signed.candidates[0].addr = "192.168.1.9:51999".parse().unwrap();
+        assert_eq!(
+            VerifiedPresence::verify(signed, now, "relay.example"),
+            Err(RendezvousError::BadSignature)
+        );
+    }
+
+    #[test]
+    fn an_expired_record_yields_no_verified_presence() {
+        let now = 1_000u64;
+        let signed = signed_with_candidates(now);
+        assert!(matches!(
+            VerifiedPresence::verify(signed, now + 60_001, "relay.example"),
+            Err(RendezvousError::Expired { .. })
+        ));
+    }
+
+    #[test]
+    fn a_noncanonical_record_yields_no_verified_presence() {
+        let now = 1_000u64;
+        let mut signed = signed_with_candidates(now);
+        signed.candidates.reverse();
+        assert!(matches!(
+            VerifiedPresence::verify(signed, now, "relay.example"),
+            Err(RendezvousError::Malformed(_))
+        ));
+    }
+
+    #[test]
+    fn the_wrong_audience_yields_no_verified_presence() {
+        let now = 1_000u64;
+        let signed = signed_with_candidates(now);
+        assert!(matches!(
+            VerifiedPresence::verify(signed, now, "other.example"),
+            Err(RendezvousError::AudienceMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn verified_presence_carries_the_incarnation_and_the_pin_material() {
+        let now = 1_000u64;
+        let signed = signed_with_candidates(now);
+        let expected = signed.fingerprint();
+        let verified = VerifiedPresence::verify(signed, now, "relay.example").unwrap();
+        assert_eq!(verified.fingerprint(), expected);
+        assert_eq!(verified.expires_at_ms(), now + 60_000);
+        assert!(verified.relay_capable());
     }
 
     #[test]
