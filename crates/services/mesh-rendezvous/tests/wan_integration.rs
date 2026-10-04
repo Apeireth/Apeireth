@@ -239,6 +239,7 @@ async fn malformed_presence_is_rejected() {
         u64::MAX - 1,
         "relay://test",
         true,
+        Vec::new(),
         vec![0u8; 16],
     );
     assert!(
