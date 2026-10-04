@@ -36,6 +36,7 @@
 
 #![deny(unsafe_code)]
 
+pub mod candidates;
 pub mod conformance;
 pub mod connector;
 pub mod discovery;
@@ -55,6 +56,7 @@ pub mod transport;
 pub mod trust;
 pub mod trust_store;
 
+pub use candidates::dial_plan;
 pub use conformance::assert_connection_conformance;
 pub use connector::{PeerConnector, Strategy};
 pub use discovery::{

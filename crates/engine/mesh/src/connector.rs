@@ -93,4 +93,29 @@ impl MeshTransport for PeerConnector {
             MeshTransportError::Io("no connection strategy available".to_string())
         }))
     }
+
+    /// The strategy order still decides: an earlier strategy gets every
+    /// candidate before a later one is tried at all. That is what keeps
+    /// "direct before relay" true even when the direct side has several
+    /// addresses to work through.
+    async fn dial_candidates(
+        &self,
+        candidates: &[String],
+        per_attempt_timeout: std::time::Duration,
+    ) -> Result<Arc<dyn MeshConnection>, MeshTransportError> {
+        let mut last: Option<MeshTransportError> = None;
+        for strategy in &self.strategies {
+            match strategy
+                .transport
+                .dial_candidates(candidates, per_attempt_timeout)
+                .await
+            {
+                Ok(link) => return Ok(link),
+                Err(error) => last = Some(error),
+            }
+        }
+        Err(last.unwrap_or_else(|| {
+            MeshTransportError::Io("no connection strategy available".to_string())
+        }))
+    }
 }
