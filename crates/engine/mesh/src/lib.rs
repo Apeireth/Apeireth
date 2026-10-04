@@ -98,6 +98,6 @@ pub use apeireth_mesh_protocol::{
     decode_envelope, encode_envelope, Cancel, CapabilityAdvert, CapabilityAdvertEntry,
     CapabilityCall, CapabilityError, CapabilityOutcome, CapabilityResult, Heartbeat, Hello,
     HelloAck, InvokeCapability, LocatedPluginId, MeshCapabilityKind, MeshEnvelope, MeshErrorCode,
-    MeshPayload, MeshProtocolError, NodeDescriptor, PluginAdvert, PluginLocation,
+    MeshPayload, MeshProtocolError, NodeDescriptor, PluginAdvert, PluginLocation, VerifiedPresence,
     WireModelDescriptor, MESH_PROTOCOL_VERSION,
 };
