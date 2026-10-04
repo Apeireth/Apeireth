@@ -26,6 +26,8 @@
 //! to identity + reachability hints — no capabilities, no tools, no models, no
 //! credentials, no prompts.
 
+use std::net::{IpAddr, SocketAddr};
+
 use serde::{Deserialize, Serialize};
 
 pub use apeireth_core::kernel::NodeId;
@@ -37,10 +39,23 @@ pub use apeireth_core::kernel::NodeId;
 /// audience into the signed payload is what stops a malicious rendezvous server
 /// from replaying a presence captured against server X to redirect a client
 /// talking to server Y.
-pub const PRESENCE_DOMAIN: &str = "APEIRETH-MESH-PRESENCE-V1";
+pub const PRESENCE_DOMAIN: &str = "APEIRETH-MESH-PRESENCE-V2";
 
 /// The rendezvous/relay wire protocol version.
+///
+/// This numbers the *control* protocol (register / heartbeat / lookup /
+/// withdraw and the relay circuit control), not the shape of a
+/// [`PresenceRecord`]. Adding signed endpoint candidates changed the record's
+/// signed payload, which [`PRESENCE_DOMAIN`] versions instead — so this stays
+/// at 1 while a version 1 presence record can no longer verify at all.
 pub const RENDEZVOUS_PROTOCOL_VERSION: u32 = 1;
+
+/// Maximum endpoint candidates one presence record may carry.
+///
+/// Small and fixed on purpose: a candidate list is a routing hint, and an
+/// unbounded one would turn every lookup into an allocation and amplification
+/// vector.
+pub const PRESENCE_MAX_CANDIDATES: usize = 8;
 
 /// Shortest accepted presence TTL (milliseconds). Presence is a *lease*, not a
 /// registration: the shortest useful window that still tolerates a heartbeat.
@@ -138,6 +153,143 @@ impl std::fmt::Display for RelayCircuitId {
 /// tools, no models, no memory, no session/user data, no credentials, no agent
 /// metadata. The rendezvous server learns *that* a node is online and *how* to
 /// reach it, and nothing about what it can do.
+/// How a candidate address was learned.
+///
+/// The kind is part of the *signed* claim, so a peer cannot relabel an address
+/// after the fact. Relay reachability is deliberately **not** a candidate kind:
+/// a relay is an intermediary with its own identity and allocation metadata,
+/// not an address the destination answers at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EndpointCandidateKind {
+    /// An address on a local interface, as this node sees it.
+    Host,
+    /// An address an outside observer saw: this node's NAT mapping.
+    ServerReflexive,
+}
+
+impl EndpointCandidateKind {
+    /// Stable wire discriminant. These values are part of the signed payload
+    /// and must never be reordered.
+    pub fn wire_tag(self) -> u8 {
+        match self {
+            Self::Host => 0,
+            Self::ServerReflexive => 1,
+        }
+    }
+
+    /// Dial preference: a host address is the cheapest and needs no NAT
+    /// traversal, so it is always tried before a server-reflexive one.
+    pub fn preference(self) -> u8 {
+        self.wire_tag()
+    }
+}
+
+/// One place a peer claims it might be reachable.
+///
+/// A **routing hint**, never an identity: it says *where to dial*, not *who is
+/// there*. Whatever answers at this address must still prove the pinned key
+/// during the transport handshake, so a candidate can only ever cause a failed
+/// attempt, never a wrong peer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndpointCandidate {
+    /// How this address was learned.
+    pub kind: EndpointCandidateKind,
+    /// The address to dial.
+    pub addr: SocketAddr,
+}
+
+impl EndpointCandidate {
+    /// Build a candidate, rejecting an address that must never be dialled.
+    pub fn new(kind: EndpointCandidateKind, addr: SocketAddr) -> Result<Self, RendezvousError> {
+        let candidate = Self { kind, addr };
+        candidate.validate()?;
+        Ok(candidate)
+    }
+
+    /// Reject anything that must never be dialled.
+    ///
+    /// Unspecified, multicast and IPv4-broadcast addresses are refused for
+    /// every kind. Loopback, private and link-local addresses are **allowed**:
+    /// a host candidate is exactly "the LAN address I can be reached at", and
+    /// refusing private space would break the case candidates exist for.
+    pub fn validate(&self) -> Result<(), RendezvousError> {
+        if self.addr.port() == 0 {
+            return Err(RendezvousError::Malformed(
+                "candidate port must not be zero".to_string(),
+            ));
+        }
+        let dialable = match self.addr.ip() {
+            IpAddr::V4(v4) => !(v4.is_unspecified() || v4.is_multicast() || v4.is_broadcast()),
+            IpAddr::V6(v6) => !(v6.is_unspecified() || v6.is_multicast()),
+        };
+        if !dialable {
+            return Err(RendezvousError::Malformed(
+                "candidate address is not dialable".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Total canonical order: kind preference, address family, address bytes,
+    /// then port.
+    ///
+    /// Deliberately independent of `SocketAddr`'s own ordering so the signed
+    /// candidate order can never drift when the standard library changes.
+    pub fn sort_key(&self) -> (u8, u8, [u8; 16], u16) {
+        match self.addr {
+            SocketAddr::V4(v4) => {
+                let mut octets = [0u8; 16];
+                octets[..4].copy_from_slice(&v4.ip().octets());
+                (self.kind.preference(), 4, octets, v4.port())
+            }
+            SocketAddr::V6(v6) => (self.kind.preference(), 6, v6.ip().octets(), v6.port()),
+        }
+    }
+}
+
+/// Validate, sort and de-duplicate candidates into their canonical order.
+///
+/// The signer calls this so a record has exactly one encoding, and
+/// [`PresenceRecord::verify`] requires the result so nobody can present a
+/// re-ordered or padded list under a valid signature.
+pub fn canonicalize_candidates(
+    candidates: Vec<EndpointCandidate>,
+) -> Result<Vec<EndpointCandidate>, RendezvousError> {
+    if candidates.len() > PRESENCE_MAX_CANDIDATES {
+        return Err(RendezvousError::Malformed(
+            "too many endpoint candidates".to_string(),
+        ));
+    }
+    for candidate in &candidates {
+        candidate.validate()?;
+    }
+    let mut out = candidates;
+    out.sort_by_key(EndpointCandidate::sort_key);
+    out.dedup();
+    Ok(out)
+}
+
+/// Append a socket address in the canonical **binary** form the presence
+/// signature covers.
+///
+/// Family tag, exact-width address bytes, fixed-width port. Deliberately not
+/// the textual form: `::1` and `0:0:0:0:0:0:0:1` are the same address, and a
+/// text encoding would let two encodings of one claim both verify.
+fn push_socket_addr(out: &mut Vec<u8>, addr: SocketAddr) {
+    match addr {
+        SocketAddr::V4(v4) => {
+            out.push(4);
+            out.extend_from_slice(&v4.ip().octets());
+        }
+        SocketAddr::V6(v6) => {
+            out.push(6);
+            out.extend_from_slice(&v6.ip().octets());
+        }
+    }
+    out.extend_from_slice(&addr.port().to_be_bytes());
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PresenceRecord {
     /// Canonical node identity. Stable across restarts and network moves.
@@ -158,6 +310,15 @@ pub struct PresenceRecord {
     /// Whether this node is willing to terminate relay circuits. A reachability
     /// hint only — never authority.
     pub relay_capable: bool,
+    /// Endpoint candidates this node is currently reachable at, in canonical
+    /// `(kind, addr)` order.
+    ///
+    /// Signed (see [`PresenceRecord::signing_payload`]): without that, anyone
+    /// able to touch the record — the rendezvous server included — could
+    /// redirect a peer's dial to an address they control. Signing it does not
+    /// make the address trusted; the dial still has to survive the pinned
+    /// transport handshake.
+    pub candidates: Vec<EndpointCandidate>,
     /// Random per-record nonce (replay freshness).
     pub nonce: Vec<u8>,
     /// Ed25519 signature over the canonical payload. 64 bytes.
@@ -174,6 +335,7 @@ impl PresenceRecord {
         expires_at_ms: u64,
         audience: impl Into<String>,
         relay_capable: bool,
+        candidates: Vec<EndpointCandidate>,
         nonce: Vec<u8>,
     ) -> Self {
         Self {
@@ -183,6 +345,7 @@ impl PresenceRecord {
             expires_at_ms,
             audience: audience.into(),
             relay_capable,
+            candidates,
             nonce,
             signature: Vec::new(),
         }
@@ -204,8 +367,49 @@ impl PresenceRecord {
         out.extend_from_slice(&self.session_id.to_be_bytes());
         out.extend_from_slice(&self.expires_at_ms.to_be_bytes());
         out.push(u8::from(self.relay_capable));
+        out.extend_from_slice(&(self.candidates.len() as u32).to_be_bytes());
+        for candidate in &self.candidates {
+            out.push(candidate.kind.wire_tag());
+            push_socket_addr(&mut out, candidate.addr);
+        }
         push_bytes(&mut out, &self.nonce);
         out
+    }
+
+    /// Check the candidate list without touching the signature: bounded, every
+    /// address dialable, and in canonical order. Canonical order also rejects
+    /// duplicates, since a strictly increasing list cannot hold two equal keys.
+    fn verify_candidates(&self) -> Result<(), RendezvousError> {
+        if self.candidates.len() > PRESENCE_MAX_CANDIDATES {
+            return Err(RendezvousError::Malformed(
+                "too many endpoint candidates".to_string(),
+            ));
+        }
+        for candidate in &self.candidates {
+            candidate.validate()?;
+        }
+        if self
+            .candidates
+            .windows(2)
+            .any(|pair| pair[0].sort_key() >= pair[1].sort_key())
+        {
+            return Err(RendezvousError::Malformed(
+                "candidates are not in canonical order".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The addresses this record advertises, in dial order (host first).
+    ///
+    /// This is the only place signed candidates should become addresses to
+    /// dial, and only after [`PresenceRecord::verify`] has succeeded.
+    pub fn dialable_candidates(&self) -> Vec<(EndpointCandidateKind, SocketAddr)> {
+        self.candidates
+            .iter()
+            .filter(|candidate| candidate.validate().is_ok())
+            .map(|candidate| (candidate.kind, candidate.addr))
+            .collect()
     }
 
     /// Sign this record in place with the Ed25519 private key whose PKCS#8
@@ -238,6 +442,7 @@ impl PresenceRecord {
                 "public key must be {ED25519_PUBLIC_KEY_BYTES} bytes"
             )));
         }
+        self.verify_candidates()?;
         if self.nonce.len() != PRESENCE_NONCE_BYTES {
             return Err(RendezvousError::Malformed(format!(
                 "nonce must be {PRESENCE_NONCE_BYTES} bytes"
@@ -499,9 +704,244 @@ mod tests {
             now + 60_000,
             "relay.example",
             true,
+            Vec::new(),
             vec![0u8; PRESENCE_NONCE_BYTES],
         );
         (r, pkcs8)
+    }
+
+    fn fixture_candidates() -> Vec<EndpointCandidate> {
+        canonicalize_candidates(vec![
+            EndpointCandidate::new(
+                EndpointCandidateKind::ServerReflexive,
+                "203.0.113.5:51820".parse().unwrap(),
+            )
+            .unwrap(),
+            EndpointCandidate::new(
+                EndpointCandidateKind::Host,
+                "192.168.1.9:51820".parse().unwrap(),
+            )
+            .unwrap(),
+        ])
+        .unwrap()
+    }
+
+    fn signed_with_candidates(now: u64) -> PresenceRecord {
+        let (pkcs8, pubk) = keypair();
+        let record = PresenceRecord::unsigned(
+            NodeId::new("node-b").unwrap(),
+            pubk,
+            7,
+            now + 60_000,
+            "relay.example",
+            true,
+            fixture_candidates(),
+            vec![0u8; PRESENCE_NONCE_BYTES],
+        );
+        record.sign(&pkcs8).unwrap()
+    }
+
+    #[test]
+    fn signed_candidates_round_trip_in_dial_order() {
+        let now = 1_000u64;
+        let signed = signed_with_candidates(now);
+        assert!(signed.verify(now).is_ok());
+        assert_eq!(
+            signed.dialable_candidates(),
+            vec![
+                (
+                    EndpointCandidateKind::Host,
+                    "192.168.1.9:51820".parse().unwrap()
+                ),
+                (
+                    EndpointCandidateKind::ServerReflexive,
+                    "203.0.113.5:51820".parse().unwrap()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_tampered_candidate_address_fails_the_signature() {
+        let now = 1_000u64;
+        let mut signed = signed_with_candidates(now);
+        // Still canonical, still dialable: only the signature can tell that
+        // this is not the address the node actually signed.
+        signed.candidates[0].addr = "192.168.1.9:51999".parse().unwrap();
+        assert_eq!(signed.verify(now), Err(RendezvousError::BadSignature));
+    }
+
+    #[test]
+    fn a_tampered_candidate_kind_fails_the_signature() {
+        let now = 1_000u64;
+        let mut signed = signed_with_candidates(now);
+        signed.candidates[1].kind = EndpointCandidateKind::Host;
+        assert_eq!(signed.verify(now), Err(RendezvousError::BadSignature));
+    }
+
+    #[test]
+    fn adding_a_candidate_after_signing_is_forgery() {
+        let now = 1_000u64;
+        let mut signed = signed_with_candidates(now);
+        // Chosen to keep the list canonically ordered, so the failure is the
+        // signature and not the order check.
+        signed.candidates.push(
+            EndpointCandidate::new(
+                EndpointCandidateKind::ServerReflexive,
+                "203.0.113.6:51820".parse().unwrap(),
+            )
+            .unwrap(),
+        );
+        assert_eq!(signed.verify(now), Err(RendezvousError::BadSignature));
+    }
+
+    #[test]
+    fn a_reordered_candidate_list_is_rejected() {
+        let now = 1_000u64;
+        let mut signed = signed_with_candidates(now);
+        signed.candidates.reverse();
+        assert!(matches!(
+            signed.verify(now),
+            Err(RendezvousError::Malformed(_))
+        ));
+    }
+
+    #[test]
+    fn duplicate_candidates_are_collapsed() {
+        let dup = EndpointCandidate::new(
+            EndpointCandidateKind::Host,
+            "192.168.1.9:51820".parse().unwrap(),
+        )
+        .unwrap();
+        let out = canonicalize_candidates(vec![
+            EndpointCandidate::new(
+                EndpointCandidateKind::ServerReflexive,
+                "203.0.113.5:51820".parse().unwrap(),
+            )
+            .unwrap(),
+            dup.clone(),
+            dup,
+        ])
+        .unwrap();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].kind, EndpointCandidateKind::Host);
+        assert_eq!(out[1].kind, EndpointCandidateKind::ServerReflexive);
+    }
+
+    #[test]
+    fn too_many_candidates_are_rejected() {
+        let many: Vec<EndpointCandidate> = (1..=PRESENCE_MAX_CANDIDATES + 1)
+            .map(|i| {
+                EndpointCandidate::new(
+                    EndpointCandidateKind::Host,
+                    format!("192.168.1.{i}:51820").parse().unwrap(),
+                )
+                .unwrap()
+            })
+            .collect();
+        assert!(canonicalize_candidates(many.clone()).is_err());
+
+        // A signer that skips canonicalization is still refused at verify time.
+        let now = 1_000u64;
+        let (pkcs8, pubk) = keypair();
+        let record = PresenceRecord::unsigned(
+            NodeId::new("node-b").unwrap(),
+            pubk,
+            7,
+            now + 60_000,
+            "relay.example",
+            true,
+            many,
+            vec![0u8; PRESENCE_NONCE_BYTES],
+        );
+        let signed = record.sign(&pkcs8).unwrap();
+        assert!(matches!(
+            signed.verify(now),
+            Err(RendezvousError::Malformed(_))
+        ));
+    }
+
+    #[test]
+    fn undialable_candidate_addresses_are_rejected() {
+        for raw in [
+            "0.0.0.0:51820",
+            "[::]:51820",
+            "192.168.1.9:0",
+            "239.1.1.1:51820",
+            "255.255.255.255:51820",
+            "[ff02::1]:51820",
+        ] {
+            let addr = raw.parse().unwrap();
+            assert!(
+                EndpointCandidate::new(EndpointCandidateKind::Host, addr).is_err(),
+                "{raw} must not be a dialable candidate"
+            );
+        }
+    }
+
+    #[test]
+    fn private_and_loopback_host_candidates_are_allowed() {
+        for raw in [
+            "192.168.1.9:51820",
+            "10.0.0.5:51820",
+            "127.0.0.1:51820",
+            "[fe80::1]:51820",
+        ] {
+            let addr = raw.parse().unwrap();
+            assert!(
+                EndpointCandidate::new(EndpointCandidateKind::Host, addr).is_ok(),
+                "{raw} is a legitimate host candidate"
+            );
+        }
+    }
+
+    #[test]
+    fn a_json_round_trip_preserves_the_signed_payload() {
+        let now = 1_000u64;
+        let signed = signed_with_candidates(now);
+        let text = serde_json::to_string(&signed).unwrap();
+        let back: PresenceRecord = serde_json::from_str(&text).unwrap();
+        // The wire form is text, but the signed bytes are binary and family
+        // tagged, so re-encoding cannot change what the signature covers.
+        assert_eq!(back.signing_payload(), signed.signing_payload());
+        assert!(back.verify(now).is_ok());
+    }
+
+    #[test]
+    fn presence_is_version_two_but_the_control_protocol_is_not() {
+        assert_eq!(PRESENCE_DOMAIN, "APEIRETH-MESH-PRESENCE-V2");
+        // Candidates changed the record's signed payload, not the rendezvous
+        // control protocol, so the control version deliberately stays at 1.
+        assert_eq!(RENDEZVOUS_PROTOCOL_VERSION, 1);
+    }
+
+    #[test]
+    fn a_version_one_domain_signature_cannot_verify() {
+        let now = 1_000u64;
+        let (pkcs8, pubk) = keypair();
+        let record = PresenceRecord::unsigned(
+            NodeId::new("node-b").unwrap(),
+            pubk,
+            7,
+            now + 60_000,
+            "relay.example",
+            true,
+            Vec::new(),
+            vec![0u8; PRESENCE_NONCE_BYTES],
+        );
+        let payload = record.signing_payload();
+        assert!(payload.starts_with(b"APEIRETH-MESH-PRESENCE-V2"));
+
+        // Same fields, old domain prefix: the old signature must not be
+        // accepted as a version 2 record that happens to have no candidates.
+        use ring::signature::{Ed25519KeyPair, KeyPair};
+        let pair = Ed25519KeyPair::from_pkcs8(&pkcs8).unwrap();
+        let mut v1_payload = payload.clone();
+        v1_payload[.."APEIRETH-MESH-PRESENCE-V1".len()]
+            .copy_from_slice(b"APEIRETH-MESH-PRESENCE-V1");
+        let mut forged = record;
+        forged.signature = pair.sign(&v1_payload).as_ref().to_vec();
+        assert_eq!(forged.verify(now), Err(RendezvousError::BadSignature));
     }
 
     #[test]
@@ -576,6 +1016,7 @@ mod tests {
             r.expires_at_ms,
             r.audience.clone(),
             r.relay_capable,
+            r.candidates.clone(),
             r.nonce.clone(),
         );
         // Signing with a key that doesn't match the embedded public key fails.
