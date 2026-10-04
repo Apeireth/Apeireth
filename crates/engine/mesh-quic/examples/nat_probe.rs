@@ -16,9 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use apeireth_mesh::identity::NodeIdentity;
-use apeireth_mesh_protocol::observe::{
-    decode_probe, encode_reply, OBSERVE_DATAGRAM_BYTES,
-};
+use apeireth_mesh_protocol::observe::{decode_probe, encode_reply, OBSERVE_DATAGRAM_BYTES};
 use apeireth_mesh_quic::config::QuicTransportConfig;
 use apeireth_mesh_quic::endpoint::PreparedMeshEndpoint;
 
@@ -39,8 +37,13 @@ async fn main() {
 /// Answer observation probes forever, printing the address it bound.
 async fn observer(bind: &str) {
     let bind: SocketAddr = bind.parse().expect("observer bind address");
-    let socket = tokio::net::UdpSocket::bind(bind).await.expect("bind observer");
-    println!("OBSERVER={}", socket.local_addr().expect("observer local addr"));
+    let socket = tokio::net::UdpSocket::bind(bind)
+        .await
+        .expect("bind observer");
+    println!(
+        "OBSERVER={}",
+        socket.local_addr().expect("observer local addr")
+    );
     let mut buf = [0u8; OBSERVE_DATAGRAM_BYTES];
     loop {
         let Ok((n, from)) = socket.recv_from(&mut buf).await else {
@@ -71,6 +74,9 @@ async fn peer(bind: &str, observer: &str) {
     let endpoint = prepared
         .into_quic_peer_endpoint(Arc::clone(&identity), &[], QuicTransportConfig::default())
         .expect("dual-role endpoint");
-    println!("QUIC_LOCAL={}", endpoint.local_addr().expect("quic local addr"));
+    println!(
+        "QUIC_LOCAL={}",
+        endpoint.local_addr().expect("quic local addr")
+    );
     endpoint.close();
 }
