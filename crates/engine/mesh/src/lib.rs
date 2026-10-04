@@ -50,6 +50,7 @@ pub mod node;
 pub mod pairing;
 pub mod peer;
 pub mod port;
+pub mod presence_store;
 pub mod reconnect;
 pub mod relay;
 pub mod route;
@@ -84,6 +85,7 @@ pub use port::{
     RemoteCapabilityError, RemoteCapabilityPort, RemoteInvokeContext, RemoteProviderDescriptor,
     RemoteToolDescriptor, RemoteToolRoute,
 };
+pub use presence_store::{PresenceError, PresenceStore, PresenceUpdate};
 pub use reconnect::ReconnectPolicy;
 pub use route::{
     CapabilityCatalogEntry, CapabilityRoute, RemoteCapability, RouteSelection, RouteTable,
