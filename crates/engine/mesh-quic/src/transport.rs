@@ -80,6 +80,48 @@ impl QuicMeshTransport {
         Ok(Self { endpoint, config })
     }
 
+    /// Build a client endpoint on a socket the caller already bound.
+    ///
+    /// The socket is taken **exactly as given**: nothing is re-bound, so the
+    /// local port — and therefore the NAT mapping an observer just reported —
+    /// is preserved. This is what makes a server-reflexive candidate mean
+    /// anything at all.
+    pub fn from_bound_socket(
+        socket: std::net::UdpSocket,
+        identity: Arc<NodeIdentity>,
+        expected_peer_pins: &[KeyFingerprint],
+        config: QuicTransportConfig,
+    ) -> Result<Self, MeshTransportError> {
+        let client_tls =
+            tls::client_config(&identity, expected_peer_pins).map_err(MeshTransportError::Io)?;
+        Self::from_bound_socket_with_tls(socket, client_tls, config)
+    }
+
+    /// [`QuicMeshTransport::from_bound_socket`] with an explicit TLS config
+    /// (the `testing` module is the only caller that passes a relaxed verifier).
+    pub(crate) fn from_bound_socket_with_tls(
+        socket: std::net::UdpSocket,
+        client_tls: rustls::ClientConfig,
+        config: QuicTransportConfig,
+    ) -> Result<Self, MeshTransportError> {
+        let mut client_config = quinn::ClientConfig::new(Arc::new(
+            quinn::crypto::rustls::QuicClientConfig::try_from(client_tls)
+                .map_err(|e| MeshTransportError::Io(e.to_string()))?,
+        ));
+        client_config.transport_config(Arc::new(transport_config(&config)));
+        let runtime = quinn::default_runtime().ok_or_else(|| {
+            MeshTransportError::Io("quinn: no async runtime to wrap the socket".to_string())
+        })?;
+        // `None` server config: this endpoint dials only. An endpoint that must
+        // also accept inbound initial packets (simultaneous open) needs both
+        // halves and is a separate constructor.
+        let mut endpoint =
+            quinn::Endpoint::new(quinn::EndpointConfig::default(), None, socket, runtime)
+                .map_err(|e| MeshTransportError::Io(format!("quic endpoint from socket: {e}")))?;
+        endpoint.set_default_client_config(client_config);
+        Ok(Self { endpoint, config })
+    }
+
     /// Pairing-mode dial: the server must present an authenticated identity
     /// key but need not be pinned yet — pinning is what pairing produces.
     pub fn new_for_pairing(

@@ -27,10 +27,12 @@
 
 pub mod config;
 pub mod connection;
+pub mod endpoint;
 pub mod framing;
 pub mod tls;
 pub mod transport;
 
 pub use config::QuicTransportConfig;
 pub use connection::QuicMeshConnection;
+pub use endpoint::{ObserveError, PreparedMeshEndpoint, DEFAULT_OBSERVE_TIMEOUT_MS};
 pub use transport::{testing, QuicMeshListener, QuicMeshTransport};
