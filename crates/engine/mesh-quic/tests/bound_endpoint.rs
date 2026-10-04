@@ -102,6 +102,31 @@ async fn repeated_observation_keeps_one_local_port() {
 }
 
 #[tokio::test]
+async fn the_observed_port_serves_both_dialing_and_accepting() {
+    let observer = spawn_observer().await;
+    let identity = Arc::new(NodeIdentity::generate().unwrap());
+    let prepared = PreparedMeshEndpoint::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
+    let local = prepared.local_addr().unwrap();
+    let observed = prepared
+        .observe(observer, Duration::from_secs(2))
+        .await
+        .unwrap();
+    assert_eq!(observed, local);
+
+    let peer = prepared
+        .into_quic_peer_endpoint(identity, &[], QuicTransportConfig::default())
+        .unwrap();
+    assert_eq!(
+        peer.local_addr().unwrap(),
+        local,
+        "one socket, one port, both roles"
+    );
+    peer.close();
+}
+
+#[tokio::test]
 async fn an_unreachable_observer_fails_typed_without_hanging() {
     let prepared = PreparedMeshEndpoint::bind("127.0.0.1:0".parse().unwrap())
         .await

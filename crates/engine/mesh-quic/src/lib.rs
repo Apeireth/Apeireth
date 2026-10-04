@@ -34,5 +34,7 @@ pub mod transport;
 
 pub use config::QuicTransportConfig;
 pub use connection::QuicMeshConnection;
-pub use endpoint::{ObserveError, PreparedMeshEndpoint, DEFAULT_OBSERVE_TIMEOUT_MS};
+pub use endpoint::{
+    ObserveError, PreparedMeshEndpoint, QuicPeerEndpoint, DEFAULT_OBSERVE_TIMEOUT_MS,
+};
 pub use transport::{testing, QuicMeshListener, QuicMeshTransport};
