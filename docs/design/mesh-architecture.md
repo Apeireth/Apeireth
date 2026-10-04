@@ -122,11 +122,72 @@ configured (`ServerConfig::with_observe_addr`), and a node that never observes
 anything still works over the direct and relayed paths — observation is an
 optimization, never a prerequisite.
 
-Observation runs over UDP on its own socket. The control channel is TCP, and a
-TCP-mapped address says nothing about the UDP mapping a QUIC endpoint will use,
-so a candidate is only meaningful if it was observed from the socket that will
-do the dialing. Closing that gap — dialing from the very port that was observed
-— is what turns a list of candidates into a hole punch.
+Observation runs over UDP on its own socket, and that socket is the *same*
+socket QUIC will dial from. The control channel is TCP, and a TCP-mapped address
+says nothing about the UDP mapping a QUIC endpoint will use; and a candidate
+observed from socket A while QUIC dials from socket B describes a mapping
+nothing will ever use.
+
+So the lifetime is single-owner:
+
+```text
+UdpSocket::bind
+      |
+  observe()           probe and reply both on this socket
+      |
+  into_quic_client()  the socket is MOVED into quinn
+      v
+  quinn::Endpoint     quinn owns every datagram from here
+```
+
+`PreparedMeshEndpoint` (in `apeireth-mesh-quic`) owns the bound socket.
+`observe()` borrows it and probes from its own local port; `into_quic_client()`
+consumes `self` and hands the socket to `QuicMeshTransport::from_bound_socket`,
+which takes it exactly as given and re-binds nothing. Observation therefore
+happens strictly *before* the handoff, so no second reader ever competes with
+quinn for the same datagrams — "observe after handoff" is not expressible,
+not merely discouraged.
+
+## Endpoint candidates
+
+A presence record used to say *who* is reachable and never *where*. It now
+carries `EndpointCandidate { kind, addr }` with
+`EndpointCandidateKind { Host, ServerReflexive }`, and the list sits inside the
+signed payload:
+
+- the signed bytes are **binary** — family tag, exact-width address,
+  fixed-width port — so `::1` and `0:0:0:0:0:0:0:1`, one address, cannot yield
+  two verifying encodings;
+- candidates are canonicalized before signing (validated, sorted by kind
+  preference then family then bytes then port, de-duplicated, bounded by
+  `PRESENCE_MAX_CANDIDATES`) and `verify()` requires that canonical order, so a
+  valid signature cannot be replayed over a reordered or padded list;
+- unspecified, multicast and IPv4-broadcast addresses are refused, as is a zero
+  port. Loopback, private and link-local addresses are allowed: a host candidate
+  is exactly "the LAN address I can be reached at";
+- relay is deliberately **not** a candidate kind. A relay is an intermediary
+  with its own identity and allocation metadata, not an address the destination
+  answers at, and freezing it as one would bake in a wrong wire representation;
+- `session_id` is the presence generation. There is no second `generation`
+  field: a new session is a new incarnation, and a version 1 record cannot
+  verify under the version 2 domain at all.
+
+`PresenceRecord::dialable_candidates()` and `apeireth_mesh::dial_plan()` are the
+only places signed candidates become addresses to dial. Neither verifies:
+verification happens once, where the record arrives, so the dial path below can
+never see an unverified address.
+
+## Dialing
+
+`MeshTransport::dial_candidates` tries a plan in order with a per-attempt
+deadline, so one dead address cannot stall an attempt. `PeerConnector` keeps the
+strategy order decisive — an earlier strategy gets every candidate before a
+later one is considered at all — which is what preserves "direct before relay"
+once the direct side has several addresses.
+
+A candidate is *where* to dial. *Who* answers is proved by the pinned handshake
+above this boundary, and an identity that does not match the pin still fails
+closed there.
 
 ## Rendezvous server
 - First key wins while a lease lives; refreshes must advance the expiry.
@@ -147,16 +208,13 @@ do the dialing. Closing that gap — dialing from the very port that was observe
   an ownership story for them.
 - **NAT traversal is not implemented end to end.** Peers behind NAT reach each
   other directly only when one side is reachable, and otherwise through the
-  relay. The seam exists (`PeerConnector` strategies), and the first piece is
-  now in place: `apeireth-mesh-protocol::observe` defines the server-reflexive
-  observation datagram and the rendezvous server answers it on a UDP socket
-  (`ServerConfig::with_observe_addr`), so a node can learn the public UDP
-  address it should advertise. Still missing: carrying that candidate inside the
-  signed presence record, a shared-socket QUIC endpoint (dial from the very port
-  that was observed), simultaneous dial over a candidate list, and the
-  node-level wiring that picks among candidates. **Loopback tests prove the
-  plumbing only — they do not prove a real NAT is traversed**, and nothing here
-  may be called "NAT traversal supported" until it is measured against one.
+  relay. The mechanics now exist: signed host and server-reflexive candidates, a
+  single observed socket handed to QUIC, and ordered dialing over a candidate
+  plan. What is missing is simultaneous dial (coordinated hole punching), a
+  Linux network-namespace NAT harness, and above all any measurement against a
+  real NAT. **Socket identity, canonical signed candidates and dial ordering are
+  proven on loopback only — no NAT has ever been traversed by this code**, and
+  nothing here may be called "NAT traversal supported" until one has been.
 - **The rendezvous control channel is plain TCP.** An on-path attacker can drop
   or delay traffic and race a captured registration. Confidentiality and peer
   identity are unaffected (end-to-end), availability is.
