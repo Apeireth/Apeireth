@@ -14,7 +14,11 @@
 
 use std::path::Path;
 
-use crate::mcp_bridge::config::is_secret_key;
+// super:: 而非 crate:: —— 本文件被 research/verification/kani mirror 零复制
+// 包含: `crate::` 锚定宿主 crate root, 嵌套一层 (typecheck 桩 crate::mirror::)
+// 即失联; `super::` 在真 crate (crate::sensitive_path → crate root) 与 mirror
+// 两处等价解析。
+use super::mcp_bridge::config::is_secret_key;
 
 /// Whether `path` contains a known sensitive workspace path.
 ///
@@ -133,7 +137,7 @@ fn is_sensitive_file_name(name: &str) -> bool {
 /// 帧 = 完整、关联、可分类的失败描述 (不是空洞): 稳定 code + 来源 + 事实
 /// 原因「凭据面不可读（安全契约）」。文件读取类工具对凭据面一律用它回话。
 pub(crate) fn credential_surface_refusal() -> String {
-    let failure = crate::exec_pipeline::PipelineFailure::PreDenied {
+    let failure = super::exec_pipeline::PipelineFailure::PreDenied {
         source: "credential_surface_guard".to_string(),
         reason: "requested path is protected: credential surface is unreadable (security contract); 凭据面不可读（安全契约）".to_string(),
     };
