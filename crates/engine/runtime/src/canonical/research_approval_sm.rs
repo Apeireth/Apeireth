@@ -139,10 +139,54 @@ impl ResearchApprovalRecord {
     }
 }
 
+// ===== Kani 口径: 存根哈希器 (把哈希行为挪出证明面) =====
+//
+// 病灶 (2026-09-05 注 + 2026-10-07 日志考古): Kani 把 String 字节缓冲当符号
+// 长度处理, SipHash `Hasher::write` 循环符号展开 —— harness 1/2/3 实测 25m /
+// 25m / 45m 均跑不完 (runs 36124804277 / 37568650823 / job 112640549977, 三份
+// 日志同一签名: sip.rs:282 unwinding 25..31+ … exit 124)。2026-09-26 前
+// continue-on-error 把"从未证明完过"盖住, 可信化后诚实见红。
+//
+// 证明面关心的是状态机转移/不变量语义, 不是哈希函数行为 —— 与 kani mirror
+// 的 sha2 force-soft 同一理由: 与命题无关的复杂实现不该进 CBMC 视野。故
+// cfg(kani) 下 records 换 O(1) 存根哈希器 (无循环、无 RandomState/getrandom
+// 符号路径); 生产构建零参与, 类型逐字节不变 (not(kani) 别名 = 原类型)。
+#[cfg(kani)]
+#[derive(Clone, Default, Debug)]
+pub struct KaniStubHasher(u64);
+
+#[cfg(kani)]
+impl std::hash::Hasher for KaniStubHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        // O(1): 长度 + 首尾字节混入 —— 零循环 (符号长度下零展开)。
+        // 证明不依赖哈希质量, 只要求确定性与碰撞可容忍 (短键)。
+        self.0 = self
+            .0
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            .wrapping_add(bytes.len() as u64);
+        if let Some(&b) = bytes.first() {
+            self.0 = self.0.wrapping_add((b as u64) << 8);
+        }
+        if let Some(&b) = bytes.last() {
+            self.0 = self.0.wrapping_add((b as u64) << 16);
+        }
+    }
+}
+
+/// records 容器: 生产 = 默认 HashMap (SipHash); cfg(kani) = 存根哈希器版。
+#[cfg(kani)]
+pub type ApprovalRecords =
+    HashMap<String, ResearchApprovalRecord, std::hash::BuildHasherDefault<KaniStubHasher>>;
+#[cfg(not(kani))]
+pub type ApprovalRecords = HashMap<String, ResearchApprovalRecord>;
+
 /// 审批状态机 (RA-5 §2–§5 的 Rust 编码, 纯内存模型)。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ResearchApprovalMachine {
-    pub records: HashMap<String, ResearchApprovalRecord>,
+    pub records: ApprovalRecords,
     pub active: Option<String>,
 }
 
@@ -559,11 +603,11 @@ pub fn research_run_fault_injection(seed: u64, rounds: u64) -> ResearchFaultInje
 mod kani_proofs {
     use super::*;
 
-    // 注 (2026-09-05, CI 实测): Kani 把 String 字节缓冲当符号长度处理,
-    // HashMap 的 SipHash Hasher::write 循环会无限展开 (实测 1900+ 迭代 × 2s)。
-    // 本 harness 全部使用具体短键 ("a1"), 真实展开深度 ≤ 2 字节 + 桶遍历;
-    // 上界 32 覆盖全部真实执行 (超出上界的符号路径不检查, 属有界模型检查口径,
-    // 与 TLC 穷举互相印证)。该属性仅 cfg(kani) 生效, 生产零影响。
+    // 注 (2026-09-05, CI 实测; 2026-10-07 修): 原注以为"具体短键 → 展开 ≤2
+    // 字节"即可收口 —— 考古三份日志证伪: SipHash write 在符号长度下照样炸
+    // (25m/25m/45m 全跑不完)。已改根治: cfg(kani) 存根哈希器 (见文件头
+    // KaniStubHasher 注), SipHash 彻底退出证明面; unwind(32) 现真有富余
+    // (O(1) write 零循环, 真实展开深度只剩桶遍历)。与 TLC 穷举互相印证。
 
     #[kani::proof]
     #[kani::unwind(32)]
