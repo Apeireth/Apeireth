@@ -139,52 +139,81 @@ impl ResearchApprovalRecord {
     }
 }
 
-// ===== Kani 口径: 存根哈希器 (把哈希行为挪出证明面) =====
+// ===== Kani 口径: 线性表容器 (把哈希/桶机器挪出证明面) =====
 //
-// 病灶 (2026-09-05 注 + 2026-10-07 日志考古): Kani 把 String 字节缓冲当符号
-// 长度处理, SipHash `Hasher::write` 循环符号展开 —— harness 1/2/3 实测 25m /
-// 25m / 45m 均跑不完 (runs 36124804277 / 37568650823 / job 112640549977, 三份
-// 日志同一签名: sip.rs:282 unwinding 25..31+ … exit 124)。2026-09-26 前
+// 病灶 (2026-09-05 注 + 2026-10-07 日志考古, 三份日志同签名):
+// ① SipHash `Hasher::write` 循环在 Kani 符号长度下疯狂展开 (sip.rs:282);
+// ② 换 O(1) 存根哈希器后, hashbrown RawTable 探测循环仍对新鲜分配内存
+//    展开到 unwind 上界 (raw.rs max-iter=31, 548 条 unwinding);
+// harness 1/2/3 实测 25m/25m/45m 三档超时全跑不完 —— 2026-09-26 前
 // continue-on-error 把"从未证明完过"盖住, 可信化后诚实见红。
 //
-// 证明面关心的是状态机转移/不变量语义, 不是哈希函数行为 —— 与 kani mirror
-// 的 sha2 force-soft 同一理由: 与命题无关的复杂实现不该进 CBMC 视野。故
-// cfg(kani) 下 records 换 O(1) 存根哈希器 (无循环、无 RandomState/getrandom
-// 符号路径); 生产构建零参与, 类型逐字节不变 (not(kani) 别名 = 原类型)。
+// 证明面关心的是状态机转移/不变量语义, 不是容器实现行为 —— 与 kani
+// mirror 的 sha2 force-soft 同一理由: 与命题无关的复杂实现不该进 CBMC
+// 视野。cfg(kani) 下 records 换 Vec 线性表 (无哈希/无桶探测/无符号内存
+// 读, 线性扫描循环 = 记录数上界, 完全有界); 生产构建零参与, not(kani)
+// 别名 = 原 HashMap 类型, 逐字节不变。
 #[cfg(kani)]
-#[derive(Clone, Default, Debug)]
-pub struct KaniStubHasher(u64);
+#[derive(Debug, Clone)]
+pub struct KaniLinearMap<V>(Vec<(String, V)>);
 
+// 手写 Default (derive 会误加 V: Default 界, records 的值类型无此界)。
 #[cfg(kani)]
-impl std::hash::Hasher for KaniStubHasher {
-    fn finish(&self) -> u64 {
-        self.0
-    }
-    fn write(&mut self, bytes: &[u8]) {
-        // O(1): 长度 + 首尾字节混入 —— 零循环 (符号长度下零展开)。
-        // 证明不依赖哈希质量, 只要求确定性与碰撞可容忍 (短键)。
-        self.0 = self
-            .0
-            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
-            .wrapping_add(bytes.len() as u64);
-        if let Some(&b) = bytes.first() {
-            self.0 = self.0.wrapping_add((b as u64) << 8);
-        }
-        if let Some(&b) = bytes.last() {
-            self.0 = self.0.wrapping_add((b as u64) << 16);
-        }
+impl<V> Default for KaniLinearMap<V> {
+    fn default() -> Self {
+        Self(Vec::new())
     }
 }
 
-/// records 容器: 生产 = 默认 HashMap (SipHash); cfg(kani) = 存根哈希器版。
 #[cfg(kani)]
-pub type ApprovalRecords =
-    HashMap<String, ResearchApprovalRecord, std::hash::BuildHasherDefault<KaniStubHasher>>;
+impl<V> KaniLinearMap<V> {
+    pub fn insert(&mut self, key: String, value: V) -> Option<V> {
+        for slot in self.0.iter_mut() {
+            if slot.0 == key {
+                return Some(std::mem::replace(&mut slot.1, value));
+            }
+        }
+        self.0.push((key, value));
+        None
+    }
+
+    pub fn get(&self, key: &str) -> Option<&V> {
+        self.0.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+    }
+
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut V> {
+        self.0
+            .iter_mut()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v)
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &V> {
+        self.0.iter().map(|(_, v)| v)
+    }
+
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> {
+        self.0.iter_mut().map(|(_, v)| v)
+    }
+}
+
+#[cfg(kani)]
+impl<V> std::ops::Index<&str> for KaniLinearMap<V> {
+    type Output = V;
+    fn index(&self, key: &str) -> &V {
+        self.get(key).expect("map index on missing key")
+    }
+}
+
+/// records 容器: 生产 = 默认 HashMap (SipHash); cfg(kani) = Vec 线性表。
+#[cfg(kani)]
+pub type ApprovalRecords = KaniLinearMap<ResearchApprovalRecord>;
 #[cfg(not(kani))]
 pub type ApprovalRecords = HashMap<String, ResearchApprovalRecord>;
 
 /// 审批状态机 (RA-5 §2–§5 的 Rust 编码, 纯内存模型)。
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(not(kani), derive(Serialize, Deserialize))]
 pub struct ResearchApprovalMachine {
     pub records: ApprovalRecords,
     pub active: Option<String>,
@@ -604,10 +633,10 @@ mod kani_proofs {
     use super::*;
 
     // 注 (2026-09-05, CI 实测; 2026-10-07 修): 原注以为"具体短键 → 展开 ≤2
-    // 字节"即可收口 —— 考古三份日志证伪: SipHash write 在符号长度下照样炸
-    // (25m/25m/45m 全跑不完)。已改根治: cfg(kani) 存根哈希器 (见文件头
-    // KaniStubHasher 注), SipHash 彻底退出证明面; unwind(32) 现真有富余
-    // (O(1) write 零循环, 真实展开深度只剩桶遍历)。与 TLC 穷举互相印证。
+    // 字节"即可收口 —— 考古三份日志证伪: SipHash write 循环 + hashbrown 桶
+    // 探测循环照样炸 (25m/25m/45m 全跑不完)。已根治: cfg(kani) 下 records 换
+    // KaniLinearMap 线性表 (见文件头注), 哈希/桶机器整体退出证明面; unwind(32)
+    // 现真有富余 (线性扫描 = 记录数上界)。与 TLC 穷举互相印证。
 
     #[kani::proof]
     #[kani::unwind(32)]
