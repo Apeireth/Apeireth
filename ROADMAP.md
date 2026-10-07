@@ -112,6 +112,8 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ## 4. v2.0 下一步（按优先级，2026-08-27 起）
 
+> **后端增强待办（2026-10-02 立）**：想法级清单与细节小文件索引见 docs/04-internal/backend-enhancement/00-backlog.md（A 配额真接口 / B 性能 / C 记忆 / D 干活 / E 安全 / F 服务端 / G 观测 / H 模型面）。
+
 | P | 任务 | 说明 | 依赖 |
 |---|---|---|---|
 | **P0** | ✅ 完成（upstream `873d2857`）：`build_canonical_runtime_from_env` 装 `GovernancePipeline(PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)` | — |
