@@ -182,10 +182,7 @@ impl<V> KaniLinearMap<V> {
     }
 
     pub fn get_mut(&mut self, key: &str) -> Option<&mut V> {
-        self.0
-            .iter_mut()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v)
+        self.0.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v)
     }
 
     pub fn values(&self) -> impl Iterator<Item = &V> {

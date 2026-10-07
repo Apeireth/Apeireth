@@ -14,6 +14,10 @@
 //! 5. Ω 河网可观测性标量门控三态机 (Collapsed / Sparse / Dense)。
 
 use serde::{Deserialize, Serialize};
+// cfg(kani) 证明面容器: 见 research/verification/kani/src/lib.rs kani_collections 注。
+#[cfg(kani)]
+use super::kani_collections::HashMap;
+#[cfg(not(kani))]
 use std::collections::HashMap;
 
 /// 种子脉冲的初始动量。

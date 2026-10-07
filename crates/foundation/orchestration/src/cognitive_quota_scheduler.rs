@@ -31,7 +31,12 @@
 //!    `complete_task()` 回收 (map 删除), 超上限时淘汰最旧的未入队条目。
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
+// cfg(kani) 证明面容器: 见 research/verification/kani/src/lib.rs kani_collections 注。
+#[cfg(kani)]
+use super::kani_collections::HashMap;
+#[cfg(not(kani))]
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Five-tier cognitive priority levels.

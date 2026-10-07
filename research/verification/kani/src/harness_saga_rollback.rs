@@ -19,16 +19,17 @@ fn saga(action_id: &str) -> SagaCompensatingAction {
         action_id: action_id.to_string(),
         forward_action_name: "do".to_string(),
         compensation_action_name: "undo".to_string(),
-        payload: std::collections::HashMap::new(),
+        // Default 而非 std HashMap::new(): cfg(kani) 下 payload 字段是
+        // kani_collections 线性表 (见 mirror lib.rs), Default 两态通用。
+        payload: Default::default(),
     }
 }
 
+/// 任意 N 字符串 (码点 = 任意 Latin-1 0..=255, 含 NUL/控制字符)。
+/// 口径修订 2026-10-07: lossy 生成器是 CBMC 路径爆炸源 (见
+/// harness_panic_freedom.rs 同名注); 256 种字节值作为码点覆盖不变。
 fn bounded_string<const N: usize>() -> String {
-    let mut bytes: Vec<u8> = Vec::with_capacity(N);
-    for _ in 0..N {
-        bytes.push(kani::any::<u8>());
-    }
-    String::from_utf8_lossy(&bytes).into_owned()
+    (0..N).map(|_| char::from(kani::any::<u8>())).collect()
 }
 
 /// 证明: 分支回滚精确恢复基线 —— 任意 ≤2 笔投机写 + ≤2 个 SAGA 补偿动作后

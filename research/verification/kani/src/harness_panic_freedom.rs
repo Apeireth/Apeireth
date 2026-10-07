@@ -12,13 +12,14 @@ use super::residual_pyramid::OrthogonalResidualPyramid;
 use super::river_topology::{DualScaledFieldSolver, RiverObservability, RiverState};
 use super::semantic_axis::SemanticAxisBridge;
 
-/// 任意 N 字节串 (含非法 UTF-8 → lossy 替换; 含 NUL/控制字符均可)。
+/// 任意 N 字符串 (码点 = 任意 Latin-1 0..=255, 含 NUL/控制字符/1-2 字节
+/// UTF-8 编码分支)。口径修订 2026-10-07: 原经 String::from_utf8_lossy 从
+/// 任意字节生成 —— lossy 的 UTF-8 验证机器 (str::lossy::Utf8Chunks) 是 CBMC
+/// 路径爆炸源 (run 112721596511 实测展开 52+ 层), 而 lossy 映射属 std 契约、
+/// 不在命题面; 唯一收窄 = 不再覆盖"非法 UTF-8 序列 → U+FFFD"这条 std 自有
+/// 路径, 256 种字节值作为码点的覆盖不变。
 fn bounded_string<const N: usize>() -> String {
-    let mut bytes: Vec<u8> = Vec::with_capacity(N);
-    for _ in 0..N {
-        bytes.push(kani::any::<u8>());
-    }
-    String::from_utf8_lossy(&bytes).into_owned()
+    (0..N).map(|_| char::from(kani::any::<u8>())).collect()
 }
 
 /// 有界有限 f32 ∈ (-20, 20) (经整数取模构造, 不会产生 NaN/inf)。

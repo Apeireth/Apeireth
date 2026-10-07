@@ -11,6 +11,10 @@
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+// cfg(kani) 证明面容器: 见 research/verification/kani/src/lib.rs kani_collections 注。
+#[cfg(kani)]
+use super::kani_collections::HashMap;
+#[cfg(not(kani))]
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -260,15 +264,17 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, FileFetchError> {
 mod kani_base64_proofs {
     use super::*;
 
-    /// 证明: base64_decode 对任意 ≤8 字节串不 panic —— 非法字符唯一失败模式
+    /// 证明: base64_decode 对任意 ≤8 字符串不 panic —— 非法字符唯一失败模式
     /// 是 Decode 错误, 合法解码输出长度不超过输入长 (≤3/4 膨胀界)。
-    /// 边界: 输入 8 字节任意值 (含 `=` 提前收尾、\r\n/空白、非法字符),
+    /// 边界: 输入 8 字符 (码点 = Latin-1 0..=255, 含 `=` 提前收尾、\r\n/空白、
+    /// 非法字符; 口径修订 2026-10-07: 原 lossy 字节串生成器是 CBMC 路径爆炸
+    /// 源, 见 research/verification/kani/src/harness_panic_freedom.rs 同名注),
     /// unwind 48。
     #[kani::proof]
     #[kani::unwind(48)]
     fn kani_panic_free_base64_decode() {
         let bytes: [u8; 8] = kani::any();
-        let input = String::from_utf8_lossy(&bytes).into_owned();
+        let input: String = bytes.into_iter().map(char::from).collect();
         match base64_decode(&input) {
             Ok(out) => assert!(out.len() <= input.len(), "解码输出长度 ≤ 输入长"),
             Err(err) => assert!(

@@ -132,6 +132,299 @@ pub mod exec_pipeline {
     }
 }
 
+// ===== kani_collections: cfg(kani) 证明面 drop-in 线性 HashMap =====
+//
+// 病灶 (2026-10-07 日志考古): hashbrown RawTable 桶探测循环对新鲜分配内存
+// 展开到 unwind 上界 (raw.rs max-iter=31), SipHash write 循环符号展开 ——
+// HashMap 对 CBMC 就是路径爆炸源 (research_approval_sm 三 proof 25m/25m/45m
+// 跑不完的根因; 换线性表后 4.6s/7.3s/5.6s 证完)。本模块给其余被镜像
+// canonical 文件同一药方: 各文件以 `#[cfg(kani)] use super::kani_collections::
+// HashMap` 换掉 std HashMap —— 真 crate 里该 use 行编译期剔除, 生产零参与。
+// 语义口径: 与 std HashMap 等价 (insert 返回旧值 / remove 返回被删值 /
+// retain/entry 同语义 / PartialEq 为 set 语义与插入序无关)。有界性:
+// 线性扫描 = 条目数上界, 无哈希/无桶探测/无符号内存读。
+#[cfg(kani)]
+pub mod kani_collections {
+    use std::borrow::Borrow;
+
+    #[derive(Debug, Clone)]
+    pub struct HashMap<K, V> {
+        entries: Vec<(K, V)>,
+    }
+
+    impl<K: PartialEq, V: PartialEq> PartialEq for HashMap<K, V> {
+        fn eq(&self, other: &Self) -> bool {
+            self.entries.len() == other.entries.len()
+                && self
+                    .entries
+                    .iter()
+                    .all(|(k, v)| other.entries.iter().any(|(k2, v2)| k == k2 && v == v2))
+        }
+    }
+
+    impl<K: PartialEq + Eq, V: Eq> Eq for HashMap<K, V> {}
+
+    impl<K, V> Default for HashMap<K, V> {
+        fn default() -> Self {
+            Self {
+                entries: Vec::new(),
+            }
+        }
+    }
+
+    impl<K, V> HashMap<K, V> {
+        pub fn new() -> Self {
+            Self::default()
+        }
+    }
+
+    impl<K: PartialEq, V> HashMap<K, V> {
+        pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+            for slot in self.entries.iter_mut() {
+                if slot.0 == key {
+                    return Some(std::mem::replace(&mut slot.1, value));
+                }
+            }
+            self.entries.push((key, value));
+            None
+        }
+
+        pub fn get<Q: ?Sized + PartialEq>(&self, key: &Q) -> Option<&V>
+        where
+            K: Borrow<Q>,
+        {
+            self.entries
+                .iter()
+                .find(|(k, _)| k.borrow() == key)
+                .map(|(_, v)| v)
+        }
+
+        pub fn get_mut<Q: ?Sized + PartialEq>(&mut self, key: &Q) -> Option<&mut V>
+        where
+            K: Borrow<Q>,
+        {
+            self.entries
+                .iter_mut()
+                .find(|(k, _)| k.borrow() == key)
+                .map(|(_, v)| v)
+        }
+
+        pub fn remove<Q: ?Sized + PartialEq>(&mut self, key: &Q) -> Option<V>
+        where
+            K: Borrow<Q>,
+        {
+            let idx = self
+                .entries
+                .iter()
+                .position(|(k, _)| k.borrow() == key)?;
+            Some(self.entries.swap_remove(idx).1)
+        }
+
+        pub fn contains_key<Q: ?Sized + PartialEq>(&self, key: &Q) -> bool
+        where
+            K: Borrow<Q>,
+        {
+            self.get(key).is_some()
+        }
+
+        pub fn keys(&self) -> impl Iterator<Item = &K> {
+            self.entries.iter().map(|(k, _)| k)
+        }
+
+        pub fn values(&self) -> impl Iterator<Item = &V> {
+            self.entries.iter().map(|(_, v)| v)
+        }
+
+        pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> {
+            self.entries.iter_mut().map(|(_, v)| v)
+        }
+
+        pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
+            self.entries.iter().map(|(k, v)| (k, v))
+        }
+
+        pub fn iter_mut(&mut self) -> impl Iterator<Item = (&K, &mut V)> {
+            self.entries.iter_mut().map(|(k, v)| (&*k, v))
+        }
+
+        pub fn len(&self) -> usize {
+            self.entries.len()
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.entries.is_empty()
+        }
+
+        pub fn clear(&mut self) {
+            self.entries.clear();
+        }
+
+        pub fn retain<F: FnMut(&K, &mut V) -> bool>(&mut self, mut f: F) {
+            self.entries.retain_mut(|(k, v)| f(&*k, v));
+        }
+
+        pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
+            match self.entries.iter().position(|(k, _)| *k == key) {
+                Some(idx) => Entry::Occupied(OccupiedEntry { map: self, idx }),
+                None => Entry::Vacant(VacantEntry { map: self, key }),
+            }
+        }
+    }
+
+    pub enum Entry<'a, K, V> {
+        Occupied(OccupiedEntry<'a, K, V>),
+        Vacant(VacantEntry<'a, K, V>),
+    }
+
+    pub struct OccupiedEntry<'a, K, V> {
+        map: &'a mut HashMap<K, V>,
+        idx: usize,
+    }
+
+    pub struct VacantEntry<'a, K, V> {
+        map: &'a mut HashMap<K, V>,
+        key: K,
+    }
+
+    impl<'a, K: PartialEq, V> Entry<'a, K, V> {
+        pub fn or_insert(self, default: V) -> &'a mut V {
+            match self {
+                Entry::Occupied(entry) => &mut entry.map.entries[entry.idx].1,
+                Entry::Vacant(entry) => {
+                    entry.map.entries.push((entry.key, default));
+                    &mut entry.map.entries.last_mut().unwrap().1
+                }
+            }
+        }
+
+        pub fn or_insert_with<F: FnOnce() -> V>(self, f: F) -> &'a mut V {
+            match self {
+                Entry::Occupied(entry) => &mut entry.map.entries[entry.idx].1,
+                Entry::Vacant(entry) => {
+                    entry.map.entries.push((entry.key, f()));
+                    &mut entry.map.entries.last_mut().unwrap().1
+                }
+            }
+        }
+
+        pub fn or_default(self) -> &'a mut V
+        where
+            V: Default,
+        {
+            self.or_insert_with(V::default)
+        }
+
+        pub fn and_modify<F: FnOnce(&mut V)>(self, f: F) -> Self {
+            match self {
+                Entry::Occupied(mut entry) => {
+                    f(&mut entry.map.entries[entry.idx].1);
+                    Entry::Occupied(entry)
+                }
+                vacant => vacant,
+            }
+        }
+    }
+
+    impl<K, V> IntoIterator for HashMap<K, V> {
+        type Item = (K, V);
+        type IntoIter = std::vec::IntoIter<(K, V)>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.entries.into_iter()
+        }
+    }
+
+    impl<'a, K, V> IntoIterator for &'a HashMap<K, V> {
+        type Item = (&'a K, &'a V);
+        type IntoIter = std::iter::Map<
+            std::slice::Iter<'a, (K, V)>,
+            fn(&(K, V)) -> (&K, &V),
+        >;
+        fn into_iter(self) -> Self::IntoIter {
+            fn pair<K, V>(slot: &(K, V)) -> (&K, &V) {
+                (&slot.0, &slot.1)
+            }
+            self.entries.iter().map(pair as fn(&(K, V)) -> (&K, &V))
+        }
+    }
+
+    impl<'a, K, V> IntoIterator for &'a mut HashMap<K, V> {
+        type Item = (&'a K, &'a mut V);
+        type IntoIter = std::iter::Map<
+            std::slice::IterMut<'a, (K, V)>,
+            fn(&mut (K, V)) -> (&K, &mut V),
+        >;
+        fn into_iter(self) -> Self::IntoIter {
+            fn pair<K, V>(slot: &mut (K, V)) -> (&K, &mut V) {
+                (&slot.0, &mut slot.1)
+            }
+            self.entries
+                .iter_mut()
+                .map(pair as fn(&mut (K, V)) -> (&K, &mut V))
+        }
+    }
+
+    impl<K: PartialEq, V, Q: ?Sized + PartialEq> std::ops::Index<&Q> for HashMap<K, V>
+    where
+        K: Borrow<Q>,
+    {
+        type Output = V;
+        fn index(&self, key: &Q) -> &V {
+            self.get(key).expect("map index on missing key")
+        }
+    }
+
+    impl<K: PartialEq, V, Q: ?Sized + PartialEq> std::ops::IndexMut<&Q> for HashMap<K, V>
+    where
+        K: Borrow<Q>,
+    {
+        fn index_mut(&mut self, key: &Q) -> &mut V {
+            self.get_mut(key).expect("map index on missing key")
+        }
+    }
+
+    impl<K: serde::Serialize, V: serde::Serialize> serde::Serialize for HashMap<K, V> {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            use serde::ser::SerializeMap;
+            let mut map = serializer.serialize_map(Some(self.entries.len()))?;
+            for (key, value) in &self.entries {
+                map.serialize_entry(key, value)?;
+            }
+            map.end()
+        }
+    }
+
+    impl<'de, K, V> serde::Deserialize<'de> for HashMap<K, V>
+    where
+        K: serde::Deserialize<'de> + PartialEq,
+        V: serde::Deserialize<'de>,
+    {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            struct MapVisitor<K, V>(std::marker::PhantomData<(K, V)>);
+            impl<'de, K, V> serde::de::Visitor<'de> for MapVisitor<K, V>
+            where
+                K: serde::Deserialize<'de> + PartialEq,
+                V: serde::Deserialize<'de>,
+            {
+                type Value = HashMap<K, V>;
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "a map")
+                }
+                fn visit_map<A: serde::de::MapAccess<'de>>(
+                    self,
+                    mut access: A,
+                ) -> Result<Self::Value, A::Error> {
+                    let mut map = HashMap::new();
+                    while let Some((key, value)) = access.next_entry()? {
+                        map.insert(key, value);
+                    }
+                    Ok(map)
+                }
+            }
+            deserializer.deserialize_map(MapVisitor(std::marker::PhantomData))
+        }
+    }
+}
+
 #[path = "../../../../crates/capabilities/tools/src/sensitive_path.rs"]
 pub mod sensitive_path;
 
