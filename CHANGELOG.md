@@ -1,5 +1,16 @@
 # Changelog — Apeireth
 
+## [Unreleased] — rc.3 改动批：首启引导·用户中心·会话清理双档·主题·滚轮 + CI 门禁修复 (2026-10-03)
+
+- **CLI 首次使用引导** `apeireth onboard`：介绍 → 分流（普通用户=预设值+使用中自动调参 / 专业用户=只介绍）→ API 设置（密钥只进钥匙串，引导档案零机密）→ 自我描述词入身份段；无档案 = 0 行为变化，显式 env 最高。
+- **桌面向导 OOBE** 升级分步弹窗（同一分流模型，纯逻辑零 DOM 可单测；对外接口与 v1 一致）。
+- **用户中心 + 用户印象**：昵称/头像/签名本机存储（无账号不上传）；印象双重身份——用户可读可改的设置项 + system 侧栏随对话注入，回合后节流自动总结、失败静默保旧。
+- **会话清理双档**：① 清近期(7 天窗) ② 清全部，均真删本地正文 + 后端账本行（修"清理后复活"）；长期记忆不动（红线，记忆遗忘是另一动作）。
+- **设置页两级导航**（14 分区归 5 大类）；**主题** 新增 origin(默认档)/noir(AMOLED)；出厂第一人设修复版「阿佩瑞斯」+ 老出厂签名幂等迁徙；**全局滚轮路由**修死区滚轮失效（CDP 复现+探针）。
+- **CI 门禁修复批**：kani 镜像编译面 shim（sensitive_path 新依赖面假红，proof 停跑）；doc-caliber 口径标注两处；audit/deny 三处同步 ignore（ratatui 0.29 系 transitive，治本=0.30 迁移，已登记 ROADMAP §4 P11）；upload-sarif v3→v4；8 硬墙守门 2 对齐 release authority 本义（版本轴递进不再假红，拍板证据=release: 提交携版本号）。
+- **deps**：吸收 dependabot 补丁更新（encoding_rs 0.8.42 / pyo3 0.29.3，甩 multiversion 宏链 ×2）。
+- 实证：pnpm test 41/41 套件 + pnpm check 0/0；cargo deny 四类 ok、cargo audit 0 warnings（3 条 ignore 有据三处同步）、kani mirror 编译 + 62/62 测试。
+
 ## [Unreleased] — 预算面板+仪表（内测四轮） (2026-09-30 夜)
 
 - **设置页「预算与配额」区**：三枚真实旋钮（回合轮数/单轮工具/上下文字符预算）即效可调，越界钳制/非法回默认与后端同源；实际生效值徽标（configured/constant 同 self_status 语法）。
