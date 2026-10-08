@@ -180,20 +180,20 @@ fn kani_governance_default_deny_unrequested_ops() {
 
 /// 证明: 风险标签单调 —— 对任意 (原始标签, 提案标签) 字节串, 严格降级的
 /// 提案必被 check_no_degrade 触发 (不得评估为通过); Pass 蕴含未降级。
-/// 边界: 标签为任意 ≤4 字符串 (码点 = Latin-1 0..=255; 对抗拼写变体是量词域
-/// 的核心; 口径修订 2026-10-07: 原 lossy 字节串生成器是 CBMC 路径爆炸源,
-/// 见 harness_panic_freedom.rs 同名注), 判定只依赖两个标签的 risk_rank,
-/// unwind 32。
+/// 边界: 标签为任意 ≤4 字符串 (码点 = ASCII 0..=127; 对抗拼写变体是量词域
+/// 的核心; 口径修订 2026-10-07 二次: ASCII 生成 —— 字节长度恒 = 4, 避免
+/// 符号长度令搜索循环按 unwind 上界展开, 见 harness_panic_freedom.rs 同名
+/// 注), 判定只依赖两个标签的 risk_rank, unwind 32。
 #[kani::proof]
 #[kani::unwind(32)]
 fn kani_governance_no_degrade_never_weakens() {
     let original: String = {
         let b: [u8; 4] = kani::any();
-        b.into_iter().map(char::from).collect()
+        b.into_iter().map(|x| char::from(x & 0x7F)).collect()
     };
     let proposed: String = {
         let b: [u8; 4] = kani::any();
-        b.into_iter().map(char::from).collect()
+        b.into_iter().map(|x| char::from(x & 0x7F)).collect()
     };
 
     let result = check_no_degrade(&original, &proposed);

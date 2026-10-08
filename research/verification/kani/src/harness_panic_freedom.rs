@@ -12,14 +12,15 @@ use super::residual_pyramid::OrthogonalResidualPyramid;
 use super::river_topology::{DualScaledFieldSolver, RiverObservability, RiverState};
 use super::semantic_axis::SemanticAxisBridge;
 
-/// 任意 N 字符串 (码点 = 任意 Latin-1 0..=255, 含 NUL/控制字符/1-2 字节
-/// UTF-8 编码分支)。口径修订 2026-10-07: 原经 String::from_utf8_lossy 从
-/// 任意字节生成 —— lossy 的 UTF-8 验证机器 (str::lossy::Utf8Chunks) 是 CBMC
-/// 路径爆炸源 (run 112721596511 实测展开 52+ 层), 而 lossy 映射属 std 契约、
-/// 不在命题面; 唯一收窄 = 不再覆盖"非法 UTF-8 序列 → U+FFFD"这条 std 自有
-/// 路径, 256 种字节值作为码点的覆盖不变。
+/// 任意 N 字符串 (码点 = ASCII 0..=127, 含 NUL/控制字符)。
+/// 口径修订 2026-10-07 (二次): 生成器三易其稿 —— ① 原 lossy 字节串: UTF-8
+/// 验证机器 (Utf8Chunks) 爆 52+ 层; ② Latin-1 码点: 编码 1-2 字节变长 →
+/// 串字节长度符号化 → memchr/搜索循环全线按 unwind 上界展开 (run 112828475849
+/// 实测 memchr 8757 次 × 63 层); ③ 现 ASCII: 字节长度恒 = N (具体值),
+/// 根串搜索循环精确收敛。收窄面 = 不覆盖多字节编码分支 (属 std 编码机器、
+/// 不在命题面; 多字节具体例由单元测试互补)。
 fn bounded_string<const N: usize>() -> String {
-    (0..N).map(|_| char::from(kani::any::<u8>())).collect()
+    (0..N).map(|_| char::from(kani::any::<u8>() & 0x7F)).collect()
 }
 
 /// 有界有限 f32 ∈ (-20, 20) (经整数取模构造, 不会产生 NaN/inf)。
@@ -28,12 +29,14 @@ fn bounded_f32() -> f32 {
     (m % 2001) as f32 / 100.0
 }
 
-/// 证明: 任意 ≤8 字节串经 has_fold_markers/parse_fold_blocks/render_fold_blocks
+/// 证明: 任意 ≤8 字符串经 has_fold_markers/parse_fold_blocks/render_fold_blocks
 /// 全程无 panic, 且渲染记账恒等 (expanded + hidden == blocks 数)。
-/// 边界: 输入 8 字节 (行数 ≤ 8), similarity 为任意 f32 (含 NaN, 依契约视作 0.0),
-/// unwind 64 覆盖逐行解析与 join。
+/// 边界: 输入 8 字符 (行数 ≤ 8, ASCII 具体长度, 见 bounded_string 注),
+/// similarity 为任意 f32 (含 NaN, 依契约视作 0.0), unwind 32 覆盖逐行解析与
+/// join (2026-10-07 由 64 收紧: 符号长度子切片的循环按 unwind 上界展开,
+/// 收紧即收公式)。
 #[kani::proof]
-#[kani::unwind(64)]
+#[kani::unwind(32)]
 fn kani_panic_free_fold_block_string_pipeline() {
     let s = bounded_string::<8>();
     let _markers = has_fold_markers(&s);

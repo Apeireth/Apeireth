@@ -14,12 +14,12 @@ use super::file_fetcher::{FileFetchError, TransparentFileFetcher};
 use super::sensitive_path::is_sensitive_path;
 use std::path::{Path, PathBuf};
 
-/// 任意 N 字符串 (码点 = 任意 Latin-1 0..=255, 含 NUL/`..`/控制字符)。
-/// 口径修订 2026-10-07: 原经 String::from_utf8_lossy —— lossy 的 UTF-8 验证
-/// 机器是 CBMC 路径爆炸源 (见 harness_panic_freedom.rs 同名注), lossy 映射
-/// 属 std 契约不在命题面; 256 种字节值作为码点的覆盖不变。
+/// 任意 N 字符串 (码点 = ASCII 0..=127, 含 NUL/`..`/控制字符)。
+/// 口径修订 2026-10-07 (二次): ASCII 生成 —— 字节长度恒 = N, 避免符号长度
+/// 令搜索循环按 unwind 上界展开 (见 harness_panic_freedom.rs 同名注);
+/// 收窄面 = 不覆盖多字节编码分支 (std 编码机器, 不在命题面)。
 fn bounded_string<const N: usize>() -> String {
-    (0..N).map(|_| char::from(kani::any::<u8>())).collect()
+    (0..N).map(|_| char::from(kani::any::<u8>() & 0x7F)).collect()
 }
 
 /// 证明: 无白名单时 validate_path_safety 的判定精确等于"含 `..` 或 NUL"——
