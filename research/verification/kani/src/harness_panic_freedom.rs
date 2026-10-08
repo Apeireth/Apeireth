@@ -29,25 +29,34 @@ fn bounded_f32() -> f32 {
     (m % 2001) as f32 / 100.0
 }
 
-/// 证明: 任意 ≤8 字符串经 has_fold_markers/parse_fold_blocks/render_fold_blocks
+/// 证明: 任意 ≤4 字符串经 has_fold_markers/parse_fold_blocks/render_fold_blocks
 /// 全程无 panic, 且渲染记账恒等 (expanded + hidden == blocks 数)。
-/// 边界: 输入 8 字符 (行数 ≤ 8, ASCII 具体长度, 见 bounded_string 注),
-/// similarity 为任意 f32 (含 NaN, 依契约视作 0.0), unwind 32 覆盖逐行解析与
-/// join (2026-10-07 由 64 收紧: 符号长度子切片的循环按 unwind 上界展开,
-/// 收紧即收公式)。
+/// 边界: 输入 4 字符 (行数 ≤ 4, ASCII 具体长度, 见 bounded_string 注);
+/// similarity 覆盖 = 任意有限 f32 ∈ (-20,20) (整数映射) + 具名 NaN/±∞/0.0
+/// 案例 (契约"NaN 视作 0.0"仍具名覆盖); unwind 24。
+/// 口径修订 2026-10-07 (三次): N 8→4 与 sim 收敛 —— 符号内容解析分支 ×
+/// 符号 f32 软浮点位爆炸令 45m 跑不完 (run 113296231995: memchr 3066×31 +
+/// memcmp 1426×31 仍未收); 多字符/多行/特殊 f32 具体例由单元测试互补。
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(24)]
 fn kani_panic_free_fold_block_string_pipeline() {
-    let s = bounded_string::<8>();
+    let s = bounded_string::<4>();
     let _markers = has_fold_markers(&s);
     let blocks = parse_fold_blocks(&s);
-    let sim: f32 = kani::any();
-    let render = render_fold_blocks(&blocks, sim);
-    assert_eq!(
-        render.expanded + render.hidden,
-        blocks.len(),
-        "渲染记账守恒: 展开数 + 折叠数 == 块数"
-    );
+    for sim in [
+        bounded_f32(),
+        f32::NAN,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        0.0,
+    ] {
+        let render = render_fold_blocks(&blocks, sim);
+        assert_eq!(
+            render.expanded + render.hidden,
+            blocks.len(),
+            "渲染记账守恒: 展开数 + 折叠数 == 块数"
+        );
+    }
 }
 
 /// 证明: OrthogonalResidualPyramid::analyze 对任意 ≤3 维有限有界查询与任意

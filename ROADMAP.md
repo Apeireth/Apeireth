@@ -118,7 +118,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 |---|---|---|---|
 | **P0** | ✅ 完成（upstream `873d2857`）：`build_canonical_runtime_from_env` 装 `GovernancePipeline(PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)` | — |
 | **P1** | **文档对账**（2026-09-05 批执行中） | ROADMAP/CHANGELOG/交接手册/审计数字统一到 17-crate 实测值（17 crates / 3120 tests / workspace.version 2.0.0-rc.1） | 无 |
-| P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 | 🟡 credentials 已接线（RC-9, `crates/adapters/cli/src/keyring_bootstrap.rs`, 2026-09-05 实测）；core 脊椎去留仍待 |
+| P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 | 🟡 credentials 已接线（四级口径: PRODUCTION WIRED——RC-9, `crates/adapters/cli/src/keyring_bootstrap.rs`, 2026-09-05 实测）；core 脊椎去留仍待 |
 | P3 | M1B 记忆迁回 | ACT-R 记忆、检索、向量/图全量迁入 `crates/engine/memory` | P2 |
 | P4 | MCP 动态能力注册 | ✅ done：`canonical::tool_modules::McpModule`（`CapabilityProvider`，动态 register/unregister + 身份冲突拒绝）已进生产装配（`production.rs`）；MCP 协议客户端栈在 `apeireth-plugin::mcp`（jsonrpc/schema/subscribe/resource/prompt/lifecycle/reconnect/sse）。遗留 = 协议客户端会话 ↔ McpModule 的 transport 桥 | P2 |
 | P5 | ProcessSupervisor + 沙箱强化 | 🟡 半完成：RC-8 `StdSubSupervisor` 真 impl（5 sub-supervisor 真实 spawn + RestartStrategy，`std_sub_supervisor.rs`）。遗留 = 进程树快照、Linux cgroup、macOS 强隔离、文件/网络隔离（沙箱强化层） | P0 |
