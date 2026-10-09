@@ -52,6 +52,7 @@
     type MemoryGraphNode,
     type MemoryGraphEdge,
   } from './memory-ledger';
+  import {isSessionCleared} from './chat-shell/session-cleanup';
 
   let {
     config,
@@ -421,9 +422,15 @@
             <button
               class="mv-meta-value mv-session-link"
               onclick={() => filterBySession(selected.sessionId)}
-              title="只看这个会话的记忆"
+              title={isSessionCleared(selected.sessionId)
+                ? '会话记录已清除，这条记忆不受影响——只看这个会话的记忆'
+                : '只看这个会话的记忆'}
             >
-              {selected.sessionId.slice(0, 8)}…
+              {#if isSessionCleared(selected.sessionId)}
+                会话已清除
+              {:else}
+                {selected.sessionId.slice(0, 8)}…
+              {/if}
             </button>
           </div>
         </div>

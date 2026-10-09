@@ -460,6 +460,73 @@ const SNAPSHOT_JSON = JSON.stringify({
   }
 }
 
+// ⑤ 构造 EventSource 同步抛出不杀死重试链（内测⑤：链路卡死根因之一——
+// 构造抛出原会从 setTimeout 回调里逃逸，链静默死亡、徽章永远停在未连接）
+{
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  const realEventSource = globalThis.EventSource;
+  const timers = [];
+  globalThis.setTimeout = (fn, ms) => {
+    const timer = {fn, ms, cleared: false};
+    timers.push(timer);
+    return timer;
+  };
+  globalThis.clearTimeout = (timer) => {
+    if (timer && typeof timer === 'object') timer.cleared = true;
+  };
+
+  class FlakyEventSource {
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+      this.closed = false;
+      if (FlakyEventSource.failures > 0) {
+        FlakyEventSource.failures -= 1;
+        throw new Error('EventSource ctor boom');
+      }
+      FlakyEventSource.instances.push(this);
+    }
+    addEventListener(name, fn) {
+      this.listeners.set(name, fn);
+    }
+    close() {
+      this.closed = true;
+    }
+  }
+  FlakyEventSource.instances = [];
+  FlakyEventSource.failures = 1;
+  globalThis.EventSource = FlakyEventSource;
+
+  const settle = () => new Promise((resolve) => realSetTimeout(resolve, 0));
+  const local = createPresenceStore(() => 7);
+  const cancel = subscribePresence('http://gateway.test/', {
+    store: local,
+    fetchSnapshot: async () => SNAPSHOT_JSON,
+  });
+
+  await settle();
+  assert.equal(FlakyEventSource.instances.length, 0, '第一次构造同步抛出');
+  const retry = timers.find((t) => !t.cleared && t.ms === 2000);
+  assert.ok(retry, '构造抛出后退避重试计时器仍在——链路不死');
+  retry.fn();
+  await settle();
+  assert.equal(FlakyEventSource.instances.length, 1, '下一次重试成功建连');
+  FlakyEventSource.instances[0].onopen?.();
+  await settle();
+  assert.equal(local.get().connected, true, '建连后连接态如实回真');
+
+  cancel();
+  globalThis.setTimeout = realSetTimeout;
+  globalThis.clearTimeout = realClearTimeout;
+  if (realEventSource === undefined) {
+    delete globalThis.EventSource;
+  } else {
+    globalThis.EventSource = realEventSource;
+  }
+}
+
 console.log('✓ 快照口: 快照即读 / 失败即帧 / 重连先取快照 (GET /v1/apeireth/presence)');
+console.log('✓ 构造抛出不死链: EventSource 同步抛出仍按退避续排');
 
 console.log('--- presence_state Contract Check PASSED ---');

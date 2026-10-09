@@ -31,6 +31,10 @@
 //! - trust 的 w/λ/κ 是工程策略参数, 非数据学习结论 (RA-2 §8.2)。
 
 use serde::{Deserialize, Serialize};
+// cfg(kani) 证明面容器: 见 research/verification/kani/src/lib.rs kani_collections 注。
+#[cfg(kani)]
+use super::kani_collections::HashMap;
+#[cfg(not(kani))]
 use std::collections::HashMap;
 
 /// 事实来源类型 (RA-2 §5.2, 基础权重为可配置策略)。

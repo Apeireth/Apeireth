@@ -114,7 +114,7 @@
 
 <div class="theme-panel">
   <p class="theme-lede">
-    切换界面照明与背景。默认遗产星空为静态图；深空舰桥保留 WebGL 实时场景与金色存在纪律；Essence 使用星空山脉浅色雾面。
+    切换界面照明与背景。默认遗产星空为静态图；深空舰桥保留 WebGL 实时场景与金色存在纪律；Essence 使用星空山脉浅色雾面；星舰为科幻 HUD 档——深空黑底 + 发光数据（网格/扫描线/角标记），正文保持可读性优先。
   </p>
   <div class="theme-grid" role="listbox" aria-label="界面主题">
     {#each THEME_CATALOG as item (item.id)}

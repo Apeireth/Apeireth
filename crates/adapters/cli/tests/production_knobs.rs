@@ -456,3 +456,50 @@ fn context_budget_knob_defaults_when_unset() {
         "invalid values fall back to the default"
     );
 }
+
+// ---- 轮数 / 单轮工具调用预算旋钮 (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS) ----
+
+/// 预算显式化: 两个预算 env 旋钮装配进 runtime (调小轮数可触发真实上限帧)。
+#[tokio::test]
+async fn turn_budget_knobs_configure_the_runtime_from_env() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_rounds = EnvGuard::set("APEIRETH_MAX_TURN_ROUNDS", Some("2"));
+    let _g_calls = EnvGuard::set("APEIRETH_MAX_TOOL_CALLS", Some("4"));
+    let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("turn-budget")));
+    let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("turn-budget-session")));
+
+    assert_eq!(apeireth_cli::turn_round_limit_from_env(), 2);
+    assert_eq!(apeireth_cli::tool_call_limit_from_env(), 4);
+
+    let (runtime, _sessions, _memory, _policy, _guard_hook) =
+        build_canonical_runtime_with_sessions_from_env()
+            .await
+            .expect("bootstrap with budget knobs");
+    assert_eq!(runtime.config().max_rounds, 2, "轮数预算 env 生效");
+    assert_eq!(
+        runtime.config().max_tool_calls_per_round,
+        4,
+        "单轮工具调用预算 env 生效"
+    );
+}
+
+/// 预算旋钮取值纪律: 越界钳制、非法值回默认 (8 / 16)。
+#[test]
+fn turn_budget_knobs_clamp_and_fall_back_to_defaults() {
+    let _lock = ENV_LOCK.lock().unwrap();
+
+    let _g_bad = EnvGuard::set("APEIRETH_MAX_TURN_ROUNDS", Some("not-a-number"));
+    let _g_bad2 = EnvGuard::set("APEIRETH_MAX_TOOL_CALLS", Some(""));
+    assert_eq!(apeireth_cli::turn_round_limit_from_env(), 8);
+    assert_eq!(apeireth_cli::tool_call_limit_from_env(), 16);
+
+    let _g_big = EnvGuard::set("APEIRETH_MAX_TURN_ROUNDS", Some("999"));
+    let _g_zero = EnvGuard::set("APEIRETH_MAX_TOOL_CALLS", Some("0"));
+    assert_eq!(apeireth_cli::turn_round_limit_from_env(), 64);
+    assert_eq!(apeireth_cli::tool_call_limit_from_env(), 1);
+
+    let _g_none = EnvGuard::set("APEIRETH_MAX_TURN_ROUNDS", None);
+    let _g_none2 = EnvGuard::set("APEIRETH_MAX_TOOL_CALLS", None);
+    assert_eq!(apeireth_cli::turn_round_limit_from_env(), 8);
+    assert_eq!(apeireth_cli::tool_call_limit_from_env(), 16);
+}

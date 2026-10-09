@@ -42,6 +42,11 @@ impl SqliteSessionStore {
     ) -> RuntimeError {
         match operation {
             "load" => RuntimeError::session_load(session, error.to_string()),
+            "delete" => RuntimeError::Session {
+                session,
+                operation: "deleted",
+                reason: error.to_string(),
+            },
             _ => RuntimeError::session_save(session, error.to_string()),
         }
     }
@@ -108,6 +113,20 @@ impl SessionStore for SqliteSessionStore {
         });
         Ok(sessions)
     }
+
+    async fn delete(&self, id: &SessionId) -> RuntimeResult<bool> {
+        let id = *id;
+        self.pool
+            .write(move |connection| {
+                let affected = connection.execute(
+                    "DELETE FROM sessions WHERE id = ?1",
+                    rusqlite::params![id.to_string()],
+                )?;
+                Ok(affected > 0)
+            })
+            .await
+            .map_err(|error| Self::storage_error(id, "delete", error))
+    }
 }
 
 /// Convenience conversion for assembly callers.
@@ -172,5 +191,92 @@ mod tests {
             "transcript must survive migration"
         );
         assert_eq!(ContentPart::join_text(&loaded.messages[0].content), "hello");
+    }
+
+    #[tokio::test]
+    async fn delete_removes_the_row_and_reports_whether_it_existed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sessions.sqlite3");
+        let store = SqliteSessionStore::open(&path).await.unwrap();
+        let clock = system_clock();
+        let mut session = Session::new(SessionId::new(), clock.as_ref());
+        session.append(NormalizedMessage::user("hello"), clock.as_ref());
+        let session_id = session.id;
+        store.save(&session).await.unwrap();
+
+        assert!(store.delete(&session_id).await.unwrap());
+        assert!(store.load(&session_id).await.unwrap().is_none());
+        assert!(store.list().await.unwrap().is_empty());
+        assert!(
+            !store.delete(&session_id).await.unwrap(),
+            "a second delete must report no removal"
+        );
+    }
+
+    #[tokio::test]
+    async fn session_settings_roundtrip_preserves_each_preset() {
+        // Select a tier → save → load: every tier (and each switch between
+        // tiers) must read back as itself, with no field distorted.
+        let store = SqliteSessionStore::in_memory().await.unwrap();
+        let clock = system_clock();
+        let mut session = Session::new(SessionId::new(), clock.as_ref());
+        session.append(NormalizedMessage::user("hello"), clock.as_ref());
+        session.settings.model = Some("some/model".into());
+        let session_id = session.id;
+
+        for (preset, remember) in [
+            (PermissionPreset::ReadOnly, true),
+            (PermissionPreset::Standard, false),
+            (PermissionPreset::Full, true),
+        ] {
+            session.settings.permission_preset = preset;
+            session.settings.approval_remember = remember;
+            store.save(&session).await.unwrap();
+
+            let loaded = store.load(&session_id).await.unwrap().unwrap();
+            assert_eq!(loaded.settings.permission_preset, preset);
+            assert_eq!(loaded.settings.approval_remember, remember);
+            assert_eq!(loaded.settings.model.as_deref(), Some("some/model"));
+            session = loaded;
+        }
+    }
+
+    #[tokio::test]
+    async fn session_settings_survive_store_reopen_across_preset_changes() {
+        // Reopening the file store stands in for a process restart: the
+        // persisted tier must be restored as itself, and a later tier switch
+        // must survive another reopen the same way.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sessions.sqlite3");
+        let clock = system_clock();
+        let session_id = SessionId::new();
+
+        let store = SqliteSessionStore::open(&path).await.unwrap();
+        let mut session = Session::new(session_id, clock.as_ref());
+        session.settings.permission_preset = PermissionPreset::ReadOnly;
+        session.settings.approval_remember = true;
+        store.save(&session).await.unwrap();
+        drop(store);
+
+        let reopened = SqliteSessionStore::open(&path).await.unwrap();
+        let mut loaded = reopened.load(&session_id).await.unwrap().unwrap();
+        assert_eq!(
+            loaded.settings.permission_preset,
+            PermissionPreset::ReadOnly
+        );
+        assert!(loaded.settings.approval_remember);
+
+        loaded.settings.permission_preset = PermissionPreset::Full;
+        loaded.settings.approval_remember = false;
+        reopened.save(&loaded).await.unwrap();
+        drop(reopened);
+
+        let reopened_again = SqliteSessionStore::open(&path).await.unwrap();
+        let loaded = reopened_again.load(&session_id).await.unwrap().unwrap();
+        assert_eq!(loaded.settings.permission_preset, PermissionPreset::Full);
+        assert!(
+            !loaded.settings.approval_remember,
+            "the switched tier must win over both the default and the previous tier"
+        );
     }
 }

@@ -9,7 +9,9 @@ pub mod canonical;
 pub mod sqlite_session;
 
 pub use canonical::{
-    consolidation_cadence_turns, is_write_or_execute_capability, migrate_legacy_tuning_log_file,
+    budget_status_from_configured, budget_status_from_constants, consolidation_cadence_turns,
+    is_write_or_execute_capability, max_rounds_per_turn_constant,
+    max_tool_calls_per_round_constant, migrate_legacy_tuning_log_file, roster_from_config,
     tuning_log_path, tuning_log_path_from_session_db, with_memory_context_projection,
     CanonicalMemoryTypedSink, CognitiveBackends, CognitiveModuleConfig, CognitiveModuleEvent,
     CognitiveTelemetry, CouncilModule, FetchModule, FilesystemModule, GuardDatasetObserver,
@@ -19,11 +21,13 @@ pub use canonical::{
     OrganModuleObservation, PermissionPresetGovernanceHook, PreferenceEvidence,
     PreferenceLearningModule, PreferenceLearningStats, PreferencePolarity, PreferenceRecallModule,
     ProductionBackends, ProductionCognitiveModules, ProductionModules, ProductionModulesConfig,
-    ReflexionModule, RepoModule, SearchModule, SelfAssessmentModule, SelfTuningWire, ShellModule,
-    SqliteTypedMemoryRecallSource, COUNCIL_MODULE_ID, DEFERRED_COGNITIVE_SLOTS,
-    INVOKER_LLM_FACTORY_NAME, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID, MEMORY_WRITEBACK_MODULE_ID,
-    ORGAN_MODULE_ID, PREFERENCE_LEARNING_MODULE_ID, PREFERENCE_RECALL_MODULE_ID,
-    REFLEXION_MODULE_ID, SELF_ASSESSMENT_MODULE_ID, SELF_TUNING_ENABLE_ENV, TUNING_LOG_DOC_NAME,
+    ProductionSelfStatusSource, ReflexionModule, RepoModule, SearchModule, SelfAssessmentModule,
+    SelfStatusModule, SelfTuningWire, ShellModule, SqliteTypedMemoryRecallSource,
+    BUDGET_SOURCE_CONFIGURED, BUDGET_SOURCE_CONFIGURED_NOTE, BUDGET_SOURCE_CONSTANT,
+    COUNCIL_MODULE_ID, DEFERRED_COGNITIVE_SLOTS, INVOKER_LLM_FACTORY_NAME, JUDGE_MODULE_ID,
+    MEMORY_RECALL_MODULE_ID, MEMORY_WRITEBACK_MODULE_ID, ORGAN_MODULE_ID,
+    PREFERENCE_LEARNING_MODULE_ID, PREFERENCE_RECALL_MODULE_ID, REFLEXION_MODULE_ID,
+    SELF_ASSESSMENT_MODULE_ID, SELF_STATUS_TIMEOUT_MS, SELF_TUNING_ENABLE_ENV, TUNING_LOG_DOC_NAME,
     TUNING_LOG_DOC_VERSION, TUNING_LOG_FILE,
 };
 pub use sqlite_session::SqliteSessionStore;

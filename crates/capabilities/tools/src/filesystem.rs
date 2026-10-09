@@ -6,6 +6,10 @@
 //! the root for the operations implemented here. Known credential and key
 //! paths are protected by the shared workspace path policy.
 //!
+//! 敏感面治理: 凭据与密钥面 (凭据存储件 / 钥匙串导出物 / `.env` 族 / 密钥
+//! 材料) 读取**拒绝**, 拒绝信息即帧 (pre_deny 语义); 配置文件可读但密钥
+//! 字段的字段值脱敏为 `[redacted]`。
+//!
 //! Write/delete/rename/copy are deliberately not implemented in M2A. They are
 //! deferred to the sandbox phase (M2B). This tool does **not** claim to be a
 //! process/filesystem sandbox.
@@ -26,7 +30,9 @@ use async_trait::async_trait;
 use serde::Deserialize;
 
 use crate::observed_gate::{FileVersion, ObservedGate};
-use crate::sensitive_path::is_sensitive_path;
+use crate::sensitive_path::{
+    credential_surface_refusal, is_sensitive_path, redact_secret_field_values,
+};
 
 /// Default maximum file size for `read` (1 MiB).
 pub const DEFAULT_MAX_FILE_SIZE: u64 = 1024 * 1024;
@@ -168,8 +174,10 @@ impl FilesystemTool {
         }
 
         if is_sensitive_path(&root, &candidate) || is_sensitive_path(&root, &canonical) {
+            // 凭据与密钥面 fail-closed: 拒绝信息即帧 (pre_deny 语义), 说明
+            // 「凭据面不可读（安全契约）」。
             return Err(FilesystemError::PermissionDenied(
-                "requested path is protected".to_string(),
+                credential_surface_refusal(),
             ));
         }
 
@@ -263,6 +271,9 @@ impl FilesystemTool {
                     self.observed_gate.observe_present(&canonical, version);
                     self.observed_gate.observe_present(&request_path, version);
                 }
+                // 敏感面治理: 配置可读, 但密钥字段的**字段值**脱敏为
+                // `[redacted]` (与启动日志脱敏同一语义); 非敏感字段逐字节照读。
+                let content = redact_secret_field_values(&content);
                 ToolResult::ok(&call.id, serde_json::Value::String(content))
             }
             Err(_) => self.tool_result_for_error(
@@ -834,5 +845,51 @@ mod tests {
             );
             assert_eq!(result.render(), "normal");
         }
+    }
+
+    #[tokio::test]
+    async fn credential_surface_denial_is_a_pre_deny_frame() {
+        // 凭据面 (凭据存储件 / 钥匙串导出物 / .env 族) fail-closed:
+        // 拒绝信息即帧 (pre_deny 语义), 说明「凭据面不可读（安全契约）」。
+        let dir = tempfile::tempdir().unwrap();
+        for path in ["creds.json", "apeireth-keyring.bin", ".env"] {
+            fs::write(dir.path().join(path), "{\"api_key\":\"sk-live-secret\"}").unwrap();
+        }
+
+        let tool = tool(dir.path());
+        for path in ["creds.json", "apeireth-keyring.bin", ".env"] {
+            let read = invoke(&tool, "read", path).await;
+            assert!(!read.is_ok(), "read unexpectedly allowed: {path}");
+            let rendered = read.render();
+            assert!(rendered.contains("pipeline.pre_deny"), "{path}: {rendered}");
+            assert!(rendered.contains("protected"), "{path}: {rendered}");
+            assert!(
+                rendered.contains("凭据面不可读（安全契约）"),
+                "{path}: {rendered}"
+            );
+            assert!(!rendered.contains("sk-live-secret"), "{path}: {rendered}");
+        }
+    }
+
+    #[tokio::test]
+    async fn config_reads_redact_secret_field_values_but_keep_other_fields() {
+        // 配置文件可读; 密钥字段的**字段值**脱敏为 `[redacted]`;
+        // 非敏感字段照读 (零回归)。
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("app.toml"),
+            "name = \"apeireth\"\ntimeout = 30\napi_key = \"sk-live-secret\"\ntoken = abc123\n",
+        )
+        .unwrap();
+
+        let result = invoke(&tool(dir.path()), "read", "app.toml").await;
+        assert!(result.is_ok());
+        let rendered = result.render();
+        assert!(!rendered.contains("sk-live-secret"), "{rendered}");
+        assert!(!rendered.contains("abc123"), "{rendered}");
+        assert!(rendered.contains("api_key = \"[redacted]\""), "{rendered}");
+        assert!(rendered.contains("token = [redacted]"), "{rendered}");
+        assert!(rendered.contains("name = \"apeireth\""), "{rendered}");
+        assert!(rendered.contains("timeout = 30"), "{rendered}");
     }
 }

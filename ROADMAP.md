@@ -77,7 +77,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | Tag | `v1.0.0` / `v1.5.0` / `v2.0.0-alpha.1` / `v2.0.0-preview` / `v2.0.0-rc.1`（→ `854831fc`） |
 | Workspace | **18 crates**（foundation 6 / engine 8 / capabilities 1 / adapters 3；engine 第 7 个 = `crates/engine/runtime-assembly`，第 8 个 = `crates/engine/guard`（2026-10-06 协作者批）） + `frontend/companion-desktop` (Svelte 5 + Tauri 2) |
 | 代码量 | crates/ 内 .rs：src-only **147,732 行**（406 文件）+ tests **25,972 行**（73 文件）（2026-09-05 实测，不含 legacy/）；前端 companion-desktop 61 文件 ~21k 行（不含 node_modules/dist） |
-| 测试 | **4671 passed / 0 failed / 21 ignored**（149 suites，`cargo test --workspace` 全量实测 2026-09-27；历史口径：2026-09-28 清污批 4671、2026-09-27 MCP批 4668、清零批 4585、尾款批前 3907、2026-09-26 3662/130、2026-10-06 W2 批 3418/19、2026-09-05 3120/13） |
+| 测试 | **4829 passed / 0 failed / 21 ignored**（161 suites，`cargo test --workspace` 全量实测 2026-09-27；历史口径：2026-09-30 rc.3批 4829、2026-09-28 清污批 4671、2026-09-27 MCP批 4668、清零批 4585、尾款批前 3907、2026-09-26 3662/130、2026-10-06 W2 批 3418/19、2026-09-05 3120/13） |
 | CI / 守门 | 5 重守门全绿 + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告（2026-09-05 亲跑）+ 9 锚 / 13 键 / 3 脊柱 / R11 baseline 0 触碰；workspace.version 已随 RC1 发布推进为 2.0.0-rc.1 |
 | **v2.0 核心建设** | ✅ **100% 落地**：14 大战区（Whisper HTTP + Xcap 截屏多模态、Okapi BM25 + 向量 RRF 混合检索、上下文衰减 3 因子、SpillStore 溢出隔离、7 阶段伙伴羁绊、8 分类里程碑、动态原则洋葱、三层语调合成、断点续行与 O-1 核心段删除防御、叙事日记本与日活动聚合、跨日记图共享词元索引、口头强化反思闭环、微积分换元符号规则检查、Gateway SSE 流式通道及桌面端伙伴）。 |
 | **当前状态与下一步** | **预览版已就绪 (v2.0.0-preview)**，转交协作者开展生产压测与交叉验证，待协作者确认后提议发布 2.0 正式版。 |
@@ -112,11 +112,13 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ## 4. v2.0 下一步（按优先级，2026-08-27 起）
 
+> **后端增强待办（2026-10-02 立）**：想法级清单与细节小文件索引见 docs/04-internal/backend-enhancement/00-backlog.md（A 配额真接口 / B 性能 / C 记忆 / D 干活 / E 安全 / F 服务端 / G 观测 / H 模型面）。
+
 | P | 任务 | 说明 | 依赖 |
 |---|---|---|---|
 | **P0** | ✅ 完成（upstream `873d2857`）：`build_canonical_runtime_from_env` 装 `GovernancePipeline(PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)` | — |
 | **P1** | **文档对账**（2026-09-05 批执行中） | ROADMAP/CHANGELOG/交接手册/审计数字统一到 17-crate 实测值（17 crates / 3120 tests / workspace.version 2.0.0-rc.1） | 无 |
-| P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 | 🟡 credentials 已接线（RC-9, `crates/adapters/cli/src/keyring_bootstrap.rs`, 2026-09-05 实测）；core 脊椎去留仍待 |
+| P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 | 🟡 credentials 已接线（四级口径: PRODUCTION WIRED——RC-9, `crates/adapters/cli/src/keyring_bootstrap.rs`, 2026-09-05 实测）；core 脊椎去留仍待 |
 | P3 | M1B 记忆迁回 | ACT-R 记忆、检索、向量/图全量迁入 `crates/engine/memory` | P2 |
 | P4 | MCP 动态能力注册 | ✅ done：`canonical::tool_modules::McpModule`（`CapabilityProvider`，动态 register/unregister + 身份冲突拒绝）已进生产装配（`production.rs`）；MCP 协议客户端栈在 `apeireth-plugin::mcp`（jsonrpc/schema/subscribe/resource/prompt/lifecycle/reconnect/sse）。遗留 = 协议客户端会话 ↔ McpModule 的 transport 桥 | P2 |
 | P5 | ProcessSupervisor + 沙箱强化 | 🟡 半完成：RC-8 `StdSubSupervisor` 真 impl（5 sub-supervisor 真实 spawn + RestartStrategy，`std_sub_supervisor.rs`）。遗留 = 进程树快照、Linux cgroup、macOS 强隔离、文件/网络隔离（沙箱强化层） | P0 |
@@ -131,6 +133,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | **P1 (新)** | **RC-10 metadata-bound APX2 header + RC-11 migration** | 已完成：v2 写入的 AAD 绑定 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length；旧 v1 `[sealed_len:4 BE][sealed:N]` 保持只读兼容，当前格式不落盘 raw `record_id`。`scripts/migrate_v1_to_v2_encrypted.py` 与 7 个 Rust 集成测试完成离线 v1→APX2 重签、截断/超长 ID fail-closed 验证 | RC-10/11 ✅ |
 | **P2 (KV 参考清单, 2026-09-06 登记)** | KV 层逐出/压缩三篇（RA-15 派单包） | 📋 后置：本地推理路线（便携 U 盘 SLM）启动后吸收——arXiv:2607.10582 MemDecay 区域感知逐出 / arXiv:2608.00528 S4R 采样+子空间+稀疏重建 / arXiv:2601.18999 随机化逐出+学习路由。对照见 `docs/03-reference/absorption-2026-09.md` §P2 | 本地推理路线 |
 | **P10 (产品化 P0 批, 2026-09-26 登记)** | 产品化路线（源 `docs/04-internal/pm-review-productization-2026-09-25.md`） | ① NSIS 安装包挂 GitHub Release ✅（`publish-release.yml` 传资产：windows-latest 跑 `packaging/desktop/build-desktop-nsis.ps1` + `check-release-version.ps1 -Strict` 版本门禁，安装包+SHA256 挂 Release；本地全链实证产出 `Apeireth Companion_2.0.0-rc.1_x64-setup.exe`，2026-09-26）；② **宣称口径已拍板：诚实降调**（主人 2026-09-26）——对外文案只写已交付能力，P2P Mesh / 因果世界模型产品化 / 主动关怀移入路线图并标注阶段（`publish-release.yml` 发布说明 body 已按此校准；README 重写轮全量执行）；③ 待做 = 文档必败命令修复 + README 用户视角重写、首启向导人工点击流 + key 钥匙串持久化、核心记忆能力默认开 | 无 |
+| **P11 (deps 治本, 2026-10-03 登记)** | ratatui 0.29 → 0.30 迁移（`apeireth-tui` 驾驶舱） | 消 paste(RUSTSEC-2024-0436 停维护) / lru 0.12(RUSTSEC-2026-0002/0253 unsound) 三条 transitive 面。当前以三处同步 ignore 短接（deny.toml / audit.toml / cargo-audit.yml `--ignore`，理由全文见 deny.toml 2026-10-03 段），**不宣称风险为零**。0.30 是 core/widgets/crossterm 模块重组级大改，单列执行；仓内 e2e 已有 0.30 先例可循 | 无 |
 
 ---
 

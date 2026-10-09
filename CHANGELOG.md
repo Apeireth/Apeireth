@@ -1,5 +1,31 @@
 # Changelog — Apeireth
 
+## [Unreleased] — rc.3 改动批：首启引导·用户中心·会话清理双档·主题·滚轮 + CI 门禁修复 (2026-10-03)
+
+- **CLI 首次使用引导** `apeireth onboard`：介绍 → 分流（普通用户=预设值+使用中自动调参 / 专业用户=只介绍）→ API 设置（密钥只进钥匙串，引导档案零机密）→ 自我描述词入身份段；无档案 = 0 行为变化，显式 env 最高。
+- **桌面向导 OOBE** 升级分步弹窗（同一分流模型，纯逻辑零 DOM 可单测；对外接口与 v1 一致）。
+- **用户中心 + 用户印象**：昵称/头像/签名本机存储（无账号不上传）；印象双重身份——用户可读可改的设置项 + system 侧栏随对话注入，回合后节流自动总结、失败静默保旧。
+- **会话清理双档**：① 清近期(7 天窗) ② 清全部，均真删本地正文 + 后端账本行（修"清理后复活"）；长期记忆不动（红线，记忆遗忘是另一动作）。
+- **设置页两级导航**（14 分区归 5 大类）；**主题** 新增 origin(默认档)/noir(AMOLED)；出厂第一人设修复版「阿佩瑞斯」+ 老出厂签名幂等迁徙；**全局滚轮路由**修死区滚轮失效（CDP 复现+探针）。
+- **CI 门禁修复批**：kani 镜像编译面 shim（sensitive_path 新依赖面假红，proof 停跑）；doc-caliber 口径标注两处；audit/deny 三处同步 ignore（ratatui 0.29 系 transitive，治本=0.30 迁移，已登记 ROADMAP §4 P11）；upload-sarif v3→v4；8 硬墙守门 2 对齐 release authority 本义（版本轴递进不再假红，拍板证据=release: 提交携版本号）。
+- **deps**：吸收 dependabot 补丁更新（encoding_rs 0.8.42 / pyo3 0.29.3，甩 multiversion 宏链 ×2）。
+- 实证：pnpm test 41/41 套件 + pnpm check 0/0；cargo deny 四类 ok、cargo audit 0 warnings（3 条 ignore 有据三处同步）、kani mirror 编译 + 62/62 测试。
+
+## [Unreleased] — 预算面板+仪表（内测四轮） (2026-09-30 夜)
+
+- **设置页「预算与配额」区**：三枚真实旋钮（回合轮数/单轮工具/上下文字符预算）即效可调，越界钳制/非法回默认与后端同源；实际生效值徽标（configured/constant 同 self_status 语法）。
+- **会话消耗仪表**：token 入出/缓存命中（数·率）/回合数/累计耗时 + 预算余量条（无上限维度诚实"—"）。
+- **配额四维如实标注"暂无接口"**（读码证据入档，零假旋钮）；耗尽行为无可配语义→固定语义说明。
+- 实证：164 套件 4882 passed / 0 failed（唯一红=已立案 file_lock 负载 flake，隔离复跑绿）；pnpm 37/37。
+## [Unreleased] — 内测二批：P0 挂起修复·缓存组装·自省通道·IM 接入·驾驶舱 P1·星舰主题 (2026-09-30)
+
+- **P0 审批挂起修复**（内测 422 病根）：冻结即收束（保留已生成文本+真实轮耗）、防重入台账（同操作重复提议直接收束、一审批一动作）、收束优先级（待批>轮上限）、预算显式（`APEIRETH_MAX_TURN_ROUNDS`/`APEIRETH_MAX_TOOL_CALLS`）+ 错误帧真实数字。
+- **缓存友好组装**：消息拼装前缀冻结（史→叠→重试），`APEIRETH_CACHE_TRACE=1` 诊断简报；命中率论证入档（会话越长越高）。
+- **自省通道**：`self_status` 结构化自述工具 + 敏感面治理（凭据 fail-closed、密钥字段脱敏）。
+- **IM 快捷接入**：三类 IM 渠道 + 双向消息桥 + **审批卡片到手机**（四态闭合、审计配对原子）。
+- **终端驾驶舱 P1**：`apeireth-tui`（纯 Rust 全屏 HUD、状态条/会话管理/两段退出）。
+- **星舰主题**：深空 HUD 档（发光数据/扫描线/reduced-motion），默认主题零回归。
+- 实证：**161 套件 4829 passed / 0 failed**；clippy 0 / fmt 0 / pnpm 24/24 / 扫描 0。
 ## [Unreleased] — MCP 外部工具服务器接线（最后一公里） (2026-09-27)
 
 - **接入配置面**：`APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json`（信封拒开语义，坏配置 fail-closed）；默认关（轻默认）。
@@ -521,6 +547,7 @@
 > ③ "`apeireth-credentials` 未接线 / 记忆图 / 器官 / voice / screen 未移植"——**已全部兑现**：
 > credentials 已接线（真热更凭据链）、记忆图/语义轴在 `engine/memory`、9 器官全实装、
 > voice 族真现实现、screen/perception 已接线（默认关）；仍未接线的仅 **MCP** 一件（如实标注）。
+> （四级口径: 本条"已接线/实装"= PRODUCTION WIRED / IMPLEMENTED 级, 非 HARDWARE VALIDATED。）
 
 - 生产 bootstrap 尚未安装 governance pipeline（默认 AllowAll）——P0
 - 13 键 verdict cache 只在 core 内测试、未接 canonical 执行路径——P0 拍板去留

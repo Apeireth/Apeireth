@@ -13,6 +13,9 @@
 #![deny(unsafe_code)]
 
 pub mod apply_patch;
+// 受控文件写入生产工具面 (`tool.apply_patch`): 事务补丁原语 + 读前观测门禁
+// 接线 + 写入风险映射 (require-approval 档) + 单调边界 Guard + 五段流水线。
+pub mod apply_patch_tool;
 pub mod education;
 pub mod egress;
 // 工具执行五段流水线: pre-execute 瀑布 → 单调 Guard → around(超时/重试) →
@@ -36,6 +39,10 @@ pub mod process;
 pub mod repo;
 pub mod repo_map;
 pub mod search;
+// 结构化自述面 (自省通道): `tool.self_status` 只读工具 —— 身份 / 能力名册 /
+// 记忆账本计数 / 调参状态 / 预算 / 工作区事实, 全部取真实生效值; 缺失字段
+// 显式 null + 原因, 不整帧失败。
+pub mod self_status;
 mod sensitive_path;
 pub mod shell;
 pub mod spill;
@@ -44,9 +51,19 @@ pub mod stealth_crawler;
 // v2.0.0-rc.1 RC-8: 加 std_sub_supervisor 模块 (真 impl, std::process::Command 同步启进程).
 pub mod std_sub_supervisor;
 pub mod supervisor;
+// 文件写入总闸的 shell 侧写意图词法扫描 (内测整改): 命中且总闸未开 → 拒绝即帧。
+pub mod write_intent;
 
 pub use apply_patch::{
     ApplyPatchError, FilePatchAction, PatchHunk, PatchReport, TransactionalPatchApplier,
+};
+pub use apply_patch_tool::{
+    apply_patch_capability, apply_patch_pipeline, authorized_file_write_policy,
+    write_release_class_for_arguments, write_release_class_for_patch, ApplyPatchParams,
+    ApplyPatchRiskMappingHook, ApplyPatchTool, ApplyPatchWriteApprovalHook,
+    ApplyPatchWriteBoundaryGuard, WriteReleaseClass, APPLY_PATCH_CAPABILITY_ID,
+    APPLY_PATCH_TIMEOUT_MS, APPLY_PATCH_TOOL_DESCRIPTION, APPLY_PATCH_TOOL_NAME,
+    GIT_WRITE_BOUNDARY_NOTE,
 };
 pub use education::{DxCheckTool, DxReport, REPLACED_DIFFS};
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
@@ -59,7 +76,7 @@ pub use exec_pipeline::{
     PipelinedCapability, PostDecision, PostExecuteHook, PostExecuteRequest, PostExecuteWaterfall,
     PostVerdict, PreDecision, PreExecuteHook, PreExecuteRequest, PreExecuteWaterfall, PreVerdict,
     RetryPolicy, RiskLevelGateHook, SchemaField, SchemaKind, StageEntry, SupersededResult,
-    ToolExecutionPipeline, ToolGuard, ToolGuardRequest, ToolOutcome,
+    ToolExecutionPipeline, ToolGuard, ToolGuardRequest, ToolOutcome, DEFAULT_MAX_TIMEOUT_MS,
 };
 pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
@@ -82,6 +99,14 @@ pub use observed_gate::{
 pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
 pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
+pub use self_status::{
+    capability_roster, derive_tuning_preset, render_snapshot, BudgetStatus, CapabilitySwitch,
+    MemoryLedgerStats, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SelfStatusTool,
+    StatusProbe, TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
+    DISPOSITION_PRESETS, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS,
+    PRODUCT_NAME, RUNTIME_ROLE_GATEWAY_SIDECAR,
+};
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};
 pub use stealth_crawler::{ExtractedMediaItem, StealthBrowserConfig, StealthCrawlerEngine};
+pub use write_intent::{scan_shell_write_intent, WriteIntentHit};

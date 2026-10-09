@@ -540,6 +540,20 @@ pub enum SessionEventKind {
         /// Optional human reason recorded at resolution time.
         human_reason: Option<String>,
     },
+    /// The model repeated, in the same turn, a proposal that governance had
+    /// already frozen for human approval. The repeat is folded onto the same
+    /// approval item ("视为同一待批准项"): no second approval is minted, and
+    /// the turn collapses directly instead of re-entering the freeze loop.
+    ApprovalReentryCollapsed {
+        /// Model-facing tool name of the repeated proposal.
+        tool_name: String,
+        /// The approval item the repeat was folded into.
+        approval_id: ApprovalId,
+        /// Status that item had reached when the repeat arrived.
+        prior_status: String,
+        /// Round of the repeated proposal.
+        round: u32,
+    },
     /// Provider routing could not serve a round.
     ProviderFailed {
         /// Legible terminal routing/provider error.
@@ -763,6 +777,13 @@ pub trait SessionStore: Send + Sync {
     /// Panel/introspection surface (`GET /v1/panel/sessions`). Ordering is part
     /// of the contract: the frontend renders the newest conversation first.
     async fn list(&self) -> RuntimeResult<Vec<Session>>;
+
+    /// Remove the stored session record.
+    ///
+    /// Returns `Ok(true)` when a record was removed, `Ok(false)` when the id
+    /// was not present. This deletes the durable transcript record — callers
+    /// own the retention decision.
+    async fn delete(&self, id: &SessionId) -> RuntimeResult<bool>;
 }
 
 /// A session store held in process memory.
@@ -814,6 +835,10 @@ impl SessionStore for InMemorySessionStore {
         });
         Ok(all)
     }
+
+    async fn delete(&self, id: &SessionId) -> RuntimeResult<bool> {
+        Ok(self.sessions.lock().await.remove(id).is_some())
+    }
 }
 
 /// Loads, creates, and persists sessions against a [`SessionStore`].
@@ -855,6 +880,18 @@ impl SessionManager {
             .save(session)
             .await
             .map_err(|e| RuntimeError::session_save(session.id, e.to_string()))
+    }
+
+    /// Remove `id` from the store, returning whether a record was removed.
+    pub async fn delete(&self, id: &SessionId) -> RuntimeResult<bool> {
+        self.store
+            .delete(id)
+            .await
+            .map_err(|e| RuntimeError::Session {
+                session: *id,
+                operation: "deleted",
+                reason: e.to_string(),
+            })
     }
 
     /// The clock this manager stamps sessions with.
@@ -1039,6 +1076,40 @@ mod tests {
         assert_eq!(migrated.permission_preset, PermissionPreset::Full);
     }
 
+    #[test]
+    fn session_settings_survive_json_roundtrip_for_each_preset() {
+        // Select a tier → serialize → deserialize: a populated session (with a
+        // transcript and a recorded fact) must read its settings back as the
+        // same tier, with the model override and the remember flag untouched —
+        // for every tier and every switch between tiers.
+        let clock = clock();
+        let mut session = Session::new(SessionId::new(), clock.as_ref());
+        session.append(NormalizedMessage::user("hello"), clock.as_ref());
+        session.record(
+            RequestId::new(),
+            TraceId::new(),
+            SessionEventKind::TurnStarted,
+            clock.as_ref(),
+        );
+        session.settings.model = Some("some/model".into());
+
+        for (preset, remember) in [
+            (PermissionPreset::ReadOnly, true),
+            (PermissionPreset::Standard, false),
+            (PermissionPreset::Full, true),
+        ] {
+            session.settings.permission_preset = preset;
+            session.settings.approval_remember = remember;
+
+            let json = serde_json::to_string(&session).unwrap();
+            let reloaded: Session = serde_json::from_str(&json).unwrap();
+
+            assert_eq!(reloaded.settings.permission_preset, preset);
+            assert_eq!(reloaded.settings.approval_remember, remember);
+            assert_eq!(reloaded.settings.model.as_deref(), Some("some/model"));
+        }
+    }
+
     #[tokio::test]
     async fn list_returns_sessions_most_recently_updated_first() {
         let virtual_clock = VirtualClock::new(
@@ -1060,5 +1131,27 @@ mod tests {
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].id, newer.id, "newest updated first");
         assert_eq!(listed[1].id, older.id);
+    }
+
+    #[tokio::test]
+    async fn delete_removes_the_stored_session_and_reports_it() {
+        let store = InMemorySessionStore::new();
+        let id = SessionId::new();
+        store
+            .save(&Session::new(id, clock().as_ref()))
+            .await
+            .unwrap();
+        assert_eq!(store.len().await, 1);
+
+        assert!(store.delete(&id).await.unwrap(), "record was present");
+        assert_eq!(store.len().await, 0);
+        assert!(store.load(&id).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn deleting_an_unknown_session_reports_nothing_removed() {
+        let store = InMemorySessionStore::new();
+
+        assert!(!store.delete(&SessionId::new()).await.unwrap());
     }
 }

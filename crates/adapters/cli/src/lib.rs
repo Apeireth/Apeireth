@@ -9,6 +9,7 @@
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
 pub mod gateway_panels;
 pub mod keyring_bootstrap;
+pub mod onboarding;
 pub mod portable_bundle;
 
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
@@ -32,7 +33,7 @@ use apeireth_runtime::canonical::{
     TurnRequest, TurnResponse,
 };
 use apeireth_runtime_assembly::SqliteSessionStore;
-use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
+use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
 
 /// One persistent SQLite database is shared by the cognitive backends.
 /// `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
@@ -60,6 +61,18 @@ pub const DISABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_DISABLE_LOCAL_READ_TOOL
 // organs / preference_learning 为认知模块装配旋钮。
 const ENABLE_SHELL_ENV: &str = "APEIRETH_ENABLE_SHELL";
 const ENABLE_FETCH_ENV: &str = "APEIRETH_ENABLE_FETCH";
+// 受控文件写入旋钮 (`tool.apply_patch`, 第七件生产工具): 注册 + 策略 grant +
+// 风险档位。默认关 (fail-closed); `APEIRETH_ENABLE_FILE_WRITE=1` = 注册工具 +
+// grant + require_approval —— 每次写入都要人批 (本地审批面板 + IM 审批卡同链)。
+// **文件写入总闸：apply_patch 与 shell 写命令同受此闸** (内测整改, 宪法级):
+// 关 = shell 写意图 (重定向/删除类/写命令面) 拒绝即帧 (pipeline.pre_deny);
+// 开 = shell 写命令行为不变 (照旧走审批链与既有风险映射)。
+pub const ENABLE_FILE_WRITE_ENV: &str = "APEIRETH_ENABLE_FILE_WRITE";
+// 「自动放行已读文件的修改」子档 (依赖主开关, 同 shellSandbox 嵌套依赖模式):
+// `APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS=1` 时仅**修改类**补丁免逐次审批;
+// 创建/删除永不自动放行 (仍进人工审批四态闭合 / IM 审批卡)。未读文件的修改
+// 由读前观测门禁直接拒绝 (先读后写)。
+pub const ENABLE_FILE_WRITE_AUTO_PASS_ENV: &str = "APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS";
 // MCP 外部工具桥旋钮 (轻默认, 默认关): `APEIRETH_ENABLE_MCP=1` 时装配外部工具桥,
 // 服务器列表走 `APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json` (拒开语义)。
 const ENABLE_MCP_ENV: &str = "APEIRETH_ENABLE_MCP";
@@ -87,6 +100,8 @@ const ENABLE_CONSOLIDATION_ENV: &str = "APEIRETH_ENABLE_CONSOLIDATION";
 const ENABLE_REFLEXION_ENV: &str = "APEIRETH_ENABLE_REFLEXION";
 const REFLEXION_DIR_ENV: &str = "APEIRETH_REFLEXION_DIR";
 const CONTEXT_BUDGET_CHARS_ENV: &str = "APEIRETH_CONTEXT_BUDGET_CHARS";
+const TURN_ROUNDS_ENV: &str = "APEIRETH_MAX_TURN_ROUNDS";
+const TOOL_CALLS_ENV: &str = "APEIRETH_MAX_TOOL_CALLS";
 
 /// Resolve the local read-tools switch from the process environment.
 ///
@@ -249,6 +264,24 @@ pub fn context_budget_chars_from_env() -> usize {
         .unwrap_or(apeireth_runtime::DEFAULT_CONTEXT_BUDGET_CHARS)
 }
 
+/// 回合轮数预算旋钮 (预算显式化): `APEIRETH_MAX_TURN_ROUNDS=N` = 单回合逻辑
+/// 轮数上限 (含模块重试占位)。越界值钳制到 `MIN_TURN_ROUNDS..=MAX_TURN_ROUNDS`,
+/// 未设 / 空 / 非法值 = 默认 `DEFAULT_MAX_ROUNDS` (8)。
+pub fn turn_round_limit_from_env() -> u32 {
+    apeireth_runtime::canonical::parse_turn_round_limit(
+        std::env::var(TURN_ROUNDS_ENV).ok().as_deref(),
+    )
+}
+
+/// 单轮工具调用预算旋钮 (预算显式化): `APEIRETH_MAX_TOOL_CALLS=N` = 单轮最多
+/// 派发多少个 tool call (超出部分截断并补合成结果)。越界值钳制到
+/// `MIN_TOOL_CALL_LIMIT..=MAX_TOOL_CALL_LIMIT`, 未设 / 空 / 非法值 = 默认 16。
+pub fn tool_call_limit_from_env() -> usize {
+    apeireth_runtime::canonical::parse_tool_call_limit(
+        std::env::var(TOOL_CALLS_ENV).ok().as_deref(),
+    )
+}
+
 /// Build the production governance policy from an explicit local-read choice.
 ///
 /// The explicit boolean keeps the policy deterministic and easy to test. The
@@ -257,6 +290,52 @@ pub fn context_budget_chars_from_env() -> usize {
 /// must never turn an unauthorized capability into an approval request.
 pub fn build_production_governance(enable_local_read_tools: bool) -> GovernancePipeline {
     build_production_governance_parts(enable_local_read_tools).0
+}
+
+/// 文件写入 (`tool.apply_patch`) 的治理风险档位 (件一风险映射)。
+///
+/// 三档与设置开关一一对应; 未授权的能力永不因内容风险被抬进审批
+/// (授权仍是第一钩子)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileWriteRiskLevel {
+    /// 未开主开关: 不 grant (写入工具不在授权面)。
+    Disabled,
+    /// 默认档: grant + require_approval 标记 —— **每次写入**都停在人工审批
+    /// (本地审批面板 + IM 审批卡同链)。
+    RequireApprovalEveryWrite,
+    /// 自动放行档: grant + 写入风险钩子 —— 修改类补丁放行; 创建/删除
+    /// **永不自动放行**, 停在人工审批 (同一审批链)。
+    AutoPassReadFileEdits,
+}
+
+/// 从环境变量解析写入风险档位 (子档依赖主开关, fail-closed)。
+pub fn file_write_risk_level_from_env() -> FileWriteRiskLevel {
+    if !file_write_enabled_from_env() {
+        return FileWriteRiskLevel::Disabled;
+    }
+    if file_write_auto_pass_enabled_from_env() {
+        FileWriteRiskLevel::AutoPassReadFileEdits
+    } else {
+        FileWriteRiskLevel::RequireApprovalEveryWrite
+    }
+}
+
+/// 受控文件写入主开关: `APEIRETH_ENABLE_FILE_WRITE=1` (默认关, fail-closed)。
+/// **文件写入总闸：apply_patch 与 shell 写命令同受此闸** —— 唯一写总闸,
+/// 开关名与权力相符 (内测整改)。
+pub fn file_write_enabled_from_env() -> bool {
+    std::env::var(ENABLE_FILE_WRITE_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 「自动放行已读文件的修改」子档: 主开关开且 `APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS=1`
+/// 才生效 (依赖主开关; 单独设子档 = 无效果)。
+pub fn file_write_auto_pass_enabled_from_env() -> bool {
+    file_write_enabled_from_env()
+        && std::env::var(ENABLE_FILE_WRITE_AUTO_PASS_ENV)
+            .ok()
+            .is_some_and(|value| value.trim() == "1")
 }
 
 use apeireth_guard::BehaviorChainGuardHook;
@@ -271,12 +350,17 @@ pub fn build_production_governance_parts(
     Arc<std::sync::Mutex<PermissionPolicy>>,
     Arc<BehaviorChainGuardHook>,
 ) {
-    build_production_governance_parts_with_dataset(enable_local_read_tools, None)
+    build_production_governance_parts_with_dataset(
+        enable_local_read_tools,
+        None,
+        FileWriteRiskLevel::Disabled,
+    )
 }
 
 fn build_production_governance_parts_with_dataset(
     enable_local_read_tools: bool,
     dataset: Option<Arc<DatasetRecorder>>,
+    file_write: FileWriteRiskLevel,
 ) -> (
     GovernancePipeline,
     Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -284,9 +368,30 @@ fn build_production_governance_parts_with_dataset(
 ) {
     let mut policy = PermissionPolicy::new();
     policy.grant(Permission::ExecuteTool("tool.repo".to_string()));
+    // 自省通道: `tool.self_status` 只读档 —— 默认可用、零审批 (无
+    // require_approval)。模型可实测自身状态再发言, 不靠翻文件撞见自己。
+    policy.grant(Permission::ExecuteTool("tool.self_status".to_string()));
     if enable_local_read_tools {
         policy.grant(Permission::ExecuteTool("tool.filesystem".to_string()));
         policy.grant(Permission::ExecuteTool("tool.search".to_string()));
+    }
+    // 件一风险映射: 受控文件写入 (`tool.apply_patch`) 的三档授权。
+    // 默认档 grant + require_approval 标记 = 每次写入都停在人工审批 (本地
+    // 审批面板 + IM 审批卡同链); 自动放行档只 grant, 放行规则交给写入风险
+    // 钩子 (修改类补丁放行, 创建/删除永不自动放行)。Disabled = 不 grant。
+    match file_write {
+        FileWriteRiskLevel::Disabled => {}
+        FileWriteRiskLevel::RequireApprovalEveryWrite => {
+            policy.grant(Permission::ExecuteTool(
+                APPLY_PATCH_CAPABILITY_ID.to_string(),
+            ));
+            policy.require_approval_for(APPLY_PATCH_CAPABILITY_ID);
+        }
+        FileWriteRiskLevel::AutoPassReadFileEdits => {
+            policy.grant(Permission::ExecuteTool(
+                APPLY_PATCH_CAPABILITY_ID.to_string(),
+            ));
+        }
     }
     let policy = Arc::new(std::sync::Mutex::new(policy));
     let mut guard = BehaviorChainGuardHook::new();
@@ -296,10 +401,18 @@ fn build_production_governance_parts_with_dataset(
     guard = configure_guard_classifier(guard);
     let guard_hook = Arc::new(guard);
 
-    let mut pipeline = GovernancePipeline::new()
-        .with(Arc::new(PermissionGovernanceHook::new_shared(
-            policy.clone(),
-        )))
+    let mut pipeline = GovernancePipeline::new().with(Arc::new(
+        PermissionGovernanceHook::new_shared(policy.clone()),
+    ));
+    // 自动放行档的放行规则 (授权之后、内容风险之前): 修改类补丁放行;
+    // 创建/删除停在 Decision::RequireApproval —— 与默认档同一条人工审批链
+    // (审批四态闭合 / IM 审批卡), 「删除/新建永不自动放行」单调生效。
+    if matches!(file_write, FileWriteRiskLevel::AutoPassReadFileEdits) {
+        pipeline = pipeline.with(Arc::new(
+            apeireth_tools_canonical::ApplyPatchWriteApprovalHook::new(),
+        ));
+    }
+    let mut pipeline = pipeline
         .with(Arc::new(CredentialDisclosureHook::new()))
         .with(Arc::new(PromptInjectionHook::new()))
         .with(guard_hook.clone());
@@ -377,6 +490,7 @@ fn build_production_governance_parts_from_env() -> (
     let (pipeline, policy, guard_hook) = build_production_governance_parts_with_dataset(
         enable_local_read_tools,
         production_guard_dataset_recorder(),
+        file_write_risk_level_from_env(),
     );
 
     // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
@@ -400,6 +514,18 @@ fn build_production_governance_parts_from_env() -> (
             guard.grant(Permission::ExecuteTool("tool.fetch".to_string()));
             guard.require_approval_for("tool.fetch");
         }
+    }
+    // education Dx-Check 工具 (`tool.education`, 纯确定性自查, 0 副作用):
+    // **开关开 = 注册 + 授权同源** (开关名与权力相符, 与 shell/fetch 同款
+    // 整改口径) —— 同一开关值 (`education_enabled_from_env`) 同时决定装配侧
+    // 注册与本授权面, 不再出现"注册了但权力没到手"。只读计算档不设
+    // require_approval (与 tool.repo / tool.self_status 同档); 会话权限预设
+    // (read_only 等) 的读能力白名单语义不受影响。
+    if education_enabled_from_env() {
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool("tool.education".to_string()));
     }
     (pipeline, policy, guard_hook)
 }
@@ -509,6 +635,11 @@ async fn build_canonical_runtime_with_parts(
     // 上下文预算旋钮 (APEIRETH_CONTEXT_BUDGET_CHARS): 注入上下文块的总字符预算,
     // 组装期约束 provider 请求的 token 侧注入量 (核心块永不截断)。
     builder = builder.with_context_budget_chars(context_budget_chars_from_env());
+    // 轮数 / 单轮工具调用预算旋钮 (APEIRETH_MAX_TURN_ROUNDS /
+    // APEIRETH_MAX_TOOL_CALLS): 显式预算, 越界钳制、非法值回默认。
+    builder = builder
+        .with_max_rounds(turn_round_limit_from_env())
+        .with_max_tool_calls_per_round(tool_call_limit_from_env());
     // 长尾截断的完整原文落盘根目录 (数据目录, 实际写入 `<data>/spill/`): 有落盘点时
     // 截断保留头尾预览 + 取回指引行; 落盘失败时回退内联原文 (宁长勿丢, 不失败调用)。
     builder = builder.with_context_spill_root(default_panel_data_dir());
@@ -757,6 +888,10 @@ async fn build_cognitive_modules_from_env(
                 .with_sandbox(shell_sandbox_enabled_from_env())
         }),
         fetch: fetch_enabled.then(FetchConfig::public_internet_only),
+        // 受控文件写入旋钮 (`tool.apply_patch`): 注册工具 + 风险档位同源
+        // (治理层 grant/approval 用同一 env 解析, 即效一致)。子档依赖主开关。
+        file_write: file_write_enabled_from_env(),
+        file_write_auto_pass: file_write_auto_pass_enabled_from_env(),
         // MCP 外部工具桥: 装配时加载服务器列表 (env 主入口 / 数据目录次入口,
         // 坏配置拒开), 数据目录与面板其余持久档同位。
         mcp: mcp_enabled,
@@ -819,6 +954,22 @@ async fn build_cognitive_modules_from_env(
         self_tuning: apeireth_runtime_assembly::SelfTuningWire::from_env(
             apeireth_runtime_assembly::tuning_log_path(),
         ),
+        // 自省通道: 记忆账本 / 凭据存在性探测口 + 授权层旋钮的名册行。
+        self_status_ledger: Some(self_status_ledger_probe(
+            path.clone(),
+            reflexion_store_root_from_env(),
+        )),
+        self_status_credentials: Some(self_status_credentials_probe(default_panel_data_dir())),
+        self_status_extras: vec![apeireth_tools_canonical::CapabilitySwitch::new(
+            "local_read_tools",
+            local_read_tools_enabled_from_env(),
+        )],
+        // 预算一节与运行时装配同源: 同一条可配置旋钮解析路径的取值
+        // (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS, 未设取默认)。
+        self_status_budget: Some(apeireth_runtime_assembly::budget_status_from_configured(
+            u64::from(turn_round_limit_from_env()),
+            tool_call_limit_from_env() as u64,
+        )),
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)
@@ -835,6 +986,11 @@ fn llm_credential_resolver() -> Arc<dyn apeireth_plugin::CredentialResolver> {
 /// 构造 Council 后端（2026-09-08 用户旋钮批）：优先 OpenAI-compatible
 /// （DeepSeek 等, env 配置时）→ 回退 MiniMax → 最后 Noop（0 装, advisors 会
 /// 显式 NotImplemented 而非静默）。
+///
+/// **数值旋钮同源接入**（开关生效链审计续）：顾问数 / 单顾问超时
+/// （`APEIRETH_COUNCIL_ADVISORS` / `APEIRETH_COUNCIL_TIMEOUT_MS`）与显式
+/// `council` 命令走同一条 [`council_config_from_env`] 解析——生产装配的
+/// council 也吃这两个旋钮，不再只有显式咨询路径生效。
 fn build_council_from_env() -> apeireth_orchestration::Council {
     use apeireth_orchestration::Council;
     use apeireth_plugin::llm_factory::LlmFactory as PluginLlmFactory;
@@ -855,7 +1011,7 @@ fn build_council_from_env() -> apeireth_orchestration::Council {
                 .unwrap_or_else(|| "deepseek-v4-flash".to_string());
             let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
                 Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory)));
-            return Council::with_factory(mirror, model);
+            return Council::with_factory(mirror, model).with_config(council_config_from_env());
         }
     }
     // MiniMax 回退仅在显式配了 MiniMax key 时成立 (0 装: 不凭空造一个会在
@@ -876,10 +1032,10 @@ fn build_council_from_env() -> apeireth_orchestration::Council {
                 .unwrap_or_else(|| "MiniMax-M3".to_string());
             let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
                 Arc::new(apeireth_plugin::MirrorLlmFactory::new(Arc::new(factory)));
-            return Council::with_factory(mirror, model);
+            return Council::with_factory(mirror, model).with_config(council_config_from_env());
         }
     }
-    Council::default_llm()
+    Council::default_llm().with_config(council_config_from_env())
 }
 
 /// **生产 subagent 长程任务** (2026-10-10): `plan → impl → review` 三步链
@@ -891,6 +1047,8 @@ pub async fn dispatch_subagent(
 ) -> Result<String, String> {
     use apeireth_orchestration::Orchestrator as _;
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let payload: serde_json::Value = match payload_json {
         Some(raw) => {
             serde_json::from_str(&raw).map_err(|error| format!("payload 不是合法 JSON: {error}"))?
@@ -1032,6 +1190,66 @@ fn cognitive_db_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(".apeireth/cognitive.sqlite3"))
 }
 
+/// 自省通道: 记忆账本计数探测口 —— 会话/记忆/保护计数取自认知库可查元数据
+/// ([`apeireth_memory::SqliteMemoryStore::ledger_counts`]), 教训计数取自反思
+/// 教训存储; **只回计数, 不回内容原文**。每次自述现探测; 失败给字段级
+/// `null` + 原因, 不让整帧失败。
+fn self_status_ledger_probe(
+    cognitive_db: PathBuf,
+    lessons_root: PathBuf,
+) -> apeireth_tools_canonical::StatusProbe<apeireth_tools_canonical::MemoryLedgerStats> {
+    use apeireth_memory::reflexion::ReflexionStore as _;
+    Arc::new(move || {
+        let store = apeireth_memory::SqliteMemoryStore::open(&cognitive_db)
+            .map_err(|error| format!("memory store open failed: {error}"))?;
+        let counts = store
+            .ledger_counts()
+            .map_err(|error| format!("memory ledger query failed: {error}"))?;
+        let reflexion = apeireth_memory::reflexion::FileReflexionStore::new(lessons_root.clone());
+        let (lessons, reason) = match reflexion.list_reflections() {
+            Ok(reflections) => (Some(reflections.len() as u64), None),
+            Err(error) => (None, Some(format!("lesson store read failed: {error}"))),
+        };
+        Ok(apeireth_tools_canonical::MemoryLedgerStats {
+            sessions: Some(counts.sessions),
+            memories: Some(counts.memories),
+            protected: Some(counts.protected),
+            lessons,
+            reason,
+        })
+    })
+}
+
+/// 自省通道: 凭据存在性探测口 —— **只回布尔, 不回显凭据本体**。
+///
+/// 判定口径: provider 凭据 env 启动值非空 / 运行时凭据库非空 / 数据目录存在
+/// 凭据存储件 (`creds.json` / 钥匙串导出物)。存在与否是自省事实, 值不是。
+fn self_status_credentials_probe(data_dir: PathBuf) -> apeireth_tools_canonical::StatusProbe<bool> {
+    Arc::new(move || {
+        const PROVIDER_KEY_ENVS: &[&str] = &[
+            "APEIRETH_API_KEY",
+            "APEIRETH_ANTHROPIC_KEY",
+            "APEIRETH_OPENAI_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+        ];
+        let env_present = PROVIDER_KEY_ENVS.iter().any(|key| {
+            std::env::var(key)
+                .ok()
+                .is_some_and(|value| !value.trim().is_empty())
+        });
+        let hot_present = !keyring_bootstrap::hot_credential_store().is_empty();
+        let file_present = [
+            "creds.json",
+            "apeireth-keyring.bin",
+            "apeireth-keyring.master.key",
+        ]
+        .iter()
+        .any(|name| data_dir.join(name).is_file());
+        Ok(env_present || hot_present || file_present)
+    })
+}
+
 /// Execute one CLI turn directly through [`Runtime::execute_outcome`].
 pub async fn execute_canonical_cli_turn(
     runtime: &Runtime,
@@ -1049,6 +1267,11 @@ pub async fn execute_canonical_cli_turn(
     });
     let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
     let mut request = TurnRequest::new(session, prompt).with_security_context(context);
+    // 引导档案的自我描述词（`apeireth onboard` 写入）: 无档案 / 逃生门开启 =
+    // None, 既有对话逐字节不变。
+    if let Some(identity) = crate::onboarding::identity_system_block() {
+        request = request.with_system(identity);
+    }
     if let Some(model) = model {
         request = request.with_model(model);
     }
@@ -1081,6 +1304,9 @@ pub async fn dispatch_canonical_chat(
     model: Option<String>,
     session: Option<String>,
 ) -> Result<CanonicalCliTurn, String> {
+    // 引导档案激活（普通用户预设值 + 自动调参补位; 只补未设 env, 显式 env 最高,
+    // 无档案 = 0 行为变化）。gateway / 桌面侧车路径不激活, 互不干扰。
+    crate::onboarding::activate_for_process();
     let prompt = prompt.into();
     let session = session
         .map(|id| id.parse::<SessionId>().map_err(|error| error.to_string()))
@@ -1088,6 +1314,11 @@ pub async fn dispatch_canonical_chat(
     let (runtime, observer) = build_canonical_runtime_from_env_with_observability().await?;
     let result = execute_canonical_cli_turn(&runtime, prompt.as_str(), model, session).await;
     observer.flush().await;
+    // 普通用户自动调参: 回合一结束回写用量（best-effort, 不影响回合结果;
+    // 无档案 / 非普通用户 / 调参关 = no-op）。
+    if let Ok(CanonicalCliTurn::Completed(response)) = &result {
+        crate::onboarding::record_turn_usage(prompt.chars().count(), response);
+    }
     // W3 onering 消费 (2026-10-10, 默认关): 完成的回合留痕到跨前端统一账本
     // (best-effort 旁路, 不影响回合结果; 挂起待审批的回合不记 —— 回合未完成)。
     if onering_ledger_enabled_from_env() {
@@ -1109,6 +1340,8 @@ pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Resul
     use apeireth_runtime_assembly::canonical::nightwatch::{EpisodeSnapshot, NightwatchInputs};
     use apeireth_storage::SqliteConnectionPool;
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let pool = Arc::new(
         SqliteConnectionPool::open(cognitive_db_path())
             .await
@@ -1178,6 +1411,8 @@ pub async fn dispatch_nightwatch_watch(
     use apeireth_storage::SqliteConnectionPool;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let pool = Arc::new(
         SqliteConnectionPool::open(cognitive_db_path())
             .await
@@ -1326,6 +1561,8 @@ pub async fn dispatch_dream(
     use apeireth_runtime_assembly::canonical::{FallbackMetaThinker, LlmMetaThinker};
     use apeireth_storage::SqliteConnectionPool;
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let path = cognitive_db_path();
     let pool = Arc::new(
         SqliteConnectionPool::open(&path)
@@ -1463,6 +1700,8 @@ pub async fn dispatch_council(topic: String) -> Result<String, String> {
     use apeireth_core::kernel::SessionId;
     use apeireth_orchestration::{Council, CouncilVerdict, Proposal};
 
+    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
+    crate::onboarding::activate_for_process();
     let (factory, model) = llm_factory_from_env()?;
     let mirror: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
         Arc::new(apeireth_plugin::MirrorLlmFactory::new(factory));
@@ -1611,7 +1850,7 @@ pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, 
 
 /// Data directory for panel archives. `APEIRETH_DATA_DIR` overrides; the
 /// default is `~/.apeireth` (same place as the keyring and session dbs).
-fn default_panel_data_dir() -> PathBuf {
+pub(crate) fn default_panel_data_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("APEIRETH_DATA_DIR") {
         if !dir.trim().is_empty() {
             return PathBuf::from(dir);
@@ -1697,5 +1936,144 @@ mod onering_ledger_tests {
         assert!(ledger
             .record("system", Some("x"), "cli", "内容", 1)
             .is_err());
+    }
+}
+
+/// 开关生效链审计续 (治理 grant 同源 / council 数值旋钮消费): env 是进程全局,
+/// 用例串在一把锁后, 逐键保存-恢复。
+#[cfg(test)]
+mod capability_switch_chain_tests {
+    use super::*;
+    use apeireth_orchestration::{
+        Advisor, AdvisorDecision, AdvisorVerdict, CouncilCallError, CouncilInvoker, Proposal,
+    };
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    const TOUCHED_KEYS: &[&str] = &[
+        "APEIRETH_ENABLE_EDUCATION",
+        "APEIRETH_COUNCIL_ADVISORS",
+        "APEIRETH_COUNCIL_TIMEOUT_MS",
+        "APEIRETH_OPENAI_MODELS",
+        "APEIRETH_API_KEY",
+    ];
+
+    /// 清空本组用例涉及的 env (工厂 env 一并清: council 走 0 装 Noop 路径)。
+    fn clear_env() -> Vec<(&'static str, Option<String>)> {
+        let previous: Vec<(&'static str, Option<String>)> = TOUCHED_KEYS
+            .iter()
+            .map(|key| (*key, std::env::var(key).ok()))
+            .collect();
+        for key in TOUCHED_KEYS {
+            std::env::remove_var(key);
+        }
+        previous
+    }
+
+    fn restore_env(previous: Vec<(&'static str, Option<String>)>) {
+        for (key, value) in previous {
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
+
+    /// education 开关同源接线: 开关开 = 注册 + 授权同侧生效 (零审批只读档),
+    /// 开关关 = 未授权 (fail-closed, 调用被拒)。
+    #[test]
+    fn education_grant_follows_the_registration_switch() {
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let previous = clear_env();
+
+        std::env::set_var("APEIRETH_ENABLE_EDUCATION", "1");
+        let (_, policy, _) = build_production_governance_parts_from_env();
+        let policy = policy.lock().expect("policy lock");
+        assert!(
+            policy.has(&Permission::ExecuteTool("tool.education".to_string())),
+            "开关开必须同源 grant tool.education"
+        );
+        assert!(
+            policy
+                .decision_for_capability("tool.education")
+                .is_allowed(),
+            "只读计算档应放行且零审批"
+        );
+        drop(policy);
+
+        std::env::remove_var("APEIRETH_ENABLE_EDUCATION");
+        let (_, policy, _) = build_production_governance_parts_from_env();
+        let policy = policy.lock().expect("policy lock");
+        assert!(
+            !policy.has(&Permission::ExecuteTool("tool.education".to_string())),
+            "开关关不得授权 (fail-closed)"
+        );
+        assert!(
+            !policy
+                .decision_for_capability("tool.education")
+                .is_allowed(),
+            "未授权能力必须拒绝"
+        );
+
+        restore_env(previous);
+    }
+
+    /// 桩 side-call 适配器: 计数可见即 max_advisors 可见。
+    struct CountingInvoker;
+
+    #[async_trait::async_trait]
+    impl CouncilInvoker for CountingInvoker {
+        async fn invoke(
+            &self,
+            _advisor: Arc<dyn Advisor>,
+            _proposal: &Proposal,
+        ) -> Result<AdvisorVerdict, CouncilCallError> {
+            AdvisorVerdict::new(1.0, AdvisorDecision::Allow, "", Some(1.0))
+                .map_err(CouncilCallError::Provider)
+        }
+    }
+
+    /// council 数值旋钮同源消费: 生产装配的 council 吃
+    /// `APEIRETH_COUNCIL_ADVISORS` (裁决顾问数上限即批次上限, 越界钳制 1..=7)。
+    #[tokio::test]
+    async fn production_council_consumes_the_advisor_count_knob() {
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let previous = clear_env();
+
+        let proposal = Proposal {
+            id: "council-knob".into(),
+            proposer: "test".into(),
+            payload: serde_json::json!({}),
+            submitted_at: 0,
+            session_id: apeireth_core::kernel::SessionId::new(),
+        };
+
+        std::env::set_var("APEIRETH_COUNCIL_ADVISORS", "2");
+        let council = build_council_from_env();
+        let result = council
+            .decide_with_invoker(&proposal, &CountingInvoker)
+            .await;
+        assert_eq!(
+            result.side_call_count, 2,
+            "APEIRETH_COUNCIL_ADVISORS=2 必须被生产 council 消费: {:?}",
+            result.evaluations
+        );
+
+        std::env::set_var("APEIRETH_COUNCIL_ADVISORS", "1");
+        let council = build_council_from_env();
+        let result = council
+            .decide_with_invoker(&proposal, &CountingInvoker)
+            .await;
+        assert_eq!(result.side_call_count, 1, "顾问数上限逐档生效");
+
+        std::env::set_var("APEIRETH_COUNCIL_ADVISORS", "99");
+        let council = build_council_from_env();
+        let result = council
+            .decide_with_invoker(&proposal, &CountingInvoker)
+            .await;
+        assert_eq!(result.side_call_count, 7, "越界钳制到 7 个规范顾问位");
+
+        restore_env(previous);
     }
 }

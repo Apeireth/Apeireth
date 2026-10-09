@@ -14,6 +14,12 @@
 //! Pure Safe Rust (`#![deny(unsafe_code)]`).
 
 use serde::{Deserialize, Serialize};
+// cfg(kani) 证明面容器: HashMap 的哈希/桶机器是 CBMC 路径爆炸源 (见
+// research/verification/kani/src/lib.rs kani_collections 注); 线性表语义与
+// std HashMap 等价。真 crate 里 cfg(kani) 行编译期剔除, 生产类型不变。
+#[cfg(kani)]
+use super::kani_collections::HashMap;
+#[cfg(not(kani))]
 use std::collections::HashMap;
 
 /// Environmental state snapshot.

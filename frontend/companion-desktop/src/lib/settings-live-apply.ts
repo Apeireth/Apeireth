@@ -139,8 +139,18 @@ export function personasSnapshot(personas: PersonaProfile[], activePersonaId: st
 /**
  * 危险动作 = 删数据 / 清记忆 / 断开连接类：点按钮只打开确认弹层，
  * 确认后才即效。登记表是唯一文案来源（测试镜像校验覆盖面）。
+ *
+ * 会话清理双档（docs/01-architecture/session-cleanup-options-spec.md）：
+ *   clearRecentConversations ① 清除近期对话记录（保留长期记忆，7 天窗口）；
+ *   clearAllSessionData     ② 清除全部会话数据（保留长期记忆，含调用日志）。
+ * 两档文案必须含"长期记忆不受影响"句（红线 C，tests/session-cleanup.mjs 机器断言）。
  */
-export type DangerActionKey = 'clearLocalData' | 'deleteStoredKey' | 'removePersona' | 'clearCustomBg';
+export type DangerActionKey =
+  | 'clearRecentConversations'
+  | 'clearAllSessionData'
+  | 'deleteStoredKey'
+  | 'removePersona'
+  | 'clearCustomBg';
 
 export interface DangerActionConfirm {
   title: string;
@@ -149,10 +159,17 @@ export interface DangerActionConfirm {
 }
 
 export const DANGER_ACTION_CONFIRMATIONS: Record<DangerActionKey, DangerActionConfirm> = {
-  clearLocalData: {
-    title: '清空本地所有会话',
-    message: '确定要清空本地保存的所有会话记录吗？此操作无法撤销。',
-    confirmText: '确认清空',
+  clearRecentConversations: {
+    title: '清除近期对话记录',
+    message:
+      '将删除最近 7 天内的对话记录：本机聊天正文与后端账本记录一并真删，重启不复活。长期记忆（他从相处中学到的东西）不受影响。此操作无法撤销。',
+    confirmText: '确认清除',
+  },
+  clearAllSessionData: {
+    title: '清除全部会话数据',
+    message:
+      '将删除全部会话：本机聊天正文、后端账本记录、挂起的审批与调用日志一并真删。长期记忆不受影响——如需连同长期记忆一起遗忘，是另一个动作（记忆遗忘），需要单独审批。此操作无法撤销。',
+    confirmText: '全部清除',
   },
   deleteStoredKey: {
     title: '删除已存密钥',

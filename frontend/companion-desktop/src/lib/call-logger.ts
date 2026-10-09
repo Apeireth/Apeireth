@@ -95,6 +95,17 @@ export function clearCallLogs(): void {
   notifyListeners();
 }
 
+/**
+ * 只清指定会话归属的调用日志（会话清理 ① 档用）。
+ * 无 conversationId 归属的条目保留（0 装：无法归属就不冒充归属）。
+ */
+export function clearCallLogsFor(conversationIds: ReadonlySet<string>): void {
+  const logs = loadLogs();
+  memoryLogs = logs.filter((entry) => !entry.conversationId || !conversationIds.has(entry.conversationId));
+  persistLogs();
+  notifyListeners();
+}
+
 export function subscribeCallLogs(listener: LogListener): () => void {
   listeners.add(listener);
   listener(loadLogs());

@@ -4,7 +4,10 @@ export type ViewId = 'chat' | 'conversations' | 'activity' | 'tools' | 'memory' 
 // 2026-09-23 主人指示「最后我们都是要做的」：day/ocean/forest/paper 四主题
 // 当日曾作为空心项删除（无实现点了无反应），现在真实现补全（令牌+背景见
 // tokens.css/base.css/shell.css），从空心回归现役。
-export type Theme = 'heritage-void' | 'essence' | 'night' | 'day' | 'ocean' | 'forest' | 'paper';
+// starship = 科幻 HUD 档（深空黑底 + 发光数据，纯主题层切换，见 design/hud.css）。
+// origin = 原初（默认档，DeepSeek 原生界面风：白底/品牌蓝/零动画纯色层，2026-10-03 拍板）。
+// noir = 纯黑（真黑 AMOLED 档，零装饰高对比，2026-10-03 拍板）。
+export type Theme = 'origin' | 'noir' | 'heritage-void' | 'essence' | 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'starship';
 
 /** UI 配色方案 id（规范 §8 增补⑤）：只染 UI 高亮，不占存在金 */
 export type Accent = 'presence-gold' | 'deep-space' | 'sage' | 'bone';
@@ -236,6 +239,10 @@ export interface CapabilityToggles {
   fetch: boolean;
   /** 工具: 本地只读工具（file/search/repo 不经审批的读侧） */
   localReadTools: boolean;
+  /** 工具: 受控文件写入（apply_patch 补丁式写入；创建/修改/删除须在补丁里声明） */
+  fileWrite: boolean;
+  /** 工具子开关「自动放行已读文件修改」（依赖 fileWrite 主开关，同 shellSandbox 嵌套行模式） */
+  fileWriteAutoPass: boolean;
   /** AfterTurn 器官链（9 organs） */
   organs: boolean;
   /** 偏好学习双索引写回 */
@@ -292,6 +299,14 @@ export interface CapabilityToggles {
   consolidationCadence: number;
   /** 从使用中学习（自学习自动微调体验参数；默认关） */
   selfTuning: boolean;
+  /** 单回合轮数上限（APEIRETH_MAX_TURN_ROUNDS 同源；null = 未配置 = 后端默认 8，
+   *  越界钳制 1..=64、非法回默认的解析语义保留在后端 CLI） */
+  maxTurnRounds: number | null;
+  /** 单轮工具调用上限（APEIRETH_MAX_TOOL_CALLS 同源；null = 未配置 = 后端默认 16） */
+  maxToolCalls: number | null;
+  /** 上下文注入总字符预算（APEIRETH_CONTEXT_BUDGET_CHARS 同源；null = 未配置 = 后端
+   *  默认 24000；正整数直通、越界/非法回默认） */
+  contextBudgetChars: number | null;
 }
 
 export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
@@ -299,6 +314,8 @@ export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   shellSandbox: true,
   fetch: false,
   localReadTools: true,
+  fileWrite: false,
+  fileWriteAutoPass: false,
   organs: false,
   preferenceLearning: true,
   proactiveRecall: true,
@@ -327,6 +344,9 @@ export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   toneSaturation: 1.0,
   consolidationCadence: 1,
   selfTuning: false,
+  maxTurnRounds: null,
+  maxToolCalls: null,
+  contextBudgetChars: null,
 };
 
 /**
