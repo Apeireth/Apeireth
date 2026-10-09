@@ -29,18 +29,42 @@ fn bounded_f32() -> f32 {
     (m % 2001) as f32 / 100.0
 }
 
-/// 证明: 任意 ≤4 字符串经 has_fold_markers/parse_fold_blocks/render_fold_blocks
-/// 全程无 panic, 且渲染记账恒等 (expanded + hidden == blocks 数)。
-/// 边界: 输入 4 字符 (行数 ≤ 4, ASCII 具体长度, 见 bounded_string 注);
-/// similarity 覆盖 = 任意有限 f32 ∈ (-20,20) (整数映射) + 具名 NaN/±∞/0.0
-/// 案例 (契约"NaN 视作 0.0"仍具名覆盖); unwind 24。
-/// 口径修订 2026-10-07 (三次): N 8→4 与 sim 收敛 —— 符号内容解析分支 ×
-/// 符号 f32 软浮点位爆炸令 45m 跑不完 (run 113296231995: memchr 3066×31 +
-/// memcmp 1426×31 仍未收); 多字符/多行/特殊 f32 具体例由单元测试互补。
+/// fold 文档结构化生成器 (口径四改 2026-10-08, 见 fold_block harness 注):
+/// 行取自 {完整标记行, 断标记行, 文本行, 空行} × 任意 ASCII 尾字节 ×
+/// 有/无换行 —— 内容大头是字面量 (memcmp/搜索逐字节即决), 少量符号字节
+/// 分支, 覆盖真实解析状态 (正常/断标记/夹心/空行) 而公式有限。
+fn fold_doc<const L: usize>() -> String {
+    let mut doc = String::new();
+    for _ in 0..L {
+        let tail = char::from(kani::any::<u8>() & 0x7F);
+        match kani::any::<u8>() % 4 {
+            0 => doc.push_str("[===fold:0.5===]"),
+            1 => doc.push_str("[===fold:0.5"),
+            2 => {
+                doc.push('x');
+                doc.push(tail);
+            }
+            _ => {}
+        }
+        if kani::any::<bool>() {
+            doc.push('\n');
+        }
+    }
+    doc
+}
+
+/// 证明: 任意 ≤3 行 fold 文档经 has_fold_markers/parse_fold_blocks/
+/// render_fold_blocks 全程无 panic, 且渲染记账恒等 (expanded + hidden ==
+/// blocks 数)。
+/// 边界 (口径四改 2026-10-08): 文档结构化 (见 fold_doc 注; 随机字节串让
+/// 解析器在垃圾路径空转 —— run 113318670470 实测 same_allocation 1988× +
+/// TwoWaySearcher 650×, N=4 仍 45m 未收); similarity = 任意有限 f32 ∈
+/// (-20,20) + 具名 NaN/±∞/0.0 (契约"NaN 视作 0.0"具名覆盖); unwind 24。
+/// 长文档/多标记/多字节具体例由单元测试互补。
 #[kani::proof]
 #[kani::unwind(24)]
 fn kani_panic_free_fold_block_string_pipeline() {
-    let s = bounded_string::<4>();
+    let s = fold_doc::<3>();
     let _markers = has_fold_markers(&s);
     let blocks = parse_fold_blocks(&s);
     for sim in [
