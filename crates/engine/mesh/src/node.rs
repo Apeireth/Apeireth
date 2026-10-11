@@ -35,9 +35,12 @@ use tokio::sync::oneshot;
 use crate::error::{MeshError, MeshExecError};
 use crate::executor::{catalog_to_modules, CancelFlag, MeshCapabilityExecutor, MeshInvokeContext};
 use crate::peer::{Peer, PeerState};
+use crate::presence_store::{PresenceError, PresenceStore, PresenceUpdate};
+use crate::punch::{punch, PunchCoordinator};
 use crate::route::{RemoteCapability, RouteSelection, RouteTable};
-use crate::transport::MeshConnection;
+use crate::transport::{MeshConnection, MeshListener, MeshTransport};
 use crate::trust::{KnownPeer, PeerTrust, TrustPolicy};
+use crate::VerifiedPresence;
 
 /// Default silence after which a peer is considered unreachable.
 pub const DEFAULT_HEARTBEAT_TIMEOUT_MS: u64 = 15_000;
@@ -310,6 +313,12 @@ pub struct MeshNode {
     generation: std::sync::atomic::AtomicU64,
     /// Flips to `true` once on [`MeshNode::shutdown`]; background loops watch it.
     shutdown: tokio::sync::watch::Sender<bool>,
+    /// Simultaneous-open coordination state, driven by
+    /// [`MeshNode::connect_punched`].
+    punch: Arc<PunchCoordinator>,
+    /// The current verified reachability of each known peer. Feeds
+    /// [`MeshNode::connect_punched`]; never a trust or liveness signal.
+    presence: Mutex<PresenceStore>,
 }
 
 impl MeshNode {
@@ -337,6 +346,8 @@ impl MeshNode {
             invocations: Arc::new(Mutex::new(BTreeMap::new())),
             generation: std::sync::atomic::AtomicU64::new(0),
             shutdown: tokio::sync::watch::channel(false).0,
+            punch: Arc::new(PunchCoordinator::default()),
+            presence: Mutex::new(PresenceStore::new()),
         })
     }
 
@@ -383,6 +394,10 @@ impl MeshNode {
     /// and drops its pin (so no key can reconnect under that id), its
     /// connection closes, pending calls fail, and its projected capabilities
     /// disappear. Persisted removal is [`crate::TrustStore::forget`].
+    ///
+    /// Everything *derived* from the peer's reachability is dropped with it:
+    /// its stored presence and any punch attempt bound to either side's
+    /// incarnation. A revoked peer must not keep dialling anything.
     pub fn revoke_peer(&self, node: &NodeId) {
         {
             let mut trust = self
@@ -401,6 +416,59 @@ impl MeshNode {
             });
         }
         self.forget_peer(node);
+        self.presence
+            .lock()
+            .expect("mesh presence poisoned")
+            .remove(node);
+        self.punch.invalidate_peer(node);
+    }
+
+    /// The simultaneous-open coordination state this node drives.
+    ///
+    /// Shared with [`MeshNode::connect_punched`]: a caller that learns about
+    /// coordination out of band (an existing relay link, a rendezvous hint)
+    /// can wait on the same coordinator the dialer requests on.
+    pub fn punch_coordinator(&self) -> Arc<PunchCoordinator> {
+        Arc::clone(&self.punch)
+    }
+
+    /// Record a peer's current, already-verified reachability.
+    ///
+    /// This is metadata about *where to dial*, never trust: it is upserted
+    /// under the same rules as [`PresenceStore`] (a restated incarnation with
+    /// different reachability, an already-expired record, or a lease that
+    /// does not advance are all refused). When a new incarnation replaces an
+    /// old one, every punch attempt bound to the previous incarnation is
+    /// invalidated here — an attempt may only ever dial the snapshot it was
+    /// created for.
+    pub fn note_presence(
+        &self,
+        presence: VerifiedPresence,
+    ) -> Result<PresenceUpdate, PresenceError> {
+        let peer = presence.node_id().clone();
+        let update = self
+            .presence
+            .lock()
+            .expect("mesh presence poisoned")
+            .upsert(presence, self.now_ms())?;
+        if let PresenceUpdate::Replaced {
+            previous_session_id,
+            ..
+        } = update
+        {
+            self.punch.invalidate_incarnation(&peer, previous_session_id);
+        }
+        Ok(update)
+    }
+
+    /// This peer's current verified presence, or `None` when it is unknown or
+    /// its lease has lapsed.
+    pub fn peer_presence(&self, peer: &NodeId) -> Option<VerifiedPresence> {
+        self.presence
+            .lock()
+            .expect("mesh presence poisoned")
+            .current(peer, self.now_ms())
+            .cloned()
     }
 
     /// Whether [`MeshNode::shutdown`] has been called.
@@ -656,6 +724,130 @@ impl MeshNode {
         self.send_advert_to(&peer_id, &link).await;
         self.spawn_connection_loop(peer_id.clone(), link, generation);
         Ok(peer_id)
+    }
+
+    /// Establish a direct connection to a trusted peer by **simultaneous
+    /// open**, driven from the production connection path.
+    ///
+    /// This is the seam the hole-punch machinery was missing: everything
+    /// below it already existed (`PresenceStore`, `PunchCoordinator`,
+    /// `punch`, pinned QUIC, `activate_peer` convergence); nothing called it.
+    /// The steps, in order, each one the existing production step rather
+    /// than a test shortcut:
+    ///
+    /// 1. **Trust first.** An unadmitted peer is refused before any packet
+    ///    is sent — a punch authorizes nothing.
+    /// 2. **Presence is recorded** through [`MeshNode::note_presence`], so a
+    ///    replayed, expired, or lease-stale record fails closed here instead
+    ///    of poisoning later dials. The record must describe `peer` and must
+    ///    still be inside its lease.
+    /// 3. **Coordination is requested** on this node's own
+    ///    [`PunchCoordinator`], bound to both current incarnations: our own
+    ///    (`local_presence_session`) and the peer's (`remote_presence`).
+    /// 4. **Both halves run on one endpoint.** `endpoint` must implement
+    ///    *both* [`MeshTransport`] and [`MeshListener`] — one bound socket in
+    ///    both roles, so the NAT mapping the peer's candidates describe is
+    ///    the mapping this node dials from and accepts on. The generic bound
+    ///    is what makes "two uncoordinated sockets" inexpressible rather
+    ///    than merely discouraged.
+    /// 5. **The surviving link is handshaked** by the ordinary connection
+    ///    path: the dial side through [`MeshNode::connect`], the accept side
+    ///    through [`MeshNode::accept`] — pinned identity, protocol version,
+    ///    adverts, activation and duplicate-connection convergence are
+    ///    exactly what any other connection gets.
+    ///
+    /// Failure is bounded and explicit: [`MeshError::PunchFailed`] means no
+    /// authenticated connection appeared inside the window, which is the
+    /// caller's signal to fall back to the relay path — never to retry
+    /// forever. A [`MeshError::Superseded`] from step 5 is reported as
+    /// success: the peer's dial won the convergence race and the pair has
+    /// exactly one live link either way.
+    pub async fn connect_punched<E>(
+        self: &Arc<Self>,
+        peer: NodeId,
+        remote_presence: &VerifiedPresence,
+        local_presence_session: u64,
+        endpoint: Arc<E>,
+        window_ms: u64,
+    ) -> Result<NodeId, MeshError>
+    where
+        E: MeshTransport + MeshListener + 'static,
+    {
+        if self.is_shutdown() {
+            return Err(MeshError::Transport("node is shut down".to_string()));
+        }
+        // 1. Trust gate, before a single datagram.
+        self.authorize(&peer)?;
+
+        // 2. Presence must be current, ours to dial, and about this peer.
+        let now = self.now_ms();
+        if remote_presence.node_id() != &peer {
+            return Err(MeshError::PunchFailed {
+                peer: peer.to_string(),
+                reason: format!(
+                    "presence describes {}, not {peer}",
+                    remote_presence.node_id()
+                ),
+            });
+        }
+        if remote_presence.expires_at_ms() <= now {
+            return Err(MeshError::PunchFailed {
+                peer: peer.to_string(),
+                reason: format!(
+                    "presence incarnation {} expired at {} (now {now})",
+                    remote_presence.session_id(),
+                    remote_presence.expires_at_ms()
+                ),
+            });
+        }
+        self.note_presence(remote_presence.clone())
+            .map_err(|error| MeshError::PunchFailed {
+                peer: peer.to_string(),
+                reason: format!("presence refused: {error}"),
+            })?;
+
+        // 3. One bounded attempt, bound to both incarnations.
+        let session = self
+            .punch
+            .request(
+                self.node_id(),
+                &peer,
+                local_presence_session,
+                remote_presence.session_id(),
+                now,
+                window_ms,
+            )
+            .map_err(|error| MeshError::PunchFailed {
+                peer: peer.to_string(),
+                reason: error.to_string(),
+            })?;
+
+        // 4. Both halves over the one dual-role socket.
+        let dialer: Arc<dyn MeshTransport> = endpoint.clone();
+        let listener: Arc<dyn MeshListener> = endpoint.clone();
+        let outcome =
+            punch(&session, dialer, listener, remote_presence, now)
+                .await
+                .map_err(|error| MeshError::PunchFailed {
+                    peer: peer.to_string(),
+                    reason: error.to_string(),
+                })?;
+
+        // 5. The survivor goes through the ordinary handshake — the dial side
+        // through `connect`, the accept side through `accept`, exactly as if
+        // each had arrived on its own — and then the ordinary convergence.
+        // Nothing about a punched link is special above this line.
+        let handshaken = match outcome.kept_direction {
+            crate::Direction::Outbound => self.connect(outcome.kept, peer.clone()).await,
+            crate::Direction::Inbound => self.accept(outcome.kept).await,
+        };
+        match handshaken {
+            Ok(connected) => Ok(connected),
+            // The peer's dial won the convergence race: exactly one live
+            // authenticated link exists either way.
+            Err(MeshError::Superseded { .. }) => Ok(peer),
+            Err(error) => Err(error),
+        }
     }
 
     /// Forget a peer entirely (§18): drop its connection and its capability
@@ -1126,6 +1318,10 @@ impl MeshNode {
     /// Their routes stop dispatching; their projections and known-peer
     /// identities survive, so a reconnect restores service without pretending
     /// anything was permanently lost.
+    ///
+    /// Lapsed presence leases are pruned in the same sweep, and every punch
+    /// attempt bound to a pruned peer is invalidated: an attempt may only
+    /// ever dial a snapshot that still exists.
     pub fn sweep_heartbeats(&self, now_ms: u64) {
         let mut peers = self.peers.lock().expect("mesh peers poisoned");
         let mut gone = Vec::new();
@@ -1140,6 +1336,14 @@ impl MeshNode {
         drop(peers);
         for node in gone {
             self.fail_pending_for_peer(&node, "peer unreachable (heartbeat timeout)");
+        }
+        for expired in self
+            .presence
+            .lock()
+            .expect("mesh presence poisoned")
+            .prune_expired(now_ms)
+        {
+            self.punch.invalidate_peer(&expired);
         }
     }
 
