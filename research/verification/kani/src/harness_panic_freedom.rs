@@ -7,26 +7,57 @@
 
 use super::async_context::{AsyncArrayKind, AsyncContextMessage, AsyncContextPipeline};
 use super::file_fetcher::TransparentFileFetcher;
-use super::fold_block::{has_fold_markers, parse_fold_blocks, render_fold_blocks};
+use super::fold_block::{has_fold_markers, parse_fold_blocks, render_fold_blocks, FoldBlock};
 use super::residual_pyramid::OrthogonalResidualPyramid;
 use super::river_topology::{DualScaledFieldSolver, RiverObservability, RiverState};
 use super::semantic_axis::SemanticAxisBridge;
 
-/// 任意 N 字符串 (码点 = ASCII 0..=127, 含 NUL/控制字符)。
-/// 口径修订 2026-10-07 (二次): 生成器三易其稿 —— ① 原 lossy 字节串: UTF-8
-/// 验证机器 (Utf8Chunks) 爆 52+ 层; ② Latin-1 码点: 编码 1-2 字节变长 →
-/// 串字节长度符号化 → memchr/搜索循环全线按 unwind 上界展开 (run 112828475849
-/// 实测 memchr 8757 次 × 63 层); ③ 现 ASCII: 字节长度恒 = N (具体值),
-/// 根串搜索循环精确收敛。收窄面 = 不覆盖多字节编码分支 (属 std 编码机器、
-/// 不在命题面; 多字节具体例由单元测试互补)。
+/// 任意 N 字符串 (字节 0..=127, 含 NUL/控制字符)。
+/// 口径修订 2026-10-11 (四次·真解): 生成器四易其稿 —— ③ char::collect 令
+/// CBMC 无法证明编码 1 字节/char (encode_utf8 分支) → 串长符号化 → 主循环
+/// 展开断言 FAILURE; ④ 字节数组 + from_utf8 —— 长度可证具体, 但 from_utf8
+/// 的 UTF-8 验证循环 + unwrap 失败路径的 panic/格式化机器 (rustc_demangle
+/// TwoWaySearcher) 仍是 churn 源。终解 = 字节数组 + from_utf8_unchecked:
+/// 字节掩码 <0x80 构造即合法 UTF-8, 安全性由构造保证, 验证机/panic 路径
+/// 双双退出证明面。
 fn bounded_string<const N: usize>() -> String {
-    (0..N).map(|_| char::from(kani::any::<u8>() & 0x7F)).collect()
+    let bytes: Vec<u8> = (0..N).map(|_| rep_byte()).collect();
+    // SAFETY: rep_byte() 全部 < 0x80 (ASCII), 必为合法 UTF-8。
+    unsafe { String::from_utf8_unchecked(bytes) }
 }
 
-/// 有界有限 f32 ∈ (-20, 20) (经整数取模构造, 不会产生 NaN/inf)。
+/// 有界有限 f32 (9 档代表值域 ∈ [-20, 20))。表选择零算术 ——
+/// 旧版 `(m % 2001) as f32 / 100.0` 的生成器自身带 int→f32 转换与除法,
+/// 每次取值都是软浮点位爆炸源 (K12); 常量表选择让生成器零成本。
+/// 覆盖: 负大/负小/负极小/零/正极小/正小/正 1/正大/正边界。
 fn bounded_f32() -> f32 {
-    let m: i32 = kani::any();
-    (m % 2001) as f32 / 100.0
+    match kani::any::<u8>() % 9 {
+        0 => -20.0,
+        1 => -1.5,
+        2 => -0.01,
+        3 => 0.0,
+        4 => 0.01,
+        5 => 0.5,
+        6 => 1.0,
+        7 => 10.0,
+        _ => 19.99,
+    }
+}
+
+/// 代表值域字节 (8 档, 全分支类覆盖): NUL / \n / 空格 / '=' (提前收尾) /
+/// '+' 'A' (base64 合法) / 0x7F (控制) / '!' (非法)。掩码 <0x80 →
+/// 构造即合法 UTF-8。claim 口径: 代表值域量词 + 全分支类覆盖 (K4/K12)。
+fn rep_byte() -> u8 {
+    match kani::any::<u8>() % 8 {
+        0 => 0x00,
+        1 => 0x0A,
+        2 => 0x20,
+        3 => 0x3D,
+        4 => 0x2B,
+        5 => 0x41,
+        6 => 0x7F,
+        _ => 0x21,
+    }
 }
 
 /// 定长 f32 向量 (分支定长法, 口径注见 river harness): n%3 选 1/2/3 维,
@@ -55,53 +86,91 @@ fn f32_vec0(selector: u8) -> Vec<f32> {
 /// 行取自 {完整标记行, 断标记行, 文本行, 空行} × 任意 ASCII 尾字节 ×
 /// 有/无换行 —— 内容大头是字面量 (memcmp/搜索逐字节即决), 少量符号字节
 /// 分支, 覆盖真实解析状态 (正常/断标记/夹心/空行) 而公式有限。
-fn fold_doc<const L: usize>() -> String {
-    let mut doc = String::new();
-    for _ in 0..L {
-        let tail = char::from(kani::any::<u8>() & 0x7F);
-        match kani::any::<u8>() % 4 {
-            0 => doc.push_str("[===fold:0.5===]"),
-            1 => doc.push_str("[===fold:0.5"),
-            2 => {
-                doc.push('x');
-                doc.push(tail);
-            }
-            _ => {}
-        }
-        if kani::any::<bool>() {
-            doc.push('\n');
-        }
-    }
-    doc
+/// fold 文档具名结构用例 (K15 具名量词口径, 2026-10-11 终稿):
+/// 符号内容量词在 CBMC 下三代生成器均超 25 分钟 (TwoWaySearcher 标记搜索 ×
+/// 符号字节分支爆炸, format! 与行界定型后仍超) —— 收敛为**具名结构用例组**,
+/// 覆盖全部解析状态: 仅标记行 / 纯文本 / 空文档 / 断标记 / 多块 / 多行文本。
+/// 残余值域 (具体字符内容) 由 fold_block 单测互补 (单测含 CJK/多字节例)。
+fn fold_docs() -> Vec<String> {
+    vec![
+        // 仅标记行
+        "[===fold:0.5===]".to_string(),
+        // 纯文本
+        "plain text".to_string(),
+        // 空文档
+        String::new(),
+        // 断标记 (无收尾)
+        "[===fold:0.5".to_string(),
+        // 多块 + 内容行
+        "[===fold:0.5===]\nbody\n[===fold:0.2===]\ntail".to_string(),
+        // 多行纯文本 (无标记)
+        "x\ny\nz".to_string(),
+    ]
 }
 
-/// 证明: 任意 ≤3 行 fold 文档经 has_fold_markers/parse_fold_blocks/
-/// render_fold_blocks 全程无 panic, 且渲染记账恒等 (expanded + hidden ==
-/// blocks 数)。
-/// 边界 (口径四改 2026-10-08): 文档结构化 (见 fold_doc 注; 随机字节串让
-/// 解析器在垃圾路径空转 —— run 113318670470 实测 same_allocation 1988× +
-/// TwoWaySearcher 650×, N=4 仍 45m 未收); similarity = 任意有限 f32 ∈
-/// (-20,20) + 具名 NaN/±∞/0.0 (契约"NaN 视作 0.0"具名覆盖); unwind 24。
-/// 长文档/多标记/多字节具体例由单元测试互补。
+/// 证明: has_fold_markers 对具名结构用例组不 panic (函数级, 零切片面)。
+/// 口径 (K16 拆分): "管线全程无 panic" 拆为三函数级命题 —— 全管线合一的
+/// harness 让每处切片的 panic 路径各拖一整套格式化/Backtrace 机器 (实测
+/// slice_index_fail 周围 memchr 3937 次展开, 常量输入也 25m+ 不落地),
+/// 与输入域无关; 拆分后各命题面最小化。
 #[kani::proof]
-#[kani::unwind(24)]
-fn kani_panic_free_fold_block_string_pipeline() {
-    let s = fold_doc::<3>();
-    let _markers = has_fold_markers(&s);
-    let blocks = parse_fold_blocks(&s);
-    for sim in [
-        bounded_f32(),
-        f32::NAN,
-        f32::INFINITY,
-        f32::NEG_INFINITY,
-        0.0,
-    ] {
-        let render = render_fold_blocks(&blocks, sim);
-        assert_eq!(
-            render.expanded + render.hidden,
-            blocks.len(),
-            "渲染记账守恒: 展开数 + 折叠数 == 块数"
-        );
+#[kani::unwind(32)]
+fn kani_panic_free_fold_markers() {
+    for doc in fold_docs() {
+        let _ = has_fold_markers(&doc);
+    }
+}
+
+/// 证明: parse_fold_blocks 对具名结构用例组不 panic, 块数有界 (≤ 用例行数)。
+#[kani::proof]
+#[kani::unwind(32)]
+fn kani_panic_free_fold_parse() {
+    for doc in fold_docs() {
+        let blocks = parse_fold_blocks(&doc);
+        assert!(blocks.len() <= 8, "块数有界 (6 用例的行数上界)");
+    }
+}
+
+/// 证明: render_fold_blocks 对直接构造的块组 + 全 sim 域不 panic, 且渲染
+/// 记账恒等 (expanded + hidden == blocks 数)。输入 = 直接构造 blocks
+/// (跳过解析 —— 解析切片面不进本命题), 覆盖 阈值/描述/正文 形态组合。
+#[kani::proof]
+#[kani::unwind(32)]
+fn kani_panic_free_fold_render() {
+    let contents = ["a", "bb", "ccc"];
+    let descs = [String::new(), "d".to_string()];
+    let thresholds = [0.0f32, 0.35, 1.0];
+    for content in contents.iter() {
+        for desc in &descs {
+            for threshold in &thresholds {
+                let blocks = vec![
+                    FoldBlock {
+                        threshold: *threshold,
+                        description: desc.clone(),
+                        content: content.to_string(),
+                    },
+                    FoldBlock {
+                        threshold: 0.5,
+                        description: String::new(),
+                        content: "x".to_string(),
+                    },
+                ];
+                for sim in [
+                    bounded_f32(),
+                    f32::NAN,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    0.0,
+                ] {
+                    let render = render_fold_blocks(&blocks, sim);
+                    assert_eq!(
+                        render.expanded + render.hidden,
+                        blocks.len(),
+                        "渲染记账守恒: 展开数 + 折叠数 == 块数"
+                    );
+                }
+            }
+        }
     }
 }
 

@@ -1,5 +1,38 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 收尾入档：形象视觉列重做项（主人裁定）(2026-10-11)
+
+- **主人裁定**：现役前端观感不达标——**形象（含 2D 模式）整体列重做项**，由前端能力/审美更强的模型主持重做讨论（2D 模式方向专题议）。现役形象层三实现（光态哨兵/2D 骨骼小人/3D 素体）一律按**工程验证件**对待：证明契约与管线，不代表产品观感，视觉语言可整体推翻重写。
+- **底座保留（换皮不换契约）**：PetFrame 形象抽象契约、四姿态机、防唠叨引擎、BYO 装载口 + 免责纪律、许可红线进代码、窗壳/互斥/停帧闩、素材台账 + CI 门禁、全部测试门禁。
+- **交接面同步**：`handoff-pet-avatar-line-2026-10-11.md` 增「主人裁定与形象重做令」专节（保留/重做边界表 + 审美线进场清单：先与主人做 2D 模式方向讨论再动工）；施工账、委托需求书（风格方向节挂起待重做讨论）、总台账同步标注。
+
+## [Unreleased] — 桌宠五件套：2D 骨骼华服 + 自主行为 + 真窗实测 + 条款 + 形象设置 (2026-10-11)
+
+- **2D 骨骼第二华服**：程序化骨骼小人（关节/骨段全代码生成，零资产零许可面）接进形象插口，形象层扩为四态（光态/角色/2D 骨骼/微光简模）；社区格式装载口为插缝预留（npm 实探负证在案：正名运行时包不存在、杂名包许可不在白名单——核验收口前不硬接）。
+- **自主行为批**：待机微动作（微摆/微倾/呼吸游移/确定性伸展窗）+ 作息节律（dreaming 真实时长爬坡入定档，不发明假事件）；幅度封顶纪律（≤0.03 弧度当量，质感不冒充信号）进测试钉；两件华服同显身体语言。
+- **真窗实测升级**：`pet-window-real-smoke.mjs` 起真壳 + 调试口挂进真 WebView2，经主窗真 IPC 唤起桌宠——**7/7 全过**，三形象层实拍图入 `reports/pet-real-smoke-2026-10-11/`。**真发现**：`window.hide()` 不翻 `document.visibilityState`——补显式停帧闩（壳层发 `pet-host-visibility`，形象层双闩停帧），原生节流 + 显式闩双保险，后者可验收。
+- **使用条款 BYO 责任段草案**（`user-avatar-terms-draft.md`，待主人审并入正式条款）+ **形象设置面板**（设置 › 外观 › 形象：形象层四选一 + 自带形象管理，跨窗 storage 事件同步）。
+- 设置分区 14→15（形象新增，断言随契约演进注明理由）。
+- 实证：pnpm test **70/70** + check 0/0 + 素材门禁 ✓ + 中性扫描零命中 + 真窗实测 7/7 + Rust clippy 0 / pet 决策表全绿。
+
+## [Unreleased] — 社区生态基建首批：治理章程 + 行为准则 + 协作规范体系 (2026-10-11)
+
+- **治理与信任**：`GOVERNANCE.md`（独立性原则 / 角色六级阶梯 / 三级决策机制（懒共识→RFC→Lead 终审）/ 晋升退出含 6 个月不活跃转 Emeritus / 四级争议解决全带时限）+ `CODE_OF_CONDUCT.md`（Contributor Covenant 2.1 改编 + **社区诚信条款**——买星刷榜伪造活动即违反行为准则，与「0 装 PASS」同源；执行三原则：比例/回避/记录）。
+- **贡献者动线**：`CONTRIBUTING.md` 升级（欢迎段 + Issue 分诊 SLA（1/3/7 天必有结论）+ PR Review 规范（首响 ≤3 工作日、超时 @chuling 升级、不允许无声黑洞））+ 新增 `docs/02-guides/first-contribution.md`（good-first-issue → 第一个 PR 合并的 6 步动线 + FAQ）。
+- **决策与契约**：`docs/development/rfc-process.md`（何时走 RFC / 模板 / 讨论期 ≥7 天 / 裁决 ≤14 天 / 只增不改归档纪律）+ `docs/development/rfc/` 索引 + `docs/development/api-stability.md`（稳定/实验/内部/冻结四级，如实声明 v2.0.0-rc 整体未进稳定期，1.0 前走稳定级清单 RFC）。
+- **生态运营**：`docs/development/community-ops.md`（数据真实性纪律置顶 / 标签体系 / 分诊 runbook / 运营节奏（good-first-issue 存量 ≥5、季度真实性自查）/ 仓库元数据 Runbook / SLA 汇总 / **反面教训清单**——同类项目复盘"文件齐≠生态活、星标与活跃度失真"逐条设防）+ **§八 挂账事项台账**（`conduct@` 邮箱 / stale 自动化 / required set 扩容 / 稳定级 RFC / 角色增补 / Discussions 细分，触发时机+落地动作全登记防遗忘）。
+- **GitHub 设置落地**（API 配置 + 回读验证，2026-10-11）：标签体系（`good first issue`/`help wanted`/`documentation` 改名对齐手册 + `needs-repro`/`needs-info`/`stale`/`rfc`/`1.0-blocker`/`blocked` 新建）+ Discussions 启用 + [welcome 帖 #26](https://github.com/Apeireth/Apeireth/discussions/26) + main 分支保护（≥1 approval / stale 失效 / 会话 resolve / 禁 force-push + 5 稳定门禁强制；红检查修复后逐步纳入）。
+- **同步**：`CODEOWNERS` 登记 6 处新路径；`docs/README.md` 索引补全并修正根文档相对链接（`../../`→`../`，GitHub 渲染实测死链）；旧仓库名链接统一 canonical（`apeireth/apeireth-rust`→`Apeireth/Apeireth`，config.yml / mkdocs.yml / security.txt / 社区文档 7 处）。
+
+## [Unreleased] — 桌宠批 B/C/D 收官：角色形象层 + BYO 装载口 + 素材许可门禁 (2026-10-11)
+
+- **角色形象层**（开放 3D 人形格式，四次拍板）：`CharacterAvatar` 渲染层接进形象插口——形象文件装载 + 程序化素体兜底 + WebGL 降级接线 + 内嵌许可元数据透传；`character-mapping` 契约→口型/眨眼/视线/姿态/呼吸纯映射（六组测试钉）；形象层三态循环（光态哨兵/角色形象/微光简模），代码分割生效（渲染引擎 747KB 独立成块不进主包）。
+- **用户自带形象（BYO）装载口**：格式合法性校验（扩展名/体积/容器魔数）+ 免责确认（"许可责任由你自担"装载前必呈现）+ IndexedDB 本机持久化 + 内嵌许可声明如实显示（不解读不背书）；`user-avatar` 四组测试钉。
+- **素材许可 CI 门禁**：`asset-licenses.json` 台账 + `check-asset-licenses.mjs`（无行即红/白名单外拒/陈旧行红，双向验证）+ `pnpm check:assets` + workflow 最小改动接入。
+- **文书**：用户指引 `avatar-byo-guide.md`（指路不背书三条铁律）+ 官方形象委托需求书 `avatar-commission-brief.md`（合同红线：CC0/CC-BY 交稿 + 编改权 + 再分发 + 链条干净）。
+- **烟测**：`scripts/pet-window-smoke.mjs` 构建产物 7/7（双形象层真渲染 + WebGL 探测 + 异常巡检）。
+- 实证：pnpm test **56/56** + pnpm check 0/0 + check:assets ✓ + 中性扫描零命中 + build ✓。
+
 ## [Unreleased] — 桌宠常驻投影首批：形象层双形态可插拔 + 主动涌现 (2026-10-11)
 
 - **桌宠常驻窗**（presence 第四个投影点亮）：透明置顶无边框窗、右下常驻位、拖拽/鼠标穿透/托盘联动；**互斥礼让**——主窗前台隐身、主窗收起接管（壳层纯决策表可单测）；关闭=销毁纪律与快捷窗同源（幽灵窗教训零复发）。

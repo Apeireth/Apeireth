@@ -62,8 +62,13 @@ console.log('--- Starting Starport Faces Check ---');
   const assembled = listFacesByStatus('live').map((f) => f.id);
   assert.ok(assembled.includes('host') && assembled.includes('agent-status'));
   const pending = listFacesByStatus('not_assembled').map((f) => f.codename);
-  for (const codename of ['星语', '深流', '舵室', '信使', '矿脉', '星槎']) {
-    assert.ok(pending.includes(codename), `未组装面缺登记：${codename}`);
+  // 断言演进（2026-10-11 批次推进终章）：矿脉已交工作切片——17 面全部点亮，
+  // 未组装名单清零（live/slice 全覆盖）。后续批次是增强既有面与清接线缝。
+  assert.deepEqual(pending, [], '未组装名单清零：17 面全部有工作切片');
+  for (const flipped of ['memory', 'mail', 'voice', 'terminal', 'portable', 'database']) {
+    const face = getFace(flipped);
+    assert.ok(face, `已交切片面缺登记：${flipped}`);
+    assert.equal(face.status, 'slice', `已交切片面必须翻 slice：${flipped}`);
   }
   console.log('  [3] query surface OK');
 }

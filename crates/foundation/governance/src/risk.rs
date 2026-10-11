@@ -179,9 +179,15 @@ impl RegressionAssertion {
                 max,
             } => {
                 if *value < *min || *value > *max {
-                    Err(format!(
+                    // cfg(kani): format! 插值是 CBMC 引雷点 (同款注见
+                    // file_fetcher base64); 命题断言约束判定结果, 不含消息文本。
+                    #[cfg(kani)]
+                    let error = "[InRange] value not in bounds".to_string();
+                    #[cfg(not(kani))]
+                    let error = format!(
                         "[InRange:{name}] value={value} not in [{min}, {max}]"
-                    ))
+                    );
+                    Err(error)
                 } else {
                     Ok(())
                 }
@@ -198,10 +204,15 @@ impl RegressionAssertion {
                         window[0] >= window[1]
                     };
                     if !good {
-                        return Err(format!(
+                        // cfg(kani): format! 插值是 CBMC 引雷点 (同款注)。
+                        #[cfg(kani)]
+                        let error = "[Monotonic] values not monotonic".to_string();
+                        #[cfg(not(kani))]
+                        let error = format!(
                             "[Monotonic:{name}] values={values:?} not {}monotonic",
                             if *increasing { "" } else { "de" }
-                        ));
+                        );
+                        return Err(error);
                     }
                 }
                 Ok(())

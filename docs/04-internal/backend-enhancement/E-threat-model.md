@@ -29,8 +29,8 @@
   │    设防：开关同源注入、启动日志脱敏、会话级工作区、审计 masked 不可还原、
   │         回环令牌自铸注入（G10 处置：每次启动一枚 32 字节随机令牌进侧车 env）
   │    缺口：来源白名单只挡浏览器跨源；**令牌门已扩到全 API 面（W2-②，仅 /health
-  │         探活豁免）**，但桌面 WebView 只在 admin/审批两处带令牌——chat/面板/SSE
-  │         调用无凭据会 401（桌面 UI 令牌覆盖缺口，见 §5 残余 (d)）
+  │         探活豁免）**，桌面 WebView 全调用面带令牌（残余 (d) 已收口：全 fetch
+  │         统一鉴权头 + SSE 带令牌走 fetch 流式读取）
   ▼
 侧车网关 + 运行时（adapters/gateway + engine/runtime + 治理管线）
   ├─③ → provider API（出：提示+召回记忆 / 入：回复）
@@ -68,7 +68,7 @@
 
 | 防点 | 实现指针 | 边界（如实） |
 |---|---|---|
-| 全 API 面令牌门（G10 处置 W1-③ + G4 收口 W2-②） | 三态门口径 `crates/adapters/gateway/src/canonical_entry.rs`（`GatewayTokenGate`：令牌族在场=Bearer 恒定时间校验**全端点** / 两面皆空=放行+警告帧+审计 / `none`=逃生阀明示不设防留审计）+ 客户端令牌表 `crates/adapters/gateway/src/client_tokens.rs`（name→token, env `APEIRETH_GATEWAY_TOKENS` + `client-tokens.json` StoredDoc 拒开, 过门审计 `client=<名>`）+ 远程绑定闸 `crates/adapters/gateway/src/remote_access.rs`（`APEIRETH_LISTEN` 缺省仅本机; 非回环无令牌**拒启动** fail-closed）+ 桌面自铸注入 `frontend/companion-desktop/src-tauri/src/backend_supervisor.rs`（每次启动一枚 32 字节随机令牌, 进程 env 面, 不落盘）+ 客户端注入面（TUI 全请求带 Bearer、桌面 UI `get_gateway_token` IPC、验证脚本全端点透传） | 唯一豁免 `/health`（探活刚需, `UNAUTHENTICATED_PROBE_PATHS` 测试钉死）；未设口径=兼容路径放行（警告+审计可见）；逃生阀 `APEIRETH_GATEWAY_TOKEN=none` = 明示不设防（审计留痕、门体不设防, 与令牌表互斥拒开）；TLS 面接口桩**未接线**（`APEIRETH_TLS_CERT/KEY` 只触发显式警告, 流量明文）；桌面 WebView 只在 admin/审批两处带令牌（残余 (d)） |
+| 全 API 面令牌门（G10 处置 W1-③ + G4 收口 W2-②） | 三态门口径 `crates/adapters/gateway/src/canonical_entry.rs`（`GatewayTokenGate`：令牌族在场=Bearer 恒定时间校验**全端点** / 两面皆空=放行+警告帧+审计 / `none`=逃生阀明示不设防留审计）+ 客户端令牌表 `crates/adapters/gateway/src/client_tokens.rs`（name→token, env `APEIRETH_GATEWAY_TOKENS` + `client-tokens.json` StoredDoc 拒开, 过门审计 `client=<名>`）+ 远程绑定闸 `crates/adapters/gateway/src/remote_access.rs`（`APEIRETH_LISTEN` 缺省仅本机; 非回环无令牌**拒启动** fail-closed）+ 桌面自铸注入 `frontend/companion-desktop/src-tauri/src/backend_supervisor.rs`（每次启动一枚 32 字节随机令牌, 进程 env 面, 不落盘）+ 客户端注入面（TUI 全请求带 Bearer、桌面 UI `get_gateway_token` IPC、验证脚本全端点透传） | 唯一豁免 `/health`（探活刚需, `UNAUTHENTICATED_PROBE_PATHS` 测试钉死）；未设口径=兼容路径放行（警告+审计可见）；逃生阀 `APEIRETH_GATEWAY_TOKEN=none` = 明示不设防（审计留痕、门体不设防, 与令牌表互斥拒开）；TLS 面接口桩**未接线**（`APEIRETH_TLS_CERT/KEY` 只触发显式警告, 流量明文）；桌面 WebView 全调用面带令牌（残余 (d) 已收口：`gatewayAuthHeaders()` 全 fetch 统一鉴权头 + SSE 带令牌走 fetch 流式读取, 前端测试 `gateway-auth-face.mjs` / `sse-fetch-stream.mjs` 钉死） |
 | 三洋葱 | 双洋葱 `crates/foundation/core/src/onion.rs` + 判定层 `onion_gate.rs`（L0 人类权威恒需在场）+ 执行面 `crates/engine/runtime-assembly/src/canonical/onion_layer.rs`（末层纵深） | 执行面 hook 旋钮 `APEIRETH_ENABLE_ONION_LAYER` **默认关**；多签 v2.1 未真接（挂账 D2）——「多签」暂无密码学效力 |
 | 审批四态 | `crates/foundation/governance/src/approval_closure.rs`（AllowedOnce 恰好一次；Rejected/Cancelled/Unavailable 一律 fail-closed）+ 冻结面 `crates/engine/runtime/src/canonical/approval.rs` | 命令级名单逐字精确匹配→族等价形态可绕（G2） |
 | 写总闸 | `crates/capabilities/tools/src/write_intent.rs`（写意图词法，静态调用面与命令面同族同权）+ `shell.rs` 冻结/执行双查 + 组装根 `runtime-assembly/src/canonical/production.rs` 同源 | 词法面之外的写入（解释器内写入/编码负载）由审批链+沙箱兜底；保守扫描宁误拒不漏放 |

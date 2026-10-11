@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "policy": "素材许可台账（avatar-pack-admission.md §1b 渠道三分 + §4 准入流程）。发布物内每个素材文件必须在此有行（CI 门禁 scripts/check-asset-licenses.mjs 把关，无行即红）；origin=third-party 必须白名单许可 + 署名 + 来源 URL。",
+  "thirdPartyLicenseWhitelist": [
+    "CC0-1.0",
+    "Unlicense",
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC-BY-4.0"
+  ],
+  "assets": [
+    {"path": "public/assets/themes/essence-bg.png", "origin": "first-party", "license": "first-party", "note": "主题背景（本项目设计批自制）"},
+    {"path": "public/assets/themes/heritage-void-bg.png", "origin": "first-party", "license": "first-party", "note": "主题背景（本项目设计批自制）"},
+    {"path": "src/assets/bridge/bridge-back.png", "origin": "first-party", "license": "first-party", "note": "场景原画（本项目设计批自制）"},
+    {"path": "src/assets/bridge/bridge-back.webp", "origin": "first-party", "license": "first-party", "note": "场景原画（本项目设计批自制）"},
+    {"path": "src/assets/cabin/deep-cabin.webp", "origin": "first-party", "license": "first-party", "note": "场景原画（本项目设计批自制）"},
+    {"path": "src/assets/scene/limb-clouds-tile.webp", "origin": "first-party", "license": "first-party", "note": "场景贴图（本项目设计批自制）"},
+    {"path": "src/assets/scene/planet-mask-limb.webp", "origin": "first-party", "license": "first-party", "note": "场景遮罩（本项目设计批自制）"},
+    {"path": "src/assets/scene/planet-mask-ring.webp", "origin": "first-party", "license": "first-party", "note": "场景遮罩（本项目设计批自制）"},
+    {"path": "src/assets/scene/planet.png", "origin": "first-party", "license": "first-party", "note": "场景原画（本项目设计批自制）"},
+    {"path": "src/assets/scene/planet.webp", "origin": "first-party", "license": "first-party", "note": "场景原画压缩档（本项目设计批自制）"},
+    {"path": "src/assets/scene/ring-bands-tile.webp", "origin": "first-party", "license": "first-party", "note": "场景贴图（本项目设计批自制）"}
+  ]
+}

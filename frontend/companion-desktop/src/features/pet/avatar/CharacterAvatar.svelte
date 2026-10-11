@@ -18,27 +18,41 @@
     POSTURE_BODY_BIAS,
     type CharacterParams,
   } from '../../../lib/pet/character-mapping';
+  import {deriveIdleMotion, type IdleMotion} from '../../../lib/pet/idle-behavior';
+  import {petRenderPause} from '../../../lib/pet/pet-render-pause';
+  import {
+    normalizeVrmMetaLicense,
+    type UserAvatarMeta,
+  } from '../../../lib/pet/user-avatar';
 
   let {
     frame,
     modelUrl = null,
     onUnavailable = undefined,
+    onModelMeta = undefined,
   }: {
     frame: PetFrame;
     /** 形象文件地址（开放 3D 人形格式）；null = 程序化素体 */
     modelUrl?: string | null;
     /** WebGL 不可用时通知宿主回落（降级纪律的接线口） */
     onUnavailable?: () => void;
+    /** 形象文件内嵌许可元数据透传（只读出不解读，宿主如实展示） */
+    onModelMeta?: (meta: UserAvatarMeta) => void;
   } = $props();
 
   let host: HTMLDivElement | null = $state(null);
   const seed = 7;
 
-  // rAF 循环读最新帧（$effect 落到普通变量，避免每帧重建派生）
-  let latestFrame: PetFrame = frame;
-  $effect(() => {
-    latestFrame = frame;
-  });
+  /** 形象文件运行时的最小契约面（开放 3D 人形格式加载库的鸭子类型）。 */
+  interface VrmLike {
+    scene: import('three').Object3D;
+    update?: (dt: number) => void;
+    humanoid?: {
+      getNormalizedBoneNode: (name: string) => import('three').Object3D | null;
+    };
+    expressionManager?: {setValue: (name: string, value: number) => void} | null;
+    lookAt?: {target?: import('three').Object3D} | null;
+  }
 
   onMount(() => {
     let disposed = false;
@@ -88,32 +102,24 @@
       scene.add(ambient, key, rim);
 
       // —— 形象来源：用户/官方形象文件 → 开放 3D 人形格式装载；失败回落素体 ——
-      let vrm: {
-        scene: import('three').Object3D;
-        update?: (dt: number) => void;
-        humanoid?: {
-          getNormalizedBoneNode: (name: string) => import('three').Object3D | null;
-        };
-        expressionManager?: {setValue: (name: string, value: number) => void} | null;
-        lookAt?: {target?: import('three').Object3D} | null;
-      } | null = null;
+      let vrm: VrmLike | null = null;
       const rig = buildStandaloneRig(THREE);
       scene.add(rig.root);
 
       if (modelUrl) {
         try {
           const {GLTFLoader} = await import('three/examples/jsm/loaders/GLTFLoader.js');
-          const {VRMLoaderPlugin, VRMUtils} = await import('@pixiv/three-vrm');
+          const {VRMLoaderPlugin} = await import('@pixiv/three-vrm');
           const loader = new GLTFLoader();
-          loader.register((parser) => new VRMLoaderPlugin(parser));
+          loader.register((parser: unknown) => new VRMLoaderPlugin(parser as never));
           const gltf = await loader.loadAsync(modelUrl);
-          const loaded = (gltf.userData as {vrm?: typeof vrm}).vrm ?? null;
+          const loaded = (gltf.userData as {vrm?: VrmLike | null}).vrm ?? null;
           if (loaded && !disposed) {
-            VRMUtils.removeUnnecessaryVertices?.(gltf.scene as never);
             vrm = loaded;
             scene.add(vrm.scene);
-            // 形象文件到位：素体退场（换装不换契约）
+            // 形象文件到位：素体退场（换装不换契约）；内嵌许可元数据透传宿主
             scene.remove(rig.root);
+            onModelMeta?.(normalizeVrmMetaLicense((loaded as {meta?: unknown}).meta));
           }
         } catch {
           // 形象文件加载失败 → 素体顶上（绝不空窗）；不冒充加载成功
@@ -125,45 +131,53 @@
         matchMedia('(prefers-reduced-motion: reduce)').matches;
 
       let lastT = startedAt;
+      let dreamHoldSec = 0;
       const loop = (now: number) => {
         if (disposed) return;
         rafId = requestAnimationFrame(loop);
-        // 降级纪律①：隐藏即停渲染（不渲染、不更新、不 tick）
-        if (document.hidden) {
+        // 降级纪律①：隐藏即停渲染（不渲染、不更新、不 tick）——document.hidden
+        // 或宿主显式闩（真隐藏口径：window.hide() 不翻 visibilityState，2026-10-11 实测）
+        if (document.hidden || petRenderPause.paused) {
           lastT = now;
           return;
         }
         const dt = Math.min(0.05, Math.max(0, (now - lastT) / 1000));
         lastT = now;
         const clockSec = (now - startedAt) / 1000;
-        const params = deriveCharacterParams(latestFrame, clockSec, seed);
-        applyParams(params, reduced);
+        // 作息：只累计真实 dreaming 姿态时长（不发明"他睡了"）
+        dreamHoldSec = frame.posture === 'curled_asleep' ? dreamHoldSec + dt : 0;
+        const params = deriveCharacterParams(frame, clockSec, seed);
+        applyParams(params, deriveIdleMotion(clockSec, seed, dreamHoldSec), reduced);
         if (vrm?.update) vrm.update(dt);
         renderer.render(scene, camera);
       };
 
-      const applyParams = (p: CharacterParams, still: boolean) => {
+      const applyParams = (p: CharacterParams, idle: IdleMotion, still: boolean) => {
         const bias = POSTURE_BODY_BIAS[p.posture];
         const breath = still ? 0 : Math.sin(p.breathPhase * Math.PI * 2) * p.breathAmplitude;
-        const open = still && latestFrame.activity !== 'speaking' ? 0.02 : p.visemeOpen;
-        const blink = still ? 0 : p.blink;
+        const open = still && frame.activity !== 'speaking' ? 0.02 : p.visemeOpen;
+        const blink = still ? 0 : Math.max(p.blink, idle.doze);
 
         if (vrm) {
           vrm.expressionManager?.setValue('aa', open);
           vrm.expressionManager?.setValue('blink', blink);
           const head = vrm.humanoid?.getNormalizedBoneNode('head');
           if (head) {
-            head.rotation.x = THREE.MathUtils.degToRad(-bias.headUpDeg - p.gazeY * 10) * 0.25;
+            head.rotation.x =
+              THREE.MathUtils.degToRad(-bias.headUpDeg - p.gazeY * 10) * 0.25 +
+              idle.headTiltRad +
+              idle.doze * 0.22;
             head.rotation.y = THREE.MathUtils.degToRad(p.gazeX * 12) * 0.25;
           }
           const chest = vrm.humanoid?.getNormalizedBoneNode('chest');
           if (chest) {
-            chest.rotation.x = THREE.MathUtils.degToRad(bias.leanDeg) * 0.12 + breath * 0.015;
+            chest.rotation.x =
+              THREE.MathUtils.degToRad(bias.leanDeg) * 0.12 + breath * 0.015 + idle.swayRad * 0.35;
           }
           return;
         }
-        // 素体：分组变换直落
-        rig.apply(p, bias, breath, open, blink, THREE);
+        // 素体：分组变换直落（微动作/入定同契约显影）
+        rig.apply(p, bias, breath, open, blink, idle, THREE);
       };
 
       rafId = requestAnimationFrame(loop);
@@ -223,18 +237,21 @@
         breath: number,
         open: number,
         blink: number,
+        idle: IdleMotion,
         THREE_mod: typeof import('three'),
       ) {
         root.rotation.x = THREE_mod.MathUtils.degToRad(bias.leanDeg);
+        root.rotation.z = idle.swayRad * 0.45;
         root.scale.setScalar(bias.scale * (1 + breath * 0.012 * p.breathAmplitude));
-        head.rotation.x = THREE_mod.MathUtils.degToRad(-bias.headUpDeg - p.gazeY * 10);
+        head.rotation.x =
+          THREE_mod.MathUtils.degToRad(-bias.headUpDeg - p.gazeY * 10) + idle.headTiltRad + idle.doze * 0.22;
         head.rotation.y = THREE_mod.MathUtils.degToRad(p.gazeX * 12);
         jaw.scale.set(1, 1 + open * 2.2, 1);
         const eyeScaleY = Math.max(0.08, 1 - blink * 0.92);
         eyeL.scale.y = eyeScaleY;
         eyeR.scale.y = eyeScaleY;
-        armL.rotation.x = bias.curl * 0.9;
-        armR.rotation.x = bias.curl * 0.9;
+        armL.rotation.x = bias.curl * 0.9 - idle.stretch * 0.7;
+        armR.rotation.x = bias.curl * 0.9 - idle.stretch * 0.7;
         torso.position.y = 1.05 + breath * 0.014 * p.breathAmplitude;
       },
     };

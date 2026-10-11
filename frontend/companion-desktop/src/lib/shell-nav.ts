@@ -16,8 +16,8 @@ export type RailItem = 'chat' | 'tools' | 'status' | 'settings';
 
 export const RAIL_ITEMS: readonly RailItem[] = ['chat', 'tools', 'status', 'settings'];
 
-/** 工作台分区：回合视图（默认）/ 记忆卷宗 / 他的日记。 */
-export type WorkbenchSection = 'turn' | 'memory' | 'diary';
+/** 工作台分区：回合视图（默认）/ 记忆卷宗 / 他的日记 / 星港内置应用面。 */
+export type WorkbenchSection = 'turn' | 'memory' | 'diary' | 'starport';
 
 /** 设置分区里承接旧治理页的那一个。 */
 export const SETTINGS_SECURITY_SECTION = 'security';
@@ -67,12 +67,14 @@ export const NAV_COMMAND_TARGETS: Readonly<Record<string, ShellTarget>> = {
   'nav.settings': {kind: 'drawer', id: 'settings'},
   'nav.memory': {kind: 'workbench', section: 'memory'},
   'nav.diary': {kind: 'workbench', section: 'diary'},
+  'nav.starport': {kind: 'workbench', section: 'starport'},
   'nav.governance': {kind: 'drawer', id: 'settings', section: SETTINGS_SECURITY_SECTION},
   'nav.logs': {kind: 'drawer', id: 'status'},
 };
 
-/** 工作台两张卡片入口（记忆 / 日记）。 */
+/** 工作台卡片入口（记忆 / 日记 / 星港）。 */
 export const WORKBENCH_CARDS: ReadonlyArray<{section: WorkbenchSection; title: string; sub: string}> = [
   {section: 'memory', title: '记忆卷宗', sub: '情节记忆 · 检索 · 图谱 · 保护治理'},
   {section: 'diary', title: '他的日记', sub: '纸面档案调 · 空态契约页'},
+  {section: 'starport', title: '星港', sub: '内置应用面 · 多标签工作区 · 贡献点注册表'},
 ];

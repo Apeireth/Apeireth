@@ -325,6 +325,93 @@ pub fn validate_gate_table_pair(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// W2-③ 会话归属面: 过门身份下行 + name↔token 绑定校验 + 会话关联审计行
+// ---------------------------------------------------------------------------
+
+/// `gateway.session_client` 审计行 (W2-③): 过门客户端名与会话事件的关联行 ——
+/// "谁 (客户端令牌表 name) 在写/订阅哪个会话", W3 多用户授权的问责地基。
+pub const SESSION_CLIENT_AUDIT_EVENT: &str = "gateway.session_client";
+
+/// 客户端自称名请求头 (W2-③ 令牌隔离): 可选; 出现即触发 name↔token 绑定校验
+/// ([`client_name_binds`]) —— 自称名不得冒名他人审计署名。
+pub const CLIENT_NAME_CLAIM_HEADER: &str = "x-apeireth-client";
+
+/// 过门身份 (W2-③): 令牌绑定的客户端署名键, 由令牌门中间件随请求扩展下行,
+/// 处理器据此写 `gateway.session_client` 审计行。
+///
+/// 署名键**只来自令牌绑定** ([`ClientTokenTable::authenticate`] /
+/// env 单令牌面), 请求自称名只做绑定校验、绝不改写署名。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientIdentity {
+    /// 审计署名键 (令牌表 `name` / env 面单令牌 `env` / 未设防口径 `anonymous`)。
+    pub client: String,
+    /// 是否经令牌认证 (未设防口径放行 = false)。
+    pub authenticated: bool,
+}
+
+impl ClientIdentity {
+    /// 未过门调用的署名键 (内部直调, 无客户端身份可署)。
+    pub const UNATTRIBUTED: &'static str = "unattributed";
+
+    /// 一枚已认证身份 (令牌绑定名)。
+    pub fn authenticated(client: impl Into<String>) -> Self {
+        Self {
+            client: client.into(),
+            authenticated: true,
+        }
+    }
+
+    /// 未设防口径的放行身份 (无令牌即无绑定, 署名如实为 `anonymous`)。
+    pub fn anonymous() -> Self {
+        Self {
+            client: "anonymous".to_string(),
+            authenticated: false,
+        }
+    }
+}
+
+/// name↔token 绑定校验 (W2-③ 令牌隔离): 自称名只有与令牌绑定名一致才可信。
+///
+/// 无绑定 (`bound = None`, 未设防口径) 时自称名**不可校验** → 一律不通过
+/// (fail-closed: 无凭证的自称名就是冒名企图)。
+pub fn client_name_binds(claimed: &str, bound: Option<&str>) -> bool {
+    matches!(bound, Some(bound) if bound == claimed)
+}
+
+/// 请求扩展里的过门署名键 (无身份 = 未过门调用, 署名如实为 `unattributed`)。
+pub fn identity_label(identity: Option<&axum::extract::Extension<ClientIdentity>>) -> &str {
+    identity
+        .map(|axum::extract::Extension(identity)| identity.client.as_str())
+        .unwrap_or(ClientIdentity::UNATTRIBUTED)
+}
+
+/// 写一条 `gateway.session_client` 审计行 (W2-③ 会话归属面)。
+///
+/// `admission` 是该次会话写的写闸排队事实 (回合/设置写携带; 读与订阅类动作
+/// 无写闸, 传 `None`)。无审计面 (内嵌直调) = 不写, 不伪造。
+pub fn record_session_client(
+    observations: Option<&crate::events::RuntimeObservationSink>,
+    session: apeireth_core::kernel::SessionId,
+    client: &str,
+    action: &str,
+    admission: Option<apeireth_runtime::canonical::SessionWriteAdmission>,
+) {
+    let Some(observations) = observations else {
+        return;
+    };
+    let mut detail = format!("session={session} client={client} action={action}");
+    if let Some(admission) = admission {
+        detail.push_str(&format!(
+            " queued={} position={} wait_ms={}",
+            u8::from(admission.was_queued()),
+            admission.queue_position,
+            admission.waited.as_millis()
+        ));
+    }
+    observations.buffer_audit(SESSION_CLIENT_AUDIT_EVENT, Some(detail));
+}
+
 /// 客户端令牌配置缺陷。每个变体对加载都是致命的: 坏配置拒绝打开。
 #[derive(Debug, Error)]
 pub enum ClientTokenError {
@@ -545,6 +632,58 @@ mod tests {
         assert!(validate_gate_table_pair(&GatewayTokenGate::UnprotectedDefault, &table).is_ok());
         assert!(
             validate_gate_table_pair(&GatewayTokenGate::Enforced("tok-e".into()), &table).is_ok()
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // W2-③ 令牌隔离: name↔token 绑定校验 (自称名不可冒名审计署名)
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn a_claimed_name_binds_only_to_its_own_token_identity() {
+        // A 的令牌绑定名 = `desktop-a`: 自称 A 通过, 自称 B 拒 (冒名)。
+        assert!(client_name_binds("desktop-a", Some("desktop-a")));
+        assert!(!client_name_binds("desktop-b", Some("desktop-a")));
+        // 无绑定 (未设防口径) = 不可校验 → 一律拒 (fail-closed)。
+        assert!(!client_name_binds("desktop-b", None));
+    }
+
+    #[tokio::test]
+    async fn session_client_audit_rows_name_the_bound_client_and_the_session() {
+        #[derive(Debug, Default)]
+        struct RecordingAudit(std::sync::Mutex<Vec<(String, Option<String>)>>);
+
+        #[async_trait::async_trait]
+        impl crate::panels::AuditCommand for RecordingAudit {
+            async fn append_audit(&self, event: &str, detail: Option<&str>) {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push((event.to_string(), detail.map(str::to_string)));
+            }
+        }
+
+        let archive = std::sync::Arc::new(RecordingAudit::default());
+        let sink = std::sync::Arc::new(crate::events::RuntimeObservationSink::new(
+            None,
+            Some(std::sync::Arc::clone(&archive) as std::sync::Arc<dyn crate::panels::AuditCommand>),
+        ));
+        let session = apeireth_core::kernel::SessionId::new();
+
+        record_session_client(Some(sink.as_ref()), session, "tui", "turn", None);
+        // 无审计面 = 不写 (内嵌直调不伪造审计行)。
+        record_session_client(None, session, "ghost", "turn", None);
+
+        sink.flush().await;
+        let rows = archive.0.lock().unwrap().clone();
+        assert_eq!(rows.len(), 1, "只写真实审计面的那一行");
+        assert_eq!(rows[0].0, SESSION_CLIENT_AUDIT_EVENT);
+        let detail = rows[0].1.clone().expect("detail");
+        assert!(
+            detail.contains(&format!("session={session}"))
+                && detail.contains("client=tui")
+                && detail.contains("action=turn"),
+            "{detail}"
         );
     }
 }

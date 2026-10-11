@@ -9,6 +9,7 @@
   } from '../types';
   import MemoryView from '../MemoryView.svelte';
   import DiaryView from '../views/DiaryView.svelte';
+  import StarportPanel from './StarportPanel.svelte';
   import {WORKBENCH_CARDS, type WorkbenchSection} from '../shell-nav';
 
   let {
@@ -137,6 +138,10 @@
     {:else if section === 'diary'}
       <div class="wb-panel">
         <DiaryView />
+      </div>
+    {:else if section === 'starport'}
+      <div class="wb-panel">
+        <StarportPanel />
       </div>
     {:else if !conversation}
       <p class="wb-empty">开始对话后，目标、工具轨迹与本轮记忆会显示在这里。</p>

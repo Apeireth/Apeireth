@@ -33,7 +33,9 @@ use axum::routing::post;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use crate::canonical_entry::{execute_chat, CanonicalChatOutcome, CanonicalChatRequest};
+use crate::canonical_entry::{
+    execute_chat_attributed, CanonicalChatOutcome, CanonicalChatRequest, SessionAttribution,
+};
 use crate::im_approval::{
     ImApprovalCloser, ImApprovalClosure, ImApprovalClosureResult, ImApprovalNotice,
     ImApprovalRequest, ImApprovalResolution, ImApprovalResolver,
@@ -225,6 +227,23 @@ impl CanonicalChainHandler {
     pub fn new(runtime: Arc<Runtime>) -> Self {
         Self { runtime }
     }
+
+    /// W2-③: 审批续跑写同一本会话账本 —— 过会话写闸串行 (与在途回合零交叠,
+    /// 也与设置补丁/删除串行)。
+    async fn resolve_serialized(
+        &self,
+        session: SessionId,
+        approval: ApprovalId,
+        decision: ApprovalDecision,
+    ) -> Result<ApprovalResolution, apeireth_runtime::canonical::RuntimeError> {
+        let permit = self.runtime.sessions().write_permit(session).await;
+        let resolved = self
+            .runtime
+            .resolve_approval(session, approval, decision)
+            .await;
+        drop(permit);
+        resolved
+    }
 }
 
 #[async_trait]
@@ -236,7 +255,10 @@ impl ImTurnHandler for CanonicalChainHandler {
             model: None,
             system: None,
         };
-        match execute_chat(&self.runtime, request).await {
+        // W2-③: IM 桥是进程内客户端 `im-bridge` —— 回合同样过会话写闸串行
+        // (与桌面/TUI/web 的回合排队不交叠); 具名审计面留 W3 (见残余表)。
+        let attribution = SessionAttribution::new("im-bridge", None);
+        match execute_chat_attributed(&self.runtime, request, attribution).await {
             Ok(CanonicalChatOutcome::Completed(response)) => ImTurnOutcome {
                 text: response.text,
                 approval: None,
@@ -273,11 +295,7 @@ impl ImApprovalResolver for CanonicalChainHandler {
             "cancel" => (ApprovalDecision::Cancel { reason: None }, "cancelled"),
             _ => return ImApprovalResolution::NotFound,
         };
-        match self
-            .runtime
-            .resolve_approval(session, approval, decision)
-            .await
-        {
+        match self.resolve_serialized(session, approval, decision).await {
             Ok(ApprovalResolution::Resumed(TurnOutcome::Completed(response))) => {
                 ImApprovalResolution::Resumed {
                     text: response.text,

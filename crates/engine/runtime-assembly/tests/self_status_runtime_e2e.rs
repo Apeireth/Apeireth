@@ -439,8 +439,8 @@ async fn the_frame_is_the_normalized_contract_shape() {
 }
 
 /// 配额自述面端到端: 会话配额探测口读**真会话存储**的账本, 组装后的
-/// `budget.quota` 两维出真值 (上限/已耗/余量, 不设限显 "—"); 无会话作用域
-/// 的调用已耗列显式 null + 原因。
+/// `budget.quota` 三维出真值 (上限/已耗/余量, 不设限显 "—"); 花费维含无价
+/// 轮时如实标"部分计量"; 无会话作用域的调用已耗列显式 null + 原因。
 #[tokio::test]
 async fn budget_quota_rows_report_real_values_from_the_durable_session_ledger() {
     use apeireth_runtime::SessionStore as _;
@@ -449,7 +449,7 @@ async fn budget_quota_rows_report_real_values_from_the_durable_session_ledger() 
     let dir = tempfile::tempdir().expect("temp dir");
     let db = dir.path().join("sessions.sqlite3");
 
-    // 真存储造数: 一个带配额账本的会话 (120 token, 2 步)。
+    // 真存储造数: 一个带配额账本的会话 (120 token, 2 步, 2000 微花费含 1 个无价轮)。
     let store = apeireth_runtime_assembly::SqliteSessionStore::open(&db)
         .await
         .expect("session store");
@@ -458,16 +458,24 @@ async fn budget_quota_rows_report_real_values_from_the_durable_session_ledger() 
     session.quota.consume_tokens(120);
     session.quota.consume_tool_step();
     session.quota.consume_tool_step();
+    session.quota.consume_cost_micros(2_000);
+    session.quota.record_unpriced_round();
     store.save(&session).await.expect("save");
 
     let backends = ProductionBackends {
-        self_status_budget: Some(budget_status_from_configured(8, 16, Some(5_000), None)),
+        self_status_budget: Some(budget_status_from_configured(
+            8,
+            16,
+            Some(5_000),
+            None,
+            Some(10_000),
+        )),
         self_status_quota: Some(session_quota_probe(db.clone())),
         ..ProductionBackends::default()
     };
     let (_, tool) = build(base_config(), backends);
 
-    // 会话作用域内: 两维真值; tool_steps 上限不设限 → 显示 "—"。
+    // 会话作用域内: 三维真值; tool_steps 上限不设限 → 显示 "—"。
     let call = ToolCall {
         id: "call_quota".into(),
         name: "self_status".into(),
@@ -485,8 +493,17 @@ async fn budget_quota_rows_report_real_values_from_the_durable_session_ledger() 
     assert_eq!(steps["limit"], Value::Null);
     assert_eq!(steps["consumed"], 2);
     assert_eq!(steps["display"], "2/—", "不设限显 —");
-    // 花费 / 深度两维如实"暂无接口"。
-    assert_eq!(report["budget"]["quota"]["cost_micros"]["display"], "—");
+    // 花费维转真值 (A-P2 计量点接线): 上限/已耗/余量真实数字, 无价轮如实
+    // 标"部分计量"; 深度维继续"暂无接口"。
+    let cost = &report["budget"]["quota"]["cost_micros"];
+    assert_eq!(cost["limit"], 10_000);
+    assert_eq!(cost["consumed"], 2_000);
+    assert_eq!(cost["remaining"], 8_000);
+    assert_eq!(cost["display"], "2000/10000");
+    assert!(
+        cost["reason"].as_str().unwrap().contains("部分计量"),
+        "无价轮必须如实标部分计量: {cost}"
+    );
     assert_eq!(report["budget"]["quota"]["depth"]["display"], "—");
 
     // 无会话作用域: 已耗列显式 null + 原因, 上限真值不变。

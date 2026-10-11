@@ -9,11 +9,20 @@
 // the Ready transition, crash detection, restart, and owned shutdown only exist
 // at runtime and are exercised from that integration test.
 pub mod backend_supervisor;
+mod imap_client;
 mod keychain;
 mod logging;
+mod mysql_client;
+mod pg_client;
+mod portable_mode;
 mod provider_proxy;
+mod smtp_send;
+mod speech_recognizer;
+mod sqlite_workbench;
 mod stored_config;
+mod terminal_exec;
 pub mod workspace;
+mod workspace_list;
 
 use backend_supervisor::{
     BackendCapabilityEnv, BackendInfo, BackendProviderEnv, BackendSupervisor,
@@ -89,7 +98,8 @@ async fn get_gateway_effective_config(
 }
 
 /// The loopback access token the UI must present on the gateway's gated
-/// endpoints (admin config / approval resolve).
+/// endpoints (whole API face since the token gate went gateway-wide; only
+/// `/health` is exempt).
 ///
 /// In-memory only: it is minted per backend spawn (or inherited from an
 /// explicit env value), crosses IPC like provider keys do, and is never
@@ -385,11 +395,22 @@ fn show_pet_window(app: &tauri::AppHandle) {
 }
 
 /// 互斥礼让应用：主窗在场 → 桌宠隐身；主窗收起 → 桌宠接管。
+///
+/// 隐身前发 `pet-host-visibility` 显式事件（真隐藏口径）：实测 `window.hide()`
+/// 不翻 `document.visibilityState`，形象层停帧闩（pet-render-pause）靠本事件
+/// 置位——原生节流 + 显式闩双保险，后者是可验收的那道（2026-10-11 真窗实测）。
 fn apply_pet_leeway(app: &tauri::AppHandle, main_window_presenting: bool) {
+    use tauri::Emitter;
     match pet_leeway(main_window_presenting) {
-        PetLeeway::Show => show_pet_window(app),
+        PetLeeway::Show => {
+            if let Some(pet) = app.get_webview_window("pet") {
+                let _ = pet.emit("pet-host-visibility", true);
+            }
+            show_pet_window(app);
+        }
         PetLeeway::Hide => {
             if let Some(pet) = app.get_webview_window("pet") {
+                let _ = pet.emit("pet-host-visibility", false);
                 let _ = pet.hide();
             }
         }
@@ -422,6 +443,11 @@ fn toggle_pet_window(app: tauri::AppHandle) {
         }
         PetWindowAction::Show => {
             if let Some(window) = existing {
+                // 解闩显式事件（与 apply_pet_leeway 同源）：礼让隐藏过的窗别冻着
+                {
+                    use tauri::Emitter;
+                    let _ = window.emit("pet-host-visibility", true);
+                }
                 let _ = window.show();
             }
         }
@@ -544,6 +570,19 @@ pub fn run() {
             open_log_directory,
             read_tuning_log,
             provider_proxy::provider_request,
+            terminal_exec::run_workspace_command,
+            portable_mode::get_portable_mode,
+            sqlite_workbench::query_sqlite_file,
+            workspace_list::list_workspace_dir,
+            smtp_send::send_smtp,
+            pg_client::query_postgres,
+            imap_client::imap_fetch,
+            mysql_client::query_mysql,
+            speech_recognizer::detect_speech_engine,
+            speech_recognizer::recognize_speech,
+            workspace_list::create_dir_entry,
+            workspace_list::rename_entry,
+            workspace_list::delete_entry,
             open_settings,
             toggle_quick_window,
             close_pet_window,

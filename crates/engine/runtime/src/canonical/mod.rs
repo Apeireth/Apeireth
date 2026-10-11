@@ -43,6 +43,7 @@ pub mod event_log;
 pub mod events;
 pub mod execute;
 pub mod heartbeat;
+pub mod metrics;
 pub mod module;
 // OrganOrchestrator 类似 v1 AwakeCompanion 真实施 (per R11 spec + 子代理 R12 真实施).
 // **0 装诚实真账 (子代理 R12 独立判断)**:
@@ -90,6 +91,10 @@ pub use execute::{
     PLAN_MODE_EXIT_TOOL_NAME,
 };
 pub use heartbeat::{FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource};
+pub use metrics::{
+    DistributionSummary, MetricsRegistry, MetricsSnapshot, SessionAggregate, TurnMetrics,
+    TurnOutcomeKind, WindowAggregate, DEFAULT_METRICS_WINDOW_TURNS, MAX_TRACKED_SESSIONS,
+};
 pub use module::{
     AgentModule, BehaviorModule, HookPoint, InvocationContext, InvocationOrigin, Module,
     ModuleContext, ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
@@ -98,9 +103,9 @@ pub use module::{
 };
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use quota::{
-    parse_quota_max_tokens, parse_quota_max_tool_steps, CostRateMicros, CostRateTable,
-    QuotaDimension, QuotaExceeded, QuotaExhaustedAction, SessionQuotaLimits, MAX_QUOTA_TOKENS,
-    MAX_QUOTA_TOOL_STEPS,
+    parse_quota_max_cost_micros, parse_quota_max_tokens, parse_quota_max_tool_steps,
+    CostRateMicros, CostRateTable, QuotaDimension, QuotaExceeded, QuotaExhaustedAction,
+    SessionQuotaLimits, MAX_QUOTA_COST_MICROS, MAX_QUOTA_TOKENS, MAX_QUOTA_TOOL_STEPS,
 };
 pub use runtime::{
     parse_tool_call_limit, parse_turn_round_limit, plugin_ids, Runtime, RuntimeBuilder,
@@ -110,7 +115,8 @@ pub use runtime::{
 };
 pub use session::{
     InMemorySessionStore, PermissionPreset, Session, SessionEvent, SessionEventKind,
-    SessionManager, SessionSettings, SessionStore,
+    SessionManager, SessionSettings, SessionStore, SessionWriteAdmission, SessionWriteGate,
+    SessionWritePermit,
 };
 pub use subloop::{
     RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,

@@ -67,6 +67,13 @@ pub struct CognitiveQuota {
     pub consumed_tokens: usize,
     pub consumed_tool_steps: usize,
     pub consumed_cost_micros: u64,
+    /// 花费维计量覆盖计数: cost 换算不出来的计量轮数 (无单价行, 绝不编价)。
+    ///
+    /// 计入此列的轮**不**计入 `consumed_cost_micros`, 因此该列 > 0 时花费累计
+    /// 是"部分计量"口径 (如实标注, 不是全量花费)。
+    /// `#[serde(default)]` 是落库迁移口径: 旧会话行没有此列, 读回 0。
+    #[serde(default)]
+    pub unpriced_rounds: usize,
 }
 
 impl Default for CognitiveQuota {
@@ -88,6 +95,7 @@ impl CognitiveQuota {
             consumed_tokens: 0,
             consumed_tool_steps: 0,
             consumed_cost_micros: 0,
+            unpriced_rounds: 0,
         }
     }
 
@@ -100,9 +108,9 @@ impl CognitiveQuota {
 
     /// Records one provider round's usage-metered tokens (saturating).
     ///
-    /// Production metering splits across the two metered dimensions because
-    /// they land at different call sites: tokens accumulate per provider
-    /// response, tool steps per dispatched tool call. `consume_step` (above)
+    /// Production metering splits across the metered dimensions because they
+    /// land at different call sites: tokens and cost accumulate per provider
+    /// response, tool steps per dispatched tool call. `consume_step` (below)
     /// keeps the coupled scheduler-facing accounting untouched.
     pub fn consume_tokens(&mut self, tokens: usize) {
         self.consumed_tokens = self.consumed_tokens.saturating_add(tokens);
@@ -111,6 +119,25 @@ impl CognitiveQuota {
     /// Records one dispatched tool call (saturating).
     pub fn consume_tool_step(&mut self) {
         self.consumed_tool_steps = self.consumed_tool_steps.saturating_add(1);
+    }
+
+    /// Records one priced provider round's converted cost (saturating).
+    ///
+    /// The amount is the frozen conversion (`usage × unit price`, per-side
+    /// ceil over 1 000 tokens) computed at the metering point. A round whose
+    /// model carries no unit price is **not** recorded here — it lands in
+    /// [`CognitiveQuota::record_unpriced_round`] instead (never invented).
+    pub fn consume_cost_micros(&mut self, cost_micros: u64) {
+        self.consumed_cost_micros = self.consumed_cost_micros.saturating_add(cost_micros);
+    }
+
+    /// Records one provider round whose cost could not be converted (no unit
+    /// price row for the model).
+    ///
+    /// The round still meters tokens/steps normally; only the cost column is
+    /// skipped. A non-zero count marks the cost total as "部分计量" (partial).
+    pub fn record_unpriced_round(&mut self) {
+        self.unpriced_rounds = self.unpriced_rounds.saturating_add(1);
     }
 
     /// Checks if any budget dimension has been exceeded.
@@ -417,6 +444,32 @@ mod tests {
             quota.consume_step(100, 500);
         }
         assert!(quota.is_exhausted());
+    }
+
+    /// 花费维记账二分 (A-P2): 有价轮进 `consumed_cost_micros` (饱和), 无价轮
+    /// 只进 `unpriced_rounds` (绝不编价, 不污染成本列); 旧账本行缺列读回 0。
+    #[test]
+    fn cost_accounting_splits_priced_and_unpriced_rounds() {
+        let mut quota = CognitiveQuota::new(1000, 5, 5000);
+        quota.consume_cost_micros(7_000);
+        quota.record_unpriced_round();
+        quota.consume_cost_micros(2);
+        assert_eq!(quota.consumed_cost_micros, 7_002, "有价轮累计");
+        assert_eq!(quota.unpriced_rounds, 1, "无价轮只计数, 不编价");
+
+        // 花费列是 u64 累加账本: 到顶饱和停在 u64::MAX, 不回绕不 panic。
+        let mut saturated = CognitiveQuota::unlimited();
+        saturated.consume_cost_micros(u64::MAX);
+        saturated.consume_cost_micros(1);
+        assert_eq!(saturated.consumed_cost_micros, u64::MAX, "饱和不回绕");
+
+        // 落库迁移口径: 旧会话行没有 `unpriced_rounds` 列, 读回 0 不是失败。
+        let legacy = serde_json::from_str::<CognitiveQuota>(
+            r#"{"max_tokens":1,"max_tool_steps":1,"max_cost_micros":1,
+                "consumed_tokens":0,"consumed_tool_steps":0,"consumed_cost_micros":0}"#,
+        )
+        .expect("旧账本行必须能读回");
+        assert_eq!(legacy.unpriced_rounds, 0);
     }
 
     /// M1 回归: 重复 task_id 必须拒绝 (旧实现静默覆盖 + 队列留重).

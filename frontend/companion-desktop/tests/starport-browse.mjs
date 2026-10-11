@@ -11,6 +11,8 @@ import {
   checkBrowsePolicy,
   extractReadableText,
   pushHistory,
+  extractSemanticTree,
+  findSemanticNode,
   BROWSE_HISTORY_LIMIT,
 } from '../src/lib/starport/apps/browse-store.ts';
 
@@ -114,6 +116,47 @@ console.log('--- Starting Starport Browse Check ---');
   assert.equal(history.length, BROWSE_HISTORY_LIMIT, '重复访问不涨账');
   assert.equal(history[0].at, 999, '重复访问上浮到最前');
   console.log('  [4] history ledger OK');
+}
+
+// ---------------------------------------------------------------------------
+// 5. 语义树：去噪提取 + 确定性句柄 + 查找
+// ---------------------------------------------------------------------------
+{
+  const html = `
+    <html><head><style>.x{}</style><script>evil()</script></head><body>
+      <!-- 噪声注释 -->
+      <h1>标题甲</h1>
+      <p>正文一。</p>
+      <a href="https://a.test/x">链接一</a>
+      <img src="pic.png" alt="图甲" />
+      <input name="q" type="text" placeholder="搜索词" />
+      <button>提交</button>
+      <h2>标题乙</h2>
+      <p></p>
+    </body></html>`;
+  const tree = extractSemanticTree(html);
+  // 文档序句柄：heading:1, text:1, link:1, image:1, form-field:1, button:1, heading:2。
+  assert.deepEqual(
+    tree.map((node) => node.handle),
+    ['heading:1', 'text:1', 'link:1', 'image:1', 'form-field:1', 'button:1', 'heading:2'],
+    '文档序确定性句柄',
+  );
+  assert.equal(tree[0].level, 1);
+  assert.equal(tree[2].href, 'https://a.test/x');
+  assert.equal(tree[4].name, 'q');
+  assert.ok(!tree.some((node) => node.text.includes('evil')), '脚本噪声剥除');
+  assert.ok(!tree.some((node) => node.text.includes('噪声注释')), '注释噪声剥除');
+  assert.ok(!tree.some((node) => node.text === ''), '空文本节点不产出');
+
+  // 确定性：同输入恒同句柄。
+  assert.deepEqual(
+    extractSemanticTree(html).map((node) => node.handle),
+    tree.map((node) => node.handle),
+  );
+  assert.equal(findSemanticNode(tree, 'link:1')?.text, '链接一');
+  assert.equal(findSemanticNode(tree, 'link:99'), null, '未知句柄返回 null');
+  assert.deepEqual(extractSemanticTree(''), [], '空输入空树');
+  console.log('  [5] semantic tree OK');
 }
 
 console.log('--- Starport Browse Check PASSED ---');

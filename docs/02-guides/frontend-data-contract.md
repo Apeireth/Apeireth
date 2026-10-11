@@ -177,7 +177,7 @@ handler：`companion_serve.rs:1040-1363`。OpenAI 兼容请求，服务端在调
 | header | 说明 / 出处 |
 |--------|--------------|
 | `X-Apeireth-Continuity` | 可选会话标签；空/缺省 → 启动 subject（`:1045-1050`）。前端在 `streamChat` 里当 `sessionId` 非空时发送（`runtime.ts:366-368`） |
-| `Authorization` | 对话端点服务端不校验；可发任意非空 Bearer。注意敏感端点（`/v1/admin/config`、`/v1/approvals/resolve`）另有回环令牌门（env `APEIRETH_GATEWAY_TOKEN` 三态口径：设值=Bearer 必须匹配 / 未设=放行但警告+审计 / `none`=明示不设防留痕，见 `docs/04-internal/backend-enhancement/E-threat-model.md` G10 处置） |
+| `Authorization` | **全 API 面令牌门**（W2-② 起 chat/事件流/面板/会话/审批/admin 族全鉴权，唯一豁免 `/health` 探活）：三态口径（env `APEIRETH_GATEWAY_TOKEN` + 客户端令牌表任一在场=强制态，Bearer 必须命中令牌族；两面皆空=放行但警告+审计；`none`=明示不设防留痕，见 `docs/04-internal/backend-enhancement/E-threat-model.md` G10 处置）。桌面 UI 每个网关请求统一经 `gatewayAuthHeaders()`（`src/lib/tauri-bridge.ts` 令牌面，三源取值：IPC `get_gateway_token`（桌面）> env `VITE_APEIRETH_GATEWAY_TOKEN`（web 构建注入）> 无；无令牌=三态门未设口径照旧，不发鉴权头）。用户凭据（`config.apiKey` / `provider.apiKey`）**不是**入站鉴权，不进网关请求头 |
 
 服务端副作用（前端可感知）：每条对话都会喂节律 + 重置做梦安静期（`:1053`），并可能触发异步记忆提炼（fire-and-forget，`:1355-1360`）。
 
@@ -720,7 +720,7 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 
 ### 9.2 断线重连策略建议
 
-- **SSE `/v1/apeireth/events`**：参照 `subscribeCompanionEvents` 的指数退避（首试 2s，×1.5，封顶 30s，连接成功后复位，`runtime.ts:1022`、`:1035`、`:1059-1060`）。注意服务端 broadcast 容量 64、落后即丢（`companion_serve.rs:980`、`:1532`）——重连后**不要**假设能补到断线期消息，应主动拉一次相关 REST（如 approval-requests）对齐状态。`EventSource` 自带重连不可控，建议统一走 fetch+reader 的手动循环（现有实现即如此）。
+- **SSE `/v1/apeireth/events`**：参照 `subscribeCompanionEvents` 的指数退避（首试 2s，×1.5，封顶 30s）。注意服务端 broadcast 容量 64、落后即丢（`companion_serve.rs:980`、`:1532`）——重连后**不要**假设能补到断线期消息，应主动拉一次相关 REST（如 approval-requests）对齐状态。`EventSource` 自带重连不可控且**无法带 Authorization 头**：令牌门全 API 面化后，有令牌的客户端统一走 fetch+reader 手动循环（`src/lib/sse-stream.ts`，帧解析与 EventSource 同口径）；无令牌（三态门未设，兼容路径）保留 EventSource 原路径，行为与收口前一致。
 - **轮询兜底**：`App.svelte:463-465` 已每 15s 刷新健康 + 审批请求。SSE 断线期间这是唯一状态来源，保留。
 - **chat 请求**：503（限流）按 body 提示 10-30s 后由用户重试（`companion_serve.rs:1256`）；`streamChat` 中断（`done` 提前/网络错）时前端已能保留已收 `fullText`，不要整句丢弃。
 - **所有 panel 只读端点**失败时按「数据源暂缺」降级展示，不阻塞主对话链路。

@@ -35,6 +35,22 @@ rand = "0.8"
 keyring = "3.6.3"
 # Workspace policy (clippy.toml): fs_err over std::fs for path-carrying errors.
 fs-err = "3.0"
+# 矿脉数据库面: 只读 SQL 查询引擎。版本对齐主 workspace 硬锁 0.32 (bundled)，
+# 防 libsqlite3-sys 生态漂移——本 crate 独立 workspace，同版即同栈。
+rusqlite = { version = "0.32", features = ["bundled"] }
+# 信使 SMTP 发送面: 传输件对齐既有依赖树版本（经 reqwest 带入的同栈），
+# 零树膨胀。隐式 TLS 走 ring 提供者；明文通道需显式 insecure 标志（如实命名）。
+tokio-rustls = "0.26"
+rustls = { version = "0.23", features = ["ring"] }
+webpki-roots = "1.0"
+base64 = "0.22"
+# 认证件: MD5/SCRAM 握手哈希用，纯计算零网络。
+md-5 = "0.10"
+sha2 = "0.10"
+hmac = "0.12"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+# MySQL 认证加扰（mysql_native_password 的 SHA1 口径；纯计算零网络）。
+sha1 = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Credentials"] }

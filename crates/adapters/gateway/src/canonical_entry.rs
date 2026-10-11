@@ -14,7 +14,7 @@ use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, ExecutionTrace, PendingApprovalView, Runtime,
     RuntimeError, TraceEvent, TurnOutcome, TurnRequest, TurnSecurityContext,
 };
-use axum::extract::{Query, Request, State};
+use axum::extract::{Extension, Query, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -25,8 +25,11 @@ use tokio_stream::StreamExt;
 use tower_http::cors::AllowOrigin;
 
 use crate::admin::{admin_config_get, admin_config_update, GatewayRuntimeConfig};
+use crate::client_tokens::{
+    client_name_binds, record_session_client, ClientIdentity, CLIENT_NAME_CLAIM_HEADER,
+};
 use crate::error_frame::{ErrorCode, ErrorFrame};
-use crate::events::{events_handler, EventBus, GatewayEvent};
+use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
 use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
 
 /// Native gateway request. HTTP and CLI transports can both construct it.
@@ -237,10 +240,86 @@ pub struct CanonicalApprovalRequest {
     pub reason: Option<String>,
 }
 
+/// W2-③ 会话归属: 这次会话写以谁的名义署名、事实落哪个审计面。
+///
+/// 署名键只来自令牌绑定 ([`ClientIdentity`]); 会话写无论有无归属都过同一把
+/// 会话写闸 (排队 + 串行), 归属只决定 `gateway.session_client` 审计行怎么署名。
+#[derive(Clone)]
+pub struct SessionAttribution {
+    /// 审计署名键 (令牌表 `name` / `env` / `anonymous` / `im-bridge` / `unattributed`)。
+    pub client: String,
+    /// 观测攒批面: `gateway.session_client` 审计行落点 (None = 不留审计行)。
+    pub audit: Option<Arc<RuntimeObservationSink>>,
+}
+
+impl std::fmt::Debug for SessionAttribution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionAttribution")
+            .field("client", &self.client)
+            .field("audit", &self.audit.is_some())
+            .finish()
+    }
+}
+
+impl SessionAttribution {
+    /// 无归属的内部直调 (不署名、不留审计行; 会话写仍过写闸串行)。
+    pub fn unattributed() -> Self {
+        Self {
+            client: ClientIdentity::UNATTRIBUTED.to_string(),
+            audit: None,
+        }
+    }
+
+    /// 以具名客户端署名 (审计面可选)。
+    pub fn new(client: impl Into<String>, audit: Option<Arc<RuntimeObservationSink>>) -> Self {
+        Self {
+            client: client.into(),
+            audit,
+        }
+    }
+}
+
+/// 持会话写闸跑一个回合 (W2-③ 并发写语义: **排队 + 审计**)。
+///
+/// 同一会话的回合先到先服务串行 —— 第二个客户端的回合**排队**等前一个跑完,
+/// 不发 busy 帧、不交叠写会话账本; 入场事实 (排第几 / 等多久) 落
+/// `gateway.session_client` 审计行, 排队因此可观测可审计。
+async fn run_turn_serialized(
+    runtime: &Runtime,
+    turn: TurnRequest,
+    attribution: &SessionAttribution,
+    on_delta: Option<Arc<dyn Fn(String) + Send + Sync>>,
+) -> Result<TurnOutcome, RuntimeError> {
+    let permit = runtime.sessions().write_permit(turn.session).await;
+    record_session_client(
+        attribution.audit.as_deref(),
+        turn.session,
+        &attribution.client,
+        "turn",
+        Some(permit.admission()),
+    );
+    let outcome = match on_delta {
+        Some(sink) => runtime.execute_outcome_streaming(turn, sink).await,
+        None => runtime.execute_outcome(turn).await,
+    };
+    drop(permit);
+    outcome
+}
+
 /// Invoke the canonical runtime through the real gateway entry adapter.
 pub async fn execute_chat(
     runtime: &Runtime,
     request: CanonicalChatRequest,
+) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
+    execute_chat_attributed(runtime, request, SessionAttribution::unattributed()).await
+}
+
+/// 归属化回合入口 (W2-③): 会话写闸串行 (排队语义) + `gateway.session_client`
+/// 审计行 (客户端名 ↔ 会话事件关联)。
+pub async fn execute_chat_attributed(
+    runtime: &Runtime,
+    request: CanonicalChatRequest,
+    attribution: SessionAttribution,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
     if request.input.trim().is_empty() {
         return Err(CanonicalEntryError::InvalidRequest(
@@ -265,7 +344,8 @@ pub async fn execute_chat(
         turn = turn.with_system(system);
     }
 
-    Ok(turn_outcome_to_chat(runtime.execute_outcome(turn).await?))
+    let outcome = run_turn_serialized(runtime, turn, &attribution, None).await?;
+    Ok(turn_outcome_to_chat(outcome))
 }
 
 /// Resolve a pending approval through the canonical runtime API.
@@ -273,11 +353,30 @@ pub async fn resolve_approval(
     runtime: &Runtime,
     request: CanonicalApprovalRequest,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
+    resolve_approval_attributed(runtime, request, SessionAttribution::unattributed()).await
+}
+
+/// 归属化审批续跑 (W2-③): 续跑写同一本会话账本, 同样过会话写闸串行 +
+/// `gateway.session_client` 审计 (`action=approval.resolve`)。
+pub async fn resolve_approval_attributed(
+    runtime: &Runtime,
+    request: CanonicalApprovalRequest,
+    attribution: SessionAttribution,
+) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
     let decision = parse_approval_decision(&request.decision, request.reason.clone())?;
-    match runtime
+    let permit = runtime.sessions().write_permit(request.session).await;
+    record_session_client(
+        attribution.audit.as_deref(),
+        request.session,
+        &attribution.client,
+        "approval.resolve",
+        Some(permit.admission()),
+    );
+    let resolved = runtime
         .resolve_approval(request.session, request.approval, decision)
-        .await?
-    {
+        .await;
+    drop(permit);
+    match resolved? {
         ApprovalResolution::Resumed(outcome) => Ok(turn_outcome_to_chat(outcome)),
         ApprovalResolution::AlreadyResolved { status } => Err(CanonicalEntryError::InvalidRequest(
             format!("approval already resolved: {status:?}"),
@@ -749,6 +848,15 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
     diff == 0
 }
 
+/// 自称名的有界审计渲染 (请求头值是攻击方可控输入, 不无界进审计行)。
+fn truncate_label(claimed: &str) -> String {
+    let mut bounded: String = claimed.chars().take(64).collect();
+    if bounded.chars().count() < claimed.chars().count() {
+        bounded.push('…');
+    }
+    bounded
+}
+
 /// 无认证探活端点: 令牌门对这些路径**整体豁免** (不校验、不警告、不审计)。
 ///
 /// 健康探活是探测刚需 (服务管理器 / 桌面侧车监督 / 服务脚本的就绪探针都只打
@@ -757,7 +865,7 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
 /// `gateway_auth_face` 测试钉住。
 pub const UNAUTHENTICATED_PROBE_PATHS: &[&str] = &["/health"];
 
-/// H1/G10/W2-②: 全 API 面的令牌门中间件 (口径由 [`GatewayTokenGate`] 给出)。
+/// H1/G10/W2-②/W2-③: 全 API 面的令牌门中间件 (口径由 [`GatewayTokenGate`] 给出)。
 ///
 /// - `Enforced` (或令牌表在场): 缺失/错误的 Bearer 令牌分别返回 401
 ///   `auth_missing_key` / `auth_invalid_key`, 拒绝入审计 (`gateway.auth_rejected`);
@@ -765,11 +873,17 @@ pub const UNAUTHENTICATED_PROBE_PATHS: &[&str] = &["/health"];
 /// - `UnprotectedDefault` (env 未设且令牌表为空): 放行但每次记警告帧 + 审计事实;
 /// - `UnprotectedDeclared` (逃生阀 `none`): 放行, 审计留痕, 不逐次告警。
 ///
+/// W2-③ 令牌隔离: 过门身份 ([`ClientIdentity`]) 随请求扩展下行给处理器
+/// (署名键**只来自令牌绑定**); 请求可带自称名头
+/// [`CLIENT_NAME_CLAIM_HEADER`] 做 name↔token 绑定校验 —— 自称名与令牌绑定名
+/// 不一致、或在无绑定的未设防口径下自称名, 一律 401 拒绝 (冒名 fail-closed,
+/// 审计署名不可冒名)。
+///
 /// [`UNAUTHENTICATED_PROBE_PATHS`] 显式豁免。任何分支都不把令牌值写进帧、
 /// 审计或错误正文。
 async fn require_gateway_token(
     State(state): State<GatewayState>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Response {
     let endpoint = request.uri().path().to_string();
@@ -782,19 +896,64 @@ async fn require_gateway_token(
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "))
         .map(str::to_string);
+    // W2-③: 客户端自称名 (可选) —— 只做绑定校验, 永不改写审计署名。
+    let claimed = request
+        .headers()
+        .get(CLIENT_NAME_CLAIM_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
     match state
         .token_gate
         .verify(bearer.as_deref(), &state.client_tokens)
     {
         GateVerdict::Pass { client } => {
+            if let Some(claimed) = &claimed {
+                if !client_name_binds(claimed, Some(client.as_str())) {
+                    // 冒名即拒 (错误即帧): 自称名必须与令牌绑定名一致。
+                    state.observations.buffer_audit(
+                        "gateway.auth_rejected",
+                        Some(format!(
+                            "endpoint={endpoint} reason=client_name_mismatch client={client} \
+                             claimed={}",
+                            truncate_label(claimed)
+                        )),
+                    );
+                    return ErrorFrame::response(
+                        StatusCode::UNAUTHORIZED,
+                        ErrorCode::AuthInvalidKey,
+                        "client name does not match the presented credential",
+                    )
+                    .into_response();
+                }
+            }
             // 过门留痕: 谁 (客户端名) 调了哪个端点 —— W3 多用户授权的问责地基。
             state.observations.buffer_audit(
                 "gateway.auth_client",
                 Some(format!("endpoint={endpoint} client={client}")),
             );
+            request
+                .extensions_mut()
+                .insert(ClientIdentity::authenticated(client));
             next.run(request).await
         }
         GateVerdict::PassUnprotected { mode } => {
+            if let Some(claimed) = &claimed {
+                // 无凭证即无绑定: 自称名不可校验 → 拒 (审计署名不可冒名)。
+                state.observations.buffer_audit(
+                    "gateway.auth_rejected",
+                    Some(format!(
+                        "endpoint={endpoint} reason=client_name_unverifiable mode={mode} \
+                         claimed={}",
+                        truncate_label(claimed)
+                    )),
+                );
+                return ErrorFrame::response(
+                    StatusCode::UNAUTHORIZED,
+                    ErrorCode::AuthInvalidKey,
+                    "a claimed client name requires a token binding to verify against",
+                )
+                .into_response();
+            }
             if mode == "env_unset" {
                 // 收紧后的默认态 (保守过渡): 无认证调用仍放行 (无令牌客户端零断),
                 // 但不再是静默 —— 每次放行记警告帧 + 审计事实。
@@ -812,6 +971,7 @@ async fn require_gateway_token(
                 "gateway.auth_unprotected",
                 Some(format!("endpoint={endpoint} mode={mode}")),
             );
+            request.extensions_mut().insert(ClientIdentity::anonymous());
             next.run(request).await
         }
         GateVerdict::RejectMissing => {
@@ -881,6 +1041,8 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         // 不可靠)。与全 API 面同一令牌门同一三态口径。
         .route("/v1/admin/shutdown", post(admin_shutdown))
         .merge(panel_routes())
+        // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
+        .merge(crate::panel_metrics::metrics_routes())
         // 令牌门包住整个 API 面 (含未匹配路径的 fallback: 强制态下未知路径也
         // 401, 不借 404/401 差别泄露路由存在性)。
         .layer(middleware::from_fn_with_state(
@@ -1084,8 +1246,20 @@ async fn runtime_snapshot(State(state): State<GatewayState>) -> Json<serde_json:
     Json(serde_json::json!(state.runtime.snapshot()))
 }
 
+/// 请求过门身份 → 会话归属 (W2-③): 署名键只来自令牌绑定。
+fn attribution_for(
+    state: &GatewayState,
+    identity: Option<&Extension<ClientIdentity>>,
+) -> SessionAttribution {
+    let client = identity
+        .map(|Extension(identity)| identity.client.clone())
+        .unwrap_or_else(|| ClientIdentity::UNATTRIBUTED.to_string());
+    SessionAttribution::new(client, Some(Arc::clone(&state.observations)))
+}
+
 async fn native_chat(
     State(state): State<GatewayState>,
+    identity: Option<Extension<ClientIdentity>>,
     Json(request): Json<CanonicalChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
@@ -1094,7 +1268,8 @@ async fn native_chat(
     }
     let session = request.session.unwrap_or_else(SessionId::new);
     request.session = Some(session);
-    let outcome = execute_chat(state.runtime.as_ref(), request).await;
+    let attribution = attribution_for(&state, identity.as_ref());
+    let outcome = execute_chat_attributed(state.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     publish_turn_delta(&state.events, &outcome);
@@ -1116,10 +1291,12 @@ fn publish_turn_delta(bus: &EventBus, outcome: &CanonicalChatOutcome) {
 
 async fn native_resolve_approval(
     State(state): State<GatewayState>,
+    identity: Option<Extension<ClientIdentity>>,
     Json(request): Json<CanonicalApprovalRequest>,
 ) -> Result<Response, HttpError> {
     let session = request.session;
-    let outcome = resolve_approval(state.runtime.as_ref(), request).await;
+    let attribution = attribution_for(&state, identity.as_ref());
+    let outcome = resolve_approval_attributed(state.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     publish_turn_delta(&state.events, &outcome);
@@ -1168,6 +1345,7 @@ fn chat_http_response(outcome: CanonicalChatOutcome) -> Response {
 
 async fn openai_chat(
     State(state): State<GatewayState>,
+    identity: Option<Extension<ClientIdentity>>,
     Json(request): Json<OpenAiChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
@@ -1207,16 +1385,17 @@ async fn openai_chat(
         system: (!system.is_empty()).then_some(system),
     };
     let model_name = request.model.unwrap_or_default();
+    let attribution = attribution_for(&state, identity.as_ref());
 
     // True incremental streaming: deltas flow from the provider through the
     // canonical loop to the client as they arrive. Non-streaming providers
     // fall back inside the runtime (one final delta), so this branch is
     // correct for every provider.
     if is_stream {
-        return openai_chat_streaming(&state, native, model_name).await;
+        return openai_chat_streaming(&state, native, model_name, attribution).await;
     }
 
-    let outcome = execute_chat(state.runtime.as_ref(), native).await;
+    let outcome = execute_chat_attributed(state.runtime.as_ref(), native, attribution).await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     let outcome = match outcome {
@@ -1267,6 +1446,7 @@ async fn openai_chat_streaming(
     state: &GatewayState,
     native: CanonicalChatRequest,
     model_name: String,
+    attribution: SessionAttribution,
 ) -> Result<Response, HttpError> {
     let session = native
         .session
@@ -1334,7 +1514,8 @@ async fn openai_chat_streaming(
             let _ = tx.send(format!("data: {json}\n\n")).await;
         }
 
-        let outcome = runtime.execute_outcome_streaming(turn, sink).await;
+        // W2-③: 流式回合同样过会话写闸 (排队 + 串行 + 归属审计)。
+        let outcome = run_turn_serialized(runtime.as_ref(), turn, &attribution, Some(sink)).await;
         observations.flush().await;
 
         match outcome {

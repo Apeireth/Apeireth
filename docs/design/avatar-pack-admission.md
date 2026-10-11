@@ -31,6 +31,14 @@
   必须在 §5 台账有行，无行即红。
 - 选型调研（`reports/avatar-runtime-selection-2026-10-11.md`）已核实：白名单内
   现成 2D 角色资产近乎为零——这正是"用户自备 + 官方自制后补"策略的证据基础。
+- **落地状态（2026-10-11）**：
+  - ① 用户自带形象装载口 ✅——`user-avatar.ts`（格式合法性校验 + 免责确认 +
+    IndexedDB 本机持久化 + 内嵌许可元数据透传）、`PetWindowView` 右键菜单接入；
+  - ② CI 素材许可门禁 ✅——`asset-licenses.json` 台账（11 素材全 first-party）
+    + `scripts/check-asset-licenses.mjs`（无行即红、白名单外拒、陈旧行红）
+    + `pnpm check:assets` + workflow `companion-desktop-ci.yml` 接入（最小改动）；
+  - ③ 用户指引 ✅——`docs/02-guides/avatar-byo-guide.md`（指路不背书）；
+  - ④ 官方形象委托需求书 ✅——`docs/design/avatar-commission-brief.md`（待主人签发）。
 
 ## 2. 路线定位（与范式层的关系）
 
@@ -85,6 +93,7 @@
   "id": "theme-xxx",
   "displayName": "…",
   "module": "layers/xxx.mjs",
+  "model": "models/xxx.vrm",
   "license": {
     "spdx": "CC-BY-4.0",
     "attribution": "署名文案（随包展示与 NOTICE 共用）",
@@ -101,6 +110,9 @@
   "tier0Safe": false
 }
 ```
+
+- `module`（自定义形象层模块）与 `model`（形象文件，.vrm/.glb）**至少给一个**，
+  可同包并存；路径均须相对包目录、无逃逸、扩展名白名单（校验已落码）；
 
 - 校验口径沿用 v1 的严格纪律：缺主键拒绝、路径逃逸拒绝、保留字 id 拒绝；
   `license.spdx` 不在白名单 → **拒绝注册**（许可红线进代码，不只进文档）；

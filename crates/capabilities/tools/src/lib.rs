@@ -56,6 +56,12 @@ pub mod std_sub_supervisor;
 pub mod supervisor;
 // 文件写入总闸的 shell 侧写意图词法扫描 (内测整改): 命中且总闸未开 → 拒绝即帧。
 pub mod write_intent;
+// 干活能力轴 P2 · 只读改单面 (`tool.worktree_plan`): 任务目标 → 改单
+// (文件列表+动作+预期), 计划不落盘、只读档零审批。
+pub mod worktree_plan;
+// 干活能力轴 P2 · 四拍受控工作树写 (`tool.worktree_apply`): 计划→改→验证→落,
+// 暂存面执行 + 观测门禁 + 写总闸语义 + 落拍全有或全无 (审批级, 每次人批)。
+pub mod worktree_apply;
 
 pub use apply_patch::{
     ApplyPatchError, FilePatchAction, PatchHunk, PatchReport, TransactionalPatchApplier,
@@ -111,15 +117,31 @@ pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
 pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
 pub use self_status::{
-    capability_roster, derive_tuning_preset, render_snapshot, BudgetStatus, CapabilitySwitch,
-    MemoryLedgerStats, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, SelfStatusIdentity,
-    SelfStatusSnapshot, SelfStatusSource, SelfStatusTool, SessionQuotaProbe, StatusProbe,
-    TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
-    DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY,
-    PRESET_EFFORTLESS, PRICE_NOT_PROVIDED, PRODUCT_NAME, QUOTA_COST_NOT_WIRED,
-    QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED, RUNTIME_ROLE_GATEWAY_SIDECAR,
+    capability_roster, derive_tuning_preset, quota_cost_partial_note, render_snapshot,
+    BudgetStatus, CapabilitySwitch, MemoryLedgerStats, QuotaDimensionStatus, QuotaMeterReading,
+    QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SelfStatusTool,
+    SessionQuotaProbe, StatusProbe, TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE,
+    DATA_PROBE_NOT_WIRED, DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN, PRESET_BALANCED,
+    PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS, PRICE_NOT_PROVIDED, PRODUCT_NAME,
+    QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    RUNTIME_ROLE_GATEWAY_SIDECAR,
 };
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};
 pub use stealth_crawler::{ExtractedMediaItem, StealthBrowserConfig, StealthCrawlerEngine};
+pub use worktree_apply::{
+    apply_boundary_refusal, apply_summary, authorized_worktree_apply_policy,
+    cross_check_change_order, prepare_apply, worktree_apply_capability, worktree_apply_pipeline,
+    PreparedApply, VerifyCommand, WorktreeApplyApprovalHook, WorktreeApplyBoundaryGuard,
+    WorktreeApplyParams, WorktreeApplyReport, WorktreeApplyRiskMappingHook, WorktreeApplyTool,
+    REFUSAL_DRIFT_PREFIX, REFUSAL_VERIFY_PREFIX, WORKTREE_APPLY_CAPABILITY_ID,
+    WORKTREE_APPLY_TIMEOUT_MS, WORKTREE_APPLY_TOOL_DESCRIPTION, WORKTREE_APPLY_TOOL_NAME,
+};
+pub use worktree_plan::{
+    change_order_refusal, validated_change_order, worktree_plan_capability, worktree_plan_pipeline,
+    ActionDistribution, WorktreeChangeAction, WorktreeChangeOrder, WorktreeFileChange,
+    WorktreePlanBoundaryGuard, WorktreePlanTool, WORKTREE_GIT_BOUNDARY_NOTE,
+    WORKTREE_PLAN_CAPABILITY_ID, WORKTREE_PLAN_TIMEOUT_MS, WORKTREE_PLAN_TOOL_DESCRIPTION,
+    WORKTREE_PLAN_TOOL_NAME,
+};
 pub use write_intent::{scan_shell_write_intent, WriteIntentHit};

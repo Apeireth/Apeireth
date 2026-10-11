@@ -102,6 +102,9 @@ pub enum ActionTarget {
     // === PHL-05 不假装不科学 ===
     /// 假装决策不基于科学方法 (PHL-05 not_pretend_unscientific)
     PretendUnscientific,
+    // === PHL-08 不假装权威 (2026-10-11 主人特批新增) ===
+    /// 假装权威/僭越诊断权·处方权·专业责任 (PHL-08 not_pretend_authoritative)
+    PretendAuthoritative,
     /// 正常操作（描述字符串）
     NormalAction(String),
 }

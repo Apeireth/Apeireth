@@ -159,7 +159,8 @@ pub enum RuntimeError {
     /// budget-exhausted frame is diagnosable without a second lookup.
     #[error("session quota exhausted on {dimension}: consumed {consumed} of limit {limit}")]
     BudgetExhausted {
-        /// Which quota dimension ran out (`tokens` / `tool_steps`).
+        /// Which quota dimension ran out (`tokens` / `tool_steps` /
+        /// `cost_micros`).
         dimension: crate::canonical::quota::QuotaDimension,
         /// The effective ceiling on that dimension.
         limit: u64,

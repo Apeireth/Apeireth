@@ -166,6 +166,16 @@ pub struct RuntimeConfig {
     /// self-report's consumption column stays real. See
     /// [`super::quota`] for the accounting and exhausted-behavior contract.
     pub quota: super::quota::SessionQuotaLimits,
+    /// Unit-price source for the cost dimension of the session quota
+    /// ([`super::quota::CostRateTable`]). Every provider round whose model has
+    /// a row here is converted onto the ledger's cost column at the round
+    /// metering point; a model without a row is counted as an unpriced round
+    /// instead (never invented). `None` = no price source installed, so every
+    /// round is unpriced and the cost total is honestly partial.
+    pub cost_rates: Option<Arc<dyn super::quota::CostRateTable>>,
+    /// 滚动窗口大小 (G-P1 指标面, 拍/层): 指标注册表每层保留最近 N 个回合
+    /// 收束拍 (进程内环形, 不落盘)。默认 [`super::metrics::DEFAULT_METRICS_WINDOW_TURNS`]。
+    pub metrics_window_turns: usize,
 }
 
 /// Secret-free diagnostic projection of the live runtime graph.
@@ -236,6 +246,8 @@ impl Default for RuntimeConfig {
             repetition_advisory: RepetitionPolicy::default(),
             plan_mode_enabled: false,
             quota: super::quota::SessionQuotaLimits::default(),
+            cost_rates: None,
+            metrics_window_turns: super::metrics::DEFAULT_METRICS_WINDOW_TURNS,
         }
     }
 }
@@ -330,6 +342,9 @@ pub struct Runtime {
     /// bounded rolling pool, model-order result commit). `None` = every tool
     /// call dispatches strictly serially, one at a time.
     pub(super) call_scheduler: Option<Arc<CallScheduler>>,
+    /// G-P1 指标面: 回合收束指标的进程内滚动窗口 (会话 + 全局两层),回合
+    /// 收束埋点写这里, `/v1/panel/metrics` 从这里读 (见 [`super::metrics`])。
+    pub(super) metrics: Arc<super::metrics::MetricsRegistry>,
 }
 
 impl Runtime {
@@ -361,6 +376,11 @@ impl Runtime {
     /// Runtime settings.
     pub fn config(&self) -> &RuntimeConfig {
         &self.config
+    }
+
+    /// 指标注册表 (G-P1 指标数据源): 回合收束指标的进程内滚动窗口。
+    pub fn metrics(&self) -> &super::metrics::MetricsRegistry {
+        &self.metrics
     }
 
     /// Return a live, secret-free projection for diagnostics and capability
@@ -873,6 +893,30 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Install the unit-price source behind the cost dimension of the session
+    /// quota ([`super::quota::CostRateTable`]).
+    ///
+    /// Without it every provider round is counted as unpriced (the cost total
+    /// is honestly partial; nothing is ever invented). With it, each round is
+    /// converted at the round model's unit price onto the session ledger at
+    /// the round metering point.
+    #[must_use]
+    pub fn with_cost_rates(mut self, rates: Arc<dyn super::quota::CostRateTable>) -> Self {
+        self.config.cost_rates = Some(rates);
+        self
+    }
+
+    /// Set the metrics rolling window (G-P1, 拍/层).
+    ///
+    /// Each layer (per session + global) keeps the last N turn-closure beats in
+    /// process memory. The value is clamped to `1..=`[`super::metrics::MAX_METRICS_WINDOW_TURNS`],
+    /// so the effective window always equals `config.metrics_window_turns`.
+    #[must_use]
+    pub fn with_metrics_window(mut self, turns: usize) -> Self {
+        self.config.metrics_window_turns = turns.clamp(1, super::metrics::MAX_METRICS_WINDOW_TURNS);
+        self
+    }
+
     /// Install the runtime-invariant consumption point.
     ///
     /// Without it, no invariant checking happens at the dispatch boundary.
@@ -962,6 +1006,10 @@ impl RuntimeBuilder {
             providers = providers.with_fallback_order(order);
         }
 
+        let metrics = Arc::new(super::metrics::MetricsRegistry::new(
+            self.config.metrics_window_turns,
+        ));
+
         let context_spill = self
             .config
             .context_spill_root
@@ -987,6 +1035,7 @@ impl RuntimeBuilder {
                 .summary_generator
                 .map(|generator| Arc::new(CompactionEngine::new(generator))),
             call_scheduler: self.call_scheduler,
+            metrics,
         })
     }
 }

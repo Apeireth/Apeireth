@@ -81,6 +81,7 @@
     CircleUserRound,
     UserRound,
     ImagePlus,
+    Smile,
   } from 'lucide-svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import {downscaleAvatarImage, loadUserProfile, saveUserProfile, type UserProfile} from '../user-profile';
@@ -96,6 +97,7 @@
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
   import ThemeSettingsPanel from '../components/ThemeSettingsPanel.svelte';
+  import AvatarSettingsPanel from '../components/AvatarSettingsPanel.svelte';
   import SessionModelPicker from '../components/SessionModelPicker.svelte';
   import WorkspacePickerModal from '../components/WorkspacePickerModal.svelte';
   import ErrorSolutionBanner from '../components/ErrorSolutionBanner.svelte';
@@ -189,6 +191,7 @@
   type SettingsSection =
     | 'user'
     | 'appearance'
+    | 'avatar'
     | 'models'
     | 'personality'
     | 'impression'
@@ -1243,6 +1246,7 @@
   const sections = [
     {id: 'user', label: '用户中心', icon: CircleUserRound},
     {id: 'appearance', label: '外观与主题', icon: Palette},
+    {id: 'avatar', label: '形象', icon: Smile},
     {id: 'models', label: '模型与提供商', icon: Cpu},
     {id: 'personality', label: '伙伴人设与行为', icon: User},
     {id: 'impression', label: '用户印象', icon: Eye},
@@ -1900,6 +1904,11 @@
                 },
               )}
           />
+        </div>
+
+      {:else if activeSection === 'avatar'}
+        <div class="setting-block">
+          <AvatarSettingsPanel />
         </div>
 
       {:else if activeSection === 'models'}

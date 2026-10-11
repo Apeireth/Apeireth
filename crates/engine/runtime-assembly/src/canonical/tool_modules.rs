@@ -10,7 +10,8 @@ use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::education::EducationTool;
 use apeireth_tools_canonical::{
     apply_patch_capability, authorized_file_write_policy, authorized_git_write_policy,
-    git_write_capability, AroundPolicy, FetchConfig, FetchTool, FilesystemTool, ObservedGate,
+    authorized_worktree_apply_policy, git_write_capability, worktree_apply_capability,
+    worktree_plan_capability, AroundPolicy, FetchConfig, FetchTool, FilesystemTool, ObservedGate,
     PipelinedCapability, RepoTool, SearchTool, SelfStatusSource, SelfStatusTool, ShellTool,
     ToolExecutionPipeline, TrustedShellConfig, DEFAULT_MAX_TIMEOUT_MS,
 };
@@ -391,6 +392,79 @@ impl GitWriteModule {
 impl CapabilityProvider for GitWriteModule {
     fn id(&self) -> &str {
         "module.tool.git_write"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the read-only change-order tool (`tool.worktree_plan`, D-P2 计划拍).
+///
+/// 多文件大改的「计划→改→验证→落」四拍之首: 任务目标 → 改单 (文件列表 +
+/// 每文件动作 + 预期)。**计划不落盘** —— 零文件系统写; 只读档**零审批**
+/// (无 ask 档钩子, `read_only` 预设不拒只读能力)。改单是
+/// [`WorktreeApplyModule`] 的输入合同。
+pub struct WorktreePlanModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl WorktreePlanModule {
+    /// Create the read-only change-order module rooted at `workspace_root`.
+    pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
+        Self {
+            tool: worktree_plan_capability(workspace_root),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) change-order capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for WorktreePlanModule {
+    fn id(&self) -> &str {
+        "module.tool.worktree_plan"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the controlled worktree write tool (`tool.worktree_apply`, D-P2).
+///
+/// 四拍受控工作树写: 计划拍 (改单/补丁交叉一致, 零写入) → 改拍 (暂存面执行,
+/// 复用事务补丁原语) → 验证拍 (纯结构校验 + 可挂校验命令走受控通道) → 落拍
+/// (过读前观测门禁落真实工作区, 全有或全无, 任一失败整批回滚)。
+///
+/// 治理: **RequireApproval 级** —— 每次落盘都停人工审批 (审批卡载荷 = 改单
+/// 摘要: 文件数/动作分布/验证命令), 无自动放行档; `read_only` 预设拒本工具。
+/// **写总闸语义**: 与 `tool.apply_patch` 同受 `file_write` 唯一写总闸 ——
+/// 组装根必须只在同一开关下注册本模块 (注册即闸)。git 分工: 本模块只动
+/// 文件, 提交走 `tool.git_write` 的分级词表 (工具描述同文)。
+pub struct WorktreeApplyModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl WorktreeApplyModule {
+    /// Create the worktree-write module over the shared read-observation gate.
+    pub fn new(workspace_root: impl Into<PathBuf>, gate: Arc<ObservedGate>) -> Self {
+        let tool =
+            worktree_apply_capability(workspace_root, gate, authorized_worktree_apply_policy());
+        Self { tool }
+    }
+
+    /// Access the underlying (pipeline-wrapped) worktree-write capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for WorktreeApplyModule {
+    fn id(&self) -> &str {
+        "module.tool.worktree_apply"
     }
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {

@@ -20,6 +20,7 @@ import {
   FALLBACK_AVATAR_LAYER_ID,
   type AvatarLayerDescriptor,
 } from './pet-contract.ts';
+import {CHARACTER_AVATAR_LAYER_ID, SKELETAL_2D_AVATAR_LAYER_ID} from './pet-contract.ts';
 
 /** 形象层模块形状：默认导出一个消费 PetFrame 的组件。 */
 export interface AvatarLayerModule {
@@ -82,6 +83,8 @@ export function registerBuiltInAvatarLayers(loaders: {
   emberMinimal: AvatarLayerLoader;
   /** 角色形象层（tier0Safe=false：T0 梯队不装载，老机器不付这笔钱） */
   characterForm?: AvatarLayerLoader;
+  /** 2D 骨骼形象层（纯 Canvas，tier0Safe=false 保守标注：动画仍跑时钟） */
+  skeletal2d?: AvatarLayerLoader;
 }): void {
   registerAvatarLayer(
     {
@@ -110,6 +113,17 @@ export function registerBuiltInAvatarLayers(loaders: {
         tier0Safe: false,
       },
       loaders.characterForm,
+    );
+  }
+  if (loaders.skeletal2d) {
+    registerAvatarLayer(
+      {
+        id: SKELETAL_2D_AVATAR_LAYER_ID,
+        displayName: '2D 骨骼',
+        kind: 'builtin',
+        tier0Safe: false,
+      },
+      loaders.skeletal2d,
     );
   }
 }
@@ -160,10 +174,19 @@ export function parseThemePackManifest(json: string): ThemePackAvatarManifest | 
 
 /** 相对模块路径安全检查：非绝对、无上级逃逸、必须是 .js/.mjs。 */
 function isSafeRelativeModulePath(path: string): boolean {
+  return isSafeRelativePath(path, /\.(js|mjs)$/);
+}
+
+/** 相对模型路径安全检查：非绝对、无上级逃逸、必须是 .vrm/.glb。 */
+function isSafeRelativeModelPath(path: string): boolean {
+  return isSafeRelativePath(path, /\.(vrm|glb)$/i);
+}
+
+function isSafeRelativePath(path: string, extPattern: RegExp): boolean {
   if (path.startsWith('/') || path.startsWith('\\')) return false;
   if (/^[a-zA-Z]:/.test(path)) return false;
   if (path.split(/[\\/]/).includes('..')) return false;
-  return /\.(js|mjs)$/.test(path);
+  return extPattern.test(path);
 }
 
 /**
@@ -233,7 +256,10 @@ export interface AvatarPackManifestV2 {
   schemaVersion: 2;
   id: string;
   displayName: string;
-  module: string;
+  /** 自定义形象层模块相对路径（与 model 二选一，可同包并存） */
+  module?: string;
+  /** 形象文件相对路径（开放 3D 人形格式容器 .vrm/.glb；与 module 二选一） */
+  model?: string;
   license: AvatarPackLicense;
   capabilities: AvatarPackCapabilities;
   /** 形象包一律 false（T0 梯队只走内置光态/简模） */
@@ -270,9 +296,12 @@ export function parseAvatarPackManifestV2(json: string): AvatarPackManifestV2 | 
   const id = typeof m.id === 'string' ? m.id.trim() : '';
   const displayName = typeof m.displayName === 'string' ? m.displayName.trim() : '';
   const module = typeof m.module === 'string' ? m.module.trim() : '';
-  if (!id || !displayName || !module) return null;
+  const model = typeof m.model === 'string' ? m.model.trim() : '';
+  if (!id || !displayName) return null;
+  if (!module && !model) return null; // 层模块与模型文件至少给一个
   if (BUILTIN_RESERVED_IDS.has(id)) return null;
-  if (!isSafeRelativeModulePath(module)) return null;
+  if (module && !isSafeRelativeModulePath(module)) return null;
+  if (model && !isSafeRelativeModelPath(model)) return null;
 
   // —— 许可红线 ——
   const lic = m.license as Record<string, unknown> | null;
@@ -305,7 +334,8 @@ export function parseAvatarPackManifestV2(json: string): AvatarPackManifestV2 | 
     schemaVersion: 2,
     id,
     displayName,
-    module,
+    ...(module ? {module} : {}),
+    ...(model ? {model} : {}),
     license: {spdx, attribution, source, modifications},
     capabilities: {
       postures: postures as string[],

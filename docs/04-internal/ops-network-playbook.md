@@ -69,6 +69,10 @@
   一律落文件再 grep**（三次假绿事故的根源, 详见 kani-playbook K9）。
 - `pkill -f <pattern>` 会匹配到当前 bash -c 自身命令行 → 自杀; pattern 里
   避开自身串或用 pid 精确杀。
+- **bash 嵌套引号/here-doc 是重灾区**（一日三踩: `wsl bash -c @'...'@` 里的
+  here-doc、awk 单引号、sed 多行全炸过）: 优先 **UNC 路径直改文件**
+  （`\\wsl.localhost\<发行版>\root\...` 用 PowerShell/编辑器改）+ bash 只跑
+  **单条纯命令**; 必须多行时用 `-e bash -c` 配最简引号, 避免 here-doc 嵌套。
 - wsl.exe 输出是 UTF-16, PowerShell 直接 `Out-String` 是乱码;
   `[Console]::OutputEncoding = [System.Text.Encoding]::Unicode` 或让 WSL 内
   bash 输出（UTF-8）。

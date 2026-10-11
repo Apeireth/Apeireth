@@ -149,8 +149,8 @@ pub struct BudgetStatus {
     pub max_rounds_per_turn: u64,
     /// 单轮工具调用上限。
     pub max_tool_calls_per_round: u64,
-    /// 会话配额一节: token / 步数两维真值 (上限/已耗/余量), 花费 / 深度
-    /// 两维如实"暂无接口" (见 [`QuotaStatus`])。
+    /// 会话配额一节: token / 步数 / 花费三维真值 (上限/已耗/余量), 深度维
+    /// 如实"暂无接口" (见 [`QuotaStatus`])。
     pub quota: QuotaStatus,
     /// 取值口径: `constant` = 读编译期常量; `configured` = 读可配置值。
     pub source: String,
@@ -165,6 +165,11 @@ pub struct QuotaMeterReading {
     pub consumed_tokens: u64,
     /// 会话累计已耗工具步数 (工具调用计数)。
     pub consumed_tool_steps: u64,
+    /// 会话累计已耗花费 (有价轮按 `usage × 单价` 换算累加, 每侧向上取整)。
+    pub consumed_cost_micros: u64,
+    /// 无价轮数: cost 换算不出来的计量轮 (无单价行, 绝不编价)。> 0 时
+    /// `consumed_cost_micros` 是部分计量口径, 自述如实标"部分计量"。
+    pub unpriced_rounds: u64,
 }
 
 /// 会话配额计量探测口: 传会话 id, 回该会话账本的已耗读数 (失败回 `Err(原因)`)。
@@ -188,7 +193,7 @@ pub struct QuotaDimensionStatus {
     pub remaining: Option<u64>,
     /// 显示串 (`"{已耗}/{上限}"`, 取不到的一侧显 "—"; 暂无接口整行 "—")。
     pub display: String,
-    /// 已耗取不到 / 该维暂无接口的原因; 齐全时为 `None`。
+    /// 已耗取不到 / 该维暂无接口 / 花费维部分计量标注的原因; 齐全时为 `None`。
     pub reason: Option<String>,
 }
 
@@ -231,6 +236,19 @@ impl QuotaDimensionStatus {
         Self::metered(self.limit, consumed)
     }
 
+    /// 换上花费维读数 (上限不变, 已耗/余量/显示串按真值重算), 并按无价轮数
+    /// 如实标"部分计量"。
+    ///
+    /// `unpriced_rounds > 0` 时已耗是**部分计量**口径 (无价轮未计入, 绝不
+    /// 编价), 标注落在 `reason`; 全量口径 (0 无价轮) 无标注。
+    pub fn with_cost_reading(self, consumed: u64, unpriced_rounds: u64) -> Self {
+        let mut row = self.with_reading(consumed);
+        if unpriced_rounds > 0 {
+            row.reason = Some(quota_cost_partial_note(unpriced_rounds));
+        }
+        row
+    }
+
     /// 换成"取不到读数" (上限不变, 已耗显式 null + 原因)。
     pub fn with_missing_reading(self, reason: impl Into<String>) -> Self {
         Self::without_reading(self.limit, reason)
@@ -244,10 +262,20 @@ fn dash(value: Option<u64>) -> String {
         .unwrap_or_else(|| "—".to_string())
 }
 
-/// 花费维"暂无接口"的原因 (0 装诚实: 单价表来源就绪但计量点未接线, 不硬造花费)。
-pub const QUOTA_COST_NOT_WIRED: &str = "not wired: the cost dimension is not metered at the \
-     execution points yet (the unit-price table source is ready, installing the metering is a \
-     separate batch)";
+/// 历史注记 (文案退役): 花费维曾以 `QUOTA_COST_NOT_WIRED`
+/// ("not wired: the cost dimension is not metered at the execution points yet
+/// (the unit-price table source is ready, installing the metering is a
+/// separate batch)") 如实标"暂无接口" —— A-P2 计量点装表接线后该文案退役,
+/// 花费维改报真值; 无价轮的诚实标注改走 [`QUOTA_COST_PARTIAL`]。
+pub const QUOTA_COST_PARTIAL: &str = "部分计量";
+
+/// 花费维"部分计量"标注 (累计含无价轮时如实标注; 绝不编价)。
+///
+/// 无价轮 (无单价行的计量轮) 不计入成本列, 因此 `unpriced_rounds > 0` 时
+/// 已耗数字是**部分**口径 —— 缺口照实说, 不把部分当全量。
+pub fn quota_cost_partial_note(unpriced_rounds: u64) -> String {
+    format!("{QUOTA_COST_PARTIAL}: {unpriced_rounds} 个计量轮无单价未计入 (绝不编价)")
+}
 
 /// 深度维"暂无接口"的原因 (0 装诚实: 调用树深度跟踪未实施)。
 pub const QUOTA_DEPTH_NOT_WIRED: &str =
@@ -257,14 +285,14 @@ pub const QUOTA_DEPTH_NOT_WIRED: &str =
 pub const QUOTA_METER_SCOPE_REQUIRED: &str =
     "quota metering is session-scoped: this invocation carried no session scope";
 
-/// 会话配额一节: 两维真值 + 两维如实标注。
+/// 会话配额一节: 三维真值 + 深度维如实标注。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuotaStatus {
     /// token 维 (真值: 上限/已耗/余量)。
     pub tokens: QuotaDimensionStatus,
     /// 工具步数维 (真值: 上限/已耗/余量)。
     pub tool_steps: QuotaDimensionStatus,
-    /// 花费维 —— 暂无接口 (单价表来源已就绪, 计量点未接线)。
+    /// 花费维 (真值: 上限/已耗/余量; 含无价轮时已耗标"部分计量")。
     pub cost_micros: QuotaDimensionStatus,
     /// 深度维 —— 暂无接口 (调用树深度跟踪未实施)。
     pub depth: QuotaDimensionStatus,
@@ -709,7 +737,7 @@ mod tests {
                 quota: QuotaStatus {
                     tokens: QuotaDimensionStatus::metered(Some(5_000), 120),
                     tool_steps: QuotaDimensionStatus::metered(None, 3),
-                    cost_micros: QuotaDimensionStatus::not_wired(QUOTA_COST_NOT_WIRED),
+                    cost_micros: QuotaDimensionStatus::metered(Some(10_000), 2_000),
                     depth: QuotaDimensionStatus::not_wired(QUOTA_DEPTH_NOT_WIRED),
                 },
                 source: "constant".to_string(),
@@ -1002,19 +1030,66 @@ mod tests {
     }
 
     #[test]
-    fn cost_and_depth_dimensions_are_honestly_marked_not_wired() {
+    fn the_depth_dimension_is_honestly_marked_not_wired() {
         let value = render_snapshot(&fixture_snapshot());
-        for dimension in ["cost_micros", "depth"] {
-            let row = &value["budget"]["quota"][dimension];
-            assert_eq!(row["display"], "—", "{dimension} 暂无接口整行显 —");
-            assert_eq!(row["limit"], Value::Null);
-            assert_eq!(row["consumed"], Value::Null);
-            assert_eq!(row["remaining"], Value::Null);
-            assert!(
-                row["reason"].as_str().unwrap().contains("not wired"),
-                "{dimension} 必须如实标注暂无接口: {row}"
-            );
-        }
+        let row = &value["budget"]["quota"]["depth"];
+        assert_eq!(row["display"], "—", "深度维暂无接口整行显 —");
+        assert_eq!(row["limit"], Value::Null);
+        assert_eq!(row["consumed"], Value::Null);
+        assert_eq!(row["remaining"], Value::Null);
+        assert!(
+            row["reason"].as_str().unwrap().contains("not wired"),
+            "深度维必须如实标注暂无接口: {row}"
+        );
+    }
+
+    #[test]
+    fn the_cost_dimension_reports_true_values_and_marks_partial_metering() {
+        // 演进自「花费维暂无接口整行 —」钉死 (演进理由: A-P2 计量点装表接线,
+        // 花费维转真值 —— 上限/已耗/余量; 含无价轮时如实标"部分计量")。
+        let mut snapshot = fixture_snapshot();
+        snapshot.budget.as_mut().expect("budget").quota.cost_micros =
+            QuotaDimensionStatus::without_reading(Some(10_000), DATA_PROBE_NOT_WIRED)
+                .with_cost_reading(2_000, 2);
+        let value = render_snapshot(&snapshot);
+        let row = &value["budget"]["quota"]["cost_micros"];
+        assert_eq!(row["limit"], 10_000);
+        assert_eq!(row["consumed"], 2_000);
+        assert_eq!(row["remaining"], 8_000);
+        assert_eq!(row["display"], "2000/10000");
+        assert_eq!(
+            row["reason"],
+            quota_cost_partial_note(2),
+            "含无价轮 = 部分计量标注, 缺口照实说"
+        );
+    }
+
+    #[test]
+    fn a_fully_priced_cost_total_carries_no_partial_note() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.budget.as_mut().expect("budget").quota.cost_micros =
+            QuotaDimensionStatus::without_reading(None, DATA_PROBE_NOT_WIRED)
+                .with_cost_reading(2_000, 0);
+        let value = render_snapshot(&snapshot);
+        let row = &value["budget"]["quota"]["cost_micros"];
+        assert_eq!(row["consumed"], 2_000);
+        assert_eq!(row["limit"], Value::Null, "不设限显 —");
+        assert_eq!(row["display"], "2000/—");
+        assert!(row["reason"].is_null(), "全量口径无标注: {row}");
+    }
+
+    #[test]
+    fn the_partial_note_copy_is_frozen_and_names_the_gap() {
+        // 用户可见文案是合同 (演进须注明理由): 标注必须说清"部分计量"口径、
+        // 无价轮真实计数、以及绝不编价的立场。
+        assert_eq!(
+            quota_cost_partial_note(0),
+            "部分计量: 0 个计量轮无单价未计入 (绝不编价)"
+        );
+        assert_eq!(
+            quota_cost_partial_note(3),
+            "部分计量: 3 个计量轮无单价未计入 (绝不编价)"
+        );
     }
 
     #[test]

@@ -504,7 +504,8 @@ fn turn_budget_knobs_clamp_and_fall_back_to_defaults() {
     assert_eq!(apeireth_cli::tool_call_limit_from_env(), 16);
 }
 
-// ---- 会话配额旋钮 (APEIRETH_QUOTA_MAX_TOKENS / APEIRETH_QUOTA_MAX_TOOL_STEPS) ----
+// ---- 会话配额旋钮 (APEIRETH_QUOTA_MAX_TOKENS / APEIRETH_QUOTA_MAX_TOOL_STEPS
+//      / APEIRETH_QUOTA_MAX_COST_MICROS) ----
 
 /// 会话配额旋钮 (opt-in 烧钱闸): 正整数直通, env → RuntimeConfig 同源装配。
 #[tokio::test]
@@ -512,11 +513,17 @@ async fn session_quota_knobs_configure_the_runtime_from_env() {
     let _lock = ENV_LOCK.lock().unwrap();
     let _g_tokens = EnvGuard::set("APEIRETH_QUOTA_MAX_TOKENS", Some("5000"));
     let _g_steps = EnvGuard::set("APEIRETH_QUOTA_MAX_TOOL_STEPS", Some("250"));
+    let _g_cost = EnvGuard::set("APEIRETH_QUOTA_MAX_COST_MICROS", Some("700000"));
     let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("quota-knobs")));
     let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("quota-knobs-session")));
 
     assert_eq!(apeireth_cli::quota_max_tokens_from_env(), Some(5_000));
     assert_eq!(apeireth_cli::quota_max_tool_steps_from_env(), Some(250));
+    assert_eq!(
+        apeireth_cli::quota_max_cost_micros_from_env(),
+        Some(700_000),
+        "花费旋钮同一解析口径"
+    );
 
     let (runtime, _sessions, _memory, _policy, _guard_hook) =
         build_canonical_runtime_with_sessions_from_env()
@@ -532,6 +539,11 @@ async fn session_quota_knobs_configure_the_runtime_from_env() {
         Some(250),
         "步数配额 env 生效"
     );
+    assert_eq!(
+        runtime.config().quota.max_cost_micros,
+        Some(700_000),
+        "花费配额 env 生效"
+    );
 }
 
 /// 会话配额旋钮取值纪律: 未设 / 0 / 非法 = 不设限 (None, opt-in 显式),
@@ -542,22 +554,36 @@ fn session_quota_knobs_are_opt_in_and_clamp_oversized_values() {
 
     let _g_none = EnvGuard::set("APEIRETH_QUOTA_MAX_TOKENS", None);
     let _g_none2 = EnvGuard::set("APEIRETH_QUOTA_MAX_TOOL_STEPS", None);
+    let _g_none3 = EnvGuard::set("APEIRETH_QUOTA_MAX_COST_MICROS", None);
     assert_eq!(apeireth_cli::quota_max_tokens_from_env(), None);
     assert_eq!(apeireth_cli::quota_max_tool_steps_from_env(), None);
+    assert_eq!(apeireth_cli::quota_max_cost_micros_from_env(), None);
 
     let _g_zero = EnvGuard::set("APEIRETH_QUOTA_MAX_TOKENS", Some("0"));
     let _g_bad = EnvGuard::set("APEIRETH_QUOTA_MAX_TOOL_STEPS", Some("nope"));
+    let _g_cost_zero = EnvGuard::set("APEIRETH_QUOTA_MAX_COST_MICROS", Some("0"));
     assert_eq!(
         apeireth_cli::quota_max_tokens_from_env(),
         None,
         "0 = 不设限 (显式)"
     );
     assert_eq!(apeireth_cli::quota_max_tool_steps_from_env(), None);
+    assert_eq!(
+        apeireth_cli::quota_max_cost_micros_from_env(),
+        None,
+        "花费旋钮同族纪律: 0 = 不设限"
+    );
 
     let _g_big = EnvGuard::set("APEIRETH_QUOTA_MAX_TOKENS", Some("99999999999999"));
+    let _g_cost_big = EnvGuard::set("APEIRETH_QUOTA_MAX_COST_MICROS", Some("99999999999999"));
     assert_eq!(
         apeireth_cli::quota_max_tokens_from_env(),
         Some(apeireth_runtime::canonical::MAX_QUOTA_TOKENS),
+        "越界钳制"
+    );
+    assert_eq!(
+        apeireth_cli::quota_max_cost_micros_from_env(),
+        Some(apeireth_runtime::canonical::MAX_QUOTA_COST_MICROS),
         "越界钳制"
     );
 }

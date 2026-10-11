@@ -185,3 +185,15 @@ export const DEFAULT_AVATAR_LAYER_ID = 'light-sentinel';
  * 同时是「形象抽象接口确实可插」的活证据：两个实现共用 PetFrame 契约。
  */
 export const FALLBACK_AVATAR_LAYER_ID = 'ember-minimal';
+
+/**
+ * 角色形象层 id（"华服"，开放 3D 人形格式渲染）：tier0Safe=false，
+ * T0 梯队不装载；WebGL 不可用时由宿主回落微光简模（降级纪律）。
+ */
+export const CHARACTER_AVATAR_LAYER_ID = 'character-form';
+
+/**
+ * 2D 骨骼形象层 id（第二华服，开放 2D 骨骼路线的程序化素体）：纯 Canvas，
+ * 零 WebGL 依赖；社区格式装载口为插缝预留（等白名单运行时核验收口）。
+ */
+export const SKELETAL_2D_AVATAR_LAYER_ID = 'skeletal-2d';

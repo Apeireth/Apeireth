@@ -188,12 +188,20 @@ fn kani_governance_default_deny_unrequested_ops() {
 #[kani::unwind(32)]
 fn kani_governance_no_degrade_never_weakens() {
     let original: String = {
-        let b: [u8; 4] = kani::any();
-        b.into_iter().map(|x| char::from(x & 0x7F)).collect()
+        let b: Vec<u8> = {
+            let raw: [u8; 4] = kani::any();
+            raw.into_iter().map(|x| x & 0x7F).collect()
+        };
+        // SAFETY: 全部字节 < 0x80, 必为合法 UTF-8 (同款注见 harness_panic_freedom.rs)。
+        unsafe { String::from_utf8_unchecked(b) }
     };
     let proposed: String = {
-        let b: [u8; 4] = kani::any();
-        b.into_iter().map(|x| char::from(x & 0x7F)).collect()
+        let b: Vec<u8> = {
+            let raw: [u8; 4] = kani::any();
+            raw.into_iter().map(|x| x & 0x7F).collect()
+        };
+        // SAFETY: 全部字节 < 0x80, 必为合法 UTF-8。
+        unsafe { String::from_utf8_unchecked(b) }
     };
 
     let result = check_no_degrade(&original, &proposed);

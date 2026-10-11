@@ -19,7 +19,7 @@ use apeireth_tools_canonical::{
     derive_tuning_preset, BudgetStatus, CapabilitySwitch, MemoryLedgerStats, QuotaDimensionStatus,
     QuotaMeterReading, QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource,
     SessionQuotaProbe, StatusProbe, TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE,
-    DATA_PROBE_NOT_WIRED, QUOTA_COST_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    DATA_PROBE_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
 };
 
 use super::production::ProductionModulesConfig;
@@ -47,8 +47,8 @@ pub fn max_tool_calls_per_round_constant() -> u64 {
 
 /// 从编译期常量构造预算一节 (含口径注记)。
 ///
-/// 配额两维此口径下无旋钮 = 不设限 (上限真值 `None`), 已耗一列无探测口 =
-/// 显式 `null` + 原因; 花费 / 深度两维如实"暂无接口"。
+/// 配额三维此口径下无旋钮 = 不设限 (上限真值 `None`), 已耗一列无探测口 =
+/// 显式 `null` + 原因; 深度维如实"暂无接口"。
 pub fn budget_status_from_constants() -> BudgetStatus {
     BudgetStatus {
         max_rounds_per_turn: max_rounds_per_turn_constant(),
@@ -56,7 +56,7 @@ pub fn budget_status_from_constants() -> BudgetStatus {
         quota: QuotaStatus {
             tokens: QuotaDimensionStatus::without_reading(None, DATA_PROBE_NOT_WIRED),
             tool_steps: QuotaDimensionStatus::without_reading(None, DATA_PROBE_NOT_WIRED),
-            cost_micros: QuotaDimensionStatus::not_wired(QUOTA_COST_NOT_WIRED),
+            cost_micros: QuotaDimensionStatus::without_reading(None, DATA_PROBE_NOT_WIRED),
             depth: QuotaDimensionStatus::not_wired(QUOTA_DEPTH_NOT_WIRED),
         },
         source: BUDGET_SOURCE_CONSTANT.to_string(),
@@ -67,14 +67,17 @@ pub fn budget_status_from_constants() -> BudgetStatus {
 /// 从**生效中的**可配置预算旋钮构造预算一节 (组装根把实际装配进运行时的
 /// 取值原样传入, 自述与运行时同源)。
 ///
-/// `quota_max_tokens` / `quota_max_tool_steps` 是会话配额旋钮的生效上限
-/// (`None` = 不设限, 显示 "—"); 已耗一列在自述采集时按会话作用域现探测
-/// (见 [`ProductionSelfStatusSource::snapshot_in_session`])。
+/// `quota_max_tokens` / `quota_max_tool_steps` / `quota_max_cost_micros` 是
+/// 会话配额三维旋钮的生效上限 (`None` = 不设限, 显示 "—"); 已耗一列在自述
+/// 采集时按会话作用域现探测 (见
+/// [`ProductionSelfStatusSource::snapshot_in_session`]), 花费维含无价轮时另
+/// 如实标"部分计量"。
 pub fn budget_status_from_configured(
     max_rounds_per_turn: u64,
     max_tool_calls_per_round: u64,
     quota_max_tokens: Option<u64>,
     quota_max_tool_steps: Option<u64>,
+    quota_max_cost_micros: Option<u64>,
 ) -> BudgetStatus {
     BudgetStatus {
         max_rounds_per_turn,
@@ -85,7 +88,10 @@ pub fn budget_status_from_configured(
                 quota_max_tool_steps,
                 DATA_PROBE_NOT_WIRED,
             ),
-            cost_micros: QuotaDimensionStatus::not_wired(QUOTA_COST_NOT_WIRED),
+            cost_micros: QuotaDimensionStatus::without_reading(
+                quota_max_cost_micros,
+                DATA_PROBE_NOT_WIRED,
+            ),
             depth: QuotaDimensionStatus::not_wired(QUOTA_DEPTH_NOT_WIRED),
         },
         source: BUDGET_SOURCE_CONFIGURED.to_string(),
@@ -119,6 +125,8 @@ pub fn session_quota_probe(db_path: PathBuf) -> SessionQuotaProbe {
             consumed_tokens: u64::try_from(loaded.quota.consumed_tokens).unwrap_or(u64::MAX),
             consumed_tool_steps: u64::try_from(loaded.quota.consumed_tool_steps)
                 .unwrap_or(u64::MAX),
+            consumed_cost_micros: loaded.quota.consumed_cost_micros,
+            unpriced_rounds: u64::try_from(loaded.quota.unpriced_rounds).unwrap_or(u64::MAX),
         })
     })
 }
@@ -198,13 +206,14 @@ impl ProductionSelfStatusSource {
         &self.identity
     }
 
-    /// 配额两维的已耗列: 会话作用域 + 探测口都在场才有真值, 否则显式
-    /// `null` + 原因 (0 装诚实: 无作用域不编造数字)。
-    fn quota_row(
+    /// 配额各维的已耗列: 会话作用域 + 探测口都在场才有真值, 否则显式
+    /// `null` + 原因 (0 装诚实: 无作用域不编造数字)。`apply` 决定读数怎么
+    /// 落进行里 (花费维要额外带"部分计量"标注, 其余维直接换真值)。
+    fn quota_row_with(
         &self,
         row: QuotaDimensionStatus,
         session: Option<SessionId>,
-        pick: fn(&QuotaMeterReading) -> u64,
+        apply: impl FnOnce(QuotaDimensionStatus, &QuotaMeterReading) -> QuotaDimensionStatus,
     ) -> QuotaDimensionStatus {
         let Some(session) = session else {
             return row.with_missing_reading(QUOTA_METER_SCOPE_REQUIRED);
@@ -213,13 +222,22 @@ impl ProductionSelfStatusSource {
             return row.with_missing_reading(DATA_PROBE_NOT_WIRED);
         };
         match probe(session) {
-            Ok(reading) => row.with_reading(pick(&reading)),
+            Ok(reading) => apply(row, &reading),
             Err(error) => row.with_missing_reading(format!("quota meter probe failed: {error}")),
         }
     }
 
+    fn quota_row(
+        &self,
+        row: QuotaDimensionStatus,
+        session: Option<SessionId>,
+        pick: fn(&QuotaMeterReading) -> u64,
+    ) -> QuotaDimensionStatus {
+        self.quota_row_with(row, session, |row, reading| row.with_reading(pick(reading)))
+    }
+
     /// 预算一节按当前作用域落真值: 上限来自装配注入的生效旋钮 (与运行时
-    /// 同源), 已耗/余量来自会话账本。
+    /// 同源), 已耗/余量来自会话账本; 花费维含无价轮时另如实标"部分计量"。
     fn budget_with_quota_reading(&self, session: Option<SessionId>) -> BudgetStatus {
         let mut budget = self.budget.clone();
         budget.quota.tokens = self.quota_row(budget.quota.tokens, session, |reading| {
@@ -228,6 +246,10 @@ impl ProductionSelfStatusSource {
         budget.quota.tool_steps = self.quota_row(budget.quota.tool_steps, session, |reading| {
             reading.consumed_tool_steps
         });
+        budget.quota.cost_micros =
+            self.quota_row_with(budget.quota.cost_micros, session, |row, reading| {
+                row.with_cost_reading(reading.consumed_cost_micros, reading.unpriced_rounds)
+            });
         budget
     }
 
@@ -435,15 +457,16 @@ mod tests {
         assert_eq!(budget.max_tool_calls_per_round, 16);
         assert_eq!(budget.source, BUDGET_SOURCE_CONSTANT);
         assert!(budget.note.contains("constants"), "{}", budget.note);
-        // 配额两维: 无旋钮 = 不设限 (上限真值 None), 已耗列无探测口显式 null。
+        // 配额三维: 无旋钮 = 不设限 (上限真值 None), 已耗列无探测口显式 null。
         assert_eq!(budget.quota.tokens.limit, None);
         assert_eq!(budget.quota.tool_steps.limit, None);
+        assert_eq!(budget.quota.cost_micros.limit, None);
         assert_eq!(budget.quota.tokens.consumed, None);
-        // 花费 / 深度两维如实"暂无接口"。
         assert_eq!(
             budget.quota.cost_micros.reason.as_deref(),
-            Some(QUOTA_COST_NOT_WIRED)
+            Some(DATA_PROBE_NOT_WIRED)
         );
+        // 深度维如实"暂无接口"。
         assert_eq!(
             budget.quota.depth.reason.as_deref(),
             Some(QUOTA_DEPTH_NOT_WIRED)
@@ -452,7 +475,7 @@ mod tests {
 
     #[test]
     fn configured_budget_status_carries_the_live_knob_values() {
-        let budget = budget_status_from_configured(2, 4, Some(5_000), None);
+        let budget = budget_status_from_configured(2, 4, Some(5_000), None, Some(7_000));
         assert_eq!(budget.max_rounds_per_turn, 2);
         assert_eq!(budget.max_tool_calls_per_round, 4);
         assert_eq!(budget.source, BUDGET_SOURCE_CONFIGURED);
@@ -460,6 +483,7 @@ mod tests {
         // 配额上限与运行时同源: Some 直通, None = 不设限 (显示 "—")。
         assert_eq!(budget.quota.tokens.limit, Some(5_000));
         assert_eq!(budget.quota.tool_steps.limit, None);
+        assert_eq!(budget.quota.cost_micros.limit, Some(7_000));
         assert_eq!(budget.quota.tool_steps.display, "—/—");
         assert_eq!(budget.quota.tokens.display, "—/5000");
     }
@@ -614,13 +638,21 @@ mod tests {
             Ok(QuotaMeterReading {
                 consumed_tokens: 120,
                 consumed_tool_steps: 3,
+                consumed_cost_micros: 2_000,
+                unpriced_rounds: 2,
             })
         });
         let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
-            .with_budget(budget_status_from_configured(8, 16, Some(5_000), Some(30)))
+            .with_budget(budget_status_from_configured(
+                8,
+                16,
+                Some(5_000),
+                Some(30),
+                Some(10_000),
+            ))
             .with_quota_probe(probe);
 
-        // 会话作用域内: 两维真值 (上限/已耗/余量), 不设限侧显 "—"。
+        // 会话作用域内: 三维真值 (上限/已耗/余量), 不设限侧显 "—"。
         let session = SessionId::new();
         let budget = source
             .snapshot_in_session(Some(session))
@@ -633,6 +665,17 @@ mod tests {
         assert_eq!(budget.quota.tool_steps.consumed, Some(3));
         assert_eq!(budget.quota.tool_steps.remaining, Some(27));
         assert_eq!(budget.quota.tool_steps.display, "3/30");
+        // 花费维真值 + 无价轮如实标"部分计量" (2 轮无单价未计入)。
+        let cost = &budget.quota.cost_micros;
+        assert_eq!(cost.limit, Some(10_000));
+        assert_eq!(cost.consumed, Some(2_000));
+        assert_eq!(cost.remaining, Some(8_000));
+        assert_eq!(cost.display, "2000/10000");
+        assert_eq!(
+            cost.reason,
+            Some(apeireth_tools_canonical::quota_cost_partial_note(2)),
+            "2 轮无单价未计入: 如实标部分计量"
+        );
 
         // 无会话作用域: 已耗列显式 null + 原因, 上限真值不变。
         let budget = source.snapshot().budget.expect("budget");
@@ -643,6 +686,32 @@ mod tests {
             Some(QUOTA_METER_SCOPE_REQUIRED)
         );
         assert_eq!(budget.quota.tool_steps.consumed, None);
+        assert_eq!(budget.quota.cost_micros.consumed, None);
+    }
+
+    #[test]
+    fn a_fully_priced_cost_reading_carries_no_partial_note() {
+        // 全量口径 (0 无价轮) 不标"部分计量": 标注只在缺口真存在时出现。
+        let probe: SessionQuotaProbe = Arc::new(|_session| {
+            Ok(QuotaMeterReading {
+                consumed_tokens: 1,
+                consumed_tool_steps: 1,
+                consumed_cost_micros: 7_000,
+                unpriced_rounds: 0,
+            })
+        });
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
+            .with_budget(budget_status_from_configured(8, 16, None, None, None))
+            .with_quota_probe(probe);
+        let budget = source
+            .snapshot_in_session(Some(SessionId::new()))
+            .budget
+            .expect("budget");
+        let cost = &budget.quota.cost_micros;
+        assert_eq!(cost.consumed, Some(7_000));
+        assert_eq!(cost.limit, None);
+        assert_eq!(cost.display, "7000/—");
+        assert!(cost.reason.is_none(), "全量口径无标注: {cost:?}");
     }
 
     #[test]
@@ -667,7 +736,7 @@ mod tests {
     #[test]
     fn a_missing_quota_probe_reports_the_missing_interface_explicitly() {
         let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
-            .with_budget(budget_status_from_configured(8, 16, Some(10), None));
+            .with_budget(budget_status_from_configured(8, 16, Some(10), None, None));
         let budget = source
             .snapshot_in_session(Some(SessionId::new()))
             .budget
@@ -678,6 +747,7 @@ mod tests {
             budget.quota.tokens.reason.as_deref(),
             Some(DATA_PROBE_NOT_WIRED)
         );
+        assert_eq!(budget.quota.cost_micros.consumed, None);
     }
 
     #[test]

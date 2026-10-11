@@ -99,6 +99,13 @@ jobs:
         working-directory: frontend/companion-desktop
         run: pnpm check
 
+      # 素材许可门禁（avatar-pack-admission.md §1b）：发布物素材必须全在
+      # asset-licenses.json 台账、第三方许可必须白名单内——无行即红。
+      # （最小改动接入，报备：本步只读台账与素材，无其它副作用。）
+      - name: pnpm check:assets (素材许可门禁)
+        working-directory: frontend/companion-desktop
+        run: pnpm check:assets
+
   # =========================================================================
   # 3. 8 硬墙守门 — 确认 companion-desktop 没有偷偷碰 LOCKED crate
   # =========================================================================

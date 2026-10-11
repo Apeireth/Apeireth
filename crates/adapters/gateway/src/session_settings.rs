@@ -8,17 +8,23 @@
 //! on exactly the same durable session the agent loop reads at the start of a
 //! turn. A `model` of `null` in a PATCH resets the session back to the global
 //! default model.
+//!
+//! W2-③ 并发写语义: PATCH / DELETE 是会话账本写者, 与在途回合走**同一把会话
+//! 写闸** (先到先服务排队) —— 读-改-写全程持证, 与回合写零交叠 (设置补丁不会
+//! 覆写回合刚追加的消息, 回合也不会吃掉设置改动); 每次写落
+//! `gateway.session_client` 审计行 (谁改了哪个会话)。
 
 use std::str::FromStr;
 
 use apeireth_core::kernel::SessionId;
 use apeireth_runtime::canonical::{PermissionPreset, SessionSettings};
-use axum::extract::{Path, State};
+use axum::extract::{Extension, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
+use crate::client_tokens::{identity_label, record_session_client, ClientIdentity};
 use crate::panels::GatewayState;
 
 /// Full session-settings projection returned by both endpoints.
@@ -141,51 +147,53 @@ pub(crate) async fn get_session_settings(
 
 pub(crate) async fn patch_session_settings(
     State(state): State<GatewayState>,
+    identity: Option<Extension<ClientIdentity>>,
     Path(session_id): Path<String>,
     Json(request): Json<PatchSessionSettingsRequest>,
 ) -> Result<Response, SettingsError> {
     let session_id = SessionId::from_str(&session_id)
         .map_err(|_| invalid_request(format!("invalid session id {session_id:?}")))?;
-    let loaded = state
+    // W2-③: 读-改-写全程持会话写闸 (与在途回合零交叠, 不丢任何一方的写)。
+    let updated = state
         .runtime
         .sessions()
-        .load(&session_id)
+        .update(session_id, |session| {
+            if let Some(model) = request.model {
+                session.settings.model = model;
+            }
+            if let Some(preset) = request.permission_preset {
+                session.settings.permission_preset = preset;
+            }
+            if let Some(remember) = request.approval_remember {
+                session.settings.approval_remember = remember;
+            }
+            SessionSettingsBody::from_session(session_id, &session.settings)
+        })
         .await
         .map_err(|error| invalid_request(error.to_string()))?;
-    let Some(mut session) = loaded else {
+    let Some((body, admission)) = updated else {
         return Err(session_not_found(&session_id.to_string()));
     };
-
-    if let Some(model) = request.model {
-        session.settings.model = model;
-    }
-    if let Some(preset) = request.permission_preset {
-        session.settings.permission_preset = preset;
-    }
-    if let Some(remember) = request.approval_remember {
-        session.settings.approval_remember = remember;
-    }
-
-    state
-        .runtime
-        .sessions()
-        .save(&session)
-        .await
-        .map_err(|error| invalid_request(error.to_string()))?;
-
-    Ok(Json(SessionSettingsBody::from_session(
+    record_session_client(
+        Some(state.observations.as_ref()),
         session_id,
-        &session.settings,
-    ))
-    .into_response())
+        identity_label(identity.as_ref()),
+        "settings.patch",
+        Some(admission),
+    );
+
+    Ok(Json(body).into_response())
 }
 
 pub(crate) async fn delete_session(
     State(state): State<GatewayState>,
+    identity: Option<Extension<ClientIdentity>>,
     Path(session_id): Path<String>,
 ) -> Result<Response, SettingsError> {
     let session_id = SessionId::from_str(&session_id)
         .map_err(|_| invalid_request(format!("invalid session id {session_id:?}")))?;
+    // W2-③: 删除同为会话账本写 —— 过同一把写闸, 不在回合半途抽走账本。
+    let permit = state.runtime.sessions().write_permit(session_id).await;
     let deleted = state
         .runtime
         .sessions()
@@ -195,6 +203,14 @@ pub(crate) async fn delete_session(
     if !deleted {
         return Err(session_not_found(&session_id.to_string()));
     }
+    record_session_client(
+        Some(state.observations.as_ref()),
+        session_id,
+        identity_label(identity.as_ref()),
+        "session.delete",
+        Some(permit.admission()),
+    );
+    drop(permit);
 
     Ok(Json(serde_json::json!({ "deleted": true })).into_response())
 }

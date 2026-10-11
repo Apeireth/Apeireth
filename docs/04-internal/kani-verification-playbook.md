@@ -47,14 +47,53 @@
   文件统一 `#[cfg(kani)] use super::kani_collections::HashMap;`（真 crate
   编译期剔除, 生产类型逐字节不变）。
 
-### K4. 字符串生成器的"符号性结构"比值域大小更致命（三易其稿）
-- 症状: `bounded_string` 换了三版才收住。
+### K4. 字符串生成器的"符号性结构"比值域大小更致命（五易其稿·终解）
+- 症状: `bounded_string` 换了**五版**才收住, 每版都死在 CBMC 证明能力与直觉的
+  差距上。
 - 演化: ① `String::from_utf8_lossy(任意字节)` → Utf8Chunks 验证机器爆 52+ 层;
   ② Latin-1 码点直构 → **编码 1-2 字节变长 = 字节长度符号化** → memchr/搜索
-  全线按 unwind 上界展开（8757 次 × 63 层实测）; ③ **ASCII（0..=127）→
-  字节长度恒 = N 具体值** → 根串搜索精确收敛。
-- 药方: 生成器要让**长度具体、内容可符号**; 优先字面量混符号尾字节;
-  值域收窄如实改 claim（"收窄面 = 不覆盖多字节编码分支, 由单测互补"）。
+  全线按 unwind 上界展开（8757 次 × 63 层实测）; ③ ASCII char::collect →
+  **CBMC 无法证明 encode_utf8 每 char 1 字节**（有分支）→ 串长仍符号 → 主循环
+  展开断言 FAILURE（base64_decode.unwind.0 案发）; ④ 字节数组 +
+  `String::from_utf8().unwrap()` → 长度可证, 但 UTF-8 验证循环（1127 展开）
+  + unwrap 失败路径的 panic/格式化机器（rustc_demangle 的 TwoWaySearcher）
+  双重税; ⑤ **终解 = 字节数组 + `from_utf8_unchecked`**（字节掩码 <0x80 构造
+  即合法, SAFETY 注释写明）—— 验证机/panic 路径双双退出证明面。
+- 药方: 生成器要让**可证**长度具体（字节数组, 不是 char collect）; 验证机/
+  panic 路径别留在证明面（unchecked + 构造即合法）; 值域收窄如实改 claim。
+
+### K12. `format!` 插值是 CBMC 的头号引雷点（45 分钟 → 秒级）
+- 症状: base64/governance/fold 多件 45m+ 跑不完; churn 里 memchr 数千次展开
+  （memchr_naive/memchr_aligned）+ TwoWaySearcher（rustc_demangle 也有份）。
+- 根因: **错误消息/提示文本里的 `format!("{var}")` 插值**拖进 Display/format
+  全套机器（fmt → 数字格式化 → 字符串机器 → panic 路径 → demangle → 搜索）。
+  与被测逻辑零关系, 却主宰公式体积。实证: 换掉一处插值后 base64 从 40m+ →
+  **73s** 证绿, governance 两件 45m+ → **8.4s / 22s**。
+- 铁证: research_approval_sm 三件从来秒级 —— 它只有 `.to_string()` **零插值**。
+- 药方: verified 面内:
+  - 字符串拼接用 `push_str`/字面量（输出逐字节等价, 见 intent.rs 改例）;
+  - 数字/变量要进消息 → `#[cfg(kani)]` 静态文案双实现（命题断言的是失败
+    模式/记账/决策, **不含消息文本** —— 语义无损, 生产逐字节不变）;
+  - 顺手排查: `format!` 在 render/错误构造/ID 拼接处最爱出现。
+
+### K13. 假阴性实验（K9「假绿」的姊妹坑）
+- 症状: 对照实验显示 "memchr=0" 大喜 —— 其实 sed 替换留了残渣括号, 编译直接
+  失败, CBMC 根本没跑, "0" 是假阴性。
+- 药方: 探针必须**自证跑通**——先 grep 确认替换落位、确认无 `error[E`、
+  确认出现 `VERIFICATION` 判词行, 三者齐了才能解读计数类指标。
+
+### K14. 行界/切分点也要定型
+- 症状: fold 的 memchr 2208 次在 format! 修复后纹丝不动。
+- 根因: `lines()`/`split('\n')` 的 memchr 扫**符号位置**的换行 → 切分点乱窜。
+- 药方: 生成器行间**恒插** `\n`（去掉随机换行开关）→ 每分支行界具体、
+  搜索定界; 行内容照旧符号（量词域不缩）。
+### K11. unwind 上限必须盖住被测代码的字面量循环
+- 症状: base64_decode 展开断言 FAILURE, 命题与输入都没问题。
+- 根因: `#[kani::unwind(48)]` **小于 decode_table 初始化循环的 64 次迭代**
+  （64 元素字母表 for 循环）——上限没盖住被测代码自己的字面量循环, 必败。
+- 药方: 设 unwind 前数一遍被测路径上的所有循环上界（字面量循环 + 推导界）,
+  上限 = 最大真实界 + 裕量; 与 K5 的"收上限收公式"不矛盾——收的是**符号界
+  循环**的浪费, 盖的是**真实界循环**的需要。
 
 ### K5. 符号长度收集 = OOM 的结构根源（分支定长法）
 - 症状: 数值系 harness（river/semantic_axis/residual_pyramid/dual_scaled）
@@ -113,9 +152,15 @@
 
 - [ ] 输入全部显式有界; **长度具体**（分支定长, 不用符号长度收集）;
 - [ ] f32 用 `bounded_f32()` + 具名 NaN/±∞/边界案例;
-- [ ] 字符串用 ASCII 生成器（字节长度 = N 具体值）, 优先字面量结构;
+- [ ] 避开 libm 外调（cbrt/powf/ln→exp 族）; 必须用则恒等桩 + 闭合论证;
+- [ ] 字符串用**字节数组 + `from_utf8_unchecked`**（掩码 <0x80 构造即合法,
+      SAFETY 注明）—— char collect 与 from_utf8().unwrap() 都是坑（K4）;
+- [ ] unwind 上限 = 被测路径最大**真实**循环界 + 裕量（字面量循环也算, K11）;
 - [ ] 避开 HashMap/HashSet（`kani_collections::HashMap`）;
 - [ ] 避开 libm 外调（cbrt/powf/ln→exp 族）; 必须用则恒等桩 + 闭合论证;
+- [ ] **零 `format!` 插值**（K12）: 拼接用 push_str; 数字/变量进消息走
+      `#[cfg(kani)]` 静态文案双实现（命题不含消息文本, 语义无损）;
+- [ ] 行界/切分点定型（K14）: 结构分隔符恒插, 不做随机开合;
 - [ ] 生产侧垃圾输入源头过滤, 不靠终值硬救;
 - [ ] unwind 从实测收紧（循环界具体后 8 通常够）, 注释写明收紧依据;
 - [ ] claim 文案与证明域**逐字对齐**（收窄面如实写, 单测互补要注明）;
@@ -159,7 +204,11 @@ cargo kani --harness <name> > /tmp/x.log 2>&1; grep -E "^VERIFICATION" /tmp/x.lo
 
 | harness | 本地 | 备注 |
 |---|---|---|
-| SM ×3 | 3-15s | 线性表后秒级 |
-| fold_block | 待复测 | 结构化生成器后 churn 大减; TwoWaySearcher 残留 |
-| river | 复测中 | 分支定长 + cbrt 桩 + NaN 过滤 |
-| residual/semantic/dual/async | 待推广分支定长 | semantic_axis unwind 96 是最大嫌疑 |
+| SM ×3 | 3-15s | 线性表后秒级; **零 format! 插值是长期快的原因** |
+| river | 195s ✅ | cbrt 桩 + NaN 过滤 + 分支定长 |
+| base64 | 73s ✅ | format! 静态化 + unwind 盖住 64 字面量循环 |
+| governance_no_degrade | 8.4s ✅ | format! 静态化 |
+| governance_default_deny | 22s ✅ | format! → push_str |
+| fold_block | 复验中 | format! 静态化 + 行界定型 |
+| residual/semantic/dual/async | 待抓药 | 先查 format! 残雷, 再看符号长度 |
+| memory ×3 / sandbox ×5 / quota ×2 / saga ×2 | 待复测 | CI 曾 45m+; 同款刀法待施 |

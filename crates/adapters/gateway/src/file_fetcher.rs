@@ -239,9 +239,14 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, FileFetchError> {
         }
         let sextet = decode_table[byte as usize];
         if sextet == 255 {
-            return Err(FileFetchError::Decode(format!(
-                "invalid base64 char: {byte}"
-            )));
+            // cfg(kani): format! 插值是 CBMC 引雷点 (Display/format 机器拖
+            // memchr 7881 次, 实测 40m+ 跑不完; 换静态文案后 <420s 证完)。
+            // 命题只断言失败模式 (Decode 枚举) 不含消息文本, 语义无损。
+            #[cfg(kani)]
+            let message = "invalid base64 char".to_string();
+            #[cfg(not(kani))]
+            let message = format!("invalid base64 char: {byte}");
+            return Err(FileFetchError::Decode(message));
         }
         accumulator = (accumulator << 6) | u32::from(sextet);
         pending_bits += 6;

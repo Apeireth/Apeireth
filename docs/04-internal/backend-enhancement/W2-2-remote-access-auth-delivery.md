@@ -98,7 +98,7 @@ APEIRETH_TLS_CERT / APEIRETH_TLS_KEY               gateway.remote_bind (远程�
 | G10 残余 (c)「chat/事件流/面板族无认证面」 | **销账（本批）**：门扩到全 API 面，仅 `/health` 豁免 | `gateway_auth_face.rs` 401 矩阵 |
 | G10 残余 (a) 逃生阀 | 仍在（如实）：`none` 明示不设防，审计留痕；非回环下同样放行但留痕 | 逃生阀测试 ×2（单测 + 进程级） |
 | G10 残余 (b) 未设默认放行 | 仍在（如实，口径沿用）：兼容路径逐字不变，警告帧+审计可见可查 | `unset_gate_keeps_the_no_token_compat_path_working_with_warnings` |
-| G10 残余 (d) web 构建取不到令牌 | 仍在（设计内）+ **新残余**：桌面 WebView 目前只给 admin/approvals 两处带令牌，chat/面板/SSE 裸请求（EventSource 无法带鉴权头）——全网关化后这些调用会 401，需前端批补：全 fetch 统一带令牌 + SSE 换 fetch 流/侧车转发。**后端批零前端触碰，未修** | `runtime.ts` `gatewayAuthHeaders` 仅 2 调用点；`tauri-bridge.ts` 令牌注释 |
+| G10 残余 (d) web 构建取不到令牌 | web 构建取不到令牌仍在（设计内，web 构建可经 `VITE_APEIRETH_GATEWAY_TOKEN` 注入）；桌面 WebView 令牌覆盖缺口**已销账（前端认证面收口批）**：全 fetch 统一走 `gatewayAuthHeaders()`（三源令牌：IPC > env 注入 > 无，无令牌不发鉴权头），SSE 带令牌换 fetch 流式读取（EventSource 无法带鉴权头），无令牌保留 EventSource 原路径 | `runtime.ts` `gatewayAuthHeaders` 全调用面（32 项行为表）；`tauri-bridge.ts` 令牌面；`tests/gateway-auth-face.mjs` + `tests/sse-fetch-stream.mjs` |
 | TLS 面 | **未接线（接口桩）**，如实：设 `APEIRETH_TLS_CERT/KEY` 只得显式警告，不得 TLS | `tls_placeholder_knobs_are_reported_as_unwired` + 启动警告 + `gateway.tls_unwired` 审计 |
 
 ## 6. 门禁证据（2026-10-11 实测，全部 `-j 2`）

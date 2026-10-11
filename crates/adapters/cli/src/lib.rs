@@ -113,6 +113,7 @@ const TURN_ROUNDS_ENV: &str = "APEIRETH_MAX_TURN_ROUNDS";
 const TOOL_CALLS_ENV: &str = "APEIRETH_MAX_TOOL_CALLS";
 const QUOTA_MAX_TOKENS_ENV: &str = "APEIRETH_QUOTA_MAX_TOKENS";
 const QUOTA_MAX_TOOL_STEPS_ENV: &str = "APEIRETH_QUOTA_MAX_TOOL_STEPS";
+const QUOTA_MAX_COST_MICROS_ENV: &str = "APEIRETH_QUOTA_MAX_COST_MICROS";
 
 /// Resolve the local read-tools switch from the process environment.
 ///
@@ -309,6 +310,17 @@ pub fn quota_max_tokens_from_env() -> Option<u64> {
 pub fn quota_max_tool_steps_from_env() -> Option<u64> {
     apeireth_runtime::canonical::parse_quota_max_tool_steps(
         std::env::var(QUOTA_MAX_TOOL_STEPS_ENV).ok().as_deref(),
+    )
+}
+
+/// 会话配额旋钮 (opt-in 烧钱闸): `APEIRETH_QUOTA_MAX_COST_MICROS=N` = 会话级
+/// 花费上限 (微单位; 有价轮按 `usage × 单价` 换算累加到上限即预算耗尽)。
+/// 取值纪律同 [`quota_max_tokens_from_env`]: 正整数直通 (越界钳制到
+/// `MAX_QUOTA_COST_MICROS`), 未设 / 空 / 0 / 非法 = 不设限 (`None`)。
+/// 无价轮 (无单价行) 不计入花费 (绝不编价), 该上限只对有价部分生效。
+pub fn quota_max_cost_micros_from_env() -> Option<u64> {
+    apeireth_runtime::canonical::parse_quota_max_cost_micros(
+        std::env::var(QUOTA_MAX_COST_MICROS_ENV).ok().as_deref(),
     )
 }
 
@@ -757,12 +769,17 @@ async fn build_canonical_runtime_with_parts(
     builder = builder
         .with_max_rounds(turn_round_limit_from_env())
         .with_max_tool_calls_per_round(tool_call_limit_from_env());
-    // 会话配额旋钮 (APEIRETH_QUOTA_MAX_TOKENS / APEIRETH_QUOTA_MAX_TOOL_STEPS):
-    // opt-in 烧钱闸, 默认不设限 (None); 执行面按会话账本累计并在检查点截断。
+    // 会话配额旋钮 (APEIRETH_QUOTA_MAX_TOKENS / APEIRETH_QUOTA_MAX_TOOL_STEPS /
+    // APEIRETH_QUOTA_MAX_COST_MICROS): opt-in 烧钱闸, 默认不设限 (None);
+    // 执行面按会话账本累计并在检查点截断。
     builder = builder.with_session_quota(apeireth_runtime::canonical::SessionQuotaLimits {
         max_tokens: quota_max_tokens_from_env(),
         max_tool_steps: quota_max_tool_steps_from_env(),
+        max_cost_micros: quota_max_cost_micros_from_env(),
     });
+    // 花费维单价来源 (H-P1 画像表): 回合计量处按 `usage × 单价` 记成本列,
+    // 无价模型不计入只计数 (绝不编价)。与自述模型节同一张表 (同源)。
+    builder = builder.with_cost_rates(Arc::new(model_profile_table_from_env()?));
     // 长尾截断的完整原文落盘根目录 (数据目录, 实际写入 `<data>/spill/`): 有落盘点时
     // 截断保留头尾预览 + 取回指引行; 落盘失败时回退内联原文 (宁长勿丢, 不失败调用)。
     builder = builder.with_context_spill_root(default_panel_data_dir());
@@ -1098,12 +1115,14 @@ async fn build_cognitive_modules_from_env(
             local_read_tools_enabled_from_env(),
         )],
         // 预算一节与运行时装配同源: 同一条可配置旋钮解析路径的取值
-        // (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS, 未设取默认)。
+        // (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS /
+        // APEIRETH_QUOTA_MAX_*, 未设取默认)。
         self_status_budget: Some(apeireth_runtime_assembly::budget_status_from_configured(
             u64::from(turn_round_limit_from_env()),
             tool_call_limit_from_env() as u64,
             quota_max_tokens_from_env(),
             quota_max_tool_steps_from_env(),
+            quota_max_cost_micros_from_env(),
         )),
         // 自省通道: 会话配额计量探测口 —— 只读会话行的账本, 已耗真值与
         // 执行面同一本账 (不设限维显示 "—")。

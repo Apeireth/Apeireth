@@ -48,7 +48,8 @@ import {
   transcriptForSummary,
 } from './user-impression.ts';
 import {providerFetch} from './provider-transport.ts';
-import {getGatewayToken} from './tauri-bridge.ts';
+import {gatewayAuthHeaders} from './tauri-bridge.ts';
+import {startSseFetchStream} from './sse-stream.ts';
 import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
 
 const STORAGE_KEY = 'apeireth-config';
@@ -812,7 +813,10 @@ async function checkJson(response: Response): Promise<unknown> {
 /** 基础 /health 端点探测 */
 export async function checkHealth(baseUrl: string): Promise<boolean> {
   try {
-    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/health`, {signal: AbortSignal.timeout(2500)});
+    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/health`, {
+      headers: await gatewayAuthHeaders(),
+      signal: AbortSignal.timeout(2500),
+    });
     return response.ok;
   } catch {
     return false;
@@ -822,7 +826,8 @@ export async function checkHealth(baseUrl: string): Promise<boolean> {
 /** 深度健康检测，探测 canonical Apeireth 2.0 gateway 及配置的模型提供商 */
 export async function checkHealthDetailed(
   baseUrl: string,
-  apiKey: string = '',
+  // 凭据从来不是入站鉴权: 该位只是签名兼容保留, 不参与探活也不进任何请求头。
+  _apiKey: string = '',
   model?: string,
   provider?: ApeirethConfig['provider'],
 ): Promise<RuntimeHealthReport> {
@@ -835,7 +840,10 @@ export async function checkHealthDetailed(
   // 1. Gateway Health (canonical)
   const t0 = performance.now();
   try {
-    const res = await fetch(`${base}/health`, {signal: AbortSignal.timeout(2500)});
+    const res = await fetch(`${base}/health`, {
+      headers: await gatewayAuthHeaders(),
+      signal: AbortSignal.timeout(2500),
+    });
     const lat = Math.round(performance.now() - t0);
     if (res.ok) {
       gatewayOk = true;
@@ -883,6 +891,7 @@ export async function checkHealthDetailed(
     const t1 = performance.now();
     try {
       const res = await fetch(`${base}/v1/models`, {
+        headers: await gatewayAuthHeaders(),
         signal: AbortSignal.timeout(3000),
       });
       const lat = Math.round(performance.now() - t1);
@@ -921,21 +930,24 @@ export async function checkHealthDetailed(
  * 获取模型列表.
  *
  * - 新契约 `listModels(config)` 返回 ModelInfo[] (id + ownedBy + description).
- * - 旧调用 `listModels(baseUrl, apiKey)` 仍返回 string[] (向后兼容, App.svelte 使用).
+ * - 旧调用 `listModels(baseUrl, _apiKey)` 仍返回 string[] (向后兼容, App.svelte 使用).
  *
  * NOTE: Provider credentials loaded by backend from env vars, not frontend
- * Authorization header. apiKey parameter kept for signature compatibility but
- * not used for canonical endpoint.
+ * Authorization header. The apiKey parameter is kept for signature
+ * compatibility only — credentials are never inbound auth; the canonical
+ * endpoint goes through the loopback token face like every gateway request.
  */
-export async function listModels(baseUrl: string, apiKey?: string): Promise<string[]>;
+export async function listModels(baseUrl: string, _apiKey?: string): Promise<string[]>;
 export async function listModels(config: ApeirethConfig): Promise<ModelInfo[]>;
 export async function listModels(
   baseUrlOrConfig: string | ApeirethConfig,
-  apiKey?: string,
+  _apiKey?: string,
 ): Promise<string[] | ModelInfo[]> {
   const baseUrl = typeof baseUrlOrConfig === 'string' ? baseUrlOrConfig : baseUrlOrConfig.baseUrl;
   // 出网请求经 providerFetch 传输选择 (Tauri → Rust 代发, 浏览器 → fetch)。
-  const response = await providerFetch(`${normalizeBaseUrl(baseUrl)}/v1/models`);
+  const response = await providerFetch(`${normalizeBaseUrl(baseUrl)}/v1/models`, {
+    headers: await gatewayAuthHeaders(),
+  });
   const data = (await checkJson(response)) as {
     data?: Array<{id?: unknown; owned_by?: unknown; description?: unknown}>;
   };
@@ -954,23 +966,9 @@ export async function listModels(
 // Admin config + session settings (canonical 2.0 代理契约)
 // ============================================================
 
-/**
- * G10 回环令牌注入面: 桌面壳自铸的回环访问令牌 (随侧车每枚启动而生, 重启
- * 即换)。每次调用现取、不缓存 —— 侧车重启换令牌后旧值不滞留。非桌面环境 /
- * 网关明示不设防时为空 → 无令牌客户端兼容路径 (不发鉴权头)。令牌不入日志、
- * 不入调用记录 (`call-logger.ts` 只记消息面, 无请求头)。
- */
-async function gatewayAccessToken(): Promise<string | null> {
-  const token = await getGatewayToken();
-  return token && token.trim() ? token.trim() : null;
-}
-
-/** 敏感端点鉴权头: 有回环令牌带 Bearer; 否则退回既有 apiKey 面 (web 兼容)。 */
-async function gatewayAuthHeaders(config: ApeirethConfig): Promise<Record<string, string>> {
-  const token = await gatewayAccessToken();
-  const value = token ? `Bearer ${token}` : config.apiKey ? `Bearer ${config.apiKey}` : '';
-  return value ? {Authorization: value} : {};
-}
+// G10 回环令牌注入面: 每个网关请求的鉴权头统一走 `gatewayAuthHeaders()`
+// (tauri-bridge.ts 令牌面, 三源: IPC > env 注入 > 无; 每次现取不缓存)。
+// 无令牌 = 三态门未设口径照旧, 不发鉴权头 (不发空 Bearer)。
 
 async function requestJson(
   config: ApeirethConfig,
@@ -979,7 +977,7 @@ async function requestJson(
 ): Promise<unknown> {
   const hasBody = options.body !== undefined;
   const headers: Record<string, string> = {
-    ...(await gatewayAuthHeaders(config)),
+    ...(await gatewayAuthHeaders()),
   };
   if (hasBody) headers['Content-Type'] = 'application/json';
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
@@ -1406,6 +1404,7 @@ export async function streamChat(
     const base = normalizeBaseUrl(config.baseUrl);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...(await gatewayAuthHeaders()),
     };
 
     const response = await fetch(`${base}/v1/chat/completions`, {
@@ -1614,6 +1613,7 @@ export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(await gatewayAuthHeaders()),
     },
     body: JSON.stringify({
       model: config.model,
@@ -1774,7 +1774,9 @@ export async function fetchCapabilities(_config: ApeirethConfig): Promise<Capabi
   // fall back to the static release contract when the endpoint is unreachable.
   const baseUrl = normalizeBaseUrl(_config.baseUrl);
   try {
-    const res = await fetch(`${baseUrl}/v1/apeireth/capabilities`);
+    const res = await fetch(`${baseUrl}/v1/apeireth/capabilities`, {
+      headers: await gatewayAuthHeaders(),
+    });
     if (res.ok) {
       const data = (await res.json()) as CapabilityManifest;
       if (data && Array.isArray(data.capabilities)) return data;
@@ -1925,7 +1927,7 @@ export const legacyCapabilityManifest = releaseContractManifest;
 /** 获取真实后端会话列表 (只读数据) */
 export async function fetchBackendSessions(config: ApeirethConfig): Promise<Array<{id: string; title?: string; started_at: number; last_active_at: number; closed_at?: number; episode_count: number}>> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/sessions`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   // Canonical contract shape: {sessions: [{id, title, created_at, updated_at, message_count, revision}]}
   const data = (await checkJson(res)) as {
@@ -1963,7 +1965,7 @@ export async function deleteBackendSession(config: ApeirethConfig, sessionId: st
     `${normalizeBaseUrl(config.baseUrl)}/v1/sessions/${encodeURIComponent(sessionId)}`,
     {
       method: 'DELETE',
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     },
   );
   if (res.ok) return;
@@ -1977,7 +1979,7 @@ export async function deleteBackendSession(config: ApeirethConfig, sessionId: st
 export async function fetchMemoryEpisodes(config: ApeirethConfig, query = '', limit = 100, session = ''): Promise<MemoryEpisodeItem[]> {
   const url = `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/episodes?limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}${session ? `&session=${encodeURIComponent(session)}` : ''}`;
   const res = await fetch(url, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   const data = (await checkJson(res)) as {
     episodes?: Array<{
@@ -2015,7 +2017,7 @@ export async function fetchGraphData(config: ApeirethConfig): Promise<{
   edges: Array<{from: string; to: string; weight?: number; label?: string | null}>;
 }> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/graph`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   // Canonical contract shape: {nodes: [{id, label, kind}], edges: [{from, to, weight, label?}]}
   const data = (await checkJson(res)) as {
@@ -2063,7 +2065,7 @@ export async function fetchRuntimeSnapshot(
 ): Promise<{snapshot: Record<string, unknown>} | {error: string}> {
   try {
     const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/runtime/snapshot`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     });
     if (!res.ok) return {error: `HTTP ${res.status}`};
     return {snapshot: (await checkJson(res)) as Record<string, unknown>};
@@ -2075,7 +2077,7 @@ export async function fetchRuntimeSnapshot(
 /** 获取持久化审计记录 */
 export async function fetchAuditLogs(config: ApeirethConfig, limit = 100): Promise<ActivityItem[]> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/audit?limit=${limit}`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   // Canonical contract shape: {events: [{ts, event, service, detail?}]}
   const data = (await checkJson(res)) as {
@@ -2099,12 +2101,12 @@ export async function fetchTools(config: ApeirethConfig): Promise<ToolItem[]> {
   const baseUrl = normalizeBaseUrl(config.baseUrl);
   // 先尝试 /v1/tools/list，再尝试 /v1/panel/tools
   let res = await fetch(`${baseUrl}/v1/tools/list`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   }).catch(() => null);
 
   if (!res || !res.ok) {
     res = await fetch(`${baseUrl}/v1/panel/tools`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     }).catch(() => null);
   }
 
@@ -2143,6 +2145,7 @@ export async function fetchCanonicalApprovals(
 ): Promise<CanonicalPendingApproval[]> {
   const res = await fetch(
     `${normalizeBaseUrl(config.baseUrl)}/v1/approvals?session=${encodeURIComponent(sessionId)}`,
+    {headers: await gatewayAuthHeaders()},
   );
   const data = (await checkJson(res)) as {approvals?: CanonicalPendingApproval[]};
   return Array.isArray(data.approvals) ? data.approvals : [];
@@ -2163,7 +2166,7 @@ export async function resolveCanonicalApproval(
   let res: Response;
   try {
     // G10: 审批解决是敏感端点 —— 带桌面壳自铸的回环令牌 (无令牌 = 兼容路径)。
-    const auth = await gatewayAuthHeaders(config);
+    const auth = await gatewayAuthHeaders();
     res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/approvals/resolve`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json', ...auth},
@@ -2241,7 +2244,7 @@ export async function appendMemoryEpisode(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+      ...(await gatewayAuthHeaders()),
     },
     body: JSON.stringify({
       session: target,
@@ -2319,22 +2322,25 @@ export interface CompanionEvent {
  * 接收 backend_ready / approval_required / approval_resolved 等网关级事件,
  * 转成轻量文本行交给调用方 (toast / 对话流纪律)。
  * 支持断线指数退避自动重连 (2s → 30s)。
+ * 认证收口: 有回环令牌走 fetch 流式 (EventSource 无法带 Authorization 头,
+ * 令牌门全 API 面化后带令牌客户端必须 fetch 过门); 无令牌 = 三态门未设口径
+ * 照旧, 保留 EventSource 原路径 (含无 EventSource 时静默不建链)。
  */
 export function subscribeCompanionEvents(
   config: ApeirethConfig,
   onEvent: (event: CompanionEvent) => void,
 ): () => void {
-  if (typeof EventSource === 'undefined') return () => {};
   const url = `${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/events`;
   let active = true;
   let source: EventSource | null = null;
+  let streamClose: (() => void) | null = null;
   let retryDelay = 2000;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const handler = (kind: string) => (msg: MessageEvent) => {
+  const dispatch = (kind: string, data: string) => {
     let payload: Record<string, unknown> | null = null;
     try {
-      payload = JSON.parse(typeof msg.data === 'string' ? msg.data : '');
+      payload = JSON.parse(data);
     } catch {
       payload = null;
     }
@@ -2350,9 +2356,55 @@ export function subscribeCompanionEvents(
     if (text) onEvent({text, ts: Date.now(), kind, payload: payload ?? undefined});
   };
 
+  const handler = (kind: string) => (msg: MessageEvent) => {
+    dispatch(kind, typeof msg.data === 'string' ? msg.data : '');
+  };
+
+  const scheduleRetry = () => {
+    retryTimer = setTimeout(connect, retryDelay);
+    retryDelay = Math.min(retryDelay * 1.5, 30000);
+  };
+
   const connect = () => {
     if (!active) return;
-    const es = new EventSource(url);
+    void openChannel();
+  };
+
+  async function openChannel(): Promise<void> {
+    const auth = await gatewayAuthHeaders();
+    if (!active) return;
+    if (auth.Authorization) {
+      // EventSource 无法带 Authorization 头 —— 带令牌过门走 fetch 流式读取。
+      streamClose = startSseFetchStream(url, auth, {
+        onOpen: () => {},
+        onFrame: (frame) => {
+          if (
+            frame.event === 'backend_ready' ||
+            frame.event === 'approval_required' ||
+            frame.event === 'approval_resolved'
+          ) {
+            dispatch(frame.event, frame.data);
+          }
+        },
+        onEnd: () => {
+          if (!active) return;
+          streamClose = null;
+          scheduleRetry();
+        },
+      });
+      return;
+    }
+    // 无令牌 (三态门未设口径照旧) 且环境无 EventSource = 无通道, 静默不建链。
+    if (typeof EventSource === 'undefined') return;
+    let es: EventSource;
+    try {
+      es = new EventSource(url);
+    } catch {
+      // 构造同步抛出不许杀死重试链 (与 presence.ts 同一口径), 按退避续排。
+      if (!active) return;
+      scheduleRetry();
+      return;
+    }
     source = es;
     es.addEventListener('backend_ready', handler('backend_ready') as EventListener);
     es.addEventListener('approval_required', handler('approval_required') as EventListener);
@@ -2361,10 +2413,9 @@ export function subscribeCompanionEvents(
       if (source === es) source = null;
       es.close();
       if (!active) return;
-      retryTimer = setTimeout(connect, retryDelay);
-      retryDelay = Math.min(retryDelay * 1.5, 30000);
+      scheduleRetry();
     };
-  };
+  }
 
   connect();
 
@@ -2376,6 +2427,8 @@ export function subscribeCompanionEvents(
     }
     source?.close();
     source = null;
+    streamClose?.();
+    streamClose = null;
   };
 }
 
@@ -2449,27 +2502,7 @@ async function postJson(config: ApeirethConfig, path: string, body: unknown): Pr
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
-      },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      return {ok: false, status: res.status, error: (data && (data as {message?: string}).message) || `HTTP ${res.status}`};
-    }
-    return {ok: true, status: res.status, data};
-  } catch (caught) {
-    return {ok: false, status: 0, error: caught instanceof Error ? caught.message : String(caught)};
-  }
-}
-
-async function patchJson(config: ApeirethConfig, path: string, body: unknown): Promise<{ok: boolean; status: number; data?: unknown; error?: string}> {
-  try {
-    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+        ...(await gatewayAuthHeaders()),
       },
       body: JSON.stringify(body),
     });
@@ -2507,7 +2540,7 @@ export async function unprotectMemoryEpisode(config: ApeirethConfig, id: string,
 
 export async function fetchGrants(config: ApeirethConfig): Promise<GrantView[]> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/grants`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   if (!res.ok) return [];
   const data = (await res.json().catch(() => null)) as {
@@ -2537,7 +2570,7 @@ export async function revokeGrant(
 ): Promise<{ok: boolean; error?: string}> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/grants/revoke`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...(await gatewayAuthHeaders())},
     body: JSON.stringify({capability: id}),
   });
   if (!res.ok) {
@@ -2567,7 +2600,7 @@ export async function fetchTraceList(
 ): Promise<TraceSummaryItem[] | {error: string}> {
   try {
     const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/traces?limit=${limit}`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as {message?: string};
@@ -2583,7 +2616,7 @@ export async function fetchTraceList(
 export async function fetchTraceDetail(config: ApeirethConfig, traceId: string): Promise<TraceSpanItem[] | {error: string}> {
   try {
     const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/traces/${encodeURIComponent(traceId)}`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as {message?: string};
@@ -2601,7 +2634,7 @@ export async function fetchTraceDetail(config: ApeirethConfig, traceId: string):
 export async function fetchGuardStatus(config: ApeirethConfig): Promise<GuardStatus | {error: string}> {
   try {
     const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/safety/guard/status`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as {error?: {message?: string}};
@@ -2616,7 +2649,7 @@ export async function fetchGuardStatus(config: ApeirethConfig): Promise<GuardSta
 export async function fetchGuardEvents(config: ApeirethConfig, limit = 50): Promise<GuardEvent[] | {error: string}> {
   try {
     const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/safety/guard/events?limit=${limit}`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as {error?: {message?: string}};
@@ -2635,7 +2668,7 @@ export async function evaluateGuard(config: ApeirethConfig, req: GuardDryRunRequ
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {}),
+        ...(await gatewayAuthHeaders()),
       },
       body: JSON.stringify(req),
     });
@@ -2653,7 +2686,7 @@ export async function fetchWorkbenchTurn(config: ApeirethConfig, sessionId?: str
   try {
     const query = sessionId ? `?session=${encodeURIComponent(sessionId)}` : '';
     const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/workbench/turn${query}`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as {error?: {message?: string}};

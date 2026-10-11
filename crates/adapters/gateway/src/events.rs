@@ -37,29 +37,39 @@
 //!   batch face. The first holder starts the periodic flush loop, the last
 //!   holder stops it; a crashed pass becomes a failure frame (崩溃失败即帧)
 //!   and the next clean pass clears it.
+//!
+//! 会话级事件扇出 (W2-③ 多客户端会话复用, 并发会话路由面):
+//! - **逐客户端独立订阅**: 每条连接/每个程序化订阅各持自己的接收器与自己的
+//!   订阅登记, 互不牵连 (一端断开不动另一端);
+//! - **同会话事件扇出多端**: 同一会话的事件帧送到它的全部订阅端 (广播语义),
+//!   [`EventBus::subscribe_session`] 可按会话过滤 —— 只收本会话帧;
+//! - **会话帧面**: 有订阅者期间留存该会话最近一帧 (有界), 无订阅者即不留存、
+//!   不回放 (快照即读); 订阅端数由 [`EventBus::session_connections`] 观测;
+//! - SSE 面的 `GET /v1/apeireth/events?session=<id>` 即会话订阅的 HTTP 面。
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
-use axum::extract::State;
+use axum::extract::{Extension, Query, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event as SseEvent, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
-use apeireth_core::kernel::Timestamp;
+use apeireth_core::kernel::{SessionId, Timestamp};
 use apeireth_core::resource_lease::{
     ResourceError, ResourceFrame, ResourceHooks, ResourceLease, ResourcePin, ResourceRegistry,
 };
 use apeireth_runtime::canonical::{RuntimeEvent, RuntimeEventSink, TraceEvent};
 
+use crate::client_tokens::{identity_label, record_session_client, ClientIdentity};
 use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::panels::{AuditCommand, GatewayState, TraceCommand, TraceSpanDto};
 
@@ -123,17 +133,30 @@ impl EventsDeliveryDriver {
     }
 }
 
+/// 会话扇出面的一条登记 (W2-③): 该会话的订阅端数 + 订阅期间留存的最近一帧。
+#[derive(Debug, Default)]
+struct SessionFanoutEntry {
+    /// 当前订阅端数 (逐客户端独立; 0 即整条登记回收)。
+    connections: usize,
+    /// 本会话最近一帧 (仅订阅期间留存; 快照即读, 不回放)。
+    last_frame: Option<GatewayEvent>,
+}
+
 /// In-process event bus shared by handlers and the SSE endpoint.
 ///
 /// Alongside the broadcast fan-out the bus keeps a lease-managed frame surface
 /// ([`ResourceRegistry`]): publishing retains the latest frame so a connection
 /// reads the current state on arrival (快照即读, 不回放), and a delivery gap
 /// rides beside the last value as a failure frame (失败即帧, 下一成功帧自清).
+///
+/// W2-③ 会话扇出面: 另有一张逐会话登记表 (订阅端数 + 最近一帧), 支撑
+/// "每客户端独立订阅、同一会话事件扇出多端" 的并发会话路由语义。
 #[derive(Debug, Clone)]
 pub struct EventBus {
     tx: broadcast::Sender<GatewayEvent>,
     frames: Arc<ResourceRegistry<GatewayEvent>>,
     delivery: Arc<EventsDeliveryDriver>,
+    fanout: Arc<Mutex<BTreeMap<SessionId, SessionFanoutEntry>>>,
 }
 
 impl Default for EventBus {
@@ -159,13 +182,23 @@ impl EventBus {
             tx,
             frames,
             delivery,
+            fanout: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
     /// Publish one event; no subscribers is a silent success, and a lagging
     /// subscriber never blocks the publisher. The frame surface retains the
     /// latest event for snapshot-on-connect while the delivery stream is open.
+    ///
+    /// 会话帧面 (W2-③): 带会话归属的帧同时更新该会话登记表里的最近一帧
+    /// (仅在有订阅者期间留存 —— 登记表即订阅表, 无订阅者无留存、无回放)。
     pub fn publish(&self, event: GatewayEvent) {
+        if let Some(session) = event_session(&event) {
+            let mut fanout = self.fanout.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(entry) = fanout.get_mut(&session) {
+                entry.last_frame = Some(event.clone());
+            }
+        }
         let _ = self.frames.publish(event.clone());
         let _ = self.tx.send(event);
     }
@@ -173,6 +206,40 @@ impl EventBus {
     /// Subscribe for events emitted after this call.
     pub fn subscribe(&self) -> broadcast::Receiver<GatewayEvent> {
         self.tx.subscribe()
+    }
+
+    /// 会话事件订阅 (W2-③): 逐客户端独立 (独立接收器 + 独立订阅登记), 只收
+    /// 本会话的事件帧 —— 同一会话的事件扇出到它的全部订阅端。
+    pub fn subscribe_session(&self, session: SessionId) -> SessionEventsSubscription {
+        let scope = self.session_scope(session);
+        SessionEventsSubscription {
+            session,
+            rx: self.tx.subscribe(),
+            scope,
+            fanout: Arc::clone(&self.fanout),
+        }
+    }
+
+    /// 登记一端为某会话的订阅者 (RAII; Drop 即退订回收)。
+    fn session_scope(&self, session: SessionId) -> SessionScope {
+        let mut fanout = self.fanout.lock().unwrap_or_else(|p| p.into_inner());
+        fanout.entry(session).or_default().connections += 1;
+        SessionScope {
+            session,
+            fanout: Arc::clone(&self.fanout),
+        }
+    }
+
+    /// 该会话当前订阅端数 (扇出端数观测; 无登记 = 0)。
+    pub fn session_connections(&self, session: &SessionId) -> usize {
+        let fanout = self.fanout.lock().unwrap_or_else(|p| p.into_inner());
+        fanout.get(session).map_or(0, |entry| entry.connections)
+    }
+
+    /// 该会话最近一帧 (快照即读): 仅在有订阅者期间留存, 无订阅者不回放。
+    pub fn session_snapshot(&self, session: &SessionId) -> Option<GatewayEvent> {
+        let fanout = self.fanout.lock().unwrap_or_else(|p| p.into_inner());
+        fanout.get(session)?.last_frame.clone()
     }
 
     /// One SSE connection lease on the delivery surface: the first holder
@@ -252,6 +319,124 @@ impl EventsSubscription {
             .frames
             .publish_failure(format!("stream gap: {omitted} frame(s) omitted"));
     }
+}
+
+// ---------------------------------------------------------------------------
+// 会话级事件扇出 (W2-③ 多客户端会话复用)
+// ---------------------------------------------------------------------------
+
+/// 一端对某会话的订阅登记 (RAII): 持有即计入 [`EventBus::session_connections`],
+/// 释放即退订、登记归零即整条回收 (帧面留存随之终止, 有界)。
+pub struct SessionScope {
+    session: SessionId,
+    fanout: Arc<Mutex<BTreeMap<SessionId, SessionFanoutEntry>>>,
+}
+
+impl std::fmt::Debug for SessionScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionScope")
+            .field("session", &self.session)
+            .finish_non_exhaustive()
+    }
+}
+
+impl SessionScope {
+    /// 本订阅登记的会话。
+    pub fn session(&self) -> SessionId {
+        self.session
+    }
+}
+
+impl Drop for SessionScope {
+    fn drop(&mut self) {
+        let mut fanout = self.fanout.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(entry) = fanout.get_mut(&self.session) {
+            entry.connections = entry.connections.saturating_sub(1);
+            if entry.connections == 0 {
+                fanout.remove(&self.session);
+            }
+        }
+    }
+}
+
+/// 一端对某会话的事件订阅 (W2-③): 独立接收器 + 独立登记, 只收本会话帧 ——
+/// 同一会话的事件扇出到它的全部订阅端, 一端断开不动另一端。
+///
+/// 会话帧面语义: 该会话最近一帧仅在**有订阅者期间**留存 (有界), 无订阅者
+/// 不留存、不回放 (快照即读)。
+pub struct SessionEventsSubscription {
+    session: SessionId,
+    rx: broadcast::Receiver<GatewayEvent>,
+    scope: SessionScope,
+    fanout: Arc<Mutex<BTreeMap<SessionId, SessionFanoutEntry>>>,
+}
+
+impl std::fmt::Debug for SessionEventsSubscription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionEventsSubscription")
+            .field("session", &self.session)
+            .finish_non_exhaustive()
+    }
+}
+
+impl SessionEventsSubscription {
+    /// 本订阅过滤的会话。
+    pub fn session(&self) -> SessionId {
+        self.session
+    }
+
+    /// 该会话最近一帧 (快照即读, 不回放历史)。
+    pub fn snapshot(&self) -> Option<GatewayEvent> {
+        self.fanout
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(&self.session)?
+            .last_frame
+            .clone()
+    }
+
+    /// 该会话当前订阅端数 (含本订阅)。
+    pub fn connections(&self) -> usize {
+        self.fanout
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(&self.session)
+            .map_or(0, |entry| entry.connections)
+    }
+
+    /// 下一帧本会话事件: 他会话帧跳过; 落后跳帧 = 显式省略事实
+    /// (`Err(omitted)`); 总线关闭 = `Ok(None)`。
+    pub async fn recv(&mut self) -> Result<Option<GatewayEvent>, u64> {
+        loop {
+            match self.rx.recv().await {
+                Ok(event) if is_session_event(&event, self.session) => return Ok(Some(event)),
+                Ok(_) => continue,
+                Err(broadcast::error::RecvError::Lagged(omitted)) => return Err(omitted),
+                Err(broadcast::error::RecvError::Closed) => return Ok(None),
+            }
+        }
+    }
+
+    /// 拆出底层接收器与订阅登记 (自定义流接线用, 如 SSE 交付面): 登记随
+    /// 返回的 [`SessionScope`] 回收 —— 二者同寿, 悬空登记不可能。
+    pub fn into_parts(self) -> (broadcast::Receiver<GatewayEvent>, SessionScope) {
+        (self.rx, self.scope)
+    }
+}
+
+/// 该帧是否属于 `session` (会话过滤谓词): 只有携带该会话归属的帧才通过。
+pub fn is_session_event(event: &GatewayEvent, session: SessionId) -> bool {
+    event_session(event) == Some(session)
+}
+
+/// 帧的会话归属 (payload 的 `session` 字段), 无归属 = `None`。
+fn event_session(event: &GatewayEvent) -> Option<SessionId> {
+    event
+        .data
+        .get("session")
+        .and_then(serde_json::Value::as_str)?
+        .parse()
+        .ok()
 }
 
 impl RuntimeEventSink for EventBus {
@@ -887,6 +1072,13 @@ fn trace_span_kind_status(event: &TraceEvent) -> (&'static str, &'static str) {
     }
 }
 
+/// SSE 查询面: `GET /v1/apeireth/events` 的过滤参数 (W2-③ 会话订阅)。
+#[derive(Debug, Default, Deserialize)]
+pub struct EventsQuery {
+    /// 给定时 = 只订阅该会话的事件帧 (并发会话路由面)。
+    pub session: Option<String>,
+}
+
 /// `GET /v1/apeireth/events` — SSE stream of gateway lifecycle events.
 ///
 /// Per-connection lease (逐连接租约): the handler holds one delivery lease for
@@ -897,7 +1089,29 @@ fn trace_span_kind_status(event: &TraceEvent) -> (&'static str, &'static str) {
 /// `frames_omitted` fact plus a failure frame on the surface (丢帧 = 显式省略
 /// 事实, 不静默). A shut-down delivery surface answers an explicit error frame
 /// instead of silently streaming nothing.
-pub async fn events_handler(State(state): State<GatewayState>) -> Response {
+///
+/// W2-③ 会话订阅: `?session=<id>` 时本连接只收该会话的事件帧 (每客户端独立
+/// 订阅、同一会话事件扇出多端), 连接快照也只读该会话的最近一帧; 订阅动作落
+/// `gateway.session_client` 审计行 (谁订阅了哪个会话)。非法会话 id = 显式
+/// 400 错误帧, 不静默当全量订阅。
+pub async fn events_handler(
+    State(state): State<GatewayState>,
+    Query(query): Query<EventsQuery>,
+    identity: Option<Extension<ClientIdentity>>,
+) -> Response {
+    let scoped = match query.session {
+        None => None,
+        Some(raw) => match raw.parse::<SessionId>() {
+            Ok(session) => Some(session),
+            Err(_) => {
+                return ErrorFrame::response(
+                    StatusCode::BAD_REQUEST,
+                    ErrorCode::InvalidRequest,
+                    format!("invalid session id {raw:?}"),
+                )
+            }
+        },
+    };
     let connection = match state.events.connect() {
         Ok(connection) => connection,
         Err(error) => {
@@ -908,15 +1122,33 @@ pub async fn events_handler(State(state): State<GatewayState>) -> Response {
             )
         }
     };
-    let live = state.events.subscribe();
+    // 每客户端独立订阅: 全量面用裸接收器, 会话面用独立登记 + 独立接收器。
+    let (live, scope, latest) = match scoped {
+        Some(session) => {
+            let subscription = state.events.subscribe_session(session);
+            let latest = subscription.snapshot();
+            // 会话归属审计 (W2-③): 过门客户端名与会话事件关联。
+            record_session_client(
+                Some(state.observations.as_ref()),
+                session,
+                identity_label(identity.as_ref()),
+                "events.subscribe",
+                None,
+            );
+            let (live, scope) = subscription.into_parts();
+            (live, Some(scope), latest)
+        }
+        None => (state.events.subscribe(), None, connection.snapshot().value),
+    };
 
-    // 连接即送快照帧: 当前帧 (最后值 + 挂着的失败帧) 先行, 历史不回放。
+    // 连接即送快照帧: 当前帧 (最近值 + 挂着的失败帧) 先行, 历史不回放。
     let snapshot = connection.snapshot();
     let head = vec![Ok::<_, Infallible>(
         SseEvent::default().event(STREAM_SNAPSHOT_EVENT).data(
             serde_json::json!({
                 "surface": EVENTS_SURFACE,
-                "latest": snapshot.value,
+                "session": scoped,
+                "latest": latest,
                 "failure": snapshot.failure,
             })
             .to_string(),
@@ -925,22 +1157,25 @@ pub async fn events_handler(State(state): State<GatewayState>) -> Response {
 
     let stream =
         tokio_stream::iter(head).chain(BroadcastStream::new(live).filter_map(move |item| {
-            // `connection` rides inside this closure: the lease lives exactly as
-            // long as the stream, and dropping the stream (client disconnect)
-            // releases it.
+            // `connection` 与 `scope` 一起骑在闭包里: 交付租约与会话订阅登记
+            // 同寿于流, 断流即一起回收。
+            let _session_scope = &scope;
             match item {
-                Ok(event) => match serde_json::to_string(&event.data) {
-                    Ok(payload) => Some(Ok::<_, Infallible>(
-                        SseEvent::default().event(&event.event).data(payload),
-                    )),
-                    Err(_) => {
-                        // 失败即帧: 编码失败作为正式一帧上报, 不静默吞掉。
-                        let _ = connection
-                            .frames
-                            .publish_failure("event payload serialization failed".to_string());
-                        Some(Ok(SseEvent::default().event(&event.event).data("{}")))
+                Ok(event) if scoped.map_or(true, |session| is_session_event(&event, session)) => {
+                    match serde_json::to_string(&event.data) {
+                        Ok(payload) => Some(Ok::<_, Infallible>(
+                            SseEvent::default().event(&event.event).data(payload),
+                        )),
+                        Err(_) => {
+                            // 失败即帧: 编码失败作为正式一帧上报, 不静默吞掉。
+                            let _ = connection
+                                .frames
+                                .publish_failure("event payload serialization failed".to_string());
+                            Some(Ok(SseEvent::default().event(&event.event).data("{}")))
+                        }
                     }
-                },
+                }
+                Ok(_) => None,
                 Err(BroadcastStreamRecvError::Lagged(omitted)) => {
                     // 丢帧 = 显式省略事实: 落后跳过的帧数说出来, 并挂失败帧。
                     connection.note_gap(omitted);

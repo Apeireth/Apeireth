@@ -21,6 +21,9 @@ pub mod canonical_entry;
 /// Panel introspection surface (`/v1/panel/*`, tools, capabilities, audit, traces).
 pub mod panels;
 
+/// G-P1 指标端点 (`GET /v1/panel/metrics`): 指标注册表的 HTTP 数据面。
+pub mod panel_metrics;
+
 /// Gateway-level SSE event bus (`/v1/apeireth/events`).
 pub mod events;
 
@@ -84,16 +87,18 @@ pub use presence::{
 pub use canonical_entry::{
     build_gateway_state, build_gateway_state_with_services, canonical_router,
     canonical_router_with_panels, canonical_router_with_services, canonical_router_with_state,
-    execute_chat, resolve_approval, serve_canonical, serve_canonical_with_services,
-    serve_state_with_shutdown, serve_with_shutdown, CanonicalApprovalRequest, CanonicalChatOutcome,
-    CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError, CanonicalExecutionEvent,
-    CanonicalPendingApproval, GateVerdict, GatewayTokenGate, UNAUTHENTICATED_PROBE_PATHS,
+    execute_chat, execute_chat_attributed, resolve_approval, resolve_approval_attributed,
+    serve_canonical, serve_canonical_with_services, serve_state_with_shutdown, serve_with_shutdown,
+    CanonicalApprovalRequest, CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse,
+    CanonicalEntryError, CanonicalExecutionEvent, CanonicalPendingApproval, GateVerdict,
+    GatewayTokenGate, SessionAttribution, UNAUTHENTICATED_PROBE_PATHS,
 };
 
 pub use client_tokens::{
-    validate_gate_table_pair, ClientTokenConfig, ClientTokenError, ClientTokenSpec,
-    ClientTokenTable, CLIENT_TOKENS_DOC_NAME, CLIENT_TOKENS_DOC_VERSION, CLIENT_TOKENS_ENV,
-    CLIENT_TOKENS_FILE,
+    client_name_binds, identity_label, record_session_client, validate_gate_table_pair,
+    ClientIdentity, ClientTokenConfig, ClientTokenError, ClientTokenSpec, ClientTokenTable,
+    CLIENT_NAME_CLAIM_HEADER, CLIENT_TOKENS_DOC_NAME, CLIENT_TOKENS_DOC_VERSION, CLIENT_TOKENS_ENV,
+    CLIENT_TOKENS_FILE, SESSION_CLIENT_AUDIT_EVENT,
 };
 
 pub use remote_access::{
@@ -126,8 +131,9 @@ pub use im_channels::{
 };
 
 pub use events::{
-    events_handler, EventBus, EventsSubscription, FlushReport, GatewayEvent,
-    ObservationFlushSubscription, RuntimeObservationSink, FLUSH_PASS_INTERVAL_SECS,
+    events_handler, is_session_event, EventBus, EventsQuery, EventsSubscription, FlushReport,
+    GatewayEvent, ObservationFlushSubscription, RuntimeObservationSink, SessionEventsSubscription,
+    SessionScope, FLUSH_PASS_INTERVAL_SECS,
 };
 
 pub use resident::{

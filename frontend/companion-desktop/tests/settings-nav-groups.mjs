@@ -19,11 +19,12 @@ for (const group of SETTINGS_NAV_GROUPS) {
   assert.ok(group.blurb.length > 0, `组 ${group.id} 有人话说明`);
 }
 
-// ② 14 个分区恰好各归一组（owner 清单缺口修复：cognition 归组 2；用户中心新增；
-//    用户印象 = AI 智能体独立设置栏新增）
+// ② 15 个分区恰好各归一组（owner 清单缺口修复：cognition 归组 2；用户中心新增；
+//    用户印象 = AI 智能体独立设置栏新增；2026-10-11 形象分区新增——口径演进
+//    14→15，理由：增设分区是深链的纯增量，旧 14 个 id 全保留、全归组不变）
 const allIds = SETTINGS_NAV_GROUPS.flatMap((g) => [...g.sectionIds]);
-assert.equal(allIds.length, 14, '14 个分区全覆盖');
-assert.equal(new Set(allIds).size, 14, '无重复归组');
+assert.equal(allIds.length, 15, '15 个分区全覆盖');
+assert.equal(new Set(allIds).size, 15, '无重复归组');
 assert.ok(allIds.includes('cognition'), '记忆与认知已归组（清单缺口修复）');
 assert.equal(SETTINGS_SECTION_GROUP.cognition, 'character', 'cognition 归组 2 它的性格');
 assert.equal(SETTINGS_SECTION_GROUP.impression, 'character', '用户印象归组 2 它的性格（它怎么看你）');
@@ -34,7 +35,7 @@ assert.equal(SETTINGS_NAV_GROUPS[0].sectionIds[0], 'user', '用户中心 = 设�
 assert.equal(SETTINGS_SECTION_GROUP.appearance, 'appearance', '外观归组 4');
 assert.equal(SETTINGS_SECTION_GROUP.developer, 'data', '开发者选项归组 5');
 
-// ③ 深链契约：14 个 id 全部原样通过、未知回 null
+// ③ 深链契约：15 个 id 全部原样通过、未知回 null
 for (const id of allIds) {
   assert.equal(resolveSettingsSection(id, allIds), id, `深链 ${id} 原样通过`);
 }
@@ -65,8 +66,14 @@ assert.ok(view.includes("from '../user-profile'"), '用户信息走本地用户�
 assert.ok(view.includes('saveUserProfile('), '用户信息失焦/回车即存本地');
 assert.ok(view.includes("label: '用户印象'"), '用户印象（AI 智能体独立设置栏）分区上导航');
 
+// ⑤b 形象分区（2026-10-11 新增）渲染接线镜像：归外观组、分支存在、面板挂载
+assert.equal(SETTINGS_SECTION_GROUP.avatar, 'appearance', '形象归组 4 外观');
+assert.ok(view.includes("label: '形象'"), '形象分区上导航');
+assert.ok(view.includes("activeSection === 'avatar'"), '形象分区渲染分支存在');
+assert.ok(view.includes('AvatarSettingsPanel'), '形象设置面板挂载');
+
 // ⑥ 多开总高预算镜像：子导航不自滚是滚轮契约（wheel-scroll.mjs 钉 overflow: hidden），
-// 5 大行 + 14 分区页全开必须原生放得下（980×640 实测可用 500px）——行高压缩在案。
+// 5 大行 + 15 分区页全开必须原生放得下（980×640 实测可用 500px）——行高压缩在案。
 assert.ok(/\.subnav-btn[\s\S]{0,400}?padding: 3px 12px;[\s\S]{0,80}?line-height: 16px/.test(view), '分区页 22px 行高在案');
 assert.ok(/\.subnav-group-btn[\s\S]{0,400}?padding: 5px 12px; line-height: 16px/.test(view), '大类行 26px 行高在案');
 

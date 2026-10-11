@@ -8,6 +8,11 @@
 //!
 //! Response shapes follow `docs/gateway-api-contract.md` §4-§9 and mirror the
 //! desktop types in the sibling `apeireth-ui/src/lib/types.ts` workspace.
+//!
+//! 读快照语义 (W2-③ 面板一致性, 多客户端读数一致): 每个 `/v1/panel/*` 响应 =
+//! **一次快照读** —— 单个端口调用的完整结果, 绝不拼两次读 (会话列表/内存计数
+//! 不会混两个时刻的状态); 响应内各字段同出一刻, 多客户端并发读各自拿到完整
+//! 一致的快照。该语义由 `tests/multi_client_session.rs` 面板两例钉住。
 
 use std::sync::{Arc, RwLock};
 

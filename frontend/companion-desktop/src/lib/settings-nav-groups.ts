@@ -1,4 +1,4 @@
-// 设置页大类归类（两级导航）：把 14 个设置分区归入五个大类——
+// 设置页大类归类（两级导航）：把 15 个设置分区归入五个大类——
 // 侧栏只列大类，展开的大类才见其下的分区页；各分区渲染体一字不迁
 // （源码镜像测试零破坏）。
 // 组织哲学：每一组回答一个问题（它靠谁供给智能/它是谁/它能做什么/
@@ -37,8 +37,8 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   {
     id: 'appearance',
     title: '外观',
-    blurb: '它住的房间怎么布置：主题、背景与动效。',
-    sectionIds: ['appearance'],
+    blurb: '它住的房间怎么布置：主题、背景、形象与动效。',
+    sectionIds: ['appearance', 'avatar'],
   },
   {
     id: 'data',
@@ -55,7 +55,7 @@ export const SETTINGS_SECTION_GROUP: Readonly<Record<string, SettingsGroupId>> =
   ) as Record<string, SettingsGroupId>,
 );
 
-/** 深链/命令面板落区：合法分区原样通过（14 个 id 全保留，深链契约不变），未知回 null。 */
+/** 深链/命令面板落区：合法分区原样通过（15 个 id 全保留，深链契约不变），未知回 null。 */
 export function resolveSettingsSection(
   raw: string | null | undefined,
   known: readonly string[],

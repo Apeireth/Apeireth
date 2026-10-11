@@ -763,6 +763,9 @@ impl Runtime {
         let lock = self.session_locks.acquire(request.session).await;
         let _guard = lock.lock().await;
 
+        // G-P1 指标埋点: 收束段计时起点 (不含会话排队)。
+        let metrics_started = std::time::Instant::now();
+
         let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
         let request_id = RequestId::new();
         let trace_id = TraceId::new();
@@ -798,6 +801,9 @@ impl Runtime {
             // it anyway, so the state is dropped rather than retained.
             self.clear_repetition_state(observed_request.session);
         }
+        // G-P1 指标埋点: 回合收束处记一拍 (成功/失败/待批分计), 不动控制流。
+        self.metrics
+            .record_outcome(observed_request.session, metrics_started.elapsed(), &result);
         result
     }
 
@@ -1083,6 +1089,8 @@ impl Runtime {
             .unwrap_or_else(|| (RequestId::new(), TraceId::new()));
         let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
         let request = TurnRequest::new(session_id, "");
+        // G-P1 指标埋点: 续跑段计时起点 (不含人工审批等待)。
+        let metrics_started = std::time::Instant::now();
         let result = self
             .resolve_approval_locked(session_id, approval_id, decision, Arc::clone(&state))
             .await;
@@ -1106,6 +1114,9 @@ impl Runtime {
                 error: error.to_string(),
             }),
         }
+        // G-P1 指标埋点: 审批续跑再收束记一拍 (与收束事件同口径), 不动控制流。
+        self.metrics
+            .record_resolution(session_id, metrics_started.elapsed(), &result);
         result
     }
 
@@ -1709,9 +1720,11 @@ impl Runtime {
                 // 因此能把已生成文本原样交给 UI, 而不是把它丢掉。
                 continuation.served_by = Some(served_by.clone());
                 continuation.usage = response.usage.clone();
-                // 会话级 token 计量 (回合计量 usage 累加): 每轮的 usage 按
-                // `total_tokens` 累加进会话账本, 计量点即落库点。
-                self.meter_provider_usage(&mut session, &response.usage)
+                // 会话级 token / 花费计量 (回合计量 usage 累加): 每轮的 usage
+                // 按 `total_tokens` 累加进会话账本; 花费维按本轮模型单价换算
+                // (`usage × 单价`, 无价轮不计入只计数 —— 绝不编价), 计量点即
+                // 落库点。
+                self.meter_provider_usage(&mut session, &continuation.model, &response.usage)
                     .await?;
                 if !response.content.is_empty() {
                     continuation.generated_text.push_str(&response.content);
@@ -2681,16 +2694,34 @@ impl Runtime {
     /// Metering points are persist points: the spend gate's ledger is durable
     /// before any later side effect, so the self-report probe reads exact
     /// numbers and an interrupted process never loses already-spent
-    /// accounting. The usage column metered is the round's `total_tokens`.
+    /// accounting. The usage columns metered are the round's `total_tokens`
+    /// (token dimension) and, for the cost dimension, `usage × unit price` of
+    /// the round's model (the frozen [`super::quota::CostRateMicros::cost_micros`]
+    /// arithmetic). A model without a unit-price row meters **no** cost —
+    /// never invented — and the round is counted in the ledger's
+    /// `unpriced_rounds`, which marks the cost total as partial ("部分计量").
     async fn meter_provider_usage(
         &self,
         session: &mut Session,
+        model: &str,
         usage: &NormalizedUsage,
     ) -> RuntimeResult<()> {
         self.config.quota.bind_into(&mut session.quota);
         session
             .quota
             .consume_tokens(usize::try_from(usage.total_tokens).unwrap_or(usize::MAX));
+        match self
+            .config
+            .cost_rates
+            .as_ref()
+            .and_then(|rates| rates.rate_for(model))
+        {
+            Some(rate) => session.quota.consume_cost_micros(rate.cost_micros(
+                u64::from(usage.prompt_tokens),
+                u64::from(usage.completion_tokens),
+            )),
+            None => session.quota.record_unpriced_round(),
+        }
         self.sessions.save(session).await
     }
 

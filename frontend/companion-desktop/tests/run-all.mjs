@@ -61,6 +61,7 @@ const SUITES = [
   {file: 'pet-window-lifecycle.mjs', name: 'pet window lifecycle + mutual exclusion (source mirror)'},
   {file: 'pet-character-mapping.mjs', name: 'pet character mapping (viseme/glance/blink discipline, real module)', strip: true},
   {file: 'pet-user-avatar.mjs', name: 'pet user avatar port (format gate / disclaimer discipline, real module)', strip: true},
+  {file: 'pet-idle-behavior.mjs', name: 'pet idle micro-motion (amplitude cap / stretch window / doze ramp, real module)', strip: true},
   {file: 'self-tuning-mapping.mjs', name: 'self-tuning knob mapping (real module)', strip: true},
   {file: 'file-write-toggle.mjs', name: 'controlled file-write toggle mapping (real module)', strip: true},
   {file: 'provider-transport.mjs', name: 'provider transport selection (invoke vs fetch, real module)', strip: true},
@@ -88,6 +89,11 @@ const SUITES = [
   {file: 'starport-notes.mjs', name: 'starport notes (CRUD / pinned ordering / strict validation / persistence round-trip, real modules)', strip: true},
   {file: 'starport-text-editor.mjs', name: 'starport text editor (session CRUD / expected-checked replace / find hit table / mount-cleanup chain, real modules)', strip: true},
   {file: 'starport-doc-pipeline.mjs', name: 'starport doc pipeline (source-preserving segments / range transaction / segment integrity, real modules)', strip: true},
+  {file: 'starport-mail.mjs', name: 'starport mail (eml round-trip / header-injection guard / status machine / mailbox, real module)', strip: true},
+  {file: 'starport-memory-flow.mjs', name: 'starport memory flow (observation ledger / daily-window compression / term recall ranking / dispatch content, real module)', strip: true},
+  {file: 'starport-voice.mjs', name: 'starport voice (state machine full table / level math / voice ledger / duration format, real modules)', strip: true},
+  {file: 'starport-db.mjs', name: 'starport db (read-only sql gate / csv escaping / boundary rejection, real module)', strip: true},
+  {file: 'starport-folder-tiles.mjs', name: 'starport folder tiles (group CRUD / deterministic ordering / listing mapping, real module)', strip: true},
   {file: 'starport-face-apps.mjs', name: 'starport face apps source mirror (browse gate wiring / real model channel / factory+installer wiring)'},
 ];
 

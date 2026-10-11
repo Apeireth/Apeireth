@@ -19,6 +19,8 @@
 /RELEASE_NOTES.md          @chuling
 /CODEOWNERS                @chuling
 /CONTRIBUTING.md           @chuling
+/CODE_OF_CONDUCT.md        @chuling   # 社区: 行为准则
+/GOVERNANCE.md             @chuling   # 社区: 治理章程
 /SECURITY.md               @chuling
 /INSTALL.md                @chuling
 /Cargo.toml                @chuling
@@ -38,6 +40,7 @@
 # 02-guides: 用户/开发指南
 /docs/02-guides/quick-start.md                  @chuling
 /docs/02-guides/development.md                  @chuling
+/docs/02-guides/first-contribution.md           @chuling   # 社区: 新人上手指南
 /docs/02-guides/deployment.md                   @chuling
 /docs/02-guides/user-manual.md                  @chuling
 /docs/02-guides/frontend-data-contract.md       @chuling   # v1 契约, 标历史
@@ -53,6 +56,9 @@
 /docs/development/repository-layout.md         @chuling
 /docs/development/adding-a-module.md            @chuling
 /docs/development/legacy-port-backlog.md        @chuling
+/docs/development/rfc-process.md                @chuling   # 社区: RFC 流程
+/docs/development/api-stability.md              @chuling   # 社区: 稳定性分级
+/docs/development/community-ops.md              @chuling   # 社区: 生态运营手册
 
 # 04-internal: 内部工作文档（设计意图 + 台账 + 团队）
 /docs/04-internal/design-intent.md              @chuling   # 🔒 思想层 + §1 机制映射（活跃维护）

@@ -185,8 +185,9 @@ fn spawns_real_backend_and_reaches_ready() {
 /// Settings-UI provider configuration must reach the real child's environment:
 /// applying an OpenAI-compatible env restarts the backend, and the restarted
 /// gateway then lists the injected model (model registration reads
-/// `APEIRETH_OPENAI_MODELS`, no auth needed at list time). Re-applying the same
-/// env is a no-op that must not restart again.
+/// `APEIRETH_OPENAI_MODELS`; the list probe presents the loopback token — the
+/// token gate covers the whole API face). Re-applying the same env is a no-op
+/// that must not restart again.
 #[test]
 fn provider_env_reaches_the_backend() {
     if !backend_available() {
@@ -220,7 +221,16 @@ fn provider_env_reaches_the_backend() {
             info.port
         );
 
-        let models = reqwest::get(format!("{endpoint}/v1/models"))
+        // 令牌门覆盖全 API 面 (仅 /health 豁免): 注册表读取同样过门,
+        // 带本壳自铸的回环令牌请求 (与桌面 UI 同一面)。
+        let token = supervisor
+            .gateway_access_token()
+            .await
+            .expect("a spawned sidecar must carry a loopback access token");
+        let models = reqwest::Client::new()
+            .get(format!("{endpoint}/v1/models"))
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
             .await
             .expect("models request")
             .text()
@@ -250,9 +260,10 @@ fn provider_env_reaches_the_backend() {
 /// Advanced-capability toggles reach the real child the same way: enabling
 /// shell via `apply_backend_config` restarts the backend and the restarted
 /// gateway then serves `tool.shell` in `/v1/tools/list` (registration reads
-/// `APEIRETH_ENABLE_SHELL`, no auth needed at list time). The combined call
-/// with an unchanged provider must still restart exactly once, proving the
-/// single-restart contract.
+/// `APEIRETH_ENABLE_SHELL`; the list probe presents the loopback token — the
+/// token gate covers the whole API face). The combined call with an unchanged
+/// provider must still restart exactly once, proving the single-restart
+/// contract.
 #[test]
 fn capability_env_reaches_the_backend() {
     if !backend_available() {
@@ -278,7 +289,16 @@ fn capability_env_reaches_the_backend() {
         assert_eq!(info.restart_count, 1, "changed capabilities restart exactly once");
         let endpoint = info.endpoint.clone().expect("endpoint after restart");
 
-        let tools = reqwest::get(format!("{endpoint}/v1/tools/list"))
+        // 令牌门覆盖全 API 面 (仅 /health 豁免): 注册表读取同样过门,
+        // 带本壳自铸的回环令牌请求 (与桌面 UI 同一面)。
+        let token = supervisor
+            .gateway_access_token()
+            .await
+            .expect("a spawned sidecar must carry a loopback access token");
+        let tools = reqwest::Client::new()
+            .get(format!("{endpoint}/v1/tools/list"))
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
             .await
             .expect("tools request")
             .text()

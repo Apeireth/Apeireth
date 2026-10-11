@@ -101,7 +101,12 @@ jobs:
           - kani_executed_monotonic_once
           - kani_crash_recovery_invariant_c
           # ---- 性质族 1: panic-freedom ----
-          - kani_panic_free_fold_block_string_pipeline
+          # fold 管线 2026-10-11 拆三函数级 (K16): 全管线合一会让每处切片的
+          # panic 路径各拖一整套格式化机器 (slice_index_fail 周围 memchr 数千
+          # 次展开, 常量输入也 25m+ 不落地)。
+          - kani_panic_free_fold_markers
+          - kani_panic_free_fold_parse
+          - kani_panic_free_fold_render
           - kani_panic_free_residual_pyramid_analyze
           - kani_panic_free_semantic_axis_fit_project
           - kani_panic_free_river_measure_omega

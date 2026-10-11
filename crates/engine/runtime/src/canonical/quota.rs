@@ -3,18 +3,22 @@
 //!
 //! # What is metered
 //!
-//! Two dimensions are metered this batch:
+//! Three dimensions are metered:
 //!
 //! * **tokens** — the sum of per-round usage metering (`usage.total_tokens` of
 //!   every provider response), accumulated on the session's ledger;
-//! * **tool steps** — one step per dispatched tool call.
+//! * **tool steps** — one step per dispatched tool call;
+//! * **cost** — every provider round's usage converted to micro-units at the
+//!   round model's unit price (the frozen [`CostRateMicros::cost_micros`]
+//!   arithmetic, looked up through a [`CostRateTable`]) and accumulated on the
+//!   ledger's cost column. A round whose model carries no unit price converts
+//!   to `None`: it is **not** counted (nothing is ever invented) and lands in
+//!   the ledger's `unpriced_rounds` counter instead, so a non-zero count marks
+//!   the cost total as "部分计量" (partial coverage, honestly annotated in the
+//!   self-report).
 //!
-//! The other two dimensions of the four-dimension quota design are honestly
-//! *not* wired: **cost** now has a unit-price table source (the model-profile
-//! table, see [`CostRateTable`]) but the execution metering points do not yet
-//! record `usage × price`, so the dimension stays un-metered until a rate
-//! table is installed there (a separate batch), and **depth** has no
-//! call-tree tracking. Nothing pretends otherwise.
+//! The fourth dimension of the four-dimension quota design is honestly *not*
+//! wired: **depth** has no call-tree tracking. Nothing pretends otherwise.
 //!
 //! # Opt-in limits
 //!
@@ -45,6 +49,10 @@ pub enum QuotaDimension {
     Tokens,
     /// Dispatched tool calls.
     ToolSteps,
+    /// Cost converted from usage at the round model's unit price. Rounds
+    /// without a unit price are not converted (never invented) and mark the
+    /// total as partial.
+    CostMicros,
 }
 
 impl QuotaDimension {
@@ -53,6 +61,7 @@ impl QuotaDimension {
         match self {
             Self::Tokens => "tokens",
             Self::ToolSteps => "tool_steps",
+            Self::CostMicros => "cost_micros",
         }
     }
 }
@@ -75,6 +84,13 @@ pub const MAX_QUOTA_TOKENS: u64 = u32::MAX as u64;
 /// budget any more, and the metering column could not express it either.
 pub const MAX_QUOTA_TOOL_STEPS: u64 = u32::MAX as u64;
 
+/// Largest session cost quota a configuration value is clamped to.
+///
+/// 家族钳制锚点与 [`MAX_QUOTA_TOKENS`] / [`MAX_QUOTA_TOOL_STEPS`] 同口径
+/// (u32::MAX 微单位): 单价以微单位计, 这个量级的单会话花费上限已经不是
+/// 一份真实预算而是数值噪音; 越界值钳到锚点, 不发明更高的"预算"。
+pub const MAX_QUOTA_COST_MICROS: u64 = u32::MAX as u64;
+
 /// Resolve the session token quota from a raw configuration value.
 ///
 /// Quota knobs are opt-in, so the fallback is *no limit*: an absent, empty,
@@ -91,6 +107,16 @@ pub fn parse_quota_max_tokens(raw: Option<&str>) -> Option<u64> {
 /// unlimited.
 pub fn parse_quota_max_tool_steps(raw: Option<&str>) -> Option<u64> {
     parse_quota_ceiling(raw, MAX_QUOTA_TOOL_STEPS)
+}
+
+/// Resolve the session cost quota (micro-units) from a raw configuration
+/// value.
+///
+/// Same contract as [`parse_quota_max_tokens`]: positive integers pass
+/// through (clamped to [`MAX_QUOTA_COST_MICROS`]); anything else is `None` =
+/// unlimited.
+pub fn parse_quota_max_cost_micros(raw: Option<&str>) -> Option<u64> {
+    parse_quota_ceiling(raw, MAX_QUOTA_COST_MICROS)
 }
 
 fn parse_quota_ceiling(raw: Option<&str>, ceiling: u64) -> Option<u64> {
@@ -113,14 +139,17 @@ pub struct SessionQuotaLimits {
     pub max_tokens: Option<u64>,
     /// Session-wide dispatched-tool-call ceiling. `None` = no limit.
     pub max_tool_steps: Option<u64>,
+    /// Session-wide converted-cost ceiling, in micro-units. `None` = no limit.
+    pub max_cost_micros: Option<u64>,
 }
 
 impl SessionQuotaLimits {
-    /// A quota with both dimensions unlimited (the default: opt-in).
+    /// A quota with all dimensions unlimited (the default: opt-in).
     pub const fn unlimited() -> Self {
         Self {
             max_tokens: None,
             max_tool_steps: None,
+            max_cost_micros: None,
         }
     }
 
@@ -129,9 +158,9 @@ impl SessionQuotaLimits {
     /// An unlimited dimension receives the ledger's unreachable ceiling
     /// ([`CognitiveQuota::unlimited`]), so `CognitiveQuota::is_exhausted`
     /// agrees with [`SessionQuotaLimits::check`] by construction. The cost
-    /// dimension is not metered (the unit-price source exists but no metering
-    /// point records `usage × price` yet), so its
-    /// ceiling stays unreachable too.
+    /// ceiling binds the metered cost column: it can only ever bind on the
+    /// *priced* part of the spend, because unpriced rounds are never converted
+    /// into the cost column (never invented).
     pub fn bind_into(&self, meter: &mut CognitiveQuota) {
         meter.max_tokens = self
             .max_tokens
@@ -141,14 +170,18 @@ impl SessionQuotaLimits {
             .max_tool_steps
             .map(|value| value.min(MAX_QUOTA_TOOL_STEPS) as usize)
             .unwrap_or(usize::MAX);
-        meter.max_cost_micros = u64::MAX;
+        meter.max_cost_micros = self
+            .max_cost_micros
+            .map(|value| value.min(MAX_QUOTA_COST_MICROS))
+            .unwrap_or(u64::MAX);
     }
 
     /// Bind the live ceilings, then report the exhausted dimension.
     ///
     /// `consumed >= limit` is exhausted — the same reading as
     /// [`CognitiveQuota::is_exhausted`]. Tokens are checked first, then tool
-    /// steps, so a frame always names the same dimension for the same ledger.
+    /// steps, then cost, so a frame always names the same dimension for the
+    /// same ledger.
     pub fn check(&self, meter: &mut CognitiveQuota) -> Option<QuotaExceeded> {
         self.bind_into(meter);
         if meter.consumed_tokens >= meter.max_tokens {
@@ -163,6 +196,13 @@ impl SessionQuotaLimits {
                 dimension: QuotaDimension::ToolSteps,
                 limit: meter.max_tool_steps as u64,
                 consumed: meter.consumed_tool_steps as u64,
+            });
+        }
+        if meter.consumed_cost_micros >= meter.max_cost_micros {
+            return Some(QuotaExceeded {
+                dimension: QuotaDimension::CostMicros,
+                limit: meter.max_cost_micros,
+                consumed: meter.consumed_cost_micros,
             });
         }
         None
@@ -207,11 +247,11 @@ impl QuotaExhaustedAction {
 
 /// One model's unit price: micro-units of cost per 1 000 tokens.
 ///
-/// The cost dimension of the quota is still honestly *un-metered*: the
-/// unit-price source exists (the model-profile table implements
-/// [`CostRateTable`]) but the execution metering points do not record
-/// `usage × price` yet. Installing that recording is what would enable the
-/// dimension; until then the self-report says "暂无接口".
+/// This is the frozen conversion the round metering point calls (see
+/// [`CostRateMicros::cost_micros`]): `usage × unit price` per provider round,
+/// accumulated on the session ledger's cost column. A model without a rate is
+/// never converted — never invented — and its rounds are counted as unpriced
+/// instead (see [`CognitiveQuota::unpriced_rounds`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CostRateMicros {
     /// Cost of 1 000 input tokens, in micro-units.
@@ -226,7 +266,7 @@ impl CostRateMicros {
     ///
     /// Rounding is per-side ceil over 1 000 tokens (保守口径: 永不低估花费),
     /// saturating at `u64::MAX`. This is the frozen arithmetic the cost
-    /// metering points will call when the dimension is installed.
+    /// metering point calls (A-P2 起回合计量处按此换算记账).
     pub fn cost_micros(&self, input_tokens: u64, output_tokens: u64) -> u64 {
         ceil_micros(input_tokens, self.input_micros_per_1k_tokens)
             .saturating_add(ceil_micros(output_tokens, self.output_micros_per_1k_tokens))
@@ -243,11 +283,12 @@ fn ceil_micros(tokens: u64, micros_per_1k: u64) -> u64 {
 /// The unit-price table lookup: model id to unit price.
 ///
 /// The install point for the cost dimension (see [`CostRateMicros`]): the
-/// execution metering points accept no price source yet, and installing one
-/// (plus `usage × price` recording) is the documented path to enabling the
-/// cost dimension. The model-profile table is the production source of these
-/// rows (see the [`CostRateTable`] impl for [`ModelProfileTable`]).
-pub trait CostRateTable: Send + Sync {
+/// runtime's round metering point takes one of these and converts every priced
+/// round onto the session ledger. `None` = that model has no complete price
+/// row, so its rounds are counted unpriced (never invented). The model-profile
+/// table is the production source of these rows (see the [`CostRateTable`]
+/// impl for [`ModelProfileTable`]).
+pub trait CostRateTable: Send + Sync + fmt::Debug {
     /// The unit price for `model`, or `None` when the table has no row (the
     /// cost dimension then cannot be metered for that model).
     fn rate_for(&self, model: &str) -> Option<CostRateMicros>;
@@ -327,21 +368,55 @@ mod tests {
     }
 
     #[test]
+    fn cost_quota_parsing_covers_the_four_family_states() {
+        // ① 正整数直通 (含空白剥除)。
+        assert_eq!(parse_quota_max_cost_micros(Some("5000")), Some(5_000));
+        assert_eq!(parse_quota_max_cost_micros(Some("  42  ")), Some(42));
+        assert_eq!(parse_quota_max_cost_micros(Some("1")), Some(1));
+        // ② 越界钳制到家族锚点 (钳制, 不发明更高预算)。
+        assert_eq!(
+            parse_quota_max_cost_micros(Some("99999999999999")),
+            Some(MAX_QUOTA_COST_MICROS),
+            "above the ceiling the value clamps, it is not invented"
+        );
+        // ③ 0 / 负数 / 非法 = None (0 非法, 不是"零预算")。
+        for raw in ["0", "-3", "abc", "2.5", "99999999999999999999999"] {
+            assert_eq!(
+                parse_quota_max_cost_micros(Some(raw)),
+                None,
+                "cost quota must read {raw:?} as unlimited (0/illegal)"
+            );
+        }
+        // ④ 未设 / 空 = 不设限 (opt-in 默认)。
+        assert_eq!(parse_quota_max_cost_micros(None), None);
+        assert_eq!(parse_quota_max_cost_micros(Some("")), None);
+        assert_eq!(parse_quota_max_cost_micros(Some("   ")), None);
+    }
+
+    #[test]
     fn unlimited_defaults_never_bind_a_ledger() {
         let limits = SessionQuotaLimits::default();
         assert_eq!(limits, SessionQuotaLimits::unlimited());
         assert_eq!(limits.max_tokens, None);
         assert_eq!(limits.max_tool_steps, None);
+        assert_eq!(limits.max_cost_micros, None);
 
         let mut meter = CognitiveQuota::default();
         meter.consume_tokens(1_000_000);
         meter.consume_tool_step();
+        meter.consume_cost_micros(u64::MAX / 2);
+        meter.record_unpriced_round();
         assert_eq!(
             limits.check(&mut meter),
             None,
             "no ceiling is configured: nothing ever trips"
         );
         assert_eq!(meter.consumed_tokens, 1_000_000, "metering still runs");
+        assert_eq!(
+            meter.consumed_cost_micros,
+            u64::MAX / 2,
+            "花费维照计量, 只是不设限"
+        );
     }
 
     #[test]
@@ -349,6 +424,7 @@ mod tests {
         let limits = SessionQuotaLimits {
             max_tokens: Some(100),
             max_tool_steps: Some(2),
+            max_cost_micros: None,
         };
         let mut meter = CognitiveQuota::default();
         meter.consume_tokens(60);
@@ -380,6 +456,7 @@ mod tests {
     fn the_dimension_names_stay_stable_for_frames_and_reports() {
         assert_eq!(QuotaDimension::Tokens.as_str(), "tokens");
         assert_eq!(QuotaDimension::ToolSteps.as_str(), "tool_steps");
+        assert_eq!(QuotaDimension::CostMicros.as_str(), "cost_micros");
         assert_eq!(QuotaDimension::Tokens.to_string(), "tokens");
     }
 
@@ -391,15 +468,17 @@ mod tests {
     }
 
     #[test]
-    fn the_cost_dimension_is_an_explicitly_unwired_price_table_skeleton() {
-        // 单价表安装点合同: trait + type 是花费维的接线缝 (H-P1 起画像表来源
-        // 已实现, 计量点仍未装表); 装表 + 记账才启用花费维。
+    fn the_cost_rate_table_seam_yields_prices_only_for_priced_rows() {
+        // 单价表安装点合同: trait + type 是花费维的价格来源缝 (H-P1 起画像表
+        // 来源已实现, A-P2 起计量点装表记账); 无价/缺半价回 None —— 绝不编价。
+        #[derive(Debug)]
         struct EmptyTable;
         impl CostRateTable for EmptyTable {
             fn rate_for(&self, _model: &str) -> Option<CostRateMicros> {
                 None
             }
         }
+        #[derive(Debug)]
         struct OneRowTable(CostRateMicros);
         impl CostRateTable for OneRowTable {
             fn rate_for(&self, model: &str) -> Option<CostRateMicros> {
@@ -416,10 +495,15 @@ mod tests {
         assert_eq!(table.rate_for("model-b"), None, "no row, no metering");
         assert_eq!(EmptyTable.rate_for("model-a"), None);
 
-        // 未接线是显式事实: 账本的成本维上限恒不可达 (不计量)。
+        // A-P2 起成本维上限随配置真绑定 (不再恒不可达)。
         let mut meter = CognitiveQuota::default();
-        SessionQuotaLimits::default().bind_into(&mut meter);
-        assert_eq!(meter.max_cost_micros, u64::MAX);
+        SessionQuotaLimits {
+            max_tokens: None,
+            max_tool_steps: None,
+            max_cost_micros: Some(5_000),
+        }
+        .bind_into(&mut meter);
+        assert_eq!(meter.max_cost_micros, 5_000);
     }
 
     #[test]
@@ -453,26 +537,107 @@ mod tests {
     }
 
     #[test]
-    fn the_cost_dimension_stays_explicitly_unwired_while_only_the_price_source_exists() {
-        // 显式未接线钉死: 单价表来源就绪 (画像表) ≠ 花费维已计量 —— 上限恒
-        // 不可达, 检查点不产出花费维的超限事实; 记账接线是后续批次的活。
-        let table = ModelProfileTable::from_json_value(serde_json::json!([
-            {"model_id": "priced", "input_price_micros": 2_000, "output_price_micros": 8_000}
-        ]))
-        .expect("profile table");
-        assert!(table.rate_for("priced").is_some(), "来源就绪");
-
+    fn a_priced_round_lands_in_the_cost_column_and_the_ceiling_binds_on_real_numbers() {
+        // 花费维接线 (A-P2) 演进自「显式未接线」钉死 (演进理由: 计量点已装表
+        // 记账): 有价轮累计真数字, 上限按 `consumed >= limit` 出超限事实,
+        // 与 tokens/steps 完全同语义 (口径唯一)。
+        let rate = CostRateMicros {
+            input_micros_per_1k_tokens: 2_000,
+            output_micros_per_1k_tokens: 8_000,
+        };
+        let limits = SessionQuotaLimits {
+            max_tokens: None,
+            max_tool_steps: None,
+            max_cost_micros: Some(7_000),
+        };
         let mut meter = CognitiveQuota::default();
-        meter.consume_tokens(1);
+        // 有价轮换算 (每侧向上取整): 1.5k 输入 × 2 + 0.5k 输出 × 8 = 7000。
+        meter.consume_cost_micros(rate.cost_micros(1_500, 500));
+        assert_eq!(meter.consumed_cost_micros, 7_000);
+        let exceeded = limits.check(&mut meter).expect("花费维到顶即出超限事实");
         assert_eq!(
-            SessionQuotaLimits::default().check(&mut meter),
-            None,
-            "花费维不产出超限事实 (未计量)"
+            exceeded,
+            QuotaExceeded {
+                dimension: QuotaDimension::CostMicros,
+                limit: 7_000,
+                consumed: 7_000,
+            }
         );
-        assert_eq!(meter.max_cost_micros, u64::MAX, "上限恒不可达");
+        assert!(meter.is_exhausted(), "口径唯一: same reading");
+
+        // 预算内不绑: 同一轮口径下的下半段。
+        let mut within = CognitiveQuota::default();
+        within.consume_cost_micros(rate.cost_micros(1_500, 499));
+        assert_eq!(within.consumed_cost_micros, 6_992);
+        assert_eq!(limits.check(&mut within), None);
+        assert!(!within.is_exhausted(), "口径唯一: same reading");
+    }
+
+    #[test]
+    fn unpriced_rounds_never_enter_the_cost_column_and_mark_the_total_partial() {
+        // 绝不编价: 无价轮 cost=None 不计入成本列, 只计轮数 (部分计量标注的
+        // 数据来源); 也不会伪造超限事实。
+        let limits = SessionQuotaLimits {
+            max_tokens: None,
+            max_tool_steps: None,
+            max_cost_micros: Some(1),
+        };
+        let mut meter = CognitiveQuota::default();
+        meter.record_unpriced_round();
+        meter.record_unpriced_round();
+        meter.consume_cost_micros(2);
+        meter.record_unpriced_round();
+        assert_eq!(meter.consumed_cost_micros, 2, "无价轮不计入 (绝不编价)");
+        assert_eq!(meter.unpriced_rounds, 3, "无价轮数如实计数 (部分计量)");
+        let exceeded = limits.check(&mut meter).expect("有价花费绑上限");
+        assert_eq!(exceeded.dimension, QuotaDimension::CostMicros);
+        assert_eq!(exceeded.consumed, 2, "已耗只有有价部分的真数字");
+
+        // 只有无价轮的会话: 0 花费, 不伪造超限。
+        let mut unpriced_only = CognitiveQuota::default();
+        unpriced_only.record_unpriced_round();
+        assert_eq!(limits.check(&mut unpriced_only), None);
+    }
+
+    #[test]
+    fn the_three_metered_dimensions_accumulate_and_bind_independently() {
+        // 互不干扰: 各维只累计自己的列, 超限事实只出自己的维度名。
+        let mut meter = CognitiveQuota::default();
+        meter.consume_tokens(10);
+        meter.consume_cost_micros(7_000);
+        meter.consume_tool_step();
+        meter.consume_cost_micros(2);
+        meter.record_unpriced_round();
+        assert_eq!(meter.consumed_tokens, 10);
+        assert_eq!(meter.consumed_tool_steps, 1);
+        assert_eq!(meter.consumed_cost_micros, 7_002);
+        assert_eq!(meter.unpriced_rounds, 1);
+
+        let cost_only = SessionQuotaLimits {
+            max_tokens: None,
+            max_tool_steps: None,
+            max_cost_micros: Some(1),
+        };
         assert_eq!(
-            meter.consumed_cost_micros, 0,
-            "没有计量点写花费列 (显式未接线, 不是假计量)"
+            cost_only.check(&mut meter).map(|fact| fact.dimension),
+            Some(QuotaDimension::CostMicros),
+            "只有花费维绑"
+        );
+
+        let mut tokens_only = CognitiveQuota::default();
+        tokens_only.consume_tokens(5);
+        tokens_only.consume_cost_micros(7_002);
+        let token_limits = SessionQuotaLimits {
+            max_tokens: Some(5),
+            max_tool_steps: None,
+            max_cost_micros: None,
+        };
+        assert_eq!(
+            token_limits
+                .check(&mut tokens_only)
+                .map(|fact| fact.dimension),
+            Some(QuotaDimension::Tokens),
+            "花费累计不牵连 token 维"
         );
     }
 }

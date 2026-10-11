@@ -36,7 +36,9 @@ use sha2::{Digest, Sha256};
 /// - 执行面: `tool.shell` / `tool.process` / `tool.supervisor` /
 ///   `tool.std_sub_supervisor` / `tool.mcp*` (动态能力);
 /// - 受控写: `tool.filesystem` (workspace 边界内的读写, 仍是写) /
-///   `tool.apply_patch` (补丁式受控写文件, 创建/修改/删除都算写);
+///   `tool.apply_patch` (补丁式受控写文件, 创建/修改/删除都算写) /
+///   `tool.worktree_apply` (四拍受控工作树写, 改单落盘仍是写;
+///   `tool.worktree_plan` 是只读改单面, 不入本名单);
 /// - 出口: `tool.fetch` / `tool.repo` (remote 读发布) —— 只读会话不应外联;
 /// - 凭据: `credential.read` / `secret.read` / `env.read` (环境变量含 secret);
 /// - 删除: `fs.delete`;
@@ -53,6 +55,7 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         "tool.filesystem",
         "tool.apply_patch",
         "tool.git_write",
+        "tool.worktree_apply",
         "fs.write",
         // 出口 / 远端副作用
         "tool.fetch",
@@ -542,7 +545,11 @@ mod tests {
     }
 
     /// M2 回归: `read_only` 预设的执法面必须覆盖出口/凭据/删除类能力 —— 名单
-    /// 缺一项, "只读" 会话就能静默执行该能力。    #[test]
+    /// 缺一项, "只读" 会话就能静默执行该能力。
+    ///
+    /// 债清 (D-P2 进场发现): 本测试的 `#[test]` 属性曾被并入上一行行尾注释而
+    /// 静默失效 (陈旧断言 —— 挂名不跑), 现恢复挂测并钉 D-P2 新面。
+    #[test]
     fn read_only_preset_covers_egress_credential_and_delete_exits() {
         for id in [
             // 执行面 (原名单)
@@ -555,6 +562,7 @@ mod tests {
             "tool.filesystem",
             "tool.apply_patch",
             "tool.git_write",
+            "tool.worktree_apply",
             "fs.write",
             // 出口 / 远端副作用
             "tool.fetch",
@@ -574,8 +582,14 @@ mod tests {
                 "{id} must be refused under the read_only preset"
             );
         }
-        // 纯读能力不受影响。
-        for id in ["tool.search", "tool.education", "fs.read", "unknown.reader"] {
+        // 纯读能力不受影响 (worktree_plan 是只读改单面, 计划不落盘)。
+        for id in [
+            "tool.search",
+            "tool.education",
+            "tool.worktree_plan",
+            "fs.read",
+            "unknown.reader",
+        ] {
             assert!(
                 !is_write_or_execute_capability(&CapabilityId::new(id).unwrap()),
                 "{id} is a read capability and must stay allowed"
@@ -607,7 +621,13 @@ mod tests {
         save_session(&store, session, PermissionPreset::ReadOnly, false).await;
         let args = serde_json::json!({});
 
-        for id in ["tool.fetch", "http.send", "credential.read", "fs.delete"] {
+        for id in [
+            "tool.fetch",
+            "http.send",
+            "credential.read",
+            "fs.delete",
+            "tool.worktree_apply",
+        ] {
             let capability = CapabilityId::new(id).unwrap();
             let verdict = hook
                 .evaluate_verbose(&dispatch_request(session, &capability, &args))
@@ -619,5 +639,86 @@ mod tests {
             );
             assert_eq!(verdict.hook, "permission_preset");
         }
+    }
+
+    /// D-P2 (行为面): `tool.worktree_apply` 的审批级语义按预设逐档钉死 ——
+    /// read_only 拒 / standard 审批 (RequireApproval, 理由载荷 = 改单摘要:
+    /// 文件数 / 动作分布 / 验证命令) / full 按预设语义放行 (本工具无审批地板)。
+    /// 计划面 `tool.worktree_plan` 是只读能力, read_only 下照常可用。
+    #[tokio::test]
+    async fn worktree_apply_approval_tier_matches_each_permission_preset() {
+        let inner: Arc<dyn GovernanceHook> = Arc::new(
+            apeireth_tools_canonical::WorktreeApplyApprovalHook::new(std::env::temp_dir()),
+        );
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let hook = PermissionPresetGovernanceHook::new(inner, store.clone());
+        let session = SessionId::new();
+        let apply = CapabilityId::new("tool.worktree_apply").unwrap();
+        let arguments = serde_json::json!({
+            "plan": {
+                "goal": "demo objective",
+                "files": [
+                    { "path": "a.txt", "action": "update", "expect": "updated body" }
+                ]
+            },
+            "patch": "*** Begin Patch\n*** Update File: a.txt\n@@\n-old\n+new\n*** End Patch",
+            "verify": [ { "program": "cargo", "args": ["--version"] } ]
+        });
+
+        // read_only: 预设显式拒 (写能力名单覆盖)。
+        save_session(&store, session, PermissionPreset::ReadOnly, false).await;
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &apply, &arguments))
+            .await;
+        assert!(
+            matches!(verdict.decision, Decision::Deny { .. }),
+            "read_only must refuse tool.worktree_apply, got {:?}",
+            verdict.decision
+        );
+        assert_eq!(verdict.hook, "permission_preset");
+
+        // standard: 审批级 (RequireApproval), 载荷带改单摘要。
+        save_session(&store, session, PermissionPreset::Standard, false).await;
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &apply, &arguments))
+            .await;
+        let Decision::RequireApproval { reason } = &verdict.decision else {
+            panic!(
+                "standard must keep tool.worktree_apply at require-approval, got {:?}",
+                verdict.decision
+            );
+        };
+        assert!(reason.contains("文件 1"), "审批卡载荷缺文件数: {reason}");
+        assert!(
+            reason.contains("add 0/update 1/delete 0"),
+            "审批卡载荷缺动作分布: {reason}"
+        );
+        assert!(
+            reason.contains("验证命令 1 条") && reason.contains("cargo --version"),
+            "审批卡载荷缺验证命令: {reason}"
+        );
+
+        // full: 按预设语义 (RequireApproval→Allow 改写; 本工具无审批地板)。
+        save_session(&store, session, PermissionPreset::Full, false).await;
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &apply, &arguments))
+            .await;
+        assert!(
+            verdict.decision.is_allowed(),
+            "full preset follows preset semantics for tool.worktree_apply, got {:?}",
+            verdict.decision
+        );
+
+        // 计划面: 只读改单不入写能力名单, read_only 下照常。
+        let plan = CapabilityId::new("tool.worktree_plan").unwrap();
+        save_session(&store, session, PermissionPreset::ReadOnly, false).await;
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &plan, &serde_json::json!({})))
+            .await;
+        assert!(
+            verdict.decision.is_allowed(),
+            "tool.worktree_plan is read-only and must stay allowed under read_only, got {:?}",
+            verdict.decision
+        );
     }
 }
