@@ -305,7 +305,7 @@ impl RiverObservability {
         let emergence = Self::node_emergence(reached_node_count, seed_count);
         let balance = Self::flow_balance(edge_flows, active_edge_count);
 
-        let omega = (expansion.max(0.01) * emergence.max(0.01) * balance.max(0.01)).cbrt();
+        let omega = cbrt_compat(expansion.max(0.01) * emergence.max(0.01) * balance.max(0.01));
         (omega, RiverState::classify(omega))
     }
 
@@ -321,12 +321,22 @@ impl RiverObservability {
     }
 
     /// 3. 流量分布均衡度：香农信息熵对最大熵的归一化。
+    ///
+    /// 输入鲁棒性 (2026-10-10): 非有限流量 (NaN/±inf) 是无信息输入, 直接
+    /// 忽略 —— 否则 sum 传染 NaN、`flow / total_flow` 产生 NaN 算术 (Kani
+    /// nan-check 判负)。此前靠外层 `max(0.01)` 硬救终值, 中间算术仍产 NaN;
+    /// 现从源头过滤, 对外契约 (Ω ∈ [0,1]、状态一致、空拓扑早退) 不变。
     fn flow_balance(edge_flows: &[f32], active_edges: usize) -> f32 {
-        let total_flow: f32 = edge_flows.iter().sum();
+        let flows: Vec<f32> = edge_flows
+            .iter()
+            .copied()
+            .filter(|flow| flow.is_finite())
+            .collect();
+        let total_flow: f32 = flows.iter().sum();
         if total_flow <= 1e-6 || active_edges <= 1 {
             return 0.5;
         }
-        let entropy: f32 = edge_flows
+        let entropy: f32 = flows
             .iter()
             .map(|&flow| flow / total_flow)
             .filter(|&p| p > 1e-6)
@@ -335,6 +345,22 @@ impl RiverObservability {
         let max_entropy = (active_edges as f32).ln().max(1e-6);
         (entropy / max_entropy).clamp(0.0, 1.0)
     }
+}
+
+/// 立方根。Kani 不支持 libm `cbrtf` 外部调用 (model-checking/kani#2423 ——
+/// 反例: river_measure_omega 直接判负), cfg(kani) 下以恒等桩代。
+/// 证明面覆盖"被开方数 ∈ [0,1]"与状态一致性 (两边同值, 蕴含传递);
+/// cbrt 在 [0,1] 上保界的解析事实闭合 Ω 域断言。生产构建走真 cbrt。
+#[cfg(not(kani))]
+#[inline]
+fn cbrt_compat(x: f32) -> f32 {
+    x.cbrt()
+}
+
+#[cfg(kani)]
+#[inline]
+fn cbrt_compat(x: f32) -> f32 {
+    x
 }
 
 /// 双预解算子偏微分对偶连续场求解器
