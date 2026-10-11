@@ -523,6 +523,78 @@ async fn a_presence_that_expired_between_verifying_and_dialing_is_refused() {
 }
 
 #[tokio::test]
+async fn a_punch_with_no_answering_peer_fails_inside_its_window_and_leaves_nothing() {
+    let identity_a = Arc::new(NodeIdentity::generate().unwrap());
+    let identity_b = Arc::new(NodeIdentity::generate().unwrap());
+    let node_b_id = apeireth_mesh::NodeId::new("node-b").unwrap();
+
+    let (node_a, _) = node_with_echo(
+        "node-a",
+        TrustPolicy::new().with_trusted_pinned(
+            node_b_id.clone(),
+            "127.0.0.1:1",
+            identity_b.fingerprint().clone(),
+        ),
+    )
+    .await;
+    let a_peer = Arc::new(
+        QuicPeerEndpoint::bind(
+            "127.0.0.1:0".parse().unwrap(),
+            Arc::clone(&identity_a),
+            &[identity_b.fingerprint().clone()],
+            QuicTransportConfig::default(),
+        )
+        .unwrap(),
+    );
+
+    // A signed, verified, dialable presence for a peer that is simply not
+    // there: the candidate is a loopback address with no listener.
+    let silence = presence_for(
+        &identity_b,
+        &node_b_id,
+        22,
+        600_000,
+        "127.0.0.1:1".parse().unwrap(),
+    );
+
+    let started = std::time::Instant::now();
+    let error = node_a
+        .connect_punched(node_b_id.clone(), &silence, 11, a_peer, 1_000)
+        .await
+        .expect_err("a peer that never answers cannot produce a connection");
+    let elapsed = started.elapsed();
+
+    // Bounded: the failure comes back inside the window, not after an
+    // unbounded retry — this is the signal a caller turns into relay
+    // fallback, and the relay path is covered by the wan suites.
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "the failure must be bounded by the punch window, took {elapsed:?}"
+    );
+    assert!(
+        matches!(error, MeshError::PunchFailed { .. }),
+        "got {error}"
+    );
+    assert!(
+        error.to_string().contains("no authenticated connection"),
+        "the refusal says why: {error}"
+    );
+    // No half-open state: the peer is not Active, and the attempt is spent.
+    assert!(node_a
+        .peers()
+        .iter()
+        .all(|(id, state, _)| id != &node_b_id || !state.is_dispatchable()));
+    node_a.punch_coordinator().prune_expired(now_ms() + 2_000);
+    assert!(
+        node_a
+            .punch_coordinator()
+            .session_for(node_a.node_id(), &node_b_id)
+            .is_none(),
+        "the spent attempt must not linger"
+    );
+}
+
+#[tokio::test]
 async fn a_replayed_lease_is_refused_rather_than_shortening_the_stored_one() {
     let identity_b = Arc::new(NodeIdentity::generate().unwrap());
     let node_b_id = apeireth_mesh::NodeId::new("node-b").unwrap();

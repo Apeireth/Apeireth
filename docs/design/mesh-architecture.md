@@ -206,15 +206,17 @@ closed there.
   in the runtime's own `CapabilityRegistry` (module-id strings), not in
   `PluginManager`, so the mesh cannot see them. Exposing them would first need
   an ownership story for them.
-- **NAT traversal is not implemented end to end.** Peers behind NAT reach each
-  other directly only when one side is reachable, and otherwise through the
-  relay. The mechanics now exist: signed host and server-reflexive candidates, a
-  single observed socket handed to QUIC, and ordered dialing over a candidate
-  plan. What is missing is simultaneous dial (coordinated hole punching), a
-  Linux network-namespace NAT harness, and above all any measurement against a
-  real NAT. **Socket identity, canonical signed candidates and dial ordering are
-  proven on loopback only — no NAT has ever been traversed by this code**, and
-  nothing here may be called "NAT traversal supported" until one has been.
+- **NAT traversal is implemented end to end in the connection path, but no
+  NAT has ever been traversed by this code.** The mechanics exist and are
+  driven by the production flow: `MeshNode::connect_punched` runs trust gate
+  → presence gate → `PunchCoordinator` → simultaneous open over one dual-role
+  socket → the ordinary pinned handshake → the ordinary convergence, and the
+  Linux namespace harness (`scripts/test-mesh-nat.sh`, `nat_probe punch`)
+  exercises that same path against nft-masquerade NATs with a real remote
+  invocation. What is missing is *execution and measurement*: the harness was
+  written on a Windows host and has not been run, and nothing here may be
+  called "NAT traversal supported" until it has been run on Linux and, after
+  that, against a real NAT. Loopback proves the path, not the traversal.
 - **The rendezvous control channel is plain TCP.** An on-path attacker can drop
   or delay traffic and race a captured registration. Confidentiality and peer
   identity are unaffected (end-to-end), availability is.
