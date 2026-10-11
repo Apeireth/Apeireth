@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>桌面常驻形象渲染性能探针（avatar-perf-probe）</title>
+<style>
+  :root {
+    --bg: #12141c;
+    --panel: #1a1e2a;
+    --line: #2a3042;
+    --text: #d8dce8;
+    --dim: #8b93a7;
+    --ok: #7ddba0;
+    --warn: #e8c46a;
+    --bad: #e88b8b;
+    --gold: #d8b25a;
+    font-size: 13px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 14px;
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: var(--dim); margin-bottom: 12px; line-height: 1.6; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .stage-box {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px; text-align: center;
+  }
+  .stage-box .label { color: var(--dim); margin-bottom: 6px; }
+  canvas, .light-stage {
+    width: 220px; height: 260px; border-radius: 8px; display: block;
+    background: radial-gradient(120% 90% at 50% 20%, #232a3d 0%, #141826 70%, #10121c 100%);
+    margin: 0 auto;
+  }
+  .light-stage { position: relative; overflow: hidden; }
+  .light-stage svg { width: 100%; height: 100%; display: block; }
+  .breathe { animation: breathe 4s ease-in-out infinite; transform-origin: 110px 130px; }
+  .breathe-core { animation: breatheCore 4s ease-in-out infinite; transform-origin: 110px 130px; }
+  @keyframes breathe { 0%,100% { opacity:.55; transform:scale(1);} 50% { opacity:.95; transform:scale(1.12);} }
+  @keyframes breatheCore { 0%,100% { opacity:.85; transform:scale(1);} 50% { opacity:1; transform:scale(1.06);} }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; min-width: 520px; flex: 1 1 520px;
+  }
+  .panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--gold); font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border-bottom: 1px solid var(--line); padding: 5px 8px; text-align: left; white-space: nowrap; }
+  th { color: var(--dim); font-weight: 500; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .mono { font-family: Consolas, "Courier New", monospace; }
+  #phase { margin: 8px 0; color: var(--text); }
+  #phase b { color: var(--gold); }
+  #timeline { max-height: 160px; overflow: auto; color: var(--dim); line-height: 1.5; font-size: 12px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); margin-left: 6px; }
+  .note { color: var(--dim); font-size: 12px; line-height: 1.7; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <h1>桌面常驻小窗形象渲染性能探针 <span class="badge" id="mode-badge">full</span></h1>
+  <div class="sub">
+    三条形象负载同页顺序实测（视口 220×260，透明窗语义）：3D 卡通渲染路线（程序化人形 + 卡通着色）／
+    2D 形象路线（程序化 Canvas2D 骨骼小人）／ 光态基线（CSS·SVG 呼吸光点）。
+    每线测稳态 FPS（rAF 采样）与 JS 堆，并验证两条纪律：document.hidden 时渲染循环必须停、
+    WebGL 不可用时优雅降级。结果写入 <span class="mono">window.__AVATAR_PERF_PROBE__</span>。
+  </div>
+
+  <div class="row">
+    <div class="stage-box">
+      <div class="label">3D 卡通渲染路线</div>
+      <canvas id="stage-3d" width="220" height="260"></canvas>
+    </div>
+    <div class="stage-box">
+      <div class="label">2D 形象路线（骨骼小人）</div>
+      <canvas id="stage-2d" width="220" height="260"></canvas>
+    </div>
+    <div class="stage-box">
+      <div class="label">光态基线</div>
+      <div class="light-stage" id="stage-light">
+        <svg viewBox="0 0 220 260" aria-hidden="true">
+          <defs>
+            <radialGradient id="halo">
+              <stop offset="0%" stop-color="#ffe9b8" stop-opacity="0.9"/>
+              <stop offset="45%" stop-color="#e8c46a" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="#e8c46a" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="core">
+              <stop offset="0%" stop-color="#fff6e0"/>
+              <stop offset="60%" stop-color="#f2d489"/>
+              <stop offset="100%" stop-color="#d8b25a"/>
+            </radialGradient>
+            <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="7"/>
+            </filter>
+          </defs>
+          <circle class="breathe" cx="110" cy="130" r="72" fill="url(#halo)" filter="url(#soft)"/>
+          <circle class="breathe-core" cx="110" cy="130" r="20" fill="url(#core)"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>结果面板</h2>
+      <div id="phase">状态：<b id="phase-text">初始化…</b></div>
+      <div id="summary"></div>
+      <h2 style="margin-top:12px">运行时间线</h2>
+      <div id="timeline" class="mono"></div>
+      <div class="note">
+        口径：FPS 均值 = 采样窗口内实际帧数 / 时长；1% low = 瞬时帧率最低 1% 帧的均值；
+        JS 堆 = performance.memory usedJSHeapSize（稳态中位数）；浸泡漂移 = 浸泡前后同条件 GC 后堆差。
+        1% low 与瞬时帧率为 rAF 采样口径，非合成器真实上屏口径。
+      </div>
+    </div>
+  </div>
+
+  <!-- 3D/2D 负载模块由 main.js 程序化生成，无任何外部美术资产 -->
+  <script type="importmap">
+    { "imports": { "three": "./node_modules/three/build/three.module.js" } }
+  </script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

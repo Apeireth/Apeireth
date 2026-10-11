@@ -106,8 +106,8 @@
 
 ## 余量备忘（收卷建议入账）
 
-- reflexion 自研 MutationLock 可换统一文件锁（死锁接管语义更强，可选优化）；
-- `stored_doc` 消费方接线（JSON 配置/记录消费方迁移）列后续批次；
+- reflexion 自研 MutationLock 可换统一文件锁（死锁接管语义更强，可选优化）——**✅ 已落地**（2026-10-12 零债清偿批复核：`reflexion.rs` 早已挂统一文件锁 `storage_atomic::with_file_lock`，含死锁接管/不抢活跃持有者/共享锁互通三测；本行系收卷前旧备忘，留痕核销）；
+- `stored_doc` 消费方接线（JSON 配置/记录消费方迁移）列后续批次——**✅ 已落地**（见 `stored-doc-consumer-migration.md`：6 消费方文件族迁移清单 + 13 类不迁理由成文；本行留痕核销）；
 - `inv_sweep_keeps_protected` 的 cleanup 侧在线发射点待 retention 清理生产接线时补喂。
 
 ## 战况注记（2026-09-26 晚）

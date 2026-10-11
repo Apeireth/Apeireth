@@ -149,6 +149,24 @@ pub enum RuntimeError {
         pending_tool: Option<String>,
     },
 
+    /// The session's cognitive quota for one dimension ran out and the
+    /// budget-exhausted behavior closed the turn (circuit-break semantics).
+    ///
+    /// This is the spend gate speaking: the session-level ledger reached its
+    /// configured ceiling on one metered dimension and the turn aborted at the
+    /// next checkpoint. The frame reports the real budget numbers — the
+    /// dimension name, the effective limit, and the consumed count — so a
+    /// budget-exhausted frame is diagnosable without a second lookup.
+    #[error("session quota exhausted on {dimension}: consumed {consumed} of limit {limit}")]
+    BudgetExhausted {
+        /// Which quota dimension ran out (`tokens` / `tool_steps`).
+        dimension: crate::canonical::quota::QuotaDimension,
+        /// The effective ceiling on that dimension.
+        limit: u64,
+        /// What the session had consumed when the ceiling bound.
+        consumed: u64,
+    },
+
     /// A runtime invariant raised a violation in fail-fast mode and blocked the
     /// step it observed.
     ///

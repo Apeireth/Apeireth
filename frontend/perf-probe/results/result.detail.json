@@ -1,0 +1,1217 @@
+{
+  "done": true,
+  "meta": {
+    "startedAt": "2026-10-11T05:19:48.224Z",
+    "finishedAt": "2026-10-11T05:22:45.432Z",
+    "mode": "full",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
+    "viewport": {
+      "w": 970,
+      "h": 825,
+      "dpr": 1
+    },
+    "stageSize": {
+      "w": 220,
+      "h": 260
+    },
+    "crossOriginIsolated": true,
+    "three": {
+      "installed": true,
+      "version": "180"
+    },
+    "gl": {
+      "available": true,
+      "webgl2": true,
+      "renderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x000013C0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "vendor": "Google Inc. (AMD)"
+    },
+    "visibilityAtStart": "visible",
+    "hiddenAtStart": false,
+    "exposureGc": true,
+    "timing": {
+      "fpsSec": 25,
+      "soakSec": 10,
+      "hiddenSec": 3
+    },
+    "phase": "全部测项完成"
+  },
+  "lines": {
+    "three3d": {
+      "id": "three3d",
+      "label": "3D 卡通渲染路线",
+      "available": true,
+      "fps": {
+        "fpsMean": 164.61,
+        "fps1Low": 157.57,
+        "fpsMin": 82.24,
+        "frames": 4123,
+        "elapsedSec": 25.04
+      },
+      "frameJsMs": {
+        "mean": 0.286,
+        "p95": 0.405
+      },
+      "heap": {
+        "startMB": 6.14,
+        "steadyMedianMB": 6.15,
+        "maxMB": 7.04,
+        "endMB": 5.36,
+        "samplesMB": [
+          6.14,
+          6.73,
+          5.83,
+          6.48,
+          7.04,
+          6.14,
+          6.77,
+          6.67,
+          5.66,
+          5.56,
+          6.15,
+          6.03,
+          6,
+          5.87,
+          6.44,
+          6.32,
+          6.16,
+          6.17,
+          6.79,
+          6.74,
+          6.58,
+          5.75,
+          5.58,
+          6.15,
+          6.03
+        ]
+      },
+      "totalMemoryMB": 8.88,
+      "extra": {
+        "drawCalls": 33,
+        "triangles": 6692,
+        "glRenderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x000013C0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "glVendor": "Google Inc. (AMD)",
+        "glVersion": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+      }
+    },
+    "canvas2d": {
+      "id": "canvas2d",
+      "label": "2D 形象路线",
+      "available": true,
+      "fps": {
+        "fpsMean": 164.69,
+        "fps1Low": 161.88,
+        "fpsMin": 144.93,
+        "frames": 4125,
+        "elapsedSec": 25.04
+      },
+      "frameJsMs": {
+        "mean": 0.124,
+        "p95": 0.165
+      },
+      "heap": {
+        "startMB": 6.22,
+        "steadyMedianMB": 5.96,
+        "maxMB": 6.26,
+        "endMB": 5.51,
+        "samplesMB": [
+          6.22,
+          5.71,
+          5.97,
+          6.24,
+          5.68,
+          5.97,
+          6.22,
+          5.49,
+          5.6,
+          5.71,
+          5.82,
+          6.1,
+          5.99,
+          5.92,
+          5.76,
+          5.64,
+          6.26,
+          6.22,
+          6.18,
+          6.08,
+          5.96,
+          5.83,
+          5.71,
+          5.59,
+          6.2
+        ]
+      },
+      "totalMemoryMB": 9.04,
+      "extra": null
+    },
+    "lightCss": {
+      "id": "lightCss",
+      "label": "光态基线",
+      "available": true,
+      "fps": {
+        "fpsMean": 164.69,
+        "fps1Low": 160.82,
+        "fpsMin": 134.59,
+        "frames": 4125,
+        "elapsedSec": 25.04
+      },
+      "frameJsMs": {
+        "mean": 0.001,
+        "p95": 0.005
+      },
+      "heap": {
+        "startMB": 5.57,
+        "steadyMedianMB": 5.62,
+        "maxMB": 5.83,
+        "endMB": 5.58,
+        "samplesMB": [
+          5.57,
+          5.59,
+          5.62,
+          5.64,
+          5.65,
+          5.55,
+          5.56,
+          5.6,
+          5.61,
+          5.62,
+          5.63,
+          5.68,
+          5.69,
+          5.7,
+          5.7,
+          5.71,
+          5.72,
+          5.81,
+          5.82,
+          5.83,
+          5.58,
+          5.59,
+          5.6,
+          5.61,
+          5.62
+        ]
+      },
+      "totalMemoryMB": 9.1,
+      "extra": null
+    }
+  },
+  "disciplines": {
+    "hiddenStop": {
+      "three3d": {
+        "label": "3D 卡通渲染路线",
+        "hiddenMethod": "document.hidden/visibilityState 强制注入 + visibilitychange",
+        "framesVisiblePerSec": 165,
+        "rafTicksDuringHidden": 495,
+        "framesDuringHidden": 0,
+        "loopCallbacksDuringHidden": 0,
+        "hiddenSkipsBelt": 0,
+        "framesAfterResume": 332,
+        "pass": true
+      },
+      "canvas2d": {
+        "label": "2D 形象路线",
+        "hiddenMethod": "document.hidden/visibilityState 强制注入 + visibilitychange",
+        "framesVisiblePerSec": 165,
+        "rafTicksDuringHidden": 495,
+        "framesDuringHidden": 0,
+        "loopCallbacksDuringHidden": 0,
+        "hiddenSkipsBelt": 0,
+        "framesAfterResume": 330,
+        "pass": true
+      },
+      "lightCss": {
+        "label": "光态基线",
+        "hiddenMethod": "document.hidden/visibilityState 强制注入 + visibilitychange",
+        "framesVisiblePerSec": 165,
+        "rafTicksDuringHidden": 495,
+        "framesDuringHidden": 0,
+        "loopCallbacksDuringHidden": 0,
+        "hiddenSkipsBelt": 0,
+        "framesAfterResume": 329,
+        "pass": true
+      }
+    },
+    "webglFallback": {
+      "inPageStub": {
+        "method": "HTMLCanvasElement.getContext 对 webgl/webgl2 返回 null 后重建 3D 线",
+        "three3dReportsUnavailable": true,
+        "twoDStillRuns": true,
+        "lightStillRuns": true,
+        "hostFallback": "canvas2d",
+        "pass": true,
+        "error": null,
+        "reason3d": "webgl-unavailable: Error: Error creating WebGL context."
+      }
+    }
+  },
+  "soak": {
+    "durationSec": 10,
+    "loadsRunning": [
+      "three3d",
+      "canvas2d",
+      "light-css"
+    ],
+    "heapStartMB": 5.61,
+    "heapEndMB": 5.68,
+    "driftMB": 0,
+    "slopeMBPerMin": 0,
+    "totalMemoryStartMB": 9.35,
+    "totalMemoryEndMB": 9.42,
+    "samples": [
+      {
+        "tSec": 5,
+        "heapMB": 6.28
+      },
+      {
+        "tSec": 10,
+        "heapMB": 6.24
+      }
+    ]
+  },
+  "timeline": [
+    "05:19:48 启动：模式=full，视口 970×825，目标舞台 220×260",
+    "05:19:48 three 运行库已装载（r180）",
+    "05:19:48 WebGL 探测：可用（ANGLE (AMD, AMD Radeon(TM) 610M (0x000013C0) Direct3D11 vs_5_0 ps_5_0, D3D11)）",
+    "05:20:24 [完成] 3D 卡通渲染路线：FPS 均值 164.61、1% low 157.57；JS 堆稳态 6.15MB；每帧 JS 0.286ms",
+    "05:21:02 [完成] 2D 形象路线：FPS 均值 164.69、1% low 161.88；JS 堆稳态 5.96MB；每帧 JS 0.124ms",
+    "05:21:47 [完成] 光态基线：FPS 均值 164.69、1% low 160.82；JS 堆稳态 5.62MB；每帧 JS 0.001ms",
+    "05:21:50 [visibilitychange] hidden=true（强制注入）",
+    "05:21:53 [visibilitychange] hidden=false（真实切换）",
+    "05:21:55 [hidden] 3D 卡通渲染路线：隐藏期渲染帧 0（应为 0）、同期 rAF 心跳 495（应 >0）、恢复后 332 帧 → 通过",
+    "05:21:57 [visibilitychange] hidden=true（强制注入）",
+    "05:22:00 [visibilitychange] hidden=false（真实切换）",
+    "05:22:02 [hidden] 2D 形象路线：隐藏期渲染帧 0（应为 0）、同期 rAF 心跳 495（应 >0）、恢复后 330 帧 → 通过",
+    "05:22:05 [visibilitychange] hidden=true（强制注入）",
+    "05:22:08 [visibilitychange] hidden=false（真实切换）",
+    "05:22:10 [hidden] 光态基线：隐藏期渲染帧 0（应为 0）、同期 rAF 心跳 495（应 >0）、恢复后 329 帧 → 通过",
+    "05:22:13 [WebGL 降级] 3D 线报不可用=true（webgl-unavailable: Error: Error creating WebGL context.）；2D 照常=true；光态照常=true → 通过",
+    "05:22:45 [浸泡] 前后 JS 堆 5.61MB → 5.68MB，漂移 0MB",
+    "05:22:45 完成：window.__AVATAR_PERF_PROBE__ 已就绪"
+  ],
+  "hostProcess": {
+    "note": "浏览器进程树工作集（WorkingSetSize 合计，含浏览器/GPU/渲染器等多进程；是宿主壳+内核近似，不是 WebView2 实体）",
+    "rootPid": 43828,
+    "baseline": {
+      "ts": "2026-10-11T13:19:51.4089601+08:00",
+      "rootPid": 43828,
+      "processCount": 17,
+      "totalWsMB": 946,
+      "processes": [
+        {
+          "pid": 43828,
+          "name": "msedge.exe",
+          "type": "browser",
+          "wsMB": 173.4
+        },
+        {
+          "pid": 41096,
+          "name": "msedge.exe",
+          "type": "renderer",
+          "wsMB": 45.1
+        },
+        {
+          "pid": 35348,
+          "name": "msedge.exe",
+          "type": "crashpad-handler",
+          "wsMB": 10.3
+        },
+        {
+          "pid": 28720,
+          "name": "msedge.exe",
+          "type": "renderer",
+          "wsMB": 45.3
+        },
+        {
+          "pid": 38444,
+          "name": "msedge.exe",
+          "type": "utility",
+          "wsMB": 18.6
+        },
+        {
+          "pid": 34484,
+          "name": "msedge.exe",
+          "type": "renderer",
+          "wsMB": 88.4
+        },
+        {
+          "pid": 42800,
+          "name": "msedge.exe",
+          "type": "renderer",
+          "wsMB": 47.2
+        },
+        {
+          "pid": 43612,
+          "name": "msedge.exe",
+          "type": "renderer",
+          "wsMB": 66.5
+        },
+        {
+          "pid": 40852,
+          "name": "msedge.exe",
+          "type": "utility",
+          "wsMB": 17.2
+        },
+        {
+          "pid": 38920,
+          "name": "msedge.exe",
+          "type": "renderer",
+          "wsMB": 33.5
+        },
+        {
+          "pid": 3100,
+          "name": "msedge.exe",
+          "type": "gpu-process",
+          "wsMB": 167.5
+        },
+        {
+          "pid": 12300,
+          "name": "msedge.exe",
+          "type": "utility",
+          "wsMB": 42.9
+        },
+        {
+          "pid": 35668,
+          "name": "msedge.exe",
+          "type": "renderer",
+          "wsMB": 46.5
+        },
+        {
+          "pid": 41632,
+          "name": "msedge.exe",
+          "type": "renderer",
+          "wsMB": 48.4
+        },
+        {
+          "pid": 32132,
+          "name": "identity_helper.exe",
+          "type": "utility",
+          "wsMB": 30
+        },
+        {
+          "pid": 41440,
+          "name": "msedge.exe",
+          "type": "renderer",
+          "wsMB": 45
+        },
+        {
+          "pid": 41248,
+          "name": "msedge.exe",
+          "type": "utility",
+          "wsMB": 20.3
+        }
+      ]
+    },
+    "samples": [
+      {
+        "tSec": 0,
+        "phase": "3D 卡通渲染路线：稳态采样 25s",
+        "totalWsMB": 948.7,
+        "processCount": 17,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 173.6
+          },
+          {
+            "pid": 41096,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 45.1
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 10.3
+          },
+          {
+            "pid": 28720,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 45.3
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.6
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 90.9
+          },
+          {
+            "pid": 42800,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 47.2
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 66.5
+          },
+          {
+            "pid": 40852,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 17.2
+          },
+          {
+            "pid": 38920,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.5
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 167.6
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 43
+          },
+          {
+            "pid": 35668,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 46.5
+          },
+          {
+            "pid": 41632,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 48.4
+          },
+          {
+            "pid": 32132,
+            "name": "identity_helper.exe",
+            "type": "utility",
+            "wsMB": 29.8
+          },
+          {
+            "pid": 41440,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 45
+          },
+          {
+            "pid": 41248,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 20.3
+          }
+        ]
+      },
+      {
+        "tSec": 16,
+        "phase": "3D 卡通渲染路线：稳态采样 25s（已测 15s / 25s，瞬时帧计数 2952）",
+        "totalWsMB": 714.4,
+        "processCount": 11,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 192.2
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.5
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 10.3
+          },
+          {
+            "pid": 28720,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 44.6
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.7
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 92.6
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65
+          },
+          {
+            "pid": 40852,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 17.3
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 174.7
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 45
+          },
+          {
+            "pid": 41248,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 20.3
+          }
+        ]
+      },
+      {
+        "tSec": 32,
+        "phase": "3D 卡通渲染路线：稳态采样 25s（已测 25s / 25s，瞬时帧计数 4602）",
+        "totalWsMB": 624.1,
+        "processCount": 9,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 192.4
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 32.7
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 18.8
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.7
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 91.5
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65
+          },
+          {
+            "pid": 40852,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 17.3
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 144.5
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 43.3
+          }
+        ]
+      },
+      {
+        "tSec": 47,
+        "phase": "2D 形象路线：稳态采样 25s（已测 11s / 25s，瞬时帧计数 2300）",
+        "totalWsMB": 629,
+        "processCount": 8,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 194
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 32.7
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 18.8
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.7
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 98.6
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 157.9
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 43.3
+          }
+        ]
+      },
+      {
+        "tSec": 63,
+        "phase": "2D 形象路线：稳态采样 25s（已测 25s / 25s，瞬时帧计数 4610）",
+        "totalWsMB": 645.2,
+        "processCount": 9,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 195.3
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.2
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 13.1
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.9
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 88.8
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65.7
+          },
+          {
+            "pid": 4092,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 29.8
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 157.4
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 43
+          }
+        ]
+      },
+      {
+        "tSec": 79,
+        "phase": "光态基线：稳态采样 25s（已测 4s / 25s，瞬时帧计数 1155）",
+        "totalWsMB": 648.3,
+        "processCount": 9,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 194.2
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.2
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 13.1
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.9
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 90
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65.7
+          },
+          {
+            "pid": 4092,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 29.8
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 160.6
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 42.8
+          }
+        ]
+      },
+      {
+        "tSec": 95,
+        "phase": "光态基线：稳态采样 25s（已测 20s / 25s，瞬时帧计数 3795）",
+        "totalWsMB": 644.4,
+        "processCount": 9,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 193.8
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.2
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 13.1
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.9
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 94.3
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65.7
+          },
+          {
+            "pid": 4092,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 29.7
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 153
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 42.8
+          }
+        ]
+      },
+      {
+        "tSec": 110,
+        "phase": "光态基线：稳态采样 25s（已测 25s / 25s，瞬时帧计数 4620）",
+        "totalWsMB": 633.6,
+        "processCount": 9,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 193.4
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.2
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 13.1
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.9
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 91.8
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65.7
+          },
+          {
+            "pid": 4092,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 29.7
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 144.9
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 42.8
+          }
+        ]
+      },
+      {
+        "tSec": 126,
+        "phase": "2D 形象路线：hidden 纪律验证",
+        "totalWsMB": 665,
+        "processCount": 9,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 195.3
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.2
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 13.1
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.9
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 95.8
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65.7
+          },
+          {
+            "pid": 4092,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 29.7
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 169.9
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 43.3
+          }
+        ]
+      },
+      {
+        "tSec": 141,
+        "phase": "WebGL 禁用降级（页内 stub：getContext(\"webgl*\") → null）",
+        "totalWsMB": 670.4,
+        "processCount": 9,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 198.1
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.2
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 13
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.9
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 96.1
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65.7
+          },
+          {
+            "pid": 4092,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 29.7
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 170.7
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 44.9
+          }
+        ]
+      },
+      {
+        "tSec": 157,
+        "phase": "浸泡 10s（三线并发，最坏情况口径）",
+        "totalWsMB": 661.1,
+        "processCount": 9,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 194.8
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.2
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 13
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.9
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 95.3
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65.7
+          },
+          {
+            "pid": 4092,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 29.7
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 167.3
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 43.1
+          }
+        ]
+      },
+      {
+        "tSec": 173,
+        "phase": "浸泡 10s（10s / 10s，JS 堆 6.24MB）",
+        "totalWsMB": 636.8,
+        "processCount": 9,
+        "processes": [
+          {
+            "pid": 43828,
+            "name": "msedge.exe",
+            "type": "browser",
+            "wsMB": 194.8
+          },
+          {
+            "pid": 40416,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 33.2
+          },
+          {
+            "pid": 35348,
+            "name": "msedge.exe",
+            "type": "crashpad-handler",
+            "wsMB": 13
+          },
+          {
+            "pid": 38444,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 18.9
+          },
+          {
+            "pid": 34484,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 94.5
+          },
+          {
+            "pid": 43612,
+            "name": "msedge.exe",
+            "type": "renderer",
+            "wsMB": 65.7
+          },
+          {
+            "pid": 4092,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 29.7
+          },
+          {
+            "pid": 3100,
+            "name": "msedge.exe",
+            "type": "gpu-process",
+            "wsMB": 143.7
+          },
+          {
+            "pid": 12300,
+            "name": "msedge.exe",
+            "type": "utility",
+            "wsMB": 43.1
+          }
+        ]
+      }
+    ],
+    "minWsMB": 624.1,
+    "maxWsMB": 948.7
+  },
+  "runner": {
+    "collectedAt": "2026-10-11T05:22:49.926Z",
+    "browser": "msedge.exe",
+    "browserPath": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "headless": true,
+    "cdpPort": 9333,
+    "staticPort": 8765,
+    "url": "http://127.0.0.1:8765/index.html?mode=full&fpsSec=25&soakSec=10&hiddenSec=3"
+  }
+}

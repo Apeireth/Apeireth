@@ -21,7 +21,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use apeireth_core::kernel::CapabilityId;
+use apeireth_core::kernel::{CapabilityId, SessionId};
 use apeireth_core::RELEASE_VERSION;
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
@@ -141,17 +141,131 @@ pub fn derive_tuning_preset(values: [f64; 4]) -> String {
     PRESET_CUSTOM.to_string()
 }
 
-/// 预算一节: 回合轮数上限 / 单轮工具上限 + 取值口径注记。
+/// 预算一节: 回合轮数上限 / 单轮工具上限 + 配额两维真值 + 取值口径注记。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BudgetStatus {
     /// 单回合轮数上限。
     pub max_rounds_per_turn: u64,
     /// 单轮工具调用上限。
     pub max_tool_calls_per_round: u64,
+    /// 会话配额一节: token / 步数两维真值 (上限/已耗/余量), 花费 / 深度
+    /// 两维如实"暂无接口" (见 [`QuotaStatus`])。
+    pub quota: QuotaStatus,
     /// 取值口径: `constant` = 读编译期常量; `configured` = 读可配置值。
     pub source: String,
     /// 口径注记 (可配置口径未接线时如实注明)。
     pub note: String,
+}
+
+/// 会话配额计量读数 (只回数字, 不回内容)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct QuotaMeterReading {
+    /// 会话累计已耗 token (回合计量 usage 累加)。
+    pub consumed_tokens: u64,
+    /// 会话累计已耗工具步数 (工具调用计数)。
+    pub consumed_tool_steps: u64,
+}
+
+/// 会话配额计量探测口: 传会话 id, 回该会话账本的已耗读数 (失败回 `Err(原因)`)。
+///
+/// 配额计量是**会话级**的, 所以读数必须带会话作用域; 无作用域的调用对应字段
+/// 显式 `null` + 原因 (0 装诚实)。
+pub type SessionQuotaProbe =
+    Arc<dyn Fn(SessionId) -> Result<QuotaMeterReading, String> + Send + Sync>;
+
+/// 一维配额的自述行: 上限 / 已耗 / 余量 + 显示串 + 缺位原因。
+///
+/// 显示串口径: `"{已耗}/{上限}"`, 取不到或不设限的一侧显 `"—"`
+/// (不设限显 "—"); 暂无接口的维度整行显 `"—"`。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuotaDimensionStatus {
+    /// 上限; `None` = 不设限 (显示 "—")。
+    pub limit: Option<u64>,
+    /// 已耗; `None` = 该作用域取不到计量 (显式 null + 原因)。
+    pub consumed: Option<u64>,
+    /// 余量 = 上限 − 已耗 (饱和); `None` = 不设限或取不到计量。
+    pub remaining: Option<u64>,
+    /// 显示串 (`"{已耗}/{上限}"`, 取不到的一侧显 "—"; 暂无接口整行 "—")。
+    pub display: String,
+    /// 已耗取不到 / 该维暂无接口的原因; 齐全时为 `None`。
+    pub reason: Option<String>,
+}
+
+impl QuotaDimensionStatus {
+    /// 计量真值行: 已耗已知; 上限 `None` = 不设限 (显示 "—")。
+    pub fn metered(limit: Option<u64>, consumed: u64) -> Self {
+        Self {
+            limit,
+            consumed: Some(consumed),
+            remaining: limit.map(|cap| cap.saturating_sub(consumed)),
+            display: format!("{}/{}", consumed, dash(limit)),
+            reason: None,
+        }
+    }
+
+    /// 无读数行: 上限已知, 该作用域取不到已耗 (显式 null + 原因)。
+    pub fn without_reading(limit: Option<u64>, reason: impl Into<String>) -> Self {
+        Self {
+            limit,
+            consumed: None,
+            remaining: None,
+            display: format!("—/{}", dash(limit)),
+            reason: Some(reason.into()),
+        }
+    }
+
+    /// 暂无接口行: 该维计量未实施 (如实整行 "—" + 原因, 不硬造数字)。
+    pub fn not_wired(reason: impl Into<String>) -> Self {
+        Self {
+            limit: None,
+            consumed: None,
+            remaining: None,
+            display: "—".to_string(),
+            reason: Some(reason.into()),
+        }
+    }
+
+    /// 换上会话账本读数 (上限不变, 已耗/余量/显示串按真值重算)。
+    pub fn with_reading(self, consumed: u64) -> Self {
+        Self::metered(self.limit, consumed)
+    }
+
+    /// 换成"取不到读数" (上限不变, 已耗显式 null + 原因)。
+    pub fn with_missing_reading(self, reason: impl Into<String>) -> Self {
+        Self::without_reading(self.limit, reason)
+    }
+}
+
+/// 不设限的显示占位 (上限/余量取不到时显 "—")。
+fn dash(value: Option<u64>) -> String {
+    value
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| "—".to_string())
+}
+
+/// 花费维"暂无接口"的原因 (0 装诚实: 无单价表不硬造花费)。
+pub const QUOTA_COST_NOT_WIRED: &str =
+    "not wired: the cost dimension has no unit-price table (type + trait stub only)";
+
+/// 深度维"暂无接口"的原因 (0 装诚实: 调用树深度跟踪未实施)。
+pub const QUOTA_DEPTH_NOT_WIRED: &str =
+    "not wired: the depth dimension has no call-tree depth tracking yet";
+
+/// 已耗取不到的原因: 配额计量是会话级, 本调用没有会话作用域。
+pub const QUOTA_METER_SCOPE_REQUIRED: &str =
+    "quota metering is session-scoped: this invocation carried no session scope";
+
+/// 会话配额一节: 两维真值 + 两维如实标注。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuotaStatus {
+    /// token 维 (真值: 上限/已耗/余量)。
+    pub tokens: QuotaDimensionStatus,
+    /// 工具步数维 (真值: 上限/已耗/余量)。
+    pub tool_steps: QuotaDimensionStatus,
+    /// 花费维 —— 暂无接口 (单价表未接线)。
+    pub cost_micros: QuotaDimensionStatus,
+    /// 深度维 —— 暂无接口 (调用树深度跟踪未实施)。
+    pub depth: QuotaDimensionStatus,
 }
 
 /// 口径注记: 预算读编译期常量, 逐回合可配置口径尚未接线。
@@ -217,6 +331,15 @@ pub const DATA_PROBE_NOT_WIRED: &str = "status source not wired in this composit
 pub trait SelfStatusSource: Send + Sync {
     /// 采集一份自述快照 (调用时的生效值)。
     fn snapshot(&self) -> SelfStatusSnapshot;
+
+    /// 会话作用域内的自述采集: `session` = 派发本调用的回合所属会话。
+    ///
+    /// 只有会话作用域的读数 (配额计量的已耗列) 依赖它; 默认实现退化为
+    /// [`SelfStatusSource::snapshot`], 对应字段显式 `null` + 原因。
+    fn snapshot_in_session(&self, session: Option<SessionId>) -> SelfStatusSnapshot {
+        let _ = session;
+        self.snapshot()
+    }
 }
 
 /// data 系探测口 (记忆账本 / 凭据存在性): 每次自述现探测, 失败回 `Err(原因)`。
@@ -290,6 +413,12 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         Some(status) => json!({
             "max_rounds_per_turn": status.max_rounds_per_turn,
             "max_tool_calls_per_round": status.max_tool_calls_per_round,
+            "quota": {
+                "tokens": render_quota_dimension(&status.quota.tokens),
+                "tool_steps": render_quota_dimension(&status.quota.tool_steps),
+                "cost_micros": render_quota_dimension(&status.quota.cost_micros),
+                "depth": render_quota_dimension(&status.quota.depth),
+            },
             "source": status.source,
             "note": status.note,
             "reason": snapshot.budget_reason,
@@ -297,6 +426,7 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         None => json!({
             "max_rounds_per_turn": null,
             "max_tool_calls_per_round": null,
+            "quota": null,
             "source": null,
             "note": null,
             "reason": snapshot
@@ -333,6 +463,17 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         "tuning": tuning,
         "budget": budget,
         "workspace": workspace,
+    })
+}
+
+/// 把一维配额行投影成结构化 JSON (字段合同的唯一实现)。
+fn render_quota_dimension(row: &QuotaDimensionStatus) -> Value {
+    json!({
+        "limit": row.limit,
+        "consumed": row.consumed,
+        "remaining": row.remaining,
+        "display": row.display,
+        "reason": row.reason,
     })
 }
 
@@ -373,6 +514,35 @@ impl SelfStatusTool {
     pub fn collect(&self) -> Value {
         render_snapshot(&self.source.snapshot())
     }
+
+    /// 采集并投影一份自述, 可带会话作用域 (配额计量列的真值来源)。
+    async fn collect_scoped(&self, call: &ToolCall, session: Option<SessionId>) -> ToolResult {
+        let arguments = match &call.arguments {
+            Value::Null => json!({}),
+            other => other.clone(),
+        };
+        if let Err(error) = serde_json::from_value::<SelfStatusParams>(arguments) {
+            return ToolResult::permanent_error(
+                &call.id,
+                format!("invalid self_status parameters: {error}"),
+            );
+        }
+        // 采集跑在阻塞池上: data 系探测 (库查询/文件读) 卡住时, 执行链的
+        // 到期计时器仍能触发, 超时归既有 `timeout.*` code 族 (可重试帧),
+        // 而不是把回合一起挂死。
+        let source = Arc::clone(&self.source);
+        match tokio::task::spawn_blocking(move || {
+            render_snapshot(&source.snapshot_in_session(session))
+        })
+        .await
+        {
+            Ok(value) => ToolResult::ok(&call.id, value),
+            Err(error) => ToolResult::permanent_error(
+                &call.id,
+                format!("self_status collection task failed: {error}"),
+            ),
+        }
+    }
 }
 
 #[async_trait]
@@ -403,27 +573,18 @@ impl ToolCapability for SelfStatusTool {
     }
 
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
-        let arguments = match &call.arguments {
-            Value::Null => json!({}),
-            other => other.clone(),
-        };
-        if let Err(error) = serde_json::from_value::<SelfStatusParams>(arguments) {
-            return ToolResult::permanent_error(
-                &call.id,
-                format!("invalid self_status parameters: {error}"),
-            );
-        }
-        // 采集跑在阻塞池上: data 系探测 (库查询/文件读) 卡住时, 执行链的
-        // 到期计时器仍能触发, 超时归既有 `timeout.*` code 族 (可重试帧),
-        // 而不是把回合一起挂死。
-        let source = Arc::clone(&self.source);
-        match tokio::task::spawn_blocking(move || render_snapshot(&source.snapshot())).await {
-            Ok(value) => ToolResult::ok(&call.id, value),
-            Err(error) => ToolResult::permanent_error(
-                &call.id,
-                format!("self_status collection task failed: {error}"),
-            ),
-        }
+        self.collect_scoped(call, None).await
+    }
+
+    /// 会话作用域入口: 回合派发带会话 id, 配额计量列因此读到该会话账本的
+    /// 真值 (见 [`SelfStatusSource::snapshot_in_session`])。
+    async fn invoke_in_session(
+        &self,
+        call: &ToolCall,
+        _frozen: Option<&apeireth_plugin::FrozenInvocation>,
+        session: Option<SessionId>,
+    ) -> ToolResult {
+        self.collect_scoped(call, session).await
     }
 }
 
@@ -470,6 +631,12 @@ mod tests {
             budget: Some(BudgetStatus {
                 max_rounds_per_turn: 8,
                 max_tool_calls_per_round: 16,
+                quota: QuotaStatus {
+                    tokens: QuotaDimensionStatus::metered(Some(5_000), 120),
+                    tool_steps: QuotaDimensionStatus::metered(None, 3),
+                    cost_micros: QuotaDimensionStatus::not_wired(QUOTA_COST_NOT_WIRED),
+                    depth: QuotaDimensionStatus::not_wired(QUOTA_DEPTH_NOT_WIRED),
+                },
                 source: "constant".to_string(),
                 note: BUDGET_SOURCE_CONSTANT_NOTE.to_string(),
             }),
@@ -722,5 +889,125 @@ mod tests {
             rendered.contains("timeout.deadline_expired"),
             "超时必须归 timeout.* code 族: {rendered}"
         );
+    }
+
+    #[test]
+    fn quota_rows_report_true_limits_consumed_and_remaining_with_dash_for_unlimited() {
+        let value = render_snapshot(&fixture_snapshot());
+        let tokens = &value["budget"]["quota"]["tokens"];
+        assert_eq!(tokens["limit"], 5_000);
+        assert_eq!(tokens["consumed"], 120);
+        assert_eq!(tokens["remaining"], 4_880);
+        assert_eq!(tokens["display"], "120/5000");
+        assert!(tokens["reason"].is_null());
+
+        // 不设限显 "—": 上限/余量为显式 null, 显示串的上限侧是 "—"。
+        let steps = &value["budget"]["quota"]["tool_steps"];
+        assert_eq!(steps["limit"], Value::Null);
+        assert_eq!(steps["consumed"], 3);
+        assert_eq!(steps["remaining"], Value::Null);
+        assert_eq!(steps["display"], "3/—");
+        assert!(steps["reason"].is_null());
+    }
+
+    #[test]
+    fn cost_and_depth_dimensions_are_honestly_marked_not_wired() {
+        let value = render_snapshot(&fixture_snapshot());
+        for dimension in ["cost_micros", "depth"] {
+            let row = &value["budget"]["quota"][dimension];
+            assert_eq!(row["display"], "—", "{dimension} 暂无接口整行显 —");
+            assert_eq!(row["limit"], Value::Null);
+            assert_eq!(row["consumed"], Value::Null);
+            assert_eq!(row["remaining"], Value::Null);
+            assert!(
+                row["reason"].as_str().unwrap().contains("not wired"),
+                "{dimension} 必须如实标注暂无接口: {row}"
+            );
+        }
+    }
+
+    #[test]
+    fn quota_readings_without_a_session_scope_are_explicit_null_with_a_reason() {
+        let row = QuotaDimensionStatus::without_reading(Some(10), QUOTA_METER_SCOPE_REQUIRED);
+        assert_eq!(row.limit, Some(10));
+        assert_eq!(row.consumed, None);
+        assert_eq!(row.remaining, None);
+        assert_eq!(row.display, "—/10");
+        assert_eq!(row.reason.as_deref(), Some(QUOTA_METER_SCOPE_REQUIRED));
+
+        // 换上真值后数字恢复, 上限不变。
+        let row = row.with_reading(4);
+        assert_eq!(row.consumed, Some(4));
+        assert_eq!(row.remaining, Some(6));
+        assert_eq!(row.display, "4/10");
+        assert!(row.reason.is_none());
+    }
+
+    #[test]
+    fn the_session_scoped_snapshot_entry_defaults_to_the_scope_free_snapshot() {
+        struct BareSource;
+        impl SelfStatusSource for BareSource {
+            fn snapshot(&self) -> SelfStatusSnapshot {
+                fixture_snapshot()
+            }
+        }
+
+        let source = BareSource;
+        let scoped = source.snapshot_in_session(Some(SessionId::new()));
+        assert_eq!(scoped, source.snapshot(), "默认实现不改变读数");
+    }
+
+    #[tokio::test]
+    async fn the_pipelined_entry_forwards_the_session_scope_to_the_source() {
+        use crate::exec_pipeline::{PipelinedCapability, ToolExecutionPipeline};
+
+        /// 记住绑定会话并只对它给出真值的来源 (钉住作用域透传链)。
+        struct ScopedSource {
+            bound: SessionId,
+            reading: u64,
+        }
+
+        impl SelfStatusSource for ScopedSource {
+            fn snapshot(&self) -> SelfStatusSnapshot {
+                fixture_snapshot()
+            }
+
+            fn snapshot_in_session(&self, session: Option<SessionId>) -> SelfStatusSnapshot {
+                let mut snapshot = fixture_snapshot();
+                if session == Some(self.bound) {
+                    if let Some(budget) = snapshot.budget.as_mut() {
+                        budget.quota.tokens =
+                            QuotaDimensionStatus::metered(Some(100), self.reading);
+                    }
+                }
+                snapshot
+            }
+        }
+
+        let bound = SessionId::new();
+        let inner: Arc<dyn ToolCapability> =
+            Arc::new(SelfStatusTool::new(Arc::new(ScopedSource {
+                bound,
+                reading: 7,
+            })));
+        let tool = PipelinedCapability::new(inner, Arc::new(ToolExecutionPipeline::new()));
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "self_status".into(),
+            arguments: json!({}),
+        };
+
+        // 会话作用域穿过 `invoke_in_session` → 管道 → 来源 (真值列)。
+        let scoped = tool.invoke_in_session(&call, None, Some(bound)).await;
+        let value: Value = serde_json::from_str(&scoped.render()).expect("structured json");
+        assert_eq!(
+            value["budget"]["quota"]["tokens"]["consumed"], 7,
+            "会话作用域必须透传到来源: {value}"
+        );
+
+        // 无作用域走基线快照 (fixture 的 120), 不是绑定会话的读数。
+        let unscoped = tool.invoke(&call).await;
+        let value: Value = serde_json::from_str(&unscoped.render()).expect("structured json");
+        assert_eq!(value["budget"]["quota"]["tokens"]["consumed"], 120);
     }
 }

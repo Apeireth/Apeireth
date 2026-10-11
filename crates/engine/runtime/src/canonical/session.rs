@@ -20,6 +20,7 @@ use apeireth_orchestration::compaction_checkpoint::{
     CompactionLogEntry, CompactionMessage, CompactionRole,
 };
 use apeireth_orchestration::plan_mode::PlanModeEvent;
+use apeireth_orchestration::CognitiveQuota;
 use apeireth_protocol::canonical::{ContentPart, MessageRole, NormalizedMessage};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -100,6 +101,15 @@ pub struct Session {
     /// and lose nothing from their transcript or approval history.
     #[serde(default)]
     pub settings: SessionSettings,
+    /// Session-level cognitive quota ledger: the durable consumption
+    /// accounting behind the opt-in spend gate (token usage accumulated from
+    /// per-round usage metering, tool steps counted per dispatched call).
+    ///
+    /// `#[serde(default)]` is the on-disk migration path: sessions persisted
+    /// before this field existed load an unlimited, empty ledger and lose
+    /// nothing from their transcript or approval history.
+    #[serde(default)]
+    pub quota: CognitiveQuota,
     /// The transcript, in order. Includes assistant tool-call messages and
     /// tool-result messages, so a resumed session can continue mid-tool-loop.
     ///
@@ -154,6 +164,7 @@ impl Session {
             approvals: BTreeMap::new(),
             active_approval_id: None,
             settings: SessionSettings::default(),
+            quota: CognitiveQuota::default(),
             revision: 0,
             created_at: now,
             updated_at: now,
@@ -691,6 +702,8 @@ struct SessionRepr {
     id: SessionId,
     #[serde(default)]
     settings: SessionSettings,
+    #[serde(default)]
+    quota: CognitiveQuota,
     messages: Vec<NormalizedMessage>,
     events: Vec<SessionEvent>,
     #[serde(default)]
@@ -709,6 +722,7 @@ impl From<SessionRepr> for Session {
         let mut session = Self {
             id: repr.id,
             settings: repr.settings,
+            quota: repr.quota,
             messages: repr.messages,
             events: repr.events,
             log: repr.log,

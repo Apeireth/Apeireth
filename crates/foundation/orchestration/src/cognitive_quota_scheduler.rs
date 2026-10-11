@@ -69,6 +69,16 @@ pub struct CognitiveQuota {
     pub consumed_cost_micros: u64,
 }
 
+impl Default for CognitiveQuota {
+    /// An unlimited, empty ledger: every ceiling unreachable, every counter
+    /// zero. This is the ledger a session carries before any quota knob has
+    /// been bound to it (production wiring: see the canonical runtime's
+    /// session quota accounting).
+    fn default() -> Self {
+        Self::unlimited()
+    }
+}
+
 impl CognitiveQuota {
     pub fn new(max_tokens: usize, max_tool_steps: usize, max_cost_micros: u64) -> Self {
         Self {
@@ -79,6 +89,28 @@ impl CognitiveQuota {
             consumed_tool_steps: 0,
             consumed_cost_micros: 0,
         }
+    }
+
+    /// An unlimited, empty ledger. The ceilings are the type's unreachable
+    /// maxima, which makes `is_exhausted` permanently false until limits are
+    /// bound and consumption recorded.
+    pub fn unlimited() -> Self {
+        Self::new(usize::MAX, usize::MAX, u64::MAX)
+    }
+
+    /// Records one provider round's usage-metered tokens (saturating).
+    ///
+    /// Production metering splits across the two metered dimensions because
+    /// they land at different call sites: tokens accumulate per provider
+    /// response, tool steps per dispatched tool call. `consume_step` (above)
+    /// keeps the coupled scheduler-facing accounting untouched.
+    pub fn consume_tokens(&mut self, tokens: usize) {
+        self.consumed_tokens = self.consumed_tokens.saturating_add(tokens);
+    }
+
+    /// Records one dispatched tool call (saturating).
+    pub fn consume_tool_step(&mut self) {
+        self.consumed_tool_steps = self.consumed_tool_steps.saturating_add(1);
     }
 
     /// Checks if any budget dimension has been exceeded.

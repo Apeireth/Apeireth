@@ -295,6 +295,8 @@ pub struct ProductionBackends {
     pub self_status_extras: Vec<CapabilitySwitch>,
     /// 自省通道: 生效中的预算一节 (可配置旋钮取值; 缺位回退编译期常量)。
     pub self_status_budget: Option<apeireth_tools_canonical::BudgetStatus>,
+    /// 自省通道: 会话配额计量探测口 (按会话 id 读已耗真值, 只回数字)。
+    pub self_status_quota: Option<apeireth_tools_canonical::SessionQuotaProbe>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -453,6 +455,9 @@ impl ProductionModules {
             }
             if let Some(budget) = &backends.self_status_budget {
                 source = source.with_budget(budget.clone());
+            }
+            if let Some(probe) = &backends.self_status_quota {
+                source = source.with_quota_probe(Arc::clone(probe));
             }
             let provider = SelfStatusModule::new(Arc::new(source));
             capabilities.extend(provider.capabilities());

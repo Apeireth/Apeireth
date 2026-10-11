@@ -101,10 +101,12 @@ pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
 pub use self_status::{
     capability_roster, derive_tuning_preset, render_snapshot, BudgetStatus, CapabilitySwitch,
-    MemoryLedgerStats, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SelfStatusTool,
-    StatusProbe, TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
+    MemoryLedgerStats, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, SelfStatusIdentity,
+    SelfStatusSnapshot, SelfStatusSource, SelfStatusTool, SessionQuotaProbe, StatusProbe,
+    TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
     DISPOSITION_PRESETS, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS,
-    PRODUCT_NAME, RUNTIME_ROLE_GATEWAY_SIDECAR,
+    PRODUCT_NAME, QUOTA_COST_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    RUNTIME_ROLE_GATEWAY_SIDECAR,
 };
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};

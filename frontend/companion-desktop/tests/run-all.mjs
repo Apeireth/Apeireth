@@ -55,6 +55,10 @@ const SUITES = [
   {file: 'settings-live-apply.mjs', name: 'settings three-tier live apply (real module)', strip: true},
   {file: 'settings-save-buttons-removed.mjs', name: 'save-button removal source mirror'},
   {file: 'quick-window-close.mjs', name: 'quick window close/destroy lifecycle (mirrored)'},
+  {file: 'pet-frame.mjs', name: 'pet avatar contract (posture/light mirror, real module)', strip: true},
+  {file: 'pet-proactive.mjs', name: 'pet proactive engine (anti-nagging budget / glance, real module)', strip: true},
+  {file: 'pet-avatar-registry.mjs', name: 'pet avatar registry (dual-form plug-in slot, real module)', strip: true},
+  {file: 'pet-window-lifecycle.mjs', name: 'pet window lifecycle + mutual exclusion (source mirror)'},
   {file: 'self-tuning-mapping.mjs', name: 'self-tuning knob mapping (real module)', strip: true},
   {file: 'file-write-toggle.mjs', name: 'controlled file-write toggle mapping (real module)', strip: true},
   {file: 'provider-transport.mjs', name: 'provider transport selection (invoke vs fetch, real module)', strip: true},
@@ -70,6 +74,10 @@ const SUITES = [
   {file: 'pending-approval-marker.mjs', name: 'pending approval card marker chain (tool-generic 等待批准 frame, source mirror)'},
   {file: 'session-preset-persistence.mjs', name: 'session approval tier persistence (select→persist→read back / reopen restore / new-session default, source mirror)'},
   {file: 'user-impression.mjs', name: 'user impression agent settings column (per-persona ledger / self-reference block / summarize seam, real module)', strip: true},
+  {file: 'starport-registry.mjs', name: 'starport contribution registry (data-first / injection-field ban / owner lifecycle, real module)', strip: true},
+  {file: 'starport-shell.mjs', name: 'starport shell (view lifecycle / single-instance / overlay pairing / async settle, real modules)', strip: true},
+  {file: 'pet-agent-status.mjs', name: 'pet agent status machine (five-state vocabulary / live-source table / decay discipline, real module)', strip: true},
+  {file: 'pet-approval-quick.mjs', name: 'pet approval quick panel (frame truth source / authoritative match / dual-sync clear, real module)', strip: true},
 ];
 
 function run({file, strip}) {

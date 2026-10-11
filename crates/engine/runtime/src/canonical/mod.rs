@@ -58,6 +58,7 @@ pub mod module;
 // Long-lived: 7 deterministic organs + OrganOrchestrator backend; transient
 // per invocation: W1/W2 built from ctx.invoker_handle() and dropped.
 pub mod provider;
+pub mod quota;
 pub mod runtime;
 pub mod session;
 pub mod subloop;
@@ -96,6 +97,11 @@ pub use module::{
     PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
+pub use quota::{
+    parse_quota_max_tokens, parse_quota_max_tool_steps, CostRateMicros, CostRateTable,
+    QuotaDimension, QuotaExceeded, QuotaExhaustedAction, SessionQuotaLimits, MAX_QUOTA_TOKENS,
+    MAX_QUOTA_TOOL_STEPS,
+};
 pub use runtime::{
     parse_tool_call_limit, parse_turn_round_limit, plugin_ids, Runtime, RuntimeBuilder,
     RuntimeCapabilitySnapshot, RuntimeConfig, RuntimeHealthSnapshot, RuntimeModelSnapshot,

@@ -2403,12 +2403,29 @@
       void refreshConnection();
     }, 15000);
 
+    // 桌宠右键卷宗入口（src-tauri open_main_target → shell-target 事件）：
+    // 目标串沿用旧深链 ?drawer= 口径，经同一张目标表改道（lib/shell-nav.ts）。
+    let unlistenShellTarget: (() => void) | null = null;
+    void (async () => {
+      if (!isDesktop()) return;
+      try {
+        const {listen} = await import('@tauri-apps/api/event');
+        unlistenShellTarget = await listen<string>('shell-target', (event) => {
+          const target = resolveLegacyDrawer(event.payload ?? null);
+          if (target) applyShellTarget(target);
+        });
+      } catch {
+        // 事件层不可用：右键卷宗入口无接线，主窗自身导航不受影响
+      }
+    })();
+
     return () => {
       disposeWheelRouter();
       window.clearInterval(timer);
       if (hourTimer !== null) window.clearInterval(hourTimer);
       unsubscribeEvents();
       unsubscribePresence?.();
+      unlistenShellTarget?.();
     };
   });
 </script>

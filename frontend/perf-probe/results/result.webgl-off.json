@@ -1,0 +1,215 @@
+{
+  "done": true,
+  "meta": {
+    "startedAt": "2026-10-11T05:16:49.016Z",
+    "finishedAt": "2026-10-11T05:17:06.688Z",
+    "mode": "degrade",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
+    "viewport": {
+      "w": 970,
+      "h": 825,
+      "dpr": 1
+    },
+    "stageSize": {
+      "w": 220,
+      "h": 260
+    },
+    "crossOriginIsolated": true,
+    "three": {
+      "installed": true,
+      "version": "180"
+    },
+    "gl": {
+      "available": false
+    },
+    "visibilityAtStart": "visible",
+    "hiddenAtStart": false,
+    "exposureGc": true,
+    "timing": {
+      "fpsSec": 60,
+      "soakSec": 300,
+      "hiddenSec": 3
+    },
+    "phase": "降级验证完成"
+  },
+  "lines": {
+    "three3d": {
+      "id": "three3d",
+      "label": "3D 卡通渲染路线",
+      "available": false,
+      "reason": "webgl-unavailable: Error: Error creating WebGL context."
+    },
+    "canvas2d": {
+      "id": "canvas2d",
+      "label": "2D 形象路线",
+      "available": true,
+      "fps": {
+        "framesIn5s": 802
+      },
+      "note": "degrade 模式仅验\"照常出帧\"，不测稳态"
+    },
+    "lightCss": {
+      "id": "lightCss",
+      "label": "光态基线",
+      "available": true,
+      "fps": {
+        "framesIn5s": 823
+      },
+      "note": "degrade 模式仅验\"照常出帧\"，不测稳态"
+    }
+  },
+  "disciplines": {
+    "hiddenStop": {
+      "canvas2d": {
+        "label": "2D 形象路线",
+        "hiddenMethod": "document.hidden/visibilityState 强制注入 + visibilitychange",
+        "framesVisiblePerSec": 165,
+        "rafTicksDuringHidden": 495,
+        "framesDuringHidden": 0,
+        "loopCallbacksDuringHidden": 0,
+        "hiddenSkipsBelt": 0,
+        "framesAfterResume": 330,
+        "pass": true
+      }
+    },
+    "webglFallback": {
+      "realRun": {
+        "env": "浏览器以 --disable-3d-apis 启动（真实 WebGL 禁用）",
+        "webglProbeAvailable": false,
+        "three3dReportsUnavailable": true,
+        "reason3d": "webgl-unavailable: Error: Error creating WebGL context.",
+        "pass": true
+      }
+    }
+  },
+  "soak": null,
+  "timeline": [
+    "05:16:49 降级验证模式启动（mode=degrade），document.hidden=false",
+    "05:16:54 [降级验证] 2D 形象路线：5s 内出帧 802 → 照常",
+    "05:16:59 [降级验证] 光态基线：5s 内出帧 823 → 照常",
+    "05:17:01 [visibilitychange] hidden=true（强制注入）",
+    "05:17:04 [visibilitychange] hidden=false（真实切换）",
+    "05:17:06 [hidden] 2D 形象路线：隐藏期渲染帧 0（应为 0）、同期 rAF 心跳 495（应 >0）、恢复后 330 帧 → 通过",
+    "05:17:06 [降级验证] 真实 WebGL 禁用：3D 报不可用=true（webgl-unavailable: Error: Error creating WebGL context.），2D/光态照常=true → 通过"
+  ],
+  "hostProcess": {
+    "note": "浏览器进程树工作集（WorkingSetSize 合计，含浏览器/GPU/渲染器等多进程；是宿主壳+内核近似，不是 WebView2 实体）",
+    "rootPid": 37292,
+    "baseline": {
+      "ts": "2026-10-11T13:16:52.0319291+08:00",
+      "rootPid": 37292,
+      "processCount": 17,
+      "totalWsMB": 935.6,
+      "processes": [
+        {
+          "pid": 37292,
+          "name": "msedge.exe",
+          "wsMB": 170.9
+        },
+        {
+          "pid": 24760,
+          "name": "msedge.exe",
+          "wsMB": 10.3
+        },
+        {
+          "pid": 31840,
+          "name": "msedge.exe",
+          "wsMB": 36.2
+        },
+        {
+          "pid": 620,
+          "name": "msedge.exe",
+          "wsMB": 168.6
+        },
+        {
+          "pid": 34584,
+          "name": "msedge.exe",
+          "wsMB": 74.8
+        },
+        {
+          "pid": 37788,
+          "name": "msedge.exe",
+          "wsMB": 44.8
+        },
+        {
+          "pid": 21672,
+          "name": "msedge.exe",
+          "wsMB": 51.2
+        },
+        {
+          "pid": 35432,
+          "name": "msedge.exe",
+          "wsMB": 17
+        },
+        {
+          "pid": 23480,
+          "name": "msedge.exe",
+          "wsMB": 20.3
+        },
+        {
+          "pid": 10256,
+          "name": "msedge.exe",
+          "wsMB": 64.3
+        },
+        {
+          "pid": 1416,
+          "name": "msedge.exe",
+          "wsMB": 45
+        },
+        {
+          "pid": 20648,
+          "name": "msedge.exe",
+          "wsMB": 46.5
+        },
+        {
+          "pid": 24288,
+          "name": "msedge.exe",
+          "wsMB": 47.7
+        },
+        {
+          "pid": 39208,
+          "name": "msedge.exe",
+          "wsMB": 47.9
+        },
+        {
+          "pid": 39852,
+          "name": "msedge.exe",
+          "wsMB": 41.4
+        },
+        {
+          "pid": 30524,
+          "name": "msedge.exe",
+          "wsMB": 18.7
+        },
+        {
+          "pid": 23644,
+          "name": "identity_helper.exe",
+          "wsMB": 29.9
+        }
+      ]
+    },
+    "samples": [
+      {
+        "tSec": 0,
+        "phase": "",
+        "totalWsMB": 939.2,
+        "processCount": 17
+      }
+    ],
+    "minWsMB": 939.2,
+    "maxWsMB": 939.2
+  },
+  "runner": {
+    "collectedAt": "2026-10-11T05:17:07.936Z",
+    "browser": "msedge.exe",
+    "browserPath": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "headless": true,
+    "cdpPort": 9333,
+    "staticPort": 8765,
+    "url": "http://127.0.0.1:8765/index.html?mode=degrade&hiddenSec=3",
+    "extraArgs": [
+      "--disable-3d-apis"
+    ],
+    "note": "本轮以 --disable-3d-apis 启动，验证 WebGL 不可用时的优雅降级"
+  }
+}

@@ -437,3 +437,67 @@ async fn the_frame_is_the_normalized_contract_shape() {
         "输出归一合同: output_text 即渲染文本"
     );
 }
+
+/// 配额自述面端到端: 会话配额探测口读**真会话存储**的账本, 组装后的
+/// `budget.quota` 两维出真值 (上限/已耗/余量, 不设限显 "—"); 无会话作用域
+/// 的调用已耗列显式 null + 原因。
+#[tokio::test]
+async fn budget_quota_rows_report_real_values_from_the_durable_session_ledger() {
+    use apeireth_runtime::SessionStore as _;
+    use apeireth_runtime_assembly::{budget_status_from_configured, session_quota_probe};
+
+    let dir = tempfile::tempdir().expect("temp dir");
+    let db = dir.path().join("sessions.sqlite3");
+
+    // 真存储造数: 一个带配额账本的会话 (120 token, 2 步)。
+    let store = apeireth_runtime_assembly::SqliteSessionStore::open(&db)
+        .await
+        .expect("session store");
+    let session_id = apeireth_core::kernel::SessionId::new();
+    let mut session = apeireth_runtime::canonical::Session::new(session_id, clock().as_ref());
+    session.quota.consume_tokens(120);
+    session.quota.consume_tool_step();
+    session.quota.consume_tool_step();
+    store.save(&session).await.expect("save");
+
+    let backends = ProductionBackends {
+        self_status_budget: Some(budget_status_from_configured(8, 16, Some(5_000), None)),
+        self_status_quota: Some(session_quota_probe(db.clone())),
+        ..ProductionBackends::default()
+    };
+    let (_, tool) = build(base_config(), backends);
+
+    // 会话作用域内: 两维真值; tool_steps 上限不设限 → 显示 "—"。
+    let call = ToolCall {
+        id: "call_quota".into(),
+        name: "self_status".into(),
+        arguments: serde_json::json!({}),
+    };
+    let scoped = tool.invoke_in_session(&call, None, Some(session_id)).await;
+    assert!(scoped.is_ok(), "{}", scoped.render());
+    let report: Value = serde_json::from_str(&scoped.render()).expect("structured json");
+    let tokens = &report["budget"]["quota"]["tokens"];
+    assert_eq!(tokens["limit"], 5_000);
+    assert_eq!(tokens["consumed"], 120);
+    assert_eq!(tokens["remaining"], 4_880);
+    assert_eq!(tokens["display"], "120/5000");
+    let steps = &report["budget"]["quota"]["tool_steps"];
+    assert_eq!(steps["limit"], Value::Null);
+    assert_eq!(steps["consumed"], 2);
+    assert_eq!(steps["display"], "2/—", "不设限显 —");
+    // 花费 / 深度两维如实"暂无接口"。
+    assert_eq!(report["budget"]["quota"]["cost_micros"]["display"], "—");
+    assert_eq!(report["budget"]["quota"]["depth"]["display"], "—");
+
+    // 无会话作用域: 已耗列显式 null + 原因, 上限真值不变。
+    let unscoped = invoke(&tool).await;
+    let tokens = &unscoped["budget"]["quota"]["tokens"];
+    assert_eq!(tokens["limit"], 5_000);
+    assert_eq!(tokens["consumed"], Value::Null);
+    assert!(tokens["reason"].as_str().unwrap().contains("session scope"));
+
+    // 探测口对未落库会话回 Err(原因), 不编造数字。
+    let missing = session_quota_probe(db)(apeireth_core::kernel::SessionId::new())
+        .expect_err("a session with no persisted row has no reading");
+    assert!(missing.contains("no persisted row"), "{missing}");
+}

@@ -43,6 +43,10 @@
 //!
 //! Two things do abort: governance denying the *completion* itself, and the
 //! round limit. Neither is something the model can recover from by trying again.
+//! A third abort joins them when a session quota ceiling binds: the budget-
+//! exhausted frame (circuit-break semantics; see [`super::quota`]) closes the
+//! turn at the next checkpoint — the spend gate, not a recoverable tool
+//! failure.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -89,6 +93,8 @@ use super::module::{
     HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError,
     ModuleInvocationError, ModuleInvoker, ModuleOutcome, ModuleTurnState, PromptOverlay,
 };
+use super::provider::ProviderRouter;
+use super::quota::QuotaExceeded;
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
 use super::subloop::RuntimeSubLoopSpawner;
@@ -324,8 +330,10 @@ struct AdmittedCall {
     capability: CapabilityId,
     tool: Arc<dyn apeireth_plugin::ToolCapability>,
     call: ToolCall,
-    preapproved: bool,
     frozen_invocation: Option<FrozenInvocation>,
+    /// The session whose turn dispatches this call (session-scoped tool
+    /// entries read it; see [`apeireth_plugin::ToolCapability::invoke_in_session`]).
+    session: SessionId,
 }
 
 /// One admitted call inside a parallel dispatch window.
@@ -333,6 +341,9 @@ struct AdmittedCall {
 struct WindowEntry {
     call: ToolCall,
     execution: WindowExecution,
+    /// The dispatching turn's session (same scope contract as
+    /// [`AdmittedCall::session`]).
+    session: SessionId,
 }
 
 /// How a window slot produces its result: already resolved (no invocation) or
@@ -347,15 +358,20 @@ enum WindowExecution {
 }
 
 /// Execution stage of one admitted call: the invocation, nothing else.
+///
+/// The frozen-invocation and plain paths collapse into the session-scoped
+/// entry: `frozen: None` routes to `invoke` by the trait's own contract, so
+/// the observable behavior of both branches is unchanged — only the session
+/// scope now travels with the call.
 async fn run_admitted_call(admitted: &AdmittedCall) -> ToolResult {
-    if admitted.preapproved {
-        admitted
-            .tool
-            .invoke_frozen(&admitted.call, admitted.frozen_invocation.as_ref())
-            .await
-    } else {
-        admitted.tool.invoke(&admitted.call).await
-    }
+    admitted
+        .tool
+        .invoke_in_session(
+            &admitted.call,
+            admitted.frozen_invocation.as_ref(),
+            Some(admitted.session),
+        )
+        .await
 }
 
 /// The synthetic result a cancelled call is answered with, so every call in the
@@ -394,7 +410,8 @@ impl CallRunner<ToolResult> for WindowRunner {
             WindowExecution::Ready { tool, .. } => {
                 let tool = Arc::clone(tool);
                 let call = self.entries[index].call.clone();
-                Box::pin(async move { tool.invoke(&call).await })
+                let session = self.entries[index].session;
+                Box::pin(async move { tool.invoke_in_session(&call, None, Some(session)).await })
             }
         }
     }
@@ -1444,6 +1461,14 @@ impl Runtime {
                     return Err(error);
                 }
 
+                // 配额烧钱闸 (回合起手检查点): 会话级账本已耗尽时不再烧 provider
+                // 往返 —— 立即以预算耗尽错误帧收束 (熔断档)。
+                if let Some(exceeded) = self.config.quota.check(&mut session.quota) {
+                    return self
+                        .close_quota_exhausted(&mut session, request_id, trace_id, exceeded, None)
+                        .await;
+                }
+
                 let model_messages =
                     compose_provider_messages(&session.messages, &retry_scaffolding, &[]);
                 let before_model = self
@@ -1684,6 +1709,10 @@ impl Runtime {
                 // 因此能把已生成文本原样交给 UI, 而不是把它丢掉。
                 continuation.served_by = Some(served_by.clone());
                 continuation.usage = response.usage.clone();
+                // 会话级 token 计量 (回合计量 usage 累加): 每轮的 usage 按
+                // `total_tokens` 累加进会话账本, 计量点即落库点。
+                self.meter_provider_usage(&mut session, &response.usage)
+                    .await?;
                 if !response.content.is_empty() {
                     continuation.generated_text.push_str(&response.content);
                 }
@@ -1772,6 +1801,19 @@ impl Runtime {
 
                     match before_final.directive {
                         ModuleDirective::Continue => {
+                            // 配额烧钱闸 (回合收束检查点): 提交最终回答前查
+                            // 会话账本, 超限即帧收束 (回合中止即帧, 熔断档)。
+                            if let Some(exceeded) = self.config.quota.check(&mut session.quota) {
+                                return self
+                                    .close_quota_exhausted(
+                                        &mut session,
+                                        request_id,
+                                        trace_id,
+                                        exceeded,
+                                        None,
+                                    )
+                                    .await;
+                            }
                             let candidate = response.clone();
                             let turn_response = self
                                 .finish_turn(
@@ -1900,6 +1942,19 @@ impl Runtime {
             while continuation.next_tool_index < continuation.tool_calls.len() {
                 let index = continuation.next_tool_index;
                 let call = continuation.tool_calls[index].clone();
+                // 配额烧钱闸 (工具调用点): 派发本调用前查会话账本, 超限即帧
+                // 收束 —— 本调用起的未答调用补合成结果, 已生成文本与前文保留。
+                if let Some(exceeded) = self.config.quota.check(&mut session.quota) {
+                    return self
+                        .close_quota_exhausted(
+                            &mut session,
+                            request_id,
+                            trace_id,
+                            exceeded,
+                            Some((&continuation.tool_calls, index)),
+                        )
+                        .await;
+                }
                 let is_preapproved = continuation.approved_tool_index == Some(index);
                 // Parallel dispatch window: only a run of consecutive calls the
                 // classifier explicitly allows may overlap (bounded rolling pool,
@@ -2620,6 +2675,82 @@ impl Runtime {
         Err(error)
     }
 
+    /// Meter one provider round's usage onto the session quota ledger and
+    /// persist it.
+    ///
+    /// Metering points are persist points: the spend gate's ledger is durable
+    /// before any later side effect, so the self-report probe reads exact
+    /// numbers and an interrupted process never loses already-spent
+    /// accounting. The usage column metered is the round's `total_tokens`.
+    async fn meter_provider_usage(
+        &self,
+        session: &mut Session,
+        usage: &NormalizedUsage,
+    ) -> RuntimeResult<()> {
+        self.config.quota.bind_into(&mut session.quota);
+        session
+            .quota
+            .consume_tokens(usize::try_from(usage.total_tokens).unwrap_or(usize::MAX));
+        self.sessions.save(session).await
+    }
+
+    /// Meter one dispatched tool call onto the session quota ledger and
+    /// persist it (same persist-at-metering contract as
+    /// [`Self::meter_provider_usage`]).
+    ///
+    /// A step is counted when a call enters dispatch — including a call
+    /// answered with a synthetic result (unknown tool / governance denial) or
+    /// frozen for human approval; a resumed approved call is the *same* call
+    /// and is not counted twice. Calls dropped by the per-round truncation
+    /// never enter dispatch and are not counted.
+    async fn meter_tool_step(&self, session: &mut Session) -> RuntimeResult<()> {
+        self.config.quota.bind_into(&mut session.quota);
+        session.quota.consume_tool_step();
+        self.sessions.save(session).await
+    }
+
+    /// 预算耗尽即帧收束 (熔断档 = [`super::quota::QuotaExhaustedAction::CircuitBreak`]):
+    /// 未答的工具调用补合成结果 (transcript 保持合法), 记
+    /// `ExecutionFailed(phase = "quota_exhausted")`, 落库, 然后以
+    /// [`RuntimeError::BudgetExhausted`] 错误帧中止回合 —— 帧带维度名 / 上限 /
+    /// 已耗三个真实数字, 前文与已生成文本保留在会话里。返回类型泛型: 各检查点
+    /// 的收束目标不同 (回合收束 / 窗口流), 错误帧只有一个。
+    async fn close_quota_exhausted<T>(
+        &self,
+        session: &mut Session,
+        request_id: RequestId,
+        trace_id: TraceId,
+        exceeded: QuotaExceeded,
+        unanswered: Option<(&[ToolCall], usize)>,
+    ) -> RuntimeResult<T> {
+        let clock = self.clock.as_ref();
+        if let Some((calls, first_skipped)) = unanswered {
+            Self::append_skipped_tool_results(
+                session,
+                calls,
+                first_skipped,
+                "tool call skipped: the session quota is exhausted",
+                clock,
+            );
+        }
+        let error = RuntimeError::BudgetExhausted {
+            dimension: exceeded.dimension,
+            limit: exceeded.limit,
+            consumed: exceeded.consumed,
+        };
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::ExecutionFailed {
+                phase: "quota_exhausted".into(),
+                error: error.to_string(),
+            },
+            clock,
+        );
+        self.sessions.save(session).await?;
+        Err(error)
+    }
+
     /// Expire a pending approval that has outlived its TTL so a later turn can start.
     ///
     /// Claimed approvals are not expired here: their effect may already have
@@ -2963,8 +3094,8 @@ impl Runtime {
                 capability,
                 tool,
                 call: call.clone(),
-                preapproved: true,
                 frozen_invocation: approval.effective_invocation.clone(),
+                session: *session_id,
             }));
         }
 
@@ -3070,8 +3201,8 @@ impl Runtime {
             capability,
             tool,
             call: call.clone(),
-            preapproved: false,
             frozen_invocation: None,
+            session: *session_id,
         }))
     }
 
@@ -3093,6 +3224,11 @@ impl Runtime {
         preapproved: bool,
         approved_approval: Option<&PendingApproval>,
     ) -> RuntimeResult<ToolDispatch> {
+        // 步数计量 (工具调用计数): 每进入派发的调用记一步; 恢复一个已批准
+        // 调用是同一调用的续跑, 不重复记步 (首次派发已记)。
+        if !preapproved {
+            self.meter_tool_step(session).await?;
+        }
         match self
             .admit_one_tool(
                 trace,
@@ -3466,6 +3602,20 @@ impl Runtime {
 
         for offset in 0..window_len {
             let call = &continuation.tool_calls[window_start + offset];
+            // 配额烧钱闸 (工具调用点, 并行窗口同口径): 准入每一调用前查
+            // 会话账本, 超限即帧收束 —— 窗口尚未执行, 本窗起的调用全部补
+            // 合成结果。
+            if let Some(exceeded) = self.config.quota.check(&mut session.quota) {
+                return self
+                    .close_quota_exhausted(
+                        session,
+                        request_id,
+                        trace_id,
+                        exceeded,
+                        Some((&continuation.tool_calls, window_start)),
+                    )
+                    .await;
+            }
             let before_tool_messages = session.messages.clone();
             let before_tool = self
                 .run_hook_checked(
@@ -3534,17 +3684,26 @@ impl Runtime {
                 )
                 .await?
             {
-                ToolAdmission::Resolved(result) => entries.push(WindowEntry {
-                    call: call.clone(),
-                    execution: WindowExecution::Resolved(result),
-                }),
-                ToolAdmission::Ready(admitted) => entries.push(WindowEntry {
-                    call: call.clone(),
-                    execution: WindowExecution::Ready {
-                        capability: admitted.capability,
-                        tool: admitted.tool,
-                    },
-                }),
+                ToolAdmission::Resolved(result) => {
+                    // 步数计量: 进入窗口批 = 进入派发 (与串行路径同口径)。
+                    self.meter_tool_step(session).await?;
+                    entries.push(WindowEntry {
+                        call: call.clone(),
+                        execution: WindowExecution::Resolved(result),
+                        session: *session_id,
+                    });
+                }
+                ToolAdmission::Ready(admitted) => {
+                    self.meter_tool_step(session).await?;
+                    entries.push(WindowEntry {
+                        call: call.clone(),
+                        execution: WindowExecution::Ready {
+                            capability: admitted.capability,
+                            tool: admitted.tool,
+                        },
+                        session: *session_id,
+                    });
+                }
                 ToolAdmission::Pending(pending) => {
                     window_end = offset;
                     pending_dispatch = Some(pending);

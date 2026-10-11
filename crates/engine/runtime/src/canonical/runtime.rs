@@ -161,6 +161,11 @@ pub struct RuntimeConfig {
     /// postures changes the prompt projection and nothing else. Default `false`:
     /// a runtime that never engages the mechanism is byte-for-byte unchanged.
     pub plan_mode_enabled: bool,
+    /// Session-scoped cognitive quota ceilings (opt-in spend gate). `None` on a
+    /// dimension means no limit; the metering itself always runs so the
+    /// self-report's consumption column stays real. See
+    /// [`super::quota`] for the accounting and exhausted-behavior contract.
+    pub quota: super::quota::SessionQuotaLimits,
 }
 
 /// Secret-free diagnostic projection of the live runtime graph.
@@ -230,6 +235,7 @@ impl Default for RuntimeConfig {
             context_spill_root: None,
             repetition_advisory: RepetitionPolicy::default(),
             plan_mode_enabled: false,
+            quota: super::quota::SessionQuotaLimits::default(),
         }
     }
 }
@@ -853,6 +859,17 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_plan_mode_enabled(mut self, enabled: bool) -> Self {
         self.config.plan_mode_enabled = enabled;
+        self
+    }
+
+    /// Set the session-scoped cognitive quota ceilings (opt-in spend gate).
+    ///
+    /// `None` on a dimension = no limit; consumption metering runs either way.
+    /// See [`super::quota::SessionQuotaLimits`] for the exhausted-behavior
+    /// contract.
+    #[must_use]
+    pub fn with_session_quota(mut self, quota: super::quota::SessionQuotaLimits) -> Self {
+        self.config.quota = quota;
         self
     }
 

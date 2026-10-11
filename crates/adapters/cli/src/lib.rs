@@ -102,6 +102,8 @@ const REFLEXION_DIR_ENV: &str = "APEIRETH_REFLEXION_DIR";
 const CONTEXT_BUDGET_CHARS_ENV: &str = "APEIRETH_CONTEXT_BUDGET_CHARS";
 const TURN_ROUNDS_ENV: &str = "APEIRETH_MAX_TURN_ROUNDS";
 const TOOL_CALLS_ENV: &str = "APEIRETH_MAX_TOOL_CALLS";
+const QUOTA_MAX_TOKENS_ENV: &str = "APEIRETH_QUOTA_MAX_TOKENS";
+const QUOTA_MAX_TOOL_STEPS_ENV: &str = "APEIRETH_QUOTA_MAX_TOOL_STEPS";
 
 /// Resolve the local read-tools switch from the process environment.
 ///
@@ -279,6 +281,25 @@ pub fn turn_round_limit_from_env() -> u32 {
 pub fn tool_call_limit_from_env() -> usize {
     apeireth_runtime::canonical::parse_tool_call_limit(
         std::env::var(TOOL_CALLS_ENV).ok().as_deref(),
+    )
+}
+
+/// 会话配额旋钮 (opt-in 烧钱闸): `APEIRETH_QUOTA_MAX_TOKENS=N` = 会话级 token
+/// 配额上限 (回合计量 usage 累加到上限即预算耗尽)。正整数直通 (越界钳制到
+/// `MAX_QUOTA_TOKENS`); 未设 / 空 / 0 / 非法 = 不设限 (`None`) —— 配额是
+/// opt-in, 默认不设限的语义显式。
+pub fn quota_max_tokens_from_env() -> Option<u64> {
+    apeireth_runtime::canonical::parse_quota_max_tokens(
+        std::env::var(QUOTA_MAX_TOKENS_ENV).ok().as_deref(),
+    )
+}
+
+/// 会话配额旋钮 (opt-in 烧钱闸): `APEIRETH_QUOTA_MAX_TOOL_STEPS=N` = 会话级
+/// 工具步数上限 (工具调用计数到上限即预算耗尽)。取值纪律同
+/// [`quota_max_tokens_from_env`]。
+pub fn quota_max_tool_steps_from_env() -> Option<u64> {
+    apeireth_runtime::canonical::parse_quota_max_tool_steps(
+        std::env::var(QUOTA_MAX_TOOL_STEPS_ENV).ok().as_deref(),
     )
 }
 
@@ -640,6 +661,12 @@ async fn build_canonical_runtime_with_parts(
     builder = builder
         .with_max_rounds(turn_round_limit_from_env())
         .with_max_tool_calls_per_round(tool_call_limit_from_env());
+    // 会话配额旋钮 (APEIRETH_QUOTA_MAX_TOKENS / APEIRETH_QUOTA_MAX_TOOL_STEPS):
+    // opt-in 烧钱闸, 默认不设限 (None); 执行面按会话账本累计并在检查点截断。
+    builder = builder.with_session_quota(apeireth_runtime::canonical::SessionQuotaLimits {
+        max_tokens: quota_max_tokens_from_env(),
+        max_tool_steps: quota_max_tool_steps_from_env(),
+    });
     // 长尾截断的完整原文落盘根目录 (数据目录, 实际写入 `<data>/spill/`): 有落盘点时
     // 截断保留头尾预览 + 取回指引行; 落盘失败时回退内联原文 (宁长勿丢, 不失败调用)。
     builder = builder.with_context_spill_root(default_panel_data_dir());
@@ -661,14 +688,21 @@ async fn build_canonical_runtime_with_parts(
 }
 
 async fn production_session_store() -> Result<Arc<dyn apeireth_runtime::SessionStore>, String> {
-    let path = std::env::var(SESSION_DB_ENV)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| ".apeireth/sessions.sqlite3".into());
-    SqliteSessionStore::open(&path)
+    SqliteSessionStore::open(session_db_path())
         .await
         .map(|store| Arc::new(store) as Arc<dyn apeireth_runtime::SessionStore>)
         .map_err(|error| format!("session store open failed: {error}"))
+}
+
+/// 生产会话库路径 (`APEIRETH_SESSION_DB` 覆写, 默认 `.apeireth/sessions.sqlite3`)。
+///
+/// 自省通道的会话配额探测口读同一路径: 自述与执行面同账本。
+fn session_db_path() -> PathBuf {
+    std::env::var(SESSION_DB_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".apeireth/sessions.sqlite3"))
 }
 
 /// Build the direct CLI runtime with the same trace/audit observer used by the
@@ -969,6 +1003,13 @@ async fn build_cognitive_modules_from_env(
         self_status_budget: Some(apeireth_runtime_assembly::budget_status_from_configured(
             u64::from(turn_round_limit_from_env()),
             tool_call_limit_from_env() as u64,
+            quota_max_tokens_from_env(),
+            quota_max_tool_steps_from_env(),
+        )),
+        // 自省通道: 会话配额计量探测口 —— 只读会话行的账本, 已耗真值与
+        // 执行面同一本账 (不设限维显示 "—")。
+        self_status_quota: Some(apeireth_runtime_assembly::session_quota_probe(
+            session_db_path(),
         )),
     };
     let modules =
