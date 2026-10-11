@@ -41,3 +41,11 @@ P1 token/步数两维（计量已有）→ P2 花费（单价表）→ P3 深度
 3. 自述面：`budget.quota` 四行——token/步数两维真值（上限/已耗/余量，不设限显示 "—"），花费/深度两维如实"暂无接口"；已耗按会话作用域现探测（无作用域显式 null+原因）。
 
 **测试证据**：`crates/engine/runtime/tests/session_quota.rs`（累计/超限即帧/维度名/回合中止语义/烧钱闸不起烧）、`canonical/quota.rs` 单测（env 解析四态/不设限默认/口径唯一/询问档与单价表骨架显式未接线）、`self_status.rs` 与 `self_status_source.rs` 单测（两维真值与"—"/暂无接口标注/作用域缺失显式 null）、`production_knobs.rs`（env→RuntimeConfig 同源）。
+
+## H-P1 接头记录（单价表来源就绪）
+
+> 叠加记录（原有各节不动）。H 线 P1（模型画像表）交出**单价表来源**：
+> `impl CostRateTable for ModelProfileTable`（`apeireth-runtime::canonical::quota`，画像行有输入+输出双价才给价，缺一半/无价/未知回 `None`——绝不编价）
+> + `CostRateMicros::cost_micros`（每侧向上取整、饱和——计量点接线时的冻结换算口径）。
+> 本文件 P1 记录「`CostRateMicros`+`CostRateTable`（花费单价表骨架）」一句自该批起读作"单价表来源已实现（画像表）"。
+> **花费维计量与超限行为仍属 P2**（显式未接线钉死：上限恒不可达、花费列无计量点、自述沿用"暂无接口"）；P2 接线路径 = 计量点按 `usage × rate` 记 `consumed_cost_micros`，`check` 增 `cost_micros` 维走超限即帧同款。详见 [H-model-plane.md](H-model-plane.md) P1 实施记录。

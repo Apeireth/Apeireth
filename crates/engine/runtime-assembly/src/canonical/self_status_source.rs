@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_core::kernel::SessionId;
+use apeireth_core::model_profile::ModelProfile;
 use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_tools_canonical::{
     derive_tuning_preset, BudgetStatus, CapabilitySwitch, MemoryLedgerStats, QuotaDimensionStatus,
@@ -132,6 +133,7 @@ pub struct ProductionSelfStatusSource {
     self_learning: bool,
     budget: BudgetStatus,
     quota: Option<SessionQuotaProbe>,
+    model_profile: Option<ModelProfile>,
 }
 
 impl ProductionSelfStatusSource {
@@ -150,6 +152,7 @@ impl ProductionSelfStatusSource {
             self_learning,
             budget: budget_status_from_constants(),
             quota: None,
+            model_profile: None,
         }
     }
 
@@ -178,6 +181,15 @@ impl ProductionSelfStatusSource {
     #[must_use]
     pub fn with_budget(mut self, budget: BudgetStatus) -> Self {
         self.budget = budget;
+        self
+    }
+
+    /// 注入生效模型的画像 (模型面轴 H-P1): 组装根把画像表解析出的生效模型行
+    /// 传入 (未知模型传显式 unknown 行, 不是 None); 缺位时模型节显式 null +
+    /// 原因。
+    #[must_use]
+    pub fn with_model_profile(mut self, profile: ModelProfile) -> Self {
+        self.model_profile = Some(profile);
         self
     }
 
@@ -279,6 +291,12 @@ impl ProductionSelfStatusSource {
             }
         };
 
+        // 模型画像: 装配期解析的生效模型行 (H-P1); 缺位显式 null + 原因。
+        let (model, model_reason) = match &self.model_profile {
+            Some(profile) => (Some(profile.clone()), None),
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
         SelfStatusSnapshot {
             identity: self.identity.clone(),
             capabilities: self.capabilities.clone(),
@@ -293,6 +311,8 @@ impl ProductionSelfStatusSource {
                 credentials_present,
             }),
             workspace_reason,
+            model,
+            model_reason,
         }
     }
 }
@@ -658,5 +678,47 @@ mod tests {
             budget.quota.tokens.reason.as_deref(),
             Some(DATA_PROBE_NOT_WIRED)
         );
+    }
+
+    #[test]
+    fn the_model_profile_reaches_the_self_report_snapshot() {
+        use apeireth_core::model_profile::{ModelProfileTable, BASELINE_CONTEXT_WINDOW_FLOOR};
+        let table = ModelProfileTable::baseline();
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
+            .with_model_profile(table.resolve("MiniMax-M3").into_owned());
+        let snapshot = source.snapshot();
+        let profile = snapshot.model.expect("model profile must arrive");
+        assert_eq!(profile.model_id, "MiniMax-M3");
+        assert_eq!(profile.context_window, Some(BASELINE_CONTEXT_WINDOW_FLOOR));
+        assert!(
+            profile.input_price_micros.is_none(),
+            "基线单价未提供 (绝不编价)"
+        );
+        assert!(snapshot.model_reason.is_none());
+    }
+
+    #[test]
+    fn an_unknown_model_profile_stays_an_explicit_unknown_row() {
+        use apeireth_core::model_profile::ModelProfileTable;
+        // 未知模型注入显式 unknown 行 (不是 None): 事实如实未提供, 不编造。
+        let table = ModelProfileTable::baseline();
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
+            .with_model_profile(table.resolve("never-heard-of-it").into_owned());
+        let snapshot = source.snapshot();
+        let profile = snapshot.model.expect("unknown row still arrives");
+        assert!(profile.is_unknown());
+        assert_eq!(profile.model_id, "never-heard-of-it");
+    }
+
+    #[test]
+    fn a_missing_model_profile_reports_explicit_null_with_a_reason() {
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None);
+        let snapshot = source.snapshot();
+        assert!(snapshot.model.is_none());
+        assert!(snapshot
+            .model_reason
+            .as_deref()
+            .unwrap()
+            .contains(DATA_PROBE_NOT_WIRED));
     }
 }

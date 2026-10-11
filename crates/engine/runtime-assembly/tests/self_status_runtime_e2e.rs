@@ -1,8 +1,8 @@
 //! 结构化自述面 (`tool.self_status`) 的装配级端到端证明 (自省通道)。
 //!
 //! 装配走真 [`ProductionModules`] 生产组装根; 自述内容对账到真实生效值与
-//! 真存储计数: 身份 / 能力名册 / 记忆账本 / 调参 / 预算 / 工作区逐项核对,
-//! 缺失来源显式 null + 原因, 凭据只回存在性布尔 (绝不回显凭据本体)。
+//! 真存储计数: 身份 / 能力名册 / 记忆账本 / 调参 / 预算 / 工作区 / 模型画像
+//! 逐项核对, 缺失来源显式 null + 原因, 凭据只回存在性布尔 (绝不回显凭据本体)。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -500,4 +500,62 @@ async fn budget_quota_rows_report_real_values_from_the_durable_session_ledger() 
     let missing = session_quota_probe(db)(apeireth_core::kernel::SessionId::new())
         .expect_err("a session with no persisted row has no reading");
     assert!(missing.contains("no persisted row"), "{missing}");
+}
+
+/// 模型画像节端到端 (H-P1): 组装根注入画像表解析出的生效模型行, 自述
+/// `model` 节出真值; 单价缺的单项如实标「未提供」, 绝不编价。
+#[tokio::test]
+async fn the_model_section_reports_the_active_model_profile_from_the_table() {
+    use apeireth_core::model_profile::ModelProfileTable;
+    use apeireth_tools_canonical::PRICE_NOT_PROVIDED;
+
+    let table = ModelProfileTable::load_with(
+        None,
+        Some(
+            r#"[{"model_id": "MiniMax-M3", "context_window": 204800, "max_output": 8192,
+                 "supports_tools": true, "supports_streaming": false,
+                 "input_price_micros": 2000, "output_price_micros": 8000}]"#,
+        ),
+    )
+    .expect("profile table");
+    let backends = ProductionBackends {
+        self_status_model_profile: Some(table.resolve("MiniMax-M3").into_owned()),
+        ..ProductionBackends::default()
+    };
+    let (_, tool) = build(base_config(), backends);
+    let report = invoke(&tool).await;
+    let model = &report["model"];
+    assert_eq!(model["model_id"], "MiniMax-M3");
+    assert_eq!(model["context_window"], 204_800);
+    assert_eq!(model["supports_tools"], true);
+    assert_eq!(model["supports_streaming"], false);
+    assert_eq!(model["input_price_micros"], 2_000);
+    assert_eq!(model["output_price_micros"], 8_000);
+    assert_eq!(model["cache_read_price_micros"], Value::Null, "缺即未提供");
+    assert_eq!(
+        model["prices_display"],
+        format!("input=2000, output=8000, cache_read={PRICE_NOT_PROVIDED}")
+    );
+    assert!(model["reason"].is_null());
+}
+
+/// 无画像来源: 模型节显式 null + 原因 (缺失不编造, 也不整帧失败)。
+#[tokio::test]
+async fn a_missing_model_profile_section_is_explicit_null_with_a_reason() {
+    use apeireth_tools_canonical::PRICE_NOT_PROVIDED;
+
+    let (_, tool) = build(base_config(), ProductionBackends::default());
+    let report = invoke(&tool).await;
+    let model = &report["model"];
+    assert_eq!(model["model_id"], Value::Null);
+    assert_eq!(model["context_window"], Value::Null);
+    assert_eq!(model["prices_display"], PRICE_NOT_PROVIDED);
+    assert!(
+        model["reason"]
+            .as_str()
+            .unwrap()
+            .contains(DATA_PROBE_NOT_WIRED),
+        "{}",
+        model["reason"]
+    );
 }

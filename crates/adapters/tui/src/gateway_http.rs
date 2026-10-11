@@ -23,9 +23,10 @@ const EPISODE_COUNT_WINDOW: usize = 500;
 #[derive(Debug)]
 pub struct HttpGatewayBackend {
     endpoint: String,
-    /// 回环访问令牌 (`--token` / env `APEIRETH_GATEWAY_TOKEN`): 有则随每个请求
-    /// 呈现 `Authorization: Bearer <token>`, 供网关敏感端点令牌门校验。无则
-    /// 不发鉴权头 (未设令牌的网关零断)。
+    /// 回环访问令牌 (`--token` / env `APEIRETH_GATEWAY_TOKEN`): 有则随**每个**
+    /// 请求呈现 `Authorization: Bearer <token>`, 供网关令牌门校验 (W2-② 起
+    /// 覆盖全 API 面, 仅 `/health` 探活豁免)。无则不发鉴权头 (未设令牌的
+    /// 网关零断)。
     token: Option<String>,
     client: reqwest::blocking::Client,
 }
@@ -745,5 +746,69 @@ mod tests {
             !captured.to_ascii_lowercase().contains("authorization"),
             "空白令牌不得发鉴权头: {captured}"
         );
+    }
+
+    /// 全端点带 Bearer (W2-② 认证面全网关化): TUI 的每个请求族 (探活 / 模型 /
+    /// 面板 / 会话设置 / chat) 都随请求呈现令牌 —— 令牌门覆盖全 API 面后,
+    /// 这是 TUI 全程零断的前提 (缺一族就 401)。
+    #[test]
+    fn every_request_family_carries_the_bearer_token() {
+        let cases: Vec<(&str, Box<dyn FnOnce(String)>)> = vec![
+            (
+                "health",
+                Box::new(|endpoint| {
+                    let _ = HttpGatewayBackend::with_token(&endpoint, Some("family-token-1"))
+                        .expect("backend")
+                        .health();
+                }),
+            ),
+            (
+                "models",
+                Box::new(|endpoint| {
+                    let _ = HttpGatewayBackend::with_token(&endpoint, Some("family-token-1"))
+                        .expect("backend")
+                        .list_models();
+                }),
+            ),
+            (
+                "panel sessions",
+                Box::new(|endpoint| {
+                    let _ = HttpGatewayBackend::with_token(&endpoint, Some("family-token-1"))
+                        .expect("backend")
+                        .list_sessions();
+                }),
+            ),
+            (
+                "session settings",
+                Box::new(|endpoint| {
+                    let _ = HttpGatewayBackend::with_token(&endpoint, Some("family-token-1"))
+                        .expect("backend")
+                        .set_model(Some("session-1"), Some("model-1"));
+                }),
+            ),
+            (
+                "chat",
+                Box::new(|endpoint| {
+                    let mut backend =
+                        HttpGatewayBackend::with_token(&endpoint, Some("family-token-1"))
+                            .expect("backend");
+                    let request = crate::backend::TurnRequest {
+                        session: Some("session-1".to_string()),
+                        input: "hello".to_string(),
+                        model: None,
+                    };
+                    let _ = backend.send_turn(request, &mut |_delta| {});
+                }),
+            ),
+        ];
+        for (label, call) in cases {
+            let captured = serve_one_and_capture(call);
+            assert!(
+                captured
+                    .to_ascii_lowercase()
+                    .contains("authorization: bearer family-token-1"),
+                "{label} 请求必须带 Bearer 头: {captured}"
+            );
+        }
     }
 }

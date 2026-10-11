@@ -57,6 +57,14 @@ pub mod im_bridge;
 /// IM quick access: approval cards and four-state closure (paired audit writes).
 pub mod im_approval;
 
+/// W2-② client credential system: per-client token table (name → token, env /
+/// json config faces with stored-doc refuse-to-open semantics).
+pub mod client_tokens;
+
+/// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
+/// and the explicitly unwired TLS placeholder surface.
+pub mod remote_access;
+
 pub use barge_in::{
     format_sse_interrupt_event, BargeInController, InterruptNotice, InterruptReason,
     InterruptStreamSubscription, StreamHandle,
@@ -79,7 +87,19 @@ pub use canonical_entry::{
     execute_chat, resolve_approval, serve_canonical, serve_canonical_with_services,
     serve_state_with_shutdown, serve_with_shutdown, CanonicalApprovalRequest, CanonicalChatOutcome,
     CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError, CanonicalExecutionEvent,
-    CanonicalPendingApproval, GatewayTokenGate,
+    CanonicalPendingApproval, GateVerdict, GatewayTokenGate, UNAUTHENTICATED_PROBE_PATHS,
+};
+
+pub use client_tokens::{
+    validate_gate_table_pair, ClientTokenConfig, ClientTokenError, ClientTokenSpec,
+    ClientTokenTable, CLIENT_TOKENS_DOC_NAME, CLIENT_TOKENS_DOC_VERSION, CLIENT_TOKENS_ENV,
+    CLIENT_TOKENS_FILE,
+};
+
+pub use remote_access::{
+    bind_scope, enforce_remote_bind, resolve_listen_bind, resolve_listen_bind_from,
+    tls_surface_status, tls_surface_status_from, BindScope, RemoteBindClearance, RemoteBindError,
+    TlsSurface, DEFAULT_BIND, LISTEN_ENV, TLS_CERT_ENV, TLS_KEY_ENV,
 };
 
 pub use admin::{

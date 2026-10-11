@@ -561,3 +561,60 @@ fn session_quota_knobs_are_opt_in_and_clamp_oversized_values() {
         "越界钳制"
     );
 }
+
+/// H-P1 模型面: 生效模型 id 的唯一解析口径 (与运行时 `with_default_model`
+/// 同源) —— `APEIRETH_MODEL` 显式覆盖胜出; 空白覆盖按未设处理, 回族首默认
+/// 模型; 族模型表 env (`APEIRETH_API_MODELS`) 与解析同源。
+#[test]
+fn active_model_id_is_the_single_resolution_for_the_model_plane() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("explicit-model"));
+    let _g_models = EnvGuard::set("APEIRETH_API_MODELS", None);
+    assert_eq!(
+        apeireth_cli::active_model_id().as_deref(),
+        Some("explicit-model"),
+        "显式覆盖胜出"
+    );
+
+    let _g_blank = EnvGuard::set("APEIRETH_MODEL", Some("  "));
+    assert_eq!(
+        apeireth_cli::active_model_id().as_deref(),
+        Some("minimax-m3"),
+        "空白覆盖按未设处理, 回族首默认模型 (提供商面规范 id, 小写)"
+    );
+
+    let _g_list = EnvGuard::set("APEIRETH_API_MODELS", Some("custom-a,custom-b"));
+    assert_eq!(
+        apeireth_cli::active_model_id().as_deref(),
+        Some("custom-a"),
+        "族模型表 env 同源 (首个)"
+    );
+
+    let _g_empty_list = EnvGuard::set("APEIRETH_API_MODELS", Some(" "));
+    let _g_no_model = EnvGuard::set("APEIRETH_MODEL", None);
+    assert_eq!(
+        apeireth_cli::active_model_id().as_deref(),
+        Some("minimax-m3"),
+        "模型表 env 空白 = 族默认模型表"
+    );
+}
+
+/// H-P1 配置面 fail-closed: 坏 `APEIRETH_MODEL_PROFILES` = 装配拒开
+/// (启动错误正式通道), 不静默回退基线。
+#[tokio::test]
+async fn bootstrap_refuses_a_broken_model_profiles_env() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_profiles = EnvGuard::set("APEIRETH_MODEL_PROFILES", Some("{ not json"));
+    let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("model-profiles")));
+    let _g_sdb = EnvGuard::set(
+        "APEIRETH_SESSION_DB",
+        Some(&temp_db("model-profiles-session")),
+    );
+    let Err(error) = build_canonical_runtime_with_sessions_from_env().await else {
+        panic!("坏画像配置必须拒开");
+    };
+    assert!(
+        error.contains("model profile configuration refused to load"),
+        "{error}"
+    );
+}

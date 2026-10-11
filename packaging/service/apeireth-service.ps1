@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Apeireth 常驻服务管理面 (Windows): install | start | stop | status | uninstall.
@@ -29,7 +29,8 @@
     网关监听端口 (缺省 8080)。取值 1..65535。
 
 .PARAMETER Bind
-    网关监听地址 (缺省 127.0.0.1 = 仅本机; 非回环暴露请另行配置令牌 + 防火墙)。
+    网关监听地址。缺省取 env `APEIRETH_LISTEN`, 再缺省 127.0.0.1 (仅本机)。
+    非回环暴露由网关远程绑定闸强制令牌 (fail-closed: 无令牌拒启动)。
 
 .PARAMETER BinaryPath
     `apeireth` 可执行文件路径。缺省按 脚本旁 / 仓库 target / PATH 顺序解析。
@@ -61,7 +62,8 @@ param(
     [ValidateRange(1, 65535)]
     [int]$Port = 8080,
 
-    [string]$Bind = '127.0.0.1',
+    # W2-② 绑定旋钮: -Bind 显式给值优先, 缺省取 env APEIRETH_LISTEN, 再缺省仅本机。
+    [string]$Bind = $(if ([string]::IsNullOrWhiteSpace($env:APEIRETH_LISTEN)) { '127.0.0.1' } else { $env:APEIRETH_LISTEN.Trim() }),
 
     [string]$BinaryPath,
 

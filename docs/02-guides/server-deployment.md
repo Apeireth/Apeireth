@@ -94,12 +94,17 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 uninstall
 
 ## 6. 安全建议
 
-1. **令牌必配**: install 默认生成持久令牌, 敏感端点 (`/v1/admin/config`、
-   `/v1/approvals/resolve`、`/v1/admin/shutdown`) 即强制 `Authorization: Bearer <token>`。
-   无令牌时网关三态门口径照旧 (放行 + 警告帧 + 审计) —— 但常驻暴露面请勿裸奔。
-2. **防火墙**: 默认绑定 `127.0.0.1` (仅本机)。确需 LAN/远程访问时:
-   非回环绑定 (`-Bind 0.0.0.0`) + 主机防火墙只放行可信网段 + 强制令牌;
-   更细的 TLS/每客户端授权属 F 轴 P3 (远程访问) 范围, 当前版本不提供。
+1. **令牌必配**: install 默认生成持久令牌, **全 API 面**强制 `Authorization: Bearer <token>`
+   (chat/事件流/面板/会话/审批/admin 族, 仅 `/health` 探活豁免)。令牌可以是服务令牌
+   (`APEIRETH_GATEWAY_TOKEN`) 或客户端令牌表条目 (`APEIRETH_GATEWAY_TOKENS` /
+   `client-tokens.json`, name→token, 过门审计带客户端名)。令牌族两面皆空时三态门口径
+   照旧 (放行 + 警告帧 + 审计) —— 但常驻暴露面请勿裸奔。
+2. **防火墙**: 默认绑定 `127.0.0.1` (仅本机)。确需 LAN/远程访问时: 非回环绑定
+   (`-Bind 0.0.0.0` 或 env `APEIRETH_LISTEN`) + 主机防火墙只放行可信网段;
+   **非回环绑定强制令牌**: 令牌族两面皆空时网关拒绝启动 (fail-closed), 显式
+   `APEIRETH_GATEWAY_TOKEN=none` 为逃生阀 (明示不设防, 留审计)。
+   TLS 尚未接线 (`APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 为接口桩, 流量明文),
+   每客户端**权限**分级属 W3/E 轴范围, 当前版本不提供。
 3. **令牌轮换**: `install -RotateToken`; 轮换后重连端 (桌面/TUI) 自动取新值
    (同源读取), 常驻服务需 `stop` + `start` 让新令牌进服务 env。
 4. **令牌不外流**: 令牌只存系统凭据库与服务 env —— 不落明文文件、不进任务定义、
@@ -115,7 +120,7 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 uninstall
 | 启动报 `gateway already running (pid N, port P)` | 有常驻实例活着 (PID 文件占位)。要换实例先 `stop`; 占位陈旧 (进程已死) 会被下次启动自动接管 |
 | 启动报 `gateway already running: <addr> is already in use` | 端口被占 (另一个网关或别的进程)。换 `-Port` 或先停掉占用者 |
 | 桌面壳直连了旧常驻 | 桌面按 `%LOCALAPPDATA%\Apeireth\run\gateway.pid` + `/health` 探测; 常驻已停而占位残留时桌面回落拉起侧车; 端口变了请重启桌面壳 |
-| 敏感端点 401 `auth_missing_key` / `auth_invalid_key` | 客户端没带/带错令牌。桌面/TUI 走同源令牌面自动带; 手工 curl 需 `Authorization: Bearer <token>` (从凭据库取, 不落日志) |
+| 端点 401 `auth_missing_key` / `auth_invalid_key` | 客户端没带/带错令牌 (全 API 面令牌门, 仅 `/health` 豁免)。TUI 全请求自动带; 手工 curl 需 `Authorization: Bearer <token>` (从凭据库/令牌表取, 不落日志) |
 | 无令牌警告帧刷屏 (`gateway_auth_unprotected`) | 服务没带令牌跑 (令牌面缺席)。`status` 看 token 在否, `install -RotateToken` 后 `stop`+`start` |
 | 停机后仍有残留 | 非优雅路径 (强杀) 可能留下未删的 PID 文件: 不影响下次启动 (陈旧自动接管), 介意可手删 |
 

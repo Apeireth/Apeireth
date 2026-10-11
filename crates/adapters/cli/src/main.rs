@@ -10,7 +10,7 @@ use apeireth_runtime::ApprovalDecision;
 
 fn print_help() {
     println!(
-        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
+        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version\n\nEnvironment:\n  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)\n  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)"
     );
 }
 
@@ -910,7 +910,9 @@ fn main() -> ExitCode {
             }
         },
         "gateway" if args.get(1).map(String::as_str) == Some("serve") => {
-            let mut bind = "127.0.0.1".to_string();
+            // 绑定地址口径 (W2-②): --bind 显式旗标 > env APEIRETH_LISTEN >
+            // 回环缺省 (127.0.0.1, fail-closed 默认仅本机)。
+            let mut bind: Option<String> = None;
             let mut port = 8080;
             let mut pid_file: Option<std::path::PathBuf> = None;
             let mut index = 2;
@@ -921,7 +923,7 @@ fn main() -> ExitCode {
                         eprintln!("gateway serve --bind requires a value");
                         return ExitCode::FAILURE;
                     };
-                    bind = value.clone();
+                    bind = Some(value.clone());
                 } else if args[index] == "--port" {
                     index += 1;
                     let Some(value) = args.get(index) else {
@@ -953,6 +955,13 @@ fn main() -> ExitCode {
                 }
                 index += 1;
             }
+            let bind = match apeireth_gateway::resolve_listen_bind(bind.as_deref()) {
+                Ok(bind) => bind,
+                Err(error) => {
+                    eprintln!("gateway serve failed: {error}");
+                    return ExitCode::FAILURE;
+                }
+            };
             run_gateway(bind, port, pid_file)
         }
         _ => {

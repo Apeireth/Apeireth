@@ -63,6 +63,10 @@ pub mod statechart;
 pub mod storage_atomic;
 /// 存储文档描述符 (`StoredDoc<T>`) + 版本拒开两级容错 + 显式迁移入口。
 pub mod stored_doc;
+// 模型画像表 (H-P1 模型面轴): 模型能力事实 + 单价的依据数据面 (路由/成本分级)。
+/// 模型画像表 (`ModelProfile`/`ModelProfileTable`): 三层配置 (内置基线 /
+/// 数据目录拒开档 / env 覆盖) + 显式 unknown, 单价缺省 None 绝不编价。
+pub mod model_profile;
 // 统一超时熔合 (第三批·裁决件): 到期只通知 + 取值过闸 + 空闲看门狗 + 超时类独立 code。
 /// 统一超时熔合小库 (`Deadline` / `clamp_timeout` / `IdleWatchdog`)。
 pub mod deadline;

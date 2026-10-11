@@ -10,8 +10,10 @@
 //! * **tool steps** — one step per dispatched tool call.
 //!
 //! The other two dimensions of the four-dimension quota design are honestly
-//! *not* wired: **cost** has no unit-price table (only the type + trait stub
-//! below — installing a table is what would enable it) and **depth** has no
+//! *not* wired: **cost** now has a unit-price table source (the model-profile
+//! table, see [`CostRateTable`]) but the execution metering points do not yet
+//! record `usage × price`, so the dimension stays un-metered until a rate
+//! table is installed there (a separate batch), and **depth** has no
 //! call-tree tracking. Nothing pretends otherwise.
 //!
 //! # Opt-in limits
@@ -32,6 +34,7 @@
 
 use std::fmt;
 
+use apeireth_core::model_profile::ModelProfileTable;
 use apeireth_orchestration::CognitiveQuota;
 use serde::{Deserialize, Serialize};
 
@@ -126,7 +129,8 @@ impl SessionQuotaLimits {
     /// An unlimited dimension receives the ledger's unreachable ceiling
     /// ([`CognitiveQuota::unlimited`]), so `CognitiveQuota::is_exhausted`
     /// agrees with [`SessionQuotaLimits::check`] by construction. The cost
-    /// dimension is not metered this batch (no unit-price table), so its
+    /// dimension is not metered (the unit-price source exists but no metering
+    /// point records `usage × price` yet), so its
     /// ceiling stays unreachable too.
     pub fn bind_into(&self, meter: &mut CognitiveQuota) {
         meter.max_tokens = self
@@ -203,10 +207,11 @@ impl QuotaExhaustedAction {
 
 /// One model's unit price: micro-units of cost per 1 000 tokens.
 ///
-/// Interface stub, **explicitly not wired**: this batch has no unit-price
-/// table, so the cost dimension of the quota is honestly un-metered (the
-/// self-report says so). Installing a [`CostRateTable`] implementation and
-/// recording `usage × price` at the metering points is what would enable it.
+/// The cost dimension of the quota is still honestly *un-metered*: the
+/// unit-price source exists (the model-profile table implements
+/// [`CostRateTable`]) but the execution metering points do not record
+/// `usage × price` yet. Installing that recording is what would enable the
+/// dimension; until then the self-report says "暂无接口".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CostRateMicros {
     /// Cost of 1 000 input tokens, in micro-units.
@@ -215,15 +220,57 @@ pub struct CostRateMicros {
     pub output_micros_per_1k_tokens: u64,
 }
 
+impl CostRateMicros {
+    /// The cost, in micro-units, of metering `input_tokens` + `output_tokens`
+    /// at this rate.
+    ///
+    /// Rounding is per-side ceil over 1 000 tokens (保守口径: 永不低估花费),
+    /// saturating at `u64::MAX`. This is the frozen arithmetic the cost
+    /// metering points will call when the dimension is installed.
+    pub fn cost_micros(&self, input_tokens: u64, output_tokens: u64) -> u64 {
+        ceil_micros(input_tokens, self.input_micros_per_1k_tokens)
+            .saturating_add(ceil_micros(output_tokens, self.output_micros_per_1k_tokens))
+    }
+}
+
+/// `tokens × micros_per_1k / 1000`, rounded up (never undercounts spend).
+fn ceil_micros(tokens: u64, micros_per_1k: u64) -> u64 {
+    let product = u128::from(tokens) * u128::from(micros_per_1k);
+    let rounded = (product + 999) / 1000;
+    u64::try_from(rounded).unwrap_or(u64::MAX)
+}
+
 /// The unit-price table lookup: model id to unit price.
 ///
-/// Interface stub, **explicitly not wired** (see [`CostRateMicros`]). The
-/// production metering points accept no price source yet; wiring one is the
-/// documented path to enabling the cost dimension.
+/// The install point for the cost dimension (see [`CostRateMicros`]): the
+/// execution metering points accept no price source yet, and installing one
+/// (plus `usage × price` recording) is the documented path to enabling the
+/// cost dimension. The model-profile table is the production source of these
+/// rows (see the [`CostRateTable`] impl for [`ModelProfileTable`]).
 pub trait CostRateTable: Send + Sync {
     /// The unit price for `model`, or `None` when the table has no row (the
     /// cost dimension then cannot be metered for that model).
     fn rate_for(&self, model: &str) -> Option<CostRateMicros>;
+}
+
+/// 模型画像表 = 单价表来源 (H-P1 接头): 有价的画像行给出单价,
+/// 无价/未知的行回 `None` —— 绝不编价。
+///
+/// A row yields a rate only when **both** the input and the output unit price
+/// are provided: a half-priced row cannot express a complete rate, and the
+/// missing half is never invented. `cache_read_price_micros` stays profile
+/// data (the [`CostRateMicros`] shape carries no cache column).
+impl CostRateTable for ModelProfileTable {
+    fn rate_for(&self, model: &str) -> Option<CostRateMicros> {
+        let profile = self.get(model)?;
+        match (profile.input_price_micros, profile.output_price_micros) {
+            (Some(input), Some(output)) => Some(CostRateMicros {
+                input_micros_per_1k_tokens: input,
+                output_micros_per_1k_tokens: output,
+            }),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -345,7 +392,8 @@ mod tests {
 
     #[test]
     fn the_cost_dimension_is_an_explicitly_unwired_price_table_skeleton() {
-        // 单价表骨架: type + trait 占位, 接单价表即启用。
+        // 单价表安装点合同: trait + type 是花费维的接线缝 (H-P1 起画像表来源
+        // 已实现, 计量点仍未装表); 装表 + 记账才启用花费维。
         struct EmptyTable;
         impl CostRateTable for EmptyTable {
             fn rate_for(&self, _model: &str) -> Option<CostRateMicros> {
@@ -372,5 +420,59 @@ mod tests {
         let mut meter = CognitiveQuota::default();
         SessionQuotaLimits::default().bind_into(&mut meter);
         assert_eq!(meter.max_cost_micros, u64::MAX);
+    }
+
+    #[test]
+    fn cost_rates_come_from_the_profile_table() {
+        // 画像表 = 单价表来源: 有价算成本, 无价 None (缺一半也不编另一半)。
+        let table = ModelProfileTable::from_json_value(serde_json::json!([
+            {"model_id": "priced", "input_price_micros": 2_000, "output_price_micros": 8_000},
+            {"model_id": "half-priced", "input_price_micros": 2_000},
+            {"model_id": "unpriced"}
+        ]))
+        .expect("profile table");
+        let rate = table.rate_for("priced").expect("有价行必须给出单价");
+        assert_eq!(
+            rate,
+            CostRateMicros {
+                input_micros_per_1k_tokens: 2_000,
+                output_micros_per_1k_tokens: 8_000,
+            }
+        );
+        assert_eq!(
+            rate.cost_micros(1_500, 500),
+            7_000,
+            "1.5k 输入 × 2 + 0.5k 输出 × 8"
+        );
+        assert_eq!(rate.cost_micros(1, 0), 2, "取整: 每侧向上取整, 永不低估");
+        assert_eq!(rate.cost_micros(0, 0), 0);
+
+        assert_eq!(table.rate_for("half-priced"), None, "缺输出价 = 不编价");
+        assert_eq!(table.rate_for("unpriced"), None, "无价行 = None");
+        assert_eq!(table.rate_for("unknown-model"), None, "未知模型无价");
+    }
+
+    #[test]
+    fn the_cost_dimension_stays_explicitly_unwired_while_only_the_price_source_exists() {
+        // 显式未接线钉死: 单价表来源就绪 (画像表) ≠ 花费维已计量 —— 上限恒
+        // 不可达, 检查点不产出花费维的超限事实; 记账接线是后续批次的活。
+        let table = ModelProfileTable::from_json_value(serde_json::json!([
+            {"model_id": "priced", "input_price_micros": 2_000, "output_price_micros": 8_000}
+        ]))
+        .expect("profile table");
+        assert!(table.rate_for("priced").is_some(), "来源就绪");
+
+        let mut meter = CognitiveQuota::default();
+        meter.consume_tokens(1);
+        assert_eq!(
+            SessionQuotaLimits::default().check(&mut meter),
+            None,
+            "花费维不产出超限事实 (未计量)"
+        );
+        assert_eq!(meter.max_cost_micros, u64::MAX, "上限恒不可达");
+        assert_eq!(
+            meter.consumed_cost_micros, 0,
+            "没有计量点写花费列 (显式未接线, 不是假计量)"
+        );
     }
 }

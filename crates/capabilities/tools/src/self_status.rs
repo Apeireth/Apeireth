@@ -2,7 +2,7 @@
 //!
 //! 产品哲学「不假装」要求模型能**实测自身状态再发言**。本模块把自省设计化为
 //! 一个专用只读面: 一次调用返回一份**结构化自述** JSON —— 身份 / 能力名册 /
-//! 记忆账本 / 调参状态 / 预算 / 工作区。数据一律取自运行时**真实生效值**
+//! 记忆账本 / 调参状态 / 预算 / 工作区 / 模型画像。数据一律取自运行时**真实生效值**
 //! (装配时的实际开关、存储可查元数据、进程内生效调参), 不复述配置文本。
 //!
 //! # 三条硬边界
@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use apeireth_core::kernel::{CapabilityId, SessionId};
+use apeireth_core::model_profile::ModelProfile;
 use apeireth_core::RELEASE_VERSION;
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
@@ -243,9 +244,10 @@ fn dash(value: Option<u64>) -> String {
         .unwrap_or_else(|| "—".to_string())
 }
 
-/// 花费维"暂无接口"的原因 (0 装诚实: 无单价表不硬造花费)。
-pub const QUOTA_COST_NOT_WIRED: &str =
-    "not wired: the cost dimension has no unit-price table (type + trait stub only)";
+/// 花费维"暂无接口"的原因 (0 装诚实: 单价表来源就绪但计量点未接线, 不硬造花费)。
+pub const QUOTA_COST_NOT_WIRED: &str = "not wired: the cost dimension is not metered at the \
+     execution points yet (the unit-price table source is ready, installing the metering is a \
+     separate batch)";
 
 /// 深度维"暂无接口"的原因 (0 装诚实: 调用树深度跟踪未实施)。
 pub const QUOTA_DEPTH_NOT_WIRED: &str =
@@ -262,7 +264,7 @@ pub struct QuotaStatus {
     pub tokens: QuotaDimensionStatus,
     /// 工具步数维 (真值: 上限/已耗/余量)。
     pub tool_steps: QuotaDimensionStatus,
-    /// 花费维 —— 暂无接口 (单价表未接线)。
+    /// 花费维 —— 暂无接口 (单价表来源已就绪, 计量点未接线)。
     pub cost_micros: QuotaDimensionStatus,
     /// 深度维 —— 暂无接口 (调用树深度跟踪未实施)。
     pub depth: QuotaDimensionStatus,
@@ -280,6 +282,13 @@ pub struct WorkspaceStatus {
     /// 凭据是否存在 (只回布尔; `None` = 探测缺位/失败 → 显式 null)。
     pub credentials_present: Option<bool>,
 }
+
+/// 单价「未提供」的显示标注 (零假价格: 缺省即明说未提供, 绝不编价)。
+pub const PRICE_NOT_PROVIDED: &str = "未提供";
+
+/// 模型画像事实显式 unknown 的原因 (未知模型: 不编造任何事实)。
+pub const MODEL_PROFILE_UNKNOWN: &str = "model is not in the profile table: its facts are \
+     explicitly unknown (never invented)";
 
 /// 一份完整结构化自述的来源数据 (工具只负责投影成 JSON)。
 #[derive(Debug, Clone, PartialEq)]
@@ -304,6 +313,11 @@ pub struct SelfStatusSnapshot {
     pub workspace: Option<WorkspaceStatus>,
     /// 工作区不可用的原因; 可用时为 `None`。
     pub workspace_reason: Option<String>,
+    /// 模型画像一节 (生效模型的能力事实 + 单价, 缺省如实未提供)。
+    pub model: Option<ModelProfile>,
+    /// 模型画像不可用的原因; 可用时为 `None` (未知模型的显式 unknown 说明
+    /// 在渲染时按 [`MODEL_PROFILE_UNKNOWN`] 给出)。
+    pub model_reason: Option<String>,
 }
 
 impl SelfStatusSnapshot {
@@ -320,6 +334,8 @@ impl SelfStatusSnapshot {
             budget_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             workspace: None,
             workspace_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            model: None,
+            model_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
         }
     }
 }
@@ -452,6 +468,40 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         }),
     };
 
+    let model = match &snapshot.model {
+        Some(profile) => json!({
+            "model_id": profile.model_id,
+            "context_window": profile.context_window,
+            "max_output": profile.max_output,
+            "supports_tools": profile.supports_tools,
+            "supports_streaming": profile.supports_streaming,
+            "capabilities_flags": profile.capabilities_flags,
+            "input_price_micros": profile.input_price_micros,
+            "output_price_micros": profile.output_price_micros,
+            "cache_read_price_micros": profile.cache_read_price_micros,
+            "prices_display": prices_display(profile),
+            "reason": snapshot.model_reason.clone().or_else(|| {
+                profile.is_unknown().then(|| MODEL_PROFILE_UNKNOWN.to_string())
+            }),
+        }),
+        None => json!({
+            "model_id": null,
+            "context_window": null,
+            "max_output": null,
+            "supports_tools": null,
+            "supports_streaming": null,
+            "capabilities_flags": [],
+            "input_price_micros": null,
+            "output_price_micros": null,
+            "cache_read_price_micros": null,
+            "prices_display": PRICE_NOT_PROVIDED,
+            "reason": snapshot
+                .model_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
     json!({
         "identity": {
             "product_name": snapshot.identity.product_name,
@@ -463,7 +513,28 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         "tuning": tuning,
         "budget": budget,
         "workspace": workspace,
+        "model": model,
     })
+}
+
+/// 单价显示串: 三项全缺 = 「未提供」; 有值则逐项标注 (缺的单项也标「未提供」)。
+fn prices_display(profile: &ModelProfile) -> String {
+    let item = |price: Option<u64>| match price {
+        Some(value) => value.to_string(),
+        None => PRICE_NOT_PROVIDED.to_string(),
+    };
+    if profile.input_price_micros.is_none()
+        && profile.output_price_micros.is_none()
+        && profile.cache_read_price_micros.is_none()
+    {
+        return PRICE_NOT_PROVIDED.to_string();
+    }
+    format!(
+        "input={}, output={}, cache_read={}",
+        item(profile.input_price_micros),
+        item(profile.output_price_micros),
+        item(profile.cache_read_price_micros)
+    )
 }
 
 /// 把一维配额行投影成结构化 JSON (字段合同的唯一实现)。
@@ -497,9 +568,10 @@ impl SelfStatusTool {
         }
     }
 
-    /// 输出归一合同: 结构化输出必须是对象且六节恒在场 (每节为对象)。
+    /// 输出归一合同: 结构化输出必须是对象且七节恒在场 (每节为对象)。
     ///
     /// 具体字段允许显式 null (来源缺失), 但**节**不可缺席 —— 自述的形状冻结。
+    /// 模型画像节随 H-P1 (模型画像表) 入合同: 路由/成本的依据数据面自述化。
     pub fn output_schema() -> OutputSchema {
         OutputSchema::new()
             .require("identity", SchemaKind::Object)
@@ -508,6 +580,7 @@ impl SelfStatusTool {
             .require("tuning", SchemaKind::Object)
             .require("budget", SchemaKind::Object)
             .require("workspace", SchemaKind::Object)
+            .require("model", SchemaKind::Object)
     }
 
     /// 采集并投影当前自述 (结构化值)。
@@ -566,8 +639,10 @@ impl ToolCapability for SelfStatusTool {
         NormalizedTool::new("self_status")
             .with_description(
                 "Read-only structured self-report: identity, capability switches in force, memory \
-                 ledger counts (numbers only), tuning state, turn budgets, and workspace facts. \
-                 Reports measured state only; credential values are never echoed.",
+                 ledger counts (numbers only), tuning state, turn budgets, workspace facts, and \
+                 the active model profile (context window, tool support, unit prices — missing \
+                 prices read as not provided, never invented). Reports measured state only; \
+                 credential values are never echoed.",
             )
             .with_parameters(params)
     }
@@ -646,6 +721,18 @@ mod tests {
                 credentials_present: Some(true),
             }),
             workspace_reason: None,
+            model: Some(ModelProfile {
+                model_id: "model-a".to_string(),
+                context_window: Some(32_768),
+                max_output: Some(8_192),
+                supports_tools: Some(true),
+                supports_streaming: Some(false),
+                input_price_micros: None,
+                output_price_micros: None,
+                cache_read_price_micros: None,
+                capabilities_flags: vec!["system_prompt".to_string()],
+            }),
+            model_reason: None,
         }
     }
 
@@ -681,6 +768,8 @@ mod tests {
             "tuning",
             "budget",
             "workspace",
+            // H-P1: 模型画像节入七节合同 (形状冻结的演进, 附理由)。
+            "model",
         ] {
             assert!(value.get(section).is_some(), "missing section {section}");
         }
@@ -844,6 +933,8 @@ mod tests {
             "tuning",
             "budget",
             "workspace",
+            // H-P1: 模型画像节入七节合同 (形状冻结的演进, 附理由)。
+            "model",
         ] {
             assert!(
                 structured.get(section).is_some(),
@@ -1009,5 +1100,126 @@ mod tests {
         let unscoped = tool.invoke(&call).await;
         let value: Value = serde_json::from_str(&unscoped.render()).expect("structured json");
         assert_eq!(value["budget"]["quota"]["tokens"]["consumed"], 120);
+    }
+
+    #[test]
+    fn the_model_section_projects_the_profile_with_honest_missing_prices() {
+        let value = render_snapshot(&fixture_snapshot());
+        let model = &value["model"];
+        assert_eq!(model["model_id"], "model-a");
+        assert_eq!(model["context_window"], 32_768);
+        assert_eq!(model["max_output"], 8_192);
+        assert_eq!(model["supports_tools"], true);
+        assert_eq!(model["supports_streaming"], false);
+        assert_eq!(model["capabilities_flags"], json!(["system_prompt"]));
+        // 单价缺省 = 未提供: 数字侧显式 null, 显示侧明说「未提供」。
+        assert_eq!(model["input_price_micros"], Value::Null);
+        assert_eq!(model["output_price_micros"], Value::Null);
+        assert_eq!(model["cache_read_price_micros"], Value::Null);
+        assert_eq!(model["prices_display"], PRICE_NOT_PROVIDED);
+        assert!(model["reason"].is_null());
+    }
+
+    #[test]
+    fn provided_prices_render_each_item_and_missing_items_stay_not_provided() {
+        let mut snapshot = fixture_snapshot();
+        let profile = snapshot.model.as_mut().expect("model profile");
+        profile.input_price_micros = Some(2_000);
+        profile.cache_read_price_micros = Some(500);
+        let value = render_snapshot(&snapshot);
+        let model = &value["model"];
+        assert_eq!(model["input_price_micros"], 2_000);
+        assert_eq!(model["output_price_micros"], Value::Null);
+        assert_eq!(
+            model["prices_display"],
+            format!("input=2000, output={PRICE_NOT_PROVIDED}, cache_read=500")
+        );
+    }
+
+    #[test]
+    fn the_model_section_without_a_source_is_explicit_null_with_a_reason() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.model = None;
+        snapshot.model_reason = Some("model profile source not wired".to_string());
+        let value = render_snapshot(&snapshot);
+        let model = &value["model"];
+        assert_eq!(model["model_id"], Value::Null);
+        assert_eq!(model["context_window"], Value::Null);
+        assert_eq!(model["supports_tools"], Value::Null);
+        assert_eq!(model["prices_display"], PRICE_NOT_PROVIDED);
+        assert!(
+            model["reason"]
+                .as_str()
+                .unwrap()
+                .contains("model profile source not wired"),
+            "{}",
+            model["reason"]
+        );
+    }
+
+    #[test]
+    fn an_unknown_model_reports_explicit_unknown_instead_of_invented_facts() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.model = Some(ModelProfile::unknown("mystery-model"));
+        snapshot.model_reason = None;
+        let value = render_snapshot(&snapshot);
+        let model = &value["model"];
+        assert_eq!(model["model_id"], "mystery-model", "id 如实");
+        assert_eq!(model["context_window"], Value::Null, "不编窗口");
+        assert_eq!(model["supports_tools"], Value::Null, "未知不等于不支持");
+        assert_eq!(model["prices_display"], PRICE_NOT_PROVIDED, "绝不编价");
+        assert!(
+            model["reason"]
+                .as_str()
+                .unwrap()
+                .contains("explicitly unknown"),
+            "{}",
+            model["reason"]
+        );
+    }
+
+    #[test]
+    fn the_model_section_carries_no_credential_surface() {
+        // 画像面无密钥: 自述帧字段全表里没有任何凭据面字段 (既有
+        // `credentials_present` 是存在性布尔, 不是凭据本体)。
+        fn keys(value: &Value, out: &mut Vec<String>) {
+            match value {
+                Value::Object(map) => {
+                    for (key, child) in map {
+                        out.push(key.to_ascii_lowercase());
+                        keys(child, out);
+                    }
+                }
+                Value::Array(items) => {
+                    for item in items {
+                        keys(item, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        const FORBIDDEN: &[&str] = &[
+            "api_key",
+            "apikey",
+            "key",
+            "token",
+            "auth",
+            "bearer",
+            "secret",
+            "password",
+            "passwd",
+            "credential",
+            "credentials",
+            "signature",
+        ];
+        let value = render_snapshot(&fixture_snapshot());
+        let mut all_keys = Vec::new();
+        keys(&value, &mut all_keys);
+        for name in &all_keys {
+            assert!(
+                !FORBIDDEN.contains(&name.as_str()),
+                "自述必须无密钥面字段: {name}"
+            );
+        }
     }
 }

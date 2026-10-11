@@ -38,7 +38,7 @@ const TELEMETRY_POLL_MS: u64 = 5_000;
 const INPUT_POLL_CAP_MS: u64 = 200;
 
 /// 用法文本。
-const USAGE: &str = "apeireth-tui — 终端驾驶舱\n\n用法:\n  apeireth-tui [--endpoint URL] [--token TOKEN] [--motion full|reduced]\n\n环境变量:\n  APEIRETH_GATEWAY_URL     后端端点 (缺省 http://127.0.0.1:8080)\n  APEIRETH_GATEWAY_TOKEN   回环访问令牌 (敏感端点令牌门; --token 优先; 缺省回落常驻服务令牌面, 无令牌=三态门照旧)\n  APEIRETH_TUI_MOTION      动效档 (full / reduced)\n\n键位: / 命令  ? 帮助  Ctrl+C 两段式退出  Esc Esc 时间倒带(接口桩)";
+const USAGE: &str = "apeireth-tui — 终端驾驶舱\n\n用法:\n  apeireth-tui [--endpoint URL] [--token TOKEN] [--motion full|reduced]\n\n环境变量:\n  APEIRETH_GATEWAY_URL     后端端点 (缺省 http://127.0.0.1:8080)\n  APEIRETH_GATEWAY_TOKEN   回环访问令牌 (全 API 面令牌门; --token 优先; 缺省回落常驻服务令牌面, 无令牌=三态门照旧)\n  APEIRETH_TUI_MOTION      动效档 (full / reduced)\n\n键位: / 命令  ? 帮助  Ctrl+C 两段式退出  Esc Esc 时间倒带(接口桩)";
 
 /// 启动选项。
 struct Options {

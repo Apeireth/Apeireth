@@ -43,8 +43,8 @@ pub mod repo;
 pub mod repo_map;
 pub mod search;
 // 结构化自述面 (自省通道): `tool.self_status` 只读工具 —— 身份 / 能力名册 /
-// 记忆账本计数 / 调参状态 / 预算 / 工作区事实, 全部取真实生效值; 缺失字段
-// 显式 null + 原因, 不整帧失败。
+// 记忆账本计数 / 调参状态 / 预算 / 工作区 / 模型画像事实, 全部取真实生效值;
+// 缺失字段显式 null + 原因, 不整帧失败。
 pub mod self_status;
 mod sensitive_path;
 pub mod shell;
@@ -115,9 +115,9 @@ pub use self_status::{
     MemoryLedgerStats, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, SelfStatusIdentity,
     SelfStatusSnapshot, SelfStatusSource, SelfStatusTool, SessionQuotaProbe, StatusProbe,
     TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
-    DISPOSITION_PRESETS, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS,
-    PRODUCT_NAME, QUOTA_COST_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
-    RUNTIME_ROLE_GATEWAY_SIDECAR,
+    DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY,
+    PRESET_EFFORTLESS, PRICE_NOT_PROVIDED, PRODUCT_NAME, QUOTA_COST_NOT_WIRED,
+    QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED, RUNTIME_ROLE_GATEWAY_SIDECAR,
 };
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};

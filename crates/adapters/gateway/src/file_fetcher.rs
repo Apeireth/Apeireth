@@ -274,9 +274,20 @@ mod kani_base64_proofs {
     #[kani::proof]
     #[kani::unwind(128)]
     fn kani_panic_free_base64_decode() {
-        let mut raw: [u8; 8] = kani::any();
-        for byte in raw.iter_mut() {
-            *byte &= 0x7F;
+        // 代表值域 8 档 (NUL/\n/空格/'='/'+'/'A'/0x7F/'!'): 全分支类覆盖
+        // (跳过/截断/合法/非法), 值域量词口径见 harness_panic_freedom.rs::rep_byte。
+        let mut raw = [0u8; 8];
+        for slot in raw.iter_mut() {
+            *slot = match kani::any::<u8>() % 8 {
+                0 => 0x00,
+                1 => 0x0A,
+                2 => 0x20,
+                3 => 0x3D,
+                4 => 0x2B,
+                5 => 0x41,
+                6 => 0x7F,
+                _ => 0x21,
+            };
         }
         // SAFETY: 全部字节 < 0x80 (ASCII), 必为合法 UTF-8。
         let input: &str = unsafe { std::str::from_utf8_unchecked(&raw) };

@@ -308,6 +308,9 @@ pub struct ProductionBackends {
     pub self_status_budget: Option<apeireth_tools_canonical::BudgetStatus>,
     /// 自省通道: 会话配额计量探测口 (按会话 id 读已耗真值, 只回数字)。
     pub self_status_quota: Option<apeireth_tools_canonical::SessionQuotaProbe>,
+    /// 自省通道: 生效模型的画像 (H-P1 模型画像表解析结果; 未知模型传显式
+    /// unknown 行; 缺位时模型节显式 null + 原因)。
+    pub self_status_model_profile: Option<apeireth_core::model_profile::ModelProfile>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -480,6 +483,9 @@ impl ProductionModules {
             }
             if let Some(probe) = &backends.self_status_quota {
                 source = source.with_quota_probe(Arc::clone(probe));
+            }
+            if let Some(profile) = &backends.self_status_model_profile {
+                source = source.with_model_profile(profile.clone());
             }
             let provider = SelfStatusModule::new(Arc::new(source));
             capabilities.extend(provider.capabilities());

@@ -312,6 +312,30 @@ pub fn quota_max_tool_steps_from_env() -> Option<u64> {
     )
 }
 
+/// 生效模型 id (与运行时 `with_default_model` 同一解析口径):
+/// `APEIRETH_MODEL` 显式覆盖 > minimax 族首个默认模型 (提供商面规范 id,
+/// 小写)。无模型在力回 `None` (自述模型节显式 null + 原因, 不编造)。
+pub fn active_model_id() -> Option<String> {
+    if let Some(model) = std::env::var("APEIRETH_MODEL")
+        .ok()
+        .filter(|model| !model.trim().is_empty())
+    {
+        return Some(model);
+    }
+    apeireth_provider::canonical_minimax::MinimaxProviderPlugin::from_env()
+        .ok()
+        .and_then(|plugin| plugin.model_ids().first().cloned())
+}
+
+/// 模型画像表 (H-P1 配置面): 内置基线 ← 数据目录 `model-profiles.json`
+/// (StoredDoc 拒开) ← env `APEIRETH_MODEL_PROFILES` (JSON 覆盖), 逐模型整行
+/// 覆盖。坏配置拒开: 走启动错误正式通道, 不静默回退。
+fn model_profile_table_from_env() -> Result<apeireth_core::model_profile::ModelProfileTable, String>
+{
+    apeireth_core::model_profile::ModelProfileTable::load(Some(&default_panel_data_dir()))
+        .map_err(|error| format!("model profile configuration refused to load: {error}"))
+}
+
 /// Build the production governance policy from an explicit local-read choice.
 ///
 /// The explicit boolean keeps the policy deterministic and easy to test. The
@@ -676,10 +700,6 @@ async fn build_canonical_runtime_with_parts(
     use apeireth_provider::canonical_minimax::MinimaxProviderPlugin;
     use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
 
-    let configured_model = std::env::var("APEIRETH_MODEL")
-        .ok()
-        .filter(|model| !model.trim().is_empty());
-
     let mut builder = Runtime::builder().with_clock(Arc::clone(&clock));
     // P-arch (2026-08-27) + v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring
     // 优先用 keyring (设 APEIRETH_KEYRING_BACKEND env), fallback 到 EnvCredentialResolver
@@ -705,12 +725,10 @@ async fn build_canonical_runtime_with_parts(
     builder = cognitive.register_context_projection(builder);
     builder = cognitive.register_into(builder);
 
-    let first_default_model: Option<String>;
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
 
     let minimax = MinimaxProviderPlugin::from_env()
         .map_err(|error| format!("minimax provider activation failed: {error}"))?;
-    first_default_model = minimax.model_ids().first().cloned();
     fallback_order.push(CapabilityId::new("provider.minimax").unwrap());
     builder = builder.with_plugin(Arc::new(minimax));
 
@@ -748,7 +766,8 @@ async fn build_canonical_runtime_with_parts(
     // 长尾截断的完整原文落盘根目录 (数据目录, 实际写入 `<data>/spill/`): 有落盘点时
     // 截断保留头尾预览 + 取回指引行; 落盘失败时回退内联原文 (宁长勿丢, 不失败调用)。
     builder = builder.with_context_spill_root(default_panel_data_dir());
-    if let Some(model) = configured_model.or(first_default_model) {
+    // 生效模型 id 与自述模型节同一解析口径 (见 [`active_model_id`])。
+    if let Some(model) = active_model_id() {
         builder = builder.with_default_model(model);
     }
 
@@ -1091,6 +1110,12 @@ async fn build_cognitive_modules_from_env(
         self_status_quota: Some(apeireth_runtime_assembly::session_quota_probe(
             session_db_path(),
         )),
+        // 自省通道: 模型画像节 (H-P1) —— 画像表三层解析 (基线/数据目录/env,
+        // 坏配置拒开) + 生效模型行 (未知模型显式 unknown 行, 不是 None)。
+        self_status_model_profile: {
+            let table = model_profile_table_from_env()?;
+            active_model_id().map(|model| table.resolve(&model).into_owned())
+        },
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)
@@ -1942,6 +1967,23 @@ pub async fn dispatch_gateway_serve_with(
     port: u16,
     pid_file: Option<&std::path::Path>,
 ) -> Result<String, String> {
+    // W2-② 认证面 / 远程面配置闸先行 (fail-closed 即帧, 零副作用): 坏令牌配置
+    // 拒开; 逃生阀与令牌表互斥拒开; 非回环绑定必须有可校验令牌 (逃生阀
+    // `none` = 操作者明示自担, 放行但留审计)。
+    let gate = apeireth_gateway::GatewayTokenGate::from_env();
+    let data_dir = default_panel_data_dir();
+    let client_tokens = apeireth_gateway::ClientTokenTable::load(Some(&data_dir))
+        .map_err(|error| format!("client token configuration refused to open: {error}"))?;
+    apeireth_gateway::validate_gate_table_pair(&gate, &client_tokens)
+        .map_err(|error| error.to_string())?;
+    let bind_clearance = apeireth_gateway::enforce_remote_bind(bind, &gate, &client_tokens)
+        .map_err(|error| error.to_string())?;
+    // TLS 面接口桩: 占位旋钮被设置就显式喊破 (未接线 = 流量仍明文), 不装死。
+    let tls_notice = apeireth_gateway::tls_surface_status().warning();
+    if let Some(notice) = &tls_notice {
+        eprintln!("WARNING: {notice}");
+    }
+
     // 单实例占位先行: 活着的既有实例直接显式拒绝 (不装配运行时、不双开)。
     // 占位租约随函数退出自动释放 (优雅/出错路径都会清掉自己的 PID 文件)。
     if pid_file.is_some() && port == 0 {
@@ -1993,6 +2035,18 @@ pub async fn dispatch_gateway_serve_with(
     // 下一请求即生效); a configured keyring backend additionally persists the
     // value across restarts.
     services.credentials = crate::keyring_bootstrap::build_keyring_credential_writer();
+    // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
+    // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
+    let mut state = apeireth_gateway::build_gateway_state_with_services(runtime, services);
+    state.client_tokens = client_tokens;
+    for (event, detail) in bind_clearance.audit_facts {
+        state.observations.buffer_audit(&event, detail);
+    }
+    if let Some(notice) = tls_notice {
+        state
+            .observations
+            .buffer_audit("gateway.tls_unwired", Some(notice));
+    }
     let address = format!("{bind}:{port}");
     let listener = tokio::net::TcpListener::bind(&address).await.map_err(|error| {
         // 端口占用 = 二次启动的另一显式面: 不吐底层错误号, 直说"已在运行"。
@@ -2013,10 +2067,11 @@ pub async fn dispatch_gateway_serve_with(
         eprintln!("canonical gateway started at {url}");
     } else {
         eprintln!(
-            "WARNING: canonical gateway is exposed on non-loopback address {local_addr}; use this only on a trusted network"
+            "WARNING: canonical gateway is exposed on non-loopback address {local_addr}; the token gate covers the whole API face (see {token_env})",
+            token_env = apeireth_gateway::GatewayTokenGate::ENV
         );
     }
-    apeireth_gateway::serve_with_shutdown(listener, runtime, services, graceful_shutdown_signal())
+    apeireth_gateway::serve_state_with_shutdown(listener, state, graceful_shutdown_signal())
         .await
         .map_err(|error| format!("gateway server failed: {error}"))?;
 

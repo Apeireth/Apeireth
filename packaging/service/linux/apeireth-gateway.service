@@ -11,6 +11,8 @@
 #        APEIRETH_GATEWAY_TOKEN=<32 字节随机令牌的十六进制>
 #      (Linux 面令牌以 env 文件驻留, 与 Windows 凭据库面等价语义; 明文落盘
 #      姿态不同, 见 docs/02-guides/server-deployment.md 安全建议);
+#      远程暴露可在同一 env 文件设 APEIRETH_LISTEN=<绑定地址> (缺省 127.0.0.1
+#      仅本机); 非回环绑定由网关远程绑定闸强制令牌 (无令牌拒启动, fail-closed);
 #   3) systemd-analyze verify apeireth-gateway.service;
 #   4) cp apeireth-gateway.service /etc/systemd/system/ && systemctl daemon-reload
 #      && systemctl enable --now apeireth-gateway.
@@ -31,7 +33,9 @@ WorkingDirectory=/var/lib/apeireth
 EnvironmentFile=/etc/apeireth/gateway.env
 Environment=APEIRETH_DATA_DIR=/var/lib/apeireth/data
 RuntimeDirectory=apeireth
-ExecStart=/usr/local/bin/apeireth gateway serve --bind 127.0.0.1 --port 8080 --pid-file /run/apeireth/gateway.pid
+# 绑定地址: 不在此处钉死 --bind, 由 apeireth 的绑定旋钮决 (APEIRETH_LISTEN >
+# 回环缺省 127.0.0.1, fail-closed 默认仅本机)。
+ExecStart=/usr/local/bin/apeireth gateway serve --port 8080 --pid-file /run/apeireth/gateway.pid
 # 崩溃自拉起: 非零退出即失败, 5 秒后重试 (无限次)。
 Restart=on-failure
 RestartSec=5s

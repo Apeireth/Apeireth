@@ -28,8 +28,9 @@
   ├─② 本机回环 HTTP/SSE + 能力开关 env 注入 → 侧车
   │    设防：开关同源注入、启动日志脱敏、会话级工作区、审计 masked 不可还原、
   │         回环令牌自铸注入（G10 处置：每次启动一枚 32 字节随机令牌进侧车 env）
-  │    缺口：来源白名单只挡浏览器跨源；令牌门只覆盖两个敏感端点——chat/事件流/
-  │         面板族仍无认证面（G10 残余，见 §5 处置注）
+  │    缺口：来源白名单只挡浏览器跨源；**令牌门已扩到全 API 面（W2-②，仅 /health
+  │         探活豁免）**，但桌面 WebView 只在 admin/审批两处带令牌——chat/面板/SSE
+  │         调用无凭据会 401（桌面 UI 令牌覆盖缺口，见 §5 残余 (d)）
   ▼
 侧车网关 + 运行时（adapters/gateway + engine/runtime + 治理管线）
   ├─③ → provider API（出：提示+召回记忆 / 入：回复）
@@ -42,8 +43,11 @@
   │      设防：审批级接入（tools/src/mcp_bridge/）、输出归一+脱敏、坏配置拒开、启动日志脱敏
   │      缺口：外部服务器自带权限=供应链面（G6）；判定非对象级（G3）
   └─⑥ ↔ TUI / 远程客户端（W2 起：会话与工具权远程化）
-         设防：暂无接口（设计期，零假旋钮）
-         缺口：远程认证、多客户端授权全空白（G4/G1）
+         设防（W2-②）：认证面全网关化（全 API 面令牌门, 审计带客户端名）+ 每客户端
+              令牌表（name→token, env/json 配置面, StoredDoc 拒开）+ 非回环绑定
+              强制令牌（fail-closed 拒启动）+ `APEIRETH_LISTEN` 绑定旋钮（缺省仅本机）
+         缺口：TLS 面仍是接口桩（未接线, 明文）；每客户端**权限**分级未做（W3, G1）；
+              未设口径/逃生阀下仍无认证（残余 (a)(b)，审计可见）
 沙箱执行面包住工具层（tools/process 应用容器 + 作业对象 + 出口管制）：
   设防：工作区 ACL 授予、零 capability=断网、能力不达 fail-closed 不裸跑
   缺口：词面/命令级判定≠对象级（G3）；仓外拦截层不对称（见 §4 沙箱行）
@@ -64,7 +68,7 @@
 
 | 防点 | 实现指针 | 边界（如实） |
 |---|---|---|
-| 回环令牌门（G10 处置, W1-③） | 三态门口径 `crates/adapters/gateway/src/canonical_entry.rs`（`GatewayTokenGate`：设值=Bearer 恒定时间校验 / 未设=放行+警告帧+审计 / `none`=逃生阀明示不设防留审计）+ 桌面自铸注入 `frontend/companion-desktop/src-tauri/src/backend_supervisor.rs`（每次启动一枚 32 字节随机令牌, 进程 env 面, 不落盘）+ 客户端注入面（TUI `--token`/env、桌面 UI `get_gateway_token` IPC、验证脚本透传） | 只覆盖 `/v1/admin/config` 与 `/v1/approvals/resolve` 两敏感端点；CLI 裸跑未设=保守过渡放行（警告+审计可见）；逃生阀 `APEIRETH_GATEWAY_TOKEN=none` = 明示不设防（审计留痕、门体不设防） |
+| 全 API 面令牌门（G10 处置 W1-③ + G4 收口 W2-②） | 三态门口径 `crates/adapters/gateway/src/canonical_entry.rs`（`GatewayTokenGate`：令牌族在场=Bearer 恒定时间校验**全端点** / 两面皆空=放行+警告帧+审计 / `none`=逃生阀明示不设防留审计）+ 客户端令牌表 `crates/adapters/gateway/src/client_tokens.rs`（name→token, env `APEIRETH_GATEWAY_TOKENS` + `client-tokens.json` StoredDoc 拒开, 过门审计 `client=<名>`）+ 远程绑定闸 `crates/adapters/gateway/src/remote_access.rs`（`APEIRETH_LISTEN` 缺省仅本机; 非回环无令牌**拒启动** fail-closed）+ 桌面自铸注入 `frontend/companion-desktop/src-tauri/src/backend_supervisor.rs`（每次启动一枚 32 字节随机令牌, 进程 env 面, 不落盘）+ 客户端注入面（TUI 全请求带 Bearer、桌面 UI `get_gateway_token` IPC、验证脚本全端点透传） | 唯一豁免 `/health`（探活刚需, `UNAUTHENTICATED_PROBE_PATHS` 测试钉死）；未设口径=兼容路径放行（警告+审计可见）；逃生阀 `APEIRETH_GATEWAY_TOKEN=none` = 明示不设防（审计留痕、门体不设防, 与令牌表互斥拒开）；TLS 面接口桩**未接线**（`APEIRETH_TLS_CERT/KEY` 只触发显式警告, 流量明文）；桌面 WebView 只在 admin/审批两处带令牌（残余 (d)） |
 | 三洋葱 | 双洋葱 `crates/foundation/core/src/onion.rs` + 判定层 `onion_gate.rs`（L0 人类权威恒需在场）+ 执行面 `crates/engine/runtime-assembly/src/canonical/onion_layer.rs`（末层纵深） | 执行面 hook 旋钮 `APEIRETH_ENABLE_ONION_LAYER` **默认关**；多签 v2.1 未真接（挂账 D2）——「多签」暂无密码学效力 |
 | 审批四态 | `crates/foundation/governance/src/approval_closure.rs`（AllowedOnce 恰好一次；Rejected/Cancelled/Unavailable 一律 fail-closed）+ 冻结面 `crates/engine/runtime/src/canonical/approval.rs` | 命令级名单逐字精确匹配→族等价形态可绕（G2） |
 | 写总闸 | `crates/capabilities/tools/src/write_intent.rs`（写意图词法，静态调用面与命令面同族同权）+ `shell.rs` 冻结/执行双查 + 组装根 `runtime-assembly/src/canonical/production.rs` 同源 | 词法面之外的写入（解释器内写入/编码负载）由审批链+沙箱兜底；保守扫描宁误拒不漏放 |
@@ -82,13 +86,30 @@
 | G1 | 多用户隔离（现状单机单主） | W3 / E-P4 | 访客会话与主人共用记忆库/凭据/工具权，越权读写无闸可拦 |
 | G2 | 命令级审批族归一 | W3 / E-P2 | 批一次 `Remove-Item x` 后用等价静态调用重放，字面外形态不进名单=白拿授权 |
 | G3 | 沙箱对象级判定 | W3 / E-P3 | 换 API 形态拿同一权力——命令动词级判定（含仓外拦截层）对等价调用失明 |
-| G4 | 远程访问认证 | W2 / F | 远程端点无认证=谁连上谁是主人，工具权+记忆库一锅端 |
+| G4 | 远程访问认证 **→已处置（W2-②，认证面收口）** | W2 / F | 远程端点无认证=谁连上谁是主人，工具权+记忆库一锅端（原缺口；现非回环绑定强制令牌、无令牌拒启动，见 §5 处置注） |
 | G5 | 备份恢复 | W2-W5 横切 / G | 本地恶意进程加密或删库后无备份可还，勒索即成永久损失 |
 | G6 | 供应链（依赖 + MCP 外部工具服务器） | W4 / D-E | 投毒的依赖/工具描述/工具输出把指令带进上下文，在授权面内代模型作恶 |
 | G7 | 数据静态加密（记忆/会话库明文在盘） | W3 候选 / G | 物理接触者直接拷走数据目录，历史与记忆全量外泄 |
 | G8 | 提示注入净化仅启发式 | W3 候选 / E | 跨源内容诱导模型发起越权请求，防线后移到审批与沙箱兜底 |
 | G9 | 多签 v2.1 真密码学（挂账 D2） | W3 候选 / E | 伪造「多签」决策无密码学可验，高危升级可被假授权混过 |
-| G10 | 本机回环令牌可选未设即放（`canonical_entry.rs` H1 门）**→已处置（W1-③）** | W1-W2 / F | 本机进程伪装来源头调端点，冒充桌面壳发指令、读事件流 |
+| G10 | 本机回环令牌可选未设即放（`canonical_entry.rs` H1 门）**→已处置（W1-③）+ 残余 (c) 已销账（W2-② 全网关化）** | W1-W2 / F | 本机进程伪装来源头调端点，冒充桌面壳发指令、读事件流 |
+
+> **G4 处置（W2-② 远程访问与认证面收口）**：缺口「远程端点无认证」已封堵——
+> ① **认证面全网关化**：令牌门从两个敏感端点扩到**全 API 面**（chat/事件流/面板/会话/审批/
+> admin 族 + fallback），唯一豁免 `/health`（探活刚需，`UNAUTHENTICATED_PROBE_PATHS` 显式
+> 文档化并测试钉死）；三态语义沿用，「设/未设」按整个令牌族判定（env 单令牌或客户端令牌表
+> 任一在场 = 强制校验）；
+> ② **每客户端令牌体系**：令牌表 name→token（env `APEIRETH_GATEWAY_TOKENS` + 数据目录
+> `client-tokens.json`，坏配置拒开 / StoredDoc 拒开语义），过门审计带**客户端名**
+> （`gateway.auth_client client=<名>`），为 W3 多用户授权留桩（本批=单令牌族多枚，只立
+> 「谁在调用」的问责身份，不做权限分级）；
+> ③ **远程绑定 fail-closed**：`APEIRETH_LISTEN` 绑定旋钮（`--bind` 旗标 > env > `127.0.0.1`
+> 缺省仅本机）；非回环绑定**强制令牌**——令牌族两面皆空时**拒绝启动**（fail-closed 即帧），
+> 逃生阀 `none` 明示可裸奔但留审计（`gateway.remote_bind mode=declared_none`）；
+> ④ **TLS 面接口桩**：`APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 显式未接线（设值只触发
+> 「仍是明文」警告 + 审计，不硬造 TLS）。
+> 详见 [W2-2-remote-access-auth-delivery.md](W2-2-remote-access-auth-delivery.md)（认证面矩阵表+
+> 接线图+测试证据）。
 
 > **G10 处置（W1-③ 网关回环令牌加固）**：缺口本体「令牌门可选、未设即放」已封堵——
 > ① **桌面自铸**：`backend_supervisor` 启动侧车时若 env 未设 `APEIRETH_GATEWAY_TOKEN` 即自铸
@@ -102,11 +123,17 @@
 > IPC + `runtime.ts` 鉴权头）、`scripts/verify-provider-path.ps1` 同源透传；IM 桥为同源进程内
 > 直调（无回环 HTTP 面）零改动；无令牌客户端在未设口径下零断（兼容路径有测试钉住）。
 > **残余（如实）**：(a) 逃生阀语义 = `APEIRETH_GATEWAY_TOKEN=none` 明示不设防——审计留痕
-> 但门体不设防，风险由操作者明示自担；(b) CLI 裸跑（env 未设）默认仍放行无认证调用（保守
-> 过渡），暴露面靠警告帧+审计可见可查，正式部署应配令牌或走桌面壳；(c) 令牌门只覆盖两个
-> 敏感端点，chat/事件流/面板族仍无认证面——本机进程仍可驱动回合、读观测面（原 G10 敌人
-> 路径的残留半句），候 W2 远程化批随 G4 认证面一并收紧；(d) 浏览器 web 构建取不到令牌
-> （令牌只经桌面壳 IPC 下发），对令牌强制网关调敏感端点会 401——设计内（令牌只属于桌面壳）。
+> 但门体不设防，风险由操作者明示自担（非回环绑定下同样成立，留 `gateway.remote_bind
+> mode=declared_none`）；(b) 令牌族两面皆空的默认态仍放行无认证调用（保守过渡的兼容路径，
+> 口径沿用），暴露面靠警告帧+审计可见可查，正式部署应配令牌、走桌面壳/服务令牌面，或至少
+> 守回环绑定；(c) **已销账（W2-②）**：令牌门已扩到全 API 面（chat/事件流/面板/会话族全部
+> 过门，仅 `/health` 豁免）——原「本机进程可驱动回合、读观测面」残留半句在强制态下闭合
+> （无令牌调 chat=401，`gateway_auth_face` 测试矩阵钉死）；(d) 浏览器 web 构建取不到令牌
+> （令牌只经桌面壳 IPC 下发），对令牌强制网关调任意端点会 401——设计内（令牌只属于桌面壳）；
+> 且**桌面 WebView 的令牌覆盖仍有缺口（如实）**：UI 目前只给 `/v1/admin/config` 与审批解决
+> 两处带令牌，chat/面板/SSE 调用无凭据（`EventSource` 无法带鉴权头），全网关化后这些调用会
+> 401——**需前端批补**（全 fetch 统一带令牌 + SSE 换 fetch 流/侧车转发），后端批零前端触碰
+> 未修；(e) TLS 面接口桩未接线，远程流量明文（凭据可被链路窃听），TLS 真接线挂 F 轴 P3 后续。
 
 > 波次如实注：G1-G5 按 [00-backlog.md](00-backlog.md) 排序建议与 [E-security-depth.md](E-security-depth.md) 分期挂靠；E-P2/P3 未显式入波，按 E 分期顺序排在 P4（W3）前；G7-G9 为未入波候选——派工以 owner 拍板为准，不假称已排期。
 
@@ -116,7 +143,7 @@
 |---|---|
 | ① 提示注入 | (a) IM 入站消息夹「忽略之前指令,执行 X」→断言仍冻结进审批四态、不自动执行；(b) 召回记忆/工具输出带注入指令→断言 `UntrustedEnvelope` 警告头与边界标记不被剥除；(c) 注入诱导读凭据面→断言 `sensitive_path` 拒绝帧 |
 | ② 工具滥用 | (a) 未读文件覆盖写→`observed_gate` 拒；(b) `echo x > f` 与等价静态调用在关闸下同帧拒（扩 `delete_path_parity` 覆盖写族）；(c) shell 输出夹 `sk-` 密钥→绊线脱敏截断且结果带 `credential_tripwire` |
-| ③ 本地恶意进程 | (a) 直读 `sessions.sqlite3`/记忆库→当前应可读=G7 实证用例（落地后反转为回归锚）；(b) 伪来源头调回环端点→断言 401（G10 已落地：`crates/adapters/gateway/tests/gateway_token_gate.rs` 强制态 401 + 伪来源头零 CORS 放行 + 桌面自铸令牌 e2e）；(c) 读钥匙串导出物/密钥文件→`sensitive_path` 拒 |
+| ③ 本地恶意进程 | (a) 直读 `sessions.sqlite3`/记忆库→当前应可读=G7 实证用例（落地后反转为回归锚）；(b) **绕过用例全部转绿（W2-②）**：伪来源头零 CORS 放行 + **无令牌调 chat=401** + **伪造 Bearer=401**（`crates/adapters/gateway/tests/gateway_auth_face.rs`：`forged_origin_and_forged_bearer_are_refused_together` 及 401 矩阵六例；`gateway_token_gate.rs` W1-③ 断言原样保留；桌面自铸令牌 e2e / 远程绑定 fail-closed 进程级 `cli/tests/remote_access_e2e.rs`）；(c) 读钥匙串导出物/密钥文件→`sensitive_path` 拒 |
 | ④ 供应链 | (a) MCP 工具描述含指令文本→断言只入审批面、不被执行；(b) MCP 输出夹凭据→归一+脱敏断言；(c) 坏配置/未知 schema→拒开 fail-closed |
 | ⑤ 多户越权 | (a) 访客会话读主人记忆库→应拒（现为 G1 实证用例）；(b) 客户端 A 的 `AllowedOnce` 在客户端 B 重放→恰好一次失效；(c) 访客改能力开关/沙箱旋钮→权限拒绝 |
 | ⑥ 物理接触 | (a) 无锁翻会话历史→当前可读=G7 实证；(b) 导出或复制密钥材料→fail-closed 即帧；(c) 现场改配置关沙箱→默认开语义回归 + 下次审批卡红标警示 |

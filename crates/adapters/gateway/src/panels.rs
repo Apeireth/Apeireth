@@ -45,10 +45,15 @@ pub struct GatewayState {
     /// Live runtime config, readable by every request path and patchable through
     /// `/v1/admin/config`.
     pub hot_config: Arc<RwLock<crate::admin::GatewayRuntimeConfig>>,
-    /// H1/G10 loopback token gate for the sensitive endpoints (admin config /
-    /// approval resolve), resolved once at assembly from env
-    /// `APEIRETH_GATEWAY_TOKEN` (see [`crate::canonical_entry::GatewayTokenGate`]).
+    /// W2-② 全 API 面令牌门 (chat / 事件流 / 面板 / 会话 / 审批 / admin 族,
+    /// 唯一豁免 `UNAUTHENTICATED_PROBE_PATHS` 健康探活), 三态口径解析自 env
+    /// `APEIRETH_GATEWAY_TOKEN` (see [`crate::canonical_entry::GatewayTokenGate`])。
     pub token_gate: crate::canonical_entry::GatewayTokenGate,
+    /// 客户端令牌表 (name → token, 令牌族第二面): 与 env 单令牌并列的通行证,
+    /// 过门审计带客户端名。由组合根**显式装载注入** (see
+    /// [`crate::client_tokens::ClientTokenTable::load`]) —— 装配函数不隐式读
+    /// 配置面, 「坏配置拒开」必须在可失败边界执行; 未注入 = 空表 (仅 env 面)。
+    pub client_tokens: crate::client_tokens::ClientTokenTable,
     /// Graceful-shutdown trigger (W2-① resident form): fired by the token-gated
     /// `/v1/admin/shutdown` endpoint; the serve loop stops, writes the closing
     /// audit fact and flushes the observation archive (see

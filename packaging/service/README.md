@@ -62,10 +62,19 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 uninstall # 卸载 
 - `install` 生成 32 随机字节 (64 hex) 存入系统凭据库 (目标 `apeireth.gateway-token`,
   用户 `apeireth`, 本地机器持久) —— **明文不落盘**; 服务运行期只以 env
   (`APEIRETH_GATEWAY_TOKEN`) 注入网关进程;
-- `run` 动作启动时现读凭据库 → env → 网关令牌门 (`GatewayTokenGate::Enforced`) 强制执行;
+- `run` 动作启动时现读凭据库 → env → 网关令牌门 (`GatewayTokenGate::Enforced`) 强制执行
+  (W2-② 起覆盖**全 API 面**, 仅 `/health` 探活豁免);
 - 桌面壳 / TUI 从**同一凭据条目**取同源令牌 (keyring 默认映射: 目标 = 用户.服务);
 - 无令牌 = 三态门口径照旧 (放行 + 警告帧 + 审计), 不新造第四种口径;
 - `uninstall` 删除令牌 (`-KeepToken` 保留); `install -RotateToken` 换新。
+
+## 远程面 (W2-②)
+
+- 绑定地址: `-Bind` 显式给值 > env `APEIRETH_LISTEN` > `127.0.0.1` (缺省仅本机);
+- 非回环绑定**强制令牌** (fail-closed): 令牌族两面皆空时网关拒启动; 逃生阀
+  `APEIRETH_GATEWAY_TOKEN=none` 明示可裸奔但留审计;
+- TLS 面为接口桩 (`APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 显式未接线, 设值只得显式警告,
+  流量仍明文)。
 
 ## Linux 面 (未实测)
 
