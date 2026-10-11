@@ -216,7 +216,7 @@ impl CognitiveQuotaScheduler {
         }
         // M1: tasks 表有界 — 超上限淘汰条目。**0 装诚实**: TCB 不带插入时间戳,
         // 这里按 `task_id` 字典序最小淘汰 (确定性, 但不等于"最旧提交者");
-        // 要严格 FIFO 淘汰需给 TCB 加 submit_seq (TODO)。
+        // 要严格 FIFO 淘汰需给 TCB 加 submit_seq (债登记: 00-backlog.md 债栏 D7)。
         while inner.tasks.len() >= MAX_TRACKED_TASKS {
             let oldest = inner.tasks.keys().min().cloned();
             match oldest {

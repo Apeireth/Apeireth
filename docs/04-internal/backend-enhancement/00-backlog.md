@@ -47,6 +47,7 @@
 | D4 | reflexion 文件并发偶发 flake（台账 #57） | 疑与 file_lock 同根，本批定根后**待复跑观察定性**，不虚报已消 | 台账 #57 顺记 |
 | D5 | deny.toml `[bans]` v1 时代 duplicate skip 条目理由对账 | 非本批造成；deps 治理批复核 | `deny.toml` |
 | D6 | `TunableParam::effective()` 宿主 env 测试敏感面 | 非竞态；测试侧减敏待测试治理批统一做 | 清偿表 §5 N6 |
+| D7 | 认知调度器任务淘汰序非严格 FIFO（按 `task_id` 字典序，非最旧提交者） | M1 有界化时如实注记的边界；严格 FIFO 需给 TCB 加 `submit_seq`，属调度器内部改动（W1-② 进场读到，按宪章 §一.2 登记） | `cognitive_quota_scheduler.rs` 淘汰注记 |
 
 ## 与既有账目的关系
 
