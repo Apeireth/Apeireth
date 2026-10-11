@@ -38,27 +38,39 @@ const TELEMETRY_POLL_MS: u64 = 5_000;
 const INPUT_POLL_CAP_MS: u64 = 200;
 
 /// 用法文本。
-const USAGE: &str = "apeireth-tui — 终端驾驶舱\n\n用法:\n  apeireth-tui [--endpoint URL] [--motion full|reduced]\n\n环境变量:\n  APEIRETH_GATEWAY_URL   后端端点 (缺省 http://127.0.0.1:8080)\n  APEIRETH_TUI_MOTION    动效档 (full / reduced)\n\n键位: / 命令  ? 帮助  Ctrl+C 两段式退出  Esc Esc 时间倒带(接口桩)";
+const USAGE: &str = "apeireth-tui — 终端驾驶舱\n\n用法:\n  apeireth-tui [--endpoint URL] [--token TOKEN] [--motion full|reduced]\n\n环境变量:\n  APEIRETH_GATEWAY_URL     后端端点 (缺省 http://127.0.0.1:8080)\n  APEIRETH_GATEWAY_TOKEN   回环访问令牌 (敏感端点令牌门; --token 优先)\n  APEIRETH_TUI_MOTION      动效档 (full / reduced)\n\n键位: / 命令  ? 帮助  Ctrl+C 两段式退出  Esc Esc 时间倒带(接口桩)";
 
 /// 启动选项。
 struct Options {
     /// 后端端点。
     endpoint: String,
+    /// 回环访问令牌 (可选; 有则随请求呈现 Bearer 头)。
+    token: Option<String>,
     /// 动效档。
     motion: MotionMode,
 }
 
 fn parse_args() -> Result<Options, String> {
-    let mut endpoint = std::env::var("APEIRETH_GATEWAY_URL")
-        .ok()
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    parse_args_from(&args, &|key| std::env::var(key).ok())
+}
+
+/// 参数解析主体 (env 取值注入, 便于钉行为): `--token` 优先于 env
+/// `APEIRETH_GATEWAY_TOKEN`, 空白令牌按未配置处理。
+fn parse_args_from(
+    args: &[String],
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<Options, String> {
+    let mut endpoint = env("APEIRETH_GATEWAY_URL")
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_ENDPOINT.to_string());
-    let mut motion = std::env::var("APEIRETH_TUI_MOTION")
-        .ok()
+    let mut token = env("APEIRETH_GATEWAY_TOKEN")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let mut motion = env("APEIRETH_TUI_MOTION")
         .and_then(|value| MotionMode::parse(&value))
         .unwrap_or_default();
 
-    let args: Vec<String> = std::env::args().skip(1).collect();
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -66,6 +78,11 @@ fn parse_args() -> Result<Options, String> {
                 index += 1;
                 let value = args.get(index).ok_or("--endpoint 需要一个 URL")?;
                 endpoint = value.clone();
+            }
+            "--token" => {
+                index += 1;
+                let value = args.get(index).ok_or("--token 需要一个令牌值")?;
+                token = Some(value.trim().to_string()).filter(|value| !value.is_empty());
             }
             "--motion" => {
                 index += 1;
@@ -77,7 +94,11 @@ fn parse_args() -> Result<Options, String> {
         }
         index += 1;
     }
-    Ok(Options { endpoint, motion })
+    Ok(Options {
+        endpoint,
+        token,
+        motion,
+    })
 }
 
 fn main() {
@@ -95,14 +116,15 @@ fn main() {
     };
 
     let mut app = App::new(&options.endpoint, options.motion);
-    let backend: BackendHandle = match HttpGatewayBackend::new(&options.endpoint) {
-        Ok(backend) => Arc::new(Mutex::new(Box::new(backend))),
-        Err(error) => {
-            // 端点构造失败 = 配置错误, 明确报错退出 (不白屏装跑)。
-            eprintln!("端点不可用: {error}");
-            std::process::exit(2);
-        }
-    };
+    let backend: BackendHandle =
+        match HttpGatewayBackend::with_token(&options.endpoint, options.token.as_deref()) {
+            Ok(backend) => Arc::new(Mutex::new(Box::new(backend))),
+            Err(error) => {
+                // 端点构造失败 = 配置错误, 明确报错退出 (不白屏装跑)。
+                eprintln!("端点不可用: {error}");
+                std::process::exit(2);
+            }
+        };
 
     // 启动即探活: 连接失败 → 错误帧第一帧上屏。
     let mut startup_effects = Vec::new();
@@ -224,5 +246,59 @@ fn dispatch(effects: Vec<Effect>, backend: &BackendHandle, tx: &Sender<Input>) {
             let mut guard = lock_backend(&backend);
             effects::run(effect, guard.as_mut(), &mut sink);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| value.to_string()).collect()
+    }
+
+    fn no_env(_: &str) -> Option<String> {
+        None
+    }
+
+    /// 令牌注入面 (G10 对齐): `--token` 显式给值 / env `APEIRETH_GATEWAY_TOKEN`
+    /// 同源兜底 / 空白按未配置 (不发空 Bearer)。
+    #[test]
+    fn token_comes_from_flag_or_env_and_blank_means_none() {
+        // env 兜底。
+        let env = |key: &str| (key == "APEIRETH_GATEWAY_TOKEN").then(|| "env-token".to_string());
+        let options = parse_args_from(&[], &env).expect("parse");
+        assert_eq!(options.token.as_deref(), Some("env-token"));
+
+        // --token 显式覆盖 env。
+        let options = parse_args_from(&args(&["--token", "flag-token"]), &env).expect("parse");
+        assert_eq!(options.token.as_deref(), Some("flag-token"), "旗标优先");
+
+        // 空白 = 无令牌 (兼容路径: 不发鉴权头)。
+        let options = parse_args_from(&args(&["--token", "  "]), &no_env).expect("parse");
+        assert_eq!(options.token, None);
+        let options = parse_args_from(&[], &no_env).expect("parse");
+        assert_eq!(options.token, None);
+    }
+
+    /// 端点/动效既有语义零回归 (令牌面只增不改)。
+    #[test]
+    fn endpoint_and_motion_keep_their_existing_semantics() {
+        let env = |key: &str| match key {
+            "APEIRETH_GATEWAY_URL" => Some("http://127.0.0.1:9000".to_string()),
+            "APEIRETH_TUI_MOTION" => Some("reduced".to_string()),
+            _ => None,
+        };
+        let options = parse_args_from(&[], &env).expect("parse");
+        assert_eq!(options.endpoint, "http://127.0.0.1:9000");
+        assert!(matches!(options.motion, MotionMode::Reduced));
+
+        let options = parse_args_from(
+            &args(&["--endpoint", "http://127.0.0.1:7000", "--motion", "full"]),
+            &env,
+        )
+        .expect("parse");
+        assert_eq!(options.endpoint, "http://127.0.0.1:7000");
+        assert!(matches!(options.motion, MotionMode::Full));
     }
 }

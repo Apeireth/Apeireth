@@ -1,4 +1,4 @@
-﻿# 服务商链路验证脚本（真凭据实跑 + 热更生效性判别）
+# 服务商链路验证脚本（真凭据实跑 + 热更生效性判别）
 # 用途：验证"网关 → 服务商"链路的三件事——①真凭据可用；②热更凭据即时生效；
 # ③热更后可恢复。全程密钥只在内存流转，输出仅回显尾号。
 # 用法：powershell -File scripts/verify-provider-path.ps1 [-Port 8099]
@@ -50,6 +50,14 @@ $env:APEIRETH_API_KEY = $realKey
 $env:OPENAI_API_KEY = $realKey
 $env:APEIRETH_OPENAI_URL = 'https://api.deepseek.com/v1'
 $env:APEIRETH_OPENAI_MODELS = 'deepseek-flash'
+# 令牌透传（G10）：网关继承本脚本环境——设了 APEIRETH_GATEWAY_TOKEN，敏感端点
+# (/v1/admin/config) 的令牌门就按令牌校验，本脚本的 admin 调用同源透传该令牌；
+# 未设（或显式 none 逃生阀）时按未设口径放行，保持既有验证语义。
+$gateBearer = if ($env:APEIRETH_GATEWAY_TOKEN -and $env:APEIRETH_GATEWAY_TOKEN.Trim() -notin @('', 'none')) {
+  "Bearer $($env:APEIRETH_GATEWAY_TOKEN.Trim())"
+} else {
+  "Bearer $realKey"
+}
 $exe = Join-Path (Split-Path $PSScriptRoot -Parent) 'target\x86_64-pc-windows-msvc\release\apeireth.exe'
 if (-not (Test-Path $exe)) { $exe = 'C:\Program Files\Apeireth Companion\apeireth.exe' }
 $gw = Start-Process -FilePath $exe -ArgumentList 'gateway','serve','--port',"$Port" -PassThru -WindowStyle Hidden
@@ -73,7 +81,7 @@ try {
 # ---- 4. ②诱饵热更：换假 key，下一请求必须改用假 key ----
 $decoy = 'sk-decoy-INVALID-000000'
 try {
-  Invoke-RestMethod -Uri "$base/v1/admin/config" -Method Post -Headers @{Authorization="Bearer $realKey"} -Body (@{provider='openai'; api_key=$decoy} | ConvertTo-Json) -ContentType 'application/json' -TimeoutSec 10 | Out-Null
+  Invoke-RestMethod -Uri "$base/v1/admin/config" -Method Post -Headers @{Authorization=$gateBearer} -Body (@{provider='openai'; api_key=$decoy} | ConvertTo-Json) -ContentType 'application/json' -TimeoutSec 10 | Out-Null
 } catch { Step 'hot-swap-apply' $false (Read-ErrorBody $_) }
 Start-Sleep 1
 try {
@@ -90,7 +98,7 @@ try {
 
 # ---- 5. ③恢复真凭据，再次聊天应成功 ----
 try {
-  Invoke-RestMethod -Uri "$base/v1/admin/config" -Method Post -Headers @{Authorization="Bearer $decoy"} -Body (@{provider='openai'; api_key=$realKey} | ConvertTo-Json) -ContentType 'application/json' -TimeoutSec 10 | Out-Null
+  Invoke-RestMethod -Uri "$base/v1/admin/config" -Method Post -Headers @{Authorization=$gateBearer} -Body (@{provider='openai'; api_key=$realKey} | ConvertTo-Json) -ContentType 'application/json' -TimeoutSec 10 | Out-Null
 } catch { Step 'restore-apply' $false (Read-ErrorBody $_) }
 Start-Sleep 1
 try {

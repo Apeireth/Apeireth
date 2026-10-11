@@ -428,6 +428,29 @@ mod tests {
         assert!(redacted.contains("/v1/chat"));
     }
 
+    /// G10 令牌不入日志: 回环令牌 (env 注入值 / Bearer 头) 一律打码, 而
+    /// 自铸启动行的来源诊断 (`source=minted`) 保留可读。
+    #[test]
+    fn redacts_the_loopback_gateway_token_in_every_shape() {
+        let token = "loopback-tok-0123456789abcdef";
+        for line in [
+            &format!("APEIRETH_GATEWAY_TOKEN={token}"),
+            &format!(r#"spawn env: {{"APEIRETH_GATEWAY_TOKEN":"{token}"}}"#),
+            &format!("Authorization: Bearer {token}"),
+        ] {
+            let redacted = DesktopLogger::redact_secrets(line);
+            assert!(!redacted.contains(token), "令牌泄露: {redacted}");
+        }
+
+        // 自铸启动行: 值永远 [REDACTED], 来源诊断保留 (可排障、零泄露)。
+        let startup = "backend.gateway_token source=minted value=[REDACTED]";
+        let redacted = DesktopLogger::redact_secrets(startup);
+        assert!(
+            redacted.contains("source=minted"),
+            "来源诊断必须保留: {redacted}"
+        );
+    }
+
     #[test]
     fn keeps_non_secret_diagnostics_intact() {
         let line = "backend.ready pid=4321 port=52719 credential_source=environment";

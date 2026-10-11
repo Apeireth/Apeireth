@@ -45,6 +45,10 @@ pub struct GatewayState {
     /// Live runtime config, readable by every request path and patchable through
     /// `/v1/admin/config`.
     pub hot_config: Arc<RwLock<crate::admin::GatewayRuntimeConfig>>,
+    /// H1/G10 loopback token gate for the sensitive endpoints (admin config /
+    /// approval resolve), resolved once at assembly from env
+    /// `APEIRETH_GATEWAY_TOKEN` (see [`crate::canonical_entry::GatewayTokenGate`]).
+    pub token_gate: crate::canonical_entry::GatewayTokenGate,
 }
 
 // ---------------------------------------------------------------------------

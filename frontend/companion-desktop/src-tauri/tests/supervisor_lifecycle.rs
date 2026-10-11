@@ -538,3 +538,61 @@ fn concurrent_start_does_not_spawn_two_backends() {
         supervisor.stop().await.expect("cleanup stop");
     });
 }
+
+/// G10 loopback hardening, end to end: the sidecar is spawned with an
+/// auto-minted access token and its sensitive endpoints enforce it — an
+/// unauthenticated call is refused while the minted token opens the same
+/// endpoint. The mint→inject→enforce chain only exists at runtime, so it is
+/// proven here against the real process.
+#[test]
+fn minted_gateway_token_enforces_the_sensitive_endpoint_gate() {
+    if !backend_available() {
+        eprintln!("SKIP: no canonical backend build found");
+        return;
+    }
+    let _guard = gateway_lock();
+    isolate_backend_data();
+    // The mint path is the one under test: no explicit env token.
+    let _env = EnvGuard::clear(&["APEIRETH_GATEWAY_TOKEN"]);
+
+    runtime().block_on(async {
+        let supervisor = BackendSupervisor::new_for_test();
+        supervisor.start().await.expect("backend should start");
+        let endpoint = supervisor
+            .info()
+            .await
+            .endpoint
+            .clone()
+            .expect("a Ready backend must publish an endpoint");
+        let token = supervisor
+            .gateway_access_token()
+            .await
+            .expect("a spawned sidecar must carry a loopback access token");
+        assert_eq!(token.len(), 64, "minted token = 32 random bytes hex");
+
+        // 无认证直调敏感端点: 必须 401 (收紧口径, 不再未设即放)。
+        let denied = reqwest::get(format!("{endpoint}/v1/admin/config"))
+            .await
+            .expect("admin config request should reach the gateway");
+        assert_eq!(
+            denied.status(),
+            reqwest::StatusCode::UNAUTHORIZED,
+            "tokenless call to a sensitive endpoint must be refused"
+        );
+
+        // 带自铸令牌: 同一端点放行。
+        let allowed = reqwest::Client::new()
+            .get(format!("{endpoint}/v1/admin/config"))
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await
+            .expect("authorized admin config request");
+        assert!(
+            allowed.status().is_success(),
+            "minted token must open the gate, got {}",
+            allowed.status()
+        );
+
+        supervisor.stop().await.expect("cleanup stop");
+    });
+}

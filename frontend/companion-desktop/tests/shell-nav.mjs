@@ -45,17 +45,20 @@ assert.deepEqual(NAV_COMMAND_TARGETS['nav.status'], {kind: 'drawer', id: 'status
 assert.deepEqual(NAV_COMMAND_TARGETS['nav.settings'], {kind: 'drawer', id: 'settings'});
 assert.deepEqual(NAV_COMMAND_TARGETS['nav.memory'], {kind: 'workbench', section: 'memory'});
 assert.deepEqual(NAV_COMMAND_TARGETS['nav.diary'], {kind: 'workbench', section: 'diary'});
+assert.deepEqual(NAV_COMMAND_TARGETS['nav.starport'], {kind: 'workbench', section: 'starport'});
 assert.deepEqual(
   NAV_COMMAND_TARGETS['nav.governance'],
   {kind: 'drawer', id: 'settings', section: SETTINGS_SECURITY_SECTION},
 );
 assert.deepEqual(NAV_COMMAND_TARGETS['nav.logs'], {kind: 'drawer', id: 'status'});
 
-// ---- 工作台两张卡片入口 ----
+// ---- 工作台卡片入口 ----
+// 断言演进（2026-10-11，I 批 1）：星港内置应用面按既有「工作台卡片入口」模式入驻
+// （与记忆/日记同模式），侧栏四件宪法不变——卡片从 2 张增为 3 张属正当口径演进。
 assert.deepEqual(
   WORKBENCH_CARDS.map((c) => c.section),
-  ['memory', 'diary'],
-  '工作台恰好两张卡片入口：记忆 / 日记',
+  ['memory', 'diary', 'starport'],
+  '工作台三张卡片入口：记忆 / 日记 / 星港',
 );
 assert.ok(WORKBENCH_CARDS.every((c) => c.title && c.sub), '卡片带标题与副题（入口可辨认）');
 

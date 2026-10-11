@@ -716,6 +716,10 @@ pub struct BackendSupervisor {
     spawned_provider_env: RwLock<BackendProviderEnv>,
     /// The capability toggles the RUNNING sidecar was spawned with.
     spawned_capability_env: RwLock<BackendCapabilityEnv>,
+    /// The loopback access token the RUNNING sidecar was spawned with (auto-
+    /// minted per spawn when the parent env has none). In-memory only — never
+    /// persisted, never logged; see [`resolve_sidecar_gateway_token`].
+    spawned_gateway_token: RwLock<Option<String>>,
 }
 
 /// 存储文档身份: 后端 provider 环境配置 (非密字段)。
@@ -743,6 +747,43 @@ fn capability_env_doc_compat() -> DocCompat {
 
 fn tuning_log_doc_compat() -> DocCompat {
     DocCompat::exact(TUNING_LOG_DOC_NAME, TUNING_LOG_DOC_VERSION)
+}
+
+/// Env key of the sidecar's loopback access token: the same variable the
+/// gateway's sensitive-endpoint token gate reads (`GatewayTokenGate::ENV`).
+pub const GATEWAY_TOKEN_ENV: &str = "APEIRETH_GATEWAY_TOKEN";
+
+/// Explicit "run without protection" declaration understood by the gateway
+/// token gate (`GatewayTokenGate::UNPROTECTED_SENTINEL`). Never a real token.
+pub const UNPROTECTED_TOKEN_SENTINEL: &str = "none";
+
+/// Mint one cryptographically random loopback access token: 32 random bytes
+/// hex-rendered (64 chars). One token per spawn, kept in process memory only.
+pub fn mint_gateway_token() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// The loopback token the sidecar is started with, plus where it came from
+/// (`env` / `minted`) for the redacted startup log line.
+///
+/// An explicit non-empty parent-env value passes through untouched — that
+/// includes the gateway's no-protection sentinel, which is the operator's
+/// own declaration and must never be silently replaced. Everything else
+/// (unset / blank) mints a fresh token for this spawn.
+fn resolve_sidecar_gateway_token(parent_env: Option<&str>) -> (String, &'static str) {
+    match parent_env.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) => (value.to_string(), "env"),
+        None => (mint_gateway_token(), "minted"),
+    }
+}
+
+/// `Authorization` header value carrying the loopback access token to the
+/// gateway's gated endpoints.
+fn bearer_value(token: &str) -> String {
+    format!("Bearer {token}")
 }
 
 impl BackendSupervisor {
@@ -780,6 +821,7 @@ impl BackendSupervisor {
             workspace_dir: RwLock::new(persisted_workspace),
             spawned_provider_env: RwLock::new(persisted_provider),
             spawned_capability_env: RwLock::new(persisted_capabilities),
+            spawned_gateway_token: RwLock::new(None),
         })
     }
 
@@ -1338,7 +1380,13 @@ impl BackendSupervisor {
             Err(error) => return HotApply::Failed(format!("client build failed: {error}")),
         };
 
-        match client.post(&url).json(&payload).send().await {
+        let request = client.post(&url).json(&payload);
+        let request = match self.gateway_access_token().await {
+            Some(token) => request.header(reqwest::header::AUTHORIZATION, bearer_value(&token)),
+            None => request,
+        };
+
+        match request.send().await {
             Ok(response) if response.status().is_success() => HotApply::Applied,
             Ok(response)
                 if response.status() == reqwest::StatusCode::NOT_FOUND
@@ -1349,6 +1397,26 @@ impl BackendSupervisor {
             Ok(response) => HotApply::Failed(format!("HTTP {}", response.status())),
             Err(error) => HotApply::Failed(error.to_string()),
         }
+    }
+
+    /// The loopback access token to present on the gateway's gated endpoints
+    /// (admin config / approval resolve).
+    ///
+    /// The running sidecar enforces exactly what it was spawned with (the
+    /// explicit env value or the minted one), so the spawned value wins; the
+    /// env value is the fallback for an external backend the desktop did not
+    /// spawn. The no-protection sentinel means the gateway gate is declared
+    /// open — there is nothing to present, so `None`. The value never enters
+    /// logs or persisted state.
+    pub async fn gateway_access_token(&self) -> Option<String> {
+        let token = match self.spawned_gateway_token.read().await.clone() {
+            Some(value) => value,
+            None => std::env::var(GATEWAY_TOKEN_ENV)
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())?,
+        };
+        (token != UNPROTECTED_TOKEN_SENTINEL).then_some(token)
     }
 
     /// Fetch the gateway's effective config (`GET /v1/admin/config`) and pass
@@ -1366,8 +1434,12 @@ impl BackendSupervisor {
             .timeout(Duration::from_secs(5))
             .build()
             .map_err(|e| format!("failed to build admin client: {e}"))?;
-        let response = client
-            .get(&url)
+        let request = client.get(&url);
+        let request = match self.gateway_access_token().await {
+            Some(token) => request.header(reqwest::header::AUTHORIZATION, bearer_value(&token)),
+            None => request,
+        };
+        let response = request
             .send()
             .await
             .map_err(|e| format!("gateway admin config request failed: {e}"))?;
@@ -1644,6 +1716,22 @@ impl BackendSupervisor {
             cmd.env(key, value);
         }
 
+        // G10 loopback hardening: the sidecar's sensitive endpoints (admin
+        // config / approval resolve) are token-gated, and the gate must be
+        // enforced in production. The parent env's explicit value passes
+        // through untouched (including the gateway's no-protection sentinel);
+        // otherwise a fresh 32-byte random token is minted for THIS spawn and
+        // injected. Process-env surface only — never persisted to disk, so a
+        // restart legitimately rotates it.
+        let (gateway_token, token_source) =
+            resolve_sidecar_gateway_token(std::env::var(GATEWAY_TOKEN_ENV).ok().as_deref());
+        cmd.env(GATEWAY_TOKEN_ENV, &gateway_token);
+        self.log_desktop(
+            LogLevel::Info,
+            &format!("backend.gateway_token source={token_source} value=[REDACTED]"),
+        );
+        *self.spawned_gateway_token.write().await = Some(gateway_token);
+
         // Anchor the sidecar's persistent stores to absolute paths and pin its
         // working directory to app-data. The canonical CLI defaults its
         // session/cognitive DBs to RELATIVE `.apeireth/...` paths, which break
@@ -1836,6 +1924,46 @@ mod tests {
     use super::*;
     use tokio::process::Command;
 
+    /// Serializes env-mutating tests (`std::env` is process-global).
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Scoped process-env mutation: restores previous values on drop.
+    struct EnvGuard(Vec<(&'static str, Option<std::ffi::OsString>)>);
+
+    impl EnvGuard {
+        fn set(vars: &[(&'static str, &str)]) -> Self {
+            let mut saved = Vec::new();
+            for (key, value) in vars {
+                saved.push((*key, std::env::var_os(key)));
+                std::env::set_var(key, value);
+            }
+            Self(saved)
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (key, value) in self.0.drain(..) {
+                match value {
+                    Some(value) => std::env::set_var(key, value),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+    }
+
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime")
+    }
+
     /// Verified against the CLI's own help output:
     /// `apeireth gateway serve [--port PORT]`.
     #[test]
@@ -1855,6 +1983,73 @@ mod tests {
                 "legacy token {legacy:?} leaked into spawn args: {args}"
             );
         }
+    }
+
+    /// 自铸令牌 (G10): 32 随机字节的十六进制 (64 字符), 每次调用一枚新的。
+    #[test]
+    fn minted_gateway_token_is_32_random_bytes_hex() {
+        let token = mint_gateway_token();
+        assert_eq!(token.len(), 64, "32 字节 → 64 个十六进制字符: {token}");
+        assert!(
+            token.chars().all(|c| c.is_ascii_hexdigit()),
+            "令牌只含十六进制: {token}"
+        );
+
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..32 {
+            assert!(seen.insert(mint_gateway_token()), "每枚令牌必须唯一");
+        }
+    }
+
+    /// 注入口径: 显式 env 值原样透传 (含逃生阀哨兵), 未设/空白才自铸。
+    #[test]
+    fn sidecar_gateway_token_passes_through_explicit_env_and_mints_when_unset() {
+        let (value, source) = resolve_sidecar_gateway_token(Some("  operator-secret  "));
+        assert_eq!(value, "operator-secret", "显式值透传 (去空白)");
+        assert_eq!(source, "env");
+
+        // 逃生阀哨兵必须原样透传给侧车 —— 它是操作者的显式声明, 不得被替换。
+        let (value, source) = resolve_sidecar_gateway_token(Some(UNPROTECTED_TOKEN_SENTINEL));
+        assert_eq!(value, UNPROTECTED_TOKEN_SENTINEL);
+        assert_eq!(source, "env");
+
+        for unset in [None, Some(""), Some("   ")] {
+            let (value, source) = resolve_sidecar_gateway_token(unset);
+            assert_eq!(source, "minted", "未设即自铸 ({unset:?})");
+            assert_eq!(value.len(), 64);
+        }
+    }
+
+    /// 桌面自用的令牌面: 呈现的令牌恒等于运行中侧车被注入的那枚 (spawn 期
+    /// 决定); 未自持 (外部后端) 时回落 env; 哨兵 = 门已明示不设防 → 无令牌
+    /// 可呈, 回 None。
+    #[test]
+    fn gateway_access_token_tracks_the_spawned_sidecar_and_honors_the_sentinel() {
+        let _lock = env_lock();
+        runtime().block_on(async {
+            let supervisor = BackendSupervisor::new_for_test();
+
+            // 外部后端 (无 spawn): 回落 env 显式值。
+            let _guard = EnvGuard::set(&[(GATEWAY_TOKEN_ENV, "operator-secret")]);
+            assert_eq!(
+                supervisor.gateway_access_token().await.as_deref(),
+                Some("operator-secret"),
+                "未自持时回落 env (外部后端口径)"
+            );
+
+            // 自持后端: spawn 期注入的那枚说了算 (env 后改也不动摇)。
+            *supervisor.spawned_gateway_token.write().await = Some("minted-for-test".into());
+            assert_eq!(
+                supervisor.gateway_access_token().await.as_deref(),
+                Some("minted-for-test"),
+                "运行中侧车执行的是 spawn 期注入值"
+            );
+
+            // 逃生阀哨兵 (env 显式或被原样透传): 门明示不设防, 无令牌可呈。
+            *supervisor.spawned_gateway_token.write().await =
+                Some(UNPROTECTED_TOKEN_SENTINEL.into());
+            assert_eq!(supervisor.gateway_access_token().await, None);
+        });
     }
 
     /// The injected variable names must match the canonical CLI contract

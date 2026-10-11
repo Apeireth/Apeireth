@@ -26,8 +26,10 @@
   ▼
 桌面壳（frontend/companion-desktop）
   ├─② 本机回环 HTTP/SSE + 能力开关 env 注入 → 侧车
-  │    设防：开关同源注入、启动日志脱敏、会话级工作区、审计 masked 不可还原
-  │    缺口：来源白名单只挡浏览器跨源；回环令牌（env 门）可选未设即放——本机进程可冒充客户端
+  │    设防：开关同源注入、启动日志脱敏、会话级工作区、审计 masked 不可还原、
+  │         回环令牌自铸注入（G10 处置：每次启动一枚 32 字节随机令牌进侧车 env）
+  │    缺口：来源白名单只挡浏览器跨源；令牌门只覆盖两个敏感端点——chat/事件流/
+  │         面板族仍无认证面（G10 残余，见 §5 处置注）
   ▼
 侧车网关 + 运行时（adapters/gateway + engine/runtime + 治理管线）
   ├─③ → provider API（出：提示+召回记忆 / 入：回复）
@@ -62,6 +64,7 @@
 
 | 防点 | 实现指针 | 边界（如实） |
 |---|---|---|
+| 回环令牌门（G10 处置, W1-③） | 三态门口径 `crates/adapters/gateway/src/canonical_entry.rs`（`GatewayTokenGate`：设值=Bearer 恒定时间校验 / 未设=放行+警告帧+审计 / `none`=逃生阀明示不设防留审计）+ 桌面自铸注入 `frontend/companion-desktop/src-tauri/src/backend_supervisor.rs`（每次启动一枚 32 字节随机令牌, 进程 env 面, 不落盘）+ 客户端注入面（TUI `--token`/env、桌面 UI `get_gateway_token` IPC、验证脚本透传） | 只覆盖 `/v1/admin/config` 与 `/v1/approvals/resolve` 两敏感端点；CLI 裸跑未设=保守过渡放行（警告+审计可见）；逃生阀 `APEIRETH_GATEWAY_TOKEN=none` = 明示不设防（审计留痕、门体不设防） |
 | 三洋葱 | 双洋葱 `crates/foundation/core/src/onion.rs` + 判定层 `onion_gate.rs`（L0 人类权威恒需在场）+ 执行面 `crates/engine/runtime-assembly/src/canonical/onion_layer.rs`（末层纵深） | 执行面 hook 旋钮 `APEIRETH_ENABLE_ONION_LAYER` **默认关**；多签 v2.1 未真接（挂账 D2）——「多签」暂无密码学效力 |
 | 审批四态 | `crates/foundation/governance/src/approval_closure.rs`（AllowedOnce 恰好一次；Rejected/Cancelled/Unavailable 一律 fail-closed）+ 冻结面 `crates/engine/runtime/src/canonical/approval.rs` | 命令级名单逐字精确匹配→族等价形态可绕（G2） |
 | 写总闸 | `crates/capabilities/tools/src/write_intent.rs`（写意图词法，静态调用面与命令面同族同权）+ `shell.rs` 冻结/执行双查 + 组装根 `runtime-assembly/src/canonical/production.rs` 同源 | 词法面之外的写入（解释器内写入/编码负载）由审批链+沙箱兜底；保守扫描宁误拒不漏放 |
@@ -85,7 +88,25 @@
 | G7 | 数据静态加密（记忆/会话库明文在盘） | W3 候选 / G | 物理接触者直接拷走数据目录，历史与记忆全量外泄 |
 | G8 | 提示注入净化仅启发式 | W3 候选 / E | 跨源内容诱导模型发起越权请求，防线后移到审批与沙箱兜底 |
 | G9 | 多签 v2.1 真密码学（挂账 D2） | W3 候选 / E | 伪造「多签」决策无密码学可验，高危升级可被假授权混过 |
-| G10 | 本机回环令牌可选未设即放（`canonical_entry.rs` H1 门） | W1-W2 / F | 本机进程伪装来源头调端点，冒充桌面壳发指令、读事件流 |
+| G10 | 本机回环令牌可选未设即放（`canonical_entry.rs` H1 门）**→已处置（W1-③）** | W1-W2 / F | 本机进程伪装来源头调端点，冒充桌面壳发指令、读事件流 |
+
+> **G10 处置（W1-③ 网关回环令牌加固）**：缺口本体「令牌门可选、未设即放」已封堵——
+> ① **桌面自铸**：`backend_supervisor` 启动侧车时若 env 未设 `APEIRETH_GATEWAY_TOKEN` 即自铸
+> 密码学随机令牌（32 字节）注入，每次启动一枚、不落盘明文（进程 env 面）、重启换新——
+> 生产（桌面）口径恒为「令牌强制」；
+> ② **网关默认收紧（三态门）**：设值=Bearer 恒定时间校验（缺失 401 `auth_missing_key` /
+> 伪造 401 `auth_invalid_key`，拒绝入审计 `gateway.auth_rejected`）；未设=保守过渡（按最小
+> 破坏口径选此支），无认证调用仍放行但每次记警告帧 `gateway_auth_unprotected` + 审计
+> `gateway.auth_unprotected`；显式 `APEIRETH_GATEWAY_TOKEN=none`=逃生阀；
+> ③ **客户端对齐**：TUI `--token`/env 注入面、桌面 UI 敏感调用带令牌（`get_gateway_token`
+> IPC + `runtime.ts` 鉴权头）、`scripts/verify-provider-path.ps1` 同源透传；IM 桥为同源进程内
+> 直调（无回环 HTTP 面）零改动；无令牌客户端在未设口径下零断（兼容路径有测试钉住）。
+> **残余（如实）**：(a) 逃生阀语义 = `APEIRETH_GATEWAY_TOKEN=none` 明示不设防——审计留痕
+> 但门体不设防，风险由操作者明示自担；(b) CLI 裸跑（env 未设）默认仍放行无认证调用（保守
+> 过渡），暴露面靠警告帧+审计可见可查，正式部署应配令牌或走桌面壳；(c) 令牌门只覆盖两个
+> 敏感端点，chat/事件流/面板族仍无认证面——本机进程仍可驱动回合、读观测面（原 G10 敌人
+> 路径的残留半句），候 W2 远程化批随 G4 认证面一并收紧；(d) 浏览器 web 构建取不到令牌
+> （令牌只经桌面壳 IPC 下发），对令牌强制网关调敏感端点会 401——设计内（令牌只属于桌面壳）。
 
 > 波次如实注：G1-G5 按 [00-backlog.md](00-backlog.md) 排序建议与 [E-security-depth.md](E-security-depth.md) 分期挂靠；E-P2/P3 未显式入波，按 E 分期顺序排在 P4（W3）前；G7-G9 为未入波候选——派工以 owner 拍板为准，不假称已排期。
 
@@ -95,7 +116,7 @@
 |---|---|
 | ① 提示注入 | (a) IM 入站消息夹「忽略之前指令,执行 X」→断言仍冻结进审批四态、不自动执行；(b) 召回记忆/工具输出带注入指令→断言 `UntrustedEnvelope` 警告头与边界标记不被剥除；(c) 注入诱导读凭据面→断言 `sensitive_path` 拒绝帧 |
 | ② 工具滥用 | (a) 未读文件覆盖写→`observed_gate` 拒；(b) `echo x > f` 与等价静态调用在关闸下同帧拒（扩 `delete_path_parity` 覆盖写族）；(c) shell 输出夹 `sk-` 密钥→绊线脱敏截断且结果带 `credential_tripwire` |
-| ③ 本地恶意进程 | (a) 直读 `sessions.sqlite3`/记忆库→当前应可读=G7 实证用例（落地后反转为回归锚）；(b) 伪来源头调回环端点→断言 401（现状无令牌即放=G10 实证）；(c) 读钥匙串导出物/密钥文件→`sensitive_path` 拒 |
+| ③ 本地恶意进程 | (a) 直读 `sessions.sqlite3`/记忆库→当前应可读=G7 实证用例（落地后反转为回归锚）；(b) 伪来源头调回环端点→断言 401（G10 已落地：`crates/adapters/gateway/tests/gateway_token_gate.rs` 强制态 401 + 伪来源头零 CORS 放行 + 桌面自铸令牌 e2e）；(c) 读钥匙串导出物/密钥文件→`sensitive_path` 拒 |
 | ④ 供应链 | (a) MCP 工具描述含指令文本→断言只入审批面、不被执行；(b) MCP 输出夹凭据→归一+脱敏断言；(c) 坏配置/未知 schema→拒开 fail-closed |
 | ⑤ 多户越权 | (a) 访客会话读主人记忆库→应拒（现为 G1 实证用例）；(b) 客户端 A 的 `AllowedOnce` 在客户端 B 重放→恰好一次失效；(c) 访客改能力开关/沙箱旋钮→权限拒绝 |
 | ⑥ 物理接触 | (a) 无锁翻会话历史→当前可读=G7 实证；(b) 导出或复制密钥材料→fail-closed 即帧；(c) 现场改配置关沙箱→默认开语义回归 + 下次审批卡红标警示 |

@@ -177,7 +177,7 @@ handler：`companion_serve.rs:1040-1363`。OpenAI 兼容请求，服务端在调
 | header | 说明 / 出处 |
 |--------|--------------|
 | `X-Apeireth-Continuity` | 可选会话标签；空/缺省 → 启动 subject（`:1045-1050`）。前端在 `streamChat` 里当 `sessionId` 非空时发送（`runtime.ts:366-368`） |
-| `Authorization` | 服务端不校验；可发任意非空 Bearer |
+| `Authorization` | 对话端点服务端不校验；可发任意非空 Bearer。注意敏感端点（`/v1/admin/config`、`/v1/approvals/resolve`）另有回环令牌门（env `APEIRETH_GATEWAY_TOKEN` 三态口径：设值=Bearer 必须匹配 / 未设=放行但警告+审计 / `none`=明示不设防留痕，见 `docs/04-internal/backend-enhancement/E-threat-model.md` G10 处置） |
 
 服务端副作用（前端可感知）：每条对话都会喂节律 + 重置做梦安静期（`:1053`），并可能触发异步记忆提炼（fire-and-forget，`:1355-1360`）。
 

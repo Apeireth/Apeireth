@@ -48,6 +48,7 @@ import {
   transcriptForSummary,
 } from './user-impression.ts';
 import {providerFetch} from './provider-transport.ts';
+import {getGatewayToken} from './tauri-bridge.ts';
 import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
 
 const STORAGE_KEY = 'apeireth-config';
@@ -953,6 +954,24 @@ export async function listModels(
 // Admin config + session settings (canonical 2.0 代理契约)
 // ============================================================
 
+/**
+ * G10 回环令牌注入面: 桌面壳自铸的回环访问令牌 (随侧车每枚启动而生, 重启
+ * 即换)。每次调用现取、不缓存 —— 侧车重启换令牌后旧值不滞留。非桌面环境 /
+ * 网关明示不设防时为空 → 无令牌客户端兼容路径 (不发鉴权头)。令牌不入日志、
+ * 不入调用记录 (`call-logger.ts` 只记消息面, 无请求头)。
+ */
+async function gatewayAccessToken(): Promise<string | null> {
+  const token = await getGatewayToken();
+  return token && token.trim() ? token.trim() : null;
+}
+
+/** 敏感端点鉴权头: 有回环令牌带 Bearer; 否则退回既有 apiKey 面 (web 兼容)。 */
+async function gatewayAuthHeaders(config: ApeirethConfig): Promise<Record<string, string>> {
+  const token = await gatewayAccessToken();
+  const value = token ? `Bearer ${token}` : config.apiKey ? `Bearer ${config.apiKey}` : '';
+  return value ? {Authorization: value} : {};
+}
+
 async function requestJson(
   config: ApeirethConfig,
   path: string,
@@ -960,7 +979,7 @@ async function requestJson(
 ): Promise<unknown> {
   const hasBody = options.body !== undefined;
   const headers: Record<string, string> = {
-    Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+    ...(await gatewayAuthHeaders(config)),
   };
   if (hasBody) headers['Content-Type'] = 'application/json';
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
@@ -2143,9 +2162,11 @@ export async function resolveCanonicalApproval(
   const timeout = setTimeout(() => controller.abort(), 5 * 60_000);
   let res: Response;
   try {
+    // G10: 审批解决是敏感端点 —— 带桌面壳自铸的回环令牌 (无令牌 = 兼容路径)。
+    const auth = await gatewayAuthHeaders(config);
     res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/approvals/resolve`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', ...auth},
       body: JSON.stringify({
         session: pending.session,
         approval: pending.approval_id,

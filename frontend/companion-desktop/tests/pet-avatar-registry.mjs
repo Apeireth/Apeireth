@@ -164,6 +164,37 @@ const dummyLoad = async () => ({default: null});
   reject((m) => ((m.id = 'light-sentinel'), m), '保留字 id');
   reject((m) => ((m.module = '../escape.mjs'), m), '模块路径逃逸');
 
+  // —— 模型侧（v2 model 字段，与 module 二选一）——
+  const modelOnly = parseAvatarPackManifestV2(
+    JSON.stringify({
+      schemaVersion: 2,
+      id: 'pack-model-only',
+      displayName: '纯模型形象包',
+      model: 'models/avatar.vrm',
+      license: {
+        spdx: 'CC0-1.0',
+        attribution: '',
+        source: 'https://example.com/model',
+        modifications: '无',
+      },
+      capabilities: goodV2.capabilities,
+      tier0Safe: false,
+    }),
+  );
+  assert.ok(modelOnly, '纯模型形象包（无层模块）必须通过');
+  assert.equal(modelOnly.model, 'models/avatar.vrm');
+  assert.equal('module' in modelOnly, false, '没给模块就不造键');
+
+  const both = parseAvatarPackManifestV2(
+    JSON.stringify({...goodV2, model: 'models/avatar.glb'}),
+  );
+  assert.ok(both && both.module === 'layers/test.mjs' && both.model === 'models/avatar.glb', '层模块与模型可同包并存');
+
+  reject((m) => (delete m.module, m), '层模块与模型双无');
+  reject((m) => ((m.module = undefined, m.model = '../escape.vrm'), m), '模型路径逃逸');
+  reject((m) => ((m.module = undefined, m.model = 'models/avatar.fbx'), m), '模型扩展名非白名单');
+  reject((m) => ((m.module = undefined, m.model = '/abs/avatar.vrm'), m), '模型绝对路径');
+
   // 白名单本身口径：非商用/禁改绝不在表内
   assert.equal(AVATAR_LICENSE_WHITELIST['CC-BY-NC-4.0'], undefined);
   assert.equal(AVATAR_LICENSE_WHITELIST['CC0-1.0'], 'public-domain');

@@ -59,6 +59,8 @@ const SUITES = [
   {file: 'pet-proactive.mjs', name: 'pet proactive engine (anti-nagging budget / glance, real module)', strip: true},
   {file: 'pet-avatar-registry.mjs', name: 'pet avatar registry (dual-form plug-in slot, real module)', strip: true},
   {file: 'pet-window-lifecycle.mjs', name: 'pet window lifecycle + mutual exclusion (source mirror)'},
+  {file: 'pet-character-mapping.mjs', name: 'pet character mapping (viseme/glance/blink discipline, real module)', strip: true},
+  {file: 'pet-user-avatar.mjs', name: 'pet user avatar port (format gate / disclaimer discipline, real module)', strip: true},
   {file: 'self-tuning-mapping.mjs', name: 'self-tuning knob mapping (real module)', strip: true},
   {file: 'file-write-toggle.mjs', name: 'controlled file-write toggle mapping (real module)', strip: true},
   {file: 'provider-transport.mjs', name: 'provider transport selection (invoke vs fetch, real module)', strip: true},
@@ -78,6 +80,15 @@ const SUITES = [
   {file: 'starport-shell.mjs', name: 'starport shell (view lifecycle / single-instance / overlay pairing / async settle, real modules)', strip: true},
   {file: 'pet-agent-status.mjs', name: 'pet agent status machine (five-state vocabulary / live-source table / decay discipline, real module)', strip: true},
   {file: 'pet-approval-quick.mjs', name: 'pet approval quick panel (frame truth source / authoritative match / dual-sync clear, real module)', strip: true},
+  {file: 'starport-faces.mjs', name: 'starport faces ledger (17-face honest status vocabulary / note discipline, real module)', strip: true},
+  {file: 'starport-browse.mjs', name: 'starport browse gate (protocol whitelist / host policy / fetch-to-text / history, real module)', strip: true},
+  {file: 'starport-chart.mjs', name: 'starport chart geometry (data-driven line/bar SVG / degenerate-safe, real module)', strip: true},
+  {file: 'starport-organize.mjs', name: 'starport organize (groups / shortcuts CRUD / cross-group move, real module)', strip: true},
+  {file: 'starport-lifeflow.mjs', name: 'starport lifeflow (source registry / item stream / unread meter, real module)', strip: true},
+  {file: 'starport-notes.mjs', name: 'starport notes (CRUD / pinned ordering / strict validation / persistence round-trip, real modules)', strip: true},
+  {file: 'starport-text-editor.mjs', name: 'starport text editor (session CRUD / expected-checked replace / find hit table / mount-cleanup chain, real modules)', strip: true},
+  {file: 'starport-doc-pipeline.mjs', name: 'starport doc pipeline (source-preserving segments / range transaction / segment integrity, real modules)', strip: true},
+  {file: 'starport-face-apps.mjs', name: 'starport face apps source mirror (browse gate wiring / real model channel / factory+installer wiring)'},
 ];
 
 function run({file, strip}) {

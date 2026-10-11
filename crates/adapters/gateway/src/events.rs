@@ -4,6 +4,11 @@
 //! `backend_ready` / `turn_started` / `turn_delta` / `turn_completed` /
 //! `approval_required` / `approval_resolved` / `presence_state`.
 //!
+//! Security warning frames (G10 hardening): `gateway_auth_unprotected` — one
+//! frame per unauthenticated call accepted on a sensitive endpoint while the
+//! loopback token gate is in its env-unset mode (payload carries endpoint +
+//! mode only, never a token value).
+//!
 //! `presence_state` frames are produced by [`crate::presence`] (contract:
 //! `docs/design/00-PHILOSOPHY.md` §10, wire: `docs/gateway-api-contract.md`
 //! §8a) on turn end and on a 60 s heartbeat — never at higher frequency.
@@ -774,7 +779,10 @@ impl RuntimeObservationSink {
     }
 
     /// Buffer one audit fact for the next flush pass.
-    fn buffer_audit(&self, event: &str, detail: Option<String>) {
+    ///
+    /// Public so transport-level security surfaces (e.g. the loopback token
+    /// gate) can leave an audit trace without impersonating a runtime event.
+    pub fn buffer_audit(&self, event: &str, detail: Option<String>) {
         let mut audit = self.lock_buffer(&self.audit, "audit");
         audit.push((event.to_string(), detail));
     }

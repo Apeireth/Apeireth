@@ -88,6 +88,20 @@ async fn get_gateway_effective_config(
     supervisor.get_gateway_effective_config().await
 }
 
+/// The loopback access token the UI must present on the gateway's gated
+/// endpoints (admin config / approval resolve).
+///
+/// In-memory only: it is minted per backend spawn (or inherited from an
+/// explicit env value), crosses IPC like provider keys do, and is never
+/// persisted or logged. Empty string = nothing to present (gateway declares
+/// itself unprotected), which the caller treats as "send no Authorization".
+#[tauri::command]
+async fn get_gateway_token(
+    supervisor: State<'_, Arc<BackendSupervisor>>,
+) -> Result<String, String> {
+    Ok(supervisor.gateway_access_token().await.unwrap_or_default())
+}
+
 /// Read a provider key from the OS keychain. `None` when not stored.
 #[tauri::command]
 fn get_provider_key(provider: String) -> Option<String> {
@@ -518,6 +532,7 @@ pub fn run() {
             apply_backend_provider_env,
             apply_backend_config,
             get_gateway_effective_config,
+            get_gateway_token,
             get_provider_key,
             set_provider_key,
             delete_provider_key,

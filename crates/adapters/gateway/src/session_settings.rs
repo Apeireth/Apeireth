@@ -247,6 +247,7 @@ mod tests {
             hot_config: Arc::new(std::sync::RwLock::new(
                 crate::admin::GatewayRuntimeConfig::from_env(),
             )),
+            token_gate: crate::canonical_entry::GatewayTokenGate::from_env(),
         };
         Router::<GatewayState>::new()
             .route(

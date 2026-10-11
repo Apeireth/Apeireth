@@ -10,12 +10,12 @@
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)
 - 编码:UTF-8 JSON;时间戳统一 **epoch 毫秒**(`timestamp` 字段)
-- 认证:本机回环网关,无 bearer;`/v1/panel/*` 为内省只读面,不做外部鉴权(网关只绑 127.0.0.1)
+- 认证:本机回环网关。**敏感端点**(`/v1/admin/config`、`/v1/approvals/resolve`)带回环令牌门(env `APEIRETH_GATEWAY_TOKEN` 三态口径):设值=`Authorization: Bearer <token>` 必须匹配(恒定时间比较,缺失 401 `auth_missing_key` / 伪造 401 `auth_invalid_key`,拒绝入审计);未设=放行但每次记警告帧 `gateway_auth_unprotected` + 审计 `gateway.auth_unprotected`(保守过渡);显式 `none`=操作者明示不设防,放行不告警但审计留痕。桌面壳启动侧车时自铸 32 字节随机令牌注入(生产恒为强制态)。其余端点(含 `/v1/panel/*` 内省只读面)不做外部鉴权(网关只绑 127.0.0.1)
 - 错误模型:
   ```json
   { "error": { "code": "invalid_request | not_found | unsupported | runtime_error | auth_failed", "message": "人类可读信息" } }
   ```
-  HTTP 语义:400 `invalid_request` / 403 `denied` / 404 `not_found` / 409 `conflict` /
+  HTTP 语义:400 `invalid_request` / 401 `auth_missing_key` / `auth_invalid_key` / 403 `denied` / 404 `not_found` / 409 `conflict` /
   422 provider/runtime 语义失败 / 500 `internal_error` / 501 `unsupported` /
   503 `unavailable` / 202 审批挂起
 - 分页:列表端点统一 `limit`(默认 50,最大 500)+ 按时间倒序;需要更多分页时再引入 cursor

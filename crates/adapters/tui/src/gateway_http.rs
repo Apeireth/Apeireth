@@ -23,12 +23,21 @@ const EPISODE_COUNT_WINDOW: usize = 500;
 #[derive(Debug)]
 pub struct HttpGatewayBackend {
     endpoint: String,
+    /// 回环访问令牌 (`--token` / env `APEIRETH_GATEWAY_TOKEN`): 有则随每个请求
+    /// 呈现 `Authorization: Bearer <token>`, 供网关敏感端点令牌门校验。无则
+    /// 不发鉴权头 (未设令牌的网关零断)。
+    token: Option<String>,
     client: reqwest::blocking::Client,
 }
 
 impl HttpGatewayBackend {
-    /// 连接既有 gateway (形如 `http://127.0.0.1:8080`)。
+    /// 连接既有 gateway (形如 `http://127.0.0.1:8080`), 不带令牌。
     pub fn new(endpoint: &str) -> BackendResult<Self> {
+        Self::with_token(endpoint, None)
+    }
+
+    /// 连接既有 gateway, 可选携带回环访问令牌 (令牌注入面)。
+    pub fn with_token(endpoint: &str, token: Option<&str>) -> BackendResult<Self> {
         let trimmed = endpoint.trim().trim_end_matches('/').to_string();
         if trimmed.is_empty() {
             return Err(BackendError::Unreachable {
@@ -46,6 +55,10 @@ impl HttpGatewayBackend {
             })?;
         Ok(Self {
             endpoint: trimmed,
+            token: token
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string),
             client,
         })
     }
@@ -54,10 +67,20 @@ impl HttpGatewayBackend {
         format!("{}{}", self.endpoint, path)
     }
 
+    /// 带令牌的请求一律附 Bearer 头; 无令牌则原样发出 (兼容路径)。
+    fn with_auth(
+        &self,
+        request: reqwest::blocking::RequestBuilder,
+    ) -> reqwest::blocking::RequestBuilder {
+        match &self.token {
+            Some(token) => request.bearer_auth(token),
+            None => request,
+        }
+    }
+
     fn get(&self, path: &str) -> BackendResult<String> {
         let response = self
-            .client
-            .get(self.url(path))
+            .with_auth(self.client.get(self.url(path)))
             .send()
             .map_err(|error| unreachable_error(&self.endpoint, error))?;
         read_body(response)
@@ -139,8 +162,10 @@ impl CockpitBackend for HttpGatewayBackend {
         };
         let body = json!({ "model": model });
         let response = self
-            .client
-            .patch(self.url(&format!("/v1/sessions/{session}/settings")))
+            .with_auth(
+                self.client
+                    .patch(self.url(&format!("/v1/sessions/{session}/settings"))),
+            )
             .json(&body)
             .send()
             .map_err(|error| unreachable_error(&self.endpoint, error))?;
@@ -177,8 +202,7 @@ impl CockpitBackend for HttpGatewayBackend {
         }
 
         let response = self
-            .client
-            .post(self.url("/v1/chat/completions"))
+            .with_auth(self.client.post(self.url("/v1/chat/completions")))
             .json(&Value::Object(body))
             .send()
             .map_err(|error| unreachable_error(&self.endpoint, error))?;
@@ -651,6 +675,75 @@ mod tests {
                 (300, GovVerdict::Reject),
             ],
             "灯阵事件按时间序回灌"
+        );
+    }
+
+    /// 起一个只回一帧的本地监听器, 跑一次调用并返回捕获的原始请求文本。
+    fn serve_one_and_capture(call: impl FnOnce(String)) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 1024];
+            // GET 无 body: 读到头结束即可。
+            loop {
+                let n = socket.read(&mut chunk).unwrap();
+                buf.extend_from_slice(&chunk[..n]);
+                if n == 0 || buf.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let response = b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}";
+            socket.write_all(response).unwrap();
+            String::from_utf8_lossy(&buf).into_owned()
+        });
+        call(format!("http://{addr}"));
+        handle.join().unwrap()
+    }
+
+    /// 回环令牌注入面: 有令牌随请求呈现 Bearer 头; 无令牌不发鉴权头
+    /// (无令牌客户端兼容路径, 未设令牌的网关零断)。
+    #[test]
+    fn requests_carry_the_loopback_token_only_when_one_is_configured() {
+        let captured = serve_one_and_capture(|endpoint| {
+            HttpGatewayBackend::with_token(&endpoint, Some("loopback-token-1"))
+                .expect("backend")
+                .health()
+                .expect("health");
+        });
+        assert!(
+            captured
+                .to_ascii_lowercase()
+                .contains("authorization: bearer loopback-token-1"),
+            "带令牌必须呈现 Bearer 头: {captured}"
+        );
+
+        let captured = serve_one_and_capture(|endpoint| {
+            HttpGatewayBackend::new(&endpoint)
+                .expect("backend")
+                .health()
+                .expect("health");
+        });
+        assert!(
+            !captured.to_ascii_lowercase().contains("authorization"),
+            "无令牌不得发鉴权头: {captured}"
+        );
+    }
+
+    /// 空白令牌按无令牌处理 (不发空 Bearer 头)。
+    #[test]
+    fn blank_token_is_treated_as_no_token() {
+        let captured = serve_one_and_capture(|endpoint| {
+            HttpGatewayBackend::with_token(&endpoint, Some("   "))
+                .expect("backend")
+                .health()
+                .expect("health");
+        });
+        assert!(
+            !captured.to_ascii_lowercase().contains("authorization"),
+            "空白令牌不得发鉴权头: {captured}"
         );
     }
 }

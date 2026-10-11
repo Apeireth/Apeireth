@@ -489,6 +489,20 @@ pub fn build_gateway_state_with_services(
             .keepalive()
             .expect("fresh flush surface cannot be shut down"),
     );
+    // H1/G10 令牌门口径在装配期解析一次 (env → 三态)。逃生阀
+    // (`APEIRETH_GATEWAY_TOKEN=none`) 是操作者的显式声明 —— 装配即入审计,
+    // 之后每次放行另留痕。
+    let token_gate = GatewayTokenGate::from_env();
+    if token_gate == GatewayTokenGate::UnprotectedDeclared {
+        observations.buffer_audit(
+            "gateway.auth_declared_unprotected",
+            Some(format!(
+                "{}={}: operator explicitly declared an unprotected gateway (escape valve)",
+                GatewayTokenGate::ENV,
+                GatewayTokenGate::UNPROTECTED_SENTINEL
+            )),
+        );
+    }
     GatewayState {
         runtime,
         services,
@@ -499,6 +513,7 @@ pub fn build_gateway_state_with_services(
         presence,
         presence_stream,
         hot_config: Arc::new(RwLock::new(GatewayRuntimeConfig::from_env())),
+        token_gate,
     }
 }
 
@@ -524,7 +539,8 @@ pub fn canonical_router_with_services(runtime: Arc<Runtime>, services: GatewaySe
 }
 
 // ---------------------------------------------------------------------------
-// H1 (2026-09-24 安全审计): 本地来源白名单 + 可选 loopback 令牌门
+// H1 (2026-09-24 安全审计): 本地来源白名单 + loopback 令牌门
+// (G10 W1-③ 加固: 令牌门口径三态化, 桌面侧自铸令牌注入)
 // ---------------------------------------------------------------------------
 
 /// H1: CORS 只放行本地桌面件来源 (Tauri WebView 与本机开发服务器)。
@@ -561,20 +577,72 @@ fn is_allowed_local_origin(origin: &axum::http::HeaderValue) -> bool {
     matches!(host, "tauri.localhost" | "localhost" | "127.0.0.1" | "::1")
 }
 
-/// H1: 可选的 loopback 令牌 (env `APEIRETH_GATEWAY_TOKEN`)。
+/// H1/G10: loopback 令牌门的三态口径 (env `APEIRETH_GATEWAY_TOKEN`)。
 ///
-/// 设置后, `/v1/admin/config` 与 `/v1/approvals/resolve` 要求
-/// `Authorization: Bearer <token>` (恒定时间比较)。未设置时放过 ——
-/// 浏览器向量已由 CORS 白名单收敛, 令牌门是给 LAN 暴露部署加的保险。
-static GATEWAY_TOKEN: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+/// 覆盖 `/v1/admin/config` 与 `/v1/approvals/resolve` 两个敏感端点。三态
+/// (W1-③ 回环令牌加固, 威胁模型 G10 处置):
+///
+/// - [`GatewayTokenGate::Enforced`] — env 带密钥值: 每次调用必须带
+///   `Authorization: Bearer <token>` (恒定时间比较), 缺失/错误分别 401
+///   `auth_missing_key` / `auth_invalid_key`;
+/// - [`GatewayTokenGate::UnprotectedDefault`] — **env 未设 (收紧后的默认
+///   态)**: 无认证调用仍放行 (保守过渡, 无令牌客户端零断), 但每次放行记
+///   警告帧 (`gateway_auth_unprotected`) + 审计事实 (`gateway.auth_unprotected`);
+/// - [`GatewayTokenGate::UnprotectedDeclared`] — **逃生阀** (env 显式取值
+///   [`GatewayTokenGate::UNPROTECTED_SENTINEL`]): 操作者明示不设防, 放行且
+///   不发警告帧, 但声明本身与每次放行都入审计 (留痕)。
+///
+/// 桌面壳启动侧车时自铸 32 字节随机令牌注入 env, 生产路径恒为 `Enforced`;
+/// 未设/逃生阀只出现在 CLI 裸跑。令牌值不进日志、不进帧、不进 Debug。
+#[derive(Clone, PartialEq, Eq)]
+pub enum GatewayTokenGate {
+    /// env 带真实令牌: 敏感端点强制 Bearer 匹配。
+    Enforced(String),
+    /// env 未设: 放行 + 警告帧 + 审计 (保守过渡, 催化迁移到带令牌)。
+    UnprotectedDefault,
+    /// env 显式 `none`: 逃生阀 —— 明示不设防, 审计留痕, 不逐次告警。
+    UnprotectedDeclared,
+}
 
-fn gateway_token() -> &'static Option<String> {
-    GATEWAY_TOKEN.get_or_init(|| {
-        std::env::var("APEIRETH_GATEWAY_TOKEN")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-    })
+impl GatewayTokenGate {
+    /// 配置令牌门的环境变量名。
+    pub const ENV: &str = "APEIRETH_GATEWAY_TOKEN";
+    /// 逃生阀字面值: 显式声明「本网关不设防」。真实令牌不得取此值。
+    pub const UNPROTECTED_SENTINEL: &str = "none";
+
+    /// 从进程环境解析口径 (网关装配期解析一次)。
+    pub fn from_env() -> Self {
+        Self::parse(std::env::var(Self::ENV).ok())
+    }
+
+    /// 从原始 env 值解析口径: 哨兵值 = 显式不设防; 非空值 = 强制令牌;
+    /// 缺失/空白 = 收紧后的默认态。
+    pub fn parse(raw: Option<String>) -> Self {
+        match raw.map(|value| value.trim().to_string()) {
+            Some(value) if value == Self::UNPROTECTED_SENTINEL => Self::UnprotectedDeclared,
+            Some(value) if !value.is_empty() => Self::Enforced(value),
+            _ => Self::UnprotectedDefault,
+        }
+    }
+
+    /// 门在生效时要求的令牌 (仅 [`GatewayTokenGate::Enforced`])。
+    pub fn enforced_token(&self) -> Option<&str> {
+        match self {
+            Self::Enforced(token) => Some(token),
+            Self::UnprotectedDefault | Self::UnprotectedDeclared => None,
+        }
+    }
+}
+
+/// 令牌永不进 Debug/日志: 值一律打码。
+impl std::fmt::Debug for GatewayTokenGate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Enforced(_) => write!(f, "Enforced(<redacted>)"),
+            Self::UnprotectedDefault => write!(f, "UnprotectedDefault"),
+            Self::UnprotectedDeclared => write!(f, "UnprotectedDeclared"),
+        }
+    }
 }
 
 /// 恒定时间字节比较 (防时序侧信道)。
@@ -591,39 +659,86 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
 
 /// H1: 敏感端点 (admin 配置 / 审批解决) 的令牌门中间件。
 ///
-/// 未配置 `APEIRETH_GATEWAY_TOKEN` 时透明放过 (桌面单用户场景); 配置后
-/// 缺失/错误的 Bearer 令牌分别返回 401 `auth_missing_key` / `auth_invalid_key`。
-async fn require_gateway_token(request: Request, next: Next) -> Response {
-    let Some(expected) = gateway_token() else {
-        return next.run(request).await;
-    };
-    let header = request
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok());
-    let Some(token) = header.and_then(|value| value.strip_prefix("Bearer ")) else {
-        return ErrorFrame::response(
-            StatusCode::UNAUTHORIZED,
-            ErrorCode::AuthMissingKey,
-            "gateway token required for this endpoint",
-        )
-        .into_response();
-    };
-    if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
-        next.run(request).await
-    } else {
-        ErrorFrame::response(
-            StatusCode::UNAUTHORIZED,
-            ErrorCode::AuthInvalidKey,
-            "gateway token invalid",
-        )
-        .into_response()
+/// 口径由 [`GatewayTokenGate`] 给出 (见其文档):
+/// - `Enforced`: 缺失/错误的 Bearer 令牌分别返回 401 `auth_missing_key` /
+///   `auth_invalid_key`, 拒绝入审计 (`gateway.auth_rejected`);
+/// - `UnprotectedDefault` (env 未设): 放行但每次记警告帧 + 审计事实;
+/// - `UnprotectedDeclared` (逃生阀 `none`): 放行, 审计留痕, 不逐次告警。
+///
+/// 任何分支都不把令牌值写进帧、审计或错误正文。
+async fn require_gateway_token(
+    State(state): State<GatewayState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let endpoint = request.uri().path().to_string();
+    match &state.token_gate {
+        GatewayTokenGate::Enforced(expected) => {
+            let header = request
+                .headers()
+                .get(axum::http::header::AUTHORIZATION)
+                .and_then(|value| value.to_str().ok());
+            let Some(token) = header.and_then(|value| value.strip_prefix("Bearer ")) else {
+                state.observations.buffer_audit(
+                    "gateway.auth_rejected",
+                    Some(format!("endpoint={endpoint} reason=missing")),
+                );
+                return ErrorFrame::response(
+                    StatusCode::UNAUTHORIZED,
+                    ErrorCode::AuthMissingKey,
+                    "gateway token required for this endpoint",
+                )
+                .into_response();
+            };
+            if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
+                next.run(request).await
+            } else {
+                state.observations.buffer_audit(
+                    "gateway.auth_rejected",
+                    Some(format!("endpoint={endpoint} reason=invalid")),
+                );
+                ErrorFrame::response(
+                    StatusCode::UNAUTHORIZED,
+                    ErrorCode::AuthInvalidKey,
+                    "gateway token invalid",
+                )
+                .into_response()
+            }
+        }
+        GatewayTokenGate::UnprotectedDefault => {
+            // 收紧后的默认态 (保守过渡): 无认证调用仍放行 (无令牌客户端零断),
+            // 但不再是静默 —— 每次放行记警告帧 + 审计事实。
+            state.events.publish(GatewayEvent::new(
+                "gateway_auth_unprotected",
+                serde_json::json!({
+                    "endpoint": endpoint,
+                    "mode": "env_unset",
+                    "detail": "gateway token not configured; an unauthenticated call reached a sensitive endpoint",
+                }),
+            ));
+            state.observations.buffer_audit(
+                "gateway.auth_unprotected",
+                Some(format!("endpoint={endpoint} mode=env_unset")),
+            );
+            next.run(request).await
+        }
+        GatewayTokenGate::UnprotectedDeclared => {
+            // 逃生阀 (明示不设防): 不逐次告警, 但每次放行留审计痕。
+            state.observations.buffer_audit(
+                "gateway.auth_unprotected",
+                Some(format!("endpoint={endpoint} mode=declared_none")),
+            );
+            next.run(request).await
+        }
     }
 }
 
 /// Build the production router over an explicit [`GatewayState`] (lets tests
 /// keep a handle on the event bus).
 pub fn canonical_router_with_state(state: GatewayState) -> Router {
+    // The token gate needs the gateway state (gate mode + warning/audit
+    // surfaces), so the middleware carries its own copy of the state.
+    let gate_state = state.clone();
     Router::<GatewayState>::new()
         .route("/health", get(health))
         .route("/v1/models", get(list_models))
@@ -635,8 +750,11 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/approvals", get(list_pending_approvals))
         .route(
             "/v1/approvals/resolve",
-            // H1: 代替人类批准工具调用的端点, 令牌门保护 (配置 APEIRETH_GATEWAY_TOKEN 时生效)。
-            post(native_resolve_approval).route_layer(middleware::from_fn(require_gateway_token)),
+            // H1/G10: 代替人类批准工具调用的端点, 令牌门口径见 [`GatewayTokenGate`]。
+            post(native_resolve_approval).route_layer(middleware::from_fn_with_state(
+                gate_state.clone(),
+                require_gateway_token,
+            )),
         )
         .route(
             "/v1/sessions/:session_id/settings",
@@ -654,10 +772,11 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         .route(
             "/v1/admin/config",
-            // H1: 可热改 provider base_url / api_key 的端点, 令牌门保护。
-            get(admin_config_get)
-                .post(admin_config_update)
-                .route_layer(middleware::from_fn(require_gateway_token)),
+            // H1/G10: 可热改 provider base_url / api_key 的端点, 令牌门口径见
+            // [`GatewayTokenGate`]。
+            get(admin_config_get).post(admin_config_update).route_layer(
+                middleware::from_fn_with_state(gate_state, require_gateway_token),
+            ),
         )
         .merge(panel_routes())
         // CORS 白名单 (H1, 2026-09-24 安全审计): 桌面 WebView 是独立源

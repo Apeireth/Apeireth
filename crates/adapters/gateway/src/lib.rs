@@ -72,7 +72,7 @@ pub use canonical_entry::{
     canonical_router_with_panels, canonical_router_with_services, canonical_router_with_state,
     execute_chat, resolve_approval, serve_canonical, serve_canonical_with_services,
     CanonicalApprovalRequest, CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse,
-    CanonicalEntryError, CanonicalExecutionEvent, CanonicalPendingApproval,
+    CanonicalEntryError, CanonicalExecutionEvent, CanonicalPendingApproval, GatewayTokenGate,
 };
 
 pub use admin::{
