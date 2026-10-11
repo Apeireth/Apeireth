@@ -344,6 +344,14 @@ pub fn roster_from_config(
             "file_write_auto_pass",
             config.file_write_auto_pass && config.file_write && workspace_root_present,
         ),
+        // git 写分级 (`tool.git_write`): 主开关按实际注册条件取值 (配置开启
+        // 且工作区根已注入才算生效); 「自动放行 L1」子档依赖主开关, 且只放
+        // L1 可逆本地写 —— L2 出网永远人批不入子档。
+        CapabilitySwitch::new("git_write", config.git_write && workspace_root_present),
+        CapabilitySwitch::new(
+            "git_write_auto_pass_l1",
+            config.git_write_auto_pass_l1 && config.git_write && workspace_root_present,
+        ),
         CapabilitySwitch::new("mcp", config.mcp),
         CapabilitySwitch::new("education", config.education),
         CapabilitySwitch::new("memory_recall", config.memory_recall),

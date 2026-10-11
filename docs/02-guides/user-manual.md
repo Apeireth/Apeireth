@@ -53,13 +53,20 @@ v2 唯一进程执行边界 = **`crates/capabilities/tools/src/process/`**（`Pr
 | | | |
 | `tool.filesystem` | medium | 读 / 列 / stat workspace 内文件 |
 | `tool.search` | low | 确定性本地文件名 + 文件内容搜索 |
-| `tool.repo` | low | 只读 git 仓库探查（status / commit / diff / log）|
+| `tool.repo` | low | 只读 git 仓库探查（status / diff / log / branch / summary）|
 
 **`tool.shell` 与 `tool.fetch` 默认关闭**，需 `BuiltinToolsOptions { shell: Some(TrustedShellConfig), fetch: Some(FetchConfig) }` 显式开启（opt-in，非默认）。这与 v1 companion_serve `APEIRETH_GRANT=...` 的临时放行模型不同——v2 的批准模型是**编译时 / bootstrap 时**的显式配置 + **运行时** governance pipeline（见 §6）。
 
 **`tool.apply_patch`（受控文件写入，opt-in，第七件生产工具）**：`APEIRETH_ENABLE_FILE_WRITE=1` 开启（注册 + 授权同源）。**文件写入总闸：apply_patch 与 shell 写命令同受此闸**——开关关时 shell 的写命令（重定向 `>`/`>>`、删除/移动/复制/建目录类与脚本引擎等值命令面）同样拒绝即帧（`pipeline.pre_deny`；保守词法扫描，宁可误拒不漏放）；开关开时 shell 写命令行为不变（照旧走审批链与既有风险映射）。补丁式受控写文件——创建（`*** Add File`）/ 修改（`*** Update File`）/ 删除（`*** Delete File`）必须在补丁里显式声明，多文件补丁全有或全无（任一 hunk 失败整笔回滚）；**解析即合同**：空补丁、认不出的补丁行、没有任何可解析 hunk 的修改段一律报错误帧（绝不返回「成功但零动作」的谎帧），成功报告只在真有动作落地后返回（新增/修改/删除计数逐项如实），空/解析不了的补丁按 `Unparseable` 语义 fail-closed 向人工审批；工作区外路径（绝对路径 / `..` 组件 / symlink 逃逸）拒绝（fail-closed 即帧），凭据与密钥面（`.env` 族 / 密钥材料 / 凭据存储件）拒绝；沿用读前观测门禁——**未读不得覆盖写**（先用文件读工具读过，才能修改或删除）。风险档位默认 **RequireApproval 级：每次写入都要人批**（本地审批面板 + IM 审批卡同一条审批链，四态闭合同源）；`APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS=1`（子档，依赖主开关）开「自动放行已读文件的修改」——仅**修改类**补丁免逐次审批，**删除/新建永不自动放行**（仍进人工审批），未读文件的修改仍被读前门禁直接拒绝。
 
-**git 写边界（设计边界，显式声明防模型幻觉）**：git 提交等写操作**不提供工具**——commit / push / 分支变更 / 历史改写等仓库写操作没有任何工具，`tool.repo` 维持只读合同（status / commit / diff / log 探查）。不要请求 git 写工具，它不存在。
+**`tool.git_write`（git 写分级，opt-in，干活能力轴 P1）**：`APEIRETH_ENABLE_GIT_WRITE=1` 开启（注册 + 授权同源）。仓库写操作按**写意图分级词表**给面，命令文本必须是 git 调用段（段间 `&&`/`;`/换行），逐段分级取最严档；执行走受控通道（结构化 argv、`git -C <工作区根>` 限域、超时归 `timeout.*`、输出归一）：
+- **L1 可逆**（`git add` / `git commit`（带消息）/ `git branch` 建·`git switch` 切 / `git tag` 本地）——默认 **RequireApproval 级：每次人批**（本地审批面板 + IM 审批卡同一条审批链）；`APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1=1`（子档，依赖主开关）开「自动放行 L1」档，仅 L1 免逐次审批；
+- **L2 出网**（`git push`（非强推）/ `git fetch` / `git remote` add·rename·set-url·update）——**永远人工审批**：无自动放行档，任何会话预设/设置都不得越人（IM 审批卡可以批 push，但每一次都得批）；
+- **L3 毁灭**（改史 `commit --amend`/`rebase`、强推 `--force`/`+refspec`、引用删除 `update-ref -d`/`branch -d`/`tag -d`/`--prune`、`reset --hard`/`clean -f`）——**拒绝即帧，永远没有工具面**。
+
+参数变形防绕过：长选项按前缀重叠命中（`--ha` 与 `--hard` 缩写同拒），短选项束逐字符查（`-qf` 里的 `f` 也算强推），refspec 的 `+`（强推变体）与空侧 `:`（删除变体）同拒；子命令前的危险全局选项（`-c` / `--exec-path` / `--git-dir` / `--work-tree` 族与任何未列全局选项）拒绝即帧；管道 / 重定向 / shell 元字符面拒绝即帧（命令按结构化参数执行，不经 shell）。组合命令逐段顺序落地，中段失败**如实上报**（逐段报告已落地段与失败因，无回滚承诺，staged 残留照实留存）；remote URL 凭据全链脱敏（命令面 / 输出 / 审批卡不落密）。
+
+**git 写边界（分级语义，显式声明防模型幻觉）**：git 写只有 `tool.git_write` 这一个分级入口——L1 可逆默认人批（设置可开自动放行 L1）、L2 出网永远人批、**L3 毁灭永远没有工具面**（不要请求它）。`tool.repo` 维持只读合同（status / diff / log / branch / summary 探查）。
 
 CLI 隐私逃生门：`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 关闭 filesystem/search 执行许可；旧 `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` 保留兼容（等同默认）；两者同设时 DISABLE 赢（fail-closed）。敏感路径保护恒开。
 

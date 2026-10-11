@@ -40,8 +40,8 @@ use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{roster_from_config, ProductionSelfStatusSource};
 use super::tool_modules::{
-    ApplyPatchModule, EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule,
-    SearchModule, SelfStatusModule, ShellModule,
+    ApplyPatchModule, EducationModule, FetchModule, FilesystemModule, GitWriteModule, McpModule,
+    RepoModule, SearchModule, SelfStatusModule, ShellModule,
 };
 
 /// Adapter that exposes memory's context-window implementation through the
@@ -200,6 +200,15 @@ pub struct ProductionModulesConfig {
     /// 「自动放行已读文件的修改」子档 (依赖 [`Self::file_write`]): 仅修改类
     /// 补丁免逐次审批; 删除/新建永不自动放行 (仍走人工审批)。默认关。
     pub file_write_auto_pass: bool,
+    /// Register the graded git-write tool (`tool.git_write`, 干活能力轴 P1)。
+    ///
+    /// 分级词表: L1 可逆 (add/commit/branch 建·切/tag 本地) / L2 出网
+    /// (push/fetch/remote) / L3 毁灭 (无工具面, 拒绝即帧)。L1 默认每次人批
+    /// (与本地审批面板 / IM 审批卡同链); L2 **永远人批**。默认关 (opt-in)。
+    pub git_write: bool,
+    /// 「自动放行 L1」子档 (依赖 [`Self::git_write`]): 仅 L1 可逆本地写免逐次
+    /// 审批; **L2 出网永不自动放行** (永远人工审批)。默认关。
+    pub git_write_auto_pass_l1: bool,
 }
 
 impl Default for ProductionModulesConfig {
@@ -232,6 +241,8 @@ impl Default for ProductionModulesConfig {
             self_status: true,
             file_write: false,
             file_write_auto_pass: false,
+            git_write: false,
+            git_write_auto_pass_l1: false,
         }
     }
 }
@@ -408,11 +419,22 @@ impl ProductionModules {
 
         // 受控文件写入 (`tool.apply_patch`, 第七件生产工具, opt-in): 补丁式
         // 创建/修改/删除显式声明 + 读前观测门禁; 写入风险档位默认 require-approval
-        // 级 (每次写入都要人批), 授权层按同一开关接线。git 写边界: git 提交等
-        // 写操作不提供工具 (属设计边界, 仓库工具维持只读合同)。
+        // 级 (每次写入都要人批), 授权层按同一开关接线。git 写边界 (分级语义):
+        // 仓库写操作走 `tool.git_write` 的分级词表 (L1 默认人批 / L2 永远人批 /
+        // L3 毁灭无工具面)。
         if config.file_write {
             if let Some(root) = &backends.workspace_root {
                 let provider = ApplyPatchModule::new(root.clone(), Arc::clone(&observed_gate));
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // git 写分级 (`tool.git_write`, 干活能力轴 P1, opt-in): 分级词表 +
+        // 词法分级执行面 + 受控通道 (工作区限域/超时/输出归一)。L1 默认人批
+        // (设置可开「自动放行 L1」档), L2 永远人批, L3 拒绝即帧无工具面。
+        if config.git_write {
+            if let Some(root) = &backends.workspace_root {
+                let provider = GitWriteModule::new(root.clone());
                 capabilities.extend(provider.capabilities());
             }
         }

@@ -52,6 +52,7 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         // 受控写
         "tool.filesystem",
         "tool.apply_patch",
+        "tool.git_write",
         "fs.write",
         // 出口 / 远端副作用
         "tool.fetch",
@@ -68,6 +69,20 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
     ];
     let id = capability.as_str();
     WRITE_OR_EXECUTE.contains(&id) || id.starts_with("tool.mcp")
+}
+
+/// 「L2 永不因预设放行」地板: 命中即该调用**不可**被预设改写放行。
+///
+/// git 写分级 (D-P1) 的 L2 出网写 (push/fetch/remote) 永远停人工审批 ——
+/// `full` 预设的 RequireApproval→Allow 改写与 `standard` 的 `approval_remember`
+/// 免审记忆都不得越过它 (手机上批 push, 但每次都得人批)。L1 可逆本地写不受
+/// 地板约束 (照常走预设语义); L3/词表外本来就拒绝即帧, 无需地板。
+pub fn human_approval_floor_applies(
+    capability: &CapabilityId,
+    arguments: &serde_json::Value,
+) -> bool {
+    capability.as_str() == apeireth_tools_canonical::GIT_WRITE_CAPABILITY_ID
+        && apeireth_tools_canonical::git_write_human_approval_floor(arguments)
 }
 
 /// Governance hook that applies a session's [`PermissionPreset`] to capability
@@ -244,7 +259,11 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
             PermissionPreset::Full => {
                 let verdict = self.inner.evaluate_verbose(request).await;
                 match verdict.decision {
-                    Decision::RequireApproval { .. } => {
+                    // L2 永不因预设放行: 命中人工审批地板的调用, `full` 的
+                    // RequireApproval→Allow 改写也不生效 (D-P1 git 写分级)。
+                    Decision::RequireApproval { .. }
+                        if !human_approval_floor_applies(capability, arguments) =>
+                    {
                         GovernanceVerdict::new(self.name(), Decision::Allow)
                     }
                     _ => verdict,
@@ -256,8 +275,10 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
                 // `read_only` stays refuse-closed and `full` already allows.
                 // L 组: 记忆键是 (session, capability, args_hash) —— 只放行
                 // 人类真正批准过的那一次操作, 同会话换个参数 (rm -rf) 仍要审批。
+                // L2 永不因预设放行: 免审记忆也不越过人工审批地板 (D-P1)。
                 let args_hash = arguments_fingerprint(arguments);
                 if approval_remember
+                    && !human_approval_floor_applies(capability, arguments)
                     && self.remembered(&request.session, capability, &args_hash)
                 {
                     let verdict = self.inner.evaluate_verbose(request).await;
@@ -533,6 +554,7 @@ mod tests {
             // 受控写
             "tool.filesystem",
             "tool.apply_patch",
+            "tool.git_write",
             "fs.write",
             // 出口 / 远端副作用
             "tool.fetch",
@@ -559,6 +581,21 @@ mod tests {
                 "{id} is a read capability and must stay allowed"
             );
         }
+    }
+
+    /// 「L2 永不因预设放行」地板判定 (D-P1 git 写分级): 只有 `tool.git_write`
+    /// 的 L2 (出网) 调用命中地板; L1 与其它能力不踩。
+    #[test]
+    fn human_approval_floor_covers_only_l2_git_write_calls() {
+        let capability = CapabilityId::new("tool.git_write").unwrap();
+        let other = CapabilityId::new("tool.apply_patch").unwrap();
+        let push = serde_json::json!({ "command": "git push origin main" });
+        let fetch = serde_json::json!({ "command": "git fetch origin" });
+        let commit = serde_json::json!({ "command": "git commit -m x" });
+        assert!(human_approval_floor_applies(&capability, &push));
+        assert!(human_approval_floor_applies(&capability, &fetch));
+        assert!(!human_approval_floor_applies(&capability, &commit));
+        assert!(!human_approval_floor_applies(&other, &push));
     }
 
     /// M2 (行为面): read_only 会话下, 新纳入名单的能力必须被本 hook 显式

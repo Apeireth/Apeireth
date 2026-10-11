@@ -73,6 +73,15 @@ pub const ENABLE_FILE_WRITE_ENV: &str = "APEIRETH_ENABLE_FILE_WRITE";
 // 创建/删除永不自动放行 (仍进人工审批四态闭合 / IM 审批卡)。未读文件的修改
 // 由读前观测门禁直接拒绝 (先读后写)。
 pub const ENABLE_FILE_WRITE_AUTO_PASS_ENV: &str = "APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS";
+// git 写分级旋钮 (`tool.git_write`, 干活能力轴 P1): 注册 + 策略 grant + 分级
+// 风险档位。默认关 (fail-closed); `APEIRETH_ENABLE_GIT_WRITE=1` = 注册工具 +
+// grant + 分级钩子 —— L1 可逆默认每次人批 (本地审批面板 + IM 审批卡同链),
+// L2 出网**永远人批** (无自动放行档), L3 毁灭拒绝即帧 (无工具面)。
+pub const ENABLE_GIT_WRITE_ENV: &str = "APEIRETH_ENABLE_GIT_WRITE";
+// 「自动放行 L1」子档 (依赖主开关): `APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1=1`
+// 时仅 **L1 可逆本地写** (add/commit/branch 建·切/tag 本地) 免逐次审批;
+// **L2 出网永不自动放行** (push/fetch/remote 每次都人批)。
+pub const ENABLE_GIT_WRITE_AUTO_PASS_L1_ENV: &str = "APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1";
 // MCP 外部工具桥旋钮 (轻默认, 默认关): `APEIRETH_ENABLE_MCP=1` 时装配外部工具桥,
 // 服务器列表走 `APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json` (拒开语义)。
 const ENABLE_MCP_ENV: &str = "APEIRETH_ENABLE_MCP";
@@ -359,6 +368,48 @@ pub fn file_write_auto_pass_enabled_from_env() -> bool {
             .is_some_and(|value| value.trim() == "1")
 }
 
+/// git 写分级 (`tool.git_write`) 的治理风险档位 (D-P1 分级风险映射)。
+///
+/// 三档与设置开关一一对应; 未开主开关不 grant (工具不在授权面, fail-closed)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GitWriteRiskLevel {
+    /// 未开主开关: 不 grant (git 写工具不在授权面)。
+    Disabled,
+    /// 默认档: grant + 分级钩子 —— L1 / L2 都停人工审批 (L2 永远如此)。
+    RequireApprovalEveryWrite,
+    /// 「自动放行 L1」档: grant + 分级钩子 —— 仅 L1 可逆本地写放行;
+    /// L2 出网照旧永远人工审批 (同一审批链, IM 审批卡可批 push)。
+    AutoPassReversibleL1,
+}
+
+/// 从环境变量解析 git 写分级档位 (子档依赖主开关, fail-closed)。
+pub fn git_write_risk_level_from_env() -> GitWriteRiskLevel {
+    if !git_write_enabled_from_env() {
+        return GitWriteRiskLevel::Disabled;
+    }
+    if git_write_auto_pass_l1_enabled_from_env() {
+        GitWriteRiskLevel::AutoPassReversibleL1
+    } else {
+        GitWriteRiskLevel::RequireApprovalEveryWrite
+    }
+}
+
+/// git 写主开关: `APEIRETH_ENABLE_GIT_WRITE=1` (默认关, fail-closed)。
+pub fn git_write_enabled_from_env() -> bool {
+    std::env::var(ENABLE_GIT_WRITE_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 「自动放行 L1」子档: 主开关开且 `APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1=1`
+/// 才生效 (依赖主开关; 单独设子档 = 无效果)。
+pub fn git_write_auto_pass_l1_enabled_from_env() -> bool {
+    git_write_enabled_from_env()
+        && std::env::var(ENABLE_GIT_WRITE_AUTO_PASS_L1_ENV)
+            .ok()
+            .is_some_and(|value| value.trim() == "1")
+}
+
 use apeireth_guard::BehaviorChainGuardHook;
 
 /// Build the production pipeline and return the shared policy handle alongside
@@ -375,6 +426,7 @@ pub fn build_production_governance_parts(
         enable_local_read_tools,
         None,
         FileWriteRiskLevel::Disabled,
+        GitWriteRiskLevel::Disabled,
     )
 }
 
@@ -382,6 +434,7 @@ fn build_production_governance_parts_with_dataset(
     enable_local_read_tools: bool,
     dataset: Option<Arc<DatasetRecorder>>,
     file_write: FileWriteRiskLevel,
+    git_write: GitWriteRiskLevel,
 ) -> (
     GovernancePipeline,
     Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -414,6 +467,18 @@ fn build_production_governance_parts_with_dataset(
             ));
         }
     }
+    // D-P1 git 写分级 (`tool.git_write`): 授权面只 grant「工具面有人拍板」,
+    // **分级风险档位由分级钩子唯一承载** (默认档 = 钩子内 L1/L2 全停人工审批,
+    // 结构上不会漏批); L2 出网永远人工审批 (无自动放行档), L3 毁灭拒绝即帧
+    // (无工具面)。
+    match git_write {
+        GitWriteRiskLevel::Disabled => {}
+        GitWriteRiskLevel::RequireApprovalEveryWrite | GitWriteRiskLevel::AutoPassReversibleL1 => {
+            policy.grant(Permission::ExecuteTool(
+                apeireth_tools_canonical::GIT_WRITE_CAPABILITY_ID.to_string(),
+            ));
+        }
+    }
     let policy = Arc::new(std::sync::Mutex::new(policy));
     let mut guard = BehaviorChainGuardHook::new();
     if let Some(dataset) = dataset {
@@ -431,6 +496,18 @@ fn build_production_governance_parts_with_dataset(
     if matches!(file_write, FileWriteRiskLevel::AutoPassReadFileEdits) {
         pipeline = pipeline.with(Arc::new(
             apeireth_tools_canonical::ApplyPatchWriteApprovalHook::new(),
+        ));
+    }
+    // git 写分级风险映射 (授权之后、内容风险之前): L1 按档位放行或审批,
+    // L2 永远审批 (理由带分级标注, 进本地面板 / IM 审批卡), L3/词表外拒绝即帧。
+    if !matches!(git_write, GitWriteRiskLevel::Disabled) {
+        pipeline = pipeline.with(Arc::new(
+            apeireth_tools_canonical::GitWriteTierApprovalHook::new(match git_write {
+                GitWriteRiskLevel::AutoPassReversibleL1 => {
+                    apeireth_tools_canonical::GitWriteReleaseTier::AutoPassReversibleL1
+                }
+                _ => apeireth_tools_canonical::GitWriteReleaseTier::RequireApprovalEveryWrite,
+            }),
         ));
     }
     let mut pipeline = pipeline
@@ -512,6 +589,7 @@ fn build_production_governance_parts_from_env() -> (
         enable_local_read_tools,
         production_guard_dataset_recorder(),
         file_write_risk_level_from_env(),
+        git_write_risk_level_from_env(),
     );
 
     // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
@@ -926,6 +1004,8 @@ async fn build_cognitive_modules_from_env(
         // (治理层 grant/approval 用同一 env 解析, 即效一致)。子档依赖主开关。
         file_write: file_write_enabled_from_env(),
         file_write_auto_pass: file_write_auto_pass_enabled_from_env(),
+        git_write: git_write_enabled_from_env(),
+        git_write_auto_pass_l1: git_write_auto_pass_l1_enabled_from_env(),
         // MCP 外部工具桥: 装配时加载服务器列表 (env 主入口 / 数据目录次入口,
         // 坏配置拒开), 数据目录与面板其余持久档同位。
         mcp: mcp_enabled,
@@ -1840,6 +1920,53 @@ pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
 /// Loopback is the safe default. Binding a non-loopback address is an
 /// intentional operator decision and is called out before the listener starts.
 pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, String> {
+    dispatch_gateway_serve_with(bind, port, None).await
+}
+
+/// Start the HTTP Gateway in the daemon-friendly ("resident") form
+/// (W2-①): optional single-instance PID-file claim, explicit "already
+/// running" refusals, and a graceful shutdown that finishes its audit and
+/// flushes its archives before the process exits.
+///
+/// `pid_file` claims the machine-level resident slot (see
+/// [`apeireth_gateway::resident`]): a second start against a live slot is
+/// refused with an explicit "already running" error before any runtime is
+/// assembled, so a resident gateway is never doubled (不双开). The path is
+/// caller-chosen and absolute — never relative to the process CWD (工作目录无关).
+///
+/// Shutdown arrives through either the process-signal face (console control
+/// events / `SIGTERM`) or the token-gated `POST /v1/admin/shutdown` endpoint;
+/// both take the same closing path: final audit fact + full observation flush.
+pub async fn dispatch_gateway_serve_with(
+    bind: &str,
+    port: u16,
+    pid_file: Option<&std::path::Path>,
+) -> Result<String, String> {
+    // 单实例占位先行: 活着的既有实例直接显式拒绝 (不装配运行时、不双开)。
+    // 占位租约随函数退出自动释放 (优雅/出错路径都会清掉自己的 PID 文件)。
+    if pid_file.is_some() && port == 0 {
+        return Err(
+            "gateway serve --pid-file requires an explicit --port: the resident slot records the \
+             served port for probes, and port 0 would record a placeholder"
+                .to_string(),
+        );
+    }
+    let _resident_slot = match pid_file {
+        Some(path) => {
+            let record = apeireth_gateway::ResidentRecord::for_this_process(
+                bind,
+                port,
+                apeireth_core::kernel::Timestamp::now().epoch_millis(),
+            );
+            Some(
+                apeireth_gateway::claim_slot(path, record)
+                    .await
+                    .map_err(|error| error.to_string())?,
+            )
+        }
+        None => None,
+    };
+
     let (runtime, sessions, memory, policy, guard_hook) =
         build_canonical_runtime_with_sessions_from_env().await?;
     let runtime = Arc::new(runtime);
@@ -1867,9 +1994,16 @@ pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, 
     // value across restarts.
     services.credentials = crate::keyring_bootstrap::build_keyring_credential_writer();
     let address = format!("{bind}:{port}");
-    let listener = tokio::net::TcpListener::bind(&address)
-        .await
-        .map_err(|error| format!("bind {address} failed: {error}"))?;
+    let listener = tokio::net::TcpListener::bind(&address).await.map_err(|error| {
+        // 端口占用 = 二次启动的另一显式面: 不吐底层错误号, 直说"已在运行"。
+        if error.kind() == std::io::ErrorKind::AddrInUse {
+            format!(
+                "gateway already running: {address} is already in use (a gateway is likely serving there)"
+            )
+        } else {
+            format!("bind {address} failed: {error}")
+        }
+    })?;
     let local_addr = listener
         .local_addr()
         .map_err(|error| format!("local_addr: {error}"))?;
@@ -1882,11 +2016,36 @@ pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, 
             "WARNING: canonical gateway is exposed on non-loopback address {local_addr}; use this only on a trusted network"
         );
     }
-    apeireth_gateway::serve_canonical_with_services(listener, runtime, services)
+    apeireth_gateway::serve_with_shutdown(listener, runtime, services, graceful_shutdown_signal())
         .await
         .map_err(|error| format!("gateway server failed: {error}"))?;
 
     Ok(format!("server stopped at {url}"))
+}
+
+/// Process-signal face of the graceful shutdown (W2-①): console control events
+/// on Windows (`Ctrl+C`), `SIGTERM` + `SIGINT` on Unix — the exact signals a
+/// service manager sends when it stops a resident gateway. The other shutdown
+/// source (the token-gated admin endpoint) is wired inside the gateway.
+async fn graceful_shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut terminate = signal(SignalKind::terminate()).ok();
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = async {
+                match terminate.as_mut() {
+                    Some(stream) => { stream.recv().await; }
+                    None => std::future::pending::<()>().await,
+                }
+            } => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
 }
 
 /// Data directory for panel archives. `APEIRETH_DATA_DIR` overrides; the

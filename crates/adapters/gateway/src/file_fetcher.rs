@@ -266,16 +266,20 @@ mod kani_base64_proofs {
 
     /// 证明: base64_decode 对任意 ≤8 字符串不 panic —— 非法字符唯一失败模式
     /// 是 Decode 错误, 合法解码输出长度不超过输入长 (≤3/4 膨胀界)。
-    /// 边界: 输入 8 字符 (码点 = ASCII 0..=127, 含 `=` 提前收尾、\r\n/空白、
-    /// 非法字符; 口径修订 2026-10-07 二次: ASCII 生成 —— 字节长度恒 = 8,
-    /// 避免符号长度令搜索循环按 unwind 上界展开, 见
-    /// research/verification/kani/src/harness_panic_freedom.rs 同名注),
-    /// unwind 48。
+    /// 边界: 输入 8 字节 (字节 0..=127, 含 `=` 提前收尾、\r\n/空白、非法字符;
+    /// 口径修订 2026-10-11: 字节数组直构 + from_utf8_unchecked (构造即合法,
+    /// 验证机/panic 路径退出证明面, 见 research/verification/kani/src/
+    /// harness_panic_freedom.rs 同名注); unwind 128 —— 由 48 修正: decode_table
+    /// 初始化循环 64 次 > 48, 展开断言必败 (命题没变, 是上限没盖住字面量循环)。
     #[kani::proof]
-    #[kani::unwind(48)]
+    #[kani::unwind(128)]
     fn kani_panic_free_base64_decode() {
-        let bytes: [u8; 8] = kani::any();
-        let input: String = bytes.into_iter().map(|x| char::from(x & 0x7F)).collect();
+        let mut raw: [u8; 8] = kani::any();
+        for byte in raw.iter_mut() {
+            *byte &= 0x7F;
+        }
+        // SAFETY: 全部字节 < 0x80 (ASCII), 必为合法 UTF-8。
+        let input: &str = unsafe { std::str::from_utf8_unchecked(&raw) };
         match base64_decode(&input) {
             Ok(out) => assert!(out.len() <= input.len(), "解码输出长度 ≤ 输入长"),
             Err(err) => assert!(

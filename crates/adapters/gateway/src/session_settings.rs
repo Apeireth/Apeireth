@@ -248,6 +248,7 @@ mod tests {
                 crate::admin::GatewayRuntimeConfig::from_env(),
             )),
             token_gate: crate::canonical_entry::GatewayTokenGate::from_env(),
+            shutdown: Arc::new(crate::shutdown::ShutdownTrigger::default()),
         };
         Router::<GatewayState>::new()
             .route(

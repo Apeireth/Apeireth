@@ -38,7 +38,7 @@ const TELEMETRY_POLL_MS: u64 = 5_000;
 const INPUT_POLL_CAP_MS: u64 = 200;
 
 /// 用法文本。
-const USAGE: &str = "apeireth-tui — 终端驾驶舱\n\n用法:\n  apeireth-tui [--endpoint URL] [--token TOKEN] [--motion full|reduced]\n\n环境变量:\n  APEIRETH_GATEWAY_URL     后端端点 (缺省 http://127.0.0.1:8080)\n  APEIRETH_GATEWAY_TOKEN   回环访问令牌 (敏感端点令牌门; --token 优先)\n  APEIRETH_TUI_MOTION      动效档 (full / reduced)\n\n键位: / 命令  ? 帮助  Ctrl+C 两段式退出  Esc Esc 时间倒带(接口桩)";
+const USAGE: &str = "apeireth-tui — 终端驾驶舱\n\n用法:\n  apeireth-tui [--endpoint URL] [--token TOKEN] [--motion full|reduced]\n\n环境变量:\n  APEIRETH_GATEWAY_URL     后端端点 (缺省 http://127.0.0.1:8080)\n  APEIRETH_GATEWAY_TOKEN   回环访问令牌 (敏感端点令牌门; --token 优先; 缺省回落常驻服务令牌面, 无令牌=三态门照旧)\n  APEIRETH_TUI_MOTION      动效档 (full / reduced)\n\n键位: / 命令  ? 帮助  Ctrl+C 两段式退出  Esc Esc 时间倒带(接口桩)";
 
 /// 启动选项。
 struct Options {
@@ -101,6 +101,20 @@ fn parse_args_from(
     })
 }
 
+/// 令牌解析收口 (G10 常驻协同): 显式值 (`--token` / env) 优先, 缺省回落
+/// **服务令牌面** (同源令牌, 见 `apeireth_credentials::service_token`)。
+/// 令牌面只在常驻服务安装期间存在 —— 即「探测到常驻 = 读服务令牌面」的
+/// 落地口径; 若所连端点并非该常驻网关 (自定义 `--endpoint` 连侧车的边角),
+/// 敏感端点会显式 401 而非静默放行。两者皆无 = None —— 三态门警告帧语义
+/// 照旧 (不发空 Bearer, 不自造第四种口径)。
+fn resolve_access_token(explicit: Option<String>, service_face: Option<String>) -> Option<String> {
+    explicit
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .or(service_face)
+        .filter(|value| !value.trim().is_empty())
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
@@ -115,9 +129,14 @@ fn main() {
         }
     };
 
+    // 令牌三源收口: 显式值优先, 缺省读常驻服务令牌面 (同源), 无令牌照旧。
+    let access_token = resolve_access_token(
+        options.token.clone(),
+        apeireth_credentials::service_token::read().map(|secret| secret.expose().to_string()),
+    );
     let mut app = App::new(&options.endpoint, options.motion);
     let backend: BackendHandle =
-        match HttpGatewayBackend::with_token(&options.endpoint, options.token.as_deref()) {
+        match HttpGatewayBackend::with_token(&options.endpoint, access_token.as_deref()) {
             Ok(backend) => Arc::new(Mutex::new(Box::new(backend))),
             Err(error) => {
                 // 端点构造失败 = 配置错误, 明确报错退出 (不白屏装跑)。
@@ -279,6 +298,32 @@ mod tests {
         assert_eq!(options.token, None);
         let options = parse_args_from(&[], &no_env).expect("parse");
         assert_eq!(options.token, None);
+    }
+
+    /// 服务令牌面回落 (G10 常驻协同): 显式值赢过服务面; 无显式值才用服务面
+    /// (探测到常驻 = 读同源令牌); 两者皆无 = None = 三态门警告帧语义照旧。
+    #[test]
+    fn access_token_prefers_explicit_then_service_face_then_none() {
+        // 显式值优先 (含空白显式值按未配置)。
+        assert_eq!(
+            resolve_access_token(Some("flag-token".into()), Some("face-token".into())).as_deref(),
+            Some("flag-token")
+        );
+        assert_eq!(
+            resolve_access_token(Some("   ".into()), Some("face-token".into())).as_deref(),
+            Some("face-token"),
+            "空白显式值读作未配置, 回落服务令牌面"
+        );
+
+        // 无显式值 → 服务令牌面 (同源令牌)。
+        assert_eq!(
+            resolve_access_token(None, Some("face-token".into())).as_deref(),
+            Some("face-token")
+        );
+
+        // 两者皆无 → None (不发 Bearer, 三态门照旧)。
+        assert_eq!(resolve_access_token(None, None), None);
+        assert_eq!(resolve_access_token(None, Some("   ".into())), None);
     }
 
     /// 端点/动效既有语义零回归 (令牌面只增不改)。

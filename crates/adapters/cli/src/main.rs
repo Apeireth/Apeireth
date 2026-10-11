@@ -4,13 +4,13 @@ use std::process::ExitCode;
 use apeireth_cli::onboarding::UserTier;
 use apeireth_cli::{
     build_canonical_runtime_from_env, dispatch_canonical_approval, dispatch_canonical_chat,
-    dispatch_gateway_serve_on, CanonicalCliTurn,
+    dispatch_gateway_serve_with, CanonicalCliTurn,
 };
 use apeireth_runtime::ApprovalDecision;
 
 fn print_help() {
     println!(
-        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
+        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
     );
 }
 
@@ -102,7 +102,7 @@ fn run_approval(session: String, approval: String, decision: ApprovalDecision) -
     }
 }
 
-fn run_gateway(bind: String, port: u16) -> ExitCode {
+fn run_gateway(bind: String, port: u16, pid_file: Option<std::path::PathBuf>) -> ExitCode {
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -110,7 +110,11 @@ fn run_gateway(bind: String, port: u16) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(dispatch_gateway_serve_on(&bind, port)) {
+    match runtime.block_on(dispatch_gateway_serve_with(
+        &bind,
+        port,
+        pid_file.as_deref(),
+    )) {
         Ok(message) => {
             println!("{message}");
             ExitCode::SUCCESS
@@ -908,6 +912,7 @@ fn main() -> ExitCode {
         "gateway" if args.get(1).map(String::as_str) == Some("serve") => {
             let mut bind = "127.0.0.1".to_string();
             let mut port = 8080;
+            let mut pid_file: Option<std::path::PathBuf> = None;
             let mut index = 2;
             while index < args.len() {
                 if args[index] == "--bind" {
@@ -930,6 +935,17 @@ fn main() -> ExitCode {
                             return ExitCode::FAILURE;
                         }
                     };
+                } else if args[index] == "--pid-file" {
+                    index += 1;
+                    let Some(value) = args.get(index) else {
+                        eprintln!("gateway serve --pid-file requires a value");
+                        return ExitCode::FAILURE;
+                    };
+                    if value.trim().is_empty() {
+                        eprintln!("gateway serve --pid-file requires a non-empty path");
+                        return ExitCode::FAILURE;
+                    }
+                    pid_file = Some(std::path::PathBuf::from(value));
                 } else {
                     eprintln!("unknown gateway argument: {}", args[index]);
                     print_help();
@@ -937,7 +953,7 @@ fn main() -> ExitCode {
                 }
                 index += 1;
             }
-            run_gateway(bind, port)
+            run_gateway(bind, port, pid_file)
         }
         _ => {
             eprintln!("unknown command");

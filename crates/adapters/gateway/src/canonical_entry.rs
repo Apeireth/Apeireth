@@ -514,6 +514,7 @@ pub fn build_gateway_state_with_services(
         presence_stream,
         hot_config: Arc::new(RwLock::new(GatewayRuntimeConfig::from_env())),
         token_gate,
+        shutdown: Arc::new(crate::shutdown::ShutdownTrigger::default()),
     }
 }
 
@@ -775,8 +776,17 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
             // H1/G10: 可热改 provider base_url / api_key 的端点, 令牌门口径见
             // [`GatewayTokenGate`]。
             get(admin_config_get).post(admin_config_update).route_layer(
-                middleware::from_fn_with_state(gate_state, require_gateway_token),
+                middleware::from_fn_with_state(gate_state.clone(), require_gateway_token),
             ),
+        )
+        .route(
+            "/v1/admin/shutdown",
+            // W2-① 常驻形态: 优雅停机控制面 (计划任务 stop 走这里, 控制台信号
+            // 不可靠)。与 admin 配置同一令牌门同一三态口径。
+            post(admin_shutdown).route_layer(middleware::from_fn_with_state(
+                gate_state,
+                require_gateway_token,
+            )),
         )
         .merge(panel_routes())
         // CORS 白名单 (H1, 2026-09-24 安全审计): 桌面 WebView 是独立源
@@ -812,7 +822,45 @@ pub async fn serve_canonical_with_services(
     runtime: Arc<Runtime>,
     services: GatewayServices,
 ) -> std::io::Result<()> {
+    serve_with_shutdown(listener, runtime, services, std::future::pending::<()>()).await
+}
+
+/// Serve the canonical gateway until the listener closes **or** a shutdown is
+/// requested (W2-① 常驻形态的优雅停机面).
+///
+/// Shutdown sources funnel into one policy:
+///
+/// - `external_shutdown` — the composition root's process-signal face
+///   (`SIGTERM` / console control events);
+/// - [`crate::shutdown::ShutdownTrigger`] — fired by the token-gated
+///   `POST /v1/admin/shutdown` endpoint (the service scripts' stop path).
+///
+/// When either fires, the server stops accepting new work, waits for in-flight
+/// requests to finish, then performs the closing bookkeeping (收尾): one final
+/// `gateway.shutdown` audit fact and a full flush of the observation archive to
+/// its port (the `daemon-audit.jsonl` archive in the production assembly), so
+/// the last facts of the process are on disk before it exits (落盘).
+pub async fn serve_with_shutdown(
+    listener: tokio::net::TcpListener,
+    runtime: Arc<Runtime>,
+    services: GatewayServices,
+    external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+) -> std::io::Result<()> {
     let state = build_gateway_state_with_services(runtime, services);
+    serve_state_with_shutdown(listener, state, external_shutdown).await
+}
+
+/// Serve over an explicit [`GatewayState`] until the listener closes or a
+/// shutdown fires (see [`serve_with_shutdown`] for the shutdown contract).
+///
+/// Keeping the state explicit lets embedders and tests hold the observation
+/// sink handle across the shutdown boundary — which is exactly what the
+/// closing-bookkeeping assertions pin.
+pub async fn serve_state_with_shutdown(
+    listener: tokio::net::TcpListener,
+    state: GatewayState,
+    external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+) -> std::io::Result<()> {
     let endpoint = listener
         .local_addr()
         .map(|addr| addr.to_string())
@@ -821,7 +869,43 @@ pub async fn serve_canonical_with_services(
         "backend_ready",
         serde_json::json!({ "service": "apeireth-gateway-2.0", "endpoint": endpoint }),
     ));
-    axum::serve(listener, canonical_router_with_state(state)).await
+    let trigger = state.shutdown.clone();
+    let result = axum::serve(listener, canonical_router_with_state(state.clone()))
+        .with_graceful_shutdown(async move {
+            tokio::select! {
+                _ = external_shutdown => {},
+                _ = trigger.fired() => {},
+            }
+        })
+        .await;
+
+    // 优雅停机收尾: 最后一桩审计 + 观测攒批全量落盘, 之后进程才真正退出。
+    state.events.publish(GatewayEvent::new(
+        "backend_stopping",
+        serde_json::json!({ "endpoint": endpoint }),
+    ));
+    state.observations.buffer_audit(
+        "gateway.shutdown",
+        Some(format!("endpoint={endpoint} graceful=1")),
+    );
+    state.observations.flush().await;
+    result
+}
+
+/// W2-① 常驻形态: 优雅停机控制面 (`POST /v1/admin/shutdown`, 令牌门下)。
+///
+/// 幂等: 首次触发返回 `first`, 重复请求返回 `repeat` —— 服务脚本的 stop 重试
+/// 不会再掀一次停机风暴。真正的停机收尾 (审计 + 落盘) 在 [`serve_with_shutdown`]
+/// 的收尾段执行, 本端点只放闸。
+async fn admin_shutdown(State(state): State<GatewayState>) -> Json<serde_json::Value> {
+    let first = state.shutdown.trigger();
+    state
+        .observations
+        .buffer_audit("gateway.shutdown_requested", Some(format!("first={first}")));
+    Json(serde_json::json!({
+        "status": "shutting_down",
+        "trigger": if first { "first" } else { "repeat" },
+    }))
 }
 
 async fn health() -> Json<serde_json::Value> {

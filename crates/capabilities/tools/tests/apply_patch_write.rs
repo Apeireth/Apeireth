@@ -116,7 +116,11 @@ async fn registration_exposes_apply_patch_with_the_patch_contract() {
     );
 }
 
-/// 件三: git 写边界文案在工具描述中 (防模型幻觉出 git 写工具)。
+/// 件三: git 写边界文案在工具描述中 (防模型幻觉出 L3 工具)。
+///
+/// 断言演进 (D-P1「git 写分级上架」): 旧文案是「git 写一律无工具」, 现为
+/// **分级语义** —— L1 可逆默认人批 / L2 出网永远人批 / L3 毁灭无工具面。
+/// 旧短语逐条换成新短语, 「no tool / none exists」两条按「L3 永无工具」保留。
 #[test]
 fn git_write_boundary_is_stated_in_the_tool_description() {
     let dir = tempfile::tempdir().unwrap();
@@ -130,8 +134,12 @@ fn git_write_boundary_is_stated_in_the_tool_description() {
         "the model-facing description must carry the git write boundary note verbatim: {description}"
     );
     for phrase in [
-        "git write operations are",
-        "deliberately not provided as tools",
+        "repository writes",
+        "are graded",
+        "L1",
+        "L2",
+        "L3",
+        "always need a human decision",
         "no tool",
         "none exists",
     ] {

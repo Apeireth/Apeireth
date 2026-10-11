@@ -128,7 +128,9 @@ pub use memory_typed_sink::CanonicalMemoryTypedSink;
 pub use onion_layer::{onion_layer_for_capability, OnionLayerHook};
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
 pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};
-pub use permission_preset::{is_write_or_execute_capability, PermissionPresetGovernanceHook};
+pub use permission_preset::{
+    human_approval_floor_applies, is_write_or_execute_capability, PermissionPresetGovernanceHook,
+};
 pub use preference_learning::{
     PreferenceEvidence, PreferenceLearningModule, PreferenceLearningStats, PreferencePolarity,
     PREFERENCE_LEARNING_MODULE_ID,
@@ -150,7 +152,7 @@ pub use self_tuning_wire::{
     TUNING_LOG_DOC_VERSION, TUNING_LOG_FILE,
 };
 pub use tool_modules::{
-    EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,
-    SelfStatusModule, ShellModule, SELF_STATUS_TIMEOUT_MS,
+    EducationModule, FetchModule, FilesystemModule, GitWriteModule, McpModule, RepoModule,
+    SearchModule, SelfStatusModule, ShellModule, SELF_STATUS_TIMEOUT_MS,
 };
 pub use typed_recall::SqliteTypedMemoryRecallSource;

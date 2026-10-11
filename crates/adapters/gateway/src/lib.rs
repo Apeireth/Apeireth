@@ -42,6 +42,12 @@ pub mod presence;
 /// Session-scoped model + permission settings (`/v1/sessions/{id}/settings`).
 pub mod session_settings;
 
+/// Resident-slot (daemon) bookkeeping: PID file claim / release / liveness.
+pub mod resident;
+
+/// Graceful-shutdown trigger shared by signals and the admin shutdown endpoint.
+pub mod shutdown;
+
 /// IM quick access: channel configuration surface (env + data directory).
 pub mod im_channels;
 
@@ -71,8 +77,9 @@ pub use canonical_entry::{
     build_gateway_state, build_gateway_state_with_services, canonical_router,
     canonical_router_with_panels, canonical_router_with_services, canonical_router_with_state,
     execute_chat, resolve_approval, serve_canonical, serve_canonical_with_services,
-    CanonicalApprovalRequest, CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse,
-    CanonicalEntryError, CanonicalExecutionEvent, CanonicalPendingApproval, GatewayTokenGate,
+    serve_state_with_shutdown, serve_with_shutdown, CanonicalApprovalRequest, CanonicalChatOutcome,
+    CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError, CanonicalExecutionEvent,
+    CanonicalPendingApproval, GatewayTokenGate,
 };
 
 pub use admin::{
@@ -102,6 +109,11 @@ pub use events::{
     events_handler, EventBus, EventsSubscription, FlushReport, GatewayEvent,
     ObservationFlushSubscription, RuntimeObservationSink, FLUSH_PASS_INTERVAL_SECS,
 };
+
+pub use resident::{
+    claim_slot, read_slot, ResidentError, ResidentLease, ResidentParseError, ResidentRecord,
+};
+pub use shutdown::ShutdownTrigger;
 
 pub use panels::{
     AuditCommand, AuditDto, AuditQuery, EpisodeDto, EpisodeMutationDto, GatewayServices,

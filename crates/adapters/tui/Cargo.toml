@@ -35,6 +35,9 @@ thiserror = { workspace = true }
 reqwest = { workspace = true, features = ["blocking"] }
 # 文件写入统一走 fs_err (clippy.toml disallowed-methods 约束)
 fs-err = { workspace = true }
+# 常驻服务令牌面 (G10 协同): 无显式令牌时回落读同源服务令牌
+# (探测到常驻 = 读服务令牌面, 见 apeireth_credentials::service_token)。
+apeireth-credentials = { path = "../../foundation/credentials" }
 
 [dev-dependencies]
 tempfile = "3"

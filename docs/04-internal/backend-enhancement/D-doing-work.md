@@ -3,8 +3,8 @@
 > `Status: 📋 想法细节（隶属 00-backlog #D）`
 
 ## 现状
-- 已有：apply_patch 受控写（写总闸+观测门禁+审批链+IM 卡）、shell（沙箱+写意图扫描）、repo 只读、MCP 外部工具（审批级）；
-- 缺：git 写（有意不给，边界文案在案）、worktree_apply 受控写路径（老规划未实施）、并行任务编排。
+- 已有：apply_patch 受控写（写总闸+观测门禁+审批链+IM 卡）、shell（沙箱+写意图扫描）、repo 只读、MCP 外部工具（审批级）、**git 写分级 P1 已上架**（`tool.git_write`：L1 可逆默认人批/可开自动放行档、L2 出网永远人批、L3 毁灭无工具面，交付记录 [git-write-tiering-delivery.md](git-write-tiering-delivery.md)）；
+- 缺：worktree_apply 受控写路径（老规划未实施）、并行任务编排。
 
 ## 想法
 从"能看"到"能干活"：
@@ -17,7 +17,7 @@
 - 工作树隔离（并发任务互不踩）、验证回路（改完跑测试才算成）。
 
 ## 分期
-P1 git 写分级（小件大价值）→ P2 worktree_apply → P3 任务编排 → P4 MCP 深化。
+P1 git 写分级（小件大价值）**✅ 已交付**（分级词表/接线图/测试证据见 [git-write-tiering-delivery.md](git-write-tiering-delivery.md)）→ P2 worktree_apply → P3 任务编排 → P4 MCP 深化。
 
 ## 验收
 每级写权力过审批链+审计配对；毁灭级永远无工具；e2e 钉死。

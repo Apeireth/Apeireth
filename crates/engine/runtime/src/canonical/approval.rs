@@ -10,7 +10,7 @@
 //! orchestration root that acts on them.
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
-use apeireth_governance::TurnSecurityContext;
+use apeireth_governance::{redact_secret_surfaces, TurnSecurityContext};
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{NormalizedUsage, ToolCall};
 use serde::{Deserialize, Serialize};
@@ -347,6 +347,9 @@ impl From<&PendingApproval> for PendingApprovalView {
 ///
 /// It prefers the redacted frozen-invocation display (the executable shape a
 /// human actually approves) and falls back to the raw tool arguments.
+///
+/// 脱敏 (D-P1): 成品文本过 [`redact_secret_surfaces`] —— 远端 URL 凭据/密钥
+/// 赋值/凭据形状键值不入审批卡、审批面板与审计记录 (命令文本是人读面+日志面)。
 pub fn approval_command_text(
     tool_name: &str,
     call: &ToolCall,
@@ -356,28 +359,41 @@ pub fn approval_command_text(
         .and_then(|frozen| shell_command_from_display(&frozen.display))
         .or_else(|| command_from_arguments(&call.arguments))
         .unwrap_or_else(|| compact_json(&call.arguments));
-    format!("{}: {}", tool_name, command)
+    redact_secret_surfaces(&format!("{}: {}", tool_name, command))
 }
 
 /// Build a shorter human summary of one approval's arguments.
 ///
 /// This is intentionally heuristic and deterministic: it never invokes a model
 /// and never exposes secret values beyond what the approval already shows.
+/// 同 [`approval_command_text`] 的脱敏口径: 秘密面不入审批载荷。
 pub fn approval_arguments_summary(tool_name: &str, call: &ToolCall) -> String {
     let args = &call.arguments;
+    // 先脱敏后截断: 截断发生在半截凭据 URL 上会让脱敏正则漏配 (半截仍泄密)。
     if let Some(command) = args.get("command").and_then(|value| value.as_str()) {
-        return format!("执行命令 {}", bounded(command, 120));
+        return format!(
+            "执行命令 {}",
+            bounded(&redact_secret_surfaces(command), 120)
+        );
     }
     if let (Some(operation), Some(path)) = (
         args.get("operation").and_then(|value| value.as_str()),
         args.get("path").and_then(|value| value.as_str()),
     ) {
-        return format!("{} {}", operation, bounded(path, 120));
+        return format!(
+            "{} {}",
+            operation,
+            bounded(&redact_secret_surfaces(path), 120)
+        );
     }
     if let Some(path) = args.get("path").and_then(|value| value.as_str()) {
-        return format!("操作 {}", bounded(path, 120));
+        return format!("操作 {}", bounded(&redact_secret_surfaces(path), 120));
     }
-    format!("{} {}", tool_name, bounded(&compact_json(args), 120))
+    format!(
+        "{} {}",
+        tool_name,
+        bounded(&redact_secret_surfaces(&compact_json(args)), 120)
+    )
 }
 
 fn shell_command_from_display(display: &serde_json::Value) -> Option<String> {
@@ -675,6 +691,28 @@ mod tests {
 
         let summary = approval_arguments_summary("filesystem", &call);
         assert_eq!(summary, "read notes.txt");
+    }
+
+    /// 脱敏 (D-P1): 远端 URL 凭据不入审批载荷 (命令文本 + 参数摘要)。
+    #[test]
+    fn approval_payloads_redact_remote_url_credentials() {
+        let call = ToolCall {
+            id: "call_3".into(),
+            name: "git_write".into(),
+            arguments: serde_json::json!({
+                "command": "git remote add origin https://user:tok123456@host.example/repo.git"
+            }),
+        };
+
+        let text = approval_command_text("git_write", &call, None);
+        assert!(!text.contains("tok123456"), "{text}");
+        assert!(!text.contains("user:"), "{text}");
+        assert!(text.contains("[REDACTED_URL_CREDENTIAL]"), "{text}");
+        assert!(text.contains("git remote add origin"), "{text}");
+
+        let summary = approval_arguments_summary("git_write", &call);
+        assert!(!summary.contains("tok123456"), "{summary}");
+        assert!(!summary.contains("user:"), "{summary}");
     }
 
     #[test]

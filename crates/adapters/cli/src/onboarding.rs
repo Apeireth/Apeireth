@@ -967,7 +967,7 @@ pub fn pro_reference_text() -> String {
          \x20 Provider（OpenAI 兼容通道）：OPENAI_API_KEY / APEIRETH_OPENAI_URL / APEIRETH_OPENAI_MODELS\n\
          \x20 身份：APEIRETH_PERSONA_ID / APEIRETH_SUBJECT_ID\n\
          \x20 预算：APEIRETH_CONTEXT_BUDGET_CHARS / APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS\n\
-         \x20 能力：APEIRETH_ENABLE_SHELL / _FETCH / _FILE_WRITE / _MCP / _ORGANS（默认关闭 fail-closed）\n\
+         \x20 能力：APEIRETH_ENABLE_SHELL / _FETCH / _FILE_WRITE / _GIT_WRITE / _MCP / _ORGANS（默认关闭 fail-closed）\n\
          \x20 记忆：APEIRETH_ENABLE_PROACTIVE_RECALL / _PREFERENCE_LEARNING / _MEMORY_INJECTION / _CONSOLIDATION / _REFLEXION\n\
          \x20 逃生门：{disable}=1（禁用引导档案整体消费）\n\
          完整旋钮手册：docs/02-guides/user-manual.md ｜ 引导说明：docs/02-guides/cli-onboarding.md ｜ .env.example\n",

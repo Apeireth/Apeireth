@@ -148,6 +148,7 @@ pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
     "tool.filesystem",
     "tool.search",
     "tool.apply_patch",
+    "tool.git_write",
     "tool.self_status",
 ];
 
@@ -285,6 +286,19 @@ pub fn effect_fingerprint(
     format!("effect:{:016x}", hasher.finish())
 }
 
+/// 命令文本**不按 shell 语义解释**的能力面 (结构化调用面)。
+///
+/// git 写分级工具 (`tool.git_write`) 的 `command` 是词表分级的 git 调用:
+/// 固定可执行体 + 白名单 argv, 不经 shell。对这类面, shell 命令效应模板的
+/// **基线面** (Execute / SpawnProcess · ProcessExecution · ShellExecution) 不进
+/// 观察 —— 否则受控 git 调用被误标成 shell 执行面, 「自动放行 L1」档名不实
+/// (快守卫对 shell 执行面恒抬人工确认)。命令携带的**真实效应**照常合并
+/// (push 的 Publish/NetworkSend/ExternalNetwork、reset --hard 的 Delete 等):
+/// 分级词表漏判时, 意图对齐守卫仍是第二双眼睛 (非出网意图下的 push 照样被
+/// 判高危)。其余带 `command` 参数的能力 (shell 面 / 未知能力) 照旧全量合并
+/// (保守优先)。
+const SHELL_FREE_COMMAND_SURFACES: &[&str] = &["tool.git_write"];
+
 fn merge_command_effects(
     descriptor: &mut CapabilitySafetyDescriptor,
     arguments: &serde_json::Value,
@@ -292,18 +306,33 @@ fn merge_command_effects(
     let Some(command) = arguments.get("command").and_then(serde_json::Value::as_str) else {
         return;
     };
+    let shell_free = SHELL_FREE_COMMAND_SURFACES.contains(&descriptor.capability_id.as_str());
     let summary = CommandEffectAnalyzer::analyze(command);
     for operation in summary.operation_classes {
+        if shell_free
+            && matches!(
+                operation,
+                OperationClass::Execute | OperationClass::SpawnProcess
+            )
+        {
+            continue;
+        }
         if !descriptor.operation_classes.contains(&operation) {
             descriptor.operation_classes.push(operation);
         }
     }
     for resource in summary.resource_classes {
+        if shell_free && matches!(resource, ResourceClass::ProcessExecution) {
+            continue;
+        }
         if !descriptor.resource_classes.contains(&resource) {
             descriptor.resource_classes.push(resource);
         }
     }
     for sink in summary.sink_classes {
+        if shell_free && matches!(sink, SinkClass::ShellExecution) {
+            continue;
+        }
         if !descriptor.output_sinks.contains(&sink) {
             descriptor.output_sinks.push(sink);
         }
@@ -522,6 +551,23 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             "workspace",
         ),
+        // git 写分级工具 (`tool.git_write`): 仓库写面 (索引/本地引用/远端交互)
+        // 的受控写入口。静态描述符只覆盖**写面**本身 (Write/Modify): 逐命令的
+        // 分级 (L1 可逆 / L2 出网) 由分级词表逐次判定, 出网面由命令效应合并
+        // (push/fetch 命令追加 Publish/NetworkSend/ExternalNetwork); L3 毁灭级
+        // **无工具面**, 故 destructive 静态如实为 false (不谎报有毁灭入口)。
+        describe(
+            "tool.git_write",
+            vec![OperationClass::Write, OperationClass::Modify],
+            vec![ResourceClass::Repository],
+            vec![SourceClass::UserPrompt],
+            vec![SinkClass::WorkspaceFile],
+            false,
+            false,
+            true,
+            false,
+            "repository",
+        ),
         // 结构化自述面 (自省通道): 只读运行时自身状态 (开关生效值 / 记忆账本
         // 计数 / 调参 / 预算 / 工作区事实)。无写、无执行、无外联、无凭据值 ——
         // 凭据只回存在性布尔, 故 `may_access_credentials = false`。
@@ -693,6 +739,68 @@ fn infer_descriptor(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// git 写分级工具的结构化调用面: shell 基线效应不进观察 (受控 git 调用
+    /// 不是 shell 执行面), 但真实效应照常合并 (守卫仍是漏判时的第二双眼睛);
+    /// shell 面照旧全量合并 (保守优先)。
+    #[test]
+    fn structured_command_surface_merges_real_effects_without_the_shell_baseline() {
+        let add = descriptor_for_capability(
+            "tool.git_write",
+            &serde_json::json!({ "command": "git add a.txt" }),
+        );
+        assert!(
+            !add.operation_classes.contains(&OperationClass::Execute),
+            "{:?}",
+            add.operation_classes
+        );
+        assert!(
+            !add.output_sinks.contains(&SinkClass::ShellExecution),
+            "{:?}",
+            add.output_sinks
+        );
+        assert!(
+            !add.resource_classes
+                .contains(&ResourceClass::ProcessExecution),
+            "{:?}",
+            add.resource_classes
+        );
+        assert!(add.operation_classes.contains(&OperationClass::Write));
+
+        // 漏判兜底: push 的出网真实效应照常进观察 (意图对齐守卫可判高危)。
+        let push = descriptor_for_capability(
+            "tool.git_write",
+            &serde_json::json!({ "command": "git push origin main" }),
+        );
+        assert!(
+            push.operation_classes.contains(&OperationClass::Publish),
+            "{:?}",
+            push.operation_classes
+        );
+        assert!(
+            push.operation_classes
+                .contains(&OperationClass::NetworkSend),
+            "{:?}",
+            push.operation_classes
+        );
+        assert!(
+            push.output_sinks.contains(&SinkClass::ExternalNetwork),
+            "{:?}",
+            push.output_sinks
+        );
+        assert!(push.requires_network, "{push:?}");
+        assert!(
+            !push.operation_classes.contains(&OperationClass::Execute),
+            "{:?}",
+            push.operation_classes
+        );
+
+        // shell 面照旧全量合并 (保守优先, 不因结构化面放宽)。
+        let shell =
+            descriptor_for_capability("tool.shell", &serde_json::json!({ "command": "echo hi" }));
+        assert!(shell.operation_classes.contains(&OperationClass::Execute));
+        assert!(shell.output_sinks.contains(&SinkClass::ShellExecution));
+    }
 
     #[test]
     fn same_effect_fingerprints_align_across_tool_families() {

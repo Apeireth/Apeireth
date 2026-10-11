@@ -720,6 +720,14 @@ pub struct BackendSupervisor {
     /// minted per spawn when the parent env has none). In-memory only — never
     /// persisted, never logged; see [`resolve_sidecar_gateway_token`].
     spawned_gateway_token: RwLock<Option<String>>,
+    /// W2-① 常驻协同: 启动前是否探测常驻服务 (端口/健康检查), 已有常驻 =
+    /// 直连不拉起侧车 (见 [`detect_resident_gateway`])。
+    ///
+    /// 生产构造 (`with_logger`) 开启; 测试构造 (`new_for_test` /
+    /// `with_logger_in_dir`) 关闭 —— 生命周期测试自持 spawn 面, 必须与机器上
+    /// 是否装有常驻服务无关 (hermetic)。探测路径的自有测试走
+    /// [`Self::with_resident_probe_in_dir`]。
+    resident_probe: bool,
 }
 
 /// 存储文档身份: 后端 provider 环境配置 (非密字段)。
@@ -786,6 +794,211 @@ fn bearer_value(token: &str) -> String {
     format!("Bearer {token}")
 }
 
+// ---------------------------------------------------------------------------
+// W2-① 常驻协同: 常驻服务探测面 + 服务令牌面
+// ---------------------------------------------------------------------------
+
+/// 常驻占位文件名 (与 `apeireth gateway serve --pid-file` / 服务脚本写入口径
+/// 一致: `key=value` 行)。
+pub const RESIDENT_DESCRIPTOR_FILE: &str = "gateway.pid";
+
+/// 服务令牌面的凭据库目标名 (keyring 默认映射: 目标 = 用户.服务; 服务安装
+/// 面按此名写入, 本壳按此名读取, TUI 走同一身份) —— 明文不落盘。
+pub const SERVICE_TOKEN_TARGET: &str = "apeireth.gateway-token";
+
+/// 常驻占位记录 (解析自 PID 文件的 `key=value` 行)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResidentDescriptor {
+    /// 常驻网关进程 id (诊断元数据)。
+    pub pid: u32,
+    /// 常驻网关监听端口 (探测/连接面)。
+    pub port: u16,
+    /// 常驻网关绑定地址 (诊断元数据)。
+    pub bind: String,
+    /// 常驻网关占位时刻 (epoch ms)。
+    pub started_at_ms: i64,
+}
+
+impl ResidentDescriptor {
+    /// 解析 `key=value` 行; 缺字段/坏值 = None (探测面读不懂 = 无常驻, 不猜)。
+    pub fn parse(text: &str) -> Option<Self> {
+        let mut pid = None;
+        let mut port = None;
+        let mut bind = None;
+        let mut started_at_ms = None;
+        for raw in text.lines() {
+            let line = raw.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let (key, value) = line.split_once('=')?;
+            match key.trim() {
+                "pid" => pid = Some(value.trim().parse().ok()?),
+                "port" => port = Some(value.trim().parse().ok()?),
+                "bind" => bind = Some(value.trim().to_string()),
+                "started_at_ms" => started_at_ms = Some(value.trim().parse().ok()?),
+                _ => {}
+            }
+        }
+        Some(Self {
+            pid: pid?,
+            port: port?,
+            bind: bind?,
+            started_at_ms: started_at_ms?,
+        })
+    }
+
+    /// 渲染回 `key=value` 行 (稳定键序; 与写入方同契约)。
+    pub fn render(&self) -> String {
+        format!(
+            "pid={}\nport={}\nbind={}\nstarted_at_ms={}\n",
+            self.pid, self.port, self.bind, self.started_at_ms
+        )
+    }
+
+    /// 连接端点 (常驻网关按回环探测, 与服务脚本/网关同口径)。
+    pub fn endpoint(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+}
+
+/// 常驻运行目录 (`APEIRETH_RUN_DIR` 显式绝对值最高优先, 否则平台缺省)。
+///
+/// Windows 缺省 `%LOCALAPPDATA%\Apeireth\run` (与服务安装面同锚);
+/// 其余平台 `~/.apeireth/run`。绝不相对进程 CWD (工作目录无关)。
+pub fn resident_run_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("APEIRETH_RUN_DIR") {
+        let trimmed = dir.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+    if cfg!(windows) {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            return PathBuf::from(local).join("Apeireth").join("run");
+        }
+    }
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home).join(".apeireth").join("run")
+}
+
+/// 常驻占位文件完整路径。
+pub fn resident_descriptor_path() -> PathBuf {
+    resident_run_dir().join(RESIDENT_DESCRIPTOR_FILE)
+}
+
+/// 读常驻占位文件; 缺失/坏内容 = None (探测面: 读不懂即无常驻)。
+pub fn read_resident_descriptor(path: &Path) -> Option<ResidentDescriptor> {
+    let text = fs::read_to_string(path).ok()?;
+    ResidentDescriptor::parse(&text)
+}
+
+/// 探测常驻服务 (端口/健康检查): 占位记录在手且 `/health` 应答 = 常驻在跑。
+///
+/// 这是「已有常驻 = 直连, 无常驻 = 按现行为拉起侧车」的判定面; 占位陈旧
+/// (端口不应答) 读作无常驻, 走既有 spawn 路径。
+pub async fn detect_resident_gateway(path: &Path) -> Option<ResidentDescriptor> {
+    let descriptor = read_resident_descriptor(path)?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(2))
+        .build()
+        .ok()?;
+    let response = client
+        .get(format!("{}/health", descriptor.endpoint()))
+        .send()
+        .await
+        .ok()?;
+    response.status().is_success().then_some(descriptor)
+}
+
+/// 常驻服务令牌面 (G10): 从系统凭据库读同源服务令牌 (探测到常驻 = 读服务
+/// 令牌面)。明文只进内存, 不落盘、不进日志; 读不到 = None (三态门照旧)。
+#[cfg(windows)]
+pub fn read_service_token_face() -> Option<String> {
+    service_token_store::read()
+}
+
+/// 常驻服务令牌面 (G10) 的非 Windows 面: 令牌面读取暂无接口 (桌面打包面为
+/// Windows) —— 无令牌 = 三态门口径照旧, 不假装取到了。
+#[cfg(not(windows))]
+pub fn read_service_token_face() -> Option<String> {
+    None
+}
+
+/// 凭据库密文解码 (写入契约 = UTF-16LE, 与服务安装面的写入编码一致)。
+///
+/// 只认契约编码: 非 UTF-16LE 形状 (空 / 奇数长度 / 非法码元) 读作未配置,
+/// 不猜别的编码 (猜错 = 拿到乱码当令牌, 比拿不到更坏)。
+fn decode_credential_blob(blob: &[u8]) -> Option<String> {
+    if blob.is_empty() || blob.len() % 2 != 0 {
+        return None;
+    }
+    let mut units = Vec::with_capacity(blob.len() / 2);
+    for chunk in blob.chunks_exact(2) {
+        units.push(u16::from_le_bytes([chunk[0], chunk[1]]));
+    }
+    let text = String::from_utf16(&units).ok()?;
+    let trimmed = text.trim_end_matches('\u{0}').trim().to_string();
+    (!trimmed.is_empty()).then_some(trimmed)
+}
+
+/// 访问令牌三源收口 (纯函数, 行为可钉): spawn 期令牌 (自铸/env 透传) 赢,
+/// 其次 env 显式值, 最后常驻服务令牌面 (探测到常驻 = 读服务令牌面); 逃生阀
+/// 哨兵 = 明示不设防 → 无令牌可呈; 三者皆无 = None (三态门警告帧语义照旧)。
+fn resolve_gateway_access_token(
+    spawned: Option<String>,
+    env_value: Option<String>,
+    service_face: Option<String>,
+) -> Option<String> {
+    fn normalize(value: String) -> Option<String> {
+        let trimmed = value.trim().to_string();
+        (!trimmed.is_empty()).then_some(trimmed)
+    }
+    let chosen = spawned
+        .and_then(normalize)
+        .or_else(|| env_value.and_then(normalize))
+        .or_else(|| service_face.and_then(normalize))?;
+    (chosen != UNPROTECTED_TOKEN_SENTINEL).then_some(chosen)
+}
+
+#[cfg(windows)]
+mod service_token_store {
+    use windows_sys::Win32::Security::Credentials::{
+        CredFree, CredReadW, CREDENTIALW, CRED_TYPE_GENERIC,
+    };
+
+    /// 系统凭据库读一枚通用凭据 (目标 [`super::SERVICE_TOKEN_TARGET`])。
+    ///
+    /// 只读不写: 写入方是服务安装面 (CredWriteW, 本地机器持久)。缺失/读不到
+    /// 一律 None (含 ERROR_NOT_FOUND): 令牌面缺席 = 无令牌, 三态门照旧。
+    pub fn read() -> Option<String> {
+        let target: Vec<u16> = super::SERVICE_TOKEN_TARGET
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut credential: *mut CREDENTIALW = std::ptr::null_mut();
+        // SAFETY: target 是 NUL 结尾 UTF-16 缓冲, 调用期间存活; 成功返回的
+        // 指针经 CredFree 释放。
+        let ok = unsafe { CredReadW(target.as_ptr(), CRED_TYPE_GENERIC, 0, &mut credential) };
+        if ok == 0 {
+            return None;
+        }
+        // SAFETY: 成功时 credential 是有效 CREDENTIALW 指针。
+        let decoded = unsafe {
+            let blob = std::slice::from_raw_parts(
+                (*credential).CredentialBlob,
+                (*credential).CredentialBlobSize as usize,
+            );
+            super::decode_credential_blob(blob)
+        };
+        // SAFETY: 指针来自 CredReadW, CredFree 释放。
+        unsafe { CredFree(credential as *mut _) };
+        decoded
+    }
+}
+
 impl BackendSupervisor {
     /// Base constructor. Production always attaches a logger via
     /// [`Self::with_logger`]; tests use `build(None)` when no log file is wanted.
@@ -793,7 +1006,23 @@ impl BackendSupervisor {
     /// Config restore is **strict**: a present-but-broken config file is
     /// rejected (`Err`) instead of silently falling back to defaults; a missing
     /// file legitimately means "no config yet".
+    /// Base constructor (resident probe off — see
+    /// [`Self::build_with_resident_probe`]). Production always attaches a logger
+    /// via [`Self::with_logger`]; tests use `build(None)` when no log file is
+    /// wanted.
+    ///
+    /// Config restore is **strict**: a present-but-broken config file is
+    /// rejected (`Err`) instead of silently falling back to defaults; a missing
+    /// file legitimately means "no config yet".
     fn build(logger: Option<Arc<DesktopLogger>>) -> Result<Self, String> {
+        Self::build_with_resident_probe(logger, false)
+    }
+
+    /// Constructor with the W2-① resident-service probe knob spelled out.
+    fn build_with_resident_probe(
+        logger: Option<Arc<DesktopLogger>>,
+        resident_probe: bool,
+    ) -> Result<Self, String> {
         // Restore the persisted non-secret provider config (endpoints/models),
         // capability toggles, and workspace dir so the very first spawn already
         // reflects the user's last settings. Keys are deliberately NOT persisted
@@ -822,6 +1051,7 @@ impl BackendSupervisor {
             spawned_provider_env: RwLock::new(persisted_provider),
             spawned_capability_env: RwLock::new(persisted_capabilities),
             spawned_gateway_token: RwLock::new(None),
+            resident_probe,
         })
     }
 
@@ -833,7 +1063,18 @@ impl BackendSupervisor {
     }
 
     /// The directory that owns the logs and every app-data config file.
+    ///
+    /// 星槎便携契约（K-starraft.md）：可执行文件同级出现便携标记（`portable.flag`
+    /// 文件或 `data/` 目录）时，数据目录随身走 `exe_dir/data`，凌驾常规安装位置；
+    /// 无标记维持常规安装链路（其余逻辑不动）。密钥不随身（仍走系统凭据库）。
     fn logger_app_data_dir(logger: &DesktopLogger) -> PathBuf {
+        if let Some(portable) = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(Path::to_path_buf))
+            .and_then(|dir| crate::portable_mode::resolve_portable_data_dir(&dir))
+        {
+            return portable;
+        }
         logger
             .log_directory()
             .parent()
@@ -949,13 +1190,16 @@ impl BackendSupervisor {
     /// Fails (instead of defaulting) when a persisted config file exists but is
     /// malformed / foreign / version-unsupported.
     pub fn with_logger(logger: Arc<DesktopLogger>) -> Result<Self, String> {
-        Self::build(Some(logger))
+        Self::build_with_resident_probe(Some(logger), true)
     }
 
     /// A logger-less supervisor for integration tests.
     ///
     /// Tests drive the real lifecycle but must not append to the user's actual
-    /// log files, so no logger is attached (and no config file is read).
+    /// log files, so no logger is attached (and no config file is read). The
+    /// resident-service probe is also off: lifecycle tests own their spawn
+    /// path and must not depend on whether the machine runs a resident
+    /// service (hermeticity).
     #[doc(hidden)]
     pub fn new_for_test() -> Self {
         Self::build(None).expect("logger-less supervisor reads no config files")
@@ -964,11 +1208,22 @@ impl BackendSupervisor {
     /// Test-only production-shaped supervisor whose logs and app-data anchors
     /// live under `dir` (the parent of `dir\logs` becomes the app-data dir).
     /// Used by the regression test proving the sidecar's stores land in
-    /// app-data regardless of the launch CWD.
+    /// app-data regardless of the launch CWD. The resident-service probe is
+    /// off here (lifecycle tests keep owning their spawn path);
+    /// [`Self::with_resident_probe_in_dir`] turns it on.
     #[doc(hidden)]
     pub fn with_logger_in_dir(dir: PathBuf) -> Result<Self, String> {
         let logger = DesktopLogger::new_in_dir(dir.join("logs"))?;
-        Self::with_logger(Arc::new(logger))
+        Self::build(Some(Arc::new(logger)))
+    }
+
+    /// Test-only production-shaped supervisor **with** the resident-service
+    /// probe enabled — the exact behavior a production desktop launch has
+    /// (W2-① 常驻协同: 已有常驻 = 直连, 无常驻 = 拉起侧车).
+    #[doc(hidden)]
+    pub fn with_resident_probe_in_dir(dir: PathBuf) -> Result<Self, String> {
+        let logger = DesktopLogger::new_in_dir(dir.join("logs"))?;
+        Self::build_with_resident_probe(Some(Arc::new(logger)), true)
     }
 
     /// Expose dev-build resolution so an integration test can report a missing
@@ -1024,6 +1279,34 @@ impl BackendSupervisor {
         self.info.read().await.clone()
     }
 
+    /// Adopt an already-running resident gateway (W2-① 常驻协同): publish its
+    /// endpoint as `Ready` with `External` ownership and spawn nothing.
+    /// Ownership semantics are unchanged — `stop()` still refuses to stop a
+    /// backend the desktop does not own; the resident lifecycle belongs to the
+    /// service management surface (`packaging/service`).
+    async fn adopt_resident_gateway(&self, resident: ResidentDescriptor) -> Result<String, String> {
+        let endpoint = resident.endpoint();
+        let mut info = self.info.write().await;
+        info.state = BackendState::Ready;
+        info.ownership = BackendOwnership::External;
+        info.pid = Some(resident.pid);
+        info.port = Some(resident.port);
+        info.endpoint = Some(endpoint.clone());
+        info.last_error = None;
+        drop(info);
+        self.log_desktop(
+            LogLevel::Info,
+            &format!(
+                "backend.resident_adopted endpoint={endpoint} pid={} (external resident service; no sidecar spawned)",
+                resident.pid
+            ),
+        );
+        Ok(format!(
+            "Connected to resident gateway at {endpoint} (PID: {}, external service)",
+            resident.pid
+        ))
+    }
+
     /// Start the owned backend process
     pub async fn start(&self) -> Result<String, String> {
         let mut info = self.info.write().await;
@@ -1035,6 +1318,15 @@ impl BackendSupervisor {
         info.state = BackendState::Starting;
         info.last_error = None;
         drop(info);
+
+        // W2-① 常驻协同: 先探测常驻服务 (端口/健康检查)。已有常驻 = 直连
+        // (External 归属, 不重复拉起侧车); 探测不到 = 走既有 spawn 路径
+        // (无常驻 = 按现行为拉起侧车, 语义零变化)。
+        if self.resident_probe {
+            if let Some(resident) = detect_resident_gateway(&resident_descriptor_path()).await {
+                return self.adopt_resident_gateway(resident).await;
+            }
+        }
 
         // Locate bundled backend executable
         let backend_path = self.resolve_backend_binary()?;
@@ -1402,21 +1694,28 @@ impl BackendSupervisor {
     /// The loopback access token to present on the gateway's gated endpoints
     /// (admin config / approval resolve).
     ///
-    /// The running sidecar enforces exactly what it was spawned with (the
-    /// explicit env value or the minted one), so the spawned value wins; the
-    /// env value is the fallback for an external backend the desktop did not
-    /// spawn. The no-protection sentinel means the gateway gate is declared
-    /// open — there is nothing to present, so `None`. The value never enters
-    /// logs or persisted state.
+    /// Three sources, in order (see [`resolve_gateway_access_token`]): the
+    /// value the running sidecar was spawned with (the explicit env value or
+    /// the minted one), the parent env value (the fallback for an external
+    /// backend the desktop did not spawn), and — when both are absent and a
+    /// resident service is connected (W2-① G10 协同) — the **service token
+    /// face** (探测到常驻 = 读服务令牌面, 同源令牌). The no-protection sentinel
+    /// means the gateway gate is declared open — there is nothing to present,
+    /// so `None`. The value never enters logs or persisted state.
     pub async fn gateway_access_token(&self) -> Option<String> {
-        let token = match self.spawned_gateway_token.read().await.clone() {
-            Some(value) => value,
-            None => std::env::var(GATEWAY_TOKEN_ENV)
-                .ok()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())?,
+        let spawned = self.spawned_gateway_token.read().await.clone();
+        let env_value = std::env::var(GATEWAY_TOKEN_ENV).ok();
+        let env_present = env_value
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty());
+        // 服务令牌面只在前两源缺席时读 (凭据库访问有成本, 也不做无谓触碰)。
+        let service_face = if spawned.is_some() || env_present {
+            None
+        } else {
+            read_service_token_face()
         };
-        (token != UNPROTECTED_TOKEN_SENTINEL).then_some(token)
+        resolve_gateway_access_token(spawned, env_value, service_face)
     }
 
     /// Fetch the gateway's effective config (`GET /v1/admin/config`) and pass
@@ -2907,5 +3206,268 @@ mod tests {
             serde_json::to_value(&before).unwrap()
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    // -----------------------------------------------------------------------
+    // W2-① 常驻协同: 探测面 (直连/拉起) + 服务令牌面 (G10 同源)
+    // -----------------------------------------------------------------------
+
+    /// 一台应答 `/health` 的最小 HTTP 服务 (假常驻), 返回 JSON `{"status":"ok"}`。
+    async fn spawn_fake_resident() -> (u16, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("fake resident bind");
+        let port = listener.local_addr().expect("fake resident addr").port();
+        let handle = tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    break;
+                };
+                use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                let mut buffer = [0u8; 2048];
+                let _ = stream.read(&mut buffer).await;
+                let _ = stream
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 16\r\n\r\n{\"status\":\"ok\"}",
+                    )
+                    .await;
+            }
+        });
+        (port, handle)
+    }
+
+    /// 常驻占位解析: 契约往返 + 坏内容读作"无常驻" (不猜、不砖化)。
+    #[test]
+    fn resident_descriptor_round_trips_and_rejects_unparseable_content() {
+        let descriptor = ResidentDescriptor {
+            pid: 4242,
+            port: 8080,
+            bind: "127.0.0.1".to_string(),
+            started_at_ms: 1_760_000_000_000,
+        };
+        assert_eq!(
+            ResidentDescriptor::parse(&descriptor.render()).expect("round trip"),
+            descriptor
+        );
+        assert_eq!(descriptor.endpoint(), "http://127.0.0.1:8080");
+
+        // 坏内容 / 缺字段 / 空文件: 一律 None (探测面读不懂 = 无常驻)。
+        assert_eq!(ResidentDescriptor::parse("nonsense"), None);
+        assert_eq!(ResidentDescriptor::parse("pid=1\nport=x\n"), None);
+        assert_eq!(ResidentDescriptor::parse("pid=1\n"), None);
+        assert_eq!(ResidentDescriptor::parse(""), None);
+    }
+
+    /// 常驻运行目录: `APEIRETH_RUN_DIR` 显式绝对值最高优先 (工作目录无关)。
+    #[test]
+    fn resident_run_dir_prefers_the_explicit_env_anchor() {
+        let _lock = env_lock();
+        let _guard = EnvGuard::set(&[("APEIRETH_RUN_DIR", "X:\\somewhere\\run")]);
+        assert_eq!(
+            resident_run_dir(),
+            std::path::PathBuf::from("X:\\somewhere\\run"),
+            "显式 APEIRETH_RUN_DIR 必须胜出"
+        );
+        assert_eq!(
+            resident_descriptor_path(),
+            std::path::PathBuf::from("X:\\somewhere\\run").join(RESIDENT_DESCRIPTOR_FILE)
+        );
+    }
+
+    /// 探测面: 占位陈旧 (端口不应答) = 无常驻; `/health` 应答 = 命中常驻
+    /// (端口/健康检查双口径)。
+    #[test]
+    fn resident_probe_detects_a_live_service_and_ignores_a_stale_slot() {
+        tokio_block(async {
+            let dir = config_scratch("resident-probe");
+            let slot = dir.join(RESIDENT_DESCRIPTOR_FILE);
+
+            // 陈旧占位: 记录端口无人应答。
+            let closed = {
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let port = listener.local_addr().unwrap().port();
+                drop(listener);
+                port
+            };
+            let stale = ResidentDescriptor {
+                pid: 4242,
+                port: closed,
+                bind: "127.0.0.1".to_string(),
+                started_at_ms: 1,
+            };
+            fs::write(&slot, stale.render()).unwrap();
+            assert!(
+                detect_resident_gateway(&slot).await.is_none(),
+                "陈旧占位必须读作无常驻"
+            );
+
+            // 活常驻: /health 应答 = 探测命中。
+            let (port, server) = spawn_fake_resident().await;
+            let live = ResidentDescriptor {
+                pid: 4242,
+                port,
+                bind: "127.0.0.1".to_string(),
+                started_at_ms: 2,
+            };
+            fs::write(&slot, live.render()).unwrap();
+            let detected = detect_resident_gateway(&slot)
+                .await
+                .expect("常驻必须被探测到");
+            assert_eq!(detected, live);
+            server.abort();
+
+            let _ = fs::remove_dir_all(&dir);
+        });
+    }
+
+    /// 桌面协同主语义: 已有常驻 = 直连 (External 归属, 不重复拉起侧车,
+    /// 不归桌面停机); 无常驻 = 按现行为拉起侧车 (既有生命周期测试钉住)。
+    #[test]
+    fn start_adopts_an_existing_resident_service_without_spawning_a_sidecar() {
+        let _lock = env_lock();
+        tokio_block(async {
+            let dir = config_scratch("resident-adopt");
+            let run_dir = dir.join("run");
+            fs::create_dir_all(&run_dir).unwrap();
+            let _env = EnvGuard::set(&[("APEIRETH_RUN_DIR", run_dir.to_str().unwrap())]);
+
+            let (port, server) = spawn_fake_resident().await;
+            let descriptor = ResidentDescriptor {
+                pid: 4242,
+                port,
+                bind: "127.0.0.1".to_string(),
+                started_at_ms: 3,
+            };
+            fs::write(run_dir.join(RESIDENT_DESCRIPTOR_FILE), descriptor.render()).unwrap();
+
+            let supervisor = BackendSupervisor::with_resident_probe_in_dir(dir.clone())
+                .expect("production-shaped supervisor with resident probe");
+            let message = supervisor
+                .start()
+                .await
+                .expect("existing resident service must be adopted");
+            assert!(message.contains("resident"), "{message}");
+            assert!(message.contains("external"), "{message}");
+
+            let info = supervisor.info().await;
+            assert_eq!(info.state, BackendState::Ready);
+            assert_eq!(info.ownership, BackendOwnership::External);
+            assert_eq!(info.pid, Some(4242), "直连面透出常驻进程 id");
+            assert_eq!(info.port, Some(port));
+            assert_eq!(
+                info.endpoint.as_deref(),
+                Some(format!("http://127.0.0.1:{port}")).as_deref()
+            );
+            // 不拉起侧车: 进程面无子进程句柄 (真断言, 非状态猜测)。
+            assert!(
+                supervisor.process.read().await.is_none(),
+                "已有常驻不得再拉起侧车"
+            );
+            // 既有语义照旧: 外部后端不归桌面停机。
+            assert!(
+                supervisor.stop().await.is_err(),
+                "外部常驻的生命周期归服务管理面"
+            );
+            server.abort();
+
+            let _ = fs::remove_dir_all(&dir);
+        });
+    }
+
+    /// 令牌三源收口: spawn 期 > env > 服务令牌面 (探测到常驻 = 读同源令牌);
+    /// 逃生阀哨兵 = 明示不设防 (无令牌可呈); 三者皆无 = None = 三态门照旧。
+    #[test]
+    fn access_token_resolution_prefers_spawned_then_env_then_service_face() {
+        let resolve = resolve_gateway_access_token;
+        assert_eq!(
+            resolve(
+                Some("spawned".into()),
+                Some("env".into()),
+                Some("face".into())
+            )
+            .as_deref(),
+            Some("spawned")
+        );
+        assert_eq!(
+            resolve(None, Some("env".into()), Some("face".into())).as_deref(),
+            Some("env")
+        );
+        assert_eq!(
+            resolve(None, None, Some("face".into())).as_deref(),
+            Some("face"),
+            "探测到常驻 = 读服务令牌面 (同源令牌)"
+        );
+        assert_eq!(
+            resolve(None, None, None),
+            None,
+            "无令牌 = 三态门警告帧语义照旧"
+        );
+
+        // 空白值逐层跳过 (不发空 Bearer)。
+        assert_eq!(
+            resolve(Some("  ".into()), Some(" env ".into()), Some("face".into())).as_deref(),
+            Some("env")
+        );
+
+        // 逃生阀哨兵: 明示不设防 → 无令牌可呈 (任一层出现即终止, 不再回落)。
+        for (spawned, env_value, face) in [
+            (
+                Some(UNPROTECTED_TOKEN_SENTINEL.into()),
+                Some("env".into()),
+                Some("face".into()),
+            ),
+            (
+                None,
+                Some(UNPROTECTED_TOKEN_SENTINEL.into()),
+                Some("face".into()),
+            ),
+            (None, None, Some(UNPROTECTED_TOKEN_SENTINEL.into())),
+        ] {
+            assert_eq!(resolve(spawned, env_value, face), None, "哨兵 = 不设防声明");
+        }
+    }
+
+    /// 服务令牌面的凭据库编码契约: UTF-16LE (与服务安装面写入编码一致);
+    /// 非契约编码读作未配置 (不猜、不拿乱码当令牌)。
+    #[test]
+    fn service_token_blob_encoding_matches_the_store_writer() {
+        let mut utf16le = Vec::new();
+        for unit in "loopback-token-0123456789abcdef".encode_utf16() {
+            utf16le.extend_from_slice(&unit.to_le_bytes());
+        }
+        assert_eq!(
+            decode_credential_blob(&utf16le).as_deref(),
+            Some("loopback-token-0123456789abcdef"),
+            "UTF-16LE 密文必须解出令牌"
+        );
+
+        assert_eq!(decode_credential_blob(&[]), None, "空密文 = 未配置");
+        assert_eq!(
+            decode_credential_blob(&[0x61, 0x62, 0x63]),
+            None,
+            "奇数长度 = 非 UTF-16LE 契约编码, 读作未配置"
+        );
+        let blank: Vec<u8> = "   ".encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+        assert_eq!(decode_credential_blob(&blank), None, "空白密文 = 未配置");
+    }
+
+    /// 真机探针 (默认忽略): 本壳的凭据库读取面 (CredReadW) 与服务安装面写入
+    /// 同源 —— 有服务令牌在库时必须读出同一枚 (设
+    /// `SERVICE_TOKEN_PROBE_EXPECTED` 时强校验逐字节一致)。探针只读不写。
+    ///
+    ///   SERVICE_TOKEN_PROBE_EXPECTED=<token> cargo test -p companion-desktop \
+    ///     --lib service_token_face_live_probe -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn service_token_face_live_probe() {
+        match read_service_token_face() {
+            Some(token) => {
+                if let Ok(expected) = std::env::var("SERVICE_TOKEN_PROBE_EXPECTED") {
+                    assert_eq!(token, expected, "同源令牌必须逐字节一致");
+                }
+                println!("SERVICE TOKEN FACE READ OK ({} bytes)", token.len());
+            }
+            None => println!("SERVICE TOKEN FACE EMPTY"),
+        }
     }
 }

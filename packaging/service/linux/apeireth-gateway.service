@@ -1,0 +1,49 @@
+# Apeireth 常驻网关 systemd 单元 (Linux 面)
+#
+# ⚠ 未实测 (untested): 本单元随 W2-① daemon 化一并出, 但 Linux 面尚无实测
+# 画像 (见 docs/04-internal/backend-enhancement/F-server-form.md 缺口), 仅做
+# 静态校验 (字段/语法, 由 apeireth-cli 测试面钉住)。上机前请先在目标发行版
+# 逐项核对路径与用户。
+#
+# 安装 (手动, 未实测):
+#   1) apeireth 可执行文件放 /usr/local/bin/apeireth;
+#   2) 令牌面: 建 /etc/apeireth/gateway.env (root:root 0600), 内容一行
+#        APEIRETH_GATEWAY_TOKEN=<32 字节随机令牌的十六进制>
+#      (Linux 面令牌以 env 文件驻留, 与 Windows 凭据库面等价语义; 明文落盘
+#      姿态不同, 见 docs/02-guides/server-deployment.md 安全建议);
+#   3) systemd-analyze verify apeireth-gateway.service;
+#   4) cp apeireth-gateway.service /etc/systemd/system/ && systemctl daemon-reload
+#      && systemctl enable --now apeireth-gateway.
+#
+# 停机: systemctl stop apeireth-gateway → SIGTERM → 网关优雅停机
+# (收尾审计 + 落盘后退出, 见 apeireth_gateway::serve_with_shutdown)。
+
+[Unit]
+Description=Apeireth resident gateway (headless HTTP sidecar)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=apeireth
+Group=apeireth
+WorkingDirectory=/var/lib/apeireth
+EnvironmentFile=/etc/apeireth/gateway.env
+Environment=APEIRETH_DATA_DIR=/var/lib/apeireth/data
+RuntimeDirectory=apeireth
+ExecStart=/usr/local/bin/apeireth gateway serve --bind 127.0.0.1 --port 8080 --pid-file /run/apeireth/gateway.pid
+# 崩溃自拉起: 非零退出即失败, 5 秒后重试 (无限次)。
+Restart=on-failure
+RestartSec=5s
+# 优雅停机: SIGTERM → 收尾审计 + 落盘; 30 秒兜底强杀。
+KillSignal=SIGTERM
+TimeoutStopSec=30
+StandardOutput=append:/var/log/apeireth/gateway.log
+StandardError=append:/var/log/apeireth/gateway.log
+# 安全收窄: 不提权、私有 /tmp、系统树只读。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

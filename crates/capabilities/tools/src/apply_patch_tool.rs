@@ -19,9 +19,11 @@
 //! 动作)。删除与新建**永不**进入自动放行档: 任何含创建/删除动作的补丁都停在
 //! 人工审批档。
 //!
-//! # Git 写边界 (件三)
-//! git 提交等写操作**不提供工具**, 属设计边界 —— 仓库工具维持只读合同, 见
-//! [`GIT_WRITE_BOUNDARY_NOTE`] (工具描述与文档同文, 防模型幻觉工具存在)。
+//! # Git 写边界 (件三, 分级语义版)
+//! 仓库写操作走**分级词表**, 不走补丁面: `tool.git_write` 只承载
+//! L1 可逆 (add/commit/branch 建·切/tag 本地, 默认人批) 与 L2 出网
+//! (push/fetch/remote, 永远人批); L3 毁灭 (改史/强推/引用删除) **没有工具**,
+//! 见 [`GIT_WRITE_BOUNDARY_NOTE`] (工具描述与文档同文, 防模型幻觉工具存在)。
 
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -53,14 +55,20 @@ pub const APPLY_PATCH_TOOL_NAME: &str = "apply_patch";
 /// 生产执行时限 (毫秒): 补丁走阻塞池做持久档原子写, 到期即归 `timeout.*`。
 pub const APPLY_PATCH_TIMEOUT_MS: u64 = 30_000;
 
-/// git 写边界声明 (件三): 工具描述与文档同文。
+/// git 写边界声明 (件三, 分级语义版): 工具描述与文档同文。
 ///
-/// 显式写明「git 提交等写操作不提供工具, 属设计边界」, 避免模型幻觉出一个
-/// 并不存在的 git 写工具。
-pub const GIT_WRITE_BOUNDARY_NOTE: &str = "Design boundary: git write operations are \
- deliberately not provided as tools — committing, pushing, branch changes, history \
- rewrites and other repository write operations have no tool, and the repository \
- tool stays read-only on purpose. Do not request a git write tool; none exists.";
+/// 仓库写操作按**写意图分级**给面: L1 可逆经 `tool.git_write` 默认人批
+/// (设置可开自动放行 L1), L2 出网永远人批 (无自动放行档), L3 毁灭
+/// **无工具面** —— 显式写明防模型幻觉出一个并不存在的 L3 工具。
+pub const GIT_WRITE_BOUNDARY_NOTE: &str = "Design boundary: repository writes \
+ are graded. Git writes go through the graded git_write tool only - L1 \
+ reversible local writes (add / commit with a message / branch create and \
+ switch / local tag) sit at human approval by default and may auto-pass only \
+ via an explicit settings tier, L2 network-bound writes (push / fetch / remote \
+ configuration) always need a human decision even when a preset would \
+ auto-pass, and L3 destructive writes (history rewrites, forced overwrites, \
+ ref deletions such as reset --hard, clean -f, force push, update-ref -d) \
+ deliberately have no tool: none exists for L3, so do not request one.";
 
 /// 工具描述全文 (注册声明与文档引用同一份文本)。
 pub const APPLY_PATCH_TOOL_DESCRIPTION: &str = "Apply one transactional multi-file \

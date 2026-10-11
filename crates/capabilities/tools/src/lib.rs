@@ -26,6 +26,9 @@ pub mod exec_pipeline;
 pub mod escalation;
 pub mod fetch;
 pub mod filesystem;
+// git 写分级生产工具面 (`tool.git_write`, 干活能力轴 P1): 分级词表
+// (L1 可逆/L2 出网/L3 毁灭拒绝即帧) + 词法分级执行面 + 受控通道 + 分级风险映射。
+pub mod git_write;
 pub mod guardrail;
 pub mod mcp;
 // MCP 工具桥 (最后一公里接线): 服务器配置面 (env / 数据目录 StoredDoc 拒开语义) +
@@ -80,6 +83,14 @@ pub use exec_pipeline::{
 };
 pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
+pub use git_write::{
+    authorized_git_write_policy, classify_git_write, git_write_capability,
+    git_write_human_approval_floor, git_write_pipeline, git_write_plan_for_arguments,
+    GitWriteBoundaryGuard, GitWriteParams, GitWritePlan, GitWriteReleaseTier,
+    GitWriteRiskMappingHook, GitWriteTier, GitWriteTierApprovalHook, GitWriteTool, GradedSegment,
+    GIT_WRITE_CAPABILITY_ID, GIT_WRITE_TIMEOUT_MS, GIT_WRITE_TOOL_DESCRIPTION, GIT_WRITE_TOOL_NAME,
+    REFUSAL_L3_PREFIX, REFUSAL_MORPH_PREFIX, REFUSAL_OFFLIST_PREFIX,
+};
 pub use guardrail::{LeakedCredentialKind, PreCallGuardError, ToolGuardrail, TripwireScanResult};
 pub use mcp::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, McpClient, McpContent, McpError,

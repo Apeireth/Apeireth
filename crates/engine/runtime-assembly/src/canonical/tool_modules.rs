@@ -9,9 +9,10 @@ use std::sync::Arc;
 use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::education::EducationTool;
 use apeireth_tools_canonical::{
-    apply_patch_capability, authorized_file_write_policy, AroundPolicy, FetchConfig, FetchTool,
-    FilesystemTool, ObservedGate, PipelinedCapability, RepoTool, SearchTool, SelfStatusSource,
-    SelfStatusTool, ShellTool, ToolExecutionPipeline, TrustedShellConfig, DEFAULT_MAX_TIMEOUT_MS,
+    apply_patch_capability, authorized_file_write_policy, authorized_git_write_policy,
+    git_write_capability, AroundPolicy, FetchConfig, FetchTool, FilesystemTool, ObservedGate,
+    PipelinedCapability, RepoTool, SearchTool, SelfStatusSource, SelfStatusTool, ShellTool,
+    ToolExecutionPipeline, TrustedShellConfig, DEFAULT_MAX_TIMEOUT_MS,
 };
 
 use super::capability::CapabilityProvider;
@@ -333,7 +334,8 @@ impl CapabilityProvider for SelfStatusModule {
 /// 级 —— 每次写入都停在人工审批 (与本地审批面板 / IM 审批卡同链); 设置可开
 /// 「自动放行已读文件的修改」档, 但删除/新建永不自动放行。
 ///
-/// git 写边界 (件三): git 提交等写操作不提供工具, 属设计边界 (工具描述同文)。
+/// git 写边界 (件三, 分级语义版): 仓库写操作走分级词表 (`tool.git_write`),
+/// L1 可逆默认人批 / L2 出网永远人批 / L3 毁灭无工具面 (工具描述同文)。
 pub struct ApplyPatchModule {
     tool: Arc<dyn ToolCapability>,
 }
@@ -354,6 +356,41 @@ impl ApplyPatchModule {
 impl CapabilityProvider for ApplyPatchModule {
     fn id(&self) -> &str {
         "module.tool.apply_patch"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the graded git-write tool (`tool.git_write`, 干活能力轴 P1).
+///
+/// 分级词表: L1 可逆 (add/commit/branch 建·切/tag 本地) 默认人批, 设置可开
+/// 「自动放行 L1」档; L2 出网 (push/fetch/remote) **永远人批** (无自动放行档,
+/// 会话预设也不得越人); L3 毁灭 (改史/强推/引用删除) **无工具面** —— 词法分级
+/// 拒绝即帧。执行走受控通道 (结构化 argv + 工作区限域 + 超时 `timeout.*` +
+/// 输出归一)。分级风险档位由治理层的分级钩子承载 (与本地审批面板 / IM 审批卡
+/// 同链), 本模块只接工具面。
+pub struct GitWriteModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl GitWriteModule {
+    /// Create the graded git-write module over the workspace root.
+    pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
+        let tool = git_write_capability(workspace_root, authorized_git_write_policy());
+        Self { tool }
+    }
+
+    /// Access the underlying (pipeline-wrapped) git-write capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for GitWriteModule {
+    fn id(&self) -> &str {
+        "module.tool.git_write"
     }
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {

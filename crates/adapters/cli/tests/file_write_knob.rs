@@ -209,17 +209,32 @@ async fn disabled_level_leaves_the_write_tool_unauthorized() {
 }
 
 /// git 写边界声明同样落在文档面 (件三: 工具描述与 docs 同文)。
+///
+/// 断言演进 (D-P1「git 写分级上架」): 旧口径「git 写一律无工具」改为**分级
+/// 语义** —— L1 默认人批 / L2 永远人批 / L3 毁灭无工具面, 旧短语换成新短语。
 #[test]
-fn docs_state_the_git_write_boundary() {
+fn docs_state_the_graded_git_write_boundary() {
     let user_manual = include_str!("../../../../docs/02-guides/user-manual.md");
     assert!(
-        user_manual.contains("git 提交等写操作**不提供工具**"),
-        "user manual must state the git write boundary"
+        user_manual.contains("git 写边界（分级语义"),
+        "user manual must state the graded git write boundary"
+    );
+    assert!(
+        user_manual.contains("**L2 出网**") && user_manual.contains("无自动放行档"),
+        "user manual must state the L2 forever-approval rule"
+    );
+    assert!(
+        user_manual.contains("永远没有工具面"),
+        "user manual must state that L3 has no tool surface"
     );
     let api = include_str!("../../../../docs/03-reference/api.md");
     assert!(
-        api.contains("git 提交等写操作不提供工具，属设计边界"),
-        "api reference must state the git write boundary"
+        api.contains("L3 毁灭级永远无工具"),
+        "api reference must state that L3 has no tool surface"
+    );
+    assert!(
+        api.contains("`tool.git_write`"),
+        "api reference must carry the graded git write tool row"
     );
     // 与工具描述的边界文案同源 (同一事实, 两种语言面)。
     assert!(GIT_WRITE_BOUNDARY_NOTE.contains("none exists"));

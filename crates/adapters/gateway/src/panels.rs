@@ -49,6 +49,11 @@ pub struct GatewayState {
     /// approval resolve), resolved once at assembly from env
     /// `APEIRETH_GATEWAY_TOKEN` (see [`crate::canonical_entry::GatewayTokenGate`]).
     pub token_gate: crate::canonical_entry::GatewayTokenGate,
+    /// Graceful-shutdown trigger (W2-① resident form): fired by the token-gated
+    /// `/v1/admin/shutdown` endpoint; the serve loop stops, writes the closing
+    /// audit fact and flushes the observation archive (see
+    /// [`crate::canonical_entry::serve_with_shutdown`]).
+    pub shutdown: Arc<crate::shutdown::ShutdownTrigger>,
 }
 
 // ---------------------------------------------------------------------------
