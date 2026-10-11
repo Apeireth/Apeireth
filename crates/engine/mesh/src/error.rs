@@ -100,6 +100,19 @@ pub enum MeshError {
     /// The caller's deadline elapsed before an outcome arrived.
     #[error("mesh call exceeded its deadline")]
     DeadlineExceeded,
+
+    /// A simultaneous-open attempt produced no authenticated connection
+    /// inside its bounded window, or could not honestly be started (stale,
+    /// expired, or refused presence; no dialable candidate; the attempt
+    /// limit). This is the caller's signal to fall back to the relay path —
+    /// never to retry without bound.
+    #[error("punch to {peer} produced no connection: {reason}")]
+    PunchFailed {
+        /// The peer that could not be reached directly.
+        peer: String,
+        /// Why the attempt did not produce a connection.
+        reason: String,
+    },
 }
 
 impl MeshError {
