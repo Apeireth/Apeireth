@@ -20,8 +20,8 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_core::stored_doc::{self, DocCompat};
 use apeireth_orchestration::self_tuning::{
-    install_effective_values, RetrievalHitMissSignal, SelfTuningEngine, TunableParam, TuningEvent,
-    TuningRecord, TuningSignal, TuningValues,
+    install_effective_values, RetrievalHitMissSignal, SelfTuningEngine, TunableParam, TuningRecord,
+    TuningSignal, TuningValues,
 };
 
 /// 学习日志文件名 (数据目录, 与 session db 同目录落位)。
@@ -112,33 +112,12 @@ impl SelfTuningWire {
         Some(record)
     }
 
-    /// 直接观察一条事件 (未接信号的接口预留入口; 生产只走真接信号)。
-    pub fn observe(&self, event: TuningEvent) -> Option<TuningRecord> {
-        let mut engine = self
-            .engine
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let record = engine.observe(event)?;
-        drop(engine);
-        self.persist_and_apply(&record);
-        Some(record)
-    }
-
     /// 当前生效的四个体验参数值 (引擎权威)。
     pub fn effective_values(&self) -> TuningValues {
         self.engine
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .effective_values()
-    }
-
-    /// 全部调整记录 (进程内镜像; 持久镜像是 tuning-log.jsonl)。
-    pub fn history(&self) -> Vec<TuningRecord> {
-        self.engine
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .history()
-            .to_vec()
     }
 
     /// 日志追加失败计数 (0 装诚实: 持久化失败不静默)。

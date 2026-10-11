@@ -942,11 +942,6 @@ impl App {
             tab.messages.push(message);
         }
     }
-
-    /// 是否有流式回合在途。
-    pub fn is_streaming(&self) -> bool {
-        self.tabs.iter().any(|tab| tab.pending.is_some())
-    }
 }
 
 fn apply_tool_event(assistant: &mut AssistantMessage, event: ToolEvent) {

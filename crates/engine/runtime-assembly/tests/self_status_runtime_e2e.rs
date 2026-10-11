@@ -26,6 +26,19 @@ fn clock() -> Arc<dyn Clock> {
     apeireth_core::kernel::system_clock()
 }
 
+/// 调参生效值 override 是**进程级全局槽** (`install_effective_values` /
+/// `clear_effective_overrides`): 同一测试二进制里凡触碰该槽的用例必须串行,
+/// 否则「装上/清掉」的窗口会打断并行用例对生效值的断言 (与库内测试
+/// `canonical/self_tuning_wire.rs` 的 `TUNING_GLOBAL_GUARD` 同一隔离原则,
+/// 各测试二进制进程内各自互斥)。测试隔离用锁, 不改产品语义。
+static TUNING_SLOT_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn lock_tuning_slot() -> std::sync::MutexGuard<'static, ()> {
+    TUNING_SLOT_GUARD
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// 与生产同款的最小装配: 记忆槽关闭 (无后端注入), 工具槽默认开。
 fn base_config() -> ProductionModulesConfig {
     ProductionModulesConfig {
@@ -129,6 +142,7 @@ async fn identity_reports_product_workspace_version_and_runtime_role() {
 
 #[tokio::test]
 async fn capability_roster_matches_the_effective_assembly_switches() {
+    let _slot = lock_tuning_slot();
     let mut config = base_config();
     config.organs = true;
     config.education = true;
@@ -254,6 +268,7 @@ async fn memory_ledger_counts_match_the_real_stores_without_echoing_content() {
 
 #[tokio::test]
 async fn missing_data_probes_are_explicit_null_with_reasons() {
+    let _slot = lock_tuning_slot();
     // 取值断言的确定性: 显式装基线生效值, 不吃宿主 env 的偶然值。
     apeireth_orchestration::self_tuning::install_effective_values(TuningValues::baseline());
     let (_, tool) = build(base_config(), ProductionBackends::default());
@@ -329,6 +344,7 @@ async fn credential_presence_is_boolean_and_never_echoes_the_credential() {
 
 #[tokio::test]
 async fn tuning_section_reports_sliders_preset_and_self_learning_switch() {
+    let _slot = lock_tuning_slot();
     // 自学习生效 = 接线 AND 记忆召回 (信号链挂记忆召回模块, 按实际注册条件
     // 取值); 取值为生效值 (未设旋钮 = 全基线)。
     let dir = tempfile::tempdir().expect("temp dir");

@@ -31,6 +31,20 @@
 
 **零债开场白**：W1 前先清既有债（src-tauri 告警/登记欠账）。
 
+## 债栏（登记债落账，宪章 §一.2「见债必还」的登记面）
+
+> 清偿/留账全文见 [zero-debt-opening-clearance-2026-10-12.md](zero-debt-opening-clearance-2026-10-12.md)（清偿对照表 + 门禁证据）。
+> **零债开场白已收**（2026-10-12）：src-tauri clippy 55→0、ratatui 0.30 迁移（P11 根治）、file_lock 负载 flake 定根、全局槽竞态复核闭合、孤儿/死面清理。
+
+| # | 登记债 | 卡点 / 理由 | 落点 |
+|---|---|---|---|
+| D1 | 台账 §2 挂账族（真机点击流 / live E2E 换 key / embedding 端点） | 需主人人工、有效凭证、可用端点 | `live-verification-ledger.md` §2 原行 |
+| D2 | stage123-gap-matrix 挂账行（物理多签 v2.1 / UpgradeCycle 留白 / 阈值校准 / Kani 真接线） | 拍板推迟或需阶段实测校准；产品语义红线禁本批动 | 各行理由在册 |
+| D3 | 前端欠账 6 项 + 设计系统仍断面 | 前端产品/审美工作，观感红线 | `docs/design/frontend-handoff.md` §6 |
+| D4 | reflexion 文件并发偶发 flake（台账 #57） | 疑与 file_lock 同根，本批定根后**待复跑观察定性**，不虚报已消 | 台账 #57 顺记 |
+| D5 | deny.toml `[bans]` v1 时代 duplicate skip 条目理由对账 | 非本批造成；deps 治理批复核 | `deny.toml` |
+| D6 | `TunableParam::effective()` 宿主 env 测试敏感面 | 非竞态；测试侧减敏待测试治理批统一做 | 清偿表 §5 N6 |
+
 ## 与既有账目的关系
 
 - 性能红行现状见 `reports/benchmark-reproduction.md`；开关权力现状见 `docs/02-guides/capability-switch-power-audit.md`；

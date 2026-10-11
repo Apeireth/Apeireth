@@ -109,7 +109,8 @@ skip = [
     { name = "fallible-iterator", reason = "postgres 决定" },
     { name = "fancy-regex", reason = "regex 决定" },
     { name = "hmac", reason = "0.12 (apeireth-keyring) + 0.13 (postgres-protocol)" },
-    { name = "lru", reason = "0.12.5 (ratatui 固定) vs 0.18.2 — 0.12 API 不兼容 (NonZeroUsize), ratatui 0.30 已移除 0.12, e2e 已升 0.30" },
+    # lru duplicate 已随 ratatui 0.30 迁移消失 (2026-10-12: 0.12 线出树, 全树单一
+    # 0.18.5 修复线), 对应 skip 退役清空 (原理由: 0.12.5 (ratatui 固定) vs 0.18.2)。
     { name = "notify", reason = "0.6 vs 0.7 — 等所有 consumer 升 0.7" },
     { name = "ratatui", reason = "0.x 跨 minor — workspace 决定" },
     { name = "rustc-hash", reason = "tokio / anyhow 决定" },
@@ -178,13 +179,10 @@ ignore = [
     #   同批清空 audit.toml 20 条与 cargo-audit.yml 21 条过期 ignore (三处口径本就
     #   漂移: 20/10/21), 此后三处同步为空; 新增 ignore 须三处同步并写理由。
     #
-    # 2026-10-03: 首次破 0-ignore (非 false-positive, 是 transitive 未修复面):
-    # apeireth-tui (驾驶舱) → ratatui 0.29 → paste / lru 0.12。三条根治同一路径 ——
-    # ratatui 0.29 → 0.30 迁移 (0.30 去 paste、lru 脱离 0.12 线; 仓内 e2e 已用 0.30,
-    # 见上方 lru skip 理由), TUI 迁移属模块重组级大改, 单列计划执行; 迁移前在此
-    # 短接 —— 不宣称风险为零, 只是当前无修复版可用。三处同步: audit.toml /
-    # cargo-audit.yml --ignore。
-    "RUSTSEC-2024-0436",  # paste 1.0.15 unmaintained (停维护, 非漏洞) - ratatui 0.29 proc-macro 链, 1.x 已归档无修复
-    "RUSTSEC-2026-0002",  # lru 0.12.5 unsound (IterMut Stacked Borrows) - ratatui 0.29 固定 0.12 线, 该线无修复版
-    "RUSTSEC-2026-0253",  # lru 0.12.5 unsound (pop() panic-safety UAF) - 同上, 同根治路径
+    # 2026-10-03: 曾首次破 0-ignore (非 false-positive, 是 transitive 未修复面):
+    # apeireth-tui (驾驶舱) → ratatui 0.29 → paste / lru 0.12, 三条 ignore 短接。
+    # 2026-10-12 零债清偿批: ratatui 0.29 → 0.30 迁移落地 (0.30 去 paste、lru 升
+    # 0.18.5 修复线), 依赖树复核 paste 已不存在、lru 单一 0.18.5 —— 三条 transitive
+    # 面已消, ignore 随之清空 (advisory-not-detected), 回归 0-ignore austere 模式。
+    # 同步清 audit.toml 与 cargo-audit.yml --ignore (三处同步)。
 ]

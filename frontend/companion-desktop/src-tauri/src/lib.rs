@@ -278,12 +278,178 @@ fn toggle_quick_window(app: tauri::AppHandle) {
     }
 }
 
+// ============================================================
+// 桌宠常驻窗（presence 第四个投影，00-PHILOSOPHY §5）
+// ============================================================
+
+/// 桌宠开关的纯决策（可单测）。与快捷窗同一条销毁纪律：用户关闭 = 先隐
+/// 身影再销毁，绝不留「用户以为关掉、实际藏着」的透明窗（幽灵窗教训见
+/// `quick_window_action`）。互斥礼让的 hide/show 不走本表——那是常驻面的
+/// 视觉礼让，窗体本体一直在场（重建零成本、状态不丢）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PetWindowAction {
+    /// 窗口可见：关闭（销毁）。
+    Close,
+    /// 窗口存在但不可见：唤起。
+    Show,
+    /// 窗口不存在（已销毁）：新开。
+    Create,
+}
+
+fn pet_window_action(exists: bool, visible: bool) -> PetWindowAction {
+    match (exists, visible) {
+        (true, true) => PetWindowAction::Close,
+        (true, false) => PetWindowAction::Show,
+        (false, _) => PetWindowAction::Create,
+    }
+}
+
+/// 互斥礼让的纯决策（可单测）：主窗（场景窗）在场呈现时桌宠隐身礼让；
+/// 主窗收起（关闭进托盘）时桌宠接管常驻。两份显影不抢资源
+/// （00-PHILOSOPHY §5「互斥礼让」）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PetLeeway {
+    Show,
+    Hide,
+}
+
+fn pet_leeway(main_window_presenting: bool) -> PetLeeway {
+    if main_window_presenting {
+        PetLeeway::Hide
+    } else {
+        PetLeeway::Show
+    }
+}
+
+/// 桌宠鼠标穿透态。穿透后窗内收不到任何指针事件，所以托盘菜单必须能翻回
+/// （窗内右键菜单此时已不可达）。
+static PET_CLICK_THROUGH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 桌宠窗统一构建入口（启动预建 + 托盘/互斥唤起共用同一组参数）。
+/// 透明、置顶、无边框、不进任务栏、不可缩放；默认落位主显示器右下角
+/// （桌宠的常驻位）。加载 `index.html?window=pet`（main.ts 角色路由）。
+fn build_pet_window(app: &tauri::AppHandle, visible: bool) -> tauri::Result<tauri::WebviewWindow> {
+    let (width, height) = (220.0_f64, 260.0_f64);
+    let mut builder =
+        WebviewWindowBuilder::new(app, "pet", WebviewUrl::App("index.html?window=pet".into()))
+            .title("Apeireth 桌宠")
+            .inner_size(width, height)
+            .decorations(false)
+            .transparent(true)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .shadow(false)
+            .visible(visible);
+    if let Ok(Some(monitor)) = app.primary_monitor() {
+        let size = monitor.size();
+        let scale = monitor.scale_factor();
+        let work_w = f64::from(size.width) / scale;
+        let work_h = f64::from(size.height) / scale;
+        builder = builder.position(work_w - width - 24.0, work_h - height - 24.0);
+    }
+    let window = builder.build()?;
+    // 跟随记忆中的穿透态（托盘开关可能先于窗创建）
+    let _ = window
+        .set_ignore_cursor_events(PET_CLICK_THROUGH.load(std::sync::atomic::Ordering::Relaxed));
+    Ok(window)
+}
+
+/// 桌宠接管常驻（互斥礼让的 Show 臂）：不存在则建，存在则唤起。
+/// 不抢焦点——他是常驻在场，不是弹窗。
+fn show_pet_window(app: &tauri::AppHandle) {
+    match app.get_webview_window("pet") {
+        Some(window) => {
+            let _ = window.show();
+        }
+        None => {
+            if let Err(error) = build_pet_window(app, true) {
+                eprintln!("pet window create failed: {error}");
+            }
+        }
+    }
+}
+
+/// 互斥礼让应用：主窗在场 → 桌宠隐身；主窗收起 → 桌宠接管。
+fn apply_pet_leeway(app: &tauri::AppHandle, main_window_presenting: bool) {
+    match pet_leeway(main_window_presenting) {
+        PetLeeway::Show => show_pet_window(app),
+        PetLeeway::Hide => {
+            if let Some(pet) = app.get_webview_window("pet") {
+                let _ = pet.hide();
+            }
+        }
+    }
+}
+
+/// 桌宠外部处决命令：「隐藏桌宠」= 真正关闭（先隐身影再销毁），与快捷窗
+/// 同一拆除纪律；托盘「桌宠」再点 = 新开。
+#[tauri::command]
+fn close_pet_window(app: tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("pet") {
+        let _ = window.hide();
+        let _ = window.destroy();
+    }
+}
+
+#[tauri::command]
+fn toggle_pet_window(app: tauri::AppHandle) {
+    let existing = app.get_webview_window("pet");
+    let visible = existing
+        .as_ref()
+        .map(|window| window.is_visible().unwrap_or(false))
+        .unwrap_or(false);
+    match pet_window_action(existing.is_some(), visible) {
+        PetWindowAction::Close => {
+            if let Some(window) = existing {
+                let _ = window.hide();
+                let _ = window.destroy();
+            }
+        }
+        PetWindowAction::Show => {
+            if let Some(window) = existing {
+                let _ = window.show();
+            }
+        }
+        PetWindowAction::Create => {
+            if let Err(error) = build_pet_window(&app, true) {
+                eprintln!("pet window create failed: {error}");
+            }
+        }
+    }
+}
+
+/// 右键卷宗入口（00-PHILOSOPHY §5）：唤起主窗并把导航目标递给壳层
+/// （`shell-target` 事件，App.svelte 按 shell-nav 目标表改道）。
+#[tauri::command]
+fn open_main_target(app: tauri::AppHandle, target: String) {
+    use tauri::Emitter;
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.emit("shell-target", target);
+    }
+}
+
+/// 桌宠鼠标穿透开关。穿透态由托盘「桌宠穿透」兜底翻回（穿透后窗内点不到
+/// 任何东西，右键菜单不可达）。
+#[tauri::command]
+fn set_pet_click_through(app: tauri::AppHandle, enabled: bool) {
+    PET_CLICK_THROUGH.store(enabled, std::sync::atomic::Ordering::Relaxed);
+    if let Some(window) = app.get_webview_window("pet") {
+        let _ = window.set_ignore_cursor_events(enabled);
+    }
+}
+
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let show = MenuItem::with_id(app, "show", "打开主窗", true, None::<&str>)?;
     let quick = MenuItem::with_id(app, "quick", "快捷窗口", true, None::<&str>)?;
+    let pet = MenuItem::with_id(app, "pet", "桌宠", true, None::<&str>)?;
+    let pet_through = MenuItem::with_id(app, "pet_through", "桌宠鼠标穿透", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
-    Menu::with_items(app, &[&show, &quick, &settings, &quit])
+    Menu::with_items(app, &[&show, &quick, &pet, &pet_through, &settings, &quit])
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -332,6 +498,8 @@ pub fn run() {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
+            // 互斥礼让: 主窗被唤到前台, 桌宠隐身
+            apply_pet_leeway(app, true);
         }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -362,7 +530,11 @@ pub fn run() {
             read_tuning_log,
             provider_proxy::provider_request,
             open_settings,
-            toggle_quick_window
+            toggle_quick_window,
+            close_pet_window,
+            toggle_pet_window,
+            open_main_target,
+            set_pet_click_through
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -395,6 +567,9 @@ pub fn run() {
             // 快捷窗 (启动预建、初始隐藏; 托盘「快捷窗口」新开/唤起/关闭)
             let _ = build_quick_window(app.handle(), false);
 
+            // 桌宠常驻窗 (启动预建、初始隐藏; 主窗在场即互斥礼让, 主窗收起接管)
+            let _ = build_pet_window(app.handle(), false);
+
             // 托盘
             let menu = build_menu(&handle)?;
             let _tray = TrayIconBuilder::with_id("main")
@@ -409,8 +584,15 @@ pub fn run() {
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
+                        // 互斥礼让: 主窗在场, 桌宠隐身
+                        apply_pet_leeway(app, true);
                     }
                     "quick" => toggle_quick_window(app.clone()),
+                    "pet" => toggle_pet_window(app.clone()),
+                    "pet_through" => {
+                        let next = !PET_CLICK_THROUGH.load(std::sync::atomic::Ordering::Relaxed);
+                        set_pet_click_through(app.clone(), next);
+                    }
                     "settings" => open_settings(app.clone()),
                     _ => {}
                 })
@@ -426,6 +608,8 @@ pub fn run() {
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
+                        // 互斥礼让: 主窗在场, 桌宠隐身
+                        apply_pet_leeway(app, true);
                     }
                 })
                 .build(&handle)?;
@@ -435,9 +619,18 @@ pub fn run() {
         .on_window_event(|window, event| {
             // 关闭主窗时隐藏到托盘, 不退出 (桌面伴随体常驻)
             if window.label() == "main" {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    let _ = window.hide();
-                    api.prevent_close();
+                match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        let _ = window.hide();
+                        api.prevent_close();
+                        // 互斥礼让: 主窗收起, 桌宠接管常驻 (00-PHILOSOPHY §5)
+                        apply_pet_leeway(window.app_handle(), false);
+                    }
+                    tauri::WindowEvent::Focused(true) => {
+                        // 互斥礼让: 主窗回到前台, 桌宠隐身 (两份显影不抢资源)
+                        apply_pet_leeway(window.app_handle(), true);
+                    }
+                    _ => {}
                 }
             }
         })
@@ -457,7 +650,10 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{quick_window_action, QuickWindowAction};
+    use super::{
+        pet_leeway, pet_window_action, quick_window_action, PetLeeway, PetWindowAction,
+        QuickWindowAction,
+    };
 
     /// 快捷窗生命周期决策表：可见 = 销毁关闭、存在不可见 = 唤起、不存在 = 新开。
     #[test]
@@ -495,5 +691,21 @@ mod tests {
         }
         assert_eq!(trace, ["create", "close", "create", "close"]);
         assert!(!exists);
+    }
+
+    /// 桌宠开关决策表：与快捷窗同一条销毁纪律（可见 = 销毁关闭、存在不可见 =
+    /// 唤起、不存在 = 新开），用户关闭路径绝不存在「隐藏中的透明窗」。
+    #[test]
+    fn pet_window_toggle_decision_table() {
+        assert_eq!(pet_window_action(true, true), PetWindowAction::Close);
+        assert_eq!(pet_window_action(true, false), PetWindowAction::Show);
+        assert_eq!(pet_window_action(false, false), PetWindowAction::Create);
+    }
+
+    /// 互斥礼让决策表：主窗在场 → 桌宠隐身；主窗收起 → 桌宠接管常驻。
+    #[test]
+    fn pet_leeway_follows_main_window_presence() {
+        assert_eq!(pet_leeway(true), PetLeeway::Hide);
+        assert_eq!(pet_leeway(false), PetLeeway::Show);
     }
 }

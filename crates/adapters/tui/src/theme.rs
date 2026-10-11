@@ -26,11 +26,6 @@ impl MotionMode {
         }
     }
 
-    /// 是否为全开档。
-    pub fn is_full(self) -> bool {
-        matches!(self, Self::Full)
-    }
-
     /// 档位的上屏名。
     pub fn label(self) -> &'static str {
         match self {

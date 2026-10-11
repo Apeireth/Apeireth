@@ -13,6 +13,9 @@
 use std::path::{Path, PathBuf};
 
 use apeireth_core::stored_doc::DocCompat;
+// Workspace policy (clippy.toml): fs_err over std::fs, so filesystem errors
+// carry the path that failed.
+use fs_err as fs;
 
 use crate::stored_config;
 
@@ -49,8 +52,7 @@ pub fn load_workspace_dir(app_data_dir: &Path) -> Result<Option<PathBuf>, String
 
 /// Persist the workspace dir (non-secret) to the app-data config.
 pub fn persist_workspace_dir(app_data_dir: &Path, dir: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(app_data_dir)
-        .map_err(|e| format!("failed to create app-data dir: {e}"))?;
+    fs::create_dir_all(app_data_dir).map_err(|e| format!("failed to create app-data dir: {e}"))?;
     let config = CompanionConfig {
         workspace_dir: Some(dir.to_string_lossy().to_string()),
     };
@@ -91,7 +93,7 @@ pub fn resolve_store_dir(
 /// Normalize a user-supplied directory to an absolute, canonical path without
 /// the Windows `\\?\` verbatim prefix `canonicalize` otherwise returns.
 pub fn normalize_dir(path: &Path) -> PathBuf {
-    match path.canonicalize() {
+    match fs::canonicalize(path) {
         Ok(canon) => match canon.to_string_lossy().strip_prefix(r"\\?\") {
             Some(stripped) => PathBuf::from(stripped),
             None => canon,
@@ -110,9 +112,9 @@ pub fn ensure_writable_dir(dir: &Path) -> Result<(), String> {
         return Err(format!("not a directory: {}", dir.display()));
     }
     let probe = dir.join(format!(".apeireth-write-probe-{}", std::process::id()));
-    std::fs::write(&probe, b"")
+    fs::write(&probe, b"")
         .map_err(|e| format!("directory is not writable ({}): {e}", dir.display()))?;
-    let _ = std::fs::remove_file(&probe);
+    let _ = fs::remove_file(&probe);
     Ok(())
 }
 
@@ -183,19 +185,19 @@ mod tests {
 
         let file =
             std::env::temp_dir().join(format!("apeireth-ws-file-{}.txt", std::process::id()));
-        std::fs::write(&file, b"x").unwrap();
+        fs::write(&file, b"x").unwrap();
         assert!(ensure_writable_dir(&file).is_err(), "a file must fail");
-        let _ = std::fs::remove_file(&file);
+        let _ = fs::remove_file(&file);
     }
 
     #[test]
     fn ensure_writable_dir_accepts_writable_directory_and_cleans_probe() {
         let dir = std::env::temp_dir().join(format!("apeireth-ws-ok-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&dir).unwrap();
         assert!(ensure_writable_dir(&dir).is_ok());
-        let entries = std::fs::read_dir(&dir).unwrap().count();
+        let entries = fs::read_dir(&dir).unwrap().count();
         assert_eq!(entries, 0, "probe file must be removed");
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -222,8 +224,8 @@ mod tests {
     fn scratch_dir(tag: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("apeireth-ws-stored-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
         dir
     }
 
@@ -232,17 +234,17 @@ mod tests {
     fn workspace_config_rejects_corrupt_file_without_default_fallback() {
         let app_data = scratch_dir("reject");
         let target = app_data.join("real-workspace");
-        std::fs::create_dir_all(&target).unwrap();
+        fs::create_dir_all(&target).unwrap();
         let path = app_data.join(WORKSPACE_CONFIG_FILE);
 
-        std::fs::write(&path, b"{ this is not json").unwrap();
+        fs::write(&path, b"{ this is not json").unwrap();
         assert!(
             load_workspace_dir(&app_data).is_err(),
             "坏 JSON 必须拒开而不是回退默认落位"
         );
 
         // 信封形状但串档: 同样拒开。
-        std::fs::write(
+        fs::write(
             &path,
             format!(
                 r#"{{"name":"other-doc","version":1,"compatible_versions":[1],"body":{{"workspace_dir":"{}"}}}}"#,
@@ -251,7 +253,7 @@ mod tests {
         )
         .unwrap();
         assert!(load_workspace_dir(&app_data).is_err(), "串档信封必须拒开");
-        let _ = std::fs::remove_dir_all(&app_data);
+        let _ = fs::remove_dir_all(&app_data);
     }
 
     /// 好数据路径零回归: 恢复出的配置与旧裸体写端输出逐字节等价。
@@ -259,10 +261,10 @@ mod tests {
     fn workspace_config_good_data_payload_stays_byte_equivalent() {
         let app_data = scratch_dir("equiv");
         let target = app_data.join("real-workspace");
-        std::fs::create_dir_all(&target).unwrap();
+        fs::create_dir_all(&target).unwrap();
         persist_workspace_dir(&app_data, &target).unwrap();
 
-        let raw = std::fs::read(app_data.join(WORKSPACE_CONFIG_FILE)).unwrap();
+        let raw = fs::read(app_data.join(WORKSPACE_CONFIG_FILE)).unwrap();
         let doc: apeireth_core::stored_doc::StoredDoc<CompanionConfig> =
             serde_json::from_slice(&raw).expect("落盘是存储文档信封");
         let legacy_bare = serde_json::to_string_pretty(&doc.body).unwrap();
@@ -279,7 +281,7 @@ mod tests {
             Some(target.clone()),
             "好数据恢复行为零回归"
         );
-        let _ = std::fs::remove_dir_all(&app_data);
+        let _ = fs::remove_dir_all(&app_data);
     }
 
     /// 旧文件兼容: 前信封裸体配置迁移前后都可读; 默认打开不静默迁移; 迁移留审计。
@@ -287,17 +289,17 @@ mod tests {
     fn workspace_config_legacy_file_is_readable_before_and_after_explicit_migration() {
         let app_data = scratch_dir("legacy");
         let target = app_data.join("real-workspace");
-        std::fs::create_dir_all(&target).unwrap();
+        fs::create_dir_all(&target).unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&CompanionConfig {
             workspace_dir: Some(target.to_string_lossy().to_string()),
         })
         .unwrap();
-        std::fs::write(app_data.join(WORKSPACE_CONFIG_FILE), &legacy_bytes).unwrap();
+        fs::write(app_data.join(WORKSPACE_CONFIG_FILE), &legacy_bytes).unwrap();
 
         // 迁移前可读 (旧裸体只读兼容), 文件字节不被改写。
         assert_eq!(load_workspace_dir(&app_data).unwrap(), Some(target.clone()));
         assert_eq!(
-            std::fs::read(app_data.join(WORKSPACE_CONFIG_FILE)).unwrap(),
+            fs::read(app_data.join(WORKSPACE_CONFIG_FILE)).unwrap(),
             legacy_bytes,
             "默认打开路径不得静默迁移"
         );
@@ -305,11 +307,11 @@ mod tests {
         // 显式迁移留审计。
         migrate_legacy_workspace_config(&app_data).expect("显式迁移必须成功");
         let audit_path = app_data.join(format!("{WORKSPACE_CONFIG_FILE}.migrate-audit.jsonl"));
-        let audit = std::fs::read_to_string(&audit_path).expect("显式迁移必须留审计");
+        let audit = fs::read_to_string(&audit_path).expect("显式迁移必须留审计");
         assert_eq!(audit.lines().count(), 1, "审计文件应恰一行: {audit}");
 
         // 迁移后仍可读, 内容不变。
         assert_eq!(load_workspace_dir(&app_data).unwrap(), Some(target));
-        let _ = std::fs::remove_dir_all(&app_data);
+        let _ = fs::remove_dir_all(&app_data);
     }
 }

@@ -23,9 +23,11 @@ name = "apeireth-tui"
 path = "src/main.rs"
 
 [dependencies]
-# 终端全屏渲染层 (ratatui) + 终端事件/控制层 (crossterm) —— 纯 Rust TUI 生态
-ratatui = "0.29"
-crossterm = "0.28"
+# 终端全屏渲染层 (ratatui) + 终端事件/控制层 (crossterm) —— 纯 Rust TUI 生态。
+# 0.30 配套 crossterm 0.29 (ratatui-crossterm 同版, 全树单版本; ratatui 0.30 不再拉
+# paste/lru 0.12 transitive 面, ROADMAP §4 P11 治本)。
+ratatui = "0.30"
+crossterm = "0.29"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

@@ -18,6 +18,9 @@ use crate::logging::{DesktopLogger, LogLevel};
 use crate::stored_config;
 use crate::workspace;
 use apeireth_core::stored_doc::{self, DocCompat};
+// Workspace policy (clippy.toml): fs_err over std::fs, so filesystem errors
+// carry the path that failed.
+use fs_err as fs;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -570,7 +573,7 @@ pub struct TuningLogRead {
 /// 文件缺失 = 空列表 (尚无自动调整); 单条坏行**读作不存在** —— 跳过并计数,
 /// 不砖化整个日志; 前信封旧裸体行只读兼容 (不静默迁移)。
 pub fn read_tuning_log_file(path: &Path) -> Result<TuningLogRead, String> {
-    match std::fs::metadata(path) {
+    match fs::metadata(path) {
         Ok(meta) if meta.len() > TUNING_LOG_MAX_BYTES => {
             return Err(format!(
                 "tuning log too large ({} bytes > {TUNING_LOG_MAX_BYTES}): {}",
@@ -840,7 +843,7 @@ impl BackendSupervisor {
         };
         let path = Self::provider_env_path(logger);
         if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            let _ = fs::create_dir_all(parent);
         }
         if let Err(error) =
             stored_config::save_config(&path, &provider_env_doc_compat(), &env.without_secrets())
@@ -859,7 +862,7 @@ impl BackendSupervisor {
         };
         let path = Self::capability_env_path(logger);
         if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            let _ = fs::create_dir_all(parent);
         }
         if let Err(error) = stored_config::save_config(&path, &capability_env_doc_compat(), env) {
             self.log_desktop(
@@ -1322,8 +1325,7 @@ impl BackendSupervisor {
             return HotApply::Failed("gateway endpoint not available".to_string());
         };
         let provider_env = self.provider_env.read().await.clone();
-        let provider_env =
-            provider_env.with_keychain_fallback(|provider| keychain::get_provider_key(provider));
+        let provider_env = provider_env.with_keychain_fallback(keychain::get_provider_key);
         let capabilities = self.capability_env.read().await.clone();
         let payload = AdminConfigRequest::from_env(&provider_env, &capabilities);
         let url = format!("{endpoint}/v1/admin/config");
@@ -1446,7 +1448,7 @@ impl BackendSupervisor {
     /// 否则 store 目录 (`resolve_store_dir`: workspace/.apeireth 或 app-data/data),
     /// 与后端接线层 `runtime-assembly::tuning_log_path` 同落位。
     pub async fn tuning_log_path(&self) -> PathBuf {
-        if let Some(value) = std::env::var("APEIRETH_SESSION_DB").ok() {
+        if let Ok(value) = std::env::var("APEIRETH_SESSION_DB") {
             let session_db = PathBuf::from(value);
             if session_db.is_absolute() {
                 if let Some(dir) = session_db.parent() {
@@ -1631,8 +1633,7 @@ impl BackendSupervisor {
         // later config changes can be classified hot-able or restart-required.
         *self.spawned_provider_env.write().await = provider_env.clone();
         *self.spawned_capability_env.write().await = self.capability_env.read().await.clone();
-        let provider_env =
-            provider_env.with_keychain_fallback(|provider| keychain::get_provider_key(provider));
+        let provider_env = provider_env.with_keychain_fallback(keychain::get_provider_key);
         for (key, value) in provider_env.env_pairs() {
             cmd.env(key, value);
         }
@@ -1665,16 +1666,16 @@ impl BackendSupervisor {
             let cognitive_env = std::env::var("APEIRETH_COGNITIVE_DB").ok();
             let anchor_session = session_env
                 .as_deref()
-                .is_none_or(|v| !Path::new(v).is_absolute());
+                .map_or(true, |v| !Path::new(v).is_absolute());
             let anchor_cognitive = cognitive_env
                 .as_deref()
-                .is_none_or(|v| !Path::new(v).is_absolute());
+                .map_or(true, |v| !Path::new(v).is_absolute());
 
             // Only create the store dir when we are actually going to anchor
             // paths into it: an explicit absolute env store dir is the user's
             // own location and must not cause app-data side effects.
             if anchor_session || anchor_cognitive {
-                let _ = std::fs::create_dir_all(&store_dir);
+                let _ = fs::create_dir_all(&store_dir);
             }
             if anchor_session {
                 cmd.env("APEIRETH_SESSION_DB", store_dir.join("sessions.sqlite3"));
@@ -2306,9 +2307,9 @@ mod tests {
     fn tuning_log_file_parses_jsonl_skips_bad_lines_and_missing_is_empty() {
         let dir =
             std::env::temp_dir().join(format!("apeireth-tuning-log-read-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&dir).unwrap();
         let path = dir.join(TUNING_LOG_FILE);
-        std::fs::write(
+        fs::write(
             &path,
             concat!(
                 "{\"seq\":1,\"param\":\"memory_fade\",\"previous\":1.0,\"next\":0.75,\"reason\":\"检索未命中偏多\",\"at_epoch_ms\":1000}\n",
@@ -2329,7 +2330,7 @@ mod tests {
         let missing = read_tuning_log_file(&dir.join("absent.jsonl")).expect("缺文件 = 空列表");
         assert!(missing.entries.is_empty());
         assert_eq!(missing.skipped, 0);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 逐记录信封行照读, 与旧裸体行共存 (每行独立版本戳, 逐行裁决)。
@@ -2337,14 +2338,14 @@ mod tests {
     fn tuning_log_file_reads_envelope_rows_and_legacy_rows_side_by_side() {
         let dir =
             std::env::temp_dir().join(format!("apeireth-tuning-log-env-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&dir).unwrap();
         let path = dir.join(TUNING_LOG_FILE);
         let legacy_line =
             "{\"seq\":1,\"param\":\"memory_fade\",\"previous\":1.0,\"next\":0.75,\"reason\":\"旧裸体行\",\"at_epoch_ms\":1000}";
         let envelope_line = format!(
             r#"{{"name":"{TUNING_LOG_DOC_NAME}","version":{TUNING_LOG_DOC_VERSION},"compatible_versions":[{TUNING_LOG_DOC_VERSION}],"body":{{"seq":2,"param":"tone_saturation","previous":0.2,"next":0.21,"reason":"信封行","at_epoch_ms":2000}}}}"#
         );
-        std::fs::write(&path, format!("{legacy_line}\n{envelope_line}\n")).unwrap();
+        fs::write(&path, format!("{legacy_line}\n{envelope_line}\n")).unwrap();
 
         let read = read_tuning_log_file(&path).expect("解析成功");
         assert_eq!(read.entries.len(), 2, "信封行与旧裸体行共存照读");
@@ -2356,7 +2357,7 @@ mod tests {
             "旧裸体好行必须逐字节等价恢复"
         );
         assert_eq!(read.entries[1].param, "tone_saturation");
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 旧版本持久化的 capability JSON（无 W2/W3 字段）必须仍能反序列化：
@@ -2588,8 +2589,8 @@ mod tests {
     fn config_scratch(tag: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("apeireth-env-config-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
         dir
     }
 
@@ -2599,7 +2600,7 @@ mod tests {
     fn provider_env_config_rejects_corrupt_file_without_default_fallback() {
         let dir = config_scratch("reject");
         let logger = DesktopLogger::new_in_dir(dir.join("logs")).expect("logger");
-        std::fs::write(dir.join("backend-provider-env.json"), b"{ this is not json").unwrap();
+        fs::write(dir.join("backend-provider-env.json"), b"{ this is not json").unwrap();
 
         assert!(
             BackendSupervisor::load_persisted_provider_env(&logger).is_err(),
@@ -2609,7 +2610,7 @@ mod tests {
             BackendSupervisor::with_logger_in_dir(dir.clone()).is_err(),
             "启动构造必须拒开坏配置"
         );
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 好数据路径零回归: 恢复出的配置与旧裸体写端输出逐字节等价。
@@ -2625,7 +2626,7 @@ mod tests {
         };
         supervisor.persist_provider_env(&env);
 
-        let raw = std::fs::read(dir.join("backend-provider-env.json")).unwrap();
+        let raw = fs::read(dir.join("backend-provider-env.json")).unwrap();
         let doc: stored_doc::StoredDoc<BackendProviderEnv> =
             serde_json::from_slice(&raw).expect("落盘是存储文档信封");
         assert_eq!(doc.name, PROVIDER_ENV_DOC_NAME);
@@ -2639,7 +2640,7 @@ mod tests {
             .expect("好配置可读")
             .expect("配置存在");
         assert_eq!(restored, env.without_secrets());
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 旧文件兼容: 前信封裸体配置迁移前后都可读; 默认打开不静默迁移; 迁移留审计。
@@ -2654,7 +2655,7 @@ mod tests {
         };
         let legacy_bytes = serde_json::to_vec_pretty(&env.without_secrets()).unwrap();
         let path = dir.join("backend-provider-env.json");
-        std::fs::write(&path, &legacy_bytes).unwrap();
+        fs::write(&path, &legacy_bytes).unwrap();
 
         // 迁移前可读 (旧裸体只读兼容), 文件字节不被改写。
         let before = BackendSupervisor::load_persisted_provider_env(&logger)
@@ -2662,16 +2663,15 @@ mod tests {
             .expect("配置存在");
         assert_eq!(before, env);
         assert_eq!(
-            std::fs::read(&path).unwrap(),
+            fs::read(&path).unwrap(),
             legacy_bytes,
             "默认打开路径不得静默迁移"
         );
 
         // 显式迁移留审计。
         BackendSupervisor::migrate_legacy_provider_env_config(&logger).expect("显式迁移必须成功");
-        let audit =
-            std::fs::read_to_string(dir.join("backend-provider-env.json.migrate-audit.jsonl"))
-                .expect("显式迁移必须留审计");
+        let audit = fs::read_to_string(dir.join("backend-provider-env.json.migrate-audit.jsonl"))
+            .expect("显式迁移必须留审计");
         assert_eq!(audit.lines().count(), 1, "审计文件应恰一行: {audit}");
 
         // 迁移后仍可读, 内容不变。
@@ -2679,7 +2679,7 @@ mod tests {
             .expect("迁移后必须可读")
             .expect("配置存在");
         assert_eq!(after, before);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 能力开关配置走同一套语义: 旧裸体兼容 + 显式迁移留审计。
@@ -2689,21 +2689,20 @@ mod tests {
         let logger = Arc::new(DesktopLogger::new_in_dir(dir.join("logs")).expect("logger"));
         let legacy_bytes = serde_json::to_vec_pretty(&BackendCapabilityEnv::default()).unwrap();
         let path = dir.join("backend-capability-env.json");
-        std::fs::write(&path, &legacy_bytes).unwrap();
+        fs::write(&path, &legacy_bytes).unwrap();
 
         let before = BackendSupervisor::load_persisted_capability_env(&logger)
             .expect("旧裸体配置必须可读")
             .expect("配置存在");
         assert_eq!(
-            std::fs::read(&path).unwrap(),
+            fs::read(&path).unwrap(),
             legacy_bytes,
             "默认打开路径不得静默迁移"
         );
 
         BackendSupervisor::migrate_legacy_capability_env_config(&logger).expect("显式迁移必须成功");
-        let audit =
-            std::fs::read_to_string(dir.join("backend-capability-env.json.migrate-audit.jsonl"))
-                .expect("显式迁移必须留审计");
+        let audit = fs::read_to_string(dir.join("backend-capability-env.json.migrate-audit.jsonl"))
+            .expect("显式迁移必须留审计");
         assert_eq!(audit.lines().count(), 1, "审计文件应恰一行: {audit}");
         let after = BackendSupervisor::load_persisted_capability_env(&logger)
             .expect("迁移后必须可读")
@@ -2712,6 +2711,6 @@ mod tests {
             serde_json::to_value(&after).unwrap(),
             serde_json::to_value(&before).unwrap()
         );
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 }
