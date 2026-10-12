@@ -163,7 +163,7 @@ jobs:
           if [ -z "$BASE" ]; then exit 0; fi
           # The workspace package version is the active release authority.
           CUR=$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          EXPECTED="${APEIRETH_VERSION:-2.0.0-rc.2}"
+          EXPECTED="${APEIRETH_VERSION:-2.0.0-rc.3}"
           echo "workspace.version = $CUR"
           if [ "$CUR" != "$EXPECTED" ]; then
             echo "::error::workspace.version 改动: $CUR (期望 $EXPECTED)"

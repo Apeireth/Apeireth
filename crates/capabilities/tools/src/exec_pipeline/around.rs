@@ -12,6 +12,7 @@
 use std::time::Duration;
 
 use apeireth_core::deadline::{clamp_timeout, Deadline, TimeoutError};
+use apeireth_core::kernel::SessionId;
 use apeireth_plugin::{FrozenInvocation, ToolCapability};
 use apeireth_protocol::canonical::{ToolCall, ToolResult};
 
@@ -116,10 +117,14 @@ impl AroundPolicy {
 /// Returns the final result together with the number of attempts made. The
 /// only error the stage itself produces is the closed timeout family: a failed
 /// result is a result, not a stage failure, and travels on to the next stage.
+/// `session` is the dispatching turn's session scope (see
+/// [`ToolCapability::invoke_in_session`]); it is `None` for host-side
+/// invocations that have no session.
 pub(crate) async fn run_around(
     tool: &dyn ToolCapability,
     call: &ToolCall,
     frozen: Option<&FrozenInvocation>,
+    session: Option<SessionId>,
     policy: &AroundPolicy,
 ) -> Result<(ToolResult, u32), PipelineFailure> {
     let timeout_ms = policy
@@ -144,9 +149,9 @@ pub(crate) async fn run_around(
         let attempt = match armed.as_mut() {
             Some((_deadline, notice)) => tokio::select! {
                 _ = notice.notified() => None,
-                result = tool.invoke_frozen(call, frozen) => Some(result),
+                result = tool.invoke_in_session(call, frozen, session) => Some(result),
             },
-            None => Some(tool.invoke_frozen(call, frozen).await),
+            None => Some(tool.invoke_in_session(call, frozen, session).await),
         };
         let Some(result) = attempt else {
             return Err(PipelineFailure::Timeout {

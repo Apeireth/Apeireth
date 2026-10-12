@@ -1214,7 +1214,10 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "providers", "capabilities": [ cap("providers.list", true, false, &["list"], true, !state.runtime.providers().is_empty()) ] },
             { "name": "runtime", "capabilities": [ cap("runtime.snapshot.read", true, false, &["read"], true, true) ] },
             { "name": "chat", "capabilities": [ cap("chat.completions", true, true, &["complete", "stream"], true, !state.runtime.providers().is_empty()) ] },
-            { "name": "sessions", "capabilities": [ cap("sessions.read", true, false, &["list"], sessions_supported, sessions_supported) ] },
+            { "name": "sessions", "capabilities": [
+                cap("sessions.read", true, false, &["list"], sessions_supported, sessions_supported),
+                cap("sessions.delete", false, true, &["delete"], true, true),
+            ] },
             { "name": "memory", "capabilities": memory },
             { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], tools_supported, tools_supported) ] },
             { "name": "permissions", "capabilities": [

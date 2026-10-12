@@ -46,6 +46,13 @@ pub struct TrustedShellConfig {
     /// 伴侣"): 开 = 文件限定工作区 + 断网 (AppContainer, 不可实施时**拒绝执行**,
     /// 绝不裸跑); 关 (`APEIRETH_SHELL_SANDBOX=0`) = 本机全权, 显式裸跑自担风险。
     pub sandbox: bool,
+    /// **文件写入总闸** (与受控写文件工具同一开关, 唯一来源, 内测整改):
+    /// 关 = shell 写意图 (重定向 / 删除类 / 写命令面) 拒绝即帧
+    /// (`pipeline.pre_deny`, 文案明示同受一闸); 开 = shell 行为不变
+    /// (写命令照旧走 guardrail / 人工审批链 / 既有风险映射)。
+    /// 默认关 (fail-closed) —— 开关名与权力必须相符: 没有写权力时 shell 也
+    /// 写不了文件。写意图判定见 [`crate::write_intent`]。
+    pub file_write: bool,
 }
 
 impl Default for TrustedShellConfig {
@@ -59,6 +66,9 @@ impl Default for TrustedShellConfig {
             max_stdout_bytes: 64 * 1024,
             max_stderr_bytes: 64 * 1024,
             sandbox: true,
+            // 文件写入总闸默认关 (fail-closed): shell 写命令与受控写文件工具
+            // 同受一闸, 未开闸时写意图拒绝即帧。
+            file_write: false,
         }
     }
 }
@@ -81,6 +91,15 @@ impl TrustedShellConfig {
     #[must_use]
     pub fn with_sandbox(mut self, sandbox: bool) -> Self {
         self.sandbox = sandbox;
+        self
+    }
+
+    /// 文件写入总闸 (与受控写文件工具同一开关, 唯一来源): 开 = shell 写命令
+    /// 行为不变; 关 = 写意图拒绝即帧。组装根把 `file_write` 开关值注入这里,
+    /// 开关名与权力相符 (内测整改)。
+    #[must_use]
+    pub fn with_file_write(mut self, file_write: bool) -> Self {
+        self.file_write = file_write;
         self
     }
 
@@ -373,6 +392,23 @@ impl ShellTool {
         OsString::from(value)
     }
 
+    /// 文件写入总闸拒绝即帧: 稳定 `pipeline.pre_deny` 帧 + 明示文案
+    /// 「文件写入开关未开——shell 写命令受同一总闸管辖」(拒绝信息即帧, 不是空话)。
+    fn write_gate_refusal(
+        &self,
+        call: &ToolCall,
+        hit: &crate::write_intent::WriteIntentHit,
+    ) -> ToolResult {
+        let failure = crate::exec_pipeline::PipelineFailure::PreDenied {
+            source: "shell_write_intent_gate".to_string(),
+            reason: format!(
+                "文件写入开关未开——shell 写命令受同一总闸管辖（file_write 唯一写总闸；命中: {}）",
+                hit.surface
+            ),
+        };
+        failure.emit(&call.id, Some("shell"))
+    }
+
     /// Builds a [`ProcessRequest`] from frozen fields only.
     ///
     /// This deliberately does not call `resolve_cwd_for`, `selected_shell`,
@@ -451,6 +487,16 @@ impl ShellTool {
                 ),
             )
             .with_name("shell"));
+        }
+
+        // 文件写入总闸 (内测实锤整改, 宪法级): `file_write` 是**唯一写总闸** ——
+        // 受控写文件工具与 shell 写命令同受此闸。总闸未开时写意图 (重定向 /
+        // 删除类 / 写命令面, 保守词法扫描) 拒绝即帧 (`pipeline.pre_deny`); 总闸
+        // 开时行为不变, 仍走本工具既有 guardrail / 审批链 / 风险映射。
+        if !self.config.file_write {
+            if let Some(hit) = crate::write_intent::scan_shell_write_intent(&params.command) {
+                return Err(self.write_gate_refusal(call, &hit));
+            }
         }
 
         // M13 (2026-09-24 审计): guardrail 前置守门接线 —— 冻结前 fail-closed
@@ -549,6 +595,17 @@ impl ShellTool {
     }
 
     async fn execute_frozen(&self, call: &ToolCall, frozen: &ShellFrozenInvocation) -> ToolResult {
+        // 文件写入总闸复核 (freeze→execute 时差): 审批等待期可达分钟级, 期间
+        // 总闸可能已关 —— 以执行时的闸状态对冻结脚本再扫一次写意图, 关闸后
+        // 冻结载荷同样拒绝即帧 (fail-closed)。
+        if !self.config.file_write {
+            if let Some(script) = frozen.shell_args.last() {
+                if let Some(hit) = crate::write_intent::scan_shell_write_intent(script) {
+                    return self.write_gate_refusal(call, &hit);
+                }
+            }
+        }
+
         // L 组 (2026-09-24 审计): freeze→execute TOCTOU 复核。审批等待期可
         // 达分钟级, 期间 frozen cwd 可能被替换成指向工作区外的 symlink ——
         // 冻结时 (build_frozen) 的包含校验届时已失效。执行前对 frozen cwd
@@ -946,7 +1003,10 @@ mod tests {
         // M13 (2026-09-24 审计): guardrail 守门在冻结前 fail-closed 接线。
         // 沙箱 (AppContainer) 是主墙, 但 APEIRETH_SHELL_SANDBOX=0 裸跑与
         // 审批卡之间必须有命令内容过滤这一层。
-        let tool = ShellTool::new(TrustedShellConfig::new("."));
+        // 总闸分层 (内测整改): 写意图总闸在 guardrail 之前 —— `rm -rf /` 既是
+        // 删除族写命令又是危险命令, 关闸时由总闸先拒 (见写闸测试的同款命令);
+        // 本测开闸验证 guardrail 层自身的拒绝面不因总闸接线而变化。
+        let tool = ShellTool::new(TrustedShellConfig::new(".").with_file_write(true));
         for command in [
             "rm -rf / --no-preserve-root",
             "netsh advfirewall set allprofiles off",
@@ -982,6 +1042,125 @@ mod tests {
             arguments: json!({ "command": "echo hi" }),
         };
         assert!(tool.freeze_invocation(&call).unwrap().is_some());
+    }
+
+    #[test]
+    fn file_write_gate_closed_denies_write_intent_with_pre_deny_frame() {
+        // 文件写入总闸关 (默认, fail-closed): shell 写命令与受控写文件工具同受
+        // 一闸 —— `echo xxx > file` 不再绕过开关写盘, 拒绝即帧 (`pipeline.pre_deny`)
+        // 且文案明示同受一闸。
+        let tmp = tempfile::tempdir().unwrap();
+        let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+        assert!(!tool.config().file_write, "文件写入总闸默认必须关");
+        for command in [
+            "echo xxx > file.txt",
+            "echo xxx >> file.txt",
+            "echo xxx 1> file.txt",
+            "del file.txt",
+            "mkdir new_dir",
+            // 删除族 + 高危破坏双面命令: 关闸时写意图总闸先拒 (稳定 pre_deny 帧)。
+            "rm -rf / --no-preserve-root",
+        ] {
+            let call = ToolCall {
+                id: "call_1".into(),
+                name: "shell".into(),
+                arguments: json!({ "command": command }),
+            };
+            let frozen = tool.freeze_invocation(&call);
+            let rendered = match frozen {
+                Err(result) => result.render(),
+                Ok(_) => panic!("{command} 总闸关时写意图必须拒绝即帧"),
+            };
+            assert!(
+                rendered.contains("pipeline.pre_deny"),
+                "{command}: {rendered}"
+            );
+            assert!(
+                rendered.contains("文件写入开关未开——shell 写命令受同一总闸管辖"),
+                "{command}: {rendered}"
+            );
+        }
+        assert!(
+            !tmp.path().join("file.txt").exists(),
+            "拒绝即帧 = 命令未执行, 文件不得落盘"
+        );
+    }
+
+    #[test]
+    fn file_write_gate_open_keeps_shell_behavior_unchanged() {
+        // file_write 开 → 行为不变: 写命令照常冻结进审批链 (审批/风险映射不变),
+        // 冻结载荷原样携带脚本。
+        let tmp = tempfile::tempdir().unwrap();
+        let tool =
+            ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_file_write(true));
+        assert!(tool.config().file_write);
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo xxx > file.txt" }),
+        };
+        let frozen = tool
+            .freeze_invocation(&call)
+            .expect("总闸开时写命令冻结必须放行 (行为不变)")
+            .expect("总闸开时写命令冻结必须有载荷");
+        let script = frozen.payload["shell_args"]
+            .as_array()
+            .and_then(|args| args.last())
+            .and_then(|arg| arg.as_str())
+            .unwrap_or_default();
+        assert_eq!(script, "echo xxx > file.txt", "冻结载荷原样携带脚本");
+    }
+
+    #[test]
+    fn file_write_gate_closed_keeps_read_only_commands_unchanged() {
+        // 只读命令零误伤: 总闸只拦写意图。
+        let tmp = tempfile::tempdir().unwrap();
+        let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+        for command in [
+            "echo hi",
+            "type file.txt",
+            "git status",
+            "cargo test --workspace",
+        ] {
+            let call = ToolCall {
+                id: "call_1".into(),
+                name: "shell".into(),
+                arguments: json!({ "command": command }),
+            };
+            assert!(
+                tool.freeze_invocation(&call).unwrap().is_some(),
+                "{command} 只读命令必须照常放行"
+            );
+        }
+    }
+
+    #[test]
+    fn file_write_gate_recheck_denies_frozen_payload_after_gate_closes() {
+        // freeze→execute 时差复核: 开闸时冻结的写载荷, 若执行时总闸已关,
+        // 同样拒绝即帧 (fail-closed)。
+        let tmp = tempfile::tempdir().unwrap();
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo xxx > file.txt" }),
+        };
+        let open_tool =
+            ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_file_write(true));
+        let frozen = open_tool.freeze_invocation(&call).unwrap().unwrap();
+
+        let closed_tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+        let result = tokio_test_invoke_frozen(&closed_tool, call, Some(&frozen));
+        let rendered = result.render();
+        assert!(!result.is_ok(), "关闸后的冻结写载荷必须拒绝");
+        assert!(rendered.contains("pipeline.pre_deny"), "{rendered}");
+        assert!(
+            rendered.contains("文件写入开关未开——shell 写命令受同一总闸管辖"),
+            "{rendered}"
+        );
+        assert!(
+            !tmp.path().join("file.txt").exists(),
+            "拒绝即帧 = 命令未执行, 文件不得落盘"
+        );
     }
 
     #[test]

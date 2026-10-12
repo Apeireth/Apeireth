@@ -1,12 +1,25 @@
 <script lang="ts">
   import {ChevronRight, FileText} from 'lucide-svelte';
-  import type {Conversation, ToolCallDetails, WorkbenchTurn} from '../types';
+  import type {
+    ApeirethConfig,
+    CapabilityManifest,
+    Conversation,
+    ToolCallDetails,
+    WorkbenchTurn,
+  } from '../types';
+  import MemoryView from '../MemoryView.svelte';
+  import DiaryView from '../views/DiaryView.svelte';
+  import {WORKBENCH_CARDS, type WorkbenchSection} from '../shell-nav';
 
   let {
     conversation = null,
     busy = false,
     closed = false,
     turn = null,
+    config,
+    capabilities = null,
+    section = 'turn',
+    onSelectSection,
     onClose,
   }: {
     conversation: Conversation | null;
@@ -15,6 +28,12 @@
     /** 后端 /v1/workbench/turn 真值：修复前持久化的 toolCall 卡在「运行中」，
      *  用后端状态按名称对位翻面，历史会话也能显示真实终态。 */
     turn?: WorkbenchTurn | null;
+    /** 记忆卷宗分区取数用（侧栏收纳批：记忆/日记移入工作台）。 */
+    config: ApeirethConfig;
+    capabilities?: CapabilityManifest | null;
+    /** 工作台分区：turn=回合视图（默认）/ memory=记忆卷宗 / diary=他的日记。 */
+    section?: WorkbenchSection;
+    onSelectSection?: (next: WorkbenchSection) => void;
     onClose: () => void;
   } = $props();
 
@@ -95,7 +114,31 @@
     </button>
   </div>
   <div class="wb-body">
-    {#if !conversation}
+    <!-- 侧栏收纳批：记忆 / 日记两张卡片入口（面板组件原样复用，作为工作台分区渲染；
+         再点一次回到回合视图）。 -->
+    <div class="wb-cards">
+      {#each WORKBENCH_CARDS as card (card.section)}
+        <button
+          class="wb-card"
+          class:active={section === card.section}
+          aria-pressed={section === card.section}
+          title={section === card.section ? '再点回到回合视图' : `打开${card.title}`}
+          onclick={() => onSelectSection?.(section === card.section ? 'turn' : card.section)}
+        >
+          <span class="wb-card-title">{card.title}</span>
+          <span class="wb-card-sub">{card.sub}</span>
+        </button>
+      {/each}
+    </div>
+    {#if section === 'memory'}
+      <div class="wb-panel">
+        <MemoryView {config} {capabilities} />
+      </div>
+    {:else if section === 'diary'}
+      <div class="wb-panel">
+        <DiaryView />
+      </div>
+    {:else if !conversation}
       <p class="wb-empty">开始对话后，目标、工具轨迹与本轮记忆会显示在这里。</p>
     {:else}
       <div class="blk">
@@ -222,3 +265,55 @@
     {/if}
   </div>
 </aside>
+
+<style>
+  /* 工作台卡片入口（侧栏收纳批）：圆角深底 + 标题/副题，hover 微亮 */
+  .wb-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .wb-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--ap-line);
+    border-radius: 10px;
+    background: var(--ap-panel);
+    color: var(--ap-bone);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .wb-card:hover {
+    border-color: rgba(255, 210, 122, 0.45);
+    background: var(--ap-shell-chip);
+    box-shadow: 0 0 18px -8px rgba(255, 210, 122, 0.3);
+  }
+  .wb-card.active {
+    border-color: rgba(255, 210, 122, 0.55);
+    box-shadow: inset 2px 0 0 var(--ap-gold);
+  }
+  .wb-card-title {
+    font-family: var(--ap-font-voice);
+    font-size: 13px;
+    letter-spacing: 0.12em;
+  }
+  .wb-card-sub {
+    font-family: var(--ap-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    line-height: 1.7;
+    color: var(--ap-bone-42);
+  }
+  /* 分区面板容器：原面板组件原样复用，只做容器级滚动 */
+  .wb-panel {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+</style>

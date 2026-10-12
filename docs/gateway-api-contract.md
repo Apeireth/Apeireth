@@ -68,6 +68,9 @@
 ] }
 ```
 
+- `DELETE /v1/sessions/{session_id}` → 硬删除该会话的持久化记录,成功返回 `{"deleted": true}`;
+  会话不存在返回 404 `session_not_found`,id 格式非法返回 400 `invalid_request`。
+
 ## §5 记忆
 
 | capability | 端点 | 方法 |
@@ -108,7 +111,7 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
 ] }
 ```
 
-审批(已实现,形状确认):
+审批(已实现,四级口径: PRODUCTION WIRED——已进 gateway 路由表;形状确认):
 - `GET /v1/approvals?session={id}` → `{ "session": "…", "approvals": [ { "approval_id": "…", "session": "…", "tool_name": "…", "capability_id": "…", "governance_hook": "…", "governance_reason": "…", "request": "…", "trace_id": "…", "created_at": 123, "expires_at": 123 } ] }`
 - `POST /v1/approvals/resolve` 请求 `{ "session": "…", "approval": "…", "decision": "approve|reject", "reason": "可选" }` → 与 `/v1/chat` 响应同形状(解析后继续原回合)
 

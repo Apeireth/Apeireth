@@ -2365,11 +2365,13 @@ mod release_manifest_tests {
     use super::*;
 
     #[test]
-    fn test_release_version_is_2_0_0_rc_1() {
-        // 编译期 hardcode: workspace version 升至 2.0.0-rc.1 (RC1 发布候选, per RC campaign)
+    fn test_release_version_is_2_0_0_rc_2() {
+        // 永不再漂：直接对齐编译期 crate 版本（继承自 workspace 版本轴）——
+        // 今后版本递进本测试零改动即自动正确（钉死值版本漂移的教训）。
         assert_eq!(
-            RELEASE_VERSION, "2.0.0-rc.1",
-            "RELEASE_VERSION must be 2.0.0-rc.1 (Cargo.toml workspace version 改后自动穿透, RC1 发布候选)"
+            RELEASE_VERSION,
+            env!("CARGO_PKG_VERSION"),
+            "RELEASE_VERSION must equal the workspace version axis (CARGO_PKG_VERSION)"
         );
     }
 

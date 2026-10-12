@@ -35,7 +35,8 @@ use sha2::{Digest, Sha256};
 /// mutators:
 /// - 执行面: `tool.shell` / `tool.process` / `tool.supervisor` /
 ///   `tool.std_sub_supervisor` / `tool.mcp*` (动态能力);
-/// - 受控写: `tool.filesystem` (workspace 边界内的读写, 仍是写);
+/// - 受控写: `tool.filesystem` (workspace 边界内的读写, 仍是写) /
+///   `tool.apply_patch` (补丁式受控写文件, 创建/修改/删除都算写);
 /// - 出口: `tool.fetch` / `tool.repo` (remote 读发布) —— 只读会话不应外联;
 /// - 凭据: `credential.read` / `secret.read` / `env.read` (环境变量含 secret);
 /// - 删除: `fs.delete`;
@@ -50,6 +51,7 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         "tool.std_sub_supervisor",
         // 受控写
         "tool.filesystem",
+        "tool.apply_patch",
         "fs.write",
         // 出口 / 远端副作用
         "tool.fetch",
@@ -530,6 +532,7 @@ mod tests {
             "tool.mcp.dynamic",
             // 受控写
             "tool.filesystem",
+            "tool.apply_patch",
             "fs.write",
             // 出口 / 远端副作用
             "tool.fetch",

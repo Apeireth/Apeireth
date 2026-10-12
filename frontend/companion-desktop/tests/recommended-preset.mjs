@@ -54,10 +54,10 @@ console.log('--- Starting Recommended Preset Mapping Check ---');
   for (const key of MEMORY_CORE_KEYS) {
     assert.ok(RECOMMENDED_CAPABILITY_PRESET.includes(key), `${key} 必须在推荐配置里`);
   }
-  for (const banned of ['shell', 'fetch', 'localReadTools']) {
+  for (const banned of ['shell', 'fetch', 'localReadTools', 'fileWrite', 'fileWriteAutoPass']) {
     assert.ok(!RECOMMENDED_CAPABILITY_PRESET.includes(banned), `${banned} 绝不进推荐配置`);
   }
-  console.log('  -> PASS: 推荐配置 = 记忆核心三件 + 固化/反思/器官链，无 shell/fetch');
+  console.log('  -> PASS: 推荐配置 = 记忆核心三件 + 固化/反思/器官链，无 shell/fetch/文件写入');
 }
 
 // ---------------------------------------------------------------------------
@@ -70,10 +70,10 @@ console.log('--- Starting Recommended Preset Mapping Check ---');
   for (const key of ['consolidation', 'reflexion', 'organs']) {
     assert.equal(DEFAULT_CAPABILITY_TOGGLES[key], false, `${key} 默认必须保持关`);
   }
-  for (const key of ['shell', 'fetch']) {
+  for (const key of ['shell', 'fetch', 'fileWrite', 'fileWriteAutoPass']) {
     assert.equal(DEFAULT_CAPABILITY_TOGGLES[key], false, `${key} 危险项默认必须保持关`);
   }
-  console.log('  -> PASS: 记忆核心族默认开；consolidation/reflexion/organs/shell/fetch 默认关不动');
+  console.log('  -> PASS: 记忆核心族默认开；consolidation/reflexion/organs/shell/fetch/文件写入默认关不动');
 }
 
 // ---------------------------------------------------------------------------

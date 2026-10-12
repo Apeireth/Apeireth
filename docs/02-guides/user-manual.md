@@ -57,6 +57,10 @@ v2 唯一进程执行边界 = **`crates/capabilities/tools/src/process/`**（`Pr
 
 **`tool.shell` 与 `tool.fetch` 默认关闭**，需 `BuiltinToolsOptions { shell: Some(TrustedShellConfig), fetch: Some(FetchConfig) }` 显式开启（opt-in，非默认）。这与 v1 companion_serve `APEIRETH_GRANT=...` 的临时放行模型不同——v2 的批准模型是**编译时 / bootstrap 时**的显式配置 + **运行时** governance pipeline（见 §6）。
 
+**`tool.apply_patch`（受控文件写入，opt-in，第七件生产工具）**：`APEIRETH_ENABLE_FILE_WRITE=1` 开启（注册 + 授权同源）。**文件写入总闸：apply_patch 与 shell 写命令同受此闸**——开关关时 shell 的写命令（重定向 `>`/`>>`、删除/移动/复制/建目录类与脚本引擎等值命令面）同样拒绝即帧（`pipeline.pre_deny`；保守词法扫描，宁可误拒不漏放）；开关开时 shell 写命令行为不变（照旧走审批链与既有风险映射）。补丁式受控写文件——创建（`*** Add File`）/ 修改（`*** Update File`）/ 删除（`*** Delete File`）必须在补丁里显式声明，多文件补丁全有或全无（任一 hunk 失败整笔回滚）；**解析即合同**：空补丁、认不出的补丁行、没有任何可解析 hunk 的修改段一律报错误帧（绝不返回「成功但零动作」的谎帧），成功报告只在真有动作落地后返回（新增/修改/删除计数逐项如实），空/解析不了的补丁按 `Unparseable` 语义 fail-closed 向人工审批；工作区外路径（绝对路径 / `..` 组件 / symlink 逃逸）拒绝（fail-closed 即帧），凭据与密钥面（`.env` 族 / 密钥材料 / 凭据存储件）拒绝；沿用读前观测门禁——**未读不得覆盖写**（先用文件读工具读过，才能修改或删除）。风险档位默认 **RequireApproval 级：每次写入都要人批**（本地审批面板 + IM 审批卡同一条审批链，四态闭合同源）；`APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS=1`（子档，依赖主开关）开「自动放行已读文件的修改」——仅**修改类**补丁免逐次审批，**删除/新建永不自动放行**（仍进人工审批），未读文件的修改仍被读前门禁直接拒绝。
+
+**git 写边界（设计边界，显式声明防模型幻觉）**：git 提交等写操作**不提供工具**——commit / push / 分支变更 / 历史改写等仓库写操作没有任何工具，`tool.repo` 维持只读合同（status / commit / diff / log 探查）。不要请求 git 写工具，它不存在。
+
 CLI 隐私逃生门：`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 关闭 filesystem/search 执行许可；旧 `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` 保留兼容（等同默认）；两者同设时 DISABLE 赢（fail-closed）。敏感路径保护恒开。
 
 **会话级审批策略（2026-09-12）**：`SessionSettings` 支持 `permission_preset`（`read_only` 拒写/执行 / `standard` 沿用审批 / `full` 免审批留日志）+ `approval_remember`（`standard` 下"会话内记住"：某工具批准一次后该会话内同工具后续调用跳过审批；进程内记忆、重启清零；inner 的 `Deny` 永不绕过）。桌面端会话头提供 4 档选择器：只读 / 标准·每次审批 / 标准·会话内记住 / 完全放行。
@@ -94,6 +98,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 - `crates/adapters/cli/src/lib.rs::build_canonical_runtime_from_env` **挂载 `GovernancePipeline`** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`（3 个）；配置来源 `build_production_governance_from_env()` 按环境变量 `APEIRETH_GOVERNANCE_*` 装配
 - runtime 每个 turn 的 `CapabilityDispatch` **都**先经 governance pipeline 评估，**不再**默认 `AllowAll`
 - `MaxRounds` 是**结构性**约束（runtime.rs 内部），`AuditHashChain` 按部署需要挂
+- **回合预算显式化**：单回合轮数上限默认 8（`DEFAULT_MAX_ROUNDS`）、单轮工具调用上限默认 16（`MAX_TOOL_CALLS_PER_ROUND`），可用 env `APEIRETH_MAX_TURN_ROUNDS` / `APEIRETH_MAX_TOOL_CALLS` 覆写（越界钳制到 1..=64，未设 / 非法值回默认；CLI `turn_round_limit_from_env` / `tool_call_limit_from_env` 装配）。轮上限失败的 `turn_not_converged` 错误帧带真实数字：`limit`、已耗轮数 `rounds`、当时待批工具名 `pending_tool`（若有）；回合内审批冻结即收束为待批准态（不烧剩余轮预算），同回合重复提议同一待批准项直接收束、不重走冻结循环
 - 工具层兜底：`shell` / `fetch` 默认 opt-in 关闭；`ProcessExecutor` 是 Windows Job Object 完整 / Linux·macOS 进程组部分隔离（参见 [architecture.md](../01-architecture/architecture.md) Process ownership 表）
 - `credentials` 走 **`EnvCredentialResolver`**（`crates/engine/provider/src/credentials.rs`）：逻辑名→环境变量映射（`provider.minimax.api_key` → `APEIRETH_API_KEY`、`provider.anthropic.api_key` → `APEIRETH_ANTHROPIC_KEY`、`provider.openai-compatible.api_key` → `OPENAI_API_KEY`），无 secret 留 struct、secret 走 `Secret<T>`（debug redact）
 - **`apeireth-credentials` crate（keyring / encrypted file / KMS backend）代码存在但未接线**——本批运行时用的是 `EnvCredentialResolver`；legacy OS keyring 集成排期见 ROADMAP §4 P2

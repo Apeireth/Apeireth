@@ -529,7 +529,8 @@ impl FileReflexionStore {
         });
         match held {
             Ok(outcome) => outcome,
-            // 等待超时 = 锁记录的持有者进程仍存活: 如实报占用, 不抢活跃写入者。
+            // 等待超时 = 未能确证持有者已死 (进程仍存活, 或标记瞬时不可读的
+            // 保守等待): 如实报占用, 不抢活跃写入者, 也不推断陈旧。
             Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
                 Err(ReflexionError::StoreBusy { path: lock_path })
             }

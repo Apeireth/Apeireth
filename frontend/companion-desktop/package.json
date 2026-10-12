@@ -1,7 +1,7 @@
 {
   "name": "@apeireth/companion-desktop",
   "private": true,
-  "version": "2.0.0-rc.2",
+  "version": "2.0.0-rc.3",
   "type": "module",
   "description": "Apeireth 桌面伙伴 — Svelte 5 + Tauri 2 对话壳, 对接 Apeireth gateway",
   "scripts": {
@@ -13,6 +13,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@pixiv/three-vrm": "^3.5.5",
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-notification": "^2.3.3",
@@ -21,7 +22,8 @@
     "katex": "^0.17.0",
     "lucide-svelte": "^0.468.0",
     "marked": "^18.0.6",
-    "svelte": "^5.16.0"
+    "svelte": "^5.16.0",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",

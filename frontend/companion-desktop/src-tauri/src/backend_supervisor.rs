@@ -18,6 +18,9 @@ use crate::logging::{DesktopLogger, LogLevel};
 use crate::stored_config;
 use crate::workspace;
 use apeireth_core::stored_doc::{self, DocCompat};
+// Workspace policy (clippy.toml): fs_err over std::fs, so filesystem errors
+// carry the path that failed.
+use fs_err as fs;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -239,6 +242,14 @@ pub struct BackendCapabilityEnv {
     pub shell_sandbox_off: bool,
     pub enable_fetch: bool,
     pub enable_local_read_tools: bool,
+    /// 受控文件写入 (APEIRETH_ENABLE_FILE_WRITE, apply_patch 补丁式写入):
+    /// **文件写入总闸：apply_patch 与 shell 写命令同受此闸** (唯一写总闸,
+    /// 关 = shell 写意图拒绝即帧)。默认关, 仅 true 注入 "1" (fail-closed,
+    /// false 不注入 "0")。
+    pub enable_file_write: bool,
+    /// 子开关「自动放行已读文件修改」(APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS):
+    /// 仅 true 注入 "1"; 依赖主开关的语义在映射层收口 (主开关关时恒 false)。
+    pub enable_file_write_auto_pass: bool,
     pub disable_typed_recall: bool,
     pub enable_organs: bool,
     pub enable_preference_learning: bool,
@@ -280,6 +291,15 @@ pub struct BackendCapabilityEnv {
     /// 「从使用中学习」自校准开关 (APEIRETH_ENABLE_SELF_TUNING): 默认关,
     /// 仅 true 时注入 "1" (fail-closed, 缺席 = 关)。
     pub enable_self_tuning: bool,
+    /// 单回合轮数上限 (APEIRETH_MAX_TURN_ROUNDS); `None` = 不注入 (后端默认 8)。
+    /// 取值裁决在后端解析: 越界钳制 1..=64、非法回默认 —— 注入侧只做同源透传。
+    pub turn_round_limit: Option<u32>,
+    /// 单轮工具调用上限 (APEIRETH_MAX_TOOL_CALLS); `None` = 不注入 (后端默认 16)。
+    /// 同 [`Self::turn_round_limit`] 的钳制/回默认语义。
+    pub tool_call_limit: Option<u32>,
+    /// 上下文注入总字符预算 (APEIRETH_CONTEXT_BUDGET_CHARS); `None` = 不注入
+    /// (后端默认 24000)。后端语义: 正整数直通、越界/非法回默认 (无上界钳制)。
+    pub context_budget_chars: Option<u64>,
 }
 
 /// Explicit on/off value for a default-on CLI knob: the desktop injects both
@@ -308,6 +328,8 @@ impl Default for BackendCapabilityEnv {
             shell_sandbox_off: false,
             enable_fetch: false,
             enable_local_read_tools: true,
+            enable_file_write: false,
+            enable_file_write_auto_pass: false,
             disable_typed_recall: false,
             enable_organs: false,
             enable_preference_learning: true,
@@ -337,6 +359,10 @@ impl Default for BackendCapabilityEnv {
             tune_tone_saturation: None,
             tune_consolidation_cadence: None,
             enable_self_tuning: false,
+            // 预算旋钮: 缺省不注入 (后端默认 8 / 16 / 24000 = 现行为)。
+            turn_round_limit: None,
+            tool_call_limit: None,
+            context_budget_chars: None,
         }
     }
 }
@@ -365,6 +391,15 @@ impl BackendCapabilityEnv {
             // 双向显式: 默认开旋钮的「关」必须显式反注入
             // (CLI 侧 `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 逃生门胜出)。
             pairs.push(("APEIRETH_DISABLE_LOCAL_READ_TOOLS", "1".to_string()));
+        }
+        // 受控文件写入两件 (apply_patch 补丁式写入): 与 enable_shell/enable_fetch
+        // 同契约 —— fail-closed, 仅 true 注入 "1", false 不注入 "0";
+        // 子开关依赖主开关的语义在映射层收口 (主开关关时恒 false 不注入)。
+        if self.enable_file_write {
+            pairs.push(("APEIRETH_ENABLE_FILE_WRITE", "1".to_string()));
+        }
+        if self.enable_file_write_auto_pass {
+            pairs.push(("APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS", "1".to_string()));
         }
         if self.disable_typed_recall {
             pairs.push(("APEIRETH_DISABLE_TYPED_RECALL", "1".to_string()));
@@ -477,6 +512,19 @@ impl BackendCapabilityEnv {
         if self.enable_self_tuning {
             pairs.push(("APEIRETH_ENABLE_SELF_TUNING", "1".to_string()));
         }
+        // 预算旋钮 (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS /
+        // APEIRETH_CONTEXT_BUDGET_CHARS): Some 才注入 (旧持久化 JSON 缺字段 =
+        // None = 不注入 = 后端默认现行为)。取值裁决在后端解析 (越界钳制
+        // 1..=64、非法回默认 / 正整数直通), 注入侧只做同源透传。
+        if let Some(rounds) = self.turn_round_limit {
+            pairs.push(("APEIRETH_MAX_TURN_ROUNDS", rounds.to_string()));
+        }
+        if let Some(calls) = self.tool_call_limit {
+            pairs.push(("APEIRETH_MAX_TOOL_CALLS", calls.to_string()));
+        }
+        if let Some(chars) = self.context_budget_chars {
+            pairs.push(("APEIRETH_CONTEXT_BUDGET_CHARS", chars.to_string()));
+        }
         pairs
     }
 
@@ -525,7 +573,7 @@ pub struct TuningLogRead {
 /// 文件缺失 = 空列表 (尚无自动调整); 单条坏行**读作不存在** —— 跳过并计数,
 /// 不砖化整个日志; 前信封旧裸体行只读兼容 (不静默迁移)。
 pub fn read_tuning_log_file(path: &Path) -> Result<TuningLogRead, String> {
-    match std::fs::metadata(path) {
+    match fs::metadata(path) {
         Ok(meta) if meta.len() > TUNING_LOG_MAX_BYTES => {
             return Err(format!(
                 "tuning log too large ({} bytes > {TUNING_LOG_MAX_BYTES}): {}",
@@ -795,7 +843,7 @@ impl BackendSupervisor {
         };
         let path = Self::provider_env_path(logger);
         if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            let _ = fs::create_dir_all(parent);
         }
         if let Err(error) =
             stored_config::save_config(&path, &provider_env_doc_compat(), &env.without_secrets())
@@ -814,7 +862,7 @@ impl BackendSupervisor {
         };
         let path = Self::capability_env_path(logger);
         if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            let _ = fs::create_dir_all(parent);
         }
         if let Err(error) = stored_config::save_config(&path, &capability_env_doc_compat(), env) {
             self.log_desktop(
@@ -1277,8 +1325,7 @@ impl BackendSupervisor {
             return HotApply::Failed("gateway endpoint not available".to_string());
         };
         let provider_env = self.provider_env.read().await.clone();
-        let provider_env =
-            provider_env.with_keychain_fallback(|provider| keychain::get_provider_key(provider));
+        let provider_env = provider_env.with_keychain_fallback(keychain::get_provider_key);
         let capabilities = self.capability_env.read().await.clone();
         let payload = AdminConfigRequest::from_env(&provider_env, &capabilities);
         let url = format!("{endpoint}/v1/admin/config");
@@ -1401,7 +1448,7 @@ impl BackendSupervisor {
     /// 否则 store 目录 (`resolve_store_dir`: workspace/.apeireth 或 app-data/data),
     /// 与后端接线层 `runtime-assembly::tuning_log_path` 同落位。
     pub async fn tuning_log_path(&self) -> PathBuf {
-        if let Some(value) = std::env::var("APEIRETH_SESSION_DB").ok() {
+        if let Ok(value) = std::env::var("APEIRETH_SESSION_DB") {
             let session_db = PathBuf::from(value);
             if session_db.is_absolute() {
                 if let Some(dir) = session_db.parent() {
@@ -1586,8 +1633,7 @@ impl BackendSupervisor {
         // later config changes can be classified hot-able or restart-required.
         *self.spawned_provider_env.write().await = provider_env.clone();
         *self.spawned_capability_env.write().await = self.capability_env.read().await.clone();
-        let provider_env =
-            provider_env.with_keychain_fallback(|provider| keychain::get_provider_key(provider));
+        let provider_env = provider_env.with_keychain_fallback(keychain::get_provider_key);
         for (key, value) in provider_env.env_pairs() {
             cmd.env(key, value);
         }
@@ -1620,16 +1666,16 @@ impl BackendSupervisor {
             let cognitive_env = std::env::var("APEIRETH_COGNITIVE_DB").ok();
             let anchor_session = session_env
                 .as_deref()
-                .is_none_or(|v| !Path::new(v).is_absolute());
+                .map_or(true, |v| !Path::new(v).is_absolute());
             let anchor_cognitive = cognitive_env
                 .as_deref()
-                .is_none_or(|v| !Path::new(v).is_absolute());
+                .map_or(true, |v| !Path::new(v).is_absolute());
 
             // Only create the store dir when we are actually going to anchor
             // paths into it: an explicit absolute env store dir is the user's
             // own location and must not cause app-data side effects.
             if anchor_session || anchor_cognitive {
-                let _ = std::fs::create_dir_all(&store_dir);
+                let _ = fs::create_dir_all(&store_dir);
             }
             if anchor_session {
                 cmd.env("APEIRETH_SESSION_DB", store_dir.join("sessions.sqlite3"));
@@ -2178,14 +2224,92 @@ mod tests {
         );
     }
 
+    /// 预算旋钮 (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS /
+    /// APEIRETH_CONTEXT_BUDGET_CHARS): Some 同源透传成 env 对, `None` 一个都不
+    /// 注入 (后端默认 8 / 16 / 24000 现行为)。取值裁决 (越界钳制 1..=64、非法
+    /// 回默认) 在后端解析, 已由 CLI 侧测试锁定, 这里只锁注入面。
+    #[test]
+    fn capability_env_pairs_inject_budget_knobs() {
+        let caps = BackendCapabilityEnv {
+            turn_round_limit: Some(4),
+            tool_call_limit: Some(8),
+            context_budget_chars: Some(12_000),
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = caps.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_MAX_TURN_ROUNDS"], "4");
+        assert_eq!(map["APEIRETH_MAX_TOOL_CALLS"], "8");
+        assert_eq!(map["APEIRETH_CONTEXT_BUDGET_CHARS"], "12000");
+
+        // 缺省 (None) = 一个预算变量都不注入 = 后端默认现行为。
+        for (key, _) in BackendCapabilityEnv::default().env_pairs() {
+            assert!(
+                key != "APEIRETH_MAX_TURN_ROUNDS"
+                    && key != "APEIRETH_MAX_TOOL_CALLS"
+                    && key != "APEIRETH_CONTEXT_BUDGET_CHARS",
+                "缺省不得注入预算变量: {key}"
+            );
+        }
+
+        // 部分配置: 只注入配了的那枚, 其余照旧缺席。
+        let partial = BackendCapabilityEnv {
+            turn_round_limit: Some(2),
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = partial.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_MAX_TURN_ROUNDS"], "2");
+        assert!(!map.contains_key("APEIRETH_MAX_TOOL_CALLS"), "{map:?}");
+        assert!(
+            !map.contains_key("APEIRETH_CONTEXT_BUDGET_CHARS"),
+            "{map:?}"
+        );
+    }
+
+    /// 受控文件写入两件 (APEIRETH_ENABLE_FILE_WRITE / APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS):
+    /// 默认关 fail-closed —— false 一个变量都不注入 (不注入 "0"), true 才注入 "1"。
+    /// 子开关「自动放行已读文件修改」依赖主开关的语义在前端映射层收口
+    /// (capabilityEnvFromConfig: 主开关关时 enable_file_write_auto_pass 恒 false)。
+    #[test]
+    fn capability_env_pairs_gate_file_write_tool_fail_closed() {
+        // 默认态: 两个文件写入变量都不注入。
+        for (key, _) in BackendCapabilityEnv::default().env_pairs() {
+            assert!(
+                !key.starts_with("APEIRETH_ENABLE_FILE_WRITE"),
+                "默认态不得注入文件写入变量: {key}"
+            );
+        }
+
+        // 仅主开关: 只注入主变量, 子开关变量缺席。
+        let main_only = BackendCapabilityEnv {
+            enable_file_write: true,
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = main_only.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_ENABLE_FILE_WRITE"], "1");
+        assert!(
+            !map.contains_key("APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS"),
+            "子开关未开不注入: {map:?}"
+        );
+
+        // 主开关 + 子开关: 两个都注入 "1"。
+        let both = BackendCapabilityEnv {
+            enable_file_write: true,
+            enable_file_write_auto_pass: true,
+            ..Default::default()
+        };
+        let map: std::collections::HashMap<_, _> = both.env_pairs().into_iter().collect();
+        assert_eq!(map["APEIRETH_ENABLE_FILE_WRITE"], "1");
+        assert_eq!(map["APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS"], "1");
+    }
+
     /// 学习日志只读解析 (逐记录类): 旧裸体行照读 + 坏行跳过并计数 + 缺文件 = 空。
     #[test]
     fn tuning_log_file_parses_jsonl_skips_bad_lines_and_missing_is_empty() {
         let dir =
             std::env::temp_dir().join(format!("apeireth-tuning-log-read-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&dir).unwrap();
         let path = dir.join(TUNING_LOG_FILE);
-        std::fs::write(
+        fs::write(
             &path,
             concat!(
                 "{\"seq\":1,\"param\":\"memory_fade\",\"previous\":1.0,\"next\":0.75,\"reason\":\"检索未命中偏多\",\"at_epoch_ms\":1000}\n",
@@ -2206,7 +2330,7 @@ mod tests {
         let missing = read_tuning_log_file(&dir.join("absent.jsonl")).expect("缺文件 = 空列表");
         assert!(missing.entries.is_empty());
         assert_eq!(missing.skipped, 0);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 逐记录信封行照读, 与旧裸体行共存 (每行独立版本戳, 逐行裁决)。
@@ -2214,14 +2338,14 @@ mod tests {
     fn tuning_log_file_reads_envelope_rows_and_legacy_rows_side_by_side() {
         let dir =
             std::env::temp_dir().join(format!("apeireth-tuning-log-env-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&dir).unwrap();
         let path = dir.join(TUNING_LOG_FILE);
         let legacy_line =
             "{\"seq\":1,\"param\":\"memory_fade\",\"previous\":1.0,\"next\":0.75,\"reason\":\"旧裸体行\",\"at_epoch_ms\":1000}";
         let envelope_line = format!(
             r#"{{"name":"{TUNING_LOG_DOC_NAME}","version":{TUNING_LOG_DOC_VERSION},"compatible_versions":[{TUNING_LOG_DOC_VERSION}],"body":{{"seq":2,"param":"tone_saturation","previous":0.2,"next":0.21,"reason":"信封行","at_epoch_ms":2000}}}}"#
         );
-        std::fs::write(&path, format!("{legacy_line}\n{envelope_line}\n")).unwrap();
+        fs::write(&path, format!("{legacy_line}\n{envelope_line}\n")).unwrap();
 
         let read = read_tuning_log_file(&path).expect("解析成功");
         assert_eq!(read.entries.len(), 2, "信封行与旧裸体行共存照读");
@@ -2233,7 +2357,7 @@ mod tests {
             "旧裸体好行必须逐字节等价恢复"
         );
         assert_eq!(read.entries[1].param, "tone_saturation");
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 旧版本持久化的 capability JSON（无 W2/W3 字段）必须仍能反序列化：
@@ -2465,8 +2589,8 @@ mod tests {
     fn config_scratch(tag: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("apeireth-env-config-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
         dir
     }
 
@@ -2476,7 +2600,7 @@ mod tests {
     fn provider_env_config_rejects_corrupt_file_without_default_fallback() {
         let dir = config_scratch("reject");
         let logger = DesktopLogger::new_in_dir(dir.join("logs")).expect("logger");
-        std::fs::write(dir.join("backend-provider-env.json"), b"{ this is not json").unwrap();
+        fs::write(dir.join("backend-provider-env.json"), b"{ this is not json").unwrap();
 
         assert!(
             BackendSupervisor::load_persisted_provider_env(&logger).is_err(),
@@ -2486,7 +2610,7 @@ mod tests {
             BackendSupervisor::with_logger_in_dir(dir.clone()).is_err(),
             "启动构造必须拒开坏配置"
         );
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 好数据路径零回归: 恢复出的配置与旧裸体写端输出逐字节等价。
@@ -2502,7 +2626,7 @@ mod tests {
         };
         supervisor.persist_provider_env(&env);
 
-        let raw = std::fs::read(dir.join("backend-provider-env.json")).unwrap();
+        let raw = fs::read(dir.join("backend-provider-env.json")).unwrap();
         let doc: stored_doc::StoredDoc<BackendProviderEnv> =
             serde_json::from_slice(&raw).expect("落盘是存储文档信封");
         assert_eq!(doc.name, PROVIDER_ENV_DOC_NAME);
@@ -2516,7 +2640,7 @@ mod tests {
             .expect("好配置可读")
             .expect("配置存在");
         assert_eq!(restored, env.without_secrets());
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 旧文件兼容: 前信封裸体配置迁移前后都可读; 默认打开不静默迁移; 迁移留审计。
@@ -2531,7 +2655,7 @@ mod tests {
         };
         let legacy_bytes = serde_json::to_vec_pretty(&env.without_secrets()).unwrap();
         let path = dir.join("backend-provider-env.json");
-        std::fs::write(&path, &legacy_bytes).unwrap();
+        fs::write(&path, &legacy_bytes).unwrap();
 
         // 迁移前可读 (旧裸体只读兼容), 文件字节不被改写。
         let before = BackendSupervisor::load_persisted_provider_env(&logger)
@@ -2539,16 +2663,15 @@ mod tests {
             .expect("配置存在");
         assert_eq!(before, env);
         assert_eq!(
-            std::fs::read(&path).unwrap(),
+            fs::read(&path).unwrap(),
             legacy_bytes,
             "默认打开路径不得静默迁移"
         );
 
         // 显式迁移留审计。
         BackendSupervisor::migrate_legacy_provider_env_config(&logger).expect("显式迁移必须成功");
-        let audit =
-            std::fs::read_to_string(dir.join("backend-provider-env.json.migrate-audit.jsonl"))
-                .expect("显式迁移必须留审计");
+        let audit = fs::read_to_string(dir.join("backend-provider-env.json.migrate-audit.jsonl"))
+            .expect("显式迁移必须留审计");
         assert_eq!(audit.lines().count(), 1, "审计文件应恰一行: {audit}");
 
         // 迁移后仍可读, 内容不变。
@@ -2556,7 +2679,7 @@ mod tests {
             .expect("迁移后必须可读")
             .expect("配置存在");
         assert_eq!(after, before);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// 能力开关配置走同一套语义: 旧裸体兼容 + 显式迁移留审计。
@@ -2566,21 +2689,20 @@ mod tests {
         let logger = Arc::new(DesktopLogger::new_in_dir(dir.join("logs")).expect("logger"));
         let legacy_bytes = serde_json::to_vec_pretty(&BackendCapabilityEnv::default()).unwrap();
         let path = dir.join("backend-capability-env.json");
-        std::fs::write(&path, &legacy_bytes).unwrap();
+        fs::write(&path, &legacy_bytes).unwrap();
 
         let before = BackendSupervisor::load_persisted_capability_env(&logger)
             .expect("旧裸体配置必须可读")
             .expect("配置存在");
         assert_eq!(
-            std::fs::read(&path).unwrap(),
+            fs::read(&path).unwrap(),
             legacy_bytes,
             "默认打开路径不得静默迁移"
         );
 
         BackendSupervisor::migrate_legacy_capability_env_config(&logger).expect("显式迁移必须成功");
-        let audit =
-            std::fs::read_to_string(dir.join("backend-capability-env.json.migrate-audit.jsonl"))
-                .expect("显式迁移必须留审计");
+        let audit = fs::read_to_string(dir.join("backend-capability-env.json.migrate-audit.jsonl"))
+            .expect("显式迁移必须留审计");
         assert_eq!(audit.lines().count(), 1, "审计文件应恰一行: {audit}");
         let after = BackendSupervisor::load_persisted_capability_env(&logger)
             .expect("迁移后必须可读")
@@ -2589,6 +2711,6 @@ mod tests {
             serde_json::to_value(&after).unwrap(),
             serde_json::to_value(&before).unwrap()
         );
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

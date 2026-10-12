@@ -14,6 +14,8 @@
 //! 另提供跨线程/跨进程互斥的文件锁 [`with_file_lock`]: 锁文件记录持有者 PID,
 //! 等待方通过 PID 存活探测判断「持有者进程不存在即视为可接管」, 接管动作由
 //! 认领文件串行化竞争者并做二次探测 (防止 PID 复用或并发换主造成误判)。
+//! **接管只认确证事实** (持有者进程不存在 / 记录损坏), 瞬时读取失败一律保守
+//! 等待 —— 误删活跃锁会破坏互斥 (并发写丢更新), 等待只是慢一点。
 //!
 //! 权限语义: `mode` 为 unix 权限位 (如 [`OWNER_ONLY_MODE`]); unix 下临时文件
 //! 以该 mode 创建并收敛到精确值, 替换后目标文件即为该 mode; 非 unix 平台无
@@ -248,6 +250,9 @@ impl Drop for ClaimGuard {
 ///   即视为可接管 (持有者崩溃不永久砖化锁)。接管动作由认领文件串行化竞争者,
 ///   并在认领后做二次探测 —— 若锁内容已变化 (被并发换主) 则放弃本轮,
 ///   防止 PID 复用/并发接管导致误删活跃锁。
+/// - **接管只认确证**: 接管输入限「持有者进程不存在」与「记录损坏 (内容可读
+///   但非 PID)」两类确证事实; 瞬时读取失败一律保守等待, 绝不推断陈旧
+///   (误删活跃锁 = 互斥破坏 = 并发写丢更新, 等待只是慢一点)。
 /// - 获取失败 (超时) 返回 [`io::ErrorKind::TimedOut`]; `f` panic 时锁照常释放。
 pub fn with_file_lock<T>(lock_path: &Path, f: impl FnOnce() -> T) -> io::Result<T> {
     with_file_lock_timeout(lock_path, DEFAULT_LOCK_TIMEOUT, f)
@@ -282,26 +287,36 @@ fn acquire_file_lock(lock_path: &Path, timeout: Duration) -> io::Result<LockGuar
             });
         }
 
-        let observed = read_marker_pid(lock_path);
-        if let Some(pid) = observed {
-            if pid_alive(pid) {
-                // 活跃持有者: 等其释放。
-                wait_for_retry(deadline, lock_path)?;
-                continue;
-            }
+        let observed = read_marker(lock_path);
+        // 只有「确证无合法活跃持有者」才走接管路径:
+        // - `Parsed(pid)` 且该进程不存在 (持有者崩溃遗留);
+        // - `Corrupt` (内容完整但不是 PID, 记录损坏 —— 不存在合法活跃持有者)。
+        // 持有者活着、名字刚空出 (Absent)、瞬时不可读 (Unreadable) 一律等待重试:
+        // 不推断、不删除, 防止误删活跃锁。
+        let takeoverable = match observed {
+            MarkerState::Parsed(pid) => !pid_alive(pid),
+            MarkerState::Corrupt => true,
+            MarkerState::Absent | MarkerState::Unreadable => false,
+        };
+        if !takeoverable {
+            wait_for_retry(deadline, lock_path)?;
+            continue;
         }
 
-        // 持有者进程不存在 (或锁记录不可读) → 走接管路径。
+        // 持有者进程不存在 (或记录损坏) → 走接管路径。
         if publish_marker(&claim_path, &me)? {
             let claim = ClaimGuard {
                 path: claim_path.clone(),
             };
-            let second = read_marker_pid(lock_path);
-            // 二次探测: 只有「两次读到同一个已死 PID」或「两次都不可读」
-            // (记录损坏, 不存在合法活跃持有者) 才接管; 任何变化都放弃本轮。
+            let second = read_marker(lock_path);
+            // 二次探测: 只有「两次读到同一个已死 PID」或「两次都是损坏记录」
+            // 才接管; 任何变化 (已释放/换主/转为不可读) 都放弃本轮,
+            // 防止 PID 复用/并发接管导致误删活跃锁。
             let stale = match (observed, second) {
-                (Some(first), Some(next)) => first == next && !pid_alive(next),
-                (None, None) => true,
+                (MarkerState::Parsed(first), MarkerState::Parsed(next)) => {
+                    first == next && !pid_alive(next)
+                }
+                (MarkerState::Corrupt, MarkerState::Corrupt) => true,
                 _ => false,
             };
             if stale {
@@ -313,9 +328,11 @@ fn acquire_file_lock(lock_path: &Path, timeout: Duration) -> io::Result<LockGuar
             }
             drop(claim);
         } else {
-            // 认领文件已存在: 其记录的持有者若已死, 移除以免接管路径被残留认领卡死。
-            match read_marker_pid(&claim_path) {
-                Some(pid) if pid_alive(pid) => {}
+            // 认领文件已存在: 其记录的持有者若已死 (或记录损坏), 移除以免接管
+            // 路径被残留认领卡死; 持有者活着、瞬时不可读、名字已空则不动 (保守)。
+            match read_marker(&claim_path) {
+                MarkerState::Parsed(pid) if pid_alive(pid) => {}
+                MarkerState::Unreadable | MarkerState::Absent => {}
                 _ => {
                     let _ = fs::remove_file(&claim_path);
                 }
@@ -349,9 +366,33 @@ fn publish_marker(path: &Path, content: &str) -> io::Result<bool> {
     result
 }
 
-fn read_marker_pid(path: &Path) -> Option<u32> {
-    let text = fs::read_to_string(path).ok()?;
-    text.trim().parse::<u32>().ok()
+/// 锁标记内容的读取裁决。
+///
+/// **只有确证事实才允许触发接管** (见 [`with_file_lock`] 语义): 瞬时读取失败
+/// (如刚创建的文件被安全软件短暂独占扫描、删除动议中的共享冲突) 一律推断为
+/// 「保守等待」。历史教训 (2026-10-12 定根): 把「读不到」当作「持有者已死」
+/// 会误删活跃锁 → 两个写者同时进入临界区 → 并发写丢更新 (负载 flake 的根)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MarkerState {
+    /// 内容完整且解析为持有者 PID。
+    Parsed(u32),
+    /// 文件在、内容可读但不是合法 PID (记录损坏: 不存在合法活跃持有者)。
+    Corrupt,
+    /// 名字不存在 (锁空闲或刚被释放)。
+    Absent,
+    /// 读取失败 (瞬时 IO 竞争) —— 不作任何推断。
+    Unreadable,
+}
+
+fn read_marker(path: &Path) -> MarkerState {
+    match fs::read_to_string(path) {
+        Ok(text) => match text.trim().parse::<u32>() {
+            Ok(pid) => MarkerState::Parsed(pid),
+            Err(_) => MarkerState::Corrupt,
+        },
+        Err(err) if err.kind() == io::ErrorKind::NotFound => MarkerState::Absent,
+        Err(_) => MarkerState::Unreadable,
+    }
 }
 
 fn suffix_path(path: &Path, suffix: &str) -> PathBuf {
@@ -680,6 +721,37 @@ mod tests {
             .filter(|n| n.contains(".claim"))
             .collect();
         assert!(residue.is_empty(), "认领文件不得残留: {residue:?}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn file_lock_takes_over_corrupt_marker_record() {
+        // 记录损坏 (内容可读但非 PID) 是确证「无合法活跃持有者」→ 可接管,
+        // 与「读取失败」严格区分 (后者保守等待, 见不可读用例)。
+        let dir = test_dir("lock-corrupt");
+        let lock = dir.join("unit.lock");
+        fs::write(&lock, b"this is not a pid").unwrap();
+        let out = with_file_lock_timeout(&lock, Duration::from_secs(5), || "ok")
+            .expect("损坏记录必须可接管");
+        assert_eq!(out, "ok");
+        assert!(!lock.exists(), "接管执行完后锁文件必须删除");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn file_lock_never_takes_over_unreadable_marker() {
+        // 瞬时不可读 ≠ 持有者已死 (2026-10-12 定根的并发写丢更新 flake 病根):
+        // 读不到标记时必须保守等待到超时, 既不接管也不删除。
+        // 不可读的确定性模拟: 在锁文件名上放一个目录 —— 读取必失败且非 NotFound。
+        let dir = test_dir("lock-unreadable");
+        let lock = dir.join("unit.lock");
+        fs::create_dir(&lock).unwrap();
+        let err = with_file_lock_timeout(&lock, Duration::from_millis(200), || ()).unwrap_err();
+        assert!(
+            matches!(err.kind(), io::ErrorKind::TimedOut),
+            "不可读标记必须保守等待到超时, 不得推断陈旧: {err:?}"
+        );
+        assert!(lock.is_dir(), "不可读标记不得被删除");
         let _ = fs::remove_dir_all(&dir);
     }
 

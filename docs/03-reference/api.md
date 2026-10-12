@@ -66,6 +66,7 @@ apeireth gateway serve --port 8080
 | `tool.filesystem` / `tool.search` / `tool.repo` | ✅ 启用 | 只读 |
 | `tool.shell` | ❌ 关闭 | 显式配置才启用（opt-in） |
 | `tool.fetch` | ❌ 关闭 | GET-only + DNS 钉扎 + 逐跳重校验，显式配置才启用 |
+| `tool.apply_patch` | ❌ 关闭 | 受控文件写入（补丁式创建/修改/删除显式声明，`APEIRETH_ENABLE_FILE_WRITE=1` 开启；每次写入默认要人工审批）。**文件写入总闸：apply_patch 与 shell 写命令同受此闸**（关 = shell 写意图拒绝即帧 `pipeline.pre_deny`，开 = shell 行为不变）。**git 提交等写操作不提供工具，属设计边界**——仓库工具维持只读合同 |
 
 ## 认证与安全
 

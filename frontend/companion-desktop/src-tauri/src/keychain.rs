@@ -134,7 +134,7 @@ mod platform {
         let username = wide(account);
         let mut blob = to_blob(key);
 
-        let mut credential = CREDENTIALW {
+        let credential = CREDENTIALW {
             Flags: 0,
             Type: CRED_TYPE_GENERIC,
             TargetName: target.as_ptr() as *mut u16,
@@ -154,7 +154,7 @@ mod platform {
 
         // SAFETY: all pointer fields reference the buffers above, which stay
         // alive for the duration of the call.
-        let ok = unsafe { CredWriteW(&mut credential, 0) };
+        let ok = unsafe { CredWriteW(&credential, 0) };
         if ok == 0 {
             let code = std::io::Error::last_os_error();
             return Err(format!("CredWriteW failed: {code}"));

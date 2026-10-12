@@ -23,6 +23,10 @@
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
+// Workspace policy (clippy.toml): fs_err over std::fs, so filesystem errors
+// carry the path that failed.
+use fs_err as fs;
+
 use companion_desktop_lib::backend_supervisor::{
     BackendCapabilityEnv, BackendOwnership, BackendProviderEnv, BackendState, BackendSupervisor,
 };
@@ -323,7 +327,7 @@ fn sidecar_stores_land_in_app_data_regardless_of_cwd() {
         "apeireth-desktop-data-{}-stores",
         std::process::id()
     ));
-    let _ = std::fs::remove_dir_all(&app_data);
+    let _ = fs::remove_dir_all(&app_data);
 
     runtime().block_on(async {
         let supervisor = BackendSupervisor::with_logger_in_dir(app_data.clone())
@@ -369,8 +373,8 @@ fn explicit_env_store_paths_take_priority() {
         "apeireth-desktop-custom-{}-envprio",
         std::process::id()
     ));
-    let _ = std::fs::remove_dir_all(&app_data);
-    let _ = std::fs::remove_dir_all(&custom);
+    let _ = fs::remove_dir_all(&app_data);
+    let _ = fs::remove_dir_all(&custom);
 
     let custom_session = custom
         .join("sessions.sqlite3")

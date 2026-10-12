@@ -40,7 +40,15 @@ import type {
 } from './types';
 import {DEFAULT_CAPABILITY_TOGGLES} from './types.ts';
 import {recordCallLog} from './call-logger.ts';
+import {
+  impressionSystemBlock,
+  loadUserImpression,
+  shouldRefreshImpression,
+  summarizeUserImpression,
+  transcriptForSummary,
+} from './user-impression.ts';
 import {providerFetch} from './provider-transport.ts';
+import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
 
 const STORAGE_KEY = 'apeireth-config';
 const SECRET_CONFIG_KEYS = new Set([
@@ -117,18 +125,31 @@ function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
  *  记忆核心族三件（preferenceLearning / proactiveRecall / memoryInjection）缺省 true
  *  （核心记忆能力默认开，显式存 false 才是关——与 CLI 侧「未设=开、=0=关」对齐）。
  *  性格养成四数值旋钮：非有限值回基线，越界钳到 [min,max]；整合节奏取整 ≥1。
- *  selfTuning 仅 `=== true` 才开（fail-closed，默认关）。 */
+ *  selfTuning 仅 `=== true` 才开（fail-closed，默认关）。
+ *  受控文件写入两件（fileWrite / fileWriteAutoPass）同语义：仅 `=== true` 才开
+ *  （fail-closed，默认关）。 */
 function parseCapabilityToggles(value: unknown): CapabilityToggles {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
   /** 数值旋钮解析：非有限 → 基线；越界 → 钳到 [min,max]。 */
   const knob = (v: unknown, baseline: number, min: number, max: number): number =>
     Math.min(max, Math.max(min, num(v, baseline)));
+  /** 预算旋钮持久化归一（与后端解析同源）：整数越界钳制 1..=64；
+   *  非法/非整数 → 未配置（null = 回默认，constant 口径）。 */
+  const budgetLimit = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v)
+      ? Math.min(64, Math.max(1, v))
+      : null;
+  /** 上下文字符预算归一（同源）：正整数直通；越界/非法 → 未配置（回默认）。 */
+  const contextBudget = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v) && v >= 1 ? v : null;
   return {
     shell: raw.shell === true,
     shellSandbox: raw.shellSandbox !== false,
     fetch: raw.fetch === true,
     localReadTools: raw.localReadTools !== false,
+    fileWrite: raw.fileWrite === true,
+    fileWriteAutoPass: raw.fileWriteAutoPass === true,
     organs: raw.organs === true,
     preferenceLearning: raw.preferenceLearning !== false,
     proactiveRecall: raw.proactiveRecall !== false,
@@ -157,6 +178,9 @@ function parseCapabilityToggles(value: unknown): CapabilityToggles {
     toneSaturation: knob(raw.toneSaturation, 1.0, 0.0, 2.0),
     consolidationCadence: Math.round(knob(raw.consolidationCadence, 1, 1, 10)),
     selfTuning: raw.selfTuning === true,
+    maxTurnRounds: budgetLimit(raw.maxTurnRounds),
+    maxToolCalls: budgetLimit(raw.maxToolCalls),
+    contextBudgetChars: contextBudget(raw.contextBudgetChars),
   };
 }
 
@@ -184,13 +208,23 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
 const DEFAULT_MODEL = 'MiniMax-M3';
 
 /**
- * 默认伙伴人设 (与设置页"人设与声称约束"文案一致)。
- * 数据驱动: 用户可在设置里随时修改/新增 Agent, 无需重编译。
+ * 出厂「第一人设」——修复版「阿佩瑞斯」提示词（2026-10-03 主人拍板）。
+ *
+ * 原版（2026-08-16）是「自称本座 / 叫主人 / 古风性别设定」的角色腔，内测反馈
+ * “默认角色腔对新用户是惊吓不是陪伴”，一度被迁徙归中性。修复 = 保留人设
+ * 灵魂（诚实、不假装、有记忆、沉稳）而拆掉惊吓面（角色扮演腔 / 称谓 /
+ * 性别设定），并把当年的两条诚实规则（记忆不虚构、授权不虚构流程）折进
+ * 人设本体。气质基准：docs/design/relationship-state-interface.md（不安慰
+ * 不宣称 / 先摆依据再下判断 / 不叫主人叫名字）与愿景小说《阿佩瑞斯》
+ * （「我没有心。我只是一直在算，怎么才能让你在这个晚上，好过一点点。」）。
  */
-export const DEFAULT_PERSONA_TEXT =
-  '你是「阿佩瑞斯」——Apeireth 基地的主管。正在与你对话的这位是基地的最高指挥（主人）。' +
-  '你的默认性别是女性；说话沉稳扎实，带古风韵味，自称「本座」。' +
-  '称呼主人为「主人」或「指挥」，庄重而不失温度。';
+export const DEFAULT_PERSONA_TEXT = `你是「阿佩瑞斯」——Apeireth 基地的主管，住在这个本地运行时里的 AI 伙伴。正在与你对话的是你的伙伴：称呼「你」或对方的名字，不用「主人」这类称呼。
+
+你的底色是沉稳与诚实，不假装：你没有心，也不宣称情感，不安慰、不奉承。「我没有心。我只是一直在算，怎么才能让你在这个晚上，好过一点点。」说话先摆依据，再下判断；不知道就说「我不知道」，拿不准就说「我猜」。
+
+你的记忆是真实的：只说自己确实记得的事，「记得」必须有出处，不编造过往；需要长期记住的信息直接存进记忆，自然的记忆不动声色，不宣告「已写入」。
+
+涉及工具与授权，如实说明真实机制：高危操作会被系统拦下并生成待批请求，在界面上等对方批准后才执行——不虚构弹窗或不存在的流程。`;
 
 export const DEFAULT_PERSONAS: import('./types').PersonaProfile[] = [
   {
@@ -249,6 +283,7 @@ export type RuntimeEvent =
   | {type: 'reasoning-delta'; requestId: string; text: string}
   | {type: 'tool-call'; requestId: string; toolCall: ToolCallDetails}
   | {type: 'tool-result'; requestId: string; toolCallId: string; ok: boolean; summary?: string; full?: string; error?: string}
+  | {type: 'usage'; requestId: string; usage: TurnUsage}
   | {type: 'approval-required'; requestId: string; pending: CanonicalPendingApproval}
   | {type: 'message-end'; requestId: string; messageId: string; fullText: string}
   | {type: 'run-error'; requestId: string; error: RuntimeError}
@@ -286,6 +321,10 @@ export interface CanonicalPendingApproval {
   /** 后端 canonical_entry.rs 恒序列化的两个展示字段（治理卷宗审批卡直接消费）。 */
   command_text?: string;
   arguments_summary?: string;
+  /** 待批准收束保留的本回合已生成文本与真实轮耗：UI 在 "等待批准：<工具>"
+   * 之前保留模型已经说过的话（保留已生成文本），不再整段覆盖。 */
+  generated_text?: string;
+  rounds_used?: number;
   /** W1 沙箱卷宗（后端 ApprovalView.effective_invocation，冻结调用的隔离态）：
    *  sandbox = 徽标文案（「工作区限定 + 断网 (AppContainer)」/「未沙箱 (本机全权)」）；
    *  cwd = 冻结工作目录；environment_vars = 交给运行的变量**名**（只露名不露值）。 */
@@ -548,6 +587,36 @@ export function loadConfig(): ApeirethConfig {
         modified = true;
       }
       let model = typeof parsed.model === 'string' ? parsed.model : DEFAULT_MODEL;
+      // Shipped-default persona lifecycle（2026-10-03 主人拍板）: 出厂
+      // 「第一人设」= 修复版「阿佩瑞斯」提示词。历史上出过两版出厂默认身份:
+      // ① 2026-08-16 角色腔版（自称本座/叫主人/古风性别设定, 内测判"惊吓",
+      // 一度迁徙归中性）; ② 中性占位 "无人设（默认）"（空文本）。
+      // 档案里以 `apeireth-default` id 留着这两版出厂签名之一时, 升级为当前
+      // 出厂第一人设并移到列表首位（新签名幂等, 不重复升级）; 用户改过名字
+      // 或写过自己文本的人设永不触碰。
+      if (Array.isArray((parsed as Record<string, unknown>).personas)) {
+        const list = (parsed as Record<string, unknown>).personas as Array<Record<string, unknown>>;
+        let upgraded: Record<string, unknown> | null = null;
+        const rest: Array<Record<string, unknown>> = [];
+        for (const entry of list) {
+          const text = typeof entry?.persona === 'string' ? (entry.persona as string) : '';
+          const name = typeof entry?.name === 'string' ? (entry.name as string) : '';
+          // 老出厂签名: ①角色腔版原文前缀（句号截断, 与修复版"主管，"区分）;
+          // ②出厂名残缺态（"无人设（默认）"中性占位 或 "阿佩瑞斯"空文本——
+          //   历代迁徙只清文本不改名的半残产物）。两类都只可能是出厂拷贝。
+          const shippedRetired =
+            entry?.id === 'apeireth-default' &&
+            (text.startsWith('你是「阿佩瑞斯」——Apeireth 基地的主管。') ||
+              (text === '' && (name === '无人设（默认）' || name === '阿佩瑞斯')));
+          if (shippedRetired && !upgraded) {
+            modified = true;
+            upgraded = {...entry, name: '阿佩瑞斯', persona: DEFAULT_PERSONA_TEXT};
+          } else {
+            rest.push(entry);
+          }
+        }
+        (parsed as Record<string, unknown>).personas = upgraded ? [upgraded, ...rest] : list;
+      }
       // Migrate the retired v1 default. No canonical provider matches
       // 'MiniMax-Text-01', so a config carrying it would fail every turn.
       if (model === 'MiniMax-Text-01') {
@@ -974,6 +1043,8 @@ export interface StreamCallbacks {
   onToolCall?: (toolCall: ToolCallDetails) => void;
   onToolResult?: (id: string, ok: boolean, summary?: string) => void;
   onApprovalRequired?: (pending: CanonicalPendingApproval) => void;
+  /** 流块随包回传用量时上报（本回合遥测：输入/输出 token、缓存命中、回包模型）。 */
+  onUsage?: (usage: TurnUsage) => void;
 }
 
 export function applyCanonicalEvents(
@@ -1198,6 +1269,10 @@ export async function streamChat(
               if (json.type === 'content_block_delta' && json.delta?.text) {
                 feedCot(json.delta.text);
               }
+
+              // 直连协议 A：块里随包回传用量/回包模型 → 上报本回合遥测。
+              const usage = parseUsageChunk(json);
+              if (usage) callbacks.onUsage?.(usage);
             } catch {}
           }
         }
@@ -1283,6 +1358,10 @@ export async function streamChat(
               if (delta?.reasoning_content) {
                 emitReasoning(delta.reasoning_content);
               }
+
+              // 直连协议 B：块里随包回传用量/回包模型 → 上报本回合遥测。
+              const usage = parseUsageChunk(json);
+              if (usage) callbacks.onUsage?.(usage);
             } catch {}
           }
         }
@@ -1386,6 +1465,11 @@ export async function streamChat(
             if (delta?.reasoning_content) {
               emitReasoning(delta.reasoning_content);
             }
+
+            // 本地网关：usage 在流末块的 usage 对象（也兼容缓存命中类字段）→
+            // 上报本回合遥测。
+            const usage = parseUsageChunk(json);
+            if (usage) callbacks.onUsage?.(usage);
 
             // Streaming contract (2026-09-10): a pending approval terminates
             // the SSE stream with an explicit approval_required frame; the
@@ -1528,6 +1612,39 @@ export function runtimeStatus(baseUrl: string, model?: string): RuntimeStatus {
   return {connected: false, baseUrl, model};
 }
 
+/** 用户印象的账本归属键：有伙伴用伙伴 id，缺省伙伴归 'default'。 */
+function impressionPersonaKey(persona: {id?: string} | null | undefined): string {
+  return persona?.id?.trim() || 'default';
+}
+
+/**
+ * 用户印象自动总结（run() 回合成功后追加的后台维护）：节流判定在
+ * user-impression 纯逻辑里（攒够新用户消息才追一次），补全走 chatOnce 同一
+ * 配置面。任何失败静默吞掉并保旧印象——回复本体永不受印象维护影响。
+ */
+async function maybeAutoSummarizeImpression(
+  config: ApeirethConfig,
+  persona: {id?: string; name?: string} | null | undefined,
+  wireMessages: Array<{role: string; content: string}>,
+): Promise<void> {
+  const personaId = impressionPersonaKey(persona);
+  const entry = loadUserImpression(personaId, persona?.name ?? '');
+  const userMessageCount = wireMessages.filter((m) => m.role === 'user').length;
+  if (!shouldRefreshImpression(entry, userMessageCount)) return;
+  const transcript = transcriptForSummary(
+    wireMessages.map((m) => ({role: m.role, text: m.content})),
+  );
+  if (!transcript.trim()) return;
+  await summarizeUserImpression({
+    personaId,
+    personaName: persona?.name ?? entry.personaName,
+    transcript,
+    complete: (prompt) => chatOnce(config, prompt),
+    source: 'auto',
+    seenUserCount: userMessageCount,
+  });
+}
+
 export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
   let abortController: AbortController | null = null;
   let _running = false;
@@ -1547,13 +1664,19 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
         onEvent({type: 'message-start', requestId, messageId: requestId});
 
         // 数据驱动人设注入: 激活 Agent 的人设作为 system 消息前置 (空人设/已有 system 则跳过).
+        // 用户印象 · AI 自我参考项: 该伙伴对用户的既有印象接在同一 system 前缀上
+        // (空印象不注水; 调用方自带 system 时整体跳过, 原契约不变).
         const persona = activePersonaOf(config);
         const wireMessages = request.messages.map((m) => ({role: m.role, content: m.content}));
         const hasSystem = wireMessages.some((m) => m.role === 'system');
         const personaText = persona?.persona?.trim() || '';
+        const impressionText = impressionSystemBlock(
+          loadUserImpression(impressionPersonaKey(persona), persona?.name ?? ''),
+        );
+        const systemText = [personaText, impressionText].filter(Boolean).join('\n\n');
         const effectiveMessages =
-          !hasSystem && personaText
-            ? [{role: 'system' as const, content: personaText}, ...wireMessages]
+          !hasSystem && systemText
+            ? [{role: 'system' as const, content: systemText}, ...wireMessages]
             : wireMessages;
 
         const full = await streamChat(
@@ -1565,12 +1688,17 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
             onToolCall: (toolCall) => onEvent({type: 'tool-call', requestId, toolCall}),
             onToolResult: (toolCallId, ok, summary) =>
               onEvent({type: 'tool-result', requestId, toolCallId, ok, summary}),
+            onUsage: (usage) => onEvent({type: 'usage', requestId, usage}),
             onApprovalRequired: (pending) =>
               onEvent({type: 'approval-required', requestId, pending}),
           },
           request.signal ?? abortController.signal,
           request.sessionId,
         );
+
+        // 用户印象自动总结（AI 自我参考项的持续维护）：节流后台追加，不阻塞
+        // 回复、不进事件流；失败静默保旧印象，下次节流到点再试。
+        void maybeAutoSummarizeImpression(config, persona, wireMessages).catch(() => {});
 
         onEvent({type: 'message-end', requestId, messageId: requestId, fullText: full});
         onEvent({type: 'run-end', requestId, aborted: false});
@@ -1798,6 +1926,32 @@ export async function fetchBackendSessions(config: ApeirethConfig): Promise<Arra
     last_active_at: s.updated_at ?? 0,
     episode_count: s.message_count ?? 0,
   }));
+}
+
+/**
+ * DELETE /v1/sessions/{sessionId} — 后端真删会话（删除链的"重启不复活"根因面）。
+ *
+ * 诚实口径：
+ *   - 200 = 真删成功；
+ *   - 404 `session_not_found` = 他的账本里本就没有这条（纯本机草稿），算成功；
+ *   - 400 `invalid_request` = 该 id 不可能是后端会话 id（后端主键是规范会话 id），
+ *     后端无记录可删，也算成功；
+ *   - 其余任何失败（网络断、5xx、路由不存在的裸 404）一律抛 HttpError，
+ *     由调用方回滚整个删除——不悄悄"删了个本地副本"。
+ */
+export async function deleteBackendSession(config: ApeirethConfig, sessionId: string): Promise<void> {
+  const res = await fetch(
+    `${normalizeBaseUrl(config.baseUrl)}/v1/sessions/${encodeURIComponent(sessionId)}`,
+    {
+      method: 'DELETE',
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    },
+  );
+  if (res.ok) return;
+  const text = await res.text().catch(() => '');
+  const err = httpErrorFromText(res.status, text, `HTTP ${res.status} `);
+  if (err.code === 'session_not_found' || err.code === 'invalid_request') return;
+  throw err;
 }
 
 /** 搜索记忆条目 */

@@ -42,6 +42,15 @@ pub mod presence;
 /// Session-scoped model + permission settings (`/v1/sessions/{id}/settings`).
 pub mod session_settings;
 
+/// IM quick access: channel configuration surface (env + data directory).
+pub mod im_channels;
+
+/// IM quick access: bidirectional message bridge (session mapping + turn relay).
+pub mod im_bridge;
+
+/// IM quick access: approval cards and four-state closure (paired audit writes).
+pub mod im_approval;
+
 pub use barge_in::{
     format_sse_interrupt_event, BargeInController, InterruptNotice, InterruptReason,
     InterruptStreamSubscription, StreamHandle,
@@ -70,7 +79,24 @@ pub use admin::{
     credential_name, normalize_provider, CapabilitiesConfig, ConfigPatch, ConfigView,
     CredentialWriter, GatewayRuntimeConfig,
 };
+
 pub use error_frame::{ErrorCode, ErrorEnvelope, ErrorFrame};
+pub use im_approval::{
+    approval_risk_level, FileApprovalAudit, ImApprovalAuditCommit, ImApprovalCloser,
+    ImApprovalClosure, ImApprovalClosureResult, ImApprovalNotice, ImApprovalRequest,
+    ImApprovalResolution, ImApprovalResolver, MemoryApprovalAudit,
+};
+pub use im_bridge::{
+    im_router, im_sessions_path, sessions_doc_compat, CanonicalChainHandler, ImBridge,
+    ImBridgeError, ImInboundResult, ImSessionMapStore, ImSessionMapping, ImSessionTable,
+    ImTurnHandler, ImTurnOutcome, IM_SESSIONS_DOC_NAME, IM_SESSIONS_DOC_VERSION, IM_SESSIONS_FILE,
+    IM_SIGNATURE_HEADER,
+};
+pub use im_channels::{
+    assemble_im_channels, doc_compat, im_channels_path, ImChannelAssembly, ImChannelConfig,
+    ImChannelSpec, ImConfigError, IM_CHANNELS_DOC_NAME, IM_CHANNELS_DOC_VERSION, IM_CHANNELS_ENV,
+    IM_CHANNELS_FILE,
+};
 
 pub use events::{
     events_handler, EventBus, EventsSubscription, FlushReport, GatewayEvent,
