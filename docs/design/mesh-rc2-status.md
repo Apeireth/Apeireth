@@ -31,7 +31,7 @@
 ## Testing
 
 - Mesh regression: passed (mesh / mesh-protocol / mesh-quic / mesh-rendezvous
-  suites, 211 tests, 0 failures).
+  suites, 233 tests, 0 failures; re-run at freeze, 2026-10-11).
 - Workspace regression: 4935 passed, 2 failed, 21 ignored — both failures are
   the pre-existing baseline pair (`apeireth-core` release-version assertion
   `rc.1` vs workspace `rc.2`; `apeireth-tools-canonical` `apply_patch` CAS
