@@ -324,10 +324,11 @@ the target dir off H::
     CARGO_TARGET_DIR=E:\apeireth-mesh-verify-target
     cargo test --workspace --no-fail-fast -j 4
 
-With -j 4 the run completes. The last recorded run (2026-10-11, after the
-experimental NAT traversal integration) reported 4935 passed, 2 failed, 21
-ignored. The two failures are exactly the pre-existing pair listed above, and
-they were verified as pre-existing rather than assumed: at baseline origin/main
-the workspace already reported 2.0.0-rc.2 while crates/foundation/core/src/lib.rs
+With -j 4 the run completes. The last recorded runs both reported 4935 passed,
+2 failed, 21 ignored: the NAT-traversal integration run (2026-10-11) and the
+RC2 freeze re-run (2026-10-11, documentation-only changes since). The two
+failures are exactly the pre-existing pair listed above, and they were
+verified as pre-existing rather than assumed: at baseline origin/main the
+workspace already reported 2.0.0-rc.2 while crates/foundation/core/src/lib.rs
 already asserted 2.0.0-rc.1, no replay commit ever changed a version line, and
 no replay commit touched crates/capabilities/tools at all.
