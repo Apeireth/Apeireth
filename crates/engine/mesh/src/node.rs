@@ -726,6 +726,14 @@ impl MeshNode {
         Ok(peer_id)
     }
 
+    /// **EXPERIMENTAL — best-effort direct connectivity, not verified under
+    /// real NAT.** This is *experimental NAT traversal*: it may fail on NAT
+    /// behaviours this code has never met, and it has been verified on
+    /// loopback only (the Linux namespace harness exists but has not been
+    /// run; no real NAT has been traversed). The relay remains the
+    /// correctness path. Callers must decide their own fallback policy on
+    /// [`MeshError::PunchFailed`]; nothing here retries without bound.
+    ///
     /// Establish a direct connection to a trusted peer by **simultaneous
     /// open**, driven from the production connection path.
     ///

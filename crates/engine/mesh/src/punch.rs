@@ -1,5 +1,12 @@
 //! Simultaneous open: the coordination state, and the driver that acts on it.
 //!
+//! **EXPERIMENTAL — best-effort direct connectivity, not verified under real
+//! NAT.** Everything here exists to *attempt* a direct link; whether a
+//! direct link is possible is decided by NAT behaviour this code has never
+//! met. Verified on loopback only; the Linux namespace harness
+//! (`scripts/test-mesh-nat.sh`) has not been run; no real NAT has been
+//! traversed. The relay remains the correctness path.
+//!
 //! # What this is
 //!
 //! One high-level intent — "connect to peer B" — has to become *both* peers

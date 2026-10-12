@@ -1,5 +1,10 @@
 # MESH-NAT-E2E-1 — 最终报告
 
+> **状态分类：experimental NAT traversal（best-effort direct connectivity），未在真实 NAT 下验证。**
+> 本文是 2026-10-11 的时点记录；当前权威状态以 `mesh-architecture.md`
+> 顶部的实验性横幅与 "Experimental: NAT traversal (capability boundary)"
+> 章节为准。
+>
 > 任务：以真实 NAT 穿透验证为核心的系统集成与工程验收。
 > 日期：2026-10-11 · 分支 `replay/mesh-on-rc2` · 基线 `938921f43`（rc2）
 > 配套审计：`mesh-nat-e2e-audit.md`（Gap Matrix 与本报告的差距已按此推进）。
