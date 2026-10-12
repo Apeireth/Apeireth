@@ -158,6 +158,11 @@ pub struct PunchOutcome {
 ///
 /// Keyed on the *canonical* peer pair, so `request(A, B)` and `request(B, A)`
 /// name the same attempt and cannot become two.
+///
+/// **Experimental** (see the module header): this coordinates an attempt at
+/// best-effort direct connectivity that has never met a real NAT. It holds
+/// no addresses and no trust — the pinned handshake above this boundary
+/// still decides who is a peer.
 #[derive(Debug)]
 pub struct PunchCoordinator {
     inner: Mutex<Inner>,

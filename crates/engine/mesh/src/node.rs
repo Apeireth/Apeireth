@@ -524,6 +524,19 @@ impl MeshNode {
     /// `expected` is the peer identity this runtime intends to reach — from the
     /// known-peer configuration, never guessed from the transport. Fail closed
     /// on trust, protocol version, or identity mismatch.
+    ///
+    /// Responsibilities: this method owns the *dial-side* half of the mesh
+    /// handshake (Hello → HelloAck), the pinned-identity check against the
+    /// link's transport evidence, peer activation (including the deterministic
+    /// duplicate-connection rule), the first advert, and the connection loop.
+    /// It owns no transport mechanics: obtaining the link — direct QUIC,
+    /// relay, or the experimental punched path — is the caller's job.
+    ///
+    /// Failure semantics: any failure before activation closes the link and
+    /// leaves the peer's previous state untouched (a failed second dial never
+    /// evicts a working link). [`MeshError::Superseded`] means a duplicate
+    /// connection won the convergence race; the peer is connected, just not
+    /// through this link. Every other error means no link was established.
     pub async fn connect(
         self: &Arc<Self>,
         link: Arc<dyn MeshConnection>,

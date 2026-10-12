@@ -10,7 +10,7 @@ docs/
 ├── 02-guides/           # 使用（快速开始/用户手册/部署/开发）
 ├── 03-reference/        # 参考（crates/API/术语）
 ├── 04-internal/         # 内部工作文档（台账/设计意图/团队）
-├── design/              # 前端设计（设计系统/交接/开场动画封存档案）
+├── design/              # 设计（前端设计 + Mesh 设计；mesh-architecture.md 是 mesh 权威现状）
 ├── development/         # 开发（目录布局/新增模块/移植清单）
 └── archive/             # 历史归档（stage*/r*/adr/conventions... 保留不展示）
 ```
@@ -47,6 +47,19 @@ docs/
 | [development/repository-layout.md](development/repository-layout.md) | 当前目录、ownership 与依赖边界 |
 | [../../ROADMAP.md](../../ROADMAP.md) | 顶层路线图（v2 下一步按优先级；v1 时代详单在 archive/roadmap） |
 | [../../CHANGELOG.md](../../CHANGELOG.md) | 变更流水（v2.0.0-alpha.1 段为重构版记录，其余为 v1 历史） |
+
+## Mesh 设计文档（RC2 冻结时点，2026-10-11）
+
+权威层级：`mesh-architecture.md` 是 mesh 当前状态的唯一权威；`mesh-nat-e2e-report.md` 只是证据记录；阶段文档是历史。
+
+| 文档 | 角色 |
+|---|---|
+| [design/mesh-architecture.md](design/mesh-architecture.md) | **权威现状**：mesh 保证什么、每条改动必须守什么、还缺什么；实验性 NAT 穿透的状态与能力边界以此为准 |
+| [design/mesh-rc2-status.md](design/mesh-rc2-status.md) | **RC2 状态摘要**：传输/安全/测试/已知限制一页纸（冻结时点快照） |
+| [design/mesh-nat-e2e-report.md](design/mesh-nat-e2e-report.md) | 证据与验证记录（2026-10-11 时点）：实现、测试矩阵、Git、缺口、结论 |
+| [design/mesh-nat-e2e-audit.md](design/mesh-nat-e2e-audit.md) | NAT 链路定向审计与 Gap Matrix（该轮次的历史证据） |
+| [design/mesh-phase-0.md](design/mesh-phase-0.md) | 历史阶段设计（Phase 0 定稿记录，勿当现状） |
+| [design/mesh-phase-2c1.md](design/mesh-phase-2c1.md) | 历史阶段设计（Phase 2C1；文首注记指向当前权威） |
 
 ## 当前基线（2026-10-06 对账更新；2026-08-27 快照保留在下方）
 
