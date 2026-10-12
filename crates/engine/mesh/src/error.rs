@@ -106,6 +106,14 @@ pub enum MeshError {
     /// expired, or refused presence; no dialable candidate; the attempt
     /// limit). This is the caller's signal to fall back to the relay path —
     /// never to retry without bound.
+    ///
+    /// **The mesh does not choose the fallback.** Experimental NAT traversal
+    /// is best-effort direct connectivity with no real-NAT compatibility
+    /// guarantee; the caller owns the policy (relay, retry later, surface the
+    /// error). The decision points for a relay fallback exist
+    /// (`RelayMeshTransport` + the same pinned handshake); an automatic
+    /// direct→relay state machine is a documented future step, not current
+    /// behaviour.
     #[error("punch to {peer} produced no connection: {reason}")]
     PunchFailed {
         /// The peer that could not be reached directly.

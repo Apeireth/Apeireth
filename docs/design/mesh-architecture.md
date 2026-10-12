@@ -5,6 +5,16 @@ every change must keep, and what is still missing. The phase documents
 (`mesh-phase-0.md`, `mesh-phase-2c1.md`) describe how the pieces arrived; this
 one describes the whole.
 
+> **STATUS: experimental NAT traversal.** The mesh contains *experimental NAT
+> traversal* — best-effort direct connectivity via `MeshNode::connect_punched`.
+> It is implemented in the production connection path and verified on loopback
+> only. It has **not** been verified under any real NAT: the Linux namespace
+> harness (`scripts/test-mesh-nat.sh`) exists but has not been run in the
+> environment where it was written (Windows), and real-world NAT
+> compatibility is unknown. Nothing here may be described as NAT traversal
+> "supported" or production-ready. See
+> [Experimental: NAT traversal](#experimental-nat-traversal-capability-boundary).
+
 ## One sentence
 
 The mesh moves *where a capability call executes*. It never moves who owns the
@@ -200,17 +210,79 @@ closed there.
   before dialing; trust is still decided by the pin after the end-to-end
   handshake.
 
+## Experimental: NAT traversal (capability boundary)
+
+**Experimental NAT traversal = best-effort direct connectivity.** Two peers
+that hold each other's current verified presence attempt a simultaneous open
+so a direct QUIC link can be established when a NAT mapping allows it. The
+relay remains the correctness path; direct connectivity is an optimization
+that may simply not work, depending on the NAT.
+
+Implemented:
+
+- `VerifiedPresence` validation as the only dial-plan source (a candidate is
+  never dialable from an unverified or unsigned record).
+- Punch coordination (`PunchCoordinator`): bounded, bound to both peers'
+  current presence incarnations, keyed on the canonical peer pair.
+- Simultaneous-open attempt (`punch`): dial half and accept half over one
+  dual-role socket inside one bounded window.
+- Dual-role socket ownership: one bound UDP socket observes, punches, and is
+  then handed to quinn; nothing re-binds, no second reader competes.
+- QUIC connect/accept convergence: the surviving link goes through the
+  ordinary pinned handshake and the ordinary duplicate-connection rule.
+- `PunchFailed` signalling: a typed, bounded failure the **caller** turns
+  into whatever fallback policy it wants.
+
+Not implemented:
+
+- **Production gateway orchestration.** No production host (gateway, CLI)
+  discovers presence and drives `connect_punched` yet; the first caller is
+  the test harness. Production dialing remains the static-endpoint
+  `maintain_connection` path and inbound `serve`.
+- **Automatic relay fallback state machine.** The decision points exist
+  (`PunchFailed` → dial the relay → the same pinned handshake), and the relay
+  path itself is proven by the WAN suites, but no single flow walks
+  direct-attempt → relay-fallback. See the future state machine below.
+- **Real NAT compatibility guarantees.** Verified on loopback only; the
+  Linux namespace harness has not been executed; no real NAT device has been
+  traversed. Address-dependent and address-and-port-dependent mapping and
+  filtering behaviours are untested.
+
+### Future state machine (design note, not implemented)
+
+The desired production flow once orchestration lands. This is a note, not a
+commitment, and not a description of current behaviour:
+
+```text
+discover peer
+      |
+VerifiedPresence            (note_presence; replay/expiry refused)
+      |
+attempt direct
+      |
+connect_punched()           (experimental: best-effort, bounded window)
+      |
+ +----+----+
+ |         |
+success   PunchFailed
+ |         |
+mesh      relay fallback    (RelayMeshTransport -> same pinned handshake)
+```
+
+Until that flow exists in a host, callers of `connect_punched` must decide
+their own fallback policy on `PunchFailed`; the mesh will not retry without
+bound and will not silently prefer one path.
+
 ## Not covered by this document's guarantees
 
 - **MCP and other dynamic tools are not advertised over the mesh.** They live
   in the runtime's own `CapabilityRegistry` (module-id strings), not in
   `PluginManager`, so the mesh cannot see them. Exposing them would first need
   an ownership story for them.
-- **NAT traversal is implemented end to end in the connection path, but no
-  NAT has ever been traversed by this code.** The mechanics exist and are
-  driven by the production flow: `MeshNode::connect_punched` runs trust gate
-  → presence gate → `PunchCoordinator` → simultaneous open over one dual-role
-  socket → the ordinary pinned handshake → the ordinary convergence, and the
+- **Experimental NAT traversal has never met a real NAT.** The mechanics are
+  driven by the production flow (`MeshNode::connect_punched`: trust gate →
+  presence gate → `PunchCoordinator` → simultaneous open over one dual-role
+  socket → the ordinary pinned handshake → the ordinary convergence), and the
   Linux namespace harness (`scripts/test-mesh-nat.sh`, `nat_probe punch`)
   exercises that same path against nft-masquerade NATs with a real remote
   invocation. What is missing is *execution and measurement*: the harness was
@@ -252,9 +324,10 @@ the target dir off H::
     CARGO_TARGET_DIR=E:\apeireth-mesh-verify-target
     cargo test --workspace --no-fail-fast -j 4
 
-With -j 4 the run completes: 172 suites, 4865 passed, 2 failed, 21 ignored. The
-two failures are exactly the pre-existing pair listed above, and they were
-verified as pre-existing rather than assumed: at baseline origin/main the
-workspace already reported 2.0.0-rc.2 while crates/foundation/core/src/lib.rs
+With -j 4 the run completes. The last recorded run (2026-10-11, after the
+experimental NAT traversal integration) reported 4935 passed, 2 failed, 21
+ignored. The two failures are exactly the pre-existing pair listed above, and
+they were verified as pre-existing rather than assumed: at baseline origin/main
+the workspace already reported 2.0.0-rc.2 while crates/foundation/core/src/lib.rs
 already asserted 2.0.0-rc.1, no replay commit ever changed a version line, and
 no replay commit touched crates/capabilities/tools at all.

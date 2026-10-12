@@ -1,5 +1,12 @@
 # Mesh Phase 2C1 — Secure WAN Rendezvous + Encrypted Relay
 
+> 历史阶段文档：记录 Phase 2C1 落地时的设计与决策。其中 "Deliberately
+> absent (Phase 2C2+)" 清单里的 UDP hole punching 等项此后已以**实验性**
+> 形态部分落地（`PunchCoordinator` / `punch` / `MeshNode::connect_punched`），
+> 但**未在真实 NAT 下验证**；当前权威状态见
+> [`mesh-architecture.md`](mesh-architecture.md) 的 "Experimental: NAT
+> traversal" 章节。
+
 > Correctness path for WAN Mesh. Relay answers *how to reach*; rendezvous answers
 > *where*; neither answers *who to trust* — that stays with the local
 > `TrustStore`, and cryptography proves who is on the other end.

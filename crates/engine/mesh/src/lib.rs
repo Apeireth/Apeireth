@@ -27,12 +27,22 @@
 //!   `PluginManager`, under governance, with trace propagated,
 //!   best-effort cancellation, deadlines, and heartbeats.
 //!
-//! # What Phase 0 deliberately does not contain
+//! # What is deliberately absent, and what is experimental
 //!
-//! NAT traversal, relays, STUN/TURN, DHT, gossip discovery, distributed memory,
-//! session handoff, global scheduling, agent migration, QUIC, or a PKI. The
-//! transport boundary ([`transport::MeshTransport`]) is where a real TCP or
-//! QUIC link plugs in later without touching any of the semantics above.
+//! Still absent: distributed memory, session handoff, global scheduling,
+//! agent migration, a PKI. The transport boundary
+//! ([`transport::MeshTransport`]) is where a real TCP or QUIC link plugs in
+//! without touching any of the semantics above — and QUIC
+//! (`apeireth-mesh-quic`) plus the WAN rendezvous/relay
+//! ([`relay`]) now exist on the far side of that boundary.
+//!
+//! **Experimental: NAT traversal.** [`punch`] and
+//! [`node::MeshNode::connect_punched`] are *experimental NAT traversal* —
+//! best-effort direct connectivity, verified on loopback only, never against
+//! a real NAT (the Linux namespace harness exists but has not been run). The
+//! relay remains the correctness path; a direct attempt that fails is a
+//! bounded [`MeshError::PunchFailed`] whose fallback policy belongs to the
+//! caller.
 
 #![deny(unsafe_code)]
 
