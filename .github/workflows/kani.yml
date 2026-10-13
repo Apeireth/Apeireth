@@ -101,12 +101,12 @@ jobs:
           - kani_executed_monotonic_once
           - kani_crash_recovery_invariant_c
           # ---- 性质族 1: panic-freedom ----
-          # fold 管线 2026-10-11 拆三函数级 (K16): 全管线合一会让每处切片的
-          # panic 路径各拖一整套格式化机器 (slice_index_fail 周围 memchr 数千
-          # 次展开, 常量输入也 25m+ 不落地)。
-          - kani_panic_free_fold_markers
-          - kani_panic_free_fold_parse
-          - kani_panic_free_fold_render
+          # fold 家族 2026-10-11 退出机器证明面 (K18 终局, 实测证据链 K15-K17):
+          # std 字符串机 (TwoWaySearcher/切片 panic 路径) 是不可约的 CBMC 税 ——
+          # 三代生成器 + format! 治理 + 行界定型 + 具名常量用例 + 静态切片,
+          # markers 单件 6 次常量搜索仍 599s 不落地。panic-freedom 由
+          # fold_block 单测覆盖 (含 CJK/断标记/多块), claim 边界见
+          # docs/04-internal/kani-verification-playbook.md K18。
           - kani_panic_free_residual_pyramid_analyze
           - kani_panic_free_semantic_axis_fit_project
           - kani_panic_free_river_measure_omega

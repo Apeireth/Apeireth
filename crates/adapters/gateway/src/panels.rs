@@ -1259,6 +1259,9 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "workbench", "capabilities": [
                 cap("workbench.turn.read", true, false, &["read"], workbench_supported, workbench_supported),
             ] },
+            { "name": "metrics", "capabilities": [
+                cap("metrics.read", true, false, &["read"], true, true),
+            ] },
             { "name": "voice", "capabilities": [
                 cap_with_reason("voice.duplex", false, false, &["duplex", "stream"], false, false, Some("not_assembled")),
             ] },

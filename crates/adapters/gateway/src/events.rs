@@ -410,9 +410,10 @@ impl SessionEventsSubscription {
         loop {
             match self.rx.recv().await {
                 Ok(event) if is_session_event(&event, self.session) => return Ok(Some(event)),
-                Ok(_) => continue,
                 Err(broadcast::error::RecvError::Lagged(omitted)) => return Err(omitted),
                 Err(broadcast::error::RecvError::Closed) => return Ok(None),
+                // 他会话帧: 跳过, 继续等本会话的。
+                Ok(_) => {}
             }
         }
     }

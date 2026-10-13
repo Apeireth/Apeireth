@@ -667,6 +667,19 @@ mod tests {
         assert_eq!(resp.finish_reason, Some(NormalizedFinishReason::Length));
     }
 
+    /// 找不到缓存列的家留 None 不编造: 本家原始 usage 只有三列 token 计数,
+    /// 缓存命中列照实未知 (非 0)。
+    #[test]
+    fn adapt_response_keeps_the_cache_column_unknown_without_a_vendor_column() {
+        let cap = capability(empty_resolver_slot());
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        });
+        let resp = cap.adapt_response(body, "MiniMax-M3").expect("adapts");
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, None);
+    }
+
     #[test]
     fn classify_status_maps_each_category() {
         let cap = capability(empty_resolver_slot());

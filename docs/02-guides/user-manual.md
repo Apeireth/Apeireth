@@ -68,6 +68,8 @@ v2 唯一进程执行边界 = **`crates/capabilities/tools/src/process/`**（`Pr
 
 **git 写边界（分级语义，显式声明防模型幻觉）**：git 写只有 `tool.git_write` 这一个分级入口——L1 可逆默认人批（设置可开自动放行 L1）、L2 出网永远人批、**L3 毁灭永远没有工具面**（不要请求它）。`tool.repo` 维持只读合同（status / diff / log / branch / summary 探查）。
 
+**`tool.worktree_plan` / `tool.worktree_apply`（多文件大改四拍受控写，opt-in，干活能力轴 P2）**：`APEIRETH_ENABLE_WORKTREE_PLAN=1` / `APEIRETH_ENABLE_WORKTREE_APPLY=1` 开启（注册 + 授权同源；**子依赖主 + file_write**：计划拍要 `APEIRETH_ENABLE_FILE_WRITE=1` 同开，落盘拍再要计划拍同开，fail-closed）。多文件大改走「计划→改→验证→落」四拍：计划拍（`tool.worktree_plan`，只读**零审批**）产**改单**（文件列表 + 每文件动作 + 预期）+ plan_id，零落盘；落盘拍（`tool.worktree_apply`）按改单执行——改单与补丁**交叉一致**（文件集 + 动作标签逐项相符，漂移拒绝即帧），改拍/验证拍在暂存面（工作区零写入，验证命令走受控通道：结构化 argv、限域暂存面、超时），落拍过读前观测门禁（**未读不得覆盖/删除**）+ 持久档原子写，**全有或全无**（任一失败整批回滚）。风险档位 **RequireApproval 级：每次落盘都人批**（无自动放行档，审批卡载荷 = 改单摘要：文件数 / 动作分布 / 验证命令）。两级工具**不含 git 写**——改单只动文件，提交走 `tool.git_write` 分级词表。
+
 CLI 隐私逃生门：`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 关闭 filesystem/search 执行许可；旧 `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` 保留兼容（等同默认）；两者同设时 DISABLE 赢（fail-closed）。敏感路径保护恒开。
 
 **会话级审批策略（2026-09-12）**：`SessionSettings` 支持 `permission_preset`（`read_only` 拒写/执行 / `standard` 沿用审批 / `full` 免审批留日志）+ `approval_remember`（`standard` 下"会话内记住"：某工具批准一次后该会话内同工具后续调用跳过审批；进程内记忆、重启清零；inner 的 `Deny` 永不绕过）。桌面端会话头提供 4 档选择器：只读 / 标准·每次审批 / 标准·会话内记住 / 完全放行。

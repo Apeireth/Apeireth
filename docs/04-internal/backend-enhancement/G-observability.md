@@ -43,7 +43,7 @@ P1 指标数据源（点亮现有 UI 槽位）→ P2 tracing 时间线 → P3 �
 | `latency_ms` | `u64` | 收束段执行毫秒（计时点在会话锁内、不含会话排队与人工审批等待） | 恒有 |
 | `input_tokens` | `Option<u64>` | 收束处 usage 计量 `prompt` 列（**turn-telemetry 同源**, 不另立计量） | 失败/待批收束无计量 → `null` |
 | `output_tokens` | `Option<u64>` | usage `completion` 列（同源） | 同上 |
-| `cache_hit_tokens` | `Option<u64>` | usage 计量的缓存列 | **暂无数据源**（见缺口登记①）→ `null` |
+| `cache_hit_tokens` | `Option<u64>` | usage 计量的缓存列（`NormalizedUsage::prompt_cache_hit_tokens`，缺口①已接） | provider 未报缓存列 → `null`（未知不冒充 0） |
 | `cache_hit_rate` | `Option<f64>` | Σ命中/Σ输入（0.0–1.0; 上屏百分比由消费端换算） | 命中未知或输入为 0 → `null` |
 | `tool_calls` | `Option<u32>` | 收束记录轨迹 (`ExecutionTrace`) 内的工具派发计数 | 失败/待批收束 → `null`；审批续跑拍只带续跑段轨迹（缺口登记④） |
 | `rounds` | `Option<u32>` | 收束轮数（成功 = `TurnResponse.rounds`; 待批 = `rounds_used`） | 失败收束轮数不可知 → `null` |
@@ -118,15 +118,20 @@ cargo test --workspace --locked -j 2   # 既有套件零回归（含 execute 既
 
 ## 缺口登记（不假装）
 
-1. **CACHE 格（缓存命中）暂无数据源**：usage 计量链的 `NormalizedUsage` 只有
-   prompt/completion/total 三列——provider 原始 usage 的缓存列在归一化时被丢弃。
-   指标合同已留位（`cache_hit_tokens`/`cache_hit_rate` → `null` = "—"），点亮 CACHE 格
-   需 **协议/provider 线**在归一化 usage 补缓存列（跨线缺口, 本批不越线改协议面）;
-   接入后只需改 `metrics.rs` 一处取数口。
+1. **CACHE 格（缓存命中）暂无数据源** → **已点亮（2026-10-13 总装批）**：`NormalizedUsage`
+   增缓存列 `prompt_cache_hit_tokens`（`#[serde(default)]` 落库兼容），三家 provider 归一化处
+   按原始 usage 真实字段填充（openai 兼容面 `prompt_tokens_details.cached_tokens` /
+   `prompt_cache_hit_tokens`, anthropic 面 `cache_read_input_tokens`; 找不到缓存列的家
+   留 `None` 不编造）；`metrics.rs` 的 `TurnMetrics::succeeded` 取数口随之点亮（真值,
+   未报 = "—"）。口径注（如实）：
+   各家缓存列与 `prompt_tokens` 的包含关系不同（兼容面 cached ⊆ prompt；`cache_read_input_tokens`
+   记在 `input_tokens` 之外），命中率沿用冻结公式 Σ命中/Σ输入 不换口径不裁剪。
 2. **cost 列（可选列）恒空**：usage×单价的换算点唯一归花费线回合计量（`quota`,
    A-P2 冻结口径）, 指标面不做第二次换算以免口径分裂; 由花费线把 per-turn 成本
    喂进 `record` 入口点亮（接线缝已留）。
 3. **能力清单条目**：`/v1/apeireth/capabilities` 的 `metrics.read` 条目在
    `panels.rs`（共享面, 本批不动）, 随前端消费批接入; 端点本身已过令牌门且合同在案。
+   → **已收口（2026-10-13 总装批）**：`panels.rs` 能力清单新增 `metrics` 组
+   `metrics.read` 条目（只读面, 恒可用, 端点已过令牌门）。
 4. **tool_calls 续跑段口径**：审批续跑成功拍只带续跑段轨迹（冻结 continuation 不带
    轨迹, 前段派发不回填）——如实记在字段表, 不做估算。

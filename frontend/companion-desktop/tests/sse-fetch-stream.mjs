@@ -9,7 +9,7 @@
 //      SIM 纪律), 快照与事件双面都带 Bearer;
 //   ④ companion 事件订阅链带令牌走 fetch 流: 具名帧路由 + 退避重连零回归。
 //
-// 待注册: tests/run-all.mjs SUITES (run-all.mjs 属他线在途禁区, 本批不改)。
+// 已注册: tests/run-all.mjs SUITES (strip:true, 随 pnpm test 全量跑)。
 // 独立运行: node --experimental-strip-types tests/sse-fetch-stream.mjs
 import assert from 'node:assert/strict';
 

@@ -82,6 +82,13 @@ pub const ENABLE_GIT_WRITE_ENV: &str = "APEIRETH_ENABLE_GIT_WRITE";
 // 时仅 **L1 可逆本地写** (add/commit/branch 建·切/tag 本地) 免逐次审批;
 // **L2 出网永不自动放行** (push/fetch/remote 每次都人批)。
 pub const ENABLE_GIT_WRITE_AUTO_PASS_L1_ENV: &str = "APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1";
+// 干活能力轴 P2 两级工具旋钮 (worktree_plan 只读改单面 / worktree_apply 四拍
+// 受控工作树写): 子依赖主 + file_write 唯一写总闸, fail-closed —— 计划拍要
+// 写总闸同开, 落盘拍再要计划拍同开 (改单是 apply 的输入合同, 两级成对)。
+// 默认关 (fail-closed); 开 = 注册 + 授权同源, apply 每次落盘都人批 (无自动
+// 放行档), plan 只读零审批。
+pub const ENABLE_WORKTREE_PLAN_ENV: &str = "APEIRETH_ENABLE_WORKTREE_PLAN";
+pub const ENABLE_WORKTREE_APPLY_ENV: &str = "APEIRETH_ENABLE_WORKTREE_APPLY";
 // MCP 外部工具桥旋钮 (轻默认, 默认关): `APEIRETH_ENABLE_MCP=1` 时装配外部工具桥,
 // 服务器列表走 `APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json` (拒开语义)。
 const ENABLE_MCP_ENV: &str = "APEIRETH_ENABLE_MCP";
@@ -446,6 +453,26 @@ pub fn git_write_auto_pass_l1_enabled_from_env() -> bool {
             .is_some_and(|value| value.trim() == "1")
 }
 
+/// worktree 计划拍主开关 (`tool.worktree_plan`): `APEIRETH_ENABLE_WORKTREE_PLAN=1`
+/// 且写总闸 `APEIRETH_ENABLE_FILE_WRITE=1` 才生效 (子依赖主 + file_write,
+/// fail-closed —— 单独设本旋钮而写总闸关 = 无效果)。
+pub fn worktree_plan_enabled_from_env() -> bool {
+    file_write_enabled_from_env()
+        && std::env::var(ENABLE_WORKTREE_PLAN_ENV)
+            .ok()
+            .is_some_and(|value| value.trim() == "1")
+}
+
+/// worktree 落盘拍 (`tool.worktree_apply`) 旋钮: 依赖计划拍主开关 + 写总闸
+/// (子依赖主 + file_write, fail-closed —— 单独设本旋钮 = 无效果; 改单是
+/// apply 的输入合同, 两级成对启用)。
+pub fn worktree_apply_enabled_from_env() -> bool {
+    worktree_plan_enabled_from_env()
+        && std::env::var(ENABLE_WORKTREE_APPLY_ENV)
+            .ok()
+            .is_some_and(|value| value.trim() == "1")
+}
+
 use apeireth_guard::BehaviorChainGuardHook;
 
 /// Build the production pipeline and return the shared policy handle alongside
@@ -463,6 +490,8 @@ pub fn build_production_governance_parts(
         None,
         FileWriteRiskLevel::Disabled,
         GitWriteRiskLevel::Disabled,
+        false,
+        false,
     )
 }
 
@@ -471,6 +500,8 @@ fn build_production_governance_parts_with_dataset(
     dataset: Option<Arc<DatasetRecorder>>,
     file_write: FileWriteRiskLevel,
     git_write: GitWriteRiskLevel,
+    worktree_plan: bool,
+    worktree_apply: bool,
 ) -> (
     GovernancePipeline,
     Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -515,6 +546,20 @@ fn build_production_governance_parts_with_dataset(
             ));
         }
     }
+    // 干活能力轴 P2 两级工具 (授权同源, 与 shell/fetch 同款整改口径: 开关开 =
+    // 注册 + 授权): `tool.worktree_plan` 只读改单面零审批 (计划不落盘);
+    // `tool.worktree_apply` 只 grant, 审批级由 [`WorktreeApplyApprovalHook`]
+    // 唯一承载 —— 每次落盘都人批 (无自动放行档), 理由载荷 = 改单摘要。
+    if worktree_plan {
+        policy.grant(Permission::ExecuteTool(
+            apeireth_tools_canonical::WORKTREE_PLAN_CAPABILITY_ID.to_string(),
+        ));
+    }
+    if worktree_apply {
+        policy.grant(Permission::ExecuteTool(
+            apeireth_tools_canonical::WORKTREE_APPLY_CAPABILITY_ID.to_string(),
+        ));
+    }
     let policy = Arc::new(std::sync::Mutex::new(policy));
     let mut guard = BehaviorChainGuardHook::new();
     if let Some(dataset) = dataset {
@@ -544,6 +589,16 @@ fn build_production_governance_parts_with_dataset(
                 }
                 _ => apeireth_tools_canonical::GitWriteReleaseTier::RequireApprovalEveryWrite,
             }),
+        ));
+    }
+    // worktree 落盘拍审批级映射 (授权之后、内容风险之前, 同一审批链): 每次
+    // 落盘都停人工审批 (RequireApproval 级, 无自动放行档), 理由载荷 = 改单
+    // 摘要; 计划拍校验不过的调用拒绝即帧 (不进审批)。
+    if worktree_apply {
+        pipeline = pipeline.with(Arc::new(
+            apeireth_tools_canonical::WorktreeApplyApprovalHook::new(
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+            ),
         ));
     }
     let mut pipeline = pipeline
@@ -626,6 +681,8 @@ fn build_production_governance_parts_from_env() -> (
         production_guard_dataset_recorder(),
         file_write_risk_level_from_env(),
         git_write_risk_level_from_env(),
+        worktree_plan_enabled_from_env(),
+        worktree_apply_enabled_from_env(),
     );
 
     // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
@@ -1042,6 +1099,11 @@ async fn build_cognitive_modules_from_env(
         file_write_auto_pass: file_write_auto_pass_enabled_from_env(),
         git_write: git_write_enabled_from_env(),
         git_write_auto_pass_l1: git_write_auto_pass_l1_enabled_from_env(),
+        // 干活能力轴 P2 两级工具 (子依赖主 + file_write, fail-closed): 计划拍
+        // 要写总闸同开, 落盘拍再要计划拍同开; 注册条件仍由组装根按
+        // `file_write` + 工作区根 + 共享观测门禁把关 (注册即闸)。
+        worktree_plan: worktree_plan_enabled_from_env(),
+        worktree_apply: worktree_apply_enabled_from_env(),
         // MCP 外部工具桥: 装配时加载服务器列表 (env 主入口 / 数据目录次入口,
         // 坏配置拒开), 数据目录与面板其余持久档同位。
         mcp: mcp_enabled,

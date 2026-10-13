@@ -1,5 +1,21 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 后端增强四波交付终账 + 总装批收口 (2026-10-13)
+
+后端增强工程（`docs/04-internal/backend-enhancement/`）四波交付终账（各一行带测试数，数字均出自各批交付记录 / 门禁实跑）+ 总装批六件收口：
+
+- **三维烧钱闸（A-P2 配额真接口）**：tokens / tool_steps / cost_micros 三维配额真执行——回合计量点双维记账（usage×单价按冻结口径换算，无价轮绝不编价、如实 `unpriced_rounds` 部分计量）、超限即帧真数字（`BudgetExhausted{dimension}` 烧钱闸不起烧下一趟）、自述面真值 + 「部分计量」标注。测试 **24 例**（session_quota 5 / quota 单测 7 / 认知调度 1 / 自述面 9 / env 装配 2，全绿实跑）。
+- **认证闭环（W2-② 远程访问认证面）**：全 API 面令牌门（仅 `/health` 豁免）+ 每客户端令牌表（审计带客户端名）+ 非回环绑定强制令牌（fail-closed 拒启动）+ `APEIRETH_LISTEN` 绑定旋钮（缺省仅本机）。测试 **31 例**（交付记录 §4）。
+- **daemon（W2-① 常驻形态）**：PID 文件常驻占位（二次启动显式拒绝 / 陈旧占位接管 / 停机只清自己的占位）+ 优雅停机收尾（`gateway.shutdown` 审计事实 + 攒批观测全量落盘）+ 停机控制端点过令牌门（缺 / 伪令牌 401 且不触发停机）。测试 **4 例**（`resident_service` 实跑）。
+- **多端（W2-③ 多客户端会话复用）**：并发会话路由（每客户端独立订阅 + 同会话事件扇出多端）+ 同会话并发写**排队 + 审计**（会话账本零交叠写）+ 会话归属审计（`gateway.session_client` + name↔token 绑定校验）+ 面板读快照一致。测试 **19 例**（集成 12 + 单测 7，交付记录 §4）。
+- **git 写分级（D-P1）**：L1 可逆默认每次人批 / L2 出网**永远人批**（免审记忆也不越）/ L3 毁灭**无工具面**——词法分级词表 + 变形防绕过（缩写 / 组合短选项 / refspec 变体 / 危险全局选项）+ 受控通道执行（工作区限域 / 超时 / 输出归一）+ 分级审批钩子 + 审批卡脱敏。测试 **27 项**（交付记录 §4 证据表逐名在案；主套件 `git_write_grading` 16 全绿）。
+- **worktree 四拍受控写（D-P2）**：`tool.worktree_plan` 只读改单（零落盘零审批）→ `tool.worktree_apply`「计划→改→验证→落」（暂存面物化 + 校验命令受控通道 + 落拍过读前观测门禁、全有或全无回滚）；改单 / 补丁交叉一致，漂移拒绝即帧；**每次落盘都人批**（无自动放行档，审批卡载荷 = 改单摘要）。测试 **17 例**（主套件 15 + 组装根 2）。
+- **指标数据面（G-P1）**：一收束一拍 `TurnMetrics` + 会话 / 全局两层窗口聚合（最近秩 P50/P95）+ `GET /v1/panel/metrics` 过令牌门；进程内滚动留存如实声明，未知列 "—" 不冒充 0。测试 **21 项**。
+- **模型画像（H-P1）**：`ModelProfileTable` 基线表（能力布尔取族声明、上下文 / 输出取保守下界、单价一律未提供不编价）+ 自述模型节 + 花费线单价来源同源（坏配置拒开）。测试 **24 例**。
+
+**总装批（本批，六件收口）**：① **worktree 两级工具入组装根**——`ProductionModulesConfig` 增 `worktree_plan` / `worktree_apply` 开关（默认关），注册即闸（`file_write` 唯一写总闸 + 工作区根 + 共享 `ObservedGate`），env 旋钮 `APEIRETH_ENABLE_WORKTREE_PLAN` / `_APPLY`（子依赖主 + file_write，fail-closed）注册与授权同源（apply 审批级 = 每次落盘人批、plan 只读零审批），自省名册两行按实际注册条件取值；② **CACHE 格点亮**——`NormalizedUsage` 增缓存列 `prompt_cache_hit_tokens`（`#[serde(default)]` 落库兼容，既有持久记录照常读回），三家 provider 归一化按原始 usage 真实字段填充（兼容面 `prompt_tokens_details.cached_tokens` / `prompt_cache_hit_tokens`、`cache_read_input_tokens`；找不到缓存列的家留 `None` 不编造），`metrics.rs` 取数口随之取真值（命中率沿用冻结公式 Σ命中/Σ输入，各家缓存列与 prompt 的包含关系差异如实入档不裁剪）；③ **run-all 注册** `gateway-auth-face.mjs` / `sse-fetch-stream.mjs`（两套件真跑过）；④ **能力清单**补 `metrics.read` 条目（G-P1 缺口③收口）；⑤ **`cargo fmt --all` 归一全树** + 债栏 D1–D8 速查（全部仍符实际，无需修正）；⑥ 本终账。新测试 **17 例**（装配 4 / 旋钮 4 / 协议落库兼容 2 / provider 填充与缺列 5 / metrics 取数口 2）。
+- 实证：`cargo test --workspace --locked -j 2` 全绿 **186 套件 / 5180 passed / 0 failed**（= 既有 184 套件 + 本批新增 2 套件，零回归）+ clippy `-D warnings` 0 警告 + `cargo fmt --all -- --check` 干净 + pnpm check 0/0 + pnpm test **73/73**（含新注册两套件）+ 中性扫描零命中 + secret-scan 过。
+
 ## [Unreleased] — 收尾入档：形象视觉列重做项（主人裁定）(2026-10-11)
 
 - **主人裁定**：现役前端观感不达标——**形象（含 2D 模式）整体列重做项**，由前端能力/审美更强的模型主持重做讨论（2D 模式方向专题议）。现役形象层三实现（光态哨兵/2D 骨骼小人/3D 素体）一律按**工程验证件**对待：证明契约与管线，不代表产品观感，视觉语言可整体推翻重写。

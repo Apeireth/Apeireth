@@ -12,8 +12,10 @@
 //!   窗口 = 最近 N 拍 (N 配置默认 [`DEFAULT_METRICS_WINDOW_TURNS`]),进程退出
 //!   即清空。会话环有驻留上限 ([`MAX_TRACKED_SESSIONS`]),观测面不会自己
 //!   变成负担。
-//! * **未知不冒充**: 计量源没有的列 (缓存命中/计价) 记 `None`,聚合与端点
-//!   都如实报"未知"(`null` / 遥测条同款 "—"),绝不用 0 冒充。
+//! * **未知不冒充**: 计量源没有的列 (计价; provider 未报缓存列时的命中) 记
+//!   `None`,聚合与端点都如实报"未知"(`null` / 遥测条同款 "—"),绝不用 0 冒充。
+//!   缓存命中列自 G-P1 缺口①接入: provider 归一化 usage 报缓存列时这里取真值
+//!   ([`TurnMetrics::succeeded`] 的取数口), 不报则照旧 "—"。
 //!
 //! 分位口径: 最近秩 (nearest-rank) —— 排序后取 `ceil(p × n)` 位 (1-based)。
 
@@ -92,14 +94,23 @@ impl TurnMetrics {
     /// 成功收束拍: usage 计量在场 (turn-telemetry 同源),轮数与派发数取自
     /// 回合记录。
     pub fn succeeded(elapsed: Duration, response: &TurnResponse) -> Self {
+        let input_tokens = u64::from(response.usage.prompt_tokens);
+        // CACHE 格取数口 (G-P1 缺口①接入, 只改这一处): 命中数取自 usage 计量
+        // 的缓存列 (`NormalizedUsage::prompt_cache_hit_tokens`); provider 未报
+        // 缓存列 = None ("—" = 未知, 不冒充 0)。命中率 = 命中数/输入数
+        // (G-P1 冻结口径; 命中未知或输入为 0 → None)。
+        let cache_hit_tokens = response.usage.prompt_cache_hit_tokens.map(u64::from);
+        let cache_hit_rate = match (cache_hit_tokens, input_tokens) {
+            (Some(hit), input) if input > 0 => Some(hit as f64 / input as f64),
+            _ => None,
+        };
         Self {
             outcome: TurnOutcomeKind::Succeeded,
             latency_ms: latency_ms(elapsed),
-            input_tokens: Some(u64::from(response.usage.prompt_tokens)),
+            input_tokens: Some(input_tokens),
             output_tokens: Some(u64::from(response.usage.completion_tokens)),
-            // 缓存命中列: usage 计量当前不携带缓存列, 命中数未知 (—)。
-            cache_hit_tokens: None,
-            cache_hit_rate: None,
+            cache_hit_tokens,
+            cache_hit_rate,
             tool_calls: Some(dispatch_count(response)),
             rounds: Some(response.rounds),
             // 可选列: 计价换算唯一归花费线, 本面不二次换算 (—)。
@@ -786,5 +797,59 @@ mod tests {
         assert_eq!(metrics.tool_calls, Some(1));
         assert_eq!(metrics.cache_hit_tokens, None);
         assert_eq!(metrics.cost_micros, None);
+    }
+
+    /// CACHE 格取数口点亮 (G-P1 缺口①接入): 成功拍的缓存列取自 usage 计量的
+    /// 缓存列**真值**, 命中率 = 命中/输入; 未报缓存列照旧 "—" (未知不当 0)。
+    #[test]
+    fn succeeded_beat_lights_the_cache_columns_from_the_usage_cache_column() {
+        let mut response = usage_response(100, 5, 1);
+        response.usage.prompt_cache_hit_tokens = Some(25);
+        let metrics = TurnMetrics::succeeded(Duration::from_millis(1), &response);
+        assert_eq!(metrics.cache_hit_tokens, Some(25));
+        assert!(
+            (metrics.cache_hit_rate.expect("known") - 0.25).abs() < 1e-9,
+            "命中率 = 命中/输入"
+        );
+
+        // 未报缓存列 = 未知 (—), 不冒充 0。
+        let unknown = usage_response(100, 5, 1);
+        let metrics = TurnMetrics::succeeded(Duration::from_millis(1), &unknown);
+        assert_eq!(metrics.cache_hit_tokens, None);
+        assert_eq!(metrics.cache_hit_rate, None);
+
+        // 命中已知但输入为 0: 命中率未知 (除零不编造)。
+        let mut zero_input = usage_response(0, 5, 1);
+        zero_input.usage.prompt_cache_hit_tokens = Some(10);
+        let metrics = TurnMetrics::succeeded(Duration::from_millis(1), &zero_input);
+        assert_eq!(metrics.cache_hit_tokens, Some(10));
+        assert_eq!(metrics.cache_hit_rate, None);
+    }
+
+    /// CACHE 格端到端: usage 缓存列 → 成功拍 → 窗口聚合 (Σ命中/Σ输入 真值;
+    /// 无缓存计量的拍不进分子分母, 同源计量口径)。
+    #[test]
+    fn cache_columns_flow_from_the_usage_cache_column_into_the_window_aggregate() {
+        let registry = MetricsRegistry::default();
+        let session = session();
+        for (prompt, hit) in [(100u32, 25u32), (100, 75)] {
+            let mut response = usage_response(prompt, 5, 1);
+            response.usage.prompt_cache_hit_tokens = Some(hit);
+            registry.record(
+                session,
+                TurnMetrics::succeeded(Duration::from_millis(1), &response),
+            );
+        }
+        // 一拍未报缓存列: 不进分子分母。
+        registry.record(
+            session,
+            TurnMetrics::succeeded(Duration::from_millis(1), &usage_response(50, 5, 1)),
+        );
+        let aggregate = registry.session_aggregate(session).expect("session");
+        assert_eq!(aggregate.cache_hit_tokens, Some(100));
+        assert!(
+            (aggregate.cache_hit_rate.expect("known") - 0.5).abs() < 1e-9,
+            "命中率 = Σ命中/Σ输入 = 100/200"
+        );
     }
 }

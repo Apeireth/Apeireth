@@ -1,6 +1,6 @@
 # W2-③ 多客户端会话复用（后端批）交付记录
 
-> `Status: 🚧 施工中（门禁证据待回填）`
+> `Status: ✅ 已交付（2026-10-12，后端批 · 零前端触碰）`
 > 一事：桌面/TUI/IM/web 多端同时在线同一个后端 —— 并发会话路由（事件扇出）、
 > 同会话并发写语义（串行化回合）、会话归属面（`gateway.session_client`）、面板读快照一致性。
 > 范围口径：F 轴 P2/P3 会话复用面（F-server-form.md「多客户端复用 + 会话并发安全」缺口）；
@@ -18,7 +18,7 @@
    再贴一张 busy 帧是与屋内真实行为不符的假旋钮（名实不符）。显式排队 + 排队审计
    让等待**可观测**（排第几 / 等多久都入审计），而不是把排队伪装成拒绝；
 3. **账本零交叠写是硬要求**，排队（先到先服务）是它最直接的实现：回合次序 = 入场次序，
-   账本追加序号天然连续；busy 语义在突发下仍需排队兑底，等于两套语义并存；
+   账本追加序号天然连续；busy 语义在突发下仍需排队兜底，等于两套语义并存；
 4. **实现面最小**：`tokio` 互斥锁即先到先服务，零新造调度器。
 
 钉死点（有测试为证）：第二回合 `queued=1 position=1` 入审计、持闸期间绝不入场、
@@ -110,14 +110,15 @@
 - `gateway.session_client` 审计行已把「谁」与「哪个会话的什么动作」绑定 —— 问责链成形；
 - 每客户端**权限**分级（主人/访客/只读）仍属 W3（E 轴），本批不装。
 
-## 6. 门禁证据（回填中）
+## 6. 门禁证据（2026-10-12 实测，全部 `-j 2`）
 
 | 门禁 | 命令 | 结果 |
 |---|---|---|
-| 全量测试 | `cargo test --workspace --locked -j 2` | 待回填 |
-| Clippy | `cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings` | 待回填 |
-| 格式 | `cargo fmt --all -- --check` | 待回填 |
-| 中性表述 | `scripts/check-neutral-terms.ps1` | 待回填 |
+| 全量测试 | `cargo test --workspace --locked -j 2` | ✅ 退出码 0；**184 套件 / 5163 例通过 / 0 失败 / 22 忽略**（既有 180 套件零失败回归；套件数 180→184 含本批新增 `multi_client_session` 与并行线新增面） |
+| Clippy | `cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings` | ✅ 退出码 0，零警告 |
+| 格式 | `cargo fmt --all -- --check` | ✅ 干净（含跨范围顺手修的 1 行机械回流，见变更面） |
+| 中性表述 | `scripts/check-neutral-terms.ps1` | ✅ 零命中 |
+| 密钥扫描 | `scripts/secret-scan.ps1` | ✅ 无泄漏 |
 
 ## 7. 残余（诚实条款）
 
@@ -130,8 +131,10 @@
 
 变更面（本批）：`crates/engine/runtime/src/canonical/session.rs`（会话写闸 + 原子读改写 + 单测）、
 `crates/engine/runtime/src/canonical/mod.rs`（导出 3 个新符号，最小叠加）、
-`crates/adapters/gateway/src/{events,client_tokens,canonical_entry,session_settings,im_bridge,lib}.rs`、
+`crates/adapters/gateway/src/{events,client_tokens,canonical_entry,session_settings,im_bridge,panels,lib}.rs`、
 `crates/adapters/gateway/tests/multi_client_session.rs`（新增）、
 文档 `gateway-api-contract.md`（§4/§8 增补）/ `F-server-form.md` / 本文。
+跨范围顺手修（报备 + 最小改动 + 说明）：`crates/foundation/governance/src/risk.rs` 仅
+rustfmt 一行机械回流（`cargo fmt --all` 门禁要求全库干净；内容零改动，属验证线在途文件）。
 未触碰禁区（frontend/**、CHANGELOG.md、.github/**、docs/design/**、HANDOFF-NOTES.md、
 canonical/{quota,execute}.rs、crates/capabilities/tools/**、memory 两文件、src-tauri/**）；未 commit。

@@ -9,7 +9,7 @@
 //      (config.apiKey) 从来不是入站鉴权, 任何请求头不得出现;
 //   ④ 源码镜像: 网关 fetch 调用点全部带鉴权头缝 + 陈旧凭据头零残留。
 //
-// 待注册: tests/run-all.mjs SUITES (run-all.mjs 属他线在途禁区, 本批不改)。
+// 已注册: tests/run-all.mjs SUITES (strip:true, 随 pnpm test 全量跑)。
 // 独立运行: node --experimental-strip-types tests/gateway-auth-face.mjs
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';

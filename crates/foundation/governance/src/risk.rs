@@ -184,9 +184,7 @@ impl RegressionAssertion {
                     #[cfg(kani)]
                     let error = "[InRange] value not in bounds".to_string();
                     #[cfg(not(kani))]
-                    let error = format!(
-                        "[InRange:{name}] value={value} not in [{min}, {max}]"
-                    );
+                    let error = format!("[InRange:{name}] value={value} not in [{min}, {max}]");
                     Err(error)
                 } else {
                     Ok(())

@@ -102,6 +102,7 @@ impl ProviderCapability for FakeProvider {
                 prompt_tokens: 10,
                 completion_tokens: 5,
                 total_tokens: 15,
+                prompt_cache_hit_tokens: None,
             },
             tool_calls: Vec::new(),
             raw_metadata: serde_json::Map::new(),

@@ -449,6 +449,20 @@ pub struct NormalizedUsage {
     pub completion_tokens: u32,
     /// 总计
     pub total_tokens: u32,
+    /// 提示缓存命中 token (缓存列的归一): 各家缓存命中/缓存读列收敛到同一
+    /// 语义 —— 本次请求由提示缓存直接供给的输入 token。
+    ///
+    /// `None` = 该 provider 原始 usage **没有**缓存列 (未知, 不是 0) ——
+    /// 找不到的家留 `None` 不编造。`#[serde(default)]` 落库兼容: 既有持久
+    /// 记录没有本列照常反序列化 (历史行读回 = `None` = 未知)。
+    ///
+    /// 口径注 (如实): 各家缓存列与 [`Self::prompt_tokens`] 的包含关系不同 ——
+    /// OpenAI 形状的 `cached_tokens` 计**在** `prompt_tokens` 内, 而
+    /// `cache_read_input_tokens` 记在 `input_tokens` **之外**。派生命中率沿用
+    /// G-P1 冻结公式 (Σ命中/Σ输入), 对后者如实反映"缓存读/未缓存输入", 不做
+    /// 上限裁剪也不换口径。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_hit_tokens: Option<u32>,
 }
 
 /// M11 修复 (2026-09-24 审计): u64 → u32 安全收敛工具。上游 usage 字段返回
@@ -459,7 +473,7 @@ pub fn clamp_u32(value: u64) -> u32 {
 }
 
 impl NormalizedUsage {
-    /// 创建
+    /// 创建 (缓存列未知 = `None`, 不编造)
     pub fn new(prompt: u32, completion: u32) -> Self {
         Self {
             prompt_tokens: prompt,
@@ -467,7 +481,16 @@ impl NormalizedUsage {
             // M11 修复 (2026-09-24 审计): 裸 `+` 在 debug 构建下
             // `u32::MAX + x` 直接 panic; release 回绕成 0。
             total_tokens: prompt.saturating_add(completion),
+            prompt_cache_hit_tokens: None,
         }
+    }
+
+    /// 附上缓存命中列 (provider 归一化处按原始 usage 的真实字段填充;
+    /// 找不到对应列的家传 `None`, 不编造)。
+    #[must_use]
+    pub fn with_cache_hit_tokens(mut self, prompt_cache_hit_tokens: Option<u32>) -> Self {
+        self.prompt_cache_hit_tokens = prompt_cache_hit_tokens;
+        self
     }
 }
 
@@ -720,6 +743,34 @@ mod tests {
     fn usage_total_is_sum() {
         let u = NormalizedUsage::new(10, 20);
         assert_eq!(u.total_tokens, 30);
+    }
+
+    #[test]
+    fn usage_cache_column_is_unknown_by_default_and_round_trips() {
+        // `new` 不编造缓存列: 找不到对应列 = None (未知, 非 0)。
+        let u = NormalizedUsage::new(10, 20);
+        assert_eq!(u.prompt_cache_hit_tokens, None);
+        // 归一化处填充后 round-trip 保真。
+        let filled = NormalizedUsage::new(100, 20).with_cache_hit_tokens(Some(80));
+        assert_eq!(filled.prompt_cache_hit_tokens, Some(80));
+        let json = serde_json::to_string(&filled).expect("serializes");
+        let back: NormalizedUsage = serde_json::from_str(&json).expect("deserializes");
+        assert_eq!(back, filled);
+    }
+
+    #[test]
+    fn usage_cache_column_keeps_persisted_records_readable() {
+        // 落库兼容: 既有持久记录没有缓存列, 照常反序列化 (历史行读回 = 未知)。
+        let legacy = r#"{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}"#;
+        let parsed: NormalizedUsage = serde_json::from_str(legacy).expect("legacy record parses");
+        assert_eq!(parsed, NormalizedUsage::new(10, 20));
+        assert_eq!(parsed.prompt_cache_hit_tokens, None);
+        // 未知缓存列不落键: 新写回的形状与旧读者面一致。
+        let json = serde_json::to_string(&parsed).expect("serializes");
+        assert!(
+            !json.contains("prompt_cache_hit_tokens"),
+            "未知缓存列不得落键: {json}"
+        );
     }
 
     #[test]

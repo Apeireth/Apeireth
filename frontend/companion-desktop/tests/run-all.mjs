@@ -95,6 +95,8 @@ const SUITES = [
   {file: 'starport-db.mjs', name: 'starport db (read-only sql gate / csv escaping / boundary rejection, real module)', strip: true},
   {file: 'starport-folder-tiles.mjs', name: 'starport folder tiles (group CRUD / deterministic ordering / listing mapping, real module)', strip: true},
   {file: 'starport-face-apps.mjs', name: 'starport face apps source mirror (browse gate wiring / real model channel / factory+installer wiring)'},
+  {file: 'gateway-auth-face.mjs', name: 'gateway auth face (three-source token / bearer on every fetch / stale credential head purge, real modules)', strip: true},
+  {file: 'sse-fetch-stream.mjs', name: 'sse fetch stream (frame parsing / stream lifecycle / token-gated subscription chains, real modules)', strip: true},
 ];
 
 function run({file, strip}) {

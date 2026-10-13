@@ -91,20 +91,22 @@ fn f32_vec0(selector: u8) -> Vec<f32> {
 /// 符号字节分支爆炸, format! 与行界定型后仍超) —— 收敛为**具名结构用例组**,
 /// 覆盖全部解析状态: 仅标记行 / 纯文本 / 空文档 / 断标记 / 多块 / 多行文本。
 /// 残余值域 (具体字符内容) 由 fold_block 单测互补 (单测含 CJK/多字节例)。
-fn fold_docs() -> Vec<String> {
-    vec![
+fn fold_docs() -> [&'static str; 6] {
+    // &'static str 字面量而非 String: 堆 String 长度在内存 (CBMC 循环盲展开到
+    // 上界), 静态切片长度是常量 (直接折叠) —— K17 终极开关。
+    [
         // 仅标记行
-        "[===fold:0.5===]".to_string(),
+        "[===fold:0.5===]",
         // 纯文本
-        "plain text".to_string(),
+        "plain text",
         // 空文档
-        String::new(),
+        "",
         // 断标记 (无收尾)
-        "[===fold:0.5".to_string(),
+        "[===fold:0.5",
         // 多块 + 内容行
-        "[===fold:0.5===]\nbody\n[===fold:0.2===]\ntail".to_string(),
+        "[===fold:0.5===]\nbody\n[===fold:0.2===]\ntail",
         // 多行纯文本 (无标记)
-        "x\ny\nz".to_string(),
+        "x\ny\nz",
     ]
 }
 

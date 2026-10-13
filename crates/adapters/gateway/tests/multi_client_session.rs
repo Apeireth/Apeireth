@@ -277,6 +277,7 @@ fn request(method: &str, uri: &str, token: Option<&str>, body: Body) -> Request<
     let mut request = Request::builder()
         .method(method)
         .uri(uri)
+        .header("content-type", "application/json")
         .body(body)
         .expect("request");
     if let Some(token) = token {
@@ -294,6 +295,16 @@ fn with_claim(mut request: Request<Body>, claimed: &str) -> Request<Body> {
         claimed.parse().expect("claim header"),
     );
     request
+}
+
+/// 收一个并发任务的响应 (10 秒兜底: 队列语义若死锁, 测试要报死而不是挂死)。
+async fn finish(
+    job: tokio::task::JoinHandle<axum::http::Response<Body>>,
+) -> axum::http::Response<Body> {
+    tokio::time::timeout(Duration::from_secs(10), job)
+        .await
+        .expect("request finished within 10s (排队语义不得死锁)")
+        .expect("request task not panicked")
 }
 
 async fn status_and_body(response: axum::http::Response<Body>) -> (StatusCode, String) {
@@ -525,11 +536,10 @@ async fn a_second_turn_on_a_busy_session_queues_instead_of_being_rejected() {
                 .unwrap()
         }
     });
-    entered_rx
-        .recv()
+    tokio::time::timeout(Duration::from_secs(5), entered_rx.recv())
         .await
-        .expect("turn A entered the provider");
-
+        .expect("turn A entered the provider (5s 内报到)")
+        .expect("entry signal");
     // 客户端 B 同会话再发: 排队 (在场计数 2), 不被 busy 帧拒绝。
     let turn_b = tokio::spawn({
         let router = router.clone();
@@ -553,8 +563,8 @@ async fn a_second_turn_on_a_busy_session_queues_instead_of_being_rejected() {
 
     // 放行两个回合: 先后完成, 全部 200 (没有 busy 帧)。
     release.add_permits(2);
-    let (status_a, body_a) = status_and_body(turn_a.await.unwrap()).await;
-    let (status_b, body_b) = status_and_body(turn_b.await.unwrap()).await;
+    let (status_a, body_a) = status_and_body(finish(turn_a).await).await;
+    let (status_b, body_b) = status_and_body(finish(turn_b).await).await;
     assert_eq!(status_a, StatusCode::OK, "{body_a}");
     assert_eq!(
         status_b,
@@ -651,7 +661,7 @@ async fn concurrent_turns_and_settings_writes_never_interleave_the_session_ledge
         }));
     }
     for job in jobs {
-        let (status, text) = status_and_body(job.await.unwrap()).await;
+        let (status, text) = status_and_body(finish(job).await).await;
         assert_eq!(status, StatusCode::OK, "{text}");
     }
 
@@ -755,7 +765,10 @@ async fn a_settings_patch_during_a_running_turn_preserves_both_writes() {
                 .unwrap()
         }
     });
-    entered_rx.recv().await.expect("turn entered the provider");
+    tokio::time::timeout(Duration::from_secs(5), entered_rx.recv())
+        .await
+        .expect("turn entered the provider (5s 内报到)")
+        .expect("entry signal");
 
     // 回合半途的设置补丁: 排队等回合, 不与回合交叠写账本。
     let patch = tokio::spawn({
@@ -775,8 +788,8 @@ async fn a_settings_patch_during_a_running_turn_preserves_both_writes() {
     wait_writers_in_flight(&harness.state, session, 2).await;
 
     release.add_permits(1);
-    let (turn_status, turn_body) = status_and_body(turn.await.unwrap()).await;
-    let (patch_status, patch_body) = status_and_body(patch.await.unwrap()).await;
+    let (turn_status, turn_body) = status_and_body(finish(turn).await).await;
+    let (patch_status, patch_body) = status_and_body(finish(patch).await).await;
     assert_eq!(turn_status, StatusCode::OK, "{turn_body}");
     assert_eq!(patch_status, StatusCode::OK, "{patch_body}");
 
@@ -1051,7 +1064,7 @@ async fn panel_session_reads_are_one_consistent_snapshot_per_request() {
         }));
     }
     for reader in readers {
-        let (status, text) = status_and_body(reader.await.unwrap()).await;
+        let (status, text) = status_and_body(finish(reader).await).await;
         assert_eq!(status, StatusCode::OK, "{text}");
         let body: serde_json::Value = serde_json::from_str(&text).unwrap();
         let row = &body["sessions"][0];

@@ -41,7 +41,8 @@ use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{roster_from_config, ProductionSelfStatusSource};
 use super::tool_modules::{
     ApplyPatchModule, EducationModule, FetchModule, FilesystemModule, GitWriteModule, McpModule,
-    RepoModule, SearchModule, SelfStatusModule, ShellModule,
+    RepoModule, SearchModule, SelfStatusModule, ShellModule, WorktreeApplyModule,
+    WorktreePlanModule,
 };
 
 /// Adapter that exposes memory's context-window implementation through the
@@ -209,6 +210,21 @@ pub struct ProductionModulesConfig {
     /// 「自动放行 L1」子档 (依赖 [`Self::git_write`]): 仅 L1 可逆本地写免逐次
     /// 审批; **L2 出网永不自动放行** (永远人工审批)。默认关。
     pub git_write_auto_pass_l1: bool,
+    /// Register the read-only change-order tool (`tool.worktree_plan`, 干活能力轴 P2 计划拍)。
+    ///
+    /// 多文件大改「计划→改→验证→落」四拍之首: 任务目标 → 改单 (零落盘,
+    /// 只读面); 改单是 [`Self::worktree_apply`] 的输入合同。注册条件 = 本开关
+    /// + [`Self::file_write`] (唯一写总闸) + 工作区根已注入 (注册即闸)。
+    /// 默认关 (opt-in)。
+    pub worktree_plan: bool,
+    /// Register the controlled worktree-write tool (`tool.worktree_apply`, 干活能力轴 P2)。
+    ///
+    /// 四拍受控工作树写 (计划→改→验证→落, 全有或全无); 与 `tool.apply_patch`
+    /// 同受 [`Self::file_write`] 唯一写总闸。注册条件 = 本开关 +
+    /// [`Self::file_write`] + 工作区根已注入 + 共享读前观测门禁 (`ObservedGate`,
+    /// 与读工具同一张观测表 —— 未读不得覆盖/删除)。RequireApproval 级 (每次
+    /// 落盘都人批, 无自动放行档)。默认关 (opt-in)。
+    pub worktree_apply: bool,
 }
 
 impl Default for ProductionModulesConfig {
@@ -243,6 +259,8 @@ impl Default for ProductionModulesConfig {
             file_write_auto_pass: false,
             git_write: false,
             git_write_auto_pass_l1: false,
+            worktree_plan: false,
+            worktree_apply: false,
         }
     }
 }
@@ -428,6 +446,26 @@ impl ProductionModules {
         if config.file_write {
             if let Some(root) = &backends.workspace_root {
                 let provider = ApplyPatchModule::new(root.clone(), Arc::clone(&observed_gate));
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // 干活能力轴 P2 (「计划→改→验证→落」四拍受控工作树写, opt-in): 两级
+        // 工具面注册条件 = 开关 + `file_write` 唯一写总闸 + 工作区根 (注册即闸,
+        // 与 `tool.apply_patch` 同受一闸)。`worktree_plan` 是只读改单面 (零落盘,
+        // 其产物是 apply 的输入合同); `worktree_apply` 走**共享**读前观测门禁
+        // (与读工具同一张观测表, 未读不得覆盖/删除)。审批级: apply 每次落盘
+        // 都人批 (无自动放行档, 审批卡载荷 = 改单摘要), plan 只读零审批。
+        if config.worktree_plan && config.file_write {
+            if let Some(root) = &backends.workspace_root {
+                let provider = WorktreePlanModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        if config.worktree_apply && config.file_write {
+            if let Some(root) = &backends.workspace_root {
+                let provider = WorktreeApplyModule::new(root.clone(), Arc::clone(&observed_gate));
                 capabilities.extend(provider.capabilities());
             }
         }

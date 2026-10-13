@@ -107,5 +107,6 @@
 
 ## 六、接棒清单（未完）
 
-1. **组装根注册**（`crates/engine/runtime-assembly/src/canonical/production.rs`，共享文件，四路并发不抢）：`ProductionModulesConfig` 加 `worktree_plan` / `worktree_apply` opt-in 开关，注册条件 = `config.file_write`（唯一写总闸）+ workspace root + 共享 `ObservedGate`，模块构造已是现成的 `WorktreePlanModule::new(root)` / `WorktreeApplyModule::new(root, gate)`（[tool_modules.rs](../../../crates/engine/runtime-assembly/src/canonical/tool_modules.rs) 已挂载）；自省通道名册如需列开关生效值同批补；
+1. **组装根注册**（`crates/engine/runtime-assembly/src/canonical/production.rs`，共享文件，四路并发不抢）：`ProductionModulesConfig` 加 `worktree_plan` / `worktree_apply` opt-in 开关，注册条件 = `config.file_write`（唯一写总闸）+ workspace root + 共享 `ObservedGate`，模块构造已是现成的 `WorktreePlanModule::new(root)` / `WorktreeApplyModule::new(root, gate)`（[tool_modules.rs](../../../crates/engine/runtime-assembly/src/canonical/tool_modules.rs) 已挂载）；自省通道名册如需列开关生效值同批补。
+   → ✅ **已收口（2026-10-13 总装批件一）**：两级开关按上述注册条件入 `production.rs`（注册即闸），自省名册两行 `worktree_plan` / `worktree_apply` 按实际注册条件取值；env 旋钮 `APEIRETH_ENABLE_WORKTREE_PLAN` / `APEIRETH_ENABLE_WORKTREE_APPLY`（子依赖主 + file_write，fail-closed）在 `crates/adapters/cli/src/lib.rs` 接线，授权同源（grant + `WorktreeApplyApprovalHook` 审批级，plan 零审批）；测试 `worktree_registration.rs` 3 + `worktree_knob.rs` 4。
 2. 会话预设 UI/多客户端线如需展示审批卡，载荷字段即 `WorktreeApplyApprovalHook` 的 reason（改单摘要）。

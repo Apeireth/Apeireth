@@ -394,6 +394,17 @@ pub fn roster_from_config(
             "git_write_auto_pass_l1",
             config.git_write_auto_pass_l1 && config.git_write && workspace_root_present,
         ),
+        // 干活能力轴 P2 (worktree 计划/落盘两级): 按实际注册条件取值 —— 开关
+        // + `file_write` 唯一写总闸 + 工作区根三者齐备才算生效 (子依赖写总闸,
+        // fail-closed); 写总闸没开, 两级照实 false。
+        CapabilitySwitch::new(
+            "worktree_plan",
+            config.worktree_plan && config.file_write && workspace_root_present,
+        ),
+        CapabilitySwitch::new(
+            "worktree_apply",
+            config.worktree_apply && config.file_write && workspace_root_present,
+        ),
         CapabilitySwitch::new("mcp", config.mcp),
         CapabilitySwitch::new("education", config.education),
         CapabilitySwitch::new("memory_recall", config.memory_recall),
