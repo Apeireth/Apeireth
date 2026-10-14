@@ -75,8 +75,8 @@ pub mod untrusted_mark;
 
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
 pub use input_security::{
-    CredentialDisclosureHook, PiiDetector, PiiFinding, PiiKind, PromptInjectionHeuristic,
-    PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal,
+    redact_secret_surfaces, CredentialDisclosureHook, PiiDetector, PiiFinding, PiiKind,
+    PromptInjectionHeuristic, PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal,
 };
 pub use intent::{
     CredentialPolicy, DestructivePolicy, IntentClass, IntentExplicitness, IntentProvenance,

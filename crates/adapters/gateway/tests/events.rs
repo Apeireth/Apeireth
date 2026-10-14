@@ -11,6 +11,9 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
+/// 测试令牌 (强制态过门用; 形似凭据以便泄漏显形, 非真实秘密)。
+const TOKEN: &str = "sse-test-token-0123456789abcdef";
+
 #[tokio::test]
 async fn event_bus_delivers_published_events_in_order() {
     let bus = EventBus::new(16);
@@ -156,7 +159,12 @@ async fn collect_sse_until(response: axum::response::Response, marker: &str) -> 
 #[tokio::test]
 async fn sse_connection_receives_the_snapshot_frame_on_connect_without_replay() {
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
-    let state: GatewayState = build_gateway_state(runtime, None);
+    let mut state: GatewayState = build_gateway_state(runtime, None);
+    // 演进注记 (W2-② 认证面全网关化): 本测试钉的是 SSE 快照语义, 不是认证
+    // 语义 —— 未设口径下令牌门每次放行会发 `gateway_auth_unprotected` 警告帧
+    // (本就入总线), 会盖掉"连接即读当前帧"的断言对象。改用强制态 + 令牌过门
+    // (过门只留审计痕、不发帧), 快照语义的钉法原样保留。
+    state.token_gate = apeireth_gateway::GatewayTokenGate::Enforced(TOKEN.to_string());
     let bus = state.events.clone();
 
     // 连接前已有历史帧: 只有最新帧应当以快照帧送出, 历史不回放。
@@ -174,6 +182,7 @@ async fn sse_connection_receives_the_snapshot_frame_on_connect_without_replay() 
         .oneshot(
             Request::builder()
                 .uri("/v1/apeireth/events")
+                .header("authorization", format!("Bearer {TOKEN}"))
                 .body(Body::empty())
                 .expect("request"),
         )

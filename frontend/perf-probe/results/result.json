@@ -1,0 +1,964 @@
+{
+  "done": true,
+  "meta": {
+    "startedAt": "2026-10-11T05:07:01.011Z",
+    "finishedAt": "2026-10-11T05:16:43.758Z",
+    "mode": "full",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
+    "viewport": {
+      "w": 970,
+      "h": 825,
+      "dpr": 1
+    },
+    "stageSize": {
+      "w": 220,
+      "h": 260
+    },
+    "crossOriginIsolated": true,
+    "three": {
+      "installed": true,
+      "version": "180"
+    },
+    "gl": {
+      "available": true,
+      "webgl2": true,
+      "renderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x000013C0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "vendor": "Google Inc. (AMD)"
+    },
+    "visibilityAtStart": "visible",
+    "hiddenAtStart": false,
+    "exposureGc": true,
+    "timing": {
+      "fpsSec": 60,
+      "soakSec": 300,
+      "hiddenSec": 3
+    },
+    "phase": "全部测项完成"
+  },
+  "lines": {
+    "three3d": {
+      "id": "three3d",
+      "label": "3D 卡通渲染路线",
+      "available": true,
+      "fps": {
+        "fpsMean": 164.64,
+        "fps1Low": 154.4,
+        "fpsMin": 73.39,
+        "frames": 9897,
+        "elapsedSec": 60.11
+      },
+      "frameJsMs": {
+        "mean": 0.254,
+        "p95": 0.375
+      },
+      "heap": {
+        "startMB": 6.37,
+        "steadyMedianMB": 6.24,
+        "maxMB": 7.23,
+        "endMB": 5.45,
+        "samplesMB": [
+          6.37,
+          6.96,
+          6.02,
+          6.66,
+          7.23,
+          6.34,
+          6.25,
+          6.84,
+          5.66,
+          5.56,
+          6.15,
+          6.05,
+          5.99,
+          5.87,
+          6.43,
+          6.31,
+          6.15,
+          6.14,
+          6.76,
+          6.7,
+          6.55,
+          5.77,
+          5.57,
+          6.14,
+          6.02,
+          5.85,
+          5.88,
+          6.5,
+          6.42,
+          5.72,
+          5.99,
+          5.81,
+          5.63,
+          6.24,
+          6.07,
+          5.91,
+          6.52,
+          6.35,
+          6.15,
+          6.77,
+          6.74,
+          6.71,
+          6.72,
+          5.82,
+          5.63,
+          6.24,
+          6.06,
+          5.89,
+          6.51,
+          6.33,
+          6.12,
+          6,
+          6.57,
+          6.4,
+          6.27,
+          6.83,
+          6.66,
+          5.97,
+          5.79,
+          6.36
+        ]
+      },
+      "totalMemoryMB": 8.97,
+      "extra": {
+        "drawCalls": 33,
+        "triangles": 6692,
+        "glRenderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x000013C0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "glVendor": "Google Inc. (AMD)",
+        "glVersion": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+      }
+    },
+    "canvas2d": {
+      "id": "canvas2d",
+      "label": "2D 形象路线",
+      "available": true,
+      "fps": {
+        "fpsMean": 164.67,
+        "fps1Low": 157.62,
+        "fpsMin": 84.53,
+        "frames": 9899,
+        "elapsedSec": 60.11
+      },
+      "frameJsMs": {
+        "mean": 0.133,
+        "p95": 0.205
+      },
+      "heap": {
+        "startMB": 6.3,
+        "steadyMedianMB": 6.06,
+        "maxMB": 6.4,
+        "endMB": 5.69,
+        "samplesMB": [
+          6.3,
+          5.79,
+          6.05,
+          6.34,
+          5.77,
+          6.06,
+          6.28,
+          5.81,
+          6.18,
+          6.3,
+          6.26,
+          6.18,
+          6.09,
+          6.02,
+          5.87,
+          5.74,
+          6.36,
+          6.31,
+          6.25,
+          6.06,
+          5.94,
+          5.81,
+          5.69,
+          6.3,
+          6.15,
+          6.03,
+          6.03,
+          5.96,
+          5.94,
+          5.82,
+          6.01,
+          5.88,
+          5.76,
+          6.38,
+          6.25,
+          6.13,
+          5.98,
+          5.86,
+          5.73,
+          6.35,
+          6.4,
+          5.9,
+          5.75,
+          6.37,
+          6.25,
+          6.12,
+          6,
+          5.88,
+          5.76,
+          6.38,
+          6.25,
+          6.13,
+          5.75,
+          6.37,
+          6.25,
+          6.13,
+          6.01,
+          5.88,
+          5.76,
+          6.38
+        ]
+      },
+      "totalMemoryMB": 9.21,
+      "extra": null
+    },
+    "lightCss": {
+      "id": "lightCss",
+      "label": "光态基线",
+      "available": true,
+      "fps": {
+        "fpsMean": 164.65,
+        "fps1Low": 156.31,
+        "fpsMin": 81.37,
+        "frames": 9898,
+        "elapsedSec": 60.11
+      },
+      "frameJsMs": {
+        "mean": 0.001,
+        "p95": 0.005
+      },
+      "heap": {
+        "startMB": 5.79,
+        "steadyMedianMB": 5.91,
+        "maxMB": 6.09,
+        "endMB": 5.81,
+        "samplesMB": [
+          5.79,
+          5.81,
+          5.84,
+          5.86,
+          5.87,
+          5.9,
+          5.9,
+          5.94,
+          5.95,
+          5.96,
+          5.97,
+          6.04,
+          5.78,
+          5.79,
+          5.8,
+          5.81,
+          5.82,
+          5.89,
+          5.9,
+          5.91,
+          5.92,
+          5.93,
+          5.94,
+          5.95,
+          5.95,
+          5.96,
+          6.08,
+          6.09,
+          5.84,
+          5.85,
+          5.86,
+          5.87,
+          5.88,
+          5.89,
+          5.9,
+          5.9,
+          5.9,
+          5.91,
+          5.91,
+          5.92,
+          6.08,
+          6.08,
+          6.08,
+          6.09,
+          5.9,
+          5.9,
+          5.9,
+          5.91,
+          5.91,
+          5.92,
+          5.92,
+          5.93,
+          5.93,
+          5.94,
+          5.94,
+          5.94,
+          5.95,
+          5.95,
+          5.96,
+          5.82
+        ]
+      },
+      "totalMemoryMB": 9.33,
+      "extra": null
+    }
+  },
+  "disciplines": {
+    "hiddenStop": {
+      "three3d": {
+        "label": "3D 卡通渲染路线",
+        "hiddenMethod": "document.hidden/visibilityState 强制注入 + visibilitychange",
+        "framesVisiblePerSec": 165,
+        "rafTicksDuringHidden": 495,
+        "framesDuringHidden": 0,
+        "loopCallbacksDuringHidden": 0,
+        "hiddenSkipsBelt": 0,
+        "framesAfterResume": 329,
+        "pass": true
+      },
+      "canvas2d": {
+        "label": "2D 形象路线",
+        "hiddenMethod": "document.hidden/visibilityState 强制注入 + visibilitychange",
+        "framesVisiblePerSec": 165,
+        "rafTicksDuringHidden": 495,
+        "framesDuringHidden": 0,
+        "loopCallbacksDuringHidden": 0,
+        "hiddenSkipsBelt": 0,
+        "framesAfterResume": 330,
+        "pass": true
+      },
+      "lightCss": {
+        "label": "光态基线",
+        "hiddenMethod": "document.hidden/visibilityState 强制注入 + visibilitychange",
+        "framesVisiblePerSec": 165,
+        "rafTicksDuringHidden": 495,
+        "framesDuringHidden": 0,
+        "loopCallbacksDuringHidden": 0,
+        "hiddenSkipsBelt": 0,
+        "framesAfterResume": 330,
+        "pass": true
+      }
+    },
+    "webglFallback": {
+      "inPageStub": {
+        "method": "HTMLCanvasElement.getContext 对 webgl/webgl2 返回 null 后重建 3D 线",
+        "three3dReportsUnavailable": true,
+        "twoDStillRuns": true,
+        "lightStillRuns": true,
+        "hostFallback": "canvas2d",
+        "pass": true,
+        "error": null,
+        "reason3d": "webgl-unavailable: Error: Error creating WebGL context."
+      }
+    }
+  },
+  "soak": {
+    "durationSec": 300,
+    "loadsRunning": [
+      "three3d",
+      "canvas2d",
+      "light-css"
+    ],
+    "heapStartMB": 5.84,
+    "heapEndMB": 5.93,
+    "driftMB": 0.56,
+    "slopeMBPerMin": 0.11,
+    "totalMemoryStartMB": 9.58,
+    "totalMemoryEndMB": 9.67,
+    "samples": [
+      {
+        "tSec": 5,
+        "heapMB": 6.47
+      },
+      {
+        "tSec": 10,
+        "heapMB": 6.41
+      },
+      {
+        "tSec": 15,
+        "heapMB": 6.99
+      },
+      {
+        "tSec": 20,
+        "heapMB": 6.05
+      },
+      {
+        "tSec": 25,
+        "heapMB": 6.63
+      },
+      {
+        "tSec": 30,
+        "heapMB": 6.54,
+        "totalMemoryMB": 9.67
+      },
+      {
+        "tSec": 43,
+        "heapMB": 6.39
+      },
+      {
+        "tSec": 48,
+        "heapMB": 6.49
+      },
+      {
+        "tSec": 53,
+        "heapMB": 6.83
+      },
+      {
+        "tSec": 58,
+        "heapMB": 6.57
+      },
+      {
+        "tSec": 63,
+        "heapMB": 6.91
+      },
+      {
+        "tSec": 68,
+        "heapMB": 6.62
+      },
+      {
+        "tSec": 73,
+        "heapMB": 7.01
+      },
+      {
+        "tSec": 78,
+        "heapMB": 6.14
+      },
+      {
+        "tSec": 83,
+        "heapMB": 6.49
+      },
+      {
+        "tSec": 89,
+        "heapMB": 6.34
+      },
+      {
+        "tSec": 94,
+        "heapMB": 6.7
+      },
+      {
+        "tSec": 99,
+        "heapMB": 6.67
+      },
+      {
+        "tSec": 104,
+        "heapMB": 7.83
+      },
+      {
+        "tSec": 109,
+        "heapMB": 7.09
+      },
+      {
+        "tSec": 114,
+        "heapMB": 6.71
+      },
+      {
+        "tSec": 119,
+        "heapMB": 7.71
+      },
+      {
+        "tSec": 124,
+        "heapMB": 7.24
+      },
+      {
+        "tSec": 129,
+        "heapMB": 6.6
+      },
+      {
+        "tSec": 134,
+        "heapMB": 6.01
+      },
+      {
+        "tSec": 139,
+        "heapMB": 7.23
+      },
+      {
+        "tSec": 144,
+        "heapMB": 6.51
+      },
+      {
+        "tSec": 149,
+        "heapMB": 7.68
+      },
+      {
+        "tSec": 154,
+        "heapMB": 6.6
+      },
+      {
+        "tSec": 159,
+        "heapMB": 7.74
+      },
+      {
+        "tSec": 164,
+        "heapMB": 7.05
+      },
+      {
+        "tSec": 169,
+        "heapMB": 6.6
+      },
+      {
+        "tSec": 174,
+        "heapMB": 7.52
+      },
+      {
+        "tSec": 179,
+        "heapMB": 7.06
+      },
+      {
+        "tSec": 184,
+        "heapMB": 6.44
+      },
+      {
+        "tSec": 189,
+        "heapMB": 7.63
+      },
+      {
+        "tSec": 194,
+        "heapMB": 7.3
+      },
+      {
+        "tSec": 199,
+        "heapMB": 6.86
+      },
+      {
+        "tSec": 204,
+        "heapMB": 6.75
+      },
+      {
+        "tSec": 209,
+        "heapMB": 7.93
+      },
+      {
+        "tSec": 214,
+        "heapMB": 7.29
+      },
+      {
+        "tSec": 219,
+        "heapMB": 6.84
+      },
+      {
+        "tSec": 224,
+        "heapMB": 6.25
+      },
+      {
+        "tSec": 229,
+        "heapMB": 7.4
+      },
+      {
+        "tSec": 234,
+        "heapMB": 6.47
+      },
+      {
+        "tSec": 239,
+        "heapMB": 5.95
+      },
+      {
+        "tSec": 244,
+        "heapMB": 7.15
+      },
+      {
+        "tSec": 249,
+        "heapMB": 6.44
+      },
+      {
+        "tSec": 254,
+        "heapMB": 7.56
+      },
+      {
+        "tSec": 259,
+        "heapMB": 7
+      },
+      {
+        "tSec": 264,
+        "heapMB": 6.57
+      },
+      {
+        "tSec": 269,
+        "heapMB": 6.1
+      },
+      {
+        "tSec": 274,
+        "heapMB": 7.18
+      },
+      {
+        "tSec": 279,
+        "heapMB": 6.64
+      },
+      {
+        "tSec": 284,
+        "heapMB": 7.69
+      },
+      {
+        "tSec": 289,
+        "heapMB": 7.13
+      },
+      {
+        "tSec": 294,
+        "heapMB": 6.74
+      },
+      {
+        "tSec": 299,
+        "heapMB": 7.63
+      },
+      {
+        "tSec": 304,
+        "heapMB": 7.19
+      }
+    ]
+  },
+  "timeline": [
+    "05:07:01 启动：模式=full，视口 970×825，目标舞台 220×260",
+    "05:07:01 three 运行库已装载（r180）",
+    "05:07:01 WebGL 探测：可用（ANGLE (AMD, AMD Radeon(TM) 610M (0x000013C0) Direct3D11 vs_5_0 ps_5_0, D3D11)）",
+    "05:08:16 [完成] 3D 卡通渲染路线：FPS 均值 164.64、1% low 154.4；JS 堆稳态 6.24MB；每帧 JS 0.254ms",
+    "05:09:35 [完成] 2D 形象路线：FPS 均值 164.67、1% low 157.62；JS 堆稳态 6.06MB；每帧 JS 0.133ms",
+    "05:10:50 [完成] 光态基线：FPS 均值 164.65、1% low 156.31；JS 堆稳态 5.91MB；每帧 JS 0.001ms",
+    "05:10:52 [visibilitychange] hidden=true（强制注入）",
+    "05:10:55 [visibilitychange] hidden=false（真实切换）",
+    "05:10:57 [hidden] 3D 卡通渲染路线：隐藏期渲染帧 0（应为 0）、同期 rAF 心跳 495（应 >0）、恢复后 329 帧 → 通过",
+    "05:11:00 [visibilitychange] hidden=true（强制注入）",
+    "05:11:03 [visibilitychange] hidden=false（真实切换）",
+    "05:11:05 [hidden] 2D 形象路线：隐藏期渲染帧 0（应为 0）、同期 rAF 心跳 495（应 >0）、恢复后 330 帧 → 通过",
+    "05:11:08 [visibilitychange] hidden=true（强制注入）",
+    "05:11:11 [visibilitychange] hidden=false（真实切换）",
+    "05:11:13 [hidden] 光态基线：隐藏期渲染帧 0（应为 0）、同期 rAF 心跳 495（应 >0）、恢复后 330 帧 → 通过",
+    "05:11:16 [WebGL 降级] 3D 线报不可用=true（webgl-unavailable: Error: Error creating WebGL context.）；2D 照常=true；光态照常=true → 通过",
+    "05:16:43 [浸泡] 前后 JS 堆 5.84MB → 5.93MB，漂移 0.56MB",
+    "05:16:43 完成：window.__AVATAR_PERF_PROBE__ 已就绪"
+  ],
+  "hostProcess": {
+    "note": "浏览器进程树工作集（WorkingSetSize 合计，含浏览器/GPU/渲染器等多进程；是宿主壳+内核近似，不是 WebView2 实体）",
+    "rootPid": 43268,
+    "baseline": {
+      "ts": "2026-10-11T13:07:04.1125649+08:00",
+      "rootPid": 43268,
+      "processCount": 17,
+      "totalWsMB": 933.6,
+      "processes": [
+        {
+          "pid": 43268,
+          "name": "msedge.exe",
+          "wsMB": 172.1
+        },
+        {
+          "pid": 32132,
+          "name": "msedge.exe",
+          "wsMB": 64.2
+        },
+        {
+          "pid": 7288,
+          "name": "msedge.exe",
+          "wsMB": 10.3
+        },
+        {
+          "pid": 21068,
+          "name": "msedge.exe",
+          "wsMB": 46.4
+        },
+        {
+          "pid": 33888,
+          "name": "msedge.exe",
+          "wsMB": 44.9
+        },
+        {
+          "pid": 43548,
+          "name": "msedge.exe",
+          "wsMB": 17.2
+        },
+        {
+          "pid": 42524,
+          "name": "msedge.exe",
+          "wsMB": 45
+        },
+        {
+          "pid": 36428,
+          "name": "msedge.exe",
+          "wsMB": 20.3
+        },
+        {
+          "pid": 37788,
+          "name": "msedge.exe",
+          "wsMB": 33.5
+        },
+        {
+          "pid": 39908,
+          "name": "msedge.exe",
+          "wsMB": 18.6
+        },
+        {
+          "pid": 31936,
+          "name": "identity_helper.exe",
+          "wsMB": 30
+        },
+        {
+          "pid": 4012,
+          "name": "msedge.exe",
+          "wsMB": 45
+        },
+        {
+          "pid": 13200,
+          "name": "msedge.exe",
+          "wsMB": 44.9
+        },
+        {
+          "pid": 18580,
+          "name": "msedge.exe",
+          "wsMB": 160.8
+        },
+        {
+          "pid": 42452,
+          "name": "msedge.exe",
+          "wsMB": 48.8
+        },
+        {
+          "pid": 39836,
+          "name": "msedge.exe",
+          "wsMB": 43.8
+        },
+        {
+          "pid": 34408,
+          "name": "msedge.exe",
+          "wsMB": 87.8
+        }
+      ]
+    },
+    "samples": [
+      {
+        "tSec": 0,
+        "phase": "3D 卡通渲染路线：稳态采样 60s",
+        "totalWsMB": 936.8,
+        "processCount": 17
+      },
+      {
+        "tSec": 16,
+        "phase": "3D 卡通渲染路线：稳态采样 60s（已测 15s / 60s，瞬时帧计数 2954）",
+        "totalWsMB": 709.8,
+        "processCount": 12
+      },
+      {
+        "tSec": 31,
+        "phase": "3D 卡通渲染路线：稳态采样 60s（已测 31s / 60s，瞬时帧计数 5594）",
+        "totalWsMB": 628.5,
+        "processCount": 9
+      },
+      {
+        "tSec": 47,
+        "phase": "3D 卡通渲染路线：稳态采样 60s（已测 47s / 60s，瞬时帧计数 8232）",
+        "totalWsMB": 600.4,
+        "processCount": 8
+      },
+      {
+        "tSec": 63,
+        "phase": "3D 卡通渲染路线：稳态采样 60s（已测 60s / 60s，瞬时帧计数 10377）",
+        "totalWsMB": 618.8,
+        "processCount": 9
+      },
+      {
+        "tSec": 78,
+        "phase": "2D 形象路线：稳态采样 60s（已测 3s / 60s，瞬时帧计数 981）",
+        "totalWsMB": 648.2,
+        "processCount": 9
+      },
+      {
+        "tSec": 94,
+        "phase": "2D 形象路线：稳态采样 60s（已测 18s / 60s，瞬时帧计数 3456）",
+        "totalWsMB": 644.3,
+        "processCount": 9
+      },
+      {
+        "tSec": 110,
+        "phase": "2D 形象路线：稳态采样 60s（已测 34s / 60s，瞬时帧计数 6095）",
+        "totalWsMB": 644.3,
+        "processCount": 9
+      },
+      {
+        "tSec": 125,
+        "phase": "2D 形象路线：稳态采样 60s（已测 49s / 60s，瞬时帧计数 8570）",
+        "totalWsMB": 646.9,
+        "processCount": 9
+      },
+      {
+        "tSec": 141,
+        "phase": "2D 形象路线：稳态采样 60s（已测 60s / 60s，瞬时帧计数 10385）",
+        "totalWsMB": 625.8,
+        "processCount": 9
+      },
+      {
+        "tSec": 156,
+        "phase": "光态基线：稳态采样 60s（已测 1s / 60s，瞬时帧计数 659）",
+        "totalWsMB": 632.5,
+        "processCount": 9
+      },
+      {
+        "tSec": 172,
+        "phase": "光态基线：稳态采样 60s（已测 17s / 60s，瞬时帧计数 3299）",
+        "totalWsMB": 629.1,
+        "processCount": 9
+      },
+      {
+        "tSec": 188,
+        "phase": "光态基线：稳态采样 60s（已测 33s / 60s，瞬时帧计数 5939）",
+        "totalWsMB": 629.1,
+        "processCount": 9
+      },
+      {
+        "tSec": 203,
+        "phase": "光态基线：稳态采样 60s（已测 48s / 60s，瞬时帧计数 8414）",
+        "totalWsMB": 629.3,
+        "processCount": 9
+      },
+      {
+        "tSec": 219,
+        "phase": "光态基线：稳态采样 60s（已测 60s / 60s，瞬时帧计数 10393）",
+        "totalWsMB": 625.6,
+        "processCount": 9
+      },
+      {
+        "tSec": 234,
+        "phase": "2D 形象路线：hidden 纪律验证",
+        "totalWsMB": 632.9,
+        "processCount": 9
+      },
+      {
+        "tSec": 250,
+        "phase": "WebGL 禁用降级（页内 stub：getContext(\"webgl*\") → null）",
+        "totalWsMB": 651.9,
+        "processCount": 9
+      },
+      {
+        "tSec": 266,
+        "phase": "浸泡 300s（三线并发，最坏情况口径）",
+        "totalWsMB": 621.5,
+        "processCount": 9
+      },
+      {
+        "tSec": 281,
+        "phase": "浸泡 300s（15s / 300s，JS 堆 6.99MB）",
+        "totalWsMB": 639,
+        "processCount": 9
+      },
+      {
+        "tSec": 297,
+        "phase": "浸泡 300s（30s / 300s，JS 堆 6.54MB）",
+        "totalWsMB": 657.4,
+        "processCount": 10
+      },
+      {
+        "tSec": 313,
+        "phase": "浸泡 300s（48s / 300s，JS 堆 6.49MB）",
+        "totalWsMB": 658.5,
+        "processCount": 10
+      },
+      {
+        "tSec": 328,
+        "phase": "浸泡 300s（63s / 300s，JS 堆 6.91MB）",
+        "totalWsMB": 658.9,
+        "processCount": 10
+      },
+      {
+        "tSec": 344,
+        "phase": "浸泡 300s（78s / 300s，JS 堆 6.14MB）",
+        "totalWsMB": 658.9,
+        "processCount": 10
+      },
+      {
+        "tSec": 359,
+        "phase": "浸泡 300s（94s / 300s，JS 堆 6.7MB）",
+        "totalWsMB": 661.6,
+        "processCount": 10
+      },
+      {
+        "tSec": 375,
+        "phase": "浸泡 300s（109s / 300s，JS 堆 7.09MB）",
+        "totalWsMB": 660.9,
+        "processCount": 10
+      },
+      {
+        "tSec": 391,
+        "phase": "浸泡 300s（124s / 300s，JS 堆 7.24MB）",
+        "totalWsMB": 660.1,
+        "processCount": 10
+      },
+      {
+        "tSec": 406,
+        "phase": "浸泡 300s（144s / 300s，JS 堆 6.51MB）",
+        "totalWsMB": 659.6,
+        "processCount": 10
+      },
+      {
+        "tSec": 422,
+        "phase": "浸泡 300s（159s / 300s，JS 堆 7.74MB）",
+        "totalWsMB": 660.8,
+        "processCount": 10
+      },
+      {
+        "tSec": 438,
+        "phase": "浸泡 300s（174s / 300s，JS 堆 7.52MB）",
+        "totalWsMB": 660.7,
+        "processCount": 10
+      },
+      {
+        "tSec": 453,
+        "phase": "浸泡 300s（189s / 300s，JS 堆 7.63MB）",
+        "totalWsMB": 660,
+        "processCount": 10
+      },
+      {
+        "tSec": 469,
+        "phase": "浸泡 300s（204s / 300s，JS 堆 6.75MB）",
+        "totalWsMB": 659.1,
+        "processCount": 10
+      },
+      {
+        "tSec": 485,
+        "phase": "浸泡 300s（219s / 300s，JS 堆 6.84MB）",
+        "totalWsMB": 659.1,
+        "processCount": 10
+      },
+      {
+        "tSec": 500,
+        "phase": "浸泡 300s（234s / 300s，JS 堆 6.47MB）",
+        "totalWsMB": 660.5,
+        "processCount": 10
+      },
+      {
+        "tSec": 516,
+        "phase": "浸泡 300s（254s / 300s，JS 堆 7.56MB）",
+        "totalWsMB": 660.9,
+        "processCount": 10
+      },
+      {
+        "tSec": 532,
+        "phase": "浸泡 300s（269s / 300s，JS 堆 6.1MB）",
+        "totalWsMB": 660.7,
+        "processCount": 10
+      },
+      {
+        "tSec": 547,
+        "phase": "浸泡 300s（284s / 300s，JS 堆 7.69MB）",
+        "totalWsMB": 660.6,
+        "processCount": 10
+      },
+      {
+        "tSec": 563,
+        "phase": "浸泡 300s（299s / 300s，JS 堆 7.63MB）",
+        "totalWsMB": 660.4,
+        "processCount": 10
+      },
+      {
+        "tSec": 578,
+        "phase": "浸泡 300s（304s / 300s，JS 堆 7.19MB）",
+        "totalWsMB": 642,
+        "processCount": 10
+      }
+    ],
+    "minWsMB": 600.4,
+    "maxWsMB": 936.8
+  },
+  "runner": {
+    "collectedAt": "2026-10-11T05:16:48.240Z",
+    "browser": "msedge.exe",
+    "browserPath": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "headless": true,
+    "cdpPort": 9333,
+    "staticPort": 8765,
+    "url": "http://127.0.0.1:8765/index.html?mode=full&fpsSec=60&soakSec=300&hiddenSec=3"
+  }
+}

@@ -180,21 +180,29 @@ fn kani_governance_default_deny_unrequested_ops() {
 
 /// 证明: 风险标签单调 —— 对任意 (原始标签, 提案标签) 字节串, 严格降级的
 /// 提案必被 check_no_degrade 触发 (不得评估为通过); Pass 蕴含未降级。
-/// 边界: 标签为任意 ≤4 字节串 (对抗拼写变体是量词域的核心), 判定只依赖
-/// 两个标签的 risk_rank, unwind 32。
+/// 边界: 标签为任意 ≤4 字符串 (码点 = ASCII 0..=127; 对抗拼写变体是量词域
+/// 的核心; 口径修订 2026-10-07 二次: ASCII 生成 —— 字节长度恒 = 4, 避免
+/// 符号长度令搜索循环按 unwind 上界展开, 见 harness_panic_freedom.rs 同名
+/// 注), 判定只依赖两个标签的 risk_rank, unwind 32。
 #[kani::proof]
 #[kani::unwind(32)]
 fn kani_governance_no_degrade_never_weakens() {
-    let original = String::from_utf8_lossy(&{
-        let b: [u8; 4] = kani::any();
-        b
-    })
-    .into_owned();
-    let proposed = String::from_utf8_lossy(&{
-        let b: [u8; 4] = kani::any();
-        b
-    })
-    .into_owned();
+    let original: String = {
+        let b: Vec<u8> = {
+            let raw: [u8; 4] = kani::any();
+            raw.into_iter().map(|x| x & 0x7F).collect()
+        };
+        // SAFETY: 全部字节 < 0x80, 必为合法 UTF-8 (同款注见 harness_panic_freedom.rs)。
+        unsafe { String::from_utf8_unchecked(b) }
+    };
+    let proposed: String = {
+        let b: Vec<u8> = {
+            let raw: [u8; 4] = kani::any();
+            raw.into_iter().map(|x| x & 0x7F).collect()
+        };
+        // SAFETY: 全部字节 < 0x80, 必为合法 UTF-8。
+        unsafe { String::from_utf8_unchecked(b) }
+    };
 
     let result = check_no_degrade(&original, &proposed);
     if !proposed.is_empty() && risk_rank(&proposed) < risk_rank(&original) {

@@ -19,16 +19,19 @@ fn saga(action_id: &str) -> SagaCompensatingAction {
         action_id: action_id.to_string(),
         forward_action_name: "do".to_string(),
         compensation_action_name: "undo".to_string(),
-        payload: std::collections::HashMap::new(),
+        // Default 而非 std HashMap::new(): cfg(kani) 下 payload 字段是
+        // kani_collections 线性表 (见 mirror lib.rs), Default 两态通用。
+        payload: Default::default(),
     }
 }
 
+/// 任意 N 字符串 (字节 0..=127, 含 NUL/控制字符)。
+/// 口径修订 2026-10-11 (三次): 字节数组直构 (char::collect 令串长符号化,
+/// 见 harness_panic_freedom.rs 同名注)。
 fn bounded_string<const N: usize>() -> String {
-    let mut bytes: Vec<u8> = Vec::with_capacity(N);
-    for _ in 0..N {
-        bytes.push(kani::any::<u8>());
-    }
-    String::from_utf8_lossy(&bytes).into_owned()
+    let bytes: Vec<u8> = (0..N).map(|_| kani::any::<u8>() & 0x7F).collect();
+    // SAFETY: 全部字节 < 0x80, 必为合法 UTF-8 (同款注见 harness_panic_freedom.rs)。
+    unsafe { String::from_utf8_unchecked(bytes) }
 }
 
 /// 证明: 分支回滚精确恢复基线 —— 任意 ≤2 笔投机写 + ≤2 个 SAGA 补偿动作后

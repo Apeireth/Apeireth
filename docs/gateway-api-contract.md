@@ -10,12 +10,12 @@
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)
 - 编码:UTF-8 JSON;时间戳统一 **epoch 毫秒**(`timestamp` 字段)
-- 认证:本机回环网关,无 bearer;`/v1/panel/*` 为内省只读面,不做外部鉴权(网关只绑 127.0.0.1)
+- 认证:**全 API 面令牌门**(W2-② 起,chat/事件流/面板/会话/审批/admin 族,唯一豁免 `/health` 探活)。三态口径(env `APEIRETH_GATEWAY_TOKEN` + 客户端令牌表 `APEIRETH_GATEWAY_TOKENS`/`client-tokens.json`,任一在场=强制态):强制态=`Authorization: Bearer <token>` 必须命中令牌族任一枚(恒定时间比较,缺失 401 `auth_missing_key` / 伪造 401 `auth_invalid_key`,拒绝入审计 `gateway.auth_rejected`,过门入审计 `gateway.auth_client client=<客户端名>`);两面皆空=放行但每次记警告帧 `gateway_auth_unprotected` + 审计 `gateway.auth_unprotected`(兼容路径,保守过渡);显式 `none`=操作者明示不设防,放行不告警但审计留痕(与客户端令牌表互斥,配置矛盾拒开)。桌面壳启动侧车时自铸 32 字节随机令牌注入(生产恒为强制态);客户端令牌表每客户端一枚(name→token,过门审计带客户端名)。非回环绑定(`APEIRETH_LISTEN`/`--bind`)强制令牌:令牌族两面皆空时拒绝启动(fail-closed)
 - 错误模型:
   ```json
   { "error": { "code": "invalid_request | not_found | unsupported | runtime_error | auth_failed", "message": "人类可读信息" } }
   ```
-  HTTP 语义:400 `invalid_request` / 403 `denied` / 404 `not_found` / 409 `conflict` /
+  HTTP 语义:400 `invalid_request` / 401 `auth_missing_key` / `auth_invalid_key` / 403 `denied` / 404 `not_found` / 409 `conflict` /
   422 provider/runtime 语义失败 / 500 `internal_error` / 501 `unsupported` /
   503 `unavailable` / 202 审批挂起
 - 分页:列表端点统一 `limit`(默认 50,最大 500)+ 按时间倒序;需要更多分页时再引入 cursor
@@ -24,7 +24,7 @@
 
 | 端点 | 方法 | 说明 |
 |---|---|---|
-| `/health` | GET | `{"status":"ok","execution_owner":"apeireth-runtime::canonical"}` |
+| `/health` | GET | `{"status":"ok","execution_owner":"apeireth-runtime::canonical"}`(**无认证探活豁免**:探测刚需,令牌门不校验/不告警/不审计) |
 | `/v1/models` | GET | OpenAI 风格模型列表 `{object:"list",data:[{id,object:"model",created,owned_by}]}` |
 | `/v1/providers` | GET | 来自 live Provider Router 的 provider 状态与模型描述 |
 | `/v1/runtime/snapshot` | GET | 不含凭据、私有记忆、原始 prompt/CoT 的 Runtime 诊断快照 |
@@ -34,6 +34,7 @@
 | `/v1/chat/completions` | POST | OpenAI 兼容对话(支持 `stream:true` SSE) |
 | `/v1/approvals?session={id}` | GET | 该会话的待批审批(见 §6) |
 | `/v1/approvals/resolve` | POST | 批准/拒绝审批(见 §6) |
+| `/v1/panel/metrics` | GET | 指标聚合快照(见 §8b;会话+全局两层,空态显式空) |
 
 ## §3 对话 `/v1/chat`
 
@@ -67,6 +68,17 @@
   { "id": "…", "title": "…", "created_at": 123, "updated_at": 123, "message_count": 4, "revision": 0 }
 ] }
 ```
+
+- `DELETE /v1/sessions/{session_id}` → 硬删除该会话的持久化记录,成功返回 `{"deleted": true}`;
+  会话不存在返回 404 `session_not_found`,id 格式非法返回 400 `invalid_request`。
+- **同会话并发写语义 (W2-③)**:同一会话的回合提交 / 审批续跑 / 设置补丁 / 删除走
+  **同一把会话写闸**,先到先服务**排队**串行 —— 第二回合排队等第一个跑完(不发
+  busy 帧),账本写永不交叠;排队事实(排位/等待)入审计行 `gateway.session_client`
+  (`session=<id> client=<名> action=turn|approval.resolve|settings.patch|session.delete
+  queued=<0|1> position=<n> wait_ms=<ms>`)。
+- **name↔token 绑定 (W2-③ 令牌隔离)**:请求可带自称名头 `x-apeireth-client`;自称名
+  必须与令牌绑定的客户端名一致,否则 401 `auth_invalid_key`(无绑定的自称名同样
+  拒绝,fail-closed)。审计署名键**只来自令牌绑定**,请求自称名永不改写署名。
 
 ## §5 记忆
 
@@ -108,7 +120,7 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
 ] }
 ```
 
-审批(已实现,形状确认):
+审批(已实现,四级口径: PRODUCTION WIRED——已进 gateway 路由表;形状确认):
 - `GET /v1/approvals?session={id}` → `{ "session": "…", "approvals": [ { "approval_id": "…", "session": "…", "tool_name": "…", "capability_id": "…", "governance_hook": "…", "governance_reason": "…", "request": "…", "trace_id": "…", "created_at": 123, "expires_at": 123 } ] }`
 - `POST /v1/approvals/resolve` 请求 `{ "session": "…", "approval": "…", "decision": "approve|reject", "reason": "可选" }` → 与 `/v1/chat` 响应同形状(解析后继续原回合)
 
@@ -143,6 +155,12 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
   > 所以它携带最终全文作为单条增量,总线上观测不到 token 级增量。
   > **逐字渲染请走 `POST /v1/chat/completions` 的 `stream:true` SSE**(token 级真流式,见 §3)。
   > 事件在进程内广播,不跨重启持久。
+
+  **会话订阅 (W2-③)**:`GET /v1/apeireth/events?session=<id>` = 逐客户端独立的会话
+  订阅 —— 该连接只收这个会话的事件帧(同一会话的事件扇出到它的全部订阅端,多端
+  同会话各收各的),连接快照帧也只读该会话的最近一帧;会话 id 非法返回 400
+  `invalid_request`。订阅动作落审计行 `gateway.session_client`
+  (`action=events.subscribe`)。不带 `session` 参数 = 全量订阅(既有语义不变)。
 
 ### §8a presence_state 事件 ✅(2026-09-22,契约来源 `docs/design/00-PHILOSOPHY.md` §10 草案 v0)
 
@@ -190,6 +208,35 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
 initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类型、不在本帧内;
 其"单用户日常 ≤ 少量次/天"的限量纪律由后端 presence 模块的预算器强制执行(默认 ≤3 次/天,
 高信号才开口,宁少勿多),v0 尚无 initiative 生产者,预算器先行落地防唠叨。
+
+### §8b 指标面板 `GET /v1/panel/metrics` ✅(2026-10-12, G-P1 指标数据源)
+
+回合收束指标的**进程内滚动窗口**聚合快照(数据面全量口径见
+`docs/04-internal/backend-enhancement/G-observability.md` 的字段表)。过全 API 面令牌门。
+
+```json
+{
+  "schema_version": 1,
+  "window_turns": 50,
+  "retention": "in_process_rolling",
+  "global": {
+    "turns": 3, "succeeded": 2, "failed": 1, "pending_approval": 0,
+    "latency_ms": { "count": 3, "mean": 12.0, "p50": 10, "p95": 30, "sum": 36 },
+    "input_tokens": { "count": 2, "mean": 100.0, "p50": 100, "p95": 120, "sum": 200 },
+    "output_tokens": { "count": 2, "mean": 20.0, "p50": 20, "p95": 24, "sum": 40 },
+    "rounds": { "count": 3, "mean": 1.0, "p50": 1, "p95": 2, "sum": 3 },
+    "tool_calls": { "count": 2, "mean": 1.0, "p50": 1, "p95": 2, "sum": 2 },
+    "cache_hit_tokens": null, "cache_hit_rate": null, "cost_micros": null
+  },
+  "sessions": [ { "session_id": "…", "aggregate": { …同 global 形… } } ]
+}
+```
+
+- 分布列 = 均值/最近秩 P50/P95/计数/累计和,只统计有值的收束拍;
+- **空态 = 显式空 + "—"**:无数据时 `sessions: []`、计数 `0`、分布数值列 `null`、
+  缓存/计价列 `null`——消费端渲染 "—",未知不用 0 冒充;
+- `cache_hit_tokens`/`cache_hit_rate` 当前恒 `null`(usage 计量链尚无缓存列,见
+  G-observability 缺口登记),`cost_micros` 为可选计价列(换算归花费线)。
 
 ## §9 能力清单 `[P0]`
 

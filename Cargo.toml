@@ -20,6 +20,8 @@ members = [
     "crates/adapters/gateway",
     "crates/adapters/sdk",
     "crates/adapters/cli",
+    # 终端驾驶舱 (全屏 TUI 客户端, P1)
+    "crates/adapters/tui",
     # 基准复现 harness (bench-only 包, publish = false; 不计入 18 个产品 crate)
     "benches",
 ]
@@ -46,7 +48,7 @@ members = [
 #     (2026-09-05 对账批实测; v1 era "27 skeleton 硬编码" 已随 v2 重构清零)
 # ============================================================================
 [workspace.package]
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.3"
 edition = "2021"
 rust-version = "1.97"  # 与 rust-toolchain.toml 对齐 (1.97.1), MSRV 诚实声明
 authors = ["Apeireth Team"]
@@ -168,7 +170,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
 thiserror = "1.0"
-# v2.0.0-rc.2 RC-10: AES-256-GCM 加密 (per v2.0.0-rc-roadmap.md §3 RC-10: "File AES-GCM 加密")
+# v2.0.0-rc.3 RC-10: AES-256-GCM 加密 (per v2.0.0-rc-roadmap.md §3 RC-10: "File AES-GCM 加密")
 # `aes-gcm` 0.10 是 stable release, 0.11 是 2024-06 release (rust 1.78+)
 aes-gcm = "0.10"
 rand = "0.8"

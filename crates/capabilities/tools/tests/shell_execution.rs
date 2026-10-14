@@ -183,10 +183,13 @@ async fn sandbox_denies_workspace_external_reads() {
 }
 
 /// W1 §2.5 E2E「工作区写成」: 授予的工作区目录读写正常 —— 墙不挡自己人。
+/// 写命令同受文件写入总闸管辖 (内测整改): 本测在开闸态下验证沙箱墙本身,
+/// 总闸关时的拒绝语义由 shell 工具的写意图测试覆盖。
 #[tokio::test]
 async fn sandbox_allows_workspace_writes() {
     let tmp = tempdir().unwrap();
-    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+    let tool =
+        ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_file_write(true));
 
     #[cfg(windows)]
     let command = "echo sandbox-ok > probe.txt && type probe.txt";

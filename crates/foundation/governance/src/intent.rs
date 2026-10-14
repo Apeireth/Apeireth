@@ -171,7 +171,13 @@ impl TaskIntentEnvelopeV1 {
         let trace_id = trace_id.into();
         Self {
             schema_version: Self::SCHEMA_VERSION.to_string(),
-            intent_id: format!("intent:{trace_id}"),
+            // push_str 而非 format!: format! 插值是 CBMC 引雷点; push_str
+            // 输出逐字节等价 ("intent:" + trace_id), 生产语义零差异。
+            intent_id: {
+                let mut id = String::from("intent:");
+                id.push_str(&trace_id);
+                id
+            },
             session_id,
             trace_id,
             intent_class: IntentClass::Unknown,

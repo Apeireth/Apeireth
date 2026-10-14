@@ -44,6 +44,8 @@
     type SseSignal,
   } from '../../governance/ledger';
   import {formatDateTimeMs, formatRelativeMs, shortId} from '../../governance/format';
+  import {gatewayAuthHeaders} from '../../tauri-bridge';
+  import {startSseFetchStream} from '../../sse-stream';
 
   let {
     config,
@@ -78,6 +80,7 @@
   // ---- SSE 真实连接态（断连标断连，不装在线）----
   let sseState = $state<SseConnectionState>('connecting');
   let es: EventSource | null = null;
+  let sseClose: (() => void) | null = null;
   let retryMs = SSE_INITIAL_RETRY_MS;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let destroyed = false;
@@ -141,10 +144,10 @@
     }
   }
 
-  function handleApprovalEvent(kind: 'approval_required' | 'approval_resolved', msg: MessageEvent): void {
+  function handleApprovalEvent(kind: 'approval_required' | 'approval_resolved', data: string): void {
     let payload: unknown = null;
     try {
-      payload = JSON.parse(typeof msg.data === 'string' ? msg.data : '');
+      payload = JSON.parse(data);
     } catch {
       payload = null;
     }
@@ -176,14 +179,47 @@
       return;
     }
     sseState = 'connecting';
+    void openSseChannel();
+  }
+
+  async function openSseChannel(): Promise<void> {
     const base = config.baseUrl.replace(/\/+$/, '');
+    const auth = await gatewayAuthHeaders();
+    if (destroyed) return;
+    if (auth.Authorization) {
+      // EventSource 无法带 Authorization 头 —— 带令牌过门走 fetch 流式读取；
+      // 断线按既有退避续排（与 EventSource 路径同一状态机）。
+      sseClose = startSseFetchStream(`${base}/v1/apeireth/events`, auth, {
+        onOpen: () => {
+          if (destroyed) return;
+          retryMs = SSE_INITIAL_RETRY_MS;
+          sseSignal('open');
+        },
+        onFrame: (frame) => {
+          if (frame.event === 'approval_required') handleApprovalEvent('approval_required', frame.data);
+          else if (frame.event === 'approval_resolved') handleApprovalEvent('approval_resolved', frame.data);
+        },
+        onEnd: () => {
+          sseClose = null;
+          if (destroyed) return;
+          sseSignal('error');
+          retryTimer = setTimeout(() => {
+            retryTimer = null;
+            startSse();
+          }, retryMs);
+          retryMs = nextRetryDelay(retryMs);
+        },
+      });
+      return;
+    }
+    // 无令牌（三态门未设口径照旧）：EventSource 原路径逐字语义保留。
     const source = new EventSource(`${base}/v1/apeireth/events`);
     es = source;
     source.addEventListener('approval_required', (m) =>
-      handleApprovalEvent('approval_required', m as MessageEvent),
+      handleApprovalEvent('approval_required', typeof (m as MessageEvent).data === 'string' ? (m as MessageEvent).data : ''),
     );
     source.addEventListener('approval_resolved', (m) =>
-      handleApprovalEvent('approval_resolved', m as MessageEvent),
+      handleApprovalEvent('approval_resolved', typeof (m as MessageEvent).data === 'string' ? (m as MessageEvent).data : ''),
     );
     source.onopen = () => {
       if (es !== source) return;
@@ -264,6 +300,8 @@
     if (clockTimer) clearInterval(clockTimer);
     es?.close();
     es = null;
+    sseClose?.();
+    sseClose = null;
   });
 </script>
 

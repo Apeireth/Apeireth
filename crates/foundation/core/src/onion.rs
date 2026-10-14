@@ -259,16 +259,16 @@ pub const PRINCIPLE_LAYER_O: &str = "O";
 /// 映射原则（按 key 语义，非机械分组）:
 /// - **E 存在层**: NotClone / NotPerfect / NotUuid / NotUnobservable / NotSelfRelationless
 ///   (本体论可观测性、身份连续性、不假装克隆/完美/唯一 → 5 键)
-/// - **S 价值层**: NotSafe / NotUnoptimizable
-///   (安全 + 最优价值判断 → 2 键)
+/// - **S 价值层**: NotSafe / NotUnoptimizable / NotAuthoritative
+///   (安全 + 最优 + 权威边界价值判断 → 3 键；NotAuthoritative 2026-10-11 主人特批)
 /// - **A 经验层**: NotUndo
 ///   (过去经验不可撤销 → 1 键)
 /// - **M 方法论层**: NotProof / SpecIsNotProof / CounterexampleIsNotBug / ProverIsNotTruth / NotUnscientific
 ///   (证明 / 规格 / 反例 / 证明者 / 科学方法 → 5 键)
 /// - **O 操作层**: (v2 当前无键显式归此层；预留扩展位)
-///   (含义：日常操作层。当前 13 键在 E/S/A/M 各层已覆盖 O 的语义)
+///   (含义：日常操作层。当前 14 键在 E/S/A/M 各层已覆盖 O 的语义)
 ///
-/// 总数: 5 + 2 + 1 + 5 = 13 ✓ (与 ALL_THIRTEEN_KEYS.len() 一致)
+/// 总数: 5 + 3 + 1 + 5 = 14 ✓ (与 ALL_THIRTEEN_KEYS.len() 一致)
 /// 0 触碰 ALL_THIRTEEN_KEYS / group_id() / THIRTEEN_KEYS_HARDCODE——纯新增映射表。
 pub const VERDICT_KEYS_BY_PRINCIPLE: &[(&str, &[PhilosophyKey])] = &[
     (
@@ -283,7 +283,11 @@ pub const VERDICT_KEYS_BY_PRINCIPLE: &[(&str, &[PhilosophyKey])] = &[
     ),
     (
         PRINCIPLE_LAYER_S,
-        &[PhilosophyKey::NotSafe, PhilosophyKey::NotUnoptimizable],
+        &[
+            PhilosophyKey::NotSafe,
+            PhilosophyKey::NotUnoptimizable,
+            PhilosophyKey::NotAuthoritative,
+        ],
     ),
     (PRINCIPLE_LAYER_A, &[PhilosophyKey::NotUndo]),
     (
@@ -296,7 +300,7 @@ pub const VERDICT_KEYS_BY_PRINCIPLE: &[(&str, &[PhilosophyKey])] = &[
             PhilosophyKey::NotUnscientific,
         ],
     ),
-    // O 操作层: 当前 13 键未显式归此层 (E/S/A/M 已覆盖 O 语义)
+    // O 操作层: 当前 14 键未显式归此层 (E/S/A/M 已覆盖 O 语义)
     // 扩展位: 未来如新增 O 层 键，加在下面。
 ];
 
@@ -312,7 +316,7 @@ const _VERDICT_KEYS_BY_PRINCIPLE_LEN_MATCHES: () = {
         idx += 1;
     }
     if total != ALL_THIRTEEN_KEYS.len() {
-        panic!("13 键映射完整性: 映射表总数与 ALL_THIRTEEN_KEYS.len() 不匹配");
+        panic!("键映射完整性: 映射表总数与 ALL_THIRTEEN_KEYS.len() 不匹配");
     }
 };
 

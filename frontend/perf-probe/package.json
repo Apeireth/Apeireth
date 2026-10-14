@@ -1,0 +1,14 @@
+{
+  "name": "apeireth-avatar-perf-probe",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "桌面常驻小窗形象渲染性能探针：3D 卡通渲染路线 / 2D 形象路线 / 光态基线，三线同页顺序实测",
+  "scripts": {
+    "probe": "node ../../scripts/avatar-perf-probe.mjs",
+    "probe:serve": "node ../../scripts/avatar-perf-probe.mjs --serve"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  }
+}

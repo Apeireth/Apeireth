@@ -102,12 +102,12 @@
 - 性能红行：沙箱 spawn 12.8ms **转绿**（根因=全线程枚举→ResumeThread）；冷启动 22ms
   （差距 2.2× 仍红如实，剩余=真冷文件创建系统开销，不改口径）；
 - src-tauri 陈年 fmt 清零。
-- 全场：149 套件 4671 passed / 0 failed（2026-09-28 权威口径）。
+- 全场：161 套件 4829 passed / 0 failed（2026-09-30 rc.3 权威口径：P0 挂起修复+缓存友好组装+自省通道+IM 接入+驾驶舱 P1+星舰主题）。
 
 ## 余量备忘（收卷建议入账）
 
-- reflexion 自研 MutationLock 可换统一文件锁（死锁接管语义更强，可选优化）；
-- `stored_doc` 消费方接线（JSON 配置/记录消费方迁移）列后续批次；
+- reflexion 自研 MutationLock 可换统一文件锁（死锁接管语义更强，可选优化）——**✅ 已落地**（2026-10-12 零债清偿批复核：`reflexion.rs` 早已挂统一文件锁 `storage_atomic::with_file_lock`，含死锁接管/不抢活跃持有者/共享锁互通三测；本行系收卷前旧备忘，留痕核销）；
+- `stored_doc` 消费方接线（JSON 配置/记录消费方迁移）列后续批次——**✅ 已落地**（见 `stored-doc-consumer-migration.md`：6 消费方文件族迁移清单 + 13 类不迁理由成文；本行留痕核销）；
 - `inv_sweep_keeps_protected` 的 cleanup 侧在线发射点待 retention 清理生产接线时补喂。
 
 ## 战况注记（2026-09-26 晚）

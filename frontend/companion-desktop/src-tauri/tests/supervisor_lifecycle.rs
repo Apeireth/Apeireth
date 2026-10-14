@@ -23,6 +23,10 @@
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
+// Workspace policy (clippy.toml): fs_err over std::fs, so filesystem errors
+// carry the path that failed.
+use fs_err as fs;
+
 use companion_desktop_lib::backend_supervisor::{
     BackendCapabilityEnv, BackendOwnership, BackendProviderEnv, BackendState, BackendSupervisor,
 };
@@ -181,8 +185,9 @@ fn spawns_real_backend_and_reaches_ready() {
 /// Settings-UI provider configuration must reach the real child's environment:
 /// applying an OpenAI-compatible env restarts the backend, and the restarted
 /// gateway then lists the injected model (model registration reads
-/// `APEIRETH_OPENAI_MODELS`, no auth needed at list time). Re-applying the same
-/// env is a no-op that must not restart again.
+/// `APEIRETH_OPENAI_MODELS`; the list probe presents the loopback token — the
+/// token gate covers the whole API face). Re-applying the same env is a no-op
+/// that must not restart again.
 #[test]
 fn provider_env_reaches_the_backend() {
     if !backend_available() {
@@ -216,7 +221,16 @@ fn provider_env_reaches_the_backend() {
             info.port
         );
 
-        let models = reqwest::get(format!("{endpoint}/v1/models"))
+        // 令牌门覆盖全 API 面 (仅 /health 豁免): 注册表读取同样过门,
+        // 带本壳自铸的回环令牌请求 (与桌面 UI 同一面)。
+        let token = supervisor
+            .gateway_access_token()
+            .await
+            .expect("a spawned sidecar must carry a loopback access token");
+        let models = reqwest::Client::new()
+            .get(format!("{endpoint}/v1/models"))
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
             .await
             .expect("models request")
             .text()
@@ -246,9 +260,10 @@ fn provider_env_reaches_the_backend() {
 /// Advanced-capability toggles reach the real child the same way: enabling
 /// shell via `apply_backend_config` restarts the backend and the restarted
 /// gateway then serves `tool.shell` in `/v1/tools/list` (registration reads
-/// `APEIRETH_ENABLE_SHELL`, no auth needed at list time). The combined call
-/// with an unchanged provider must still restart exactly once, proving the
-/// single-restart contract.
+/// `APEIRETH_ENABLE_SHELL`; the list probe presents the loopback token — the
+/// token gate covers the whole API face). The combined call with an unchanged
+/// provider must still restart exactly once, proving the single-restart
+/// contract.
 #[test]
 fn capability_env_reaches_the_backend() {
     if !backend_available() {
@@ -274,7 +289,16 @@ fn capability_env_reaches_the_backend() {
         assert_eq!(info.restart_count, 1, "changed capabilities restart exactly once");
         let endpoint = info.endpoint.clone().expect("endpoint after restart");
 
-        let tools = reqwest::get(format!("{endpoint}/v1/tools/list"))
+        // 令牌门覆盖全 API 面 (仅 /health 豁免): 注册表读取同样过门,
+        // 带本壳自铸的回环令牌请求 (与桌面 UI 同一面)。
+        let token = supervisor
+            .gateway_access_token()
+            .await
+            .expect("a spawned sidecar must carry a loopback access token");
+        let tools = reqwest::Client::new()
+            .get(format!("{endpoint}/v1/tools/list"))
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
             .await
             .expect("tools request")
             .text()
@@ -323,7 +347,7 @@ fn sidecar_stores_land_in_app_data_regardless_of_cwd() {
         "apeireth-desktop-data-{}-stores",
         std::process::id()
     ));
-    let _ = std::fs::remove_dir_all(&app_data);
+    let _ = fs::remove_dir_all(&app_data);
 
     runtime().block_on(async {
         let supervisor = BackendSupervisor::with_logger_in_dir(app_data.clone())
@@ -369,8 +393,8 @@ fn explicit_env_store_paths_take_priority() {
         "apeireth-desktop-custom-{}-envprio",
         std::process::id()
     ));
-    let _ = std::fs::remove_dir_all(&app_data);
-    let _ = std::fs::remove_dir_all(&custom);
+    let _ = fs::remove_dir_all(&app_data);
+    let _ = fs::remove_dir_all(&custom);
 
     let custom_session = custom
         .join("sessions.sqlite3")
@@ -530,6 +554,64 @@ fn concurrent_start_does_not_spawn_two_backends() {
             "the original process must be untouched"
         );
         assert_eq!(info.state, BackendState::Ready);
+
+        supervisor.stop().await.expect("cleanup stop");
+    });
+}
+
+/// G10 loopback hardening, end to end: the sidecar is spawned with an
+/// auto-minted access token and its sensitive endpoints enforce it — an
+/// unauthenticated call is refused while the minted token opens the same
+/// endpoint. The mint→inject→enforce chain only exists at runtime, so it is
+/// proven here against the real process.
+#[test]
+fn minted_gateway_token_enforces_the_sensitive_endpoint_gate() {
+    if !backend_available() {
+        eprintln!("SKIP: no canonical backend build found");
+        return;
+    }
+    let _guard = gateway_lock();
+    isolate_backend_data();
+    // The mint path is the one under test: no explicit env token.
+    let _env = EnvGuard::clear(&["APEIRETH_GATEWAY_TOKEN"]);
+
+    runtime().block_on(async {
+        let supervisor = BackendSupervisor::new_for_test();
+        supervisor.start().await.expect("backend should start");
+        let endpoint = supervisor
+            .info()
+            .await
+            .endpoint
+            .clone()
+            .expect("a Ready backend must publish an endpoint");
+        let token = supervisor
+            .gateway_access_token()
+            .await
+            .expect("a spawned sidecar must carry a loopback access token");
+        assert_eq!(token.len(), 64, "minted token = 32 random bytes hex");
+
+        // 无认证直调敏感端点: 必须 401 (收紧口径, 不再未设即放)。
+        let denied = reqwest::get(format!("{endpoint}/v1/admin/config"))
+            .await
+            .expect("admin config request should reach the gateway");
+        assert_eq!(
+            denied.status(),
+            reqwest::StatusCode::UNAUTHORIZED,
+            "tokenless call to a sensitive endpoint must be refused"
+        );
+
+        // 带自铸令牌: 同一端点放行。
+        let allowed = reqwest::Client::new()
+            .get(format!("{endpoint}/v1/admin/config"))
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await
+            .expect("authorized admin config request");
+        assert!(
+            allowed.status().is_success(),
+            "minted token must open the gate, got {}",
+            allowed.status()
+        );
 
         supervisor.stop().await.expect("cleanup stop");
     });

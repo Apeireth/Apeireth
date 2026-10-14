@@ -72,6 +72,45 @@ use super::session::{InMemorySessionStore, SessionManager, SessionStore};
 /// a model or module stuck in a loop fails fast. Module retries consume a slot.
 pub const DEFAULT_MAX_ROUNDS: u32 = 8;
 
+/// Smallest per-turn round limit a configuration value is clamped to.
+pub const MIN_TURN_ROUNDS: u32 = 1;
+
+/// Largest per-turn round limit a configuration value is clamped to.
+pub const MAX_TURN_ROUNDS: u32 = 64;
+
+/// Smallest per-round tool-call limit a configuration value is clamped to.
+pub const MIN_TOOL_CALL_LIMIT: usize = 1;
+
+/// Largest per-round tool-call limit a configuration value is clamped to.
+pub const MAX_TOOL_CALL_LIMIT: usize = 64;
+
+/// Resolve the per-turn round limit from a raw configuration value.
+///
+/// Budget knobs are explicit: an out-of-range integer is clamped into
+/// `MIN_TURN_ROUNDS..=MAX_TURN_ROUNDS`, while an absent, empty, or
+/// unparseable value falls back to [`DEFAULT_MAX_ROUNDS`]. Nothing else is
+/// invented.
+pub fn parse_turn_round_limit(raw: Option<&str>) -> u32 {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.parse::<i64>().ok())
+        .map(|value| value.clamp(i64::from(MIN_TURN_ROUNDS), i64::from(MAX_TURN_ROUNDS)) as u32)
+        .unwrap_or(DEFAULT_MAX_ROUNDS)
+}
+
+/// Resolve the per-round tool-call limit from a raw configuration value.
+///
+/// Same explicit-budget contract as [`parse_turn_round_limit`]: out-of-range
+/// values clamp into `MIN_TOOL_CALL_LIMIT..=MAX_TOOL_CALL_LIMIT`, absent or
+/// unparseable values fall back to the default of 16.
+pub fn parse_tool_call_limit(raw: Option<&str>) -> usize {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.parse::<i64>().ok())
+        .map(|value| value.clamp(MIN_TOOL_CALL_LIMIT as i64, MAX_TOOL_CALL_LIMIT as i64) as usize)
+        .unwrap_or(super::execute::MAX_TOOL_CALLS_PER_ROUND)
+}
+
 /// Default lifetime of a pending approval before it expires.
 pub const DEFAULT_APPROVAL_TTL_MS: u64 = 5 * 60 * 1000;
 
@@ -96,6 +135,11 @@ pub struct RuntimeConfig {
     pub default_model: Option<String>,
     /// Logical round limit for one turn, including module retry attempts.
     pub max_rounds: u32,
+    /// Maximum tool calls one round may dispatch. Calls beyond the limit in a
+    /// single round are truncated with a recorded trace entry and answered
+    /// with synthetic results, so every call in the assistant message still
+    /// has exactly one answer.
+    pub max_tool_calls_per_round: usize,
     /// How long a pending approval stays resumable, in milliseconds.
     pub approval_ttl_ms: u64,
     /// Maximum isolated module provider calls in one top-level turn.
@@ -117,6 +161,21 @@ pub struct RuntimeConfig {
     /// postures changes the prompt projection and nothing else. Default `false`:
     /// a runtime that never engages the mechanism is byte-for-byte unchanged.
     pub plan_mode_enabled: bool,
+    /// Session-scoped cognitive quota ceilings (opt-in spend gate). `None` on a
+    /// dimension means no limit; the metering itself always runs so the
+    /// self-report's consumption column stays real. See
+    /// [`super::quota`] for the accounting and exhausted-behavior contract.
+    pub quota: super::quota::SessionQuotaLimits,
+    /// Unit-price source for the cost dimension of the session quota
+    /// ([`super::quota::CostRateTable`]). Every provider round whose model has
+    /// a row here is converted onto the ledger's cost column at the round
+    /// metering point; a model without a row is counted as an unpriced round
+    /// instead (never invented). `None` = no price source installed, so every
+    /// round is unpriced and the cost total is honestly partial.
+    pub cost_rates: Option<Arc<dyn super::quota::CostRateTable>>,
+    /// 滚动窗口大小 (G-P1 指标面, 拍/层): 指标注册表每层保留最近 N 个回合
+    /// 收束拍 (进程内环形, 不落盘)。默认 [`super::metrics::DEFAULT_METRICS_WINDOW_TURNS`]。
+    pub metrics_window_turns: usize,
 }
 
 /// Secret-free diagnostic projection of the live runtime graph.
@@ -179,12 +238,16 @@ impl Default for RuntimeConfig {
         Self {
             default_model: None,
             max_rounds: DEFAULT_MAX_ROUNDS,
+            max_tool_calls_per_round: super::execute::MAX_TOOL_CALLS_PER_ROUND,
             approval_ttl_ms: DEFAULT_APPROVAL_TTL_MS,
             max_module_invocations: DEFAULT_MAX_MODULE_INVOCATIONS,
             context_budget_chars: DEFAULT_CONTEXT_BUDGET_CHARS,
             context_spill_root: None,
             repetition_advisory: RepetitionPolicy::default(),
             plan_mode_enabled: false,
+            quota: super::quota::SessionQuotaLimits::default(),
+            cost_rates: None,
+            metrics_window_turns: super::metrics::DEFAULT_METRICS_WINDOW_TURNS,
         }
     }
 }
@@ -279,6 +342,9 @@ pub struct Runtime {
     /// bounded rolling pool, model-order result commit). `None` = every tool
     /// call dispatches strictly serially, one at a time.
     pub(super) call_scheduler: Option<Arc<CallScheduler>>,
+    /// G-P1 指标面: 回合收束指标的进程内滚动窗口 (会话 + 全局两层),回合
+    /// 收束埋点写这里, `/v1/panel/metrics` 从这里读 (见 [`super::metrics`])。
+    pub(super) metrics: Arc<super::metrics::MetricsRegistry>,
 }
 
 impl Runtime {
@@ -310,6 +376,11 @@ impl Runtime {
     /// Runtime settings.
     pub fn config(&self) -> &RuntimeConfig {
         &self.config
+    }
+
+    /// 指标注册表 (G-P1 指标数据源): 回合收束指标的进程内滚动窗口。
+    pub fn metrics(&self) -> &super::metrics::MetricsRegistry {
+        &self.metrics
     }
 
     /// Return a live, secret-free projection for diagnostics and capability
@@ -745,6 +816,13 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Cap the tool calls one round may dispatch (clamped to at least 1).
+    #[must_use]
+    pub fn with_max_tool_calls_per_round(mut self, calls: usize) -> Self {
+        self.config.max_tool_calls_per_round = calls;
+        self
+    }
+
     /// Pending-approval lifetime, in milliseconds.
     #[must_use]
     pub fn with_approval_ttl(mut self, ttl_ms: u64) -> Self {
@@ -801,6 +879,41 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_plan_mode_enabled(mut self, enabled: bool) -> Self {
         self.config.plan_mode_enabled = enabled;
+        self
+    }
+
+    /// Set the session-scoped cognitive quota ceilings (opt-in spend gate).
+    ///
+    /// `None` on a dimension = no limit; consumption metering runs either way.
+    /// See [`super::quota::SessionQuotaLimits`] for the exhausted-behavior
+    /// contract.
+    #[must_use]
+    pub fn with_session_quota(mut self, quota: super::quota::SessionQuotaLimits) -> Self {
+        self.config.quota = quota;
+        self
+    }
+
+    /// Install the unit-price source behind the cost dimension of the session
+    /// quota ([`super::quota::CostRateTable`]).
+    ///
+    /// Without it every provider round is counted as unpriced (the cost total
+    /// is honestly partial; nothing is ever invented). With it, each round is
+    /// converted at the round model's unit price onto the session ledger at
+    /// the round metering point.
+    #[must_use]
+    pub fn with_cost_rates(mut self, rates: Arc<dyn super::quota::CostRateTable>) -> Self {
+        self.config.cost_rates = Some(rates);
+        self
+    }
+
+    /// Set the metrics rolling window (G-P1, 拍/层).
+    ///
+    /// Each layer (per session + global) keeps the last N turn-closure beats in
+    /// process memory. The value is clamped to `1..=`[`super::metrics::MAX_METRICS_WINDOW_TURNS`],
+    /// so the effective window always equals `config.metrics_window_turns`.
+    #[must_use]
+    pub fn with_metrics_window(mut self, turns: usize) -> Self {
+        self.config.metrics_window_turns = turns.clamp(1, super::metrics::MAX_METRICS_WINDOW_TURNS);
         self
     }
 
@@ -893,6 +1006,10 @@ impl RuntimeBuilder {
             providers = providers.with_fallback_order(order);
         }
 
+        let metrics = Arc::new(super::metrics::MetricsRegistry::new(
+            self.config.metrics_window_turns,
+        ));
+
         let context_spill = self
             .config
             .context_spill_root
@@ -918,6 +1035,7 @@ impl RuntimeBuilder {
                 .summary_generator
                 .map(|generator| Arc::new(CompactionEngine::new(generator))),
             call_scheduler: self.call_scheduler,
+            metrics,
         })
     }
 }

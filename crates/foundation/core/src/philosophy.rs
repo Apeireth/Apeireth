@@ -1,10 +1,10 @@
-//! `apeireth-core::philosophy` — 13 键 verdict (编译时 hardcode trait)
+//! `apeireth-core::philosophy` — 14 键 verdict (编译时 hardcode trait；常量名沿用历史命名)
 //!
 //! 拆自 `lib.rs` line 148-317 (R131 架构债清理). 0 触碰公开签名 — `use apeireth_core::PhilosophyKey` 等仍可用.
 //!
 //! 包含: typedef 本段所有 `pub struct` / `pub enum` / `pub trait` / `pub const`.
 //!
-//! ## 13 键 = 12 原 + PHL-07 (R125-12 NotUnoptimizable 新增)
+//! ## 14 键 = 12 原 + PHL-07 (R125-12 NotUnoptimizable 新增) + PHL-08 (2026-10-11 NotAuthoritative 新增)
 //!
 //! PHL-07 = "不假装 (代码/系统/推理) 已最优", A3 哲学锚 group 7 (本体论 trust),
 //! 形式化证明在 `crates/_archived/apeireth-formal/stage5_2/verdict_cache_13keys_formal.rs` (archived 历史 form),
@@ -18,10 +18,10 @@ use serde::{Deserialize, Serialize};
 // 4. 13 键 verdict (编译时 hardcode trait) — 12 原 + PHL-07 NotUnoptimizable
 // =================================================
 
-/// V3 9 键 + v4.1 新增 3 键 + R125-12 PHL-07 = 13 键
+/// V3 9 键 + v4.1 新增 3 键 + R125-12 PHL-07 + 2026-10-11 PHL-08 = 14 键
 ///
 /// ⚠️ 编译时 hardcode 锁：增删任何键都会触发 `ALL_THIRTEEN_KEYS` 数组长度不匹配错误。
-/// `const THIRTEEN_KEYS_HARDCODE` 在编译期强制数组长度为 13。
+/// `const THIRTEEN_KEYS_HARDCODE` 在编译期强制数组长度为 14。
 /// 详见 docs/architecture-v4-1-living-intelligence-update.md §15.2 + R125-12 PHL-07 spec。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PhilosophyKey {
@@ -56,10 +56,13 @@ pub enum PhilosophyKey {
     // === R125-12 新增 1 键 (PHL-07 本体论 trust) ===
     /// PHL-07 not_pretend_unoptimizable: 不假装代码/系统/推理已最优
     NotUnoptimizable,
+    // === 2026-10-11 新增 1 键 (PHL-08 权威边界；主人特批直加，流程豁免一次——留痕于此) ===
+    /// PHL-08 not_pretend_authoritative: 不假装权威（不僭越诊断权/处方权/专业责任——能力≠权威）
+    NotAuthoritative,
 }
 
 impl PhilosophyKey {
-    /// 13 键描述 (编译时 hardcode)
+    /// 14 键描述 (编译时 hardcode)
     pub const fn description(&self) -> &'static str {
         match self {
             Self::NotClone => "不假装克隆",
@@ -75,10 +78,11 @@ impl PhilosophyKey {
             Self::NotUnscientific => "PHL-05 不假装不科学",
             Self::NotSelfRelationless => "PHL-06 不假装不与自身关系",
             Self::NotUnoptimizable => "PHL-07 不假装已最优",
+            Self::NotAuthoritative => "PHL-08 不假装权威",
         }
     }
 
-    /// 主键分组 ID (1=PHL-01, 2=PHL-02b, 3=PHL-03, 4=PHL-04, 5=PHL-05, 6=PHL-06, 7=PHL-07)
+    /// 主键分组 ID (1=PHL-01, 2=PHL-02b, 3=PHL-03, 4=PHL-04, 5=PHL-05, 6=PHL-06, 7=PHL-07, 8=PHL-08)
     pub const fn group_id(&self) -> u8 {
         match self {
             Self::NotClone | Self::NotPerfect | Self::NotUuid => 1,
@@ -88,15 +92,19 @@ impl PhilosophyKey {
             Self::NotUnscientific => 5,
             Self::NotSelfRelationless => 6,
             Self::NotUnoptimizable => 7,
+            Self::NotAuthoritative => 8,
         }
     }
 }
 
-/// 13 键完整列表 — 编译时 hardcode，🦴 骨架不可变。
+/// 14 键完整列表 — 编译时 hardcode，🦴 骨架不可变。
 ///
 /// ⚠️ 任何修改都会立即触发 `THIRTEEN_KEYS_HARDCODE` 编译期断言失败。
-/// 顺序锁定：V3 PHL-01 (3) → V3 PHL-02b (3) → V3 PHL-03 (3) → v4.1 PHL-04/05/06 (3) → R125-12 PHL-07 (1)
-pub const ALL_THIRTEEN_KEYS: [PhilosophyKey; 13] = [
+/// 顺序锁定：V3 PHL-01 (3) → V3 PHL-02b (3) → V3 PHL-03 (3) → v4.1 PHL-04/05/06 (3) → R125-12 PHL-07 (1) → 2026-10-11 PHL-08 (1)
+///
+/// **0 假装注**：常量名 `ALL_THIRTEEN_KEYS` 是历史命名（R125-12 时为 13），
+/// 实际 14 元素——同 `ALL_TWELVE_KEYS` 的名字漂移惯例，改名成本 = 30+ 调用方。
+pub const ALL_THIRTEEN_KEYS: [PhilosophyKey; 14] = [
     // V3 PHL-01 not_X (LOCKED)
     PhilosophyKey::NotClone,
     PhilosophyKey::NotPerfect,
@@ -115,14 +123,17 @@ pub const ALL_THIRTEEN_KEYS: [PhilosophyKey; 13] = [
     PhilosophyKey::NotSelfRelationless,
     // R125-12 新增 1 键 (PHL-07 本体论 trust)
     PhilosophyKey::NotUnoptimizable,
+    // 2026-10-11 新增 1 键 (PHL-08 权威边界，主人特批)
+    PhilosophyKey::NotAuthoritative,
 ];
 
-/// **向后兼容 alias** — 13 键清单的旧名 (`ALL_TWELVE_KEYS`) 保留, 数组实际 13 元素.
+/// **向后兼容 alias** — 13 键清单的旧名 (`ALL_TWELVE_KEYS`) 保留, 数组实际 14 元素.
 ///
-/// 历史命名 (V3 9 键 + v4.1 3 键 = 12 键) 已被 R125-12 PHL-07 升级后变成 13 键 (12 + PHL-07).
-/// 数组仍是这 13 元素, 但名字保留以避免改 30+ 调用方 (apeireth-constraint / apeireth-action / 等).
-/// **0 假装 PASS 严守**: 数组长度就是 13, 名字说 12 是历史遗留, 内部断言用 `THIRTEEN_KEYS_HARDCODE` 强守.
-pub const ALL_TWELVE_KEYS: [PhilosophyKey; 13] = ALL_THIRTEEN_KEYS;
+/// 历史命名 (V3 9 键 + v4.1 3 键 = 12 键) 已被 R125-12 PHL-07 升级后变成 13 键 (12 + PHL-07),
+/// 2026-10-11 PHL-08 后为 14。数组是这 14 元素, 但名字保留以避免改 30+ 调用方
+/// (apeireth-constraint / apeireth-action / 等)。
+/// **0 假装 PASS 严守**: 数组长度就是 14, 名字说 12 是历史遗留, 内部断言用 `THIRTEEN_KEYS_HARDCODE` 强守.
+pub const ALL_TWELVE_KEYS: [PhilosophyKey; 14] = ALL_THIRTEEN_KEYS;
 
 /// **v2 角色降级 (2026-08-27)** — 13 键 = 哲学标准 / 判别词汇表 (🦴 LOCKED),
 /// **不是** v2 runtime 的强制机制.
@@ -144,12 +155,13 @@ pub const RUNTIME_ENFORCED: bool = false;
 /// 编译期断言 — 13 键 hardcode 锁。任何遗漏/重复都编译失败。
 ///
 /// 这是 v6 守门 1（编译时 hardcode）的真正落地：🦴 骨架不可变。
+/// （常量名沿用历史命名；实际守 14 元素，2026-10-11 PHL-08。）
 pub const THIRTEEN_KEYS_HARDCODE: () = {
-    // 数组长度 = 13。增删键必须同步修改此断言，否则编译失败。
-    if ALL_THIRTEEN_KEYS.len() != 13 {
-        panic!("13 键 hardcode 被破坏！必须保持 V3 9 键 + v4.1 新增 3 键 + R125-12 PHL-07 = 13");
+    // 数组长度 = 14。增删键必须同步修改此断言，否则编译失败。
+    if ALL_THIRTEEN_KEYS.len() != 14 {
+        panic!("14 键 hardcode 被破坏！必须保持 V3 9 键 + v4.1 新增 3 键 + R125-12 PHL-07 + 2026-10-11 PHL-08 = 14");
     }
-    // 主键分组检查 (3+3+3+1+1+1+1 = 13)
+    // 主键分组检查 (3+3+3+1+1+1+1+1 = 14)
     let mut phl01 = 0u8;
     let mut phl02b = 0u8;
     let mut phl03 = 0u8;
@@ -157,6 +169,7 @@ pub const THIRTEEN_KEYS_HARDCODE: () = {
     let mut phl05 = 0u8;
     let mut phl06 = 0u8;
     let mut phl07 = 0u8;
+    let mut phl08 = 0u8;
     let mut i = 0;
     while i < ALL_THIRTEEN_KEYS.len() {
         match ALL_THIRTEEN_KEYS[i].group_id() {
@@ -167,6 +180,7 @@ pub const THIRTEEN_KEYS_HARDCODE: () = {
             5 => phl05 += 1,
             6 => phl06 += 1,
             7 => phl07 += 1,
+            8 => phl08 += 1,
             _ => panic!("未分组键"),
         }
         i += 1;
@@ -178,8 +192,9 @@ pub const THIRTEEN_KEYS_HARDCODE: () = {
         || phl05 != 1
         || phl06 != 1
         || phl07 != 1
+        || phl08 != 1
     {
-        panic!("13 键分组不匹配！3+3+3+1+1+1+1=13");
+        panic!("14 键分组不匹配！3+3+3+1+1+1+1+1=14");
     }
 };
 

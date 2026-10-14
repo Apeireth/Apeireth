@@ -16,8 +16,8 @@ site_author: Apeireth Team
 copyright: Copyright © 2026 Apeireth Team. Licensed under Apache License, Version 2.0.
 
 # 仓库 (1.0 release 后主人配)
-repo_name: apeireth/apeireth-rust
-repo_url: https://github.com/apeireth/apeireth-rust
+repo_name: Apeireth/Apeireth
+repo_url: https://github.com/Apeireth/Apeireth
 edit_uri: edit/gh-pages/docs/pages-source/
 
 # 文档源目录 (R129-13 写到 docs/pages-source/, 跟现有丰富 docs/ 隔离)
@@ -116,7 +116,7 @@ plugins:
         - en
         - zh
 
-# 导航 (5 主导航 + 3 链式页)
+# 导航 (5 主导航 + 3 链式页 + 2 实战手册)
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
@@ -125,6 +125,8 @@ nav:
   - Architecture: architecture.md
   - Changelog: changelog.md
   - Borrowed Repos: borrowed-repos.md
+  - Kani 验证手册: 04-internal/kani-verification-playbook.md
+  - 运维排障手册: 04-internal/ops-network-playbook.md
 
 # 严格模式 (broken link 警告)
 strict: true

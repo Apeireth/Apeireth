@@ -42,6 +42,8 @@ serde_json = { workspace = true }
 tempfile = "3"
 chrono = { workspace = true }
 rusqlite = { workspace = true }
+# 文件写入统一走 fs_err (clippy.toml disallowed-methods 约束, 测试面同样适用)
+fs-err = { workspace = true }
 
 [features]
 default = ["base"]

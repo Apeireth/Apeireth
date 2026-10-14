@@ -242,6 +242,8 @@ impl RuntimeSubLoopSpawner {
             prompt_tokens: 0,
             completion_tokens: 0,
             total_tokens: 0,
+            // 缓存列的求和单位元 (累计起点, 不是计量): 累加折子见下。
+            prompt_cache_hit_tokens: Some(0),
         };
         let mut collected_tool_results = Vec::new();
 
@@ -284,6 +286,15 @@ impl RuntimeSubLoopSpawner {
             total_usage.total_tokens = total_usage
                 .total_tokens
                 .saturating_add(response.usage.total_tokens);
+            // 缓存列累加: 有列的轮逐轮求和 (不回绕); 任一轮缺列 = 总计未知
+            // (None, 未知不当 0 —— 不编造)。
+            total_usage.prompt_cache_hit_tokens = match (
+                total_usage.prompt_cache_hit_tokens,
+                response.usage.prompt_cache_hit_tokens,
+            ) {
+                (Some(total), Some(round)) => Some(total.saturating_add(round)),
+                _ => None,
+            };
 
             // If the model called tools
             if response.finish_reason == Some(NormalizedFinishReason::ToolCalls)

@@ -8,6 +8,11 @@
 //!
 //! Response shapes follow `docs/gateway-api-contract.md` §4-§9 and mirror the
 //! desktop types in the sibling `apeireth-ui/src/lib/types.ts` workspace.
+//!
+//! 读快照语义 (W2-③ 面板一致性, 多客户端读数一致): 每个 `/v1/panel/*` 响应 =
+//! **一次快照读** —— 单个端口调用的完整结果, 绝不拼两次读 (会话列表/内存计数
+//! 不会混两个时刻的状态); 响应内各字段同出一刻, 多客户端并发读各自拿到完整
+//! 一致的快照。该语义由 `tests/multi_client_session.rs` 面板两例钉住。
 
 use std::sync::{Arc, RwLock};
 
@@ -45,6 +50,20 @@ pub struct GatewayState {
     /// Live runtime config, readable by every request path and patchable through
     /// `/v1/admin/config`.
     pub hot_config: Arc<RwLock<crate::admin::GatewayRuntimeConfig>>,
+    /// W2-② 全 API 面令牌门 (chat / 事件流 / 面板 / 会话 / 审批 / admin 族,
+    /// 唯一豁免 `UNAUTHENTICATED_PROBE_PATHS` 健康探活), 三态口径解析自 env
+    /// `APEIRETH_GATEWAY_TOKEN` (see [`crate::canonical_entry::GatewayTokenGate`])。
+    pub token_gate: crate::canonical_entry::GatewayTokenGate,
+    /// 客户端令牌表 (name → token, 令牌族第二面): 与 env 单令牌并列的通行证,
+    /// 过门审计带客户端名。由组合根**显式装载注入** (see
+    /// [`crate::client_tokens::ClientTokenTable::load`]) —— 装配函数不隐式读
+    /// 配置面, 「坏配置拒开」必须在可失败边界执行; 未注入 = 空表 (仅 env 面)。
+    pub client_tokens: crate::client_tokens::ClientTokenTable,
+    /// Graceful-shutdown trigger (W2-① resident form): fired by the token-gated
+    /// `/v1/admin/shutdown` endpoint; the serve loop stops, writes the closing
+    /// audit fact and flushes the observation archive (see
+    /// [`crate::canonical_entry::serve_with_shutdown`]).
+    pub shutdown: Arc<crate::shutdown::ShutdownTrigger>,
 }
 
 // ---------------------------------------------------------------------------
@@ -1214,7 +1233,10 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "providers", "capabilities": [ cap("providers.list", true, false, &["list"], true, !state.runtime.providers().is_empty()) ] },
             { "name": "runtime", "capabilities": [ cap("runtime.snapshot.read", true, false, &["read"], true, true) ] },
             { "name": "chat", "capabilities": [ cap("chat.completions", true, true, &["complete", "stream"], true, !state.runtime.providers().is_empty()) ] },
-            { "name": "sessions", "capabilities": [ cap("sessions.read", true, false, &["list"], sessions_supported, sessions_supported) ] },
+            { "name": "sessions", "capabilities": [
+                cap("sessions.read", true, false, &["list"], sessions_supported, sessions_supported),
+                cap("sessions.delete", false, true, &["delete"], true, true),
+            ] },
             { "name": "memory", "capabilities": memory },
             { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], tools_supported, tools_supported) ] },
             { "name": "permissions", "capabilities": [
@@ -1236,6 +1258,9 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             ] },
             { "name": "workbench", "capabilities": [
                 cap("workbench.turn.read", true, false, &["read"], workbench_supported, workbench_supported),
+            ] },
+            { "name": "metrics", "capabilities": [
+                cap("metrics.read", true, false, &["read"], true, true),
             ] },
             { "name": "voice", "capabilities": [
                 cap_with_reason("voice.duplex", false, false, &["duplex", "stream"], false, false, Some("not_assembled")),

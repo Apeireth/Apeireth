@@ -63,6 +63,9 @@ export interface MergeSessionLedgerInput {
   /** 工作区默认回退（2026-10-11 批）：会话未戳工作区（旧数据）时归入的
    *  当前项目组；显式 null/未传 = 归「未关联项目」组。 */
   defaultWorkspace?: string | null;
+  /** 已确认删除、后端陈账尚未刷新掉的会话 id（乐观排除）：
+   *  删除是"立即消失"的，不允许在后端重拉间隙里被陈账行补回来。 */
+  exclude?: ReadonlySet<string>;
 }
 
 /** 最后一条消息的一行预览（空白折叠，截断 80 字）。 */
@@ -80,10 +83,12 @@ export function sessionPreview(conv: Conversation): string | null {
 export function mergeSessionLedger(input: MergeSessionLedgerInput): HomeSessionItem[] {
   const pending = input.pendingApprovalSessions ?? new Set<string>();
   const fallbackWs = input.defaultWorkspace ?? null;
+  const exclude = input.exclude ?? new Set<string>();
   const byId = new Map<string, HomeSessionItem>();
 
   for (const conv of input.local) {
     if (conv.archived) continue;
+    if (exclude.has(conv.id)) continue;
     byId.set(conv.id, {
       id: conv.id,
       title: conv.title || '新对话',
@@ -101,6 +106,7 @@ export function mergeSessionLedger(input: MergeSessionLedgerInput): HomeSessionI
   }
 
   for (const s of input.backend ?? []) {
+    if (exclude.has(s.id)) continue;
     const existing = byId.get(s.id);
     const lastActive = s.last_active_at || s.started_at || 0;
     if (existing) {
@@ -159,6 +165,19 @@ export function archivedHomeItems(
       personaName: conv.personaName ?? null,
     }))
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+}
+
+/**
+ * 会话搜索命中（历史入口撤除后「会话列表 + 搜索」即历史）：
+ * 标题 / 预览 / 联系人名 / 项目名任一含查询词即命中（大小写不敏感）。
+ */
+export function sessionMatchesQuery(item: HomeSessionItem, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [item.title, item.preview ?? '', item.personaName ?? '', workspaceLabel(item.workspace)]
+    .join('\n')
+    .toLowerCase();
+  return haystack.includes(q);
 }
 
 /** 项目分组键 → 显示名：取路径末段（目录名）；空/根路径回退默认组。 */

@@ -62,6 +62,7 @@
 | **运行时 Assembly** | `rt.harness_patch` | `apeireth-runtime-assembly::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| 失败轨迹自动演绎策略补丁 |
 | **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` + runtime-assembly registration | `RepoMapGenerator::generate_map()` | 跨语言 AST 符号提取 + PageRank 代码地图 |
 | **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | 两阶段提交 + 100% 自动原子回滚 |
+| **工具 (Capabilities)** | `tool.git_write` | `apeireth-tools-canonical::git_write` | `git_write(command_str)` | 写意图三级词表（L1 可逆默认人批 / L2 出网永远人批 / L3 毁灭无工具面）+ 命令白名单词法分级（变形防护/组合取最严）+ 受控通道执行 |
 | **工具 (Capabilities)** | `tool.guardrail` | `apeireth-tools-canonical::guardrail` | `pre_call_guard()`, `post_call_guard()` | 路径/命令拦截 + API Key/私钥出站绊线 |
 | **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` + runtime-assembly registration | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
 | **工具 (Capabilities)** | `tool.stealth_crawler`| `apeireth-tools-canonical::stealth_crawler` | `StealthCrawlerEngine::parse_scraped_document()` | 高反爬异步无头浏览器 + 指纹伪装 + 短视频多模态提取 |
