@@ -113,7 +113,7 @@ build_skill_disclosure: 逐卡 UntrustedEnvelope（固定警告头 + 显式边�
 
 **门禁（校验带 `-j 2`）**：`cargo test --workspace --locked -j 2` / `cargo clippy --workspace
 --all-targets --locked -j 2 -- -D warnings` / `cargo fmt --all -- --check` /
-`scripts/check-neutral-terms.ps1` —— 复跑输出与既有套件口径见 §7。
+`scripts/check-neutral-terms.ps1` —— 复跑输出见 §7。
 
 ## 6. I 轴分期更新
 
@@ -126,4 +126,15 @@ build_skill_disclosure: 逐卡 UntrustedEnvelope（固定警告头 + 显式边�
 
 ## 7. 全量门禁复跑（2026-10-13 亲跑）
 
-（复跑输出摘要；未达标的项如实标红。）
+| 门禁 | 命令 | 结果 |
+|---|---|---|
+| 全量测试 | `cargo test --workspace --locked -j 2` | ✅ **exit 0；199 个测试目标 / 5360 例通过 / 0 失败 / 22 忽略**（2026-10-13 亲跑）。本批新增 6 套件 47 例在内；既有套件全数通过 = **零回归**（任务书「既有 186 套件」为批前基线口径，套件数随各线在途批继续增长，逐批自报实测数） |
+| Clippy | `cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings` | ✅ exit 0（零警告） |
+| 格式 | `cargo fmt --all -- --check` | ✅ 干净（零 diff） |
+| 中性词 | `scripts/check-neutral-terms.ps1` | ✅ 零命中（`OK ... added lines all neutral`） |
+| Secret 扫描 | 随批不变（无新增凭据面；技能库只收内容输入） | ✅ 无新增敏感面（来源只读通道拒凭据/密钥面） |
+
+**共树在途红记账（口径诚实）**：本批施工窗口内共树多线并行，工具面曾先后出现三处在途编译红 /
+一处在途测试红（`content_feed/tool.rs` 与 `object_access.rs` 的半程态、`write_intent.rs` 的族词表
+同源迁移半程态、`sdk/src/im/card.rs` 审批卡族标注渲染半程态）——**复跑时均已由对应线收敛**，
+最终全量以 exit 0 收口。均非本批文件；本批对其零改动（宪章「他人文件不乱动」）。

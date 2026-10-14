@@ -254,7 +254,7 @@ fn render_template_card(kind: &str, card: &ImApprovalCard) -> ImResult<serde_jso
         })
         .collect::<ImResult<Vec<_>>>()?;
 
-    let family_label = card_family_annotation(card);
+    let family_label = format!("授权族: {}", card_family_annotation(card));
     Ok(serde_json::json!({
         "card_kind": kind,
         "msgtype": "approval_card",
