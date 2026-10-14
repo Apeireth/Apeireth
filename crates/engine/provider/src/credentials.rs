@@ -1,14 +1,14 @@
 //! Production credential resolution for canonical providers.
 //!
-//! A canonical [`ProviderCapability`](apeireth_plugin::ProviderCapability) never
+//! A canonical [`ProviderCapability`] never
 //! stores a secret as a plain `String` field and never reads a fixed path. It
-//! asks the runtime's [`CredentialResolver`](apeireth_plugin::CredentialResolver)
+//! asks the runtime's [`CredentialResolver`]
 //! for a secret by *logical name* (e.g. `provider.minimax.api_key`) and the
 //! resolver decides where that secret physically lives.
 //!
 //! [`EnvCredentialResolver`] is the production resolver: logical names map to
 //! environment variables, and the resolved value is returned as a redacted
-//! [`Secret`](apeireth_plugin::Secret). It is the honest upgrade over the legacy
+//! [`Secret`]. It is the honest upgrade over the legacy
 //! `api_key: String` field that `ApeirethApiConfig` carried: no secret sits on a
 //! long-lived struct, no `Debug` print can leak it, and a missing key resolves to
 //! `None` so the provider can fail explicitly rather than silently fall back.

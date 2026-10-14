@@ -495,7 +495,18 @@ fn gated_write(
 
     // 写后回填观测: 同会话后续写凭回填版本直接过 CAS。回填探查失败只让
     // 记录停留旧版本 —— 偏向「下次写被拒、要求重读」的安全方向。
-    if let Some(fresh) = probe.version(&request.path) {
+    // 探查带有限重试 (2026-10-14): 新落盘文件在 Windows CI 上可被 Defender/
+    // 索引器瞬时占用, 单次 metadata 探查漏回填 (实测 flake: apply_with_gate
+    // 版本 CAS 测试连败 3 retry); 重试只影响回填新鲜度, 不改判定与安全语义。
+    let mut fresh = probe.version(&request.path);
+    for _ in 0..4 {
+        if fresh.is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+        fresh = probe.version(&request.path);
+    }
+    if let Some(fresh) = fresh {
         gate.observe_present(&request.path, fresh);
     }
     Ok(())

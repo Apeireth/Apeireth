@@ -1,7 +1,7 @@
 //! The minimax provider as a first-class canonical capability.
 //!
 //! The first production provider to implement
-//! [`ProviderCapability`](apeireth_plugin::ProviderCapability) directly, rather
+//! [`ProviderCapability`] directly, rather
 //! than reaching the runtime through the now-removed `LegacyLlmCapability`
 //! bridge. The runtime therefore names no vendor here: it sees only
 //! `provider.minimax` in its router, and this module is the one place that

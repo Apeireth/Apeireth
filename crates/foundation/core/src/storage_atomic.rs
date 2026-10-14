@@ -641,6 +641,9 @@ mod tests {
     }
 
     #[test]
+    // miri 不支持父目录 fsync (仅 file-backed fd): 持久档 unix 收尾会 fsync 目录,
+    // miri 下必炸 (unsupported operation)。行为由普通平台测试覆盖, miri 侧显式跳过。
+    #[cfg_attr(miri, ignore = "miri 不支持目录 fsync (file-backed fd only)")]
     fn durable_tier_syncs_before_replace_atomic_tier_does_not() {
         // sync 存在性 (行为层面可观测缝): 持久档在替换前做 sync, 完整性档不做。
         let dir = test_dir("sync-tier");
@@ -662,6 +665,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持目录 fsync (file-backed fd only)")]
     fn durable_tier_applies_exact_unix_mode() {
         use std::os::unix::fs::PermissionsExt;
         let dir = test_dir("mode");
