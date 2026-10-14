@@ -15,6 +15,7 @@
 | E | **安全纵深** | 沙箱对象级判定、审批族归一、多用户权限 | [E-security-depth.md](E-security-depth.md) |
 | F | **服务端形态** | headless daemon、多客户端复用、远程访问（T2 中枢） | [F-server-form.md](F-server-form.md) |
 | G | **观测与可靠** | 指标数据源、崩溃恢复、备份 | [G-observability.md](G-observability.md) |
+| I | **吸收自动化** | 书→技能/随手记/历史即记忆——把『吸收优秀实践』变成产品本能 | [吸收候选池](../absorption-candidates-2026-10.md) |
 | H | **模型面** | 多模型路由/fallback、成本分级 | [H-model-plane.md](H-model-plane.md) |
 | I | **内置应用面（星港）** | 多标签壳+贡献点注册表+内置件面（伴星/星笺/深望等 15 面），批次按工程速度 | [I-starport-builtins.md](I-starport-builtins.md) |
 | J | **生活信息流（信风）** | 多源订阅+摘要+陪伴共看，接入现代生活与网络 | [J-tradewind.md](J-tradewind.md) |
