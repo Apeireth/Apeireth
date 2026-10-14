@@ -79,3 +79,18 @@
 - awk/复杂引号经 `wsl bash -c "..."` 双层转义易碎; 用 `bash -c @'...'@`
   here-string 喂整段脚本。
 - Python 在 Windows 默认 GBK 读 JSON 会炸中文; `open(..., encoding='utf-8')`。
+
+## 6. 跨平台编译面陷阱（Windows 本地绿 ≠ Linux CI 绿）
+
+- 症状: 本地 Windows `cargo check`/`clippy` 全绿, CI (ubuntu) 直接编译错误
+  E0599——例: `file_encrypted.rs` 的 `opts.mode(0o600)` 找不到方法。
+- 根因: **`#[cfg(unix)]` 屏蔽的是可见性, 不是"trait 要在作用域内"这条编译规则**
+  —— 块内用了 Unix 专有扩展方法（`OpenOptionsExt::mode`）但没 `use` 该 trait,
+  Linux 编译必炸; Windows 因 cfg 整块不编译, 本地零报错。与 kani 手册 K 系列
+  同款病根: **本地验证面 ≠ CI 验证面**。
+- 药方:
+  - cfg(unix)/cfg(windows) 块内**第一行带全平台专属导入**;
+  - 动过跨平台代码后, **WSL/Linux 侧过一遍 `cargo check`** 再收工
+    （干净副本: `tar --exclude=./target -cf - . | tar -C /root/debt -xf -`）;
+  - CI clippy 是 **`-D warnings` + 长白名单**口径 —— 本地复现必须带同款
+    flag 组（见 .github/workflows/rust-lint.yml）, 否则"本地全绿"是假象。
