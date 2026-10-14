@@ -10,6 +10,7 @@
 //! orchestration root that acts on them.
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
+use apeireth_governance::approval_family::family_ids_for_arguments;
 use apeireth_governance::{redact_secret_surfaces, TurnSecurityContext};
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{NormalizedUsage, ToolCall};
@@ -250,6 +251,16 @@ pub struct PendingApproval {
     /// Shorter human summary, e.g. `执行命令 ls -la /tmp`.
     #[serde(default)]
     pub arguments_summary: String,
+    /// 审批卡族标注 / 本记录的授权对象（E-P2 审批族归一）：被批命令的**族**
+    /// （族 id 词表，如 `["删除族"]`）。批"删除族" = 该族所有形态生效，
+    /// 同族换形重放被本记录覆盖（不重批），跨族仍逐族审批。
+    /// 空 = 非命令面操作（授权对象 = 操作本身，逐操作授权）。
+    ///
+    /// `#[serde(default)]`：本字段加入前持久化的存量记录（逐字命令形态）
+    /// 读取时按**迁移语义**由 [`PendingApproval::effective_authorization_families`]
+    /// 映射生效（命令→族映射后生效，不失效重批）。
+    #[serde(default)]
+    pub authorization_families: Vec<String>,
     /// Canonical fingerprint over every operation-relevant field.
     pub operation_fingerprint: String,
     pub created_at: Timestamp,
@@ -272,6 +283,17 @@ pub struct PendingApproval {
 impl PendingApproval {
     pub fn is_expired(&self, now: Timestamp) -> bool {
         now > self.expires_at
+    }
+
+    /// 本记录的授权族（E-P2，二选一钉死 = **迁移生效**）：
+    /// 新记录冻结时算好存在 `authorization_families`；存量记录（该字段加入前
+    /// 持久化的逐字命令形态，读入后为空）按迁移语义由 `tool_call` 的逐字命令
+    /// 映射生效 —— 老记录的命令→族映射后生效，不是失效重批。
+    pub fn effective_authorization_families(&self) -> Vec<String> {
+        if !self.authorization_families.is_empty() {
+            return self.authorization_families.clone();
+        }
+        family_ids_for_arguments(&self.tool_call.arguments)
     }
 }
 
@@ -302,6 +324,11 @@ pub struct PendingApprovalView {
     /// Shorter human summary (from [`PendingApproval`]).
     #[serde(default)]
     pub arguments_summary: String,
+    /// 审批卡族标注 / 授权对象（E-P2，取自
+    /// [`PendingApproval::effective_authorization_families`]，存量记录按
+    /// 迁移语义映射后随视图给出）。
+    #[serde(default)]
+    pub authorization_families: Vec<String>,
     pub created_at: Timestamp,
     pub expires_at: Timestamp,
     pub operation_fingerprint: String,
@@ -334,6 +361,7 @@ impl From<&PendingApproval> for PendingApprovalView {
             governance_reason: value.governance_reason.clone(),
             command_text: value.command_text.clone(),
             arguments_summary: value.arguments_summary.clone(),
+            authorization_families: value.effective_authorization_families(),
             created_at: value.created_at,
             expires_at: value.expires_at,
             operation_fingerprint: value.operation_fingerprint.clone(),
@@ -736,6 +764,7 @@ mod tests {
             governance_reason: "reason".into(),
             command_text: approval_command_text("shell", &call, None),
             arguments_summary: approval_arguments_summary("shell", &call),
+            authorization_families: vec!["删除族".to_string()],
             created_at: Timestamp::from_epoch_millis(1_700_000_000_000).unwrap(),
             expires_at: Timestamp::from_epoch_millis(1_700_000_300_000).unwrap(),
             operation_fingerprint: "fp".into(),
@@ -746,6 +775,7 @@ mod tests {
         let json = serde_json::to_value(&view).unwrap();
         assert_eq!(json["command_text"], "shell: ls -la /tmp");
         assert_eq!(json["arguments_summary"], "执行命令 ls -la /tmp");
+        assert_eq!(json["authorization_families"][0], "删除族");
     }
 
     /// Regression for the 2026-09-12 real-machine failure: sessions persisted
@@ -773,6 +803,7 @@ mod tests {
             governance_reason: "reason".into(),
             command_text: String::new(),
             arguments_summary: String::new(),
+            authorization_families: Vec::new(),
             created_at: Timestamp::from_epoch_millis(1_700_000_000_000).unwrap(),
             expires_at: Timestamp::from_epoch_millis(1_700_000_300_000).unwrap(),
             operation_fingerprint: "fp".into(),
@@ -788,6 +819,78 @@ mod tests {
         assert_eq!(migrated.command_text, "");
         assert_eq!(migrated.arguments_summary, "");
         assert_eq!(migrated.tool_name, "shell");
+    }
+
+    /// E-P2 审批卡族标注: 冻结记录的授权族随视图给出（族词表 id，
+    /// 授权对象 = 族），审批卡渲染面据此标注。
+    #[test]
+    fn approval_view_carries_the_family_annotation() {
+        let pending = pending_delete_approval(vec!["删除族".to_string()]);
+        let view = PendingApprovalView::from(&pending);
+        assert_eq!(view.authorization_families, vec!["删除族"]);
+        let json = serde_json::to_value(&view).unwrap();
+        assert_eq!(json["authorization_families"][0], "删除族");
+    }
+
+    /// E-P2 存量记录迁移语义（二选一钉死 = **迁移生效**）：`authorization_families`
+    /// 字段加入前持久化的逐字命令形态记录（读入后字段为空）按族解释生效 ——
+    /// 老记录的命令→族映射后生效，不是失效重批。
+    #[test]
+    fn persisted_records_before_the_family_field_migrate_by_interpretation() {
+        let pending = pending_delete_approval(Vec::new());
+        // 序列化面先去掉字段，模拟存量 session blob。
+        let mut json = serde_json::to_value(&pending).unwrap();
+        json.as_object_mut()
+            .unwrap()
+            .remove("authorization_families");
+        let migrated: PendingApproval = serde_json::from_value(json).unwrap();
+        assert!(migrated.authorization_families.is_empty());
+        assert_eq!(
+            migrated.effective_authorization_families(),
+            vec!["删除族"],
+            "存量逐字记录必须按族映射后生效（迁移生效）"
+        );
+        let view = PendingApprovalView::from(&migrated);
+        assert_eq!(view.authorization_families, vec!["删除族"]);
+    }
+
+    /// 测试件: 一条 `Remove-Item x.txt`（删除族）待批记录。
+    fn pending_delete_approval(authorization_families: Vec<String>) -> PendingApproval {
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: serde_json::json!({ "command": "Remove-Item x.txt" }),
+        };
+        let created = Timestamp::from_epoch_millis(1_700_000_000_000).unwrap();
+        PendingApproval {
+            approval_id: ApprovalId::new(),
+            session_id: SessionId::new(),
+            request_id: RequestId::new(),
+            trace_id: TraceId::new(),
+            round: 1,
+            capability_id: CapabilityId::new("tool.example").unwrap(),
+            tool_name: "shell".into(),
+            tool_call: call.clone(),
+            effective_invocation: None,
+            governance_hook: "hook".into(),
+            governance_reason: "approval list matched [family:删除族]".into(),
+            command_text: approval_command_text("shell", &call, None),
+            arguments_summary: approval_arguments_summary("shell", &call),
+            authorization_families,
+            operation_fingerprint: "fp".into(),
+            created_at: created,
+            expires_at: Timestamp::from_epoch_millis(1_700_000_300_000).unwrap(),
+            status: ApprovalStatus::Pending,
+            continuation: FrozenTurnContinuation::start_of_round(
+                RequestId::new(),
+                TraceId::new(),
+                "m",
+                1,
+            ),
+            human_reason: None,
+            generated_text: String::new(),
+            rounds_used: 1,
+        }
     }
 
     /// M27 兼容性: `security_context` 字段加入前持久化的 approval (session

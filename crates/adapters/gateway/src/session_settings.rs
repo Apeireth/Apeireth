@@ -17,7 +17,8 @@
 use std::str::FromStr;
 
 use apeireth_core::kernel::SessionId;
-use apeireth_runtime::canonical::{PermissionPreset, SessionSettings};
+use apeireth_core::user_domain::UserDomainError;
+use apeireth_runtime::canonical::{PermissionPreset, SessionManager, SessionSettings};
 use axum::extract::{Extension, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -25,6 +26,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::client_tokens::{identity_label, record_session_client, ClientIdentity};
+use crate::domain_context::DomainContext;
 use crate::panels::GatewayState;
 
 /// Full session-settings projection returned by both endpoints.
@@ -122,15 +124,54 @@ fn delete_failed(message: String) -> SettingsError {
     )
 }
 
+/// W3-①: 本域拒开帧 (403 `domain_refused`) —— 真因如实 (本域信息, 不涉他域)。
+fn domain_refused(error: &UserDomainError) -> SettingsError {
+    (
+        StatusCode::FORBIDDEN,
+        Json(ErrorBody {
+            error: ErrorDetail {
+                message: format!("the request's user domain is not open: {}", error.reason()),
+                code: "domain_refused".into(),
+                solution: "check users/<id>/domain.json (bad domain config refuses to open)".into(),
+            },
+        }),
+    )
+}
+
+/// W3-①: 按请求域上下文取会话写闸 (**每域恰一把**)。
+///
+/// - 域面未接线 / 无域上下文 = 兼容路径: 运行时那把 (默认域原位语义);
+/// - 已接线 = 域平面按域路由; 默认域与运行时**同一把** (W2-③ 同会话写串行
+///   承诺不拆);
+/// - 资源级跨域不需要专门拒帧: 本域写闸查不到他域会话, 一律走
+///   [`session_not_found`] —— 与真不存在**同帧** (存在性不泄露)。
+fn session_manager<'s>(
+    state: &'s GatewayState,
+    domain: Option<&Extension<DomainContext>>,
+) -> Result<&'s SessionManager, SettingsError> {
+    let Some(Extension(context)) = domain else {
+        return Ok(state.runtime.sessions());
+    };
+    let Some(plane) = state.domains.as_ref() else {
+        return Ok(state.runtime.sessions());
+    };
+    match &context.domain {
+        None => Ok(state.runtime.sessions()),
+        Some(domain) => plane
+            .sessions(domain)
+            .map(|manager| manager.as_ref())
+            .map_err(|error| domain_refused(&error)),
+    }
+}
+
 pub(crate) async fn get_session_settings(
     State(state): State<GatewayState>,
+    domain: Option<Extension<DomainContext>>,
     Path(session_id): Path<String>,
 ) -> Result<Response, SettingsError> {
     let session_id = SessionId::from_str(&session_id)
         .map_err(|_| invalid_request(format!("invalid session id {session_id:?}")))?;
-    let loaded = state
-        .runtime
-        .sessions()
+    let loaded = session_manager(&state, domain.as_ref())?
         .load(&session_id)
         .await
         .map_err(|error| invalid_request(error.to_string()))?;
@@ -148,15 +189,15 @@ pub(crate) async fn get_session_settings(
 pub(crate) async fn patch_session_settings(
     State(state): State<GatewayState>,
     identity: Option<Extension<ClientIdentity>>,
+    domain: Option<Extension<DomainContext>>,
     Path(session_id): Path<String>,
     Json(request): Json<PatchSessionSettingsRequest>,
 ) -> Result<Response, SettingsError> {
     let session_id = SessionId::from_str(&session_id)
         .map_err(|_| invalid_request(format!("invalid session id {session_id:?}")))?;
-    // W2-③: 读-改-写全程持会话写闸 (与在途回合零交叠, 不丢任何一方的写)。
-    let updated = state
-        .runtime
-        .sessions()
+    // W2-③: 读-改-写全程持会话写闸 (与在途回合零交叠, 不丢任何一方的写);
+    // W3-①: 写闸按请求域路由 (每域恰一把)。
+    let updated = session_manager(&state, domain.as_ref())?
         .update(session_id, |session| {
             if let Some(model) = request.model {
                 session.settings.model = model;
@@ -188,15 +229,16 @@ pub(crate) async fn patch_session_settings(
 pub(crate) async fn delete_session(
     State(state): State<GatewayState>,
     identity: Option<Extension<ClientIdentity>>,
+    domain: Option<Extension<DomainContext>>,
     Path(session_id): Path<String>,
 ) -> Result<Response, SettingsError> {
     let session_id = SessionId::from_str(&session_id)
         .map_err(|_| invalid_request(format!("invalid session id {session_id:?}")))?;
-    // W2-③: 删除同为会话账本写 —— 过同一把写闸, 不在回合半途抽走账本。
-    let permit = state.runtime.sessions().write_permit(session_id).await;
-    let deleted = state
-        .runtime
-        .sessions()
+    // W2-③: 删除同为会话账本写 —— 过同一把写闸, 不在回合半途抽走账本;
+    // W3-①: 写闸按请求域路由 (每域恰一把)。
+    let manager = session_manager(&state, domain.as_ref())?;
+    let permit = manager.write_permit(session_id).await;
+    let deleted = manager
         .delete(&session_id)
         .await
         .map_err(|error| delete_failed(error.to_string()))?;
@@ -265,6 +307,8 @@ mod tests {
             )),
             token_gate: crate::canonical_entry::GatewayTokenGate::from_env(),
             client_tokens: crate::client_tokens::ClientTokenTable::default(),
+            user_access: crate::client_tokens::UserAccess::default(),
+            domains: None,
             shutdown: Arc::new(crate::shutdown::ShutdownTrigger::default()),
         };
         Router::<GatewayState>::new()

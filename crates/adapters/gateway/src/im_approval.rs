@@ -58,6 +58,10 @@ pub struct ImApprovalNotice {
     pub command_text: String,
     /// 参数短摘要。
     pub arguments_summary: String,
+    /// 审批卡族标注 / 授权对象（E-P2 族归一）：被批命令的族 id 列表；
+    /// 空 = 非命令面操作（授权对象 = 操作本身）。批"删除族" = 该族所有
+    /// 形态生效，跨族仍逐族审批。
+    pub authorization_families: Vec<String>,
     /// 治理 hook 名 (展示)。
     pub governance_hook: String,
     /// 治理原因 (展示 + 风险级推导输入)。
@@ -79,6 +83,7 @@ impl ImApprovalNotice {
             subject: view.capability_id.clone(),
             command_text: view.command_text.clone(),
             arguments_summary: view.arguments_summary.clone(),
+            authorization_families: view.authorization_families.clone(),
             governance_hook: view.governance_hook.clone(),
             governance_reason: view.governance_reason.clone(),
             created_at_ms: view.created_at.epoch_millis(),
@@ -102,6 +107,7 @@ impl ImApprovalNotice {
             subject: self.subject.clone(),
             command_text: self.command_text.clone(),
             arguments_summary: self.arguments_summary.clone(),
+            authorization_families: self.authorization_families.clone(),
             risk_level: self.risk_level(),
             governance_reason: self.governance_reason.clone(),
             created_at_ms: self.created_at_ms,
@@ -553,6 +559,7 @@ mod tests {
             subject: "tool.shell".to_string(),
             command_text: "shell: bash -c 'ls'".to_string(),
             arguments_summary: "执行命令 ls".to_string(),
+            authorization_families: vec!["删除族".to_string()],
             governance_hook: "hook".to_string(),
             governance_reason: "risk=critical write".to_string(),
             created_at_ms: 1_700_000_000_000,

@@ -16,8 +16,18 @@
 //!    与命令面族词**同族同权**——`[System.IO.File]::Delete` 与 `Remove-Item` /
 //!    `del` 判入同一删除族，同一总闸、同一命中族名、同一审批档。
 //!
+//! **族词表同源（E-P2）**：本面的族词 / 成员词头 / 命中标签 / 变体匹配
+//! （大小写 / 前缀缩写 / 可执行后缀）全部引自治理层单一来源
+//! `apeireth_governance::approval_family`（命令审批族词表），两处族词一致
+//! 由本文件的同源断言测试钉死；写总闸只执法**写四族**（网络族 / 进程族
+//! 不属写意图，词表同源但不入本闸）。
+//!
 //! 边界（白名单与误拒口径逐条写在 [`mask_handle_duplication`] 的注释里，
 //! 写意图扫描矩阵测试锁住该注释与两侧边界）。
+
+use apeireth_governance::approval_family::{
+    command_words, member_calls, word_families, CommandFamily, MemberCallForm, SEGMENT_SEPARATORS,
+};
 
 /// 命中的写意图面（人读描述，进入拒绝帧文案）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,95 +36,14 @@ pub struct WriteIntentHit {
     pub surface: String,
 }
 
-/// 删除族：删文件/删目录（cmd 内建与类比命令面；静态调用面 `Delete*` 成员
-/// 同族，见 [`STATIC_CALL_MEMBER_PREFIXES`]）。
-const DELETE_FAMILY: &[&str] = &[
-    "del",
-    "erase",
-    "rd",
-    "rmdir",
-    "rm",
-    "unlink",
-    "shred",
-    "Remove-Item",
+/// 写四族（写总闸执法面，词表序 = 命中优先级）：网络族 / 进程族同源在表
+/// 但不入写闸。
+const WRITE_FAMILIES: [CommandFamily; 4] = [
+    CommandFamily::Delete,
+    CommandFamily::MoveCopy,
+    CommandFamily::Create,
+    CommandFamily::WriteContent,
 ];
-
-/// 移动 / 复制 / 改名族。
-const MOVE_COPY_FAMILY: &[&str] = &[
-    "move",
-    "copy",
-    "xcopy",
-    "robocopy",
-    "ren",
-    "rename",
-    "mv",
-    "cp",
-    "ln",
-    "Move-Item",
-    "Copy-Item",
-];
-
-/// 建目录 / 建文件族。
-const CREATE_FAMILY: &[&str] = &[
-    "mkdir",
-    "md",
-    "touch",
-    "New-Item",
-    "New-TemporaryFile",
-    "install",
-];
-
-/// 文件写入族（改内容 / 追加 / 覆盖输出 / 原地截断）。
-const WRITE_CONTENT_FAMILY: &[&str] = &[
-    "tee",
-    "dd",
-    "truncate",
-    "Set-Content",
-    "Add-Content",
-    "Out-File",
-    "Clear-Content",
-    "Set-Item",
-    "Rename-Item",
-    "Export-Csv",
-    "Export-Clixml",
-    "Start-Transcript",
-];
-
-/// 各族的面名（拒绝帧里的人读标签）。静态调用面判族复用同一组标签，
-/// 两条删除路径的命中面族名逐字相同（同族同权）。
-const LABEL_DELETE: &str = "删除族命令";
-const LABEL_MOVE_COPY: &str = "移动/复制/改名族命令";
-const LABEL_CREATE: &str = "建目录/建文件族命令";
-const LABEL_WRITE_CONTENT: &str = "文件写入族命令";
-
-const FAMILY_LABELS: [(&str, &[&str]); 4] = [
-    (LABEL_DELETE, DELETE_FAMILY),
-    (LABEL_MOVE_COPY, MOVE_COPY_FAMILY),
-    (LABEL_CREATE, CREATE_FAMILY),
-    (LABEL_WRITE_CONTENT, WRITE_CONTENT_FAMILY),
-];
-
-/// 脚本引擎静态调用面的变更成员词头（大小写不敏感前缀命中）→ 命中面族名。
-/// 覆盖 `::成员`（静态调用 / 方法组）与 `.成员(`（实例调用）两种形态；
-/// `Delete*` / `Write*` / `Create*` / `Move*` / `Copy*` / `Append*` / `Replace*`
-/// / `Set*` 等变更成员命中，只读成员（`Read*` / `Get*` / `Exists` 等）不命中。
-const STATIC_CALL_MEMBER_PREFIXES: &[(&str, &str)] = &[
-    ("delete", LABEL_DELETE),
-    ("move", LABEL_MOVE_COPY),
-    ("copy", LABEL_MOVE_COPY),
-    ("rename", LABEL_MOVE_COPY),
-    ("create", LABEL_CREATE),
-    ("write", LABEL_WRITE_CONTENT),
-    ("append", LABEL_WRITE_CONTENT),
-    ("replace", LABEL_WRITE_CONTENT),
-    ("set", LABEL_WRITE_CONTENT),
-    ("encrypt", LABEL_WRITE_CONTENT),
-    ("decrypt", LABEL_WRITE_CONTENT),
-];
-
-/// 段分隔符：管道 / 条件链 / 顺序链 / 分组括号 / 换行 —— 逐段扫描的切点。
-/// `&` 的句柄复制形态已在 [`mask_handle_duplication`] 里抹掉，此处可安全切。
-const SEGMENT_SEPARATORS: [char; 9] = ['|', '&', ';', '\n', '\r', '(', ')', '{', '}'];
 
 /// 扫描一条 shell 命令的写意图。命中返回拒绝面；纯读命令返回 `None`。
 pub fn scan_shell_write_intent(command: &str) -> Option<WriteIntentHit> {
@@ -188,89 +117,43 @@ fn scan_redirections(command: &str) -> Option<String> {
 }
 
 /// 脚本引擎静态调用面：`::变更成员`（静态调用 / 方法组）与 `.变更成员(`
-/// （实例调用）两种形态，按 [`STATIC_CALL_MEMBER_PREFIXES`] 词头判族，
+/// （实例调用）两种形态，按治理层成员词头表判族，
 /// 与命令面族词同族同权（`[System.IO.File]::Delete` ≡ `Remove-Item`）。
 /// 成员名大小写不敏感；`::` 后允许空白（宁可误拒不漏放），`.成员` 后要求
 /// 调用括号（文件名带点的 `.txt` / `.md` 等不误命中）。成员调用形态可跨
-/// 段分隔符（`(` `)` 本身就是切段符），故整条命令面整体扫描。
+/// 段分隔符（`(` `)` 本身就是切段符），故整条命令面整体扫描。只执法写四族
+/// （网络族 / 进程族成员不判写意图）。
 fn scan_static_member_calls(command: &str) -> Option<WriteIntentHit> {
-    let chars: Vec<char> = command.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i] == ':' && chars.get(i + 1) == Some(&':') {
-            let mut j = i + 2;
-            while j < chars.len() && chars[j].is_whitespace() {
-                j += 1;
-            }
-            if let Some(member) = member_name_at(&chars, j) {
-                if let Some(label) = static_call_member_family(&member) {
-                    let call = format!("::{member}");
-                    return Some(WriteIntentHit {
-                        surface: format!("{label} {call:?}"),
-                    });
-                }
-            }
-            i += 2;
+    for call in member_calls(command) {
+        let Some(family) = apeireth_governance::approval_family::member_family(&call.name) else {
+            continue;
+        };
+        if !family.is_write_family() {
             continue;
         }
-        if chars[i] == '.' {
-            if let Some(member) = member_name_at(&chars, i + 1) {
-                let mut k = i + 1 + member.chars().count();
-                while k < chars.len() && chars[k].is_whitespace() {
-                    k += 1;
-                }
-                if chars.get(k) == Some(&'(') {
-                    if let Some(label) = static_call_member_family(&member) {
-                        let call = format!(".{member}()");
-                        return Some(WriteIntentHit {
-                            surface: format!("{label} {call:?}"),
-                        });
-                    }
-                }
-            }
-        }
-        i += 1;
+        let surface_call = match call.form {
+            MemberCallForm::Static => format!("::{}", call.name),
+            MemberCallForm::Instance => format!(".{}()", call.name),
+        };
+        return Some(WriteIntentHit {
+            surface: format!("{} {:?}", family.hit_label(), surface_call),
+        });
     }
     None
 }
 
-/// 从 `start` 起提一个成员名：字母/下划线开头、字母数字/下划线续。
-/// 非标识符开头（如 `::30` 的数字、`::(` 等）返回 `None`。
-fn member_name_at(chars: &[char], start: usize) -> Option<String> {
-    let first = *chars.get(start)?;
-    if !(first.is_ascii_alphabetic() || first == '_') {
-        return None;
-    }
-    let mut end = start + 1;
-    while let Some(&ch) = chars.get(end) {
-        if ch.is_ascii_alphanumeric() || ch == '_' {
-            end += 1;
-        } else {
-            break;
-        }
-    }
-    Some(chars[start..end].iter().collect())
-}
-
-/// 变更成员词头 → 命中面族名；只读成员（`Read*` / `Get*` / `Exists` 等）
-/// 不在表内，返回 `None`（读命令零误伤的词法前提）。
-fn static_call_member_family(member: &str) -> Option<&'static str> {
-    let lower = member.to_ascii_lowercase();
-    STATIC_CALL_MEMBER_PREFIXES
-        .iter()
-        .find(|(prefix, _)| lower.starts_with(prefix))
-        .map(|(_, label)| *label)
-}
-
 /// 逐段扫描命令面：切段 → 提词 → 族词命中即拒；外加两条原地改写特判。
+/// 族词判定走治理层 [`word_families`]（精确命中优先于缩写命中，含大小写 /
+/// 前缀缩写 / 可执行后缀变体口径），只执法写四族。
 fn scan_segments_for_write_commands(command: &str) -> Option<WriteIntentHit> {
     for segment in command.split(|c| SEGMENT_SEPARATORS.contains(&c)) {
         let words = command_words(segment);
-        for (label, family) in FAMILY_LABELS {
-            for word in &words {
-                if family.iter().any(|cmd| word.eq_ignore_ascii_case(cmd)) {
+        for word in &words {
+            let families = word_families(word);
+            for family in WRITE_FAMILIES {
+                if families.contains(&family) {
                     return Some(WriteIntentHit {
-                        surface: format!("{label} {word:?}"),
+                        surface: format!("{} {:?}", family.hit_label(), word),
                     });
                 }
             }
@@ -292,27 +175,12 @@ fn scan_segments_for_write_commands(command: &str) -> Option<WriteIntentHit> {
     None
 }
 
-/// 提词：词字符 = 字母数字 + `_` / `-` / `.`（命令名与参数各成一词；
-/// 文件名带点不拆词，`file.md` 不会误命中 `md`）。
-fn command_words(segment: &str) -> Vec<String> {
-    let mut words = Vec::new();
-    let mut current = String::new();
-    for ch in segment.chars() {
-        if ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '.' {
-            current.push(ch);
-        } else if !current.is_empty() {
-            words.push(std::mem::take(&mut current));
-        }
-    }
-    if !current.is_empty() {
-        words.push(current);
-    }
-    words
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use apeireth_governance::approval_family::{
+        member_family, touched_families, word_families, MEMBER_PREFIX_FAMILIES,
+    };
 
     /// ① 重定向面矩阵：各形态重定向都判写意图。
     #[test]
@@ -519,6 +387,23 @@ mod tests {
         }
     }
 
+    /// ②附4 非写族成员调用不入写闸（词表同源但网络/进程族不属写意图）：
+    /// `Download*` / `Kill*` / `Start*` 成员不判写意图。
+    #[test]
+    fn non_write_family_member_calls_stay_out_of_the_write_gate() {
+        for command in [
+            "[System.Net.WebClient]::DownloadFile('http://example.invalid','x')",
+            "$proc.Kill()",
+            "$proc.Start()",
+        ] {
+            assert_eq!(
+                scan_shell_write_intent(command),
+                None,
+                "{command} 非写族成员调用不得判写意图"
+            );
+        }
+    }
+
     /// ③ 管道/条件链逐段扫描：写意图在任何一段都要扫到。
     #[test]
     fn pipe_and_chain_segments_are_scanned_segment_by_segment() {
@@ -623,6 +508,62 @@ mod tests {
                 None,
                 "{command} 只读命令不得判写意图"
             );
+        }
+    }
+
+    /// ⑤ 写意图族词表同源断言（两处族词一致，E-P2）：写意图扫描命中面族名
+    /// 与治理层族归一（`touched_families` 触达面）逐一相符——同一份族词、
+    /// 同一命中标签、同一变体匹配，任何一族的词表漂移都会在此断掉。
+    #[test]
+    fn write_intent_family_vocabulary_agrees_with_the_governance_source() {
+        // 词表同源：写四族每个族词（含短形态/长形态）在写意图面命中本族标签，
+        // 在治理层归一本族。
+        for family in WRITE_FAMILIES {
+            for word in family.words() {
+                let hit =
+                    scan_shell_write_intent(word).unwrap_or_else(|| panic!("{word} 必须判写意图"));
+                assert_eq!(
+                    family_label(&hit.surface),
+                    family.hit_label(),
+                    "族词 {word} 的命中标签必须与治理层族 {} 一致",
+                    family.id()
+                );
+                assert!(
+                    touched_families(word).contains(&family),
+                    "族词 {word} 在治理层必须归 {} 族",
+                    family.id()
+                );
+                assert!(
+                    word_families(word).contains(&family),
+                    "族词 {word} 的族归一必须落在 {} 族",
+                    family.id()
+                );
+            }
+        }
+        // 成员词头同源：写族成员词头两种调用形态命中本族标签，治理层同族。
+        for (family, prefix) in MEMBER_PREFIX_FAMILIES {
+            if !family.is_write_family() {
+                // 非写族词头同源在表，但不入写闸（上一测试钉边界）。
+                assert!(
+                    member_family(&format!("{prefix}X")) == Some(*family),
+                    "成员词头 {prefix} 在治理层必须归 {} 族",
+                    family.id()
+                );
+                continue;
+            }
+            for call in [
+                format!("[Type]::{prefix}X('y')"),
+                format!("$obj.{prefix}X('y')"),
+            ] {
+                let hit =
+                    scan_shell_write_intent(&call).unwrap_or_else(|| panic!("{call} 必须判写意图"));
+                assert_eq!(
+                    family_label(&hit.surface),
+                    family.hit_label(),
+                    "成员词头 {prefix} 的命中标签必须与治理层族 {} 一致",
+                    family.id()
+                );
+            }
         }
     }
 }

@@ -5,8 +5,9 @@
 > `gateway.user_action` 审计 + G1 对抗用例转绿。
 > 范围口径：星群·治理层（W3 多户多端波的治理/身份面）；架构定案 = 星群为骨（[F-server-form.md](F-server-form.md)）；
 > 纪律：[CONSTRUCTION-DISCIPLINE.md](CONSTRUCTION-DISCIPLINE.md)；威胁模型销账随行：[E-threat-model.md](E-threat-model.md) §2/§4/§5/§6。
-> 接缝（W3-① 并行线）：`UserDomain.role` 由域面建立、本面消费（宽接口 `UserIdentity::from_wide(user_id, role: Option<&str>, client_names)`）；
-> 用户表独立文件 `users.json` + `domain` 域引用（只携引用不判域）。
+> 接缝（W3-① 并行线）：`UserDomain.role` 由域面建立、本面消费（宽接口 `UserIdentity::from_wide(user_id, role: Option<&str>, client_names)`，
+> 未配置/未知角色都 fail-closed 拒）；其域面角色词面 `DomainRole::{owner,member}` 是冻结词表的**兼容子集**
+> （`as_str()` 字面值一致，`guest` 为治理层词表项、域面未发）；用户表独立文件 `users.json` + `domain` 域引用（只携引用不判域）。
 > 诚实条款：本批只落**身份/授权面**（谁能干什么）；跨户**数据**隔离（记忆库/域目录）归 W3-① 数据隔离线，见 §5 残余。
 
 ## 1. 角色矩阵表（治理层 role 权限矩阵，词表冻结）
@@ -113,28 +114,33 @@ W3-① 并行线在途面零触碰。唯一结构演进注记：`ClientTokenSpec
 | 账目 | 处置 | 证据 |
 |---|---|---|
 | G1「多用户隔离」之**身份/授权面** | **本批处置**：用户模型 + 冻结角色词表 + role 权限矩阵 + 令牌→用户→角色链 + 角色门（写面/管理面/审批面）+ 管理命令 owner 门 + `gateway.user_action` 审计 | §4 全部 28 例 |
-| 敌人⑤(a) 成员冒名 owner | **转绿（本批）**：自称客户端名 401（name↔token 绑定）+ 角色只来自令牌链（无从自称）+ 管理面 403 | `a_member_claiming_the_owner_client_name_is_refused`、`a_member_self_declaring_owner_rights_is_refused_on_management` |
+| 敌人⑤(d) 成员冒名 owner | **转绿（本批）**：自称客户端名 401（name↔token 绑定）+ 角色只来自令牌链（无从自称）+ 管理面 403 | `a_member_claiming_the_owner_client_name_is_refused`、`a_member_self_declaring_owner_rights_is_refused_on_management` |
 | 敌人⑤(c) 访客越权写 / 改全局开关 | **转绿（本批）**：guest 零写面 403 + 管理面（admin config/shutdown/授权热撤）owner 档 403 | `guest_has_zero_write_surface_but_keeps_read_access`、`member_can_write_but_never_touches_the_admin_face` |
-| 敌人⑤(b) 复用他人审批（跨用户审批） | **转绿（本批）**：归属闸（owner 全权 / 他人会话 403 / 恰好一次失效另由审批四态守） | `cross_user_approval_resolution_is_refused_for_non_owners`（双套件） |
+| 敌人⑤(e) 跨用户审批（复用他人审批） | **转绿（本批）**：归属闸（owner 全权 / 他人会话 403 / 恰好一次失效另由审批四态守） | `cross_user_approval_resolution_is_refused_for_non_owners`（双套件） |
 | G1 残余（如实） | **仍在**：① 跨户**数据**隔离（访客会话读主人记忆库）归 W3-① 数据隔离线（users/ 域模型）；② 工具执行档（`ToolUse`/`ToolUseWrite`/`GitWriteL1`）已入冻结矩阵并提供判定接口，但逐用户工具执行面的运行时接线随 W3-①/工具面批（本批网关面只接读/写/审批/管理四类）；③ 会话归属为首个具名写者粒度（细粒度审批发起人归属随域面细化） | 本行即实证注记 |
 
 ## 6. 门禁证据（2026-10-13 实测，全部 `-j 2`）
 
 | 门禁 | 命令 | 结果 |
 |---|---|---|
-| 全量测试 | `cargo test --workspace --locked -j 2` | ✅ 退出码 0（详见下方套件口径） |
+| 全量测试 | `cargo test --workspace --locked -j 2` | ✅ 退出码 0；**190 套件 / 5243 例通过 / 0 失败 / 22 忽略**（既有 186 套件零失败零跳过回归 + 本批新增 `user_authorization`、`user_admin` 2 套件 + W3-① 并行线在途新增面。取证期间并行线两次瞬时红（其自写 `user_domain_isolation` 用例断言口径、其结构演进的编译面），其修复后全绿——均非本批引入） |
 | Clippy | `cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings` | ✅ 退出码 0，零警告 |
-| 格式 | `cargo fmt --all -- --check` | ✅ 干净 |
-| 中性表述 | `scripts/check-neutral-terms.ps1` | ✅ 零命中 |
-| 密钥扫描 | `scripts/secret-scan.ps1` | ✅ 无泄漏 |
+| 格式 | `cargo fmt --all -- --check` | ✅ 干净（本批文件 + 并行线在途文件的机械空白补平） |
+| 中性表述 | `scripts/check-neutral-terms.ps1` | ✅ 零命中（69 个变更文件新增行全中性；取证途中曾见并行线外部源码暂存的 1 处命中，其归置后复扫全绿） |
+| 密钥扫描 | `scripts/secret-scan.ps1`（scan-staged + scan-all） | ✅ 无泄漏 |
 
 变更面（本批）：`crates/foundation/governance/src/{user_access.rs（新增）,lib.rs}` + `Cargo.toml`（dev-dep `fs-err`，
 `Cargo.lock` 随之加一条依赖边）、`crates/adapters/gateway/src/{client_tokens,canonical_entry}.rs`、
 `tests/user_authorization.rs`（新增）、`tests/{gateway_auth_face,multi_client_session}.rs`（`ClientTokenSpec` 字面量补 `user_id: None`）、
 `crates/adapters/cli/src/{user_admin.rs（新增）,lib.rs,main.rs}`、`tests/user_admin.rs`（新增）。
-跨范围最小改动（宪章 §二.4 报备）：`gateway/src/{panels.rs`（`GatewayState` 增 `user_access` 字段）`,
-session_settings.rs}`（测试装配字面量补字段）`,remote_access.rs}`（测试字面量补字段）`,
+跨范围最小改动（宪章 §二.4 报备）：`gateway/src/{panels.rs`（`GatewayState` 增 `user_access` 字段 + 面板管理面判定
+`panel_admin_face`）`,session_settings.rs}`（测试装配字面量补字段）`,remote_access.rs}`（测试字面量补字段）`,
 error_frame.rs,error_codes.rs}`（`ErrorCode` 增 `permission_denied`，契约已同步）。
+**共树协同注（W3-① 并行线）**：其在途结构演进两次造成全树编译中断——① `SelfStatusSnapshot` 增
+`domain`/`domain_reason` 后 `self_status_source.rs` 构造器未跟上；② `ProductionBackends` 增
+`self_status_domain` 后 `cli/src/lib.rs` 装配字面量未跟上。两处均按其自身「未接线 = 显式 null/None + 原因」
+口径补位（`DATA_PROBE_NOT_WIRED` / `None`，含报备注释），域探测口真接线归 W3-① 线；其文件的格式补平
+（`cargo fmt --all`）为机械空白，无语义改动。
 文档：`E-threat-model.md` / `F-server-form.md` / `gateway-api-contract.md` / 本文。
 未触碰禁区（frontend/**、CHANGELOG.md、.github/**、docs/design/**、HANDOFF-NOTES.md、research/verification/**、
 `crates/engine/memory/{reflexion,river_topology}.rs`）；未 commit。

@@ -514,6 +514,54 @@ button {
   max-height: 220px;
 }
 
+/* ---------- 快捷窗随手记（Quick Capture）----------
+   使用点：features/quick/QuickWindowView.svelte（落地反馈 + 回看列表）。
+   零打扰纪律：只用既有 token，不加主题新色。 */
+.capture-feedback {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  color: var(--green);
+}
+.capture-recent {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.capture-recent-title {
+  font-size: 11px;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+.capture-recent-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.capture-seq {
+  flex: none;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.capture-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.capture-time {
+  flex: none;
+  font-size: 11px;
+  color: var(--faint);
+}
+
 /* ---------- 窄屏适配（原压缩块 media 查询的活选择器残量） ----------
    保留仍存活的三条：body 滚动解锁、.page-head 与 .composer 的边距收紧；
    其余引用死类（.rail/.nav-item/.chat-stream/.statusbar 等）的规则已删。 */

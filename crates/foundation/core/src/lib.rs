@@ -63,6 +63,10 @@ pub mod statechart;
 pub mod storage_atomic;
 /// 存储文档描述符 (`StoredDoc<T>`) + 版本拒开两级容错 + 显式迁移入口。
 pub mod stored_doc;
+// 用户域 (W3-① 多户数据隔离·星群数据层): 域模型 + 域注册表 + 单户兼容采用。
+/// 用户域模型 (`UserDomain`/`DomainUserId`/`DomainRole`) + 域注册表 + 首次启动
+/// 「默认域原位采用」(零迁移) + 域级授权拒绝即帧 (404/403 语义钉死)。
+pub mod user_domain;
 // 模型画像表 (H-P1 模型面轴): 模型能力事实 + 单价的依据数据面 (路由/成本分级)。
 /// 模型画像表 (`ModelProfile`/`ModelProfileTable`): 三层配置 (内置基线 /
 /// 数据目录拒开档 / env 覆盖) + 显式 unknown, 单价缺省 None 绝不编价。

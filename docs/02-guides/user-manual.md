@@ -72,7 +72,9 @@ v2 唯一进程执行边界 = **`crates/capabilities/tools/src/process/`**（`Pr
 
 CLI 隐私逃生门：`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 关闭 filesystem/search 执行许可；旧 `APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` 保留兼容（等同默认）；两者同设时 DISABLE 赢（fail-closed）。敏感路径保护恒开。
 
-**会话级审批策略（2026-09-12）**：`SessionSettings` 支持 `permission_preset`（`read_only` 拒写/执行 / `standard` 沿用审批 / `full` 免审批留日志）+ `approval_remember`（`standard` 下"会话内记住"：某工具批准一次后该会话内同工具后续调用跳过审批；进程内记忆、重启清零；inner 的 `Deny` 永不绕过）。桌面端会话头提供 4 档选择器：只读 / 标准·每次审批 / 标准·会话内记住 / 完全放行。
+**`tool.skill_distill` / `tool.skill_search`（书→技能沉淀，opt-in，I 轴吸收自动化 I1）**：`APEIRETH_ENABLE_SKILL_DISTILL=1` / `APEIRETH_ENABLE_SKILL_SEARCH=1` 开启（注册 + 授权同源；沉淀**子依赖 file_write 总闸**——要 `APEIRETH_ENABLE_FILE_WRITE=1` 同开，fail-closed；检索只读档独立）。沉淀管线：内容输入（正文，或文件路径走**只读通道**：工作区词法限域 + 敏感面拒）+ 模型侧草稿（调用方 prompt 模板提炼的触发词 / 要点 / 操作步骤）→ 结构化技能卡（坏卡拒 + 触发词归一）→ 技能库（数据目录 `skills/`，每卡一 StoredDoc，**拒开语义**）。创建**重复名拒绝**；版本演进（`update`）= 同名更新，旧版先留 `audit.jsonl` 审计再原子写新版（id / 首沉淀时刻不变）。治理档：沉淀是写文件面——**每次沉淀都停人工审批**（无自动放行档，审批卡载荷 = 技能卡摘要）；检索是只读档——零审批零写盘。调用面（上下文预算纪律）：技能卡进模型上下文的唯一方式是 **L2 封套披露**（检索式注入：触发词命中 / 按需点名，共享引用封套 + 每源预算 + 分级省略措辞），**绝不无差别全量注入**——未命中卡正文零注入，卡名轻清单只含名字。
+
+**会话级审批策略（2026-09-12；E-P2 族归一后口径如下）**：`SessionSettings` 支持 `permission_preset`（`read_only` 拒写/执行 / `standard` 沿用审批 / `full` 免审批留日志）+ `approval_remember`（`standard` 下"会话内记住"：某次批准后该会话内**同一授权对象**的后续调用跳过审批——命令面授权对象 = **族**（批"删除族" = 该族所有形态生效，同族换形重放不重批；跨族仍逐族审批），无族命令按逐次操作逐字记住；审批卡带**族标注**（「授权族: …」，人见族而批）；进程内记忆、重启清零；inner 的 `Deny` 永不绕过）。桌面端会话头提供 4 档选择器：只读 / 标准·每次审批 / 标准·会话内记住 / 完全放行。
 
 工具调用走 **`<<<[TOOL_REQUEST]>>>` 已废弃**：v2 工具调用由各 provider 的原生 tool_calls 流式协议处理（OpenAI `tool_calls` 数组），不再走 marker 解析。`crates/capabilities/tools/src/plugin.rs` 的 plugin descriptor（`CapabilityDescriptor`）声明每个工具的 CapabilityId / kind / risk / M2* stage 标注，是唯一权威来源。
 

@@ -525,6 +525,7 @@ mod tests {
             governance_reason: "needs a human".into(),
             command_text: "gated".into(),
             arguments_summary: "{}".into(),
+            authorization_families: Vec::new(),
             created_at: at,
             expires_at: at,
             operation_fingerprint: "fp".into(),

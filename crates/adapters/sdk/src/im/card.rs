@@ -91,6 +91,12 @@ pub struct ImApprovalCard {
     pub command_text: String,
     /// 参数短摘要。
     pub arguments_summary: String,
+    /// 审批卡族标注 / 授权对象 (E-P2 审批族归一): 被批命令的族 id 列表
+    /// (如 `["删除族"]`)。批"删除族" = 该族所有形态生效, 同族换形重放被
+    /// 本次授权覆盖, 跨族仍逐族审批。空 = 非命令面操作 (授权对象 = 操作
+    /// 本身, 逐操作授权)。`#[serde(default)]`: 旧卡片载荷无此字段照读。
+    #[serde(default)]
+    pub authorization_families: Vec<String>,
     /// 风险级 (词表标签)。
     pub risk_level: String,
     /// 治理给出的原因 (展示用)。
@@ -155,6 +161,16 @@ pub fn render_approval_card(
     }
 }
 
+/// 审批卡族标注的人读文本: 族 id 以 `、` 连接; 空 = 非命令面操作
+/// (授权对象 = 操作本身, 逐操作授权)。批"删除族" = 该族所有形态生效。
+pub fn card_family_annotation(card: &ImApprovalCard) -> String {
+    if card.authorization_families.is_empty() {
+        "（无族·逐操作授权）".to_string()
+    } else {
+        card.authorization_families.join("、")
+    }
+}
+
 /// `im-feishu` 渠道: 消费 [`crate::lark::message::CardContent`] 元素形状
 /// (header + div 文本 + action 按钮), 按钮 `value` 即 [`ImButtonPayload`]。
 fn render_feishu_card(card: &ImApprovalCard) -> ImResult<serde_json::Value> {
@@ -176,7 +192,8 @@ fn render_feishu_card(card: &ImApprovalCard) -> ImResult<serde_json::Value> {
         serde_json::json!({
             "tag": "lark_md",
             "content": format!(
-                "**风险级**: {}\n**摘要**: {}\n**治理原因**: {}\n**超时**: {} ms",
+                "**授权族**: {}\n**风险级**: {}\n**摘要**: {}\n**治理原因**: {}\n**超时**: {} ms",
+                card_family_annotation(card),
                 card.risk_level,
                 card.arguments_summary,
                 card.governance_reason,
@@ -237,6 +254,7 @@ fn render_template_card(kind: &str, card: &ImApprovalCard) -> ImResult<serde_jso
         })
         .collect::<ImResult<Vec<_>>>()?;
 
+    let family_label = card_family_annotation(card);
     Ok(serde_json::json!({
         "card_kind": kind,
         "msgtype": "approval_card",
@@ -244,6 +262,8 @@ fn render_template_card(kind: &str, card: &ImApprovalCard) -> ImResult<serde_jso
             "title": "待审批操作",
             "command_text": card.command_text,
             "arguments_summary": card.arguments_summary,
+            "authorization_families": card.authorization_families,
+            "authorization_family_label": family_label,
             "risk_level": card.risk_level,
             "governance_reason": card.governance_reason,
             "expires_at_ms": card.expires_at_ms,
@@ -264,6 +284,7 @@ mod tests {
             subject: "tool.shell".to_string(),
             command_text: "shell: bash -c 'rm -rf /tmp/x'".to_string(),
             arguments_summary: "执行命令 rm -rf /tmp/x".to_string(),
+            authorization_families: vec!["删除族".to_string()],
             risk_level: "high".to_string(),
             governance_reason: "destructive write".to_string(),
             created_at_ms: 1_700_000_000_000,
@@ -334,5 +355,36 @@ mod tests {
             assert!(text.contains("reject"), "{kind}: {text}");
             assert!(text.contains("pair-1"), "{kind}: {text}");
         }
+    }
+
+    /// E-P2 审批卡族标注: 卡片载荷与各渠道渲染都携带授权族（授权对象 =
+    /// 族; 批"删除族" = 该族所有形态生效, 人见族而批）; 无族操作明示
+    /// "逐操作授权", 不留语义空洞; 旧载荷无字段照读（serde 兼容）。
+    #[test]
+    fn approval_card_carries_the_family_annotation() {
+        let annotated = card();
+        assert_eq!(card_family_annotation(&annotated), "删除族");
+        for kind in ImChannelKind::ALL {
+            let rendered = render_approval_card(kind, &annotated).unwrap().to_string();
+            assert!(rendered.contains("删除族"), "{kind}: {rendered}");
+            assert!(rendered.contains("授权族"), "{kind}: {rendered}");
+        }
+
+        let mut familyless = card();
+        familyless.authorization_families = Vec::new();
+        assert_eq!(card_family_annotation(&familyless), "（无族·逐操作授权）");
+        let rendered = render_approval_card(ImChannelKind::ImWecom, &familyless)
+            .unwrap()
+            .to_string();
+        assert!(rendered.contains("（无族·逐操作授权）"), "{rendered}");
+
+        // 存量卡片载荷（无本字段）读入 = 空族标注, 不读失败。
+        let mut object = serde_json::to_value(card()).unwrap();
+        object
+            .as_object_mut()
+            .unwrap()
+            .remove("authorization_families");
+        let migrated: ImApprovalCard = serde_json::from_value(object).unwrap();
+        assert!(migrated.authorization_families.is_empty());
     }
 }

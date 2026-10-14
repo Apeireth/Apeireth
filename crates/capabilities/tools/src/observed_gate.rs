@@ -234,7 +234,10 @@ fn pattern_matches(pattern: &str, key: &str) -> bool {
 ///
 /// 这是词法归一, 不展开 symlink、不折叠大小写; 同一文件的 symlink 拼写是
 /// 两个键 (写入端各自解析后仍各自过门禁, 不会漏拒)。
-fn path_key(path: &Path) -> String {
+///
+/// `pub(crate)` (E-P3): 对象级判定件 [`crate::object_access`] 复用同一归一
+/// 口径 —— 两个判定面必须同一把尺, 不复制第二份词法归一。
+pub(crate) fn path_key(path: &Path) -> String {
     let mut joined = PathBuf::new();
     for component in path.components() {
         match component {
