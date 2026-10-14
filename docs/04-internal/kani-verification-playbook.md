@@ -215,15 +215,14 @@ cargo kani --harness <name> > /tmp/x.log 2>&1; grep -E "^VERIFICATION" /tmp/x.lo
 要点: `cargo kani setup` 无视已放好的 tar 包坚持下载; 正道是
 `--local-bundle <path>`（kani-verifier setup.rs 的 use_local_bundle 分支）。
 
-## 6. 本地已验证面 harness 基线（2026-10-11 实测）
+## 6. 本地已验证面 harness 基线（2026-10-13 终局实测）
 
-| harness | 本地 | 备注 |
+| harness | 本地实证 | 处置 |
 |---|---|---|
-| SM ×3 | 3-15s | 线性表后秒级; **零 format! 插值是长期快的原因** |
-| river | 195s ✅ | cbrt 桩 + NaN 过滤 + 分支定长 |
-| base64 | 73s ✅ | format! 静态化 + unwind 盖住 64 字面量循环 |
-| governance_no_degrade | 8.4s ✅ | format! 静态化 |
-| governance_default_deny | 22s ✅ | format! → push_str |
-| fold_block | 复验中 | format! 静态化 + 行界定型 |
-| residual/semantic/dual/async | 待抓药 | 先查 format! 残雷, 再看符号长度 |
-| memory ×3 / sandbox ×5 / quota ×2 / saga ×2 | 待复测 | CI 曾 45m+; 同款刀法待施 |
+| SM ×3（审批状态机真证明） | 3-15s ✅ | 矩阵在役 |
+| river | 195s ✅ | 矩阵在役（cbrt 桩 + NaN 过滤 + 分支定长） |
+| base64_decode | 73s ✅ | 矩阵在役（零 format! + unwind 盖 64 字面量循环） |
+| governance ×4（deny_axis/default_deny/no_degrade/fail_closed） | 1-22s ✅ | 矩阵在役（4/4 全证; format! 刀把 45m 救成秒级） |
+| quota_ledger | ~1m ✅ | 矩阵在役 |
+| sandbox_validate | ✅ | 矩阵在役 |
+| **K18 退出**（带全刀仍 900s+） | fold×3、数值×4、memory×3、quota×2、saga×2、sandbox×4、cache_key | 单测覆盖; harness 源码留复验入口; 证据链 K15-K18 |
