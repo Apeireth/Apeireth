@@ -102,10 +102,17 @@
 2. **平台语义面**: 测试含 Windows 路径语义（`C:\data` 反斜杠/盘符）, unix 上
    `\` 非分隔符 —— windows_service_script_dry_run / tuning_log_lands_beside_
    session_db 两案。**测试名或断言含平台语义的, 一律 cfg 守卫**;
-3. **键规范化面**: `fs::canonicalize` 返回真实大小写, 归一化键不折叠大小写
-   （TEMP 环境变量拼写 vs NTFS 真实大小写）→ 同一文件两个键, 写后回填查无
-   此人（apply_patch 版本 CAS 三连败案）。**路径键必须按目标平台语义折叠**
-   （Windows 大小写不敏感）; 本地大小写一致时永不复现, 最隐蔽的一变种。
+3. **键规范化面**: `fs::canonicalize` 返回**真实大小写 + symlink 解析后**的
+   拼写（macOS `/var`→`/private/var`、Windows 大小写/`\\?\` verbatim）, 归一化
+   键不展开 symlink 时同一文件落两个键 —— 写后回填查无此人（apply_patch
+   版本 CAS 三连败案, 示踪招供: `target_key=/var/...` vs
+   `gate_keys=[/private/var/...]`）。**路径键必须按目标平台语义折叠 + 查询方
+   用 canonical 拼写命中**; 本地大小写一致/symlink 不经斜路时永不复现,
+   最隐蔽的一变种。
+
+破案方法论（理论三连破后唯一正道）: **示踪三选一判据** —— 在失败点埋
+诊断打印（双方键/分支标记）, 让 CI 现场自己招供: ①键对比差异 = 失配实锤;
+②特定标记出现 = 对应理论复活; ③空 = 上游根本没发生。一轮 CI 破三轮悬案。
 
 CI 解剖工具箱（按效率排序）:
 - **报错归属会误导**: "could not document `X`" 的 X 不一定是病灶 crate
