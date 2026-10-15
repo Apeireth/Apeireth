@@ -200,7 +200,10 @@ fn first_line(text: &str) -> String {
 }
 
 /// FNV-1a 64 (稳定、零依赖; 仅身份摘要用)。
-fn fnv1a64(bytes: &[u8]) -> u64 {
+///
+/// `pub(crate)`: 技能卡稳定身份 [`crate::skill::card::skill_card_id`] 复用
+/// 同一实现 (零复制), 两者都**非密码学**、都只做身份摘要。
+pub(crate) fn fnv1a64(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for byte in bytes {
         hash ^= u64::from(*byte);

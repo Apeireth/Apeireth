@@ -8,6 +8,7 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use apeireth_core::kernel::CapabilityId;
@@ -16,6 +17,7 @@ use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, Too
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+use crate::object_access::{ObjectAccessJudge, ObjectDomain, ObjectSubject};
 use crate::process::{
     current_platform_capabilities, EnforcementLevel, EnvironmentSpec, IsolationCapability,
     IsolationRequirement, ProcessLimits, ProcessRequest, ProcessResult,
@@ -53,6 +55,13 @@ pub struct TrustedShellConfig {
     /// 默认关 (fail-closed) —— 开关名与权力必须相符: 没有写权力时 shell 也
     /// 写不了文件。写意图判定见 [`crate::write_intent`]。
     pub file_write: bool,
+    /// **对象级判定挂载点** (E-P3 · 威胁模型 G3): `None` = 默认判定器
+    /// ([`ObjectAccessJudge::with_defaults`]: 工作区对象策略 + 元数据快照探针
+    /// + 进程内审计); `Some` = 挂载自定义判定器 —— 对象策略
+    /// [`crate::object_access::ObjectAccessPolicy`] 可替换 (星港线深望智能体
+    /// 接此契约)。执行前后对象状态对比: 词法面漏放的写入按对象事实兜底,
+    /// 越界即帧 + `sandbox.object_violation` 审计 (见 [`crate::object_access`])。
+    pub object_judgment: Option<Arc<ObjectAccessJudge>>,
 }
 
 impl Default for TrustedShellConfig {
@@ -69,6 +78,8 @@ impl Default for TrustedShellConfig {
             // 文件写入总闸默认关 (fail-closed): shell 写命令与受控写文件工具
             // 同受一闸, 未开闸时写意图拒绝即帧。
             file_write: false,
+            // 对象级判定默认上默认判定器 (执行面常开), 挂载点可替换策略。
+            object_judgment: None,
         }
     }
 }
@@ -100,6 +111,13 @@ impl TrustedShellConfig {
     #[must_use]
     pub fn with_file_write(mut self, file_write: bool) -> Self {
         self.file_write = file_write;
+        self
+    }
+
+    /// 挂载对象级判定器 (E-P3 · G3): 替换默认判定器的对象策略/探针/审计面。
+    #[must_use]
+    pub fn with_object_judgment(mut self, judgment: Arc<ObjectAccessJudge>) -> Self {
+        self.object_judgment = Some(judgment);
         self
     }
 
@@ -160,18 +178,30 @@ struct ShellFrozenInvocation {
 pub struct ShellTool {
     id: CapabilityId,
     config: TrustedShellConfig,
+    /// 对象级判定器 (E-P3 · G3): 执行前后对象状态对比 + 越界即帧 + 审计。
+    judge: Arc<ObjectAccessJudge>,
 }
 
 impl ShellTool {
     pub fn new(config: TrustedShellConfig) -> Self {
+        let judge = config
+            .object_judgment
+            .clone()
+            .unwrap_or_else(|| Arc::new(ObjectAccessJudge::with_defaults()));
         Self {
             id: CapabilityId::new("tool.shell").unwrap(),
             config,
+            judge,
         }
     }
 
     pub fn config(&self) -> &TrustedShellConfig {
         &self.config
+    }
+
+    /// 挂载的对象级判定器 (审计行可经 [`ObjectAccessJudge::audit_rows`] 回读)。
+    pub fn object_judge(&self) -> &Arc<ObjectAccessJudge> {
+        &self.judge
     }
 
     fn declaration_parameters() -> ToolParameters {
@@ -657,21 +687,53 @@ impl ShellTool {
             }
         };
 
-        let result = tokio::task::spawn_blocking(move || {
-            crate::process::ProcessExecutor::new().execute(&request)
+        // 对象级判定窗 (E-P3 · G3): 受控执行前后对象状态对比 ——「动了哪些
+        // 对象」的事实判定, 与 API 形态无关。词法面漏放的写入 (编码负载 /
+        // 解释器内写入等) 在这里按对象事实兜底; 越界即帧 + 落
+        // `sandbox.object_violation` 审计。判定窗开不出 = 对象事实不可核验,
+        // fail-closed 不执行。
+        let judge = Arc::clone(&self.judge);
+        let subject = ObjectSubject::new(frozen.shell_executable.clone());
+        let domain = ObjectDomain::new(PathBuf::from(&frozen.workspace_root));
+        let judged = tokio::task::spawn_blocking(move || {
+            judge.guard(subject, domain, || {
+                crate::process::ProcessExecutor::new().execute(&request)
+            })
         })
         .await;
 
-        match result {
-            Ok(Ok(process_result)) => {
-                let value = Self::format_result(&process_result);
-                ToolResult::ok(&call.id, value).with_name("shell")
+        match judged {
+            Ok(Err(guard_error)) => {
+                let failure = crate::exec_pipeline::PipelineFailure::PreDenied {
+                    source: crate::object_access::OBJECT_JUDGE_SOURCE.to_string(),
+                    reason: guard_error.to_string(),
+                };
+                failure.emit(&call.id, Some("shell"))
             }
-            Ok(Err(process_error)) => ToolResult::permanent_error(
-                &call.id,
-                format!("shell process execution failed: {process_error}"),
-            )
-            .with_name("shell"),
+            Ok(Ok((process_result, report))) => {
+                // 越界即帧: 未授权对象操作判失败 (审计已随判定落行)。
+                if let Some(failure) = report.failure() {
+                    return failure.emit(&call.id, Some("shell"));
+                }
+                match process_result {
+                    Ok(process_result) => {
+                        let mut value = Self::format_result(&process_result);
+                        // 对象审计可见墙: 本次执行动了哪些对象 (计数口径) ——
+                        // 合规执行零帧零审计行, 事实计数随结果可见。
+                        value["object_audit"] = serde_json::json!({
+                            "changes": report.changes().len(),
+                            "violations": report.violations().len(),
+                            "coverage": if report.complete() { "complete" } else { "partial" },
+                        });
+                        ToolResult::ok(&call.id, value).with_name("shell")
+                    }
+                    Err(process_error) => ToolResult::permanent_error(
+                        &call.id,
+                        format!("shell process execution failed: {process_error}"),
+                    )
+                    .with_name("shell"),
+                }
+            }
             Err(join_error) => ToolResult::retryable_error(
                 &call.id,
                 format!("shell execution task failed to join: {join_error}"),

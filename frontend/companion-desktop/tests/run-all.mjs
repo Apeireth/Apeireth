@@ -55,6 +55,7 @@ const SUITES = [
   {file: 'settings-live-apply.mjs', name: 'settings three-tier live apply (real module)', strip: true},
   {file: 'settings-save-buttons-removed.mjs', name: 'save-button removal source mirror'},
   {file: 'quick-window-close.mjs', name: 'quick window close/destroy lifecycle (mirrored)'},
+  {file: 'quick-capture.mjs', name: 'quick capture (one-click memory stream / zero token / review list, real modules)', strip: true},
   {file: 'pet-frame.mjs', name: 'pet avatar contract (posture/light mirror, real module)', strip: true},
   {file: 'pet-proactive.mjs', name: 'pet proactive engine (anti-nagging budget / glance, real module)', strip: true},
   {file: 'pet-avatar-registry.mjs', name: 'pet avatar registry (dual-form plug-in slot, real module)', strip: true},

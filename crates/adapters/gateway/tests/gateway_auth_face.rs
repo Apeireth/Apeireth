@@ -80,6 +80,7 @@ fn table(entries: &[(&str, &str)]) -> ClientTokenTable {
             .map(|(name, token)| ClientTokenSpec {
                 name: (*name).to_string(),
                 token: (*token).to_string(),
+                user_id: None,
             })
             .collect(),
     ))

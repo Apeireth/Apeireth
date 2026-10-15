@@ -161,7 +161,7 @@
 
 | 宣称（原文摘句） | 出处 | 可验证命题 | 证据等级 | 证据位置 | 缺口说明 |
 |---|---|---|---|---|---|
-| "tests-3662 passed \| 0 failed" + "自动化测试 100% 通过"（S-3） | README.md:9 / zh:432 | 全量测试通过且 CI 验证 | B | .github/workflows/rust.yml（3-OS nextest + JUnit）；INSTALL.md:177 "3662 passed / 0 failed / 21 ignored, 130 suites" | badge 是静态数字无自动刷新；"100% CI pass"含非阻塞项（kani.yml continue-on-error） |
+| "tests-3662 passed \| 0 failed" + "自动化测试 100% 通过"（S-3） | README.md:9 / zh:432 | 全量测试通过且 CI 验证 | B | .github/workflows/rust.yml（3-OS nextest + JUnit）；INSTALL.md:177 "5243 passed / 0 failed / 22 ignored, 190 suites（2026-10-13 口径）" | badge 是静态数字无自动刷新（且 README 冻结口径已落后于实测）；"100% CI pass"含非阻塞项（kani.yml continue-on-error） |
 | "Clippy 0 warnings" | README.md:10 | clippy -D warnings 通过 | B | .github/workflows/rust-lint.yml（三层 -D warnings）、rustfmt.yml、rustdoc.yml | 无缺口 |
 | "download `Apeireth Companion_<version>_x64-setup.exe` from Releases" | README.md:414 | 发布流水线产出安装包 | B | publish-release.yml（NSIS + SHA-256 + gh-release，:56-93）+ scripts/check-release-version.ps1（22 处版本源一致性） | 实际 Release 资产存在性未核（本次只读审计不访问网络）→ 发布实物核验属 E 类 |
 | "Quick Start: `cargo run -p apeireth-cli -- gateway serve --port 8080` / `chat`" | README.md:400-410 | 入口命令可运行 | B | ARCHITECTURE.md:125-129（apeireth session/chat/gateway serve）；cli/src/main.rs；tests/canonical_cli_bootstrap.rs | chat 需 API key（README 已注明）；gateway 默认 loopback（ARCHITECTURE.md:131） |
@@ -243,7 +243,7 @@
 | 7 | JobObject OS Sandbox Spawn | **6.40 ms** | benchmark-baseline.md:18 "Process Sandbox Spawn"（手填） | **未见复现脚本**（process_executor 测试不测耗时） |
 | 8 | Microkernel Cold Start（18-crate 自举） | **4.20 ms** | 无 | **未见复现脚本** |
 | 9 | Runtime Idle Footprint | **~18.2 MB** | 无（benchmark-baseline.md:31 是 Desktop idle ~48.5MB，对象不同） | **未见复现脚本** |
-| 10 | Workspace Test Suite（100% Pass） | "3662/3662" | INSTALL.md:177 + system-capabilities.md:10（静态自述）；CI rust.yml 在跑全量测试 | B（测试在跑）；但数字为静态手填 |
+| 10 | Workspace Test Suite（100% Pass） | "5243/5243"（2026-10-13 口径） | INSTALL.md:177 + system-capabilities.md:10（静态自述）；CI rust.yml 在跑全量测试 | B（测试在跑）；但数字为静态手填 |
 
 **横向口径漂移**：benchmark-baseline.md:27 写 "Core Workspace (**16 Crates**)"，README 写 18-crate；
 `release-1.0.0.yml:326-327` 在 CI 里自述 "the current root workspace has **no benchmark target**"，却把空的

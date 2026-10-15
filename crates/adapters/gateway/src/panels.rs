@@ -59,6 +59,16 @@ pub struct GatewayState {
     /// [`crate::client_tokens::ClientTokenTable::load`]) —— 装配函数不隐式读
     /// 配置面, 「坏配置拒开」必须在可失败边界执行; 未注入 = 空表 (仅 env 面)。
     pub client_tokens: crate::client_tokens::ClientTokenTable,
+    /// 用户角色面 (W3-②): 用户表 (`users.json`; 未注入 = **角色面未激活**,
+    /// 兼容路径零回归) + 会话→用户绑定。由组合根显式装载注入 (see
+    /// [`crate::client_tokens::UserAccess::load`]), 坏表/绑定不一致在可失败
+    /// 边界拒开; 角色门据此按治理层 role 权限矩阵过闸。
+    pub user_access: crate::client_tokens::UserAccess,
+    /// 用户域会话平面 (W3-① 多户数据隔离): 域解析 + 按域路由会话写闸 (每域
+    /// 恰一把, 默认域与运行时共用同一把)。由组合根显式装载注入 (see
+    /// [`apeireth_runtime_assembly::DomainDataPlane`]); 未注入 = 域面未接线
+    /// (兼容路径, 一切按默认域原位语义)。
+    pub domains: Option<Arc<apeireth_runtime::canonical::DomainSessionPlane>>,
     /// Graceful-shutdown trigger (W2-① resident form): fired by the token-gated
     /// `/v1/admin/shutdown` endpoint; the serve loop stops, writes the closing
     /// audit fact and flushes the observation archive (see
@@ -668,6 +678,14 @@ impl ModuleQuery for PanelDataAdapter {
 
 /// Panel routes without attached state — merge into the canonical router
 /// before its final `.with_state(...)`.
+/// 面板族里的**管理面**端点 (W3-② 角色门分类用): 授权热撤属治理层 role 权限
+/// 矩阵 [`apeireth_governance::UserCapability::AdminControl`] 档 (owner)。
+/// 面板路径知识归面板面本体 (canonical_entry 只问不背路径, 架构冻结面不许引
+/// 面板路径)。
+pub fn panel_admin_face(endpoint: &str) -> bool {
+    endpoint == "/v1/panel/grants/revoke"
+}
+
 pub fn panel_routes() -> Router<GatewayState> {
     Router::new()
         .route("/v1/panel/sessions", get(list_sessions))

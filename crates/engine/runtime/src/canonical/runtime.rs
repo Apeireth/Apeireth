@@ -315,7 +315,9 @@ pub struct Runtime {
     // Arc so per-turn invoker handles can carry the one canonical router
     // without borrowing the runtime. Still exactly one router instance.
     pub(super) providers: Arc<ProviderRouter>,
-    pub(super) sessions: SessionManager,
+    // W3-① Arc 形态: 默认用户域的会话写闸与域平面 (`DomainSessionPlane`) 共用
+    // **同一把** SessionManager —— 每域恰一把写闸 (W2-③ 同会话串行承诺不拆)。
+    pub(super) sessions: Arc<SessionManager>,
     pub(super) governance: Arc<dyn GovernanceHook>,
     pub(super) clock: Arc<dyn Clock>,
     pub(super) config: RuntimeConfig,
@@ -360,6 +362,12 @@ impl Runtime {
 
     /// The session manager.
     pub fn sessions(&self) -> &SessionManager {
+        &self.sessions
+    }
+
+    /// The session manager as a shared handle (W3-①): 组合根把它注册进域平面,
+    /// 让默认用户域的会话面与运行时共用同一把写闸 (同一实例, 非同一存储的两把闸)。
+    pub fn sessions_arc(&self) -> &Arc<SessionManager> {
         &self.sessions
     }
 
@@ -684,6 +692,7 @@ pub struct RuntimeBuilder {
     invariant_auditor: Option<Arc<InvariantAuditor>>,
     summary_generator: Option<Arc<dyn SummaryGenerator>>,
     call_scheduler: Option<Arc<CallScheduler>>,
+    session_manager: Option<Arc<SessionManager>>,
 }
 
 impl Default for RuntimeBuilder {
@@ -710,6 +719,7 @@ impl RuntimeBuilder {
             invariant_auditor: None,
             summary_generator: None,
             call_scheduler: None,
+            session_manager: None,
         }
     }
 
@@ -733,6 +743,17 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_session_store(mut self, store: Arc<dyn SessionStore>) -> Self {
         self.session_store = store;
+        self
+    }
+
+    /// Use an already-assembled [`SessionManager`] (W3-① 域平面共用写闸):
+    ///
+    /// 与 [`RuntimeBuilder::with_session_store`] 二选一; 两者都在场时本方法生效。
+    /// 用途: 组合根先组装默认用户域的写闸, 再把**同一把**交给运行时与域平面 ——
+    /// 每域恰一把会话写闸 (W2-③ 同会话串行承诺不拆)。
+    #[must_use]
+    pub fn with_session_manager(mut self, manager: Arc<SessionManager>) -> Self {
+        self.session_manager = Some(manager);
         self
     }
 
@@ -1016,10 +1037,19 @@ impl RuntimeBuilder {
             .clone()
             .map(|root| Arc::new(SpillWriter::new(root)));
 
+        // W3-①: 注入的会话写闸优先 (与域平面共用同一把); 未注入则按 store 自建。
+        let sessions = match self.session_manager {
+            Some(manager) => manager,
+            None => Arc::new(SessionManager::new(
+                self.session_store,
+                Arc::clone(&self.clock),
+            )),
+        };
+
         Ok(Runtime {
             plugins: manager,
             providers: Arc::new(providers),
-            sessions: SessionManager::new(self.session_store, Arc::clone(&self.clock)),
+            sessions,
             governance: self.governance,
             clock: self.clock,
             config: self.config,

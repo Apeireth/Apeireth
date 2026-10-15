@@ -236,8 +236,12 @@ fn pattern_matches(pattern: &str, key: &str) -> bool {
 /// 各自解析后仍各自过门禁, 不会漏拒)。Windows 大小写折叠 (2026-10-15):
 /// canonicalize 返回真实大小写, 调用方拼写 (TEMP 环境变量大小写 vs NTFS 真实
 /// 大小写) 可不同 —— 不折叠会让同一文件两个拼写落两个观测键, 写后回填查不到
-/// (实测 CI flake: apply_with_gate 版本 CAS 三连败, 本地大小写一致不复现);
+/// (实测 CI flake: apply_with_gate 版本 CAS 三连败, 本地大小写一致不复现;
+/// macOS `/var`→`/private/var` symlink 同病, 由查询方 canonical 拼写命中);
 /// Windows 文件系统语义即大小写不敏感, unix 保持大小写敏感。
+///
+/// `pub(crate)` (E-P3): 对象级判定件 [`crate::object_access`] 复用同一归一
+/// 口径 —— 两个判定面必须同一把尺, 不复制第二份词法归一。
 pub(crate) fn path_key(path: &Path) -> String {
     let mut joined = PathBuf::new();
     for component in path.components() {

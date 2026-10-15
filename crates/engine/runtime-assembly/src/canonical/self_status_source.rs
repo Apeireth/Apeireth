@@ -16,10 +16,11 @@ use apeireth_core::kernel::SessionId;
 use apeireth_core::model_profile::ModelProfile;
 use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_tools_canonical::{
-    derive_tuning_preset, BudgetStatus, CapabilitySwitch, MemoryLedgerStats, QuotaDimensionStatus,
-    QuotaMeterReading, QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource,
-    SessionQuotaProbe, StatusProbe, TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE,
-    DATA_PROBE_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    derive_tuning_preset, BudgetStatus, CapabilitySwitch, ContentFeedStatus, DomainCounts,
+    DomainStatus, MemoryLedgerStats, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus,
+    SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SessionQuotaProbe, StatusProbe,
+    TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
+    QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
 };
 
 use super::production::ProductionModulesConfig;
@@ -131,6 +132,49 @@ pub fn session_quota_probe(db_path: PathBuf) -> SessionQuotaProbe {
     })
 }
 
+/// 自省通道: 用户域节探测口 (W3-①) —— 现探测当前域的域文档真值与域内计数。
+///
+/// - 域身份 (id/显示名/角色/创建时刻) 每次现读域文档 (坏域配置拒开, 如实);
+/// - 域内计数: 会话数读本域会话库 (与配额账本同库), 记忆/受保护数读本域记忆库
+///   账本; 单维失败 = 该维显式 null + 原因, 不整节失败 (0 装诚实)。
+pub fn domain_status_probe(
+    registry: Arc<apeireth_core::user_domain::DomainRegistry>,
+    user_id: apeireth_core::user_domain::DomainUserId,
+    sessions_db: PathBuf,
+    memory: Arc<apeireth_memory::SqliteMemoryStore>,
+) -> StatusProbe<DomainStatus> {
+    Arc::new(move || {
+        let domain = registry.load(&user_id).map_err(|error| error.to_string())?;
+        let mut count_reason: Option<String> = None;
+        let sessions = match crate::domain_plane::session_row_count(&sessions_db) {
+            Ok(count) => Some(count),
+            Err(error) => {
+                count_reason = Some(error);
+                None
+            }
+        };
+        let ledger = match memory.ledger_counts() {
+            Ok(counts) => Some(counts),
+            Err(error) => {
+                count_reason.get_or_insert_with(|| format!("memory ledger probe failed: {error}"));
+                None
+            }
+        };
+        Ok(DomainStatus {
+            user_id: domain.user_id.to_string(),
+            display_name: domain.display_name.clone(),
+            role: domain.role_str().to_string(),
+            created_at: domain.created_at,
+            counts: DomainCounts {
+                sessions,
+                memories: ledger.as_ref().map(|counts| counts.memories),
+                protected: ledger.as_ref().map(|counts| counts.protected),
+                reason: count_reason,
+            },
+        })
+    })
+}
+
 /// 生产自述来源: 装配期收集生效值, 调用期现探测 data 系。
 pub struct ProductionSelfStatusSource {
     identity: SelfStatusIdentity,
@@ -142,6 +186,8 @@ pub struct ProductionSelfStatusSource {
     budget: BudgetStatus,
     quota: Option<SessionQuotaProbe>,
     model_profile: Option<ModelProfile>,
+    domain: Option<StatusProbe<DomainStatus>>,
+    content_feed: Option<StatusProbe<ContentFeedStatus>>,
 }
 
 impl ProductionSelfStatusSource {
@@ -161,6 +207,8 @@ impl ProductionSelfStatusSource {
             budget: budget_status_from_constants(),
             quota: None,
             model_profile: None,
+            domain: None,
+            content_feed: None,
         }
     }
 
@@ -198,6 +246,20 @@ impl ProductionSelfStatusSource {
     #[must_use]
     pub fn with_model_profile(mut self, profile: ModelProfile) -> Self {
         self.model_profile = Some(profile);
+        self
+    }
+
+    /// 接入用户域节探测口 (W3-①): 当前域 id/角色/域内计数, 每次自述现探测。
+    #[must_use]
+    pub fn with_domain_probe(mut self, probe: StatusProbe<DomainStatus>) -> Self {
+        self.domain = Some(probe);
+        self
+    }
+
+    /// 接入内容流面探测口 (J1): 订阅数/最近拉取, 每次自述现探测 (真值如实)。
+    #[must_use]
+    pub fn with_content_feed_probe(mut self, probe: StatusProbe<ContentFeedStatus>) -> Self {
+        self.content_feed = Some(probe);
         self
     }
 
@@ -319,6 +381,26 @@ impl ProductionSelfStatusSource {
             None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
         };
 
+        // 用户域一节 (W3-① 域节): 当前域 id/角色/域内计数, 现探测如实;
+        // 探测口缺位 = 显式 null + 原因 (W3-2 报备的域面接线在本批落地)。
+        let (domain, domain_reason) = match &self.domain {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("user domain probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
+        // 内容流面一节 (J1): 订阅数/最近拉取, 现探测如实; 探测口缺位 = 显式
+        // null + 原因 (0 装诚实)。
+        let (content_feed, content_feed_reason) = match &self.content_feed {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("content feed probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
         SelfStatusSnapshot {
             identity: self.identity.clone(),
             capabilities: self.capabilities.clone(),
@@ -335,6 +417,10 @@ impl ProductionSelfStatusSource {
             workspace_reason,
             model,
             model_reason,
+            domain,
+            domain_reason,
+            content_feed,
+            content_feed_reason,
         }
     }
 }
@@ -378,6 +464,9 @@ pub fn roster_from_config(
         CapabilitySwitch::new("repo", config.repo && workspace_root_present),
         CapabilitySwitch::new("shell", config.shell.is_some()),
         CapabilitySwitch::new("fetch", config.fetch.is_some()),
+        // 内容流接入 (`tool.content_feed`, J1): 按实际注册条件取值 (配置注入
+        // 才算生效)。治理: RequireApproval 级 (拉取与入库都经审批档)。
+        CapabilitySwitch::new("content_feed", config.content_feed.is_some()),
         // 受控文件写入 (`tool.apply_patch`): 主开关按实际注册条件取值 (配置开启
         // 且工作区根已注入才算生效); 自动放行子档依赖主开关 —— 主开关没注册成,
         // 子档无处生效, 名册照实说 false。
@@ -406,6 +495,20 @@ pub fn roster_from_config(
             config.worktree_apply && config.file_write && workspace_root_present,
         ),
         CapabilitySwitch::new("mcp", config.mcp),
+        // 书→技能沉淀 (I1): 写面按实际注册条件取值 (开关 + `file_write` 唯一写
+        // 总闸 + 工作区根 + 技能库目录齐备才算生效, fail-closed); 只读检索按
+        // (开关 + 技能库目录) 取值, 不依赖写总闸。
+        CapabilitySwitch::new(
+            "skill_distill",
+            config.skill_distill
+                && config.file_write
+                && workspace_root_present
+                && config.skills_dir.is_some(),
+        ),
+        CapabilitySwitch::new(
+            "skill_search",
+            config.skill_search && config.skills_dir.is_some(),
+        ),
         CapabilitySwitch::new("education", config.education),
         CapabilitySwitch::new("memory_recall", config.memory_recall),
         CapabilitySwitch::new("memory_writeback", config.memory_writeback),

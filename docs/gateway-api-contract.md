@@ -11,11 +11,13 @@
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)
 - 编码:UTF-8 JSON;时间戳统一 **epoch 毫秒**(`timestamp` 字段)
 - 认证:**全 API 面令牌门**(W2-② 起,chat/事件流/面板/会话/审批/admin 族,唯一豁免 `/health` 探活)。三态口径(env `APEIRETH_GATEWAY_TOKEN` + 客户端令牌表 `APEIRETH_GATEWAY_TOKENS`/`client-tokens.json`,任一在场=强制态):强制态=`Authorization: Bearer <token>` 必须命中令牌族任一枚(恒定时间比较,缺失 401 `auth_missing_key` / 伪造 401 `auth_invalid_key`,拒绝入审计 `gateway.auth_rejected`,过门入审计 `gateway.auth_client client=<客户端名>`);两面皆空=放行但每次记警告帧 `gateway_auth_unprotected` + 审计 `gateway.auth_unprotected`(兼容路径,保守过渡);显式 `none`=操作者明示不设防,放行不告警但审计留痕(与客户端令牌表互斥,配置矛盾拒开)。桌面壳启动侧车时自铸 32 字节随机令牌注入(生产恒为强制态);客户端令牌表每客户端一枚(name→token,过门审计带客户端名)。非回环绑定(`APEIRETH_LISTEN`/`--bind`)强制令牌:令牌族两面皆空时拒绝启动(fail-closed)
+- 授权(W3-② 起,角色门):用户表 `users.json`(StoredDoc 拒开语义)在场=**角色面激活**,过门客户端名沿令牌→用户→角色链(`client-tokens.json` 条目 `user_id` + 用户表 `client_names`)解析为问责身份,按治理层 role 权限矩阵过闸——写面(chat/会话写/记忆写,非读方法)需 `Write`、admin 族与 `/v1/panel/grants/revoke` 需 `AdminControl`(owner 档)、`/v1/approvals/resolve` 需 `ApprovalL2` 且**跨用户审批拒**(owner 可批任意会话,其余角色只可批本人绑定会话的审批);读面(GET)全员可读。未绑定用户的受闸请求 fail-closed 拒(403 `permission_denied`);未配置用户表=兼容路径(W2-② 行为逐字不变,不新增拒绝面)。角色只来自令牌绑定的解析链,请求无法自称角色(自称客户端名另有 name↔token 绑定校验)。每次裁决落审计 `gateway.user_action user=<id> role=<role> action=<能力> endpoint=<路径> decision=allow|deny`
+- 数据域(W3-① 起,域门):请求沿令牌→user_id 链解析**用户域**(未绑定=默认域,单户兼容;未开域的绑定用户留默认域;域配置坏=403 `domain_refused` 拒开,真因入审计 `gateway.domain_refused`)。`/v1/sessions/*` **按域路由**(每域自己的会话库+配额账本;他域/不存在的会话 id **同帧** 404 `session_not_found`,存在性不泄露);其余面(含 `/v1/chat`)对非默认域 **403 `domain_forbidden`** fail-closed(面未按用户域开放,不泄露默认域数据)。可选自称域头 `x-apeireth-domain` 与本域不符=403 `domain_forbidden` **恒定帧**(目标域存在与否同帧)
 - 错误模型:
   ```json
   { "error": { "code": "invalid_request | not_found | unsupported | runtime_error | auth_failed", "message": "人类可读信息" } }
   ```
-  HTTP 语义:400 `invalid_request` / 401 `auth_missing_key` / `auth_invalid_key` / 403 `denied` / 404 `not_found` / 409 `conflict` /
+  HTTP 语义:400 `invalid_request` / 401 `auth_missing_key` / `auth_invalid_key` / 403 `permission_denied`(W3-② 角色门)/ 403 `domain_forbidden` / `domain_refused`(W3-① 域门)/ `denied` / 404 `not_found` / 409 `conflict` /
   422 provider/runtime 语义失败 / 500 `internal_error` / 501 `unsupported` /
   503 `unavailable` / 202 审批挂起
 - 分页:列表端点统一 `limit`(默认 50,最大 500)+ 按时间倒序;需要更多分页时再引入 cursor
@@ -123,6 +125,7 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
 审批(已实现,四级口径: PRODUCTION WIRED——已进 gateway 路由表;形状确认):
 - `GET /v1/approvals?session={id}` → `{ "session": "…", "approvals": [ { "approval_id": "…", "session": "…", "tool_name": "…", "capability_id": "…", "governance_hook": "…", "governance_reason": "…", "request": "…", "trace_id": "…", "created_at": 123, "expires_at": 123 } ] }`
 - `POST /v1/approvals/resolve` 请求 `{ "session": "…", "approval": "…", "decision": "approve|reject", "reason": "可选" }` → 与 `/v1/chat` 响应同形状(解析后继续原回合)
+- 跨用户审批(W3-②,角色面激活时):resolve 除 `ApprovalL2` 能力外还过**归属闸**——owner 可批任意会话的审批,其余角色只可批本人绑定会话的审批(会话归属=首个具名写者);跨用户/未归属/未绑定一律 403 `permission_denied`(审计 `gateway.user_action action=approval_ownership decision=deny`)
 
 ## §7 授权管理 ✅
 

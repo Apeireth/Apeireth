@@ -275,6 +275,7 @@ mod tests {
             crate::client_tokens::ClientTokenSpec {
                 name: "tui".to_string(),
                 token: "tok-a".to_string(),
+                user_id: None,
             },
         ]))
         .unwrap()

@@ -1,0 +1,60 @@
+With the power of modern large language models like [ChatGPT](https://chatgpt.com) and famous [Claude](https://claude.ai), asking a virtual being to [滤] and chat with us is already easy enough for everyone. Platforms like [[滤] (a.k.a. [滤])](https://[滤]) and [[滤]](https://[滤].com/) as well as local playgrounds like [SillyTavern](https://github.com/SillyTavern/SillyTavern) are already good-enough solutions for a chat based or visual adventure game like experience.
+Perhaps you know [Neuro-sama](https://www.youtube.com/@Neurosama) already. She is currently the best virtual streamer capable of playing games, chatting, and interacting with you and the participants. Some also call this kind of being "digital human." **Sadly, as it's not open sourced, you cannot interact with her after her live streams go offline**.
+## Recent DevLogs & Stories
+- [DevLog @ 2026.03.23: Mobile performance and game engine exploration](https://airi.moeru.ai/docs/en/blog/DevLog-2026.03.23/) - March 23, 2026
+- [DevLog @ 2026.03.14: VRM stage lifecycle, cache, and observability](https://airi.moeru.ai/docs/en/blog/DevLog-2026.03.14/) - March 14, 2026
+- [DevLog @ 2026.02.16: Dome Keeper data collection and training pipeline](https://airi.moeru.ai/docs/en/blog/DevLog-2026.02.16/) - February 16, 2026
+- [DevLog @ 2026.01.01: AIRI Pocket and FlowChat memory experiments](https://airi.moeru.ai/docs/en/blog/DevLog-2026.01.01/) - January 1, 2026
+- [DevLog @ 2025.10.20: Electron migration, new models, and Moeru AI updates](https://airi.moeru.ai/docs/en/blog/DevLog-2025.10.20/) - October 20, 2025
+- [DevLog @ 2025.08.26: Pure vision progress for airi-factorio](https://airi.moeru.ai/docs/en/blog/DevLog-2025.08.26/) - August 26, 2025
+- [DevLog @ 2025.08.05: AIRI v0.7 release highlights](https://airi.moeru.ai/docs/en/blog/DevLog-2025.08.05/) - August 5, 2025
+- [DevLog @ 2025.08.01: Streaming text animation and grapheme clusters](https://airi.moeru.ai/docs/en/blog/DevLog-2025.08.01/) - August 1, 2025
+- [DevLog @ 2025.07.18: Rethinking airi-factorio with Factorio Learning Environment](https://airi.moeru.ai/docs/en/blog/DevLog-2025.07.18/) - July 18, 2025
+- [DreamLog 0x1: The backstory of Project AIRI](https://airi.moeru.ai/docs/en/blog/DreamLog-0x1/) - June 16, 2025
+- More on the [documentation site](https://airi.moeru.ai/docs/en/)
+## What's So Special About This Project?
+Unlike the other AI driven VTuber open source projects, アイリ was built with support of many Web technologies such as [WebGPU](https://www.w3.org/TR/webgpu/), [WebAudio](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API), [Web Workers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers), [WebAssembly](https://webassembly.org/), [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket), etc. from the first day.
+This means that **アイリ is capable of running on modern browsers and devices** and even on mobile devices (already done with PWA support). This brings a lot of possibilities for us (the developers) to build and extend the power of アイリ VTuber to the next level, while still leaving the flexibility for users to enable features that require TCP connections or other non-Web technologies such as connecting to a Discord voice channel or playing Minecraft and Factorio with friends.
+## Current Progress & Roadmap
+- [x] Brain
+- [x] Play [Minecraft](https://www.minecraft.net)
+- [x] Play [Factorio](https://www.factorio.com) (WIP, but [PoC and demo available](https://github.com/moeru-ai/airi-factorio))
+- [x] Play [Kerbal Space Program](https://www.kerbalspaceprogram.com/) (announcement TBD)
+- [ ] Co-play [Helldivers 2](https://www.playstation.com/en-hk/games/helldivers-2/pc/) (WIP)
+- [x] Chat in [Telegram](https://telegram.org)
+- [x] Chat in [Discord](https://discord.com)
+- [ ] Memory
+- [x] Pure in-browser database support (DuckDB WASM | `pglite`)
+- [ ] Memory Alaya (WIP)
+- [ ] Pure in-browser local (WebGPU) inference
+- [x] Ears
+- [x] Audio input from browser
+- [x] Audio input from [Discord](https://discord.com)
+- [x] Client side speech recognition
+- [x] Client side talking detection
+- [x] Mouth
+- [x] Multi-provider voice synthesis, including [ElevenLabs](https://elevenlabs.io/), Microsoft/Azure Speech, OpenAI-compatible TTS, Alibaba Cloud Model Studio, and local Kokoro TTS
+- [x] Body
+- [x] VRM support
+- [x] Control VRM model
+- [x] VRM model animations
+- [x] Auto blink
+- [x] Auto look at
+- [x] Idle eye movement
+- [x] Live2D support
+- [x] Control Live2D model
+- [x] Live2D model animations
+- [x] Auto blink
+- [x] Auto look at
+- [x] Idle eye movement
+## Development
+### Stage Web (Browser Version at [airi.moeru.ai](https://airi.moeru.ai))
+### Stage Tamagotchi (Desktop Version)
+#### NixOS
+### Stage Pocket (Mobile Version)
+# Or
+### Documentation Site
+### Publish
+## Support of LLM API Providers (powered by [xsai](https://github.com/moeru-ai/xsai))
+- [x] [AIHubMix (recommended)](https://aihubmix.com/?aff=OOiX)
+- [x] [OpenRouter](https://openrouter.ai/)

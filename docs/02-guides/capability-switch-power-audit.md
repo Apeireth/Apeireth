@@ -17,6 +17,8 @@
 | `APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1`（git_write_auto_pass_l1） | 自动放行 L1（仅可逆本地写） | 一致：仅 L1 可逆本地写免逐次审批；**L2 出网永不自动放行**（push 每次都人批，审批记忆也不跳）；L3 永远拒绝即帧；依赖主开关（单独设=无效果） | **保持**（名实相符） |
 | `APEIRETH_ENABLE_WORKTREE_PLAN`（worktree_plan） | 多文件改单工具开关（`tool.worktree_plan`，只读） | 一致：开 = 注册 + grant，只读改单面**零审批**（计划不落盘）；注册即闸——依赖 `file_write` 唯一写总闸 + 工作区根（子依赖主 + file_write，fail-closed：总闸关 = 不注册不生效）；改单是 `tool.worktree_apply` 的输入合同 | **保持**（名实相符，D-P2 计划拍） |
 | `APEIRETH_ENABLE_WORKTREE_APPLY`（worktree_apply） | 四拍受控工作树写开关（`tool.worktree_apply`） | 一致：开 = 注册 + grant，审批级由 `WorktreeApplyApprovalHook` 唯一承载——**每次落盘都人批**（无自动放行档，载荷 = 改单摘要）；同受 `file_write` 唯一写总闸（注册即闸）；依赖计划拍主开关 + 写总闸（子依赖主 + file_write，fail-closed）；只动文件不含 git 写（提交走 `tool.git_write` 分级词表） | **保持**（名实相符，D-P2 落盘拍） |
+| `APEIRETH_ENABLE_SKILL_DISTILL`（skill_distill） | 书→技能沉淀写入口（`tool.skill_distill`） | 一致：开 = 注册 + grant，审批档由 `SkillDistillApprovalHook` 唯一承载——**每次沉淀都人批**（无自动放行档，载荷 = 技能卡摘要）；同受 `file_write` 唯一写总闸（注册即闸）；子依赖主 + file_write（fail-closed，单独设=无效果）；坏卡/来源越界拒绝即帧，版本演进留旧版审计 | **保持**（名实相符，I1 写文件面；桌面设置页无行 = 前端面随产品批补，CLI 旋钮面在位） |
+| `APEIRETH_ENABLE_SKILL_SEARCH`（skill_search） | 技能库只读检索开关（`tool.skill_search`） | 一致：开 = 注册 + grant，**只读档零审批**（零写盘，`read_only` 会话预设不拒）；独立于写总闸；调用面只有 **L2 封套披露**一条路（触发命中/按需拉取才注入，未命中卡零注入，绝不无差别全量注入） | **保持**（名实相符，I1 只读档；同上，桌面设置页无行） |
 | `APEIRETH_ENABLE_SHELL`（shell） | Shell 命令工具开关 | 一致（注册 + grant + require_approval，每次调用人工审批）；但 shell 工具的权力由三个开关分层：注册/授权（本开关）、沙箱姿态（`APEIRETH_SHELL_SANDBOX`）、写权力（file_write 总闸）——单说"shell 开关"不等于 shell 全部行为 | **保持 + 描述补全**：设置页 shell 行明示"写命令另受文件写入总闸管辖"（开关分层如实声明） |
 | `APEIRETH_SHELL_SANDBOX`（shellSandbox） | shell 沙箱开关 | 一致：开 = 文件限定工作区 + 断网隔离（平台不可实施即拒绝执行，绝不裸跑）；关 = 显式裸跑。只决定隔离要求集，不涉注册/授权/审批 | **保持** |
 | `APEIRETH_ENABLE_FETCH`（fetch） | 网络读取工具开关 | 一致：注册 + grant + require_approval；工具内受控出站（目的校验/本地回环拒绝）。**核查问题"fetch 管不管住 fetch？"→ 管住**：未注册即无网络权力；其余网络面归属清晰——外部工具桥的网络行为归 `APEIRETH_ENABLE_MCP` 辖，爬取引擎是库代码、未注册为能力（模型无此权力面） | **保持**（网络面归属入档） |
@@ -25,6 +27,7 @@
 | （无开关）`tool.repo` | —— | 只读 git 仓库探查，恒注册（默认）+ 恒 grant；仓库**写**操作走 `tool.git_write` 分级词表（L1 默认人批 / L2 永远人批 / L3 毁灭无工具面） | **保持**（表内注明无开关事实） |
 | （无开关）`tool.self_status` | —— | 自省只读面，恒注册 + 恒 grant + 零审批；只读取自身状态计数 | **保持** |
 | `APEIRETH_ENABLE_EDUCATION`（education） | 换元检查工具开关 | **反向缺口**：开 = 注册 `tool.education`，但默认治理授权面未随开（无对应 grant），开关开了权力未必到手（会话权限档可另授） | **挂账**（本轮不扩权：授权面扩张需单独评审；已在本表如实登记） |
+| （无开关）命令级审批名单（`approvalList`：`Tool` / `Tool:family:<族id>` / `Tool:<命令>`） | 命令级审批粒度（按命令文本登记审批/授权） | **整改前有洞（E-P2 查实）**：逐字精确匹配——批一次 `Remove-Item x`，等价写法（`[System.IO.File]::Delete` / `rm` / 变体）重放逃出名单 = 白拿授权（孪生 API 形态不同权）。**整改后 = 审批族归一**：命令→族（删除族/移动复制改名族/建目录建文件族/文件写入族/网络族/进程族，词表单一来源 `governance/src/approval_family.rs`），审批/授权记录的对象 = 族（批"删除族" = 该族所有形态生效；跨族仍逐族审批，批删除≠批网络）；存量逐字条目**迁移生效**（命令→族映射后生效，不失效重批） | **已整改（E-P2）**：族词表+族归一函数进治理层（写意图族词表同源引用，两处族词一致测试钉死）+ 名单族匹配（`approval_policy.rs`）+ 授权记忆族对象（`permission_preset.rs`）+ 审批卡族标注全链（`authorization_families`，卡面「授权族: …」）；残余=族集授权不绑目标（要目标级逐批走 AllowedOnce / 关 approval_remember）与词法外形态（归对象级判定兜底）——详见 `docs/04-internal/backend-enhancement/E-approval-family-contract.md` |
 
 ## 二、不属工具权力面的开关（核查后划出本表）
 
@@ -51,6 +54,8 @@
 | file_write_auto_pass | `crates/adapters/cli/tests/file_write_knob.rs`（三档风险映射） |
 | git_write / git_write_auto_pass_l1（分级词表 + 拒绝即帧 + L2 永人批） | `crates/capabilities/tools/tests/git_write_grading.rs`（词表矩阵/变形防护/受控执行）、`crates/engine/runtime-assembly/tests/git_write_preset_semantics.rs`（三档语义/L2 地板/审批卡载荷）、`crates/adapters/cli/tests/git_write_knob.rs`（旋钮接线） |
 | shell / fetch / mcp / localReadTools | `crates/adapters/cli/tests/production_knobs.rs`、`crates/engine/runtime-assembly/tests/canonical_shell_approval_e2e.rs`、`canonical_fetch_e2e.rs`、`mcp_bridge_runtime_e2e.rs` |
+| 命令级审批名单（族归一，E-P2） | `crates/foundation/governance/src/approval_family.rs`（族归一矩阵/变体防护/词表冻结）、`approval_policy.rs`（族级条目/跨族不串/存量迁移）、`crates/capabilities/tools/src/write_intent.rs`（族词表同源断言）、`crates/capabilities/tools/tests/delete_path_parity.rs`（孪生换形不逃名单）、`crates/engine/runtime-assembly/src/canonical/permission_preset.rs`（同族换形不重批/跨族必批） |
+| skill_distill / skill_search（治理档 + 注册即闸 + 调用面预算纪律） | `crates/capabilities/tools/tests/skill_governance.rs`（审批档/风险映射/单调边界/只读档）、`crates/capabilities/tools/tests/skill_search.rs`（L2 封套披露/预算截断/零全量注入）、`crates/engine/runtime-assembly/tests/skill_registration.rs`（注册即闸/名册如实/只读预设名单）、`crates/adapters/cli/tests/skill_knob.rs`（旋钮链 + 治理档 + 文档随行） |
 | 全责文案三落点 | `frontend/companion-desktop/tests/switch-scope-copy.mjs` |
 | 本表入档（结构 + 行覆盖） | `frontend/companion-desktop/tests/switch-power-audit.mjs` |
 
@@ -83,6 +88,7 @@
 | absorption_insight（认知体操，`APEIRETH_ENABLE_ABSORPTION_INSIGHT`） | 全链一字不差（`absorptionInsight` → `enable_absorption_insight` → 解析 → `config.absorption_insight`） | 消费注册 `AbsorptionInsightModule`（无槽依赖） | 模块真注册（`cognitive.absorption_insight`） | roster = `config.absorption_insight`，如实 | 无断点（全链通） |
 | community_triage（图社区分诊，`APEIRETH_ENABLE_COMMUNITY_TRIAGE`） | 全链一字不差（`communityTriage` → `enable_community_triage` → 解析 → `config.community_triage`） | 消费：`MemoryRecallModule.with_community_triage(graph)`（需图谱槽，缺席静默跳过） | 挂在记忆召回模块 + 图谱后端双条件上 | **断**：静默跳过照抄 config 报 true | **已修**：名册按实际注册条件取值（AND 记忆召回 AND 图谱槽）；desc 补"需图谱后端" |
 | consolidation（记忆固化，`APEIRETH_ENABLE_CONSOLIDATION`） | 全链一字不差（`consolidation` → `enable_consolidation` → 解析 → `config.consolidation`） | 消费：`MemoryWritebackModule.with_consolidation()` | 挂在记忆写入模块上：记忆写入关闭时静默失效 | **断**：静默失效照抄 config 报 true（旧测试钉了错误语义） | **已修**：名册按实际注册条件取值（AND 记忆写入）；desc 补挂靠说明；旧行为 → 新行为记入测试注释 |
+| skill_distill / skill_search（书→技能沉淀，`APEIRETH_ENABLE_SKILL_DISTILL` / `APEIRETH_ENABLE_SKILL_SEARCH`，I1） | 全链一字不差（env → `skill_*_enabled_from_env()` → `config.skill_distill` / `config.skill_search`；沉淀子依赖 file_write 总闸） | 消费注册 `tool.skill_distill`（条件 = 开关 + `file_write` + 工作区根 + 技能库目录）/ `tool.skill_search`（条件 = 开关 + 技能库目录） | 写面注册即闸 + 每次沉淀人批（审批档钩子）；只读面零审批零写盘 | roster `skill_distill` / `skill_search` 按实际注册条件取值（技能库目录缺位照实 false） | 无断点（全链通；桌面设置页无行 = 前端面随产品批补） |
 
 ### 5.2 同型附注与口径
 

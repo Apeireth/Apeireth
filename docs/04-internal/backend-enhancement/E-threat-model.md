@@ -41,16 +41,16 @@
   │      缺口：跨源内容=提示注入面（G8）；回执身份仅共享秘密级
   ├─⑤ ↔ MCP 外部工具（出：调用 / 入：结果与工具描述）
   │      设防：审批级接入（tools/src/mcp_bridge/）、输出归一+脱敏、坏配置拒开、启动日志脱敏
-  │      缺口：外部服务器自带权限=供应链面（G6）；判定非对象级（G3）
+  │      缺口：外部服务器自带权限=供应链面（G6）；判定非对象级（G3→本仓面已处置，见 §5 处置注）
   └─⑥ ↔ TUI / 远程客户端（W2 起：会话与工具权远程化）
          设防（W2-②）：认证面全网关化（全 API 面令牌门, 审计带客户端名）+ 每客户端
               令牌表（name→token, env/json 配置面, StoredDoc 拒开）+ 非回环绑定
               强制令牌（fail-closed 拒启动）+ `APEIRETH_LISTEN` 绑定旋钮（缺省仅本机）
-         缺口：TLS 面仍是接口桩（未接线, 明文）；每客户端**权限**分级已立（W3-② 角色门, 见 §4/§5 G1 处置注）, 跨户**数据**隔离待 W3-①；
+         缺口：TLS 面仍是接口桩（未接线, 明文）；每客户端**权限**分级已立（W3-② 角色门, 见 §4/§5 G1 处置注）, 跨户**数据**隔离数据面已立（W3-① 用户域+三面分库, 见 §4 域数据门行；星群逐域伙伴实例待后续批）；
               未设口径/逃生阀下仍无认证（残余 (a)(b)，审计可见）
 沙箱执行面包住工具层（tools/process 应用容器 + 作业对象 + 出口管制）：
   设防：工作区 ACL 授予、零 capability=断网、能力不达 fail-closed 不裸跑
-  缺口：词面/命令级判定≠对象级（G3）；仓外拦截层不对称（见 §4 沙箱行）
+  缺口：词面/命令级判定≠对象级（G3→本仓面已处置，见 §5 处置注）；仓外拦截层不对称（如实留残余，见 §4 沙箱行）
 ```
 
 ## 3. 敌人画像
@@ -69,24 +69,25 @@
 | 防点 | 实现指针 | 边界（如实） |
 |---|---|---|
 | 全 API 面令牌门（G10 处置 W1-③ + G4 收口 W2-②） | 三态门口径 `crates/adapters/gateway/src/canonical_entry.rs`（`GatewayTokenGate`：令牌族在场=Bearer 恒定时间校验**全端点** / 两面皆空=放行+警告帧+审计 / `none`=逃生阀明示不设防留审计）+ 客户端令牌表 `crates/adapters/gateway/src/client_tokens.rs`（name→token, env `APEIRETH_GATEWAY_TOKENS` + `client-tokens.json` StoredDoc 拒开, 过门审计 `client=<名>`）+ 远程绑定闸 `crates/adapters/gateway/src/remote_access.rs`（`APEIRETH_LISTEN` 缺省仅本机; 非回环无令牌**拒启动** fail-closed）+ 桌面自铸注入 `frontend/companion-desktop/src-tauri/src/backend_supervisor.rs`（每次启动一枚 32 字节随机令牌, 进程 env 面, 不落盘）+ 客户端注入面（TUI 全请求带 Bearer、桌面 UI `get_gateway_token` IPC、验证脚本全端点透传） | 唯一豁免 `/health`（探活刚需, `UNAUTHENTICATED_PROBE_PATHS` 测试钉死）；未设口径=兼容路径放行（警告+审计可见）；逃生阀 `APEIRETH_GATEWAY_TOKEN=none` = 明示不设防（审计留痕、门体不设防, 与令牌表互斥拒开）；TLS 面接口桩**未接线**（`APEIRETH_TLS_CERT/KEY` 只触发显式警告, 流量明文）；桌面 WebView 全调用面带令牌（残余 (d) 已收口：`gatewayAuthHeaders()` 全 fetch 统一鉴权头 + SSE 带令牌走 fetch 流式读取, 前端测试 `gateway-auth-face.mjs` / `sse-fetch-stream.mjs` 钉死） |
-| 用户身份与角色门（G1 处置 W3-②） | 角色词表+矩阵 `crates/foundation/governance/src/user_access.rs`（`UserRole` 冻结词表 owner/member/guest、`UserRole::grants` 24 格 role 权限矩阵、`users.json` StoredDoc 拒开、末 owner 不可删/降）+ 令牌→用户→角色链 `crates/adapters/gateway/src/client_tokens.rs`（`resolve_user_identity` / `validate_client_user_bindings` 绑定一致性拒开 / `UserAccess`）+ 角色门 `canonical_entry.rs`（`require_user_capability` 整面中间件挂令牌门**之内**：写面 `Write` / 管理面 `AdminControl` / 审批 `ApprovalL2`+归属闸 `may_resolve_approval`，未绑定用户 fail-closed，每裁决 `gateway.user_action` 审计 user/role/action）+ CLI 管理面 `crates/adapters/cli/src/user_admin.rs`（`apeireth user add\|list\|role\|remove`，owner 角色门 + 引导首用户必 owner） | 边界（如实）：未配置 `users.json` = 角色面未激活（兼容路径，W2-② 行为逐字不变，不新增拒绝面）；工具执行档（`ToolUse`/`ToolUseWrite`/`GitWriteL1`）已入冻结矩阵并有判定接口，逐用户工具执行面未接线（随 W3-①/工具面批）；会话归属=首个具名写者粒度；跨户**数据**隔离（记忆/域目录）归 W3-① |
+| 用户身份与角色门（G1 处置 W3-②） | 角色词表+矩阵 `crates/foundation/governance/src/user_access.rs`（`UserRole` 冻结词表 owner/member/guest、`UserRole::grants` 24 格 role 权限矩阵、`users.json` StoredDoc 拒开、末 owner 不可删/降）+ 令牌→用户→角色链 `crates/adapters/gateway/src/client_tokens.rs`（`resolve_user_identity` / `validate_client_user_bindings` 绑定一致性拒开 / `UserAccess`）+ 角色门 `canonical_entry.rs`（`require_user_capability` 整面中间件挂令牌门**之内**：写面 `Write` / 管理面 `AdminControl` / 审批 `ApprovalL2`+归属闸 `may_resolve_approval`，未绑定用户 fail-closed，每裁决 `gateway.user_action` 审计 user/role/action）+ CLI 管理面 `crates/adapters/cli/src/user_admin.rs`（`apeireth user add\|list\|role\|remove`，owner 角色门 + 引导首用户必 owner） | 边界（如实）：未配置 `users.json` = 角色面未激活（兼容路径，W2-② 行为逐字不变，不新增拒绝面）；工具执行档（`ToolUse`/`ToolUseWrite`/`GitWriteL1`）已入冻结矩阵并有判定接口，逐用户工具执行面未接线（随工具面批）；会话归属=首个具名写者粒度；跨户**数据**隔离数据面已立（W3-① 域数据门行） |
+| 域数据门（G1 处置 W3-①，跨户数据隔离·数据面） | 域模型+采用 `crates/foundation/core/src/user_domain.rs`（`users/<id>/` 每户一域、冻结角色词表、首次启动把数据根**原位标记**为默认域=零迁移零丢失、坏域配置拒开）+ 三面分库 `crates/engine/runtime-assembly/src/domain_plane.rs`（每域自己的 `sessions.sqlite3`（含三维配额账本）/`cognitive.sqlite3`，每域恰一把会话写闸，默认域与运行时同一把）+ 域门 `crates/adapters/gateway/src/domain_context.rs`（挂在令牌门与角色门**之内**：user_id 域解析→`DomainContext` 下行、`/v1/sessions/*` 按域路由、自称域头校验、面闸）+ 自述域节 `tools/src/self_status.rs`（`domain` 节：域 id/角色/域内计数） | 边界（如实）：**未开域的绑定用户共享默认域**（兼容形态=单户语义，开域即隔离）；非默认域本批只开 `/v1/sessions/*`（`/v1/chat`/面板/事件/管理面 403 `domain_forbidden` fail-closed——宁拒不泄，逐域伙伴实例随星群后续批）；归档面（traces/审计/凭据库）仍共享数据根；域开通随下次启动生效 |
 | 三洋葱 | 双洋葱 `crates/foundation/core/src/onion.rs` + 判定层 `onion_gate.rs`（L0 人类权威恒需在场）+ 执行面 `crates/engine/runtime-assembly/src/canonical/onion_layer.rs`（末层纵深） | 执行面 hook 旋钮 `APEIRETH_ENABLE_ONION_LAYER` **默认关**；多签 v2.1 未真接（挂账 D2）——「多签」暂无密码学效力 |
-| 审批四态 | `crates/foundation/governance/src/approval_closure.rs`（AllowedOnce 恰好一次；Rejected/Cancelled/Unavailable 一律 fail-closed）+ 冻结面 `crates/engine/runtime/src/canonical/approval.rs` | 命令级名单逐字精确匹配→族等价形态可绕（G2） |
+| 审批四态 | `crates/foundation/governance/src/approval_closure.rs`（AllowedOnce 恰好一次；Rejected/Cancelled/Unavailable 一律 fail-closed）+ 冻结面 `crates/engine/runtime/src/canonical/approval.rs` + **族归一名单 `governance/src/approval_family.rs`/`approval_policy.rs`（E-P2，见 §5 G2 处置注）** | 命令级名单已族归一（授权对象=族，批"删除族"=该族所有形态生效，孪生换形同权）；残余=族集授权不绑目标（要目标级逐批走 AllowedOnce/关 approval_remember）与词法外形态（G3 兜底） |
 | 写总闸 | `crates/capabilities/tools/src/write_intent.rs`（写意图词法，静态调用面与命令面同族同权）+ `shell.rs` 冻结/执行双查 + 组装根 `runtime-assembly/src/canonical/production.rs` 同源 | 词法面之外的写入（解释器内写入/编码负载）由审批链+沙箱兜底；保守扫描宁误拒不漏放 |
 | 观测门禁 | `crates/capabilities/tools/src/observed_gate.rs`（未读不得覆盖写 + 版本 CAS 双钥匙） | 观测表仅进程内，重启即重置 |
 | 敏感面拒绝 | `crates/capabilities/tools/src/sensitive_path.rs`（凭据/密钥面读取 fail-closed 即帧；配置密钥字段值脱敏同模块） | 名单制：新敏感后缀/新密钥字段需人工补录 |
 | 脱敏 | `crates/foundation/governance/src/input_security.rs`（PII 8 类 + 注入启发式）+ `tools/src/guardrail.rs` 凭据绊线（shell 输出真接线）+ `memory/src/agent_trace.rs` | 口令扫描单次一个命中段，不声称全扫 |
 | 审计配对 | `approval_closure.rs`（asked↔decision 原子双写、半态可检出）+ `credentials` FileAuditSink（name_hash 不含明文） | IO 失败只降级计数——审计可用性非硬保证 |
 | 凭据钥匙串 | `crates/foundation/credentials/src/keyring.rs`（平台钥匙串/加密文件/内存三级 + SecretBuf 内存清零）+ `gate.rs` 高危凭据审批门 | 降级加密文件后端=密钥仍落本机盘（加密态） |
-| 沙箱 | `crates/capabilities/tools/src/process/appcontainer.rs`（工作区 ACL + 零 capability 断网 + fail-closed 不裸跑）+ 作业对象进程树 + `guardrail.rs` 灾难字面量守门 + `egress.rs` 出口管制 + 升级阶梯 `escalation.rs`/`governance::sandbox_ladder`（单调加宽+理由强制+一次授权） | **已知不对称（如实，在案 E-security-depth §现状①）**：沙箱本体的进程拦截层拦 `Remove-Item` 而静态调用形态穿，该拦截层在本仓外（本仓改不了）——「换 API 换权力」未消，出路=对象级判定（G3）；本仓删除双路径已同族同权（`tests/delete_path_parity.rs` 锁对称）；灾难字面量守门不扩面到 cmdlet/静态调用形态（`guardrail.rs` 注释明示理由） |
+| 沙箱 | `crates/capabilities/tools/src/process/appcontainer.rs`（工作区 ACL + 零 capability 断网 + fail-closed 不裸跑）+ 作业对象进程树 + `guardrail.rs` 灾难字面量守门 + `egress.rs` 出口管制 + 升级阶梯 `escalation.rs`/`governance::sandbox_ladder`（单调加宽+理由强制+一次授权）+ **对象级判定 `object_access.rs`（E-P3，见 §5 G3 处置注）**：受控执行前后对象状态对比（事实判定，与 API 形态无关）+ 越界即帧 + `sandbox.object_violation` 审计 + `ObjectAccessPolicy` 挂载点 | **已知不对称（如实，在案 E-security-depth §现状①）**：沙箱本体的进程拦截层拦 `Remove-Item` 而静态调用形态穿，该拦截层在本仓外（本仓改不了）——「换 API 换权力」的权力差已由**本仓对象级判定**对冲（同对象同动作同判定，API 形态不进裁决，`tests/object_access_judgment.rs` 形态无关测试钉死；词法漏放边界如编码负载由对象事实兜底）；本仓删除双路径已同族同权（`tests/delete_path_parity.rs` 锁对称）；灾难字面量守门不扩面到 cmdlet/静态调用形态（`guardrail.rs` 注释明示理由）；对象判定残余（事后判定/域界/枚举零痕迹/元数据指纹）如实列 §5 G3 处置注 |
 
 ## 5. 缺口清单（按波次挂轴，每条一句「敌人怎么利用」）
 
 | # | 缺口 | 波次 / 轴 | 敌人怎么利用 |
 |---|---|---|---|
-| G1 | 多用户隔离**→身份/授权面已处置（W3-②，见下方处置注）；数据隔离残余（W3-①）** | W3 / E-P4 | 访客会话与主人共用记忆库/凭据/工具权，越权读写无闸可拦（身份/授权面已立闸；记忆库/域目录的数据归属隔离仍在 W3-①） |
-| G2 | 命令级审批族归一 | W3 / E-P2 | 批一次 `Remove-Item x` 后用等价静态调用重放，字面外形态不进名单=白拿授权 |
-| G3 | 沙箱对象级判定 | W3 / E-P3 | 换 API 形态拿同一权力——命令动词级判定（含仓外拦截层）对等价调用失明 |
+| G1 | 多用户隔离**→身份/授权面已处置（W3-②，见下方处置注）；数据隔离数据面已处置（W3-①，见 §4 域数据门行）；剩星群逐域伙伴实例** | W3 / E-P4 | 访客会话与主人共用记忆库/凭据/工具权，越权读写无闸可拦（身份/授权面已立闸；数据面已按用户域分库+越权拒绝即帧；逐域运行时随星群后续批） |
+| G2 | 命令级审批族归一 **→已处置（E-P2，见下方处置注）** | W3 / E-P2 | 批一次 `Remove-Item x` 后用等价静态调用重放，字面外形态不进名单=白拿授权（原缺口；现名单按语义族匹配、授权对象=族，同族换形落进同一族授权、不逃出授权面） |
+| G3 | 沙箱对象级判定 **→本仓面已处置（E-P3，见下方处置注）；仓外拦截层形态不对称如实留残余** | W3 / E-P3 | 换 API 形态拿同一权力——命令动词级判定（含仓外拦截层）对等价调用失明（本仓面已按「对象×动作」事实判定兜底，API 形态不再进裁决） |
 | G4 | 远程访问认证 **→已处置（W2-②，认证面收口）** | W2 / F | 远程端点无认证=谁连上谁是主人，工具权+记忆库一锅端（原缺口；现非回环绑定强制令牌、无令牌拒启动，见 §5 处置注） |
 | G5 | 备份恢复 | W2-W5 横切 / G | 本地恶意进程加密或删库后无备份可还，勒索即成永久损失 |
 | G6 | 供应链（依赖 + MCP 外部工具服务器） | W4 / D-E | 投毒的依赖/工具描述/工具输出把指令带进上下文，在授权面内代模型作恶 |
@@ -106,11 +107,59 @@
 > `permission_denied`，每裁决落 `gateway.user_action` 审计（user/role/action）；
 > ④ **管理命令**：`apeireth user add|list|role|remove`（`users.json` StoredDoc 拒开语义），owner 令牌才可管理
 > （管理面过角色门），引导首用户必须 owner、末 owner 不可删/降（默认拒绝）。
-> **残余（如实）**：(a) 跨户**数据**隔离（访客会话读主人记忆库/域目录）归 W3-① 数据隔离线；(b) 工具执行档
-> （`ToolUse`/`ToolUseWrite`/`GitWriteL1`）已入矩阵与判定接口，逐用户工具执行面运行时接线随 W3-①/工具面批
+> **残余（如实）**：(a) 跨户**数据**隔离数据面已转绿（W3-①：已开域用户跨域读拒/写拒+越权不泄露，
+> 见 [W3-1-multi-user-data-isolation.md](W3-1-multi-user-data-isolation.md)；残余=未开域用户共享
+> 默认域（兼容形态）与星群逐域伙伴实例）；(b) 工具执行档
+> （`ToolUse`/`ToolUseWrite`/`GitWriteL1`）已入矩阵与判定接口，逐用户工具执行面运行时接线随工具面批
 > （本批网关面接读/写/审批/管理四类）；(c) 会话归属为首写者粒度；(d) 未配置用户表=角色面休眠（兼容路径，
 > 零回归口径），正式部署应配 `users.json`。
 > 详见 [W3-2-user-identity-roles.md](W3-2-user-identity-roles.md)（角色矩阵表+接线图+测试证据）。
+
+> **G2 处置（E-P2 命令级审批族归一）**：缺口「批一次 `Remove-Item x`，等价写法重放
+> 白拿授权」已封堵——孪生 API 形态不再逃出授权面，而是落进**同一族授权**：
+> ① **族词表单一来源**：`governance/src/approval_family.rs`（六族冻结词表：
+> 删除族/移动复制改名族/建目录建文件族/文件写入族/网络族/进程族；族 id=人读族名，
+> 命中面标签=族id+「命令」）+ 族归一函数 `command_families`（归属面：段首动词+
+> 成员调用）/`touched_families`（触达面：保守，审批门用）；写意图族词表与它
+> **同源引用**（`write_intent.rs`，两处族词一致测试钉死）；
+> ② **审批/授权记录的对象 = 族**：批"删除族" = 该族**所有形态**生效（同族换形
+> 重放 = 同族授权覆盖、不重批），**跨族仍逐族审批**（批删除≠批网络，跨族复合
+> 命令另立授权对象）；无族命令逐字逐批（L 组口径原样）；
+> ③ **审批名单族匹配**（`approval_policy.rs`）：条目 `tool:family:<族id>` = 该族
+> 所有形态都受管辖；**存量逐字条目迁移生效**（命令→族映射后生效，不是失效重批，
+> 词表外退回逐字）；
+> ④ **审批卡族标注**：记录/视图/API 载荷/IM 卡全链带 `authorization_families`
+> （卡面渲染「授权族: 删除族」，人见族而批），`AllowedOnce` 恰好一次语义不变、
+> git L2 人工审批地板不变；变体防护（短束/前缀缩写/可执行后缀/大小写）沿
+> git_write 变形防护经验收口。
+> **残余（如实）**：(a) 族集授权在族内不绑目标（批"删除族"覆盖同族不同目标；
+> 要目标级逐批走 `AllowedOnce` 一次性审批面或关闭会话 `approval_remember`）；
+> (b) 归属面是段首动词+成员调用，经调度器转手的形态（`cmd /c del x`）归属不足
+> → 授权面按"重批"收口（安全向），触达面（审批门）仍按词面触达判到；
+> (c) 词法外形态（动态成员名/编码负载/解释器内写入）不入族，由 G3 对象级判定
+> 兜底；(d) 审批记忆进程内（重启即清），跨进程持久授权不在本批。
+> 详见 [E-approval-family-contract.md](E-approval-family-contract.md)（族词表全表/
+> 族词表 API/审批卡族标注/重放语义/星港线接线契约/测试证据）。
+
+> **G3 处置（E-P3 对象级判定）**：缺口「换 API 形态拿同一权力」在**本仓可控面已闭环**——
+> ① **对象级判定层**（`crates/capabilities/tools/src/object_access.rs`）：判定按
+> 「对象（路径对象域 × 冻结四动作 创建/修改/删除/枚举）」记账，API 形态永不进裁决
+> ——同对象同动作不论哪条 API 路径落地，判定逐一相同（形态无关测试钉死）；
+> ② **事实判定 = 执行前后对象状态对比**：受控子进程执行前后对象域快照差分，
+> 「动了哪些对象」是事实；词法面明示的漏放边界（编码负载/解释器内写入/动态成员调用）
+> 由这层按对象事实兜底（实弹用例：编码负载删 `.env`，词法+守门放行 → 对象判定拦下）；
+> ③ **越界即帧 + 审计**：未授权对象操作 → 失败即帧（`pipeline.post_block`，
+> source=`object_access_judge`，理由逐条列对象/动作/进程）+ `sandbox.object_violation`
+> 审计行（对象/动作/进程/域/理由）；判定窗开不出 fail-closed 不执行；
+> ④ **挂载点**（`ObjectAccessPolicy` trait + 策略链 + 探针 + 审计 sink，星港线深望
+> 智能体接此契约放行）：默认工作区对象策略（域内放行/敏感与域外一律拒）可挂载替换。
+> **残余（如实）**：(a) 沙箱本体的进程/API 拦截层在**本仓外**，其「cmdlet 拦、静态调用
+> 穿」的形态不对称本仓改不了——但权力差由对象级判定对冲（同对象同判定）；(b) 事实判定
+> 是事后判定（违规变更已落盘，判定给帧+审计，回滚归受控写/审批链）且有域界（域外变更
+> 不入差分，由请求判定+沙箱围栏+cwd 边界兜）；(c) 枚举零状态痕迹，只走请求时判定；
+> (d) 指纹=元数据三元组（同长同 mtime 粒度内原地改写不可见）；(e) 审计 sink 默认进程内
+> （落盘 sink 由宿主接线，挂载点已立）。
+> 详见 [E-object-level-contract.md](E-object-level-contract.md)（判定语义/挂载点/星港线接入契约/测试证据）。
 
 > **G4 处置（W2-② 远程访问与认证面收口）**：缺口「远程端点无认证」已封堵——
 > ① **认证面全网关化**：令牌门从两个敏感端点扩到**全 API 面**（chat/事件流/面板/会话/审批/
@@ -163,7 +212,7 @@
 | ② 工具滥用 | (a) 未读文件覆盖写→`observed_gate` 拒；(b) `echo x > f` 与等价静态调用在关闸下同帧拒（扩 `delete_path_parity` 覆盖写族）；(c) shell 输出夹 `sk-` 密钥→绊线脱敏截断且结果带 `credential_tripwire` |
 | ③ 本地恶意进程 | (a) 直读 `sessions.sqlite3`/记忆库→当前应可读=G7 实证用例（落地后反转为回归锚）；(b) **绕过用例全部转绿（W2-②）**：伪来源头零 CORS 放行 + **无令牌调 chat=401** + **伪造 Bearer=401**（`crates/adapters/gateway/tests/gateway_auth_face.rs`：`forged_origin_and_forged_bearer_are_refused_together` 及 401 矩阵六例；`gateway_token_gate.rs` W1-③ 断言原样保留；桌面自铸令牌 e2e / 远程绑定 fail-closed 进程级 `cli/tests/remote_access_e2e.rs`）；(c) 读钥匙串导出物/密钥文件→`sensitive_path` 拒 |
 | ④ 供应链 | (a) MCP 工具描述含指令文本→断言只入审批面、不被执行；(b) MCP 输出夹凭据→归一+脱敏断言；(c) 坏配置/未知 schema→拒开 fail-closed |
-| ⑤ 多户越权 | (a) 访客会话读主人记忆库→应拒（数据面归 W3-①，**仍在**）；(b) 客户端 A 的 `AllowedOnce` 在客户端 B 重放→恰好一次失效；(c) **转绿（W3-②）**：访客改能力开关/沙箱旋钮→403（admin 族 owner 档，`user_authorization.rs::guest_has_zero_write_surface_but_keeps_read_access` / `member_can_write_but_never_touches_the_admin_face`）；(d) **转绿（W3-②）**：成员冒名 owner→401/403（`a_member_claiming_the_owner_client_name_is_refused` / `a_member_self_declaring_owner_rights_is_refused_on_management`）；(e) **转绿（W3-②）**：跨用户审批（复用他人审批）→403（`cross_user_approval_resolution_is_refused_for_non_owners`） |
+| ⑤ 多户越权 | (a) **数据面转绿（W3-①）**：已开域用户跨域读/写拒——他域会话 id 与不存在同帧 404、跨域写他域账本逐字节零改动、三面（会话/记忆/配额）分域独立（`runtime-assembly/tests/user_domain_isolation.rs::cross_domain_reads_and_writes_are_refused_on_all_three_planes` / `quota_ledgers_stay_independent_per_domain_for_the_same_session_id` + `gateway/tests/user_domain_isolation.rs::cross_domain_session_*`）；残余=未开域用户共享默认域（兼容形态）与星群逐域伙伴实例；(b) 客户端 A 的 `AllowedOnce` 在客户端 B 重放→恰好一次失效；(c) **转绿（W3-②）**：访客改能力开关/沙箱旋钮→403（admin 族 owner 档，`user_authorization.rs::guest_has_zero_write_surface_but_keeps_read_access` / `member_can_write_but_never_touches_the_admin_face`）；(d) **转绿（W3-②）**：成员冒名 owner→401/403（`a_member_claiming_the_owner_client_name_is_refused` / `a_member_self_declaring_owner_rights_is_refused_on_management`）；(e) **转绿（W3-②）**：跨用户审批（复用他人审批）→403（`cross_user_approval_resolution_is_refused_for_non_owners`） |
 | ⑥ 物理接触 | (a) 无锁翻会话历史→当前可读=G7 实证；(b) 导出或复制密钥材料→fail-closed 即帧；(c) 现场改配置关沙箱→默认开语义回归 + 下次审批卡红标警示 |
 
 > 配套纪律：治理/安全语义改动落地时按宪章 §五补对抗测试；本表即选题池，实现归后续批。

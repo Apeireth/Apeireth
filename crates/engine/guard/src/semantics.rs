@@ -150,6 +150,7 @@ pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
     "tool.apply_patch",
     "tool.git_write",
     "tool.self_status",
+    "tool.content_feed",
 ];
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -588,6 +589,25 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             "self_status",
         ),
+        // 内容流接入 (`tool.content_feed`, J1): 读网络 + 写记忆流双面。静态描述
+        // 符如实标双面 (NetworkRead + Write; 源 = 外部网络, 汇 = 记忆写), 不因
+        // 「内容只是读来的」降级 —— 跨源内容入记忆流是持久写面。逐动作的写面
+        // (改订阅 = 写文件 / 拉取入库) 由工具的 write_intent 同族归类与治理档
+        // (RequireApproval 级: 拉取与入库都经审批档) 逐次判定, 敏感面 URL
+        // (凭据/内网) 是拒绝而非审批。凭据面: 拒收 userinfo URL, `may_access_credentials`
+        // 如实为 false。
+        describe(
+            "tool.content_feed",
+            vec![OperationClass::NetworkRead, OperationClass::Write],
+            vec![ResourceClass::NetworkPublic, ResourceClass::MemoryEpisodic],
+            vec![SourceClass::ExternalNetwork],
+            vec![SinkClass::MemoryWrite],
+            true,
+            false,
+            true,
+            true,
+            "external_network",
+        ),
         describe(
             "guard.policy.write",
             vec![
@@ -800,6 +820,50 @@ mod tests {
             descriptor_for_capability("tool.shell", &serde_json::json!({ "command": "echo hi" }));
         assert!(shell.operation_classes.contains(&OperationClass::Execute));
         assert!(shell.output_sinks.contains(&SinkClass::ShellExecution));
+    }
+
+    /// 内容流接入 (`tool.content_feed`) 的描述符如实标双面: 读网络 + 写记忆流
+    /// 都在场 (不因「内容只是读来的」降级), 凭据面拒收故 `may_access_credentials`
+    /// 为 false (不谎报有凭据入口)。
+    #[test]
+    fn content_feed_descriptor_is_honest_about_its_dual_face() {
+        let descriptor = descriptor_for_capability("tool.content_feed", &serde_json::json!({}));
+        assert_eq!(descriptor.source, DescriptorSource::Canonical);
+        assert!(descriptor.known);
+        assert!(
+            descriptor
+                .operation_classes
+                .contains(&OperationClass::NetworkRead),
+            "{:?}",
+            descriptor.operation_classes
+        );
+        assert!(
+            descriptor
+                .operation_classes
+                .contains(&OperationClass::Write),
+            "{:?}",
+            descriptor.operation_classes
+        );
+        assert!(descriptor.requires_network);
+        assert!(descriptor.external_effect);
+        assert!(descriptor.persistent_effect, "入记忆流是持久写面");
+        assert!(!descriptor.destructive);
+        assert!(
+            !descriptor.may_access_credentials,
+            "凭据 URL 拒收, 无凭据入口"
+        );
+        assert!(
+            descriptor
+                .resource_classes
+                .contains(&ResourceClass::MemoryEpisodic),
+            "{:?}",
+            descriptor.resource_classes
+        );
+        assert!(
+            descriptor.output_sinks.contains(&SinkClass::MemoryWrite),
+            "{:?}",
+            descriptor.output_sinks
+        );
     }
 
     #[test]

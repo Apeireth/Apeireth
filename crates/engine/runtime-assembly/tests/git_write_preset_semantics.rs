@@ -509,7 +509,8 @@ async fn l2_approval_memory_never_skips_the_human() {
         )
     };
 
-    // 第一次: 待批 → 人批 → 记忆种入 (session, capability, args_hash)。
+    // 第一次: 待批 → 人批 → 记忆种入 (session, capability, 授权对象;
+    // E-P2 起第三键是族集/精确操作指纹, 见 permission_preset.rs::authorization_key)。
     let first = hook.evaluate_verbose(&request()).await;
     assert!(
         matches!(

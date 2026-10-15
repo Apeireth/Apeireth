@@ -296,3 +296,12 @@ frontend/companion-desktop/src-tauri/binaries/
 artifacts/*.png
 artifacts/*.txt
 frontend/companion-desktop/shot-*.png
+
+# 外部源码抽取暂存（研究线临时区）：绝不入库（借鉴源码产物不留痕迹），收口即删
+_lx_src/
+
+# 外部源码抽取暂存（研究线临时区）：绝不入库，收口即删
+_research/
+research/dagger-git/
+research/langflow-git/
+research/praisonai-git/

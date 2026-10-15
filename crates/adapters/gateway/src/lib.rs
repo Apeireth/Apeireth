@@ -64,6 +64,10 @@ pub mod im_approval;
 /// json config faces with stored-doc refuse-to-open semantics).
 pub mod client_tokens;
 
+/// W3-① 域上下文面: 请求 → ClientIdentity → user_id 域解析 → 按域路由,
+/// 越域访问拒绝即帧 (404/403 语义, 不泄露他域存在)。
+pub mod domain_context;
+
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the explicitly unwired TLS placeholder surface.
 pub mod remote_access;
@@ -95,10 +99,11 @@ pub use canonical_entry::{
 };
 
 pub use client_tokens::{
-    client_name_binds, identity_label, record_session_client, validate_gate_table_pair,
-    ClientIdentity, ClientTokenConfig, ClientTokenError, ClientTokenSpec, ClientTokenTable,
-    CLIENT_NAME_CLAIM_HEADER, CLIENT_TOKENS_DOC_NAME, CLIENT_TOKENS_DOC_VERSION, CLIENT_TOKENS_ENV,
-    CLIENT_TOKENS_FILE, SESSION_CLIENT_AUDIT_EVENT,
+    client_name_binds, identity_label, record_session_client, record_user_action,
+    resolve_user_identity, validate_client_user_bindings, validate_gate_table_pair, ClientIdentity,
+    ClientTokenConfig, ClientTokenError, ClientTokenSpec, ClientTokenTable, UserAccess,
+    UserContext, CLIENT_NAME_CLAIM_HEADER, CLIENT_TOKENS_DOC_NAME, CLIENT_TOKENS_DOC_VERSION,
+    CLIENT_TOKENS_ENV, CLIENT_TOKENS_FILE, SESSION_CLIENT_AUDIT_EVENT, USER_ACTION_AUDIT_EVENT,
 };
 
 pub use remote_access::{

@@ -6,11 +6,18 @@
 #![deny(unsafe_code)]
 
 pub mod canonical;
+// W3-① 多户数据隔离 (星群数据层): 用户域数据平面 (三面按域分库 + 跨域拒绝即帧)。
+pub mod domain_plane;
 pub mod sqlite_session;
+
+pub use domain_plane::{
+    session_row_count, DefaultDomainStores, DomainDataCounts, DomainDataPlane, DomainHandles,
+    DomainMemoryStores,
+};
 
 pub use canonical::{
     budget_status_from_configured, budget_status_from_constants, consolidation_cadence_turns,
-    is_write_or_execute_capability, max_rounds_per_turn_constant,
+    domain_status_probe, is_write_or_execute_capability, max_rounds_per_turn_constant,
     max_tool_calls_per_round_constant, migrate_legacy_tuning_log_file, roster_from_config,
     session_quota_probe, tuning_log_path, tuning_log_path_from_session_db,
     with_memory_context_projection, CanonicalMemoryTypedSink, CognitiveBackends,

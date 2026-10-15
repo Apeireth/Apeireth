@@ -10,10 +10,11 @@ use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::education::EducationTool;
 use apeireth_tools_canonical::{
     apply_patch_capability, authorized_file_write_policy, authorized_git_write_policy,
-    authorized_worktree_apply_policy, git_write_capability, worktree_apply_capability,
-    worktree_plan_capability, AroundPolicy, FetchConfig, FetchTool, FilesystemTool, ObservedGate,
-    PipelinedCapability, RepoTool, SearchTool, SelfStatusSource, SelfStatusTool, ShellTool,
-    ToolExecutionPipeline, TrustedShellConfig, DEFAULT_MAX_TIMEOUT_MS,
+    authorized_worktree_apply_policy, content_feed_capability, git_write_capability,
+    worktree_apply_capability, worktree_plan_capability, AroundPolicy, ContentFeedConfig,
+    FetchConfig, FetchTool, FilesystemTool, ObservedGate, PipelinedCapability, RepoTool,
+    SearchTool, SelfStatusSource, SelfStatusTool, ShellTool, ToolExecutionPipeline,
+    TrustedShellConfig, DEFAULT_MAX_TIMEOUT_MS,
 };
 
 use super::capability::CapabilityProvider;
@@ -169,6 +170,41 @@ impl CapabilityProvider for FetchModule {
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         vec![self.tool.clone()]
+    }
+}
+
+/// Module providing the life-integration content feed (`tool.content_feed`, J1).
+///
+/// 内容流接入: 订阅源管理 + 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套披露,
+/// 跨源内容不直进提示词)。治理档位在治理链上
+/// ([`apeireth_tools_canonical::ContentFeedApprovalHook`]): RequireApproval 级
+/// —— 拉取与入库都经审批档, 改订阅走 write_intent 同族 (改订阅 = 写文件),
+/// 每次调用都停人工审批。默认关 (opt-in)。
+pub struct ContentFeedModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl ContentFeedModule {
+    /// Create the content-feed module from trusted configuration.
+    pub fn new(config: ContentFeedConfig) -> Self {
+        Self {
+            tool: content_feed_capability(config),
+        }
+    }
+
+    /// Access the underlying tool capability.
+    pub fn capability(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+}
+
+impl CapabilityProvider for ContentFeedModule {
+    fn id(&self) -> &str {
+        "module.tool.content_feed"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
     }
 }
 
@@ -465,6 +501,90 @@ impl WorktreeApplyModule {
 impl CapabilityProvider for WorktreeApplyModule {
     fn id(&self) -> &str {
         "module.tool.worktree_apply"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the skill distill tool (`tool.skill_distill`, 书→技能沉淀 I1).
+///
+/// 知识吸收的写入口: 内容输入 (正文 / 文件只读通道) + 模型侧草稿 → 结构化
+/// 技能卡 → 入技能库 (数据目录 `skills/`, 每卡一 StoredDoc 拒开语义)。创建
+/// 重复名拒绝; 版本演进 (`update`) 同名更新留旧版审计。
+///
+/// 治理: **写文件面 = file_write 总闸族 + 审批档** —— 与 `tool.apply_patch`
+/// 同受 [`super::production::ProductionModulesConfig::file_write`] 唯一写总闸
+/// (注册即闸), **每次沉淀都停人工审批** ( [`SkillDistillApprovalHook`],
+/// 无自动放行档, 审批卡载荷 = 技能卡摘要)。
+pub struct SkillDistillModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl SkillDistillModule {
+    /// Create the skill distill module over the workspace root (来源只读通道限域)
+    /// and the skill library directory (数据目录 `skills/`)。
+    pub fn new(workspace_root: impl Into<PathBuf>, skills_dir: impl Into<PathBuf>) -> Self {
+        let workspace_root = workspace_root.into();
+        let library = apeireth_tools_canonical::SkillLibrary::new(skills_dir.into());
+        Self {
+            tool: apeireth_tools_canonical::skill_distill_capability(
+                workspace_root,
+                library,
+                apeireth_tools_canonical::authorized_skill_distill_policy(),
+            ),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) distill capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for SkillDistillModule {
+    fn id(&self) -> &str {
+        "module.tool.skill_distill"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the read-only skill search tool (`tool.skill_search`, I1 调用面).
+///
+/// 检索式注入 (触发词命中 / 按需拉取) 经 **L2 封套披露**进上下文 (共享引用
+/// 封套 + 共享预算, 绝不无差别全量注入)。**只读档零审批** (无 ask 档钩子,
+/// `read_only` 会话预设不拒只读能力)。
+pub struct SkillSearchModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl SkillSearchModule {
+    /// Create the skill search module over the skill library directory
+    /// (数据目录 `skills/`) with the disclosure budget (字符, 与调用方
+    /// 上下文预算同参换算)。
+    pub fn new(skills_dir: impl Into<PathBuf>, disclosure_budget_chars: usize) -> Self {
+        let library = apeireth_tools_canonical::SkillLibrary::new(skills_dir.into());
+        Self {
+            tool: apeireth_tools_canonical::skill_search_capability(
+                library,
+                disclosure_budget_chars,
+            ),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) search capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for SkillSearchModule {
+    fn id(&self) -> &str {
+        "module.tool.skill_search"
     }
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {

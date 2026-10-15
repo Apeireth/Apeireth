@@ -314,6 +314,86 @@ pub struct WorkspaceStatus {
 /// 单价「未提供」的显示标注 (零假价格: 缺省即明说未提供, 绝不编价)。
 pub const PRICE_NOT_PROVIDED: &str = "未提供";
 
+/// 内容流面一节 (J1 自述): 订阅数 / 最近拉取, 真值如实。
+///
+/// 「最近拉取」逐维 `None` = 尚无拉取 (显式 null + `last_pull_note` 如实注
+/// 「尚无拉取记录」), 绝不编造时间或条数; 探测口缺位/失败 = 全维显式 null +
+/// `reason` (0 装诚实)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContentFeedStatus {
+    /// 订阅数 (`feeds.json` 真值计数)。
+    pub feeds: Option<u64>,
+    /// 最近拉取时刻 (epoch 毫秒); `None` = 尚无拉取。
+    pub last_pull_at_ms: Option<i64>,
+    /// 最近拉取成败 (true = 全部订阅拉取成功)。
+    pub last_pull_ok: Option<bool>,
+    /// 最近拉取入记忆流的条数。
+    pub last_pull_ingested: Option<u64>,
+    /// 最近拉取备注 (成败真因 / 「尚无拉取记录」)。
+    pub last_pull_note: Option<String>,
+    /// 探测缺位/失败的原因 (全维就位时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl ContentFeedStatus {
+    /// 不可用 (探测口缺位/失败): 全维显式 null + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            feeds: None,
+            last_pull_at_ms: None,
+            last_pull_ok: None,
+            last_pull_ingested: None,
+            last_pull_note: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// 域内计数 (W3-① 域节): 会话/记忆/受保护记忆的真值计数。
+///
+/// 逐维 `None` = 该维探测口缺位/失败 → 显式 null + `reason` (不编数)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DomainCounts {
+    /// 域内会话数 (该域会话库的真值计数)。
+    pub sessions: Option<u64>,
+    /// 域内记忆数 (该域记忆库的真值计数)。
+    pub memories: Option<u64>,
+    /// 域内受保护记忆数。
+    pub protected: Option<u64>,
+    /// 缺位/失败的原因 (全维就位时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl DomainCounts {
+    /// 计数不可用 (探测口缺位/失败): 全维显式 null + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            sessions: None,
+            memories: None,
+            protected: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// 用户域一节 (W3-① 自述域节): 当前域 id / 显示名 / 角色 / 创建时刻 + 域内计数。
+///
+/// 「当前域」= 本自述来源所组装的那个用户域的数据面 (星群形态下每户伙伴实例
+/// 自述自己的域), 如实报告, 不跨域代答。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DomainStatus {
+    /// 域 id (默认用户域 = `default`)。
+    pub user_id: String,
+    /// 域显示名。
+    pub display_name: String,
+    /// 域角色 (`owner` / `member`)。
+    pub role: String,
+    /// 域创建时刻 (epoch 毫秒)。
+    pub created_at: i64,
+    /// 域内计数 (真值; 缺探测口的维显式 null + 原因)。
+    pub counts: DomainCounts,
+}
+
 /// 模型画像事实显式 unknown 的原因 (未知模型: 不编造任何事实)。
 pub const MODEL_PROFILE_UNKNOWN: &str = "model is not in the profile table: its facts are \
      explicitly unknown (never invented)";
@@ -346,6 +426,14 @@ pub struct SelfStatusSnapshot {
     /// 模型画像不可用的原因; 可用时为 `None` (未知模型的显式 unknown 说明
     /// 在渲染时按 [`MODEL_PROFILE_UNKNOWN`] 给出)。
     pub model_reason: Option<String>,
+    /// 用户域一节 (W3-①: 当前域 id/角色/域内计数)。
+    pub domain: Option<DomainStatus>,
+    /// 用户域一节不可用的原因; 可用时为 `None`。
+    pub domain_reason: Option<String>,
+    /// 内容流面一节 (J1: 订阅数/最近拉取)。
+    pub content_feed: Option<ContentFeedStatus>,
+    /// 内容流面一节不可用的原因; 可用时为 `None`。
+    pub content_feed_reason: Option<String>,
 }
 
 impl SelfStatusSnapshot {
@@ -364,6 +452,10 @@ impl SelfStatusSnapshot {
             workspace_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             model: None,
             model_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            domain: None,
+            domain_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            content_feed: None,
+            content_feed_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
         }
     }
 }
@@ -530,6 +622,53 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         }),
     };
 
+    let domain = match &snapshot.domain {
+        Some(status) => json!({
+            "user_id": status.user_id,
+            "display_name": status.display_name,
+            "role": status.role,
+            "created_at": status.created_at,
+            "counts": render_domain_counts(&status.counts),
+        }),
+        None => json!({
+            "user_id": null,
+            "display_name": null,
+            "role": null,
+            "created_at": null,
+            "counts": render_domain_counts(&DomainCounts::unavailable(
+                snapshot
+                    .domain_reason
+                    .clone()
+                    .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+            )),
+        }),
+    };
+
+    let content_feed = match &snapshot.content_feed {
+        Some(status) => json!({
+            "feeds": status.feeds,
+            "last_pull_at_ms": status.last_pull_at_ms,
+            "last_pull_ok": status.last_pull_ok,
+            "last_pull_ingested": status.last_pull_ingested,
+            "last_pull_note": status.last_pull_note,
+            "reason": snapshot
+                .content_feed_reason
+                .clone()
+                .or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "feeds": null,
+            "last_pull_at_ms": null,
+            "last_pull_ok": null,
+            "last_pull_ingested": null,
+            "last_pull_note": null,
+            "reason": snapshot
+                .content_feed_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
     json!({
         "identity": {
             "product_name": snapshot.identity.product_name,
@@ -542,6 +681,8 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         "budget": budget,
         "workspace": workspace,
         "model": model,
+        "domain": domain,
+        "content_feed": content_feed,
     })
 }
 
@@ -576,6 +717,16 @@ fn render_quota_dimension(row: &QuotaDimensionStatus) -> Value {
     })
 }
 
+/// 把域内计数投影成结构化 JSON (字段合同的唯一实现)。
+fn render_domain_counts(counts: &DomainCounts) -> Value {
+    json!({
+        "sessions": counts.sessions,
+        "memories": counts.memories,
+        "protected": counts.protected,
+        "reason": counts.reason,
+    })
+}
+
 /// 空参数 (工具无参数; 未知字段拒绝)。
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -596,10 +747,12 @@ impl SelfStatusTool {
         }
     }
 
-    /// 输出归一合同: 结构化输出必须是对象且七节恒在场 (每节为对象)。
+    /// 输出归一合同: 结构化输出必须是对象且九节恒在场 (每节为对象)。
     ///
     /// 具体字段允许显式 null (来源缺失), 但**节**不可缺席 —— 自述的形状冻结。
-    /// 模型画像节随 H-P1 (模型画像表) 入合同: 路由/成本的依据数据面自述化。
+    /// 模型画像节随 H-P1 (模型画像表) 入合同: 路由/成本的依据数据面自述化;
+    /// 用户域节随 W3-① (多户数据隔离) 入合同: 当前域 id/角色/域内计数自述化;
+    /// 内容流节随 J1 (内容流接入) 入合同: 订阅数/最近拉取自述化。
     pub fn output_schema() -> OutputSchema {
         OutputSchema::new()
             .require("identity", SchemaKind::Object)
@@ -609,6 +762,8 @@ impl SelfStatusTool {
             .require("budget", SchemaKind::Object)
             .require("workspace", SchemaKind::Object)
             .require("model", SchemaKind::Object)
+            .require("domain", SchemaKind::Object)
+            .require("content_feed", SchemaKind::Object)
     }
 
     /// 采集并投影当前自述 (结构化值)。
@@ -761,6 +916,28 @@ mod tests {
                 capabilities_flags: vec!["system_prompt".to_string()],
             }),
             model_reason: None,
+            domain: Some(DomainStatus {
+                user_id: "alice".to_string(),
+                display_name: "Alice".to_string(),
+                role: "owner".to_string(),
+                created_at: 1_728_000_000_000,
+                counts: DomainCounts {
+                    sessions: Some(3),
+                    memories: Some(12),
+                    protected: Some(1),
+                    reason: None,
+                },
+            }),
+            domain_reason: None,
+            content_feed: Some(ContentFeedStatus {
+                feeds: Some(2),
+                last_pull_at_ms: Some(1_728_000_500_000),
+                last_pull_ok: Some(true),
+                last_pull_ingested: Some(4),
+                last_pull_note: Some("2 feeds, 4 items".to_string()),
+                reason: None,
+            }),
+            content_feed_reason: None,
         }
     }
 
@@ -798,9 +975,22 @@ mod tests {
             "workspace",
             // H-P1: 模型画像节入七节合同 (形状冻结的演进, 附理由)。
             "model",
+            // W3-①: 用户域节入八节合同 (形状冻结的演进, 附理由: 多户数据隔离
+            // 的自述域面)。
+            "domain",
+            // J1: 内容流节入九节合同 (形状冻结的演进, 附理由: 订阅数/最近拉取
+            // 的如实自述)。
+            "content_feed",
         ] {
             assert!(value.get(section).is_some(), "missing section {section}");
         }
+        assert_eq!(value["content_feed"]["feeds"], 2);
+        assert_eq!(
+            value["content_feed"]["last_pull_at_ms"],
+            1_728_000_500_000i64
+        );
+        assert_eq!(value["content_feed"]["last_pull_ok"], true);
+        assert_eq!(value["content_feed"]["last_pull_ingested"], 4);
         assert_eq!(value["identity"]["product_name"], PRODUCT_NAME);
         assert_eq!(value["identity"]["version"], RELEASE_VERSION);
         assert_eq!(
@@ -816,6 +1006,13 @@ mod tests {
         assert_eq!(value["budget"]["max_tool_calls_per_round"], 16);
         assert_eq!(value["workspace"]["root"], "C:\\work");
         assert_eq!(value["workspace"]["credentials_present"], true);
+        assert_eq!(value["domain"]["user_id"], "alice");
+        assert_eq!(value["domain"]["display_name"], "Alice");
+        assert_eq!(value["domain"]["role"], "owner");
+        assert_eq!(value["domain"]["created_at"], 1_728_000_000_000i64);
+        assert_eq!(value["domain"]["counts"]["sessions"], 3);
+        assert_eq!(value["domain"]["counts"]["memories"], 12);
+        assert_eq!(value["domain"]["counts"]["protected"], 1);
     }
 
     #[tokio::test]
@@ -825,6 +1022,10 @@ mod tests {
         snapshot.memory_ledger_reason = Some("memory store unavailable: disk error".to_string());
         snapshot.workspace = None;
         snapshot.workspace_reason = Some("workspace probe failed".to_string());
+        snapshot.domain = None;
+        snapshot.domain_reason = Some("domain registry unavailable: bad config".to_string());
+        snapshot.content_feed = None;
+        snapshot.content_feed_reason = Some("feeds.json refused to open: bad config".to_string());
 
         let result = invoke_tool(snapshot).await;
         assert!(result.is_ok(), "a missing source must not fail the frame");
@@ -852,9 +1053,53 @@ mod tests {
             "{}",
             value["workspace"]["reason"]
         );
+        // 域节缺席同样显式 null + 原因 (不丢节, 不编域)。
+        assert_eq!(value["domain"]["user_id"], Value::Null);
+        assert_eq!(value["domain"]["role"], Value::Null);
+        assert_eq!(value["domain"]["counts"]["sessions"], Value::Null);
+        assert!(
+            value["domain"]["counts"]["reason"]
+                .as_str()
+                .unwrap()
+                .contains("domain registry unavailable"),
+            "{}",
+            value["domain"]["counts"]["reason"]
+        );
         // 其余节不受牵连: 不整帧失败。
         assert_eq!(value["identity"]["product_name"], PRODUCT_NAME);
         assert!(!value["memory_ledger"]["reason"].is_null());
+        // 内容流节缺席同样显式 null + 原因 (不丢节, 不编订阅数)。
+        assert_eq!(value["content_feed"]["feeds"], Value::Null);
+        assert_eq!(value["content_feed"]["last_pull_at_ms"], Value::Null);
+        assert!(
+            value["content_feed"]["reason"]
+                .as_str()
+                .unwrap()
+                .contains("feeds.json refused to open"),
+            "{}",
+            value["content_feed"]["reason"]
+        );
+    }
+
+    /// J1 自述行: 订阅数/最近拉取如实 —— 尚无拉取 = 显式 null + 如实注, 不编时间。
+    #[test]
+    fn content_feed_section_reports_subscription_count_and_last_pull_honestly() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.content_feed = Some(ContentFeedStatus {
+            feeds: Some(3),
+            last_pull_at_ms: None,
+            last_pull_ok: None,
+            last_pull_ingested: None,
+            last_pull_note: Some("尚无拉取记录".to_string()),
+            reason: None,
+        });
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["content_feed"]["feeds"], 3);
+        assert_eq!(value["content_feed"]["last_pull_at_ms"], Value::Null);
+        assert_eq!(value["content_feed"]["last_pull_ok"], Value::Null);
+        assert_eq!(value["content_feed"]["last_pull_ingested"], Value::Null);
+        assert_eq!(value["content_feed"]["last_pull_note"], "尚无拉取记录");
+        assert_eq!(value["content_feed"]["reason"], Value::Null);
     }
 
     #[test]
@@ -876,6 +1121,29 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("lesson store not wired"));
+    }
+
+    #[test]
+    fn a_partial_domain_counts_probe_stays_honest_per_dimension() {
+        // 域计数缺维逐维显式 null + 原因, 域节不丢、域身份仍如实。
+        let mut snapshot = fixture_snapshot();
+        let domain = snapshot.domain.as_mut().expect("fixture carries a domain");
+        domain.counts = DomainCounts {
+            sessions: Some(4),
+            memories: None,
+            protected: None,
+            reason: Some("memory ledger probe not wired".to_string()),
+        };
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["domain"]["user_id"], "alice");
+        assert_eq!(value["domain"]["counts"]["sessions"], 4);
+        assert_eq!(value["domain"]["counts"]["memories"], Value::Null);
+        assert_eq!(value["domain"]["counts"]["protected"], Value::Null);
+        assert!(value["domain"]["counts"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("memory ledger probe not wired"));
+        assert!(SelfStatusTool::output_schema().validate(&value).is_ok());
     }
 
     #[test]

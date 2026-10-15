@@ -3399,6 +3399,11 @@ impl Runtime {
         );
         let arguments_summary =
             approval_arguments_summary(&pending_dispatch.tool_name, &pending_dispatch.tool_call);
+        // E-P2 审批卡族标注 / 授权对象: 冻结时按族归一算好随记录持久化
+        // (存量记录读取时按迁移语义映射, 见 PendingApproval)。
+        let authorization_families = apeireth_governance::approval_family::family_ids_for_arguments(
+            &pending_dispatch.tool_call.arguments,
+        );
         let pending = PendingApproval {
             approval_id,
             session_id,
@@ -3413,6 +3418,7 @@ impl Runtime {
             governance_reason: pending_dispatch.governance_reason,
             command_text,
             arguments_summary,
+            authorization_families,
             operation_fingerprint: fingerprint,
             created_at,
             expires_at,

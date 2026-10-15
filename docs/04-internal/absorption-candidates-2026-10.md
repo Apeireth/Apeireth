@@ -61,3 +61,9 @@ Supermemory（ASMR 记忆系统）→ 记忆分层假说；agent-governance-tool
 
 - 00-backlog 新增 **I 轴（吸收自动化）** 一行；随手记/历史即记忆 → C 轴分期注记；
 - 吸收落地后回写 `docs/04-internal/absorption-ledger.md`（台账先例）。
+
+**落地回写（2026-10-13）**：TOP 候选 2「书→技能流水线」= **I1 已交付**（技能卡模型 +
+`tool.skill_distill` 沉淀管线 + `tool.skill_search` L2 封套调用面 + 治理档），
+分期与后续各期见 [I 轴分期](backend-enhancement/I-absorption-automation.md)，交付实录见
+[I1-skill-distill-delivery](backend-enhancement/I1-skill-distill-delivery.md)；
+TOP 候选 1 随手记已由 C 轴入口面交付（[quick-capture-delivery](backend-enhancement/quick-capture-delivery.md)）。

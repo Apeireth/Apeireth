@@ -35,6 +35,13 @@ pub enum ErrorCode {
     ProviderError,
     /// The request parameters were invalid.
     InvalidRequest,
+    /// The authenticated user's role may not perform this operation (W3-② 角色门).
+    PermissionDenied,
+    /// 域级越权 (W3-① 多户数据隔离): 点名他域 / 面未按用户域开放 —— 帧恒定,
+    /// 不泄露他域存在。
+    DomainForbidden,
+    /// 本域不可用 (W3-①): 域配置坏/拒开 —— 真因可报 (本域信息, 不涉他域存在性)。
+    DomainRefused,
     /// The referenced session does not exist.
     SessionNotFound,
     /// The request was rate limited.
@@ -56,6 +63,9 @@ impl ErrorCode {
             Self::ProviderUnreachable => "provider_unreachable",
             Self::ProviderError => "provider_error",
             Self::InvalidRequest => "invalid_request",
+            Self::PermissionDenied => "permission_denied",
+            Self::DomainForbidden => "domain_forbidden",
+            Self::DomainRefused => "domain_refused",
             Self::SessionNotFound => "session_not_found",
             Self::RateLimited => "rate_limited",
             Self::ReviewRejected => "review_rejected",
@@ -72,6 +82,9 @@ impl ErrorCode {
             Self::ProviderUnreachable => "检查 base_url 与网络连通性后重试",
             Self::ProviderError => "查看 message 中的上游信息, 必要时联系服务商",
             Self::InvalidRequest => "检查参数后重试",
+            Self::PermissionDenied => "当前用户角色无此操作权限; 需要更高角色请联系 owner 调整用户表",
+            Self::DomainForbidden => "该操作不在本用户域的开放面内; 域面按用户域隔离, 越域访问一律拒绝",
+            Self::DomainRefused => "本用户域的数据面未打开 (域配置可能损坏); 请联系 owner 检查 users/<id>/domain.json",
             Self::SessionNotFound => "回到会话列表重新选择",
             Self::RateLimited => "稍后重试或降低请求频率",
             Self::ReviewRejected => "回复被认知评审驳回——点「重新生成」再试; 若频繁出现, 在设置 → 高级能力中把认知深度调低",

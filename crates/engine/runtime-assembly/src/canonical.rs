@@ -141,10 +141,10 @@ pub use production::{
     ProductionModulesConfig,
 };
 pub use self_status_source::{
-    budget_status_from_configured, budget_status_from_constants, max_rounds_per_turn_constant,
-    max_tool_calls_per_round_constant, roster_from_config, session_quota_probe,
-    ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED, BUDGET_SOURCE_CONFIGURED_NOTE,
-    BUDGET_SOURCE_CONSTANT,
+    budget_status_from_configured, budget_status_from_constants, domain_status_probe,
+    max_rounds_per_turn_constant, max_tool_calls_per_round_constant, roster_from_config,
+    session_quota_probe, ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED,
+    BUDGET_SOURCE_CONFIGURED_NOTE, BUDGET_SOURCE_CONSTANT,
 };
 pub use self_tuning_wire::{
     consolidation_cadence_turns, migrate_legacy_tuning_log_file, tuning_log_path,

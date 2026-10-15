@@ -390,12 +390,12 @@ fn production_capability_level_approval_is_symmetric_for_both_forms() {
     }
 }
 
-/// 边界实证：规则引擎的**命令级**审批名单是逐字精确匹配（该引擎既有语义），
-/// 按 API 形态逐一登记是运维口径；生产接线走能力级（见上一测试），两条删除
-/// 路径在生产档逐一相同。命令面族归一属规则引擎层（governance）语义变更，
-/// 不在本层改动面内 —— 此处把边界钉在测试上，改口径必改本测试。
+/// 族归一口径（E-P2 改口径，本测试随口径演进 —— 原"逐字精确匹配边界"测试
+/// 于此改写）：规则引擎的命令级名单按**语义族**匹配，存量逐字条目
+/// （`tool.shell:<命令>`）迁移语义 = 按族解释（命令→族映射后生效）——
+/// 同族孪生 API 形态换形重放**不再**逃出名单（G2 封堵），跨族仍逐族审批。
 #[test]
-fn command_level_approval_entries_stay_exact_text_boundary() {
+fn command_level_approval_entries_are_family_scoped_across_twin_forms() {
     let capability = CapabilityId::new("tool.shell").unwrap();
     let mut engine = ApprovalPolicyEngine::new();
     engine
@@ -404,13 +404,36 @@ fn command_level_approval_entries_stay_exact_text_boundary() {
 
     let pinned = risk_verdict(&engine, &capability, "Remove-Item x.txt");
     let twin = risk_verdict(&engine, &capability, "[System.IO.File]::Delete('x.txt')");
-    assert!(
-        matches!(&pinned, PreVerdict::Ask { reason } if reason.contains("approval list matched")),
-        "{pinned:?}"
+    let alias = risk_verdict(&engine, &capability, "rm x.txt");
+    for (command, verdict) in [
+        ("Remove-Item x.txt", &pinned),
+        ("[System.IO.File]::Delete('x.txt')", &twin),
+        ("rm x.txt", &alias),
+    ] {
+        assert!(
+            matches!(verdict, PreVerdict::Ask { reason } if reason.contains("approval list matched")),
+            "{command} 同族形态必须同受名单管辖（迁移生效）: {verdict:?}"
+        );
+    }
+
+    // 跨族不串：删除族条目不顺带管住网络族（批删除≠批网络）。
+    let cross_family = risk_verdict(
+        &engine,
+        &capability,
+        "Invoke-WebRequest http://example.invalid",
     );
     assert_eq!(
-        twin,
+        cross_family,
         PreVerdict::Allow,
-        "未逐字登记的孪生形态不命中命令级名单（精确匹配边界）"
+        "跨族命令不受本族条目管辖（跨族仍逐族审批）"
+    );
+
+    // 命中族标注（审批卡族标注的规则面来源）：同族形态命中同一族。
+    let args = serde_json::json!({ "command": "[System.IO.File]::Delete('x.txt')" });
+    let (_, detail) = engine.evaluate("tool.shell", &args, &[], 0);
+    assert_eq!(detail.matched_family, vec!["删除族"], "{detail:?}");
+    assert_eq!(
+        detail.matched_command.as_deref(),
+        Some("[System.IO.File]::Delete('x.txt')")
     );
 }

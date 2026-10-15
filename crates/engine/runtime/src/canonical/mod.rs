@@ -29,6 +29,8 @@ pub mod approval;
 pub mod cache_trace;
 pub mod capability;
 pub mod context;
+// W3-① 多户数据隔离 (星群数据层): 用户域会话平面 (域解析 + 按域路由会话写闸)。
+pub mod domain_plane;
 // B6 · Phase 5 (research, 默认关闭): 审批状态机形式化 (RA-5 规格, 模型级验证).
 pub mod research_approval_sm;
 pub use research_approval_sm::{
@@ -76,6 +78,7 @@ pub use approval::{
 };
 pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
+pub use domain_plane::DomainSessionPlane;
 pub use error::{RuntimeError, RuntimeResult};
 pub use event_log::{
     compaction_entries, fold_surface, fork_placeholder, open_tool_calls, ForkRecord, LogEntry,

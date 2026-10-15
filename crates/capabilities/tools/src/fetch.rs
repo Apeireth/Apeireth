@@ -528,7 +528,10 @@ fn is_textual_media_type(content_type: &str) -> bool {
         || essence.ends_with("+xml")
 }
 
-fn decode_text_body(
+/// Decode a bounded textual body under the fetch text contract (UTF-8/ASCII
+/// only, textual media types only). Shared with the content-feed face so both
+/// surfaces use one text-decoding rule set.
+pub(crate) fn decode_text_body(
     call_id: &str,
     body: &[u8],
     content_type: Option<&str>,

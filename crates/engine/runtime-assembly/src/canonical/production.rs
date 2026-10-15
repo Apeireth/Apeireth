@@ -40,9 +40,9 @@ use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{roster_from_config, ProductionSelfStatusSource};
 use super::tool_modules::{
-    ApplyPatchModule, EducationModule, FetchModule, FilesystemModule, GitWriteModule, McpModule,
-    RepoModule, SearchModule, SelfStatusModule, ShellModule, WorktreeApplyModule,
-    WorktreePlanModule,
+    ApplyPatchModule, ContentFeedModule, EducationModule, FetchModule, FilesystemModule,
+    GitWriteModule, McpModule, RepoModule, SearchModule, SelfStatusModule, ShellModule,
+    SkillDistillModule, SkillSearchModule, WorktreeApplyModule, WorktreePlanModule,
 };
 
 /// Adapter that exposes memory's context-window implementation through the
@@ -137,6 +137,14 @@ pub struct ProductionModulesConfig {
     pub shell: Option<TrustedShellConfig>,
     /// Register fetch tool module when config is supplied.
     pub fetch: Option<FetchConfig>,
+    /// Register the life-integration content feed (`tool.content_feed`, J1) when
+    /// config is supplied.
+    ///
+    /// 内容流接入: 订阅源管理 + 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套
+    /// 披露, 跨源内容不直进提示词)。治理档位 (RequireApproval 级: 拉取与入库
+    /// 都经审批档, 改订阅 = 写文件走 write_intent 同族) 由治理链钩子承载。
+    /// 默认关 (opt-in)。
+    pub content_feed: Option<apeireth_tools_canonical::ContentFeedConfig>,
     /// Register the external tool bridge (MCP) module.
     ///
     /// When enabled, the server list is loaded at assembly time from
@@ -225,6 +233,22 @@ pub struct ProductionModulesConfig {
     /// 与读工具同一张观测表 —— 未读不得覆盖/删除)。RequireApproval 级 (每次
     /// 落盘都人批, 无自动放行档)。默认关 (opt-in)。
     pub worktree_apply: bool,
+    /// Register the skill distill tool (`tool.skill_distill`, 书→技能沉淀 I1)。
+    ///
+    /// 知识吸收写入口: 内容输入 (正文 / 文件只读通道) + 模型侧草稿 →
+    /// 结构化技能卡 → 技能库 ( [`Self::skills_dir`] )。注册条件 = 本开关 +
+    /// [`Self::file_write`] (唯一写总闸, 注册即闸) + 工作区根 + 技能库目录。
+    /// **审批档**: 每次沉淀都人批 (无自动放行档)。默认关 (opt-in)。
+    pub skill_distill: bool,
+    /// Register the read-only skill search tool (`tool.skill_search`, I1 调用面)。
+    ///
+    /// 检索式注入 (触发词命中 / 按需拉取) 经 L2 封套披露进上下文; 只读档
+    /// 零审批。注册条件 = 本开关 + 技能库目录 (不依赖写总闸)。默认关 (opt-in)。
+    pub skill_search: bool,
+    /// 技能库目录 (数据目录 `skills/`, 每卡一 StoredDoc)。
+    ///
+    /// 缺位时两级技能工具都注册不成 (注册即闸), 名册照实报 false。
+    pub skills_dir: Option<PathBuf>,
 }
 
 impl Default for ProductionModulesConfig {
@@ -242,6 +266,7 @@ impl Default for ProductionModulesConfig {
             repo: true,
             shell: None,
             fetch: None,
+            content_feed: None,
             mcp: false,
             mcp_data_dir: None,
             preference_learning: false,
@@ -261,6 +286,9 @@ impl Default for ProductionModulesConfig {
             git_write_auto_pass_l1: false,
             worktree_plan: false,
             worktree_apply: false,
+            skill_distill: false,
+            skill_search: false,
+            skills_dir: None,
         }
     }
 }
@@ -329,6 +357,10 @@ pub struct ProductionBackends {
     /// 自省通道: 生效模型的画像 (H-P1 模型画像表解析结果; 未知模型传显式
     /// unknown 行; 缺位时模型节显式 null + 原因)。
     pub self_status_model_profile: Option<apeireth_core::model_profile::ModelProfile>,
+    /// 自省通道: 用户域节探测口 (W3-①: 当前域 id/角色/域内计数, 现探测如实)。
+    pub self_status_domain: Option<StatusProbe<apeireth_tools_canonical::DomainStatus>>,
+    /// 自省通道: 内容流面探测口 (J1: 订阅数/最近拉取, 现探测如实)。
+    pub self_status_content_feed: Option<StatusProbe<apeireth_tools_canonical::ContentFeedStatus>>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -480,6 +512,29 @@ impl ProductionModules {
             }
         }
 
+        // 书→技能沉淀 (I 轴吸收自动化 I1, 默认关): 两级工具面。`tool.skill_distill`
+        // 是写文件面 —— 注册条件 = 开关 + `file_write` 唯一写总闸 + 工作区根 +
+        // 技能库目录 (注册即闸, 与 `tool.apply_patch` 同受一闸), 审批档 = 每次
+        // 沉淀都人批 (无自动放行档, 审批卡载荷 = 技能卡摘要); `tool.skill_search`
+        // 是只读档 (零审批), 只要技能库目录。技能库 = 数据目录 `skills/`,
+        // 每卡一 StoredDoc (拒开语义)。
+        if config.skill_distill && config.file_write {
+            if let (Some(root), Some(skills_dir)) = (&backends.workspace_root, &config.skills_dir) {
+                let provider = SkillDistillModule::new(root.clone(), skills_dir.clone());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        if config.skill_search {
+            if let Some(skills_dir) = &config.skills_dir {
+                let provider = SkillSearchModule::new(
+                    skills_dir.clone(),
+                    apeireth_tools_canonical::skill::DEFAULT_SKILL_DISCLOSURE_BUDGET_CHARS,
+                );
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
         // W2 §4.3 (2026-10-10, 默认关): education Dx-Check 工具 (纯确定性, 0 副作用)。
         if config.education {
             let provider = EducationModule::new();
@@ -498,6 +553,15 @@ impl ProductionModules {
 
         if let Some(fetch_config) = config.fetch {
             let provider = FetchModule::new(fetch_config);
+            capabilities.extend(provider.capabilities());
+        }
+
+        // 内容流接入 (`tool.content_feed`, J1, opt-in): 订阅源管理 + 受控拉取 +
+        // 结构化摘要 + 入记忆流 (L2 封套披露)。治理档位在治理链
+        // (`ContentFeedApprovalHook`): RequireApproval 级 —— 拉取与入库都经
+        // 审批档, 改订阅走 write_intent 同族 (改订阅 = 写文件)。
+        if let Some(feed_config) = config.content_feed {
+            let provider = ContentFeedModule::new(feed_config);
             capabilities.extend(provider.capabilities());
         }
 
@@ -524,6 +588,12 @@ impl ProductionModules {
             }
             if let Some(profile) = &backends.self_status_model_profile {
                 source = source.with_model_profile(profile.clone());
+            }
+            if let Some(probe) = &backends.self_status_domain {
+                source = source.with_domain_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_content_feed {
+                source = source.with_content_feed_probe(Arc::clone(probe));
             }
             let provider = SelfStatusModule::new(Arc::new(source));
             capabilities.extend(provider.capabilities());

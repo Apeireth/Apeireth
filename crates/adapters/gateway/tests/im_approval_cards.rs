@@ -303,6 +303,7 @@ async fn approval_card_carries_command_text_risk_level_and_two_buttons() {
         subject: format!("tool.{TOOL}"),
         command_text: format!("{TOOL}: 1 + 1"),
         arguments_summary: "执行命令 1 + 1".to_string(),
+        authorization_families: Vec::new(),
         governance_hook: "permission".to_string(),
         governance_reason: "requires human approval".to_string(),
         created_at_ms: 1_700_000_000_000,

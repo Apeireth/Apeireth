@@ -8,6 +8,7 @@
 use std::sync::{Arc, RwLock};
 
 use apeireth_core::kernel::{ApprovalId, RequestId, SessionId, Timestamp};
+use apeireth_governance::{may_resolve_approval, UserCapability};
 use apeireth_guard::{IntentInput, IntentInterpreter, RuleIntentInterpreter};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
 use apeireth_runtime::canonical::{
@@ -26,7 +27,8 @@ use tower_http::cors::AllowOrigin;
 
 use crate::admin::{admin_config_get, admin_config_update, GatewayRuntimeConfig};
 use crate::client_tokens::{
-    client_name_binds, record_session_client, ClientIdentity, CLIENT_NAME_CLAIM_HEADER,
+    client_name_binds, record_session_client, record_user_action, ClientIdentity, UserContext,
+    CLIENT_NAME_CLAIM_HEADER,
 };
 use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
@@ -177,6 +179,9 @@ pub struct CanonicalPendingApproval {
     pub governance_reason: String,
     pub command_text: String,
     pub arguments_summary: String,
+    /// 审批卡族标注 / 授权对象（E-P2 族归一）：被批命令的族 id 列表；
+    /// 空 = 非命令面操作（授权对象 = 操作本身）。
+    pub authorization_families: Vec<String>,
     /// The turn's generated text so far, preserved by the pending close so the
     /// UI can keep what the model already said alongside "waiting for
     /// approval: <tool>".
@@ -201,6 +206,7 @@ impl From<PendingApprovalView> for CanonicalPendingApproval {
             governance_reason: view.governance_reason,
             command_text: view.command_text,
             arguments_summary: view.arguments_summary,
+            authorization_families: view.authorization_families,
             generated_text: view.generated_text,
             rounds_used: view.rounds_used,
             created_at: view.created_at,
@@ -616,6 +622,12 @@ pub fn build_gateway_state_with_services(
         // 客户端令牌表由组合根显式装载注入 (坏配置拒开在可失败边界执行);
         // 装配面不隐式读配置面 —— 见 `client_tokens` 字段文档。
         client_tokens: crate::client_tokens::ClientTokenTable::default(),
+        // 用户角色面 (W3-②) 同一口径: 未注入 = 角色面未激活 (兼容路径),
+        // 坏表/绑定不一致由组合根在可失败边界拒开 —— 见 `user_access` 字段文档。
+        user_access: crate::client_tokens::UserAccess::default(),
+        // 用户域平面 (W3-①) 同一口径: 未注入 = 域面未接线 (兼容路径,
+        // 一切按默认域原位语义) —— 组合根在可失败边界装载注入。
+        domains: None,
         shutdown: Arc::new(crate::shutdown::ShutdownTrigger::default()),
     }
 }
@@ -849,7 +861,7 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
 }
 
 /// 自称名的有界审计渲染 (请求头值是攻击方可控输入, 不无界进审计行)。
-fn truncate_label(claimed: &str) -> String {
+pub(crate) fn truncate_label(claimed: &str) -> String {
     let mut bounded: String = claimed.chars().take(64).collect();
     if bounded.chars().count() < claimed.chars().count() {
         bounded.push('…');
@@ -1001,6 +1013,144 @@ async fn require_gateway_token(
     }
 }
 
+/// W3-② 角色门分类: 方法 + 路径 → 所需能力 (治理层 role 权限矩阵的判定入口)。
+///
+/// - 管理面 (admin 族 / 面板族授权热撤, 见 [`crate::panels::panel_admin_face`])
+///   → [`UserCapability::AdminControl`] (owner 档);
+/// - 审批解决 (`/v1/approvals/resolve`) → [`UserCapability::ApprovalL2`]
+///   (跨用户归属另闸, 见 [`cross_user_approval_refusal`]);
+/// - 其余非读方法 (chat / 会话写 / 记忆写) → [`UserCapability::Write`]
+///   (guest 零写面);
+/// - 读方法 (`GET`/`HEAD`) → 无能力要求 (矩阵全员持 [`UserCapability::Read`])。
+fn required_user_capability(method: &axum::http::Method, path: &str) -> Option<UserCapability> {
+    if path.starts_with("/v1/admin") || crate::panels::panel_admin_face(path) {
+        return Some(UserCapability::AdminControl);
+    }
+    if path == "/v1/approvals/resolve" {
+        return Some(UserCapability::ApprovalL2);
+    }
+    match *method {
+        axum::http::Method::GET | axum::http::Method::HEAD => None,
+        _ => Some(UserCapability::Write),
+    }
+}
+
+/// W3-② 角色门 (整面中间件, 挂在令牌门**之内**): 令牌门认「你是谁」,
+/// 角色门判「你能不能」。
+///
+/// - **角色面未激活** (未注入用户表) = 兼容路径: W2-② 行为逐字不变,
+///   不新增拒绝面 (零回归口径);
+/// - **角色面激活**: 过门客户端名 → 令牌→用户→角色链 → 治理层 role 权限矩阵;
+///   写面/管理面/审批面对**未绑定用户** fail-closed 拒 (403 `permission_denied`);
+///   每次裁决 (allow/deny) 落一行 `gateway.user_action` 审计 (user/role/action)。
+///
+/// 角色只来自令牌绑定的解析链 ([`crate::client_tokens::resolve_user_identity`]),
+/// 请求无法自称角色 —— 成员冒名 owner 在这里无从发生 (自称客户端名另有
+/// name↔token 绑定校验, 在令牌门内已拒)。
+async fn require_user_capability(
+    State(state): State<GatewayState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    if !state.user_access.is_active() {
+        request.extensions_mut().insert(UserContext::unbound());
+        return next.run(request).await;
+    }
+    let client = request
+        .extensions()
+        .get::<ClientIdentity>()
+        .map(|identity| identity.client.clone())
+        .unwrap_or_else(|| ClientIdentity::UNATTRIBUTED.to_string());
+    let user = state.user_access.identity(&client, &state.client_tokens);
+    let context = UserContext { user };
+    let endpoint = request.uri().path().to_string();
+    if let Some(capability) = required_user_capability(request.method(), &endpoint) {
+        let allowed = context.allows(capability);
+        record_user_action(
+            Some(state.observations.as_ref()),
+            context.user_id(),
+            context.role(),
+            capability.label(),
+            &endpoint,
+            allowed,
+        );
+        if !allowed {
+            let message = if context.user_id().is_some() {
+                format!(
+                    "role gate refused {endpoint}: the bound user role may not perform {}",
+                    capability.label()
+                )
+            } else {
+                format!("role gate refused {endpoint}: the calling client is not bound to any user")
+            };
+            return ErrorFrame::response(
+                StatusCode::FORBIDDEN,
+                ErrorCode::PermissionDenied,
+                message,
+            )
+            .into_response();
+        }
+    }
+    request.extensions_mut().insert(context);
+    next.run(request).await
+}
+
+/// 会话→用户绑定 (W3-②): 首个具名写者绑定会话归属, 供跨用户审批拒判定。
+fn bind_session_owner(
+    state: &GatewayState,
+    session: SessionId,
+    user: Option<&Extension<UserContext>>,
+) {
+    if let Some(Extension(context)) = user {
+        if let Some(user_id) = context.user_id() {
+            state.user_access.bind_session_user(session, user_id);
+        }
+    }
+}
+
+/// 跨用户审批拒 (G1 对抗面): 角色面激活时, 审批解决必须过归属闸 —— owner 全权
+/// (可批任意会话的审批); 其余角色只可批**本用户绑定会话**的审批; 未绑定用户/
+/// 无归属会话 fail-closed 拒 (403 + `gateway.user_action` 审计)。
+/// 返回 `Some(拒绝帧)` = 不得继续解决审批。
+fn cross_user_approval_refusal(
+    state: &GatewayState,
+    session: SessionId,
+    user: Option<&Extension<UserContext>>,
+) -> Option<Response> {
+    if !state.user_access.is_active() {
+        return None;
+    }
+    let context = user.map(|Extension(context)| context);
+    let subject = state.user_access.session_user(session);
+    let allowed = context
+        .and_then(|context| context.user.as_ref())
+        .is_some_and(|identity| {
+            may_resolve_approval(identity.role, &identity.user_id, subject.as_deref())
+        });
+    if allowed {
+        return None;
+    }
+    record_user_action(
+        Some(state.observations.as_ref()),
+        context.and_then(|context| context.user_id()),
+        context.and_then(|context| context.role()),
+        "approval_ownership",
+        "/v1/approvals/resolve",
+        false,
+    );
+    Some(
+        ErrorFrame::response(
+            StatusCode::FORBIDDEN,
+            ErrorCode::PermissionDenied,
+            format!(
+                "role gate refused /v1/approvals/resolve: approval for session {session} \
+                 belongs to another user (only its owner may resolve it)"
+            ),
+        )
+        .into_response(),
+    )
+}
+
 /// Build the production router over an explicit [`GatewayState`] (lets tests
 /// keep a handle on the event bus).
 pub fn canonical_router_with_state(state: GatewayState) -> Router {
@@ -1043,6 +1193,20 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .merge(panel_routes())
         // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
         .merge(crate::panel_metrics::metrics_routes())
+        // W3-① 域门 (数据域面): user_id 域解析 + 自称域校验 + 面闸, 过闸后
+        // `DomainContext` 随请求扩展下行 (会话面按域路由)。挂在令牌门与角色门
+        // **之内** (先认人、再判权、后判域); 域面未注入 = 兼容路径零回归。
+        .layer(middleware::from_fn_with_state(
+            gate_state.clone(),
+            crate::domain_context::require_domain_context,
+        ))
+        // W3-② 角色门 (授权面): 挂在令牌门**之内** —— 先认人 (authn) 再判权
+        // (authz)。角色面未注入 = 兼容路径零回归; 激活后按治理层 role 权限矩阵
+        // 过闸 (写面/管理面/审批面), 每次裁决落 `gateway.user_action` 审计。
+        .layer(middleware::from_fn_with_state(
+            gate_state.clone(),
+            require_user_capability,
+        ))
         // 令牌门包住整个 API 面 (含未匹配路径的 fallback: 强制态下未知路径也
         // 401, 不借 404/401 差别泄露路由存在性)。
         .layer(middleware::from_fn_with_state(
@@ -1260,6 +1424,7 @@ fn attribution_for(
 async fn native_chat(
     State(state): State<GatewayState>,
     identity: Option<Extension<ClientIdentity>>,
+    user: Option<Extension<UserContext>>,
     Json(request): Json<CanonicalChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
@@ -1268,6 +1433,8 @@ async fn native_chat(
     }
     let session = request.session.unwrap_or_else(SessionId::new);
     request.session = Some(session);
+    // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
+    bind_session_owner(&state, session, user.as_ref());
     let attribution = attribution_for(&state, identity.as_ref());
     let outcome = execute_chat_attributed(state.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;
@@ -1292,9 +1459,15 @@ fn publish_turn_delta(bus: &EventBus, outcome: &CanonicalChatOutcome) {
 async fn native_resolve_approval(
     State(state): State<GatewayState>,
     identity: Option<Extension<ClientIdentity>>,
+    user: Option<Extension<UserContext>>,
     Json(request): Json<CanonicalApprovalRequest>,
 ) -> Result<Response, HttpError> {
     let session = request.session;
+    // W3-② 跨用户审批拒: 归属闸在角色门能力判定之后 (owner 可批任意会话)。
+    if let Some(refusal) = cross_user_approval_refusal(&state, session, user.as_ref()) {
+        state.observations.flush().await;
+        return Ok(refusal);
+    }
     let attribution = attribution_for(&state, identity.as_ref());
     let outcome = resolve_approval_attributed(state.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;
@@ -1346,6 +1519,7 @@ fn chat_http_response(outcome: CanonicalChatOutcome) -> Response {
 async fn openai_chat(
     State(state): State<GatewayState>,
     identity: Option<Extension<ClientIdentity>>,
+    user: Option<Extension<UserContext>>,
     Json(request): Json<OpenAiChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
@@ -1354,6 +1528,8 @@ async fn openai_chat(
     }
     let is_stream = request.stream;
     let session = request.session_id.unwrap_or_else(SessionId::new);
+    // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
+    bind_session_owner(&state, session, user.as_ref());
     let input = request
         .messages
         .iter()
