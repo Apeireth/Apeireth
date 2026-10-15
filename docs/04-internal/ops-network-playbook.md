@@ -94,3 +94,26 @@
     （干净副本: `tar --exclude=./target -cf - . | tar -C /root/debt -xf -`）;
   - CI clippy 是 **`-D warnings` + 长白名单**口径 —— 本地复现必须带同款
     flag 组（见 .github/workflows/rust-lint.yml）, 否则"本地全绿"是假象。
+
+### §6.2 「本地绿 ≠ CI 绿」三变种 + CI 解剖工具箱（2026-10-15 欠账战役实证）
+
+三变种（同一个病根的三种形态）:
+1. **编译面**: cfg(unix) 块本地不编译（§6 主条, OpenOptionsExt 案）;
+2. **平台语义面**: 测试含 Windows 路径语义（`C:\data` 反斜杠/盘符）, unix 上
+   `\` 非分隔符 —— windows_service_script_dry_run / tuning_log_lands_beside_
+   session_db 两案。**测试名或断言含平台语义的, 一律 cfg 守卫**;
+3. **键规范化面**: `fs::canonicalize` 返回真实大小写, 归一化键不折叠大小写
+   （TEMP 环境变量拼写 vs NTFS 真实大小写）→ 同一文件两个键, 写后回填查无
+   此人（apply_patch 版本 CAS 三连败案）。**路径键必须按目标平台语义折叠**
+   （Windows 大小写不敏感）; 本地大小写一致时永不复现, 最隐蔽的一变种。
+
+CI 解剖工具箱（按效率排序）:
+- **报错归属会误导**: "could not document `X`" 的 X 不一定是病灶 crate
+  （真凶在 sdk 的文档链接）—— 以 `--> file:line` 的地址为准;
+- **退出码读心术**: bash 门挂 101 = 内有 cargo test/clippy（读判定脚本比
+  猜日志快）;
+- check-run annotations API 只给退出码, 真相在日志中段;
+- **miri 线程名/栈帧定位**: `this is on thread 'X::'` + 栈直指
+  `函数:行`（sync_parent_dir:203 案）;
+- 日志过滤陷阱: `Get-Content -Raw` 与 `-TotalCount` 不可同用; GitHub 日志
+  行带时间戳前缀, `^error` 锚点会全部落空。
