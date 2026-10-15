@@ -194,13 +194,24 @@ fn replace_target(tmp: &Path, dest: &Path) -> io::Result<()> {
 
 /// 持久档的收尾: unix 追加父目录 fsync (保证目录项落盘);
 /// Windows 无父目录 fsync 等价语义, 如实跳过 (平台差异)。
+/// miri 不支持目录 fsync (仅 file-backed fd): 以 no-op 如实跳过 (该步是崩溃
+/// 一致性语义, miri 不做崩溃注入); 真实行为由平台测试覆盖 (2026-10-15
+/// 釜底抽薪垫片 —— 免去逐测试 ignore, 治 stored_doc 等全部持久档测试)。
 #[cfg(unix)]
 fn sync_parent_dir(dest: &Path) -> io::Result<()> {
-    let parent = match dest.parent() {
-        Some(p) if !p.as_os_str().is_empty() => p,
-        _ => Path::new("."),
-    };
-    fs::File::open(parent)?.sync_all()
+    #[cfg(miri)]
+    {
+        let _ = dest;
+        Ok(())
+    }
+    #[cfg(not(miri))]
+    {
+        let parent = match dest.parent() {
+            Some(p) if !p.as_os_str().is_empty() => p,
+            _ => Path::new("."),
+        };
+        fs::File::open(parent)?.sync_all()
+    }
 }
 
 #[cfg(not(unix))]
@@ -421,6 +432,13 @@ fn wait_for_retry(deadline: Instant, lock_path: &Path) -> io::Result<()> {
 ///   (如访问被拒) 保守视为存活。
 /// - 其它平台: 保守视为存活 (不猜测, 不误接管)。
 pub fn pid_alive(pid: u32) -> bool {
+    // miri 不支持 libc::kill (FFI 边界): 保守返回"存活" —— 锁接管逻辑永不
+    // 触发, 走安全方向 (宁等不抢); 真实语义由平台测试覆盖 (2026-10-15 垫片)。
+    #[cfg(miri)]
+    {
+        let _ = pid;
+        return true;
+    }
     #[cfg(unix)]
     {
         use std::ffi::c_int;
