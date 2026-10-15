@@ -238,7 +238,7 @@ fn pattern_matches(pattern: &str, key: &str) -> bool {
 /// 大小写) 可不同 —— 不折叠会让同一文件两个拼写落两个观测键, 写后回填查不到
 /// (实测 CI flake: apply_with_gate 版本 CAS 三连败, 本地大小写一致不复现);
 /// Windows 文件系统语义即大小写不敏感, unix 保持大小写敏感。
-fn path_key(path: &Path) -> String {
+pub(crate) fn path_key(path: &Path) -> String {
     let mut joined = PathBuf::new();
     for component in path.components() {
         match component {
@@ -389,6 +389,12 @@ impl ObservedGate {
         self.map().clear();
     }
 
+    /// 诊断用: 全部观测键快照 (CI flake 解剖示踪, 2026-10-15)。
+    #[cfg(test)]
+    pub(crate) fn observed_keys(&self) -> Vec<String> {
+        self.map().keys().cloned().collect()
+    }
+
     fn map(&self) -> std::sync::MutexGuard<'_, HashMap<String, ObservationState>> {
         self.observations
             .lock()
@@ -515,6 +521,13 @@ fn gated_write(
     }
     if let Some(fresh) = fresh {
         gate.observe_present(&request.path, fresh);
+    } else {
+        // 诊断示踪 (2026-10-15 CI flake 解剖): 回填探查全败时打印路径与键。
+        eprintln!(
+            "[gated_write] 回填探查失败 (诊断): path={:?} key={}",
+            request.path,
+            path_key(&request.path)
+        );
     }
     Ok(())
 }

@@ -1071,9 +1071,15 @@ replaced
 
         // 事务收尾回填观测: 同会话后续覆盖写凭回填版本直接过 CAS。
         let target = dir.path().join("a.txt");
-        let observed = gate
-            .observed_version(&target)
-            .expect("写后必须回填观测版本");
+        let observed = gate.observed_version(&target);
+        assert!(
+            observed.is_some(),
+            "写后必须回填观测版本 (诊断示踪 2026-10-15): target={:?} target_key={} gate_keys={:?}",
+            target,
+            crate::observed_gate::path_key(&target),
+            gate.observed_keys(),
+        );
+        let observed = observed.unwrap();
         assert_eq!(observed.len, fs::metadata(&target).unwrap().len());
         let request = WriteRequest {
             path: target.clone(),
