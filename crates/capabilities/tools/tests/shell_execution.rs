@@ -41,7 +41,8 @@ async fn invoke(
 #[tokio::test]
 async fn echo_fixture_executes_and_captures_stdout() {
     let tmp = tempdir().unwrap();
-    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
+    let tool =
+        ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
 
     #[cfg(windows)]
     let command = "echo shell_fixture_ok";
@@ -61,7 +62,8 @@ async fn echo_fixture_executes_and_captures_stdout() {
 #[tokio::test]
 async fn double_quoted_powershell_command_executes() {
     let tmp = tempdir().unwrap();
-    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
+    let tool =
+        ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
     let value = invoke(
         &tool,
         r#"powershell -NoProfile -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Write-Output wrapped-doublequote-ok""#,
@@ -80,7 +82,8 @@ async fn double_quoted_powershell_command_executes() {
 #[tokio::test]
 async fn explicit_cwd_is_used() {
     let tmp = tempdir().unwrap();
-    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
+    let tool =
+        ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
 
     #[cfg(windows)]
     let command = "cd";
@@ -110,7 +113,8 @@ async fn explicit_cwd_is_used() {
 #[tokio::test]
 async fn nonzero_exit_is_a_normal_result() {
     let tmp = tempdir().unwrap();
-    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
+    let tool =
+        ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
 
     #[cfg(windows)]
     let command = "exit /b 7";
@@ -125,7 +129,8 @@ async fn nonzero_exit_is_a_normal_result() {
 #[tokio::test]
 async fn bounded_timeout_terminates_long_sleep() {
     let tmp = tempdir().unwrap();
-    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
+    let tool =
+        ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
 
     // 2026-10-10: 原用 `ping -n 30 127.0.0.1` 当长命令 —— 沙箱断网后 ping 秒死
     // (连 loopback 都不开), 超时语义前提失效。换无网络长命令 (powershell 休眠)。
@@ -212,7 +217,8 @@ async fn sandbox_allows_workspace_writes() {
 #[tokio::test]
 async fn cwd_escape_is_rejected_before_execution() {
     let tmp = tempdir().unwrap();
-    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
+    let tool =
+        ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
     let call = ToolCall {
         id: "call_shell".into(),
         name: "shell".into(),
@@ -229,7 +235,8 @@ async fn cwd_escape_is_rejected_before_execution() {
 #[tokio::test]
 async fn cwd_escape_refusal_carries_the_upgrade_hint() {
     let tmp = tempdir().unwrap();
-    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
+    let tool =
+        ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
     let call = ToolCall {
         id: "call_shell_hint".into(),
         name: "shell".into(),
@@ -251,7 +258,8 @@ async fn cwd_escape_refusal_carries_the_upgrade_hint() {
 #[tokio::test]
 async fn unicode_script_round_trips_without_normalization() {
     let tmp = tempdir().unwrap();
-    let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
+    let tool =
+        ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
 
     #[cfg(windows)]
     let command = "powershell -NoProfile -NonInteractive -EncodedCommand WwBDAG8AbgBzAG8AbABlAF0AOgA6AE8AdQB0AHAAdQB0AEUAbgBjAG8AZABpAG4AZwA9AFsAVABlAHgAdAAuAFUAVABGADgARQBuAGMAbwBkAGkAbgBnAF0AOgA6AG4AZQB3ACgAKQA7ACAAVwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIABhAHAAZQBpAHIAZQB0AGgAXwDqlg==";
