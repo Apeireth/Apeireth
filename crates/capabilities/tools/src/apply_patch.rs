@@ -1070,7 +1070,12 @@ replaced
         );
 
         // 事务收尾回填观测: 同会话后续覆盖写凭回填版本直接过 CAS。
-        let target = dir.path().join("a.txt");
+        // 路径拼写语义 (2026-10-15 示踪破案): 门禁回填以 resolve_contained_target
+        // 的 canonical 拼写为键 —— macOS `/var`→`/private/var` symlink、Windows
+        // 真实大小写/verbatim 前缀都会让裸拼写落不同键 (path_key 是词法归一,
+        // 不展开 symlink)。查询方必须用同拼写命中; 同一文件的异拼写是两个键
+        // (产品内写端/读端均走 resolve, 拼写自洽; 此处对齐之)。
+        let target = fs::canonicalize(dir.path()).unwrap().join("a.txt");
         let observed = gate.observed_version(&target);
         assert!(
             observed.is_some(),
