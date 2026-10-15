@@ -124,3 +124,18 @@ CI 解剖工具箱（按效率排序）:
   `函数:行`（sync_parent_dir:203 案）;
 - 日志过滤陷阱: `Get-Content -Raw` 与 `-TotalCount` 不可同用; GitHub 日志
   行带时间戳前缀, `^error` 锚点会全部落空。
+
+### §6.3 「CI 假死」真相: PR 冲突 = checks 静默不建（2026-10-15 一小时悬案）
+
+- 症状: push 落库成功、PR 开着、Actions 状态全绿, 但 **check-runs /
+  check-suites 全为 0**; 空提交踢不动, 关开 PR 无效, 新开 PR 也 0 runs;
+  `workflow_dispatch` 却能正常建 run —— 极像"事件系统坏了"。
+- **真相: `pulls.mergeable=false`（分支与 base 冲突）→ GitHub 构造不出 merge
+  ref → 全部 pull_request 类 checks 静默不创建**（不报错、不通知、无注解）。
+  main 被别人推进后最容易踩。
+- 排查序列（按性价比）: ① `pulls/N` 的 `mergeable`/`mergeable_state` 字段
+  （dirty=冲突实锤）; ② `actions/runs?head_sha=` 按 sha 查 runs（分支列表
+  视图会误导）; ③ `commits/<sha>/check-suites` 底层探针; ④ `workflow_dispatch`
+  验证创建链（通 → 事件链问题; 不通 → 更深）。
+- 药方: **合并 base 进分支解冲突 → push → checks 自动复活**; 顺手收益 =
+  分支不再落后主干。教训: "CI 全体静默" 先查 mergeable, 再怀疑事件系统。
