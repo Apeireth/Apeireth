@@ -677,6 +677,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_excludes_concurrent_holders() {
         let dir = test_dir("lock-mutex");
         let lock = dir.join("unit.lock");
@@ -706,6 +707,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_takes_over_marker_of_dead_holder() {
         // 死锁接管: 锁文件记录的 PID 对应进程不存在 → 视为可接管, 不永久砖化。
         let dir = test_dir("lock-takeover");
@@ -729,6 +731,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_takes_over_corrupt_marker_record() {
         // 记录损坏 (内容可读但非 PID) 是确证「无合法活跃持有者」→ 可接管,
         // 与「读取失败」严格区分 (后者保守等待, 见不可读用例)。
@@ -743,6 +746,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_never_takes_over_unreadable_marker() {
         // 瞬时不可读 ≠ 持有者已死 (2026-10-12 定根的并发写丢更新 flake 病根):
         // 读不到标记时必须保守等待到超时, 既不接管也不删除。
@@ -760,6 +764,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_serializes_concurrent_writers() {
         // 并发写序列化: 锁内读-改-写共享计数文件, 不得丢更新。
         let dir = test_dir("lock-serialize");
@@ -799,6 +804,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_released_when_closure_panics() {
         let dir = test_dir("lock-panic");
         let lock = dir.join("unit.lock");
