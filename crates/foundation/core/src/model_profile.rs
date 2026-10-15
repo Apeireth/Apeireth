@@ -746,6 +746,10 @@ mod tests {
     }
 
     #[test]
+    // miri 不支持目录 fsync (file-backed fd only): 本测经 stored_doc::save_single
+    // 落盘走持久档 (unix 父目录 fsync), miri 下必炸。覆盖逻辑由普通平台测试完整
+    // 覆盖, miri 侧显式跳过 (同 storage_atomic 两测处置)。
+    #[cfg_attr(miri, ignore = "miri 不支持目录 fsync (file-backed fd only)")]
     fn layered_configuration_overlays_per_model_and_env_wins() {
         let dir = temp_dir("overlay");
         // 数据目录层: 整行替换基线行 + 追加新行。

@@ -230,10 +230,14 @@ fn pattern_matches(pattern: &str, key: &str) -> bool {
 }
 
 /// 归一化路径键: 统一 `/` 分隔、去 `.` 组件、折叠 `..`、剥 Windows verbatim
-/// 前缀 (canonicalize 的 `\\?\` 拼写与裸拼写落到同一观测)。
+/// 前缀 (canonicalize 的 `\\?\` 拼写与裸拼写落到同一观测), Windows 折叠大小写。
 ///
-/// 这是词法归一, 不展开 symlink、不折叠大小写; 同一文件的 symlink 拼写是
-/// 两个键 (写入端各自解析后仍各自过门禁, 不会漏拒)。
+/// 这是词法归一, 不展开 symlink; 同一文件的 symlink 拼写是两个键 (写入端
+/// 各自解析后仍各自过门禁, 不会漏拒)。Windows 大小写折叠 (2026-10-15):
+/// canonicalize 返回真实大小写, 调用方拼写 (TEMP 环境变量大小写 vs NTFS 真实
+/// 大小写) 可不同 —— 不折叠会让同一文件两个拼写落两个观测键, 写后回填查不到
+/// (实测 CI flake: apply_with_gate 版本 CAS 三连败, 本地大小写一致不复现);
+/// Windows 文件系统语义即大小写不敏感, unix 保持大小写敏感。
 fn path_key(path: &Path) -> String {
     let mut joined = PathBuf::new();
     for component in path.components() {
@@ -246,13 +250,16 @@ fn path_key(path: &Path) -> String {
         }
     }
     let key = joined.to_string_lossy().replace('\\', "/");
-    if let Some(rest) = key.strip_prefix("//?/UNC/") {
+    let key = if let Some(rest) = key.strip_prefix("//?/UNC/") {
         format!("//{rest}")
     } else if let Some(rest) = key.strip_prefix("//?/") {
         rest.to_string()
     } else {
         key
-    }
+    };
+    #[cfg(windows)]
+    let key = key.to_lowercase();
+    key
 }
 
 /// 读前观测门禁: 进程内三态观测表 + 可配排除清单。

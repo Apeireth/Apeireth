@@ -3,7 +3,7 @@
 //! 客户端 ↔ 外部编排服务之间的请求/响应帧编解码。本模块只做**纯编解码 + 校验**:
 //!
 //! - 帧结构: `schema_version` + `request_id` + body (op 标签联合)。
-//! - schema 版本不符一律 [`SandboxError::Protocol`](crate::sandbox::SandboxError::Protocol),
+//! - schema 版本不符一律 [`SandboxError::Protocol`],
 //!   不做静默兼容猜测。
 //! - 线上错误码是**闭合词表** ([`WireErrorCode`]): 未知错误码字符串一律收口进
 //!   [`SandboxErrorCode::Protocol`], 不做自由字符串扩散。
