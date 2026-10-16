@@ -2343,6 +2343,12 @@ pub async fn dispatch_gateway_serve_with(
     services.domain_admin = Some(Arc::new(apeireth_gateway::DomainAdminService::new(
         domain_registry,
     )));
+    // 技能库只读面 (GET /v1/panel/skills): 与 skill_search/skill_distill 同一
+    // 技能库 (`<data_dir>/skills/`, StoredDoc 拒开语义) 的元数据投影 —— 只读,
+    // 不回卡体 (卡体走 L2 封套面), 坏卡如实列拒不砖库。
+    services.skills = Some(Arc::new(
+        crate::gateway_panels::CliSkillShelf::under_data_dir(&data_dir),
+    ));
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
     let mut state =

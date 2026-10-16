@@ -52,6 +52,7 @@ import {gatewayAuthHeaders} from './tauri-bridge.ts';
 import {startSseFetchStream} from './sse-stream.ts';
 import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
 import {normalizeUserRows, normalizeDomainRows, type UserAdminRow, type DomainAdminRow} from './user-admin.ts';
+import {normalizeSkillScan, type SkillShelfScan} from './skill-shelf.ts';
 
 const STORAGE_KEY = 'apeireth-config';
 const SECRET_CONFIG_KEYS = new Set([
@@ -2745,4 +2746,22 @@ export async function fetchDomains(config: ApeirethConfig): Promise<DomainAdminL
   } catch (caught) {
     return adminFaceError(null, 0, caught instanceof Error ? caught.message : String(caught));
   }
+}
+
+// --- 技能库读面（契约 gateway-api-contract.md §7d / frontend-data-contract.md §10.8，
+// 只读 fetch 面）---
+// 技能书架消费：GET /v1/panel/skills → {skills, count, refused} —— 只回**元数据**
+// （卡体是 L2 封套面，读面不回卡体）；坏卡在 refused 侧车如实列拒（不砖库）。
+// 语义三态：200 = 真值扫描（归一为书架卡，读面不回卡体 → body 恒空串）；
+// 501/404 = 该部署读面缺席 → null（书架如实上屏「暂无接口」诚实空态，不硬造端点）；
+// 其余错误（401/网络断等）抛 HttpError 由面板错误行承接（不静默降级成空列表）。
+
+/** GET /v1/panel/skills —— 技能库元数据只读面（书架 loadCards 注入缝的真源）。 */
+export async function fetchSkills(config: ApeirethConfig): Promise<SkillShelfScan | null> {
+  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/skills`, {
+    headers: await gatewayAuthHeaders(),
+  });
+  if (res.status === 501 || res.status === 404) return null;
+  const data = await checkJson(res);
+  return normalizeSkillScan(data);
 }

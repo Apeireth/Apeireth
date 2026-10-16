@@ -37,6 +37,7 @@
 | `/v1/approvals?session={id}` | GET | 该会话的待批审批(见 §6) |
 | `/v1/approvals/resolve` | POST | 批准/拒绝审批(见 §6) |
 | `/v1/panel/metrics` | GET | 指标聚合快照(见 §8b;会话+全局两层,空态显式空) |
+| `/v1/panel/skills` | GET | 技能库元数据只读面(见 §7d;只回元数据不回卡体,坏卡列拒不砖库) |
 | `/v1/panel/users` | GET | 用户管理列表(见 §7c;owner 专属) |
 | `/v1/admin/users` | POST | 建户(见 §7c;owner 专属) |
 | `/v1/admin/users/{user_id}` | PATCH / DELETE | 改角色 / 删户(见 §7c;owner 专属) |
@@ -203,6 +204,46 @@ W3-① 目录安全规则 `[a-z0-9_-]`、首字符小写字母或数字,路径�
 > 令牌门/角色门的**运行期**判定按 W2-②/W3-② 装载期快照语义——新建用户的绑定随
 > 下次启动生效(与 CLI 改 `client-tokens.json` 的既有口径一致)。
 
+### §7d 技能库只读面 ✅(2026-10-16, 技能书架读面微批)
+
+`GET /v1/panel/skills` —— 技能库元数据列表(与 `skill_search` 同源只读: `<data_dir>/skills/*.json`,
+每卡一 StoredDoc, 拒开语义原样沿用——坏 JSON / 串档 / 版本不符一律拒开并报结构化原因)。
+
+- **只回元数据, 不回卡体**: 卡体是 L2 封套面(对话回合内按触发词披露的只读背景材料),
+  读面只给七字段元数据; 响应**无 `body` 字段**。
+- **坏卡如实列拒不砖库**: 打不开的卡进 `refused` 侧车(文件名 + 结构化原因), 好卡照常
+  上屏——不砖化整个技能库, 也绝不「读坏用默认」。
+- **一次快照读**(W2-③ 面板一致性): 响应内各字段同出一扫, 不拼两次读。
+- 过 W2-② 全 API 面令牌门; 读面(GET)角色门全员可读(非管理面); W3-① 域门: 技能库是
+  默认域数据, 非默认域请求按「面未按用户域开放」403 `domain_forbidden` 恒定帧(fail-closed)。
+- 服务未接线 = 501 `unsupported`(不假装有数据源)。
+
+响应(200):
+```json
+{
+  "skills": [
+    { "id": "skill-1f2e3d4c5b6a7988", "name": "发布前检查单", "summary": "一句话摘要",
+      "triggers": ["发布", "上线检查"], "source": { "kind": "book", "title": "来源标题" },
+      "created_at": 1728000000000, "version": 1 }
+  ],
+  "count": 1,
+  "refused": [ { "file": "broken.json", "reason": "拒开原因 (结构化错误的显示文本)" } ]
+}
+```
+
+- **SkillMetaDto**:`id`(稳定身份 `skill-{FNV-1a 64 hex}`, 卡名确定性派生)/ `name`(卡名,
+  技能库内唯一键)/ `summary`(一句话摘要)/ `triggers`(已归一触发词)/
+  `source{kind,title}`(来源, `kind` 冻结词表 `document|book|article`)/ `created_at`
+  (**epoch 毫秒**, 版本演进不变)/ `version`(StoredDoc 信封格式版本, 拒开语义版本戳, 当前恒 1)。
+- `count` = `skills` 行数(拒开数另计); `refused[] = {file, reason}` —— `file` 只回技能库内
+  文件名(不回磁盘绝对路径), `reason` 为拒开结构化原因。
+- 错误模型(与 §1 同一帧形):401(令牌门)/ 501 `unsupported`(服务未接线)/
+  403 `domain_forbidden`(W3-① 非默认域面闸)。
+
+实现:`crates/adapters/gateway/src/skill_shelf.rs`(DTO + `SkillShelfQuery` bounded-context
+端口)、组合根适配 `crates/adapters/cli/src/gateway_panels.rs`(`CliSkillShelf` 读
+`SkillLibrary::scan`)。前端 DTO 契约见 [frontend-data-contract.md](02-guides/frontend-data-contract.md) §10.8。
+
 ## §8 Trace / Audit / 事件总线
 
 - `GET /v1/panel/traces?limit=20` `[P0]` → `{ "traces": [ { "trace_id": "…", "span_count": 3, "root_span": { … }, "started_at": 123 } ] }`
@@ -316,7 +357,8 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 `health`、`models.list`、`providers.list`、`runtime.snapshot.read`、`chat.completions`、
 `sessions.read`、`memory.read/write/forget/protect/unprotect`、`memory.graph.read`、
 `memory.update`（`supported=false`, `available=false`, `reason=not_implemented`）、
-`tools.list`、`permissions.approval.read`、`permissions.approval.resolve`、
+`tools.list`、`skills.read`（技能库元数据只读面，§7d）、
+`permissions.approval.read`、`permissions.approval.resolve`、
 `approvals.read` / `approvals.resolve`（compatibility aliases）、`permissions.grants.read`、
 `permissions.revoke`、`organs.list`、`modules.list`、`trace.read`、`audit.read`、`activity.sse`、
 `users.read` / `users.manage`、`domains.read` / `domains.manage`（V2-b 用户/域管理面，

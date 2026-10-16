@@ -542,6 +542,10 @@ pub struct GatewayServices {
     /// 域管理面 (W3-① HTTP 面): [`apeireth_core::user_domain::DomainRegistry`] 的
     /// 开域/列域口 (见 [`crate::domain_admin::DomainAdminService`]); 未注入 = `501`。
     pub domain_admin: Option<Arc<crate::domain_admin::DomainAdminService>>,
+    /// 技能库只读面 (`GET /v1/panel/skills`): [`crate::skill_shelf::SkillShelfQuery`]
+    /// 的元数据扫描 (StoredDoc 拒开语义, 坏卡列拒不砖库; 不回卡体, 卡体走 L2
+    /// 封套面)。适配实现在组合根; 未注入 = `501`。
+    pub skills: Option<Arc<dyn crate::skill_shelf::SkillShelfQuery>>,
 }
 
 impl GatewayServices {
@@ -573,9 +577,10 @@ impl GatewayServices {
             credentials: None,
             safety_guard: None,
             workbench: None,
-            // 用户/域管理面走文件事实服务 (组合根显式注入), 不走旧 PanelData 适配。
+            // 用户/域/技能库面走文件事实服务 (组合根显式注入), 不走旧 PanelData 适配。
             user_admin: None,
             domain_admin: None,
+            skills: None,
         }
     }
 }
@@ -732,6 +737,8 @@ pub fn panel_routes() -> Router<GatewayState> {
         .route("/v1/panel/traces/:trace_id", get(trace_detail))
         .route("/v1/tools/list", get(list_tools))
         .route("/v1/panel/audit", get(list_audit))
+        // 技能库只读面 (元数据; 不回卡体, 卡体走 L2 封套面), 见 [`crate::skill_shelf`]。
+        .route("/v1/panel/skills", get(crate::skill_shelf::list_skills))
         .route("/v1/apeireth/capabilities", get(capabilities))
         // V2-b 用户/域管理面 (owner 档, 见 [`panel_admin_face`]): 列表两口在面板族,
         // 增删改口在 canonical_entry 的 admin 族 (同一 UserTable 服务, 双入口同源)。
@@ -802,7 +809,8 @@ pub(crate) fn admin_error(
         .into_response()
 }
 
-fn panel_error(message: String) -> Response {
+/// 面板族运行期错误帧 (`500 runtime_error`); 技能库等旁路面板模块同用。
+pub(crate) fn panel_error(message: String) -> Response {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(serde_json::json!({ "error": { "code": "runtime_error", "message": message, "solution": "重启 Companion 后重试, 若复现请提交日志" } })),
@@ -1261,6 +1269,7 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
     let workbench_supported = services.workbench.is_some();
     let user_admin_supported = services.user_admin.is_some();
     let domain_admin_supported = services.domain_admin.is_some();
+    let skills_supported = services.skills.is_some();
 
     let memory_ids = [
         ("memory.read", true, false, &["list", "read"] as &[&str]),
@@ -1318,6 +1327,7 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             ] },
             { "name": "memory", "capabilities": memory },
             { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], tools_supported, tools_supported) ] },
+            { "name": "skills", "capabilities": [ cap("skills.read", true, false, &["list"], skills_supported, skills_supported) ] },
             { "name": "permissions", "capabilities": [
                 cap("permissions.approval.read", true, false, &["list"], true, true),
                 cap("permissions.approval.resolve", false, true, &["resolve"], true, true),

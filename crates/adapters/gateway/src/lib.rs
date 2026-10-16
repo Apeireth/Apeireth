@@ -76,6 +76,10 @@ pub mod user_admin;
 /// `/v1/panel/domains`、`/v1/admin/domains` 端点。
 pub mod domain_admin;
 
+/// 技能库只读面 (`GET /v1/panel/skills`): `SkillLibrary::scan` 的元数据投影端口
+/// (StoredDoc 拒开语义, 坏卡列拒不砖库; 不回卡体, 卡体走 L2 封套面)。
+pub mod skill_shelf;
+
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the explicitly unwired TLS placeholder surface.
 pub mod remote_access;
@@ -115,6 +119,9 @@ pub use client_tokens::{
 };
 
 pub use domain_admin::{DomainAdminDto, DomainAdminService, DomainCreateBody};
+pub use skill_shelf::{
+    SkillMetaDto, SkillRefusalDto, SkillShelfQuery, SkillShelfScanDto, SkillSourceDto,
+};
 pub use user_admin::{
     UserAdminDto, UserAdminError, UserAdminService, UserCreateBody, UserRolePatchBody,
 };

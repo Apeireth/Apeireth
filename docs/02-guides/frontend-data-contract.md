@@ -953,4 +953,33 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 
 **前端消费现状**：0 消费（V1-b 用户/域面板待上屏，挂债栏 D10；后端面 + 测试已备）。
 
+### 10.8 技能书架读面 `SkillMetaDto`（`GET /v1/panel/skills`，2026-10-16 V1-b 书架换源真数据）
+
+出处：`crates/adapters/gateway/src/skill_shelf.rs`（DTO + `SkillShelfQuery` 端口 + handler）、`crates/adapters/cli/src/gateway_panels.rs`（`CliSkillShelf`——读 `SkillLibrary::scan`，StoredDoc 拒开语义，`crates/capabilities/tools/src/skill/library.rs`）；端点合同表与错误模型见 [gateway-api-contract.md](../gateway-api-contract.md) §7d；卡体全模型见 §10.4（**读面不回卡体**）。
+
+- `GET /v1/panel/skills` → `{ "skills": [SkillMetaDto], "count": n, "refused": [SkillRefusalDto] }`（一次快照读，确定性排序 = 卡名键 + id）。
+
+```json
+{ "id": "skill-1f2e3d4c5b6a7988", "name": "发布前检查单", "summary": "一句话摘要",
+  "triggers": ["发布", "上线检查"], "source": { "kind": "book", "title": "来源标题" },
+  "created_at": 1728000000000, "version": 1 }
+```
+
+| 字段 | 类型 | 说明 / 出处 |
+|------|------|--------------|
+| `id` | string | 稳定身份（§10.4 同源 `skill-{FNV-1a 64 hex}`，版本演进不变） |
+| `name` | string | 卡名（技能库内唯一键） |
+| `summary` / `triggers` | string / string[] | 摘要 / 归一触发词（§10.4 同口径） |
+| `source.kind` / `source.title` | string | 冻结词表 `document` / `book` / `article` + 来源标题 |
+| `created_at` | number，**epoch 毫秒** | 首次沉淀时刻（版本演进不变） |
+| `version` | number | StoredDoc 信封格式版本（拒开语义版本戳，当前恒 1）。**无 `body` 字段**——卡体是 L2 封套面，读面不回卡体 |
+| `count` | number | `skills` 行数（拒开数另计，不混入） |
+| `refused[]` | `{ "file", "reason" }` | 被拒开的卡**如实列拒**（坏 JSON / 串档 / 版本不符）：`file` = 技能库内文件名（不回绝对路径）、`reason` = 结构化拒开原因；**不砖库**——好卡照常上屏 |
+
+**前端消费现状**：技能书架（`frontend/companion-desktop/src/lib/skill-shelf.ts` + `components/SkillShelfPanel.svelte`，V1-b 工作台技能卡）取数缝已一行换源真数据：`runtime.ts fetchSkills`（只读 fetch 面，过 `gatewayAuthHeaders()` 令牌缝）→ `normalizeSkillScan`（本信封归一；`version` 数按十进制字面上屏，缺省显「—」，不编版本）。
+
+- 200 = 书架四列真值（卡名 / 摘要 / 触发词 / 版本）+ 拒收计数（`refused.length`）；
+- **501 / 404 = 该部署读面缺席** → 书架「暂无接口」诚实空态（`SKILL_SHELF_NO_FACE`，不硬造端点、不摆假数据）；其余错误（401 / 网络断等）抛错上屏，不静默降级成空列表；
+- 展开语义保留（L2 封套警示头 + 卡体位），但读面不回卡体 → 正文如实为空串，不编造；卡体披露走 L2 封套面（`skill_search` 对话回合内按触发词披露，见 §10.4）。
+
 *文档完。任何字段与代码冲突时，以代码为准并回写本文档（含出处行号）。*

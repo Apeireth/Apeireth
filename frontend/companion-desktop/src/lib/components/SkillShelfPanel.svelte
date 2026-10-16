@@ -1,7 +1,8 @@
 <!-- 技能书架卡（V1-b/d 上屏）：技能库列表（与 skill_search 同源只读）——
      卡名/摘要/触发词/版本；点击展开卡体，L2 封套警示头原样上屏（后端常量同源）。
-     读面现状（诚实边界）：网关路由表与桌面 IPC 命令表均无技能库读面，
-     故取数走注入缝（loadCards）；缺读面时如实上屏「暂无接口」空态 + 警示头
+     取数（诚实边界）：读面已落地（GET /v1/panel/skills，只回元数据——卡体是
+     L2 封套面，读面不回卡体），真源经注入缝（loadCards ← runtime.ts fetchSkills）
+     一行换源；该部署读面缺席（501/404）时如实上屏「暂无接口」空态 + 警示头
      口径预览，不硬造端点、不摆假旋钮（详见 skill-shelf.ts 头注）。 -->
 <script lang="ts">
   import {BookOpen, ChevronDown, ChevronRight} from 'lucide-svelte';
@@ -13,7 +14,7 @@
   import type {SkillShelfScan} from '../skill-shelf';
 
   interface Props {
-    /** 取数缝：读面落地即换真源；返回 null = 无读面（诚实空态）。 */
+    /** 取数缝：真源注入（runtime.ts `fetchSkills` 一行换源）；返回 null = 该部署读面缺席（诚实空态）。 */
     loadCards?: () => Promise<SkillShelfScan | null>;
   }
   let {loadCards}: Props = $props();

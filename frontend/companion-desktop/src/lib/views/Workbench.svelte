@@ -9,6 +9,7 @@
   import type {ApeirethConfig} from '../types';
   import UserAdminPanel from '../components/UserAdminPanel.svelte';
   import SkillShelfPanel from '../components/SkillShelfPanel.svelte';
+  import {fetchSkills} from '../runtime';
   import {
     CAPTURE_REVIEW_LIMIT,
     captureReviewRows,
@@ -37,7 +38,7 @@
 
 <div class="wbv-cards">
   <UserAdminPanel {config} />
-  <SkillShelfPanel />
+  <SkillShelfPanel loadCards={() => fetchSkills(config)} />
 
   <div class="cp-card">
     <div class="cp-head">

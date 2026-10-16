@@ -23,7 +23,8 @@ use apeireth_gateway::{
     GrantCommand, GrantDto, GrantMutationDto, GrantQuery, GraphEdgeDto, GraphNodeDto,
     GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto, MemoryCommand,
     MemoryGovernanceCommand, MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto, PanelData,
-    SafetyGuardQuery, SessionQuery, SessionSummaryDto, ToolCatalogQuery, ToolDto, TraceCommand,
+    SafetyGuardQuery, SessionQuery, SessionSummaryDto, SkillMetaDto, SkillRefusalDto,
+    SkillShelfQuery, SkillShelfScanDto, SkillSourceDto, ToolCatalogQuery, ToolDto, TraceCommand,
     TraceDetailDto, TraceQuery, TraceSpanDto, TraceSummaryDto, WorkbenchMemoryProvenanceDto,
     WorkbenchQuery, WorkbenchToolExecutionDto, WorkbenchTurnDto,
 };
@@ -1119,5 +1120,67 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         // 组合根在网关 serve 装配点显式注入 (见 cli::lib 的 `services.user_admin`)。
         user_admin: None,
         domain_admin: None,
+        // 技能库只读面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
+        // `services.skills`)。
+        skills: None,
+    }
+}
+
+/// 技能库只读面适配 (组合根): `SkillLibrary::scan` → 元数据投影。
+///
+/// 拒开语义原样透出 (StoredDoc 拒开): 好卡照读 (确定性排序), 打不开的卡如实
+/// 列进 `refused` 侧车 —— 不砖化整个技能库, 也绝不「读坏用默认」。**不回卡体**:
+/// 卡体是 L2 封套面, 读面只给元数据。
+pub struct CliSkillShelf {
+    library: apeireth_tools_canonical::SkillLibrary,
+}
+
+impl CliSkillShelf {
+    /// 挂在数据目录下的技能库 (`<data_dir>/skills/`)。
+    pub fn under_data_dir(data_dir: impl AsRef<std::path::Path>) -> Self {
+        Self {
+            library: apeireth_tools_canonical::SkillLibrary::under_data_dir(data_dir),
+        }
+    }
+}
+
+#[async_trait]
+impl SkillShelfQuery for CliSkillShelf {
+    async fn list_skills(&self) -> Result<SkillShelfScanDto, String> {
+        let scan = self.library.scan();
+        let skills = scan
+            .cards
+            .iter()
+            .map(|doc| SkillMetaDto {
+                id: doc.body.id.clone(),
+                name: doc.body.name.clone(),
+                summary: doc.body.summary.clone(),
+                triggers: doc.body.triggers.clone(),
+                source: SkillSourceDto {
+                    kind: doc.body.source.kind.as_str().to_string(),
+                    title: doc.body.source.title.clone(),
+                },
+                created_at: doc.body.created_at,
+                version: doc.version,
+            })
+            .collect();
+        let refused = scan
+            .refused
+            .iter()
+            .map(|refusal| SkillRefusalDto {
+                file: refusal
+                    .path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| refusal.path.display().to_string()),
+                reason: refusal.reason.clone(),
+            })
+            .collect();
+        let count = scan.cards.len();
+        Ok(SkillShelfScanDto {
+            skills,
+            count,
+            refused,
+        })
     }
 }
