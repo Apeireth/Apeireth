@@ -5,6 +5,10 @@
 > 开工时认领想法 → 拆批派工 → 细节文件随批更新；想法完成就在本页标 ✅ 并把细节文件归档。
 > 状态列（2026-10-13 文档同步批刷新）词表：**✅ 已交付**（指针到交付记录）／**🔧 在飞**（在建或部分交付，含他线在途）／**📋 未开工**。
 
+## 后续方向（2026-10-15 立）
+
+**[V1-V6 施工序](V-forward-direction.md)**：上屏面兑现 → 星群正身 → 活在生活里 → 记忆升维 → 安全守望 → 编排绑定（调研综合裁定，见总裁决篇）。
+
 ## 想法清单
 
 | # | 想法 | 一句话 | 状态（2026-10-13 刷新） | 细节文件 |
@@ -16,6 +20,7 @@
 | E | **安全纵深** | 沙箱对象级判定、审批族归一、多用户权限 | 🔧 在飞：P1 威胁模型 ✅（[E-threat-model.md](E-threat-model.md)）+ W1-③ 令牌加固/W2-② 认证面/W3-① 域数据门/W3-② 角色门**已交付**（销账对齐见 [E-threat-model.md](E-threat-model.md) §4/§5 处置注）；E-P2 审批族归一、E-P3 沙箱对象级判定**在飞** | [E-security-depth.md](E-security-depth.md) |
 | F | **服务端形态** | headless daemon、多客户端复用、远程访问（T2 中枢） | 🔧 在飞：W2-① daemon 化 ✅、W2-② 远程认证面 ✅（[W2-2-remote-access-auth-delivery.md](W2-2-remote-access-auth-delivery.md)）、W2-③ 多客户端会话复用 ✅（[W2-3-multi-client-session-reuse.md](W2-3-multi-client-session-reuse.md)）、W3-① 跨户数据面 ✅（[W3-1-multi-user-data-isolation.md](W3-1-multi-user-data-isolation.md)）、W3-② 角色门 ✅（[W3-2-user-identity-roles.md](W3-2-user-identity-roles.md)）；TLS 真接线（现接口桩）、星群逐域伙伴实例、P4 部署形态待 | [F-server-form.md](F-server-form.md) |
 | G | **观测与可靠** | 指标数据源、崩溃恢复、备份 | 🔧 在飞：P1 指标数据源 ✅（`GET /v1/panel/metrics`，见细节文件文末交付记录；**前端消费待上屏**→债栏 D9）；P2 tracing 时间线、P3 崩溃恢复、P4 备份待 | [G-observability.md](G-observability.md) |
+| L | **会话经验沉淀** | 431 轮/104 子代理的工程经验→项目资产（协同模式/死亡解剖/设计裁定/方法论/产品洞察五矿脉） | [L-experience-distillation.md](L-experience-distillation.md) |
 | I | **吸收自动化** | 书→技能/随手记/历史即记忆——把『吸收优秀实践』变成产品本能 | 🔧 在建：I1 书→技能**已交付**（见 [I 轴分期](I-absorption-automation.md) 分期表；交付记录随线落盘）；随手记入口面 ✅（[quick-capture-delivery.md](quick-capture-delivery.md)）；I2-I4 待排期 | [I 轴分期](I-absorption-automation.md)（I1 书→技能已交付；候选池 [吸收候选池](../absorption-candidates-2026-10.md)） |
 | H | **模型面** | 多模型路由/fallback、成本分级 | 🔧 在飞：P1 模型画像表 ✅（见细节文件 P1 实施记录；单价表来源已供 A-P2 花费维）；P2 fallback、P3 路由、P4 成本分级待 | [H-model-plane.md](H-model-plane.md) |
 | I | **内置应用面（星港）** | 多标签壳+贡献点注册表+内置件面（伴星/星笺/深望等 15 面），批次按工程速度 | ✅ 17 面全部点亮（2026-10-11，批次台账见细节文件）；🔧 增强位随批清（最末两件等 W1/E 契约） | [I-starport-builtins.md](I-starport-builtins.md) |

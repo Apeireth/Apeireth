@@ -72,4 +72,4 @@ v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`
 
 ---
 
-_Last updated_: 2026-10-13 (文档同步对账：测试基线口径统一 = **5243 passed / 0 failed / 22 ignored**（`cargo test --workspace --locked -j 2`，190 suites，2026-10-13 全绿实测；历史口径见 CHANGELOG）；18-crate 范围与 `apeireth-guard` 安全边界 2026-10-06 已核验；workspace.version 2.0.0-rc.1、仓库 URL `Apeireth/Apeireth` 不变)
+_Last updated_: 2026-10-13 (文档同步对账：测试基线口径统一 = **5360 passed / 0 failed / 22 ignored**（`cargo test --workspace --locked -j 2`，190 suites，2026-10-13 全绿实测；历史口径见 CHANGELOG）；18-crate 范围与 `apeireth-guard` 安全边界 2026-10-06 已核验；workspace.version 2.0.0-rc.1、仓库 URL `Apeireth/Apeireth` 不变)

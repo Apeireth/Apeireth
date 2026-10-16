@@ -57,6 +57,10 @@
 
 Supermemory（ASMR 记忆系统）→ 记忆分层假说；agent-governance-toolkit → 对抗测试补强；TradingAgents → 角色分工产品化；语音族 → voice P2。**调研纪律**：一项目一小节、机制假说+实证+吸收裁定三段式。
 
+## 三之半、落地追踪（2026-10-15）
+
+TOP5 机制已全部入 V1-V6 施工序（V3=双引擎关怀/TTS、V4=人格层/保鲜/保真、V5=安全守望、V6=任务编排/动作绑定、V1=上屏面）——见 [V-forward-direction.md](../backend-enhancement/V-forward-direction.md)。
+
 ## 四、登记
 
 - 00-backlog 新增 **I 轴（吸收自动化）** 一行；随手记/历史即记忆 → C 轴分期注记；

@@ -102,10 +102,17 @@
 2. **平台语义面**: 测试含 Windows 路径语义（`C:\data` 反斜杠/盘符）, unix 上
    `\` 非分隔符 —— windows_service_script_dry_run / tuning_log_lands_beside_
    session_db 两案。**测试名或断言含平台语义的, 一律 cfg 守卫**;
-3. **键规范化面**: `fs::canonicalize` 返回真实大小写, 归一化键不折叠大小写
-   （TEMP 环境变量拼写 vs NTFS 真实大小写）→ 同一文件两个键, 写后回填查无
-   此人（apply_patch 版本 CAS 三连败案）。**路径键必须按目标平台语义折叠**
-   （Windows 大小写不敏感）; 本地大小写一致时永不复现, 最隐蔽的一变种。
+3. **键规范化面**: `fs::canonicalize` 返回**真实大小写 + symlink 解析后**的
+   拼写（macOS `/var`→`/private/var`、Windows 大小写/`\\?\` verbatim）, 归一化
+   键不展开 symlink 时同一文件落两个键 —— 写后回填查无此人（apply_patch
+   版本 CAS 三连败案, 示踪招供: `target_key=/var/...` vs
+   `gate_keys=[/private/var/...]`）。**路径键必须按目标平台语义折叠 + 查询方
+   用 canonical 拼写命中**; 本地大小写一致/symlink 不经斜路时永不复现,
+   最隐蔽的一变种。
+
+破案方法论（理论三连破后唯一正道）: **示踪三选一判据** —— 在失败点埋
+诊断打印（双方键/分支标记）, 让 CI 现场自己招供: ①键对比差异 = 失配实锤;
+②特定标记出现 = 对应理论复活; ③空 = 上游根本没发生。一轮 CI 破三轮悬案。
 
 CI 解剖工具箱（按效率排序）:
 - **报错归属会误导**: "could not document `X`" 的 X 不一定是病灶 crate
@@ -117,3 +124,18 @@ CI 解剖工具箱（按效率排序）:
   `函数:行`（sync_parent_dir:203 案）;
 - 日志过滤陷阱: `Get-Content -Raw` 与 `-TotalCount` 不可同用; GitHub 日志
   行带时间戳前缀, `^error` 锚点会全部落空。
+
+### §6.3 「CI 假死」真相: PR 冲突 = checks 静默不建（2026-10-15 一小时悬案）
+
+- 症状: push 落库成功、PR 开着、Actions 状态全绿, 但 **check-runs /
+  check-suites 全为 0**; 空提交踢不动, 关开 PR 无效, 新开 PR 也 0 runs;
+  `workflow_dispatch` 却能正常建 run —— 极像"事件系统坏了"。
+- **真相: `pulls.mergeable=false`（分支与 base 冲突）→ GitHub 构造不出 merge
+  ref → 全部 pull_request 类 checks 静默不创建**（不报错、不通知、无注解）。
+  main 被别人推进后最容易踩。
+- 排查序列（按性价比）: ① `pulls/N` 的 `mergeable`/`mergeable_state` 字段
+  （dirty=冲突实锤）; ② `actions/runs?head_sha=` 按 sha 查 runs（分支列表
+  视图会误导）; ③ `commits/<sha>/check-suites` 底层探针; ④ `workflow_dispatch`
+  验证创建链（通 → 事件链问题; 不通 → 更深）。
+- 药方: **合并 base 进分支解冲突 → push → checks 自动复活**; 顺手收益 =
+  分支不再落后主干。教训: "CI 全体静默" 先查 mergeable, 再怀疑事件系统。
