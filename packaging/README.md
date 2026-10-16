@@ -7,7 +7,7 @@ This directory contains packaging specifications, manifests, and build automatio
 ```text
 packaging/
 ├── zip/                  # Windows CLI Portable ZIP
-│   ├── build.ps1         # Builds apeireth-2.0.0-rc.1-windows-x86_64.zip
+│   ├── build.ps1         # Builds apeireth-2.0.0-rc.4-windows-x86_64.zip
 │   ├── build-zip.ps1     # Alias wrapper
 │   ├── install.ps1       # User installation helper
 │   └── uninstall.ps1     # User uninstallation helper

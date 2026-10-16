@@ -8,7 +8,9 @@ Historical design proposals and archived implementations live under `docs/archiv
 
 ```text
 apeireth/
-> Workspace taxonomy: **18 product crates** (foundation 6 / engine 8 / capabilities / adapters / sdk / perception) + 1 bench-only package excluded from the count by convention (cargo metadata lists 19 members).
+> Workspace taxonomy: **workspace = 20 members（19 product crates + 1 bench-only harness）**
+> (foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli, gateway, sdk, tui + `benches` harness)。
+> crate 口径统一见本文件下表与 [INSTALL.md](INSTALL.md)（审计修 B-02 / A-11）。
 
 ├── crates/
 │   ├── foundation/       # stable domain types, protocol, plugins, policy, credentials
@@ -25,15 +27,18 @@ apeireth/
 └── previews/              # design/reference assets
 ```
 
-The root `Cargo.toml` is the only product Rust workspace. It contains eighteen
-packages, grouped by responsibility rather than development history:
+The root `Cargo.toml` is the only product Rust workspace. It contains twenty
+workspace members — nineteen product crates plus the bench-only harness
+(`benches`, `publish = false`) — grouped by responsibility rather than
+development history:
 
 | Group | Packages | Responsibility |
 | --- | --- | --- |
 | Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration` | stable types, wire contracts, plugin contracts, policy, credential resolution, orchestration |
 | Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ`, `apeireth-guard` | mechanism kernel, concrete production assembly, provider adapters, persistence, memory, perception, and organ domains, plus the behavior-chain safety guard (`crates/engine/guard`, added by the 2026-10-06 collaborator batch) |
 | Capabilities | `apeireth-tools-canonical` | built-in tools and the single process-execution boundary |
-| Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk` | HTTP gateway, command-line entry point, SDK surface |
+| Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk`, `apeireth-tui` | HTTP gateway, command-line entry point, SDK surface, terminal cockpit (full-screen TUI client) |
+| Bench harness | `benches` | benchmark reproduction harness (workspace member, not a product crate) |
 
 `frontend/companion-desktop/src-tauri` has its own workspace and is deliberately
 not a member of the root workspace. `legacy/` is reference material only and is

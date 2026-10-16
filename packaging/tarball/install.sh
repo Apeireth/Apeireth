@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-VERSION="${APEIRETH_VERSION:-2.0.0-rc.1}"
+VERSION="${APEIRETH_VERSION:-2.0.0-rc.4}"
 INSTALL_DIR="${APEIRETH_INSTALL_DIR:-/opt/apeireth}"
 
 # 0. root 守门

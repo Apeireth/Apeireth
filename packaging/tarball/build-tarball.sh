@@ -2,8 +2,8 @@
 # =============================================================================
 # packaging/tarball/build-tarball.sh
 #
-# tarball 的 build script (Apeireth 2.0.0-rc.1)
-# 产出目标: apeireth-2.0.0-rc.1-linux-x86_64.tar.gz
+# tarball 的 build script (Apeireth 2.0.0-rc.4)
+# 产出目标: apeireth-2.0.0-rc.4-linux-x86_64.tar.gz
 # 主脚本 packaging/tarball/build.sh 已有, 本脚本是 alias 满足 spec 命名
 #
 # 用法:

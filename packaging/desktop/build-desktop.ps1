@@ -1,7 +1,7 @@
 # packaging/desktop/build-desktop.ps1
 # Master build script for Apeireth Desktop Companion (Portable ZIP + MSI + NSIS)
 param(
-    [string]$Version = "2.0.0-rc.1",
+    [string]$Version = "2.0.0-rc.4",
     [string]$Target = "x86_64-pc-windows-msvc"
 )
 

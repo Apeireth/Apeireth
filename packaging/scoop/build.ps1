@@ -3,13 +3,13 @@
 #
 # Usage:
 #   .\packaging\scoop\build.ps1
-#   $env:APEIRETH_VERSION = "2.0.0-rc.1"; .\packaging\scoop\build.ps1
+#   $env:APEIRETH_VERSION = "2.0.0-rc.4"; .\packaging\scoop\build.ps1
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..\..
 
 $VERSION = $env:APEIRETH_VERSION
-if (-not $VERSION) { $VERSION = "2.0.0-rc.1" }
+if (-not $VERSION) { $VERSION = "2.0.0-rc.4" }
 $BUCKET_REPO = $env:APEIRETH_BUCKET_REPO
 if (-not $BUCKET_REPO) { $BUCKET_REPO = "apeireth/scoop-bucket" }
 

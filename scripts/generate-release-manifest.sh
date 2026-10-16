@@ -22,7 +22,7 @@ if [[ -z "${VERSION}" ]]; then
   elif [[ -f "${REPO_ROOT}/Cargo.toml" ]]; then
     VERSION="$(grep -E '^\s*version\s*=' "${REPO_ROOT}/Cargo.toml" | head -1 | sed -E 's/.*version\s*=\s*"([^"]+)".*/\1/')"
   else
-    VERSION="2.0.0-rc.1"
+    VERSION="2.0.0-rc.4"
   fi
 fi
 

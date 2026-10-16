@@ -1,4 +1,4 @@
-# Apeireth docker-compose（当前基线 v2.0.0-rc.1）
+# Apeireth docker-compose（当前基线 v2.0.0-rc.4）
 #
 # 单服务编排: apeireth canonical gateway（SQLite 持久化 + 数据卷）。
 # - 镜像由根目录 Dockerfile 构建（构建当前工作区 CLI 并以 `apeireth gateway serve` 启动）
@@ -12,11 +12,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: apeireth/apeireth:2.0.0-rc.1
+    image: apeireth/apeireth:2.0.0-rc.4
     container_name: apeireth
     restart: unless-stopped
     ports:
-      - "8080:8080"   # HTTP API + WebSocket + /health
+      - "8080:8080"   # HTTP API + /health（WebSocket 服务端未接线，见 docs/03-reference/capabilities-matrix.md）
     environment:
       # 必填才能真对话（留空走本地 scripted 桩）
       APEIRETH_API_KEY: ${APEIRETH_API_KEY:-}

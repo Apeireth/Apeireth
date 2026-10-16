@@ -41,7 +41,7 @@ fi
 
 # === 1. 找 tarball ===
 cd "$(dirname "$0")/../.."
-VERSION="${APEIRETH_VERSION:-2.0.0-rc.1}"
+VERSION="${APEIRETH_VERSION:-2.0.0-rc.4}"
 INSTALL_DIR="${APEIRETH_INSTALL_DIR:-/opt/apeireth}"
 
 if [[ -n "${1:-}" ]]; then

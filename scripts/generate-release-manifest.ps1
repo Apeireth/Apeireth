@@ -8,11 +8,11 @@
 .PARAMETER DistDir
     Directory containing staged release artifacts (default: "dist").
 .PARAMETER Version
-    Release version (e.g. "2.0.0-rc.1"). Auto-detected if omitted.
+    Release version (e.g. "2.0.0-rc.4"). Auto-detected if omitted.
 .PARAMETER CommitSha
     Git commit SHA. Auto-detected via git rev-parse HEAD if omitted.
 .PARAMETER ReleaseTag
-    Git tag (e.g. "v2.0.0-rc.1"). Defaults to "v<Version>".
+    Git tag (e.g. "v2.0.0-rc.4"). Defaults to "v<Version>".
 .PARAMETER StageMetadata
     If set, copies cyclonedx-sbom.json and THIRD-PARTY-NOTICES.md into DistDir before manifest generation.
 #>
@@ -68,7 +68,7 @@ if (-not $Version) {
         }
     }
     if (-not $Version) {
-        $Version = "2.0.0-rc.1"
+        $Version = "2.0.0-rc.4"
     }
 }
 

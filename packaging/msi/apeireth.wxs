@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Apeireth Windows MSI Installer Definition (APEIRETH 2.0 RC)
-  Platform: Windows x86_64 (msiexec /i apeireth-2.0.0-rc.1-windows-x86_64.msi)
+  Platform: Windows x86_64 (msiexec /i apeireth-2.0.0-rc.4-windows-x86_64.msi)
   Tool: WiX Toolset 3.x / 4.x / cargo-wix
   Target Path: %ProgramFiles%\Apeireth\
 
   Lifecycle:
-    - Install: msiexec /i apeireth-2.0.0-rc.1-windows-x86_64.msi /qn
+    - Install: msiexec /i apeireth-2.0.0-rc.4-windows-x86_64.msi /qn
     - Upgrade: msiexec /i apeireth-2.0.0.msi /qn (MajorUpgrade automated)
-    - Repair:  msiexec /f apeireth-2.0.0-rc.1-windows-x86_64.msi
+    - Repair:  msiexec /f apeireth-2.0.0-rc.4-windows-x86_64.msi
     - Uninstall: msiexec /x {ProductCode} or via Add/Remove Programs
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"

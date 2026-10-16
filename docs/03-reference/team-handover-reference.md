@@ -8,7 +8,7 @@
 ---
 
 ## 目录
-1. [项目全貌与 18-Crate 依赖拓扑](#1-项目全貌与-18-crate-依赖拓扑)
+1. [项目全貌与 20-Member 依赖拓扑](#1-项目全貌与-20-member-依赖拓扑)
 2. [5 项 LOCKED 核心资产与 9 哲学锚守则](#2-5-项-locked-核心资产与-9-哲学锚守则)
 3. [全域系统能力与核心 API 一览表](#3-全域系统能力与核心-api-一览表)
 4. [外部 170+ 标杆与同类工程演进图谱（历史）](#4-外部-170-标杆与同类工程演进图谱)
@@ -18,14 +18,16 @@
 
 ---
 
-## 1. 项目全貌与 18-Crate 依赖拓扑
+## 1. 项目全貌与 20-Member 依赖拓扑
+
+> 口径（审计修 B-02）：workspace = 20 members（19 crates + bench harness；adapters 4 = cli/gateway/sdk/tui）。
 
 Apeireth 2.0 采用严格的**四层单向依赖微内核架构**，杜绝跨层逆向引用与循环依赖：
 
 ```mermaid
 graph TD
     subgraph Layer4 [Layer 4: 适配器与网关层 (Adapters)]
-        GW[apeireth-gateway: 8帧WS+分句推流+BargeIn]
+        GW[apeireth-gateway: 8帧WS契约(服务端未接线)+分句推流+BargeIn]
         CLI[apeireth-cli: 统一启动与会话执行]
         SDK[apeireth-sdk: 跨平台安全SDK]
     end
@@ -70,7 +72,7 @@ graph TD
 | **1. 9 项哲学锚本体** | `crates/foundation/core/src/eight_anchors.rs` | S-1~S-3、O-1~O-6 枚举定义严格锁定 |
 | **2. 13 键 LOCKED 判别词汇表** | `crates/foundation/core/src/philosophy.rs` | `ALL_THIRTEEN_KEYS` 13 键原则判定逻辑锁定 |
 | **3. 3 项不可变脊柱** | `crates/foundation/core/src/onion.rs` | Self-Disable (L0) / L0 HA (500ms) / 13 键 Verdict Cache |
-| **4. workspace.version** | 根目录 `Cargo.toml` | `version = "2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210）保持不变 |
+| **4. workspace.version** | 根目录 `Cargo.toml` | 随 release 推进（现值 `2.0.0-rc.4`；2026-08-30 RC1 发布起旧 1.2.0 双轴制终结）；仅 release authority 可改 |
 | **5. R11 baseline 3 值** | `0.8682 / 0.8532 / 0.9063` | 历史评测基准常数锁定 |
 
 ### 2.2 9 大哲学锚落地清单

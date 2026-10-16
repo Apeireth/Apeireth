@@ -27,7 +27,7 @@ Apeireth 团队承诺漏洞披露过程透明，通过以下渠道公告：
 
 ## 适用范围 (Scope)
 
-以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 18-crate 工作区）：
+以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 workspace = 20 members：19 crates + bench harness）：
 
 - `apeireth-core`（`crates/foundation/core`）— 稳定域原语 + kernel（IDs/时间/生命周期/事件）；13 键 verdict cache 与洋葱/守门语义（v1 脊椎，接线状态见 ROADMAP P0/P2）
 - `apeireth-protocol`（`crates/foundation/protocol`）— 规范化协议 DTO 与 vendor wire 翻译（不含 HTTP client）
@@ -72,4 +72,4 @@ v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`
 
 ---
 
-_Last updated_: 2026-10-13 (文档同步对账：测试基线口径统一 = **5360 passed / 0 failed / 22 ignored**（`cargo test --workspace --locked -j 2`，190 suites，2026-10-13 全绿实测；历史口径见 CHANGELOG）；18-crate 范围与 `apeireth-guard` 安全边界 2026-10-06 已核验；workspace.version 2.0.0-rc.1、仓库 URL `Apeireth/Apeireth` 不变)
+_Last updated_: 2026-10-16 (文本可信度批对账：测试基线改引单一真源 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)（2026-10-16 口径：199 套件 / 5360 passed / 0 failed / 22 ignored，审计修 B-01），不再抄写数字；crate 口径 = workspace 20 members（19 crates + bench harness，审计修 B-02）；`apeireth-guard` 安全边界 2026-10-06 已核验；workspace.version 2.0.0-rc.4（审计修 B-03）、仓库 URL `Apeireth/Apeireth` 不变)

@@ -9,16 +9,18 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-4638%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/04-internal/absorption-ledger.md)
+[![Tests](https://img.shields.io/badge/tests-5360%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
 [![Kani](https://img.shields.io/badge/proof-Kani%20%2B%20TLA%2B%20required%20check-blueviolet.svg)](research/verification)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
-> 口径注记：**18 个产品 crate**（foundation 6 / engine 8 / capabilities / adapters / sdk / perception）+ 1 个 bench 专用包按口径不计（cargo metadata 计 19 个 workspace 成员）。
+> 口径注记：**workspace = 20 members（19 个产品 crate + 1 个 bench harness）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）。
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
 </div>
+
+> **审计修注记（宣称与实现落差清单，2026-10-16 批）**：本稿数字与口径已随「落差清账·文本可信度批」对齐（审计修 A-03 / A-07 / A-11 / B-02）；能力诚实边界全集（WebSocket 服务端未接线 / P2P mesh 明文 / SDK `STUB_MODE=true` / 默认能力表 / 记忆数学简化级）见英文草稿 [README-draft-pending.md](README-draft-pending.md) 头部逐条注记与 [capabilities-matrix.md](../03-reference/capabilities-matrix.md) §0.2。
 
 ---
 
@@ -39,7 +41,7 @@
 | 🧠 **记得你**——几个月前随口提过的一句话，它还接得住 | 双时态记忆：每句话带着"什么时候说的"与"当时怎么理解的"；历史追加写死，永不改写 |
 | 🔒 **管得住自己**——想删文件、发消息、动你的钱？先过你的审批 | 风险分级 + 机器证明过的审批状态机："一次批准只产生一次副作用" |
 | 🌱 **会长大**——语气、偏好、相处方式，慢慢长成"你们的" | 性格养成：学习开着、调整可见、每一步可撤销 |
-| 🛡 **经得起复核**——因为它要被托付一生 | 4638 项测试、25 条机器证明、每个数字带脚本——被这样信任，是要付代价的 |
+| 🛡 **经得起复核**——因为它要被托付一生 | 5,360 项测试（2026-10-16 基线）、25 条机器证明、每个数字带脚本——被这样信任，是要付代价的 |
 
 **它不假装。** 它说"我没有心"——这不是谦虚，是诚实。它不模拟意识、不冒充情感、不虚报能力。做不到的写"做不到"，未接线的挂"未接线"。这条誓言我们写进了编译器、测试和每一份文档。
 
@@ -58,7 +60,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 
 ### 三步开始
 
-1. 双击桌面图标 → 选服务商 → 填密钥 → 开聊。密钥进**系统钥匙串**（不落盘明文，重启自己回来）；
+1. 双击桌面图标 → 选服务商 → 填密钥 → 开聊。密钥优先进**系统钥匙串**（`APEIRETH_KEYRING_BACKEND=auto`）；钥匙串不可用时**退化为环境变量/内存后端**——诚实边界见 `apeireth-credentials` crate（文件后端为明文，zeroize 未实现前不宣称）（审计修 A-07）；
 2. 先聊两句试试——它会用你的话回答你，不是用模板；
 3. 想调它的性子？设置页「性格与记忆」：四个滑杆、三档预设（省心 / 均衡 / 深度记忆）——**你调的每一档它都记得，也都可以反悔**。
 
@@ -70,7 +72,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 
 ## 三、它是怎么做到的（给翻开引擎盖的你）
 
-"被记得"听起来是件柔软的事，做成它需要非常硬的工程。18 个 crate 的认知微内核，纯 Safe Rust、零 unsafe——不是为了炫技，是因为**要被托付一生的东西，不能有未定义行为**。
+"被记得"听起来是件柔软的事，做成它需要非常硬的工程。20 成员工作区（19 个产品 crate + 1 个 bench harness）的认知微内核，纯 Safe Rust、零 unsafe——不是为了炫技，是因为**要被托付一生的东西，不能有未定义行为**。
 
 ### 🧠 记忆：会淡，但不会错
 
@@ -138,8 +140,9 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 
 ```bash
 # 1. 测试是真的
-cargo test --workspace --locked
-# 预期：147 套件全绿、0 失败（当前基线 4638 passed）
+cargo test --workspace --all-targets --locked --no-fail-fast
+# 预期：0 失败（2026-10-16 基线：199 套件 / 5360 passed / 22 ignored）
+# ——单一真源 docs/03-reference/test-baseline.md（审计修 A-03）
 
 # 2. 红线是真的：纯 Safe Rust + 零警告
 cargo clippy --workspace --all-targets --locked -- -D warnings

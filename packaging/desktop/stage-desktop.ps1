@@ -1,7 +1,7 @@
 # packaging/desktop/stage-desktop.ps1
 # Prepares and stages Tauri Desktop frontend and binaries for MSI/NSIS packaging
 param(
-    [string]$Version = "2.0.0-rc.1",
+    [string]$Version = "2.0.0-rc.4",
     [string]$Target = "x86_64-pc-windows-msvc"
 )
 

@@ -1,7 +1,8 @@
 # Apeireth 2.0 能力矩阵与契约参考 (Capabilities Matrix & Contract Reference)
 
-> **版本**: 2.0.0-rc.1 / runtime-assembly refactor (2026-09-04)
+> **版本**: 2.0.0-rc.4 / runtime-assembly refactor (2026-09-04 起，2026-10-16 文本可信度批对账)
 > **适用范围**: 开发者集成、API 调用方、前端控制台与多 Agent 协同网络
+> **测试基线**: 见本文件 §0.1（审计修 A-03 / C-01）；**默认能力**: 见本文件 §0.2（审计修 A-10）
 
 ---
 
@@ -27,6 +28,38 @@
 `supported=true, available=false` 表示实现存在但当前 Provider/凭据/装配不可用；
 客户端必须显示后端 `reason`。未知能力与缺失 manifest 不得推测为已支持。
 
+### 0.1 测试基线（审计修 A-03 / C-01）
+
+徽章（Tests）链接本文件，其数字以此处为据；**单一真源**见
+[test-baseline.md](test-baseline.md)（口径定义与历史口径也在那里）。
+
+| 项 | 值 |
+|---|---|
+| 命令 | `cargo test --workspace --all-targets --locked --no-fail-fast` |
+| 结果 | **199 套件 / 5360 passed / 0 failed / 22 ignored** |
+| 日期 | 2026-10-16 |
+| 工具链 | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 / rustup 1.29.1；MSVC 14.44.35207 + Windows SDK 10.0.26100.0 |
+
+> 22 ignored 全部为需真 API key / 真硬件的 live E2E，CI 默认不跑；数字逐批增长，以
+> test-baseline.md 最近一次全量实测为准。
+
+### 0.2 默认能力表（审计修 A-10）
+
+按生产装配默认值（`crates/engine/runtime-assembly/src/canonical/production.rs`
+`ProductionModulesConfig::default()`，2026-10-16 核对）与 CLI env 旋钮实况。**默认 OFF 的能力
+不是系统现状**，需显式 env 开启；未接线项如实标注。
+
+| 档 | 能力 | 开启方式 / 备注 |
+|---|---|---|
+| **默认 ON** | 记忆召回 `memory_recall` / 记忆写回 `memory_writeback` / 偏好召回 `preference_recall` / 自评 `self_assessment` / 自省通道 `self_status` | 生产默认装配 |
+| **默认 ON** | 只读工具面：`filesystem` / `search` / `repo` | `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 可关 |
+| **默认 ON**（CLI env 覆盖层未设即开） | 偏好学习 `preference_learning` / 主动召回 `proactive_recall` / 记忆注入格式 `memory_injection` / typed 召回 | `=0` 或对应 `APEIRETH_DISABLE_*=1` 关（DISABLE 优先） |
+| **默认 OFF（需 env 显式开启）** | shell（`APEIRETH_ENABLE_SHELL=1`，注册即审批级）/ fetch（`APEIRETH_ENABLE_FETCH=1`）/ content_feed / MCP（`mcp`） | 危险项维持默认关 |
+| **默认 OFF（需 env 显式开启）** | Judge（`APEIRETH_COGNITIVE_JUDGE=1`）/ Council（`APEIRETH_COGNITIVE_COUNCIL=1`）/ 9 器官（`APEIRETH_ENABLE_ORGANS=1`）/ consolidation（`APEIRETH_ENABLE_CONSOLIDATION=1`）/ reflexion（`APEIRETH_ENABLE_REFLEXION=1`） | LLM 重的项默认关，逐项显式授权 |
+| **默认 OFF（需 env 显式开启）** | 写族：`file_write`（总闸 `APEIRETH_ENABLE_FILE_WRITE=1`）/ `git_write` / `worktree_plan` / `worktree_apply` / `skill_distill` / `skill_search` | 写总闸未开则写族工具注册不成（注册即闸） |
+| **默认 OFF（装配默认 false）** | `partner_bond` / `morphology_recall` / `community_triage` / `education` / `absorption_insight` | 库级在场，装配默认不接 |
+| **未接线（不是默认开关问题）** | 第三洋葱 DSL 层（`DslOnionLayer`，无生产接线）；双洋葱执行钩子需 `APEIRETH_ENABLE_ONION_LAYER=1`；`memory.update`（`reason=not_implemented`）；WebSocket 服务端（见 §1 `gw.duplex_ws` 行） | 如实标注，勿当系统现状 |
+
 ---
 
 ## 1. 全域能力速查矩阵
@@ -45,9 +78,9 @@
 | **编排 (Orchestration)** | `orch.cognitive_scheduler`| `apeireth-orchestration::cognitive_quota_scheduler`| `CognitiveQuotaScheduler::schedule_next()` | 多维认知配额 Q + PIP 优先级继承 + 抢占快照压栈 |
 | **编排 (Orchestration)** | `orch.lineage_spawning` | `apeireth-orchestration::lineage_spawning` | `LineageSpawningOrchestrator::spawn_progeny()` | 跨代教养协议 + Ed25519 表观遗传同构 + 三阶段晋级 |
 | **编排 (Orchestration)** | `orch.council_7` | `apeireth-orchestration::council` | `Council::decide(proposal)` | 7 Advisor 结构化辩论与 Veto 机制 |
-| **记忆 (Memory)** | `mem.betti_hole_detector`| `apeireth-memory::betti_hole_detector` | `BettiHoleDetector::analyze()` | Vietoris-Rips 持续同调 + β₀/β₁/β₂ 拓扑洞 + 负压求知梯度 |
-| **记忆 (Memory)** | `mem.kuramoto_resonance`| `apeireth-memory::kuramoto_resonance` | `KuramotoResonanceEngine::step()` | 非线性振子相锁 + 零阻抗虫洞 + 顿悟雪崩元概念 |
-| **记忆 (Memory)** | `mem.chronicle_crystallizer`| `apeireth-memory::chronicle_crystallizer` | `ChronicleCrystallizer::crystallize()` | 昼夜相变结晶 + 分形幂律衰减 R(t) + SHA-256 Merkle 锚定 |
+| **记忆 (Memory)** | `mem.betti_hole_detector`| `apeireth-memory::betti_hole_detector` | `BettiHoleDetector::analyze()` | 持续同调 β₀（并查集）/β₁（3/4 环枚举）；**β₂ 为简化级（恒 0 占位）**，简化/实验级实现（审计修 A-12） |
+| **记忆 (Memory)** | `mem.kuramoto_resonance`| `apeireth-memory::kuramoto_resonance` | `KuramotoResonanceEngine::step()` | 非线性振子相锁（简化/实验级：部分字段未接线，审计修 A-12） |
+| **记忆 (Memory)** | `mem.chronicle_crystallizer`| `apeireth-memory::chronicle_crystallizer` | `ChronicleCrystallizer::crystallize()` | 昼夜相变结晶 + 分形幂律衰减 R(t)；完整性锚定为**单次 SHA-256（非 Merkle 链）**，简化/实验级（审计修 A-12） |
 | **记忆 (Memory)** | `mem.three_tier_vault`| `apeireth-memory::three_tier_vault` | `ThreeTierVault`, `TocTreeIndexer` | 三层知识库 (Raw-Wiki-Schema) + 无向量 TOC 树路由 |
 | **记忆 (Memory)** | `mem.river_topology` | `apeireth-memory::river_topology` | `DualScaledFieldSolver::solve()` | 双标度连续场 (DualScaled) + LIF 脉冲 + Ω 门控 |
 | **记忆 (Memory)** | `mem.residual_pyramid`| `apeireth-memory::residual_pyramid` | `OrthogonalResidualPyramid::analyze()` | 修正 Gram-Schmidt 正交投影 + 90% 能量截断 |
@@ -68,9 +101,9 @@
 | **工具 (Capabilities)** | `tool.stealth_crawler`| `apeireth-tools-canonical::stealth_crawler` | `StealthCrawlerEngine::parse_scraped_document()` | 高反爬异步无头浏览器 + 指纹伪装 + 短视频多模态提取 |
 | **适配器 (Adapters)** | `cli.portable_bundle` | `apeireth-cli::portable_bundle` | `PortableBundleSynthesizer::generate_windows_launcher()` | 随身 U 盘生命体便携化打包器 + `./data/` 相对隔离 |
 | **网关 (Gateway)** | `gw.file_fetcher` | `apeireth-gateway::file_fetcher` | `TransparentFileFetcher::fetch_file()` | 跨节点透明文件穿透 + 内容寻址缓存 |
-| **网关 (Gateway)** | `gw.duplex_ws` | `apeireth-gateway::duplex_gateway` | `DuplexFrame`, `SentenceDivider` | 8 核心帧体系 + 实时分句 + 毫秒级 Barge-in |
+| **网关 (Gateway)** | `gw.duplex_ws` | `apeireth-gateway::duplex_gateway` | `DuplexFrame`, `SentenceDivider` | **协议契约已定义（类型 + 测试），HTTP 服务端未接线**：gateway 无 ws 依赖、无 `/v1/ws` 路由，能力面板自报 `voice.duplex available=false, reason=not_assembled`（审计修 A-04） |
 | **网关 (Gateway)** | `gw.ember_hud` | `apeireth-gateway::ember_hud_driver` | `EmberHudDriver::synthesize_uniforms()` | 4.0s 生理呼吸三次正弦波 + 暗角微光 + WGSL 着色器 |
-| **协议 (Protocol)** | `proto.p2p_mesh` | `apeireth-protocol::p2p_mesh` | `P2pMeshController::wrap_onion_packet()` | 去中心化 P2P 蓝牙/LAN Mesh + Noise 密钥交换 + 洋葱路由 + 记忆漫游 |
+| **协议 (Protocol)** | `proto.p2p_mesh` | `apeireth-protocol::p2p_mesh` | `P2pMeshController`, `MeshPacket` | **明文 mesh**：报文编解码 + 对端注册表；无 Noise 握手、无洋葱多层封装（`payload_hex` 为十六进制明文，`payload_len_hex` 仅为长度非校验和，`packet_id` 不保证唯一/不防重放）；真加密在 v2.1 roadmap（审计修 A-05） |
 | **感知 (Perception)** | `perc.minimax_tts` | `apeireth-perception::voice::minimax_tts`| `synthesize_stream()` | 128kbps 32kHz 音频流 + 3D PAD 情感调制 |
 
 > **状态标注**：本节保留库级能力契约与历史实现索引；是否 PRODUCTION WIRED、DEFAULT ENABLED 或当前可用，必须以运行时 `/v1/apeireth/capabilities` 为准。当前 runtime kernel 只保留机制与抽象端口；具体认知、工具、Organ、SQLite 装配位于 `apeireth-runtime-assembly`。canonical 网关的 chat SSE 当前为缓冲成帧（完整 canonical 完成路径结束后返回帧与 `[DONE]`），非逐 token 增量流式；Activity SSE 的生命周期事件则来自 Runtime Event Spine。没有真实 production backend 的能力保持 `supported=false`。
@@ -135,6 +168,10 @@ applier.apply_patch(patch)?; // 内存预演 -> 磁盘写入 (任意异常自动
 ```
 
 ### 2.3 全双工 WebSocket 帧定义 (Duplex Frames)
+
+> **接线状态（审计修 A-04）**：以下帧定义是**协议契约**（`apeireth-protocol::ws_v1` 类型 + 测试，
+> SDK 文档引用）；**HTTP 服务端尚未接线**——gateway 无 ws 依赖、无 `/v1/ws` 路由，能力面板自报
+> `voice.duplex available=false, reason=not_assembled`。接线前不得当作可用端点宣传。
 ```json
 // 助手下发语音片段
 {

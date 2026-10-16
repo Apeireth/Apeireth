@@ -214,6 +214,11 @@ hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1"] 
 # 避开 SQLITE_ENABLE_LOAD_EXTENSION 宏的 bundled 缺位).
 sqlite-vec = "0.1"
 
+# 构建缓存治理（2026-10-16 磁盘建议书 P0-1）：第三方依赖不生成调试信息，自有代码保留全调试
+# （config 优先级实测高于 manifest；临时开满调试用 CARGO_PROFILE_DEV_DEBUG=2）
+[profile.dev.package."*"]
+debug = 0
+
 [profile.release]
 opt-level = 3
 lto = "fat"

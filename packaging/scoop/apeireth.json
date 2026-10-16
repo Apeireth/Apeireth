@@ -1,5 +1,5 @@
 {
-    "version": "2.0.0-rc.1",
+    "version": "2.0.0-rc.4",
     "description": "Apeireth OS 2.0 - AGI Operating System & AI Growth Platform (API server & CLI)",
     "homepage": "https://github.com/apeireth/apeireth-rust",
     "license": "Apache-2.0",
@@ -10,7 +10,7 @@
     },
     "architecture": {
         "64bit": {
-            "url": "https://github.com/apeireth/apeireth-rust/releases/download/v2.0.0-rc.1/apeireth-2.0.0-rc.1-windows-x86_64.zip",
+            "url": "https://github.com/apeireth/apeireth-rust/releases/download/v2.0.0-rc.4/apeireth-2.0.0-rc.4-windows-x86_64.zip",
             "hash": "REPLACE_WITH_RELEASE_SHA256_AT_TAG_TIME"
         }
     },

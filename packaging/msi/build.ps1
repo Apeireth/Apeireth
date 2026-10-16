@@ -1,5 +1,5 @@
 # Apeireth Windows MSI Packaging Script (APEIRETH 2.0 RC)
-# Platform: Windows x86_64 (msiexec /i apeireth-2.0.0-rc.1-windows-x86_64.msi)
+# Platform: Windows x86_64 (msiexec /i apeireth-2.0.0-rc.4-windows-x86_64.msi)
 # Tool: WiX Toolset / cargo-wix
 # Target Path: %ProgramFiles%\Apeireth\
 
@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..\..
 
 $VERSION = $env:APEIRETH_VERSION
-if (-not $VERSION) { $VERSION = "2.0.0-rc.1" }
+if (-not $VERSION) { $VERSION = "2.0.0-rc.4" }
 $TARGET = $env:APEIRETH_TARGET
 if (-not $TARGET) { $TARGET = "x86_64-pc-windows-msvc" }
 

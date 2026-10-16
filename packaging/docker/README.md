@@ -1,4 +1,4 @@
-# Apeireth Docker 包 (Apeireth 2.0 RC1, Linux packaging)
+# Apeireth Docker 包 (Apeireth 2.0 RC4, Linux packaging)
 
 ## 文件清单
 
@@ -9,13 +9,13 @@
 
 ```bash
 # 1. 单镜像 build
-docker build -t apeireth/apeireth:2.0.0-rc.1 -t apeireth/apeireth:latest .
+docker build -t apeireth/apeireth:2.0.0-rc.4 -t apeireth/apeireth:latest .
 
 # 2. 多架构 build (linux/amd64 + linux/arm64)
 docker buildx create --use --name apeireth-builder
 docker buildx build --platform linux/amd64,linux/arm64 \
-    --tag apeireth/apeireth:2.0.0-rc.1 --tag apeireth/apeireth:latest \
-    --tag ghcr.io/apeireth/apeireth:2.0.0-rc.1 --tag ghcr.io/apeireth/apeireth:latest \
+    --tag apeireth/apeireth:2.0.0-rc.4 --tag apeireth/apeireth:latest \
+    --tag ghcr.io/apeireth/apeireth:2.0.0-rc.4 --tag ghcr.io/apeireth/apeireth:latest \
     --push .
 
 # 3. compose 启动 (3 服务)
@@ -24,8 +24,8 @@ docker-compose ps  # 期望 3/3 healthy
 curl http://localhost:8080/health
 
 # 4. 推 GHCR
-docker tag apeireth/apeireth:2.0.0-rc.1 ghcr.io/apeireth/apeireth:2.0.0-rc.1
-docker push ghcr.io/apeireth/apeireth:2.0.0-rc.1
+docker tag apeireth/apeireth:2.0.0-rc.4 ghcr.io/apeireth/apeireth:2.0.0-rc.4
+docker push ghcr.io/apeireth/apeireth:2.0.0-rc.4
 ```
 
 ## 镜像分层

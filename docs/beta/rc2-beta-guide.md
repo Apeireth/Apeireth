@@ -1,17 +1,21 @@
-# Apeireth v2.0.0-rc.2 内测指南
+# Apeireth v2.0.0-rc.4 内测指南
 
 > 欢迎来到 Apeireth 内测。这是一份一页纸的安装与反馈指南——**三分钟上手，反馈格式学自我们的真机点击流验收**（步骤号+现象+期望，能让我一次复现）。
 
 ## 一、安装（2 分钟）
 
-1. 下载 `Apeireth Companion_2.0.0-rc.2_x64-setup.exe`（[Releases 页](../../releases)）；
+1. 下载 `Apeireth Companion_2.0.0-rc.4_x64-setup.exe`（[Releases 页](../../releases)）；
 2. （可选）核对 SHA256 与 `SHA256SUMS.txt` 一致——我们所有数字都可复核；
 3. 双击安装（默认装到 `C:\Program Files\Apeireth Companion`）→ 桌面出现快捷方式。
 
 ## 二、首次运行（3 分钟）
 
-1. 双击桌面图标 → **首启向导**：选服务商（DeepSeek / OpenAI 兼容 / 本地）→ 填密钥 → 开始使用；
-   - 密钥存入**系统钥匙串**，不落盘明文，重启自动恢复；
+1. 双击桌面图标 → **首启向导**：选服务商 → 填密钥 → 开始使用；
+   - 服务商为**三家**：OpenAI 兼容 / MiniMax / Anthropic（审计修 E-08）。**DeepSeek 走 OpenAI 兼容**：
+     服务商选「OpenAI 兼容」，Base URL 填 `https://api.deepseek.com/v1`、填 DeepSeek key 即可；
+     （注意 DeepSeek 无 embeddings 端点，语义向量检索需另配 `APEIRETH_EMBEDDING_URL`，仅环境变量、UI 不暴露）
+   - 密钥优先存入**系统钥匙串**；钥匙串不可用时退化为环境变量/内存后端（诚实边界见 credentials crate，
+     启用钥匙串：设 `APEIRETH_KEYRING_BACKEND=auto`）（审计修 E-08 附注，同类口径见 A-07）；
 2. 说句话试试——回复应当**逐字流式**出现；
 3. 设置页可以调它的性子：**四个滑杆、三档预设**（省心/均衡/深度记忆）——全部即点即生效，没有保存按钮。
 
@@ -28,7 +32,7 @@
 步骤号/操作：（如"设置→打开 Shell 开关"）
 现象：（实际发生了什么，界面上的原话最好）
 期望：（你认为应该发生什么）
-截图/日志：（可选；日志在 %LOCALAPPDATA%\Apeireth Companion\logs\）
+截图/日志：（可选；日志在 %LOCALAPPDATA%\Apeireth\logs\——apeireth-desktop.log / apeireth-backend.log）
 ```
 
 ⚠️ **遇到异常不要默默重跑**——第一次的现场最值钱。

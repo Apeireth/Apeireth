@@ -50,7 +50,7 @@ else
         echo "❌ 未找到 .rpm (默认路径 target/**/apeireth-${VERSION}*.rpm)"
         echo "   选项:"
         echo "   1. 先跑 packaging/rpm/build.sh 编出 .rpm"
-        echo "   2. 从 GitHub release 下载: https://github.com/apeireth/apeireth-rust/releases/download/v2.0.0-rc.1/apeireth-2.0.0-0.1.rc1.x86_64.rpm"
+        echo "   2. 从 GitHub release 下载: https://github.com/apeireth/apeireth-rust/releases/download/v2.0.0-rc.4/apeireth-2.0.0-0.1.rc1.x86_64.rpm"
         echo "   3. 显式传: sudo $0 /path/to/apeireth.rpm"
         exit 1
     fi

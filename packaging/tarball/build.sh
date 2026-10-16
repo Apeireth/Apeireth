@@ -15,7 +15,7 @@
 set -uo pipefail  # -e removed: 0 触碰, 1.0 release engineer 后续实装 musl 包装
 cd "$(dirname "$0")/../.."
 
-VERSION="${APEIRETH_VERSION:-2.0.0-rc.1}"
+VERSION="${APEIRETH_VERSION:-2.0.0-rc.4}"
 TARGET="${APEIRETH_TARGET:-x86_64-unknown-linux-musl}"
 
 echo "=== apeireth tarball build v${VERSION} (target=${TARGET}) ==="

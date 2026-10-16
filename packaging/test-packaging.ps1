@@ -73,7 +73,7 @@ Assert-Check $hasCleanUninstall "WiX specifies clean directory removal on uninst
 # === 3. Tauri Configuration Audit ===
 Write-Host "`n--- 3. Auditing Tauri Desktop Configuration (tauri.conf.json) ---"
 $tauriConf = Get-Content "frontend\companion-desktop\src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
-Assert-Check ($tauriConf.version -eq "2.0.0-rc.1") "Tauri version is 2.0.0-rc.1 ($($tauriConf.version))"
+Assert-Check ($tauriConf.version -eq "2.0.0-rc.4") "Tauri version is 2.0.0-rc.4 ($($tauriConf.version))"
 
 $wixUpgradeCode = $tauriConf.bundle.windows.wix.upgradeCode
 $validWixUpgrade = $wixUpgradeCode -match '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
@@ -87,8 +87,8 @@ Assert-Check $iconExists "Tauri icon.ico asset exists"
 # === 4. Scoop Manifest Audit ===
 Write-Host "`n--- 4. Auditing Scoop Manifest (packaging/scoop/apeireth.json) ---"
 $scoopJson = Get-Content "packaging\scoop\apeireth.json" -Raw | ConvertFrom-Json
-Assert-Check ($scoopJson.version -eq "2.0.0-rc.1") "Scoop manifest version is 2.0.0-rc.1 ($($scoopJson.version))"
-Assert-Check ($scoopJson.architecture.'64bit'.url -like "*apeireth-2.0.0-rc.1-windows-x86_64.zip") "Scoop manifest 64bit URL targets apeireth-2.0.0-rc.1-windows-x86_64.zip"
+Assert-Check ($scoopJson.version -eq "2.0.0-rc.4") "Scoop manifest version is 2.0.0-rc.4 ($($scoopJson.version))"
+Assert-Check ($scoopJson.architecture.'64bit'.url -like "*apeireth-2.0.0-rc.4-windows-x86_64.zip") "Scoop manifest 64bit URL targets apeireth-2.0.0-rc.4-windows-x86_64.zip"
 
 # === 5. Packaging Scripts Existence ===
 Write-Host "`n--- 5. Auditing Packaging Scripts ---"

@@ -21,7 +21,7 @@ docs/
 |---|---|
 | [01-architecture/brand.md](01-architecture/brand.md) | 品牌：命名（Apeiron）+ 宣言 + Logo Design Brief |
 | [01-architecture/vision.md](01-architecture/vision.md) | 愿景：五原型 + 产品北极星 + 三远合一 |
-| [01-architecture/philosophy.md](01-architecture/philosophy.md) | 哲学：8 锚 / 三洋葱 / 0 装 PASS |
+| [01-architecture/philosophy.md](01-architecture/philosophy.md) | 哲学：9 锚 / 三洋葱 / 0 装 PASS |
 | [01-architecture/architecture.md](01-architecture/architecture.md) | 架构总览（当前根工作区与独立桌面工作区）|
 | [01-architecture/security.md](01-architecture/security.md) | 安全模型（对齐实际机制）|
 | [01-architecture/engineering-report.md](01-architecture/engineering-report.md) | 工程报告（1.0 实测数据/里程碑/纪律）|
@@ -37,6 +37,7 @@ docs/
 | [02-guides/first-contribution.md](02-guides/first-contribution.md) | 新人上手指南（good-first-issue → 第一个 PR 动线）|
 | [03-reference/crates.md](03-reference/crates.md) | 当前根工作区 crate 索引 |
 | [03-reference/capabilities-matrix.md](03-reference/capabilities-matrix.md) | 工业级能力矩阵与对外契约参考 |
+| [03-reference/test-baseline.md](03-reference/test-baseline.md) | **测试基线单一真源（命令/口径/日期/工具链；其余文档只引用不抄写）** |
 | [03-reference/team-handover-reference.md](03-reference/team-handover-reference.md) | **团队接手一站式参考全景手册（权威交接主入口）** |
 | [03-reference/vcp-line-level-absorption-guide.md](03-reference/vcp-line-level-absorption-guide.md) | VCP 核心算法行级代码解构与 2.0 吸收升级指南 |
 | [03-reference/api.md](03-reference/api.md) | API 参考（真实端点/工具协议/认证）|
@@ -56,9 +57,9 @@ docs/
 | [../ROADMAP.md](../ROADMAP.md) | 顶层路线图（v2 下一步按优先级；v1 时代详单在 archive/roadmap） |
 | [../CHANGELOG.md](../CHANGELOG.md) | 变更流水（v2.0.0-alpha.1 段为重构版记录，其余为 v1 历史） |
 
-## 当前基线（2026-10-06 对账更新；2026-08-27 快照保留在下方）
+## 当前基线（2026-10-16 文本可信度批对账；2026-10-06 / 2026-08-27 快照保留在下方）
 
-默认分支 `main`（HEAD 以实际提交为准），tag `v2.0.0-rc.1`；**18-crate 工作区**（foundation 6 / engine 8 / capabilities 1 / adapters 3；2026-10-06 协作者批新增 `crates/engine/guard`）+ 独立前端 workspace；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。
+默认分支 `main`（HEAD 以实际提交为准），workspace.version `v2.0.0-rc.4`；**workspace = 20 members（19 crates + bench harness）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）+ 独立前端 workspace；测试基线单一真源见 [03-reference/test-baseline.md](03-reference/test-baseline.md)；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。（审计修 A-14 / B-02 / B-03）
 
 历史快照（2026-08-27）：`main` @ `d6910cf7`，tag `v2.0.0-alpha.1`，13-crate 工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）。
 

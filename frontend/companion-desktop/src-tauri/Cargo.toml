@@ -55,6 +55,9 @@ sha1 = "0.10"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Credentials"] }
 
+# 构建缓存治理（2026-10-16 建议书 P0-1 同款）：第三方依赖不生成调试信息
+[profile.dev.package."*"]
+debug = 0
 [profile.release]
 codegen-units = 1
 lto = true

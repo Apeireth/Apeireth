@@ -5,13 +5,13 @@
 #
 # Usage:
 #   .\packaging\zip\build.ps1
-#   $env:APEIRETH_VERSION = "2.0.0-rc.1"; .\packaging\zip\build.ps1
+#   $env:APEIRETH_VERSION = "2.0.0-rc.4"; .\packaging\zip\build.ps1
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..\..
 
 $VERSION = $env:APEIRETH_VERSION
-if (-not $VERSION) { $VERSION = "2.0.0-rc.1" }
+if (-not $VERSION) { $VERSION = "2.0.0-rc.4" }
 $TARGET = $env:APEIRETH_TARGET
 if (-not $TARGET) { $TARGET = "x86_64-pc-windows-msvc" }
 

@@ -1,5 +1,5 @@
 # Apeireth 2.0 Dockerfile (Multi-stage build)
-# Image: apeireth/apeireth:2.0.0-rc.1
+# Image: apeireth/apeireth:2.0.0-rc.4
 # Canonical gateway serve on port 8080
 
 FROM rust:1.97.1-bookworm AS builder
@@ -22,7 +22,7 @@ FROM debian:bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.title="Apeireth OS" \
       org.opencontainers.image.description="Apeireth OS 2.0 - AGI Operating System & Cognitive Microkernel" \
-      org.opencontainers.image.version="2.0.0-rc.1" \
+      org.opencontainers.image.version="2.0.0-rc.4" \
       org.opencontainers.image.url="https://github.com/apeireth/apeireth-rust" \
       org.opencontainers.image.licenses="Apache-2.0"
 

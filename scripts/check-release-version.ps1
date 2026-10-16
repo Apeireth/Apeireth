@@ -14,7 +14,7 @@
       5. Desktop Tauri Config (frontend/companion-desktop/src-tauri/tauri.conf.json)
 
 .PARAMETER ExpectedVersion
-    Optional expected version string (e.g. "1.2.0" or "2.0.0-rc.1").
+    Optional expected version string (e.g. "1.2.0" or "2.0.0-rc.4").
 .PARAMETER Strict
     If true, requires companion-desktop to match the root workspace version exactly.
     If false (default), validates internal consistency within workspace and within desktop.

@@ -2,7 +2,7 @@
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **当前基线**: 默认分支 `main`、18-crate 工作区（v2.0.0-rc.1；测试基线 **5360 passed / 0 failed / 22 ignored**，190 套件全量实测（2026-10-13 口径），历史口径见 CHANGELOG）；`legacy/` 不参与构建。
+> **当前基线**: 默认分支 `main`、**workspace = 20 members（19 crates + bench harness）**（v2.0.0-rc.4）；测试基线见 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)（2026-10-16 口径：**199 套件 / 5360 passed / 0 failed / 22 ignored**），历史口径见 CHANGELOG；`legacy/` 不参与构建。
 
 ---
 
@@ -14,14 +14,20 @@
 | **Linux** | Ubuntu 20.04 / Debian 11 | Ubuntu 22.04+ |
 | **macOS** | macOS 11 Big Sur | macOS 13+ |
 
-| 工具 | 最低版本 | 推荐版本 |
-|---|---|---|
-| **Rust** | 1.97.1 stable | 1.97.1 stable（rust-toolchain.toml 锁定）|
-| **Cargo** | 1.97.1 | 1.97.1 |
-| **Git** | 2.30+ | 2.40+ |
-| **cmake** | 3.20+ | 3.25+（编译 sled）|
-| **Python** | 3.11+ | 3.13（PyO3 桥）|
-| **SQLite** | 3.35+ | 3.40+（`crates/engine/memory` 持久化）|
+**实测最小前置依赖**（2026-10-16 实测核对，删去此前文档中的幻影依赖——审计修 D-01/D-02/D-03）：
+
+| 工具 | 最低版本 | 推荐版本 | 说明 |
+|---|---|---|---|
+| **rustup + Rust** | 1.97.1 stable | 1.97.1 stable（rust-toolchain.toml 锁定）| 必需 |
+| **Cargo** | 1.97.1 | 1.97.1 | 随 rustup |
+| **Git** | 2.30+ | 2.40+ | 必需 |
+| **VS Build Tools 2022**（仅 Windows） | 2022 | 2022 | 必需：勾选 **C++ build tools workload + Windows SDK**（MSVC 链接器） |
+
+**不需要**（此前文档列出但项目并不依赖）：
+
+- ~~cmake 3.20+（编译 sled）~~ —— 工作区无 sled 依赖，亦无 cmake crate；
+- ~~Python 3.11+（PyO3 桥）~~ —— `pyo3` 为 optional 且无任何 workspace 成员启用 `python` feature；
+- ~~系统 SQLite 3.35+~~ —— `rusqlite` 以 `bundled` feature 静态编译自带 SQLite 源码，无需系统库。
 
 ---
 
@@ -49,12 +55,11 @@ rustup component add rustfmt clippy rust-src
 # 必须勾选 "C++ build tools" + "Windows 11 SDK"
 ```
 
-### 步骤 3：安装 Git + cmake
+### 步骤 3：安装 Git
 
 ```powershell
-# 通过 winget 或 choco 安装
+# 通过 winget 安装（不再需要 cmake——审计修 D-01）
 winget install Git.Git
-winget install Kitware.CMake
 ```
 
 ### 步骤 4：Clone + Build
@@ -94,12 +99,9 @@ rustup component add rustfmt clippy rust-src
 ### 步骤 2：安装系统依赖
 
 ```bash
-# Ubuntu/Debian
+# Ubuntu/Debian（实测最小集：C 工具链 + TLS 依赖；不需要 cmake / Python / 系统 SQLite——审计修 D-01/D-02/D-03）
 sudo apt update
-sudo apt install -y build-essential cmake git pkg-config libssl-dev
-
-# 安装 Python + pip（如需 PyO3 桥）
-sudo apt install -y python3 python3-pip python3-dev
+sudo apt install -y build-essential git pkg-config libssl-dev
 ```
 
 ### 步骤 3：Clone + Build
@@ -142,11 +144,12 @@ rustup component add rustfmt clippy rust-src
 xcode-select --install
 ```
 
-### 步骤 3：安装 Homebrew + cmake
+### 步骤 3：（可选）安装 Homebrew + openssl
 
 ```bash
+# 仅当 openssl-sys 构建失败时需要；不需要 cmake / Python / 系统 SQLite（审计修 D-01/D-02/D-03）
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install cmake pkg-config openssl
+brew install pkg-config openssl
 ```
 
 ### 步骤 4：Clone + Build
@@ -174,8 +177,8 @@ cargo run --bin apeireth session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（预期 5360 passed / 0 failed / 22 ignored，190 套件——工作区基线口径（2026-10-13 实测），以现场实测为准；历史口径见 CHANGELOG）
-cargo test --workspace
+# 2. Test（测试基线单一真源见 docs/03-reference/test-baseline.md；2026-10-16 口径：199 套件 / 5360 passed / 0 failed / 22 ignored，以现场实测为准）
+cargo test --workspace --all-targets --locked --no-fail-fast
 
 # 3. Clippy（应该 0 warning）
 cargo clippy --workspace -- -D warnings
@@ -240,9 +243,9 @@ EOF
 ### Q5: `cargo test` 失败
 
 **解决**：查看具体错误，可能是：
-- Python 版本不符（需要 3.11+）
-- SQLite 版本不符（需要 3.35+）
-- PyO3 链接失败（需要 Python dev headers）
+- 工具链版本不符（需要 Rust 1.97.1 stable，`rust-toolchain.toml` 已锁定）
+- Windows 缺 MSVC 链接器（需要 VS Build Tools 2022 C++ workload + Windows SDK）
+- 并行在途构建抢 cargo 锁（"Blocking waiting for file lock"）——等锁释放后复跑
 
 ---
 
@@ -322,4 +325,5 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
 
 _安装指南 v1 修订版（leader 亲自产出）._
 _依据我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 1.97.1 锁定._
-_主哲学 8 锚穿透 (S-1 北极星 / S-2 实事求是 / S-3 质量工程化 NEW / O-1 安全优先 NEW / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装; per R125 B5 升 8 锚 + R126 P1-2 实施)._
+_主哲学 9 锚穿透 (S-1 北极星 / S-2 实事求是 / S-3 质量工程化 NEW / O-1 安全优先 NEW / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装 / O-6 永远追求最优 NEW 2026-08-27; per R125 B5 升级 + R126 P1-2 实施 + 2026-08-27 加 O-6，审计修 A-14)._
+_前置依赖为实测最小集（2026-10-16 核对；审计修 D-01/D-02/D-03），测试基线单一真源见 docs/03-reference/test-baseline.md（审计修 B-01）；crate 口径 = workspace 20 members（19 crates + bench harness，审计修 B-02）；版本 v2.0.0-rc.4（审计修 B-03）._

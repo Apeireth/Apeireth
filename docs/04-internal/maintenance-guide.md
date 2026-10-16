@@ -289,3 +289,20 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 ---
 
 _本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17、2026-10-06 对账更新为 18（新增 `crates/engine/guard`）：取代 v1 `apeireth-companion` 维护手册（`crates/apeireth-companion` 模块地图 → 现 18-crate foundation|engine|capabilities|adapters 分组）；v2 维护的 = PluginManager 唯一注册点 + 8 哲学锚穿透 + 3 不漂移承诺。v2 下一步（governance 接线 / core drain / 记忆实现）见根 ROADMAP §4。_
+## worktree 台账（2026-10-16 建，建议书 P1-2）
+
+| worktree | 分支 | 用途 | 回收条件 |
+|---|---|---|---|
+| `C:\Users\31683\apeireth-debt` | fix/historical-debt | 历史债偿还（11 提交未合 main） | **合并进 main 后** `git worktree remove`（勿直删目录=悬挂元数据） |
+
+**磁盘纪律**：worktree 的 `target/` 随用随清（`scripts/target-sweep.ps1`）；`target/` >50GB 手术式清扫（删 incremental/doc/**stale pdb** 与 `frontend/companion-desktop/src-tauri/target` 同档，保留 deps/build/.fingerprint——先例 reports/target-cleanup-2026-08-20.md + 台账 #40「pdb 可再生、零重编」实证）。
+
+## companion-desktop 体积构成表（2026-10-16 验收整改 R2）
+
+| 子目录 | 体量 | 处置 |
+|---|---|---|
+| `src-tauri/target` | 18.0GB → **4.5GB**（sweep v2 后） | 增量/pdb 随 sweep 清；依赖调试信息由 `[profile.dev.package."*"] debug=0` 治本 |
+| `node_modules` | 0.14GB | 可删可 `pnpm install` 恢复 |
+| `dist` / `src-tauri/binaries` | 0.03GB | 构建产物，随打包循环 |
+
+（验收报告 reports/disk-build-cache-advisory-acceptance-2026-10-16.md 的 R1/R2 复验对象：R1=sweep v2 增 pdb 档（回收 113.9GB+4.8GB、cargo check 冒烟 exit 0 零重编）；R2=本表+脚本纳管。）

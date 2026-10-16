@@ -1,4 +1,4 @@
-> ⚠️ 对账标注：本文为历史记录，写作时数字属实于当时。当前基线口径以 [INSTALL.md](../../INSTALL.md) 为准（18 crates / 5360 passed / 0 failed / 22 ignored，2026-10-13 口径，workspace.version 2.0.0-rc.1）。
+> ⚠️ 对账标注：本文为历史记录，写作时数字属实于当时。当前基线口径以 [INSTALL.md](../../INSTALL.md) 与测试基线单一真源 [test-baseline.md](../03-reference/test-baseline.md) 为准（workspace = 20 members（19 crates + bench harness）/ workspace.version 2.0.0-rc.4；测试数字不再抄写，见真源）。
 
 # smol-vm / libkrun 真接配置指南（历史设计记录）
 

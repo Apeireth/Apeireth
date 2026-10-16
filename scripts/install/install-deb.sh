@@ -56,7 +56,7 @@ else
         echo "❌ 未找到 .deb (默认路径 target/**/apeireth_*${VERSION}*.deb)"
         echo "   选项:"
         echo "   1. 先跑 packaging/deb/build.sh 编出 .deb"
-        echo "   2. 从 GitHub release 下载: https://github.com/apeireth/apeireth-rust/releases/download/v2.0.0-rc.1/apeireth_${VERSION}_amd64.deb"
+        echo "   2. 从 GitHub release 下载: https://github.com/apeireth/apeireth-rust/releases/download/v2.0.0-rc.4/apeireth_${VERSION}_amd64.deb"
         echo "   3. 显式传: sudo $0 /path/to/apeireth.deb"
         exit 1
     fi
