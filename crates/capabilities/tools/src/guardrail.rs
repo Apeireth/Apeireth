@@ -12,6 +12,10 @@ use thiserror::Error;
 pub enum PreCallGuardError {
     #[error("检测到路径穿越或敏感系统路径访问: {0}")]
     PathTraversal(String),
+    /// 目标路径落在工作区目录之外 —— 目录边界拒绝. 与词法攻击面/受保护
+    /// 路径不同, 这类拒绝可经一次性升级 (见 `escalation` 模块) 就地引导.
+    #[error("{0}")]
+    OutsideWorkspace(String),
     #[error("检测到高危破坏性 Shell 注入或命令: {0}")]
     DangerousCommandInjection(String),
 }
@@ -26,6 +30,8 @@ pub enum LeakedCredentialKind {
     JwtToken,
     SlackToken,
     GenericBearer,
+    /// 明文口令赋值 (`password=...` / `password: ...`, W1 §2.2 设计点名).
+    PlaintextPassword,
 }
 
 /// 后置出站绊线扫描结果.
@@ -39,6 +45,17 @@ pub struct TripwireScanResult {
 /// 工具执行守门员.
 #[derive(Debug, Clone, Default)]
 pub struct ToolGuardrail;
+
+/// ASCII 快速子串定位 (大小写不敏感, 字节偏移安全 —— 多字节文本不移位)。
+fn find_ascii_ci(haystack: &str, needle: &str) -> Option<usize> {
+    let hay = haystack.as_bytes();
+    let nee = needle.as_bytes();
+    if nee.len() > hay.len() {
+        return None;
+    }
+    hay.windows(nee.len())
+        .position(|w| w.eq_ignore_ascii_case(nee))
+}
 
 impl ToolGuardrail {
     pub fn new() -> Self {
@@ -88,7 +105,7 @@ impl ToolGuardrail {
                 (workspace_root.canonicalize(), requested_path.canonicalize())
             {
                 if !canonical_target.starts_with(&canonical_root) {
-                    return Err(PreCallGuardError::PathTraversal(format!(
+                    return Err(PreCallGuardError::OutsideWorkspace(format!(
                         "目标路径超出工作区边界: {}",
                         path_str
                     )));
@@ -100,6 +117,16 @@ impl ToolGuardrail {
     }
 
     /// 前置 Shell 命令防注入与破坏性检查.
+    ///
+    /// 删除族同权口径 (本层不改判, 理由在此写明): 破坏面是**窄词面灾难清单**
+    /// (灾难形态字面量 + 系统配置写动词), 不做删除族全量拦截 —— 普通删除族
+    /// (`del` / `Remove-Item` / `[System.IO.File]::Delete` 等静态调用面) 一律
+    /// 同档放行, 经写意图总闸 + shell 审批链统一兜住; 两条删除 API 路径在本层
+    /// 判定逐一相同 (同为放行档), 对称性由 tests/delete_path_parity.rs 锁定。
+    /// 灾难字面量不扩面到 cmdlet / 静态调用形态的理由: 词面清单无法可靠判定
+    /// 灾难作用域, 单边扩面会造成两条删除路径的审批档判定不一致 —— 恰是删除
+    /// 同权要消除的权力差; 守门不是沙箱的替代, 灾难级作用域由总闸 + 人工审批
+    /// + 沙箱三层兜住。
     pub fn verify_shell_command(command_line: &str) -> Result<(), PreCallGuardError> {
         let trimmed = command_line.trim();
         let lower = trimmed.to_lowercase();
@@ -116,6 +143,20 @@ impl ToolGuardrail {
             "shutdown -h now",
             "shutdown /s",
             "reboot",
+            // W1 §2.3 系统修改命令 (2026-10-10 批): 注册表/服务/网络配置/属性隐藏。
+            // 白名单否定式纵深 —— 守门不是沙箱的替代。
+            "reg add",
+            "reg delete",
+            "reg import",
+            "sc create",
+            "sc config",
+            "sc delete",
+            "netsh set",
+            "netsh add",
+            "netsh delete",
+            "netsh reset",
+            "attrib +s",
+            "attrib +h",
         ];
 
         for cmd in &forbidden_commands {
@@ -125,6 +166,19 @@ impl ToolGuardrail {
                     cmd
                 )));
             }
+        }
+
+        // netsh 写入类 (W1 §2.3): 单纯子串表抓不到 "netsh advfirewall set ..." 这种
+        // 动词后置形态 —— "netsh" 出现且伴随写动词 (set/add/delete/reset/import) 即拦;
+        // show/display 只读放行 (否定式保守, 误报可接受 —— 纵深不是沙箱的替代)。
+        if lower.contains("netsh")
+            && [" set", " add", " delete", " reset", " import"]
+                .iter()
+                .any(|verb| lower.contains(verb))
+        {
+            return Err(PreCallGuardError::DangerousCommandInjection(
+                "拦截 netsh 写入类系统配置指令".to_string(),
+            ));
         }
 
         Ok(())
@@ -202,6 +256,43 @@ impl ToolGuardrail {
             }
         }
 
+        // 6. 明文口令赋值扫描 (W1 §2.2 设计点名: `password\s*[:=]\s*\S+`; 手写等价,
+        //    不引 regex 依赖)。值截断到行尾 (截断而非放行), key 名保留可读。
+        //    匹配用 ASCII 快速比较 —— 不走 to_lowercase 的字节偏移 (中文输出下
+        //    大小写折叠可能移位, 切片会错位)。
+        {
+            let mut search_from = 0usize;
+            while let Some(rel) = find_ascii_ci(&sanitized[search_from..], "password") {
+                let key_start = search_from + rel;
+                let after_key = key_start + "password".len();
+                let rest = &sanitized[after_key..];
+                let trimmed_start = after_key + (rest.len() - rest.trim_start().len());
+                if sanitized[trimmed_start..].starts_with(':')
+                    || sanitized[trimmed_start..].starts_with('=')
+                {
+                    let value_start_raw = &sanitized[trimmed_start + 1..];
+                    let lead = value_start_raw.len() - value_start_raw.trim_start().len();
+                    let value_start = trimmed_start + 1 + lead;
+                    let value_end = sanitized[value_start..]
+                        .find('\n')
+                        .map(|i| value_start + i)
+                        .unwrap_or(sanitized.len());
+                    let value = &sanitized[value_start..value_end];
+                    if value.len() >= 4 {
+                        leaked_kinds.push(LeakedCredentialKind::PlaintextPassword);
+                        sanitized.replace_range(value_start..value_end, "[REDACTED_PASSWORD]");
+                        // 文本已变, 从头再扫会错位; 多处口令以首处命中为准
+                        // (0 装: 不声称全扫, 单次调用一个命中段)。
+                        break;
+                    }
+                }
+                search_from = after_key;
+                if search_from >= sanitized.len() {
+                    break;
+                }
+            }
+        }
+
         let is_clean = leaked_kinds.is_empty();
         TripwireScanResult {
             is_clean,
@@ -247,6 +338,48 @@ mod tests {
             .contains(&LeakedCredentialKind::AwsAccessKey));
         assert!(res.sanitized_output.contains("[REDACTED_OPENAI_KEY]"));
         assert!(res.sanitized_output.contains("[REDACTED_AWS_KEY]"));
+    }
+
+    #[test]
+    fn tripwire_redacts_plaintext_password_assignment() {
+        // W1 §2.2 设计点名模式; 含中文上下文 (回归 to_lowercase 偏移隐患)。
+        let raw = "数据库登录 ok\npassword = hunter2secret\n下一行完好";
+        let res = ToolGuardrail::scan_and_sanitize_output(raw);
+        assert!(!res.is_clean);
+        assert!(res
+            .leaked_kinds
+            .contains(&LeakedCredentialKind::PlaintextPassword));
+        assert!(!res.sanitized_output.contains("hunter2secret"), "值已截断");
+        assert!(res.sanitized_output.contains("[REDACTED_PASSWORD]"));
+        assert!(
+            res.sanitized_output.contains("下一行完好"),
+            "只截命中值到行尾"
+        );
+    }
+
+    #[test]
+    fn password_keyword_without_assignment_passes() {
+        let res = ToolGuardrail::scan_and_sanitize_output("the password field is empty here");
+        assert!(res.is_clean, "{res:?}");
+    }
+
+    #[test]
+    fn system_modification_commands_are_guarded() {
+        // W1 §2.3 扩展: 注册表/服务/网络配置/属性隐藏类系统修改命令。
+        for cmd in [
+            "reg add HKLM\\Software\\x /v y",
+            "sc create evil binPath= x",
+            "netsh advfirewall set allprofiles off",
+            "attrib +s +h secret.txt",
+        ] {
+            assert!(
+                ToolGuardrail::verify_shell_command(cmd).is_err(),
+                "{cmd} 应被守门拦截"
+            );
+        }
+        assert!(ToolGuardrail::verify_shell_command("netsh show all").is_ok());
+        // 否定式保守语义: 含子串即拦 (纵深防线接受误报, 守门不是沙箱的替代)。
+        assert!(ToolGuardrail::verify_shell_command("echo reg add is a phrase").is_err());
     }
 
     #[test]

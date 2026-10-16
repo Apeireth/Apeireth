@@ -50,13 +50,13 @@ Author:          主代理 Mavis
 
 | 维度 | 真账 |
 |---|---|
-| **Workspace** | **17 crates** (foundation 6 / engine 7 / capabilities 1 / adapters 3), 单向依赖, 0 循环（2026-09-05 实测；此前"16 crates"口径因 2026-09-04 `0e542d03` 抽出 runtime-assembly 作废） |
-| **架构收敛** | v1 86-crate → v2 17-crate = **80.2% 收敛** |
+| **Workspace** | **18 crates** (foundation 6 / engine 8 / capabilities 1 / adapters 3), 单向依赖, 0 循环（2026-09-05 实测 + 2026-10-06 对账新增 `crates/engine/guard`；此前"16 crates"口径因 2026-09-04 `0e542d03` 抽出 runtime-assembly 作废） |
+| **架构收敛** | v1 86-crate → v2 18-crate = **79.1% 收敛**（17-crate 口径于 2026-10-06 `apeireth-guard` 加入后更新） |
 | **哲学锚** | **9 项 LOCKED** (S-1/S-2/S-3 + O-1..O-6, O-6 永远追求最优 2026-08-27 主人授权加) |
-| **测试** | **3120 passed / 0 failed / 13 ignored** (2026-09-05 亲跑 `cargo test --workspace --locked`; 历史: 2026-08-28 A 块后 1739 passed) |
+| **测试** | **5360 passed / 0 failed / 22 ignored**（190 suites，2026-10-13 全量实测 `cargo test --workspace --locked -j 2`; 历史: 2026-09-05 3120/13、2026-08-28 A 块后 1739) |
 | **clippy** | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |
 | **7 capability trait** | MemoryBackend / Experience / Perception / PreferenceStore / SelfAssessmentStore / LlmFactory / SubSupervisor 全真接 |
-| **9 organ** | **9/9 真移植** (E4/F1/F4/F6/W1/W2/W3/E7/Memory, 整合 #2 commit `bbf70293`) |
+| **9 organ** | **9/9 真实现** (E4/F1/F4/F6/W1/W2/W3/E7/Memory, 整合 #2 commit `bbf70293`) |
 | **OrganOrchestrator** | **A 块完整化真实施已落** (5 stage 真实施 + O-6 amend, 详 §6) |
 | **认知模块 12 slot** | **6 WIRED + 6 DEFERRED** (judge/council 为 WIRED, OFF by default) |
 | **10 RC** | **9/10 真实现**, RC-7 (Whisper + 屏幕感知) 待硬件, spec 已完 (R14) |
@@ -76,7 +76,7 @@ Author:          主代理 Mavis
 | **S-2** | 实事求是 | 写前验证, 真相高于叙事 | 数字必实测 (`cargo test` 跑过才写, 不复用旧数字). 文档漂移是病. |
 | **S-3** | 质量工程化 | 工程严谨压倒叙事 — clippy 0 警告 + doc 1077 行清 | clippy 跑过吗? 文档行数清吗? 测试覆盖率? |
 | **O-1** | 安全优先 | 安全 > 功能 > 性能, 5 重守门 + 13 键 + 3 项不可变脊柱 | 改动会绕过 P0 governance 3 hook 吗? 会接回 13 键 runtime 强制吗? (答: 都不应该) |
-| **O-2** | 走在前人肩上 | 借 + 标注 + 改 (不抄) | 这方案借鉴了谁的? 标注来源了吗? 来源: 上游标杆项目 + 标准协议, 借 + 标注 + 改。 |
+| **O-2** | 走在前人肩上 | 借 + 标注 + 改 (不抄) | 这方案参考了谁的? 标注来源了吗? 来源: 同类标杆工程 + 标准协议, 借 + 标注 + 改。 |
 | **O-3** | 干到底 | 不做半截活. 决策立刻沉淀, 1 commit 总 | 改完跑完基线 + 文档同步 + commit + push 4 步, 不是"先这样, 以后补" (O-6 拒借口清单) |
 | **O-4** | 任何人都能接手 | 文档单独能 onboard. 顶层瘦. | 接手人能只读你的 commit message 理解改动吗? 文档树清晰吗? |
 | **O-5** | 不假装 | 0 装 PASS — `unimplemented!()` 必须显式标注, 绝不静默 | TODO 是不是真没做? ✅ 是不是真过了? 没有"我觉得这样应该 work" (跑了才算) |
@@ -121,7 +121,7 @@ Author:          主代理 Mavis
 | # | 守门 | 命令 | 期望 |
 |---|---|---|---|
 | 1 | **clippy 0 警告** | `cargo clippy --workspace --all-targets --locked -- -D warnings` | 0 warning, 0 error |
-| 2 | **workspace tests 0 失败** | `cargo test --workspace --locked` | 0 FAILED (2026-09-05 实测 3120 passed / 13 ignored：真实 LLM E2E、Xcap 硬件 smoke 等) |
+| 2 | **workspace tests 0 失败** | `cargo test --workspace --locked` | 0 FAILED (2026-10-13 实测 5360 passed / 22 ignored：真实 LLM E2E、Xcap 硬件 smoke 等) |
 | 3 | **legacy compat path < 100 引用** | `grep -r "legacy/" crates/ \| wc -l` | < 100 (legacy/ 在 workspace exclude) |
 | 4 | **LOCKED 5 项 0 触碰** (详 §10) | (CI 比对 src 改动) | 9 哲学锚本体 + 13 键 + 3 不可变脊柱 + workspace.version + R11 baseline 全 0 改 |
 | 5 | **哲学锚表头 0 减** | (CI 比对 9 锚 description 行数) | NINE_ANCHORS_HARDCODE 编译期断言不 panic |
@@ -130,7 +130,7 @@ Author:          主代理 Mavis
 ```bash
 cd C:\Users\31683\Apeireth-rust
 git log --oneline -5                                    # 期望 HEAD = 7647d2c9 (2026-09-05 对账基线; 历史收盘 6f9c3dee)
-cargo test --workspace --locked                          # 期望: 3120 passed, 0 failed, 13 ignored
+cargo test --workspace --locked                          # 期望: 5360 passed, 0 failed, 22 ignored (2026-10-13 口径)
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望: 0 警告
 cargo test --workspace --doc --locked                   # 期望: 0 FAILED
 git status                                             # 期望: clean 或仅 .harness-* untracked
@@ -147,7 +147,7 @@ git status                                             # 期望: clean 或仅 .h
 | 数字 | 含义 | 位置 | 实测当前值 |
 |---|---|---|---|
 | **5 重** | §4 当前 CI 守门**5 项**检查 (clippy / tests / legacy / LOCKED / 哲学锚) | §4 表 row 1-5 | 5 项 ✓ |
-| **6 重** | R125-5 v6 守门 (5 重 + DSL onion 守门, NVIDIA Guardrails 借鉴) | ROADMAP L165 | 已升 |
+| **6 重** | R125-5 v6 守门 (5 重 + DSL onion 守门, 对齐业界 Guardrails 公开设计) | ROADMAP L165 | 已升 |
 | **7 重** | R126 v7 守门 (6 重 + Colang DSL + Superpowers Skill Guard) | ROADMAP L165 | 已升 |
 | **8 重** | R126 v8 守门 (历史中间态) | docs/archive/ | 已升 |
 | **9 重** | R126 v9 守门 (8 重 + S-3 R126 + O-1 R126) | ROADMAP L165 | 当前 LOCKED |
@@ -174,7 +174,7 @@ git status                                             # 期望: clean 或仅 .h
 - O-6 三阶审查:
   - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
   - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? 与 alternatives 比较 + 选最优 + 拒理由>
-  - 架构最优: <在 workspace 17-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
+  - 架构最优: <在 workspace 18-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
 ```
 
 **0 装诚实标** (主代理 A 块 O-6 复盘真账): 之前 A 块 5 commit O-6 三阶审查 sections **多描述 WHAT 不是 WHY**. 这是 O-6 失守. amend 后修订版 sections 真答案 + 拒 alternatives + 拒理由. 详 `A-block-o6-true-account.md` + 修订版 5 sections 真账.
@@ -201,7 +201,7 @@ git status                                             # 期望: clean 或仅 .h
 ```
 任务: <明确产出, 不是模糊方向, 例: "派子代理调研 A 块 5 缺口真生产路径, 写报告 docs/04-internal/A-block-5-gaps-research.md">
 必读: <文档 file:line, 例: docs/04-internal/cognitive-module-wiring.md:20-35>
-必跑: <命令 + 期望输出, 例: cargo test --workspace --locked 期望 1726 passed>
+必跑: <命令 + 期望输出, 例: cargo test --workspace --locked 期望 5360 passed>
 必写: <报告结构, 含 0 装诚实真账 + 0 触碰 LOCKED 声明>
 不 commit: <等主代理审 (Q1 C1 policy)>
 ```
@@ -326,7 +326,7 @@ docs/04-internal/9-organ-progress-2026-08-28.md  ← 9 organ 实时进度
 - O-6 三阶审查:
   - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
   - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? 与 alternatives 比较 + 选最优 + 拒理由>
-  - 架构最优: <在 workspace 17-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
+  - 架构最优: <在 workspace 18-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
 - 影响面: <文件清单 + 行数>
 - 后续 stage: <如果分阶段, 列下一步>
 ```
@@ -456,7 +456,7 @@ git commit --no-verify -m "..."   # 跳过所有 hook
 ```bash
 cd C:\Users\31683\Apeireth-rust
 git log --oneline -5                                            # 确认 HEAD 与文档一致
-cargo test --workspace --locked                                  # 期望 3120 passed / 0 failed / 13 ignored
+cargo test --workspace --locked                                  # 期望 5360 passed / 0 failed / 22 ignored（2026-10-13 口径）
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望 0 警告
 cargo test --workspace --doc --locked                           # 期望 0 FAILED
 rustfmt crates/<your_file>.rs                                   # 单文件 fmt (不要 cargo fmt -- file)
@@ -527,7 +527,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory real_llm_call_smoke -
 | **13 键** | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` 显式标 | 已拍板降级为哲学标准, 不接回 runtime 强制. |
 | **3 项不可变脊柱** | `crates/foundation/core/src/onion.rs:249` | Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义 | 同上, 主人明确授权例外. |
 | **workspace.version** | `Cargo.toml` (workspace.package) | `"2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210；旧 "1.2.0 双轴制" 已终结，workspace 轴现与产品轴一致） | 随 release 推进 (rc.1 → 2.0.0 等), 主代理/release authority 拍板. |
-| **R11 baseline 3 值** | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (R11_V1141/1131/1136_BASELINE const) + `legacy/donor/apeireth-blueprint-impl/src/r_measure.rs:228-231` (RMeasureAll::drift hardcode) — active workspace 无 const source | 0.8682 / 0.8532 / 0.9063 (R11 ASI R-Measure 数字严守) | R11 数字更新需 R12 spec 重新审定 + active workspace 移植, 主代理拍板. |
+| **R11 baseline 3 值** | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (R11_V1141/1131/1136_BASELINE const) + `legacy/donor/apeireth-blueprint-impl/src/r_measure.rs:228-231` (RMeasureAll::drift hardcode) — active workspace 无 const source | 0.8682 / 0.8532 / 0.9063 (R11 ASI R-Measure 数字严守) | R11 数字更新需 R12 spec 重新审定 + active workspace 迁回, 主代理拍板. |
 
 **改前必查**:
 ```bash
@@ -576,7 +576,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 8. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
 9. 读 docs/04-internal/TO-NEW-TEAM.md (给新团队的话 + 3 块真实施清单)
 10. 读 docs/01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
-11. 跑 cargo test --workspace --locked (期望 3120 passed / 0 failed / 13 ignored)
+11. 跑 cargo test --workspace --locked (期望 5360 passed / 0 failed / 22 ignored，2026-10-13 口径)
 12. 跑 cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 警告)
 ```
 
@@ -634,7 +634,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 ## 14. 收尾 — 新团队最终 1 段话
 
 ```
-Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + A 块 OrganOrchestrator 完整化 ✅ 
+Apeireth v2.0 = 9 organ 真实现 ✅ + OrganOrchestrator 串联层 ✅ + A 块 OrganOrchestrator 完整化 ✅ 
              + 4 重 LOCKED 守门 (9 锚 + 13 键 + 3 不可变脊柱 + R11 baseline) + 5 重自动守门 CI ✅
              + frontend 对接 (待 B 块) + 6 DEFERRED slot 激活 (待 C 块) + RC-7 真 modality (待 D 块)
              + 自我升级 cycle (L0-L5 UpgradeCycle 已实施, 主人 Veto dashboard 待 v2.0.0 release 接入).
@@ -651,7 +651,7 @@ Apeireth v2.0 = 9 organ 真移植 ✅ + OrganOrchestrator 串联层 ✅ + A 块 
 9. 本 reference 手册: docs/04-internal/ENGINEER-MANIFESTO.md (你正在读)
 
 主代理 Mavis 收盘 rc.1 + 8 spec + A 块完整化 + O-6 复盘 阶段, 你来接.
-有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline (期望 3120 tests / 0 clippy 警告).
+有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline (期望 5243 tests / 0 clippy 警告).
 ```
 
 ---

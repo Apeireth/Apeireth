@@ -73,7 +73,7 @@ impl PreferenceStore for FakePrefStore {
             });
         }
         if mine.is_empty() {
-            // Fixed donor semantics: fall back to the session's top-N.
+            // Fixed baseline semantics: fall back to the session's top-N.
             mine = rows
                 .iter()
                 .filter(|row| row.session_id == *session_id)

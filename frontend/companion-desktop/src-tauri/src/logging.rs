@@ -91,15 +91,14 @@ impl DesktopLogger {
         // Use Tauri's app data directory convention
         #[cfg(target_os = "windows")]
         {
-            let local_app_data = std::env::var("LOCALAPPDATA")
-                .map_err(|_| "LOCALAPPDATA not set".to_string())?;
+            let local_app_data =
+                std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA not set".to_string())?;
             Ok(PathBuf::from(local_app_data).join("Apeireth").join("logs"))
         }
 
         #[cfg(target_os = "macos")]
         {
-            let home = std::env::var("HOME")
-                .map_err(|_| "HOME not set".to_string())?;
+            let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
             Ok(PathBuf::from(home)
                 .join("Library")
                 .join("Application Support")
@@ -109,8 +108,7 @@ impl DesktopLogger {
 
         #[cfg(target_os = "linux")]
         {
-            let home = std::env::var("HOME")
-                .map_err(|_| "HOME not set".to_string())?;
+            let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
             Ok(PathBuf::from(home)
                 .join(".local")
                 .join("share")
@@ -190,7 +188,10 @@ impl DesktopLogger {
     ///
     /// Named assignments run first so `OPENAI_API_KEY=sk-…` is redacted as a
     /// configured credential rather than as a loose key fragment.
-    fn redact_secrets(line: &str) -> String {
+    ///
+    /// `pub(crate)` so the provider relay (`provider_proxy`) reuses the same
+    /// passes for its error strings and log lines.
+    pub(crate) fn redact_secrets(line: &str) -> String {
         let stage = Self::redact_named_assignments(line);
         let stage = Self::redact_bearer_tokens(&stage);
         Self::redact_key_prefixes(&stage)
@@ -389,9 +390,18 @@ mod tests {
     #[test]
     fn redacts_canonical_provider_env_values() {
         for (line, secret) in [
-            ("APEIRETH_API_KEY=test-key-mm-live-abcdef123456", "test-key-mm-live-abcdef123456"),
-            ("APEIRETH_ANTHROPIC_KEY=test-key-ant-live-9f8e7d", "test-key-ant-live-9f8e7d"),
-            ("OPENAI_API_KEY=test-key-oai-live-55443322", "test-key-oai-live-55443322"),
+            (
+                "APEIRETH_API_KEY=test-key-mm-live-abcdef123456",
+                "test-key-mm-live-abcdef123456",
+            ),
+            (
+                "APEIRETH_ANTHROPIC_KEY=test-key-ant-live-9f8e7d",
+                "test-key-ant-live-9f8e7d",
+            ),
+            (
+                "OPENAI_API_KEY=test-key-oai-live-55443322",
+                "test-key-oai-live-55443322",
+            ),
         ] {
             let redacted = DesktopLogger::redact_secrets(line);
             assert!(
@@ -409,10 +419,36 @@ mod tests {
     fn redacts_master_token_bearer_header() {
         let line = r#"{"headers":{"Authorization":"Bearer master-tok-7788"},"path":"/v1/chat"}"#;
         let redacted = DesktopLogger::redact_secrets(line);
-        assert!(!redacted.contains("master-tok-7788"), "master token leaked: {redacted}");
+        assert!(
+            !redacted.contains("master-tok-7788"),
+            "master token leaked: {redacted}"
+        );
         assert!(redacted.contains("[REDACTED_TOKEN]"));
         // Surrounding structure must survive so the log stays useful.
         assert!(redacted.contains("/v1/chat"));
+    }
+
+    /// G10 令牌不入日志: 回环令牌 (env 注入值 / Bearer 头) 一律打码, 而
+    /// 自铸启动行的来源诊断 (`source=minted`) 保留可读。
+    #[test]
+    fn redacts_the_loopback_gateway_token_in_every_shape() {
+        let token = "loopback-tok-0123456789abcdef";
+        for line in [
+            &format!("APEIRETH_GATEWAY_TOKEN={token}"),
+            &format!(r#"spawn env: {{"APEIRETH_GATEWAY_TOKEN":"{token}"}}"#),
+            &format!("Authorization: Bearer {token}"),
+        ] {
+            let redacted = DesktopLogger::redact_secrets(line);
+            assert!(!redacted.contains(token), "令牌泄露: {redacted}");
+        }
+
+        // 自铸启动行: 值永远 [REDACTED], 来源诊断保留 (可排障、零泄露)。
+        let startup = "backend.gateway_token source=minted value=[REDACTED]";
+        let redacted = DesktopLogger::redact_secrets(startup);
+        assert!(
+            redacted.contains("source=minted"),
+            "来源诊断必须保留: {redacted}"
+        );
     }
 
     #[test]

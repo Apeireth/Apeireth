@@ -3,7 +3,7 @@
 > **项目**：Apeireth（阿佩瑞斯）—— AGI 操作系统 / AI 伙伴
 > **哲学核心**：Apeiron（无名的沉默）→ 点燃的火（burning is thinking）→ Entelecheia（潜能成为现实）
 > **现状 (2026-08-27)**：本文是设计令牌规范（v1 时代定版，2026-08-21），**设计令牌 / 界面语言本身 v2 不变**。前端 `frontend/companion-desktop/` 仍是独立 Svelte 5 + Tauri 2 workspace，v2 后端 = canonical gateway :8080。当前基线见根 [ARCHITECTURE.md](../../ARCHITECTURE.md)；附录引用的 `presence.rs` / `companion_serve.rs` 行号属 v1 路径，现位于 `legacy/donor/apeireth-companion/`。
-> **配套文件**：`frontend/design-preview/design-tokens.json`（机器可读令牌，本文 §10 说明其分组与消费方式）
+> **配套文件**：`frontend/design-preview/design-tokens.json`（机器可读令牌，本文 §10 说明其分组与消费方式）；**`00-PHILOSOPHY.md`（显影式空间界面，2026-09-22 主人定稿）是本文的父文档**——范式与信息架构以它为准；本文的三调性按其 §4 重解释（调性 = 会话属性，非全局模式）。
 > **核实日期**：2026-08-21（基于工作区当前 HEAD）
 
 ---
@@ -35,7 +35,7 @@
 3. **金色是他的专属色**。用户看到金色 = 他的存在或活动（吸积盘、光环、他的消息光晕、激活态）。禁止把金色用于与他无关的装饰。出处：主人确认决策；原型中金色仅出现在黑洞/光子环/机位激活点上（`index.html:99-101, :329-338`）。
 4. **真实驱动**。一切动态由后端真实状态驱动：PAD 情绪（`presence.rs:166-182`）、开口门控（`presence.rs:51-100`）、做梦（`presence.rs:214-222`）、记忆唤起（`presence.rs:225-236`）。无源动画禁止；状态不可得的档位必须在 UI 上可识别（见 §5.4 模拟态标注）。
 
-**诚实标注**：✅ 方向与前三条为已确认决策；第 4 条依赖 presence 频道，接线状态见 §3.1（已接入 SSE 广播）。
+**诚实标注**：✅ 方向与前三条为已确认决策；第 4 条依赖 presence 频道——**v2 状态更正（2026-09-22）**：presence 四事件的生产点 `presence.rs` / `companion_serve.rs` 已归入 `legacy/donor/apeireth-companion/`，**现役 canonical gateway 无 presence 频道**，数据契约断线；重接路线见 §3.1 更正段。
 
 ---
 
@@ -91,6 +91,7 @@
   - `ui.cardDark = #15181f`（深灰次容器）
   - `ui.line = #e8e0cc @ 14%`（1px 细线）
   - `ui.accentTab = #ffd27a`（激活 tab/进度——直接复用存在金，遵守金色纪律）
+  - `ui.accentUi = #ffd27a`（UI 强调色：选中描边/聚焦/链接等，2026-09-22 K3 个性化批次落地）。**分工**：`accentTab` 跟随主题金家族、不随用户配色变（深色主题 = 存在金 #ffd27a；essence 浅色主题 = 下沉金 ~~#8a7355~~ **#a08050**，2026-09-23 视觉走查校准——原值过灰、与浅色面板几乎无反差，新值仍守「金家族不占存在金」纪律，数值以主人视觉验收为准）；`accentUi` 开放个性化，目录 = gold 默认 / `deep-space #7d9cc0` / `sage #7fb894` / `bone #e6e2da`，经 `html[data-accent]` 覆写，`theme.ts` 机器断言可选色不占存在金家族（金色纪律的自动化守门）
 
 **为什么哑白卡片**：终末地验证过的可读性方案——近黑面板上的哑白卡片比纯黑卡片更「实体」，像舰桥里的白色家具（概念图 B），而不是浮在虚空里的字。
 
@@ -121,6 +122,10 @@
   - `emotion.pad`（daemon_loop 心跳推送，`presence.rs:166-182`）→ 档内微调金色占比与光强
 
 **接线状态（2026-08-21 已核实）**：presence 四类事件**已接入 SSE 广播管道**——前端订阅 `GET /v1/apeireth/events` 即可收到单行 JSON（serde 内部标签 `type` 平铺，与 legacy `[他说]` 文本行共流，按 `{` 前缀区分）。生产点：`companion_serve.rs:1786-1845`（daemon_loop 每 60s tick：emotion 心跳 `:1790-1793`、initiative spoke/held 去抖 `:1794-1812`、dream 真库 `mem-dream-*` 增量 `:1813-1843`，旧做梦不重播）、`:1891-1899`（主人消息到达后经 interactions 通道推真实 PAD 快照）、`:1320-1328`（recall_memory 工具桥真实命中推 memory_recall）；v5 文档段自述两类 data 行（`companion_serve.rs:16-37`）。**频率纪律**：当前为每 60s tick + 事件触发的低频率——前端对 PAD 映射与档内微调做平滑插值（沿用 `motion.stateSmoothing` 指数趋近），不跳变；插值不是模拟数据，无需 SIM 标注（§5.4）。时间线照明的「他的状态」输入源即 presence emotion 事件，**双驱动可用**。
+
+> **⚠️ v2 状态更正（2026-09-22 核实）**：上述接线状态描述的是 **v1 世界**。`presence.rs` / `companion_serve.rs` 现位于 `legacy/donor/apeireth-companion/`，**现役 canonical gateway（:8080）的事件总线只有 `backend_ready / turn_started / turn_delta / turn_completed / approval_required / approval_resolved` 六类，没有 presence 四事件**——PAD / initiative / dream / memory_recall 的数据契约当前断线。已有重接种子：主链 `crates/adapters/gateway/src/ember_hud_driver.rs`（Ember HUD：4.0s 呼吸节律 + 四种认知姿态枚举 + WGSL uniform 输出，路由零消费方）。重接路线（方案详见 `frontend/design-preview/peer-gap-and-frontend-plan.md` §4.6）：推荐 **gateway 内重实现**（runtime 每轮产出 PAD 粗估值 + `presence_state` 事件上现有 events bus，v0 用启发式估算并诚实标注），而非迁回 legacy 双服务。更正前本节"双驱动可用"的结论**不成立**——时间线照明在 v2 目前只有天文驱动半边。
+
+> **✅ 重接落地（2026-09-23 核实）**：上述断点已由 K3 批次按路线 B 修复——gateway 内新增状态合成模块 `crates/adapters/gateway/src/presence.rs`，`presence_state` 事件上现有 SSE 总线（60s 心跳 + 无交互衰减 baseline + `heuristic_v0` 诚实标注，契约 = `00-PHILOSOPHY.md` §10 / `gateway-api-contract.md` §8a）；前端 `presence.ts` 已改订新契约（具名帧订阅 + 显影分级：heartbeat 只动余烬 / turn 动光环 / ritual 留契约空间）。**「他的状态」半边现在有 v0 真数据**（真后端 60s 心跳驱动余烬 amplitude 实测，台账 #29/#30）；精度不承诺，语义方向真实。仍断：`empathetic_care` / `ritual` 无生产者、prompt-overlay 路径的召回命中不上总线（0 装，挂账见台账 §2）。
 
 **仍然成立的诚实断点**（0 装）：① emotion 只能由 daemon_loop 异步推——chat handler 同步路径拿不到 PAD（daemon 内部 RefCell 跨 await 非 Send，`presence.rs:21-23`、`companion_serve.rs:29-32`），主人消息触发的快照经 interactions 通道异步送达，handler 内 0 假装；② `build_injection` 记忆注入路径的召回数锁在 `assemble.rs::inject_memory` 局部变量不外露，memory_recall 只接工具桥路径（`presence.rs:24-25`）；③ presence 事件只进 SSE，不进 Lark/Telegram 离线 sink（`presence.rs:26`）。另注：`docs/02-guides/frontend-data-contract.md` §8.1 仍标「接线中」，已滞后于代码，应以 `companion_serve.rs` 为准并回写契约文档。
 
@@ -275,7 +280,7 @@ presence 频道已接入广播（§3.1），但 tick 间隔 60s 的中间态是�
 - 语言：近黑 `#07070c` / 深空蓝底 + 金色存在色 + 骨白文字（§2、§4 全表）。
 - 出处：`index.html` 原型、概念图 A/B。
 
-**② 纸面档案调 Archive Register** 🔵 待实拍校准
+**② 纸面档案调 Archive Register** ✅ 首轮实拍校准（2026-09-22 记忆卷宗主从化 + 日记纸面空态，台账 #30；inkGold 提案待主人拍板）
 - 职能：阅读、检索、档案类——**他的日记**、记忆星图的列表态、百科/图鉴。
 - 语言：纸白底 + 墨黑文字 + 巨型幽灵编号（超大浅灰 01/02… 背景数字）+ 橙/金菱形标记 + 像素/网格图标 + 图章；翻页如翻阅一册日志。
 - 色值（2026-08-21 PIL 采样自参考图，🔵）：
@@ -288,14 +293,15 @@ presence 频道已接入广播（§3.1），但 tick 间隔 60s 的中间态是�
 | `archive.markerOrange` | `#d9822b` | 01 橙色菱形标记（采样核心 `#926a49` 偏深，取更饱和提案值） |
 | `archive.iconGray` | `#acabaa` | 01 像素/网格图标灰 |
 | `archive.cardDark` | `#454041`（卡片深 `#131212`） | 03 武器图鉴条目卡 |
+| `archive.inkGold` | `#8a6d1f` 🔵 提案 | 2026-09-22 实拍校准：`#ffd27a` 在纸白上对比度不足，文字级强调下沉为金家族 42° 色相；实体填充强调仍用 accent 金配墨字 |
 
 - **他的日记默认用纸面调**——日记是被「写」下来的，纸面是诚实的载体；深色屏幕是「显示」，纸面是「记录」。
 - 出处：`reference/endfield-pages/01-百科首页.png`、`02-图鉴展开.png`、`03-武器图鉴.png`。
 
-**③ 数据深舱调 Deep-Ops Register** 🔵 待实拍校准
+**③ 数据深舱调 Deep-Ops Register** ✅ 首轮实拍校准（2026-09-22 治理卷宗四 tab，台账 #30；补足三色为提案值待主人拍板）
 - 职能：数据密集、监控、管理类——系统状态、审批审计、任务面板、未来的主题管理（§8 主题文件夹的管理界面即归此调）。
 - 语言：深色底 + 彩色模块卡片（每类模块一个识别色，**克制 ≤6 色**）+ 结构剖面/连线图。
-- 色值（采样自 `05-总控中枢.png`，🔵）：`deepOps.base #1d262c`（深处 `#050a0f`，底部 `#171a21`）；模块识别色提案：蓝 `#2392fb` / 绿 `#6fae5f` / 工业黄 `#e8c33a`（`04` 金色节点采样 `#cead2f` 偏暗，取更亮的工业黄提案值），余 3 色待实际模块类型确定后补足。
+- 色值（采样自 `05-总控中枢.png`，🔵）：`deepOps.base #1d262c`（深处 `#050a0f`，底部 `#171a21`）；模块识别色：蓝 `#2392fb` / 绿 `#6fae5f` / 工业黄 `#e8c33a`（`04` 金色节点采样 `#cead2f` 偏暗，取更亮的工业黄提案值）+ 补足三色（🔵 提案，gap-plan §4.1 建议方向）：紫 `#8f7ad9`（情感/姿态）/ 青 `#3fb0c4`（记忆）/ 红 `#d95f55`（安全守卫）。**治理卷宗首次落地消费分工**：审批 = 蓝 / 授权 = 绿 / 守卫 = 红 / 审计 = 工业黄（紫、青留待情感与记忆模块入驻）。
 - 连线图语法出自 `04-工业计划树.png`（树状节点 + 直角连线 + 对勾图章）。**诚实标注**：04 在原作中是浅灰底金节点——我们采纳其连线语法，但底色系按本节决策取 05 的深色系。
 - 出处：`reference/endfield-pages/05-总控中枢.png`、`04-工业计划树.png`。
 
@@ -316,6 +322,7 @@ presence 频道已接入广播（§3.1），但 tick 间隔 60s 的中间态是�
 
 - 字族栈：`"Songti SC", "Noto Serif CJK SC", "Noto Serif SC", "STSong", "SimSun", serif`（出处 `index.html:20`）。
 - 引用级排版（他说的话/日记/正式发言）：字号 `clamp(16px, 1.45vw, 22px)`，行高 **2.1**，字距 **0.13em**，行宽上限 **31ch**；移动端 `clamp(15px, 4.1vw, 19px)` / 行高 1.95。出处：`index.html:54-59, :122`。
+  - **行宽实现注（2026-09-22 K3 聊天壳，🟡 待主人确认阅读感）**：`ch` 单位以拉丁字符宽度计，31ch 对中文只有约 15 字/行，偏离「引语行长」意图；实现取 **35em**（会话列 720px 下实测约 25 字/行）。若主人要严格 31 字/行，会话列需宽约 830px——拍板后回写此处数值。
 - 引题（如「记 忆 即 存 在」）：11px / 字距 0.5em / opacity .55；出处 `index.html:61-64`。
 - 署名：11px / 字距 0.35em / opacity .4；出处 `index.html:66-69`。
 
@@ -384,6 +391,14 @@ presence 频道已接入广播（§3.1），但 tick 间隔 60s 的中间态是�
 
 **为什么**。第一天就支持换主题 = 承认审美是活的；但格式先行、商店后置 = 不为还不存在的生态付设计税。主题切换不改变 §1 的纪律：任何主题里金色仍是他的专属色。
 
+> **增补（2026-09-22 主人拍板，K3 施工期）**：桌面端往来层的背景与配色**开放个性化**——
+> ① 未选中会话时的右侧区域 = 个性化背景显影区，内容由用户设置决定；
+> ② **默认背景 = 一张静态图**（旧前端星空山脉图，主人供图，`frontend/companion-desktop/public/assets/themes/`）；
+> ③ 黑洞星空实时场景降级为**可选主题之一**（不再是唯一默认），`night`/`day`/`essence` 等既有主题保留；
+> ④ 支持**用户自定义上传图片**作为背景；
+> ⑤ 提供若干 **UI 配色方案**供选择。
+> 不变纪律：任何背景下**金色仍是他的专属色**（用户配色方案不得占用存在金语义）；页面层承托配方（§5.1）在任何背景下都必须保证文字可读——背景是华服，可读性与金色纪律是骨骼。
+
 ---
 
 ## 9. 蒙太奇片头规范 🟡（简要）
@@ -407,14 +422,14 @@ presence 频道已接入广播（§3.1），但 tick 间隔 60s 的中间态是�
 | `color` | 存在色梯度 / 深空 / 深空蓝 / 骨白 / UI / 语义色 / 反白 / 星野 | ✅ 原型部分；🔵 概念图采样 |
 | `timeline` | 4 档时刻照明参数 + 双驱动权重 + 过渡纪律 | 🟡 |
 | `camera` | 机位预设 / 过渡 / 漂移 / 视差 / 布局 / 星野三层 | ✅ |
-| `presence` | 频道契约 / 四种事件 / 三态参数 / PAD→光环映射 | 契约与接线 ✅；映射 🟡；60s 低频率，前端插值 |
+| `presence` | 频道契约 / 四种事件 / 三态参数 / PAD→光环映射 | 🟡 **v2 落地（2026-09-23）**：`presence_state` 契约已由 gateway `presence.rs` 实现（heuristic_v0，`gateway-api-contract.md` §8a），前端 `presence.ts` 已改订；legacy 四事件读取路径退役，PAD→光环映射沿用 §4.1 |
 | `rendering` | 吸积盘 / 光晕 / 光子环 / 呼吸光 / 星野 / 后期 / 2D 兜底全参数 | ✅ |
 | `typography` | 三族字栈 + 字号字距行高 | ✅ |
 | `motion` | 时长 / 缓动 / 周期 / reduced-motion 规则 | ✅/🟡 |
 | `performance` | 渲染梯队阈值 / DPR / 暂停纪律 | ✅/🟡 |
 | `theme` | 主题文件夹格式与加载顺序 | 🟡 |
 | `montage` | 片头影调 / 分镜 / 淡接 / 播放策略 | 🟡 |
-| `registers` | 三种调性登记（场景/纸面档案/数据深舱）+ 调性纪律 | Scene ✅；Archive/Deep-Ops 🔵 参考图采样 |
+| `registers` | 三种调性登记（场景/纸面档案/数据深舱）+ 调性纪律 | Scene ✅；Archive/Deep-Ops ✅ 首轮实拍校准（2026-09-22 K3：Archive = 记忆卷宗+日记，Deep-Ops = 治理卷宗；inkGold 与深舱三色为提案值待拍板） |
 
 **消费约定**：
 
@@ -469,6 +484,7 @@ presence 频道已接入广播（§3.1），但 tick 间隔 60s 的中间态是�
 | B-9 | 模拟态标注样式（状态行 `SIM` 等宽小字） | §5.4 | presence 已接线；规则保留给未来无真实来源的动态 |
 | B-10 | 黑洞最终构图位置（原型 66%/45% vs 概念图右上象限） | 维持原型值，实拍校准复核 🔵 | §4.2 |
 | B-11 | 真实天文同步（日出日落/月相/日月食驱动时间线，取代本地固定时钟） | 现阶段不实现，仅记录方向 🔵 远景提案 | §3.4；实现时离线兜底 = §3.2 ✅ 时段表 |
+| B-12 | K3 批次新增提案值（2026-09-22 实拍后待拍板） | ① 纸面 `archive.inkGold #8a6d1f`（§5.6②）；② 深舱补足三色 紫 `#8f7ad9` / 青 `#3fb0c4` / 红 `#d95f55`（§5.6③）；③ `ui.accentUi` 个性化目录 deep-space/sage/bone（§2.3）；④ 他的声音行宽 31ch → 实现 35em（§6.1） | 全部已落地并经视觉验收（台账 #30），数值待主人确认后转 ✅ |
 
 ---
 

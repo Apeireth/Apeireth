@@ -1,7 +1,7 @@
 //! Usage accounting: per-call token/cost/latency records and aggregate queries.
 //!
-//! Recovered from the legacy `apeireth-pipeline::provider_registry` `UsageRecord`
-//! + `CostTracker` semantics (field-level translation of LiteLLM's public
+//! The legacy `apeireth-pipeline::provider_registry` `UsageRecord`
+//! + `CostTracker` semantics (field-level mapping of the public
 //! `Usage` / `CostBreakdown` / `completion_cost` aggregate-query surface).
 //! The legacy provider *registry* / *fallback chain* / *selection strategies*
 //! stay with the canonical ProviderRouter (`crates/engine/provider`) — only the
@@ -51,7 +51,7 @@ impl ModelPricing {
 
     /// Estimate the USD cost of one call from token counts.
     ///
-    /// Legacy 1:1: `(input / 1000) * input_rate + (output / 1000) * output_rate`.
+    /// Legacy: `(input / 1000) * input_rate + (output / 1000) * output_rate`.
     /// Rates of `0.0` (unknown pricing) legitimately produce `0.0` — callers
     /// must not fabricate prices they do not have.
     pub fn estimate_cost(&self, input_tokens: u64, output_tokens: u64) -> f64 {
@@ -69,8 +69,8 @@ impl Default for ModelPricing {
 
 /// One LLM call's complete cost + performance record (8 fields).
 ///
-/// Legacy 1:1: `apeireth-pipeline::provider_registry::UsageRecord`
-/// (LiteLLM public `Usage` + `CostBreakdown` field translation). `success =
+/// Legacy: `apeireth-pipeline::provider_registry::UsageRecord`
+/// (public `Usage` + `CostBreakdown` field mapping). `success =
 /// false` records typically carry `cost_usd = 0.0`; the flag exists for
 /// success-rate aggregation, not for cost suppression.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,7 +144,7 @@ impl UsageRecord {
 
 /// Append-only usage ledger with aggregate queries.
 ///
-/// Legacy 1:1: `apeireth-pipeline::provider_registry::CostTracker` (LiteLLM
+/// Legacy: `apeireth-pipeline::provider_registry::CostTracker` (the
 /// public `completion_cost` aggregate-query pattern). Pure in-memory; the
 /// owner decides the lifetime (turn / session / scheduler) and any
 /// persistence.

@@ -1,10 +1,10 @@
 # reconstruct_v2 Convergence Baseline — Architecture Reality Audit
 
-> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：文中"no agent loop exists anywhere"（:98,:112-116）已被推翻——现在 `crates/engine/runtime/src/canonical/execute.rs` 是完整 agent loop；"nested workspace removed" 指 git 已删除，磁盘 `reconstruction_v2/` 目录残留未跟踪文件（target/db），可安全清理。
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：文中"no agent loop exists anywhere"（:98,:112-116）已被推翻——现在 `crates/engine/runtime/src/canonical/execute.rs` 是完整 agent loop；"nested workspace removed" 指 git 已删除，磁盘 `reconstruction_v2/` 目录残留未跟踪文件（target/db），可安全清理。
 
 Status: recorded 2026-08-23. Baseline for the canonical-skeleton convergence work.
 
-Update 2026-08-26: the nested `reconstruction_v2/` donor workspace described
+Update 2026-08-26: the nested `reconstruction_v2/` workspace described
 by this snapshot was removed after the canonical provider path stabilized. The
 measurements and paths below are historical evidence, not current filesystem
 locations; the root workspace is the only active Rust workspace.
@@ -19,15 +19,15 @@ locations; the root workspace is the only active Rust workspace.
 | HEAD subject | `feat(frontier): complete real-time Voice Call UI, Screen Agent, Software Factory and MCP Hub` |
 | Parent | `0dcb64cb9b241fc8334705cd69d2d4512204c9cb` |
 | Working tree at clone | clean |
-| `origin/master` | historical reference / donor only — **not** merged, **not** rebased |
+| `origin/master` | historical reference only — **not** merged, **not** rebased |
 
 ## 1. The three concepts (do not conflate)
 
 | | What it is | Role in this work |
 | --- | --- | --- |
 | A. `reconstruct_v2` **branch** | the Git baseline | the only working baseline |
-| B. **root workspace** (`/Cargo.toml`, `crates/`) | the real, large, historical implementation | mature donor; convergence target |
-| C. `reconstruction_v2/` **directory** | a *separate nested* Cargo workspace | idea donor only; not a target |
+| B. **root workspace** (`/Cargo.toml`, `crates/`) | the real, large, historical implementation | mature baseline; convergence target |
+| C. `reconstruction_v2/` **directory** | a *separate nested* Cargo workspace | idea source only; not a target |
 
 ## 2. Measured reality
 
@@ -155,7 +155,7 @@ Name availability in `crates/` decides the mechanism per crate:
 | `apeireth-runtime` | occupied by legacy (2 dependents) | evolve in place: add the canonical composition root |
 | `apeireth-storage` | free | deferred — not in this phase's priority list |
 
-The nested `reconstruction_v2/` donor has now been removed as scheduled in the
+The nested `reconstruction_v2/` workspace has now been removed as scheduled in the
 migration map. No third architecture was created: no `reconstruction_v3/`, no
 `canonical_v2/`, and no parallel root directory.
 

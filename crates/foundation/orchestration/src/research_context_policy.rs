@@ -347,6 +347,12 @@ pub fn research_synthetic_requests(
         (state.wrapping_mul(0x2545_F491_4F6C_DD1D) >> 11) as f64 / (1u64 << 53) as f64
     };
     let hot = hot_size.min(universe);
+    // L6: `universe == 0` 显式处理 — 旧实现落到 `next() * universe as f64` = 0.0,
+    // 语义上"碰巧没错"但依赖浮点巧合; 一旦以后改成 `x / universe` 之类写法就是
+    // inf → `as usize` = usize::MAX 的越界页号。这里直接短路返空序列。
+    if universe == 0 || n == 0 {
+        return Vec::new();
+    }
     (0..n)
         .map(|t| {
             let u = next();

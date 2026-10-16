@@ -35,13 +35,13 @@ pub mod canonical;
 mod episode;
 mod identity;
 mod migrations;
-// N8: generation 绑定观测缓存 (自包含, VCP MemoRuntime 精神, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
+// N8: generation 绑定观测缓存 (自包含, 通用记忆运行时模式, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
 pub mod gen_cache;
-// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py)
+// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (对齐同类记忆工程公开设计)
 pub mod hallways;
 mod session_note;
 mod streams;
-mod three_layer; // R30 U9: claude-mem 3 层 facade
+mod three_layer; // R30 U9: 3 层记忆 facade
 
 pub use append_only::{AppendOnlyError, HistoryEntry, HistoryStream, Tombstone};
 // R22 ST-A2.4 — 6 历史流深度公共 API (query / insert / count)
@@ -51,6 +51,8 @@ pub mod arbitration;
 pub mod betti_hole_detector;
 pub mod bitemporal_graph;
 pub mod chronicle_crystallizer;
+/// 图社区分层聚合 + 双级检索分诊 (W3 实现批, v1 community, 2026-10-10)。
+pub mod community;
 pub mod continuity_link;
 pub use continuity_link::{
     continuity_id_from_env, current_continuity_id, ensure_identity, migrate_subject,
@@ -65,6 +67,7 @@ pub mod confidence;
 pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
+pub mod dream_wiring;
 pub mod dreaming;
 pub mod ensemble;
 pub mod five_dimensional;
@@ -109,8 +112,8 @@ pub use amem_graph::{
 };
 pub use dream_consolidation::{pair_merge, select_dream_candidates, DreamSource, DREAM_ID_PREFIX};
 pub use memory_injection::{
-    build_memory_injection, build_preference_injection, EVIDENCE_MAX_CHARS,
-    PREFERENCE_INJECTION_LIMIT,
+    build_l2_retrieval_disclosure, build_memory_injection, build_preference_injection,
+    EVIDENCE_MAX_CHARS, PREFERENCE_INJECTION_LIMIT,
 };
 pub use memory_rank::{
     filter_active_memories, group_bonus, memory_score, parse_importance, rank_memory_entries,
@@ -301,7 +304,10 @@ pub use context_ledger::{
 };
 // Salvage 02: combined retention sweep (count cap + TTL + decay) via governance sidecar.
 pub mod retention;
-pub use retention::{decay_strength, sweep_session, RetentionPolicy, RetentionSweepReport};
+pub use retention::{
+    decay_strength, sweep_session, sweep_session_with_audit, RetentionCleanup, RetentionPolicy,
+    RetentionSweepReport, CLEANUP_AUDIT_MODULE,
+};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
@@ -320,6 +326,7 @@ pub mod extraction;
 pub mod facade;
 pub mod layers;
 pub mod memory_materializer;
+pub mod partner_store_sqlite;
 pub mod persona_store_sqlite;
 pub mod reconciler;
 pub mod retrieval_pipeline;
@@ -336,6 +343,7 @@ pub use commitments::{
     CommitmentStatus, SqliteCommitmentStore,
 };
 pub use facade::MemoryMutationFacade;
+pub use partner_store_sqlite::SqlitePartnerStore;
 pub use persona_store_sqlite::SqlitePersonaProfileStore;
 pub use temporal_graph_store::{
     SqliteTemporalGraphStore, TemporalGraphError, TemporalGraphFact, TemporalGraphQuery,
@@ -458,7 +466,10 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().expect("memory store mutex");
+            let mut guard = store
+                .conn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)
@@ -472,7 +483,10 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().expect("memory store mutex");
+            let mut guard = store
+                .conn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)
@@ -483,6 +497,10 @@ impl SqliteMemoryStore {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
+        // M26: 补齐 busy_timeout — rusqlite 默认 0, 另一进程持写锁时立即
+        // SQLITE_BUSY 失败且不重试; 与 apeireth-storage `SqliteConfig::default()`
+        // (5s) 对齐, 两条链路行为一致.
+        conn.pragma_update(None, "busy_timeout", 5_000_i64)?;
         Ok(())
     }
 
@@ -509,6 +527,42 @@ impl SqliteMemoryStore {
         let conn = self.conn()?;
         append_only::export_all_streams(&conn)
     }
+
+    /// 记忆账本计数 (自省通道的元数据面): 会话数 / 记忆件数 / 保护件数.
+    ///
+    /// **只回计数, 不回内容原文** —— 自述面只暴露"有多少", 永不暴露"是什么"。
+    /// 计数全部走本 store 可查的元数据 (episodes 流 + 治理 sidecar 表)。
+    pub fn ledger_counts(&self) -> MemoryResult<MemoryLedgerCounts> {
+        let conn = self.conn()?;
+        let sessions: i64 = conn.query_row(
+            "SELECT COUNT(DISTINCT session_id) FROM episodes",
+            [],
+            |row| row.get(0),
+        )?;
+        let memories: i64 =
+            conn.query_row("SELECT COUNT(*) FROM episodes", [], |row| row.get(0))?;
+        let protected: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM episode_governance WHERE protected = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(MemoryLedgerCounts {
+            sessions: sessions.max(0) as u64,
+            memories: memories.max(0) as u64,
+            protected: protected.max(0) as u64,
+        })
+    }
+}
+
+/// 记忆账本计数 (纯元数据, 自省通道消费).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MemoryLedgerCounts {
+    /// 会话数 (episodes 流里的不同 `session_id` 计数).
+    pub sessions: u64,
+    /// 记忆件数 (episodes 流总行数).
+    pub memories: u64,
+    /// 保护件数 (治理 sidecar 中 `protected = 1` 的行数).
+    pub protected: u64,
 }
 
 fn map_poisoned(e: std::sync::PoisonError<std::sync::MutexGuard<'_, Connection>>) -> MemoryError {
@@ -587,6 +641,9 @@ impl apeireth_plugin::memory_backend::MemoryBackend for SqliteMemoryStore {
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         let metadata_str = serde_json::to_string(&metadata)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        // M27 / L 组: canonical 定义在 migrations V11 (带 updated_at 列);
+        // 这里仅是 pre-V11 老库 self-heal, 建 V9 时代两列形态. 新库的列集
+        // 以 V11 迁移为准, 懒建路径不得新增列.
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS episode_memory_metadata (episode_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL)",
         )
@@ -637,13 +694,16 @@ impl apeireth_plugin::memory_backend::MemoryBackend for SqliteMemoryStore {
     fn list_stream(
         &self,
         kind: StreamKind,
-        _session_id: &str,
+        session_id: &str,
         n: usize,
     ) -> apeireth_plugin::memory_backend::CapabilityResult<Vec<HistoryEntry>> {
         let conn = self
             .conn()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        append_only::list_recent_entries(&conn, kind.table_name_ext(), n, false)
+        // H13: 旧实现忽略 session_id (`list_recent_entries` 返回**所有**
+        // session 的最近 N 条) — 跨 session 数据泄漏. 改为按 session_id 列
+        // 过滤 + tombstone 过滤, 与 SqliteBackend / trait 路径语义对齐.
+        append_only::list_recent_for_session(&conn, kind.table_name_ext(), session_id, n, false)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
 }

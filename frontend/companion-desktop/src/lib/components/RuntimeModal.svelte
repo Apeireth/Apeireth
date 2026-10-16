@@ -198,35 +198,36 @@
             <p class="snapshot-hint">包含后端注册的 providers / 模块 / 执行状态全量内省，点击拉取。</p>
           {/if}
         </div>
-      </div>
 
-      {#if capabilities}
-        <div class="cap-section">
-          <div class="cap-head">
-            <span class="cap-title">能力清单 (Capability Manifest)</span>
-            <span class="cap-version">schema v{capabilities.schema_version}{capabilities.legacy ? ' · legacy' : ''}</span>
-          </div>
-          <div class="cap-runtime">
-            {capabilities.runtime.service} · {capabilities.runtime.version}
-          </div>
-          <div class="cap-grid">
-            {#each capabilities.capabilities as group}
-              <div class="cap-group">
-                <div class="cap-group-name">{group.name}</div>
-                <div class="cap-ops">
-                  {#each group.capabilities as cap}
-                    {#if cap.supported}
-                      <span class="cap-tag" title={`${cap.id}${cap.write ? ' (read/write)' : cap.read ? ' (read)' : ''}`}>
-                        {cap.id.split('.').pop()}
-                      </span>
-                    {/if}
-                  {/each}
+        <!-- 能力清单排在运行时快照之后；与快照同在唯一滚动容器内整页滚动。 -->
+        {#if capabilities}
+          <div class="cap-section">
+            <div class="cap-head">
+              <h3 class="section-title">能力清单 (Capability Manifest)</h3>
+              <span class="cap-version">schema v{capabilities.schema_version}{capabilities.legacy ? ' · legacy' : ''}</span>
+            </div>
+            <div class="cap-runtime">
+              {capabilities.runtime.service} · {capabilities.runtime.version}
+            </div>
+            <div class="cap-grid">
+              {#each capabilities.capabilities as group}
+                <div class="cap-group">
+                  <div class="cap-group-name">{group.name}</div>
+                  <div class="cap-ops">
+                    {#each group.capabilities as cap}
+                      {#if cap.supported}
+                        <span class="cap-tag" title={`${cap.id}${cap.write ? ' (read/write)' : cap.read ? ' (read)' : ''}`}>
+                          {cap.id.split('.').pop()}
+                        </span>
+                      {/if}
+                    {/each}
+                  </div>
                 </div>
-              </div>
-            {/each}
+              {/each}
+            </div>
           </div>
-        </div>
-      {/if}
+        {/if}
+      </div>
 
       <div class="modal-foot">
         <span class="foot-hint">提示：Apeireth 服务常驻于本地或指定端点</span>
@@ -278,8 +279,7 @@
     color: var(--danger, #e5484d);
   }
   .snapshot-json {
-    max-height: 260px;
-    overflow: auto;
+    /* 不设内层 max-height/滚动条：内容整页滚（单一滚动容器），快照不再被压成一条缝。 */
     font-family: monospace;
     font-size: 11px;
     background: var(--surface-2);
@@ -351,6 +351,10 @@
     color: var(--text);
   }
   .modal-body {
+    /* 唯一滚动容器：标题/底栏固定，内容整页滚；窄窗（弹窗高 < 内容高）时
+       靠 flex:1 + min-height:0 把滚动留在这里，而不是散落在嵌套小滚动条里。 */
+    flex: 1 1 auto;
+    min-height: 0;
     padding: 20px;
     overflow-y: auto;
     display: flex;
@@ -541,19 +545,24 @@
   }
 
   .cap-section {
-    padding: 14px 20px;
-    border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+    /* 能力清单是滚动内容里的一个普通 section（与快照同级、同间距），不再固定在弹窗底部遮挡快照。 */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0;
+    border-top: 0;
   }
   .cap-head {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 4px;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 0;
   }
-  .cap-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text, #e6e6e6);
+  /* 横排标题行里的 section 标题不再带下边距（与快照行同一规则）。 */
+  .cap-head .section-title,
+  .snapshot-head .section-title {
+    margin: 0;
   }
   .cap-version {
     font-size: 11px;
@@ -562,7 +571,7 @@
   .cap-runtime {
     font-size: 11px;
     color: var(--text-dim, #888);
-    margin-bottom: 10px;
+    margin-bottom: 0;
     font-family: monospace;
   }
   .cap-grid {

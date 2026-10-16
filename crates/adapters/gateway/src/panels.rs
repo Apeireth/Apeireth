@@ -8,6 +8,11 @@
 //!
 //! Response shapes follow `docs/gateway-api-contract.md` §4-§9 and mirror the
 //! desktop types in the sibling `apeireth-ui/src/lib/types.ts` workspace.
+//!
+//! 读快照语义 (W2-③ 面板一致性, 多客户端读数一致): 每个 `/v1/panel/*` 响应 =
+//! **一次快照读** —— 单个端口调用的完整结果, 绝不拼两次读 (会话列表/内存计数
+//! 不会混两个时刻的状态); 响应内各字段同出一刻, 多客户端并发读各自拿到完整
+//! 一致的快照。该语义由 `tests/multi_client_session.rs` 面板两例钉住。
 
 use std::sync::{Arc, RwLock};
 
@@ -27,10 +32,48 @@ pub struct GatewayState {
     pub runtime: Arc<Runtime>,
     pub services: GatewayServices,
     pub events: crate::events::EventBus,
+    /// Keepalive pin on the SSE delivery frame surface (逐连接租约的装配面):
+    /// the assembly keeps the delivery stream open, so frame retention spans
+    /// connection gaps and every new connection reads a current snapshot.
+    pub events_stream: Arc<apeireth_core::resource_lease::ResourcePin>,
     pub observations: Arc<crate::events::RuntimeObservationSink>,
+    /// Keepalive pin on the observation flush surface (攒批面租约的装配面):
+    /// the flush loop runs for the assembly lifetime and stops with it.
+    pub observations_stream: Arc<apeireth_core::resource_lease::ResourcePin>,
+    /// Presence synthesizer behind `presence_state` frames (contract §8a); held
+    /// here so the service outlives the assembly scope and its heartbeat task.
+    pub presence: Arc<crate::presence::PresenceService>,
+    /// Keepalive pin on the presence frame surface (资源租约示范接线): the
+    /// assembly surface is the first holder, so the frame stream (heartbeat
+    /// producer) opens here and closes when the gateway state is gone.
+    pub presence_stream: Arc<apeireth_core::resource_lease::ResourcePin>,
     /// Live runtime config, readable by every request path and patchable through
     /// `/v1/admin/config`.
     pub hot_config: Arc<RwLock<crate::admin::GatewayRuntimeConfig>>,
+    /// W2-② 全 API 面令牌门 (chat / 事件流 / 面板 / 会话 / 审批 / admin 族,
+    /// 唯一豁免 `UNAUTHENTICATED_PROBE_PATHS` 健康探活), 三态口径解析自 env
+    /// `APEIRETH_GATEWAY_TOKEN` (see [`crate::canonical_entry::GatewayTokenGate`])。
+    pub token_gate: crate::canonical_entry::GatewayTokenGate,
+    /// 客户端令牌表 (name → token, 令牌族第二面): 与 env 单令牌并列的通行证,
+    /// 过门审计带客户端名。由组合根**显式装载注入** (see
+    /// [`crate::client_tokens::ClientTokenTable::load`]) —— 装配函数不隐式读
+    /// 配置面, 「坏配置拒开」必须在可失败边界执行; 未注入 = 空表 (仅 env 面)。
+    pub client_tokens: crate::client_tokens::ClientTokenTable,
+    /// 用户角色面 (W3-②): 用户表 (`users.json`; 未注入 = **角色面未激活**,
+    /// 兼容路径零回归) + 会话→用户绑定。由组合根显式装载注入 (see
+    /// [`crate::client_tokens::UserAccess::load`]), 坏表/绑定不一致在可失败
+    /// 边界拒开; 角色门据此按治理层 role 权限矩阵过闸。
+    pub user_access: crate::client_tokens::UserAccess,
+    /// 用户域会话平面 (W3-① 多户数据隔离): 域解析 + 按域路由会话写闸 (每域
+    /// 恰一把, 默认域与运行时共用同一把)。由组合根显式装载注入 (see
+    /// [`apeireth_runtime_assembly::DomainDataPlane`]); 未注入 = 域面未接线
+    /// (兼容路径, 一切按默认域原位语义)。
+    pub domains: Option<Arc<apeireth_runtime::canonical::DomainSessionPlane>>,
+    /// Graceful-shutdown trigger (W2-① resident form): fired by the token-gated
+    /// `/v1/admin/shutdown` endpoint; the serve loop stops, writes the closing
+    /// audit fact and flushes the observation archive (see
+    /// [`crate::canonical_entry::serve_with_shutdown`]).
+    pub shutdown: Arc<crate::shutdown::ShutdownTrigger>,
 }
 
 // ---------------------------------------------------------------------------
@@ -635,6 +678,14 @@ impl ModuleQuery for PanelDataAdapter {
 
 /// Panel routes without attached state — merge into the canonical router
 /// before its final `.with_state(...)`.
+/// 面板族里的**管理面**端点 (W3-② 角色门分类用): 授权热撤属治理层 role 权限
+/// 矩阵 [`apeireth_governance::UserCapability::AdminControl`] 档 (owner)。
+/// 面板路径知识归面板面本体 (canonical_entry 只问不背路径, 架构冻结面不许引
+/// 面板路径)。
+pub fn panel_admin_face(endpoint: &str) -> bool {
+    endpoint == "/v1/panel/grants/revoke"
+}
+
 pub fn panel_routes() -> Router<GatewayState> {
     Router::new()
         .route("/v1/panel/sessions", get(list_sessions))
@@ -1200,7 +1251,10 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "providers", "capabilities": [ cap("providers.list", true, false, &["list"], true, !state.runtime.providers().is_empty()) ] },
             { "name": "runtime", "capabilities": [ cap("runtime.snapshot.read", true, false, &["read"], true, true) ] },
             { "name": "chat", "capabilities": [ cap("chat.completions", true, true, &["complete", "stream"], true, !state.runtime.providers().is_empty()) ] },
-            { "name": "sessions", "capabilities": [ cap("sessions.read", true, false, &["list"], sessions_supported, sessions_supported) ] },
+            { "name": "sessions", "capabilities": [
+                cap("sessions.read", true, false, &["list"], sessions_supported, sessions_supported),
+                cap("sessions.delete", false, true, &["delete"], true, true),
+            ] },
             { "name": "memory", "capabilities": memory },
             { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], tools_supported, tools_supported) ] },
             { "name": "permissions", "capabilities": [
@@ -1222,6 +1276,9 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             ] },
             { "name": "workbench", "capabilities": [
                 cap("workbench.turn.read", true, false, &["read"], workbench_supported, workbench_supported),
+            ] },
+            { "name": "metrics", "capabilities": [
+                cap("metrics.read", true, false, &["read"], true, true),
             ] },
             { "name": "voice", "capabilities": [
                 cap_with_reason("voice.duplex", false, false, &["duplex", "stream"], false, false, Some("not_assembled")),

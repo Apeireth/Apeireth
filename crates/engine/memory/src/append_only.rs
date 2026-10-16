@@ -280,6 +280,38 @@ pub(crate) fn list_recent_entries(
     Ok(out)
 }
 
+/// 按 session 取最近 N 条 (时间升序返回, 最新在末尾).
+///
+/// H13: `SqliteMemoryStore` 的 `MemoryBackend::list_stream` 旧实现用
+/// `list_recent_entries` (无 session 过滤) — 把**所有** session 的最近 N
+/// 条返回给调用方, 跨 session 泄漏. 本 helper 按 `session_id` 列过滤
+/// (无归属 NULL 行不在具名 session 查询结果内), 其余语义与
+/// `list_recent_entries` 一致.
+pub(crate) fn list_recent_for_session(
+    conn: &Connection,
+    table: &'static str,
+    session_id: &str,
+    limit: usize,
+    include_tombstoned: bool,
+) -> MemoryResult<Vec<HistoryEntry>> {
+    let mut sql = format!(
+        "SELECT id, subject_id, subject_rev, session_id, created_at, payload, source, tags, tombstoned_at
+         FROM {table} WHERE session_id = ?1"
+    );
+    if !include_tombstoned {
+        sql.push_str(" AND tombstoned_at IS NULL");
+    }
+    sql.push_str(" ORDER BY created_at DESC, id DESC LIMIT ?2");
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![session_id, limit as i64], row_mapper(table))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    out.reverse(); // 时间升序, 最新在末尾 (与 list_recent_entries 一致)
+    Ok(out)
+}
+
 fn row_mapper<'a>(
     table: &'a str,
 ) -> impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> + 'a {

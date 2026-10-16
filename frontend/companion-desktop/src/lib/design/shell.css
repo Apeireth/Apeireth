@@ -103,6 +103,31 @@
   color: var(--ap-gold);
   text-shadow: 0 0 14px rgba(255, 210, 122, 0.45);
 }
+/* 左上头像（用户中心入口）：单字品牌位换成用户头像，点击落设置 › 用户中心。 */
+.rail-avatar {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.rail-avatar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ap-gold) 55%, transparent);
+}
+.rail-avatar:focus-visible {
+  outline: 2px solid var(--ap-accent-ui);
+  outline-offset: 2px;
+}
+.rail-avatar-img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ap-gold) 35%, transparent);
+}
 .rail-nav {
   flex: 1;
   display: flex;
@@ -157,12 +182,12 @@
   opacity: 0.95;
 }
 .rail-btn.active {
-  color: var(--ap-gold);
-  background: rgba(255, 210, 122, 0.09);
+  color: var(--ap-accent-ui);
+  background: color-mix(in srgb, var(--ap-accent-ui) 9%, transparent);
 }
 .rail-btn.active .rail-label {
   opacity: 1;
-  color: var(--ap-gold-ui);
+  color: var(--ap-accent-ui);
 }
 .rail-btn.active::before {
   content: "";
@@ -172,8 +197,8 @@
   bottom: 10px;
   width: 2px;
   border-radius: 2px;
-  background: var(--ap-gold);
-  box-shadow: 0 0 8px rgba(255, 210, 122, 0.6);
+  background: var(--ap-accent-ui);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ap-accent-ui) 60%, transparent);
 }
 .rail-btn .tip {
   display: none;
@@ -217,9 +242,12 @@
 .drawer-head .eyebrow {
   margin: 0 0 4px;
   font-family: var(--ap-font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.34em;
-  color: var(--ap-bone-30);
+  /* 走查校准：9.5px/bone-30/0.34em 在深色底上远看是噪点（rev-gov-approvals 实证）；
+     提到 10px/bone-42/0.26em——仍弱于正文，但轮廓可辨。essence.css 的覆写
+     与本值同为 bone-42，两主题从此一致。 */
+  font-size: 10px;
+  letter-spacing: 0.26em;
+  color: var(--ap-bone-42);
   text-transform: none;
   font-weight: 400;
 }
@@ -260,18 +288,31 @@
   min-height: 0;
   min-width: 0;
 }
-.drawer-body::-webkit-scrollbar,
-.wb-body::-webkit-scrollbar,
-.panel::-webkit-scrollbar,
-.scroll::-webkit-scrollbar {
+/* ── 全局滚动条（显白病灶修复）────────────────────────────────────────
+   病灶：自定义滚动条只给 .drawer-body/.wb-body/.panel/.scroll 四个选择器，
+   且颜色硬编码骨白 rgba(232,224,204,0.12)；其余滚动容器（.session-col /
+   .settings-content / 记忆·治理面板等）落回 Chromium **默认白滚动条**——
+   深色主题下即"侧边异常白色色块"，浅色主题下骨白滑块同样发白。
+   修复：全局伪元素 + 令牌驱动（--ap-scrollbar-*，tokens.css 按主题覆写），
+   任何滚动容器、任何主题都不再出现默认白滚动条。 */
+::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
-.drawer-body::-webkit-scrollbar-thumb,
-.wb-body::-webkit-scrollbar-thumb,
-.panel::-webkit-scrollbar-thumb,
-.scroll::-webkit-scrollbar-thumb {
-  background: rgba(232, 224, 204, 0.12);
+::-webkit-scrollbar-track {
+  background: var(--ap-scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ap-scrollbar-thumb);
   border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ap-scrollbar-thumb-hover);
+}
+html {
+  /* 标准属性兜底（可继承到全部滚动容器；Chromium 里 webkit 伪元素优先）。 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ap-scrollbar-thumb) var(--ap-scrollbar-track);
 }
 .drawer-body .page-head {
   display: none !important;
@@ -282,6 +323,7 @@
 .drawer-body.embed .sessions-view,
 .drawer-body.embed .memory-view,
 .drawer-body.embed .tools-view,
+.drawer-body.embed .governance-view,
 .drawer-body.embed .activity-view {
   max-width: none;
 }
@@ -500,20 +542,161 @@
 }
 .wb-toggle:hover,
 .wb-toggle.on {
-  border-color: rgba(232, 217, 176, 0.5);
-  color: var(--ap-gold-ui);
-  background: color-mix(in srgb, var(--ap-panel) 88%, var(--ap-gold) 12%);
+  border-color: color-mix(in srgb, var(--ap-accent-ui) 50%, transparent);
+  color: var(--ap-accent-ui);
+  background: color-mix(in srgb, var(--ap-panel) 88%, var(--ap-accent-ui) 12%);
 }
 .scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scroll-behavior: smooth;
+  /* 瞬时落底（内测整改①）：这里不再无条件声明平滑滚动——否则任何 scrollTop
+     赋值都被动画成中间滚动帧，打开/切换会话会看见"从顶滚到底"的过程。显式
+     scrollTo({behavior:'smooth'}) 的「回到底部」按钮跳转不受影响（显式行为
+     优先于本声明，平滑能力保留）。 */
+  scroll-behavior: auto;
   pointer-events: none;
 }
 .col {
-  width: min(720px, calc(100% - 56px));
+  width: min(640px, calc(100% - 56px));
   margin: 0 auto;
+}
+
+/* ── 三栏主从骨架（2026-09-22 主人拍板：同类桌面即时通讯范式）──────────
+   图标轨（.rail）｜会话列表栏（.session-col 常驻，260–320 弹性）｜聊天区。
+   栏体 = 页面层承托（§5.1：#0b0d12@82% + blur 20px），场景从栏外透出；
+   栏内逐行卡片/hover 金线/空态契约保持第①②轮已验收语言，不重复定义。 */
+.chat-columns {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.session-col {
+  flex: none;
+  width: clamp(260px, 24vw, 320px);
+  /* 2026-10-11 主人反馈批③：Kimi Desktop 式「窗框融进软件」——列表栏取消
+     浮卡（外边距+圆角+描边），四边锚定窗口、只留一道右分界线，栏体即窗框
+     的一部分，不再有「漂在壁纸上的黑盒子」。 */
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  border-right: 1px solid var(--ap-line);
+  border-radius: 0;
+  background: var(--ap-panel);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  pointer-events: auto;
+}
+.chat-area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 未选中态 = 个性化背景显影区（§8 增补①）：背景本身即是内容，
+   只放一句指引 + 右下角背景署名（如实标注来源，0 装）。 */
+.bg-reveal {
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+/* 承托与右下角署名同款 chip（§5.1 承托纪律）：裸 text-shadow 在复杂背景
+   （night 黑洞亮环 / essence 山脉）上实测不可读——走查 rev-night-hour2 实证。 */
+.bg-hint {
+  margin: 0;
+  padding: 10px 24px;
+  border: 1px solid var(--ap-line);
+  border-radius: 999px;
+  background: var(--ap-shell-chip);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-family: var(--ap-font-voice);
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  color: var(--ap-bone-68);
+}
+.bg-caption {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--ap-line);
+  border-radius: 6px;
+  background: var(--ap-shell-chip);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-family: var(--ap-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--ap-bone-42);
+}
+
+/* 窄窗降级开关：桌面恒隐，≤980px 媒体查询里亮起（断点见下方诚实标注） */
+.col-toggle {
+  display: none;
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 12;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--ap-line);
+  border-radius: 999px;
+  background: var(--ap-panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--ap-bone-68);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: border-color 0.25s, color 0.25s;
+}
+.col-toggle:hover {
+  border-color: color-mix(in srgb, var(--ap-accent-ui) 45%, transparent);
+  color: var(--ap-bone);
+}
+
+/* 窄窗降级（诚实断点 ≤980px，桌面优先）：列表栏折叠为覆盖层，
+   由 .col-toggle 召出，选中会话即收（openConversation 里置 false）。 */
+@media (max-width: 980px) {
+  .session-col {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: min(300px, calc(100% - 64px));
+    margin: 0;
+    border-radius: 0 12px 12px 0;
+    background: var(--ap-shell-elevated);
+    transform: translateX(-105%);
+    /* 折叠态 visibility:hidden（滚轮路由批）：滑出后右缘仍可能压在视口里，
+       作为"幽灵面板"会污染 wheel-router R4 的同页唯一面板判定；
+       visibility 延迟到滑出动画结束再隐（transform 0.3s），展开即显。 */
+    visibility: hidden;
+    transition: transform 0.3s var(--ap-ease), visibility 0s linear 0.3s;
+  }
+  .session-col.open {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.3s var(--ap-ease), visibility 0s linear 0s;
+  }
+  .col-toggle {
+    display: inline-flex;
+  }
+  /* 给覆盖层开关让位，避免压住会话头标题 */
+  .chat-head {
+    padding-left: 84px;
+  }
 }
 .home {
   min-height: 100%;
@@ -642,8 +825,18 @@ p.lede {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
   padding: 16px 0 12px;
   pointer-events: auto;
+  /* 2026-10-11 主人反馈批②：Kimi Desktop 式「窗框融进软件」——头部不做半透明
+     灰板（壁纸透出显脏），而是全实底、左右全出血的一条暗色窗框，对话从下面
+     钻进框里，窗口与内容浑然一体，根本没有「灰盒子」概念。 */
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--ap-panel-solid);
+  box-shadow: 0 0 0 100vmax var(--ap-panel-solid);
+  clip-path: inset(0 -100vmax);
 }
 .chat-title {
   margin: 0;
@@ -651,12 +844,22 @@ p.lede {
   font-weight: 500;
   letter-spacing: 0.04em;
   color: var(--ap-bone);
+  /* 长会话名横排单行省略（打回修复②轮）；收缩空间由 .chat-head-main
+     的 flex:1 + min-width:0 让出，此处 min-width:0 打通收缩链。 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .statusline {
   display: flex;
   align-items: center;
   gap: 7px;
   margin-top: 3px;
+  /* 独占会话头第二行（打回修复②轮）：操作组 flex:none 占走第一行右半，
+     状态行若留在同一 flex 行会被挤到控件文字竖排；flex-wrap 下取整宽。 */
+  flex: none;
+  flex-basis: 100%;
 }
 .mono-note {
   font-family: var(--ap-font-mono);
@@ -670,6 +873,25 @@ p.lede {
 }
 .mono-note.live {
   color: var(--ap-gold);
+}
+/* 对话遥测条（内测整改③）：状态行尾的等宽小字四项（本轮 token / 提示缓存命中 /
+   回合耗时 / 模型），同 .mono-note 的 10px 等宽口径；非交互项不给手型光标，
+   详情走 hover（title）。 */
+.turn-telemetry {
+  font-family: var(--ap-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ap-bone-42);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: default;
+}
+.turn-telemetry .tele-sep {
+  opacity: 0.4;
 }
 .sim-badge {
   font-family: var(--ap-font-mono);
@@ -778,6 +1000,57 @@ p.lede {
   background: linear-gradient(180deg, var(--ap-gold-white-hot), var(--ap-gold) 45%, var(--ap-gold-amber));
   box-shadow: 0 0 10px rgba(255, 210, 122, var(--presence-glow, 0.18));
 }
+/* 左缘宽幅软辉（打回修复②轮）：2px 金条之外再铺一层径向渐变的弥散光，
+   与金条同相位呼吸；blur 软化边缘，溢出卡片左缘落在深空底上。
+   强度真实接线（presence → --presence-glow 调幅）留给第 ⑦ 项，此处先落静态呼吸。 */
+.ai-card::after {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 6px;
+  bottom: 6px;
+  width: 30px;
+  pointer-events: none;
+  opacity: calc(0.32 + var(--presence-glow, 0.18) * 0.5);
+  background: radial-gradient(closest-side, rgba(255, 210, 122, 0.5), rgba(255, 210, 122, 0));
+  filter: blur(4px);
+}
+/* 光晕呼吸 = motion.breathe ✅ 2.8s，opacity 0.22→0.65（打回验收口径）。
+   reduced-motion 由 tokens.css 全局降级停动画，回落到上面的静态微光（§7.3）。 */
+@media (prefers-reduced-motion: no-preference) {
+  .ai-card::before,
+  .ai-card::after {
+    animation: ap-edge-breathe var(--ap-dur-breathe) ease-in-out infinite;
+  }
+  @keyframes ap-edge-breathe {
+    0%,
+    100% {
+      opacity: 0.22;
+    }
+    50% {
+      opacity: 0.65;
+    }
+  }
+}
+/* 他的声音正文（规范 §6.1，打回修复②轮）：衬线引语级排版在往来会话卡片内提级。
+   根因：prose.css 的 .md-body 基础规则（14px / 1.75 / var(--text)）与 tokens.css
+   的 .ap-voice 同为 (0,1,0) 且加载更晚，把引语级字号/行高/墨色压回散文默认值，
+   14px 的 SimSun 位图渲染在截图里读作「非衬线」；此处以 .ai-card 语境提级 (0,3,0)，
+   作用面仅往来会话（quick 窗不用 .ai-card），代码/表格回落纪律仍由
+   MessageContent.svelte 的语境规则承担（§6.2/§6.3）。
+   行宽 35em ≈ 31 个中文 × (1 + 0.13em 字距)（验收口径）；§6.1 令牌原文 "31ch"
+   在半角 ch 下仅 ~15 汉字/行，属令牌口径冲突，建议回写规范 §6.1。 */
+.ai-card .md-body.ap-voice {
+  font-family: var(--ap-font-voice);
+  /* 2026-10-11 主人反馈批：正文字号回落——22px/2.1 行高读作「字太大」；
+     收到 14.5–16.5px / 1.9 行距，衬线嗓音身份保留，阅读密度对齐 Kimi 级。
+     令牌本体（--ap-voice-size）不动：快捷窗等其余面继续用原令牌。 */
+  font-size: clamp(14.5px, 1.05vw, 16.5px);
+  line-height: 1.9;
+  letter-spacing: 0.055em;
+  max-width: 35em;
+  color: var(--ap-bone);
+}
 .error-banner {
   display: flex;
   align-items: center;
@@ -801,14 +1074,16 @@ p.lede {
   position: relative;
 }
 .dock-col {
-  width: min(720px, calc(100% - 56px));
+  /* 2026-10-11 主人反馈批：输入栏要比上下文列宽——视觉重心自然落在输入上
+     （Kimi Desktop 式留白：消息列 640 收进框架，对话栏 860 宽台坐镇底部） */
+  width: min(860px, calc(100% - 32px));
   margin: 0 auto;
 }
 .composer-row {
-  --composer-h: 52px;
+  --composer-h: 58px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   height: var(--composer-h);
 }
 .composer-row .composer {
@@ -837,6 +1112,12 @@ p.lede {
 }
 .composer-caps {
   position: relative;
+  /* 2026-09-23 真机实证（elementFromPoint）：本元素的 backdrop-filter 生成
+     层叠上下文，把绝对定位于此的 .panel（M/◯ 弹出层）困在 z-auto 层——
+     #scrim(z17) 盖在其上：面板文字被 scrim 毛玻璃糊住（浅色下「看不清」），
+     点击也全被 scrim 拦截（点模型行 = 关面板，选不中）。抬到 18：
+     caps 连面板整体高于 scrim；抽屉(30+)/persona(31/32) 不受影响。 */
+  z-index: 18;
   display: flex;
   align-items: center;
   gap: 0;
@@ -845,7 +1126,7 @@ p.lede {
   box-sizing: border-box;
   background: var(--ap-panel);
   border: 1px solid var(--ap-line);
-  border-radius: 9px;
+  border-radius: 12px;
   backdrop-filter: blur(14px);
   padding: 0 4px;
   transition: border-color 0.3s, box-shadow 0.3s;
@@ -894,9 +1175,9 @@ p.lede {
   height: 100%;
 }
 .composer-send .send {
-  width: var(--composer-h);
-  height: var(--composer-h);
-  border-radius: 9px;
+  width: calc(var(--composer-h) - 10px);
+  height: calc(var(--composer-h) - 10px);
+  border-radius: 10px;
   flex: none;
 }
 .composer-caps .panel {
@@ -907,7 +1188,7 @@ p.lede {
 .composer {
   background: var(--ap-panel);
   border: 1px solid var(--ap-line);
-  border-radius: 9px;
+  border-radius: 12px;
   backdrop-filter: blur(14px);
   transition: border-color 0.3s, box-shadow 0.3s;
 }
@@ -944,7 +1225,7 @@ p.lede {
   border: 0;
   outline: 0;
   background: transparent;
-  font: 13.5px / 1.6 var(--ap-font-ui);
+  font: 14px / 1.6 var(--ap-font-ui);
   min-height: 22px;
   max-height: 132px;
   padding: 6px 0;
@@ -1083,11 +1364,14 @@ p.lede {
   bottom: calc(100% + 10px);
   left: 0;
   width: 356px;
-  max-width: 100%;
+  max-width: min(356px, calc(100vw - 80px));
   background: var(--ap-shell-elevated);
   border: 1px solid var(--ap-line);
   border-radius: 7px;
-  backdrop-filter: blur(20px);
+  /* 2026-09-23 真机实证修复： backdrop-filter 与父级 .composer-caps 的
+     backdrop-filter 嵌套触发 Edge 合成 bug——打开面板时整个窗口被糊化。
+     本层底 --ap-shell-elevated 实为近不透明（深 0.96/浅 0.94），
+     去掉滤镜对视觉无影响。 */
   padding: 16px;
   display: none;
   z-index: 18;
@@ -1409,6 +1693,9 @@ p.lede {
   font-size: 9.5px;
   color: var(--ap-bone-30);
 }
+.agent .tag.bad {
+  color: var(--ap-semantic-danger);
+}
 .file {
   display: flex;
   align-items: center;
@@ -1553,9 +1840,9 @@ p.lede {
   background: rgba(232, 224, 204, 0.06);
 }
 .mode-btn.active {
-  color: var(--ap-gold);
-  background: rgba(255, 210, 122, 0.12);
-  box-shadow: 0 0 12px rgba(255, 210, 122, 0.25);
+  color: var(--ap-accent-ui);
+  background: color-mix(in srgb, var(--ap-accent-ui) 12%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ap-accent-ui) 25%, transparent);
 }
 .app-root.mode-focus .mode-switch,
 .app-root.intro-playing .mode-switch {
@@ -1625,36 +1912,145 @@ p.lede {
   color: var(--ap-bone-30);
 }
 
-/* ── Essence 场景层（主题细节见 essence.css） ── */
-.essence-scene {
+/* ── 静态背景层（规范 §8 增补，2026-09-22 主人拍板）────────────────────
+   默认主题 heritage-void = 主人供旧前端星空山脉静态图；essence 走同一路径；
+   自定义上传（.custom-bg）以 inline background-image 覆盖主题默认图。
+   遮罩只为可读性（§5.1 承托纪律不破）：essence 白雾面；heritage/自定义压暗。 */
+.static-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.8s var(--ap-ease);
-  background: url('/assets/themes/essence-bg.png') center / cover no-repeat;
+  background: center / cover no-repeat;
 }
-.app-root.theme-essence .essence-scene {
+.app-root.theme-essence .static-bg {
   opacity: 1;
+  background-image: url('/assets/themes/essence-bg.png');
 }
-.app-root.theme-essence .essence-scene::after {
+.app-root.theme-heritage .static-bg {
+  opacity: 1;
+  background-image: url('/assets/themes/heritage-void-bg.png');
+}
+/* ── 补全四主题（2026-09-23 主人指示，纯 CSS 渐变背景，无照片资产）────────
+   日光/纸面=浅底（白雾面承托由面板承担，不叠遮罩）；深海/林海=深底
+   （叠轻微压暗，同 heritage 纪律）。场景层与 presence 四主题同隐藏。 */
+.app-root.theme-day .static-bg {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 78% 14%, rgba(255, 238, 205, 0.9) 0%, rgba(255, 238, 205, 0) 36%),
+    radial-gradient(ellipse at 50% 110%, rgba(214, 200, 176, 0.55) 0%, rgba(214, 200, 176, 0) 55%),
+    linear-gradient(180deg, #faf8f3 0%, #efe9dc 100%);
+}
+.app-root.theme-paper .static-bg {
+  opacity: 1;
+  /* 2026-09-23 走查修复：底调暗一档 + 横线加浓——原底 #f0eee9 与面板
+     rgba(250,249,246,.86) 几乎同灰，面板边界全失；线 0.035 不可见。 */
+  background:
+    repeating-linear-gradient(180deg, rgba(20, 19, 22, 0.05) 0 1px, transparent 1px 28px),
+    linear-gradient(180deg, #e9e6de 0%, #d2cfc6 100%);
+}
+.app-root.theme-ocean .static-bg {
+  opacity: 1;
+  background:
+    linear-gradient(205deg, rgba(110, 160, 195, 0.35) 0%, rgba(110, 160, 195, 0) 42%),
+    radial-gradient(ellipse at 50% 118%, rgba(28, 62, 86, 0.6) 0%, rgba(28, 62, 86, 0) 60%),
+    linear-gradient(180deg, #1c2933 0%, #060b10 100%);
+}
+.app-root.theme-forest .static-bg {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 30% 0%, rgba(127, 184, 148, 0.3) 0%, rgba(127, 184, 148, 0) 46%),
+    radial-gradient(ellipse at 85% 100%, rgba(38, 66, 50, 0.55) 0%, rgba(38, 66, 50, 0) 55%),
+    linear-gradient(180deg, #1b2521 0%, #0a100d 100%);
+}
+/* ── 原初 origin（默认 · DeepSeek 原生界面风，2026-10-03 主人拍板）────────
+   白底 + 品牌蓝微光，零照片资产零动画（纯静态渐变，简洁高效）。 */
+.app-root.theme-origin .static-bg {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 82% 12%, rgba(77, 107, 254, 0.06) 0%, rgba(77, 107, 254, 0) 42%),
+    linear-gradient(180deg, #ffffff 0%, #f2f3f5 100%);
+}
+/* ── 纯黑 noir（2026-10-03 主人拍板）：真黑底 + 一丝顶光，零装饰零动画。 */
+.app-root.theme-noir .static-bg {
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 55%),
+    #000000;
+}
+/* ── 原初档去 backdrop-filter（2026-10-03）────────────────────────────
+   勘误（同日复检）：先前把"origin 下鼠标光标变白"归因于本条的合成器伪影——
+   **归因有误**。真凶是本机 Windows"白色指针方案"的白色 I-beam（取证：
+   artifacts/sys-IDC_IBEAM32513.png + Win32 GetCursorInfo），已改用浅底主题
+   自带深色文本光标修复（essence.css 文本光标块）。本规则**保留**但理由
+   改为：origin 是平白底 + 近实面板，模糊是视觉空操作，关掉省 GPU 合成
+   开销（简洁高效）；同 2026-09-23 嵌套 bf 病历，少一层 bf 少一类合成
+   风险。其余主题零改动。 */
+html[data-theme='origin'] *,
+html[data-theme='origin'] *::before,
+html[data-theme='origin'] *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.app-root.custom-bg .static-bg {
+  opacity: 1; /* 图由 inline style 给出 */
+}
+.static-bg::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.52);
   pointer-events: none;
+  opacity: 0;
 }
-.app-root.theme-essence .scene-underlay {
+.app-root.theme-essence .static-bg::after {
+  opacity: 1;
+  /* 走查校准：0.52 → 0.38——原值把山脉洗成灰白纸面，失了景深；
+     UI 面板已加实（tokens.css --ap-panel 0.85），承托由面板承担。 */
+  background: rgba(255, 255, 255, 0.38);
+}
+.app-root.theme-heritage .static-bg::after,
+.app-root.custom-bg .static-bg::after {
+  opacity: 1;
+  background: rgba(7, 7, 12, 0.34);
+}
+/* 深海/林海：渐变底已够深，轻压暗提对比；日光/纸面不叠遮罩。 */
+.app-root.theme-ocean .static-bg::after,
+.app-root.theme-forest .static-bg::after {
+  opacity: 1;
+  background: rgba(4, 8, 10, 0.22);
+}
+.app-root.theme-essence .scene-underlay,
+.app-root.theme-heritage .scene-underlay,
+.app-root.theme-day .scene-underlay,
+.app-root.theme-paper .scene-underlay,
+.app-root.theme-ocean .scene-underlay,
+.app-root.theme-forest .scene-underlay,
+.app-root.theme-origin .scene-underlay,
+.app-root.theme-noir .scene-underlay,
+.app-root.custom-bg .scene-underlay {
   opacity: 0;
   pointer-events: none;
 }
-.app-root.theme-essence #presence {
+.app-root.theme-essence #presence,
+.app-root.theme-heritage #presence,
+.app-root.theme-day #presence,
+.app-root.theme-paper #presence,
+.app-root.theme-ocean #presence,
+.app-root.theme-forest #presence,
+.app-root.theme-origin #presence,
+.app-root.theme-noir #presence {
   opacity: 0 !important;
 }
-.app-root.theme-essence #vignette {
+.app-root.theme-essence #vignette,
+.app-root.theme-day #vignette,
+.app-root.theme-paper #vignette,
+.app-root.theme-origin #vignette {
   background: radial-gradient(ellipse 120% 88% at 50% 38%, rgba(255, 255, 255, 0) 40%, rgba(235, 232, 226, 0.35) 100%);
 }
+/* heritage/自定义保持夜色晕影（#vignette 默认即深色），不覆写；
+   深海/林海同为深底，默认深色晕影正好，不覆写。 */
 
 @media (max-width: 820px) {
   .panel,

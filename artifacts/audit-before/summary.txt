@@ -1,0 +1,15 @@
+scope files: 1100
+word-zhiyizi             5
+word-zhiyi               367
+word-jiejianzi           6
+word-jiejian             619
+word-yuanshixian         21
+word-canzhao             2
+word-111-fanyi           561
+word-111-all             1136
+word-donor               807
+word-donor-path          330
+word-qianren             0
+word-shangyou            75
+brand-forbidden          36
+brand-common             559

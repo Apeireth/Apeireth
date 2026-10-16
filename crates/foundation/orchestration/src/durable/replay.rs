@@ -1,9 +1,9 @@
 //! `durable::replay` — 确定性重放引擎 (真正跳过已完成活动的副作用).
 //!
-//! **语义来源**: donor/apeireth-workflow 声称 "同一 input + 相同 history → 相同 output"
-//! 的 replay, 但 donor `WorkflowRunner::run` 每次都新建空 history 并重新执行全部
+//! **语义基线**: apeireth-workflow 声称 "同一 input + 相同 history → 相同 output"
+//! 的 replay, 但 `WorkflowRunner::run` 每次都新建空 history 并重新执行全部
 //! Activity 副作用 (`r152_workflow_deliverables` 只验证了确定性函数本身)。本模块
-//! **补上 donor 未实现的真重放**:
+//! **补上其未实现的真重放**:
 //!
 //! - 已记录 `ActivityScheduled` + `ActivityCompleted` → 返回记录的 output, **零副作用**;
 //! - 已记录尝试链 `Scheduled → Failed … → Completed` → 消费失败记录后返回成功;
@@ -12,7 +12,7 @@
 //! - 新鲜活动经注入的 [`ActivityExecutor`] 执行并追加事件。
 //!
 //! **确定性方法**: 注入时间戳 + JSON 输入相等匹配 (v2 step 函数确定性, 无 rng)。
-//! 不采用 donor supervisor 的 `host_pid` / `rng_seed` DeterminismMeta。
+//! 不采用既有 supervisor 的 `host_pid` / `rng_seed` DeterminismMeta。
 //!
 //! **不是** Main Loop / WorkflowRunner 注册表 / daemon tick: 调用方自带 step 闭包
 //! 与 executor, 本类型只维护一条 journal 游标。
@@ -23,7 +23,7 @@ use super::history::{ActivityEvent, ActivityEventKind, DurableHistory, RUN_EVENT
 use super::retry::RetryPolicy;
 use super::{DurableError, DurableResult};
 
-/// 副作用执行器 (donor `Activity` trait 的注入形态, 无全局注册表).
+/// 副作用执行器 (既有 `Activity` trait 的注入形态, 无全局注册表).
 pub trait ActivityExecutor {
     /// 执行一次活动。`Err(String)` 视为该次尝试失败, 由 [`DurableRun`] 按 [`RetryPolicy`] 记账。
     fn execute(&self, activity_id: &str, input: &Value) -> Result<Value, String>;
@@ -470,11 +470,13 @@ impl DurableRun {
 
     fn value_preview(value: &Value) -> String {
         let s = value.to_string();
-        if s.len() <= 128 {
-            s
-        } else {
-            format!("{}…", &s[..128])
+        // 按 char 而非 byte 截断: 多字节 UTF-8 被 `&s[..128]` 切在字符边界上会 panic
+        // (同 crate context_fold/fold.rs:143-158 find_boundary 的同源问题)。
+        let mut preview: String = s.chars().take(128).collect();
+        if s.chars().count() > 128 {
+            preview.push('…');
         }
+        preview
     }
 }
 
@@ -554,7 +556,7 @@ mod tests {
         h.events().iter().map(|e| e.kind).collect()
     }
 
-    /// donor `runner_records_event_history` / R225 end-to-end: 事件顺序。
+    /// 基线 `runner_records_event_history` / R225 end-to-end: 事件顺序。
     #[test]
     fn fresh_run_records_started_scheduled_completed() {
         let exec = CountingEcho::new();
@@ -587,7 +589,7 @@ mod tests {
         }
     }
 
-    /// donor `test_workflow_propagates_activity_failure` + `runner_handles_activity_failure`。
+    /// 基线 `test_workflow_propagates_activity_failure` + `runner_handles_activity_failure`。
     #[test]
     fn activity_failure_is_recorded_and_propagated() {
         let mut run = DurableRun::start(json!(null), 1);
@@ -614,8 +616,8 @@ mod tests {
         );
     }
 
-    /// donor `r152_workflow_deliverables`: 同 input → 同 output; **并且**第二次
-    /// 走 history 重放, 计数器不增加 (这是 donor 只声称未实现的真重放)。
+    /// 基线 `r152_workflow_deliverables`: 同 input → 同 output; **并且**第二次
+    /// 走 history 重放, 计数器不增加 (这是既有实现只声称未实现的真重放)。
     #[test]
     fn replay_skips_completed_activities() {
         let exec = CountingEcho::new();
@@ -882,5 +884,39 @@ mod tests {
             "first activity replayed, second executed once"
         );
         assert_eq!(resumed.history().len(), 6);
+    }
+
+    /// 回归 (H2): value_preview 曾用 `&s[..128]` 字节切片, 多字节 UTF-8 (中文/emoji)
+    /// 落在非字符边界即 panic; 且 128 字节对 ASCII 恰好是 128 字符但仅约 42 个中文字符。
+    #[test]
+    fn value_preview_truncates_on_char_boundary() {
+        // 短值原样返回, 不加省略号。
+        assert_eq!(DurableRun::value_preview(&json!("短")), "\"短\"");
+
+        // 恰 128 字符 (含 JSON 引号): 无省略号。
+        let exact = "x".repeat(126); // 126 + 2 个引号 = 128
+        let preview = DurableRun::value_preview(&json!(exact));
+        assert_eq!(preview, format!("\"{exact}\""));
+        assert!(!preview.ends_with('…'));
+        assert_eq!(preview.chars().count(), 128);
+
+        // 超长 ASCII: 截到 128 字符 + "…" (总长 129)。
+        let long = "y".repeat(200);
+        let preview = DurableRun::value_preview(&json!(long));
+        assert_eq!(preview.chars().count(), 129);
+        assert!(preview.ends_with('…'));
+
+        // 超长中文: 必须按 char 截断而不是字节 (旧实现会 panic)。
+        let zh = "复".repeat(300);
+        let preview = DurableRun::value_preview(&json!(zh));
+        assert_eq!(preview.chars().count(), 129);
+        assert!(preview.is_char_boundary(preview.len()));
+        assert!(preview.ends_with('…'));
+
+        // emoji (4 字节/char): 同样不能 panic。
+        let emoji = "🎉".repeat(300);
+        let preview = DurableRun::value_preview(&json!(emoji));
+        assert_eq!(preview.chars().count(), 129);
+        assert!(preview.ends_with('…'));
     }
 }

@@ -1,6 +1,6 @@
 # Apeireth Crate Index
 
-This index lists the 16 members of the root Cargo workspace. The independent
+This index lists the 18 members of the root Cargo workspace. The independent
 Tauri shell is documented with the frontend, and `legacy/` is excluded from
 the product workspace.
 
@@ -20,6 +20,8 @@ the product workspace.
 | Package | Path | Responsibility |
 | --- | --- | --- |
 | `apeireth-runtime` | `crates/engine/runtime` | 规范会话内核、多提供商路由、5 触发源二叉堆心跳调度器与 FlowLock 心流锁 (`heartbeat`)、失败轨迹自进化修补 (`harness_patch`)、治理执行闭环与 Trace |
+| `apeireth-runtime-assembly` | `crates/engine/runtime-assembly` | 生产组合根：cognitive modules（judge/council/memory recall/writeback/preference/self-assessment）、Organ bridge、tool wiring、SQLite session adapter（2026-09-04 自 runtime 抽出） |
+| `apeireth-guard` | `crates/engine/guard` | 行为链安全 Guard：两阶段行为链分类器（FastGuard + DecisionFusion）、命令效果分析、会话行为历史、数据集录制与 oracle 评估；经 `BehaviorChainGuardHook` 接生产治理管线（2026-10-06 协作者批加入。与 v1 legacy/donor 的 PII `apeireth-guard` 同名不同物——PII 脱敏当前位于 `apeireth-governance::input_security`） |
 | `apeireth-provider` | `crates/engine/provider` | Anthropic, MiniMax, and OpenAI-compatible provider capabilities |
 | `apeireth-storage` | `crates/engine/storage` | SQLite pool, migrations, storage configuration, and errors |
 | `apeireth-memory` | `crates/engine/memory` | 五维时空记忆与 Browser 导出 (`five_dimensional`)、双时态事实图谱与残差特异性检索 (`bitemporal_graph`)、SHA-256 唯一事实链与 Merkle 仲裁 (`arbitration`)、6 阶段昼夜做梦引擎 (`dreaming`)、元思维递进思考链 (`meta_thinking`)、活维基知识编译与反熵 Lint (`wiki_fs`) |

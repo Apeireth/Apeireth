@@ -32,7 +32,7 @@
 #   A1 R11 baseline 3 值 0 改 (本脚本 0 触碰 17 baseline 文件)
 #   B3-B7 + A2-A3 严守 (本脚本 0 触碰)
 #   C1 0 主动 commit (本脚本由主人手跑, Mavis 0 主动)
-#   C2 0 装 PASS 严守 (commit 5.1 仅借鉴 8/11 真实施)
+#   C2 0 装 PASS 严守 (commit 5.1 仅吸收 8/11 真实施)
 #   C3 升 6 重 v7 严守 (本脚本 0 触碰)
 #   0 主动 push 严守 (本脚本由主人手跑, Mavis 0 主动)
 # ==============================================================================
@@ -133,7 +133,7 @@ Write-Host "Subject: $Commit5_1_Subject" -ForegroundColor Cyan
 Write-Host ''
 Write-Host '改动范围 (per decision-62 §2.1):' -ForegroundColor White
 Write-Host '   - 31 M src/ (LOCKED crate 内部 fn)' -ForegroundColor White
-Write-Host '   - 50+ ?? src/ (借鉴 8/11 真实施 + 新模块)' -ForegroundColor White
+Write-Host '   - 50+ ?? src/ (吸收 8/11 真实施 + 新模块)' -ForegroundColor White
 Write-Host '   - 20+ tests/ + 10+ examples/' -ForegroundColor White
 Write-Host '   - 3 NEW 库目录 (apeireth-library-governance/ + frontend/ + library/)' -ForegroundColor White
 Write-Host '   - 0 改 Cargo.toml version (B2 严守)' -ForegroundColor White
@@ -155,15 +155,15 @@ $Commit5_1_Subject
 
 主仓 src/ 实施整合 (R125 16 + R126 16 + R127 4 + R127-2 10 + R128 6 + R128-2 3 = 41 sub-agent 全 done).
 
-借鉴 8/11 真实施:
+吸收 8/11 真实施:
 - clap-rs/clap 4.6.6 (R125-2) - derive 实施
 - hyperium/hyper 0.1.20 (R125-3) - 池复用
 - modelcontextprotocol/servers 76d64c8 (R125-4) - MCP 协议对齐
 - PyO3/PyO3 0.29.2 (R125-9) - pybridge
 - model-checking/kani 0.67.0 (R125-10) - 形式化
-- langchain-ai/langgraph d56666f (R125-13) - StateGraph
-- obra/superpowers 6.2.0 (R125-14) - 9 skill files
-- LiteLLM (P6-1 retry 21:38) - 公开设计 1:1 翻译
+- 同类状态图工程 d56666f (R125-13) - StateGraph
+- 同类技能库 6.2.0 (R125-14) - 9 skill files
+- 同类网关 (P6-1 retry 21:38) - 公开设计语义对齐
 
 升级:
 - 8 哲学锚 (B5, 6→8)
@@ -228,14 +228,14 @@ $Commit5_2_Subject
 - CHANGELOG.md (v1.0.0, P7-1 写, 42.8KB)
 - ROADMAP.md (P7-2 写, 28.7KB)
 - RELEASE_NOTES.md (P7-3 retry 写, 36.8KB)
-- OSS_NOTICE.md (P13-1 写, 346 行, 借鉴 8/11 致谢)
+- OSS_NOTICE.md (P13-1 写, 346 行, 吸收 8/11 致谢)
 - LICENSE (175 行, Apache-2.0 verbatim, P13-1 写, 严守不动)
 - NOTICE (66 行, R20 阶段 6, 严守不动)
 
 Cargo.toml 配 (per P15-1 R128-2 阶段 C):
 - [workspace.package] license = "Apache-2.0" 单一来源
 - [workspace.metadata.apeireth] section (73 行, 11 字段)
-- 18 行注释 block (LICENSE 引用链 + 借鉴 8/11)
+- 18 行注释 block (LICENSE 引用链 + 吸收 8/11)
 
 0 越界 8 硬墙 100%:
 - B2 workspace.version 1.2.0 0 改

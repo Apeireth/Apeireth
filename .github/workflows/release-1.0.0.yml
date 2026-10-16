@@ -10,7 +10,7 @@ name: 1.0.0 release pipeline
 #   - 0 改 24 LOCKED crate src/ (per m3-hallucination-defense-2026-08-05 §6.1 项 8)
 #   - 0 改 workspace version 1.0.0 (per APEIRETH-VERSIONING §1)
 #   - 0 引 NewAPI (per R17 砍 NewAPI 决策, 用 GitHub 官方 actions/*)
-#   - 12/12 checklist 覆盖 (per 蓝图 §3.5)
+#   - 12/12 checklist 覆盖 (per 发布清单)
 
 on:
   push:
@@ -45,7 +45,7 @@ concurrency:
 jobs:
   # =========================================================================
   # 1. 多平台 build (8 包 matrix: deb/rpm/brew/scoop/tarball/msi/docker, 10 组合)
-  # 蓝图 §3.5 #4 install (8 包 dry-run) + #11 ci (8 包 CI 自动化, D-06 8 包同时)
+  # 发布清单 #4 install (8 包 dry-run) + #11 ci (8 包 CI 自动化, D-06 8 包同时)
   # =========================================================================
   build-packages:
     name: build ${{ matrix.target }}-${{ matrix.arch || 'native' }} (${{ matrix.os }})
@@ -208,7 +208,7 @@ jobs:
 
   # =========================================================================
   # 2. Docker multi-arch 汇总 (linux/amd64 + linux/arm64 一次 push)
-  # 蓝图 §3.5 #11 ci (Docker multi-arch 守门) + per packaging/docker/README.md 第 2 步
+  # 发布清单 #11 ci (Docker multi-arch 守门) + per packaging/docker/README.md 第 2 步
   # =========================================================================
   docker-multi-arch:
     name: docker multi-arch push (amd64 + arm64)
@@ -242,7 +242,7 @@ jobs:
 
   # =========================================================================
   # 3. security (cargo audit + cargo deny)
-  # 蓝图 §3.5 #3 security (5 守门: non-root / API key 不入 image / audit append-only / 鉴权限流 / 内部网络隔离)
+  # 发布清单 #3 security (5 守门: non-root / API key 不入 image / audit append-only / 鉴权限流 / 内部网络隔离)
   #                + #12 security (cargo audit + cargo deny)
   # 注: cargo-deny.yml 已独立, 本 job 补 cargo-audit (5 守门 #3 项)
   # =========================================================================
@@ -338,7 +338,7 @@ jobs:
           if-no-files-found: warn
 
   # =========================================================================
-  # 5. release 12 项 checklist (per 蓝图 §3.5)
+  # 5. release 12 项 checklist (per 发布清单)
   # 跑 3 个脚本 (dry-run):
   #   - scripts/release-1.0-checklist.sh
   #   - scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run
@@ -359,7 +359,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # === 蓝图 §3.5 12 项 checklist (9 P0 + 3 P1) ===
+      # === 发布清单 12 项 checklist (9 P0 + 3 P1) ===
       # 任何 P0 fail 阻塞 1.0 release tag
       - name: 12 项 release checklist (dry-run)
         run: bash scripts/release-1.0-checklist.sh --dry-run

@@ -1,6 +1,6 @@
 # 场景 D：v2 长程 AI 判断架构方案（2026-08-27）
 
-> **现状 (2026-08-27) — 新增 P-arch 任务**。v2 工程重构把 13 键降级为哲学标准 + external hook 闸为唯一 runtime 治理（upstream `873d2857` 已装 3 个 hook：Permission / 凭据泄漏 / 注入检测）。但场景 D（需要语义上下文的 AI 判断）当前在 v2 工作区**完全缺位**——v1 的 companion_serve 里有完整实现（F1/F6/E7/W6 等），全在 `legacy/donor/apeireth-companion`。本文是 v2 移植+演化的架构方案。
+> **现状 (2026-08-27) — 新增 P-arch 任务**。v2 工程重构把 13 键降级为哲学标准 + external hook 闸为唯一 runtime 治理（upstream `873d2857` 已装 3 个 hook：Permission / 凭据泄漏 / 注入检测）。但场景 D（需要语义上下文的 AI 判断）当前在 v2 工作区**完全缺位**——v1 的 companion_serve 里有完整实现（F1/F6/E7/W6 等），全在 `legacy/donor/apeireth-companion`。本文是 v2 迁入+演化的架构方案。
 
 ```
 [Document-Meta]
@@ -46,7 +46,7 @@ v2 工程重构后，**所有运行时判断归三类**：
 
 **v1 实现位置**：`legacy/donor/apeireth-companion/memory_extractor.rs`（F1）+ `legacy/donor/apeireth-companion/value_cases.rs`（F6）+ `crates/engine/memory/src/memory_governance.rs`（部分 v2 残留）
 
-**v2 移植路径**：
+**v2 实现路径**：
 - **位置**：`crates/engine/memory`（M1B 已经预留 domain，但 ACT-R/价值管线未实现）
 - **新增类型**：`UserPreference { topic, stance, evidence_refs, created_at, confidence }` + `PreferenceStore` trait（CRUD + 检索）
 - **检索接口**：`Runtime::execute` 在每个 turn 注入 token budget 范围调 `PreferenceStore::recall_for_context(session_id, current_topic)` → `Vec<UserPreference>` 作为软约束注入 transcript
@@ -68,7 +68,7 @@ v2 工程重构后，**所有运行时判断归三类**：
 
 **v1 实现位置**：`legacy/donor/apeireth-companion/oracle.rs`（Brier 校准）+ `world_model.rs`（部分）
 
-**v2 移植路径**：
+**v2 实现路径**：
 - **位置**：新功能（v2 没有对应物）
 - **新增类型**：`WorkCheckpoint { task_id, week_n, goals, delivered, self_assessment }` + `DeviationReport { from_goal_id, severity, evidence }`
 - **触发**：runtime 在每个 turn 检查 `WorkCheckpoint` 距离上次 `N turns` 时强制 AI 写 checkpoint（**强制频率可配置**，默认每 100 turn 一次）
@@ -100,7 +100,7 @@ v2 工程重构后，**所有运行时判断归三类**：
 
 **v1 实现位置**：`legacy/donor/apeireth-companion/team-lead.rs`（任务调度）+ `legacy/donor/apeireth-companion/orchestrator.rs`（编排），但**v1 没有正式的互审协议**——只有任务队列。
 
-**v2 移植路径**（**最不可替代，工作量最大**）：
+**v2 实现路径**（**最不可替代，工作量最大**）：
 - **位置**：**新 crate `crates/engine/orchestrator`**（与 runtime 平级，runtime 不自己调度多 agent）
 - **核心类型**：`Subagent { id, role, capabilities, model_config }` + `OrchestrationSpec { plan_agent, implement_agent, review_agent, spec }` + `ReviewVerdict { score, blocking_issues, optional_suggestions }`
 - **协议**：`Orchestrator::dispatch(spec) -> Vec<SubagentResult>`，子 agent 是独立 LLM 调用（隔离 prompt、隔离上下文、隔离 trace）
@@ -207,7 +207,7 @@ pub trait IsolatedLlmInstance: Send + Sync {
 
 ## 4. 优先级与工作量
 
-| 例 | v2 移植工作量 | 风险 | 价值 | 推荐优先级 |
+| 例 | v2 实现工作量 | 风险 | 价值 | 推荐优先级 |
 |---|---|---|---|---|
 | 例 1（F1/F6 偏好） | 1-2 周（小） | 低（持久化偏好 = 已有 memory 模式） | 高（主人体验直接提升）| **P3**（与 M1B 记忆同步） |
 | 例 2（W6 自我诊断） | 2-3 周（中）| 中（multi-instance 评审要小心）| 中（偏离检测有用但主人能容忍偶尔偏离） | **P5**（在 P3 之后）|
@@ -218,7 +218,7 @@ pub trait IsolatedLlmInstance: Send + Sync {
 **优先级约束**：
 - 例 1 → P3（与 M1B 同步进 crate engine/memory）
 - 例 2 → P5（与 ProcessSupervisor 同步进 runtime 改造）
-- 例 3 → P6（与器官移植同步进 orchestration crate 新建）
+- 例 3 → P6（与器官实现同步进 orchestration crate 新建）
 
 ### 4.1 不能动的东西（架构约束）
 
@@ -272,9 +272,9 @@ pub trait IsolatedLlmInstance: Send + Sync {
 
 | ROADMAP 项 | 关系 |
 |---|---|
-| §4 P3 M1B 记忆全量移植 | 例 1 嵌进这里（PreferenceStore 是 M1B 的一部分）|
+| §4 P3 M1B 记忆全量实现 | 例 1 嵌进这里（PreferenceStore 是 M1B 的一部分）|
 | §4 P5 ProcessSupervisor + 沙箱强化 | 例 2 的 multi-instance 隔离逻辑与沙箱强化共同进 runtime 改造 |
-| §4 P6 companion 器官移植 | 例 3 与器官移植同期推进（orchestrator 是"AI 怎么组织自己工作"的机制） |
+| §4 P6 companion 器官实现 | 例 3 与器官实现同期推进（orchestrator 是"AI 怎么组织自己工作"的机制） |
 | §4 P-arch 场景 D 评估（**新加**） | 本文档 |
 | 已完成 P0 治理接线（upstream 873d2857） | 不冲突：L1/L2 不变，L3 是新层 |
 

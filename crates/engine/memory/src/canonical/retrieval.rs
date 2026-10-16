@@ -5,7 +5,7 @@
 //! - [`MemoryRepository`] persists values.
 //! - this module interprets them.
 //!
-//! The donor formula is ACT-R-inspired activation plus an importance bonus.
+//! The formula is ACT-R-inspired activation plus an importance bonus.
 //! It is implemented as a pure deterministic function: no database access, no
 //! hidden wall clock, no global state.
 
@@ -15,14 +15,14 @@ use super::domain::MemoryItem;
 use super::error::MemoryError;
 use super::repository::{MemoryFilter, MemoryRepository};
 
-/// Default donor decay for ACT-R-style activation.
+/// Default decay for ACT-R-style activation.
 pub const DEFAULT_ACT_R_DECAY: f64 = 0.5;
-/// Default donor beta for ACT-R-style activation.
+/// Default beta for ACT-R-style activation.
 pub const DEFAULT_ACT_R_BETA: f64 = 0.0;
-/// Default donor importance weight in the retrieval score.
+/// Default importance weight in the retrieval score.
 pub const DEFAULT_IMPORTANCE_WEIGHT: f64 = 2.0;
 
-/// Calculates the donor ACT-R-inspired activation.
+/// Calculates the ACT-R-inspired activation.
 ///
 /// Formula (from `memory_v2.rs`):
 ///
@@ -32,7 +32,7 @@ pub const DEFAULT_IMPORTANCE_WEIGHT: f64 = 2.0;
 /// ```
 ///
 /// Times are compared in Unix **seconds**. Future access timestamps are
-/// clipped to a one-second difference, exactly as in the donor
+/// clipped to a one-second difference, exactly as in the baseline
 /// implementation. Empty access history returns `beta`.
 ///
 /// # Errors
@@ -84,7 +84,7 @@ pub struct MemoryHit {
 /// Explicit retrieval query options.
 ///
 /// `as_of` is the only clock input and is required. Defaults preserve the
-/// donor query semantics: decay `0.5`, beta `0.0`, importance weight `2.0`.
+/// baseline query semantics: decay `0.5`, beta `0.0`, importance weight `2.0`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RetrievalOptions {
     /// Temporal probe. Items are eligible iff they are effective at `as_of`
@@ -105,7 +105,7 @@ pub struct RetrievalOptions {
 }
 
 impl RetrievalOptions {
-    /// Creates donor-default retrieval options for `as_of`.
+    /// Creates default retrieval options for `as_of`.
     pub fn new(as_of: Timestamp) -> Self {
         Self {
             as_of,
@@ -253,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn activation_matches_donor_formula_exact_values() {
+    fn activation_matches_baseline_formula_exact_values() {
         // access at t-100s with decay 0.5: sum = 100^-0.5 = 0.1
         // activation = ln(0.1) + 0 = -2.302585092994046
         let as_of = ts(200_000_000);
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn activation_clips_future_timestamps_to_one_second() {
-        // A future access would produce diff = -1; donor clamps to 1, so
+        // A future access would produce diff = -1; baseline clamps to 1, so
         // sum = 1^-0.5 = 1 and activation = ln(1) + beta = beta.
         let as_of = ts(100_000_000);
         let future = ts(as_of.epoch_millis() + 100_000);

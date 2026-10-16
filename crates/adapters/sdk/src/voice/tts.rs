@@ -1,17 +1,17 @@
-//! # Voice Text-to-Speech (per @anthropic-ai/voice v0.9.21 1:1 翻译)
+//! # Voice Text-to-Speech (per 既有 Voice SDK)
 //!
-//! 4 TTS 模型 (per v0.9.21 + task spec §3):
+//! 4 TTS 模型 (按既有实现 + task spec §3):
 //! 1. **ElevenLabs** — ElevenLabs (online, real-time API, 多 voice clone)
 //! 2. **Azure** — Azure Cognitive Services Speech (online, multi-language, 神经语音)
 //! 3. **Google** — Google Cloud Text-to-Speech (online, multi-language, WaveNet)
 //! 4. **OpenAI** — OpenAI TTS (online, 6 voice preset)
 //!
-//! **STUB**: 4 模型枚举保留 1:1 翻译, 但 synthesize() 内部返 `VoiceError::NotImplemented`.
+//! 领域模型 (4 模型枚举 + 合成请求 / 输出); 合成执行面见 [`crate::voice`] 的 `synthesize`.
 //!
 //! ## 引用文档
 //!
-//! 1. `@anthropic-ai/voice v0.9.21` `client/api_synthesize.js` (synthesize 1:1 翻译源)
-//! 2. `@anthropic-ai/voice v0.9.21` `core/types.d.ts` (TtsModel 1:1 翻译源)
+//! 1. `既有 Voice SDK` `client/api_synthesize.js` (synthesize 参考)
+//! 2. `既有 Voice SDK` `core/types.d.ts` (TtsModel 参考)
 
 use std::time::SystemTime;
 
@@ -23,20 +23,20 @@ use crate::voice::error::{VoiceError, VoiceResult};
 // §1 4 TTS 模型 enum (K-1 强校验守门, 编译期 hardcode 4 variant)
 // ============================================================================
 
-/// TTS 模型 (4 variant, 1:1 翻译 @anthropic-ai/voice v0.9.21 `TtsModel` enum).
+/// TTS 模型 (4 variant, 语义对齐 既有 Voice SDK `TtsModel` enum).
 ///
-/// 4 模型 snake_case 字符串严格匹配 v0.9.21 API 规范.
+/// 4 模型 snake_case 字符串严格匹配 既有实现 API 规范.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TtsModel {
-    /// **ElevenLabs** (online, real-time API, 多 voice clone, per v0.9.21估 1:1).
+    /// **ElevenLabs** (online, real-time API, 多 voice clone, 按既有实现估算).
     #[default]
     ElevenLabs,
-    /// **Azure Cognitive Services Speech** (online, multi-language, 神经语音, per v0.9.21估 1:1).
+    /// **Azure Cognitive Services Speech** (online, multi-language, 神经语音, 按既有实现估算).
     Azure,
-    /// **Google Cloud Text-to-Speech** (online, multi-language, WaveNet, per v0.9.21估 1:1).
+    /// **Google Cloud Text-to-Speech** (online, multi-language, WaveNet, 按既有实现估算).
     Google,
-    /// **OpenAI TTS** (online, 6 voice preset, per v0.9.21估 1:1).
+    /// **OpenAI TTS** (online, 6 voice preset, 按既有实现估算).
     OpenAI,
 }
 
@@ -44,7 +44,7 @@ impl TtsModel {
     /// 4 模型 hardcode 常量.
     pub const COUNT: usize = 4;
 
-    /// 字符串 (1:1 翻译 v0.9.21 `model` 字段, snake_case 严格匹配).
+    /// 字符串 (对齐既有实现 `model` 字段, snake_case 严格匹配).
     pub fn as_str(&self) -> &'static str {
         match self {
             TtsModel::ElevenLabs => "elevenlabs",
@@ -54,7 +54,7 @@ impl TtsModel {
         }
     }
 
-    /// 从字符串解析 (per v0.9.21响应 `model` 字段).
+    /// 从字符串解析 (按既有实现响应 `model` 字段).
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "elevenlabs" => Some(TtsModel::ElevenLabs),
@@ -65,7 +65,7 @@ impl TtsModel {
         }
     }
 
-    /// 默认输出音频格式 (per v0.9.21估).
+    /// 默认输出音频格式 (按既有实现估算).
     /// - ElevenLabs: mp3
     /// - Azure: wav
     /// - Google: mp3
@@ -79,7 +79,7 @@ impl TtsModel {
         }
     }
 
-    /// 默认采样率 (Hz, per v0.9.21估).
+    /// 默认采样率 (Hz, 按既有实现估算).
     /// - ElevenLabs: 44100
     /// - Azure: 16000
     /// - Google: 24000
@@ -93,7 +93,7 @@ impl TtsModel {
         }
     }
 
-    /// 最大文本长度 (字符, per v0.9.21估).
+    /// 最大文本长度 (字符, 按既有实现估算).
     /// - ElevenLabs: 5000
     /// - Azure: 10000
     /// - Google: 5000
@@ -124,12 +124,12 @@ pub const SUPPORTED_TTS_MODELS: &[TtsModel] = &[
 const _: () = assert!(SUPPORTED_TTS_MODELS.len() == 4);
 
 // ============================================================================
-// §2 Audio TTS 输出音频 (per v0.9.21 `synthesize` 响应 1:1 翻译)
+// §2 Audio TTS 输出音频 (按既有实现 `synthesize` 响应)
 // ============================================================================
 
-/// TTS 输出音频 (per v0.9.21 `synthesize` 响应 1:1 翻译).
+/// TTS 输出音频 (按既有实现 `synthesize` 响应).
 ///
-/// 字段对应 v0.9.21 `Audio` 对象:
+/// 字段对应既有实现 `Audio` 对象:
 /// - `data` (audio bytes)
 /// - `format` (wav/mp3/opus/flac)
 /// - `sample_rate` (Hz)
@@ -188,12 +188,12 @@ impl Audio {
 }
 
 // ============================================================================
-// §3 TtsRequest TTS 请求 (per v0.9.21 `synthesize` 入参 1:1)
+// §3 TtsRequest TTS 请求 (按既有实现 `synthesize` 入参)
 // ============================================================================
 
-/// TTS 请求 (per v0.9.21 `synthesize` 入参 1:1 翻译).
+/// TTS 请求 (按既有实现 `synthesize` 入参).
 ///
-/// 字段对应 v0.9.21 `SynthesizeRequest` 对象:
+/// 字段对应既有实现 `SynthesizeRequest` 对象:
 /// - `text` (要合成的文本, 1..=max_text_length)
 /// - `model` (per `TtsModel`)
 /// - `voice` (per voice id, e.g. `"alloy"` for OpenAI, 估)
@@ -228,10 +228,10 @@ impl TtsRequest {
     ) -> VoiceResult<Self> {
         // 文本非空 + ≤ max_text_length
         if text.trim().is_empty() {
-            return Err(VoiceError::Other("tts text is empty".to_string()));
+            return Err(VoiceError::InvalidArgument("tts text is empty".to_string()));
         }
         if text.len() > model.max_text_length() {
-            return Err(VoiceError::Other(format!(
+            return Err(VoiceError::InvalidArgument(format!(
                 "tts text too long: {} > {}",
                 text.len(),
                 model.max_text_length()
@@ -239,7 +239,7 @@ impl TtsRequest {
         }
         // Voice ID 非空
         if voice.trim().is_empty() {
-            return Err(VoiceError::Other("voice id is empty".to_string()));
+            return Err(VoiceError::InvalidArgument("voice id is empty".to_string()));
         }
         // K-1 #6: Language
         VoiceError::validate_language(&language)?;
@@ -407,7 +407,7 @@ mod tests {
             "mp3".to_string(),
             24000,
         );
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     #[test]
@@ -421,7 +421,7 @@ mod tests {
             "mp3".to_string(),
             24000,
         );
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     #[test]
@@ -434,7 +434,7 @@ mod tests {
             "mp3".to_string(),
             24000,
         );
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     #[test]

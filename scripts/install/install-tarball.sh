@@ -8,7 +8,7 @@
 # 蓝图: docs/stage4/v09021-rust-translation-blueprint-2026-08-05.md §3.4
 # 决策: D-06 (主人 2026-08-05 20:53 拍 A: 8 包齐发 + Linux 4 包重点)
 #
-# 5 步标准安装流 (per 蓝图 §3.4):
+# 5 步标准安装流 (按安装规范):
 #   1. 检测 tarball 路径 (参数 $1, 默认 target/**/apeireth-*.tar.gz)
 #   2. 校验 sha256 (如果同目录有 .sha256)
 #   3. 解包到 /opt/apeireth + symlink /usr/local/bin/apeireth

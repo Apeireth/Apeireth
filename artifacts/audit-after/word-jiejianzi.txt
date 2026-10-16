@@ -1,0 +1,1 @@
+scripts/check-neutral-terms.ps1:17:  '借鉴自',

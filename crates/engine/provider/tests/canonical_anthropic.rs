@@ -1,4 +1,4 @@
-//! Deterministic transport tests for the migrated anthropic provider.
+//! Deterministic transport tests for the anthropic provider.
 //!
 //! These prove the canonical [`AnthropicProviderCapability`] against a local
 //! mock HTTP server — no Internet, no real API key — and, critically, assert

@@ -4,7 +4,7 @@
 //! / Gemini GenerateContent) 都先转成 [`NormalizedRequest`] / [`NormalizedResponse`],
 //! 内部逻辑 (chat pipeline / routing / context management) 只跟归一化类型交互。
 //!
-//! **借鉴 VCP 真代码** (`research/source/vcptoolbox/`):
+//! **设计参考**:
 //! - 归一化 message role: `routes/protocolBridge.js:47-52` `normalizeMessageRole`
 //!   (developer → system, tool / system / user / assistant 原样, 其他 → user)
 //! - 归一化 content: `routes/protocolBridge.js:21-42` `normalizeTextContent`
@@ -21,10 +21,10 @@ use std::collections::BTreeMap;
 
 /// 归一化消息角色。
 ///
-/// **借鉴** VCP `routes/protocolBridge.js:47-52` `normalizeMessageRole`:
+/// **对齐** 既有实现 `normalizeMessageRole`:
 /// - `developer` → `System` (OpenAI Responses API 引入了 developer role 跟 system 等价)
 /// - `system` / `user` / `assistant` / `tool` → 原样
-/// - 其他 (e.g. `function`) → `Tool` (按 VCP 真代码语义降级)
+/// - 其他 (e.g. `function`) → `Tool` (按 既有实现语义降级)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageRole {
@@ -39,14 +39,14 @@ pub enum MessageRole {
 }
 
 impl MessageRole {
-    /// 从字符串归一化 (借鉴 `protocolBridge.js:47-52`)
+    /// 从字符串归一化
     pub fn from_legacy_value(s: &str) -> Self {
         match s {
             "system" | "developer" => Self::System,
             "user" => Self::User,
             "assistant" => Self::Assistant,
             "tool" | "function" => Self::Tool,
-            _ => Self::User, // VCP 默认 fallback 是 user
+            _ => Self::User, // 既有实现默认 fallback 是 user
         }
     }
 }
@@ -57,7 +57,7 @@ impl MessageRole {
 
 /// 多模态内容部分。
 ///
-/// **借鉴** VCP `routes/protocolBridge.js:21-42` `normalizeTextContent`:
+/// **对齐** 既有实现 `normalizeTextContent`:
 /// - `text` (OpenAI Chat / Anthropic text)
 /// - `input_text` (OpenAI Responses)
 /// - `output_text` (OpenAI Responses assistant 角色)
@@ -81,12 +81,12 @@ pub enum ContentPart {
 }
 
 impl ContentPart {
-    /// 提取纯文本 (借鉴 `normalizeTextContent`)
+    /// 提取纯文本 (对齐 `normalizeTextContent`)
     pub fn text_only(s: impl Into<String>) -> Self {
         Self::Text { text: s.into() }
     }
 
-    /// 从 VCP 风格 raw content (string or array) 归一化
+    /// 从 raw content (string or array) 归一化
     pub fn from_legacy_value(raw: &serde_json::Value) -> Vec<Self> {
         if let Some(s) = raw.as_str() {
             return vec![Self::Text {
@@ -135,7 +135,7 @@ impl ContentPart {
         Vec::new()
     }
 
-    /// 合并多个 part 为纯文本 (空分隔符, 借鉴 VCP join('\n'))
+    /// 合并多个 part 为纯文本 (空分隔符, 设计参考 join('\n'))
     pub fn join_text(parts: &[Self]) -> String {
         parts
             .iter()
@@ -154,7 +154,7 @@ impl ContentPart {
 
 /// 归一化消息。
 ///
-/// **字段含义** (借鉴 VCP 真代码语义):
+/// **字段含义** (设计参考 真代码语义):
 /// - `role`: 4 种 (System / User / Assistant / Tool)
 /// - `content`: 多模态 part 列表 (空 = tool call 无 content)
 /// - `tool_calls`: assistant 想调用的工具 (OpenAI tool_calls / Anthropic tool_use /
@@ -254,9 +254,9 @@ impl NormalizedMessage {
 /// 函数工具参数 (JSON Schema 风格)
 pub type ToolParameters = serde_json::Map<String, serde_json::Value>;
 
-/// 归一化工具 (复刻 VCP `toOpenAiChatTool` 归一化结果)。
+/// 归一化工具 (复刻 既有实现 归一化结果)。
 ///
-/// **借鉴** VCP `routes/protocolBridge.js:63-89` `toOpenAiChatTool`:
+/// **对齐** 既有实现 `toOpenAiChatTool`:
 /// - 优先 `tool.type === 'function' && tool.function.name` (OpenAI Chat 风格)
 /// - 退化 `tool.name` (Anthropic / Gemini 风格, 无 function 包装)
 /// - `parameters` 从 `function.parameters` / `function.input_schema` / `parameters` /
@@ -304,17 +304,17 @@ impl NormalizedTool {
     }
 }
 
-/// 归一化 tool_choice (借鉴 VCP `normalizeToolChoice` 真代码)
+/// 归一化 tool_choice (映射设计参考 真代码)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum NormalizedToolChoice {
     /// 让 LLM 自动决定
     Auto,
-    /// 不允许调工具 (VCP NONE / OpenAI "none" / Anthropic 不支持)
+    /// 不允许调工具 (OpenAI "none" / Anthropic 不支持)
     None,
-    /// 必须调工具 (VCP ANY with 0 or 2+ allowed names)
+    /// 必须调工具 (any-of 语义: 0 or 2+ allowed names)
     Required,
-    /// 必须调指定工具 (VCP ANY with 1 allowed name / OpenAI specific function)
+    /// 必须调指定工具 (any-of 语义: 1 allowed name / OpenAI specific function)
     Specific {
         /// 工具名
         name: String,
@@ -327,7 +327,7 @@ pub enum NormalizedToolChoice {
 
 /// 助手想调用的工具 (assistant message 的 tool_calls 字段)。
 ///
-/// **借鉴** VCP 协议归一化:
+/// **设计参考** 协议归一化:
 /// - OpenAI: `{id, type: "function", function: {name, arguments (JSON string)}}`
 /// - Anthropic: `{id: "toolu_xxx", name, input (JSON object)}`
 /// - Gemini: `{name, args (JSON object)}` (无 id, 用 `functionCall` 字段)
@@ -449,16 +449,48 @@ pub struct NormalizedUsage {
     pub completion_tokens: u32,
     /// 总计
     pub total_tokens: u32,
+    /// 提示缓存命中 token (缓存列的归一): 各家缓存命中/缓存读列收敛到同一
+    /// 语义 —— 本次请求由提示缓存直接供给的输入 token。
+    ///
+    /// `None` = 该 provider 原始 usage **没有**缓存列 (未知, 不是 0) ——
+    /// 找不到的家留 `None` 不编造。`#[serde(default)]` 落库兼容: 既有持久
+    /// 记录没有本列照常反序列化 (历史行读回 = `None` = 未知)。
+    ///
+    /// 口径注 (如实): 各家缓存列与 [`Self::prompt_tokens`] 的包含关系不同 ——
+    /// OpenAI 形状的 `cached_tokens` 计**在** `prompt_tokens` 内, 而
+    /// `cache_read_input_tokens` 记在 `input_tokens` **之外**。派生命中率沿用
+    /// G-P1 冻结公式 (Σ命中/Σ输入), 对后者如实反映"缓存读/未缓存输入", 不做
+    /// 上限裁剪也不换口径。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_hit_tokens: Option<u32>,
+}
+
+/// M11 修复 (2026-09-24 审计): u64 → u32 安全收敛工具。上游 usage 字段返回
+/// > `u32::MAX` 的数值 (恶意/故障 vendor) 时, `as u32` 静默回绕 (配额/成本
+/// 数据被悄悄篡改); 本工具收敛到 `u32::MAX` 保留"溢出"信号。
+pub fn clamp_u32(value: u64) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 impl NormalizedUsage {
-    /// 创建
+    /// 创建 (缓存列未知 = `None`, 不编造)
     pub fn new(prompt: u32, completion: u32) -> Self {
         Self {
             prompt_tokens: prompt,
             completion_tokens: completion,
-            total_tokens: prompt + completion,
+            // M11 修复 (2026-09-24 审计): 裸 `+` 在 debug 构建下
+            // `u32::MAX + x` 直接 panic; release 回绕成 0。
+            total_tokens: prompt.saturating_add(completion),
+            prompt_cache_hit_tokens: None,
         }
+    }
+
+    /// 附上缓存命中列 (provider 归一化处按原始 usage 的真实字段填充;
+    /// 找不到对应列的家传 `None`, 不编造)。
+    #[must_use]
+    pub fn with_cache_hit_tokens(mut self, prompt_cache_hit_tokens: Option<u32>) -> Self {
+        self.prompt_cache_hit_tokens = prompt_cache_hit_tokens;
+        self
     }
 }
 
@@ -468,13 +500,13 @@ impl NormalizedUsage {
 
 /// 归一化请求 (4 协议入参统一形态)。
 ///
-/// **借鉴** VCP `routes/protocolBridge.js:91-118` `extractProtectedTools`:
+/// **对齐** 既有实现 `extractProtectedTools`:
 /// 工具字段是**受保护**的 (不进 messages / RAG),只在请求转发前附加。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NormalizedRequest {
     /// 模型名 (e.g. "gpt-4o" / "claude-sonnet-4" / "gemini-1.5-pro")
     pub model: String,
-    /// 对话消息 (system 必须放第一个, 借鉴 VCP `consumeVcpToolUseForbiddenPlaceholder`
+    /// 对话消息 (system 必须放第一个, 映射设计参考
     /// 只扫首段连续 system)
     pub messages: Vec<NormalizedMessage>,
     /// 温度 0.0 - 2.0
@@ -489,13 +521,13 @@ pub struct NormalizedRequest {
     /// 停止词
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stop: Vec<String>,
-    /// 工具列表 (归一化, **借鉴 VCP extractProtectedTools 不进 messages 原则**)
+    /// 工具列表 (归一化, **设计参考 extractProtectedTools 不进 messages 原则**)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<NormalizedTool>,
     /// 工具选择策略
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<NormalizedToolChoice>,
-    /// 元数据透传 (借鉴 VCP `__oneRingMeta` 思路, 任何返回新数组的步骤保留)
+    /// 元数据透传 (映射设计参考 思路, 任何返回新数组的步骤保留)
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, String>,
 }
@@ -580,7 +612,7 @@ mod tests {
 
     #[test]
     fn message_role_from_legacy_value_developer_to_system() {
-        // 借鉴 VCP protocolBridge.js:47-52: developer → system
+        // 设计参考 protocolBridge.js:47-52: developer → system
         assert_eq!(
             MessageRole::from_legacy_value("developer"),
             MessageRole::System
@@ -604,7 +636,7 @@ mod tests {
 
     #[test]
     fn content_part_from_legacy_string() {
-        // 借鉴 VCP protocolBridge.js:21-42: string 原样
+        // 设计参考 protocolBridge.js:21-42: string 原样
         let raw = serde_json::json!("Hello");
         let parts = ContentPart::from_legacy_value(&raw);
         assert_eq!(parts.len(), 1);
@@ -613,7 +645,7 @@ mod tests {
 
     #[test]
     fn content_part_from_legacy_value_array_text_types() {
-        // 借鉴 VCP protocolBridge.js:31-34: text / input_text / output_text 都归一化
+        // 设计参考 protocolBridge.js:31-34: text / input_text / output_text 都归一化
         let raw = serde_json::json!([
             {"type": "text", "text": "A"},
             {"type": "input_text", "text": "B"},
@@ -626,7 +658,7 @@ mod tests {
 
     #[test]
     fn content_part_from_legacy_value_image_url() {
-        // 借鉴 VCP: image_url 单独处理
+        // 设计参考 image_url 单独处理
         let raw = serde_json::json!([
             {"type": "text", "text": "see "},
             {"type": "image_url", "image_url": {"url": "https://x.com/a.png", "detail": "high"}},
@@ -711,6 +743,34 @@ mod tests {
     fn usage_total_is_sum() {
         let u = NormalizedUsage::new(10, 20);
         assert_eq!(u.total_tokens, 30);
+    }
+
+    #[test]
+    fn usage_cache_column_is_unknown_by_default_and_round_trips() {
+        // `new` 不编造缓存列: 找不到对应列 = None (未知, 非 0)。
+        let u = NormalizedUsage::new(10, 20);
+        assert_eq!(u.prompt_cache_hit_tokens, None);
+        // 归一化处填充后 round-trip 保真。
+        let filled = NormalizedUsage::new(100, 20).with_cache_hit_tokens(Some(80));
+        assert_eq!(filled.prompt_cache_hit_tokens, Some(80));
+        let json = serde_json::to_string(&filled).expect("serializes");
+        let back: NormalizedUsage = serde_json::from_str(&json).expect("deserializes");
+        assert_eq!(back, filled);
+    }
+
+    #[test]
+    fn usage_cache_column_keeps_persisted_records_readable() {
+        // 落库兼容: 既有持久记录没有缓存列, 照常反序列化 (历史行读回 = 未知)。
+        let legacy = r#"{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}"#;
+        let parsed: NormalizedUsage = serde_json::from_str(legacy).expect("legacy record parses");
+        assert_eq!(parsed, NormalizedUsage::new(10, 20));
+        assert_eq!(parsed.prompt_cache_hit_tokens, None);
+        // 未知缓存列不落键: 新写回的形状与旧读者面一致。
+        let json = serde_json::to_string(&parsed).expect("serializes");
+        assert!(
+            !json.contains("prompt_cache_hit_tokens"),
+            "未知缓存列不得落键: {json}"
+        );
     }
 
     #[test]

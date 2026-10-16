@@ -7,11 +7,11 @@
 ```
 docs/
 ├── 01-architecture/     # 架构（品牌/愿景/哲学/架构/安全/工程报告）
-├── 02-guides/           # 使用（快速开始/用户手册/部署/开发）
+├── 02-guides/           # 使用（快速开始/用户手册/部署/开发/新人上手）
 ├── 03-reference/        # 参考（crates/API/术语）
 ├── 04-internal/         # 内部工作文档（台账/设计意图/团队）
 ├── design/              # 前端设计（设计系统/交接/开场动画封存档案）
-├── development/         # 开发（目录布局/新增模块/移植清单）
+├── development/         # 开发（目录布局/新增模块/移植清单/RFC/稳定性分级/社区运营）
 └── archive/             # 历史归档（stage*/r*/adr/conventions... 保留不展示）
 ```
 
@@ -29,9 +29,12 @@ docs/
 | [01-architecture/v2-master-lineage-and-upgrade-blueprint.md](01-architecture/v2-master-lineage-and-upgrade-blueprint.md) | 2.0 终极升级蓝图白皮书（1.0 行级与 170+ 标杆解构）|
 | [01-architecture/vcp-vs-apeireth-deep-comparison.md](01-architecture/vcp-vs-apeireth-deep-comparison.md) | Apeireth 2.0 vs VCPToolBox 深度架构对比与优劣势洞察报告 |
 | [02-guides/quick-start.md](02-guides/quick-start.md) | 快速开始（真实命令）|
+| **[04-internal/kani-verification-playbook.md](04-internal/kani-verification-playbook.md)** | **Kani 形式化验证实战手册（动验证面必读: 14 坑 + 配方检查单 + 本地环境）** |
+| **[04-internal/ops-network-playbook.md](04-internal/ops-network-playbook.md)** | **运维与网络排障手册（代理/大文件下载/WSL 修复/shell 陷阱）** |
 | [02-guides/user-manual.md](02-guides/user-manual.md) | 用户手册（功能详解/FAQ）|
 | [02-guides/deployment.md](02-guides/deployment.md) | 部署（环境变量/持久化/前端接入/故障排查）|
 | [02-guides/development.md](02-guides/development.md) | 开发指南（代码地图/模式/陷阱/提交规范）|
+| [02-guides/first-contribution.md](02-guides/first-contribution.md) | 新人上手指南（good-first-issue → 第一个 PR 动线）|
 | [03-reference/crates.md](03-reference/crates.md) | 当前根工作区 crate 索引 |
 | [03-reference/capabilities-matrix.md](03-reference/capabilities-matrix.md) | 工业级能力矩阵与对外契约参考 |
 | [03-reference/team-handover-reference.md](03-reference/team-handover-reference.md) | **团队接手一站式参考全景手册（权威交接主入口）** |
@@ -45,12 +48,19 @@ docs/
 | [design/frontend-handoff.md](design/frontend-handoff.md) | 前端交接（现状/联调/坑与纪律/欠账，接手先读）|
 | [design/intro-animation.md](design/intro-animation.md) | 开场动画「火之文明史」封存档案（2026-08-22 起默认关闭）|
 | [development/repository-layout.md](development/repository-layout.md) | 当前目录、ownership 与依赖边界 |
-| [../../ROADMAP.md](../../ROADMAP.md) | 顶层路线图（v2 下一步按优先级；v1 时代详单在 archive/roadmap） |
-| [../../CHANGELOG.md](../../CHANGELOG.md) | 变更流水（v2.0.0-alpha.1 段为重构版记录，其余为 v1 历史） |
+| [development/rfc-process.md](development/rfc-process.md) | RFC 流程（重大技术决策提案机制）|
+| [development/api-stability.md](development/api-stability.md) | API 稳定性分级（对外兼容性承诺口径）|
+| [development/community-ops.md](development/community-ops.md) | 社区生态运营手册（标签/分诊/SLA/数据真实性纪律）|
+| [../GOVERNANCE.md](../GOVERNANCE.md) | 治理章程（角色阶梯/决策机制/晋升退出/争议解决）|
+| [../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | 行为准则（社区诚信 + 执行机制）|
+| [../ROADMAP.md](../ROADMAP.md) | 顶层路线图（v2 下一步按优先级；v1 时代详单在 archive/roadmap） |
+| [../CHANGELOG.md](../CHANGELOG.md) | 变更流水（v2.0.0-alpha.1 段为重构版记录，其余为 v1 历史） |
 
-## 当前基线（2026-08-27）
+## 当前基线（2026-10-06 对账更新；2026-08-27 快照保留在下方）
 
-默认分支 `main` @ `d6910cf7`，tag `v2.0.0-alpha.1`；13-crate 工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）+ 独立前端 workspace；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。
+默认分支 `main`（HEAD 以实际提交为准），tag `v2.0.0-rc.1`；**18-crate 工作区**（foundation 6 / engine 8 / capabilities 1 / adapters 3；2026-10-06 协作者批新增 `crates/engine/guard`）+ 独立前端 workspace；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。
+
+历史快照（2026-08-27）：`main` @ `d6910cf7`，tag `v2.0.0-alpha.1`，13-crate 工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）。
 
 ## Archive
 

@@ -183,7 +183,7 @@ impl DiaryStore for InMemoryDiaryStore {
     }
 }
 
-/// 文件系统日记存储 (一天一 JSON 文件，崩溃安全原子写入).
+/// 文件系统日记存储 (一天一 JSON 文件, 统一原子写完整性档: 读到的永远是完整页)。
 pub struct FileDiaryStore {
     root: PathBuf,
 }
@@ -212,12 +212,14 @@ impl DiaryStore for FileDiaryStore {
         page.entries.push(entry);
 
         let target_path = self.path_for(date);
-        let tmp_path = self
-            .root
-            .join(format!("{date}.tmp-{}", uuid::Uuid::new_v4()));
         let bytes = serde_json::to_vec_pretty(&page)?;
-        std::fs::write(&tmp_path, bytes)?;
-        std::fs::rename(&tmp_path, &target_path)?;
+        // 临时态/记录页: 统一原子写完整性档 —— 读者要么读到旧的整页, 要么读到
+        // 新的整页, 永不半写 (该档不承诺崩溃持久, 与既有语义一致)。
+        apeireth_core::storage_atomic::write_atomic(
+            &target_path,
+            &bytes,
+            apeireth_core::storage_atomic::DEFAULT_FILE_MODE,
+        )?;
         Ok(())
     }
 

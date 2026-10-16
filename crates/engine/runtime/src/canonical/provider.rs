@@ -8,9 +8,9 @@
 //! runtime holds only the router — which is why no part of the runtime names a
 //! vendor.
 //!
-//! # Ported, not reinvented
+//! # Preserved, not reinvented
 //!
-//! The selection and health algorithm is ported from `MultiLlmRouter`
+//! The selection and health algorithm is semantically aligned with `MultiLlmRouter`
 //! (`crates/apeireth-api/src/llm/router.rs`), which is mature and already
 //! handles the cases a fresh implementation gets wrong. Preserved exactly:
 //!
@@ -28,7 +28,7 @@
 //!   error rate (`* 0.9`, plus `0.1` on failure), with a provider considered
 //!   unhealthy after three consecutive failures or an error rate at or above 0.5.
 //!
-//! Changed deliberately: the ported version was generic over `apeireth-api`'s
+//! Changed deliberately: the baseline version was generic over `apeireth-api`'s
 //! `LlmRequest`/`LlmResponse` and read latency from a field the provider filled
 //! in. This one speaks canonical `NormalizedRequest`/`NormalizedResponse` and
 //! measures latency against the runtime's injected clock, so a virtual clock

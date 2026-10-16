@@ -28,8 +28,13 @@ globalThis.fetch = async (input, init) => {
 };
 
 let checks = 0;
+// 检查体收进串行链、逐个跑完再跑下一个（演进理由：网关请求统一走鉴权头面后
+// fetch 发起晚一个微任务（先 await 令牌），异步检查若 fire-and-forget 不但会与
+// 收场恢复全局 fetch 竞态，还会互相覆盖各自的 fetch 注入面——串行执行 + 跑完
+// 再恢复才能保住每个检查的注入窗口）。
+let pendingChecks = Promise.resolve();
 const check = (name, fn) => {
-  fn();
+  pendingChecks = pendingChecks.then(() => fn());
   checks += 1;
   console.log(`  ok  ${name}`);
 };
@@ -184,5 +189,6 @@ check('normalizeBaseUrl repairs full-width punctuation', () => {
   assert.equal(normalizeBaseUrl('https://api.deepseek.com/v1/'), 'https://api.deepseek.com/v1');
 });
 
+await pendingChecks;
 globalThis.fetch = originalFetch;
 console.log(`--- ${checks} checks ---`);

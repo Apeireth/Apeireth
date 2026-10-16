@@ -29,18 +29,25 @@
 //! - **平台 keyring 不可用时**才 fallback `EncryptedFileBackend`, 后者依赖 master.key
 //!   文件权限 (unix 0600) 收敛访问 — 这与 [`FileCredentialsStore`] (明文文件) 同
 //!   "靠 OS 权限" 边界, 升级到 OS DPAPI / KMS / HSM 属后续层.
-//! - **审计日志不持久化**: 默认实现 `NoopAudit`, 装配侧可挂真 audit sink
-//!   (telemetry / 经验库), 此处为 trait 口 (0 装 PASS 标注).
+//! - **master.key 与密文同目录的保护边界 (M2, 如实标注)**: master.key 与数据密文
+//!   `apeireth-keyring.bin` 同目录存放, 目录级整体泄漏 (备份 / 同步 / 容器镜像
+//!   打包) 时两者**一起**落入攻击者手中, AEAD 加密即被消解 (有 key 即有明文)。
+//!   现行收敛手段: unix 0600 属主权限 + 原子写 (临时文件创建即 0600 + fsync +
+//!   rename, 消除 chmod 窗口与崩溃半写损坏); 独立目录 / OS keyring 封存属后续层。
+//! - **审计落档已真实施** (W4②, 2026-10-10, **IMPLEMENTED**): [`FileAuditSink`]
+//!   JSONL 追加写真落档; [`NoopAudit`] 保留为测试/显式禁用 (0 装 PASS 标注).
 //! - **name_hash = SHA-256(service)[:16] hex** — 不可逆 (单向散列) 但同 service
-//!   同 hash, 仍可关联审计, 不暴露 service 名原文. 若需要更强匿名, 上层
-//!   应再加盐 (`AuditContext::with_salt`).
+//!   同 hash, 仍可关联审计, 不暴露 service 名原文. 加盐形态已真实施:
+//!   [`AuditContext::with_salt`] → [`name_hash_salted`] = SHA-256(salt‖service)[:16]
+//!   (防跨安装 rainbow 比对; salt 由装配侧保管).
 
 #![allow(clippy::result_large_err)] // KeyringError 变体多, 不强求 box 化
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use apeireth_core::storage_atomic::{self, OWNER_ONLY_MODE};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, XChaCha20Poly1305, XNonce};
 use rand::RngCore;
@@ -148,9 +155,14 @@ pub trait KeyringBackend: Send + Sync {
     fn get(&self, service: &str) -> Result<SecretBuf>;
 
     /// 写入/覆盖服务凭据.
+    ///
+    /// 实现方 (加密文件后端) 在底层存储**已损坏/被篡改**时必须返回错误
+    /// **拒绝写入** (fail-closed), 不得以空表起步静默覆盖全部既有凭据 (H5).
     fn set(&self, service: &str, secret: &SecretBuf) -> Result<()>;
 
     /// 删除服务凭据; 不存在 → `UnknownService`.
+    ///
+    /// 同 [`KeyringBackend::set`]: 底层存储损坏时拒绝删除 (fail-closed, H5).
     fn delete(&self, service: &str) -> Result<()>;
 
     /// 列出已存服务名 (仅名称, 不含明文).
@@ -230,12 +242,12 @@ impl CountingAudit {
 
     /// 取所有审计条目 (clone).
     pub fn entries(&self) -> Vec<AuditEntry> {
-        self.inner.lock().unwrap().clone()
+        self.inner.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     /// 审计条目数.
     pub fn len(&self) -> usize {
-        self.inner.lock().unwrap().len()
+        self.inner.lock().unwrap_or_else(|p| p.into_inner()).len()
     }
 
     /// 是否为空.
@@ -260,24 +272,267 @@ impl CountingAudit {
 impl AuditSink for CountingAudit {
     fn record(&self, event: AuditEvent, service: &str, backend: &'static str, success: bool) {
         let name_hash = name_hash(service).clone();
-        self.inner.lock().unwrap().push(AuditEntry {
-            event,
-            name_hash,
-            backend,
-            success,
-        });
+        self.inner
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .push(AuditEntry {
+                event,
+                name_hash,
+                backend,
+                success,
+            });
     }
 }
 
 /// **SHA-256(service) 前 16 hex** (64 bit 截断). 单向, 同 service 同 hash.
 ///
 /// 设计: 16 hex = 64 bit, 平衡 "可关联 (同 service 同 hash)" 与 "不可逆".
-/// 若需更强匿名 (防 rainbow table), 上层加盐 (见 `AuditContext::with_salt` 占位).
+/// 更强匿名 (防 rainbow table) 用 [`AuditContext::with_salt`] (W4② 真身化, 2026-10-10).
 pub fn name_hash(service: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(service.as_bytes());
     let digest = hasher.finalize();
     hex::encode(&digest[..8])
+}
+
+/// **盐化名哈希**: `SHA-256(salt ‖ service)[:16] hex` (W4②).
+///
+/// 同 salt 内同 service 同 hash (审计可关联); 换 salt 即换 hash (防跨安装比对)。
+pub fn name_hash_salted(salt: &[u8], service: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(salt);
+    hasher.update(service.as_bytes());
+    let digest = hasher.finalize();
+    hex::encode(&digest[..8])
+}
+
+/// **加盐审计上下文** (原 `AuditContext::with_salt` 占位 — W4② 真身化, 2026-10-10).
+///
+/// 红线不变: 任一输出**不含** service 名原文与凭据明文。
+#[derive(Debug, Clone, Default)]
+pub struct AuditContext {
+    salt: Option<Vec<u8>>,
+}
+
+impl AuditContext {
+    /// 无盐 (与 [`name_hash`] 同口径).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 有盐 (推荐生产使用; salt 由装配侧保管, 例如机器指纹派生).
+    pub fn with_salt(salt: impl Into<Vec<u8>>) -> Self {
+        Self {
+            salt: Some(salt.into()),
+        }
+    }
+
+    /// 计算 service 的审计名哈希 (16 hex).
+    pub fn hash(&self, service: &str) -> String {
+        match &self.salt {
+            Some(salt) => name_hash_salted(salt, service),
+            None => name_hash(service),
+        }
+    }
+}
+
+/// **真落档审计 sink** (JSONL 追加写 — W4②, 2026-10-10; 原"审计日志不持久化 0 装"升级).
+///
+/// 每条一行 JSON: `{"ts_ms":…,"event":"get|set|delete|list","name_hash":…,"backend":…,"success":…}`。
+/// **红线**: 行内只含元信息 (经 [`AuditContext::hash`]), 无 service 原文、无凭据明文。
+/// **只降级不枪毙** (元层原则): IO 失败不 panic, 计数进 [`Self::failures`] —
+/// 审计故障绝不打死主任务; 审计缺失由调用方巡检发现。
+pub struct FileAuditSink {
+    path: PathBuf,
+    context: AuditContext,
+    file: std::sync::Mutex<Option<std::fs::File>>,
+    failures: std::sync::atomic::AtomicU64,
+    now_ms: Arc<dyn Fn() -> u64 + Send + Sync>,
+}
+
+impl std::fmt::Debug for FileAuditSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileAuditSink")
+            .field("path", &self.path)
+            .field(
+                "failures",
+                &self.failures.load(std::sync::atomic::Ordering::Relaxed),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+impl FileAuditSink {
+    /// 打开 (追加模式; 目录/文件首次写入时惰性创建). now_ms = UNIX 纪元毫秒.
+    pub fn open(path: impl Into<PathBuf>, context: AuditContext) -> Self {
+        Self {
+            path: path.into(),
+            context,
+            file: std::sync::Mutex::new(None),
+            failures: std::sync::atomic::AtomicU64::new(0),
+            now_ms: Arc::new(|| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0)
+            }),
+        }
+    }
+
+    /// 带盐便捷构造.
+    pub fn with_salt(path: impl Into<PathBuf>, salt: impl Into<Vec<u8>>) -> Self {
+        Self::open(path, AuditContext::with_salt(salt))
+    }
+
+    /// 注入时钟 (虚拟时钟可重放, 测试用).
+    #[must_use]
+    pub fn with_clock(mut self, now_ms: Arc<dyn Fn() -> u64 + Send + Sync>) -> Self {
+        self.now_ms = now_ms;
+        self
+    }
+
+    /// 写入失败计数 (0 = 全部落盘).
+    pub fn failures(&self) -> u64 {
+        self.failures.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// 审计文件路径.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn append_line(&self, line: &str) {
+        use std::io::Write;
+        use std::sync::atomic::Ordering as AtomicOrdering;
+        let mut guard = self.file.lock().unwrap_or_else(|p| p.into_inner());
+        if guard.is_none() {
+            if let Some(parent) = self.path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)
+            {
+                Ok(f) => *guard = Some(f),
+                Err(_) => {
+                    self.failures.fetch_add(1, AtomicOrdering::Relaxed);
+                    return;
+                }
+            }
+        }
+        let outcome = guard
+            .as_mut()
+            .map(|f| writeln!(f, "{line}").and_then(|_| f.sync_data()))
+            .unwrap_or(Ok(()));
+        if outcome.is_err() {
+            self.failures.fetch_add(1, AtomicOrdering::Relaxed);
+        }
+    }
+}
+
+impl AuditSink for FileAuditSink {
+    fn record(&self, event: AuditEvent, service: &str, backend: &'static str, success: bool) {
+        let event_str = match event {
+            AuditEvent::Get => "get",
+            AuditEvent::Set => "set",
+            AuditEvent::Delete => "delete",
+            AuditEvent::List => "list",
+        };
+        let line = format!(
+            "{{\"ts_ms\":{},\"event\":\"{}\",\"name_hash\":\"{}\",\"backend\":\"{}\",\"success\":{}}}",
+            (self.now_ms)(),
+            event_str,
+            self.context.hash(service),
+            backend,
+            success
+        );
+        self.append_line(&line);
+    }
+}
+
+#[cfg(test)]
+mod w4_tests {
+    use super::*;
+    use std::sync::atomic::Ordering as AtomicOrdering;
+
+    #[test]
+    fn salted_hash_links_within_salt_and_separates_across() {
+        assert_eq!(
+            name_hash_salted(b"salt-a", "openai"),
+            name_hash_salted(b"salt-a", "openai"),
+            "同 salt 同 service 同 hash (可关联)"
+        );
+        assert_ne!(
+            name_hash_salted(b"salt-a", "openai"),
+            name_hash_salted(b"salt-b", "openai"),
+            "换 salt 换 hash (防跨安装比对)"
+        );
+        assert_ne!(name_hash_salted(b"salt-a", "openai"), name_hash("openai"));
+        assert_eq!(name_hash_salted(b"salt-a", "openai").len(), 16);
+    }
+
+    #[test]
+    fn file_audit_sink_writes_jsonl_without_plaintext() {
+        let dir = std::env::temp_dir().join(format!(
+            "apeireth-credentials-file-audit-{}",
+            std::process::id()
+        ));
+        let path = dir.join("audit.jsonl");
+        let sink = FileAuditSink::open(&path, AuditContext::with_salt(b"unit-salt"))
+            .with_clock(Arc::new(|| 1_700_000_000_000u64));
+
+        sink.record(AuditEvent::Set, "openai", "platform_keyring", true);
+        sink.record(AuditEvent::Get, "openai", "platform_keyring", false);
+
+        let text = std::fs::read_to_string(&path).expect("audit file");
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("\"ts_ms\":1700000000000"));
+        assert!(lines[0].contains("\"event\":\"set\""));
+        assert!(lines[0].contains("\"backend\":\"platform_keyring\""));
+        assert!(lines[0].contains("\"success\":true"));
+        assert!(lines[1].contains("\"event\":\"get\""));
+        assert!(lines[1].contains("\"success\":false"));
+        // 红线: 无 service 原文, name_hash 为盐化 16 hex
+        let expected = name_hash_salted(b"unit-salt", "openai");
+        assert!(lines[0].contains(&format!("\"name_hash\":\"{expected}\"")));
+        assert!(!text.contains("openai"));
+        assert_eq!(sink.failures(), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn audit_io_failure_degrades_not_panics() {
+        // 元层原则: 审计只降级不枪毙 — 把父路径做成文件, 惰性建目录必失败。
+        let dir = std::env::temp_dir().join(format!(
+            "apeireth-credentials-audit-fail-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let blocker = dir.join("blocker");
+        std::fs::write(&blocker, b"i am a file").unwrap();
+        let sink = FileAuditSink::open(blocker.join("audit.jsonl"), AuditContext::new());
+        sink.record(AuditEvent::Get, "openai", "in_memory", true); // 不 panic
+        sink.record(AuditEvent::Get, "openai", "in_memory", true);
+        assert_eq!(sink.failures(), 2);
+        assert_eq!(
+            sink.file.lock().unwrap().is_none(),
+            true,
+            "未能打开文件时不留半开句柄"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unhashed_audit_context_matches_plain_name_hash() {
+        assert_eq!(AuditContext::new().hash("openai"), name_hash("openai"));
+        assert_ne!(
+            AuditContext::with_salt(b"s").hash("openai"),
+            name_hash("openai")
+        );
+        let _ = AtomicOrdering::Relaxed; // 保持 import 使用
+    }
 }
 
 // ============================================================================
@@ -470,6 +725,13 @@ impl PlatformKeyring {
 /// - `FileCredentialsStore` 是明文静态存储 (靠 0600);
 /// - `EncryptedFileBackend` 是加密静态存储 (0600 + AEAD), 即使文件泄漏也不出明文.
 /// - 二者并存: 装配侧可任选; 不互替.
+///
+/// **并发与损坏语义 (H5 修复)**:
+/// - `set` / `delete` 的 read-modify-write 由进程内 [`Mutex`] 串行化 (trait 方法
+///   是 `&self`, 调用方无需自行同步); 跨进程并发仍依赖 OS 文件语义.
+/// - `set` / `delete` 中 `load_all` 的错误**不再被静默吞掉**: 数据文件不存在 →
+///   空表起步 (合法首次写); 文件存在但读取失败/解密失败 (AEAD 篡改检测) →
+///   传播 [`KeyringError`] **拒绝写入**, 防"一条新凭据覆盖全部旧凭据".
 pub struct EncryptedFileBackend {
     /// 数据文件路径.
     data_path: PathBuf,
@@ -479,6 +741,11 @@ pub struct EncryptedFileBackend {
     master_key: Key,
     /// 审计 sink.
     audit: Arc<dyn AuditSink>,
+    /// 进程内写锁: 串行化 `set`/`delete` 的 load-modify-save (H5).
+    ///
+    /// 只持锁期间的读-改-写临界区; `get`/`list` 只读不持锁 (save_all 的
+    /// tmp+rename 原子替换保证读者只看到旧或新完整文件).
+    write_lock: Mutex<()>,
 }
 
 impl std::fmt::Debug for EncryptedFileBackend {
@@ -534,6 +801,7 @@ impl EncryptedFileBackend {
             master_key_path,
             master_key,
             audit,
+            write_lock: Mutex::new(()),
         })
     }
 
@@ -636,24 +904,14 @@ impl EncryptedFileBackend {
         out.extend_from_slice(&ct_len.to_le_bytes());
         out.extend_from_slice(&ciphertext);
 
-        // 原子写: 写临时文件 + rename (防半写).
-        let tmp = self.data_path.with_extension("bin.tmp");
-        std::fs::write(&tmp, &out).map_err(|source| KeyringError::Io {
-            service: "<encrypted-file-backend>".into(),
-            source,
-        })?;
-        std::fs::rename(&tmp, &self.data_path).map_err(|source| KeyringError::Io {
-            service: "<encrypted-file-backend>".into(),
-            source,
-        })?;
-        // 0600 收敛 (unix); Windows 走默认 ACL.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ =
-                std::fs::set_permissions(&self.data_path, std::fs::Permissions::from_mode(0o600));
-        }
-        Ok(())
+        // 统一存储基础件持久档原子写: 独占临时文件 0600 (unix) + fsync + rename
+        // (防半写/权限窗口)。非 unix 无 mode 语义, 权限由 OS 默认 ACL 收敛。
+        storage_atomic::write_atomic_durable(&self.data_path, &out, OWNER_ONLY_MODE).map_err(
+            |source| KeyringError::Io {
+                service: "<encrypted-file-backend>".into(),
+                source,
+            },
+        )
     }
 }
 
@@ -693,7 +951,18 @@ impl KeyringBackend for EncryptedFileBackend {
                 max: MAX_SECRET_LEN,
             });
         }
-        let mut all = self.load_all().unwrap_or_default();
+        // H5: 进程内写锁串行化 read-modify-write; poison 后取内卫值继续 (数据一致性优先).
+        let _guard = self.write_lock.lock().unwrap_or_else(|p| p.into_inner());
+        // H5: 区分"文件不存在" (load_all → 空表) 与"文件损坏/解密失败" (Err);
+        // 后者必须拒绝写入 — 否则一条新凭据会静默覆盖全部旧凭据.
+        let mut all = match self.load_all() {
+            Ok(all) => all,
+            Err(e) => {
+                self.audit
+                    .record(AuditEvent::Set, service, "encrypted-file", false);
+                return Err(e);
+            }
+        };
         all.insert(service.to_string(), secret.expose().to_vec());
         match self.save_all(&all) {
             Ok(()) => {
@@ -711,7 +980,16 @@ impl KeyringBackend for EncryptedFileBackend {
 
     fn delete(&self, service: &str) -> Result<()> {
         check_service_name(service)?;
-        let mut all = self.load_all().unwrap_or_default();
+        // H5: 同 set — 写锁串行化 load-modify-save, 加载失败拒绝删除 (防篡改检测被吞).
+        let _guard = self.write_lock.lock().unwrap_or_else(|p| p.into_inner());
+        let mut all = match self.load_all() {
+            Ok(all) => all,
+            Err(e) => {
+                self.audit
+                    .record(AuditEvent::Delete, service, "encrypted-file", false);
+                return Err(e);
+            }
+        };
         if all.remove(service).is_none() {
             self.audit
                 .record(AuditEvent::Delete, service, "encrypted-file", false);
@@ -772,18 +1050,20 @@ fn load_master_key(path: &Path) -> Result<Key> {
     Ok(Key::from(arr))
 }
 
-/// 写 master key 到文件 (0600 语义).
+/// 写 master key 到文件 (统一存储基础件持久档原子写 + 创建即 0600, 无 chmod 窗口 — M2).
+///
+/// - unix: 临时文件以 `mode(0o600)` **创建** (消除"先写后 chmod"的短暂
+///   0644 窗口), `sync_all` 落盘后 `rename` 原子替换 (防崩溃半写 → 密钥损坏);
+///   独占创建拒绝预置同名临时文件 (防 skid)。
+/// - 非 unix: 无 unix mode 语义, 权限由 OS 默认 ACL 收敛 (如实标注, 见模块头
+///   0 假装边界), 原子替换与落盘照常。
 fn write_master_key(path: &Path, key: &Key) -> Result<()> {
-    std::fs::write(path, key.as_slice()).map_err(|source| KeyringError::Io {
-        service: "<master-key>".into(),
-        source,
-    })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
+    storage_atomic::write_atomic_durable(path, key.as_slice(), OWNER_ONLY_MODE).map_err(|source| {
+        KeyringError::Io {
+            service: "<master-key>".into(),
+            source,
+        }
+    })
 }
 
 // ============================================================================
@@ -809,7 +1089,10 @@ impl std::fmt::Debug for InMemoryKeyring {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // 不打印 inner (含明文) 与 audit (dyn 不 impl Debug).
         f.debug_struct("InMemoryKeyring")
-            .field("len", &self.inner.lock().unwrap().len())
+            .field(
+                "len",
+                &self.inner.lock().unwrap_or_else(|p| p.into_inner()).len(),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -827,7 +1110,7 @@ impl InMemoryKeyring {
 impl KeyringBackend for InMemoryKeyring {
     fn get(&self, service: &str) -> Result<SecretBuf> {
         check_service_name(service)?;
-        let guard = self.inner.lock().unwrap();
+        let guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         match guard.get(service) {
             Some(bytes) => {
                 let len = bytes.len();
@@ -861,7 +1144,7 @@ impl KeyringBackend for InMemoryKeyring {
                 max: MAX_SECRET_LEN,
             });
         }
-        let mut guard = self.inner.lock().unwrap();
+        let mut guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         guard.insert(service.to_string(), secret.expose().to_vec());
         self.audit
             .record(AuditEvent::Set, service, "in-memory", true);
@@ -870,7 +1153,7 @@ impl KeyringBackend for InMemoryKeyring {
 
     fn delete(&self, service: &str) -> Result<()> {
         check_service_name(service)?;
-        let mut guard = self.inner.lock().unwrap();
+        let mut guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         if guard.remove(service).is_none() {
             self.audit
                 .record(AuditEvent::Delete, service, "in-memory", false);
@@ -884,7 +1167,7 @@ impl KeyringBackend for InMemoryKeyring {
     }
 
     fn list(&self) -> Result<Vec<String>> {
-        let guard = self.inner.lock().unwrap();
+        let guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         self.audit
             .record(AuditEvent::List, "<all>", "in-memory", true);
         Ok(guard.keys().cloned().collect())
@@ -1147,6 +1430,59 @@ mod tests {
         let audit3 = Arc::new(CountingAudit::new());
         let k3 = EncryptedFileBackend::open(&tmp, audit3.clone()).unwrap();
         assert!(matches!(k3.list().unwrap_err(), KeyringError::Crypto(_)));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    // ----- §9.2b H5: 数据文件损坏时 set/delete 必须拒绝 (fail-closed) -----
+
+    #[test]
+    fn corrupted_data_file_refuses_set_and_delete() {
+        let tmp = std::env::temp_dir().join(format!(
+            "apeireth-keyring-test-{}-{}",
+            std::process::id(),
+            "corrupt-h5"
+        ));
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        let audit = Arc::new(CountingAudit::new());
+        let k = EncryptedFileBackend::open(&tmp, audit.clone()).unwrap();
+        // 先写两条真实凭据, 证明"被覆盖"的损失面
+        k.set("openai", &SecretBuf::from_str("sk-test-encrypted"))
+            .unwrap();
+        k.set("anthropic", &SecretBuf::from_str("sk-test-encrypted-2"))
+            .unwrap();
+        let data_path = k.data_path().to_path_buf();
+        drop(k);
+
+        // 翻转密文最后一个字节 (AEAD tag 区) → 解密必失败; 模拟磁盘损坏/攻击者篡改
+        let mut raw = std::fs::read(&data_path).unwrap();
+        let last = raw.len() - 1;
+        raw[last] ^= 0xFF;
+        std::fs::write(&data_path, &raw).unwrap();
+        let bytes_before = std::fs::read(&data_path).unwrap();
+
+        let audit2 = Arc::new(CountingAudit::new());
+        let k2 = EncryptedFileBackend::open(&tmp, audit2.clone()).unwrap();
+
+        // H5 核心断言: set/delete 都必须返回 Crypto 错误并拒绝写入
+        let set_err = k2.set("new-svc", &SecretBuf::from_str("sk-attacker"));
+        assert!(
+            matches!(set_err, Err(KeyringError::Crypto(_))),
+            "损坏文件上 set 应拒绝: {set_err:?}"
+        );
+        let del_err = k2.delete("openai");
+        assert!(
+            matches!(del_err, Err(KeyringError::Crypto(_))),
+            "损坏文件上 delete 应拒绝: {del_err:?}"
+        );
+
+        // 关键: 文件必须保持被篡改的字节 — 未发生静默覆盖 (旧行为会写成只剩一条的空表+新条)
+        let bytes_after = std::fs::read(&data_path).unwrap();
+        assert_eq!(
+            bytes_before, bytes_after,
+            "损坏/被篡改的数据文件不得被静默覆盖"
+        );
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

@@ -311,6 +311,46 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
+    /// 全量 fact 列举 (W3 community 消费, 2026-10-10): 最近 limit 条,
+    /// 有效窗口过滤 (与 facts_from 同口径), 无 subject 前缀。
+    fn all_facts(&self, limit: u32) -> CapabilityResult<Vec<GraphFact>> {
+        self.pool
+            .read(
+                |conn| -> Result<Vec<GraphFact>, apeireth_storage::StorageError> {
+                    let mut stmt = conn.prepare_cached(
+                        "SELECT id, subject_id, subject_kind, predicate, object_id, object_kind, \
+                            valid_from_ms, valid_until_ms, source_episode_id, confidence \
+                         FROM kg_facts \
+                         WHERE (valid_until_ms IS NULL OR valid_until_ms > ?1) \
+                         ORDER BY valid_from_ms DESC \
+                         LIMIT ?2",
+                    )?;
+                    let now_ms = chrono::Utc::now().timestamp_millis();
+                    let rows =
+                        stmt.query_map(rusqlite::params![now_ms, i64::from(limit)], |row| {
+                            Ok(GraphFact {
+                                id: row.get(0)?,
+                                subject_id: row.get(1)?,
+                                subject_kind: row.get(2)?,
+                                predicate: row.get(3)?,
+                                object_id: row.get(4)?,
+                                object_kind: row.get(5)?,
+                                valid_from: row.get(6)?,
+                                valid_until: row.get(7)?,
+                                source_episode_id: row.get(8)?,
+                                confidence: row.get(9)?,
+                            })
+                        })?;
+                    let mut out = Vec::new();
+                    for r in rows {
+                        out.push(r?);
+                    }
+                    Ok(out)
+                },
+            )
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    }
+
     fn links_from(&self, from_id: &str, limit: u32) -> CapabilityResult<Vec<GraphLink>> {
         self.pool
             .read(
@@ -497,6 +537,75 @@ mod tests {
         KnowledgeGraphStore::put_link(&store, &link).expect("put_link");
         let links = KnowledgeGraphStore::links_from(&store, "rust", 10).expect("links_from");
         assert_eq!(links.len(), 1);
+    }
+
+    /// W3 community 消费 (2026-10-10): all_facts 全量列举 roundtrip + limit 封顶。
+    #[tokio::test]
+    async fn kg_all_facts_roundtrip_and_limit() {
+        let store = fresh().await;
+        for index in 0..3 {
+            let fact = GraphFact {
+                id: format!("f-{index}"),
+                subject_id: format!("s{index}"),
+                subject_kind: "thing".into(),
+                predicate: "rel".into(),
+                object_id: format!("o{index}"),
+                object_kind: "thing".into(),
+                valid_from: 1_700_000_000 + index,
+                valid_until: None,
+                source_episode_id: "ep-1".into(),
+                confidence: 0.8,
+            };
+            KnowledgeGraphStore::put_fact(&store, &fact).expect("put_fact");
+        }
+        let all = KnowledgeGraphStore::all_facts(&store, 10).expect("all_facts");
+        assert_eq!(all.len(), 3, "全量列举必须看到全部 subject 的 fact");
+        let capped = KnowledgeGraphStore::all_facts(&store, 2).expect("all_facts");
+        assert_eq!(capped.len(), 2, "limit 封顶");
+        // 无 subject 前缀: facts_from 只能按 subject 看一跳, all_facts 是全集。
+        let from = KnowledgeGraphStore::facts_from(&store, "s0", 10).expect("facts_from");
+        assert_eq!(from.len(), 1);
+    }
+
+    /// 默认 trait 实现: 未覆写 all_facts 的 store = 空 (契约默认, 不炸)。
+    #[test]
+    fn default_all_facts_is_empty_for_non_sqlite_stores() {
+        struct NoopStore;
+        impl apeireth_plugin::experience::KnowledgeGraphStore for NoopStore {
+            fn put_fact(
+                &self,
+                _fact: &GraphFact,
+            ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                Ok(())
+            }
+            fn put_link(
+                &self,
+                _link: &GraphLink,
+            ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                Ok(())
+            }
+            fn facts_from(
+                &self,
+                _subject_id: &str,
+                _limit: u32,
+            ) -> apeireth_plugin::memory_backend::CapabilityResult<Vec<GraphFact>> {
+                Ok(Vec::new())
+            }
+            fn links_from(
+                &self,
+                _from_id: &str,
+                _limit: u32,
+            ) -> apeireth_plugin::memory_backend::CapabilityResult<Vec<GraphLink>> {
+                Ok(Vec::new())
+            }
+            fn forget_subject(
+                &self,
+                _subject_id: &str,
+            ) -> apeireth_plugin::memory_backend::CapabilityResult<()> {
+                Ok(())
+            }
+        }
+        assert!(NoopStore.all_facts(10).expect("default").is_empty());
     }
 
     /// RC-2 验收: forget_subject 真删

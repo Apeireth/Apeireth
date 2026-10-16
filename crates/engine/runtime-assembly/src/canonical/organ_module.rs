@@ -227,7 +227,12 @@ impl AgentModule for OrganModule {
         // w1, w2, factory and the invoker handle drop here.
 
         {
-            let mut observations = self.observations.lock().expect("organ observations");
+            // poison 容错 (2026-09-24 修复轮补漏): 锁保护的是可重建的观察环形
+            // 缓冲, 持锁 panic 不应连锁毒化后续每次 organ 调用 (与 G 组同模式)。
+            let mut observations = self
+                .observations
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if observations.len() == MAX_OBSERVATIONS {
                 observations.remove(0);
             }

@@ -1,9 +1,9 @@
 //! F1 EmotionMemory 器官 集成测试 (per 任务 §3, 子代理 R1).
 //!
 //! 3 测试 (per task spec §3):
-//! 1. `emotion_organ_record_updates_mood_state` (record → 改 current_mood, 1:1 v1)
+//! 1. `emotion_organ_record_updates_mood_state` (record → 改 current_mood, 对齐 v1)
 //! 2. `emotion_organ_mood_trend_reflects_history` (mood_trend 路径 — 历史反映趋势)
-//! 3. `emotion_organ_recall_by_mood_finds_similar` (recall_by_mood 路径, 1:1 v1)
+//! 3. `emotion_organ_recall_by_mood_finds_similar` (recall_by_mood 路径, 对齐 v1)
 //!
 //! **0 装诚实** (per 任务 §3 + 子代理 R 同款):
 //! - 真生产路径: `EmotionOrgan::new()` (无 LLM 注入 — v1 emotion_memory 是确定性无 LLM).
@@ -34,13 +34,13 @@ fn make_input(hints: Vec<String>) -> OrganInput {
 }
 
 // ============================================
-// Test 1: record → 改 current_mood (1:1 v1 emotion_memory::record / current_mood)
+// Test 1: record → 改 current_mood (对齐 v1 emotion_memory::record / current_mood)
 // ============================================
 
 #[tokio::test]
 async fn emotion_organ_record_updates_mood_state() {
     // 0 装诚实: 直接用 EmotionMemoryEngine (无 LLM 介入, v1 是确定性无 LLM).
-    // 验证 record → current_mood 路径 1:1 v1.
+    // 验证 record → current_mood 路径 对齐 v1.
     let mut engine = EmotionMemoryEngine::new(Default::default());
     assert_eq!(engine.current_mood().sample_count, 0, "无数据 → 空快照");
 
@@ -180,7 +180,7 @@ async fn emotion_organ_mood_trend_reflects_history() {
 
 #[tokio::test]
 async fn emotion_organ_recall_by_mood_finds_similar() {
-    // 0 装诚实: 用 EmotionMemoryEngine (无 LLM) 验 recall_by_mood 1:1 v1.
+    // 0 装诚实: 用 EmotionMemoryEngine (无 LLM) 验 recall_by_mood 对齐 v1.
     let mut engine = EmotionMemoryEngine::new(Default::default());
     let now = 1_700_000_000_000_i64;
 

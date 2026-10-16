@@ -11,16 +11,15 @@
     Gauge,
     Eclipse,
     MessageCircleMore,
-    History,
-    Layers3,
     Wrench,
     Activity,
-    ScrollText,
     Settings,
     PanelRight,
     X,
     Search,
     Info,
+    ShieldCheck,
+    CircleUserRound,
   } from 'lucide-svelte';
   import MessageContent from './lib/MessageContent.svelte';
   import RuntimeModal from './lib/components/RuntimeModal.svelte';
@@ -28,11 +27,24 @@
   import VoiceCallModal from './components/VoiceCallModal.svelte';
   import { voiceCallManager } from './lib/voice';
 
-  import ApprovalRequestCard from './lib/components/ApprovalRequestCard.svelte';
   import ErrorSolutionBanner from './lib/components/ErrorSolutionBanner.svelte';
   import ToolCallLifecycleCard from './lib/components/ToolCallLifecycleCard.svelte';
   import ComposerMenu from './lib/components/ComposerMenu.svelte';
-  import SessionModelPicker from './lib/components/SessionModelPicker.svelte';
+  import CommandPalette from './lib/components/CommandPalette.svelte';
+  import StatusBar from './lib/components/StatusBar.svelte';
+  import {
+    sseSourceOf,
+    sseIndicator,
+    turnIndicator,
+    guardIndicator,
+    memoryIndicator,
+  } from './lib/statusbar';
+  import {
+    pushRecentId,
+    loadRecentIds,
+    saveRecentIds,
+    type CommandItem,
+  } from './lib/commands/registry';
   import WorkspacePickerModal from './lib/components/WorkspacePickerModal.svelte';
   import {
     getWorkspaceDir,
@@ -45,13 +57,54 @@
   import DeepCabinLayer from './lib/cabin/DeepCabinLayer.svelte';
   import IntroLayer from './lib/intro/IntroLayer.svelte';
   import {localClockHour} from './lib/scene/timeline';
-  import ConversationsView from './lib/ConversationsView.svelte';
+  import SessionListHome from './lib/chat-shell/SessionListHome.svelte';
+  import PendingDocumentDock from './lib/chat-shell/PendingDocumentDock.svelte';
+  import GuardNoticeCard from './lib/chat-shell/GuardNoticeCard.svelte';
+  import type {HomeSessionItem} from './lib/chat-shell/session-list';
+  import {deleteSession} from './lib/chat-shell/session-delete';
+  import {markSessionsCleared, purgeSessions, type PurgeScope} from './lib/chat-shell/session-cleanup';
+  import {initWheelRouter} from './lib/wheel-scroll';
+  import {clearCallLogs, clearCallLogsFor} from './lib/call-logger';
+  import {
+    isNearBottom as nearBottomNow,
+    scrollOnAppend,
+    scrollOnOpen,
+    showJumpButton,
+  } from './lib/chat-shell/scroll-policy';
+  import {landAtBottom, needsReland} from './lib/chat-shell/scroll-landing';
+  import {
+    accumulateTurnUsage,
+    emptySessionTotals,
+    formatTurnTelemetry,
+    mergeUsage,
+    type SessionUsageTotals,
+    type TurnUsage,
+  } from './lib/chat-shell/turn-telemetry';
+  import {
+    budgetRemainingRows,
+    budgetRemainingSummary,
+    effectiveBudget,
+  } from './lib/budget';
+  import {
+    applyApprovalEventToPending,
+    classifyGovernanceNotice,
+    parseApprovalEventPayload,
+  } from './lib/chat-shell/gateway-events';
   import ActivityView from './lib/views/ActivityView.svelte';
   import ToolsView from './lib/views/ToolsView.svelte';
-  import MemoryView from './lib/MemoryView.svelte';
+  import type {GovernanceTabId} from './lib/views/GovernanceView.svelte';
   import SettingsView from './lib/views/SettingsView.svelte';
   import Workbench from './lib/components/Workbench.svelte';
-  import {applyDocumentTheme, resolveTheme} from './lib/theme';
+  import {
+    NAV_COMMAND_TARGETS,
+    SETTINGS_SECURITY_SECTION,
+    resolveLegacyDrawer,
+    type ShellTarget,
+    type WorkbenchSection,
+  } from './lib/shell-nav';
+  import {applyDocumentAccent, applyDocumentTheme, isStaticBgTheme, resolveAccent, resolveTheme, themeLabel, THEME_CATALOG} from './lib/theme';
+  import {getCustomBg} from './lib/bg-store';
+  import {loadUserProfile, subscribeUserProfile, type UserProfile} from './lib/user-profile';
   import type {Theme} from './lib/types';
 
   import type {
@@ -65,13 +118,18 @@
     RuntimeHealthReport,
     SessionSettings,
     ToolCallDetails,
+    WorkbenchTurn,
     GuardStatus,
   } from './lib/types';
   import {
     checkHealthDetailed,
     createAgentRuntime,
+    deleteBackendSession,
+    fetchBackendSessions,
     fetchCanonicalApprovals,
     resolveCanonicalApproval,
+    applyCanonicalEvents,
+    fetchWorkbenchTurn,
     ApprovalRequiredError,
     loadConfig,
     loadConversations,
@@ -83,37 +141,33 @@
     patchSessionSettings,
     fetchCapabilities,
     fetchGuardStatus,
+    fetchGuardEvents,
+    fetchMemoryEpisodes,
     subscribeCompanionEvents,
     capabilityAvailable,
     capabilitySupported,
+    capabilityUnavailableReason,
     activePersonaOf,
     DEFAULT_PERSONAS,
     type CompanionPresentationState,
     type CanonicalPendingApproval,
   } from './lib/runtime';
-  import {presenceStore, subscribePresence} from './lib/presence';
+  import {presenceStore, subscribePresence, derivePresenceGlow} from './lib/presence';
   import {
     applyBackendConfig,
+    applyBackendConfigOrThrow,
     backendProviderEnvFromConfig,
     capabilityEnvFromConfig,
     isDesktop,
     resolveBackendEndpoint,
   } from './lib/desktop-bridge';
 
-  type DrawerId = 'history' | 'memory' | 'tools' | 'status' | 'logs' | 'settings';
+  // 侧栏收纳（内测反馈批）：左栏常驻只留 对话/工具/状态/设置 四件。被移页面
+  // 换家不删功能——历史撤除（会话列表 + 搜索即历史），记忆/日记进工作台
+  // （卡片入口，面板组件原样复用），治理进设置 ›「安全与治理」（面板组件原样
+  // 嵌入），日志并入状态（组件原样复用）。目标解析统一在 lib/shell-nav.ts。
+  type DrawerId = 'tools' | 'status' | 'settings';
   const DRAWER_META: Record<DrawerId, {eyebrow: string; title: string; sub: string; action: string}> = {
-    history: {
-      eyebrow: '管理',
-      title: '历史',
-      sub: '本地对话上下文与后端持久账本；删除需确认，归档不丢记录。',
-      action: '新对话',
-    },
-    memory: {
-      eyebrow: '认知',
-      title: '记忆与知识库',
-      sub: '持久化情节记忆、六历史流与结构化知识图谱。',
-      action: '',
-    },
     tools: {
       eyebrow: '能力',
       title: '工具管理与权限',
@@ -123,19 +177,13 @@
     status: {
       eyebrow: '微内核',
       title: '系统状态',
-      sub: '网关、模型服务、账本与记忆流的实时探测。',
+      sub: '网关、模型服务、账本与记忆流的实时探测，含活动与调用日志。',
       action: '深度诊断',
-    },
-    logs: {
-      eyebrow: '观察与审计',
-      title: '活动与调用日志',
-      sub: '每一轮交互的延迟、Token、执行事件与工具调用轨迹。',
-      action: '',
     },
     settings: {
       eyebrow: '首选项',
       title: '设置',
-      sub: '模型提供商、人设、记忆策略、权限与数据。',
+      sub: '模型提供商、人设、记忆策略、权限与数据，含安全与治理。',
       action: '',
     },
   };
@@ -160,6 +208,32 @@
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('theme') : null;
   let activeTheme = $state<Theme>(resolveTheme(loadConfig().theme, themeQuery));
   const isEssenceTheme = $derived(activeTheme === 'essence');
+  // 静态背景主题（规范 §8 增补）：场景层隐藏 + 渲染循环暂停；自定义上传背景
+  // 开启时同样盖掉场景（画面被静态图接管），暂停同样生效。
+  const isHeritageTheme = $derived(activeTheme === 'heritage-void');
+  // 自定义上传背景（规范 §8 增补④）：blob 持久化在 IndexedDB（bg-store.ts），
+  // 这里只持有其对象 URL；null = 未启用。加载/清除逻辑随设置面板接线。
+  let customBgUrl = $state<string | null>(null);
+  const isStaticScene = $derived(isStaticBgTheme(activeTheme) || customBgUrl !== null);
+
+  /** 自定义背景开关同步：开 = 从 IndexedDB 取图；取不到（换原点/清库）诚实回落关开关。 */
+  async function syncCustomBg(on: boolean): Promise<void> {
+    if (!on) {
+      if (customBgUrl) URL.revokeObjectURL(customBgUrl);
+      customBgUrl = null;
+      return;
+    }
+    const blob = await getCustomBg().catch(() => null);
+    if (blob) {
+      if (customBgUrl) URL.revokeObjectURL(customBgUrl);
+      customBgUrl = URL.createObjectURL(blob);
+    } else {
+      customBgUrl = null;
+      const back = {...config, customBg: false};
+      config = back;
+      saveConfig(back);
+    }
+  }
 
   // ---------- 开场动画（火之文明史序章）门禁 ----------
   // 【2026-08-22 封存】v1 审美验收未过（主人评：一言难尽），默认关闭不再自动播放，
@@ -188,8 +262,48 @@
   }
 
   // 初始视图：对话始终居中；工程/专注只切场景层，不再把主区换成页面层
-  let drawerSec = $state<DrawerId | null>(null);
-  let wbOpen = $state(false);
+  // 开发覆写 ?drawer=<id>&govtab=<tab>（与 ?mode= 同纪律：仅供无头截图/联调
+  // 直接落到某个抽屉与卷宗 tab，正常启动不受影响）。被移页面的旧深链由
+  // resolveLegacyDrawer 重定向到新位置（历史→对话列表、记忆/日记→工作台、
+  // 治理→设置 › 安全与治理、日志→状态），不落空页。
+  const drawerQuery =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('drawer') : null;
+  const govtabQuery =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('govtab') : null;
+  const initialShell = resolveLegacyDrawer(drawerQuery);
+  const initialDrawer: DrawerId | null =
+    initialShell && initialShell.kind === 'drawer' ? initialShell.id : null;
+  const initialSettingsSection =
+    initialShell && initialShell.kind === 'drawer' && initialShell.section === SETTINGS_SECURITY_SECTION
+      ? SETTINGS_SECURITY_SECTION
+      : 'appearance';
+  const initialWbSection: WorkbenchSection =
+    initialShell && initialShell.kind === 'workbench' ? initialShell.section : 'turn';
+  // govInitialTab 可变：状态条「守卫计数 → 守卫 tab」入口需要指令式落 tab；
+  // GovernanceView 的 initialTab 是挂载快照，配 govTabKey 重挂载生效。
+  let govInitialTab = $state<GovernanceTabId>(
+    govtabQuery === 'grants' || govtabQuery === 'guard' || govtabQuery === 'audit'
+      ? govtabQuery
+      : 'approvals',
+  );
+  let govTabKey = $state(0);
+  let drawerSec = $state<DrawerId | null>(initialDrawer);
+  let wbOpen = $state(initialShell?.kind === 'workbench');
+  let workbenchTurn = $state<WorkbenchTurn | null>(null);
+  // 工作台分区（侧栏收纳批）：turn=回合视图（默认）/ memory=记忆卷宗 / diary=他的日记。
+  let wbSection = $state<WorkbenchSection>(initialWbSection);
+  // 设置页落区：安全与治理 = 治理面板搬入处（侧栏收纳批）；'user' = 头像入口。
+  let settingsSection = $state<'appearance' | 'user' | typeof SETTINGS_SECURITY_SECTION>(
+    initialSettingsSection,
+  );
+  // 用户资料（设置 › 用户中心第一页）：暂只随应用存本地；侧栏头像实时跟随写入。
+  let profile = $state<UserProfile>(loadUserProfile());
+  $effect(() => {
+    const unsubscribe = subscribeUserProfile((next) => {
+      profile = next;
+    });
+    return unsubscribe;
+  });
   let openPanel = $state<'model' | 'ctx' | null>(null);
   let availableModels = $state<string[]>([]);
   let modelsLoading = $state(false);
@@ -232,8 +346,6 @@
   const personaList = $derived(
     config.personas && config.personas.length > 0 ? config.personas : DEFAULT_PERSONAS,
   );
-  let personaMenuOpen = $state(false);
-
   function setActivePersona(id: string): void {
     const target = personaList.find((p) => p.id === id);
     if (!target) return;
@@ -242,11 +354,28 @@
     config = next;
     saveConfig(next);
     agentRuntime = createAgentRuntime(next);
-    personaMenuOpen = false;
   }
 
   let conversations = $state<Conversation[]>(loadConversations());
+  // T0 聊天壳（00-PHILOSOPHY §3.1 消息列表是主页）：activeId 缺省为 null ——
+  // 打开应用第一屏 = 会话列表（「谁找我了」），进入会话才是消息流 + composer。
   let activeId = $state<string | null>(null);
+  // 会话级「待签」账本（SSE approval_required − approval_resolved 推导，真实信号）；
+  // 主页列表据此打金色待签标。applyApprovalEventToPending 不可变更新。
+  let pendingApprovalSessions = $state<ReadonlySet<string>>(new Set());
+  // 主页账本重拉节拍（refreshConnection / SSE 事件后 bump）。
+  let homeReloadKey = $state(0);
+  // 三栏主从（2026-09-22 主人拍板）：窄窗（≤980px）下列表栏折叠为覆盖层，
+  // 此开关只在窄窗生效（桌面端 .session-col 常驻，open class 无视觉效果）。
+  let sessionColOpen = $state(false);
+  // 背景显影区 caption（§8 增补①）：如实标注当前背景来源。
+  const bgCaption = $derived(
+    customBgUrl !== null
+      ? '自定义上传图片'
+      : `${themeLabel(activeTheme)} · ${isStaticBgTheme(activeTheme) ? '静态图' : '实时场景'}`,
+  );
+  // 从主页点开的 backend-only 会话：本机无消息副本，hero 区给诚实标注。
+  let ledgerHint = $state<{id: string; episodeCount: number} | null>(null);
   let draft = $state('');
   let busy = $state(false);
   let error = $state('');
@@ -269,9 +398,16 @@
   // 全局权限预设（设置页 tools 区写入 localStorage）接入新会话创建：
   // 新建会话/分支时读入 pendingPreset[conversationId]，首次 send 完成后静默 PATCH 到后端。
   const GLOBAL_PRESET_KEY = 'apeireth-permission-preset-default';
-  let pendingPreset = $state<Record<string, 'read_only' | 'standard' | 'full'>>({});
-  // getSessionSettings 成功过的会话 id —— pendingPreset 不覆盖已有后端 settings。
-  let sessionsWithSettings = $state<Record<string, boolean>>({});
+  /** 未投递的初始权限档：新会话在后端记录出现前先记下"该继承哪一档"。 */
+  type PendingPreset = {
+    permission_preset: SessionSettings['permission_preset'];
+    approval_remember?: boolean;
+  };
+  // 未投递的初始权限档（新会话继承全局默认 + 会话创建前的显式选档暂存）。
+  // 清除只发生在"投递成功"或"用户显式选档 PATCH 成功"——会话 settings 拉取成功
+  // 不能清：后端会在回合开始时按默认档自动建会话，"能读回 settings"不代表用户
+  // 设置过；拉取时清会在长回合的心跳重拉里把全局默认档冲掉（继承静默失效）。
+  let pendingPreset = $state<Record<string, PendingPreset>>({});
 
   // 斜杠菜单（输入框聚焦且首字符 "/" 时显示）。
   let composerFocused = $state(false);
@@ -305,15 +441,40 @@
 
   const currentSessionModel = $derived(sessionSettings?.model ?? config.model);
   // 会话头策略 active 态：permission_preset + approval_remember 共同决定。
+  // 后端 settings 未就绪（新会话首回合之前）时回落到未投递的初始档，选档芯片不撒谎。
   const activeApprovalStrategyId = $derived.by(() => {
-    const preset = sessionSettings?.permission_preset ?? 'standard';
-    const remember = sessionSettings?.approval_remember ?? false;
+    const pending = activeId ? pendingPreset[activeId] : undefined;
+    const preset = sessionSettings?.permission_preset ?? pending?.permission_preset ?? 'standard';
+    const remember = sessionSettings?.approval_remember ?? pending?.approval_remember ?? false;
     return (
       SESSION_PRESETS.find(
         (p) => p.permission_preset === preset && p.approval_remember === remember,
       )?.id ?? 'standard'
     );
   });
+
+  // ---- 对话栏位常驻控制（2026-10-11 主人反馈批：常驻输入栏布局）----
+  // 权限档位芯片的短标签（输入栏位空间紧，完整语义进弹层与 title）。
+  const PRESET_SHORT_LABEL: Record<string, string> = {
+    read_only: '只读',
+    standard: '标准·每次',
+    standard_remember: '标准·记住',
+    full: '完全放行',
+  };
+  const activePresetShortLabel = $derived(
+    PRESET_SHORT_LABEL[activeApprovalStrategyId] ?? '标准·每次',
+  );
+  const activePresetFull = $derived(
+    SESSION_PRESETS.find((p) => p.id === activeApprovalStrategyId),
+  );
+  let composerPresetOpen = $state(false);
+  async function pickComposerPreset(id: string): Promise<void> {
+    composerPresetOpen = false;
+    const preset = SESSION_PRESETS.find((p) => p.id === id);
+    if (preset && preset.id !== activeApprovalStrategyId) {
+      await selectSessionPreset(preset);
+    }
+  }
 
   function toEpochMs(value: unknown): number | undefined {
     if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
@@ -348,7 +509,7 @@
   function markPendingPreset(conversationId: string): void {
     const preset = readGlobalPreset();
     if (preset) {
-      pendingPreset = {...pendingPreset, [conversationId]: preset};
+      pendingPreset = {...pendingPreset, [conversationId]: {permission_preset: preset}};
     }
   }
 
@@ -360,25 +521,25 @@
   }
 
   /**
-   * 全局权限预设接入会话创建：在 send() 完成后（成功/失败，只要 backend 会话已创建）
-   * 静默 PATCH 一次。时机选在 finally 而非会话创建处，是因为 backend 在首个 chat 请求
-   * 之前未必有该会话记录（GET/PATCH settings 会 404），创建处就打补丁会空耗一次失败。
+   * 未投递初始档的落库缝：在 send() 完成后（成功/失败，只要 backend 会话已创建）
+   * 静默 PATCH 一次，走既有会话 settings 面。时机选在 finally 而非会话创建处，是因为
+   * backend 在首个 chat 请求之前未必有该会话记录（GET/PATCH settings 会 404），
+   * 创建处就打补丁会空耗一次失败。pendingPreset 只在投递成功或用户显式选档成功后
+   * 清除；读回 settings 不算数（那是后端自动建会话的默认档，不是用户设置）。
    */
   async function applyPendingPreset(conversationId: string): Promise<void> {
     const preset = pendingPreset[conversationId];
     if (!preset) return;
-    // 会话已有 settings（getSessionSettings 成功过）时不覆盖，避免冲掉后端真值。
-    if (sessionsWithSettings[conversationId]) {
-      clearPendingPreset(conversationId);
-      return;
-    }
     try {
-      const updated = await patchSessionSettings(config, conversationId, {
-        permission_preset: preset,
-      });
+      const patch: Partial<SessionSettings> = {
+        permission_preset: preset.permission_preset,
+      };
+      if (preset.approval_remember !== undefined) {
+        patch.approval_remember = preset.approval_remember;
+      }
+      const updated = await patchSessionSettings(config, conversationId, patch);
       // 成功一次后清除，避免后续 send 重复打补丁。
       clearPendingPreset(conversationId);
-      sessionsWithSettings = {...sessionsWithSettings, [conversationId]: true};
       if (activeId === conversationId) sessionSettings = updated;
     } catch {
       // 404 / 网络失败静默忽略；保留 pendingPreset，下次 send 后再试。
@@ -400,9 +561,8 @@
       const settings = await getSessionSettings(config, sessionId);
       if (activeId === sessionId) {
         sessionSettings = settings;
-        sessionsWithSettings = {...sessionsWithSettings, [sessionId]: true};
-        // 后端已有 settings，不再用全局预设覆盖。
-        clearPendingPreset(sessionId);
+        // 拉取只做按会话恢复展示，不撤销未投递的初始档：能读回 settings 只说明
+        // 后端会话已存在（回合开始会按默认档自动建），不代表用户设置过真值。
       }
     } catch {
       // 拉取失败静默降级：picker 回落到全局模型。
@@ -449,8 +609,21 @@
           notice = `该会话还有 ${inbox.length} 个此前产生的未决审批——策略变更不追溯，请先批准或拒绝；之后的请求即按「${strategy.label}」执行。`;
         }
       }
-    } catch {
-      if (activeId === sessionId) sessionSettings = prev;
+    } catch (caught) {
+      // 显式选档不得丢：后端会话还没建（首个回合之前 PATCH 必 404）时，这次选择
+      // 暂存为待投递初始档，会话一创建即按它落库，并保留乐观显示；其它失败（网络等）
+      // 保持回滚 + 暂存，下次 send 后由投递缝重试。
+      const sessionNotCreatedYet =
+        (caught as {status?: number})?.status === 404 ||
+        (caught as {code?: string})?.code === 'session_not_found';
+      pendingPreset = {
+        ...pendingPreset,
+        [sessionId]: {
+          permission_preset: strategy.permission_preset,
+          approval_remember: strategy.approval_remember,
+        },
+      };
+      if (!sessionNotCreatedYet && activeId === sessionId) sessionSettings = prev;
     }
   }
 
@@ -515,6 +688,11 @@
     return undefined;
   });
 
+  // 守卫通报分流（§3.2 琥珀卡）：回合被治理面拦停（当前唯一真实信号 =
+  // review_rejected，断点见 chat-shell/gateway-events.ts 头注）时在发生处
+  // 浮出通报卡，取代红色错误 banner；其余错误仍走 ErrorSolutionBanner。
+  const governanceNotice = $derived(classifyGovernanceNotice(lastError));
+
   type PendingApprovalWithDetails = CanonicalPendingApproval & {
     command_text?: string;
     arguments_summary?: string;
@@ -531,8 +709,17 @@
         argumentsSummary?: string;
         reason?: string;
         createdAt?: number;
+        sandbox?: string;
+        cwd?: string;
+        isolation?: string;
       };
     }
+    // W1 沙箱卷宗（2026-10-10）：批准前看见墙 —— 徽标 + 冻结 cwd + 隔离态。
+    const effective = p.effective_invocation;
+    const isolation =
+      effective?.filesystem_isolation && effective?.network_isolation
+        ? `文件 ${effective.filesystem_isolation} · 网络 ${effective.network_isolation}`
+        : undefined;
     return {
       title: '需要批准的操作',
       commandText: typeof p.command_text === 'string' ? p.command_text : undefined,
@@ -540,6 +727,9 @@
         typeof p.arguments_summary === 'string' ? p.arguments_summary : undefined,
       reason: p.governance_reason || undefined,
       createdAt: toEpochMs(p.created_at),
+      sandbox: typeof effective?.sandbox === 'string' ? effective.sandbox : undefined,
+      cwd: typeof effective?.cwd === 'string' ? effective.cwd : undefined,
+      isolation,
     };
   });
 
@@ -564,7 +754,8 @@
     agentRuntime = createAgentRuntime(config);
     localStorage.setItem(FIRST_RUN_DONE_KEY, '1');
     showFirstRun = false;
-    void pushProviderEnvAndRefresh(config);
+    // 首启推送失败不打断向导收尾（连接态由健康探测如实呈现）。
+    void pushProviderEnvAndRefresh(config).catch(() => {});
   }
 
   function skipFirstRun(): void {
@@ -637,6 +828,10 @@
 
   // 星尘条（规范 §5.3：memory_recall → 对话流中的「他想起了 N 段记忆」，脱敏，不含原文）。
   // 会话内瞬态：不持久化——星尘是「此刻」的痕迹，刷新即散。按会话 id 分桶。
+  // 蛰伏断点（0 装，00-PHILOSOPHY §9 / 契约 §8a）：现役 canonical 总线没有
+  // memory_recall 事件（仅 v1 legacy 伴随体有；MemoryRecallModule 的 prompt-overlay
+  // 召回路径不上 RuntimeEvent 总线）——卡片只接真实 presence 信号，无信号即蛰伏，
+  // 禁止假数据演示。presence_state 已落地（§8a）但不含召回计数，不构成此卡数据源。
   interface Stardust {
     id: string;
     found: number;
@@ -644,7 +839,6 @@
     ts: number;
   }
   let stardusts = $state<Record<string, Stardust[]>>({});
-  let lastDustAt = 0; // 非响应式记账：已消费到的 memory_recall receivedAt
 
   // 后端信号驱动的伴随体表现态 (严禁前端造假). Reconciled from master.
   const companionPresentation = $derived.by<CompanionPresentationState>(() => {
@@ -657,6 +851,21 @@
 
   const activeConversation = $derived(
     conversations.find((item) => item.id === activeId) || null,
+  );
+
+  // 主页置顶行「他」的状态词 —— 全部由前端真实状态推导（流式/审批/健康探测），
+  // 无假数据；「他停下了」用金（00-PHILOSOPHY §7：审批卡的金是因为他停下了）。
+  const himAttention = $derived(pendingCanonical !== null || pendingApprovals.length > 0);
+  const himStatus = $derived(
+    himAttention
+      ? '他停下了 · 等你签字'
+      : busy
+        ? '正在输出…'
+        : isReasoning
+          ? '思考中…'
+          : healthState === 'offline'
+            ? '离线'
+            : '在',
   );
 
   const activeMessages = $derived(activeConversation?.messages || []);
@@ -681,12 +890,8 @@
 
   // 他的卡片左缘光晕强度：由真实 presence 状态驱动（规范 §5.3 光晕随 bright 呼吸）；
   // 无数据时取静息微光 —— 金线本身不消失，消失的只是呼吸。
-  const presenceGlow = $derived.by(() => {
-    const cur = $presenceStore.current;
-    if (!cur) return 0.14;
-    const base = cur.mode === 'speaking' ? 0.5 : cur.mode === 'thinking' ? 0.32 : 0.16;
-    return Math.min(0.65, base + Math.max(0, cur.p) * 0.12);
-  });
+  // 公式与 heuristic_v0 增益收敛在 presence.ts derivePresenceGlow（契约 §8a）。
+  const presenceGlow = $derived(derivePresenceGlow($presenceStore.current));
 
   const healthLabel: Record<HealthState, string> = {
     connecting: '连接中…',
@@ -716,6 +921,8 @@
       messages: [],
       scope: 'global',
       model: config.model,
+      personaId: activePersona?.id,
+      personaName: activePersona?.name,
     };
     conversations = [conversation, ...conversations];
     activeId = conversation.id;
@@ -809,6 +1016,40 @@
     persist();
   }
 
+  /** 工具翻面：tool_completed/tool_failed（或审批决议）把对应 toolCall 从
+   *  「运行中/待批」翻成终态。此前 tool-result 事件被吞，工具永远显示「执行中」。 */
+  function finishMessageToolCall(
+    conversationId: string,
+    messageId: string,
+    toolCallId: string,
+    ok: boolean,
+    summary?: string,
+  ): void {
+    conversations = conversations.map((item) => {
+      if (item.id !== conversationId) return item;
+      return {
+        ...item,
+        updatedAt: Date.now(),
+        messages: item.messages.map((m) => {
+          if (m.id !== messageId || !m.toolCalls) return m;
+          const list = m.toolCalls.map((t) =>
+            t.id === toolCallId && (t.status === 'pending' || t.status === 'running')
+              ? {
+                  ...t,
+                  status: (ok ? 'succeeded' : 'failed') as ToolCallDetails['status'],
+                  endTime: Date.now(),
+                  durationMs: t.startTime ? Date.now() - t.startTime : undefined,
+                  resultSummary: summary,
+                }
+              : t,
+          );
+          return {...m, toolCalls: list};
+        }),
+      };
+    });
+    persist();
+  }
+
   /**
    * 他主动开口（legacy `[他说] …` 行，契约 §5.1；initiative/spoke 的完整话术由此送达）：
    * 按规范 §5.3 走与「他的消息」相同的卡片语言进入对话流。
@@ -825,13 +1066,13 @@
     });
   }
 
-  // 滚动位置监听与控制
+  // 滚动位置监听与控制（口径来自 chat-shell/scroll-policy.ts，Node 单测覆盖）
   function handleScroll() {
     if (!messagesContainer) return;
     const {scrollTop, scrollHeight, clientHeight} = messagesContainer;
     const distanceToBottom = scrollHeight - scrollTop - clientHeight;
-    isNearBottom = distanceToBottom < 80;
-    showScrollBottomBtn = distanceToBottom > 150;
+    isNearBottom = nearBottomNow(distanceToBottom);
+    showScrollBottomBtn = showJumpButton(distanceToBottom);
   }
 
   function scrollToBottom(smooth = false) {
@@ -842,18 +1083,46 @@
         behavior: 'smooth',
       });
     } else {
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      landAtBottom(messagesContainer);
     }
     isNearBottom = true;
     showScrollBottomBtn = false;
   }
 
   async function triggerAutoScroll() {
-    if (isNearBottom) {
+    // 流式追加/新卡片浮起：贴底才跟随；用户已上翻 = 原地不动（不拽回）。
+    if (scrollOnAppend(isNearBottom) === 'follow') {
       await tick();
       scrollToBottom(false);
     }
   }
+
+  // 打开/切换会话（含新建）→ 恒滚到底部（scrollOnOpen 契约：最新消息 + 输入框
+  // = 继续工作的位置）；上一屏停在哪不带走这次的第一眼。
+  let lastScrolledId: string | null = null;
+  $effect(() => {
+    const id = activeId;
+    if (id === lastScrolledId) return;
+    lastScrolledId = id;
+    const kind = untrack(() => {
+      const conv = conversations.find((c) => c.id === id);
+      return conv && conv.messages.length > 0 ? 'switch' : 'new';
+    });
+    if (scrollOnOpen(kind) !== 'bottom') return;
+    const container = messagesContainer;
+    if (!container) return;
+    // 瞬时落底（内测整改①）：同一渲染帧内同步一次赋值到位（landAtBottom 无
+    // await），首帧即贴底——不再渲染后排队异步定位（那会先见顶部再滚下来）。
+    const landedTop = landAtBottom(container);
+    isNearBottom = true;
+    showScrollBottomBtn = false;
+    // 首帧后同步复核一次：内容（图片/公式/长文）在首帧后长高时仍贴底；
+    // 仅当滚动位置没被用户动过才复核（上翻不拽回）。
+    requestAnimationFrame(() => {
+      if (messagesContainer !== container) return;
+      if (needsReland(container, landedTop)) landAtBottom(container);
+    });
+  });
 
   async function refreshConnection(): Promise<void> {
     isRefreshingHealth = true;
@@ -877,6 +1146,26 @@
         if (!sessionModels.length) void loadSessionModels();
         const guard = await fetchGuardStatus(config);
         guardStatus = 'error' in guard ? null : guard;
+        // 状态条两个窗口计数（能力门内取数；失败 = null = 诚实「读取失败」而非零）。
+        if (capabilityAvailable(capabilities, 'safety.guard.events.read')) {
+          const events = await fetchGuardEvents(config, GUARD_EVENTS_WINDOW);
+          if (Array.isArray(events)) {
+            guardEventCount = events.length;
+            guardEventLatestTs = events.reduce((max, e) => Math.max(max, e.timestamp_ms ?? 0), 0);
+            if (guardSeenLatestTs < 0) guardSeenLatestTs = guardEventLatestTs; // 首载基线不闪
+          } else {
+            guardEventCount = null;
+          }
+        } else {
+          guardEventCount = null;
+        }
+        if (capabilityAvailable(capabilities, 'memory.read')) {
+          memoryEpisodeCount = await fetchMemoryEpisodes(config, '', MEMORY_EPISODES_WINDOW)
+            .then((list) => list.length)
+            .catch(() => null);
+        } else {
+          memoryEpisodeCount = null;
+        }
         if (activeId) {
           if (!sessionSettings) void loadSessionSettings(activeId);
           const inbox = await fetchCanonicalApprovals(config, activeId).catch(() => []);
@@ -886,6 +1175,16 @@
             reason: item.governance_reason,
             status: 'pending' as const,
           }));
+          // 主页待签账本同步（当前会话的 inbox 真值；其他会话由 SSE 事件维护）。
+          const nextPending = new Set(pendingApprovalSessions);
+          if (inbox.length > 0) nextPending.add(activeId);
+          else nextPending.delete(activeId);
+          if (
+            nextPending.size !== pendingApprovalSessions.size ||
+            [...nextPending].some((id) => !pendingApprovalSessions.has(id))
+          ) {
+            pendingApprovalSessions = nextPending;
+          }
           // 自愈（2026-09-28 卡死根因类）：弹窗以"后端真值"为准——
           // 若弹窗持有的审批 id 已不在待审批列表（过期/已被处理），
           // 换成后端最新一条；后端说没有待审批就关掉陈旧弹窗。
@@ -907,12 +1206,20 @@
       }
     } finally {
       isRefreshingHealth = false;
+      // 主页账本节拍：健康探测/审批同步后让会话列表对齐一次后端账本。
+      homeReloadKey += 1;
     }
   }
 
   async function send(customText?: string): Promise<void> {
     const text = (customText ?? draft).trim();
     if (!text || busy) return;
+    // 回合遥测起点（真实测量）：回合结束（含错误/中断）时落一条。
+    const turnStartedAtMs = performance.now();
+    const turnUsageBox: {current: TurnUsage | null} = {current: null};
+    // 本回合工具调用计数（事件计数，真值）：会话累计器与单轮余量求差基数。
+    let turnToolCalls = 0;
+    turnTelemetry = null;
     const conversation = ensureConversation();
     const conversationId = conversation.id;
     const history = conversation.messages
@@ -978,11 +1285,17 @@
             appendReasoningDelta(conversationId, assistantMessage.id, event.text);
           } else if (event.type === 'tool-call') {
             isExecutingTool = true;
+            turnToolCalls += 1;
             updateMessageToolCall(conversationId, assistantMessage.id, event.toolCall);
             void triggerAutoScroll();
           } else if (event.type === 'tool-result') {
             isExecutingTool = false;
+            // 状态翻面：completed/failed 事件到达 → 对应工具从「运行中」翻成终态。
+            finishMessageToolCall(conversationId, assistantMessage.id, event.toolCallId, event.ok, event.summary);
             void triggerAutoScroll();
+          } else if (event.type === 'usage') {
+            // 流块随包回传的用量（逐字段后到非空者胜）攒成本回合快照。
+            turnUsageBox.current = mergeUsage(turnUsageBox.current, event.usage);
           } else if (event.type === 'approval-required') {
             pendingCanonical = event.pending;
           }
@@ -992,12 +1305,18 @@
         text: full || '(空响应)',
         streaming: false,
       });
+      void refreshWorkbenchTurn();
     } catch (caught) {
       if (caught instanceof ApprovalRequiredError) {
         pendingCanonical = caught.pending;
+        // 保留已生成文本 + "等待批准：<工具>": 不再整段覆盖模型已说的话。
+        const streamedText =
+          conversations
+            .find((item) => item.id === conversationId)
+            ?.messages.find((m) => m.id === assistantMessage.id)?.text ?? '';
         updateMessage(conversationId, assistantMessage.id, {
           streaming: false,
-          text: `等待批准：${caught.pending.tool_name}`,
+          text: withPendingMarker(streamedText || caught.pending.generated_text || '', caught.pending.tool_name),
         });
         return;
       }
@@ -1045,6 +1364,23 @@
         }
       }
     } finally {
+      // 回合结束（成功/错误/中断皆收束于此）：落一条真实测量的回合遥测——
+      // 用量只攒真实回包字段，模型名优先回包 model、缺省回落配置模型。
+      const turnDurationMs = Math.round(performance.now() - turnStartedAtMs);
+      turnTelemetry = {
+        usage: turnUsageBox.current,
+        durationMs: turnDurationMs,
+        model: turnUsageBox.current?.model || config.model || null,
+      };
+      // 会话级累计器（预算仪表）：本回合收束即并入当前会话 running totals
+      // （真值累加，未上报的位保持未知）。
+      sessionUsageByConv = {
+        ...sessionUsageByConv,
+        [conversationId]: accumulateTurnUsage(
+          sessionUsageByConv[conversationId] ?? emptySessionTotals(),
+          {usage: turnUsageBox.current, durationMs: turnDurationMs, toolCalls: turnToolCalls},
+        ),
+      };
       busy = false;
       isReasoning = false;
       isExecutingTool = false;
@@ -1058,6 +1394,15 @@
       await tick();
       void triggerAutoScroll();
     }
+  }
+
+  /** 保留已生成文本 + "等待批准：<工具>"（待批准收束的 UI 口径）：
+   *  剥掉上一版等待标记再挂新标记，让标记始终指向当前待批的工具，
+   *  模型已经说过的话不被整段覆盖。 */
+  function withPendingMarker(text: string, toolName: string | undefined): string {
+    const kept = (text || '').replace(/\n*\s*等待批准：[^\n]*\s*$/u, '').trimEnd();
+    const marker = `等待批准：${toolName || '工具'}`;
+    return kept ? `${kept}\n\n${marker}` : marker;
   }
 
   async function resolvePending(decision: 'approve' | 'reject'): Promise<void> {
@@ -1127,13 +1472,16 @@
   ): Promise<void> {
     if (result.kind === 'pending') {
       pendingCanonical = result.pending;
-      // 同步消息文案, 让"等待批准"始终指向当前待批的工具。
+      // 同步消息文案, 让"等待批准"始终指向当前待批的工具; 保留已生成文本。
       if (conversationId) {
         const conversation = conversations.find((item) => item.id === conversationId);
         const last = conversation?.messages.filter((m) => m.role === 'assistant').at(-1);
         if (last) {
           updateMessage(conversationId, last.id, {
-            text: `等待批准：${result.pending.tool_name ?? '工具'}`,
+            text: withPendingMarker(
+              last.text || result.pending.generated_text || '',
+              result.pending.tool_name,
+            ),
             streaming: false,
           });
         }
@@ -1149,13 +1497,46 @@
           text: result.text || (decision === 'approve' ? '工具执行完成' : '已拒绝该工具调用'),
           streaming: false,
         });
+        // 审批决议携带的 canonical events 此前被整包丢弃 → 工具永远「执行中」。
+        // 现在把它们应用到最近一条助手消息的 toolCalls（started 补录 / completed·failed 翻面）。
+        applyCanonicalEvents(result.events, {
+          onToolCall: (toolCall) => updateMessageToolCall(conversationId, last.id, toolCall),
+          onToolResult: (toolCallId, ok, summary) =>
+            finishMessageToolCall(conversationId, last.id, toolCallId, ok, summary),
+        });
+        // 拒绝且无 events 回包时，诚实标注待批工具为「已取消」，不停在「执行中」。
+        if (decision === 'reject' && !result.events?.length && last.toolCalls?.length) {
+          conversations = conversations.map((item) => {
+            if (item.id !== conversationId) return item;
+            return {
+              ...item,
+              messages: item.messages.map((m) =>
+                m.id !== last.id || !m.toolCalls
+                  ? m
+                  : {
+                      ...m,
+                      toolCalls: m.toolCalls.map((t) =>
+                        t.status === 'pending' || t.status === 'running'
+                          ? {...t, status: 'cancelled' as const, endTime: Date.now()}
+                          : t,
+                      ),
+                    },
+              ),
+            };
+          });
+          persist();
+        }
       }
     }
+    if (wbOpen) void refreshWorkbenchTurn();
   }
 
-  /** X / 遮罩：仅关闭弹窗，不做业务决策（区别于"拒绝"按钮）。 */
+  /** X / Esc：仅收起待签文书为 slim 金线，不做业务决策（区别于"拒绝"按钮）。
+   *  收起选择按 approval_id 记忆：自愈重拉不打扰，新文书自动重新浮起。 */
+  let approvalDockCollapsed = $state(false);
+  let lastApprovalDocId = $state('');
   function dismissPendingApproval(): void {
-    pendingCanonical = null;
+    approvalDockCollapsed = true;
   }
 
   function describeCaughtSafe(caught: unknown): string {
@@ -1163,6 +1544,12 @@
     return String(caught);
   }
 
+  /**
+   * 打断当前回合（前端近似，gap-plan §5：后端无 POST /v1/turn/interrupt）。
+   * 语义 = 「不再听他说」：abort 只切断本地流式读取与输入复位；
+   * 后端回合仍跑完，barge_in 的 interrupt 事件广播暂无 HTTP 面可达。
+   * 消息侧以 message.aborted 标记此语义（MessageContent 渲染诚实注记）。
+   */
   function stop(): void {
     agentRuntime.abort();
   }
@@ -1231,7 +1618,7 @@
     persist();
   }
 
-  function newConversation(): void {
+  function newConversation(opts: {askWorkspace?: boolean} = {}): void {
     const now = Date.now();
     const conversation: Conversation = {
       id: crypto.randomUUID(),
@@ -1241,6 +1628,8 @@
       messages: [],
       scope: 'global',
       model: config.model,
+      personaId: activePersona?.id,
+      personaName: activePersona?.name,
     };
     conversations = [conversation, ...conversations];
     activeId = conversation.id;
@@ -1248,7 +1637,15 @@
     drawerSec = null;
     persist();
     // 每个新会话自动弹出工作区选择 (2026-10-06 用户需求): 不选则跟随全局默认.
-    void openWorkspacePicker();
+    // 头部「⊕ 新会话」是快速通道（askWorkspace: false）——不弹选择器，直接
+    // 沿用当前工作区并把焦点交还输入框；其余新建入口保持原询问。
+    if (opts.askWorkspace !== false) void openWorkspacePicker();
+  }
+
+  /** 会话头「⊕ 新会话」：新开会话 + 焦点进输入框（继续工作的位置）。 */
+  function startNewSession(): void {
+    newConversation({askWorkspace: false});
+    void tick().then(() => composerTextarea?.focus());
   }
 
   /** 打开工作区选择器: 刷新候选与当前值. */
@@ -1272,6 +1669,8 @@
   function openConversation(id: string): void {
     activeId = id;
     drawerSec = null;
+    sessionColOpen = false; // 窄窗覆盖层：选中即收（桌面端无视觉效果）
+    if (wbOpen) void refreshWorkbenchTurn();
     // 会话级工作区随切换生效: 与侧车当前根不同则重根 (supervisor 快速重启).
     const conv = conversations.find((item) => item.id === id);
     if (conv?.workspace) {
@@ -1293,10 +1692,148 @@
     if (conv) updateConversation(id, {archived: !conv.archived});
   }
 
-  function deleteConversation(id: string): void {
-    conversations = conversations.filter((item) => item.id !== id);
-    if (activeId === id) activeId = null;
-    persist();
+  // ---------- T0 壳：主页（会话列表）导航 ----------
+  /** 回到会话列表主页（同类即时通讯范式：消息列表是主页，会话可返回）。 */
+  function backToList(): void {
+    activeId = null;
+    ledgerHint = null;
+    drawerSec = null;
+    homeReloadKey += 1; // 回主页即对齐一次他的账本
+  }
+
+  /** 主页置顶行「他」：进入最近的进行中的会话，没有则新建。 */
+  function openHim(): void {
+    const latest = conversations.filter((c) => !c.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    if (latest) openConversation(latest.id);
+    else newConversation();
+  }
+
+  /**
+   * 主页点开一行会话：
+   * - 本地有副本 → 直接进入；
+   * - backend-only（本机无消息副本）→ 以同一 session id 建本地壳（之后的发言
+   *   后端会续上该会话账本），并在 hero 区诚实标注内容在他的账本里。
+   */
+  function openHomeSession(item: HomeSessionItem): void {
+    const local = conversations.find((c) => c.id === item.id);
+    if (!local) {
+      const now = Date.now();
+      const conv: Conversation = {
+        id: item.id,
+        title: item.title,
+        createdAt: item.lastActiveAt || now,
+        updatedAt: item.lastActiveAt || now,
+        messages: [],
+        scope: 'global',
+        model: config.model,
+        personaId: activePersona?.id,
+        personaName: activePersona?.name,
+      };
+      conversations = [conv, ...conversations];
+      persist();
+      if (item.origin === 'backend' && item.messageCount > 0) {
+        ledgerHint = {id: item.id, episodeCount: item.messageCount};
+      }
+      // 重开既有后端会话不 mark 初始档：它已有自己的持久档（按会话恢复即真值），
+      // 全局默认档只属于新建会话，不得覆盖这里读回的档。
+    } else {
+      ledgerHint = null;
+    }
+    openConversation(item.id);
+  }
+
+  // ---- 会话真删链（内测反馈批①）：乐观移除 → 持久 → 后端真删 → 失败即回滚+亮帧 ----
+  // 病灶：删除只动本地账，后端账本行经归并立刻补回来（"像没删"、重启复活）。
+  // 链上三段缺一不可（lib/chat-shell/session-delete.ts 纯逻辑，Node 单测覆盖）。
+  /** 已确认删除的会话 id（仅内存态）：后端陈账重拉间隙不允许"删了又回来"。 */
+  let deletedSessionIds = $state<ReadonlySet<string>>(new Set());
+  /** 删除失败错误帧：立即亮帧 + 列表已回滚（不吞错、不粉饰）。 */
+  let actionError = $state<{message: string; title: string; solution: string} | null>(null);
+
+  async function deleteConversation(id: string): Promise<void> {
+    const wasActive = activeId === id;
+    deletedSessionIds = new Set(deletedSessionIds).add(id); // 乐观排除后端陈账行
+    if (wasActive) activeId = null;
+    const outcome = await deleteSession(id, {
+      list: () => conversations,
+      setList: (next) => {
+        conversations = next;
+      },
+      persist,
+      deleteRemote: (sid) => deleteBackendSession(config, sid),
+      onError: (caught) => {
+        const frame = describeError(caught);
+        actionError = {
+          message: describeCaughtSafe(caught),
+          title: frame.title,
+          solution: frame.solution,
+        };
+      },
+    });
+    if (outcome.ok) {
+      // 列表刷新：对齐一次他的账本（重拉后陈账行自然消失）。
+      markSessionsCleared([id]); // 会话已清除登记（MemoryView 悬空引用占位）
+      homeReloadKey += 1;
+      return;
+    }
+    // 失败即回滚：乐观排除一并撤销，列表回到删除前的样子。
+    const restored = new Set(deletedSessionIds);
+    restored.delete(id);
+    deletedSessionIds = restored;
+    if (wasActive) activeId = id;
+  }
+
+  // ---- 会话清理双档（session-cleanup-options-spec §1）：① 近期 / ② 全部 ----
+  // 两档都真删后端账本行（防复活）、都保留长期记忆；失败如实亮帧不谎报清空。
+  async function purgeConversations(scope: PurgeScope): Promise<void> {
+    // 后端账本先拉后清：拉不到 = 整体取消（清理链不接受"跳过后端只清本地"）。
+    let backend: Awaited<ReturnType<typeof fetchBackendSessions>> | null = null;
+    try {
+      backend = await fetchBackendSessions(config);
+    } catch (caught) {
+      const frame = describeError(caught);
+      actionError = {
+        message: describeCaughtSafe(caught),
+        title: frame.title,
+        solution: frame.solution,
+      };
+      return;
+    }
+    const outcome = await purgeSessions(scope, {
+      list: () => conversations,
+      setList: (next) => {
+        conversations = next;
+      },
+      persist,
+      backend: () => backend,
+      deleteRemote: (sid) => deleteBackendSession(config, sid),
+      clearCallLogs: (target) => {
+        if (target === 'all') clearCallLogs();
+        else clearCallLogsFor(target);
+      },
+      onError: (caught) => {
+        const frame = describeError(caught);
+        actionError = {
+          message: describeCaughtSafe(caught),
+          title: frame.title,
+          solution: frame.solution,
+        };
+      },
+    });
+    if (outcome.deletedIds.length > 0) {
+      // 真删成的登记（含部分失败档）：乐观排除陈账行 + MemoryView 占位。
+      deletedSessionIds = new Set([...deletedSessionIds, ...outcome.deletedIds]);
+      markSessionsCleared(outcome.deletedIds);
+      if (activeId && outcome.deletedIds.includes(activeId)) activeId = null;
+      homeReloadKey += 1; // 列表刷新：对齐一次他的账本
+    }
+    if (outcome.ok) {
+      notice =
+        outcome.deletedIds.length > 0
+          ? `已清除 ${outcome.deletedIds.length} 个会话的对话记录${scope === 'all' ? '（含调用日志）' : ''}。长期记忆不受影响。`
+          : '没有需要清除的会话。';
+    }
+    // 失败档：清理链已还原失败项并经 onError 亮帧——不另发"成功"通知，不谎报。
   }
 
   function applyQuickPrompt(promptText: string) {
@@ -1315,6 +1852,25 @@
   const drawerMeta = $derived(drawerSec ? DRAWER_META[drawerSec] : null);
   const modelLetter = $derived(
     (config.model.match(/[A-Za-z]/)?.[0] ?? 'M').toUpperCase(),
+  );
+  // 本回合遥测（内测整改③）：回合结束落一条真实测量；显示串/详情串由
+  // chat-shell/turn-telemetry.ts 纯函数产出，无数据位诚实「—」，不编数。
+  let turnTelemetry = $state<{
+    usage: TurnUsage | null;
+    durationMs: number | null;
+    model: string | null;
+  } | null>(null);
+  // 会话级累计器（预算仪表）：按会话记 running totals，切换会话互不串账；
+  // 从未上报过的位保持未知（显示「—」），不拿 0 顶数。
+  let sessionUsageByConv = $state<Record<string, SessionUsageTotals>>({});
+  const sessionUsage = $derived(sessionUsageByConv[activeId ?? ''] ?? emptySessionTotals());
+  // 预算余量摘要（对生效上限求余量；无上限维度显「—」）：hover 详情补一行，
+  // 与设置页「预算与配额」仪表同一份纯函数取数。
+  const budgetSummary = $derived(
+    budgetRemainingSummary(budgetRemainingRows(sessionUsage, effectiveBudget(config.capabilities))),
+  );
+  const turnTelemetryView = $derived(
+    formatTurnTelemetry({...turnTelemetry, budgetRemaining: budgetSummary}),
   );
   const hdState = $derived(
     busy
@@ -1356,9 +1912,41 @@
     drawerSec = null;
   }
 
+  /** 侧栏左上头像 = 用户中心入口：无条件落设置 › 用户中心（第一页）。 */
+  async function openUserCenter(): Promise<void> {
+    settingsSection = 'user';
+    if (drawerSec === 'settings') {
+      // 设置已开着、内部可能翻到了别的分区：重挂载抽屉，保证落区快照生效。
+      drawerSec = null;
+      await tick();
+    }
+    openDrawer('settings');
+  }
+
+  /** 壳层统一导航：命令面板 nav.* 与旧深链重定向共用一张目标表（lib/shell-nav.ts）。 */
+  function applyShellTarget(target: ShellTarget): void {
+    if (target.kind === 'chat') {
+      closeDrawer();
+      backToList();
+      return;
+    }
+    if (target.kind === 'workbench') {
+      drawerSec = null;
+      wbSection = target.section;
+      if (!wbOpen) toggleWb(true);
+      return;
+    }
+    settingsSection =
+      target.id === 'settings' && target.section === SETTINGS_SECURITY_SECTION
+        ? SETTINGS_SECURITY_SECTION
+        : 'appearance';
+    openDrawer(target.id);
+  }
+
   function toggleRail(id: 'chat' | DrawerId): void {
     if (id === 'chat') {
-      closeDrawer();
+      // 「对话」= 往来主页（00-PHILOSOPHY §3.1：消息列表是主页）
+      backToList();
       return;
     }
     if (drawerSec === id) closeDrawer();
@@ -1366,12 +1954,24 @@
   }
 
   function onDrawerAction(): void {
-    if (drawerSec === 'history') newConversation();
-    else if (drawerSec === 'status') showRuntimeModal = true;
+    if (drawerSec === 'status') showRuntimeModal = true;
   }
 
   function toggleWb(force?: boolean): void {
     wbOpen = force === undefined ? !wbOpen : force;
+    if (wbOpen) void refreshWorkbenchTurn();
+  }
+
+  /** 工作台后端真值（/v1/workbench/turn）：工具终态、代理状态。
+   *  打开工作台/切换会话/回合结束/审批决议后拉取，让本地持久化里
+   *  卡在「运行中」的历史 toolCall 按后端真值翻面。 */
+  async function refreshWorkbenchTurn(): Promise<void> {
+    if (!activeId) {
+      workbenchTurn = null;
+      return;
+    }
+    const result = await fetchWorkbenchTurn(config, activeId).catch(() => null);
+    workbenchTurn = result && 'tools' in result ? result : null;
   }
 
   function closePanels(): void {
@@ -1413,12 +2013,180 @@
     updateComposerMenu(el.value);
   }
 
+  // ---- Ctrl+K 命令面板（00-PHILOSOPHY §6 原则 3「一个入口」；gap-plan §4.3 P0）----
+  // 注册表驱动：命令是数据，执行闭包在此处注入；筛选/别名/最近优先的纯逻辑在
+  // lib/commands/registry.ts（Node 单测覆盖）。最近榜 localStorage 诚实持久化。
+  let paletteOpen = $state(false);
+  let commandRecentIds = $state<string[]>(loadRecentIds());
+
+  /** 主题切换（与 SettingsView onSave 同路径：persist + applyDocument）。 */
+  function setTheme(next: Theme): void {
+    if (next === activeTheme) return;
+    config = {...config, theme: next};
+    saveConfig(config);
+    activeTheme = resolveTheme(next, themeQuery);
+    applyDocumentTheme(activeTheme);
+  }
+
+  const THEME_PINYIN: Record<Theme, string> = {
+    origin: 'yuanchu',
+    noir: 'chunhei',
+    'heritage-void': 'yichan',
+    essence: 'essence',
+    night: 'shenkong',
+    day: 'riguang',
+    paper: 'zhimian',
+    ocean: 'shenhai',
+    forest: 'linhai',
+    starship: 'xingjian',
+  };
+
+  interface PaletteCommand extends CommandItem {
+    run: () => void | Promise<void>;
+  }
+
+  /** nav.* 命令执行闭包：目标来自 NAV_COMMAND_TARGETS（与旧深链重定向同一张表）。 */
+  function navRun(id: string): () => void {
+    return () => {
+      const target = NAV_COMMAND_TARGETS[id];
+      if (target) applyShellTarget(target);
+    };
+  }
+
+  const paletteCommands = $derived.by<PaletteCommand[]>(() => {
+    const approveReason = !capabilities
+      ? '运行时能力清单未到达'
+      : !capabilityAvailable(capabilities, 'permissions.approval.resolve')
+        ? (capabilityUnavailableReason(capabilities, 'permissions.approval.resolve') ??
+          '当前运行时不支持审批签批')
+        : approvalBusy
+          ? '上一笔签批仍在路上'
+          : !pendingCanonical
+            ? '当前没有等待签字的文书'
+            : undefined;
+    return [
+      // —— 导航：侧栏四件 + 被移页面的新家（历史入口已随侧栏收纳撤除，
+      //    会话列表即历史；nav.* 目标表见 lib/shell-nav.ts）——
+      {id: 'nav.chat', title: '打开对话', aliases: ['duihua', 'chat', 'dh'], group: '导航',
+        run: navRun('nav.chat')},
+      {id: 'nav.tools', title: '打开工具', aliases: ['gongju', 'tools', 'gj'], group: '导航',
+        run: navRun('nav.tools')},
+      {id: 'nav.status', title: '打开状态', aliases: ['zhuangtai', 'status'], group: '导航',
+        hint: '含活动与调用日志',
+        run: navRun('nav.status')},
+      {id: 'nav.settings', title: '打开设置', aliases: ['shezhi', 'settings', 'sz'], group: '导航',
+        run: navRun('nav.settings')},
+      {id: 'nav.memory', title: '打开记忆卷宗', aliases: ['jiyi', 'memory', 'jy'], group: '导航',
+        hint: '工作台 › 记忆卷宗',
+        run: navRun('nav.memory')},
+      {id: 'nav.diary', title: '打开他的日记', aliases: ['riji', 'diary', 'rj'], group: '导航',
+        hint: '工作台 › 他的日记 · 纸面档案调 · 空态契约页',
+        run: navRun('nav.diary')},
+      {id: 'nav.governance', title: '打开安全与治理', aliases: ['zhili', 'governance', 'gov', 'zl'], group: '导航',
+        hint: '设置 › 安全与治理（审批 / 授权 / 守卫 / 审计）',
+        run: navRun('nav.governance')},
+      {id: 'nav.logs', title: '打开活动与调用日志', aliases: ['rizhi', 'logs', 'rz', 'activity'], group: '导航',
+        hint: '状态 › 活动与调用日志',
+        run: navRun('nav.logs')},
+      // —— 主题：现役主题（THEME_CATALOG 目录驱动，2026-09-23 起三套）——
+      ...THEME_CATALOG.map((t) => ({
+        id: `theme.${t.id}`,
+        title: `主题：${t.label}`,
+        aliases: ['zhuti', 'theme', t.id, THEME_PINYIN[t.id]],
+        group: '主题',
+        hint: activeTheme === t.id ? `当前 · ${t.desc}` : t.desc,
+        run: () => setTheme(t.id),
+      })),
+      // —— 动作 ——
+      {id: 'act.new', title: '新建会话', aliases: ['xinjian', 'new', 'xj'], group: '动作',
+        run: () => newConversation()},
+      {id: 'act.reconnect', title: '健康检查重连', aliases: ['chonglian', 'reconnect', 'health', 'cl'], group: '动作',
+        run: () => refreshConnection()},
+      {id: 'act.approve', title: '批准当前待签文书', aliases: ['pizhun', 'approve', 'pz'], group: '动作',
+        hint: pendingCanonical ? `待签：${pendingCanonical.tool_name}` : undefined,
+        disabledReason: approveReason,
+        run: () => resolvePending('approve')},
+      {id: 'act.interrupt', title: '打断当前回合', aliases: ['daduan', 'interrupt', 'stop', 'dd'], group: '动作',
+        hint: busy ? '不再听他说完（后端回合仍会跑完）' : undefined,
+        disabledReason: busy ? undefined : '当前没有进行中的回合',
+        run: () => stop()},
+    ];
+  });
+
+  function executePaletteCommand(id: string): void {
+    const cmd = paletteCommands.find((c) => c.id === id);
+    if (!cmd || cmd.disabledReason) return; // 置灰命令不入账不执行（0 装）
+    paletteOpen = false;
+    commandRecentIds = pushRecentId(commandRecentIds, id);
+    saveRecentIds(commandRecentIds);
+    void cmd.run();
+  }
+
+  // ---- 底部状态条（余光投影；00-PHILOSOPHY §2 / gap-plan §4.3 P1）----
+  // 四指标推导纯逻辑在 lib/statusbar.ts（Node 单测覆盖）；此处只接线取数与点击。
+  // 窗口口径：guard events limit 50 / memory episodes limit 100，端点不供总数——
+  // 满窗显示「N+」，拉取失败 = null（诚实「读取失败」，不是零）。
+  const GUARD_EVENTS_WINDOW = 50;
+  const MEMORY_EPISODES_WINDOW = 100;
+  let guardEventCount = $state<number | null>(null);
+  let guardEventLatestTs = $state(0);
+  /** 首载基线前为 -1：首载不闪「新事件」；点守卫计数即视为已读。 */
+  let guardSeenLatestTs = $state(-1);
+  let memoryEpisodeCount = $state<number | null>(null);
+
+  const sbSse = $derived(
+    sseIndicator(
+      sseSourceOf({
+        // 清单未到达/离线 = 未知（null），不是缺席——按连接事实报。
+        supported:
+          capabilities === null ? null : capabilityAvailable(capabilities, 'activity.sse'),
+        connected: $presenceStore.connected,
+        simulated: $presenceStore.simulated,
+      }),
+    ),
+  );
+  const sbTurn = $derived(turnIndicator(busy));
+  const sbGuard = $derived(
+    guardIndicator({
+      supported: capabilityAvailable(capabilities, 'safety.guard.events.read'),
+      count: guardEventCount,
+      limit: GUARD_EVENTS_WINDOW,
+      hasNew: guardSeenLatestTs >= 0 && guardEventLatestTs > guardSeenLatestTs,
+    }),
+  );
+  const sbMemory = $derived(
+    memoryIndicator({
+      supported: capabilityAvailable(capabilities, 'memory.read'),
+      count: memoryEpisodeCount,
+      limit: MEMORY_EPISODES_WINDOW,
+    }),
+  );
+
+  /** 指令式落「设置 › 安全与治理」某 tab：治理面板搬进设置后仍守同一入口语义。 */
+  function openGovernanceTab(tab: GovernanceTabId): void {
+    govInitialTab = tab;
+    govTabKey += 1;
+    applyShellTarget(NAV_COMMAND_TARGETS['nav.governance']);
+  }
+
+  function handleSbGuardClick(): void {
+    guardSeenLatestTs = guardEventLatestTs; // 看过即不新
+    openGovernanceTab('guard');
+  }
+
   function handleChromeKey(e: KeyboardEvent): void {
     handleModeKeydown(e);
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      paletteOpen = !paletteOpen;
+      return;
+    }
+    // 面板开着时 Esc/方向键归面板管——不穿到抽屉/文书层。
+    if (paletteOpen) return;
     if (e.key === 'Escape') {
       closePanels();
       closeDrawer();
-      // 审批卡：Escape 仅关闭（与「拒绝」按钮分离，不做业务决策）。
+      // 待签文书：Escape 仅收起为 slim 金线（与「拒绝」按钮分离，不做业务决策）。
       if (pendingCanonical) dismissPendingApproval();
     }
   }
@@ -1439,32 +2207,20 @@
             : '连接中',
   );
 
-  // 星尘条：监听 presenceStore.recentEvents，新 memory_recall 事件落进当前会话流。
-  // recentEvents 已由 store 按 (type, at) 去重；此处按 receivedAt 水位线消费，幂等。
+  // 星尘条：蛰伏断点（0 装，00-PHILOSOPHY §9 / 契约 §8a）。
+  // 旧实现消费 presenceStore.recentEvents 里的 memory_recall 事件；presence_state 契约
+  // （§8a）不含召回计数，v0 总线上不存在任何星尘数据源——此 effect 整体退役。
+  // Stardust 接口与 flowItems 归并保留：渲染空列表，不假数据演示；待契约给出
+  // 召回信号后在此复活。
+
+  // 待签文书卡（§3.2/§6.4）：新文书（approval_id 变化）自动重新浮起并滚动到发生处；
+  // 同一文书保持用户的收起选择（自愈重拉 inbox 不打扰）。
   $effect(() => {
-    const records = $presenceStore.recentEvents;
-    const fresh: Stardust[] = [];
-    let maxAt = lastDustAt;
-    for (const r of records) {
-      if (r.event.type !== 'memory_recall') continue;
-      if (r.receivedAt <= lastDustAt) continue;
-      maxAt = Math.max(maxAt, r.receivedAt);
-      fresh.push({
-        id: `dust-${r.receivedAt}`,
-        found: r.event.found,
-        keywords: Array.isArray(r.event.keywords) ? r.event.keywords : [],
-        ts: r.receivedAt,
-      });
-    }
-    if (!fresh.length) return;
-    lastDustAt = maxAt;
-    untrack(() => {
-      const convId = activeId;
-      if (!convId) return; // 无活动会话时不落（边缘：事件发生在对话外）
-      const list = stardusts[convId] ?? [];
-      stardusts = {...stardusts, [convId]: [...list, ...fresh]};
-      void triggerAutoScroll();
-    });
+    const id = pendingCanonical?.approval_id ?? '';
+    if (id === lastApprovalDocId) return;
+    lastApprovalDocId = id;
+    approvalDockCollapsed = false;
+    if (id) void triggerAutoScroll();
   });
 
   // 会话切换 / 首次激活时拉取会话级设置（失败静默降级，picker 回落全局模型）。
@@ -1501,6 +2257,9 @@
    * backend exactly once when anything changed, which allocates a fresh
    * port — so after applying we re-adopt the endpoint before probing.
    * No-op in web mode.
+   *
+   * Rejects when the IPC apply fails: the settings capability toggles apply
+   * on click and roll back on failure, so the error must reach the caller.
    */
   async function pushProviderEnvAndRefresh(cfg: ApeirethConfig): Promise<void> {
     if (!isDesktop()) {
@@ -1508,12 +2267,10 @@
       return;
     }
     const provider = backendProviderEnvFromConfig(cfg);
-    if (!provider) {
-      void refreshConnection();
-      return;
-    }
     const capabilities = capabilityEnvFromConfig(cfg.capabilities);
-    const endpoint = await applyBackendConfig(provider, capabilities);
+    // Provider may be absent (nothing configured yet) while capability
+    // toggles still need to reach the sidecar — either part is optional.
+    const endpoint = await applyBackendConfigOrThrow(provider, capabilities);
     if (endpoint && endpoint !== cfg.baseUrl) {
       config = {...cfg, baseUrl: endpoint};
       agentRuntime = createAgentRuntime(config);
@@ -1522,9 +2279,41 @@
     void refreshConnection();
   }
 
+  // presence 频道主订阅（波次 2 壳层整合点）：EventSource + 指数退避 + SIM 纪律。
+  // ⑤ 修复：原在 onMount 同步门控，mount 时清单恒 null → 订阅从不启动，
+  // presenceStore.connected/simulated 成死值（§5.4 SIM 纪律空转，状态条恒误报
+  // 「重连中」——静是默认的反面）。改为清单真正到达且声明 activity.sse 可用时
+  // 启动（endpoint adopt 先于首次清单拉取完成，此刻 config.baseUrl 已是真端口）。
+  // ⑤ 二轮修复（内测"徽章常显断连"根因）：先前接线用 presenceStarted 一次性闩 +
+  // 订阅器把 URL 冻在首次建连——桌面侧车每次重启换端口后，重试永远拨旧端口，
+  // 事件链卡死在未连接（聊天不受影响，因为每个 HTTP 调用都现场取 baseUrl）。
+  // 现改为按端点订阅：baseUrl 变即整链重建；徽章点击 = 立即重建订阅（说到做到）。
+  let unsubscribePresence: (() => void) | null = null;
+  /** 当前订阅所用端点（非响应式闩：只用于判断要不要重建）。 */
+  let presenceBaseUrl = '';
+  function restartPresenceSubscription(): void {
+    unsubscribePresence?.();
+    unsubscribePresence = null;
+    presenceBaseUrl = config.baseUrl;
+    unsubscribePresence = subscribePresence(config.baseUrl);
+  }
+  $effect(() => {
+    const base = config.baseUrl;
+    const ready =
+      capabilitySupported(capabilities, 'activity.sse') &&
+      capabilityAvailable(capabilities, 'activity.sse');
+    if (ready && base !== presenceBaseUrl) restartPresenceSubscription();
+  });
+
   onMount(() => {
+    // 全局滚轮路由（lib/wheel-scroll.ts）：死区滚轮直达滚动面板——小窗模式下
+    // 设置子导航列/聊天区留白等处滚轮失效的修复（CDP 实测见 scripts/wheel-scroll-probe.mjs）。
+    const disposeWheelRouter = initWheelRouter();
     applyDocumentTheme(activeTheme);
-    if (!activeId && conversations.length) activeId = conversations[0].id;
+    applyDocumentAccent(resolveAccent(config.accent));
+    // 自定义背景（§8 增补④）：开关开着就从 IndexedDB 取图；取不到 = 诚实回落关开关
+    if (config.customBg) void syncCustomBg(true);
+    // T0 壳（§3.1）：不再自动进入最近会话 —— 第一屏 = 会话列表（谁找我了）。
     if (window.innerWidth < 1180) wbOpen = false;
     // 首启向导：桌面模式下未完成过向导时先引导选 provider / 填 key。
     if (isDesktop() && !localStorage.getItem(FIRST_RUN_DONE_KEY)) {
@@ -1545,6 +2334,10 @@
       }
       await adoptSupervisorEndpoint();
       void refreshConnection();
+      // 工作区默认回退（2026-10-11 批）：启动即取侧车当前根作主页分组默认值——
+      // 旧会话（未戳工作区）归入当前项目组；此前该值只在工作区选择器打开时加载，
+      // 主页分组回退因此恒为空（真机实证的漏接线）。
+      currentWorkspace = (await getWorkspaceDir()) ?? '';
     })();
 
     // 舰内时刻心跳：无 ?hour= 覆写时每 30s 对齐本地时钟（照明过渡由 CSS/rAF 慢性子承担）
@@ -1555,26 +2348,41 @@
           }, 30000)
         : null;
 
-    // Capability gate for the two /v1/apeireth/events subscribers below.
+    // Capability gate for the legacy /v1/apeireth/events subscriber below.
     // subscribeCompanionEvents retries on an exponential backoff loop that
     // never gives up, so gate it on both static support and live availability.
+    // ⚠ 诚实标注（⑤ 发现，保持现状待拍板）：mount 时 capabilities 恒为 null
+    // （清单异步拉取），此门永假——legacy 伴随体订阅实际从未启动。点亮它会
+    // 同时唤醒审批推送/[他说]主动开口等整条行为链，超出状态条任务 scope。
     const eventStreamSupported =
       capabilitySupported(capabilities, 'activity.sse') &&
       capabilityAvailable(capabilities, 'activity.sse');
 
-    // presence 频道主订阅（波次 2 壳层整合点）：EventSource + 指数退避 + SIM 纪律。
-    // 与下方 legacy 订阅并存是设计内行为——store 按 (type, at) 去重（presence.ts dedupKey）。
-    const unsubscribePresence = eventStreamSupported
-      ? subscribePresence(config.baseUrl)
-      : () => {};
-
     // 订阅 SSE 伴随体事件通道 (主动涌现与反思通知). Reconciled from master.
-    // G5 修复: 频道现为 legacy 文本行 + presence JSON 行共流 (契约 §5.1/§8.1) —
-    // 先经 presence 分流: JSON 行进 presenceStore, 仅 legacy 文本行继续下行。
+    // 契约 §8a：presence_state 具名帧由 subscribePresence 独立订阅（presence.ts），
+    // 不在此通道分流；此处只剩 legacy 文本行（[他说]/测试事件，canonical 上本就罕见）。
     // 波次 2：`[他说]` 行 = 他主动开口 → 进入对话流（规范 §5.3）；
     // 其余 legacy 行（如测试事件）→ 轻量 toast，不进对话。
     const unsubscribeEvents = !eventStreamSupported ? () => {} : subscribeCompanionEvents(config, (event) => {
-      if (presenceStore.ingestLine(event.text) !== 'legacy') return;
+      // T0 壳（§3.2）：审批事件 = 待签文书实时推入对话，不进 toast 流。
+      // 当前会话 → 重拉 inbox（卡在发生处浮起/resolved 后自愈收起）；
+      // 其他会话 → 只更新主页列表的金色待签标。
+      if (event.kind === 'approval_required' || event.kind === 'approval_resolved') {
+        const info = parseApprovalEventPayload(event.payload);
+        if (info) {
+          pendingApprovalSessions = applyApprovalEventToPending(
+            pendingApprovalSessions,
+            info,
+            event.kind,
+          );
+        }
+        if (!info || !info.session || info.session === activeId) {
+          void refreshConnection();
+        } else {
+          homeReloadKey += 1;
+        }
+        return;
+      }
       const text = event.text.trim();
       if (text.startsWith('[他说]')) {
         const said = text.slice('[他说]'.length).trim();
@@ -1595,11 +2403,29 @@
       void refreshConnection();
     }, 15000);
 
+    // 桌宠右键卷宗入口（src-tauri open_main_target → shell-target 事件）：
+    // 目标串沿用旧深链 ?drawer= 口径，经同一张目标表改道（lib/shell-nav.ts）。
+    let unlistenShellTarget: (() => void) | null = null;
+    void (async () => {
+      if (!isDesktop()) return;
+      try {
+        const {listen} = await import('@tauri-apps/api/event');
+        unlistenShellTarget = await listen<string>('shell-target', (event) => {
+          const target = resolveLegacyDrawer(event.payload ?? null);
+          if (target) applyShellTarget(target);
+        });
+      } catch {
+        // 事件层不可用：右键卷宗入口无接线，主窗自身导航不受影响
+      }
+    })();
+
     return () => {
+      disposeWheelRouter();
       window.clearInterval(timer);
       if (hourTimer !== null) window.clearInterval(hourTimer);
       unsubscribeEvents();
-      unsubscribePresence();
+      unsubscribePresence?.();
+      unlistenShellTarget?.();
     };
   });
 </script>
@@ -1610,17 +2436,32 @@
   class="app-root"
   class:busy
   class:theme-essence={isEssenceTheme}
+  class:theme-heritage={isHeritageTheme}
+  class:theme-day={activeTheme === 'day'}
+  class:theme-paper={activeTheme === 'paper'}
+  class:theme-ocean={activeTheme === 'ocean'}
+  class:theme-forest={activeTheme === 'forest'}
+  class:theme-origin={activeTheme === 'origin'}
+  class:theme-noir={activeTheme === 'noir'}
+  class:custom-bg={customBgUrl !== null}
   class:mode-focus={mode === 'focus'}
   class:mode-engineering={mode === 'engineering'}
   class:intro-playing={introPlaying}
 >
-  <div class="essence-scene" aria-hidden="true"></div>
+  <!-- 静态背景层（规范 §8 增补）：essence/heritage-void 主题各带默认图，
+       自定义上传（customBgUrl）以 inline 背景覆盖主题默认图 -->
+  <div
+    class="static-bg"
+    style:background-image={customBgUrl ? `url(${customBgUrl})` : undefined}
+    aria-hidden="true"
+  ></div>
   <div class="scene-underlay">
     <SceneLayer
       presence={$presenceStore.current}
       hour={timelineHour}
       interactive={!drawerSec && !showRuntimeModal && !openPanel}
       cameraIndex={sceneCamera}
+      paused={isStaticScene}
       onBlackholeClick={handleBlackholeClick}
     />
     <div class="planet-xfade" class:layer-off={mode === 'focus'}>
@@ -1638,35 +2479,30 @@
   <div id="vignette" aria-hidden="true"></div>
 
   <div class="shell">
+    <!-- 侧栏四件（内测反馈批）：对话/工具/状态/设置。历史撤除（往来列表即历史）、
+         记忆/日记入工作台、治理入设置 › 安全与治理、日志并入状态——见 lib/shell-nav.ts -->
     <nav class="rail" aria-label="主导航">
-      <div class="rail-brand" title="Apeireth">燧</div>
+      <!-- 左上角 = 用户头像（单字品牌位让位）：点击落设置 › 用户中心 -->
+      <button
+        class="rail-brand rail-avatar"
+        title={profile.nickname ? `${profile.nickname} · 用户中心` : '用户中心（设置头像与用户信息）'}
+        onclick={() => void openUserCenter()}
+      >
+        {#if profile.avatar}
+          <img class="rail-avatar-img" src={profile.avatar} alt="用户头像" />
+        {:else}
+          <CircleUserRound size={21} />
+        {/if}
+      </button>
       <div class="rail-nav">
         <button
           class="rail-btn"
           class:active={!drawerSec}
           onclick={() => toggleRail('chat')}
-          title="当前对话"
+          title="对话（往来列表即历史）"
         >
           <MessageCircleMore size={17} class="shell-icon" />
           <span class="rail-label">对话</span>
-        </button>
-        <button
-          class="rail-btn"
-          class:active={drawerSec === 'history'}
-          onclick={() => toggleRail('history')}
-          title="历史"
-        >
-          <History size={17} class="shell-icon" />
-          <span class="rail-label">历史</span>
-        </button>
-        <button
-          class="rail-btn"
-          class:active={drawerSec === 'memory'}
-          onclick={() => toggleRail('memory')}
-          title="认知 / 记忆"
-        >
-          <Layers3 size={17} class="shell-icon" />
-          <span class="rail-label">记忆</span>
         </button>
         <button
           class="rail-btn"
@@ -1684,25 +2520,16 @@
           class="rail-btn"
           class:active={drawerSec === 'status'}
           onclick={() => toggleRail('status')}
-          title="系统状态"
+          title="系统状态（含活动与调用日志）"
         >
           <Activity size={17} class="shell-icon" />
           <span class="rail-label">状态</span>
         </button>
         <button
           class="rail-btn"
-          class:active={drawerSec === 'logs'}
-          onclick={() => toggleRail('logs')}
-          title="日志"
-        >
-          <ScrollText size={17} class="shell-icon" />
-          <span class="rail-label">日志</span>
-        </button>
-        <button
-          class="rail-btn"
           class:active={drawerSec === 'settings'}
           onclick={() => toggleRail('settings')}
-          title="设置"
+          title="设置（含安全与治理）"
         >
           <Settings size={17} class="shell-icon" />
           <span class="rail-label">设置</span>
@@ -1751,49 +2578,56 @@
           </div>
         </div>
       {/if}
-      <div class="drawer-body" class:embed={drawerSec !== 'status' && drawerSec !== null}>
-        {#if drawerSec === 'history'}
-          <ConversationsView
-            {conversations}
-            activeId={activeId || ''}
-            {config}
-            {capabilities}
-            onOpen={openConversation}
-            onCreate={newConversation}
-            onArchive={archiveConversation}
-            onDelete={deleteConversation}
-            onRename={(id, title) => updateConversation(id, {title})}
-            onPin={(id) => {
-              const conv = conversations.find((item) => item.id === id);
-              if (conv) updateConversation(id, {pinned: !conv.pinned});
-            }}
-          />
-        {:else if drawerSec === 'memory'}
-          <MemoryView {config} {capabilities} />
-        {:else if drawerSec === 'tools'}
+      <div class="drawer-body" class:embed={drawerSec === 'tools' || drawerSec === 'settings'}>
+        {#if drawerSec === 'tools'}
           <ToolsView {config} {capabilities} />
-        {:else if drawerSec === 'logs'}
-          <ActivityView {config} {capabilities} />
         {:else if drawerSec === 'settings'}
           <SettingsView
             {config}
-            onSave={(newCfg) => {
+            capabilityManifest={capabilities}
+            initialSection={settingsSection}
+            initialGovernanceTab={govInitialTab}
+            governanceKey={govTabKey}
+            sessionUsage={sessionUsage}
+            onGovernanceOpenChat={() => {
+              closeDrawer();
+              backToList();
+            }}
+            onSave={async (newCfg) => {
+              const previousCfg = config;
+              const previousTheme = activeTheme;
+              const customBgToggled = (newCfg.customBg ?? false) !== (config.customBg ?? false);
               config = newCfg;
               saveConfig(newCfg);
               agentRuntime = createAgentRuntime(newCfg);
               const nextTheme = resolveTheme(newCfg.theme, themeQuery);
               activeTheme = nextTheme;
               applyDocumentTheme(nextTheme);
+              applyDocumentAccent(resolveAccent(newCfg.accent));
+              // 自定义背景开关变化（§8 增补④）：从 IndexedDB 取图或回落
+              if (customBgToggled) void syncCustomBg(newCfg.customBg === true);
               // Provider changes must reach the sidecar environment; the
               // push re-adopts the endpoint (a restart allocates a new port)
-              // and then re-probes.
-              void pushProviderEnvAndRefresh(newCfg);
+              // and then re-probes. Awaited so an apply failure can roll an
+              // apply-on-click control back (and surface the error).
+              try {
+                await pushProviderEnvAndRefresh(newCfg);
+              } catch (err) {
+                // 推送失败 = 运行时没接住这次改动：本地配置与文档主题一并
+                // 回退到改动前，与控件级回填保持同一条真相线（不留下
+                // 「本地已改、运行时没改」的半截状态），错误继续向上抛给
+                // 控件层亮横幅。
+                config = previousCfg;
+                saveConfig(previousCfg);
+                agentRuntime = createAgentRuntime(previousCfg);
+                activeTheme = previousTheme;
+                applyDocumentTheme(previousTheme);
+                applyDocumentAccent(resolveAccent(previousCfg.accent));
+                if (customBgToggled) void syncCustomBg(previousCfg.customBg === true);
+                throw err;
+              }
             }}
-            onClearLocalData={() => {
-              conversations = [];
-              activeId = null;
-              persist();
-            }}
+            onClearSessionData={(scope) => void purgeConversations(scope)}
           />
         {:else if drawerSec === 'status'}
           <div class="stats">
@@ -1855,6 +2689,11 @@
           {:else}
             <p class="wb-empty">Guard 状态暂不可用。</p>
           {/if}
+          <!-- 日志并入状态（侧栏收纳批）：活动与调用日志组件原样复用，不重写 -->
+          <h3 class="sec-title">活动与调用日志</h3>
+          <div class="status-activity">
+            <ActivityView {config} {capabilities} />
+          </div>
         {/if}
       </div>
     </aside>
@@ -1871,6 +2710,47 @@
         <PanelRight size={14} class="shell-icon-sm" />
         <span>工作台</span>
       </button>
+      <!-- 三栏主从骨架（2026-09-22 主人拍板，同类桌面即时通讯范式）：
+           图标轨（已有）｜会话列表栏（常驻 ~300px，点行不跳转）｜聊天区。
+           未选中会话时右栏 = 个性化背景显影区（§8 增补①），不再是列表页跳转。 -->
+      <div class="chat-columns">
+        <aside class="session-col" class:open={sessionColOpen} aria-label="往来列表">
+          <SessionListHome
+            {conversations}
+            {config}
+            {capabilities}
+            {pendingApprovalSessions}
+            {activeId}
+            defaultWorkspace={currentWorkspace || null}
+            deletedSessions={deletedSessionIds}
+            himName={activePersona?.name || '他'}
+            {himStatus}
+            {himAttention}
+            reloadKey={homeReloadKey}
+            onOpen={openHomeSession}
+            onOpenHim={openHim}
+            onNew={startNewSession}
+            onRename={(id, title) => updateConversation(id, {title})}
+            onTogglePin={(id) => {
+              const conv = conversations.find((item) => item.id === id);
+              if (conv) updateConversation(id, {pinned: !conv.pinned});
+            }}
+            onToggleArchive={archiveConversation}
+            onDelete={deleteConversation}
+          />
+        </aside>
+        <div class="chat-area">
+          <!-- 窄窗折叠（≤980px，诚实断点）时的列表开关；桌面恒隐 -->
+          <button
+            class="col-toggle"
+            onclick={() => (sessionColOpen = !sessionColOpen)}
+            aria-expanded={sessionColOpen}
+            aria-label="往来列表"
+            title="往来列表"
+          >
+            <MessageCircleMore size={13} />
+            往来
+          </button>
       <div
         class="scroll"
         id="chatScroll"
@@ -1878,7 +2758,14 @@
         onscroll={handleScroll}
         style:--presence-glow={presenceGlow.toFixed(3)}
       >
-        {#if !flowItems.length}
+        {#if activeId === null}
+          <!-- 未选中态 = 个性化背景显影区：内容随用户设置（主题默认图/自定义上传/实时场景），
+               只放一句指引与背景署名，背景本身即是内容 -->
+          <section class="bg-reveal" aria-label="个性化背景显影区">
+            <p class="bg-hint">从左边选一段往来，或开始新的一段。</p>
+            <p class="bg-caption">背景 · {bgCaption}</p>
+          </section>
+        {:else if !flowItems.length}
           <section class="home col">
             <svg class="ember" viewBox="0 0 56 56" aria-hidden="true">
               <circle class="halo" cx="28" cy="30" r="19"></circle>
@@ -1887,6 +2774,12 @@
             </svg>
             <h1 class="ask">今天想干些什么？</h1>
             <p class="lede">与 Apeireth 交流你的想法、创意与工作。</p>
+            {#if ledgerHint && ledgerHint.id === activeId}
+              <!-- backend-only 会话：本机无消息副本的诚实标注（0 装空态契约） -->
+              <p class="ledger-hint" role="status">
+                这段会话在他的账本里有 {ledgerHint.episodeCount} 条记录；本机没有消息副本——从下一句开始，他会接着同一本账继续。
+              </p>
+            {/if}
             <div class="sugs">
               {#if suggestions.length}
                 {#each suggestions as item (item.id)}
@@ -1925,70 +2818,43 @@
         {:else}
           <section class="col">
             <div class="chat-head">
-              <div>
+              <div class="chat-head-main">
+                <!-- 三栏主从下取消「‹ 往来」返回键：列表栏常驻，不存在返回；
+                     长标题横排单行省略（flex:1 + min-width:0 收缩链） -->
                 <h2 class="chat-title">{activeConversation?.title || '新对话'}</h2>
-                <div class="statusline">
-                  <div class="persona-menu">
-                    <button
-                      class="persona-trigger"
-                      onclick={() => (personaMenuOpen = !personaMenuOpen)}
-                      title="切换伙伴身份"
-                      aria-label="切换伙伴身份"
-                      aria-expanded={personaMenuOpen}
-                    >
-                      <span>{activePersona?.name || '伙伴'}</span>
-                      <ChevronDown size={12} />
-                    </button>
-                    {#if personaMenuOpen}
-                      <div class="persona-pop" role="menu">
-                        {#each personaList as p (p.id)}
-                          <button
-                            class="persona-item"
-                            class:active={p.id === activePersona?.id}
-                            role="menuitem"
-                            onclick={() => setActivePersona(p.id)}
-                          >
-                            <span class="persona-item-name">{p.name}</span>
-                            {#if p.model}
-                              <span class="persona-item-model">{p.model}</span>
-                            {/if}
-                          </button>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                  <span class="mono-note" style="opacity:.4">·</span>
-                  <SessionModelPicker
-                    models={sessionModels}
-                    value={currentSessionModel}
-                    onSelect={(id) => void selectSessionModel(id)}
-                    disabled={busy}
-                  />
-                  <span class="mono-note" style="opacity:.4">·</span>
-                  <button class="mono-note live" onclick={() => (showRuntimeModal = true)}>{hdState}</button>
-                  {#if $presenceStore.simulated}
-                    <span class="sim-badge" title="presence 频道断连：当前为本机中性默认值">SIM</span>
-                  {/if}
-                </div>
               </div>
-              <div class="chat-head-actions">
-                <div class="preset-group" role="group" aria-label="会话审批策略">
-                  {#each SESSION_PRESETS as preset (preset.id)}
-                    <button
-                      class="preset-btn"
-                      class:active={activeApprovalStrategyId === preset.id}
-                      onclick={() => void selectSessionPreset(preset)}
-                      title={preset.title}
-                      aria-pressed={activeApprovalStrategyId === preset.id}
-                    >
-                      {preset.label}
-                    </button>
-                  {/each}
-                </div>
-                <button class="quiet-btn" onclick={newConversation}>
-                  <Plus size={13} />
-                  新对话
+              <!-- 权限档位 / 新对话 / 会话模型已移至对话栏位（2026-10-11 主人反馈批：
+                   头部随滚动消失，输入栏位常驻——布局对齐桌面聊天窗常驻输入栏范式） -->
+              <!-- 状态行：头部第二行，独占整宽（打回修复②轮） -->
+              <div class="statusline">
+                <!-- ⊕ 新会话（内测反馈批）：会话头常驻快捷入口 = 新开会话 + 焦点进输入框。
+                     原伙伴人名/模型下拉让位，移入「模型与上下文」面板（功能不丢，见 panel-model）。 -->
+                <button
+                  class="new-session-btn"
+                  onclick={startNewSession}
+                  title="新会话——新开一段并聚焦输入框"
+                >
+                  <Plus size={13} class="shell-icon-sm" />
+                  <span>新会话</span>
                 </button>
+                <span class="mono-note" style="opacity:.4">·</span>
+                <button class="mono-note live" onclick={() => (showRuntimeModal = true)}>{hdState}</button>
+                {#if $presenceStore.simulated}
+                  <span class="sim-badge" title="presence 频道断连：当前为本机中性默认值">SIM</span>
+                {/if}
+                <!-- 对话遥测条（内测整改③）：本轮 token（输入/输出）· 提示缓存命中 ·
+                     回合耗时 · 模型名；等宽小字 + hover 详情（title）。无数据位诚实
+                     「—」占位——绝不编数（连 0 都只在流里真报 0 时显示 0）。 -->
+                <span class="mono-note" style="opacity:.4">·</span>
+                <span class="turn-telemetry" title={turnTelemetryView.hover}>
+                  <span>{turnTelemetryView.tokens}</span>
+                  <span class="tele-sep">·</span>
+                  <span>{turnTelemetryView.cache}</span>
+                  <span class="tele-sep">·</span>
+                  <span>{turnTelemetryView.duration}</span>
+                  <span class="tele-sep">·</span>
+                  <span>{turnTelemetryView.model}</span>
+                </span>
               </div>
             </div>
             <div class="thread">
@@ -2035,7 +2901,32 @@
                   </div>
                 {/if}
               {/each}
-              {#if error}
+              {#if pendingCanonical && pendingCanonical.session === activeId}
+                <!-- 待签文书（§3.2/§6.4）：对话内浮起，在发生处批准/拒绝，不跳窗。
+                     按 session 归属渲染：切换会话后文书只留在它自己的会话里。 -->
+                <PendingDocumentDock
+                  approvalId={pendingCanonical.approval_id}
+                  item={approvalCardItem}
+                  busy={approvalBusy}
+                  collapsed={approvalDockCollapsed}
+                  onExpand={() => (approvalDockCollapsed = false)}
+                  onAllow={() => void resolvePending('approve')}
+                  onReject={() => void resolvePending('reject')}
+                  onDismiss={dismissPendingApproval}
+                />
+              {/if}
+              {#if governanceNotice}
+                <!-- 守卫通报卡（琥珀，§3.2）：治理面拦停在发生处呈现，不跳窗 -->
+                <GuardNoticeCard
+                  title={governanceNotice.title}
+                  message={error}
+                  solution={describeError(lastError).solution}
+                  onClose={() => {
+                    error = '';
+                    lastError = null;
+                  }}
+                />
+              {:else if error}
                 <ErrorSolutionBanner
                   code={errorCode}
                   message={error}
@@ -2076,9 +2967,42 @@
           <div class="composer-row">
             <div class="composer">
               <div class="editor">
-                <button class="round-btn" title="新对话" onclick={newConversation} aria-label="新对话">
+                <button class="round-btn" title="新对话" onclick={() => newConversation()} aria-label="新对话">
                   <Plus size={16} />
                 </button>
+                <!-- 权限档位芯片（输入栏左侧常驻；弹层向上翻） -->
+                <div class="composer-preset">
+                  <button
+                    class="composer-preset-trigger"
+                    class:open={composerPresetOpen}
+                    onclick={() => (composerPresetOpen = !composerPresetOpen)}
+                    disabled={busy}
+                    title={`权限档位：${activePresetFull?.title ?? ''}（点击切换）`}
+                    aria-haspopup="menu"
+                    aria-expanded={composerPresetOpen}
+                  >
+                    <ShieldCheck size={13} class="shell-icon-sm" />
+                    <span>{activePresetShortLabel}</span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {#if composerPresetOpen}
+                    <div class="composer-preset-scrim" onclick={() => (composerPresetOpen = false)} aria-hidden="true"></div>
+                    <div class="composer-preset-pop" role="menu" aria-label="权限档位">
+                      {#each SESSION_PRESETS as preset (preset.id)}
+                        <button
+                          class="composer-preset-item"
+                          class:active={activeApprovalStrategyId === preset.id}
+                          role="menuitemcheckbox"
+                          aria-checked={activeApprovalStrategyId === preset.id}
+                          onclick={() => void pickComposerPreset(preset.id)}
+                        >
+                          <span class="composer-preset-label">{preset.label}</span>
+                          <span class="composer-preset-title">{preset.title}</span>
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
                 <textarea
                   bind:value={draft}
                   bind:this={composerTextarea}
@@ -2149,6 +3073,22 @@
                   {:else}
                     <p class="wb-empty">暂无可用模型。可在设置中配置提供商。</p>
                   {/if}
+                  <!-- 伙伴身份（内测反馈批）：人名/模型下拉自会话头让位并入「模型与上下文」，
+                       切换语义原样保留（换人设即换其默认模型）。 -->
+                  <h2>伙伴身份</h2>
+                  {#each personaList as p (p.id)}
+                    <button
+                      class="model persona-choice"
+                      aria-current={p.id === activePersona?.id ? 'true' : undefined}
+                      onclick={() => setActivePersona(p.id)}
+                      title={p.model ? `${p.name} · ${p.model}` : p.name}
+                    >
+                      <span>{p.name}</span>
+                      {#if p.model}
+                        <span class="persona-choice-model">{p.model}</span>
+                      {/if}
+                    </button>
+                  {/each}
                 </div>
 
                 <button
@@ -2184,7 +3124,19 @@
 
               <div class="composer-send">
                 {#if busy}
-                  <button class="send stop" onclick={stop} aria-label="中断">
+                  <!-- 打断按钮（任务 B，gap-plan §5 缺口的前端近似）：
+                       后端无 POST /v1/turn/interrupt，此钮只切断本地收听
+                       （agentRuntime.abort → 关闭流式读取、复位输入态）；
+                       后端回合仍跑完，下一条消息开新轮。显隐信号 = busy
+                       （本地流真值），不取 SSE turn_*：那是网关级事件，
+                       本地打断后后端仍在跑，挂它会违背按钮的真实语义。
+                       语言克制、非金色（金=他；打断是主人的动作）。 -->
+                  <button
+                    class="send stop"
+                    onclick={stop}
+                    aria-label="打断当前回合"
+                    title="不再听他说完——后端回合仍会跑完（打断的是收听，不是他）"
+                  >
                     <Square size={14} />
                   </button>
                 {:else}
@@ -2203,17 +3155,43 @@
           <p class="hint">ENTER 发送 · SHIFT+ENTER 换行</p>
         </div>
       </div>
+        </div>
+      </div>
+
+      <!-- 余光投影（00-PHILOSOPHY §2 第四个投影 / gap-plan §4.3 P1）：
+           四指标一行通栏，静是默认，异常才挣色；入口不是面板。 -->
+      <StatusBar
+        sse={sbSse}
+        turn={sbTurn}
+        guard={sbGuard}
+        memory={sbMemory}
+        onSseClick={() => {
+          // 徽章承诺「点击立即重连」= 真重建事件订阅（不是只做健康检查）。
+          restartPresenceSubscription();
+          void refreshConnection();
+        }}
+        onTurnClick={() => {
+          if (busy) stop();
+        }}
+        onGuardClick={handleSbGuardClick}
+        onMemoryClick={() => applyShellTarget(NAV_COMMAND_TARGETS['nav.memory'])}
+      />
     </div>
 
     <Workbench
       conversation={activeConversation}
       {busy}
       closed={!wbOpen}
+      turn={workbenchTurn}
+      {config}
+      {capabilities}
+      section={wbSection}
+      onSelectSection={(s) => (wbSection = s)}
       onClose={() => toggleWb(false)}
     />
   </div>
 
-  {#if !isEssenceTheme}
+  {#if !isStaticScene}
     <nav class="mode-switch" aria-label="模式切换">
       {#each modes as item (item.id)}
         <button
@@ -2231,6 +3209,17 @@
   {/if}
 
   <button class="focus-exit" onclick={() => setMode('companion')}>返回舰桥</button>
+
+  {#if actionError}
+    <!-- 删除失败错误帧（内测反馈批）：失败即亮帧 + 列表已回滚——不吞错、不粉饰 -->
+    <div class="action-error-frame">
+      <ErrorSolutionBanner
+        message={`${actionError.title}：${actionError.message}`}
+        solution={actionError.solution}
+        onClose={() => (actionError = null)}
+      />
+    </div>
+  {/if}
 
   {#if legacyToast}
     <div class="legacy-toast" role="status">
@@ -2255,34 +3244,6 @@
   onSendMessage={handleVoiceMessage}
 />
 
-{#if pendingCanonical}
-  <div
-    class="approval-backdrop"
-    role="presentation"
-    onclick={() => dismissPendingApproval()}
-  >
-    <div
-      class="approval-wrap"
-      role="dialog"
-      aria-modal="true"
-      aria-label="待批准操作"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => {
-        if (e.key === 'Escape') dismissPendingApproval();
-      }}
-    >
-      <ApprovalRequestCard
-        item={approvalCardItem}
-        busy={approvalBusy}
-        onAllow={() => void resolvePending('approve')}
-        onReject={() => void resolvePending('reject')}
-        onDismiss={dismissPendingApproval}
-      />
-    </div>
-  </div>
-{/if}
-
 <RuntimeModal
   open={showRuntimeModal}
   report={healthReport}
@@ -2291,6 +3252,14 @@
   isRefreshing={isRefreshingHealth}
   onClose={() => (showRuntimeModal = false)}
   onRefresh={refreshConnection}
+/>
+
+<CommandPalette
+  open={paletteOpen}
+  commands={paletteCommands}
+  recentIds={commandRecentIds}
+  onExecute={executePaletteCommand}
+  onClose={() => (paletteOpen = false)}
 />
 
 <WorkspacePickerModal
@@ -2424,40 +3393,148 @@
     color: var(--ap-bone);
   }
 
-  /* ---------- 会话头：模型选择器 + 权限预设（P0-3 / P1-2） ---------- */
-  .chat-head-actions {
-    display: flex;
+  /* ---------- 会话头权限预设已迁至对话栏位（2026-10-11 主人反馈批） ---------- */
+
+  /* ---------- 会话头「⊕ 新会话」（内测反馈批）：圆角深底 + ⊕ 图标 + 文字，hover 微亮 ---------- */
+  .new-session-btn {
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid var(--ap-line);
+    border-radius: 999px;
+    background: var(--ap-panel-solid);
+    color: var(--ap-bone-68);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .new-session-btn:hover {
+    border-color: rgba(255, 210, 122, 0.5);
+    color: var(--ap-bone);
+    background: var(--ap-shell-chip);
+    box-shadow: 0 0 18px -8px rgba(255, 210, 122, 0.35);
+  }
+  .new-session-btn :global(svg) {
+    color: var(--ap-gold);
     flex: none;
   }
-  .preset-group {
+
+  /* ---------- 伙伴身份行（自会话头让位并入「模型与上下文」面板） ---------- */
+  .persona-choice {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .persona-choice-model {
+    font-family: var(--ap-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    color: var(--ap-bone-30);
+  }
+
+  /* ---------- 删除失败错误帧（失败即帧 + 列表已回滚） ---------- */
+  .action-error-frame {
+    position: absolute;
+    left: 50%;
+    bottom: 116px;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: min(560px, 82vw);
+    pointer-events: auto;
+  }
+
+  /* ---------- 状态抽屉 › 活动与调用日志（日志并入状态，组件原样复用） ---------- */
+  .status-activity {
+    margin-top: 12px;
+    border: 1px solid var(--ap-line);
+    border-radius: 10px;
+    overflow: hidden;
     background: var(--ap-panel);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* ---------- 对话栏位常驻控制（2026-10-11 主人反馈批：常驻输入栏） ---------- */
+  .composer-preset {
+    position: relative;
+    flex: none;
+  }
+  .composer-preset-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
     border: 1px solid var(--ap-line);
     border-radius: 7px;
-  }
-  .preset-btn {
-    border: 0;
-    background: transparent;
-    color: var(--ap-bone-42);
-    font-size: 10.5px;
-    letter-spacing: 0.08em;
-    padding: 3px 8px;
-    border-radius: 5px;
+    background: var(--ap-panel);
+    color: var(--ap-bone-62);
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    transition: color 0.2s, background 0.2s;
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s;
   }
-  .preset-btn:hover {
+  .composer-preset-trigger:hover:not(:disabled),
+  .composer-preset-trigger.open {
+    border-color: var(--amber-line);
     color: var(--ap-bone);
   }
-  .preset-btn.active {
-    color: var(--ap-gold);
-    background: rgba(255, 210, 122, 0.12);
+  .composer-preset-trigger:disabled {
+    opacity: 0.55;
+    cursor: default;
   }
+  .composer-preset-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 210;
+  }
+  .composer-preset-pop {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 0;
+    z-index: 220;
+    min-width: 240px;
+    padding: 5px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .composer-preset-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 7px 10px;
+    border: 0;
+    background: transparent;
+    border-radius: 7px;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+  .composer-preset-item:hover {
+    background: var(--surface-3);
+  }
+  .composer-preset-item.active {
+    box-shadow: inset 2px 0 0 var(--amber);
+  }
+  .composer-preset-label {
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .composer-preset-title {
+    font-size: 11px;
+    color: var(--faint);
+    line-height: 1.5;
+  }
+  /* 窄输入栏：会话模型芯片优先，全局字母丸让位（双击状态栏仍可进设置改全局模型） */
 
   /* ---------- 工具生命周期卡（P1-5） ----------
      旧 ToolCallCard 由 MessageContent 内部渲染；此处用新卡接管展示，
@@ -2504,35 +3581,28 @@
     background: rgba(255, 255, 255, 0.06);
   }
 
-  /* ---------- 审批卡遮罩（P0-4） ---------- */
-  .approval-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(4px);
-    display: grid;
-    place-items: center;
-    padding: 20px;
-    animation: ap-fade-in 0.15s ease-out;
-  }
-  .approval-wrap {
-    width: 100%;
-    max-width: 480px;
-  }
-  @keyframes ap-fade-in {
-    from {
-      opacity: 0;
-      transform: scale(0.98);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
+  /* ---------- 待签文书卡的视觉语言在 chat-shell/PendingDocumentDock.svelte ---------- */
 
   /* ---------- 斜杠菜单锚点（P1-6） ---------- */
   .composer {
     position: relative;
+  }
+
+  /* ---------- T0 壳：会话头 + backend-only 诚实标注（三栏主从下返回键已取消） ---------- */
+  .chat-head-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+  }
+  .ledger-hint {
+    margin: 0 0 18px;
+    max-width: 52ch;
+    font-family: var(--ap-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    line-height: 1.8;
+    color: var(--ap-bone-42);
   }
 </style>

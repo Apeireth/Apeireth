@@ -1,0 +1,6 @@
+scripts/check-neutral-terms.ps1:17:  '借鉴自',
+scripts/secret-scan.ps1:4:# 借鉴自 gitleaks v8.30.1 的核心 pattern 表 (https://github.com/gitleaks/gitleaks)
+scripts/secret-scan.ps1:40:# 借鉴自 gitleaks v8.30.1 rules/ 目录的 pattern 子集
+scripts/secret-scan.ps1:77:# 借鉴自 .gitignore 的 "允许" 文件 (placeholder / 测试数据, false positive)
+scripts/secret-scan.ps1:101:# 借鉴自 gitleaks .toml allowlist 机制
+scripts/secret-scan.ps1:139:# 借鉴自 gitleaks scan semantics

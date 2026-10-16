@@ -1,4 +1,4 @@
-//! R179 P1-11: 4-layer progressive memory (借鉴 mempalace 4-layer closed-loop).
+//! R179 P1-11: 4-layer progressive memory (对齐公开 4-layer closed-loop 设计).
 //!
 //! ## 概念
 //! 每个 memory item 从 L1 逐渐升级到 L4:
@@ -18,8 +18,8 @@
 //! - 随 decay < threshold 从 L4 降到 L3 再到 L2
 //! - L1 永不降 (原始存储 是 安全网)
 //!
-//! ## 跟 mempalace 4-layer 的差别
-//! - mempalace: 4 layer 各自独立, 主动 fill 所有 layer
+//! ## 跟同类记忆工程 4-layer 的差别
+//! - 同类记忆工程: 4 layer 各自独立, 主动 fill 所有 layer
 //! - apeireth: 同一个 item 随生命周期逐渐升级
 //!   (你可以查询 "this item has been promoted to L4?")
 //!

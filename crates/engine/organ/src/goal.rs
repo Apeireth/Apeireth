@@ -1,12 +1,12 @@
 //! Goal state machine + crash-safe persist (library, default-off).
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/goal.rs` (DSH-style
-//! single-current-goal machine). This is a **mechanism**: one current goal,
+//! Single-current-goal machine.
+//! This is a **mechanism**: one current goal,
 //! guarded phase transitions, revision CAS, `rounds_started` only on
-//! goal-driven turns, tmp+rename persist. It is **not** a round driver, not
-//! a daemon, and not a second agent loop.
+//! goal-driven turns, atomic-file persist (shared atomic durable writer). It is
+//! **not** a round driver, not a daemon, and not a second agent loop.
 //!
-//! Semantics kept from the donor:
+//! Semantics kept from the baseline:
 //! - Single current goal. `create` refuses while a non-completed goal exists.
 //! - `revision` is strictly +1 on every committed mutation.
 //! - Illegal phase transitions leave state unchanged.
@@ -14,32 +14,42 @@
 //! - `rounds_started` increments only via [`GoalService::admit_round`].
 //! - Hitting `max_goal_rounds` auto-blocks with code `max-rounds`.
 //!
-//! Honest adaptations vs the donor:
-//! - Donor claimed compare-and-set (`StaleRevision`) but never compared an
-//!   expected revision. This port **enforces** CAS: every mutation takes the
+//! Honest adaptations vs the baseline:
+//! - The baseline claimed compare-and-set (`StaleRevision`) but never compared an
+//!   expected revision. This module **enforces** CAS: every mutation takes the
 //!   caller's expected revision and rejects a stale handle.
-//! - Donor swallowed persist errors (`let _ = store.save`). This port surfaces
+//! - The baseline swallowed persist errors (`let _ = store.save`). This module surfaces
 //!   typed I/O / serialization errors; in-memory state is not advanced if
 //!   persist fails.
 //! - No `uuid` / `chrono` crate deps. Ids are minted from
 //!   [`apeireth_core::kernel::TaskId`]; timestamps are injected (`now_ms`).
-//! - Persist filenames are sanitized (no path escape). tmp names do not embed
-//!   the raw id.
+//! - Persist filenames are sanitized (no path escape). Temp-file names are
+//!   derived by the shared atomic writer from the sanitized target name.
 //!
 //! Production wiring: none. Callers that want a Goal organ later compose this
 //! library behind `OrganTrait`; this module does not register, tick, or speak.
+//!
+//! Continuation-drive layer (additive, on top of the machine above):
+//! - Strict replay fold: [`fold_goal_events`] folds the full-snapshot
+//!   `goal`/`change` event stream into one current goal state; the same event
+//!   stream always folds to the same state, and streams the machine could not
+//!   have produced are refused.
+//! - Reservation vs admission: [`GoalContinuationDrive`] reserves the next
+//!   round number (`rounds_started + 1`) up front and consumes quota only
+//!   when the reserved round's message actually enters history. A stale
+//!   reservation consumes no number; every step rechecks the revision first.
+//! - `armed`/`disarmed` is process state only: it is never persisted, and a
+//!   resumed goal starts disarmed (ceasefire by default).
 
 use std::fmt;
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use apeireth_core::kernel::TaskId;
+use apeireth_core::storage_atomic;
+use apeireth_core::stored_doc;
 use serde::{Deserialize, Serialize};
-
-/// Monotonic nonce so tmp filenames stay unique without a uuid crate.
-static TMP_NONCE: AtomicU64 = AtomicU64::new(1);
 
 /// Goal phase. One blocked phase — reasons live on the snapshot, not as extra
 /// variants.
@@ -91,14 +101,137 @@ impl GoalSnapshot {
     }
 }
 
+/// One goal-domain event. Both kinds carry the **full snapshot** committed at
+/// that point: the fold never patches individual fields, it replays whole
+/// snapshots through [`fold_goal_events`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum GoalEvent {
+    /// A goal appeared (its creation was committed).
+    Goal(GoalSnapshot),
+    /// A committed mutation changed the current goal.
+    Change(GoalSnapshot),
+}
+
+impl GoalEvent {
+    /// The full snapshot this event committed.
+    pub fn snapshot(&self) -> &GoalSnapshot {
+        match self {
+            Self::Goal(snapshot) | Self::Change(snapshot) => snapshot,
+        }
+    }
+
+    /// Stable event label (`goal` / `change`).
+    pub const fn label(&self) -> &'static str {
+        match self {
+            Self::Goal(_) => "goal",
+            Self::Change(_) => "change",
+        }
+    }
+}
+
+/// Why a strict replay fold refused an event stream.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GoalFoldError {
+    /// A `change` event arrived before any `goal` event.
+    ChangeWithoutGoal,
+    /// A committed mutation must advance the revision by exactly one.
+    RevisionNotSequential { expected: u64, found: u64 },
+    /// A `change` event switched goal identity without a `goal` event.
+    IdentityChanged { expected: String, found: String },
+    /// A new `goal` event arrived while the previous goal is unfinished.
+    GoalWhileUnfinished { phase: GoalPhase },
+}
+
+impl fmt::Display for GoalFoldError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ChangeWithoutGoal => {
+                write!(f, "goal fold: a change event arrived before any goal event")
+            }
+            Self::RevisionNotSequential { expected, found } => write!(
+                f,
+                "goal fold: revision must advance by exactly one (expected {expected}, found {found})"
+            ),
+            Self::IdentityChanged { expected, found } => write!(
+                f,
+                "goal fold: change switched goal identity ({expected} → {found}) without a goal event"
+            ),
+            Self::GoalWhileUnfinished { phase } => write!(
+                f,
+                "goal fold: a new goal event arrived while the previous goal is {}",
+                phase.label()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for GoalFoldError {}
+
+/// Strict replay fold: fold the full-snapshot `goal`/`change` event stream
+/// into the single current goal state.
+///
+/// The fold is a pure function of its inputs — the same event stream always
+/// folds to the same goal state — and it refuses any stream the machine could
+/// not have produced: a `change` needs a `goal` before it, revisions advance
+/// by exactly one per committed mutation, one stream carries one goal identity
+/// at a time, and a new `goal` may only replace a completed one.
+pub fn fold_goal_events(events: &[GoalEvent]) -> Result<Option<GoalSnapshot>, GoalFoldError> {
+    let mut current: Option<GoalSnapshot> = None;
+    for event in events {
+        let snapshot = event.snapshot();
+        match (&current, event) {
+            (None, GoalEvent::Goal(_)) => current = Some(snapshot.clone()),
+            (None, GoalEvent::Change(_)) => return Err(GoalFoldError::ChangeWithoutGoal),
+            (Some(previous), GoalEvent::Goal(_)) => {
+                if !previous.is_replaceable() {
+                    return Err(GoalFoldError::GoalWhileUnfinished {
+                        phase: previous.phase,
+                    });
+                }
+                current = Some(snapshot.clone());
+            }
+            (Some(previous), GoalEvent::Change(_)) => {
+                if snapshot.id != previous.id {
+                    return Err(GoalFoldError::IdentityChanged {
+                        expected: previous.id.clone(),
+                        found: snapshot.id.clone(),
+                    });
+                }
+                if snapshot.revision != previous.revision + 1 {
+                    return Err(GoalFoldError::RevisionNotSequential {
+                        expected: previous.revision + 1,
+                        found: snapshot.revision,
+                    });
+                }
+                current = Some(snapshot.clone());
+            }
+        }
+    }
+    Ok(current)
+}
+
 /// Typed goal-machine errors. Illegal transitions never mutate state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GoalError {
     NoGoal,
     AlreadyExists,
-    IllegalTransition { from: GoalPhase, to: GoalPhase },
-    StaleRevision { expected: u64, actual: u64 },
+    IllegalTransition {
+        from: GoalPhase,
+        to: GoalPhase,
+    },
+    StaleRevision {
+        expected: u64,
+        actual: u64,
+    },
     NoRoundsRemaining,
+    /// The continuation drive is disarmed; no new goal-driven round starts.
+    DriveDisarmed,
+    /// A reservation names a different goal than the current one.
+    ReservationGoalMismatch {
+        expected: String,
+        actual: String,
+    },
     Persist(GoalPersistError),
 }
 
@@ -160,6 +293,14 @@ impl fmt::Display for GoalError {
                 )
             }
             Self::NoRoundsRemaining => write!(f, "no goal-driven rounds remaining"),
+            Self::DriveDisarmed => write!(
+                f,
+                "continuation drive is disarmed; no goal-driven round starts"
+            ),
+            Self::ReservationGoalMismatch { expected, actual } => write!(
+                f,
+                "reservation bound to goal {expected}, current goal is {actual}"
+            ),
             Self::Persist(err) => write!(f, "{err}"),
         }
     }
@@ -173,7 +314,41 @@ impl From<GoalPersistError> for GoalError {
     }
 }
 
-/// Crash-safe per-goal JSON store (`{sanitized-id}.json` via tmp+rename).
+/// goal 快照存储文档身份 (存储文档信封)。
+pub const GOAL_SNAPSHOT_DOC_NAME: &str = "goal-snapshot";
+/// goal 快照存储格式版本。
+pub const GOAL_SNAPSHOT_DOC_VERSION: u32 = 1;
+
+/// goal 快照的读端版本契约 (信封)。
+fn goal_doc_compat() -> stored_doc::DocCompat {
+    stored_doc::DocCompat::exact(GOAL_SNAPSHOT_DOC_NAME, GOAL_SNAPSHOT_DOC_VERSION)
+}
+
+/// 存储文档错误 → 持久化错误 (IO 归 IO, 其余一律拒开为损坏)。
+fn doc_error(
+    operation: &'static str,
+    id: &str,
+    error: stored_doc::StoredDocError,
+) -> GoalPersistError {
+    match error {
+        stored_doc::StoredDocError::Io { path, source } => persist_io(operation, &path, source),
+        other => GoalPersistError::Corrupt {
+            id: id.to_string(),
+            reason: other.to_string(),
+        },
+    }
+}
+
+/// Crash-safe per-goal stored-document store (`{sanitized-id}.json` via the
+/// shared atomic durable writer).
+///
+/// Each snapshot is a [`stored_doc::StoredDoc`] envelope (identity + version
+/// stamp + body). Opening is **strict**: malformed / identity-mismatched /
+/// unversioned-future files are rejected as [`GoalPersistError::Corrupt`] —
+/// never silently replaced with a default. Pre-envelope bare files stay
+/// readable read-only (they are not rewritten on open); upgrading one is an
+/// explicit [`GoalStore::migrate_legacy_snapshot`] call that leaves an audit
+/// line.
 ///
 /// This is a **file helper**, not a second session/transcript owner. One
 /// [`GoalService`] holds at most one current snapshot.
@@ -194,57 +369,55 @@ impl GoalStore {
         self.dir.join(format!("{}.json", sanitize_goal_id(id)))
     }
 
-    /// Atomically persist a snapshot. On POSIX, `rename` replaces. On Windows,
-    /// existing dest is unlinked then renamed (documented crash window: dest
-    /// briefly absent). tmp is removed on any failure after create.
+    /// Atomically persist a snapshot as a stored document through the shared
+    /// atomic writer's durable tier (goal state must not roll back after a
+    /// crash): parent dir creation, exclusive same-directory temp file, write,
+    /// `sync_all`, then replace.
     pub fn save(&self, g: &GoalSnapshot) -> Result<(), GoalPersistError> {
-        fs::create_dir_all(&self.dir).map_err(|e| persist_io("create goal dir", &self.dir, e))?;
-        let nonce = TMP_NONCE.fetch_add(1, Ordering::Relaxed);
-        let tmp = self
-            .dir
-            .join(format!("{}.tmp-{nonce}", sanitize_goal_id(&g.id)));
-        let bytes = serde_json::to_vec_pretty(g).map_err(|e| GoalPersistError::Serialization {
-            reason: e.to_string(),
-        })?;
-        let write_result = (|| -> Result<(), GoalPersistError> {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&tmp)
-                .map_err(|e| persist_io("open goal tmp", &tmp, e))?;
-            file.write_all(&bytes)
-                .map_err(|e| persist_io("write goal tmp", &tmp, e))?;
-            file.sync_all()
-                .map_err(|e| persist_io("sync goal tmp", &tmp, e))?;
-            Ok(())
-        })();
-        if let Err(err) = write_result {
-            let _ = fs::remove_file(&tmp);
-            return Err(err);
-        }
         let dest = self.path_for(&g.id);
-        if let Err(err) = atomic_replace(&tmp, &dest) {
-            let _ = fs::remove_file(&tmp);
-            return Err(err);
-        }
+        stored_doc::save_single(
+            &dest,
+            &goal_doc_compat(),
+            g.clone(),
+            storage_atomic::DEFAULT_FILE_MODE,
+        )
+        .map_err(|e| doc_error("write goal snapshot", &g.id, e))?;
         Ok(())
     }
 
+    /// Load one snapshot. Missing file = `None` (the caller decides whether a
+    /// missing snapshot is legal); a present-but-invalid file is **rejected**
+    /// as [`GoalPersistError::Corrupt`] — no default fallback, no silent
+    /// migration.
     pub fn load(&self, id: &str) -> Result<Option<GoalSnapshot>, GoalPersistError> {
         let path = self.path_for(id);
-        match fs::read(&path) {
-            Ok(bytes) => {
-                let snap =
-                    serde_json::from_slice(&bytes).map_err(|e| GoalPersistError::Corrupt {
-                        id: id.to_string(),
-                        reason: e.to_string(),
-                    })?;
-                Ok(Some(snap))
+        match stored_doc::open_single_compat::<GoalSnapshot>(&path, &goal_doc_compat()) {
+            Ok(opened) => Ok(Some(opened.into_body())),
+            Err(stored_doc::StoredDocError::Io { source, .. })
+                if source.kind() == io::ErrorKind::NotFound =>
+            {
+                Ok(None)
             }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(persist_io("read goal snapshot", &path, e)),
+            Err(e) => Err(doc_error("read goal snapshot", id, e)),
         }
+    }
+
+    /// Explicit migration of one snapshot file into the current stored-document
+    /// format (pre-envelope bare body → envelope), rewriting the file and
+    /// appending a `<file>.migrate-audit.jsonl` audit line. Callers opt in;
+    /// [`GoalStore::load`] never migrates on its own.
+    pub fn migrate_legacy_snapshot(
+        &self,
+        id: &str,
+    ) -> Result<stored_doc::MigrationAudit, GoalPersistError> {
+        let path = self.path_for(id);
+        stored_doc::migrate_file_from_legacy::<GoalSnapshot, GoalSnapshot, _>(
+            &path,
+            &goal_doc_compat(),
+            storage_atomic::DEFAULT_FILE_MODE,
+            Ok,
+        )
+        .map_err(|e| doc_error("migrate goal snapshot", id, e))
     }
 
     pub fn clear(&self, id: &str) -> Result<(), GoalPersistError> {
@@ -287,6 +460,8 @@ impl GoalStore {
 pub struct GoalService {
     store: GoalStore,
     current: Option<GoalSnapshot>,
+    /// Committed `goal`/`change` event stream (in-process, append-only).
+    events: Vec<GoalEvent>,
 }
 
 impl GoalService {
@@ -294,11 +469,19 @@ impl GoalService {
         Self {
             store: GoalStore::new(dir),
             current: None,
+            events: Vec::new(),
         }
     }
 
     pub fn store(&self) -> &GoalStore {
         &self.store
+    }
+
+    /// The committed `goal`/`change` event stream of this service, in commit
+    /// order. The stream is append-only; [`fold_goal_events`] replays it to
+    /// the same goal state (`current` is a derived view of it).
+    pub fn events(&self) -> &[GoalEvent] {
+        &self.events
     }
 
     /// Restore a specific id from disk (crash recovery).
@@ -516,12 +699,19 @@ impl GoalService {
     /// Completed goals may be replaced; unfinished ones may not. Replacing
     /// deletes the previous snapshot file so [`Self::restore_only`] still sees
     /// a single current goal.
+    ///
+    /// L6: 顺序修正 — 旧实现先 `self.current.take()` 再 `store.clear()`:
+    /// 若 clear 失败 (IO 错误), 内存里的 current 已被掏空 (自称"无目标") 而
+    /// 磁盘快照仍在, `restore_only` 会把它读回来 → 内存/磁盘状态分裂,
+    /// 且错误 propagates 时 current 已丢。现在先 clear、成功后才清内存,
+    /// clear 失败则内存态保持原样 (错误可重试)。
     fn ensure_create_allowed(&mut self) -> Result<(), GoalError> {
         match &self.current {
             Some(g) if !g.is_replaceable() => Err(GoalError::AlreadyExists),
             Some(_) => {
-                let prev = self.current.take().expect("just matched Some");
-                self.store.clear(&prev.id)?;
+                let prev_id = self.current.as_ref().ok_or(GoalError::NoGoal)?.id.clone();
+                self.store.clear(&prev_id)?;
+                self.current = None;
                 Ok(())
             }
             None => Ok(()),
@@ -542,6 +732,7 @@ impl GoalService {
     fn commit_new(&mut self, mut g: GoalSnapshot) -> Result<GoalSnapshot, GoalError> {
         g.revision += 1;
         self.store.save(&g)?;
+        self.events.push(GoalEvent::Goal(g.clone()));
         self.current = Some(g.clone());
         Ok(g)
     }
@@ -549,23 +740,264 @@ impl GoalService {
     fn commit(&mut self, mut g: GoalSnapshot) -> Result<GoalSnapshot, GoalError> {
         g.revision += 1;
         self.store.save(&g)?;
+        self.events.push(GoalEvent::Change(g.clone()));
         self.current = Some(g.clone());
         Ok(g)
     }
 }
 
+/// One reserved goal-driven round.
+///
+/// Reserving claims the next round number (`rounds_started + 1`) without
+/// consuming quota or entering history. Only a reserved round whose message
+/// actually enters history commits the reservation and consumes the number;
+/// a stale reservation (the goal moved on after reserving) is refused at the
+/// pre-step revision recheck and consumes nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoundReservation {
+    goal_id: String,
+    expected_revision: u64,
+    round_number: u64,
+}
+
+impl RoundReservation {
+    /// The goal this reservation is bound to.
+    pub fn goal_id(&self) -> &str {
+        &self.goal_id
+    }
+
+    /// The revision this reservation was taken at.
+    pub const fn expected_revision(&self) -> u64 {
+        self.expected_revision
+    }
+
+    /// The round number claimed (`rounds_started + 1` when reserved).
+    pub const fn round_number(&self) -> u64 {
+        self.round_number
+    }
+}
+
+/// Whether a reserved round produced a message that entered history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoundEntry {
+    /// The round's message entered history: the round number is consumed.
+    EnteredHistory,
+    /// No history entry: the reservation is released without consuming.
+    NoHistoryEntry,
+}
+
+/// The goal continuation drive: reserves and admits goal-driven rounds.
+///
+/// Reservation and admission are distinct on purpose. Reserving only claims
+/// the next round number; the quota is consumed (and history advances) only
+/// when the reserved round's message actually enters history. A stale
+/// reservation — the goal moved on between reserving and committing — is
+/// refused at the pre-step revision recheck and never consumes a round
+/// number.
+///
+/// `armed`/`disarmed` is process state only. It is never persisted, and a
+/// resumed goal starts disarmed: resuming a goal is a ceasefire, not an order
+/// to keep firing rounds. Disarming stops *new* rounds; accounting still
+/// follows history for a round whose message enters history, because the
+/// budget counts what happened, not what the switch says.
+#[derive(Debug, Clone, Default)]
+pub struct GoalContinuationDrive {
+    armed: bool,
+    outstanding: Option<RoundReservation>,
+}
+
+impl GoalContinuationDrive {
+    /// A fresh drive is disarmed (ceasefire by default).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Arm the drive: it may start new goal-driven rounds.
+    pub fn arm(&mut self) {
+        self.armed = true;
+    }
+
+    /// Disarm the drive (ceasefire): no new goal-driven round starts.
+    pub fn disarm(&mut self) {
+        self.armed = false;
+    }
+
+    /// Whether the drive may start new rounds.
+    pub fn is_armed(&self) -> bool {
+        self.armed
+    }
+
+    /// The outstanding reservation, when one is held.
+    pub fn outstanding(&self) -> Option<&RoundReservation> {
+        self.outstanding.as_ref()
+    }
+
+    /// Resume the goal through the drive. A resumed goal starts disarmed
+    /// (ceasefire by default) and any held reservation is dropped — resuming
+    /// bumps the revision, so a held reservation is stale by construction.
+    pub fn resume_goal(
+        &mut self,
+        goal: &mut GoalService,
+        expected_revision: u64,
+        now_ms: i64,
+    ) -> Result<GoalSnapshot, GoalError> {
+        let snapshot = goal.resume(expected_revision, now_ms)?;
+        self.armed = false;
+        self.outstanding = None;
+        Ok(snapshot)
+    }
+
+    /// Pre-step check before starting a round: the drive must be armed and
+    /// the caller's revision must still be current. A stale handle is
+    /// refused before anything changes.
+    pub fn pre_step_check(
+        &self,
+        goal: &GoalService,
+        expected_revision: u64,
+    ) -> Result<(), GoalError> {
+        if !self.armed {
+            return Err(GoalError::DriveDisarmed);
+        }
+        let current = goal.current().ok_or(GoalError::NoGoal)?;
+        if current.revision != expected_revision {
+            return Err(GoalError::StaleRevision {
+                expected: expected_revision,
+                actual: current.revision,
+            });
+        }
+        Ok(())
+    }
+
+    /// Reserve the next round number (`rounds_started + 1`). Reserving claims
+    /// the number only: no quota is consumed, nothing enters history, and
+    /// nothing is persisted.
+    pub fn reserve_round(
+        &mut self,
+        goal: &GoalService,
+        expected_revision: u64,
+    ) -> Result<RoundReservation, GoalError> {
+        self.pre_step_check(goal, expected_revision)?;
+        let current = goal.current().ok_or(GoalError::NoGoal)?;
+        if current.phase != GoalPhase::Active {
+            return Err(GoalError::IllegalTransition {
+                from: current.phase,
+                to: GoalPhase::Active,
+            });
+        }
+        if current.rounds_started >= current.max_goal_rounds {
+            return Err(GoalError::NoRoundsRemaining);
+        }
+        let reservation = RoundReservation {
+            goal_id: current.id.clone(),
+            expected_revision,
+            round_number: current.rounds_started + 1,
+        };
+        self.outstanding = Some(reservation.clone());
+        Ok(reservation)
+    }
+
+    /// Commit a reservation: the round's message entered history, so the
+    /// claimed round number is consumed through the existing CAS-guarded
+    /// admission. The pre-step recheck refuses a stale reservation and
+    /// consumes nothing.
+    pub fn commit_round(
+        &mut self,
+        goal: &mut GoalService,
+        reservation: &RoundReservation,
+        now_ms: i64,
+    ) -> Result<GoalSnapshot, GoalError> {
+        self.revalidate(goal, reservation)?;
+        let snapshot = goal.admit_round(reservation.expected_revision, now_ms)?;
+        if self.outstanding.as_ref() == Some(reservation) {
+            self.outstanding = None;
+        }
+        Ok(snapshot)
+    }
+
+    /// Release a reservation whose message never entered history: the round
+    /// number is not consumed and history does not move.
+    pub fn release_round(&mut self, reservation: &RoundReservation) {
+        if self.outstanding.as_ref() == Some(reservation) {
+            self.outstanding = None;
+        }
+    }
+
+    /// Drive one goal-driven round: reserve the round number, run `body`, and
+    /// consume the number only when `body` reports a history entry. A round
+    /// without a history entry releases its reservation untouched.
+    pub fn drive_round<F>(
+        &mut self,
+        goal: &mut GoalService,
+        expected_revision: u64,
+        now_ms: i64,
+        body: F,
+    ) -> Result<Option<GoalSnapshot>, GoalError>
+    where
+        F: FnOnce(&RoundReservation) -> RoundEntry,
+    {
+        let reservation = self.reserve_round(goal, expected_revision)?;
+        match body(&reservation) {
+            RoundEntry::EnteredHistory => self.commit_round(goal, &reservation, now_ms).map(Some),
+            RoundEntry::NoHistoryEntry => {
+                self.release_round(&reservation);
+                Ok(None)
+            }
+        }
+    }
+
+    /// Recheck freshness before consuming: the reservation must still match
+    /// the current goal and revision. A stale reservation is refused and
+    /// consumes nothing.
+    fn revalidate(
+        &self,
+        goal: &GoalService,
+        reservation: &RoundReservation,
+    ) -> Result<(), GoalError> {
+        let current = goal.current().ok_or(GoalError::NoGoal)?;
+        if current.id != reservation.goal_id {
+            return Err(GoalError::ReservationGoalMismatch {
+                expected: reservation.goal_id.clone(),
+                actual: current.id.clone(),
+            });
+        }
+        if current.revision != reservation.expected_revision {
+            return Err(GoalError::StaleRevision {
+                expected: reservation.expected_revision,
+                actual: current.revision,
+            });
+        }
+        Ok(())
+    }
+}
+
 /// ASCII alphanumerics plus `-`/`_`, max 120 chars. Empty → `"goal"`.
+///
+/// L6: 非 ASCII 碰撞后缀 — 纯中文/emoji id ("目标一" / "目标二" / "🎯") 净化后
+/// 会**全部**收敛成 `"goal"` (字符被全部剔除 → 空 → 兜底), 两个不同目标互相
+/// 覆盖磁盘快照。对被剥离过字符的 id 追加原始串的 FNV-1a 短哈希后缀,
+/// 保证可区分 (总长仍有界: base ≤ 100 + "-" + 8 hex = 109 < 120)。
 fn sanitize_goal_id(id: &str) -> String {
     let cleaned: String = id
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-        .take(120)
+        .take(100)
         .collect();
-    if cleaned.is_empty() {
+    let base = if cleaned.is_empty() {
         "goal".to_string()
     } else {
         cleaned
+    };
+    if id == base {
+        // 本来就是安全 id, 0 追加 (保持既有文件名兼容)。
+        return base;
     }
+    // L6: 有字符被剥离 (非 ASCII / 标点 / 超长) → 追加原串短哈希区分碰撞。
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in id.as_bytes() {
+        hash ^= u64::from(*b);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{base}-{:08x}", hash & 0xffff_ffff)
 }
 
 fn persist_io(operation: &'static str, path: &Path, err: io::Error) -> GoalPersistError {
@@ -573,24 +1005,6 @@ fn persist_io(operation: &'static str, path: &Path, err: io::Error) -> GoalPersi
         operation,
         path: path.to_path_buf(),
         reason: err.to_string(),
-    }
-}
-
-fn atomic_replace(tmp: &Path, dest: &Path) -> Result<(), GoalPersistError> {
-    match fs::rename(tmp, dest) {
-        Ok(()) => Ok(()),
-        Err(err) => {
-            // Windows cannot rename over an existing file. Unlink dest then
-            // retry. There is a brief window where dest is absent; documented
-            // as a platform limitation, not pretended to be POSIX-atomic.
-            if dest.exists() {
-                fs::remove_file(dest).map_err(|e| persist_io("replace-remove dest", dest, e))?;
-                fs::rename(tmp, dest).map_err(|e| persist_io("replace-rename", dest, e))?;
-                Ok(())
-            } else {
-                Err(persist_io("rename goal snapshot", dest, err))
-            }
-        }
     }
 }
 
@@ -789,9 +1203,34 @@ mod tests {
         let mut s = GoalService::new(&dir);
         s.create_with_id("../evil", "obj", 1, 1).unwrap();
         let ids = s.store().list_ids().unwrap();
-        assert_eq!(ids, vec!["evil".to_string()]);
+        // L6: 净化后是 "evil" + 短哈希后缀 (原 id 被剥离过字符 → 追加后缀防
+        // 非 ASCII 碰撞); 关键是**不逃逸**且单条目。
+        assert_eq!(ids.len(), 1, "只应有一个目标: {ids:?}");
+        assert!(
+            ids[0].starts_with("evil"),
+            "../evil 应净化为 evil 前缀, 得到 {ids:?}"
+        );
+        assert!(!ids[0].contains(".."), "不得保留路径穿越段: {ids:?}");
         // nothing written outside the store root
-        assert!(dir.join("evil.json").is_file());
+        assert!(dir.join(format!("{}.json", ids[0])).is_file());
+        assert!(
+            !dir.parent().unwrap().join("evil.json").is_file(),
+            "store 根外不得落文件"
+        );
+    }
+
+    /// L6: 纯非 ASCII id 不得互相碰撞 ("目标一"/"目标二" 旧实现都收敛到 "goal")。
+    #[test]
+    fn non_ascii_ids_do_not_collide() {
+        let a = sanitize_goal_id("目标一");
+        let b = sanitize_goal_id("目标二");
+        let c = sanitize_goal_id("🎯");
+        assert_ne!(a, b, "不同中文 id 必须可区分");
+        assert_ne!(a, c);
+        assert_ne!(b, c);
+        assert!(a.starts_with("goal"), "剥离后应回落 goal 兜底: {a}");
+        // 安全 id 不追加后缀 (保持既有文件名兼容)。
+        assert_eq!(sanitize_goal_id("goal-x"), "goal-x");
     }
 
     #[test]
@@ -835,5 +1274,346 @@ mod tests {
             s.restore_only().unwrap_err(),
             GoalError::Persist(GoalPersistError::Corrupt { .. })
         ));
+    }
+
+    fn snap(id: &str, revision: u64, phase: GoalPhase) -> GoalSnapshot {
+        GoalSnapshot {
+            id: id.into(),
+            revision,
+            objective: "objective".into(),
+            phase,
+            max_goal_rounds: 4,
+            rounds_started: 0,
+            blocked_reason: None,
+            updated_at_ms: 1,
+        }
+    }
+
+    /// fold 确定性: 同一事件流确定折叠同一目标态, 状态是事件流的派生视图。
+    #[test]
+    fn fold_goal_events_replays_one_stream_to_one_state() {
+        let mut s = GoalService::new(tmp("fold"));
+        s.create("ship the fold", 4, 1).unwrap();
+        s.edit(rev(&s), "ship the fold, strictly", 2).unwrap();
+        s.pause(rev(&s), 3).unwrap();
+
+        let folded = fold_goal_events(s.events())
+            .unwrap()
+            .expect("the stream carries a goal");
+        assert_eq!(folded, s.current().cloned().unwrap());
+        assert_eq!(folded.revision, 3);
+
+        // 同一事件流再次折叠 = 同一目标态。
+        let again = fold_goal_events(s.events()).unwrap().unwrap();
+        assert_eq!(folded, again);
+        let replay: Vec<GoalEvent> = s.events().to_vec();
+        assert_eq!(fold_goal_events(&replay).unwrap().unwrap(), folded);
+
+        // 空流折叠为 None (不发明目标)。
+        assert!(fold_goal_events(&[]).unwrap().is_none());
+    }
+
+    /// 严格回放: 机器产不出的事件流必须被拒, 不做静默修补。
+    #[test]
+    fn fold_goal_events_refuses_streams_the_machine_cannot_produce() {
+        let a = snap("goal-a", 1, GoalPhase::Active);
+        let mut b = snap("goal-b", 1, GoalPhase::Active);
+
+        // change 先于 goal: 拒。
+        assert_eq!(
+            fold_goal_events(&[GoalEvent::Change(a.clone())]),
+            Err(GoalFoldError::ChangeWithoutGoal)
+        );
+
+        // revision 必须严格 +1。
+        let mut jumped = a.clone();
+        jumped.revision = 3;
+        assert_eq!(
+            fold_goal_events(&[GoalEvent::Goal(a.clone()), GoalEvent::Change(jumped)]),
+            Err(GoalFoldError::RevisionNotSequential {
+                expected: 2,
+                found: 3
+            })
+        );
+
+        // 同一事件流不换目标身份。
+        assert_eq!(
+            fold_goal_events(&[GoalEvent::Goal(a.clone()), GoalEvent::Change(b.clone())]),
+            Err(GoalFoldError::IdentityChanged {
+                expected: "goal-a".into(),
+                found: "goal-b".into()
+            })
+        );
+
+        // 未完成目标不得被新 goal 顶替。
+        assert_eq!(
+            fold_goal_events(&[GoalEvent::Goal(a.clone()), GoalEvent::Goal(b.clone())]),
+            Err(GoalFoldError::GoalWhileUnfinished {
+                phase: GoalPhase::Active
+            })
+        );
+
+        // 完成之后可以立新目标 (create 语义一致)。
+        let done = snap("goal-a", 2, GoalPhase::Completed);
+        b.revision = 1;
+        assert!(fold_goal_events(&[
+            GoalEvent::Goal(a),
+            GoalEvent::Change(done),
+            GoalEvent::Goal(b)
+        ])
+        .is_ok());
+    }
+
+    /// 陈旧 revision 拒绝: pre-step 复核在先, 不产生任何预留。
+    #[test]
+    fn a_stale_revision_is_rejected_before_reserving() {
+        let mut s = GoalService::new(tmp("pre-step"));
+        s.create("goal", 3, 1).unwrap();
+        let mut drive = GoalContinuationDrive::new();
+        drive.arm();
+
+        assert_eq!(
+            drive.reserve_round(&s, 0).unwrap_err(),
+            GoalError::StaleRevision {
+                expected: 0,
+                actual: 1
+            }
+        );
+        assert!(drive.outstanding().is_none(), "拒绝的请求不留下预留");
+
+        let reservation = drive.reserve_round(&s, 1).unwrap();
+        assert_eq!(reservation.round_number(), 1);
+    }
+
+    /// 预留不入史不耗号: 预留只占轮号, 状态/磁盘/事件流都不动。
+    #[test]
+    fn reserving_alone_never_enters_history_or_consumes_a_round() {
+        let mut s = GoalService::new(tmp("reserve-only"));
+        s.create_with_id("goal-r", "goal", 3, 1).unwrap();
+        let before = s.current().cloned().unwrap();
+        let mut drive = GoalContinuationDrive::new();
+        drive.arm();
+
+        let reservation = drive.reserve_round(&s, before.revision).unwrap();
+        assert_eq!(reservation.round_number(), before.rounds_started + 1);
+
+        assert_eq!(s.current().cloned().unwrap(), before, "预留不动内存态");
+        assert_eq!(s.events().len(), 1, "预留不是事件");
+        assert_eq!(
+            s.store().load("goal-r").unwrap().unwrap(),
+            before,
+            "预留不落盘"
+        );
+
+        // 未入史的预留直接释放: 仍然零消耗。
+        drive.release_round(&reservation);
+        assert_eq!(s.current().cloned().unwrap(), before);
+        assert_eq!(s.current().unwrap().rounds_started, 0);
+    }
+
+    /// 真入史才计数: 只有消息真正进入历史的轮才消耗轮号。
+    #[test]
+    fn a_round_number_is_consumed_only_when_the_message_enters_history() {
+        let mut s = GoalService::new(tmp("admit"));
+        s.create("goal", 3, 1).unwrap();
+        let mut drive = GoalContinuationDrive::new();
+        drive.arm();
+
+        // 消息未入史: 驱动不计数。
+        let none = drive
+            .drive_round(&mut s, 1, 2, |_| RoundEntry::NoHistoryEntry)
+            .unwrap();
+        assert!(none.is_none());
+        assert_eq!(s.current().unwrap().rounds_started, 0);
+
+        // 消息入史: 预留的轮号被消耗。
+        let admitted = drive
+            .drive_round(&mut s, 1, 3, |reservation| {
+                assert_eq!(reservation.round_number(), 1);
+                RoundEntry::EnteredHistory
+            })
+            .unwrap()
+            .expect("入史轮提交");
+        assert_eq!(admitted.rounds_started, 1);
+        assert_eq!(admitted.revision, 2);
+        assert!(drive.outstanding().is_none());
+    }
+
+    /// 陈旧预留不耗号: 预留后目标前进 → 提交被拒, 轮号不消耗。
+    #[test]
+    fn a_stale_reservation_consumes_no_round_number() {
+        let mut s = GoalService::new(tmp("stale-res"));
+        s.create("goal", 3, 1).unwrap();
+        let mut drive = GoalContinuationDrive::new();
+        drive.arm();
+        let reservation = drive.reserve_round(&s, 1).unwrap();
+
+        // 目标在预留之后前进了 (revision 1 → 2)。
+        s.edit(rev(&s), "goal, revised", 2).unwrap();
+
+        assert_eq!(
+            drive.commit_round(&mut s, &reservation, 3).unwrap_err(),
+            GoalError::StaleRevision {
+                expected: 1,
+                actual: 2
+            }
+        );
+        assert_eq!(s.current().unwrap().rounds_started, 0, "陈旧预留不耗号");
+
+        // 重新预留后正常入史计数。
+        let fresh = drive.reserve_round(&s, 2).unwrap();
+        assert_eq!(fresh.round_number(), 1);
+        let admitted = drive.commit_round(&mut s, &fresh, 4).unwrap();
+        assert_eq!(admitted.rounds_started, 1);
+    }
+
+    /// resume 后默认停火 + armed/disarmed 不持久化。
+    #[test]
+    fn resume_disarms_the_drive_and_arming_is_never_persisted() {
+        let mut s = GoalService::new(tmp("disarm"));
+        s.create("goal", 3, 1).unwrap();
+        let mut drive = GoalContinuationDrive::new();
+        drive.arm();
+        drive.reserve_round(&s, 1).unwrap();
+        s.pause(rev(&s), 2).unwrap();
+
+        // resume 后默认停火: 持票预留作废, 不再发新轮。
+        drive.resume_goal(&mut s, 2, 3).unwrap();
+        assert!(!drive.is_armed(), "resume 后默认停火");
+        assert!(drive.outstanding().is_none(), "恢复后旧预留作废");
+        assert_eq!(
+            drive.reserve_round(&s, rev(&s)).unwrap_err(),
+            GoalError::DriveDisarmed
+        );
+
+        // armed/disarmed 不持久化: 快照里没有开关, 重建即停火。
+        let json = serde_json::to_string(s.current().unwrap()).unwrap();
+        assert!(!json.contains("armed"), "武装状态不得进快照: {json}");
+        assert!(!json.contains("outstanding"), "预留不得进快照: {json}");
+        let restored = GoalContinuationDrive::new();
+        assert!(!restored.is_armed());
+    }
+
+    /// 与既有 CAS 测试共存零回归: 预留-准入与 admit_round 同一 revision 规则。
+    #[test]
+    fn the_reservation_flow_composes_with_existing_cas_guards() {
+        let mut s = GoalService::new(tmp("cas-coexist"));
+        s.create("goal", 4, 1).unwrap();
+        let mut drive = GoalContinuationDrive::new();
+        drive.arm();
+
+        // 既有 CAS 语义不变: admit_round 仍严格核对 revision。
+        assert_eq!(
+            s.admit_round(0, 2).unwrap_err(),
+            GoalError::StaleRevision {
+                expected: 0,
+                actual: 1
+            }
+        );
+        s.admit_round(1, 2).unwrap();
+
+        // 驱动预留绑 revision; 另一持票人先消耗一轮 → 预留变陈旧。
+        let reservation = drive.reserve_round(&s, 2).unwrap();
+        assert_eq!(reservation.round_number(), 2);
+        s.admit_round(2, 3).unwrap();
+        assert_eq!(
+            drive.commit_round(&mut s, &reservation, 4).unwrap_err(),
+            GoalError::StaleRevision {
+                expected: 2,
+                actual: 3
+            }
+        );
+        assert_eq!(s.current().unwrap().rounds_started, 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // stored_doc 消费方接线: 信封拒开 + 好数据零回归 + 旧文件兼容 + 显式迁移
+    // -----------------------------------------------------------------------
+
+    /// 好数据路径零回归: 信封 body 与旧裸体写端输出逐字节等价。
+    #[test]
+    fn goal_store_good_data_payload_stays_byte_equivalent() {
+        let dir = tmp("stored-doc-equiv");
+        fs::create_dir_all(&dir).unwrap();
+        let store = GoalStore::new(&dir);
+        let g = snap("goal-a", 3, GoalPhase::Blocked);
+        store.save(&g).unwrap();
+
+        let raw = fs::read(dir.join("goal-a.json")).unwrap();
+        let doc: stored_doc::StoredDoc<GoalSnapshot> =
+            serde_json::from_slice(&raw).expect("落盘是存储文档信封");
+        assert_eq!(doc.name, GOAL_SNAPSHOT_DOC_NAME);
+        assert_eq!(doc.version, GOAL_SNAPSHOT_DOC_VERSION);
+        assert_eq!(
+            serde_json::to_vec_pretty(&doc.body).unwrap(),
+            serde_json::to_vec_pretty(&g).unwrap(),
+            "好数据 body 必须与旧裸体写端输出逐字节等价"
+        );
+        assert_eq!(store.load("goal-a").unwrap().unwrap(), g);
+    }
+
+    /// 旧文件兼容: 前信封裸体快照迁移前后都可读; 默认打开不静默迁移。
+    #[test]
+    fn goal_store_reads_legacy_bare_snapshot_before_and_after_explicit_migration() {
+        let dir = tmp("stored-doc-legacy");
+        fs::create_dir_all(&dir).unwrap();
+        let g = snap("goal-x", 2, GoalPhase::Paused);
+        let legacy_bytes = serde_json::to_vec_pretty(&g).unwrap();
+        fs::write(dir.join("goal-x.json"), &legacy_bytes).unwrap();
+
+        let store = GoalStore::new(&dir);
+        // 迁移前可读 (旧裸体只读兼容), 且文件字节不被改写。
+        assert_eq!(store.load("goal-x").unwrap().unwrap(), g);
+        assert_eq!(
+            fs::read(dir.join("goal-x.json")).unwrap(),
+            legacy_bytes,
+            "默认打开路径不得静默迁移"
+        );
+
+        // 显式迁移留审计。
+        let audit = store.migrate_legacy_snapshot("goal-x").unwrap();
+        assert_eq!(audit.from_version, stored_doc::LEGACY_DOC_VERSION);
+        assert_eq!(audit.to_version, GOAL_SNAPSHOT_DOC_VERSION);
+        assert!(audit.audit_logged, "显式迁移必须留审计");
+
+        // 迁移后仍可读, 内容不变。
+        assert_eq!(store.load("goal-x").unwrap().unwrap(), g);
+        let audit_text = fs::read_to_string(dir.join("goal-x.json.migrate-audit.jsonl")).unwrap();
+        assert_eq!(
+            audit_text.lines().count(),
+            1,
+            "审计文件应恰一行: {audit_text}"
+        );
+    }
+
+    /// 拒开生效: 坏快照/串档信封不再「读坏用默认」, 如实报 Corrupt。
+    #[test]
+    fn goal_store_rejects_corrupt_snapshot_without_default_fallback() {
+        let dir = tmp("stored-doc-reject");
+        fs::create_dir_all(&dir).unwrap();
+        let store = GoalStore::new(&dir);
+
+        fs::write(dir.join("goal-x.json"), b"{ this is not json").unwrap();
+        assert!(
+            matches!(
+                store.load("goal-x").unwrap_err(),
+                GoalPersistError::Corrupt { .. }
+            ),
+            "坏 JSON 必须拒开"
+        );
+
+        // 信封形状但串档: 同样拒开, 不回退默认值。
+        fs::write(
+            dir.join("goal-x.json"),
+            br#"{"name":"other-doc","version":1,"compatible_versions":[1],"body":{}}"#,
+        )
+        .unwrap();
+        assert!(
+            matches!(
+                store.load("goal-x").unwrap_err(),
+                GoalPersistError::Corrupt { .. }
+            ),
+            "串档信封必须拒开"
+        );
     }
 }

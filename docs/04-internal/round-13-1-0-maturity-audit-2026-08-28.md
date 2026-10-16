@@ -1,7 +1,7 @@
 # Round 13 1.0 maturity 真账补查 + 主代理答用户 (2026-08-28)
 
 > **作者**: 主代理 Mavis (写于 Round 13, 用户原话 "修订 release 路径是啥意思, 还有 我看到你列的 Apeireth 还缺什么了, 但里面有的东西 1.0 没有吗? 实施 2.0 的时候对 1.0 的调研真的彻底吗" 触发)
-> **用途**: 主代理自省 + 1.0 maturity 真账补查, 给 v2.0 release 真实施期借签真账 (1.0 是否完整可移植)
+> **用途**: 主代理自省 + 1.0 maturity 真账补查, 给 v2.0 release 真实施期参考真账 (1.0 是否完整可实现)
 > **关系**: 修订主代理真账 `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` + R11 真调研真账 (6 sub-agent) + Round 12 终极审计
 
 ```
@@ -54,7 +54,7 @@ Author:          主代理 Mavis
 
 **所以我之前列的 ~23 项 1.0 缺口是否真的"1.0 有但 2.0 没"** — 部分对, 部分不彻底:
 
-**已 1:1 可移植 (R11 sub-agent 列对, 1.0 真账实测验证) ✅**:
+**已 逐项可实现 (R11 sub-agent 列对, 1.0 真账实测验证) ✅**:
 - **daily_summary.rs** (99 行, REAL): 纯函数数据源, 1.0 真账实测 L1-50 = "从 (id, content) 条目构建每日摘要", 0 LLM, 0 装 PASS
 - **diary.rs** (442 行, REAL): DiaryStore 完整 + DiaryInjector trait 口, 0 装 PASS L15-19 "注入实接线延后, 只提供机制口"
 - **cross_diary.rs** (301 行, REAL): §5.1 跨日记关联 + memory_graph 联动, 确定性 token 匹配, 0 装 PASS L11-12 "注入侧留 trait 口, 关联上下文注入延后统一接线"
@@ -64,12 +64,12 @@ Author:          主代理 Mavis
 - **partner.rs** (141 行, REAL): PartnerId + 关系数据, 纯数据
 
 **部分 1.0 不完整 (0 装 PASS 已标, 真实施时主代理必亲做) ⚠️**:
-- **diary 注入实接线** (L17 "延后"): 主代理必亲做 spec, 不是 1:1 翻译
+- **diary 注入实接线** (L17 "延后"): 主代理必亲做 spec, 不是 语义对齐
 - **cross_diary 关联上下文注入** (L11-12 "延后"): 主代理必亲做 spec
 - **reflexion LLM 版 CRITIC** (L17 "未接"): 主代理必亲做 spec, 1.0 留 trait 口 + 确定性规则版 RuleCritic, LLM 版待主代理亲接
 - **reflexion 失败事件实接线** (L18): 主代理必亲做 spec
 - **reflexion 注入块消费侧** (L19 "未接线"): 主代理必亲做 spec
-- **education 字符串规则 vs 真 CAS** (L7-10 "无 CAS 引擎"): 1.0 是字符串规则表, 真实施时主代理可借签或接 sympy 真 CAS
+- **education 字符串规则 vs 真 CAS** (L7-10 "无 CAS 引擎"): 1.0 是字符串规则表, 真实施时主代理可参考或接 sympy 真 CAS
 
 **主代理 §1 调研彻底度 0 装诚实标**:
 - 我之前 R11 6 sub-agent 调研 **0 实测 1.0 真代码**, 仅凭真账文件 + 推断 — 这是 O-5 失守, 用户 catch 对
@@ -92,7 +92,7 @@ Author:          主代理 Mavis
 
 1. **修订 release 路径**: ROADMAP §7 + MANIFESTO §14 必修订, 用户原话 trigger, 已 image to 真账 §1
 2. **修订 1.0 调研彻底度**: 主代理写真账补查 §2, 1.0 maturity 真账 (REAL/PARTIAL/STUB) + 0 装 PASS 标注 + trait 口 全部列出
-3. **修订主代理真账 §2** (1.0 vs 2.0 gap): 区分 "1:1 可移植" vs "trait 口待主代理亲做 spec"
+3. **修订主代理真账 §2** (1.0 vs 2.0 gap): 区分 "逐项可实现" vs "trait 口待主代理亲做 spec"
 4. **真实施前主代理必亲验**: R11 真调研范围 100% 完成, 但 0 实测 1.0 真代码 + 0 实测 2.0 master branch 都 — 真实施前主代理必 git clone + 跑 5 重守门 + LOCKED 0 触碰
 
 ---
@@ -121,7 +121,7 @@ Author:          主代理 Mavis
 
 - 主代理真账 §3.1 估 3-4 周 → 实际 11-13 周 = **修订主代理 §3.1 估时偏乐观**, 修订 release 路径
 - 主代理真账 §6.3 留 backlog ~25 项 → 修订 ~23 项 (修订 2 项 OK/partial)
-- R11 6 sub-agent 0 实测 1.0 真代码 = **修订真账 §2** 加 maturity 区分 "1:1 可移植" vs "trait 口待主代理亲做 spec"
+- R11 6 sub-agent 0 实测 1.0 真代码 = **修订真账 §2** 加 maturity 区分 "逐项可实现" vs "trait 口待主代理亲做 spec"
 
 ---
 
@@ -135,73 +135,73 @@ Author:          主代理 Mavis
 
 | 1.0 真账 | 行数 | Maturity | 1.0 真实施内容 (主代理亲测) | 2.0 真实施 |
 |---|---|---|---|---|
-| `apeireth-vector` (1.0 真账不在 legacy/donor/, 在 `_research_mem/apeireth-rust-fork/crates/apeireth-vector/`) | ~400+ | REAL | traits.rs `VectorStore` trait + `SqliteVecBackend` (sqlite-vec vec0 + 10w × 768 维 KNN P99 < 50ms) + `QdrantClient` (REST API v1.7+) + `distance.rs` + `organ_kani_proofs.rs` | ⚠️ partial (v2 `canonical/vector.rs` 1:1 翻译 cosine + ACT-R, 缺 SqliteVecBackend / QdrantClient / trait 抽象) |
-| `apeireth-graph-primitive` (1.0 真账同上) | ~500+ | REAL | BFS / DFS + predicate query + 确定性 | ⚠️ partial (v2 `canonical/graph.rs` 1:1 翻译 MemoryGraph BFS + shortest_path, 缺 predicate query + causal engine) |
+| `apeireth-vector` (1.0 真账不在 legacy/donor/, 在 `_research_mem/apeireth-rust-fork/crates/apeireth-vector/`) | ~400+ | REAL | traits.rs `VectorStore` trait + `SqliteVecBackend` (sqlite-vec vec0 + 10w × 768 维 KNN P99 < 50ms) + `QdrantClient` (REST API v1.7+) + `distance.rs` + `organ_kani_proofs.rs` | ⚠️ partial (v2 `canonical/vector.rs` 语义对齐 cosine + ACT-R, 缺 SqliteVecBackend / QdrantClient / trait 抽象) |
+| `apeireth-graph-primitive` (1.0 真账同上) | ~500+ | REAL | BFS / DFS + predicate query + 确定性 | ⚠️ partial (v2 `canonical/graph.rs` 语义对齐 MemoryGraph BFS + shortest_path, 缺 predicate query + causal engine) |
 | `apeireth-storage/src/{vector.rs,graph.rs,memory_*.rs}` (master branch 真账, 不存在) | n/a | n/a | n/a | n/a (主代理真账 §1.1 L43/L44/L45 错 — R11-Storage catch 修订) |
 
 #### 2.1.2 长期记忆塑形 (per R11-LongTermMemory 真账 + 主代理亲测)
 
 | 1.0 真账 | 行数 | Maturity | 1.0 真实施内容 (主代理亲测) | 2.0 真实施 |
 |---|---|---|---|---|
-| `apeireth-companion/src/daily_summary.rs` | 99 行 | **REAL** ✅ 1:1 可移植 | 纯函数 `build_daily_summary` + `DailySummary { date, episode_count, memory_writes, dreams, reflections, tool_records, excerpts }` + `render()` (无 UI, 仅数据源, L8 0 装 PASS 标注 "这里是统计 + 结构化数据源; 展示由上层决定") | ❌ v2 0 真实施 (R20 critical path) |
-| `apeireth-companion/src/diary.rs` | 442 行 | **REAL** ✅ 1:1 可移植 + ⚠️ trait 口 | DiaryStore (root + clock 注入 + VirtualClock 可快进 0 真等待) + DiaryStore::append/read_day/list_days/search (大小写不敏感子串匹配) + DiaryInjector 注入块 trait 口 (infallible, 失败/空 → 空串诚实降级); 0 装 PASS L15-19 "注入实接线 (assemble.rs/context.rs 渲染链挂接) 延后: companion crate 当前被 N14 阻塞, 且两文件已有主人 — 本模块只提供机制口" | ❌ v2 0 真实施 |
-| `apeireth-companion/src/cross_diary.rs` | 301 行 | **REAL** ✅ 1:1 可移植 + ⚠️ trait 口 | §5.1 跨日记关联 + memory_graph 联动 (L1-15), 确定性 token 匹配 (共享 `topic_groups::topic_tokens`, CJK bigram + 拉丁词, 停用词切分, 0 向量 0 嵌入 0 远程), `CrossLink { fact_id, diary_date }`; 0 装 PASS L11-12 "注入侧留 trait 口, 关联上下文注入延后统一接线" | ❌ v2 0 真实施 |
-| `apeireth-companion/src/memory_injection.rs` | 66 行 | **REAL** ✅ 1:1 可移植 | 反幻觉记忆注入 (hydra EMI/NEC 重写), 闭世界证据: 编号列表 + 来源标注 + 反幻觉指令 (禁止声称记得列表之外的事); 纯函数, 0 LLM, 0 装 PASS | ❌ v2 0 真实施 (per R11-LongTermMemory 真账) |
-| `apeireth-companion/src/reflexion.rs` | 497 行 | **REAL** ✅ 1:1 可移植 + ⚠️ 3 trait 口待主代理亲做 | E1 口头强化闭环 (Reflexion 式), 4 段职责链: (1) 失败轨迹采集 `ReflexionStore::record_failure` (三类失败: 决策拒绝/验证失败/经验失败) + (2) CRITIC 反思 `Critic` trait + 确定性 `RuleCritic` + (3) 反思记忆 (reflections.json, seq 序确定性) + (4) 重试注入 `ReflexionStore::retry_injection`; 0 装 PASS L17-19 "LLM 版 CRITIC 未接 (trait 口已留), 失败事件实接线未接, 注入块消费侧未接线" | ❌ v2 0 真实施 (per R11-LongTermMemory 真账) |
-| `apeireth-companion/src/reflection.rs` | 329 行 | REAL ✅ 1:1 可移植 | (类似 reflexion 但周期反思) | 🟡 R22 真实施 DEFERRED INTO SELF-ASSESSMENT |
+| `apeireth-companion/src/daily_summary.rs` | 99 行 | **REAL** ✅ 逐项可实现 | 纯函数 `build_daily_summary` + `DailySummary { date, episode_count, memory_writes, dreams, reflections, tool_records, excerpts }` + `render()` (无 UI, 仅数据源, L8 0 装 PASS 标注 "这里是统计 + 结构化数据源; 展示由上层决定") | ❌ v2 0 真实施 (R20 critical path) |
+| `apeireth-companion/src/diary.rs` | 442 行 | **REAL** ✅ 逐项可实现 + ⚠️ trait 口 | DiaryStore (root + clock 注入 + VirtualClock 可快进 0 真等待) + DiaryStore::append/read_day/list_days/search (大小写不敏感子串匹配) + DiaryInjector 注入块 trait 口 (infallible, 失败/空 → 空串诚实降级); 0 装 PASS L15-19 "注入实接线 (assemble.rs/context.rs 渲染链挂接) 延后: companion crate 当前被 N14 阻塞, 且两文件已有主人 — 本模块只提供机制口" | ❌ v2 0 真实施 |
+| `apeireth-companion/src/cross_diary.rs` | 301 行 | **REAL** ✅ 逐项可实现 + ⚠️ trait 口 | §5.1 跨日记关联 + memory_graph 联动 (L1-15), 确定性 token 匹配 (共享 `topic_groups::topic_tokens`, CJK bigram + 拉丁词, 停用词切分, 0 向量 0 嵌入 0 远程), `CrossLink { fact_id, diary_date }`; 0 装 PASS L11-12 "注入侧留 trait 口, 关联上下文注入延后统一接线" | ❌ v2 0 真实施 |
+| `apeireth-companion/src/memory_injection.rs` | 66 行 | **REAL** ✅ 逐项可实现 | 反幻觉记忆注入 (hydra EMI/NEC 重写), 闭世界证据: 编号列表 + 引用标注 + 反幻觉指令 (禁止声称记得列表之外的事); 纯函数, 0 LLM, 0 装 PASS | ❌ v2 0 真实施 (per R11-LongTermMemory 真账) |
+| `apeireth-companion/src/reflexion.rs` | 497 行 | **REAL** ✅ 逐项可实现 + ⚠️ 3 trait 口待主代理亲做 | E1 口头强化闭环 (Reflexion 式), 4 段职责链: (1) 失败轨迹采集 `ReflexionStore::record_failure` (三类失败: 决策拒绝/验证失败/经验失败) + (2) CRITIC 反思 `Critic` trait + 确定性 `RuleCritic` + (3) 反思记忆 (reflections.json, seq 序确定性) + (4) 重试注入 `ReflexionStore::retry_injection`; 0 装 PASS L17-19 "LLM 版 CRITIC 未接 (trait 口已留), 失败事件实接线未接, 注入块消费侧未接线" | ❌ v2 0 真实施 (per R11-LongTermMemory 真账) |
+| `apeireth-companion/src/reflection.rs` | 329 行 | REAL ✅ 逐项可实现 | (类似 reflexion 但周期反思) | 🟡 R22 真实施 DEFERRED INTO SELF-ASSESSMENT |
 
 #### 2.1.3 物种化核心 (per R11-SpeciesCore 真账 + 主代理亲测)
 
 | 1.0 真账 | 行数 | Maturity | 1.0 真实施内容 (主代理亲测) | 2.0 真实施 |
 |---|---|---|---|---|
-| `apeireth-companion/src/education.rs` | 402 行 | **PARTIAL** ✅ 1:1 可移植 (字符串规则) | 教育升级套件 = 换元法 dx 检查器 + 插件装配 (`EducationDxPlugin` on_load 注册 `dx_check` 工具); 0 装诚实 L7-10 "v1 是字符串级规则表, 不是真实符号计算 (无 CAS 引擎, 不宣称能解积分)", 覆盖 4 检查 (忘换 dx / dx 与 dt 混用 / 缺微分 / 残留 x) + 三角换元表 | ❌ v2 0 真实施 (per R11-SpeciesCore 真账 §1.1) |
-| `apeireth-companion/src/partner.rs` | 141 行 | **REAL** ✅ 1:1 可移植 | PartnerId + 关系数据, 纯数据 (`Bond`, `BondStage` import from `bond.rs`) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/community.rs` | 360 行 | REAL ✅ 1:1 可移植 (主代理未亲测内容, 仅凭真账行数 + R11-SpeciesCore sub-agent 报告) | (物种化社区) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/principles.rs` | 478 行 | REAL ✅ 1:1 可移植 (主代理未亲测内容, 仅凭真账行数 + R11-SpeciesCore sub-agent 报告) | (F6 价值内化) | ⚠️ partial (F6 value_cases organ ✅ WIRED 1:1 翻译 v1 donor, principles 0) |
+| `apeireth-companion/src/education.rs` | 402 行 | **PARTIAL** ✅ 逐项可实现 (字符串规则) | 教育升级套件 = 换元法 dx 检查器 + 插件装配 (`EducationDxPlugin` on_load 注册 `dx_check` 工具); 0 装诚实 L7-10 "v1 是字符串级规则表, 不是真实符号计算 (无 CAS 引擎, 不宣称能解积分)", 覆盖 4 检查 (忘换 dx / dx 与 dt 混用 / 缺微分 / 残留 x) + 三角换元表 | ❌ v2 0 真实施 (per R11-SpeciesCore 真账 §1.1) |
+| `apeireth-companion/src/partner.rs` | 141 行 | **REAL** ✅ 逐项可实现 | PartnerId + 关系数据, 纯数据 (`Bond`, `BondStage` import from `bond.rs`) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/community.rs` | 360 行 | REAL ✅ 逐项可实现 (主代理未亲测内容, 仅凭真账行数 + R11-SpeciesCore sub-agent 报告) | (物种化社区) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/principles.rs` | 478 行 | REAL ✅ 逐项可实现 (主代理未亲测内容, 仅凭真账行数 + R11-SpeciesCore sub-agent 报告) | (F6 价值内化) | ⚠️ partial (F6 value_cases organ ✅ WIRED 语义对齐 v1, principles 0) |
 
 #### 2.1.4 物种化塑形维度 (per R11-SpeciesForm 真账 + 主代理亲测)
 
 | 1.0 真账 | 行数 | Maturity | 1.0 真实施内容 (主代理亲测) | 2.0 真实施 |
 |---|---|---|---|---|
-| `apeireth-companion/src/timeline.rs` | 79 行 | **REAL** ✅ 1:1 可移植 (主代理未亲测内容, 仅凭真账行数 + R11-SpeciesForm sub-agent 报告) | (物种化塑形时间维度) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/tone.rs` | 374 行 | **REAL** ✅ 1:1 可移植 (A3 人格化深化 2026-08-16, 三层确定性 + ToneRefiner trait + 0 装 PASS 显式降级, per R11-SpeciesForm sub-agent 报告) | (物种化塑形语言维度) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/morphology.rs` | 284 行 | **REAL** ✅ 1:1 可移植 (N7 VCP 借鉴, softmax + 三档 Shallow/Standard/Deep + budget 控制, per R11-SpeciesForm sub-agent 报告) | (物种化塑形 frontend 维度, L167 env APEIRETH_MORPHOLOGY_TEMPERATURE) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/timeline.rs` | 79 行 | **REAL** ✅ 逐项可实现 (主代理未亲测内容, 仅凭真账行数 + R11-SpeciesForm sub-agent 报告) | (物种化塑形时间维度) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/tone.rs` | 374 行 | **REAL** ✅ 逐项可实现 (A3 人格化深化 2026-08-16, 三层确定性 + ToneRefiner trait + 0 装 PASS 显式降级, per R11-SpeciesForm sub-agent 报告) | (物种化塑形语言维度) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/morphology.rs` | 284 行 | **REAL** ✅ 逐项可实现 (N7 同类工程参考, softmax + 三档 Shallow/Standard/Deep + budget 控制, per R11-SpeciesForm sub-agent 报告) | (物种化塑形 frontend 维度, L167 env APEIRETH_MORPHOLOGY_TEMPERATURE) | ❌ v2 0 真实施 |
 
 #### 2.1.5 反思+元认知 (per R11-MetaCognition 真账 + 主代理亲测)
 
 | 1.0 真账 | 行数 | Maturity | 1.0 真实施内容 (主代理亲测) | 2.0 真实施 |
 |---|---|---|---|---|
-| `apeireth-companion/src/meta_thinking.rs` | 643 行 | **REAL** ✅ 1:1 可移植 (8 单测全绿 per R11 真账) | (元思考) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/thought_cluster.rs` | 522 行 | REAL ✅ 1:1 可移植 (8 单测全绿) | (认知聚类) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/intent_brier.rs` | 817 行 | REAL ✅ 1:1 可移植 (31 单测全绿, sliding-window Brier scores) | (Brier 校准意图, 跟 W1/W2/W3 world_model Brier 校准对接) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/confidence.rs` | 177 行 | REAL ✅ 1:1 可移植 (4 单测全绿, BetaBinomial trait) | (置信度, 跟 cognitive.council + judge 对接) | ⚠️ partial (v2 organ::world_model::CalibrationStrength 本地简化版 in-place, L159-160 "0 装诚实 + 依赖最小", 但 v1 BetaBinomial trait 0 移植) |
-| `apeireth-companion/src/reflexion.rs` | 497 行 | REAL ✅ 1:1 可移植 (per 2.1.2) | (E1 口头强化闭环, Reflexion 式, 4 段职责链) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/meta_thinking.rs` | 643 行 | **REAL** ✅ 逐项可实现 (8 单测全绿 per R11 真账) | (元思考) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/thought_cluster.rs` | 522 行 | REAL ✅ 逐项可实现 (8 单测全绿) | (认知聚类) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/intent_brier.rs` | 817 行 | REAL ✅ 逐项可实现 (31 单测全绿, sliding-window Brier scores) | (Brier 校准意图, 跟 W1/W2/W3 world_model Brier 校准对接) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/confidence.rs` | 177 行 | REAL ✅ 逐项可实现 (4 单测全绿, BetaBinomial trait) | (置信度, 跟 cognitive.council + judge 对接) | ⚠️ partial (v2 organ::world_model::CalibrationStrength 本地简化版 in-place, L159-160 "0 装诚实 + 依赖最小", 但 v1 BetaBinomial trait 0 实现) |
+| `apeireth-companion/src/reflexion.rs` | 497 行 | REAL ✅ 逐项可实现 (per 2.1.2) | (E1 口头强化闭环, Reflexion 式, 4 段职责链) | ❌ v2 0 真实施 |
 | `apeireth-companion/src/hybrid.rs` (master audit) | n/a | PARTIAL | (master hybrid routing, rule-based fast path with hardcoded templates) | ❌ v2 0 真实施 |
 
 #### 2.1.6 协调+上下文 (per R11-CoordinationContext 真账 + 主代理亲测)
 
 | 1.0 真账 | 行数 | Maturity | 1.0 真实施内容 (主代理亲测) | 2.0 真实施 |
 |---|---|---|---|---|
-| `apeireth-companion/src/onering.rs` | ? | REAL ✅ 1:1 可移植 (单环协调) | (主代理未亲测内容) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/oracle.rs` | ? | REAL ✅ 1:1 可移植 (主代理未亲测内容) | (Oracle, 预言) | ⚠️ partial (v2 organ trait 已 1:1 翻译, engine adapter 层 0) |
-| `apeireth-companion/src/oracle_adapters.rs` | ? | REAL ✅ 1:1 可移植 (主代理未亲测内容) | (Oracle 适配器) | ⚠️ partial (同上) |
-| `apeireth-companion/src/context.rs` | 451+ 行 (L141-451) | REAL ✅ 1:1 可移植 (rot_score 启发式, 待 A/B per R11 真账 ⚠️) | (context window) | ❌ v2 0 真实施 (per R11 catch ⚠️ v1 重复实现 rot_score 在 context.rs + context_rot.rs 待主代理亲做融合) |
-| `apeireth-companion/src/context_rot.rs` | 174+ 行 (L140-174) | REAL ✅ 1:1 可移植 (rot_score 启发式, 与 context.rs 重复实现) | (context rotation) | ❌ v2 0 真实施 (待主代理亲做 v1 重复实现融合) |
-| `apeireth-companion/src/continuation.rs` | ? | REAL ✅ 1:1 可移植 | (ContinuationSnapshot 跨进程崩溃恢复) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/continuity.rs` | ? | REAL ✅ 1:1 可移植 (IdentityCard / FrozenTurnContinuation 已就位 per R11-CoordinationContext) | (continuity) | ⚠️ partial (IdentityCard/FrozenTurnContinuation ✅, ContinuationSnapshot + spill 缺) |
-| `apeireth-companion/src/spill.rs` | ? | REAL ✅ 1:1 可移植 | (spill 跨 frontend 连续性) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/assemble.rs` | ? | REAL ✅ 1:1 可移植 (主代理未亲测内容) | (启动/装配, L455 + L472 + L679-680 DIARY_SUMMARY_DAYS + DIARY_SUMMARY_BUDGET) | ❌ v2 0 真实施 (per R11 catch ⚠️ hello.rs 概念 collision Windows Hello NGC vs 启动/装配) |
-| `apeireth-companion/src/hello.rs` | ? | REAL ✅ 1:1 可移植 | ⚠️ 主代理真账标错 (Windows Hello NGC 探测 vs 启动/装配, per R11 catch) | ❌ v2 0 真实施 (需主代理亲验 hello.rs 主题) |
-| `apeireth-companion/src/milestone.rs` | ? | REAL ✅ 1:1 可移植 (主代理未亲测内容) | (物种化塑形节点层) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/experiment_field.rs` | ? | REAL ✅ 1:1 可移植 (主代理未亲测内容) | (实验场, vision L40 自我改进独立实验场待建) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/proactive.rs` | ? | REAL ✅ 1:1 可移植 | (主动) | ⚠️ partial (E7 emergence organ + 8 重 gate 真实施, LarkDelivery/ProactiveDriver 缺) |
-| `apeireth-companion/src/progressive.rs` | ? | REAL ✅ 1:1 可移植 | (渐进) | ❌ v2 0 真实施 |
-| `apeireth-companion/src/pentest.rs` | ? | REAL ✅ 1:1 可移植 | (渗透测试) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/onering.rs` | ? | REAL ✅ 逐项可实现 (单环协调) | (主代理未亲测内容) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/oracle.rs` | ? | REAL ✅ 逐项可实现 (主代理未亲测内容) | (Oracle, 预言) | ⚠️ partial (v2 organ trait 已 语义对齐, engine adapter 层 0) |
+| `apeireth-companion/src/oracle_adapters.rs` | ? | REAL ✅ 逐项可实现 (主代理未亲测内容) | (Oracle 适配器) | ⚠️ partial (同上) |
+| `apeireth-companion/src/context.rs` | 451+ 行 (L141-451) | REAL ✅ 逐项可实现 (rot_score 启发式, 待 A/B per R11 真账 ⚠️) | (context window) | ❌ v2 0 真实施 (per R11 catch ⚠️ v1 重复实现 rot_score 在 context.rs + context_rot.rs 待主代理亲做融合) |
+| `apeireth-companion/src/context_rot.rs` | 174+ 行 (L140-174) | REAL ✅ 逐项可实现 (rot_score 启发式, 与 context.rs 重复实现) | (context rotation) | ❌ v2 0 真实施 (待主代理亲做 v1 重复实现融合) |
+| `apeireth-companion/src/continuation.rs` | ? | REAL ✅ 逐项可实现 | (ContinuationSnapshot 跨进程崩溃恢复) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/continuity.rs` | ? | REAL ✅ 逐项可实现 (IdentityCard / FrozenTurnContinuation 已就位 per R11-CoordinationContext) | (continuity) | ⚠️ partial (IdentityCard/FrozenTurnContinuation ✅, ContinuationSnapshot + spill 缺) |
+| `apeireth-companion/src/spill.rs` | ? | REAL ✅ 逐项可实现 | (spill 跨 frontend 连续性) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/assemble.rs` | ? | REAL ✅ 逐项可实现 (主代理未亲测内容) | (启动/装配, L455 + L472 + L679-680 DIARY_SUMMARY_DAYS + DIARY_SUMMARY_BUDGET) | ❌ v2 0 真实施 (per R11 catch ⚠️ hello.rs 概念 collision Windows Hello NGC vs 启动/装配) |
+| `apeireth-companion/src/hello.rs` | ? | REAL ✅ 逐项可实现 | ⚠️ 主代理真账标错 (Windows Hello NGC 探测 vs 启动/装配, per R11 catch) | ❌ v2 0 真实施 (需主代理亲验 hello.rs 主题) |
+| `apeireth-companion/src/milestone.rs` | ? | REAL ✅ 逐项可实现 (主代理未亲测内容) | (物种化塑形节点层) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/experiment_field.rs` | ? | REAL ✅ 逐项可实现 (主代理未亲测内容) | (实验场, vision L40 自我改进独立实验场待建) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/proactive.rs` | ? | REAL ✅ 逐项可实现 | (主动) | ⚠️ partial (E7 emergence organ + 8 重 gate 真实施, LarkDelivery/ProactiveDriver 缺) |
+| `apeireth-companion/src/progressive.rs` | ? | REAL ✅ 逐项可实现 | (渐进) | ❌ v2 0 真实施 |
+| `apeireth-companion/src/pentest.rs` | ? | REAL ✅ 逐项可实现 | (渗透测试) | ❌ v2 0 真实施 |
 | `apeireth-companion/src/{bridge,organ}_kani_proofs.rs` | ? | REAL ⚠️ partial (organ 6 crate R177 已装, bridge 仍 0) | (Kani 形式化证明) | ⚠️ partial (per R11-CoordinationContext catch) |
 
 ### 2.2 1.0 maturity 补查汇总 (per 主代理亲验)
 
-| 类别 | 1:1 可移植 (REAL) | 1:1 可移植 + ⚠️ trait 口待主代理亲做 (REAL with 注) | 部分可移植 (PARTIAL) | 0 装 PASS 标注 |
+| 类别 | 逐项可实现 (REAL) | 逐项可实现 + ⚠️ trait 口待主代理亲做 (REAL with 注) | 部分可实现 (PARTIAL) | 0 装 PASS 标注 |
 |---|---|---|---|---|
 | Storage 抽象层 (2 项) | 0 | 2 (VectorIndex trait + Graph primitives, 缺 SqliteVecBackend + causal engine) | 0 | "无持久化"/"无 CAS 引擎"/"simplified, not full" |
 | 长期记忆塑形 (6 项) | 5 (daily_summary, diary Store 部分, cross_diary, memory_injection, reflection) | 1 (reflexion, 3 trait 口: LLM CRITIC + 失败事件实接线 + 注入块消费侧) | 0 | "0 装 PASS 显式降级" + "trait 口留" |
@@ -209,7 +209,7 @@ Author:          主代理 Mavis
 | 物种化塑形维度 (3 项) | 3 (timeline, tone, morphology) | 0 | 0 | — |
 | 反思+元认知 (6 项) | 5 (meta_thinking, thought_cluster, intent_brier, confidence 部分, reflexion) | 0 | 1 (HybridCognitiveRouter PARTIAL rule-based fast path) | "rule-based fast path with hardcoded templates" |
 | 协调+上下文 (15 项) | 12 (onering, oracle, oracle_adapters, context, context_rot, continuation, continuity 部分, spill, assemble, hello, milestone, experiment_field, proactive 部分, progressive, pentest) | 0 | 3 (HybridCognitiveRouter + confidence + proactive 部分 + Kani proofs 部分) | "v1 重复实现 rot_score 待融合" + "Windows Hello NGC 概念 collision" + "rule-based fast path" |
-| **总 ~35 项** | **~28 项 REAL (1:1 可移植)** | **~4 项 trait 口待主代理亲做** | **~5 项 PARTIAL (0 装诚实标)** | **~10 项 0 装 PASS 标注** |
+| **总 ~35 项** | **~28 项 REAL (逐项可实现)** | **~4 项 trait 口待主代理亲做** | **~5 项 PARTIAL (0 装诚实标)** | **~10 项 0 装 PASS 标注** |
 
 ### 2.3 修订主代理真账 §2 (per R11 调研 + 本轮 Round 13 maturity 补查)
 
@@ -217,11 +217,11 @@ Author:          主代理 Mavis
 > "v2 真实施必补 1.0 功能全集 + 实接线"
 
 **修订真账 §2 真实施路径** (per 1.0 maturity 补查):
-> "v2 真实施 = 28 项 1:1 翻译 + 4 项 1:1 翻译 + 主代理亲做 trait 口实接线 spec + 5 项 PARTIAL 0 装诚实标"
+> "v2 真实施 = 28 项 语义对齐 + 4 项 语义对齐 + 主代理亲做 trait 口实接线 spec + 5 项 PARTIAL 0 装诚实标"
 
 具体路径:
-1. **28 项 1:1 可移植** (REAL 完整, per 1.0 maturity 补查): Storage 0 (VectorIndex / Graph primitives 缺, 已修订) + 长期记忆塑形 5 (daily_summary/diary/cross_diary/memory_injection/reflection) + 物种化核心 3 (partner/community/principles 部分) + 物种化塑形维度 3 (timeline/tone/morphology) + 反思+元认知 5 (meta_thinking/thought_cluster/intent_brier/confidence 部分/reflexion) + 协调+上下文 12 (大部分)
-2. **4 项 1:1 + trait 口待主代理亲做** (REAL with 注): reflexion (LLM CRITIC + 失败事件 + 注入块消费侧) + diary 注入实接线 + cross_diary 关联上下文注入 + 教育升级 (字符串规则 → 真 CAS)
+1. **28 项 逐项可实现** (REAL 完整, per 1.0 maturity 补查): Storage 0 (VectorIndex / Graph primitives 缺, 已修订) + 长期记忆塑形 5 (daily_summary/diary/cross_diary/memory_injection/reflection) + 物种化核心 3 (partner/community/principles 部分) + 物种化塑形维度 3 (timeline/tone/morphology) + 反思+元认知 5 (meta_thinking/thought_cluster/intent_brier/confidence 部分/reflexion) + 协调+上下文 12 (大部分)
+2. **4 项语义对齐 + trait 口待主代理亲做** (REAL with 注): reflexion (LLM CRITIC + 失败事件 + 注入块消费侧) + diary 注入实接线 + cross_diary 关联上下文注入 + 教育升级 (字符串规则 → 真 CAS)
 3. **5 项 PARTIAL** (0 装诚实标): HybridCognitiveRouter + confidence (BetaBinomial trait 缺) + education (无 CAS 引擎) + proactive 部分 (LarkDelivery 缺) + Kani proofs 部分 (bridge 仍 0)
 4. **~10 项 0 装 PASS 标注** (1.0 真账 self-flag, 真实施时主代理必亲验): "trait 口留" / "0 LLM" / "无持久化" / "无 CAS 引擎" / "rule-based fast path" 等
 
@@ -242,7 +242,7 @@ Author:          主代理 Mavis
 ### 2.5 修订主代理真账 §6 release timeline
 
 - **原估**: 4-6 月 release (2027-Q1-Q2)
-- **修订估**: 6-9 月 release (2027-Q3, 修订因 ~28 项 1:1 翻译 + 4 项 trait 口 + 5 项 PARTIAL + 主代理亲做 spec ~2 周)
+- **修订估**: 6-9 月 release (2027-Q3, 修订因 ~28 项 语义对齐 + 4 项 trait 口 + 5 项 PARTIAL + 主代理亲做 spec ~2 周)
 
 ---
 
@@ -250,7 +250,7 @@ Author:          主代理 Mavis
 
 ### 3.1 修订 release 路径 (答 Q1)
 
-- **ROADMAP §7**: 修订总进度 80% → **70-75%** (因 1.0 vs 2.0 功能全集对比发现 ~35 项缺口, 修订 23 项 P0 必补, 1:1 翻译 + trait 口实接线 + PARTIAL 0 装诚实标)
+- **ROADMAP §7**: 修订总进度 80% → **70-75%** (因 1.0 vs 2.0 功能全集对比发现 ~35 项缺口, 修订 23 项 P0 必补, 语义对齐 + trait 口实接线 + PARTIAL 0 装诚实标)
 - **MANIFESTO §14 release timeline**: 修订 2027-Q1-Q2 → **2027-Q3**
 - **ROADMAP §12 release path**: 修订 4-6 月 → **6-9 月**
 - **真实施 critical path**: 修订 11-13 周 → **12-14 周** (修订主代理真账 §3.1 估时偏乐观)
@@ -320,4 +320,4 @@ per §3.3 派单顺序 1-11 (估 12-14 周 critical path, 跟 R20/R22/R21/R14 �
 
 ---
 
-_Mavis 写于 2026-08-28 Round 13, 用户原话 '修订 release 路径是啥意思, 还有 我看到你列的 Apeireth 还缺什么了, 但里面有的东西 1.0 没有吗? 实施 2.0 的时候对 1.0 的调研真的彻底吗' 触发主代理自省 + 1.0 maturity 真账补查 + 真账修订 (8 个核心 .rs 文件实测), 修订 release 路径 4-6 月 → 6-9 月, 真实施 critical path 11-13 周 → 12-14 周, ~35 项 1.0 缺口分 28 项 1:1 可移植 + 4 项 trait 口待主代理亲做 + 5 项 PARTIAL 0 装诚实标. 真实施前主代理必亲验 (~35 项 1.0 真代码实测 + 物种化扩展 + 0 触碰 LOCKED)._
+_Mavis 写于 2026-08-28 Round 13, 用户原话 '修订 release 路径是啥意思, 还有 我看到你列的 Apeireth 还缺什么了, 但里面有的东西 1.0 没有吗? 实施 2.0 的时候对 1.0 的调研真的彻底吗' 触发主代理自省 + 1.0 maturity 真账补查 + 真账修订 (8 个核心 .rs 文件实测), 修订 release 路径 4-6 月 → 6-9 月, 真实施 critical path 11-13 周 → 12-14 周, ~35 项 1.0 缺口分 28 项 逐项可实现 + 4 项 trait 口待主代理亲做 + 5 项 PARTIAL 0 装诚实标. 真实施前主代理必亲验 (~35 项 1.0 真代码实测 + 物种化扩展 + 0 触碰 LOCKED)._

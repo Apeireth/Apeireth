@@ -3,7 +3,7 @@ name: Cargo audit (RUSTSEC advisories)
 # R61 B0 续: cargo audit 每周 + workflow_dispatch (跟 cargo-deny.yml 平行)
 # 借 RustSec advisory-db 自动; install 1 次 cargo-audit 然后 cargo audit --json
 #
-# 借鉴来源 (mirror cargo-deny.yml R19 第 0 阶段):
+# 结构对齐 (mirror cargo-deny.yml R19 第 0 阶段):
 # - wasmtime .github/workflows/main.yml [cargo_audit] job
 # - qdrant-spark 的 audit workflow
 #
@@ -59,25 +59,29 @@ jobs:
       - name: Run cargo audit (json + exit code)
         # 0 vulnerabilities 期望; 有 vuln 时 fails CI
         # CI fix 2026-08: cargo-audit 0.22 默认不读项目 audit.toml (仅 ~/.cargo/audit.toml),
-        # 用 --ignore 显式同步 deny.toml 的 unmaintained 清单 (真实漏洞 0 ignore)
-        # 注意: run 必须用 | 块标量 (普通标量折叠换行 → `\` 续行失效 → ' --ignore' 变子命令)
+        # 需要 ignore 时用 --ignore 显式同步 audit.toml / deny.toml 清单 (真实漏洞 0 ignore)。
+        # 2026-10-06 复核批 (交接工作包 §4.4): 原 21 条 --ignore 全部 unmatched (与
+        # audit.toml 20 条 / deny.toml 10 条同样漂移), 按 0-ignore austere 模式清空,
+        # 三处同步为空; 新增 ignore 须三处同步并写理由。
+        # 注意: run 必须用 | 块标量 (普通标量折叠换行 → `\` 续行失效)
+        # 2026-10-03 曾加 3 条 --ignore (apeireth-tui → ratatui 0.29 → paste/lru 0.12
+        # transitive 未修复面)。2026-10-12 零债清偿批: ratatui 0.30 迁移落地,
+        # 三条面已消 (paste 不在依赖树, lru 单一 0.18.5 修复线), --ignore 清空,
+        # 与 audit.toml / deny.toml 三处同步。
         run: |
           cargo audit --json --deny warnings \
-            --ignore RUSTSEC-2024-0411 --ignore RUSTSEC-2024-0412 --ignore RUSTSEC-2024-0413 \
-            --ignore RUSTSEC-2024-0414 --ignore RUSTSEC-2024-0415 --ignore RUSTSEC-2024-0416 \
-            --ignore RUSTSEC-2024-0417 --ignore RUSTSEC-2024-0418 --ignore RUSTSEC-2024-0419 \
-            --ignore RUSTSEC-2024-0420 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0370 \
-            --ignore RUSTSEC-2026-0173 --ignore RUSTSEC-2025-0075 --ignore RUSTSEC-2025-0080 \
-            --ignore RUSTSEC-2025-0081 --ignore RUSTSEC-2025-0098 --ignore RUSTSEC-2025-0100 \
-            --ignore RUSTSEC-2026-0174 --ignore RUSTSEC-2025-0141 \
-            --ignore RUSTSEC-2026-0217 \
             > audit-report.json || echo "audit non-zero exit captured in report"
 
       - name: Convert JSON report to SARIF (R66)
-        # 借鉴 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
+        # 语义对齐 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
         # 0 引新 dep; 走 python3 (GitHub Actions ubuntu-latest 默认带).
-        # CI fix 2026-08: cargo-audit 0.22 的 vulnerabilities.found 在 0 漏洞时是 false (非 []),
-        # 脚本要 or [] 兜底 (之前 TypeError: 'bool' object is not iterable)
+        # CI fix 2026-09: cargo-audit 0.22 的 JSON 里 vulnerabilities.found 是布尔值
+        # (true/false), 漏洞条目在 vulnerabilities.list。修复前迭代 `found` 并用 `or []`
+        # 兜底 —— `or []` 只兜 falsy, 兜不住 true, 所以 0 漏洞时正常、一旦真有漏洞就
+        # TypeError: 'bool' object is not iterable (2026-09-23 首次真实漏洞暴露:
+        # run 35835024572 步骤 "Convert JSON report to SARIF" 失败)。
+        # 守门机制必须能在"发现漏洞"这一时刻工作, 故改为迭代 list; severity 缺省/为
+        # null 时按 1 (warning) 处理, 不因缺字段崩。
         run: |
           python3 - <<'PYEOF'
           import json, sys, datetime, hashlib
@@ -86,7 +90,7 @@ jobs:
           findings = []
           vuln_index = {}
           vulns = report.get("vulnerabilities") or {}
-          for v in (vulns.get("found") or []):
+          for v in (vulns.get("list") or []):
               advisory = v.get("advisory", {})
               aid = advisory.get("id", "UNKNOWN")
               pkg = v.get("package", {})
@@ -96,7 +100,7 @@ jobs:
               vuln_index[rule_id] = {"package": pkg_name, "version": pkg_version}
               findings.append({
                   "ruleId": rule_id,
-                  "level": "error" if advisory.get("severity", 1) >= 5 else "warning",
+                  "level": "error" if (advisory.get("severity") or 1) >= 5 else "warning",
                   "message": {"text": advisory.get("description", advisory.get("title", aid))},
                   "locations": [{
                       "physicalLocation": {
@@ -149,7 +153,8 @@ jobs:
 
       - name: Upload SARIF to Code Scanning (R66)
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        # 2026-10-03: v3 已 EOL (GitHub 强制退役旧主版), 升 v4 —— 否则本步必败
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: audit-report.sarif
           category: cargo-audit

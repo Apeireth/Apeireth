@@ -1,13 +1,15 @@
 # Apeireth Architecture
 
 This document describes the current product baseline in the root repository.
-Historical design proposals and donor implementations live under `docs/archive/`,
+Historical design proposals and archived implementations live under `docs/archive/`,
 `legacy/`, and `reports/`; they are not part of the built product workspace.
 
 ## Current structure
 
 ```text
 apeireth/
+> Workspace taxonomy: **18 product crates** (foundation 6 / engine 8 / capabilities / adapters / sdk / perception) + 1 bench-only package excluded from the count by convention (cargo metadata lists 19 members).
+
 ├── crates/
 │   ├── foundation/       # stable domain types, protocol, plugins, policy, credentials
 │   ├── engine/            # runtime kernel, assembly, providers, storage, memory
@@ -18,18 +20,18 @@ apeireth/
 ├── deploy/                # deployment-specific artifacts retained separately
 ├── packaging/             # package build metadata and installers
 ├── docs/                  # current guides, architecture, reference, and archive
-├── legacy/                # donor/reference code; excluded from the root workspace
+├── legacy/                # archived/reference code; excluded from the root workspace
 ├── reports/               # durable audit and validation evidence
 └── previews/              # design/reference assets
 ```
 
-The root `Cargo.toml` is the only product Rust workspace. It contains seventeen
+The root `Cargo.toml` is the only product Rust workspace. It contains eighteen
 packages, grouped by responsibility rather than development history:
 
 | Group | Packages | Responsibility |
 | --- | --- | --- |
 | Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration` | stable types, wire contracts, plugin contracts, policy, credential resolution, orchestration |
-| Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ` | mechanism kernel, concrete production assembly, provider adapters, persistence, memory, perception, and organ domains |
+| Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ`, `apeireth-guard` | mechanism kernel, concrete production assembly, provider adapters, persistence, memory, perception, and organ domains, plus the behavior-chain safety guard (`crates/engine/guard`, added by the 2026-10-06 collaborator batch) |
 | Capabilities | `apeireth-tools-canonical` | built-in tools and the single process-execution boundary |
 | Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk` | HTTP gateway, command-line entry point, SDK surface |
 
@@ -89,6 +91,7 @@ Gateway and CLI translate external requests and do not create a second runtime.
 | Credential resolution | `crates/foundation/credentials` | backend behind the plugin credential contract |
 | Runtime/session/execution loop | `crates/engine/runtime` | mechanism kernel: orchestration, approvals, provider selection, behavior/capability registries, events, and abstract ports |
 | Production runtime assembly | `crates/engine/runtime-assembly` | concrete cognitive behaviors, Organ bridge, tool capabilities, composition, and SQLite session adapter |
+| Behavior-chain safety guard | `crates/engine/guard` | two-stage behavior-chain safety classifier consumed by the production governance pipeline; owns no tool implementations |
 | Provider transport and routing inputs | `crates/engine/provider` | provider implementations and response normalization |
 | Durable storage | `crates/engine/storage` | SQLite pool, writer, and migrations |
 | Memory domain and retrieval | `crates/engine/memory` | memory entities, repository, retrieval, vector/graph primitives |

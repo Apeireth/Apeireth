@@ -10,6 +10,10 @@ description = "Apeireth 感知层 trait (P-arch 2026-08-27, A3): 5 modality (Tex
 [dependencies]
 apeireth-core = { path = "../../foundation/core" }
 apeireth-plugin = { path = "../../foundation/plugin" }
+# 感知→记忆接线链复用: L2 披露封套 (untrusted_envelope) + 活动标题脱敏
+apeireth-orchestration = { path = "../../foundation/orchestration" }
+# 记忆面 episodic 写入 (真产出链终点)
+apeireth-memory = { path = "../memory" }
 async-trait = { workspace = true }
 reqwest = { workspace = true, features = ["multipart"] }
 serde = { workspace = true }

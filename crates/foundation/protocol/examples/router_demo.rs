@@ -13,7 +13,7 @@
 //! **期望输出**:
 //! - 4 协议 request body 结构 (json pretty)
 //! - 4 协议 response body 归一化 (content / finish_reason / tool_calls / usage)
-//! - 终点: 总结 4 协议字段差异 + VCP 借鉴映射
+//! - 终点: 总结 4 协议字段差异 + 归一化映射
 
 use apeireth_protocol::{
     decode_for_kind, encode_for_kind, endpoint_path_for_kind, is_tool_result_error,
@@ -232,26 +232,26 @@ fn main() {
     }
 
     // ============================================================
-    // 第 3 步: 字段级 VCP 借鉴映射
+    // 第 3 步: 字段归一化映射
     // ============================================================
-    print_section("3. 字段级 VCP 真代码借鉴映射");
+    print_section("3. 字段归一化映射");
 
     println!();
-    println!("| 借鉴点                  | VCP 真文件 + 行号                  | 借鉴落地                    |");
+    println!("| 归一化点                | 协议字段惯例                        | 落地                        |");
     println!("|-------------------------|------------------------------------|------------------------------|");
-    println!("| 归一化 message role     | protocolBridge.js:47-52             | MessageRole::from_legacy_value()      |");
-    println!("| 归一化 content          | protocolBridge.js:21-42             | ContentPart::from_legacy_value()      |");
-    println!("| 归一化 tool 3 步判定    | protocolBridge.js:63-89             | NormalizedTool 构造          |");
-    println!("| 归一化 tool_choice      | protocolBridge.js:120-156           | NormalizedToolChoice 枚举    |");
-    println!("| Gemini functionDecl.    | protocolBridge.js:91-118            | GeminiAdapter.build_tools    |");
-    println!("| 工具结果错误 5 字段     | chatCompletionHandler.js:286-323   | error::is_tool_result_error  |");
-    println!("| Keep-Alive 5 字段       | chatCompletionHandler.js:22-28     | lib.rs 编译期 hardcode       |");
+    println!("| 归一化 message role     | role 字段规范                       | MessageRole::from_legacy_value()      |");
+    println!("| 归一化 content          | content 字段规范                    | ContentPart::from_legacy_value()      |");
+    println!("| 归一化 tool 3 步判定    | tool 调用规范                       | NormalizedTool 构造          |");
+    println!("| 归一化 tool_choice      | tool_choice 规范                    | NormalizedToolChoice 枚举    |");
+    println!("| Gemini functionDecl.    | functionDecl 规范                   | GeminiAdapter.build_tools    |");
+    println!("| 工具结果错误 5 字段     | 错误字段惯例                        | error::is_tool_result_error  |");
+    println!("| Keep-Alive 5 字段       | 连接保活惯例                        | lib.rs 编译期 hardcode       |");
     println!("|                         | (战役 1-2 apeireth-http-client 落地) |                          |");
 
     // ============================================================
     // 第 4 步: is_tool_result_error 演示
     // ============================================================
-    print_section("4. is_tool_result_error 演示 (VCP chatCompletionHandler.js:286-323)");
+    print_section("4. is_tool_result_error 演示");
 
     let cases: Vec<(&str, serde_json::Value, bool)> = vec![
         ("null (空结果)", json!(null), false),
@@ -281,12 +281,12 @@ fn main() {
     println!();
     println!("  ✅ 4 协议都真实现 (不止 OpenAI, R17 战役 0 已直连 minimaxi)");
     println!("  ✅ NormalizedRequest/Response 统一内部表示");
-    println!("  ✅ 字段级引用 VCP 真代码 (文件 + 行号 + 真函数名 + 真字段名)");
+    println!("  ✅ 字段级归一化映射 (真函数名 + 真字段名)");
     println!("  ✅ 不调 LLM, 全 fake JSON, 0 key 消耗 (主哲学锚 #6)");
     println!("  ✅ 编译期 hardcode (KEEP_ALIVE 5 字段 + 4 协议常量)");
     println!();
     println!("  下一步: 战役 1-2 把 apeireth-protocol 接进 apeireth-api + apeireth-pipeline");
-    println!("          战役 1-2 在 apeireth-http-client 落 Keep-Alive 5 字段 (VCP 真代码)");
+    println!("          战役 1-2 在 apeireth-http-client 落 Keep-Alive 5 字段");
     println!();
     println!("============================================================");
     println!("  demo 完成 (不调 LLM, 不消耗 key, 4 协议全跑通)");

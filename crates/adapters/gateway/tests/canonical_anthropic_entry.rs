@@ -1,5 +1,5 @@
 //! Deterministic proof that the real HTTP gateway entry reaches canonical
-//! execution through the **migrated** anthropic provider.
+//! execution through the **canonical** anthropic provider.
 //!
 //! Mirrors `canonical_minimax_entry.rs` but wires the real
 //! `AnthropicProviderPlugin` (a canonical `ProviderCapability`, not
@@ -145,7 +145,7 @@ async fn the_real_gateway_entry_serves_through_the_anthropic_provider() {
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-    // The migrated canonical anthropic capability served the turn through the
+    // The canonical anthropic capability served the turn through the
     // real HTTP gateway entry — not a compat.* bridge id, not an OpenAI provider.
     assert_eq!(body["served_by"], "provider.anthropic");
     assert_eq!(body["text"], "hello via anthropic gateway");

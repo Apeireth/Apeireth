@@ -26,6 +26,8 @@
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
   import type {ApeirethConfig, ApprovalRequestItem, CapabilityManifest, ToolItem} from '../types';
   import {fetchApprovalRequests, fetchGrants, fetchTools, grantToolPermission, revokeGrant, capabilityAvailable, capabilitySupported, friendlyErrorMessage} from '../runtime';
+  // 0 装：清单未到 ≠ 不支持——复用治理卷宗的诚实等待态（12s 转圈 → 超时说明）。
+  import GovManifestPending from './governance/GovManifestPending.svelte';
 
   let {
     config,
@@ -95,7 +97,10 @@
       grants = grantsRes;
 
       // If all capabilities unsupported, show informative error
-      if (!capabilitySupported(capabilities, 'tools.list') &&
+      // （0 装：仅在清单真的到达后才有资格说「不支持」——离线时清单为 null，
+      //  说「未实现」是把不知道说成没有。走查 2026-09-23 实证。）
+      if (capabilities !== null &&
+          !capabilitySupported(capabilities, 'tools.list') &&
           !capabilitySupported(capabilities, 'permissions.approval.read') &&
           !capabilitySupported(capabilities, 'permissions.grants.read')) {
         error = '工具内省不支持: 当前运行时未实现工具/权限审批 API (Apeireth 2.0 canonical gateway 无此内省功能)';
@@ -247,14 +252,21 @@
       {/if}
     </div>
 
-    <div class="tools-summary-meta">
-      <span>已装配工具: <b>{tools.length}</b> 个</span>
-    </div>
+    <!-- 计数只在「真的知道」时显示：拉取失败时空列表 + 「0 个」会与上方错误态
+         并存成矛盾信息（走查 rev-tools 实证）——错误态由 ErrorState 自己说明。 -->
+    {#if !(error && !tools.length)}
+      <div class="tools-summary-meta">
+        <span>已装配工具: <b>{tools.length}</b> 个</span>
+      </div>
+    {/if}
   </div>
 
   <!-- Tools Grid -->
   <div class="tools-container">
-    {#if loading && !tools.length}
+    {#if capabilities === null && !tools.length}
+      <!-- 清单未到 ≠ 不支持：复用治理卷宗诚实等待态（0 装，走查修复 2026-09-23） -->
+      <GovManifestPending message="正在读取运行时能力清单…" />
+    {:else if loading && !tools.length}
       <LoadingState message="正在连接工具注册表…" />
     {:else if error && !tools.length}
       <ErrorState title="拉取工具列表失败" message={error} onRetry={loadData} />

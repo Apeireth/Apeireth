@@ -1,6 +1,6 @@
 //! HTML to plain-text extraction (hand-rolled tokenizer, pure std).
 //!
-//! Ported from legacy `apeireth-tool-fetch::html_extract` (R149 baseline).
+//! Semantics aligned with legacy `apeireth-tool-fetch::html_extract` (R149 baseline).
 //! Scope is honestly narrow: a hand-rolled tokenizer that handles the common
 //! case — script/style content is skipped, block-level tags become newlines,
 //! named and numeric HTML entities are decoded, and text is whitespace-
@@ -212,8 +212,8 @@ mod tests {
 
     #[test]
     fn extract_numeric_entities() {
-        // Donor decoder handles decimal numeric entities (`&#65;` → A). Hex
-        // (`&#x42;`) is not in the ported algorithm.
+        // The decoder handles decimal numeric entities (`&#65;` → A). Hex
+        // (`&#x42;`) is not in the implemented algorithm.
         let h = "<p>&#65;&#66;</p>";
         let t = extract_text(h).unwrap();
         assert!(t.contains("AB"), "{t}");

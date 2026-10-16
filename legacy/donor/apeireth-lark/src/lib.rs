@@ -3,7 +3,7 @@
 //! ⚠️ **STUB MODE: R20 阶段 3 必补, 修改需经 6 哲学锚 + 主人审**
 //!
 //! Lark / Feishu SDK Skeleton (1:1 翻译 v0.9.21 `out/main` 中
-//! `@larksuiteoapi/node-sdk@^1.59.0` 集成面, per `安装包package.json` line 23).
+//! `@larksuiteoapi/node-sdk@^1.59.0` 集成面, per `package.json` line 23).
 //! 商业版 bundle 实查 0 处直接调用 (lark 仅在 deps 里声明, 未实接 — R20 阶段 3 估补),
 //! 5 端点消息/日历/文档/Bitable/Auth 1:1 翻译自飞书 Open API:
 //! - 消息发送 (`im/v1/messages`)

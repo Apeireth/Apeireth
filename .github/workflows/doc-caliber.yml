@@ -1,0 +1,49 @@
+name: Doc caliber (四级口径守门)
+
+# W8③ (docs/04-internal/engineering-review-handoff-2026-10-06.md §5 W8):
+# 把 0 装纪律 (O-5 锚) 变成机器可检查信号 —— 文档出现"已实现/已接线"时,
+# 必须同段出现四级口径之一 (docs/01-architecture/system-capabilities.md 定义:
+# IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED)。
+# 增量守门: 只查本次 push/PR 改动过的 .md; 历史档案由脚本自身规则跳过
+# (docs/archive/ legacy/ reports/ research/ 等 + 日期/轮次文件名 + 历史横幅),
+# 不追溯存量欠账 —— 动过的活跃文档才须合规。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - '**.md'
+      - 'scripts/check_doc_caliber.py'
+      - 'scripts/doc-caliber-baseline.txt'
+  pull_request:
+    paths:
+      - '**.md'
+      - 'scripts/check_doc_caliber.py'
+      - 'scripts/doc-caliber-baseline.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  doc-caliber:
+    name: doc caliber gate (changed active docs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check changed active docs
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            BASE="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+          fi
+          echo "base=$BASE head=$GITHUB_SHA"
+          python3 scripts/check_doc_caliber.py --changed "$BASE" "$GITHUB_SHA"

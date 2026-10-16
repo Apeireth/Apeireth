@@ -24,6 +24,8 @@ path = "src/lib.rs"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
+# 文件读写统一走 fs_err (clippy.toml disallowed-methods 约束, 测试面同样适用)
+fs-err = { workspace = true }
 
 [lints]
 workspace = true

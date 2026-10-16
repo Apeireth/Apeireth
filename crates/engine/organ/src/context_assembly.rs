@@ -1,8 +1,8 @@
 //! Budgeted context-block assembler (relational prompt injection).
 //!
-//! Recovered from `legacy/donor/apeireth-companion/src/context.rs` (the block
+//! Scope: the block
 //! pipeline only — rot scoring already lives in
-//! `apeireth-orchestration::context_rot` and is a different algorithm).
+//! `apeireth-orchestration::context_rot` and is a different algorithm.
 //!
 //! - Ordered named blocks with a total character budget.
 //! - Core blocks (persona / identity / essential story) are never truncated.

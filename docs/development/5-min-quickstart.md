@@ -22,7 +22,7 @@ Clone the repository and verify the core workspace:
 git clone https://github.com/Apeireth/Apeireth.git
 cd apeireth-rust
 
-# 2. Run all workspace tests (17 crates)
+# 2. Run all workspace tests (18 crates)
 cargo test --workspace
 ```
 
@@ -30,9 +30,11 @@ cargo test --workspace
 
 ## 💬 3. Run the CLI / Start the HTTP Gateway
 
-### Option A: Interactive CLI Chat
+### Option A: Single-Turn CLI Chat (requires APEIRETH_API_KEY)
 ```bash
-cargo run -p apeireth-cli -- chat
+# PowerShell: $env:APEIRETH_API_KEY = "sk-..."
+cargo run -p apeireth-cli -- chat "Hello — do you remember me?"
+# `chat` is a one-shot command (not an interactive REPL).
 ```
 
 ### Option B: Launch the Local HTTP Gateway (Port 8080)

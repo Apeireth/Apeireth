@@ -1,5 +1,5 @@
 //! Deterministic proof that the real HTTP gateway entry reaches canonical
-//! execution through the **migrated** minimax provider.
+//! execution through the **canonical** minimax provider.
 //!
 //! This mirrors `canonical_entry_e2e.rs`, but instead of a scripted
 //! `FakeProvider` it wires the real `MinimaxProviderPlugin` (a canonical
@@ -123,7 +123,7 @@ fn native_request(session: SessionId, input: &str) -> Request<Body> {
 }
 
 #[tokio::test]
-async fn the_real_gateway_entry_serves_through_the_migrated_provider() {
+async fn the_real_gateway_entry_serves_through_the_minimax_provider() {
     let server = MockServer::start(openai_success_body()).await;
     let http = reqwest::Client::builder().build().unwrap();
     let plugin = Arc::new(
@@ -152,7 +152,7 @@ async fn the_real_gateway_entry_serves_through_the_migrated_provider() {
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-    // The migrated canonical capability served the turn through the real HTTP
+    // The canonical capability served the turn through the real HTTP
     // gateway entry — not a compat.* bridge id.
     assert_eq!(body["served_by"], "provider.minimax");
     assert_eq!(body["text"], "hello via gateway");

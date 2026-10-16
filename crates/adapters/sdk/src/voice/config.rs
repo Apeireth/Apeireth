@@ -1,13 +1,13 @@
-//! # Voice Config (per @anthropic-ai/voice v0.9.21 1:1 翻译)
+//! # Voice Config (per 既有 Voice SDK)
 //!
-//! VoiceConfig 5 段 (per v0.9.21 + task spec §1):
+//! VoiceConfig 5 段 (按既有实现 + task spec §1):
 //! 1. **wake** — 唤醒词配置 (per `WakeWord`, 默认 `Hardcoded("apeireth")`)
 //! 2. **stt** — STT 模型配置 (per `SttModel`, 默认 `Whisper`)
 //! 3. **tts** — TTS 模型配置 (per `TtsModel`, 默认 `ElevenLabs`)
 //! 4. **vad** — VAD 配置 (per `VadConfig`, 默认 `Energy`)
 //! 5. **audio** — 全局音频格式 (format/sample_rate/bit_depth/channels/language)
 //!
-//! **STUB**: 5 段配置字段保留 1:1 翻译, 但实际不真接 SDK.
+//! **STUB**: 5 段配置字段保留, 但实际不真接 SDK.
 
 use serde::{Deserialize, Serialize};
 
@@ -24,28 +24,28 @@ use crate::voice::wake::{WakeWord, WakeWordCategory, VOICE_DEFAULT_WAKE_WORD};
 /// VoiceConfig 段数 (per task spec §1, 编译期 hardcode 5).
 pub const VOICE_CONFIG_SECTION_COUNT: usize = 5;
 
-/// 默认 audio 格式 (per v0.9.21估 wav).
+/// 默认 audio 格式 (按既有实现估算 wav).
 pub const DEFAULT_AUDIO_FORMAT: &str = "wav";
 
-/// 默认采样率 (16kHz, per Porcupine 官方 + v0.9.21估).
+/// 默认采样率 (16kHz, per Porcupine 官方 + 既有实现估).
 pub const DEFAULT_AUDIO_SAMPLE_RATE: u32 = 16_000;
 
-/// 默认位深 (16-bit, per v0.9.21估).
+/// 默认位深 (16-bit, 按既有实现估算).
 pub const DEFAULT_AUDIO_BIT_DEPTH: u16 = 16;
 
-/// 默认通道数 (单声道, per v0.9.21估).
+/// 默认通道数 (单声道, 按既有实现估算).
 pub const DEFAULT_AUDIO_CHANNELS: u8 = 1;
 
-/// 默认语言 (英语, per v0.9.21估).
+/// 默认语言 (英语, 按既有实现估算).
 pub const DEFAULT_AUDIO_LANGUAGE: &str = "en";
 
 // ============================================================================
-// §2 AudioConfig 全局音频配置 (per v0.9.21 1:1 翻译)
+// §2 AudioConfig 全局音频配置 (per 对齐既有实现)
 // ============================================================================
 
-/// 全局音频配置 (per v0.9.21 `audio_config` 字段 1:1 翻译).
+/// 全局音频配置 (按既有实现 `audio_config` 字段).
 ///
-/// 字段对应 v0.9.21 `AudioConfig` 对象:
+/// 字段对应既有实现 `AudioConfig` 对象:
 /// - `format` (wav/mp3/opus/flac)
 /// - `sample_rate` (8000..=48000)
 /// - `bit_depth` (8/16/24/32)
@@ -98,6 +98,16 @@ impl AudioConfig {
             language,
         })
     }
+
+    /// 全量 K-1 校验 (格式 / 采样率 / 位深 / 通道 / 语言, 5 项).
+    pub fn validate(&self) -> VoiceResult<()> {
+        VoiceError::validate_audio_format(&self.format)?;
+        VoiceError::validate_sample_rate(self.sample_rate)?;
+        VoiceError::validate_bit_depth(self.bit_depth)?;
+        VoiceError::validate_channels(self.channels)?;
+        VoiceError::validate_language(&self.language)?;
+        Ok(())
+    }
 }
 
 impl Default for AudioConfig {
@@ -112,7 +122,7 @@ impl Default for AudioConfig {
 
 /// VoiceConfig 主配置 (5 段, per task spec §1).
 ///
-/// 字段对应 v0.9.21 `VoiceConfig` 对象:
+/// 字段对应既有实现 `VoiceConfig` 对象:
 /// - `wake` (per `WakeWord`, 默认 `Hardcoded("apeireth")`)
 /// - `stt` (per `SttModel`, 默认 `Whisper`)
 /// - `tts` (per `TtsModel`, 默认 `ElevenLabs`)
@@ -148,12 +158,12 @@ impl VoiceConfig {
     pub fn validate(&self) -> VoiceResult<()> {
         // wake.keyword 必须非空
         if self.wake.keyword.trim().is_empty() {
-            return Err(VoiceError::Other("wake.keyword is empty".to_string()));
+            return Err(VoiceError::InvalidArgument(
+                "wake.keyword is empty".to_string(),
+            ));
         }
-        // 交叉: audio.sample_rate 必须匹配 stt/tts 模型范围
-        VoiceError::validate_sample_rate(self.audio.sample_rate)?;
-        // 交叉: audio.language 必合法
-        VoiceError::validate_language(&self.audio.language)?;
+        // audio 段全量 K-1 校验 (格式 / 采样率 / 位深 / 通道 / 语言)
+        self.audio.validate()?;
         Ok(())
     }
 
@@ -286,6 +296,9 @@ mod tests {
     fn k1_voice_config_validate_rejects_empty_wake() {
         let mut config = VoiceConfig::default_apeireth();
         config.wake.keyword = String::new();
-        assert!(matches!(config.validate(), Err(VoiceError::Other(_))));
+        assert!(matches!(
+            config.validate(),
+            Err(VoiceError::InvalidArgument(_))
+        ));
     }
 }

@@ -5,10 +5,11 @@
    * 全屏绝对定位铺底；z-index 不设，由调用方控制层序（规范 §5.1：场景层在 z 最低）。
    *
    * Props:
-   *   presence        —— { p, a, d, mode } | null；null 时用默认（quiet + PAD 0）。
-   *                        mode 映射到原型状态机；p/a/d 为 v1 简化映射（亮度 += p*0.15、
-   *                        转速 += a*0.4，数值 TODO 待实拍校准，规范 §4.1/B-2）。
-   *                        形状与将来的 src/lib/presence.ts presenceStore 订阅值对齐。
+   *   presence        —— { p, a, d, intensity, mode } | null；null 时用默认（quiet + PAD 0）。
+   *                        形状与 src/lib/presence.ts presenceStore.current 对齐（契约 §8a
+   *                        presence_state 回合级帧；intensity 驱动 §4.1 turb 映射）。
+   *                        mode 映射到原型状态机；p/a/d/intensity 经 §4.1 映射表 +
+   *                        heuristic_v0 保守增益（tokens.ts PRESENCE_HEURISTIC_V0_GAIN）。
    *   hour            —— 舰内时刻 0-24；null 时跟随本地时钟。
    *   interactive     —— 是否响应鼠标轨道视差（页面层打开时调用方关掉）。
    *   onBlackholeClick —— 点击黑洞区域（光子环 1.05R 以内）时回调；组件内部同时自管理
@@ -26,6 +27,7 @@
     hour = null,
     interactive = true,
     cameraIndex = null,
+    paused = false,
     onBlackholeClick,
   }: {
     presence?: PresenceInput | null;
@@ -34,6 +36,8 @@
     /** 受控机位（波次 4 三模式）：null = 引擎内部自管理（快捷键/点黑洞，现状不变）；
      *  非 null 时按值调 engine.setCamera。reduced-motion 下引擎仍锁定远眺，纪律不变。 */
     cameraIndex?: number | null;
+    /** 静态背景主题 = true：暂停渲染循环（规范 §8 增补，WebGL 不在静态图下空转）。 */
+    paused?: boolean;
     onBlackholeClick?: () => void;
   } = $props();
 
@@ -49,7 +53,8 @@
   function applyPresence(p: PresenceInput | null): void {
     if (!engine) return;
     engine.setMode(p?.mode ?? 'quiet');
-    engine.setPadBias({p: p?.p ?? 0, a: p?.a ?? 0, d: p?.d ?? 0});
+    // intensity 仅在确有回合级帧时传递；null 让引擎回落模式基线（显影分级：心跳不动光环）。
+    engine.setPadBias({p: p?.p ?? 0, a: p?.a ?? 0, d: p?.d ?? 0}, p ? p.intensity : null);
   }
 
   onMount(() => {
@@ -82,6 +87,9 @@
   });
   $effect(() => {
     if (cameraIndex !== null) engine?.setCamera(cameraIndex);
+  });
+  $effect(() => {
+    engine?.setPaused(paused);
   });
 
   function handleSceneClick(e: MouseEvent): void {

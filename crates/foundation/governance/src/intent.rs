@@ -171,7 +171,13 @@ impl TaskIntentEnvelopeV1 {
         let trace_id = trace_id.into();
         Self {
             schema_version: Self::SCHEMA_VERSION.to_string(),
-            intent_id: format!("intent:{trace_id}"),
+            // push_str 而非 format!: format! 插值是 CBMC 引雷点; push_str
+            // 输出逐字节等价 ("intent:" + trace_id), 生产语义零差异。
+            intent_id: {
+                let mut id = String::from("intent:");
+                id.push_str(&trace_id);
+                id
+            },
             session_id,
             trace_id,
             intent_class: IntentClass::Unknown,
@@ -237,7 +243,11 @@ impl TaskIntentEnvelopeV1 {
 
     pub fn allows_publish(&self) -> bool {
         self.allows_operation(OperationClass::Publish)
-            || matches!(self.intent_class, IntentClass::RepositoryPublish)
+            // 类目兜底只补"缺口"不推翻"声明"：操作轴已有显式内容时，类目不再放行
+            // （与读权限的类目兜底同语义——两轴独立把关，声明优先于类目）。
+            || (matches!(self.intent_class, IntentClass::RepositoryPublish)
+                && self.allowed_effects.is_empty()
+                && self.requested_operations.is_empty())
     }
 }
 
@@ -274,5 +284,43 @@ impl TurnSecurityContext {
     pub fn with_intent(mut self, intent: TaskIntentEnvelopeV1) -> Self {
         self.intent = Some(intent);
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn publish_class_envelope() -> TaskIntentEnvelopeV1 {
+        TaskIntentEnvelopeV1 {
+            intent_class: IntentClass::RepositoryPublish,
+            ..TaskIntentEnvelopeV1::unknown("s", "t")
+        }
+    }
+
+    /// 类目兜底只补缺口：操作轴沉默时 RepositoryPublish 类目放行发布。
+    #[test]
+    fn publish_class_fills_the_gap_when_no_operations_are_declared() {
+        let envelope = publish_class_envelope();
+        assert!(envelope.allowed_effects.is_empty());
+        assert!(envelope.requested_operations.is_empty());
+        assert!(envelope.allows_publish());
+    }
+
+    /// 类目不得推翻声明：操作轴已有显式内容（且不含发布）时，类目不再放行。
+    #[test]
+    fn publish_class_never_overrides_an_explicit_operation_declaration() {
+        let mut envelope = publish_class_envelope();
+        envelope.allowed_effects = vec![OperationClass::Read];
+        assert!(!envelope.allows_publish());
+
+        let mut envelope = publish_class_envelope();
+        envelope.requested_operations = vec![OperationClass::Read];
+        assert!(!envelope.allows_publish());
+
+        // 显式声明发布则照常放行（声明轴权威路径不受影响）。
+        let mut envelope = publish_class_envelope();
+        envelope.allowed_effects = vec![OperationClass::Publish];
+        assert!(envelope.allows_publish());
     }
 }

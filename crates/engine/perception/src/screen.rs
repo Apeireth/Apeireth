@@ -1,4 +1,4 @@
-//! Screen salience observation recovered from companion `screen_perception.rs`.
+//! Screen salience observation aligned with `screen_perception.rs`.
 //!
 //! Distinct from `XcapVisionBackend`: Xcap captures pixel frames; this module
 //! scores **window/idle events** (switch / focus / idle start / idle resume).
@@ -6,7 +6,7 @@
 //! pretend to see the desktop.
 //!
 //! Idle detection is deterministic and does not depend on the OS source.
-//! IdleStart is emitted at most once per idle stretch (donor `poll_events`
+//! IdleStart is emitted at most once per idle stretch (baseline `poll_events`
 //! would re-emit every poll after the threshold; that is a leak, not a
 //! semantic).
 

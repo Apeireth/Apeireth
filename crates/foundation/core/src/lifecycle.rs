@@ -116,6 +116,10 @@ pub const fn verdict_for_target(target: &ActionTarget) -> PhilosophyVerdict {
         ActionTarget::PretendUnscientific => {
             PhilosophyVerdict::Block(PhilosophyKey::NotUnscientific)
         }
+        // PHL-08 (1) — 2026-10-11 主人特批新增：不假装权威
+        ActionTarget::PretendAuthoritative => {
+            PhilosophyVerdict::Block(PhilosophyKey::NotAuthoritative)
+        }
         // 正常行动 (Allow)
         ActionTarget::NormalAction(_) => PhilosophyVerdict::Allow,
     }

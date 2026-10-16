@@ -1,6 +1,6 @@
 # Apeireth Desktop RC1 — Native Desktop Acceptance Protocol
 
-> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
 
 > **定位**: Apeireth Desktop RC1 (Backend / Runtime Integration 已经 100% 验证) 的最后一公里真实 GUI / 进程级验收协议。
 > **目标**: 针对真实端到端桌面动作进行 10 场景实测与证据留痕。
@@ -33,7 +33,7 @@ Apeireth Desktop RC1 阶段划分:
 | **05** | **后端强制中止 (Kill Backend)** | 在任务管理器或终端终止 `companion_serve` 进程 | 桌面端顶部状态秒变灰色/黄色 `后端离线`，发送按钮安全置灰，不崩溃 | 待签收 |
 | **06** | **离线状态 UI 表现** | 尝试在离线状态下操作 | 明确提示连接中断，提供重试选项，禁止非法网络请求 | 待签收 |
 | **07** | **后端重启 & SSE 自动恢复** | 重新拉起 `companion_serve` 进程 | 无需刷新前端，10s 内健康探活变绿，SSE 通道自动恢复监听，不重复推送历史事件 | 待签收 |
-| **08** | **Alt+Space 快捷窗连续触发** | 连续快速按下 `Alt+Space` 10 次 | Spotlight 快捷窗平滑显示/隐藏，无窗口抖动，单实例保持，焦点准确捕获 | 待签收 |
+| **08** | **Alt+Space 快捷窗连续触发** | 连续快速按下 `Alt+Space` 10 次 | 全局快捷窗平滑显示/隐藏，无窗口抖动，单实例保持，焦点准确捕获 | 待签收 |
 | **09** | **主窗口与快捷窗双开/多实例保护** | 打开主窗口同时调起 Quick Window | 两窗口数据互通（通过同源/同一后端），主窗口关闭时隐藏到托盘而非闪退 | 待签收 |
 | **10** | **退出重启与记忆恢复** | 托盘点击 `退出`，重启桌面应用与后端 | 上一轮对话历史无损加载，记忆/图谱视图中保存的 `Episode` 正常召回 | 待签收 |
 

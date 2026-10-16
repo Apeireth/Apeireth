@@ -109,7 +109,8 @@ skip = [
     { name = "fallible-iterator", reason = "postgres 决定" },
     { name = "fancy-regex", reason = "regex 决定" },
     { name = "hmac", reason = "0.12 (apeireth-keyring) + 0.13 (postgres-protocol)" },
-    { name = "lru", reason = "0.12.5 (ratatui 固定) vs 0.18.2 — 0.12 API 不兼容 (NonZeroUsize), ratatui 0.30 已移除 0.12, e2e 已升 0.30" },
+    # lru duplicate 已随 ratatui 0.30 迁移消失 (2026-10-12: 0.12 线出树, 全树单一
+    # 0.18.5 修复线), 对应 skip 退役清空 (原理由: 0.12.5 (ratatui 固定) vs 0.18.2)。
     { name = "notify", reason = "0.6 vs 0.7 — 等所有 consumer 升 0.7" },
     { name = "ratatui", reason = "0.x 跨 minor — workspace 决定" },
     { name = "rustc-hash", reason = "tokio / anyhow 决定" },
@@ -171,14 +172,17 @@ ignore = [
     # - proc-macro-error2 (RUSTSEC-2026-0173): 同上
     # - unic-* (RUSTSEC-2025-0081/0075/0080/0100/0098): url / idna 间接拉
     # R139-1-retry 2026-08-11: unmaintained 已知项 (gtk-rs 链, 0 直接业务依赖):
-    "RUSTSEC-2024-0413",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
-    "RUSTSEC-2024-0416",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
-    "RUSTSEC-2024-0419",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
-    "RUSTSEC-2024-0411",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-tauri-stub gtk test 链)
-    "RUSTSEC-2024-0412",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
-    "RUSTSEC-2024-0414",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk-sys 链)
-    "RUSTSEC-2024-0415",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
-    "RUSTSEC-2024-0417",  # gtk-rs GTK3 bindings - no longer maintained (gtk 链)
-    "RUSTSEC-2024-0418",  # gtk-rs GTK3 bindings - no longer maintained (gtk 链)
-    "RUSTSEC-2024-0420",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
+    #   10 条 gtk-rs ignore 于 2026-10-06 复核批 (交接工作包 §4.4) 清空 —— 当前
+    #   Cargo.lock 无 gtk 链 (该测试只存在于 legacy/archived/apeireth-integration-r20-stage4,
+    #   不在工作区), `cargo deny check advisories` 对每条报 advisory-not-detected:
+    #   no crate matched。按上方 0-ignore austere 模式回归留空。
+    #   同批清空 audit.toml 20 条与 cargo-audit.yml 21 条过期 ignore (三处口径本就
+    #   漂移: 20/10/21), 此后三处同步为空; 新增 ignore 须三处同步并写理由。
+    #
+    # 2026-10-03: 曾首次破 0-ignore (非 false-positive, 是 transitive 未修复面):
+    # apeireth-tui (驾驶舱) → ratatui 0.29 → paste / lru 0.12, 三条 ignore 短接。
+    # 2026-10-12 零债清偿批: ratatui 0.29 → 0.30 迁移落地 (0.30 去 paste、lru 升
+    # 0.18.5 修复线), 依赖树复核 paste 已不存在、lru 单一 0.18.5 —— 三条 transitive
+    # 面已消, ignore 随之清空 (advisory-not-detected), 回归 0-ignore austere 模式。
+    # 同步清 audit.toml 与 cargo-audit.yml --ignore (三处同步)。
 ]

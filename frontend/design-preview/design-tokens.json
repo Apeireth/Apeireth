@@ -56,13 +56,14 @@
     },
     "ui": {
       "_status": "proposal",
-      "_note": "面板/卡片层级为终末地配方（reference/endfield-ui, endfield-chat 验证）的本地化提案，数值待主人确认",
+      "_note": "面板/卡片层级为参考配方（reference/endfield-ui, endfield-chat 验证）的本地化提案，数值待主人确认",
       "panel":      { "hex": "#0b0d12", "alpha": 0.82, "role": "页面层面板底（近黑，浮于虚化场景上）" },
       "panelSolid": { "hex": "#0b0d12", "alpha": 1.0,  "role": "不透明近黑（设置页等需要专注的场景）" },
-      "card":       { "hex": "#ece7da", "role": "哑白卡片（内容卡/消息卡，终末地配方）" },
+      "card":       { "hex": "#ece7da", "role": "哑白卡片（内容卡/消息卡，参考配方）" },
       "cardDark":   { "hex": "#15181f", "role": "深灰卡片（列表项/次要容器）" },
       "line":       { "hex": "#e8e0cc", "alpha": 0.14, "role": "1px 细分隔线/描边" },
       "accentTab":  { "hex": "#ffd27a", "role": "激活 tab/进度/高亮——复用存在金，同金色纪律" },
+      "accentUi":   { "hex": "#ffd27a", "role": "UI 强调色（选中描边/聚焦/链接等）。分工：accentTab 跟随主题金家族不随用户配色变（深色主题 = 存在金 #ffd27a，essence 浅色 = 下沉金 #a08050（2026-09-23 走查校准，原 #8a7355 过灰））；accentUi 开放个性化，目录 = gold 默认 / deep-space #7d9cc0 / sage #7fb894 / bone #e6e2da，html[data-accent] 覆写", "_status": "proposal（2026-09-22 K3 个性化批次落地；theme.ts ACCENT_CATALOG 机器断言可选色不占存在金家族）" },
       "stamp":      { "hex": "#ece7da", "role": "图章/编号文字（括号角标内）" }
     },
     "semantic": {
@@ -102,7 +103,7 @@
           { "signal": "dream 事件（做梦整合完成）", "effect": "夜间档确认/加深", "source": "presence.rs:213-222 (DreamPayload)" },
           { "signal": "emotion.pad（ daemon_loop 心跳推送）", "effect": "档内微调金色占比与光强", "source": "presence.rs:165-182 (EmotionPayload)" }
         ],
-        "_honesty": "presence 四类事件已接入 SSE 广播管道（companion_serve.rs:1786-1845 daemon_loop 每 60s tick + :1891-1899 主人消息经 interactions 通道触发 + :1320-1328 工具桥 memory_recall；v5 文档段 :16-37）。当前为每 60s tick + 事件触发的低频率，前端对档内微调做平滑插值；双驱动可用，emotion 事件即『他的状态』输入源。"
+        "_honesty": "v2 更正（2026-09-22）：backendState 半边驱动当前断线——presence 四类事件属 v1 遗存（companion_serve.rs，见 presence.channel.wireStatusNote），现役 canonical gateway 无此频道；时间线照明目前仅 localClock 半边生效，backendState 信号应按权重 0.5 缺席处理（前端不得假装驱动存在）。原 v1 记录：presence 四类事件已接入 SSE 广播管道（companion_serve.rs:1786-1845 daemon_loop 每 60s tick + :1891-1899 主人消息经 interactions 通道触发 + :1320-1328 工具桥 memory_recall；v5 文档段 :16-37）。当前为每 60s tick + 事件触发的低频率，前端对档内微调做平滑插值。"
       }
     },
     "modes": {
@@ -236,8 +237,8 @@
     "channel": {
       "endpoint": "GET /v1/apeireth/events",
       "format": "单行 JSON（serde 内部标签 type 平铺），与 legacy 纯文本『[他说] …』行共用一条 SSE 流；前端按 `{` 前缀区分",
-      "wireStatus": "wired",
-      "wireStatusNote": "PresenceEvent 四种事件在 crates/apeireth-companion/src/presence.rs:152-236 定义并被单测锁定（:337-502），已接入 SSE 广播管道：companion_serve.rs:1786-1845（daemon_loop 每 60s tick：emotion 心跳 :1790-1793、initiative spoke/held 去抖 :1794-1812、dream 真库 mem-dream-* 增量 :1813-1843，旧做梦不重播）、:1891-1899（主人消息到达后经 interactions 通道推 PAD 快照）、:1320-1328（recall_memory 工具桥真实命中推 memory_recall）；v5 文档段 companion_serve.rs:16-37 自述两类 data 行",
+      "wireStatus": "legacy-wired-v2-disconnected",
+      "wireStatusNote": "v2 更正（2026-09-22）：下述接线状态属 v1 世界。presence.rs / companion_serve.rs 现位于 legacy/donor/apeireth-companion/；现役 canonical gateway（:8080）事件总线只有 backend_ready/turn_started/turn_delta/turn_completed/approval_required/approval_resolved 六类，无 presence 四事件。重接种子 = crates/adapters/gateway/src/ember_hud_driver.rs（路由零消费方）；路线见 docs/design/01-DESIGN-SYSTEM.md §3.1 更正段。—— 原 v1 记录：PresenceEvent 四种事件在 crates/apeireth-companion/src/presence.rs:152-236 定义并被单测锁定（:337-502），已接入 SSE 广播管道：companion_serve.rs:1786-1845（daemon_loop 每 60s tick：emotion 心跳 :1790-1793、initiative spoke/held 去抖 :1794-1812、dream 真库 mem-dream-* 增量 :1813-1843，旧做梦不重播）、:1891-1899（主人消息到达后经 interactions 通道推 PAD 快照）、:1320-1328（recall_memory 工具桥真实命中推 memory_recall）；v5 文档段 companion_serve.rs:16-37 自述两类 data 行",
       "cadence": {
         "emotion": "每 60s tick 一条心跳 + 主人消息到达后一条（低频率；on_user_message 只喂节律不触情绪事件，推的是当前真实 PAD，多为基线）",
         "initiative": "spoke 每次都推；held 仅门控原因变化时推（去抖，否则每 60s 刷屏）",
@@ -248,7 +249,7 @@
       "knownLimits": [
         "emotion 事件只能由 daemon_loop 异步推（每 tick 心跳 + 主人消息到达后经 interactions 通道），chat handler 同步路径拿不到 PAD——daemon 内部 RefCell 跨 await 非 Send（presence.rs:21-23；companion_serve.rs:29-32）",
         "build_injection 记忆注入路径的召回数锁在 assemble.rs::inject_memory 局部变量不外露，memory_recall 只接 recall_memory 工具桥路径（presence.rs:24-25；companion_serve.rs:33-34）",
-        "presence 事件只进 SSE 广播，不进 Lark/Telegram 离线 sink（presence.rs:26；companion_serve.rs:35）"
+        "presence 事件只进 SSE 广播，不进同类 IM 离线 sink（presence.rs:26；companion_serve.rs:35）"
       ]
     },
     "events": {
@@ -435,7 +436,7 @@
   },
 
   "registers": {
-    "_status": "proposal（主人 2026-08-21 确认三调性方向；Archive/Deep-Ops 色值为参考图采样，calibration）",
+    "_status": "proposal（主人 2026-08-21 确认三调性方向；Archive/Deep-Ops 色值为参考图采样，calibration；2026-09-22 K3 批次两调性均完成首轮实拍——Archive = 记忆卷宗+日记，Deep-Ops = 治理卷宗）",
     "_doc": "docs/design/01-DESIGN-SYSTEM.md §5.6 三种调性登记",
     "_source": "frontend/design-preview/reference/endfield-pages/（01 百科首页 / 02 图鉴展开 / 03 武器图鉴 / 04 工业计划树 / 05 总控中枢，2026-08-21 PIL 采样）",
     "scene": {
@@ -446,7 +447,7 @@
       "note": "实时、在场、场景类；已验收基准（index.html 原型 + 概念图 A/B）"
     },
     "archive": {
-      "_status": "calibration",
+      "_status": "calibration（2026-09-22 记忆卷宗/日记首轮实拍完成；inkGold 提案待主人拍板）",
       "label": "纸面档案调",
       "appliesTo": ["他的日记（默认）", "记忆星图列表态", "百科/图鉴"],
       "paper":      { "hex": "#e2e1df", "range": ["#cfcdcc", "#e9e8e7"], "_source": "01/02/03 纸面底采样" },
@@ -456,11 +457,12 @@
       "iconGray":   { "hex": "#acabaa", "role": "像素/网格图标", "_source": "01 采样" },
       "cardDark":   { "hex": "#454041", "deep": "#131212", "role": "条目深卡 + 稀有度色条", "_source": "03 采样" },
       "accent":     { "hex": "#ffd27a", "role": "纸面调内强调色仍用存在金（金色=他 纪律跨调性有效）" },
+      "inkGold":    { "hex": "#8a6d1f", "role": "纸面文字级强调（下沉金，金家族色相 42°）——#ffd27a 在纸白 #e2e1df 上对比度不足的实拍校准值；实体填充强调（选中条/主按钮底）仍用 accent 金配墨字", "_status": "proposal（2026-09-22 记忆卷宗/日记实拍校准，待主人拍板）" },
       "extras": ["图章", "翻页如翻阅一册日志"],
       "note": "日记是被「写」下来的，纸面是诚实的载体；深色屏幕是显示，纸面是记录"
     },
     "deepOps": {
-      "_status": "calibration",
+      "_status": "calibration（2026-09-22 治理卷宗首次实拍；紫/青/红为提案值待主人拍板）",
       "label": "数据深舱调",
       "appliesTo": ["系统状态", "审批审计", "任务面板", "工具注册表", "设置", "未来的主题管理界面"],
       "base":  { "hex": "#1d262c", "deep": "#050a0f", "bottom": "#171a21", "_source": "05-总控中枢.png 采样" },
@@ -470,9 +472,12 @@
         "colors": [
           { "hex": "#2392fb", "role": "蓝（核心/中枢类）", "_source": "05 采样亮部" },
           { "hex": "#6fae5f", "role": "绿（培养/生产类）", "_source": "05 采样（亮部 #98eaa3）" },
-          { "hex": "#e8c33a", "role": "工业黄（制造类；04 节点采样 #cead2f 偏暗，取更亮提案值）", "_source": "04/05 采样" }
+          { "hex": "#e8c33a", "role": "工业黄（制造类；04 节点采样 #cead2f 偏暗，取更亮提案值）", "_source": "04/05 采样" },
+          { "hex": "#d95f55", "role": "红（安全守卫类）", "_status": "proposal", "_source": "gap-plan §4.1 建议值；治理卷宗守卫 tab 首次消费（2026-09-22），待实拍校准" },
+          { "hex": "#8f7ad9", "role": "紫（情感/姿态类）", "_status": "proposal", "_source": "gap-plan §4.1 建议值；卷宗暂未消费" },
+          { "hex": "#3fb0c4", "role": "青（记忆类）", "_status": "proposal", "_source": "gap-plan §4.1 建议值；卷宗暂未消费" }
         ],
-        "todo": "余 3 色待实际模块类型确定后补足"
+        "todo": "6 色已补足（3 采样 + 3 提案）；治理卷宗模块分工：审批=蓝 / 授权=绿 / 守卫=红 / 审计=工业黄"
       },
       "connectionGraph": { "grammar": "树状节点 + 直角连线 + 对勾图章", "_source": "04-工业计划树.png", "_honesty": "04 在原作为浅灰底金节点——采纳其连线语法，底色系按本节决策取 05 深色系" }
     },

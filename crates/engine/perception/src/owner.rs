@@ -4,7 +4,7 @@
 //!
 //! Frozen v2 architecture: perception is an **input adapter**. Runtime already
 //! converts text events through `turn_request_from_perception`. This type is
-//! the crate-level owner of recovered algorithms so production wiring can
+//! the crate-level owner of these algorithms so production wiring can
 //! later inject it. Construction is enabled only via [`PerceptionOwner::enabled`];
 //! [`PerceptionOwner::disabled`] (and [`Default`]) is a no-op sink.
 

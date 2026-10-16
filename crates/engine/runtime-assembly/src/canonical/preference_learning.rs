@@ -10,16 +10,16 @@
 //!   → turn N+1 → existing PreferenceRecallModule overlay
 //! ```
 //!
-//! # Donor truth, honored
+//! # Baseline truth, honored
 //!
-//! The v1 donor (`apeireth-companion::memory_extractor`) classified
+//! The v1 implementation (`apeireth-companion::memory_extractor`) classified
 //! preferences with an LLM extractor and wrote/injected them through a
 //! deterministic mechanism whose `preference_injection()` applied the
 //! preference profile across scenarios unconditionally. This first v2
 //! implementation inverts the split: **explicit preference statements are
 //! extracted deterministically** (no model call at all — the closed loop runs
 //! with zero provider side-calls), the write path reuses the existing
-//! `PreferenceStore`, and recall keeps its existing slot. The donor's
+//! `PreferenceStore`, and recall keeps its existing slot. The baseline's
 //! LLM-based semantic extraction of *implicit* preferences is deferred, not
 //! faked: nothing here pretends to infer unstated preferences.
 //!
@@ -182,12 +182,21 @@ impl PreferenceLearningModule {
     /// Attach the shared non-sensitive telemetry sink.
     #[must_use]
     pub fn with_telemetry(self, telemetry: Arc<CognitiveTelemetry>) -> Self {
-        *self.telemetry.lock().expect("telemetry mutex") = Some(telemetry);
+        // poison 容错 (2026-09-24 修复轮补漏): 见 G 组 poison 修复同款注释。
+        *self
+            .telemetry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(telemetry);
         self
     }
 
     fn record_telemetry(&self, hook: HookPoint, started: Instant) {
-        if let Some(telemetry) = self.telemetry.lock().expect("telemetry mutex").as_ref() {
+        if let Some(telemetry) = self
+            .telemetry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+        {
             telemetry.record(super::cognitive::CognitiveModuleEvent {
                 module_id: PREFERENCE_LEARNING_MODULE_ID.to_string(),
                 hook: format!("{hook:?}"),

@@ -1,7 +1,16 @@
 // Apeireth 桌面伙伴 — 核心共享类型定义 (Svelte 5 + Tauri 2)
 
 export type ViewId = 'chat' | 'conversations' | 'activity' | 'tools' | 'memory' | 'settings';
-export type Theme = 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'essence';
+// 2026-09-23 主人指示「最后我们都是要做的」：day/ocean/forest/paper 四主题
+// 当日曾作为空心项删除（无实现点了无反应），现在真实现补全（令牌+背景见
+// tokens.css/base.css/shell.css），从空心回归现役。
+// starship = 科幻 HUD 档（深空黑底 + 发光数据，纯主题层切换，见 design/hud.css）。
+// origin = 原初（默认档，DeepSeek 原生界面风：白底/品牌蓝/零动画纯色层，2026-10-03 拍板）。
+// noir = 纯黑（真黑 AMOLED 档，零装饰高对比，2026-10-03 拍板）。
+export type Theme = 'origin' | 'noir' | 'heritage-void' | 'essence' | 'night' | 'day' | 'ocean' | 'forest' | 'paper' | 'starship';
+
+/** UI 配色方案 id（规范 §8 增补⑤）：只染 UI 高亮，不占存在金 */
+export type Accent = 'presence-gold' | 'deep-space' | 'sage' | 'bone';
 export type MemoryCategory =
   | '工作记忆'
   | '近期记忆'
@@ -100,8 +109,11 @@ export interface Conversation {
   scope: ConversationScope;
   projectId?: string;
   model?: string;
-  /** 会话级工作区根目录; 未设时跟随全局默认 (设置页). */
+  /** 会话级工作区根目录; 未设时跟随全局默认 (设置页). 项目分组键. */
   workspace?: string;
+  /** 创建会话时的伙伴人设（联系人分组键；name 冗余存, 人设删了组标签仍在）。 */
+  personaId?: string;
+  personaName?: string;
 }
 
 export interface ModelSetup {
@@ -214,30 +226,147 @@ export interface PersonaProfile {
   model?: string;
 }
 
-/** 后端高级能力开关（注入侧车环境，默认全关 fail-closed）。 */
+/** 后端高级能力开关（注入侧车环境）。记忆核心族三件（preferenceLearning /
+ *  proactiveRecall / memoryInjection）默认开，显式关时注入 `APEIRETH_ENABLE_*=0`；
+ *  其余默认关 fail-closed。2026-10-10 W2/W3 收官批扩展：补齐 v1→v2 补漏落地的
+ *  全部认知旋钮，与 crates/adapters/cli 的 APEIRETH_* env 一一对应。 */
 export interface CapabilityToggles {
   /** 工具: shell 命令（开启后每次调用仍走人工审批） */
   shell: boolean;
+  /** 工具: shell 沙箱执行（AppContainer 断网 + 用户空间隔离；默认开，关闭 = 显式裸跑自担风险） */
+  shellSandbox: boolean;
   /** 工具: 公网 GET-only fetch */
   fetch: boolean;
+  /** 工具: 本地只读工具（file/search/repo 不经审批的读侧） */
+  localReadTools: boolean;
+  /** 工具: 受控文件写入（apply_patch 补丁式写入；创建/修改/删除须在补丁里声明） */
+  fileWrite: boolean;
+  /** 工具子开关「自动放行已读文件修改」（依赖 fileWrite 主开关，同 shellSandbox 嵌套行模式） */
+  fileWriteAutoPass: boolean;
   /** AfterTurn 器官链（9 organs） */
   organs: boolean;
   /** 偏好学习双索引写回 */
   preferenceLearning: boolean;
+  /** 前瞻召回（闲置期主动浮现相关记忆） */
+  proactiveRecall: boolean;
+  /** 记忆注入（把召回内容注进上下文） */
+  memoryInjection: boolean;
+  /** 记忆固化（consolidation 提炼） */
+  consolidation: boolean;
+  /** 反思沉淀（reflexion 文件回流） */
+  reflexion: boolean;
+  /** 类型化召回（默认开；关闭 = 注入 APEIRETH_DISABLE_TYPED_RECALL） */
+  typedRecall: boolean;
+  /** 伙伴羁绊（TurnStart 关系状态注入 + 确定性演化，W2 §4.2） */
+  partnerBond: boolean;
+  /** 检索深度自适应 morphology（只收紧不放大，W2 §4.3） */
+  morphologyRecall: boolean;
+  /** morphology 温度（检索活跃度，默认 1.0） */
+  morphologyTemperature: number;
+  /** Dx-Check 教育工具（W2 §4.3） */
+  education: boolean;
+  /** 认知体操四算法洞察（betti/residual/river/kuramoto，W2 §4.4） */
+  absorptionInsight: boolean;
+  /** 图社区分诊（检索前置 Entity/Broad 路由，W3 §1） */
+  communityTriage: boolean;
+  /** onering 账本记账（回合留痕入 context_ledger，W3） */
+  oneringLedger: boolean;
   /** AfterModelResponse 评审 */
   judge: boolean;
-  /** AfterModelResponse 议会（7 advisor） */
+  /** AfterModelResponse 议会 */
   council: boolean;
+  /** 议会顾问数 1-7（默认 3，Safety 恒首位） */
+  councilAdvisors: number;
+  /** 单顾问超时毫秒（默认 30000） */
+  councilTimeoutMs: number;
+  /** 三洋葱治理层 L3-L5 三段门（默认关，W3 工作项 6） */
+  onionLayer: boolean;
+  /** 子代理 git worktree 隔离（默认关） */
+  worktreeSandbox: boolean;
+  /** [Beta] 思考模式：reasoning_content 单独分流展示（默认关） */
+  reasoningEnabled: boolean;
+  /** [Beta] 思考模式生效的模型过滤器（逗号分隔子串，空 = 全部模型） */
+  reasoningModelFilters: string;
+  /** [Beta] reasoning 标签名（默认 think） */
+  reasoningTag: string;
+  /** 遗忘衰减强度倍率（有效遗忘半衰期 = 24h / 值；默认 1.0 = 现行为） */
+  memoryFade: number;
+  /** 好奇心强度倍率（好奇日预算 = 2000 × 值；默认 1.0） */
+  curiosityStrength: number;
+  /** 语气情绪饱和度倍率（情绪注入混合 × 值；0 = 纯关系基线；默认 1.0） */
+  toneSaturation: number;
+  /** 整合节奏·每 N 回合触发一次记忆整合（1 = 每回合 = 现行为；默认 1） */
+  consolidationCadence: number;
+  /** 从使用中学习（自学习自动微调体验参数；默认关） */
+  selfTuning: boolean;
+  /** 单回合轮数上限（APEIRETH_MAX_TURN_ROUNDS 同源；null = 未配置 = 后端默认 8，
+   *  越界钳制 1..=64、非法回默认的解析语义保留在后端 CLI） */
+  maxTurnRounds: number | null;
+  /** 单轮工具调用上限（APEIRETH_MAX_TOOL_CALLS 同源；null = 未配置 = 后端默认 16） */
+  maxToolCalls: number | null;
+  /** 上下文注入总字符预算（APEIRETH_CONTEXT_BUDGET_CHARS 同源；null = 未配置 = 后端
+   *  默认 24000；正整数直通、越界/非法回默认） */
+  contextBudgetChars: number | null;
 }
 
 export const DEFAULT_CAPABILITY_TOGGLES: CapabilityToggles = {
   shell: false,
+  shellSandbox: true,
   fetch: false,
+  localReadTools: true,
+  fileWrite: false,
+  fileWriteAutoPass: false,
   organs: false,
-  preferenceLearning: false,
+  preferenceLearning: true,
+  proactiveRecall: true,
+  memoryInjection: true,
+  consolidation: false,
+  reflexion: false,
+  typedRecall: true,
+  partnerBond: false,
+  morphologyRecall: false,
+  morphologyTemperature: 1.0,
+  education: false,
+  absorptionInsight: false,
+  communityTriage: false,
+  oneringLedger: false,
   judge: false,
   council: false,
+  councilAdvisors: 3,
+  councilTimeoutMs: 30000,
+  onionLayer: false,
+  worktreeSandbox: false,
+  reasoningEnabled: false,
+  reasoningModelFilters: '',
+  reasoningTag: 'think',
+  memoryFade: 1.0,
+  curiosityStrength: 1.0,
+  toneSaturation: 1.0,
+  consolidationCadence: 1,
+  selfTuning: false,
+  maxTurnRounds: null,
+  maxToolCalls: null,
+  contextBudgetChars: null,
 };
+
+/**
+ * 「推荐配置」一键预设开启的能力键（与 SettingsView 能力中心按钮共用）。
+ * 记忆核心族三件 + 记忆固化/反思沉淀/器官链；**绝不包含** shell / fetch
+ * （危险能力不进任何预设）。键名到后端 env 的映射见 SettingsView 的
+ * 能力注册表（每行标注 env 芯片），测试镜像校验两侧一致。
+ */
+export type BooleanCapabilityKey = {
+  [K in keyof CapabilityToggles]: CapabilityToggles[K] extends boolean ? K : never;
+}[keyof CapabilityToggles];
+
+export const RECOMMENDED_CAPABILITY_PRESET: ReadonlyArray<BooleanCapabilityKey> = [
+  'proactiveRecall',
+  'preferenceLearning',
+  'memoryInjection',
+  'consolidation',
+  'reflexion',
+  'organs',
+];
 
 export interface ApeirethConfig {
   baseUrl: string;
@@ -264,6 +393,11 @@ export interface ApeirethConfig {
   personas?: PersonaProfile[];
   /** 当前激活人设 id (缺省时取列表第一个) */
   activePersonaId?: string;
+  /** 自定义上传背景开关（规范 §8 增补④）：true = 用 IndexedDB 里的上传图
+   *  盖住主题默认背景；图本体在 IndexedDB（bg-store.ts），不落 config。 */
+  customBg?: boolean;
+  /** UI 配色方案（规范 §8 增补⑤）：缺省 = 存在金（视觉现状不变） */
+  accent?: Accent;
 }
 
 export interface ActivityItem {
@@ -412,6 +546,9 @@ export interface GuardStatus {
   enabled: boolean;
   fast_guard_active: boolean;
   chain_guard_active: boolean;
+  /** introspection.rs serde(default) 字段：新后端恒序列化，旧后端可能缺省。 */
+  intent_guard_active?: boolean;
+  cross_turn_monitoring_active?: boolean;
   active_chains: number;
   total_evaluations: number;
   total_allowed: number;

@@ -89,7 +89,7 @@ Author:          子代理 R13 (独立判断, 0 装诚实真账)
 **真账** (per `v2.0.0-release-path-integration.md:218-222` + `R14 RC-7 spec`):
 
 接手人 actionable 5/5 done + **5 新加**:
-- ✅ #1 RC-5/6/7 + 9 organ 真移植全 done (整合 #2 commit `bbf70293`)
+- ✅ #1 RC-5/6/7 + 9 organ 真实现全 done (整合 #2 commit `bbf70293`)
 - ✅ #2 哲学锚 ledger 待核 (子代理 K)
 - ✅ #3 12 consumer 弃用迁移 (子代理 H/I)
 - ✅ #4 RC-10 line header AAD + APX2 envelope (子代理 E)
@@ -317,7 +317,7 @@ per `v2.0.0-release-path-integration.md:218-222` + R14 RC-7 spec + 子代理 R13
 
 | # | 项 | 状态 | 备注 |
 |---|---|---|---|
-| #1 | RC-5/6/7 + 9 organ 真移植 | ✅ done | 子代理 R1-R8 + M/N 真写 |
+| #1 | RC-5/6/7 + 9 organ 真实现 | ✅ done | 子代理 R1-R8 + M/N 真写 |
 | #2 | 哲学锚 ledger 待核 | ✅ done | 子代理 K |
 | #3 | 12 consumer 弃用迁移 | ✅ done | 子代理 H/I Python script |
 | #4 | RC-10 line header AAD + APX2 envelope | ✅ done | 子代理 E |

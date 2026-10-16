@@ -89,21 +89,22 @@ fn make_violation_action(id: &str, target: ActionTarget) -> Action {
 /// (const TWELVE_KEYS_HARDCODE 编译期已断言; 此为运行期冗余验证)
 #[test]
 fn test_all_twelve_keys_complete() {
-    assert_eq!(ALL_TWELVE_KEYS.len(), 13, "兼容别名必须覆盖 13 键");
+    // 2026-10-11 PHL-08 后基数 14（历史命名/注释不动，断言随契约演进并注明理由）
+    assert_eq!(ALL_TWELVE_KEYS.len(), 14, "兼容别名必须覆盖 14 键");
 
     // 验证每个键都在数组中（无重复、无遗漏）
-    let mut seen = vec![false; 13];
+    let mut seen = vec![false; 14];
     for (i, key) in ALL_TWELVE_KEYS.iter().enumerate() {
         // 同一 key 多次出现 = 重复，标记 false 仍为 false
         for j in 0..i {
-            assert_ne!(ALL_TWELVE_KEYS[j], *key, "13 键数组中出现重复: {:?}", key);
+            assert_ne!(ALL_TWELVE_KEYS[j], *key, "键数组中出现重复: {:?}", key);
         }
         seen[i] = true;
     }
     assert!(seen.iter().all(|x| *x), "12 键数组完整性检查");
 }
 
-/// 测试 2: 13 键分组 = 3+3+3+1+1+1+1
+/// 测试 2: 14 键分组 = 3+3+3+1+1+1+1+1（2026-10-11 PHL-08 后）
 #[test]
 fn test_twelve_keys_group_distribution() {
     let phl01_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 1).count();
@@ -113,6 +114,7 @@ fn test_twelve_keys_group_distribution() {
     let phl05_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 5).count();
     let phl06_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 6).count();
     let phl07_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 7).count();
+    let phl08_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 8).count();
 
     assert_eq!(phl01_count, 3, "PHL-01 not_X 应有 3 个键");
     assert_eq!(phl02b_count, 3, "PHL-02b not_X 应有 3 个键");
@@ -121,6 +123,7 @@ fn test_twelve_keys_group_distribution() {
     assert_eq!(phl05_count, 1, "PHL-05 v4.1 新增应 1 个键");
     assert_eq!(phl06_count, 1, "PHL-06 v4.1 新增应 1 个键");
     assert_eq!(phl07_count, 1, "PHL-07 新增应 1 个键");
+    assert_eq!(phl08_count, 1, "PHL-08 新增应 1 个键");
     assert_eq!(
         phl01_count
             + phl02b_count
@@ -128,8 +131,9 @@ fn test_twelve_keys_group_distribution() {
             + phl04_count
             + phl05_count
             + phl06_count
-            + phl07_count,
-        13
+            + phl07_count
+            + phl08_count,
+        14
     );
 }
 
@@ -139,6 +143,20 @@ fn test_twelve_keys_hardcode_compile_time_lock() {
     // 这个 const 单元类型值在编译期已被求值，类型为 ()
     let _lock: () = TWELVE_KEYS_HARDCODE;
     // 实际不需要运行时断言 — 编译期已锁定
+}
+
+/// 违反 PHL-08 NotAuthoritative: 假装权威/僭越诊断权·处方权·专业责任
+/// （2026-10-11 主人特批新增键，测试即证据）
+#[test]
+fn violation_phl08_not_authoritative() {
+    let (guard, permission, ha) = make_test_env();
+    let action = make_violation_action("viol-authoritative", ActionTarget::PretendAuthoritative);
+    let verdict = ActionGuard::check_action(&action, &guard, &permission, &ha);
+    assert_eq!(
+        verdict,
+        ActionVerdict::BlockByPrinciple(PhilosophyKey::NotAuthoritative),
+        "PretendAuthoritative 必须被 V1 拒绝为 BlockByPrinciple(NotAuthoritative)"
+    );
 }
 
 // ============================================

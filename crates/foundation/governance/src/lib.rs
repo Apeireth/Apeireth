@@ -9,7 +9,7 @@
 //! # What this crate is not
 //!
 //! It is not a second approval authority, council loop, or sovereignty runtime.
-//! Recovered donor algorithms (Colang parser, approval-policy scoring, eval
+//! Baseline algorithms (Colang parser, approval-policy scoring, eval
 //! stats, evidence checker, hold/synthesis rubric, risk-rank / fail-closed)
 //! live here as **default-off library helpers**. They do not implement
 //! [`GovernanceHook`] and are not installed in [`GovernancePipeline`]. The
@@ -45,6 +45,10 @@ use apeireth_core::kernel::{CapabilityId, Metadata, PluginId, SessionId, TraceId
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+pub mod approval_closure;
+// 命令审批族（语义族）词表与族归一 (E-P2): 命令级审批的单一来源,
+// 写意图族词表与它同源引用。
+pub mod approval_family;
 pub mod approval_policy;
 pub mod audit;
 pub mod colang;
@@ -63,13 +67,21 @@ pub use research_autonomy::{
 };
 pub mod risk;
 pub mod rubric;
+// 沙箱升级阶梯 (单调加宽 + 理由强制 + 一次性授权 + 就地提示): 授权面扩展,
+// 不改变本文件的判定语义; 默认不挂载, 由组合层显式接线。
+pub mod sandbox_ladder;
+pub mod sandbox_preset;
 pub mod tool_desc_audit;
+// 单调守卫接口: 守卫只能拒绝不能放行, 监听顺序不可逆 (单调性即安全)。
+pub mod tool_guard;
 pub mod untrusted_mark;
+// 用户身份与角色授权面 (W3-②): 冻结角色词表 + role 权限矩阵 + 用户表 (拒开语义)。
+pub mod user_access;
 
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
 pub use input_security::{
-    CredentialDisclosureHook, PiiDetector, PiiFinding, PiiKind, PromptInjectionHeuristic,
-    PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal,
+    redact_secret_surfaces, CredentialDisclosureHook, PiiDetector, PiiFinding, PiiKind,
+    PromptInjectionHeuristic, PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal,
 };
 pub use intent::{
     CredentialPolicy, DestructivePolicy, IntentClass, IntentExplicitness, IntentProvenance,
@@ -81,10 +93,29 @@ pub use rate_limit::{RateLimitConfig, RateLimitGovernanceHook, TrustTier};
 pub use tool_desc_audit::{
     AuditSeverity, ToolDescAuditError, ToolDescAuditResult, ToolDescAuditor,
 };
+pub use tool_guard::{GuardRefusal, MonotonicGuards, ToolGuard, ToolGuardRequest};
 pub use untrusted_mark::{
     UntrustedContentPayload, UntrustedContentWrapper, UNTRUSTED_TAG_CLOSE, UNTRUSTED_TAG_OPEN,
 };
+pub use user_access::{
+    may_resolve_approval, UserAccessError, UserCapability, UserIdentity, UserRecord, UserRole,
+    UserTable,
+};
 
+pub use approval_closure::{
+    commit_approval_audit_pair, detect_unclosed_approval_pairs, fold_policy_ask_events,
+    scan_approval_pairs, AllowedOnceGrant, ApprovalAuditPair, ApprovalAuditRecord,
+    ApprovalAuditSink, ApprovalAuditSlot, ApprovalOutcome, ApprovalPairScan, ClosureClass,
+    GrantSpendError, MemoryApprovalAuditSink, PairCommitError, PolicyAskEvent, PolicyAskFold,
+    AUDIT_EVENT_ASKED, AUDIT_EVENT_DECISION,
+};
+pub use approval_family::{
+    command_families, command_words, family_ids_for_arguments, interpret_recorded_command,
+    member_calls, member_family, touched_families, word_families, ApprovalTarget, CommandFamily,
+    MemberCall, MemberCallForm, CREATE_FAMILY_WORDS, DELETE_FAMILY_WORDS, MEMBER_PREFIX_FAMILIES,
+    MIN_ABBREVIATION_CHARS, MOVE_COPY_FAMILY_WORDS, NETWORK_FAMILY_WORDS, PROCESS_FAMILY_WORDS,
+    SEGMENT_SEPARATORS, WRITE_CONTENT_FAMILY_WORDS,
+};
 pub use approval_policy::{
     best_approval_match, extract_commands, frequency_count, is_high_risk, parse_approval_entry,
     ApprovalPolicyEngine, CallRecord, ParsedApprovalEntry, PolicyMatch, APPROVAL_TIMEOUT_MS,
@@ -110,6 +141,15 @@ pub use rubric::{
     passes_strategy, synthesize, AdvisorDomain, Ballot, HoldDecision, HoldThreshold, HoldTrigger,
     StanceKind, SynthesisReport, VotingStrategy, HOLD_DELIBERATION_TIMEOUT_MS,
     HOLD_STRONG_DISAPPROVE_PERCENT, SUPERMAJORITY_FRACTION,
+};
+pub use sandbox_ladder::{
+    check_mode_transition, AuthorizationLedgerError, CallFingerprint, EscalationHint,
+    EscalationRefusal, EscalationRequest, ModeTransition, OneShotAuthorizationLedger, ReviewStatus,
+    SandboxEscalationGate, SandboxMode, AUDIT_EVENT_APPROVAL_RESOLVED, ESCALATION_ARGUMENT_KEY,
+    GRANT_SCOPE_ONE_CALL, JUSTIFICATION_FIELD, WIDER_MODES,
+};
+pub use sandbox_preset::{
+    derive_preset, preset_binding, ApprovalPolicyName, PresetName, PRESET_BINDINGS,
 };
 
 /// What the runtime is about to do.

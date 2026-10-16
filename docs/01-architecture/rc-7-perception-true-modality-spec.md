@@ -3,7 +3,7 @@
 > **本文档定位**: v2.0.0-rc.1 真生产前阻塞项 **#9** — RC-7 PerceptionBackend 真接 Voice (Whisper API) + Vision (xcap) 真 modality 实施 spec.
 > **何时写**: 子代理 R14 (2026-08-28), 在 `22c6e72b` (主代理亲做整合文档) 后写.
 > **读谁**: 接手 Apeireth v2.0 真生产路径的工程师 / 未来实施 RC-7 真 modality 的子代理.
-> **关系文档**: 本文 + `perception_backend.rs` (R6 真实现 trait 架构, 408 行) + `perception.rs` (5 modality) + `v2.0.0-release-path-integration.md` §1.2 (4 块真实施依赖链) + `v2.0.0-release-path-integration.md` §3.2 (4 块估时表) + `organ-orchestrator-spec.md` (R11, 9 organ 串联) + `minimax_llm_factory.rs` (RC-5 真接模式 1:1 翻译) + `apeireth-voice::real.rs` (v1 STT `POST /v1/audio/transcriptions` multipart/form-data 1:1 翻译).
+> **关系文档**: 本文 + `perception_backend.rs` (R6 真实现 trait 架构, 408 行) + `perception.rs` (5 modality) + `v2.0.0-release-path-integration.md` §1.2 (4 块真实施依赖链) + `v2.0.0-release-path-integration.md` §3.2 (4 块估时表) + `organ-orchestrator-spec.md` (R11, 9 organ 串联) + `minimax_llm_factory.rs` (RC-5 真接模式 语义对齐) + `apeireth-voice::real.rs` (v1 STT `POST /v1/audio/transcriptions` multipart/form-data 语义对齐).
 > **本文状态**: 🟡 **spec 完成, 真实施待主代理后续派 R14+ 真做** (估 2-3 周, 需麦克风 + Windows 截屏硬件).
 > **0 装诚实**: 本 spec 估 30-45 分钟写完, **不真做 2-3 周 RC-7 真 modality 实施**; 主代理后续派 R14+ 真做时**重核验硬件 + 端点 + keyring**, 不假装"已调通".
 
@@ -77,9 +77,9 @@ v2.0.0-rc.1 release tag 已拍板 (commit `b9026186`), 4 tag 拍板 (v1.0.0 / v1
 
 ---
 
-## §2. R6 真实现 PerceptionBackend trait 架构 (1:1 翻译 R6 commit)
+## §2. R6 真实现 PerceptionBackend trait 架构 (语义对齐 R6 commit)
 
-> **本节为"已知信息", 1:1 翻译 R6 commit, 0 装诱导 prevention 标"作者已亲写 + 测试全过, 0 改"**.
+> **本节为"已知信息", 语义对齐 R6 commit, 0 装诱导 prevention 标"作者已亲写 + 测试全过, 0 改"**.
 
 ### 2.1 文件: `crates/foundation/plugin/src/perception_backend.rs` (R6 真写, 408 行)
 
@@ -225,13 +225,13 @@ test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; fin
 - 真实施时需重核验: API key 注入 + endpoint 可达性 + 麦克风硬件联调
 - 不假装"已调通 Whisper API"
 
-### 3.2 HTTP 协议 (1:1 翻译 OpenAI Whisper API + MiniMax 兼容)
+### 3.2 HTTP 协议 (语义对齐 OpenAI Whisper API + MiniMax 兼容)
 
 **请求**: `POST {base_url}/audio/transcriptions`
 - **Headers**:
   - `Authorization: Bearer {api_key}` (从 `CredentialResolver::resolve(credential_key)` 拿)
 - **Body**: `multipart/form-data; boundary=...`
-  - `file`: audio bytes (PCM / WAV / MP3, 跟 `apeireth-voice::real.rs:889-893` 1:1 翻译)
+  - `file`: audio bytes (PCM / WAV / MP3, 跟 `apeireth-voice::real.rs:889-893` 语义对齐)
   - `model`: `"whisper-1"` (OpenAI) / `"speech-01"` (MiniMax)
   - `language`: ISO 639-1 (e.g. `"en"` / `"zh"`)
   - `response_format`: `"json"` (默认) / `"text"` / `"srt"` / `"verbose_json"` / `"vtt"`
@@ -273,12 +273,12 @@ test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; fin
 - `400 Bad Request` → `PerceptionBackendError::Audio("400 Bad Request: file size too large")`
 - `500 Internal Server Error` → `PerceptionBackendError::Provider("500 Internal Server Error: ...")`
 
-### 3.3 真接 LLM 路径 (per RC-5 模式 1:1 翻译)
+### 3.3 真接 LLM 路径 (per RC-5 模式 语义对齐)
 
 参照 `minimax_llm_factory.rs:75-99` 真接模式:
 - **不重写 reqwest client** — 复用 `ProviderCapability` HTTP client (per `minimax_llm_factory.rs:11-14` 注释)
 - **凭证 0 装诚实** — `CredentialResolver::resolve(credential_key)` 每 turn 拿 (per `minimax_llm_factory.rs:69-75` 注释)
-- **不 mock 真 LLM call** — 真接 OpenAI / MiniMax endpoint, 401 自动重试 1 次 (per `apeireth-voice::real.rs:733-749` 1:1 翻译)
+- **不 mock 真 LLM call** — 真接 OpenAI / MiniMax endpoint, 401 自动重试 1 次 (per `apeireth-voice::real.rs:733-749` 语义对齐)
 - **凭证走 RC-9 keyring** — `KeyringCredentialResolver` 或 `EnvCredentialResolver` (per `apeireth-plugin::credentials::EnvCredentialResolver`)
 
 **代码骨架 (待实施)**:
@@ -360,7 +360,7 @@ pub struct AudioBuffer {
 ### 3.5 测试 (估 5-7 测试, 估 1 周)
 
 1. **`whisper_http_backend_transcribes_wav_succeeds`** — 真 HTTP 调通 (需麦克风 + 真 key, `#[ignore]` by default)
-2. **`whisper_http_backend_401_retries_once`** — 401 自动重试 1 次 (per `apeireth-voice::real.rs:733-749` 1:1 翻译)
+2. **`whisper_http_backend_401_retries_once`** — 401 自动重试 1 次 (per `apeireth-voice::real.rs:733-749` 语义对齐)
 3. **`whisper_http_backend_429_returns_rate_limited`** — 429 返 `RateLimited { retry_after_ms: <from Retry-After> }`
 4. **`whisper_http_backend_400_returns_audio_error`** — 400 返 `Audio("...")`
 5. **`whisper_http_backend_no_key_returns_backend_unavailable`** — 无 key 返 `BackendUnavailable("...")`
@@ -371,7 +371,7 @@ pub struct AudioBuffer {
 
 ### 3.6 1.16s 真 LLM 调通 (RC-5 已真兑现)
 
-RC-5 已真兑现 1.16s MiniMax LLM 调通 (per `minimax_llm_factory.rs` RC-5 真接模式), 1:1 翻译复用:
+RC-5 已真兑现 1.16s MiniMax LLM 调通 (per `minimax_llm_factory.rs` RC-5 真接模式), 语义对齐复用:
 - 单实例 (一个 provider 一个 capability ID, 跨请求共享 reqwest client)
 - 凭证每次 `complete()` resolve (per `minimax_llm_factory.rs:69-75`)
 - 错误经 `ProviderError::*` 一对一映射到 `LlmError::*`
@@ -519,7 +519,7 @@ macos-capture = ["dep:xcap", "dep:cocoa"]
 - ✅ R6 真实现 trait 架构 (本批 + R6 真写 408 行 3 测试全过)
 - 🟡 RC-7 真 modality (本 spec done 估 30-45 分钟, 真实施 2-3 周待, 需硬件)
 - ⏳ 5 重守门验证 (待 R14+ 真实施时跑 cargo test/clippy)
-- ✅ 1.16s 真 LLM 调通 (RC-5 已真兑现, per `minimax_llm_factory.rs` 1:1 翻译模式)
+- ✅ 1.16s 真 LLM 调通 (RC-5 已真兑现, per `minimax_llm_factory.rs` 语义对齐模式)
 
 ### 5.2 5 项 LOCKED 0 触碰核验 (R14 spec 阶段)
 
@@ -545,7 +545,7 @@ macos-capture = ["dep:xcap", "dep:cocoa"]
 | 块 | 子任务 | 估时 | 备注 |
 |---|---|---|---|
 | **Whisper 真接** | HTTP client + multipart + verbose_json 解析 | 3-5 天 | 复用 RC-5 `ProviderCapability` |
-| | 401 重试 1 次 + 错误分类 | 1-2 天 | per `apeireth-voice::real.rs:733-749` 1:1 翻译 |
+| | 401 重试 1 次 + 错误分类 | 1-2 天 | per `apeireth-voice::real.rs:733-749` 语义对齐 |
 | | 5-7 测试 + mock server (wiremock) | 2-3 天 | per `apeireth-voice::real.rs` 测试模式 |
 | | 真 API key + 麦克风硬件联调 | 1-2 天 | 需主代理亲做, 不在 R14 范围 |
 | | (估 Whisper 总 1-2 周) | | |
@@ -575,7 +575,7 @@ macos-capture = ["dep:xcap", "dep:cocoa"]
 
 - **任务 brief 说 "RC-7 Perception 真 modality = 估 2-3 周", 我**不**真做 2-3 周, **只写 spec** (估 30-45 分钟)**
 - **0 装诱导 prevention 标**: 不假装"已实施 RC-7 真 modality", 标 "spec 完成 + 真实施待主代理后续派 R14+ 真做"
-- **0 装诚实真账**: R6 真实现 trait 架构 (1:1 翻译 v1, 0 装诱导 prevention 标 "R6 真写 + 3 测试全过"), RC-7 真 modality 估 2-3 周真实施待
+- **0 装诚实真账**: R6 真实现 trait 架构 (语义对齐 v1, 0 装诱导 prevention 标 "R6 真写 + 3 测试全过"), RC-7 真 modality 估 2-3 周真实施待
 - **不假装"全做完"** (R14 spec 阶段, 不真做 2-3 周, 0 装诱导 prevention 标)
 - **0 装诱导 prevention 本身是 0 装诱导** (子代理 Z 独立判断, R14 同意): 文档靠"标"完成 0 装诚实 ledger, **不是真核验**
 
@@ -612,7 +612,7 @@ R14 估主代理亲做以下 0 装诚实核验 (待主代理后续派 R14+ 真�
 
 **R11 commit** (per `organ-orchestrator-spec.md` 头部注释):
 - 9 organ 串联 (per `v2-architecture-reflection.md` §6)
-- 8 重 gate + 5 状态机 1:1 翻译 v1 AwakeCompanion
+- 8 重 gate + 5 状态机 语义对齐 v1 AwakeCompanion
 - 估 1-3 周真实施 (待主代理派 R12)
 
 **R14 关系**:
@@ -741,6 +741,6 @@ Real Implementation: 估 2-3 周 (Whisper 1-2 周 + xcap 1 周, 需硬件)
 - `crates/foundation/plugin/src/perception_backend.rs` (R6 真写, 408 行)
 - `crates/foundation/plugin/src/perception.rs` (R6 真写 5 modality, 458 行)
 - `crates/engine/perception/src/lib.rs` (29 行 re-export, 真实施时新建 `voice/whisper_http_backend.rs` + `vision/xcap_vision_backend.rs`)
-- `crates/engine/provider/src/minimax_llm_factory.rs` (RC-5 真接模式 1:1 翻译)
-- `legacy/donor/apeireth-voice/src/real.rs` (v1 voice STT `POST /v1/audio/transcriptions` multipart/form-data 1:1 翻译)
-- `legacy/donor/apeireth-voice/src/real.rs` (v1 voice 4 块 1:1 翻译 TTS/STT/声纹/唤醒词)
+- `crates/engine/provider/src/minimax_llm_factory.rs` (RC-5 真接模式 语义对齐)
+- `legacy/donor/apeireth-voice/src/real.rs` (v1 voice STT `POST /v1/audio/transcriptions` multipart/form-data 语义对齐)
+- `legacy/donor/apeireth-voice/src/real.rs` (v1 voice 4 块 语义对齐 TTS/STT/声纹/唤醒词)

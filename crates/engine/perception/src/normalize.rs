@@ -1,8 +1,8 @@
-//! Multimodal observation normalization recovered from donor `apeireth-perception`.
+//! Multimodal observation normalization aligned with `apeireth-perception`.
 //!
 //! v2 already owns the frozen `PerceptionEvent` / `Attention` / modality traits in
-//! `apeireth-plugin`. This module does **not** resurrect donor `PerceptionChannel`
-//! types or a second event schema. It ports the missing **algorithms**:
+//! `apeireth-plugin`. This module does **not** resurrect `PerceptionChannel`
+//! types or a second event schema. It implements the missing **algorithms**:
 //!
 //! - `SignalSource` provenance labels (cli / http / pybridge / mcp / internal / unknown)
 //! - priority heuristics (voice loudness, vision pixel ratio, tactile |pressure|, command 0.9)
@@ -21,10 +21,10 @@ use apeireth_plugin::perception::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-/// Donor default attention threshold (balance of signal vs noise).
+/// Baseline default attention threshold (balance of signal vs noise).
 pub const DEFAULT_ATTENTION_THRESHOLD: f64 = 0.5;
 
-/// Donor default Top-K (aligned with a single-batch processing cap).
+/// Baseline default Top-K (aligned with a single-batch processing cap).
 pub const DEFAULT_TOP_K: usize = 5;
 
 /// Full-HD reference used by the vision pixel-priority heuristic.
@@ -73,7 +73,7 @@ pub fn clamp_priority(value: f64) -> f64 {
     value.clamp(0.0, 1.0)
 }
 
-/// Voice priority equals clamped loudness (donor heuristic; no acoustic model).
+/// Voice priority equals clamped loudness (baseline heuristic; no acoustic model).
 pub fn voice_priority(loudness: f64) -> f64 {
     clamp_priority(loudness)
 }
@@ -121,7 +121,7 @@ pub fn payload_is_empty(payload: &Value) -> bool {
     }
 }
 
-/// Validate canonical event fields recovered from donor `validate_event`.
+/// Validate canonical event fields (aligned with `validate_event`).
 pub fn validate_event(event: &PerceptionEvent) -> Result<(), String> {
     if payload_is_empty(&event.payload) {
         return Err("PerceptionEvent.payload must not be empty".to_string());
@@ -135,7 +135,7 @@ pub fn validate_event(event: &PerceptionEvent) -> Result<(), String> {
     Ok(())
 }
 
-/// Append a tag (donor `PerceptionEvent::with_tag`).
+/// Append a tag (aligned with `PerceptionEvent::with_tag`).
 pub fn with_tag(mut event: PerceptionEvent, tag: impl Into<String>) -> PerceptionEvent {
     event.tags.push(tag.into());
     event
@@ -143,7 +143,7 @@ pub fn with_tag(mut event: PerceptionEvent, tag: impl Into<String>) -> Perceptio
 
 /// Filter events by attention threshold using the canonical `ThresholdAttention`.
 ///
-/// The cutoff is **not** clamped here (matching donor `pipeline`): a threshold
+/// The cutoff is **not** clamped here (matching baseline `pipeline`): a threshold
 /// above 1.0 keeps nothing; a threshold below 0.0 keeps everything. Callers
 /// that want a clamped cutoff should pass [`clamp_priority`].
 pub fn pipeline_events(events: Vec<PerceptionEvent>, threshold: f64) -> Vec<PerceptionEvent> {
@@ -294,6 +294,46 @@ pub fn command_observation(
         }),
         DEFAULT_COMMAND_PRIORITY,
         vec!["command".into(), "user_initiated".into()],
+    )
+}
+
+/// Normalize a screen / input activity observation into a canonical event.
+///
+/// The payload carries only the whitelisted activity fields — activity kind
+/// label, application label, optional detail — plus provenance. Callers that
+/// collect from the desktop surface are expected to redact free text before
+/// this point; the pipeline never widens the field set here.
+///
+/// Modality mapping stays inside the frozen five-modality schema: screen
+/// activity is vision-channel material, input activity is an activity-level
+/// signal and lands in the tactile channel.
+pub fn activity_observation(
+    session_id: SessionId,
+    source: SignalSource,
+    kind_label: &str,
+    app: &str,
+    detail: Option<&str>,
+    attention_score: f64,
+    timestamp_ms: i64,
+) -> PerceptionEvent {
+    let modality = if kind_label == "input_activity" {
+        PerceptionModality::Tactile
+    } else {
+        PerceptionModality::Vision
+    };
+    base_event(
+        "activity",
+        modality,
+        session_id,
+        timestamp_ms,
+        json!({
+            "activity_kind": kind_label,
+            "app": app,
+            "detail": detail,
+            "signal_source": source.label(),
+        }),
+        attention_score,
+        vec!["activity".into(), kind_label.to_string()],
     )
 }
 
@@ -454,6 +494,44 @@ mod tests {
         );
         assert!(event.tags.contains(&"alpha".to_string()));
         assert!(event.tags.contains(&"beta".to_string()));
+    }
+
+    /// Activity observations normalize into the canonical schema with only the
+    /// whitelisted fields, kind-carried tags, and a clamped score.
+    #[test]
+    fn activity_normalization_carries_whitelisted_fields_only() {
+        let screen = activity_observation(
+            sid(),
+            SignalSource::Internal,
+            "screen_activity",
+            "editor",
+            Some("app_focus"),
+            0.4,
+            1_000,
+        );
+        assert_eq!(screen.source, PerceptionModality::Vision);
+        assert_eq!(screen.payload["activity_kind"], "screen_activity");
+        assert_eq!(screen.payload["app"], "editor");
+        assert_eq!(screen.payload["detail"], "app_focus");
+        assert_eq!(screen.payload["signal_source"], "internal");
+        assert!(screen.tags.contains(&"activity".to_string()));
+        assert!(screen.tags.contains(&"screen_activity".to_string()));
+        // Only the four whitelisted payload fields exist.
+        assert_eq!(screen.payload.as_object().unwrap().len(), 4);
+        assert!((screen.attention_score - 0.4).abs() < 1e-9);
+
+        let input = activity_observation(
+            sid(),
+            SignalSource::Internal,
+            "input_activity",
+            "editor",
+            None,
+            2.0,
+            1_000,
+        );
+        assert_eq!(input.source, PerceptionModality::Tactile);
+        assert!(input.payload["detail"].is_null());
+        assert!((input.attention_score - 1.0).abs() < 1e-9, "score clamps");
     }
 
     #[test]

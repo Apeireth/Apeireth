@@ -1,6 +1,6 @@
 //! Deterministic query expansion for hybrid retrieval.
 //!
-//! Assigned donors (`apeireth-graph`, `apeireth-graph-primitive`,
+//! The assigned v1 crates (`apeireth-graph`, `apeireth-graph-primitive`,
 //! `apeireth-vector`, `apeireth-repo-tools`) have **no** dedicated query
 //! rewriter. The closest v2 owner is [`crate::topic_predictor`], whose keyword
 //! clusters already map surface forms onto topics.

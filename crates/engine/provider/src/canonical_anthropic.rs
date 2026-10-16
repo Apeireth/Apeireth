@@ -2,7 +2,7 @@
 //!
 //! This is the Phase 2 protocol-diversity proof: a provider whose wire shape
 //! (Anthropic Messages API) differs deliberately from the OpenAI Chat
-//! Completions shape Phase 1 migrated, yet which reaches the runtime through
+//! Completions shape Phase 1 implemented, yet which reaches the runtime through
 //! the **same** `ProviderCapability` / `ProviderRouter` / `CredentialResolver`
 //! plumbing. The runtime names no vendor and knows no Anthropic protocol
 //! detail; every difference is contained in this module.
@@ -19,7 +19,7 @@
 //! | `stop_reason` → `NormalizedFinishReason::from_anthropic` | `adapt_response` |
 //! | `usage.input_tokens`/`output_tokens` → `NormalizedUsage` | `adapt_response` |
 //!
-//! Ported faithfully from the repository's existing
+//! Semantically aligned with the repository's existing
 //! `apeireth_api::llm::providers::anthropic_compat::AnthropicCompatibleProvider`
 //! (an `LlmProvider`), but **not** wrapped around it: translation, the HTTP
 //! client, and credential resolution are owned here against the canonical
@@ -130,7 +130,10 @@ impl AnthropicProviderCapability {
     /// is permanent (§40): falling back would mask a misconfiguration.
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
         let resolver = {
-            let guard = self.resolver.lock().expect("resolver slot lock poisoned");
+            let guard = self
+                .resolver
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone().ok_or_else(|| ProviderError::AuthFailed {
                 provider: self.id.to_string(),
                 detail: format!(
@@ -313,12 +316,22 @@ impl AnthropicProviderCapability {
 
         let usage = body
             .get("usage")
-            .map(|u| NormalizedUsage {
-                prompt_tokens: u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                completion_tokens: u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0)
-                    as u32,
-                total_tokens: u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32
-                    + u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            .map(|u| {
+                let input = token_count(u, "input_tokens");
+                let output = token_count(u, "output_tokens");
+                NormalizedUsage {
+                    prompt_tokens: input,
+                    completion_tokens: output,
+                    // M11: total 用 saturating_add —— 两个分量各自已封顶到
+                    // u32::MAX, 再相加不得回绕 (debug panic / release 静默
+                    // 截断都会污染记账)。
+                    total_tokens: input.saturating_add(output),
+                    // 缓存命中列: 本家缓存读列是 `usage.cache_read_input_tokens`
+                    // (从提示缓存直接供给的输入 token); 没报 = None (不编造)。
+                    // 注意本家把它记在 `input_tokens` **之外** (见
+                    // [`NormalizedUsage::prompt_cache_hit_tokens`] 的口径注)。
+                    prompt_cache_hit_tokens: cache_read_count(u),
+                }
             })
             .unwrap_or_default();
 
@@ -491,11 +504,17 @@ impl AnthropicProviderPlugin {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_else(|| DEFAULT_MODELS.iter().map(|s| s.to_string()).collect());
-        let http = reqwest::Client::builder().build().map_err(|e| {
-            PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
-                "reqwest client build failed: {e}"
-            )))
-        })?;
+        // M6: 禁重定向 —— anthropic auth 用自定义 `x-api-key` 头, reqwest
+        // 的跨主机重定向清理只覆盖 Authorization/Cookie 等固定集合,
+        // 不删自定义头; Messages API 从不 30x, 直接拒绝重定向。
+        let http = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| {
+                PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
+                    "reqwest client build failed: {e}"
+                )))
+            })?;
         Ok(Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?)
     }
 
@@ -516,7 +535,10 @@ impl AnthropicProviderPlugin {
     /// Attach a credential resolver without booting a full runtime (tests).
     #[doc(hidden)]
     pub fn attach_resolver_for_test(&self, resolver: Arc<dyn CredentialResolver>) {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(resolver);
     }
 
@@ -534,13 +556,19 @@ impl Plugin for AnthropicProviderPlugin {
     }
 
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(Arc::clone(&ctx.credentials));
         Ok(())
     }
 
     async fn shutdown(&self) -> PluginResult<()> {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = None;
         Ok(())
     }
@@ -557,6 +585,31 @@ impl std::fmt::Debug for AnthropicProviderPlugin {
             .field("capability", &self.capability)
             .finish_non_exhaustive()
     }
+}
+
+/// Read one usage counter and clamp it into `u32` (M11).
+///
+/// `as u32` on a vendor-reported count panics in debug builds and silently
+/// truncates in release builds when the value exceeds `u32::MAX`; both are
+/// unacceptable accounting semantics. Clamping to `u32::MAX` keeps an
+/// obviously-overflowing value instead of pretending it is precise. A missing
+/// or non-numeric field stays `0` (usage is never fabricated).
+fn token_count(usage: &serde_json::Value, key: &str) -> u32 {
+    usage
+        .get(key)
+        .and_then(|v| v.as_u64())
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+        .unwrap_or(0)
+}
+
+/// Read this family's prompt-cache read column (`cache_read_input_tokens`),
+/// clamped into `u32` (M11 同口径), or `None` when the vendor reports no
+/// cache column — never fabricated.
+fn cache_read_count(usage: &serde_json::Value) -> Option<u32> {
+    usage
+        .get("cache_read_input_tokens")
+        .and_then(|v| v.as_u64())
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
 }
 
 /// Build the provider model list from configured ids, de-duplicating by
@@ -735,6 +788,69 @@ mod tests {
             let resp = cap.adapt_response(body, "m").expect("adapts");
             assert_eq!(resp.finish_reason, Some(expected), "{wire}");
         }
+    }
+
+    #[test]
+    fn adapt_response_clamps_overflowing_usage_counters() {
+        // M11 回归: vendor 回大于 u32::MAX 的 usage 计数时, 旧实现 `as u32`
+        // 在 debug 构建 panic、release 静默截断; 现在封顶且 total 不回绕。
+        let cap = capability(empty_resolver_slot());
+        let body = serde_json::json!({
+            "content": [{"type": "text", "text": "x"}],
+            "usage": {
+                "input_tokens": u64::from(u32::MAX) + 7,
+                "output_tokens": u64::from(u32::MAX) + 9,
+            }
+        });
+        let resp = cap.adapt_response(body, "m").expect("adapts");
+        assert_eq!(resp.usage.prompt_tokens, u32::MAX);
+        assert_eq!(resp.usage.completion_tokens, u32::MAX);
+        assert_eq!(
+            resp.usage.total_tokens,
+            u32::MAX,
+            "total must saturate, not wrap"
+        );
+    }
+
+    /// 缓存命中列: 本家缓存读列 `cache_read_input_tokens` 真实填充 (溢出封顶
+    /// M11 同口径); 找不到缓存列 = None 不编造。
+    #[test]
+    fn adapt_response_fills_the_cache_read_column_when_reported() {
+        let cap = capability(empty_resolver_slot());
+        let body = serde_json::json!({
+            "content": [{"type": "text", "text": "x"}],
+            "usage": {
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "cache_read_input_tokens": 80
+            }
+        });
+        let resp = cap.adapt_response(body, "m").expect("adapts");
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(80));
+
+        // 溢出封顶, 不回绕。
+        let body = serde_json::json!({
+            "content": [{"type": "text", "text": "x"}],
+            "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1,
+                "cache_read_input_tokens": u64::from(u32::MAX) + 3
+            }
+        });
+        let resp = cap.adapt_response(body, "m").expect("adapts");
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(u32::MAX));
+    }
+
+    /// 没报缓存列的家留 None 不编造 (usage 在场但无缓存字段)。
+    #[test]
+    fn adapt_response_never_fabricates_a_missing_cache_column() {
+        let cap = capability(empty_resolver_slot());
+        let body = serde_json::json!({
+            "content": [{"type": "text", "text": "x"}],
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        });
+        let resp = cap.adapt_response(body, "m").expect("adapts");
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, None);
     }
 
     #[test]

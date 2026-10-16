@@ -183,15 +183,35 @@ pub fn parse_response(
         .and_then(|f| f.as_str())
         .unwrap_or("stop");
 
+    // 0 装 fail-loud (2026-10-10 真缺陷 #4 加固): 思考型模型把 max_tokens 全喂给
+    // reasoning_content 时 content 落空 (教训见 canonical_openai_compatible.rs
+    // adapt_request 注释: 500 必截断 / 2048 仍空 1/3 / 4096 稳)。空 content +
+    // length 截断 = 预算耗尽的空壳响应 —— 显式报错并给行动指引, 不发假响应。
+    // 非截断的空 content (finish=stop) 不拦: 那是模型的真实输出。
+    if content.is_empty() && finish_reason == "length" {
+        return Err(ProviderError::BadResponse {
+            provider: provider_owned.clone(),
+            detail: "output budget exhausted: content empty while finish_reason=length \
+                     (reasoning models burn max_tokens on reasoning_content). Raise \
+                     max_tokens (4096 known-good) or omit it (canonical default fills 4096)."
+                .into(),
+        });
+    }
+
+    // M11: usage 读数按 u32 封顶。`as u32` 对 > u32::MAX 的 vendor 值在
+    // debug 构建 panic、release 静默截断 —— 两者都不是可接受的记账语义。
+    // 缺失/非数字字段仍是 0 (usage 从不臆造)。
     let usage = body
         .get("usage")
         .map(|u| NormalizedUsage {
-            prompt_tokens: u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            completion_tokens: u
-                .get("completion_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
-            total_tokens: u.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            prompt_tokens: token_count(u, "prompt_tokens"),
+            completion_tokens: token_count(u, "completion_tokens"),
+            // total 直接读 vendor 自报值 (封顶), 保持与旧实现相同的语义,
+            // 不回绕也不臆造。
+            total_tokens: token_count(u, "total_tokens"),
+            // 缓存命中列: 读原始 usage 的真实缓存字段; vendor 没报缓存列 =
+            // None (未知, 不编造)。
+            prompt_cache_hit_tokens: cache_hit_count(u),
         })
         .unwrap_or_default();
 
@@ -222,10 +242,22 @@ pub fn parse_response(
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string();
+            // M20 (provider 侧): 模型输出畸形 arguments JSON 时, 旧实现
+            // `.ok()` 静默吞为 `Value::Null` —— 排障困难, 且工具侧会拿到
+            // 一个看起来像"无参数"的调用。这里 fail-loud: 带说明的
+            // BadResponse, 让调用方看到是哪一次 tool call 的参数坏掉。
             let arguments = function
                 .get("arguments")
                 .and_then(|v| v.as_str())
-                .and_then(|s| serde_json::from_str(s).ok())
+                .map(|raw| {
+                    serde_json::from_str(raw).map_err(|error| ProviderError::BadResponse {
+                        provider: provider_owned.clone(),
+                        detail: format!(
+                            "tool call {id:?} ({name}) has malformed arguments JSON: {error}"
+                        ),
+                    })
+                })
+                .transpose()?
                 .unwrap_or(serde_json::Value::Null);
             tool_calls.push(ToolCall {
                 id,
@@ -248,6 +280,42 @@ pub fn parse_response(
         tool_calls,
         raw_metadata: serde_json::Map::new(),
     })
+}
+
+/// Read one usage counter and clamp it into `u32` (M11).
+///
+/// `as u32` on a vendor-reported count panics in debug builds and silently
+/// truncates in release builds when the value exceeds `u32::MAX`; both are
+/// unacceptable accounting semantics. Clamping to `u32::MAX` keeps an
+/// obviously-overflowing value instead of pretending it is precise. A missing
+/// or non-numeric field stays `0` (usage is never fabricated).
+fn token_count(usage: &serde_json::Value, key: &str) -> u32 {
+    usage
+        .get(key)
+        .and_then(|v| v.as_u64())
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+        .unwrap_or(0)
+}
+
+/// Read the prompt-cache hit column, clamped into `u32` (M11 同口径), or
+/// `None` when the vendor reports no cache column at all — never fabricated.
+///
+/// OpenAI-shaped vendors report the nested `prompt_tokens_details.cached_tokens`;
+/// some compatible vendors instead report a top-level `prompt_cache_hit_tokens`.
+/// Both spellings describe the same data (input tokens served from the prompt
+/// cache); when both are present the details column wins, so one vendor quirk
+/// never double-counts.
+fn cache_hit_count(usage: &serde_json::Value) -> Option<u32> {
+    let details_column = usage
+        .get("prompt_tokens_details")
+        .and_then(|details| details.get("cached_tokens"))
+        .and_then(|v| v.as_u64());
+    let direct_column = usage
+        .get("prompt_cache_hit_tokens")
+        .and_then(|v| v.as_u64());
+    details_column
+        .or(direct_column)
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
 }
 
 /// Classify a vendor HTTP outcome into a canonical [`ProviderError`].
@@ -465,6 +533,131 @@ mod tests {
         let resp = parse_response(body, "m", "provider.test").unwrap();
         assert_eq!(resp.usage, NormalizedUsage::default());
         assert_eq!(resp.finish_reason, Some(NormalizedFinishReason::Length));
+    }
+
+    /// M11 回归: > u32::MAX 的 usage 计数不得 `as u32` (debug panic /
+    /// release 静默截断), 封顶为 u32::MAX。
+    #[test]
+    fn parse_response_clamps_overflowing_usage_counters() {
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": u64::from(u32::MAX) + 3,
+                "completion_tokens": u64::from(u32::MAX) + 5,
+                "total_tokens": u64::from(u32::MAX) + 11,
+            }
+        });
+        let resp = parse_response(body, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_tokens, u32::MAX);
+        assert_eq!(resp.usage.completion_tokens, u32::MAX);
+        assert_eq!(resp.usage.total_tokens, u32::MAX);
+    }
+
+    /// 缓存命中列: 从原始 usage 的**真实**缓存字段填充 (details 形状与顶列
+    /// 形状是同一数据的两种拼法, 同现取 details 不双计; 溢出封顶 M11 同口径)。
+    #[test]
+    fn parse_response_fills_the_cache_hit_column_from_real_vendor_fields() {
+        let details_shape = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 5,
+                "total_tokens": 105,
+                "prompt_tokens_details": {"cached_tokens": 80}
+            }
+        });
+        let resp = parse_response(details_shape, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(80));
+
+        let direct_shape = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 5,
+                "total_tokens": 105,
+                "prompt_cache_hit_tokens": 60
+            }
+        });
+        let resp = parse_response(direct_shape, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(60));
+
+        // 两列同现: 取 details, 不把两种拼法加在一起。
+        let both = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 5,
+                "total_tokens": 105,
+                "prompt_tokens_details": {"cached_tokens": 80},
+                "prompt_cache_hit_tokens": 60
+            }
+        });
+        let resp = parse_response(both, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(80));
+
+        // M11 同口径: > u32::MAX 的缓存计数封顶, 不回绕。
+        let overflowing = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2,
+                "prompt_tokens_details": {"cached_tokens": u64::from(u32::MAX) + 7}
+            }
+        });
+        let resp = parse_response(overflowing, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(u32::MAX));
+    }
+
+    /// 找不到缓存列的家留 `None` 不编造: usage 在场但没有缓存字段 = 未知。
+    #[test]
+    fn parse_response_never_fabricates_a_missing_cache_column() {
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        });
+        let resp = parse_response(body, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, None);
+    }
+
+    /// M20 (provider 侧) 回归: 畸形 arguments JSON 必须 fail-loud, 不再静默
+    /// 吞为 `Value::Null` (那会让工具侧看到一个"无参数"的假调用)。
+    #[test]
+    fn parse_response_rejects_malformed_tool_arguments() {
+        let body = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "call_bad",
+                        "type": "function",
+                        "function": {"name": "tool.shell", "arguments": "{\"command\": "}
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }]
+        });
+        let err = parse_response(body, "m", "provider.test").expect_err("must fail");
+        assert!(matches!(err, ProviderError::BadResponse { .. }), "{err:?}");
+        let ProviderError::BadResponse { detail, .. } = err else {
+            unreachable!("asserted above");
+        };
+        assert!(detail.contains("call_bad"), "{detail}");
+        assert!(detail.contains("malformed arguments"), "{detail}");
+    }
+
+    /// 合法 arguments 与非字符串 (缺失) 形态保持原语义: 前者解析, 后者 Null。
+    #[test]
+    fn parse_response_absent_tool_arguments_stay_null() {
+        let body = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{"id": "call_ok", "function": {"name": "t"}}]
+                },
+                "finish_reason": "tool_calls"
+            }]
+        });
+        let resp = parse_response(body, "m", "provider.test").unwrap();
+        assert_eq!(resp.tool_calls[0].arguments, serde_json::Value::Null);
     }
 
     #[test]

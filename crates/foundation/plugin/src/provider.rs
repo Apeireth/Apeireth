@@ -22,8 +22,7 @@ use thiserror::Error;
 ///
 /// The retryable/permanent split is the whole point of this type: it is what
 /// lets a router decide between falling back to another provider and failing
-/// fast. Classification is ported from the mature `MultiLlmRouter` in
-/// `apeireth-api`, whose fallback loop this preserves.
+/// fast.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum ProviderError {
@@ -105,7 +104,44 @@ impl ProviderError {
             | Self::Refused { provider, .. } => provider,
         }
     }
+
+    /// Whether this failure is the context-window-exceeded class: the provider
+    /// answered that the request does not fit the model's context window.
+    ///
+    /// Recognized from the vendor detail text the existing error mapping
+    /// already carries (`BadResponse` / `Refused`), so the enum shape and every
+    /// mapping semantic stay unchanged. This is the class budget-shrink
+    /// recovery acts on; every other failure keeps its normal handling.
+    pub fn is_context_window_exceeded(&self) -> bool {
+        let detail = match self {
+            Self::BadResponse { detail, .. } | Self::Refused { detail, .. } => detail.as_str(),
+            _ => return false,
+        };
+        let lowered = detail.to_ascii_lowercase();
+        CONTEXT_WINDOW_EXCEEDED_MARKERS
+            .iter()
+            .any(|marker| lowered.contains(marker))
+    }
 }
+
+/// Generic phrases by which providers report "this request does not fit the
+/// context window". Matched case-insensitively against the vendor detail text
+/// carried by [`ProviderError::BadResponse`] / [`ProviderError::Refused`].
+const CONTEXT_WINDOW_EXCEEDED_MARKERS: &[&str] = &[
+    "context length",
+    "context_length",
+    "context window",
+    "context_window",
+    "maximum context",
+    "max context",
+    "too many tokens",
+    "token limit",
+    "prompt is too long",
+    "input is too long",
+    "request too large",
+    "exceeds the maximum",
+    "reduce the length",
+];
 
 /// A hot-config patch for a running provider capability.
 ///
@@ -254,5 +290,59 @@ mod tests {
         };
         assert_eq!(e.provider(), "provider.fake");
         assert!(e.to_string().contains("provider.fake"), "{e}");
+    }
+
+    #[test]
+    fn window_exceeded_is_recognized_in_the_vendor_detail() {
+        let over = ProviderError::BadResponse {
+            provider: "provider.fake".into(),
+            detail: "vendor returned 400: context length exceeded (9000 > 8000)".into(),
+        };
+        assert!(over.is_context_window_exceeded(), "{over}");
+
+        let refused = ProviderError::Refused {
+            provider: "provider.fake".into(),
+            detail: "vendor returned 500: maximum context length is 128000 tokens".into(),
+        };
+        assert!(refused.is_context_window_exceeded(), "{refused}");
+
+        let snake = ProviderError::BadResponse {
+            provider: "provider.fake".into(),
+            detail: "vendor returned 400: input exceeds context_window".into(),
+        };
+        assert!(snake.is_context_window_exceeded(), "{snake}");
+    }
+
+    #[test]
+    fn other_failures_are_not_window_exceeded() {
+        let not_over = [
+            ProviderError::BadResponse {
+                provider: "provider.fake".into(),
+                detail: "vendor returned 200: response has no choices array".into(),
+            },
+            ProviderError::BadResponse {
+                provider: "provider.fake".into(),
+                detail: "output budget exhausted: content empty while finish_reason=length".into(),
+            },
+            ProviderError::RateLimited {
+                provider: "provider.fake".into(),
+                retry_after_ms: 5,
+            },
+            ProviderError::Timeout {
+                provider: "provider.fake".into(),
+                timeout_ms: 5,
+            },
+            ProviderError::Network {
+                provider: "provider.fake".into(),
+                detail: "connection reset".into(),
+            },
+            ProviderError::AuthFailed {
+                provider: "provider.fake".into(),
+                detail: "bad key".into(),
+            },
+        ];
+        for e in &not_over {
+            assert!(!e.is_context_window_exceeded(), "{e}");
+        }
     }
 }

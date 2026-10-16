@@ -26,7 +26,7 @@
 - [x] **24 LOCKED 入口签名 0 改 verify** ✅ (P2-3 + P4-1 + P14-1 retry 三方 verify done)
 - [x] **Cargo.toml 1.2.0 严守 verify** ✅ (`Cargo.toml:274 version = "1.2.0"`)
 - [x] **master HEAD = abf12243 verify** ✅ (`.git/refs/heads/master` = `abf1224371016e36df8f4d3c9a05b33f1c563e0d`)
-- [x] **借鉴 11/11 状态 clear verify** ✅ (✅ 10 真实施 + ⏳ 0 限流 + ❌ 1 跳过)
+- [x] **吸收 11/11 状态 clear verify** ✅ (✅ 10 真实施 + ⏳ 0 限流 + ❌ 1 跳过)
 - [x] **决策链 #30-#60 全读 verify** ✅ (31 份决策文件 + HANDOFF, 0:03 新 session 已读)
 
 **整合 #5 commit 拍板**: 拆 3 commit (per decision-62, Mavis 自决):
@@ -41,7 +41,7 @@
 - [x] **R129-1**: 整合 #5.1 commit 准备 (src/ 实施 verify + commit message 写)
 - [x] **R129-2**: 整合 #5.2 commit 准备 (docs/ + Cargo.toml verify + commit message 写)
 - [x] **R129-3**: 8 步 verify 跑 (cargo build/test/audit/deny)
-- [x] **R129-7**: 借鉴 11/11 升级 verify (1:1 verify ✅ 10 + ⏳ 0 + ❌ 1)
+- [x] **R129-7**: 吸收 11/11 升级 verify (逐项 verify ✅ 10 + ⏳ 0 + ❌ 1)
 
 ### 1.3 整合 #5 commit 执行 (主人手跑 `scripts/release/git-push-1.0.ps1`, 0 主动 push 严守)
 
@@ -177,7 +177,7 @@
 - **decision-34**: 整合 #3 commit `21aa85f3` 17:30 done
 - **decision-48**: 整合 #4 commit `abf12243` 19:41 done (46752 file changes)
 - **decision-55**: R127 4 派活 (整合 #5 pre-check + Library Stage 4-6)
-- **decision-56**: R127-2 10 派活 (借鉴 3 限流重试 + 1.0 release 准备 + Library 进阶)
+- **decision-56**: R127-2 10 派活 (吸收 3 限流重试 + 1.0 release 准备 + Library 进阶)
 - **decision-57**: R128 6 派活 (ASI Python + Tauri + Cargo + LICENSE + 整合 #5 pre-stage)
 - **decision-58**: R128-2 3 派活 (ASI Stage 3 + Tauri scaffold 深化 + 1.0 release Cargo 配)
 - **decision-59**: promethean/ 全删方案

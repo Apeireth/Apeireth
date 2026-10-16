@@ -2,7 +2,7 @@
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **当前基线**: 默认分支 `main`、17-crate 工作区（v2.0.0-rc.1, 2026-09-05 对账实测）；`legacy/` 不参与构建。
+> **当前基线**: 默认分支 `main`、18-crate 工作区（v2.0.0-rc.1；测试基线 **5360 passed / 0 failed / 22 ignored**，190 套件全量实测（2026-10-13 口径），历史口径见 CHANGELOG）；`legacy/` 不参与构建。
 
 ---
 
@@ -70,7 +70,7 @@ cargo test --workspace
 
 ```powershell
 cargo run --bin apeireth session
-# 应该看到：欢迎信息 + 启动 session
+# 预期：打印 canonical runtime ready / providers: … 就绪信息后退出（诊断命令）；对话请用 apeireth chat <prompt>（需 APEIRETH_API_KEY）或桌面端
 ```
 
 ---
@@ -115,7 +115,7 @@ cargo test --workspace
 
 ```bash
 cargo run --bin apeireth session
-# 应该看到：欢迎信息 + 启动 session
+# 预期：打印 canonical runtime ready / providers: … 就绪信息后退出（诊断命令）；对话请用 apeireth chat <prompt>（需 APEIRETH_API_KEY）或桌面端
 ```
 
 ---
@@ -174,7 +174,7 @@ cargo run --bin apeireth session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（应该 3120 passed / 0 failed / 13 ignored——17-crate 工作区实测，2026-09-05 对账批；v1 时代 86-crate 全量为 23,806，见 CHANGELOG）
+# 2. Test（预期 5360 passed / 0 failed / 22 ignored，190 套件——工作区基线口径（2026-10-13 实测），以现场实测为准；历史口径见 CHANGELOG）
 cargo test --workspace
 
 # 3. Clippy（应该 0 warning）
@@ -183,7 +183,7 @@ cargo clippy --workspace -- -D warnings
 # 4. Format（应该 0 diff）
 cargo fmt --check
 
-# 5. Hello World（应该看到欢迎信息）
+# 5. Hello World（运行时就绪自检）
 cargo run --bin apeireth session
 ```
 
@@ -255,13 +255,18 @@ EOF
 3. **读 docs/01-architecture/vision.md**（5/30/60 分钟路径起点, docs/archive 体系重构后)
 4. **读 ROADMAP.md**（顶层路线图, 8/19 已反映 v1.0.0 实际）
 5. **读 docs/03-reference/glossary.md**（术语；v2 现状见 docs/01-architecture/architecture.md）
-6. **运行 examples/**（最小 demo, `cargo run --example hello_world` 选具体 example）
+6. **运行示例**（最小 demo: `cargo run -p apeireth-core --example hello_world`；其他 example 在各 crate 的 examples/ 下，虚拟 workspace 需带 `-p <crate>`）
 
 ---
 
 ## 🎛️ 启用高级能力（用户旋钮，2026-09-08 落地）
 
 > 设计原则：**默认拒绝**。每个旋钮 = 主人的一次显式授权；值为 `1` 才生效。
+> 例外（核心体验默认开）：记忆核心族三件 `APEIRETH_ENABLE_PREFERENCE_LEARNING` /
+> `APEIRETH_ENABLE_PROACTIVE_RECALL` / `APEIRETH_ENABLE_MEMORY_INJECTION`
+> **未设即开**；`=0` 或对应 `APEIRETH_DISABLE_PREFERENCE_LEARNING` /
+> `APEIRETH_DISABLE_PROACTIVE_RECALL` / `APEIRETH_DISABLE_MEMORY_INJECTION`（`=1`）关闭，
+> DISABLE 优先。危险项（shell/fetch）维持默认关不动。
 > 全部旋钮均为 env 变量，在启动 CLI/gateway 前设置。0 装说明：逐 token 流式
 > 仍为缓冲成帧（冻结 seam），无旋钮。
 
@@ -273,7 +278,12 @@ EOF
 | `APEIRETH_COGNITIVE_JUDGE=1` | 每回合 AI 自我评审（低分触发重试/停止） | 每回合 +1 次 LLM 调用 |
 | `APEIRETH_COGNITIVE_COUNCIL=1` | 多视角审议（7 advisor 并行，10s/60s 有界） | 每回合最多 +7 次 LLM 调用 |
 | `APEIRETH_ENABLE_ORGANS=1` | 装配 9 器官模块（W1/W2 等，LLM 重的器官会真调 LLM） | 视器官而定 |
-| `APEIRETH_ENABLE_PREFERENCE_LEARNING=1` | 让 AI 把学到的偏好写回长期记忆 | 写入权交给模型；配 P1-A 准入控制使用更稳 |
+| `APEIRETH_ENABLE_PREFERENCE_LEARNING=1` | 让 AI 把学到的偏好写回长期记忆 | 写入权交给模型；配 P1-A 准入控制使用更稳；**默认开**（`=0` 或 `APEIRETH_DISABLE_PREFERENCE_LEARNING=1` 关） |
+| `APEIRETH_ENABLE_PROACTIVE_RECALL=1` | 记忆主动召回：已存记忆按对话线索主动浮现（每次 ≤2 条、有置信度阈值，确定性选择器） | 低——不额外调 LLM；**默认开**（`=0` 或 `APEIRETH_DISABLE_PROACTIVE_RECALL=1` 关） |
+| `APEIRETH_DISABLE_TYPED_RECALL=1` | 关闭承诺/画像/关系三类记忆的**召回读侧**（写侧不动） | 关掉后这三类记忆不再浮现；默认**开**（写读对称，2026-10-06 修复入库不召回的断链） |
+| `APEIRETH_ENABLE_MEMORY_INJECTION=1` | 记忆 overlay 用反幻觉格式（编号证据清单 + 「禁止说『我记得我们以前聊过』」） | 低——纯渲染切换；**默认开**（`=0` 或 `APEIRETH_DISABLE_MEMORY_INJECTION=1` 关回 XML 封闭世界格式） |
+| `APEIRETH_ENABLE_CONSOLIDATION=1` | 每回合后跑确定性记忆整理，提炼洞察落库（稳定 ID 幂等，只从原始证据提炼） | 低——0 模型调用；默认关 |
+| `APEIRETH_ENABLE_REFLEXION=1` | 失败闭环：TurnStart 注入历史教训 + AfterTurn 把 Judge 显式否决沉淀为反思 | 低——需 Judge 开启才有信号源；默认关 |
 
 **shell 审批流示例**（开启后）：
 
@@ -285,9 +295,28 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
 # 或 apeireth reject --session <sid> --approval <approval-id> --reason "不需要"
 ```
 
+**2026-10-10 W2 §4.1 做梦（不是旋钮——显式命令即授权）**：`apeireth dream [--session <id>] [--limit N] [--date YYYY-MM-DD]`。取该会话近 N 条 episodes 为梦境素材（不给 `--session` = 空素材，走引擎"常规认知结构自整定"路径），跑 6 阶段做梦循环（LLM 元思考器 + 确定性降级链，LLM 未配则纯规则浅推演），苏醒把 `DreamReport` 写入 `<data>/diary` 日记（source=`dream`）。**默认不自动跑**——做梦只在这个命令下发生。
+
+**2026-10-10 council 改造（每轮评审器 → 决策环节顾问）**：council 不再按轮常开（深度档 = 深思直答，省下原先每轮开庭的延迟），只在**决策环节**用：A 升级/部署批准、B 高危操作（L3+）、C 待裁冲突批量裁决（空闲时）三个位点随对应模块接入；**D 显式咨询已可用**：`apeireth council "<议题>"`（显式授权 = 显式命令，真顾问裁决链；未配 LLM 会 fail-loud 报错而不是给假裁决）。旋钮：`APEIRETH_COUNCIL_ADVISORS=N`（裁决顾问数 1–7，**默认 3**（7→3 拍板），规范序取前 N：Safety/Performance/Philosophy/History/Strategy/Ethics/Legal，Safety 恒首位）、`APEIRETH_COUNCIL_TIMEOUT_MS`（单顾问超时，默认 30000）。
+
+**2026-10-10 生产 Orchestrator（不是旋钮——显式命令即授权）**：`apeireth subagent "<标题>" [--payload <JSON>]` —— 长程任务 `plan→impl→review` 三步链（IMPLEMENTED → PRODUCTION WIRED：每步**独立 LLM 实例**按角色隔离，`spec.model` 可换 model 做隔离实验）。**人工审批 fail-closed**：plan 步需主人在 CLI 交互点头（y/N），无审批门时自动 deny（绝不静默放行）；dispatch 超时有界（默认 120s）；未配 LLM 显式报错（0 装）。旋钮：`APEIRETH_ENABLE_WORKTREE_SANDBOX=1`（**默认关**）——子代理跑在独立 git worktree（物理目录级隔离，防污染主工作区；worktree 创建失败即拒、不裸跑）。
+
+**2026-10-10 守夜人 Nightwatch（不是旋钮——显式命令即授权）**：`apeireth nightwatch [--session <id>] [--limit N]`。离线闲时审计（**report-only，不阻塞不批准**——approval_policy 留热路径）：读近 N 条 episodes 为被动快照 → 五件组合审计（risk 核词扫描 / eval 行为质量趋势 / no-degrade 复盘 / evidence 断言缺口 / rubric 立场平衡 / colang DSL 健康）→ 报告落 `<data>/nightwatch/nightwatch-<ts>.json`。**默认不自动跑**；审计链/council ballot 未持久化的分析段如实报"接线缺口"，不造假输入。**后台守护（2026-10-10 设计闭环）**：`apeireth nightwatch --watch [--idle 900] [--cooldown 3600] [--interval 60]` —— 只在**用户空闲时**复盘：活动信号 = 认知库 episode 时间戳（用户说话=新 episode，`--session` 指定观测会话），双闸（距最近活动 ≥ idle 且距上次复盘 ≥ cooldown）过后跑一次，轮询间隔 interval；Ctrl-C 退出，报告已落盘无中间态。
+
 **与工具同批的既有旋钮**：`APEIRETH_COGNITIVE_DB`（记忆库路径）、
 `APEIRETH_SESSION_DB`（会话库路径）、`APEIRETH_MODEL`（默认模型）、
 `APEIRETH_OPENAI_URL`/`APEIRETH_OPENAI_MODELS`/`OPENAI_API_KEY`（provider 配置）。
+
+**2026-10-06 W2 记忆检索旋钮**（不是 `=1` 开关，是配置项）：
+
+- `APEIRETH_EMBEDDING_URL` + `APEIRETH_EMBEDDING_MODEL`（`APEIRETH_EMBEDDING_KEY`
+  可选，本地免鉴权端点不设）——记忆检索的**语义向量阶段**（OpenAI 兼容
+  `/embeddings` 端点）。**双缺 = 纯词法检索（默认，行为不变）；只设其一 = 启动报错**
+  （半配是配置事故，大声失败）；DeepSeek 没有 embeddings 端点，需本地模型或
+  其他兼容端点。每回合约 +N 次嵌入调用（候选逐条）。
+- `APEIRETH_PERSONA_ID` / `APEIRETH_SUBJECT_ID`——typed 记忆（承诺/画像/关系）的
+  主体身份。本地单用户无需设置（默认 `apeireth` / `local-user`）；多主体部署时覆写。
+- `APEIRETH_REFLEXION_DIR`——reflexion 反思库目录（默认 `<data>/reflexion`）。
 
 ---
 

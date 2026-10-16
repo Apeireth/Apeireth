@@ -38,7 +38,7 @@ COPY --from=builder /build/target/release/apeireth /usr/local/bin/apeireth
 
 ENV APEIRETH_HOME=/var/lib/apeireth \
     APEIRETH_API_KEY="" \
-    APEIRETH_BASE_URL=https://api.minimaxi.com/v1 \
+    APEIRETH_API_URL="" \
     APEIRETH_MODEL=MiniMax-M3 \
     RUST_LOG=info
 

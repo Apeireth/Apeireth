@@ -1,8 +1,8 @@
 name: Rust formatter (stable)
 
 # R25 Stage 1 续: 独立 rustfmt 校验 workflow (qdrant 模式)
-# 抄自: qdrant/.github/workflows/rust-lint.yml (其中的 fmt 部分被 qdrant 合并到 lint job)
-# 借鉴: wasmtime (也用 nightly fmt + separate workflow)
+# 对齐: qdrant/.github/workflows/rust-lint.yml (其中的 fmt 部分被 qdrant 合并到 lint job)
+# 结构对齐: wasmtime (也用 nightly fmt + separate workflow)
 # 模板: https://github.com/qdrant/qdrant/blob/master/.github/workflows/rust-lint.yml
 #
 # 决策记录 (R25 Agent D 2026-08-10 03:30):

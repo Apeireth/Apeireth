@@ -1,0 +1,184 @@
+crates/adapters/gateway/tests/canonical_openai_compatible_entry.rs:376:            "http://127.0.0.1:1/v1",
+crates/adapters/gateway/tests/canonical_openai_compatible_entry.rs:384:        AnthropicProviderPlugin::new("http://127.0.0.1:1", vec![shared.into()], http, 2_000)
+crates/adapters/gateway/tests/canonical_openai_compatible_entry.rs:444:        "http://127.0.0.1:1420",
+crates/adapters/sdk/apeireth_sdk.h:4:// Skeleton 桥接 1:1 c.rs 5 fn (count_tokens_c / hash_request_c /
+crates/adapters/sdk/build.rs:30:                         // Skeleton 桥接 1:1 c.rs 5 fn (count_tokens_c / hash_request_c /\n\
+crates/adapters/sdk/src/client.rs:152:// §1 错误类型 (按接口契约 12 类 HTTP 状态码 1:1 映射)
+crates/adapters/sdk/src/client.rs:750:    /// JSON 体 + 有界超时 + audit 留痕。错误面 1:1 映射 (401/403 → AuthFailed,
+crates/capabilities/tools/src/supervisor.rs:19://! - 与 v1 supervisor 1:1 字段对齐 (RestartStrategy 3 态, ChildSpec 包含 cmd/args/env/restart/cwd)
+crates/engine/memory/src/commitments.rs:904:        assert_eq!(events[1].event_id, "c1:1");
+crates/engine/memory/src/commitments.rs:976:            vec!["c1:0", "c1:1"]
+crates/engine/memory/src/intent_brier.rs:463:// 单元测试集 (1:1 继承 1.0 全部 31 测试 + 2.0 增强测试)
+crates/engine/organ/src/memory.rs:111:    /// 去重阈值 (per task spec, 当前 FNV-1a hash 1:1 判等, threshold 保留扩展)
+crates/engine/organ/src/memory.rs:204:    /// **0 装诚实**: 当前 hash 1:1 判等 (FNV-1a 无冲突概率极低但理论存在). threshold
+crates/engine/organ/src/world_model.rs:857:        // - 起点状态: WorldState::default() (推演起点固定, 防 LLM 漂移, per v1:108-110)
+crates/engine/organ/tests/emergence.rs:143:                "开口 → action 字段非空 (v1 Action::label 1:1)"
+crates/engine/organ/tests/emergence.rs:148:                "无 context_hint → 默认 Greet 动作标签 (v1 Action::select 1:1)"
+crates/engine/organ/tests/hypothesis.rs:167:    assert!(result.is_err(), "已定论假设不接受新证据 (per v1 1:1)");
+crates/engine/organ/tests/memory.rs:64:    assert!(id_1.starts_with("mrg-"), "id 前缀对齐 v1 mem-ex-/pref- 1:1");
+crates/engine/organ/tests/value_cases.rs:201:        "values 排序 + 去重 (per v1 1:1)"
+crates/engine/organ/tests/value_cases.rs:237:        "主人不同意 → 不提升 (per v1 1:1)"
+crates/engine/perception/src/voice/whisper_http.rs:708:            base_url: "http://127.0.0.1:1".to_string(), // 不存在的端口 (环回, 放行)
+crates/engine/provider/src/reasoning_adapter.rs:10://!    1:1) 提取推理文本 (支持嵌套对象/数组递归), 去重合并为内部 think 块
+crates/engine/provider/tests/canonical_anthropic.rs:271:        AnthropicProviderPlugin::new("http://127.0.0.1:1", vec![MODEL.into()], http, 500).unwrap(),
+crates/engine/provider/tests/canonical_minimax.rs:301:        MinimaxProviderPlugin::new("http://127.0.0.1:1", vec![MODEL.into()], http, 500).unwrap(),
+crates/engine/provider/tests/canonical_openai_compatible.rs:303:        OpenAiCompatibleProviderPlugin::new("http://127.0.0.1:1", vec![MODEL.into()], http, 500)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:4://! - 8 重 gate (per v1 `AwakeCompanion::tick` 第 2 步 + `emergence.rs:460-503` 1:1:
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:126:    /// 5 状态机 transition 路径 (per R11 spec §6.2 table 1:1):
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:147:/// 主动策略 transition 原因 (per v1 `apeireth-evolution::TransitionReason` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:201:    /// 在安静窗口内 (per v1 `Boundaries::in_quiet_window` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:283:// 关系深度 trait (per v1 `RelationshipState` 1:1, runtime 侧最小实现)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:286:/// 关系深度 trait (per v1 `apeireth-companion::emergence::RelationshipState` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:301:/// 关系深度本地实现 (per v1 `LocalRelationship` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:334:// 主权闸 trait (per v1 `SovereigntyGate` 1:1, runtime 侧抽象)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:337:/// 主权总闸 trait (per v1 `apeireth-companion::security::SovereigntyGate` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:464:// 决策留痕 (per v1 `GateDecision` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:467:/// Tick 决策留痕 (per v1 `presence::GateDecision` 1:1, 观测口).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:474:        /// 动作标签 (per v1 `init.action.label()` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:482:// OrganOrchestrator struct (per v1 `AwakeCompanion` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:557:/// 反馈枚举 (per v1 `Feedback::Responded/Ignored` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:564:/// Tick 输入 (per v1 `AwakeCompanion::tick(now, context_hint)` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:570:    /// epoch 毫秒 (per v1 `now.timestamp_millis()` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:572:    /// 当天分钟 of day (per v1 `now.minute()` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:574:    /// day_key "YYYY-MM-DD" UTC (per v1 `now.date_naive()` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:576:    /// 上下文提示 (per v1 `context_hint: Option<String>` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:585:    /// 从 `Episode` 派生 (per `OrganInput::new` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:604:/// Tick 输出 (per v1 `AwakeCompanion::tick` 返 `Option<Initiative>` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:607:/// schema 在 organ crate `apeireth_organ::emergence::Initiative` (per v1 1:1); Orchestrator
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:611:    /// 动作标签 (per v1 `init.action.label()` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:613:    /// 当前关系深度 (per v1 `init.depth` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:615:    /// 节律观察天数 (per v1 `init.rhythm.days` 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:703:    /// 构造 (per v1 `AwakeCompanion::new(bond, boundaries)` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:882:    /// 从 F1 emotion organ 输出提取 mood (per v1 `organs.rs:108-114` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:936:    ///   真实算法给出 (per v1 `EmergenceLoop::last_hold()` 1:1, Stage 3 接入).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1009:    /// 5 状态机 transition driver (per v1 `AwakeCompanion::ratify_fresh_policy` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1013:    ///   v1 `state.rs:186-197` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1017:    ///   `AwakeCompanion::ratify_fresh_policy` 1:1, v1 走 4 个 evolution.transition 调用).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1018:    /// - `transition_policy()` 单步推进 (per v1 `EvolutionStateMachine::transition` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1020:        // per v1 `AwakeCompanion::ratify_fresh_policy` 1:1:
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1046:    /// 单步 transition (per v1 `EvolutionStateMachine::transition` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1066:    /// Tick 串联入口 (per v1 `AwakeCompanion::tick(now, context_hint) -> Option<Initiative>` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1068:    /// **v1 → v2 6 串联步骤** (per R11 spec §2.3 1:1):
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1230:    /// 反馈应用 (per v1 `AwakeCompanion::apply_feedback(feedback, at)` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1262:    /// 观察交互 (per v1 `AwakeCompanion::observe_interaction` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1279:    /// 当前关系深度 (per v1 `AwakeCompanion::depth()` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1284:    /// 当前 PolicyStage (per v1 `evolution.current` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1289:    /// 最近一次 tick 决策留痕 (per v1 `AwakeCompanion::last_decision()` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1294:    /// 反馈历史 (per v1 `AwakeCompanion::asi_feedback` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1356:// 1:1, v1 走 4 个 evolution.transition 调用)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1360:/// 1:1, v1 走 4 个 evolution.transition 调用).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1376:    /// 步骤数 (应 = 4 per v1 `AwakeCompanion::ratify_fresh_policy` 1:1).
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1534:        // Idle → Draft → Proposed → Ratified → Active (per v1 ratify_fresh_policy 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1550:        // is_active() (per v1 EvolutionState::is_active 1:1)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:1667:    /// 0 装诚实: OrchestratorFeedback 2 variant (per v1 Feedback 1:1)
+crates/engine/runtime-assembly/tests/orchestrator.rs:343:    // emergence 8 重 (per v1 `emergence.rs:460-503` 1:1)
+crates/engine/runtime-assembly/tests/orchestrator.rs:353:    // organs 5 重 (per v1 `AwakeCompanion::tick` 上层 1:1)
+crates/engine/runtime-assembly/tests/orchestrator.rs:487:    // is_active() (per v1 `EvolutionState::is_active` 1:1)
+crates/engine/runtime-assembly/tests/orchestrator.rs:507:    // (per Stage 1 完整化, v1 `AwakeCompanion::ratify_fresh_policy` 1:1)
+crates/engine/runtime-assembly/tests/orchestrator.rs:588:/// tick 步骤 3: F1 emotion organ 真路径 → 算 mood → 比 mood_floor (per v1 organs.rs:108-114 1:1).
+crates/engine/runtime-assembly/tests/orchestrator.rs:702:/// check_8_gates() 接 E7 organ 真 gate (per v1 `EmergenceLoop::last_hold()` 1:1).
+crates/engine/runtime/tests/canonical_multi_provider.rs:227:            "http://127.0.0.1:1",
+crates/engine/storage/src/machine_id.rs:3://! Probe chains (1:1 with the baseline):
+crates/foundation/core/src/eight_anchors.rs:39:/// - `S-2` 实事求是 — 基于现状不重写, 核验后写 (per 主人 17:43, R119 主人 8/10 01:14 拍板)
+crates/foundation/core/src/lib.rs:23:// `pub use memory::*` 等) 排 v2.1: 需 12 个 crate 改路径, 1:1
+crates/foundation/orchestration/src/lib.rs:28://! - 与 v1 的 14 调度工具 API 1:1 对应, 但 trait 化让 impl 可换 (CLI / TUI / HTTP 都走同 trait)
+crates/foundation/plugin/src/organ.rs:373:    /// LLM 调用失败 (凭证 / 网络 / rate limit / provider / stream, per `LlmError` 1:1 映射)
+crates/foundation/protocol/src/ws_v1.rs:275:    /// 错误码 (machine-readable, 按接口契约 12 类 HTTP 状态码 1:1 映射)
+deploy/k8s/05-apeireth-formal.yaml:60:            - chown -R 1001:1001 /app/artifacts && chmod 700 /app/artifacts
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:40:| `TopicCue` | `PreferenceLearningInput` (或 `OrganInput` 复用) | 字段 1:1; `now: NaiveDateTime` → `at_ms: i64` 显式 (per F6 同模式) |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:41:| `TopicHint { topic: &'static str, confidence: f32 }` | `Topic { key: String, confidence: f32 }` | serde rename, 0 静态字符串; 1:1 字段 |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:44:| `predict_topic(&TopicCue) -> TopicPrediction` | `TopicPredictor::predict_topics(&PreferenceLearningInput)` | 算法骨架 1:1 (BTreeMap merge + sort_by + max-not-sum), 0 LLM |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:46:| `MemoryCandidate { content, timestamp, importance }` | **复用 R11 `Episode`** 主路径核心类型 | 1:1 字段映射 (content→content/text, timestamp→created_at, importance→importance) |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:48:| `KeywordChannel` | `KeywordChannel` | substring 命中 1:1; 反查 keywords_for_topic |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:49:| `TimeChannel { within_secs }` | `TimeChannel { within_secs }` | 1:1; 字段保留 (供 future anchor 时间窗) |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:50:| `ImportanceChannel { threshold }` | `ImportanceChannel { threshold }` | 1:1; 默认 threshold=8 (主人惯例) |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:51:| `CompositeChannel { channels }` + `default_composite_channel()` | 同 (含默认 keyword + time(3600) + importance(≥8)) | 1:1; 按 `Episode::id` 去重 (R11 schema) 而非 content |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:52:| `render_proactive_content` | `render_preference_evidence` | 编号 + 反幻觉尾注 ("不主动说「我记得」") 1:1 |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:53:| `build_proactive_block` | `PreferenceLearningOrgan::process` (OrganTrait) | 1:1; 注入 OrganInput/OrganOutput |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:54:| `recommend_proactive_cap` | `recommend_preference_cap` | 1/4 + [400,2000] 钳位 1:1 |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:64:| `TopicHint { topic, confidence }` → `Topic { key, confidence }` | L57-63 | ✅ 字段 rename 1:1 |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:65:| `PreloadChannel` trait + 4 impl 1:1 | L273 / 285 / 341 / 365 / 394 | ✅ 4 impl 全列 (含 CompositeChannel) |
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:70:**结论**: R15 spec §1.2 翻译表 6 行全 1:1 准确, 1 处措辞微差 (Utc 显式性), 不影响实施.
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:183:3. **不预先派 R21-R24** (R15 spec §5 估 6-10 周总, 但 R16-R19 spec 还未写, 派单顺序 R21 (critic) → R22 (reflection) → R23 (planner, LLM 重建非 1:1) → R24 (orchestrator, 区分 R12)).
+docs/01-architecture/cognitive-9-organ-integration-spec.md:569:- 当前 v2 E7 `process()` 走 rhythm+boundary loop 1:1 v1 真相, 不假装 emergence 自带 5
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:74:| `TopicHint { topic, confidence }` | `Topic { key, confidence }` (serde rename) | 1:1 字段映射 |
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:77:| `MemoryCandidate { content, timestamp, importance }` | `Episode` (R11 主路径核心类型) | 用 Episode, 1:1 字段映射 |
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:131:    └─ src/lib.rs                (pub use + 单元测试 1:1)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:138:- `llm_factory()` 返 `None` (per v1 0 LLM 真相, 1:1)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:144:- `v1 confidence: f32` → `v2 confidence: f32` (1:1)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:211:    fn llm_factory(&self) -> Option<Arc<dyn LlmFactory>> { None }  // 0 LLM (1:1 v1)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:235:    pub topic_keywords: Vec<(String, String)>,  // (kw, topic) — 1:1 v1 TOPIC_KEYWORDS
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:236:    pub time_anchors: Vec<(u32, u32, String)>,  // (start, end, topic) — 1:1 v1 TIME_ANCHORS
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:237:    pub mood_anchors: Vec<(String, String)>,   // (mood, topic) — 1:1 v1 MOOD_ANCHORS
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:264:pub struct KeywordChannel { /* ... */ }      // 1:1 v1 KeywordChannel
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:265:pub struct TimeChannel { pub within_secs: i64 }  // 1:1 v1 TimeChannel
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:266:pub struct ImportanceChannel { pub threshold: u8 }  // 1:1 v1 ImportanceChannel
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:267:pub struct CompositeChannel { pub channels: Vec<Box<dyn PreloadChannel>> }  // 1:1 v1 CompositeChannel
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:272:- v1 substring hit → v2 同 (0 NLP 库, 1:1)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:273:- v1 sort_by (hit desc, importance desc) → v2 同 (1:1)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:306:- v1 `MemoryCandidate` → v2 `Episode` (R11 主路径核心类型, 1:1 字段映射)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:307:- 0 算法改造 (BTreeMap merge + sort_by + substring hit 1:1)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:366:| `cognitive.planner` | (v1 0 实现) | 3 周 | R18 待派 | **LLM 重新建** (不走 1:1, 走 LLM Adapter 模式) |
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:380:2. **§2 语义对齐 v1 真实现**: v1 source file:line + 算法骨架 + 字段 1:1 映射表
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:766:- R18 (cognitive.planner, 估 3 周, LLM 重新建, 0 1:1)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:799:- ✅ §12 风险 (R12 + R14 + 5 slot 接力 + cognitive.planner/orchestrator 0 1:1)
+docs/01-architecture/engineering-report.md:75:> post-1.0.0 (2026-08-19): 诚实是地基, **不漂移**是屋顶 — templates / docs / CI gates 全部跟实际 hard-walls job 1:1 对齐. 后续 TP34 (real LLM streaming) 是屋顶下一层, 见 `docs/04-internal/next-team-handbook.md`.
+docs/01-architecture/organ-orchestrator-completion-plan.md:101:/// ratify_fresh_policy() 走完整 5 状态 transition 链结果 (per v1 `AwakeCompanion::ratify_fresh_policy` 1:1)
+docs/01-architecture/organ-orchestrator-completion-plan.md:118:    // per v1 organs.rs:73-84 1:1: 4 transition 调用走完整 5 状态链
+docs/01-architecture/organ-orchestrator-completion-plan.md:224:3. **R12 内部 0 装诚实标** 准确 — orchestrator.rs:915-918 旧实现 `policy_stage = Active` 单步跳 + 注释"本地 driver 简化"确实是 0 装诚实标缺口。R11 spec §6.3 v1 `AwakeCompanion::ratify_fresh_policy` 真走 4 transition 调用，新实现对齐 v1 1:1。
+docs/01-architecture/organ-orchestrator-spec.md:223:| 2 | **F1 emotion_memory** | `organ/src/emotion_memory.rs` | 主人情绪记录 (PAD 三维 + MoodSource) | ❌ 0 LLM (deterministic 文本启发式) | 子代理 R1 真写 (per `runtime_brain.rs:126-152` 1:1) |
+docs/01-architecture/organ-orchestrator-spec.md:384:| `apply_feedback()` + `observe_interaction()` | 1-2 天 | per `organs.rs:194-262` 1:1 |
+docs/01-architecture/r20-preference_learning-research-2026-08-28.md:76:**主入口**: `TopicPredictor::predict_topics(&self, input) -> Vec<Topic>` + 自由函数 `predict_topics(input) -> Vec<Topic>` (per v1 `predict_topic` 1:1).
+docs/01-architecture/r20-preference_learning-research-2026-08-28.md:78:**辅助**: `top_topics(&[Topic], k) -> Vec<String>` + `primary_topic(&[Topic]) -> Option<String>` (per v1 `TopicPrediction::top_topics/primary` 1:1).
+docs/01-architecture/r20-preference_learning-research-2026-08-28.md:82:**候选类型**: `PreferenceCandidate { id: String, content: String, timestamp: i64, importance: u8 }` (per v1 `MemoryCandidate` 1:1 字段映射; 加 `id` 字段 per R11 `Episode::id` schema, 用于 CompositeChannel 去重键).
+docs/01-architecture/r20-preference_learning-research-2026-08-28.md:84:**trait**: `PreloadChannel: Send + Sync`, 方法 `fetch(topics: &[String], candidates: &[PreferenceCandidate], top_k: usize) -> Vec<PreferenceCandidate>` (per v1 L276-282 1:1; `&[String]` 而非 `&[&str]` 跟 v2 `String` 生态一致).
+docs/01-architecture/r20-preference_learning-research-2026-08-28.md:92:**默认**: `default_composite_channel() -> CompositeChannel { channels: vec![KeywordChannel, TimeChannel { within_secs: 3600 }, ImportanceChannel { threshold: 8 }] }` (per v1 L433-441 1:1).
+docs/01-architecture/r20-preference_learning-research-2026-08-28.md:126:| 1.3 TopicPredictor 1:1 | 2 天 | 1.5h | (同) |
+docs/01-architecture/r21-r24-r12-research-2026-08-28.md:74:| `cognitive.critic` | DEFERRED INTO JUDGE | `critic.rs` (272 行, CRITIC 反幻觉) | ✅ 1:1 | 1 周 |
+docs/01-architecture/r21-r24-r12-research-2026-08-28.md:75:| `cognitive.reflection` | DEFERRED INTO SELF-ASSESSMENT | `reflection.rs` (329 行, 4 阶段 cycle) | ✅ 1:1 | 1 周 |
+docs/01-architecture/r21-r24-r12-research-2026-08-28.md:78:| `cognitive.perception` | NOT AN AGENT MODULE | `screen_perception.rs` (5.7KB) + `observer_capture.rs` (24KB) + `voice_session.rs` (6KB) | ⚠ 部分 1:1 (screen 1:1; voice/capture 需硬件) | 2-3 周 |
+docs/01-architecture/r21-r24-r12-research-2026-08-28.md:171:- 语义对齐 v1 <file>: <file:line + 字段 1:1 映射>
+docs/01-architecture/rc7-perception-research-2026-08-28.md:164:## §5. 估时真账 (R15 不假装, 跟 R14 spec §6.1 1:1 对齐)
+docs/02-guides/custom-llm.md:25:**0 装 PASS**: TOML 不存在 → 退化到 env `APEIRETH_LLM_BASE_URL` → default `https://api.minimaxi.com`. 旧版 1:1 行为不变.
+docs/02-guides/custom-llm.md:120:| 3 (缺省) | `https://api.minimaxi.com` (硬编码) | 与旧版 1:1 |
+docs/02-guides/custom-llm.md:124:| 2 (缺省) | `MiniMax-M3` | 与旧版 1:1 |
+docs/02-guides/smol-vm-config.md:10:> 默认 build 0 装 PASS (NoopVMSandbox) 1:1 兼容现状; 真接仅 Linux/macOS 启用 libkrun 编译 + libkrun.so 装载时.
+docs/02-guides/smol-vm-config.md:18:# 默认 build (0 装, 1:1 兼容现状)
+docs/02-guides/smol-vm-config.md:28:**0 装 PASS**: 默认 build 0 装 `libkrun` dep, NoopVMSandbox 0 装 stub, start 永远 Err "0 假装已启". 1:1 兼容现状.
+docs/02-guides/smol-vm-config.md:69:# 启动完成, 0 装 PASS 1:1 兼容现状
+docs/02-guides/smol-vm-config.md:220:_2026-08-20 主人决策 "全看你, 但要最极致最好最强" — cfg-gated allow unsafe + libkrun-sys 0.9.7 dep + 真接 FFI 函数体 (B 路线 start_threaded) + 5 测 cfg-gated E2E + 3 OS × 2 features CI matrix + 完整文档. 0 装 PASS 兜底保持 (默认 build 1:1 兼容现状, NoopVMSandbox 0 装 stub start 永远 Err)._
+docs/02-guides/v2-gateway-frontend-integration-spec.md:376:    LlmError(String),         // ← LlmError 1:1 映射 (凭证 / 网络 / rate limit / provider / stream)
+docs/02-guides/v2-gateway-frontend-integration-spec.md:383:**LlmError 1:1 映射** (per `organ.rs:248`: "LLM 调用失败 (凭证 / 网络 / rate limit / provider / stream, per LlmError 1:1 映射)").
+docs/04-internal/A-block-o6-true-account.md:37:  - **拒** 方案 C: 改 transition_policy 返 `Result<PolicyStage, TransitionError>` 加 error enum — 过度工程, 当前 `Result<(), ()>` 已够 (per v1 EvolutionStateMachine 1:1).
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:159:| **assemble / hello** | `apeireth-companion/src/assemble.rs`, `hello.rs` | REAL | ❌ **0 真实施** (assemble = 启动/装配, **hello = Windows Hello 生物识别 (NGC 凭据探测, 121 行, 0 装 PASS 标注 "Windows Hello 真绑机制口")**, 不是"启动/装配") | 🔴 **缺** (assemble 可 1:1 迁移, hello 需主人硬件 + 微软账号配置, 真实施主代理亲测本地 Windows NGC 凭据提供方) |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:230:- **assemble / hello** (assemble = 启动/装配 可 1:1 迁移, **hello = Windows Hello 生物识别 (NGC 凭据探测, 121 行, 1.0 真账 self-flag "0 装 PASS: 不假装已绑定, 检测不到如实报 Unavailable{reason}")**)
+docs/04-internal/backlog.md:127:| 53 | **#5 smol-vm / libkrun 真接路线** (8 commit 已 push origin) | reports/smol-vm-implementation-spec-2026-08-20.md (56 KB) | 2026-08-20 主人决策 "全最强路线": cfg-gated deny 放宽 + libkrun-sys 0.9.7 dep + B 路线 (start_threaded spawn krun_start_enter 隔离线程) + 写真接 FFI 函数体 (per docs.rs 0.9.7 真实 API: krun_create_ctx / krun_set_vm_config / krun_add_disk2 / krun_set_kernel / krun_start_enter / krun_free_ctx); 默认 build 0 装 stub (NoopVMSandbox) 1:1 兼容现状; --features libkrun 真接 (Linux/macOS only, Windows cfg-gated 跳过) | ✅ 8 commit 已 push origin (176a4003 Phase 1 stub + 949f2d2c 工厂 3 段 cfg 守门 + 894dd260 修 13 键 verdict cache bug + 36cdd601 cfg-gated deny 放宽 + 13b91f81 真接 FFI 函数体 + cb22c3da B 路线 start_threaded + 7fd32d39 E2E 测 5 测 cfg-gated + 59be8019 CI matrix 3 OS × 2 features + 43b4a6a1 docs/02-guides/smol-vm-config.md 10 章节); cargo test -p apeireth-companion --lib (default) 714 passed 0 failed; cargo test -p apeireth-companion --lib --features libkrun 714 passed 0 failed; cargo check --workspace --all-targets 0 错 0 warning (两种 mode); 0 触碰 24 LOCKED crate / workspace.version 1.2.0 / 3 不可变脊柱; 8 哲学锚穿透 (每 commit + 文档都标 S-1..O-5) |
+docs/04-internal/backlog.md:322:| 53 | **#5 smol-vm / libkrun 真接路线** (8 commit 已 push origin) | reports/smol-vm-implementation-spec-2026-08-20.md (56 KB) | 2026-08-20 主人决策 "全最强路线": cfg-gated deny 放宽 + libkrun-sys 0.9.7 dep + B 路线 (start_threaded spawn krun_start_enter 隔离线程) + 写真接 FFI 函数体 (per docs.rs 0.9.7 真实 API: krun_create_ctx / krun_set_vm_config / krun_add_disk2 / krun_set_kernel / krun_start_enter / krun_free_ctx); 默认 build 0 装 stub (NoopVMSandbox) 1:1 兼容现状; --features libkrun 真接 (Linux/macOS only, Windows cfg-gated 跳过) | ✅ 8 commit 已 push origin (176a4003 Phase 1 stub + 949f2d2c 工厂 3 段 cfg 守门 + 894dd260 修 13 键 verdict cache bug + 36cdd601 cfg-gated deny 放宽 + 13b91f81 真接 FFI 函数体 + cb22c3da B 路线 start_threaded + 7fd32d39 E2E 测 5 测 cfg-gated + 59be8019 CI matrix 3 OS × 2 features + 43b4a6a1 docs/02-guides/smol-vm-config.md 10 章节); cargo test -p apeireth-companion --lib (default) 714 passed 0 failed; cargo test -p apeireth-companion --lib --features libkrun 714 passed 0 failed; cargo check --workspace --all-targets 0 错 0 warning (两种 mode); 0 触碰 24 LOCKED crate / workspace.version 1.2.0 / 3 不可变脊柱; 8 哲学锚穿透 (每 commit + 文档都标 S-1..O-5) |
+docs/04-internal/design-task-lease-2026-08-21.md:175:| 字段级对齐对应 | AgentFlow `TaskState.{Pending,Rented,Running,Failed,Canceled,Done}` → Rust `TaskState.{Ready,Leased,Running,Failed,Cancelled,Completed}` (改名仅取更标准术语, 字段含义 1:1) |
+docs/04-internal/live-verification-ledger.md:97:| 61 | **W5 SDK HTTP 真传输（`apeireth-sdk` R21 半场落地）**：`invoke_tool` 从 stub 换真 reqwest POST——端点 `tool_url(tool)`（`{base}/v1/tools/{tool}/invoke` 平台 API 契约）+ Bearer 鉴权 + `tool_invoke_body` 纯函数体 + 有界超时（config.http_timeout_secs）+ **错误面 1:1**（401/403→AuthFailed / 429→RateLimited / 5xx→ServerInternal / 传输→Network / 其他→Other）+ audit 留痕（preflight 尝试+结果配对 2 条）。WS 侧（`invoke_stream`）**仍 stub**（`STUB_MODE` 退守 WS 层——WS 服务端端点 = 后续项，0 装不假装）。测试翻面：stub 断言 2 处 → wiremock 真传输 2 组（成功+ Bearer 头+ audit 计数 / 错误面 1:1）+ K-1 Fixture 5 翻为"HTTP 真+WS 仍 stub"双断言。文书口径同步：client 结构 doc / lib.rs 头 / is_stub doc / 差距审计 §7.2（🔴→🟡 HTTP 真、WS stub 实记） | 2026-10-10 亲跑：apeireth-sdk **61 passed / 0 failed**（lib 24 + 集成 37）；clippy `-D warnings` 0 警告 | `cargo test -p apeireth-sdk`；复现：wiremock 200 → `web_search` 返解析后 SearchResult；401 → AuthFailed |
+docs/04-internal/maintenance-guide.md:142:### 3.1 本地反馈环（CI 1:1 复刻）
+docs/04-internal/maintenance-guide.md:175:7. 验证 manifest 与 `tools()/providers()` 1:1 对应（manager 自动验证）
+docs/04-internal/maintenance-guide.md:243:## 7. CI 门禁清单（13 个 workflow，1:1 复刻到本地）
+docs/04-internal/plugin-authoring-guide.md:206:| `PluginManager::register(plugin)` | 验证 manifest vs `tools()/providers()` 1:1（`manager.rs::register`）；重复 id 直接拒（**0 装 PASS：R假装重复装）| Err |
+docs/04-internal/plugin-authoring-guide.md:372:    // 1) 注册成功（manifest vs tools() 1:1 验证通过）
+docs/04-internal/v2.0.0-release-path-7-spec-4-block.md:57:- `llm_factory()` 返 `None` (1:1 v1 0 LLM)
+docs/04-internal/v2.0.0-release-path.md:204:- 9 organ v1 → v2 语义对齐纪律 (R1/R2/R3 独立判断 vs task 示例 4-3 差异, 1:1 保留 v1 真相)
+docs/04-internal/v2.0.0-release-path.md:214:- 子代理 R2 标 "4 态状态机 1:1 保留 vs task 示例 3 态, Verifying 是过程态"
+docs/design/frontend-handoff.md:92:1. 壳跑起来：`pnpm tauri dev` 起真实窗口（devUrl `127.0.0.1:1420`，vite.config
+frontend/companion-desktop/tests/capability-toggle-apply.mjs:37:  const cfg = configWithCapabilities({baseUrl: 'http://127.0.0.1:1', model: 'm'}, on);
+frontend/companion-desktop/tests/capability-toggle-apply.mjs:39:  assert.equal(cfg.baseUrl, 'http://127.0.0.1:1', '其余配置字段不被覆盖');
+frontend/companion-desktop/tests/frontend-smoke.cjs:6:const DESKTOP = 'http://127.0.0.1:1420/';
+frontend/companion-desktop/tests/frontend-smoke.cjs:7:const BACKEND = 'http://127.0.0.1:18095';
+frontend/companion-desktop/tests/settings-live-apply.mjs:80:  const cfg = configWithCapabilities({baseUrl: 'http://127.0.0.1:1', model: 'm'}, toggled);
+frontend/companion-desktop/tests/settings-live-apply.mjs:82:  assert.equal(cfg.baseUrl, 'http://127.0.0.1:1', '其余配置字段不被覆盖（叠加不覆盖）');
+scripts/audit/8-promise-audit.sh:7:# 触发: 主人 2026-08-05 21:18 拍板"cpu 9955hx 内存 32G, 还能派的都给我派了"
+scripts/audit/run-cargo-audit-deny.ps1:5:# 触发: 主人 2026-08-05 21:18 拍板"真派"
+scripts/audit/run-cargo-audit-deny.sh:6:# 触发: 主人 2026-08-05 21:18 拍板"真派"
+scripts/check-neutral-terms.ps1:20:  '1:1\s*翻译',
+scripts/push_ready.ps1:32:    $confirm = Read-Host "These src/ changes — confirm '0 触碰 src/ logic' is OK (cargo fmt 拆行 0 装 stub 1:1 兼容)? (y/N)"
+scripts/push_ready.ps1:64:    Write-Host "  ⚠️ LOCKED crate files modified (cargo fmt 拆行 0 装 stub 1:1 兼容):" -ForegroundColor Yellow
+scripts/push_ready.ps1:94:    Write-Host "  - 或走 proxy: git config http.proxy socks5://127.0.0.1:1080"
+scripts/release-prep.sh:60:    # A2: 0 触碰 24 LOCKED crate (per 8 硬墙 + CODEOWNERS 1:1)
+scripts/release/cosign-sign-all.sh:4:# 主人 2026-08-05 21:14 拍板"ABCD 都派, 内存大放心派"
+scripts/release/cosign-verify.sh:4:# 主人 2026-08-05 21:14 拍板"ABCD 都派, 内存大放心派"
+scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh:81:# PostgreSQL schema (按安装规范: apeireth.sessions/identity/audit 简化; 实际 1:1 镜像)
