@@ -161,7 +161,7 @@
 
 | 宣称（原文摘句） | 出处 | 可验证命题 | 证据等级 | 证据位置 | 缺口说明 |
 |---|---|---|---|---|---|
-| "tests-3662 passed \| 0 failed" + "自动化测试 100% 通过"（S-3） | README.md:9 / zh:432 | 全量测试通过且 CI 验证 | B | .github/workflows/rust.yml（3-OS nextest + JUnit）；INSTALL.md:177 "5243 passed / 0 failed / 22 ignored, 190 suites（2026-10-13 口径）" | badge 是静态数字无自动刷新（且 README 冻结口径已落后于实测）；"100% CI pass"含非阻塞项（kani.yml continue-on-error） |
+| "tests-3662 passed \| 0 failed" + "自动化测试 100% 通过"（S-3） | README.md:9 / zh:432 | 全量测试通过且 CI 验证 | B | .github/workflows/rust.yml（3-OS nextest + JUnit）；INSTALL.md:177 "5360 passed / 0 failed / 22 ignored, 190 suites（2026-10-13 口径）" | badge 是静态数字无自动刷新（且 README 冻结口径已落后于实测）；"100% CI pass"含非阻塞项（kani.yml continue-on-error） |
 | "Clippy 0 warnings" | README.md:10 | clippy -D warnings 通过 | B | .github/workflows/rust-lint.yml（三层 -D warnings）、rustfmt.yml、rustdoc.yml | 无缺口 |
 | "download `Apeireth Companion_<version>_x64-setup.exe` from Releases" | README.md:414 | 发布流水线产出安装包 | B | publish-release.yml（NSIS + SHA-256 + gh-release，:56-93）+ scripts/check-release-version.ps1（22 处版本源一致性） | 实际 Release 资产存在性未核（本次只读审计不访问网络）→ 发布实物核验属 E 类 |
 | "Quick Start: `cargo run -p apeireth-cli -- gateway serve --port 8080` / `chat`" | README.md:400-410 | 入口命令可运行 | B | ARCHITECTURE.md:125-129（apeireth session/chat/gateway serve）；cli/src/main.rs；tests/canonical_cli_bootstrap.rs | chat 需 API key（README 已注明）；gateway 默认 loopback（ARCHITECTURE.md:131） |

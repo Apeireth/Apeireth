@@ -230,10 +230,15 @@ fn pattern_matches(pattern: &str, key: &str) -> bool {
 }
 
 /// 归一化路径键: 统一 `/` 分隔、去 `.` 组件、折叠 `..`、剥 Windows verbatim
-/// 前缀 (canonicalize 的 `\\?\` 拼写与裸拼写落到同一观测)。
+/// 前缀 (canonicalize 的 `\\?\` 拼写与裸拼写落到同一观测), Windows 折叠大小写。
 ///
-/// 这是词法归一, 不展开 symlink、不折叠大小写; 同一文件的 symlink 拼写是
-/// 两个键 (写入端各自解析后仍各自过门禁, 不会漏拒)。
+/// 这是词法归一, 不展开 symlink; 同一文件的 symlink 拼写是两个键 (写入端
+/// 各自解析后仍各自过门禁, 不会漏拒)。Windows 大小写折叠 (2026-10-15):
+/// canonicalize 返回真实大小写, 调用方拼写 (TEMP 环境变量大小写 vs NTFS 真实
+/// 大小写) 可不同 —— 不折叠会让同一文件两个拼写落两个观测键, 写后回填查不到
+/// (实测 CI flake: apply_with_gate 版本 CAS 三连败, 本地大小写一致不复现;
+/// macOS `/var`→`/private/var` symlink 同病, 由查询方 canonical 拼写命中);
+/// Windows 文件系统语义即大小写不敏感, unix 保持大小写敏感。
 ///
 /// `pub(crate)` (E-P3): 对象级判定件 [`crate::object_access`] 复用同一归一
 /// 口径 —— 两个判定面必须同一把尺, 不复制第二份词法归一。
@@ -249,13 +254,16 @@ pub(crate) fn path_key(path: &Path) -> String {
         }
     }
     let key = joined.to_string_lossy().replace('\\', "/");
-    if let Some(rest) = key.strip_prefix("//?/UNC/") {
+    let key = if let Some(rest) = key.strip_prefix("//?/UNC/") {
         format!("//{rest}")
     } else if let Some(rest) = key.strip_prefix("//?/") {
         rest.to_string()
     } else {
         key
-    }
+    };
+    #[cfg(windows)]
+    let key = key.to_lowercase();
+    key
 }
 
 /// 读前观测门禁: 进程内三态观测表 + 可配排除清单。
@@ -385,6 +393,12 @@ impl ObservedGate {
         self.map().clear();
     }
 
+    /// 诊断用: 全部观测键快照 (CI flake 解剖示踪, 2026-10-15)。
+    #[cfg(test)]
+    pub(crate) fn observed_keys(&self) -> Vec<String> {
+        self.map().keys().cloned().collect()
+    }
+
     fn map(&self) -> std::sync::MutexGuard<'_, HashMap<String, ObservationState>> {
         self.observations
             .lock()
@@ -498,8 +512,26 @@ fn gated_write(
 
     // 写后回填观测: 同会话后续写凭回填版本直接过 CAS。回填探查失败只让
     // 记录停留旧版本 —— 偏向「下次写被拒、要求重读」的安全方向。
-    if let Some(fresh) = probe.version(&request.path) {
+    // 探查带有限重试 (2026-10-14): 新落盘文件在 Windows CI 上可被 Defender/
+    // 索引器瞬时占用, 单次 metadata 探查漏回填 (实测 flake: apply_with_gate
+    // 版本 CAS 测试连败 3 retry); 重试只影响回填新鲜度, 不改判定与安全语义。
+    let mut fresh = probe.version(&request.path);
+    for _ in 0..4 {
+        if fresh.is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+        fresh = probe.version(&request.path);
+    }
+    if let Some(fresh) = fresh {
         gate.observe_present(&request.path, fresh);
+    } else {
+        // 诊断示踪 (2026-10-15 CI flake 解剖): 回填探查全败时打印路径与键。
+        eprintln!(
+            "[gated_write] 回填探查失败 (诊断): path={:?} key={}",
+            request.path,
+            path_key(&request.path)
+        );
     }
     Ok(())
 }

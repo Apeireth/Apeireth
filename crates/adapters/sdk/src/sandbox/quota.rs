@@ -2,7 +2,7 @@
 //!
 //! 多沙箱编排的资源准入面。客户端在**发出创建请求之前**做本地记账预留
 //! ([`QuotaLedger::reserve`]), 创建失败 / 销毁 / 回收时归还 ([`QuotaLedger::release`]),
-//! 超限一律 [`SandboxError::QuotaExceeded`](crate::sandbox::SandboxError::QuotaExceeded)
+//! 超限一律 [`SandboxError::QuotaExceeded`]
 //! —— 不静默排队、不假装成功。
 //!
 //! 记账状态可选**原子落盘** (复用 `apeireth_core::storage_atomic`):

@@ -213,6 +213,9 @@ mod tests {
 
     #[test]
     fn tuning_log_lands_beside_session_db() {
+        // Windows 路径语义用例 (盘符/反斜杠): `\` 在 unix 非分隔符, 该期望只在
+        // windows 成立 (同 windows_service 平台守卫教训, 2026-10-15)。
+        #[cfg(windows)]
         assert_eq!(
             tuning_log_path_from_session_db(Some(r"C:\data\sessions.sqlite3".into())),
             PathBuf::from(r"C:\data").join(TUNING_LOG_FILE)
