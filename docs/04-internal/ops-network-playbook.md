@@ -139,3 +139,20 @@ CI 解剖工具箱（按效率排序）:
   验证创建链（通 → 事件链问题; 不通 → 更深）。
 - 药方: **合并 base 进分支解冲突 → push → checks 自动复活**; 顺手收益 =
   分支不再落后主干。教训: "CI 全体静默" 先查 mergeable, 再怀疑事件系统。
+
+### §6.4 分支锁与保护 API 姿势（2026-10-15 合并收官实录）
+
+- **`lock_branch=true` = "Cannot change this locked branch"** —— 字面意思:
+  main 只读, 一切合并/推送被卡（哪怕 checks 全绿、admin 也一样）。上锁
+  入口在 Settings→Branches→Lock branch, 易被误开; 无意之锁直接解除。
+- **required check 旧名对账**: 分支保护要求名 `"kani"` 而现行检查叫聚合器
+  名 → 合并被卡 "Required status check expected"。临时对账 = **Statuses API**
+  发一枚同名 legacy status（`POST /statuses/<完整 sha>`, 40 字符 sha,
+  短 sha 会 422）; 治本 = 改保护配置或让 job 同名。
+- **保护 API 的子端点会 404 而全量 PUT 能通**: `PUT .../protection/
+  required_status_checks` 404、`DELETE .../branches/<b>/lock` 404 —— 但
+  `PUT .../branches/<b>/protection`（全量回写原值+目标改动）成功。管理端
+  操作优先走全量保护 PUT, 读什么写回什么, 只改目标字段。
+- 判定链速查: `pulls.mergeable_state` (blocked/dirty) → GraphQL
+  `mergeStateStatus + statusCheckRollup`（区分"检查没过"vs"其他封锁"）→
+  `branches/<b>/protection` 全字段逐项（lock_branch 藏在字段清单尾部）。
