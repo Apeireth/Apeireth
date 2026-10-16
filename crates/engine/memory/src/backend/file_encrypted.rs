@@ -358,6 +358,7 @@ impl EncryptedFileBackend {
         {
             // H12: 新建 .enc 文件仅属主可读. mode 只在 O_CREAT 真正创建文件时
             // 生效; 存量文件 (旧版默认 umask 创建) 的权限需 OS 侧修正.
+            use std::os::unix::fs::OpenOptionsExt;
             opts.mode(0o600);
         }
         let mut f = opts.open(&path).map_err(MemoryError::from)?;

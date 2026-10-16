@@ -150,6 +150,12 @@ async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax
     ));
     let session_db = session_db.to_string_lossy().into_owned();
     let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
+    let cognitive_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-cognitive-{}.sqlite3",
+        std::process::id()
+    ));
+    let cognitive_db = cognitive_db.to_string_lossy().into_owned();
+    let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
     // Anthropic key absent — its provider is still registered (keyless), but
     // would fail explicitly if routed to. Minimax serves this turn.
     let _g_ant_key = EnvGuard::set("APEIRETH_ANTHROPIC_KEY", None);
@@ -245,6 +251,12 @@ async fn the_cli_bootstrap_routes_an_anthropic_model_to_provider_anthropic() {
     ));
     let session_db = session_db.to_string_lossy().into_owned();
     let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
+    let cognitive_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-cognitive-anthropic-{}.sqlite3",
+        std::process::id()
+    ));
+    let cognitive_db = cognitive_db.to_string_lossy().into_owned();
+    let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
 
     let runtime = build_canonical_runtime_from_env()
         .await
@@ -285,6 +297,12 @@ async fn the_cli_bootstrap_routes_an_openai_model_to_provider_openai_compatible(
     ));
     let session_db = session_db.to_string_lossy().into_owned();
     let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
+    let cognitive_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-cognitive-openai-{}.sqlite3",
+        std::process::id()
+    ));
+    let cognitive_db = cognitive_db.to_string_lossy().into_owned();
+    let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
 
     let runtime = build_canonical_runtime_from_env()
         .await
@@ -327,6 +345,12 @@ async fn the_cli_bootstrap_omits_openai_compatible_when_unconfigured() {
     ));
     let session_db = session_db.to_string_lossy().into_owned();
     let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
+    let cognitive_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-cognitive-omit-{}.sqlite3",
+        std::process::id()
+    ));
+    let cognitive_db = cognitive_db.to_string_lossy().into_owned();
+    let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
 
     let runtime = build_canonical_runtime_from_env()
         .await
@@ -366,6 +390,12 @@ async fn the_cli_bootstrap_boots_keyless_and_fails_explicitly_on_execute() {
     ));
     let session_db = session_db.to_string_lossy().into_owned();
     let _g_session_db = EnvGuard::set("APEIRETH_SESSION_DB", Some(&session_db));
+    let cognitive_db = std::env::temp_dir().join(format!(
+        "apeireth-cli-cognitive-keyless-{}.sqlite3",
+        std::process::id()
+    ));
+    let cognitive_db = cognitive_db.to_string_lossy().into_owned();
+    let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
 
     let runtime = build_canonical_runtime_from_env()
         .await

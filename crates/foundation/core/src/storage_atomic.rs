@@ -194,13 +194,24 @@ fn replace_target(tmp: &Path, dest: &Path) -> io::Result<()> {
 
 /// 持久档的收尾: unix 追加父目录 fsync (保证目录项落盘);
 /// Windows 无父目录 fsync 等价语义, 如实跳过 (平台差异)。
+/// miri 不支持目录 fsync (仅 file-backed fd): 以 no-op 如实跳过 (该步是崩溃
+/// 一致性语义, miri 不做崩溃注入); 真实行为由平台测试覆盖 (2026-10-15
+/// 釜底抽薪垫片 —— 免去逐测试 ignore, 治 stored_doc 等全部持久档测试)。
 #[cfg(unix)]
 fn sync_parent_dir(dest: &Path) -> io::Result<()> {
-    let parent = match dest.parent() {
-        Some(p) if !p.as_os_str().is_empty() => p,
-        _ => Path::new("."),
-    };
-    fs::File::open(parent)?.sync_all()
+    #[cfg(miri)]
+    {
+        let _ = dest;
+        Ok(())
+    }
+    #[cfg(not(miri))]
+    {
+        let parent = match dest.parent() {
+            Some(p) if !p.as_os_str().is_empty() => p,
+            _ => Path::new("."),
+        };
+        fs::File::open(parent)?.sync_all()
+    }
 }
 
 #[cfg(not(unix))]
@@ -421,6 +432,13 @@ fn wait_for_retry(deadline: Instant, lock_path: &Path) -> io::Result<()> {
 ///   (如访问被拒) 保守视为存活。
 /// - 其它平台: 保守视为存活 (不猜测, 不误接管)。
 pub fn pid_alive(pid: u32) -> bool {
+    // miri 不支持 libc::kill (FFI 边界): 保守返回"存活" —— 锁接管逻辑永不
+    // 触发, 走安全方向 (宁等不抢); 真实语义由平台测试覆盖 (2026-10-15 垫片)。
+    #[cfg(miri)]
+    {
+        let _ = pid;
+        return true;
+    }
     #[cfg(unix)]
     {
         use std::ffi::c_int;
@@ -641,6 +659,9 @@ mod tests {
     }
 
     #[test]
+    // miri 不支持父目录 fsync (仅 file-backed fd): 持久档 unix 收尾会 fsync 目录,
+    // miri 下必炸 (unsupported operation)。行为由普通平台测试覆盖, miri 侧显式跳过。
+    #[cfg_attr(miri, ignore = "miri 不支持目录 fsync (file-backed fd only)")]
     fn durable_tier_syncs_before_replace_atomic_tier_does_not() {
         // sync 存在性 (行为层面可观测缝): 持久档在替换前做 sync, 完整性档不做。
         let dir = test_dir("sync-tier");
@@ -662,6 +683,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持目录 fsync (file-backed fd only)")]
     fn durable_tier_applies_exact_unix_mode() {
         use std::os::unix::fs::PermissionsExt;
         let dir = test_dir("mode");
@@ -673,6 +695,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_excludes_concurrent_holders() {
         let dir = test_dir("lock-mutex");
         let lock = dir.join("unit.lock");
@@ -702,6 +725,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_takes_over_marker_of_dead_holder() {
         // 死锁接管: 锁文件记录的 PID 对应进程不存在 → 视为可接管, 不永久砖化。
         let dir = test_dir("lock-takeover");
@@ -725,6 +749,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_takes_over_corrupt_marker_record() {
         // 记录损坏 (内容可读但非 PID) 是确证「无合法活跃持有者」→ 可接管,
         // 与「读取失败」严格区分 (后者保守等待, 见不可读用例)。
@@ -739,6 +764,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_never_takes_over_unreadable_marker() {
         // 瞬时不可读 ≠ 持有者已死 (2026-10-12 定根的并发写丢更新 flake 病根):
         // 读不到标记时必须保守等待到超时, 既不接管也不删除。
@@ -756,6 +782,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_serializes_concurrent_writers() {
         // 并发写序列化: 锁内读-改-写共享计数文件, 不得丢更新。
         let dir = test_dir("lock-serialize");
@@ -795,6 +822,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "miri 不支持 libc::kill (pid_alive 进程存活探测)")]
     fn file_lock_released_when_closure_panics() {
         let dir = test_dir("lock-panic");
         let lock = dir.join("unit.lock");

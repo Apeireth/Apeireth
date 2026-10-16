@@ -111,7 +111,7 @@ pub const SANDBOX_TOOL_WHITELIST_COUNT: usize = 6;
 const _: () = assert!(SANDBOX_TOOL_WHITELIST.len() == SANDBOX_TOOL_WHITELIST_COUNT);
 
 /// 校验工具调用是否在白名单内; 不在则
-/// [`SandboxError::ToolNotWhitelisted`](error::SandboxError::ToolNotWhitelisted)。
+/// [`SandboxError::ToolNotWhitelisted`]。
 pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> SandboxResult<()> {
     if !SANDBOX_TOOL_WHITELIST.contains(&tool) {
         return Err(SandboxError::ToolNotWhitelisted(tool.to_string()));
