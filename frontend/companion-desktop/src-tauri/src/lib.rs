@@ -552,6 +552,7 @@ pub fn run() {
             ping,
             close_quick_window,
             get_backend_status,
+            backend_supervisor::get_resident_probe,
             start_backend,
             stop_backend,
             restart_backend,

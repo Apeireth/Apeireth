@@ -44,6 +44,10 @@ chrono = { workspace = true }
 rusqlite = { workspace = true }
 # 文件写入统一走 fs_err (clippy.toml disallowed-methods 约束, 测试面同样适用)
 fs-err = { workspace = true }
+# V2-b 双入口同源测试: 以真路由过 HTTP 面 (与 gateway 测试面同款三件套)
+axum = { version = "0.7", features = ["macros"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
 
 [features]
 default = ["base"]

@@ -913,6 +913,68 @@ pub async fn detect_resident_gateway(path: &Path) -> Option<ResidentDescriptor> 
     response.status().is_success().then_some(descriptor)
 }
 
+// ---------------------------------------------------------------------------
+// D12 运维探针读面: 常驻服务探测报告 (只读)
+// ---------------------------------------------------------------------------
+
+/// 常驻服务健康判定 (运维探针读面)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResidentProbeHealth {
+    /// 占位在手且 `/health` 应答 = 常驻在跑。
+    Live,
+    /// 占位在手但端口不应答 = 陈旧占位 (不猜在跑)。
+    Stale,
+    /// 无占位 (或占位读不懂) = 未探测到常驻。
+    Absent,
+}
+
+/// 常驻服务探测报告 —— **只读**: 只汇报占位与健康判定, 不启停、不安装、
+/// 不写任何状态 (零装边界; 界面消费见设置页 daemon 状态卡)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ResidentProbeReport {
+    /// 占位记录是否在手 (读不懂 = false, 不猜)。
+    pub descriptor_present: bool,
+    /// 占位记录的连接端点; 无记录 = None。
+    pub endpoint: Option<String>,
+    /// 占位记录的网关进程 id (诊断元数据)。
+    pub pid: Option<u32>,
+    /// 健康判定。
+    pub health: ResidentProbeHealth,
+}
+
+/// 探测常驻服务的只读报告 (复用探测缝 [`detect_resident_gateway`] 的同一条
+/// 占位 + `/health` 双口径): 无占位 = `absent`; 占位在手: 应答 = `live`,
+/// 不应答 = `stale` (占位照报, 陈旧如实标注)。
+pub async fn probe_resident_service(path: &Path) -> ResidentProbeReport {
+    let Some(descriptor) = read_resident_descriptor(path) else {
+        return ResidentProbeReport {
+            descriptor_present: false,
+            endpoint: None,
+            pid: None,
+            health: ResidentProbeHealth::Absent,
+        };
+    };
+    let health = if detect_resident_gateway(path).await.is_some() {
+        ResidentProbeHealth::Live
+    } else {
+        ResidentProbeHealth::Stale
+    };
+    ResidentProbeReport {
+        descriptor_present: true,
+        endpoint: Some(descriptor.endpoint()),
+        pid: Some(descriptor.pid),
+        health,
+    }
+}
+
+/// 运维探针 IPC 读面 (D12): 常驻服务探测报告。**只读** —— 不启停、不安装、
+/// 不写状态; 失败/读不懂如实报 `absent`, 不猜。
+#[tauri::command]
+pub async fn get_resident_probe() -> ResidentProbeReport {
+    probe_resident_service(&resident_descriptor_path()).await
+}
+
 /// 常驻服务令牌面 (G10): 从系统凭据库读同源服务令牌 (探测到常驻 = 读服务
 /// 令牌面)。明文只进内存, 不落盘、不进日志; 读不到 = None (三态门照旧)。
 #[cfg(windows)]
@@ -3314,6 +3376,69 @@ mod tests {
                 .await
                 .expect("常驻必须被探测到");
             assert_eq!(detected, live);
+            server.abort();
+
+            let _ = fs::remove_dir_all(&dir);
+        });
+    }
+
+    /// D12 运维探针读面: 只读报告三态如实 —— 无占位 `absent` / 占位陈旧
+    /// `stale` (占位照报) / `/health` 应答 `live`; 全程不写状态。
+    #[test]
+    fn resident_probe_read_face_reports_absent_stale_and_live() {
+        tokio_block(async {
+            let dir = config_scratch("resident-probe-face");
+            let slot = dir.join(RESIDENT_DESCRIPTOR_FILE);
+
+            // 无占位: absent + 端点/进程号 None (不猜)。
+            let absent = probe_resident_service(&slot).await;
+            assert_eq!(
+                absent,
+                ResidentProbeReport {
+                    descriptor_present: false,
+                    endpoint: None,
+                    pid: None,
+                    health: ResidentProbeHealth::Absent,
+                },
+                "无占位必须如实报 absent"
+            );
+
+            // 陈旧占位: 占位在手但端口不应答 = stale (占位照报, 不猜在跑)。
+            let closed = {
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let port = listener.local_addr().unwrap().port();
+                drop(listener);
+                port
+            };
+            let stale = ResidentDescriptor {
+                pid: 4242,
+                port: closed,
+                bind: "127.0.0.1".to_string(),
+                started_at_ms: 1,
+            };
+            fs::write(&slot, stale.render()).unwrap();
+            let stale_report = probe_resident_service(&slot).await;
+            assert!(stale_report.descriptor_present);
+            assert_eq!(stale_report.health, ResidentProbeHealth::Stale);
+            assert_eq!(
+                stale_report.endpoint.as_deref(),
+                Some(stale.endpoint().as_str())
+            );
+            assert_eq!(stale_report.pid, Some(4242));
+
+            // 活常驻: /health 应答 = live (与直连判定同一探测缝)。
+            let (port, server) = spawn_fake_resident().await;
+            let live = ResidentDescriptor {
+                pid: 4242,
+                port,
+                bind: "127.0.0.1".to_string(),
+                started_at_ms: 2,
+            };
+            fs::write(&slot, live.render()).unwrap();
+            let live_report = probe_resident_service(&slot).await;
+            assert!(live_report.descriptor_present);
+            assert_eq!(live_report.health, ResidentProbeHealth::Live);
+            assert_eq!(live_report.pid, Some(4242));
             server.abort();
 
             let _ = fs::remove_dir_all(&dir);

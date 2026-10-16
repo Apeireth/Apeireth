@@ -127,6 +127,22 @@ impl SessionStore for SqliteSessionStore {
             .await
             .map_err(|error| Self::storage_error(id, "delete", error))
     }
+
+    /// 在册探测 (W3-③ 域事件过滤面): 只查存在性, 不载入会话 JSON。
+    async fn contains(&self, id: &SessionId) -> RuntimeResult<bool> {
+        use rusqlite::OptionalExtension;
+
+        let id = *id;
+        self.pool
+            .read(move |connection| {
+                let hit: Option<i64> = connection
+                    .prepare("SELECT 1 FROM sessions WHERE id = ?1")?
+                    .query_row([id.to_string()], |row| row.get(0))
+                    .optional()?;
+                Ok(hit.is_some())
+            })
+            .map_err(|error| Self::storage_error(id, "load", error))
+    }
 }
 
 /// Convenience conversion for assembly callers.

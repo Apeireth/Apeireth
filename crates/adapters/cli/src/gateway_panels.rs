@@ -1115,5 +1115,9 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         credentials: None,
         safety_guard,
         workbench: Some(panel as Arc<dyn WorkbenchQuery>),
+        // V2-b 用户/域管理面 (跨范围最小补位, 宪章 §二.4 报备): 文件事实服务由
+        // 组合根在网关 serve 装配点显式注入 (见 cli::lib 的 `services.user_admin`)。
+        user_admin: None,
+        domain_admin: None,
     }
 }

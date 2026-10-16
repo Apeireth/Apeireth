@@ -68,6 +68,14 @@ pub mod client_tokens;
 /// 越域访问拒绝即帧 (404/403 语义, 不泄露他域存在)。
 pub mod domain_context;
 
+/// W3-② 用户管理面 (HTTP + CLI 双入口同源): 共享 UserTable 服务与
+/// `/v1/panel/users`、`/v1/admin/users*` 端点。
+pub mod user_admin;
+
+/// W3-① 域管理面 (V2-b): `DomainRegistry` 开域/列域口与
+/// `/v1/panel/domains`、`/v1/admin/domains` 端点。
+pub mod domain_admin;
+
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the explicitly unwired TLS placeholder surface.
 pub mod remote_access;
@@ -104,6 +112,11 @@ pub use client_tokens::{
     ClientTokenConfig, ClientTokenError, ClientTokenSpec, ClientTokenTable, UserAccess,
     UserContext, CLIENT_NAME_CLAIM_HEADER, CLIENT_TOKENS_DOC_NAME, CLIENT_TOKENS_DOC_VERSION,
     CLIENT_TOKENS_ENV, CLIENT_TOKENS_FILE, SESSION_CLIENT_AUDIT_EVENT, USER_ACTION_AUDIT_EVENT,
+};
+
+pub use domain_admin::{DomainAdminDto, DomainAdminService, DomainCreateBody};
+pub use user_admin::{
+    UserAdminDto, UserAdminError, UserAdminService, UserCreateBody, UserRolePatchBody,
 };
 
 pub use remote_access::{

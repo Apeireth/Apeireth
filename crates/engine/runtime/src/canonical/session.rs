@@ -800,6 +800,15 @@ pub trait SessionStore: Send + Sync {
     /// was not present. This deletes the durable transcript record — callers
     /// own the retention decision.
     async fn delete(&self, id: &SessionId) -> RuntimeResult<bool>;
+
+    /// Whether `id` is present in this store (membership probe, W3-③ 域事件
+    /// 过滤面: 本域库在册 = 本域会话, 分库之下他域会话按本域库读作不存在)。
+    ///
+    /// 默认实现经 [`SessionStore::load`] 判定; 存储后端可覆写成只查存在性的
+    /// 轻量实现 (不载入会话 JSON)。**存在性本身不含内容**, 探测口只回答在册与否。
+    async fn contains(&self, id: &SessionId) -> RuntimeResult<bool> {
+        Ok(self.load(id).await?.is_some())
+    }
 }
 
 /// A session store held in process memory.
@@ -1073,6 +1082,21 @@ impl SessionManager {
             .load(id)
             .await
             .map_err(|e| RuntimeError::session_load(*id, e.to_string()))
+    }
+
+    /// Whether `id` is present in this manager's store (本域在册探测:
+    /// 语义见 [`SessionStore::contains`])。
+    pub async fn contains(&self, id: &SessionId) -> RuntimeResult<bool> {
+        self.store
+            .contains(id)
+            .await
+            .map_err(|e| RuntimeError::session_load(*id, e.to_string()))
+    }
+
+    /// The store this manager writes through (W3-③ 组合根给每域伙伴运行时
+    /// 共用同一把写闸时, 治理面/预设面需要同一存储句柄)。
+    pub fn store(&self) -> &Arc<dyn SessionStore> {
+        &self.store
     }
 
     /// Load `id`, creating an empty session if it does not exist yet.

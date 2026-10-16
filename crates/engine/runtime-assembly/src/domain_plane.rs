@@ -52,14 +52,18 @@ pub struct DefaultDomainStores {
     pub memory_backend: Arc<dyn MemoryBackend>,
     /// 默认域会话库路径 (计数/配额探测口同源)。
     pub sessions_db: PathBuf,
+    /// 默认域记忆库路径 (W3-③ 伙伴运行时记忆面接线同源)。
+    pub memory_db: PathBuf,
 }
 
-/// 一个域的记忆库双面: 账本 (计数) + 后端 (情节读写)。
+/// 一个域的记忆库双面: 账本 (计数) + 后端 (情节读写) + 库路径 (接线同源)。
 pub struct DomainMemoryStores {
     /// 记忆库账本 (`ledger_counts` 计数面)。
     pub store: Arc<SqliteMemoryStore>,
     /// 记忆库情节读写面。
     pub backend: Arc<dyn MemoryBackend>,
+    /// 记忆库路径 (`users/<id>/data/cognitive.sqlite3`; 默认域 = 原位路径)。
+    pub path: PathBuf,
 }
 
 /// 一个域的三面句柄 (会话/记忆/配额) —— 只经授权取得, 之后只读写本域。
@@ -143,6 +147,7 @@ impl DomainDataPlane {
             DomainMemoryStores {
                 store: defaults.memory,
                 backend: defaults.memory_backend,
+                path: defaults.memory_db,
             },
         );
         sessions_db.insert(default_domain.user_id.clone(), defaults.sessions_db);
@@ -254,5 +259,9 @@ async fn open_domain_memory(path: &Path) -> Result<DomainMemoryStores, UserDomai
         SqliteMemoryStore::open(path)
             .map_err(|error| UserDomainError::Io(format!("memory ledger open failed: {error}")))?,
     );
-    Ok(DomainMemoryStores { store, backend })
+    Ok(DomainMemoryStores {
+        store,
+        backend,
+        path: path.to_path_buf(),
+    })
 }

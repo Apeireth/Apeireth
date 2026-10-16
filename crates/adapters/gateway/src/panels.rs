@@ -69,11 +69,36 @@ pub struct GatewayState {
     /// [`apeireth_runtime_assembly::DomainDataPlane`]); 未注入 = 域面未接线
     /// (兼容路径, 一切按默认域原位语义)。
     pub domains: Option<Arc<apeireth_runtime::canonical::DomainSessionPlane>>,
+    /// 逐域伙伴运行时实例面 (W3-③ 星群正身): 非默认域的对话跑在该域自己的
+    /// 伙伴运行时实例上 (模型/记忆/配额/写闸全按域)。由组合根显式装载注入;
+    /// 未注入 = 非默认域 chat 面拒开 (403 `domain_refused` fail-closed,
+    /// 绝不拿默认域的运行时代跑 —— 代跑会把默认域数据面泄给该域)。
+    pub domain_runtimes: Option<Arc<apeireth_runtime::canonical::DomainRuntimePlane>>,
     /// Graceful-shutdown trigger (W2-① resident form): fired by the token-gated
     /// `/v1/admin/shutdown` endpoint; the serve loop stops, writes the closing
     /// audit fact and flushes the observation archive (see
     /// [`crate::canonical_entry::serve_with_shutdown`]).
     pub shutdown: Arc<crate::shutdown::ShutdownTrigger>,
+}
+
+impl GatewayState {
+    /// W3-③ 星群装配: 把逐域伙伴运行时实例接上与主运行时**同一套**事件汇
+    /// (事件帧同管道, 域订阅按域过滤)。组合根注入 [`Self::domain_runtimes`]
+    /// 之后调用; 未注入 = 不动 (兼容路径零变化)。
+    pub fn attach_domain_runtime_events(&self) {
+        let Some(plane) = self.domain_runtimes.as_ref() else {
+            return;
+        };
+        for runtime in plane.instances().values() {
+            runtime.add_event_sink(Arc::new(
+                apeireth_runtime::canonical::CompositeRuntimeEventSink::new(vec![
+                    Arc::new(self.events.clone()),
+                    self.observations.clone(),
+                    self.presence.clone(),
+                ]),
+            ));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -510,6 +535,13 @@ pub struct GatewayServices {
     pub credentials: Option<Arc<dyn crate::admin::CredentialWriter>>,
     pub safety_guard: Option<Arc<dyn SafetyGuardQuery>>,
     pub workbench: Option<Arc<dyn WorkbenchQuery>>,
+    /// 用户管理面 (W3-② HTTP 面): 与 CLI `apeireth user` **同一** UserTable 服务
+    /// (双入口同源, 见 [`crate::user_admin::UserAdminService`]); 未注入 = 该面
+    /// `501 unsupported` (不假装有数据源)。
+    pub user_admin: Option<Arc<crate::user_admin::UserAdminService>>,
+    /// 域管理面 (W3-① HTTP 面): [`apeireth_core::user_domain::DomainRegistry`] 的
+    /// 开域/列域口 (见 [`crate::domain_admin::DomainAdminService`]); 未注入 = `501`。
+    pub domain_admin: Option<Arc<crate::domain_admin::DomainAdminService>>,
 }
 
 impl GatewayServices {
@@ -541,6 +573,9 @@ impl GatewayServices {
             credentials: None,
             safety_guard: None,
             workbench: None,
+            // 用户/域管理面走文件事实服务 (组合根显式注入), 不走旧 PanelData 适配。
+            user_admin: None,
+            domain_admin: None,
         }
     }
 }
@@ -678,12 +713,16 @@ impl ModuleQuery for PanelDataAdapter {
 
 /// Panel routes without attached state — merge into the canonical router
 /// before its final `.with_state(...)`.
-/// 面板族里的**管理面**端点 (W3-② 角色门分类用): 授权热撤属治理层 role 权限
-/// 矩阵 [`apeireth_governance::UserCapability::AdminControl`] 档 (owner)。
+/// 面板族里的**管理面**端点 (W3-② 角色门分类用): 管理面读写同属治理层 role 权限
+/// 矩阵 [`apeireth_governance::UserCapability::AdminControl`] 档 (owner 专属) ——
+/// 授权热撤 (写)、用户管理列表、域列表 (读) 都是管理面数据, 非 owner 一律 403。
 /// 面板路径知识归面板面本体 (canonical_entry 只问不背路径, 架构冻结面不许引
 /// 面板路径)。
 pub fn panel_admin_face(endpoint: &str) -> bool {
-    endpoint == "/v1/panel/grants/revoke"
+    matches!(
+        endpoint,
+        "/v1/panel/grants/revoke" | "/v1/panel/users" | "/v1/panel/domains"
+    )
 }
 
 pub fn panel_routes() -> Router<GatewayState> {
@@ -694,6 +733,10 @@ pub fn panel_routes() -> Router<GatewayState> {
         .route("/v1/tools/list", get(list_tools))
         .route("/v1/panel/audit", get(list_audit))
         .route("/v1/apeireth/capabilities", get(capabilities))
+        // V2-b 用户/域管理面 (owner 档, 见 [`panel_admin_face`]): 列表两口在面板族,
+        // 增删改口在 canonical_entry 的 admin 族 (同一 UserTable 服务, 双入口同源)。
+        .route("/v1/panel/users", get(crate::user_admin::list_users))
+        .route("/v1/panel/domains", get(crate::domain_admin::list_domains))
         .route("/v1/panel/memory/episodes", get(list_episodes))
         .route("/v1/memory/append", axum::routing::post(append_episode))
         .route(
@@ -729,7 +772,7 @@ pub fn panel_routes() -> Router<GatewayState> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn unsupported(what: &str) -> Response {
+pub(crate) fn unsupported(what: &str) -> Response {
     (
         StatusCode::NOT_IMPLEMENTED,
         Json(serde_json::json!({
@@ -738,6 +781,22 @@ fn unsupported(what: &str) -> Response {
                 "message": format!("{what} 不支持: 当前运行时未实现该内省 API (Apeireth 2.0 canonical gateway)"),
                 "solution": "该内省能力当前不可用, 请升级 Companion 后重试"
             }
+        })),
+    )
+        .into_response()
+}
+
+/// 管理面/面板族通用错误帧 (`{"error": {code, message, solution}}`)。
+pub(crate) fn admin_error(
+    status: StatusCode,
+    code: &str,
+    message: impl Into<String>,
+    solution: &str,
+) -> Response {
+    (
+        status,
+        Json(serde_json::json!({
+            "error": { "code": code, "message": message.into(), "solution": solution }
         })),
     )
         .into_response()
@@ -1200,6 +1259,8 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
     let organs_supported = services.modules.is_some();
     let safety_supported = services.safety_guard.is_some();
     let workbench_supported = services.workbench.is_some();
+    let user_admin_supported = services.user_admin.is_some();
+    let domain_admin_supported = services.domain_admin.is_some();
 
     let memory_ids = [
         ("memory.read", true, false, &["list", "read"] as &[&str]),
@@ -1279,6 +1340,14 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             ] },
             { "name": "metrics", "capabilities": [
                 cap("metrics.read", true, false, &["read"], true, true),
+            ] },
+            { "name": "users", "capabilities": [
+                cap("users.read", true, false, &["list"], user_admin_supported, user_admin_supported),
+                cap("users.manage", false, true, &["add", "role", "remove"], user_admin_supported, user_admin_supported),
+            ] },
+            { "name": "domains", "capabilities": [
+                cap("domains.read", true, false, &["list"], domain_admin_supported, domain_admin_supported),
+                cap("domains.manage", false, true, &["create"], domain_admin_supported, domain_admin_supported),
             ] },
             { "name": "voice", "capabilities": [
                 cap_with_reason("voice.duplex", false, false, &["duplex", "stream"], false, false, Some("not_assembled")),

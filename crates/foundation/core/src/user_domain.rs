@@ -50,8 +50,18 @@ pub const DEFAULT_DOMAIN_ID: &str = "default";
 pub const DEFAULT_DOMAIN_DISPLAY_NAME: &str = "Default";
 
 /// 域文档 (`users/<id>/domain.json`) 的 StoredDoc 身份与格式版本。
+///
+/// v1 **兼容加字段** (W3-③ 域级运行时覆盖): `persona_text` / `model` 是可选字段
+/// (`serde(default)`), 既有域文档逐字可读; `deny_unknown_fields` 不松 ——
+/// 未知字段仍然拒开 (坏域配置拒开语义不因加字段而软化)。
 const DOMAIN_DOC_NAME: &str = "user-domain";
 const DOMAIN_DOC_VERSION: u32 = 1;
+
+/// 域级人设/性格文本的最大字符数 (超出 = 坏域配置拒开)。
+pub const PERSONA_TEXT_MAX_CHARS: usize = 16_384;
+
+/// 域级模型覆盖 id 的最大字符数 (超出 = 坏域配置拒开)。
+pub const MODEL_OVERRIDE_MAX_CHARS: usize = 128;
 
 fn domain_doc_compat() -> DocCompat {
     DocCompat::exact(DOMAIN_DOC_NAME, DOMAIN_DOC_VERSION)
@@ -179,10 +189,18 @@ pub struct UserDomain {
     pub created_at: i64,
     /// 域角色。
     pub role: DomainRole,
+    /// 域级性格/人设文本覆盖 (W3-③ 星群「每户各得其伴」): 缺省 (`None`) 回落
+    /// 全局 (不注入人设种子, 与既有行为逐字一致)。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persona_text: Option<String>,
+    /// 域级模型覆盖 (W3-③): 缺省 (`None`) 回落全局默认模型。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 impl UserDomain {
-    /// 构造并校验一个域 (创建/采用入口用)。
+    /// 构造并校验一个域 (创建/采用入口用)。域级运行时覆盖默认缺省
+    /// (回落全局), 需要时用 [`UserDomain::with_runtime_overrides`] 补。
     pub fn new(
         user_id: DomainUserId,
         display_name: impl Into<String>,
@@ -194,12 +212,27 @@ impl UserDomain {
             display_name: display_name.into(),
             created_at,
             role,
+            persona_text: None,
+            model: None,
         };
         domain.validate()?;
         Ok(domain)
     }
 
-    /// 域文档 body 的字段校验 (显示名长度/控制字符、时间戳非负)。
+    /// 补域级运行时覆盖 (性格/人设文本 + 模型, 缺省回落全局) 并校验。
+    pub fn with_runtime_overrides(
+        mut self,
+        persona_text: Option<String>,
+        model: Option<String>,
+    ) -> Result<Self, UserDomainError> {
+        self.persona_text = persona_text;
+        self.model = model;
+        self.validate()?;
+        Ok(self)
+    }
+
+    /// 域文档 body 的字段校验 (显示名长度/控制字符、时间戳非负、
+    /// 运行时覆盖越界即拒 —— 坏域配置拒开, 不回退默认)。
     pub fn validate(&self) -> Result<(), UserDomainError> {
         let name_len = self.display_name.chars().count();
         if name_len == 0 || name_len > 128 {
@@ -219,6 +252,30 @@ impl UserDomain {
                 "user domain {} created_at must be non-negative",
                 self.user_id
             )));
+        }
+        if let Some(persona_text) = &self.persona_text {
+            let persona_len = persona_text.chars().count();
+            if persona_len == 0 || persona_len > PERSONA_TEXT_MAX_CHARS {
+                return Err(UserDomainError::Invalid(format!(
+                    "user domain {} persona_text must be 1..={PERSONA_TEXT_MAX_CHARS} characters",
+                    self.user_id
+                )));
+            }
+        }
+        if let Some(model) = &self.model {
+            let model_len = model.chars().count();
+            if model_len == 0 || model_len > MODEL_OVERRIDE_MAX_CHARS {
+                return Err(UserDomainError::Invalid(format!(
+                    "user domain {} model must be 1..={MODEL_OVERRIDE_MAX_CHARS} characters",
+                    self.user_id
+                )));
+            }
+            if model.trim() != model || model.chars().any(char::is_control) {
+                return Err(UserDomainError::Invalid(format!(
+                    "user domain {} model must be a bare model id (no surrounding whitespace, no control characters)",
+                    self.user_id
+                )));
+            }
         }
         Ok(())
     }
@@ -500,6 +557,40 @@ impl DomainRegistry {
             return Err(error);
         }
         Ok(domain)
+    }
+
+    /// 写域级运行时覆盖 (性格/人设文本 + 模型, 缺省回落全局)。
+    ///
+    /// - 严格打开域文档 (坏域配置拒开, 语义与 [`DomainRegistry::load`] 一致);
+    /// - 只改两个覆盖字段, `created_at` / 角色 / 显示名与 StoredDoc 信封**原样**
+    ///   保留 (不重建信封, 不刷新任何时间戳);
+    /// - 覆盖值越界 → [`UserDomainError::Invalid`], 文件零改动 (拒开不落盘)。
+    pub fn set_runtime_overrides(
+        &self,
+        user_id: &DomainUserId,
+        persona_text: Option<String>,
+        model: Option<String>,
+    ) -> Result<UserDomain, UserDomainError> {
+        let file = self.layout.domain_file(user_id);
+        if !file.exists() {
+            return Err(UserDomainError::NotFound(format!(
+                "user domain `{user_id}` does not exist"
+            )));
+        }
+        let mut doc = stored_doc::open_single::<UserDomain>(&file, &domain_doc_compat())
+            .map_err(|error| self.refused(user_id, error))?;
+        if doc.body.user_id != *user_id {
+            return Err(UserDomainError::Invalid(format!(
+                "user domain config `{user_id}` declares user_id `{}` (mismatched with its directory)",
+                doc.body.user_id
+            )));
+        }
+        doc.body.persona_text = persona_text;
+        doc.body.model = model;
+        doc.body.validate()?;
+        stored_doc::write_doc(&file, &doc, DEFAULT_DOC_MODE)
+            .map_err(|error| UserDomainError::Io(format!("domain doc write failed: {error}")))?;
+        Ok(doc.body)
     }
 
     fn refused(
@@ -916,6 +1007,137 @@ mod tests {
             .create("guesty", "Guesty", DomainRole::Guest)
             .unwrap();
         assert_eq!(guest.role_str(), "guest");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ------------------------------------------------------------------
+    // 域级运行时覆盖 (W3-③ 星群: persona/model 按域可配, 缺省回落全局)
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn domain_documents_accept_optional_runtime_overrides_and_keep_old_docs_readable() {
+        let root = test_root("overrides-compat");
+        let registry = DomainRegistry::open(&root).unwrap();
+        let alice = registry
+            .create("alice", "Alice", DomainRole::Owner)
+            .unwrap();
+        let id = alice.user_id.clone();
+
+        // 兼容加字段: 无覆盖字段的既有域文档照常打开, 覆盖读作缺省 (回落全局)。
+        let loaded = registry.load(&id).unwrap();
+        assert_eq!(loaded.persona_text, None);
+        assert_eq!(loaded.model, None);
+
+        // 带覆盖的域文档往返: 字段如实读回, 其余字段零改动。
+        let updated = registry
+            .set_runtime_overrides(
+                &id,
+                Some("你是 Alice 的专属伙伴, 语气温和。".to_string()),
+                Some("model-alice".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            updated.persona_text.as_deref(),
+            Some("你是 Alice 的专属伙伴, 语气温和。")
+        );
+        assert_eq!(updated.model.as_deref(), Some("model-alice"));
+        let reloaded = registry.load(&id).unwrap();
+        assert_eq!(reloaded, updated);
+        assert_eq!(reloaded.created_at, alice.created_at);
+        assert_eq!(reloaded.role, DomainRole::Owner);
+
+        // 信封原样 (身份/版本不被重建): StoredDoc 信封可按原兼容面打开。
+        let doc = stored_doc::open_single::<UserDomain>(
+            &root.join("users/alice/domain.json"),
+            &domain_doc_compat(),
+        )
+        .unwrap();
+        assert_eq!(doc.body, updated);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn bad_runtime_override_values_refuse_to_open_without_touching_the_file() {
+        let root = test_root("overrides-bad");
+        let registry = DomainRegistry::open(&root).unwrap();
+        let alice = registry
+            .create("alice", "Alice", DomainRole::Owner)
+            .unwrap();
+        let id = alice.user_id.clone();
+        let file = root.join("users/alice/domain.json");
+
+        // 空模型 / 空人设 / 超长人设 / 模型带空白或控制字符 —— 一律拒开且文件零改动。
+        let long_persona = "x".repeat(PERSONA_TEXT_MAX_CHARS + 1);
+        for (persona, model) in [
+            (None, Some(String::new())),
+            (None, Some(" padded ".to_string())),
+            (None, Some("bad\nmodel".to_string())),
+            (None, Some("m".repeat(MODEL_OVERRIDE_MAX_CHARS + 1))),
+            (Some(String::new()), None),
+            (Some(long_persona.clone()), None),
+        ] {
+            let before = std::fs::read(&file).unwrap();
+            let err = registry
+                .set_runtime_overrides(&id, persona.clone(), model.clone())
+                .unwrap_err();
+            assert!(
+                matches!(err, UserDomainError::Invalid(_)),
+                "越界覆盖必须拒开: {err}"
+            );
+            assert_eq!(std::fs::read(&file).unwrap(), before, "拒开不得落盘");
+        }
+
+        // 未知字段仍然拒开 (deny_unknown_fields 不因兼容加字段而松)。
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        value["body"]["surprise"] = serde_json::json!("x");
+        std::fs::write(&file, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+        assert!(matches!(
+            registry.load(&id),
+            Err(UserDomainError::Invalid(_))
+        ));
+
+        // 覆盖字段类型错 (model 是数字) —— 同样拒开。
+        value["body"].as_object_mut().unwrap().remove("surprise");
+        value["body"]["model"] = serde_json::json!(5);
+        std::fs::write(&file, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+        assert!(matches!(
+            registry.load(&id),
+            Err(UserDomainError::Invalid(_))
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn runtime_overrides_clear_back_to_global_fallback_without_rewriting_identity() {
+        let root = test_root("overrides-clear");
+        let registry = DomainRegistry::open(&root).unwrap();
+        let alice = registry
+            .create("alice", "Alice", DomainRole::Member)
+            .unwrap();
+        let id = alice.user_id.clone();
+        registry
+            .set_runtime_overrides(
+                &id,
+                Some("persona".to_string()),
+                Some("model-alice".to_string()),
+            )
+            .unwrap();
+
+        // 覆盖清空 = 回落全局; 身份字段 (created_at/role) 与信封零改动。
+        let cleared = registry.set_runtime_overrides(&id, None, None).unwrap();
+        assert_eq!(cleared.persona_text, None);
+        assert_eq!(cleared.model, None);
+        assert_eq!(cleared.created_at, alice.created_at);
+        assert_eq!(cleared.role, DomainRole::Member);
+        assert_eq!(registry.load(&id).unwrap(), cleared);
+
+        // 不存在的域 = NotFound (不误建、不误写)。
+        let missing = DomainUserId::new("nobody").unwrap();
+        assert!(matches!(
+            registry.set_runtime_overrides(&missing, None, Some("m".into())),
+            Err(UserDomainError::NotFound(_))
+        ));
         let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -61,6 +61,7 @@ async fn default_stores(root: &Path) -> DefaultDomainStores {
                 .unwrap(),
         ))),
         sessions_db: root.join("sessions.sqlite3"),
+        memory_db: root.join("cognitive.sqlite3"),
     }
 }
 
@@ -571,5 +572,141 @@ async fn an_invalid_bound_user_id_is_refused_even_when_everything_else_is_fine()
     // 默认域唯一常量与解析一致 (口径唯一)。
     let default = plane.resolve(Some(DEFAULT_DOMAIN_ID)).unwrap();
     assert_eq!(default.user_id.as_str(), DEFAULT_DOMAIN_ID);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// ---------------------------------------------------------------------------
+// W3-③ 逐域运行时隔离 (星群正身): 模型 / 记忆 / 配额 / 写闸 四面
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn per_domain_runtime_isolation_holds_on_all_four_faces() {
+    use apeireth_runtime::canonical::{DomainRuntimeContext, DomainRuntimePlane, Runtime};
+    use std::collections::BTreeMap;
+    use std::time::Duration;
+
+    let root = temp_root("rt-four-faces");
+    let registry = DomainRegistry::open(&root).unwrap();
+    registry
+        .create("alice", "Alice", DomainRole::Owner)
+        .unwrap();
+    registry.create("bob", "Bob", DomainRole::Member).unwrap();
+    let plane = open_plane(&root).await;
+
+    // 伙伴实例面: 每域自己的运行时实例 (默认域 = 注入的现运行时)。
+    let default_runtime = Arc::new(Runtime::builder().build().await.unwrap());
+    let alice_runtime = Arc::new(Runtime::builder().build().await.unwrap());
+    let bob_runtime = Arc::new(Runtime::builder().build().await.unwrap());
+    let mut instances = BTreeMap::new();
+    let alice_id = DomainUserId::new("alice").unwrap();
+    let bob_id = DomainUserId::new("bob").unwrap();
+    instances.insert(alice_id.clone(), alice_runtime.clone());
+    instances.insert(bob_id.clone(), bob_runtime.clone());
+    let runtime_plane = DomainRuntimePlane::new(
+        plane.sessions_plane().clone(),
+        default_runtime.clone(),
+        instances,
+    );
+
+    let alice = plane.resolve(Some("alice")).unwrap();
+    let bob = plane.resolve(Some("bob")).unwrap();
+    let default = plane.resolve(None).unwrap();
+    let registry = plane.sessions_plane().registry().clone();
+
+    // 面① 模型: 域覆盖各归各, 对抗改写互不渗透。
+    registry
+        .set_runtime_overrides(
+            &alice_id,
+            Some("Alice 的专属伙伴".to_string()),
+            Some("model-alice".to_string()),
+        )
+        .unwrap();
+    registry
+        .set_runtime_overrides(&bob_id, None, Some("model-bob".to_string()))
+        .unwrap();
+    assert_eq!(
+        runtime_plane.context_for(&alice).unwrap(),
+        DomainRuntimeContext {
+            model: Some("model-alice".to_string()),
+            persona_text: Some("Alice 的专属伙伴".to_string()),
+        }
+    );
+    assert_eq!(
+        runtime_plane.context_for(&bob).unwrap().model.as_deref(),
+        Some("model-bob")
+    );
+    // 对抗: 连改 alice 的模型, bob 与默认域的解析逐字不变。
+    let bob_context_before = runtime_plane.context_for(&bob).unwrap();
+    let default_context_before = runtime_plane.context_for(&default).unwrap();
+    for model in ["model-alice-2", "model-alice-3"] {
+        registry
+            .set_runtime_overrides(&alice_id, None, Some(model.to_string()))
+            .unwrap();
+        assert_eq!(
+            runtime_plane.context_for(&bob).unwrap(),
+            bob_context_before,
+            "域 A 的模型配置不得影响域 B"
+        );
+        assert_eq!(
+            runtime_plane.context_for(&default).unwrap(),
+            default_context_before,
+            "域 A 的模型配置不得影响默认域"
+        );
+    }
+
+    // 面② 记忆: 两域记忆库互不可见 (他域记忆按本域句柄读作不存在)。
+    let alice_handles = plane.handles(&alice).unwrap();
+    let bob_handles = plane.handles(&bob).unwrap();
+    alice_handles
+        .memory
+        .backend
+        .put_episode(&new_episode("ep-a", "s-a"))
+        .unwrap();
+    assert!(alice_handles
+        .memory
+        .backend
+        .get_episode("ep-a")
+        .unwrap()
+        .is_some());
+    assert!(
+        bob_handles
+            .memory
+            .backend
+            .get_episode("ep-a")
+            .unwrap()
+            .is_none(),
+        "他域记忆必须读作不存在 (分库隔离)"
+    );
+
+    // 面③ 配额: 同一 session id, 两域账本互不串。
+    let sid = SessionId::new();
+    let mut in_alice = Session::new(sid, system_clock().as_ref());
+    in_alice.quota.consume_tokens(120);
+    in_alice.quota.consume_tool_step();
+    alice_handles.sessions.save(&in_alice).await.unwrap();
+    let in_bob = Session::new(sid, system_clock().as_ref());
+    bob_handles.sessions.save(&in_bob).await.unwrap();
+    let alice_copy = alice_handles.sessions.load(&sid).await.unwrap().unwrap();
+    let bob_copy = bob_handles.sessions.load(&sid).await.unwrap().unwrap();
+    assert_eq!(alice_copy.quota.consumed_tokens, 120);
+    assert_eq!(alice_copy.quota.consumed_tool_steps, 1);
+    assert_eq!(bob_copy.quota.consumed_tokens, 0);
+    assert_eq!(bob_copy.quota.consumed_tool_steps, 0);
+
+    // 面④ 写闸: 每域恰一把 (实例互不相同, 也不与默认域共用);
+    // 本域持证不阻塞他域写 (域间并发, 域内串行由 W2-③ 套件钉住)。
+    assert!(!Arc::ptr_eq(alice_handles.sessions, bob_handles.sessions));
+    assert!(!Arc::ptr_eq(
+        alice_handles.sessions,
+        plane.handles(&default).unwrap().sessions
+    ));
+    let alice_permit = alice_handles.sessions.write_permit(sid).await;
+    let bob_permit = tokio::time::timeout(
+        Duration::from_millis(250),
+        bob_handles.sessions.write_permit(SessionId::new()),
+    )
+    .await;
+    assert!(bob_permit.is_ok(), "本域持证不得阻塞他域写闸 (跨域互不锁)");
+    drop(alice_permit);
     let _ = std::fs::remove_dir_all(&root);
 }

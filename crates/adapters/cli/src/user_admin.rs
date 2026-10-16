@@ -1,14 +1,20 @@
 //! CLI 用户管理面 (W3-②): `apeireth user add|list|role|remove`。
 //!
+//! **双入口同源**: 本面只做 CLI 外壳 (参数解析 / owner 凭证门 / 文本输出), 管理
+//! 动作全部走网关面同一份 UserTable 服务
+//! ([`apeireth_gateway::UserAdminService`]), 与 HTTP 面
+//! (`/v1/panel/users`、`/v1/admin/users*`) 改**同一份** `users.json` —— 引导
+//! 口径 / 末 owner 保护 / 发令牌序一处实现, 两个入口行为逐字一致。
+//!
 //! 用户表持久化 = 数据目录 `users.json` (存储文档拒开语义, 与 W3-① 域目录的
 //! 接缝 = 用户表独立文件 + `domain` 域引用宽接口)。管理动作过 **owner 角色门**:
 //! 出示 `--token` (令牌→用户→角色链), 只有 `ManageUsers` 能力 (owner 档) 可管理;
 //! 非 owner / 未绑定 / 伪令牌一律拒绝。
 //!
 //! 引导口径 (fail-closed, 不锁死): 用户表为空时 `user add` 是引导入口 ——
-//! 免令牌, 但**第一个用户必须是 owner** (否则用户表永久失主, 管理面失守);
-//! 表非空后一切管理动作都要 owner 令牌。破坏性不变量: 最后一个 owner 不可
-//! 删除/降级 ([`apeireth_governance::UserTable`] 拒)。
+//! 免令牌, 但**第一个用户必须是 owner** (由共享服务强制, 否则用户表永久失主,
+//! 管理面失守); 表非空后一切管理动作都要 owner 令牌。破坏性不变量: 最后一个
+//! owner 不可删除/降级 ([`apeireth_governance::UserTable`] 拒)。
 //!
 //! 发令牌序 (问责链不得断, 落盘前过 `validate_client_user_bindings`): 令牌条目
 //! 声明 `user_id` 的, **先建用户再写绑定**; 删用户前**先摘令牌绑定** —— 悬空/
@@ -21,10 +27,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use apeireth_gateway::{
-    resolve_user_identity, validate_client_user_bindings, ClientTokenTable, GateVerdict,
-    GatewayTokenGate,
+    resolve_user_identity, ClientTokenTable, GateVerdict, GatewayTokenGate, UserAdminService,
 };
-use apeireth_governance::{UserCapability, UserIdentity, UserRecord, UserRole, UserTable};
+use apeireth_governance::{UserCapability, UserIdentity, UserTable};
 
 /// `apeireth user` 的用法行 (错误帧随行, 帮助面同源)。
 const USAGE: &str = "Usage:\n  apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]\n  apeireth user list [--token TOKEN]\n  apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]\n  apeireth user remove --user-id ID [--token TOKEN]";
@@ -41,9 +46,9 @@ pub fn run_user_admin_at(data_dir: &Path, args: &[String]) -> Result<String, Str
         .map_err(|error| format!("client token table refused to open: {error}"))?;
     // 管理面与网关令牌门同一令牌族口径 (env 单令牌 + 令牌表, 恒定时间比较)。
     let gate = GatewayTokenGate::from_env();
-    let mut users = UserTable::load(data_dir)
-        .map_err(|error| format!("user table refused to open: {error}"))?
-        .unwrap_or_default();
+    // 共享 UserTable 服务 (HTTP 面同一份): 用户表缺失 = 空表, 坏表拒开。
+    let service = UserAdminService::new(data_dir);
+    let users = service.load().map_err(|error| error.to_string())?;
     let bootstrap = users.users.is_empty();
     let bearer = options.get("token").map(String::as_str);
 
@@ -51,41 +56,31 @@ pub fn run_user_admin_at(data_dir: &Path, args: &[String]) -> Result<String, Str
         "add" => {
             let user_id = required(&options, "user-id")?;
             let role_raw = required(&options, "role")?;
-            let role = UserRole::parse(role_raw)
-                .map_err(|error| format!("refusing to add user: {error}"))?;
             let clients = split_clients(options.get("clients"));
-            if bootstrap {
-                // 引导: 免令牌, 但第一个用户必须是 owner (否则表永久失主)。
-                if role != UserRole::Owner {
-                    return Err(format!(
-                        "refusing to add user {user_id:?}: the first user must be \
-                         owner (the user table must start with an owner)"
-                    ));
-                }
-            } else {
+            if !bootstrap {
                 require_manager(&tokens, &users, bearer, &gate)?;
             }
-            let record = UserRecord {
-                user_id: user_id.to_string(),
-                role: role.as_str().to_string(),
-                client_names: clients,
-                domain: options.get("domain").cloned(),
-            };
-            users
-                .add(record)
-                .map_err(|error| format!("refusing to add user: {error}"))?;
-            commit(data_dir, &tokens, users)?;
-            Ok(format!("added user {user_id} ({role})"))
+            // 引导口径由共享服务强制: 表空时首个用户必须是 owner。
+            let created = service
+                .add(
+                    user_id,
+                    role_raw,
+                    clients,
+                    options.get("domain").map(String::as_str),
+                )
+                .map_err(|error| format!("refusing to add user {user_id:?}: {error}"))?;
+            Ok(format!("added user {} ({})", created.user_id, created.role))
         }
         "list" => {
             if !bootstrap {
                 require_manager(&tokens, &users, bearer, &gate)?;
             }
-            if users.users.is_empty() {
+            let rows = service.list().map_err(|error| error.to_string())?;
+            if rows.is_empty() {
                 return Ok("(user table is empty)".to_string());
             }
-            let mut lines = Vec::with_capacity(users.users.len());
-            for record in &users.users {
+            let mut lines = Vec::with_capacity(rows.len());
+            for record in &rows {
                 lines.push(format!(
                     "{}\t{}\t{}\t{}",
                     record.user_id,
@@ -102,23 +97,20 @@ pub fn run_user_admin_at(data_dir: &Path, args: &[String]) -> Result<String, Str
         }
         "role" => {
             let user_id = required(&options, "user-id")?;
-            let role = UserRole::parse(required(&options, "role")?)
-                .map_err(|error| format!("refusing to change role: {error}"))?;
+            let role_raw = required(&options, "role")?;
             require_manager(&tokens, &users, bearer, &gate)?;
-            users
-                .set_role(user_id, role)
+            let updated = service
+                .set_role(user_id, role_raw)
                 .map_err(|error| format!("refusing to change role: {error}"))?;
-            commit(data_dir, &tokens, users)?;
-            Ok(format!("user {user_id} is now {role}"))
+            Ok(format!("user {} is now {}", updated.user_id, updated.role))
         }
         "remove" => {
             let user_id = required(&options, "user-id")?;
             require_manager(&tokens, &users, bearer, &gate)?;
-            users
+            let removed = service
                 .remove(user_id)
                 .map_err(|error| format!("refusing to remove user: {error}"))?;
-            commit(data_dir, &tokens, users)?;
-            Ok(format!("removed user {user_id}"))
+            Ok(format!("removed user {}", removed.user_id))
         }
         other => Err(format!(
             "unknown user command: {other} (expected add, list, role, or remove)\n{USAGE}"
@@ -158,15 +150,6 @@ fn require_manager(
         ));
     }
     Ok(identity)
-}
-
-/// 落盘前的最后闸: 令牌表↔用户表绑定一致性 (操作不得把问责链弄断) + 持久化。
-fn commit(data_dir: &Path, tokens: &ClientTokenTable, users: UserTable) -> Result<(), String> {
-    validate_client_user_bindings(tokens, &users)
-        .map_err(|error| format!("refusing to save the user table: {error}"))?;
-    users
-        .save(data_dir)
-        .map_err(|error| format!("user table refused to save: {error}"))
 }
 
 /// 解析 `apeireth user <action> [--flag value ...]` (逐动作白名单, 未知旗标拒)。

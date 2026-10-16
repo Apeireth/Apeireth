@@ -309,6 +309,7 @@ mod tests {
             client_tokens: crate::client_tokens::ClientTokenTable::default(),
             user_access: crate::client_tokens::UserAccess::default(),
             domains: None,
+            domain_runtimes: None,
             shutdown: Arc::new(crate::shutdown::ShutdownTrigger::default()),
         };
         Router::<GatewayState>::new()

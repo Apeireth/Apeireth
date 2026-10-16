@@ -837,13 +837,38 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     let session_store = production_session_store().await?;
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
     let (cognitive, memory) = build_cognitive_modules_from_env(Arc::clone(&clock)).await?;
+    // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根把它注册进域平面,
+    // 与运行时共用**同一把** (每域恰一把, W2-③ 承诺不拆)。
+    let sessions = Arc::new(apeireth_runtime::SessionManager::new(
+        Arc::clone(&session_store),
+        Arc::clone(&clock),
+    ));
     let (runtime, policy, guard_hook) =
-        build_canonical_runtime_with_parts(session_store.clone(), cognitive, clock).await?;
+        build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok((runtime, session_store, memory, policy, guard_hook))
 }
 
+/// W3-③ 逐域伙伴运行时组装 (星群正身, 「每户各得其伴」): 该域自己的
+/// **会话写闸** (与域数据面同一把 —— 记忆/配额/写闸全按域) + 该域自己的
+/// **记忆库** (`users/<id>/data/cognitive.sqlite3`, 每户独立记忆域) +
+/// 与默认域同款的进程旋钮 (预算/配额/单价表等全局口径)。
+///
+/// 模型/性格人设按域可配不在此处: 覆盖随域文档解析
+/// ([`apeireth_runtime::canonical::DomainRuntimePlane::context_for`]), 缺省
+/// 回落全局默认。
+async fn build_domain_partner_runtime(
+    sessions: Arc<apeireth_runtime::SessionManager>,
+    memory_db: PathBuf,
+) -> Result<Runtime, String> {
+    let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
+    let (cognitive, _memory) = build_cognitive_modules_at(memory_db, Arc::clone(&clock)).await?;
+    let (runtime, _policy, _guard_hook) =
+        build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
+    Ok(runtime)
+}
+
 async fn build_canonical_runtime_with_parts(
-    session_store: Arc<dyn SessionStore>,
+    sessions: Arc<apeireth_runtime::SessionManager>,
     cognitive: apeireth_runtime_assembly::ProductionCognitiveModules,
     clock: Arc<dyn apeireth_core::kernel::Clock>,
 ) -> Result<
@@ -872,10 +897,12 @@ async fn build_canonical_runtime_with_parts(
     let preset_governance =
         apeireth_runtime_assembly::canonical::PermissionPresetGovernanceHook::new(
             Arc::new(governance),
-            Arc::clone(&session_store),
+            Arc::clone(sessions.store()),
         );
     builder = builder.with_governance(Arc::new(preset_governance));
-    builder = builder.with_session_store(session_store);
+    // W3-①/③: 注入预组装写闸 (每域恰一把 —— 默认域与域平面共用同一实例,
+    // 伙伴域用自己的那一把)。
+    builder = builder.with_session_manager(sessions);
 
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
@@ -1022,6 +1049,21 @@ async fn build_cognitive_modules_from_env(
     ),
     String,
 > {
+    build_cognitive_modules_at(cognitive_db_path(), clock).await
+}
+
+/// 认知模块组装的记忆库路径化形态 (W3-③ 逐域伙伴运行时: 每域自己的
+/// `cognitive.sqlite3`, 每户独立记忆域; 默认域 = `cognitive_db_path()` 原位)。
+async fn build_cognitive_modules_at(
+    memory_db: PathBuf,
+    clock: Arc<dyn apeireth_core::kernel::Clock>,
+) -> Result<
+    (
+        apeireth_runtime_assembly::ProductionCognitiveModules,
+        Arc<dyn MemoryBackend>,
+    ),
+    String,
+> {
     use apeireth_memory::backend::sqlite::SqliteBackend;
     use apeireth_memory::{
         experience_store_sqlite::SQLiteExperienceStore,
@@ -1031,7 +1073,7 @@ async fn build_cognitive_modules_from_env(
     use apeireth_runtime_assembly::{CognitiveBackends, CognitiveModuleConfig, JudgeConfig};
     use apeireth_storage::SqliteConnectionPool;
 
-    let path = cognitive_db_path();
+    let path = memory_db;
     let pool = Arc::new(
         SqliteConnectionPool::open(&path)
             .await
@@ -1162,7 +1204,7 @@ async fn build_cognitive_modules_from_env(
     // store 的写入面 —— EpisodeSink 同源: 同一 append-only episode 写入)。
     let content_feed_config = if content_feed_enabled_from_env() {
         let store = std::sync::Arc::new(
-            apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
+            apeireth_memory::SqliteMemoryStore::open(path.clone())
                 .map_err(|error| format!("content feed memory store open failed: {error}"))?,
         );
         let writer: apeireth_tools_canonical::EpisodeWriter = std::sync::Arc::new(move |episode| {
@@ -2260,14 +2302,18 @@ pub async fn dispatch_gateway_serve_with(
     // W3-① 多户数据隔离: 打开用户域数据平面 (默认域 = 数据根原位数据面, 与
     // 运行时共用同一把会话写闸; 其余域 `users/<id>/data/` 分库)。首次启动走
     // 采用语义 (只写域标记, 存量数据零移动零丢失); 坏域配置在可失败边界拒开。
+    let domain_registry = apeireth_core::user_domain::DomainRegistry::open(&data_dir)
+        .map_err(|error| format!("user domain registry open failed: {error}"))?;
     let domain_plane = apeireth_runtime_assembly::DomainDataPlane::open(
-        apeireth_core::user_domain::DomainRegistry::open(&data_dir)
-            .map_err(|error| format!("user domain registry open failed: {error}"))?,
+        domain_registry.clone(),
         apeireth_runtime_assembly::DefaultDomainStores {
             sessions: runtime.sessions_arc().clone(),
             memory: governance.clone(),
             memory_backend: memory.clone(),
             sessions_db: session_db_path(),
+            // 共树协同补位 (宪章 §二.4 报备, W3-① 并行线结构演进 `memory_db`):
+            // 默认域记忆库路径 = 组合根的同一认知库 (cognitive.sqlite3, 原位语义)。
+            memory_db: cognitive_db_path(),
         },
     )
     .await
@@ -2290,9 +2336,17 @@ pub async fn dispatch_gateway_serve_with(
     // 下一请求即生效); a configured keyring backend additionally persists the
     // value across restarts.
     services.credentials = crate::keyring_bootstrap::build_keyring_credential_writer();
+    // V2-b 用户/域管理面 (双入口同源, 跨范围最小接线报备见交付说明): HTTP 面与
+    // CLI `apeireth user` 共用同一 UserTable 服务 (同一 `users.json`), 域管理口
+    // 与域平面共用同一域注册表 (同一数据根)。
+    services.user_admin = Some(Arc::new(apeireth_gateway::UserAdminService::new(&data_dir)));
+    services.domain_admin = Some(Arc::new(apeireth_gateway::DomainAdminService::new(
+        domain_registry,
+    )));
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
-    let mut state = apeireth_gateway::build_gateway_state_with_services(runtime, services);
+    let mut state =
+        apeireth_gateway::build_gateway_state_with_services(Arc::clone(&runtime), services);
     // W3-②: 用户角色面显式注入 (users.json StoredDoc 拒开 + 令牌↔用户绑定一致性
     // fail-closed); 未配置用户表 = 角色面未激活 (兼容路径, 行为逐字不变)。
     let user_access = apeireth_gateway::UserAccess::load(&data_dir, &client_tokens)
@@ -2301,6 +2355,52 @@ pub async fn dispatch_gateway_serve_with(
     state.user_access = user_access;
     // W3-①: 域上下文路由面注入 (会话面按域路由 / 越域拒绝即帧 / 面闸)。
     state.domains = Some(domain_plane.sessions_plane().clone());
+    // W3-③ 星群正身: 逐域伙伴运行时组装 (每户各得其伴) —— 每域自己的伙伴
+    // 实例 (该域的会话写闸/记忆库/配额账本), 域 chat 面与域事件面走它;
+    // 模型/性格人设覆盖随域文档解析 (缺省回落全局)。一户组装失败 = 该域
+    // 拒开 (chat 面 403 domain_refused fail-closed), 不砖化其余域 (审计留痕)。
+    let mut domain_instances = std::collections::BTreeMap::new();
+    for domain_id in domain_plane.sessions_plane().domain_ids() {
+        if domain_id.as_str() == apeireth_core::user_domain::DEFAULT_DOMAIN_ID {
+            continue;
+        }
+        let open_handles = domain_plane
+            .sessions_plane()
+            .registry()
+            .load(&domain_id)
+            .ok()
+            .and_then(|domain| domain_plane.handles(&domain).ok())
+            .map(|handles| (Arc::clone(handles.sessions), handles.memory.path.clone()));
+        let Some((domain_sessions, domain_memory_db)) = open_handles else {
+            state.observations.buffer_audit(
+                "gateway.domain_runtime_skipped",
+                Some(format!("domain={domain_id} reason=no_open_data_plane")),
+            );
+            continue;
+        };
+        match build_domain_partner_runtime(domain_sessions, domain_memory_db).await {
+            Ok(partner) => {
+                domain_instances.insert(domain_id, Arc::new(partner));
+            }
+            Err(error) => {
+                state.observations.buffer_audit(
+                    "gateway.domain_runtime_skipped",
+                    Some(format!(
+                        "domain={domain_id} reason=partner_runtime_build_failed detail={:.160}",
+                        error
+                    )),
+                );
+            }
+        }
+    }
+    state.domain_runtimes = Some(Arc::new(
+        apeireth_runtime::canonical::DomainRuntimePlane::new(
+            domain_plane.sessions_plane().clone(),
+            Arc::clone(&runtime),
+            domain_instances,
+        ),
+    ));
+    state.attach_domain_runtime_events();
     for (event, detail) in bind_clearance.audit_facts {
         state.observations.buffer_audit(&event, detail);
     }

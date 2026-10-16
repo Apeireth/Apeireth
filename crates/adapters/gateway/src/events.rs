@@ -1073,11 +1073,46 @@ fn trace_span_kind_status(event: &TraceEvent) -> (&'static str, &'static str) {
     }
 }
 
-/// SSE 查询面: `GET /v1/apeireth/events` 的过滤参数 (W2-③ 会话订阅)。
+/// SSE 查询面: `GET /v1/apeireth/events` 的过滤参数 (W2-③ 会话订阅 +
+/// W3-③ 域订阅)。
 #[derive(Debug, Default, Deserialize)]
 pub struct EventsQuery {
     /// 给定时 = 只订阅该会话的事件帧 (并发会话路由面)。
     pub session: Option<String>,
+    /// 自称域 (W3-③): 与头 `x-apeireth-domain` 同一语义的查询面形态
+    /// (口径唯一) —— 与解析域不符 = 403 `domain_forbidden` 恒定帧。
+    pub domain: Option<String>,
+}
+
+/// 事件订阅的域过滤面 (W3-③ 星群: 域事件按域隔离)。
+#[derive(Clone)]
+enum DomainEventScope {
+    /// 域面未接线: 全量订阅 (兼容路径零变化)。
+    Unrestricted,
+    /// 按域过滤: 只投递**本域在册会话**的事件帧 (分库之下他域会话按本域
+    /// 账本读作不存在, 与 W3-① 同语义); 本域数据面未开 = 会话帧全不投
+    /// (fail-closed, 宁拒不泄)。无会话归属的进程级帧 (生命周期等) 照常。
+    OwnDomain(Option<Arc<apeireth_runtime::canonical::SessionManager>>),
+}
+
+impl DomainEventScope {
+    /// 该会话是否归属本订阅域 (在册探测; 失败按不在册处理 —— fail-closed,
+    /// 宁拒不泄, 与「他域读作不存在」同一语义)。
+    async fn owns(&self, session: SessionId) -> bool {
+        match self {
+            Self::Unrestricted => true,
+            Self::OwnDomain(None) => false,
+            Self::OwnDomain(Some(manager)) => manager.contains(&session).await.unwrap_or(false),
+        }
+    }
+
+    /// 该帧是否投递本订阅 (会话帧按本域在册判定; 无会话归属的进程级帧照常)。
+    async fn admits(&self, event: &GatewayEvent) -> bool {
+        match event_session(event) {
+            None => true,
+            Some(session) => self.owns(session).await,
+        }
+    }
 }
 
 /// `GET /v1/apeireth/events` — SSE stream of gateway lifecycle events.
@@ -1095,11 +1130,30 @@ pub struct EventsQuery {
 /// 订阅、同一会话事件扇出多端), 连接快照也只读该会话的最近一帧; 订阅动作落
 /// `gateway.session_client` 审计行 (谁订阅了哪个会话)。非法会话 id = 显式
 /// 400 错误帧, 不静默当全量订阅。
+///
+/// W3-③ 域订阅: `?domain=<id>` 自称域 (与头 `x-apeireth-domain` 同语义,
+/// 不符 = 403 恒定帧); 域面接线时本连接按域过滤 —— 只收**本域在册会话**的
+/// 事件帧 (他域/不存在同帧读作不存在, 不泄露他域存在), `?session=` 点名
+/// 本域不在册的会话 = 404 `session_not_found` 族 (与会话面同语义)。
 pub async fn events_handler(
     State(state): State<GatewayState>,
     Query(query): Query<EventsQuery>,
     identity: Option<Extension<ClientIdentity>>,
+    domain: Option<Extension<crate::domain_context::DomainContext>>,
 ) -> Response {
+    use crate::domain_context::{check_domain_claim, DomainContext};
+
+    // 自称域查询面 (`?domain=`): 与域头同一语义 (口径唯一)。
+    let context = domain
+        .as_ref()
+        .map(|Extension(context)| context)
+        .cloned()
+        .unwrap_or_default();
+    if let Some(claimed) = query.domain.as_deref() {
+        if let Err(refusal) = check_domain_claim(&state, "/v1/apeireth/events", claimed, &context) {
+            return refusal;
+        }
+    }
     let scoped = match query.session {
         None => None,
         Some(raw) => match raw.parse::<SessionId>() {
@@ -1113,6 +1167,25 @@ pub async fn events_handler(
             }
         },
     };
+    // W3-③ 域过滤面: 域面接线时按解析域过滤 (本域在册会话的帧才投递;
+    // 域面未接线 = 兼容路径全量, 零变化)。
+    let domain_scope = match (state.domains.as_ref(), context.domain.as_ref()) {
+        (Some(plane), Some(domain)) => {
+            DomainEventScope::OwnDomain(plane.sessions(domain).ok().cloned())
+        }
+        _ => DomainEventScope::Unrestricted,
+    };
+    // `?session=` 点名: 域面接线时, 本域不在册的会话 id 与不存在**同帧** 404
+    // (存在性不泄露, 与会话面同一语义)。
+    if let Some(session) = scoped {
+        if !domain_scope.owns(session).await {
+            return ErrorFrame::response(
+                StatusCode::NOT_FOUND,
+                ErrorCode::SessionNotFound,
+                format!("session {session} does not exist"),
+            );
+        }
+    }
     let connection = match state.events.connect() {
         Ok(connection) => connection,
         Err(error) => {
@@ -1156,14 +1229,39 @@ pub async fn events_handler(
         ),
     )];
 
-    let stream =
-        tokio_stream::iter(head).chain(BroadcastStream::new(live).filter_map(move |item| {
-            // `connection` 与 `scope` 一起骑在闭包里: 交付租约与会话订阅登记
-            // 同寿于流, 断流即一起回收。
-            let _session_scope = &scope;
-            match item {
-                Ok(event) if scoped.map_or(true, |session| is_session_event(&event, session)) => {
-                    match serde_json::to_string(&event.data) {
+    // 帧流: 逐帧先过会话过滤 (W2-③) 与域过滤 (W3-③, 在册探测是异步的,
+    // 所以用 `then` 逐帧判定), 再编码成 SSE 帧; 落后跳帧 = 显式省略事实。
+    enum BusItem {
+        Event(GatewayEvent),
+        Gap(u64),
+    }
+    let stream = tokio_stream::iter(head).chain(
+        BroadcastStream::new(live)
+            .then(move |item| {
+                let domain_scope = domain_scope.clone();
+                async move {
+                    match item {
+                        Ok(event) => {
+                            if scoped.map_or(true, |session| is_session_event(&event, session))
+                                && domain_scope.admits(&event).await
+                            {
+                                Some(BusItem::Event(event))
+                            } else {
+                                None
+                            }
+                        }
+                        Err(BroadcastStreamRecvError::Lagged(omitted)) => {
+                            Some(BusItem::Gap(omitted))
+                        }
+                    }
+                }
+            })
+            .filter_map(move |item| {
+                // `connection` 与 `scope` 一起骑在闭包里: 交付租约与会话订阅登记
+                // 同寿于流, 断流即一起回收。
+                let _session_scope = &scope;
+                match item {
+                    Some(BusItem::Event(event)) => match serde_json::to_string(&event.data) {
                         Ok(payload) => Some(Ok::<_, Infallible>(
                             SseEvent::default().event(&event.event).data(payload),
                         )),
@@ -1174,22 +1272,22 @@ pub async fn events_handler(
                                 .publish_failure("event payload serialization failed".to_string());
                             Some(Ok(SseEvent::default().event(&event.event).data("{}")))
                         }
+                    },
+                    Some(BusItem::Gap(omitted)) => {
+                        // 丢帧 = 显式省略事实: 落后跳过的帧数说出来, 并挂失败帧。
+                        connection.note_gap(omitted);
+                        Some(Ok(SseEvent::default().event(FRAMES_OMITTED_EVENT).data(
+                            serde_json::json!({
+                                "surface": EVENTS_SURFACE,
+                                "omitted": omitted,
+                            })
+                            .to_string(),
+                        )))
                     }
+                    None => None,
                 }
-                Ok(_) => None,
-                Err(BroadcastStreamRecvError::Lagged(omitted)) => {
-                    // 丢帧 = 显式省略事实: 落后跳过的帧数说出来, 并挂失败帧。
-                    connection.note_gap(omitted);
-                    Some(Ok(SseEvent::default().event(FRAMES_OMITTED_EVENT).data(
-                        serde_json::json!({
-                            "surface": EVENTS_SURFACE,
-                            "omitted": omitted,
-                        })
-                        .to_string(),
-                    )))
-                }
-            }
-        }));
+            }),
+    );
     Sse::new(stream)
         .keep_alive(
             KeepAlive::new()

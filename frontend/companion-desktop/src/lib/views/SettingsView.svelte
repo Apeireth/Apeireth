@@ -101,6 +101,7 @@
   import SessionModelPicker from '../components/SessionModelPicker.svelte';
   import WorkspacePickerModal from '../components/WorkspacePickerModal.svelte';
   import ErrorSolutionBanner from '../components/ErrorSolutionBanner.svelte';
+  import MetricsPanel from '../components/MetricsPanel.svelte';
   import GovernanceView, {type GovernanceTabId} from './GovernanceView.svelte';
   import type {ApeirethConfig, CapabilityManifest, RuntimeHealthReport, ProviderProtocol, ProviderConfig, PersonaProfile, CapabilityToggles, ModelInfo, AdminConfigPatch} from '../types';
   import {DEFAULT_CAPABILITY_TOGGLES, RECOMMENDED_CAPABILITY_PRESET} from '../types';
@@ -126,8 +127,8 @@
     setWorkspaceDir,
     listWorkspaceSuggestions,
   } from '../tauri-bridge';
-  import type {TuningLogEntry} from '../desktop-bridge';
-  import {isDesktop, readTuningLog} from '../desktop-bridge';
+  import type {BackendStatus, ResidentProbeReport, TuningLogEntry} from '../desktop-bridge';
+  import {getBackendStatus, getResidentProbe, isDesktop, readTuningLog} from '../desktop-bridge';
   import {configWithCapabilities, toggledCapability} from '../capability-apply';
   import type {CapabilityToggleKey} from '../capability-apply';
   import {
@@ -154,6 +155,12 @@
     resolveBudgetLimitInput,
   } from '../budget';
   import type {BudgetKnobKey} from '../budget';
+  import {
+    DAEMON_GUIDANCE_COMMANDS,
+    DAEMON_ZERO_INSTALL_NOTE,
+    daemonOpsView,
+  } from '../daemon-ops';
+  import type {DaemonCommandRow} from '../daemon-ops';
   import {emptySessionTotals, formatSessionTotals} from '../chat-shell/turn-telemetry';
   import type {SessionUsageTotals} from '../chat-shell/turn-telemetry';
   import type {PurgeScope} from '../chat-shell/session-cleanup';
@@ -1649,6 +1656,48 @@
     }
   }
 
+  // ---- daemon 运维面（D12）：只读展示 + 启停指引（零装边界，不代跑安装/启停） ----
+  // 读数来源 = 桌面壳监督面（get_backend_status / 常驻探针 get_resident_probe）；
+  // 非桌面环境读不到就是读不到——daemon-ops 如实标「仅桌面版可读」，不伪造状态。
+  let daemonStatus = $state<BackendStatus | null>(null);
+  let residentProbe = $state<ResidentProbeReport | null>(null);
+  let daemonLoading = $state(false);
+  let opsCopiedKey = $state('');
+  let opsCopyError = $state('');
+
+  async function refreshDaemonStatus(): Promise<void> {
+    daemonLoading = true;
+    try {
+      const [status, probe] = await Promise.all([getBackendStatus(), getResidentProbe()]);
+      daemonStatus = status;
+      residentProbe = probe;
+    } finally {
+      daemonLoading = false;
+    }
+  }
+
+  // 进入「数据与本地缓存」区即读一次运维读数（只读探针，无写面）。
+  $effect(() => {
+    if (activeSection === 'data') void refreshDaemonStatus();
+  });
+
+  const daemonView = $derived(daemonOpsView(daemonStatus, residentProbe));
+
+  /** 复制一条启停指引命令（指引可复制，界面不代跑）。 */
+  async function copyOpsCommand(row: DaemonCommandRow): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(row.command);
+      opsCopiedKey = row.key;
+      opsCopyError = '';
+      setTimeout(() => {
+        opsCopiedKey = '';
+      }, 1500);
+    } catch {
+      opsCopiedKey = '';
+      opsCopyError = '复制失败（剪贴板不可用）：请手动选中命令文本复制。';
+    }
+  }
+
   // ---- 开发者选项：客户端配置 JSON 复制 ----
   let configJsonCopied = $state(false);
   const configJsonPreview = $derived(
@@ -3102,6 +3151,9 @@
             </div>
           </div>
 
+          <!-- 运行指标卡（D9）：消费 GET /v1/panel/metrics（契约 §10.1），刷新按钮 + 30s 自动刷新 -->
+          <MetricsPanel {config} />
+
           <!-- 预算旋钮（数字步进器）：回合预算两枚 + 上下文预算一枚，同一条即效缝 -->
           <div class="cap-card">
             <div class="cap-card-head">
@@ -3228,6 +3280,63 @@
         <div class="setting-block">
           <h3 class="block-title">数据与本地缓存</h3>
           <p class="block-desc">管理客户端本地存储的会话与配置缓存。</p>
+
+          <!-- daemon 状态卡（D12 运维面）：侧车连接态/端点/版本 + 常驻服务探测
+               + 服务启停指引（CLI 命令可复制）。只读展示 + 指引：不代跑安装/启停。 -->
+          <div class="cap-card">
+            <div class="cap-card-head">
+              <span class="cap-card-title"><Radar size={13} /> daemon 状态（只读）</span>
+              <button
+                class="quiet-button"
+                onclick={() => void refreshDaemonStatus()}
+                disabled={daemonLoading}
+              >
+                <RefreshCcw size={13} class={daemonLoading ? 'spin' : ''} />
+                <span>{daemonLoading ? '读取中…' : '刷新'}</span>
+              </button>
+            </div>
+            <div class="ops-rows">
+              {#each daemonView.statusRows as row (row.key)}
+                <div class="ops-row">
+                  <span class="ops-label">{row.label}</span>
+                  <span class="ops-value">{row.value}</span>
+                  {#if row.note}<span class="ops-note">{row.note}</span>{/if}
+                </div>
+              {/each}
+              {#each daemonView.probeRows as row (row.key)}
+                <div class="ops-row">
+                  <span class="ops-label">{row.label}</span>
+                  <span class="ops-value">{row.value}</span>
+                  {#if row.note}<span class="ops-note">{row.note}</span>{/if}
+                </div>
+              {/each}
+            </div>
+            <div class="ops-guidance">
+              <div class="ops-guidance-title">服务启停指引（CLI 命令可复制；界面不代跑）</div>
+              {#each DAEMON_GUIDANCE_COMMANDS as row (row.key)}
+                <div class="ops-command">
+                  <div class="ops-command-head">
+                    <strong>{row.label}</strong>
+                    <button class="quiet-button" onclick={() => void copyOpsCommand(row)}>
+                      {#if opsCopiedKey === row.key}
+                        <Check size={12} />
+                        <span>已复制</span>
+                      {:else}
+                        <Copy size={12} />
+                        <span>复制</span>
+                      {/if}
+                    </button>
+                  </div>
+                  <code class="ops-command-text">{row.command}</code>
+                  <small>{row.desc}</small>
+                </div>
+              {/each}
+              <p class="field-hint">{DAEMON_ZERO_INSTALL_NOTE}</p>
+              {#if opsCopyError}
+                <p class="field-hint error-hint">{opsCopyError}</p>
+              {/if}
+            </div>
+          </div>
 
           <div class="info-card">
             <strong class="info-title">工作区目录 {@render fieldFlag('workspace.dir')}</strong>
@@ -4937,6 +5046,77 @@
     font-size: 12px;
     line-height: 1.6;
     color: var(--muted);
+  }
+
+  /* ---- daemon 运维面（D12）：状态行 / 启停指引命令行（只读 + 可复制） ---- */
+  .ops-rows {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .ops-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 6px 14px;
+  }
+  .ops-label {
+    flex: none;
+    width: 110px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .ops-value {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  .ops-note {
+    font-size: 11px;
+    color: var(--faint);
+    overflow-wrap: anywhere;
+  }
+  .ops-guidance {
+    padding: 12px 14px;
+  }
+  .ops-guidance-title {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .ops-command {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .ops-command-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .ops-command-head strong {
+    font-size: 12px;
+    color: var(--text);
+  }
+  .ops-command-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 10px;
+    overflow-wrap: anywhere;
+  }
+  .ops-command small {
+    font-size: 11px;
+    color: var(--faint);
   }
   /* 大类行（简化批）：图标 + 标题 + 展开指示；描述词不在导航列（挪去页面顶）。 */
   .subnav-group { display: flex; flex-direction: column; gap: 2px; }

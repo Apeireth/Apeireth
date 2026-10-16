@@ -69,6 +69,25 @@ export function getBackendStatus(): Promise<BackendStatus | null> {
   return invokeOptional<BackendStatus>('get_backend_status');
 }
 
+/**
+ * Resident-service probe report (D12 ops read face), mirroring the Rust
+ * `ResidentProbeReport`. Read-only: it reports the resident descriptor slot +
+ * `/health` verdict and never starts/stops/installs anything (zero-install
+ * boundary). Null in web mode / on failure.
+ */
+export interface ResidentProbeReport {
+  descriptor_present: boolean;
+  endpoint: string | null;
+  pid: number | null;
+  /** `live` = slot + /health answered · `stale` = slot but no answer · `absent` = no slot. */
+  health: 'live' | 'stale' | 'absent';
+}
+
+/** Current resident-service probe report, or null in web mode / on failure. */
+export function getResidentProbe(): Promise<ResidentProbeReport | null> {
+  return invokeOptional<ResidentProbeReport>('get_resident_probe');
+}
+
 /** Ask the shell to restart the owned backend. */
 export function restartBackend(): Promise<string | null> {
   return invokeOptional<string>('restart_backend');

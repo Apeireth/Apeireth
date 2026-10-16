@@ -360,10 +360,11 @@ async fn non_default_domains_are_confined_to_the_domain_routed_surface() {
     let router = router(&harness).await;
 
     // 非默认域: 未按域开放的面一律 403 `domain_forbidden` (不出默认域数据)。
+    // (W3-③ 演进注记: `/v1/chat` 面已按域开放并走该域伙伴运行时, 见
+    // `domain_partner_chat.rs` 全链证据; 本例保留未开放面的收敛断言。)
     for (method, uri, body) in [
         ("GET", "/v1/models", Body::empty()),
         ("GET", "/v1/panel/sessions", Body::empty()),
-        ("POST", "/v1/chat", Body::from(r#"{"input":"hi"}"#)),
     ] {
         let response = router
             .clone()
@@ -379,6 +380,26 @@ async fn non_default_domains_are_confined_to_the_domain_routed_surface() {
         let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(value["error"]["code"], "domain_forbidden");
     }
+
+    // W3-③: chat 面已按域开放, 但本装配未注入伙伴运行时实例面 —— 非默认域
+    // chat 仍拒开且**不用默认域代跑** (403 `domain_refused` fail-closed)。
+    let mut chat = request(
+        "POST",
+        "/v1/chat",
+        Some(ALICE_TOKEN),
+        Body::from(r#"{"input":"hi"}"#),
+    );
+    chat
+        .headers_mut()
+        .insert("content-type", "application/json".parse().unwrap());
+    let response = router.clone().oneshot(chat).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = body_bytes(response).await;
+    let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        value["error"]["code"], "domain_refused",
+        "无伙伴实例的域 chat 必须拒开, 绝不代跑"
+    );
 
     // 默认域 (未绑定) 的同一批面不受域门影响 (零回归)。
     let response = router

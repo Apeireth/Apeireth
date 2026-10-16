@@ -46,7 +46,12 @@ pub const DOMAIN_CLAIM_HEADER: &str = "x-apeireth-domain";
 
 /// 按用户域路由的开放面 (前缀): 非默认域只开这些面, 其余面本批对非默认域
 /// 403 fail-closed (面未按域开放, 逐面开放随星群后续批; 见交付记录隔离矩阵)。
-pub const DOMAIN_ROUTED_PATH_PREFIXES: &[&str] = &["/v1/sessions/"];
+///
+/// W3-③ 星群正身: 域 chat 面 (`/v1/chat`、`/v1/chat/completions`) 与域事件面
+/// (`/v1/apeireth/events`) 开放 —— 走该域自己的伙伴运行时实例 (模型/记忆/
+/// 配额/写闸全按域), 事件按域过滤。
+pub const DOMAIN_ROUTED_PATH_PREFIXES: &[&str] =
+    &["/v1/sessions/", "/v1/chat", "/v1/apeireth/events"];
 
 /// 域级越权帧的恒定文案 (不因目标域存在与否而变 —— 存在性不泄露)。
 pub const DOMAIN_FORBIDDEN_CLAIM_MESSAGE: &str =
@@ -89,7 +94,11 @@ pub fn domain_forbidden_frame(message: &'static str) -> Response {
 }
 
 /// 本域拒开帧 (403 `domain_refused`): 真因入审计, 响应对本域如实。
-fn domain_refused_frame(state: &GatewayState, endpoint: &str, error: &UserDomainError) -> Response {
+pub fn domain_refused_frame(
+    state: &GatewayState,
+    endpoint: &str,
+    error: &UserDomainError,
+) -> Response {
     state.observations.buffer_audit(
         "gateway.domain_refused",
         Some(format!(
@@ -145,6 +154,34 @@ pub fn resolve_domain_context(
     })
 }
 
+/// 自称域校验 (域级点名): 头 `x-apeireth-domain` 与查询 `?domain=` 同一语义
+/// (口径唯一) —— 自称必须与解析域逐字一致, 否则 403 `domain_forbidden`
+/// **恒定帧** (目标域存在与否同帧, 不泄露他域存在); 域面未接线时只有默认域
+/// 可自称 (无域绑定可校验, 自称即事实)。
+pub fn check_domain_claim(
+    state: &GatewayState,
+    endpoint: &str,
+    claimed: &str,
+    context: &DomainContext,
+) -> Result<(), Response> {
+    let claimed_ok = match context.user_id() {
+        Some(bound) => claimed == bound,
+        // 域面未接线: 只有默认域可自称 (无法开域, 自称即事实)。
+        None => claimed == DEFAULT_DOMAIN_ID,
+    };
+    if claimed_ok {
+        return Ok(());
+    }
+    state.observations.buffer_audit(
+        "gateway.domain_refused",
+        Some(format!(
+            "endpoint={endpoint} reason=domain_claim_mismatch claimed={}",
+            crate::canonical_entry::truncate_label(claimed)
+        )),
+    );
+    Err(domain_forbidden_frame(DOMAIN_FORBIDDEN_CLAIM_MESSAGE))
+}
+
 /// 域门裁决 (整面): 解析域上下文 + 自称域头校验 + 面闸, 过闸后把
 /// [`DomainContext`] 插入请求扩展。
 ///
@@ -166,21 +203,7 @@ pub fn admit_request_domain(
         .get(DOMAIN_CLAIM_HEADER)
         .and_then(|value| value.to_str().ok())
     {
-        let claimed_ok = match context.user_id() {
-            Some(bound) => claimed == bound,
-            // 域面未接线: 只有默认域可自称 (无法开域, 自称即事实)。
-            None => claimed == DEFAULT_DOMAIN_ID,
-        };
-        if !claimed_ok {
-            state.observations.buffer_audit(
-                "gateway.domain_refused",
-                Some(format!(
-                    "endpoint={endpoint} reason=domain_claim_mismatch claimed={}",
-                    crate::canonical_entry::truncate_label(claimed)
-                )),
-            );
-            return Err(domain_forbidden_frame(DOMAIN_FORBIDDEN_CLAIM_MESSAGE));
-        }
+        check_domain_claim(state, endpoint, claimed, &context)?;
     }
 
     // 面闸: 非默认域只开按域路由的面 (其余面本批 fail-closed, 不出默认域数据)。

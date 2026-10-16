@@ -187,14 +187,17 @@ dependencies = [
  "apeireth-storage",
  "apeireth-tools-canonical",
  "async-trait",
+ "axum",
  "chrono",
  "fs-err",
+ "http-body-util",
  "reqwest",
  "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
+ "tower",
  "uuid",
 ]
 

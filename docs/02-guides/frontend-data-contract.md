@@ -762,7 +762,7 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 
 ## 10. 后端增强批新数据面（2026-10 战役 · 前端接新面唯一契约参照）
 
-> 本节收录后端增强战役新建数据面的**字段合同**（指标端点 / 配额自述 / 域节 / 技能卡 / 随手记条目）。
+> 本节收录后端增强战役新建数据面的**字段合同**（指标端点 / 配额自述 / 域节 / 技能卡 / 随手记条目 / 用户与域管理面）。
 > 沿用本文「契约即真相」纪律：字段与代码不一致时以代码为准并回写本文档（含出处行号）；
 > 能力面清单（状态+上屏面）见 [capabilities-matrix.md](../03-reference/capabilities-matrix.md) §1.1。
 > 向后兼容约定沿用 §9.3：后端加字段不改名，前端未知字段忽略。
@@ -857,7 +857,7 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 | `counts.{sessions,memories,protected}` | number \| null | 域内真值计数；缺探测口的维显式 `null` + `counts.reason` |
 | `counts.reason` | string \| null | 计数缺源原因（`render_domain_counts`，`:721-728`） |
 
-**前端消费现状**：0 消费（待上屏——域/用户管理面仅 CLI，挂债栏 D10）。
+**前端消费现状**：0 消费（待上屏——自述域节仅工具面自述；域/用户管理的 HTTP 面已由 V2-b 备好，见 §10.6/§10.7，UI 上屏仍挂债栏 D10）。
 
 ### 10.4 技能卡 `SkillCard`（I1 书→技能沉淀，**在建**）
 
@@ -906,5 +906,51 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 
 - **落流缝**：`POST /v1/memory/append {session, role:'user', content}`（与 §4 记忆追加同源缝）；后端 schema 无 `source` 列——来源随正文序列化（诚实边界见交付记录 §2.3），后续整编用 `parseCaptureNote` 剥标注取原料。
 - **零打扰纪律**：采集分支与对话回合完全分叉（唯一请求 = 记忆追加，零 `/v1/chat/completions`、零通知、纯采集零 token）。
+
+### 10.6 用户管理行 `UserAdminRow`（V2-b 用户/域管理端点，V1-b 面板消费）
+
+出处：`crates/adapters/gateway/src/user_admin.rs:46-71`（DTO）、`:173-296`（`UserAdminService`——与 CLI `apeireth user` **双入口同源**的唯一 UserTable 操作语义）、`:303-437`（四端点 handler + `gateway.user_action` 审计行）；角色门分类 `crates/adapters/gateway/src/panels.rs:721`（`/v1/panel/users` 属 `AdminControl` owner 档）；端点合同表与错误模型见 [gateway-api-contract.md](../gateway-api-contract.md) §7c。
+
+- `GET /v1/panel/users` → `{ "users": [UserAdminRow], "count": n }`（文件顺序）；
+- `POST /v1/admin/users {user_id, role, client_names?, domain?}` → 201 `{ "user": UserAdminRow }`；
+- `PATCH /v1/admin/users/:user_id {role}` → 200 `{ "user": UserAdminRow }`（只开改角色一门）；
+- `DELETE /v1/admin/users/:user_id` → 200 `{ "deleted": true, "user_id": "…" }`。
+
+```json
+{ "user_id": "user-owner", "role": "owner", "domain": "home",
+  "client_names": ["desktop-shell"], "client_count": 1 }
+```
+
+| 字段 | 类型 | 说明 / 出处 |
+|------|------|--------------|
+| `user_id` | string | 目录安全词面 `[a-z0-9_-]`、首字符小写字母或数字、≤64 字节（复用 W3-① `DomainUserId` 校验，`user_admin.rs:282`；路径穿越 `../`、分隔符、大小写混淆一律 400 拒） |
+| `role` | string | 冻结词表 `owner` / `member` / `guest`（`user_admin.rs:294`；未知角色与大小写变体一律 400 拒，不就近映射） |
+| `domain` | string \| 缺省 | 域引用（缺省 = 与 `user_id` 同名的域；无引用的行**不编该字段**） |
+| `client_names` | string[] | 绑定客户端名（空数组 = 尚未发令牌） |
+| `client_count` | number | `= client_names.len()`（面板"客户端数"列，`user_admin.rs:46-71`） |
+
+**错误形态**（`{"error": {code, message, solution}}`）：400 `invalid_request` / 404 `not_found` / 409 `conflict`（重复 id、末 owner 保护、令牌↔用户绑定不一致）/ 500 `runtime_error`（坏 `users.json` **拒开不回退空表**）/ 403 `permission_denied`（角色门：member/guest/未绑定）/ 401（令牌门）/ 501 `unsupported`（管理服务未接线）。
+
+### 10.7 域管理行 `DomainAdminRow`（V2-b 域面开放与管理端点）
+
+出处：`crates/adapters/gateway/src/domain_admin.rs:27-40`（DTO）、`:55-133`（`DomainAdminService`——`DomainRegistry` 开域/列域口）、`:140-200`（两端点 handler）；计数口径 `domain_admin.rs:108-121`。开域语义与 `default` 保留 id 见 W3-① 域模型（`crates/foundation/core/src/user_domain.rs`）。
+
+- `GET /v1/panel/domains` → `{ "domains": [DomainAdminRow], "count": n }`（id 序）；
+- `POST /v1/admin/domains {user_id, display_name, role?}` → 201 `{ "domain": DomainAdminRow }`（`role` 缺省 `owner` = 开域即域主）。
+
+```json
+{ "user_id": "alice", "display_name": "Alice", "created_at": 1728000000000,
+  "role": "owner", "user_count": 2 }
+```
+
+| 字段 | 类型 | 说明 / 出处 |
+|------|------|--------------|
+| `user_id` | string | 域 id（= `users/<id>/` 目录名；`default` 为采用语义保留 id，拒绝再建） |
+| `display_name` | string | 显示名（1..=128 字符、无控制字符，坏名 400 拒） |
+| `created_at` | number，**epoch 毫秒** | 创建时刻（与 §10.3 同口径） |
+| `role` | string | 域角色 `owner` / `member` / `guest`（冻结词表） |
+| `user_count` | number \| null | 用户表中域引用落到该域的用户数（`domain` 缺省回落 user_id 同名域，`domain_admin.rs:108`）；用户管理面未接线时**显式 `null`**，不编 0（`domain_admin.rs:226`） |
+
+**前端消费现状**：0 消费（V1-b 用户/域面板待上屏，挂债栏 D10；后端面 + 测试已备）。
 
 *文档完。任何字段与代码冲突时，以代码为准并回写本文档（含出处行号）。*

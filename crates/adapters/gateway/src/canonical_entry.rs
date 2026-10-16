@@ -327,11 +327,7 @@ pub async fn execute_chat_attributed(
     request: CanonicalChatRequest,
     attribution: SessionAttribution,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
-    if request.input.trim().is_empty() {
-        return Err(CanonicalEntryError::InvalidRequest(
-            "input must not be empty".into(),
-        ));
-    }
+    validate_chat_input(&request.input)?;
 
     let session = request.session.unwrap_or_else(SessionId::new);
     let input = request.input;
@@ -628,6 +624,9 @@ pub fn build_gateway_state_with_services(
         // 用户域平面 (W3-①) 同一口径: 未注入 = 域面未接线 (兼容路径,
         // 一切按默认域原位语义) —— 组合根在可失败边界装载注入。
         domains: None,
+        // 逐域伙伴运行时实例面 (W3-③) 同一口径: 未注入 = 非默认域 chat 面
+        // 拒开 (fail-closed) —— 组合根在可失败边界装载注入。
+        domain_runtimes: None,
         shutdown: Arc::new(crate::shutdown::ShutdownTrigger::default()),
     }
 }
@@ -1015,7 +1014,8 @@ async fn require_gateway_token(
 
 /// W3-② 角色门分类: 方法 + 路径 → 所需能力 (治理层 role 权限矩阵的判定入口)。
 ///
-/// - 管理面 (admin 族 / 面板族授权热撤, 见 [`crate::panels::panel_admin_face`])
+/// - 管理面 (admin 族 / 面板族管理面: 授权热撤 + 用户与域管理列表, 见
+///   [`crate::panels::panel_admin_face`])
 ///   → [`UserCapability::AdminControl`] (owner 档);
 /// - 审批解决 (`/v1/approvals/resolve`) → [`UserCapability::ApprovalL2`]
 ///   (跨用户归属另闸, 见 [`cross_user_approval_refusal`]);
@@ -1190,6 +1190,18 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         // W2-① 常驻形态: 优雅停机控制面 (计划任务 stop 走这里, 控制台信号
         // 不可靠)。与全 API 面同一令牌门同一三态口径。
         .route("/v1/admin/shutdown", post(admin_shutdown))
+        // V2-b 用户/域管理面 (W3-②/W3-①, owner 档): 建户/改角色/删户/开域四口
+        // 走 admin 族 (整面前缀 → AdminControl 角色门), 与 CLI `apeireth user`
+        // 同一 UserTable 服务 (双入口同源); 列表两口在面板族 (panel_routes)。
+        .route("/v1/admin/users", post(crate::user_admin::create_user))
+        .route(
+            "/v1/admin/users/:user_id",
+            patch(crate::user_admin::patch_user).delete(crate::user_admin::delete_user),
+        )
+        .route(
+            "/v1/admin/domains",
+            post(crate::domain_admin::create_domain),
+        )
         .merge(panel_routes())
         // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
         .merge(crate::panel_metrics::metrics_routes())
@@ -1421,22 +1433,129 @@ fn attribution_for(
     SessionAttribution::new(client, Some(Arc::clone(&state.observations)))
 }
 
+/// 回合输入的最小校验 (空输入不成回合)。抽出来是为了让会话立案
+/// ([`admit_domain_session`]) 只发生在有效请求上 —— 400 请求不落空会话。
+fn validate_chat_input(input: &str) -> Result<(), CanonicalEntryError> {
+    if input.trim().is_empty() {
+        return Err(CanonicalEntryError::InvalidRequest(
+            "input must not be empty".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// W3-③ 一个域回合的执行目标: 跑在哪个运行时实例上 + 该域的运行时上下文
+/// (模型/性格人设覆盖, 缺省回落全局)。
+struct DomainChatExecution<'a> {
+    /// 本回合的运行时实例 (默认域/域面未接线 = 现 [`Runtime`], 零变化)。
+    runtime: &'a Arc<Runtime>,
+    /// 该域的对话运行时上下文 (域文档覆盖, 缺省回落全局)。
+    context: apeireth_runtime::canonical::DomainRuntimeContext,
+}
+
+impl DomainChatExecution<'_> {
+    /// 生效模型 (缺省回落链): 请求显式 > 域覆盖 > admin 热配 > 运行时默认。
+    fn resolve_model(&self, request_model: Option<String>, hot: Option<String>) -> Option<String> {
+        request_model.or(self.context.model.clone()).or(hot)
+    }
+
+    /// 生效会话种子: 域人设在前, 请求 system 在后; 均缺省 = 不注入 (零变化)。
+    fn seeded_system(&self, request_system: Option<String>) -> Option<String> {
+        self.context.seeded_system(request_system.as_deref())
+    }
+}
+
+/// W3-③ 域伙伴运行时解析 (星群正身: 每户各得其伴):
+///
+/// - 域面未接线 / 默认域 → 现 [`Runtime`] (零变化);
+/// - 非默认域 → 该域自己的伙伴实例 (模型/记忆/配额/写闸全按域);
+/// - 非默认域未注入实例面 / 该域未注册伙伴实例 / 域配置坏 → 403
+///   `domain_refused` (fail-closed, **绝不拿默认域代跑** —— 代跑会把默认域
+///   的会话/记忆/配额面泄给该域)。
+fn chat_execution<'a>(
+    state: &'a GatewayState,
+    domain: Option<&crate::domain_context::DomainContext>,
+    endpoint: &'static str,
+) -> Result<DomainChatExecution<'a>, Response> {
+    use apeireth_core::user_domain::UserDomainError;
+
+    let Some(bound) = domain.and_then(|context| context.domain.as_ref()) else {
+        return Ok(DomainChatExecution {
+            runtime: &state.runtime,
+            context: apeireth_runtime::canonical::DomainRuntimeContext::default(),
+        });
+    };
+    let Some(plane) = state.domain_runtimes.as_ref() else {
+        return Err(crate::domain_context::domain_refused_frame(
+            state,
+            endpoint,
+            &UserDomainError::Refused(format!(
+                "user domain `{}` chat surface refused: no open partner runtime plane",
+                bound.user_id
+            )),
+        ));
+    };
+    let runtime = plane
+        .runtime_for(bound)
+        .map_err(|error| crate::domain_context::domain_refused_frame(state, endpoint, &error))?;
+    let context = plane
+        .context_for(bound)
+        .map_err(|error| crate::domain_context::domain_refused_frame(state, endpoint, &error))?;
+    Ok(DomainChatExecution { runtime, context })
+}
+
+/// 会话入域立案 (W3-③ 域事件过滤面): 域面接线时, 回合开跑前把会话在**本域**
+/// 账本立案 —— 该会话的事件帧自 `turn_started` 起即在本域在册, 域订阅按域
+/// 过滤不丢首帧; 已立案 = 幂等原样。域面未接线 = 不动 (兼容路径零变化)。
+async fn admit_domain_session(
+    state: &GatewayState,
+    execution: &DomainChatExecution<'_>,
+    session: SessionId,
+) -> Result<(), HttpError> {
+    if state.domains.is_none() {
+        return Ok(());
+    }
+    let manager = execution.runtime.sessions();
+    let record = manager
+        .load_or_create(session)
+        .await
+        .map_err(|error| http_error(CanonicalEntryError::Runtime(error), Some(session)))?;
+    manager
+        .save(&record)
+        .await
+        .map_err(|error| http_error(CanonicalEntryError::Runtime(error), Some(session)))
+}
+
 async fn native_chat(
     State(state): State<GatewayState>,
     identity: Option<Extension<ClientIdentity>>,
     user: Option<Extension<UserContext>>,
+    domain: Option<Extension<crate::domain_context::DomainContext>>,
     Json(request): Json<CanonicalChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
-    if request.model.is_none() {
-        request.model = hot_model_override(&state);
+    let execution = match chat_execution(
+        &state,
+        domain.as_ref().map(|Extension(context)| context),
+        "/v1/chat",
+    ) {
+        Ok(execution) => execution,
+        Err(refusal) => return Ok(refusal),
+    };
+    request.model = execution.resolve_model(request.model.take(), hot_model_override(&state));
+    // 输入校验先于会话立案: 400 请求不落空会话 (与 execute 内的校验同一实现)。
+    if let Err(error) = validate_chat_input(&request.input) {
+        return Err(http_error(error, request.session));
     }
     let session = request.session.unwrap_or_else(SessionId::new);
     request.session = Some(session);
+    request.system = execution.seeded_system(request.system.take());
     // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
     bind_session_owner(&state, session, user.as_ref());
+    // W3-③: 会话入域立案 (域事件过滤面)。
+    admit_domain_session(&state, &execution, session).await?;
     let attribution = attribution_for(&state, identity.as_ref());
-    let outcome = execute_chat_attributed(state.runtime.as_ref(), request, attribution).await;
+    let outcome = execute_chat_attributed(execution.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     publish_turn_delta(&state.events, &outcome);
@@ -1520,12 +1639,19 @@ async fn openai_chat(
     State(state): State<GatewayState>,
     identity: Option<Extension<ClientIdentity>>,
     user: Option<Extension<UserContext>>,
+    domain: Option<Extension<crate::domain_context::DomainContext>>,
     Json(request): Json<OpenAiChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
-    if request.model.is_none() {
-        request.model = hot_model_override(&state);
-    }
+    let execution = match chat_execution(
+        &state,
+        domain.as_ref().map(|Extension(context)| context),
+        "/v1/chat/completions",
+    ) {
+        Ok(execution) => execution,
+        Err(refusal) => return Ok(refusal),
+    };
+    request.model = execution.resolve_model(request.model.take(), hot_model_override(&state));
     let is_stream = request.stream;
     let session = request.session_id.unwrap_or_else(SessionId::new);
     // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
@@ -1558,20 +1684,29 @@ async fn openai_chat(
         session: Some(session),
         input,
         model: request.model.clone(),
-        system: (!system.is_empty()).then_some(system),
+        system: execution.seeded_system((!system.is_empty()).then_some(system)),
     };
     let model_name = request.model.unwrap_or_default();
     let attribution = attribution_for(&state, identity.as_ref());
+    // W3-③: 会话入域立案 (域事件过滤面; 输入校验已过)。
+    admit_domain_session(&state, &execution, session).await?;
 
     // True incremental streaming: deltas flow from the provider through the
     // canonical loop to the client as they arrive. Non-streaming providers
     // fall back inside the runtime (one final delta), so this branch is
     // correct for every provider.
     if is_stream {
-        return openai_chat_streaming(&state, native, model_name, attribution).await;
+        return openai_chat_streaming(
+            &state,
+            Arc::clone(execution.runtime),
+            native,
+            model_name,
+            attribution,
+        )
+        .await;
     }
 
-    let outcome = execute_chat_attributed(state.runtime.as_ref(), native, attribution).await;
+    let outcome = execute_chat_attributed(execution.runtime.as_ref(), native, attribution).await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     let outcome = match outcome {
@@ -1620,6 +1755,7 @@ async fn openai_chat(
 /// explicit final frame, so the client never hangs.
 async fn openai_chat_streaming(
     state: &GatewayState,
+    runtime: Arc<Runtime>,
     native: CanonicalChatRequest,
     model_name: String,
     attribution: SessionAttribution,
@@ -1659,7 +1795,6 @@ async fn openai_chat_streaming(
         }
     });
 
-    let runtime = Arc::clone(&state.runtime);
     let observations = Arc::clone(&state.observations);
     let events = state.events.clone();
     let mut turn = TurnRequest::new(session, native.input);

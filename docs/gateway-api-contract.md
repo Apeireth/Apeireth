@@ -11,8 +11,8 @@
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)
 - 编码:UTF-8 JSON;时间戳统一 **epoch 毫秒**(`timestamp` 字段)
 - 认证:**全 API 面令牌门**(W2-② 起,chat/事件流/面板/会话/审批/admin 族,唯一豁免 `/health` 探活)。三态口径(env `APEIRETH_GATEWAY_TOKEN` + 客户端令牌表 `APEIRETH_GATEWAY_TOKENS`/`client-tokens.json`,任一在场=强制态):强制态=`Authorization: Bearer <token>` 必须命中令牌族任一枚(恒定时间比较,缺失 401 `auth_missing_key` / 伪造 401 `auth_invalid_key`,拒绝入审计 `gateway.auth_rejected`,过门入审计 `gateway.auth_client client=<客户端名>`);两面皆空=放行但每次记警告帧 `gateway_auth_unprotected` + 审计 `gateway.auth_unprotected`(兼容路径,保守过渡);显式 `none`=操作者明示不设防,放行不告警但审计留痕(与客户端令牌表互斥,配置矛盾拒开)。桌面壳启动侧车时自铸 32 字节随机令牌注入(生产恒为强制态);客户端令牌表每客户端一枚(name→token,过门审计带客户端名)。非回环绑定(`APEIRETH_LISTEN`/`--bind`)强制令牌:令牌族两面皆空时拒绝启动(fail-closed)
-- 授权(W3-② 起,角色门):用户表 `users.json`(StoredDoc 拒开语义)在场=**角色面激活**,过门客户端名沿令牌→用户→角色链(`client-tokens.json` 条目 `user_id` + 用户表 `client_names`)解析为问责身份,按治理层 role 权限矩阵过闸——写面(chat/会话写/记忆写,非读方法)需 `Write`、admin 族与 `/v1/panel/grants/revoke` 需 `AdminControl`(owner 档)、`/v1/approvals/resolve` 需 `ApprovalL2` 且**跨用户审批拒**(owner 可批任意会话,其余角色只可批本人绑定会话的审批);读面(GET)全员可读。未绑定用户的受闸请求 fail-closed 拒(403 `permission_denied`);未配置用户表=兼容路径(W2-② 行为逐字不变,不新增拒绝面)。角色只来自令牌绑定的解析链,请求无法自称角色(自称客户端名另有 name↔token 绑定校验)。每次裁决落审计 `gateway.user_action user=<id> role=<role> action=<能力> endpoint=<路径> decision=allow|deny`
-- 数据域(W3-① 起,域门):请求沿令牌→user_id 链解析**用户域**(未绑定=默认域,单户兼容;未开域的绑定用户留默认域;域配置坏=403 `domain_refused` 拒开,真因入审计 `gateway.domain_refused`)。`/v1/sessions/*` **按域路由**(每域自己的会话库+配额账本;他域/不存在的会话 id **同帧** 404 `session_not_found`,存在性不泄露);其余面(含 `/v1/chat`)对非默认域 **403 `domain_forbidden`** fail-closed(面未按用户域开放,不泄露默认域数据)。可选自称域头 `x-apeireth-domain` 与本域不符=403 `domain_forbidden` **恒定帧**(目标域存在与否同帧)
+- 授权(W3-② 起,角色门):用户表 `users.json`(StoredDoc 拒开语义)在场=**角色面激活**,过门客户端名沿令牌→用户→角色链(`client-tokens.json` 条目 `user_id` + 用户表 `client_names`)解析为问责身份,按治理层 role 权限矩阵过闸——写面(chat/会话写/记忆写,非读方法)需 `Write`、admin 族与面板族**管理面**(`/v1/panel/grants/revoke`、`/v1/panel/users`、`/v1/panel/domains`)需 `AdminControl`(owner 档)、`/v1/approvals/resolve` 需 `ApprovalL2` 且**跨用户审批拒**(owner 可批任意会话,其余角色只可批本人绑定会话的审批);读面(GET)全员可读。未绑定用户的受闸请求 fail-closed 拒(403 `permission_denied`);未配置用户表=兼容路径(W2-② 行为逐字不变,不新增拒绝面)。角色只来自令牌绑定的解析链,请求无法自称角色(自称客户端名另有 name↔token 绑定校验)。每次裁决落审计 `gateway.user_action user=<id> role=<role> action=<能力> endpoint=<路径> decision=allow|deny`
+- 数据域(W3-① 起,域门):请求沿令牌→user_id 链解析**用户域**(未绑定=默认域,单户兼容;未开域的绑定用户留默认域;域配置坏=403 `domain_refused` 拒开,真因入审计 `gateway.domain_refused`)。`/v1/sessions/*` **按域路由**(每域自己的会话库+配额账本;他域/不存在的会话 id **同帧** 404 `session_not_found`,存在性不泄露);W3-③ 起 `/v1/chat`、`/v1/chat/completions`(走该域**伙伴运行时实例**:模型/记忆/配额/写闸全按域;域文档 persona/model 覆盖缺省回落全局,`session_id` 落本域账本)与 `/v1/apeireth/events`(`?domain=` 自称域与域头同语义;按域过滤——只投**本域在册会话**的事件帧,他域/不存在同帧读作不存在)亦按域开放,非默认域无伙伴运行时实例=403 `domain_refused`(fail-closed,不用默认域代跑);其余面对非默认域 **403 `domain_forbidden`** fail-closed(面未按用户域开放,不泄露默认域数据)。可选自称域头 `x-apeireth-domain` 与本域不符=403 `domain_forbidden` **恒定帧**(目标域存在与否同帧)
 - 错误模型:
   ```json
   { "error": { "code": "invalid_request | not_found | unsupported | runtime_error | auth_failed", "message": "人类可读信息" } }
@@ -37,6 +37,11 @@
 | `/v1/approvals?session={id}` | GET | 该会话的待批审批(见 §6) |
 | `/v1/approvals/resolve` | POST | 批准/拒绝审批(见 §6) |
 | `/v1/panel/metrics` | GET | 指标聚合快照(见 §8b;会话+全局两层,空态显式空) |
+| `/v1/panel/users` | GET | 用户管理列表(见 §7c;owner 专属) |
+| `/v1/admin/users` | POST | 建户(见 §7c;owner 专属) |
+| `/v1/admin/users/{user_id}` | PATCH / DELETE | 改角色 / 删户(见 §7c;owner 专属) |
+| `/v1/panel/domains` | GET | 域列表+计数(见 §7c;owner 专属) |
+| `/v1/admin/domains` | POST | 开域(见 §7c;owner 专属) |
 
 ## §3 对话 `/v1/chat`
 
@@ -140,6 +145,63 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
 - `GET /v1/organs` → `{ "organs": [ { "id": "…", "name": "…", "enabled": true, "description": "…" } ] }`
   来源是当前 assembly 的 BehaviorRegistry；不再返回固定的 9 个静态未启用器官。
 - `GET /v1/modules` → `{ "modules": [ ... ] }`，与 `/v1/organs` 共享当前行为注册状态。
+
+### §7c 用户与域管理 ✅(2026-10-13, V2-b 域面开放与管理端点)
+
+用户四口与域两口共用**同一个 UserTable 服务**(`apeireth_gateway::UserAdminService`,
+数据目录 `users.json` 为唯一事实):CLI `apeireth user add|list|role|remove` 与 HTTP
+**双入口同源**——引导口径 / 末 owner 保护 / 发令牌序一处实现,两入口互改互见。
+全部端点在 W2-② 令牌门 + W3-② 角色门 `AdminControl` 档(**owner 专属**,含列表读口:
+用户与域的管理数据非 owner 不可见)之内;服务未接线 = 501 `unsupported`(不假装有数据源)。
+
+**端点合同表**:
+
+| 端点 | 方法 | 请求体 | 成功响应 |
+|---|---|---|---|
+| `/v1/panel/users` | GET | — | 200 `{ "users": [UserAdminRow], "count": n }`(文件顺序) |
+| `/v1/admin/users` | POST | `{ "user_id", "role", "client_names"?: [], "domain"?: "…" }` | 201 `{ "user": UserAdminRow }` |
+| `/v1/admin/users/{user_id}` | PATCH | `{ "role" }`(只开改角色一门) | 200 `{ "user": UserAdminRow }` |
+| `/v1/admin/users/{user_id}` | DELETE | — | 200 `{ "deleted": true, "user_id": "…" }` |
+| `/v1/panel/domains` | GET | — | 200 `{ "domains": [DomainAdminRow], "count": n }`(id 序) |
+| `/v1/admin/domains` | POST | `{ "user_id", "display_name", "role"?: "owner" }` | 201 `{ "domain": DomainAdminRow }` |
+
+```json
+{ "user_id": "user-owner", "role": "owner", "domain": "home",
+  "client_names": ["desktop-shell"], "client_count": 1 }
+{ "user_id": "alice", "display_name": "Alice", "created_at": 1728000000000,
+  "role": "owner", "user_count": 2 }
+```
+
+- **UserAdminRow**:`user_id`(目录安全词面)/ `role`(冻结词表 `owner|member|guest`)/
+  `domain`(域引用,可缺省=与 user_id 同名的域)/ `client_names`(绑定客户端名)/
+  `client_count`(`= client_names.len()`,面板"客户端数"列)。
+- **DomainAdminRow**:`user_id` / `display_name` / `created_at`(**epoch 毫秒**)/
+  `role` / `user_count`(用户表中域引用落到该域的用户数,`domain` 缺省回落 user_id
+  同名域;用户管理面未接线时**显式 `null`**,不编 0)。`count` = 本响应行数。
+
+**错误模型**(与 §1 同一帧形):400 `invalid_request`(user_id/域 id 词面越界——复用
+W3-① 目录安全规则 `[a-z0-9_-]`、首字符小写字母或数字,路径穿越 `../`/分隔符/大小写
+混淆全拒;未知角色或角色大小写变体——冻结词表只认三字面,不就近映射)/ 404 `not_found`
+(用户不在表)/ 409 `conflict`(重复 user_id、客户端名多属、末 owner 保护、令牌↔用户
+绑定不一致)/ 500 `runtime_error`(坏 `users.json`/令牌表**拒开**——不回退空表)/
+403 `permission_denied`(角色门:member/guest/未绑定)/ 401(令牌门)/ 501 `unsupported`。
+
+**不变量**(与 CLI 面同一把闸):
+
+1. **引导口径**:用户表为空时建户可入(表内首用户**必须 `owner`**,否则拒)——表非空
+   后一切管理动作都要 owner;
+2. **末 owner 保护**:最后一个 owner 不可删、不可降级(409);
+3. **发令牌序**:令牌条目声明 `user_id` 的**先建用户再写绑定**;删用户前**先摘令牌
+   绑定**(否则 409,问责链不得断);
+4. **user_id 路径安全**:id 词面复用 W3-① `DomainUserId` 校验(user_id 缺省即域引用
+   `users/<user_id>/` 目录名,不安全 id 一律拒);
+5. **审计**:每次管理动作落一行
+   `gateway.user_action user=<id> role=<role> action=user_add|user_role_change|user_remove|domain_create endpoint=<路径> decision=allow|deny`
+   (角色门自身另有 `action=admin_control` 行;令牌值零泄漏)。
+
+> 装载快照边界(诚实声明):管理动作**落盘即为事实**(每操作重读,双入口互见);
+> 令牌门/角色门的**运行期**判定按 W2-②/W3-② 装载期快照语义——新建用户的绑定随
+> 下次启动生效(与 CLI 改 `client-tokens.json` 的既有口径一致)。
 
 ## §8 Trace / Audit / 事件总线
 
@@ -256,7 +318,9 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 `memory.update`（`supported=false`, `available=false`, `reason=not_implemented`）、
 `tools.list`、`permissions.approval.read`、`permissions.approval.resolve`、
 `approvals.read` / `approvals.resolve`（compatibility aliases）、`permissions.grants.read`、
-`permissions.revoke`、`organs.list`、`modules.list`、`trace.read`、`audit.read`、`activity.sse`。
+`permissions.revoke`、`organs.list`、`modules.list`、`trace.read`、`audit.read`、`activity.sse`、
+`users.read` / `users.manage`、`domains.read` / `domains.manage`（V2-b 用户/域管理面，
+`supported=available` 取值随管理服务接线状态，见 §7c）。
 
 ## §10 当前实现状态
 

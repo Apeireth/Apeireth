@@ -156,3 +156,21 @@ CI 解剖工具箱（按效率排序）:
 - 判定链速查: `pulls.mergeable_state` (blocked/dirty) → GraphQL
   `mergeStateStatus + statusCheckRollup`（区分"检查没过"vs"其他封锁"）→
   `branches/<b>/protection` 全字段逐项（lock_branch 藏在字段清单尾部）。
+
+## 7. 陷阱速查表（2026-10-15 批 L1 经验沉淀补录）
+
+| 症状 | 根因 | 药方（速查） |
+|---|---|---|
+| `@{u}` 等 git 片段报解析错 | `@{` 是 PowerShell 哈希表/splatting 起手 | 单引号包死或转义; 含 `@{`/`$`/引号的命令片段不裸放 |
+| `-i` 没生效 / 打到别的参数 | PS 参数前缀缩写歧义（可撞 `-InformationVariable` 族） | 参数写全称, 禁缩写 |
+| 正则替换"忽略大小写"失效还吃掉别处参数 | .NET `Regex::Replace` 第四参是 `RegexOptions` 不是 count | options 显式形态 + 替换后断言命中数 |
+| 批量替换 0 处生效 | CRLF 行尾吞掉 `$`/`\n` 锚定的匹配 | 正则容行尾（`\r?$`）或先归一化; 0 次命中 = 失败 |
+| 同一文件落两个键 / 写后查无此人 | canonicalize 真实大小写 + symlink 拼写 vs 裸拼写分叉（§6.2） | 路径键单源折叠 + canonical 拼写命中; 悬案走示踪三选一 |
+| cwd 掉 `%WINDIR%` / 路径双前缀 | `\\?\` verbatim 前缀参与拼接与 cwd 解析 | 拼接/cwd 前剥 verbatim 前缀 |
+| 压缩包只解出开头一段 | zstd 多帧流单发解压只吐第一帧 | 循环解到流尾 + 尺寸/清单校验（§2 同源纪律） |
+| 中性扫描命中想加豁免了事 | 豁免表只给真实路径/文件名/研究引注 | 素材归置出库、表述改写优先; 豁免计数公开可审计 |
+| 命令"只回显不执行" | cmd `/S` 引号规则 × argv 转义吃双引号 | `raw_arg` 直传（`/D /S /C "<cmd>"`）+ 真实执行回归测试 |
+| 验证"通过"但实际失败 | 管道截断（§5 条）杀上游, 退出码归截断者 | 输出落文件再 grep 判定 |
+
+详案（症状/死因/药方/防复发断言四段）见
+`docs/04-internal/engineering-experience/02-failure-anatomy.md`。

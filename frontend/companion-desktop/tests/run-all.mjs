@@ -72,6 +72,8 @@ const SUITES = [
   {file: 'budget-knobs.mjs', name: 'budget knob face (clamp/fallback / effective badge / env wiring / quota registry, real modules)', strip: true},
   {file: 'settings-nav-groups.mjs', name: 'settings nav five groups (mapping / deep-link contract, real module)', strip: true},
   {file: 'budget-meter.mjs', name: 'budget meter (session accumulator / consumption card / remaining bars, real modules)', strip: true},
+  {file: 'metrics-panel.mjs', name: 'metrics panel (contract view / dash semantics / auto refresh / fetch face, real modules)', strip: true},
+  {file: 'daemon-ops.mjs', name: 'daemon ops card (status read / resident probe map / guidance commands / zero-install boundary, real modules)', strip: true},
   {file: 'theme-bubble-contrast.mjs', name: 'user bubble contrast sentinel (starship fix / default zero-regression, source mirror)'},
   {file: 'switch-scope-copy.mjs', name: 'file-write gate full-scope copy (capdef desc / env note / user manual, source mirror)'},
   {file: 'switch-power-audit.mjs', name: 'capability switch power audit table (filed rows / dispositions, source mirror)'},
